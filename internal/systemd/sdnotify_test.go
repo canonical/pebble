@@ -24,9 +24,33 @@ import (
 	"github.com/canonical/pebble/internal/systemd"
 )
 
-type sdNotifyTestSuite struct{}
+type sdNotifyTestSuite struct{
+	env map[string]string
+	restoreGetenv func()
+}
 
 var _ = Suite(&sdNotifyTestSuite{})
+
+func (sd *sdNotifyTestSuite) SetUpTest(c *C) {
+	sd.env = map[string]string{}
+	sd.restoreGetenv = systemd.FakeOsGetenv(func(k string) string {
+		return sd.env[k]
+	})
+}
+
+func (sd *sdNotifyTestSuite) TearDownTest(c *C) {
+	sd.restoreGetenv()
+}
+
+func (sd *sdNotifyTestSuite) TestSocketAvailable(c *C) {
+	socketPath := filepath.Join(c.MkDir(), "notify.socket")
+	c.Assert(systemd.SocketAvailable(), Equals, false)
+	sd.env["NOTIFY_SOCKET"] = socketPath
+	c.Assert(systemd.SocketAvailable(), Equals, false)
+	f, _ := os.Create(socketPath)
+	f.Close()
+	c.Assert(systemd.SocketAvailable(), Equals, true)
+}
 
 func (sd *sdNotifyTestSuite) TestSdNotifyMissingNotifyState(c *C) {
 	c.Check(systemd.SdNotify(""), ErrorMatches, "cannot use empty notify state")
@@ -48,17 +72,11 @@ func (sd *sdNotifyTestSuite) TestSdNotifyWrongNotifySocket(c *C) {
 }
 
 func (sd *sdNotifyTestSuite) TestSdNotifyIntegration(c *C) {
-	fakeEnv := map[string]string{}
-	restore := systemd.FakeOsGetenv(func(k string) string {
-		return fakeEnv[k]
-	})
-	defer restore()
-
 	for _, sockPath := range []string{
 		filepath.Join(c.MkDir(), "socket"),
 		"@socket",
 	} {
-		fakeEnv["NOTIFY_SOCKET"] = sockPath
+		sd.env["NOTIFY_SOCKET"] = sockPath
 
 		conn, err := net.ListenUnixgram("unixgram", &net.UnixAddr{
 			Name: sockPath,

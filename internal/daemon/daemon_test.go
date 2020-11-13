@@ -12,7 +12,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package pebble
+package daemon
 
 import (
 	"encoding/json"
@@ -22,6 +22,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"sync"
 	"syscall"
 	"testing"
@@ -871,6 +872,10 @@ func (s *daemonSuite) TestRestartExpectedRebootGiveUp(c *check.C) {
 }
 
 func (s *daemonSuite) TestRestartIntoSocketModeNoNewChanges(c *check.C) {
+	notifySocket := filepath.Join(c.MkDir(), "notify.socket")
+	os.Setenv("NOTIFY_SOCKET", notifySocket)
+	defer os.Setenv("NOTIFY_SOCKET", "")
+
 	restore := standby.FakeStandbyWait(5 * time.Millisecond)
 	defer restore()
 
@@ -878,11 +883,17 @@ func (s *daemonSuite) TestRestartIntoSocketModeNoNewChanges(c *check.C) {
 	makeDaemonListeners(c, d)
 
 	d.Start()
+
 	// pretend some ensure happened
 	for i := 0; i < 5; i++ {
 		d.overlord.StateEngine().Ensure()
 		time.Sleep(5 * time.Millisecond)
 	}
+
+	c.Assert(d.standbyOpinions.CanStandby(), check.Equals, false)
+	f, _ := os.Create(notifySocket)
+	f.Close()
+	c.Assert(d.standbyOpinions.CanStandby(), check.Equals, true)
 
 	select {
 	case <-d.Dying():
@@ -896,6 +907,9 @@ func (s *daemonSuite) TestRestartIntoSocketModeNoNewChanges(c *check.C) {
 }
 
 func (s *daemonSuite) TestRestartIntoSocketModePendingChanges(c *check.C) {
+	os.Setenv("NOTIFY_SOCKET", c.MkDir())
+	defer os.Setenv("NOTIFY_SOCKET", "")
+
 	restore := standby.FakeStandbyWait(5 * time.Millisecond)
 	defer restore()
 

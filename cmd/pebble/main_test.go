@@ -2,10 +2,12 @@ package main_test
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"golang.org/x/crypto/ssh/terminal"
@@ -50,6 +52,8 @@ func (s *BasePebbleSuite) SetUpTest(c *C) {
 
 	s.AddCleanup(pebble.FakeIsStdoutTTY(false))
 	s.AddCleanup(pebble.FakeIsStdinTTY(false))
+
+	os.Setenv("PEBBLE_LAST_WARNING_TIMESTAMP_FILENAME", filepath.Join(c.MkDir(), "warnings.json"))
 }
 
 func (s *BasePebbleSuite) TearDownTest(c *C) {
@@ -58,7 +62,8 @@ func (s *BasePebbleSuite) TearDownTest(c *C) {
 	pebble.Stderr = os.Stderr
 	pebble.ReadPassword = terminal.ReadPassword
 
-	//dirs.SetRootDir("/")
+	os.Setenv("PEBBLE_LAST_WARNING_TIMESTAMP_FILENAME", "")
+
 	s.BaseTest.TearDownTest(c)
 }
 
@@ -78,9 +83,26 @@ func (s *BasePebbleSuite) ResetStdStreams() {
 
 func (s *BasePebbleSuite) RedirectClientToTestServer(handler func(http.ResponseWriter, *http.Request)) {
 	server := httptest.NewServer(http.HandlerFunc(handler))
-	//s.BaseTest.AddCleanup(func() { server.Close() })
+	s.BaseTest.AddCleanup(func() { server.Close() })
 	pebble.ClientConfig.BaseURL = server.URL
-	//s.BaseTest.AddCleanup(func() { pebble.ClientConfig.BaseURL = "" })
+	s.BaseTest.AddCleanup(func() { pebble.ClientConfig.BaseURL = "" })
+}
+
+// DecodedRequestBody returns the JSON-decoded body of the request.
+func DecodedRequestBody(c *C, r *http.Request) map[string]interface{} {
+	var body map[string]interface{}
+	decoder := json.NewDecoder(r.Body)
+	decoder.UseNumber()
+	err := decoder.Decode(&body)
+	c.Assert(err, IsNil)
+	return body
+}
+
+// EncodeResponseBody writes JSON-serialized body to the response writer.
+func EncodeResponseBody(c *C, w http.ResponseWriter, body interface{}) {
+	encoder := json.NewEncoder(w)
+	err := encoder.Encode(body)
+	c.Assert(err, IsNil)
 }
 
 func fakeArgs(args ...string) (restore func()) {
@@ -102,15 +124,11 @@ type PebbleSuite struct {
 var _ = Suite(&PebbleSuite{})
 
 func (s *PebbleSuite) TestErrorResult(c *C) {
-	// TODO Enable this once we have an actual command to test this with.
-	//      The version command doesn't work because it's supposed to ignore errors.
-	return
-
 	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintln(w, `{"type": "error", "result": {"message": "cannot do something"}}`)
 	})
 
-	restore := fakeArgs("pebble", "version")
+	restore := fakeArgs("pebble", "warnings")
 	defer restore()
 
 	err := pebble.RunMain()

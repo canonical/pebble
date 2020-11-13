@@ -15,16 +15,12 @@
 package main
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
-	"go/doc"
 	"io"
 	"os"
 	"os/user"
-	"strconv"
 	"strings"
-	"text/tabwriter"
 	"unicode"
 	"unicode/utf8"
 
@@ -385,57 +381,10 @@ func run() error {
 		fmt.Fprintln(Stderr, msg)
 		return nil
 	}
+
+	maybePresentWarnings(cli.WarningsSummary())
+
 	return nil
-}
-
-func tabWriter() *tabwriter.Writer {
-	return tabwriter.NewWriter(Stdout, 5, 3, 2, ' ', 0)
-}
-
-var termSize = termSizeImpl
-
-func termSizeImpl() (width, height int) {
-	if f, ok := Stdout.(*os.File); ok {
-		width, height, _ = terminal.GetSize(int(f.Fd()))
-	}
-
-	if width <= 0 {
-		width, _ = strconv.Atoi(os.Getenv("COLUMNS"))
-	}
-
-	if height <= 0 {
-		height, _ = strconv.Atoi(os.Getenv("LINES"))
-	}
-
-	if width < 40 {
-		width = 80
-	}
-
-	if height < 15 {
-		height = 25
-	}
-
-	return width, height
-}
-
-func fill(para string, indent int) string {
-	width, _ := termSize()
-
-	if width > 100 {
-		width = 100
-	}
-
-	// some terminals aren't happy about writing in the last
-	// column (they'll add line for you). We could check terminfo
-	// for "sam" (semi_auto_right_margin), but that's a lot of
-	// work just for this.
-	width--
-
-	var buf bytes.Buffer
-	indentStr := strings.Repeat(" ", indent)
-	doc.ToText(&buf, para, indentStr, indentStr, width-indent)
-
-	return strings.TrimSpace(buf.String())
 }
 
 var errorPrefix = "error: "

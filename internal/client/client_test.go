@@ -198,9 +198,39 @@ func (cs *clientSuite) TestClientReportsInnerJSONError(c *C) {
 
 func (cs *clientSuite) TestClientAsync(c *C) {
 	cs.rsp = `{"type":"async", "status-code": 202, "change": "42"}`
-	changeId, err := cs.cli.AsyncTest()
+	changeId, err := cs.cli.FakeAsyncRequest()
 	c.Assert(err, IsNil)
 	c.Assert(changeId, Equals, "42")
+}
+
+func (cs *clientSuite) TestClientMaintenance(c *C) {
+	cs.rsp = `{"type":"sync", "result":{"series":"42"}, "maintenance": {"kind": "system-restart", "message": "system is restarting"}}`
+	_, err := cs.cli.SysInfo()
+	c.Assert(err, IsNil)
+	c.Check(cs.cli.Maintenance().(*client.Error), DeepEquals, &client.Error{
+		Kind:    client.ErrorKindSystemRestart,
+		Message: "system is restarting",
+	})
+
+	cs.rsp = `{"type":"sync", "result":{"series":"42"}}`
+	_, err = cs.cli.SysInfo()
+	c.Assert(err, IsNil)
+	c.Check(cs.cli.Maintenance(), Equals, error(nil))
+}
+
+func (cs *clientSuite) TestClientAsyncOpMaintenance(c *C) {
+	cs.rsp = `{"type":"async", "status-code": 202, "change": "42", "maintenance": {"kind": "system-restart", "message": "system is restarting"}}`
+	_, err := cs.cli.FakeAsyncRequest()
+	c.Assert(err, IsNil)
+	c.Check(cs.cli.Maintenance().(*client.Error), DeepEquals, &client.Error{
+		Kind:    client.ErrorKindSystemRestart,
+		Message: "system is restarting",
+	})
+
+	cs.rsp = `{"type":"async", "status-code": 202, "change": "42"}`
+	_, err = cs.cli.FakeAsyncRequest()
+	c.Assert(err, IsNil)
+	c.Check(cs.cli.Maintenance(), Equals, error(nil))
 }
 
 func (cs *clientSuite) TestParseError(c *C) {

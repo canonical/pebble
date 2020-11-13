@@ -12,28 +12,18 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package client
+package timeutil
 
-import (
-	"fmt"
-	"io"
-	"net/url"
+import "time"
+
+var (
+	ParseClockSpan = parseClockSpan
+	ParseWeekSpan  = parseWeekSpan
+	HumanTimeSince = humanTimeSince
 )
 
-var ParseErrorInTest = parseError
-
-func (client *Client) SetDoer(d doer) {
-	client.doer = d
-}
-
-func (client *Client) Do(method, path string, query url.Values, body io.Reader, v interface{}) error {
-	return client.do(method, path, query, nil, body, v)
-}
-
-func (client *Client) FakeAsyncRequest() (changeId string, err error) {
-	changeId, err = client.doAsync("GET", "/v1/async-test", nil, nil, nil)
-	if err != nil {
-		return "", fmt.Errorf("cannot do async test: %v", err)
-	}
-	return changeId, nil
+func MockTimeNow(f func() time.Time) (restorer func()) {
+	origTimeNow := timeNow
+	timeNow = f
+	return func() { timeNow = origTimeNow }
 }

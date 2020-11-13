@@ -19,9 +19,16 @@ import (
 	"net"
 	"os"
 	"strings"
+
+	"github.com/canonical/pebble/internal/osutil"
 )
 
 var osGetenv = os.Getenv
+
+func SocketAvailable() bool {
+	notifySocket := osGetenv("NOTIFY_SOCKET")
+	return notifySocket != "" && osutil.CanStat(notifySocket)
+}
 
 // SdNotify sends the given state string notification to systemd.
 //

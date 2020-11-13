@@ -41,11 +41,11 @@ var (
 	//WrapFlow           = wrapFlow
 	//TrueishJSON        = trueishJSON
 
-	//CanUnicode           = canUnicode
-	//ColorTable           = colorTable
-	//MonoColorTable       = mono
-	//ColorColorTable      = color
-	//NoEscColorTable      = noesc
+	CanUnicode           = canUnicode
+	ColorTable           = colorTable
+	MonoColorTable       = mono
+	ColorColorTable      = color
+	NoEscColorTable      = noesc
 	//ColorMixinGetEscapes = (colorMixin).getEscapes
 	//FillerPublisher      = fillerPublisher
 	//LongPublisher        = longPublisher
@@ -53,8 +53,8 @@ var (
 
 	//ReadRpc = readRpc
 
-	//WriteWarningTimestamp = writeWarningTimestamp
-	//MaybePresentWarnings  = maybePresentWarnings
+	WriteWarningTimestamp = writeWarningTimestamp
+	MaybePresentWarnings  = maybePresentWarnings
 
 	//LongSnapDescription     = longSnapDescription
 	//SnapUsage               = snapUsage

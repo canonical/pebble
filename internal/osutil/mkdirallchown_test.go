@@ -12,28 +12,32 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package client
+package osutil_test
 
 import (
-	"fmt"
-	"io"
-	"net/url"
+	"strings"
+
+	"gopkg.in/check.v1"
+
+	"github.com/canonical/pebble/internal/osutil"
 )
 
-var ParseErrorInTest = parseError
+type mkdacSuite struct{}
 
-func (client *Client) SetDoer(d doer) {
-	client.doer = d
-}
+var _ = check.Suite(&mkdacSuite{})
 
-func (client *Client) Do(method, path string, query url.Values, body io.Reader, v interface{}) error {
-	return client.do(method, path, query, nil, body, v)
-}
-
-func (client *Client) FakeAsyncRequest() (changeId string, err error) {
-	changeId, err = client.doAsync("GET", "/v1/async-test", nil, nil, nil)
-	if err != nil {
-		return "", fmt.Errorf("cannot do async test: %v", err)
+func (mkdacSuite) TestSlashySlashy(c *check.C) {
+	for _, dir := range []string{
+		// these must start with "/" (because d doesn't end in /, and we
+		// are _not_ using filepath.Join, on purpose)
+		"/foo/bar",
+		"/foo/bar/",
+	} {
+		d := c.MkDir()
+		// just in case
+		c.Assert(strings.HasSuffix(d, "/"), check.Equals, false)
+		err := osutil.MkdirAllChown(d+dir, 0755, osutil.NoChown, osutil.NoChown)
+		c.Assert(err, check.IsNil, check.Commentf("%q", dir))
 	}
-	return changeId, nil
+
 }

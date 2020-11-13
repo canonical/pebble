@@ -24,7 +24,7 @@ import (
 
 	"gopkg.in/tomb.v2"
 
-	"github.com/snapcore/snapd/strutil"
+	"github.com/canonical/pebble/internal/strutil"
 )
 
 var (

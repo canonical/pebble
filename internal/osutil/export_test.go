@@ -20,11 +20,20 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"os/user"
 	"syscall"
 	"time"
 
 	"github.com/canonical/pebble/internal/osutil/sys"
 )
+
+
+func FakeUserCurrent(f func() (*user.User, error)) func() {
+	realUserCurrent := userCurrent
+	userCurrent = f
+
+	return func() { userCurrent = realUserCurrent }
+}
 
 func FakeChown(f func(*os.File, sys.UserID, sys.GroupID) error) (restore func()) {
 	oldChown := chown

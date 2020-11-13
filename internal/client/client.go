@@ -59,6 +59,11 @@ type Client struct {
 	baseURL   url.URL
 	doer      doer
 	userAgent string
+
+	maintenance error
+
+	warningCount     int
+	warningTimestamp time.Time
 }
 
 // New returns a new instance of Client
@@ -89,6 +94,18 @@ func New(config *Config) *Client {
 		doer:      &http.Client{Transport: &http.Transport{DisableKeepAlives: config.DisableKeepAlive}},
 		userAgent: config.UserAgent,
 	}
+}
+
+// Maintenance returns an error reflecting the daemon maintenance status or nil.
+func (client *Client) Maintenance() error {
+	return client.maintenance
+}
+
+// WarningsSummary returns the number of warnings that are ready to be shown to
+// the user, and the timestamp of the most recently added warning (useful for
+// silencing the warning alerts, and OKing the returned warnings).
+func (client *Client) WarningsSummary() (count int, timestamp time.Time) {
+	return client.warningCount, client.warningTimestamp
 }
 
 type RequestError struct{ error }
@@ -231,6 +248,9 @@ func (client *Client) doSync(method, path string, query url.Values, headers map[
 		}
 	}
 
+	client.warningCount = rsp.WarningCount
+	client.warningTimestamp = rsp.WarningTimestamp
+
 	return &rsp.ResultInfo, nil
 }
 
@@ -275,7 +295,12 @@ type response struct {
 	Type       string          `json:"type"`
 	Change     string          `json:"change"`
 
+	WarningCount     int       `json:"warning-count"`
+	WarningTimestamp time.Time `json:"warning-timestamp"`
+
 	ResultInfo
+
+	Maintenance *Error `json:"maintenance"`
 }
 
 // Error is the real value of response.Result when an error occurs.
@@ -293,9 +318,21 @@ func (e *Error) Error() string {
 
 const (
 	ErrorKindLoginRequired = "login-required"
+
+	ErrorKindSystemRestart = "system-restart"
+	ErrorKindDaemonRestart = "daemon-restart"
 )
 
 func (rsp *response) err(cli *Client) error {
+	if cli != nil {
+		maintErr := rsp.Maintenance
+		// avoid setting to (*client.Error)(nil)
+		if maintErr != nil {
+			cli.maintenance = maintErr
+		} else {
+			cli.maintenance = nil
+		}
+	}
 	if rsp.Type != "error" {
 		return nil
 	}

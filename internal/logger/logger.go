@@ -33,7 +33,7 @@ type Logger interface {
 
 const (
 	// DefaultFlags are passed to the default console log.Logger
-	DefaultFlags = log.Ldate | log.Ltime | log.Lmicroseconds | log.Lshortfile
+	DefaultFlags = log.Ldate | log.Ltime
 )
 
 type nullLogger struct{}

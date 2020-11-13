@@ -12,7 +12,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package pebble
+package daemon
 
 import (
 	"context"
@@ -37,6 +37,7 @@ import (
 	"github.com/canonical/pebble/internal/overlord/state"
 	"github.com/canonical/pebble/internal/systemd"
 	"os/exec"
+	"strings"
 )
 
 var (
@@ -280,7 +281,12 @@ func logit(handler http.Handler) http.Handler {
 		t0 := time.Now()
 		handler.ServeHTTP(ww, r)
 		t := time.Now().Sub(t0)
-		logger.Debugf("%s %s %s %s %d", r.RemoteAddr, r.Method, r.URL, t, ww.s)
+		if strings.HasSuffix(r.RemoteAddr, ";") {
+			logger.Debugf("%s %s %s %s %d", r.RemoteAddr, r.Method, r.URL, t, ww.s)
+			logger.Noticef("%s %s %s %d", r.Method, r.URL, t, ww.s)
+		} else {
+			logger.Noticef("%s %s %s %s %d", r.RemoteAddr, r.Method, r.URL, t, ww.s)
+		}
 	})
 }
 
@@ -364,8 +370,13 @@ func (ct *connTracker) trackConn(conn net.Conn, state http.ConnState) {
 	}
 }
 
+func (d *Daemon) CanStandby() bool {
+	return systemd.SocketAvailable()
+}
+
 func (d *Daemon) initStandbyHandling() {
 	d.standbyOpinions = standby.New(d.state)
+	d.standbyOpinions.AddOpinion(d)
 	d.standbyOpinions.AddOpinion(d.connTracker)
 	d.standbyOpinions.AddOpinion(d.overlord)
 	d.standbyOpinions.Start()
@@ -389,10 +400,8 @@ func (d *Daemon) Start() {
 		ConnState: d.connTracker.trackConn,
 	}
 
-	// enable standby handling
 	d.initStandbyHandling()
 
-	// the loop runs in its own goroutine
 	d.overlord.Loop()
 
 	d.tomb.Go(func() error {
