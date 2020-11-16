@@ -15,34 +15,41 @@
 package daemon
 
 import (
-	"bytes"
 	"encoding/json"
-	"io"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
-	"time"
-
-	"github.com/canonical/pebble/internal/overlord/state"
 
 	"gopkg.in/check.v1"
 )
 
+var _ = check.Suite(&apiSuite{})
+
 type apiSuite struct {
 	d *Daemon
+
+	vars map[string]string
+
+	restoreMuxVars func()
 }
 
-var _ = check.Suite(&apiSuite{})
+func (s *apiSuite) SetUpTest(c *check.C) {
+	s.restoreMuxVars = FakeMuxVars(s.muxVars)
+}
 
 func (s *apiSuite) TearDownTest(c *check.C) {
 	s.d = nil
+	s.restoreMuxVars()
+}
+
+func (s *apiSuite) muxVars(*http.Request) map[string]string {
+	return s.vars
 }
 
 func (s *apiSuite) daemon(c *check.C) *Daemon {
 	if s.d != nil {
 		panic("called daemon() twice")
 	}
-	d, err := New(c.MkDir()+"/state.json")
+	d, err := New(c.MkDir() + "/state.json")
 	c.Assert(err, check.IsNil)
 	d.addRoutes()
 	s.d = d
@@ -82,61 +89,4 @@ func (s *apiSuite) TestSysInfo(c *check.C) {
 	c.Check(rsp.Status, check.Equals, 200)
 	c.Check(rsp.Type, check.Equals, ResponseTypeSync)
 	c.Check(rsp.Result, check.DeepEquals, expected)
-}
-
-func (s *apiSuite) testWarnings(c *check.C, all bool, body io.Reader) (calls string, result interface{}) {
-	s.daemon(c)
-
-	oldOK := stateOkayWarnings
-	oldAll := stateAllWarnings
-	oldPending := statePendingWarnings
-	stateOkayWarnings = func(*state.State, time.Time) int { calls += "ok"; return 0 }
-	stateAllWarnings = func(*state.State) []*state.Warning { calls += "all"; return nil }
-	statePendingWarnings = func(*state.State) ([]*state.Warning, time.Time) { calls += "show"; return nil, time.Time{} }
-	defer func() {
-		stateOkayWarnings = oldOK
-		stateAllWarnings = oldAll
-		statePendingWarnings = oldPending
-	}()
-
-	warningsCmd := apiCmd("/v1/warnings")
-
-	method := "GET"
-	f := warningsCmd.GET
-	if body != nil {
-		method = "POST"
-		f = warningsCmd.POST
-	}
-	q := url.Values{}
-	if all {
-		q.Set("select", "all")
-	}
-	req, err := http.NewRequest(method, "/v2/warnings?"+q.Encode(), body)
-	c.Assert(err, check.IsNil)
-
-	rsp, ok := f(warningsCmd, req, nil).(*resp)
-	c.Assert(ok, check.Equals, true)
-
-	c.Check(rsp.Type, check.Equals, ResponseTypeSync)
-	c.Check(rsp.Status, check.Equals, 200)
-	c.Assert(rsp.Result, check.NotNil)
-	return calls, rsp.Result
-}
-
-func (s *apiSuite) TestAllWarnings(c *check.C) {
-	calls, result := s.testWarnings(c, true, nil)
-	c.Check(calls, check.Equals, "all")
-	c.Check(result, check.DeepEquals, []state.Warning{})
-}
-
-func (s *apiSuite) TestSomeWarnings(c *check.C) {
-	calls, result := s.testWarnings(c, false, nil)
-	c.Check(calls, check.Equals, "show")
-	c.Check(result, check.DeepEquals, []state.Warning{})
-}
-
-func (s *apiSuite) TestAckWarnings(c *check.C) {
-	calls, result := s.testWarnings(c, false, bytes.NewReader([]byte(`{"action": "okay", "timestamp": "2006-01-02T15:04:05Z"}`)))
-	c.Check(calls, check.Equals, "ok")
-	c.Check(result, check.DeepEquals, 0)
 }

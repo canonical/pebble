@@ -408,6 +408,9 @@ func errorToMessage(e error) (normalMessage string, err error) {
 		} else {
 			msg = fmt.Sprintf(`%s (try with sudo)`, cerr.Message)
 		}
+	case client.ErrorKindSystemRestart:
+		isError = false
+		msg = "pebble is about to reboot the system"
 	default:
 		msg = cerr.Message
 	}

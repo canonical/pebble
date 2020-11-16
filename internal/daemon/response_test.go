@@ -103,7 +103,7 @@ func (s *responseSuite) TestRespJSONWithNullResult(c *check.C) {
 	c.Check(string(data), check.Equals, `{"type":"","status-code":0}`)
 }
 
-func (responseSuite) TestErrorResponderPrintfsWithArgs(c *check.C) {
+func (s *responseSuite) TestErrorResponderPrintfsWithArgs(c *check.C) {
 	teapot := makeErrorResponder(418)
 
 	rec := httptest.NewRecorder()
@@ -118,7 +118,7 @@ func (responseSuite) TestErrorResponderPrintfsWithArgs(c *check.C) {
 	c.Check(v.Result.Message, check.Equals, "system memory below 1%.")
 }
 
-func (responseSuite) TestErrorResponderDoesNotPrintfAlways(c *check.C) {
+func (s *responseSuite) TestErrorResponderDoesNotPrintfAlways(c *check.C) {
 	teapot := makeErrorResponder(418)
 
 	rec := httptest.NewRecorder()
