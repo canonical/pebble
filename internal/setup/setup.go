@@ -44,20 +44,21 @@ type Service struct {
 	Name        string
 	Summary     string
 	Description string
-	State       ServiceState
+	Default     ServiceAction
 	Override    ServiceOverride
 	Command     string
-	Before      []string
 	After       []string
+	Before      []string
+	Requires    []string
 	Environment []StringVariable
 }
 
-type ServiceState string
+type ServiceAction string
 
 const (
-	UnknownState  ServiceState = ""
-	EnabledState  ServiceState = "enabled"
-	DisabledState ServiceState = "disabled"
+	UnknownAction ServiceAction = ""
+	StartAction   ServiceAction = "start"
+	StopAction    ServiceAction = "stop"
 )
 
 type ServiceOverride string
@@ -109,8 +110,8 @@ func (s *Setup) Flatten() (*Layer, error) {
 					if service.Description != "" {
 						old.Description = service.Description
 					}
-					if service.State != UnknownState {
-						old.State = service.State
+					if service.Default != UnknownAction {
+						old.Default = service.Default
 					}
 					if service.Command != "" {
 						old.Command = service.Command
@@ -136,14 +137,45 @@ func (s *Setup) Flatten() (*Layer, error) {
 	return &flat, nil
 }
 
-func (l *Layer) ServiceOrder() ([]string, error) {
+// StartOrder returns the order in which services must be started for the
+// named services to be properly started.
+// An error is returned when a provided service name does not exist, or there
+// is an order cycle involving the provided service or its dependencies.
+func (l *Layer) StartOrder(names []string) ([]string, error) {
+
+	// Collect all services that will be started.
 	successors := make(map[string][]string)
-	for name, service := range l.Services {
-		successors[name] = append(successors[name], service.After...)
+	pending := append([]string(nil), names...)
+	for i := 0; i < len(pending); i++ {
+		name := pending[i]
+		if _, seen := successors[name]; seen {
+			continue
+		}
+		successors[name] = nil
+		pending = append(pending, l.Services[name].Requires...)
+	}
+
+	// Create a list of successors involving those services.
+	for name := range successors {
+		service, ok := l.Services[name]
+		if !ok {
+			return nil, fmt.Errorf("service %q does not exist", name)
+		}
+		succs := successors[name]
+		for _, after := range service.After {
+			if _, required := successors[after]; required {
+				succs = append(succs, after)
+			}
+		}
+		successors[name] = succs
 		for _, before := range service.Before {
-			successors[before] = append(successors[before], name)
+			if succs, required := successors[before]; required {
+				successors[before] = append(succs, name)
+			}
 		}
 	}
+
+	// Sort them up.
 	var order []string
 	for _, names := range tarjanSort(successors) {
 		if len(names) > 1 {
@@ -152,6 +184,15 @@ func (l *Layer) ServiceOrder() ([]string, error) {
 		order = append(order, names[0])
 	}
 	return order, nil
+}
+
+func (l *Layer) CheckCycles() error {
+	var names []string
+	for name, _ := range l.Services {
+		names = append(names, name)
+	}
+	_, err := l.StartOrder(names)
+	return err
 }
 
 func ParseLayer(key string, data []byte) (*Layer, error) {
@@ -166,14 +207,14 @@ func ParseLayer(key string, data []byte) (*Layer, error) {
 	for name, service := range layer.Services {
 		service.Name = name
 	}
-	_, err = layer.ServiceOrder()
+	err = layer.CheckCycles()
 	if err != nil {
 		return nil, err
 	}
 	return &layer, err
 }
 
-func ParseLayersDir(dirname string) ([]*Layer, error) {
+func ReadLayersDir(dirname string) ([]*Layer, error) {
 	finfos, err := ioutil.ReadDir(dirname)
 	if err != nil {
 		// Errors from package os generally include the path.
@@ -202,4 +243,15 @@ func ParseLayersDir(dirname string) ([]*Layer, error) {
 		layers = append(layers, layer)
 	}
 	return layers, nil
+}
+
+func ReadDir(dir string) (*Setup, error) {
+	layers, err := ReadLayersDir(filepath.Join(dir, "layers"))
+	if err != nil {
+		return nil, err
+	}
+	setup := &Setup{
+		Layers: layers,
+	}
+	return setup, nil
 }

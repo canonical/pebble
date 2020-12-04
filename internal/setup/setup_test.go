@@ -63,6 +63,7 @@ type setupTest struct {
 	layers  []*setup.Layer
 	result  *setup.Layer
 	error   string
+	order   map[string][]string
 }
 
 var setupTests = []setupTest{{
@@ -75,9 +76,13 @@ var setupTests = []setupTest{{
 				override: replace
 				summary: Service summary
 				command: cmd arg1 "arg2 arg3"
+				default: start
 				after:
 					- srv2
 				before:
+					- srv3
+				requires:
+					- srv2
 					- srv3
 				environment:
 					- var1: val1
@@ -85,6 +90,7 @@ var setupTests = []setupTest{{
 					- var2: val2
 			srv2:
 				override: replace
+				default: start
 				command: cmd
 				before:
 					- srv3
@@ -105,11 +111,13 @@ var setupTests = []setupTest{{
 					- srv5
 			srv2:
 				override: replace
+				default: stop
 				command: cmd
 				summary: Replaced service
 			srv4:
 				override: replace
 				command: cmd
+				default: start
 			srv5:
 				override: replace
 				command: cmd
@@ -119,18 +127,15 @@ var setupTests = []setupTest{{
 		Summary:     "Simple layer",
 		Description: "A simple layer.",
 		Services: map[string]*setup.Service{
-			"srv3": {
-				Name:     "srv3",
-				Override: "replace",
-				Command:  "cmd",
-			},
 			"srv1": {
 				Name:     "srv1",
 				Summary:  "Service summary",
 				Override: "replace",
 				Command:  `cmd arg1 "arg2 arg3"`,
+				Default:  setup.StartAction,
 				Before:   []string{"srv3"},
 				After:    []string{"srv2"},
+				Requires: []string{"srv2", "srv3"},
 				Environment: []setup.StringVariable{
 					{Name: "var1", Value: "val1"},
 					{Name: "var0", Value: "val0"},
@@ -141,7 +146,14 @@ var setupTests = []setupTest{{
 				Name:     "srv2",
 				Override: "replace",
 				Command:  "cmd",
+				Default:  setup.StartAction,
 				Before:   []string{"srv3"},
+			},
+			"srv3": {
+				Name:     "srv3",
+				Override: "replace",
+				Command:  "cmd",
+				Default:  setup.UnknownAction,
 			},
 		},
 	}, {
@@ -149,17 +161,6 @@ var setupTests = []setupTest{{
 		Summary:     "Simple override layer.",
 		Description: "The second layer.",
 		Services: map[string]*setup.Service{
-			"srv5": {
-				Name:     "srv5",
-				Override: "replace",
-				Command:  "cmd",
-			},
-			"srv2": {
-				Name:     "srv2",
-				Summary:  "Replaced service",
-				Override: "replace",
-				Command:  "cmd",
-			},
 			"srv1": {
 				Name:     "srv1",
 				Override: "merge",
@@ -169,8 +170,21 @@ var setupTests = []setupTest{{
 					{Name: "var3", Value: "val3"},
 				},
 			},
+			"srv2": {
+				Name:     "srv2",
+				Summary:  "Replaced service",
+				Override: "replace",
+				Command:  "cmd",
+				Default:  setup.StopAction,
+			},
 			"srv4": {
 				Name:     "srv4",
+				Override: "replace",
+				Command:  "cmd",
+				Default:  setup.StartAction,
+			},
+			"srv5": {
+				Name:     "srv5",
 				Override: "replace",
 				Command:  "cmd",
 			},
@@ -186,8 +200,10 @@ var setupTests = []setupTest{{
 				Summary:  "Service summary",
 				Override: "replace",
 				Command:  `cmd arg1 "arg2 arg3"`,
-				Before:   []string{"srv3", "srv5"},
+				Default:  "start",
 				After:    []string{"srv2", "srv4"},
+				Before:   []string{"srv3", "srv5"},
+				Requires: []string{"srv2", "srv3"},
 				Environment: []setup.StringVariable{
 					{Name: "var1", Value: "val1"},
 					{Name: "var0", Value: "val0"},
@@ -200,6 +216,7 @@ var setupTests = []setupTest{{
 				Summary:  "Replaced service",
 				Override: "replace",
 				Command:  "cmd",
+				Default:  "stop",
 			},
 			"srv3": {
 				Name:     "srv3",
@@ -210,6 +227,7 @@ var setupTests = []setupTest{{
 				Name:     "srv4",
 				Override: "replace",
 				Command:  "cmd",
+				Default:  "start",
 			},
 			"srv5": &setup.Service{
 				Name:     "srv5",
@@ -217,6 +235,11 @@ var setupTests = []setupTest{{
 				Command:  "cmd",
 			},
 		},
+	},
+	order: map[string][]string{
+		"srv1": []string{"srv2", "srv1", "srv3"},
+		"srv2": []string{"srv2"},
+		"srv3": []string{"srv3"},
 	},
 }, {
 	summary: "Order loop on before/after",
@@ -302,6 +325,13 @@ func (s *S) TestSetupTests(c *C) {
 			result, err = sup.Flatten()
 			if err == nil && test.result != nil {
 				c.Assert(result, DeepEquals, test.result)
+			}
+			if err == nil {
+				for name, order := range test.order {
+					names, err := result.StartOrder([]string{name})
+					c.Assert(err, IsNil)
+					c.Assert(names, DeepEquals, order)
+				}
 			}
 		}
 		if err != nil || test.error != "" {
