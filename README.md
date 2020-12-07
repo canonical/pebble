@@ -30,9 +30,12 @@ This is a complete example of the current configuration format:
 
 ```yaml
 summary: Simple layer
+
 description: |
     A better description for a simple layer.
+
 services:
+
     srv1:
         override: replace
         summary: Service summary
@@ -71,7 +74,9 @@ To illustrate, here is a sample override layer that might sit atop the one above
 
 ```yaml
 summary: Simple override layer
+
 services:
+
     srv1:
         override: merge
         environment:
