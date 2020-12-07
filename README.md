@@ -1,7 +1,7 @@
 
 ## Take control of your internal daemons!
 
-**Pebble** helps you orchestrating a set of local service processes as an organized set.
+**Pebble** helps you to orchestrate a set of local service processes as an organized set.
 It resembles well known tools such as _supervisord_, _runit_, or _s6_, in that it can
 easily manage non-system processes independently from the system services, but it was
 designed with unique features that help with more specific use cases.
@@ -13,15 +13,16 @@ client to itself. When the daemon runs it loads its own configuration from the
 _$PEBBLE_ directory, as defined in the environment, and also writes down in
 that same directory its state and unix sockets for communication.
 
-The _$PEBBLE_ directory must also contain a _layers/_ subdirectory, containing a
+The _$PEBBLE_ directory must also contain a _layers/_ subdirectory that holds a
 list of yaml files conventionally named as `2020-12-01T15:00:00.yaml`.  The reason
-for the timestamp in the filename is that these configuration files, as the
-directory name implies, are layered. That is, each layer sits above the former
-layer, and has the chance to improve or redefine the configuration as desired.
+for the timestamp in the filename is that these configuration files are layered,
+as the directory name implies. That is, each layer sits above the former
+layer, and has the chance to improve or redefine the service configuration as
+desired.
 
 For now, naming files as _01.yaml_, _02.yaml_, etc, will work just as well, but we
 will most likely enforce _some_ convention before the first stable release is ready.
-A key feature of timestamps is that it's easy to create a latest one without
+An interesting feature of timestamps is that it's easy to create a latest one without
 knowing what was there before.
 
 ## Layer configuration
@@ -39,7 +40,7 @@ services:
     srv1:
         override: replace
         summary: Service summary
-        command: cmd arg1 "arg2 arg3"
+        command: cmd arg1 "arg2a arg2b"
         default: start
         after:
             - srv2
@@ -49,9 +50,9 @@ services:
             - srv2
             - srv3
         environment:
-            - var1: val1
-            - var0: val0
-            - var2: val2
+            - VAR1: val1
+            - VAR2: val2
+            - VAR3: val3
 
     srv2:
         override: replace
@@ -65,10 +66,10 @@ services:
         command: cmd
 ```
 
-The file should be almost entirely obvious. The one interesting detail here is the _override_
+The file should be almost entirely obvious. One interesting detail there is the _override_
 field (for now required) which defines whether this entry _overrides_ the previous
-layer of the same name (if any, missing is okay), or merges with it. Any of the fields can
-be replaced individually in a merged configuration.
+service of the same name (if any - missing is okay), or merges with it. Any of the fields can
+be replaced individually in a merged service configuration.
 
 To illustrate, here is a sample override layer that might sit atop the one above:
 
@@ -80,7 +81,7 @@ services:
     srv1:
         override: merge
         environment:
-            - var3: val3
+            - VAR3: val3
         after:
             - srv4
         before:
