@@ -69,7 +69,7 @@ func RunAndWait(argv []string, env []string, timeout time.Duration, tomb *tomb.T
 	command.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	command.Env = append(os.Environ(), env...)
 
-	// Make sure we can obtain stdout and stderror. Same buffer so they're
+	// Make sure we can obtain stdout and stderr. Same buffer so they're
 	// combined.
 	buffer := strutil.NewLimitedBuffer(100, 10*1024)
 	command.Stdout = buffer

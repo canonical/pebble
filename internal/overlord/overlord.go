@@ -28,6 +28,7 @@ import (
 	"github.com/canonical/pebble/internal/logger"
 	"github.com/canonical/pebble/internal/osutil"
 	"github.com/canonical/pebble/internal/overlord/patch"
+	"github.com/canonical/pebble/internal/overlord/servstate"
 	"github.com/canonical/pebble/internal/overlord/state"
 	"github.com/canonical/pebble/internal/timing"
 )
@@ -60,7 +61,9 @@ type RestartBehavior interface {
 // Overlord is the central manager of the system, keeping track
 // of all available state managers and related helpers.
 type Overlord struct {
-	stateEng *StateEngine
+	pebbleDir string
+	stateEng  *StateEngine
+
 	// ensure loop
 	loopTomb    *tomb.Tomb
 	ensureLock  sync.Mutex
@@ -68,21 +71,33 @@ type Overlord struct {
 	ensureNext  time.Time
 	ensureRun   int32
 	pruneTicker *time.Ticker
+
 	// restarts
 	restartBehavior RestartBehavior
+
 	// managers
-	inited bool
-	runner *state.TaskRunner
+	inited     bool
+	runner     *state.TaskRunner
+	serviceMgr *servstate.ServiceManager
 }
 
 // New creates a new Overlord with all its state managers.
 // It can be provided with an optional RestartBehavior.
-func New(statePath string, restartBehavior RestartBehavior) (*Overlord, error) {
+func New(pebbleDir string, restartBehavior RestartBehavior) (*Overlord, error) {
 	o := &Overlord{
+		pebbleDir:       pebbleDir,
 		loopTomb:        new(tomb.Tomb),
 		inited:          true,
 		restartBehavior: restartBehavior,
 	}
+
+	if !filepath.IsAbs(pebbleDir) {
+		return nil, fmt.Errorf("directory %q must be absolute", pebbleDir)
+	}
+	if !osutil.IsDir(pebbleDir) {
+		return nil, fmt.Errorf("directory %q does not exist", pebbleDir)
+	}
+	statePath := filepath.Join(pebbleDir, ".pebble.state")
 
 	backend := &overlordStateBackend{
 		path:           statePath,
@@ -103,6 +118,12 @@ func New(statePath string, restartBehavior RestartBehavior) (*Overlord, error) {
 	}
 	o.runner.AddOptionalHandler(matchAnyUnknownTask, handleUnknownTask, nil)
 
+	serviceMgr, err := servstate.NewManager(s, o.runner, o.pebbleDir)
+	if err != nil {
+		return nil, err
+	}
+	o.addManager(serviceMgr)
+
 	// the shared task runner should be added last!
 	o.stateEng.AddManager(o.runner)
 
@@ -111,11 +132,10 @@ func New(statePath string, restartBehavior RestartBehavior) (*Overlord, error) {
 
 func (o *Overlord) addManager(mgr StateManager) {
 	// It may be necessary to keep a reference in the overlord itself.
-	// This is a convenient place to do so, with something like this:
-	//switch x := mgr.(type) {
-	//case *foostate.FooManager:
-	//	o.fooMgr = x
-	//}
+	switch x := mgr.(type) {
+	case *servstate.ServiceManager:
+		o.serviceMgr = x
+	}
 	o.stateEng.AddManager(mgr)
 }
 
@@ -389,6 +409,12 @@ func (o *Overlord) StateEngine() *StateEngine {
 // tasks for all managers under the overlord.
 func (o *Overlord) TaskRunner() *state.TaskRunner {
 	return o.runner
+}
+
+// ServiceManager returns the service manager responsible for services
+// under the overlord.
+func (o *Overlord) ServiceManager() *servstate.ServiceManager {
+	return o.serviceMgr
 }
 
 // Fake creates an Overlord without any managers and with a backend

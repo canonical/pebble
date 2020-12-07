@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/canonical/pebble/internal/overlord/state"
+	"github.com/canonical/pebble/internal/osutil/sys"
 )
 
 type Resp = resp
@@ -37,5 +38,13 @@ func FakeStateEnsureBefore(f func(st *state.State, d time.Duration)) (restore fu
 	stateEnsureBefore = f
 	return func() {
 		stateEnsureBefore = old
+	}
+}
+
+func FakeGetuid(f func() sys.UserID) (restore func()) {
+	old := sysGetuid
+	sysGetuid = f
+	return func() {
+		sysGetuid = old
 	}
 }

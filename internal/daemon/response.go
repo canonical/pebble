@@ -117,9 +117,10 @@ func (r *resp) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
 type errorKind string
 
 const (
-	errorKindLoginRequired = errorKind("login-required")
-	errorKindDaemonRestart = errorKind("daemon-restart")
-	errorKindSystemRestart = errorKind("system-restart")
+	errorKindLoginRequired     = errorKind("login-required")
+	errorKindDaemonRestart     = errorKind("daemon-restart")
+	errorKindSystemRestart     = errorKind("system-restart")
+	errorKindNoDefaultServices = errorKind("no-default-services")
 )
 
 type errorValue interface{}
@@ -146,11 +147,12 @@ func SyncResponse(result interface{}) Response {
 	}
 }
 
-func AsyncResponse(result map[string]interface{}) Response {
+func AsyncResponse(result map[string]interface{}, change string) Response {
 	return &resp{
 		Type:   ResponseTypeAsync,
 		Status: 202,
 		Result: result,
+		Change: change,
 	}
 }
 

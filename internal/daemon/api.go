@@ -41,6 +41,15 @@ var api = []*Command{{
 	UserOK: true,
 	GET:    v1GetChange,
 	POST:   v1PostChange,
+}, {
+	Path:   "/v1/services",
+	UserOK: true,
+	POST:   v1PostServices,
+}, {
+	Path:   "/v1/services/{name}",
+	UserOK: true,
+	GET:    v1GetService,
+	POST:   v1PostService,
 }}
 
 var (
@@ -51,6 +60,17 @@ var (
 
 	muxVars = mux.Vars
 )
+
+func newChange(st *state.State, kind, summary string, taskSets []*state.TaskSet, serviceNames []string) *state.Change {
+	chg := st.NewChange(kind, summary)
+	for _, taskSet := range taskSets {
+		chg.AddAll(taskSet)
+	}
+	if serviceNames != nil {
+		chg.Set("service-names", serviceNames)
+	}
+	return chg
+}
 
 func v1SystemInfo(c *Command, r *http.Request, _ *userState) Response {
 	result := map[string]interface{}{

@@ -44,6 +44,7 @@ import (
 func Test(t *testing.T) { check.TestingT(t) }
 
 type daemonSuite struct {
+	pebbleDir       string
 	statePath       string
 	authorized      bool
 	err             error
@@ -54,7 +55,8 @@ type daemonSuite struct {
 var _ = check.Suite(&daemonSuite{})
 
 func (s *daemonSuite) SetUpTest(c *check.C) {
-	s.statePath = c.MkDir() + "/state.json"
+	s.pebbleDir = c.MkDir()
+	s.statePath = filepath.Join(s.pebbleDir, ".pebble.state")
 	systemdSdNotify = func(notif string) error {
 		s.notified = append(s.notified, notif)
 		return nil
@@ -69,7 +71,7 @@ func (s *daemonSuite) TearDownTest(c *check.C) {
 }
 
 func (s *daemonSuite) newDaemon(c *check.C) *Daemon {
-	d, err := New(s.statePath)
+	d, err := New(s.pebbleDir)
 	c.Assert(err, check.IsNil)
 	d.addRoutes()
 	return d
@@ -207,30 +209,32 @@ func (s *daemonSuite) TestFillsWarnings(c *check.C) {
 }
 
 func (s *daemonSuite) TestGuestAccess(c *check.C) {
+	d := s.newDaemon(c)
+
 	get := &http.Request{Method: "GET"}
 	put := &http.Request{Method: "PUT"}
 	pst := &http.Request{Method: "POST"}
 	del := &http.Request{Method: "DELETE"}
 
-	cmd := &Command{d: s.newDaemon(c)}
+	cmd := &Command{d: d}
 	c.Check(cmd.canAccess(get, nil), check.Equals, accessUnauthorized)
 	c.Check(cmd.canAccess(put, nil), check.Equals, accessUnauthorized)
 	c.Check(cmd.canAccess(pst, nil), check.Equals, accessUnauthorized)
 	c.Check(cmd.canAccess(del, nil), check.Equals, accessUnauthorized)
 
-	cmd = &Command{d: s.newDaemon(c), RootOnly: true}
+	cmd = &Command{d: d, AdminOnly: true}
 	c.Check(cmd.canAccess(get, nil), check.Equals, accessUnauthorized)
 	c.Check(cmd.canAccess(put, nil), check.Equals, accessUnauthorized)
 	c.Check(cmd.canAccess(pst, nil), check.Equals, accessUnauthorized)
 	c.Check(cmd.canAccess(del, nil), check.Equals, accessUnauthorized)
 
-	cmd = &Command{d: s.newDaemon(c), UserOK: true}
+	cmd = &Command{d: d, UserOK: true}
 	c.Check(cmd.canAccess(get, nil), check.Equals, accessUnauthorized)
 	c.Check(cmd.canAccess(put, nil), check.Equals, accessUnauthorized)
 	c.Check(cmd.canAccess(pst, nil), check.Equals, accessUnauthorized)
 	c.Check(cmd.canAccess(del, nil), check.Equals, accessUnauthorized)
 
-	cmd = &Command{d: s.newDaemon(c), GuestOK: true}
+	cmd = &Command{d: d, GuestOK: true}
 	c.Check(cmd.canAccess(get, nil), check.Equals, accessOK)
 	c.Check(cmd.canAccess(put, nil), check.Equals, accessUnauthorized)
 	c.Check(cmd.canAccess(pst, nil), check.Equals, accessUnauthorized)
@@ -238,13 +242,15 @@ func (s *daemonSuite) TestGuestAccess(c *check.C) {
 }
 
 func (s *daemonSuite) TestUntrustedAccessUntrustedOKWithUser(c *check.C) {
-	remoteAddr := "pid=100;uid=1000;socket=" + UntrustedSocketPath + ";"
+	d := s.newDaemon(c)
+
+	remoteAddr := "pid=100;uid=1000;socket=" + d.untrustedSocketPath + ";"
 	get := &http.Request{Method: "GET", RemoteAddr: remoteAddr}
 	put := &http.Request{Method: "PUT", RemoteAddr: remoteAddr}
 	pst := &http.Request{Method: "POST", RemoteAddr: remoteAddr}
 	del := &http.Request{Method: "DELETE", RemoteAddr: remoteAddr}
 
-	cmd := &Command{d: s.newDaemon(c), UntrustedOK: true}
+	cmd := &Command{d: d, UntrustedOK: true}
 	c.Check(cmd.canAccess(get, nil), check.Equals, accessOK)
 	c.Check(cmd.canAccess(put, nil), check.Equals, accessOK)
 	c.Check(cmd.canAccess(pst, nil), check.Equals, accessOK)
@@ -252,13 +258,15 @@ func (s *daemonSuite) TestUntrustedAccessUntrustedOKWithUser(c *check.C) {
 }
 
 func (s *daemonSuite) TestUntrustedAccessUntrustedOKWithRoot(c *check.C) {
-	remoteAddr := "pid=100;uid=0;socket=" + UntrustedSocketPath + ";"
+	d := s.newDaemon(c)
+
+	remoteAddr := "pid=100;uid=0;socket=" + d.untrustedSocketPath + ";"
 	get := &http.Request{Method: "GET", RemoteAddr: remoteAddr}
 	put := &http.Request{Method: "PUT", RemoteAddr: remoteAddr}
 	pst := &http.Request{Method: "POST", RemoteAddr: remoteAddr}
 	del := &http.Request{Method: "DELETE", RemoteAddr: remoteAddr}
 
-	cmd := &Command{d: s.newDaemon(c), UntrustedOK: true}
+	cmd := &Command{d: d, UntrustedOK: true}
 	c.Check(cmd.canAccess(get, nil), check.Equals, accessOK)
 	c.Check(cmd.canAccess(put, nil), check.Equals, accessOK)
 	c.Check(cmd.canAccess(pst, nil), check.Equals, accessOK)
@@ -266,82 +274,91 @@ func (s *daemonSuite) TestUntrustedAccessUntrustedOKWithRoot(c *check.C) {
 }
 
 func (s *daemonSuite) TestUserAccess(c *check.C) {
+	d := s.newDaemon(c)
+
 	get := &http.Request{Method: "GET", RemoteAddr: "pid=100;uid=42;socket=;"}
 	put := &http.Request{Method: "PUT", RemoteAddr: "pid=100;uid=42;socket=;"}
 
-	cmd := &Command{d: s.newDaemon(c)}
+	cmd := &Command{d: d}
 	c.Check(cmd.canAccess(get, nil), check.Equals, accessUnauthorized)
 	c.Check(cmd.canAccess(put, nil), check.Equals, accessUnauthorized)
 
-	cmd = &Command{d: s.newDaemon(c), RootOnly: true}
+	cmd = &Command{d: d, AdminOnly: true}
 	c.Check(cmd.canAccess(get, nil), check.Equals, accessUnauthorized)
 	c.Check(cmd.canAccess(put, nil), check.Equals, accessUnauthorized)
 
-	cmd = &Command{d: s.newDaemon(c), UserOK: true}
+	cmd = &Command{d: d, UserOK: true}
 	c.Check(cmd.canAccess(get, nil), check.Equals, accessOK)
 	c.Check(cmd.canAccess(put, nil), check.Equals, accessUnauthorized)
 
-	cmd = &Command{d: s.newDaemon(c), GuestOK: true}
+	cmd = &Command{d: d, GuestOK: true}
 	c.Check(cmd.canAccess(get, nil), check.Equals, accessOK)
 	c.Check(cmd.canAccess(put, nil), check.Equals, accessUnauthorized)
 
 	// Since this request has a RemoteAddr, it must be coming from the snapd
 	// socket instead of the snap one. In that case, UntrustedOK should have no
 	// bearing on the default behavior, which is to deny access.
-	cmd = &Command{d: s.newDaemon(c), UntrustedOK: true}
+	cmd = &Command{d: d, UntrustedOK: true}
 	c.Check(cmd.canAccess(get, nil), check.Equals, accessUnauthorized)
 	c.Check(cmd.canAccess(put, nil), check.Equals, accessUnauthorized)
 }
 
 func (s *daemonSuite) TestLoggedInUserAccess(c *check.C) {
+	d := s.newDaemon(c)
+
 	user := &userState{}
 	get := &http.Request{Method: "GET", RemoteAddr: "pid=100;uid=42;socket=;"}
 	put := &http.Request{Method: "PUT", RemoteAddr: "pid=100;uid=42;socket=;"}
 
-	cmd := &Command{d: s.newDaemon(c)}
+	cmd := &Command{d: d}
 	c.Check(cmd.canAccess(get, user), check.Equals, accessOK)
 	c.Check(cmd.canAccess(put, user), check.Equals, accessOK)
 
-	cmd = &Command{d: s.newDaemon(c), RootOnly: true}
+	cmd = &Command{d: d, AdminOnly: true}
 	c.Check(cmd.canAccess(get, user), check.Equals, accessUnauthorized)
 	c.Check(cmd.canAccess(put, user), check.Equals, accessUnauthorized)
 
-	cmd = &Command{d: s.newDaemon(c), UserOK: true}
+	cmd = &Command{d: d, UserOK: true}
 	c.Check(cmd.canAccess(get, user), check.Equals, accessOK)
 	c.Check(cmd.canAccess(put, user), check.Equals, accessOK)
 
-	cmd = &Command{d: s.newDaemon(c), GuestOK: true}
+	cmd = &Command{d: d, GuestOK: true}
 	c.Check(cmd.canAccess(get, user), check.Equals, accessOK)
 	c.Check(cmd.canAccess(put, user), check.Equals, accessOK)
 
-	cmd = &Command{d: s.newDaemon(c), UntrustedOK: true}
+	cmd = &Command{d: d, UntrustedOK: true}
 	c.Check(cmd.canAccess(get, user), check.Equals, accessOK)
 	c.Check(cmd.canAccess(put, user), check.Equals, accessOK)
 }
 
 func (s *daemonSuite) TestSuperAccess(c *check.C) {
-	get := &http.Request{Method: "GET", RemoteAddr: "pid=100;uid=0;socket=;"}
-	put := &http.Request{Method: "PUT", RemoteAddr: "pid=100;uid=0;socket=;"}
+	d := s.newDaemon(c)
 
-	cmd := &Command{d: s.newDaemon(c)}
-	c.Check(cmd.canAccess(get, nil), check.Equals, accessOK)
-	c.Check(cmd.canAccess(put, nil), check.Equals, accessOK)
+	for _, uid := range []int{0, os.Getuid()} {
+		remoteAddr := fmt.Sprintf("pid=100;uid=%d;socket=;", uid)
+		get := &http.Request{Method: "GET", RemoteAddr: remoteAddr}
+		put := &http.Request{Method: "PUT", RemoteAddr: remoteAddr}
 
-	cmd = &Command{d: s.newDaemon(c), RootOnly: true}
-	c.Check(cmd.canAccess(get, nil), check.Equals, accessOK)
-	c.Check(cmd.canAccess(put, nil), check.Equals, accessOK)
+		cmd := &Command{d: d}
+		c.Check(cmd.canAccess(get, nil), check.Equals, accessOK)
+		c.Check(cmd.canAccess(put, nil), check.Equals, accessOK)
 
-	cmd = &Command{d: s.newDaemon(c), UserOK: true}
-	c.Check(cmd.canAccess(get, nil), check.Equals, accessOK)
-	c.Check(cmd.canAccess(put, nil), check.Equals, accessOK)
+		cmd = &Command{d: d, AdminOnly: true}
+		c.Check(cmd.canAccess(get, nil), check.Equals, accessOK)
+		c.Check(cmd.canAccess(put, nil), check.Equals, accessOK)
 
-	cmd = &Command{d: s.newDaemon(c), GuestOK: true}
-	c.Check(cmd.canAccess(get, nil), check.Equals, accessOK)
-	c.Check(cmd.canAccess(put, nil), check.Equals, accessOK)
+		cmd = &Command{d: d, UserOK: true}
+		c.Check(cmd.canAccess(get, nil), check.Equals, accessOK)
+		c.Check(cmd.canAccess(put, nil), check.Equals, accessOK)
 
-	cmd = &Command{d: s.newDaemon(c), UntrustedOK: true}
-	c.Check(cmd.canAccess(get, nil), check.Equals, accessOK)
-	c.Check(cmd.canAccess(put, nil), check.Equals, accessOK)
+		cmd = &Command{d: d, GuestOK: true}
+		c.Check(cmd.canAccess(get, nil), check.Equals, accessOK)
+		c.Check(cmd.canAccess(put, nil), check.Equals, accessOK)
+
+		cmd = &Command{d: d, UntrustedOK: true}
+		c.Check(cmd.canAccess(get, nil), check.Equals, accessOK)
+		c.Check(cmd.canAccess(put, nil), check.Equals, accessOK)
+	}
 }
 
 func (s *daemonSuite) TestAddRoutes(c *check.C) {

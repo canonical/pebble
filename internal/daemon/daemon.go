@@ -32,37 +32,38 @@ import (
 
 	"github.com/canonical/pebble/internal/logger"
 	"github.com/canonical/pebble/internal/osutil"
+	"github.com/canonical/pebble/internal/osutil/sys"
 	"github.com/canonical/pebble/internal/overlord"
 	"github.com/canonical/pebble/internal/overlord/standby"
 	"github.com/canonical/pebble/internal/overlord/state"
 	"github.com/canonical/pebble/internal/systemd"
 	"os/exec"
+	"path/filepath"
 	"strings"
 )
 
 var (
-	// TODO Move these to daemon configuration, and force a command line
-	// option to be provided so that multiple pebbles co-exist fine.
-	SocketPath          string = "./pebble.socket"
-	UntrustedSocketPath string = "./pebble-untrusted.socket"
-
 	ErrRestartSocket = fmt.Errorf("daemon stop requested to wait for socket activation")
 
 	systemdSdNotify = systemd.SdNotify
+	sysGetuid = sys.Getuid
 )
 
 // A Daemon listens for requests and routes them to the right command
 type Daemon struct {
-	Version           string
-	overlord          *overlord.Overlord
-	state             *state.State
-	generalListener   net.Listener
-	untrustedListener net.Listener
-	connTracker       *connTracker
-	serve             *http.Server
-	tomb              tomb.Tomb
-	router            *mux.Router
-	standbyOpinions   *standby.StandbyOpinions
+	Version             string
+	pebbleDir           string
+	normalSocketPath    string
+	untrustedSocketPath string
+	overlord            *overlord.Overlord
+	state               *state.State
+	generalListener     net.Listener
+	untrustedListener   net.Listener
+	connTracker         *connTracker
+	serve               *http.Server
+	tomb                tomb.Tomb
+	router              *mux.Router
+	standbyOpinions     *standby.StandbyOpinions
 
 	// set to remember we need to restart the system
 	restartSystem bool
@@ -97,7 +98,7 @@ type Command struct {
 	GuestOK     bool
 	UserOK      bool
 	UntrustedOK bool
-	RootOnly    bool
+	AdminOnly    bool
 
 	d *Daemon
 }
@@ -113,21 +114,21 @@ const (
 // canAccess checks the following properties:
 //
 // - if the user is `root` everything is allowed
-// - if a user is logged in and the command doesn't have RootOnly, everything is allowed
-// - POST/PUT/DELETE all require `root`, or just login if not RootOnly
+// - if a user is logged in and the command doesn't have AdminOnly, everything is allowed
+// - POST/PUT/DELETE all require the admin, or just login if not AdminOnly
 //
 // Otherwise for GET requests the following parameters are honored:
 // - GuestOK: anyone can access GET
 // - UserOK: any uid on the local system can access GET
-// - RootOnly: only root can access this
+// - AdminOnly: only the administrator can access this
 // - UntrustedOK: can access this via the untrusted socket
 func (c *Command) canAccess(r *http.Request, user *userState) accessResult {
-	if c.RootOnly && (c.UserOK || c.GuestOK || c.UntrustedOK) {
-		logger.Panicf("internal error: command cannot have RootOnly together with any *OK flag")
+	if c.AdminOnly && (c.UserOK || c.GuestOK || c.UntrustedOK) {
+		logger.Panicf("internal error: command cannot have AdminOnly together with any *OK flag")
 	}
 
-	if user != nil && !c.RootOnly {
-		// Authenticated users do anything not requiring explicit root.
+	if user != nil && !c.AdminOnly {
+		// Authenticated users do anything not requiring explicit admin.
 		return accessOK
 	}
 
@@ -140,7 +141,8 @@ func (c *Command) canAccess(r *http.Request, user *userState) accessResult {
 		logger.Noticef("unexpected error when attempting to get UID: %s", err)
 		return accessForbidden
 	}
-	isUntrusted := (socket == UntrustedSocketPath)
+
+	isUntrusted := (socket == c.d.untrustedSocketPath)
 
 	_ = pid
 	_ = uid
@@ -152,8 +154,8 @@ func (c *Command) canAccess(r *http.Request, user *userState) accessResult {
 		return accessUnauthorized
 	}
 
-	// the !RootOnly check is redundant, but belt-and-suspenders
-	if r.Method == "GET" && !c.RootOnly {
+	// the !AdminOnly check is redundant, but belt-and-suspenders
+	if r.Method == "GET" && !c.AdminOnly {
 		// Guest and user access restricted to GET requests
 		if c.GuestOK {
 			return accessOK
@@ -169,12 +171,12 @@ func (c *Command) canAccess(r *http.Request, user *userState) accessResult {
 		return accessUnauthorized
 	}
 
-	if uid == 0 {
-		// Superuser does anything.
+	if uid == 0 || sys.UserID(uid) == sysGetuid() {
+		// Superuser and process owner can do anything.
 		return accessOK
 	}
 
-	if c.RootOnly {
+	if c.AdminOnly {
 		return accessUnauthorized
 	}
 
@@ -281,11 +283,13 @@ func logit(handler http.Handler) http.Handler {
 		t0 := time.Now()
 		handler.ServeHTTP(ww, r)
 		t := time.Now().Sub(t0)
-		if strings.HasSuffix(r.RemoteAddr, ";") {
-			logger.Debugf("%s %s %s %s %d", r.RemoteAddr, r.Method, r.URL, t, ww.s)
-			logger.Noticef("%s %s %s %d", r.Method, r.URL, t, ww.s)
-		} else {
-			logger.Noticef("%s %s %s %s %d", r.RemoteAddr, r.Method, r.URL, t, ww.s)
+		if !strings.Contains(r.URL.String(), "/v1/changes/") {
+			if strings.HasSuffix(r.RemoteAddr, ";") {
+				logger.Debugf("%s %s %s %s %d", r.RemoteAddr, r.Method, r.URL, t, ww.s)
+				logger.Noticef("%s %s %s %d", r.Method, r.URL, t, ww.s)
+			} else {
+				logger.Noticef("%s %s %s %s %d", r.RemoteAddr, r.Method, r.URL, t, ww.s)
+			}
 		}
 	})
 }
@@ -295,18 +299,18 @@ func logit(handler http.Handler) http.Handler {
 func (d *Daemon) Init() error {
 	listenerMap := make(map[string]net.Listener)
 
-	if listener, err := getListener(SocketPath, listenerMap); err == nil {
+	if listener, err := getListener(d.normalSocketPath, listenerMap); err == nil {
 		d.generalListener = &ucrednetListener{Listener: listener}
 	} else {
-		return fmt.Errorf("when trying to listen on %s: %v", SocketPath, err)
+		return fmt.Errorf("when trying to listen on %s: %v", d.normalSocketPath, err)
 	}
 
-	if listener, err := getListener(UntrustedSocketPath, listenerMap); err == nil {
+	if listener, err := getListener(d.untrustedSocketPath, listenerMap); err == nil {
 		// This listener may also be nil if that socket wasn't among
 		// the listeners, so check it before using it.
 		d.untrustedListener = &ucrednetListener{Listener: listener}
 	} else {
-		logger.Debugf("cannot get listener for %q: %v", UntrustedSocketPath, err)
+		logger.Debugf("cannot get listener for %q: %v", d.untrustedSocketPath, err)
 	}
 
 	d.addRoutes()
@@ -343,7 +347,7 @@ func (d *Daemon) addRoutes() {
 
 	// also maybe add a /favicon.ico handler...
 
-	d.router.NotFoundHandler = statusNotFound("not found")
+	d.router.NotFoundHandler = statusNotFound("invalid API endpoint requested")
 }
 
 type connTracker struct {
@@ -646,9 +650,13 @@ func (d *Daemon) RebootIsMissing(st *state.State) error {
 	return state.ErrExpectedReboot
 }
 
-func New(statePath string) (*Daemon, error) {
-	d := &Daemon{}
-	ovld, err := overlord.New(statePath, d)
+func New(pebbleDir string) (*Daemon, error) {
+	d := &Daemon{
+		pebbleDir: pebbleDir,
+		normalSocketPath: filepath.Join(pebbleDir, ".pebble.socket"),
+		untrustedSocketPath: filepath.Join(pebbleDir, ".pebble.untrusted-socket"),
+	}
+	ovld, err := overlord.New(pebbleDir, d)
 	if err == state.ErrExpectedReboot {
 		// we proceed without overlord until we reach Stop
 		// where we will schedule and wait again for a system restart.

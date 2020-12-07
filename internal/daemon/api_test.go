@@ -27,6 +27,8 @@ var _ = check.Suite(&apiSuite{})
 type apiSuite struct {
 	d *Daemon
 
+	pebbleDir string
+
 	vars map[string]string
 
 	restoreMuxVars func()
@@ -34,10 +36,12 @@ type apiSuite struct {
 
 func (s *apiSuite) SetUpTest(c *check.C) {
 	s.restoreMuxVars = FakeMuxVars(s.muxVars)
+	s.pebbleDir = c.MkDir()
 }
 
 func (s *apiSuite) TearDownTest(c *check.C) {
 	s.d = nil
+	s.pebbleDir = ""
 	s.restoreMuxVars()
 }
 
@@ -49,7 +53,7 @@ func (s *apiSuite) daemon(c *check.C) *Daemon {
 	if s.d != nil {
 		panic("called daemon() twice")
 	}
-	d, err := New(c.MkDir() + "/state.json")
+	d, err := New(s.pebbleDir)
 	c.Assert(err, check.IsNil)
 	d.addRoutes()
 	s.d = d

@@ -77,6 +77,19 @@ func (m *ServiceManager) Ensure() error {
 	return nil
 }
 
+// ActiveServices returns the name of the services which are currently
+// set to run. They may be running or not depending on the state of their
+// process lifecycle.
+func (m *ServiceManager) ActiveServices() []string {
+	var names []string
+	for name, service := range m.flattened.Services {
+		if service.Default == setup.StartAction {
+			names = append(names, name)
+		}
+	}
+	return names
+}
+
 // DefaultServices returns the name of the services set to start
 // by default.
 func (m *ServiceManager) DefaultServices() ([]string, error) {
@@ -96,19 +109,29 @@ func (m *ServiceManager) DefaultServices() ([]string, error) {
 	return m.flattened.StartOrder(names)
 }
 
-// ActiveServices returns the name of the services which are currently
-// set to run. They may be running or not depending on the state of their
-// process lifecycle.
-func (m *ServiceManager) ActiveServices() []string {
-	var names []string
-	for name, service := range m.flattened.Services {
-		if service.Default == setup.StartAction {
-			names = append(names, name)
-		}
+// StartOrder returns the provided services, together with any required
+// dependencies, in the proper order for starting them all up.
+func (m *ServiceManager) StartOrder(services []string) ([]string, error) {
+	releaseSetup, err := m.acquireSetup()
+	if err != nil {
+		return nil, err
 	}
-	return names
+	defer releaseSetup()
+
+	return m.flattened.StartOrder(services)
 }
 
+// StartOrder returns the provided services, together with any required
+// dependencies, in the proper order for starting them all up.
+func (m *ServiceManager) StopOrder(services []string) ([]string, error) {
+	releaseSetup, err := m.acquireSetup()
+	if err != nil {
+		return nil, err
+	}
+	defer releaseSetup()
+
+	return m.flattened.StopOrder(services)
+}
 
 // Override changes the current override service layer which sits atop the
 // layers loaded from storage. No services will be started by default (see AutoStart),
