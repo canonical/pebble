@@ -63,7 +63,8 @@ type setupTest struct {
 	layers  []*setup.Layer
 	result  *setup.Layer
 	error   string
-	order   map[string][]string
+	start   map[string][]string
+	stop    map[string][]string
 }
 
 var setupTests = []setupTest{{
@@ -236,10 +237,15 @@ var setupTests = []setupTest{{
 			},
 		},
 	},
-	order: map[string][]string{
+	start: map[string][]string{
 		"srv1": []string{"srv2", "srv1", "srv3"},
 		"srv2": []string{"srv2"},
 		"srv3": []string{"srv3"},
+	},
+	stop: map[string][]string{
+		"srv1": []string{"srv1"},
+		"srv2": []string{"srv1", "srv2"},
+		"srv3": []string{"srv3", "srv1"},
 	},
 }, {
 	summary: "Order loop on before/after",
@@ -327,8 +333,13 @@ func (s *S) TestSetupTests(c *C) {
 				c.Assert(result, DeepEquals, test.result)
 			}
 			if err == nil {
-				for name, order := range test.order {
+				for name, order := range test.start {
 					names, err := result.StartOrder([]string{name})
+					c.Assert(err, IsNil)
+					c.Assert(names, DeepEquals, order)
+				}
+				for name, order := range test.stop {
+					names, err := result.StopOrder([]string{name})
 					c.Assert(err, IsNil)
 					c.Assert(names, DeepEquals, order)
 				}

@@ -137,14 +137,37 @@ func (s *Setup) Flatten() (*Layer, error) {
 	return &flat, nil
 }
 
-// StartOrder returns the order in which services must be started for the
-// named services to be properly started.
+// StartOrder returns the required services that must be started for the named
+// services to be properly started, in the order that they must be started.
 // An error is returned when a provided service name does not exist, or there
 // is an order cycle involving the provided service or its dependencies.
 func (l *Layer) StartOrder(names []string) ([]string, error) {
+	return l.order(names, false)
+}
 
-	// Collect all services that will be started.
-	successors := make(map[string][]string)
+// StopOrder returns the required services that must be stopped for the named
+// services to be properly stopped, in the order that they must be stopped.
+// An error is returned when a provided service name does not exist, or there
+// is an order cycle involving the provided service or its dependencies.
+func (l *Layer) StopOrder(names []string) ([]string, error) {
+	return l.order(names, true)
+}
+
+func (l *Layer) order(names []string, stop bool) ([]string, error) {
+
+	// For stop, create a list of reversed dependencies.
+	predecessors := map[string][]string(nil)
+	if stop {
+		predecessors = make(map[string][]string)
+		for name, service := range l.Services {
+			for _, req := range service.Requires {
+				predecessors[req] = append(predecessors[req], name)
+			}
+		}
+	}
+
+	// Collect all services that will be started or stopped.
+	successors := map[string][]string{}
 	pending := append([]string(nil), names...)
 	for i := 0; i < len(pending); i++ {
 		name := pending[i]
@@ -152,23 +175,36 @@ func (l *Layer) StartOrder(names []string) ([]string, error) {
 			continue
 		}
 		successors[name] = nil
-		pending = append(pending, l.Services[name].Requires...)
+		if stop {
+			pending = append(pending, predecessors[name]...)
+		} else {
+			service, ok := l.Services[name]
+			if !ok {
+				return nil, fmt.Errorf("service %q does not exist", name)
+			}
+			pending = append(pending, service.Requires...)
+		}
 	}
 
-	// Create a list of successors involving those services.
+	// Create a list of successors involving those services only.
 	for name := range successors {
 		service, ok := l.Services[name]
 		if !ok {
 			return nil, fmt.Errorf("service %q does not exist", name)
 		}
 		succs := successors[name]
-		for _, after := range service.After {
+		serviceAfter := service.After
+		serviceBefore := service.Before
+		if stop {
+			serviceAfter, serviceBefore = serviceBefore, serviceAfter
+		}
+		for _, after := range serviceAfter {
 			if _, required := successors[after]; required {
 				succs = append(succs, after)
 			}
 		}
 		successors[name] = succs
-		for _, before := range service.Before {
+		for _, before := range serviceBefore {
 			if succs, required := successors[before]; required {
 				successors[before] = append(succs, name)
 			}
