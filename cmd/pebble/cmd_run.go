@@ -26,6 +26,7 @@ import (
 
 	"github.com/canonical/pebble/cmd"
 	"github.com/canonical/pebble/internal/daemon"
+	"github.com/canonical/pebble/internal/client"
 	"github.com/canonical/pebble/internal/logger"
 	"github.com/canonical/pebble/internal/systemd"
 )
@@ -37,13 +38,18 @@ The run command starts pebble and runs the configured environment.
 
 type cmdRun struct {
 	clientMixin
+
+	Hold bool `long:"hold"`
 }
 
 func init() {
-	addCommand("run", shortRunHelp, longRunHelp, func() flags.Commander { return &cmdRun{} }, nil, nil)
+	addCommand("run", shortRunHelp, longRunHelp, func() flags.Commander { return &cmdRun{} },
+		map[string]string{
+			"hold": "Do not start default services automatically",
+		}, nil)
 }
 
-func (cmd cmdRun) Execute(args []string) error {
+func (rcmd *cmdRun) Execute(args []string) error {
 	if len(args) > 0 {
 		return ErrExtraArgs
 	}
@@ -51,14 +57,14 @@ func (cmd cmdRun) Execute(args []string) error {
 	sigs := make(chan os.Signal, 2)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 
-	if err := runDaemon(sigs); err != nil {
+	if err := runDaemon(rcmd, sigs); err != nil {
 		if err == daemon.ErrRestartSocket {
 			// No "error: " prefix as this isn't an error.
 			fmt.Fprintf(os.Stdout, "%v\n", err)
 			// This exit code must be in system'd SuccessExitStatus.
 			panic(&exitStatus{42})
 		}
-		fmt.Fprintf(os.Stderr, "cannot run daemon: %v\n", err)
+		fmt.Fprintf(os.Stderr, "cannot run pebble: %v\n", err)
 		panic(&exitStatus{1})
 	}
 
@@ -101,12 +107,11 @@ func sanityCheck() error {
 	return nil
 }
 
-func runDaemon(ch chan os.Signal) error {
+func runDaemon(rcmd *cmdRun, ch chan os.Signal) error {
 
 	t0 := time.Now().Truncate(time.Millisecond)
 
-	// TODO Provide state file path here.
-	d, err := daemon.New("./state.json")
+	d, err := daemon.New(os.Getenv("PEBBLE"))
 	if err != nil {
 		return err
 	}
@@ -128,7 +133,6 @@ func runDaemon(ch chan os.Signal) error {
 	}
 
 	d.Version = cmd.Version
-
 	d.Start()
 
 	watchdog, err := runWatchdog(d)
@@ -140,6 +144,16 @@ func runDaemon(ch chan os.Signal) error {
 	}
 
 	logger.Debugf("activation done in %v", time.Now().Truncate(time.Millisecond).Sub(t0))
+
+	if !rcmd.Hold {
+		servopts := client.ServiceOptions{}
+		changeID, err := rcmd.client.AutoStart(&servopts)
+		if err != nil {
+			logger.Noticef("Cannot start default services: %v", err)
+		} else {
+			logger.Noticef("Started default services with change %s.", changeID)
+		}
+	}
 
 out:
 	for {
@@ -157,6 +171,9 @@ out:
 			}
 		}
 	}
+
+	// Close our own self-connection, otherwise it prevents fast and clean termination.
+	rcmd.client.CloseIdleConnections()
 
 	return d.Stop(ch)
 }

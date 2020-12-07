@@ -110,6 +110,13 @@ func New(config *Config) *Client {
 	}
 }
 
+func (client *Client) CloseIdleConnections() {
+	c, ok := client.doer.(*http.Client)
+	if ok {
+		c.CloseIdleConnections()
+	}
+}
+
 // Maintenance returns an error reflecting the daemon maintenance status or nil.
 func (client *Client) Maintenance() error {
 	return client.maintenance

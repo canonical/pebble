@@ -25,10 +25,11 @@ func Test(t *testing.T) { TestingT(t) }
 
 type BasePebbleSuite struct {
 	testutil.BaseTest
-	stdin    *bytes.Buffer
-	stdout   *bytes.Buffer
-	stderr   *bytes.Buffer
-	password string
+	stdin     *bytes.Buffer
+	stdout    *bytes.Buffer
+	stderr    *bytes.Buffer
+	password  string
+	pebbleDir string
 
 	AuthFile string
 }
@@ -39,6 +40,9 @@ func (s *BasePebbleSuite) readPassword(fd int) ([]byte, error) {
 
 func (s *BasePebbleSuite) SetUpTest(c *C) {
 	s.BaseTest.SetUpTest(c)
+
+	s.pebbleDir = c.MkDir()
+	os.Setenv("PEBBLE", s.pebbleDir)
 
 	s.stdin = bytes.NewBuffer(nil)
 	s.stdout = bytes.NewBuffer(nil)
@@ -57,6 +61,8 @@ func (s *BasePebbleSuite) SetUpTest(c *C) {
 }
 
 func (s *BasePebbleSuite) TearDownTest(c *C) {
+	os.Setenv("PEBBLE", "")
+
 	pebble.Stdin = os.Stdin
 	pebble.Stdout = os.Stdout
 	pebble.Stderr = os.Stderr

@@ -20,6 +20,7 @@ import (
 	"io"
 	"os"
 	"os/user"
+	"path/filepath"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -29,6 +30,7 @@ import (
 	"golang.org/x/crypto/ssh/terminal"
 
 	"github.com/canonical/pebble/internal/client"
+	"github.com/canonical/pebble/internal/osutil"
 	"github.com/canonical/pebble/internal/logger"
 )
 
@@ -301,22 +303,8 @@ var (
 	isStdoutTTY = terminal.IsTerminal(1)
 )
 
-// TODO Support a flag to set the overall configuration directory.
-var PebbleSocket = "./pebble.socket"
-
 // ClientConfig is the configuration of the Client used by all commands.
-var ClientConfig = client.Config{
-	// we need the general socket
-	Socket: PebbleSocket,
-}
-
-// Client returns a new client using ClientConfig as configuration.
-// commands should (in general) not use this, and instead use clientMixin.
-func mkClient() *client.Client {
-	cfg := &ClientConfig
-	cli := client.New(cfg)
-	return cli
-}
+var clientConfig client.Config
 
 func main() {
 	defer func() {
@@ -329,7 +317,7 @@ func main() {
 	}()
 
 	if err := run(); err != nil {
-		fmt.Fprintf(Stderr, errorPrefix+" %v\n", err)
+		fmt.Fprintf(Stderr, errorPrefix+"%v\n", err)
 		os.Exit(1)
 	}
 }
@@ -348,7 +336,13 @@ func run() error {
 		fmt.Fprintf(Stderr, "WARNING: Cannot activate logging: %v\n", err)
 	}
 
-	cli := mkClient()
+	pebbleDir := os.Getenv("PEBBLE")
+	if pebbleDir == "" || !osutil.IsDir(pebbleDir) {
+		return fmt.Errorf("$PEBBLE must point to a pebble directory")
+	}
+	clientConfig.Socket = filepath.Join(pebbleDir, ".pebble.socket")
+
+	cli := client.New(&clientConfig)
 	parser := Parser(cli)
 	xtra, err := parser.Parse()
 	if err != nil {
@@ -411,6 +405,8 @@ func errorToMessage(e error) (normalMessage string, err error) {
 	case client.ErrorKindSystemRestart:
 		isError = false
 		msg = "pebble is about to reboot the system"
+	case client.ErrorKindNoDefaultServices:
+		msg = "no default services"
 	default:
 		msg = cerr.Message
 	}

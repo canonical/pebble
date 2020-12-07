@@ -20,14 +20,18 @@ import (
 
 	//"github.com/jessevdk/go-flags"
 
-	//"github.com/canonical/pebble/internal/client"
+	"github.com/canonical/pebble/internal/client"
 )
 
 var RunMain = run
 
-var (
-	Client = mkClient
+var ClientConfig = &clientConfig
 
+func Client() *client.Client {
+	return client.New(ClientConfig)
+}
+
+var (
 	//FirstNonOptionIsRun = firstNonOptionIsRun
 
 	//CreateUserDataDirs = createUserDataDirs
