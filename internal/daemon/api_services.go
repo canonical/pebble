@@ -1,0 +1,116 @@
+// Copyright (c) 2014-2020 Canonical Ltd
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License version 3 as
+// published by the Free Software Foundation.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+package daemon
+
+import (
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"strings"
+
+	"github.com/canonical/pebble/internal/overlord/servstate"
+	"github.com/canonical/pebble/internal/overlord/state"
+)
+
+func v1GetServices(c *Command, r *http.Request, _ *userState) Response {
+	return statusBadRequest("not implemented")
+}
+
+func v1PostServices(c *Command, r *http.Request, _ *userState) Response {
+	var payload struct {
+		Action   string   `json:"action"`
+		Services []string `json:"services"`
+	}
+
+	decoder := json.NewDecoder(r.Body)
+	if err := decoder.Decode(&payload); err != nil {
+		return statusBadRequest("cannot decode data from request body: %v", err)
+	}
+
+	var err error
+	var services []string
+	servmgr := c.d.overlord.ServiceManager()
+	if payload.Action == "autostart" {
+		if len(payload.Services) != 0 {
+			return statusBadRequest("%s accepts no service names", payload.Action)
+		}
+		services, err = servmgr.DefaultServices()
+		if err != nil {
+			return statusInternalError(err.Error())
+		}
+		if len(services) == 0 {
+			return SyncResponse(&resp{
+				Type:   ResponseTypeError,
+				Result: &errorResult{Kind: errorKindNoDefaultServices, Message: "no default services"},
+				Status: 400,
+			})
+		}
+		payload.Services = services
+	} else {
+		if len(payload.Services) == 0 {
+			return statusBadRequest("no services to %s provided", payload.Action)
+		}
+		var err error
+		if payload.Action == "start" {
+			services, err = servmgr.StartOrder(payload.Services)
+		} else if payload.Action == "stop" {
+			services, err = servmgr.StopOrder(payload.Services)
+		} else {
+			err = fmt.Errorf("action %q is unsupported", payload.Action)
+		}
+		if err != nil {
+			return statusBadRequest(err.Error())
+		}
+	}
+
+	st := c.d.overlord.State()
+	st.Lock()
+	defer st.Unlock()
+
+	var taskSet *state.TaskSet
+	switch payload.Action {
+	case "start", "autostart":
+		taskSet, err = servstate.Start(st, services)
+	case "stop":
+		taskSet, err = servstate.Stop(st, services)
+	default:
+		return statusBadRequest("action %q is unsupported", payload.Action)
+	}
+	if err != nil {
+		return statusBadRequest("cannot %s services: %v", payload.Action, err)
+	}
+
+	// Use the original requested service name for the summary, not the
+	// resolved one. But do use the resolved set for the count.
+	var summary string
+	if len(services) == 1 {
+		summary = fmt.Sprintf("%s service %q", strings.Title(payload.Action), payload.Services[0])
+	} else {
+		summary = fmt.Sprintf("%s service %q and %d more", strings.Title(payload.Action), payload.Services[0], len(services)-1)
+	}
+	change := newChange(st, payload.Action, summary, []*state.TaskSet{taskSet}, payload.Services)
+
+	stateEnsureBefore(st, 0)
+
+	return AsyncResponse(nil, change.ID())
+}
+
+func v1GetService(c *Command, r *http.Request, _ *userState) Response {
+	return statusBadRequest("not implemented")
+}
+
+func v1PostService(c *Command, r *http.Request, _ *userState) Response {
+	return statusBadRequest("not implemented")
+}
