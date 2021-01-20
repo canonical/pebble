@@ -29,7 +29,7 @@ import (
 
 	"golang.org/x/crypto/ssh/terminal"
 
-	"github.com/canonical/pebble/internal/client"
+	"github.com/canonical/pebble/client"
 	"github.com/canonical/pebble/internal/osutil"
 	"github.com/canonical/pebble/internal/logger"
 )

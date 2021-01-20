@@ -29,7 +29,7 @@ import (
 
 	. "gopkg.in/check.v1"
 
-	"github.com/canonical/pebble/internal/client"
+	"github.com/canonical/pebble/client"
 )
 
 // Hook up check.v1 into the "go test" runner

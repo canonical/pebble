@@ -255,7 +255,6 @@ func (s *State) EnsureBefore(d time.Duration) {
 	}
 }
 
-
 // FIXME The whole point of having a RestartBehavior was to not make the
 //       state responsible for the detail of system restarts, as that's
 //       way too far from state management. Much of the logic below went
@@ -269,7 +268,7 @@ func (s *State) RequestRestart(t RestartType) {
 			// FIXME See note above. Please clean this up. We have
 			// the state package, the overlord, and the dameon
 			// package, all fiddling with restart state. This is
-			// about orchestration of restarts, so should all be 
+			// about orchestration of restarts, so should all be
 			// centralized via the ovelord.
 			if s.bootID == "" {
 				panic("internal error: cannot request a system restart if current boot ID was not provided via VerifyReboot")
@@ -316,12 +315,18 @@ func (s *State) VerifyReboot(curBootID string) error {
 	return nil
 }
 
+// BootID returns the current boot id set by VerifyReboot.
+func (s *State) BootID() string {
+	s.reading()
+	return s.bootID
+}
+
 // ClearReboot clears state information about tracking requested reboots.
 func (s *State) ClearReboot() {
 	// FIXME See notes above. Please clean this up. We have
 	// the state package, the overlord, and the dameon
 	// package, all fiddling with restart state. This is
-	// about orchestration of restarts, so should all be 
+	// about orchestration of restarts, so should all be
 	// centralized via the ovelord.
 	s.Set("system-restart-from-boot-id", nil)
 }

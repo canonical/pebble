@@ -20,8 +20,11 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -37,21 +40,19 @@ import (
 	"github.com/canonical/pebble/internal/overlord/standby"
 	"github.com/canonical/pebble/internal/overlord/state"
 	"github.com/canonical/pebble/internal/systemd"
-	"os/exec"
-	"path/filepath"
-	"strings"
 )
 
 var (
 	ErrRestartSocket = fmt.Errorf("daemon stop requested to wait for socket activation")
 
 	systemdSdNotify = systemd.SdNotify
-	sysGetuid = sys.Getuid
+	sysGetuid       = sys.Getuid
 )
 
 // A Daemon listens for requests and routes them to the right command
 type Daemon struct {
 	Version             string
+	StartTime           time.Time
 	pebbleDir           string
 	normalSocketPath    string
 	untrustedSocketPath string
@@ -98,7 +99,7 @@ type Command struct {
 	GuestOK     bool
 	UserOK      bool
 	UntrustedOK bool
-	AdminOnly    bool
+	AdminOnly   bool
 
 	d *Daemon
 }
@@ -398,6 +399,8 @@ func (d *Daemon) Start() {
 		panic("internal error: no Overlord")
 	}
 
+	d.StartTime = time.Now()
+
 	d.connTracker = &connTracker{conns: make(map[net.Conn]struct{})}
 	d.serve = &http.Server{
 		Handler:   logit(d.router),
@@ -652,8 +655,8 @@ func (d *Daemon) RebootIsMissing(st *state.State) error {
 
 func New(pebbleDir string) (*Daemon, error) {
 	d := &Daemon{
-		pebbleDir: pebbleDir,
-		normalSocketPath: filepath.Join(pebbleDir, ".pebble.socket"),
+		pebbleDir:           pebbleDir,
+		normalSocketPath:    filepath.Join(pebbleDir, ".pebble.socket"),
 		untrustedSocketPath: filepath.Join(pebbleDir, ".pebble.untrusted-socket"),
 	}
 	ovld, err := overlord.New(pebbleDir, d)

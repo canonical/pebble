@@ -20,7 +20,7 @@ import (
 
 	//"github.com/jessevdk/go-flags"
 
-	"github.com/canonical/pebble/internal/client"
+	"github.com/canonical/pebble/client"
 )
 
 var RunMain = run

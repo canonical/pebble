@@ -73,8 +73,12 @@ func newChange(st *state.State, kind, summary string, taskSets []*state.TaskSet,
 }
 
 func v1SystemInfo(c *Command, r *http.Request, _ *userState) Response {
+	state := c.d.overlord.State()
+	state.Lock()
+	defer state.Unlock()
 	result := map[string]interface{}{
 		"version": c.d.Version,
+		"boot-id": state.BootID(),
 	}
 	return SyncResponse(result)
 }
