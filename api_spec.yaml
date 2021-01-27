@@ -1,0 +1,258 @@
+openapi: 3.0.2
+info:
+  title: Pebble API
+  version: '0.1'
+components:
+  schemas:
+    DefaultResponse:
+      type: object
+      description: The default response
+      properties:
+        type:
+          type: string
+          description: Type of the operation
+          enum: [sync, async]
+          example: sync
+        status-code:
+          type: integer
+          description: Status Code
+        status:
+          type: string
+          description: The current status
+          example: OK
+    ChangesPostTasksResultResponse:
+      type: array
+      description: A list of tasks
+      items:
+        properties:
+          id:
+            type: string
+            description: Change ID
+          kind:
+            type: string
+            enum: [autostart, start, stop]
+            example: autostart
+          status:
+            type: string
+            example: Error
+          spawn-time:
+            type: string
+            example: 2021-01-24T12:44:19.680362867Z
+          ready-time:
+            type: string
+            example: 2021-01-24T12:44:19.680362867Z
+          log:
+            type: array
+            items:
+              type: string
+          progress:
+            type: object
+            properties:
+              label:
+                type: string
+              done:
+                type: integer
+                example: 1
+              total:
+                type: integer
+                example: 1
+paths:
+  /v1/system-info:
+    get:
+      responses:
+        '200':
+          description: Get system info
+          content:
+            application/json:
+              schema:
+                type: object
+                allOf:
+                - $ref: '#/components/schemas/DefaultResponse'
+                - type: object
+                  description: The System info result dictionary
+                  properties:
+                    result:
+                      type: object
+                      properties:
+                        version:
+                          type: string
+  /v1/warnings:
+    get:
+      description: Get list of warnings in given state (pending or all)
+      parameters:
+        - in: query
+          name: select
+          schema:
+            type: string
+            description: Warning types
+            enum: [all, pending]
+            example: all
+      responses:
+        '200':
+          description: Returns the warnings
+          content:
+            application/json:
+              schema:
+                type: object
+                allOf:
+                - $ref: '#/components/schemas/DefaultResponse'
+                - type: object
+                  description: The warnings result array
+                  properties:
+                    result:
+                      type: array
+                      items:
+                        type: string
+    post:
+      requestBody:
+        description: Acknowledge warnings up to given timestamp, return number acknowledged
+        required: true
+        content:
+          application/json:
+              schema:
+                type: object
+                properties:
+                  action:
+                    type: string
+                    description: Action
+                  timestamp:
+                    type: string
+                    description: Acknowledge warnings up to
+                    example: 2021-01-24T12:44:19.680362867Z
+      responses:
+        '200':
+          description: Returns the warnings
+          content:
+            application/json:
+              schema:
+                type: object
+                allOf:
+                - $ref: '#/components/schemas/DefaultResponse'
+                - type: object
+                  description: Number of warnings acknowledged
+                  properties:
+                    result:
+                      type: integer
+  /v1/services:
+    get:
+      description: Get list of changes in given state, filter by service name if given.
+      parameters:
+        - in: query
+          name: select
+          schema:
+            type: string
+            description: Service status type
+            enum: [all, pending]
+            example: all
+      responses:
+        '405':
+          description: Method not implemented
+          content:
+            application/json:
+              schema:
+                type: object
+                allOf:
+                  - $ref: '#/components/schemas/DefaultResponse'
+                  - type: object
+                    properties:
+                      result:
+                        type: object
+                        description: The result dictionary
+                        properties:
+                          message:
+                            type: string
+                            description: The error message
+    post:
+      requestBody:
+        description: Manipulate a list of services
+        required: true
+        content:
+          application/json:
+              schema:
+                type: object
+                properties:
+                  action:
+                    type: string
+                    enum: [autostart, start, stop]
+                    description: Service action
+                  services:
+                    type: array
+                    description: A list of services to manipulate
+                    items:
+                      type: string
+      responses:
+        '202':
+          description: Service response
+          content:
+            application/json:
+              schema:
+                type: object
+                allOf:
+                  - $ref: '#/components/schemas/DefaultResponse'
+                  - type: object
+                    properties:
+                      result:
+                        type: string
+                        description: The result of the action
+  /v1/changes:
+    get:
+      parameters:
+        - in: query
+          name: select
+          schema:
+            type: string
+            description: Change types
+            enum: [all, in-progress, ready]
+            example: all
+        - in: query
+          name: for
+          schema:
+            type: string
+            description: Service name
+            example: nginx
+      responses:
+        '200':
+          description: Returns the changes
+          content:
+            application/json:
+              schema:
+                type: object
+                allOf:
+                  - $ref: '#/components/schemas/DefaultResponse'
+                  - type: object
+                    properties:
+                      result:
+                        type: array
+                        description: The result of the action
+                        items:
+                          properties:
+                            id:
+                              type: string
+                              description: Change ID
+                            kind:
+                              type: string
+                              enum: [autostart, start, stop]
+                              example: autostart
+                            summary:
+                              type: string
+                              example: Autostart service nginx
+                            status:
+                              type: string
+                              example: Error
+                            ready:
+                              type: string
+                              example: true
+                            err:
+                              type: string
+                              description: The error message
+                            spawn-time:
+                              type: string
+                              example: 2021-01-24T12:44:19.680362867Z
+                            ready-time:
+                              type: string
+                              example: 2021-01-24T12:44:19.680362867Z
+                            tasks:
+                              type: array
+                              description: A list of tasks
+                              allOf:
+                              - $ref: '#/components/schemas/ChangesPostTasksResultResponse'
