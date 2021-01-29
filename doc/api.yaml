@@ -59,6 +59,7 @@ components:
 paths:
   /v1/system-info:
     get:
+      description: Get System info
       responses:
         '200':
           description: Get system info
@@ -78,7 +79,7 @@ paths:
                           type: string
   /v1/warnings:
     get:
-      description: Get list of warnings in given state (pending or all)
+      description: Get Warnings
       parameters:
         - in: query
           name: select
@@ -104,6 +105,7 @@ paths:
                       items:
                         type: string
     post:
+      description: Update warnings
       requestBody:
         description: Acknowledge warnings up to given timestamp, return number acknowledged
         required: true
@@ -135,7 +137,7 @@ paths:
                       type: integer
   /v1/services:
     get:
-      description: Get list of changes in given state, filter by service name if given.
+      description: Get Services
       parameters:
         - in: query
           name: select
@@ -163,8 +165,8 @@ paths:
                             type: string
                             description: The error message
     post:
+      description: Update services
       requestBody:
-        description: Manipulate a list of services
         required: true
         content:
           application/json:
@@ -177,7 +179,7 @@ paths:
                     description: Service action
                   services:
                     type: array
-                    description: A list of services to manipulate
+                    description: A list of services to update
                     items:
                       type: string
       responses:
@@ -196,6 +198,7 @@ paths:
                         description: The result of the action
   /v1/changes:
     get:
+      description: Get Changes
       parameters:
         - in: query
           name: select
