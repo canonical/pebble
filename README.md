@@ -1,3 +1,4 @@
+
 ## Take control of your internal daemons!
 
 **Pebble** helps you to orchestrate a set of local service processes as an organized set.
@@ -9,11 +10,11 @@ designed with unique features that help with more specific use cases.
 
 Pebble is organized as a single binary that works as a daemon and also as a
 client to itself. When the daemon runs it loads its own configuration from the
-_\$PEBBLE_ directory, as defined in the environment, and also writes down in
+_$PEBBLE_ directory, as defined in the environment, and also writes down in
 that same directory its state and unix sockets for communication.
 
-The _\$PEBBLE_ directory must also contain a _layers/_ subdirectory that holds a
-list of yaml files conventionally named as `2020-12-01T15:00:00.yaml`. The reason
+The _$PEBBLE_ directory must also contain a _layers/_ subdirectory that holds a
+list of yaml files conventionally named as `2020-12-01T15:00:00.yaml`.  The reason
 for the timestamp in the filename is that these configuration files are layered,
 as the directory name implies. That is, each layer sits above the former
 layer, and has the chance to improve or redefine the service configuration as
@@ -32,36 +33,37 @@ This is a complete example of the current configuration format:
 summary: Simple layer
 
 description: |
-  A better description for a simple layer.
+    A better description for a simple layer.
 
 services:
-  srv1:
-    override: replace
-    summary: Service summary
-    command: cmd arg1 "arg2a arg2b"
-    default: start
-    after:
-      - srv2
-    before:
-      - srv3
-    requires:
-      - srv2
-      - srv3
-    environment:
-      - VAR1: val1
-      - VAR2: val2
-      - VAR3: val3
 
-  srv2:
-    override: replace
-    default: start
-    command: cmd
-    before:
-      - srv3
+    srv1:
+        override: replace
+        summary: Service summary
+        command: cmd arg1 "arg2a arg2b"
+        default: start
+        after:
+            - srv2
+        before:
+            - srv3
+        requires:
+            - srv2
+            - srv3
+        environment:
+            - VAR1: val1
+            - VAR2: val2
+            - VAR3: val3
 
-  srv3:
-    override: replace
-    command: cmd
+    srv2:
+        override: replace
+        default: start
+        command: cmd
+        before:
+            - srv3
+
+    srv3:
+        override: replace
+        command: cmd
 ```
 
 The file should be almost entirely obvious. One interesting detail there is the _override_
@@ -75,34 +77,35 @@ To illustrate, here is a sample override layer that might sit atop the one above
 summary: Simple override layer
 
 services:
-  srv1:
-    override: merge
-    environment:
-      - VAR3: val3
-    after:
-      - srv4
-    before:
-      - srv5
 
-  srv2:
-    override: replace
-    summary: Replaced service
-    default: stop
-    command: cmd
+    srv1:
+        override: merge
+        environment:
+            - VAR3: val3
+        after:
+            - srv4
+        before:
+            - srv5
 
-  srv4:
-    override: replace
-    command: cmd
-    default: start
+    srv2:
+        override: replace
+        summary: Replaced service
+        default: stop
+        command: cmd
 
-  srv5:
-    override: replace
-    command: cmd
+    srv4:
+        override: replace
+        command: cmd
+        default: start
+
+    srv5:
+        override: replace
+        command: cmd
 ```
 
 ## Running pebble
 
-Once the _\$PEBBLE_ directory is setup, running it is easy:
+Once the _$PEBBLE_ directory is setup, running it is easy:
 
     $ pebble run
 
@@ -118,6 +121,7 @@ And start or stop a specific service with:
     $ pebble start <name1> [<name2> ...]
     $ pebble stop  <name1> [<name2> ...]
 
+
 ## XXX THIS IS EXPERIMENTAL XXX
 
 This is a preview of what Pebble is becoming. Please keep that in mind while you
@@ -125,12 +129,12 @@ explore around.
 
 Here are some of the things coming soon:
 
-- [ ] Terminate all services before exiting run command
-- [ ] Status command that displays active services and their current status
-- [ ] Configuration retrieval commands to investigate current settings
-- [ ] General system modification commands (writing files, etc)
-- [ ] Define and enforce convention for layer names
-- [ ] More tests for existing CLI commands
+  - [ ] Terminate all services before exiting run command
+  - [ ] Status command that displays active services and their current status
+  - [ ] Configuration retrieval commands to investigate current settings
+  - [ ] General system modification commands (writing files, etc)
+  - [ ] Define and enforce convention for layer names
+  - [ ] More tests for existing CLI commands
 
 ## API
 
@@ -141,3 +145,4 @@ The html file can be generated with: `npx redoc-cli bundle doc/api.yaml --output
 ## Have fun!
 
 ... and enjoy the end of 2020!
+
