@@ -136,7 +136,13 @@ Here are some of the things coming soon:
   - [ ] Define and enforce convention for layer names
   - [ ] More tests for existing CLI commands
 
+## API
+
+The documentation for the currently exposed API endpoints can be found in `doc/api.yaml`
+In that folder you can also find a nice looking html file reflecting the contents of the file above.
+The html file can be generated with: `npx redoc-cli bundle doc/api.yaml --output doc/index.html`
 
 ## Have fun!
 
 ... and enjoy the end of 2020!
+
