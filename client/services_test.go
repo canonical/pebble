@@ -19,7 +19,7 @@ import (
 
 	"gopkg.in/check.v1"
 
-	"github.com/canonical/pebble/internal/client"
+	"github.com/canonical/pebble/client"
 )
 
 func (cs *clientSuite) TestStartStop(c *check.C) {

@@ -387,6 +387,7 @@ func parseError(r *http.Response) error {
 
 type SysInfo struct {
 	Version string `json:"version,omitempty"`
+	BootID  string `json:"boot-id,omitempty"`
 }
 
 // SysInfo gets system information from the remote API.

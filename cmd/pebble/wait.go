@@ -21,7 +21,7 @@ import (
 	"os/signal"
 	"time"
 
-	"github.com/canonical/pebble/internal/client"
+	"github.com/canonical/pebble/client"
 	"github.com/canonical/pebble/internal/progress"
 )
 

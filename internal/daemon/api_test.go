@@ -80,6 +80,10 @@ func (s *apiSuite) TestSysInfo(c *check.C) {
 
 	d := s.daemon(c)
 	d.Version = "42b1"
+	state := d.overlord.State()
+	state.Lock()
+	state.VerifyReboot("ffffffff-ffff-ffff-ffff-ffffffffffff")
+	state.Unlock()
 
 	sysInfoCmd.GET(sysInfoCmd, nil, nil).ServeHTTP(rec, nil)
 	c.Check(rec.Code, check.Equals, 200)
@@ -87,6 +91,7 @@ func (s *apiSuite) TestSysInfo(c *check.C) {
 
 	expected := map[string]interface{}{
 		"version": "42b1",
+		"boot-id": "ffffffff-ffff-ffff-ffff-ffffffffffff",
 	}
 	var rsp resp
 	c.Assert(json.Unmarshal(rec.Body.Bytes(), &rsp), check.IsNil)
