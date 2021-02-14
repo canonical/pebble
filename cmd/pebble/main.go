@@ -340,7 +340,10 @@ func run() error {
 	if pebbleDir == "" || !osutil.IsDir(pebbleDir) {
 		return fmt.Errorf("$PEBBLE must point to a pebble directory")
 	}
-	clientConfig.Socket = filepath.Join(pebbleDir, ".pebble.socket")
+	clientConfig.Socket = os.Getenv("PEBBLE_SOCKET")
+	if clientConfig.Socket == "" {
+		clientConfig.Socket = filepath.Join(pebbleDir, ".pebble.socket")
+	}
 
 	cli := client.New(&clientConfig)
 	parser := Parser(cli)

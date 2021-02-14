@@ -111,7 +111,11 @@ func runDaemon(rcmd *cmdRun, ch chan os.Signal) error {
 
 	t0 := time.Now().Truncate(time.Millisecond)
 
-	d, err := daemon.New(os.Getenv("PEBBLE"))
+	dopts := daemon.Options{
+		Dir:        os.Getenv("PEBBLE"),
+		SocketPath: os.Getenv("PEBBLE_SOCKET"),
+	}
+	d, err := daemon.New(&dopts)
 	if err != nil {
 		return err
 	}

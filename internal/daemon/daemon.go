@@ -49,6 +49,21 @@ var (
 	sysGetuid       = sys.Getuid
 )
 
+
+var defaultPebbleDir = "/var/lib/pebble/default"
+
+
+// Options holds the daemon setup required for the initialization of a new daemon.
+type Options struct {
+	// Dir is the pebble directory where all setup is found. Defaults to /var/lib/pebble/default.
+	Dir string
+
+	// SocketPath is an optional path for the unix socket used for the client
+	// to communicate with the daemon. Defaults to a hidden (dotted) name inside
+	// the pebble directory.
+	SocketPath string
+}
+
 // A Daemon listens for requests and routes them to the right command
 type Daemon struct {
 	Version             string
@@ -653,11 +668,21 @@ func (d *Daemon) RebootIsMissing(st *state.State) error {
 	return state.ErrExpectedReboot
 }
 
-func New(pebbleDir string) (*Daemon, error) {
+func New(opts *Options) (*Daemon, error) {
+
+	pebbleDir := opts.Dir
+	if pebbleDir == "" {
+		pebbleDir = defaultPebbleDir
+	}
+	socketPath := opts.SocketPath
+	if socketPath == "" {
+		socketPath = filepath.Join(pebbleDir, ".pebble.socket")
+	}
+
 	d := &Daemon{
 		pebbleDir:           pebbleDir,
-		normalSocketPath:    filepath.Join(pebbleDir, ".pebble.socket"),
-		untrustedSocketPath: filepath.Join(pebbleDir, ".pebble.untrusted-socket"),
+		normalSocketPath:    socketPath,
+		untrustedSocketPath: socketPath + ".untrusted",
 	}
 	ovld, err := overlord.New(pebbleDir, d)
 	if err == state.ErrExpectedReboot {
