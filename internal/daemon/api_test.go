@@ -53,7 +53,7 @@ func (s *apiSuite) daemon(c *check.C) *Daemon {
 	if s.d != nil {
 		panic("called daemon() twice")
 	}
-	d, err := New(s.pebbleDir)
+	d, err := New(&Options{Dir: s.pebbleDir})
 	c.Assert(err, check.IsNil)
 	d.addRoutes()
 	s.d = d
