@@ -18,6 +18,9 @@ package setup_test
 import (
 	"bytes"
 	"fmt"
+	"io/ioutil"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/canonical/pebble/internal/setup"
@@ -124,7 +127,8 @@ var setupTests = []setupTest{{
 				command: cmd
 	`},
 	layers: []*setup.Layer{{
-		Key:         "layer-0",
+		Order:       0,
+		Label:       "layer-0",
 		Summary:     "Simple layer",
 		Description: "A simple layer.",
 		Services: map[string]*setup.Service{
@@ -158,7 +162,8 @@ var setupTests = []setupTest{{
 			},
 		},
 	}, {
-		Key:         "layer-1",
+		Order:       1,
+		Label:       "layer-1",
 		Summary:     "Simple override layer.",
 		Description: "The second layer.",
 		Services: map[string]*setup.Service{
@@ -192,7 +197,6 @@ var setupTests = []setupTest{{
 		},
 	}},
 	result: &setup.Layer{
-		Key:         "",
 		Summary:     "Simple override layer.",
 		Description: "The second layer.",
 		Services: map[string]*setup.Service{
@@ -283,7 +287,8 @@ var setupTests = []setupTest{{
 					- c:
 	`},
 	layers: []*setup.Layer{{
-		Key: "layer-0",
+		Order: 0,
+		Label: "layer-0",
 		Services: map[string]*setup.Service{
 			"srv1": {
 				Name:     "srv1",
@@ -310,13 +315,13 @@ var setupTests = []setupTest{{
 	`},
 }}
 
-func (s *S) TestSetupTests(c *C) {
+func (s *S) TestParseLayer(c *C) {
 
 	for _, test := range setupTests {
 		var sup setup.Setup
 		var err error
 		for i, yml := range test.input {
-			layer, e := setup.ParseLayer(fmt.Sprintf("layer-%d", i), reindent(yml))
+			layer, e := setup.ParseLayer(i, fmt.Sprintf("layer-%d", i), reindent(yml))
 			if e != nil {
 				err = e
 				break
@@ -351,6 +356,101 @@ func (s *S) TestSetupTests(c *C) {
 			} else {
 				c.Assert(err, IsNil)
 			}
+		}
+	}
+}
+
+func (s *S) TestReadDir(c *C) {
+	setupDir := c.MkDir()
+	layersDir := filepath.Join(setupDir, "layers")
+	err := os.Mkdir(layersDir, 0755)
+	c.Assert(err, IsNil)
+
+	for _, test := range setupTests {
+		for i, yml := range test.input {
+			err := ioutil.WriteFile(filepath.Join(layersDir, fmt.Sprintf("%03d-layer-%d.yaml", i, i)), []byte(reindent(yml)), 0644)
+			c.Assert(err, IsNil)
+		}
+		sup, err := setup.ReadDir(setupDir)
+		if err == nil {
+			var result *setup.Layer
+			result, err = sup.Flatten()
+			if err == nil && test.result != nil {
+				c.Assert(result, DeepEquals, test.result)
+			}
+			if err == nil {
+				for name, order := range test.start {
+					names, err := result.StartOrder([]string{name})
+					c.Assert(err, IsNil)
+					c.Assert(names, DeepEquals, order)
+				}
+				for name, order := range test.stop {
+					names, err := result.StopOrder([]string{name})
+					c.Assert(err, IsNil)
+					c.Assert(names, DeepEquals, order)
+				}
+			}
+		}
+		if err != nil || test.error != "" {
+			if test.error != "" {
+				c.Assert(err, ErrorMatches, test.error)
+			} else {
+				c.Assert(err, IsNil)
+			}
+		}
+	}
+}
+
+var readDirBadNames = []string{
+	"001-l.yaml",
+	"01-label.yaml",
+	"0001-label.yaml",
+	"0001-label.yaml",
+	"001-label-.yaml",
+	"001--label.yaml",
+	"001-label--label.yaml",
+}
+
+func (s *S) TestReadDirBadNames(c *C) {
+	setupDir := c.MkDir()
+	layersDir := filepath.Join(setupDir, "layers")
+	err := os.Mkdir(layersDir, 0755)
+	c.Assert(err, IsNil)
+
+	for _, fname := range readDirBadNames {
+		fpath := filepath.Join(layersDir, fname)
+		err := ioutil.WriteFile(fpath, []byte("<ignore>"), 0644)
+		c.Assert(err, IsNil)
+		_, err = setup.ReadDir(setupDir)
+		c.Assert(err.Error(), Equals, fmt.Sprintf("invalid layer filename: %q (must look like \"123-some-label.yaml\")", fname))
+		err = os.Remove(fpath)
+		c.Assert(err, IsNil)
+	}
+}
+
+var readDirDupNames = [][]string{
+	{"001-bar.yaml", "001-foo.yaml"},
+	{"001-foo.yaml", "002-foo.yaml"},
+}
+
+func (s *S) TestReadDirDupNames(c *C) {
+	setupDir := c.MkDir()
+	layersDir := filepath.Join(setupDir, "layers")
+	err := os.Mkdir(layersDir, 0755)
+	c.Assert(err, IsNil)
+
+	for _, fnames := range readDirDupNames {
+		for _, fname := range fnames {
+			fpath := filepath.Join(layersDir, fname)
+			err := ioutil.WriteFile(fpath, []byte("summary: ignore"), 0644)
+			c.Assert(err, IsNil)
+		}
+		_, err = setup.ReadDir(setupDir)
+		c.Assert(err.Error(), Equals, fmt.Sprintf("invalid layer filename: %q not unique (have %q already)", fnames[1], fnames[0]))
+		for _, fname := range fnames {
+			fpath := filepath.Join(layersDir, fname)
+			err = os.Remove(fpath)
+			c.Assert(err, IsNil)
 		}
 	}
 }

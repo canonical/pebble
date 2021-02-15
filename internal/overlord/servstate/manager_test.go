@@ -81,7 +81,7 @@ func (s *S) SetUpTest(c *C) {
 
 	s.log = filepath.Join(s.dir, "log.txt")
 	data := fmt.Sprintf(setupLayer, s.log, s.log)
-	err := ioutil.WriteFile(filepath.Join(s.dir, "layers", "1.yaml"), []byte(data), 0644)
+	err := ioutil.WriteFile(filepath.Join(s.dir, "layers", "001-base.yaml"), []byte(data), 0644)
 	c.Assert(err, IsNil)
 
 	s.runner = state.NewTaskRunner(s.st)

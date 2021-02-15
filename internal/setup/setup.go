@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"io/ioutil"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -34,7 +36,8 @@ func (s *Setup) AddLayer(layer *Layer) {
 }
 
 type Layer struct {
-	Key         string
+	Order       int
+	Label       string
 	Summary     string
 	Description string
 	Services    map[string]*Service
@@ -126,11 +129,11 @@ func (s *Setup) Flatten() (*Layer, error) {
 				copy := *service
 				flat.Services[name] = &copy
 			case UnknownOverride:
-				return nil, fmt.Errorf("layer %s must define 'override' for service %q",
-					layer.Key, service.Name)
+				return nil, fmt.Errorf("layer %q must define 'override' for service %q",
+					layer.Label, service.Name)
 			default:
-				return nil, fmt.Errorf("layer %s has invalid 'override' value on service %q: %q",
-					layer.Key, service.Name, service.Override)
+				return nil, fmt.Errorf("layer %q has invalid 'override' value on service %q: %q",
+					layer.Label, service.Name, service.Override)
 			}
 		}
 	}
@@ -231,15 +234,16 @@ func (l *Layer) CheckCycles() error {
 	return err
 }
 
-func ParseLayer(key string, data []byte) (*Layer, error) {
+func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 	var layer Layer
 	dec := yaml.NewDecoder(bytes.NewBuffer(data))
 	dec.KnownFields(true)
 	err := dec.Decode(&layer)
 	if err != nil {
-		return nil, fmt.Errorf("cannot parse layer %s: %v", key, err)
+		return nil, fmt.Errorf("cannot parse layer %q: %v", label, err)
 	}
-	layer.Key = key
+	layer.Order = order
+	layer.Label = label
 	for name, service := range layer.Services {
 		service.Name = name
 	}
@@ -250,6 +254,8 @@ func ParseLayer(key string, data []byte) (*Layer, error) {
 	return &layer, err
 }
 
+var fnameExp = regexp.MustCompile("^([0-9]{3})-([a-z](?:-?[a-z0-9]){2,}).yaml$")
+
 func ReadLayersDir(dirname string) ([]*Layer, error) {
 	finfos, err := ioutil.ReadDir(dirname)
 	if err != nil {
@@ -257,22 +263,50 @@ func ReadLayersDir(dirname string) ([]*Layer, error) {
 		return nil, fmt.Errorf("cannot read layers directory: %v", err)
 	}
 
+	orders := make(map[int]string)
+	labels := make(map[string]int)
+
 	// Documentation says ReadDir result is already sorted by name.
 	// This is fundamental here so if reading changes make sure the
 	// sorting is preserved.
 	var layers []*Layer
 	for _, finfo := range finfos {
-		if finfo.IsDir() {
+		if finfo.IsDir() || !strings.HasSuffix(finfo.Name(), ".yaml") {
 			continue
 		}
 		// TODO Consider enforcing permissions and ownership here to
 		//      avoid mistakes that could lead to hacks.
+		match := fnameExp.FindStringSubmatch(finfo.Name())
+		if match == nil {
+			return nil, fmt.Errorf("invalid layer filename: %q (must look like \"123-some-label.yaml\")", finfo.Name())
+		}
+
 		data, err := ioutil.ReadFile(filepath.Join(dirname, finfo.Name()))
 		if err != nil {
 			// Errors from package os generally include the path.
 			return nil, fmt.Errorf("cannot read layer file: %v", err)
 		}
-		layer, err := ParseLayer(finfo.Name(), data)
+		label := match[2]
+		order, err := strconv.Atoi(match[1])
+		if err != nil {
+			panic("internal error: filename regexp is wrong")
+		}
+
+		oldLabel, dupOrder := orders[order]
+		oldOrder, dupLabel := labels[label]
+		if dupOrder {
+			oldOrder = order
+		} else if dupLabel {
+			oldLabel = label
+		}
+		if dupOrder || dupLabel {
+			return nil, fmt.Errorf("invalid layer filename: %q not unique (have \"%03d-%s.yaml\" already)", finfo.Name(), oldOrder, oldLabel)
+		}
+
+		orders[order] = label
+		labels[label] = order
+
+		layer, err := ParseLayer(order, label, data)
 		if err != nil {
 			return nil, err
 		}

@@ -57,7 +57,7 @@ services:
 func writeTestLayer(pebbleDir string) {
 	err := os.Mkdir(filepath.Join(pebbleDir, "layers"), 0755)
 	if err == nil {
-		err = ioutil.WriteFile(filepath.Join(pebbleDir, "layers", "1.yaml"), []byte(setupLayer), 0644)
+		err = ioutil.WriteFile(filepath.Join(pebbleDir, "layers", "001-base.yaml"), []byte(setupLayer), 0644)
 	}
 	if err != nil {
 		panic(err)
