@@ -337,7 +337,7 @@ func run() error {
 	}
 
 	pebbleDir := os.Getenv("PEBBLE")
-	if pebbleDir == "" || !osutil.IsDir(pebbleDir) {
+	if pebbleDir != "" && !osutil.IsDir(pebbleDir) {
 		return fmt.Errorf("$PEBBLE must point to a pebble directory")
 	}
 	clientConfig.Socket = os.Getenv("PEBBLE_SOCKET")
