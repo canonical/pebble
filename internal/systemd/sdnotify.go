@@ -40,10 +40,10 @@ func SdNotify(notifyState string) error {
 
 	notifySocket := osGetenv("NOTIFY_SOCKET")
 	if notifySocket == "" {
-		return fmt.Errorf("cannot find NOTIFY_SOCKET environment")
+		return fmt.Errorf("$NOTIFY_SOCKET not defined")
 	}
 	if !strings.HasPrefix(notifySocket, "@") && !strings.HasPrefix(notifySocket, "/") {
-		return fmt.Errorf("cannot use NOTIFY_SOCKET %q", notifySocket)
+		return fmt.Errorf("cannot use $NOTIFY_SOCKET value: %q", notifySocket)
 	}
 
 	raddr := &net.UnixAddr{

@@ -110,7 +110,7 @@ type Log struct {
 // Debug only prints if SNAPD_DEBUG is set
 func (l Log) Debug(msg string) {
 	if os.Getenv("PEBBLE_DEBUG") == "1" {
-		l.log.Output(3, "DEBUG: "+msg)
+		l.log.Output(3, "DEBUG "+msg)
 	}
 }
 
