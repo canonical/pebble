@@ -93,15 +93,15 @@ func (s *LogSuite) TestDebugfEnv(c *C) {
 	defer os.Unsetenv("SNAPD_DEBUG")
 
 	logger.Debugf("xyzzy")
-	c.Check(s.logbuf.String(), Matches, `(?s).*DEBUG: xyzzy.*`)
+	c.Check(s.logbuf.String(), Matches, `(?s).*DEBUG xyzzy.*`)
 }
 
 func (s *LogSuite) TestNoticef(c *C) {
 	logger.Noticef("xyzzy")
-	c.Check(s.logbuf.String(), Matches, `(?m).*logger_test\.go:\d+: xyzzy`)
+	c.Check(s.logbuf.String(), Matches, `(?m)20\d\d/\d\d/\d\d \d\d:\d\d:\d\d xyzzy`)
 }
 
 func (s *LogSuite) TestPanicf(c *C) {
 	c.Check(func() { logger.Panicf("xyzzy") }, Panics, "xyzzy")
-	c.Check(s.logbuf.String(), Matches, `(?m).*logger_test\.go:\d+: PANIC xyzzy`)
+	c.Check(s.logbuf.String(), Matches, `(?m)20\d\d/\d\d/\d\d \d\d:\d\d:\d\d PANIC xyzzy`)
 }

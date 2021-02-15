@@ -61,12 +61,10 @@ func (sd *sdNotifyTestSuite) TestSdNotifyWrongNotifySocket(c *C) {
 		env    string
 		errStr string
 	}{
-		{"", "cannot find NOTIFY_SOCKET environment"},
-		{"xxx", `cannot use NOTIFY_SOCKET "xxx"`},
+		{"", `\$NOTIFY_SOCKET not defined`},
+		{"xxx", `cannot use \$NOTIFY_SOCKET value: "xxx"`},
 	} {
-		os.Setenv("NOTIFY_SOCKET", t.env)
-		defer os.Unsetenv("NOTIFY_SOCKET")
-
+		sd.env["NOTIFY_SOCKET"] = t.env
 		c.Check(systemd.SdNotify("something"), ErrorMatches, t.errStr)
 	}
 }
