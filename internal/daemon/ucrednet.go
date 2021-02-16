@@ -27,7 +27,9 @@ import (
 var errNoID = errors.New("no pid/uid found")
 
 const (
-	ucrednetNoProcess = int32(0)
+	// ucrednetNoProcess is -1 to avoid the case when pid=0 is returned from the kernel
+	// because the connecting process is in an unrelated process namespace.
+	ucrednetNoProcess = int32(-1)
 	ucrednetNobody    = uint32((1 << 32) - 1)
 )
 
