@@ -10,13 +10,13 @@ designed with unique features that help with more specific use cases.
 
 Pebble is organized as a single binary that works as a daemon and also as a
 client to itself. When the daemon runs it loads its own configuration from the
-_$PEBBLE_ directory, as defined in the environment, and also writes down in
+`$PEBBLE` directory, as defined in the environment, and also writes down in
 that same directory its state and unix sockets for communication. If that variable
 is not defined, Pebble will attempt to look for its configuration from a default
-system-level setup at _/var/lib/pebble/default_. Using that directory is encouraged
+system-level setup at `/var/lib/pebble/default`. Using that directory is encouraged
 for whole-system setup such as when using Pebble to control services in a container.
 
-The _$PEBBLE_ directory must contain a _layers/_ subdirectory that holds a stack of
+The `$PEBBLE` directory must contain a `layers/` subdirectory that holds a stack of
 configuration files with names similar to `001-base-layer.yaml`, where the digits define
 the order of the layer and the following label uniquely identifies it.  Each
 layer in the stack sits above the former one, and has the chance to improve or
@@ -63,7 +63,7 @@ services:
         command: cmd
 ```
 
-The file should be almost entirely obvious. One interesting detail there is the _override_
+The file should be almost entirely obvious. One interesting detail there is the `override`
 field (for now required) which defines whether this entry _overrides_ the previous
 service of the same name (if any - missing is okay), or merges with it. Any of the fields can
 be replaced individually in a merged service configuration.
@@ -102,7 +102,7 @@ services:
 
 ## Running pebble
 
-Once the _$PEBBLE_ directory is setup, running it is easy:
+Once the `$PEBBLE` directory is setup, running it is easy:
 
     $ pebble run
 
@@ -126,7 +126,7 @@ explore around.
 
 Here are some of the things coming soon:
 
-  - [x] Support `$PEBBLE_SOCKET` and default `$PEBBLE` to /var/lib/pebble/default.
+  - [x] Support `$PEBBLE_SOCKET` and default `$PEBBLE` to `/var/lib/pebble/default`
   - [x] Define and enforce convention for layer names
   - [ ] Dynamic layer support over the API
   - [ ] Terminate all services before exiting run command
