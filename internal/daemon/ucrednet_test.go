@@ -194,3 +194,11 @@ func (s *ucrednetSuite) TestGetSneak(c *check.C) {
 	c.Check(uid, check.Equals, ucrednetNobody)
 	c.Check(socket, check.Equals, "")
 }
+
+func (s *ucrednetSuite) TestGetWithZeroPid(c *check.C) {
+	pid, uid, socket, err := ucrednetGet("pid=0;uid=42;socket=/run/snap.socket;")
+	c.Check(err, check.IsNil)
+	c.Check(pid, check.Equals, int32(0))
+	c.Check(uid, check.Equals, uint32(42))
+	c.Check(socket, check.Equals, "/run/snap.socket")
+}
