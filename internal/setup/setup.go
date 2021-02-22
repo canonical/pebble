@@ -36,24 +36,28 @@ func (s *Setup) AddLayer(layer *Layer) {
 }
 
 type Layer struct {
-	Order       int
-	Label       string
-	Summary     string
-	Description string
+	Order       int    `yaml:"-"`
+	Label       string `yaml:"-"`
+	Summary     string `yaml:"summary,omitempty"`
+	Description string `yaml:"description,omitempty"`
 	Services    map[string]*Service
 }
 
+func (l *Layer) AsYAML() ([]byte, error) {
+	return yaml.Marshal(l)
+}
+
 type Service struct {
-	Name        string
-	Summary     string
-	Description string
-	Default     ServiceAction
-	Override    ServiceOverride
-	Command     string
-	After       []string
-	Before      []string
-	Requires    []string
-	Environment []StringVariable
+	Name        string           `yaml:"-"`
+	Summary     string           `yaml:"summary,omitempty"`
+	Description string           `yaml:"description,omitempty"`
+	Default     ServiceAction    `yaml:"default,omitempty"`
+	Override    ServiceOverride  `yaml:"override,omitempty"`
+	Command     string           `yaml:"command,omitempty"`
+	After       []string         `yaml:"after,omitempty"`
+	Before      []string         `yaml:"before,omitempty"`
+	Requires    []string         `yaml:"requires,omitempty"`
+	Environment []StringVariable `yaml:"environment,omitempty"`
 }
 
 type ServiceAction string
@@ -73,7 +77,8 @@ const (
 )
 
 type StringVariable struct {
-	Name, Value string
+	Name  string `yaml:"name"`
+	Value string `yaml:"value"`
 }
 
 func (sv *StringVariable) UnmarshalYAML(node *yaml.Node) error {

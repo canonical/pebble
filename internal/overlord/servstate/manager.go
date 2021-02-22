@@ -53,6 +53,45 @@ func (m *ServiceManager) reloadSetup() error {
 	return nil
 }
 
+func (m *ServiceManager) FlattenedSetup() ([]byte, error) {
+	releaseSetup, err := m.acquireSetup()
+	if err != nil {
+		return nil, err
+	}
+	defer releaseSetup()
+
+	return m.flattened.AsYAML()
+}
+
+func (m *ServiceManager) AddSetupLayer(layerYAML []byte) (int, error) {
+	releaseSetup, err := m.acquireSetup()
+	if err != nil {
+		return 0, err
+	}
+	defer releaseSetup()
+
+	maxOrder := 0
+	for _, layer := range m.setup.Layers {
+		if layer.Order > maxOrder {
+			maxOrder = layer.Order
+		}
+	}
+
+	layer, err := setup.ParseLayer(maxOrder+1, "layer", layerYAML)
+	if err != nil {
+		return 0, err
+	}
+
+	newSetup := &setup.Setup{Layers: append(m.setup.Layers, layer)}
+	flattened, err := newSetup.Flatten()
+	if err != nil {
+		return 0, err
+	}
+	m.setup = newSetup
+	m.flattened = flattened
+	return layer.Order, nil
+}
+
 func (m *ServiceManager) acquireSetup() (release func(), err error) {
 	m.setupLock.Lock()
 	if m.setup == nil {
