@@ -91,7 +91,7 @@ func (c *cmdChanges) Execute(args []string) error {
 
 	opts := client.ChangesOptions{
 		ServiceName: c.Positional.Service,
-		Selector: client.ChangesAll,
+		Selector:    client.ChangesAll,
 	}
 
 	changes, err := queryChanges(c.client, &opts)

@@ -229,7 +229,6 @@ func runesLastIndexSpace(text []rune) int {
 	return -1
 }
 
-
 // wrapLine wraps a line, assumed to be part of a block-style yaml
 // string, to fit into termWidth, preserving the line's indent, and
 // writes it out prepending padding to each line.

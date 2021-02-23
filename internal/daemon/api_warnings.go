@@ -73,5 +73,3 @@ func v1GetWarnings(c *Command, r *http.Request, _ *userState) Response {
 
 	return SyncResponse(ws)
 }
-
-

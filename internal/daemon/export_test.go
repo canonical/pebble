@@ -18,8 +18,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/canonical/pebble/internal/overlord/state"
 	"github.com/canonical/pebble/internal/osutil/sys"
+	"github.com/canonical/pebble/internal/overlord/state"
 )
 
 type Resp = resp

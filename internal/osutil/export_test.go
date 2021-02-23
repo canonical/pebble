@@ -27,7 +27,6 @@ import (
 	"github.com/canonical/pebble/internal/osutil/sys"
 )
 
-
 func FakeUserCurrent(f func() (*user.User, error)) func() {
 	realUserCurrent := userCurrent
 	userCurrent = f

@@ -13,7 +13,6 @@ import (
 	"gopkg.in/tomb.v2"
 )
 
-
 // TaskServiceRequest extracts the *ServiceRequest that was associated
 // with the provided task when it was created, reflecting details of
 // the operation requested.
@@ -26,7 +25,6 @@ func TaskServiceRequest(task *state.Task) (*ServiceRequest, error) {
 	if err == nil {
 		return req, nil
 	}
-
 
 	var id string
 	err = task.Get("service-request-task", &id)

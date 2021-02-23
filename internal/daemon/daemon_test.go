@@ -35,12 +35,12 @@ import (
 	// XXX Delete import above and make this file like the other ones.
 	. "gopkg.in/check.v1"
 
-	"github.com/canonical/pebble/internal/overlord/state"
+	"github.com/canonical/pebble/internal/osutil"
 	"github.com/canonical/pebble/internal/overlord/patch"
 	"github.com/canonical/pebble/internal/overlord/standby"
+	"github.com/canonical/pebble/internal/overlord/state"
 	"github.com/canonical/pebble/internal/systemd"
 	"github.com/canonical/pebble/internal/testutil"
-	"github.com/canonical/pebble/internal/osutil"
 )
 
 // Hook up check.v1 into the "go test" runner
@@ -111,11 +111,11 @@ func (s *daemonSuite) TestDefaultPaths(c *C) {
 
 	info, err := os.Stat(filepath.Join(defaultPebbleDir, ".pebble.socket"))
 	c.Assert(err, IsNil)
-	c.Assert(info.Mode(), Equals, os.ModeSocket | 0666)
+	c.Assert(info.Mode(), Equals, os.ModeSocket|0666)
 
 	info, err = os.Stat(filepath.Join(defaultPebbleDir, ".pebble.socket.untrusted"))
 	c.Assert(err, IsNil)
-	c.Assert(info.Mode(), Equals, os.ModeSocket | 0666)
+	c.Assert(info.Mode(), Equals, os.ModeSocket|0666)
 }
 
 func (s *daemonSuite) TestExplicitPaths(c *C) {
@@ -128,11 +128,11 @@ func (s *daemonSuite) TestExplicitPaths(c *C) {
 
 	info, err := os.Stat(s.socketPath)
 	c.Assert(err, IsNil)
-	c.Assert(info.Mode(), Equals, os.ModeSocket | 0666)
+	c.Assert(info.Mode(), Equals, os.ModeSocket|0666)
 
 	info, err = os.Stat(s.socketPath + ".untrusted")
 	c.Assert(err, IsNil)
-	c.Assert(info.Mode(), Equals, os.ModeSocket | 0666)
+	c.Assert(info.Mode(), Equals, os.ModeSocket|0666)
 }
 
 func (s *daemonSuite) TestCommandMethodDispatch(c *check.C) {

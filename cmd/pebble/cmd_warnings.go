@@ -62,7 +62,7 @@ sufficient time has passed.
 
 func init() {
 	addCommand("warnings", shortWarningsHelp, longWarningsHelp, func() flags.Commander { return &cmdWarnings{} }, merge(timeDescs, unicodeDescs, map[string]string{
-		"all": "Show all warnings",
+		"all":     "Show all warnings",
 		"verbose": "Show more information",
 	}), nil)
 	addCommand("okay", shortOkayHelp, longOkayHelp, func() flags.Commander { return &cmdOkay{} }, nil, nil)

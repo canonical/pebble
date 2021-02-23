@@ -45,11 +45,11 @@ var (
 	//WrapFlow           = wrapFlow
 	//TrueishJSON        = trueishJSON
 
-	CanUnicode           = canUnicode
-	ColorTable           = colorTable
-	MonoColorTable       = mono
-	ColorColorTable      = color
-	NoEscColorTable      = noesc
+	CanUnicode      = canUnicode
+	ColorTable      = colorTable
+	MonoColorTable  = mono
+	ColorColorTable = color
+	NoEscColorTable = noesc
 	//ColorMixinGetEscapes = (colorMixin).getEscapes
 	//FillerPublisher      = fillerPublisher
 	//LongPublisher        = longPublisher
