@@ -1,0 +1,32 @@
+name: Tests
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        go: ['1.16', '1.15', '1.14']
+
+    name: Go ${{ matrix.go }}
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Set up Go
+      uses: actions/setup-go@v2
+      with:
+        go-version: ${{ matrix.go }}
+
+    - name: Test and build
+      run: |
+        go fmt ./...
+        git diff --exit-code  # Ensure no formatting changes
+        go test ./...
+        go build ./cmd/pebble
