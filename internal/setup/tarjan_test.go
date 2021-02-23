@@ -36,22 +36,22 @@ var _ = Suite(TarjanSuite{})
 
 func (TarjanSuite) TestExample(c *C) {
 	successors := map[string][]string{
-		"1": []string{"2", "3"},
-		"2": []string{"1", "5"},
-		"3": []string{"4"},
-		"4": []string{"3", "5"},
-		"5": []string{"6"},
-		"6": []string{"7"},
-		"7": []string{"8"},
-		"8": []string{"6", "9"},
-		"9": []string{},
+		"1": {"2", "3"},
+		"2": {"1", "5"},
+		"3": {"4"},
+		"4": {"3", "5"},
+		"5": {"6"},
+		"6": {"7"},
+		"7": {"8"},
+		"8": {"6", "9"},
+		"9": {},
 	}
 
 	c.Assert(tarjanSort(successors), DeepEquals, [][]string{
-		[]string{"9"},
-		[]string{"6", "7", "8"},
-		[]string{"5"},
-		[]string{"3", "4"},
-		[]string{"1", "2"},
+		{"9"},
+		{"6", "7", "8"},
+		{"5"},
+		{"3", "4"},
+		{"1", "2"},
 	})
 }

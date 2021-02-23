@@ -234,7 +234,7 @@ var setupTests = []setupTest{{
 				Command:  "cmd",
 				Default:  "start",
 			},
-			"srv5": &setup.Service{
+			"srv5": {
 				Name:     "srv5",
 				Override: "replace",
 				Command:  "cmd",
@@ -242,14 +242,14 @@ var setupTests = []setupTest{{
 		},
 	},
 	start: map[string][]string{
-		"srv1": []string{"srv2", "srv1", "srv3"},
-		"srv2": []string{"srv2"},
-		"srv3": []string{"srv3"},
+		"srv1": {"srv2", "srv1", "srv3"},
+		"srv2": {"srv2"},
+		"srv3": {"srv3"},
 	},
 	stop: map[string][]string{
-		"srv1": []string{"srv1"},
-		"srv2": []string{"srv1", "srv2"},
-		"srv3": []string{"srv3", "srv1"},
+		"srv1": {"srv1"},
+		"srv2": {"srv1", "srv2"},
+		"srv3": {"srv3", "srv1"},
 	},
 }, {
 	summary: "Order loop on before/after",
