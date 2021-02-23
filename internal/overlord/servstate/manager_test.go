@@ -31,7 +31,6 @@ import (
 	"github.com/canonical/pebble/internal/testutil"
 )
 
-
 func Test(t *testing.T) { TestingT(t) }
 
 type S struct {
@@ -91,7 +90,7 @@ func (s *S) SetUpTest(c *C) {
 
 	restore := servstate.FakeOkayWait(100 * time.Millisecond)
 	s.AddCleanup(restore)
-	restore = servstate.FakeKillWait(100 * time.Millisecond, 1000 * time.Millisecond)
+	restore = servstate.FakeKillWait(100*time.Millisecond, 1000*time.Millisecond)
 	s.AddCleanup(restore)
 }
 
@@ -104,7 +103,7 @@ func (s *S) assertLog(c *C, expected string) {
 		c.Fatal("Services have not run")
 	}
 	c.Assert(err, IsNil)
-	c.Assert(string(data), Matches, "(?s)" + expected)
+	c.Assert(string(data), Matches, "(?s)"+expected)
 }
 
 func (s *S) TestDefaultServices(c *C) {

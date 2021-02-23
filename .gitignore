@@ -4,3 +4,4 @@ cmd/version_generated.go
 cmd/VERSION
 *.swp
 *.swo
+.idea

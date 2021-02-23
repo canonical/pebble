@@ -49,9 +49,7 @@ var (
 	sysGetuid       = sys.Getuid
 )
 
-
 var defaultPebbleDir = "/var/lib/pebble/default"
-
 
 // Options holds the daemon setup required for the initialization of a new daemon.
 type Options struct {

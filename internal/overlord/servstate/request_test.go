@@ -61,4 +61,3 @@ func (s *S) TestStop(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(req.Name, Equals, "two")
 }
-

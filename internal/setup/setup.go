@@ -227,7 +227,7 @@ func (l *Layer) order(names []string, stop bool) ([]string, error) {
 
 func (l *Layer) CheckCycles() error {
 	var names []string
-	for name, _ := range l.Services {
+	for name := range l.Services {
 		names = append(names, name)
 	}
 	_, err := l.StartOrder(names)

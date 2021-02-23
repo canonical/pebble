@@ -1,18 +1,18 @@
 // This file was copied from mgo, MongoDB driver for Go.
-// 
+//
 // Copyright (c) 2010-2013 - Gustavo Niemeyer <gustavo@niemeyer.net>
-// 
+//
 // All rights reserved.
-// 
+//
 // Redistribution and use in source and binary forms, with or without
-// modification, are permitted provided that the following conditions are met: 
-// 
+// modification, are permitted provided that the following conditions are met:
+//
 // 1. Redistributions of source code must retain the above copyright notice, this
-//    list of conditions and the following disclaimer. 
+//    list of conditions and the following disclaimer.
 // 2. Redistributions in binary form must reproduce the above copyright notice,
 //    this list of conditions and the following disclaimer in the documentation
-//    and/or other materials provided with the distribution. 
-// 
+//    and/or other materials provided with the distribution.
+//
 // THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
 // ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
 // WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -36,22 +36,22 @@ var _ = Suite(TarjanSuite{})
 
 func (TarjanSuite) TestExample(c *C) {
 	successors := map[string][]string{
-		"1": []string{"2", "3"},
-		"2": []string{"1", "5"},
-		"3": []string{"4"},
-		"4": []string{"3", "5"},
-		"5": []string{"6"},
-		"6": []string{"7"},
-		"7": []string{"8"},
-		"8": []string{"6", "9"},
-		"9": []string{},
+		"1": {"2", "3"},
+		"2": {"1", "5"},
+		"3": {"4"},
+		"4": {"3", "5"},
+		"5": {"6"},
+		"6": {"7"},
+		"7": {"8"},
+		"8": {"6", "9"},
+		"9": {},
 	}
 
 	c.Assert(tarjanSort(successors), DeepEquals, [][]string{
-		[]string{"9"},
-		[]string{"6", "7", "8"},
-		[]string{"5"},
-		[]string{"3", "4"},
-		[]string{"1", "2"},
+		{"9"},
+		{"6", "7", "8"},
+		{"5"},
+		{"3", "4"},
+		{"1", "2"},
 	})
 }

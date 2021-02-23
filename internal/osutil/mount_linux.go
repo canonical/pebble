@@ -14,7 +14,6 @@
 
 package osutil
 
-
 // ProcSelfMountInfo is a path to the mountinfo table of the current process.
 var procSelfMountInfo = "/proc/self/mountinfo"
 

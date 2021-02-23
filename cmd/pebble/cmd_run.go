@@ -24,9 +24,9 @@ import (
 
 	"github.com/jessevdk/go-flags"
 
+	"github.com/canonical/pebble/client"
 	"github.com/canonical/pebble/cmd"
 	"github.com/canonical/pebble/internal/daemon"
-	"github.com/canonical/pebble/client"
 	"github.com/canonical/pebble/internal/logger"
 	"github.com/canonical/pebble/internal/systemd"
 )

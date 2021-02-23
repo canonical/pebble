@@ -24,8 +24,8 @@ import (
 	"github.com/canonical/pebble/internal/systemd"
 )
 
-type sdNotifyTestSuite struct{
-	env map[string]string
+type sdNotifyTestSuite struct {
+	env           map[string]string
 	restoreGetenv func()
 }
 

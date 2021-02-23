@@ -17,7 +17,6 @@ package main
 import (
 	"github.com/canonical/pebble/client"
 	"github.com/jessevdk/go-flags"
-
 )
 
 var shortStartHelp = "Start a service and its dependencies"

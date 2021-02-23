@@ -19,7 +19,6 @@ import (
 	"time"
 )
 
-
 func (m *ServiceManager) CmdsForTest() map[string]*exec.Cmd {
 	releaseSetup, err := m.acquireSetup()
 	if err != nil {
@@ -46,6 +45,6 @@ func FakeKillWait(kill, fail time.Duration) (restore func()) {
 	old1, old2 := killWait, failWait
 	killWait, failWait = kill, fail
 	return func() {
-		 killWait, failWait = old1, old2
+		killWait, failWait = old1, old2
 	}
 }
