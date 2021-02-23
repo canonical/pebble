@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2020 Canonical Ltd
+// Copyright (c) 2021 Canonical Ltd
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License version 3 as
@@ -41,7 +41,7 @@ func v1PostLayer(c *Command, r *http.Request, x *userState) Response {
 	servmgr := c.d.overlord.ServiceManager()
 	order, err := servmgr.AddSetupLayer([]byte(payload.Layer))
 	if err != nil {
-		return statusBadRequest("cannot add layer: %v", err)
+		return statusInternalError("cannot add layer: %v", err)
 	}
 
 	return SyncResponse(order)

@@ -36,11 +36,11 @@ func (s *Setup) AddLayer(layer *Layer) {
 }
 
 type Layer struct {
-	Order       int    `yaml:"-"`
-	Label       string `yaml:"-"`
-	Summary     string `yaml:"summary,omitempty"`
-	Description string `yaml:"description,omitempty"`
-	Services    map[string]*Service
+	Order       int                 `yaml:"-"`
+	Label       string              `yaml:"-"`
+	Summary     string              `yaml:"summary,omitempty"`
+	Description string              `yaml:"description,omitempty"`
+	Services    map[string]*Service `yaml:"services,omitempty"`
 }
 
 func (l *Layer) AsYAML() ([]byte, error) {

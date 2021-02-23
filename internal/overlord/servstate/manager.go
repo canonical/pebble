@@ -53,6 +53,7 @@ func (m *ServiceManager) reloadSetup() error {
 	return nil
 }
 
+// FlattenedSetup returns the flattened setup as a single layer in YAML format.
 func (m *ServiceManager) FlattenedSetup() ([]byte, error) {
 	releaseSetup, err := m.acquireSetup()
 	if err != nil {
@@ -63,6 +64,7 @@ func (m *ServiceManager) FlattenedSetup() ([]byte, error) {
 	return m.flattened.AsYAML()
 }
 
+// AddSetupLayer adds the given layer YAML as a new setup layer.
 func (m *ServiceManager) AddSetupLayer(layerYAML []byte) (int, error) {
 	releaseSetup, err := m.acquireSetup()
 	if err != nil {
