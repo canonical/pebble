@@ -64,34 +64,63 @@ func (m *ServiceManager) FlattenedSetup() ([]byte, error) {
 	return m.flattened.AsYAML()
 }
 
-// AddSetupLayer adds the given layer YAML as a new setup layer.
-func (m *ServiceManager) AddSetupLayer(layerYAML []byte) (int, error) {
+// MergeLayer merges the given layer YAML into the dynamic layers, returning
+// the new layer's "order" (won't increase if adding another dynamic layer).
+func (m *ServiceManager) MergeLayer(layerYAML []byte) (int, error) {
+	layer, err := setup.ParseLayer(0, "", layerYAML)
+	if err != nil {
+		return 0, err
+	}
+
 	releaseSetup, err := m.acquireSetup()
 	if err != nil {
 		return 0, err
 	}
 	defer releaseSetup()
 
-	maxOrder := 0
-	for _, layer := range m.setup.Layers {
-		if layer.Order > maxOrder {
-			maxOrder = layer.Order
+	var last *setup.Layer
+	layers := m.setup.Layers
+	if len(layers) > 0 {
+		last = layers[len(layers)-1]
+	}
+
+	var newOrder int
+	var newSetup *setup.Setup
+	var newFlattened *setup.Layer
+	if last != nil && last.IsDynamic() {
+		// Last layer is dynamic, merge new layer into existing dynamic layer
+		dynamicSetup := &setup.Setup{Layers: []*setup.Layer{last, layer}}
+		dynamicFlattened, err := dynamicSetup.Flatten()
+		if err != nil {
+			return 0, err
 		}
+		dynamicFlattened.Order = last.Order
+		newOrder = dynamicFlattened.Order
+		newSetup = &setup.Setup{Layers: append(layers[:len(layers)-1], dynamicFlattened)}
+		newFlattened, err = newSetup.Flatten()
+		if err != nil {
+			return 0, err
+		}
+	} else if last != nil {
+		// Last layer is not dynamic, add new dynamic layer
+		layer.Order = last.Order + 1
+		newOrder = layer.Order
+		newSetup = &setup.Setup{Layers: append(layers, layer)}
+		newFlattened, err = newSetup.Flatten()
+		if err != nil {
+			return 0, err
+		}
+	} else {
+		// No layers, add single dynamic layer
+		layer.Order = 1
+		newOrder = layer.Order
+		newSetup = &setup.Setup{Layers: []*setup.Layer{layer}}
+		newFlattened = layer
 	}
 
-	layer, err := setup.ParseLayer(maxOrder+1, "layer", layerYAML)
-	if err != nil {
-		return 0, err
-	}
-
-	newSetup := &setup.Setup{Layers: append(m.setup.Layers, layer)}
-	flattened, err := newSetup.Flatten()
-	if err != nil {
-		return 0, err
-	}
 	m.setup = newSetup
-	m.flattened = flattened
-	return layer.Order, nil
+	m.flattened = newFlattened
+	return newOrder, nil
 }
 
 func (m *ServiceManager) acquireSetup() (release func(), err error) {

@@ -19,30 +19,40 @@ import (
 	"net/http"
 )
 
-func v1GetLayer(c *Command, r *http.Request, x *userState) Response {
-	servmgr := c.d.overlord.ServiceManager()
-	layer, err := servmgr.FlattenedSetup()
-	if err != nil {
-		return statusInternalError("cannot fetch flattened layer: %v", err)
-	}
-	return SyncResponse(string(layer))
-}
-
 func v1PostLayer(c *Command, r *http.Request, x *userState) Response {
 	var payload struct {
-		Layer string `json:"layer"`
+		Action string `json:"action"`
+		Format string `json:"format"`
+		Layer  string `json:"layer"`
 	}
 
 	decoder := json.NewDecoder(r.Body)
 	if err := decoder.Decode(&payload); err != nil {
-		return statusBadRequest("cannot decode data from request body: %v", err)
+		return statusBadRequest("cannot decode request body: %v", err)
+	}
+
+	if payload.Format != "yaml" {
+		return statusBadRequest("invalid format %q", payload.Format)
 	}
 
 	servmgr := c.d.overlord.ServiceManager()
-	order, err := servmgr.AddSetupLayer([]byte(payload.Layer))
-	if err != nil {
-		return statusInternalError("cannot add layer: %v", err)
-	}
 
-	return SyncResponse(order)
+	switch payload.Action {
+	case "merge":
+		_, err := servmgr.MergeLayer([]byte(payload.Layer))
+		if err != nil {
+			return statusInternalError("cannot merge layer: %v", err)
+		}
+		return SyncResponse(true)
+
+	case "flatten":
+		layer, err := servmgr.FlattenedSetup()
+		if err != nil {
+			return statusInternalError("cannot flatten layers: %v", err)
+		}
+		return SyncResponse(string(layer))
+
+	default:
+		return statusBadRequest("invalid action %q", payload.Action)
+	}
 }

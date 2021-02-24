@@ -47,7 +47,7 @@ type S struct {
 
 var _ = Suite(&S{})
 
-var setupLayer = `
+var setupLayer1 = `
 services:
     test1:
         override: replace
@@ -61,7 +61,10 @@ services:
     test2:
         override: replace
         command: /bin/sh -c "echo test2 >> %s; sleep 300"
+`
 
+var setupLayer2 = `
+services:
     test3:
         override: replace
         command: some-bad-command
@@ -79,8 +82,10 @@ func (s *S) SetUpTest(c *C) {
 	os.Mkdir(filepath.Join(s.dir, "layers"), 0755)
 
 	s.log = filepath.Join(s.dir, "log.txt")
-	data := fmt.Sprintf(setupLayer, s.log, s.log)
+	data := fmt.Sprintf(setupLayer1, s.log, s.log)
 	err := ioutil.WriteFile(filepath.Join(s.dir, "layers", "001-base.yaml"), []byte(data), 0644)
+	c.Assert(err, IsNil)
+	err = ioutil.WriteFile(filepath.Join(s.dir, "layers", "002-two.yaml"), []byte(setupLayer2), 0644)
 	c.Assert(err, IsNil)
 
 	s.runner = state.NewTaskRunner(s.st)
@@ -132,7 +137,7 @@ func (s *S) TestStartStopServices(c *C) {
 	chg.AddAll(ts)
 	s.st.Unlock()
 
-	// Twice due to the cross-task depdendency.
+	// Twice due to the cross-task dependency.
 	s.ensure(c, 2)
 
 	s.st.Lock()
@@ -166,7 +171,7 @@ func (s *S) TestStartStopServices(c *C) {
 	chg.AddAll(ts)
 	s.st.Unlock()
 
-	// Twice due to the cross-task depdendency.
+	// Twice due to the cross-task dependency.
 	s.ensure(c, 2)
 
 	// Ensure processes are gone indeed.
@@ -217,4 +222,130 @@ func (s *S) TestStartFastExitCommand(c *C) {
 	c.Check(chg.Status(), Equals, state.ErrorStatus)
 	c.Check(chg.Err(), ErrorMatches, `(?s).*cannot start.*exited quickly with code 0.*`)
 	s.st.Unlock()
+}
+
+func (s *S) TestFlattenedSetup(c *C) {
+	yaml, err := s.manager.FlattenedSetup()
+	c.Assert(err, IsNil)
+	expected := fmt.Sprintf(`
+services:
+    test1:
+        default: start
+        override: replace
+        command: /bin/sh -c "echo test1 >> %s; sleep 300"
+        before:
+            - test2
+        requires:
+            - test2
+    test2:
+        override: replace
+        command: /bin/sh -c "echo test2 >> %s; sleep 300"
+    test3:
+        override: replace
+        command: some-bad-command
+    test4:
+        override: replace
+        command: echo too-fast
+`[1:], s.log, s.log)
+	c.Assert(string(yaml), Equals, expected)
+}
+
+func (s *S) TestMergeLayerParseError(c *C) {
+	_, err := s.manager.MergeLayer([]byte(`@`))
+	c.Assert(err, ErrorMatches, `cannot parse layer "": yaml: found character that cannot start any token`)
+}
+
+func (s *S) TestMergeLayerNoLayers(c *C) {
+	dir := c.MkDir()
+	os.Mkdir(filepath.Join(dir, "layers"), 0755)
+	runner := state.NewTaskRunner(s.st)
+	manager, err := servstate.NewManager(s.st, runner, dir)
+
+	order, err := manager.MergeLayer([]byte(`
+services:
+    svc1:
+        override: replace
+        command: /bin/sh
+`))
+	c.Assert(err, IsNil)
+	c.Assert(order, Equals, 1)
+
+	yaml, err := manager.FlattenedSetup()
+	c.Assert(err, IsNil)
+	c.Assert(string(yaml), Equals, `
+services:
+    svc1:
+        override: replace
+        command: /bin/sh
+`[1:])
+}
+
+func (s *S) TestMergeLayerDynamic(c *C) {
+	dir := c.MkDir()
+	os.Mkdir(filepath.Join(dir, "layers"), 0755)
+
+	layer1 := `
+services:
+    static:
+        override: replace
+        command: echo static
+`
+	err := ioutil.WriteFile(filepath.Join(dir, "layers", "001-base.yaml"), []byte(layer1), 0644)
+	c.Assert(err, IsNil)
+
+	runner := state.NewTaskRunner(s.st)
+	manager, err := servstate.NewManager(s.st, runner, dir)
+
+	// Add first dynamic layer
+	order, err := manager.MergeLayer([]byte(`
+services:
+    dynamic1:
+        override: replace
+        command: echo dynamic1
+`))
+	c.Assert(err, IsNil)
+	c.Assert(order, Equals, 2)
+
+	yaml, err := manager.FlattenedSetup()
+	c.Assert(err, IsNil)
+	c.Assert(string(yaml), Equals, `
+services:
+    dynamic1:
+        override: replace
+        command: echo dynamic1
+    static:
+        override: replace
+        command: echo static
+`[1:])
+
+	// Add another dynamic layer (order won't increase)
+	order, err = manager.MergeLayer([]byte(`
+services:
+    dynamic1:
+        override: replace
+        command: echo dynamic1-b
+    dynamic2:
+        override: replace
+        command: echo dynamic2
+    static:
+        override: replace
+        command: echo static-b
+`))
+	c.Assert(err, IsNil)
+	c.Assert(order, Equals, 2)
+
+	yaml, err = manager.FlattenedSetup()
+	c.Assert(err, IsNil)
+	c.Assert(string(yaml), Equals, `
+services:
+    dynamic1:
+        override: replace
+        command: echo dynamic1-b
+    dynamic2:
+        override: replace
+        command: echo dynamic2
+    static:
+        override: replace
+        command: echo static-b
+`[1:])
 }

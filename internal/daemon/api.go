@@ -53,7 +53,6 @@ var api = []*Command{{
 }, {
 	Path:   "/v1/layers",
 	UserOK: true,
-	GET:    v1GetLayer,
 	POST:   v1PostLayer,
 }}
 

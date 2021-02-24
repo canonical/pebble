@@ -47,6 +47,10 @@ func (l *Layer) AsYAML() ([]byte, error) {
 	return yaml.Marshal(l)
 }
 
+func (l *Layer) IsDynamic() bool {
+	return l.Label == ""
+}
+
 type Service struct {
 	Name        string           `yaml:"-"`
 	Summary     string           `yaml:"summary,omitempty"`
