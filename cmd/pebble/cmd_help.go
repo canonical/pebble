@@ -181,7 +181,7 @@ var helpCategories = []helpCategory{{
 
 var (
 	longPebbleDescription = strings.TrimSpace(`
-Pebble lets you control services and perform managemnet actions on
+Pebble lets you control services and perform management actions on
 the system that is running them.
 `)
 	pebbleUsage               = "Usage: pebble <command> [<options>...]"
