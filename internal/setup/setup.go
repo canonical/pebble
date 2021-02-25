@@ -19,6 +19,7 @@ import (
 	"bytes"
 	"fmt"
 	"io/ioutil"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -332,8 +333,20 @@ func ReadLayersDir(dirname string) ([]*Layer, error) {
 	return layers, nil
 }
 
+// ReadDir reads the setup layers from the "layers" sub-directory in dir, and
+// returns the resulting Setup. If the "layers" sub-directory doesn't exist,
+// it returns a valid Setup with no layers.
 func ReadDir(dir string) (*Setup, error) {
-	layers, err := ReadLayersDir(filepath.Join(dir, "layers"))
+	layersDir := filepath.Join(dir, "layers")
+	_, err := os.Stat(layersDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return &Setup{}, nil
+		}
+		return nil, err
+	}
+
+	layers, err := ReadLayersDir(layersDir)
 	if err != nil {
 		return nil, err
 	}
