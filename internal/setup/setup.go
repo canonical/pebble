@@ -102,16 +102,18 @@ func (sv *StringVariable) UnmarshalYAML(node *yaml.Node) error {
 	return nil
 }
 
-func (s *Setup) Flatten() (*Layer, error) {
+// FlattenLayers flattens the given layers into a single layer, with the later
+// layers "on top".
+func FlattenLayers(layers ...*Layer) (*Layer, error) {
 	var flat Layer
 	flat.Services = make(map[string]*Service)
-	if len(s.Layers) == 0 {
+	if len(layers) == 0 {
 		return &flat, nil
 	}
-	last := s.Layers[len(s.Layers)-1]
+	last := layers[len(layers)-1]
 	flat.Summary = last.Summary
 	flat.Description = last.Description
-	for _, layer := range s.Layers {
+	for _, layer := range layers {
 		for name, service := range layer.Services {
 			switch service.Override {
 			case MergeOverride:
@@ -147,6 +149,12 @@ func (s *Setup) Flatten() (*Layer, error) {
 		}
 	}
 	return &flat, nil
+}
+
+// Flatten flattens this Setup's layers and returns the new flattened layer
+// (no changes are made to the Setup itself).
+func (s *Setup) Flatten() (*Layer, error) {
+	return FlattenLayers(s.Layers...)
 }
 
 // StartOrder returns the required services that must be started for the named

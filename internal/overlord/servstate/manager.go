@@ -89,33 +89,29 @@ func (m *ServiceManager) MergeLayer(layerYAML []byte) (int, error) {
 	var newFlattened *setup.Layer
 	if last != nil && last.IsDynamic() {
 		// Last layer is dynamic, merge new layer into existing dynamic layer
-		dynamicSetup := &setup.Setup{Layers: []*setup.Layer{last, layer}}
-		dynamicFlattened, err := dynamicSetup.Flatten()
+		flattened, err := setup.FlattenLayers(last, layer)
 		if err != nil {
 			return 0, err
 		}
-		dynamicFlattened.Order = last.Order
-		newOrder = dynamicFlattened.Order
-		newSetup = &setup.Setup{Layers: append(layers[:len(layers)-1], dynamicFlattened)}
+		flattened.Order = last.Order
+		newOrder = flattened.Order
+		newSetup = &setup.Setup{Layers: append(layers[:len(layers)-1], flattened)}
 		newFlattened, err = newSetup.Flatten()
 		if err != nil {
 			return 0, err
 		}
-	} else if last != nil {
-		// Last layer is not dynamic, add new dynamic layer
-		layer.Order = last.Order + 1
+	} else {
+		// Last layer is not dynamic (or no layers), add new dynamic layer
+		layer.Order = 1
+		if last != nil {
+			layer.Order = last.Order + 1
+		}
 		newOrder = layer.Order
 		newSetup = &setup.Setup{Layers: append(layers, layer)}
 		newFlattened, err = newSetup.Flatten()
 		if err != nil {
 			return 0, err
 		}
-	} else {
-		// No layers, add single dynamic layer
-		layer.Order = 1
-		newOrder = layer.Order
-		newSetup = &setup.Setup{Layers: []*setup.Layer{layer}}
-		newFlattened = layer
 	}
 
 	m.setup = newSetup
