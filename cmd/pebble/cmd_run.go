@@ -108,12 +108,16 @@ func sanityCheck() error {
 }
 
 func runDaemon(rcmd *cmdRun, ch chan os.Signal) error {
-
 	t0 := time.Now().Truncate(time.Millisecond)
 
+	pebbleDir, socketPath := getEnvPaths()
+	err := ensurePebbleDir(pebbleDir)
+	if err != nil {
+		return err
+	}
 	dopts := daemon.Options{
-		Dir:        os.Getenv("PEBBLE"),
-		SocketPath: os.Getenv("PEBBLE_SOCKET"),
+		Dir:        pebbleDir,
+		SocketPath: socketPath,
 	}
 	d, err := daemon.New(&dopts)
 	if err != nil {
@@ -180,4 +184,24 @@ out:
 	rcmd.client.CloseIdleConnections()
 
 	return d.Stop(ch)
+}
+
+// ensurePebbleDir ensures that the pebble directory exists and is a directory.
+// If the directory doesn't exist, create it.
+func ensurePebbleDir(pebbleDir string) error {
+	st, err := os.Stat(pebbleDir)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			return fmt.Errorf("cannot stat pebble directory: %w", err)
+		}
+		err = os.MkdirAll(pebbleDir, 0755)
+		if err != nil {
+			return fmt.Errorf("cannot create pebble directory: %w", err)
+		}
+		return nil
+	}
+	if !st.IsDir() {
+		return fmt.Errorf("%q is not a directory", pebbleDir)
+	}
+	return nil
 }

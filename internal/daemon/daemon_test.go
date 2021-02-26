@@ -91,33 +91,6 @@ func (h *fakeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.lastMethod = r.Method
 }
 
-func (s *daemonSuite) TestDefaultPaths(c *C) {
-	c.Assert(defaultPebbleDir, Equals, "/var/lib/pebble/default")
-
-	originalDefaultDir := defaultPebbleDir
-	defer func() {
-		defaultPebbleDir = originalDefaultDir
-	}()
-
-	// newDaemon will use the empty directory, which makes the daemon
-	// use the default as established by the global defaultPebbleDir.
-	s.pebbleDir = ""
-	defaultPebbleDir = c.MkDir()
-
-	d := s.newDaemon(c)
-	d.Init()
-	d.Start()
-	defer d.Stop(nil)
-
-	info, err := os.Stat(filepath.Join(defaultPebbleDir, ".pebble.socket"))
-	c.Assert(err, IsNil)
-	c.Assert(info.Mode(), Equals, os.ModeSocket|0666)
-
-	info, err = os.Stat(filepath.Join(defaultPebbleDir, ".pebble.socket.untrusted"))
-	c.Assert(err, IsNil)
-	c.Assert(info.Mode(), Equals, os.ModeSocket|0666)
-}
-
 func (s *daemonSuite) TestExplicitPaths(c *C) {
 	s.socketPath = filepath.Join(c.MkDir(), "custom.socket")
 

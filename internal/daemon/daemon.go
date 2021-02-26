@@ -22,7 +22,6 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
-	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
@@ -48,8 +47,6 @@ var (
 	systemdSdNotify = systemd.SdNotify
 	sysGetuid       = sys.Getuid
 )
-
-var defaultPebbleDir = "/var/lib/pebble/default"
 
 // Options holds the daemon setup required for the initialization of a new daemon.
 type Options struct {
@@ -667,22 +664,12 @@ func (d *Daemon) RebootIsMissing(st *state.State) error {
 }
 
 func New(opts *Options) (*Daemon, error) {
-
-	pebbleDir := opts.Dir
-	if pebbleDir == "" {
-		pebbleDir = defaultPebbleDir
-	}
-	socketPath := opts.SocketPath
-	if socketPath == "" {
-		socketPath = filepath.Join(pebbleDir, ".pebble.socket")
-	}
-
 	d := &Daemon{
-		pebbleDir:           pebbleDir,
-		normalSocketPath:    socketPath,
-		untrustedSocketPath: socketPath + ".untrusted",
+		pebbleDir:           opts.Dir,
+		normalSocketPath:    opts.SocketPath,
+		untrustedSocketPath: opts.SocketPath + ".untrusted",
 	}
-	ovld, err := overlord.New(pebbleDir, d)
+	ovld, err := overlord.New(opts.Dir, d)
 	if err == state.ErrExpectedReboot {
 		// we proceed without overlord until we reach Stop
 		// where we will schedule and wait again for a system restart.
