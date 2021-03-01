@@ -20,6 +20,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"path/filepath"
 
 	"gopkg.in/check.v1"
@@ -35,21 +36,18 @@ func assertBodyEquals(c *check.C, body io.ReadCloser, expected map[string]interf
 	c.Assert(actual, check.DeepEquals, expected)
 }
 
-func (s *PebbleSuite) TestFlatten(c *check.C) {
+func (s *PebbleSuite) TestGetPlan(c *check.C) {
 	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		c.Check(r.Method, check.Equals, "POST")
-		c.Check(r.URL.Path, check.Equals, "/v1/layers")
-		assertBodyEquals(c, r.Body, map[string]interface{}{
-			"action": "flatten",
-			"format": "yaml",
-		})
+		c.Check(r.Method, check.Equals, "GET")
+		c.Check(r.URL.Path, check.Equals, "/v1/plan")
+		c.Check(r.URL.Query(), check.DeepEquals, url.Values{"format": []string{"yaml"}})
 		fmt.Fprint(w, `{
     "type": "sync",
     "status-code": 200,
     "result": "services:\n foo:\n  override: replace\n  command: cmd\n"
 }`)
 	})
-	rest, err := pebble.Parser(pebble.Client()).ParseArgs([]string{"flatten"})
+	rest, err := pebble.Parser(pebble.Client()).ParseArgs([]string{"plan"})
 	c.Assert(err, check.IsNil)
 	c.Assert(rest, check.HasLen, 0)
 	c.Check(s.Stdout(), check.Equals, `

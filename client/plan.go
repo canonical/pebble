@@ -17,6 +17,7 @@ package client
 import (
 	"bytes"
 	"encoding/json"
+	"net/url"
 )
 
 type MergeLayerOptions struct {
@@ -41,21 +42,13 @@ func (client *Client) MergeLayer(opts *MergeLayerOptions) error {
 	return err
 }
 
-type FlattenedSetupOptions struct{}
+type GetPlanOptions struct{}
 
-func (client *Client) FlattenedSetup(_ *FlattenedSetupOptions) (layerYAML string, err error) {
-	var payload = struct {
-		Action string `json:"action"`
-		Format string `json:"format"`
-	}{
-		Action: "flatten",
-		Format: "yaml",
+func (client *Client) GetPlan(_ *GetPlanOptions) (layerYAML string, err error) {
+	query := url.Values{
+		"format": []string{"yaml"},
 	}
-	var body bytes.Buffer
-	if err := json.NewEncoder(&body).Encode(&payload); err != nil {
-		return "", err
-	}
-	_, err = client.doSync("POST", "/v1/layers", nil, nil, &body, &layerYAML)
+	_, err = client.doSync("GET", "/v1/plan", query, nil, nil, &layerYAML)
 	if err != nil {
 		return "", err
 	}

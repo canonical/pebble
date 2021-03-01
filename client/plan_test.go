@@ -16,6 +16,7 @@ package client_test
 
 import (
 	"encoding/json"
+	"net/url"
 
 	"github.com/canonical/pebble/client"
 	"gopkg.in/check.v1"
@@ -47,23 +48,17 @@ services:
 	})
 }
 
-func (cs *clientSuite) TestFlattenedSetup(c *check.C) {
+func (cs *clientSuite) TestGetPlan(c *check.C) {
 	cs.rsp = `{
 		"type": "sync",
 		"status-code": 200,
 		"result": "services:\n foo:\n  override: replace\n  command: cmd\n"
 	}`
-	layerYAML, err := cs.cli.FlattenedSetup(&client.FlattenedSetupOptions{})
+	layerYAML, err := cs.cli.GetPlan(&client.GetPlanOptions{})
 	c.Assert(err, check.IsNil)
-	c.Check(cs.req.Method, check.Equals, "POST")
-	c.Check(cs.req.URL.Path, check.Equals, "/v1/layers")
-	c.Check(cs.req.URL.Query(), check.HasLen, 0)
-	var body map[string]interface{}
-	c.Assert(json.NewDecoder(cs.req.Body).Decode(&body), check.IsNil)
-	c.Assert(body, check.DeepEquals, map[string]interface{}{
-		"action": "flatten",
-		"format": "yaml",
-	})
+	c.Check(cs.req.Method, check.Equals, "GET")
+	c.Check(cs.req.URL.Path, check.Equals, "/v1/plan")
+	c.Check(cs.req.URL.Query(), check.DeepEquals, url.Values{"format": []string{"yaml"}})
 	c.Assert(layerYAML, check.Equals, `
 services:
  foo:

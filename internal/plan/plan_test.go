@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package setup_test
+package plan_test
 
 import (
 	"bytes"
@@ -23,7 +23,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/canonical/pebble/internal/setup"
+	"github.com/canonical/pebble/internal/plan"
 
 	. "gopkg.in/check.v1"
 )
@@ -60,17 +60,17 @@ func reindent(in string) []byte {
 	return buf.Bytes()
 }
 
-type setupTest struct {
+type planTest struct {
 	summary string
 	input   []string
-	layers  []*setup.Layer
-	result  *setup.Layer
+	layers  []*plan.Layer
+	result  *plan.Plan
 	error   string
 	start   map[string][]string
 	stop    map[string][]string
 }
 
-var setupTests = []setupTest{{
+var planTests = []planTest{{
 	summary: "Relatively simple layer with override on top",
 	input: []string{`
 		summary: Simple layer
@@ -126,22 +126,22 @@ var setupTests = []setupTest{{
 				override: replace
 				command: cmd
 	`},
-	layers: []*setup.Layer{{
+	layers: []*plan.Layer{{
 		Order:       0,
 		Label:       "layer-0",
 		Summary:     "Simple layer",
 		Description: "A simple layer.",
-		Services: map[string]*setup.Service{
+		Services: map[string]*plan.Service{
 			"srv1": {
 				Name:     "srv1",
 				Summary:  "Service summary",
 				Override: "replace",
 				Command:  `cmd arg1 "arg2 arg3"`,
-				Default:  setup.StartAction,
+				Default:  plan.StartAction,
 				Before:   []string{"srv3"},
 				After:    []string{"srv2"},
 				Requires: []string{"srv2", "srv3"},
-				Environment: []setup.StringVariable{
+				Environment: []plan.StringVariable{
 					{Name: "var1", Value: "val1"},
 					{Name: "var0", Value: "val0"},
 					{Name: "var2", Value: "val2"},
@@ -151,14 +151,14 @@ var setupTests = []setupTest{{
 				Name:     "srv2",
 				Override: "replace",
 				Command:  "cmd",
-				Default:  setup.StartAction,
+				Default:  plan.StartAction,
 				Before:   []string{"srv3"},
 			},
 			"srv3": {
 				Name:     "srv3",
 				Override: "replace",
 				Command:  "cmd",
-				Default:  setup.UnknownAction,
+				Default:  plan.UnknownAction,
 			},
 		},
 	}, {
@@ -166,13 +166,13 @@ var setupTests = []setupTest{{
 		Label:       "layer-1",
 		Summary:     "Simple override layer.",
 		Description: "The second layer.",
-		Services: map[string]*setup.Service{
+		Services: map[string]*plan.Service{
 			"srv1": {
 				Name:     "srv1",
 				Override: "merge",
 				Before:   []string{"srv5"},
 				After:    []string{"srv4"},
-				Environment: []setup.StringVariable{
+				Environment: []plan.StringVariable{
 					{Name: "var3", Value: "val3"},
 				},
 			},
@@ -181,13 +181,13 @@ var setupTests = []setupTest{{
 				Summary:  "Replaced service",
 				Override: "replace",
 				Command:  "cmd",
-				Default:  setup.StopAction,
+				Default:  plan.StopAction,
 			},
 			"srv4": {
 				Name:     "srv4",
 				Override: "replace",
 				Command:  "cmd",
-				Default:  setup.StartAction,
+				Default:  plan.StartAction,
 			},
 			"srv5": {
 				Name:     "srv5",
@@ -196,10 +196,11 @@ var setupTests = []setupTest{{
 			},
 		},
 	}},
-	result: &setup.Layer{
+	result: &plan.Plan{
+		Layers:      []*plan.Layer{}, // Layers checked separately
 		Summary:     "Simple override layer.",
 		Description: "The second layer.",
-		Services: map[string]*setup.Service{
+		Services: map[string]*plan.Service{
 			"srv1": {
 				Name:     "srv1",
 				Summary:  "Service summary",
@@ -209,7 +210,7 @@ var setupTests = []setupTest{{
 				After:    []string{"srv2", "srv4"},
 				Before:   []string{"srv3", "srv5"},
 				Requires: []string{"srv2", "srv3"},
-				Environment: []setup.StringVariable{
+				Environment: []plan.StringVariable{
 					{Name: "var1", Value: "val1"},
 					{Name: "var0", Value: "val0"},
 					{Name: "var2", Value: "val2"},
@@ -274,7 +275,6 @@ var setupTests = []setupTest{{
 				command: cmd
 	`},
 }, {
-
 	summary: "Handling of nulls and typed values in environment",
 	input: []string{`
 		services:
@@ -286,15 +286,15 @@ var setupTests = []setupTest{{
 					- b: 1.1
 					- c:
 	`},
-	layers: []*setup.Layer{{
+	layers: []*plan.Layer{{
 		Order: 0,
 		Label: "layer-0",
-		Services: map[string]*setup.Service{
+		Services: map[string]*plan.Service{
 			"srv1": {
 				Name:     "srv1",
 				Override: "replace",
 				Command:  "cmd",
-				Environment: []setup.StringVariable{
+				Environment: []plan.StringVariable{
 					{Name: "a", Value: "true"},
 					{Name: "b", Value: "1.1"},
 					{Name: "c", Value: ""},
@@ -303,7 +303,6 @@ var setupTests = []setupTest{{
 		},
 	}},
 }, {
-
 	summary: "Unknown keys are not accepted",
 	error:   "(?s).*field future not found.*",
 	input: []string{`
@@ -316,12 +315,11 @@ var setupTests = []setupTest{{
 }}
 
 func (s *S) TestParseLayer(c *C) {
-
-	for _, test := range setupTests {
-		var sup setup.Setup
+	for _, test := range planTests {
+		var sup plan.Plan
 		var err error
 		for i, yml := range test.input {
-			layer, e := setup.ParseLayer(i, fmt.Sprintf("layer-%d", i), reindent(yml))
+			layer, e := plan.ParseLayer(i, fmt.Sprintf("layer-%d", i), reindent(yml))
 			if e != nil {
 				err = e
 				break
@@ -329,12 +327,14 @@ func (s *S) TestParseLayer(c *C) {
 			if len(test.layers) > 0 && test.layers[i] != nil {
 				c.Assert(layer, DeepEquals, test.layers[i])
 			}
-			sup.AddLayer(layer)
+			sup.Layers = append(sup.Layers, layer)
 		}
 		if err == nil {
-			var result *setup.Layer
-			result, err = sup.Flatten()
+			var result *plan.Plan
+			result, err = plan.CombineLayers(sup.Layers...)
 			if err == nil && test.result != nil {
+				c.Assert(result.Layers, DeepEquals, test.layers)
+				result.Layers = []*plan.Layer{} // Layers checked separately above
 				c.Assert(result, DeepEquals, test.result)
 			}
 			if err == nil {
@@ -361,21 +361,23 @@ func (s *S) TestParseLayer(c *C) {
 }
 
 func (s *S) TestReadDir(c *C) {
-	setupDir := c.MkDir()
-	layersDir := filepath.Join(setupDir, "layers")
+	pebbleDir := c.MkDir()
+	layersDir := filepath.Join(pebbleDir, "layers")
 	err := os.Mkdir(layersDir, 0755)
 	c.Assert(err, IsNil)
 
-	for _, test := range setupTests {
+	for _, test := range planTests {
 		for i, yml := range test.input {
 			err := ioutil.WriteFile(filepath.Join(layersDir, fmt.Sprintf("%03d-layer-%d.yaml", i, i)), []byte(reindent(yml)), 0644)
 			c.Assert(err, IsNil)
 		}
-		sup, err := setup.ReadDir(setupDir)
+		sup, err := plan.ReadDir(pebbleDir)
 		if err == nil {
-			var result *setup.Layer
-			result, err = sup.Flatten()
+			var result *plan.Plan
+			result, err = plan.CombineLayers(sup.Layers...)
 			if err == nil && test.result != nil {
+				c.Assert(result.Layers, DeepEquals, test.layers)
+				result.Layers = []*plan.Layer{} // Layers checked separately above
 				c.Assert(result, DeepEquals, test.result)
 			}
 			if err == nil {
@@ -412,8 +414,8 @@ var readDirBadNames = []string{
 }
 
 func (s *S) TestReadDirBadNames(c *C) {
-	setupDir := c.MkDir()
-	layersDir := filepath.Join(setupDir, "layers")
+	pebbleDir := c.MkDir()
+	layersDir := filepath.Join(pebbleDir, "layers")
 	err := os.Mkdir(layersDir, 0755)
 	c.Assert(err, IsNil)
 
@@ -421,7 +423,7 @@ func (s *S) TestReadDirBadNames(c *C) {
 		fpath := filepath.Join(layersDir, fname)
 		err := ioutil.WriteFile(fpath, []byte("<ignore>"), 0644)
 		c.Assert(err, IsNil)
-		_, err = setup.ReadDir(setupDir)
+		_, err = plan.ReadDir(pebbleDir)
 		c.Assert(err.Error(), Equals, fmt.Sprintf("invalid layer filename: %q (must look like \"123-some-label.yaml\")", fname))
 		err = os.Remove(fpath)
 		c.Assert(err, IsNil)
@@ -434,8 +436,8 @@ var readDirDupNames = [][]string{
 }
 
 func (s *S) TestReadDirDupNames(c *C) {
-	setupDir := c.MkDir()
-	layersDir := filepath.Join(setupDir, "layers")
+	pebbleDir := c.MkDir()
+	layersDir := filepath.Join(pebbleDir, "layers")
 	err := os.Mkdir(layersDir, 0755)
 	c.Assert(err, IsNil)
 
@@ -445,7 +447,7 @@ func (s *S) TestReadDirDupNames(c *C) {
 			err := ioutil.WriteFile(fpath, []byte("summary: ignore"), 0644)
 			c.Assert(err, IsNil)
 		}
-		_, err = setup.ReadDir(setupDir)
+		_, err = plan.ReadDir(pebbleDir)
 		c.Assert(err.Error(), Equals, fmt.Sprintf("invalid layer filename: %q not unique (have %q already)", fnames[1], fnames[0]))
 		for _, fname := range fnames {
 			fpath := filepath.Join(layersDir, fname)

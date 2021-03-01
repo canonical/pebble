@@ -17,42 +17,49 @@ package daemon
 import (
 	"encoding/json"
 	"net/http"
+
+	"gopkg.in/yaml.v3"
 )
 
-func v1PostLayer(c *Command, r *http.Request, x *userState) Response {
+func v1GetPlan(c *Command, r *http.Request, _ *userState) Response {
+	format := r.URL.Query().Get("format")
+	if format != "yaml" {
+		return statusBadRequest("invalid format %q", format)
+	}
+
+	servmgr := c.d.overlord.ServiceManager()
+	plan, err := servmgr.Plan()
+	if err != nil {
+		return statusInternalError("cannot get plan: %v", err)
+	}
+	planYAML, err := yaml.Marshal(plan)
+	if err != nil {
+		return statusInternalError("cannot serialize plan: %v", err)
+	}
+	return SyncResponse(string(planYAML))
+}
+
+func v1PostLayers(c *Command, r *http.Request, _ *userState) Response {
 	var payload struct {
 		Action string `json:"action"`
 		Format string `json:"format"`
 		Layer  string `json:"layer"`
 	}
-
 	decoder := json.NewDecoder(r.Body)
 	if err := decoder.Decode(&payload); err != nil {
 		return statusBadRequest("cannot decode request body: %v", err)
 	}
-
+	if payload.Action != "merge" {
+		return statusBadRequest("invalid action %q", payload.Action)
+	}
 	if payload.Format != "yaml" {
 		return statusBadRequest("invalid format %q", payload.Format)
 	}
 
 	servmgr := c.d.overlord.ServiceManager()
-
-	switch payload.Action {
-	case "merge":
-		_, err := servmgr.MergeLayer([]byte(payload.Layer))
-		if err != nil {
-			return statusInternalError("cannot merge layer: %v", err)
-		}
-		return SyncResponse(true)
-
-	case "flatten":
-		layer, err := servmgr.FlattenedSetup()
-		if err != nil {
-			return statusInternalError("cannot flatten layers: %v", err)
-		}
-		return SyncResponse(string(layer))
-
-	default:
-		return statusBadRequest("invalid action %q", payload.Action)
+	_, err := servmgr.MergeLayer([]byte(payload.Layer))
+	if err != nil {
+		return statusInternalError("cannot merge layer: %v", err)
 	}
+	return SyncResponse(true)
 }

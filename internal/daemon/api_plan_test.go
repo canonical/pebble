@@ -22,32 +22,32 @@ import (
 	. "gopkg.in/check.v1"
 )
 
-var setupLayer = `
+var planLayer = `
+summary: this is a summary
+description: this is a description
 services:
     static:
         override: replace
         command: echo static
 `
 
-func (s *apiSuite) TestLayersErrors(c *C) {
+func (s *apiSuite) TestGetPlanErrors(c *C) {
 	var tests = []struct {
-		payload string
+		url     string
 		status  int
 		message string
 	}{
-		{"@", 400, `cannot decode request body: invalid character '@' looking for beginning of value`},
-		{`{"action": "merge", "format": "foo"}`, 400, `invalid format "foo"`},
-		{`{"action": "flatten", "format": "foo"}`, 400, `invalid format "foo"`},
-		{`{"action": "bar", "format": "yaml"}`, 400, `invalid action "bar"`},
+		{"/v1/layers", 400, `invalid format ""`},
+		{"/v1/layers?format=foo", 400, `invalid format "foo"`},
 	}
 
 	_ = s.daemon(c)
-	layersCmd := apiCmd("/v1/layers")
+	planCmd := apiCmd("/v1/plan")
 
 	for _, test := range tests {
-		req, err := http.NewRequest("POST", "/v1/layers", bytes.NewBufferString(test.payload))
+		req, err := http.NewRequest("POST", test.url, nil)
 		c.Assert(err, IsNil)
-		rsp := v1PostLayer(layersCmd, req, nil).(*resp)
+		rsp := v1GetPlan(planCmd, req, nil).(*resp)
 		rec := httptest.NewRecorder()
 		rsp.ServeHTTP(rec, req)
 		c.Assert(rec.Code, Equals, test.status)
@@ -57,21 +57,22 @@ func (s *apiSuite) TestLayersErrors(c *C) {
 	}
 }
 
-func (s *apiSuite) TestLayersFlatten(c *C) {
-	writeTestLayer(s.pebbleDir, setupLayer)
+func (s *apiSuite) TestGetPlan(c *C) {
+	writeTestLayer(s.pebbleDir, planLayer)
 	_ = s.daemon(c)
-	layersCmd := apiCmd("/v1/layers")
+	planCmd := apiCmd("/v1/plan")
 
-	payload := `{"action": "flatten", "format": "yaml"}`
-	req, err := http.NewRequest("POST", "/v1/layers", bytes.NewBufferString(payload))
+	req, err := http.NewRequest("GET", "/v1/plan?format=yaml", nil)
 	c.Assert(err, IsNil)
-	rsp := v1PostLayer(layersCmd, req, nil).(*resp)
+	rsp := v1GetPlan(planCmd, req, nil).(*resp)
 	rec := httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)
 	c.Assert(rec.Code, Equals, 200)
 	c.Assert(rsp.Status, Equals, 200)
 	c.Assert(rsp.Type, Equals, ResponseTypeSync)
 	c.Assert(rsp.Result.(string), Equals, `
+summary: this is a summary
+description: this is a description
 services:
     static:
         override: replace
@@ -79,38 +80,46 @@ services:
 `[1:])
 }
 
+func (s *apiSuite) TestLayersErrors(c *C) {
+	var tests = []struct {
+		payload string
+		status  int
+		message string
+	}{
+		{"@", 400, `cannot decode request body: invalid character '@' looking for beginning of value`},
+		{`{"action": "merge", "format": "foo"}`, 400, `invalid format "foo"`},
+		{`{"action": "bar", "format": "yaml"}`, 400, `invalid action "bar"`},
+	}
+
+	_ = s.daemon(c)
+	layersCmd := apiCmd("/v1/layers")
+
+	for _, test := range tests {
+		req, err := http.NewRequest("POST", "/v1/layers", bytes.NewBufferString(test.payload))
+		c.Assert(err, IsNil)
+		rsp := v1PostLayers(layersCmd, req, nil).(*resp)
+		rec := httptest.NewRecorder()
+		rsp.ServeHTTP(rec, req)
+		c.Assert(rec.Code, Equals, test.status)
+		c.Assert(rsp.Status, Equals, test.status)
+		c.Assert(rsp.Type, Equals, ResponseTypeError)
+		c.Assert(rsp.Result.(*errorResult).Message, Matches, test.message)
+	}
+}
+
 func (s *apiSuite) TestLayersMerge(c *C) {
-	writeTestLayer(s.pebbleDir, setupLayer)
+	writeTestLayer(s.pebbleDir, planLayer)
 	_ = s.daemon(c)
 	layersCmd := apiCmd("/v1/layers")
 
 	payload := `{"action": "merge", "format": "yaml", "layer": "services:\n dynamic:\n  override: replace\n  command: echo dynamic\n"}`
 	req, err := http.NewRequest("POST", "/v1/layers", bytes.NewBufferString(payload))
 	c.Assert(err, IsNil)
-	rsp := v1PostLayer(layersCmd, req, nil).(*resp)
+	rsp := v1PostLayers(layersCmd, req, nil).(*resp)
 	rec := httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)
 	c.Assert(rec.Code, Equals, 200)
 	c.Assert(rsp.Status, Equals, 200)
 	c.Assert(rsp.Type, Equals, ResponseTypeSync)
 	c.Assert(rsp.Result.(bool), Equals, true)
-
-	payload = `{"action": "flatten", "format": "yaml"}`
-	req, err = http.NewRequest("POST", "/v1/layers", bytes.NewBufferString(payload))
-	c.Assert(err, IsNil)
-	rsp = v1PostLayer(layersCmd, req, nil).(*resp)
-	rec = httptest.NewRecorder()
-	rsp.ServeHTTP(rec, req)
-	c.Assert(rec.Code, Equals, 200)
-	c.Assert(rsp.Status, Equals, 200)
-	c.Assert(rsp.Type, Equals, ResponseTypeSync)
-	c.Assert(rsp.Result.(string), Equals, `
-services:
-    dynamic:
-        override: replace
-        command: echo dynamic
-    static:
-        override: replace
-        command: echo static
-`[1:])
 }

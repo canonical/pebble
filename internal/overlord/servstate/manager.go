@@ -5,7 +5,7 @@ import (
 	"sync"
 
 	"github.com/canonical/pebble/internal/overlord/state"
-	"github.com/canonical/pebble/internal/setup"
+	"github.com/canonical/pebble/internal/plan"
 )
 
 type ServiceManager struct {
@@ -13,10 +13,9 @@ type ServiceManager struct {
 	runner    *state.TaskRunner
 	pebbleDir string
 
-	setupLock sync.Mutex
-	setup     *setup.Setup
-	flattened *setup.Layer
-	services  map[string]*activeService
+	planLock sync.Mutex
+	plan     *plan.Plan
+	services map[string]*activeService
 }
 
 type activeService struct {
@@ -39,64 +38,62 @@ func NewManager(s *state.State, runner *state.TaskRunner, pebbleDir string) (*Se
 	return manager, nil
 }
 
-func (m *ServiceManager) reloadSetup() error {
-	setup, err := setup.ReadDir(m.pebbleDir)
+func (m *ServiceManager) reloadPlan() error {
+	p, err := plan.ReadDir(m.pebbleDir)
 	if err != nil {
 		return err
 	}
-	flattened, err := setup.Flatten()
-	if err != nil {
-		return err
-	}
-	m.setup = setup
-	m.flattened = flattened
+	m.plan = p
 	return nil
 }
 
-// FlattenedSetup returns the flattened setup as a single layer in YAML format.
-func (m *ServiceManager) FlattenedSetup() ([]byte, error) {
-	releaseSetup, err := m.acquireSetup()
+// Plan returns the configuration plan.
+func (m *ServiceManager) Plan() (*plan.Plan, error) {
+	releasePlan, err := m.acquirePlan()
 	if err != nil {
 		return nil, err
 	}
-	defer releaseSetup()
-
-	return m.flattened.AsYAML()
+	defer releasePlan()
+	return m.plan, nil // TODO: copy?
 }
 
 // MergeLayer merges the given layer YAML into the dynamic layers, returning
 // the new layer's "order" (won't increase if adding another dynamic layer).
 func (m *ServiceManager) MergeLayer(layerYAML []byte) (int, error) {
-	layer, err := setup.ParseLayer(0, "", layerYAML)
+	layer, err := plan.ParseLayer(0, "", layerYAML)
 	if err != nil {
 		return 0, err
 	}
 
-	releaseSetup, err := m.acquireSetup()
+	releasePlan, err := m.acquirePlan()
 	if err != nil {
 		return 0, err
 	}
-	defer releaseSetup()
+	defer releasePlan()
 
-	var last *setup.Layer
-	layers := m.setup.Layers
+	var last *plan.Layer
+	layers := m.plan.Layers
 	if len(layers) > 0 {
 		last = layers[len(layers)-1]
 	}
 
 	var newOrder int
-	var newSetup *setup.Setup
-	var newFlattened *setup.Layer
+	var newPlan *plan.Plan
 	if last != nil && last.IsDynamic() {
 		// Last layer is dynamic, merge new layer into existing dynamic layer
-		flattened, err := setup.FlattenLayers(last, layer)
+		flattened, err := plan.CombineLayers(last, layer)
 		if err != nil {
 			return 0, err
 		}
-		flattened.Order = last.Order
-		newOrder = flattened.Order
-		newSetup = &setup.Setup{Layers: append(layers[:len(layers)-1], flattened)}
-		newFlattened, err = newSetup.Flatten()
+		newOrder = last.Order
+		newLayer := &plan.Layer{
+			Order:       last.Order,
+			Summary:     flattened.Summary,
+			Description: flattened.Description,
+			Services:    flattened.Services,
+		}
+		newLayers := append(layers[:len(layers)-1], newLayer)
+		newPlan, err = plan.CombineLayers(newLayers...)
 		if err != nil {
 			return 0, err
 		}
@@ -107,24 +104,23 @@ func (m *ServiceManager) MergeLayer(layerYAML []byte) (int, error) {
 			layer.Order = last.Order + 1
 		}
 		newOrder = layer.Order
-		newSetup = &setup.Setup{Layers: append(layers, layer)}
-		newFlattened, err = newSetup.Flatten()
+		newLayers := append(layers, layer)
+		newPlan, err = plan.CombineLayers(newLayers...)
 		if err != nil {
 			return 0, err
 		}
 	}
 
-	m.setup = newSetup
-	m.flattened = newFlattened
+	m.plan = newPlan
 	return newOrder, nil
 }
 
-func (m *ServiceManager) acquireSetup() (release func(), err error) {
-	m.setupLock.Lock()
-	if m.setup == nil {
-		err := m.reloadSetup()
+func (m *ServiceManager) acquirePlan() (release func(), err error) {
+	m.planLock.Lock()
+	if m.plan == nil {
+		err := m.reloadPlan()
 		if err != nil {
-			m.setupLock.Unlock()
+			m.planLock.Unlock()
 			return nil, err
 		}
 	}
@@ -132,7 +128,7 @@ func (m *ServiceManager) acquireSetup() (release func(), err error) {
 	release = func() {
 		if !released {
 			released = true
-			m.setupLock.Unlock()
+			m.planLock.Unlock()
 		}
 	}
 	return release, nil
@@ -148,8 +144,8 @@ func (m *ServiceManager) Ensure() error {
 // process lifecycle.
 func (m *ServiceManager) ActiveServices() []string {
 	var names []string
-	for name, service := range m.flattened.Services {
-		if service.Default == setup.StartAction {
+	for name, service := range m.plan.Services {
+		if service.Default == plan.StartAction {
 			names = append(names, name)
 		}
 	}
@@ -159,50 +155,42 @@ func (m *ServiceManager) ActiveServices() []string {
 // DefaultServices returns the name of the services set to start
 // by default.
 func (m *ServiceManager) DefaultServices() ([]string, error) {
-	releaseSetup, err := m.acquireSetup()
+	releasePlan, err := m.acquirePlan()
 	if err != nil {
 		return nil, err
 	}
-	defer releaseSetup()
+	defer releasePlan()
 
 	var names []string
-	for name, service := range m.flattened.Services {
-		if service.Default == setup.StartAction {
+	for name, service := range m.plan.Services {
+		if service.Default == plan.StartAction {
 			names = append(names, name)
 		}
 	}
 
-	return m.flattened.StartOrder(names)
+	return m.plan.StartOrder(names)
 }
 
 // StartOrder returns the provided services, together with any required
 // dependencies, in the proper order for starting them all up.
 func (m *ServiceManager) StartOrder(services []string) ([]string, error) {
-	releaseSetup, err := m.acquireSetup()
+	releasePlan, err := m.acquirePlan()
 	if err != nil {
 		return nil, err
 	}
-	defer releaseSetup()
+	defer releasePlan()
 
-	return m.flattened.StartOrder(services)
+	return m.plan.StartOrder(services)
 }
 
 // StartOrder returns the provided services, together with any required
 // dependencies, in the proper order for starting them all up.
 func (m *ServiceManager) StopOrder(services []string) ([]string, error) {
-	releaseSetup, err := m.acquireSetup()
+	releasePlan, err := m.acquirePlan()
 	if err != nil {
 		return nil, err
 	}
-	defer releaseSetup()
+	defer releasePlan()
 
-	return m.flattened.StopOrder(services)
-}
-
-// Override changes the current override service layer which sits atop the
-// layers loaded from storage. No services will be started by default (see AutoStart),
-// but any services present in the previous override layer and not present in the
-// new layer will be stopped for consistency.
-func (m *ServiceManager) Override(layer *setup.Layer) error {
-	panic("unsupported")
+	return m.plan.StopOrder(services)
 }

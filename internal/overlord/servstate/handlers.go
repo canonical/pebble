@@ -51,11 +51,11 @@ var (
 
 // Start starts the named service after also starting all of its dependencies.
 func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
-	releaseSetup, err := m.acquireSetup()
+	releasePlan, err := m.acquirePlan()
 	if err != nil {
 		return err
 	}
-	defer releaseSetup()
+	defer releasePlan()
 
 	m.state.Lock()
 	req, err := TaskServiceRequest(task)
@@ -64,9 +64,9 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 		return err
 	}
 
-	service, ok := m.flattened.Services[req.Name]
+	service, ok := m.plan.Services[req.Name]
 	if !ok {
-		return fmt.Errorf("cannot find service %q in setup", req.Name)
+		return fmt.Errorf("cannot find service %q in plan", req.Name)
 	}
 
 	_, previous := m.services[req.Name]
@@ -101,19 +101,19 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 		close(active.done)
 	}()
 
-	releaseSetup()
+	releasePlan()
 
 	okay := time.After(okayWait)
 	select {
 	case <-okay:
 		return nil
 	case <-active.done:
-		releaseSetup, err := m.acquireSetup()
+		releasePlan, err := m.acquirePlan()
 		if err == nil {
 			if m.services[req.Name].cmd == cmd {
 				delete(m.services, req.Name)
 			}
-			releaseSetup()
+			releasePlan()
 		}
 		return fmt.Errorf("cannot start service: exited quickly with code %d", cmd.ProcessState.ExitCode())
 	}
@@ -121,11 +121,11 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 }
 
 func (m *ServiceManager) doStop(task *state.Task, tomb *tomb.Tomb) error {
-	releaseSetup, err := m.acquireSetup()
+	releasePlan, err := m.acquirePlan()
 	if err != nil {
 		return err
 	}
-	defer releaseSetup()
+	defer releasePlan()
 
 	m.state.Lock()
 	req, err := TaskServiceRequest(task)
@@ -140,7 +140,7 @@ func (m *ServiceManager) doStop(task *state.Task, tomb *tomb.Tomb) error {
 	}
 	cmd := active.cmd
 
-	releaseSetup()
+	releasePlan()
 
 	syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM)
 	//cmd.Process.Signal(syscall.SIGTERM)
@@ -159,12 +159,12 @@ func (m *ServiceManager) doStop(task *state.Task, tomb *tomb.Tomb) error {
 		case <-fail:
 			return fmt.Errorf("process still runs after SIGTERM and SIGKILL")
 		case <-dead:
-			releaseSetup, err := m.acquireSetup()
+			releasePlan, err := m.acquirePlan()
 			if err == nil {
 				if m.services[req.Name].cmd == cmd {
 					delete(m.services, req.Name)
 				}
-				releaseSetup()
+				releasePlan()
 			}
 			return nil
 		}

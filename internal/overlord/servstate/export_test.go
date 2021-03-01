@@ -20,11 +20,11 @@ import (
 )
 
 func (m *ServiceManager) CmdsForTest() map[string]*exec.Cmd {
-	releaseSetup, err := m.acquireSetup()
+	releasePlan, err := m.acquirePlan()
 	if err != nil {
 		panic(err)
 	}
-	defer releaseSetup()
+	defer releasePlan()
 
 	cmds := make(map[string]*exec.Cmd)
 	for name, active := range m.services {

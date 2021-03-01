@@ -25,6 +25,7 @@ import (
 	"time"
 
 	. "gopkg.in/check.v1"
+	"gopkg.in/yaml.v3"
 
 	"github.com/canonical/pebble/internal/overlord/servstate"
 	"github.com/canonical/pebble/internal/overlord/state"
@@ -47,7 +48,7 @@ type S struct {
 
 var _ = Suite(&S{})
 
-var setupLayer1 = `
+var planLayer1 = `
 services:
     test1:
         override: replace
@@ -63,7 +64,7 @@ services:
         command: /bin/sh -c "echo test2 >> %s; sleep 300"
 `
 
-var setupLayer2 = `
+var planLayer2 = `
 services:
     test3:
         override: replace
@@ -82,10 +83,10 @@ func (s *S) SetUpTest(c *C) {
 	os.Mkdir(filepath.Join(s.dir, "layers"), 0755)
 
 	s.log = filepath.Join(s.dir, "log.txt")
-	data := fmt.Sprintf(setupLayer1, s.log, s.log)
+	data := fmt.Sprintf(planLayer1, s.log, s.log)
 	err := ioutil.WriteFile(filepath.Join(s.dir, "layers", "001-base.yaml"), []byte(data), 0644)
 	c.Assert(err, IsNil)
-	err = ioutil.WriteFile(filepath.Join(s.dir, "layers", "002-two.yaml"), []byte(setupLayer2), 0644)
+	err = ioutil.WriteFile(filepath.Join(s.dir, "layers", "002-two.yaml"), []byte(planLayer2), 0644)
 	c.Assert(err, IsNil)
 
 	s.runner = state.NewTaskRunner(s.st)
@@ -224,9 +225,15 @@ func (s *S) TestStartFastExitCommand(c *C) {
 	s.st.Unlock()
 }
 
-func (s *S) TestFlattenedSetup(c *C) {
-	yaml, err := s.manager.FlattenedSetup()
+func planYAML(c *C, manager *servstate.ServiceManager) string {
+	plan, err := manager.Plan()
 	c.Assert(err, IsNil)
+	yml, err := yaml.Marshal(plan)
+	c.Assert(err, IsNil)
+	return string(yml)
+}
+
+func (s *S) TestPlan(c *C) {
 	expected := fmt.Sprintf(`
 services:
     test1:
@@ -247,7 +254,7 @@ services:
         override: replace
         command: echo too-fast
 `[1:], s.log, s.log)
-	c.Assert(string(yaml), Equals, expected)
+	c.Assert(planYAML(c, s.manager), Equals, expected)
 }
 
 func (s *S) TestMergeLayerParseError(c *C) {
@@ -270,9 +277,7 @@ services:
 	c.Assert(err, IsNil)
 	c.Assert(order, Equals, 1)
 
-	yaml, err := manager.FlattenedSetup()
-	c.Assert(err, IsNil)
-	c.Assert(string(yaml), Equals, `
+	c.Assert(planYAML(c, manager), Equals, `
 services:
     svc1:
         override: replace
@@ -306,9 +311,7 @@ services:
 	c.Assert(err, IsNil)
 	c.Assert(order, Equals, 2)
 
-	yaml, err := manager.FlattenedSetup()
-	c.Assert(err, IsNil)
-	c.Assert(string(yaml), Equals, `
+	c.Assert(planYAML(c, manager), Equals, `
 services:
     dynamic1:
         override: replace
@@ -334,9 +337,7 @@ services:
 	c.Assert(err, IsNil)
 	c.Assert(order, Equals, 2)
 
-	yaml, err = manager.FlattenedSetup()
-	c.Assert(err, IsNil)
-	c.Assert(string(yaml), Equals, `
+	c.Assert(planYAML(c, manager), Equals, `
 services:
     dynamic1:
         override: replace

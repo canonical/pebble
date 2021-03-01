@@ -30,9 +30,9 @@ type cmdMerge struct {
 	} `positional-args:"yes"`
 }
 
-var shortMergeHelp = "Dynamically merge a layer on top of the setup layers"
+var shortMergeHelp = "Dynamically merge a layer on top of the plan's layers"
 var longMergeHelp = `
-The merge command reads the setup layer YAML from the path specified, and
+The merge command reads the plan's layer YAML from the path specified, and
 merges it on top of the current dynamic layer (which are on top of any static
 layers loaded when Pebble started). If there are no dynamic layers, a new
 dynamic layer is added.
@@ -54,21 +54,21 @@ func (cmd *cmdMerge) Execute(args []string) error {
 	return nil
 }
 
-type cmdFlatten struct {
+type cmdPlan struct {
 	clientMixin
 }
 
-var shortFlattenHelp = "Show the service setup flattened into a single layer"
-var longFlattenHelp = `
-The flatten command reads the flattened setup and displays it as YAML. The
-setup layers are flattened according to Pebble's layer override rules.
+var shortPlanHelp = "Show the plan with layers combined"
+var longPlanHelp = `
+The plan command reads the plan (configuration) and displays it as YAML. The
+plan's layers are flattened according to Pebble's layer override rules.
 `
 
-func (cmd *cmdFlatten) Execute(args []string) error {
+func (cmd *cmdPlan) Execute(args []string) error {
 	if len(args) > 0 {
 		return ErrExtraArgs
 	}
-	layerYAML, err := cmd.client.FlattenedSetup(&client.FlattenedSetupOptions{})
+	layerYAML, err := cmd.client.GetPlan(&client.GetPlanOptions{})
 	if err != nil {
 		return err
 	}
@@ -78,5 +78,5 @@ func (cmd *cmdFlatten) Execute(args []string) error {
 
 func init() {
 	addCommand("merge", shortMergeHelp, longMergeHelp, func() flags.Commander { return &cmdMerge{} }, nil, nil)
-	addCommand("flatten", shortFlattenHelp, longFlattenHelp, func() flags.Commander { return &cmdFlatten{} }, nil, nil)
+	addCommand("plan", shortPlanHelp, longPlanHelp, func() flags.Commander { return &cmdPlan{} }, nil, nil)
 }
