@@ -30,7 +30,7 @@ func v1GetPlan(c *Command, r *http.Request, _ *userState) Response {
 	servmgr := c.d.overlord.ServiceManager()
 	plan, err := servmgr.Plan()
 	if err != nil {
-		return statusInternalError("cannot get plan: %v", err)
+		return statusInternalError("%v", err)
 	}
 	planYAML, err := yaml.Marshal(plan)
 	if err != nil {
@@ -49,7 +49,7 @@ func v1PostLayers(c *Command, r *http.Request, _ *userState) Response {
 	if err := decoder.Decode(&payload); err != nil {
 		return statusBadRequest("cannot decode request body: %v", err)
 	}
-	if payload.Action != "merge" {
+	if payload.Action != "combine" {
 		return statusBadRequest("invalid action %q", payload.Action)
 	}
 	if payload.Format != "yaml" {
@@ -57,9 +57,9 @@ func v1PostLayers(c *Command, r *http.Request, _ *userState) Response {
 	}
 
 	servmgr := c.d.overlord.ServiceManager()
-	_, err := servmgr.MergeLayer([]byte(payload.Layer))
+	_, err := servmgr.CombineLayer([]byte(payload.Layer))
 	if err != nil {
-		return statusInternalError("cannot merge layer: %v", err)
+		return statusInternalError("%v", err)
 	}
 	return SyncResponse(true)
 }

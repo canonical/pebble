@@ -28,10 +28,8 @@ import (
 )
 
 type Plan struct {
-	Layers      []*Layer            `yaml:"-"`
-	Summary     string              `yaml:"summary,omitempty"`
-	Description string              `yaml:"description,omitempty"`
-	Services    map[string]*Service `yaml:"services,omitempty"`
+	Layers   []*Layer            `yaml:"-"`
+	Services map[string]*Service `yaml:"services,omitempty"`
 }
 
 type Layer struct {
@@ -99,22 +97,21 @@ func (sv *StringVariable) UnmarshalYAML(node *yaml.Node) error {
 
 // CombineLayers combines the given layers into a Plan, with the later layers
 // layers overriding earlier ones.
-func CombineLayers(layers ...*Layer) (*Plan, error) {
-	plan := &Plan{
+func CombineLayers(layers ...*Layer) (*Layer, error) {
+	combined := &Layer{
 		Services: make(map[string]*Service),
 	}
 	if len(layers) == 0 {
-		return plan, nil
+		return combined, nil
 	}
 	last := layers[len(layers)-1]
-	plan.Layers = layers
-	plan.Summary = last.Summary
-	plan.Description = last.Description
+	combined.Summary = last.Summary
+	combined.Description = last.Description
 	for _, layer := range layers {
 		for name, service := range layer.Services {
 			switch service.Override {
 			case MergeOverride:
-				if old, ok := plan.Services[name]; ok {
+				if old, ok := combined.Services[name]; ok {
 					if service.Summary != "" {
 						old.Summary = service.Summary
 					}
@@ -135,7 +132,7 @@ func CombineLayers(layers ...*Layer) (*Plan, error) {
 				fallthrough
 			case ReplaceOverride:
 				copy := *service
-				plan.Services[name] = &copy
+				combined.Services[name] = &copy
 			case UnknownOverride:
 				return nil, fmt.Errorf("layer %q must define 'override' for service %q",
 					layer.Label, service.Name)
@@ -145,7 +142,7 @@ func CombineLayers(layers ...*Layer) (*Plan, error) {
 			}
 		}
 	}
-	return plan, nil
+	return combined, nil
 }
 
 // StartOrder returns the required services that must be started for the named
@@ -263,7 +260,7 @@ func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 
 var fnameExp = regexp.MustCompile("^([0-9]{3})-([a-z](?:-?[a-z0-9]){2,}).yaml$")
 
-func ReadLayersDir(dirname string) (*Plan, error) {
+func ReadLayersDir(dirname string) ([]*Layer, error) {
 	finfos, err := ioutil.ReadDir(dirname)
 	if err != nil {
 		// Errors from package os generally include the path.
@@ -319,7 +316,7 @@ func ReadLayersDir(dirname string) (*Plan, error) {
 		}
 		layers = append(layers, layer)
 	}
-	return CombineLayers(layers...)
+	return layers, nil
 }
 
 // ReadDir reads the configuration layers from the "layers" sub-directory in
@@ -335,5 +332,17 @@ func ReadDir(dir string) (*Plan, error) {
 		return nil, err
 	}
 
-	return ReadLayersDir(layersDir)
+	layers, err := ReadLayersDir(layersDir)
+	if err != nil {
+		return nil, err
+	}
+	combined, err := CombineLayers(layers...)
+	if err != nil {
+		return nil, err
+	}
+	plan := &Plan{
+		Layers:   layers,
+		Services: combined.Services,
+	}
+	return plan, err
 }

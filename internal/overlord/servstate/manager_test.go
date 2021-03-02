@@ -257,18 +257,18 @@ services:
 	c.Assert(planYAML(c, s.manager), Equals, expected)
 }
 
-func (s *S) TestMergeLayerParseError(c *C) {
-	_, err := s.manager.MergeLayer([]byte(`@`))
+func (s *S) TestCombineLayerParseError(c *C) {
+	_, err := s.manager.CombineLayer([]byte(`@`))
 	c.Assert(err, ErrorMatches, `cannot parse layer "": yaml: found character that cannot start any token`)
 }
 
-func (s *S) TestMergeLayerNoLayers(c *C) {
+func (s *S) TestCombineLayerNoLayers(c *C) {
 	dir := c.MkDir()
 	os.Mkdir(filepath.Join(dir, "layers"), 0755)
 	runner := state.NewTaskRunner(s.st)
 	manager, err := servstate.NewManager(s.st, runner, dir)
 
-	order, err := manager.MergeLayer([]byte(`
+	order, err := manager.CombineLayer([]byte(`
 services:
     svc1:
         override: replace
@@ -285,7 +285,7 @@ services:
 `[1:])
 }
 
-func (s *S) TestMergeLayerDynamic(c *C) {
+func (s *S) TestCombineLayerDynamic(c *C) {
 	dir := c.MkDir()
 	os.Mkdir(filepath.Join(dir, "layers"), 0755)
 
@@ -302,7 +302,7 @@ services:
 	manager, err := servstate.NewManager(s.st, runner, dir)
 
 	// Add first dynamic layer
-	order, err := manager.MergeLayer([]byte(`
+	order, err := manager.CombineLayer([]byte(`
 services:
     dynamic1:
         override: replace
@@ -322,7 +322,7 @@ services:
 `[1:])
 
 	// Add another dynamic layer (order won't increase)
-	order, err = manager.MergeLayer([]byte(`
+	order, err = manager.CombineLayer([]byte(`
 services:
     dynamic1:
         override: replace

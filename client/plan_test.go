@@ -22,44 +22,49 @@ import (
 	"gopkg.in/check.v1"
 )
 
-func (cs *clientSuite) TestMergeLayer(c *check.C) {
-	cs.rsp = `{
+func (cs *clientSuite) TestAddLayer(c *check.C) {
+	for _, action := range []string{"", "combine"} {
+		cs.rsp = `{
 		"type": "sync",
 		"status-code": 200,
 		"result": true
 	}`
-	layerYAML := `
+		data := `
 services:
  foo:
   override: replace
   command: cmd
 `[1:]
-	err := cs.cli.MergeLayer(&client.MergeLayerOptions{Layer: layerYAML})
-	c.Assert(err, check.IsNil)
-	c.Check(cs.req.Method, check.Equals, "POST")
-	c.Check(cs.req.URL.Path, check.Equals, "/v1/layers")
-	c.Check(cs.req.URL.Query(), check.HasLen, 0)
-	var body map[string]interface{}
-	c.Assert(json.NewDecoder(cs.req.Body).Decode(&body), check.IsNil)
-	c.Assert(body, check.DeepEquals, map[string]interface{}{
-		"action": "merge",
-		"format": "yaml",
-		"layer":  layerYAML,
-	})
+		err := cs.cli.AddLayer(&client.AddLayerOptions{
+			Action:    client.AddLayerAction(action),
+			LayerData: []byte(data),
+		})
+		c.Assert(err, check.IsNil)
+		c.Check(cs.req.Method, check.Equals, "POST")
+		c.Check(cs.req.URL.Path, check.Equals, "/v1/layers")
+		c.Check(cs.req.URL.Query(), check.HasLen, 0)
+		var body map[string]interface{}
+		c.Assert(json.NewDecoder(cs.req.Body).Decode(&body), check.IsNil)
+		c.Assert(body, check.DeepEquals, map[string]interface{}{
+			"action": "combine",
+			"format": "yaml",
+			"layer":  data,
+		})
+	}
 }
 
-func (cs *clientSuite) TestGetPlan(c *check.C) {
+func (cs *clientSuite) TestPlanData(c *check.C) {
 	cs.rsp = `{
 		"type": "sync",
 		"status-code": 200,
 		"result": "services:\n foo:\n  override: replace\n  command: cmd\n"
 	}`
-	layerYAML, err := cs.cli.GetPlan(&client.GetPlanOptions{})
+	data, err := cs.cli.PlanData(&client.PlanDataOptions{})
 	c.Assert(err, check.IsNil)
 	c.Check(cs.req.Method, check.Equals, "GET")
 	c.Check(cs.req.URL.Path, check.Equals, "/v1/plan")
 	c.Check(cs.req.URL.Query(), check.DeepEquals, url.Values{"format": []string{"yaml"}})
-	c.Assert(layerYAML, check.Equals, `
+	c.Assert(string(data), check.Equals, `
 services:
  foo:
   override: replace

@@ -71,8 +71,6 @@ func (s *apiSuite) TestGetPlan(c *C) {
 	c.Assert(rsp.Status, Equals, 200)
 	c.Assert(rsp.Type, Equals, ResponseTypeSync)
 	c.Assert(rsp.Result.(string), Equals, `
-summary: this is a summary
-description: this is a description
 services:
     static:
         override: replace
@@ -87,7 +85,7 @@ func (s *apiSuite) TestLayersErrors(c *C) {
 		message string
 	}{
 		{"@", 400, `cannot decode request body: invalid character '@' looking for beginning of value`},
-		{`{"action": "merge", "format": "foo"}`, 400, `invalid format "foo"`},
+		{`{"action": "combine", "format": "foo"}`, 400, `invalid format "foo"`},
 		{`{"action": "bar", "format": "yaml"}`, 400, `invalid action "bar"`},
 	}
 
@@ -107,12 +105,12 @@ func (s *apiSuite) TestLayersErrors(c *C) {
 	}
 }
 
-func (s *apiSuite) TestLayersMerge(c *C) {
+func (s *apiSuite) TestLayersCombine(c *C) {
 	writeTestLayer(s.pebbleDir, planLayer)
 	_ = s.daemon(c)
 	layersCmd := apiCmd("/v1/layers")
 
-	payload := `{"action": "merge", "format": "yaml", "layer": "services:\n dynamic:\n  override: replace\n  command: echo dynamic\n"}`
+	payload := `{"action": "combine", "format": "yaml", "layer": "services:\n dynamic:\n  override: replace\n  command: echo dynamic\n"}`
 	req, err := http.NewRequest("POST", "/v1/layers", bytes.NewBufferString(payload))
 	c.Assert(err, IsNil)
 	rsp := v1PostLayers(layersCmd, req, nil).(*resp)

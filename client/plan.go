@@ -20,19 +20,36 @@ import (
 	"net/url"
 )
 
-type MergeLayerOptions struct {
-	Layer string
+type AddLayerAction string
+
+const (
+	AddLayerCombine AddLayerAction = "combine"
+)
+
+type AddLayerOptions struct {
+	// LayerData is the new layer in YAML format.
+	LayerData []byte
+
+	// Action is the action performed when adding the new layer. Only
+	// "combine" is supported right now, which means combine the new layer
+	// into the existing dynamic layer, or add a new dynamic layer if none
+	// exists. If not set, default to "combine".
+	Action AddLayerAction
 }
 
-func (client *Client) MergeLayer(opts *MergeLayerOptions) error {
+// AddLayer adds a layer to the plan's layers according to opts.Action.
+func (client *Client) AddLayer(opts *AddLayerOptions) error {
 	var payload = struct {
 		Action string `json:"action"`
 		Format string `json:"format"`
 		Layer  string `json:"layer"`
 	}{
-		Action: "merge",
+		Action: string(opts.Action),
 		Format: "yaml",
-		Layer:  opts.Layer,
+		Layer:  string(opts.LayerData),
+	}
+	if payload.Action == "" {
+		payload.Action = string(AddLayerCombine)
 	}
 	var body bytes.Buffer
 	if err := json.NewEncoder(&body).Encode(&payload); err != nil {
@@ -42,15 +59,17 @@ func (client *Client) MergeLayer(opts *MergeLayerOptions) error {
 	return err
 }
 
-type GetPlanOptions struct{}
+type PlanDataOptions struct{}
 
-func (client *Client) GetPlan(_ *GetPlanOptions) (layerYAML string, err error) {
+// PlanData fetches the plan in YAML format.
+func (client *Client) PlanData(_ *PlanDataOptions) (data []byte, err error) {
 	query := url.Values{
 		"format": []string{"yaml"},
 	}
-	_, err = client.doSync("GET", "/v1/plan", query, nil, nil, &layerYAML)
+	var dataStr string
+	_, err = client.doSync("GET", "/v1/plan", query, nil, nil, &dataStr)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	return layerYAML, nil
+	return []byte(dataStr), nil
 }

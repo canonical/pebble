@@ -64,7 +64,7 @@ type planTest struct {
 	summary string
 	input   []string
 	layers  []*plan.Layer
-	result  *plan.Plan
+	result  *plan.Layer
 	error   string
 	start   map[string][]string
 	stop    map[string][]string
@@ -196,8 +196,7 @@ var planTests = []planTest{{
 			},
 		},
 	}},
-	result: &plan.Plan{
-		Layers:      []*plan.Layer{}, // Layers checked separately
+	result: &plan.Layer{
 		Summary:     "Simple override layer.",
 		Description: "The second layer.",
 		Services: map[string]*plan.Service{
@@ -330,21 +329,21 @@ func (s *S) TestParseLayer(c *C) {
 			sup.Layers = append(sup.Layers, layer)
 		}
 		if err == nil {
-			var result *plan.Plan
+			var result *plan.Layer
 			result, err = plan.CombineLayers(sup.Layers...)
 			if err == nil && test.result != nil {
-				c.Assert(result.Layers, DeepEquals, test.layers)
-				result.Layers = []*plan.Layer{} // Layers checked separately above
 				c.Assert(result, DeepEquals, test.result)
 			}
 			if err == nil {
 				for name, order := range test.start {
-					names, err := result.StartOrder([]string{name})
+					p := plan.Plan{Services: result.Services}
+					names, err := p.StartOrder([]string{name})
 					c.Assert(err, IsNil)
 					c.Assert(names, DeepEquals, order)
 				}
 				for name, order := range test.stop {
-					names, err := result.StopOrder([]string{name})
+					p := plan.Plan{Services: result.Services}
+					names, err := p.StopOrder([]string{name})
 					c.Assert(err, IsNil)
 					c.Assert(names, DeepEquals, order)
 				}
@@ -373,21 +372,21 @@ func (s *S) TestReadDir(c *C) {
 		}
 		sup, err := plan.ReadDir(pebbleDir)
 		if err == nil {
-			var result *plan.Plan
+			var result *plan.Layer
 			result, err = plan.CombineLayers(sup.Layers...)
 			if err == nil && test.result != nil {
-				c.Assert(result.Layers, DeepEquals, test.layers)
-				result.Layers = []*plan.Layer{} // Layers checked separately above
 				c.Assert(result, DeepEquals, test.result)
 			}
 			if err == nil {
 				for name, order := range test.start {
-					names, err := result.StartOrder([]string{name})
+					p := plan.Plan{Services: result.Services}
+					names, err := p.StartOrder([]string{name})
 					c.Assert(err, IsNil)
 					c.Assert(names, DeepEquals, order)
 				}
 				for name, order := range test.stop {
-					names, err := result.StopOrder([]string{name})
+					p := plan.Plan{Services: result.Services}
+					names, err := p.StopOrder([]string{name})
 					c.Assert(err, IsNil)
 					c.Assert(names, DeepEquals, order)
 				}

@@ -57,9 +57,10 @@ func (m *ServiceManager) Plan() (*plan.Plan, error) {
 	return m.plan, nil // TODO: copy?
 }
 
-// MergeLayer merges the given layer YAML into the dynamic layers, returning
-// the new layer's "order" (won't increase if adding another dynamic layer).
-func (m *ServiceManager) MergeLayer(layerYAML []byte) (int, error) {
+// CombineLayer combines the given layer YAML into the dynamic layers,
+// returning the new layer's "order" (which won't increase if adding another
+// dynamic layer).
+func (m *ServiceManager) CombineLayer(layerYAML []byte) (int, error) {
 	layer, err := plan.ParseLayer(0, "", layerYAML)
 	if err != nil {
 		return 0, err
@@ -78,22 +79,22 @@ func (m *ServiceManager) MergeLayer(layerYAML []byte) (int, error) {
 	}
 
 	var newOrder int
-	var newPlan *plan.Plan
+	var newCombined *plan.Layer
 	if last != nil && last.IsDynamic() {
-		// Last layer is dynamic, merge new layer into existing dynamic layer
-		flattened, err := plan.CombineLayers(last, layer)
+		// Last layer is dynamic, combine new layer into existing dynamic layer
+		combined, err := plan.CombineLayers(last, layer)
 		if err != nil {
 			return 0, err
 		}
 		newOrder = last.Order
 		newLayer := &plan.Layer{
 			Order:       last.Order,
-			Summary:     flattened.Summary,
-			Description: flattened.Description,
-			Services:    flattened.Services,
+			Summary:     combined.Summary,
+			Description: combined.Description,
+			Services:    combined.Services,
 		}
-		newLayers := append(layers[:len(layers)-1], newLayer)
-		newPlan, err = plan.CombineLayers(newLayers...)
+		layers = append(layers[:len(layers)-1], newLayer)
+		newCombined, err = plan.CombineLayers(layers...)
 		if err != nil {
 			return 0, err
 		}
@@ -104,14 +105,17 @@ func (m *ServiceManager) MergeLayer(layerYAML []byte) (int, error) {
 			layer.Order = last.Order + 1
 		}
 		newOrder = layer.Order
-		newLayers := append(layers, layer)
-		newPlan, err = plan.CombineLayers(newLayers...)
+		layers = append(layers, layer)
+		newCombined, err = plan.CombineLayers(layers...)
 		if err != nil {
 			return 0, err
 		}
 	}
 
-	m.plan = newPlan
+	m.plan = &plan.Plan{
+		Layers:   layers,
+		Services: newCombined.Services,
+	}
 	return newOrder, nil
 }
 
