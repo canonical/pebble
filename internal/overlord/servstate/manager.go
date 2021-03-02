@@ -54,7 +54,7 @@ func (m *ServiceManager) Plan() (*plan.Plan, error) {
 		return nil, err
 	}
 	defer releasePlan()
-	return m.plan, nil // TODO: copy?
+	return m.plan, nil
 }
 
 // CombineLayer combines the given layer YAML into the dynamic layers,
