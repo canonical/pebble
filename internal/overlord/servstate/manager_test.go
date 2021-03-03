@@ -278,7 +278,7 @@ func (s *S) TestAppendLayer(c *C) {
 	c.Assert(err, IsNil)
 
 	// Append a layer when there are no layers.
-	layer := parseLayer(c, 0, "label", `
+	layer := parseLayer(c, 0, "label1", `
 services:
     svc1:
         override: replace
@@ -295,15 +295,15 @@ services:
 `[1:])
 	s.planLayersHasLen(c, manager, 1)
 
-	// Try to append a layer with an invalid override.
-	layer = parseLayer(c, 0, "label", `
+	// Try to append a layer when that label already exists.
+	layer = parseLayer(c, 0, "label1", `
 services:
     svc1:
         override: foobar
         command: /bin/bar
 `)
 	err = manager.AppendLayer(layer)
-	c.Assert(err, ErrorMatches, `layer "label" has invalid 'override' value .*`)
+	c.Assert(err.(*servstate.LabelExists).Label, Equals, "label1")
 	c.Assert(planYAML(c, manager), Equals, `
 services:
     svc1:
@@ -313,7 +313,7 @@ services:
 	s.planLayersHasLen(c, manager, 1)
 
 	// Append another layer on top.
-	layer = parseLayer(c, 0, "label", `
+	layer = parseLayer(c, 0, "label2", `
 services:
     svc1:
         override: replace
@@ -331,7 +331,7 @@ services:
 	s.planLayersHasLen(c, manager, 2)
 
 	// Append a layer with a different service.
-	layer = parseLayer(c, 0, "label", `
+	layer = parseLayer(c, 0, "label3", `
 services:
     svc2:
         override: replace

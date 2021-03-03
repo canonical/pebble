@@ -20,6 +20,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/canonical/pebble/internal/overlord/servstate"
 	"github.com/canonical/pebble/internal/plan"
 )
 
@@ -75,6 +76,9 @@ func v1PostLayers(c *Command, r *http.Request, _ *userState) Response {
 		err = servmgr.AppendLayer(layer)
 	}
 	if err != nil {
+		if _, ok := err.(*servstate.LabelExists); ok {
+			return statusBadRequest("%v", err)
+		}
 		return statusInternalError("%v", err)
 	}
 	return SyncResponse(true)

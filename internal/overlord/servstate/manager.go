@@ -1,6 +1,7 @@
 package servstate
 
 import (
+	"fmt"
 	"os/exec"
 	"sync"
 
@@ -22,6 +23,16 @@ type activeService struct {
 	cmd  *exec.Cmd
 	err  error
 	done chan struct{}
+}
+
+// LabelExists is the error returned by AppendLayer when a layer with that
+// label already exists.
+type LabelExists struct {
+	Label string
+}
+
+func (e *LabelExists) Error() string {
+	return fmt.Sprintf("layer %q already exists", e.Label)
 }
 
 func NewManager(s *state.State, runner *state.TaskRunner, pebbleDir string) (*ServiceManager, error) {
@@ -57,14 +68,20 @@ func (m *ServiceManager) Plan() (*plan.Plan, error) {
 	return m.plan, nil
 }
 
-// AppendLayer appends the given layer to the plan's layers and updates
-// the layer.Order field to the new order.
+// AppendLayer appends the given layer to the plan's layers and updates the
+// layer.Order field to the new order. If a layer with layer.Label already
+// exists, return an error of type *LabelExists.
 func (m *ServiceManager) AppendLayer(layer *plan.Layer) error {
 	releasePlan, err := m.acquirePlan()
 	if err != nil {
 		return err
 	}
 	defer releasePlan()
+
+	index, _ := findLayer(m.plan.Layers, layer.Label)
+	if index >= 0 {
+		return &LabelExists{Label: layer.Label}
+	}
 
 	return m.appendLayer(layer)
 }
@@ -97,6 +114,17 @@ func (m *ServiceManager) updateLayers(layers []*plan.Layer) error {
 	return nil
 }
 
+// findLayer returns the index (in layers) of the layer with the given label,
+// or returns -1, nil if there's no layer with that label.
+func findLayer(layers []*plan.Layer, label string) (int, *plan.Layer) {
+	for i, layer := range layers {
+		if layer.Label == label {
+			return i, layer
+		}
+	}
+	return -1, nil
+}
+
 // CombineLayer combines the given layer with an existing layer that has the
 // same label. If no existing layer has the label, append a new one. In either
 // case, update the layer.Order field to the new order.
@@ -107,18 +135,11 @@ func (m *ServiceManager) CombineLayer(layer *plan.Layer) error {
 	}
 	defer releasePlan()
 
-	index := -1
-	for i, found := range m.plan.Layers {
-		if found.Label == layer.Label {
-			index = i
-			break
-		}
-	}
+	index, found := findLayer(m.plan.Layers, layer.Label)
 	if index < 0 {
 		// No layer found with this label, append new one.
 		return m.appendLayer(layer)
 	}
-	found := m.plan.Layers[index]
 
 	// Layer found with this label, combine into that one.
 	combined, err := plan.CombineLayers(found, layer)
