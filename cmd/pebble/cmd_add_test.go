@@ -36,36 +36,46 @@ func assertBodyEquals(c *check.C, body io.ReadCloser, expected map[string]interf
 }
 
 func (s *PebbleSuite) TestAdd(c *check.C) {
-	layerYAML := `
+	for _, combine := range []bool{false, true} {
+		layerYAML := `
 services:
- foo:
-  override: replace
-  command: cmd
+   foo:
+    override: replace
+    command: cmd
 `[1:]
 
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		c.Check(r.Method, check.Equals, "POST")
-		c.Check(r.URL.Path, check.Equals, "/v1/layers")
-		assertBodyEquals(c, r.Body, map[string]interface{}{
-			"action": "combine",
-			"format": "yaml",
-			"layer":  layerYAML,
-		})
-		fmt.Fprint(w, `{
+		s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+			c.Check(r.Method, check.Equals, "POST")
+			c.Check(r.URL.Path, check.Equals, "/v1/layers")
+			assertBodyEquals(c, r.Body, map[string]interface{}{
+				"action":  "add",
+				"combine": combine,
+				"label":   "foo",
+				"format":  "yaml",
+				"layer":   layerYAML,
+			})
+			fmt.Fprint(w, `{
     "type": "sync",
     "status-code": 200,
     "result": true
 }`)
-	})
+		})
 
-	tempDir := c.MkDir()
-	layerPath := filepath.Join(tempDir, "layer.yaml")
-	err := ioutil.WriteFile(layerPath, []byte(layerYAML), 0755)
-	c.Assert(err, check.IsNil)
+		tempDir := c.MkDir()
+		layerPath := filepath.Join(tempDir, "layer.yaml")
+		err := ioutil.WriteFile(layerPath, []byte(layerYAML), 0755)
+		c.Assert(err, check.IsNil)
 
-	rest, err := pebble.Parser(pebble.Client()).ParseArgs([]string{"add", layerPath})
-	c.Assert(err, check.IsNil)
-	c.Assert(rest, check.HasLen, 0)
-	c.Check(s.Stdout(), check.Matches, `Layer added successfully.*\n`)
-	c.Check(s.Stderr(), check.Equals, "")
+		args := []string{"add"}
+		if combine {
+			args = append(args, "--combine")
+		}
+		args = append(args, "foo", layerPath)
+		rest, err := pebble.Parser(pebble.Client()).ParseArgs(args)
+		c.Assert(err, check.IsNil)
+		c.Assert(rest, check.HasLen, 0)
+		c.Check(s.Stdout(), check.Matches, `Layer "foo" added successfully.*\n`)
+		c.Check(s.Stderr(), check.Equals, "")
+		s.ResetStdStreams()
+	}
 }

@@ -29,6 +29,7 @@ import (
 
 	"github.com/canonical/pebble/internal/overlord/servstate"
 	"github.com/canonical/pebble/internal/overlord/state"
+	"github.com/canonical/pebble/internal/plan"
 	"github.com/canonical/pebble/internal/testutil"
 )
 
@@ -257,96 +258,209 @@ services:
 	c.Assert(planYAML(c, s.manager), Equals, expected)
 }
 
-func (s *S) TestCombineLayerParseError(c *C) {
-	_, err := s.manager.CombineLayer([]byte(`@`))
-	c.Assert(err, ErrorMatches, `cannot parse layer "": yaml: found character that cannot start any token`)
+func parseLayer(c *C, order int, label, layerYAML string) *plan.Layer {
+	layer, err := plan.ParseLayer(order, label, []byte(layerYAML))
+	c.Assert(err, IsNil)
+	return layer
 }
 
-func (s *S) TestCombineLayerNoLayers(c *C) {
+func (s *S) planLayersHasLen(c *C, manager *servstate.ServiceManager, expectedLen int) {
+	plan, err := manager.Plan()
+	c.Assert(err, IsNil)
+	c.Assert(plan.Layers, HasLen, expectedLen)
+}
+
+func (s *S) TestAppendLayer(c *C) {
 	dir := c.MkDir()
 	os.Mkdir(filepath.Join(dir, "layers"), 0755)
 	runner := state.NewTaskRunner(s.st)
 	manager, err := servstate.NewManager(s.st, runner, dir)
+	c.Assert(err, IsNil)
 
-	order, err := manager.CombineLayer([]byte(`
+	// Append a layer when there are no layers.
+	layer := parseLayer(c, 0, "label", `
 services:
     svc1:
         override: replace
         command: /bin/sh
-`))
+`)
+	err = manager.AppendLayer(layer)
 	c.Assert(err, IsNil)
-	c.Assert(order, Equals, 1)
-
+	c.Assert(layer.Order, Equals, 1)
 	c.Assert(planYAML(c, manager), Equals, `
 services:
     svc1:
         override: replace
         command: /bin/sh
 `[1:])
+	s.planLayersHasLen(c, manager, 1)
+
+	// Try to append a layer with an invalid override.
+	layer = parseLayer(c, 0, "label", `
+services:
+    svc1:
+        override: foobar
+        command: /bin/bar
+`)
+	err = manager.AppendLayer(layer)
+	c.Assert(err, ErrorMatches, `layer "label" has invalid 'override' value .*`)
+	c.Assert(planYAML(c, manager), Equals, `
+services:
+    svc1:
+        override: replace
+        command: /bin/sh
+`[1:])
+	s.planLayersHasLen(c, manager, 1)
+
+	// Append another layer on top.
+	layer = parseLayer(c, 0, "label", `
+services:
+    svc1:
+        override: replace
+        command: /bin/bash
+`)
+	err = manager.AppendLayer(layer)
+	c.Assert(err, IsNil)
+	c.Assert(layer.Order, Equals, 2)
+	c.Assert(planYAML(c, manager), Equals, `
+services:
+    svc1:
+        override: replace
+        command: /bin/bash
+`[1:])
+	s.planLayersHasLen(c, manager, 2)
+
+	// Append a layer with a different service.
+	layer = parseLayer(c, 0, "label", `
+services:
+    svc2:
+        override: replace
+        command: /bin/foo
+`)
+	err = manager.AppendLayer(layer)
+	c.Assert(err, IsNil)
+	c.Assert(layer.Order, Equals, 3)
+	c.Assert(planYAML(c, manager), Equals, `
+services:
+    svc1:
+        override: replace
+        command: /bin/bash
+    svc2:
+        override: replace
+        command: /bin/foo
+`[1:])
+	s.planLayersHasLen(c, manager, 3)
 }
 
-func (s *S) TestCombineLayerDynamic(c *C) {
+func (s *S) TestCombineLayer(c *C) {
 	dir := c.MkDir()
 	os.Mkdir(filepath.Join(dir, "layers"), 0755)
-
-	layer1 := `
-services:
-    static:
-        override: replace
-        command: echo static
-`
-	err := ioutil.WriteFile(filepath.Join(dir, "layers", "001-base.yaml"), []byte(layer1), 0644)
-	c.Assert(err, IsNil)
-
 	runner := state.NewTaskRunner(s.st)
 	manager, err := servstate.NewManager(s.st, runner, dir)
-
-	// Add first dynamic layer
-	order, err := manager.CombineLayer([]byte(`
-services:
-    dynamic1:
-        override: replace
-        command: echo dynamic1
-`))
 	c.Assert(err, IsNil)
-	c.Assert(order, Equals, 2)
 
+	// "Combine" layer with no layers should just append.
+	layer := parseLayer(c, 0, "label1", `
+services:
+    svc1:
+        override: replace
+        command: /bin/sh
+`)
+	err = manager.CombineLayer(layer)
+	c.Assert(err, IsNil)
+	c.Assert(layer.Order, Equals, 1)
 	c.Assert(planYAML(c, manager), Equals, `
 services:
-    dynamic1:
+    svc1:
         override: replace
-        command: echo dynamic1
-    static:
-        override: replace
-        command: echo static
+        command: /bin/sh
 `[1:])
+	s.planLayersHasLen(c, manager, 1)
 
-	// Add another dynamic layer (order won't increase)
-	order, err = manager.CombineLayer([]byte(`
+	// Combine layer with different label should just append.
+	layer = parseLayer(c, 0, "label2", `
 services:
-    dynamic1:
+    svc2:
         override: replace
-        command: echo dynamic1-b
-    dynamic2:
-        override: replace
-        command: echo dynamic2
-    static:
-        override: replace
-        command: echo static-b
-`))
+        command: /bin/foo
+`)
+	err = manager.CombineLayer(layer)
 	c.Assert(err, IsNil)
-	c.Assert(order, Equals, 2)
-
+	c.Assert(layer.Order, Equals, 2)
 	c.Assert(planYAML(c, manager), Equals, `
 services:
-    dynamic1:
+    svc1:
         override: replace
-        command: echo dynamic1-b
-    dynamic2:
+        command: /bin/sh
+    svc2:
         override: replace
-        command: echo dynamic2
-    static:
-        override: replace
-        command: echo static-b
+        command: /bin/foo
 `[1:])
+	s.planLayersHasLen(c, manager, 2)
+
+	// Combine layer with first layer.
+	layer = parseLayer(c, 0, "label1", `
+services:
+    svc1:
+        override: replace
+        command: /bin/bash
+`)
+	err = manager.CombineLayer(layer)
+	c.Assert(err, IsNil)
+	c.Assert(layer.Order, Equals, 1)
+	c.Assert(planYAML(c, manager), Equals, `
+services:
+    svc1:
+        override: replace
+        command: /bin/bash
+    svc2:
+        override: replace
+        command: /bin/foo
+`[1:])
+	s.planLayersHasLen(c, manager, 2)
+
+	// Combine layer with second layer.
+	layer = parseLayer(c, 0, "label2", `
+services:
+    svc2:
+        override: replace
+        command: /bin/bar
+`)
+	err = manager.CombineLayer(layer)
+	c.Assert(err, IsNil)
+	c.Assert(layer.Order, Equals, 2)
+	c.Assert(planYAML(c, manager), Equals, `
+services:
+    svc1:
+        override: replace
+        command: /bin/bash
+    svc2:
+        override: replace
+        command: /bin/bar
+`[1:])
+	s.planLayersHasLen(c, manager, 2)
+
+	// One last append for good measure.
+	layer = parseLayer(c, 0, "label3", `
+services:
+    svc1:
+        override: replace
+        command: /bin/a
+    svc2:
+        override: replace
+        command: /bin/b
+`)
+	err = manager.CombineLayer(layer)
+	c.Assert(err, IsNil)
+	c.Assert(layer.Order, Equals, 3)
+	c.Assert(planYAML(c, manager), Equals, `
+services:
+    svc1:
+        override: replace
+        command: /bin/a
+    svc2:
+        override: replace
+        command: /bin/b
+`[1:])
+	s.planLayersHasLen(c, manager, 3)
 }

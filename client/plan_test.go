@@ -23,21 +23,22 @@ import (
 )
 
 func (cs *clientSuite) TestAddLayer(c *check.C) {
-	for _, action := range []string{"", "combine"} {
+	for _, combine := range []bool{false, true} {
 		cs.rsp = `{
 		"type": "sync",
 		"status-code": 200,
 		"result": true
 	}`
-		data := `
+		layerYAML := `
 services:
  foo:
   override: replace
   command: cmd
 `[1:]
 		err := cs.cli.AddLayer(&client.AddLayerOptions{
-			Action:    client.AddLayerAction(action),
-			LayerData: []byte(data),
+			Combine:   combine,
+			Label:     "foo",
+			LayerData: []byte(layerYAML),
 		})
 		c.Assert(err, check.IsNil)
 		c.Check(cs.req.Method, check.Equals, "POST")
@@ -46,9 +47,11 @@ services:
 		var body map[string]interface{}
 		c.Assert(json.NewDecoder(cs.req.Body).Decode(&body), check.IsNil)
 		c.Assert(body, check.DeepEquals, map[string]interface{}{
-			"action": "combine",
-			"format": "yaml",
-			"layer":  data,
+			"action":  "add",
+			"combine": combine,
+			"label":   "foo",
+			"format":  "yaml",
+			"layer":   layerYAML,
 		})
 	}
 }

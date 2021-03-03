@@ -25,22 +25,23 @@ import (
 
 type cmdAdd struct {
 	clientMixin
-	Action     string `long:"action"`
+	Combine    bool `long:"combine"`
 	Positional struct {
+		Label     string `positional-arg-name:"<label>" required:"1"`
 		LayerPath string `positional-arg-name:"<layer-path>" required:"1"`
 	} `positional-args:"yes"`
 }
 
 var addDescs = map[string]string{
-	"action": `Method used to add the layer: only "combine" (the default) is supported right now`,
+	"combine": `Combine the new layer with an existing layer that has the given label (default is to append)`,
 }
 
 var shortAddHelp = "Dynamically add a layer to the plan's layers"
 var longAddHelp = `
-The add command reads the plan's layer YAML from the path specified, and
-combines it with the current dynamic layer (which in turn are on top of any
-static layers loaded when Pebble started). If there are no dynamic layers,
-a new dynamic layer is added.
+The add command reads the plan's layer YAML from the path specified and
+appends a layer with the given label to the plan's layers. If --combine
+is specified, combine the layer with an existing layer that has the given
+label (or append if the label is not found).
 `
 
 func (cmd *cmdAdd) Execute(args []string) error {
@@ -52,17 +53,16 @@ func (cmd *cmdAdd) Execute(args []string) error {
 		return err
 	}
 	opts := client.AddLayerOptions{
-		Action:    client.AddLayerAction(cmd.Action),
+		Combine:   cmd.Combine,
+		Label:     cmd.Positional.Label,
 		LayerData: data,
-	}
-	if opts.Action == "" {
-		opts.Action = client.AddLayerCombine
 	}
 	err = cmd.client.AddLayer(&opts)
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(Stdout, "Layer added successfully from %q\n", cmd.Positional.LayerPath)
+	fmt.Fprintf(Stdout, "Layer %q added successfully from %q\n",
+		cmd.Positional.Label, cmd.Positional.LayerPath)
 	return nil
 }
 

@@ -19,6 +19,8 @@ import (
 	"net/http"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/canonical/pebble/internal/plan"
 )
 
 func v1GetPlan(c *Command, r *http.Request, _ *userState) Response {
@@ -41,23 +43,37 @@ func v1GetPlan(c *Command, r *http.Request, _ *userState) Response {
 
 func v1PostLayers(c *Command, r *http.Request, _ *userState) Response {
 	var payload struct {
-		Action string `json:"action"`
-		Format string `json:"format"`
-		Layer  string `json:"layer"`
+		Action  string `json:"action"`
+		Combine bool   `json:"combine"`
+		Label   string `json:"label"`
+		Format  string `json:"format"`
+		Layer   string `json:"layer"`
 	}
 	decoder := json.NewDecoder(r.Body)
 	if err := decoder.Decode(&payload); err != nil {
 		return statusBadRequest("cannot decode request body: %v", err)
 	}
-	if payload.Action != "combine" {
+
+	if payload.Action != "add" {
 		return statusBadRequest("invalid action %q", payload.Action)
+	}
+	if payload.Label == "" {
+		return statusBadRequest("label must be set")
 	}
 	if payload.Format != "yaml" {
 		return statusBadRequest("invalid format %q", payload.Format)
 	}
+	layer, err := plan.ParseLayer(0, payload.Label, []byte(payload.Layer))
+	if err != nil {
+		return statusBadRequest("cannot parse layer YAML: %v", err)
+	}
 
 	servmgr := c.d.overlord.ServiceManager()
-	_, err := servmgr.CombineLayer([]byte(payload.Layer))
+	if payload.Combine {
+		err = servmgr.CombineLayer(layer)
+	} else {
+		err = servmgr.AppendLayer(layer)
+	}
 	if err != nil {
 		return statusInternalError("%v", err)
 	}

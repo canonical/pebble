@@ -20,36 +20,33 @@ import (
 	"net/url"
 )
 
-type AddLayerAction string
-
-const (
-	AddLayerCombine AddLayerAction = "combine"
-)
-
 type AddLayerOptions struct {
+	// Combine true means combine the new layer with an existing layer that
+	// has the given label. False (the default) means append a new layer.
+	Combine bool
+
+	// Label is the label for the new layer if appending, and the label of the
+	// layer to combine with if Combine is true.
+	Label string
+
 	// LayerData is the new layer in YAML format.
 	LayerData []byte
-
-	// Action is the action performed when adding the new layer. Only
-	// "combine" is supported right now, which means combine the new layer
-	// into the existing dynamic layer, or add a new dynamic layer if none
-	// exists. If not set, default to "combine".
-	Action AddLayerAction
 }
 
 // AddLayer adds a layer to the plan's layers according to opts.Action.
 func (client *Client) AddLayer(opts *AddLayerOptions) error {
 	var payload = struct {
-		Action string `json:"action"`
-		Format string `json:"format"`
-		Layer  string `json:"layer"`
+		Action  string `json:"action"`
+		Combine bool   `json:"combine"`
+		Label   string `json:"label"`
+		Format  string `json:"format"`
+		Layer   string `json:"layer"`
 	}{
-		Action: string(opts.Action),
-		Format: "yaml",
-		Layer:  string(opts.LayerData),
-	}
-	if payload.Action == "" {
-		payload.Action = string(AddLayerCombine)
+		Action:  "add",
+		Combine: opts.Combine,
+		Label:   opts.Label,
+		Format:  "yaml",
+		Layer:   string(opts.LayerData),
 	}
 	var body bytes.Buffer
 	if err := json.NewEncoder(&body).Encode(&payload); err != nil {

@@ -20,6 +20,7 @@ import (
 	"net/http/httptest"
 
 	. "gopkg.in/check.v1"
+	"gopkg.in/yaml.v3"
 )
 
 var planLayer = `
@@ -70,12 +71,31 @@ func (s *apiSuite) TestGetPlan(c *C) {
 	c.Assert(rec.Code, Equals, 200)
 	c.Assert(rsp.Status, Equals, 200)
 	c.Assert(rsp.Type, Equals, ResponseTypeSync)
-	c.Assert(rsp.Result.(string), Equals, `
+
+	expectedYAML := `
 services:
     static:
         override: replace
         command: echo static
-`[1:])
+`[1:]
+	c.Assert(rsp.Result.(string), Equals, expectedYAML)
+	c.Assert(s.planYAML(c), Equals, expectedYAML)
+}
+
+func (s *apiSuite) planYAML(c *C) string {
+	manager := s.d.overlord.ServiceManager()
+	plan, err := manager.Plan()
+	c.Assert(err, IsNil)
+	yml, err := yaml.Marshal(plan)
+	c.Assert(err, IsNil)
+	return string(yml)
+}
+
+func (s *apiSuite) planLayersHasLen(c *C, expectedLen int) {
+	manager := s.d.overlord.ServiceManager()
+	plan, err := manager.Plan()
+	c.Assert(err, IsNil)
+	c.Assert(plan.Layers, HasLen, expectedLen)
 }
 
 func (s *apiSuite) TestLayersErrors(c *C) {
@@ -85,8 +105,10 @@ func (s *apiSuite) TestLayersErrors(c *C) {
 		message string
 	}{
 		{"@", 400, `cannot decode request body: invalid character '@' looking for beginning of value`},
-		{`{"action": "combine", "format": "foo"}`, 400, `invalid format "foo"`},
-		{`{"action": "bar", "format": "yaml"}`, 400, `invalid action "bar"`},
+		{`{"action": "sub", "label": "x", "format": "yaml"}`, 400, `invalid action "sub"`},
+		{`{"action": "add", "label": "", "format": "yaml"}`, 400, `label must be set`},
+		{`{"action": "add", "label": "x", "format": "xml"}`, 400, `invalid format "xml"`},
+		{`{"action": "add", "label": "x", "format": "yaml", "layer": "@"}`, 400, `cannot parse layer YAML: .*`},
 	}
 
 	_ = s.daemon(c)
@@ -105,12 +127,12 @@ func (s *apiSuite) TestLayersErrors(c *C) {
 	}
 }
 
-func (s *apiSuite) TestLayersCombine(c *C) {
+func (s *apiSuite) TestLayersAddAppend(c *C) {
 	writeTestLayer(s.pebbleDir, planLayer)
 	_ = s.daemon(c)
 	layersCmd := apiCmd("/v1/layers")
 
-	payload := `{"action": "combine", "format": "yaml", "layer": "services:\n dynamic:\n  override: replace\n  command: echo dynamic\n"}`
+	payload := `{"action": "add", "label": "foo", "format": "yaml", "layer": "services:\n dynamic:\n  override: replace\n  command: echo dynamic\n"}`
 	req, err := http.NewRequest("POST", "/v1/layers", bytes.NewBufferString(payload))
 	c.Assert(err, IsNil)
 	rsp := v1PostLayers(layersCmd, req, nil).(*resp)
@@ -120,4 +142,41 @@ func (s *apiSuite) TestLayersCombine(c *C) {
 	c.Assert(rsp.Status, Equals, 200)
 	c.Assert(rsp.Type, Equals, ResponseTypeSync)
 	c.Assert(rsp.Result.(bool), Equals, true)
+	c.Assert(s.planYAML(c), Equals, `
+services:
+    dynamic:
+        override: replace
+        command: echo dynamic
+    static:
+        override: replace
+        command: echo static
+`[1:])
+	s.planLayersHasLen(c, 2)
+}
+
+func (s *apiSuite) TestLayersAddCombine(c *C) {
+	writeTestLayer(s.pebbleDir, planLayer)
+	_ = s.daemon(c)
+	layersCmd := apiCmd("/v1/layers")
+
+	payload := `{"action": "add", "combine": true, "label": "base", "format": "yaml", "layer": "services:\n dynamic:\n  override: replace\n  command: echo dynamic\n"}`
+	req, err := http.NewRequest("POST", "/v1/layers", bytes.NewBufferString(payload))
+	c.Assert(err, IsNil)
+	rsp := v1PostLayers(layersCmd, req, nil).(*resp)
+	rec := httptest.NewRecorder()
+	rsp.ServeHTTP(rec, req)
+	c.Assert(rec.Code, Equals, 200)
+	c.Assert(rsp.Status, Equals, 200)
+	c.Assert(rsp.Type, Equals, ResponseTypeSync)
+	c.Assert(rsp.Result.(bool), Equals, true)
+	c.Assert(s.planYAML(c), Equals, `
+services:
+    dynamic:
+        override: replace
+        command: echo dynamic
+    static:
+        override: replace
+        command: echo static
+`[1:])
+	s.planLayersHasLen(c, 1)
 }

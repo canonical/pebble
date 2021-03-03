@@ -40,10 +40,6 @@ type Layer struct {
 	Services    map[string]*Service `yaml:"services,omitempty"`
 }
 
-func (l *Layer) IsDynamic() bool {
-	return l.Label == ""
-}
-
 type Service struct {
 	Name        string           `yaml:"-"`
 	Summary     string           `yaml:"summary,omitempty"`
