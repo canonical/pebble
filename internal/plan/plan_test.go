@@ -359,6 +359,29 @@ func (s *S) TestParseLayer(c *C) {
 	}
 }
 
+func (s *S) TestCombineLayersCycle(c *C) {
+	// Even if individual layers don't have cycles, combined layers might.
+	layer1, err := plan.ParseLayer(1, "label1", []byte(`
+services:
+    srv1:
+        override: replace
+        command: cmd
+        after:
+            - srv2
+`))
+	c.Assert(err, IsNil)
+	layer2, err := plan.ParseLayer(2, "label2", []byte(`
+services:
+    srv2:
+        override: replace
+        command: cmd
+        after:
+            - srv1
+`))
+	_, err = plan.CombineLayers(layer1, layer2)
+	c.Assert(err, ErrorMatches, `services in before/after loop: .*`)
+}
+
 func (s *S) TestReadDir(c *C) {
 	pebbleDir := c.MkDir()
 	layersDir := filepath.Join(pebbleDir, "layers")

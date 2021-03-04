@@ -138,6 +138,12 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 			}
 		}
 	}
+
+	// Ensure combined layers don't have cycles.
+	err := combined.checkCycles()
+	if err != nil {
+		return nil, err
+	}
 	return combined, nil
 }
 

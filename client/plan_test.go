@@ -31,9 +31,9 @@ func (cs *clientSuite) TestAddLayer(c *check.C) {
 	}`
 		layerYAML := `
 services:
- foo:
-  override: replace
-  command: cmd
+    foo:
+        override: replace
+        command: cmd
 `[1:]
 		err := cs.cli.AddLayer(&client.AddLayerOptions{
 			Combine:   combine,
@@ -56,21 +56,21 @@ services:
 	}
 }
 
-func (cs *clientSuite) TestPlanData(c *check.C) {
+func (cs *clientSuite) TestPlanBytes(c *check.C) {
 	cs.rsp = `{
 		"type": "sync",
 		"status-code": 200,
-		"result": "services:\n foo:\n  override: replace\n  command: cmd\n"
+		"result": "services:\n    foo:\n        override: replace\n        command: cmd\n"
 	}`
-	data, err := cs.cli.PlanData(&client.PlanDataOptions{})
+	data, err := cs.cli.PlanBytes(&client.PlanOptions{})
 	c.Assert(err, check.IsNil)
 	c.Check(cs.req.Method, check.Equals, "GET")
 	c.Check(cs.req.URL.Path, check.Equals, "/v1/plan")
 	c.Check(cs.req.URL.Query(), check.DeepEquals, url.Values{"format": []string{"yaml"}})
 	c.Assert(string(data), check.Equals, `
 services:
- foo:
-  override: replace
-  command: cmd
+    foo:
+        override: replace
+        command: cmd
 `[1:])
 }

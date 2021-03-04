@@ -56,10 +56,10 @@ func (client *Client) AddLayer(opts *AddLayerOptions) error {
 	return err
 }
 
-type PlanDataOptions struct{}
+type PlanOptions struct{}
 
-// PlanData fetches the plan in YAML format.
-func (client *Client) PlanData(_ *PlanDataOptions) (data []byte, err error) {
+// PlanBytes fetches the plan in YAML format.
+func (client *Client) PlanBytes(_ *PlanOptions) (data []byte, err error) {
 	query := url.Values{
 		"format": []string{"yaml"},
 	}

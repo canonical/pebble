@@ -94,7 +94,7 @@ func (m *ServiceManager) appendLayer(layer *plan.Layer) error {
 	}
 
 	newLayers := append(m.plan.Layers, layer)
-	err := m.updateLayers(newLayers)
+	err := m.updatePlan(newLayers)
 	if err != nil {
 		return err
 	}
@@ -102,7 +102,7 @@ func (m *ServiceManager) appendLayer(layer *plan.Layer) error {
 	return nil
 }
 
-func (m *ServiceManager) updateLayers(layers []*plan.Layer) error {
+func (m *ServiceManager) updatePlan(layers []*plan.Layer) error {
 	combined, err := plan.CombineLayers(layers...)
 	if err != nil {
 		return err
@@ -153,7 +153,7 @@ func (m *ServiceManager) CombineLayer(layer *plan.Layer) error {
 	newLayers := make([]*plan.Layer, len(m.plan.Layers))
 	copy(newLayers, m.plan.Layers)
 	newLayers[index] = combined
-	err = m.updateLayers(newLayers)
+	err = m.updatePlan(newLayers)
 	if err != nil {
 		return err
 	}

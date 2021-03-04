@@ -26,19 +26,19 @@ type cmdPlan struct {
 
 var shortPlanHelp = "Show the plan with layers combined"
 var longPlanHelp = `
-The plan command reads the plan (configuration) and displays it as YAML. The
-plan's layers are combined according to Pebble's layer override rules.
+The plan command prints out the effective configuration of pebble in YAML
+format. Layers are combined according to the override rules defined in them.
 `
 
 func (cmd *cmdPlan) Execute(args []string) error {
 	if len(args) > 0 {
 		return ErrExtraArgs
 	}
-	data, err := cmd.client.PlanData(&client.PlanDataOptions{})
+	planYAML, err := cmd.client.PlanBytes(&client.PlanOptions{})
 	if err != nil {
 		return err
 	}
-	Stdout.Write(data)
+	Stdout.Write(planYAML)
 	return nil
 }
 

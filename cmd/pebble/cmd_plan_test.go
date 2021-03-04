@@ -31,7 +31,7 @@ func (s *PebbleSuite) TestGetPlan(c *check.C) {
 		fmt.Fprint(w, `{
     "type": "sync",
     "status-code": 200,
-    "result": "services:\n foo:\n  override: replace\n  command: cmd\n"
+    "result": "services:\n    foo:\n        override: replace\n        command: cmd\n"
 }`)
 	})
 	rest, err := pebble.Parser(pebble.Client()).ParseArgs([]string{"plan"})
@@ -39,9 +39,9 @@ func (s *PebbleSuite) TestGetPlan(c *check.C) {
 	c.Assert(rest, check.HasLen, 0)
 	c.Check(s.Stdout(), check.Equals, `
 services:
- foo:
-  override: replace
-  command: cmd
+    foo:
+        override: replace
+        command: cmd
 `[1:])
 	c.Check(s.Stderr(), check.Equals, "")
 }
