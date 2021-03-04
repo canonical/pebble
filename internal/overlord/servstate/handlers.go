@@ -146,8 +146,6 @@ func (m *ServiceManager) doStop(task *state.Task, tomb *tomb.Tomb) error {
 	//cmd.Process.Signal(syscall.SIGTERM)
 
 	// TODO Make these timings configurable in the layer itself.
-	dead := make(chan error)
-	go func() { dead <- cmd.Wait() }()
 	kill := time.After(killWait)
 	fail := time.After(failWait)
 	for {
@@ -158,7 +156,7 @@ func (m *ServiceManager) doStop(task *state.Task, tomb *tomb.Tomb) error {
 			//cmd.Process.Signal(syscall.SIGKILL)
 		case <-fail:
 			return fmt.Errorf("process still runs after SIGTERM and SIGKILL")
-		case <-dead:
+		case <-active.done:
 			releasePlan, err := m.acquirePlan()
 			if err == nil {
 				if m.services[req.Name].cmd == cmd {
