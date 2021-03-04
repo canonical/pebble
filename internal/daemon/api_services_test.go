@@ -28,7 +28,7 @@ import (
 	. "gopkg.in/check.v1"
 )
 
-var setupLayer = `
+var servicesLayer = `
 services:
     test1:
         override: replace
@@ -54,10 +54,10 @@ services:
         command: just-idling-here
 `
 
-func writeTestLayer(pebbleDir string) {
+func writeTestLayer(pebbleDir, layerYAML string) {
 	err := os.Mkdir(filepath.Join(pebbleDir, "layers"), 0755)
 	if err == nil {
-		err = ioutil.WriteFile(filepath.Join(pebbleDir, "layers", "001-base.yaml"), []byte(setupLayer), 0644)
+		err = ioutil.WriteFile(filepath.Join(pebbleDir, "layers", "001-base.yaml"), []byte(layerYAML), 0644)
 	}
 	if err != nil {
 		panic(err)
@@ -66,7 +66,7 @@ func writeTestLayer(pebbleDir string) {
 
 func (s *apiSuite) TestServicesStart(c *C) {
 	// Setup
-	writeTestLayer(s.pebbleDir)
+	writeTestLayer(s.pebbleDir, servicesLayer)
 	d := s.daemon(c)
 	st := d.overlord.State()
 
@@ -113,7 +113,7 @@ func (s *apiSuite) TestServicesStart(c *C) {
 
 func (s *apiSuite) TestServicesStop(c *C) {
 	// Setup
-	writeTestLayer(s.pebbleDir)
+	writeTestLayer(s.pebbleDir, servicesLayer)
 	d := s.daemon(c)
 	st := d.overlord.State()
 
@@ -161,7 +161,7 @@ func (s *apiSuite) TestServicesStop(c *C) {
 func (s *apiSuite) TestServicesAutoStart(c *C) {
 
 	// Setup
-	writeTestLayer(s.pebbleDir)
+	writeTestLayer(s.pebbleDir, servicesLayer)
 	d := s.daemon(c)
 	st := d.overlord.State()
 

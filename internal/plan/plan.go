@@ -1,5 +1,4 @@
-//
-// Copyright (c) 2020 Canonical Ltd
+// Copyright (c) 2021 Canonical Ltd
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,12 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package setup
+package plan
 
 import (
 	"bytes"
 	"fmt"
 	"io/ioutil"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -27,33 +27,30 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-type Setup struct {
-	Layers []*Layer
-}
-
-func (s *Setup) AddLayer(layer *Layer) {
-	s.Layers = append(s.Layers, layer)
+type Plan struct {
+	Layers   []*Layer            `yaml:"-"`
+	Services map[string]*Service `yaml:"services,omitempty"`
 }
 
 type Layer struct {
-	Order       int
-	Label       string
-	Summary     string
-	Description string
-	Services    map[string]*Service
+	Order       int                 `yaml:"-"`
+	Label       string              `yaml:"-"`
+	Summary     string              `yaml:"summary,omitempty"`
+	Description string              `yaml:"description,omitempty"`
+	Services    map[string]*Service `yaml:"services,omitempty"`
 }
 
 type Service struct {
-	Name        string
-	Summary     string
-	Description string
-	Default     ServiceAction
-	Override    ServiceOverride
-	Command     string
-	After       []string
-	Before      []string
-	Requires    []string
-	Environment []StringVariable
+	Name        string           `yaml:"-"`
+	Summary     string           `yaml:"summary,omitempty"`
+	Description string           `yaml:"description,omitempty"`
+	Default     ServiceAction    `yaml:"default,omitempty"`
+	Override    ServiceOverride  `yaml:"override,omitempty"`
+	Command     string           `yaml:"command,omitempty"`
+	After       []string         `yaml:"after,omitempty"`
+	Before      []string         `yaml:"before,omitempty"`
+	Requires    []string         `yaml:"requires,omitempty"`
+	Environment []StringVariable `yaml:"environment,omitempty"`
 }
 
 type ServiceAction string
@@ -73,7 +70,8 @@ const (
 )
 
 type StringVariable struct {
-	Name, Value string
+	Name  string `yaml:"name"`
+	Value string `yaml:"value"`
 }
 
 func (sv *StringVariable) UnmarshalYAML(node *yaml.Node) error {
@@ -93,20 +91,23 @@ func (sv *StringVariable) UnmarshalYAML(node *yaml.Node) error {
 	return nil
 }
 
-func (s *Setup) Flatten() (*Layer, error) {
-	var flat Layer
-	flat.Services = make(map[string]*Service)
-	if len(s.Layers) == 0 {
-		return &flat, nil
+// CombineLayers combines the given layers into a Plan, with the later layers
+// layers overriding earlier ones.
+func CombineLayers(layers ...*Layer) (*Layer, error) {
+	combined := &Layer{
+		Services: make(map[string]*Service),
 	}
-	last := s.Layers[len(s.Layers)-1]
-	flat.Summary = last.Summary
-	flat.Description = last.Description
-	for _, layer := range s.Layers {
+	if len(layers) == 0 {
+		return combined, nil
+	}
+	last := layers[len(layers)-1]
+	combined.Summary = last.Summary
+	combined.Description = last.Description
+	for _, layer := range layers {
 		for name, service := range layer.Services {
 			switch service.Override {
 			case MergeOverride:
-				if old, ok := flat.Services[name]; ok {
+				if old, ok := combined.Services[name]; ok {
 					if service.Summary != "" {
 						old.Summary = service.Summary
 					}
@@ -127,7 +128,7 @@ func (s *Setup) Flatten() (*Layer, error) {
 				fallthrough
 			case ReplaceOverride:
 				copy := *service
-				flat.Services[name] = &copy
+				combined.Services[name] = &copy
 			case UnknownOverride:
 				return nil, fmt.Errorf("layer %q must define 'override' for service %q",
 					layer.Label, service.Name)
@@ -137,32 +138,37 @@ func (s *Setup) Flatten() (*Layer, error) {
 			}
 		}
 	}
-	return &flat, nil
+
+	// Ensure combined layers don't have cycles.
+	err := combined.checkCycles()
+	if err != nil {
+		return nil, err
+	}
+	return combined, nil
 }
 
 // StartOrder returns the required services that must be started for the named
 // services to be properly started, in the order that they must be started.
 // An error is returned when a provided service name does not exist, or there
 // is an order cycle involving the provided service or its dependencies.
-func (l *Layer) StartOrder(names []string) ([]string, error) {
-	return l.order(names, false)
+func (p *Plan) StartOrder(names []string) ([]string, error) {
+	return order(p.Services, names, false)
 }
 
 // StopOrder returns the required services that must be stopped for the named
 // services to be properly stopped, in the order that they must be stopped.
 // An error is returned when a provided service name does not exist, or there
 // is an order cycle involving the provided service or its dependencies.
-func (l *Layer) StopOrder(names []string) ([]string, error) {
-	return l.order(names, true)
+func (p *Plan) StopOrder(names []string) ([]string, error) {
+	return order(p.Services, names, true)
 }
 
-func (l *Layer) order(names []string, stop bool) ([]string, error) {
-
+func order(services map[string]*Service, names []string, stop bool) ([]string, error) {
 	// For stop, create a list of reversed dependencies.
 	predecessors := map[string][]string(nil)
 	if stop {
 		predecessors = make(map[string][]string)
-		for name, service := range l.Services {
+		for name, service := range services {
 			for _, req := range service.Requires {
 				predecessors[req] = append(predecessors[req], name)
 			}
@@ -181,7 +187,7 @@ func (l *Layer) order(names []string, stop bool) ([]string, error) {
 		if stop {
 			pending = append(pending, predecessors[name]...)
 		} else {
-			service, ok := l.Services[name]
+			service, ok := services[name]
 			if !ok {
 				return nil, fmt.Errorf("service %q does not exist", name)
 			}
@@ -191,7 +197,7 @@ func (l *Layer) order(names []string, stop bool) ([]string, error) {
 
 	// Create a list of successors involving those services only.
 	for name := range successors {
-		service, ok := l.Services[name]
+		service, ok := services[name]
 		if !ok {
 			return nil, fmt.Errorf("service %q does not exist", name)
 		}
@@ -225,12 +231,12 @@ func (l *Layer) order(names []string, stop bool) ([]string, error) {
 	return order, nil
 }
 
-func (l *Layer) CheckCycles() error {
+func (l *Layer) checkCycles() error {
 	var names []string
 	for name := range l.Services {
 		names = append(names, name)
 	}
-	_, err := l.StartOrder(names)
+	_, err := order(l.Services, names, false)
 	return err
 }
 
@@ -247,7 +253,7 @@ func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 	for name, service := range layer.Services {
 		service.Name = name
 	}
-	err = layer.CheckCycles()
+	err = layer.checkCycles()
 	if err != nil {
 		return nil, err
 	}
@@ -289,7 +295,7 @@ func ReadLayersDir(dirname string) ([]*Layer, error) {
 		label := match[2]
 		order, err := strconv.Atoi(match[1])
 		if err != nil {
-			panic("internal error: filename regexp is wrong")
+			panic(fmt.Sprintf("internal error: filename regexp is wrong: %v", err))
 		}
 
 		oldLabel, dupOrder := orders[order]
@@ -315,13 +321,30 @@ func ReadLayersDir(dirname string) ([]*Layer, error) {
 	return layers, nil
 }
 
-func ReadDir(dir string) (*Setup, error) {
-	layers, err := ReadLayersDir(filepath.Join(dir, "layers"))
+// ReadDir reads the configuration layers from the "layers" sub-directory in
+// dir, and returns the resulting Plan. If the "layers" sub-directory doesn't
+// exist, it returns a valid Plan with no layers.
+func ReadDir(dir string) (*Plan, error) {
+	layersDir := filepath.Join(dir, "layers")
+	_, err := os.Stat(layersDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return &Plan{}, nil
+		}
+		return nil, err
+	}
+
+	layers, err := ReadLayersDir(layersDir)
 	if err != nil {
 		return nil, err
 	}
-	setup := &Setup{
-		Layers: layers,
+	combined, err := CombineLayers(layers...)
+	if err != nil {
+		return nil, err
 	}
-	return setup, nil
+	plan := &Plan{
+		Layers:   layers,
+		Services: combined.Services,
+	}
+	return plan, err
 }

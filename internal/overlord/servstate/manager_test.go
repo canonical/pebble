@@ -25,9 +25,11 @@ import (
 	"time"
 
 	. "gopkg.in/check.v1"
+	"gopkg.in/yaml.v3"
 
 	"github.com/canonical/pebble/internal/overlord/servstate"
 	"github.com/canonical/pebble/internal/overlord/state"
+	"github.com/canonical/pebble/internal/plan"
 	"github.com/canonical/pebble/internal/testutil"
 )
 
@@ -47,7 +49,7 @@ type S struct {
 
 var _ = Suite(&S{})
 
-var setupLayer = `
+var planLayer1 = `
 services:
     test1:
         override: replace
@@ -61,7 +63,10 @@ services:
     test2:
         override: replace
         command: /bin/sh -c "echo test2 >> %s; sleep 300"
+`
 
+var planLayer2 = `
+services:
     test3:
         override: replace
         command: some-bad-command
@@ -79,8 +84,10 @@ func (s *S) SetUpTest(c *C) {
 	os.Mkdir(filepath.Join(s.dir, "layers"), 0755)
 
 	s.log = filepath.Join(s.dir, "log.txt")
-	data := fmt.Sprintf(setupLayer, s.log, s.log)
+	data := fmt.Sprintf(planLayer1, s.log, s.log)
 	err := ioutil.WriteFile(filepath.Join(s.dir, "layers", "001-base.yaml"), []byte(data), 0644)
+	c.Assert(err, IsNil)
+	err = ioutil.WriteFile(filepath.Join(s.dir, "layers", "002-two.yaml"), []byte(planLayer2), 0644)
 	c.Assert(err, IsNil)
 
 	s.runner = state.NewTaskRunner(s.st)
@@ -132,7 +139,7 @@ func (s *S) TestStartStopServices(c *C) {
 	chg.AddAll(ts)
 	s.st.Unlock()
 
-	// Twice due to the cross-task depdendency.
+	// Twice due to the cross-task dependency.
 	s.ensure(c, 2)
 
 	s.st.Lock()
@@ -166,7 +173,7 @@ func (s *S) TestStartStopServices(c *C) {
 	chg.AddAll(ts)
 	s.st.Unlock()
 
-	// Twice due to the cross-task depdendency.
+	// Twice due to the cross-task dependency.
 	s.ensure(c, 2)
 
 	// Ensure processes are gone indeed.
@@ -217,4 +224,243 @@ func (s *S) TestStartFastExitCommand(c *C) {
 	c.Check(chg.Status(), Equals, state.ErrorStatus)
 	c.Check(chg.Err(), ErrorMatches, `(?s).*cannot start.*exited quickly with code 0.*`)
 	s.st.Unlock()
+}
+
+func planYAML(c *C, manager *servstate.ServiceManager) string {
+	plan, err := manager.Plan()
+	c.Assert(err, IsNil)
+	yml, err := yaml.Marshal(plan)
+	c.Assert(err, IsNil)
+	return string(yml)
+}
+
+func (s *S) TestPlan(c *C) {
+	expected := fmt.Sprintf(`
+services:
+    test1:
+        default: start
+        override: replace
+        command: /bin/sh -c "echo test1 >> %s; sleep 300"
+        before:
+            - test2
+        requires:
+            - test2
+    test2:
+        override: replace
+        command: /bin/sh -c "echo test2 >> %s; sleep 300"
+    test3:
+        override: replace
+        command: some-bad-command
+    test4:
+        override: replace
+        command: echo too-fast
+`[1:], s.log, s.log)
+	c.Assert(planYAML(c, s.manager), Equals, expected)
+}
+
+func parseLayer(c *C, order int, label, layerYAML string) *plan.Layer {
+	layer, err := plan.ParseLayer(order, label, []byte(layerYAML))
+	c.Assert(err, IsNil)
+	return layer
+}
+
+func (s *S) planLayersHasLen(c *C, manager *servstate.ServiceManager, expectedLen int) {
+	plan, err := manager.Plan()
+	c.Assert(err, IsNil)
+	c.Assert(plan.Layers, HasLen, expectedLen)
+}
+
+func (s *S) TestAppendLayer(c *C) {
+	dir := c.MkDir()
+	os.Mkdir(filepath.Join(dir, "layers"), 0755)
+	runner := state.NewTaskRunner(s.st)
+	manager, err := servstate.NewManager(s.st, runner, dir)
+	c.Assert(err, IsNil)
+
+	// Append a layer when there are no layers.
+	layer := parseLayer(c, 0, "label1", `
+services:
+    svc1:
+        override: replace
+        command: /bin/sh
+`)
+	err = manager.AppendLayer(layer)
+	c.Assert(err, IsNil)
+	c.Assert(layer.Order, Equals, 1)
+	c.Assert(planYAML(c, manager), Equals, `
+services:
+    svc1:
+        override: replace
+        command: /bin/sh
+`[1:])
+	s.planLayersHasLen(c, manager, 1)
+
+	// Try to append a layer when that label already exists.
+	layer = parseLayer(c, 0, "label1", `
+services:
+    svc1:
+        override: foobar
+        command: /bin/bar
+`)
+	err = manager.AppendLayer(layer)
+	c.Assert(err.(*servstate.LabelExists).Label, Equals, "label1")
+	c.Assert(planYAML(c, manager), Equals, `
+services:
+    svc1:
+        override: replace
+        command: /bin/sh
+`[1:])
+	s.planLayersHasLen(c, manager, 1)
+
+	// Append another layer on top.
+	layer = parseLayer(c, 0, "label2", `
+services:
+    svc1:
+        override: replace
+        command: /bin/bash
+`)
+	err = manager.AppendLayer(layer)
+	c.Assert(err, IsNil)
+	c.Assert(layer.Order, Equals, 2)
+	c.Assert(planYAML(c, manager), Equals, `
+services:
+    svc1:
+        override: replace
+        command: /bin/bash
+`[1:])
+	s.planLayersHasLen(c, manager, 2)
+
+	// Append a layer with a different service.
+	layer = parseLayer(c, 0, "label3", `
+services:
+    svc2:
+        override: replace
+        command: /bin/foo
+`)
+	err = manager.AppendLayer(layer)
+	c.Assert(err, IsNil)
+	c.Assert(layer.Order, Equals, 3)
+	c.Assert(planYAML(c, manager), Equals, `
+services:
+    svc1:
+        override: replace
+        command: /bin/bash
+    svc2:
+        override: replace
+        command: /bin/foo
+`[1:])
+	s.planLayersHasLen(c, manager, 3)
+}
+
+func (s *S) TestCombineLayer(c *C) {
+	dir := c.MkDir()
+	os.Mkdir(filepath.Join(dir, "layers"), 0755)
+	runner := state.NewTaskRunner(s.st)
+	manager, err := servstate.NewManager(s.st, runner, dir)
+	c.Assert(err, IsNil)
+
+	// "Combine" layer with no layers should just append.
+	layer := parseLayer(c, 0, "label1", `
+services:
+    svc1:
+        override: replace
+        command: /bin/sh
+`)
+	err = manager.CombineLayer(layer)
+	c.Assert(err, IsNil)
+	c.Assert(layer.Order, Equals, 1)
+	c.Assert(planYAML(c, manager), Equals, `
+services:
+    svc1:
+        override: replace
+        command: /bin/sh
+`[1:])
+	s.planLayersHasLen(c, manager, 1)
+
+	// Combine layer with different label should just append.
+	layer = parseLayer(c, 0, "label2", `
+services:
+    svc2:
+        override: replace
+        command: /bin/foo
+`)
+	err = manager.CombineLayer(layer)
+	c.Assert(err, IsNil)
+	c.Assert(layer.Order, Equals, 2)
+	c.Assert(planYAML(c, manager), Equals, `
+services:
+    svc1:
+        override: replace
+        command: /bin/sh
+    svc2:
+        override: replace
+        command: /bin/foo
+`[1:])
+	s.planLayersHasLen(c, manager, 2)
+
+	// Combine layer with first layer.
+	layer = parseLayer(c, 0, "label1", `
+services:
+    svc1:
+        override: replace
+        command: /bin/bash
+`)
+	err = manager.CombineLayer(layer)
+	c.Assert(err, IsNil)
+	c.Assert(layer.Order, Equals, 1)
+	c.Assert(planYAML(c, manager), Equals, `
+services:
+    svc1:
+        override: replace
+        command: /bin/bash
+    svc2:
+        override: replace
+        command: /bin/foo
+`[1:])
+	s.planLayersHasLen(c, manager, 2)
+
+	// Combine layer with second layer.
+	layer = parseLayer(c, 0, "label2", `
+services:
+    svc2:
+        override: replace
+        command: /bin/bar
+`)
+	err = manager.CombineLayer(layer)
+	c.Assert(err, IsNil)
+	c.Assert(layer.Order, Equals, 2)
+	c.Assert(planYAML(c, manager), Equals, `
+services:
+    svc1:
+        override: replace
+        command: /bin/bash
+    svc2:
+        override: replace
+        command: /bin/bar
+`[1:])
+	s.planLayersHasLen(c, manager, 2)
+
+	// One last append for good measure.
+	layer = parseLayer(c, 0, "label3", `
+services:
+    svc1:
+        override: replace
+        command: /bin/a
+    svc2:
+        override: replace
+        command: /bin/b
+`)
+	err = manager.CombineLayer(layer)
+	c.Assert(err, IsNil)
+	c.Assert(layer.Order, Equals, 3)
+	c.Assert(planYAML(c, manager), Equals, `
+services:
+    svc1:
+        override: replace
+        command: /bin/a
+    svc2:
+        override: replace
+        command: /bin/b
+`[1:])
+	s.planLayersHasLen(c, manager, 3)
 }
