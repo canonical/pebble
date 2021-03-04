@@ -31,7 +31,6 @@ import (
 
 	"github.com/canonical/pebble/client"
 	"github.com/canonical/pebble/internal/logger"
-	"github.com/canonical/pebble/internal/osutil"
 )
 
 var (
@@ -44,6 +43,11 @@ var (
 	// set to logger.Panicf in testing
 	noticef = logger.Noticef
 )
+
+// defaultPebbleDir is the Pebble directory used if $PEBBLE is not set. It is
+// created by the daemon ("pebble run") if it doesn't exist, and also used by
+// the pebble client.
+const defaultPebbleDir = "/var/lib/pebble/default"
 
 type options struct {
 	Version func() `long:"version"`
@@ -336,14 +340,7 @@ func run() error {
 		fmt.Fprintf(Stderr, "WARNING: Cannot activate logging: %v\n", err)
 	}
 
-	pebbleDir := os.Getenv("PEBBLE")
-	if pebbleDir != "" && !osutil.IsDir(pebbleDir) {
-		return fmt.Errorf("$PEBBLE must point to a pebble directory")
-	}
-	clientConfig.Socket = os.Getenv("PEBBLE_SOCKET")
-	if clientConfig.Socket == "" {
-		clientConfig.Socket = filepath.Join(pebbleDir, ".pebble.socket")
-	}
+	_, clientConfig.Socket = getEnvPaths()
 
 	cli := client.New(&clientConfig)
 	parser := Parser(cli)
@@ -420,4 +417,16 @@ func errorToMessage(e error) (normalMessage string, err error) {
 	}
 
 	return msg, nil
+}
+
+func getEnvPaths() (pebbleDir string, socketPath string) {
+	pebbleDir = os.Getenv("PEBBLE")
+	if pebbleDir == "" {
+		pebbleDir = defaultPebbleDir
+	}
+	socketPath = os.Getenv("PEBBLE_SOCKET")
+	if socketPath == "" {
+		socketPath = filepath.Join(pebbleDir, ".pebble.socket")
+	}
+	return pebbleDir, socketPath
 }

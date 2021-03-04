@@ -73,6 +73,8 @@ var (
 	//FixupArg = fixupArg
 
 	//InterfacesDeprecationNotice = interfacesDeprecationNotice
+
+	GetEnvPaths = getEnvPaths
 )
 
 //func NewInfoWriter(w writeflusher) *infoWriter {

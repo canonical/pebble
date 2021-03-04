@@ -39,13 +39,15 @@ The run command starts pebble and runs the configured environment.
 type cmdRun struct {
 	clientMixin
 
-	Hold bool `long:"hold"`
+	CreateDirs bool `long:"create-dirs"`
+	Hold       bool `long:"hold"`
 }
 
 func init() {
 	addCommand("run", shortRunHelp, longRunHelp, func() flags.Commander { return &cmdRun{} },
 		map[string]string{
-			"hold": "Do not start default services automatically",
+			"create-dirs": "Create pebble directory on startup if it doesn't exist",
+			"hold":        "Do not start default services automatically",
 		}, nil)
 }
 
@@ -108,12 +110,18 @@ func sanityCheck() error {
 }
 
 func runDaemon(rcmd *cmdRun, ch chan os.Signal) error {
-
 	t0 := time.Now().Truncate(time.Millisecond)
 
+	pebbleDir, socketPath := getEnvPaths()
+	if rcmd.CreateDirs {
+		err := os.MkdirAll(pebbleDir, 0755)
+		if err != nil {
+			return err
+		}
+	}
 	dopts := daemon.Options{
-		Dir:        os.Getenv("PEBBLE"),
-		SocketPath: os.Getenv("PEBBLE_SOCKET"),
+		Dir:        pebbleDir,
+		SocketPath: socketPath,
 	}
 	d, err := daemon.New(&dopts)
 	if err != nil {
