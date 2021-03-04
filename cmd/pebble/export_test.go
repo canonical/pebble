@@ -74,8 +74,7 @@ var (
 
 	//InterfacesDeprecationNotice = interfacesDeprecationNotice
 
-	GetEnvPaths     = getEnvPaths
-	EnsurePebbleDir = ensurePebbleDir
+	GetEnvPaths = getEnvPaths
 )
 
 //func NewInfoWriter(w writeflusher) *infoWriter {

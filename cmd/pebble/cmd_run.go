@@ -39,13 +39,15 @@ The run command starts pebble and runs the configured environment.
 type cmdRun struct {
 	clientMixin
 
-	Hold bool `long:"hold"`
+	CreateDirs bool `long:"create-dirs"`
+	Hold       bool `long:"hold"`
 }
 
 func init() {
 	addCommand("run", shortRunHelp, longRunHelp, func() flags.Commander { return &cmdRun{} },
 		map[string]string{
-			"hold": "Do not start default services automatically",
+			"create-dirs": "Create pebble directory on startup if it doesn't exist",
+			"hold":        "Do not start default services automatically",
 		}, nil)
 }
 
@@ -111,9 +113,11 @@ func runDaemon(rcmd *cmdRun, ch chan os.Signal) error {
 	t0 := time.Now().Truncate(time.Millisecond)
 
 	pebbleDir, socketPath := getEnvPaths()
-	err := ensurePebbleDir(pebbleDir)
-	if err != nil {
-		return err
+	if rcmd.CreateDirs {
+		err := os.MkdirAll(pebbleDir, 0755)
+		if err != nil {
+			return err
+		}
 	}
 	dopts := daemon.Options{
 		Dir:        pebbleDir,
@@ -184,24 +188,4 @@ out:
 	rcmd.client.CloseIdleConnections()
 
 	return d.Stop(ch)
-}
-
-// ensurePebbleDir ensures that the pebble directory exists and is a directory.
-// If the directory doesn't exist, create it.
-func ensurePebbleDir(pebbleDir string) error {
-	st, err := os.Stat(pebbleDir)
-	if err != nil {
-		if !os.IsNotExist(err) {
-			return fmt.Errorf("cannot stat pebble directory: %w", err)
-		}
-		err = os.MkdirAll(pebbleDir, 0755)
-		if err != nil {
-			return fmt.Errorf("cannot create pebble directory: %w", err)
-		}
-		return nil
-	}
-	if !st.IsDir() {
-		return fmt.Errorf("%q is not a directory", pebbleDir)
-	}
-	return nil
 }
