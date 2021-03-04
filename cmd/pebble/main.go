@@ -340,8 +340,7 @@ func run() error {
 		fmt.Fprintf(Stderr, "WARNING: Cannot activate logging: %v\n", err)
 	}
 
-	_, socketPath := getEnvPaths()
-	clientConfig.Socket = socketPath
+	_, clientConfig.Socket = getEnvPaths()
 
 	cli := client.New(&clientConfig)
 	parser := Parser(cli)
