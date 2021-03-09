@@ -31,7 +31,7 @@ import (
 	"github.com/canonical/pebble/internal/systemd"
 )
 
-var shortRunHelp = "Run the pebble environment"
+var shortRunHelp = "Run the pebble server"
 var longRunHelp = `
 The run command starts pebble and runs the configured environment.
 `

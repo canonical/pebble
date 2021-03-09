@@ -167,16 +167,20 @@ type helpCategory struct {
 // helpCategories helps us by grouping commands
 var helpCategories = []helpCategory{{
 	Label:       "Basics",
-	Description: "basic management",
-	Commands:    []string{"start", "stop", "autostart"},
+	Description: "basic service management",
+	Commands:    []string{"autostart", "run", "start", "stop"},
+}, {
+	Label:       "Configuration",
+	Description: "manage configuration",
+	Commands:    []string{"add", "plan"},
 }, {
 	Label:       "Changes",
-	Description: "basic management",
-	Commands:    []string{"history", "tasks", "abort"},
+	Description: "view changes, tasks, and warnings",
+	Commands:    []string{"changes", "okay", "tasks", "warnings"},
 }, {
-	Label:       "...more",
-	Description: "slightly more advanced management",
-	Commands:    []string{"help"},
+	Label:       "Other",
+	Description: "miscellaneous commands",
+	Commands:    []string{"help", "version"},
 }}
 
 var (
@@ -196,7 +200,6 @@ func printHelpHeader() {
 	fmt.Fprintln(Stdout, pebbleUsage)
 	fmt.Fprintln(Stdout)
 	fmt.Fprintln(Stdout, pebbleHelpCategoriesIntro)
-	fmt.Fprintln(Stdout)
 }
 
 func printHelpAllFooter() {
@@ -212,6 +215,7 @@ func printHelpFooter() {
 // this is called when the Execute returns a flags.Error with ErrCommandRequired
 func printShortHelp() {
 	printHelpHeader()
+	fmt.Fprintln(Stdout)
 	maxLen := 0
 	for _, categ := range helpCategories {
 		if l := utf8.RuneCountInString(categ.Label); l > maxLen {
