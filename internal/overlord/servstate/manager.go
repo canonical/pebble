@@ -3,6 +3,7 @@ package servstate
 import (
 	"fmt"
 	"os/exec"
+	"sort"
 	"sync"
 
 	"github.com/canonical/pebble/internal/overlord/state"
@@ -185,22 +186,62 @@ func (m *ServiceManager) Ensure() error {
 	return nil
 }
 
-// ActiveServices returns the name of the services which are currently
-// set to run. They may be running or not depending on the state of their
-// process lifecycle.
-func (m *ServiceManager) ActiveServices() []string {
-	var names []string
-	for name, service := range m.plan.Services {
-		if service.Default == plan.StartAction {
-			names = append(names, name)
-		}
-	}
-	return names
+type ServiceInfo struct {
+	Name    string
+	Default plan.ServiceAction
+	Status  ServiceStatus
+	Message string
 }
 
-// DefaultServices returns the name of the services set to start
+type ServiceStatus string
+
+const (
+	ServiceActive   ServiceStatus = "active"
+	ServiceInactive ServiceStatus = "inactive"
+	ServiceError    ServiceStatus = "error"
+)
+
+// Services returns the list of configured services and their status, sorted
+// by service name. Filter by the specified service names if provided.
+func (m *ServiceManager) Services(names []string) ([]*ServiceInfo, error) {
+	releasePlan, err := m.acquirePlan()
+	if err != nil {
+		return nil, err
+	}
+	defer releasePlan()
+
+	requested := make(map[string]bool)
+	for _, name := range names {
+		requested[name] = true
+	}
+
+	var services []*ServiceInfo
+	for name, service := range m.plan.Services {
+		if len(names) > 0 && !requested[name] {
+			continue
+		}
+		info := &ServiceInfo{
+			Name:    name,
+			Default: plan.StopAction,
+			Status:  ServiceInactive,
+		}
+		if service.Default == plan.StartAction {
+			info.Default = plan.StartAction
+		}
+		if _, ok := m.services[name]; ok {
+			info.Status = ServiceActive
+		}
+		services = append(services, info)
+	}
+	sort.Slice(services, func(i, j int) bool {
+		return services[i].Name < services[j].Name
+	})
+	return services, nil
+}
+
+// DefaultServiceNames returns the name of the services set to start
 // by default.
-func (m *ServiceManager) DefaultServices() ([]string, error) {
+func (m *ServiceManager) DefaultServiceNames() ([]string, error) {
 	releasePlan, err := m.acquirePlan()
 	if err != nil {
 		return nil, err

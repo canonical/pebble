@@ -18,6 +18,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"net/url"
+	"strings"
 )
 
 type ServiceOptions struct {
@@ -57,4 +59,33 @@ func (client *Client) doMultiServiceAction(actionName string, services []string)
 		"Content-Type": "application/json",
 	}
 	return client.doAsyncFull("POST", "/v1/services", nil, headers, bytes.NewBuffer(data))
+}
+
+// ServicesOptions are the filtering options for querying services.
+type ServicesOptions struct {
+	// Names is the list of service names to query for. If slice is nil or
+	// empty, fetch information for all services.
+	Names []string
+}
+
+// ServiceInfo holds status information for a single service.
+type ServiceInfo struct {
+	Name    string `json:"name"`    // service name
+	Default string `json:"default"` // default state: "start" or "stop"
+	Status  string `json:"status"`  // "active", "inactive", or "error"
+	Message string `json:"message"` // message (e.g., error) or empty string
+}
+
+// Services fetches information about specific services (or all of them),
+// ordered by service name.
+func (client *Client) Services(opts *ServicesOptions) ([]*ServiceInfo, error) {
+	query := url.Values{
+		"names": []string{strings.Join(opts.Names, ",")},
+	}
+	var services []*ServiceInfo
+	_, err := client.doSync("GET", "/v1/services", query, nil, nil, &services)
+	if err != nil {
+		return nil, err
+	}
+	return services, nil
 }

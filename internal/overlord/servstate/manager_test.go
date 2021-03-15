@@ -19,7 +19,6 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"sort"
 	"syscall"
 	"testing"
 	"time"
@@ -113,8 +112,8 @@ func (s *S) assertLog(c *C, expected string) {
 	c.Assert(string(data), Matches, "(?s)"+expected)
 }
 
-func (s *S) TestDefaultServices(c *C) {
-	services, err := s.manager.DefaultServices()
+func (s *S) TestDefaultServiceNames(c *C) {
+	services, err := s.manager.DefaultServiceNames()
 	c.Assert(err, IsNil)
 	c.Assert(services, DeepEquals, []string{"test1", "test2"})
 }
@@ -154,13 +153,6 @@ func (s *S) TestStartStopServices(c *C) {
 	if c.Failed() {
 		return
 	}
-
-	// === ActiveServices ===
-
-	// No implicit sorting for active services.
-	active := s.manager.ActiveServices()
-	sort.Strings(active)
-	c.Check(services, DeepEquals, []string{"test1", "test2"})
 
 	// === Stop ===
 
@@ -206,6 +198,16 @@ func (s *S) TestStartBadCommand(c *C) {
 	c.Check(chg.Status(), Equals, state.ErrorStatus)
 	c.Check(chg.Err(), ErrorMatches, `(?s).*cannot start.*"some-bad-command":.*not found.*`)
 	s.st.Unlock()
+
+	svc := s.serviceByName(c, "test3")
+	c.Assert(svc.Status, Equals, servstate.ServiceInactive)
+}
+
+func (s *S) serviceByName(c *C, name string) *servstate.ServiceInfo {
+	services, err := s.manager.Services([]string{name})
+	c.Assert(err, IsNil)
+	c.Assert(services, HasLen, 1)
+	return services[0]
 }
 
 func (s *S) TestStartFastExitCommand(c *C) {
@@ -224,6 +226,9 @@ func (s *S) TestStartFastExitCommand(c *C) {
 	c.Check(chg.Status(), Equals, state.ErrorStatus)
 	c.Check(chg.Err(), ErrorMatches, `(?s).*cannot start.*exited quickly with code 0.*`)
 	s.st.Unlock()
+
+	svc := s.serviceByName(c, "test4")
+	c.Assert(svc.Status, Equals, servstate.ServiceInactive)
 }
 
 func planYAML(c *C, manager *servstate.ServiceManager) string {
@@ -463,4 +468,41 @@ services:
         command: /bin/b
 `[1:])
 	s.planLayersHasLen(c, manager, 3)
+}
+
+func (s *S) TestServices(c *C) {
+	services, err := s.manager.Services(nil)
+	c.Assert(err, IsNil)
+	c.Assert(services, DeepEquals, []*servstate.ServiceInfo{
+		{Name: "test1", Status: servstate.ServiceInactive, Default: plan.StartAction},
+		{Name: "test2", Status: servstate.ServiceInactive, Default: plan.StopAction},
+		{Name: "test3", Status: servstate.ServiceInactive, Default: plan.StopAction},
+		{Name: "test4", Status: servstate.ServiceInactive, Default: plan.StopAction},
+	})
+
+	services, err = s.manager.Services([]string{"test2", "test3"})
+	c.Assert(err, IsNil)
+	c.Assert(services, DeepEquals, []*servstate.ServiceInfo{
+		{Name: "test2", Status: servstate.ServiceInactive, Default: plan.StopAction},
+		{Name: "test3", Status: servstate.ServiceInactive, Default: plan.StopAction},
+	})
+
+	// Start a service and ensure it's marked active
+	s.st.Lock()
+	ts, err := servstate.Start(s.st, []string{"test2"})
+	c.Check(err, IsNil)
+	chg := s.st.NewChange("test", "Start test")
+	chg.AddAll(ts)
+	s.st.Unlock()
+	s.ensure(c, 1)
+
+	services, err = s.manager.Services(nil)
+	c.Assert(err, IsNil)
+	c.Assert(services, DeepEquals, []*servstate.ServiceInfo{
+		{Name: "test1", Status: servstate.ServiceInactive, Default: plan.StartAction},
+		{Name: "test2", Status: servstate.ServiceActive, Default: plan.StopAction},
+		{Name: "test3", Status: servstate.ServiceInactive, Default: plan.StopAction},
+		{Name: "test4", Status: servstate.ServiceInactive, Default: plan.StopAction},
+	})
+
 }

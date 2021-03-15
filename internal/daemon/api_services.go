@@ -22,10 +22,36 @@ import (
 
 	"github.com/canonical/pebble/internal/overlord/servstate"
 	"github.com/canonical/pebble/internal/overlord/state"
+	"github.com/canonical/pebble/internal/strutil"
 )
 
+type serviceInfo struct {
+	Name    string `json:"name"`
+	Default string `json:"default"`
+	Status  string `json:"status"`
+	Message string `json:"message,omitempty"`
+}
+
 func v1GetServices(c *Command, r *http.Request, _ *userState) Response {
-	return statusBadRequest("not implemented")
+	names := strutil.CommaSeparatedList(r.URL.Query().Get("names"))
+
+	servmgr := c.d.overlord.ServiceManager()
+	services, err := servmgr.Services(names)
+	if err != nil {
+		return statusInternalError(err.Error())
+	}
+
+	var infos []serviceInfo
+	for _, svc := range services {
+		info := serviceInfo{
+			Name:    svc.Name,
+			Default: string(svc.Default),
+			Status:  string(svc.Status),
+			Message: svc.Message,
+		}
+		infos = append(infos, info)
+	}
+	return SyncResponse(infos)
 }
 
 func v1PostServices(c *Command, r *http.Request, _ *userState) Response {
@@ -46,7 +72,7 @@ func v1PostServices(c *Command, r *http.Request, _ *userState) Response {
 		if len(payload.Services) != 0 {
 			return statusBadRequest("%s accepts no service names", payload.Action)
 		}
-		services, err = servmgr.DefaultServices()
+		services, err = servmgr.DefaultServiceNames()
 		if err != nil {
 			return statusInternalError(err.Error())
 		}

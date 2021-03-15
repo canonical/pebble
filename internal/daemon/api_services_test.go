@@ -16,6 +16,7 @@ package daemon
 
 import (
 	"bytes"
+	"encoding/json"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -200,4 +201,32 @@ func (s *apiSuite) TestServicesAutoStart(c *C) {
 	c.Assert(tasks, HasLen, 2)
 	c.Assert(tasks[0].Summary(), Equals, `Start service "test1"`)
 	c.Assert(tasks[1].Summary(), Equals, `Start service "test2"`)
+}
+
+func (s *apiSuite) TestServicesGet(c *C) {
+	// Setup
+	writeTestLayer(s.pebbleDir, servicesLayer)
+	s.daemon(c)
+
+	// Execute
+	req, err := http.NewRequest("GET", "/v1/services", nil)
+	c.Assert(err, IsNil)
+	rsp := v1GetServices(apiCmd("/v1/services"), req, nil).(*resp)
+	rec := httptest.NewRecorder()
+	rsp.ServeHTTP(rec, req)
+
+	// Verify
+	c.Check(rec.Code, Equals, 200)
+	c.Check(rsp.Status, Equals, 200)
+	c.Check(rsp.Type, Equals, ResponseTypeSync)
+	c.Check(rsp.Result, NotNil)
+	var body map[string]interface{}
+	err = json.Unmarshal(rec.Body.Bytes(), &body)
+	c.Check(err, IsNil)
+	c.Check(body["result"], DeepEquals, []interface{}{
+		map[string]interface{}{"default": "start", "name": "test1", "status": "inactive"},
+		map[string]interface{}{"default": "stop", "name": "test2", "status": "inactive"},
+		map[string]interface{}{"default": "stop", "name": "test3", "status": "inactive"},
+		map[string]interface{}{"default": "stop", "name": "test4", "status": "inactive"},
+	})
 }
