@@ -27,9 +27,8 @@ import (
 
 type serviceInfo struct {
 	Name    string `json:"name"`
-	Default string `json:"default"`
-	Status  string `json:"status"`
-	Message string `json:"message,omitempty"`
+	Startup string `json:"startup"`
+	Current string `json:"current"`
 }
 
 func v1GetServices(c *Command, r *http.Request, _ *userState) Response {
@@ -41,13 +40,12 @@ func v1GetServices(c *Command, r *http.Request, _ *userState) Response {
 		return statusInternalError(err.Error())
 	}
 
-	var infos []serviceInfo
+	infos := make([]serviceInfo, 0, len(services))
 	for _, svc := range services {
 		info := serviceInfo{
 			Name:    svc.Name,
-			Default: string(svc.Default),
-			Status:  string(svc.Status),
-			Message: svc.Message,
+			Startup: string(svc.Startup),
+			Current: string(svc.Current),
 		}
 		infos = append(infos, info)
 	}

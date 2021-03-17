@@ -167,20 +167,20 @@ type helpCategory struct {
 // helpCategories helps us by grouping commands
 var helpCategories = []helpCategory{{
 	Label:       "Basics",
-	Description: "basic service management",
-	Commands:    []string{"autostart", "run", "services", "start", "stop"},
+	Description: "basic management",
+	Commands:    []string{"run", "autostart", "start", "stop", "services"},
 }, {
 	Label:       "Configuration",
 	Description: "manage configuration",
 	Commands:    []string{"add", "plan"},
 }, {
 	Label:       "Changes",
-	Description: "view changes, tasks, and warnings",
-	Commands:    []string{"changes", "okay", "tasks", "warnings"},
+	Description: "view changes and tasks",
+	Commands:    []string{"changes", "tasks"},
 }, {
 	Label:       "Other",
-	Description: "miscellaneous commands",
-	Commands:    []string{"help", "version"},
+	Description: "other commands",
+	Commands:    []string{"warnings", "okay", "help", "version"},
 }}
 
 var (

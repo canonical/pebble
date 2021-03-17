@@ -86,8 +86,8 @@ func (cs *clientSuite) TestAutostart(c *check.C) {
 func (cs *clientSuite) TestServicesGet(c *check.C) {
 	cs.rsp = `{
 		"result": [
-			{"name": "svc1", "default": "start", "status": "inactive"},
-			{"name": "svc2", "default": "stop", "status": "active"}
+			{"name": "svc1", "startup": "enabled", "current": "inactive"},
+			{"name": "svc2", "startup": "disabled", "current": "active"}
 		],
 		"status": "OK",
 		"status-code": 200,
@@ -100,8 +100,8 @@ func (cs *clientSuite) TestServicesGet(c *check.C) {
 	services, err := cs.cli.Services(&opts)
 	c.Assert(err, check.IsNil)
 	c.Assert(services, check.DeepEquals, []*client.ServiceInfo{
-		{Name: "svc1", Default: "start", Status: "inactive"},
-		{Name: "svc2", Default: "stop", Status: "active"},
+		{Name: "svc1", Startup: client.StartupEnabled, Current: client.StatusInactive},
+		{Name: "svc2", Startup: client.StartupDisabled, Current: client.StatusActive},
 	})
 	c.Assert(cs.req.Method, check.Equals, "GET")
 	c.Assert(cs.req.URL.Path, check.Equals, "/v1/services")

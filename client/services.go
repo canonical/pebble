@@ -70,11 +70,27 @@ type ServicesOptions struct {
 
 // ServiceInfo holds status information for a single service.
 type ServiceInfo struct {
-	Name    string `json:"name"`    // service name
-	Default string `json:"default"` // default state: "start" or "stop"
-	Status  string `json:"status"`  // "active", "inactive", or "error"
-	Message string `json:"message"` // message (e.g., error) or empty string
+	Name    string         `json:"name"` // service name
+	Startup ServiceStartup `json:"startup"`
+	Current ServiceStatus  `json:"current"`
 }
+
+// ServiceStartup defines the different startup modes for a service.
+type ServiceStartup string
+
+const (
+	StartupEnabled  ServiceStartup = "enabled"
+	StartupDisabled ServiceStartup = "disabled"
+)
+
+// ServiceStatus defines the current states for a service.
+type ServiceStatus string
+
+const (
+	StatusActive   ServiceStatus = "active"
+	StatusInactive ServiceStatus = "inactive"
+	StatusError    ServiceStatus = "error"
+)
 
 // Services fetches information about specific services (or all of them),
 // ordered by service name.

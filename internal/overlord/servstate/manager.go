@@ -188,17 +188,23 @@ func (m *ServiceManager) Ensure() error {
 
 type ServiceInfo struct {
 	Name    string
-	Default plan.ServiceAction
-	Status  ServiceStatus
-	Message string
+	Startup ServiceStartup
+	Current ServiceStatus
 }
+
+type ServiceStartup string
+
+const (
+	StartupEnabled  = "enabled"
+	StartupDisabled = "disabled"
+)
 
 type ServiceStatus string
 
 const (
-	ServiceActive   ServiceStatus = "active"
-	ServiceInactive ServiceStatus = "inactive"
-	ServiceError    ServiceStatus = "error"
+	StatusActive   ServiceStatus = "active"
+	StatusInactive ServiceStatus = "inactive"
+	StatusError    ServiceStatus = "error"
 )
 
 // Services returns the list of configured services and their status, sorted
@@ -210,26 +216,27 @@ func (m *ServiceManager) Services(names []string) ([]*ServiceInfo, error) {
 	}
 	defer releasePlan()
 
-	requested := make(map[string]bool)
+	requested := make(map[string]bool, len(names))
 	for _, name := range names {
 		requested[name] = true
 	}
 
 	var services []*ServiceInfo
+	matchNames := len(names) > 0
 	for name, service := range m.plan.Services {
-		if len(names) > 0 && !requested[name] {
+		if matchNames && !requested[name] {
 			continue
 		}
 		info := &ServiceInfo{
 			Name:    name,
-			Default: plan.StopAction,
-			Status:  ServiceInactive,
+			Startup: StartupDisabled,
+			Current: StatusInactive,
 		}
 		if service.Default == plan.StartAction {
-			info.Default = plan.StartAction
+			info.Startup = StartupEnabled
 		}
 		if _, ok := m.services[name]; ok {
-			info.Status = ServiceActive
+			info.Current = StatusActive
 		}
 		services = append(services, info)
 	}

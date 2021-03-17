@@ -59,22 +59,10 @@ func (cmd *cmdServices) Execute(args []string) error {
 	w := tabWriter()
 	defer w.Flush()
 
-	fmt.Fprintln(w, "Service\tStartup\tCurrent\tNotes")
+	fmt.Fprintln(w, "Service\tStartup\tCurrent")
 
 	for _, svc := range services {
-		startup := svc.Default
-		switch svc.Default {
-		case "start":
-			startup = "enabled"
-		case "stop":
-			startup = "disabled"
-		}
-		current := svc.Status
-		notes := svc.Message
-		if notes == "" {
-			notes = "-"
-		}
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", svc.Name, startup, current, notes)
+		fmt.Fprintf(w, "%s\t%s\t%s\n", svc.Name, svc.Startup, svc.Current)
 	}
 	return nil
 }

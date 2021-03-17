@@ -224,9 +224,9 @@ func (s *apiSuite) TestServicesGet(c *C) {
 	err = json.Unmarshal(rec.Body.Bytes(), &body)
 	c.Check(err, IsNil)
 	c.Check(body["result"], DeepEquals, []interface{}{
-		map[string]interface{}{"default": "start", "name": "test1", "status": "inactive"},
-		map[string]interface{}{"default": "stop", "name": "test2", "status": "inactive"},
-		map[string]interface{}{"default": "stop", "name": "test3", "status": "inactive"},
-		map[string]interface{}{"default": "stop", "name": "test4", "status": "inactive"},
+		map[string]interface{}{"startup": "enabled", "name": "test1", "current": "inactive"},
+		map[string]interface{}{"startup": "disabled", "name": "test2", "current": "inactive"},
+		map[string]interface{}{"startup": "disabled", "name": "test3", "current": "inactive"},
+		map[string]interface{}{"startup": "disabled", "name": "test4", "current": "inactive"},
 	})
 }

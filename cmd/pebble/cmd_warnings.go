@@ -45,7 +45,7 @@ var shortWarningsHelp = "List warnings"
 var longWarningsHelp = `
 The warnings command lists the warnings that have been reported to the system.
 
-Once warnings have been listed with 'snap warnings', 'snap okay' may be used to
+Once warnings have been listed with 'pebble warnings', 'pebble okay' may be used to
 silence them. A warning that's been silenced in this way will not be listed
 again unless it happens again, _and_ a cooldown time has passed.
 
@@ -54,7 +54,7 @@ Warnings expire automatically, and once expired they are forgotten.
 
 var shortOkayHelp = "Acknowledge warnings"
 var longOkayHelp = `
-The okay command acknowledges the warnings listed with 'snap warnings'.
+The okay command acknowledges the warnings listed with 'pebble warnings'.
 
 Once acknowledged a warning won't appear again unless it re-occurrs and
 sufficient time has passed.

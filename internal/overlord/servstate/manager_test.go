@@ -200,7 +200,7 @@ func (s *S) TestStartBadCommand(c *C) {
 	s.st.Unlock()
 
 	svc := s.serviceByName(c, "test3")
-	c.Assert(svc.Status, Equals, servstate.ServiceInactive)
+	c.Assert(svc.Current, Equals, servstate.StatusInactive)
 }
 
 func (s *S) serviceByName(c *C, name string) *servstate.ServiceInfo {
@@ -228,7 +228,7 @@ func (s *S) TestStartFastExitCommand(c *C) {
 	s.st.Unlock()
 
 	svc := s.serviceByName(c, "test4")
-	c.Assert(svc.Status, Equals, servstate.ServiceInactive)
+	c.Assert(svc.Current, Equals, servstate.StatusInactive)
 }
 
 func planYAML(c *C, manager *servstate.ServiceManager) string {
@@ -474,17 +474,17 @@ func (s *S) TestServices(c *C) {
 	services, err := s.manager.Services(nil)
 	c.Assert(err, IsNil)
 	c.Assert(services, DeepEquals, []*servstate.ServiceInfo{
-		{Name: "test1", Status: servstate.ServiceInactive, Default: plan.StartAction},
-		{Name: "test2", Status: servstate.ServiceInactive, Default: plan.StopAction},
-		{Name: "test3", Status: servstate.ServiceInactive, Default: plan.StopAction},
-		{Name: "test4", Status: servstate.ServiceInactive, Default: plan.StopAction},
+		{Name: "test1", Current: servstate.StatusInactive, Startup: servstate.StartupEnabled},
+		{Name: "test2", Current: servstate.StatusInactive, Startup: servstate.StartupDisabled},
+		{Name: "test3", Current: servstate.StatusInactive, Startup: servstate.StartupDisabled},
+		{Name: "test4", Current: servstate.StatusInactive, Startup: servstate.StartupDisabled},
 	})
 
 	services, err = s.manager.Services([]string{"test2", "test3"})
 	c.Assert(err, IsNil)
 	c.Assert(services, DeepEquals, []*servstate.ServiceInfo{
-		{Name: "test2", Status: servstate.ServiceInactive, Default: plan.StopAction},
-		{Name: "test3", Status: servstate.ServiceInactive, Default: plan.StopAction},
+		{Name: "test2", Current: servstate.StatusInactive, Startup: servstate.StartupDisabled},
+		{Name: "test3", Current: servstate.StatusInactive, Startup: servstate.StartupDisabled},
 	})
 
 	// Start a service and ensure it's marked active
@@ -499,10 +499,9 @@ func (s *S) TestServices(c *C) {
 	services, err = s.manager.Services(nil)
 	c.Assert(err, IsNil)
 	c.Assert(services, DeepEquals, []*servstate.ServiceInfo{
-		{Name: "test1", Status: servstate.ServiceInactive, Default: plan.StartAction},
-		{Name: "test2", Status: servstate.ServiceActive, Default: plan.StopAction},
-		{Name: "test3", Status: servstate.ServiceInactive, Default: plan.StopAction},
-		{Name: "test4", Status: servstate.ServiceInactive, Default: plan.StopAction},
+		{Name: "test1", Current: servstate.StatusInactive, Startup: servstate.StartupEnabled},
+		{Name: "test2", Current: servstate.StatusActive, Startup: servstate.StartupDisabled},
+		{Name: "test3", Current: servstate.StatusInactive, Startup: servstate.StartupDisabled},
+		{Name: "test4", Current: servstate.StatusInactive, Startup: servstate.StartupDisabled},
 	})
-
 }
