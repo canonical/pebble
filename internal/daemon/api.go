@@ -44,6 +44,7 @@ var api = []*Command{{
 }, {
 	Path:   "/v1/services",
 	UserOK: true,
+	GET:    v1GetServices,
 	POST:   v1PostServices,
 }, {
 	Path:   "/v1/services/{name}",

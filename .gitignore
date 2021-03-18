@@ -5,3 +5,4 @@ cmd/VERSION
 *.swp
 *.swo
 .idea
+/pebble

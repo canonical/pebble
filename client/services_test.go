@@ -16,6 +16,7 @@ package client_test
 
 import (
 	"encoding/json"
+	"net/url"
 
 	"gopkg.in/check.v1"
 
@@ -59,7 +60,7 @@ func (cs *clientSuite) TestStartStop(c *check.C) {
 	}
 }
 
-func (cs *clientSuite) TestAutoStart(c *check.C) {
+func (cs *clientSuite) TestAutostart(c *check.C) {
 	cs.rsp = `{
 		"result": {},
 		"status": "OK",
@@ -80,4 +81,31 @@ func (cs *clientSuite) TestAutoStart(c *check.C) {
 	c.Assert(json.NewDecoder(cs.req.Body).Decode(&body), check.IsNil)
 	c.Check(body, check.HasLen, 2)
 	c.Check(body["action"], check.Equals, "autostart")
+}
+
+func (cs *clientSuite) TestServicesGet(c *check.C) {
+	cs.rsp = `{
+		"result": [
+			{"name": "svc1", "startup": "enabled", "current": "inactive"},
+			{"name": "svc2", "startup": "disabled", "current": "active"}
+		],
+		"status": "OK",
+		"status-code": 200,
+		"type": "sync"
+	}`
+
+	opts := client.ServicesOptions{
+		Names: []string{"svc1", "svc2"},
+	}
+	services, err := cs.cli.Services(&opts)
+	c.Assert(err, check.IsNil)
+	c.Assert(services, check.DeepEquals, []*client.ServiceInfo{
+		{Name: "svc1", Startup: client.StartupEnabled, Current: client.StatusInactive},
+		{Name: "svc2", Startup: client.StartupDisabled, Current: client.StatusActive},
+	})
+	c.Assert(cs.req.Method, check.Equals, "GET")
+	c.Assert(cs.req.URL.Path, check.Equals, "/v1/services")
+	c.Assert(cs.req.URL.Query(), check.DeepEquals, url.Values{
+		"names": {"svc1,svc2"},
+	})
 }
