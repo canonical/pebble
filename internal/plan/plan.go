@@ -70,9 +70,15 @@ const (
 )
 
 type StringVariable struct {
-	Name  string `yaml:"name"`
-	Value string `yaml:"value"`
+	Name  string
+	Value string
 }
+
+// Ensure we're implementing both the custom unmarshaler and marshaller. Note
+// that the unmarshaller is on *StringVariable, but the marshaller needs to be
+// on the non-pointer type.
+var _ yaml.Unmarshaler = &StringVariable{}
+var _ yaml.Marshaler = StringVariable{}
 
 func (sv *StringVariable) UnmarshalYAML(node *yaml.Node) error {
 	if node.ShortTag() != "!!map" || len(node.Content) != 2 {
@@ -89,6 +95,10 @@ func (sv *StringVariable) UnmarshalYAML(node *yaml.Node) error {
 	sv.Name = name
 	sv.Value = value
 	return nil
+}
+
+func (sv StringVariable) MarshalYAML() (interface{}, error) {
+	return map[string]string{sv.Name: sv.Value}, nil
 }
 
 // CombineLayers combines the given layers into a Plan, with the later layers

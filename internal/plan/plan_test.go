@@ -23,9 +23,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/canonical/pebble/internal/plan"
-
 	. "gopkg.in/check.v1"
+	"gopkg.in/yaml.v3"
+
+	"github.com/canonical/pebble/internal/plan"
 )
 
 // TODOs:
@@ -477,4 +478,39 @@ func (s *S) TestReadDirDupNames(c *C) {
 			c.Assert(err, IsNil)
 		}
 	}
+}
+
+func (s *S) TestMarshalLayer(c *C) {
+	layerStr := `
+summary: Simple layer
+description: A simple layer.
+services:
+    srv1:
+        summary: Service summary
+        default: start
+        override: replace
+        command: cmd arg1 "arg2 arg3"
+        after:
+            - srv2
+        before:
+            - srv3
+        requires:
+            - srv2
+            - srv3
+        environment:
+            - var1: val1
+            - var0: val0
+            - var2: val2
+    srv2:
+        override: replace
+        command: srv2cmd
+    srv3:
+        override: replace
+        command: srv3cmd
+`[1:]
+	layer, err := plan.ParseLayer(1, "layer1", []byte(layerStr))
+	c.Assert(err, IsNil)
+	out, err := yaml.Marshal(layer)
+	c.Assert(err, IsNil)
+	c.Assert(string(out), Equals, layerStr)
 }
