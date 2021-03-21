@@ -2,6 +2,7 @@ package servstate
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 	"syscall"
 	"time"
@@ -82,6 +83,12 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 	}
 	cmd := exec.Command(args[0], args[1:]...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+
+	// Pass service description's environment variables to child process
+	cmd.Env = os.Environ()
+	for _, v := range service.Environment {
+		cmd.Env = append(cmd.Env, v.Name+"="+v.Value)
+	}
 
 	buffer := strutil.NewLimitedBuffer(160, 10*1024)
 	cmd.Stdout = buffer
