@@ -34,7 +34,7 @@ services:
     test1:
         override: replace
         command: /bin/sh -c "echo test1 >> %s; sleep 300"
-        default: start
+        startup: enabled
         requires:
             - test2
         before:

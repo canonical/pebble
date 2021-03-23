@@ -81,7 +81,7 @@ var planTests = []planTest{{
 				override: replace
 				summary: Service summary
 				command: cmd arg1 "arg2 arg3"
-				default: start
+				startup: enabled
 				after:
 					- srv2
 				before:
@@ -95,7 +95,7 @@ var planTests = []planTest{{
 					- var2: val2
 			srv2:
 				override: replace
-				default: start
+				startup: enabled
 				command: cmd
 				before:
 					- srv3
@@ -116,13 +116,13 @@ var planTests = []planTest{{
 					- srv5
 			srv2:
 				override: replace
-				default: stop
+				startup: disabled
 				command: cmd
 				summary: Replaced service
 			srv4:
 				override: replace
 				command: cmd
-				default: start
+				startup: enabled
 			srv5:
 				override: replace
 				command: cmd
@@ -138,7 +138,7 @@ var planTests = []planTest{{
 				Summary:  "Service summary",
 				Override: "replace",
 				Command:  `cmd arg1 "arg2 arg3"`,
-				Default:  plan.StartAction,
+				Startup:  plan.StartupEnabled,
 				Before:   []string{"srv3"},
 				After:    []string{"srv2"},
 				Requires: []string{"srv2", "srv3"},
@@ -152,14 +152,14 @@ var planTests = []planTest{{
 				Name:     "srv2",
 				Override: "replace",
 				Command:  "cmd",
-				Default:  plan.StartAction,
+				Startup:  plan.StartupEnabled,
 				Before:   []string{"srv3"},
 			},
 			"srv3": {
 				Name:     "srv3",
 				Override: "replace",
 				Command:  "cmd",
-				Default:  plan.UnknownAction,
+				Startup:  plan.StartupUnknown,
 			},
 		},
 	}, {
@@ -182,13 +182,13 @@ var planTests = []planTest{{
 				Summary:  "Replaced service",
 				Override: "replace",
 				Command:  "cmd",
-				Default:  plan.StopAction,
+				Startup:  plan.StartupDisabled,
 			},
 			"srv4": {
 				Name:     "srv4",
 				Override: "replace",
 				Command:  "cmd",
-				Default:  plan.StartAction,
+				Startup:  plan.StartupEnabled,
 			},
 			"srv5": {
 				Name:     "srv5",
@@ -206,7 +206,7 @@ var planTests = []planTest{{
 				Summary:  "Service summary",
 				Override: "replace",
 				Command:  `cmd arg1 "arg2 arg3"`,
-				Default:  "start",
+				Startup:  plan.StartupEnabled,
 				After:    []string{"srv2", "srv4"},
 				Before:   []string{"srv3", "srv5"},
 				Requires: []string{"srv2", "srv3"},
@@ -222,7 +222,7 @@ var planTests = []planTest{{
 				Summary:  "Replaced service",
 				Override: "replace",
 				Command:  "cmd",
-				Default:  "stop",
+				Startup:  plan.StartupDisabled,
 			},
 			"srv3": {
 				Name:     "srv3",
@@ -233,7 +233,7 @@ var planTests = []planTest{{
 				Name:     "srv4",
 				Override: "replace",
 				Command:  "cmd",
-				Default:  "start",
+				Startup:  plan.StartupEnabled,
 			},
 			"srv5": {
 				Name:     "srv5",
@@ -487,7 +487,7 @@ func (s *S) TestMarshalLayer(c *C) {
 		services:
 			srv1:
 				summary: Service summary
-				default: start
+				startup: enabled
 				override: replace
 				command: cmd arg1 "arg2 arg3"
 				after:
