@@ -529,9 +529,12 @@ func (s *S) TestEnvironment(c *C) {
 	err = manager.AppendLayer(layer)
 	c.Assert(err, IsNil)
 
-	// Set an environment variable in the current process to ensure we're
-	// passing down the parent's environment too
+	// Set environment variables in the current process to ensure we're
+	// passing down the parent's environment too, but the layer's config
+	// should override these if also set there.
 	err = os.Setenv("PEBBLE_ENV_TEST_PARENT", "from-parent")
+	c.Assert(err, IsNil)
+	err = os.Setenv("PEBBLE_ENV_TEST_1", "should be overridden")
 	c.Assert(err, IsNil)
 
 	// Start "envtest" service
