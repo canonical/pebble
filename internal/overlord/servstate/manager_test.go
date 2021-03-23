@@ -53,7 +53,7 @@ services:
     test1:
         override: replace
         command: /bin/sh -c "echo test1 >> %s; sleep 300"
-        default: start
+        startup: enabled
         requires:
             - test2
         before:
@@ -243,7 +243,7 @@ func (s *S) TestPlan(c *C) {
 	expected := fmt.Sprintf(`
 services:
     test1:
-        default: start
+        startup: enabled
         override: replace
         command: /bin/sh -c "echo test1 >> %s; sleep 300"
         before:

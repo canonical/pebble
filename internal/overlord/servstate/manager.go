@@ -232,7 +232,7 @@ func (m *ServiceManager) Services(names []string) ([]*ServiceInfo, error) {
 			Startup: StartupDisabled,
 			Current: StatusInactive,
 		}
-		if service.Default == plan.StartAction {
+		if service.Startup == plan.StartupEnabled {
 			info.Startup = StartupEnabled
 		}
 		if _, ok := m.services[name]; ok {
@@ -257,7 +257,7 @@ func (m *ServiceManager) DefaultServiceNames() ([]string, error) {
 
 	var names []string
 	for name, service := range m.plan.Services {
-		if service.Default == plan.StartAction {
+		if service.Startup == plan.StartupEnabled {
 			names = append(names, name)
 		}
 	}

@@ -44,7 +44,7 @@ type Service struct {
 	Name        string           `yaml:"-"`
 	Summary     string           `yaml:"summary,omitempty"`
 	Description string           `yaml:"description,omitempty"`
-	Default     ServiceAction    `yaml:"default,omitempty"`
+	Startup     ServiceStartup   `yaml:"startup,omitempty"`
 	Override    ServiceOverride  `yaml:"override,omitempty"`
 	Command     string           `yaml:"command,omitempty"`
 	After       []string         `yaml:"after,omitempty"`
@@ -53,12 +53,12 @@ type Service struct {
 	Environment []StringVariable `yaml:"environment,omitempty"`
 }
 
-type ServiceAction string
+type ServiceStartup string
 
 const (
-	UnknownAction ServiceAction = ""
-	StartAction   ServiceAction = "start"
-	StopAction    ServiceAction = "stop"
+	StartupUnknown  ServiceStartup = ""
+	StartupEnabled  ServiceStartup = "enabled"
+	StartupDisabled ServiceStartup = "disabled"
 )
 
 type ServiceOverride string
@@ -124,8 +124,8 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 					if service.Description != "" {
 						old.Description = service.Description
 					}
-					if service.Default != UnknownAction {
-						old.Default = service.Default
+					if service.Startup != StartupUnknown {
+						old.Startup = service.Startup
 					}
 					if service.Command != "" {
 						old.Command = service.Command
