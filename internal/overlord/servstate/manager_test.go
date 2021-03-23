@@ -505,3 +505,60 @@ func (s *S) TestServices(c *C) {
 		{Name: "test4", Current: servstate.StatusInactive, Startup: servstate.StartupDisabled},
 	})
 }
+
+var planLayerEnv = `
+services:
+    envtest:
+        override: replace
+        command: /bin/sh -c "env | grep PEBBLE_ENV_TEST | sort > %s; sleep 300"
+        environment:
+            - PEBBLE_ENV_TEST_1: foo
+            - PEBBLE_ENV_TEST_2: bar bazz
+`
+
+func (s *S) TestEnvironment(c *C) {
+	// Setup new state and add "envtest" layer
+	st := state.New(nil)
+	dir := c.MkDir()
+	runner := state.NewTaskRunner(st)
+	manager, err := servstate.NewManager(st, runner, dir)
+	c.Assert(err, IsNil)
+	logPath := filepath.Join(dir, "log.txt")
+	layerYAML := fmt.Sprintf(planLayerEnv, logPath)
+	layer := parseLayer(c, 0, "envlayer", layerYAML)
+	err = manager.AppendLayer(layer)
+	c.Assert(err, IsNil)
+
+	// Set environment variables in the current process to ensure we're
+	// passing down the parent's environment too, but the layer's config
+	// should override these if also set there.
+	err = os.Setenv("PEBBLE_ENV_TEST_PARENT", "from-parent")
+	c.Assert(err, IsNil)
+	err = os.Setenv("PEBBLE_ENV_TEST_1", "should be overridden")
+	c.Assert(err, IsNil)
+
+	// Start "envtest" service
+	st.Lock()
+	ts, err := servstate.Start(st, []string{"envtest"})
+	c.Check(err, IsNil)
+	chg := st.NewChange("envtest", "Start envtest")
+	chg.AddAll(ts)
+	st.Unlock()
+	runner.Ensure()
+	runner.Wait()
+	st.Lock()
+	c.Check(chg.Status(), Equals, state.DoneStatus, Commentf("Error: %v", chg.Err()))
+	st.Unlock()
+
+	// Ensure it read environment variables correctly
+	data, err := ioutil.ReadFile(logPath)
+	if os.IsNotExist(err) {
+		c.Fatal("'envtest' service did not run")
+	}
+	c.Assert(err, IsNil)
+	c.Assert(string(data), Equals, `
+PEBBLE_ENV_TEST_1=foo
+PEBBLE_ENV_TEST_2=bar bazz
+PEBBLE_ENV_TEST_PARENT=from-parent
+`[1:])
+}
