@@ -11,7 +11,7 @@ designed with unique features that help with more specific use cases.
 Pebble is organized as a single binary that works as a daemon and also as a
 client to itself. When the daemon runs it loads its own configuration from the
 `$PEBBLE` directory, as defined in the environment, and also writes down in
-that same directory its state and unix sockets for communication. If that variable
+that same directory its state and Unix sockets for communication. If that variable
 is not defined, Pebble will attempt to look for its configuration from a default
 system-level setup at `/var/lib/pebble/default`. Using that directory is encouraged
 for whole-system setup such as when using Pebble to control services in a container.
@@ -38,7 +38,7 @@ services:
         override: replace
         summary: Service summary
         command: cmd arg1 "arg2a arg2b"
-        default: start
+        startup: enabled
         after:
             - srv2
         before:
@@ -53,7 +53,7 @@ services:
 
     srv2:
         override: replace
-        default: start
+        startup: enabled
         command: cmd
         before:
             - srv3
@@ -63,11 +63,16 @@ services:
         command: cmd
 ```
 
-The file should be almost entirely obvious. One interesting detail there is the `override`
-field (for now required) which defines whether this entry _overrides_ the previous
-service of the same name (if any - missing is okay), or merges with it. Any of the fields can
-be replaced individually in a merged service configuration.
+Some details worth highlighting:
 
+  - The `startup` option can be `enabled` or `disabled`.
+  - Environment variables are defined in an ordered list in case there are any
+dependencies.
+  - There is the `override` field (for now required) which defines whether this
+    entry _overrides_ the previous service of the same name (if any - missing is
+    okay), or merges with it.
+
+Any of the fields can be replaced individually in a merged service configuration.
 To illustrate, here is a sample override layer that might sit atop the one above:
 
 ```yaml
@@ -87,13 +92,13 @@ services:
     srv2:
         override: replace
         summary: Replaced service
-        default: stop
+        startup: disabled
         command: cmd
 
     srv4:
         override: replace
         command: cmd
-        default: start
+        startup: enabled
 
     srv5:
         override: replace
@@ -146,5 +151,4 @@ The html file can be generated with: `npx redoc-cli bundle doc/api.yaml --output
 
 ## Have fun!
 
-... and enjoy the end of 2020!
-
+... and enjoy the rest of 2021!
