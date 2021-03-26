@@ -121,6 +121,8 @@ const (
 	errorKindDaemonRestart     = errorKind("daemon-restart")
 	errorKindSystemRestart     = errorKind("system-restart")
 	errorKindNoDefaultServices = errorKind("no-default-services")
+	errorKindNotFound          = errorKind("not-found")
+	errorKindPermissionDenied  = errorKind("permission-denied")
 )
 
 type errorValue interface{}
