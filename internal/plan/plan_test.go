@@ -90,9 +90,9 @@ var planTests = []planTest{{
 					- srv2
 					- srv3
 				environment:
-					- var1: val1
-					- var0: val0
-					- var2: val2
+					var1: val1
+					var0: val0
+					var2: val2
 			srv2:
 				override: replace
 				startup: enabled
@@ -109,7 +109,7 @@ var planTests = []planTest{{
 			srv1:
 				override: merge
 				environment:
-					- var3: val3
+					var3: val3
 				after:
 					- srv4
 				before:
@@ -142,10 +142,10 @@ var planTests = []planTest{{
 				Before:   []string{"srv3"},
 				After:    []string{"srv2"},
 				Requires: []string{"srv2", "srv3"},
-				Environment: []plan.StringVariable{
-					{Name: "var1", Value: "val1"},
-					{Name: "var0", Value: "val0"},
-					{Name: "var2", Value: "val2"},
+				Environment: map[string]string{
+					"var1": "val1",
+					"var0": "val0",
+					"var2": "val2",
 				},
 			},
 			"srv2": {
@@ -173,8 +173,8 @@ var planTests = []planTest{{
 				Override: "merge",
 				Before:   []string{"srv5"},
 				After:    []string{"srv4"},
-				Environment: []plan.StringVariable{
-					{Name: "var3", Value: "val3"},
+				Environment: map[string]string{
+					"var3": "val3",
 				},
 			},
 			"srv2": {
@@ -210,11 +210,11 @@ var planTests = []planTest{{
 				After:    []string{"srv2", "srv4"},
 				Before:   []string{"srv3", "srv5"},
 				Requires: []string{"srv2", "srv3"},
-				Environment: []plan.StringVariable{
-					{Name: "var1", Value: "val1"},
-					{Name: "var0", Value: "val0"},
-					{Name: "var2", Value: "val2"},
-					{Name: "var3", Value: "val3"},
+				Environment: map[string]string{
+					"var1": "val1",
+					"var0": "val0",
+					"var2": "val2",
+					"var3": "val3",
 				},
 			},
 			"srv2": {
@@ -282,9 +282,9 @@ var planTests = []planTest{{
 				override: replace
 				command: cmd
 				environment:
-					- a: true
-					- b: 1.1
-					- c:
+					a: true
+					b: 1.1
+					c:
 	`},
 	layers: []*plan.Layer{{
 		Order: 0,
@@ -294,10 +294,10 @@ var planTests = []planTest{{
 				Name:     "srv1",
 				Override: "replace",
 				Command:  "cmd",
-				Environment: []plan.StringVariable{
-					{Name: "a", Value: "true"},
-					{Name: "b", Value: "1.1"},
-					{Name: "c", Value: ""},
+				Environment: map[string]string{
+					"a": "true",
+					"b": "1.1",
+					"c": "",
 				},
 			},
 		},
@@ -498,9 +498,9 @@ func (s *S) TestMarshalLayer(c *C) {
 					- srv2
 					- srv3
 				environment:
-					- var1: val1
-					- var0: val0
-					- var2: val2
+					var0: val0
+					var1: val1
+					var2: val2
 			srv2:
 				override: replace
 				command: srv2cmd
