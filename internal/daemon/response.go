@@ -123,6 +123,7 @@ const (
 	errorKindNoDefaultServices = errorKind("no-default-services")
 	errorKindNotFound          = errorKind("not-found")
 	errorKindPermissionDenied  = errorKind("permission-denied")
+	errorKindGenericFileError  = errorKind("generic-file-error")
 )
 
 type errorValue interface{}
