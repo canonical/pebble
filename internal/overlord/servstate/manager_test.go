@@ -512,8 +512,8 @@ services:
         override: replace
         command: /bin/sh -c "env | grep PEBBLE_ENV_TEST | sort > %s; sleep 300"
         environment:
-            - PEBBLE_ENV_TEST_1: foo
-            - PEBBLE_ENV_TEST_2: bar bazz
+            PEBBLE_ENV_TEST_1: foo
+            PEBBLE_ENV_TEST_2: bar bazz
 `
 
 func (s *S) TestEnvironment(c *C) {

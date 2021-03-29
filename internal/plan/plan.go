@@ -41,16 +41,16 @@ type Layer struct {
 }
 
 type Service struct {
-	Name        string           `yaml:"-"`
-	Summary     string           `yaml:"summary,omitempty"`
-	Description string           `yaml:"description,omitempty"`
-	Startup     ServiceStartup   `yaml:"startup,omitempty"`
-	Override    ServiceOverride  `yaml:"override,omitempty"`
-	Command     string           `yaml:"command,omitempty"`
-	After       []string         `yaml:"after,omitempty"`
-	Before      []string         `yaml:"before,omitempty"`
-	Requires    []string         `yaml:"requires,omitempty"`
-	Environment []StringVariable `yaml:"environment,omitempty"`
+	Name        string            `yaml:"-"`
+	Summary     string            `yaml:"summary,omitempty"`
+	Description string            `yaml:"description,omitempty"`
+	Startup     ServiceStartup    `yaml:"startup,omitempty"`
+	Override    ServiceOverride   `yaml:"override,omitempty"`
+	Command     string            `yaml:"command,omitempty"`
+	After       []string          `yaml:"after,omitempty"`
+	Before      []string          `yaml:"before,omitempty"`
+	Requires    []string          `yaml:"requires,omitempty"`
+	Environment map[string]string `yaml:"environment,omitempty"`
 }
 
 type ServiceStartup string
@@ -68,38 +68,6 @@ const (
 	MergeOverride   ServiceOverride = "merge"
 	ReplaceOverride ServiceOverride = "replace"
 )
-
-type StringVariable struct {
-	Name  string
-	Value string
-}
-
-// Ensure we're implementing both the custom unmarshaler and marshaller. Note
-// that the unmarshaller is on *StringVariable, but the marshaller needs to be
-// on the non-pointer type.
-var _ yaml.Unmarshaler = &StringVariable{}
-var _ yaml.Marshaler = StringVariable{}
-
-func (sv *StringVariable) UnmarshalYAML(node *yaml.Node) error {
-	if node.ShortTag() != "!!map" || len(node.Content) != 2 {
-		return fmt.Errorf("environment must be a list of single-item maps (- name: value)")
-	}
-	var name, value string
-	err := node.Content[0].Decode(&name)
-	if err == nil {
-		err = node.Content[1].Decode(&value)
-	}
-	if err != nil {
-		return fmt.Errorf("cannot decode environment variable: %v", err)
-	}
-	sv.Name = name
-	sv.Value = value
-	return nil
-}
-
-func (sv StringVariable) MarshalYAML() (interface{}, error) {
-	return map[string]string{sv.Name: sv.Value}, nil
-}
 
 // CombineLayers combines the given layers into a Plan, with the later layers
 // layers overriding earlier ones.
@@ -132,7 +100,9 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 					}
 					old.Before = append(old.Before, service.Before...)
 					old.After = append(old.After, service.After...)
-					old.Environment = append(old.Environment, service.Environment...)
+					for k, v := range service.Environment {
+						old.Environment[k] = v
+					}
 					break
 				}
 				fallthrough

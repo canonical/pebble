@@ -47,9 +47,9 @@ services:
             - srv2
             - srv3
         environment:
-            - VAR1: val1
-            - VAR2: val2
-            - VAR3: val3
+            VAR1: val1
+            VAR2: val2
+            VAR3: val3
 
     srv2:
         override: replace
@@ -66,8 +66,6 @@ services:
 Some details worth highlighting:
 
   - The `startup` option can be `enabled` or `disabled`.
-  - Environment variables are defined in an ordered list in case there are any
-dependencies.
   - There is the `override` field (for now required) which defines whether this
     entry _overrides_ the previous service of the same name (if any - missing is
     okay), or merges with it.
@@ -83,7 +81,7 @@ services:
     srv1:
         override: merge
         environment:
-            - VAR3: val3
+            VAR3: val3
         after:
             - srv4
         before:

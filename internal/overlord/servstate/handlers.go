@@ -86,8 +86,8 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 
 	// Pass service description's environment variables to child process
 	cmd.Env = os.Environ()
-	for _, v := range service.Environment {
-		cmd.Env = append(cmd.Env, v.Name+"="+v.Value)
+	for k, v := range service.Environment {
+		cmd.Env = append(cmd.Env, k+"="+v)
 	}
 
 	buffer := strutil.NewLimitedBuffer(160, 10*1024)
