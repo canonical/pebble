@@ -12,6 +12,11 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+// TODO(benhoyt) - should we limit the file size (or total size) for a read-files response,
+//                 or just keep push bytes till the client rejects it?
+// TODO(benhoyt) - should we limit the file size (or total size) for a write-files request,
+//                 or just keep receiving bytes till the disk fills up?
+
 package daemon
 
 import (
@@ -19,12 +24,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"mime"
 	"mime/multipart"
 	"net/http"
 	"net/textproto"
 	"os"
+	"os/user"
 	"path"
 	"path/filepath"
 	"strconv"
@@ -96,7 +101,10 @@ func (r readFilesResponse) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
 	mw := multipart.NewWriter(w)
 	header := w.Header()
 	header.Set("Content-Type", mw.FormDataContentType())
-	status := fileErrorToStatus(firstErr)
+	status := http.StatusOK
+	if firstErr != nil {
+		status = http.StatusBadRequest
+	}
 	w.WriteHeader(status)
 
 	// Write first part: response metadata in JSON format.
@@ -109,18 +117,17 @@ func (r readFilesResponse) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
 		return
 	}
 	encoder := json.NewEncoder(part)
-	encoder.SetIndent("", "    ") // TODO(benhoyt) - remove after testing
 	respType := ResponseTypeSync
 	if firstErr != nil {
 		respType = ResponseTypeError
 	}
-	resp := respJSON{
+	metadata := respJSON{
 		Type:       respType,
 		Status:     status,
 		StatusText: http.StatusText(status),
 		Result:     result,
 	}
-	err = encoder.Encode(resp)
+	err = encoder.Encode(metadata)
 	if err != nil {
 		http.Error(w, "\n"+err.Error(), http.StatusInternalServerError)
 		return
@@ -136,7 +143,7 @@ func (r readFilesResponse) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
 			http.Error(w, "\n"+err.Error(), http.StatusInternalServerError)
 			return
 		}
-		_, err = io.Copy(fw, file.f) // TODO: limit amount of data?
+		_, err = io.Copy(fw, file.f)
 		if err != nil {
 			http.Error(w, "\n"+err.Error(), http.StatusInternalServerError)
 			return
@@ -149,13 +156,6 @@ func (r readFilesResponse) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
 		http.Error(w, "\n"+err.Error(), http.StatusInternalServerError)
 		return
 	}
-}
-
-func fileErrorToStatus(err error) int {
-	if err != nil {
-		return http.StatusBadRequest
-	}
-	return http.StatusOK
 }
 
 func fileErrorToResult(err error) *errorResult {
@@ -177,7 +177,7 @@ func fileErrorToResult(err error) *errorResult {
 	}
 }
 
-func errorResponse(kind errorKind, message string) Response {
+func fileErrorResponse(kind errorKind, message string) Response {
 	status := 400
 	switch kind {
 	case errorKindNotFound:
@@ -258,7 +258,7 @@ func listFiles(pattern string, directoryItself bool) Response {
 	if err != nil {
 		if errors.Is(err, os.ErrPermission) {
 			// Pattern path exists but we don't have access.
-			return errorResponse(errorKindPermissionDenied, err.Error())
+			return fileErrorResponse(errorKindPermissionDenied, err.Error())
 		}
 		if !errors.Is(err, os.ErrNotExist) {
 			// Some other error (NotExist is okay).
@@ -299,9 +299,9 @@ func v1PostFiles(c *Command, r *http.Request, _ *userState) Response {
 		return writeFiles(r.Body, params["boundary"])
 	case "application/json":
 		var payload struct {
-			Action string        `json:"action"`
-			Dirs   []makeDirsDir `json:"dirs"`
-			Paths  []removePath  `json:"paths"`
+			Action string            `json:"action"`
+			Dirs   []makeDirsItem    `json:"dirs"`
+			Paths  []removePathsItem `json:"paths"`
 		}
 		decoder := json.NewDecoder(r.Body)
 		if err := decoder.Decode(&payload); err != nil {
@@ -322,7 +322,7 @@ func v1PostFiles(c *Command, r *http.Request, _ *userState) Response {
 	}
 }
 
-type writeFilesFile struct {
+type writeFilesItem struct {
 	Path        string `json:"path"`
 	MakeDirs    bool   `json:"make-dirs"`
 	Permissions string `json:"permissions"`
@@ -340,13 +340,13 @@ func writeFiles(body io.Reader, boundary string) Response {
 		return statusBadRequest("cannot read request metadata: %v", err)
 	}
 	if part.FormName() != "request" {
-		return statusBadRequest(`first part's field name must be "request", not %q`, part.FormName())
+		return statusBadRequest(`metadata field name must be "request", not %q`, part.FormName())
 	}
 
 	// Decode metadata about files to write.
 	var payload struct {
 		Action string           `json:"action"`
-		Files  []writeFilesFile `json:"files"`
+		Files  []writeFilesItem `json:"files"`
 	}
 	decoder := json.NewDecoder(part)
 	if err := decoder.Decode(&payload); err != nil {
@@ -358,9 +358,12 @@ func writeFiles(body io.Reader, boundary string) Response {
 	if len(payload.Files) == 0 {
 		return statusBadRequest("must specify one or more files")
 	}
-	infos := make(map[string]writeFilesFile)
+	infos := make(map[string]writeFilesItem)
 	for _, file := range payload.Files {
 		infos[file.Path] = file
+		if !path.IsAbs(file.Path) {
+			return statusBadRequest("paths must be absolute (%q is not)", file.Path)
+		}
 		_, err = parsePermissions(file.Permissions, 0o644)
 		if err != nil {
 			return statusBadRequest(err.Error())
@@ -377,71 +380,71 @@ func writeFiles(body io.Reader, boundary string) Response {
 			return statusBadRequest("cannot read file part %d: %v", i, err)
 		}
 		if !strings.HasPrefix(part.FormName(), "file:") {
-			return statusBadRequest(`field name must be in format "file:path", not %q`, part.FormName())
+			return statusBadRequest(`field name must be in format "file:p", not %q`, part.FormName())
 		}
-		path := part.FormName()[len("file:"):]
-		info, ok := infos[path]
+		p := part.FormName()[len("file:"):]
+		info, ok := infos[p]
 		if !ok {
-			return statusBadRequest("no metadata for path %q", path)
+			return statusBadRequest("no metadata for path %q", p)
 		}
-
-		if info.MakeDirs {
-			// TODO: make dirs - os.MkdirAll()
-		}
-
-		// Create file and write contents.
-		perm, _ := parsePermissions(info.Permissions, 0o644) // already validated above
-		f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_TRUNC, perm)
-		if err != nil {
-			// TODO: handle (dir) not-found and permissions errors
-			errors[path] = fmt.Errorf("error creating file: %w", err)
-			continue
-		}
-		_, err = io.Copy(f, part) // TODO: limit / ensure it's not too big
-		if err != nil {
-			f.Close()
-			errors[path] = fmt.Errorf("error writing file: %w", err)
-			continue
-		}
-		err = f.Close()
-		if err != nil {
-			errors[path] = fmt.Errorf("error closing file: %w", err)
-			continue
-		}
-
-		if info.GroupID != 0 || info.Group != "" || info.UserID != 0 || info.User != "" {
-			errors[path] = fmt.Errorf("group and user handling not yet implemented") // TODO
-			continue
-		}
-
-		// Success!
-		errors[path] = nil
+		errors[p] = writeFile(info, part)
+		part.Close()
 	}
 
 	// Build list of results with any errors.
 	result := make([]fileResult, len(payload.Files))
-	respType := ResponseTypeSync
-	status := http.StatusOK
+	var firstErr error
 	for i, file := range payload.Files {
 		err, ok := errors[file.Path]
 		if !ok {
 			// Ensure we wrote all the files in the metadata.
 			err = fmt.Errorf("no file content for path %q", file.Path)
 		}
-		if err != nil {
-			respType = ResponseTypeError
-			status = http.StatusBadRequest
+		if err != nil && firstErr == nil {
+			firstErr = err
 		}
 		result[i] = fileResult{
 			Path:  file.Path,
 			Error: fileErrorToResult(err),
 		}
 	}
-	return &resp{
-		Type:   respType,
-		Status: status,
-		Result: result,
+	return respWithError(result, firstErr)
+}
+
+func writeFile(item writeFilesItem, source io.Reader) error {
+	// Create parent directory if needed
+	perm, err := parsePermissions(item.Permissions, 0o644)
+	if err != nil {
+		return err
 	}
+	if item.MakeDirs {
+		err = os.MkdirAll(path.Dir(item.Path), perm)
+		if err != nil {
+			return fmt.Errorf("error creating directory: %w", err)
+		}
+	}
+
+	// Create file and write contents.
+	f, err := os.OpenFile(item.Path, os.O_RDWR|os.O_CREATE|os.O_TRUNC, perm)
+	if err != nil {
+		return fmt.Errorf("error creating file: %w", err)
+	}
+	_, err = io.Copy(f, source)
+	if err != nil {
+		_ = f.Close()
+		return fmt.Errorf("error writing file: %w", err)
+	}
+	err = f.Close()
+	if err != nil {
+		return fmt.Errorf("error closing file: %w", err)
+	}
+
+	// Update user and group if necessary.
+	err = updateUserGroup(item.Path, item.UserID, item.User, item.GroupID, item.Group)
+	if err != nil {
+		return fmt.Errorf("error updating permissions: %w", err)
+	}
+	return nil
 }
 
 func parsePermissions(permissions string, defaultMode os.FileMode) (os.FileMode, error) {
@@ -455,7 +458,7 @@ func parsePermissions(permissions string, defaultMode os.FileMode) (os.FileMode,
 	return os.FileMode(perm), nil
 }
 
-type makeDirsDir struct {
+type makeDirsItem struct {
 	Path        string `json:"path"`
 	MakeParents bool   `json:"make-parents"`
 	Permissions string `json:"permissions"`
@@ -465,63 +468,108 @@ type makeDirsDir struct {
 	Group       string `json:"group"`
 }
 
-func makeDirs(dirs []makeDirsDir) Response {
+func makeDirs(dirs []makeDirsItem) Response {
 	result := make([]fileResult, len(dirs))
-	respType := ResponseTypeSync
-	status := http.StatusOK
+	var firstErr error
 	for i, dir := range dirs {
-		perm, err := parsePermissions(dir.Permissions, 0o775)
-		// TODO: clean this up -- helper function to do one directory
-		if err == nil {
-			if dir.MakeParents {
-				err = os.MkdirAll(dir.Path, perm)
-			} else {
-				err = os.Mkdir(dir.Path, perm)
-			}
-		}
-		if err != nil {
-			respType = ResponseTypeError
-			status = http.StatusBadRequest
+		err := makeDir(dir)
+		if err != nil && firstErr == nil {
+			firstErr = err
 		}
 		result[i] = fileResult{
 			Path:  dir.Path,
 			Error: fileErrorToResult(err),
 		}
 	}
-	return &resp{
-		Type:   respType,
-		Status: status,
-		Result: result,
-	}
+	return respWithError(result, firstErr)
 }
 
-type removePath struct {
+func makeDir(dir makeDirsItem) error {
+	if !path.IsAbs(dir.Path) {
+		return fmt.Errorf("paths must be absolute (%q is not)", dir.Path)
+	}
+	perm, err := parsePermissions(dir.Permissions, 0o775)
+	if err != nil {
+		return err
+	}
+	if dir.MakeParents {
+		err = os.MkdirAll(dir.Path, perm)
+	} else {
+		err = os.Mkdir(dir.Path, perm)
+	}
+	if err != nil {
+		return err
+	}
+	return updateUserGroup(dir.Path, dir.UserID, dir.User, dir.GroupID, dir.Group)
+}
+
+func updateUserGroup(path string, uid int, username string, gid int, group string) error {
+	if uid == 0 && username == "" && gid == 0 && group == "" {
+		return nil
+	}
+	if uid == 0 && username != "" {
+		u, err := user.Lookup(username)
+		if err != nil {
+			return fmt.Errorf("error looking up user: %w", err)
+		}
+		uid, _ = strconv.Atoi(u.Uid)
+	}
+	if gid == 0 && group != "" {
+		g, err := user.LookupGroup(group)
+		if err != nil {
+			return fmt.Errorf("error looking up group: %w", err)
+		}
+		gid, _ = strconv.Atoi(g.Gid)
+	}
+	if uid == 0 || gid == 0 {
+		return fmt.Errorf("must set both user and group together")
+	}
+	err := os.Chown(path, uid, gid)
+	if err != nil {
+		return fmt.Errorf("error changing user and group: %w", err)
+	}
+	return nil
+}
+
+type removePathsItem struct {
 	Path      string `json:"path"`
 	Recursive bool   `json:"recursive"`
 }
 
-func removePaths(paths []removePath) Response {
+func removePaths(paths []removePathsItem) Response {
 	result := make([]fileResult, len(paths))
-	respType := ResponseTypeSync
-	status := http.StatusOK
-	log.Printf("removePaths: %#v", paths)
+	var firstErr error
 	for i, p := range paths {
-		var err error
-		if p.Recursive {
-			log.Printf("removePath recursive: %q", p.Path)
-			err = os.RemoveAll(p.Path)
-		} else {
-			log.Printf("removePath non-recursive: %q", p.Path)
-			err = os.Remove(p.Path)
-		}
-		if err != nil {
-			respType = ResponseTypeError
-			status = http.StatusBadRequest
+		err := removePath(p.Path, p.Recursive)
+		if err != nil && firstErr == nil {
+			firstErr = err
 		}
 		result[i] = fileResult{
 			Path:  p.Path,
 			Error: fileErrorToResult(err),
 		}
+	}
+	return respWithError(result, firstErr)
+}
+
+func removePath(p string, recursive bool) error {
+	if !path.IsAbs(p) {
+		return fmt.Errorf("paths must be absolute (%q is not)", p)
+	}
+	if recursive {
+		return os.RemoveAll(p)
+	} else {
+		return os.Remove(p)
+	}
+}
+
+// TODO: move to response.go?
+func respWithError(result interface{}, err error) Response {
+	respType := ResponseTypeSync
+	status := http.StatusOK
+	if err != nil {
+		respType = ResponseTypeError
+		status = http.StatusBadRequest
 	}
 	return &resp{
 		Type:   respType,
