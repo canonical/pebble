@@ -110,7 +110,7 @@ func (s *filesSuite) TestListFilesDir(c *C) {
 		assertListResult(c, r.Result, 0, "file", tmpDir, "foo", "664", 1)
 		assertListResult(c, r.Result, 1, "file", tmpDir, "one.txt", "600", 2)
 		assertListResult(c, r.Result, 2, "directory", tmpDir, "sub", "775", -1)
-		assertListResult(c, r.Result, 3, "file", tmpDir, "two.txt", "775", 3)
+		assertListResult(c, r.Result, 3, "file", tmpDir, "two.txt", "755", 3)
 	}
 }
 
@@ -141,7 +141,7 @@ func (s *filesSuite) TestListFilesGlob(c *C) {
 
 	r := decodeResp(c, body, http.StatusOK, ResponseTypeSync)
 	assertListResult(c, r.Result, 0, "file", tmpDir, "one.txt", "600", 2)
-	assertListResult(c, r.Result, 1, "file", tmpDir, "two.txt", "775", 3)
+	assertListResult(c, r.Result, 1, "file", tmpDir, "two.txt", "755", 3)
 }
 
 func (s *filesSuite) TestListFilesFile(c *C) {
@@ -194,7 +194,7 @@ func createTestFiles(c *C) string {
 	writeTempFile(c, tmpDir, "foo", "a", 0o664)
 	writeTempFile(c, tmpDir, "one.txt", "be", 0o600)
 	c.Assert(os.Mkdir(filepath.Join(tmpDir, "sub"), 0o775), IsNil)
-	writeTempFile(c, tmpDir, "two.txt", "cee", 0o775)
+	writeTempFile(c, tmpDir, "two.txt", "cee", 0o755)
 	return tmpDir
 }
 
