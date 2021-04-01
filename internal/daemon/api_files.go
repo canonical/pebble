@@ -140,7 +140,7 @@ func (r readFilesResponse) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		if file.Error != nil {
 			continue
 		}
-		fw, err := mw.CreateFormFile("p:"+file.Path, path.Base(file.Path))
+		fw, err := mw.CreateFormFile("path:"+file.Path, path.Base(file.Path))
 		if err != nil {
 			http.Error(w, "\n"+err.Error(), http.StatusInternalServerError)
 			return

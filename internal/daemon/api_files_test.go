@@ -19,6 +19,8 @@ import (
 	"encoding/json"
 	"io"
 	"io/ioutil"
+	"mime"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -156,6 +158,65 @@ func (s *filesSuite) TestListFilesFile(c *C) {
 
 	r := decodeResp(c, body, http.StatusOK, ResponseTypeSync)
 	assertListResult(c, r.Result, 0, "file", tmpDir, "foo", "664", 1)
+}
+
+func (s *filesSuite) TestReadFile(c *C) {
+	tmpDir := createTestFiles(c)
+
+	query := url.Values{
+		"action": []string{"read"},
+		"path":   []string{tmpDir + "/one.txt", tmpDir + "/two.txt"},
+	}
+	headers := http.Header{
+		"Accept": []string{"multipart/form-data"},
+	}
+	response, body := doRequest(c, v1GetFiles, "GET", "/v1/files", query, headers, nil)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	var r map[string]interface{}
+	files := readMultipart(c, response, body, &r)
+	c.Assert(r["type"], Equals, "sync")
+	c.Assert(r["status-code"], Equals, float64(http.StatusOK))
+	c.Assert(r["status"], Equals, "OK")
+	c.Assert(r["result"], DeepEquals, []interface{}{
+		map[string]interface{}{
+			"path": tmpDir + "/one.txt",
+		},
+		map[string]interface{}{
+			"path": tmpDir + "/two.txt",
+		},
+	})
+	c.Assert(files, DeepEquals, map[string]string{
+		"path:" + tmpDir + "/one.txt": "be",
+		"path:" + tmpDir + "/two.txt": "cee",
+	})
+}
+
+func readMultipart(c *C, response *http.Response, body io.Reader, result interface{}) map[string]string {
+	contentType := response.Header.Get("Content-Type")
+	mediaType, params, err := mime.ParseMediaType(contentType)
+	c.Assert(err, IsNil)
+	c.Assert(mediaType, Equals, "multipart/form-data")
+	c.Assert(params["boundary"], Not(Equals), "")
+	mr := multipart.NewReader(body, params["boundary"])
+	form, err := mr.ReadForm(4096)
+	c.Assert(err, IsNil)
+
+	err = json.Unmarshal([]byte(form.Value["response"][0]), result)
+	c.Assert(err, IsNil)
+
+	files := make(map[string]string)
+	for p, fhs := range form.File {
+		for _, fh := range fhs {
+			f, err := fh.Open()
+			c.Assert(err, IsNil)
+			b, err := ioutil.ReadAll(f)
+			c.Assert(err, IsNil)
+			f.Close()
+			files[p] = string(b)
+		}
+	}
+	return files
 }
 
 func doRequest(c *C, f ResponseFunc, method, url string, query url.Values, headers http.Header, body []byte) (*http.Response, *bytes.Buffer) {
