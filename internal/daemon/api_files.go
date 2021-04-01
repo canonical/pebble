@@ -24,6 +24,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"mime"
 	"mime/multipart"
 	"net/http"
@@ -37,8 +38,8 @@ import (
 	"time"
 )
 
-func v1GetFiles(c *Command, r *http.Request, _ *userState) Response {
-	query := r.URL.Query()
+func v1GetFiles(_ *Command, req *http.Request, _ *userState) Response {
+	query := req.URL.Query()
 	action := query.Get("action")
 	switch action {
 	case "read":
@@ -46,16 +47,11 @@ func v1GetFiles(c *Command, r *http.Request, _ *userState) Response {
 		if len(paths) == 0 {
 			return statusBadRequest("must specify one or more paths")
 		}
-		for _, p := range paths {
-			if !path.IsAbs(p) {
-				return statusBadRequest("paths must be absolute (%q is not)", p)
-			}
-		}
 		return readFilesResponse{paths: paths}
 	case "list":
 		pattern := query.Get("pattern")
-		if !path.IsAbs(pattern) {
-			return statusBadRequest("pattern must be absolute (%q is not)", pattern)
+		if pattern == "" {
+			return statusBadRequest("must specify pattern")
 		}
 		directoryItself := query.Get("directory") == "true"
 		return listFiles(pattern, directoryItself)
@@ -75,14 +71,20 @@ type readFilesResponse struct {
 	paths []string
 }
 
-func (r readFilesResponse) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
+func (r readFilesResponse) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	if req.Header.Get("Accept") != "multipart/form-data" {
+		errResp := statusBadRequest(`must accept \"multipart/form-data\"`)
+		errResp.ServeHTTP(w, req)
+		return
+	}
+
 	// We open all the files first so we can detect not-found and
 	// permission-denied errors for each file, as we send the metadata and
 	// errors first.
 	result := make([]fileResult, len(r.paths))
 	var firstErr error
-	for i, path := range r.paths {
-		f, err := os.Open(path)
+	for i, p := range r.paths {
+		f, err := openForRead(p)
 		if err != nil {
 			if firstErr == nil {
 				firstErr = err
@@ -91,7 +93,7 @@ func (r readFilesResponse) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
 			defer f.Close()
 		}
 		result[i] = fileResult{
-			Path:  path,
+			Path:  p,
 			Error: fileErrorToResult(err),
 			f:     f,
 		}
@@ -133,12 +135,12 @@ func (r readFilesResponse) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
 		return
 	}
 
-	// Write file content for each path.
+	// Write file content for each p.
 	for _, file := range result {
 		if file.Error != nil {
 			continue
 		}
-		fw, err := mw.CreateFormFile("path:"+file.Path, path.Base(file.Path))
+		fw, err := mw.CreateFormFile("p:"+file.Path, path.Base(file.Path))
 		if err != nil {
 			http.Error(w, "\n"+err.Error(), http.StatusInternalServerError)
 			return
@@ -156,6 +158,13 @@ func (r readFilesResponse) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
 		http.Error(w, "\n"+err.Error(), http.StatusInternalServerError)
 		return
 	}
+}
+
+func openForRead(p string) (*os.File, error) {
+	if !path.IsAbs(p) {
+		return nil, fmt.Errorf("paths must be absolute (%q is not)", p)
+	}
+	return os.Open(p)
 }
 
 func fileErrorToResult(err error) *errorResult {
@@ -177,18 +186,21 @@ func fileErrorToResult(err error) *errorResult {
 	}
 }
 
-func fileErrorResponse(kind errorKind, message string) Response {
-	status := 400
-	switch kind {
-	case errorKindNotFound:
-		status = 404
-	case errorKindPermissionDenied:
-		status = 403
+func listErrorResponse(err error) Response {
+	status := http.StatusBadRequest
+	kind := errorKindGenericFileError
+	switch {
+	case errors.Is(err, os.ErrNotExist):
+		status = http.StatusNotFound
+		kind = errorKindNotFound
+	case errors.Is(err, os.ErrPermission):
+		status = http.StatusForbidden
+		kind = errorKindPermissionDenied
 	}
 	return &resp{
 		Type: ResponseTypeError,
 		Result: &errorResult{
-			Message: message,
+			Message: err.Error(),
 			Kind:    kind,
 		},
 		Status: status,
@@ -254,41 +266,63 @@ func fileInfoToResult(fullPath string, info os.FileInfo) fileInfoResult {
 }
 
 func listFiles(pattern string, directoryItself bool) Response {
-	st, err := os.Stat(pattern)
-	if err != nil {
-		if errors.Is(err, os.ErrPermission) {
-			// Pattern path exists but we don't have access.
-			return fileErrorResponse(errorKindPermissionDenied, err.Error())
-		}
-		if !errors.Is(err, os.ErrNotExist) {
-			// Some other error (NotExist is okay).
-			return statusBadRequest("cannot fetch path information: %v", err)
-		}
-	} else if st.IsDir() && !directoryItself {
-		// If pattern is a directory, use "dir/*" as the glob.
-		pattern = path.Join(pattern, "*")
+	if !path.IsAbs(pattern) {
+		return statusBadRequest("pattern must be absolute (%q is not)", pattern)
 	}
-
-	// List files that match this glob pattern.
-	matches, err := filepath.Glob(pattern)
+	result, err := listFilesErr(pattern, directoryItself)
 	if err != nil {
-		return statusBadRequest("cannot list files: %v", err)
-	}
-
-	// Loop through files, get stat info, and convert to result.
-	result := make([]fileInfoResult, len(matches))
-	for i, match := range matches {
-		info, err := os.Lstat(match)
-		if err != nil {
-			return statusBadRequest("cannot fetch file information: %v", err)
-		}
-		result[i] = fileInfoToResult(match, info)
+		return listErrorResponse(err)
 	}
 	return SyncResponse(result)
 }
 
-func v1PostFiles(c *Command, r *http.Request, _ *userState) Response {
-	contentType := r.Header.Get("Content-Type")
+func listFilesErr(pattern string, directoryItself bool) ([]fileInfoResult, error) {
+	info, err := os.Stat(pattern)
+	if errors.Is(err, os.ErrNotExist) {
+		dir, base := filepath.Split(pattern)
+		result, err := readDirFiltered(dir, base)
+		if err != nil {
+			return nil, err
+		}
+		if len(result) == 0 {
+			// They specified a file or pattern and it doesn't exist.
+			return nil, os.ErrNotExist
+		}
+		return result, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if !info.IsDir() || directoryItself {
+		// Info about a single file (or directory entry itself).
+		result := []fileInfoResult{fileInfoToResult(pattern, info)}
+		return result, nil
+	}
+	return readDirFiltered(pattern, "")
+}
+
+func readDirFiltered(dir, pattern string) ([]fileInfoResult, error) {
+	infos, err := ioutil.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+	var result []fileInfoResult
+	for _, info := range infos {
+		name := info.Name()
+		matched := true
+		if pattern != "" {
+			matched, err = filepath.Match(pattern, name)
+		}
+		if matched {
+			p := filepath.Join(dir, name)
+			result = append(result, fileInfoToResult(p, info))
+		}
+	}
+	return result, nil
+}
+
+func v1PostFiles(_ *Command, req *http.Request, _ *userState) Response {
+	contentType := req.Header.Get("Content-Type")
 	mediaType, params, err := mime.ParseMediaType(contentType)
 	if err != nil {
 		return statusBadRequest("invalid Content-Type: %q", contentType)
@@ -296,14 +330,14 @@ func v1PostFiles(c *Command, r *http.Request, _ *userState) Response {
 
 	switch mediaType {
 	case "multipart/form-data":
-		return writeFiles(r.Body, params["boundary"])
+		return writeFiles(req.Body, params["boundary"])
 	case "application/json":
 		var payload struct {
 			Action string            `json:"action"`
 			Dirs   []makeDirsItem    `json:"dirs"`
 			Paths  []removePathsItem `json:"paths"`
 		}
-		decoder := json.NewDecoder(r.Body)
+		decoder := json.NewDecoder(req.Body)
 		if err := decoder.Decode(&payload); err != nil {
 			return statusBadRequest("cannot decode request body: %v", err)
 		}
@@ -361,13 +395,6 @@ func writeFiles(body io.Reader, boundary string) Response {
 	infos := make(map[string]writeFilesItem)
 	for _, file := range payload.Files {
 		infos[file.Path] = file
-		if !path.IsAbs(file.Path) {
-			return statusBadRequest("paths must be absolute (%q is not)", file.Path)
-		}
-		_, err = parsePermissions(file.Permissions, 0o644)
-		if err != nil {
-			return statusBadRequest(err.Error())
-		}
 	}
 
 	errors := make(map[string]error)
@@ -408,10 +435,14 @@ func writeFiles(body io.Reader, boundary string) Response {
 			Error: fileErrorToResult(err),
 		}
 	}
-	return respWithError(result, firstErr)
+	return syncResponseWithError(result, firstErr)
 }
 
 func writeFile(item writeFilesItem, source io.Reader) error {
+	if !path.IsAbs(item.Path) {
+		return fmt.Errorf("paths must be absolute (%q is not)", item.Path)
+	}
+
 	// Create parent directory if needed
 	perm, err := parsePermissions(item.Permissions, 0o644)
 	if err != nil {
@@ -481,7 +512,7 @@ func makeDirs(dirs []makeDirsItem) Response {
 			Error: fileErrorToResult(err),
 		}
 	}
-	return respWithError(result, firstErr)
+	return syncResponseWithError(result, firstErr)
 }
 
 func makeDir(dir makeDirsItem) error {
@@ -549,7 +580,7 @@ func removePaths(paths []removePathsItem) Response {
 			Error: fileErrorToResult(err),
 		}
 	}
-	return respWithError(result, firstErr)
+	return syncResponseWithError(result, firstErr)
 }
 
 func removePath(p string, recursive bool) error {
@@ -560,20 +591,5 @@ func removePath(p string, recursive bool) error {
 		return os.RemoveAll(p)
 	} else {
 		return os.Remove(p)
-	}
-}
-
-// TODO: move to response.go?
-func respWithError(result interface{}, err error) Response {
-	respType := ResponseTypeSync
-	status := http.StatusOK
-	if err != nil {
-		respType = ResponseTypeError
-		status = http.StatusBadRequest
-	}
-	return &resp{
-		Type:   respType,
-		Status: status,
-		Result: result,
 	}
 }
