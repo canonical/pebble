@@ -160,38 +160,129 @@ func (s *filesSuite) TestListFilesFile(c *C) {
 	assertListResult(c, r.Result, 0, "file", tmpDir, "foo", "664", 1)
 }
 
-func (s *filesSuite) TestReadFile(c *C) {
+func (s *filesSuite) TestReadFilesNoPaths(c *C) {
+	query := url.Values{"action": []string{"read"}}
+	response, body := doRequest(c, v1GetFiles, "GET", "/v1/files", query, nil, nil)
+	c.Assert(response.StatusCode, Equals, http.StatusBadRequest)
+	assertError(c, body, http.StatusBadRequest, "", "must specify one or more paths")
+}
+
+func (s *filesSuite) TestReadFilesNoMultipartHeader(c *C) {
+	query := url.Values{"action": []string{"read"}, "path": []string{"foo"}}
+	response, body := doRequest(c, v1GetFiles, "GET", "/v1/files", query, nil, nil)
+	c.Assert(response.StatusCode, Equals, http.StatusBadRequest)
+	assertError(c, body, http.StatusBadRequest, "", "must accept multipart/form-data")
+}
+
+type testReadFilesResponse struct {
+	Type       string
+	StatusCode int `json:"status-code"`
+	Status     string
+	Result     []struct {
+		Path  string
+		Error struct {
+			Kind    string
+			Message string
+		}
+	}
+}
+
+func (s *filesSuite) TestReadFilesSingle(c *C) {
 	tmpDir := createTestFiles(c)
 
 	query := url.Values{
 		"action": []string{"read"},
-		"path":   []string{tmpDir + "/one.txt", tmpDir + "/two.txt"},
+		"path":   []string{tmpDir + "/one.txt"},
 	}
 	headers := http.Header{
 		"Accept": []string{"multipart/form-data"},
 	}
 	response, body := doRequest(c, v1GetFiles, "GET", "/v1/files", query, headers, nil)
-	c.Assert(response.StatusCode, Equals, http.StatusOK)
+	c.Check(response.StatusCode, Equals, http.StatusOK)
 
-	var r map[string]interface{}
+	var r testReadFilesResponse
 	files := readMultipart(c, response, body, &r)
-	c.Assert(r["type"], Equals, "sync")
-	c.Assert(r["status-code"], Equals, float64(http.StatusOK))
-	c.Assert(r["status"], Equals, "OK")
-	c.Assert(r["result"], DeepEquals, []interface{}{
-		map[string]interface{}{
-			"path": tmpDir + "/one.txt",
-		},
-		map[string]interface{}{
-			"path": tmpDir + "/two.txt",
-		},
+	c.Check(r.Type, Equals, "sync")
+	c.Check(r.StatusCode, Equals, http.StatusOK)
+	c.Check(r.Status, Equals, "OK")
+	c.Check(r.Result, HasLen, 1)
+	c.Check(r.Result[0].Path, Equals, tmpDir+"/one.txt")
+	c.Check(r.Result[0].Error.Kind, Equals, "")
+
+	c.Check(files, DeepEquals, map[string]string{
+		"path:" + tmpDir + "/one.txt": "be",
 	})
-	c.Assert(files, DeepEquals, map[string]string{
+}
+
+func (s *filesSuite) TestReadFilesMultiple(c *C) {
+	tmpDir := createTestFiles(c)
+
+	query := url.Values{
+		"action": []string{"read"},
+		"path":   []string{tmpDir + "/foo", tmpDir + "/one.txt", tmpDir + "/two.txt"},
+	}
+	headers := http.Header{
+		"Accept": []string{"multipart/form-data"},
+	}
+	response, body := doRequest(c, v1GetFiles, "GET", "/v1/files", query, headers, nil)
+	c.Check(response.StatusCode, Equals, http.StatusOK)
+
+	var r testReadFilesResponse
+	files := readMultipart(c, response, body, &r)
+	c.Check(r.Type, Equals, "sync")
+	c.Check(r.StatusCode, Equals, http.StatusOK)
+	c.Check(r.Status, Equals, "OK")
+	c.Check(r.Result, HasLen, 3)
+	c.Check(r.Result[0].Path, Equals, tmpDir+"/foo")
+	c.Check(r.Result[0].Error.Kind, Equals, "")
+	c.Check(r.Result[1].Path, Equals, tmpDir+"/one.txt")
+	c.Check(r.Result[1].Error.Kind, Equals, "")
+	c.Check(r.Result[2].Path, Equals, tmpDir+"/two.txt")
+	c.Check(r.Result[2].Error.Kind, Equals, "")
+
+	c.Check(files, DeepEquals, map[string]string{
+		"path:" + tmpDir + "/foo":     "a",
 		"path:" + tmpDir + "/one.txt": "be",
 		"path:" + tmpDir + "/two.txt": "cee",
 	})
 }
 
+func (s *filesSuite) TestReadFilesErrors(c *C) {
+	tmpDir := createTestFiles(c)
+	writeTempFile(c, tmpDir, "no-access", "x", 0)
+
+	query := url.Values{
+		"action": []string{"read"},
+		"path":   []string{tmpDir + "/no-exist", tmpDir + "/foo", tmpDir + "/no-access"},
+	}
+	headers := http.Header{
+		"Accept": []string{"multipart/form-data"},
+	}
+	response, body := doRequest(c, v1GetFiles, "GET", "/v1/files", query, headers, nil)
+	c.Check(response.StatusCode, Equals, http.StatusBadRequest)
+
+	var r testReadFilesResponse
+	files := readMultipart(c, response, body, &r)
+	c.Check(r.Type, Equals, "error")
+	c.Check(r.StatusCode, Equals, http.StatusBadRequest)
+	c.Check(r.Status, Equals, "Bad Request")
+	c.Check(r.Result, HasLen, 3)
+	c.Check(r.Result[0].Path, Equals, tmpDir+"/no-exist")
+	c.Check(r.Result[0].Error.Kind, Equals, "not-found")
+	c.Check(r.Result[0].Error.Message, Matches, ".*: no such file or directory")
+	c.Check(r.Result[1].Path, Equals, tmpDir+"/foo")
+	c.Check(r.Result[1].Error.Kind, Equals, "")
+	c.Check(r.Result[2].Path, Equals, tmpDir+"/no-access")
+	c.Check(r.Result[2].Error.Kind, Equals, "permission-denied")
+	c.Check(r.Result[2].Error.Message, Matches, ".*: permission denied")
+
+	c.Check(files, DeepEquals, map[string]string{
+		"path:" + tmpDir + "/foo": "a",
+	})
+}
+
+// Read a multipart HTTP response body, parse JSON in "response" field to result,
+// and return map of file field to file content.
 func readMultipart(c *C, response *http.Response, body io.Reader, result interface{}) map[string]string {
 	contentType := response.Header.Get("Content-Type")
 	mediaType, params, err := mime.ParseMediaType(contentType)

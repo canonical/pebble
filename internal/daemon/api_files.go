@@ -73,7 +73,7 @@ type readFilesResponse struct {
 
 func (r readFilesResponse) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	if req.Header.Get("Accept") != "multipart/form-data" {
-		errResp := statusBadRequest(`must accept \"multipart/form-data\"`)
+		errResp := statusBadRequest(`must accept multipart/form-data`)
 		errResp.ServeHTTP(w, req)
 		return
 	}
