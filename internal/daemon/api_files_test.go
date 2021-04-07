@@ -253,7 +253,12 @@ func (s *filesSuite) TestReadFilesErrors(c *C) {
 
 	query := url.Values{
 		"action": []string{"read"},
-		"path":   []string{tmpDir + "/no-exist", tmpDir + "/foo", tmpDir + "/no-access"},
+		"path":   []string{
+			tmpDir + "/no-exist",
+			tmpDir + "/foo",
+			tmpDir + "/no-access",
+			"relative-path",
+		},
 	}
 	headers := http.Header{
 		"Accept": []string{"multipart/form-data"},
@@ -266,7 +271,7 @@ func (s *filesSuite) TestReadFilesErrors(c *C) {
 	c.Check(r.Type, Equals, "error")
 	c.Check(r.StatusCode, Equals, http.StatusBadRequest)
 	c.Check(r.Status, Equals, "Bad Request")
-	c.Check(r.Result, HasLen, 3)
+	c.Check(r.Result, HasLen, 4)
 	c.Check(r.Result[0].Path, Equals, tmpDir+"/no-exist")
 	c.Check(r.Result[0].Error.Kind, Equals, "not-found")
 	c.Check(r.Result[0].Error.Message, Matches, ".*: no such file or directory")
@@ -275,6 +280,9 @@ func (s *filesSuite) TestReadFilesErrors(c *C) {
 	c.Check(r.Result[2].Path, Equals, tmpDir+"/no-access")
 	c.Check(r.Result[2].Error.Kind, Equals, "permission-denied")
 	c.Check(r.Result[2].Error.Message, Matches, ".*: permission denied")
+	c.Check(r.Result[3].Path, Equals, "relative-path")
+	c.Check(r.Result[3].Error.Kind, Equals, "generic-file-error")
+	c.Check(r.Result[3].Error.Message, Matches, "paths must be absolute .*")
 
 	c.Check(files, DeepEquals, map[string]string{
 		"path:" + tmpDir + "/foo": "a",
