@@ -12,11 +12,6 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-// TODO(benhoyt) - should we limit the file size (or total size) for a read-files response,
-//                 or just keep push bytes till the client rejects it?
-// TODO(benhoyt) - should we limit the file size (or total size) for a write-files request,
-//                 or just keep receiving bytes till the disk fills up?
-
 package daemon
 
 import (
@@ -119,12 +114,8 @@ func (r readFilesResponse) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	encoder := json.NewEncoder(part)
-	respType := ResponseTypeSync
-	if firstErr != nil {
-		respType = ResponseTypeError
-	}
 	metadata := respJSON{
-		Type:       respType,
+		Type:       ResponseTypeSync,
 		Status:     status,
 		StatusText: http.StatusText(status),
 		Result:     result,
@@ -325,12 +316,16 @@ func v1PostFiles(_ *Command, req *http.Request, _ *userState) Response {
 	contentType := req.Header.Get("Content-Type")
 	mediaType, params, err := mime.ParseMediaType(contentType)
 	if err != nil {
-		return statusBadRequest("invalid Content-Type: %q", contentType)
+		return statusBadRequest("invalid Content-Type %q", contentType)
 	}
 
 	switch mediaType {
 	case "multipart/form-data":
-		return writeFiles(req.Body, params["boundary"])
+		boundary := params["boundary"]
+		if boundary == "" {
+			return statusBadRequest("invalid boundary %q", boundary)
+		}
+		return writeFiles(req.Body, boundary)
 	case "application/json":
 		var payload struct {
 			Action string            `json:"action"`
@@ -349,10 +344,10 @@ func v1PostFiles(_ *Command, req *http.Request, _ *userState) Response {
 		case "write":
 			return statusBadRequest(`must use multipart with "write" action`)
 		default:
-			return statusBadRequest("invalid action: %q", payload.Action)
+			return statusBadRequest("invalid action %q", payload.Action)
 		}
 	default:
-		return statusBadRequest("invalid media type: %q", mediaType)
+		return statusBadRequest("invalid media type %q", mediaType)
 	}
 }
 
@@ -407,7 +402,7 @@ func writeFiles(body io.Reader, boundary string) Response {
 			return statusBadRequest("cannot read file part %d: %v", i, err)
 		}
 		if !strings.HasPrefix(part.FormName(), "file:") {
-			return statusBadRequest(`field name must be in format "file:p", not %q`, part.FormName())
+			return statusBadRequest(`field name must be in format "file:/path", not %q`, part.FormName())
 		}
 		p := part.FormName()[len("file:"):]
 		info, ok := infos[p]
@@ -444,18 +439,18 @@ func writeFile(item writeFilesItem, source io.Reader) error {
 	}
 
 	// Create parent directory if needed
-	perm, err := parsePermissions(item.Permissions, 0o644)
-	if err != nil {
-		return err
-	}
 	if item.MakeDirs {
-		err = os.MkdirAll(path.Dir(item.Path), perm)
+		err := os.MkdirAll(path.Dir(item.Path), 0o775)
 		if err != nil {
 			return fmt.Errorf("error creating directory: %w", err)
 		}
 	}
 
 	// Create file and write contents.
+	perm, err := parsePermissions(item.Permissions, 0o644)
+	if err != nil {
+		return err
+	}
 	f, err := os.OpenFile(item.Path, os.O_RDWR|os.O_CREATE|os.O_TRUNC, perm)
 	if err != nil {
 		return fmt.Errorf("error creating file: %w", err)
@@ -473,7 +468,7 @@ func writeFile(item writeFilesItem, source io.Reader) error {
 	// Update user and group if necessary.
 	err = updateUserGroup(item.Path, item.UserID, item.User, item.GroupID, item.Group)
 	if err != nil {
-		return fmt.Errorf("error updating permissions: %w", err)
+		return fmt.Errorf("error setting user and group: %w", err)
 	}
 	return nil
 }
@@ -531,7 +526,11 @@ func makeDir(dir makeDirsItem) error {
 	if err != nil {
 		return err
 	}
-	return updateUserGroup(dir.Path, dir.UserID, dir.User, dir.GroupID, dir.Group)
+	err = updateUserGroup(dir.Path, dir.UserID, dir.User, dir.GroupID, dir.Group)
+	if err != nil {
+		return fmt.Errorf("error setting user and group: %w", err)
+	}
+	return nil
 }
 
 func updateUserGroup(path string, uid int, username string, gid int, group string) error {
@@ -557,7 +556,7 @@ func updateUserGroup(path string, uid int, username string, gid int, group strin
 	}
 	err := os.Chown(path, uid, gid)
 	if err != nil {
-		return fmt.Errorf("error changing user and group: %w", err)
+		return err
 	}
 	return nil
 }

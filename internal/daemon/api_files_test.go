@@ -17,6 +17,7 @@ package daemon
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"mime"
@@ -28,6 +29,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/canonical/pebble/internal/osutil"
 	. "gopkg.in/check.v1"
 )
 
@@ -160,34 +162,36 @@ func (s *filesSuite) TestListFilesFile(c *C) {
 	assertListResult(c, r.Result, 0, "file", tmpDir, "foo", "664", 1)
 }
 
-func (s *filesSuite) TestReadFilesNoPaths(c *C) {
+func (s *filesSuite) TestReadNoPaths(c *C) {
 	query := url.Values{"action": []string{"read"}}
 	response, body := doRequest(c, v1GetFiles, "GET", "/v1/files", query, nil, nil)
 	c.Assert(response.StatusCode, Equals, http.StatusBadRequest)
 	assertError(c, body, http.StatusBadRequest, "", "must specify one or more paths")
 }
 
-func (s *filesSuite) TestReadFilesNoMultipartHeader(c *C) {
+func (s *filesSuite) TestReadNoMultipartHeader(c *C) {
 	query := url.Values{"action": []string{"read"}, "path": []string{"foo"}}
 	response, body := doRequest(c, v1GetFiles, "GET", "/v1/files", query, nil, nil)
 	c.Assert(response.StatusCode, Equals, http.StatusBadRequest)
 	assertError(c, body, http.StatusBadRequest, "", "must accept multipart/form-data")
 }
 
-type testReadFilesResponse struct {
-	Type       string
-	StatusCode int `json:"status-code"`
-	Status     string
-	Result     []struct {
-		Path  string
-		Error struct {
-			Kind    string
-			Message string
-		}
+type testFileResult struct {
+	Path  string
+	Error struct {
+		Kind    string
+		Message string
 	}
 }
 
-func (s *filesSuite) TestReadFilesSingle(c *C) {
+type testFilesResponse struct {
+	Type       string
+	StatusCode int `json:"status-code"`
+	Status     string
+	Result     []testFileResult
+}
+
+func (s *filesSuite) TestReadSingle(c *C) {
 	tmpDir := createTestFiles(c)
 
 	query := url.Values{
@@ -200,21 +204,26 @@ func (s *filesSuite) TestReadFilesSingle(c *C) {
 	response, body := doRequest(c, v1GetFiles, "GET", "/v1/files", query, headers, nil)
 	c.Check(response.StatusCode, Equals, http.StatusOK)
 
-	var r testReadFilesResponse
+	var r testFilesResponse
 	files := readMultipart(c, response, body, &r)
 	c.Check(r.Type, Equals, "sync")
 	c.Check(r.StatusCode, Equals, http.StatusOK)
 	c.Check(r.Status, Equals, "OK")
 	c.Check(r.Result, HasLen, 1)
-	c.Check(r.Result[0].Path, Equals, tmpDir+"/one.txt")
-	c.Check(r.Result[0].Error.Kind, Equals, "")
+	checkFileResult(c, r.Result[0], tmpDir+"/one.txt", "", "")
 
 	c.Check(files, DeepEquals, map[string]string{
 		"path:" + tmpDir + "/one.txt": "be",
 	})
 }
 
-func (s *filesSuite) TestReadFilesMultiple(c *C) {
+func checkFileResult(c *C, r testFileResult, path, errorKind, errorMsg string) {
+	c.Check(r.Path, Equals, path)
+	c.Check(r.Error.Kind, Equals, errorKind)
+	c.Check(r.Error.Message, Matches, errorMsg)
+}
+
+func (s *filesSuite) TestReadMultiple(c *C) {
 	tmpDir := createTestFiles(c)
 
 	query := url.Values{
@@ -227,18 +236,15 @@ func (s *filesSuite) TestReadFilesMultiple(c *C) {
 	response, body := doRequest(c, v1GetFiles, "GET", "/v1/files", query, headers, nil)
 	c.Check(response.StatusCode, Equals, http.StatusOK)
 
-	var r testReadFilesResponse
+	var r testFilesResponse
 	files := readMultipart(c, response, body, &r)
 	c.Check(r.Type, Equals, "sync")
 	c.Check(r.StatusCode, Equals, http.StatusOK)
 	c.Check(r.Status, Equals, "OK")
 	c.Check(r.Result, HasLen, 3)
-	c.Check(r.Result[0].Path, Equals, tmpDir+"/foo")
-	c.Check(r.Result[0].Error.Kind, Equals, "")
-	c.Check(r.Result[1].Path, Equals, tmpDir+"/one.txt")
-	c.Check(r.Result[1].Error.Kind, Equals, "")
-	c.Check(r.Result[2].Path, Equals, tmpDir+"/two.txt")
-	c.Check(r.Result[2].Error.Kind, Equals, "")
+	checkFileResult(c, r.Result[0], tmpDir+"/foo", "", "")
+	checkFileResult(c, r.Result[1], tmpDir+"/one.txt", "", "")
+	checkFileResult(c, r.Result[2], tmpDir+"/two.txt", "", "")
 
 	c.Check(files, DeepEquals, map[string]string{
 		"path:" + tmpDir + "/foo":     "a",
@@ -247,13 +253,13 @@ func (s *filesSuite) TestReadFilesMultiple(c *C) {
 	})
 }
 
-func (s *filesSuite) TestReadFilesErrors(c *C) {
+func (s *filesSuite) TestReadErrors(c *C) {
 	tmpDir := createTestFiles(c)
 	writeTempFile(c, tmpDir, "no-access", "x", 0)
 
 	query := url.Values{
 		"action": []string{"read"},
-		"path":   []string{
+		"path": []string{
 			tmpDir + "/no-exist",
 			tmpDir + "/foo",
 			tmpDir + "/no-access",
@@ -266,27 +272,471 @@ func (s *filesSuite) TestReadFilesErrors(c *C) {
 	response, body := doRequest(c, v1GetFiles, "GET", "/v1/files", query, headers, nil)
 	c.Check(response.StatusCode, Equals, http.StatusBadRequest)
 
-	var r testReadFilesResponse
+	var r testFilesResponse
 	files := readMultipart(c, response, body, &r)
-	c.Check(r.Type, Equals, "error")
+	c.Check(r.Type, Equals, "sync")
 	c.Check(r.StatusCode, Equals, http.StatusBadRequest)
 	c.Check(r.Status, Equals, "Bad Request")
 	c.Check(r.Result, HasLen, 4)
-	c.Check(r.Result[0].Path, Equals, tmpDir+"/no-exist")
-	c.Check(r.Result[0].Error.Kind, Equals, "not-found")
-	c.Check(r.Result[0].Error.Message, Matches, ".*: no such file or directory")
-	c.Check(r.Result[1].Path, Equals, tmpDir+"/foo")
-	c.Check(r.Result[1].Error.Kind, Equals, "")
-	c.Check(r.Result[2].Path, Equals, tmpDir+"/no-access")
-	c.Check(r.Result[2].Error.Kind, Equals, "permission-denied")
-	c.Check(r.Result[2].Error.Message, Matches, ".*: permission denied")
-	c.Check(r.Result[3].Path, Equals, "relative-path")
-	c.Check(r.Result[3].Error.Kind, Equals, "generic-file-error")
-	c.Check(r.Result[3].Error.Message, Matches, "paths must be absolute .*")
+	checkFileResult(c, r.Result[0], tmpDir+"/no-exist", "not-found", ".*: no such file or directory")
+	checkFileResult(c, r.Result[1], tmpDir+"/foo", "", "")
+	checkFileResult(c, r.Result[2], tmpDir+"/no-access", "permission-denied", ".*: permission denied")
+	checkFileResult(c, r.Result[3], "relative-path", "generic-file-error", "paths must be absolute .*")
 
 	c.Check(files, DeepEquals, map[string]string{
 		"path:" + tmpDir + "/foo": "a",
 	})
+}
+
+func (s *filesSuite) TestPostFilesInvalidContentType(c *C) {
+	response, body := doRequest(c, v1PostFiles, "POST", "/v1/files", nil, nil, nil)
+	c.Check(response.StatusCode, Equals, http.StatusBadRequest)
+	assertError(c, body, http.StatusBadRequest, "", `invalid Content-Type ""`)
+
+	headers := http.Header{
+		"Content-Type": []string{"text/foo"},
+	}
+	response, body = doRequest(c, v1PostFiles, "POST", "/v1/files", nil, headers, nil)
+	c.Check(response.StatusCode, Equals, http.StatusBadRequest)
+	assertError(c, body, http.StatusBadRequest, "", `invalid media type "text/foo"`)
+}
+
+func (s *filesSuite) TestPostFilesInvalidAction(c *C) {
+	headers := http.Header{
+		"Content-Type": []string{"application/json"},
+	}
+	response, body := doRequest(c, v1PostFiles, "POST", "/v1/files", nil, headers,
+		[]byte(`{"action": "foo"}`))
+	c.Check(response.StatusCode, Equals, http.StatusBadRequest)
+	assertError(c, body, http.StatusBadRequest, "", `invalid action "foo"`)
+
+	response, body = doRequest(c, v1PostFiles, "POST", "/v1/files", nil, headers,
+		[]byte(`{"action": "write"}`))
+	c.Check(response.StatusCode, Equals, http.StatusBadRequest)
+	assertError(c, body, http.StatusBadRequest, "", `must use multipart with "write" action`)
+}
+
+func (s *filesSuite) TestMakeDirsSingle(c *C) {
+	tmpDir := c.MkDir()
+
+	headers := http.Header{
+		"Content-Type": []string{"application/json"},
+	}
+	payload := struct {
+		Action string
+		Dirs   []makeDirsItem
+	}{
+		Action: "make-dirs",
+		Dirs: []makeDirsItem{
+			{Path: tmpDir + "/newdir"},
+		},
+	}
+	reqBody, err := json.Marshal(payload)
+	c.Assert(err, IsNil)
+	response, body := doRequest(c, v1PostFiles, "POST", "/v1/files", nil, headers, reqBody)
+	c.Check(response.StatusCode, Equals, http.StatusOK)
+
+	var r testFilesResponse
+	c.Assert(json.NewDecoder(body).Decode(&r), IsNil)
+	c.Check(r.StatusCode, Equals, http.StatusOK)
+	c.Check(r.Type, Equals, "sync")
+	c.Check(r.Result, HasLen, 1)
+	checkFileResult(c, r.Result[0], tmpDir+"/newdir", "", "")
+
+	c.Check(osutil.IsDir(tmpDir+"/newdir"), Equals, true)
+}
+
+func (s *filesSuite) TestMakeDirsMultiple(c *C) {
+	tmpDir := c.MkDir()
+
+	headers := http.Header{
+		"Content-Type": []string{"application/json"},
+	}
+	payload := struct {
+		Action string
+		Dirs   []makeDirsItem
+	}{
+		Action: "make-dirs",
+		Dirs: []makeDirsItem{
+			{Path: tmpDir + "/newdir"},
+			{Path: tmpDir + "/will/not/work"},
+			{Path: tmpDir + "/make/my/parents", MakeParents: true, Permissions: "755"},
+		},
+	}
+	reqBody, err := json.Marshal(payload)
+	c.Assert(err, IsNil)
+	response, body := doRequest(c, v1PostFiles, "POST", "/v1/files", nil, headers, reqBody)
+	c.Check(response.StatusCode, Equals, http.StatusBadRequest)
+
+	var r testFilesResponse
+	c.Assert(json.NewDecoder(body).Decode(&r), IsNil)
+	c.Check(r.StatusCode, Equals, http.StatusBadRequest)
+	c.Check(r.Type, Equals, "sync")
+	c.Check(r.Result, HasLen, 3)
+	checkFileResult(c, r.Result[0], tmpDir+"/newdir", "", "")
+	checkFileResult(c, r.Result[1], tmpDir+"/will/not/work", "not-found", ".*")
+	checkFileResult(c, r.Result[2], tmpDir+"/make/my/parents", "", "")
+
+	c.Check(osutil.IsDir(tmpDir+"/newdir"), Equals, true)
+	c.Check(osutil.IsDir(tmpDir+"/will/not/work"), Equals, false)
+	c.Check(osutil.IsDir(tmpDir+"/make/my/parents"), Equals, true)
+	st, err := os.Stat(tmpDir + "/newdir")
+	c.Assert(err, IsNil)
+	c.Check(st.Mode().Perm(), Equals, os.FileMode(0o775))
+	st, err = os.Stat(tmpDir + "/make/my/parents")
+	c.Assert(err, IsNil)
+	c.Check(st.Mode().Perm(), Equals, os.FileMode(0o755))
+}
+
+func (s *filesSuite) TestRemoveSingle(c *C) {
+	tmpDir := c.MkDir()
+	writeTempFile(c, tmpDir, "file", "a", 0o644)
+
+	headers := http.Header{
+		"Content-Type": []string{"application/json"},
+	}
+	payload := struct {
+		Action string
+		Paths  []removePathsItem
+	}{
+		Action: "remove",
+		Paths: []removePathsItem{
+			{Path: tmpDir + "/file"},
+		},
+	}
+	reqBody, err := json.Marshal(payload)
+	c.Assert(err, IsNil)
+	response, body := doRequest(c, v1PostFiles, "POST", "/v1/files", nil, headers, reqBody)
+	c.Check(response.StatusCode, Equals, http.StatusOK)
+
+	var r testFilesResponse
+	c.Assert(json.NewDecoder(body).Decode(&r), IsNil)
+	c.Check(r.StatusCode, Equals, http.StatusOK)
+	c.Check(r.Type, Equals, "sync")
+	c.Check(r.Result, HasLen, 1)
+	checkFileResult(c, r.Result[0], tmpDir+"/file", "", "")
+
+	c.Check(osutil.CanStat(tmpDir+"/file"), Equals, false)
+}
+
+func (s *filesSuite) TestRemoveMultiple(c *C) {
+	tmpDir := c.MkDir()
+	writeTempFile(c, tmpDir, "file", "a", 0o644)
+	c.Assert(os.Mkdir(tmpDir+"/empty", 0o775), IsNil)
+	c.Assert(os.Mkdir(tmpDir+"/non-empty", 0o775), IsNil)
+	writeTempFile(c, tmpDir, "non-empty/bar", "b", 0o644)
+	c.Assert(os.Mkdir(tmpDir+"/recursive", 0o775), IsNil)
+	writeTempFile(c, tmpDir, "recursive/car", "c", 0o644)
+
+	headers := http.Header{
+		"Content-Type": []string{"application/json"},
+	}
+	payload := struct {
+		Action string
+		Paths  []removePathsItem
+	}{
+		Action: "remove",
+		Paths: []removePathsItem{
+			{Path: tmpDir + "/file"},
+			{Path: tmpDir + "/empty"},
+			{Path: tmpDir + "/non-empty"},
+			{Path: tmpDir + "/recursive", Recursive: true},
+		},
+	}
+	reqBody, err := json.Marshal(payload)
+	c.Assert(err, IsNil)
+	response, body := doRequest(c, v1PostFiles, "POST", "/v1/files", nil, headers, reqBody)
+	c.Check(response.StatusCode, Equals, http.StatusBadRequest)
+
+	var r testFilesResponse
+	c.Assert(json.NewDecoder(body).Decode(&r), IsNil)
+	c.Check(r.StatusCode, Equals, http.StatusBadRequest)
+	c.Check(r.Type, Equals, "sync")
+	c.Check(r.Result, HasLen, 4)
+	checkFileResult(c, r.Result[0], tmpDir+"/file", "", "")
+	checkFileResult(c, r.Result[1], tmpDir+"/empty", "", "")
+	checkFileResult(c, r.Result[2], tmpDir+"/non-empty", "generic-file-error", ".*directory not empty")
+	checkFileResult(c, r.Result[3], tmpDir+"/recursive", "", "")
+
+	c.Check(osutil.CanStat(tmpDir+"/file"), Equals, false)
+	c.Check(osutil.IsDir(tmpDir+"/empty"), Equals, false)
+	c.Check(osutil.IsDir(tmpDir+"/non-empty"), Equals, true)
+	c.Check(osutil.IsDir(tmpDir+"/recursive"), Equals, false)
+}
+
+func (s *filesSuite) TestWriteNoMetadata(c *C) {
+	headers := http.Header{
+		"Content-Type": []string{"multipart/form-data; boundary=FOO"},
+	}
+	response, body := doRequest(c, v1PostFiles, "POST", "/v1/files", nil, headers, []byte{})
+	c.Check(response.StatusCode, Equals, http.StatusBadRequest)
+	assertError(c, body, http.StatusBadRequest, "", `cannot read request metadata: .*`)
+}
+
+func (s *filesSuite) TestWriteNoBoundary(c *C) {
+	headers := http.Header{
+		"Content-Type": []string{"multipart/form-data"},
+	}
+	response, body := doRequest(c, v1PostFiles, "POST", "/v1/files", nil, headers, []byte{})
+	c.Check(response.StatusCode, Equals, http.StatusBadRequest)
+	assertError(c, body, http.StatusBadRequest, "", `invalid boundary ""`)
+}
+
+func (s *filesSuite) TestWriteInvalidRequestField(c *C) {
+	headers := http.Header{
+		"Content-Type": []string{"multipart/form-data; boundary=BOUNDARY"},
+	}
+	response, body := doRequest(c, v1PostFiles, "POST", "/v1/files", nil, headers,
+		[]byte(`
+--BOUNDARY
+Content-Disposition: form-data; name="foo"
+
+{"foo": "bar"}
+--BOUNDARY--
+`))
+	c.Check(response.StatusCode, Equals, http.StatusBadRequest)
+	assertError(c, body, http.StatusBadRequest, "", `metadata field name must be "request", not "foo"`)
+}
+
+func (s *filesSuite) TestWriteInvalidFileField(c *C) {
+	headers := http.Header{
+		"Content-Type": []string{"multipart/form-data; boundary=BOUNDARY"},
+	}
+	response, body := doRequest(c, v1PostFiles, "POST", "/v1/files", nil, headers,
+		[]byte(`
+--BOUNDARY
+Content-Disposition: form-data; name="request"
+
+{"action": "write", "files": [
+	{"path": "/foo/bar"}
+]}
+--BOUNDARY
+Content-Disposition: form-data; name="bad"; filename="foo"
+
+Bad file field
+--BOUNDARY--
+`))
+	c.Check(response.StatusCode, Equals, http.StatusBadRequest)
+	assertError(c, body, http.StatusBadRequest, "", `field name must be in format "file:/path".*`)
+}
+
+func (s *filesSuite) TestWriteNoMetadataForPath(c *C) {
+	headers := http.Header{
+		"Content-Type": []string{"multipart/form-data; boundary=BOUNDARY"},
+	}
+	response, body := doRequest(c, v1PostFiles, "POST", "/v1/files", nil, headers,
+		[]byte(`
+--BOUNDARY
+Content-Disposition: form-data; name="request"
+
+{"action": "write", "files": [
+	{"path": "/foo/bar"}
+]}
+--BOUNDARY
+Content-Disposition: form-data; name="file:/no-metadata"; filename="foo"
+
+No metadata
+--BOUNDARY--
+`))
+	c.Check(response.StatusCode, Equals, http.StatusBadRequest)
+	assertError(c, body, http.StatusBadRequest, "", `no metadata for path "/no-metadata"`)
+}
+
+func (s *filesSuite) TestWriteInvalidMetadata(c *C) {
+	headers := http.Header{
+		"Content-Type": []string{"multipart/form-data; boundary=BOUNDARY"},
+	}
+	response, body := doRequest(c, v1PostFiles, "POST", "/v1/files", nil, headers,
+		[]byte(`
+--BOUNDARY
+Content-Disposition: form-data; name="request"
+
+not json
+--BOUNDARY--
+`))
+	c.Check(response.StatusCode, Equals, http.StatusBadRequest)
+	assertError(c, body, http.StatusBadRequest, "", `cannot decode request metadata.*`)
+
+	response, body = doRequest(c, v1PostFiles, "POST", "/v1/files", nil, headers,
+		[]byte(`
+--BOUNDARY
+Content-Disposition: form-data; name="request"
+
+{"action": "foo"}
+--BOUNDARY--
+`))
+	c.Check(response.StatusCode, Equals, http.StatusBadRequest)
+	assertError(c, body, http.StatusBadRequest, "", `multipart action must be "write", not "foo"`)
+}
+
+func (s *filesSuite) TestWriteNoFiles(c *C) {
+	headers := http.Header{
+		"Content-Type": []string{"multipart/form-data; boundary=BOUNDARY"},
+	}
+	response, body := doRequest(c, v1PostFiles, "POST", "/v1/files", nil, headers,
+		[]byte(`
+--BOUNDARY
+Content-Disposition: form-data; name="request"
+
+{"action": "write"}
+--BOUNDARY--
+`))
+	c.Check(response.StatusCode, Equals, http.StatusBadRequest)
+	assertError(c, body, http.StatusBadRequest, "", "must specify one or more files")
+}
+
+func (s *filesSuite) TestWriteSingle(c *C) {
+	tmpDir := c.MkDir()
+	path := tmpDir + "/hello.txt"
+
+	headers := http.Header{
+		"Content-Type": []string{"multipart/form-data; boundary=BOUNDARY"},
+	}
+	response, body := doRequest(c, v1PostFiles, "POST", "/v1/files", nil, headers,
+		[]byte(fmt.Sprintf(`
+--BOUNDARY
+Content-Disposition: form-data; name="request"
+
+{"action": "write", "files": [
+	{"path": "%[1]s"}
+]}
+--BOUNDARY
+Content-Disposition: form-data; name="file:%[1]s"; filename="hello.txt"
+
+Hello world
+--BOUNDARY--
+`, path)))
+	c.Check(response.StatusCode, Equals, http.StatusOK)
+
+	var r testFilesResponse
+	c.Assert(json.NewDecoder(body).Decode(&r), IsNil)
+	c.Check(r.StatusCode, Equals, http.StatusOK)
+	c.Check(r.Type, Equals, "sync")
+	c.Check(r.Result, HasLen, 1)
+	checkFileResult(c, r.Result[0], path, "", "")
+
+	assertFile(c, path, 0o644, "Hello world")
+}
+
+func (s *filesSuite) TestWriteMultiple(c *C) {
+	tmpDir := c.MkDir()
+	path0 := tmpDir + "/hello.txt"
+	path1 := tmpDir + "/byebye.txt"
+	path2 := tmpDir + "/foo/bar.txt"
+
+	headers := http.Header{
+		"Content-Type": []string{"multipart/form-data; boundary=BOUNDARY"},
+	}
+	response, body := doRequest(c, v1PostFiles, "POST", "/v1/files", nil, headers,
+		[]byte(fmt.Sprintf(`
+--BOUNDARY
+Content-Disposition: form-data; name="request"
+
+{
+	"action": "write",
+	"files": [
+		{"path": "%[1]s"},
+		{"path": "%[2]s", "permissions": "600"},
+		{"path": "%[3]s", "make-dirs": true}
+	]
+}
+--BOUNDARY
+Content-Disposition: form-data; name="file:%[1]s"; filename="hello.txt"
+
+Hello
+--BOUNDARY
+Content-Disposition: form-data; name="file:%[2]s"; filename="byebye.txt"
+
+Bye bye
+--BOUNDARY
+Content-Disposition: form-data; name="file:%[3]s"; filename="bar.txt"
+
+Foo
+Bar
+--BOUNDARY--
+`, path0, path1, path2)))
+	c.Check(response.StatusCode, Equals, http.StatusOK)
+
+	var r testFilesResponse
+	c.Assert(json.NewDecoder(body).Decode(&r), IsNil)
+	c.Check(r.StatusCode, Equals, http.StatusOK)
+	c.Check(r.Type, Equals, "sync")
+	c.Check(r.Result, HasLen, 3)
+	checkFileResult(c, r.Result[0], path0, "", "")
+	checkFileResult(c, r.Result[1], path1, "", "")
+	checkFileResult(c, r.Result[2], path2, "", "")
+
+	assertFile(c, path0, 0o644, "Hello")
+	assertFile(c, path1, 0o600, "Bye bye")
+	assertFile(c, path2, 0o644, "Foo\nBar")
+	info, err := os.Stat(tmpDir + "/foo")
+	c.Assert(err, IsNil)
+	c.Assert(info.Mode().Perm(), Equals, os.FileMode(0o775))
+}
+
+func (s *filesSuite) TestWriteErrors(c *C) {
+	tmpDir := c.MkDir()
+	pathNoContent := tmpDir + "/no-content"
+	pathNotAbsolute := "path-not-absolute"
+	pathNotFound := tmpDir + "/not-found/foo"
+	pathPermissionDenied := "/dev/permission-denied"
+
+	headers := http.Header{
+		"Content-Type": []string{"multipart/form-data; boundary=BOUNDARY"},
+	}
+	response, body := doRequest(c, v1PostFiles, "POST", "/v1/files", nil, headers,
+		[]byte(fmt.Sprintf(`
+--BOUNDARY
+Content-Disposition: form-data; name="request"
+
+{
+	"action": "write",
+	"files": [
+		{"path": "%[1]s"},
+		{"path": "%[2]s"},
+		{"path": "%[3]s"},
+		{"path": "%[4]s"}
+	]
+}
+--BOUNDARY
+Content-Disposition: form-data; name="file:%[2]s"; filename="a"
+
+path not absolute
+--BOUNDARY
+Content-Disposition: form-data; name="file:%[3]s"; filename="b"
+
+dir not found
+--BOUNDARY
+Content-Disposition: form-data; name="file:%[4]s"; filename="c"
+
+permission denied
+--BOUNDARY--
+`, pathNoContent, pathNotAbsolute, pathNotFound, pathPermissionDenied)))
+	c.Check(response.StatusCode, Equals, http.StatusBadRequest)
+
+	var r testFilesResponse
+	c.Assert(json.NewDecoder(body).Decode(&r), IsNil)
+	c.Check(r.StatusCode, Equals, http.StatusBadRequest)
+	c.Check(r.Type, Equals, "sync")
+	c.Check(r.Result, HasLen, 4)
+	checkFileResult(c, r.Result[0], pathNoContent, "generic-file-error", "no file content for path.*")
+	checkFileResult(c, r.Result[1], pathNotAbsolute, "generic-file-error", "paths must be absolute.*")
+	checkFileResult(c, r.Result[2], pathNotFound, "not-found", ".*")
+	checkFileResult(c, r.Result[3], pathPermissionDenied, "permission-denied", ".*")
+
+	c.Check(osutil.CanStat(pathNoContent), Equals, false)
+	c.Check(osutil.CanStat(pathNotAbsolute), Equals, false)
+	c.Check(osutil.CanStat(pathNotFound), Equals, false)
+	c.Check(osutil.CanStat(pathPermissionDenied), Equals, false)
+}
+
+func assertFile(c *C, path string, perm os.FileMode, content string) {
+	b, err := ioutil.ReadFile(path)
+	c.Assert(err, IsNil)
+	c.Assert(string(b), Equals, content)
+	info, err := os.Stat(path)
+	c.Assert(err, IsNil)
+	c.Assert(info.Mode().Perm(), Equals, perm)
 }
 
 // Read a multipart HTTP response body, parse JSON in "response" field to result,
@@ -353,7 +803,7 @@ func createTestFiles(c *C) string {
 	tmpDir := c.MkDir()
 	writeTempFile(c, tmpDir, "foo", "a", 0o664)
 	writeTempFile(c, tmpDir, "one.txt", "be", 0o600)
-	c.Assert(os.Mkdir(filepath.Join(tmpDir, "sub"), 0o775), IsNil)
+	c.Assert(os.Mkdir(tmpDir+"/sub", 0o775), IsNil)
 	writeTempFile(c, tmpDir, "two.txt", "cee", 0o755)
 	return tmpDir
 }
