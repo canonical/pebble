@@ -27,6 +27,7 @@ jobs:
     - name: Test and build
       run: |
         umask # TODO: temporary
+        umask 002
         go fmt ./...
         git diff --exit-code  # Ensure no formatting changes
         go test -race ./...
