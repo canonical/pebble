@@ -440,7 +440,7 @@ func writeFile(item writeFilesItem, source io.Reader) error {
 
 	// Create parent directory if needed
 	if item.MakeDirs {
-		err := os.MkdirAll(path.Dir(item.Path), 0o775)
+		err := os.MkdirAll(path.Dir(item.Path), 0o755)
 		if err != nil {
 			return fmt.Errorf("error creating directory: %w", err)
 		}
@@ -514,7 +514,7 @@ func makeDir(dir makeDirsItem) error {
 	if !path.IsAbs(dir.Path) {
 		return fmt.Errorf("paths must be absolute (%q is not)", dir.Path)
 	}
-	perm, err := parsePermissions(dir.Permissions, 0o775)
+	perm, err := parsePermissions(dir.Permissions, 0o755)
 	if err != nil {
 		return err
 	}

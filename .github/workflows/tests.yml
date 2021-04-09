@@ -26,7 +26,6 @@ jobs:
 
     - name: Test and build
       run: |
-        umask 000  # Clear umask so permission tests do what we expect
         go fmt ./...
         git diff --exit-code  # Ensure no formatting changes
         go test -race ./...

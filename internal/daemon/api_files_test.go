@@ -111,9 +111,9 @@ func (s *filesSuite) TestListFilesDir(c *C) {
 		c.Assert(response.StatusCode, Equals, http.StatusOK)
 
 		r := decodeResp(c, body, http.StatusOK, ResponseTypeSync)
-		assertListResult(c, r.Result, 0, "file", tmpDir, "foo", "664", 1)
+		assertListResult(c, r.Result, 0, "file", tmpDir, "foo", "644", 1)
 		assertListResult(c, r.Result, 1, "file", tmpDir, "one.txt", "600", 2)
-		assertListResult(c, r.Result, 2, "directory", tmpDir, "sub", "775", -1)
+		assertListResult(c, r.Result, 2, "directory", tmpDir, "sub", "755", -1)
 		assertListResult(c, r.Result, 3, "file", tmpDir, "two.txt", "755", 3)
 	}
 }
@@ -130,7 +130,7 @@ func (s *filesSuite) TestListFilesDirItself(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
 	r := decodeResp(c, body, http.StatusOK, ResponseTypeSync)
-	assertListResult(c, r.Result, 0, "directory", tmpDir, "sub", "775", -1)
+	assertListResult(c, r.Result, 0, "directory", tmpDir, "sub", "755", -1)
 }
 
 func (s *filesSuite) TestListFilesGlob(c *C) {
@@ -159,7 +159,7 @@ func (s *filesSuite) TestListFilesFile(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
 	r := decodeResp(c, body, http.StatusOK, ResponseTypeSync)
-	assertListResult(c, r.Result, 0, "file", tmpDir, "foo", "664", 1)
+	assertListResult(c, r.Result, 0, "file", tmpDir, "foo", "644", 1)
 }
 
 func (s *filesSuite) TestReadNoPaths(c *C) {
@@ -360,7 +360,7 @@ func (s *filesSuite) TestMakeDirsMultiple(c *C) {
 		Dirs: []makeDirsItem{
 			{Path: tmpDir + "/newdir"},
 			{Path: tmpDir + "/will/not/work"},
-			{Path: tmpDir + "/make/my/parents", MakeParents: true, Permissions: "755"},
+			{Path: tmpDir + "/make/my/parents", MakeParents: true, Permissions: "700"},
 		},
 	}
 	reqBody, err := json.Marshal(payload)
@@ -382,10 +382,10 @@ func (s *filesSuite) TestMakeDirsMultiple(c *C) {
 	c.Check(osutil.IsDir(tmpDir+"/make/my/parents"), Equals, true)
 	st, err := os.Stat(tmpDir + "/newdir")
 	c.Assert(err, IsNil)
-	c.Check(st.Mode().Perm(), Equals, os.FileMode(0o775))
+	c.Check(st.Mode().Perm(), Equals, os.FileMode(0o755))
 	st, err = os.Stat(tmpDir + "/make/my/parents")
 	c.Assert(err, IsNil)
-	c.Check(st.Mode().Perm(), Equals, os.FileMode(0o755))
+	c.Check(st.Mode().Perm(), Equals, os.FileMode(0o700))
 }
 
 func (s *filesSuite) TestRemoveSingle(c *C) {
@@ -422,10 +422,10 @@ func (s *filesSuite) TestRemoveSingle(c *C) {
 func (s *filesSuite) TestRemoveMultiple(c *C) {
 	tmpDir := c.MkDir()
 	writeTempFile(c, tmpDir, "file", "a", 0o644)
-	c.Assert(os.Mkdir(tmpDir+"/empty", 0o775), IsNil)
-	c.Assert(os.Mkdir(tmpDir+"/non-empty", 0o775), IsNil)
+	c.Assert(os.Mkdir(tmpDir+"/empty", 0o755), IsNil)
+	c.Assert(os.Mkdir(tmpDir+"/non-empty", 0o755), IsNil)
 	writeTempFile(c, tmpDir, "non-empty/bar", "b", 0o644)
-	c.Assert(os.Mkdir(tmpDir+"/recursive", 0o775), IsNil)
+	c.Assert(os.Mkdir(tmpDir+"/recursive", 0o755), IsNil)
 	writeTempFile(c, tmpDir, "recursive/car", "c", 0o644)
 
 	headers := http.Header{
@@ -671,7 +671,7 @@ Bar
 	assertFile(c, path2, 0o644, "Foo\nBar")
 	info, err := os.Stat(tmpDir + "/foo")
 	c.Assert(err, IsNil)
-	c.Assert(info.Mode().Perm(), Equals, os.FileMode(0o775))
+	c.Assert(info.Mode().Perm(), Equals, os.FileMode(0o755))
 }
 
 func (s *filesSuite) TestWriteErrors(c *C) {
@@ -801,9 +801,9 @@ func assertError(c *C, body io.Reader, status int, kind, message string) {
 
 func createTestFiles(c *C) string {
 	tmpDir := c.MkDir()
-	writeTempFile(c, tmpDir, "foo", "a", 0o664)
+	writeTempFile(c, tmpDir, "foo", "a", 0o644)
 	writeTempFile(c, tmpDir, "one.txt", "be", 0o600)
-	c.Assert(os.Mkdir(tmpDir+"/sub", 0o775), IsNil)
+	c.Assert(os.Mkdir(tmpDir+"/sub", 0o755), IsNil)
 	writeTempFile(c, tmpDir, "two.txt", "cee", 0o755)
 	return tmpDir
 }
