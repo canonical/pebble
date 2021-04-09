@@ -49,8 +49,11 @@ func v1GetFiles(_ *Command, req *http.Request, _ *userState) Response {
 		if pattern == "" {
 			return statusBadRequest("must specify pattern")
 		}
-		directoryItself := query.Get("directory") == "true"
-		return listFiles(pattern, directoryItself)
+		directory := query.Get("directory")
+		if directory != "true" && directory != "false" && directory != "" {
+			return statusBadRequest(`directory parameter must be "true" or "false"`)
+		}
+		return listFiles(pattern, directory == "true")
 	default:
 		return statusBadRequest("invalid action %q", action)
 	}
@@ -152,9 +155,13 @@ func (r readFilesResponse) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
+func nonAbsolutePathError(p string) error {
+	return fmt.Errorf("paths must be absolute (%q is not)", p)
+}
+
 func openForRead(p string) (*os.File, error) {
 	if !path.IsAbs(p) {
-		return nil, fmt.Errorf("paths must be absolute (%q is not)", p)
+		return nil, nonAbsolutePathError(p)
 	}
 	return os.Open(p)
 }
@@ -436,7 +443,7 @@ func writeFiles(body io.Reader, boundary string) Response {
 
 func writeFile(item writeFilesItem, source io.Reader) error {
 	if !path.IsAbs(item.Path) {
-		return fmt.Errorf("paths must be absolute (%q is not)", item.Path)
+		return nonAbsolutePathError(item.Path)
 	}
 
 	// Create parent directory if needed
@@ -536,7 +543,7 @@ func makeDirs(dirs []makeDirsItem) Response {
 
 func makeDir(dir makeDirsItem) error {
 	if !path.IsAbs(dir.Path) {
-		return fmt.Errorf("paths must be absolute (%q is not)", dir.Path)
+		return nonAbsolutePathError(dir.Path)
 	}
 	perm, err := parsePermissions(dir.Permissions, 0o755)
 	if err != nil {
@@ -608,11 +615,10 @@ func removePaths(paths []removePathsItem) Response {
 
 func removePath(p string, recursive bool) error {
 	if !path.IsAbs(p) {
-		return fmt.Errorf("paths must be absolute (%q is not)", p)
+		return nonAbsolutePathError(p)
 	}
 	if recursive {
 		return os.RemoveAll(p)
-	} else {
-		return os.Remove(p)
 	}
+	return os.Remove(p)
 }
