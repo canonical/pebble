@@ -676,10 +676,11 @@ Bar
 
 func (s *filesSuite) TestWriteErrors(c *C) {
 	tmpDir := c.MkDir()
+	c.Assert(os.Mkdir(tmpDir+"/permission-denied", 0), IsNil)
 	pathNoContent := tmpDir + "/no-content"
 	pathNotAbsolute := "path-not-absolute"
 	pathNotFound := tmpDir + "/not-found/foo"
-	pathPermissionDenied := "/dev/permission-denied"
+	pathPermissionDenied := tmpDir + "/permission-denied/file"
 
 	headers := http.Header{
 		"Content-Type": []string{"multipart/form-data; boundary=BOUNDARY"},

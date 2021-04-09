@@ -15,6 +15,7 @@
 package daemon
 
 import (
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -442,35 +443,58 @@ func writeFile(item writeFilesItem, source io.Reader) error {
 	if item.MakeDirs {
 		err := os.MkdirAll(path.Dir(item.Path), 0o755)
 		if err != nil {
-			return fmt.Errorf("error creating directory: %w", err)
+			return fmt.Errorf("creating directory: %w", err)
 		}
 	}
 
-	// Create file and write contents.
+	// Create file and write contents to temporary file.
 	perm, err := parsePermissions(item.Permissions, 0o644)
 	if err != nil {
 		return err
 	}
-	f, err := os.OpenFile(item.Path, os.O_RDWR|os.O_CREATE|os.O_TRUNC, perm)
+	tempPath, err := makeTempPath()
 	if err != nil {
-		return fmt.Errorf("error creating file: %w", err)
+		return fmt.Errorf("generating temporary filename: %w", err)
+	}
+	f, err := os.OpenFile(tempPath, os.O_RDWR|os.O_CREATE|os.O_TRUNC, perm)
+	if err != nil {
+		return fmt.Errorf("creating file: %w", err)
 	}
 	_, err = io.Copy(f, source)
 	if err != nil {
 		_ = f.Close()
-		return fmt.Errorf("error writing file: %w", err)
+		_ = os.Remove(tempPath)
+		return fmt.Errorf("writing file: %w", err)
 	}
 	err = f.Close()
 	if err != nil {
-		return fmt.Errorf("error closing file: %w", err)
+		_ = os.Remove(tempPath)
+		return fmt.Errorf("closing file: %w", err)
 	}
 
 	// Update user and group if necessary.
 	err = updateUserGroup(item.Path, item.UserID, item.User, item.GroupID, item.Group)
 	if err != nil {
-		return fmt.Errorf("error setting user and group: %w", err)
+		_ = os.Remove(tempPath)
+		return fmt.Errorf("setting user and group: %w", err)
+	}
+
+	// Atomically move temporary file to final location.
+	err = os.Rename(tempPath, item.Path)
+	if err != nil {
+		return fmt.Errorf("moving temporary file to path: %w", err)
 	}
 	return nil
+}
+
+func makeTempPath() (string, error) {
+	b := make([]byte, 20)
+	_, err := rand.Read(b)
+	if err != nil {
+		return "", fmt.Errorf("generating random bytes: %w", err)
+	}
+	name := fmt.Sprintf("pebble-%x", b)
+	return filepath.Join(os.TempDir(), name), nil
 }
 
 func parsePermissions(permissions string, defaultMode os.FileMode) (os.FileMode, error) {
@@ -528,7 +552,7 @@ func makeDir(dir makeDirsItem) error {
 	}
 	err = updateUserGroup(dir.Path, dir.UserID, dir.User, dir.GroupID, dir.Group)
 	if err != nil {
-		return fmt.Errorf("error setting user and group: %w", err)
+		return fmt.Errorf("setting user and group: %w", err)
 	}
 	return nil
 }
@@ -540,14 +564,14 @@ func updateUserGroup(path string, uid int, username string, gid int, group strin
 	if uid == 0 && username != "" {
 		u, err := user.Lookup(username)
 		if err != nil {
-			return fmt.Errorf("error looking up user: %w", err)
+			return fmt.Errorf("looking up user: %w", err)
 		}
 		uid, _ = strconv.Atoi(u.Uid)
 	}
 	if gid == 0 && group != "" {
 		g, err := user.LookupGroup(group)
 		if err != nil {
-			return fmt.Errorf("error looking up group: %w", err)
+			return fmt.Errorf("looking up group: %w", err)
 		}
 		gid, _ = strconv.Atoi(g.Gid)
 	}
