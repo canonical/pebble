@@ -550,19 +550,26 @@ func makeDir(dir makeDirsItem) error {
 	return nil
 }
 
+// Because it's hard to test os.Chown with running the tests as root.
+var (
+	chown       = os.Chown
+	lookupUser  = user.Lookup
+	lookupGroup = user.LookupGroup
+)
+
 func updateUserAndGroup(path string, uid int, username string, gid int, group string) error {
 	if uid == 0 && username == "" && gid == 0 && group == "" {
 		return nil
 	}
 	if uid == 0 && username != "" {
-		u, err := user.Lookup(username)
+		u, err := lookupUser(username)
 		if err != nil {
 			return err
 		}
 		uid, _ = strconv.Atoi(u.Uid)
 	}
 	if gid == 0 && group != "" {
-		g, err := user.LookupGroup(group)
+		g, err := lookupGroup(group)
 		if err != nil {
 			return err
 		}
@@ -571,7 +578,7 @@ func updateUserAndGroup(path string, uid int, username string, gid int, group st
 	if uid == 0 || gid == 0 {
 		return fmt.Errorf("must set both user and group together")
 	}
-	err := os.Chown(path, uid, gid)
+	err := chown(path, uid, gid)
 	if err != nil {
 		return err
 	}

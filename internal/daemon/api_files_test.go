@@ -26,7 +26,10 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"os/user"
 	"path/filepath"
+	"strconv"
+	"syscall"
 	"time"
 
 	"github.com/canonical/pebble/internal/osutil"
@@ -666,6 +669,121 @@ Bar
 	info, err := os.Stat(tmpDir + "/foo")
 	c.Assert(err, IsNil)
 	c.Assert(info.Mode().Perm(), Equals, os.FileMode(0o755))
+}
+
+// We mock os.Chown in this test because it's hard to test chown without
+// running as root.
+func (s *filesSuite) TestWriteUserGroupMocked(c *C) {
+	type chownArgs struct {
+		name string
+		uid  int
+		gid  int
+	}
+	var chownCalls []chownArgs
+	chown = func(name string, uid, gid int) error {
+		chownCalls = append(chownCalls, chownArgs{name, uid, gid})
+		return nil
+	}
+	var lookupUserCalls []string
+	lookupUser = func(name string) (*user.User, error) {
+		lookupUserCalls = append(lookupUserCalls, name)
+		return &user.User{Uid: "56"}, nil
+	}
+	var lookupGroupCalls []string
+	lookupGroup = func(name string) (*user.Group, error) {
+		lookupGroupCalls = append(lookupGroupCalls, name)
+		return &user.Group{Gid: "78"}, nil
+	}
+	defer func() {
+		chown = os.Chown
+		lookupUser = user.Lookup
+		lookupGroup = user.LookupGroup
+	}()
+
+	tmpDir := s.testWriteUserGroup(c, 12, 34, "USER", "GROUP")
+
+	c.Check(chownCalls, HasLen, 2)
+	c.Check(chownCalls[0], Equals, chownArgs{tmpDir + "/uid-gid.pebble-temp", 12, 34})
+	c.Check(chownCalls[1], Equals, chownArgs{tmpDir + "/user-group.pebble-temp", 56, 78})
+	c.Check(lookupUserCalls, HasLen, 1)
+	c.Check(lookupUserCalls[0], Equals, "USER")
+	c.Check(lookupGroupCalls, HasLen, 1)
+	c.Check(lookupGroupCalls[0], Equals, "GROUP")
+}
+
+// This test is normally skipped; run with "sudo go test" to execute.
+func (s *filesSuite) TestWriteUserGroupReal(c *C) {
+	if os.Getuid() != 0 {
+		c.Skip("real chown test requires running as root")
+	}
+	nobody, err := user.Lookup("nobody")
+	c.Assert(err, IsNil)
+	nogroup, err := user.LookupGroup("nogroup")
+	c.Assert(err, IsNil)
+	uid, err := strconv.Atoi(nobody.Uid)
+	c.Assert(err, IsNil)
+	gid, err := strconv.Atoi(nogroup.Gid)
+	c.Assert(err, IsNil)
+
+	tmpDir := s.testWriteUserGroup(c, uid, gid, "nobody", "nogroup")
+
+	info, err := os.Stat(tmpDir + "/uid-gid")
+	c.Assert(err, IsNil)
+	statT := info.Sys().(*syscall.Stat_t)
+	c.Check(statT.Uid, Equals, uint32(uid))
+	c.Check(statT.Gid, Equals, uint32(uid))
+
+	info, err = os.Stat(tmpDir + "/user-group")
+	c.Assert(err, IsNil)
+	statT = info.Sys().(*syscall.Stat_t)
+	c.Check(statT.Uid, Equals, uint32(uid))
+	c.Check(statT.Gid, Equals, uint32(uid))
+}
+
+func (s *filesSuite) testWriteUserGroup(c *C, uid, gid int, user, group string) string {
+	tmpDir := c.MkDir()
+	pathUidGid := tmpDir + "/uid-gid"
+	pathUserGroup := tmpDir + "/user-group"
+
+	headers := http.Header{
+		"Content-Type": []string{"multipart/form-data; boundary=BOUNDARY"},
+	}
+	response, body := doRequest(c, v1PostFiles, "POST", "/v1/files", nil, headers,
+		[]byte(fmt.Sprintf(`
+--BOUNDARY
+Content-Disposition: form-data; name="request"
+
+{
+	"action": "write",
+	"files": [
+		{"path": "%[1]s", "user-id": %[3]d, "group-id": %[4]d},
+		{"path": "%[2]s", "user": "%[5]s", "group": "%[6]s"}
+	]
+}
+--BOUNDARY
+Content-Disposition: form-data; name="file:%[1]s"; filename="uid-gid"
+
+uid gid
+--BOUNDARY
+Content-Disposition: form-data; name="file:%[2]s"; filename="user-group"
+
+user group
+--BOUNDARY--
+`, pathUidGid, pathUserGroup, uid, gid, user, group)))
+	c.Check(response.StatusCode, Equals, http.StatusOK)
+
+	var r testFilesResponse
+	c.Assert(json.NewDecoder(body).Decode(&r), IsNil)
+	c.Check(r.StatusCode, Equals, http.StatusOK)
+	c.Check(r.Type, Equals, "sync")
+	c.Check(r.Result, HasLen, 2)
+	checkFileResult(c, r.Result[0], pathUidGid, "", "")
+	checkFileResult(c, r.Result[1], pathUserGroup, "", "")
+
+	assertFile(c, pathUidGid, 0o644, "uid gid")
+	assertFile(c, pathUserGroup, 0o644, "user group")
+
+	return tmpDir
 }
 
 func (s *filesSuite) TestWriteErrors(c *C) {
