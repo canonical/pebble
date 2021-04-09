@@ -15,7 +15,6 @@
 package daemon
 
 import (
-	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -459,10 +458,7 @@ func writeFile(item writeFilesItem, source io.Reader) error {
 	if err != nil {
 		return err
 	}
-	tempPath, err := makeTempPath()
-	if err != nil {
-		return fmt.Errorf("generating temporary filename: %w", err)
-	}
+	tempPath := item.Path + ".pebble-temp"
 	f, err := os.OpenFile(tempPath, os.O_RDWR|os.O_CREATE|os.O_TRUNC, perm)
 	if err != nil {
 		return fmt.Errorf("creating file: %w", err)
@@ -480,7 +476,7 @@ func writeFile(item writeFilesItem, source io.Reader) error {
 	}
 
 	// Update user and group if necessary.
-	err = updateUserGroup(item.Path, item.UserID, item.User, item.GroupID, item.Group)
+	err = updateUserAndGroup(tempPath, item.UserID, item.User, item.GroupID, item.Group)
 	if err != nil {
 		_ = os.Remove(tempPath)
 		return fmt.Errorf("setting user and group: %w", err)
@@ -492,16 +488,6 @@ func writeFile(item writeFilesItem, source io.Reader) error {
 		return fmt.Errorf("moving temporary file to path: %w", err)
 	}
 	return nil
-}
-
-func makeTempPath() (string, error) {
-	b := make([]byte, 20)
-	_, err := rand.Read(b)
-	if err != nil {
-		return "", fmt.Errorf("generating random bytes: %w", err)
-	}
-	name := fmt.Sprintf("pebble-%x", b)
-	return filepath.Join(os.TempDir(), name), nil
 }
 
 func parsePermissions(permissions string, defaultMode os.FileMode) (os.FileMode, error) {
@@ -557,28 +543,28 @@ func makeDir(dir makeDirsItem) error {
 	if err != nil {
 		return err
 	}
-	err = updateUserGroup(dir.Path, dir.UserID, dir.User, dir.GroupID, dir.Group)
+	err = updateUserAndGroup(dir.Path, dir.UserID, dir.User, dir.GroupID, dir.Group)
 	if err != nil {
 		return fmt.Errorf("setting user and group: %w", err)
 	}
 	return nil
 }
 
-func updateUserGroup(path string, uid int, username string, gid int, group string) error {
+func updateUserAndGroup(path string, uid int, username string, gid int, group string) error {
 	if uid == 0 && username == "" && gid == 0 && group == "" {
 		return nil
 	}
 	if uid == 0 && username != "" {
 		u, err := user.Lookup(username)
 		if err != nil {
-			return fmt.Errorf("looking up user: %w", err)
+			return err
 		}
 		uid, _ = strconv.Atoi(u.Uid)
 	}
 	if gid == 0 && group != "" {
 		g, err := user.LookupGroup(group)
 		if err != nil {
-			return fmt.Errorf("looking up group: %w", err)
+			return err
 		}
 		gid, _ = strconv.Atoi(g.Gid)
 	}

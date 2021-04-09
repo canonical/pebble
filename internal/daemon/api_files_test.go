@@ -37,12 +37,6 @@ var _ = Suite(&filesSuite{})
 
 type filesSuite struct{}
 
-func (s *filesSuite) SetUpTest(c *C) {
-}
-
-func (s *filesSuite) TearDownTest(c *C) {
-}
-
 func (s *filesSuite) TestGetFilesInvalidAction(c *C) {
 	query := url.Values{"action": []string{"foo"}}
 	response, body := doRequest(c, v1GetFiles, "GET", "/v1/files", query, nil, nil)
