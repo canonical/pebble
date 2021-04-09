@@ -69,6 +69,8 @@ type readFilesResponse struct {
 	paths []string
 }
 
+// Reading files
+
 func (r readFilesResponse) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	if req.Header.Get("Accept") != "multipart/form-data" {
 		errResp := statusBadRequest(`must accept multipart/form-data`)
@@ -183,6 +185,8 @@ func fileErrorToResult(err error) *errorResult {
 		Message: err.Error(),
 	}
 }
+
+// Listing files
 
 func listErrorResponse(err error) Response {
 	status := http.StatusBadRequest
@@ -358,6 +362,8 @@ func v1PostFiles(_ *Command, req *http.Request, _ *userState) Response {
 	}
 }
 
+// Writing files
+
 type writeFilesItem struct {
 	Path        string `json:"path"`
 	MakeDirs    bool   `json:"make-dirs"`
@@ -501,6 +507,8 @@ func parsePermissions(permissions string, defaultMode os.FileMode) (os.FileMode,
 	return os.FileMode(perm), nil
 }
 
+// Creating directories
+
 type makeDirsItem struct {
 	Path        string `json:"path"`
 	MakeParents bool   `json:"make-parents"`
@@ -584,6 +592,8 @@ func updateUserAndGroup(path string, uid int, username string, gid int, group st
 	}
 	return nil
 }
+
+// Removing paths
 
 type removePathsItem struct {
 	Path      string `json:"path"`
