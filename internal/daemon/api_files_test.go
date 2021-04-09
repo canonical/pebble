@@ -675,6 +675,10 @@ func (s *filesSuite) TestWriteErrors(c *C) {
 	pathNotAbsolute := "path-not-absolute"
 	pathNotFound := tmpDir + "/not-found/foo"
 	pathPermissionDenied := tmpDir + "/permission-denied/file"
+	pathUserNotFound := tmpDir + "/user-not-found"
+	pathGroupNotFound := tmpDir + "/group-not-found"
+	pathOnlyUser := tmpDir + "/only-user"
+	pathOnlyGroup := tmpDir + "/only-group"
 
 	headers := http.Header{
 		"Content-Type": []string{"multipart/form-data; boundary=BOUNDARY"},
@@ -690,7 +694,11 @@ Content-Disposition: form-data; name="request"
 		{"path": "%[1]s"},
 		{"path": "%[2]s"},
 		{"path": "%[3]s"},
-		{"path": "%[4]s"}
+		{"path": "%[4]s"},
+		{"path": "%[5]s", "user": "user-not-found", "group": "nogroup"},
+		{"path": "%[6]s", "user": "nobody", "group": "group-not-found"},
+		{"path": "%[7]s", "user": "nobody"},
+		{"path": "%[8]s", "group": "nogroup"}
 	]
 }
 --BOUNDARY
@@ -705,19 +713,40 @@ dir not found
 Content-Disposition: form-data; name="file:%[4]s"; filename="c"
 
 permission denied
+--BOUNDARY
+Content-Disposition: form-data; name="file:%[5]s"; filename="c"
+
+user not found
+--BOUNDARY
+Content-Disposition: form-data; name="file:%[6]s"; filename="c"
+
+group not found
+--BOUNDARY
+Content-Disposition: form-data; name="file:%[7]s"; filename="c"
+
+only user specified
+--BOUNDARY
+Content-Disposition: form-data; name="file:%[8]s"; filename="c"
+
+only group specified
 --BOUNDARY--
-`, pathNoContent, pathNotAbsolute, pathNotFound, pathPermissionDenied)))
+`, pathNoContent, pathNotAbsolute, pathNotFound, pathPermissionDenied,
+			pathUserNotFound, pathGroupNotFound, pathOnlyUser, pathOnlyGroup)))
 	c.Check(response.StatusCode, Equals, http.StatusBadRequest)
 
 	var r testFilesResponse
 	c.Assert(json.NewDecoder(body).Decode(&r), IsNil)
 	c.Check(r.StatusCode, Equals, http.StatusBadRequest)
 	c.Check(r.Type, Equals, "sync")
-	c.Check(r.Result, HasLen, 4)
+	c.Check(r.Result, HasLen, 8)
 	checkFileResult(c, r.Result[0], pathNoContent, "generic-file-error", "no file content for path.*")
 	checkFileResult(c, r.Result[1], pathNotAbsolute, "generic-file-error", "paths must be absolute.*")
 	checkFileResult(c, r.Result[2], pathNotFound, "not-found", ".*")
 	checkFileResult(c, r.Result[3], pathPermissionDenied, "permission-denied", ".*")
+	checkFileResult(c, r.Result[4], pathUserNotFound, "generic-file-error", ".*unknown user.*")
+	checkFileResult(c, r.Result[5], pathGroupNotFound, "generic-file-error", ".*unknown group.*")
+	checkFileResult(c, r.Result[6], pathOnlyUser, "generic-file-error", ".*must set both user and group.*")
+	checkFileResult(c, r.Result[7], pathOnlyGroup, "generic-file-error", ".*must set both user and group.*")
 
 	c.Check(osutil.CanStat(pathNoContent), Equals, false)
 	c.Check(osutil.CanStat(pathNotAbsolute), Equals, false)
