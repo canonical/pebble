@@ -214,6 +214,30 @@ func (s *filesSuite) TestReadSingle(c *C) {
 	})
 }
 
+func (s *filesSuite) TestReadDirectory(c *C) {
+	tmpDir := createTestFiles(c)
+
+	query := url.Values{
+		"action": []string{"read"},
+		"path":   []string{tmpDir},
+	}
+	headers := http.Header{
+		"Accept": []string{"multipart/form-data"},
+	}
+	response, body := doRequest(c, v1GetFiles, "GET", "/v1/files", query, headers, nil)
+	c.Check(response.StatusCode, Equals, http.StatusBadRequest)
+
+	var r testFilesResponse
+	files := readMultipart(c, response, body, &r)
+	c.Check(r.Type, Equals, "sync")
+	c.Check(r.StatusCode, Equals, http.StatusBadRequest)
+	c.Check(r.Status, Equals, "Bad Request")
+	c.Check(r.Result, HasLen, 1)
+	checkFileResult(c, r.Result[0], tmpDir, "generic-file-error", "cannot read a directory.*")
+
+	c.Check(files, DeepEquals, map[string]string{})
+}
+
 func checkFileResult(c *C, r testFileResult, path, errorKind, errorMsg string) {
 	c.Check(r.Path, Equals, path)
 	c.Check(r.Error.Kind, Equals, errorKind)

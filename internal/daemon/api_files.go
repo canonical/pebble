@@ -31,6 +31,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/canonical/pebble/internal/osutil"
 )
 
 func v1GetFiles(_ *Command, req *http.Request, _ *userState) Response {
@@ -163,6 +165,11 @@ func nonAbsolutePathError(p string) error {
 func openForRead(p string) (*os.File, error) {
 	if !path.IsAbs(p) {
 		return nil, nonAbsolutePathError(p)
+	}
+	// Pro-actively disallow reading directories (other errors will be caught
+	// during read / io.Copy).
+	if osutil.IsDir(p) {
+		return nil, fmt.Errorf("cannot read a directory: %q", p)
 	}
 	return os.Open(p)
 }
