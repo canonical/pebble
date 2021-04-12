@@ -106,7 +106,9 @@ func (r readFilesResponse) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	mh.Set("Content-Disposition", `form-data; name="response"`)
 	part, err := mw.CreatePart(mh)
 	if err != nil {
-		http.Error(w, "\n"+err.Error(), http.StatusInternalServerError)
+		// Can't write metadata -- writing the error message on a new line is
+		// about the best we can do.
+		fmt.Fprint(w, "\n", err)
 		return
 	}
 	encoder := json.NewEncoder(part)
@@ -118,14 +120,14 @@ func (r readFilesResponse) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 	err = encoder.Encode(metadata)
 	if err != nil {
-		http.Error(w, "\n"+err.Error(), http.StatusInternalServerError)
+		fmt.Fprint(w, "\n", err)
 		return
 	}
 
 	// Write the multipart trailer (last boundary marker).
 	err = mw.Close()
 	if err != nil {
-		http.Error(w, "\n"+err.Error(), http.StatusInternalServerError)
+		fmt.Fprint(w, "\n", err)
 		return
 	}
 }
