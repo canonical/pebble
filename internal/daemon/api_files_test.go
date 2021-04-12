@@ -33,6 +33,7 @@ import (
 	"time"
 
 	"github.com/canonical/pebble/internal/osutil"
+	"github.com/canonical/pebble/internal/osutil/sys"
 	. "gopkg.in/check.v1"
 )
 
@@ -420,6 +421,76 @@ func (s *filesSuite) TestMakeDirsMultiple(c *C) {
 	c.Check(st.Mode().Perm(), Equals, os.FileMode(0o700))
 }
 
+func (s *filesSuite) TestMakeDirsUserGroupMocked(c *C) {
+	type chownArgs struct {
+		name string
+		uid  int
+		gid  int
+	}
+	var chownCalls []chownArgs
+	chown = func(name string, uid, gid int) error {
+		chownCalls = append(chownCalls, chownArgs{name, uid, gid})
+		return nil
+	}
+	var lookupUserCalls []string
+	lookupUser = func(name string) (*user.User, error) {
+		lookupUserCalls = append(lookupUserCalls, name)
+		return &user.User{Uid: "56"}, nil
+	}
+	var lookupGroupCalls []string
+	lookupGroup = func(name string) (*user.Group, error) {
+		lookupGroupCalls = append(lookupGroupCalls, name)
+		return &user.Group{Gid: "78"}, nil
+	}
+	defer func() {
+		chown = os.Chown
+		lookupUser = user.Lookup
+		lookupGroup = user.LookupGroup
+	}()
+
+	tmpDir := c.MkDir()
+
+	headers := http.Header{
+		"Content-Type": []string{"application/json"},
+	}
+	payload := struct {
+		Action string
+		Dirs   []makeDirsItem
+	}{
+		Action: "make-dirs",
+		Dirs: []makeDirsItem{
+			{Path: tmpDir + "/normal"},
+			{Path: tmpDir + "/uid-gid", UserID: 12, GroupID: 34},
+			{Path: tmpDir + "/user-group", User: "USER", Group: "GROUP"},
+		},
+	}
+	reqBody, err := json.Marshal(payload)
+	c.Assert(err, IsNil)
+	response, body := doRequest(c, v1PostFiles, "POST", "/v1/files", nil, headers, reqBody)
+	c.Check(response.StatusCode, Equals, http.StatusOK)
+
+	var r testFilesResponse
+	c.Assert(json.NewDecoder(body).Decode(&r), IsNil)
+	c.Check(r.StatusCode, Equals, http.StatusOK)
+	c.Check(r.Type, Equals, "sync")
+	c.Check(r.Result, HasLen, 3)
+	checkFileResult(c, r.Result[0], tmpDir+"/normal", "", "")
+	checkFileResult(c, r.Result[1], tmpDir+"/uid-gid", "", "")
+	checkFileResult(c, r.Result[2], tmpDir+"/user-group", "", "")
+
+	c.Check(chownCalls, HasLen, 2)
+	c.Check(chownCalls[0], Equals, chownArgs{tmpDir + "/uid-gid", 12, 34})
+	c.Check(chownCalls[1], Equals, chownArgs{tmpDir + "/user-group", 56, 78})
+	c.Check(lookupUserCalls, HasLen, 1)
+	c.Check(lookupUserCalls[0], Equals, "USER")
+	c.Check(lookupGroupCalls, HasLen, 1)
+	c.Check(lookupGroupCalls[0], Equals, "GROUP")
+
+	c.Check(osutil.IsDir(tmpDir+"/normal"), Equals, true)
+	c.Check(osutil.IsDir(tmpDir+"/uid-gid"), Equals, true)
+	c.Check(osutil.IsDir(tmpDir+"/user-group"), Equals, true)
+}
+
 func (s *filesSuite) TestRemoveSingle(c *C) {
 	tmpDir := c.MkDir()
 	writeTempFile(c, tmpDir, "file", "a", 0o644)
@@ -713,8 +784,7 @@ Bar
 	c.Assert(info.Mode().Perm(), Equals, os.FileMode(0o755))
 }
 
-// We mock os.Chown in this test because it's hard to test chown without
-// running as root.
+// We mock chown in this test because it's hard to test without running as root.
 func (s *filesSuite) TestWriteUserGroupMocked(c *C) {
 	type chownArgs struct {
 		name string
@@ -722,8 +792,14 @@ func (s *filesSuite) TestWriteUserGroupMocked(c *C) {
 		gid  int
 	}
 	var chownCalls []chownArgs
-	chown = func(name string, uid, gid int) error {
-		chownCalls = append(chownCalls, chownArgs{name, uid, gid})
+	atomicWriteChown = func(name string, r io.Reader, perm os.FileMode, flags osutil.AtomicWriteFlags, uid sys.UserID, gid sys.GroupID) error {
+		err := osutil.AtomicWrite(name, r, perm, flags)
+		if err != nil {
+			return err
+		}
+		if uid != osutil.NoChown && gid != osutil.NoChown {
+			chownCalls = append(chownCalls, chownArgs{name, int(uid), int(gid)})
+		}
 		return nil
 	}
 	var lookupUserCalls []string
@@ -737,7 +813,7 @@ func (s *filesSuite) TestWriteUserGroupMocked(c *C) {
 		return &user.Group{Gid: "78"}, nil
 	}
 	defer func() {
-		chown = os.Chown
+		atomicWriteChown = osutil.AtomicWriteChown
 		lookupUser = user.Lookup
 		lookupGroup = user.LookupGroup
 	}()
@@ -745,8 +821,8 @@ func (s *filesSuite) TestWriteUserGroupMocked(c *C) {
 	tmpDir := s.testWriteUserGroup(c, 12, 34, "USER", "GROUP")
 
 	c.Check(chownCalls, HasLen, 2)
-	c.Check(chownCalls[0], Equals, chownArgs{tmpDir + "/uid-gid.pebble-temp", 12, 34})
-	c.Check(chownCalls[1], Equals, chownArgs{tmpDir + "/user-group.pebble-temp", 56, 78})
+	c.Check(chownCalls[0], Equals, chownArgs{tmpDir + "/uid-gid", 12, 34})
+	c.Check(chownCalls[1], Equals, chownArgs{tmpDir + "/user-group", 56, 78})
 	c.Check(lookupUserCalls, HasLen, 1)
 	c.Check(lookupUserCalls[0], Equals, "USER")
 	c.Check(lookupGroupCalls, HasLen, 1)
@@ -769,9 +845,15 @@ func (s *filesSuite) TestWriteUserGroupReal(c *C) {
 
 	tmpDir := s.testWriteUserGroup(c, uid, gid, "nobody", "nogroup")
 
-	info, err := os.Stat(tmpDir + "/uid-gid")
+	info, err := os.Stat(tmpDir + "/normal")
 	c.Assert(err, IsNil)
 	statT := info.Sys().(*syscall.Stat_t)
+	c.Check(statT.Uid, Equals, uint32(0))
+	c.Check(statT.Gid, Equals, uint32(0))
+
+	info, err = os.Stat(tmpDir + "/uid-gid")
+	c.Assert(err, IsNil)
+	statT = info.Sys().(*syscall.Stat_t)
 	c.Check(statT.Uid, Equals, uint32(uid))
 	c.Check(statT.Gid, Equals, uint32(uid))
 
@@ -784,6 +866,7 @@ func (s *filesSuite) TestWriteUserGroupReal(c *C) {
 
 func (s *filesSuite) testWriteUserGroup(c *C, uid, gid int, user, group string) string {
 	tmpDir := c.MkDir()
+	pathNormal := tmpDir + "/normal"
 	pathUidGid := tmpDir + "/uid-gid"
 	pathUserGroup := tmpDir + "/user-group"
 
@@ -798,30 +881,37 @@ Content-Disposition: form-data; name="request"
 {
 	"action": "write",
 	"files": [
-		{"path": "%[1]s", "user-id": %[3]d, "group-id": %[4]d},
-		{"path": "%[2]s", "user": "%[5]s", "group": "%[6]s"}
+		{"path": "%[1]s"},
+		{"path": "%[2]s", "user-id": %[3]d, "group-id": %[4]d},
+		{"path": "%[5]s", "user": "%[6]s", "group": "%[7]s"}
 	]
 }
 --BOUNDARY
 Content-Disposition: form-data; name="path:%[1]s"; filename="uid-gid"
 
+normal
+--BOUNDARY
+Content-Disposition: form-data; name="path:%[2]s"; filename="uid-gid"
+
 uid gid
 --BOUNDARY
-Content-Disposition: form-data; name="path:%[2]s"; filename="user-group"
+Content-Disposition: form-data; name="path:%[5]s"; filename="user-group"
 
 user group
 --BOUNDARY--
-`, pathUidGid, pathUserGroup, uid, gid, user, group)))
+`, pathNormal, pathUidGid, uid, gid, pathUserGroup, user, group)))
 	c.Check(response.StatusCode, Equals, http.StatusOK)
 
 	var r testFilesResponse
 	c.Assert(json.NewDecoder(body).Decode(&r), IsNil)
 	c.Check(r.StatusCode, Equals, http.StatusOK)
 	c.Check(r.Type, Equals, "sync")
-	c.Check(r.Result, HasLen, 2)
-	checkFileResult(c, r.Result[0], pathUidGid, "", "")
-	checkFileResult(c, r.Result[1], pathUserGroup, "", "")
+	c.Check(r.Result, HasLen, 3)
+	checkFileResult(c, r.Result[0], pathNormal, "", "")
+	checkFileResult(c, r.Result[1], pathUidGid, "", "")
+	checkFileResult(c, r.Result[2], pathUserGroup, "", "")
 
+	assertFile(c, pathNormal, 0o644, "normal")
 	assertFile(c, pathUidGid, 0o644, "uid gid")
 	assertFile(c, pathUserGroup, 0o644, "user group")
 

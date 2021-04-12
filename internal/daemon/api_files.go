@@ -33,6 +33,7 @@ import (
 	"time"
 
 	"github.com/canonical/pebble/internal/osutil"
+	"github.com/canonical/pebble/internal/osutil/sys"
 )
 
 const minBoundaryLength = 8
@@ -449,41 +450,22 @@ func writeFile(item writeFilesItem, source io.Reader) error {
 		}
 	}
 
-	// Create file and write contents to temporary file.
+	// Atomically write file content to destination.
 	perm, err := parsePermissions(item.Permissions, 0o644)
 	if err != nil {
 		return err
 	}
-	tempPath := item.Path + ".pebble-temp"
-	f, err := os.OpenFile(tempPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, perm)
+	uid, gid, err := lookupUserAndGroup(item.UserID, item.User, item.GroupID, item.Group)
 	if err != nil {
-		return fmt.Errorf("cannot create file: %w", err)
+		return fmt.Errorf("cannot look up user and group: %w", err)
 	}
-	defer func() {
-		if err != nil {
-			_ = os.Remove(tempPath)
-		}
-	}()
-	_, err = io.Copy(f, source)
-	if err != nil {
-		_ = f.Close()
-		return fmt.Errorf("cannot write file: %w", err)
+	sysUid, sysGid := sys.UserID(uid), sys.GroupID(gid)
+	if uid == 0 || gid == 0 {
+		sysUid, sysGid = osutil.NoChown, osutil.NoChown
 	}
-	err = f.Close()
+	err = atomicWriteChown(item.Path, source, perm, 0, sysUid, sysGid)
 	if err != nil {
-		return fmt.Errorf("cannot close file: %w", err)
-	}
-
-	// Update user and group if necessary.
-	err = updateUserAndGroup(tempPath, item.UserID, item.User, item.GroupID, item.Group)
-	if err != nil {
-		return fmt.Errorf("cannot set user and group: %w", err)
-	}
-
-	// Atomically move temporary file to final location.
-	err = os.Rename(tempPath, item.Path)
-	if err != nil {
-		return fmt.Errorf("cannot move temporary file to destination: %w", err)
+		return fmt.Errorf("cannot atomically write file: %w", err)
 	}
 	return nil
 }
@@ -543,46 +525,49 @@ func makeDir(dir makeDirsItem) error {
 	if err != nil {
 		return err
 	}
-	err = updateUserAndGroup(dir.Path, dir.UserID, dir.User, dir.GroupID, dir.Group)
+	uid, gid, err := lookupUserAndGroup(dir.UserID, dir.User, dir.GroupID, dir.Group)
 	if err != nil {
-		return fmt.Errorf("cannot set user and group: %w", err)
+		return fmt.Errorf("cannot look up user and group: %w", err)
+	}
+	if uid != 0 && gid != 0 {
+		err = chown(dir.Path, uid, gid)
+		if err != nil {
+			return fmt.Errorf("cannot set user and group: %w", err)
+		}
 	}
 	return nil
 }
 
 // Because it's hard to test os.Chown with running the tests as root.
 var (
-	chown       = os.Chown
-	lookupUser  = user.Lookup
-	lookupGroup = user.LookupGroup
+	chown            = os.Chown
+	atomicWriteChown = osutil.AtomicWriteChown
+	lookupUser       = user.Lookup
+	lookupGroup      = user.LookupGroup
 )
 
-func updateUserAndGroup(path string, uid int, username string, gid int, group string) error {
+func lookupUserAndGroup(uid int, username string, gid int, group string) (int, int, error) {
 	if uid == 0 && username == "" && gid == 0 && group == "" {
-		return nil
+		return 0, 0, nil
 	}
 	if uid == 0 && username != "" {
 		u, err := lookupUser(username)
 		if err != nil {
-			return err
+			return 0, 0, err
 		}
 		uid, _ = strconv.Atoi(u.Uid)
 	}
 	if gid == 0 && group != "" {
 		g, err := lookupGroup(group)
 		if err != nil {
-			return err
+			return 0, 0, err
 		}
 		gid, _ = strconv.Atoi(g.Gid)
 	}
 	if uid == 0 || gid == 0 {
-		return fmt.Errorf("must set both user and group together")
+		return 0, 0, fmt.Errorf("must set both user and group together")
 	}
-	err := chown(path, uid, gid)
-	if err != nil {
-		return err
-	}
-	return nil
+	return uid, gid, nil
 }
 
 // Removing paths
