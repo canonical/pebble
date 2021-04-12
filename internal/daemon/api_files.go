@@ -29,7 +29,6 @@ import (
 	"path"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/canonical/pebble/internal/osutil"
@@ -149,7 +148,7 @@ func readFile(p string, mw *multipart.Writer) error {
 	}
 	defer f.Close()
 
-	fw, err := mw.CreateFormFile("path:"+p, path.Base(p))
+	fw, err := mw.CreateFormFile("files", p)
 	if err != nil {
 		return err
 	}
@@ -407,10 +406,10 @@ func writeFiles(body io.Reader, boundary string) Response {
 		if err != nil {
 			return statusBadRequest("cannot read file part %d: %v", i, err)
 		}
-		p := strings.TrimPrefix(part.FormName(), "path:")
-		if p == part.FormName() {
-			return statusBadRequest(`field name must be in format "path:/PATH", got %q`, part.FormName())
+		if part.FormName() != "files" {
+			return statusBadRequest(`field name must be "files", got %q`, part.FormName())
 		}
+		p := part.FileName()
 		info, ok := infos[p]
 		if !ok {
 			return statusBadRequest("no metadata for path %q", p)

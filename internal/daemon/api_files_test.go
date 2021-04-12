@@ -211,7 +211,7 @@ func (s *filesSuite) TestReadSingle(c *C) {
 	checkFileResult(c, r.Result[0], tmpDir+"/one.txt", "", "")
 
 	c.Check(files, DeepEquals, map[string]string{
-		"path:" + tmpDir + "/one.txt": "be",
+		tmpDir + "/one.txt": "be",
 	})
 }
 
@@ -244,7 +244,7 @@ func (s *filesSuite) TestReadErrorOnRead(c *C) {
 
 	// File will still be in response, but with no content
 	c.Check(files, DeepEquals, map[string]string{
-		"path:/proc/self/mem": "",
+		"/proc/self/mem": "",
 	})
 }
 
@@ -278,9 +278,9 @@ func (s *filesSuite) TestReadMultiple(c *C) {
 	checkFileResult(c, r.Result[2], tmpDir+"/two.txt", "", "")
 
 	c.Check(files, DeepEquals, map[string]string{
-		"path:" + tmpDir + "/foo":     "a",
-		"path:" + tmpDir + "/one.txt": "be",
-		"path:" + tmpDir + "/two.txt": "cee",
+		tmpDir + "/foo":     "a",
+		tmpDir + "/one.txt": "be",
+		tmpDir + "/two.txt": "cee",
 	})
 }
 
@@ -317,7 +317,7 @@ func (s *filesSuite) TestReadErrors(c *C) {
 	checkFileResult(c, r.Result[4], tmpDir, "generic-file-error", "cannot read a directory: .*")
 
 	c.Check(files, DeepEquals, map[string]string{
-		"path:" + tmpDir + "/foo": "a",
+		tmpDir + "/foo": "a",
 	})
 }
 
@@ -627,7 +627,7 @@ Bad file field
 --BOUNDARY--
 `))
 	c.Check(response.StatusCode, Equals, http.StatusBadRequest)
-	assertError(c, body, http.StatusBadRequest, "", `field name must be in format "path:/PATH".*`)
+	assertError(c, body, http.StatusBadRequest, "", `field name must be "files", got "bad"`)
 }
 
 func (s *filesSuite) TestWriteNoMetadataForPath(c *C) {
@@ -643,7 +643,7 @@ Content-Disposition: form-data; name="request"
 	{"path": "/foo/bar"}
 ]}
 --BOUNDARY
-Content-Disposition: form-data; name="path:/no-metadata"; filename="foo"
+Content-Disposition: form-data; name="files"; filename="/no-metadata"
 
 No metadata
 --BOUNDARY--
@@ -711,7 +711,7 @@ Content-Disposition: form-data; name="request"
 	{"path": "%[1]s"}
 ]}
 --BOUNDARY
-Content-Disposition: form-data; name="path:%[1]s"; filename="hello.txt"
+Content-Disposition: form-data; name="files"; filename="%[1]s"
 
 Hello world
 --BOUNDARY--
@@ -751,15 +751,15 @@ Content-Disposition: form-data; name="request"
 	]
 }
 --BOUNDARY
-Content-Disposition: form-data; name="path:%[1]s"; filename="hello.txt"
+Content-Disposition: form-data; name="files"; filename="%[1]s"
 
 Hello
 --BOUNDARY
-Content-Disposition: form-data; name="path:%[2]s"; filename="byebye.txt"
+Content-Disposition: form-data; name="files"; filename="%[2]s"
 
 Bye bye
 --BOUNDARY
-Content-Disposition: form-data; name="path:%[3]s"; filename="bar.txt"
+Content-Disposition: form-data; name="files"; filename="%[3]s"
 
 Foo
 Bar
@@ -887,15 +887,15 @@ Content-Disposition: form-data; name="request"
 	]
 }
 --BOUNDARY
-Content-Disposition: form-data; name="path:%[1]s"; filename="uid-gid"
+Content-Disposition: form-data; name="files"; filename="%[1]s"
 
 normal
 --BOUNDARY
-Content-Disposition: form-data; name="path:%[2]s"; filename="uid-gid"
+Content-Disposition: form-data; name="files"; filename="%[2]s"
 
 uid gid
 --BOUNDARY
-Content-Disposition: form-data; name="path:%[5]s"; filename="user-group"
+Content-Disposition: form-data; name="files"; filename="%[5]s"
 
 user group
 --BOUNDARY--
@@ -952,31 +952,31 @@ Content-Disposition: form-data; name="request"
 	]
 }
 --BOUNDARY
-Content-Disposition: form-data; name="path:%[2]s"; filename="a"
+Content-Disposition: form-data; name="files"; filename="%[2]s"
 
 path not absolute
 --BOUNDARY
-Content-Disposition: form-data; name="path:%[3]s"; filename="b"
+Content-Disposition: form-data; name="files"; filename="%[3]s"
 
 dir not found
 --BOUNDARY
-Content-Disposition: form-data; name="path:%[4]s"; filename="c"
+Content-Disposition: form-data; name="files"; filename="%[4]s"
 
 permission denied
 --BOUNDARY
-Content-Disposition: form-data; name="path:%[5]s"; filename="c"
+Content-Disposition: form-data; name="files"; filename="%[5]s"
 
 user not found
 --BOUNDARY
-Content-Disposition: form-data; name="path:%[6]s"; filename="c"
+Content-Disposition: form-data; name="files"; filename="%[6]s"
 
 group not found
 --BOUNDARY
-Content-Disposition: form-data; name="path:%[7]s"; filename="c"
+Content-Disposition: form-data; name="files"; filename="%[7]s"
 
 only user specified
 --BOUNDARY
-Content-Disposition: form-data; name="path:%[8]s"; filename="c"
+Content-Disposition: form-data; name="files"; filename="%[8]s"
 
 only group specified
 --BOUNDARY--
@@ -1029,15 +1029,13 @@ func readMultipart(c *C, response *http.Response, body io.Reader, result interfa
 	c.Assert(err, IsNil)
 
 	files := make(map[string]string)
-	for p, fhs := range form.File {
-		for _, fh := range fhs {
-			f, err := fh.Open()
-			c.Assert(err, IsNil)
-			b, err := ioutil.ReadAll(f)
-			c.Assert(err, IsNil)
-			f.Close()
-			files[p] = string(b)
-		}
+	for _, fh := range form.File["files"] {
+		f, err := fh.Open()
+		c.Assert(err, IsNil)
+		b, err := ioutil.ReadAll(f)
+		c.Assert(err, IsNil)
+		f.Close()
+		files[fh.Filename] = string(b)
 	}
 	return files
 }
