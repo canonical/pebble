@@ -35,6 +35,8 @@ import (
 	"github.com/canonical/pebble/internal/osutil"
 )
 
+const minBoundaryLength = 8
+
 func v1GetFiles(_ *Command, req *http.Request, _ *userState) Response {
 	query := req.URL.Query()
 	action := query.Get("action")
@@ -43,6 +45,9 @@ func v1GetFiles(_ *Command, req *http.Request, _ *userState) Response {
 		paths := query["path"]
 		if len(paths) == 0 {
 			return statusBadRequest("must specify one or more paths")
+		}
+		if req.Header.Get("Accept") != "multipart/form-data" {
+			return statusBadRequest(`must accept multipart/form-data`)
 		}
 		return readFilesResponse{paths: paths}
 	case "list":
@@ -54,7 +59,7 @@ func v1GetFiles(_ *Command, req *http.Request, _ *userState) Response {
 		if directory != "true" && directory != "false" && directory != "" {
 			return statusBadRequest(`directory parameter must be "true" or "false"`)
 		}
-		return listFiles(pattern, directory == "true")
+		return listFilesResponse(pattern, directory == "true")
 	default:
 		return statusBadRequest("invalid action %q", action)
 	}
@@ -63,55 +68,38 @@ func v1GetFiles(_ *Command, req *http.Request, _ *userState) Response {
 type fileResult struct {
 	Path  string       `json:"path"`
 	Error *errorResult `json:"error,omitempty"`
-	f     *os.File
 }
+
+// Reading files
 
 // Custom Response implementation to serve the multipart.
 type readFilesResponse struct {
 	paths []string
 }
 
-// Reading files
-
 func (r readFilesResponse) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	if req.Header.Get("Accept") != "multipart/form-data" {
-		errResp := statusBadRequest(`must accept multipart/form-data`)
-		errResp.ServeHTTP(w, req)
-		return
-	}
+	// Write HTTP status and headers. HTTP status is always OK because we don't
+	// know any better until we've read all the files.
+	mw := multipart.NewWriter(w)
+	header := w.Header()
+	header.Set("Content-Type", mw.FormDataContentType())
+	w.WriteHeader(http.StatusOK)
 
-	// We open all the files first so we can detect not-found and
-	// permission-denied errors for each file, as we send the metadata and
-	// errors first.
+	// Read each file's contents to multipart response.
 	result := make([]fileResult, len(r.paths))
-	var firstErr error
+	status := http.StatusOK
 	for i, p := range r.paths {
-		f, err := openForRead(p)
+		err := readFile(p, mw)
 		if err != nil {
-			if firstErr == nil {
-				firstErr = err
-			}
-		} else {
-			defer f.Close()
+			status = http.StatusBadRequest
 		}
 		result[i] = fileResult{
 			Path:  p,
 			Error: fileErrorToResult(err),
-			f:     f,
 		}
 	}
 
-	// Write HTTP status and headers.
-	mw := multipart.NewWriter(w)
-	header := w.Header()
-	header.Set("Content-Type", mw.FormDataContentType())
-	status := http.StatusOK
-	if firstErr != nil {
-		status = http.StatusBadRequest
-	}
-	w.WriteHeader(status)
-
-	// Write first part: response metadata in JSON format.
+	// At the end, write response metadata in JSON format.
 	mh := textproto.MIMEHeader{}
 	mh.Set("Content-Type", "application/json")
 	mh.Set("Content-Disposition", `form-data; name="response"`)
@@ -133,23 +121,6 @@ func (r readFilesResponse) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// Write file content for each p.
-	for _, file := range result {
-		if file.Error != nil {
-			continue
-		}
-		fw, err := mw.CreateFormFile("path:"+file.Path, path.Base(file.Path))
-		if err != nil {
-			http.Error(w, "\n"+err.Error(), http.StatusInternalServerError)
-			return
-		}
-		_, err = io.Copy(fw, file.f)
-		if err != nil {
-			http.Error(w, "\n"+err.Error(), http.StatusInternalServerError)
-			return
-		}
-	}
-
 	// Write the multipart trailer (last boundary marker).
 	err = mw.Close()
 	if err != nil {
@@ -159,19 +130,31 @@ func (r readFilesResponse) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 }
 
 func nonAbsolutePathError(p string) error {
-	return fmt.Errorf("paths must be absolute (%q is not)", p)
+	return fmt.Errorf("paths must be absolute, got %q", p)
 }
 
-func openForRead(p string) (*os.File, error) {
+func readFile(p string, mw *multipart.Writer) error {
 	if !path.IsAbs(p) {
-		return nil, nonAbsolutePathError(p)
+		return nonAbsolutePathError(p)
 	}
-	// Pro-actively disallow reading directories (other errors will be caught
-	// during read / io.Copy).
 	if osutil.IsDir(p) {
-		return nil, fmt.Errorf("cannot read a directory: %q", p)
+		return fmt.Errorf("cannot read a directory: %q", p)
 	}
-	return os.Open(p)
+	f, err := os.Open(p)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	fw, err := mw.CreateFormFile("path:"+p, path.Base(p))
+	if err != nil {
+		return err
+	}
+	_, err = io.Copy(fw, f)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func fileErrorToResult(err error) *errorResult {
@@ -274,18 +257,18 @@ func fileInfoToResult(fullPath string, info os.FileInfo) fileInfoResult {
 	return result
 }
 
-func listFiles(pattern string, directoryItself bool) Response {
+func listFilesResponse(pattern string, directoryItself bool) Response {
 	if !path.IsAbs(pattern) {
-		return statusBadRequest("pattern must be absolute (%q is not)", pattern)
+		return statusBadRequest("pattern must be absolute, got %q", pattern)
 	}
-	result, err := listFilesErr(pattern, directoryItself)
+	result, err := listFiles(pattern, directoryItself)
 	if err != nil {
 		return listErrorResponse(err)
 	}
 	return SyncResponse(result)
 }
 
-func listFilesErr(pattern string, directoryItself bool) ([]fileInfoResult, error) {
+func listFiles(pattern string, directoryItself bool) ([]fileInfoResult, error) {
 	info, err := os.Stat(pattern)
 	if errors.Is(err, os.ErrNotExist) {
 		dir, base := filepath.Split(pattern)
@@ -340,7 +323,7 @@ func v1PostFiles(_ *Command, req *http.Request, _ *userState) Response {
 	switch mediaType {
 	case "multipart/form-data":
 		boundary := params["boundary"]
-		if boundary == "" {
+		if len(boundary) < minBoundaryLength {
 			return statusBadRequest("invalid boundary %q", boundary)
 		}
 		return writeFiles(req.Body, boundary)
@@ -389,7 +372,7 @@ func writeFiles(body io.Reader, boundary string) Response {
 		return statusBadRequest("cannot read request metadata: %v", err)
 	}
 	if part.FormName() != "request" {
-		return statusBadRequest(`metadata field name must be "request", not %q`, part.FormName())
+		return statusBadRequest(`metadata field name must be "request", got %q`, part.FormName())
 	}
 
 	// Decode metadata about files to write.
@@ -402,7 +385,7 @@ func writeFiles(body io.Reader, boundary string) Response {
 		return statusBadRequest("cannot decode request metadata: %v", err)
 	}
 	if payload.Action != "write" {
-		return statusBadRequest(`multipart action must be "write", not %q`, payload.Action)
+		return statusBadRequest(`multipart action must be "write", got %q`, payload.Action)
 	}
 	if len(payload.Files) == 0 {
 		return statusBadRequest("must specify one or more files")
@@ -421,10 +404,10 @@ func writeFiles(body io.Reader, boundary string) Response {
 		if err != nil {
 			return statusBadRequest("cannot read file part %d: %v", i, err)
 		}
-		if !strings.HasPrefix(part.FormName(), "file:") {
-			return statusBadRequest(`field name must be in format "file:/path", not %q`, part.FormName())
+		p := strings.TrimPrefix(part.FormName(), "path:")
+		if p == part.FormName() {
+			return statusBadRequest(`field name must be in format "path:/PATH", got %q`, part.FormName())
 		}
-		p := part.FormName()[len("file:"):]
 		info, ok := infos[p]
 		if !ok {
 			return statusBadRequest("no metadata for path %q", p)
@@ -462,7 +445,7 @@ func writeFile(item writeFilesItem, source io.Reader) error {
 	if item.MakeDirs {
 		err := os.MkdirAll(path.Dir(item.Path), 0o755)
 		if err != nil {
-			return fmt.Errorf("creating directory: %w", err)
+			return fmt.Errorf("cannot create directory: %w", err)
 		}
 	}
 
@@ -472,33 +455,35 @@ func writeFile(item writeFilesItem, source io.Reader) error {
 		return err
 	}
 	tempPath := item.Path + ".pebble-temp"
-	f, err := os.OpenFile(tempPath, os.O_RDWR|os.O_CREATE|os.O_TRUNC, perm)
+	f, err := os.OpenFile(tempPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, perm)
 	if err != nil {
-		return fmt.Errorf("creating file: %w", err)
+		return fmt.Errorf("cannot create file: %w", err)
 	}
+	defer func() {
+		if err != nil {
+			_ = os.Remove(tempPath)
+		}
+	}()
 	_, err = io.Copy(f, source)
 	if err != nil {
 		_ = f.Close()
-		_ = os.Remove(tempPath)
-		return fmt.Errorf("writing file: %w", err)
+		return fmt.Errorf("cannot write file: %w", err)
 	}
 	err = f.Close()
 	if err != nil {
-		_ = os.Remove(tempPath)
-		return fmt.Errorf("closing file: %w", err)
+		return fmt.Errorf("cannot close file: %w", err)
 	}
 
 	// Update user and group if necessary.
 	err = updateUserAndGroup(tempPath, item.UserID, item.User, item.GroupID, item.Group)
 	if err != nil {
-		_ = os.Remove(tempPath)
-		return fmt.Errorf("setting user and group: %w", err)
+		return fmt.Errorf("cannot set user and group: %w", err)
 	}
 
 	// Atomically move temporary file to final location.
 	err = os.Rename(tempPath, item.Path)
 	if err != nil {
-		return fmt.Errorf("moving temporary file to path: %w", err)
+		return fmt.Errorf("cannot move temporary file to destination: %w", err)
 	}
 	return nil
 }
@@ -509,7 +494,7 @@ func parsePermissions(permissions string, defaultMode os.FileMode) (os.FileMode,
 	}
 	perm, err := strconv.ParseUint(permissions, 8, 32)
 	if err != nil || len(permissions) != 3 {
-		return 0, fmt.Errorf("permissions must be a 3-digit octal string, not %q", permissions)
+		return 0, fmt.Errorf("permissions must be a 3-digit octal string, got %q", permissions)
 	}
 	return os.FileMode(perm), nil
 }
@@ -560,7 +545,7 @@ func makeDir(dir makeDirsItem) error {
 	}
 	err = updateUserAndGroup(dir.Path, dir.UserID, dir.User, dir.GroupID, dir.Group)
 	if err != nil {
-		return fmt.Errorf("setting user and group: %w", err)
+		return fmt.Errorf("cannot set user and group: %w", err)
 	}
 	return nil
 }

@@ -64,7 +64,7 @@ func (s *filesSuite) TestListFilesNonAbsPattern(c *C) {
 	}
 	response, body := doRequest(c, v1GetFiles, "GET", "/v1/files", query, nil, nil)
 	c.Assert(response.StatusCode, Equals, http.StatusBadRequest)
-	assertError(c, body, http.StatusBadRequest, "", `pattern must be absolute .*`)
+	assertError(c, body, http.StatusBadRequest, "", `pattern must be absolute, got .*`)
 }
 
 func (s *filesSuite) TestListFilesPermissionDenied(c *C) {
@@ -214,18 +214,24 @@ func (s *filesSuite) TestReadSingle(c *C) {
 	})
 }
 
-func (s *filesSuite) TestReadDirectory(c *C) {
-	tmpDir := createTestFiles(c)
+func (s *filesSuite) TestReadErrorOnRead(c *C) {
+	// You can open /proc/self/mem with error, but when you read from it
+	// at offset 0 you get a Read error -- this tests that code path.
+	f, err := os.Open("/proc/self/mem")
+	if err != nil {
+		c.Skip("/proc/self/mem unavailable")
+	}
+	_ = f.Close()
 
 	query := url.Values{
 		"action": []string{"read"},
-		"path":   []string{tmpDir},
+		"path":   []string{"/proc/self/mem"},
 	}
 	headers := http.Header{
 		"Accept": []string{"multipart/form-data"},
 	}
 	response, body := doRequest(c, v1GetFiles, "GET", "/v1/files", query, headers, nil)
-	c.Check(response.StatusCode, Equals, http.StatusBadRequest)
+	c.Check(response.StatusCode, Equals, http.StatusOK)
 
 	var r testFilesResponse
 	files := readMultipart(c, response, body, &r)
@@ -233,9 +239,12 @@ func (s *filesSuite) TestReadDirectory(c *C) {
 	c.Check(r.StatusCode, Equals, http.StatusBadRequest)
 	c.Check(r.Status, Equals, "Bad Request")
 	c.Check(r.Result, HasLen, 1)
-	checkFileResult(c, r.Result[0], tmpDir, "generic-file-error", "cannot read a directory.*")
+	checkFileResult(c, r.Result[0], "/proc/self/mem", "generic-file-error", ".*input/output error")
 
-	c.Check(files, DeepEquals, map[string]string{})
+	// File will still be in response, but with no content
+	c.Check(files, DeepEquals, map[string]string{
+		"path:/proc/self/mem": "",
+	})
 }
 
 func checkFileResult(c *C, r testFileResult, path, errorKind, errorMsg string) {
@@ -282,27 +291,29 @@ func (s *filesSuite) TestReadErrors(c *C) {
 		"action": []string{"read"},
 		"path": []string{
 			tmpDir + "/no-exist",
-			tmpDir + "/foo",
+			tmpDir + "/foo", // successful read
 			tmpDir + "/no-access",
 			"relative-path",
+			tmpDir,
 		},
 	}
 	headers := http.Header{
 		"Accept": []string{"multipart/form-data"},
 	}
 	response, body := doRequest(c, v1GetFiles, "GET", "/v1/files", query, headers, nil)
-	c.Check(response.StatusCode, Equals, http.StatusBadRequest)
+	c.Check(response.StatusCode, Equals, http.StatusOK) // actual HTTP status is 200
 
 	var r testFilesResponse
 	files := readMultipart(c, response, body, &r)
 	c.Check(r.Type, Equals, "sync")
 	c.Check(r.StatusCode, Equals, http.StatusBadRequest)
 	c.Check(r.Status, Equals, "Bad Request")
-	c.Check(r.Result, HasLen, 4)
+	c.Check(r.Result, HasLen, 5)
 	checkFileResult(c, r.Result[0], tmpDir+"/no-exist", "not-found", ".*: no such file or directory")
 	checkFileResult(c, r.Result[1], tmpDir+"/foo", "", "")
 	checkFileResult(c, r.Result[2], tmpDir+"/no-access", "permission-denied", ".*: permission denied")
-	checkFileResult(c, r.Result[3], "relative-path", "generic-file-error", "paths must be absolute .*")
+	checkFileResult(c, r.Result[3], "relative-path", "generic-file-error", "paths must be absolute, got .*")
+	checkFileResult(c, r.Result[4], tmpDir, "generic-file-error", "cannot read a directory: .*")
 
 	c.Check(files, DeepEquals, map[string]string{
 		"path:" + tmpDir + "/foo": "a",
@@ -487,20 +498,27 @@ func (s *filesSuite) TestRemoveMultiple(c *C) {
 
 func (s *filesSuite) TestWriteNoMetadata(c *C) {
 	headers := http.Header{
-		"Content-Type": []string{"multipart/form-data; boundary=FOO"},
+		"Content-Type": []string{"multipart/form-data; boundary=BOUNDARY"},
 	}
 	response, body := doRequest(c, v1PostFiles, "POST", "/v1/files", nil, headers, []byte{})
 	c.Check(response.StatusCode, Equals, http.StatusBadRequest)
 	assertError(c, body, http.StatusBadRequest, "", `cannot read request metadata: .*`)
 }
 
-func (s *filesSuite) TestWriteNoBoundary(c *C) {
+func (s *filesSuite) TestWriteInvalidBoundary(c *C) {
 	headers := http.Header{
 		"Content-Type": []string{"multipart/form-data"},
 	}
 	response, body := doRequest(c, v1PostFiles, "POST", "/v1/files", nil, headers, []byte{})
 	c.Check(response.StatusCode, Equals, http.StatusBadRequest)
 	assertError(c, body, http.StatusBadRequest, "", `invalid boundary ""`)
+
+	headers = http.Header{
+		"Content-Type": []string{"multipart/form-data; boundary=SHORT"},
+	}
+	response, body = doRequest(c, v1PostFiles, "POST", "/v1/files", nil, headers, []byte{})
+	c.Check(response.StatusCode, Equals, http.StatusBadRequest)
+	assertError(c, body, http.StatusBadRequest, "", `invalid boundary "SHORT"`)
 }
 
 func (s *filesSuite) TestWriteInvalidRequestField(c *C) {
@@ -516,7 +534,7 @@ Content-Disposition: form-data; name="foo"
 --BOUNDARY--
 `))
 	c.Check(response.StatusCode, Equals, http.StatusBadRequest)
-	assertError(c, body, http.StatusBadRequest, "", `metadata field name must be "request", not "foo"`)
+	assertError(c, body, http.StatusBadRequest, "", `metadata field name must be "request", got "foo"`)
 }
 
 func (s *filesSuite) TestWriteInvalidFileField(c *C) {
@@ -538,7 +556,7 @@ Bad file field
 --BOUNDARY--
 `))
 	c.Check(response.StatusCode, Equals, http.StatusBadRequest)
-	assertError(c, body, http.StatusBadRequest, "", `field name must be in format "file:/path".*`)
+	assertError(c, body, http.StatusBadRequest, "", `field name must be in format "path:/PATH".*`)
 }
 
 func (s *filesSuite) TestWriteNoMetadataForPath(c *C) {
@@ -554,7 +572,7 @@ Content-Disposition: form-data; name="request"
 	{"path": "/foo/bar"}
 ]}
 --BOUNDARY
-Content-Disposition: form-data; name="file:/no-metadata"; filename="foo"
+Content-Disposition: form-data; name="path:/no-metadata"; filename="foo"
 
 No metadata
 --BOUNDARY--
@@ -587,7 +605,7 @@ Content-Disposition: form-data; name="request"
 --BOUNDARY--
 `))
 	c.Check(response.StatusCode, Equals, http.StatusBadRequest)
-	assertError(c, body, http.StatusBadRequest, "", `multipart action must be "write", not "foo"`)
+	assertError(c, body, http.StatusBadRequest, "", `multipart action must be "write", got "foo"`)
 }
 
 func (s *filesSuite) TestWriteNoFiles(c *C) {
@@ -622,7 +640,7 @@ Content-Disposition: form-data; name="request"
 	{"path": "%[1]s"}
 ]}
 --BOUNDARY
-Content-Disposition: form-data; name="file:%[1]s"; filename="hello.txt"
+Content-Disposition: form-data; name="path:%[1]s"; filename="hello.txt"
 
 Hello world
 --BOUNDARY--
@@ -662,15 +680,15 @@ Content-Disposition: form-data; name="request"
 	]
 }
 --BOUNDARY
-Content-Disposition: form-data; name="file:%[1]s"; filename="hello.txt"
+Content-Disposition: form-data; name="path:%[1]s"; filename="hello.txt"
 
 Hello
 --BOUNDARY
-Content-Disposition: form-data; name="file:%[2]s"; filename="byebye.txt"
+Content-Disposition: form-data; name="path:%[2]s"; filename="byebye.txt"
 
 Bye bye
 --BOUNDARY
-Content-Disposition: form-data; name="file:%[3]s"; filename="bar.txt"
+Content-Disposition: form-data; name="path:%[3]s"; filename="bar.txt"
 
 Foo
 Bar
@@ -785,11 +803,11 @@ Content-Disposition: form-data; name="request"
 	]
 }
 --BOUNDARY
-Content-Disposition: form-data; name="file:%[1]s"; filename="uid-gid"
+Content-Disposition: form-data; name="path:%[1]s"; filename="uid-gid"
 
 uid gid
 --BOUNDARY
-Content-Disposition: form-data; name="file:%[2]s"; filename="user-group"
+Content-Disposition: form-data; name="path:%[2]s"; filename="user-group"
 
 user group
 --BOUNDARY--
@@ -844,31 +862,31 @@ Content-Disposition: form-data; name="request"
 	]
 }
 --BOUNDARY
-Content-Disposition: form-data; name="file:%[2]s"; filename="a"
+Content-Disposition: form-data; name="path:%[2]s"; filename="a"
 
 path not absolute
 --BOUNDARY
-Content-Disposition: form-data; name="file:%[3]s"; filename="b"
+Content-Disposition: form-data; name="path:%[3]s"; filename="b"
 
 dir not found
 --BOUNDARY
-Content-Disposition: form-data; name="file:%[4]s"; filename="c"
+Content-Disposition: form-data; name="path:%[4]s"; filename="c"
 
 permission denied
 --BOUNDARY
-Content-Disposition: form-data; name="file:%[5]s"; filename="c"
+Content-Disposition: form-data; name="path:%[5]s"; filename="c"
 
 user not found
 --BOUNDARY
-Content-Disposition: form-data; name="file:%[6]s"; filename="c"
+Content-Disposition: form-data; name="path:%[6]s"; filename="c"
 
 group not found
 --BOUNDARY
-Content-Disposition: form-data; name="file:%[7]s"; filename="c"
+Content-Disposition: form-data; name="path:%[7]s"; filename="c"
 
 only user specified
 --BOUNDARY
-Content-Disposition: form-data; name="file:%[8]s"; filename="c"
+Content-Disposition: form-data; name="path:%[8]s"; filename="c"
 
 only group specified
 --BOUNDARY--
@@ -882,7 +900,7 @@ only group specified
 	c.Check(r.Type, Equals, "sync")
 	c.Check(r.Result, HasLen, 8)
 	checkFileResult(c, r.Result[0], pathNoContent, "generic-file-error", "no file content for path.*")
-	checkFileResult(c, r.Result[1], pathNotAbsolute, "generic-file-error", "paths must be absolute.*")
+	checkFileResult(c, r.Result[1], pathNotAbsolute, "generic-file-error", "paths must be absolute, got .*")
 	checkFileResult(c, r.Result[2], pathNotFound, "not-found", ".*")
 	checkFileResult(c, r.Result[3], pathPermissionDenied, "permission-denied", ".*")
 	checkFileResult(c, r.Result[4], pathUserNotFound, "generic-file-error", ".*unknown user.*")
