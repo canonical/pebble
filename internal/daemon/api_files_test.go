@@ -316,7 +316,7 @@ func (s *filesSuite) TestReadErrors(c *C) {
 	checkFileResult(c, r.Result[1], tmpDir+"/foo", "", "")
 	checkFileResult(c, r.Result[2], tmpDir+"/no-access", "permission-denied", ".*: permission denied")
 	checkFileResult(c, r.Result[3], "relative-path", "generic-file-error", "paths must be absolute, got .*")
-	checkFileResult(c, r.Result[4], tmpDir, "generic-file-error", "cannot read a directory: .*")
+	checkFileResult(c, r.Result[4], tmpDir, "generic-file-error", "can only read a regular file: .*")
 
 	c.Check(files, DeepEquals, map[string]string{
 		tmpDir + "/foo": "a",

@@ -135,8 +135,12 @@ func readFile(path string, mw *multipart.Writer) error {
 	if !pathpkg.IsAbs(path) {
 		return nonAbsolutePathError(path)
 	}
-	if osutil.IsDir(path) {
-		return fmt.Errorf("cannot read a directory: %q", path)
+	info, err := os.Stat(path)
+	if err != nil {
+		return err
+	}
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("can only read a regular file: %q", path)
 	}
 	f, err := os.Open(path)
 	if err != nil {
