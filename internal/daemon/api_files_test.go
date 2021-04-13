@@ -121,9 +121,9 @@ func (s *filesSuite) TestListFilesDirItself(c *C) {
 	tmpDir := createTestFiles(c)
 
 	query := url.Values{
-		"action":    []string{"list"},
-		"path":      []string{tmpDir + "/sub"},
-		"directory": []string{"true"},
+		"action": []string{"list"},
+		"path":   []string{tmpDir + "/sub"},
+		"itself": []string{"true"},
 	}
 	response, body := doRequest(c, v1GetFiles, "GET", "/v1/files", query, nil, nil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
