@@ -571,7 +571,7 @@ func (s *filesSuite) TestRemoveMultiple(c *C) {
 
 func (s *filesSuite) TestWriteNoMetadata(c *C) {
 	headers := http.Header{
-		"Content-Type": []string{"multipart/form-data; boundary=BOUNDARY"},
+		"Content-Type": []string{"multipart/form-data; boundary=01234567890123456789012345678901"},
 	}
 	response, body := doRequest(c, v1PostFiles, "POST", "/v1/files", nil, headers, []byte{})
 	c.Check(response.StatusCode, Equals, http.StatusBadRequest)
@@ -596,15 +596,15 @@ func (s *filesSuite) TestWriteInvalidBoundary(c *C) {
 
 func (s *filesSuite) TestWriteInvalidRequestField(c *C) {
 	headers := http.Header{
-		"Content-Type": []string{"multipart/form-data; boundary=BOUNDARY"},
+		"Content-Type": []string{"multipart/form-data; boundary=01234567890123456789012345678901"},
 	}
 	response, body := doRequest(c, v1PostFiles, "POST", "/v1/files", nil, headers,
 		[]byte(`
---BOUNDARY
+--01234567890123456789012345678901
 Content-Disposition: form-data; name="foo"
 
 {"foo": "bar"}
---BOUNDARY--
+--01234567890123456789012345678901--
 `))
 	c.Check(response.StatusCode, Equals, http.StatusBadRequest)
 	assertError(c, body, http.StatusBadRequest, "", `metadata field name must be "request", got "foo"`)
@@ -612,21 +612,21 @@ Content-Disposition: form-data; name="foo"
 
 func (s *filesSuite) TestWriteInvalidFileField(c *C) {
 	headers := http.Header{
-		"Content-Type": []string{"multipart/form-data; boundary=BOUNDARY"},
+		"Content-Type": []string{"multipart/form-data; boundary=01234567890123456789012345678901"},
 	}
 	response, body := doRequest(c, v1PostFiles, "POST", "/v1/files", nil, headers,
 		[]byte(`
---BOUNDARY
+--01234567890123456789012345678901
 Content-Disposition: form-data; name="request"
 
 {"action": "write", "files": [
 	{"path": "/foo/bar"}
 ]}
---BOUNDARY
+--01234567890123456789012345678901
 Content-Disposition: form-data; name="bad"; filename="foo"
 
 Bad file field
---BOUNDARY--
+--01234567890123456789012345678901--
 `))
 	c.Check(response.StatusCode, Equals, http.StatusBadRequest)
 	assertError(c, body, http.StatusBadRequest, "", `field name must be "files", got "bad"`)
@@ -634,21 +634,21 @@ Bad file field
 
 func (s *filesSuite) TestWriteNoMetadataForPath(c *C) {
 	headers := http.Header{
-		"Content-Type": []string{"multipart/form-data; boundary=BOUNDARY"},
+		"Content-Type": []string{"multipart/form-data; boundary=01234567890123456789012345678901"},
 	}
 	response, body := doRequest(c, v1PostFiles, "POST", "/v1/files", nil, headers,
 		[]byte(`
---BOUNDARY
+--01234567890123456789012345678901
 Content-Disposition: form-data; name="request"
 
 {"action": "write", "files": [
 	{"path": "/foo/bar"}
 ]}
---BOUNDARY
+--01234567890123456789012345678901
 Content-Disposition: form-data; name="files"; filename="/no-metadata"
 
 No metadata
---BOUNDARY--
+--01234567890123456789012345678901--
 `))
 	c.Check(response.StatusCode, Equals, http.StatusBadRequest)
 	assertError(c, body, http.StatusBadRequest, "", `no metadata for path "/no-metadata"`)
@@ -656,26 +656,26 @@ No metadata
 
 func (s *filesSuite) TestWriteInvalidMetadata(c *C) {
 	headers := http.Header{
-		"Content-Type": []string{"multipart/form-data; boundary=BOUNDARY"},
+		"Content-Type": []string{"multipart/form-data; boundary=01234567890123456789012345678901"},
 	}
 	response, body := doRequest(c, v1PostFiles, "POST", "/v1/files", nil, headers,
 		[]byte(`
---BOUNDARY
+--01234567890123456789012345678901
 Content-Disposition: form-data; name="request"
 
 not json
---BOUNDARY--
+--01234567890123456789012345678901--
 `))
 	c.Check(response.StatusCode, Equals, http.StatusBadRequest)
 	assertError(c, body, http.StatusBadRequest, "", `cannot decode request metadata.*`)
 
 	response, body = doRequest(c, v1PostFiles, "POST", "/v1/files", nil, headers,
 		[]byte(`
---BOUNDARY
+--01234567890123456789012345678901
 Content-Disposition: form-data; name="request"
 
 {"action": "foo"}
---BOUNDARY--
+--01234567890123456789012345678901--
 `))
 	c.Check(response.StatusCode, Equals, http.StatusBadRequest)
 	assertError(c, body, http.StatusBadRequest, "", `multipart action must be "write", got "foo"`)
@@ -683,15 +683,15 @@ Content-Disposition: form-data; name="request"
 
 func (s *filesSuite) TestWriteNoFiles(c *C) {
 	headers := http.Header{
-		"Content-Type": []string{"multipart/form-data; boundary=BOUNDARY"},
+		"Content-Type": []string{"multipart/form-data; boundary=01234567890123456789012345678901"},
 	}
 	response, body := doRequest(c, v1PostFiles, "POST", "/v1/files", nil, headers,
 		[]byte(`
---BOUNDARY
+--01234567890123456789012345678901
 Content-Disposition: form-data; name="request"
 
 {"action": "write"}
---BOUNDARY--
+--01234567890123456789012345678901--
 `))
 	c.Check(response.StatusCode, Equals, http.StatusBadRequest)
 	assertError(c, body, http.StatusBadRequest, "", "must specify one or more files")
@@ -702,21 +702,21 @@ func (s *filesSuite) TestWriteSingle(c *C) {
 	path := tmpDir + "/hello.txt"
 
 	headers := http.Header{
-		"Content-Type": []string{"multipart/form-data; boundary=BOUNDARY"},
+		"Content-Type": []string{"multipart/form-data; boundary=01234567890123456789012345678901"},
 	}
 	response, body := doRequest(c, v1PostFiles, "POST", "/v1/files", nil, headers,
 		[]byte(fmt.Sprintf(`
---BOUNDARY
+--01234567890123456789012345678901
 Content-Disposition: form-data; name="request"
 
 {"action": "write", "files": [
 	{"path": "%[1]s"}
 ]}
---BOUNDARY
+--01234567890123456789012345678901
 Content-Disposition: form-data; name="files"; filename="%[1]s"
 
 Hello world
---BOUNDARY--
+--01234567890123456789012345678901--
 `, path)))
 	c.Check(response.StatusCode, Equals, http.StatusOK)
 
@@ -737,11 +737,11 @@ func (s *filesSuite) TestWriteMultiple(c *C) {
 	path2 := tmpDir + "/foo/bar.txt"
 
 	headers := http.Header{
-		"Content-Type": []string{"multipart/form-data; boundary=BOUNDARY"},
+		"Content-Type": []string{"multipart/form-data; boundary=01234567890123456789012345678901"},
 	}
 	response, body := doRequest(c, v1PostFiles, "POST", "/v1/files", nil, headers,
 		[]byte(fmt.Sprintf(`
---BOUNDARY
+--01234567890123456789012345678901
 Content-Disposition: form-data; name="request"
 
 {
@@ -752,20 +752,20 @@ Content-Disposition: form-data; name="request"
 		{"path": "%[3]s", "make-dirs": true}
 	]
 }
---BOUNDARY
+--01234567890123456789012345678901
 Content-Disposition: form-data; name="files"; filename="%[1]s"
 
 Hello
---BOUNDARY
+--01234567890123456789012345678901
 Content-Disposition: form-data; name="files"; filename="%[2]s"
 
 Bye bye
---BOUNDARY
+--01234567890123456789012345678901
 Content-Disposition: form-data; name="files"; filename="%[3]s"
 
 Foo
 Bar
---BOUNDARY--
+--01234567890123456789012345678901--
 `, path0, path1, path2)))
 	c.Check(response.StatusCode, Equals, http.StatusOK)
 
@@ -873,11 +873,11 @@ func (s *filesSuite) testWriteUserGroup(c *C, uid, gid int, user, group string) 
 	pathUserGroup := tmpDir + "/user-group"
 
 	headers := http.Header{
-		"Content-Type": []string{"multipart/form-data; boundary=BOUNDARY"},
+		"Content-Type": []string{"multipart/form-data; boundary=01234567890123456789012345678901"},
 	}
 	response, body := doRequest(c, v1PostFiles, "POST", "/v1/files", nil, headers,
 		[]byte(fmt.Sprintf(`
---BOUNDARY
+--01234567890123456789012345678901
 Content-Disposition: form-data; name="request"
 
 {
@@ -888,19 +888,19 @@ Content-Disposition: form-data; name="request"
 		{"path": "%[5]s", "user": "%[6]s", "group": "%[7]s"}
 	]
 }
---BOUNDARY
+--01234567890123456789012345678901
 Content-Disposition: form-data; name="files"; filename="%[1]s"
 
 normal
---BOUNDARY
+--01234567890123456789012345678901
 Content-Disposition: form-data; name="files"; filename="%[2]s"
 
 uid gid
---BOUNDARY
+--01234567890123456789012345678901
 Content-Disposition: form-data; name="files"; filename="%[5]s"
 
 user group
---BOUNDARY--
+--01234567890123456789012345678901--
 `, pathNormal, pathUidGid, uid, gid, pathUserGroup, user, group)))
 	c.Check(response.StatusCode, Equals, http.StatusOK)
 
@@ -933,11 +933,11 @@ func (s *filesSuite) TestWriteErrors(c *C) {
 	pathOnlyGroup := tmpDir + "/only-group"
 
 	headers := http.Header{
-		"Content-Type": []string{"multipart/form-data; boundary=BOUNDARY"},
+		"Content-Type": []string{"multipart/form-data; boundary=01234567890123456789012345678901"},
 	}
 	response, body := doRequest(c, v1PostFiles, "POST", "/v1/files", nil, headers,
 		[]byte(fmt.Sprintf(`
---BOUNDARY
+--01234567890123456789012345678901
 Content-Disposition: form-data; name="request"
 
 {
@@ -953,35 +953,35 @@ Content-Disposition: form-data; name="request"
 		{"path": "%[8]s", "group": "nogroup"}
 	]
 }
---BOUNDARY
+--01234567890123456789012345678901
 Content-Disposition: form-data; name="files"; filename="%[2]s"
 
 path not absolute
---BOUNDARY
+--01234567890123456789012345678901
 Content-Disposition: form-data; name="files"; filename="%[3]s"
 
 dir not found
---BOUNDARY
+--01234567890123456789012345678901
 Content-Disposition: form-data; name="files"; filename="%[4]s"
 
 permission denied
---BOUNDARY
+--01234567890123456789012345678901
 Content-Disposition: form-data; name="files"; filename="%[5]s"
 
 user not found
---BOUNDARY
+--01234567890123456789012345678901
 Content-Disposition: form-data; name="files"; filename="%[6]s"
 
 group not found
---BOUNDARY
+--01234567890123456789012345678901
 Content-Disposition: form-data; name="files"; filename="%[7]s"
 
 only user specified
---BOUNDARY
+--01234567890123456789012345678901
 Content-Disposition: form-data; name="files"; filename="%[8]s"
 
 only group specified
---BOUNDARY--
+--01234567890123456789012345678901--
 `, pathNoContent, pathNotAbsolute, pathNotFound, pathPermissionDenied,
 			pathUserNotFound, pathGroupNotFound, pathOnlyUser, pathOnlyGroup)))
 	c.Check(response.StatusCode, Equals, http.StatusOK)

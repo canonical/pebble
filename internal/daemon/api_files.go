@@ -34,7 +34,7 @@ import (
 	"github.com/canonical/pebble/internal/osutil/sys"
 )
 
-const minBoundaryLength = 8
+const minBoundaryLength = 32
 
 func v1GetFiles(_ *Command, req *http.Request, _ *userState) Response {
 	query := req.URL.Query()
