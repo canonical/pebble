@@ -180,24 +180,16 @@ func fileErrorToResult(err error) *errorResult {
 
 // Listing files
 
-func listErrorResponse(err error) Response {
-	status := http.StatusBadRequest
-	kind := errorKindGenericFileError
+func fileErrorToStatus(err error) int {
 	switch {
+	case err == nil:
+		return http.StatusOK
 	case errors.Is(err, os.ErrNotExist):
-		status = http.StatusNotFound
-		kind = errorKindNotFound
+		return http.StatusNotFound
 	case errors.Is(err, os.ErrPermission):
-		status = http.StatusForbidden
-		kind = errorKindPermissionDenied
-	}
-	return &resp{
-		Type: ResponseTypeError,
-		Result: &errorResult{
-			Message: err.Error(),
-			Kind:    kind,
-		},
-		Status: status,
+		return http.StatusForbidden
+	default:
+		return http.StatusBadRequest
 	}
 }
 
@@ -265,7 +257,11 @@ func listFilesResponse(path, pattern string, itself bool) Response {
 	}
 	result, err := listFiles(path, pattern, itself)
 	if err != nil {
-		return listErrorResponse(err)
+		return &resp{
+			Type:   ResponseTypeError,
+			Result: fileErrorToResult(err),
+			Status: fileErrorToStatus(err),
+		}
 	}
 	return SyncResponse(result)
 }
