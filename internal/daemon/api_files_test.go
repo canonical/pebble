@@ -48,24 +48,24 @@ func (s *filesSuite) TestGetFilesInvalidAction(c *C) {
 	assertError(c, body, http.StatusBadRequest, "", `invalid action "foo"`)
 }
 
-func (s *filesSuite) TestListFilesNoPattern(c *C) {
+func (s *filesSuite) TestListFilesNoPath(c *C) {
 	query := url.Values{
-		"action":  []string{"list"},
-		"pattern": []string{""},
+		"action": []string{"list"},
+		"path":   []string{""},
 	}
 	response, body := doRequest(c, v1GetFiles, "GET", "/v1/files", query, nil, nil)
 	c.Assert(response.StatusCode, Equals, http.StatusBadRequest)
-	assertError(c, body, http.StatusBadRequest, "", `must specify pattern`)
+	assertError(c, body, http.StatusBadRequest, "", `must specify path`)
 }
 
-func (s *filesSuite) TestListFilesNonAbsPattern(c *C) {
+func (s *filesSuite) TestListFilesNonAbsPath(c *C) {
 	query := url.Values{
-		"action":  []string{"list"},
-		"pattern": []string{"bar"},
+		"action": []string{"list"},
+		"path":   []string{"bar"},
 	}
 	response, body := doRequest(c, v1GetFiles, "GET", "/v1/files", query, nil, nil)
 	c.Assert(response.StatusCode, Equals, http.StatusBadRequest)
-	assertError(c, body, http.StatusBadRequest, "", `pattern must be absolute, got .*`)
+	assertError(c, body, http.StatusBadRequest, "", `path must be absolute, got .*`)
 }
 
 func (s *filesSuite) TestListFilesPermissionDenied(c *C) {
@@ -75,8 +75,8 @@ func (s *filesSuite) TestListFilesPermissionDenied(c *C) {
 	c.Assert(os.Chmod(noAccessDir, 0), IsNil)
 
 	query := url.Values{
-		"action":  []string{"list"},
-		"pattern": []string{noAccessDir},
+		"action": []string{"list"},
+		"path":   []string{noAccessDir},
 	}
 	response, body := doRequest(c, v1GetFiles, "GET", "/v1/files", query, nil, nil)
 	c.Assert(response.StatusCode, Equals, http.StatusForbidden)
@@ -88,21 +88,22 @@ func (s *filesSuite) TestListFilesNotFound(c *C) {
 
 	for _, pattern := range []string{tmpDir + "/notfound", tmpDir + "/*.xyz"} {
 		query := url.Values{
-			"action":  []string{"list"},
-			"pattern": []string{pattern},
+			"action": []string{"list"},
+			"path":   []string{pattern},
 		}
 		response, body := doRequest(c, v1GetFiles, "GET", "/v1/files", query, nil, nil)
 		c.Assert(response.StatusCode, Equals, http.StatusNotFound)
-		assertError(c, body, http.StatusNotFound, "not-found", "file does not exist")
+		assertError(c, body, http.StatusNotFound, "not-found", ".* no such file or directory")
 	}
 }
 
 func (s *filesSuite) TestListFilesDir(c *C) {
 	tmpDir := createTestFiles(c)
 
-	for _, pattern := range []string{tmpDir, tmpDir + "/*"} {
+	for _, pattern := range []string{"", "*"} {
 		query := url.Values{
 			"action":  []string{"list"},
+			"path":    []string{tmpDir},
 			"pattern": []string{pattern},
 		}
 		response, body := doRequest(c, v1GetFiles, "GET", "/v1/files", query, nil, nil)
@@ -121,7 +122,7 @@ func (s *filesSuite) TestListFilesDirItself(c *C) {
 
 	query := url.Values{
 		"action":    []string{"list"},
-		"pattern":   []string{tmpDir + "/sub"},
+		"path":      []string{tmpDir + "/sub"},
 		"directory": []string{"true"},
 	}
 	response, body := doRequest(c, v1GetFiles, "GET", "/v1/files", query, nil, nil)
@@ -131,12 +132,13 @@ func (s *filesSuite) TestListFilesDirItself(c *C) {
 	assertListResult(c, r.Result, 0, "directory", tmpDir, "sub", "755", -1)
 }
 
-func (s *filesSuite) TestListFilesGlob(c *C) {
+func (s *filesSuite) TestListFilesWithPattern(c *C) {
 	tmpDir := createTestFiles(c)
 
 	query := url.Values{
 		"action":  []string{"list"},
-		"pattern": []string{tmpDir + "/*.txt"},
+		"path":    []string{tmpDir},
+		"pattern": []string{"*.txt"},
 	}
 	response, body := doRequest(c, v1GetFiles, "GET", "/v1/files", query, nil, nil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
@@ -150,8 +152,8 @@ func (s *filesSuite) TestListFilesFile(c *C) {
 	tmpDir := createTestFiles(c)
 
 	query := url.Values{
-		"action":  []string{"list"},
-		"pattern": []string{tmpDir + "/foo"},
+		"action": []string{"list"},
+		"path":   []string{tmpDir + "/foo"},
 	}
 	response, body := doRequest(c, v1GetFiles, "GET", "/v1/files", query, nil, nil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)

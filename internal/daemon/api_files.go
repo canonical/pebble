@@ -27,7 +27,6 @@ import (
 	"os"
 	"os/user"
 	"path"
-	"path/filepath"
 	"strconv"
 	"time"
 
@@ -51,15 +50,16 @@ func v1GetFiles(_ *Command, req *http.Request, _ *userState) Response {
 		}
 		return readFilesResponse{paths: paths}
 	case "list":
-		pattern := query.Get("pattern")
-		if pattern == "" {
-			return statusBadRequest("must specify pattern")
+		p := query.Get("path")
+		if p == "" {
+			return statusBadRequest("must specify path")
 		}
+		pattern := query.Get("pattern")
 		directory := query.Get("directory")
 		if directory != "true" && directory != "false" && directory != "" {
 			return statusBadRequest(`directory parameter must be "true" or "false"`)
 		}
-		return listFilesResponse(pattern, directory == "true")
+		return listFilesResponse(p, pattern, directory == "true")
 	default:
 		return statusBadRequest("invalid action %q", action)
 	}
@@ -259,57 +259,48 @@ func fileInfoToResult(fullPath string, info os.FileInfo) fileInfoResult {
 	return result
 }
 
-func listFilesResponse(pattern string, directoryItself bool) Response {
-	if !path.IsAbs(pattern) {
-		return statusBadRequest("pattern must be absolute, got %q", pattern)
+func listFilesResponse(p, pattern string, directoryItself bool) Response {
+	if !path.IsAbs(p) {
+		return statusBadRequest("path must be absolute, got %q", p)
 	}
-	result, err := listFiles(pattern, directoryItself)
+	result, err := listFiles(p, pattern, directoryItself)
 	if err != nil {
 		return listErrorResponse(err)
 	}
 	return SyncResponse(result)
 }
 
-func listFiles(pattern string, directoryItself bool) ([]fileInfoResult, error) {
-	info, err := os.Stat(pattern)
-	if errors.Is(err, os.ErrNotExist) {
-		dir, base := filepath.Split(pattern)
-		result, err := readDirFiltered(dir, base)
+func listFiles(p, pattern string, directoryItself bool) ([]fileInfoResult, error) {
+	info, err := os.Stat(p)
+	if err != nil {
+		return nil, err
+	}
+
+	var infos []os.FileInfo
+	var dir string
+	if !info.IsDir() || directoryItself {
+		// Info about a single file (or directory entry itself).
+		infos = []os.FileInfo{info}
+		dir = path.Dir(p)
+	} else {
+		// List an entire directory.
+		infos, err = ioutil.ReadDir(p)
 		if err != nil {
 			return nil, err
 		}
-		if len(result) == 0 {
-			// They specified a file or pattern and it doesn't exist.
-			return nil, os.ErrNotExist
-		}
-		return result, nil
+		dir = p
 	}
-	if err != nil {
-		return nil, err
-	}
-	if !info.IsDir() || directoryItself {
-		// Info about a single file (or directory entry itself).
-		result := []fileInfoResult{fileInfoToResult(pattern, info)}
-		return result, nil
-	}
-	return readDirFiltered(pattern, "")
-}
 
-func readDirFiltered(dir, pattern string) ([]fileInfoResult, error) {
-	infos, err := ioutil.ReadDir(dir)
-	if err != nil {
-		return nil, err
-	}
 	var result []fileInfoResult
-	for _, info := range infos {
+	for _, info = range infos {
 		name := info.Name()
 		matched := true
 		if pattern != "" {
-			matched, err = filepath.Match(pattern, name)
+			matched, err = path.Match(pattern, name)
 		}
 		if matched {
-			p := filepath.Join(dir, name)
-			result = append(result, fileInfoToResult(p, info))
+			fullPath := path.Join(dir, name)
+			result = append(result, fileInfoToResult(fullPath, info))
 		}
 	}
 	return result, nil
