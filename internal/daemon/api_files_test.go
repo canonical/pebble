@@ -239,8 +239,8 @@ func (s *filesSuite) TestReadErrorOnRead(c *C) {
 	var r testFilesResponse
 	files := readMultipart(c, response, body, &r)
 	c.Check(r.Type, Equals, "sync")
-	c.Check(r.StatusCode, Equals, http.StatusBadRequest)
-	c.Check(r.Status, Equals, "Bad Request")
+	c.Check(r.StatusCode, Equals, http.StatusOK)
+	c.Check(r.Status, Equals, "OK")
 	c.Check(r.Result, HasLen, 1)
 	checkFileResult(c, r.Result[0], "/proc/self/mem", "generic-file-error", ".*input/output error")
 
@@ -309,8 +309,8 @@ func (s *filesSuite) TestReadErrors(c *C) {
 	var r testFilesResponse
 	files := readMultipart(c, response, body, &r)
 	c.Check(r.Type, Equals, "sync")
-	c.Check(r.StatusCode, Equals, http.StatusBadRequest)
-	c.Check(r.Status, Equals, "Bad Request")
+	c.Check(r.StatusCode, Equals, http.StatusOK)
+	c.Check(r.Status, Equals, "OK")
 	c.Check(r.Result, HasLen, 5)
 	checkFileResult(c, r.Result[0], tmpDir+"/no-exist", "not-found", ".*: no such file or directory")
 	checkFileResult(c, r.Result[1], tmpDir+"/foo", "", "")

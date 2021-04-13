@@ -87,12 +87,8 @@ func (r readFilesResponse) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 	// Read each file's contents to multipart response.
 	result := make([]fileResult, len(r.paths))
-	status := http.StatusOK
 	for i, path := range r.paths {
 		err := readFile(path, mw)
-		if err != nil {
-			status = http.StatusBadRequest
-		}
 		result[i] = fileResult{
 			Path:  path,
 			Error: fileErrorToResult(err),
@@ -113,8 +109,8 @@ func (r readFilesResponse) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	encoder := json.NewEncoder(part)
 	metadata := respJSON{
 		Type:       ResponseTypeSync,
-		Status:     status,
-		StatusText: http.StatusText(status),
+		Status:     http.StatusOK,
+		StatusText: http.StatusText(http.StatusOK),
 		Result:     result,
 	}
 	err = encoder.Encode(metadata)
