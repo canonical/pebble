@@ -26,7 +26,7 @@ import (
 	"net/textproto"
 	"os"
 	"os/user"
-	"path"
+	pathpkg "path"
 	"strconv"
 	"time"
 
@@ -50,8 +50,8 @@ func v1GetFiles(_ *Command, req *http.Request, _ *userState) Response {
 		}
 		return readFilesResponse{paths: paths}
 	case "list":
-		p := query.Get("path")
-		if p == "" {
+		path := query.Get("path")
+		if path == "" {
 			return statusBadRequest("must specify path")
 		}
 		pattern := query.Get("pattern")
@@ -59,7 +59,7 @@ func v1GetFiles(_ *Command, req *http.Request, _ *userState) Response {
 		if directory != "true" && directory != "false" && directory != "" {
 			return statusBadRequest(`directory parameter must be "true" or "false"`)
 		}
-		return listFilesResponse(p, pattern, directory == "true")
+		return listFilesResponse(path, pattern, directory == "true")
 	default:
 		return statusBadRequest("invalid action %q", action)
 	}
@@ -88,13 +88,13 @@ func (r readFilesResponse) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	// Read each file's contents to multipart response.
 	result := make([]fileResult, len(r.paths))
 	status := http.StatusOK
-	for i, p := range r.paths {
-		err := readFile(p, mw)
+	for i, path := range r.paths {
+		err := readFile(path, mw)
 		if err != nil {
 			status = http.StatusBadRequest
 		}
 		result[i] = fileResult{
-			Path:  p,
+			Path:  path,
 			Error: fileErrorToResult(err),
 		}
 	}
@@ -131,24 +131,24 @@ func (r readFilesResponse) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func nonAbsolutePathError(p string) error {
-	return fmt.Errorf("paths must be absolute, got %q", p)
+func nonAbsolutePathError(path string) error {
+	return fmt.Errorf("paths must be absolute, got %q", path)
 }
 
-func readFile(p string, mw *multipart.Writer) error {
-	if !path.IsAbs(p) {
-		return nonAbsolutePathError(p)
+func readFile(path string, mw *multipart.Writer) error {
+	if !pathpkg.IsAbs(path) {
+		return nonAbsolutePathError(path)
 	}
-	if osutil.IsDir(p) {
-		return fmt.Errorf("cannot read a directory: %q", p)
+	if osutil.IsDir(path) {
+		return fmt.Errorf("cannot read a directory: %q", path)
 	}
-	f, err := os.Open(p)
+	f, err := os.Open(path)
 	if err != nil {
 		return err
 	}
 	defer f.Close()
 
-	fw, err := mw.CreateFormFile("files", p)
+	fw, err := mw.CreateFormFile("files", path)
 	if err != nil {
 		return err
 	}
@@ -250,7 +250,7 @@ func fileInfoToResult(fullPath string, info os.FileInfo) fileInfoResult {
 	}
 	result := fileInfoResult{
 		Path:         fullPath,
-		Name:         path.Base(fullPath),
+		Name:         pathpkg.Base(fullPath),
 		Type:         fileModeToType(mode),
 		Size:         psize,
 		Permissions:  fmt.Sprintf("%03o", mode.Perm()),
@@ -259,19 +259,19 @@ func fileInfoToResult(fullPath string, info os.FileInfo) fileInfoResult {
 	return result
 }
 
-func listFilesResponse(p, pattern string, directoryItself bool) Response {
-	if !path.IsAbs(p) {
-		return statusBadRequest("path must be absolute, got %q", p)
+func listFilesResponse(path, pattern string, directoryItself bool) Response {
+	if !pathpkg.IsAbs(path) {
+		return statusBadRequest("path must be absolute, got %q", path)
 	}
-	result, err := listFiles(p, pattern, directoryItself)
+	result, err := listFiles(path, pattern, directoryItself)
 	if err != nil {
 		return listErrorResponse(err)
 	}
 	return SyncResponse(result)
 }
 
-func listFiles(p, pattern string, directoryItself bool) ([]fileInfoResult, error) {
-	info, err := os.Stat(p)
+func listFiles(path, pattern string, directoryItself bool) ([]fileInfoResult, error) {
+	info, err := os.Stat(path)
 	if err != nil {
 		return nil, err
 	}
@@ -281,14 +281,14 @@ func listFiles(p, pattern string, directoryItself bool) ([]fileInfoResult, error
 	if !info.IsDir() || directoryItself {
 		// Info about a single file (or directory entry itself).
 		infos = []os.FileInfo{info}
-		dir = path.Dir(p)
+		dir = pathpkg.Dir(path)
 	} else {
 		// List an entire directory.
-		infos, err = ioutil.ReadDir(p)
+		infos, err = ioutil.ReadDir(path)
 		if err != nil {
 			return nil, err
 		}
-		dir = p
+		dir = path
 	}
 
 	var result []fileInfoResult
@@ -296,10 +296,10 @@ func listFiles(p, pattern string, directoryItself bool) ([]fileInfoResult, error
 		name := info.Name()
 		matched := true
 		if pattern != "" {
-			matched, err = path.Match(pattern, name)
+			matched, err = pathpkg.Match(pattern, name)
 		}
 		if matched {
-			fullPath := path.Join(dir, name)
+			fullPath := pathpkg.Join(dir, name)
 			result = append(result, fileInfoToResult(fullPath, info))
 		}
 	}
@@ -400,12 +400,12 @@ func writeFiles(body io.Reader, boundary string) Response {
 		if part.FormName() != "files" {
 			return statusBadRequest(`field name must be "files", got %q`, part.FormName())
 		}
-		p := part.FileName()
-		info, ok := infos[p]
+		path := part.FileName()
+		info, ok := infos[path]
 		if !ok {
-			return statusBadRequest("no metadata for path %q", p)
+			return statusBadRequest("no metadata for path %q", path)
 		}
-		errors[p] = writeFile(info, part)
+		errors[path] = writeFile(info, part)
 		part.Close()
 	}
 
@@ -430,13 +430,13 @@ func writeFiles(body io.Reader, boundary string) Response {
 }
 
 func writeFile(item writeFilesItem, source io.Reader) error {
-	if !path.IsAbs(item.Path) {
+	if !pathpkg.IsAbs(item.Path) {
 		return nonAbsolutePathError(item.Path)
 	}
 
 	// Create parent directory if needed
 	if item.MakeDirs {
-		err := os.MkdirAll(path.Dir(item.Path), 0o755)
+		err := os.MkdirAll(pathpkg.Dir(item.Path), 0o755)
 		if err != nil {
 			return fmt.Errorf("cannot create directory: %w", err)
 		}
@@ -502,7 +502,7 @@ func makeDirs(dirs []makeDirsItem) Response {
 }
 
 func makeDir(dir makeDirsItem) error {
-	if !path.IsAbs(dir.Path) {
+	if !pathpkg.IsAbs(dir.Path) {
 		return nonAbsolutePathError(dir.Path)
 	}
 	perm, err := parsePermissions(dir.Permissions, 0o755)
@@ -572,25 +572,25 @@ type removePathsItem struct {
 func removePaths(paths []removePathsItem) Response {
 	result := make([]fileResult, len(paths))
 	var firstErr error
-	for i, p := range paths {
-		err := removePath(p.Path, p.Recursive)
+	for i, path := range paths {
+		err := removePath(path.Path, path.Recursive)
 		if err != nil && firstErr == nil {
 			firstErr = err
 		}
 		result[i] = fileResult{
-			Path:  p.Path,
+			Path:  path.Path,
 			Error: fileErrorToResult(err),
 		}
 	}
 	return syncResponseWithError(result, firstErr)
 }
 
-func removePath(p string, recursive bool) error {
-	if !path.IsAbs(p) {
-		return nonAbsolutePathError(p)
+func removePath(path string, recursive bool) error {
+	if !pathpkg.IsAbs(path) {
+		return nonAbsolutePathError(path)
 	}
 	if recursive {
-		return os.RemoveAll(p)
+		return os.RemoveAll(path)
 	}
-	return os.Remove(p)
+	return os.Remove(path)
 }
