@@ -411,22 +411,18 @@ func writeFiles(body io.Reader, boundary string) Response {
 
 	// Build list of results with any errors.
 	result := make([]fileResult, len(payload.Files))
-	var firstErr error
 	for i, file := range payload.Files {
 		err, ok := errors[file.Path]
 		if !ok {
 			// Ensure we wrote all the files in the metadata.
 			err = fmt.Errorf("no file content for path %q", file.Path)
 		}
-		if err != nil && firstErr == nil {
-			firstErr = err
-		}
 		result[i] = fileResult{
 			Path:  file.Path,
 			Error: fileErrorToResult(err),
 		}
 	}
-	return syncResponseWithError(result, firstErr)
+	return SyncResponse(result)
 }
 
 func writeFile(item writeFilesItem, source io.Reader) error {
@@ -455,11 +451,7 @@ func writeFile(item writeFilesItem, source io.Reader) error {
 	if uid == 0 || gid == 0 {
 		sysUid, sysGid = osutil.NoChown, osutil.NoChown
 	}
-	err = atomicWriteChown(item.Path, source, perm, 0, sysUid, sysGid)
-	if err != nil {
-		return fmt.Errorf("cannot atomically write file: %w", err)
-	}
-	return nil
+	return atomicWriteChown(item.Path, source, perm, 0, sysUid, sysGid)
 }
 
 func parsePermissions(permissions string, defaultMode os.FileMode) (os.FileMode, error) {
@@ -487,18 +479,14 @@ type makeDirsItem struct {
 
 func makeDirs(dirs []makeDirsItem) Response {
 	result := make([]fileResult, len(dirs))
-	var firstErr error
 	for i, dir := range dirs {
 		err := makeDir(dir)
-		if err != nil && firstErr == nil {
-			firstErr = err
-		}
 		result[i] = fileResult{
 			Path:  dir.Path,
 			Error: fileErrorToResult(err),
 		}
 	}
-	return syncResponseWithError(result, firstErr)
+	return SyncResponse(result)
 }
 
 func makeDir(dir makeDirsItem) error {
@@ -571,18 +559,14 @@ type removePathsItem struct {
 
 func removePaths(paths []removePathsItem) Response {
 	result := make([]fileResult, len(paths))
-	var firstErr error
 	for i, path := range paths {
 		err := removePath(path.Path, path.Recursive)
-		if err != nil && firstErr == nil {
-			firstErr = err
-		}
 		result[i] = fileResult{
 			Path:  path.Path,
 			Error: fileErrorToResult(err),
 		}
 	}
-	return syncResponseWithError(result, firstErr)
+	return SyncResponse(result)
 }
 
 func removePath(path string, recursive bool) error {

@@ -401,11 +401,11 @@ func (s *filesSuite) TestMakeDirsMultiple(c *C) {
 	reqBody, err := json.Marshal(payload)
 	c.Assert(err, IsNil)
 	response, body := doRequest(c, v1PostFiles, "POST", "/v1/files", nil, headers, reqBody)
-	c.Check(response.StatusCode, Equals, http.StatusBadRequest)
+	c.Check(response.StatusCode, Equals, http.StatusOK)
 
 	var r testFilesResponse
 	c.Assert(json.NewDecoder(body).Decode(&r), IsNil)
-	c.Check(r.StatusCode, Equals, http.StatusBadRequest)
+	c.Check(r.StatusCode, Equals, http.StatusOK)
 	c.Check(r.Type, Equals, "sync")
 	c.Check(r.Result, HasLen, 3)
 	checkFileResult(c, r.Result[0], tmpDir+"/newdir", "", "")
@@ -551,11 +551,11 @@ func (s *filesSuite) TestRemoveMultiple(c *C) {
 	reqBody, err := json.Marshal(payload)
 	c.Assert(err, IsNil)
 	response, body := doRequest(c, v1PostFiles, "POST", "/v1/files", nil, headers, reqBody)
-	c.Check(response.StatusCode, Equals, http.StatusBadRequest)
+	c.Check(response.StatusCode, Equals, http.StatusOK)
 
 	var r testFilesResponse
 	c.Assert(json.NewDecoder(body).Decode(&r), IsNil)
-	c.Check(r.StatusCode, Equals, http.StatusBadRequest)
+	c.Check(r.StatusCode, Equals, http.StatusOK)
 	c.Check(r.Type, Equals, "sync")
 	c.Check(r.Result, HasLen, 4)
 	checkFileResult(c, r.Result[0], tmpDir+"/file", "", "")
@@ -984,11 +984,11 @@ only group specified
 --BOUNDARY--
 `, pathNoContent, pathNotAbsolute, pathNotFound, pathPermissionDenied,
 			pathUserNotFound, pathGroupNotFound, pathOnlyUser, pathOnlyGroup)))
-	c.Check(response.StatusCode, Equals, http.StatusBadRequest)
+	c.Check(response.StatusCode, Equals, http.StatusOK)
 
 	var r testFilesResponse
 	c.Assert(json.NewDecoder(body).Decode(&r), IsNil)
-	c.Check(r.StatusCode, Equals, http.StatusBadRequest)
+	c.Check(r.StatusCode, Equals, http.StatusOK)
 	c.Check(r.Type, Equals, "sync")
 	c.Check(r.Result, HasLen, 8)
 	checkFileResult(c, r.Result[0], pathNoContent, "generic-file-error", "no file content for path.*")

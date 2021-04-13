@@ -150,19 +150,6 @@ func SyncResponse(result interface{}) Response {
 	}
 }
 
-func syncResponseWithError(result interface{}, err error) Response {
-	status := http.StatusOK
-	if err != nil {
-		status = http.StatusBadRequest
-	}
-	return &resp{
-		// Type is still "sync", not "error", because result is not an errorResult
-		Type:   ResponseTypeSync,
-		Status: status,
-		Result: result,
-	}
-}
-
 func AsyncResponse(result map[string]interface{}, change string) Response {
 	return &resp{
 		Type:   ResponseTypeAsync,
