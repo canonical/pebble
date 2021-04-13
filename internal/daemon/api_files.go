@@ -55,11 +55,11 @@ func v1GetFiles(_ *Command, req *http.Request, _ *userState) Response {
 			return statusBadRequest("must specify path")
 		}
 		pattern := query.Get("pattern")
-		directory := query.Get("directory")
-		if directory != "true" && directory != "false" && directory != "" {
-			return statusBadRequest(`directory parameter must be "true" or "false"`)
+		itself := query.Get("itself")
+		if itself != "true" && itself != "false" && itself != "" {
+			return statusBadRequest(`itself parameter must be "true" or "false"`)
 		}
-		return listFilesResponse(path, pattern, directory == "true")
+		return listFilesResponse(path, pattern, itself == "true")
 	default:
 		return statusBadRequest("invalid action %q", action)
 	}
@@ -259,18 +259,18 @@ func fileInfoToResult(fullPath string, info os.FileInfo) fileInfoResult {
 	return result
 }
 
-func listFilesResponse(path, pattern string, directoryItself bool) Response {
+func listFilesResponse(path, pattern string, itself bool) Response {
 	if !pathpkg.IsAbs(path) {
 		return statusBadRequest("path must be absolute, got %q", path)
 	}
-	result, err := listFiles(path, pattern, directoryItself)
+	result, err := listFiles(path, pattern, itself)
 	if err != nil {
 		return listErrorResponse(err)
 	}
 	return SyncResponse(result)
 }
 
-func listFiles(path, pattern string, directoryItself bool) ([]fileInfoResult, error) {
+func listFiles(path, pattern string, itself bool) ([]fileInfoResult, error) {
 	info, err := os.Stat(path)
 	if err != nil {
 		return nil, err
@@ -278,7 +278,7 @@ func listFiles(path, pattern string, directoryItself bool) ([]fileInfoResult, er
 
 	var infos []os.FileInfo
 	var dir string
-	if !info.IsDir() || directoryItself {
+	if !info.IsDir() || itself {
 		// Info about a single file (or directory entry itself).
 		infos = []os.FileInfo{info}
 		dir = pathpkg.Dir(path)
