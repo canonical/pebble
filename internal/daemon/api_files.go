@@ -294,7 +294,7 @@ func listFiles(path, pattern string, itself bool) ([]fileInfoResult, error) {
 		dir = path
 	}
 
-	var result []fileInfoResult
+	result := make([]fileInfoResult, 0) // want "no results" to be [], not nil
 	for _, info = range infos {
 		name := info.Name()
 		matched := true

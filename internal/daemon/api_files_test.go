@@ -162,6 +162,20 @@ func (s *filesSuite) TestListFilesFile(c *C) {
 	assertListResult(c, r.Result, 0, "file", tmpDir, "foo", "644", 1)
 }
 
+func (s *filesSuite) TestListFilesNoResults(c *C) {
+	tmpDir := c.MkDir()
+
+	query := url.Values{
+		"action": []string{"list"},
+		"path":   []string{tmpDir},
+	}
+	response, body := doRequest(c, v1GetFiles, "GET", "/v1/files", query, nil, nil)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	r := decodeResp(c, body, http.StatusOK, ResponseTypeSync)
+	c.Assert(r.Result, HasLen, 0) // should be empty slice, not nil
+}
+
 func (s *filesSuite) TestReadNoPaths(c *C) {
 	query := url.Values{"action": []string{"read"}}
 	response, body := doRequest(c, v1GetFiles, "GET", "/v1/files", query, nil, nil)
