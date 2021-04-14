@@ -730,6 +730,41 @@ Hello world
 	assertFile(c, path, 0o644, "Hello world")
 }
 
+func (s *filesSuite) TestWriteOverwrite(c *C) {
+	tmpDir := c.MkDir()
+	path := tmpDir + "/hello.txt"
+
+	for _, content := range []string{"Hello", "byebye"} {
+		headers := http.Header{
+			"Content-Type": []string{"multipart/form-data; boundary=01234567890123456789012345678901"},
+		}
+		response, body := doRequest(c, v1PostFiles, "POST", "/v1/files", nil, headers,
+			[]byte(fmt.Sprintf(`
+--01234567890123456789012345678901
+Content-Disposition: form-data; name="request"
+
+{"action": "write", "files": [
+	{"path": "%[1]s"}
+]}
+--01234567890123456789012345678901
+Content-Disposition: form-data; name="files"; filename="%[1]s"
+
+%[2]s
+--01234567890123456789012345678901--
+`, path, content)))
+		c.Check(response.StatusCode, Equals, http.StatusOK)
+
+		var r testFilesResponse
+		c.Assert(json.NewDecoder(body).Decode(&r), IsNil)
+		c.Check(r.StatusCode, Equals, http.StatusOK)
+		c.Check(r.Type, Equals, "sync")
+		c.Check(r.Result, HasLen, 1)
+		checkFileResult(c, r.Result[0], path, "", "")
+
+		assertFile(c, path, 0o644, content)
+	}
+}
+
 func (s *filesSuite) TestWriteMultiple(c *C) {
 	tmpDir := c.MkDir()
 	path0 := tmpDir + "/hello.txt"
