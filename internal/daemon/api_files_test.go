@@ -1136,6 +1136,11 @@ func assertListResult(c *C, result interface{}, index int, typ, dir, name, perms
 	}
 	_, err := time.Parse(time.RFC3339, x["last-modified"].(string))
 	c.Assert(err, IsNil)
+
+	uid := int(x["user-id"].(float64))
+	c.Assert(uid, Equals, os.Getuid())
+	gid := int(x["group-id"].(float64))
+	c.Assert(gid, Equals, os.Getgid())
 }
 
 func decodeResp(c *C, body io.Reader, status int, typ ResponseType) respJSON {

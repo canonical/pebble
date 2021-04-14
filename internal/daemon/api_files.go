@@ -28,6 +28,7 @@ import (
 	"os/user"
 	pathpkg "path"
 	"strconv"
+	"syscall"
 	"time"
 
 	"github.com/canonical/pebble/internal/osutil"
@@ -200,6 +201,8 @@ type fileInfoResult struct {
 	Size         *int64   `json:"size,omitempty"`
 	Permissions  string   `json:"permissions"`
 	LastModified string   `json:"last-modified"`
+	UserID       int      `json:"user-id"`
+	GroupID      int      `json:"group-id"`
 }
 
 type fileType string
@@ -247,6 +250,10 @@ func fileInfoToResult(fullPath string, info os.FileInfo) fileInfoResult {
 		Size:         psize,
 		Permissions:  fmt.Sprintf("%03o", mode.Perm()),
 		LastModified: info.ModTime().Format(time.RFC3339),
+	}
+	if stat, ok := info.Sys().(*syscall.Stat_t); ok {
+		result.UserID = int(stat.Uid)
+		result.GroupID = int(stat.Gid)
 	}
 	return result
 }
