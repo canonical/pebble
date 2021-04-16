@@ -202,7 +202,9 @@ type fileInfoResult struct {
 	Permissions  string   `json:"permissions"`
 	LastModified string   `json:"last-modified"`
 	UserID       int      `json:"user-id"`
+	User         string   `json:"user"`
 	GroupID      int      `json:"group-id"`
+	Group        string   `json:"group"`
 }
 
 type fileType string
@@ -236,7 +238,7 @@ func fileModeToType(mode os.FileMode) fileType {
 	}
 }
 
-func fileInfoToResult(fullPath string, info os.FileInfo) fileInfoResult {
+func fileInfoToResult(fullPath string, info os.FileInfo, userCache, groupCache map[int]string) fileInfoResult {
 	mode := info.Mode()
 	var psize *int64
 	if mode.IsRegular() {
@@ -254,6 +256,25 @@ func fileInfoToResult(fullPath string, info os.FileInfo) fileInfoResult {
 	if stat, ok := info.Sys().(*syscall.Stat_t); ok {
 		result.UserID = int(stat.Uid)
 		result.GroupID = int(stat.Gid)
+
+		// Look up user and group names (cache per API call for efficiency).
+		result.User = userCache[result.UserID]
+		if result.User == "" {
+			u, err := user.LookupId(strconv.Itoa(result.UserID))
+			if err == nil {
+				result.User = u.Username
+				userCache[result.UserID] = u.Username
+			}
+		}
+
+		result.Group = groupCache[result.GroupID]
+		if result.Group == "" {
+			g, err := user.LookupGroupId(strconv.Itoa(result.GroupID))
+			if err == nil {
+				result.Group = g.Name
+				groupCache[result.GroupID] = g.Name
+			}
+		}
 	}
 	return result
 }
@@ -295,6 +316,8 @@ func listFiles(path, pattern string, itself bool) ([]fileInfoResult, error) {
 	}
 
 	result := make([]fileInfoResult, 0) // want "no results" to be [], not nil
+	userCache := make(map[int]string)
+	groupCache := make(map[int]string)
 	for _, info = range infos {
 		name := info.Name()
 		matched := true
@@ -303,7 +326,7 @@ func listFiles(path, pattern string, itself bool) ([]fileInfoResult, error) {
 		}
 		if matched {
 			fullPath := pathpkg.Join(dir, name)
-			result = append(result, fileInfoToResult(fullPath, info))
+			result = append(result, fileInfoToResult(fullPath, info, userCache, groupCache))
 		}
 	}
 	return result, nil
@@ -521,7 +544,7 @@ func makeDir(dir makeDirsItem) error {
 	return nil
 }
 
-// Because it's hard to test os.Chown with running the tests as root.
+// Because it's hard to test os.Chown without running the tests as root.
 var (
 	chown            = os.Chown
 	atomicWriteChown = osutil.AtomicWriteChown

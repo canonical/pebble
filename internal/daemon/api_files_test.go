@@ -1155,6 +1155,13 @@ func assertListResult(c *C, result interface{}, index int, typ, dir, name, perms
 	c.Assert(uid, Equals, os.Getuid())
 	gid := int(x["group-id"].(float64))
 	c.Assert(gid, Equals, os.Getgid())
+
+	usr, err := user.LookupId(strconv.Itoa(uid))
+	c.Assert(err, IsNil)
+	c.Assert(x["user"], Equals, usr.Username)
+	group, err := user.LookupGroupId(strconv.Itoa(gid))
+	c.Assert(err, IsNil)
+	c.Assert(x["group"], Equals, group.Name)
 }
 
 func decodeResp(c *C, body io.Reader, status int, typ ResponseType) respJSON {
