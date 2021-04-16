@@ -201,9 +201,9 @@ type fileInfoResult struct {
 	Size         *int64   `json:"size,omitempty"`
 	Permissions  string   `json:"permissions"`
 	LastModified string   `json:"last-modified"`
-	UserID       int      `json:"user-id"`
+	UserID       *int     `json:"user-id"`
 	User         string   `json:"user"`
-	GroupID      int      `json:"group-id"`
+	GroupID      *int     `json:"group-id"`
 	Group        string   `json:"group"`
 }
 
@@ -254,25 +254,27 @@ func fileInfoToResult(fullPath string, info os.FileInfo, userCache, groupCache m
 		LastModified: info.ModTime().Format(time.RFC3339),
 	}
 	if stat, ok := info.Sys().(*syscall.Stat_t); ok {
-		result.UserID = int(stat.Uid)
-		result.GroupID = int(stat.Gid)
+		uidInt := int(stat.Uid)
+		gidInt := int(stat.Gid)
+		result.UserID = &uidInt
+		result.GroupID = &gidInt
 
 		// Look up user and group names (cache per API call for efficiency).
-		result.User = userCache[result.UserID]
+		result.User = userCache[uidInt]
 		if result.User == "" {
-			u, err := user.LookupId(strconv.Itoa(result.UserID))
+			u, err := user.LookupId(strconv.Itoa(uidInt))
 			if err == nil {
 				result.User = u.Username
-				userCache[result.UserID] = u.Username
+				userCache[uidInt] = u.Username
 			}
 		}
 
-		result.Group = groupCache[result.GroupID]
+		result.Group = groupCache[gidInt]
 		if result.Group == "" {
-			g, err := user.LookupGroupId(strconv.Itoa(result.GroupID))
+			g, err := user.LookupGroupId(strconv.Itoa(gidInt))
 			if err == nil {
 				result.Group = g.Name
-				groupCache[result.GroupID] = g.Name
+				groupCache[gidInt] = g.Name
 			}
 		}
 	}
@@ -377,9 +379,9 @@ type writeFilesItem struct {
 	Path        string `json:"path"`
 	MakeDirs    bool   `json:"make-dirs"`
 	Permissions string `json:"permissions"`
-	UserID      int    `json:"user-id"`
+	UserID      *int   `json:"user-id"`
 	User        string `json:"user"`
-	GroupID     int    `json:"group-id"`
+	GroupID     *int   `json:"group-id"`
 	Group       string `json:"group"`
 }
 
@@ -469,13 +471,13 @@ func writeFile(item writeFilesItem, source io.Reader) error {
 	if err != nil {
 		return err
 	}
-	uid, gid, err := lookupUserAndGroup(item.UserID, item.User, item.GroupID, item.Group)
+	uid, gid, err := lookupUserAndGroup(item.UserID, item.GroupID, item.User, item.Group)
 	if err != nil {
 		return fmt.Errorf("cannot look up user and group: %w", err)
 	}
-	sysUid, sysGid := sys.UserID(uid), sys.GroupID(gid)
-	if uid == 0 || gid == 0 {
-		sysUid, sysGid = osutil.NoChown, osutil.NoChown
+	sysUid, sysGid := sys.UserID(osutil.NoChown), sys.GroupID(osutil.NoChown)
+	if uid != nil && gid != nil {
+		sysUid, sysGid = sys.UserID(*uid), sys.GroupID(*gid)
 	}
 	return atomicWriteChown(item.Path, source, perm, 0, sysUid, sysGid)
 }
@@ -497,9 +499,9 @@ type makeDirsItem struct {
 	Path        string `json:"path"`
 	MakeParents bool   `json:"make-parents"`
 	Permissions string `json:"permissions"`
-	UserID      int    `json:"user-id"`
+	UserID      *int   `json:"user-id"`
 	User        string `json:"user"`
-	GroupID     int    `json:"group-id"`
+	GroupID     *int   `json:"group-id"`
 	Group       string `json:"group"`
 }
 
@@ -531,12 +533,12 @@ func makeDir(dir makeDirsItem) error {
 	if err != nil {
 		return err
 	}
-	uid, gid, err := lookupUserAndGroup(dir.UserID, dir.User, dir.GroupID, dir.Group)
+	uid, gid, err := lookupUserAndGroup(dir.UserID, dir.GroupID, dir.User, dir.Group)
 	if err != nil {
 		return fmt.Errorf("cannot look up user and group: %w", err)
 	}
-	if uid != 0 && gid != 0 {
-		err = chown(dir.Path, uid, gid)
+	if uid != nil && gid != nil {
+		err = chown(dir.Path, *uid, *gid)
 		if err != nil {
 			return fmt.Errorf("cannot set user and group: %w", err)
 		}
@@ -552,26 +554,28 @@ var (
 	lookupGroup      = user.LookupGroup
 )
 
-func lookupUserAndGroup(uid int, username string, gid int, group string) (int, int, error) {
-	if uid == 0 && username == "" && gid == 0 && group == "" {
-		return 0, 0, nil
+func lookupUserAndGroup(uid, gid *int, username, group string) (*int, *int, error) {
+	if uid == nil && username == "" && gid == nil && group == "" {
+		return nil, nil, nil
 	}
-	if uid == 0 && username != "" {
+	if uid == nil && username != "" {
 		u, err := lookupUser(username)
 		if err != nil {
-			return 0, 0, err
+			return nil, nil, err
 		}
-		uid, _ = strconv.Atoi(u.Uid)
+		n, _ := strconv.Atoi(u.Uid)
+		uid = &n
 	}
-	if gid == 0 && group != "" {
+	if gid == nil && group != "" {
 		g, err := lookupGroup(group)
 		if err != nil {
-			return 0, 0, err
+			return nil, nil, err
 		}
-		gid, _ = strconv.Atoi(g.Gid)
+		n, _ := strconv.Atoi(g.Gid)
+		gid = &n
 	}
-	if uid == 0 || gid == 0 {
-		return 0, 0, fmt.Errorf("must set both user and group together")
+	if uid == nil || gid == nil {
+		return nil, nil, fmt.Errorf("must set both user and group together")
 	}
 	return uid, gid, nil
 }

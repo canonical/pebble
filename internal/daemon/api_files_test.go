@@ -469,6 +469,7 @@ func (s *filesSuite) TestMakeDirsUserGroupMocked(c *C) {
 	headers := http.Header{
 		"Content-Type": []string{"application/json"},
 	}
+	uid, gid := 12, 34
 	payload := struct {
 		Action string
 		Dirs   []makeDirsItem
@@ -476,7 +477,7 @@ func (s *filesSuite) TestMakeDirsUserGroupMocked(c *C) {
 		Action: "make-dirs",
 		Dirs: []makeDirsItem{
 			{Path: tmpDir + "/normal"},
-			{Path: tmpDir + "/uid-gid", UserID: 12, GroupID: 34},
+			{Path: tmpDir + "/uid-gid", UserID: &uid, GroupID: &gid},
 			{Path: tmpDir + "/user-group", User: "USER", Group: "GROUP"},
 		},
 	}
@@ -1085,7 +1086,7 @@ func readMultipart(c *C, response *http.Response, body io.Reader, result interfa
 		c.Assert(err, IsNil)
 		b, err := ioutil.ReadAll(f)
 		c.Assert(err, IsNil)
-		f.Close()
+		_ = f.Close()
 		files[fh.Filename] = string(b)
 	}
 	return files
