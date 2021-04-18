@@ -162,6 +162,20 @@ func (s *filesSuite) TestListFilesFile(c *C) {
 	assertListResult(c, r.Result, 0, "file", tmpDir, "foo", "644", 1)
 }
 
+func (s *filesSuite) TestListFilesNoResults(c *C) {
+	tmpDir := c.MkDir()
+
+	query := url.Values{
+		"action": []string{"list"},
+		"path":   []string{tmpDir},
+	}
+	response, body := doRequest(c, v1GetFiles, "GET", "/v1/files", query, nil, nil)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	r := decodeResp(c, body, http.StatusOK, ResponseTypeSync)
+	c.Assert(r.Result, HasLen, 0) // should be empty slice, not nil
+}
+
 func (s *filesSuite) TestReadNoPaths(c *C) {
 	query := url.Values{"action": []string{"read"}}
 	response, body := doRequest(c, v1GetFiles, "GET", "/v1/files", query, nil, nil)
@@ -455,6 +469,7 @@ func (s *filesSuite) TestMakeDirsUserGroupMocked(c *C) {
 	headers := http.Header{
 		"Content-Type": []string{"application/json"},
 	}
+	uid, gid := 12, 34
 	payload := struct {
 		Action string
 		Dirs   []makeDirsItem
@@ -462,7 +477,7 @@ func (s *filesSuite) TestMakeDirsUserGroupMocked(c *C) {
 		Action: "make-dirs",
 		Dirs: []makeDirsItem{
 			{Path: tmpDir + "/normal"},
-			{Path: tmpDir + "/uid-gid", UserID: 12, GroupID: 34},
+			{Path: tmpDir + "/uid-gid", UserID: &uid, GroupID: &gid},
 			{Path: tmpDir + "/user-group", User: "USER", Group: "GROUP"},
 		},
 	}
@@ -728,6 +743,41 @@ Hello world
 	checkFileResult(c, r.Result[0], path, "", "")
 
 	assertFile(c, path, 0o644, "Hello world")
+}
+
+func (s *filesSuite) TestWriteOverwrite(c *C) {
+	tmpDir := c.MkDir()
+	path := tmpDir + "/hello.txt"
+
+	for _, content := range []string{"Hello", "byebye"} {
+		headers := http.Header{
+			"Content-Type": []string{"multipart/form-data; boundary=01234567890123456789012345678901"},
+		}
+		response, body := doRequest(c, v1PostFiles, "POST", "/v1/files", nil, headers,
+			[]byte(fmt.Sprintf(`
+--01234567890123456789012345678901
+Content-Disposition: form-data; name="request"
+
+{"action": "write", "files": [
+	{"path": "%[1]s"}
+]}
+--01234567890123456789012345678901
+Content-Disposition: form-data; name="files"; filename="%[1]s"
+
+%[2]s
+--01234567890123456789012345678901--
+`, path, content)))
+		c.Check(response.StatusCode, Equals, http.StatusOK)
+
+		var r testFilesResponse
+		c.Assert(json.NewDecoder(body).Decode(&r), IsNil)
+		c.Check(r.StatusCode, Equals, http.StatusOK)
+		c.Check(r.Type, Equals, "sync")
+		c.Check(r.Result, HasLen, 1)
+		checkFileResult(c, r.Result[0], path, "", "")
+
+		assertFile(c, path, 0o644, content)
+	}
 }
 
 func (s *filesSuite) TestWriteMultiple(c *C) {
@@ -1036,7 +1086,7 @@ func readMultipart(c *C, response *http.Response, body io.Reader, result interfa
 		c.Assert(err, IsNil)
 		b, err := ioutil.ReadAll(f)
 		c.Assert(err, IsNil)
-		f.Close()
+		_ = f.Close()
 		files[fh.Filename] = string(b)
 	}
 	return files
@@ -1101,6 +1151,18 @@ func assertListResult(c *C, result interface{}, index int, typ, dir, name, perms
 	}
 	_, err := time.Parse(time.RFC3339, x["last-modified"].(string))
 	c.Assert(err, IsNil)
+
+	uid := int(x["user-id"].(float64))
+	c.Assert(uid, Equals, os.Getuid())
+	gid := int(x["group-id"].(float64))
+	c.Assert(gid, Equals, os.Getgid())
+
+	usr, err := user.LookupId(strconv.Itoa(uid))
+	c.Assert(err, IsNil)
+	c.Assert(x["user"], Equals, usr.Username)
+	group, err := user.LookupGroupId(strconv.Itoa(gid))
+	c.Assert(err, IsNil)
+	c.Assert(x["group"], Equals, group.Name)
 }
 
 func decodeResp(c *C, body io.Reader, status int, typ ResponseType) respJSON {
