@@ -8,6 +8,7 @@ import (
 
 	"github.com/canonical/pebble/internal/overlord/state"
 	"github.com/canonical/pebble/internal/plan"
+	"github.com/canonical/pebble/internal/servicelog"
 )
 
 type ServiceManager struct {
@@ -21,9 +22,10 @@ type ServiceManager struct {
 }
 
 type activeService struct {
-	cmd  *exec.Cmd
-	err  error
-	done chan struct{}
+	cmd       *exec.Cmd
+	err       error
+	done      chan struct{}
+	logBuffer *servicelog.WriteBuffer
 }
 
 // LabelExists is the error returned by AppendLayer when a layer with that
@@ -287,4 +289,29 @@ func (m *ServiceManager) StopOrder(services []string) ([]string, error) {
 	defer releasePlan()
 
 	return m.plan.StopOrder(services)
+}
+
+// ServiceLogs returns iterators to the provided services. Each iterator
+// must be closed via the Close method.
+func (m *ServiceManager) ServiceLogs(services []string) (map[string]servicelog.Iterator, error) {
+	requested := make(map[string]bool, len(services))
+	for _, name := range services {
+		requested[name] = true
+	}
+
+	var iterators map[string]servicelog.Iterator
+	for name, service := range m.services {
+		if !requested[name] {
+			continue
+		}
+		if service == nil || service.logBuffer == nil {
+			continue
+		}
+		if iterators == nil {
+			iterators = make(map[string]servicelog.Iterator)
+		}
+		iterators[name] = service.logBuffer.TailIterator()
+	}
+
+	return iterators, nil
 }

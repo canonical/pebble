@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/canonical/pebble/internal/overlord/state"
-	"github.com/canonical/pebble/internal/strutil"
+	"github.com/canonical/pebble/internal/servicelog"
 	"github.com/canonical/pebble/internal/strutil/shlex"
 
 	"gopkg.in/tomb.v2"
@@ -48,6 +48,11 @@ var (
 	okayWait = 1 * time.Second
 	killWait = 5 * time.Second
 	failWait = 10 * time.Second
+
+	// TODO make these configurable.
+	maxLogBytes  = 1024 * 1024
+	avgLogLine   = 100
+	maxLogWrites = maxLogBytes / avgLogLine
 )
 
 // Start starts the named service after also starting all of its dependencies.
@@ -90,21 +95,24 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 		cmd.Env = append(cmd.Env, k+"="+v)
 	}
 
-	buffer := strutil.NewLimitedBuffer(160, 10*1024)
-	cmd.Stdout = buffer
-	cmd.Stderr = buffer
+	logBuffer := servicelog.NewWriteBuffer(maxLogWrites, maxLogBytes)
+	cmd.Stdout = logBuffer.StreamWriter(servicelog.Stdout)
+	cmd.Stderr = logBuffer.StreamWriter(servicelog.Stderr)
 	err = cmd.Start()
 	if err != nil {
+		_ = logBuffer.Close()
 		return fmt.Errorf("cannot start service: %v", err)
 	}
 
 	active := &activeService{
-		cmd:  cmd,
-		done: make(chan struct{}),
+		cmd:       cmd,
+		done:      make(chan struct{}),
+		logBuffer: logBuffer,
 	}
 	m.services[req.Name] = active
 	go func() {
 		active.err = cmd.Wait()
+		active.logBuffer.Close()
 		close(active.done)
 	}()
 
