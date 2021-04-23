@@ -30,6 +30,17 @@ var (
 	Stderr  StreamID = 2
 )
 
+func (s StreamID) String() string {
+	switch s {
+	case Stdout:
+		return "stdout"
+	case Stderr:
+		return "stderr"
+	default:
+		return "unknown"
+	}
+}
+
 type WriteIndex int32
 
 var (
