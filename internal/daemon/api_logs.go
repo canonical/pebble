@@ -18,12 +18,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"sort"
 	"sync"
 	"time"
 
+	"github.com/canonical/pebble/internal/logger"
 	"github.com/canonical/pebble/internal/servicelog"
 )
 
@@ -39,6 +39,13 @@ type logsResponse struct {
 func (r logsResponse) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	query := req.URL.Query()
 	services := query["services"]
+	followStr := query.Get("follow")
+	if followStr != "" && followStr != "true" && followStr != "false" {
+		response := statusBadRequest(`follow parameter must be "true" or "false"`)
+		response.ServeHTTP(w, req)
+		return
+	}
+	follow := followStr == "true"
 
 	// If "services" parameter not specified, fetch logs for all services.
 	if len(services) == 0 {
@@ -67,9 +74,16 @@ func (r logsResponse) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		}
 	}()
 
-	// This is not exactly text/plain, but it's not pure JSON either.
+	// Output format is not exactly text/plain, but it's not pure JSON either.
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	if follow {
+		followLogs(w, itsByName, req.Context().Done())
+	} else {
+		outputLogs(w, itsByName)
+	}
+}
 
+func outputLogs(w io.Writer, itsByName map[string]servicelog.Iterator) {
 	// Service names, ordered alphabetically for consistent output.
 	names := make([]string, 0, len(itsByName))
 	for name := range itsByName {
@@ -116,33 +130,41 @@ func (r logsResponse) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		// Set iterator to nil so we fetch next log for that service.
 		its[earliest] = nil
 	}
-
-	//	followLogs(w, req.Context().Done(), itsByName)
 }
 
-// TODO(benhoyt) - not working yet
-func followLogs(w io.Writer, done <-chan struct{}, itsByName map[string]servicelog.Iterator) {
+func followLogs(w io.Writer, itsByName map[string]servicelog.Iterator, done <-chan struct{}) {
+	// Start one goroutine per service to listen for new logs.
 	writeMutex := &sync.Mutex{}
 	for name, it := range itsByName {
-		go func(name string, it servicelog.Iterator) {
-			for {
-				select {
-				case <-it.More():
-					writeMutex.Lock()
-					err := writeLog(w, name, it)
-					writeMutex.Unlock()
-					if err != nil {
-						fmt.Fprintf(w, "\ncannot write log: %v", err)
-						return
-					}
-				case <-done:
-					log.Printf("TODO: connection closed (%q)", name)
-					return
-				}
-			}
-		}(name, it)
+		go followLog(w, writeMutex, done, name, it)
 	}
+
+	// Don't return till client connection is closed.
 	<-done
+}
+
+func followLog(w io.Writer, writeMutex *sync.Mutex, done <-chan struct{}, name string, it servicelog.Iterator) {
+	for it.Next() {
+		// Catch up to current log.
+	}
+
+	for {
+		more := it.More()
+		for it.Next() {
+			// Ensure we don't miss any buffered logs.
+			writeLogLocked(w, writeMutex, name, it)
+		}
+
+		// Wait for next log (or connection closed).
+		select {
+		case <-more:
+			it.Next()
+			writeLogLocked(w, writeMutex, name, it)
+		case <-done:
+			// Stop when client connection is closed.
+			return
+		}
+	}
 }
 
 // Each log write is output as <metadata json> <newline> <message bytes>,
@@ -173,5 +195,27 @@ func writeLog(w io.Writer, service string, it servicelog.Iterator) error {
 		return err
 	}
 	_, err = it.WriteTo(w)
-	return err
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func writeLogLocked(w io.Writer, writeMutex *sync.Mutex, service string, it servicelog.Iterator) {
+	writeMutex.Lock()
+	defer writeMutex.Unlock()
+
+	err := writeLog(w, service, it)
+	if err != nil {
+		logger.Noticef("cannot write log from %s: %v", service, err)
+		return
+	}
+	flushWriter(w)
+}
+
+func flushWriter(w io.Writer) {
+	flusher, ok := w.(interface{ Flush() })
+	if ok {
+		flusher.Flush()
+	}
 }

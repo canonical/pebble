@@ -175,7 +175,7 @@ func (rb *RingBuffer) WriteTo(writer io.Writer, start RingPos, end RingPos) (int
 	return int64(n0 + n1), err
 }
 
-// Release a range of the RingBuffer so that it may be resused. Start must be the
+// Release a range of the RingBuffer so that it may be reused. Start must be the
 // earliest allocated position. End must be up to the latest allocated position or
 // any value in between.
 func (rb *RingBuffer) Release(start, end RingPos) error {
