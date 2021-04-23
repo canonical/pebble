@@ -60,6 +60,11 @@ var api = []*Command{{
 	UserOK: true,
 	POST:   v1PostLayers,
 }, {
+	Path:   "/v1/files",
+	UserOK: true,
+	GET:    v1GetFiles,
+	POST:   v1PostFiles,
+}, {
 	Path:   "/v1/logs",
 	UserOK: true,
 	GET:    v1GetLogs,
