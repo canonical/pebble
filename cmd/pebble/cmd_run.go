@@ -16,9 +16,11 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"os/signal"
 	"strconv"
+	"sync"
 	"syscall"
 	"time"
 
@@ -28,6 +30,7 @@ import (
 	"github.com/canonical/pebble/cmd"
 	"github.com/canonical/pebble/internal/daemon"
 	"github.com/canonical/pebble/internal/logger"
+	"github.com/canonical/pebble/internal/servicelog"
 	"github.com/canonical/pebble/internal/systemd"
 )
 
@@ -188,4 +191,32 @@ out:
 	rcmd.client.CloseIdleConnections()
 
 	return d.Stop(ch)
+}
+
+type logWriter struct {
+	buf   []byte
+	mutex sync.Mutex
+}
+
+func (w *logWriter) writeLog(writer io.Writer, timestamp time.Time, serviceName string, stream servicelog.StreamID, message io.Reader) error {
+	w.mutex.Lock()
+	defer w.mutex.Unlock()
+
+	// Use a buffer for the prefix to minimize the number of writes. Use the
+	// format "2021-08-04T12:34:45Z00:33 serviceName stdout/stderr: message".
+	w.buf = w.buf[:0]
+	w.buf = timestamp.AppendFormat(w.buf, time.RFC3339)
+	w.buf = append(w.buf, ' ')
+	w.buf = append(w.buf, []byte(serviceName)...)
+	w.buf = append(w.buf, ' ')
+	w.buf = append(w.buf, []byte(stream.String())...)
+	w.buf = append(w.buf, ':', ' ')
+	_, err := writer.Write(w.buf)
+	if err != nil {
+		return err
+	}
+
+	// Then write the message itself.
+	_, err = io.Copy(writer, message)
+	return err
 }
