@@ -15,6 +15,7 @@
 package servicelog_test
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"sync"
@@ -116,4 +117,61 @@ func (s *writeBufferSuite) TestAllocs(c *C) {
 	c.Assert(int(numAllocs), Equals, 1)
 	err := wb.Close()
 	c.Assert(err, IsNil)
+}
+
+func (s *writeBufferSuite) TestTail(c *C) {
+	wb := servicelog.NewWriteBuffer(100, 1000)
+	n, err := wb.Write([]byte("hello"), servicelog.Stdout)
+	c.Assert(err, IsNil)
+	c.Assert(n, Equals, 5)
+	n, err = wb.Write([]byte(" pebble"), servicelog.Stdout)
+	c.Assert(err, IsNil)
+	c.Assert(n, Equals, 7)
+
+	buf := &bytes.Buffer{}
+	it := wb.TailIterator()
+	for it.Next() {
+		_, err := io.Copy(buf, it)
+		c.Assert(err, IsNil)
+	}
+
+	c.Assert(buf.String(), Equals, "hello pebble")
+}
+
+func (s *writeBufferSuite) TestHead(c *C) {
+	wb := servicelog.NewWriteBuffer(100, 1000)
+	n, err := wb.Write([]byte("hello"), servicelog.Stdout)
+	c.Assert(err, IsNil)
+	c.Assert(n, Equals, 5)
+	n, err = wb.Write([]byte(" pebble"), servicelog.Stdout)
+	c.Assert(err, IsNil)
+	c.Assert(n, Equals, 7)
+
+	buf := &bytes.Buffer{}
+	it := wb.HeadIterator(0)
+	for it.Next() {
+		_, err := io.Copy(buf, it)
+		c.Assert(err, IsNil)
+	}
+
+	c.Assert(buf.String(), Equals, "")
+}
+
+func (s *writeBufferSuite) TestHeadMinus1(c *C) {
+	wb := servicelog.NewWriteBuffer(100, 1000)
+	n, err := wb.Write([]byte("hello"), servicelog.Stdout)
+	c.Assert(err, IsNil)
+	c.Assert(n, Equals, 5)
+	n, err = wb.Write([]byte(" pebble"), servicelog.Stdout)
+	c.Assert(err, IsNil)
+	c.Assert(n, Equals, 7)
+
+	buf := &bytes.Buffer{}
+	it := wb.HeadIterator(1)
+	for it.Next() {
+		_, err := io.Copy(buf, it)
+		c.Assert(err, IsNil)
+	}
+
+	c.Assert(buf.String(), Equals, " pebble")
 }

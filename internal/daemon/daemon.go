@@ -38,6 +38,7 @@ import (
 	"github.com/canonical/pebble/internal/overlord"
 	"github.com/canonical/pebble/internal/overlord/standby"
 	"github.com/canonical/pebble/internal/overlord/state"
+	"github.com/canonical/pebble/internal/servicelog"
 	"github.com/canonical/pebble/internal/systemd"
 )
 
@@ -57,6 +58,9 @@ type Options struct {
 	// to communicate with the daemon. Defaults to a hidden (dotted) name inside
 	// the pebble directory.
 	SocketPath string
+
+	// VerboseOutput is set when service logs should be aggregated via stdout.
+	VerboseOutput servicelog.Output
 }
 
 // A Daemon listens for requests and routes them to the right command
@@ -669,7 +673,7 @@ func New(opts *Options) (*Daemon, error) {
 		normalSocketPath:    opts.SocketPath,
 		untrustedSocketPath: opts.SocketPath + ".untrusted",
 	}
-	ovld, err := overlord.New(opts.Dir, d)
+	ovld, err := overlord.New(opts.Dir, d, opts.VerboseOutput)
 	if err == state.ErrExpectedReboot {
 		// we proceed without overlord until we reach Stop
 		// where we will schedule and wait again for a system restart.

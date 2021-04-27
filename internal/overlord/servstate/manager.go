@@ -19,6 +19,8 @@ type ServiceManager struct {
 	planLock sync.Mutex
 	plan     *plan.Plan
 	services map[string]*activeService
+
+	verboseOutput servicelog.Output
 }
 
 type activeService struct {
@@ -38,12 +40,13 @@ func (e *LabelExists) Error() string {
 	return fmt.Sprintf("layer %q already exists", e.Label)
 }
 
-func NewManager(s *state.State, runner *state.TaskRunner, pebbleDir string) (*ServiceManager, error) {
+func NewManager(s *state.State, runner *state.TaskRunner, pebbleDir string, verboseOutput servicelog.Output) (*ServiceManager, error) {
 	manager := &ServiceManager{
-		state:     s,
-		runner:    runner,
-		pebbleDir: pebbleDir,
-		services:  make(map[string]*activeService),
+		state:         s,
+		runner:        runner,
+		pebbleDir:     pebbleDir,
+		services:      make(map[string]*activeService),
+		verboseOutput: verboseOutput,
 	}
 
 	runner.AddHandler("start", manager.doStart, nil)

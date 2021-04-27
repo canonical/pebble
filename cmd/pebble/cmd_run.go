@@ -44,6 +44,7 @@ type cmdRun struct {
 
 	CreateDirs bool `long:"create-dirs"`
 	Hold       bool `long:"hold"`
+	Verbose    bool `short:"v" long:"verbose"`
 }
 
 func init() {
@@ -51,6 +52,7 @@ func init() {
 		map[string]string{
 			"create-dirs": "Create pebble directory on startup if it doesn't exist",
 			"hold":        "Do not start default services automatically",
+			"verbose":     "Log all output from services to stdout/stderr",
 		}, nil)
 }
 
@@ -126,6 +128,10 @@ func runDaemon(rcmd *cmdRun, ch chan os.Signal) error {
 		Dir:        pebbleDir,
 		SocketPath: socketPath,
 	}
+	if rcmd.Verbose {
+		dopts.VerboseOutput = &logWriter{Writer: os.Stdout}
+	}
+
 	d, err := daemon.New(&dopts)
 	if err != nil {
 		return err

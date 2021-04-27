@@ -96,10 +96,16 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 	}
 
 	logBuffer := servicelog.NewWriteBuffer(maxLogWrites, maxLogBytes)
+	var outputIterator servicelog.Iterator
+	if m.verboseOutput != nil {
+		outputIterator = logBuffer.TailIterator()
+	}
+
 	cmd.Stdout = logBuffer.StreamWriter(servicelog.Stdout)
 	cmd.Stderr = logBuffer.StreamWriter(servicelog.Stderr)
 	err = cmd.Start()
 	if err != nil {
+		_ = outputIterator.Close()
 		_ = logBuffer.Close()
 		return fmt.Errorf("cannot start service: %v", err)
 	}
@@ -112,9 +118,12 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 	m.services[req.Name] = active
 	go func() {
 		active.err = cmd.Wait()
-		active.logBuffer.Close()
+		_ = active.logBuffer.Close()
 		close(active.done)
 	}()
+	if m.verboseOutput != nil {
+		go servicelog.Sink(outputIterator, m.verboseOutput, req.Name, active.done)
+	}
 
 	releasePlan()
 

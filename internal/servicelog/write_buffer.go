@@ -187,6 +187,26 @@ func (wb *WriteBuffer) TailIterator() Iterator {
 	}
 }
 
+// HeadIterator returns an iterator from the head of the stream.
+// If last is a positive non-zero number, the iterator will start
+// at most N writes back from the head.
+// The callee must Close the iterator when finished.
+func (wb *WriteBuffer) HeadIterator(last int) Iterator {
+	head := wb.acquireHead(last)
+	skip := head != &wb.placeholderTail
+	if last < 1 {
+		// Since the head is the last write in the buffer
+		// and the caller didn't ask for the last line, tell
+		// the iterator to not skip the first Next call.
+		skip = false
+	}
+	return &iterator{
+		wb:    wb,
+		write: head,
+		skip:  skip,
+	}
+}
+
 func (wb *WriteBuffer) getWrite(index WriteIndex) *write {
 	idx := int(index) % len(wb.writes)
 	return &wb.writes[idx]
@@ -264,6 +284,33 @@ func (wb *WriteBuffer) acquireTail() *write {
 	}
 	tailIndex := WriteIndex(atomic.LoadInt32(&wb.tailIndex))
 	write := wb.getWrite(tailIndex)
+	write.acquire()
+	return write
+}
+
+// acquireHead returns the tail and acquires a lock on it.
+// the caller must either release it or call nextWrite to
+// exchange it for the subsequent write.
+func (wb *WriteBuffer) acquireHead(last int) *write {
+	wb.releaseMutex.RLock()
+	defer wb.releaseMutex.RUnlock()
+	numWrites := atomic.LoadInt32(&wb.numWrites)
+	if numWrites == 0 {
+		write := &wb.placeholderTail
+		write.acquire()
+		return write
+	}
+	if last < 0 {
+		last = 0
+	}
+	if last > int(numWrites) {
+		last = int(numWrites)
+	}
+	headIndex := WriteIndex(atomic.LoadInt32(&wb.headIndex))
+	if last > 0 {
+		headIndex -= WriteIndex(last - 1)
+	}
+	write := wb.getWrite(headIndex)
 	write.acquire()
 	return write
 }
