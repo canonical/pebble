@@ -194,29 +194,35 @@ out:
 }
 
 type logWriter struct {
-	buf   []byte
-	mutex sync.Mutex
+	Writer io.Writer
+
+	prefix []byte
+	msg    []byte
+	mutex  sync.Mutex
 }
 
-func (w *logWriter) WriteLog(writer io.Writer, timestamp time.Time, serviceName string, stream servicelog.StreamID, message io.Reader) error {
+func (w *logWriter) WriteLog(timestamp time.Time, serviceName string, stream servicelog.StreamID, message io.Reader) error {
 	w.mutex.Lock()
 	defer w.mutex.Unlock()
 
 	// Use a buffer for the prefix to minimize the number of writes. Use the
 	// format "2021-08-04T12:34:45Z00:33 serviceName stdout/stderr: message".
-	w.buf = w.buf[:0]
-	w.buf = timestamp.AppendFormat(w.buf, time.RFC3339)
-	w.buf = append(w.buf, ' ')
-	w.buf = append(w.buf, serviceName...)
-	w.buf = append(w.buf, ' ')
-	w.buf = append(w.buf, stream.String()...)
-	w.buf = append(w.buf, ':', ' ')
-	_, err := writer.Write(w.buf)
+	w.prefix = w.prefix[:0]
+	w.prefix = timestamp.AppendFormat(w.prefix, time.RFC3339)
+	w.prefix = append(w.prefix, ' ')
+	w.prefix = append(w.prefix, serviceName...)
+	w.prefix = append(w.prefix, ' ')
+	w.prefix = append(w.prefix, stream.String()...)
+	w.prefix = append(w.prefix, ':', ' ')
+	_, err := w.Writer.Write(w.prefix)
 	if err != nil {
 		return err
 	}
 
 	// Then write the message itself.
-	_, err = io.Copy(writer, message)
+	if w.msg == nil {
+		w.msg = make([]byte, 4096)
+	}
+	_, err = io.CopyBuffer(w.Writer, message, w.msg)
 	return err
 }

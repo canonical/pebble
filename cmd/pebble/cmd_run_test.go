@@ -29,11 +29,10 @@ import (
 )
 
 func (s *PebbleSuite) TestLogWriterSimple(c *check.C) {
-	lw := pebble.LogWriter{}
-
 	w := &bytes.Buffer{}
+	lw := pebble.LogWriter{Writer: w}
+
 	err := lw.WriteLog(
-		w,
 		time.Date(2021, 8, 4, 2, 3, 4, 0, time.UTC),
 		"nginx",
 		servicelog.Stdout,
@@ -44,7 +43,6 @@ func (s *PebbleSuite) TestLogWriterSimple(c *check.C) {
 
 	w.Reset()
 	err = lw.WriteLog(
-		w,
 		time.Date(2021, 12, 25, 12, 23, 34, 456789, time.UTC),
 		"postgresql",
 		servicelog.Stderr,
@@ -55,8 +53,8 @@ func (s *PebbleSuite) TestLogWriterSimple(c *check.C) {
 }
 
 func (s *PebbleSuite) TestLogWriterConcurrent(c *check.C) {
-	lw := pebble.LogWriter{}
 	w := &bytes.Buffer{}
+	lw := pebble.LogWriter{Writer: w}
 
 	// Fire up a couple of concurrent goroutines writing logs.
 	var wg sync.WaitGroup
@@ -66,7 +64,6 @@ func (s *PebbleSuite) TestLogWriterConcurrent(c *check.C) {
 			defer wg.Done()
 			for i := 0; i < 100; i++ {
 				err := lw.WriteLog(
-					w,
 					time.Date(2021, 8, 4, 2, 3, 4, 0, time.UTC),
 					"nginx",
 					servicelog.Stdout,
