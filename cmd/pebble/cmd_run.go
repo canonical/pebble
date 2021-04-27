@@ -34,6 +34,10 @@ import (
 	"github.com/canonical/pebble/internal/systemd"
 )
 
+const (
+	writeLogBufSize = 4096
+)
+
 var shortRunHelp = "Run the pebble environment"
 var longRunHelp = `
 The run command starts pebble and runs the configured environment.
@@ -227,8 +231,51 @@ func (w *logWriter) WriteLog(timestamp time.Time, serviceName string, stream ser
 
 	// Then write the message itself.
 	if w.msg == nil {
-		w.msg = make([]byte, 4096)
+		w.msg = make([]byte, writeLogBufSize)
 	}
-	_, err = io.CopyBuffer(w.Writer, message, w.msg)
+	_, err = io.CopyBuffer(w.Writer, &newlineReader{Reader: message}, w.msg)
 	return err
+}
+
+// newlineReader is a Reader that adds a newline ('\n') at the end of whatever
+// is being read, after the EOF. It includes the '\n' in the same read if
+// possible (if the read buffer has enough space), otherwise on the next read.
+type newlineReader struct {
+	Reader io.Reader
+
+	hadEOF         bool
+	endedInNewline bool
+}
+
+func (r *newlineReader) Read(b []byte) (int, error) {
+	if r.hadEOF {
+		// If last read returned EOF, then add newline if last read didn't
+		// end in one.
+		if !r.endedInNewline {
+			b[0] = '\n'
+			return 1, io.EOF
+		}
+		return 0, io.EOF
+	}
+
+	// Read a chunk, detect newline at end.
+	n, err := r.Reader.Read(b)
+	if n > 0 {
+		r.endedInNewline = b[n-1] == '\n'
+	}
+
+	if err == io.EOF {
+		// If this read returned EOF, add newline now if we have space.
+		if n < len(b) {
+			if !r.endedInNewline {
+				b[n] = '\n'
+				return n + 1, io.EOF
+			}
+			return n, io.EOF
+		}
+		// Otherwise postpone the newline handling till next read.
+		r.hadEOF = true
+		return n, nil
+	}
+	return n, err
 }
