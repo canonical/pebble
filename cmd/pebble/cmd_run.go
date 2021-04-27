@@ -198,7 +198,7 @@ type logWriter struct {
 	mutex sync.Mutex
 }
 
-func (w *logWriter) writeLog(writer io.Writer, timestamp time.Time, serviceName string, stream servicelog.StreamID, message io.Reader) error {
+func (w *logWriter) WriteLog(writer io.Writer, timestamp time.Time, serviceName string, stream servicelog.StreamID, message io.Reader) error {
 	w.mutex.Lock()
 	defer w.mutex.Unlock()
 
@@ -207,9 +207,9 @@ func (w *logWriter) writeLog(writer io.Writer, timestamp time.Time, serviceName 
 	w.buf = w.buf[:0]
 	w.buf = timestamp.AppendFormat(w.buf, time.RFC3339)
 	w.buf = append(w.buf, ' ')
-	w.buf = append(w.buf, []byte(serviceName)...)
+	w.buf = append(w.buf, serviceName...)
 	w.buf = append(w.buf, ' ')
-	w.buf = append(w.buf, []byte(stream.String())...)
+	w.buf = append(w.buf, stream.String()...)
 	w.buf = append(w.buf, ':', ' ')
 	_, err := writer.Write(w.buf)
 	if err != nil {
