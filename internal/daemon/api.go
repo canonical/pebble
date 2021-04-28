@@ -64,10 +64,6 @@ var api = []*Command{{
 	UserOK: true,
 	GET:    v1GetFiles,
 	POST:   v1PostFiles,
-}, {
-	Path:   "/v1/logs",
-	UserOK: true,
-	GET:    v1GetLogs,
 }}
 
 var (
