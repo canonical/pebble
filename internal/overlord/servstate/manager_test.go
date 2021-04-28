@@ -21,6 +21,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
@@ -40,9 +41,10 @@ func Test(t *testing.T) { TestingT(t) }
 type S struct {
 	testutil.BaseTest
 
-	dir       string
-	log       string
-	logBuffer bytes.Buffer
+	dir          string
+	log          string
+	logBuffer    bytes.Buffer
+	logBufferMut sync.Mutex
 
 	st *state.State
 
@@ -93,8 +95,12 @@ func (s *S) SetUpTest(c *C) {
 	err = ioutil.WriteFile(filepath.Join(s.dir, "layers", "002-two.yaml"), []byte(planLayer2), 0644)
 	c.Assert(err, IsNil)
 
+	s.logBufferMut.Lock()
 	s.logBuffer.Reset()
+	s.logBufferMut.Unlock()
 	logOutput := servicelog.OutputFunc(func(_ time.Time, _ string, _ servicelog.StreamID, message io.Reader) error {
+		s.logBufferMut.Lock()
+		defer s.logBufferMut.Unlock()
 		_, err := io.Copy(&s.logBuffer, message)
 		return err
 	})
@@ -114,6 +120,8 @@ func (s *S) TearDownTest(c *C) {
 }
 
 func (s *S) assertLog(c *C, expected string) {
+	s.logBufferMut.Lock()
+	defer s.logBufferMut.Unlock()
 	data, err := ioutil.ReadFile(s.log)
 	if os.IsNotExist(err) {
 		c.Fatal("Services have not run")
