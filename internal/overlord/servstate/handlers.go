@@ -7,6 +7,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/canonical/pebble/internal/logger"
 	"github.com/canonical/pebble/internal/overlord/state"
 	"github.com/canonical/pebble/internal/servicelog"
 	"github.com/canonical/pebble/internal/strutil/shlex"
@@ -49,7 +50,6 @@ var (
 	killWait = 5 * time.Second
 	failWait = 10 * time.Second
 
-	// TODO make these configurable.
 	maxLogBytes  = 1024 * 1024
 	avgLogLine   = 100
 	maxLogWrites = maxLogBytes / avgLogLine
@@ -105,7 +105,9 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 	cmd.Stderr = logBuffer.StreamWriter(servicelog.Stderr)
 	err = cmd.Start()
 	if err != nil {
-		_ = outputIterator.Close()
+		if outputIterator != nil {
+			_ = outputIterator.Close()
+		}
 		_ = logBuffer.Close()
 		return fmt.Errorf("cannot start service: %v", err)
 	}
@@ -122,7 +124,13 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 		close(active.done)
 	}()
 	if m.verboseOutput != nil {
-		go servicelog.Sink(outputIterator, m.verboseOutput, req.Name, active.done)
+		go func() {
+			defer outputIterator.Close()
+			err := servicelog.Sink(outputIterator, m.verboseOutput, req.Name, active.done)
+			if err != nil {
+				logger.Noticef("service %s log sink closed with %v", req.Name, err)
+			}
+		}()
 	}
 
 	releasePlan()

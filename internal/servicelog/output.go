@@ -24,10 +24,15 @@ type Output interface {
 	WriteLog(timestamp time.Time, serviceName string, stream StreamID, message io.Reader) error
 }
 
+type OutputFunc func(time.Time, string, StreamID, io.Reader) error
+
+func (f OutputFunc) WriteLog(timestamp time.Time, serviceName string, stream StreamID, message io.Reader) error {
+	return f(timestamp, serviceName, stream, message)
+}
+
 // Sink logs from the iterator to Output labeled with the service name.
 // Sink blocks until done is closed.
 func Sink(it Iterator, out Output, serviceName string, done <-chan struct{}) error {
-	defer it.Close()
 	last := false
 	for {
 		more := it.More()

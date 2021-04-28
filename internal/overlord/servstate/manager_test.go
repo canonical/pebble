@@ -15,7 +15,9 @@
 package servstate_test
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -29,6 +31,7 @@ import (
 	"github.com/canonical/pebble/internal/overlord/servstate"
 	"github.com/canonical/pebble/internal/overlord/state"
 	"github.com/canonical/pebble/internal/plan"
+	"github.com/canonical/pebble/internal/servicelog"
 	"github.com/canonical/pebble/internal/testutil"
 )
 
@@ -37,8 +40,9 @@ func Test(t *testing.T) { TestingT(t) }
 type S struct {
 	testutil.BaseTest
 
-	dir string
-	log string
+	dir       string
+	log       string
+	logBuffer bytes.Buffer
 
 	st *state.State
 
@@ -52,7 +56,7 @@ var planLayer1 = `
 services:
     test1:
         override: replace
-        command: /bin/sh -c "echo test1 >> %s; sleep 300"
+        command: /bin/sh -c "echo test1 | tee -a %s; sleep 300"
         startup: enabled
         requires:
             - test2
@@ -61,7 +65,7 @@ services:
 
     test2:
         override: replace
-        command: /bin/sh -c "echo test2 >> %s; sleep 300"
+        command: /bin/sh -c "echo test2 | tee -a %s; sleep 300"
 `
 
 var planLayer2 = `
@@ -89,8 +93,14 @@ func (s *S) SetUpTest(c *C) {
 	err = ioutil.WriteFile(filepath.Join(s.dir, "layers", "002-two.yaml"), []byte(planLayer2), 0644)
 	c.Assert(err, IsNil)
 
+	s.logBuffer.Reset()
+	logOutput := servicelog.OutputFunc(func(_ time.Time, _ string, _ servicelog.StreamID, message io.Reader) error {
+		_, err := io.Copy(&s.logBuffer, message)
+		return err
+	})
+
 	s.runner = state.NewTaskRunner(s.st)
-	manager, err := servstate.NewManager(s.st, s.runner, s.dir)
+	manager, err := servstate.NewManager(s.st, s.runner, s.dir, logOutput)
 	c.Assert(err, IsNil)
 	s.manager = manager
 
@@ -110,6 +120,7 @@ func (s *S) assertLog(c *C, expected string) {
 	}
 	c.Assert(err, IsNil)
 	c.Assert(string(data), Matches, "(?s)"+expected)
+	c.Assert(s.logBuffer.String(), Matches, "(?s)"+expected)
 }
 
 func (s *S) TestDefaultServiceNames(c *C) {
@@ -125,12 +136,7 @@ func (s *S) ensure(c *C, n int) {
 	}
 }
 
-func (s *S) TestStartStopServices(c *C) {
-
-	// === Start ===
-
-	services := []string{"test1", "test2"}
-
+func (s *S) startServices(c *C, services []string) {
 	s.st.Lock()
 	ts, err := servstate.Start(s.st, services)
 	c.Check(err, IsNil)
@@ -148,20 +154,30 @@ func (s *S) TestStartStopServices(c *C) {
 	s.assertLog(c, "test1\ntest2\n")
 
 	cmds := s.manager.CmdsForTest()
-	c.Check(cmds, HasLen, 2)
+	c.Check(cmds, HasLen, len(services))
+}
+
+func (s *S) TestStartStopServices(c *C) {
+	services := []string{"test1", "test2"}
+	s.startServices(c, services)
 
 	if c.Failed() {
 		return
 	}
 
-	// === Stop ===
+	s.stopServices(c, services)
+}
+
+func (s *S) stopServices(c *C, services []string) {
+	cmds := s.manager.CmdsForTest()
+	c.Check(cmds, HasLen, len(services))
 
 	s.st.Lock()
 	// Stopping should happen in reverse order in practice. For now
 	// it's up to the call site to organize that.
-	ts, err = servstate.Stop(s.st, services)
+	ts, err := servstate.Stop(s.st, services)
 	c.Check(err, IsNil)
-	chg = s.st.NewChange("test", "Stop test")
+	chg := s.st.NewChange("test", "Stop test")
 	chg.AddAll(ts)
 	s.st.Unlock()
 
@@ -169,7 +185,7 @@ func (s *S) TestStartStopServices(c *C) {
 	s.ensure(c, 2)
 
 	// Ensure processes are gone indeed.
-	c.Assert(cmds, HasLen, 2)
+	c.Assert(cmds, HasLen, len(services))
 	for name, cmd := range cmds {
 		err := cmd.Process.Signal(syscall.Signal(0))
 		if err == nil {
@@ -182,6 +198,35 @@ func (s *S) TestStartStopServices(c *C) {
 	s.st.Lock()
 	c.Check(chg.Status(), Equals, state.DoneStatus, Commentf("Error: %v", chg.Err()))
 	s.st.Unlock()
+}
+
+func (s *S) TestServiceLogs(c *C) {
+	services := []string{"test1", "test2"}
+	outputs := map[string]string{"test1": "test1\n", "test2": "test2\n"}
+	s.startServices(c, services)
+
+	if c.Failed() {
+		return
+	}
+
+	iterators, err := s.manager.ServiceLogs(services)
+	c.Assert(err, IsNil)
+	c.Assert(iterators, HasLen, len(services))
+
+	for serviceName, it := range iterators {
+		buf := &bytes.Buffer{}
+		for it.Next() {
+			_, err = io.Copy(buf, it)
+			c.Assert(err, IsNil)
+		}
+
+		c.Assert(buf.String(), Equals, outputs[serviceName])
+
+		err = it.Close()
+		c.Assert(err, IsNil)
+	}
+
+	s.stopServices(c, services)
 }
 
 func (s *S) TestStartBadCommand(c *C) {
@@ -245,14 +290,14 @@ services:
     test1:
         startup: enabled
         override: replace
-        command: /bin/sh -c "echo test1 >> %s; sleep 300"
+        command: /bin/sh -c "echo test1 | tee -a %s; sleep 300"
         before:
             - test2
         requires:
             - test2
     test2:
         override: replace
-        command: /bin/sh -c "echo test2 >> %s; sleep 300"
+        command: /bin/sh -c "echo test2 | tee -a %s; sleep 300"
     test3:
         override: replace
         command: some-bad-command
@@ -279,7 +324,7 @@ func (s *S) TestAppendLayer(c *C) {
 	dir := c.MkDir()
 	os.Mkdir(filepath.Join(dir, "layers"), 0755)
 	runner := state.NewTaskRunner(s.st)
-	manager, err := servstate.NewManager(s.st, runner, dir)
+	manager, err := servstate.NewManager(s.st, runner, dir, nil)
 	c.Assert(err, IsNil)
 
 	// Append a layer when there are no layers.
@@ -361,7 +406,7 @@ func (s *S) TestCombineLayer(c *C) {
 	dir := c.MkDir()
 	os.Mkdir(filepath.Join(dir, "layers"), 0755)
 	runner := state.NewTaskRunner(s.st)
-	manager, err := servstate.NewManager(s.st, runner, dir)
+	manager, err := servstate.NewManager(s.st, runner, dir, nil)
 	c.Assert(err, IsNil)
 
 	// "Combine" layer with no layers should just append.
@@ -521,7 +566,7 @@ func (s *S) TestEnvironment(c *C) {
 	st := state.New(nil)
 	dir := c.MkDir()
 	runner := state.NewTaskRunner(st)
-	manager, err := servstate.NewManager(st, runner, dir)
+	manager, err := servstate.NewManager(st, runner, dir, nil)
 	c.Assert(err, IsNil)
 	logPath := filepath.Join(dir, "log.txt")
 	layerYAML := fmt.Sprintf(planLayerEnv, logPath)

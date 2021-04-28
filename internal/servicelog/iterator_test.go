@@ -33,10 +33,10 @@ type iteratorSuite struct{}
 var _ = Suite(&iteratorSuite{})
 
 func (s *iteratorSuite) TestReads(c *C) {
-	wb := servicelog.NewWriteBuffer(100, 1000)
+	wb := servicelog.NewWriteBuffer(10, 100)
 	stdout := wb.StreamWriter(servicelog.Stdout)
-	for i := 0; i < 100; i++ {
-		n, err := fmt.Fprintln(stdout, "123456789")
+	for i := 0; i < 10; i++ {
+		n, err := fmt.Fprint(stdout, "0123456789")
 		c.Assert(err, IsNil)
 		c.Assert(n, Equals, 10)
 	}
@@ -51,13 +51,13 @@ func (s *iteratorSuite) TestReads(c *C) {
 		n, err := it.Read(buf[:])
 		c.Assert(err, IsNil)
 		c.Assert(n, Equals, 10)
-		c.Assert(buf[:], DeepEquals, []byte("123456789\n"))
+		c.Assert(buf[:], DeepEquals, []byte("0123456789"))
 		num++
 	}
 
 	it.Close()
 
-	c.Assert(num, Equals, 100)
+	c.Assert(num, Equals, 10)
 }
 
 func (s *iteratorSuite) TestConcurrentReaders(c *C) {

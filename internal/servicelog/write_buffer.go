@@ -177,7 +177,7 @@ func (wb *WriteBuffer) Write(p []byte, streamID StreamID) (int, error) {
 }
 
 // TailIterator returns an iterator from the tail of the stream.
-// The callee must Close the iterator when finished.
+// The caller must Close the iterator when finished.
 func (wb *WriteBuffer) TailIterator() Iterator {
 	tail := wb.acquireTail()
 	return &iterator{
@@ -190,7 +190,7 @@ func (wb *WriteBuffer) TailIterator() Iterator {
 // HeadIterator returns an iterator from the head of the stream.
 // If last is a positive non-zero number, the iterator will start
 // at most N writes back from the head.
-// The callee must Close the iterator when finished.
+// The caller must Close the iterator when finished.
 func (wb *WriteBuffer) HeadIterator(last int) Iterator {
 	head := wb.acquireHead(last)
 	skip := head != &wb.placeholderTail
