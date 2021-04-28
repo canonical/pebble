@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2020 Canonical Ltd
+// Copyright (c) 2021 Canonical Ltd
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License version 3 as
@@ -18,9 +18,9 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"sync"
+	"time"
 )
 
 // A Logger is a fairly minimal logging tool.
@@ -30,11 +30,6 @@ type Logger interface {
 	// Debug is for messages that the user should be able to find if they're debugging something
 	Debug(msg string)
 }
-
-const (
-	// DefaultFlags are passed to the default console log.Logger
-	DefaultFlags = log.Ldate | log.Ltime
-)
 
 type nullLogger struct{}
 
@@ -46,16 +41,11 @@ var NullLogger = nullLogger{}
 
 var (
 	logger Logger = NullLogger
-	lock   sync.Mutex
 )
 
 // Panicf notifies the user and then panics
 func Panicf(format string, v ...interface{}) {
 	msg := fmt.Sprintf(format, v...)
-
-	lock.Lock()
-	defer lock.Unlock()
-
 	logger.Notice("PANIC " + msg)
 	panic(msg)
 }
@@ -63,77 +53,66 @@ func Panicf(format string, v ...interface{}) {
 // Noticef notifies the user of something
 func Noticef(format string, v ...interface{}) {
 	msg := fmt.Sprintf(format, v...)
-
-	lock.Lock()
-	defer lock.Unlock()
-
 	logger.Notice(msg)
 }
 
 // Debugf records something in the debug log
 func Debugf(format string, v ...interface{}) {
 	msg := fmt.Sprintf(format, v...)
-
-	lock.Lock()
-	defer lock.Unlock()
-
 	logger.Debug(msg)
 }
 
-// MockLogger replaces the exiting logger with a buffer and returns
+// MockLogger replaces the existing logger with a buffer and returns
 // the log buffer and a restore function.
-func MockLogger() (buf *bytes.Buffer, restore func()) {
+func MockLogger(prefix string) (buf *bytes.Buffer, restore func()) {
 	buf = &bytes.Buffer{}
 	oldLogger := logger
-	l, err := New(buf, DefaultFlags)
-	if err != nil {
-		panic(err)
-	}
-	SetLogger(l)
+	SetLogger(New(buf, prefix))
 	return buf, func() {
 		SetLogger(oldLogger)
 	}
 }
 
-// SetLogger sets the global logger to the given one
+// SetLogger sets the global logger to the given one. It must be called
+// from a single goroutine before any logs are written.
 func SetLogger(l Logger) {
-	lock.Lock()
-	defer lock.Unlock()
-
 	logger = l
 }
 
-type Log struct {
-	log *log.Logger
+type defaultLogger struct {
+	w      io.Writer
+	prefix string
+
+	buf []byte
+	mu  sync.Mutex
 }
 
-// Debug only prints if SNAPD_DEBUG is set
-func (l Log) Debug(msg string) {
+// Debug only prints if PEBBLE_DEBUG is set.
+func (l *defaultLogger) Debug(msg string) {
 	if os.Getenv("PEBBLE_DEBUG") == "1" {
-		l.log.Output(3, "DEBUG "+msg)
+		l.Notice("DEBUG " + msg)
 	}
 }
 
 // Notice alerts the user about something, as well as putting it syslog
-func (l Log) Notice(msg string) {
-	l.log.Output(3, msg)
+func (l *defaultLogger) Notice(msg string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	l.buf = l.buf[:0]
+	now := time.Now().UTC()
+	l.buf = now.AppendFormat(l.buf, time.RFC3339)
+	l.buf = append(l.buf, ' ')
+	l.buf = append(l.buf, l.prefix...)
+	l.buf = append(l.buf, msg...)
+	if len(msg) == 0 || msg[len(msg)-1] != '\n' {
+		l.buf = append(l.buf, '\n')
+	}
+	l.w.Write(l.buf)
 }
 
-// New creates a log.Logger using the given io.Writer and flag.
-func New(w io.Writer, flag int) (Logger, error) {
-	return Log{log: log.New(w, "", flag)}, nil
-}
-
-// SimpleSetup creates the default (console) logger
-func SimpleSetup() error {
-	flags := log.Lshortfile
-	if term := os.Getenv("TERM"); term != "" {
-		// snapd is probably not running under systemd
-		flags = DefaultFlags
-	}
-	l, err := New(os.Stderr, flags)
-	if err == nil {
-		SetLogger(l)
-	}
-	return err
+// New creates a log.Logger using the given io.Writer and prefix (which is
+// printed between the timestamp and the message).
+func New(w io.Writer, prefix string) Logger {
+	return &defaultLogger{w: w, prefix: prefix}
 }

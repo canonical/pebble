@@ -335,10 +335,7 @@ func (e *exitStatus) Error() string {
 }
 
 func run() error {
-	err := logger.SimpleSetup()
-	if err != nil {
-		fmt.Fprintf(Stderr, "WARNING: Cannot activate logging: %v\n", err)
-	}
+	logger.SetLogger(logger.New(os.Stderr, "[pebble] stderr: "))
 
 	_, clientConfig.Socket = getEnvPaths()
 
