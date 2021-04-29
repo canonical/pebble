@@ -21,13 +21,13 @@ import (
 
 // Output of logs sourced from an iterator using Sink.
 type Output interface {
-	WriteLog(timestamp time.Time, serviceName string, stream StreamID, message io.Reader) error
+	WriteLog(timestamp time.Time, serviceName string, stream StreamID, length int, message io.Reader) error
 }
 
-type OutputFunc func(time.Time, string, StreamID, io.Reader) error
+type OutputFunc func(time.Time, string, StreamID, int, io.Reader) error
 
-func (f OutputFunc) WriteLog(timestamp time.Time, serviceName string, stream StreamID, message io.Reader) error {
-	return f(timestamp, serviceName, stream, message)
+func (f OutputFunc) WriteLog(timestamp time.Time, serviceName string, stream StreamID, length int, message io.Reader) error {
+	return f(timestamp, serviceName, stream, length, message)
 }
 
 // Sink logs from the iterator to Output labeled with the service name.
@@ -37,7 +37,7 @@ func Sink(it Iterator, out Output, serviceName string, done <-chan struct{}) err
 	for {
 		more := it.More()
 		for it.Next() {
-			err := out.WriteLog(it.Timestamp(), serviceName, it.StreamID(), it)
+			err := out.WriteLog(it.Timestamp(), serviceName, it.StreamID(), it.Length(), it)
 			if err != nil {
 				return err
 			}

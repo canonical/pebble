@@ -236,33 +236,12 @@ func followLogs(w io.Writer, itsByName map[string]servicelog.Iterator, done <-ch
 	// Start one goroutine per service to listen for new logs.
 	writeMutex := &sync.Mutex{}
 	for name, it := range itsByName {
-		go followLog(w, writeMutex, done, name, it)
+		out := &lockingLogWriter{w: w, mutex: writeMutex}
+		go servicelog.Sink(it, out, name, done)
 	}
 
 	// Don't return till client connection is closed.
 	<-done
-}
-
-// TODO: consider using servicelog.Sink instead -- this is basically identical
-func followLog(w io.Writer, writeMutex *sync.Mutex, done <-chan struct{}, name string, it servicelog.Iterator) {
-	for {
-		more := it.More()
-		for it.Next() {
-			// Output any buffered logs.
-			writeLogLocked(w, writeMutex, name, it.Timestamp(), it.StreamID(), it.Length(), it)
-		}
-
-		// Wait for next log (or connection closed).
-		select {
-		case <-more:
-		case <-done:
-			// Stop when client connection is closed (output any remaining logs).
-			for it.Next() {
-				writeLogLocked(w, writeMutex, name, it.Timestamp(), it.StreamID(), it.Length(), it)
-			}
-			return
-		}
-	}
 }
 
 // Each log write is output as <metadata json> <newline> <message bytes>,
@@ -302,16 +281,22 @@ func writeLog(w io.Writer, service string, timestamp time.Time, stream servicelo
 	return nil
 }
 
-func writeLogLocked(w io.Writer, writeMutex *sync.Mutex, service string, timestamp time.Time, stream servicelog.StreamID, length int, message io.Reader) {
-	writeMutex.Lock()
-	defer writeMutex.Unlock()
+type lockingLogWriter struct {
+	w     io.Writer
+	mutex *sync.Mutex
+}
 
-	err := writeLog(w, service, timestamp, stream, length, message)
+func (w *lockingLogWriter) WriteLog(timestamp time.Time, serviceName string, stream servicelog.StreamID, length int, message io.Reader) error {
+	w.mutex.Lock()
+	defer w.mutex.Unlock()
+
+	err := writeLog(w.w, serviceName, timestamp, stream, length, message)
 	if err != nil {
-		fmt.Fprintf(w, "\ncannot write log from %q: %v", service, err)
-		return
+		fmt.Fprintf(w.w, "\ncannot write log from %q: %v", serviceName, err)
+		return err
 	}
-	flushWriter(w)
+	flushWriter(w.w)
+	return nil
 }
 
 func flushWriter(w io.Writer) {
