@@ -26,6 +26,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/canonical/pebble/internal/overlord/servstate"
 	"github.com/canonical/pebble/internal/servicelog"
 )
 
@@ -33,13 +34,20 @@ const (
 	defaultNumLogs = 10
 )
 
+type serviceManager interface {
+	Services(names []string) ([]*servstate.ServiceInfo, error)
+	ServiceLogs(services []string, last int) (map[string]servicelog.Iterator, error)
+}
+
 func v1GetLogs(cmd *Command, req *http.Request, _ *userState) Response {
-	return logsResponse{cmd}
+	return logsResponse{
+		svcMgr: cmd.d.overlord.ServiceManager(),
+	}
 }
 
 // Response implementation to serve the logs in a custom format.
 type logsResponse struct {
-	cmd *Command
+	svcMgr serviceManager
 }
 
 func (r logsResponse) ServeHTTP(w http.ResponseWriter, req *http.Request) {
@@ -69,7 +77,7 @@ func (r logsResponse) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 	// If "services" parameter not specified, fetch logs for all services.
 	if len(services) == 0 {
-		infos, err := r.cmd.d.overlord.ServiceManager().Services(nil)
+		infos, err := r.svcMgr.Services(nil)
 		if err != nil {
 			response := statusInternalError("cannot fetch services: %v", err)
 			response.ServeHTTP(w, req)
@@ -82,7 +90,7 @@ func (r logsResponse) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 
 	// Get log iterators by service name (and close them when we're done).
-	itsByName, err := r.cmd.d.overlord.ServiceManager().ServiceLogs(services, numLogs)
+	itsByName, err := r.svcMgr.ServiceLogs(services, numLogs)
 	if err != nil {
 		response := statusInternalError("cannot fetch log iterators: %v", err)
 		response.ServeHTTP(w, req)
@@ -270,11 +278,11 @@ func writeLog(w io.Writer, service string, timestamp time.Time, stream servicelo
 		Length:  length,
 	}
 	encoder := json.NewEncoder(w)
-	err := encoder.Encode(log)
+	err := encoder.Encode(log) // Encode writes the object followed by '\n'
 	if err != nil {
 		return err
 	}
-	_, err = io.Copy(w, message)
+	_, err = io.Copy(w, message) // io.Copy uses message.WriteTo to avoid copy
 	if err != nil {
 		return err
 	}
@@ -295,7 +303,7 @@ func (w *lockingLogWriter) WriteLog(timestamp time.Time, serviceName string, str
 		fmt.Fprintf(w.w, "\ncannot write log from %q: %v", serviceName, err)
 		return err
 	}
-	flushWriter(w.w)
+	flushWriter(w.w) // Flush HTTP response after each line in follow mode
 	return nil
 }
 
