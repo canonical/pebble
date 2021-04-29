@@ -103,6 +103,8 @@ func (rb *RingBuffer) Capacity() int {
 
 // Pos of current write index.
 func (rb *RingBuffer) Pos() RingPos {
+	rb.rwlock.RLock()
+	defer rb.rwlock.RUnlock()
 	return rb.writeIndex
 }
 

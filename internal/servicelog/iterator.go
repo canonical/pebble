@@ -20,17 +20,31 @@ import (
 )
 
 type Iterator interface {
+	// Close must be called after the consumer is finished to release
+	// backing buffers.
 	Close() error
+	// Next tries to advance to the next buffered write, returning
+	// false if there are currently no more buffred writes.
 	Next() bool
+	// More returns a channel that closes when there is more buffered
+	// writes to advance to.
 	More() <-chan struct{}
-	Reset()
 	BufferedWrite
 }
 
 type BufferedWrite interface {
+	// Reset the read offset used by io.Reader and io.WriterTo.
+	Reset()
+	// Length of the buffered write.
 	Length() int
+	// Timestamp of when the buffered write was received by the write
+	// buffer.
 	Timestamp() time.Time
+	// StreamID of which stream the buffered write was received on.
+	// This can be either Stdout or Stderr.
 	StreamID() StreamID
+	// Buffers backing the buffered write, this can be upto 2 byte
+	// slices.
 	Buffers() [2][]byte
 	io.Reader
 	io.WriterTo
