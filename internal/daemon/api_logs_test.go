@@ -15,13 +15,17 @@
 package daemon
 
 import (
+	"bufio"
+	"bytes"
+	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
+	"sort"
+	"strings"
 	"time"
 
 	. "gopkg.in/check.v1"
@@ -43,25 +47,46 @@ type logEntry struct {
 }
 
 type testServiceManager struct {
-	logsFunc serviceLogsFunc
+	buffers        map[string]*servicelog.WriteBuffer
+	servicesErr    error
+	serviceLogsErr error
 }
-
-type serviceLogsFunc func(services []string, last int) (map[string]servicelog.Iterator, error)
 
 func (m testServiceManager) Services(names []string) ([]*servstate.ServiceInfo, error) {
 	if len(names) > 0 {
 		panic("/v1/logs shouldn't call Services with names specified")
 	}
-	infos := []*servstate.ServiceInfo{
-		{Name: "nginx"},
-		{Name: "redis"},
-		{Name: "postgresql"},
+	if m.servicesErr != nil {
+		return nil, m.servicesErr
 	}
+	infos := make([]*servstate.ServiceInfo, 0, len(m.buffers))
+	for name := range m.buffers {
+		infos = append(infos, &servstate.ServiceInfo{Name: name})
+	}
+	sort.Slice(infos, func(i, j int) bool {
+		return infos[i].Name < infos[j].Name
+	})
 	return infos, nil
 }
 
 func (m testServiceManager) ServiceLogs(services []string, last int) (map[string]servicelog.Iterator, error) {
-	return m.logsFunc(services, last)
+	if m.serviceLogsErr != nil {
+		return nil, m.serviceLogsErr
+	}
+	its := make(map[string]servicelog.Iterator)
+	for name, wb := range m.buffers {
+		for _, s := range services {
+			if name == s {
+				if last >= 0 {
+					its[name] = wb.HeadIterator(last)
+				} else {
+					its[name] = wb.TailIterator()
+				}
+				break
+			}
+		}
+	}
+	return its, nil
 }
 
 func (s *logsSuite) TestInvalidFollow(c *C) {
@@ -76,7 +101,25 @@ func (s *logsSuite) TestInvalidN(c *C) {
 	checkError(c, rec.Body.Bytes(), http.StatusBadRequest, `n must be a valid integer`)
 }
 
-func (s *logsSuite) TestOneService(c *C) {
+func (s *logsSuite) TestServicesError(c *C) {
+	svcMgr := testServiceManager{
+		servicesErr: fmt.Errorf("Services error!"),
+	}
+	rec := s.recordResponse(c, "/v1/logs", svcMgr)
+	c.Assert(rec.Code, Equals, http.StatusInternalServerError)
+	checkError(c, rec.Body.Bytes(), http.StatusInternalServerError, `cannot fetch services: Services error!`)
+}
+
+func (s *logsSuite) TestServiceLogsError(c *C) {
+	svcMgr := testServiceManager{
+		serviceLogsErr: fmt.Errorf("ServiceLogs error!"),
+	}
+	rec := s.recordResponse(c, "/v1/logs", svcMgr)
+	c.Assert(rec.Code, Equals, http.StatusInternalServerError)
+	checkError(c, rec.Body.Bytes(), http.StatusInternalServerError, `cannot fetch log iterators: ServiceLogs error!`)
+}
+
+func (s *logsSuite) TestOneServiceDefaults(c *C) {
 	wb := servicelog.NewWriteBuffer(20, 1024)
 	stdout := wb.StreamWriter(servicelog.Stdout)
 	stderr := wb.StreamWriter(servicelog.Stderr)
@@ -89,14 +132,10 @@ func (s *logsSuite) TestOneService(c *C) {
 	}
 
 	svcMgr := testServiceManager{
-		logsFunc: func(services []string, last int) (map[string]servicelog.Iterator, error) {
-			its := map[string]servicelog.Iterator{
-				"nginx": getIterator(wb, last),
-			}
-			return its, nil
+		buffers: map[string]*servicelog.WriteBuffer{
+			"nginx": wb,
 		},
 	}
-
 	rec := s.recordResponse(c, "/v1/logs", svcMgr)
 	c.Assert(rec.Code, Equals, http.StatusOK)
 
@@ -111,48 +150,322 @@ func (s *logsSuite) TestOneService(c *C) {
 	}
 }
 
+func (s *logsSuite) TestOneServiceWithN(c *C) {
+	wb := servicelog.NewWriteBuffer(10, 1024)
+	stdout := wb.StreamWriter(servicelog.Stdout)
+	for i := 0; i < 20; i++ {
+		fmt.Fprintf(stdout, "message %d\n", i)
+	}
+
+	svcMgr := testServiceManager{
+		buffers: map[string]*servicelog.WriteBuffer{
+			"nginx": wb,
+		},
+	}
+	rec := s.recordResponse(c, "/v1/logs?n=3", svcMgr)
+	c.Assert(rec.Code, Equals, http.StatusOK)
+
+	logs := decodeLogs(c, rec.Body)
+	c.Assert(logs, HasLen, 3)
+	for i := 0; i < 3; i++ {
+		checkLog(c, logs[i], "nginx", "stdout", fmt.Sprintf("message %d\n", i+17))
+	}
+}
+
+func (s *logsSuite) TestOneServiceAllLogs(c *C) {
+	wb := servicelog.NewWriteBuffer(20, 1024)
+	stdout := wb.StreamWriter(servicelog.Stdout)
+	for i := 0; i < 40; i++ {
+		fmt.Fprintf(stdout, "message %d\n", i)
+	}
+
+	svcMgr := testServiceManager{
+		buffers: map[string]*servicelog.WriteBuffer{
+			"nginx": wb,
+		},
+	}
+	rec := s.recordResponse(c, "/v1/logs?n=-1", svcMgr)
+	c.Assert(rec.Code, Equals, http.StatusOK)
+
+	logs := decodeLogs(c, rec.Body)
+	c.Assert(logs, HasLen, 20)
+	for i := 0; i < 20; i++ {
+		checkLog(c, logs[i], "nginx", "stdout", fmt.Sprintf("message %d\n", i+20))
+	}
+}
+
+func (s *logsSuite) TestOneServiceOutOfTwo(c *C) {
+	wb := servicelog.NewWriteBuffer(10, 1024)
+	stdout := wb.StreamWriter(servicelog.Stdout)
+	for i := 0; i < 20; i++ {
+		fmt.Fprintf(stdout, "message %d\n", i)
+	}
+
+	svcMgr := testServiceManager{
+		buffers: map[string]*servicelog.WriteBuffer{
+			"nginx":  wb,
+			"unused": nil,
+		},
+	}
+	rec := s.recordResponse(c, "/v1/logs?n=3&services=nginx", svcMgr)
+	c.Assert(rec.Code, Equals, http.StatusOK)
+
+	logs := decodeLogs(c, rec.Body)
+	c.Assert(logs, HasLen, 3)
+	for i := 0; i < 3; i++ {
+		checkLog(c, logs[i], "nginx", "stdout", fmt.Sprintf("message %d\n", i+17))
+	}
+}
+
+func (s *logsSuite) TestNoLogs(c *C) {
+	svcMgr := testServiceManager{
+		buffers: map[string]*servicelog.WriteBuffer{
+			"foo": servicelog.NewWriteBuffer(10, 10),
+			"bar": servicelog.NewWriteBuffer(10, 10),
+		},
+	}
+	rec := s.recordResponse(c, "/v1/logs", svcMgr)
+	c.Assert(rec.Code, Equals, http.StatusOK)
+
+	logs := decodeLogs(c, rec.Body)
+	c.Assert(logs, HasLen, 0)
+}
+
+func (s *logsSuite) TestZeroN(c *C) {
+	svcMgr := testServiceManager{
+		buffers: map[string]*servicelog.WriteBuffer{
+			"foo": servicelog.NewWriteBuffer(10, 10),
+			"bar": servicelog.NewWriteBuffer(10, 10),
+		},
+	}
+	rec := s.recordResponse(c, "/v1/logs?n=0", svcMgr)
+	c.Assert(rec.Code, Equals, http.StatusOK)
+
+	logs := decodeLogs(c, rec.Body)
+	c.Assert(logs, HasLen, 0)
+}
+
+func (s *logsSuite) TestMultipleServicesAll(c *C) {
+	wb1 := servicelog.NewWriteBuffer(10, 1024)
+	wb2 := servicelog.NewWriteBuffer(10, 1024)
+	stdout1 := wb1.StreamWriter(servicelog.Stdout)
+	stdout2 := wb2.StreamWriter(servicelog.Stdout)
+	for i := 0; i < 10; i++ {
+		fmt.Fprintf(stdout1, "message1 %d\n", i)
+		time.Sleep(time.Millisecond)
+		fmt.Fprintf(stdout2, "message2 %d\n", i)
+		time.Sleep(time.Millisecond)
+	}
+
+	svcMgr := testServiceManager{
+		buffers: map[string]*servicelog.WriteBuffer{
+			"one": wb1,
+			"two": wb2,
+		},
+	}
+	rec := s.recordResponse(c, "/v1/logs?n=-1", svcMgr)
+	c.Assert(rec.Code, Equals, http.StatusOK)
+
+	logs := decodeLogs(c, rec.Body)
+	c.Assert(logs, HasLen, 20)
+	for i := 0; i < 10; i++ {
+		checkLog(c, logs[i*2], "one", "stdout", fmt.Sprintf("message1 %d\n", i))
+		checkLog(c, logs[i*2+1], "two", "stdout", fmt.Sprintf("message2 %d\n", i))
+	}
+}
+
+func (s *logsSuite) TestMultipleServicesN(c *C) {
+	wb1 := servicelog.NewWriteBuffer(10, 1024)
+	wb2 := servicelog.NewWriteBuffer(10, 1024)
+	stdout1 := wb1.StreamWriter(servicelog.Stdout)
+	stdout2 := wb2.StreamWriter(servicelog.Stdout)
+	for i := 0; i < 10; i++ {
+		fmt.Fprintf(stdout1, "message1 %d\n", i)
+		time.Sleep(time.Millisecond)
+		fmt.Fprintf(stdout2, "message2 %d\n", i)
+		time.Sleep(time.Millisecond)
+	}
+
+	svcMgr := testServiceManager{
+		buffers: map[string]*servicelog.WriteBuffer{
+			"one": wb1,
+			"two": wb2,
+		},
+	}
+	rec := s.recordResponse(c, "/v1/logs", svcMgr)
+	c.Assert(rec.Code, Equals, http.StatusOK)
+
+	logs := decodeLogs(c, rec.Body)
+	c.Assert(logs, HasLen, 10)
+	for i := 0; i < 5; i++ {
+		checkLog(c, logs[i*2], "one", "stdout", fmt.Sprintf("message1 %d\n", 5+i))
+		checkLog(c, logs[i*2+1], "two", "stdout", fmt.Sprintf("message2 %d\n", 5+i))
+	}
+}
+
+func (s *logsSuite) TestMultipleServicesNFewLogs(c *C) {
+	wb1 := servicelog.NewWriteBuffer(10, 1024)
+	wb2 := servicelog.NewWriteBuffer(10, 1024)
+	stdout1 := wb1.StreamWriter(servicelog.Stdout)
+	stdout2 := wb2.StreamWriter(servicelog.Stdout)
+	fmt.Fprintf(stdout1, "message1 1\n")
+	time.Sleep(time.Millisecond)
+	fmt.Fprintf(stdout2, "message2 1\n")
+	time.Sleep(time.Millisecond)
+
+	svcMgr := testServiceManager{
+		buffers: map[string]*servicelog.WriteBuffer{
+			"one": wb1,
+			"two": wb2,
+		},
+	}
+	rec := s.recordResponse(c, "/v1/logs", svcMgr)
+	c.Assert(rec.Code, Equals, http.StatusOK)
+
+	logs := decodeLogs(c, rec.Body)
+	c.Assert(logs, HasLen, 2)
+	checkLog(c, logs[0], "one", "stdout", "message1 1\n")
+	checkLog(c, logs[1], "two", "stdout", "message2 1\n")
+}
+
+func (s *logsSuite) TestMultipleServicesFollow(c *C) {
+	wb1 := servicelog.NewWriteBuffer(10, 1024)
+	wb2 := servicelog.NewWriteBuffer(10, 1024)
+	stdout1 := wb1.StreamWriter(servicelog.Stdout)
+	stdout2 := wb2.StreamWriter(servicelog.Stdout)
+	fmt.Fprintf(stdout1, "message1 1\n")
+	time.Sleep(time.Millisecond)
+	fmt.Fprintf(stdout2, "message2 1\n")
+	time.Sleep(time.Millisecond)
+
+	svcMgr := testServiceManager{
+		buffers: map[string]*servicelog.WriteBuffer{
+			"one": wb1,
+			"two": wb2,
+		},
+	}
+
+	// Start a cancellable request
+	ctx, cancel := context.WithCancel(context.Background())
+	req, err := http.NewRequestWithContext(ctx, "GET", "/v1/logs?follow=true", nil)
+	c.Assert(err, IsNil)
+	rsp := logsResponse{svcMgr: svcMgr}
+
+	// writeChan is sent to whenever a response write occurs
+	logChan := make(chan string)
+	rec := &followRecorder{logChan: logChan}
+
+	// Serve the request on a background goroutine
+	done := make(chan struct{})
+	go func() {
+		rsp.ServeHTTP(rec, req)
+		done <- struct{}{}
+	}()
+
+	waitLog := func() logEntry {
+		select {
+		case log := <-logChan:
+			reader := bufio.NewReader(strings.NewReader(log))
+			entry, ok := decodeLog(c, reader)
+			c.Check(ok, Equals, true)
+			return entry
+		case <-time.After(1 * time.Second):
+			c.Fatalf("timed out waiting for log")
+			return logEntry{}
+		}
+	}
+
+	// The two logs written before the request should be there
+	checkLog(c, waitLog(), "one", "stdout", "message1 1\n")
+	checkLog(c, waitLog(), "two", "stdout", "message2 1\n")
+
+	// Then write a bunch more and ensure we can "follow" them
+	fmt.Fprintf(stdout1, "message1 2\n")
+	checkLog(c, waitLog(), "one", "stdout", "message1 2\n")
+	fmt.Fprintf(stdout2, "message2 2\n")
+	checkLog(c, waitLog(), "two", "stdout", "message2 2\n")
+	fmt.Fprintf(stdout2, "message2 3\n")
+	checkLog(c, waitLog(), "two", "stdout", "message2 3\n")
+	fmt.Fprintf(stdout1, "message1 3\n")
+	checkLog(c, waitLog(), "one", "stdout", "message1 3\n")
+
+	// Close request and wait till serve goroutine exits
+	cancel()
+	<-done
+	c.Assert(rec.status, Equals, http.StatusOK)
+}
+
+type followRecorder struct {
+	logChan chan string
+	header  http.Header
+	buf     bytes.Buffer
+	status  int
+}
+
+func (r *followRecorder) Header() http.Header {
+	if r.header == nil {
+		r.header = make(http.Header)
+	}
+	return r.header
+}
+
+func (r *followRecorder) Write(p []byte) (int, error) {
+	if r.status == 0 {
+		r.status = 200
+	}
+	n, err := r.buf.Write(p)
+	if len(p) > 0 && p[0] != '{' {
+		// If the message bytes were just written, send complete log bytes
+		r.logChan <- r.buf.String()
+		r.buf.Reset()
+	}
+	return n, err
+}
+
+func (r *followRecorder) WriteHeader(status int) {
+	r.status = status
+}
+
 func (s *logsSuite) recordResponse(c *C, url string, svcMgr serviceManager) *httptest.ResponseRecorder {
 	req, err := http.NewRequest("GET", url, nil)
 	c.Assert(err, IsNil)
 	rsp := logsResponse{svcMgr: svcMgr}
 	rec := httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)
+	if rec.Code == http.StatusOK {
+		c.Assert(rec.Header().Get("Content-Type"), Equals, "text/plain; charset=utf-8")
+	} else {
+		c.Assert(rec.Header().Get("Content-Type"), Equals, "application/json")
+	}
 	return rec
 }
 
-func getIterator(wb *servicelog.WriteBuffer, last int) servicelog.Iterator {
-	if last >= 0 {
-		return wb.HeadIterator(last)
+func decodeLog(c *C, reader *bufio.Reader) (logEntry, bool) {
+	// Read log metadata JSON and newline separator
+	metaBytes, err := reader.ReadSlice('\n')
+	if err == io.EOF {
+		return logEntry{}, false
 	}
-	return wb.TailIterator()
+	c.Assert(err, IsNil)
+	var entry logEntry
+	err = json.Unmarshal(metaBytes, &entry)
+	c.Assert(err, IsNil)
+
+	// Read message bytes
+	message, err := ioutil.ReadAll(io.LimitReader(reader, int64(entry.Length)))
+	c.Assert(err, IsNil)
+	entry.message = string(message)
+	return entry, true
 }
 
 func decodeLogs(c *C, r io.Reader) []logEntry {
 	var entries []logEntry
+	reader := bufio.NewReader(r)
 	for {
-		// Read log metadata JSON
-		var entry logEntry
-		decoder := json.NewDecoder(r)
-		err := decoder.Decode(&entry)
-		if errors.Is(err, io.EOF) {
+		entry, ok := decodeLog(c, reader)
+		if !ok {
 			break
 		}
-		c.Assert(err, IsNil)
-
-		// Read newline separator
-		buffered := decoder.Buffered()
-		var newline [1]byte
-		n, err := buffered.Read(newline[:])
-		c.Assert(err, IsNil)
-		c.Assert(n, Equals, 1)
-		c.Assert(newline[0], Equals, byte('\n'))
-
-		// Concatenate remaining buffer with rest of bytes from reader, and use
-		// that to read length message bytes.
-		r = io.MultiReader(buffered, r)
-		message, err := ioutil.ReadAll(io.LimitReader(r, int64(entry.Length)))
-		c.Assert(err, IsNil)
-		entry.message = string(message)
 		entries = append(entries, entry)
 	}
 	return entries
@@ -177,7 +490,7 @@ func checkError(c *C, body []byte, status int, errorMatch string) {
 
 func checkLog(c *C, l logEntry, service, stream, message string) {
 	c.Check(l.Time, Not(Equals), time.Time{})
-	c.Check(l.Service, Equals, "nginx")
+	c.Check(l.Service, Equals, service)
 	c.Check(l.Stream, Equals, stream)
 	c.Check(l.Length, Equals, len(message))
 	c.Check(l.message, Equals, message)
