@@ -243,13 +243,21 @@ func outputLogsAll(w io.Writer, itsByName map[string]servicelog.Iterator) {
 func followLogs(w io.Writer, itsByName map[string]servicelog.Iterator, done <-chan struct{}) {
 	// Start one goroutine per service to listen for new logs.
 	writeMutex := &sync.Mutex{}
+	var wg sync.WaitGroup
 	for name, it := range itsByName {
 		out := &lockingLogWriter{w: w, mutex: writeMutex}
-		go servicelog.Sink(it, out, name, done)
+		wg.Add(1)
+		go func(name string, it servicelog.Iterator) {
+			defer wg.Done()
+			servicelog.Sink(it, out, name, done)
+		}(name, it)
 	}
 
-	// Don't return till client connection is closed.
-	<-done
+	// Don't return till client connection is closed and all the Sink()s have
+	// finished. We can't just wait for the done channel here, because the
+	// client connection will close and the Sink calls may still be accessing
+	// it.Next() when the caller calls it.Close(), causing a data race.
+	wg.Wait()
 }
 
 // Each log write is output as <metadata json> <newline> <message bytes>,
