@@ -16,75 +16,128 @@ package client
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/url"
+	"strconv"
 	"time"
-
-	"github.com/canonical/pebble/internal/servicelog"
 )
 
-// Each log write is output as <metadata json> <newline> <message bytes>,
-// for example (the "length" field excludes the first newline):
-//
-// {"time":"2021-04-23T01:28:52.660695091Z","service":"redis","stream":"stdout","length":10}
-// message 9
-// {"time":"2021-04-23T01:28:52.798839551Z","service":"thing","stream":"stdout","length":11}
-// message 10
-type logMeta struct {
-	Time    time.Time `json:"time"`
-	Service string    `json:"service"`
-	Stream  string    `json:"stream"`
-	Length  int       `json:"length"`
+type LogsOptions struct {
+	// Function called to write a single log to the output (required).
+	WriteLog WriteLogFunc
+
+	// The list of service names to fetch logs for (nil or empty slice means
+	// all services).
+	Services []string
+
+	// Total number of logs to fetch (before following if calling FollowLogs).
+	// If nil, use Pebble's default (10). If negative, fetch all buffered logs.
+	// If set to zero when calling FollowLogs, write no logs before following.
+	NumLogs *int
 }
 
-// Logs of the specified services passed to the provided output or all services
-// when none are specified.
-func (client *Client) Logs(services []string, output servicelog.Output) error {
+type WriteLogFunc func(timestamp time.Time, service string, stream LogStream, length int, message io.Reader) error
+
+type LogStream int
+
+const (
+	StreamUnknown LogStream = 0
+	StreamStdout  LogStream = 1
+	StreamStderr  LogStream = 2
+)
+
+func (s LogStream) String() string {
+	switch s {
+	case StreamStdout:
+		return "stdout"
+	case StreamStderr:
+		return "stderr"
+	default:
+		return "unknown"
+	}
+}
+
+// Logs fetches already-written logs from the given services.
+func (client *Client) Logs(opts *LogsOptions) error {
+	return client.logs(context.Background(), opts, false)
+}
+
+// FollowLogs requests logs from the given services and follows them until the
+// context is cancelled.
+func (client *Client) FollowLogs(ctx context.Context, opts *LogsOptions) error {
+	return client.logs(ctx, opts, true)
+}
+
+func (client *Client) logs(ctx context.Context, opts *LogsOptions, follow bool) error {
 	query := url.Values{}
-	query.Set("follow", "false")
-	for _, service := range services {
+	for _, service := range opts.Services {
 		query.Add("services", service)
 	}
-	headers := map[string]string{}
-	res, err := client.raw("GET", "/v1/logs", query, headers, nil)
+	if opts.NumLogs != nil {
+		query.Set("n", strconv.Itoa(*opts.NumLogs))
+	}
+	if follow {
+		query.Set("follow", "true")
+	}
+	res, err := client.raw(ctx, "GET", "/v1/logs", query, nil, nil)
 	if err != nil {
 		return err
 	}
 	defer res.Body.Close()
+
 	reader := bufio.NewReader(res.Body)
-	eofCheckBuffer := make([]byte, 1)
 	for {
-		meta := logMeta{}
-		encoded, err := reader.ReadBytes('\n')
-		if err == io.EOF {
-			return nil
-		} else if err != nil {
-			return err
+		err = decodeLog(reader, opts.WriteLog)
+		if errors.Is(err, io.EOF) || errors.Is(err, context.Canceled) {
+			break
 		}
-		err = json.Unmarshal(encoded, &meta)
 		if err != nil {
-			return err
-		}
-		stream := servicelog.Unknown
-		switch meta.Stream {
-		case servicelog.Stdout.String():
-			stream = servicelog.Stdout
-		case servicelog.Stderr.String():
-			stream = servicelog.Stderr
-		}
-		lr := io.LimitReader(reader, int64(meta.Length))
-		err = output.WriteLog(meta.Time, meta.Service, stream, lr)
-		if err != nil {
-			return err
-		}
-		// Check we get EOF, otherwise the call to output.WriteLog didn't read all the bytes.
-		_, err = lr.Read(eofCheckBuffer)
-		if err == nil {
-			return fmt.Errorf("malformed log reader")
-		} else if err != nil && err != io.EOF {
 			return err
 		}
 	}
+	return nil
+}
+
+// Decode next log from reader and call writeLog on it. Return io.EOF if no more
+// logs to read.
+func decodeLog(reader *bufio.Reader, writeLog WriteLogFunc) error {
+	// Read log metadata JSON and newline separator
+	metaBytes, err := reader.ReadSlice('\n')
+	if err == io.EOF {
+		return io.EOF
+	}
+	if err != nil {
+		return fmt.Errorf("cannot read log metadata: %w", err)
+	}
+
+	// Decode metadata
+	var meta struct {
+		Time    time.Time `json:"time"`
+		Service string    `json:"service"`
+		Stream  string    `json:"stream"`
+		Length  int       `json:"length"`
+	}
+	err = json.Unmarshal(metaBytes, &meta)
+	if err != nil {
+		return fmt.Errorf("cannot unmarshal log metadata: %w", err)
+	}
+	stream := StreamUnknown
+	switch meta.Stream {
+	case "stdout":
+		stream = StreamStdout
+	case "stderr":
+		stream = StreamStderr
+	}
+
+	// Read message bytes
+	message := io.LimitReader(reader, int64(meta.Length))
+	err = writeLog(meta.Time, meta.Service, stream, meta.Length, message)
+	if err != nil {
+		return fmt.Errorf("cannot output log: %w", err)
+	}
+	return nil
 }

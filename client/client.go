@@ -16,6 +16,7 @@ package client
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -144,12 +145,12 @@ func (e ConnectionError) Error() string {
 // raw performs a request and returns the resulting http.Response and
 // error you usually only need to call this directly if you expect the
 // response to not be JSON, otherwise you'd call Do(...) instead.
-func (client *Client) raw(method, urlpath string, query url.Values, headers map[string]string, body io.Reader) (*http.Response, error) {
+func (client *Client) raw(ctx context.Context, method, urlpath string, query url.Values, headers map[string]string, body io.Reader) (*http.Response, error) {
 	// fake a url to keep http.Client happy
 	u := client.baseURL
 	u.Path = path.Join(client.baseURL.Path, urlpath)
 	u.RawQuery = query.Encode()
-	req, err := http.NewRequest(method, u.String(), body)
+	req, err := http.NewRequestWithContext(ctx, method, u.String(), body)
 	if err != nil {
 		return nil, RequestError{err}
 	}
@@ -209,7 +210,7 @@ func (client *Client) do(method, path string, query url.Values, headers map[stri
 	var rsp *http.Response
 	var err error
 	for {
-		rsp, err = client.raw(method, path, query, headers, body)
+		rsp, err = client.raw(context.Background(), method, path, query, headers, body)
 		if err == nil || method != "GET" {
 			break
 		}

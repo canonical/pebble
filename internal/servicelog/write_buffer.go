@@ -24,7 +24,7 @@ import (
 
 type StreamID int
 
-var (
+const (
 	Unknown StreamID = 0
 	Stdout  StreamID = 1
 	Stderr  StreamID = 2
