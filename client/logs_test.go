@@ -16,8 +16,10 @@ package client_test
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
+	"net/http"
 	"net/url"
 	"time"
 
@@ -94,6 +96,65 @@ log two
 2021-05-03T03:55:49Z thing stdout (6): log 1
 2021-05-03T03:55:49Z snappass stderr (8): log two
 `[1:])
+}
+
+func (cs *clientSuite) TestFollowLogs(c *check.C) {
+	readsChan := make(chan string)
+	cli := client.New(nil)
+	cli.SetDoer(doerFunc(func(req *http.Request) (*http.Response, error) {
+		c.Check(req.Method, check.Equals, "GET")
+		c.Check(req.URL.Path, check.Equals, "/v1/logs")
+		c.Check(req.URL.Query(), check.DeepEquals, url.Values{
+			"follow": []string{"true"},
+		})
+		rsp := &http.Response{
+			Body:       &followReader{readsChan},
+			Header:     make(http.Header),
+			StatusCode: http.StatusOK,
+		}
+		return rsp, nil
+	}))
+
+	go func() {
+		readsChan <- `{"time":"2021-05-03T03:55:49.360994155Z","service":"thing","stream":"stdout","length":6}` + "\n"
+		readsChan <- "log 1\n"
+		readsChan <- `{"time":"2021-05-03T03:55:49.654334232Z","service":"snappass","stream":"stderr","length":8}` + "\n"
+		readsChan <- "log two\n"
+		readsChan <- ""
+	}()
+	out, writeLog := makeLogWriter()
+
+	err := cli.FollowLogs(context.Background(), &client.LogsOptions{
+		WriteLog: writeLog,
+	})
+	c.Assert(err, check.IsNil)
+	c.Check(out.String(), check.Equals, `
+2021-05-03T03:55:49Z thing stdout (6): log 1
+2021-05-03T03:55:49Z snappass stderr (8): log two
+`[1:])
+}
+
+type doerFunc func(*http.Request) (*http.Response, error)
+
+func (f doerFunc) Do(req *http.Request) (*http.Response, error) {
+	return f(req)
+}
+
+type followReader struct {
+	readsChan chan string
+}
+
+func (r *followReader) Read(b []byte) (int, error) {
+	this := <-r.readsChan
+	if this == "" {
+		return 0, context.Canceled
+	}
+	n := copy(b, this)
+	return n, nil
+}
+
+func (r *followReader) Close() error {
+	return nil
 }
 
 func makeLogWriter() (*bytes.Buffer, client.WriteLogFunc) {
