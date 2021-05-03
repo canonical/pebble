@@ -102,7 +102,7 @@ func writeLogText(timestamp time.Time, service string, stream client.LogStream, 
 		// Ensure we output a final newline
 		b = append(b, '\n')
 	}
-	_, err = fmt.Printf("%s %s %s: %s", timestamp.Format(time.RFC3339), service, stream, b)
+	_, err = fmt.Fprintf(Stdout, "%s %s %s: %s", timestamp.Format(time.RFC3339), service, stream, b)
 	return err
 }
 
@@ -122,7 +122,7 @@ func writeLogJSON(timestamp time.Time, service string, stream client.LogStream, 
 		Stream:  stream.String(),
 		Message: string(b),
 	}
-	encoder := json.NewEncoder(os.Stdout)
+	encoder := json.NewEncoder(Stdout)
 	encoder.SetEscapeHTML(false)
 	return encoder.Encode(&log)
 }

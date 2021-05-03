@@ -15,9 +15,137 @@
 package main_test
 
 import (
-	"gopkg.in/check.v1"
+	"fmt"
+	"net/http"
+	"net/url"
+
+	. "gopkg.in/check.v1"
+
+	pebble "github.com/canonical/pebble/cmd/pebble"
 )
 
-func (s *PebbleSuite) TestLogs(c *check.C) {
-	// TODO
+func (s *PebbleSuite) TestLogsText(c *C) {
+	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+		c.Check(r.Method, Equals, "GET")
+		c.Check(r.URL.Path, Equals, "/v1/logs")
+		c.Check(r.URL.Query(), DeepEquals, url.Values{
+			"n": []string{"10"},
+		})
+		fmt.Fprintf(w, `
+{"time":"2021-05-03T03:55:49.360994155Z","service":"thing","stream":"stdout","length":6}
+log 1
+{"time":"2021-05-03T03:55:49.654334232Z","service":"snappass","stream":"stderr","length":8}
+log two
+{"time":"2021-05-03T03:55:50.076800988Z","service":"thing","stream":"stdout","length":10}
+the third
+`[1:])
+	})
+	rest, err := pebble.Parser(pebble.Client()).ParseArgs([]string{"logs"})
+	c.Assert(err, IsNil)
+	c.Assert(rest, HasLen, 0)
+	c.Check(s.Stdout(), Equals, `
+2021-05-03T03:55:49Z thing stdout: log 1
+2021-05-03T03:55:49Z snappass stderr: log two
+2021-05-03T03:55:50Z thing stdout: the third
+`[1:])
+	c.Check(s.Stderr(), Equals, "")
+}
+
+func (s *PebbleSuite) TestLogsJSON(c *C) {
+	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+		c.Check(r.Method, Equals, "GET")
+		c.Check(r.URL.Path, Equals, "/v1/logs")
+		c.Check(r.URL.Query(), DeepEquals, url.Values{
+			"n": []string{"10"},
+		})
+		fmt.Fprintf(w, `
+{"time":"2021-05-03T03:55:49.360994155Z","service":"thing","stream":"stdout","length":6}
+log 1
+{"time":"2021-05-03T03:55:49.654334232Z","service":"snappass","stream":"stderr","length":8}
+log two
+{"time":"2021-05-03T03:55:50.076800988Z","service":"thing","stream":"stdout","length":10}
+the third
+`[1:])
+	})
+	rest, err := pebble.Parser(pebble.Client()).ParseArgs([]string{"logs", "--format", "json"})
+	c.Assert(err, IsNil)
+	c.Assert(rest, HasLen, 0)
+	c.Check(s.Stdout(), Equals, `
+{"time":"2021-05-03T03:55:49.360994155Z","service":"thing","stream":"stdout","message":"log 1\n"}
+{"time":"2021-05-03T03:55:49.654334232Z","service":"snappass","stream":"stderr","message":"log two\n"}
+{"time":"2021-05-03T03:55:50.076800988Z","service":"thing","stream":"stdout","message":"the third\n"}
+`[1:])
+	c.Check(s.Stderr(), Equals, "")
+}
+
+func (s *PebbleSuite) TestLogsN(c *C) {
+	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+		c.Check(r.Method, Equals, "GET")
+		c.Check(r.URL.Path, Equals, "/v1/logs")
+		c.Check(r.URL.Query(), DeepEquals, url.Values{
+			"n": []string{"2"},
+		})
+		fmt.Fprintf(w, `
+{"time":"2021-05-03T03:55:49.360994155Z","service":"thing","stream":"stdout","length":6}
+log 1
+{"time":"2021-05-03T03:55:49.654334232Z","service":"snappass","stream":"stderr","length":8}
+log two
+`[1:])
+	})
+	rest, err := pebble.Parser(pebble.Client()).ParseArgs([]string{"logs", "-n2"})
+	c.Assert(err, IsNil)
+	c.Assert(rest, HasLen, 0)
+	c.Check(s.Stdout(), Equals, `
+2021-05-03T03:55:49Z thing stdout: log 1
+2021-05-03T03:55:49Z snappass stderr: log two
+`[1:])
+	c.Check(s.Stderr(), Equals, "")
+}
+
+func (s *PebbleSuite) TestLogsAll(c *C) {
+	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+		c.Check(r.Method, Equals, "GET")
+		c.Check(r.URL.Path, Equals, "/v1/logs")
+		c.Check(r.URL.Query(), DeepEquals, url.Values{
+			"n": []string{"-1"},
+		})
+		fmt.Fprintf(w, `
+{"time":"2021-05-03T03:55:49.360994155Z","service":"thing","stream":"stdout","length":6}
+log 1
+{"time":"2021-05-03T03:55:49.654334232Z","service":"snappass","stream":"stderr","length":8}
+log two
+`[1:])
+	})
+	rest, err := pebble.Parser(pebble.Client()).ParseArgs([]string{"logs", "-nall"})
+	c.Assert(err, IsNil)
+	c.Assert(rest, HasLen, 0)
+	c.Check(s.Stdout(), Equals, `
+2021-05-03T03:55:49Z thing stdout: log 1
+2021-05-03T03:55:49Z snappass stderr: log two
+`[1:])
+	c.Check(s.Stderr(), Equals, "")
+}
+
+func (s *PebbleSuite) TestLogsFollow(c *C) {
+	// NOTE: doesn't test actual following behavior -- that's tested in client
+	// tests. This just ensures ?follow=true is passed through.
+	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+		c.Check(r.Method, Equals, "GET")
+		c.Check(r.URL.Path, Equals, "/v1/logs")
+		c.Check(r.URL.Query(), DeepEquals, url.Values{
+			"n":      []string{"10"},
+			"follow": []string{"true"},
+		})
+		fmt.Fprintf(w, `
+{"time":"2021-05-03T03:55:49.360994155Z","service":"thing","stream":"stdout","length":6}
+log 1
+`[1:])
+	})
+	rest, err := pebble.Parser(pebble.Client()).ParseArgs([]string{"logs", "-f"})
+	c.Assert(err, IsNil)
+	c.Assert(rest, HasLen, 0)
+	c.Check(s.Stdout(), Equals, `
+2021-05-03T03:55:49Z thing stdout: log 1
+`[1:])
+	c.Check(s.Stderr(), Equals, "")
 }
