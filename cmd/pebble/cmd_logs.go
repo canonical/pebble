@@ -85,12 +85,25 @@ func (cmd *cmdLogs) Execute(args []string) error {
 	var err error
 	if cmd.Follow {
 		// Stop following when Ctrl-C pressed (SIGINT).
-		ctx, _ := signal.NotifyContext(context.Background(), os.Interrupt)
+		ctx := notifyContext(context.Background(), os.Interrupt)
 		err = cmd.client.FollowLogs(ctx, &opts)
 	} else {
 		err = cmd.client.Logs(&opts)
 	}
 	return err
+}
+
+// Needed because signal.NotifyContext is Go 1.16+
+func notifyContext(parent context.Context, signals ...os.Signal) context.Context {
+	ctx, cancel := context.WithCancel(parent)
+	ch := make(chan os.Signal)
+	signal.Notify(ch, signals...)
+	go func() {
+		// Wait for signal, then cancel the context.
+		<-ch
+		cancel()
+	}()
+	return ctx
 }
 
 func writeLogText(timestamp time.Time, service string, stream client.LogStream, _ int, message io.Reader) error {
