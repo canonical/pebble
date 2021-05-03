@@ -48,7 +48,7 @@ func (s *outputSuite) TestSink(c *C) {
 	readAll := make(chan struct{})
 	readCount := 0
 	lastTimestamp := logStart
-	output := servicelog.OutputFunc(func(timestamp time.Time, serviceName string, stream servicelog.StreamID, message io.Reader) error {
+	output := servicelog.OutputFunc(func(timestamp time.Time, serviceName string, stream servicelog.StreamID, length int, message io.Reader) error {
 		if timestamp.Before(logStart) {
 			c.Fatalf("log ts %v happened before start", timestamp)
 		}

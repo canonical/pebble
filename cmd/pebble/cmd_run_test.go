@@ -37,6 +37,7 @@ func (s *PebbleSuite) TestLogWriterSimple(c *check.C) {
 		time.Date(2021, 8, 4, 2, 3, 4, 0, time.UTC),
 		"nginx",
 		servicelog.Stdout,
+		0,
 		strings.NewReader("this is a test\n"),
 	)
 	c.Assert(err, check.IsNil)
@@ -47,6 +48,7 @@ func (s *PebbleSuite) TestLogWriterSimple(c *check.C) {
 		time.Date(2021, 12, 25, 12, 23, 34, 456789, time.UTC),
 		"postgresql",
 		servicelog.Stderr,
+		0,
 		strings.NewReader("some kind of error"),
 	)
 	c.Assert(err, check.IsNil)
@@ -68,6 +70,7 @@ func (s *PebbleSuite) TestLogWriterConcurrent(c *check.C) {
 					time.Date(2021, 8, 4, 2, 3, 4, 0, time.UTC),
 					"nginx",
 					servicelog.Stdout,
+					0,
 					strings.NewReader(fmt.Sprintf("message %d\n", i)),
 				)
 				c.Assert(err, check.IsNil)
@@ -138,6 +141,7 @@ func (s *PebbleSuite) TestLogWriterNewlineReader(c *check.C) {
 			time.Date(2021, 8, 4, 2, 3, 4, 0, time.UTC),
 			"nginx",
 			servicelog.Stdout,
+			0,
 			&sliceReader{reads},
 		)
 		c.Assert(err, check.IsNil)

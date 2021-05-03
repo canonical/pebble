@@ -211,7 +211,7 @@ type logWriter struct {
 	mutex  sync.Mutex
 }
 
-func (w *logWriter) WriteLog(timestamp time.Time, serviceName string, stream servicelog.StreamID, message io.Reader) error {
+func (w *logWriter) WriteLog(timestamp time.Time, serviceName string, stream servicelog.StreamID, _ int, message io.Reader) error {
 	w.mutex.Lock()
 	defer w.mutex.Unlock()
 

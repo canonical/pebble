@@ -294,15 +294,16 @@ func (m *ServiceManager) StopOrder(services []string) ([]string, error) {
 	return m.plan.StopOrder(services)
 }
 
-// ServiceLogs returns iterators to the provided services. Each iterator
-// must be closed via the Close method.
-func (m *ServiceManager) ServiceLogs(services []string) (map[string]servicelog.Iterator, error) {
+// ServiceLogs returns iterators to the provided services. If last is negative,
+// return tail iterators; if last is zero or positive, return head iterators
+// going back last elements. Each iterator must be closed via the Close method.
+func (m *ServiceManager) ServiceLogs(services []string, last int) (map[string]servicelog.Iterator, error) {
 	releasePlan, err := m.acquirePlan()
 	if err != nil {
 		return nil, err
 	}
-
 	defer releasePlan()
+
 	requested := make(map[string]bool, len(services))
 	for _, name := range services {
 		requested[name] = true
@@ -316,7 +317,11 @@ func (m *ServiceManager) ServiceLogs(services []string) (map[string]servicelog.I
 		if service == nil || service.logBuffer == nil {
 			continue
 		}
-		iterators[name] = service.logBuffer.TailIterator()
+		if last >= 0 {
+			iterators[name] = service.logBuffer.HeadIterator(last)
+		} else {
+			iterators[name] = service.logBuffer.TailIterator()
+		}
 	}
 
 	return iterators, nil
