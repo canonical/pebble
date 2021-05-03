@@ -16,6 +16,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -32,6 +33,7 @@ import (
 type cmdLogs struct {
 	clientMixin
 	Follow     bool   `short:"f" long:"follow"`
+	Format     string `long:"format"`
 	NumLogs    string `short:"n" long:"number"`
 	Positional struct {
 		Services []string `positional-arg-name:"<service>"`
@@ -40,6 +42,7 @@ type cmdLogs struct {
 
 var logsDescs = map[string]string{
 	"follow": "Follow (tail) logs for given services until Ctrl-C pressed.",
+	"format": `Output format: "text" (default) or "json" (JSON lines).`,
 	"number": "Number of logs to show (before following); defaults to 10.\nIf 'all', show all buffered logs.",
 }
 
@@ -60,8 +63,18 @@ func (cmd *cmdLogs) Execute(args []string) error {
 		var err error
 		numLogs, err = strconv.Atoi(cmd.NumLogs)
 		if err != nil {
-			return fmt.Errorf(`expected 'n' to be a non-negative integer or "all", not %q`, cmd.NumLogs)
+			return fmt.Errorf(`expected n to be a non-negative integer or "all", not %q`, cmd.NumLogs)
 		}
+	}
+
+	var writeLog client.WriteLogFunc
+	switch cmd.Format {
+	case "", "text":
+		writeLog = writeLogText
+	case "json":
+		writeLog = writeLogJSON
+	default:
+		return fmt.Errorf(`expected format to be "text" or "json", not %q`, cmd.Format)
 	}
 
 	opts := client.LogsOptions{
@@ -71,6 +84,7 @@ func (cmd *cmdLogs) Execute(args []string) error {
 	}
 	var err error
 	if cmd.Follow {
+		// Stop following when Ctrl-C pressed (SIGINT).
 		ctx, _ := signal.NotifyContext(context.Background(), os.Interrupt)
 		err = cmd.client.FollowLogs(ctx, &opts)
 	} else {
@@ -79,7 +93,7 @@ func (cmd *cmdLogs) Execute(args []string) error {
 	return err
 }
 
-func writeLog(timestamp time.Time, service string, stream client.LogStream, _ int, message io.Reader) error {
+func writeLogText(timestamp time.Time, service string, stream client.LogStream, _ int, message io.Reader) error {
 	b, err := ioutil.ReadAll(message)
 	if err != nil {
 		return err
@@ -88,8 +102,29 @@ func writeLog(timestamp time.Time, service string, stream client.LogStream, _ in
 		// Ensure we output a final newline
 		b = append(b, '\n')
 	}
-	fmt.Printf("%s %s %s: %s", timestamp.Format(time.RFC3339), service, stream, b)
-	return nil
+	_, err = fmt.Printf("%s %s %s: %s", timestamp.Format(time.RFC3339), service, stream, b)
+	return err
+}
+
+func writeLogJSON(timestamp time.Time, service string, stream client.LogStream, _ int, message io.Reader) error {
+	b, err := ioutil.ReadAll(message)
+	if err != nil {
+		return err
+	}
+	var log = struct {
+		Time    time.Time `json:"time"`
+		Service string    `json:"service"`
+		Stream  string    `json:"stream"`
+		Message string    `json:"message"`
+	}{
+		Time:    timestamp,
+		Service: service,
+		Stream:  stream.String(),
+		Message: string(b),
+	}
+	encoder := json.NewEncoder(os.Stdout)
+	encoder.SetEscapeHTML(false)
+	return encoder.Encode(&log)
 }
 
 func init() {
