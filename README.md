@@ -135,11 +135,11 @@ Here are some of the things coming soon:
   - [x] Configuration retrieval commands to investigate current settings
   - [x] Status command that displays active services and their current status
   - [x] General system modification commands (writing configuration files, etc)
+  - [x] Better log caching and retrieval support
+  - [x] Consider showing unified log as output of `pebble run` (use `-v`)
   - [ ] Improve signal handling, e.g., sending SIGHUP to a service
   - [ ] Terminate all services before exiting run command
   - [ ] More tests for existing CLI commands
-  - [ ] Better log caching and retrieval support
-  - [ ] Consider showing unified log as output of `pebble run`
 
 ## API
 
