@@ -134,6 +134,19 @@ func (cs *clientSuite) TestFollowLogs(c *check.C) {
 `[1:])
 }
 
+func (cs *clientSuite) TestLogsBadWriteLogFunc(c *check.C) {
+	cs.rsp = `
+{"time":"2021-05-03T03:55:49.360994155Z","service":"thing","stream":"stdout","length":6}
+log 1
+`[1:]
+	err := cs.cli.Logs(&client.LogsOptions{
+		WriteLog: func(_ time.Time, _ string, _ client.LogStream, _ int, _ io.Reader) error {
+			return nil
+		},
+	})
+	c.Assert(err, check.ErrorMatches, "WriteLog must read entire message")
+}
+
 type doerFunc func(*http.Request) (*http.Response, error)
 
 func (f doerFunc) Do(req *http.Request) (*http.Response, error) {

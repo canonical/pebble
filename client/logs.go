@@ -27,7 +27,8 @@ import (
 )
 
 type LogsOptions struct {
-	// Function called to write a single log to the output (required).
+	// Function called to write a single log to the output (required). This
+	// function must read the entire message till EOF.
 	WriteLog WriteLogFunc
 
 	// The list of service names to fetch logs for (nil or empty slice means
@@ -138,6 +139,17 @@ func decodeLog(reader *bufio.Reader, writeLog WriteLogFunc) error {
 	err = writeLog(meta.Time, meta.Service, stream, meta.Length, message)
 	if err != nil {
 		return fmt.Errorf("cannot output log: %w", err)
+	}
+
+	// Check that the LimitReader hit EOF, otherwise the call to writeLog
+	// didn't read all the message bytes, and the bufio.Reader won't be in the
+	// right place for the next read.
+	var buf [1]byte
+	_, err = message.Read(buf[:])
+	if err == nil {
+		return fmt.Errorf("WriteLog must read entire message")
+	} else if err != io.EOF {
+		return err
 	}
 	return nil
 }
