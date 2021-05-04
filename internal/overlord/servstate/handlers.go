@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"os/user"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -83,6 +85,20 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 	}
 	cmd := exec.Command(args[0], args[1:]...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+
+	// Start as another user if "user" specified in plan
+	if service.User != "" {
+		u, err := user.Lookup(service.User)
+		if err != nil {
+			return err // user package's errors already provide context
+		}
+		uid, _ := strconv.Atoi(u.Uid)
+		gid, _ := strconv.Atoi(u.Gid)
+		cmd.SysProcAttr.Credential = &syscall.Credential{
+			Uid: uint32(uid),
+			Gid: uint32(gid),
+		}
+	}
 
 	// Pass service description's environment variables to child process
 	cmd.Env = os.Environ()
