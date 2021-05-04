@@ -67,7 +67,7 @@ log two
 the third
 `[1:])
 	})
-	rest, err := pebble.Parser(pebble.Client()).ParseArgs([]string{"logs", "--format", "json"})
+	rest, err := pebble.Parser(pebble.Client()).ParseArgs([]string{"logs", "--output", "json"})
 	c.Assert(err, IsNil)
 	c.Assert(rest, HasLen, 0)
 	c.Check(s.Stdout(), Equals, `
@@ -76,6 +76,29 @@ the third
 {"time":"2021-05-03T03:55:50.076800988Z","service":"thing","stream":"stdout","message":"the third\n"}
 `[1:])
 	c.Check(s.Stderr(), Equals, "")
+}
+
+func (s *PebbleSuite) TestLogsRaw(c *C) {
+	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+		c.Check(r.Method, Equals, "GET")
+		c.Check(r.URL.Path, Equals, "/v1/logs")
+		c.Check(r.URL.Query(), DeepEquals, url.Values{
+			"n": []string{"10"},
+		})
+		fmt.Fprintf(w, `
+{"time":"2021-05-03T03:55:49.360994155Z","service":"thing","stream":"stdout","length":6}
+log 1
+{"time":"2021-05-03T03:55:49.654334232Z","service":"snappass","stream":"stderr","length":8}
+log two
+{"time":"2021-05-03T03:55:50.076800988Z","service":"thing","stream":"stdout","length":10}
+the third
+`[1:])
+	})
+	rest, err := pebble.Parser(pebble.Client()).ParseArgs([]string{"logs", "--output", "raw"})
+	c.Assert(err, IsNil)
+	c.Assert(rest, HasLen, 0)
+	c.Check(s.Stdout(), Equals, "log 1\nthe third\n")
+	c.Check(s.Stderr(), Equals, "log two\n")
 }
 
 func (s *PebbleSuite) TestLogsN(c *C) {
