@@ -88,16 +88,23 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 
 	// Start as another user if "user" specified in plan
 	if service.User != "" {
-		u, err := user.Lookup(service.User)
+		uid, gid, err := lookupUserOrUid(service.User)
 		if err != nil {
-			return err // user package's errors already provide context
+			return err
 		}
-		uid, _ := strconv.Atoi(u.Uid)
-		gid, _ := strconv.Atoi(u.Gid)
+		// Default GID is primary group ID of service's "user" field
+		if service.Group != "" {
+			gid, err = lookupGroupOrGid(service.Group)
+			if err != nil {
+				return err
+			}
+		}
 		cmd.SysProcAttr.Credential = &syscall.Credential{
 			Uid: uint32(uid),
 			Gid: uint32(gid),
 		}
+	} else if service.Group != "" {
+		return fmt.Errorf("group %q specified without user", service.Group)
 	}
 
 	// Pass service description's environment variables to child process
@@ -191,4 +198,31 @@ func (m *ServiceManager) doStop(task *state.Task, tomb *tomb.Tomb) error {
 		}
 	}
 	panic("unreachable")
+}
+
+// Lookup user or UID, ensure it exists, and return the user ID and its group ID.
+func lookupUserOrUid(s string) (int, int, error) {
+	u, err := user.Lookup(s)
+	if err != nil {
+		u, err = user.LookupId(s)
+		if err != nil {
+			return 0, 0, fmt.Errorf("user or UID %q not found", s)
+		}
+	}
+	uid, _ := strconv.Atoi(u.Uid)
+	gid, _ := strconv.Atoi(u.Gid)
+	return uid, gid, nil
+}
+
+// Lookup group and GID, ensure it exists, and return the group ID.
+func lookupGroupOrGid(s string) (int, error) {
+	g, err := user.LookupGroup(s)
+	if err != nil {
+		g, err = user.LookupGroupId(s)
+		if err != nil {
+			return 0, fmt.Errorf("group or GID %q not found", s)
+		}
+	}
+	gid, _ := strconv.Atoi(g.Gid)
+	return gid, nil
 }

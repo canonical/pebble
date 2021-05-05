@@ -52,6 +52,7 @@ type Service struct {
 	Requires    []string          `yaml:"requires,omitempty"`
 	Environment map[string]string `yaml:"environment,omitempty"`
 	User        string            `yaml:"user,omitempty"`
+	Group       string            `yaml:"group,omitempty"`
 }
 
 type ServiceStartup string
@@ -101,6 +102,9 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 					}
 					if service.User != "" {
 						old.User = service.User
+					}
+					if service.Group != "" {
+						old.Group = service.Group
 					}
 					old.Before = append(old.Before, service.Before...)
 					old.After = append(old.After, service.After...)
