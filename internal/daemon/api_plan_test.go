@@ -180,3 +180,21 @@ services:
 `[1:])
 	s.planLayersHasLen(c, 1)
 }
+
+func (s *apiSuite) TestLayersCombineFormatError(c *C) {
+	writeTestLayer(s.pebbleDir, planLayer)
+	_ = s.daemon(c)
+	layersCmd := apiCmd("/v1/layers")
+
+	payload := `{"action": "add", "combine": true, "label": "base", "format": "yaml", "layer": "services:\n dynamic:\n  command: echo dynamic\n"}`
+	req, err := http.NewRequest("POST", "/v1/layers", bytes.NewBufferString(payload))
+	c.Assert(err, IsNil)
+	rsp := v1PostLayers(layersCmd, req, nil).(*resp)
+	rec := httptest.NewRecorder()
+	rsp.ServeHTTP(rec, req)
+	c.Assert(rec.Code, Equals, http.StatusBadRequest)
+	c.Assert(rsp.Status, Equals, http.StatusBadRequest)
+	c.Assert(rsp.Type, Equals, ResponseTypeError)
+	result := rsp.Result.(*errorResult)
+	c.Assert(result.Message, Matches, `layer "base" must define "override" for service "dynamic"`)
+}
