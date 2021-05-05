@@ -50,6 +50,8 @@ services:
             VAR1: val1
             VAR2: val2
             VAR3: val3
+        user: bob
+        group: staff
 
     srv2:
         override: replace
@@ -69,6 +71,10 @@ Some details worth highlighting:
   - There is the `override` field (for now required) which defines whether this
     entry _overrides_ the previous service of the same name (if any - missing is
     okay), or merges with it.
+  - The optional `user` field allows starting a service with a different user
+    than the one Pebble was started with. It can be a username or numeric user
+    ID. Similarly, `group` -- which is optional even if `user` is specified --
+    can be a group name or numeric group ID.
 
 Any of the fields can be replaced individually in a merged service configuration.
 To illustrate, here is a sample override layer that might sit atop the one above:
