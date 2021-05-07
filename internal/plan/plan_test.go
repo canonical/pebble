@@ -312,6 +312,14 @@ var planTests = []planTest{{
 				override: replace
 				command: cmd
 	`},
+}, {
+	summary: `Cannot use service name "pebble"`,
+	error:   `cannot use reserved service name "pebble"`,
+	input: []string{`
+		services:
+			pebble:
+				command: cmd
+	`},
 }}
 
 func (s *S) TestParseLayer(c *C) {

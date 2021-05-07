@@ -34,11 +34,11 @@ type LogSuite struct {
 	restoreLogger func()
 }
 
-func (s *LogSuite) SetUpTest(_ *C) {
+func (s *LogSuite) SetUpTest(c *C) {
 	s.logbuf, s.restoreLogger = logger.MockLogger("PREFIX: ")
 }
 
-func (s *LogSuite) TearDownTest(_ *C) {
+func (s *LogSuite) TearDownTest(c *C) {
 	s.restoreLogger()
 }
 

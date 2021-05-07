@@ -335,7 +335,7 @@ func (e *exitStatus) Error() string {
 }
 
 func run() error {
-	logger.SetLogger(logger.New(os.Stderr, "[pebble] stderr: "))
+	logger.SetLogger(logger.New(os.Stderr, "[pebble] "))
 
 	_, clientConfig.Socket = getEnvPaths()
 

@@ -59,7 +59,8 @@ type Options struct {
 	// the pebble directory.
 	SocketPath string
 
-	// VerboseOutput is set when service logs should be aggregated via stdout.
+	// VerboseOutput is the log outputter to send service stdout and stderr
+	// logs to. If nil, service logs are discarded.
 	VerboseOutput servicelog.Output
 }
 

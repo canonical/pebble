@@ -301,8 +301,8 @@ func (m *ServiceManager) ServiceLogs(services []string) (map[string]servicelog.I
 	if err != nil {
 		return nil, err
 	}
-
 	defer releasePlan()
+
 	requested := make(map[string]bool, len(services))
 	for _, name := range services {
 		requested[name] = true
