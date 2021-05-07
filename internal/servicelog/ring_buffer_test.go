@@ -38,7 +38,7 @@ func (s *ringBufferSuite) TestWrites(c *C) {
 	c.Assert(n, Equals, 10)
 
 	c.Assert(rb.Pos(), Equals, servicelog.RingPos(10))
-	c.Assert(rb.Free(), Equals, 0)
+	c.Assert(rb.Available(), Equals, 0)
 
 	n, err = fmt.Fprint(rb, "no write")
 	c.Assert(err, Equals, io.ErrShortWrite)
@@ -54,7 +54,7 @@ func (s *ringBufferSuite) TestCrossBoundaryWriteCopy(c *C) {
 	c.Assert(n, Equals, 6)
 	a2 := rb.Pos()
 	c.Assert(a2, Equals, servicelog.RingPos(6))
-	c.Assert(rb.Free(), Equals, 7)
+	c.Assert(rb.Available(), Equals, 7)
 
 	a := make([]byte, 6)
 	n, err = rb.Copy(a, a1, a2)
@@ -69,7 +69,7 @@ func (s *ringBufferSuite) TestCrossBoundaryWriteCopy(c *C) {
 	c.Assert(n, Equals, 6)
 	b2 := rb.Pos()
 	c.Assert(b2, Equals, servicelog.RingPos(12))
-	c.Assert(rb.Free(), Equals, 1)
+	c.Assert(rb.Available(), Equals, 1)
 
 	b := make([]byte, 6)
 	n, err = rb.Copy(b, b1, b2)
@@ -77,9 +77,9 @@ func (s *ringBufferSuite) TestCrossBoundaryWriteCopy(c *C) {
 	c.Assert(n, Equals, 6)
 	c.Assert(string(b), Equals, "elbbep")
 
-	err = rb.Release(a1, a2)
+	err = rb.Discard(a1, a2)
 	c.Assert(err, IsNil)
-	c.Assert(rb.Free(), Equals, 7)
+	c.Assert(rb.Available(), Equals, 7)
 
 	c1 := rb.Pos()
 	c.Assert(c1, Equals, servicelog.RingPos(12))
@@ -88,7 +88,7 @@ func (s *ringBufferSuite) TestCrossBoundaryWriteCopy(c *C) {
 	c.Assert(n, Equals, 6)
 	c2 := rb.Pos()
 	c.Assert(c2, Equals, servicelog.RingPos(18))
-	c.Assert(rb.Free(), Equals, 1)
+	c.Assert(rb.Available(), Equals, 1)
 
 	cc := make([]byte, 6)
 	n, err = rb.Copy(cc, c1, c2)
@@ -106,7 +106,7 @@ func (s *ringBufferSuite) TestCrossBoundaryWriteWithWriteTo(c *C) {
 	c.Assert(n, Equals, 6)
 	a2 := rb.Pos()
 	c.Assert(a2, Equals, servicelog.RingPos(6))
-	c.Assert(rb.Free(), Equals, 7)
+	c.Assert(rb.Available(), Equals, 7)
 
 	a := &bytes.Buffer{}
 	read, err := rb.WriteTo(a, a1, a2)
@@ -121,7 +121,7 @@ func (s *ringBufferSuite) TestCrossBoundaryWriteWithWriteTo(c *C) {
 	c.Assert(n, Equals, 6)
 	b2 := rb.Pos()
 	c.Assert(b2, Equals, servicelog.RingPos(12))
-	c.Assert(rb.Free(), Equals, 1)
+	c.Assert(rb.Available(), Equals, 1)
 
 	b := &bytes.Buffer{}
 	read, err = rb.WriteTo(b, b1, b2)
@@ -129,9 +129,9 @@ func (s *ringBufferSuite) TestCrossBoundaryWriteWithWriteTo(c *C) {
 	c.Assert(read, Equals, int64(6))
 	c.Assert(b.String(), Equals, "elbbep")
 
-	err = rb.Release(a1, a2)
+	err = rb.Discard(a1, a2)
 	c.Assert(err, IsNil)
-	c.Assert(rb.Free(), Equals, 7)
+	c.Assert(rb.Available(), Equals, 7)
 
 	c1 := rb.Pos()
 	c.Assert(c1, Equals, servicelog.RingPos(12))
@@ -140,7 +140,7 @@ func (s *ringBufferSuite) TestCrossBoundaryWriteWithWriteTo(c *C) {
 	c.Assert(n, Equals, 6)
 	c2 := rb.Pos()
 	c.Assert(c2, Equals, servicelog.RingPos(18))
-	c.Assert(rb.Free(), Equals, 1)
+	c.Assert(rb.Available(), Equals, 1)
 
 	cc := &bytes.Buffer{}
 	read, err = rb.WriteTo(cc, c1, c2)
@@ -162,7 +162,7 @@ func (s *ringBufferSuite) TestReleaseOutOfOrder(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(n, Equals, 2)
 
-	err = rb.Release(1, 2)
+	err = rb.Discard(1, 2)
 	c.Assert(err, Equals, servicelog.ErrFreeOutOfOrder)
 }
 
@@ -172,13 +172,13 @@ func (s *ringBufferSuite) TestReleaseOutOfRange(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(n, Equals, 3)
 
-	err = rb.Release(0, 1)
+	err = rb.Discard(0, 1)
 	c.Assert(err, IsNil)
 
-	err = rb.Release(0, 1)
+	err = rb.Discard(0, 1)
 	c.Assert(err, Equals, servicelog.ErrOutOfRange)
 
-	err = rb.Release(3, 4)
+	err = rb.Discard(3, 4)
 	c.Assert(err, Equals, servicelog.ErrOutOfRange)
 }
 
@@ -235,7 +235,7 @@ func (s *ringBufferSuite) TestFullWriteCrossBoundary(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(n, Equals, 5)
 	p2 := rb.Pos()
-	err = rb.Release(p1, p2)
+	err = rb.Discard(p1, p2)
 	c.Assert(err, IsNil)
 
 	p1 = rb.Pos()
@@ -274,7 +274,7 @@ func (s *ringBufferSuite) TestAllocs(c *C) {
 			c.Assert(err, IsNil)
 		}
 		p2 := rb.Pos()
-		err = rb.Release(p1, p2)
+		err = rb.Discard(p1, p2)
 		if err != nil {
 			// this looks funny, but its to avoid allocs.
 			c.Assert(err, IsNil)

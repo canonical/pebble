@@ -127,11 +127,11 @@ func (wb *WriteBuffer) Write(p []byte, streamID StreamID) (int, error) {
 	}
 
 	writeLength := len(p)
-	if writeLength > wb.ringBuffer.Capacity() {
-		writeLength = wb.ringBuffer.Capacity()
+	if writeLength > wb.ringBuffer.Size() {
+		writeLength = wb.ringBuffer.Size()
 	}
 
-	for writeLength > wb.ringBuffer.Free() || !wb.canAdvanceHead() {
+	for writeLength > wb.ringBuffer.Available() || !wb.canAdvanceHead() {
 		err := wb.releaseTail()
 		if err == ErrSlowIterator {
 			// TODO handle timeout
@@ -264,7 +264,7 @@ func (wb *WriteBuffer) releaseTail() error {
 	}
 	l := wb.getWrite(tailIndex)
 	if !l.empty() {
-		err := wb.ringBuffer.Release(l.start, l.end)
+		err := wb.ringBuffer.Discard(l.start, l.end)
 		if err != nil {
 			// Release should not ever fail, but restore gracefully.
 			atomic.AddInt32(&wb.tailIndex, -1)

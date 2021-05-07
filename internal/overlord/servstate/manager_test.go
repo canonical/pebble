@@ -223,7 +223,7 @@ func (s *S) TestServiceLogs(c *C) {
 
 	for serviceName, it := range iterators {
 		buf := &bytes.Buffer{}
-		for it.Next() {
+		for it.Next(nil) {
 			_, err = io.Copy(buf, it)
 			c.Assert(err, IsNil)
 		}
