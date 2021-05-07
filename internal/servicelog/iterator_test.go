@@ -44,7 +44,7 @@ func (s *iteratorSuite) TestReads(c *C) {
 	it := wb.TailIterator()
 	num := 0
 	for it.Next(nil) {
-		c.Assert(it.Length(), Equals, 10)
+		c.Assert(it.Buffered(), Equals, 10)
 		c.Assert(it.StreamID(), Equals, servicelog.Stdout)
 		c.Assert(it.Timestamp(), Not(Equals), time.Time{})
 		buf := [10]byte{}
@@ -84,7 +84,7 @@ func (s *iteratorSuite) TestConcurrentReaders(c *C) {
 			it := wb.TailIterator()
 			localNum := int32(0)
 			for it.Next(nil) {
-				c.Assert(it.Length(), Equals, 10)
+				c.Assert(it.Buffered(), Equals, 10)
 				c.Assert(it.StreamID(), Equals, servicelog.Stdout)
 				c.Assert(it.Timestamp(), Not(Equals), time.Time{})
 				buf := [10]byte{}
@@ -165,7 +165,7 @@ func (s *iteratorSuite) TestMore(c *C) {
 			// Wait for write.
 			ok = it.Next(timeout)
 			c.Assert(ok, Equals, true)
-			buf := make([]byte, it.Length())
+			buf := make([]byte, it.Buffered())
 			_, err := it.Read(buf)
 			c.Assert(err, IsNil)
 			i, err := strconv.Atoi(string(buf))

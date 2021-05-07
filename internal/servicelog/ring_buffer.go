@@ -21,8 +21,8 @@ import (
 )
 
 var (
-	ErrFreeOutOfOrder = errors.New("free out of order")
-	ErrOutOfRange     = errors.New("index out of range")
+	ErrOrder = errors.New("out of order")
+	ErrRange = errors.New("out of range")
 )
 
 type RingPos int64
@@ -36,7 +36,7 @@ type RingBuffer struct {
 
 	data []byte
 
-	usedIndex  RingPos
+	readIndex  RingPos
 	writeIndex RingPos
 }
 
@@ -94,7 +94,7 @@ func (rb *RingBuffer) Available() int {
 }
 
 func (rb *RingBuffer) available() int {
-	return len(rb.data) - int(rb.writeIndex-rb.usedIndex)
+	return len(rb.data) - int(rb.writeIndex-rb.readIndex)
 }
 
 // of the internal buffer.
@@ -116,13 +116,13 @@ func (rb *RingBuffer) Copy(dest []byte, start RingPos, end RingPos) (int, error)
 	rb.rwlock.RLock()
 	defer rb.rwlock.RUnlock()
 	if end < start {
-		return 0, ErrOutOfRange
+		return 0, ErrRange
 	}
-	if start < rb.usedIndex || start > rb.writeIndex {
-		return 0, ErrOutOfRange
+	if start < rb.readIndex || start > rb.writeIndex {
+		return 0, ErrRange
 	}
-	if end < rb.usedIndex || end > rb.writeIndex {
-		return 0, ErrOutOfRange
+	if end < rb.readIndex || end > rb.writeIndex {
+		return 0, ErrRange
 	}
 	copyLength := int(end - start)
 	if copyLength > len(dest) {
@@ -152,13 +152,13 @@ func (rb *RingBuffer) WriteTo(writer io.Writer, start RingPos, end RingPos) (int
 	rb.rwlock.RLock()
 	defer rb.rwlock.RUnlock()
 	if end < start {
-		return 0, ErrOutOfRange
+		return 0, ErrRange
 	}
-	if start < rb.usedIndex || start > rb.writeIndex {
-		return 0, ErrOutOfRange
+	if start < rb.readIndex || start > rb.writeIndex {
+		return 0, ErrRange
 	}
-	if end < rb.usedIndex || end > rb.writeIndex {
-		return 0, ErrOutOfRange
+	if end < rb.readIndex || end > rb.writeIndex {
+		return 0, ErrRange
 	}
 	copyLength := int(end - start)
 	low := int(start % RingPos(len(rb.data)))
@@ -185,18 +185,18 @@ func (rb *RingBuffer) Discard(start, end RingPos) error {
 	rb.rwlock.Lock()
 	defer rb.rwlock.Unlock()
 	if end < start {
-		return ErrOutOfRange
+		return ErrRange
 	}
-	if start < rb.usedIndex || start > rb.writeIndex {
-		return ErrOutOfRange
+	if start < rb.readIndex || start > rb.writeIndex {
+		return ErrRange
 	}
-	if end < rb.usedIndex || end > rb.writeIndex {
-		return ErrOutOfRange
+	if end < rb.readIndex || end > rb.writeIndex {
+		return ErrRange
 	}
-	if start != rb.usedIndex {
-		return ErrFreeOutOfOrder
+	if start != rb.readIndex {
+		return ErrOrder
 	}
-	rb.usedIndex = end
+	rb.readIndex = end
 	return nil
 }
 
@@ -208,13 +208,13 @@ func (rb *RingBuffer) Buffers(start, end RingPos) [2][]byte {
 	if end < start {
 		return buffers
 	}
-	if start < rb.usedIndex || start > rb.writeIndex {
+	if start < rb.readIndex || start > rb.writeIndex {
 		return buffers
 	}
-	if end < rb.usedIndex || end > rb.writeIndex {
+	if end < rb.readIndex || end > rb.writeIndex {
 		return buffers
 	}
-	if start != rb.usedIndex {
+	if start != rb.readIndex {
 		return buffers
 	}
 	low := int(start % RingPos(len(rb.data)))

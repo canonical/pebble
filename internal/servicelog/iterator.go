@@ -34,10 +34,12 @@ type Iterator interface {
 }
 
 type BufferedWrite interface {
-	// Reset resets the read position in the current buffered write, used by io.Reader and io.WriterTo.
+	// Reset resets the read position in the current buffered write, so that
+	// Read and WriteTo can re-read the whole buffered write.
 	Reset()
-	// Length returns the size in bytes of the current buffered write.
-	Length() int
+	// Buffered returns how many bytes are remaining to be read in the current
+	// buffered write.
+	Buffered() int
 	// Timestamp returns the time the current buffered write was recorded.
 	Timestamp() time.Time
 	// StreamID returns the StreamID of the current buffered write.
@@ -150,12 +152,12 @@ func (it *iterator) WriteTo(writer io.Writer) (int64, error) {
 	return read, err
 }
 
-func (it *iterator) Length() int {
+func (it *iterator) Buffered() int {
 	write := it.write()
 	if write == nil {
 		return 0
 	}
-	return write.length()
+	return write.length() - it.read
 }
 
 func (it *iterator) Timestamp() time.Time {

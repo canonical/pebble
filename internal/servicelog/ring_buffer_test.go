@@ -163,7 +163,7 @@ func (s *ringBufferSuite) TestReleaseOutOfOrder(c *C) {
 	c.Assert(n, Equals, 2)
 
 	err = rb.Discard(1, 2)
-	c.Assert(err, Equals, servicelog.ErrFreeOutOfOrder)
+	c.Assert(err, Equals, servicelog.ErrOrder)
 }
 
 func (s *ringBufferSuite) TestReleaseOutOfRange(c *C) {
@@ -176,10 +176,10 @@ func (s *ringBufferSuite) TestReleaseOutOfRange(c *C) {
 	c.Assert(err, IsNil)
 
 	err = rb.Discard(0, 1)
-	c.Assert(err, Equals, servicelog.ErrOutOfRange)
+	c.Assert(err, Equals, servicelog.ErrRange)
 
 	err = rb.Discard(3, 4)
-	c.Assert(err, Equals, servicelog.ErrOutOfRange)
+	c.Assert(err, Equals, servicelog.ErrRange)
 }
 
 func (s *ringBufferSuite) TestCopy(c *C) {
