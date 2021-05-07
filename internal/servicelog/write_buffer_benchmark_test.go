@@ -32,35 +32,22 @@ func BenchmarkWriteBufferConcurrent(b *testing.B) {
 
 func benchmarkConcurrent(b *testing.B, payload []byte) {
 	done := make(chan struct{})
-	defer close(done)
 	wb := servicelog.NewWriteBuffer(b.N, b.N*len(payload))
 	go func() {
+		defer wb.Close()
+		defer close(done)
 		for i := 0; i < b.N; i++ {
-			select {
-			case <-done:
-				return
-			default:
-			}
 			wb.Write(payload, servicelog.Stdout)
 		}
 	}()
 	b.RunParallel(func(pb *testing.PB) {
-		buf := make([]byte, len(payload))
 		iterator := wb.TailIterator()
+		defer iterator.Close()
+		buf := make([]byte, len(payload))
 		for pb.Next() {
-			more := iterator.More()
-			for {
-				if iterator.Next() {
-					break
-				}
-				select {
-				case <-more:
-				case <-done:
-					b.Fail()
-					return
-				}
+			if iterator.Next(done) {
+				iterator.Read(buf)
 			}
-			iterator.Read(buf)
 		}
 	})
 }
