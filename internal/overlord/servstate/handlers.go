@@ -128,7 +128,7 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 			defer outputIterator.Close()
 			err := servicelog.Sink(outputIterator, m.verboseOutput, req.Name, active.done)
 			if err != nil {
-				logger.Noticef("service %s log sink closed with %v", req.Name, err)
+				logger.Noticef("service %q log sink closed: %v", req.Name, err)
 			}
 		}()
 	}

@@ -16,49 +16,64 @@ package servicelog
 
 import (
 	"io"
+	"sync/atomic"
 	"time"
 )
 
 type Iterator interface {
+	// Close closes the iterator so that buffers can be used for future writes.
+	// If Close is not called, the iterator will block buffer recycling causing
+	// write failures.
 	Close() error
-	Next() bool
-	More() <-chan struct{}
-	Reset()
+	// Next advances to the next available buffered write.
+	// When passed cancel, Next will wait for the next buffered write.
+	// If a nil channel is passed, cancel will return the first available
+	// buffered write, if none is available, return immediatley.
+	Next(cancel <-chan struct{}) bool
 	BufferedWrite
 }
 
 type BufferedWrite interface {
-	Length() int
+	// Reset resets the read position in the current buffered write, so that
+	// Read and WriteTo can re-read the whole buffered write.
+	Reset()
+	// Buffered returns how many bytes are remaining to be read in the current
+	// buffered write.
+	Buffered() int
+	// Timestamp returns the time the current buffered write was recorded.
 	Timestamp() time.Time
+	// StreamID returns the StreamID of the current buffered write.
+	// This can be either Stdout or Stderr.
 	StreamID() StreamID
-	Buffers() [2][]byte
+	// Length returns the length of the message in bytes.
+	Length() int
 	io.Reader
 	io.WriterTo
 }
 
 type iterator struct {
-	wb    *WriteBuffer
-	write *write
-	skip  bool
-	read  int
+	wb         *WriteBuffer
+	index      int32
+	skip       bool
+	read       int
+	notifyChan chan struct{}
+	closeChan  chan struct{}
 }
 
 var _ Iterator = (*iterator)(nil)
 
 func (it *iterator) Close() error {
-	if it.write != nil {
-		it.write.release()
-		it.write = nil
+	if it.wb == nil {
+		return nil
 	}
+	it.wb.removeIterator(it)
+	close(it.notifyChan)
 	it.wb = nil
 	return nil
 }
 
-func (it *iterator) Next() bool {
+func (it *iterator) Next(cancel <-chan struct{}) bool {
 	if it.wb == nil {
-		return false
-	}
-	if it.write == nil {
 		return false
 	}
 	if it.skip {
@@ -66,28 +81,52 @@ func (it *iterator) Next() bool {
 		it.skip = false
 		return true
 	}
-	next, ok := it.wb.nextWrite(it.write)
+	select {
+	case <-it.notifyChan:
+	default:
+	}
+	ok := it.wb.advanceIterator(it)
+	if !ok && cancel != nil {
+		// if passed a cancel channel, wait for a buffered write.
+		select {
+		case <-it.closeChan:
+			return false
+		case <-cancel:
+			return false
+		case <-it.notifyChan:
+			ok = it.wb.advanceIterator(it)
+		}
+	}
 	if !ok {
 		return false
 	}
-	it.write = next
-	it.read = 0
 	return true
+}
+
+func (it *iterator) storeIndex(next WriteIndex) {
+	atomic.StoreInt32(&it.index, int32(next))
+	it.read = 0
+}
+
+func (it *iterator) readIndex() WriteIndex {
+	return WriteIndex(atomic.LoadInt32(&it.index))
 }
 
 func (it *iterator) Reset() {
 	it.read = 0
 }
 
+// Read implements io.Reader
 func (it *iterator) Read(dest []byte) (int, error) {
 	if it.wb == nil {
 		return 0, io.EOF
 	}
-	if it.write == nil || it.write.index == TailIndex {
+	write := it.write()
+	if write == nil {
 		return 0, io.EOF
 	}
-	start := it.write.start + RingPos(it.read)
-	end := it.write.end
+	start := write.start + RingPos(it.read)
+	end := write.end
 	if start == end {
 		return 0, io.EOF
 	}
@@ -99,54 +138,58 @@ func (it *iterator) Read(dest []byte) (int, error) {
 	return read, err
 }
 
+// WriteTo implements io.WriterTo
 func (it *iterator) WriteTo(writer io.Writer) (int64, error) {
 	if it.wb == nil {
 		return 0, io.EOF
 	}
-	if it.write == nil || it.write.index == TailIndex {
+	write := it.write()
+	if write == nil {
 		return 0, io.EOF
 	}
-	start := it.write.start + RingPos(it.read)
-	end := it.write.end
+	start := write.start + RingPos(it.read)
+	end := write.end
 	read, err := it.wb.ringBuffer.WriteTo(writer, start, end)
 	it.read += int(read)
 	return read, err
 }
 
-func (it *iterator) Buffers() [2][]byte {
-	if it.wb == nil {
-		return [2][]byte{}
-	}
-	if it.write == nil {
-		return [2][]byte{}
-	}
-	return it.wb.ringBuffer.Buffers(it.write.start, it.write.end)
-}
-
-func (it *iterator) Length() int {
-	if it.write == nil {
+func (it *iterator) Buffered() int {
+	write := it.write()
+	if write == nil {
 		return 0
 	}
-	return it.write.length()
+	return write.length() - it.read
 }
 
 func (it *iterator) Timestamp() time.Time {
-	if it.write == nil {
+	write := it.write()
+	if write == nil {
 		return time.Time{}
 	}
-	return it.write.time
+	return write.time
 }
 
 func (it *iterator) StreamID() StreamID {
-	if it.write == nil {
+	write := it.write()
+	if write == nil {
 		return Unknown
 	}
-	return it.write.streamID
+	return write.streamID
 }
 
-func (it *iterator) More() <-chan struct{} {
+func (it *iterator) Length() int {
+	write := it.write()
+	if write == nil {
+		return 0
+	}
+	return write.length()
+}
+
+func (it *iterator) write() *write {
 	if it.wb == nil {
 		return nil
 	}
-	return it.wb.more()
+	index := WriteIndex(atomic.LoadInt32(&it.index))
+	return it.wb.getWrite(index)
 }

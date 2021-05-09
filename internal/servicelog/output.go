@@ -24,7 +24,7 @@ type Output interface {
 	WriteLog(timestamp time.Time, serviceName string, stream StreamID, length int, message io.Reader) error
 }
 
-type OutputFunc func(time.Time, string, StreamID, int, io.Reader) error
+type OutputFunc func(timestamp time.Time, serviceName string, stream StreamID, length int, message io.Reader) error
 
 func (f OutputFunc) WriteLog(timestamp time.Time, serviceName string, stream StreamID, length int, message io.Reader) error {
 	return f(timestamp, serviceName, stream, length, message)
@@ -33,22 +33,10 @@ func (f OutputFunc) WriteLog(timestamp time.Time, serviceName string, stream Str
 // Sink logs from the iterator to Output labeled with the service name.
 // Sink blocks until done is closed.
 func Sink(it Iterator, out Output, serviceName string, done <-chan struct{}) error {
-	last := false
-	for {
-		more := it.More()
-		for it.Next() {
-			err := out.WriteLog(it.Timestamp(), serviceName, it.StreamID(), it.Length(), it)
-			if err != nil {
-				return err
-			}
-		}
-		if last {
-			break
-		}
-		select {
-		case <-more:
-		case <-done:
-			last = true
+	for it.Next(done) {
+		err := out.WriteLog(it.Timestamp(), serviceName, it.StreamID(), it.Length(), it)
+		if err != nil {
+			return err
 		}
 	}
 	return nil

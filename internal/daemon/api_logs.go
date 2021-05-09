@@ -126,7 +126,7 @@ func (r logsResponse) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 // Efficiently output a single iterator's logs.
 func outputLogsSingle(w io.Writer, service string, it servicelog.Iterator) {
 	now := time.Now().UTC() // stop if we iterate past current time
-	for it.Next() && it.Timestamp().Before(now) {
+	for it.Next(nil) && it.Timestamp().Before(now) {
 		err := writeLog(w, service, it.Timestamp(), it.StreamID(), it.Length(), it)
 		if err != nil {
 			fmt.Fprintf(w, "\ncannot write log from %q: %v", service, err)
@@ -150,7 +150,7 @@ func outputLogsMulti(w io.Writer, itsByName map[string]servicelog.Iterator, numL
 	var buf bytes.Buffer
 	now := time.Now().UTC() // stop if we iterate past current time
 	for name, it := range itsByName {
-		for it.Next() && it.Timestamp().Before(now) {
+		for it.Next(nil) && it.Timestamp().Before(now) {
 			buf.Reset()
 			_, err := io.Copy(&buf, it)
 			if err != nil {
@@ -207,7 +207,7 @@ func outputLogsAll(w io.Writer, itsByName map[string]servicelog.Iterator) {
 		for i, name := range names {
 			if its[i] == nil {
 				it := itsByName[name]
-				if it.Next() && it.Timestamp().Before(now) {
+				if it.Next(nil) && it.Timestamp().Before(now) {
 					its[i] = it
 				}
 			}

@@ -30,8 +30,9 @@ import (
 )
 
 func (s *PebbleSuite) TestLogWriterSimple(c *check.C) {
-	w := &bytes.Buffer{}
-	lw := pebble.LogWriter{Writer: w}
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	lw := pebble.LogWriter{Stdout: stdout, Stderr: stderr}
 
 	err := lw.WriteLog(
 		time.Date(2021, 8, 4, 2, 3, 4, 0, time.UTC),
@@ -41,9 +42,8 @@ func (s *PebbleSuite) TestLogWriterSimple(c *check.C) {
 		strings.NewReader("this is a test\n"),
 	)
 	c.Assert(err, check.IsNil)
-	c.Assert(w.String(), check.Equals, "2021-08-04T02:03:04Z nginx stdout: this is a test\n")
+	c.Assert(stdout.String(), check.Equals, "2021-08-04T02:03:04Z [nginx] this is a test\n")
 
-	w.Reset()
 	err = lw.WriteLog(
 		time.Date(2021, 12, 25, 12, 23, 34, 456789, time.UTC),
 		"postgresql",
@@ -52,12 +52,12 @@ func (s *PebbleSuite) TestLogWriterSimple(c *check.C) {
 		strings.NewReader("some kind of error"),
 	)
 	c.Assert(err, check.IsNil)
-	c.Assert(w.String(), check.Equals, "2021-12-25T12:23:34Z postgresql stderr: some kind of error\n")
+	c.Assert(stderr.String(), check.Equals, "2021-12-25T12:23:34Z [postgresql] some kind of error\n")
 }
 
 func (s *PebbleSuite) TestLogWriterConcurrent(c *check.C) {
-	w := &bytes.Buffer{}
-	lw := pebble.LogWriter{Writer: w}
+	stdout := &bytes.Buffer{}
+	lw := pebble.LogWriter{Stdout: stdout}
 
 	// Fire up a couple of concurrent goroutines writing logs.
 	var wg sync.WaitGroup
@@ -81,9 +81,9 @@ func (s *PebbleSuite) TestLogWriterConcurrent(c *check.C) {
 
 	// Ensure that locking is working: timestamp will be at the start of each
 	// line, and the buffer is being locked correctly.
-	scanner := bufio.NewScanner(w)
+	scanner := bufio.NewScanner(stdout)
 	for scanner.Scan() {
-		c.Assert(scanner.Text(), check.Matches, `2021-08-04T02:03:04Z nginx stdout: message \d+`)
+		c.Assert(scanner.Text(), check.Matches, `2021-08-04T02:03:04Z \[nginx\] message \d+`)
 	}
 	c.Assert(scanner.Err(), check.IsNil)
 }
@@ -132,11 +132,11 @@ func (w *sliceWriter) String() string {
 }
 
 func (s *PebbleSuite) TestLogWriterNewlineReader(c *check.C) {
-	w := &sliceWriter{}
-	lw := pebble.LogWriter{Writer: w}
+	stdout := &sliceWriter{}
+	lw := pebble.LogWriter{Stdout: stdout}
 
 	test := func(expected string, reads ...string) {
-		w.Reset()
+		stdout.Reset()
 		err := lw.WriteLog(
 			time.Date(2021, 8, 4, 2, 3, 4, 0, time.UTC),
 			"nginx",
@@ -145,7 +145,7 @@ func (s *PebbleSuite) TestLogWriterNewlineReader(c *check.C) {
 			&sliceReader{reads},
 		)
 		c.Assert(err, check.IsNil)
-		c.Assert(w.String(), check.Equals, "2021-08-04T02:03:04Z nginx stdout: "+expected,
+		c.Assert(stdout.String(), check.Equals, "2021-08-04T02:03:04Z [nginx] "+expected,
 			check.Commentf("expected %q", expected))
 	}
 
