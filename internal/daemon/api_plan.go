@@ -79,6 +79,9 @@ func v1PostLayers(c *Command, r *http.Request, _ *userState) Response {
 		if _, ok := err.(*servstate.LabelExists); ok {
 			return statusBadRequest("%v", err)
 		}
+		if _, ok := err.(*plan.FormatError); ok {
+			return statusBadRequest("%v", err)
+		}
 		return statusInternalError("%v", err)
 	}
 	return SyncResponse(true)

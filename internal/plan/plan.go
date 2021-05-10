@@ -71,6 +71,16 @@ const (
 	ReplaceOverride ServiceOverride = "replace"
 )
 
+// FormatError is the error returned when a layer has a format error, such as
+// a missing "override" field.
+type FormatError struct {
+	Message string
+}
+
+func (e *FormatError) Error() string {
+	return e.Message
+}
+
 // CombineLayers combines the given layers into a Plan, with the later layers
 // layers overriding earlier ones.
 func CombineLayers(layers ...*Layer) (*Layer, error) {
@@ -118,11 +128,15 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 				copy := *service
 				combined.Services[name] = &copy
 			case UnknownOverride:
-				return nil, fmt.Errorf("layer %q must define 'override' for service %q",
-					layer.Label, service.Name)
+				return nil, &FormatError{
+					Message: fmt.Sprintf(`layer %q must define "override" for service %q`,
+						layer.Label, service.Name),
+				}
 			default:
-				return nil, fmt.Errorf("layer %q has invalid 'override' value on service %q: %q",
-					layer.Label, service.Name, service.Override)
+				return nil, &FormatError{
+					Message: fmt.Sprintf(`layer %q has invalid "override" value for service %q`,
+						layer.Label, service.Name),
+				}
 			}
 		}
 	}
@@ -177,7 +191,9 @@ func order(services map[string]*Service, names []string, stop bool) ([]string, e
 		} else {
 			service, ok := services[name]
 			if !ok {
-				return nil, fmt.Errorf("service %q does not exist", name)
+				return nil, &FormatError{
+					Message: fmt.Sprintf("service %q does not exist", name),
+				}
 			}
 			pending = append(pending, service.Requires...)
 		}
@@ -187,7 +203,9 @@ func order(services map[string]*Service, names []string, stop bool) ([]string, e
 	for name := range successors {
 		service, ok := services[name]
 		if !ok {
-			return nil, fmt.Errorf("service %q does not exist", name)
+			return nil, &FormatError{
+				Message: fmt.Sprintf("service %q does not exist", name),
+			}
 		}
 		succs := successors[name]
 		serviceAfter := service.After
@@ -212,7 +230,9 @@ func order(services map[string]*Service, names []string, stop bool) ([]string, e
 	var order []string
 	for _, names := range tarjanSort(successors) {
 		if len(names) > 1 {
-			return nil, fmt.Errorf("services in before/after loop: %s", strings.Join(names, ", "))
+			return nil, &FormatError{
+				Message: fmt.Sprintf("services in before/after loop: %s", strings.Join(names, ", ")),
+			}
 		}
 		order = append(order, names[0])
 	}
@@ -234,7 +254,9 @@ func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 	dec.KnownFields(true)
 	err := dec.Decode(&layer)
 	if err != nil {
-		return nil, fmt.Errorf("cannot parse layer %q: %v", label, err)
+		return nil, &FormatError{
+			Message: fmt.Sprintf("cannot parse layer %q: %v", label, err),
+		}
 	}
 	layer.Order = order
 	layer.Label = label
