@@ -134,7 +134,7 @@ And start or stop a specific service with:
 | :------------ | :------------------: | :-----: | :-------: | :---------------------------------------------------------------------------------------------- |
 | `summary`     |       `string`       |  `""`   |    no     | Short one line summary of the layer                                                             |
 | `description` |       `string`       |  `""`   |    no     | A full description of the layer                                                                 |
-| `services`    | `map[string]Service` |  `[]`   |    yes    | A map of services for Pebble to manage. The key represents the name of the service in the layer |
+| `services`    | `map[string]Service` |  `{}`   |    yes    | A map of services for Pebble to manage. The key represents the name of the service in the layer |
 
 ### Type: Service
 
@@ -145,10 +145,10 @@ And start or stop a specific service with:
 | `startup`     |  [`ServiceStartup`](#enumeration-servicestartup)  |  `""`   |    no     | Value `enabled` will ensure service is started automatically when Pebble starts. Value `disabled` will do the opposite.                  |
 | `override`    | [`ServiceOverride`](#enumeration-serviceoverride) |  `""`   |    yes    | Control the effect the new layer will have on the current Pebble plan.                                                                   |
 | `command`     |                     `string`                      |  `""`   |    yes    | Command for Pebble to run. Example `/usr/bin/myapp -a -p 8080`.                                                                          |
-| `after`       |                    `[]string`                     |  `""`   |    no     | Array of other service names in the plan that should start before the service.                                                           |
-| `before`      |                    `[]string`                     |  `""`   |    no     | Array of other service names in the plan that this service should start before.                                                          |
-| `requires`    |                    `[]string`                     |  `""`   |    no     | Array of other service names in the plan that this service requires to be started before being started itself.                           |
-| `environment` |                `map[string]string`                |  `""`   |    no     | A map of environment variable names, and their respective values, that should be injected into the environment of the service by Pebble. |
+| `after`       |                    `[]string`                     |  `[]`   |    no     | Array of other service names in the plan that should start before the service.                                                           |
+| `before`      |                    `[]string`                     |  `[]`   |    no     | Array of other service names in the plan that this service should start before.                                                          |
+| `requires`    |                    `[]string`                     |  `[]`   |    no     | Array of other service names in the plan that this service requires to be started before being started itself.                           |
+| `environment` |                `map[string]string`                |  `{}`   |    no     | A map of environment variable names, and their respective values, that should be injected into the environment of the service by Pebble. |
 
 ### Enumeration: ServiceStartup
 
