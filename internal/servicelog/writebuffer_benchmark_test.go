@@ -32,11 +32,12 @@ func BenchmarkWriteBufferConcurrent(b *testing.B) {
 
 func benchmarkConcurrent(b *testing.B, payload []byte) {
 	done := make(chan struct{})
-	wb := servicelog.NewWriteBuffer(b.N, b.N*len(payload))
+	n := b.N
+	wb := servicelog.NewWriteBuffer(n, n*len(payload))
 	go func() {
 		defer wb.Close()
 		defer close(done)
-		for i := 0; i < b.N; i++ {
+		for i := 0; i < n; i++ {
 			wb.Write(payload, servicelog.Stdout)
 		}
 	}()
