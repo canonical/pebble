@@ -312,6 +312,14 @@ var planTests = []planTest{{
 				override: replace
 				command: cmd
 	`},
+}, {
+	summary: `Cannot use service name "pebble"`,
+	error:   `cannot use reserved service name "pebble"`,
+	input: []string{`
+		services:
+			pebble:
+				command: cmd
+	`},
 }}
 
 func (s *S) TestParseLayer(c *C) {
@@ -381,6 +389,22 @@ services:
 `))
 	_, err = plan.CombineLayers(layer1, layer2)
 	c.Assert(err, ErrorMatches, `services in before/after loop: .*`)
+	_, ok := err.(*plan.FormatError)
+	c.Assert(ok, Equals, true, Commentf("error must be *plan.FormatError, not %T", err))
+}
+
+func (s *S) TestMissingOverride(c *C) {
+	layer1, err := plan.ParseLayer(1, "label1", []byte("{}"))
+	c.Assert(err, IsNil)
+	layer2, err := plan.ParseLayer(2, "label2", []byte(`
+services:
+    srv1:
+        command: cmd
+`))
+	_, err = plan.CombineLayers(layer1, layer2)
+	c.Check(err, ErrorMatches, `layer "label2" must define \"override\" for service "srv1"`)
+	_, ok := err.(*plan.FormatError)
+	c.Check(ok, Equals, true, Commentf("error must be *plan.FormatError, not %T", err))
 }
 
 func (s *S) TestReadDir(c *C) {

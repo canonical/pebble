@@ -113,8 +113,7 @@ func (s *writeBufferSuite) TestAllocs(c *C) {
 			c.Assert(err, IsNil)
 		}
 	})
-	// Expect 1 allocation for the notification channel only.
-	c.Assert(int(numAllocs), Equals, 1)
+	c.Assert(int(numAllocs), Equals, 0)
 	err := wb.Close()
 	c.Assert(err, IsNil)
 }
@@ -130,7 +129,7 @@ func (s *writeBufferSuite) TestTail(c *C) {
 
 	buf := &bytes.Buffer{}
 	it := wb.TailIterator()
-	for it.Next() {
+	for it.Next(nil) {
 		_, err := io.Copy(buf, it)
 		c.Assert(err, IsNil)
 	}
@@ -149,7 +148,7 @@ func (s *writeBufferSuite) TestHead(c *C) {
 
 	buf := &bytes.Buffer{}
 	it := wb.HeadIterator(0)
-	for it.Next() {
+	for it.Next(nil) {
 		_, err := io.Copy(buf, it)
 		c.Assert(err, IsNil)
 	}
@@ -168,7 +167,7 @@ func (s *writeBufferSuite) TestHeadMinus1(c *C) {
 
 	buf := &bytes.Buffer{}
 	it := wb.HeadIterator(1)
-	for it.Next() {
+	for it.Next(nil) {
 		_, err := io.Copy(buf, it)
 		c.Assert(err, IsNil)
 	}

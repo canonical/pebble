@@ -328,6 +328,72 @@ func (s *logsSuite) TestMultipleServicesNFewLogs(c *C) {
 	checkLog(c, logs[1], "two", "stdout", "message2 1\n")
 }
 
+func (s *logsSuite) TestLoggingTooFast(c *C) {
+	wb := servicelog.NewWriteBuffer(10, 1024)
+	stdout := wb.StreamWriter(servicelog.Stdout)
+
+	// We should only receive these first three logs
+	for i := 0; i < 3; i++ {
+		fmt.Fprintf(stdout, "message %d\n", i)
+	}
+
+	firstWrite := make(chan struct{})
+	go func() {
+		<-firstWrite // wait till after first writeLog
+		for i := 3; i < 10; i++ {
+			fmt.Fprintf(stdout, "message %d\n", i)
+		}
+	}()
+
+	svcMgr := testServiceManager{
+		buffers: map[string]*servicelog.WriteBuffer{
+			"svc": wb,
+		},
+	}
+	req, err := http.NewRequest("GET", "/v1/logs", nil)
+	c.Assert(err, IsNil)
+	rsp := logsResponse{svcMgr: svcMgr}
+	rec := &waitRecorder{firstWrite: firstWrite}
+	rsp.ServeHTTP(rec, req)
+	c.Assert(rec.status, Equals, http.StatusOK)
+
+	logs := decodeLogs(c, bytes.NewReader(rec.buf.Bytes()))
+	c.Assert(len(logs), Equals, 3)
+	for i := 0; i < 3; i++ {
+		checkLog(c, logs[i], "svc", "stdout", fmt.Sprintf("message %d\n", i))
+	}
+}
+
+type waitRecorder struct {
+	firstWrite chan struct{}
+	header     http.Header
+	buf        bytes.Buffer
+	status     int
+}
+
+func (r *waitRecorder) Header() http.Header {
+	if r.header == nil {
+		r.header = make(http.Header)
+	}
+	return r.header
+}
+
+func (r *waitRecorder) Write(p []byte) (int, error) {
+	if r.status == 0 {
+		r.status = 200
+	}
+	select {
+	case r.firstWrite <- struct{}{}:
+	default:
+	}
+	time.Sleep(10 * time.Millisecond)
+	return r.buf.Write(p)
+}
+
+func (r *waitRecorder) WriteHeader(status int) {
+	r.status = status
+}
+
 func (s *logsSuite) TestMultipleServicesFollow(c *C) {
 	wb1 := servicelog.NewWriteBuffer(10, 1024)
 	wb2 := servicelog.NewWriteBuffer(10, 1024)

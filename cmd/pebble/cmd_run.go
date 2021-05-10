@@ -133,7 +133,10 @@ func runDaemon(rcmd *cmdRun, ch chan os.Signal) error {
 		SocketPath: socketPath,
 	}
 	if rcmd.Verbose {
-		dopts.VerboseOutput = &logWriter{Writer: os.Stdout}
+		dopts.VerboseOutput = &logWriter{
+			Stdout: os.Stdout,
+			Stderr: os.Stderr,
+		}
 	}
 
 	d, err := daemon.New(&dopts)
@@ -204,7 +207,8 @@ out:
 }
 
 type logWriter struct {
-	Writer io.Writer
+	Stdout io.Writer
+	Stderr io.Writer
 
 	prefix []byte
 	msg    []byte
@@ -215,16 +219,19 @@ func (w *logWriter) WriteLog(timestamp time.Time, serviceName string, stream ser
 	w.mutex.Lock()
 	defer w.mutex.Unlock()
 
+	writer := w.Stderr
+	if stream == servicelog.Stdout {
+		writer = w.Stdout
+	}
+
 	// Use a buffer for the prefix to minimize the number of writes. Use the
-	// format "2021-08-04T12:34:45Z00:33 serviceName stdout/stderr: message".
+	// format "2006-01-02T15:04:05Z [service] message".
 	w.prefix = w.prefix[:0]
 	w.prefix = timestamp.AppendFormat(w.prefix, time.RFC3339)
-	w.prefix = append(w.prefix, ' ')
+	w.prefix = append(w.prefix, " ["...)
 	w.prefix = append(w.prefix, serviceName...)
-	w.prefix = append(w.prefix, ' ')
-	w.prefix = append(w.prefix, stream.String()...)
-	w.prefix = append(w.prefix, ':', ' ')
-	_, err := w.Writer.Write(w.prefix)
+	w.prefix = append(w.prefix, "] "...)
+	_, err := writer.Write(w.prefix)
 	if err != nil {
 		return err
 	}
@@ -233,7 +240,7 @@ func (w *logWriter) WriteLog(timestamp time.Time, serviceName string, stream ser
 	if w.msg == nil {
 		w.msg = make([]byte, writeLogBufSize)
 	}
-	_, err = io.CopyBuffer(w.Writer, &newlineReader{Reader: message}, w.msg)
+	_, err = io.CopyBuffer(writer, &newlineReader{Reader: message}, w.msg)
 	return err
 }
 

@@ -98,7 +98,7 @@ func (s *S) SetUpTest(c *C) {
 	s.logBufferMut.Lock()
 	s.logBuffer.Reset()
 	s.logBufferMut.Unlock()
-	logOutput := servicelog.OutputFunc(func(_ time.Time, _ string, _ servicelog.StreamID, _ int, message io.Reader) error {
+	logOutput := servicelog.OutputFunc(func(timestamp time.Time, service string, stream servicelog.StreamID, length int, message io.Reader) error {
 		s.logBufferMut.Lock()
 		defer s.logBufferMut.Unlock()
 		_, err := io.Copy(&s.logBuffer, message)
@@ -223,7 +223,7 @@ func (s *S) TestServiceLogs(c *C) {
 
 	for serviceName, it := range iterators {
 		buf := &bytes.Buffer{}
-		for it.Next() {
+		for it.Next(nil) {
 			_, err = io.Copy(buf, it)
 			c.Assert(err, IsNil)
 		}

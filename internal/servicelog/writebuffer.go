@@ -17,6 +17,7 @@ package servicelog
 import (
 	"errors"
 	"io"
+	"math"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -52,7 +53,6 @@ type write struct {
 	start, end RingPos
 	streamID   StreamID
 	index      WriteIndex
-	ref        int32
 }
 
 func (l *write) empty() bool {
@@ -63,28 +63,15 @@ func (l *write) length() int {
 	return int(l.end - l.start)
 }
 
-func (l *write) acquire() int {
-	return int(atomic.AddInt32(&l.ref, 1))
-}
-
-func (l *write) release() int {
-	return int(atomic.AddInt32(&l.ref, -1))
-}
-
-func (l *write) refs() int {
-	return int(atomic.LoadInt32(&l.ref))
-}
-
 type WriteBuffer struct {
-	ringBuffer      *RingBuffer
-	writes          []write
-	placeholderTail write
+	ringBuffer *RingBuffer
+	writes     []write
 
-	writeMutex   sync.Mutex
-	writeClosed  bool
-	releaseMutex sync.RWMutex
-	signalMut    sync.RWMutex
-	signalChan   chan struct{}
+	writeMutex  sync.Mutex
+	writeClosed bool
+
+	iteratorMutex sync.RWMutex
+	iteratorList  []*iterator
 
 	tailIndex int32
 	headIndex int32
@@ -92,7 +79,8 @@ type WriteBuffer struct {
 }
 
 var (
-	ErrNoMoreLines = errors.New("no more lines")
+	ErrNoMoreLines  = errors.New("no more lines")
+	ErrSlowIterator = errors.New("cannot discard write due to slow iterator")
 )
 
 func NewWriteBuffer(maxWrites, maxBytes int) *WriteBuffer {
@@ -102,10 +90,6 @@ func NewWriteBuffer(maxWrites, maxBytes int) *WriteBuffer {
 		tailIndex:  0,
 		headIndex:  -1,
 		numWrites:  0,
-		signalChan: make(chan struct{}),
-		placeholderTail: write{
-			index: TailIndex,
-		},
 	}
 	return &wb
 }
@@ -117,7 +101,7 @@ func (wb *WriteBuffer) Close() error {
 		return nil
 	}
 	wb.writeClosed = true
-	wb.releaseWaiters()
+	wb.releaseIterators()
 	return nil
 }
 
@@ -129,7 +113,7 @@ func (wb *WriteBuffer) Write(p []byte, streamID StreamID) (int, error) {
 	written := 0
 	defer func() {
 		if written > 0 {
-			wb.signalWaiters()
+			wb.signalIterators()
 		}
 	}()
 
@@ -143,13 +127,15 @@ func (wb *WriteBuffer) Write(p []byte, streamID StreamID) (int, error) {
 	}
 
 	writeLength := len(p)
-	if writeLength > wb.ringBuffer.Capacity() {
-		writeLength = wb.ringBuffer.Capacity()
+	if writeLength > wb.ringBuffer.Size() {
+		writeLength = wb.ringBuffer.Size()
 	}
 
-	for writeLength > wb.ringBuffer.Free() || !wb.canAdvanceHead() {
+	for writeLength > wb.ringBuffer.Available() || !wb.canAdvanceHead() {
 		err := wb.releaseTail()
-		if err != nil {
+		if err == ErrSlowIterator {
+			// TODO handle timeout
+		} else if err != nil {
 			return written, err
 		}
 	}
@@ -179,12 +165,23 @@ func (wb *WriteBuffer) Write(p []byte, streamID StreamID) (int, error) {
 // TailIterator returns an iterator from the tail of the stream.
 // The caller must Close the iterator when finished.
 func (wb *WriteBuffer) TailIterator() Iterator {
-	tail := wb.acquireTail()
-	return &iterator{
-		wb:    wb,
-		write: tail,
-		skip:  tail != &wb.placeholderTail,
+	wb.iteratorMutex.Lock()
+	defer wb.iteratorMutex.Unlock()
+
+	numWrites := atomic.LoadInt32(&wb.numWrites)
+	iter := &iterator{
+		wb:         wb,
+		index:      int32(TailIndex),
+		notifyChan: make(chan struct{}, 1),
+		closeChan:  make(chan struct{}),
 	}
+	if numWrites > 0 {
+		iter.index = atomic.LoadInt32(&wb.tailIndex)
+		iter.skip = true
+	}
+
+	wb.iteratorList = append(wb.iteratorList, iter)
+	return iter
 }
 
 // HeadIterator returns an iterator from the head of the stream.
@@ -192,18 +189,47 @@ func (wb *WriteBuffer) TailIterator() Iterator {
 // at most N writes back from the head.
 // The caller must Close the iterator when finished.
 func (wb *WriteBuffer) HeadIterator(last int) Iterator {
-	head := wb.acquireHead(last)
-	skip := head != &wb.placeholderTail
-	if last < 1 {
-		// Since the head is the last write in the buffer
-		// and the caller didn't ask for the last line, tell
-		// the iterator to not skip the first Next call.
-		skip = false
+	wb.iteratorMutex.Lock()
+	defer wb.iteratorMutex.Unlock()
+
+	numWrites := atomic.LoadInt32(&wb.numWrites)
+	iter := &iterator{
+		wb:         wb,
+		index:      int32(TailIndex),
+		notifyChan: make(chan struct{}, 1),
+		closeChan:  make(chan struct{}),
 	}
-	return &iterator{
-		wb:    wb,
-		write: head,
-		skip:  skip,
+	if numWrites > 0 {
+		if last < 0 {
+			last = 0
+		}
+		if last > int(numWrites) {
+			last = int(numWrites)
+		}
+		headIndex := WriteIndex(atomic.LoadInt32(&wb.headIndex))
+		if last > 0 {
+			headIndex -= WriteIndex(last - 1)
+			iter.skip = true
+		}
+		iter.index = int32(headIndex)
+	}
+
+	wb.iteratorList = append(wb.iteratorList, iter)
+	return iter
+}
+
+func (wb *WriteBuffer) removeIterator(iter *iterator) {
+	wb.iteratorMutex.Lock()
+	defer wb.iteratorMutex.Unlock()
+
+	for i, storedIter := range wb.iteratorList {
+		if iter != storedIter {
+			continue
+		}
+		close(iter.closeChan)
+		wb.iteratorList[i] = wb.iteratorList[len(wb.iteratorList)-1]
+		wb.iteratorList = wb.iteratorList[:len(wb.iteratorList)-1]
+		return
 	}
 }
 
@@ -213,23 +239,32 @@ func (wb *WriteBuffer) getWrite(index WriteIndex) *write {
 }
 
 func (wb *WriteBuffer) releaseTail() error {
-	wb.releaseMutex.Lock()
-	defer wb.releaseMutex.Unlock()
+	wb.iteratorMutex.Lock()
+	defer wb.iteratorMutex.Unlock()
 	numWrites := atomic.LoadInt32(&wb.numWrites)
 	if numWrites == 0 {
 		return ErrNoMoreLines
 	}
-	for wb.placeholderTail.refs() > 0 {
-		time.Sleep(100 * time.Microsecond)
+
+	lowestReaderIndex := WriteIndex(math.MaxInt32)
+	for _, iter := range wb.iteratorList {
+		index := iter.readIndex()
+		if index < lowestReaderIndex {
+			lowestReaderIndex = index
+		}
 	}
-	tailIndex := WriteIndex(atomic.LoadInt32(&wb.tailIndex))
+
+	tailIndex := WriteIndex(atomic.AddInt32(&wb.tailIndex, 1) - 1)
+	// lowestReaderIndex can be less than tailIndex because it could
+	// be TailIndex (-1).
+	if lowestReaderIndex <= tailIndex {
+		// Restore tail index.
+		atomic.AddInt32(&wb.tailIndex, -1)
+		return ErrSlowIterator
+	}
 	l := wb.getWrite(tailIndex)
-	atomic.AddInt32(&wb.tailIndex, 1)
-	for l.refs() > 0 {
-		time.Sleep(100 * time.Microsecond)
-	}
 	if !l.empty() {
-		err := wb.ringBuffer.Release(l.start, l.end)
+		err := wb.ringBuffer.Discard(l.start, l.end)
 		if err != nil {
 			// Release should not ever fail, but restore gracefully.
 			atomic.AddInt32(&wb.tailIndex, -1)
@@ -251,95 +286,50 @@ func (wb *WriteBuffer) advanceHead() {
 	atomic.AddInt32(&wb.headIndex, 1)
 }
 
-func (wb *WriteBuffer) signalWaiters() {
-	wb.signalMut.Lock()
-	defer wb.signalMut.Unlock()
-	close(wb.signalChan)
-	wb.signalChan = make(chan struct{})
+func (wb *WriteBuffer) signalIterators() {
+	wb.iteratorMutex.RLock()
+	defer wb.iteratorMutex.RUnlock()
+
+	for _, iter := range wb.iteratorList {
+		select {
+		case iter.notifyChan <- struct{}{}:
+		default:
+		}
+	}
 }
 
-func (wb *WriteBuffer) more() <-chan struct{} {
-	wb.signalMut.RLock()
-	defer wb.signalMut.RUnlock()
-	return wb.signalChan
+func (wb *WriteBuffer) releaseIterators() {
+	wb.iteratorMutex.Lock()
+	defer wb.iteratorMutex.Unlock()
+
+	for _, iter := range wb.iteratorList {
+		close(iter.closeChan)
+	}
+	wb.iteratorList = nil
 }
 
-func (wb *WriteBuffer) releaseWaiters() {
-	wb.signalMut.Lock()
-	defer wb.signalMut.Unlock()
-	close(wb.signalChan)
-}
-
-// acquireTail returns the tail and acquires a lock on it.
-// the caller must either release it or call nextWrite to
-// exchange it for the subsequent write.
-func (wb *WriteBuffer) acquireTail() *write {
-	wb.releaseMutex.RLock()
-	defer wb.releaseMutex.RUnlock()
-	numWrites := atomic.LoadInt32(&wb.numWrites)
-	if numWrites == 0 {
-		write := &wb.placeholderTail
-		write.acquire()
-		return write
-	}
-	tailIndex := WriteIndex(atomic.LoadInt32(&wb.tailIndex))
-	write := wb.getWrite(tailIndex)
-	write.acquire()
-	return write
-}
-
-// acquireHead returns the tail and acquires a lock on it.
-// the caller must either release it or call nextWrite to
-// exchange it for the subsequent write.
-func (wb *WriteBuffer) acquireHead(last int) *write {
-	wb.releaseMutex.RLock()
-	defer wb.releaseMutex.RUnlock()
-	numWrites := atomic.LoadInt32(&wb.numWrites)
-	if numWrites == 0 {
-		write := &wb.placeholderTail
-		write.acquire()
-		return write
-	}
-	if last < 0 {
-		last = 0
-	}
-	if last > int(numWrites) {
-		last = int(numWrites)
-	}
-	headIndex := WriteIndex(atomic.LoadInt32(&wb.headIndex))
-	if last > 0 {
-		headIndex -= WriteIndex(last - 1)
-	}
-	write := wb.getWrite(headIndex)
-	write.acquire()
-	return write
-}
-
-// nextWrite returns the next write in the sequence or false.
-// if false is returned, the caller is still responsible for releasing
-// the current write. If true is returned the current write was
-// released by nextWrite and a new write was returned.
-func (wb *WriteBuffer) nextWrite(current *write) (*write, bool) {
-	if current == &wb.placeholderTail {
+func (wb *WriteBuffer) advanceIterator(iter *iterator) bool {
+	// only need the read lock here as the atomics in the iterator
+	// deal with write consistency.
+	wb.iteratorMutex.RLock()
+	defer wb.iteratorMutex.RUnlock()
+	current := iter.readIndex()
+	if current == TailIndex {
 		numWrites := atomic.LoadInt32(&wb.numWrites)
 		if numWrites == 0 {
-			return nil, false
+			return false
 		}
 		nextIndex := WriteIndex(atomic.LoadInt32(&wb.tailIndex))
-		next := wb.getWrite(nextIndex)
-		next.acquire()
-		current.release()
-		return next, true
+		iter.storeIndex(nextIndex)
+		return true
 	}
-	nextIndex := current.index + 1
+	nextIndex := current + 1
 	headIndex := WriteIndex(atomic.LoadInt32(&wb.headIndex))
 	if nextIndex > headIndex {
-		return nil, false
+		return false
 	}
-	next := wb.getWrite(nextIndex)
-	next.acquire()
-	current.release()
-	return next, true
+	iter.storeIndex(nextIndex)
+	return true
 }
 
 type streamWriter struct {

@@ -43,8 +43,8 @@ func (s *iteratorSuite) TestReads(c *C) {
 
 	it := wb.TailIterator()
 	num := 0
-	for it.Next() {
-		c.Assert(it.Length(), Equals, 10)
+	for it.Next(nil) {
+		c.Assert(it.Buffered(), Equals, 10)
 		c.Assert(it.StreamID(), Equals, servicelog.Stdout)
 		c.Assert(it.Timestamp(), Not(Equals), time.Time{})
 		buf := [10]byte{}
@@ -83,8 +83,8 @@ func (s *iteratorSuite) TestConcurrentReaders(c *C) {
 			<-start
 			it := wb.TailIterator()
 			localNum := int32(0)
-			for it.Next() {
-				c.Assert(it.Length(), Equals, 10)
+			for it.Next(nil) {
+				c.Assert(it.Buffered(), Equals, 10)
 				c.Assert(it.StreamID(), Equals, servicelog.Stdout)
 				c.Assert(it.Timestamp(), Not(Equals), time.Time{})
 				buf := [10]byte{}
@@ -150,28 +150,22 @@ func (s *iteratorSuite) TestMore(c *C) {
 				break
 			}
 			// Check there isn't any items.
-			ok := it.Next()
+			ok := it.Next(nil)
 			c.Assert(ok, Equals, false)
-			// Watch for more items.
-			more := it.More()
-			// Ask for annother write.
-			select {
-			case sendMore <- struct{}{}:
-			case <-timeout:
-				c.Log("timeout sending")
-				c.Fail()
-				return
-			}
-			select {
-			case <-more:
-			case <-timeout:
-				c.Log("timeout waiting for more")
-				c.Fail()
-				return
-			}
-			ok = it.Next()
+			go func() {
+				time.Sleep(500 * time.Microsecond)
+				// Ask for annother write.
+				select {
+				case sendMore <- struct{}{}:
+				case <-timeout:
+					c.Log("timeout sending")
+					c.Fail()
+				}
+			}()
+			// Wait for write.
+			ok = it.Next(timeout)
 			c.Assert(ok, Equals, true)
-			buf := make([]byte, it.Length())
+			buf := make([]byte, it.Buffered())
 			_, err := it.Read(buf)
 			c.Assert(err, IsNil)
 			i, err := strconv.Atoi(string(buf))
@@ -193,7 +187,7 @@ func (s *iteratorSuite) TestWriteTo(c *C) {
 
 	buf := &bytes.Buffer{}
 	it := wb.TailIterator()
-	for it.Next() {
+	for it.Next(nil) {
 		n1, err := it.WriteTo(buf)
 		c.Assert(err, IsNil)
 		c.Assert(int(n1), Equals, n0)
@@ -213,7 +207,7 @@ func (s *iteratorSuite) TestResetRead(c *C) {
 	c.Assert(err, IsNil)
 
 	it := wb.TailIterator()
-	c.Assert(it.Next(), Equals, true)
+	c.Assert(it.Next(nil), Equals, true)
 	for i := 0; i < 2; i++ {
 		buf := &bytes.Buffer{}
 		n1, err := it.WriteTo(buf)
@@ -253,19 +247,9 @@ func (s *iteratorSuite) TestLongReaders(c *C) {
 			defer func() {
 				atomic.AddInt32(&readCount, localRead)
 			}()
-			for localRead < 10 {
-				more := it.More()
-				for it.Next() {
-					localRead++
-					time.Sleep(1 * time.Millisecond)
-				}
-				select {
-				case <-more:
-					continue
-				case <-timeout:
-					c.Fatalf("timeout waiting for #%d", readCount)
-					return
-				}
+			for localRead < 10 && it.Next(timeout) {
+				localRead++
+				time.Sleep(1 * time.Millisecond)
 			}
 		}()
 	}
@@ -284,31 +268,4 @@ func (s *iteratorSuite) TestLongReaders(c *C) {
 
 	c.Assert(int(readCount), Equals, 10*numReaders)
 	c.Assert(time.Since(startTime) > 10*time.Millisecond, Equals, true)
-}
-
-func (s *iteratorSuite) TestBuffers(c *C) {
-	wb := servicelog.NewWriteBuffer(100, 1000)
-	stdout := wb.StreamWriter(servicelog.Stdout)
-	testStr := "testing testing testing"
-	n, err := fmt.Fprint(stdout, testStr)
-	c.Assert(err, IsNil)
-	c.Assert(n, Equals, len(testStr))
-
-	it := wb.TailIterator()
-	ok := it.Next()
-	c.Assert(ok, Equals, true)
-	buffers := it.Buffers()
-	joined := []byte(nil)
-	for _, v := range buffers {
-		joined = append(joined, v...)
-	}
-	c.Assert(err, IsNil)
-	c.Assert(len(joined), Equals, n)
-	c.Assert(string(joined), Equals, testStr)
-
-	err = it.Close()
-	c.Assert(err, IsNil)
-
-	err = wb.Close()
-	c.Assert(err, IsNil)
 }

@@ -21,8 +21,8 @@ import (
 )
 
 var (
-	ErrFreeOutOfOrder = errors.New("free out of order")
-	ErrOutOfRange     = errors.New("index out of range")
+	ErrOrder = errors.New("out of order")
+	ErrRange = errors.New("out of range")
 )
 
 type RingPos int64
@@ -36,13 +36,14 @@ type RingBuffer struct {
 
 	data []byte
 
-	usedIndex  RingPos
+	readIndex  RingPos
 	writeIndex RingPos
 }
 
 var _ io.Writer = (*RingBuffer)(nil)
 
-// NewRingBuffer created with the size in bytes.
+// NewRingBuffer creates a RingBuffer with the provided size in bytes for the backing
+// buffer.
 func NewRingBuffer(size int) *RingBuffer {
 	rb := RingBuffer{
 		data: make([]byte, size),
@@ -50,7 +51,7 @@ func NewRingBuffer(size int) *RingBuffer {
 	return &rb
 }
 
-// Write to the buffer, allocating the number of bytes in p.
+// Write writes p to the backing buffer, allocating the number of bytes in p.
 // If p is larger than the amount of space available in the buffer then
 // io.ErrShortWrite is returned and the number of bytes written.
 func (rb *RingBuffer) Write(p []byte) (int, error) {
@@ -59,10 +60,10 @@ func (rb *RingBuffer) Write(p []byte) (int, error) {
 	}
 	rb.rwlock.Lock()
 	defer rb.rwlock.Unlock()
-	free := rb.free()
+	available := rb.available()
 	writeLength := len(p)
-	if writeLength > free {
-		writeLength = free
+	if writeLength > available {
+		writeLength = available
 	}
 	start := rb.writeIndex
 	end := rb.writeIndex + RingPos(writeLength)
@@ -74,9 +75,9 @@ func (rb *RingBuffer) Write(p []byte) (int, error) {
 	if low < high {
 		copy(rb.data[low:high], p[0:writeLength])
 	} else {
-		lowRange := len(rb.data) - low
-		copy(rb.data[low:len(rb.data)], p[0:lowRange])
-		copy(rb.data[0:high], p[lowRange:lowRange+high])
+		lowLength := len(rb.data) - low
+		copy(rb.data[low:], p)
+		copy(rb.data[:high], p[lowLength:])
 	}
 	rb.writeIndex += RingPos(writeLength)
 	if writeLength < len(p) {
@@ -86,40 +87,42 @@ func (rb *RingBuffer) Write(p []byte) (int, error) {
 }
 
 // Free number of bytes available to allocate.
-func (rb *RingBuffer) Free() int {
+func (rb *RingBuffer) Available() int {
 	rb.rwlock.RLock()
 	defer rb.rwlock.RUnlock()
-	return rb.free()
+	return rb.available()
 }
 
-func (rb *RingBuffer) free() int {
-	return len(rb.data) - int(rb.writeIndex-rb.usedIndex)
+func (rb *RingBuffer) available() int {
+	return len(rb.data) - int(rb.writeIndex-rb.readIndex)
 }
 
-// Capacity of the internal buffer.
-func (rb *RingBuffer) Capacity() int {
+// of the internal buffer.
+func (rb *RingBuffer) Size() int {
 	return len(rb.data)
 }
 
 // Pos of current write index.
 func (rb *RingBuffer) Pos() RingPos {
+	rb.rwlock.RLock()
+	defer rb.rwlock.RUnlock()
 	return rb.writeIndex
 }
 
-// Copy bytes from the range into the supplied buffer. If dest is not large enough
+// Copy bytes from the range into the supplied dest buffer. If dest is not large enough
 // to fill the bytes from start to end, then start to start+len(dest) is copied and
 // the error io.ErrShortBuffer is returned.
 func (rb *RingBuffer) Copy(dest []byte, start RingPos, end RingPos) (int, error) {
 	rb.rwlock.RLock()
 	defer rb.rwlock.RUnlock()
 	if end < start {
-		return 0, ErrOutOfRange
+		return 0, ErrRange
 	}
-	if start < rb.usedIndex || start > rb.writeIndex {
-		return 0, ErrOutOfRange
+	if start < rb.readIndex || start > rb.writeIndex {
+		return 0, ErrRange
 	}
-	if end < rb.usedIndex || end > rb.writeIndex {
-		return 0, ErrOutOfRange
+	if end < rb.readIndex || end > rb.writeIndex {
+		return 0, ErrRange
 	}
 	copyLength := int(end - start)
 	if copyLength > len(dest) {
@@ -134,9 +137,9 @@ func (rb *RingBuffer) Copy(dest []byte, start RingPos, end RingPos) (int, error)
 	if low < high {
 		n = copy(dest, rb.data[low:high])
 	} else {
-		lowRange := len(rb.data) - low
-		n = copy(dest[0:lowRange], rb.data[low:len(rb.data)])
-		n += copy(dest[lowRange:lowRange+high], rb.data[0:high])
+		lowLength := len(rb.data) - low
+		n = copy(dest[:lowLength], rb.data[low:])
+		n += copy(dest[lowLength:], rb.data[:high])
 	}
 	if n < int(end-start) {
 		return n, io.ErrShortBuffer
@@ -149,13 +152,13 @@ func (rb *RingBuffer) WriteTo(writer io.Writer, start RingPos, end RingPos) (int
 	rb.rwlock.RLock()
 	defer rb.rwlock.RUnlock()
 	if end < start {
-		return 0, ErrOutOfRange
+		return 0, ErrRange
 	}
-	if start < rb.usedIndex || start > rb.writeIndex {
-		return 0, ErrOutOfRange
+	if start < rb.readIndex || start > rb.writeIndex {
+		return 0, ErrRange
 	}
-	if end < rb.usedIndex || end > rb.writeIndex {
-		return 0, ErrOutOfRange
+	if end < rb.readIndex || end > rb.writeIndex {
+		return 0, ErrRange
 	}
 	copyLength := int(end - start)
 	low := int(start % RingPos(len(rb.data)))
@@ -167,33 +170,33 @@ func (rb *RingBuffer) WriteTo(writer io.Writer, start RingPos, end RingPos) (int
 		n, err := writer.Write(rb.data[low:high])
 		return int64(n), err
 	}
-	n0, err := writer.Write(rb.data[low:len(rb.data)])
+	n0, err := writer.Write(rb.data[low:])
 	if err != nil {
 		return int64(n0), err
 	}
-	n1, err := writer.Write(rb.data[0:high])
+	n1, err := writer.Write(rb.data[:high])
 	return int64(n0 + n1), err
 }
 
-// Release a range of the RingBuffer so that it may be reused. Start must be the
+// Discard releases a range of the RingBuffer so that it may be reused. Start must be the
 // earliest allocated position. End must be up to the latest allocated position or
 // any value in between.
-func (rb *RingBuffer) Release(start, end RingPos) error {
+func (rb *RingBuffer) Discard(start, end RingPos) error {
 	rb.rwlock.Lock()
 	defer rb.rwlock.Unlock()
 	if end < start {
-		return ErrOutOfRange
+		return ErrRange
 	}
-	if start < rb.usedIndex || start > rb.writeIndex {
-		return ErrOutOfRange
+	if start < rb.readIndex || start > rb.writeIndex {
+		return ErrRange
 	}
-	if end < rb.usedIndex || end > rb.writeIndex {
-		return ErrOutOfRange
+	if end < rb.readIndex || end > rb.writeIndex {
+		return ErrRange
 	}
-	if start != rb.usedIndex {
-		return ErrFreeOutOfOrder
+	if start != rb.readIndex {
+		return ErrOrder
 	}
-	rb.usedIndex = end
+	rb.readIndex = end
 	return nil
 }
 
@@ -205,13 +208,13 @@ func (rb *RingBuffer) Buffers(start, end RingPos) [2][]byte {
 	if end < start {
 		return buffers
 	}
-	if start < rb.usedIndex || start > rb.writeIndex {
+	if start < rb.readIndex || start > rb.writeIndex {
 		return buffers
 	}
-	if end < rb.usedIndex || end > rb.writeIndex {
+	if end < rb.readIndex || end > rb.writeIndex {
 		return buffers
 	}
-	if start != rb.usedIndex {
+	if start != rb.readIndex {
 		return buffers
 	}
 	low := int(start % RingPos(len(rb.data)))
@@ -223,7 +226,7 @@ func (rb *RingBuffer) Buffers(start, end RingPos) [2][]byte {
 		buffers[0] = rb.data[low:high]
 		return buffers
 	}
-	buffers[0] = rb.data[low:len(rb.data)]
-	buffers[1] = rb.data[0:high]
+	buffers[0] = rb.data[low:]
+	buffers[1] = rb.data[:high]
 	return buffers
 }
