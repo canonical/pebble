@@ -8,7 +8,6 @@ designed with unique features that help with more specific use cases.
 - [General model](#general-model)
 - [Layer configuration examples](#layer-configuration-examples)
 - [Running pebble](#running-pebble)
-- [API](#api)
 - [Layer specification](#layer-specification)
 - [TODO/Contributing](#todo-contributing)
 
@@ -127,35 +126,29 @@ And start or stop a specific service with:
     $ pebble start <name1> [<name2> ...]
     $ pebble stop  <name1> [<name2> ...]
 
-## API
-
-The documentation for the currently exposed API endpoints can be found in `doc/api.yaml`
-In that folder you can also find a nice looking html file reflecting the contents of the file above.
-The html file can be generated with: `npx redoc-cli bundle doc/api.yaml --output doc/index.html`
-
 ## Layer specification
 
 ### Type: Layer
 
 | Field         |         Type         | Default | Required? | Description                                                                                     |
 | :------------ | :------------------: | :-----: | :-------: | :---------------------------------------------------------------------------------------------- |
-| `summary`     |       `string`       |  `nil`  |    no     | Short one line summary of the layer                                                             |
-| `description` |       `string`       |  `nil`  |    no     | A full description of the layer                                                                 |
+| `summary`     |       `string`       |  `""`   |    no     | Short one line summary of the layer                                                             |
+| `description` |       `string`       |  `""`   |    no     | A full description of the layer                                                                 |
 | `services`    | `map[string]Service` |  `[]`   |    yes    | A map of services for Pebble to manage. The key represents the name of the service in the layer |
 
 ### Type: Service
 
 | Field         |                       Type                        | Default | Required? | Description                                                                                                                              |
 | :------------ | :-----------------------------------------------: | :-----: | :-------: | :--------------------------------------------------------------------------------------------------------------------------------------- |
-| `summary`     |                     `string`                      |  `nil`  |    no     | Short one line summary of the service.                                                                                                   |
-| `description` |                     `string`                      |  `nil`  |    no     | A full description of the service.                                                                                                       |
-| `startup`     |  [`ServiceStartup`](#enumeration-servicestartup)  |  `nil`  |    no     | Value `enabled` will ensure service is started automatically when Pebble starts. Value `disabled` will do the opposite.                  |
-| `override`    | [`ServiceOverride`](#enumeration-serviceoverride) |  `nil`  |    yes    | Control the effect the new layer will have on the current Pebble plan.                                                                   |
-| `command`     |                     `string`                      |  `nil`  |    yes    | Command for Pebble to run. Example `/usr/bin/myapp -a -p 8080`.                                                                          |
-| `after`       |                    `[]string`                     |  `nil`  |    no     | Array of other service names in the plan that should start before the service.                                                           |
-| `before`      |                    `[]string`                     |  `nil`  |    no     | Array of other service names in the plan that this service should start before.                                                          |
-| `requires`    |                    `[]string`                     |  `nil`  |    no     | Array of other service names in the plan that this service requires to be started before being started itself.                           |
-| `environment` |                `map[string]string`                |  `nil`  |    no     | A map of environment variable names, and their respective values, that should be injected into the environment of the service by Pebble. |
+| `summary`     |                     `string`                      |  `""`   |    no     | Short one line summary of the service.                                                                                                   |
+| `description` |                     `string`                      |  `""`   |    no     | A full description of the service.                                                                                                       |
+| `startup`     |  [`ServiceStartup`](#enumeration-servicestartup)  |  `""`   |    no     | Value `enabled` will ensure service is started automatically when Pebble starts. Value `disabled` will do the opposite.                  |
+| `override`    | [`ServiceOverride`](#enumeration-serviceoverride) |  `""`   |    yes    | Control the effect the new layer will have on the current Pebble plan.                                                                   |
+| `command`     |                     `string`                      |  `""`   |    yes    | Command for Pebble to run. Example `/usr/bin/myapp -a -p 8080`.                                                                          |
+| `after`       |                    `[]string`                     |  `""`   |    no     | Array of other service names in the plan that should start before the service.                                                           |
+| `before`      |                    `[]string`                     |  `""`   |    no     | Array of other service names in the plan that this service should start before.                                                          |
+| `requires`    |                    `[]string`                     |  `""`   |    no     | Array of other service names in the plan that this service requires to be started before being started itself.                           |
+| `environment` |                `map[string]string`                |  `""`   |    no     | A map of environment variable names, and their respective values, that should be injected into the environment of the service by Pebble. |
 
 ### Enumeration: ServiceStartup
 
