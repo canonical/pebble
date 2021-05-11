@@ -5,11 +5,11 @@ It resembles well known tools such as _supervisord_, _runit_, or _s6_, in that i
 easily manage non-system processes independently from the system services, but it was
 designed with unique features that help with more specific use cases.
 
-- [General model](#general-model)
-- [Layer configuration examples](#layer-configuration-examples)
-- [Running pebble](#running-pebble)
-- [Layer specification](#layer-specification)
-- [TODO/Contributing](#todo-contributing)
+  - [General model](#general-model)
+  - [Layer configuration examples](#layer-configuration-examples)
+  - [Running pebble](#running-pebble)
+  - [Layer specification](#layer-specification)
+  - [TODO/Contributing](#todo-contributing)
 
 ## General model
 
@@ -29,50 +29,50 @@ redefine the service configuration as desired.
 
 ## Layer configuration examples
 
-This is a complete example of the current configuration format. You can also see the [layer specification](#layer-specification):
+This is a complete example of the current [configuration format](#layer-specification):
 
 ```yaml
 summary: Simple layer
 
 description: |
-  A better description for a simple layer.
+    A better description for a simple layer.
 
 services:
-  srv1:
-    override: replace
-    summary: Service summary
-    command: cmd arg1 "arg2a arg2b"
-    startup: enabled
-    after:
-      - srv2
-    before:
-      - srv3
-    requires:
-      - srv2
-      - srv3
-    environment:
-      VAR1: val1
-      VAR2: val2
-      VAR3: val3
+    srv1:
+        override: replace
+        summary: Service summary
+        command: cmd arg1 "arg2a arg2b"
+        startup: enabled
+        after:
+            - srv2
+        before:
+            - srv3
+        requires:
+            - srv2
+            - srv3
+        environment:
+            VAR1: val1
+            VAR2: val2
+            VAR3: val3
 
-  srv2:
-    override: replace
-    startup: enabled
-    command: cmd
-    before:
-      - srv3
+    srv2:
+        override: replace
+        startup: enabled
+        command: cmd
+        before:
+            - srv3
 
-  srv3:
-    override: replace
-    command: cmd
+    srv3:
+        override: replace
+        command: cmd
 ```
 
 Some details worth highlighting:
 
-- The `startup` option can be `enabled` or `disabled`.
-- There is the `override` field (for now required) which defines whether this
-  entry _overrides_ the previous service of the same name (if any - missing is
-  okay), or merges with it.
+  - The `startup` option can be `enabled` or `disabled`.
+  - There is the `override` field (for now required) which defines whether this 
+entry _overrides_ the previous service of the same name (if any - missing is 
+okay), or merges with it.
 
 ### Layer override example
 
@@ -83,29 +83,29 @@ To illustrate, here is a sample override layer that might sit atop the one above
 summary: Simple override layer
 
 services:
-  srv1:
-    override: merge
-    environment:
-      VAR3: val3
-    after:
-      - srv4
-    before:
-      - srv5
+    srv1:
+        override: merge
+        environment:
+            VAR3: val3
+        after:
+            - srv4
+        before:
+            - srv5
 
-  srv2:
-    override: replace
-    summary: Replaced service
-    startup: disabled
-    command: cmd
+    srv2:
+        override: replace
+        summary: Replaced service
+        startup: disabled
+        command: cmd
 
-  srv4:
-    override: replace
-    command: cmd
-    startup: enabled
+    srv4:
+        override: replace
+        command: cmd
+        startup: enabled
 
-  srv5:
-    override: replace
-    command: cmd
+    srv5:
+        override: replace
+        command: cmd
 ```
 
 ## Running pebble
@@ -128,41 +128,62 @@ And start or stop a specific service with:
 
 ## Layer specification
 
-### Type: Layer
+```yaml
+# (Optional) A short one line summary of the layer
+summary: <summary>
 
-| Field         |         Type         | Default | Required? | Description                                                                                     |
-| :------------ | :------------------: | :-----: | :-------: | :---------------------------------------------------------------------------------------------- |
-| `summary`     |       `string`       |  `""`   |    no     | Short one line summary of the layer                                                             |
-| `description` |       `string`       |  `""`   |    no     | A full description of the layer                                                                 |
-| `services`    | `map[string]Service` |  `{}`   |    yes    | A map of services for Pebble to manage. The key represents the name of the service in the layer |
+# (Optional) A full description of the configuration layer
+description: |
+    <description>
 
-### Type: Service
+# (Required) A list of services managed by this configuration layer
+services:
 
-| Field         |                       Type                        | Default | Required? | Description                                                                                                                              |
-| :------------ | :-----------------------------------------------: | :-----: | :-------: | :--------------------------------------------------------------------------------------------------------------------------------------- |
-| `summary`     |                     `string`                      |  `""`   |    no     | Short one line summary of the service.                                                                                                   |
-| `description` |                     `string`                      |  `""`   |    no     | A full description of the service.                                                                                                       |
-| `startup`     |  [`ServiceStartup`](#enumeration-servicestartup)  |  `""`   |    no     | Value `enabled` will ensure service is started automatically when Pebble starts. Value `disabled` will do the opposite.                  |
-| `override`    | [`ServiceOverride`](#enumeration-serviceoverride) |  `""`   |    yes    | Control the effect the new layer will have on the current Pebble plan.                                                                   |
-| `command`     |                     `string`                      |  `""`   |    yes    | Command for Pebble to run. Example `/usr/bin/myapp -a -p 8080`.                                                                          |
-| `after`       |                    `[]string`                     |  `[]`   |    no     | Array of other service names in the plan that should start before the service.                                                           |
-| `before`      |                    `[]string`                     |  `[]`   |    no     | Array of other service names in the plan that this service should start before.                                                          |
-| `requires`    |                    `[]string`                     |  `[]`   |    no     | Array of other service names in the plan that this service requires to be started before being started itself.                           |
-| `environment` |                `map[string]string`                |  `{}`   |    no     | A map of environment variable names, and their respective values, that should be injected into the environment of the service by Pebble. |
+    <service name>:
 
-### Enumeration: ServiceStartup
+        # (Required) Control how this service definition is combined with any
+        # other pre-existing definition with the same name in the Pebble plan.
+        #
+        # The value 'merge' will ensure that values in this layer specification
+        # are merged with existing definitions, where 'override' will replace
+        # and existing service spec in the plan with the same name
+        override: merge | replace
 
-| Value      | Description                                                |
-| :--------- | :--------------------------------------------------------- |
-| `enabled`  | Start the service automatically when Pebble starts.        |
-| `disabled` | Do not start the service automatically when Pebble starts. |
+        # (Optional) A short summary of the service
+        summary: <summary>
 
-### Enumeration: ServiceOverride
+        # (Optional) A detailed description of the service
+        description: |
+            <description>
 
-| Value      | Description                                                                                                                        |
-| :--------- | :--------------------------------------------------------------------------------------------------------------------------------- |
-| `merge`    | Merge the specification of the service with any existing specification of a service with the same name in the current Pebble plan. |
-| `override` | Override any services of the same name in the current Pebble plan.                                                                 |
+        # (Optional) The command to run the service.
+        # Example: /usr/bin/somecommand -b -t 30
+        command: <commmand>
+
+        # (Optional) Control whether the service is started automatically when
+        # Pebble starts. 
+        startup: enabled | disabled
+
+        # (Optional) A list of other services in the plan that this service
+        # should start after
+        after:
+            - <other service name>
+
+        # (Optional) A list of other services in the plan that this service
+        # should start before
+        before:
+            - <other service name>
+
+        # (Optional) A list of other services in the plan that this service
+        # requires in order to start correctly    
+        requires:
+            - <other service name>
+
+        # (Optional) A list of key/value pairs defining environment variables
+        # that should be set in the context of the process
+        environment:
+            <env var name>: <env var value>
+```
 
 ## TODO/Contributing
 
@@ -171,17 +192,17 @@ explore around.
 
 Here are some of the things coming soon:
 
-- [x] Support `$PEBBLE_SOCKET` and default `$PEBBLE` to `/var/lib/pebble/default`
-- [x] Define and enforce convention for layer names
-- [x] Dynamic layer support over the API
-- [x] Configuration retrieval commands to investigate current settings
-- [x] Status command that displays active services and their current status
-- [x] General system modification commands (writing configuration files, etc)
-- [ ] Improve signal handling, e.g., sending SIGHUP to a service
-- [ ] Terminate all services before exiting run command
-- [ ] More tests for existing CLI commands
-- [ ] Better log caching and retrieval support
-- [ ] Consider showing unified log as output of `pebble run`
+  - [x] Support `$PEBBLE_SOCKET` and default `$PEBBLE` to `/var/lib/pebble/default`
+  - [x] Define and enforce convention for layer names
+  - [x] Dynamic layer support over the API
+  - [x] Configuration retrieval commands to investigate current settings
+  - [x] Status command that displays active services and their current status
+  - [x] General system modification commands (writing configuration files, etc)
+  - [ ] Improve signal handling, e.g., sending SIGHUP to a service
+  - [ ] Terminate all services before exiting run command
+  - [ ] More tests for existing CLI commands
+  - [ ] Better log caching and retrieval support
+  - [ ] Consider showing unified log as output of `pebble run`
 
 ## Have fun!
 
