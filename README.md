@@ -5,11 +5,11 @@ It resembles well known tools such as _supervisord_, _runit_, or _s6_, in that i
 easily manage non-system processes independently from the system services, but it was
 designed with unique features that help with more specific use cases.
 
-- [General model](#general-model)
-- [Layer configuration examples](#layer-configuration-examples)
-- [Running pebble](#running-pebble)
-- [Layer specification](#layer-specification)
-- [TODO/Contributing](#todo-contributing)
+  - [General model](#general-model)
+  - [Layer configuration examples](#layer-configuration-examples)
+  - [Running pebble](#running-pebble)
+  - [Layer specification](#layer-specification)
+  - [TODO/Contributing](#todo-contributing)
 
 ## General model
 
