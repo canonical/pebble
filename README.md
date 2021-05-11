@@ -192,17 +192,17 @@ explore around.
 
 Here are some of the things coming soon:
 
-- [x] Support `$PEBBLE_SOCKET` and default `$PEBBLE` to `/var/lib/pebble/default`
-- [x] Define and enforce convention for layer names
-- [x] Dynamic layer support over the API
-- [x] Configuration retrieval commands to investigate current settings
-- [x] Status command that displays active services and their current status
-- [x] General system modification commands (writing configuration files, etc)
-- [ ] Improve signal handling, e.g., sending SIGHUP to a service
-- [ ] Terminate all services before exiting run command
-- [ ] More tests for existing CLI commands
-- [ ] Better log caching and retrieval support
-- [ ] Consider showing unified log as output of `pebble run`
+  - [x] Support `$PEBBLE_SOCKET` and default `$PEBBLE` to `/var/lib/pebble/default`
+  - [x] Define and enforce convention for layer names
+  - [x] Dynamic layer support over the API
+  - [x] Configuration retrieval commands to investigate current settings
+  - [x] Status command that displays active services and their current status
+  - [x] General system modification commands (writing configuration files, etc)
+  - [ ] Improve signal handling, e.g., sending SIGHUP to a service
+  - [ ] Terminate all services before exiting run command
+  - [ ] More tests for existing CLI commands
+  - [ ] Better log caching and retrieval support
+  - [ ] Consider showing unified log as output of `pebble run`
 
 ## Have fun!
 
