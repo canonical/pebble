@@ -16,6 +16,7 @@ package servstate
 
 import (
 	"os/exec"
+	"syscall"
 	"time"
 )
 
@@ -46,5 +47,13 @@ func FakeKillWait(kill, fail time.Duration) (restore func()) {
 	killWait, failWait = kill, fail
 	return func() {
 		killWait, failWait = old1, old2
+	}
+}
+
+func FakeSetCmdCredential(f func(cmd *exec.Cmd, credential *syscall.Credential)) (restore func()) {
+	old := setCmdCredential
+	setCmdCredential = f
+	return func() {
+		setCmdCredential = old
 	}
 }

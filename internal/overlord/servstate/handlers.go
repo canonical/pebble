@@ -91,11 +91,10 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 		return err
 	}
 	if uid != nil && gid != nil {
-		// TODO(benhoyt) - add test for this
-		cmd.SysProcAttr.Credential = &syscall.Credential{
+		setCmdCredential(cmd, &syscall.Credential{
 			Uid: uint32(*uid),
 			Gid: uint32(*gid),
-		}
+		})
 	}
 
 	// Pass service description's environment variables to child process
@@ -189,4 +188,8 @@ func (m *ServiceManager) doStop(task *state.Task, tomb *tomb.Tomb) error {
 		}
 	}
 	panic("unreachable")
+}
+
+var setCmdCredential = func(cmd *exec.Cmd, credential *syscall.Credential) {
+	cmd.SysProcAttr.Credential = credential
 }
