@@ -240,7 +240,7 @@ func (s *S) TestUserGroupFails(c *C) {
 	svc := s.serviceByName(c, "test5")
 	c.Assert(svc.Current, Equals, servstate.StatusInactive)
 
-	// Ensure that setCmdCredential was called with the correct UID andGID
+	// Ensure that setCmdCredential was called with the correct UID and GID
 	u, err := user.Lookup("nobody")
 	c.Check(err, IsNil)
 	uid, _ := strconv.Atoi(u.Uid)
