@@ -32,7 +32,6 @@ import (
 	"github.com/canonical/pebble/internal/overlord/servstate"
 	"github.com/canonical/pebble/internal/overlord/state"
 	"github.com/canonical/pebble/internal/plan"
-	"github.com/canonical/pebble/internal/servicelog"
 	"github.com/canonical/pebble/internal/testutil"
 )
 
@@ -98,11 +97,10 @@ func (s *S) SetUpTest(c *C) {
 	s.logBufferMut.Lock()
 	s.logBuffer.Reset()
 	s.logBufferMut.Unlock()
-	logOutput := servicelog.OutputFunc(func(timestamp time.Time, service string, stream servicelog.StreamID, message io.Reader) error {
+	logOutput := writerFunc(func(p []byte) (int, error) {
 		s.logBufferMut.Lock()
 		defer s.logBufferMut.Unlock()
-		_, err := io.Copy(&s.logBuffer, message)
-		return err
+		return s.logBuffer.Write(p)
 	})
 
 	s.runner = state.NewTaskRunner(s.st)
@@ -159,7 +157,7 @@ func (s *S) startServices(c *C, services []string) {
 	c.Check(chg.Status(), Equals, state.DoneStatus, Commentf("Error: %v", chg.Err()))
 	s.st.Unlock()
 
-	s.assertLog(c, "test1\ntest2\n")
+	s.assertLog(c, ".*test1\n.*test2\n")
 
 	cmds := s.manager.CmdsForTest()
 	c.Check(cmds, HasLen, len(services))
@@ -210,7 +208,10 @@ func (s *S) stopServices(c *C, services []string) {
 
 func (s *S) TestServiceLogs(c *C) {
 	services := []string{"test1", "test2"}
-	outputs := map[string]string{"test1": "test1\n", "test2": "test2\n"}
+	outputs := map[string]string{
+		"test1": `\d+-\d+-\d+T\d+:\d+:\d+Z \[test1\] test1\n`,
+		"test2": `\d+-\d+-\d+T\d+:\d+:\d+Z \[test2\] test2\n`,
+	}
 	s.startServices(c, services)
 
 	if c.Failed() {
@@ -228,7 +229,7 @@ func (s *S) TestServiceLogs(c *C) {
 			c.Assert(err, IsNil)
 		}
 
-		c.Assert(buf.String(), Equals, outputs[serviceName])
+		c.Assert(buf.String(), Matches, outputs[serviceName])
 
 		err = it.Close()
 		c.Assert(err, IsNil)
@@ -614,4 +615,10 @@ PEBBLE_ENV_TEST_1=foo
 PEBBLE_ENV_TEST_2=bar bazz
 PEBBLE_ENV_TEST_PARENT=from-parent
 `[1:])
+}
+
+type writerFunc func([]byte) (int, error)
+
+func (f writerFunc) Write(p []byte) (int, error) {
+	return f(p)
 }

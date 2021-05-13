@@ -17,6 +17,7 @@ package overlord
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sync"
@@ -30,7 +31,6 @@ import (
 	"github.com/canonical/pebble/internal/overlord/patch"
 	"github.com/canonical/pebble/internal/overlord/servstate"
 	"github.com/canonical/pebble/internal/overlord/state"
-	"github.com/canonical/pebble/internal/servicelog"
 	"github.com/canonical/pebble/internal/strutil"
 	"github.com/canonical/pebble/internal/timing"
 )
@@ -85,7 +85,7 @@ type Overlord struct {
 
 // New creates a new Overlord with all its state managers.
 // It can be provided with an optional RestartBehavior.
-func New(pebbleDir string, restartBehavior RestartBehavior, verboseOutput servicelog.Output) (*Overlord, error) {
+func New(pebbleDir string, restartBehavior RestartBehavior, serviceOutput io.Writer) (*Overlord, error) {
 	o := &Overlord{
 		pebbleDir:       pebbleDir,
 		loopTomb:        new(tomb.Tomb),
@@ -120,7 +120,7 @@ func New(pebbleDir string, restartBehavior RestartBehavior, verboseOutput servic
 	}
 	o.runner.AddOptionalHandler(matchAnyUnknownTask, handleUnknownTask, nil)
 
-	serviceMgr, err := servstate.NewManager(s, o.runner, o.pebbleDir, verboseOutput)
+	serviceMgr, err := servstate.NewManager(s, o.runner, o.pebbleDir, serviceOutput)
 	if err != nil {
 		return nil, err
 	}

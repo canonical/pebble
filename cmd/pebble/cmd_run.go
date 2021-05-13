@@ -16,11 +16,9 @@ package main
 
 import (
 	"fmt"
-	"io"
 	"os"
 	"os/signal"
 	"strconv"
-	"sync"
 	"syscall"
 	"time"
 
@@ -30,7 +28,6 @@ import (
 	"github.com/canonical/pebble/cmd"
 	"github.com/canonical/pebble/internal/daemon"
 	"github.com/canonical/pebble/internal/logger"
-	"github.com/canonical/pebble/internal/servicelog"
 	"github.com/canonical/pebble/internal/systemd"
 )
 
@@ -133,10 +130,7 @@ func runDaemon(rcmd *cmdRun, ch chan os.Signal) error {
 		SocketPath: socketPath,
 	}
 	if rcmd.Verbose {
-		dopts.VerboseOutput = &logWriter{
-			Stdout: os.Stdout,
-			Stderr: os.Stderr,
-		}
+		dopts.ServiceOutput = os.Stdout
 	}
 
 	d, err := daemon.New(&dopts)
@@ -204,85 +198,4 @@ out:
 	rcmd.client.CloseIdleConnections()
 
 	return d.Stop(ch)
-}
-
-type logWriter struct {
-	Stdout io.Writer
-	Stderr io.Writer
-
-	prefix []byte
-	msg    []byte
-	mutex  sync.Mutex
-}
-
-func (w *logWriter) WriteLog(timestamp time.Time, serviceName string, stream servicelog.StreamID, message io.Reader) error {
-	w.mutex.Lock()
-	defer w.mutex.Unlock()
-
-	writer := w.Stderr
-	if stream == servicelog.Stdout {
-		writer = w.Stdout
-	}
-
-	// Use a buffer for the prefix to minimize the number of writes. Use the
-	// format "2006-01-02T15:04:05Z [service] message".
-	w.prefix = w.prefix[:0]
-	w.prefix = timestamp.AppendFormat(w.prefix, time.RFC3339)
-	w.prefix = append(w.prefix, " ["...)
-	w.prefix = append(w.prefix, serviceName...)
-	w.prefix = append(w.prefix, "] "...)
-	_, err := writer.Write(w.prefix)
-	if err != nil {
-		return err
-	}
-
-	// Then write the message itself.
-	if w.msg == nil {
-		w.msg = make([]byte, writeLogBufSize)
-	}
-	_, err = io.CopyBuffer(writer, &newlineReader{Reader: message}, w.msg)
-	return err
-}
-
-// newlineReader is a Reader that adds a newline ('\n') at the end of whatever
-// is being read, after the EOF. It includes the '\n' in the same read if
-// possible (if the read buffer has enough space), otherwise on the next read.
-type newlineReader struct {
-	Reader io.Reader
-
-	hadEOF         bool
-	endedInNewline bool
-}
-
-func (r *newlineReader) Read(b []byte) (int, error) {
-	if r.hadEOF {
-		// If last read returned EOF, then add newline if last read didn't
-		// end in one.
-		if !r.endedInNewline {
-			b[0] = '\n'
-			return 1, io.EOF
-		}
-		return 0, io.EOF
-	}
-
-	// Read a chunk, detect newline at end.
-	n, err := r.Reader.Read(b)
-	if n > 0 {
-		r.endedInNewline = b[n-1] == '\n'
-	}
-
-	if err == io.EOF {
-		// If this read returned EOF, add newline now if we have space.
-		if n < len(b) {
-			if !r.endedInNewline {
-				b[n] = '\n'
-				return n + 1, io.EOF
-			}
-			return n, io.EOF
-		}
-		// Otherwise postpone the newline handling till next read.
-		r.hadEOF = true
-		return n, nil
-	}
-	return n, err
 }

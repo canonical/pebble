@@ -16,8 +16,6 @@ package servicelog
 
 import (
 	"io"
-	"sync/atomic"
-	"time"
 )
 
 type Iterator interface {
@@ -30,156 +28,140 @@ type Iterator interface {
 	// If a nil channel is passed, cancel will return the first available
 	// buffered write, if none is available, return immediatley.
 	Next(cancel <-chan struct{}) bool
-	BufferedWrite
-}
 
-type BufferedWrite interface {
-	// Reset resets the read position in the current buffered write, so that
-	// Read and WriteTo can re-read the whole buffered write.
-	Reset()
-	// Buffered returns how many bytes are remaining to be read in the current
-	// buffered write.
 	Buffered() int
-	// Timestamp returns the time the current buffered write was recorded.
-	Timestamp() time.Time
-	// StreamID returns the StreamID of the current buffered write.
-	// This can be either Stdout or Stderr.
-	StreamID() StreamID
 	io.Reader
 	io.WriterTo
 }
 
 type iterator struct {
-	wb         *WriteBuffer
-	index      int32
-	skip       bool
-	read       int
-	notifyChan chan struct{}
-	closeChan  chan struct{}
+	rb           *RingBuffer
+	index        RingPos
+	trunc        []byte
+	truncWritten bool
+	notifyChan   chan struct{}
+	closeChan    chan struct{}
 }
 
 var _ Iterator = (*iterator)(nil)
 
+var (
+	truncBytes = []byte("<trunc>\n")
+)
+
 func (it *iterator) Close() error {
-	if it.wb == nil {
+	if it.rb == nil {
 		return nil
 	}
-	it.wb.removeIterator(it)
+	it.rb.removeIterator(it)
 	close(it.notifyChan)
-	it.wb = nil
+	it.rb = nil
 	return nil
 }
 
 func (it *iterator) Next(cancel <-chan struct{}) bool {
-	if it.wb == nil {
+	if it.rb == nil {
 		return false
-	}
-	if it.skip {
-		// already have the first write.
-		it.skip = false
-		return true
 	}
 	select {
 	case <-it.notifyChan:
 	default:
 	}
-	ok := it.wb.advanceIterator(it)
-	if !ok && cancel != nil {
-		// if passed a cancel channel, wait for a buffered write.
+	start, end := it.rb.Positions()
+	if it.index < start {
+		it.index = start
+		it.truncated()
+	}
+	if it.index < end || len(it.trunc) > 0 {
+		return true
+	}
+	for cancel != nil {
+		// if passed a cancel channel, wait for more data.
+		closed := false
 		select {
 		case <-it.closeChan:
-			return false
+			closed = it.rb.Closed()
 		case <-cancel:
-			return false
+			cancel = nil
 		case <-it.notifyChan:
-			ok = it.wb.advanceIterator(it)
+		}
+		start, end := it.rb.Positions()
+		if it.index < start {
+			it.index = start
+			it.truncated()
+		}
+		if it.index < end || len(it.trunc) > 0 {
+			return true
+		}
+		if it.index == end && closed {
+			cancel = nil
 		}
 	}
-	if !ok {
-		return false
-	}
-	return true
-}
-
-func (it *iterator) storeIndex(next WriteIndex) {
-	atomic.StoreInt32(&it.index, int32(next))
-	it.read = 0
-}
-
-func (it *iterator) readIndex() WriteIndex {
-	return WriteIndex(atomic.LoadInt32(&it.index))
-}
-
-func (it *iterator) Reset() {
-	it.read = 0
+	return false
 }
 
 // Read implements io.Reader
 func (it *iterator) Read(dest []byte) (int, error) {
-	if it.wb == nil {
+	if it.rb == nil {
 		return 0, io.EOF
 	}
-	write := it.write()
-	if write == nil {
-		return 0, io.EOF
+	if len(it.trunc) > 0 {
+		n := copy(dest, it.trunc)
+		it.trunc = it.trunc[n:]
+		it.truncWritten = true
+		return n, nil
 	}
-	start := write.start + RingPos(it.read)
-	end := write.end
-	if start == end {
-		return 0, io.EOF
+	n, err := it.rb.Copy(dest, it.index)
+	if err == ErrRange {
+		it.truncated()
+		err = nil
 	}
-	read, err := it.wb.ringBuffer.Copy(dest, start, end)
-	it.read += read
-	if err != nil && err != io.ErrShortBuffer {
-		return 0, err
+	if n > 0 {
+		it.truncWritten = false
 	}
-	return read, err
+	it.index += RingPos(n)
+	return n, err
 }
 
 // WriteTo implements io.WriterTo
 func (it *iterator) WriteTo(writer io.Writer) (int64, error) {
-	if it.wb == nil {
+	if it.rb == nil {
 		return 0, io.EOF
 	}
-	write := it.write()
-	if write == nil {
-		return 0, io.EOF
+	if len(it.trunc) > 0 {
+		n, err := writer.Write(it.trunc)
+		it.trunc = it.trunc[n:]
+		it.truncWritten = true
+		return int64(n), err
 	}
-	start := write.start + RingPos(it.read)
-	end := write.end
-	read, err := it.wb.ringBuffer.WriteTo(writer, start, end)
-	it.read += int(read)
-	return read, err
+	n, err := it.rb.WriteTo(writer, it.index)
+	if err == ErrRange {
+		it.truncated()
+		err = nil
+	}
+	if n > 0 {
+		it.truncWritten = false
+	}
+	it.index += RingPos(n)
+	return n, err
 }
 
 func (it *iterator) Buffered() int {
-	write := it.write()
-	if write == nil {
-		return 0
+	start, end := it.rb.Positions()
+	if it.index > start {
+		start = it.index
 	}
-	return write.length() - it.read
+	return int(end - start)
 }
 
-func (it *iterator) Timestamp() time.Time {
-	write := it.write()
-	if write == nil {
-		return time.Time{}
+func (it *iterator) truncated() {
+	if len(it.trunc) > 0 {
+		// trunc being written
+		return
 	}
-	return write.time
-}
-
-func (it *iterator) StreamID() StreamID {
-	write := it.write()
-	if write == nil {
-		return Unknown
+	if it.truncWritten {
+		// trunc already written
+		return
 	}
-	return write.streamID
-}
-
-func (it *iterator) write() *write {
-	if it.wb == nil {
-		return nil
-	}
-	index := WriteIndex(atomic.LoadInt32(&it.index))
-	return it.wb.getWrite(index)
+	it.trunc = truncBytes
 }

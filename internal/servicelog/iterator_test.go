@@ -17,6 +17,7 @@ package servicelog_test
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"runtime"
 	"strconv"
 	"sync"
@@ -33,20 +34,16 @@ type iteratorSuite struct{}
 var _ = Suite(&iteratorSuite{})
 
 func (s *iteratorSuite) TestReads(c *C) {
-	wb := servicelog.NewWriteBuffer(10, 100)
-	stdout := wb.StreamWriter(servicelog.Stdout)
+	rb := servicelog.NewRingBuffer(100)
 	for i := 0; i < 10; i++ {
-		n, err := fmt.Fprint(stdout, "0123456789")
+		n, err := fmt.Fprint(rb, "0123456789")
 		c.Assert(err, IsNil)
 		c.Assert(n, Equals, 10)
 	}
 
-	it := wb.TailIterator()
+	it := rb.TailIterator()
 	num := 0
 	for it.Next(nil) {
-		c.Assert(it.Buffered(), Equals, 10)
-		c.Assert(it.StreamID(), Equals, servicelog.Stdout)
-		c.Assert(it.Timestamp(), Not(Equals), time.Time{})
 		buf := [10]byte{}
 		n, err := it.Read(buf[:])
 		c.Assert(err, IsNil)
@@ -61,10 +58,9 @@ func (s *iteratorSuite) TestReads(c *C) {
 }
 
 func (s *iteratorSuite) TestConcurrentReaders(c *C) {
-	wb := servicelog.NewWriteBuffer(1000, 10000)
-	stdout := wb.StreamWriter(servicelog.Stdout)
+	rb := servicelog.NewRingBuffer(10000)
 	for i := 0; i < 1000; i++ {
-		n, err := fmt.Fprintln(stdout, "123456789")
+		n, err := fmt.Fprintln(rb, "123456789")
 		c.Assert(err, IsNil)
 		c.Assert(n, Equals, 10)
 	}
@@ -81,12 +77,9 @@ func (s *iteratorSuite) TestConcurrentReaders(c *C) {
 		go func() {
 			defer wg.Done()
 			<-start
-			it := wb.TailIterator()
+			it := rb.TailIterator()
 			localNum := int32(0)
 			for it.Next(nil) {
-				c.Assert(it.Buffered(), Equals, 10)
-				c.Assert(it.StreamID(), Equals, servicelog.Stdout)
-				c.Assert(it.Timestamp(), Not(Equals), time.Time{})
 				buf := [10]byte{}
 				n, err := it.Read(buf[:])
 				c.Assert(err, IsNil)
@@ -119,9 +112,8 @@ func (s *iteratorSuite) TestMore(c *C) {
 
 	sendMore := make(chan struct{})
 	wg := sync.WaitGroup{}
-	wb := servicelog.NewWriteBuffer(1000, 10000)
+	rb := servicelog.NewRingBuffer(10000)
 
-	stdout := wb.StreamWriter(servicelog.Stdout)
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -133,7 +125,7 @@ func (s *iteratorSuite) TestMore(c *C) {
 				c.Fail()
 				return
 			}
-			_, err := fmt.Fprintf(stdout, "%d", i)
+			_, err := fmt.Fprintf(rb, "%d", i)
 			c.Assert(err, IsNil)
 		}
 	}()
@@ -143,7 +135,7 @@ func (s *iteratorSuite) TestMore(c *C) {
 	go func() {
 		defer wg.Done()
 		defer close(sendMore)
-		it := wb.TailIterator()
+		it := rb.TailIterator()
 		defer it.Close()
 		for {
 			if resultSum == expectedSum {
@@ -180,13 +172,12 @@ func (s *iteratorSuite) TestMore(c *C) {
 }
 
 func (s *iteratorSuite) TestWriteTo(c *C) {
-	wb := servicelog.NewWriteBuffer(100, 1000)
-	stdout := wb.StreamWriter(servicelog.Stdout)
-	n0, err := fmt.Fprintln(stdout, "testing testing testing")
+	rb := servicelog.NewRingBuffer(1000)
+	n0, err := fmt.Fprintln(rb, "testing testing testing")
 	c.Assert(err, IsNil)
 
 	buf := &bytes.Buffer{}
-	it := wb.TailIterator()
+	it := rb.TailIterator()
 	for it.Next(nil) {
 		n1, err := it.WriteTo(buf)
 		c.Assert(err, IsNil)
@@ -195,38 +186,12 @@ func (s *iteratorSuite) TestWriteTo(c *C) {
 	err = it.Close()
 	c.Assert(err, IsNil)
 
-	err = wb.Close()
-	c.Assert(err, IsNil)
-}
-
-func (s *iteratorSuite) TestResetRead(c *C) {
-	testStr := "testing testing testing"
-	wb := servicelog.NewWriteBuffer(100, 1000)
-	stdout := wb.StreamWriter(servicelog.Stdout)
-	n0, err := fmt.Fprint(stdout, testStr)
-	c.Assert(err, IsNil)
-
-	it := wb.TailIterator()
-	c.Assert(it.Next(nil), Equals, true)
-	for i := 0; i < 2; i++ {
-		buf := &bytes.Buffer{}
-		n1, err := it.WriteTo(buf)
-		c.Assert(err, IsNil)
-		c.Assert(int(n1), Equals, n0)
-		c.Assert(buf.String(), Equals, testStr)
-		it.Reset()
-	}
-
-	err = it.Close()
-	c.Assert(err, IsNil)
-
-	err = wb.Close()
+	err = rb.Close()
 	c.Assert(err, IsNil)
 }
 
 func (s *iteratorSuite) TestLongReaders(c *C) {
-	wb := servicelog.NewWriteBuffer(5, 1000)
-	stdout := wb.StreamWriter(servicelog.Stdout)
+	rb := servicelog.NewRingBuffer(1000)
 
 	wg := sync.WaitGroup{}
 	readCount := int32(0)
@@ -239,7 +204,7 @@ func (s *iteratorSuite) TestLongReaders(c *C) {
 		wg.Add(1)
 		// Iterator needs to be created before the writes start
 		// as to not miss them.
-		it := wb.TailIterator()
+		it := rb.TailIterator()
 		go func() {
 			defer wg.Done()
 			defer it.Close()
@@ -257,15 +222,117 @@ func (s *iteratorSuite) TestLongReaders(c *C) {
 	startTime := time.Now()
 
 	for i := 0; i < 10; i++ {
-		n, err := fmt.Fprintf(stdout, "%d", i)
+		n, err := fmt.Fprintf(rb, "%d", i)
 		c.Assert(err, IsNil)
 		c.Assert(n, Equals, 1)
 	}
 
-	err := wb.Close()
+	err := rb.Close()
 	c.Assert(err, IsNil)
 	wg.Wait()
 
 	c.Assert(int(readCount), Equals, 10*numReaders)
 	c.Assert(time.Since(startTime) > 10*time.Millisecond, Equals, true)
+}
+
+func (s *iteratorSuite) TestTruncation(c *C) {
+	rb := servicelog.NewRingBuffer(10)
+	iter := rb.TailIterator()
+	fmt.Fprint(rb, "0123456789")
+	fmt.Fprint(rb, "0123456789")
+	buffer := &bytes.Buffer{}
+	for iter.Next(nil) {
+		_, err := io.Copy(buffer, iter)
+		c.Assert(err, IsNil)
+	}
+	c.Assert(buffer.String(), Equals, "<trunc>\n0123456789")
+}
+
+func (s *iteratorSuite) TestTruncationByteByByte(c *C) {
+	rb := servicelog.NewRingBuffer(10)
+	iter := rb.TailIterator()
+	fmt.Fprint(rb, "0123456789")
+	fmt.Fprint(rb, "0123456789")
+	buffer := &bytes.Buffer{}
+	for iter.Next(nil) {
+		one := [1]byte{}
+		n, err := iter.Read(one[:])
+		c.Assert(err, IsNil)
+		c.Assert(n, Equals, 1)
+		buffer.WriteByte(one[0])
+	}
+	c.Assert(buffer.String(), Equals, "<trunc>\n0123456789")
+}
+
+func (s *iteratorSuite) TestClosed(c *C) {
+	rb := servicelog.NewRingBuffer(10)
+	fmt.Fprint(rb, "0123456789")
+	iter0 := rb.TailIterator()
+	err := rb.Close()
+	c.Assert(err, IsNil)
+	iter1 := rb.TailIterator()
+
+	buffer0 := &bytes.Buffer{}
+	n, err := iter0.WriteTo(buffer0)
+	c.Assert(err, Equals, io.EOF)
+	c.Assert(n, Equals, int64(10))
+
+	buffer1 := &bytes.Buffer{}
+	n, err = iter1.WriteTo(buffer1)
+	c.Assert(err, Equals, io.EOF)
+	c.Assert(n, Equals, int64(10))
+}
+
+func (s *iteratorSuite) TestClosedIteration(c *C) {
+	rb := servicelog.NewRingBuffer(10)
+	fmt.Fprint(rb, "0123456789")
+	iter := rb.TailIterator()
+	err := rb.Close()
+	c.Assert(err, IsNil)
+
+	done := make(chan struct{})
+	buffer := &bytes.Buffer{}
+	for iter.Next(done) {
+		one := [1]byte{}
+		n, err := iter.Read(one[:])
+		if err == io.EOF {
+			err = nil
+		}
+		c.Assert(err, IsNil)
+		c.Assert(n, Equals, 1)
+		buffer.WriteByte(one[0])
+	}
+	c.Assert(buffer.String(), Equals, "0123456789")
+}
+
+func (s *iteratorSuite) TestHeadIterator(c *C) {
+	rb := servicelog.NewRingBuffer(100)
+	fmt.Fprint(rb, "first")
+	iter := rb.HeadIterator(0)
+	fmt.Fprint(rb, "second")
+
+	buffer := &bytes.Buffer{}
+	for iter.Next(nil) {
+		io.Copy(buffer, iter)
+	}
+
+	c.Assert(buffer.String(), Equals, "second")
+}
+
+func (s *iteratorSuite) TestHeadIteratorReplayLines(c *C) {
+	rb := servicelog.NewRingBuffer(200)
+	fmt.Fprintln(rb, "first")
+	fmt.Fprintln(rb, "second")
+	fmt.Fprintln(rb, "third")
+	fmt.Fprintln(rb, "fourth")
+	fmt.Fprintln(rb, "fifth")
+
+	iter := rb.HeadIterator(2)
+
+	buffer := &bytes.Buffer{}
+	for iter.Next(nil) {
+		io.Copy(buffer, iter)
+	}
+
+	c.Assert(buffer.String(), Equals, "fourth\nfifth\n")
 }
