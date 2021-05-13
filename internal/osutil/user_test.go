@@ -15,6 +15,7 @@
 package osutil_test
 
 import (
+	"fmt"
 	"os"
 	"os/user"
 	"strconv"
@@ -26,21 +27,21 @@ import (
 	"github.com/canonical/pebble/internal/testutil"
 )
 
-type createUserSuite struct {
+type userSuite struct {
 	testutil.BaseTest
 
 	restorer func()
 }
 
-var _ = check.Suite(&createUserSuite{})
+var _ = check.Suite(&userSuite{})
 
-func (s *createUserSuite) SetUpTest(c *check.C) {
+func (s *userSuite) SetUpTest(c *check.C) {
 }
 
-func (s *createUserSuite) TearDownTest(c *check.C) {
+func (s *userSuite) TearDownTest(c *check.C) {
 }
 
-func (s *createUserSuite) TestRealUser(c *check.C) {
+func (s *userSuite) TestRealUser(c *check.C) {
 	oldUser := os.Getenv("SUDO_USER")
 	defer func() { os.Setenv("SUDO_USER", oldUser) }()
 
@@ -72,7 +73,7 @@ func (s *createUserSuite) TestRealUser(c *check.C) {
 	}
 }
 
-func (s *createUserSuite) TestUidGid(c *check.C) {
+func (s *userSuite) TestUidGid(c *check.C) {
 	for k, t := range map[string]struct {
 		User *user.User
 		Uid  sys.UserID
@@ -92,4 +93,59 @@ func (s *createUserSuite) TestUidGid(c *check.C) {
 			c.Check(err, check.ErrorMatches, ".*"+t.Err+".*", check.Commentf(k))
 		}
 	}
+}
+
+func (s *userSuite) TestNormalizeUidGid(c *check.C) {
+	test := func(uid, gid *int, username, group string, expectedUid, expectedGid *int, errMatch string) {
+		uid, gid, err := osutil.NormalizeUidGid(uid, gid, username, group)
+		if err != nil {
+			c.Check(err, check.ErrorMatches, errMatch)
+		} else {
+			c.Check(errMatch, check.Equals, "")
+		}
+		c.Check(uid, check.DeepEquals, expectedUid)
+		c.Check(gid, check.DeepEquals, expectedGid)
+	}
+	ptr := func(n int) *int {
+		return &n
+	}
+
+	var userErr error
+	restoreUser := osutil.FakeUserLookup(func(name string) (*user.User, error) {
+		c.Check(name, check.Equals, "USER")
+		return &user.User{Uid: "10", Gid: "20"}, userErr
+	})
+	defer restoreUser()
+
+	var groupErr error
+	restoreGroup := osutil.FakeUserLookupGroup(func(name string) (*user.Group, error) {
+		c.Check(name, check.Equals, "GROUP")
+		return &user.Group{Gid: "30"}, groupErr
+	})
+	defer restoreGroup()
+
+	test(nil, nil, "", "", nil, nil, "")
+	test(nil, nil, "", "GROUP", nil, nil, "must specify user, not just group")
+	test(nil, nil, "USER", "", ptr(10), ptr(20), "")
+	test(nil, nil, "USER", "GROUP", ptr(10), ptr(30), "")
+
+	test(nil, ptr(2), "", "", nil, nil, "must specify user, not just group")
+	test(nil, ptr(2), "", "GROUP", nil, nil, "must specify user, not just group")
+	test(nil, ptr(2), "USER", "", ptr(10), ptr(2), "")
+	test(nil, ptr(2), "USER", "GROUP", ptr(10), ptr(2), "")
+
+	test(ptr(1), nil, "", "", nil, nil, "must specify group, not just UID")
+	test(ptr(1), nil, "", "GROUP", ptr(1), ptr(30), "")
+	test(ptr(1), nil, "USER", "", nil, nil, "must specify group, not just UID")
+	test(ptr(1), nil, "USER", "GROUP", ptr(1), ptr(30), "")
+
+	test(ptr(1), ptr(2), "", "", ptr(1), ptr(2), "")
+	test(ptr(1), ptr(2), "", "GROUP", ptr(1), ptr(2), "")
+	test(ptr(1), ptr(2), "USER", "", ptr(1), ptr(2), "")
+	test(ptr(1), ptr(2), "USER", "GROUP", ptr(1), ptr(2), "")
+
+	userErr = fmt.Errorf("USER ERROR!")
+	test(nil, nil, "USER", "", nil, nil, "USER ERROR!")
+	groupErr = fmt.Errorf("GROUP ERROR!")
+	test(ptr(1), nil, "", "GROUP", nil, nil, "GROUP ERROR!")
 }

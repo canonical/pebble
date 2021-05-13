@@ -23,7 +23,11 @@ import (
 	"github.com/canonical/pebble/internal/osutil/sys"
 )
 
-var userCurrent = user.Current
+var (
+	userCurrent     = user.Current
+	userLookup      = user.Lookup
+	userLookupGroup = user.LookupGroup
+)
 
 // RealUser finds the user behind a sudo invocation when root, if applicable
 // and possible.
@@ -74,4 +78,41 @@ func UidGid(u *user.User) (sys.UserID, sys.GroupID, error) {
 	}
 
 	return sys.UserID(uid), sys.GroupID(gid), nil
+}
+
+// NormalizeUidGid returns the "normalized" UID and GID for the given IDs and
+// names. UID and GID take precedence over username and group. If user is
+// specified but not gid or group, the user's primary group ID is returned.
+func NormalizeUidGid(uid, gid *int, username, group string) (*int, *int, error) {
+	if uid == nil && username == "" && gid == nil && group == "" {
+		return nil, nil, nil
+	}
+	if uid == nil && username != "" {
+		u, err := userLookup(username)
+		if err != nil {
+			return nil, nil, err
+		}
+		n, _ := strconv.Atoi(u.Uid)
+		uid = &n
+		if gid == nil && group == "" {
+			// Group not specified; use user's primary group ID
+			gidVal, _ := strconv.Atoi(u.Gid)
+			gid = &gidVal
+		}
+	}
+	if gid == nil && group != "" {
+		g, err := userLookupGroup(group)
+		if err != nil {
+			return nil, nil, err
+		}
+		n, _ := strconv.Atoi(g.Gid)
+		gid = &n
+	}
+	if uid == nil && gid != nil {
+		return nil, nil, fmt.Errorf("must specify user, not just group")
+	}
+	if uid != nil && gid == nil {
+		return nil, nil, fmt.Errorf("must specify group, not just UID")
+	}
+	return uid, gid, nil
 }

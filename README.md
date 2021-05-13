@@ -190,11 +190,19 @@ services:
         environment:
             <env var name>: <env var value>
 
-        # (Optional) Username or UID for starting service as a different user.
-        user: <username or uid>
+        # (Optional) User ID for starting service as a different user. Takes
+        # precedence over "user" field.
+        user-id: <uid>
+
+        # (Optional) Username for starting service as a different user.
+        user: <username>
+
+        # (Optional) Group ID for starting service as a different user. Takes
+        # precedence over "group" field.
+        group-id: <gid>
 
         # (Optional) Group name or GID for starting service as a different user.
-        group: <group name or gid>
+        group: <group name>
 ```
 
 ## TODO/Contributing

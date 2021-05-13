@@ -51,7 +51,9 @@ type Service struct {
 	Before      []string          `yaml:"before,omitempty"`
 	Requires    []string          `yaml:"requires,omitempty"`
 	Environment map[string]string `yaml:"environment,omitempty"`
+	UserID      *int              `yaml:"user-id,omitempty"`
 	User        string            `yaml:"user,omitempty"`
+	GroupID     *int              `yaml:"group-id,omitempty"`
 	Group       string            `yaml:"group,omitempty"`
 }
 
@@ -110,8 +112,14 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 					if service.Command != "" {
 						old.Command = service.Command
 					}
+					if service.UserID != nil {
+						old.UserID = service.UserID
+					}
 					if service.User != "" {
 						old.User = service.User
+					}
+					if service.GroupID != nil {
+						old.GroupID = service.GroupID
 					}
 					if service.Group != "" {
 						old.Group = service.Group

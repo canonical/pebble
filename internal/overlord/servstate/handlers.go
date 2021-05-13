@@ -9,6 +9,7 @@ import (
 
 	"gopkg.in/tomb.v2"
 
+	"github.com/canonical/pebble/internal/osutil"
 	"github.com/canonical/pebble/internal/overlord/state"
 	"github.com/canonical/pebble/internal/strutil"
 	"github.com/canonical/pebble/internal/strutil/shlex"
@@ -84,15 +85,16 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 	cmd := exec.Command(args[0], args[1:]...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
-	// Start as another user if "user" specified in plan
-	uid, gid, err := getUidGid(service.User, service.Group)
+	// Start as another user if specified in plan
+	uid, gid, err := osutil.NormalizeUidGid(service.UserID, service.GroupID, service.User, service.Group)
 	if err != nil {
 		return err
 	}
-	if service.User != "" {
+	if uid != nil && gid != nil {
+		// TODO(benhoyt) - add test for this
 		cmd.SysProcAttr.Credential = &syscall.Credential{
-			Uid: uint32(uid),
-			Gid: uint32(gid),
+			Uid: uint32(*uid),
+			Gid: uint32(*gid),
 		}
 	}
 

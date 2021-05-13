@@ -448,20 +448,21 @@ func (s *filesSuite) TestMakeDirsUserGroupMocked(c *C) {
 		chownCalls = append(chownCalls, chownArgs{name, uid, gid})
 		return nil
 	}
-	var lookupUserCalls []string
-	lookupUser = func(name string) (*user.User, error) {
-		lookupUserCalls = append(lookupUserCalls, name)
-		return &user.User{Uid: "56"}, nil
-	}
-	var lookupGroupCalls []string
-	lookupGroup = func(name string) (*user.Group, error) {
-		lookupGroupCalls = append(lookupGroupCalls, name)
-		return &user.Group{Gid: "78"}, nil
+	normalizeUidGid = func(uid, gid *int, username, group string) (*int, *int, error) {
+		if uid != nil {
+			return uid, gid, nil
+		}
+		if username == "" {
+			return nil, nil, nil
+		}
+		c.Check(username, Equals, "USER")
+		c.Check(group, Equals, "GROUP")
+		u, g := 56, 78
+		return &u, &g, nil
 	}
 	defer func() {
 		chown = os.Chown
-		lookupUser = user.Lookup
-		lookupGroup = user.LookupGroup
+		normalizeUidGid = osutil.NormalizeUidGid
 	}()
 
 	tmpDir := c.MkDir()
@@ -498,10 +499,6 @@ func (s *filesSuite) TestMakeDirsUserGroupMocked(c *C) {
 	c.Check(chownCalls, HasLen, 2)
 	c.Check(chownCalls[0], Equals, chownArgs{tmpDir + "/uid-gid", 12, 34})
 	c.Check(chownCalls[1], Equals, chownArgs{tmpDir + "/user-group", 56, 78})
-	c.Check(lookupUserCalls, HasLen, 1)
-	c.Check(lookupUserCalls[0], Equals, "USER")
-	c.Check(lookupGroupCalls, HasLen, 1)
-	c.Check(lookupGroupCalls[0], Equals, "GROUP")
 
 	c.Check(osutil.IsDir(tmpDir+"/normal"), Equals, true)
 	c.Check(osutil.IsDir(tmpDir+"/uid-gid"), Equals, true)
@@ -854,20 +851,21 @@ func (s *filesSuite) TestWriteUserGroupMocked(c *C) {
 		}
 		return nil
 	}
-	var lookupUserCalls []string
-	lookupUser = func(name string) (*user.User, error) {
-		lookupUserCalls = append(lookupUserCalls, name)
-		return &user.User{Uid: "56"}, nil
-	}
-	var lookupGroupCalls []string
-	lookupGroup = func(name string) (*user.Group, error) {
-		lookupGroupCalls = append(lookupGroupCalls, name)
-		return &user.Group{Gid: "78"}, nil
+	normalizeUidGid = func(uid, gid *int, username, group string) (*int, *int, error) {
+		if uid != nil {
+			return uid, gid, nil
+		}
+		if username == "" {
+			return nil, nil, nil
+		}
+		c.Check(username, Equals, "USER")
+		c.Check(group, Equals, "GROUP")
+		u, g := 56, 78
+		return &u, &g, nil
 	}
 	defer func() {
 		atomicWriteChown = osutil.AtomicWriteChown
-		lookupUser = user.Lookup
-		lookupGroup = user.LookupGroup
+		normalizeUidGid = osutil.NormalizeUidGid
 	}()
 
 	tmpDir := s.testWriteUserGroup(c, 12, 34, "USER", "GROUP")
@@ -875,10 +873,6 @@ func (s *filesSuite) TestWriteUserGroupMocked(c *C) {
 	c.Check(chownCalls, HasLen, 2)
 	c.Check(chownCalls[0], Equals, chownArgs{tmpDir + "/uid-gid", 12, 34})
 	c.Check(chownCalls[1], Equals, chownArgs{tmpDir + "/user-group", 56, 78})
-	c.Check(lookupUserCalls, HasLen, 1)
-	c.Check(lookupUserCalls[0], Equals, "USER")
-	c.Check(lookupGroupCalls, HasLen, 1)
-	c.Check(lookupGroupCalls[0], Equals, "GROUP")
 }
 
 // This test is normally skipped; run with "sudo go test" to execute.
@@ -979,8 +973,6 @@ func (s *filesSuite) TestWriteErrors(c *C) {
 	pathPermissionDenied := tmpDir + "/permission-denied/file"
 	pathUserNotFound := tmpDir + "/user-not-found"
 	pathGroupNotFound := tmpDir + "/group-not-found"
-	pathOnlyUser := tmpDir + "/only-user"
-	pathOnlyGroup := tmpDir + "/only-group"
 
 	headers := http.Header{
 		"Content-Type": []string{"multipart/form-data; boundary=01234567890123456789012345678901"},
@@ -998,9 +990,7 @@ Content-Disposition: form-data; name="request"
 		{"path": "%[3]s"},
 		{"path": "%[4]s"},
 		{"path": "%[5]s", "user": "user-not-found", "group": "nogroup"},
-		{"path": "%[6]s", "user": "nobody", "group": "group-not-found"},
-		{"path": "%[7]s", "user": "nobody"},
-		{"path": "%[8]s", "group": "nogroup"}
+		{"path": "%[6]s", "user": "nobody", "group": "group-not-found"}
 	]
 }
 --01234567890123456789012345678901
@@ -1023,32 +1013,22 @@ user not found
 Content-Disposition: form-data; name="files"; filename="%[6]s"
 
 group not found
---01234567890123456789012345678901
-Content-Disposition: form-data; name="files"; filename="%[7]s"
-
-only user specified
---01234567890123456789012345678901
-Content-Disposition: form-data; name="files"; filename="%[8]s"
-
-only group specified
 --01234567890123456789012345678901--
 `, pathNoContent, pathNotAbsolute, pathNotFound, pathPermissionDenied,
-			pathUserNotFound, pathGroupNotFound, pathOnlyUser, pathOnlyGroup)))
+			pathUserNotFound, pathGroupNotFound)))
 	c.Check(response.StatusCode, Equals, http.StatusOK)
 
 	var r testFilesResponse
 	c.Assert(json.NewDecoder(body).Decode(&r), IsNil)
 	c.Check(r.StatusCode, Equals, http.StatusOK)
 	c.Check(r.Type, Equals, "sync")
-	c.Check(r.Result, HasLen, 8)
+	c.Check(r.Result, HasLen, 6)
 	checkFileResult(c, r.Result[0], pathNoContent, "generic-file-error", "no file content for path.*")
 	checkFileResult(c, r.Result[1], pathNotAbsolute, "generic-file-error", "paths must be absolute, got .*")
 	checkFileResult(c, r.Result[2], pathNotFound, "not-found", ".*")
 	checkFileResult(c, r.Result[3], pathPermissionDenied, "permission-denied", ".*")
 	checkFileResult(c, r.Result[4], pathUserNotFound, "generic-file-error", ".*unknown user.*")
 	checkFileResult(c, r.Result[5], pathGroupNotFound, "generic-file-error", ".*unknown group.*")
-	checkFileResult(c, r.Result[6], pathOnlyUser, "generic-file-error", ".*must set both user and group.*")
-	checkFileResult(c, r.Result[7], pathOnlyGroup, "generic-file-error", ".*must set both user and group.*")
 
 	c.Check(osutil.CanStat(pathNoContent), Equals, false)
 	c.Check(osutil.CanStat(pathNotAbsolute), Equals, false)
