@@ -213,7 +213,12 @@ func (s *S) TestStartBadCommand(c *C) {
 }
 
 func (s *S) TestUserGroupFails(c *C) {
-	// Test with user and group will fail due to permission issues
+	// Test with user and group will fail due to permission issues (unless
+	// running as root)
+	if os.Getuid() == 0 {
+		c.Skip("requires non-root user")
+	}
+
 	var gotUid uint32
 	var gotGid uint32
 	restore := servstate.FakeSetCmdCredential(func(cmd *exec.Cmd, credential *syscall.Credential) {

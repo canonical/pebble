@@ -76,9 +76,8 @@ Some details worth highlighting:
 entry _overrides_ the previous service of the same name (if any - missing is 
 okay), or merges with it.
   - The optional `user` field allows starting a service with a different user
-    than the one Pebble was started with. It can be a username or numeric user
-    ID. Similarly, `group` -- which is optional even if `user` is specified --
-    can be a group name or numeric group ID.
+    than the one Pebble was started with. The `group` field is similar but for
+    a group name (it is optional even if `user` is specified).
 
 ### Layer override example
 
