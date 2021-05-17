@@ -189,14 +189,16 @@ services:
         environment:
             <env var name>: <env var value>
 
-        # (Optional) Username for starting service as a different user.
+        # (Optional) Username for starting service as a different user. It is
+        # an error if the user doesn't exist.
         user: <username>
 
         # (Optional) User ID for starting service as a different user. If both
         # user and user-id are specified, the user's UID must match user-id.
         user-id: <uid>
 
-        # (Optional) Group name for starting service as a different user.
+        # (Optional) Group name for starting service as a different user. It is
+        # an error if the group doesn't exist.
         group: <group name>
 
         # (Optional) Group ID for starting service as a different user. If both
