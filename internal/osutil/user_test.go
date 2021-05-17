@@ -130,19 +130,19 @@ func (s *userSuite) TestNormalizeUidGid(c *check.C) {
 	test(nil, nil, "USER", "GROUP", ptr(10), ptr(30), "")
 
 	test(nil, ptr(2), "", "", nil, nil, "must specify user, not just group")
-	test(nil, ptr(2), "", "GROUP", nil, nil, "must specify user, not just group")
+	test(nil, ptr(2), "", "GROUP", nil, nil, `group "GROUP" GID \(30\) does not match group-id \(2\)`)
 	test(nil, ptr(2), "USER", "", ptr(10), ptr(2), "")
-	test(nil, ptr(2), "USER", "GROUP", ptr(10), ptr(2), "")
+	test(nil, ptr(2), "USER", "GROUP", nil, nil, `group "GROUP" GID \(30\) does not match group-id \(2\)`)
 
 	test(ptr(1), nil, "", "", nil, nil, "must specify group, not just UID")
 	test(ptr(1), nil, "", "GROUP", ptr(1), ptr(30), "")
-	test(ptr(1), nil, "USER", "", nil, nil, "must specify group, not just UID")
-	test(ptr(1), nil, "USER", "GROUP", ptr(1), ptr(30), "")
+	test(ptr(1), nil, "USER", "", nil, nil, `user "USER" UID \(10\) does not match user-id \(1\)`)
+	test(ptr(1), nil, "USER", "GROUP", nil, nil, `user "USER" UID \(10\) does not match user-id \(1\)`)
 
 	test(ptr(1), ptr(2), "", "", ptr(1), ptr(2), "")
-	test(ptr(1), ptr(2), "", "GROUP", ptr(1), ptr(2), "")
-	test(ptr(1), ptr(2), "USER", "", ptr(1), ptr(2), "")
-	test(ptr(1), ptr(2), "USER", "GROUP", ptr(1), ptr(2), "")
+	test(ptr(1), ptr(2), "", "GROUP", nil, nil, `group "GROUP" GID \(30\) does not match group-id \(2\)`)
+	test(ptr(1), ptr(2), "USER", "", nil, nil, `user "USER" UID \(10\) does not match user-id \(1\)`)
+	test(ptr(1), ptr(2), "USER", "GROUP", nil, nil, `user "USER" UID \(10\) does not match user-id \(1\)`)
 
 	userErr = fmt.Errorf("USER ERROR!")
 	test(nil, nil, "USER", "", nil, nil, "USER ERROR!")

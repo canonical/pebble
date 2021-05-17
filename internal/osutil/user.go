@@ -81,18 +81,22 @@ func UidGid(u *user.User) (sys.UserID, sys.GroupID, error) {
 }
 
 // NormalizeUidGid returns the "normalized" UID and GID for the given IDs and
-// names. UID and GID take precedence over username and group. If user is
-// specified but not gid or group, the user's primary group ID is returned.
+// names. If both uid and username are specified, the username's UID must match
+// the given uid (similar for gid and group), otherwise an error is returned.
 func NormalizeUidGid(uid, gid *int, username, group string) (*int, *int, error) {
 	if uid == nil && username == "" && gid == nil && group == "" {
 		return nil, nil, nil
 	}
-	if uid == nil && username != "" {
+	if username != "" {
 		u, err := userLookup(username)
 		if err != nil {
 			return nil, nil, err
 		}
 		n, _ := strconv.Atoi(u.Uid)
+		if uid != nil && *uid != n {
+			return nil, nil, fmt.Errorf("user %q UID (%d) does not match user-id (%d)",
+				username, n, *uid)
+		}
 		uid = &n
 		if gid == nil && group == "" {
 			// Group not specified; use user's primary group ID
@@ -100,12 +104,16 @@ func NormalizeUidGid(uid, gid *int, username, group string) (*int, *int, error) 
 			gid = &gidVal
 		}
 	}
-	if gid == nil && group != "" {
+	if group != "" {
 		g, err := userLookupGroup(group)
 		if err != nil {
 			return nil, nil, err
 		}
 		n, _ := strconv.Atoi(g.Gid)
+		if gid != nil && *gid != n {
+			return nil, nil, fmt.Errorf("group %q GID (%d) does not match group-id (%d)",
+				group, n, *gid)
+		}
 		gid = &n
 	}
 	if uid == nil && gid != nil {
