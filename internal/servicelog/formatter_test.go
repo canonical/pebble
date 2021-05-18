@@ -44,3 +44,18 @@ func (s *formatterSuite) TestFormat(c *C) {
 %[1]s [test] third
 `[1:], now))
 }
+
+func (s *formatterSuite) TestFormatSingleWrite(c *C) {
+	now := time.Now().UTC().Format(servicelog.TimeFormat)
+
+	b := &bytes.Buffer{}
+	w := servicelog.NewFormatWriter(b, "test")
+
+	fmt.Fprintf(w, "first\nsecond\nthird\n")
+
+	c.Assert(b.String(), Equals, fmt.Sprintf(`
+%[1]s [test] first
+%[1]s [test] second
+%[1]s [test] third
+`[1:], now))
+}

@@ -51,7 +51,7 @@ var (
 	killWait = 5 * time.Second
 	failWait = 10 * time.Second
 
-	maxLogBytes = 1024 * 1024
+	maxLogBytes = 100 * 1024
 )
 
 // Start starts the named service after also starting all of its dependencies.

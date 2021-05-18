@@ -66,18 +66,19 @@ func (f *formatter) Write(p []byte) (nn int, ee error) {
 		}
 
 		for len(f.timestamp) > 0 {
-			// Timestamp bytes don't count towards the returned count.
+			// Timestamp bytes don't count towards the returned count because they constitute the
+			// encoding not the payload.
 			n, err := f.dest.Write(f.timestamp)
 			f.timestamp = f.timestamp[n:]
 			if err != nil {
-				return 0, err
+				return written, err
 			}
 		}
 
 		length := 0
 		for i := 0; i < len(p); i++ {
 			length++
-			if p[i] == byte('\n') {
+			if p[i] == '\n' {
 				f.writeTimestamp = true
 				break
 			}

@@ -75,7 +75,7 @@ func (rb *RingBuffer) Closed() bool {
 // If p is larger than the size of the buffer then io.ErrShortWrite is returned and the
 // number of bytes written. If the p is larger than the number of bytes available,
 // then the tail is discarded to make room.
-func (rb *RingBuffer) Write(p []byte) (written int, _ error) {
+func (rb *RingBuffer) Write(p []byte) (written int, err error) {
 	if len(p) == 0 {
 		return 0, nil
 	}
@@ -156,9 +156,9 @@ func (rb *RingBuffer) Positions() (start RingPos, end RingPos) {
 	return rb.readIndex, rb.writeIndex
 }
 
-// Copy copies bytes from the range into the supplied dest buffer. If dest is not large enough
-// to fill the bytes from start to end, then start to start+len(dest) is copied and
-// the error io.ErrShortBuffer is returned.
+// Copy copies bytes into dest upto the length of dest, starting at the supplied
+// start position in the RingBuffer. If start is outside of the range that is
+// buffered, ErrRange is returned.
 func (rb *RingBuffer) Copy(dest []byte, start RingPos) (int, error) {
 	rb.rwlock.RLock()
 	defer rb.rwlock.RUnlock()
@@ -233,7 +233,7 @@ func (rb *RingBuffer) TailIterator() Iterator {
 	iter := &iterator{
 		rb:         rb,
 		index:      start,
-		notifyChan: make(chan struct{}),
+		notifyChan: make(chan bool, 1),
 		closeChan:  make(chan struct{}),
 	}
 	if rb.Closed() {
@@ -244,6 +244,8 @@ func (rb *RingBuffer) TailIterator() Iterator {
 }
 
 // HeadIterator returns an iterator from the head of the buffer.
+// If lines is greater than zero, the iterator will start that many lines
+// backwards from the head.
 func (rb *RingBuffer) HeadIterator(lines int) Iterator {
 	firstLine := rb.reverseLinePosition(lines)
 	rb.iteratorMutex.Lock()
@@ -251,7 +253,7 @@ func (rb *RingBuffer) HeadIterator(lines int) Iterator {
 	iter := &iterator{
 		rb:         rb,
 		index:      firstLine,
-		notifyChan: make(chan struct{}),
+		notifyChan: make(chan bool, 1),
 		closeChan:  make(chan struct{}),
 	}
 	if rb.Closed() {
@@ -278,7 +280,7 @@ out:
 		for i := len(buf) - 1; i >= 0; i-- {
 			firstLine--
 			last = buf[i]
-			if last == byte('\n') {
+			if last == '\n' {
 				lines++
 			}
 			if lines == n {
@@ -286,7 +288,7 @@ out:
 			}
 		}
 	}
-	if last == byte('\n') {
+	if last == '\n' {
 		firstLine++
 	}
 	return firstLine
@@ -314,7 +316,7 @@ func (rb *RingBuffer) signalIterators() {
 	defer rb.iteratorMutex.RUnlock()
 	for _, iter := range rb.iteratorList {
 		select {
-		case iter.notifyChan <- struct{}{}:
+		case iter.notifyChan <- true:
 		default:
 		}
 	}
@@ -343,6 +345,9 @@ func (rb *RingBuffer) removeIterator(iter *iterator) {
 	}
 }
 
+// buffers returns upto two byte slices that represent the range specified
+// by start and end. Two slices are required in the case the range crosses
+// the end of the internal buffer wrapping around to the start.
 func (rb *RingBuffer) buffers(start, end RingPos) [2][]byte {
 	buffers := [2][]byte{}
 	if end < start {

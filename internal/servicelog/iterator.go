@@ -39,7 +39,7 @@ type iterator struct {
 	index        RingPos
 	trunc        []byte
 	truncWritten bool
-	notifyChan   chan struct{}
+	notifyChan   chan bool
 	closeChan    chan struct{}
 }
 
