@@ -30,7 +30,8 @@ type formatter struct {
 }
 
 const (
-	TimeFormat = time.RFC3339
+	// TimeFormat is RFC3339 with millisecond precision.
+	TimeFormat = "2006-01-02T15:04:05.999Z07:00"
 )
 
 // NewFormatWriter returns a io.Writer that inserts timestamp and service name for every
@@ -40,9 +41,9 @@ const (
 //   second\n
 //   third\n
 // The expected output is:
-//   2021-05-13T03:16:51Z [test] first\n
-//   2021-05-13T03:16:52Z [test] second\n
-//   2021-05-13T03:16:53Z [test] third\n
+//   2021-05-13T03:16:51.001Z [test] first\n
+//   2021-05-13T03:16:52.002Z [test] second\n
+//   2021-05-13T03:16:53.003Z [test] third\n
 func NewFormatWriter(dest io.Writer, serviceName string) io.Writer {
 	return &formatter{
 		serviceName:    serviceName,
