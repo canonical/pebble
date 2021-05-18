@@ -209,8 +209,8 @@ func (s *S) stopServices(c *C, services []string) {
 func (s *S) TestServiceLogs(c *C) {
 	services := []string{"test1", "test2"}
 	outputs := map[string]string{
-		"test1": `\d+-\d+-\d+T\d+:\d+:\d+Z \[test1\] test1\n`,
-		"test2": `\d+-\d+-\d+T\d+:\d+:\d+Z \[test2\] test2\n`,
+		"test1": `\d+-\d+-\d+T\d+:\d+:\d+\.\d+Z \[test1\] test1\n`,
+		"test2": `\d+-\d+-\d+T\d+:\d+:\d+\.\d+Z \[test2\] test2\n`,
 	}
 	s.startServices(c, services)
 
