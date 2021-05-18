@@ -48,7 +48,7 @@ func (s *iteratorSuite) TestReads(c *C) {
 		n, err := it.Read(buf[:])
 		c.Assert(err, IsNil)
 		c.Assert(n, Equals, 10)
-		c.Assert(buf[:], DeepEquals, []byte("0123456789"))
+		c.Assert(string(buf[:]), Equals, "0123456789")
 		num++
 	}
 
@@ -84,7 +84,7 @@ func (s *iteratorSuite) TestConcurrentReaders(c *C) {
 				n, err := it.Read(buf[:])
 				c.Assert(err, IsNil)
 				c.Assert(n, Equals, 10)
-				c.Assert(buf[:], DeepEquals, []byte("123456789\n"))
+				c.Assert(string(buf[:]), Equals, "123456789\n")
 				localNum++
 			}
 			it.Close()

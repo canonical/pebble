@@ -53,9 +53,10 @@ func (s *ringBufferSuite) TestCrossBoundaryWriteCopy(c *C) {
 	c.Assert(rb.Available(), Equals, 7)
 
 	a := make([]byte, 6)
-	n, err = rb.Copy(a, a1)
+	next, n, err := rb.Copy(a, a1)
 	c.Assert(err, IsNil)
 	c.Assert(n, Equals, 6)
+	c.Assert(next, Equals, servicelog.RingPos(6))
 	c.Assert(string(a), Equals, "pebble")
 
 	_, b1 := rb.Positions()
@@ -68,9 +69,10 @@ func (s *ringBufferSuite) TestCrossBoundaryWriteCopy(c *C) {
 	c.Assert(rb.Available(), Equals, 1)
 
 	b := make([]byte, 6)
-	n, err = rb.Copy(b, b1)
+	next, n, err = rb.Copy(b, b1)
 	c.Assert(err, IsNil)
 	c.Assert(n, Equals, 6)
+	c.Assert(next, Equals, servicelog.RingPos(12))
 	c.Assert(string(b), Equals, "elbbep")
 
 	err = rb.Discard(int(a2 - a1))
@@ -87,9 +89,10 @@ func (s *ringBufferSuite) TestCrossBoundaryWriteCopy(c *C) {
 	c.Assert(rb.Available(), Equals, 1)
 
 	cc := make([]byte, 6)
-	n, err = rb.Copy(cc, c1)
+	next, n, err = rb.Copy(cc, c1)
 	c.Assert(err, IsNil)
 	c.Assert(n, Equals, 6)
+	c.Assert(next, Equals, servicelog.RingPos(18))
 	c.Assert(string(cc), Equals, "PEBBLE")
 }
 
@@ -105,9 +108,10 @@ func (s *ringBufferSuite) TestCrossBoundaryWriteWithWriteTo(c *C) {
 	c.Assert(rb.Available(), Equals, 7)
 
 	a := &bytes.Buffer{}
-	read, err := rb.WriteTo(a, a1)
+	next, read, err := rb.WriteTo(a, a1)
 	c.Assert(err, IsNil)
 	c.Assert(read, Equals, int64(6))
+	c.Assert(next, Equals, servicelog.RingPos(6))
 	c.Assert(a.String(), Equals, "pebble")
 
 	_, b1 := rb.Positions()
@@ -120,9 +124,10 @@ func (s *ringBufferSuite) TestCrossBoundaryWriteWithWriteTo(c *C) {
 	c.Assert(rb.Available(), Equals, 1)
 
 	b := &bytes.Buffer{}
-	read, err = rb.WriteTo(b, b1)
+	next, read, err = rb.WriteTo(b, b1)
 	c.Assert(err, IsNil)
 	c.Assert(read, Equals, int64(6))
+	c.Assert(next, Equals, servicelog.RingPos(12))
 	c.Assert(b.String(), Equals, "elbbep")
 
 	err = rb.Discard(int(a2 - a1))
@@ -139,9 +144,10 @@ func (s *ringBufferSuite) TestCrossBoundaryWriteWithWriteTo(c *C) {
 	c.Assert(rb.Available(), Equals, 1)
 
 	cc := &bytes.Buffer{}
-	read, err = rb.WriteTo(cc, c1)
+	next, read, err = rb.WriteTo(cc, c1)
 	c.Assert(err, IsNil)
 	c.Assert(read, Equals, int64(6))
+	c.Assert(next, Equals, servicelog.RingPos(18))
 	c.Assert(cc.String(), Equals, "PEBBLE")
 }
 
@@ -159,15 +165,17 @@ func (s *ringBufferSuite) TestCopy(c *C) {
 	c.Assert(n, Equals, 3)
 
 	a := make([]byte, 3)
-	n, err = rb.Copy(a, 0)
+	next, n, err := rb.Copy(a, 0)
 	c.Assert(err, IsNil)
 	c.Assert(n, Equals, 3)
+	c.Assert(next, Equals, servicelog.RingPos(3))
 	c.Assert(string(a), Equals, "abc")
 
 	b := make([]byte, 1)
-	n, err = rb.Copy(b, 0)
+	next, n, err = rb.Copy(b, 0)
 	c.Assert(err, IsNil)
 	c.Assert(n, Equals, 1)
+	c.Assert(next, Equals, servicelog.RingPos(1))
 	c.Assert(string(b), Equals, "a")
 }
 
@@ -181,15 +189,17 @@ func (s *ringBufferSuite) TestFullWrite(c *C) {
 	c.Assert(p2, Equals, servicelog.RingPos(10))
 
 	slice := make([]byte, 10)
-	n, err = rb.Copy(slice, p1)
+	next, n, err := rb.Copy(slice, p1)
 	c.Assert(err, IsNil)
 	c.Assert(n, Equals, 10)
+	c.Assert(next, Equals, servicelog.RingPos(10))
 	c.Assert(string(slice), Equals, "0123456789")
 
 	buffer := &bytes.Buffer{}
-	n1, err := rb.WriteTo(buffer, p1)
+	next, n1, err := rb.WriteTo(buffer, p1)
 	c.Assert(err, IsNil)
 	c.Assert(n1, Equals, int64(10))
+	c.Assert(next, Equals, servicelog.RingPos(10))
 	c.Assert(buffer.String(), Equals, "0123456789")
 }
 
@@ -210,15 +220,17 @@ func (s *ringBufferSuite) TestFullWriteCrossBoundary(c *C) {
 	c.Assert(n, Equals, 10)
 
 	slice := make([]byte, 10)
-	n, err = rb.Copy(slice, p1)
+	next, n, err := rb.Copy(slice, p1)
 	c.Assert(err, IsNil)
 	c.Assert(n, Equals, 10)
+	c.Assert(next, Equals, servicelog.RingPos(15))
 	c.Assert(string(slice), Equals, "0123456789")
 
 	buffer := &bytes.Buffer{}
-	n1, err := rb.WriteTo(buffer, p1)
+	next, n1, err := rb.WriteTo(buffer, p1)
 	c.Assert(err, IsNil)
 	c.Assert(n1, Equals, int64(10))
+	c.Assert(next, Equals, servicelog.RingPos(15))
 	c.Assert(buffer.String(), Equals, "0123456789")
 }
 

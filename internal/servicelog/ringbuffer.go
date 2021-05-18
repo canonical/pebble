@@ -26,6 +26,11 @@ var (
 
 type RingPos int64
 
+const (
+	// TailPosition is a special position that represents the tail at read time.
+	TailPosition RingPos = -1
+)
+
 // RingBuffer is a io.Writer that uses a single byte buffer to store data written to it
 // until Release is called on the range no-longer required. RingBuffer is effectively a
 // linear allocator with sequential frees that must be done in the same order as the
@@ -159,24 +164,28 @@ func (rb *RingBuffer) Positions() (start RingPos, end RingPos) {
 // Copy copies bytes into dest upto the length of dest, starting at the supplied
 // start position in the RingBuffer. If start is outside of the range that is
 // buffered, ErrRange is returned.
-func (rb *RingBuffer) Copy(dest []byte, start RingPos) (int, error) {
+func (rb *RingBuffer) Copy(dest []byte, start RingPos) (next RingPos, n int, err error) {
 	rb.rwlock.RLock()
 	defer rb.rwlock.RUnlock()
-	if start < rb.readIndex || start > rb.writeIndex {
-		return 0, ErrRange
+	readPos := start
+	if readPos == TailPosition {
+		readPos = rb.readIndex
 	}
-	if rb.writeClosed && start == rb.writeIndex {
-		return 0, io.EOF
+	if readPos < rb.readIndex || readPos > rb.writeIndex {
+		return start, 0, ErrRange
 	}
-	copyLength := int(rb.writeIndex - start)
+	if rb.writeClosed && readPos == rb.writeIndex {
+		return start, 0, io.EOF
+	}
+	copyLength := int(rb.writeIndex - readPos)
 	if copyLength > len(dest) {
 		copyLength = len(dest)
 	}
 	if copyLength == 0 {
-		return 0, nil
+		return start, 0, nil
 	}
-	end := start + RingPos(copyLength)
-	buffers := rb.buffers(start, end)
+	end := readPos + RingPos(copyLength)
+	buffers := rb.buffers(readPos, end)
 	written := 0
 	for _, buffer := range buffers {
 		if len(buffer) == 0 {
@@ -186,28 +195,33 @@ func (rb *RingBuffer) Copy(dest []byte, start RingPos) (int, error) {
 		dest = dest[n:]
 		written += n
 	}
-	if rb.writeClosed && start+RingPos(written) == rb.writeIndex {
-		return written, io.EOF
+	nextReadPos := readPos + RingPos(written)
+	if rb.writeClosed && nextReadPos == rb.writeIndex {
+		return nextReadPos, written, io.EOF
 	}
-	return written, nil
+	return nextReadPos, written, nil
 }
 
 // WriteTo writes the selected range to a io.Writer.
-func (rb *RingBuffer) WriteTo(writer io.Writer, start RingPos) (int64, error) {
+func (rb *RingBuffer) WriteTo(writer io.Writer, start RingPos) (next RingPos, n int64, err error) {
 	rb.rwlock.RLock()
 	defer rb.rwlock.RUnlock()
-	if start < rb.readIndex || start > rb.writeIndex {
-		return 0, ErrRange
+	readPos := start
+	if readPos == TailPosition {
+		readPos = rb.readIndex
 	}
-	if rb.writeClosed && start == rb.writeIndex {
-		return 0, io.EOF
+	if readPos < rb.readIndex || readPos > rb.writeIndex {
+		return start, 0, ErrRange
 	}
-	copyLength := rb.writeIndex - start
+	if rb.writeClosed && readPos == rb.writeIndex {
+		return start, 0, io.EOF
+	}
+	copyLength := rb.writeIndex - readPos
 	if copyLength == 0 {
-		return 0, nil
+		return start, 0, nil
 	}
 	end := rb.writeIndex
-	buffers := rb.buffers(start, end)
+	buffers := rb.buffers(readPos, end)
 	written := int64(0)
 	for _, buffer := range buffers {
 		if len(buffer) == 0 {
@@ -216,13 +230,15 @@ func (rb *RingBuffer) WriteTo(writer io.Writer, start RingPos) (int64, error) {
 		n, err := writer.Write(buffer)
 		written += int64(n)
 		if err != nil {
-			return written, err
+			nextReadPos := readPos + RingPos(written)
+			return nextReadPos, written, err
 		}
 	}
-	if rb.writeClosed && start+RingPos(written) == rb.writeIndex {
-		return written, io.EOF
+	nextReadPos := readPos + RingPos(written)
+	if rb.writeClosed && nextReadPos == rb.writeIndex {
+		return nextReadPos, written, io.EOF
 	}
-	return written, nil
+	return nextReadPos, written, nil
 }
 
 // TailIterator returns an iterator from the tail of the buffer.

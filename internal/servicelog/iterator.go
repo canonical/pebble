@@ -23,10 +23,11 @@ type Iterator interface {
 	// If Close is not called, the iterator will block buffer recycling causing
 	// write failures.
 	Close() error
-	// Next advances to the next available buffered write.
-	// When passed cancel, Next will wait for the next buffered write.
-	// If a nil channel is passed, cancel will return the first available
-	// buffered write, if none is available, return immediatley.
+	// Next moves the ring buffer read mark forward, making its tail available for reuse
+	// without truncation. If the ring buffer writer produces data faster than the iterator
+	// can read it, the iterator will eventually be truncated and restarted. The truncation
+	// will be identified in the iterator output with the text specified when the iterator was
+	// created.
 	Next(cancel <-chan struct{}) bool
 
 	Buffered() int
@@ -68,11 +69,14 @@ func (it *iterator) Next(cancel <-chan struct{}) bool {
 	default:
 	}
 	start, end := it.rb.Positions()
-	if it.index < start {
+	if it.index != TailPosition && it.index < start {
 		it.index = start
 		it.truncated()
 	}
-	if it.index < end || len(it.trunc) > 0 {
+	if end != 0 && it.index < end {
+		return true
+	}
+	if len(it.trunc) > 0 {
 		return true
 	}
 	for cancel != nil {
@@ -86,11 +90,14 @@ func (it *iterator) Next(cancel <-chan struct{}) bool {
 		case <-it.notifyChan:
 		}
 		start, end := it.rb.Positions()
-		if it.index < start {
+		if it.index != TailPosition && it.index < start {
 			it.index = start
 			it.truncated()
 		}
-		if it.index < end || len(it.trunc) > 0 {
+		if end != 0 && it.index < end {
+			return true
+		}
+		if len(it.trunc) > 0 {
 			return true
 		}
 		if it.index == end && closed {
@@ -111,15 +118,15 @@ func (it *iterator) Read(dest []byte) (int, error) {
 		it.truncWritten = true
 		return n, nil
 	}
-	n, err := it.rb.Copy(dest, it.index)
-	if err == ErrRange {
-		it.truncated()
-		err = nil
-	}
+	next, n, err := it.rb.Copy(dest, it.index)
 	if n > 0 {
 		it.truncWritten = false
 	}
-	it.index += RingPos(n)
+	it.index = next
+	if err == ErrRange {
+		it.truncated()
+		return n, io.EOF
+	}
 	return n, err
 }
 
@@ -134,15 +141,15 @@ func (it *iterator) WriteTo(writer io.Writer) (int64, error) {
 		it.truncWritten = true
 		return int64(n), err
 	}
-	n, err := it.rb.WriteTo(writer, it.index)
-	if err == ErrRange {
-		it.truncated()
-		err = nil
-	}
+	next, n, err := it.rb.WriteTo(writer, it.index)
 	if n > 0 {
 		it.truncWritten = false
 	}
-	it.index += RingPos(n)
+	it.index = next
+	if err == ErrRange {
+		it.truncated()
+		return n, io.EOF
+	}
 	return n, err
 }
 
@@ -155,6 +162,7 @@ func (it *iterator) Buffered() int {
 }
 
 func (it *iterator) truncated() {
+	it.index = TailPosition
 	if len(it.trunc) > 0 {
 		// trunc being written
 		return
