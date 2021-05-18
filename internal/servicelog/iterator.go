@@ -46,7 +46,7 @@ type iterator struct {
 var _ Iterator = (*iterator)(nil)
 
 var (
-	truncBytes = []byte("<trunc>\n")
+	truncBytes = []byte("(... output truncated ...)\n")
 )
 
 func (it *iterator) Close() error {
