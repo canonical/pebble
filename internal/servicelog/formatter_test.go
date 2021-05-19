@@ -17,7 +17,6 @@ package servicelog_test
 import (
 	"bytes"
 	"fmt"
-	"time"
 
 	. "gopkg.in/check.v1"
 
@@ -29,8 +28,6 @@ type formatterSuite struct{}
 var _ = Suite(&formatterSuite{})
 
 func (s *formatterSuite) TestFormat(c *C) {
-	now := time.Now().UTC().Format(servicelog.TimeFormat)
-
 	b := &bytes.Buffer{}
 	w := servicelog.NewFormatWriter(b, "test")
 
@@ -38,24 +35,22 @@ func (s *formatterSuite) TestFormat(c *C) {
 	fmt.Fprintln(w, "second")
 	fmt.Fprintln(w, "third")
 
-	c.Assert(b.String(), Equals, fmt.Sprintf(`
-%[1]s [test] first
-%[1]s [test] second
-%[1]s [test] third
-`[1:], now))
+	c.Assert(b.String(), Matches, fmt.Sprintf(`
+%[1]s \[test\] first
+%[1]s \[test\] second
+%[1]s \[test\] third
+`[1:], servicelog.TimeFormatRegex))
 }
 
 func (s *formatterSuite) TestFormatSingleWrite(c *C) {
-	now := time.Now().UTC().Format(servicelog.TimeFormat)
-
 	b := &bytes.Buffer{}
 	w := servicelog.NewFormatWriter(b, "test")
 
 	fmt.Fprintf(w, "first\nsecond\nthird\n")
 
-	c.Assert(b.String(), Equals, fmt.Sprintf(`
-%[1]s [test] first
-%[1]s [test] second
-%[1]s [test] third
-`[1:], now))
+	c.Assert(b.String(), Matches, fmt.Sprintf(`
+%[1]s \[test\] first
+%[1]s \[test\] second
+%[1]s \[test\] third
+`[1:], servicelog.TimeFormatRegex))
 }
