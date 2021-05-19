@@ -46,7 +46,9 @@ func (s *iteratorSuite) TestReads(c *C) {
 	for it.Next(nil) {
 		buf := [10]byte{}
 		n, err := it.Read(buf[:])
-		c.Assert(err, IsNil)
+		if err != nil && err != io.EOF {
+			c.Fatalf("read did not return nil or io.EOF")
+		}
 		c.Assert(n, Equals, 10)
 		c.Assert(string(buf[:]), Equals, "0123456789")
 		num++
@@ -82,7 +84,9 @@ func (s *iteratorSuite) TestConcurrentReaders(c *C) {
 			for it.Next(nil) {
 				buf := [10]byte{}
 				n, err := it.Read(buf[:])
-				c.Assert(err, IsNil)
+				if err != nil && err != io.EOF {
+					c.Fatalf("read did not return nil or io.EOF")
+				}
 				c.Assert(n, Equals, 10)
 				c.Assert(string(buf[:]), Equals, "123456789\n")
 				localNum++
@@ -157,10 +161,10 @@ func (s *iteratorSuite) TestMore(c *C) {
 			// Wait for write.
 			ok = it.Next(timeout)
 			c.Assert(ok, Equals, true)
-			buf := make([]byte, it.Buffered())
-			_, err := it.Read(buf)
+			buf := &bytes.Buffer{}
+			_, err := io.Copy(buf, it)
 			c.Assert(err, IsNil)
-			i, err := strconv.Atoi(string(buf))
+			i, err := strconv.Atoi(buf.String())
 			c.Assert(err, IsNil)
 			resultSum += i
 		}
@@ -257,7 +261,9 @@ func (s *iteratorSuite) TestTruncationByteByByte(c *C) {
 	for iter.Next(nil) {
 		one := [1]byte{}
 		n, err := iter.Read(one[:])
-		c.Assert(err, IsNil)
+		if err != nil && err != io.EOF {
+			c.Fatalf("read did not return nil or io.EOF")
+		}
 		c.Assert(n, Equals, 1)
 		buffer.WriteByte(one[0])
 	}
@@ -274,12 +280,12 @@ func (s *iteratorSuite) TestClosed(c *C) {
 
 	buffer0 := &bytes.Buffer{}
 	n, err := iter0.WriteTo(buffer0)
-	c.Assert(err, Equals, io.EOF)
+	c.Assert(err, IsNil)
 	c.Assert(n, Equals, int64(10))
 
 	buffer1 := &bytes.Buffer{}
 	n, err = iter1.WriteTo(buffer1)
-	c.Assert(err, Equals, io.EOF)
+	c.Assert(err, IsNil)
 	c.Assert(n, Equals, int64(10))
 }
 
@@ -335,4 +341,24 @@ func (s *iteratorSuite) TestHeadIteratorReplayLines(c *C) {
 	}
 
 	c.Assert(buffer.String(), Equals, "fourth\nfifth\n")
+}
+
+func (s *iteratorSuite) TestEOF(c *C) {
+	rb := servicelog.NewRingBuffer(200)
+	fmt.Fprintln(rb, "first")
+	fmt.Fprintln(rb, "second")
+	fmt.Fprintln(rb, "third")
+	fmt.Fprintln(rb, "fourth")
+	fmt.Fprintln(rb, "fifth")
+
+	iter := rb.HeadIterator(2)
+	b := iter.Next(nil)
+	c.Assert(b, Equals, true)
+
+	a := make([]byte, 200)
+	_, err := iter.Read(a)
+	c.Assert(err, Equals, io.EOF)
+
+	b = iter.Next(nil)
+	c.Assert(b, Equals, false)
 }

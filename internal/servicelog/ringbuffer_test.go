@@ -54,7 +54,7 @@ func (s *ringBufferSuite) TestCrossBoundaryWriteCopy(c *C) {
 
 	a := make([]byte, 6)
 	next, n, err := rb.Copy(a, a1)
-	c.Assert(err, IsNil)
+	c.Assert(err, Equals, io.EOF)
 	c.Assert(n, Equals, 6)
 	c.Assert(next, Equals, servicelog.RingPos(6))
 	c.Assert(string(a), Equals, "pebble")
@@ -70,7 +70,7 @@ func (s *ringBufferSuite) TestCrossBoundaryWriteCopy(c *C) {
 
 	b := make([]byte, 6)
 	next, n, err = rb.Copy(b, b1)
-	c.Assert(err, IsNil)
+	c.Assert(err, Equals, io.EOF)
 	c.Assert(n, Equals, 6)
 	c.Assert(next, Equals, servicelog.RingPos(12))
 	c.Assert(string(b), Equals, "elbbep")
@@ -90,7 +90,7 @@ func (s *ringBufferSuite) TestCrossBoundaryWriteCopy(c *C) {
 
 	cc := make([]byte, 6)
 	next, n, err = rb.Copy(cc, c1)
-	c.Assert(err, IsNil)
+	c.Assert(err, Equals, io.EOF)
 	c.Assert(n, Equals, 6)
 	c.Assert(next, Equals, servicelog.RingPos(18))
 	c.Assert(string(cc), Equals, "PEBBLE")
@@ -166,7 +166,7 @@ func (s *ringBufferSuite) TestCopy(c *C) {
 
 	a := make([]byte, 3)
 	next, n, err := rb.Copy(a, 0)
-	c.Assert(err, IsNil)
+	c.Assert(err, Equals, io.EOF)
 	c.Assert(n, Equals, 3)
 	c.Assert(next, Equals, servicelog.RingPos(3))
 	c.Assert(string(a), Equals, "abc")
@@ -190,7 +190,7 @@ func (s *ringBufferSuite) TestFullWrite(c *C) {
 
 	slice := make([]byte, 10)
 	next, n, err := rb.Copy(slice, p1)
-	c.Assert(err, IsNil)
+	c.Assert(err, Equals, io.EOF)
 	c.Assert(n, Equals, 10)
 	c.Assert(next, Equals, servicelog.RingPos(10))
 	c.Assert(string(slice), Equals, "0123456789")
@@ -221,7 +221,7 @@ func (s *ringBufferSuite) TestFullWriteCrossBoundary(c *C) {
 
 	slice := make([]byte, 10)
 	next, n, err := rb.Copy(slice, p1)
-	c.Assert(err, IsNil)
+	c.Assert(err, Equals, io.EOF)
 	c.Assert(n, Equals, 10)
 	c.Assert(next, Equals, servicelog.RingPos(15))
 	c.Assert(string(slice), Equals, "0123456789")

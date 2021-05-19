@@ -174,7 +174,7 @@ func (rb *RingBuffer) Copy(dest []byte, start RingPos) (next RingPos, n int, err
 	if readPos < rb.readIndex || readPos > rb.writeIndex {
 		return start, 0, ErrRange
 	}
-	if rb.writeClosed && readPos == rb.writeIndex {
+	if readPos == rb.writeIndex {
 		return start, 0, io.EOF
 	}
 	copyLength := int(rb.writeIndex - readPos)
@@ -196,7 +196,7 @@ func (rb *RingBuffer) Copy(dest []byte, start RingPos) (next RingPos, n int, err
 		written += n
 	}
 	nextReadPos := readPos + RingPos(written)
-	if rb.writeClosed && nextReadPos == rb.writeIndex {
+	if nextReadPos == rb.writeIndex {
 		return nextReadPos, written, io.EOF
 	}
 	return nextReadPos, written, nil
@@ -212,9 +212,6 @@ func (rb *RingBuffer) WriteTo(writer io.Writer, start RingPos) (next RingPos, n 
 	}
 	if readPos < rb.readIndex || readPos > rb.writeIndex {
 		return start, 0, ErrRange
-	}
-	if rb.writeClosed && readPos == rb.writeIndex {
-		return start, 0, io.EOF
 	}
 	copyLength := rb.writeIndex - readPos
 	if copyLength == 0 {
@@ -235,9 +232,6 @@ func (rb *RingBuffer) WriteTo(writer io.Writer, start RingPos) (next RingPos, n 
 		}
 	}
 	nextReadPos := readPos + RingPos(written)
-	if rb.writeClosed && nextReadPos == rb.writeIndex {
-		return nextReadPos, written, io.EOF
-	}
 	return nextReadPos, written, nil
 }
 
