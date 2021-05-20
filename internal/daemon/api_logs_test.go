@@ -15,29 +15,30 @@
 package daemon
 
 import (
-	"bufio"
-	"bytes"
-	"context"
-	"encoding/json"
-	"fmt"
-	"io"
-	"io/ioutil"
-	"net/http"
-	"net/http/httptest"
-	"sort"
-	"strings"
-	"time"
+	//"bufio"
+	//"bytes"
+	//"context"
+	//"encoding/json"
+	//"fmt"
+	//"io"
+	//"io/ioutil"
+	//"net/http"
+	//"net/http/httptest"
+	//"sort"
+	//"strings"
+	//"time"
 
 	. "gopkg.in/check.v1"
 
-	"github.com/canonical/pebble/internal/overlord/servstate"
-	"github.com/canonical/pebble/internal/servicelog"
+	//"github.com/canonical/pebble/internal/overlord/servstate"
+	//"github.com/canonical/pebble/internal/servicelog"
 )
 
 var _ = Suite(&logsSuite{})
 
 type logsSuite struct{}
 
+/*
 type logEntry struct {
 	Time    time.Time
 	Service string
@@ -561,3 +562,4 @@ func checkLog(c *C, l logEntry, service, stream, message string) {
 	c.Check(l.Length, Equals, len(message))
 	c.Check(l.message, Equals, message)
 }
+*/

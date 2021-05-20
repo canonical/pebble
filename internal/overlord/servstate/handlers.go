@@ -2,6 +2,7 @@ package servstate
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"syscall"
@@ -50,9 +51,7 @@ var (
 	killWait = 5 * time.Second
 	failWait = 10 * time.Second
 
-	maxLogBytes  = 1024 * 1024
-	avgLogLine   = 100
-	maxLogWrites = maxLogBytes / avgLogLine
+	maxLogBytes = 100 * 1024
 )
 
 // Start starts the named service after also starting all of its dependencies.
@@ -95,14 +94,15 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 		cmd.Env = append(cmd.Env, k+"="+v)
 	}
 
-	logBuffer := servicelog.NewWriteBuffer(maxLogWrites, maxLogBytes)
+	logBuffer := servicelog.NewRingBuffer(maxLogBytes)
 	var outputIterator servicelog.Iterator
-	if m.verboseOutput != nil {
+	if m.serviceOutput != nil {
 		outputIterator = logBuffer.TailIterator()
 	}
 
-	cmd.Stdout = logBuffer.StreamWriter(servicelog.Stdout)
-	cmd.Stderr = logBuffer.StreamWriter(servicelog.Stderr)
+	logWriter := servicelog.NewFormatWriter(logBuffer, req.Name)
+	cmd.Stdout = logWriter
+	cmd.Stderr = logWriter
 	err = cmd.Start()
 	if err != nil {
 		if outputIterator != nil {
@@ -123,12 +123,14 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 		_ = active.logBuffer.Close()
 		close(active.done)
 	}()
-	if m.verboseOutput != nil {
+	if m.serviceOutput != nil {
 		go func() {
 			defer outputIterator.Close()
-			err := servicelog.Sink(outputIterator, m.verboseOutput, req.Name, active.done)
-			if err != nil {
-				logger.Noticef("service %q log sink closed: %v", req.Name, err)
+			for outputIterator.Next(active.done) {
+				_, err := io.Copy(m.serviceOutput, outputIterator)
+				if err != nil {
+					logger.Noticef("service %q log write failed: %v", req.Name, err)
+				}
 			}
 		}()
 	}

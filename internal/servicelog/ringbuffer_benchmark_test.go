@@ -39,15 +39,47 @@ func BenchmarkRingBufferWrite(b *testing.B) {
 func BenchmarkRingBufferCopy(b *testing.B) {
 	payload := []byte("pebblepebblepebblepebble")
 	rb := servicelog.NewRingBuffer(len(payload))
-	p1 := rb.Pos()
 	_, err := rb.Write(payload)
 	if err != nil {
 		b.Fatal(err)
 	}
-	p2 := rb.Pos()
+	p1, _ := rb.Positions()
 
 	buffer := make([]byte, len(payload))
 	for i := 0; i < b.N; i++ {
-		rb.Copy(buffer, p1, p2)
+		rb.Copy(buffer, p1)
 	}
+}
+
+func BenchmarkRingBufferConcurrentSmall(b *testing.B) {
+	payload := []byte("p")
+	benchmarkConcurrent(b, payload)
+}
+
+func BenchmarkRingBufferConcurrent(b *testing.B) {
+	payload := []byte("pebblepebblepebblepebble")
+	benchmarkConcurrent(b, payload)
+}
+
+func benchmarkConcurrent(b *testing.B, payload []byte) {
+	n := b.N
+	wb := servicelog.NewRingBuffer(n * len(payload))
+	defer wb.Close()
+	done := make(chan struct{})
+	defer close(done)
+	go func() {
+		for i := 0; i < n; i++ {
+			wb.Write(payload)
+		}
+	}()
+	b.RunParallel(func(pb *testing.PB) {
+		iterator := wb.TailIterator()
+		defer iterator.Close()
+		buf := make([]byte, len(payload))
+		for pb.Next() {
+			if iterator.Next(done) {
+				iterator.Read(buf)
+			}
+		}
+	})
 }

@@ -17,6 +17,7 @@ package daemon
 import (
 	"context"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -38,7 +39,6 @@ import (
 	"github.com/canonical/pebble/internal/overlord"
 	"github.com/canonical/pebble/internal/overlord/standby"
 	"github.com/canonical/pebble/internal/overlord/state"
-	"github.com/canonical/pebble/internal/servicelog"
 	"github.com/canonical/pebble/internal/systemd"
 )
 
@@ -59,9 +59,9 @@ type Options struct {
 	// the pebble directory.
 	SocketPath string
 
-	// VerboseOutput is the log outputter to send service stdout and stderr
-	// logs to. If nil, service logs are discarded.
-	VerboseOutput servicelog.Output
+	// ServiceOuput is an optional io.Writer for the service log output, if set, all services
+	// log output will be written to the writer.
+	ServiceOutput io.Writer
 }
 
 // A Daemon listens for requests and routes them to the right command
@@ -674,7 +674,7 @@ func New(opts *Options) (*Daemon, error) {
 		normalSocketPath:    opts.SocketPath,
 		untrustedSocketPath: opts.SocketPath + ".untrusted",
 	}
-	ovld, err := overlord.New(opts.Dir, d, opts.VerboseOutput)
+	ovld, err := overlord.New(opts.Dir, d, opts.ServiceOutput)
 	if err == state.ErrExpectedReboot {
 		// we proceed without overlord until we reach Stop
 		// where we will schedule and wait again for a system restart.

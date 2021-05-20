@@ -15,16 +15,16 @@
 package daemon
 
 import (
-	"bytes"
-	"encoding/json"
-	"fmt"
-	"io"
+	//"bytes"
+	//"encoding/json"
+	//"fmt"
+	//"io"
 	"net/http"
-	"sort"
-	"strconv"
-	"strings"
-	"sync"
-	"time"
+	//"sort"
+	//"strconv"
+	//"strings"
+	//"sync"
+	//"time"
 
 	"github.com/canonical/pebble/internal/overlord/servstate"
 	"github.com/canonical/pebble/internal/servicelog"
@@ -51,6 +51,11 @@ type logsResponse struct {
 }
 
 func (r logsResponse) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	response := statusBadRequest("TODO")
+	response.ServeHTTP(w, req)
+	return
+}
+/*
 	query := req.URL.Query()
 
 	services := query["services"]
@@ -324,3 +329,4 @@ func flushWriter(w io.Writer) {
 		flusher.Flush()
 	}
 }
+*/
