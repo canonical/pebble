@@ -31,7 +31,7 @@ type formatter struct {
 
 const (
 	// TimeFormat is RFC3339 with millisecond precision.
-	TimeFormat = "2006-01-02T15:04:05.999Z07:00"
+	TimeFormat = "2006-01-02T15:04:05.000Z07:00"
 	// TimeFormatRegex is the regular expression for matching TimeFormat.
 	TimeFormatRegex = `\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{0,3}Z(?:\d{2}:\d{2})?`
 )

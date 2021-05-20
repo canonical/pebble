@@ -23,6 +23,10 @@ import (
 	"time"
 )
 
+const (
+	timestampFormat = "2006-01-02T15:04:05.000Z07:00"
+)
+
 // A Logger is a fairly minimal logging tool.
 type Logger interface {
 	// Notice is for messages that the user should see
@@ -101,7 +105,7 @@ func (l *defaultLogger) Notice(msg string) {
 
 	l.buf = l.buf[:0]
 	now := time.Now().UTC()
-	l.buf = now.AppendFormat(l.buf, time.RFC3339)
+	l.buf = now.AppendFormat(l.buf, timestampFormat)
 	l.buf = append(l.buf, ' ')
 	l.buf = append(l.buf, l.prefix...)
 	l.buf = append(l.buf, msg...)

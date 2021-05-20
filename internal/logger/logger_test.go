@@ -63,15 +63,15 @@ func (s *LogSuite) TestDebugfEnv(c *C) {
 
 func (s *LogSuite) TestNoticef(c *C) {
 	logger.Noticef("xyzzy")
-	c.Check(s.logbuf.String(), Matches, `20\d\d-\d\d-\d\dT\d\d:\d\d:\d\dZ PREFIX: xyzzy\n`)
+	c.Check(s.logbuf.String(), Matches, `20\d\d-\d\d-\d\dT\d\d:\d\d:\d\d.\d\d\dZ PREFIX: xyzzy\n`)
 }
 
 func (s *LogSuite) TestNewline(c *C) {
 	logger.Noticef("with newline\n")
-	c.Check(s.logbuf.String(), Matches, `20\d\d-\d\d-\d\dT\d\d:\d\d:\d\dZ PREFIX: with newline\n`)
+	c.Check(s.logbuf.String(), Matches, `20\d\d-\d\d-\d\dT\d\d:\d\d:\d\d.\d\d\dZ PREFIX: with newline\n`)
 }
 
 func (s *LogSuite) TestPanicf(c *C) {
 	c.Check(func() { logger.Panicf("xyzzy") }, Panics, "xyzzy")
-	c.Check(s.logbuf.String(), Matches, `20\d\d-\d\d-\d\dT\d\d:\d\d:\d\dZ PREFIX: PANIC xyzzy\n`)
+	c.Check(s.logbuf.String(), Matches, `20\d\d-\d\d-\d\dT\d\d:\d\d:\d\d.\d\d\dZ PREFIX: PANIC xyzzy\n`)
 }
