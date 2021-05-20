@@ -15,40 +15,36 @@
 package daemon
 
 import (
-	//"bufio"
-	//"bytes"
-	//"context"
-	//"encoding/json"
-	//"fmt"
-	//"io"
-	//"io/ioutil"
-	//"net/http"
-	//"net/http/httptest"
-	//"sort"
-	//"strings"
-	//"time"
+	"bufio"
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"sort"
+	"strings"
+	"time"
 
 	. "gopkg.in/check.v1"
 
-	//"github.com/canonical/pebble/internal/overlord/servstate"
-	//"github.com/canonical/pebble/internal/servicelog"
+	"github.com/canonical/pebble/internal/overlord/servstate"
+	"github.com/canonical/pebble/internal/servicelog"
 )
 
 var _ = Suite(&logsSuite{})
 
 type logsSuite struct{}
 
-/*
-type logEntry struct {
+type testLogEntry struct {
 	Time    time.Time
 	Service string
-	Stream  string
-	Length  int
-	message string
+	Message string
 }
 
 type testServiceManager struct {
-	buffers        map[string]*servicelog.WriteBuffer
+	buffers        map[string]*servicelog.RingBuffer
 	servicesErr    error
 	serviceLogsErr error
 }
@@ -121,20 +117,15 @@ func (s *logsSuite) TestServiceLogsError(c *C) {
 }
 
 func (s *logsSuite) TestOneServiceDefaults(c *C) {
-	wb := servicelog.NewWriteBuffer(20, 1024)
-	stdout := wb.StreamWriter(servicelog.Stdout)
-	stderr := wb.StreamWriter(servicelog.Stderr)
+	rb := servicelog.NewRingBuffer(4096)
+	lw := servicelog.NewFormatWriter(rb, "nginx")
 	for i := 0; i < 12; i++ {
-		if i%2 == 0 {
-			fmt.Fprintf(stdout, "stdout message %d\n", i)
-		} else {
-			fmt.Fprintf(stderr, "stderr message %d\n", i)
-		}
+		fmt.Fprintf(lw, "message %d\n", i)
 	}
 
 	svcMgr := testServiceManager{
-		buffers: map[string]*servicelog.WriteBuffer{
-			"nginx": wb,
+		buffers: map[string]*servicelog.RingBuffer{
+			"nginx": rb,
 		},
 	}
 	rec := s.recordResponse(c, "/v1/logs", svcMgr)
@@ -143,24 +134,20 @@ func (s *logsSuite) TestOneServiceDefaults(c *C) {
 	logs := decodeLogs(c, rec.Body)
 	c.Assert(logs, HasLen, 10)
 	for i := 0; i < 10; i++ {
-		if i%2 == 0 {
-			checkLog(c, logs[i], "nginx", "stdout", fmt.Sprintf("stdout message %d\n", i+2))
-		} else {
-			checkLog(c, logs[i], "nginx", "stderr", fmt.Sprintf("stderr message %d\n", i+2))
-		}
+		checkLog(c, logs[i], "nginx", fmt.Sprintf("message %d\n", i+2))
 	}
 }
 
 func (s *logsSuite) TestOneServiceWithN(c *C) {
-	wb := servicelog.NewWriteBuffer(10, 1024)
-	stdout := wb.StreamWriter(servicelog.Stdout)
+	rb := servicelog.NewRingBuffer(4096)
+	lw := servicelog.NewFormatWriter(rb, "nginx")
 	for i := 0; i < 20; i++ {
-		fmt.Fprintf(stdout, "message %d\n", i)
+		fmt.Fprintf(lw, "message %d\n", i)
 	}
 
 	svcMgr := testServiceManager{
-		buffers: map[string]*servicelog.WriteBuffer{
-			"nginx": wb,
+		buffers: map[string]*servicelog.RingBuffer{
+			"nginx": rb,
 		},
 	}
 	rec := s.recordResponse(c, "/v1/logs?n=3", svcMgr)
@@ -169,20 +156,21 @@ func (s *logsSuite) TestOneServiceWithN(c *C) {
 	logs := decodeLogs(c, rec.Body)
 	c.Assert(logs, HasLen, 3)
 	for i := 0; i < 3; i++ {
-		checkLog(c, logs[i], "nginx", "stdout", fmt.Sprintf("message %d\n", i+17))
+		checkLog(c, logs[i], "nginx", fmt.Sprintf("message %d\n", i+17))
 	}
 }
 
 func (s *logsSuite) TestOneServiceAllLogs(c *C) {
-	wb := servicelog.NewWriteBuffer(20, 1024)
-	stdout := wb.StreamWriter(servicelog.Stdout)
+	exampleLog := "2021-05-20T16:55:00.000Z [nginx] message 00\n"
+	rb := servicelog.NewRingBuffer(len(exampleLog) * 20)
+	lw := servicelog.NewFormatWriter(rb, "nginx")
 	for i := 0; i < 40; i++ {
-		fmt.Fprintf(stdout, "message %d\n", i)
+		fmt.Fprintf(lw, "message %02d\n", i)
 	}
 
 	svcMgr := testServiceManager{
-		buffers: map[string]*servicelog.WriteBuffer{
-			"nginx": wb,
+		buffers: map[string]*servicelog.RingBuffer{
+			"nginx": rb,
 		},
 	}
 	rec := s.recordResponse(c, "/v1/logs?n=-1", svcMgr)
@@ -191,20 +179,20 @@ func (s *logsSuite) TestOneServiceAllLogs(c *C) {
 	logs := decodeLogs(c, rec.Body)
 	c.Assert(logs, HasLen, 20)
 	for i := 0; i < 20; i++ {
-		checkLog(c, logs[i], "nginx", "stdout", fmt.Sprintf("message %d\n", i+20))
+		checkLog(c, logs[i], "nginx", fmt.Sprintf("message %d\n", i+20))
 	}
 }
 
 func (s *logsSuite) TestOneServiceOutOfTwo(c *C) {
-	wb := servicelog.NewWriteBuffer(10, 1024)
-	stdout := wb.StreamWriter(servicelog.Stdout)
+	rb := servicelog.NewRingBuffer(4096)
+	lw := servicelog.NewFormatWriter(rb, "nginx")
 	for i := 0; i < 20; i++ {
-		fmt.Fprintf(stdout, "message %d\n", i)
+		fmt.Fprintf(lw, "message %d\n", i)
 	}
 
 	svcMgr := testServiceManager{
-		buffers: map[string]*servicelog.WriteBuffer{
-			"nginx":  wb,
+		buffers: map[string]*servicelog.RingBuffer{
+			"nginx":  rb,
 			"unused": nil,
 		},
 	}
@@ -214,54 +202,41 @@ func (s *logsSuite) TestOneServiceOutOfTwo(c *C) {
 	logs := decodeLogs(c, rec.Body)
 	c.Assert(logs, HasLen, 3)
 	for i := 0; i < 3; i++ {
-		checkLog(c, logs[i], "nginx", "stdout", fmt.Sprintf("message %d\n", i+17))
+		checkLog(c, logs[i], "nginx", fmt.Sprintf("message %d\n", i+17))
 	}
 }
 
 func (s *logsSuite) TestNoLogs(c *C) {
 	svcMgr := testServiceManager{
-		buffers: map[string]*servicelog.WriteBuffer{
-			"foo": servicelog.NewWriteBuffer(10, 10),
-			"bar": servicelog.NewWriteBuffer(10, 10),
+		buffers: map[string]*servicelog.RingBuffer{
+			"foo": servicelog.NewRingBuffer(1),
+			"bar": servicelog.NewRingBuffer(1),
 		},
 	}
-	rec := s.recordResponse(c, "/v1/logs", svcMgr)
-	c.Assert(rec.Code, Equals, http.StatusOK)
-
-	logs := decodeLogs(c, rec.Body)
-	c.Assert(logs, HasLen, 0)
-}
-
-func (s *logsSuite) TestZeroN(c *C) {
-	svcMgr := testServiceManager{
-		buffers: map[string]*servicelog.WriteBuffer{
-			"foo": servicelog.NewWriteBuffer(10, 10),
-			"bar": servicelog.NewWriteBuffer(10, 10),
-		},
+	for _, url := range []string{"/v1/logs", "/v1/logs?n=0"} {
+		rec := s.recordResponse(c, url, svcMgr)
+		c.Assert(rec.Code, Equals, http.StatusOK)
+		logs := decodeLogs(c, rec.Body)
+		c.Assert(logs, HasLen, 0)
 	}
-	rec := s.recordResponse(c, "/v1/logs?n=0", svcMgr)
-	c.Assert(rec.Code, Equals, http.StatusOK)
-
-	logs := decodeLogs(c, rec.Body)
-	c.Assert(logs, HasLen, 0)
 }
 
 func (s *logsSuite) TestMultipleServicesAll(c *C) {
-	wb1 := servicelog.NewWriteBuffer(10, 1024)
-	wb2 := servicelog.NewWriteBuffer(10, 1024)
-	stdout1 := wb1.StreamWriter(servicelog.Stdout)
-	stdout2 := wb2.StreamWriter(servicelog.Stdout)
+	rb1 := servicelog.NewRingBuffer(4096)
+	rb2 := servicelog.NewRingBuffer(4096)
+	lw1 := servicelog.NewFormatWriter(rb1, "one")
+	lw2 := servicelog.NewFormatWriter(rb2, "two")
 	for i := 0; i < 10; i++ {
-		fmt.Fprintf(stdout1, "message1 %d\n", i)
+		fmt.Fprintf(lw1, "message1 %d\n", i)
 		time.Sleep(time.Millisecond)
-		fmt.Fprintf(stdout2, "message2 %d\n", i)
+		fmt.Fprintf(lw2, "message2 %d\n", i)
 		time.Sleep(time.Millisecond)
 	}
 
 	svcMgr := testServiceManager{
-		buffers: map[string]*servicelog.WriteBuffer{
-			"one": wb1,
-			"two": wb2,
+		buffers: map[string]*servicelog.RingBuffer{
+			"one": rb1,
+			"two": rb2,
 		},
 	}
 	rec := s.recordResponse(c, "/v1/logs?n=-1", svcMgr)
@@ -270,27 +245,27 @@ func (s *logsSuite) TestMultipleServicesAll(c *C) {
 	logs := decodeLogs(c, rec.Body)
 	c.Assert(logs, HasLen, 20)
 	for i := 0; i < 10; i++ {
-		checkLog(c, logs[i*2], "one", "stdout", fmt.Sprintf("message1 %d\n", i))
-		checkLog(c, logs[i*2+1], "two", "stdout", fmt.Sprintf("message2 %d\n", i))
+		checkLog(c, logs[i*2], "one", fmt.Sprintf("message1 %d\n", i))
+		checkLog(c, logs[i*2+1], "two", fmt.Sprintf("message2 %d\n", i))
 	}
 }
 
 func (s *logsSuite) TestMultipleServicesN(c *C) {
-	wb1 := servicelog.NewWriteBuffer(10, 1024)
-	wb2 := servicelog.NewWriteBuffer(10, 1024)
-	stdout1 := wb1.StreamWriter(servicelog.Stdout)
-	stdout2 := wb2.StreamWriter(servicelog.Stdout)
+	rb1 := servicelog.NewRingBuffer(4096)
+	rb2 := servicelog.NewRingBuffer(4096)
+	lw1 := servicelog.NewFormatWriter(rb1, "one")
+	lw2 := servicelog.NewFormatWriter(rb2, "two")
 	for i := 0; i < 10; i++ {
-		fmt.Fprintf(stdout1, "message1 %d\n", i)
+		fmt.Fprintf(lw1, "message1 %d\n", i)
 		time.Sleep(time.Millisecond)
-		fmt.Fprintf(stdout2, "message2 %d\n", i)
+		fmt.Fprintf(lw2, "message2 %d\n", i)
 		time.Sleep(time.Millisecond)
 	}
 
 	svcMgr := testServiceManager{
-		buffers: map[string]*servicelog.WriteBuffer{
-			"one": wb1,
-			"two": wb2,
+		buffers: map[string]*servicelog.RingBuffer{
+			"one": rb1,
+			"two": rb2,
 		},
 	}
 	rec := s.recordResponse(c, "/v1/logs", svcMgr)
@@ -299,25 +274,25 @@ func (s *logsSuite) TestMultipleServicesN(c *C) {
 	logs := decodeLogs(c, rec.Body)
 	c.Assert(logs, HasLen, 10)
 	for i := 0; i < 5; i++ {
-		checkLog(c, logs[i*2], "one", "stdout", fmt.Sprintf("message1 %d\n", 5+i))
-		checkLog(c, logs[i*2+1], "two", "stdout", fmt.Sprintf("message2 %d\n", 5+i))
+		checkLog(c, logs[i*2], "one", fmt.Sprintf("message1 %d\n", 5+i))
+		checkLog(c, logs[i*2+1], "two", fmt.Sprintf("message2 %d\n", 5+i))
 	}
 }
 
 func (s *logsSuite) TestMultipleServicesNFewLogs(c *C) {
-	wb1 := servicelog.NewWriteBuffer(10, 1024)
-	wb2 := servicelog.NewWriteBuffer(10, 1024)
-	stdout1 := wb1.StreamWriter(servicelog.Stdout)
-	stdout2 := wb2.StreamWriter(servicelog.Stdout)
-	fmt.Fprintf(stdout1, "message1 1\n")
+	rb1 := servicelog.NewRingBuffer(4096)
+	rb2 := servicelog.NewRingBuffer(4096)
+	lw1 := servicelog.NewFormatWriter(rb1, "one")
+	lw2 := servicelog.NewFormatWriter(rb2, "two")
+	fmt.Fprintf(lw1, "message1 1\n")
 	time.Sleep(time.Millisecond)
-	fmt.Fprintf(stdout2, "message2 1\n")
+	fmt.Fprintf(lw2, "message2 1\n")
 	time.Sleep(time.Millisecond)
 
 	svcMgr := testServiceManager{
-		buffers: map[string]*servicelog.WriteBuffer{
-			"one": wb1,
-			"two": wb2,
+		buffers: map[string]*servicelog.RingBuffer{
+			"one": rb1,
+			"two": rb2,
 		},
 	}
 	rec := s.recordResponse(c, "/v1/logs", svcMgr)
@@ -325,30 +300,31 @@ func (s *logsSuite) TestMultipleServicesNFewLogs(c *C) {
 
 	logs := decodeLogs(c, rec.Body)
 	c.Assert(logs, HasLen, 2)
-	checkLog(c, logs[0], "one", "stdout", "message1 1\n")
-	checkLog(c, logs[1], "two", "stdout", "message2 1\n")
+	checkLog(c, logs[0], "one", "message1 1\n")
+	checkLog(c, logs[1], "two", "message2 1\n")
 }
 
-func (s *logsSuite) TestLoggingTooFast(c *C) {
-	wb := servicelog.NewWriteBuffer(10, 1024)
-	stdout := wb.StreamWriter(servicelog.Stdout)
+// TODO(benhoyt) - this is not working yet
+func (s *logsSuite) TODO_TestLoggingTooFast(c *C) {
+	rb := servicelog.NewRingBuffer(1024)
+	lw := servicelog.NewFormatWriter(rb, "svc")
 
 	// We should only receive these first three logs
 	for i := 0; i < 3; i++ {
-		fmt.Fprintf(stdout, "message %d\n", i)
+		fmt.Fprintf(lw, "message %d\n", i)
 	}
 
 	firstWrite := make(chan struct{})
 	go func() {
-		<-firstWrite // wait till after first writeLog
+		<-firstWrite // wait till after first log written
 		for i := 3; i < 10; i++ {
-			fmt.Fprintf(stdout, "message %d\n", i)
+			fmt.Fprintf(lw, "message %d\n", i)
 		}
 	}()
 
 	svcMgr := testServiceManager{
-		buffers: map[string]*servicelog.WriteBuffer{
-			"svc": wb,
+		buffers: map[string]*servicelog.RingBuffer{
+			"svc": rb,
 		},
 	}
 	req, err := http.NewRequest("GET", "/v1/logs", nil)
@@ -361,7 +337,7 @@ func (s *logsSuite) TestLoggingTooFast(c *C) {
 	logs := decodeLogs(c, bytes.NewReader(rec.buf.Bytes()))
 	c.Assert(len(logs), Equals, 3)
 	for i := 0; i < 3; i++ {
-		checkLog(c, logs[i], "svc", "stdout", fmt.Sprintf("message %d\n", i))
+		checkLog(c, logs[i], "svc", fmt.Sprintf("message %d\n", i))
 	}
 }
 
@@ -396,19 +372,19 @@ func (r *waitRecorder) WriteHeader(status int) {
 }
 
 func (s *logsSuite) TestMultipleServicesFollow(c *C) {
-	wb1 := servicelog.NewWriteBuffer(10, 1024)
-	wb2 := servicelog.NewWriteBuffer(10, 1024)
-	stdout1 := wb1.StreamWriter(servicelog.Stdout)
-	stdout2 := wb2.StreamWriter(servicelog.Stdout)
-	fmt.Fprintf(stdout1, "message1 1\n")
+	rb1 := servicelog.NewRingBuffer(4096)
+	rb2 := servicelog.NewRingBuffer(4096)
+	lw1 := servicelog.NewFormatWriter(rb1, "one")
+	lw2 := servicelog.NewFormatWriter(rb2, "two")
+	fmt.Fprintf(lw1, "message1 1\n")
 	time.Sleep(time.Millisecond)
-	fmt.Fprintf(stdout2, "message2 1\n")
+	fmt.Fprintf(lw2, "message2 1\n")
 	time.Sleep(time.Millisecond)
 
 	svcMgr := testServiceManager{
-		buffers: map[string]*servicelog.WriteBuffer{
-			"one": wb1,
-			"two": wb2,
+		buffers: map[string]*servicelog.RingBuffer{
+			"one": rb1,
+			"two": rb2,
 		},
 	}
 
@@ -429,7 +405,7 @@ func (s *logsSuite) TestMultipleServicesFollow(c *C) {
 		done <- struct{}{}
 	}()
 
-	waitLog := func() logEntry {
+	waitLog := func() testLogEntry {
 		select {
 		case log := <-logChan:
 			reader := bufio.NewReader(strings.NewReader(log))
@@ -438,23 +414,23 @@ func (s *logsSuite) TestMultipleServicesFollow(c *C) {
 			return entry
 		case <-time.After(1 * time.Second):
 			c.Fatalf("timed out waiting for log")
-			return logEntry{}
+			return testLogEntry{}
 		}
 	}
 
 	// The two logs written before the request should be there
-	checkLog(c, waitLog(), "one", "stdout", "message1 1\n")
-	checkLog(c, waitLog(), "two", "stdout", "message2 1\n")
+	checkLog(c, waitLog(), "one", "message1 1\n")
+	checkLog(c, waitLog(), "two", "message2 1\n")
 
 	// Then write a bunch more and ensure we can "follow" them
-	fmt.Fprintf(stdout1, "message1 2\n")
-	checkLog(c, waitLog(), "one", "stdout", "message1 2\n")
-	fmt.Fprintf(stdout2, "message2 2\n")
-	checkLog(c, waitLog(), "two", "stdout", "message2 2\n")
-	fmt.Fprintf(stdout2, "message2 3\n")
-	checkLog(c, waitLog(), "two", "stdout", "message2 3\n")
-	fmt.Fprintf(stdout1, "message1 3\n")
-	checkLog(c, waitLog(), "one", "stdout", "message1 3\n")
+	fmt.Fprintf(lw1, "message1 2\n")
+	checkLog(c, waitLog(), "one", "message1 2\n")
+	fmt.Fprintf(lw2, "message2 2\n")
+	checkLog(c, waitLog(), "two", "message2 2\n")
+	fmt.Fprintf(lw2, "message2 3\n")
+	checkLog(c, waitLog(), "two", "message2 3\n")
+	fmt.Fprintf(lw1, "message1 3\n")
+	checkLog(c, waitLog(), "one", "message1 3\n")
 
 	// Close request and wait till serve goroutine exits
 	cancel()
@@ -465,7 +441,6 @@ func (s *logsSuite) TestMultipleServicesFollow(c *C) {
 type followRecorder struct {
 	logChan chan string
 	header  http.Header
-	buf     bytes.Buffer
 	status  int
 }
 
@@ -480,13 +455,8 @@ func (r *followRecorder) Write(p []byte) (int, error) {
 	if r.status == 0 {
 		r.status = 200
 	}
-	n, err := r.buf.Write(p)
-	if len(p) > 0 && p[0] != '{' {
-		// If the message bytes were just written, send complete log bytes
-		r.logChan <- r.buf.String()
-		r.buf.Reset()
-	}
-	return n, err
+	r.logChan <- string(p)
+	return len(p), nil
 }
 
 func (r *followRecorder) WriteHeader(status int) {
@@ -500,33 +470,28 @@ func (s *logsSuite) recordResponse(c *C, url string, svcMgr serviceManager) *htt
 	rec := httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)
 	if rec.Code == http.StatusOK {
-		c.Assert(rec.Header().Get("Content-Type"), Equals, "text/plain; charset=utf-8")
+		c.Assert(rec.Header().Get("Content-Type"), Equals, "application/x-ndjson")
 	} else {
 		c.Assert(rec.Header().Get("Content-Type"), Equals, "application/json")
 	}
 	return rec
 }
 
-func decodeLog(c *C, reader *bufio.Reader) (logEntry, bool) {
+func decodeLog(c *C, reader *bufio.Reader) (testLogEntry, bool) {
 	// Read log metadata JSON and newline separator
-	metaBytes, err := reader.ReadSlice('\n')
+	logBytes, err := reader.ReadSlice('\n')
 	if err == io.EOF {
-		return logEntry{}, false
+		return testLogEntry{}, false
 	}
 	c.Assert(err, IsNil)
-	var entry logEntry
-	err = json.Unmarshal(metaBytes, &entry)
+	var entry testLogEntry
+	err = json.Unmarshal(logBytes, &entry)
 	c.Assert(err, IsNil)
-
-	// Read message bytes
-	message, err := ioutil.ReadAll(io.LimitReader(reader, int64(entry.Length)))
-	c.Assert(err, IsNil)
-	entry.message = string(message)
 	return entry, true
 }
 
-func decodeLogs(c *C, r io.Reader) []logEntry {
-	var entries []logEntry
+func decodeLogs(c *C, r io.Reader) []testLogEntry {
+	var entries []testLogEntry
 	reader := bufio.NewReader(r)
 	for {
 		entry, ok := decodeLog(c, reader)
@@ -555,11 +520,8 @@ func checkError(c *C, body []byte, status int, errorMatch string) {
 	c.Check(rsp.Result.Message, Matches, errorMatch)
 }
 
-func checkLog(c *C, l logEntry, service, stream, message string) {
+func checkLog(c *C, l testLogEntry, service, message string) {
 	c.Check(l.Time, Not(Equals), time.Time{})
 	c.Check(l.Service, Equals, service)
-	c.Check(l.Stream, Equals, stream)
-	c.Check(l.Length, Equals, len(message))
-	c.Check(l.message, Equals, message)
+	c.Check(l.Message, Equals, message)
 }
-*/

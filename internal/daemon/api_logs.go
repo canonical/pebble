@@ -15,23 +15,25 @@
 package daemon
 
 import (
-	//"bytes"
-	//"encoding/json"
-	//"fmt"
-	//"io"
+	"bufio"
+	"bytes"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
 	"net/http"
-	//"sort"
-	//"strconv"
-	//"strings"
-	//"sync"
-	//"time"
+	"sort"
+	"strconv"
+	"sync"
+	"time"
 
 	"github.com/canonical/pebble/internal/overlord/servstate"
 	"github.com/canonical/pebble/internal/servicelog"
 )
 
 const (
-	defaultNumLogs = 10
+	defaultNumLogs  = 10
+	bufioReaderSize = 4 * 1024
 )
 
 type serviceManager interface {
@@ -51,11 +53,6 @@ type logsResponse struct {
 }
 
 func (r logsResponse) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	response := statusBadRequest("TODO")
-	response.ServeHTTP(w, req)
-	return
-}
-/*
 	query := req.URL.Query()
 
 	services := query["services"]
@@ -107,220 +104,210 @@ func (r logsResponse) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		}
 	}()
 
-	// Output format is not exactly text/plain, but it's not pure JSON either.
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	// Output format is JSON Lines, which doesn't have an official mime type,
+	// but "application/x-ndjson" is what most people seem to use:
+	// https://github.com/wardi/jsonlines/issues/9
+	w.Header().Set("Content-Type", "application/x-ndjson")
+
+	// First write n buffered logs
 	if numLogs != 0 {
 		if len(itsByName) == 1 {
-			// Handle single-service case efficiently
-			for name, it := range itsByName {
-				outputLogsSingle(w, name, it)
+			// Handle single-service case more efficiently
+			for _, it := range itsByName {
+				err = outputLogsSingle(w, it)
 			}
-		} else if numLogs < 0 {
-			// n<0, output all logs from all services in time order
-			outputLogsAll(w, itsByName)
 		} else {
-			outputLogsMulti(w, itsByName, numLogs)
+			err = outputLogsMulti(w, itsByName, numLogs)
+		}
+		if err != nil {
+			fmt.Fprintf(w, "\nerror writing logs: %v", err)
+			return
 		}
 	}
+
+	// If requested, follow and output logs real time until request closed
 	if follow {
 		flushWriter(w)
 		followLogs(w, itsByName, req.Context().Done())
 	}
 }
 
-// Efficiently output a single iterator's logs.
-func outputLogsSingle(w io.Writer, service string, it servicelog.Iterator) {
-	now := time.Now().UTC() // stop if we iterate past current time
-	for it.Next(nil) && it.Timestamp().Before(now) {
-		err := writeLog(w, service, it.Timestamp(), it.StreamID(), it.Length(), it)
-		if err != nil {
-			fmt.Fprintf(w, "\ncannot write log from %q: %v", service, err)
-			return
-		}
-	}
+// Output a single iterator's logs without reading them all into memory.
+func outputLogsSingle(w io.Writer, it servicelog.Iterator) error {
+	reader := bufio.NewReaderSize(it, bufioReaderSize)
+	now := time.Now().UTC()
+	encoder := json.NewEncoder(w)
+	encoder.SetEscapeHTML(false)
+	err := iterateLogs(it, reader, nil, now, func(log logEntry) error {
+		return encoder.Encode(log)
+	})
+	return err
 }
 
-// Output last numLogs logs from multiple iterators (less efficient as it
-// writes them all to a slice first, and sorts by timestamp).
-func outputLogsMulti(w io.Writer, itsByName map[string]servicelog.Iterator, numLogs int) {
-	type entry struct {
-		timestamp time.Time
-		service   string
-		stream    servicelog.StreamID
-		message   string
-	}
-
+// Output last numLogs logs from multiple iterators (not particularly
+// efficient, as it writes them all to a slice first, then sorts by time).
+func outputLogsMulti(w io.Writer, itsByName map[string]servicelog.Iterator, numLogs int) error {
 	// Write all entries to slice.
-	var entries []entry
-	var buf bytes.Buffer
-	now := time.Now().UTC() // stop if we iterate past current time
-	for name, it := range itsByName {
-		for it.Next(nil) && it.Timestamp().Before(now) {
-			buf.Reset()
-			_, err := io.Copy(&buf, it)
-			if err != nil {
-				fmt.Fprintf(w, "\ncannot write log from %q: %v", name, err)
-				return
-			}
-			entries = append(entries, entry{
-				timestamp: it.Timestamp(),
-				service:   name,
-				stream:    it.StreamID(),
-				message:   buf.String(),
-			})
+	var entries []logEntry
+	reader := bufio.NewReaderSize(nil, bufioReaderSize)
+	now := time.Now().UTC()
+	for _, it := range itsByName {
+		reader.Reset(it)
+		err := iterateLogs(it, reader, nil, now, func(log logEntry) error {
+			entries = append(entries, log)
+			return nil
+		})
+		if err != nil {
+			return err
 		}
 	}
 
 	// Order by timestamp (or service name if timestamps equal).
 	sort.Slice(entries, func(i, j int) bool {
 		ei, ej := entries[i], entries[j]
-		if ei.timestamp == ej.timestamp {
-			return ei.service < ei.service
+		if ei.Time.Equal(ej.Time) {
+			return ei.Service < ei.Service
 		}
-		return ei.timestamp.Before(ej.timestamp)
+		return ei.Time.Before(ej.Time)
 	})
 
 	// Output (up to) the last numLogs logs from the sorted slice.
-	index := len(entries) - numLogs
-	if index < 0 {
-		index = 0
+	index := 0
+	if numLogs >= 0 && numLogs < len(entries) {
+		index = len(entries) - numLogs
 	}
-	for _, e := range entries[index:] {
-		message := strings.NewReader(e.message)
-		err := writeLog(w, e.service, e.timestamp, e.stream, len(e.message), message)
+	encoder := json.NewEncoder(w)
+	encoder.SetEscapeHTML(false)
+	for _, log := range entries[index:] {
+		err := encoder.Encode(log)
 		if err != nil {
-			fmt.Fprintf(w, "\ncannot write log from %q: %v", e.service, err)
-			return
+			return err
 		}
 	}
-}
-
-// Output all logs from multiple iterators in timestamp order.
-func outputLogsAll(w io.Writer, itsByName map[string]servicelog.Iterator) {
-	// Service names, ordered alphabetically for consistent output.
-	names := make([]string, 0, len(itsByName))
-	for name := range itsByName {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-
-	// Slice of iterators (or nil) holding the next log from each service.
-	its := make([]servicelog.Iterator, len(names))
-	now := time.Now().UTC() // stop if we iterate past current time
-	for {
-		// Grab next log for iterators that need fetching (its[i] nil).
-		for i, name := range names {
-			if its[i] == nil {
-				it := itsByName[name]
-				if it.Next(nil) && it.Timestamp().Before(now) {
-					its[i] = it
-				}
-			}
-		}
-
-		// Find log with earliest timestamp. Linear search is okay here as there
-		// will only be a very small number of services (likely 1, 2, or 3).
-		earliest := -1
-		for i, it := range its {
-			if it == nil {
-				continue
-			}
-			if earliest < 0 || it.Timestamp().Before(its[earliest].Timestamp()) {
-				earliest = i
-			}
-		}
-		// We're done when it.Next() returned false for all iterators.
-		if earliest < 0 {
-			break
-		}
-
-		// Write log with earliest timestamp.
-		it := its[earliest]
-		err := writeLog(w, names[earliest], it.Timestamp(), it.StreamID(), it.Length(), it)
-		if err != nil {
-			fmt.Fprintf(w, "\ncannot write log from %q: %v", names[earliest], err)
-			return
-		}
-
-		// Set iterator to nil so we fetch next log for that service.
-		its[earliest] = nil
-	}
+	return nil
 }
 
 // Follow iterators and output logs as they're written.
 func followLogs(w io.Writer, itsByName map[string]servicelog.Iterator, done <-chan struct{}) {
-	// Start one goroutine per service to listen for new logs.
+	// Start one goroutine per service to listen for and output new logs.
 	writeMutex := &sync.Mutex{}
 	var wg sync.WaitGroup
-	for name, it := range itsByName {
-		out := &lockingLogWriter{w: w, mutex: writeMutex}
+	for service, it := range itsByName {
 		wg.Add(1)
-		go func(name string, it servicelog.Iterator) {
+		go func(service string, it servicelog.Iterator) {
 			defer wg.Done()
-			servicelog.Sink(it, out, name, done)
-		}(name, it)
+			reader := bufio.NewReaderSize(it, bufioReaderSize)
+			fw := &followWriter{w, writeMutex}
+			encoder := json.NewEncoder(fw)
+			encoder.SetEscapeHTML(false)
+			err := iterateLogs(it, reader, done, time.Time{}, func(log logEntry) error {
+				return encoder.Encode(log)
+			})
+			if err != nil {
+				fmt.Fprintf(w, "\nerror writing logs: %v", err)
+				return
+			}
+		}(service, it)
 	}
 
-	// Don't return till client connection is closed and all the Sink()s have
+	// Don't return till client connection is closed and all iterateLogs have
 	// finished. We can't just wait for the done channel here, because the
-	// client connection will close and the Sink calls may still be accessing
+	// client connection will close and iterateLogs may still be calling
 	// it.Next() when the caller calls it.Close(), causing a data race.
 	wg.Wait()
 }
 
-// Each log write is output as <metadata json> <newline> <message bytes>,
-// for example (the "length" field excludes the first newline):
+// Each log is written as a JSON object followed by a newline (JSON Lines):
 //
-// {"time":"2021-04-23T01:28:52.660695091Z","service":"redis","stream":"stdout","length":10}
-// message 9
-// {"time":"2021-04-23T01:28:52.798839551Z","service":"thing","stream":"stdout","length":11}
-// message 10
-//
-// The reason for this is so that it's possible to efficiently output the bytes
-// of the message to a destination writer without additional copying.
-type logMeta struct {
+// {"time":"2021-04-23T01:28:52.660Z","service":"redis","message":"redis started up"}
+// {"time":"2021-04-23T01:28:52.798Z","service":"thing","message":"did something"}
+type logEntry struct {
 	Time    time.Time `json:"time"`
 	Service string    `json:"service"`
-	Stream  string    `json:"stream"`
-	Length  int       `json:"length"`
+	Message string    `json:"message"`
 }
 
-// Write a single log to w from the iterator.
-func writeLog(w io.Writer, service string, timestamp time.Time, stream servicelog.StreamID, length int, message io.Reader) error {
-	log := logMeta{
-		Time:    timestamp,
-		Service: service,
-		Stream:  stream.String(),
-		Length:  length,
-	}
-	encoder := json.NewEncoder(w)
-	err := encoder.Encode(log) // Encode writes the object followed by '\n'
-	if err != nil {
-		return err
-	}
-	_, err = io.Copy(w, message) // io.Copy uses message.WriteTo to avoid copy
-	if err != nil {
-		return err
+type writeLogFunc func(log logEntry) error
+
+// Iterate through all logs in the given iterator, calling writeLog for each
+// until the iterator is exhausted.
+func iterateLogs(it servicelog.Iterator, br *bufio.Reader, cancel <-chan struct{}, now time.Time, writeLog writeLogFunc) error {
+	var prevTime time.Time
+	var prevService string
+	for it.Next(cancel) {
+		br.Reset(it)
+		for {
+			line, err := br.ReadSlice('\n')
+			if err != nil && !errors.Is(err, io.EOF) {
+				return err
+			}
+			if len(line) == 0 {
+				// No bytes read, we're done with this iteration
+				break
+			}
+
+			log, ok := parseLog(line)
+			if ok {
+				// Output normal log
+				err := writeLog(log)
+				if err != nil {
+					return err
+				}
+				if !now.IsZero() && log.Time.After(now) {
+					// Stop if we're past current time
+					return nil
+				}
+				prevTime = log.Time
+				prevService = log.Service
+			} else if !prevTime.IsZero() {
+				// Output partial log with previous timestamp and service name
+				err := writeLog(logEntry{prevTime, prevService, string(line)})
+				if err != nil {
+					return err
+				}
+			}
+
+			if errors.Is(err, io.EOF) {
+				// EOF reached, break after processing line
+				break
+			}
+		}
 	}
 	return nil
 }
 
-type lockingLogWriter struct {
+// Parse a log entry of the form "2021-05-20T15:39:12.345Z [service] log message"
+func parseLog(line []byte) (logEntry, bool) {
+	fields := bytes.SplitN(line, []byte(" "), 3)
+	if len(fields) != 3 {
+		return logEntry{}, false
+	}
+	// .999 allows any number of fractional seconds (including none at all)
+	timestamp, err := time.Parse("2006-01-02T15:04:05.999Z07:00", string(fields[0]))
+	if err != nil {
+		return logEntry{}, false
+	}
+	if len(fields[1]) < 3 {
+		return logEntry{}, false
+	}
+	service := string(fields[1][1 : len(fields[1])-1]) // Trim [ and ] from "[service]"
+	message := string(fields[2])
+	return logEntry{timestamp, service, message}, true
+}
+
+// Writer that serializes concurrent writes to the underlying writer, and
+// calls Flush on the underlying writer after each write.
+type followWriter struct {
 	w     io.Writer
 	mutex *sync.Mutex
 }
 
-func (w *lockingLogWriter) WriteLog(timestamp time.Time, serviceName string, stream servicelog.StreamID, length int, message io.Reader) error {
+func (w *followWriter) Write(p []byte) (int, error) {
 	w.mutex.Lock()
 	defer w.mutex.Unlock()
-
-	err := writeLog(w.w, serviceName, timestamp, stream, length, message)
-	if err != nil {
-		fmt.Fprintf(w.w, "\ncannot write log from %q: %v", serviceName, err)
-		return err
-	}
+	n, err := w.w.Write(p)
 	flushWriter(w.w) // Flush HTTP response after each line in follow mode
-	return nil
+	return n, err
 }
 
 func flushWriter(w io.Writer) {
@@ -329,4 +316,3 @@ func flushWriter(w io.Writer) {
 		flusher.Flush()
 	}
 }
-*/
