@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2020 Canonical Ltd
+// Copyright (c) 2021 Canonical Ltd
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License version 3 as
@@ -10,22 +10,17 @@
 // GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
-// along with this program.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program.  If not, see <http://www.gnu.org/licenses/>
 
-package logger
+package servicelog_test
 
-func GetLogger() Logger {
-	lock.Lock()
-	defer lock.Unlock()
+import (
+	"testing"
 
-	return logger
-}
+	. "gopkg.in/check.v1"
+)
 
-func GetLoggerFlags() int {
-	log, ok := GetLogger().(Log)
-	if !ok {
-		return -1
-	}
-
-	return log.log.Flags()
+// Hook up check.v1 into the "go test" runner
+func Test(t *testing.T) {
+	TestingT(t)
 }

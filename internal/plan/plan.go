@@ -253,6 +253,13 @@ func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 	layer.Order = order
 	layer.Label = label
 	for name, service := range layer.Services {
+		if name == "pebble" {
+			// Disallow service name "pebble" to avoid ambiguity (for example,
+			// in log output).
+			return nil, &FormatError{
+				Message: fmt.Sprintf("cannot use reserved service name %q", name),
+			}
+		}
 		service.Name = name
 	}
 	err = layer.checkCycles()

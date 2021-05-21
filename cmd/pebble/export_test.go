@@ -31,6 +31,8 @@ func Client() *client.Client {
 	return client.New(ClientConfig)
 }
 
+const WriteLogBufSize = writeLogBufSize
+
 var (
 	//FirstNonOptionIsRun = firstNonOptionIsRun
 

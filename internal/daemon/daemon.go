@@ -17,6 +17,7 @@ package daemon
 import (
 	"context"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -57,6 +58,10 @@ type Options struct {
 	// to communicate with the daemon. Defaults to a hidden (dotted) name inside
 	// the pebble directory.
 	SocketPath string
+
+	// ServiceOuput is an optional io.Writer for the service log output, if set, all services
+	// log output will be written to the writer.
+	ServiceOutput io.Writer
 }
 
 // A Daemon listens for requests and routes them to the right command
@@ -669,7 +674,7 @@ func New(opts *Options) (*Daemon, error) {
 		normalSocketPath:    opts.SocketPath,
 		untrustedSocketPath: opts.SocketPath + ".untrusted",
 	}
-	ovld, err := overlord.New(opts.Dir, d)
+	ovld, err := overlord.New(opts.Dir, d, opts.ServiceOutput)
 	if err == state.ErrExpectedReboot {
 		// we proceed without overlord until we reach Stop
 		// where we will schedule and wait again for a system restart.

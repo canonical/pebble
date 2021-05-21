@@ -37,7 +37,7 @@ func v1GetServices(c *Command, r *http.Request, _ *userState) Response {
 	servmgr := c.d.overlord.ServiceManager()
 	services, err := servmgr.Services(names)
 	if err != nil {
-		return statusInternalError(err.Error())
+		return statusInternalError("%v", err)
 	}
 
 	infos := make([]serviceInfo, 0, len(services))
@@ -72,7 +72,7 @@ func v1PostServices(c *Command, r *http.Request, _ *userState) Response {
 		}
 		services, err = servmgr.DefaultServiceNames()
 		if err != nil {
-			return statusInternalError(err.Error())
+			return statusInternalError("%v", err)
 		}
 		if len(services) == 0 {
 			return SyncResponse(&resp{
@@ -95,7 +95,7 @@ func v1PostServices(c *Command, r *http.Request, _ *userState) Response {
 			err = fmt.Errorf("action %q is unsupported", payload.Action)
 		}
 		if err != nil {
-			return statusBadRequest(err.Error())
+			return statusBadRequest("%v", err)
 		}
 	}
 
