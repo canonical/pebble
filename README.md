@@ -1,10 +1,15 @@
-
 ## Take control of your internal daemons!
 
 **Pebble** helps you to orchestrate a set of local service processes as an organized set.
 It resembles well known tools such as _supervisord_, _runit_, or _s6_, in that it can
 easily manage non-system processes independently from the system services, but it was
 designed with unique features that help with more specific use cases.
+
+  - [General model](#general-model)
+  - [Layer configuration examples](#layer-configuration-examples)
+  - [Running pebble](#running-pebble)
+  - [Layer specification](#layer-specification)
+  - [TODO/Contributing](#todo-contributing)
 
 ## General model
 
@@ -18,13 +23,13 @@ for whole-system setup such as when using Pebble to control services in a contai
 
 The `$PEBBLE` directory must contain a `layers/` subdirectory that holds a stack of
 configuration files with names similar to `001-base-layer.yaml`, where the digits define
-the order of the layer and the following label uniquely identifies it.  Each
+the order of the layer and the following label uniquely identifies it. Each
 layer in the stack sits above the former one, and has the chance to improve or
 redefine the service configuration as desired.
 
-## Layer configuration
+## Layer configuration examples
 
-This is a complete example of the current configuration format:
+This is a complete example of the current [configuration format](#layer-specification):
 
 ```yaml
 summary: Simple layer
@@ -33,7 +38,6 @@ description: |
     A better description for a simple layer.
 
 services:
-
     srv1:
         override: replace
         summary: Service summary
@@ -66,9 +70,11 @@ services:
 Some details worth highlighting:
 
   - The `startup` option can be `enabled` or `disabled`.
-  - There is the `override` field (for now required) which defines whether this
-    entry _overrides_ the previous service of the same name (if any - missing is
-    okay), or merges with it.
+  - There is the `override` field (for now required) which defines whether this 
+entry _overrides_ the previous service of the same name (if any - missing is 
+okay), or merges with it.
+
+### Layer override example
 
 Any of the fields can be replaced individually in a merged service configuration.
 To illustrate, here is a sample override layer that might sit atop the one above:
@@ -77,7 +83,6 @@ To illustrate, here is a sample override layer that might sit atop the one above
 summary: Simple override layer
 
 services:
-
     srv1:
         override: merge
         environment:
@@ -121,8 +126,66 @@ And start or stop a specific service with:
     $ pebble start <name1> [<name2> ...]
     $ pebble stop  <name1> [<name2> ...]
 
+## Layer specification
 
-## XXX THIS IS EXPERIMENTAL XXX
+```yaml
+# (Optional) A short one line summary of the layer
+summary: <summary>
+
+# (Optional) A full description of the configuration layer
+description: |
+    <description>
+
+# (Required) A list of services managed by this configuration layer
+services:
+
+    <service name>:
+
+        # (Required) Control how this service definition is combined with any
+        # other pre-existing definition with the same name in the Pebble plan.
+        #
+        # The value 'merge' will ensure that values in this layer specification
+        # are merged with existing definitions, where 'override' will replace
+        # and existing service spec in the plan with the same name
+        override: merge | replace
+
+        # (Optional) A short summary of the service
+        summary: <summary>
+
+        # (Optional) A detailed description of the service
+        description: |
+            <description>
+
+        # (Optional) The command to run the service.
+        # Example: /usr/bin/somecommand -b -t 30
+        command: <commmand>
+
+        # (Optional) Control whether the service is started automatically when
+        # Pebble starts. 
+        startup: enabled | disabled
+
+        # (Optional) A list of other services in the plan that this service
+        # should start after
+        after:
+            - <other service name>
+
+        # (Optional) A list of other services in the plan that this service
+        # should start before
+        before:
+            - <other service name>
+
+        # (Optional) A list of other services in the plan that this service
+        # requires in order to start correctly    
+        requires:
+            - <other service name>
+
+        # (Optional) A list of key/value pairs defining environment variables
+        # that should be set in the context of the process
+        environment:
+            <env var name>: <env var value>
+```
+
+## TODO/Contributing
 
 This is a preview of what Pebble is becoming. Please keep that in mind while you
 explore around.
@@ -140,12 +203,6 @@ Here are some of the things coming soon:
   - [ ] More tests for existing CLI commands
   - [ ] Better log caching and retrieval support
   - [ ] Consider showing unified log as output of `pebble run`
-
-## API
-
-The documentation for the currently exposed API endpoints can be found in `doc/api.yaml`
-In that folder you can also find a nice looking html file reflecting the contents of the file above.
-The html file can be generated with: `npx redoc-cli bundle doc/api.yaml --output doc/index.html`
 
 ## Have fun!
 

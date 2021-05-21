@@ -249,7 +249,7 @@ func (s *iteratorSuite) TestTruncation(c *C) {
 		_, err := io.Copy(buffer, iter)
 		c.Assert(err, IsNil)
 	}
-	c.Assert(buffer.String(), Equals, "(... output truncated ...)\n0123456789")
+	c.Assert(buffer.String(), Equals, "\n(... output truncated ...)\n0123456789")
 }
 
 func (s *iteratorSuite) TestTruncationByteByByte(c *C) {
@@ -267,7 +267,7 @@ func (s *iteratorSuite) TestTruncationByteByByte(c *C) {
 		c.Assert(n, Equals, 1)
 		buffer.WriteByte(one[0])
 	}
-	c.Assert(buffer.String(), Equals, "(... output truncated ...)\n0123456789")
+	c.Assert(buffer.String(), Equals, "\n(... output truncated ...)\n0123456789")
 }
 
 func (s *iteratorSuite) TestClosed(c *C) {
