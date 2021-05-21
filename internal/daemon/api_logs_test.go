@@ -304,8 +304,7 @@ func (s *logsSuite) TestMultipleServicesNFewLogs(c *C) {
 	checkLog(c, logs[1], "two", "message2 1\n")
 }
 
-// TODO(benhoyt) - this is not working yet
-func (s *logsSuite) TODO_TestLoggingTooFast(c *C) {
+func (s *logsSuite) TestLoggingTooFast(c *C) {
 	rb := servicelog.NewRingBuffer(1024)
 	lw := servicelog.NewFormatWriter(rb, "svc")
 
@@ -314,9 +313,10 @@ func (s *logsSuite) TODO_TestLoggingTooFast(c *C) {
 		fmt.Fprintf(lw, "message %d\n", i)
 	}
 
-	firstWrite := make(chan struct{})
+	firstWrite := make(chan struct{}, 20)
 	go func() {
-		<-firstWrite // wait till after first log written
+		<-firstWrite                      // wait till after first log written
+		time.Sleep(10 * time.Millisecond) // ensure timestamp changes
 		for i := 3; i < 10; i++ {
 			fmt.Fprintf(lw, "message %d\n", i)
 		}
@@ -359,11 +359,7 @@ func (r *waitRecorder) Write(p []byte) (int, error) {
 	if r.status == 0 {
 		r.status = 200
 	}
-	select {
-	case r.firstWrite <- struct{}{}:
-	default:
-	}
-	time.Sleep(10 * time.Millisecond)
+	r.firstWrite <- struct{}{}
 	return r.buf.Write(p)
 }
 
@@ -434,7 +430,11 @@ func (s *logsSuite) TestMultipleServicesFollow(c *C) {
 
 	// Close request and wait till serve goroutine exits
 	cancel()
-	<-done
+	select {
+	case <-done:
+	case <-time.After(1 * time.Second):
+		c.Fatalf("timed out waiting for request to be finished")
+	}
 	c.Assert(rec.status, Equals, http.StatusOK)
 }
 
