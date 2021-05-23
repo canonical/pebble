@@ -2,12 +2,14 @@ package servstate
 
 import (
 	"fmt"
+	"io"
 	"os/exec"
 	"sort"
 	"sync"
 
 	"github.com/canonical/pebble/internal/overlord/state"
 	"github.com/canonical/pebble/internal/plan"
+	"github.com/canonical/pebble/internal/servicelog"
 )
 
 type ServiceManager struct {
@@ -18,12 +20,15 @@ type ServiceManager struct {
 	planLock sync.Mutex
 	plan     *plan.Plan
 	services map[string]*activeService
+
+	serviceOutput io.Writer
 }
 
 type activeService struct {
-	cmd  *exec.Cmd
-	err  error
-	done chan struct{}
+	cmd       *exec.Cmd
+	err       error
+	done      chan struct{}
+	logBuffer *servicelog.RingBuffer
 }
 
 // LabelExists is the error returned by AppendLayer when a layer with that
@@ -36,12 +41,13 @@ func (e *LabelExists) Error() string {
 	return fmt.Sprintf("layer %q already exists", e.Label)
 }
 
-func NewManager(s *state.State, runner *state.TaskRunner, pebbleDir string) (*ServiceManager, error) {
+func NewManager(s *state.State, runner *state.TaskRunner, pebbleDir string, serviceOutput io.Writer) (*ServiceManager, error) {
 	manager := &ServiceManager{
-		state:     s,
-		runner:    runner,
-		pebbleDir: pebbleDir,
-		services:  make(map[string]*activeService),
+		state:         s,
+		runner:        runner,
+		pebbleDir:     pebbleDir,
+		services:      make(map[string]*activeService),
+		serviceOutput: serviceOutput,
 	}
 
 	runner.AddHandler("start", manager.doStart, nil)
@@ -287,4 +293,32 @@ func (m *ServiceManager) StopOrder(services []string) ([]string, error) {
 	defer releasePlan()
 
 	return m.plan.StopOrder(services)
+}
+
+// ServiceLogs returns iterators to the provided services. Each iterator
+// must be closed via the Close method.
+func (m *ServiceManager) ServiceLogs(services []string) (map[string]servicelog.Iterator, error) {
+	releasePlan, err := m.acquirePlan()
+	if err != nil {
+		return nil, err
+	}
+	defer releasePlan()
+
+	requested := make(map[string]bool, len(services))
+	for _, name := range services {
+		requested[name] = true
+	}
+
+	iterators := make(map[string]servicelog.Iterator)
+	for name, service := range m.services {
+		if !requested[name] {
+			continue
+		}
+		if service == nil || service.logBuffer == nil {
+			continue
+		}
+		iterators[name] = service.logBuffer.TailIterator()
+	}
+
+	return iterators, nil
 }

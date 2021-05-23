@@ -15,13 +15,16 @@
 package servstate_test
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"os/exec"
 	"os/user"
 	"path/filepath"
 	"strconv"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
@@ -40,8 +43,10 @@ func Test(t *testing.T) { TestingT(t) }
 type S struct {
 	testutil.BaseTest
 
-	dir string
-	log string
+	dir          string
+	log          string
+	logBuffer    bytes.Buffer
+	logBufferMut sync.Mutex
 
 	st *state.State
 
@@ -55,7 +60,7 @@ var planLayer1 = `
 services:
     test1:
         override: replace
-        command: /bin/sh -c "echo test1 >> %s; sleep 300"
+        command: /bin/sh -c "echo test1 | tee -a %s; sleep 300"
         startup: enabled
         requires:
             - test2
@@ -64,7 +69,7 @@ services:
 
     test2:
         override: replace
-        command: /bin/sh -c "echo test2 >> %s; sleep 300"
+        command: /bin/sh -c "echo test2 | tee -a %s; sleep 300"
 `
 
 var planLayer2 = `
@@ -98,8 +103,17 @@ func (s *S) SetUpTest(c *C) {
 	err = ioutil.WriteFile(filepath.Join(s.dir, "layers", "002-two.yaml"), []byte(planLayer2), 0644)
 	c.Assert(err, IsNil)
 
+	s.logBufferMut.Lock()
+	s.logBuffer.Reset()
+	s.logBufferMut.Unlock()
+	logOutput := writerFunc(func(p []byte) (int, error) {
+		s.logBufferMut.Lock()
+		defer s.logBufferMut.Unlock()
+		return s.logBuffer.Write(p)
+	})
+
 	s.runner = state.NewTaskRunner(s.st)
-	manager, err := servstate.NewManager(s.st, s.runner, s.dir)
+	manager, err := servstate.NewManager(s.st, s.runner, s.dir, logOutput)
 	c.Assert(err, IsNil)
 	s.manager = manager
 
@@ -113,12 +127,15 @@ func (s *S) TearDownTest(c *C) {
 }
 
 func (s *S) assertLog(c *C, expected string) {
+	s.logBufferMut.Lock()
+	defer s.logBufferMut.Unlock()
 	data, err := ioutil.ReadFile(s.log)
 	if os.IsNotExist(err) {
 		c.Fatal("Services have not run")
 	}
 	c.Assert(err, IsNil)
 	c.Assert(string(data), Matches, "(?s)"+expected)
+	c.Assert(s.logBuffer.String(), Matches, "(?s)"+expected)
 }
 
 func (s *S) TestDefaultServiceNames(c *C) {
@@ -134,12 +151,7 @@ func (s *S) ensure(c *C, n int) {
 	}
 }
 
-func (s *S) TestStartStopServices(c *C) {
-
-	// === Start ===
-
-	services := []string{"test1", "test2"}
-
+func (s *S) startServices(c *C, services []string) {
 	s.st.Lock()
 	ts, err := servstate.Start(s.st, services)
 	c.Check(err, IsNil)
@@ -154,23 +166,33 @@ func (s *S) TestStartStopServices(c *C) {
 	c.Check(chg.Status(), Equals, state.DoneStatus, Commentf("Error: %v", chg.Err()))
 	s.st.Unlock()
 
-	s.assertLog(c, "test1\ntest2\n")
+	s.assertLog(c, ".*test1\n.*test2\n")
 
 	cmds := s.manager.CmdsForTest()
-	c.Check(cmds, HasLen, 2)
+	c.Check(cmds, HasLen, len(services))
+}
+
+func (s *S) TestStartStopServices(c *C) {
+	services := []string{"test1", "test2"}
+	s.startServices(c, services)
 
 	if c.Failed() {
 		return
 	}
 
-	// === Stop ===
+	s.stopServices(c, services)
+}
+
+func (s *S) stopServices(c *C, services []string) {
+	cmds := s.manager.CmdsForTest()
+	c.Check(cmds, HasLen, len(services))
 
 	s.st.Lock()
 	// Stopping should happen in reverse order in practice. For now
 	// it's up to the call site to organize that.
-	ts, err = servstate.Stop(s.st, services)
+	ts, err := servstate.Stop(s.st, services)
 	c.Check(err, IsNil)
-	chg = s.st.NewChange("test", "Stop test")
+	chg := s.st.NewChange("test", "Stop test")
 	chg.AddAll(ts)
 	s.st.Unlock()
 
@@ -178,7 +200,7 @@ func (s *S) TestStartStopServices(c *C) {
 	s.ensure(c, 2)
 
 	// Ensure processes are gone indeed.
-	c.Assert(cmds, HasLen, 2)
+	c.Assert(cmds, HasLen, len(services))
 	for name, cmd := range cmds {
 		err := cmd.Process.Signal(syscall.Signal(0))
 		if err == nil {
@@ -191,6 +213,38 @@ func (s *S) TestStartStopServices(c *C) {
 	s.st.Lock()
 	c.Check(chg.Status(), Equals, state.DoneStatus, Commentf("Error: %v", chg.Err()))
 	s.st.Unlock()
+}
+
+func (s *S) TestServiceLogs(c *C) {
+	services := []string{"test1", "test2"}
+	outputs := map[string]string{
+		"test1": `\d+-\d+-\d+T\d+:\d+:\d+\.\d+Z \[test1\] test1\n`,
+		"test2": `\d+-\d+-\d+T\d+:\d+:\d+\.\d+Z \[test2\] test2\n`,
+	}
+	s.startServices(c, services)
+
+	if c.Failed() {
+		return
+	}
+
+	iterators, err := s.manager.ServiceLogs(services)
+	c.Assert(err, IsNil)
+	c.Assert(iterators, HasLen, len(services))
+
+	for serviceName, it := range iterators {
+		buf := &bytes.Buffer{}
+		for it.Next(nil) {
+			_, err = io.Copy(buf, it)
+			c.Assert(err, IsNil)
+		}
+
+		c.Assert(buf.String(), Matches, outputs[serviceName])
+
+		err = it.Close()
+		c.Assert(err, IsNil)
+	}
+
+	s.stopServices(c, services)
 }
 
 func (s *S) TestStartBadCommand(c *C) {
@@ -298,14 +352,14 @@ services:
     test1:
         startup: enabled
         override: replace
-        command: /bin/sh -c "echo test1 >> %s; sleep 300"
+        command: /bin/sh -c "echo test1 | tee -a %s; sleep 300"
         before:
             - test2
         requires:
             - test2
     test2:
         override: replace
-        command: /bin/sh -c "echo test2 >> %s; sleep 300"
+        command: /bin/sh -c "echo test2 | tee -a %s; sleep 300"
     test3:
         override: replace
         command: some-bad-command
@@ -337,7 +391,7 @@ func (s *S) TestAppendLayer(c *C) {
 	dir := c.MkDir()
 	os.Mkdir(filepath.Join(dir, "layers"), 0755)
 	runner := state.NewTaskRunner(s.st)
-	manager, err := servstate.NewManager(s.st, runner, dir)
+	manager, err := servstate.NewManager(s.st, runner, dir, nil)
 	c.Assert(err, IsNil)
 
 	// Append a layer when there are no layers.
@@ -419,7 +473,7 @@ func (s *S) TestCombineLayer(c *C) {
 	dir := c.MkDir()
 	os.Mkdir(filepath.Join(dir, "layers"), 0755)
 	runner := state.NewTaskRunner(s.st)
-	manager, err := servstate.NewManager(s.st, runner, dir)
+	manager, err := servstate.NewManager(s.st, runner, dir, nil)
 	c.Assert(err, IsNil)
 
 	// "Combine" layer with no layers should just append.
@@ -581,7 +635,7 @@ func (s *S) TestEnvironment(c *C) {
 	st := state.New(nil)
 	dir := c.MkDir()
 	runner := state.NewTaskRunner(st)
-	manager, err := servstate.NewManager(st, runner, dir)
+	manager, err := servstate.NewManager(st, runner, dir, nil)
 	c.Assert(err, IsNil)
 	logPath := filepath.Join(dir, "log.txt")
 	layerYAML := fmt.Sprintf(planLayerEnv, logPath)
@@ -621,4 +675,10 @@ PEBBLE_ENV_TEST_1=foo
 PEBBLE_ENV_TEST_2=bar bazz
 PEBBLE_ENV_TEST_PARENT=from-parent
 `[1:])
+}
+
+type writerFunc func([]byte) (int, error)
+
+func (f writerFunc) Write(p []byte) (int, error) {
+	return f(p)
 }

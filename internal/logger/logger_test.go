@@ -16,9 +16,7 @@ package logger_test
 
 import (
 	"bytes"
-	"log"
 	"os"
-	"runtime"
 	"testing"
 
 	. "gopkg.in/check.v1"
@@ -37,49 +35,16 @@ type LogSuite struct {
 }
 
 func (s *LogSuite) SetUpTest(c *C) {
-	s.logbuf, s.restoreLogger = logger.MockLogger()
+	s.logbuf, s.restoreLogger = logger.MockLogger("PREFIX: ")
 }
 
 func (s *LogSuite) TearDownTest(c *C) {
 	s.restoreLogger()
 }
 
-func (s *LogSuite) TestDefault(c *C) {
-	// env shenanigans
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
-
-	oldTerm, hadTerm := os.LookupEnv("TERM")
-	defer func() {
-		if hadTerm {
-			os.Setenv("TERM", oldTerm)
-		} else {
-			os.Unsetenv("TERM")
-		}
-	}()
-
-	if logger.GetLogger() != nil {
-		logger.SetLogger(nil)
-	}
-	c.Check(logger.GetLogger(), IsNil)
-
-	os.Setenv("TERM", "dumb")
-	err := logger.SimpleSetup()
-	c.Assert(err, IsNil)
-	c.Check(logger.GetLogger(), NotNil)
-	c.Check(logger.GetLoggerFlags(), Equals, logger.DefaultFlags)
-
-	os.Unsetenv("TERM")
-	err = logger.SimpleSetup()
-	c.Assert(err, IsNil)
-	c.Check(logger.GetLogger(), NotNil)
-	c.Check(logger.GetLoggerFlags(), Equals, log.Lshortfile)
-}
-
 func (s *LogSuite) TestNew(c *C) {
 	var buf bytes.Buffer
-	l, err := logger.New(&buf, logger.DefaultFlags)
-	c.Assert(err, IsNil)
+	l := logger.New(&buf, "")
 	c.Assert(l, NotNil)
 }
 
@@ -93,15 +58,20 @@ func (s *LogSuite) TestDebugfEnv(c *C) {
 	defer os.Unsetenv("SNAPD_DEBUG")
 
 	logger.Debugf("xyzzy")
-	c.Check(s.logbuf.String(), Matches, `(?s).*DEBUG xyzzy.*`)
+	c.Check(s.logbuf.String(), Matches, `.* PREFIX: DEBUG xyzzy.*\n`)
 }
 
 func (s *LogSuite) TestNoticef(c *C) {
 	logger.Noticef("xyzzy")
-	c.Check(s.logbuf.String(), Matches, `(?m)20\d\d/\d\d/\d\d \d\d:\d\d:\d\d xyzzy`)
+	c.Check(s.logbuf.String(), Matches, `20\d\d-\d\d-\d\dT\d\d:\d\d:\d\d.\d\d\dZ PREFIX: xyzzy\n`)
+}
+
+func (s *LogSuite) TestNewline(c *C) {
+	logger.Noticef("with newline\n")
+	c.Check(s.logbuf.String(), Matches, `20\d\d-\d\d-\d\dT\d\d:\d\d:\d\d.\d\d\dZ PREFIX: with newline\n`)
 }
 
 func (s *LogSuite) TestPanicf(c *C) {
 	c.Check(func() { logger.Panicf("xyzzy") }, Panics, "xyzzy")
-	c.Check(s.logbuf.String(), Matches, `(?m)20\d\d/\d\d/\d\d \d\d:\d\d:\d\d PANIC xyzzy`)
+	c.Check(s.logbuf.String(), Matches, `20\d\d-\d\d-\d\dT\d\d:\d\d:\d\d.\d\d\dZ PREFIX: PANIC xyzzy\n`)
 }

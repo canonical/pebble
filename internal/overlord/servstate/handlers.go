@@ -2,6 +2,7 @@ package servstate
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"syscall"
@@ -9,9 +10,10 @@ import (
 
 	"gopkg.in/tomb.v2"
 
+	"github.com/canonical/pebble/internal/logger"
 	"github.com/canonical/pebble/internal/osutil"
 	"github.com/canonical/pebble/internal/overlord/state"
-	"github.com/canonical/pebble/internal/strutil"
+	"github.com/canonical/pebble/internal/servicelog"
 	"github.com/canonical/pebble/internal/strutil/shlex"
 )
 
@@ -49,6 +51,8 @@ var (
 	okayWait = 1 * time.Second
 	killWait = 5 * time.Second
 	failWait = 10 * time.Second
+
+	maxLogBytes = 100 * 1024
 )
 
 // Start starts the named service after also starting all of its dependencies.
@@ -103,23 +107,46 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 		cmd.Env = append(cmd.Env, k+"="+v)
 	}
 
-	buffer := strutil.NewLimitedBuffer(160, 10*1024)
-	cmd.Stdout = buffer
-	cmd.Stderr = buffer
+	logBuffer := servicelog.NewRingBuffer(maxLogBytes)
+	var outputIterator servicelog.Iterator
+	if m.serviceOutput != nil {
+		outputIterator = logBuffer.TailIterator()
+	}
+
+	logWriter := servicelog.NewFormatWriter(logBuffer, req.Name)
+	cmd.Stdout = logWriter
+	cmd.Stderr = logWriter
 	err = cmd.Start()
 	if err != nil {
+		if outputIterator != nil {
+			_ = outputIterator.Close()
+		}
+		_ = logBuffer.Close()
 		return fmt.Errorf("cannot start service: %v", err)
 	}
 
 	active := &activeService{
-		cmd:  cmd,
-		done: make(chan struct{}),
+		cmd:       cmd,
+		done:      make(chan struct{}),
+		logBuffer: logBuffer,
 	}
 	m.services[req.Name] = active
 	go func() {
 		active.err = cmd.Wait()
+		_ = active.logBuffer.Close()
 		close(active.done)
 	}()
+	if m.serviceOutput != nil {
+		go func() {
+			defer outputIterator.Close()
+			for outputIterator.Next(active.done) {
+				_, err := io.Copy(m.serviceOutput, outputIterator)
+				if err != nil {
+					logger.Noticef("service %q log write failed: %v", req.Name, err)
+				}
+			}
+		}()
+	}
 
 	releasePlan()
 
