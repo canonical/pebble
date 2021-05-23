@@ -299,7 +299,14 @@ func logit(handler http.Handler) http.Handler {
 		t0 := time.Now()
 		handler.ServeHTTP(ww, r)
 		t := time.Now().Sub(t0)
-		if !strings.Contains(r.URL.String(), "/v1/changes/") {
+
+		// Don't log GET /v1/changes/{change-id} as that's polled quickly by
+		// clients when waiting for a change (e.g., service starting). Also
+		// don't log GET /v1/system-info to avoid it filling logs with noise
+		// when that endpoint is used as a kind of health check (Juju hits it
+		// every 5s, for example).
+		skipLog := r.Method == "GET" && (strings.HasPrefix(r.URL.Path, "/v1/changes/") || r.URL.Path == "/v1/system-info")
+		if !skipLog {
 			if strings.HasSuffix(r.RemoteAddr, ";") {
 				logger.Debugf("%s %s %s %s %d", r.RemoteAddr, r.Method, r.URL, t, ww.s)
 				logger.Noticef("%s %s %s %d", r.Method, r.URL, t, ww.s)
