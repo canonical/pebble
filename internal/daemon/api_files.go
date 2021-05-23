@@ -471,7 +471,7 @@ func writeFile(item writeFilesItem, source io.Reader) error {
 	if err != nil {
 		return err
 	}
-	uid, gid, err := lookupUserAndGroup(item.UserID, item.GroupID, item.User, item.Group)
+	uid, gid, err := normalizeUidGid(item.UserID, item.GroupID, item.User, item.Group)
 	if err != nil {
 		return fmt.Errorf("cannot look up user and group: %w", err)
 	}
@@ -533,7 +533,7 @@ func makeDir(dir makeDirsItem) error {
 	if err != nil {
 		return err
 	}
-	uid, gid, err := lookupUserAndGroup(dir.UserID, dir.GroupID, dir.User, dir.Group)
+	uid, gid, err := normalizeUidGid(dir.UserID, dir.GroupID, dir.User, dir.Group)
 	if err != nil {
 		return fmt.Errorf("cannot look up user and group: %w", err)
 	}
@@ -550,35 +550,8 @@ func makeDir(dir makeDirsItem) error {
 var (
 	chown            = os.Chown
 	atomicWriteChown = osutil.AtomicWriteChown
-	lookupUser       = user.Lookup
-	lookupGroup      = user.LookupGroup
+	normalizeUidGid  = osutil.NormalizeUidGid
 )
-
-func lookupUserAndGroup(uid, gid *int, username, group string) (*int, *int, error) {
-	if uid == nil && username == "" && gid == nil && group == "" {
-		return nil, nil, nil
-	}
-	if uid == nil && username != "" {
-		u, err := lookupUser(username)
-		if err != nil {
-			return nil, nil, err
-		}
-		n, _ := strconv.Atoi(u.Uid)
-		uid = &n
-	}
-	if gid == nil && group != "" {
-		g, err := lookupGroup(group)
-		if err != nil {
-			return nil, nil, err
-		}
-		n, _ := strconv.Atoi(g.Gid)
-		gid = &n
-	}
-	if uid == nil || gid == nil {
-		return nil, nil, fmt.Errorf("must set both user and group together")
-	}
-	return uid, gid, nil
-}
 
 // Removing paths
 
