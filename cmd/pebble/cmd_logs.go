@@ -19,7 +19,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"os/signal"
 	"strconv"
@@ -28,6 +27,10 @@ import (
 	"github.com/jessevdk/go-flags"
 
 	"github.com/canonical/pebble/client"
+)
+
+const (
+	logTimeFormat = "2006-01-02T15:04:05.000Z07:00"
 )
 
 type cmdLogs struct {
@@ -108,46 +111,30 @@ func notifyContext(parent context.Context, signals ...os.Signal) context.Context
 	return ctx
 }
 
-func writeLogText(timestamp time.Time, service string, stream client.LogStream, _ int, message io.Reader) error {
-	b, err := ioutil.ReadAll(message)
-	if err != nil {
-		return err
+func writeLogText(timestamp time.Time, service, message string) error {
+	suffix := ""
+	if len(message) == 0 || message[len(message)-1] != '\n' {
+		suffix = "\n"
 	}
-	if len(b) == 0 || b[len(b)-1] != '\n' {
-		// Ensure we output a final newline
-		b = append(b, '\n')
-	}
-	_, err = fmt.Fprintf(Stdout, "%s %s %s: %s", timestamp.Format(time.RFC3339), service, stream, b)
+	_, err := fmt.Fprintf(Stdout, "%s [%s] %s%s",
+		timestamp.Format(logTimeFormat), service, message, suffix)
 	return err
 }
 
-func writeLogRaw(_ time.Time, _ string, stream client.LogStream, _ int, message io.Reader) error {
-	switch stream {
-	case client.StreamStdout:
-		_, err := io.Copy(Stdout, message)
-		return err
-	case client.StreamStderr:
-		_, err := io.Copy(Stderr, message)
-		return err
-	}
-	return nil
+func writeLogRaw(timestamp time.Time, service, message string) error {
+	_, err := io.WriteString(Stdout, message)
+	return err
 }
 
-func writeLogJSON(timestamp time.Time, service string, stream client.LogStream, _ int, message io.Reader) error {
-	b, err := ioutil.ReadAll(message)
-	if err != nil {
-		return err
-	}
+func writeLogJSON(timestamp time.Time, service, message string) error {
 	var log = struct {
 		Time    time.Time `json:"time"`
 		Service string    `json:"service"`
-		Stream  string    `json:"stream"`
 		Message string    `json:"message"`
 	}{
 		Time:    timestamp,
 		Service: service,
-		Stream:  stream.String(),
-		Message: string(b),
+		Message: message,
 	}
 	encoder := json.NewEncoder(Stdout)
 	encoder.SetEscapeHTML(false)

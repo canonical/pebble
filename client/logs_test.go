@@ -18,7 +18,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"time"
@@ -30,12 +29,9 @@ import (
 
 func (cs *clientSuite) TestLogsNoOptions(c *check.C) {
 	cs.rsp = `
-{"time":"2021-05-03T03:55:49.360994155Z","service":"thing","stream":"stdout","length":6}
-log 1
-{"time":"2021-05-03T03:55:49.654334232Z","service":"snappass","stream":"stderr","length":8}
-log two
-{"time":"2021-05-03T03:55:50.076800988Z","service":"thing","stream":"stdout","length":10}
-the third
+{"time":"2021-05-03T03:55:49.36Z","service":"thing","message":"log 1\n"}
+{"time":"2021-05-03T03:55:49.654123Z","service":"snappass","message":"log two\n"}
+{"time":"2021-05-03T03:55:50.076Z","service":"thing","message":"the third\n"}
 `[1:]
 	out, writeLog := makeLogWriter()
 	err := cs.cli.Logs(&client.LogsOptions{
@@ -46,16 +42,15 @@ the third
 	c.Check(cs.req.URL.Path, check.Equals, "/v1/logs")
 	c.Check(cs.req.URL.Query(), check.HasLen, 0)
 	c.Check(out.String(), check.Equals, `
-2021-05-03T03:55:49Z thing stdout (6): log 1
-2021-05-03T03:55:49Z snappass stderr (8): log two
-2021-05-03T03:55:50Z thing stdout (10): the third
+2021-05-03T03:55:49.360Z [thing] log 1
+2021-05-03T03:55:49.654Z [snappass] log two
+2021-05-03T03:55:50.076Z [thing] the third
 `[1:])
 }
 
 func (cs *clientSuite) TestLogsServices(c *check.C) {
 	cs.rsp = `
-{"time":"2021-05-03T03:55:49.654334232Z","service":"snappass","stream":"stderr","length":8}
-log two
+{"time":"2021-05-03T03:55:49.654334232Z","service":"snappass","message":"log two\n"}
 `[1:]
 	out, writeLog := makeLogWriter()
 	err := cs.cli.Logs(&client.LogsOptions{
@@ -69,16 +64,14 @@ log two
 		"services": []string{"snappass"},
 	})
 	c.Check(out.String(), check.Equals, `
-2021-05-03T03:55:49Z snappass stderr (8): log two
+2021-05-03T03:55:49.654Z [snappass] log two
 `[1:])
 }
 
 func (cs *clientSuite) TestLogsN(c *check.C) {
 	cs.rsp = `
-{"time":"2021-05-03T03:55:49.360994155Z","service":"thing","stream":"stdout","length":6}
-log 1
-{"time":"2021-05-03T03:55:49.654334232Z","service":"snappass","stream":"stderr","length":8}
-log two
+{"time":"2021-05-03T03:55:49.360994155Z","service":"thing","message":"log 1\n"}
+{"time":"2021-05-03T03:55:49.654334232Z","service":"snappass","message":"log two\n"}
 `[1:]
 	out, writeLog := makeLogWriter()
 	n := 2
@@ -93,8 +86,8 @@ log two
 		"n": []string{"2"},
 	})
 	c.Check(out.String(), check.Equals, `
-2021-05-03T03:55:49Z thing stdout (6): log 1
-2021-05-03T03:55:49Z snappass stderr (8): log two
+2021-05-03T03:55:49.360Z [thing] log 1
+2021-05-03T03:55:49.654Z [snappass] log two
 `[1:])
 }
 
@@ -116,10 +109,8 @@ func (cs *clientSuite) TestFollowLogs(c *check.C) {
 	}))
 
 	go func() {
-		readsChan <- `{"time":"2021-05-03T03:55:49.360994155Z","service":"thing","stream":"stdout","length":6}` + "\n"
-		readsChan <- "log 1\n"
-		readsChan <- `{"time":"2021-05-03T03:55:49.654334232Z","service":"snappass","stream":"stderr","length":8}` + "\n"
-		readsChan <- "log two\n"
+		readsChan <- `{"time":"2021-05-03T03:55:49.360994155Z","service":"thing","message":"log 1\n"}` + "\n"
+		readsChan <- `{"time":"2021-05-03T03:55:49.654334232Z","service":"snappass","message":"log two\n"}` + "\n"
 		readsChan <- ""
 	}()
 	out, writeLog := makeLogWriter()
@@ -129,22 +120,19 @@ func (cs *clientSuite) TestFollowLogs(c *check.C) {
 	})
 	c.Assert(err, check.IsNil)
 	c.Check(out.String(), check.Equals, `
-2021-05-03T03:55:49Z thing stdout (6): log 1
-2021-05-03T03:55:49Z snappass stderr (8): log two
+2021-05-03T03:55:49.360Z [thing] log 1
+2021-05-03T03:55:49.654Z [snappass] log two
 `[1:])
 }
 
-func (cs *clientSuite) TestLogsBadWriteLogFunc(c *check.C) {
-	cs.rsp = `
-{"time":"2021-05-03T03:55:49.360994155Z","service":"thing","stream":"stdout","length":6}
-log 1
-`[1:]
+func (cs *clientSuite) TestLogsWriteLogError(c *check.C) {
+	cs.rsp = `{"time":"2021-05-03T03:55:49.360994155Z","service":"thing","message":"log 1\n"}` + "\n"
 	err := cs.cli.Logs(&client.LogsOptions{
-		WriteLog: func(_ time.Time, _ string, _ client.LogStream, _ int, _ io.Reader) error {
-			return nil
+		WriteLog: func(timestamp time.Time, service, message string) error {
+			return fmt.Errorf("ERROR!")
 		},
 	})
-	c.Assert(err, check.ErrorMatches, "WriteLog must read entire message")
+	c.Assert(err, check.ErrorMatches, "cannot output log: ERROR!")
 }
 
 type doerFunc func(*http.Request) (*http.Response, error)
@@ -172,10 +160,9 @@ func (r *followReader) Close() error {
 
 func makeLogWriter() (*bytes.Buffer, client.WriteLogFunc) {
 	var out bytes.Buffer
-	writeLog := func(timestamp time.Time, service string, stream client.LogStream, length int, message io.Reader) error {
-		fmt.Fprintf(&out, "%s %s %s (%d): ",
-			timestamp.Format(time.RFC3339), service, stream, length)
-		io.Copy(&out, message)
+	writeLog := func(timestamp time.Time, service, message string) error {
+		fmt.Fprintf(&out, "%s [%s] %s",
+			timestamp.Format("2006-01-02T15:04:05.000Z07:00"), service, message)
 		return nil
 	}
 	return &out, writeLog

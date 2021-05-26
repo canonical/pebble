@@ -26,9 +26,12 @@ import (
 	"time"
 )
 
+const (
+	logReaderSize = 4 * 1024
+)
+
 type LogsOptions struct {
-	// Function called to write a single log to the output (required). This
-	// function must read the entire message till EOF.
+	// Function called to write a single log to the output (required).
 	WriteLog WriteLogFunc
 
 	// The list of service names to fetch logs for (nil or empty slice means
@@ -41,28 +44,9 @@ type LogsOptions struct {
 	NumLogs *int
 }
 
-type WriteLogFunc func(timestamp time.Time, service string, stream LogStream, length int, message io.Reader) error
+type WriteLogFunc func(timestamp time.Time, service, message string) error
 
-type LogStream int
-
-const (
-	StreamUnknown LogStream = 0
-	StreamStdout  LogStream = 1
-	StreamStderr  LogStream = 2
-)
-
-func (s LogStream) String() string {
-	switch s {
-	case StreamStdout:
-		return "stdout"
-	case StreamStderr:
-		return "stderr"
-	default:
-		return "unknown"
-	}
-}
-
-// Logs fetches already-written logs from the given services.
+// Logs fetches previously-written logs from the given services.
 func (client *Client) Logs(opts *LogsOptions) error {
 	return client.logs(context.Background(), opts, false)
 }
@@ -90,7 +74,7 @@ func (client *Client) logs(ctx context.Context, opts *LogsOptions, follow bool) 
 	}
 	defer res.Body.Close()
 
-	reader := bufio.NewReader(res.Body)
+	reader := bufio.NewReaderSize(res.Body, logReaderSize)
 	for {
 		err = decodeLog(reader, opts.WriteLog)
 		if errors.Is(err, io.EOF) || errors.Is(err, context.Canceled) {
@@ -103,53 +87,31 @@ func (client *Client) logs(ctx context.Context, opts *LogsOptions, follow bool) 
 	return nil
 }
 
-// Decode next log from reader and call writeLog on it. Return io.EOF if no more
-// logs to read.
+// Decode next JSON log from reader and call writeLog on it. Return io.EOF if
+// no more logs to read.
 func decodeLog(reader *bufio.Reader, writeLog WriteLogFunc) error {
-	// Read log metadata JSON and newline separator
-	metaBytes, err := reader.ReadSlice('\n')
-	if err == io.EOF {
+	// Read log JSON and newline separator
+	b, err := reader.ReadSlice('\n')
+	if errors.Is(err, io.EOF) {
 		return io.EOF
 	}
 	if err != nil {
-		return fmt.Errorf("cannot read log metadata: %w", err)
+		return fmt.Errorf("cannot read log line: %w", err)
 	}
 
-	// Decode metadata
-	var meta struct {
+	var entry struct {
 		Time    time.Time `json:"time"`
 		Service string    `json:"service"`
-		Stream  string    `json:"stream"`
-		Length  int       `json:"length"`
+		Message string    `json:"message"`
 	}
-	err = json.Unmarshal(metaBytes, &meta)
+	err = json.Unmarshal(b, &entry)
 	if err != nil {
-		return fmt.Errorf("cannot unmarshal log metadata: %w", err)
-	}
-	stream := StreamUnknown
-	switch meta.Stream {
-	case "stdout":
-		stream = StreamStdout
-	case "stderr":
-		stream = StreamStderr
+		return fmt.Errorf("cannot unmarshal log: %w", err)
 	}
 
-	// Read message bytes
-	message := io.LimitReader(reader, int64(meta.Length))
-	err = writeLog(meta.Time, meta.Service, stream, meta.Length, message)
+	err = writeLog(entry.Time, entry.Service, entry.Message)
 	if err != nil {
 		return fmt.Errorf("cannot output log: %w", err)
-	}
-
-	// Check that the LimitReader hit EOF, otherwise the call to writeLog
-	// didn't read all the message bytes, and the bufio.Reader won't be in the
-	// right place for the next read.
-	var buf [1]byte
-	_, err = message.Read(buf[:])
-	if err == nil {
-		return fmt.Errorf("WriteLog must read entire message")
-	} else if err != io.EOF {
-		return err
 	}
 	return nil
 }
