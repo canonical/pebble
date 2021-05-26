@@ -20,7 +20,10 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"os/exec"
+	"os/user"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"syscall"
 	"testing"
@@ -78,6 +81,12 @@ services:
     test4:
         override: replace
         command: echo too-fast
+
+    test5:
+        override: replace
+        command: /bin/sh -c "sleep 300"
+        user: nobody
+        group: nogroup
 `
 
 func (s *S) SetUpTest(c *C) {
@@ -257,6 +266,50 @@ func (s *S) TestStartBadCommand(c *C) {
 	c.Assert(svc.Current, Equals, servstate.StatusInactive)
 }
 
+func (s *S) TestUserGroupFails(c *C) {
+	// Test with user and group will fail due to permission issues (unless
+	// running as root)
+	if os.Getuid() == 0 {
+		c.Skip("requires non-root user")
+	}
+
+	var gotUid uint32
+	var gotGid uint32
+	restore := servstate.FakeSetCmdCredential(func(cmd *exec.Cmd, credential *syscall.Credential) {
+		gotUid = credential.Uid
+		gotGid = credential.Gid
+		cmd.SysProcAttr.Credential = credential
+	})
+	defer restore()
+
+	s.st.Lock()
+	ts, err := servstate.Start(s.st, []string{"test5"})
+	c.Check(err, IsNil)
+	chg := s.st.NewChange("test", "Start test")
+	chg.AddAll(ts)
+	s.st.Unlock()
+
+	s.ensure(c, 1)
+
+	s.st.Lock()
+	c.Check(chg.Status(), Equals, state.ErrorStatus)
+	c.Check(chg.Err(), ErrorMatches, `.*\n.*cannot start service: .* operation not permitted.*`)
+	s.st.Unlock()
+
+	svc := s.serviceByName(c, "test5")
+	c.Assert(svc.Current, Equals, servstate.StatusInactive)
+
+	// Ensure that setCmdCredential was called with the correct UID and GID
+	u, err := user.Lookup("nobody")
+	c.Check(err, IsNil)
+	uid, _ := strconv.Atoi(u.Uid)
+	c.Check(gotUid, Equals, uint32(uid))
+	g, err := user.LookupGroup("nogroup")
+	c.Check(err, IsNil)
+	gid, _ := strconv.Atoi(g.Gid)
+	c.Check(gotGid, Equals, uint32(gid))
+}
+
 func (s *S) serviceByName(c *C, name string) *servstate.ServiceInfo {
 	services, err := s.manager.Services([]string{name})
 	c.Assert(err, IsNil)
@@ -313,6 +366,11 @@ services:
     test4:
         override: replace
         command: echo too-fast
+    test5:
+        override: replace
+        command: /bin/sh -c "sleep 300"
+        user: nobody
+        group: nogroup
 `[1:], s.log, s.log)
 	c.Assert(planYAML(c, s.manager), Equals, expected)
 }
@@ -532,6 +590,7 @@ func (s *S) TestServices(c *C) {
 		{Name: "test2", Current: servstate.StatusInactive, Startup: servstate.StartupDisabled},
 		{Name: "test3", Current: servstate.StatusInactive, Startup: servstate.StartupDisabled},
 		{Name: "test4", Current: servstate.StatusInactive, Startup: servstate.StartupDisabled},
+		{Name: "test5", Current: servstate.StatusInactive, Startup: servstate.StartupDisabled},
 	})
 
 	services, err = s.manager.Services([]string{"test2", "test3"})
@@ -557,6 +616,7 @@ func (s *S) TestServices(c *C) {
 		{Name: "test2", Current: servstate.StatusActive, Startup: servstate.StartupDisabled},
 		{Name: "test3", Current: servstate.StatusInactive, Startup: servstate.StartupDisabled},
 		{Name: "test4", Current: servstate.StatusInactive, Startup: servstate.StartupDisabled},
+		{Name: "test5", Current: servstate.StatusInactive, Startup: servstate.StartupDisabled},
 	})
 }
 

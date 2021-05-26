@@ -54,6 +54,8 @@ services:
             VAR1: val1
             VAR2: val2
             VAR3: val3
+        user: bob
+        group: staff
 
     srv2:
         override: replace
@@ -73,6 +75,9 @@ Some details worth highlighting:
   - There is the `override` field (for now required) which defines whether this 
 entry _overrides_ the previous service of the same name (if any - missing is 
 okay), or merges with it.
+  - The optional `user` field allows starting a service with a different user
+    than the one Pebble was started with. The `group` field is similar but for
+    a group name (it is optional even if `user` is specified).
 
 ### Layer override example
 
@@ -183,6 +188,22 @@ services:
         # that should be set in the context of the process
         environment:
             <env var name>: <env var value>
+
+        # (Optional) Username for starting service as a different user. It is
+        # an error if the user doesn't exist.
+        user: <username>
+
+        # (Optional) User ID for starting service as a different user. If both
+        # user and user-id are specified, the user's UID must match user-id.
+        user-id: <uid>
+
+        # (Optional) Group name for starting service as a different user. It is
+        # an error if the group doesn't exist.
+        group: <group name>
+
+        # (Optional) Group ID for starting service as a different user. If both
+        # group and group-id are specified, the group's GID must match group-id.
+        group-id: <gid>
 ```
 
 ## TODO/Contributing

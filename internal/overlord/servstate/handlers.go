@@ -8,12 +8,13 @@ import (
 	"syscall"
 	"time"
 
+	"gopkg.in/tomb.v2"
+
 	"github.com/canonical/pebble/internal/logger"
+	"github.com/canonical/pebble/internal/osutil"
 	"github.com/canonical/pebble/internal/overlord/state"
 	"github.com/canonical/pebble/internal/servicelog"
 	"github.com/canonical/pebble/internal/strutil/shlex"
-
-	"gopkg.in/tomb.v2"
 )
 
 // TaskServiceRequest extracts the *ServiceRequest that was associated
@@ -87,6 +88,18 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 	}
 	cmd := exec.Command(args[0], args[1:]...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+
+	// Start as another user if specified in plan
+	uid, gid, err := osutil.NormalizeUidGid(service.UserID, service.GroupID, service.User, service.Group)
+	if err != nil {
+		return err
+	}
+	if uid != nil && gid != nil {
+		setCmdCredential(cmd, &syscall.Credential{
+			Uid: uint32(*uid),
+			Gid: uint32(*gid),
+		})
+	}
 
 	// Pass service description's environment variables to child process
 	cmd.Env = os.Environ()
@@ -202,4 +215,8 @@ func (m *ServiceManager) doStop(task *state.Task, tomb *tomb.Tomb) error {
 		}
 	}
 	panic("unreachable")
+}
+
+var setCmdCredential = func(cmd *exec.Cmd, credential *syscall.Credential) {
+	cmd.SysProcAttr.Credential = credential
 }
