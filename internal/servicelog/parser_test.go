@@ -17,7 +17,6 @@ package servicelog_test
 import (
 	"errors"
 	"strings"
-	"testing/iotest"
 	"time"
 
 	. "gopkg.in/check.v1"
@@ -134,8 +133,16 @@ func (s *parserSuite) TestParser(c *C) {
 	c.Check(parser.Next(), Equals, false)
 	c.Check(parser.Err(), IsNil)
 
-	// Reader returns a Read error
-	parser = servicelog.NewParser(iotest.ErrReader(errors.New("ERROR!")), 1024)
+	// Read error is handled
+	parser = servicelog.NewParser(&errReader{errors.New("ERROR!")}, 1024)
 	c.Check(parser.Next(), Equals, false)
 	c.Check(parser.Err(), ErrorMatches, "ERROR!")
+}
+
+type errReader struct {
+	err error
+}
+
+func (r *errReader) Read(p []byte) (int, error) {
+	return 0, r.err
 }
