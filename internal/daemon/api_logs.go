@@ -15,10 +15,7 @@
 package daemon
 
 import (
-	"bufio"
-	"bytes"
 	"encoding/json"
-	"errors"
 	"io"
 	"log"
 	"net/http"
@@ -117,15 +114,15 @@ func (r logsResponse) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		if numLogs < 0 {
 			// Client asked for all logs; write everything from the iterators
 			// (which are TailIterators).
-			err = writeLogs(itsByName, func(entry logEntry) error {
-				return encoder.Encode(entry)
+			err = writeLogs(itsByName, func(entry servicelog.Entry) error {
+				return encoder.Encode(jsonLog(entry))
 			})
 		} else {
 			// Client asked for n logs, collect from iterators (which are
 			// HeadIterator(n)) to a FIFO queue of size n and drop oldest. This
 			// avoids reading numServices*numLogs into memory and sorting.
-			fifo := make(chan logEntry, numLogs)
-			err = writeLogs(itsByName, func(entry logEntry) error {
+			fifo := make(chan servicelog.Entry, numLogs)
+			err = writeLogs(itsByName, func(entry servicelog.Entry) error {
 				// If FIFO channel is full, discard oldest log entry before
 				// writing new one so it doesn't block.
 				if len(fifo) == cap(fifo) {
@@ -136,7 +133,7 @@ func (r logsResponse) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			})
 			// Then write the logs from the FIFO to the response.
 			for len(fifo) > 0 && err == nil {
-				err = encoder.Encode(<-fifo)
+				err = encoder.Encode(jsonLog(<-fifo))
 			}
 		}
 		if err != nil {
@@ -151,10 +148,10 @@ func (r logsResponse) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 		// followLogs sends logs to output channel as they arrive. Do this
 		// until request is cancelled.
-		output := make(chan logEntry)
+		output := make(chan servicelog.Entry)
 		go followLogs(itsByName, req.Context().Done(), output)
 		for entry := range output {
-			err = encoder.Encode(entry)
+			err = encoder.Encode(jsonLog(entry))
 			if err != nil {
 				log.Printf("error writing logs: %v", err)
 				return
@@ -178,13 +175,13 @@ func writeLogs(itsByName map[string]servicelog.Iterator, writeLog writeLogFunc) 
 	}
 	sort.Strings(names)
 
-	parsersByName := make(map[string]*logParser, len(itsByName))
+	parsersByName := make(map[string]*servicelog.Parser, len(itsByName))
 	for name, it := range itsByName {
-		parsersByName[name] = newLogParser(it, logReaderSize)
+		parsersByName[name] = servicelog.NewParser(it, logReaderSize)
 	}
 
 	// Slice of parsers (or nil) holding the next log from each service.
-	parsers := make([]*logParser, len(names))
+	parsers := make([]*servicelog.Parser, len(names))
 	for {
 		// Grab next log for iterators that need fetching (parsers[i] nil).
 		for i, name := range names {
@@ -227,112 +224,19 @@ func writeLogs(itsByName map[string]servicelog.Iterator, writeLog writeLogFunc) 
 	return nil
 }
 
-type writeLogFunc func(entry logEntry) error
-
-// TODO: move this to servicelog?
-// logParser parses and iterates over logs from a Reader until EOF (or another
-// error occurs). Each log parser
-type logParser struct {
-	r     io.Reader
-	br    *bufio.Reader
-	entry logEntry
-	err   error
-}
-
-// newLogParser creates a logParser with the given buffer size.
-func newLogParser(r io.Reader, size int) *logParser {
-	return &logParser{
-		r:  r,
-		br: bufio.NewReaderSize(r, size),
-	}
-}
-
-// Reset resets the internal buffer (and clears any error).
-func (lp *logParser) Reset() {
-	lp.br.Reset(lp.r)
-	lp.err = nil
-}
-
-// Next parses the next log from the reader and reports whether another log
-// is available (false is returned on EOF or other read error).
-func (lp *logParser) Next() bool {
-	for lp.err == nil {
-		line, err := lp.br.ReadSlice('\n')
-		if err != nil && !errors.Is(err, io.EOF) {
-			// Non EOF error, stop now
-			lp.err = err
-			break
-		}
-		if len(line) == 0 {
-			lp.err = io.EOF
-			break
-		}
-		if errors.Is(err, io.EOF) {
-			// EOF reached, stop iterating after processing line
-			lp.err = err
-		}
-		entry, ok := parseLog(line)
-		if ok {
-			// Normal log line
-			lp.entry = entry
-			return true
-		}
-		if !lp.entry.Time.IsZero() {
-			// Partial log line (long line or "output truncated"), use
-			// timestamp and service from previous entry.
-			lp.entry.Message = string(line)
-			return true
-		}
-	}
-	return false
-}
-
-// Entry returns the current log entry (should only be called after Next
-// returns true).
-func (lp *logParser) Entry() logEntry {
-	return lp.entry
-}
-
-// Err returns the last error that occurred (EOF is not considered an error).
-func (lp *logParser) Err() error {
-	if errors.Is(lp.err, io.EOF) {
-		return nil
-	}
-	return lp.err
-}
-
-// parseLog parses a log entry of the form
-// "2021-05-20T15:39:12.345Z [service] log message". Ok is true if a valid log
-// entry was parsed, false if the line is not a valid log.
-func parseLog(line []byte) (entry logEntry, ok bool) {
-	fields := bytes.SplitN(line, []byte(" "), 3)
-	if len(fields) != 3 {
-		return logEntry{}, false
-	}
-	// .999 allows any number of fractional seconds (including none at all)
-	timestamp, err := time.Parse("2006-01-02T15:04:05.999Z07:00", string(fields[0]))
-	if err != nil {
-		return logEntry{}, false
-	}
-	if len(fields[1]) < 3 {
-		return logEntry{}, false
-	}
-	service := string(fields[1][1 : len(fields[1])-1]) // Trim [ and ] from "[service]"
-	message := string(fields[2])
-	return logEntry{timestamp, service, message}, true
-}
+type writeLogFunc func(entry servicelog.Entry) error
 
 // followLogs follows ("tails") the log iterators and sends logs to the output
 // channel as they're written. It stops when the done channel is closed, and
 // closes the output channel when everything is finished.
-func followLogs(itsByName map[string]servicelog.Iterator, done <-chan struct{}, output chan<- logEntry) {
+func followLogs(itsByName map[string]servicelog.Iterator, done <-chan struct{}, output chan<- servicelog.Entry) {
 	// Start one goroutine per service to listen for and output new logs.
 	var wg sync.WaitGroup
 	for _, it := range itsByName {
 		wg.Add(1)
 		go func(it servicelog.Iterator) {
 			defer wg.Done()
-			parser := newLogParser(it, logReaderSize)
+			parser := servicelog.NewParser(it, logReaderSize)
 			for it.Next(done) {
 				parser.Reset()
 				for parser.Next() {
@@ -357,7 +261,7 @@ func followLogs(itsByName map[string]servicelog.Iterator, done <-chan struct{}, 
 //
 // {"time":"2021-04-23T01:28:52.660Z","service":"redis","message":"redis started up"}
 // {"time":"2021-04-23T01:28:52.798Z","service":"thing","message":"did something"}
-type logEntry struct {
+type jsonLog struct {
 	Time    time.Time `json:"time"`
 	Service string    `json:"service"`
 	Message string    `json:"message"`
