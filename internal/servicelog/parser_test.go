@@ -15,7 +15,9 @@
 package servicelog_test
 
 import (
+	"bytes"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -145,4 +147,25 @@ type errReader struct {
 
 func (r *errReader) Read(p []byte) (int, error) {
 	return 0, r.err
+}
+
+func (s *parserSuite) TestRoundTrip(c *C) {
+	start := time.Now().UTC()
+	time.Sleep(10 * time.Millisecond) // to ensure that log timestamps are strictly after start
+	buf := &bytes.Buffer{}
+	fw := servicelog.NewFormatWriter(buf, "svc")
+	for i := 0; i < 10; i++ {
+		fmt.Fprintf(fw, "message %d\n", i)
+	}
+	parser := servicelog.NewParser(buf, 1024)
+	i := 0
+	for parser.Next() {
+		got := parser.Entry()
+		c.Check(got.Time.After(start), Equals, true,
+			Commentf("expected timestamp after %v, got %v", start, got.Time))
+		c.Check(got.Service, Equals, "svc")
+		c.Check(got.Message, Equals, fmt.Sprintf("message %d\n", i))
+		i++
+	}
+	c.Check(parser.Err(), IsNil)
 }

@@ -83,8 +83,8 @@ func (p *Parser) Next() bool {
 			return true
 		}
 		if !p.entry.Time.IsZero() {
-			// Partial log line (long line or "output truncated"), use
-			// timestamp and service from previous entry.
+			// Partial log line due to long line or "(... output truncated ...)",
+			// use timestamp and service from previous entry.
 			p.entry.Message = string(line)
 			return true
 		}
