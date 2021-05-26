@@ -2,6 +2,7 @@ package servstate
 
 import (
 	"fmt"
+	"io"
 	"os/exec"
 	"sort"
 	"sync"
@@ -20,14 +21,14 @@ type ServiceManager struct {
 	plan     *plan.Plan
 	services map[string]*activeService
 
-	verboseOutput servicelog.Output
+	serviceOutput io.Writer
 }
 
 type activeService struct {
 	cmd       *exec.Cmd
 	err       error
 	done      chan struct{}
-	logBuffer *servicelog.WriteBuffer
+	logBuffer *servicelog.RingBuffer
 }
 
 // LabelExists is the error returned by AppendLayer when a layer with that
@@ -40,13 +41,13 @@ func (e *LabelExists) Error() string {
 	return fmt.Sprintf("layer %q already exists", e.Label)
 }
 
-func NewManager(s *state.State, runner *state.TaskRunner, pebbleDir string, verboseOutput servicelog.Output) (*ServiceManager, error) {
+func NewManager(s *state.State, runner *state.TaskRunner, pebbleDir string, serviceOutput io.Writer) (*ServiceManager, error) {
 	manager := &ServiceManager{
 		state:         s,
 		runner:        runner,
 		pebbleDir:     pebbleDir,
 		services:      make(map[string]*activeService),
-		verboseOutput: verboseOutput,
+		serviceOutput: serviceOutput,
 	}
 
 	runner.AddHandler("start", manager.doStart, nil)

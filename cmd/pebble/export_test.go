@@ -31,8 +31,6 @@ func Client() *client.Client {
 	return client.New(ClientConfig)
 }
 
-type LogWriter = logWriter
-
 const WriteLogBufSize = writeLogBufSize
 
 var (

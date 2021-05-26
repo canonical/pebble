@@ -17,6 +17,7 @@ package daemon
 import (
 	"context"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -38,7 +39,6 @@ import (
 	"github.com/canonical/pebble/internal/overlord"
 	"github.com/canonical/pebble/internal/overlord/standby"
 	"github.com/canonical/pebble/internal/overlord/state"
-	"github.com/canonical/pebble/internal/servicelog"
 	"github.com/canonical/pebble/internal/systemd"
 )
 
@@ -59,9 +59,9 @@ type Options struct {
 	// the pebble directory.
 	SocketPath string
 
-	// VerboseOutput is the log outputter to send service stdout and stderr
-	// logs to. If nil, service logs are discarded.
-	VerboseOutput servicelog.Output
+	// ServiceOuput is an optional io.Writer for the service log output, if set, all services
+	// log output will be written to the writer.
+	ServiceOutput io.Writer
 }
 
 // A Daemon listens for requests and routes them to the right command
@@ -293,18 +293,33 @@ func (w *wrappedWriter) Flush() {
 	}
 }
 
+func (w *wrappedWriter) status() int {
+	if w.s == 0 {
+		// If status was not explicitly written, HTTP 200 is implied.
+		return http.StatusOK
+	}
+	return w.s
+}
+
 func logit(handler http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ww := &wrappedWriter{w: w}
 		t0 := time.Now()
 		handler.ServeHTTP(ww, r)
 		t := time.Now().Sub(t0)
-		if !strings.Contains(r.URL.String(), "/v1/changes/") {
+
+		// Don't log GET /v1/changes/{change-id} as that's polled quickly by
+		// clients when waiting for a change (e.g., service starting). Also
+		// don't log GET /v1/system-info to avoid it filling logs with noise
+		// when that endpoint is used as a kind of health check (Juju hits it
+		// every 5s, for example).
+		skipLog := r.Method == "GET" && (strings.HasPrefix(r.URL.Path, "/v1/changes/") || r.URL.Path == "/v1/system-info")
+		if !skipLog {
 			if strings.HasSuffix(r.RemoteAddr, ";") {
-				logger.Debugf("%s %s %s %s %d", r.RemoteAddr, r.Method, r.URL, t, ww.s)
-				logger.Noticef("%s %s %s %d", r.Method, r.URL, t, ww.s)
+				logger.Debugf("%s %s %s %s %d", r.RemoteAddr, r.Method, r.URL, t, ww.status())
+				logger.Noticef("%s %s %s %d", r.Method, r.URL, t, ww.status())
 			} else {
-				logger.Noticef("%s %s %s %s %d", r.RemoteAddr, r.Method, r.URL, t, ww.s)
+				logger.Noticef("%s %s %s %s %d", r.RemoteAddr, r.Method, r.URL, t, ww.status())
 			}
 		}
 	})
@@ -674,7 +689,7 @@ func New(opts *Options) (*Daemon, error) {
 		normalSocketPath:    opts.SocketPath,
 		untrustedSocketPath: opts.SocketPath + ".untrusted",
 	}
-	ovld, err := overlord.New(opts.Dir, d, opts.VerboseOutput)
+	ovld, err := overlord.New(opts.Dir, d, opts.ServiceOutput)
 	if err == state.ErrExpectedReboot {
 		// we proceed without overlord until we reach Stop
 		// where we will schedule and wait again for a system restart.

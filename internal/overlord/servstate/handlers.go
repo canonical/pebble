@@ -2,17 +2,19 @@ package servstate
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"syscall"
 	"time"
 
+	"gopkg.in/tomb.v2"
+
 	"github.com/canonical/pebble/internal/logger"
+	"github.com/canonical/pebble/internal/osutil"
 	"github.com/canonical/pebble/internal/overlord/state"
 	"github.com/canonical/pebble/internal/servicelog"
 	"github.com/canonical/pebble/internal/strutil/shlex"
-
-	"gopkg.in/tomb.v2"
 )
 
 // TaskServiceRequest extracts the *ServiceRequest that was associated
@@ -50,9 +52,7 @@ var (
 	killWait = 5 * time.Second
 	failWait = 10 * time.Second
 
-	maxLogBytes  = 1024 * 1024
-	avgLogLine   = 100
-	maxLogWrites = maxLogBytes / avgLogLine
+	maxLogBytes = 100 * 1024
 )
 
 // Start starts the named service after also starting all of its dependencies.
@@ -89,20 +89,33 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 	cmd := exec.Command(args[0], args[1:]...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
+	// Start as another user if specified in plan
+	uid, gid, err := osutil.NormalizeUidGid(service.UserID, service.GroupID, service.User, service.Group)
+	if err != nil {
+		return err
+	}
+	if uid != nil && gid != nil {
+		setCmdCredential(cmd, &syscall.Credential{
+			Uid: uint32(*uid),
+			Gid: uint32(*gid),
+		})
+	}
+
 	// Pass service description's environment variables to child process
 	cmd.Env = os.Environ()
 	for k, v := range service.Environment {
 		cmd.Env = append(cmd.Env, k+"="+v)
 	}
 
-	logBuffer := servicelog.NewWriteBuffer(maxLogWrites, maxLogBytes)
+	logBuffer := servicelog.NewRingBuffer(maxLogBytes)
 	var outputIterator servicelog.Iterator
-	if m.verboseOutput != nil {
+	if m.serviceOutput != nil {
 		outputIterator = logBuffer.TailIterator()
 	}
 
-	cmd.Stdout = logBuffer.StreamWriter(servicelog.Stdout)
-	cmd.Stderr = logBuffer.StreamWriter(servicelog.Stderr)
+	logWriter := servicelog.NewFormatWriter(logBuffer, req.Name)
+	cmd.Stdout = logWriter
+	cmd.Stderr = logWriter
 	err = cmd.Start()
 	if err != nil {
 		if outputIterator != nil {
@@ -123,12 +136,14 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 		_ = active.logBuffer.Close()
 		close(active.done)
 	}()
-	if m.verboseOutput != nil {
+	if m.serviceOutput != nil {
 		go func() {
 			defer outputIterator.Close()
-			err := servicelog.Sink(outputIterator, m.verboseOutput, req.Name, active.done)
-			if err != nil {
-				logger.Noticef("service %q log sink closed: %v", req.Name, err)
+			for outputIterator.Next(active.done) {
+				_, err := io.Copy(m.serviceOutput, outputIterator)
+				if err != nil {
+					logger.Noticef("service %q log write failed: %v", req.Name, err)
+				}
 			}
 		}()
 	}
@@ -200,4 +215,8 @@ func (m *ServiceManager) doStop(task *state.Task, tomb *tomb.Tomb) error {
 		}
 	}
 	panic("unreachable")
+}
+
+var setCmdCredential = func(cmd *exec.Cmd, credential *syscall.Credential) {
+	cmd.SysProcAttr.Credential = credential
 }

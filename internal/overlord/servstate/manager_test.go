@@ -20,7 +20,10 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"os/exec"
+	"os/user"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"syscall"
 	"testing"
@@ -32,7 +35,6 @@ import (
 	"github.com/canonical/pebble/internal/overlord/servstate"
 	"github.com/canonical/pebble/internal/overlord/state"
 	"github.com/canonical/pebble/internal/plan"
-	"github.com/canonical/pebble/internal/servicelog"
 	"github.com/canonical/pebble/internal/testutil"
 )
 
@@ -79,6 +81,12 @@ services:
     test4:
         override: replace
         command: echo too-fast
+
+    test5:
+        override: replace
+        command: /bin/sh -c "sleep 300"
+        user: nobody
+        group: nogroup
 `
 
 func (s *S) SetUpTest(c *C) {
@@ -98,11 +106,10 @@ func (s *S) SetUpTest(c *C) {
 	s.logBufferMut.Lock()
 	s.logBuffer.Reset()
 	s.logBufferMut.Unlock()
-	logOutput := servicelog.OutputFunc(func(timestamp time.Time, service string, stream servicelog.StreamID, length int, message io.Reader) error {
+	logOutput := writerFunc(func(p []byte) (int, error) {
 		s.logBufferMut.Lock()
 		defer s.logBufferMut.Unlock()
-		_, err := io.Copy(&s.logBuffer, message)
-		return err
+		return s.logBuffer.Write(p)
 	})
 
 	s.runner = state.NewTaskRunner(s.st)
@@ -159,7 +166,7 @@ func (s *S) startServices(c *C, services []string) {
 	c.Check(chg.Status(), Equals, state.DoneStatus, Commentf("Error: %v", chg.Err()))
 	s.st.Unlock()
 
-	s.assertLog(c, "test1\ntest2\n")
+	s.assertLog(c, ".*test1\n.*test2\n")
 
 	cmds := s.manager.CmdsForTest()
 	c.Check(cmds, HasLen, len(services))
@@ -210,7 +217,10 @@ func (s *S) stopServices(c *C, services []string) {
 
 func (s *S) TestServiceLogs(c *C) {
 	services := []string{"test1", "test2"}
-	outputs := map[string]string{"test1": "test1\n", "test2": "test2\n"}
+	outputs := map[string]string{
+		"test1": `\d+-\d+-\d+T\d+:\d+:\d+\.\d+Z \[test1\] test1\n`,
+		"test2": `\d+-\d+-\d+T\d+:\d+:\d+\.\d+Z \[test2\] test2\n`,
+	}
 	s.startServices(c, services)
 
 	if c.Failed() {
@@ -228,7 +238,7 @@ func (s *S) TestServiceLogs(c *C) {
 			c.Assert(err, IsNil)
 		}
 
-		c.Assert(buf.String(), Equals, outputs[serviceName])
+		c.Assert(buf.String(), Matches, outputs[serviceName])
 
 		err = it.Close()
 		c.Assert(err, IsNil)
@@ -254,6 +264,50 @@ func (s *S) TestStartBadCommand(c *C) {
 
 	svc := s.serviceByName(c, "test3")
 	c.Assert(svc.Current, Equals, servstate.StatusInactive)
+}
+
+func (s *S) TestUserGroupFails(c *C) {
+	// Test with user and group will fail due to permission issues (unless
+	// running as root)
+	if os.Getuid() == 0 {
+		c.Skip("requires non-root user")
+	}
+
+	var gotUid uint32
+	var gotGid uint32
+	restore := servstate.FakeSetCmdCredential(func(cmd *exec.Cmd, credential *syscall.Credential) {
+		gotUid = credential.Uid
+		gotGid = credential.Gid
+		cmd.SysProcAttr.Credential = credential
+	})
+	defer restore()
+
+	s.st.Lock()
+	ts, err := servstate.Start(s.st, []string{"test5"})
+	c.Check(err, IsNil)
+	chg := s.st.NewChange("test", "Start test")
+	chg.AddAll(ts)
+	s.st.Unlock()
+
+	s.ensure(c, 1)
+
+	s.st.Lock()
+	c.Check(chg.Status(), Equals, state.ErrorStatus)
+	c.Check(chg.Err(), ErrorMatches, `.*\n.*cannot start service: .* operation not permitted.*`)
+	s.st.Unlock()
+
+	svc := s.serviceByName(c, "test5")
+	c.Assert(svc.Current, Equals, servstate.StatusInactive)
+
+	// Ensure that setCmdCredential was called with the correct UID and GID
+	u, err := user.Lookup("nobody")
+	c.Check(err, IsNil)
+	uid, _ := strconv.Atoi(u.Uid)
+	c.Check(gotUid, Equals, uint32(uid))
+	g, err := user.LookupGroup("nogroup")
+	c.Check(err, IsNil)
+	gid, _ := strconv.Atoi(g.Gid)
+	c.Check(gotGid, Equals, uint32(gid))
 }
 
 func (s *S) serviceByName(c *C, name string) *servstate.ServiceInfo {
@@ -312,6 +366,11 @@ services:
     test4:
         override: replace
         command: echo too-fast
+    test5:
+        override: replace
+        command: /bin/sh -c "sleep 300"
+        user: nobody
+        group: nogroup
 `[1:], s.log, s.log)
 	c.Assert(planYAML(c, s.manager), Equals, expected)
 }
@@ -531,6 +590,7 @@ func (s *S) TestServices(c *C) {
 		{Name: "test2", Current: servstate.StatusInactive, Startup: servstate.StartupDisabled},
 		{Name: "test3", Current: servstate.StatusInactive, Startup: servstate.StartupDisabled},
 		{Name: "test4", Current: servstate.StatusInactive, Startup: servstate.StartupDisabled},
+		{Name: "test5", Current: servstate.StatusInactive, Startup: servstate.StartupDisabled},
 	})
 
 	services, err = s.manager.Services([]string{"test2", "test3"})
@@ -556,6 +616,7 @@ func (s *S) TestServices(c *C) {
 		{Name: "test2", Current: servstate.StatusActive, Startup: servstate.StartupDisabled},
 		{Name: "test3", Current: servstate.StatusInactive, Startup: servstate.StartupDisabled},
 		{Name: "test4", Current: servstate.StatusInactive, Startup: servstate.StartupDisabled},
+		{Name: "test5", Current: servstate.StatusInactive, Startup: servstate.StartupDisabled},
 	})
 }
 
@@ -614,4 +675,10 @@ PEBBLE_ENV_TEST_1=foo
 PEBBLE_ENV_TEST_2=bar bazz
 PEBBLE_ENV_TEST_PARENT=from-parent
 `[1:])
+}
+
+type writerFunc func([]byte) (int, error)
+
+func (f writerFunc) Write(p []byte) (int, error) {
+	return f(p)
 }
