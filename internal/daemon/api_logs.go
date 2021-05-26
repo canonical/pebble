@@ -194,7 +194,7 @@ func writeLogs(itsByName map[string]servicelog.Iterator, writeLog writeLogFunc) 
 		}
 
 		// Find log with earliest timestamp. Linear search is okay here as there
-		// will only be a very small number of services (likely 1, 2, or 3).
+		// will only be a very small number of services.
 		earliest := -1
 		for i, parser := range parsers {
 			if parser == nil {
