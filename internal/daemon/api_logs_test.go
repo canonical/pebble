@@ -401,22 +401,26 @@ func (s *logsSuite) TestMultipleServicesFollow(c *C) {
 		done <- struct{}{}
 	}()
 
-	waitLog := func() testLogEntry {
+	waitLogs := func() []testLogEntry {
 		select {
-		case log := <-logChan:
-			reader := bufio.NewReader(strings.NewReader(log))
-			entry, ok := decodeLog(c, reader)
-			c.Check(ok, Equals, true)
-			return entry
+		case logsStr := <-logChan:
+			return decodeLogs(c, strings.NewReader(logsStr))
 		case <-time.After(1 * time.Second):
 			c.Fatalf("timed out waiting for log")
-			return testLogEntry{}
+			return nil
 		}
+	}
+	waitLog := func() testLogEntry {
+		logs := waitLogs()
+		c.Check(logs, HasLen, 1)
+		return logs[0]
 	}
 
 	// The two logs written before the request should be there
-	checkLog(c, waitLog(), "one", "message1 1\n")
-	checkLog(c, waitLog(), "two", "message2 1\n")
+	logs := waitLogs()
+	c.Assert(logs, HasLen, 2)
+	checkLog(c, logs[0], "one", "message1 1\n")
+	checkLog(c, logs[1], "two", "message2 1\n")
 
 	// Then write a bunch more and ensure we can "follow" them
 	fmt.Fprintf(lw1, "message1 2\n")
@@ -442,6 +446,7 @@ type followRecorder struct {
 	logChan chan string
 	header  http.Header
 	status  int
+	written []byte
 }
 
 func (r *followRecorder) Header() http.Header {
@@ -455,12 +460,17 @@ func (r *followRecorder) Write(p []byte) (int, error) {
 	if r.status == 0 {
 		r.status = 200
 	}
-	r.logChan <- string(p)
+	r.written = append(r.written, p...)
 	return len(p), nil
 }
 
 func (r *followRecorder) WriteHeader(status int) {
 	r.status = status
+}
+
+func (r *followRecorder) Flush() {
+	r.logChan <- string(r.written)
+	r.written = r.written[:0]
 }
 
 func (s *logsSuite) recordResponse(c *C, url string, svcMgr serviceManager) *httptest.ResponseRecorder {

@@ -84,8 +84,15 @@ func (p *Parser) Next() bool {
 		}
 		entry, err := Parse(line)
 		if err == nil {
-			// Normal log line
 			p.entry = entry
+			if entry.Message == "" {
+				// FormatWriter has only written "timestamp [service]" and not
+				// yet written log message, break this iteration so caller can
+				// wait for next write. When message comes through it'll use
+				// this p.entry's timestamp and service name.
+				break
+			}
+			// Normal log line
 			return true
 		}
 		if !p.entry.Time.IsZero() {
