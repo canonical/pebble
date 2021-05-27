@@ -22,6 +22,12 @@ import (
 	"time"
 )
 
+const (
+	// .999 allows any number of fractional seconds (including none at all)
+	// when parsing. This is different from outputTimeFormat.
+	parseTimeFormat = "2006-01-02T15:04:05.999Z07:00"
+)
+
 var (
 	errParseFields  = errors.New("line has too few fields")
 	errParseTime    = errors.New("invalid log timestamp")
@@ -113,8 +119,7 @@ func Parse(line []byte) (Entry, error) {
 	if len(fields) != 3 {
 		return Entry{}, errParseFields
 	}
-	// .999 allows any number of fractional seconds (including none at all)
-	timestamp, err := time.Parse("2006-01-02T15:04:05.999Z07:00", string(fields[0]))
+	timestamp, err := time.Parse(parseTimeFormat, string(fields[0]))
 	if err != nil {
 		return Entry{}, errParseTime
 	}

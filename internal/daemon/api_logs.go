@@ -90,17 +90,23 @@ func (r logsResponse) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 
 	// Get log iterators by service name (and close them when we're done).
-	itsByName, err := r.svcMgr.ServiceLogs(services, numLogs)
+	iterators, err := r.svcMgr.ServiceLogs(services, numLogs)
 	if err != nil {
 		response := statusInternalError("cannot fetch log iterators: %v", err)
 		response.ServeHTTP(w, req)
 		return
 	}
 	defer func() {
-		for _, it := range itsByName {
+		for _, it := range iterators {
 			_ = it.Close()
 		}
 	}()
+
+	// Allocate parsers up-front for use in both writeLogs and followLogs.
+	parsers := make(map[string]*servicelog.Parser)
+	for name, it := range iterators {
+		parsers[name] = servicelog.NewParser(it, logReaderSize)
+	}
 
 	// Output format is JSON Lines, which doesn't have an official mime type,
 	// but "application/x-ndjson" is what most people seem to use:
@@ -114,7 +120,7 @@ func (r logsResponse) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		if numLogs < 0 {
 			// Client asked for all logs; write everything from the iterators
 			// (which are TailIterators).
-			err = writeLogs(itsByName, func(entry servicelog.Entry) error {
+			err = writeLogs(iterators, parsers, func(entry servicelog.Entry) error {
 				return encoder.Encode(jsonLog(entry))
 			})
 		} else {
@@ -122,7 +128,7 @@ func (r logsResponse) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			// HeadIterator(n)) to a FIFO queue of size n and drop oldest. This
 			// avoids reading numServices*numLogs into memory and sorting.
 			fifo := make(chan servicelog.Entry, numLogs)
-			err = writeLogs(itsByName, func(entry servicelog.Entry) error {
+			err = writeLogs(iterators, parsers, func(entry servicelog.Entry) error {
 				// If FIFO channel is full, discard oldest log entry before
 				// writing new one so it doesn't block.
 				if len(fifo) == cap(fifo) {
@@ -149,7 +155,7 @@ func (r logsResponse) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		// followLogs sends logs to output channel as they arrive. Do this
 		// until request is cancelled.
 		output := make(chan servicelog.Entry)
-		go followLogs(itsByName, req.Context().Done(), output)
+		go followLogs(iterators, parsers, req.Context().Done(), output)
 		for entry := range output {
 			err = encoder.Encode(jsonLog(entry))
 			if err != nil {
@@ -161,34 +167,33 @@ func (r logsResponse) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-// writeLogs reads logs from the given iterators, merging the log streams and
-// calling writeLog for each log.
-func writeLogs(itsByName map[string]servicelog.Iterator, writeLog writeLogFunc) error {
+// writeLogs reads logs from the given iterators and parsers, merging the log
+// streams and calling writeLog for each log.
+func writeLogs(
+	iterators map[string]servicelog.Iterator,
+	parsers map[string]*servicelog.Parser,
+	writeLog writeLogFunc,
+) error {
 	// Stop when we get a log recorded after this time. This prevents
 	// continually trying to catch up if the client is slow at reading them.
 	stop := time.Now().UTC()
 
 	// Service names, ordered alphabetically for consistent output.
-	names := make([]string, 0, len(itsByName))
-	for name := range itsByName {
+	names := make([]string, 0, len(iterators))
+	for name := range iterators {
 		names = append(names, name)
 	}
 	sort.Strings(names)
 
-	parsersByName := make(map[string]*servicelog.Parser, len(itsByName))
-	for name, it := range itsByName {
-		parsersByName[name] = servicelog.NewParser(it, logReaderSize)
-	}
-
 	// Slice of parsers (or nil) holding the next log from each service.
-	parsers := make([]*servicelog.Parser, len(names))
+	nexts := make([]*servicelog.Parser, len(names))
 	for {
 		// Grab next log for iterators that need fetching (parsers[i] nil).
 		for i, name := range names {
-			if parsers[i] == nil {
-				parser := parsersByName[name]
+			if nexts[i] == nil {
+				parser := parsers[name]
 				if parser.Next() && parser.Entry().Time.Before(stop) {
-					parsers[i] = parser
+					nexts[i] = parser
 				}
 			}
 		}
@@ -196,14 +201,14 @@ func writeLogs(itsByName map[string]servicelog.Iterator, writeLog writeLogFunc) 
 		// Find log with earliest timestamp. Linear search is okay here as there
 		// will only be a very small number of services.
 		earliest := -1
-		for i, parser := range parsers {
+		for i, parser := range nexts {
 			if parser == nil {
 				continue
 			}
 			if parser.Err() != nil {
 				return parser.Err()
 			}
-			if earliest < 0 || parser.Entry().Time.Before(parsers[earliest].Entry().Time) {
+			if earliest < 0 || parser.Entry().Time.Before(nexts[earliest].Entry().Time) {
 				earliest = i
 			}
 		}
@@ -213,13 +218,13 @@ func writeLogs(itsByName map[string]servicelog.Iterator, writeLog writeLogFunc) 
 		}
 
 		// Write the log
-		err := writeLog(parsers[earliest].Entry())
+		err := writeLog(nexts[earliest].Entry())
 		if err != nil {
 			return err
 		}
 
 		// Set iterator to nil so we fetch next log for that service.
-		parsers[earliest] = nil
+		nexts[earliest] = nil
 	}
 	return nil
 }
@@ -229,24 +234,32 @@ type writeLogFunc func(entry servicelog.Entry) error
 // followLogs follows ("tails") the log iterators and sends logs to the output
 // channel as they're written. It stops when the done channel is closed, and
 // closes the output channel when everything is finished.
-func followLogs(itsByName map[string]servicelog.Iterator, done <-chan struct{}, output chan<- servicelog.Entry) {
+func followLogs(
+	iterators map[string]servicelog.Iterator,
+	parsers map[string]*servicelog.Parser,
+	done <-chan struct{},
+	output chan<- servicelog.Entry,
+) {
 	// Start one goroutine per service to listen for and output new logs.
 	var wg sync.WaitGroup
-	for _, it := range itsByName {
+	for name, it := range iterators {
 		wg.Add(1)
-		go func(it servicelog.Iterator) {
+		go func(it servicelog.Iterator, parser *servicelog.Parser) {
 			defer wg.Done()
-			parser := servicelog.NewParser(it, logReaderSize)
 			for it.Next(done) {
 				parser.Reset()
 				for parser.Next() {
-					output <- parser.Entry()
+					select {
+					case output <- parser.Entry():
+					case <-done:
+						return
+					}
 				}
 			}
 			if parser.Err() != nil {
 				log.Printf("error parsing logs: %v", parser.Err())
 			}
-		}(it)
+		}(it, parsers[name])
 	}
 
 	// Don't close output channel till client connection is closed and all
