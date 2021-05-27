@@ -23,6 +23,10 @@ import (
 	"github.com/canonical/pebble/internal/servicelog"
 )
 
+const (
+	timeFormatRegex = `\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z`
+)
+
 type formatterSuite struct{}
 
 var _ = Suite(&formatterSuite{})
@@ -39,7 +43,7 @@ func (s *formatterSuite) TestFormat(c *C) {
 %[1]s \[test\] first
 %[1]s \[test\] second
 %[1]s \[test\] third
-`[1:], servicelog.TimeFormatRegex))
+`[1:], timeFormatRegex))
 }
 
 func (s *formatterSuite) TestFormatSingleWrite(c *C) {
@@ -52,5 +56,5 @@ func (s *formatterSuite) TestFormatSingleWrite(c *C) {
 %[1]s \[test\] first
 %[1]s \[test\] second
 %[1]s \[test\] third
-`[1:], servicelog.TimeFormatRegex))
+`[1:], timeFormatRegex))
 }

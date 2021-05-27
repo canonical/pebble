@@ -30,10 +30,8 @@ type formatter struct {
 }
 
 const (
-	// TimeFormat is RFC3339 with millisecond precision.
-	TimeFormat = "2006-01-02T15:04:05.000Z07:00"
-	// TimeFormatRegex is the regular expression for matching TimeFormat.
-	TimeFormatRegex = `\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{0,3}Z(?:\d{2}:\d{2})?`
+	// outputTimeFormat is RFC3339 with millisecond precision.
+	outputTimeFormat = "2006-01-02T15:04:05.000Z07:00"
 )
 
 // NewFormatWriter returns a io.Writer that inserts timestamp and service name for every
@@ -61,7 +59,7 @@ func (f *formatter) Write(p []byte) (nn int, ee error) {
 	for len(p) > 0 {
 		if f.writeTimestamp {
 			f.writeTimestamp = false
-			f.timestampBuffer = time.Now().UTC().AppendFormat(f.timestampBuffer[:0], TimeFormat)
+			f.timestampBuffer = time.Now().UTC().AppendFormat(f.timestampBuffer[:0], outputTimeFormat)
 			f.timestampBuffer = append(f.timestampBuffer, " ["...)
 			f.timestampBuffer = append(f.timestampBuffer, f.serviceName...)
 			f.timestampBuffer = append(f.timestampBuffer, "] "...)
