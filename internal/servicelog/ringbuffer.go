@@ -241,10 +241,10 @@ func (rb *RingBuffer) TailIterator() Iterator {
 	defer rb.iteratorMutex.Unlock()
 	start, _ := rb.Positions()
 	iter := &iterator{
-		rb:         rb,
-		index:      start,
-		notifyChan: make(chan bool, 1),
-		closeChan:  make(chan struct{}),
+		rb:        rb,
+		index:     start,
+		nextChan:  make(chan bool, 1),
+		closeChan: make(chan struct{}),
 	}
 	if rb.Closed() {
 		close(iter.closeChan)
@@ -261,10 +261,10 @@ func (rb *RingBuffer) HeadIterator(lines int) Iterator {
 	rb.iteratorMutex.Lock()
 	defer rb.iteratorMutex.Unlock()
 	iter := &iterator{
-		rb:         rb,
-		index:      firstLine,
-		notifyChan: make(chan bool, 1),
-		closeChan:  make(chan struct{}),
+		rb:        rb,
+		index:     firstLine,
+		nextChan:  make(chan bool, 1),
+		closeChan: make(chan struct{}),
 	}
 	if rb.Closed() {
 		close(iter.closeChan)
@@ -326,9 +326,15 @@ func (rb *RingBuffer) signalIterators() {
 	defer rb.iteratorMutex.RUnlock()
 	for _, iter := range rb.iteratorList {
 		select {
+		case iter.nextChan <- true:
+		default:
+		}
+		iter.notifyLock.Lock()
+		select {
 		case iter.notifyChan <- true:
 		default:
 		}
+		iter.notifyLock.Unlock()
 	}
 }
 
