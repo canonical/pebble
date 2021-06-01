@@ -412,13 +412,16 @@ func (s *logsSuite) TestMultipleServicesFollow(c *C) {
 	}
 	waitLog := func() testLogEntry {
 		logs := waitLogs()
-		c.Check(logs, HasLen, 1)
+		c.Assert(logs, HasLen, 1)
 		return logs[0]
 	}
 
 	// The two logs written before the request should be there
 	logs := waitLogs()
-	c.Assert(logs, HasLen, 2)
+	if len(logs) == 1 {
+		logs = append(logs, waitLog())
+	}
+	c.Check(logs, HasLen, 2)
 	checkLog(c, logs[0], "one", "message1 1\n")
 	checkLog(c, logs[1], "two", "message2 1\n")
 
