@@ -362,3 +362,34 @@ func (s *iteratorSuite) TestEOF(c *C) {
 	b = iter.Next(nil)
 	c.Assert(b, Equals, false)
 }
+
+func (s *iteratorSuite) TestNotify(c *C) {
+	notify := make(chan bool, 1)
+	rb := servicelog.NewRingBuffer(200)
+	defer rb.Close()
+	iter := rb.TailIterator()
+	defer iter.Close()
+	iter.Notify(notify)
+	select {
+	case <-notify:
+		c.Fatal("notify unexpected")
+	default:
+	}
+	fmt.Fprintln(rb, "first")
+	select {
+	case <-notify:
+	default:
+		c.Fatal("notify expected")
+	}
+	fmt.Fprintln(rb, "second")
+	select {
+	case <-notify:
+	default:
+		c.Fatal("notify expected")
+	}
+	select {
+	case <-notify:
+		c.Fatal("notify unexpected")
+	default:
+	}
+}
