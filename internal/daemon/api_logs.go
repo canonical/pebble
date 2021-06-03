@@ -15,6 +15,7 @@
 package daemon
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -125,24 +126,16 @@ func (r logsResponse) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		return nil
 	}
 
-	// Close the streamLogs done channel when either the request is cancelled
-	// or we return from this handler.
-	returning := make(chan struct{})
-	defer close(returning)
-	done := make(chan struct{}, 1)
-	go func() {
-		select {
-		case <-req.Context().Done():
-		case <-returning:
-		}
-		done <- struct{}{}
-	}()
-
 	// Background goroutine to stream ordered logs: it sends parsed logs on
-	// logs channel, any error on errors channel.
+	// logs channel, any error on errorChan channel, and stops when the request
+	// is cancelled or this handler returns.
 	logs := make(chan servicelog.Entry)
-	errors := make(chan error)
-	go streamLogs(itsByName, logs, errors, done)
+	errorChan := make(chan error, 1)
+	ctx, cancel := context.WithCancel(req.Context())
+	defer cancel()
+	go func() {
+		errorChan <- streamLogs(itsByName, logs, ctx.Done())
+	}()
 
 	// Main loop: output earliest log per iteration. Stop when request
 	// cancelled or there are no more logs (in non-follow mode).
@@ -167,7 +160,7 @@ func (r logsResponse) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			// Logs are coming faster than we can send them (probably a slow
 			// client), so stop now.
 			if !follow && log.Time.After(requestStarted) {
-				flushFifo()
+				_ = flushFifo()
 				return
 			}
 
@@ -193,7 +186,7 @@ func (r logsResponse) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 				flushWriter(w)
 			}
 
-		case err := <-errors:
+		case err := <-errorChan:
 			logger.Noticef("%s", err)
 			return
 
@@ -205,14 +198,8 @@ func (r logsResponse) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 // streamLogs reads and parses logs from the given services, merging the
 // log streams and ordering by timestamp. It sends the parsed logs to the
-// logs channel, and any error to the errors channel. It returns when the
-// done channel is closed.
-func streamLogs(
-	itsByName map[string]servicelog.Iterator,
-	logs chan<- servicelog.Entry,
-	errors chan<- error,
-	done <-chan struct{},
-) {
+// logs channel, and returns when the done channel is closed.
+func streamLogs(itsByName map[string]servicelog.Iterator, logs chan<- servicelog.Entry, done <-chan struct{}) error {
 	// Need to close iterators in same goroutine we're reading them from.
 	defer func() {
 		for _, it := range itsByName {
@@ -256,8 +243,7 @@ func streamLogs(
 			if parser.Next() {
 				nexts[i] = parser.Entry()
 			} else if parser.Err() != nil {
-				errors <- fmt.Errorf("error parsing logs: %w", parser.Err())
-				return
+				return fmt.Errorf("error parsing logs: %w", parser.Err())
 			} else if iterators[i].Next(nil) {
 				// Parsed all in parser buffer, but iterator now has more.
 				if parser.Next() {
@@ -280,17 +266,25 @@ func streamLogs(
 		// No more logs: send empty log to caller, then wait for more logs
 		// or done signal.
 		if earliest < 0 {
-			logs <- servicelog.Entry{}
+			select {
+			case logs <- servicelog.Entry{}:
+			case <-done:
+				return nil
+			}
 			select {
 			case <-notification:
 			case <-done:
-				return
+				return nil
 			}
 			continue
 		}
 
 		// Send log to caller.
-		logs <- nexts[earliest]
+		select {
+		case logs <- nexts[earliest]:
+		case <-done:
+			return nil
+		}
 		nexts[earliest].Time = time.Time{} // so corresponding iterator is fetched next loop
 	}
 }
