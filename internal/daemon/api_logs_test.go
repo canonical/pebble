@@ -206,38 +206,6 @@ func (s *logsSuite) TestOneServiceOutOfTwo(c *C) {
 	}
 }
 
-func (s *logsSuite) TestMoreIteratorData(c *C) {
-	rb := servicelog.NewRingBuffer(4096)
-	lw := servicelog.NewFormatWriter(rb, "nginx")
-	fmt.Fprintf(lw, "message 1\n")
-
-	svcMgr := testServiceManager{
-		buffers: map[string]*servicelog.RingBuffer{
-			"nginx": rb,
-		},
-	}
-
-	req, err := http.NewRequest("GET", "/v1/logs?n=-1", nil)
-	c.Assert(err, IsNil)
-	rsp := logsResponse{svcMgr: svcMgr}
-	written := false
-	rec := &responseRecorder{onWrite: func() {
-		if !written {
-			// Write a new log message after we've processed the first one,
-			// to trigger the iterators[i].Next(nil) branch.
-			fmt.Fprintf(lw, "message 2\n")
-			written = true
-		}
-	}}
-	rsp.ServeHTTP(rec, req)
-	c.Assert(rec.status, Equals, http.StatusOK)
-
-	logs := decodeLogs(c, bytes.NewReader(rec.buf.Bytes()))
-	c.Assert(logs, HasLen, 2)
-	checkLog(c, logs[0], "nginx", "message 1\n")
-	checkLog(c, logs[1], "nginx", "message 2\n")
-}
-
 func (s *logsSuite) TestNoLogs(c *C) {
 	svcMgr := testServiceManager{
 		buffers: map[string]*servicelog.RingBuffer{
@@ -460,6 +428,7 @@ func (s *logsSuite) TestMultipleServicesFollow(c *C) {
 	checkLog(c, logs[1], "two", "message2 1\n")
 
 	// Then write a bunch more and ensure we can "follow" them
+	time.Sleep(10 * time.Millisecond) // ensure we'll be using the notification channel
 	fmt.Fprintf(lw1, "message1 2\n")
 	checkLog(c, waitLog(), "one", "message1 2\n")
 	fmt.Fprintf(lw2, "message2 2\n")
