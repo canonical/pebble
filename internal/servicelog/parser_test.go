@@ -169,3 +169,26 @@ func (s *parserSuite) TestRoundTrip(c *C) {
 	}
 	c.Check(parser.Err(), IsNil)
 }
+
+func (s *parserSuite) TestNewDataAfterEOF(c *C) {
+	r := strings.NewReader("2021-05-26T12:37:00Z [s] msg1\n")
+	parser := servicelog.NewParser(r, 1024)
+	c.Check(parser.Next(), Equals, true)
+	checkEntry(c, parser.Entry(), servicelog.Entry{
+		Time:    time.Date(2021, 5, 26, 12, 37, 0, 0, time.UTC),
+		Service: "s",
+		Message: "msg1\n",
+	})
+	c.Check(parser.Next(), Equals, false)
+	c.Check(parser.Err(), IsNil)
+
+	r.Reset("2021-05-26T12:37:01Z [s] msg2\n")
+	c.Check(parser.Next(), Equals, true)
+	checkEntry(c, parser.Entry(), servicelog.Entry{
+		Time:    time.Date(2021, 5, 26, 12, 37, 1, 0, time.UTC),
+		Service: "s",
+		Message: "msg2\n",
+	})
+	c.Check(parser.Next(), Equals, false)
+	c.Check(parser.Err(), IsNil)
+}

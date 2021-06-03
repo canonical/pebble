@@ -330,7 +330,9 @@ func (s *logsSuite) TestLoggingTooFast(c *C) {
 	req, err := http.NewRequest("GET", "/v1/logs", nil)
 	c.Assert(err, IsNil)
 	rsp := logsResponse{svcMgr: svcMgr}
-	rec := &waitRecorder{firstWrite: firstWrite}
+	rec := &responseRecorder{onWrite: func() {
+		firstWrite <- struct{}{}
+	}}
 	rsp.ServeHTTP(rec, req)
 	c.Assert(rec.status, Equals, http.StatusOK)
 
@@ -341,29 +343,29 @@ func (s *logsSuite) TestLoggingTooFast(c *C) {
 	}
 }
 
-type waitRecorder struct {
-	firstWrite chan struct{}
-	header     http.Header
-	buf        bytes.Buffer
-	status     int
+type responseRecorder struct {
+	onWrite func()
+	header  http.Header
+	buf     bytes.Buffer
+	status  int
 }
 
-func (r *waitRecorder) Header() http.Header {
+func (r *responseRecorder) Header() http.Header {
 	if r.header == nil {
 		r.header = make(http.Header)
 	}
 	return r.header
 }
 
-func (r *waitRecorder) Write(p []byte) (int, error) {
+func (r *responseRecorder) Write(p []byte) (int, error) {
 	if r.status == 0 {
 		r.status = 200
 	}
-	r.firstWrite <- struct{}{}
+	r.onWrite()
 	return r.buf.Write(p)
 }
 
-func (r *waitRecorder) WriteHeader(status int) {
+func (r *responseRecorder) WriteHeader(status int) {
 	r.status = status
 }
 
@@ -426,6 +428,7 @@ func (s *logsSuite) TestMultipleServicesFollow(c *C) {
 	checkLog(c, logs[1], "two", "message2 1\n")
 
 	// Then write a bunch more and ensure we can "follow" them
+	time.Sleep(10 * time.Millisecond) // ensure we'll be using the notification channel
 	fmt.Fprintf(lw1, "message1 2\n")
 	checkLog(c, waitLog(), "one", "message1 2\n")
 	fmt.Fprintf(lw2, "message2 2\n")

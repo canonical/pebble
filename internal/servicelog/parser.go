@@ -42,7 +42,7 @@ type Entry struct {
 }
 
 // Parser parses and iterates over logs from a Reader until EOF (or another
-// error occurs). Each log parser
+// error occurs).
 type Parser struct {
 	r     io.Reader
 	br    *bufio.Reader
@@ -58,30 +58,24 @@ func NewParser(r io.Reader, size int) *Parser {
 	}
 }
 
-// Reset resets the internal buffer (and clears any error).
-func (p *Parser) Reset() {
-	p.br.Reset(p.r)
-	p.err = nil
-}
-
 // Next parses the next log from the reader and reports whether another log
 // is available (false is returned on EOF or other read error).
 func (p *Parser) Next() bool {
-	for p.err == nil {
+	eof := false
+	for !eof && p.err == nil {
 		line, err := p.br.ReadSlice('\n')
 		if err != nil && !errors.Is(err, io.EOF) && !errors.Is(err, bufio.ErrBufferFull) {
 			// Non EOF (and non-buffer full) error, stop now
 			p.err = err
-			break
+			return false
 		}
 		if len(line) == 0 {
-			p.err = io.EOF
-			break
+			return false
 		}
-		if errors.Is(err, io.EOF) {
-			// EOF reached, stop iterating after processing line
-			p.err = err
-		}
+
+		// If EOF reached, stop iterating after processing line.
+		eof = errors.Is(err, io.EOF)
+
 		entry, err := Parse(line)
 		if err == nil {
 			p.entry = entry
@@ -90,7 +84,7 @@ func (p *Parser) Next() bool {
 				// yet written log message, break this iteration so caller can
 				// wait for next write. When message comes through it'll use
 				// this p.entry's timestamp and service name.
-				break
+				return false
 			}
 			// Normal log line
 			return true
@@ -113,9 +107,6 @@ func (p *Parser) Entry() Entry {
 
 // Err returns the last error that occurred (EOF is not considered an error).
 func (p *Parser) Err() error {
-	if errors.Is(p.err, io.EOF) {
-		return nil
-	}
 	return p.err
 }
 

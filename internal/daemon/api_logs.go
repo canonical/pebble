@@ -16,13 +16,14 @@ package daemon
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"sort"
 	"strconv"
 	"time"
 
+	"github.com/canonical/pebble/internal/logger"
 	"github.com/canonical/pebble/internal/overlord/servstate"
 	"github.com/canonical/pebble/internal/servicelog"
 )
@@ -101,8 +102,133 @@ func (r logsResponse) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		}
 	}()
 
-	// Make sorted list of service names we actually have iterators for.
-	services = services[:0]
+	// Output format is JSON Lines, which doesn't have an official mime type,
+	// but "application/x-ndjson" is what most people seem to use:
+	// https://github.com/wardi/jsonlines/issues/9
+	w.Header().Set("Content-Type", "application/x-ndjson")
+	encoder := json.NewEncoder(w)
+	encoder.SetEscapeHTML(false)
+
+	// Use a buffered channel as a FIFO for keeping the latest numLogs logs if
+	// request "n" is set (the default).
+	var fifo chan servicelog.Entry
+	if numLogs > 0 {
+		fifo = make(chan servicelog.Entry, numLogs)
+	}
+	flushFifo := func() error { // helper to flush any logs in the FIFO
+		if numLogs <= 0 || len(fifo) == 0 {
+			return nil
+		}
+		var err error
+		for len(fifo) > 0 && err == nil {
+			err = encoder.Encode(jsonLog(<-fifo))
+		}
+		if err != nil {
+			logger.Noticef("error writing logs: %v", err)
+			return err
+		}
+		flushWriter(w)
+		return nil
+	}
+
+	// Close the streamLogs done channel when either the request is cancelled
+	// or we return from this handler.
+	returning := make(chan struct{})
+	defer close(returning)
+	done := make(chan struct{}, 1)
+	go func() {
+		select {
+		case <-req.Context().Done():
+		case <-returning:
+		}
+		done <- struct{}{}
+	}()
+
+	// Background goroutine to stream ordered logs: it sends parsed logs on
+	// logs channel, any error on errors channel.
+	logs := make(chan servicelog.Entry)
+	errors := make(chan error)
+	go streamLogs(itsByName, logs, errors, done)
+
+	// Main loop: output earliest log per iteration. Stop when request
+	// cancelled or there are no more logs (in non-follow mode).
+	requestStarted := time.Now().UTC()
+	for {
+		select {
+		case log := <-logs:
+			if log.Time.IsZero() {
+				// Zero-time log means we've consumed all buffered logs
+				if flushFifo() != nil {
+					return
+				}
+				if follow {
+					// Following, wait for more
+					numLogs = 0 // so we don't use the FIFO from here on
+					continue
+				}
+				// Not following, we're done
+				return
+			}
+
+			// Logs are coming faster than we can send them (probably a slow
+			// client), so stop now.
+			if !follow && log.Time.After(requestStarted) {
+				flushFifo()
+				return
+			}
+
+			if numLogs > 0 {
+				// Push through FIFO so we only output the first "n" across
+				// all services.
+				if len(fifo) == cap(fifo) {
+					// FIFO channel full, discard oldest log entry before
+					// writing new one so it doesn't block.
+					<-fifo
+				}
+				fifo <- log
+				continue
+			}
+
+			// Otherwise encode and output log directly.
+			err := encoder.Encode(jsonLog(log))
+			if err != nil {
+				logger.Noticef("error writing logs: %v", err)
+				return
+			}
+			if follow {
+				flushWriter(w)
+			}
+
+		case err := <-errors:
+			logger.Noticef("%s", err)
+			return
+
+		case <-req.Context().Done():
+			return
+		}
+	}
+}
+
+// streamLogs reads and parses logs from the given iterators, merging the
+// log streams and ordering by timestamp. It sends the parsed logs to the
+// logs channel, and any error to the errors channel. It returns when the
+// done channel is closed.
+func streamLogs(
+	itsByName map[string]servicelog.Iterator,
+	logs chan<- servicelog.Entry,
+	errors chan<- error,
+	done <-chan struct{},
+) {
+	// Make a channel and register it with each of the iterators to be
+	// notified when new data comes in. We don't strictly need this when not
+	// following, but it doesn't hurt either.
+	notification := make(chan bool, 1)
+	for _, it := range itsByName {
+		it.Notify(notification)
+	}
+
+	// Make sorted list of service names we have iterators for.
+	var services []string
 	for name := range itsByName {
 		services = append(services, name)
 	}
@@ -116,40 +242,10 @@ func (r logsResponse) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		parsers[i] = servicelog.NewParser(iterators[i], logReaderSize)
 	}
 
-	// Output format is JSON Lines, which doesn't have an official mime type,
-	// but "application/x-ndjson" is what most people seem to use:
-	// https://github.com/wardi/jsonlines/issues/9
-	w.Header().Set("Content-Type", "application/x-ndjson")
-	encoder := json.NewEncoder(w)
-	encoder.SetEscapeHTML(false)
-	requestDone := req.Context().Done()
-	requestStarted := time.Now().UTC()
-
-	// If we'll be following real-time, make a channel and register it with
-	// each of the iterators to be notified when new data comes in.
-	var notification chan bool
-	if follow {
-		notification = make(chan bool, 1)
-		for _, it := range iterators {
-			it.Notify(notification)
-		}
-	}
-
-	// Use a buffered channel as a FIFO for keeping the latest numLogs logs if
-	// request "n" is set (the default).
-	var fifo chan servicelog.Entry
-	if numLogs > 0 {
-		fifo = make(chan servicelog.Entry, numLogs)
-	}
-
 	// Slice of next entries for each service
 	nexts := make([]servicelog.Entry, len(services))
 
-	// Changes to true once we start following
-	following := false
-
-	// Main loop: output earliest log per iteration. Stop when no more logs,
-	// or when request is cancelled if in follow mode.
+	// Main loop: output earliest log per iteration. Stop when done is closed.
 	for {
 		// Try to fetch next log from each service (parser/iterator combo).
 		for i, parser := range parsers {
@@ -159,10 +255,13 @@ func (r logsResponse) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			if parser.Next() {
 				nexts[i] = parser.Entry()
 			} else if parser.Err() != nil {
-				log.Printf("error parsing logs: %v", parser.Err())
+				errors <- fmt.Errorf("error parsing logs: %w", parser.Err())
 				return
 			} else if iterators[i].Next(nil) {
-				parser.Reset()
+				// Parsed all in parser buffer, but iterator now has more.
+				if parser.Next() {
+					nexts[i] = parser.Entry()
+				}
 			}
 		}
 
@@ -177,70 +276,21 @@ func (r logsResponse) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			}
 		}
 
-		// No more logs: flush and exit, or wait for another if in follow mode.
+		// No more logs: send empty log to caller, then wait for more logs
+		// or done signal.
 		if earliest < 0 {
-			// If they requested "n" logs, flush logs in the FIFO first.
-			if numLogs > 0 && len(fifo) > 0 {
-				var err error
-				for len(fifo) > 0 && err == nil {
-					err = encoder.Encode(jsonLog(<-fifo))
-				}
-				if err != nil {
-					log.Printf("error writing logs: %v", err)
-					return
-				}
-				flushWriter(w)
-			}
-			if !follow {
-				// Following not requested, all done.
-				break
-			}
-			// Now following, wait for something from iterators.
-			following = true
+			logs <- servicelog.Entry{}
 			select {
 			case <-notification:
-			case <-requestDone:
+			case <-done:
 				return
 			}
 			continue
 		}
-		next := nexts[earliest]
+
+		// Send log to caller.
+		logs <- nexts[earliest]
 		nexts[earliest].Time = time.Time{} // so corresponding iterator is fetched next loop
-
-		// Stop if not in follow mode and we've moved passed request start
-		// time (we're not keeping up with logs coming in).
-		if !follow && next.Time.After(requestStarted) {
-			break
-		}
-
-		// Output the log.
-		if following || numLogs <= 0 {
-			// If now following or client requested all logs, output immediately.
-			err := encoder.Encode(jsonLog(next))
-			if err != nil {
-				log.Printf("error writing logs: %v", err)
-				return
-			}
-			if following {
-				flushWriter(w)
-			}
-		} else {
-			// Not following and numLogs>0, push through FIFO so we only output
-			// the first "n" across all services.
-			if len(fifo) == cap(fifo) {
-				// FIFO channel full, discard oldest log entry before writing
-				// new one so it doesn't block.
-				<-fifo
-			}
-			fifo <- next
-		}
-
-		// Check for request cancellation every iteration even if not following.
-		select {
-		case <-requestDone:
-			return
-		default:
-		}
 	}
 }
 
