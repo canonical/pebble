@@ -206,6 +206,38 @@ func (s *logsSuite) TestOneServiceOutOfTwo(c *C) {
 	}
 }
 
+func (s *logsSuite) TestMoreIteratorData(c *C) {
+	rb := servicelog.NewRingBuffer(4096)
+	lw := servicelog.NewFormatWriter(rb, "nginx")
+	fmt.Fprintf(lw, "message 1\n")
+
+	svcMgr := testServiceManager{
+		buffers: map[string]*servicelog.RingBuffer{
+			"nginx": rb,
+		},
+	}
+
+	req, err := http.NewRequest("GET", "/v1/logs?n=-1", nil)
+	c.Assert(err, IsNil)
+	rsp := logsResponse{svcMgr: svcMgr}
+	written := false
+	rec := &responseRecorder{onWrite: func() {
+		if !written {
+			// Write a new log message after we've processed the first one,
+			// to trigger the iterators[i].Next(nil) branch.
+			fmt.Fprintf(lw, "message 2\n")
+			written = true
+		}
+	}}
+	rsp.ServeHTTP(rec, req)
+	c.Assert(rec.status, Equals, http.StatusOK)
+
+	logs := decodeLogs(c, bytes.NewReader(rec.buf.Bytes()))
+	c.Assert(logs, HasLen, 2)
+	checkLog(c, logs[0], "nginx", "message 1\n")
+	checkLog(c, logs[1], "nginx", "message 2\n")
+}
+
 func (s *logsSuite) TestNoLogs(c *C) {
 	svcMgr := testServiceManager{
 		buffers: map[string]*servicelog.RingBuffer{
@@ -330,7 +362,9 @@ func (s *logsSuite) TestLoggingTooFast(c *C) {
 	req, err := http.NewRequest("GET", "/v1/logs", nil)
 	c.Assert(err, IsNil)
 	rsp := logsResponse{svcMgr: svcMgr}
-	rec := &waitRecorder{firstWrite: firstWrite}
+	rec := &responseRecorder{onWrite: func() {
+		firstWrite <- struct{}{}
+	}}
 	rsp.ServeHTTP(rec, req)
 	c.Assert(rec.status, Equals, http.StatusOK)
 
@@ -341,29 +375,29 @@ func (s *logsSuite) TestLoggingTooFast(c *C) {
 	}
 }
 
-type waitRecorder struct {
-	firstWrite chan struct{}
-	header     http.Header
-	buf        bytes.Buffer
-	status     int
+type responseRecorder struct {
+	onWrite func()
+	header  http.Header
+	buf     bytes.Buffer
+	status  int
 }
 
-func (r *waitRecorder) Header() http.Header {
+func (r *responseRecorder) Header() http.Header {
 	if r.header == nil {
 		r.header = make(http.Header)
 	}
 	return r.header
 }
 
-func (r *waitRecorder) Write(p []byte) (int, error) {
+func (r *responseRecorder) Write(p []byte) (int, error) {
 	if r.status == 0 {
 		r.status = 200
 	}
-	r.firstWrite <- struct{}{}
+	r.onWrite()
 	return r.buf.Write(p)
 }
 
-func (r *waitRecorder) WriteHeader(status int) {
+func (r *responseRecorder) WriteHeader(status int) {
 	r.status = status
 }
 

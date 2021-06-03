@@ -17,12 +17,12 @@ package daemon
 import (
 	"encoding/json"
 	"io"
-	"log"
 	"net/http"
 	"sort"
 	"strconv"
 	"time"
 
+	"github.com/canonical/pebble/internal/logger"
 	"github.com/canonical/pebble/internal/overlord/servstate"
 	"github.com/canonical/pebble/internal/servicelog"
 )
@@ -159,10 +159,12 @@ func (r logsResponse) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			if parser.Next() {
 				nexts[i] = parser.Entry()
 			} else if parser.Err() != nil {
-				log.Printf("error parsing logs: %v", parser.Err())
+				logger.Noticef("error parsing logs: %v", parser.Err())
 				return
 			} else if iterators[i].Next(nil) {
-				parser.Reset()
+				if parser.Next() {
+					nexts[i] = parser.Entry()
+				}
 			}
 		}
 
@@ -186,7 +188,7 @@ func (r logsResponse) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 					err = encoder.Encode(jsonLog(<-fifo))
 				}
 				if err != nil {
-					log.Printf("error writing logs: %v", err)
+					logger.Noticef("error writing logs: %v", err)
 					return
 				}
 				flushWriter(w)
@@ -218,7 +220,7 @@ func (r logsResponse) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			// If now following or client requested all logs, output immediately.
 			err := encoder.Encode(jsonLog(next))
 			if err != nil {
-				log.Printf("error writing logs: %v", err)
+				logger.Noticef("error writing logs: %v", err)
 				return
 			}
 			if following {
