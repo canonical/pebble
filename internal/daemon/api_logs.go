@@ -89,18 +89,12 @@ func (r logsResponse) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	// Get log iterators by service (and close them when we're done).
 	itsByName, err := r.svcMgr.ServiceLogs(services, numLogs)
 	if err != nil {
 		response := statusInternalError("cannot fetch log iterators: %v", err)
 		response.ServeHTTP(w, req)
 		return
 	}
-	defer func() {
-		for _, it := range itsByName {
-			_ = it.Close()
-		}
-	}()
 
 	// Output format is JSON Lines, which doesn't have an official mime type,
 	// but "application/x-ndjson" is what most people seem to use:
@@ -209,7 +203,7 @@ func (r logsResponse) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-// streamLogs reads and parses logs from the given iterators, merging the
+// streamLogs reads and parses logs from the given services, merging the
 // log streams and ordering by timestamp. It sends the parsed logs to the
 // logs channel, and any error to the errors channel. It returns when the
 // done channel is closed.
@@ -219,6 +213,13 @@ func streamLogs(
 	errors chan<- error,
 	done <-chan struct{},
 ) {
+	// Need to close iterators in same goroutine we're reading them from.
+	defer func() {
+		for _, it := range itsByName {
+			_ = it.Close()
+		}
+	}()
+
 	// Make a channel and register it with each of the iterators to be
 	// notified when new data comes in. We don't strictly need this when not
 	// following, but it doesn't hurt either.
