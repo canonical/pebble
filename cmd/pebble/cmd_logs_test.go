@@ -72,26 +72,6 @@ func (s *PebbleSuite) TestLogsJSON(c *C) {
 	c.Check(s.Stderr(), Equals, "")
 }
 
-func (s *PebbleSuite) TestLogsRaw(c *C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		c.Check(r.Method, Equals, "GET")
-		c.Check(r.URL.Path, Equals, "/v1/logs")
-		c.Check(r.URL.Query(), DeepEquals, url.Values{
-			"n": []string{"10"},
-		})
-		fmt.Fprintf(w, `
-{"time":"2021-05-03T03:55:49.360Z","service":"thing","message":"log 1\n"}
-{"time":"2021-05-03T03:55:49.654Z","service":"snappass","message":"log two\n"}
-{"time":"2021-05-03T03:55:50.076Z","service":"thing","message":"the third\n"}
-`[1:])
-	})
-	rest, err := pebble.Parser(pebble.Client()).ParseArgs([]string{"logs", "--format", "raw"})
-	c.Assert(err, IsNil)
-	c.Assert(rest, HasLen, 0)
-	c.Check(s.Stdout(), Equals, "log 1\nlog two\nthe third\n")
-	c.Check(s.Stderr(), Equals, "")
-}
-
 func (s *PebbleSuite) TestLogsN(c *C) {
 	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
 		c.Check(r.Method, Equals, "GET")

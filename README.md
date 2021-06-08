@@ -221,6 +221,7 @@ Here are some of the things coming soon:
   - [x] General system modification commands (writing configuration files, etc)
   - [x] Better log caching and retrieval support
   - [x] Consider showing unified log as output of `pebble run` (use `-v`)
+  - [ ] Add support for automatically removing (double) timestamps from logs
   - [ ] Improve signal handling, e.g., sending SIGHUP to a service
   - [ ] Terminate all services before exiting run command
   - [ ] More tests for existing CLI commands
