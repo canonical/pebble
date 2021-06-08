@@ -110,9 +110,9 @@ func (r logsResponse) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	if numLogs > 0 {
 		fifo = make(chan servicelog.Entry, numLogs)
 	}
-	flushFifo := func() error { // helper to flush any logs in the FIFO
+	flushFifo := func() bool { // helper to flush any logs in the FIFO
 		if numLogs <= 0 || len(fifo) == 0 {
-			return nil
+			return true
 		}
 		var err error
 		for len(fifo) > 0 && err == nil {
@@ -120,10 +120,10 @@ func (r logsResponse) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		}
 		if err != nil {
 			logger.Noticef("error writing logs: %v", err)
-			return err
+			return false
 		}
 		flushWriter(w)
-		return nil
+		return true
 	}
 
 	// Background goroutine to stream ordered logs: it sends parsed logs on
@@ -145,7 +145,7 @@ func (r logsResponse) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		case log := <-logs:
 			if log.Time.IsZero() {
 				// Zero-time log means we've consumed all buffered logs
-				if flushFifo() != nil {
+				if !flushFifo() {
 					return
 				}
 				if follow {
@@ -165,8 +165,8 @@ func (r logsResponse) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			}
 
 			if numLogs > 0 {
-				// Push through FIFO so we only output the first "n" across
-				// all services.
+				// Push through FIFO so we only output the most recent "n"
+				// across all services.
 				if len(fifo) == cap(fifo) {
 					// FIFO channel full, discard oldest log entry before
 					// writing new one so it doesn't block.
