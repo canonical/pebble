@@ -16,6 +16,7 @@ package servicelog
 
 import (
 	"io"
+	"sync"
 )
 
 type Iterator interface {
@@ -30,6 +31,11 @@ type Iterator interface {
 	// created.
 	Next(cancel <-chan struct{}) bool
 
+	// Notify sets the notification channel. When more data is available, the channel
+	// passed in to Notify will have true sent on it. If the channel is not receiving (unbuffered)
+	// or full (buffered), the notification will be dropped.
+	Notify(ch chan bool)
+
 	Buffered() int
 	io.Reader
 	io.WriterTo
@@ -40,8 +46,11 @@ type iterator struct {
 	index        RingPos
 	trunc        []byte
 	truncWritten bool
-	notifyChan   chan bool
+	nextChan     chan bool
 	closeChan    chan struct{}
+
+	notifyLock sync.Mutex
+	notifyChan chan bool
 }
 
 var _ Iterator = (*iterator)(nil)
@@ -55,7 +64,7 @@ func (it *iterator) Close() error {
 		return nil
 	}
 	it.rb.removeIterator(it)
-	close(it.notifyChan)
+	close(it.nextChan)
 	it.rb = nil
 	return nil
 }
@@ -65,7 +74,7 @@ func (it *iterator) Next(cancel <-chan struct{}) bool {
 		return false
 	}
 	select {
-	case <-it.notifyChan:
+	case <-it.nextChan:
 	default:
 	}
 	start, end := it.rb.Positions()
@@ -87,7 +96,7 @@ func (it *iterator) Next(cancel <-chan struct{}) bool {
 			closed = it.rb.Closed()
 		case <-cancel:
 			cancel = nil
-		case <-it.notifyChan:
+		case <-it.nextChan:
 		}
 		start, end := it.rb.Positions()
 		if it.index != TailPosition && it.index < start {
@@ -159,6 +168,12 @@ func (it *iterator) Buffered() int {
 		start = it.index
 	}
 	return int(end - start)
+}
+
+func (it *iterator) Notify(ch chan bool) {
+	it.notifyLock.Lock()
+	defer it.notifyLock.Unlock()
+	it.notifyChan = ch
 }
 
 func (it *iterator) truncated() {

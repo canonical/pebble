@@ -227,7 +227,7 @@ func (s *S) TestServiceLogs(c *C) {
 		return
 	}
 
-	iterators, err := s.manager.ServiceLogs(services)
+	iterators, err := s.manager.ServiceLogs(services, -1)
 	c.Assert(err, IsNil)
 	c.Assert(iterators, HasLen, len(services))
 

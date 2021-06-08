@@ -293,6 +293,14 @@ func (w *wrappedWriter) Flush() {
 	}
 }
 
+func (w *wrappedWriter) status() int {
+	if w.s == 0 {
+		// If status was not explicitly written, HTTP 200 is implied.
+		return http.StatusOK
+	}
+	return w.s
+}
+
 func logit(handler http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ww := &wrappedWriter{w: w}
@@ -308,10 +316,10 @@ func logit(handler http.Handler) http.Handler {
 		skipLog := r.Method == "GET" && (strings.HasPrefix(r.URL.Path, "/v1/changes/") || r.URL.Path == "/v1/system-info")
 		if !skipLog {
 			if strings.HasSuffix(r.RemoteAddr, ";") {
-				logger.Debugf("%s %s %s %s %d", r.RemoteAddr, r.Method, r.URL, t, ww.s)
-				logger.Noticef("%s %s %s %d", r.Method, r.URL, t, ww.s)
+				logger.Debugf("%s %s %s %s %d", r.RemoteAddr, r.Method, r.URL, t, ww.status())
+				logger.Noticef("%s %s %s %d", r.Method, r.URL, t, ww.status())
 			} else {
-				logger.Noticef("%s %s %s %s %d", r.RemoteAddr, r.Method, r.URL, t, ww.s)
+				logger.Noticef("%s %s %s %s %d", r.RemoteAddr, r.Method, r.URL, t, ww.status())
 			}
 		}
 	})

@@ -53,7 +53,7 @@ func init() {
 		map[string]string{
 			"create-dirs": "Create pebble directory on startup if it doesn't exist",
 			"hold":        "Do not start default services automatically",
-			"verbose":     "Log all output from services to stdout/stderr",
+			"verbose":     "Log all output from services to stdout",
 		}, nil)
 }
 
