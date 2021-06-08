@@ -41,7 +41,7 @@ type LogsOptions struct {
 	// Total number of logs to fetch (before following if calling FollowLogs).
 	// If nil, use Pebble's default (10). If negative, fetch all buffered logs.
 	// If set to zero when calling FollowLogs, write no logs before following.
-	NumLogs *int
+	Num *int
 }
 
 // LogEntry is the struct passed to the WriteLog function.
@@ -67,8 +67,8 @@ func (client *Client) logs(ctx context.Context, opts *LogsOptions, follow bool) 
 	for _, service := range opts.Services {
 		query.Add("services", service)
 	}
-	if opts.NumLogs != nil {
-		query.Set("n", strconv.Itoa(*opts.NumLogs))
+	if opts.Num != nil {
+		query.Set("n", strconv.Itoa(*opts.Num))
 	}
 	if follow {
 		query.Set("follow", "true")

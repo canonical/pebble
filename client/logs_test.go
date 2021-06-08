@@ -76,7 +76,7 @@ func (cs *clientSuite) TestLogsN(c *check.C) {
 	n := 2
 	err := cs.cli.Logs(&client.LogsOptions{
 		WriteLog: writeLog,
-		NumLogs:  &n,
+		Num:      &n,
 	})
 	c.Assert(err, check.IsNil)
 	c.Check(cs.req.Method, check.Equals, "GET")

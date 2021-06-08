@@ -61,7 +61,7 @@ func (s *PebbleSuite) TestLogsJSON(c *C) {
 {"time":"2021-05-03T03:55:50.076Z","service":"thing","message":"the third\n"}
 `[1:])
 	})
-	rest, err := pebble.Parser(pebble.Client()).ParseArgs([]string{"logs", "--output", "json"})
+	rest, err := pebble.Parser(pebble.Client()).ParseArgs([]string{"logs", "--format", "json"})
 	c.Assert(err, IsNil)
 	c.Assert(rest, HasLen, 0)
 	c.Check(s.Stdout(), Equals, `
@@ -85,7 +85,7 @@ func (s *PebbleSuite) TestLogsRaw(c *C) {
 {"time":"2021-05-03T03:55:50.076Z","service":"thing","message":"the third\n"}
 `[1:])
 	})
-	rest, err := pebble.Parser(pebble.Client()).ParseArgs([]string{"logs", "--output", "raw"})
+	rest, err := pebble.Parser(pebble.Client()).ParseArgs([]string{"logs", "--format", "raw"})
 	c.Assert(err, IsNil)
 	c.Assert(rest, HasLen, 0)
 	c.Check(s.Stdout(), Equals, "log 1\nlog two\nthe third\n")

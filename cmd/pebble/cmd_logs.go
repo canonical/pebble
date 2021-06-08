@@ -35,8 +35,8 @@ const (
 type cmdLogs struct {
 	clientMixin
 	Follow     bool   `short:"f" long:"follow"`
-	Output     string `short:"o" long:"output"`
-	NumLogs    string `short:"n" long:"number"`
+	Format     string `long:"format"`
+	Num        string `short:"n" long:"num"`
 	Positional struct {
 		Services []string `positional-arg-name:"<service>"`
 	} `positional-args:"yes"`
@@ -44,8 +44,8 @@ type cmdLogs struct {
 
 var logsDescs = map[string]string{
 	"follow": "Follow (tail) logs for given services until Ctrl-C pressed.",
-	"output": "Output format: \"text\" (default), \"json\" (JSON lines), or \n\"raw\" (copy raw log bytes to stdout and stderr).",
-	"number": "Number of logs to show (before following); defaults to 10.\nIf 'all', show all buffered logs.",
+	"format": "Output format: \"text\" (default), \"json\" (JSON lines), or \n\"raw\" (copy raw log bytes to stdout and stderr).",
+	"num":    "Number of logs to show (before following); defaults to 10.\nIf 'all', show all buffered logs.",
 }
 
 var shortLogsHelp = "Fetch service logs"
@@ -55,22 +55,22 @@ if none are specified) and displays them in chronological order.
 `
 
 func (cmd *cmdLogs) Execute(args []string) error {
-	var numLogs int
-	switch cmd.NumLogs {
+	var num int
+	switch cmd.Num {
 	case "":
-		numLogs = 10
+		num = 10
 	case "all":
-		numLogs = -1
+		num = -1
 	default:
 		var err error
-		numLogs, err = strconv.Atoi(cmd.NumLogs)
-		if err != nil || numLogs < 0 {
-			return fmt.Errorf(`expected n to be a non-negative integer or "all", not %q`, cmd.NumLogs)
+		num, err = strconv.Atoi(cmd.Num)
+		if err != nil || num < 0 {
+			return fmt.Errorf(`expected n to be a non-negative integer or "all", not %q`, cmd.Num)
 		}
 	}
 
 	var writeLog func(entry client.LogEntry) error
-	switch cmd.Output {
+	switch cmd.Format {
 	case "", "text":
 		writeLog = func(entry client.LogEntry) error {
 			suffix := ""
@@ -96,13 +96,13 @@ func (cmd *cmdLogs) Execute(args []string) error {
 		}
 
 	default:
-		return fmt.Errorf(`invalid output format (expected "json", "text", or "raw", not %q)`, cmd.Output)
+		return fmt.Errorf(`invalid output format (expected "json", "text", or "raw", not %q)`, cmd.Format)
 	}
 
 	opts := client.LogsOptions{
 		WriteLog: writeLog,
 		Services: cmd.Positional.Services,
-		NumLogs:  &numLogs,
+		Num:      &num,
 	}
 	var err error
 	if cmd.Follow {
