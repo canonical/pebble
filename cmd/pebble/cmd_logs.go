@@ -22,7 +22,6 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
-	"time"
 
 	"github.com/jessevdk/go-flags"
 
@@ -70,14 +69,32 @@ func (cmd *cmdLogs) Execute(args []string) error {
 		}
 	}
 
-	var writeLog client.WriteLogFunc
+	var writeLog func(entry client.LogEntry) error
 	switch cmd.Output {
 	case "", "text":
-		writeLog = writeLogText
+		writeLog = func(entry client.LogEntry) error {
+			suffix := ""
+			if len(entry.Message) == 0 || entry.Message[len(entry.Message)-1] != '\n' {
+				suffix = "\n"
+			}
+			_, err := fmt.Fprintf(Stdout, "%s [%s] %s%s",
+				entry.Time.Format(logTimeFormat), entry.Service, entry.Message, suffix)
+			return err
+		}
+
 	case "json":
-		writeLog = writeLogJSON
+		encoder := json.NewEncoder(Stdout)
+		encoder.SetEscapeHTML(false)
+		writeLog = func(entry client.LogEntry) error {
+			return encoder.Encode(&entry)
+		}
+
 	case "raw":
-		writeLog = writeLogRaw
+		writeLog = func(entry client.LogEntry) error {
+			_, err := io.WriteString(Stdout, entry.Message)
+			return err
+		}
+
 	default:
 		return fmt.Errorf(`invalid output format (expected "json", "text", or "raw", not %q)`, cmd.Output)
 	}
@@ -109,36 +126,6 @@ func notifyContext(parent context.Context, signals ...os.Signal) context.Context
 		cancel()
 	}()
 	return ctx
-}
-
-func writeLogText(timestamp time.Time, service, message string) error {
-	suffix := ""
-	if len(message) == 0 || message[len(message)-1] != '\n' {
-		suffix = "\n"
-	}
-	_, err := fmt.Fprintf(Stdout, "%s [%s] %s%s",
-		timestamp.Format(logTimeFormat), service, message, suffix)
-	return err
-}
-
-func writeLogRaw(timestamp time.Time, service, message string) error {
-	_, err := io.WriteString(Stdout, message)
-	return err
-}
-
-func writeLogJSON(timestamp time.Time, service, message string) error {
-	var log = struct {
-		Time    time.Time `json:"time"`
-		Service string    `json:"service"`
-		Message string    `json:"message"`
-	}{
-		Time:    timestamp,
-		Service: service,
-		Message: message,
-	}
-	encoder := json.NewEncoder(Stdout)
-	encoder.SetEscapeHTML(false)
-	return encoder.Encode(&log)
 }
 
 func init() {

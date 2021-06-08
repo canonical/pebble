@@ -32,7 +32,7 @@ const (
 
 type LogsOptions struct {
 	// Function called to write a single log to the output (required).
-	WriteLog WriteLogFunc
+	WriteLog func(entry LogEntry) error
 
 	// The list of service names to fetch logs for (nil or empty slice means
 	// all services).
@@ -44,7 +44,12 @@ type LogsOptions struct {
 	NumLogs *int
 }
 
-type WriteLogFunc func(timestamp time.Time, service, message string) error
+// LogEntry is the struct passed to the WriteLog function.
+type LogEntry struct {
+	Time    time.Time `json:"time"`
+	Service string    `json:"service"`
+	Message string    `json:"message"`
+}
 
 // Logs fetches previously-written logs from the given services.
 func (client *Client) Logs(opts *LogsOptions) error {
@@ -89,7 +94,7 @@ func (client *Client) logs(ctx context.Context, opts *LogsOptions, follow bool) 
 
 // Decode next JSON log from reader and call writeLog on it. Return io.EOF if
 // no more logs to read.
-func decodeLog(reader *bufio.Reader, writeLog WriteLogFunc) error {
+func decodeLog(reader *bufio.Reader, writeLog func(entry LogEntry) error) error {
 	// Read log JSON and newline separator
 	b, err := reader.ReadSlice('\n')
 	if errors.Is(err, io.EOF) {
@@ -99,17 +104,13 @@ func decodeLog(reader *bufio.Reader, writeLog WriteLogFunc) error {
 		return fmt.Errorf("cannot read log line: %w", err)
 	}
 
-	var entry struct {
-		Time    time.Time `json:"time"`
-		Service string    `json:"service"`
-		Message string    `json:"message"`
-	}
+	var entry LogEntry
 	err = json.Unmarshal(b, &entry)
 	if err != nil {
 		return fmt.Errorf("cannot unmarshal log: %w", err)
 	}
 
-	err = writeLog(entry.Time, entry.Service, entry.Message)
+	err = writeLog(entry)
 	if err != nil {
 		return fmt.Errorf("cannot output log: %w", err)
 	}

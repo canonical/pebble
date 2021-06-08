@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"time"
 
 	"gopkg.in/check.v1"
 
@@ -128,7 +127,7 @@ func (cs *clientSuite) TestFollowLogs(c *check.C) {
 func (cs *clientSuite) TestLogsWriteLogError(c *check.C) {
 	cs.rsp = `{"time":"2021-05-03T03:55:49.360994155Z","service":"thing","message":"log 1\n"}` + "\n"
 	err := cs.cli.Logs(&client.LogsOptions{
-		WriteLog: func(timestamp time.Time, service, message string) error {
+		WriteLog: func(entry client.LogEntry) error {
 			return fmt.Errorf("ERROR!")
 		},
 	})
@@ -158,11 +157,11 @@ func (r *followReader) Close() error {
 	return nil
 }
 
-func makeLogWriter() (*bytes.Buffer, client.WriteLogFunc) {
+func makeLogWriter() (*bytes.Buffer, func(entry client.LogEntry) error) {
 	var out bytes.Buffer
-	writeLog := func(timestamp time.Time, service, message string) error {
+	writeLog := func(entry client.LogEntry) error {
 		fmt.Fprintf(&out, "%s [%s] %s",
-			timestamp.Format("2006-01-02T15:04:05.000Z07:00"), service, message)
+			entry.Time.Format("2006-01-02T15:04:05.000Z07:00"), entry.Service, entry.Message)
 		return nil
 	}
 	return &out, writeLog
