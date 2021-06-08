@@ -36,7 +36,7 @@ type cmdLogs struct {
 	clientMixin
 	Follow     bool   `short:"f" long:"follow"`
 	Format     string `long:"format"`
-	Num        string `short:"n" long:"num"`
+	N          string `short:"n"`
 	Positional struct {
 		Services []string `positional-arg-name:"<service>"`
 	} `positional-args:"yes"`
@@ -45,7 +45,7 @@ type cmdLogs struct {
 var logsDescs = map[string]string{
 	"follow": "Follow (tail) logs for given services until Ctrl-C pressed.",
 	"format": "Output format: \"text\" (default), \"json\" (JSON lines), or \n\"raw\" (copy raw log bytes to stdout and stderr).",
-	"num":    "Number of logs to show (before following); defaults to 10.\nIf 'all', show all buffered logs.",
+	"n":      "Number of logs to show (before following); defaults to 10.\nIf 'all', show all buffered logs.",
 }
 
 var shortLogsHelp = "Fetch service logs"
@@ -55,17 +55,17 @@ if none are specified) and displays them in chronological order.
 `
 
 func (cmd *cmdLogs) Execute(args []string) error {
-	var num int
-	switch cmd.Num {
+	var n int
+	switch cmd.N {
 	case "":
-		num = 10
+		n = 10
 	case "all":
-		num = -1
+		n = -1
 	default:
 		var err error
-		num, err = strconv.Atoi(cmd.Num)
-		if err != nil || num < 0 {
-			return fmt.Errorf(`expected n to be a non-negative integer or "all", not %q`, cmd.Num)
+		n, err = strconv.Atoi(cmd.N)
+		if err != nil || n < 0 {
+			return fmt.Errorf(`expected n to be a non-negative integer or "all", not %q`, cmd.N)
 		}
 	}
 
@@ -102,7 +102,7 @@ func (cmd *cmdLogs) Execute(args []string) error {
 	opts := client.LogsOptions{
 		WriteLog: writeLog,
 		Services: cmd.Positional.Services,
-		Num:      &num,
+		N:        &n,
 	}
 	var err error
 	if cmd.Follow {
