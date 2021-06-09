@@ -32,9 +32,10 @@ func (s *PebbleSuite) TestLogsText(c *C) {
 			"n": []string{"10"},
 		})
 		fmt.Fprintf(w, `
-{"time":"2021-05-03T03:55:49.360994155Z","service":"thing","message":"log 1\n"}
-{"time":"2021-05-03T03:55:49.654334232Z","service":"snappass","message":"log two\n"}
-{"time":"2021-05-03T03:55:50.076800988Z","service":"thing","message":"the third\n"}
+{"time":"2021-05-03T03:55:49.360994155Z","service":"thing","message":"log 1"}
+{"time":"2021-05-03T03:55:49.654334232Z","service":"snappass","message":"log two"}
+{"time":"2021-05-03T03:55:50.076800988Z","service":"thing","message":"trunc","truncated":true}
+{"time":"2021-05-03T03:55:51.076800988Z","service":"thing","message":"ated"}
 `[1:])
 	})
 	rest, err := pebble.Parser(pebble.Client()).ParseArgs([]string{"logs"})
@@ -43,7 +44,8 @@ func (s *PebbleSuite) TestLogsText(c *C) {
 	c.Check(s.Stdout(), Equals, `
 2021-05-03T03:55:49.360Z [thing] log 1
 2021-05-03T03:55:49.654Z [snappass] log two
-2021-05-03T03:55:50.076Z [thing] the third
+2021-05-03T03:55:50.076Z [thing] trunc (truncated)
+2021-05-03T03:55:51.076Z [thing] ated
 `[1:])
 	c.Check(s.Stderr(), Equals, "")
 }
@@ -56,18 +58,20 @@ func (s *PebbleSuite) TestLogsJSON(c *C) {
 			"n": []string{"10"},
 		})
 		fmt.Fprintf(w, `
-{"time":"2021-05-03T03:55:49.360Z","service":"thing","message":"log 1\n"}
-{"time":"2021-05-03T03:55:49.654Z","service":"snappass","message":"log two\n"}
-{"time":"2021-05-03T03:55:50.076Z","service":"thing","message":"the third\n"}
+{"time":"2021-05-03T03:55:49.360Z","service":"thing","message":"log 1"}
+{"time":"2021-05-03T03:55:49.654Z","service":"snappass","message":"log two"}
+{"time":"2021-05-03T03:55:50.076800988Z","service":"thing","message":"trunc","truncated":true}
+{"time":"2021-05-03T03:55:51.076800988Z","service":"thing","message":"ated"}
 `[1:])
 	})
 	rest, err := pebble.Parser(pebble.Client()).ParseArgs([]string{"logs", "--format", "json"})
 	c.Assert(err, IsNil)
 	c.Assert(rest, HasLen, 0)
 	c.Check(s.Stdout(), Equals, `
-{"time":"2021-05-03T03:55:49.36Z","service":"thing","message":"log 1\n"}
-{"time":"2021-05-03T03:55:49.654Z","service":"snappass","message":"log two\n"}
-{"time":"2021-05-03T03:55:50.076Z","service":"thing","message":"the third\n"}
+{"time":"2021-05-03T03:55:49.36Z","service":"thing","message":"log 1"}
+{"time":"2021-05-03T03:55:49.654Z","service":"snappass","message":"log two"}
+{"time":"2021-05-03T03:55:50.076800988Z","service":"thing","message":"trunc","truncated":true}
+{"time":"2021-05-03T03:55:51.076800988Z","service":"thing","message":"ated"}
 `[1:])
 	c.Check(s.Stderr(), Equals, "")
 }
@@ -80,8 +84,8 @@ func (s *PebbleSuite) TestLogsN(c *C) {
 			"n": []string{"2"},
 		})
 		fmt.Fprintf(w, `
-{"time":"2021-05-03T03:55:49.360994155Z","service":"thing","message":"log 1\n"}
-{"time":"2021-05-03T03:55:49.654334232Z","service":"snappass","message":"log two\n"}
+{"time":"2021-05-03T03:55:49.360994155Z","service":"thing","message":"log 1"}
+{"time":"2021-05-03T03:55:49.654334232Z","service":"snappass","message":"log two"}
 `[1:])
 	})
 	rest, err := pebble.Parser(pebble.Client()).ParseArgs([]string{"logs", "-n2"})
@@ -102,8 +106,8 @@ func (s *PebbleSuite) TestLogsAll(c *C) {
 			"n": []string{"-1"},
 		})
 		fmt.Fprintf(w, `
-{"time":"2021-05-03T03:55:49.360994155Z","service":"thing","message":"log 1\n"}
-{"time":"2021-05-03T03:55:49.654334232Z","service":"snappass","message":"log two\n"}
+{"time":"2021-05-03T03:55:49.360994155Z","service":"thing","message":"log 1"}
+{"time":"2021-05-03T03:55:49.654334232Z","service":"snappass","message":"log two"}
 `[1:])
 	})
 	rest, err := pebble.Parser(pebble.Client()).ParseArgs([]string{"logs", "-nall"})
@@ -127,7 +131,7 @@ func (s *PebbleSuite) TestLogsFollow(c *C) {
 			"follow": []string{"true"},
 		})
 		fmt.Fprintf(w, `
-{"time":"2021-05-03T03:55:49.360994155Z","service":"thing","message":"log 1\n"}
+{"time":"2021-05-03T03:55:49.360994155Z","service":"thing","message":"log 1"}
 `[1:])
 	})
 	rest, err := pebble.Parser(pebble.Client()).ParseArgs([]string{"logs", "-f"})

@@ -22,6 +22,7 @@ import (
 	"net/http"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/canonical/pebble/internal/logger"
@@ -116,7 +117,7 @@ func (r logsResponse) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		}
 		var err error
 		for len(fifo) > 0 && err == nil {
-			err = encoder.Encode(jsonLog(<-fifo))
+			err = encoder.Encode(newJSONLog(<-fifo))
 		}
 		if err != nil {
 			logger.Noticef("error writing logs: %v", err)
@@ -177,7 +178,7 @@ func (r logsResponse) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			}
 
 			// Otherwise encode and output log directly.
-			err := encoder.Encode(jsonLog(log))
+			err := encoder.Encode(newJSONLog(log))
 			if err != nil {
 				logger.Noticef("error writing logs: %v", err)
 				return
@@ -294,9 +295,24 @@ func streamLogs(itsByName map[string]servicelog.Iterator, logs chan<- servicelog
 // {"time":"2021-04-23T01:28:52.660Z","service":"redis","message":"redis started up"}
 // {"time":"2021-04-23T01:28:52.798Z","service":"thing","message":"did something"}
 type jsonLog struct {
-	Time    time.Time `json:"time"`
-	Service string    `json:"service"`
-	Message string    `json:"message"`
+	Time      time.Time `json:"time"`
+	Service   string    `json:"service"`
+	Message   string    `json:"message"`
+	Truncated bool      `json:"truncated,omitempty"`
+}
+
+func newJSONLog(entry servicelog.Entry) *jsonLog {
+	message := entry.Message
+	truncated := !strings.HasSuffix(message, "\n")
+	if !truncated {
+		message = message[:len(entry.Message)-1]
+	}
+	return &jsonLog{
+		Time:      entry.Time,
+		Service:   entry.Service,
+		Message:   message,
+		Truncated: truncated,
+	}
 }
 
 func flushWriter(w io.Writer) {
