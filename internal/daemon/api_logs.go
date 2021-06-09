@@ -22,6 +22,7 @@ import (
 	"net/http"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/canonical/pebble/internal/logger"
@@ -116,7 +117,7 @@ func (r logsResponse) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		}
 		var err error
 		for len(fifo) > 0 && err == nil {
-			err = encoder.Encode(jsonLog(<-fifo))
+			err = encoder.Encode(newJSONLog(<-fifo))
 		}
 		if err != nil {
 			logger.Noticef("error writing logs: %v", err)
@@ -177,7 +178,7 @@ func (r logsResponse) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			}
 
 			// Otherwise encode and output log directly.
-			err := encoder.Encode(jsonLog(log))
+			err := encoder.Encode(newJSONLog(log))
 			if err != nil {
 				logger.Noticef("error writing logs: %v", err)
 				return
@@ -297,6 +298,15 @@ type jsonLog struct {
 	Time    time.Time `json:"time"`
 	Service string    `json:"service"`
 	Message string    `json:"message"`
+}
+
+func newJSONLog(entry servicelog.Entry) *jsonLog {
+	message := strings.TrimSuffix(entry.Message, "\n")
+	return &jsonLog{
+		Time:    entry.Time,
+		Service: entry.Service,
+		Message: message,
+	}
 }
 
 func flushWriter(w io.Writer) {

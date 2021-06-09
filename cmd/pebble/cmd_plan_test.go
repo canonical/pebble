@@ -16,9 +16,10 @@ package main_test
 
 import (
 	"fmt"
-	"gopkg.in/check.v1"
 	"net/http"
 	"net/url"
+
+	"gopkg.in/check.v1"
 
 	pebble "github.com/canonical/pebble/cmd/pebble"
 )

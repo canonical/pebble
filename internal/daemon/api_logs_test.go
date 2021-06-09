@@ -122,6 +122,7 @@ func (s *logsSuite) TestOneServiceDefaults(c *C) {
 	for i := 0; i < 12; i++ {
 		fmt.Fprintf(lw, "message %d\n", i)
 	}
+	fmt.Fprintf(lw, "truncated")
 
 	svcMgr := testServiceManager{
 		buffers: map[string]*servicelog.RingBuffer{
@@ -133,9 +134,12 @@ func (s *logsSuite) TestOneServiceDefaults(c *C) {
 
 	logs := decodeLogs(c, rec.Body)
 	c.Assert(logs, HasLen, 10)
-	for i := 0; i < 10; i++ {
-		checkLog(c, logs[i], "nginx", fmt.Sprintf("message %d\n", i+2))
+	for i := 0; i < 9; i++ {
+		checkLog(c, logs[i], "nginx", fmt.Sprintf("message %d", i+3))
 	}
+	c.Check(logs[9].Time, Not(Equals), time.Time{})
+	c.Check(logs[9].Service, Equals, "nginx")
+	c.Check(logs[9].Message, Equals, "truncated")
 }
 
 func (s *logsSuite) TestOneServiceWithN(c *C) {
@@ -156,7 +160,7 @@ func (s *logsSuite) TestOneServiceWithN(c *C) {
 	logs := decodeLogs(c, rec.Body)
 	c.Assert(logs, HasLen, 3)
 	for i := 0; i < 3; i++ {
-		checkLog(c, logs[i], "nginx", fmt.Sprintf("message %d\n", i+17))
+		checkLog(c, logs[i], "nginx", fmt.Sprintf("message %d", i+17))
 	}
 }
 
@@ -179,7 +183,7 @@ func (s *logsSuite) TestOneServiceAllLogs(c *C) {
 	logs := decodeLogs(c, rec.Body)
 	c.Assert(logs, HasLen, 20)
 	for i := 0; i < 20; i++ {
-		checkLog(c, logs[i], "nginx", fmt.Sprintf("message %d\n", i+20))
+		checkLog(c, logs[i], "nginx", fmt.Sprintf("message %d", i+20))
 	}
 }
 
@@ -202,7 +206,7 @@ func (s *logsSuite) TestOneServiceOutOfTwo(c *C) {
 	logs := decodeLogs(c, rec.Body)
 	c.Assert(logs, HasLen, 3)
 	for i := 0; i < 3; i++ {
-		checkLog(c, logs[i], "nginx", fmt.Sprintf("message %d\n", i+17))
+		checkLog(c, logs[i], "nginx", fmt.Sprintf("message %d", i+17))
 	}
 }
 
@@ -245,8 +249,8 @@ func (s *logsSuite) TestMultipleServicesAll(c *C) {
 	logs := decodeLogs(c, rec.Body)
 	c.Assert(logs, HasLen, 20)
 	for i := 0; i < 10; i++ {
-		checkLog(c, logs[i*2], "one", fmt.Sprintf("message1 %d\n", i))
-		checkLog(c, logs[i*2+1], "two", fmt.Sprintf("message2 %d\n", i))
+		checkLog(c, logs[i*2], "one", fmt.Sprintf("message1 %d", i))
+		checkLog(c, logs[i*2+1], "two", fmt.Sprintf("message2 %d", i))
 	}
 }
 
@@ -274,8 +278,8 @@ func (s *logsSuite) TestMultipleServicesN(c *C) {
 	logs := decodeLogs(c, rec.Body)
 	c.Assert(logs, HasLen, 10)
 	for i := 0; i < 5; i++ {
-		checkLog(c, logs[i*2], "one", fmt.Sprintf("message1 %d\n", 5+i))
-		checkLog(c, logs[i*2+1], "two", fmt.Sprintf("message2 %d\n", 5+i))
+		checkLog(c, logs[i*2], "one", fmt.Sprintf("message1 %d", 5+i))
+		checkLog(c, logs[i*2+1], "two", fmt.Sprintf("message2 %d", 5+i))
 	}
 }
 
@@ -300,8 +304,8 @@ func (s *logsSuite) TestMultipleServicesNFewLogs(c *C) {
 
 	logs := decodeLogs(c, rec.Body)
 	c.Assert(logs, HasLen, 2)
-	checkLog(c, logs[0], "one", "message1 1\n")
-	checkLog(c, logs[1], "two", "message2 1\n")
+	checkLog(c, logs[0], "one", "message1 1")
+	checkLog(c, logs[1], "two", "message2 1")
 }
 
 func (s *logsSuite) TestLoggingTooFast(c *C) {
@@ -339,7 +343,7 @@ func (s *logsSuite) TestLoggingTooFast(c *C) {
 	logs := decodeLogs(c, bytes.NewReader(rec.buf.Bytes()))
 	c.Assert(len(logs), Equals, 3)
 	for i := 0; i < 3; i++ {
-		checkLog(c, logs[i], "svc", fmt.Sprintf("message %d\n", i))
+		checkLog(c, logs[i], "svc", fmt.Sprintf("message %d", i))
 	}
 }
 
@@ -424,19 +428,19 @@ func (s *logsSuite) TestMultipleServicesFollow(c *C) {
 		logs = append(logs, waitLog())
 	}
 	c.Check(logs, HasLen, 2)
-	checkLog(c, logs[0], "one", "message1 1\n")
-	checkLog(c, logs[1], "two", "message2 1\n")
+	checkLog(c, logs[0], "one", "message1 1")
+	checkLog(c, logs[1], "two", "message2 1")
 
 	// Then write a bunch more and ensure we can "follow" them
 	time.Sleep(10 * time.Millisecond) // ensure we'll be using the notification channel
 	fmt.Fprintf(lw1, "message1 2\n")
-	checkLog(c, waitLog(), "one", "message1 2\n")
+	checkLog(c, waitLog(), "one", "message1 2")
 	fmt.Fprintf(lw2, "message2 2\n")
-	checkLog(c, waitLog(), "two", "message2 2\n")
+	checkLog(c, waitLog(), "two", "message2 2")
 	fmt.Fprintf(lw2, "message2 3\n")
-	checkLog(c, waitLog(), "two", "message2 3\n")
+	checkLog(c, waitLog(), "two", "message2 3")
 	fmt.Fprintf(lw1, "message1 3\n")
-	checkLog(c, waitLog(), "one", "message1 3\n")
+	checkLog(c, waitLog(), "one", "message1 3")
 
 	// Close request and wait till serve goroutine exits
 	cancel()

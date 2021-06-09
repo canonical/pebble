@@ -18,8 +18,9 @@ import (
 	"encoding/json"
 	"net/url"
 
-	"github.com/canonical/pebble/client"
 	"gopkg.in/check.v1"
+
+	"github.com/canonical/pebble/client"
 )
 
 func (cs *clientSuite) TestAddLayer(c *check.C) {
