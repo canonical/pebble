@@ -150,8 +150,8 @@ services:
         # other pre-existing definition with the same name in the Pebble plan.
         #
         # The value 'merge' will ensure that values in this layer specification
-        # are merged with existing definitions, where 'override' will replace
-        # and existing service spec in the plan with the same name
+        # are merged over existing definitions, whereas 'replace' will entirely
+        # override the existing service spec in the plan with the same name
         override: merge | replace
 
         # (Optional) A short summary of the service
