@@ -46,10 +46,9 @@ type LogsOptions struct {
 
 // LogEntry is the struct passed to the WriteLog function.
 type LogEntry struct {
-	Time      time.Time `json:"time"`
-	Service   string    `json:"service"`
-	Message   string    `json:"message"`
-	Truncated bool      `json:"truncated,omitempty"`
+	Time    time.Time `json:"time"`
+	Service string    `json:"service"`
+	Message string    `json:"message"`
 }
 
 // Logs fetches previously-written logs from the given services.

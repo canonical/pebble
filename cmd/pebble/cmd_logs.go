@@ -72,12 +72,8 @@ func (cmd *cmdLogs) Execute(args []string) error {
 	switch cmd.Format {
 	case "", "text":
 		writeLog = func(entry client.LogEntry) error {
-			suffix := ""
-			if entry.Truncated {
-				suffix = " (truncated)"
-			}
-			_, err := fmt.Fprintf(Stdout, "%s [%s] %s%s\n",
-				entry.Time.Format(logTimeFormat), entry.Service, entry.Message, suffix)
+			_, err := fmt.Fprintf(Stdout, "%s [%s] %s\n",
+				entry.Time.Format(logTimeFormat), entry.Service, entry.Message)
 			return err
 		}
 

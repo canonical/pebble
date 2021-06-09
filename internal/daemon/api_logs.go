@@ -295,23 +295,17 @@ func streamLogs(itsByName map[string]servicelog.Iterator, logs chan<- servicelog
 // {"time":"2021-04-23T01:28:52.660Z","service":"redis","message":"redis started up"}
 // {"time":"2021-04-23T01:28:52.798Z","service":"thing","message":"did something"}
 type jsonLog struct {
-	Time      time.Time `json:"time"`
-	Service   string    `json:"service"`
-	Message   string    `json:"message"`
-	Truncated bool      `json:"truncated,omitempty"`
+	Time    time.Time `json:"time"`
+	Service string    `json:"service"`
+	Message string    `json:"message"`
 }
 
 func newJSONLog(entry servicelog.Entry) *jsonLog {
-	message := entry.Message
-	truncated := !strings.HasSuffix(message, "\n")
-	if !truncated {
-		message = message[:len(entry.Message)-1]
-	}
+	message := strings.TrimSuffix(entry.Message, "\n")
 	return &jsonLog{
-		Time:      entry.Time,
-		Service:   entry.Service,
-		Message:   message,
-		Truncated: truncated,
+		Time:    entry.Time,
+		Service: entry.Service,
+		Message: message,
 	}
 }
 

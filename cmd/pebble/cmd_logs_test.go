@@ -34,8 +34,7 @@ func (s *PebbleSuite) TestLogsText(c *C) {
 		fmt.Fprintf(w, `
 {"time":"2021-05-03T03:55:49.360994155Z","service":"thing","message":"log 1"}
 {"time":"2021-05-03T03:55:49.654334232Z","service":"snappass","message":"log two"}
-{"time":"2021-05-03T03:55:50.076800988Z","service":"thing","message":"trunc","truncated":true}
-{"time":"2021-05-03T03:55:51.076800988Z","service":"thing","message":"ated"}
+{"time":"2021-05-03T03:55:50.076800988Z","service":"thing","message":"the third"}
 `[1:])
 	})
 	rest, err := pebble.Parser(pebble.Client()).ParseArgs([]string{"logs"})
@@ -44,8 +43,7 @@ func (s *PebbleSuite) TestLogsText(c *C) {
 	c.Check(s.Stdout(), Equals, `
 2021-05-03T03:55:49.360Z [thing] log 1
 2021-05-03T03:55:49.654Z [snappass] log two
-2021-05-03T03:55:50.076Z [thing] trunc (truncated)
-2021-05-03T03:55:51.076Z [thing] ated
+2021-05-03T03:55:50.076Z [thing] the third
 `[1:])
 	c.Check(s.Stderr(), Equals, "")
 }
@@ -60,8 +58,7 @@ func (s *PebbleSuite) TestLogsJSON(c *C) {
 		fmt.Fprintf(w, `
 {"time":"2021-05-03T03:55:49.360Z","service":"thing","message":"log 1"}
 {"time":"2021-05-03T03:55:49.654Z","service":"snappass","message":"log two"}
-{"time":"2021-05-03T03:55:50.076800988Z","service":"thing","message":"trunc","truncated":true}
-{"time":"2021-05-03T03:55:51.076800988Z","service":"thing","message":"ated"}
+{"time":"2021-05-03T03:55:50.076800988Z","service":"thing","message":"the third"}
 `[1:])
 	})
 	rest, err := pebble.Parser(pebble.Client()).ParseArgs([]string{"logs", "--format", "json"})
@@ -70,8 +67,7 @@ func (s *PebbleSuite) TestLogsJSON(c *C) {
 	c.Check(s.Stdout(), Equals, `
 {"time":"2021-05-03T03:55:49.36Z","service":"thing","message":"log 1"}
 {"time":"2021-05-03T03:55:49.654Z","service":"snappass","message":"log two"}
-{"time":"2021-05-03T03:55:50.076800988Z","service":"thing","message":"trunc","truncated":true}
-{"time":"2021-05-03T03:55:51.076800988Z","service":"thing","message":"ated"}
+{"time":"2021-05-03T03:55:50.076800988Z","service":"thing","message":"the third"}
 `[1:])
 	c.Check(s.Stderr(), Equals, "")
 }

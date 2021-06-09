@@ -38,10 +38,9 @@ var _ = Suite(&logsSuite{})
 type logsSuite struct{}
 
 type testLogEntry struct {
-	Time      time.Time
-	Service   string
-	Message   string
-	Truncated bool
+	Time    time.Time
+	Service string
+	Message string
 }
 
 type testServiceManager struct {
@@ -141,7 +140,6 @@ func (s *logsSuite) TestOneServiceDefaults(c *C) {
 	c.Check(logs[9].Time, Not(Equals), time.Time{})
 	c.Check(logs[9].Service, Equals, "nginx")
 	c.Check(logs[9].Message, Equals, "truncated")
-	c.Check(logs[9].Truncated, Equals, true)
 }
 
 func (s *logsSuite) TestOneServiceWithN(c *C) {
@@ -546,5 +544,4 @@ func checkLog(c *C, l testLogEntry, service, message string) {
 	c.Check(l.Time, Not(Equals), time.Time{})
 	c.Check(l.Service, Equals, service)
 	c.Check(l.Message, Equals, message)
-	c.Check(l.Truncated, Equals, false)
 }
