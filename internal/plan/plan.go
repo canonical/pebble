@@ -83,7 +83,7 @@ func (e *FormatError) Error() string {
 	return e.Message
 }
 
-// CombineLayers combines the given layers into a Plan, with the later layers
+// CombineLayers combines the given layers into a plan, with the later layers
 // layers overriding earlier ones.
 func CombineLayers(layers ...*Layer) (*Layer, error) {
 	combined := &Layer{
@@ -149,11 +149,18 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 		}
 	}
 
-	// Ensure combined layers don't have cycles.
-	err := combined.checkCycles()
+	// Ensure fields in combined layers validate correctly.
+	err := combined.validateFields()
 	if err != nil {
 		return nil, err
 	}
+
+	// Ensure combined layers don't have cycles.
+	err = combined.checkCycles()
+	if err != nil {
+		return nil, err
+	}
+
 	return combined, nil
 }
 
@@ -247,6 +254,17 @@ func order(services map[string]*Service, names []string, stop bool) ([]string, e
 	return order, nil
 }
 
+func (l *Layer) validateFields() error {
+	for name, service := range l.Services {
+		if service.Command == "" {
+			return &FormatError{
+				Message: fmt.Sprintf(`plan must define "command" for service %q`, name),
+			}
+		}
+	}
+	return nil
+}
+
 func (l *Layer) checkCycles() error {
 	var names []string
 	for name := range l.Services {
@@ -274,6 +292,11 @@ func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 			// in log output).
 			return nil, &FormatError{
 				Message: fmt.Sprintf("cannot use reserved service name %q", name),
+			}
+		}
+		if service == nil {
+			return nil, &FormatError{
+				Message: fmt.Sprintf("service object cannot be null for service %q", name),
 			}
 		}
 		service.Name = name
