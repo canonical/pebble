@@ -83,7 +83,7 @@ func (e *FormatError) Error() string {
 	return e.Message
 }
 
-// CombineLayers combines the given layers into a plan, with the later layers
+// CombineLayers combines the given layers into a single layer, with the later
 // layers overriding earlier ones.
 func CombineLayers(layers ...*Layer) (*Layer, error) {
 	combined := &Layer{
