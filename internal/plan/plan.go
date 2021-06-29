@@ -150,13 +150,16 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 	}
 
 	// Ensure fields in combined layers validate correctly.
-	err := combined.validateFields()
-	if err != nil {
-		return nil, err
+	for name, service := range combined.Services {
+		if service.Command == "" {
+			return nil, &FormatError{
+				Message: fmt.Sprintf(`plan must define "command" for service %q`, name),
+			}
+		}
 	}
 
 	// Ensure combined layers don't have cycles.
-	err = combined.checkCycles()
+	err := combined.checkCycles()
 	if err != nil {
 		return nil, err
 	}
@@ -254,17 +257,6 @@ func order(services map[string]*Service, names []string, stop bool) ([]string, e
 	return order, nil
 }
 
-func (l *Layer) validateFields() error {
-	for name, service := range l.Services {
-		if service.Command == "" {
-			return &FormatError{
-				Message: fmt.Sprintf(`plan must define "command" for service %q`, name),
-			}
-		}
-	}
-	return nil
-}
-
 func (l *Layer) checkCycles() error {
 	var names []string
 	for name := range l.Services {
@@ -287,6 +279,11 @@ func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 	layer.Order = order
 	layer.Label = label
 	for name, service := range layer.Services {
+		if name == "" {
+			return nil, &FormatError{
+				Message: fmt.Sprintf("cannot use empty string as service name"),
+			}
+		}
 		if name == "pebble" {
 			// Disallow service name "pebble" to avoid ambiguity (for example,
 			// in log output).

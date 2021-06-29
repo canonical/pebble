@@ -154,9 +154,9 @@ services:
         # override the existing service spec in the plan with the same name.
         override: merge | replace
 
-        # (Optional) The command to run the service. This is optional in an
-        # individual layer, but required in the combined layer. The command is
-        # executed directly; use "/bin/sh -c '...'" to run via the shell.
+        # (Required in combined layer) The command to run the service. The
+        # command is executed directly; use "/bin/sh -c '...'" to run via the
+        # shell.
         #
         # Example: /usr/bin/somecommand -b -t 30
         command: <commmand>

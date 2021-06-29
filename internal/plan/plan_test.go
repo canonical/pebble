@@ -327,6 +327,15 @@ var planTests = []planTest{{
 		services:
 			svc1: ~
 	`},
+}, {
+	summary: `Cannot use empty string as service name`,
+	error:   "cannot use empty string as service name",
+	input: []string{`
+		services:
+			"":
+				override: replace
+				command: cmd
+	`},
 }}
 
 func (s *S) TestParseLayer(c *C) {
