@@ -83,7 +83,7 @@ func (e *FormatError) Error() string {
 	return e.Message
 }
 
-// CombineLayers combines the given layers into a Plan, with the later layers
+// CombineLayers combines the given layers into a single layer, with the later
 // layers overriding earlier ones.
 func CombineLayers(layers ...*Layer) (*Layer, error) {
 	combined := &Layer{
@@ -149,11 +149,21 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 		}
 	}
 
+	// Ensure fields in combined layers validate correctly.
+	for name, service := range combined.Services {
+		if service.Command == "" {
+			return nil, &FormatError{
+				Message: fmt.Sprintf(`plan must define "command" for service %q`, name),
+			}
+		}
+	}
+
 	// Ensure combined layers don't have cycles.
 	err := combined.checkCycles()
 	if err != nil {
 		return nil, err
 	}
+
 	return combined, nil
 }
 
@@ -269,11 +279,21 @@ func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 	layer.Order = order
 	layer.Label = label
 	for name, service := range layer.Services {
+		if name == "" {
+			return nil, &FormatError{
+				Message: fmt.Sprintf("cannot use empty string as service name"),
+			}
+		}
 		if name == "pebble" {
 			// Disallow service name "pebble" to avoid ambiguity (for example,
 			// in log output).
 			return nil, &FormatError{
 				Message: fmt.Sprintf("cannot use reserved service name %q", name),
+			}
+		}
+		if service == nil {
+			return nil, &FormatError{
+				Message: fmt.Sprintf("service object cannot be null for service %q", name),
 			}
 		}
 		service.Name = name

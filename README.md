@@ -151,8 +151,15 @@ services:
         #
         # The value 'merge' will ensure that values in this layer specification
         # are merged over existing definitions, whereas 'replace' will entirely
-        # override the existing service spec in the plan with the same name
+        # override the existing service spec in the plan with the same name.
         override: merge | replace
+
+        # (Required in combined layer) The command to run the service. The
+        # command is executed directly; use "/bin/sh -c '...'" to run via the
+        # shell.
+        #
+        # Example: /usr/bin/somecommand -b -t 30
+        command: <commmand>
 
         # (Optional) A short summary of the service
         summary: <summary>
@@ -160,10 +167,6 @@ services:
         # (Optional) A detailed description of the service
         description: |
             <description>
-
-        # (Optional) The command to run the service.
-        # Example: /usr/bin/somecommand -b -t 30
-        command: <commmand>
 
         # (Optional) Control whether the service is started automatically when
         # Pebble starts. 

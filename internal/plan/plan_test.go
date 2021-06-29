@@ -320,6 +320,22 @@ var planTests = []planTest{{
 			pebble:
 				command: cmd
 	`},
+}, {
+	summary: `Cannot have null service definition`,
+	error:   `service object cannot be null for service "svc1"`,
+	input: []string{`
+		services:
+			svc1: ~
+	`},
+}, {
+	summary: `Cannot use empty string as service name`,
+	error:   "cannot use empty string as service name",
+	input: []string{`
+		services:
+			"":
+				override: replace
+				command: cmd
+	`},
 }}
 
 func (s *S) TestParseLayer(c *C) {
@@ -401,10 +417,45 @@ services:
     srv1:
         command: cmd
 `))
+	c.Assert(err, IsNil)
 	_, err = plan.CombineLayers(layer1, layer2)
 	c.Check(err, ErrorMatches, `layer "label2" must define \"override\" for service "srv1"`)
 	_, ok := err.(*plan.FormatError)
 	c.Check(ok, Equals, true, Commentf("error must be *plan.FormatError, not %T", err))
+}
+
+func (s *S) TestMissingCommand(c *C) {
+	// Combine fails if no command in combined plan
+	layer1, err := plan.ParseLayer(1, "label1", []byte("{}"))
+	c.Assert(err, IsNil)
+	layer2, err := plan.ParseLayer(2, "label2", []byte(`
+services:
+    srv1:
+        override: merge
+`))
+	c.Assert(err, IsNil)
+	_, err = plan.CombineLayers(layer1, layer2)
+	c.Check(err, ErrorMatches, `plan must define "command" for service "srv1"`)
+	_, ok := err.(*plan.FormatError)
+	c.Check(ok, Equals, true, Commentf("error must be *plan.FormatError, not %T", err))
+
+	// Combine succeeds if there is a command in combined plan
+	layer1, err = plan.ParseLayer(1, "label1", []byte(`
+services:
+    srv1:
+        override: merge
+        command: foo --bar
+`))
+	c.Assert(err, IsNil)
+	layer2, err = plan.ParseLayer(2, "label2", []byte(`
+services:
+    srv1:
+        override: merge
+`))
+	c.Assert(err, IsNil)
+	combined, err := plan.CombineLayers(layer1, layer2)
+	c.Assert(err, IsNil)
+	c.Assert(combined.Services["srv1"].Command, Equals, "foo --bar")
 }
 
 func (s *S) TestReadDir(c *C) {
