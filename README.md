@@ -7,8 +7,10 @@ designed with unique features that help with more specific use cases.
 
   - [General model](#general-model)
   - [Layer configuration examples](#layer-configuration-examples)
+  - [Building Pebble](#building-pebble)
   - [Running pebble](#running-pebble)
   - [Layer specification](#layer-specification)
+
   - [TODO/Contributing](#todo-contributing)
 
 ## General model
@@ -112,6 +114,29 @@ services:
         override: replace
         command: cmd
 ```
+## Building Pebble
+
+### Prequisities
+
+- A native/VM/container linux host ( Ubuntu LTS recommended )
+- Golang ( [Go installation on linux](https://golang.org/doc/install) )
+- Autotools
+
+### Build steps
+- Clone this repository
+- Run ```make```
+
+If build is succesful, output standalone will be in the following directory structure:
+
+```
+_build/
+└── _
+    └── bin
+        └── pebble
+```
+
+### Cross compiling Pebble 
+TODO
 
 ## Running pebble
 
@@ -228,6 +253,7 @@ Here are some of the things coming soon:
   - [ ] Improve signal handling, e.g., sending SIGHUP to a service
   - [ ] Terminate all services before exiting run command
   - [ ] More tests for existing CLI commands
+  - [ ] Explain cross compiling in the readme
 
 ## Have fun!
 
