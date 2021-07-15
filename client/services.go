@@ -41,6 +41,11 @@ func (client *Client) Stop(opts *ServiceOptions) (changeID string, err error) {
 	return changeID, err
 }
 
+func (client *Client) Restart(opts *ServiceOptions) (changeID string, err error) {
+	_, changeID, err = client.doMultiServiceAction("restart", opts.Names)
+	return changeID, err
+}
+
 type multiActionData struct {
 	Action   string   `json:"action"`
 	Services []string `json:"services"`

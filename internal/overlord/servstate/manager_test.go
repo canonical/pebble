@@ -60,16 +60,20 @@ var planLayer1 = `
 services:
     test1:
         override: replace
-        command: /bin/sh -c "echo test1 | tee -a %s; sleep 300"
+        command: /bin/sh -c "echo test1 | tee -a $FILE; sleep 300"
         startup: enabled
         requires:
             - test2
         before:
             - test2
+        environment:
+            FILE: %s
 
     test2:
         override: replace
-        command: /bin/sh -c "echo test2 | tee -a %s; sleep 300"
+        command: /bin/sh -c "echo test2 | tee -a $FILE; sleep 300"
+        environment:
+            FILE: %s
 `
 
 var planLayer2 = `
@@ -183,6 +187,26 @@ func (s *S) TestStartStopServices(c *C) {
 	s.stopServices(c, services)
 }
 
+func (s *S) TestStartStopServicesIdempotency(c *C) {
+	services := []string{"test1", "test2"}
+	s.startServices(c, services)
+	if c.Failed() {
+		return
+	}
+
+	s.startServices(c, services)
+	if c.Failed() {
+		return
+	}
+
+	s.stopServices(c, services)
+	if c.Failed() {
+		return
+	}
+
+	s.stopServicesAlreadyDead(c, services)
+}
+
 func (s *S) stopServices(c *C, services []string) {
 	cmds := s.manager.CmdsForTest()
 	c.Check(cmds, HasLen, len(services))
@@ -209,6 +233,29 @@ func (s *S) stopServices(c *C, services []string) {
 			c.Check(err, ErrorMatches, ".*process already finished.*")
 		}
 	}
+
+	s.st.Lock()
+	c.Check(chg.Status(), Equals, state.DoneStatus, Commentf("Error: %v", chg.Err()))
+	s.st.Unlock()
+}
+
+func (s *S) stopServicesAlreadyDead(c *C, services []string) {
+	cmds := s.manager.CmdsForTest()
+	c.Check(cmds, HasLen, 0)
+
+	s.st.Lock()
+	// Stopping should happen in reverse order in practice. For now
+	// it's up to the call site to organize that.
+	ts, err := servstate.Stop(s.st, services)
+	c.Check(err, IsNil)
+	chg := s.st.NewChange("test", "Stop test")
+	chg.AddAll(ts)
+	s.st.Unlock()
+
+	// Twice due to the cross-task dependency.
+	s.ensure(c, 2)
+
+	c.Assert(cmds, HasLen, 0)
 
 	s.st.Lock()
 	c.Check(chg.Status(), Equals, state.DoneStatus, Commentf("Error: %v", chg.Err()))
@@ -352,14 +399,18 @@ services:
     test1:
         startup: enabled
         override: replace
-        command: /bin/sh -c "echo test1 | tee -a %s; sleep 300"
+        command: /bin/sh -c "echo test1 | tee -a $FILE; sleep 300"
         before:
             - test2
         requires:
             - test2
+        environment:
+            FILE: %s
     test2:
         override: replace
-        command: /bin/sh -c "echo test2 | tee -a %s; sleep 300"
+        command: /bin/sh -c "echo test2 | tee -a $FILE; sleep 300"
+        environment:
+            FILE: %s
     test3:
         override: replace
         command: some-bad-command
@@ -624,7 +675,7 @@ var planLayerEnv = `
 services:
     envtest:
         override: replace
-        command: /bin/sh -c "env | grep PEBBLE_ENV_TEST | sort > %s; sleep 300"
+        command: $PEBBLE_ENV_TEST_SHELL -c "env | grep PEBBLE_ENV_TEST | sort > %s; sleep 300"
         environment:
             PEBBLE_ENV_TEST_1: foo
             PEBBLE_ENV_TEST_2: bar bazz
@@ -651,6 +702,10 @@ func (s *S) TestEnvironment(c *C) {
 	err = os.Setenv("PEBBLE_ENV_TEST_1", "should be overridden")
 	c.Assert(err, IsNil)
 
+	// Test command environment expansion.
+	err = os.Setenv("PEBBLE_ENV_TEST_SHELL", "/bin/sh")
+	c.Assert(err, IsNil)
+
 	// Start "envtest" service
 	st.Lock()
 	ts, err := servstate.Start(st, []string{"envtest"})
@@ -674,6 +729,7 @@ func (s *S) TestEnvironment(c *C) {
 PEBBLE_ENV_TEST_1=foo
 PEBBLE_ENV_TEST_2=bar bazz
 PEBBLE_ENV_TEST_PARENT=from-parent
+PEBBLE_ENV_TEST_SHELL=/bin/sh
 `[1:])
 }
 

@@ -156,9 +156,9 @@ services:
 
         # (Required in combined layer) The command to run the service. The
         # command is executed directly; use "/bin/sh -c '...'" to run via the
-        # shell.
+        # shell. All environment variables in the $X or ${X} form are expanded.
         #
-        # Example: /usr/bin/somecommand -b -t 30
+        # Example: /usr/bin/somecommand -b -t 30 $ENV_VAR
         command: <commmand>
 
         # (Optional) A short summary of the service

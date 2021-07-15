@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"strings"
 	"syscall"
 	"time"
 
@@ -77,10 +78,29 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 
 	_, previous := m.services[req.Name]
 	if previous {
-		return fmt.Errorf("service %q was previously started", req.Name)
+		// Already started
+		return nil
 	}
 
-	args, err := shlex.Split(service.Command)
+	// Pass service description's environment variables to child process
+	env := os.Environ()
+	for k, v := range service.Environment {
+		env = append(env, k+"="+v)
+	}
+
+	// Expand the command string with environment variables.
+	envMap := make(map[string]string)
+	for _, envLine := range env {
+		parts := strings.SplitN(envLine, "=", 2)
+		if len(parts) == 2 {
+			envMap[parts[0]] = parts[1]
+		}
+	}
+	expandedCommand := os.Expand(service.Command, func(k string) string {
+		return envMap[k]
+	})
+
+	args, err := shlex.Split(expandedCommand)
 	if err != nil {
 		// Shouldn't happen as it should have failed on parsing, but
 		// it does not hurt to double check and report.
@@ -88,6 +108,7 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 	}
 	cmd := exec.Command(args[0], args[1:]...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.Env = env
 
 	// Start as another user if specified in plan
 	uid, gid, err := osutil.NormalizeUidGid(service.UserID, service.GroupID, service.User, service.Group)
@@ -99,12 +120,6 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 			Uid: uint32(*uid),
 			Gid: uint32(*gid),
 		})
-	}
-
-	// Pass service description's environment variables to child process
-	cmd.Env = os.Environ()
-	for k, v := range service.Environment {
-		cmd.Env = append(cmd.Env, k+"="+v)
 	}
 
 	logBuffer := servicelog.NewRingBuffer(maxLogBytes)
@@ -134,6 +149,13 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 	go func() {
 		active.err = cmd.Wait()
 		_ = active.logBuffer.Close()
+		releasePlan, err := m.acquirePlan()
+		if err == nil {
+			if m.services[req.Name].cmd == cmd {
+				delete(m.services, req.Name)
+			}
+			releasePlan()
+		}
 		close(active.done)
 	}()
 	if m.serviceOutput != nil {
@@ -155,13 +177,6 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 	case <-okay:
 		return nil
 	case <-active.done:
-		releasePlan, err := m.acquirePlan()
-		if err == nil {
-			if m.services[req.Name].cmd == cmd {
-				delete(m.services, req.Name)
-			}
-			releasePlan()
-		}
 		return fmt.Errorf("cannot start service: exited quickly with code %d", cmd.ProcessState.ExitCode())
 	}
 	panic("unreachable")
@@ -183,7 +198,8 @@ func (m *ServiceManager) doStop(task *state.Task, tomb *tomb.Tomb) error {
 
 	active, ok := m.services[req.Name]
 	if !ok {
-		return fmt.Errorf("service %q is not active", req.Name)
+		// Already stopped
+		return nil
 	}
 	cmd := active.cmd
 
@@ -204,13 +220,6 @@ func (m *ServiceManager) doStop(task *state.Task, tomb *tomb.Tomb) error {
 		case <-fail:
 			return fmt.Errorf("process still runs after SIGTERM and SIGKILL")
 		case <-active.done:
-			releasePlan, err := m.acquirePlan()
-			if err == nil {
-				if m.services[req.Name].cmd == cmd {
-					delete(m.services, req.Name)
-				}
-				releasePlan()
-			}
 			return nil
 		}
 	}

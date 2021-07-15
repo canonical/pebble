@@ -64,13 +64,12 @@ func v1PostServices(c *Command, r *http.Request, _ *userState) Response {
 	}
 
 	var err error
-	var services []string
 	servmgr := c.d.overlord.ServiceManager()
 	if payload.Action == "autostart" {
 		if len(payload.Services) != 0 {
 			return statusBadRequest("%s accepts no service names", payload.Action)
 		}
-		services, err = servmgr.DefaultServiceNames()
+		services, err := servmgr.DefaultServiceNames()
 		if err != nil {
 			return statusInternalError("%v", err)
 		}
@@ -86,17 +85,6 @@ func v1PostServices(c *Command, r *http.Request, _ *userState) Response {
 		if len(payload.Services) == 0 {
 			return statusBadRequest("no services to %s provided", payload.Action)
 		}
-		var err error
-		if payload.Action == "start" {
-			services, err = servmgr.StartOrder(payload.Services)
-		} else if payload.Action == "stop" {
-			services, err = servmgr.StopOrder(payload.Services)
-		} else {
-			err = fmt.Errorf("action %q is unsupported", payload.Action)
-		}
-		if err != nil {
-			return statusBadRequest("%v", err)
-		}
 	}
 
 	st := c.d.overlord.State()
@@ -104,11 +92,43 @@ func v1PostServices(c *Command, r *http.Request, _ *userState) Response {
 	defer st.Unlock()
 
 	var taskSet *state.TaskSet
+	var services []string
 	switch payload.Action {
 	case "start", "autostart":
+		services, err = servmgr.StartOrder(payload.Services)
+		if err != nil {
+			break
+		}
 		taskSet, err = servstate.Start(st, services)
 	case "stop":
+		services, err = servmgr.StopOrder(payload.Services)
+		if err != nil {
+			break
+		}
 		taskSet, err = servstate.Stop(st, services)
+	case "restart":
+		services, err = servmgr.StopOrder(payload.Services)
+		if err != nil {
+			break
+		}
+		var stopTasks *state.TaskSet
+		stopTasks, err = servstate.Stop(st, services)
+		if err != nil {
+			break
+		}
+		services, err = servmgr.StartOrder(payload.Services)
+		if err != nil {
+			break
+		}
+		var startTasks *state.TaskSet
+		startTasks, err = servstate.Start(st, services)
+		if err != nil {
+			break
+		}
+		startTasks.WaitAll(stopTasks)
+		taskSet = state.NewTaskSet()
+		taskSet.AddAll(stopTasks)
+		taskSet.AddAll(startTasks)
 	default:
 		return statusBadRequest("action %q is unsupported", payload.Action)
 	}
