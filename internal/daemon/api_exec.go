@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"os/exec"
 
 	"github.com/canonical/pebble/internal/logger"
 	"github.com/canonical/pebble/internal/osutil"
@@ -44,11 +45,17 @@ func v1PostExec(c *Command, req *http.Request, _ *userState) Response {
 	if len(payload.Command) < 1 {
 		return statusBadRequest("must specify command")
 	}
-	// TODO: check up-front that binary exists (and is runnable?)
 
+	// Check up-front that the executable exists.
+	_, err := exec.LookPath(payload.Command[0])
+	if err != nil {
+		return statusBadRequest("%v", err)
+	}
+
+	// Convert User/UserID and Group/GroupID combinations into raw uid/gid.
 	uid, gid, err := osutil.NormalizeUidGid(payload.UserID, payload.GroupID, payload.User, payload.Group)
 	if err != nil {
-		return statusBadRequest("%s", err)
+		return statusBadRequest("%v", err)
 	}
 
 	st := c.d.overlord.State()
