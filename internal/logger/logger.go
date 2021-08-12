@@ -66,6 +66,23 @@ func Debugf(format string, v ...interface{}) {
 	logger.Debug(msg)
 }
 
+// TODO: clean up
+
+func Infof(format string, v ...interface{}) {
+	msg := fmt.Sprintf(format, v...)
+	logger.Notice(msg)
+}
+
+func Errorf(format string, v ...interface{}) {
+	msg := fmt.Sprintf(format, v...)
+	logger.Notice("ERROR: " + msg)
+}
+
+func Warnf(format string, v ...interface{}) {
+	msg := fmt.Sprintf(format, v...)
+	logger.Notice("WARNING: " + msg)
+}
+
 // MockLogger replaces the existing logger with a buffer and returns
 // the log buffer and a restore function.
 func MockLogger(prefix string) (buf *bytes.Buffer, restore func()) {

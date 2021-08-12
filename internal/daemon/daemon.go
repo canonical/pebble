@@ -15,6 +15,7 @@
 package daemon
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"io"
@@ -293,6 +294,14 @@ func (w *wrappedWriter) Flush() {
 	}
 }
 
+func (w *wrappedWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	hijacker, ok := w.w.(http.Hijacker)
+	if !ok {
+		return nil, nil, fmt.Errorf("underlying writer does not implement Hijack")
+	}
+	return hijacker.Hijack()
+}
+
 func (w *wrappedWriter) status() int {
 	if w.s == 0 {
 		// If status was not explicitly written, HTTP 200 is implied.
@@ -350,7 +359,7 @@ func (d *Daemon) Init() error {
 	return nil
 }
 
-// SetDegradedMode puts the daemon into an degraded mode which will the
+// SetDegradedMode puts the daemon into a degraded mode which will the
 // error given in the "err" argument for commands that are not marked
 // as readonlyOK.
 //

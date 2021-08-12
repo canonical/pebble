@@ -28,6 +28,7 @@ import (
 
 	"github.com/canonical/pebble/internal/logger"
 	"github.com/canonical/pebble/internal/osutil"
+	"github.com/canonical/pebble/internal/overlord/cmdstate"
 	"github.com/canonical/pebble/internal/overlord/patch"
 	"github.com/canonical/pebble/internal/overlord/servstate"
 	"github.com/canonical/pebble/internal/overlord/state"
@@ -125,6 +126,9 @@ func New(pebbleDir string, restartBehavior RestartBehavior, serviceOutput io.Wri
 		return nil, err
 	}
 	o.addManager(serviceMgr)
+
+	cmdMgr := cmdstate.NewManager(o.runner)
+	o.addManager(cmdMgr)
 
 	// the shared task runner should be added last!
 	o.stateEng.AddManager(o.runner)

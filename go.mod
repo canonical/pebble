@@ -4,6 +4,7 @@ go 1.14
 
 require (
 	github.com/gorilla/mux v1.8.0
+	github.com/gorilla/websocket v1.4.2
 	github.com/jessevdk/go-flags v1.4.0
 	github.com/kr/text v0.2.0 // indirect
 	golang.org/x/crypto v0.0.0-20201221181555-eec23a3978ad
