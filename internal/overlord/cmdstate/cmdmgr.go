@@ -15,7 +15,9 @@
 package cmdstate
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -24,6 +26,7 @@ import (
 	"strconv"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/gorilla/websocket"
 	"golang.org/x/sys/unix"
@@ -53,9 +56,12 @@ type ExecArgs struct {
 	Command     []string
 	Environment map[string]string
 	WorkingDir  string
+	Timeout     time.Duration
 	UserID      *int
 	GroupID     *int
 	Interactive bool
+	Width       int
+	Height      int
 }
 
 // ExecMetadata is the metadata from an Exec call.
@@ -132,10 +138,10 @@ func Exec(st *state.State, args *ExecArgs) (*state.TaskSet, ExecMetadata, error)
 
 	ws.command = args.Command
 	ws.env = env
+	ws.timeout = args.Timeout
 
-	// TODO: interactive
-	//ws.width = post.Width
-	//ws.height = post.Height
+	ws.width = args.Width
+	ws.height = args.Height
 
 	ws.cwd = cwd
 	ws.uid = args.UserID
@@ -165,7 +171,6 @@ func Exec(st *state.State, args *ExecArgs) (*state.TaskSet, ExecMetadata, error)
 	return state.NewTaskSet(task), metadata, nil
 }
 
-// TODO: use tomb to cancel?
 func doExec(task *state.Task, tomb *tomb.Tomb) error {
 	var cacheKey string
 	err := task.Get("cache-key", &cacheKey)
@@ -181,7 +186,8 @@ func doExec(task *state.Task, tomb *tomb.Tomb) error {
 
 	logger.Noticef("TODO doExec start: %+v", ws)
 
-	err = ws.Do(st, change)
+	ctx := tomb.Context(context.Background())
+	err = ws.Do(ctx, st, change)
 	return err
 }
 
@@ -195,6 +201,7 @@ func Connect(st *state.State, cacheKey string, r *http.Request, w http.ResponseW
 type execWs struct {
 	command          []string
 	env              map[string]string
+	timeout          time.Duration
 	conns            map[int]*websocket.Conn
 	connsLock        sync.Mutex
 	allConnected     chan bool
@@ -259,7 +266,7 @@ func (s *execWs) Connect(r *http.Request, w http.ResponseWriter) error {
 	return os.ErrNotExist
 }
 
-func (s *execWs) Do(st *state.State, change *state.Change) error {
+func (s *execWs) Do(ctx context.Context, st *state.State, change *state.Change) error {
 	logger.Infof("TODO execWs.Do before allConnected")
 	// TODO: shouldn't this have some kind of connect timeout?
 	<-s.allConnected
@@ -474,7 +481,13 @@ func (s *execWs) Do(st *state.State, change *state.Change) error {
 		return cmdErr
 	}
 
-	cmd := exec.Command(s.command[0], s.command[1:]...)
+	if s.timeout != 0 {
+		var cancel func()
+		ctx, cancel = context.WithTimeout(ctx, s.timeout)
+		defer cancel()
+	}
+
+	cmd := exec.CommandContext(ctx, s.command[0], s.command[1:]...)
 
 	// Prepare the environment
 	for k, v := range s.env {
@@ -523,6 +536,10 @@ func (s *execWs) Do(st *state.State, change *state.Change) error {
 		return finisher(0, nil)
 	}
 
+	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		return finisher(-1, fmt.Errorf("timed out after %v", s.timeout))
+	}
+
 	exitErr, ok := err.(*exec.ExitError)
 	if ok {
 		status, ok := exitErr.Sys().(syscall.WaitStatus)
@@ -536,5 +553,5 @@ func (s *execWs) Do(st *state.State, change *state.Change) error {
 		}
 	}
 
-	return finisher(-1, nil)
+	return finisher(-1, err)
 }

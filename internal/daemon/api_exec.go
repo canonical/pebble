@@ -21,6 +21,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"time"
 
 	"github.com/canonical/pebble/internal/osutil"
 	"github.com/canonical/pebble/internal/overlord/cmdstate"
@@ -32,11 +33,14 @@ func v1PostExec(c *Command, req *http.Request, _ *userState) Response {
 		Command     []string          `json:"command"`
 		Environment map[string]string `json:"environment"`
 		WorkingDir  string            `json:"working-dir"`
+		Timeout     time.Duration     `json:"timeout"`
 		UserID      *int              `json:"user-id"`
 		User        string            `json:"user"`
 		GroupID     *int              `json:"group-id"`
 		Group       string            `json:"group"`
-		// TODO: add timeout?
+		Interactive bool              `json:"interactive"`
+		Width       int               `json:"width"`
+		Height      int               `json:"height"`
 	}
 	decoder := json.NewDecoder(req.Body)
 	if err := decoder.Decode(&payload); err != nil {
@@ -66,8 +70,12 @@ func v1PostExec(c *Command, req *http.Request, _ *userState) Response {
 		Command:     payload.Command,
 		Environment: payload.Environment,
 		WorkingDir:  payload.WorkingDir,
+		Timeout:     payload.Timeout,
 		UserID:      uid,
 		GroupID:     gid,
+		Interactive: payload.Interactive,
+		Width:       payload.Width,
+		Height:      payload.Height,
 	}
 	taskSet, metadata, err := cmdstate.Exec(st, args)
 	if err != nil {
