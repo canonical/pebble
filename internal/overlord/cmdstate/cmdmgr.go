@@ -138,9 +138,8 @@ func Exec(st *state.State, args *ExecArgs) (*state.TaskSet, ExecMetadata, error)
 	//ws.height = post.Height
 
 	ws.cwd = cwd
-	// TODO: uid and gid handling
-	//ws.uid = args.UserID
-	//TODO ws.gid = args.GroupID
+	ws.uid = args.UserID
+	ws.gid = args.GroupID
 
 	logger.Noticef("ERROR: cmdstate.Exec ws=%+v", ws)
 	st.Cache("exec-"+cacheKey, ws)
@@ -204,8 +203,8 @@ type execWs struct {
 	fds              map[int]string
 	width            int
 	height           int
-	uid              uint32
-	gid              uint32
+	uid              *int
+	gid              *int
 	cwd              string
 }
 
@@ -485,17 +484,19 @@ func (s *execWs) Do(st *state.State, change *state.Change) error {
 	cmd.Stdin = stdin
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
-	cmd.SysProcAttr = &syscall.SysProcAttr{
-		//TODO: Credential: &syscall.Credential{
-		//	Uid: s.uid,
-		//	Gid: s.gid,
-		//},
-		// Creates a new session if the calling process is not a process group leader.
-		// The calling process is the leader of the new session, the process group leader of
-		// the new process group, and has no controlling terminal.
-		// This is important to allow remote shells to handle ctrl+c.
-		Setsid: true,
+
+	cmd.SysProcAttr = &syscall.SysProcAttr{}
+	if s.uid != nil && s.gid != nil {
+		cmd.SysProcAttr.Credential = &syscall.Credential{
+			Uid: uint32(*s.uid),
+			Gid: uint32(*s.gid),
+		}
 	}
+	// Creates a new session if the calling process is not a process group leader.
+	// The calling process is the leader of the new session, the process group leader of
+	// the new process group, and has no controlling terminal.
+	// This is important to allow remote shells to handle ctrl+c.
+	cmd.SysProcAttr.Setsid = true
 
 	// Make the given terminal the controlling terminal of the calling process.
 	// The calling process must be a session leader and not have a controlling terminal already.

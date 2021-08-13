@@ -178,6 +178,10 @@ var helpCategories = []helpCategory{{
 	Description: "view changes and tasks",
 	Commands:    []string{"changes", "tasks"},
 }, {
+	Label:       "Commands and files",
+	Description: "execute a command and read/write files",
+	Commands:    []string{"exec"},
+}, {
 	Label:       "Other",
 	Description: "other commands",
 	Commands:    []string{"warnings", "okay", "help", "version"},
