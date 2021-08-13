@@ -102,7 +102,7 @@ func (client *Client) Exec(opts *ExecOptions, args *ExecAdditionalArgs) (changeI
 		return "", err
 	}
 	var result struct {
-		FDs map[string]string
+		WebsocketIDs map[string]string `json:"websocket-ids"`
 	}
 	err = json.Unmarshal(resultBytes, &result)
 	if err != nil {
@@ -112,7 +112,7 @@ func (client *Client) Exec(opts *ExecOptions, args *ExecAdditionalArgs) (changeI
 
 	// Process additional arguments
 	if args != nil {
-		fds := result.FDs
+		fds := result.WebsocketIDs
 
 		// Call the control handler with a connection to the control socket
 		if args.Control != nil && fds["control"] != "" {

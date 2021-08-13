@@ -17,7 +17,6 @@ package wsutil
 import (
 	"io"
 	"io/ioutil"
-	"net/http"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -27,11 +26,6 @@ import (
 
 	"github.com/canonical/pebble/internal/logger"
 )
-
-// TODO: should this just be moved into cmdstate?
-var WebsocketUpgrader = websocket.Upgrader{
-	CheckOrigin: func(r *http.Request) bool { return true },
-}
 
 // WebsocketExecMirror mirrors a websocket connection with a set of Writer/Reader.
 func WebsocketExecMirror(conn *websocket.Conn, w io.WriteCloser, r io.ReadCloser, exited chan struct{}, fd int) (chan bool, chan bool) {

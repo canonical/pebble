@@ -77,9 +77,14 @@ func v1PostExec(c *Command, req *http.Request, _ *userState) Response {
 	summary := fmt.Sprintf("Execute command %q", payload.Command[0])
 	change := newChange(st, "exec", summary, []*state.TaskSet{taskSet}, nil)
 
-	stateEnsureBefore(st, 0)
+	stateEnsureBefore(st, 0) // start it right away
 
-	return AsyncResponse(metadata, change.ID())
+	result := map[string]interface{}{
+		"environment":   metadata.Environment,
+		"websocket-ids": metadata.WebsocketIDs,
+		"working-dir":   metadata.WorkingDir,
+	}
+	return AsyncResponse(result, change.ID())
 }
 
 func v1GetExecWebsocket(c *Command, req *http.Request, _ *userState) Response {

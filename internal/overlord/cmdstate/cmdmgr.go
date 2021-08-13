@@ -58,11 +58,18 @@ type ExecArgs struct {
 	Interactive bool
 }
 
+// ExecMetadata is the metadata from an Exec call.
+type ExecMetadata struct {
+	WebsocketIDs map[string]string // keys are "0" (stdin), "1" (stdout), "2" (stderr), "control"
+	Environment  map[string]string
+	WorkingDir   string
+}
+
 // Exec creates a task set that will execute the command with the given arguments.
-func Exec(st *state.State, args *ExecArgs) (*state.TaskSet, map[string]interface{}, error) {
+func Exec(st *state.State, args *ExecArgs) (*state.TaskSet, ExecMetadata, error) {
 	cacheKey, err := strutil.UUID()
 	if err != nil {
-		return nil, nil, err
+		return nil, ExecMetadata{}, err
 	}
 
 	env := map[string]string{}
@@ -119,7 +126,7 @@ func Exec(st *state.State, args *ExecArgs) (*state.TaskSet, map[string]interface
 	for i := -1; i < len(ws.conns)-1; i++ {
 		ws.fds[i], err = strutil.UUID()
 		if err != nil {
-			return nil, nil, err
+			return nil, ExecMetadata{}, err
 		}
 	}
 
@@ -150,10 +157,10 @@ func Exec(st *state.State, args *ExecArgs) (*state.TaskSet, map[string]interface
 			fds[strconv.Itoa(fd)] = secret
 		}
 	}
-	metadata := map[string]interface{}{
-		"environment": env,
-		"fds":         fds,
-		"working-dir": cwd,
+	metadata := ExecMetadata{
+		WebsocketIDs: fds,
+		Environment:  env,
+		WorkingDir:   cwd,
 	}
 
 	return state.NewTaskSet(task), metadata, nil
@@ -202,6 +209,11 @@ type execWs struct {
 	cwd              string
 }
 
+var websocketUpgrader = websocket.Upgrader{
+	CheckOrigin: func(r *http.Request) bool { return true },
+	// TODO: should we add HandshakeTimeout here as well?
+}
+
 func (s *execWs) Connect(r *http.Request, w http.ResponseWriter) error {
 	secret := r.FormValue("secret")
 	logger.Noticef("TODO execWs.Connect secret=%s", secret)
@@ -213,7 +225,7 @@ func (s *execWs) Connect(r *http.Request, w http.ResponseWriter) error {
 		logger.Noticef("TODO: execWs.Connect fd=%d", fd)
 		if secret == fdSecret {
 			logger.Noticef("TODO: execWs.Connect fd=%d, fdSecret=%s", fd, fdSecret)
-			conn, err := wsutil.WebsocketUpgrader.Upgrade(w, r, nil)
+			conn, err := websocketUpgrader.Upgrade(w, r, nil)
 			if err != nil {
 				logger.Errorf("TODO: execWs.Connect upgrade error: %v", err)
 				return err
@@ -465,13 +477,7 @@ func (s *execWs) Do(st *state.State, change *state.Change) error {
 		return cmdErr
 	}
 
-	var cmd *exec.Cmd
-
-	if len(s.command) > 1 {
-		cmd = exec.Command(s.command[0], s.command[1:]...)
-	} else {
-		cmd = exec.Command(s.command[0])
-	}
+	cmd := exec.Command(s.command[0], s.command[1:]...)
 
 	// Prepare the environment
 	for k, v := range s.env {
