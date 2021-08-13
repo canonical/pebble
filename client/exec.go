@@ -59,12 +59,10 @@ type ExecAdditionalArgs struct {
 func (client *Client) getChangeWebsocket(changeID, websocketID string) (*websocket.Conn, error) {
 	url := fmt.Sprintf("ws://localhost/v1/exec/%s/websocket?id=%s", changeID, url.QueryEscape(websocketID))
 
+	// Set up a new websocket dialer based on the HTTP client
 	httpClient := client.doer.(*http.Client)
 	httpTransport := httpClient.Transport.(*http.Transport)
-
-	// Setup a new websocket dialer based on it
 	dialer := websocket.Dialer{
-		//lint:ignore SA1019 DialContext doesn't exist in Go 1.13
 		NetDial:         httpTransport.Dial,
 		Proxy:           httpTransport.Proxy,
 		TLSClientConfig: httpTransport.TLSClientConfig,

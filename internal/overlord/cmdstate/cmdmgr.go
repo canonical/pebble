@@ -218,7 +218,7 @@ func (s *execWs) Connect(r *http.Request, w http.ResponseWriter) error {
 	id := r.FormValue("id")
 	logger.Noticef("TODO execWs.Connect id=%s", id)
 	if id == "" {
-		return fmt.Errorf("missing websocket ID")
+		return os.ErrNotExist
 	}
 
 	for fd, fsID := range s.fds {
@@ -257,9 +257,7 @@ func (s *execWs) Connect(r *http.Request, w http.ResponseWriter) error {
 		}
 	}
 
-	/* If we didn't find the right websocket ID, the user provided a bad one,
-	 * which 403, not 404, since this Operation actually exists */
-	return os.ErrPermission
+	return os.ErrNotExist
 }
 
 func (s *execWs) Do(st *state.State, change *state.Change) error {

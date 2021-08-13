@@ -16,12 +16,12 @@ package daemon
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
 	"os/exec"
 
-	"github.com/canonical/pebble/internal/logger"
 	"github.com/canonical/pebble/internal/osutil"
 	"github.com/canonical/pebble/internal/overlord/cmdstate"
 	"github.com/canonical/pebble/internal/overlord/state"
@@ -118,18 +118,17 @@ type websocketResponse struct {
 }
 
 func (wr websocketResponse) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// TODO: not certain about error handling here (what about 400's?)
-	logger.Noticef("TODO: websocketResponse.ServeHTTP, id=%s", r.FormValue("id"))
 	err := cmdstate.Connect(wr.st, wr.cacheKey, r, w)
-	if err == os.ErrPermission {
-		rsp := statusNotFound("websocket ID not found")
+	if errors.Is(err, os.ErrNotExist) {
+		rsp := statusNotFound("websocket not found")
 		rsp.ServeHTTP(w, r)
 		return
 	}
 	if err != nil {
-		logger.Errorf("TODO websocketResponse.ServeHTTP err=%v", err)
-		rsp := statusInternalError("%s", err)
+		rsp := statusInternalError("%v", err)
 		rsp.ServeHTTP(w, r)
 		return
 	}
+	// In the success case, Connect takes over the connection and upgrades to
+	// the websocket protocol.
 }
