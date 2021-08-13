@@ -150,11 +150,11 @@ func Exec(st *state.State, args *ExecArgs) (*state.TaskSet, ExecMetadata, error)
 	task.Set("cache-key", cacheKey)
 
 	fds := make(map[string]string)
-	for fd, secret := range ws.fds {
+	for fd, wsID := range ws.fds {
 		if fd == -1 {
-			fds["control"] = secret
+			fds["control"] = wsID
 		} else {
-			fds[strconv.Itoa(fd)] = secret
+			fds[strconv.Itoa(fd)] = wsID
 		}
 	}
 	metadata := ExecMetadata{
@@ -215,16 +215,16 @@ var websocketUpgrader = websocket.Upgrader{
 }
 
 func (s *execWs) Connect(r *http.Request, w http.ResponseWriter) error {
-	secret := r.FormValue("secret")
-	logger.Noticef("TODO execWs.Connect secret=%s", secret)
-	if secret == "" {
-		return fmt.Errorf("missing secret")
+	id := r.FormValue("id")
+	logger.Noticef("TODO execWs.Connect id=%s", id)
+	if id == "" {
+		return fmt.Errorf("missing websocket ID")
 	}
 
-	for fd, fdSecret := range s.fds {
+	for fd, fsID := range s.fds {
 		logger.Noticef("TODO: execWs.Connect fd=%d", fd)
-		if secret == fdSecret {
-			logger.Noticef("TODO: execWs.Connect fd=%d, fdSecret=%s", fd, fdSecret)
+		if id == fsID {
+			logger.Noticef("TODO: execWs.Connect fd=%d, fsID=%s", fd, fsID)
 			conn, err := websocketUpgrader.Upgrade(w, r, nil)
 			if err != nil {
 				logger.Errorf("TODO: execWs.Connect upgrade error: %v", err)
@@ -257,7 +257,7 @@ func (s *execWs) Connect(r *http.Request, w http.ResponseWriter) error {
 		}
 	}
 
-	/* If we didn't find the right secret, the user provided a bad one,
+	/* If we didn't find the right websocket ID, the user provided a bad one,
 	 * which 403, not 404, since this Operation actually exists */
 	return os.ErrPermission
 }

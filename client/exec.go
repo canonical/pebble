@@ -56,8 +56,8 @@ type ExecAdditionalArgs struct {
 	DataDone chan bool
 }
 
-func (client *Client) getChangeWebsocket(changeID, secret string) (*websocket.Conn, error) {
-	url := fmt.Sprintf("ws://localhost/v1/exec/%s/websocket?secret=%s", changeID, url.QueryEscape(secret))
+func (client *Client) getChangeWebsocket(changeID, websocketID string) (*websocket.Conn, error) {
+	url := fmt.Sprintf("ws://localhost/v1/exec/%s/websocket?id=%s", changeID, url.QueryEscape(websocketID))
 
 	httpClient := client.doer.(*http.Client)
 	httpTransport := httpClient.Transport.(*http.Transport)

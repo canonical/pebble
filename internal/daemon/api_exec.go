@@ -119,10 +119,10 @@ type websocketResponse struct {
 
 func (wr websocketResponse) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// TODO: not certain about error handling here (what about 400's?)
-	logger.Noticef("TODO: websocketResponse.ServeHTTP, secret=%s", r.FormValue("secret"))
+	logger.Noticef("TODO: websocketResponse.ServeHTTP, id=%s", r.FormValue("id"))
 	err := cmdstate.Connect(wr.st, wr.cacheKey, r, w)
 	if err == os.ErrPermission {
-		rsp := statusForbidden("incorrect secret")
+		rsp := statusNotFound("websocket ID not found")
 		rsp.ServeHTTP(w, r)
 		return
 	}
