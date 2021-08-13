@@ -38,6 +38,11 @@ import (
 	"github.com/canonical/pebble/internal/wsutil"
 )
 
+const (
+	connectTimeout   = 5 * time.Second
+	handshakeTimeout = 5 * time.Second
+)
+
 type CommandManager struct{}
 
 // NewManager creates a new CommandManager.
@@ -216,8 +221,8 @@ type execWs struct {
 }
 
 var websocketUpgrader = websocket.Upgrader{
-	CheckOrigin: func(r *http.Request) bool { return true },
-	// TODO: should we add HandshakeTimeout here as well?
+	CheckOrigin:      func(r *http.Request) bool { return true },
+	HandshakeTimeout: handshakeTimeout,
 }
 
 func (s *execWs) Connect(r *http.Request, w http.ResponseWriter) error {
@@ -266,13 +271,28 @@ func (s *execWs) Connect(r *http.Request, w http.ResponseWriter) error {
 	return os.ErrNotExist
 }
 
-func (s *execWs) Do(ctx context.Context, st *state.State, change *state.Change) error {
-	logger.Infof("TODO execWs.Do before allConnected")
-	// TODO: shouldn't this have some kind of connect timeout?
-	<-s.allConnected
-	logger.Infof("TODO execWs.Do after allConnected")
+// waitAllConnected waits till all the websockets are connected or the connect
+// timeout elapses (or the provided ctx is cancelled).
+func (s *execWs) waitAllConnected(ctx context.Context) error {
+	ctx, cancel := context.WithTimeout(ctx, connectTimeout)
+	defer cancel()
+	select {
+	case <-ctx.Done():
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			return errors.New("timeout waiting for websocket connections")
+		}
+		return ctx.Err()
+	case <-s.allConnected:
+		return nil
+	}
+}
 
-	var err error
+func (s *execWs) Do(ctx context.Context, st *state.State, change *state.Change) error {
+	err := s.waitAllConnected(ctx)
+	if err != nil {
+		return err
+	}
+
 	var ttys []*os.File
 	var ptys []*os.File
 

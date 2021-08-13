@@ -225,11 +225,10 @@ func (client *Client) getChangeWebsocket(changeID, websocketID string) (*websock
 	httpClient := client.doer.(*http.Client)
 	httpTransport := httpClient.Transport.(*http.Transport)
 	dialer := websocket.Dialer{
-		NetDial:         httpTransport.Dial,
-		Proxy:           httpTransport.Proxy,
-		TLSClientConfig: httpTransport.TLSClientConfig,
-		//TODO: should we have a timeout?
-		//HandshakeTimeout:  7*time.Second,
+		NetDial:          httpTransport.Dial,
+		Proxy:            httpTransport.Proxy,
+		TLSClientConfig:  httpTransport.TLSClientConfig,
+		HandshakeTimeout: 5 * time.Second,
 	}
 
 	// Establish the connection
