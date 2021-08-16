@@ -16,6 +16,7 @@ package daemon
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -394,7 +395,7 @@ func (s *apiSuite) TestStateChangeInvalidTimeout(c *check.C) {
 }
 
 func (s *apiSuite) TestStateChangeWait(c *check.C) {
-	ready := s.testStateChangeWait(c, "", func(st *state.State, change *state.Change) {
+	ready := s.testStateChangeWait(context.Background(), c, "", func(st *state.State, change *state.Change) {
 		// Mark change ready after a short interval
 		time.Sleep(10 * time.Millisecond)
 		st.Lock()
@@ -404,12 +405,26 @@ func (s *apiSuite) TestStateChangeWait(c *check.C) {
 	c.Check(ready, check.Equals, true)
 }
 
-func (s *apiSuite) TestStateChangeWaitTimeout(c *check.C) {
-	ready := s.testStateChangeWait(c, "?timeout=10ms", func(st *state.State, change *state.Change) {})
+func (s *apiSuite) TestStateChangeWaitCancel(c *check.C) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	defer cancel()
+	ready := s.testStateChangeWait(ctx, c, "", func(st *state.State, change *state.Change) {})
 	c.Check(ready, check.Equals, false)
 }
 
-func (s *apiSuite) testStateChangeWait(c *check.C, query string, markReady func(st *state.State, change *state.Change)) bool {
+func (s *apiSuite) TestStateChangeWaitTimeout(c *check.C) {
+	ready := s.testStateChangeWait(context.Background(), c, "?timeout=10ms", func(st *state.State, change *state.Change) {})
+	c.Check(ready, check.Equals, false)
+}
+
+func (s *apiSuite) TestStateChangeWaitTimeoutCancel(c *check.C) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	defer cancel()
+	ready := s.testStateChangeWait(ctx, c, "?timeout=20ms", func(st *state.State, change *state.Change) {})
+	c.Check(ready, check.Equals, false)
+}
+
+func (s *apiSuite) testStateChangeWait(ctx context.Context, c *check.C, query string, markReady func(st *state.State, change *state.Change)) bool {
 	// Setup
 	d := s.daemon(c)
 	st := d.overlord.State()
@@ -422,7 +437,7 @@ func (s *apiSuite) testStateChangeWait(c *check.C, query string, markReady func(
 
 	// Execute
 	s.vars = map[string]string{"id": change.ID()}
-	req, err := http.NewRequest("GET", "/v1/changes/"+change.ID()+"/wait"+query, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", "/v1/changes/"+change.ID()+"/wait"+query, nil)
 	c.Assert(err, check.IsNil)
 	rsp := v1GetChangeWait(apiCmd("/v1/changes/{id}/wait"), req, nil).(*resp)
 	rec := httptest.NewRecorder()
