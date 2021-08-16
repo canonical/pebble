@@ -36,12 +36,12 @@ type ExecOptions struct {
 	// Optional environment variables
 	Environment map[string]string
 
-	// Optional working directory (default is $HOME or "/" if $HOME not set)
+	// Optional working directory (default is $HOME or "/" if $HOME not set).
 	WorkingDir string
 
 	// Optional timeout for the command execution, after which the process
 	// will be terminated. If zero, no timeout applies.
-	Timeout time.Duration // TODO: wire up and implement
+	Timeout time.Duration
 
 	// Optional user ID and group ID for the process to run as.
 	UserID  *int

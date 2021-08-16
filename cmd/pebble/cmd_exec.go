@@ -71,6 +71,7 @@ func (cmd *cmdExec) Execute(args []string) error {
 	command := append([]string{cmd.Positional.Command}, args...)
 	logger.Debugf("Executing command %q", command)
 
+	// Set up any environment variables
 	env := make(map[string]string)
 	for _, kv := range cmd.Env {
 		parts := strings.SplitN(kv, "=", 2)
@@ -102,6 +103,7 @@ func (cmd *cmdExec) Execute(args []string) error {
 		groupID = &gid
 	}
 
+	// Run the command
 	opts := &client.ExecOptions{
 		Command:     command,
 		Environment: env,
@@ -124,37 +126,34 @@ func (cmd *cmdExec) Execute(args []string) error {
 		return err
 	}
 
-	// TODO: add /v1/changes/{id}/wait and use that instead
-	var returnCode int
-	var returnErr error
-	for {
-		ch, err := cmd.client.Change(changeID)
-		if err != nil {
-			return err
-		}
-		if ch.Ready {
-			if ch.Err != "" {
-				returnErr = errors.New(ch.Err)
-				break
-			}
-			err := ch.Get("return", &returnCode)
-			if err != nil {
-				return err
-			}
-			break
-		}
-		time.Sleep(250 * time.Millisecond)
+	// Wait till the command (change) is finished
+	waitOpts := &client.WaitChangeOptions{}
+	if cmd.Timeout != 0 {
+		// A little more than the command timeout to ensure that happens first
+		waitOpts.Timeout = cmd.Timeout + time.Second
 	}
-
-	// Wait for any remaining I/O to be flushed
-	<-additionalArgs.DataDone
-
+	change, err := cmd.client.WaitChange(changeID, waitOpts)
+	if err != nil {
+		return err
+	}
+	// TODO: should we handle case where change not ready?
+	if change.Err != "" {
+		return errors.New(change.Err)
+	}
+	var returnCode int
+	err = change.Get("return", &returnCode)
+	if err != nil {
+		return err
+	}
 	if returnCode != 0 {
 		logger.Debugf("Process exited with return code %d", returnCode)
 		panic(&exitStatus{returnCode})
 	}
 
-	return returnErr
+	// Wait for any remaining I/O to be flushed
+	<-additionalArgs.DataDone
+
+	return nil
 }
 
 func init() {
