@@ -200,10 +200,14 @@ func v1GetChangeWait(c *Command, r *http.Request, _ *userState) Response {
 		case <-change.Ready():
 			timer.Stop() // change ready, release timer resources
 		case <-timer.C:
+		case <-r.Context().Done():
 		}
 	} else {
 		// No timeout, wait indefinitely for change to be ready.
-		<-change.Ready()
+		select {
+		case <-change.Ready():
+		case <-r.Context().Done():
+		}
 	}
 
 	st.Lock()
