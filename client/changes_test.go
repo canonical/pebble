@@ -56,6 +56,50 @@ func (cs *clientSuite) TestClientChange(c *check.C) {
 	})
 }
 
+func (cs *clientSuite) TestClientWaitChange(c *check.C) {
+	cs.testClientWaitChange(c, "foo", nil, "http://localhost/v1/changes/foo/wait")
+}
+
+func (cs *clientSuite) TestClientWaitChangeTimeout(c *check.C) {
+	opts := &client.WaitChangeOptions{
+		Timeout: 30 * time.Second,
+	}
+	cs.testClientWaitChange(c, "bar", opts, "http://localhost/v1/changes/bar/wait?timeout=30s")
+}
+
+func (cs *clientSuite) testClientWaitChange(c *check.C, changeID string, opts *client.WaitChangeOptions, expectedURL string) {
+	cs.rsp = `{"type": "sync", "result": {
+  "id":   "uno",
+  "kind": "foo",
+  "summary": "...",
+  "status": "Do",
+  "ready": false,
+  "spawn-time": "2016-04-21T01:02:03Z",
+  "ready-time": "2016-04-21T01:02:04Z",
+  "tasks": [{"kind": "bar", "summary": "...", "status": "Do", "progress": {"done": 0, "total": 1}, "spawn-time": "2016-04-21T01:02:03Z", "ready-time": "2016-04-21T01:02:04Z"}]
+}}`
+
+	chg, err := cs.cli.WaitChange(changeID, opts)
+	c.Assert(err, check.IsNil)
+	c.Assert(cs.req.URL.String(), check.Equals, expectedURL)
+	c.Check(chg, check.DeepEquals, &client.Change{
+		ID:      "uno",
+		Kind:    "foo",
+		Summary: "...",
+		Status:  "Do",
+		Tasks: []*client.Task{{
+			Kind:      "bar",
+			Summary:   "...",
+			Status:    "Do",
+			Progress:  client.TaskProgress{Done: 0, Total: 1},
+			SpawnTime: time.Date(2016, 04, 21, 1, 2, 3, 0, time.UTC),
+			ReadyTime: time.Date(2016, 04, 21, 1, 2, 4, 0, time.UTC),
+		}},
+		SpawnTime: time.Date(2016, 04, 21, 1, 2, 3, 0, time.UTC),
+		ReadyTime: time.Date(2016, 04, 21, 1, 2, 4, 0, time.UTC),
+	})
+}
+
 func (cs *clientSuite) TestClientChangeData(c *check.C) {
 	cs.rsp = `{"type": "sync", "result": {
   "id":   "uno",
