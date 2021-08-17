@@ -160,11 +160,15 @@ func (client *Client) Changes(opts *ChangesOptions) ([]*Change, error) {
 
 // WaitChangeOptions holds the options for the WaitChange call.
 type WaitChangeOptions struct {
+	// If non-zero, wait at most this long before returning the current change
+	// data. The timeout elapsing is not considered an error, so if a timeout
+	// is specified, the caller should check Change.Ready to determine whether
+	// the change is actually finished.
 	Timeout time.Duration
 }
 
-// WaitChange waits for a given change to be finished (whether or not it had
-// an error). If a timeout is specified, wait at most that long.
+// WaitChange waits for a given change to be finished (whether or not there
+// was an error, which is indicated by Change.Err being set).
 func (client *Client) WaitChange(id string, opts *WaitChangeOptions) (*Change, error) {
 	var chgd changeAndData
 
