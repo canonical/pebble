@@ -59,13 +59,13 @@ func (m *CommandManager) Ensure() error {
 
 // ExecArgs holds the arguments for a command execution.
 type ExecArgs struct {
+	Mode        string
 	Command     []string
 	Environment map[string]string
 	WorkingDir  string
 	Timeout     time.Duration
 	UserID      *int
 	GroupID     *int
-	Interactive bool
 	Width       int
 	Height      int
 }
@@ -128,13 +128,13 @@ func Exec(st *state.State, args *ExecArgs) (*state.TaskSet, ExecMetadata, error)
 	ws.conns = map[int]*websocket.Conn{}
 	ws.conns[-1] = nil
 	ws.conns[0] = nil
-	if !args.Interactive {
+	if args.Mode != "interactive" {
 		ws.conns[1] = nil
 		ws.conns[2] = nil
 	}
 	ws.allConnected = make(chan bool, 1)
 	ws.controlConnected = make(chan bool, 1)
-	ws.interactive = args.Interactive
+	ws.interactive = args.Mode == "interactive"
 	for i := -1; i < len(ws.conns)-1; i++ {
 		ws.fds[i], err = strutil.UUID()
 		if err != nil {

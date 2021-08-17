@@ -29,8 +29,18 @@ import (
 	"github.com/canonical/pebble/internal/wsutil"
 )
 
+type ExecMode string
+
+const (
+	ExecStreaming   ExecMode = "streaming"
+	ExecInteractive ExecMode = "interactive"
+)
+
 // ExecOptions are the main options for the Exec call.
 type ExecOptions struct {
+	// Required: execution mode
+	Mode ExecMode
+
 	// Required: command and arguments (first element is the executable)
 	Command []string
 
@@ -49,10 +59,6 @@ type ExecOptions struct {
 	User    string
 	GroupID *int
 	Group   string
-
-	// True for interactive mode: one control websocket, one bidirectional
-	// I/O websocket (instead of four: control, stdin, stdout, stderr).
-	Interactive bool
 
 	// Terminal width and height (for interactive mode)
 	Width  int
@@ -77,6 +83,7 @@ type ExecAdditionalArgs struct {
 // control arguments, returning the execution's change ID.
 func (client *Client) Exec(opts *ExecOptions, args *ExecAdditionalArgs) (string, error) {
 	var payload = struct {
+		Mode        ExecMode          `json:"mode"`
 		Command     []string          `json:"command"`
 		Environment map[string]string `json:"environment"`
 		WorkingDir  string            `json:"working-dir"`
@@ -85,7 +92,6 @@ func (client *Client) Exec(opts *ExecOptions, args *ExecAdditionalArgs) (string,
 		User        string            `json:"user"`
 		GroupID     *int              `json:"group-id"`
 		Group       string            `json:"group"`
-		Interactive bool              `json:"interactive"`
 		Width       int               `json:"width"`
 		Height      int               `json:"height"`
 	}(*opts)
@@ -125,7 +131,7 @@ func (client *Client) Exec(opts *ExecOptions, args *ExecAdditionalArgs) (string,
 		go args.Control(conn)
 	}
 
-	if opts.Interactive {
+	if opts.Mode == ExecInteractive {
 		// Handle interactive sections
 		if args.Stdin != nil && args.Stdout != nil {
 			// Connect to the websocket

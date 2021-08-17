@@ -109,6 +109,7 @@ func (cmd *cmdExec) Execute(args []string) error {
 
 	// Run the command
 	opts := &client.ExecOptions{
+		Mode:        client.ExecInteractive, // TODO: should default to interactive iff istty
 		Command:     command,
 		Environment: env,
 		WorkingDir:  cmd.WorkingDir,
@@ -118,13 +119,16 @@ func (cmd *cmdExec) Execute(args []string) error {
 		Group:       group,
 		GroupID:     groupID,
 	}
+	if cmd.ForceNonInteractive {
+		opts.Mode = client.ExecStreaming
+	}
 	additionalArgs := &client.ExecAdditionalArgs{
 		Stdin:    os.Stdin,
 		Stdout:   os.Stdout,
 		Stderr:   os.Stderr,
 		DataDone: make(chan bool),
 	}
-	if false /*TODO: interactive*/ {
+	if opts.Mode == client.ExecInteractive {
 		additionalArgs.Control = execControlHandler
 	}
 	changeID, err := cmd.client.Exec(opts, additionalArgs)

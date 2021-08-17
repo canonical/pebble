@@ -30,6 +30,7 @@ import (
 
 func v1PostExec(c *Command, req *http.Request, _ *userState) Response {
 	var payload struct {
+		Mode        string            `json:"mode"`
 		Command     []string          `json:"command"`
 		Environment map[string]string `json:"environment"`
 		WorkingDir  string            `json:"working-dir"`
@@ -38,13 +39,18 @@ func v1PostExec(c *Command, req *http.Request, _ *userState) Response {
 		User        string            `json:"user"`
 		GroupID     *int              `json:"group-id"`
 		Group       string            `json:"group"`
-		Interactive bool              `json:"interactive"`
 		Width       int               `json:"width"`
 		Height      int               `json:"height"`
 	}
 	decoder := json.NewDecoder(req.Body)
 	if err := decoder.Decode(&payload); err != nil {
 		return statusBadRequest("cannot decode request body: %v", err)
+	}
+	if payload.Mode == "" {
+		return statusBadRequest("must specify mode")
+	}
+	if payload.Mode != "streaming" && payload.Mode != "interactive" {
+		return statusBadRequest(`mode must be "streaming" or "interactive"`)
 	}
 	if len(payload.Command) < 1 {
 		return statusBadRequest("must specify command")
@@ -67,13 +73,13 @@ func v1PostExec(c *Command, req *http.Request, _ *userState) Response {
 	defer st.Unlock()
 
 	args := &cmdstate.ExecArgs{
+		Mode:        payload.Mode,
 		Command:     payload.Command,
 		Environment: payload.Environment,
 		WorkingDir:  payload.WorkingDir,
 		Timeout:     payload.Timeout,
 		UserID:      uid,
 		GroupID:     gid,
-		Interactive: payload.Interactive,
 		Width:       payload.Width,
 		Height:      payload.Height,
 	}
