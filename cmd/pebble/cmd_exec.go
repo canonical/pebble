@@ -72,6 +72,10 @@ pebble exec --timeout 10s -- echo foo bar
 `
 
 func (cmd *cmdExec) Execute(args []string) error {
+	if cmd.ForceInteractive && cmd.ForceNonInteractive {
+		return errors.New("can't pass -t and -T at the same time")
+	}
+
 	command := append([]string{cmd.Positional.Command}, args...)
 	logger.Debugf("Executing command %q", command)
 
@@ -107,9 +111,39 @@ func (cmd *cmdExec) Execute(args []string) error {
 		groupID = &gid
 	}
 
+	// Determine interaction mode
+	stdinTerminal := ptyutil.IsTerminal(unix.Stdin)
+	stdoutTerminal := ptyutil.IsTerminal(unix.Stdout)
+	var interactive bool
+	if cmd.ForceInteractive {
+		interactive = true
+	} else if cmd.ForceNonInteractive {
+		interactive = false
+	} else {
+		interactive = stdinTerminal && stdoutTerminal
+	}
+
+	// Record terminal state
+	if interactive && stdinTerminal {
+		oldState, err := ptyutil.MakeRaw(unix.Stdin)
+		if err != nil {
+			return err
+		}
+		defer ptyutil.Restore(unix.Stdin, oldState)
+	}
+
+	// Grab current terminal dimensions
+	var width, height int
+	if stdoutTerminal {
+		width, height, err = ptyutil.GetSize(unix.Stdout)
+		if err != nil {
+			return err
+		}
+	}
+
 	// Run the command
 	opts := &client.ExecOptions{
-		Mode:        client.ExecInteractive, // TODO: should default to interactive iff istty
+		Mode:        client.ExecStreaming,
 		Command:     command,
 		Environment: env,
 		WorkingDir:  cmd.WorkingDir,
@@ -118,9 +152,8 @@ func (cmd *cmdExec) Execute(args []string) error {
 		UserID:      userID,
 		Group:       group,
 		GroupID:     groupID,
-	}
-	if cmd.ForceNonInteractive {
-		opts.Mode = client.ExecStreaming
+		Width:       width,
+		Height:      height,
 	}
 	additionalArgs := &client.ExecAdditionalArgs{
 		Stdin:    os.Stdin,
@@ -128,7 +161,8 @@ func (cmd *cmdExec) Execute(args []string) error {
 		Stderr:   os.Stderr,
 		DataDone: make(chan bool),
 	}
-	if opts.Mode == client.ExecInteractive {
+	if interactive {
+		opts.Mode = client.ExecInteractive
 		additionalArgs.Control = execControlHandler
 	}
 	changeID, err := cmd.client.Exec(opts, additionalArgs)
