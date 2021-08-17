@@ -21,6 +21,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -239,4 +240,31 @@ func (client *Client) getChangeWebsocket(changeID, websocketID string) (*websock
 	}
 
 	return conn, err
+}
+
+type execCommand struct {
+	Command string            `json:"command"`
+	Args    map[string]string `json:"args"`
+	Signal  int               `json:"signal"`
+}
+
+// ExecSendTermSize sends a window-resize message to the Exec control websocket.
+func ExecSendTermSize(conn *websocket.Conn, width, height int) error {
+	msg := execCommand{
+		Command: "window-resize",
+		Args: map[string]string{
+			"width":  strconv.Itoa(width),
+			"height": strconv.Itoa(height),
+		},
+	}
+	return conn.WriteJSON(msg)
+}
+
+// ExecForwardSignal forwards a signal to the Exec control websocket.
+func ExecForwardSignal(conn *websocket.Conn, signal int) error {
+	msg := execCommand{
+		Command: "signal",
+		Signal:  signal,
+	}
+	return conn.WriteJSON(msg)
 }

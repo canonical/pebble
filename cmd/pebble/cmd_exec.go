@@ -17,14 +17,18 @@ package main
 import (
 	"errors"
 	"os"
+	"os/signal"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/gorilla/websocket"
 	"github.com/jessevdk/go-flags"
+	"golang.org/x/sys/unix"
 
 	"github.com/canonical/pebble/client"
 	"github.com/canonical/pebble/internal/logger"
+	"github.com/canonical/pebble/internal/ptyutil"
 )
 
 type cmdExec struct {
@@ -118,8 +122,10 @@ func (cmd *cmdExec) Execute(args []string) error {
 		Stdin:    os.Stdin,
 		Stdout:   os.Stdout,
 		Stderr:   os.Stderr,
-		Control:  nil, // TODO: implement control handler (from LXD)
 		DataDone: make(chan bool),
+	}
+	if false /*TODO: interactive*/ {
+		additionalArgs.Control = execControlHandler
 	}
 	changeID, err := cmd.client.Exec(opts, additionalArgs)
 	if err != nil {
@@ -159,6 +165,146 @@ func (cmd *cmdExec) Execute(args []string) error {
 	<-additionalArgs.DataDone
 
 	return nil
+}
+
+func execControlHandler(control *websocket.Conn) {
+	ch := make(chan os.Signal, 10)
+	signal.Notify(ch,
+		unix.SIGWINCH,
+		unix.SIGTERM,
+		unix.SIGHUP,
+		unix.SIGINT,
+		unix.SIGQUIT,
+		unix.SIGABRT,
+		unix.SIGTSTP,
+		unix.SIGTTIN,
+		unix.SIGTTOU,
+		unix.SIGUSR1,
+		unix.SIGUSR2,
+		unix.SIGSEGV,
+		unix.SIGCONT)
+
+	closeMsg := websocket.FormatCloseMessage(websocket.CloseNormalClosure, "")
+	defer control.WriteMessage(websocket.CloseMessage, closeMsg)
+
+	// TODO: can we combine the forward-signal cases?
+	for {
+		sig := <-ch
+		switch sig {
+		case unix.SIGWINCH:
+			logger.Debugf("Received '%s signal', updating window geometry.", sig)
+			err := sendTermSize(control)
+			if err != nil {
+				logger.Debugf("error setting term size %s", err)
+				return
+			}
+		case unix.SIGTERM:
+			logger.Debugf("Received '%s signal', forwarding to executing program.", sig)
+			err := forwardSignal(control, unix.SIGTERM)
+			if err != nil {
+				logger.Debugf("Failed to forward signal '%s'.", unix.SIGTERM)
+				return
+			}
+		case unix.SIGHUP:
+			file, err := os.OpenFile("/dev/tty", os.O_RDONLY|unix.O_NOCTTY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0666)
+			if err == nil {
+				file.Close()
+				err = forwardSignal(control, unix.SIGHUP)
+			} else {
+				err = forwardSignal(control, unix.SIGTERM)
+				sig = unix.SIGTERM
+			}
+			logger.Debugf("Received '%s signal', forwarding to executing program.", sig)
+			if err != nil {
+				logger.Debugf("Failed to forward signal '%s'.", sig)
+				return
+			}
+		case unix.SIGINT:
+			logger.Debugf("Received '%s signal', forwarding to executing program.", sig)
+			err := forwardSignal(control, unix.SIGINT)
+			if err != nil {
+				logger.Debugf("Failed to forward signal '%s'.", unix.SIGINT)
+				return
+			}
+		case unix.SIGQUIT:
+			logger.Debugf("Received '%s signal', forwarding to executing program.", sig)
+			err := forwardSignal(control, unix.SIGQUIT)
+			if err != nil {
+				logger.Debugf("Failed to forward signal '%s'.", unix.SIGQUIT)
+				return
+			}
+		case unix.SIGABRT:
+			logger.Debugf("Received '%s signal', forwarding to executing program.", sig)
+			err := forwardSignal(control, unix.SIGABRT)
+			if err != nil {
+				logger.Debugf("Failed to forward signal '%s'.", unix.SIGABRT)
+				return
+			}
+		case unix.SIGTSTP:
+			logger.Debugf("Received '%s signal', forwarding to executing program.", sig)
+			err := forwardSignal(control, unix.SIGTSTP)
+			if err != nil {
+				logger.Debugf("Failed to forward signal '%s'.", unix.SIGTSTP)
+				return
+			}
+		case unix.SIGTTIN:
+			logger.Debugf("Received '%s signal', forwarding to executing program.", sig)
+			err := forwardSignal(control, unix.SIGTTIN)
+			if err != nil {
+				logger.Debugf("Failed to forward signal '%s'.", unix.SIGTTIN)
+				return
+			}
+		case unix.SIGTTOU:
+			logger.Debugf("Received '%s signal', forwarding to executing program.", sig)
+			err := forwardSignal(control, unix.SIGTTOU)
+			if err != nil {
+				logger.Debugf("Failed to forward signal '%s'.", unix.SIGTTOU)
+				return
+			}
+		case unix.SIGUSR1:
+			logger.Debugf("Received '%s signal', forwarding to executing program.", sig)
+			err := forwardSignal(control, unix.SIGUSR1)
+			if err != nil {
+				logger.Debugf("Failed to forward signal '%s'.", unix.SIGUSR1)
+				return
+			}
+		case unix.SIGUSR2:
+			logger.Debugf("Received '%s signal', forwarding to executing program.", sig)
+			err := forwardSignal(control, unix.SIGUSR2)
+			if err != nil {
+				logger.Debugf("Failed to forward signal '%s'.", unix.SIGUSR2)
+				return
+			}
+		case unix.SIGSEGV:
+			logger.Debugf("Received '%s signal', forwarding to executing program.", sig)
+			err := forwardSignal(control, unix.SIGSEGV)
+			if err != nil {
+				logger.Debugf("Failed to forward signal '%s'.", unix.SIGSEGV)
+				return
+			}
+		case unix.SIGCONT:
+			logger.Debugf("Received '%s signal', forwarding to executing program.", sig)
+			err := forwardSignal(control, unix.SIGCONT)
+			if err != nil {
+				logger.Debugf("Failed to forward signal '%s'.", unix.SIGCONT)
+				return
+			}
+		}
+	}
+}
+
+func sendTermSize(control *websocket.Conn) error {
+	width, height, err := ptyutil.GetSize(unix.Stdout)
+	if err != nil {
+		return err
+	}
+	logger.Debugf("Window size is now: %dx%d", width, height)
+	return client.ExecSendTermSize(control, width, height)
+}
+
+func forwardSignal(control *websocket.Conn, sig unix.Signal) error {
+	logger.Debugf("Forwarding signal: %s", sig)
+	return client.ExecForwardSignal(control, int(sig))
 }
 
 func init() {

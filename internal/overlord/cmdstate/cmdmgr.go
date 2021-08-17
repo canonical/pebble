@@ -34,6 +34,7 @@ import (
 
 	"github.com/canonical/pebble/internal/logger"
 	"github.com/canonical/pebble/internal/overlord/state"
+	"github.com/canonical/pebble/internal/ptyutil"
 	"github.com/canonical/pebble/internal/strutil"
 	"github.com/canonical/pebble/internal/wsutil"
 )
@@ -303,7 +304,16 @@ func (s *execWs) Do(ctx context.Context, st *state.State, change *state.Change) 
 	if s.interactive {
 		ttys = make([]*os.File, 1)
 		ptys = make([]*os.File, 1)
-		//TODO		ptys[0], ttys[0], err = shared.OpenPty(int64(s.uid), int64(s.gid))
+
+		var uid, gid int
+		if s.uid != nil && s.gid != nil {
+			uid, gid = *s.uid, *s.gid
+		} else {
+			uid = os.Getuid()
+			gid = os.Getgid()
+		}
+
+		ptys[0], ttys[0], err = ptyutil.OpenPty(int64(uid), int64(gid))
 		if err != nil {
 			return err
 		}
@@ -313,7 +323,7 @@ func (s *execWs) Do(ctx context.Context, st *state.State, change *state.Change) 
 		stderr = ttys[0]
 
 		if s.width > 0 && s.height > 0 {
-			//TODO			shared.SetSize(int(ptys[0].Fd()), s.width, s.height)
+			ptyutil.SetSize(int(ptys[0].Fd()), s.width, s.height)
 		}
 	} else {
 		ttys = make([]*os.File, 3)
@@ -412,7 +422,7 @@ func (s *execWs) Do(ctx context.Context, st *state.State, change *state.Change) 
 						continue
 					}
 
-					//TODO: err = shared.SetSize(int(ptys[0].Fd()), winchWidth, winchHeight)
+					ptyutil.SetSize(int(ptys[0].Fd()), winchWidth, winchHeight)
 					if err != nil {
 						logger.Errorf("Failed to set window size to: %dx%d", winchWidth, winchHeight)
 						continue
