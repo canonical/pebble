@@ -20,6 +20,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
@@ -55,6 +56,37 @@ type Service struct {
 	User        string            `yaml:"user,omitempty"`
 	GroupID     *int              `yaml:"group-id,omitempty"`
 	Group       string            `yaml:"group,omitempty"`
+}
+
+// Copy returns a deep copy of the service.
+func (s *Service) Copy() *Service {
+	copy := *s
+	copy.After = append([]string(nil), s.After...)
+	copy.Before = append([]string(nil), s.Before...)
+	copy.Requires = append([]string(nil), s.Requires...)
+	if s.Environment != nil {
+		copy.Environment = make(map[string]string)
+		for k, v := range s.Environment {
+			copy.Environment[k] = v
+		}
+	}
+	if s.UserID != nil {
+		userID := *s.UserID
+		copy.UserID = &userID
+	}
+	if s.GroupID != nil {
+		groupID := *s.GroupID
+		copy.GroupID = &groupID
+	}
+	return &copy
+}
+
+// Equal returns true when the two services are equal in value.
+func (s *Service) Equal(other *Service) bool {
+	if s == other {
+		return true
+	}
+	return reflect.DeepEqual(s, other)
 }
 
 type ServiceStartup string
@@ -100,41 +132,42 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 			switch service.Override {
 			case MergeOverride:
 				if old, ok := combined.Services[name]; ok {
+					copy := old.Copy()
 					if service.Summary != "" {
-						old.Summary = service.Summary
+						copy.Summary = service.Summary
 					}
 					if service.Description != "" {
-						old.Description = service.Description
+						copy.Description = service.Description
 					}
 					if service.Startup != StartupUnknown {
-						old.Startup = service.Startup
+						copy.Startup = service.Startup
 					}
 					if service.Command != "" {
-						old.Command = service.Command
+						copy.Command = service.Command
 					}
 					if service.UserID != nil {
-						old.UserID = service.UserID
+						copy.UserID = service.UserID
 					}
 					if service.User != "" {
-						old.User = service.User
+						copy.User = service.User
 					}
 					if service.GroupID != nil {
-						old.GroupID = service.GroupID
+						copy.GroupID = service.GroupID
 					}
 					if service.Group != "" {
-						old.Group = service.Group
+						copy.Group = service.Group
 					}
-					old.Before = append(old.Before, service.Before...)
-					old.After = append(old.After, service.After...)
+					copy.Before = append(copy.Before, service.Before...)
+					copy.After = append(copy.After, service.After...)
 					for k, v := range service.Environment {
-						old.Environment[k] = v
+						copy.Environment[k] = v
 					}
+					combined.Services[name] = copy
 					break
 				}
 				fallthrough
 			case ReplaceOverride:
-				copy := *service
-				combined.Services[name] = &copy
+				combined.Services[name] = service.Copy()
 			case UnknownOverride:
 				return nil, &FormatError{
 					Message: fmt.Sprintf(`layer %q must define "override" for service %q`,

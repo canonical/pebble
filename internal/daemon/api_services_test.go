@@ -24,6 +24,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/canonical/pebble/internal/overlord/servstate"
 	"github.com/canonical/pebble/internal/overlord/state"
 
 	. "gopkg.in/check.v1"
@@ -277,4 +278,58 @@ func (s *apiSuite) TestServicesRestart(c *C) {
 	c.Assert(tasks[2].Summary(), Equals, `Start service "test1"`)
 	c.Assert(tasks[3].Summary(), Equals, `Start service "test2"`)
 	c.Assert(tasks[4].Summary(), Equals, `Start service "test3"`)
+}
+
+func (s *apiSuite) TestServicesReplan(c *C) {
+	// Setup
+	writeTestLayer(s.pebbleDir, servicesLayer)
+	d := s.daemon(c)
+	st := d.overlord.State()
+
+	soon := 0
+	restore := FakeStateEnsureBefore(func(st *state.State, d time.Duration) {
+		soon++
+	})
+	defer restore()
+
+	servicesCmd := apiCmd("/v1/services")
+
+	payload := bytes.NewBufferString(`{"action": "replan"}`)
+
+	// Execute
+	req, err := http.NewRequest("POST", "/v1/services", payload)
+	c.Assert(err, IsNil)
+	rsp := v1PostServices(servicesCmd, req, nil).(*resp)
+	rec := httptest.NewRecorder()
+	rsp.ServeHTTP(rec, req)
+
+	// Verify
+	c.Check(rec.Code, Equals, 202)
+	c.Check(rsp.Status, Equals, 202)
+	c.Check(rsp.Type, Equals, ResponseTypeAsync)
+	c.Check(rsp.Result, IsNil)
+
+	st.Lock()
+	defer st.Unlock()
+
+	chg := st.Change(rsp.Change)
+	c.Check(chg, NotNil)
+	c.Check(chg.Kind(), Equals, "replan")
+	c.Check(chg.Summary(), Equals, `Replan service "test1" and 1 more`)
+	tasks := chg.Tasks()
+	c.Check(tasks, HasLen, 2)
+	c.Check(tasks[0].Summary(), Equals, `Start service "test1"`)
+	c.Check(tasks[1].Summary(), Equals, `Start service "test2"`)
+}
+
+type wrappedServiceManager struct {
+	servstate.ServiceManager
+	replan func() ([]string, []string, error)
+}
+
+func (w *wrappedServiceManager) Replan() ([]string, []string, error) {
+	if w.replan != nil {
+		return w.replan()
+	}
+	return w.ServiceManager.Replan()
 }
