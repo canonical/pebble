@@ -26,7 +26,23 @@ jobs:
 
     - name: Test and build
       run: |
-        go fmt ./...
-        git diff --exit-code  # Ensure no formatting changes
         go test -race ./...
         go build ./cmd/pebble
+
+  format:
+    runs-on: ubuntu-latest
+
+    name: Format check
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Set up Go
+      uses: actions/setup-go@v2
+      with:
+        go-version: '1.17'
+
+    - name: Ensure no formatting changes
+      run: |
+        go fmt ./...
+        git diff --exit-code
