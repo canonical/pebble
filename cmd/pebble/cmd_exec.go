@@ -81,6 +81,10 @@ func (cmd *cmdExec) Execute(args []string) error {
 
 	// Set up any environment variables
 	env := make(map[string]string)
+	term, ok := os.LookupEnv("TERM")
+	if ok {
+		env["TERM"] = term
+	}
 	for _, kv := range cmd.Env {
 		parts := strings.SplitN(kv, "=", 2)
 		key := parts[0]
