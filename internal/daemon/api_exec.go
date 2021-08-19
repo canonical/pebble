@@ -16,16 +16,12 @@ package daemon
 
 import (
 	"encoding/json"
-	"errors"
-	"fmt"
 	"net/http"
-	"os"
 	"os/exec"
 	"time"
 
 	"github.com/canonical/pebble/internal/osutil"
 	"github.com/canonical/pebble/internal/overlord/cmdstate"
-	"github.com/canonical/pebble/internal/overlord/state"
 )
 
 func v1PostExec(c *Command, req *http.Request, _ *userState) Response {
@@ -83,13 +79,10 @@ func v1PostExec(c *Command, req *http.Request, _ *userState) Response {
 		Width:       payload.Width,
 		Height:      payload.Height,
 	}
-	taskSet, metadata, err := cmdstate.Exec(st, args)
+	change, metadata, err := cmdstate.Exec(st, args)
 	if err != nil {
-		return statusInternalError("cannot create task: %v", err)
+		return statusInternalError("cannot create exec change: %v", err)
 	}
-
-	summary := fmt.Sprintf("Execute command %q", payload.Command[0])
-	change := newChange(st, "exec", summary, []*state.TaskSet{taskSet}, nil)
 
 	stateEnsureBefore(st, 0) // start it right away
 
@@ -99,50 +92,4 @@ func v1PostExec(c *Command, req *http.Request, _ *userState) Response {
 		"working-dir":   metadata.WorkingDir,
 	}
 	return AsyncResponse(result, change.ID())
-}
-
-func v1GetExecWebsocket(c *Command, req *http.Request, _ *userState) Response {
-	changeID := muxVars(req)["change-id"]
-
-	st := c.d.overlord.State()
-	st.Lock()
-	defer st.Unlock()
-
-	change := st.Change(changeID)
-	if change == nil {
-		return statusNotFound("cannot find change with id %q", changeID)
-	}
-	if len(change.Tasks()) < 1 {
-		return statusInternalError("change %q has no tasks", changeID)
-	}
-
-	task := change.Tasks()[0]
-	var cacheKey string
-	err := task.Get("cache-key", &cacheKey)
-	if err != nil {
-		return statusInternalError("cannot get cache key: %v", err)
-	}
-
-	return websocketResponse{st: st, cacheKey: cacheKey}
-}
-
-type websocketResponse struct {
-	st       *state.State
-	cacheKey string
-}
-
-func (wr websocketResponse) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	err := cmdstate.Connect(wr.st, wr.cacheKey, r, w)
-	if errors.Is(err, os.ErrNotExist) {
-		rsp := statusNotFound("websocket not found")
-		rsp.ServeHTTP(w, r)
-		return
-	}
-	if err != nil {
-		rsp := statusInternalError("%v", err)
-		rsp.ServeHTTP(w, r)
-		return
-	}
-	// In the success case, Connect takes over the connection and upgrades to
-	// the websocket protocol.
 }

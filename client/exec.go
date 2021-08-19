@@ -239,7 +239,7 @@ func (client *Client) getChangeWebsocket(changeID, websocketID string) (*websock
 	}
 
 	// Establish the connection
-	url := fmt.Sprintf("ws://localhost/v1/exec/%s/websocket?id=%s", changeID, url.QueryEscape(websocketID))
+	url := fmt.Sprintf("ws://localhost/v1/changes/%s/websocket?id=%s", changeID, url.QueryEscape(websocketID))
 	conn, _, err := dialer.Dial(url, nil)
 	if err != nil {
 		return nil, err

@@ -78,12 +78,7 @@ type ExecMetadata struct {
 }
 
 // Exec creates a task set that will execute the command with the given arguments.
-func Exec(st *state.State, args *ExecArgs) (*state.TaskSet, ExecMetadata, error) {
-	cacheKey, err := strutil.UUID()
-	if err != nil {
-		return nil, ExecMetadata{}, err
-	}
-
+func Exec(st *state.State, args *ExecArgs) (*state.Change, ExecMetadata, error) {
 	env := map[string]string{}
 	for k, v := range args.Environment {
 		env[k] = v
@@ -136,6 +131,7 @@ func Exec(st *state.State, args *ExecArgs) (*state.TaskSet, ExecMetadata, error)
 	ws.controlConnected = make(chan bool, 1)
 	ws.interactive = args.Mode == "interactive"
 	for i := -1; i < len(ws.conns)-1; i++ {
+		var err error
 		ws.fds[i], err = strutil.UUID()
 		if err != nil {
 			return nil, ExecMetadata{}, err
@@ -153,13 +149,6 @@ func Exec(st *state.State, args *ExecArgs) (*state.TaskSet, ExecMetadata, error)
 	ws.uid = args.UserID
 	ws.gid = args.GroupID
 
-	logger.Noticef("ERROR: cmdstate.Exec ws=%+v", ws)
-	st.Cache("exec-"+cacheKey, ws)
-
-	summary := fmt.Sprintf("exec command %q", args.Command[0])
-	task := st.NewTask("exec", summary)
-	task.Set("cache-key", cacheKey)
-
 	fds := make(map[string]string)
 	for fd, wsID := range ws.fds {
 		if fd == -1 {
@@ -174,34 +163,69 @@ func Exec(st *state.State, args *ExecArgs) (*state.TaskSet, ExecMetadata, error)
 		WorkingDir:   cwd,
 	}
 
-	return state.NewTaskSet(task), metadata, nil
+	// Create change object and store it in state
+	logger.Noticef("ERROR: cmdstate.Exec ws=%+v", ws)
+	cacheKey, err := strutil.UUID()
+	if err != nil {
+		return nil, ExecMetadata{}, err
+	}
+	st.Cache("exec-"+cacheKey, ws)
+	change := st.NewChange("exec", fmt.Sprintf("Execute command %q", args.Command[0]))
+	task := st.NewTask("exec", fmt.Sprintf("exec command %q", args.Command[0]))
+	change.AddAll(state.NewTaskSet(task))
+	change.Set("cache-key", cacheKey)
+
+	return change, metadata, nil
 }
 
 func doExec(task *state.Task, tomb *tomb.Tomb) error {
-	var cacheKey string
-	err := task.Get("cache-key", &cacheKey)
+	st := task.State()
+	st.Lock()
+	change := task.Change()
+	st.Unlock()
+
+	ws, cacheKey, err := getWsAndCacheKey(change)
 	if err != nil {
 		return err
 	}
 
-	st := task.State()
-	st.Lock()
-	ws := st.Cached("exec-" + cacheKey).(*execWs)
-	change := task.Change()
-	st.Unlock()
-
 	logger.Noticef("TODO doExec start: %+v", ws)
-
 	ctx := tomb.Context(context.Background())
-	err = ws.Do(ctx, st, change)
+	err = ws.do(ctx, change)
+
+	deleteWsFromCache(change, cacheKey)
+
 	return err
 }
 
-func Connect(st *state.State, cacheKey string, r *http.Request, w http.ResponseWriter) error {
+func getWsAndCacheKey(change *state.Change) (*execWs, string, error) {
+	st := change.State()
 	st.Lock()
+	defer st.Unlock()
+
+	var cacheKey string
+	err := change.Get("cache-key", &cacheKey)
+	if err != nil {
+		return nil, "", err
+	}
+
 	ws := st.Cached("exec-" + cacheKey).(*execWs)
-	st.Unlock()
-	return ws.Connect(r, w)
+	return ws, cacheKey, nil
+}
+
+func deleteWsFromCache(change *state.Change, cacheKey string) {
+	st := change.State()
+	st.Lock()
+	defer st.Unlock()
+	st.Cache("exec-"+cacheKey, nil)
+}
+
+func Connect(change *state.Change, websocketID string, r *http.Request, w http.ResponseWriter) error {
+	ws, _, err := getWsAndCacheKey(change)
+	if err != nil {
+		return err
+	}
+	return ws.connect(websocketID, r, w)
 }
 
 type execWs struct {
@@ -226,13 +250,7 @@ var websocketUpgrader = websocket.Upgrader{
 	HandshakeTimeout: handshakeTimeout,
 }
 
-func (s *execWs) Connect(r *http.Request, w http.ResponseWriter) error {
-	id := r.FormValue("id")
-	logger.Noticef("TODO execWs.Connect id=%s", id)
-	if id == "" {
-		return os.ErrNotExist
-	}
-
+func (s *execWs) connect(id string, r *http.Request, w http.ResponseWriter) error {
 	for fd, fsID := range s.fds {
 		logger.Noticef("TODO: execWs.Connect fd=%d", fd)
 		if id == fsID {
@@ -280,6 +298,7 @@ func (s *execWs) waitAllConnected(ctx context.Context) error {
 	select {
 	case <-ctx.Done():
 		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			logger.Noticef("timeout waiting for websocket connections")
 			return errors.New("timeout waiting for websocket connections")
 		}
 		return ctx.Err()
@@ -288,7 +307,7 @@ func (s *execWs) waitAllConnected(ctx context.Context) error {
 	}
 }
 
-func (s *execWs) Do(ctx context.Context, st *state.State, change *state.Change) error {
+func (s *execWs) do(ctx context.Context, change *state.Change) error {
 	err := s.waitAllConnected(ctx)
 	if err != nil {
 		return err
@@ -502,11 +521,7 @@ func (s *execWs) Do(ctx context.Context, st *state.State, change *state.Change) 
 			pty.Close()
 		}
 
-		st.Lock()
-		change.Set("api-data", map[string]interface{}{
-			"return": cmdResult,
-		})
-		st.Unlock()
+		setApiData(change, cmdResult)
 
 		return cmdErr
 	}
@@ -584,4 +599,13 @@ func (s *execWs) Do(ctx context.Context, st *state.State, change *state.Change) 
 	}
 
 	return finisher(-1, err)
+}
+
+func setApiData(change *state.Change, cmdResult int) {
+	st := change.State()
+	st.Lock()
+	defer st.Unlock()
+	change.Set("api-data", map[string]interface{}{
+		"return": cmdResult,
+	})
 }

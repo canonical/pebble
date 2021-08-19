@@ -16,10 +16,13 @@ package daemon
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/canonical/pebble/internal/logger"
+	"github.com/canonical/pebble/internal/overlord/cmdstate"
 	"github.com/canonical/pebble/internal/overlord/state"
 )
 
@@ -213,6 +216,63 @@ func v1GetChangeWait(c *Command, r *http.Request, _ *userState) Response {
 	st.Lock()
 	defer st.Unlock()
 	return SyncResponse(change2changeInfo(change))
+}
+
+func v1GetChangeWebsocket(c *Command, req *http.Request, _ *userState) Response {
+	changeID := muxVars(req)["id"]
+
+	websocketID := req.URL.Query().Get("id")
+	if websocketID == "" {
+		return statusBadRequest("must specify id")
+	}
+
+	st := c.d.overlord.State()
+	st.Lock()
+	defer st.Unlock()
+
+	change := st.Change(changeID)
+	if change == nil {
+		return statusNotFound("cannot find change with id %q", changeID)
+	}
+	connect := connectFuncs[change.Kind()]
+	if connect == nil {
+		return statusBadRequest("%q changes do not have websockets", change.Kind())
+	}
+
+	return websocketResponse{
+		change:      change,
+		websocketID: websocketID,
+		connect:     connect,
+	}
+}
+
+type websocketResponse struct {
+	change      *state.Change
+	websocketID string
+	connect     connectFunc
+}
+
+func (wr websocketResponse) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	err := wr.connect(wr.change, wr.websocketID, r, w)
+	if errors.Is(err, os.ErrNotExist) {
+		rsp := statusNotFound("websocket not found")
+		rsp.ServeHTTP(w, r)
+		return
+	}
+	if err != nil {
+		rsp := statusInternalError("%v", err)
+		rsp.ServeHTTP(w, r)
+		return
+	}
+	// In the success case, Connect takes over the connection and upgrades to
+	// the websocket protocol.
+}
+
+type connectFunc func(change *state.Change, websocketID string, r *http.Request, w http.ResponseWriter) error
+
+// connectFuncs maps change kind to websocket connect function.
+var connectFuncs = map[string]connectFunc{
+	"exec": cmdstate.Connect,
 }
 
 func v1PostChange(c *Command, r *http.Request, _ *userState) Response {

@@ -46,6 +46,10 @@ var api = []*Command{{
 	UserOK: true,
 	GET:    v1GetChangeWait,
 }, {
+	Path:   "/v1/changes/{id}/websocket",
+	UserOK: true,
+	GET:    v1GetChangeWebsocket,
+}, {
 	Path:   "/v1/services",
 	UserOK: true,
 	GET:    v1GetServices,
@@ -76,10 +80,6 @@ var api = []*Command{{
 	Path:   "/v1/exec",
 	UserOK: true,
 	POST:   v1PostExec,
-}, {
-	Path:   "/v1/exec/{change-id}/websocket",
-	UserOK: true,
-	GET:    v1GetExecWebsocket,
 }}
 
 var (
