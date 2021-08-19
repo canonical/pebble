@@ -65,7 +65,7 @@ exec's terminal mode is used if the terminal is a TTY (use -t/--terminal or
 To avoid confusion, exec options may be separated from the command and its
 arguments using "--", for example:
 
-pebble exec --timeout 10s -- echo foo bar
+pebble exec --timeout 10s -- echo -n foo bar
 `
 
 func (cmd *cmdExec) Execute(args []string) error {
