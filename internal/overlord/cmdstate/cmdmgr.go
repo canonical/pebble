@@ -59,20 +59,21 @@ func (m *CommandManager) Ensure() error {
 
 // ExecArgs holds the arguments for a command execution.
 type ExecArgs struct {
-	Mode        string
 	Command     []string
 	Environment map[string]string
 	WorkingDir  string
 	Timeout     time.Duration
 	UserID      *int
 	GroupID     *int
+	Terminal    bool
+	Stderr      bool
 	Width       int
 	Height      int
 }
 
 // ExecMetadata is the metadata from an Exec call.
 type ExecMetadata struct {
-	WebsocketIDs map[string]string // keys are "0" (stdin), "1" (stdout), "2" (stderr), "control"
+	WebsocketIDs map[string]string // keys are "control", "io", and "stderr" if Stderr true
 	Environment  map[string]string
 	WorkingDir   string
 }
@@ -123,13 +124,13 @@ func Exec(st *state.State, args *ExecArgs) (*state.Change, ExecMetadata, error) 
 	ws.conns = map[int]*websocket.Conn{}
 	ws.conns[-1] = nil
 	ws.conns[0] = nil
-	if args.Mode != "interactive" {
+	if !args.Terminal {
 		ws.conns[1] = nil
 		ws.conns[2] = nil
 	}
 	ws.allConnected = make(chan bool, 1)
 	ws.controlConnected = make(chan bool, 1)
-	ws.interactive = args.Mode == "interactive"
+	ws.interactive = args.Terminal
 	for i := -1; i < len(ws.conns)-1; i++ {
 		var err error
 		ws.fds[i], err = strutil.UUID()

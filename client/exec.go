@@ -17,6 +17,7 @@ package client
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -29,18 +30,8 @@ import (
 	"github.com/canonical/pebble/internal/wsutil"
 )
 
-type ExecMode string
-
-const (
-	ExecStreaming   ExecMode = "streaming"
-	ExecInteractive ExecMode = "interactive"
-)
-
 // ExecOptions are the main options for the Exec call.
 type ExecOptions struct {
-	// Required: execution mode
-	Mode ExecMode
-
 	// Required: command and arguments (first element is the executable)
 	Command []string
 
@@ -60,7 +51,16 @@ type ExecOptions struct {
 	GroupID *int
 	Group   string
 
-	// Terminal width and height (for interactive mode)
+	// True to ask the server to set up a pseudo-terminal (PTY) -- this allows
+	// full interactivity and window resizing. The default is no PTY, and just
+	// to use pipes for stdin/stdout/stderr.
+	Terminal bool
+
+	// True to separate the process's stderr into a separate websocket. The
+	// default is to send combined stdout+stderr on a single websocket.
+	Stderr bool
+
+	// Terminal width and height (these apply only if Terminal is true)
 	Width  int
 	Height int
 }
@@ -72,7 +72,7 @@ type ExecAdditionalArgs struct {
 	Stdout io.WriteCloser
 	Stderr io.WriteCloser
 
-	// Control message handler (window resize, signals, ...)
+	// Control message handler (for window resizing and signal forwarding)
 	Control func(conn *websocket.Conn)
 
 	// Channel that will be closed when all data operations are done
@@ -82,8 +82,14 @@ type ExecAdditionalArgs struct {
 // Exec starts a command execution with the given options and additional
 // control arguments, returning the execution's change ID.
 func (client *Client) Exec(opts *ExecOptions, args *ExecAdditionalArgs) (string, error) {
+	if opts.Terminal && opts.Stderr {
+		return "", errors.New("separate stderr not currently supported in terminal mode")
+	}
+	if !opts.Terminal && !opts.Stderr {
+		return "", errors.New("combined stderr not currently supported in non-terminal mode")
+	}
+
 	var payload = struct {
-		Mode        ExecMode          `json:"mode"`
 		Command     []string          `json:"command"`
 		Environment map[string]string `json:"environment"`
 		WorkingDir  string            `json:"working-dir"`
@@ -92,6 +98,8 @@ func (client *Client) Exec(opts *ExecOptions, args *ExecAdditionalArgs) (string,
 		User        string            `json:"user"`
 		GroupID     *int              `json:"group-id"`
 		Group       string            `json:"group"`
+		Terminal    bool              `json:"terminal"`
+		Stderr      bool              `json:"stderr"`
 		Width       int               `json:"width"`
 		Height      int               `json:"height"`
 	}(*opts)
@@ -131,7 +139,7 @@ func (client *Client) Exec(opts *ExecOptions, args *ExecAdditionalArgs) (string,
 		go args.Control(conn)
 	}
 
-	if opts.Mode == ExecInteractive {
+	if opts.Terminal {
 		// Handle interactive sections
 		if args.Stdin != nil && args.Stdout != nil {
 			// Connect to the websocket

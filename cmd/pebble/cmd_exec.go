@@ -33,37 +33,34 @@ import (
 
 type cmdExec struct {
 	clientMixin
-	WorkingDir          string        `long:"cwd"`
-	DisableStdin        bool          `short:"n" long:"disable-stdin"`
-	Env                 []string      `long:"env"`
-	User                string        `long:"user"`
-	Group               string        `long:"group"`
-	Timeout             time.Duration `long:"timeout"`
-	ForceInteractive    bool          `short:"t" long:"force-interactive"`
-	ForceNonInteractive bool          `short:"T" long:"force-noninteractive"`
-	Positional          struct {
+	WorkingDir string        `long:"cwd"`
+	Env        []string      `long:"env"`
+	User       string        `long:"user"`
+	Group      string        `long:"group"`
+	Timeout    time.Duration `long:"timeout"`
+	Terminal   bool          `short:"t" long:"terminal"`
+	NoTerminal bool          `short:"T" long:"no-terminal"`
+	Positional struct {
 		Command string `positional-arg-name:"<command>" required:"1"`
 	} `positional-args:"yes"`
 }
 
 var execDescs = map[string]string{
-	"cwd":                  "Working directory to run command in",
-	"disable-stdin":        "Disable stdin (reads from /dev/null)",
-	"env":                  "Environment variable to set (in 'FOO=bar' format)",
-	"user":                 "User name or ID to run command as",
-	"group":                "Group name or ID to run command as",
-	"timeout":              "Timeout after which to terminate command",
-	"force-interactive":    "Force pseudo-terminal allocation",
-	"force-noninteractive": "Disable pseudo-terminal allocation",
+	"cwd":         "Working directory to run command in",
+	"env":         "Environment variable to set (in 'FOO=bar' format)",
+	"user":        "User name or ID to run command as",
+	"group":       "Group name or ID to run command as",
+	"timeout":     "Timeout after which to terminate command",
+	"terminal":    "Force pseudo-terminal allocation",
+	"no-terminal": "Disable pseudo-terminal allocation",
 }
 
 var shortExecHelp = "Execute a command"
 var longExecHelp = `
 The exec command executes a command via the Pebble API and waits for it to
-finish. Stdout and stderr are forwarded, and stdin is forwarded unless
--n/--disable-stdin is specified. By default, interactive mode is used if the
-terminal is a TTY, meaning signals and window resizing are forwarded (use
--t/--force-interactive or -T/--force-noninteractive to override).
+finish. Stdin is forwarded, and stdout and stderr are received. By default,
+exec's terminal mode is used if the terminal is a TTY (use -t/--terminal or
+-T/--no-terminal to override).
 
 To avoid confusion, exec options may be separated from the command and its
 arguments using "--", for example:
@@ -72,14 +69,14 @@ pebble exec --timeout 10s -- echo foo bar
 `
 
 func (cmd *cmdExec) Execute(args []string) error {
-	if cmd.ForceInteractive && cmd.ForceNonInteractive {
+	if cmd.Terminal && cmd.NoTerminal {
 		return errors.New("can't pass -t and -T at the same time")
 	}
 
 	command := append([]string{cmd.Positional.Command}, args...)
 	logger.Debugf("Executing command %q", command)
 
-	// Set up any environment variables
+	// Set up environment variables
 	env := make(map[string]string)
 	term, ok := os.LookupEnv("TERM")
 	if ok {
@@ -118,17 +115,17 @@ func (cmd *cmdExec) Execute(args []string) error {
 	// Determine interaction mode
 	stdinTerminal := ptyutil.IsTerminal(unix.Stdin)
 	stdoutTerminal := ptyutil.IsTerminal(unix.Stdout)
-	var interactive bool
-	if cmd.ForceInteractive {
-		interactive = true
-	} else if cmd.ForceNonInteractive {
-		interactive = false
+	var terminal bool
+	if cmd.Terminal {
+		terminal = true
+	} else if cmd.NoTerminal {
+		terminal = false
 	} else {
-		interactive = stdinTerminal && stdoutTerminal
+		terminal = stdinTerminal && stdoutTerminal
 	}
 
 	// Record terminal state
-	if interactive && stdinTerminal {
+	if terminal && stdinTerminal {
 		oldState, err := ptyutil.MakeRaw(unix.Stdin)
 		if err != nil {
 			return err
@@ -147,7 +144,6 @@ func (cmd *cmdExec) Execute(args []string) error {
 
 	// Run the command
 	opts := &client.ExecOptions{
-		Mode:        client.ExecStreaming,
 		Command:     command,
 		Environment: env,
 		WorkingDir:  cmd.WorkingDir,
@@ -156,18 +152,19 @@ func (cmd *cmdExec) Execute(args []string) error {
 		UserID:      userID,
 		Group:       group,
 		GroupID:     groupID,
+		Terminal:    terminal,
+		Stderr:      !terminal,
 		Width:       width,
 		Height:      height,
 	}
 	additionalArgs := &client.ExecAdditionalArgs{
-		Stdin:    os.Stdin,
-		Stdout:   os.Stdout,
-		Stderr:   os.Stderr,
+		Stdin:  os.Stdin,
+		Stdout: os.Stdout,
+		Stderr: os.Stderr,
+		Control: func(conn *websocket.Conn) {
+			execControlHandler(conn, terminal)
+		},
 		DataDone: make(chan bool),
-	}
-	if interactive {
-		opts.Mode = client.ExecInteractive
-		additionalArgs.Control = execControlHandler
 	}
 	changeID, err := cmd.client.Exec(opts, additionalArgs)
 	if err != nil {
@@ -209,22 +206,13 @@ func (cmd *cmdExec) Execute(args []string) error {
 	return nil
 }
 
-func execControlHandler(control *websocket.Conn) {
+func execControlHandler(control *websocket.Conn, terminal bool) {
 	ch := make(chan os.Signal, 10)
 	signal.Notify(ch,
-		unix.SIGWINCH,
-		unix.SIGHUP,
-		unix.SIGTERM,
-		unix.SIGINT,
-		unix.SIGQUIT,
-		unix.SIGABRT,
-		unix.SIGTSTP,
-		unix.SIGTTIN,
-		unix.SIGTTOU,
-		unix.SIGUSR1,
-		unix.SIGUSR2,
-		unix.SIGSEGV,
-		unix.SIGCONT)
+		unix.SIGWINCH, unix.SIGHUP,
+		unix.SIGTERM, unix.SIGINT, unix.SIGQUIT, unix.SIGABRT,
+		unix.SIGTSTP, unix.SIGTTIN, unix.SIGTTOU, unix.SIGUSR1,
+		unix.SIGUSR2, unix.SIGSEGV, unix.SIGCONT)
 
 	closeMsg := websocket.FormatCloseMessage(websocket.CloseNormalClosure, "")
 	defer control.WriteMessage(websocket.CloseMessage, closeMsg)
@@ -233,51 +221,47 @@ func execControlHandler(control *websocket.Conn) {
 		sig := <-ch
 		switch sig {
 		case unix.SIGWINCH:
-			logger.Debugf("Received '%s signal', updating window geometry.", sig)
-			err := sendTermSize(control)
+			if !terminal {
+				logger.Debugf("Received SIGWINCH but not in terminal mode, ignoring")
+				break
+			}
+			logger.Debugf("Received '%s signal', updating window geometry", sig)
+			width, height, err := ptyutil.GetSize(unix.Stdout)
 			if err != nil {
-				logger.Debugf("error setting term size %s", err)
-				return
+				logger.Debugf("Error getting terminal size: %v", err)
+				break
+			}
+			logger.Debugf("Window size is now: %dx%d", width, height)
+			err = client.ExecSendTermSize(control, width, height)
+			if err != nil {
+				logger.Debugf("Error setting terminal size: %v", err)
+				break
 			}
 		case unix.SIGHUP:
 			file, err := os.OpenFile("/dev/tty", os.O_RDONLY|unix.O_NOCTTY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0666)
 			if err == nil {
 				file.Close()
-				err = forwardSignal(control, unix.SIGHUP)
+				err = client.ExecForwardSignal(control, int(unix.SIGHUP))
 			} else {
-				err = forwardSignal(control, unix.SIGTERM)
+				err = client.ExecForwardSignal(control, int(unix.SIGTERM))
 				sig = unix.SIGTERM
 			}
-			logger.Debugf("Received '%s signal', forwarding to executing program.", sig)
+			logger.Debugf("Received '%s' signal, forwarding to executing program", sig)
 			if err != nil {
-				logger.Debugf("Failed to forward signal '%s'.", sig)
+				logger.Debugf("Failed to forward signal '%s': %v", sig, err)
 				return
 			}
 		case unix.SIGTERM, unix.SIGINT, unix.SIGQUIT, unix.SIGABRT,
 			unix.SIGTSTP, unix.SIGTTIN, unix.SIGTTOU, unix.SIGUSR1,
 			unix.SIGUSR2, unix.SIGSEGV, unix.SIGCONT:
-			logger.Debugf("Received '%s signal', forwarding to executing program.", sig)
-			err := forwardSignal(control, sig.(unix.Signal))
+			logger.Debugf("Received '%s signal', forwarding to executing program", sig)
+			err := client.ExecForwardSignal(control, int(sig.(unix.Signal)))
 			if err != nil {
-				logger.Debugf("Failed to forward signal '%s'.", sig)
-				return
+				logger.Debugf("Failed to forward signal '%s': %v", sig, err)
+				break
 			}
 		}
 	}
-}
-
-func sendTermSize(control *websocket.Conn) error {
-	width, height, err := ptyutil.GetSize(unix.Stdout)
-	if err != nil {
-		return err
-	}
-	logger.Debugf("Window size is now: %dx%d", width, height)
-	return client.ExecSendTermSize(control, width, height)
-}
-
-func forwardSignal(control *websocket.Conn, sig unix.Signal) error {
-	logger.Debugf("Forwarding signal: %s", sig)
-	return client.ExecForwardSignal(control, int(sig))
 }
 
 func init() {
