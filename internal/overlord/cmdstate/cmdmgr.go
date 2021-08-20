@@ -42,6 +42,10 @@ import (
 const (
 	connectTimeout   = 5 * time.Second
 	handshakeTimeout = 5 * time.Second
+
+	wsControl = "control"
+	wsIO      = "io"
+	wsStderr  = "stderr"
 )
 
 type CommandManager struct{}
@@ -119,21 +123,22 @@ func Exec(st *state.State, args *ExecArgs) (*state.Change, ExecMetadata, error) 
 	}
 
 	ws := &execWs{}
-	ws.fds = map[int]string{}
 
-	ws.conns = map[int]*websocket.Conn{}
-	ws.conns[-1] = nil
-	ws.conns[0] = nil
-	if !args.Terminal {
-		ws.conns[1] = nil
-		ws.conns[2] = nil
+	ws.conns = map[string]*websocket.Conn{}
+	ws.conns[wsControl] = nil
+	ws.conns[wsIO] = nil
+	if args.Stderr {
+		ws.conns[wsStderr] = nil
 	}
 	ws.allConnected = make(chan bool, 1)
 	ws.controlConnected = make(chan bool, 1)
-	ws.interactive = args.Terminal
-	for i := -1; i < len(ws.conns)-1; i++ {
+	ws.terminal = args.Terminal
+	ws.stderr = args.Stderr
+
+	ws.wsIDs = map[string]string{}
+	for key := range ws.conns {
 		var err error
-		ws.fds[i], err = strutil.UUID()
+		ws.wsIDs[key], err = strutil.UUID()
 		if err != nil {
 			return nil, ExecMetadata{}, err
 		}
@@ -150,13 +155,9 @@ func Exec(st *state.State, args *ExecArgs) (*state.Change, ExecMetadata, error) 
 	ws.uid = args.UserID
 	ws.gid = args.GroupID
 
-	fds := make(map[string]string)
-	for fd, wsID := range ws.fds {
-		if fd == -1 {
-			fds["control"] = wsID
-		} else {
-			fds[strconv.Itoa(fd)] = wsID
-		}
+	fds := make(map[string]string, len(ws.wsIDs))
+	for key, id := range ws.wsIDs {
+		fds[key] = id
 	}
 	metadata := ExecMetadata{
 		WebsocketIDs: fds,
@@ -233,12 +234,13 @@ type execWs struct {
 	command          []string
 	env              map[string]string
 	timeout          time.Duration
-	conns            map[int]*websocket.Conn
+	conns            map[string]*websocket.Conn
 	connsLock        sync.Mutex
 	allConnected     chan bool
 	controlConnected chan bool
-	interactive      bool
-	fds              map[int]string
+	terminal         bool
+	stderr           bool
+	wsIDs            map[string]string
 	width            int
 	height           int
 	uid              *int
@@ -252,10 +254,10 @@ var websocketUpgrader = websocket.Upgrader{
 }
 
 func (s *execWs) connect(id string, r *http.Request, w http.ResponseWriter) error {
-	for fd, fsID := range s.fds {
-		logger.Noticef("TODO: execWs.Connect fd=%d", fd)
-		if id == fsID {
-			logger.Noticef("TODO: execWs.Connect fd=%d, fsID=%s", fd, fsID)
+	for key, wsID := range s.wsIDs {
+		logger.Noticef("TODO: execWs.Connect key=%q", key)
+		if id == wsID {
+			logger.Noticef("TODO: execWs.Connect key=%q, wsID=%q", key, wsID)
 			conn, err := websocketUpgrader.Upgrade(w, r, nil)
 			if err != nil {
 				logger.Errorf("TODO: execWs.Connect upgrade error: %v", err)
@@ -263,18 +265,18 @@ func (s *execWs) connect(id string, r *http.Request, w http.ResponseWriter) erro
 			}
 
 			s.connsLock.Lock()
-			s.conns[fd] = conn
+			s.conns[key] = conn
 			s.connsLock.Unlock()
 
-			if fd == -1 {
+			if key == wsControl {
 				logger.Noticef("TODO: execWs.Connect control connected")
 				s.controlConnected <- true
 				return nil
 			}
 
 			s.connsLock.Lock()
-			for i, c := range s.conns {
-				if i != -1 && c == nil {
+			for k, c := range s.conns {
+				if k != wsControl && c == nil {
 					s.connsLock.Unlock()
 					logger.Noticef("TODO: execWs.Connect connected (not yet all)")
 					return nil
@@ -321,7 +323,7 @@ func (s *execWs) do(ctx context.Context, change *state.Change) error {
 	var stdout *os.File
 	var stderr *os.File
 
-	if s.interactive {
+	if s.terminal {
 		ttys = make([]*os.File, 1)
 		ptys = make([]*os.File, 1)
 
@@ -365,7 +367,7 @@ func (s *execWs) do(ctx context.Context, change *state.Change) error {
 	attachedChildIsDead := make(chan struct{})
 	var wgEOF sync.WaitGroup
 
-	if s.interactive {
+	if s.terminal {
 		wgEOF.Add(1)
 		go func() {
 			logger.Debugf("Interactive child process handler waiting")
@@ -383,7 +385,7 @@ func (s *execWs) do(ctx context.Context, change *state.Change) error {
 			logger.Debugf("Interactive child process handler started for child PID %d", attachedChildPid)
 			for {
 				s.connsLock.Lock()
-				conn := s.conns[-1]
+				conn := s.conns[wsControl]
 				s.connsLock.Unlock()
 
 				mt, r, err := conn.NextReader()
@@ -423,7 +425,6 @@ func (s *execWs) do(ctx context.Context, change *state.Change) error {
 					Args    map[string]string `json:"args"`
 					Signal  int               `json:"signal"`
 				}
-
 				if err := json.Unmarshal(buf, &command); err != nil {
 					logger.Errorf("Failed to unmarshal control socket command: %s", err)
 					continue
@@ -459,7 +460,7 @@ func (s *execWs) do(ctx context.Context, change *state.Change) error {
 
 		go func() {
 			s.connsLock.Lock()
-			conn := s.conns[0]
+			conn := s.conns[wsIO]
 			s.connsLock.Unlock()
 
 			logger.Infof("Started mirroring websocket")
@@ -473,19 +474,20 @@ func (s *execWs) do(ctx context.Context, change *state.Change) error {
 			wgEOF.Done()
 		}()
 	} else {
+		// TODO: fix for new websockets approach!
 		wgEOF.Add(len(ttys) - 1)
 		for i := 0; i < len(ttys); i++ {
 			go func(i int) {
 				if i == 0 {
 					s.connsLock.Lock()
-					conn := s.conns[i]
+					conn := s.conns[strconv.Itoa(i)]
 					s.connsLock.Unlock()
 
 					<-wsutil.WebsocketRecvStream(ttys[i], conn)
 					ttys[i].Close()
 				} else {
 					s.connsLock.Lock()
-					conn := s.conns[i]
+					conn := s.conns[strconv.Itoa(i)]
 					s.connsLock.Unlock()
 
 					<-wsutil.WebsocketSendStream(conn, ptys[i], -1)
@@ -503,11 +505,11 @@ func (s *execWs) do(ctx context.Context, change *state.Change) error {
 		}
 
 		s.connsLock.Lock()
-		conn := s.conns[-1]
+		conn := s.conns[wsControl]
 		s.connsLock.Unlock()
 
 		if conn == nil {
-			if s.interactive {
+			if s.terminal {
 				controlExit <- true
 			}
 		} else {
@@ -551,6 +553,7 @@ func (s *execWs) do(ctx context.Context, change *state.Change) error {
 			Gid: uint32(*s.gid),
 		}
 	}
+
 	// Creates a new session if the calling process is not a process group leader.
 	// The calling process is the leader of the new session, the process group leader of
 	// the new process group, and has no controlling terminal.
@@ -560,7 +563,7 @@ func (s *execWs) do(ctx context.Context, change *state.Change) error {
 	// Make the given terminal the controlling terminal of the calling process.
 	// The calling process must be a session leader and not have a controlling terminal already.
 	// This is important as allows ctrl+c to work as expected for non-shell programs.
-	if s.interactive {
+	if s.terminal {
 		cmd.SysProcAttr.Setctty = true
 	}
 
@@ -572,7 +575,7 @@ func (s *execWs) do(ctx context.Context, change *state.Change) error {
 		return finisher(-1, err)
 	}
 
-	if s.interactive {
+	if s.terminal {
 		attachedChildIsBorn <- cmd.Process.Pid
 	}
 

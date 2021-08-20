@@ -143,7 +143,7 @@ func (client *Client) Exec(opts *ExecOptions, args *ExecAdditionalArgs) (string,
 		// Handle interactive sections
 		if args.Stdin != nil && args.Stdout != nil {
 			// Connect to the websocket
-			conn, err := client.getChangeWebsocket(changeID, fds["0"])
+			conn, err := client.getChangeWebsocket(changeID, fds["io"])
 			if err != nil {
 				return "", err
 			}
@@ -167,6 +167,7 @@ func (client *Client) Exec(opts *ExecOptions, args *ExecAdditionalArgs) (string,
 		dones := map[int]chan bool{}
 		conns := []*websocket.Conn{}
 
+		// TODO: fix websockets
 		// Handle stdin
 		if fds["0"] != "" {
 			conn, err := client.getChangeWebsocket(changeID, fds["0"])
