@@ -166,7 +166,6 @@ func Exec(st *state.State, args *ExecArgs) (*state.Change, ExecMetadata, error) 
 	}
 
 	// Create change object and store it in state
-	logger.Noticef("ERROR: cmdstate.Exec ws=%+v", ws)
 	cacheKey, err := strutil.UUID()
 	if err != nil {
 		return nil, ExecMetadata{}, err
@@ -191,7 +190,6 @@ func doExec(task *state.Task, tomb *tomb.Tomb) error {
 		return err
 	}
 
-	logger.Noticef("TODO doExec start: %+v", ws)
 	ctx := tomb.Context(context.Background())
 	err = ws.do(ctx, change)
 
@@ -255,12 +253,9 @@ var websocketUpgrader = websocket.Upgrader{
 
 func (s *execWs) connect(id string, r *http.Request, w http.ResponseWriter) error {
 	for key, wsID := range s.wsIDs {
-		logger.Noticef("TODO: execWs.Connect key=%q", key)
 		if id == wsID {
-			logger.Noticef("TODO: execWs.Connect key=%q, wsID=%q", key, wsID)
 			conn, err := websocketUpgrader.Upgrade(w, r, nil)
 			if err != nil {
-				logger.Errorf("TODO: execWs.Connect upgrade error: %v", err)
 				return err
 			}
 
@@ -269,7 +264,6 @@ func (s *execWs) connect(id string, r *http.Request, w http.ResponseWriter) erro
 			s.connsLock.Unlock()
 
 			if key == wsControl {
-				logger.Noticef("TODO: execWs.Connect control connected")
 				s.controlConnected <- true
 				return nil
 			}
@@ -278,13 +272,11 @@ func (s *execWs) connect(id string, r *http.Request, w http.ResponseWriter) erro
 			for k, c := range s.conns {
 				if k != wsControl && c == nil {
 					s.connsLock.Unlock()
-					logger.Noticef("TODO: execWs.Connect connected (not yet all)")
 					return nil
 				}
 			}
 			s.connsLock.Unlock()
 
-			logger.Noticef("TODO: execWs.Connect all connected")
 			s.allConnected <- true
 			return nil
 		}
@@ -301,7 +293,7 @@ func (s *execWs) waitAllConnected(ctx context.Context) error {
 	select {
 	case <-ctx.Done():
 		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-			logger.Noticef("timeout waiting for websocket connections")
+			logger.Noticef("Timeout waiting for websocket connections")
 			return errors.New("timeout waiting for websocket connections")
 		}
 		return ctx.Err()
@@ -391,16 +383,16 @@ func (s *execWs) do(ctx context.Context, change *state.Change) error {
 					// If an abnormal closure occurred, kill the attached process.
 					err := unix.Kill(attachedChildPid, unix.SIGKILL)
 					if err != nil {
-						logger.Errorf("Failed to send SIGKILL to pid %d", attachedChildPid)
+						logger.Noticef("Failed to send SIGKILL to pid %d", attachedChildPid)
 					} else {
-						logger.Infof("Sent SIGKILL to pid %d", attachedChildPid)
+						logger.Noticef("Sent SIGKILL to pid %d", attachedChildPid)
 					}
 					return
 				}
 
 				buf, err := ioutil.ReadAll(r)
 				if err != nil {
-					logger.Errorf("Failed to read message %s", err)
+					logger.Noticef("Failed to read message %s", err)
 					break
 				}
 
@@ -410,34 +402,34 @@ func (s *execWs) do(ctx context.Context, change *state.Change) error {
 					Signal  int               `json:"signal"`
 				}
 				if err := json.Unmarshal(buf, &command); err != nil {
-					logger.Errorf("Failed to unmarshal control socket command: %s", err)
+					logger.Noticef("Failed to unmarshal control socket command: %s", err)
 					continue
 				}
 
 				if command.Command == "window-resize" {
 					winchWidth, err := strconv.Atoi(command.Args["width"])
 					if err != nil {
-						logger.Errorf("Unable to extract window width: %s", err)
+						logger.Noticef("Unable to extract window width: %s", err)
 						continue
 					}
 
 					winchHeight, err := strconv.Atoi(command.Args["height"])
 					if err != nil {
-						logger.Errorf("Unable to extract window height: %s", err)
+						logger.Noticef("Unable to extract window height: %s", err)
 						continue
 					}
 
 					ptyutil.SetSize(int(ptys[0].Fd()), winchWidth, winchHeight)
 					if err != nil {
-						logger.Errorf("Failed to set window size to: %dx%d", winchWidth, winchHeight)
+						logger.Noticef("Failed to set window size to: %dx%d", winchWidth, winchHeight)
 						continue
 					}
 				} else if command.Command == "signal" {
 					if err := unix.Kill(attachedChildPid, unix.Signal(command.Signal)); err != nil {
-						logger.Errorf("Failed forwarding signal '%d' to PID %d", command.Signal, attachedChildPid)
+						logger.Noticef("Failed forwarding signal '%d' to PID %d", command.Signal, attachedChildPid)
 						continue
 					}
-					logger.Infof("Forwarded signal '%d' to PID %d", command.Signal, attachedChildPid)
+					logger.Noticef("Forwarded signal '%d' to PID %d", command.Signal, attachedChildPid)
 				}
 			}
 		}()
@@ -448,12 +440,12 @@ func (s *execWs) do(ctx context.Context, change *state.Change) error {
 			conn := s.conns[wsIO]
 			s.connsLock.Unlock()
 
-			logger.Infof("Started mirroring websocket")
+			logger.Debugf("Started mirroring websocket")
 			readDone, writeDone := wsutil.WebsocketExecMirror(conn, ptys[0], ptys[0], attachedChildIsDead, int(ptys[0].Fd()))
 
 			<-readDone
 			<-writeDone
-			logger.Infof("Finished mirroring websocket")
+			logger.Debugf("Finished mirroring websocket")
 
 			conn.Close()
 			wgEOF.Done()
@@ -514,7 +506,6 @@ func (s *execWs) do(ctx context.Context, change *state.Change) error {
 	}
 
 	finisher := func(cmdResult int, cmdErr error) error {
-		logger.Noticef("TODO finisher: cmdResult=%d, cmdErr=%v", cmdResult, cmdErr)
 		for _, tty := range ttys {
 			tty.Close()
 		}
@@ -584,7 +575,6 @@ func (s *execWs) do(ctx context.Context, change *state.Change) error {
 
 	cmd.Dir = s.cwd
 
-	logger.Noticef("TODO: starting command, args=%q", cmd.Args)
 	err = cmd.Start()
 	if err != nil {
 		return finisher(-1, err)
@@ -594,7 +584,6 @@ func (s *execWs) do(ctx context.Context, change *state.Change) error {
 		attachedChildIsBorn <- cmd.Process.Pid
 	}
 
-	logger.Noticef("TODO: waiting for command...")
 	err = cmd.Wait()
 	if err == nil {
 		return finisher(0, nil)
