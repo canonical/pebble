@@ -140,7 +140,7 @@ func (client *Client) Exec(opts *ExecOptions, args *ExecAdditionalArgs) (string,
 	}
 
 	if opts.Terminal {
-		// Handle interactive sections
+		// Handle interactive sessions
 		if args.Stdin != nil && args.Stdout != nil {
 			// Connect to the websocket
 			conn, err := client.getChangeWebsocket(changeID, fds["io"])
@@ -164,52 +164,41 @@ func (client *Client) Exec(opts *ExecOptions, args *ExecAdditionalArgs) (string,
 		}
 	} else {
 		// Handle non-interactive sessions
-		dones := map[int]chan bool{}
+		dones := map[string]chan bool{}
 		conns := []*websocket.Conn{}
 
-		// TODO: fix websockets
-		// Handle stdin
-		if fds["0"] != "" {
-			conn, err := client.getChangeWebsocket(changeID, fds["0"])
+		// Handle stdin and stdout
+		if fds["io"] != "" {
+			conn, err := client.getChangeWebsocket(changeID, fds["io"])
 			if err != nil {
 				return "", err
 			}
 			conns = append(conns, conn)
-			dones[0] = wsutil.WebsocketSendStream(conn, args.Stdin, -1)
+			dones["stdin"] = wsutil.WebsocketSendStream(conn, args.Stdin, -1)
+			dones["stdout"] = wsutil.WebsocketRecvStream(args.Stdout, conn)
 		}
 
-		// Handle stdout
-		if fds["1"] != "" {
-			conn, err := client.getChangeWebsocket(changeID, fds["1"])
+		// Handle stderr separately if needed
+		if opts.Stderr && fds["stderr"] != "" {
+			conn, err := client.getChangeWebsocket(changeID, fds["stderr"])
 			if err != nil {
 				return "", err
 			}
 			conns = append(conns, conn)
-			dones[1] = wsutil.WebsocketRecvStream(args.Stdout, conn)
-		}
-
-		// Handle stderr
-		if fds["2"] != "" {
-			conn, err := client.getChangeWebsocket(changeID, fds["2"])
-			if err != nil {
-				return "", err
-			}
-			conns = append(conns, conn)
-			dones[2] = wsutil.WebsocketRecvStream(args.Stderr, conn)
+			dones["stderr"] = wsutil.WebsocketRecvStream(args.Stderr, conn)
 		}
 
 		// Wait for everything to be done
 		go func() {
-			for i, chDone := range dones {
+			for name, done := range dones {
 				// Skip stdin, dealing with it separately below
-				if i == 0 {
+				if name == "stdin" {
 					continue
 				}
-
-				<-chDone
+				<-done
 			}
 
-			if fds["0"] != "" {
+			if fds["io"] != "" {
 				if args.Stdin != nil {
 					args.Stdin.Close()
 				}
@@ -217,7 +206,7 @@ func (client *Client) Exec(opts *ExecOptions, args *ExecAdditionalArgs) (string,
 				// Empty the stdin channel but don't block on it as
 				// stdin may be stuck in Read()
 				go func() {
-					<-dones[0]
+					<-dones["stdin"]
 				}()
 			}
 
@@ -253,7 +242,6 @@ func (client *Client) getChangeWebsocket(changeID, websocketID string) (*websock
 	if err != nil {
 		return nil, err
 	}
-
 	return conn, err
 }
 

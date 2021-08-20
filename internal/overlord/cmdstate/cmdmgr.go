@@ -323,6 +323,11 @@ func (s *execWs) do(ctx context.Context, change *state.Change) error {
 	var stdout *os.File
 	var stderr *os.File
 
+	controlExit := make(chan bool, 1)
+	attachedChildIsBorn := make(chan int)
+	attachedChildIsDead := make(chan struct{})
+	var wgEOF sync.WaitGroup
+
 	if s.terminal {
 		ttys = make([]*os.File, 1)
 		ptys = make([]*os.File, 1)
@@ -347,28 +352,7 @@ func (s *execWs) do(ctx context.Context, change *state.Change) error {
 		if s.width > 0 && s.height > 0 {
 			ptyutil.SetSize(int(ptys[0].Fd()), s.width, s.height)
 		}
-	} else {
-		ttys = make([]*os.File, 3)
-		ptys = make([]*os.File, 3)
-		for i := 0; i < len(ttys); i++ {
-			ptys[i], ttys[i], err = os.Pipe()
-			if err != nil {
-				return err
-			}
-		}
 
-		stdin = ptys[0]
-		stdout = ttys[1]
-		stderr = ttys[2]
-	}
-
-	controlExit := make(chan bool, 1)
-	attachedChildIsBorn := make(chan int)
-	attachedChildIsDead := make(chan struct{})
-	var wgEOF sync.WaitGroup
-
-	if s.terminal {
-		wgEOF.Add(1)
 		go func() {
 			logger.Debugf("Interactive child process handler waiting")
 			defer logger.Debugf("Interactive child process handler finished")
@@ -458,6 +442,7 @@ func (s *execWs) do(ctx context.Context, change *state.Change) error {
 			}
 		}()
 
+		wgEOF.Add(1)
 		go func() {
 			s.connsLock.Lock()
 			conn := s.conns[wsIO]
@@ -474,28 +459,58 @@ func (s *execWs) do(ctx context.Context, change *state.Change) error {
 			wgEOF.Done()
 		}()
 	} else {
-		// TODO: fix for new websockets approach!
-		wgEOF.Add(len(ttys) - 1)
-		for i := 0; i < len(ttys); i++ {
-			go func(i int) {
-				if i == 0 {
-					s.connsLock.Lock()
-					conn := s.conns[strconv.Itoa(i)]
-					s.connsLock.Unlock()
-
-					<-wsutil.WebsocketRecvStream(ttys[i], conn)
-					ttys[i].Close()
-				} else {
-					s.connsLock.Lock()
-					conn := s.conns[strconv.Itoa(i)]
-					s.connsLock.Unlock()
-
-					<-wsutil.WebsocketSendStream(conn, ptys[i], -1)
-					ptys[i].Close()
-					wgEOF.Done()
-				}
-			}(i)
+		// Receive stdin from "io" websocket, write to cmd.Stdin pipe
+		s.connsLock.Lock()
+		ioConn := s.conns[wsIO]
+		s.connsLock.Unlock()
+		stdinReader, stdinWriter, err := os.Pipe()
+		if err != nil {
+			return err
 		}
+		stdin = stdinReader
+		ptys = append(ptys, stdinReader)
+		ttys = append(ttys, stdinWriter)
+		go func() {
+			<-wsutil.WebsocketRecvStream(stdinWriter, ioConn)
+			stdinWriter.Close()
+		}()
+
+		// Receive from cmd.Stdout pipe, write to "io" websocket
+		stdoutReader, stdoutWriter, err := os.Pipe()
+		if err != nil {
+			return err
+		}
+		ptys = append(ptys, stdoutReader)
+		ttys = append(ttys, stdoutWriter)
+		stdout = stdoutWriter
+		wgEOF.Add(1)
+		go func() {
+			<-wsutil.WebsocketSendStream(ioConn, stdoutReader, -1)
+			stdoutReader.Close()
+			wgEOF.Done()
+		}()
+
+		// Receive from cmd.Stderr pipe, write to "io" websocket as well (or
+		// "stderr" websocket if client wants stderr separate).
+		stderrReader, stderrWriter, err := os.Pipe()
+		if err != nil {
+			return err
+		}
+		ptys = append(ptys, stderrReader)
+		ttys = append(ttys, stderrWriter)
+		stderr = stderrWriter
+		stderrConn := ioConn // TODO(benhoyt): this won't work as is -- websocket.Conn writes aren't concurrency safe
+		if s.stderr {
+			s.connsLock.Lock()
+			stderrConn = s.conns[wsStderr]
+			s.connsLock.Unlock()
+		}
+		wgEOF.Add(1)
+		go func() {
+			<-wsutil.WebsocketSendStream(stderrConn, stderrReader, -1)
+			stderrReader.Close()
+			wgEOF.Done()
+		}()
 	}
 
 	finisher := func(cmdResult int, cmdErr error) error {
