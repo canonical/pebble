@@ -151,7 +151,7 @@ func ExecReaderToChannel(r io.Reader, bufferSize int, exited <-chan struct{}, fd
 				// avoid an endless loop.
 				once.Do(closeChannel)
 			} else if (revents & unix.POLLNVAL) > 0 {
-				logger.Noticef("Detected poll(POLLNVAL) event.")
+				logger.Debugf("Detected poll(POLLNVAL) event.")
 				// Well, someone closed the fd havent they? So
 				// let's go home.
 				once.Do(closeChannel)

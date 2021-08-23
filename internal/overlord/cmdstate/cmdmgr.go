@@ -253,33 +253,35 @@ var websocketUpgrader = websocket.Upgrader{
 
 func (s *execWs) connect(id string, r *http.Request, w http.ResponseWriter) error {
 	for key, wsID := range s.wsIDs {
-		if id == wsID {
-			conn, err := websocketUpgrader.Upgrade(w, r, nil)
-			if err != nil {
-				return err
-			}
+		if id != wsID {
+			continue
+		}
 
-			s.connsLock.Lock()
-			s.conns[key] = conn
-			s.connsLock.Unlock()
+		conn, err := websocketUpgrader.Upgrade(w, r, nil)
+		if err != nil {
+			return err
+		}
 
-			if key == wsControl {
-				s.controlConnected <- true
-				return nil
-			}
+		s.connsLock.Lock()
+		s.conns[key] = conn
+		s.connsLock.Unlock()
 
-			s.connsLock.Lock()
-			for k, c := range s.conns {
-				if k != wsControl && c == nil {
-					s.connsLock.Unlock()
-					return nil
-				}
-			}
-			s.connsLock.Unlock()
-
-			s.allConnected <- true
+		if key == wsControl {
+			s.controlConnected <- true
 			return nil
 		}
+
+		s.connsLock.Lock()
+		for k, c := range s.conns {
+			if k != wsControl && c == nil {
+				s.connsLock.Unlock()
+				return nil
+			}
+		}
+		s.connsLock.Unlock()
+
+		s.allConnected <- true
+		return nil
 	}
 
 	return os.ErrNotExist
@@ -293,8 +295,8 @@ func (s *execWs) waitAllConnected(ctx context.Context) error {
 	select {
 	case <-ctx.Done():
 		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-			logger.Noticef("Timeout waiting for websocket connections")
-			return errors.New("timeout waiting for websocket connections")
+			logger.Noticef("Timeout waiting for websocket connections: %v", ctx.Err())
+			return fmt.Errorf("timeout waiting for websocket connections: %w", ctx.Err())
 		}
 		return ctx.Err()
 	case <-s.allConnected:
@@ -451,6 +453,8 @@ func (s *execWs) do(ctx context.Context, change *state.Change) error {
 			wgEOF.Done()
 		}()
 	} else {
+		// TODO: need to run control handler in !Terminal mode too (signals only)
+
 		// Receive stdin from "io" websocket, write to cmd.Stdin pipe
 		s.connsLock.Lock()
 		ioConn := s.conns[wsIO]
@@ -585,28 +589,24 @@ func (s *execWs) do(ctx context.Context, change *state.Change) error {
 	}
 
 	err = cmd.Wait()
-	if err == nil {
-		return finisher(0, nil)
-	}
 
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-		return finisher(-1, fmt.Errorf("timed out after %v", s.timeout))
-	}
-
-	exitErr, ok := err.(*exec.ExitError)
-	if ok {
+		return finisher(-1, fmt.Errorf("timed out after %v: %w", s.timeout, ctx.Err()))
+	} else if exitErr, ok := err.(*exec.ExitError); ok {
 		status, ok := exitErr.Sys().(syscall.WaitStatus)
 		if ok {
 			return finisher(status.ExitStatus(), nil)
 		}
-
 		if status.Signaled() {
 			// 128 + n == Fatal error signal "n"
 			return finisher(128+int(status.Signal()), nil)
 		}
+		return finisher(-1, err)
+	} else if err != nil {
+		return finisher(-1, err)
 	}
 
-	return finisher(-1, err)
+	return finisher(0, nil)
 }
 
 func setApiData(change *state.Change, cmdResult int) {

@@ -60,7 +60,7 @@ type ExecOptions struct {
 	// default is to send combined stdout+stderr on a single websocket.
 	Stderr bool
 
-	// Terminal width and height (these apply only if Terminal is true)
+	// Initial terminal width and height (only apply if Terminal is true)
 	Width  int
 	Height int
 }
