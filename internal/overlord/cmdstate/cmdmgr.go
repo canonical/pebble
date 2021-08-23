@@ -595,11 +595,11 @@ func (s *execWs) do(ctx context.Context, change *state.Change) error {
 	} else if exitErr, ok := err.(*exec.ExitError); ok {
 		status, ok := exitErr.Sys().(syscall.WaitStatus)
 		if ok {
+			if status.Signaled() {
+				// 128 + n == Fatal error signal "n"
+				return finisher(128+int(status.Signal()), nil)
+			}
 			return finisher(status.ExitStatus(), nil)
-		}
-		if status.Signaled() {
-			// 128 + n == Fatal error signal "n"
-			return finisher(128+int(status.Signal()), nil)
 		}
 		return finisher(-1, err)
 	} else if err != nil {
