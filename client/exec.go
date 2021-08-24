@@ -69,8 +69,8 @@ type ExecOptions struct {
 type ExecAdditionalArgs struct {
 	// Standard input, output, and error.
 	Stdin  io.ReadCloser
-	Stdout io.WriteCloser
-	Stderr io.WriteCloser
+	Stdout io.Writer
+	Stderr io.Writer
 
 	// Control message handler (for window resizing and signal forwarding)
 	Control func(conn *websocket.Conn)

@@ -17,10 +17,11 @@ package daemon
 import (
 	"bytes"
 	"encoding/json"
-	"io"
 	"io/ioutil"
 	"net/http"
 	"os"
+	"os/user"
+	"strconv"
 	"strings"
 	"time"
 
@@ -59,23 +60,117 @@ func (s *execSuite) TearDownTest(c *C) {
 
 // Some of these tests use the Go client (tested elsewhere) for simplicity.
 
-func (s *execSuite) TestSimple(c *C) {
-	stdout, stderr, exitCode := s.execSimple(c, "", &client.ExecOptions{
-		Command: []string{"echo", "foo", "bar"},
+func (s *execSuite) TestStdinStdout(c *C) {
+	changeErr, stdout, stderr, exitCode := s.exec(c, "foo bar", &client.ExecOptions{
+		Command: []string{"cat"},
 		Stderr:  true,
 	})
-	c.Check(stdout, Equals, "foo bar\n")
+	c.Check(changeErr, Equals, "")
+	c.Check(stdout, Equals, "foo bar")
 	c.Check(stderr, Equals, "")
 	c.Check(exitCode, Equals, 0)
 }
 
-func (s *execSuite) execSimple(c *C, stdin string, opts *client.ExecOptions) (stdout, stderr string, exitCode int) {
+func (s *execSuite) TestStderr(c *C) {
+	changeErr, stdout, stderr, exitCode := s.exec(c, "", &client.ExecOptions{
+		Command: []string{"/bin/sh", "-c", "echo some stderr! >&2"},
+		Stderr:  true,
+	})
+	c.Check(changeErr, Equals, "")
+	c.Check(stdout, Equals, "")
+	c.Check(stderr, Equals, "some stderr!\n")
+	c.Check(exitCode, Equals, 0)
+}
+
+func (s *execSuite) TestEnvironment(c *C) {
+	changeErr, stdout, stderr, exitCode := s.exec(c, "", &client.ExecOptions{
+		Command:     []string{"/bin/sh", "-c", "echo FOO=$FOO"},
+		Environment: map[string]string{"FOO": "bar"},
+		Stderr:      true,
+	})
+	c.Check(changeErr, Equals, "")
+	c.Check(stdout, Equals, "FOO=bar\n")
+	c.Check(stderr, Equals, "")
+	c.Check(exitCode, Equals, 0)
+}
+
+func (s *execSuite) TestWorkingDir(c *C) {
+	workingDir := c.MkDir()
+	changeErr, stdout, stderr, exitCode := s.exec(c, "", &client.ExecOptions{
+		Command:    []string{"pwd"},
+		Stderr:     true,
+		WorkingDir: workingDir,
+	})
+	c.Check(changeErr, Equals, "")
+	c.Check(stdout, Equals, workingDir+"\n")
+	c.Check(stderr, Equals, "")
+	c.Check(exitCode, Equals, 0)
+}
+
+func (s *execSuite) TestTimeout(c *C) {
+	changeErr, stdout, stderr, exitCode := s.exec(c, "", &client.ExecOptions{
+		Command: []string{"sleep", "0.1"},
+		Stderr:  true,
+		Timeout: time.Millisecond,
+	})
+	c.Check(changeErr, Matches, `cannot perform the following tasks:\n.*timed out after 1ms.*`)
+	c.Check(stdout, Equals, "")
+	c.Check(stderr, Equals, "")
+	c.Check(exitCode, Equals, -1)
+}
+
+// You can run these tests as root with the following commands:
+//
+// go test -c -v ./internal/daemon
+// sudo ./daemon.test -check.v -check.f execSuite
+//
+func (s *execSuite) TestUserGroup(c *C) {
+	if os.Getuid() != 0 {
+		c.Skip("exec user/group test requires running as root")
+	}
+	changeErr, stdout, stderr, exitCode := s.exec(c, "", &client.ExecOptions{
+		Command: []string{"/bin/sh", "-c", "id -n -u && id -n -g"},
+		Stderr:  true,
+		User:    "nobody",
+		Group:   "nogroup",
+	})
+	c.Check(changeErr, Equals, "")
+	c.Check(stdout, Equals, "nobody\nnogroup\n")
+	c.Check(stderr, Equals, "")
+	c.Check(exitCode, Equals, 0)
+}
+
+func (s *execSuite) TestUserIDGroupID(c *C) {
+	if os.Getuid() != 0 {
+		c.Skip("exec user ID/group ID test requires running as root")
+	}
+	nobody, err := user.Lookup("nobody")
+	c.Assert(err, IsNil)
+	nogroup, err := user.LookupGroup("nogroup")
+	c.Assert(err, IsNil)
+	uid, err := strconv.Atoi(nobody.Uid)
+	c.Assert(err, IsNil)
+	gid, err := strconv.Atoi(nogroup.Gid)
+	c.Assert(err, IsNil)
+	changeErr, stdout, stderr, exitCode := s.exec(c, "", &client.ExecOptions{
+		Command: []string{"/bin/sh", "-c", "id -n -u && id -n -g"},
+		Stderr:  true,
+		UserID:  &uid,
+		GroupID: &gid,
+	})
+	c.Check(changeErr, Equals, "")
+	c.Check(stdout, Equals, "nobody\nnogroup\n")
+	c.Check(stderr, Equals, "")
+	c.Check(exitCode, Equals, 0)
+}
+
+func (s *execSuite) exec(c *C, stdin string, opts *client.ExecOptions) (changeErr, stdout, stderr string, exitCode int) {
 	outBuf := &bytes.Buffer{}
 	errBuf := &bytes.Buffer{}
 	args := &client.ExecAdditionalArgs{
 		Stdin:    ioutil.NopCloser(strings.NewReader(stdin)),
-		Stdout:   writerNopCloser{outBuf},
-		Stderr:   writerNopCloser{errBuf},
+		Stdout:   outBuf,
+		Stderr:   errBuf,
 		Control:  func(conn *websocket.Conn) {},
 		DataDone: make(chan bool),
 	}
@@ -83,8 +178,8 @@ func (s *execSuite) execSimple(c *C, stdin string, opts *client.ExecOptions) (st
 	c.Check(err, IsNil)
 
 	change, err := s.client.WaitChange(changeID, nil)
+	c.Check(err, IsNil)
 	c.Check(change.Ready, Equals, true)
-	c.Check(change.Err, Equals, "")
 	err = change.Get("return", &exitCode)
 	if err != nil {
 		exitCode = -1
@@ -92,15 +187,7 @@ func (s *execSuite) execSimple(c *C, stdin string, opts *client.ExecOptions) (st
 
 	<-args.DataDone
 
-	return outBuf.String(), errBuf.String(), exitCode
-}
-
-type writerNopCloser struct {
-	io.Writer
-}
-
-func (c writerNopCloser) Close() error {
-	return nil
+	return change.Err, outBuf.String(), errBuf.String(), exitCode
 }
 
 func (s *execSuite) TestNoCommand(c *C) {
