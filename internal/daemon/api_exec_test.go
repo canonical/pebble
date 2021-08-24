@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"strings"
@@ -72,7 +73,7 @@ func (s *execSuite) execSimple(c *C, stdin string, opts *client.ExecOptions) (st
 	outBuf := &bytes.Buffer{}
 	errBuf := &bytes.Buffer{}
 	args := &client.ExecAdditionalArgs{
-		Stdin:    io.NopCloser(strings.NewReader(stdin)),
+		Stdin:    ioutil.NopCloser(strings.NewReader(stdin)),
 		Stdout:   writerNopCloser{outBuf},
 		Stderr:   writerNopCloser{errBuf},
 		Control:  func(conn *websocket.Conn) {},
