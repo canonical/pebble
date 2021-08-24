@@ -43,14 +43,14 @@ func v1PostExec(c *Command, req *http.Request, _ *userState) Response {
 	if err := decoder.Decode(&payload); err != nil {
 		return statusBadRequest("cannot decode request body: %v", err)
 	}
+	if len(payload.Command) < 1 {
+		return statusBadRequest("must specify command")
+	}
 	if payload.Terminal && payload.Stderr {
 		return statusBadRequest("separate stderr not currently supported in terminal mode")
 	}
 	if !payload.Terminal && !payload.Stderr {
 		return statusBadRequest("combined stderr not currently supported in non-terminal mode")
-	}
-	if len(payload.Command) < 1 {
-		return statusBadRequest("must specify command")
 	}
 
 	// Check up-front that the executable exists.

@@ -82,7 +82,7 @@ type ExecMetadata struct {
 	WorkingDir   string
 }
 
-// Exec creates a task set that will execute the command with the given arguments.
+// Exec creates a change that will execute the command with the given arguments.
 func Exec(st *state.State, args *ExecArgs) (*state.Change, ExecMetadata, error) {
 	env := map[string]string{}
 	for k, v := range args.Environment {
