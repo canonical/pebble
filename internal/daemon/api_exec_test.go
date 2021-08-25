@@ -17,6 +17,8 @@ package daemon
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -172,7 +174,6 @@ func (s *execSuite) exec(c *C, stdin string, opts *client.ExecOptions) (changeEr
 		Stdin:    ioutil.NopCloser(strings.NewReader(stdin)),
 		Stdout:   outBuf,
 		Stderr:   errBuf,
-		Control:  func(conn *websocket.Conn) {},
 		DataDone: make(chan bool),
 	}
 	changeID, err := s.client.Exec(opts, args)
@@ -181,10 +182,7 @@ func (s *execSuite) exec(c *C, stdin string, opts *client.ExecOptions) (changeEr
 	change, err := s.client.WaitChange(changeID, nil)
 	c.Check(err, IsNil)
 	c.Check(change.Ready, Equals, true)
-	err = change.Get("return", &exitCode)
-	if err != nil {
-		exitCode = -1
-	}
+	exitCode = getExitCode(c, change)
 
 	<-args.DataDone
 
@@ -221,10 +219,72 @@ func (s *execSuite) TestSignal(c *C) {
 	c.Check(change.Ready, Equals, true)
 	c.Check(change.Err, Equals, "")
 
-	var exitCode int
-	err = change.Get("return", &exitCode)
+	c.Check(getExitCode(c, change), Equals, 130)
+}
+
+func (s *execSuite) TestStreaming(c *C) {
+	opts := &client.ExecOptions{
+		Command: []string{"cat"},
+		Stderr:  true,
+	}
+	stdinCh := make(chan []byte)
+	stdoutCh := make(chan []byte)
+	args := &client.ExecAdditionalArgs{
+		Stdin:  ioutil.NopCloser(channelReader{stdinCh}),
+		Stdout: channelWriter{stdoutCh},
+		Stderr: ioutil.Discard,
+	}
+	changeID, err := s.client.Exec(opts, args)
+	c.Assert(err, IsNil)
+
+	for i := 0; i < 20; i++ {
+		chunk := fmt.Sprintf("chunk %d ", i)
+		select {
+		case stdinCh <- []byte(chunk):
+		case <-time.After(time.Second):
+			c.Fatalf("timed out waiting to write to stdin")
+		}
+		select {
+		case b := <-stdoutCh:
+			c.Check(string(b), Equals, chunk)
+		case <-time.After(time.Second):
+			c.Fatalf("timed out waiting for stdout")
+		}
+	}
+
+	select {
+	case stdinCh <- nil:
+	case <-time.After(time.Second):
+		c.Fatalf("timed out waiting to write to stdin")
+	}
+
+	change, err := s.client.WaitChange(changeID, nil)
 	c.Check(err, IsNil)
-	c.Check(exitCode, Equals, 130)
+	c.Check(change.Ready, Equals, true)
+	c.Check(change.Err, Equals, "")
+	c.Check(getExitCode(c, change), Equals, 0)
+}
+
+type channelReader struct {
+	ch chan []byte
+}
+
+func (r channelReader) Read(buf []byte) (int, error) {
+	b := <-r.ch
+	if b == nil {
+		return 0, io.EOF
+	}
+	n := copy(buf, b)
+	return n, nil
+}
+
+type channelWriter struct {
+	ch chan []byte
+}
+
+func (w channelWriter) Write(buf []byte) (int, error) {
+	w.ch <- buf
+	return len(buf), nil
 }
 
 func (s *execSuite) TestNoCommand(c *C) {
@@ -314,4 +374,10 @@ func execRequest(c *C, options *client.ExecOptions) (*http.Response, execRespons
 	err = json.Unmarshal(body.Bytes(), &execResp)
 	c.Assert(err, IsNil)
 	return httpResp, execResp
+}
+
+func getExitCode(c *C, change *client.Change) int {
+	exitCode := 1
+	_ = change.Get("return", &exitCode)
+	return exitCode
 }
