@@ -73,7 +73,7 @@ type ExecAdditionalArgs struct {
 	Stderr io.Writer
 
 	// Control message handler (for window resizing and signal forwarding)
-	Control func(conn *websocket.Conn)
+	Control func(conn WebsocketWriter)
 
 	// Channel that will be closed when all data operations are done
 	DataDone chan bool
@@ -245,10 +245,11 @@ func (client *Client) getChangeWebsocket(changeID, websocketID string) (*websock
 	return conn, err
 }
 
-// JSONWriter is an interface that can write a value as JSON, for example,
-// a *websocket.Conn used for sending commands to an executing program's
-// "control" websocket.
-type JSONWriter interface {
+// WebsocketWriter is a websocket writer interface that can write a websocket
+// or a value as JSON, for example, for sending commands to an executing
+// program's "control" websocket.
+type WebsocketWriter interface {
+	WriteMessage(messageType int, data []byte) error
 	WriteJSON(v interface{}) error
 }
 
@@ -259,7 +260,7 @@ type execCommand struct {
 }
 
 // ExecSendTermSize sends a window-resize message to the Exec control websocket.
-func ExecSendTermSize(conn JSONWriter, width, height int) error {
+func ExecSendTermSize(conn WebsocketWriter, width, height int) error {
 	msg := execCommand{
 		Command: "window-resize",
 		Args: map[string]string{
@@ -271,7 +272,7 @@ func ExecSendTermSize(conn JSONWriter, width, height int) error {
 }
 
 // ExecForwardSignal forwards a signal to the Exec control websocket.
-func ExecForwardSignal(conn JSONWriter, signal int) error {
+func ExecForwardSignal(conn WebsocketWriter, signal int) error {
 	msg := execCommand{
 		Command: "signal",
 		Signal:  signal,
