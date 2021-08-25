@@ -399,8 +399,7 @@ func (s *execWs) do(ctx context.Context, change *state.Change) error {
 			wgEOF.Done()
 		}()
 
-		// Receive from cmd.Stderr pipe, write to "io" websocket as well (or
-		// "stderr" websocket if client wants stderr separate).
+		// Receive from cmd.Stderr pipe, write to separate "stderr" websocket.
 		stderrReader, stderrWriter, err := os.Pipe()
 		if err != nil {
 			return err
@@ -408,12 +407,9 @@ func (s *execWs) do(ctx context.Context, change *state.Change) error {
 		ptys = append(ptys, stderrReader)
 		ttys = append(ttys, stderrWriter)
 		stderr = stderrWriter
-		stderrConn := ioConn // TODO(benhoyt): this won't work as is -- websocket.Conn writes aren't concurrency safe
-		if s.stderr {
-			s.connsLock.Lock()
-			stderrConn = s.conns[wsStderr]
-			s.connsLock.Unlock()
-		}
+		s.connsLock.Lock()
+		stderrConn := s.conns[wsStderr]
+		s.connsLock.Unlock()
 		wgEOF.Add(1)
 		go func() {
 			<-wsutil.WebsocketSendStream(stderrConn, stderrReader, -1)
