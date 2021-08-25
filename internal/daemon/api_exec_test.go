@@ -27,7 +27,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gorilla/websocket"
 	"golang.org/x/sys/unix"
 	. "gopkg.in/check.v1"
 
@@ -199,7 +198,7 @@ func (s *execSuite) TestSignal(c *C) {
 		Stdin:  ioutil.NopCloser(strings.NewReader("")),
 		Stdout: ioutil.Discard,
 		Stderr: ioutil.Discard,
-		Control: func(conn *websocket.Conn) {
+		Control: func(conn client.WebsocketConn) {
 			signal := <-signalCh
 			err := client.ExecForwardSignal(conn, signal)
 			c.Check(err, IsNil)

@@ -161,7 +161,7 @@ func (cmd *cmdExec) Execute(args []string) error {
 		Stdin:  os.Stdin,
 		Stdout: os.Stdout,
 		Stderr: os.Stderr,
-		Control: func(conn client.WebsocketWriter) {
+		Control: func(conn client.WebsocketConn) {
 			execControlHandler(conn, terminal)
 		},
 		DataDone: make(chan bool),
@@ -206,7 +206,7 @@ func (cmd *cmdExec) Execute(args []string) error {
 	return nil
 }
 
-func execControlHandler(control client.WebsocketWriter, terminal bool) {
+func execControlHandler(control client.WebsocketConn, terminal bool) {
 	ch := make(chan os.Signal, 10)
 	signal.Notify(ch,
 		unix.SIGWINCH, unix.SIGHUP,

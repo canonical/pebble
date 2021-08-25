@@ -73,7 +73,7 @@ type ExecAdditionalArgs struct {
 	Stderr io.Writer
 
 	// Control message handler (for window resizing and signal forwarding)
-	Control func(conn WebsocketWriter)
+	Control func(conn WebsocketConn)
 
 	// Channel that will be closed when all data operations are done
 	DataDone chan bool
@@ -165,7 +165,7 @@ func (client *Client) Exec(opts *ExecOptions, args *ExecAdditionalArgs) (string,
 	} else {
 		// Handle non-terminal executions
 		dones := map[string]chan bool{}
-		conns := []*websocket.Conn{}
+		conns := []WebsocketConn{}
 
 		// Handle stdin and stdout
 		if fds["io"] != "" {
@@ -225,7 +225,7 @@ func (client *Client) Exec(opts *ExecOptions, args *ExecAdditionalArgs) (string,
 
 // getChangeWebsocket creates a websocket connection for the given change ID
 // and websocket ID combination.
-func (client *Client) getChangeWebsocket(changeID, websocketID string) (*websocket.Conn, error) {
+func (client *Client) getChangeWebsocket(changeID, websocketID string) (WebsocketConn, error) {
 	// Set up a new websocket dialer based on the HTTP client
 	httpClient := client.doer.(*http.Client)
 	httpTransport := httpClient.Transport.(*http.Transport)
@@ -245,10 +245,11 @@ func (client *Client) getChangeWebsocket(changeID, websocketID string) (*websock
 	return conn, err
 }
 
-// WebsocketWriter is a websocket writer interface that can write a websocket
-// or a value as JSON, for example, for sending commands to an executing
-// program's "control" websocket.
-type WebsocketWriter interface {
+// WebsocketConn represents a websocket connection for use by this package
+// (and is implemented by *websocket.Conn).
+type WebsocketConn interface {
+	Close() error
+	NextReader() (messageType int, r io.Reader, err error)
 	WriteMessage(messageType int, data []byte) error
 	WriteJSON(v interface{}) error
 }
@@ -260,7 +261,7 @@ type execCommand struct {
 }
 
 // ExecSendTermSize sends a window-resize message to the Exec control websocket.
-func ExecSendTermSize(conn WebsocketWriter, width, height int) error {
+func ExecSendTermSize(conn WebsocketConn, width, height int) error {
 	msg := execCommand{
 		Command: "window-resize",
 		Args: map[string]string{
@@ -272,7 +273,7 @@ func ExecSendTermSize(conn WebsocketWriter, width, height int) error {
 }
 
 // ExecForwardSignal forwards a signal to the Exec control websocket.
-func ExecForwardSignal(conn WebsocketWriter, signal int) error {
+func ExecForwardSignal(conn WebsocketConn, signal int) error {
 	msg := execCommand{
 		Command: "signal",
 		Signal:  signal,
