@@ -20,7 +20,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
-	"os/exec"
 	"os/user"
 	"strconv"
 	"strings"
@@ -163,20 +162,6 @@ func (s *execSuite) TestUserIDGroupID(c *C) {
 	c.Check(stdout, Equals, "nobody\nnogroup\n")
 	c.Check(stderr, Equals, "")
 	c.Check(exitCode, Equals, 0)
-}
-
-func (s *execSuite) TestTerminal(c *C) {
-	if _, err := exec.LookPath("python3"); err != nil {
-		c.Skip("test requires python3")
-	}
-	changeErr, stdout, stderr, exitCode := s.exec(c, "", &client.ExecOptions{
-		Command:  []string{"python3", "-c", "import sys; sys.exit(42 if sys.stdin.isatty() else 0)"},
-		Terminal: true,
-	})
-	c.Check(changeErr, Equals, "")
-	c.Check(stdout, Equals, "")
-	c.Check(stderr, Equals, "")
-	c.Check(exitCode, Equals, 42)
 }
 
 func (s *execSuite) exec(c *C, stdin string, opts *client.ExecOptions) (changeErr, stdout, stderr string, exitCode int) {
