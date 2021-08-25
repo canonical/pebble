@@ -140,7 +140,7 @@ func (client *Client) Exec(opts *ExecOptions, args *ExecAdditionalArgs) (string,
 	}
 
 	if opts.Terminal {
-		// Handle interactive sessions
+		// Handle terminal-based executions
 		if args.Stdin != nil && args.Stdout != nil {
 			// Connect to the websocket
 			conn, err := client.getChangeWebsocket(changeID, fds["io"])
@@ -163,7 +163,7 @@ func (client *Client) Exec(opts *ExecOptions, args *ExecAdditionalArgs) (string,
 			}
 		}
 	} else {
-		// Handle non-interactive sessions
+		// Handle non-terminal executions
 		dones := map[string]chan bool{}
 		conns := []*websocket.Conn{}
 
@@ -245,14 +245,21 @@ func (client *Client) getChangeWebsocket(changeID, websocketID string) (*websock
 	return conn, err
 }
 
+// JSONWriter is an interface that can write a value as JSON, for example,
+// a *websocket.Conn used for sending commands to an executing program's
+// "control" websocket.
+type JSONWriter interface {
+	WriteJSON(v interface{}) error
+}
+
 type execCommand struct {
 	Command string            `json:"command"`
-	Args    map[string]string `json:"args"`
-	Signal  int               `json:"signal"`
+	Args    map[string]string `json:"args,omitempty"`
+	Signal  int               `json:"signal,omitempty"`
 }
 
 // ExecSendTermSize sends a window-resize message to the Exec control websocket.
-func ExecSendTermSize(conn *websocket.Conn, width, height int) error {
+func ExecSendTermSize(conn JSONWriter, width, height int) error {
 	msg := execCommand{
 		Command: "window-resize",
 		Args: map[string]string{
@@ -264,7 +271,7 @@ func ExecSendTermSize(conn *websocket.Conn, width, height int) error {
 }
 
 // ExecForwardSignal forwards a signal to the Exec control websocket.
-func ExecForwardSignal(conn *websocket.Conn, signal int) error {
+func ExecForwardSignal(conn JSONWriter, signal int) error {
 	msg := execCommand{
 		Command: "signal",
 		Signal:  signal,

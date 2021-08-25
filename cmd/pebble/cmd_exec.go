@@ -124,7 +124,7 @@ func (cmd *cmdExec) Execute(args []string) error {
 		terminal = stdinTerminal && stdoutTerminal
 	}
 
-	// Record terminal state
+	// Record terminal state (and restore it later)
 	if terminal && stdinTerminal {
 		oldState, err := ptyutil.MakeRaw(unix.Stdin)
 		if err != nil {
