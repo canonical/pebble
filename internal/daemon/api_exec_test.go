@@ -20,6 +20,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"os/exec"
 	"os/user"
 	"strconv"
 	"strings"
@@ -164,6 +165,20 @@ func (s *execSuite) TestUserIDGroupID(c *C) {
 	c.Check(exitCode, Equals, 0)
 }
 
+func (s *execSuite) TestTerminal(c *C) {
+	if _, err := exec.LookPath("python3"); err != nil {
+		c.Skip("test requires python3")
+	}
+	changeErr, stdout, stderr, exitCode := s.exec(c, "", &client.ExecOptions{
+		Command:  []string{"python3", "-c", "import sys; sys.exit(42 if sys.stdin.isatty() else 0)"},
+		Terminal: true,
+	})
+	c.Check(changeErr, Equals, "")
+	c.Check(stdout, Equals, "")
+	c.Check(stderr, Equals, "")
+	c.Check(exitCode, Equals, 42)
+}
+
 func (s *execSuite) exec(c *C, stdin string, opts *client.ExecOptions) (changeErr, stdout, stderr string, exitCode int) {
 	outBuf := &bytes.Buffer{}
 	errBuf := &bytes.Buffer{}
@@ -175,7 +190,7 @@ func (s *execSuite) exec(c *C, stdin string, opts *client.ExecOptions) (changeEr
 		DataDone: make(chan bool),
 	}
 	changeID, err := s.client.Exec(opts, args)
-	c.Check(err, IsNil)
+	c.Assert(err, IsNil)
 
 	change, err := s.client.WaitChange(changeID, nil)
 	c.Check(err, IsNil)
@@ -252,6 +267,8 @@ type execResponse struct {
 	Result     map[string]interface{} `json:"result"`
 }
 
+// execRequest directly calls exec via the ServeHTTP endpoint, rather than
+// going through the Go client.
 func execRequest(c *C, options *client.ExecOptions) (*http.Response, execResponse) {
 	var payload = struct {
 		Command     []string          `json:"command"`
