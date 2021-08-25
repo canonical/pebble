@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"golang.org/x/sys/unix"
 	. "gopkg.in/check.v1"
 
 	"github.com/canonical/pebble/client"
@@ -109,7 +110,7 @@ func (s *execSuite) TestWorkingDir(c *C) {
 
 func (s *execSuite) TestTimeout(c *C) {
 	changeErr, stdout, stderr, exitCode := s.exec(c, "", &client.ExecOptions{
-		Command: []string{"sleep", "0.1"},
+		Command: []string{"sleep", "1"},
 		Stderr:  true,
 		Timeout: time.Millisecond,
 	})
@@ -188,6 +189,42 @@ func (s *execSuite) exec(c *C, stdin string, opts *client.ExecOptions) (changeEr
 	<-args.DataDone
 
 	return change.Err, outBuf.String(), errBuf.String(), exitCode
+}
+
+func (s *execSuite) TestSignal(c *C) {
+	opts := &client.ExecOptions{
+		Command: []string{"sleep", "1"},
+		Stderr:  true,
+	}
+	signalCh := make(chan int, 1)
+	args := &client.ExecAdditionalArgs{
+		Stdin:  ioutil.NopCloser(strings.NewReader("")),
+		Stdout: ioutil.Discard,
+		Stderr: ioutil.Discard,
+		Control: func(conn *websocket.Conn) {
+			signal := <-signalCh
+			err := client.ExecForwardSignal(conn, signal)
+			c.Check(err, IsNil)
+		},
+	}
+	changeID, err := s.client.Exec(opts, args)
+	c.Assert(err, IsNil)
+
+	select {
+	case signalCh <- int(unix.SIGINT):
+	case <-time.After(time.Second):
+		c.Fatalf("timed out sending to signal channel")
+	}
+
+	change, err := s.client.WaitChange(changeID, nil)
+	c.Check(err, IsNil)
+	c.Check(change.Ready, Equals, true)
+	c.Check(change.Err, Equals, "")
+
+	var exitCode int
+	err = change.Get("return", &exitCode)
+	c.Check(err, IsNil)
+	c.Check(exitCode, Equals, 130)
 }
 
 func (s *execSuite) TestNoCommand(c *C) {

@@ -347,94 +347,7 @@ func (s *execWs) do(ctx context.Context, change *state.Change) error {
 			ptyutil.SetSize(int(ptys[0].Fd()), s.width, s.height)
 		}
 
-		go func() {
-			logger.Debugf("Interactive child process handler waiting")
-			defer logger.Debugf("Interactive child process handler finished")
-			attachedChildPid := <-attachedChildIsBorn
-
-			select {
-			case <-s.controlConnected:
-				break
-
-			case <-controlExit:
-				return
-			}
-
-			logger.Debugf("Interactive child process handler started for child PID %d", attachedChildPid)
-			for {
-				s.connsLock.Lock()
-				conn := s.conns[wsControl]
-				s.connsLock.Unlock()
-
-				mt, r, err := conn.NextReader()
-				if mt == websocket.CloseMessage {
-					break
-				}
-
-				if err != nil {
-					logger.Debugf("Got error getting next reader for child PID %d: %v", attachedChildPid, err)
-					er, ok := err.(*websocket.CloseError)
-					if !ok {
-						break
-					}
-
-					if er.Code != websocket.CloseAbnormalClosure {
-						break
-					}
-
-					// If an abnormal closure occurred, kill the attached process.
-					err := unix.Kill(attachedChildPid, unix.SIGKILL)
-					if err != nil {
-						logger.Noticef("Failed to send SIGKILL to pid %d", attachedChildPid)
-					} else {
-						logger.Noticef("Sent SIGKILL to pid %d", attachedChildPid)
-					}
-					return
-				}
-
-				buf, err := ioutil.ReadAll(r)
-				if err != nil {
-					logger.Noticef("Failed to read message %s", err)
-					break
-				}
-
-				var command struct {
-					Command string            `json:"command"`
-					Args    map[string]string `json:"args"`
-					Signal  int               `json:"signal"`
-				}
-				if err := json.Unmarshal(buf, &command); err != nil {
-					logger.Noticef("Failed to unmarshal control socket command: %s", err)
-					continue
-				}
-
-				if command.Command == "window-resize" {
-					winchWidth, err := strconv.Atoi(command.Args["width"])
-					if err != nil {
-						logger.Noticef("Unable to extract window width: %s", err)
-						continue
-					}
-
-					winchHeight, err := strconv.Atoi(command.Args["height"])
-					if err != nil {
-						logger.Noticef("Unable to extract window height: %s", err)
-						continue
-					}
-
-					ptyutil.SetSize(int(ptys[0].Fd()), winchWidth, winchHeight)
-					if err != nil {
-						logger.Noticef("Failed to set window size to: %dx%d", winchWidth, winchHeight)
-						continue
-					}
-				} else if command.Command == "signal" {
-					if err := unix.Kill(attachedChildPid, unix.Signal(command.Signal)); err != nil {
-						logger.Noticef("Failed forwarding signal '%d' to PID %d", command.Signal, attachedChildPid)
-						continue
-					}
-					logger.Noticef("Forwarded signal '%d' to PID %d", command.Signal, attachedChildPid)
-				}
-			}
-		}()
+		go s.controlLoop(attachedChildIsBorn, controlExit, int(ptys[0].Fd()))
 
 		wgEOF.Add(1)
 		go func() {
@@ -453,7 +366,7 @@ func (s *execWs) do(ctx context.Context, change *state.Change) error {
 			wgEOF.Done()
 		}()
 	} else {
-		// TODO: need to run control handler in !Terminal mode too (signals only)
+		go s.controlLoop(attachedChildIsBorn, controlExit, -1)
 
 		// Receive stdin from "io" websocket, write to cmd.Stdin pipe
 		s.connsLock.Lock()
@@ -519,9 +432,7 @@ func (s *execWs) do(ctx context.Context, change *state.Change) error {
 		s.connsLock.Unlock()
 
 		if conn == nil {
-			if s.terminal {
-				controlExit <- true
-			}
+			controlExit <- true
 		} else {
 			conn.Close()
 		}
@@ -584,9 +495,7 @@ func (s *execWs) do(ctx context.Context, change *state.Change) error {
 		return finisher(-1, err)
 	}
 
-	if s.terminal {
-		attachedChildIsBorn <- cmd.Process.Pid
-	}
+	attachedChildIsBorn <- cmd.Process.Pid
 
 	err = cmd.Wait()
 
@@ -616,4 +525,97 @@ func setApiData(change *state.Change, cmdResult int) {
 	change.Set("api-data", map[string]interface{}{
 		"return": cmdResult,
 	})
+}
+
+func (s *execWs) controlLoop(pidCh <-chan int, exitCh <-chan bool, ptyFd int) {
+	logger.Debugf("Control handler waiting")
+	defer logger.Debugf("Control handler finished")
+
+	pid := <-pidCh
+
+	select {
+	case <-s.controlConnected:
+		break
+	case <-exitCh:
+		return
+	}
+
+	logger.Debugf("Control handler started for child PID %d", pid)
+	for {
+		s.connsLock.Lock()
+		conn := s.conns[wsControl]
+		s.connsLock.Unlock()
+
+		mt, r, err := conn.NextReader()
+		if mt == websocket.CloseMessage {
+			break
+		}
+
+		if err != nil {
+			logger.Debugf("Got error getting next reader for child PID %d: %v", pid, err)
+			er, ok := err.(*websocket.CloseError)
+			if !ok {
+				break
+			}
+
+			if er.Code != websocket.CloseAbnormalClosure {
+				break
+			}
+
+			// If an abnormal closure occurred, kill the attached process.
+			err := unix.Kill(pid, unix.SIGKILL)
+			if err != nil {
+				logger.Noticef("Failed to send SIGKILL to pid %d", pid)
+			} else {
+				logger.Noticef("Sent SIGKILL to pid %d", pid)
+			}
+			return
+		}
+
+		buf, err := ioutil.ReadAll(r)
+		if err != nil {
+			logger.Noticef("Failed to read message %s", err)
+			break
+		}
+
+		var command struct {
+			Command string            `json:"command"`
+			Args    map[string]string `json:"args"`
+			Signal  int               `json:"signal"`
+		}
+		if err := json.Unmarshal(buf, &command); err != nil {
+			logger.Noticef("Failed to unmarshal control socket command: %s", err)
+			continue
+		}
+
+		switch {
+		case command.Command == "window-resize" && s.terminal:
+			logger.Debugf("Received 'window-resize' command with size %sx%s",
+				command.Args["width"], command.Args["height"])
+			width, err := strconv.Atoi(command.Args["width"])
+			if err != nil {
+				logger.Noticef("Unable to extract window width: %s", err)
+				continue
+			}
+			height, err := strconv.Atoi(command.Args["height"])
+			if err != nil {
+				logger.Noticef("Unable to extract window height: %s", err)
+				continue
+			}
+			err = ptyutil.SetSize(ptyFd, width, height)
+			if err != nil {
+				logger.Noticef("Failed to set window size to: %dx%d", width, height)
+				continue
+			}
+		case command.Command == "signal":
+			logger.Debugf("Received 'signal' command with signal %d", command.Signal)
+			if err := unix.Kill(pid, unix.Signal(command.Signal)); err != nil {
+				logger.Noticef("Failed forwarding signal '%d' to PID %d", command.Signal, pid)
+				continue
+			}
+			logger.Noticef("Forwarded signal '%d' to PID %d", command.Signal, pid)
+		default:
+			logger.Noticef("Invalid command %q", command.Command)
+		}
+	}
 }
