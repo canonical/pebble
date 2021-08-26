@@ -190,14 +190,14 @@ func (cmd *cmdExec) Execute(args []string) error {
 	if change.Err != "" {
 		return errors.New(change.Err)
 	}
-	var returnCode int
-	err = change.Get("return", &returnCode)
+	var exitCode int
+	err = change.Get("return", &exitCode)
 	if err != nil {
 		return err
 	}
-	if returnCode != 0 {
-		logger.Debugf("Process exited with return code %d", returnCode)
-		panic(&exitStatus{returnCode})
+	if exitCode != 0 {
+		logger.Debugf("Process exited with return code %d", exitCode)
+		return &exitStatus{exitCode}
 	}
 
 	// Wait for any remaining I/O to be flushed

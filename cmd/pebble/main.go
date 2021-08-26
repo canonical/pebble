@@ -321,11 +321,19 @@ func main() {
 	}()
 
 	if err := run(); err != nil {
+		var status *exitStatus
+		if errors.As(err, &status) {
+			os.Exit(status.code)
+		}
 		fmt.Fprintf(Stderr, errorPrefix+"%v\n", err)
 		os.Exit(1)
 	}
 }
 
+// exitStatus can be returned as an error from commands to have Pebble exit
+// with the given exit code. Pebble's main function also recovers from a
+// panic(&exitStatus{code}), for the rare cases when an error return is not
+// possible.
 type exitStatus struct {
 	code int
 }

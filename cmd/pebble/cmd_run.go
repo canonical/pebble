@@ -70,10 +70,10 @@ func (rcmd *cmdRun) Execute(args []string) error {
 			// No "error: " prefix as this isn't an error.
 			fmt.Fprintf(os.Stdout, "%v\n", err)
 			// This exit code must be in system'd SuccessExitStatus.
-			panic(&exitStatus{42})
+			return &exitStatus{42}
 		}
 		fmt.Fprintf(os.Stderr, "cannot run pebble: %v\n", err)
-		panic(&exitStatus{1})
+		return &exitStatus{1}
 	}
 
 	return nil
