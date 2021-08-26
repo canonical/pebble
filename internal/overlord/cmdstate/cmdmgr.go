@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"os/user"
 	"strconv"
 	"sync"
 	"syscall"
@@ -89,21 +90,30 @@ func Exec(st *state.State, args *ExecArgs) (*state.Change, ExecMetadata, error) 
 		env[k] = v
 	}
 
-	// Set default value for PATH
+	// Set a reasonable default for PATH
 	_, ok := env["PATH"]
 	if !ok {
 		env["PATH"] = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 	}
 
-	// If running as root, set some environment variable defaults
-	if args.UserID != nil && *args.UserID == 0 {
-		_, ok = env["HOME"]
-		if !ok {
-			env["HOME"] = "/root"
+	// Set HOME and USER based on the UserID
+	if env["HOME"] == "" || env["USER"] == "" {
+		var userID int
+		if args.UserID != nil {
+			userID = *args.UserID
+		} else {
+			userID = os.Getuid()
 		}
-		_, ok = env["USER"]
-		if !ok {
-			env["USER"] = "root"
+		u, err := user.LookupId(strconv.Itoa(userID))
+		if err != nil {
+			logger.Noticef("Failed to look up user %d: %v", userID, err)
+		} else {
+			if env["HOME"] == "" {
+				env["HOME"] = u.HomeDir
+			}
+			if env["USER"] == "" {
+				env["USER"] = u.Username
+			}
 		}
 	}
 
