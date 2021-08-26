@@ -30,7 +30,7 @@ var _ = Suite(&execSuite{})
 
 func (s *execSuite) TestForwardSignal(c *C) {
 	buf := &bytes.Buffer{}
-	w := testWebsocketConn{w: buf}
+	w := testWebsocketWriter{buf}
 
 	err := client.ExecForwardSignal(w, 1)
 	c.Check(err, IsNil)
@@ -45,7 +45,7 @@ func (s *execSuite) TestForwardSignal(c *C) {
 
 func (s *execSuite) TestSendTermSize(c *C) {
 	buf := &bytes.Buffer{}
-	w := testWebsocketConn{w: buf}
+	w := testWebsocketWriter{buf}
 
 	err := client.ExecSendTermSize(w, 150, 50)
 	c.Check(err, IsNil)
@@ -58,12 +58,15 @@ func (s *execSuite) TestSendTermSize(c *C) {
 `[1:])
 }
 
-type testWebsocketConn struct {
+type testWebsocketWriter struct {
 	w io.Writer
-	client.WebsocketConn
 }
 
-func (w testWebsocketConn) WriteJSON(v interface{}) error {
+func (w testWebsocketWriter) WriteMessage(messageType int, data []byte) error {
+	panic("not implemented")
+}
+
+func (w testWebsocketWriter) WriteJSON(v interface{}) error {
 	encoder := json.NewEncoder(w.w)
 	return encoder.Encode(v)
 }
