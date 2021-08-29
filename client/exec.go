@@ -58,9 +58,15 @@ type ExecOptions struct {
 
 	// True to separate the process's stderr into a separate websocket. The
 	// default is to send combined stdout+stderr on a single websocket.
+	//
+	// Note: currently only the combinations Terminal=true, Stderr=false and
+	// Terminal=false, Stderr=true are supported.
 	Stderr bool
 
-	// Initial terminal width and height (only apply if Terminal is true)
+	// Initial terminal width and height (only apply if Terminal is true).
+	// If not specified, the Pebble server uses the target's default (usually
+	// 80x25). When using the "pebble exec" CLI, these are set to the host's
+	// terminal size automatically.
 	Width  int
 	Height int
 }
