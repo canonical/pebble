@@ -203,13 +203,16 @@ func v1GetChangeWait(c *Command, r *http.Request, _ *userState) Response {
 		case <-change.Ready():
 			timer.Stop() // change ready, release timer resources
 		case <-timer.C:
+			return statusGatewayTimeout("timed out waiting for change after %s", timeout)
 		case <-r.Context().Done():
+			return statusInternalError("request cancelled")
 		}
 	} else {
 		// No timeout, wait indefinitely for change to be ready.
 		select {
 		case <-change.Ready():
 		case <-r.Context().Done():
+			return statusInternalError("request cancelled")
 		}
 	}
 

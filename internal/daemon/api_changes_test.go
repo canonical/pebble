@@ -16,6 +16,7 @@ package daemon
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -365,7 +366,7 @@ func (s *apiSuite) TestStateChangeAbortIsReady(c *check.C) {
 	})
 }
 
-func (s *apiSuite) TestStateChangeNotFound(c *check.C) {
+func (s *apiSuite) TestWaitChangeNotFound(c *check.C) {
 	s.daemon(c)
 	req, err := http.NewRequest("GET", "/v1/changes/x/wait", nil)
 	c.Assert(err, check.IsNil)
@@ -373,43 +374,72 @@ func (s *apiSuite) TestStateChangeNotFound(c *check.C) {
 	c.Check(rsp.Status, check.Equals, 404)
 }
 
-func (s *apiSuite) TestStateChangeInvalidTimeout(c *check.C) {
-	// Setup
-	d := s.daemon(c)
-	st := d.overlord.State()
-	st.Lock()
-	change := st.NewChange("exec", "Exec")
-	task := st.NewTask("exec", "Exec")
-	change.AddAll(state.NewTaskSet(task))
-	st.Unlock()
-
-	// Execute
-	s.vars = map[string]string{"id": change.ID()}
-	req, err := http.NewRequest("GET", "/v1/changes/"+change.ID()+"/wait?timeout=BAD", nil)
-	c.Assert(err, check.IsNil)
-	rsp := v1GetChangeWait(apiCmd("/v1/changes/{id}/wait"), req, nil).(*resp)
-
-	// Verify
+func (s *apiSuite) TestWaitChangeInvalidTimeout(c *check.C) {
+	rec, rsp, _ := s.testWaitChange(context.Background(), c, "?timeout=BAD", nil)
+	c.Check(rec.Code, check.Equals, 400)
 	c.Check(rsp.Status, check.Equals, 400)
+	c.Check(rsp.Type, check.Equals, ResponseTypeError)
+	result := rsp.Result.(*errorResult)
+	c.Check(result.Message, check.Matches, "invalid timeout .*")
 }
 
-func (s *apiSuite) TestStateChangeWait(c *check.C) {
-	ready := s.testStateChangeWait(c, "", func(st *state.State, change *state.Change) {
+func (s *apiSuite) TestWaitChangeSuccess(c *check.C) {
+	rec, rsp, changeID := s.testWaitChange(context.Background(), c, "", func(st *state.State, change *state.Change) {
 		// Mark change ready after a short interval
 		time.Sleep(10 * time.Millisecond)
 		st.Lock()
 		change.SetStatus(state.DoneStatus)
 		st.Unlock()
 	})
-	c.Check(ready, check.Equals, true)
+
+	c.Check(rec.Code, check.Equals, 200)
+	c.Check(rsp.Status, check.Equals, 200)
+	c.Check(rsp.Type, check.Equals, ResponseTypeSync)
+	c.Check(rsp.Result, check.NotNil)
+
+	var body map[string]interface{}
+	err := json.Unmarshal(rec.Body.Bytes(), &body)
+	c.Check(err, check.IsNil)
+	result := body["result"].(map[string]interface{})
+	c.Check(result["id"].(string), check.Equals, changeID)
+	c.Check(result["kind"].(string), check.Equals, "exec")
+	c.Check(result["ready"].(bool), check.Equals, true)
 }
 
-func (s *apiSuite) TestStateChangeWaitTimeout(c *check.C) {
-	ready := s.testStateChangeWait(c, "?timeout=10ms", func(st *state.State, change *state.Change) {})
-	c.Check(ready, check.Equals, false)
+func (s *apiSuite) TestWaitChangeCancel(c *check.C) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	defer cancel()
+
+	rec, rsp, _ := s.testWaitChange(ctx, c, "", nil)
+	c.Check(rec.Code, check.Equals, 500)
+	c.Check(rsp.Status, check.Equals, 500)
+	c.Check(rsp.Type, check.Equals, ResponseTypeError)
+	result := rsp.Result.(*errorResult)
+	c.Check(result.Message, check.Equals, "request cancelled")
 }
 
-func (s *apiSuite) testStateChangeWait(c *check.C, query string, markReady func(st *state.State, change *state.Change)) bool {
+func (s *apiSuite) TestWaitChangeTimeout(c *check.C) {
+	rec, rsp, _ := s.testWaitChange(context.Background(), c, "?timeout=10ms", nil)
+	c.Check(rec.Code, check.Equals, 504)
+	c.Check(rsp.Status, check.Equals, 504)
+	c.Check(rsp.Type, check.Equals, ResponseTypeError)
+	result := rsp.Result.(*errorResult)
+	c.Check(result.Message, check.Matches, "timed out waiting for change .*")
+}
+
+func (s *apiSuite) TestWaitChangeTimeoutCancel(c *check.C) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	defer cancel()
+
+	rec, rsp, _ := s.testWaitChange(ctx, c, "?timeout=20ms", nil)
+	c.Check(rec.Code, check.Equals, 500)
+	c.Check(rsp.Status, check.Equals, 500)
+	c.Check(rsp.Type, check.Equals, ResponseTypeError)
+	result := rsp.Result.(*errorResult)
+	c.Check(result.Message, check.Equals, "request cancelled")
+}
+
+func (s *apiSuite) testWaitChange(ctx context.Context, c *check.C, query string, markReady func(st *state.State, change *state.Change)) (*httptest.ResponseRecorder, *resp, string) {
 	// Setup
 	d := s.daemon(c)
 	st := d.overlord.State()
@@ -418,26 +448,17 @@ func (s *apiSuite) testStateChangeWait(c *check.C, query string, markReady func(
 	task := st.NewTask("exec", "Exec")
 	change.AddAll(state.NewTaskSet(task))
 	st.Unlock()
-	go markReady(st, change)
+
+	if markReady != nil {
+		go markReady(st, change)
+	}
 
 	// Execute
 	s.vars = map[string]string{"id": change.ID()}
-	req, err := http.NewRequest("GET", "/v1/changes/"+change.ID()+"/wait"+query, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", "/v1/changes/"+change.ID()+"/wait"+query, nil)
 	c.Assert(err, check.IsNil)
 	rsp := v1GetChangeWait(apiCmd("/v1/changes/{id}/wait"), req, nil).(*resp)
 	rec := httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)
-
-	// Verify
-	c.Check(rec.Code, check.Equals, 200)
-	c.Check(rsp.Status, check.Equals, 200)
-	c.Check(rsp.Result, check.NotNil)
-
-	var body map[string]interface{}
-	err = json.Unmarshal(rec.Body.Bytes(), &body)
-	c.Check(err, check.IsNil)
-	result := body["result"].(map[string]interface{})
-	c.Check(result["id"].(string), check.Equals, change.ID())
-	c.Check(result["kind"].(string), check.Equals, "exec")
-	return result["ready"].(bool)
+	return rec, rsp, change.ID()
 }
