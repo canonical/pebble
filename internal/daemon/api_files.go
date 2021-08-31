@@ -428,7 +428,7 @@ func writeFiles(body io.Reader, boundary string) Response {
 		if part.FormName() != "files" {
 			return statusBadRequest(`field name must be "files", got %q`, part.FormName())
 		}
-		path := part.FileName()
+		path := multipartFilename(part)
 		info, ok := infos[path]
 		if !ok {
 			return statusBadRequest("no metadata for path %q", path)
@@ -451,6 +451,15 @@ func writeFiles(body io.Reader, boundary string) Response {
 		}
 	}
 	return SyncResponse(result)
+}
+
+// This is equivalent to part.FileName(), but in Go 1.17 that was changed to
+// call filepath.Base() on the result, stripping off the path, which our API
+// depends on. So roll our own, equivalent to the Go 1.16 version.
+func multipartFilename(part *multipart.Part) string {
+	contentDisposition := part.Header.Get("Content-Disposition")
+	_, params, _ := mime.ParseMediaType(contentDisposition)
+	return params["filename"]
 }
 
 func writeFile(item writeFilesItem, source io.Reader) error {

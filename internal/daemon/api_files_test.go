@@ -1054,21 +1054,33 @@ func readMultipart(c *C, response *http.Response, body io.Reader, result interfa
 	c.Assert(mediaType, Equals, "multipart/form-data")
 	c.Assert(params["boundary"], Not(Equals), "")
 	mr := multipart.NewReader(body, params["boundary"])
-	form, err := mr.ReadForm(4096)
-	c.Assert(err, IsNil)
 
-	err = json.Unmarshal([]byte(form.Value["response"][0]), result)
-	c.Assert(err, IsNil)
-
+	// First decode all the files
 	files := make(map[string]string)
-	for _, fh := range form.File["files"] {
-		f, err := fh.Open()
+	var part *multipart.Part
+	for {
+		part, err = mr.NextPart()
 		c.Assert(err, IsNil)
-		b, err := ioutil.ReadAll(f)
+		if part.FormName() != "files" {
+			break
+		}
+		b, err := ioutil.ReadAll(part)
 		c.Assert(err, IsNil)
-		_ = f.Close()
-		files[fh.Filename] = string(b)
+		files[multipartFilename(part)] = string(b)
+		part.Close()
 	}
+
+	// Then decode "response" JSON at the end
+	c.Assert(part.FormName(), Equals, "response")
+	decoder := json.NewDecoder(part)
+	err = decoder.Decode(result)
+	c.Assert(err, IsNil)
+	part.Close()
+
+	// Ensure that was the last part
+	_, err = mr.NextPart()
+	c.Assert(err, Equals, io.EOF)
+
 	return files
 }
 

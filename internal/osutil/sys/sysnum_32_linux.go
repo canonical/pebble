@@ -1,4 +1,5 @@
 // -*- Mode: Go; indent-tabs-mode: t -*-
+//go:build arm64 || amd64 || ppc64le || s390x || ppc
 // +build arm64 amd64 ppc64le s390x ppc
 
 /*
