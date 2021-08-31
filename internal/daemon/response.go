@@ -194,12 +194,11 @@ type errorResponder func(string, ...interface{}) Response
 
 // Standard error responses.
 var (
-	statusUnauthorized     = makeErrorResponder(401)
-	statusNotFound         = makeErrorResponder(404)
 	statusBadRequest       = makeErrorResponder(400)
+	statusUnauthorized     = makeErrorResponder(401)
+	statusForbidden        = makeErrorResponder(403)
+	statusNotFound         = makeErrorResponder(404)
 	statusMethodNotAllowed = makeErrorResponder(405)
 	statusInternalError    = makeErrorResponder(500)
-	statusNotImplemented   = makeErrorResponder(501)
-	statusForbidden        = makeErrorResponder(403)
-	statusConflict         = makeErrorResponder(409)
+	statusGatewayTimeout   = makeErrorResponder(504)
 )
