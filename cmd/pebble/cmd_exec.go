@@ -181,12 +181,6 @@ func (cmd *cmdExec) Execute(args []string) error {
 	if err != nil {
 		return err
 	}
-	if !change.Ready {
-		// This case shouldn't happen (because the change should either be ready,
-		// or if a timeout was specified it will apply at the Exec level and the
-		// change will be Ready but in an error state), but handle just in case.
-		return errors.New("command unexpectedly not finished after waiting for change")
-	}
 	if change.Err != "" {
 		return errors.New(change.Err)
 	}
