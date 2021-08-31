@@ -15,6 +15,7 @@
 package client_test
 
 import (
+	"fmt"
 	"io/ioutil"
 	"time"
 
@@ -54,6 +55,49 @@ func (cs *clientSuite) TestClientChange(c *check.C) {
 		SpawnTime: time.Date(2016, 04, 21, 1, 2, 3, 0, time.UTC),
 		ReadyTime: time.Date(2016, 04, 21, 1, 2, 4, 0, time.UTC),
 	})
+}
+
+func (cs *clientSuite) TestClientWaitChange(c *check.C) {
+	cs.rsp = `{"type": "sync", "result": {
+  "id":   "uno",
+  "kind": "foo",
+  "summary": "...",
+  "status": "Do",
+  "ready": false,
+  "spawn-time": "2016-04-21T01:02:03Z",
+  "ready-time": "2016-04-21T01:02:04Z",
+  "tasks": [{"kind": "bar", "summary": "...", "status": "Do", "progress": {"done": 0, "total": 1}, "spawn-time": "2016-04-21T01:02:03Z", "ready-time": "2016-04-21T01:02:04Z"}]
+}}`
+
+	chg, err := cs.cli.WaitChange("foo", nil)
+	c.Assert(err, check.IsNil)
+	c.Assert(cs.req.URL.String(), check.Equals, "http://localhost/v1/changes/foo/wait")
+	c.Check(chg, check.DeepEquals, &client.Change{
+		ID:      "uno",
+		Kind:    "foo",
+		Summary: "...",
+		Status:  "Do",
+		Tasks: []*client.Task{{
+			Kind:      "bar",
+			Summary:   "...",
+			Status:    "Do",
+			Progress:  client.TaskProgress{Done: 0, Total: 1},
+			SpawnTime: time.Date(2016, 04, 21, 1, 2, 3, 0, time.UTC),
+			ReadyTime: time.Date(2016, 04, 21, 1, 2, 4, 0, time.UTC),
+		}},
+		SpawnTime: time.Date(2016, 04, 21, 1, 2, 3, 0, time.UTC),
+		ReadyTime: time.Date(2016, 04, 21, 1, 2, 4, 0, time.UTC),
+	})
+}
+
+func (cs *clientSuite) TestClientWaitChangeTimeout(c *check.C) {
+	cs.err = fmt.Errorf(`timed out waiting for change`)
+	opts := &client.WaitChangeOptions{
+		Timeout: 30 * time.Second,
+	}
+	_, err := cs.cli.WaitChange("bar", opts)
+	c.Assert(cs.req.URL.String(), check.Equals, "http://localhost/v1/changes/bar/wait?timeout=30s")
+	c.Assert(err, check.ErrorMatches, `.*timed out waiting for change.*`)
 }
 
 func (cs *clientSuite) TestClientChangeData(c *check.C) {

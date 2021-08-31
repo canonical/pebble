@@ -157,3 +157,30 @@ func (client *Client) Changes(opts *ChangesOptions) ([]*Change, error) {
 
 	return chgs, err
 }
+
+// WaitChangeOptions holds the options for the WaitChange call.
+type WaitChangeOptions struct {
+	// If nonzero, wait at most this long before returning. If a timeout
+	// occurs, WaitChange will return an error.
+	Timeout time.Duration
+}
+
+// WaitChange waits for the change to be finished. If the wait operation
+// succeeds, the returned Change.Err string will be non-empty if the change
+// itself had an error.
+func (client *Client) WaitChange(id string, opts *WaitChangeOptions) (*Change, error) {
+	var chgd changeAndData
+
+	query := url.Values{}
+	if opts != nil && opts.Timeout != 0 {
+		query.Set("timeout", opts.Timeout.String())
+	}
+
+	_, err := client.doSync("GET", "/v1/changes/"+id+"/wait", query, nil, nil, &chgd)
+	if err != nil {
+		return nil, err
+	}
+
+	chgd.Change.data = chgd.Data
+	return &chgd.Change, nil
+}
