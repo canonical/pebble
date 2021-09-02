@@ -283,16 +283,16 @@ func (m *ServiceManager) StartOrder(services []string) ([]string, error) {
 	return m.plan.StartOrder(services)
 }
 
-// StartOrder returns the provided services, together with any required
-// dependencies, in the proper order for starting them all up.
-func (m *ServiceManager) StopOrder(services []string) ([]string, error) {
+// StopOrder returns the provided services, together with any dependants,
+// in the proper order for starting them all up.
+func (m *ServiceManager) StopOrder(services []string, includeDependants bool) ([]string, error) {
 	releasePlan, err := m.acquirePlan()
 	if err != nil {
 		return nil, err
 	}
 	defer releasePlan()
 
-	return m.plan.StopOrder(services)
+	return m.plan.StopOrder(services, includeDependants)
 }
 
 // ServiceLogs returns iterators to the provided services. If last is negative,
