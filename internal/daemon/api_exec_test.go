@@ -350,12 +350,16 @@ type execResponse struct {
 
 // execRequest directly calls exec via the ServeHTTP endpoint, rather than
 // going through the Go client.
-func execRequest(c *C, options *client.ExecOptions) (*http.Response, execResponse) {
+func execRequest(c *C, opts *client.ExecOptions) (*http.Response, execResponse) {
+	var timeoutStr string
+	if opts.Timeout != 0 {
+		timeoutStr = opts.Timeout.String()
+	}
 	var payload = struct {
 		Command     []string          `json:"command"`
 		Environment map[string]string `json:"environment"`
 		WorkingDir  string            `json:"working-dir"`
-		Timeout     time.Duration     `json:"timeout"`
+		Timeout     string            `json:"timeout"`
 		UserID      *int              `json:"user-id"`
 		User        string            `json:"user"`
 		GroupID     *int              `json:"group-id"`
@@ -364,7 +368,20 @@ func execRequest(c *C, options *client.ExecOptions) (*http.Response, execRespons
 		Stderr      bool              `json:"stderr"`
 		Width       int               `json:"width"`
 		Height      int               `json:"height"`
-	}(*options)
+	}{
+		Command:     opts.Command,
+		Environment: opts.Environment,
+		WorkingDir:  opts.WorkingDir,
+		Timeout:     timeoutStr,
+		UserID:      opts.UserID,
+		User:        opts.User,
+		GroupID:     opts.GroupID,
+		Group:       opts.Group,
+		Terminal:    opts.Terminal,
+		Stderr:      opts.Stderr,
+		Width:       opts.Width,
+		Height:      opts.Height,
+	}
 	requestBody, err := json.Marshal(payload)
 	c.Assert(err, IsNil)
 

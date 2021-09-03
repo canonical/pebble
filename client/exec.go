@@ -95,11 +95,16 @@ func (client *Client) Exec(opts *ExecOptions, args *ExecAdditionalArgs) (string,
 		return "", errors.New("combined stderr not currently supported in non-terminal mode")
 	}
 
+	var timeoutStr string
+	if opts.Timeout != 0 {
+		timeoutStr = opts.Timeout.String()
+	}
+
 	var payload = struct {
 		Command     []string          `json:"command"`
 		Environment map[string]string `json:"environment"`
 		WorkingDir  string            `json:"working-dir"`
-		Timeout     time.Duration     `json:"timeout"`
+		Timeout     string            `json:"timeout"`
 		UserID      *int              `json:"user-id"`
 		User        string            `json:"user"`
 		GroupID     *int              `json:"group-id"`
@@ -108,7 +113,20 @@ func (client *Client) Exec(opts *ExecOptions, args *ExecAdditionalArgs) (string,
 		Stderr      bool              `json:"stderr"`
 		Width       int               `json:"width"`
 		Height      int               `json:"height"`
-	}(*opts)
+	}{
+		Command:     opts.Command,
+		Environment: opts.Environment,
+		WorkingDir:  opts.WorkingDir,
+		Timeout:     timeoutStr,
+		UserID:      opts.UserID,
+		User:        opts.User,
+		GroupID:     opts.GroupID,
+		Group:       opts.Group,
+		Terminal:    opts.Terminal,
+		Stderr:      opts.Stderr,
+		Width:       opts.Width,
+		Height:      opts.Height,
+	}
 	var body bytes.Buffer
 	err := json.NewEncoder(&body).Encode(&payload)
 	if err != nil {

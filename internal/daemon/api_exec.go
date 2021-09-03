@@ -29,7 +29,7 @@ func v1PostExec(c *Command, req *http.Request, _ *userState) Response {
 		Command     []string          `json:"command"`
 		Environment map[string]string `json:"environment"`
 		WorkingDir  string            `json:"working-dir"`
-		Timeout     time.Duration     `json:"timeout"`
+		Timeout     string            `json:"timeout"`
 		UserID      *int              `json:"user-id"`
 		User        string            `json:"user"`
 		GroupID     *int              `json:"group-id"`
@@ -53,6 +53,15 @@ func v1PostExec(c *Command, req *http.Request, _ *userState) Response {
 		return statusBadRequest("combined stderr not currently supported in non-terminal mode")
 	}
 
+	var timeout time.Duration
+	if payload.Timeout != "" {
+		var err error
+		timeout, err = time.ParseDuration(payload.Timeout)
+		if err != nil {
+			return statusBadRequest("invalid timeout: %v", err)
+		}
+	}
+
 	// Check up-front that the executable exists.
 	_, err := exec.LookPath(payload.Command[0])
 	if err != nil {
@@ -73,7 +82,7 @@ func v1PostExec(c *Command, req *http.Request, _ *userState) Response {
 		Command:     payload.Command,
 		Environment: payload.Environment,
 		WorkingDir:  payload.WorkingDir,
-		Timeout:     payload.Timeout,
+		Timeout:     timeout,
 		UserID:      uid,
 		GroupID:     gid,
 		Terminal:    payload.Terminal,
