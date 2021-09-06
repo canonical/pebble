@@ -394,6 +394,6 @@ func execRequest(c *C, opts *client.ExecOptions) (*http.Response, execResponse) 
 
 func getExitCode(c *C, change *client.Change) int {
 	exitCode := 1
-	_ = change.Get("return", &exitCode)
+	_ = change.Get("exit-code", &exitCode)
 	return exitCode
 }

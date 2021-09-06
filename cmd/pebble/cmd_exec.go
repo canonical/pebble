@@ -185,7 +185,7 @@ func (cmd *cmdExec) Execute(args []string) error {
 		return errors.New(change.Err)
 	}
 	var exitCode int
-	err = change.Get("return", &exitCode)
+	err = change.Get("exit-code", &exitCode)
 	if err != nil {
 		return err
 	}

@@ -428,7 +428,7 @@ func (s *execWs) do(ctx context.Context, change *state.Change) error {
 		}()
 	}
 
-	finisher := func(cmdResult int, cmdErr error) error {
+	finisher := func(exitCode int, cmdErr error) error {
 		for _, tty := range ttys {
 			tty.Close()
 		}
@@ -451,7 +451,7 @@ func (s *execWs) do(ctx context.Context, change *state.Change) error {
 			pty.Close()
 		}
 
-		setApiData(change, cmdResult)
+		setApiData(change, exitCode)
 
 		return cmdErr
 	}
@@ -524,12 +524,12 @@ func (s *execWs) do(ctx context.Context, change *state.Change) error {
 	return finisher(0, nil)
 }
 
-func setApiData(change *state.Change, cmdResult int) {
+func setApiData(change *state.Change, exitCode int) {
 	st := change.State()
 	st.Lock()
 	defer st.Unlock()
 	change.Set("api-data", map[string]interface{}{
-		"return": cmdResult,
+		"exit-code": exitCode,
 	})
 }
 
