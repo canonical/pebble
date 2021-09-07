@@ -109,7 +109,7 @@ func (s *daemonSuite) TestExplicitPaths(c *C) {
 }
 
 func (s *daemonSuite) TestCommandMethodDispatch(c *check.C) {
-	fakeUserAgent := "some-agent-talking-to-snapd/1.0"
+	fakeUserAgent := "some-agent-talking-to-pebble/1.0"
 
 	cmd := &Command{d: s.newDaemon(c)}
 	handler := &fakeHandler{cmd: cmd}
@@ -316,8 +316,8 @@ func (s *daemonSuite) TestUserAccess(c *check.C) {
 	c.Check(cmd.canAccess(get, nil), check.Equals, accessOK)
 	c.Check(cmd.canAccess(put, nil), check.Equals, accessUnauthorized)
 
-	// Since this request has a RemoteAddr, it must be coming from the snapd
-	// socket instead of the snap one. In that case, UntrustedOK should have no
+	// Since this request has a RemoteAddr, it must be coming from the pebble server
+	// socket instead of the pebble one. In that case, UntrustedOK should have no
 	// bearing on the default behavior, which is to deny access.
 	cmd = &Command{d: d, UntrustedOK: true}
 	c.Check(cmd.canAccess(get, nil), check.Equals, accessUnauthorized)
@@ -780,7 +780,7 @@ func (s *daemonSuite) TestRestartShutdownWithSigtermInBetween(c *check.C) {
 }
 
 // This test tests that when there is a shutdown we close the sigterm
-// handler so that systemd can kill snapd.
+// handler so that systemd can kill pebble.
 func (s *daemonSuite) TestRestartShutdown(c *check.C) {
 	oldRebootNoticeWait := rebootNoticeWait
 	oldRebootWaitTimeout := rebootWaitTimeout

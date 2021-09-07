@@ -19,9 +19,9 @@ import (
 	"fmt"
 	"net/http"
 	"path/filepath"
+	"time"
 
 	"github.com/canonical/pebble/internal/logger"
-	"time"
 )
 
 type ResponseType string

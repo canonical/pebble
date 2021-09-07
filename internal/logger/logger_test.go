@@ -55,7 +55,7 @@ func (s *LogSuite) TestDebugf(c *C) {
 
 func (s *LogSuite) TestDebugfEnv(c *C) {
 	os.Setenv("PEBBLE_DEBUG", "1")
-	defer os.Unsetenv("SNAPD_DEBUG")
+	defer os.Unsetenv("PEBBLE_DEBUG")
 
 	logger.Debugf("xyzzy")
 	c.Check(s.logbuf.String(), Matches, `.* PREFIX: DEBUG xyzzy.*\n`)

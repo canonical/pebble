@@ -57,7 +57,7 @@ func SizeToStr(size int64) string {
 }
 
 // Quoted formats a slice of strings to a quoted list of
-// comma-separated strings, e.g. `"snap1", "snap2"`
+// comma-separated strings, e.g. `"foo", "bar"`
 func Quoted(names []string) string {
 	quoted := make([]string, len(names))
 	for i, name := range names {

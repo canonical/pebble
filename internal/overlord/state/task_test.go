@@ -174,9 +174,9 @@ func (ts *taskSuite) TestProgressAndSetProgress(c *C) {
 
 	t := st.NewTask("download", "1...")
 
-	t.SetProgress("snap", 2, 99)
+	t.SetProgress("foo", 2, 99)
 	label, cur, tot := t.Progress()
-	c.Check(label, Equals, "snap")
+	c.Check(label, Equals, "foo")
 	c.Check(cur, Equals, 2)
 	c.Check(tot, Equals, 99)
 
