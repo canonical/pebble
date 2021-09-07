@@ -219,7 +219,10 @@ func getWsAndCacheKey(change *state.Change) (*execWs, string, error) {
 		return nil, "", err
 	}
 
-	ws := st.Cached("exec-" + cacheKey).(*execWs)
+	ws, ok := st.Cached("exec-" + cacheKey).(*execWs)
+	if !ok {
+		return nil, "", fmt.Errorf("exec for change %q no longer active", change.ID())
+	}
 	return ws, cacheKey, nil
 }
 
