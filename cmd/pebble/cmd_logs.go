@@ -107,7 +107,7 @@ func (cmd *cmdLogs) Execute(args []string) error {
 // Needed because signal.NotifyContext is Go 1.16+
 func notifyContext(parent context.Context, signals ...os.Signal) context.Context {
 	ctx, cancel := context.WithCancel(parent)
-	ch := make(chan os.Signal)
+	ch := make(chan os.Signal, 10)
 	signal.Notify(ch, signals...)
 	go func() {
 		// Wait for signal, then cancel the context.

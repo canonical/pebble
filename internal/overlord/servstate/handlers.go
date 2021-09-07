@@ -164,7 +164,7 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 		}
 		return fmt.Errorf("cannot start service: exited quickly with code %d", cmd.ProcessState.ExitCode())
 	}
-	panic("unreachable")
+	// unreachable
 }
 
 func (m *ServiceManager) doStop(task *state.Task, tomb *tomb.Tomb) error {
@@ -214,7 +214,7 @@ func (m *ServiceManager) doStop(task *state.Task, tomb *tomb.Tomb) error {
 			return nil
 		}
 	}
-	panic("unreachable")
+	// unreachable
 }
 
 var setCmdCredential = func(cmd *exec.Cmd, credential *syscall.Credential) {
