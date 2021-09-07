@@ -543,7 +543,7 @@ func (d *Daemon) Stop(sigCh chan<- os.Signal) error {
 		// those open requests resulted in something that
 		// prevents us from going into socket activation mode.
 		//
-		// If this is the case we do a "normal" snapd restart
+		// If this is the case we do a "normal" pebble restart
 		// to process the new changes.
 		if !d.standbyOpinions.CanStandby() {
 			d.restartSocket = false
@@ -555,7 +555,7 @@ func (d *Daemon) Stop(sigCh chan<- os.Signal) error {
 	if err != nil {
 		// do not stop the shutdown even if the tomb errors
 		// because we already scheduled a slow shutdown and
-		// exiting here will just restart snapd (via systemd)
+		// exiting here will just restart pebble (via systemd)
 		// which will lead to confusing results.
 		if restartSystem {
 			logger.Noticef("WARNING: cannot stop daemon: %v", err)
@@ -589,7 +589,7 @@ func (d *Daemon) rebootDelay() (time.Duration, error) {
 	if err == nil {
 		rebootDelay = rebootAt.Sub(now)
 	} else {
-		ovr := os.Getenv("SNAPD_REBOOT_DELAY") // for tests
+		ovr := os.Getenv("PEBBLE_REBOOT_DELAY") // for tests
 		if ovr != "" {
 			d, err := time.ParseDuration(ovr)
 			if err == nil {
@@ -608,7 +608,7 @@ func (d *Daemon) doReboot(sigCh chan<- os.Signal, waitTimeout time.Duration) err
 		return err
 	}
 	// ask for shutdown and wait for it to happen.
-	// if we exit snapd will be restared by systemd
+	// if we exit, pebble will be restarted by systemd
 	if err := reboot(rebootDelay); err != nil {
 		return err
 	}
@@ -674,12 +674,12 @@ func (d *Daemon) RebootIsMissing(st *state.State) error {
 		// might get rolled back!!
 		st.ClearReboot()
 		clearReboot(st)
-		logger.Noticef("snapd was restarted while a system restart was expected, snapd retried to schedule and waited again for a system restart %d times and is giving up", rebootMaxTentatives)
+		logger.Noticef("pebble was restarted while a system restart was expected, pebble retried to schedule and waited again for a system restart %d times and is giving up", rebootMaxTentatives)
 		return nil
 	}
 	st.Set("daemon-system-restart-tentative", nTentative)
 	d.state = st
-	logger.Noticef("snapd was restarted while a system restart was expected, snapd will try to schedule and wait for a system restart again (tenative %d/%d)", nTentative, rebootMaxTentatives)
+	logger.Noticef("pebble was restarted while a system restart was expected, pebble will try to schedule and wait for a system restart again (tenative %d/%d)", nTentative, rebootMaxTentatives)
 	return state.ErrExpectedReboot
 }
 

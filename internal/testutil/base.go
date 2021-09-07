@@ -18,7 +18,7 @@ import (
 	"gopkg.in/check.v1"
 )
 
-// BaseTest is a structure used as a base test suite for all the snappy
+// BaseTest is a structure used as a base test suite for many of the pebble
 // tests.
 type BaseTest struct {
 	cleanupHandlers []func()

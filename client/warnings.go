@@ -40,7 +40,7 @@ type jsonWarning struct {
 	RepeatAfter string `json:"repeat-after,omitempty"`
 }
 
-// WarningsOptions contains options for querying snapd for warnings
+// WarningsOptions contains options for querying pebble for warnings
 // supported options:
 // - All: return all warnings, instead of only the un-okayed ones.
 type WarningsOptions struct {
@@ -71,7 +71,7 @@ type warningsAction struct {
 	Timestamp time.Time `json:"timestamp"`
 }
 
-// Okay asks snapd to chill about the warnings that would have been returned by
+// Okay asks pebble to chill about the warnings that would have been returned by
 // Warnings at the given time.
 func (client *Client) Okay(t time.Time) error {
 	var body bytes.Buffer

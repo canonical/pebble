@@ -95,7 +95,7 @@ var fakeChangesJSON = `{"type": "sync", "result": [
   },
   {
     "id":   "one",
-    "kind": "remove-snap",
+    "kind": "remove",
     "summary": "...",
     "status": "Do",
     "ready": false,
