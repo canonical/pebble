@@ -468,7 +468,7 @@ func (t *Task) At(when time.Time) {
 // TaskSetEdge designates tasks inside a TaskSet for outside reference.
 //
 // This is useful to give tasks inside TaskSets a special meaning. It
-// is used to mark e.g. the last task used for downloading a snap.
+// is used to mark e.g. the last task in a task set.
 type TaskSetEdge string
 
 // A TaskSet holds a set of tasks.

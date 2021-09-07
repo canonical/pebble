@@ -54,7 +54,7 @@ type doer interface {
 
 // Config allows the user to customize client behavior.
 type Config struct {
-	// BaseURL contains the base URL where snappy daemon is expected to be.
+	// BaseURL contains the base URL where the pebble daemon is expected to be.
 	// It can be empty for a default behavior of talking over a unix socket.
 	BaseURL string
 
@@ -65,11 +65,11 @@ type Config struct {
 	// alive for later reuse
 	DisableKeepAlive bool
 
-	// User-Agent to sent to the snapd daemon
+	// User-Agent to sent to the pebble daemon
 	UserAgent string
 }
 
-// A Client knows how to talk to the snappy daemon.
+// A Client knows how to talk to the pebble daemon.
 type Client struct {
 	baseURL   url.URL
 	doer      doer

@@ -28,9 +28,7 @@ func (s *PebbleSuite) TestVersionCommand(c *C) {
 		fmt.Fprintln(w, `{"type":"sync","status-code":200,"status":"OK","result":{"version":"7.89"}}`)
 	})
 
-	restore := fakeArgs("snap", "version")
-	defer restore()
-	restore = fakeVersion("4.56")
+	restore := fakeVersion("4.56")
 	defer restore()
 
 	_, err := pebble.Parser(pebble.Client()).ParseArgs([]string{"version"})

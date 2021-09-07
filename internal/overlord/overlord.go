@@ -165,8 +165,7 @@ func loadState(statePath string, restartBehavior RestartBehavior, backend state.
 	}
 
 	if !osutil.CanStat(statePath) {
-		// fail fast, mostly interesting for tests, this dir is setup
-		// by the snapd package
+		// fail fast, mostly interesting for tests, this dir is set up by pebble
 		stateDir := filepath.Dir(statePath)
 		if !osutil.IsDir(stateDir) {
 			return nil, fmt.Errorf("fatal: directory %q must be present", stateDir)

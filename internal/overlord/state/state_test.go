@@ -426,7 +426,7 @@ func (ss *stateSuite) TestNewTaskAndCheckpoint(c *C) {
 	t1ID := t1.ID()
 	t1.Set("a", 1)
 	t1.SetStatus(state.DoneStatus)
-	t1.SetProgress("snap", 5, 10)
+	t1.SetProgress("foo", 5, 10)
 	t1.JoinLane(42)
 	t1.JoinLane(43)
 
