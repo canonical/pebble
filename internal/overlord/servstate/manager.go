@@ -25,11 +25,11 @@ type ServiceManager struct {
 }
 
 type activeService struct {
-	plannedService *plan.Service
-	cmd            *exec.Cmd
-	err            error
-	done           chan struct{}
-	logBuffer      *servicelog.RingBuffer
+	originalPlan *plan.Service
+	cmd          *exec.Cmd
+	err          error
+	done         chan struct{}
+	logBuffer    *servicelog.RingBuffer
 }
 
 // LabelExists is the error returned by AppendLayer when a layer with that
@@ -339,14 +339,14 @@ func (m *ServiceManager) Replan() ([]string, []string, error) {
 	defer releasePlan()
 
 	needsRestart := make(map[string]bool)
-	var stopOrder []string
+	var stop []string
 	for name, activeService := range m.services {
 		if currentService, ok := m.plan.Services[name]; ok &&
-			currentService.Equal(activeService.plannedService) {
+			currentService.Equal(activeService.originalPlan) {
 			continue
 		}
 		needsRestart[name] = true
-		stopOrder = append(stopOrder, name)
+		stop = append(stop, name)
 	}
 
 	var start []string
@@ -357,17 +357,9 @@ func (m *ServiceManager) Replan() ([]string, []string, error) {
 		}
 	}
 
-	stopOrder, err = m.plan.StopOrder(stopOrder)
+	stop, err = m.plan.StopOrder(stop, false)
 	if err != nil {
 		return nil, nil, err
-	}
-
-	var stop []string
-	// Only stop the services that need restart, not their dependants.
-	for _, name := range stopOrder {
-		if needsRestart[name] {
-			stop = append(stop, name)
-		}
 	}
 
 	start, err = m.plan.StartOrder(start)

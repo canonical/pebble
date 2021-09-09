@@ -133,10 +133,10 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 	}
 
 	active := &activeService{
-		plannedService: service.Copy(),
-		cmd:            cmd,
-		done:           make(chan struct{}),
-		logBuffer:      logBuffer,
+		originalPlan: service.Copy(),
+		cmd:          cmd,
+		done:         make(chan struct{}),
+		logBuffer:    logBuffer,
 	}
 	m.services[req.Name] = active
 	go func() {
