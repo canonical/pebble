@@ -23,6 +23,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -55,6 +56,15 @@ type Service struct {
 	User        string            `yaml:"user,omitempty"`
 	GroupID     *int              `yaml:"group-id,omitempty"`
 	Group       string            `yaml:"group,omitempty"`
+	OnExit      ServiceAction     `yaml:"on-exit,omitempty"`
+	OnFailure   ServiceAction     `yaml:"on-failure,omitempty"`
+	OnSuccess   ServiceAction     `yaml:"on-success,omitempty"`
+	Backoff     *[]string         `yaml:"backoff,omitempty"`
+	StartTime   string            `yaml:"start-time,omitempty"`
+
+	// Parsed versions of fields above that require special handling
+	BackoffDurations  []time.Duration `yaml:"-"`
+	StartTimeDuration time.Duration   `yaml:"-"`
 }
 
 type ServiceStartup string
@@ -71,6 +81,15 @@ const (
 	UnknownOverride ServiceOverride = ""
 	MergeOverride   ServiceOverride = "merge"
 	ReplaceOverride ServiceOverride = "replace"
+)
+
+type ServiceAction string
+
+const (
+	ActionUnset      ServiceAction = ""
+	ActionRestart    ServiceAction = "restart"
+	ActionExitPebble ServiceAction = "exit-pebble"
+	ActionLog        ServiceAction = "log"
 )
 
 // FormatError is the error returned when a layer has a format error, such as
@@ -128,6 +147,21 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 					old.After = append(old.After, service.After...)
 					for k, v := range service.Environment {
 						old.Environment[k] = v
+					}
+					if service.OnExit != "" {
+						old.OnExit = service.OnExit
+					}
+					if service.OnFailure != "" {
+						old.OnFailure = service.OnFailure
+					}
+					if service.OnSuccess != "" {
+						old.OnSuccess = service.OnSuccess
+					}
+					if service.Backoff != nil {
+						old.Backoff = service.Backoff
+					}
+					if service.StartTime != "" {
+						old.StartTime = service.StartTime
 					}
 					break
 				}
@@ -296,6 +330,34 @@ func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 				Message: fmt.Sprintf("service object cannot be null for service %q", name),
 			}
 		}
+
+		if !validServiceAction(service.OnExit) {
+			return nil, &FormatError{Message: fmt.Sprintf("invalid on-exit action %q", service.OnExit)}
+		}
+		if !validServiceAction(service.OnFailure) {
+			return nil, &FormatError{Message: fmt.Sprintf("invalid on-failure action %q", service.OnFailure)}
+		}
+		if !validServiceAction(service.OnSuccess) {
+			return nil, &FormatError{Message: fmt.Sprintf("invalid on-success action %q", service.OnSuccess)}
+		}
+
+		if service.Backoff != nil {
+			service.BackoffDurations, err = parseDurationList(*service.Backoff)
+			if err != nil {
+				return nil, &FormatError{
+					Message: fmt.Sprintf("invalid backoff duration list %q", *service.Backoff),
+				}
+			}
+		}
+		if service.StartTime != "" {
+			service.StartTimeDuration, err = time.ParseDuration(service.StartTime)
+			if err != nil {
+				return nil, &FormatError{
+					Message: fmt.Sprintf("invalid backoff-reset duration %q", service.StartTime),
+				}
+			}
+		}
+
 		service.Name = name
 	}
 	err = layer.checkCycles()
@@ -303,6 +365,27 @@ func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 		return nil, err
 	}
 	return &layer, err
+}
+
+func validServiceAction(action ServiceAction) bool {
+	switch action {
+	case ActionUnset, ActionRestart, ActionExitPebble, ActionLog:
+		return true
+	default:
+		return false
+	}
+}
+
+func parseDurationList(strings []string) ([]time.Duration, error) {
+	durations := make([]time.Duration, len(strings))
+	for i, s := range strings {
+		d, err := time.ParseDuration(s)
+		if err != nil {
+			return nil, err
+		}
+		durations[i] = d
+	}
+	return durations, nil
 }
 
 var fnameExp = regexp.MustCompile("^([0-9]{3})-([a-z](?:-?[a-z0-9]){2,}).yaml$")
