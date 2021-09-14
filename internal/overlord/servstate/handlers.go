@@ -13,6 +13,7 @@ import (
 	"github.com/canonical/pebble/internal/logger"
 	"github.com/canonical/pebble/internal/osutil"
 	"github.com/canonical/pebble/internal/overlord/state"
+	"github.com/canonical/pebble/internal/plan"
 	"github.com/canonical/pebble/internal/servicelog"
 	"github.com/canonical/pebble/internal/strutil/shlex"
 )
@@ -80,11 +81,38 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 		return fmt.Errorf("service %q was previously started", req.Name)
 	}
 
+	active, err := startService(service, m.serviceOutput)
+	if err != nil {
+		return err
+	}
+	m.services[req.Name] = active
+
+	releasePlan()
+
+	okay := time.After(okayWait)
+	select {
+	case <-okay:
+		return nil
+	case <-active.done:
+		releasePlan, err := m.acquirePlan()
+		if err == nil {
+			if m.services[req.Name].cmd == active.cmd {
+				delete(m.services, req.Name)
+			}
+			releasePlan()
+		}
+		return fmt.Errorf("cannot start service: exited quickly with code %d",
+			active.cmd.ProcessState.ExitCode())
+	}
+	// unreachable
+}
+
+func startService(service *plan.Service, output io.Writer) (*activeService, error) {
 	args, err := shlex.Split(service.Command)
 	if err != nil {
 		// Shouldn't happen as it should have failed on parsing, but
 		// it does not hurt to double check and report.
-		return fmt.Errorf("cannot parse service command: %s", err)
+		return nil, fmt.Errorf("cannot parse service command: %s", err)
 	}
 	cmd := exec.Command(args[0], args[1:]...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
@@ -92,7 +120,7 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 	// Start as another user if specified in plan
 	uid, gid, err := osutil.NormalizeUidGid(service.UserID, service.GroupID, service.User, service.Group)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if uid != nil && gid != nil {
 		setCmdCredential(cmd, &syscall.Credential{
@@ -109,11 +137,11 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 
 	logBuffer := servicelog.NewRingBuffer(maxLogBytes)
 	var outputIterator servicelog.Iterator
-	if m.serviceOutput != nil {
+	if output != nil {
 		outputIterator = logBuffer.TailIterator()
 	}
 
-	logWriter := servicelog.NewFormatWriter(logBuffer, req.Name)
+	logWriter := servicelog.NewFormatWriter(logBuffer, service.Name)
 	cmd.Stdout = logWriter
 	cmd.Stderr = logWriter
 	err = cmd.Start()
@@ -122,7 +150,7 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 			_ = outputIterator.Close()
 		}
 		_ = logBuffer.Close()
-		return fmt.Errorf("cannot start service: %v", err)
+		return nil, fmt.Errorf("cannot start service: %v", err)
 	}
 
 	active := &activeService{
@@ -130,41 +158,26 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 		done:      make(chan struct{}),
 		logBuffer: logBuffer,
 	}
-	m.services[req.Name] = active
+
 	go func() {
 		active.err = cmd.Wait()
 		_ = active.logBuffer.Close()
 		close(active.done)
 	}()
-	if m.serviceOutput != nil {
+
+	if output != nil {
 		go func() {
 			defer outputIterator.Close()
 			for outputIterator.Next(active.done) {
-				_, err := io.Copy(m.serviceOutput, outputIterator)
+				_, err := io.Copy(output, outputIterator)
 				if err != nil {
-					logger.Noticef("service %q log write failed: %v", req.Name, err)
+					logger.Noticef("service %q log write failed: %v", service.Name, err)
 				}
 			}
 		}()
 	}
 
-	releasePlan()
-
-	okay := time.After(okayWait)
-	select {
-	case <-okay:
-		return nil
-	case <-active.done:
-		releasePlan, err := m.acquirePlan()
-		if err == nil {
-			if m.services[req.Name].cmd == cmd {
-				delete(m.services, req.Name)
-			}
-			releasePlan()
-		}
-		return fmt.Errorf("cannot start service: exited quickly with code %d", cmd.ProcessState.ExitCode())
-	}
-	// unreachable
+	return active, nil
 }
 
 func (m *ServiceManager) doStop(task *state.Task, tomb *tomb.Tomb) error {
