@@ -54,26 +54,24 @@ type ExecOptions struct {
 	// True to ask the server to set up a pseudo-terminal (PTY) -- this allows
 	// full interactivity and window resizing. The default is no PTY, and just
 	// to use pipes for stdin/stdout/stderr.
-	Terminal bool
+	UseTerminal bool
 
 	// True to separate the process's stderr into a separate websocket. The
 	// default is to send combined stdout+stderr on a single websocket.
 	//
-	// Note: currently only the combinations Terminal=true, Stderr=false and
-	// Terminal=false, Stderr=true are supported.
-	Stderr bool
+	// Note: currently only the combinations UseTerminal=true,
+	// SeparateStderr=false and UseTerminal=false, SeparateStderr=true are
+	// supported.
+	SeparateStderr bool
 
-	// Initial terminal width and height (only apply if Terminal is true).
+	// Initial terminal width and height (only apply if UseTerminal is true).
 	// If not specified, the Pebble server uses the target's default (usually
 	// 80x25). When using the "pebble exec" CLI, these are set to the host's
 	// terminal size automatically.
 	Width  int
 	Height int
-}
 
-// ExecAdditionalArgs are additional control arguments for the Exec call.
-type ExecAdditionalArgs struct {
-	// Standard input, output, and error.
+	// Standard input, output, and error streams.
 	Stdin  io.ReadCloser
 	Stdout io.Writer
 	Stderr io.Writer
@@ -87,11 +85,11 @@ type ExecAdditionalArgs struct {
 
 // Exec starts a command execution with the given options and additional
 // control arguments, returning the execution's change ID.
-func (client *Client) Exec(opts *ExecOptions, args *ExecAdditionalArgs) (string, error) {
-	if opts.Terminal && opts.Stderr {
+func (client *Client) Exec(opts *ExecOptions) (string, error) {
+	if opts.UseTerminal && opts.SeparateStderr {
 		return "", errors.New("separate stderr not currently supported in terminal mode")
 	}
-	if !opts.Terminal && !opts.Stderr {
+	if !opts.UseTerminal && !opts.SeparateStderr {
 		return "", errors.New("combined stderr not currently supported in non-terminal mode")
 	}
 
@@ -101,31 +99,31 @@ func (client *Client) Exec(opts *ExecOptions, args *ExecAdditionalArgs) (string,
 	}
 
 	var payload = struct {
-		Command     []string          `json:"command"`
-		Environment map[string]string `json:"environment"`
-		WorkingDir  string            `json:"working-dir"`
-		Timeout     string            `json:"timeout"`
-		UserID      *int              `json:"user-id"`
-		User        string            `json:"user"`
-		GroupID     *int              `json:"group-id"`
-		Group       string            `json:"group"`
-		Terminal    bool              `json:"terminal"`
-		Stderr      bool              `json:"stderr"`
-		Width       int               `json:"width"`
-		Height      int               `json:"height"`
+		Command        []string          `json:"command"`
+		Environment    map[string]string `json:"environment"`
+		WorkingDir     string            `json:"working-dir"`
+		Timeout        string            `json:"timeout"`
+		UserID         *int              `json:"user-id"`
+		User           string            `json:"user"`
+		GroupID        *int              `json:"group-id"`
+		Group          string            `json:"group"`
+		UseTerminal    bool              `json:"use-terminal"`
+		SeparateStderr bool              `json:"separate-stderr"`
+		Width          int               `json:"width"`
+		Height         int               `json:"height"`
 	}{
-		Command:     opts.Command,
-		Environment: opts.Environment,
-		WorkingDir:  opts.WorkingDir,
-		Timeout:     timeoutStr,
-		UserID:      opts.UserID,
-		User:        opts.User,
-		GroupID:     opts.GroupID,
-		Group:       opts.Group,
-		Terminal:    opts.Terminal,
-		Stderr:      opts.Stderr,
-		Width:       opts.Width,
-		Height:      opts.Height,
+		Command:        opts.Command,
+		Environment:    opts.Environment,
+		WorkingDir:     opts.WorkingDir,
+		Timeout:        timeoutStr,
+		UserID:         opts.UserID,
+		User:           opts.User,
+		GroupID:        opts.GroupID,
+		Group:          opts.Group,
+		UseTerminal:    opts.UseTerminal,
+		SeparateStderr: opts.SeparateStderr,
+		Width:          opts.Width,
+		Height:         opts.Height,
 	}
 	var body bytes.Buffer
 	err := json.NewEncoder(&body).Encode(&payload)
@@ -147,25 +145,21 @@ func (client *Client) Exec(opts *ExecOptions, args *ExecAdditionalArgs) (string,
 		return "", err
 	}
 
-	if args == nil {
-		return changeID, nil
-	}
-
 	// Process additional arguments (connecting I/O and websockets)
 	fds := result.WebsocketIDs
 
 	// Call the control handler with a connection to the control socket
-	if args.Control != nil && fds["control"] != "" {
+	if opts.Control != nil && fds["control"] != "" {
 		conn, err := client.getChangeWebsocket(changeID, fds["control"])
 		if err != nil {
 			return "", err
 		}
-		go args.Control(conn)
+		go opts.Control(conn)
 	}
 
-	if opts.Terminal {
+	if opts.UseTerminal {
 		// Handle terminal-based executions
-		if args.Stdin != nil && args.Stdout != nil {
+		if opts.Stdin != nil && opts.Stdout != nil {
 			// Connect to the websocket
 			conn, err := client.getChangeWebsocket(changeID, fds["io"])
 			if err != nil {
@@ -174,16 +168,16 @@ func (client *Client) Exec(opts *ExecOptions, args *ExecAdditionalArgs) (string,
 
 			// And attach stdin and stdout to it
 			go func() {
-				wsutil.WebsocketSendStream(conn, args.Stdin, -1)
-				<-wsutil.WebsocketRecvStream(args.Stdout, conn)
+				wsutil.WebsocketSendStream(conn, opts.Stdin, -1)
+				<-wsutil.WebsocketRecvStream(opts.Stdout, conn)
 				conn.Close()
-				if args.DataDone != nil {
-					close(args.DataDone)
+				if opts.DataDone != nil {
+					close(opts.DataDone)
 				}
 			}()
 		} else {
-			if args.DataDone != nil {
-				close(args.DataDone)
+			if opts.DataDone != nil {
+				close(opts.DataDone)
 			}
 		}
 	} else {
@@ -198,18 +192,18 @@ func (client *Client) Exec(opts *ExecOptions, args *ExecAdditionalArgs) (string,
 				return "", err
 			}
 			conns = append(conns, conn)
-			dones["stdin"] = wsutil.WebsocketSendStream(conn, args.Stdin, -1)
-			dones["stdout"] = wsutil.WebsocketRecvStream(args.Stdout, conn)
+			dones["stdin"] = wsutil.WebsocketSendStream(conn, opts.Stdin, -1)
+			dones["stdout"] = wsutil.WebsocketRecvStream(opts.Stdout, conn)
 		}
 
 		// Handle stderr separately if needed
-		if opts.Stderr && fds["stderr"] != "" {
+		if opts.SeparateStderr && fds["stderr"] != "" {
 			conn, err := client.getChangeWebsocket(changeID, fds["stderr"])
 			if err != nil {
 				return "", err
 			}
 			conns = append(conns, conn)
-			dones["stderr"] = wsutil.WebsocketRecvStream(args.Stderr, conn)
+			dones["stderr"] = wsutil.WebsocketRecvStream(opts.Stderr, conn)
 		}
 
 		// Wait for everything to be done
@@ -223,8 +217,8 @@ func (client *Client) Exec(opts *ExecOptions, args *ExecAdditionalArgs) (string,
 			}
 
 			if fds["io"] != "" {
-				if args.Stdin != nil {
-					args.Stdin.Close()
+				if opts.Stdin != nil {
+					opts.Stdin.Close()
 				}
 
 				// Empty the stdin channel but don't block on it as
@@ -238,8 +232,8 @@ func (client *Client) Exec(opts *ExecOptions, args *ExecAdditionalArgs) (string,
 				conn.Close()
 			}
 
-			if args.DataDone != nil {
-				close(args.DataDone)
+			if opts.DataDone != nil {
+				close(opts.DataDone)
 			}
 		}()
 	}

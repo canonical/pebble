@@ -64,8 +64,8 @@ func (s *execSuite) TearDownTest(c *C) {
 
 func (s *execSuite) TestStdinStdout(c *C) {
 	changeErr, stdout, stderr, exitCode := s.exec(c, "foo bar", &client.ExecOptions{
-		Command: []string{"cat"},
-		Stderr:  true,
+		Command:        []string{"cat"},
+		SeparateStderr: true,
 	})
 	c.Check(changeErr, Equals, "")
 	c.Check(stdout, Equals, "foo bar")
@@ -75,8 +75,8 @@ func (s *execSuite) TestStdinStdout(c *C) {
 
 func (s *execSuite) TestStderr(c *C) {
 	changeErr, stdout, stderr, exitCode := s.exec(c, "", &client.ExecOptions{
-		Command: []string{"/bin/sh", "-c", "echo some stderr! >&2"},
-		Stderr:  true,
+		Command:        []string{"/bin/sh", "-c", "echo some stderr! >&2"},
+		SeparateStderr: true,
 	})
 	c.Check(changeErr, Equals, "")
 	c.Check(stdout, Equals, "")
@@ -86,9 +86,9 @@ func (s *execSuite) TestStderr(c *C) {
 
 func (s *execSuite) TestEnvironment(c *C) {
 	changeErr, stdout, stderr, exitCode := s.exec(c, "", &client.ExecOptions{
-		Command:     []string{"/bin/sh", "-c", "echo FOO=$FOO"},
-		Environment: map[string]string{"FOO": "bar"},
-		Stderr:      true,
+		Command:        []string{"/bin/sh", "-c", "echo FOO=$FOO"},
+		Environment:    map[string]string{"FOO": "bar"},
+		SeparateStderr: true,
 	})
 	c.Check(changeErr, Equals, "")
 	c.Check(stdout, Equals, "FOO=bar\n")
@@ -99,9 +99,9 @@ func (s *execSuite) TestEnvironment(c *C) {
 func (s *execSuite) TestWorkingDir(c *C) {
 	workingDir := c.MkDir()
 	changeErr, stdout, stderr, exitCode := s.exec(c, "", &client.ExecOptions{
-		Command:    []string{"pwd"},
-		Stderr:     true,
-		WorkingDir: workingDir,
+		Command:        []string{"pwd"},
+		SeparateStderr: true,
+		WorkingDir:     workingDir,
 	})
 	c.Check(changeErr, Equals, "")
 	c.Check(stdout, Equals, workingDir+"\n")
@@ -111,9 +111,9 @@ func (s *execSuite) TestWorkingDir(c *C) {
 
 func (s *execSuite) TestTimeout(c *C) {
 	changeErr, stdout, stderr, exitCode := s.exec(c, "", &client.ExecOptions{
-		Command: []string{"sleep", "1"},
-		Stderr:  true,
-		Timeout: time.Millisecond,
+		Command:        []string{"sleep", "1"},
+		SeparateStderr: true,
+		Timeout:        time.Millisecond,
 	})
 	c.Check(changeErr, Matches, `cannot perform the following tasks:\n.*timed out after 1ms.*`)
 	c.Check(stdout, Equals, "")
@@ -131,10 +131,10 @@ func (s *execSuite) TestUserGroup(c *C) {
 		c.Skip("exec user/group test requires running as root")
 	}
 	changeErr, stdout, stderr, exitCode := s.exec(c, "", &client.ExecOptions{
-		Command: []string{"/bin/sh", "-c", "id -n -u && id -n -g"},
-		Stderr:  true,
-		User:    "nobody",
-		Group:   "nogroup",
+		Command:        []string{"/bin/sh", "-c", "id -n -u && id -n -g"},
+		SeparateStderr: true,
+		User:           "nobody",
+		Group:          "nogroup",
 	})
 	c.Check(changeErr, Equals, "")
 	c.Check(stdout, Equals, "nobody\nnogroup\n")
@@ -155,10 +155,10 @@ func (s *execSuite) TestUserIDGroupID(c *C) {
 	gid, err := strconv.Atoi(nogroup.Gid)
 	c.Assert(err, IsNil)
 	changeErr, stdout, stderr, exitCode := s.exec(c, "", &client.ExecOptions{
-		Command: []string{"/bin/sh", "-c", "id -n -u && id -n -g"},
-		Stderr:  true,
-		UserID:  &uid,
-		GroupID: &gid,
+		Command:        []string{"/bin/sh", "-c", "id -n -u && id -n -g"},
+		SeparateStderr: true,
+		UserID:         &uid,
+		GroupID:        &gid,
 	})
 	c.Check(changeErr, Equals, "")
 	c.Check(stdout, Equals, "nobody\nnogroup\n")
@@ -169,13 +169,11 @@ func (s *execSuite) TestUserIDGroupID(c *C) {
 func (s *execSuite) exec(c *C, stdin string, opts *client.ExecOptions) (changeErr, stdout, stderr string, exitCode int) {
 	outBuf := &bytes.Buffer{}
 	errBuf := &bytes.Buffer{}
-	args := &client.ExecAdditionalArgs{
-		Stdin:    ioutil.NopCloser(strings.NewReader(stdin)),
-		Stdout:   outBuf,
-		Stderr:   errBuf,
-		DataDone: make(chan bool),
-	}
-	changeID, err := s.client.Exec(opts, args)
+	opts.Stdin = ioutil.NopCloser(strings.NewReader(stdin))
+	opts.Stdout = outBuf
+	opts.Stderr = errBuf
+	opts.DataDone = make(chan bool)
+	changeID, err := s.client.Exec(opts)
 	c.Assert(err, IsNil)
 
 	change, err := s.client.WaitChange(changeID, nil)
@@ -183,28 +181,26 @@ func (s *execSuite) exec(c *C, stdin string, opts *client.ExecOptions) (changeEr
 	c.Check(change.Ready, Equals, true)
 	exitCode = getExitCode(c, change)
 
-	<-args.DataDone
+	<-opts.DataDone
 
 	return change.Err, outBuf.String(), errBuf.String(), exitCode
 }
 
 func (s *execSuite) TestSignal(c *C) {
-	opts := &client.ExecOptions{
-		Command: []string{"sleep", "1"},
-		Stderr:  true,
-	}
 	signalCh := make(chan int, 1)
-	args := &client.ExecAdditionalArgs{
-		Stdin:  ioutil.NopCloser(strings.NewReader("")),
-		Stdout: ioutil.Discard,
-		Stderr: ioutil.Discard,
+	opts := &client.ExecOptions{
+		Command:        []string{"sleep", "1"},
+		SeparateStderr: true,
+		Stdin:          ioutil.NopCloser(strings.NewReader("")),
+		Stdout:         ioutil.Discard,
+		Stderr:         ioutil.Discard,
 		Control: func(conn client.WebsocketWriter) {
 			signal := <-signalCh
 			err := client.ExecForwardSignal(conn, signal)
 			c.Check(err, IsNil)
 		},
 	}
-	changeID, err := s.client.Exec(opts, args)
+	changeID, err := s.client.Exec(opts)
 	c.Assert(err, IsNil)
 
 	select {
@@ -222,18 +218,16 @@ func (s *execSuite) TestSignal(c *C) {
 }
 
 func (s *execSuite) TestStreaming(c *C) {
-	opts := &client.ExecOptions{
-		Command: []string{"cat"},
-		Stderr:  true,
-	}
 	stdinCh := make(chan []byte)
 	stdoutCh := make(chan []byte)
-	args := &client.ExecAdditionalArgs{
-		Stdin:  ioutil.NopCloser(channelReader{stdinCh}),
-		Stdout: channelWriter{stdoutCh},
-		Stderr: ioutil.Discard,
+	opts := &client.ExecOptions{
+		Command:        []string{"cat"},
+		SeparateStderr: true,
+		Stdin:          ioutil.NopCloser(channelReader{stdinCh}),
+		Stdout:         channelWriter{stdoutCh},
+		Stderr:         ioutil.Discard,
 	}
-	changeID, err := s.client.Exec(opts, args)
+	changeID, err := s.client.Exec(opts)
 	c.Assert(err, IsNil)
 
 	for i := 0; i < 20; i++ {
@@ -297,9 +291,9 @@ func (s *execSuite) TestNoCommand(c *C) {
 func (s *execSuite) TestNotSupported(c *C) {
 	// These combinations aren't currently supported (but will be later)
 	httpResp, execResp := execRequest(c, &client.ExecOptions{
-		Command:  []string{"echo", "foo"},
-		Terminal: true,
-		Stderr:   true,
+		Command:        []string{"echo", "foo"},
+		UseTerminal:    true,
+		SeparateStderr: true,
 	})
 	c.Check(httpResp.StatusCode, Equals, http.StatusBadRequest)
 	c.Check(execResp.StatusCode, Equals, http.StatusBadRequest)
@@ -307,9 +301,9 @@ func (s *execSuite) TestNotSupported(c *C) {
 	c.Check(execResp.Result["message"], Matches, ".*not currently supported.*")
 
 	httpResp, execResp = execRequest(c, &client.ExecOptions{
-		Command:  []string{"echo", "foo"},
-		Terminal: false,
-		Stderr:   false,
+		Command:        []string{"echo", "foo"},
+		UseTerminal:    false,
+		SeparateStderr: false,
 	})
 	c.Check(httpResp.StatusCode, Equals, http.StatusBadRequest)
 	c.Check(execResp.StatusCode, Equals, http.StatusBadRequest)
@@ -319,8 +313,8 @@ func (s *execSuite) TestNotSupported(c *C) {
 
 func (s *execSuite) TestCommandNotFound(c *C) {
 	httpResp, execResp := execRequest(c, &client.ExecOptions{
-		Command: []string{"badcmd"},
-		Stderr:  true,
+		Command:        []string{"badcmd"},
+		SeparateStderr: true,
 	})
 	c.Check(httpResp.StatusCode, Equals, http.StatusBadRequest)
 	c.Check(execResp.StatusCode, Equals, http.StatusBadRequest)
@@ -331,9 +325,9 @@ func (s *execSuite) TestCommandNotFound(c *C) {
 func (s *execSuite) TestUserGroupError(c *C) {
 	gid := os.Getgid()
 	httpResp, execResp := execRequest(c, &client.ExecOptions{
-		Command: []string{"echo", "foo"},
-		Stderr:  true,
-		GroupID: &gid,
+		Command:        []string{"echo", "foo"},
+		SeparateStderr: true,
+		GroupID:        &gid,
 	})
 	c.Check(httpResp.StatusCode, Equals, http.StatusBadRequest)
 	c.Check(execResp.StatusCode, Equals, http.StatusBadRequest)
@@ -356,31 +350,31 @@ func execRequest(c *C, opts *client.ExecOptions) (*http.Response, execResponse) 
 		timeoutStr = opts.Timeout.String()
 	}
 	var payload = struct {
-		Command     []string          `json:"command"`
-		Environment map[string]string `json:"environment"`
-		WorkingDir  string            `json:"working-dir"`
-		Timeout     string            `json:"timeout"`
-		UserID      *int              `json:"user-id"`
-		User        string            `json:"user"`
-		GroupID     *int              `json:"group-id"`
-		Group       string            `json:"group"`
-		Terminal    bool              `json:"terminal"`
-		Stderr      bool              `json:"stderr"`
-		Width       int               `json:"width"`
-		Height      int               `json:"height"`
+		Command        []string          `json:"command"`
+		Environment    map[string]string `json:"environment"`
+		WorkingDir     string            `json:"working-dir"`
+		Timeout        string            `json:"timeout"`
+		UserID         *int              `json:"user-id"`
+		User           string            `json:"user"`
+		GroupID        *int              `json:"group-id"`
+		Group          string            `json:"group"`
+		Terminal       bool              `json:"use-terminal"`
+		SeparateStderr bool              `json:"separate-stderr"`
+		Width          int               `json:"width"`
+		Height         int               `json:"height"`
 	}{
-		Command:     opts.Command,
-		Environment: opts.Environment,
-		WorkingDir:  opts.WorkingDir,
-		Timeout:     timeoutStr,
-		UserID:      opts.UserID,
-		User:        opts.User,
-		GroupID:     opts.GroupID,
-		Group:       opts.Group,
-		Terminal:    opts.Terminal,
-		Stderr:      opts.Stderr,
-		Width:       opts.Width,
-		Height:      opts.Height,
+		Command:        opts.Command,
+		Environment:    opts.Environment,
+		WorkingDir:     opts.WorkingDir,
+		Timeout:        timeoutStr,
+		UserID:         opts.UserID,
+		User:           opts.User,
+		GroupID:        opts.GroupID,
+		Group:          opts.Group,
+		Terminal:       opts.UseTerminal,
+		SeparateStderr: opts.SeparateStderr,
+		Width:          opts.Width,
+		Height:         opts.Height,
 	}
 	requestBody, err := json.Marshal(payload)
 	c.Assert(err, IsNil)

@@ -26,18 +26,18 @@ import (
 
 func v1PostExec(c *Command, req *http.Request, _ *userState) Response {
 	var payload struct {
-		Command     []string          `json:"command"`
-		Environment map[string]string `json:"environment"`
-		WorkingDir  string            `json:"working-dir"`
-		Timeout     string            `json:"timeout"`
-		UserID      *int              `json:"user-id"`
-		User        string            `json:"user"`
-		GroupID     *int              `json:"group-id"`
-		Group       string            `json:"group"`
-		Terminal    bool              `json:"terminal"`
-		Stderr      bool              `json:"stderr"`
-		Width       int               `json:"width"`
-		Height      int               `json:"height"`
+		Command        []string          `json:"command"`
+		Environment    map[string]string `json:"environment"`
+		WorkingDir     string            `json:"working-dir"`
+		Timeout        string            `json:"timeout"`
+		UserID         *int              `json:"user-id"`
+		User           string            `json:"user"`
+		GroupID        *int              `json:"group-id"`
+		Group          string            `json:"group"`
+		UseTerminal    bool              `json:"use-terminal"`
+		SeparateStderr bool              `json:"separate-stderr"`
+		Width          int               `json:"width"`
+		Height         int               `json:"height"`
 	}
 	decoder := json.NewDecoder(req.Body)
 	if err := decoder.Decode(&payload); err != nil {
@@ -46,10 +46,10 @@ func v1PostExec(c *Command, req *http.Request, _ *userState) Response {
 	if len(payload.Command) < 1 {
 		return statusBadRequest("must specify command")
 	}
-	if payload.Terminal && payload.Stderr {
+	if payload.UseTerminal && payload.SeparateStderr {
 		return statusBadRequest("separate stderr not currently supported in terminal mode")
 	}
-	if !payload.Terminal && !payload.Stderr {
+	if !payload.UseTerminal && !payload.SeparateStderr {
 		return statusBadRequest("combined stderr not currently supported in non-terminal mode")
 	}
 
@@ -79,16 +79,16 @@ func v1PostExec(c *Command, req *http.Request, _ *userState) Response {
 	defer st.Unlock()
 
 	args := &cmdstate.ExecArgs{
-		Command:     payload.Command,
-		Environment: payload.Environment,
-		WorkingDir:  payload.WorkingDir,
-		Timeout:     timeout,
-		UserID:      uid,
-		GroupID:     gid,
-		Terminal:    payload.Terminal,
-		Stderr:      payload.Stderr,
-		Width:       payload.Width,
-		Height:      payload.Height,
+		Command:        payload.Command,
+		Environment:    payload.Environment,
+		WorkingDir:     payload.WorkingDir,
+		Timeout:        timeout,
+		UserID:         uid,
+		GroupID:        gid,
+		UseTerminal:    payload.UseTerminal,
+		SeparateStderr: payload.SeparateStderr,
+		Width:          payload.Width,
+		Height:         payload.Height,
 	}
 	change, metadata, err := cmdstate.Exec(st, args)
 	if err != nil {

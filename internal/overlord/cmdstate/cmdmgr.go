@@ -64,21 +64,21 @@ func (m *CommandManager) Ensure() error {
 
 // ExecArgs holds the arguments for a command execution.
 type ExecArgs struct {
-	Command     []string
-	Environment map[string]string
-	WorkingDir  string
-	Timeout     time.Duration
-	UserID      *int
-	GroupID     *int
-	Terminal    bool
-	Stderr      bool
-	Width       int
-	Height      int
+	Command        []string
+	Environment    map[string]string
+	WorkingDir     string
+	Timeout        time.Duration
+	UserID         *int
+	GroupID        *int
+	UseTerminal    bool
+	SeparateStderr bool
+	Width          int
+	Height         int
 }
 
 // ExecMetadata is the metadata from an Exec call.
 type ExecMetadata struct {
-	WebsocketIDs map[string]string // keys are "control", "io", and "stderr" if Stderr true
+	WebsocketIDs map[string]string // keys are "control", "io", and "stderr" if SeparateStderr true
 	Environment  map[string]string
 	WorkingDir   string
 }
@@ -137,13 +137,13 @@ func Exec(st *state.State, args *ExecArgs) (*state.Change, ExecMetadata, error) 
 	ws.conns = map[string]*websocket.Conn{}
 	ws.conns[wsControl] = nil
 	ws.conns[wsIO] = nil
-	if args.Stderr {
+	if args.SeparateStderr {
 		ws.conns[wsStderr] = nil
 	}
 	ws.allConnected = make(chan bool, 1)
 	ws.controlConnected = make(chan bool, 1)
-	ws.terminal = args.Terminal
-	ws.stderr = args.Stderr
+	ws.useTerminal = args.UseTerminal
+	ws.separateStderr = args.SeparateStderr
 
 	ws.wsIDs = map[string]string{}
 	for key := range ws.conns {
@@ -249,8 +249,8 @@ type execWs struct {
 	connsLock        sync.Mutex
 	allConnected     chan bool
 	controlConnected chan bool
-	terminal         bool
-	stderr           bool
+	useTerminal      bool
+	separateStderr   bool
 	wsIDs            map[string]string
 	width            int
 	height           int
@@ -335,7 +335,7 @@ func (s *execWs) do(ctx context.Context, change *state.Change) error {
 	attachedChildIsDead := make(chan struct{})
 	var wgEOF sync.WaitGroup
 
-	if s.terminal {
+	if s.useTerminal {
 		ttys = make([]*os.File, 1)
 		ptys = make([]*os.File, 1)
 
@@ -493,7 +493,7 @@ func (s *execWs) do(ctx context.Context, change *state.Change) error {
 	// Make the given terminal the controlling terminal of the calling process.
 	// The calling process must be a session leader and not have a controlling terminal already.
 	// This is important as allows ctrl+c to work as expected for non-shell programs.
-	if s.terminal {
+	if s.useTerminal {
 		cmd.SysProcAttr.Setctty = true
 	}
 
@@ -598,7 +598,7 @@ func (s *execWs) controlLoop(pidCh <-chan int, exitCh <-chan bool, ptyFd int) {
 		}
 
 		switch {
-		case command.Command == "window-resize" && s.terminal:
+		case command.Command == "window-resize" && s.useTerminal:
 			logger.Debugf("Received 'window-resize' command with size %sx%s",
 				command.Args["width"], command.Args["height"])
 			width, err := strconv.Atoi(command.Args["width"])

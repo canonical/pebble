@@ -113,19 +113,19 @@ func (cmd *cmdExec) Execute(args []string) error {
 	}
 
 	// Determine interaction mode
-	stdinTerminal := ptyutil.IsTerminal(unix.Stdin)
-	stdoutTerminal := ptyutil.IsTerminal(unix.Stdout)
-	var terminal bool
+	stdinIsTerminal := ptyutil.IsTerminal(unix.Stdin)
+	stdoutIsTerminal := ptyutil.IsTerminal(unix.Stdout)
+	var useTerminal bool
 	if cmd.Terminal {
-		terminal = true
+		useTerminal = true
 	} else if cmd.NoTerminal {
-		terminal = false
+		useTerminal = false
 	} else {
-		terminal = stdinTerminal && stdoutTerminal
+		useTerminal = stdinIsTerminal && stdoutIsTerminal
 	}
 
 	// Record terminal state (and restore it later)
-	if terminal && stdinTerminal {
+	if useTerminal && stdinIsTerminal {
 		oldState, err := ptyutil.MakeRaw(unix.Stdin)
 		if err != nil {
 			return err
@@ -135,7 +135,7 @@ func (cmd *cmdExec) Execute(args []string) error {
 
 	// Grab current terminal dimensions
 	var width, height int
-	if stdoutTerminal {
+	if stdoutIsTerminal {
 		width, height, err = ptyutil.GetSize(unix.Stdout)
 		if err != nil {
 			return err
@@ -144,29 +144,27 @@ func (cmd *cmdExec) Execute(args []string) error {
 
 	// Run the command
 	opts := &client.ExecOptions{
-		Command:     command,
-		Environment: env,
-		WorkingDir:  cmd.WorkingDir,
-		Timeout:     cmd.Timeout,
-		User:        user,
-		UserID:      userID,
-		Group:       group,
-		GroupID:     groupID,
-		Terminal:    terminal,
-		Stderr:      !terminal,
-		Width:       width,
-		Height:      height,
-	}
-	additionalArgs := &client.ExecAdditionalArgs{
-		Stdin:  os.Stdin,
-		Stdout: os.Stdout,
-		Stderr: os.Stderr,
+		Command:        command,
+		Environment:    env,
+		WorkingDir:     cmd.WorkingDir,
+		Timeout:        cmd.Timeout,
+		User:           user,
+		UserID:         userID,
+		Group:          group,
+		GroupID:        groupID,
+		UseTerminal:    useTerminal,
+		SeparateStderr: !useTerminal,
+		Width:          width,
+		Height:         height,
+		Stdin:          os.Stdin,
+		Stdout:         os.Stdout,
+		Stderr:         os.Stderr,
 		Control: func(conn client.WebsocketWriter) {
-			execControlHandler(conn, terminal)
+			execControlHandler(conn, useTerminal)
 		},
 		DataDone: make(chan bool),
 	}
-	changeID, err := cmd.client.Exec(opts, additionalArgs)
+	changeID, err := cmd.client.Exec(opts)
 	if err != nil {
 		return err
 	}
@@ -195,7 +193,7 @@ func (cmd *cmdExec) Execute(args []string) error {
 	}
 
 	// Wait for any remaining I/O to be flushed
-	<-additionalArgs.DataDone
+	<-opts.DataDone
 
 	return nil
 }
