@@ -11,7 +11,7 @@ designed with unique features that help with more specific use cases.
   - [Layer configuration examples](#layer-configuration-examples)
   - [Running pebble](#running-pebble)
   - [Layer specification](#layer-specification)
-  - [API and Go client](#api-and-go-client)
+  - [API and clients](#api-and-clients)
   - [Roadmap/TODO](#roadmap--todo)
   - [Hacking / Development](#hacking--development)
   - [Contributing](#contributing)
@@ -214,7 +214,7 @@ services:
         group-id: <gid>
 ```
 
-## API and Go client
+## API and clients
 
 The Pebble daemon exposes an API (HTTP over a Unix socket) to allow remote clients to interact with the daemon. It can start and stop services, add configuration layers the plan, and so on. There is currently no official documentation for the API (apart from the [code itself](https://github.com/canonical/pebble/blob/master/internal/daemon/api.go)!); most users will interact with it via the Pebble command line interface or the Go or Python client.
 
