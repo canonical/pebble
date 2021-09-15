@@ -68,6 +68,18 @@ func (s *filesSuite) TestListFilesNonAbsPath(c *C) {
 	assertError(c, body, http.StatusBadRequest, "", `path must be absolute, got .*`)
 }
 
+func (s *filesSuite) TestListFilesItselfAndRecurse(c *C) {
+	query := url.Values{
+		"action":  []string{"list"},
+		"path":    []string{"bar"},
+		"itself":  []string{"true"},
+		"recurse": []string{"true"},
+	}
+	response, body := doRequest(c, v1GetFiles, "GET", "/v1/files", query, nil, nil)
+	c.Assert(response.StatusCode, Equals, http.StatusBadRequest)
+	assertError(c, body, http.StatusBadRequest, "", `recurse parameter and itself parameter cannot both be "true"`)
+}
+
 func (s *filesSuite) TestListFilesPermissionDenied(c *C) {
 	tmpDir := c.MkDir()
 	noAccessDir := filepath.Join(tmpDir, "noaccess")
@@ -130,6 +142,31 @@ func (s *filesSuite) TestListFilesDirItself(c *C) {
 
 	r := decodeResp(c, body, http.StatusOK, ResponseTypeSync)
 	assertListResult(c, r.Result, 0, "directory", tmpDir, "sub", "755", -1)
+}
+
+func (s *filesSuite) TestListFilesDirRecursive(c *C) {
+	tmpDir := createTestFiles(c)
+
+	query := url.Values{
+		"action":  []string{"list"},
+		"path":    []string{tmpDir},
+		"itself":  []string{"false"},
+		"recurse": []string{"true"},
+	}
+	response, body := doRequest(c, v1GetFiles, "GET", "/v1/files", query, nil, nil)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	r := decodeResp(c, body, http.StatusOK, ResponseTypeSync)
+	assertListResult(c, r.Result, 0, "file", tmpDir, "foo", "644", 1)
+	assertListResult(c, r.Result, 1, "file", tmpDir, "one.txt", "600", 2)
+	assertListResult(c, r.Result, 2, "directory", tmpDir, "sub", "755", -1)
+	assertListResult(c, r.Result, 3, "file", tmpDir, "two.txt", "755", 3)
+
+	children := pullChildListResult(c, r.Result, 2)
+	assertListResult(c, children, 0, "directory", tmpDir+"/sub", "one", "755", -1)
+
+	nestedChildren := pullChildListResult(c, children, 0)
+	assertListResult(c, nestedChildren, 0, "file", tmpDir+"/sub/one", "three.txt", "755", 4)
 }
 
 func (s *filesSuite) TestListFilesWithPattern(c *C) {
@@ -1121,12 +1158,22 @@ func createTestFiles(c *C) string {
 	writeTempFile(c, tmpDir, "one.txt", "be", 0o600)
 	c.Assert(os.Mkdir(tmpDir+"/sub", 0o755), IsNil)
 	writeTempFile(c, tmpDir, "two.txt", "cee", 0o755)
+	c.Assert(os.Mkdir(tmpDir+"/sub/one", 0o755), IsNil)
+	writeTempFile(c, tmpDir+"/sub/one", "three.txt", "deee", 0o755)
 	return tmpDir
 }
 
 func writeTempFile(c *C, dir, filename, content string, perm os.FileMode) {
 	err := ioutil.WriteFile(filepath.Join(dir, filename), []byte(content), perm)
 	c.Assert(err, IsNil)
+}
+
+func pullChildListResult(c *C, result interface{}, index int) []interface{} {
+	var r []interface{}
+	x := result.([]interface{})[index].(map[string]interface{})
+	// It would really be great if parsing arbitrary JSON were nicer in pure go
+	r = append(r, x["children"].([]interface{})[0].(map[string]interface{}))
+	return r
 }
 
 func assertListResult(c *C, result interface{}, index int, typ, dir, name, perms string, size int) {

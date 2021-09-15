@@ -60,7 +60,14 @@ func v1GetFiles(_ *Command, req *http.Request, _ *userState) Response {
 		if itself != "true" && itself != "false" && itself != "" {
 			return statusBadRequest(`itself parameter must be "true" or "false"`)
 		}
-		return listFilesResponse(path, pattern, itself == "true")
+		recurse := query.Get("recurse")
+		if recurse != "true" && recurse != "false" && recurse != "" {
+			return statusBadRequest(`recurse parameter must be "true" or "false"`)
+		}
+		if itself == "true" && recurse == "true" {
+			return statusBadRequest(`recurse parameter and itself parameter cannot both be "true"`)
+		}
+		return listFilesResponse(path, pattern, recurse == "true", itself == "true")
 	default:
 		return statusBadRequest("invalid action %q", action)
 	}
@@ -195,16 +202,17 @@ func fileErrorToStatus(err error) int {
 }
 
 type fileInfoResult struct {
-	Path         string   `json:"path"`
-	Name         string   `json:"name"`
-	Type         fileType `json:"type"`
-	Size         *int64   `json:"size,omitempty"`
-	Permissions  string   `json:"permissions"`
-	LastModified string   `json:"last-modified"`
-	UserID       *int     `json:"user-id"`
-	User         string   `json:"user"`
-	GroupID      *int     `json:"group-id"`
-	Group        string   `json:"group"`
+	Path         string           `json:"path"`
+	Name         string           `json:"name"`
+	Type         fileType         `json:"type"`
+	Size         *int64           `json:"size,omitempty"`
+	Permissions  string           `json:"permissions"`
+	LastModified string           `json:"last-modified"`
+	UserID       *int             `json:"user-id"`
+	User         string           `json:"user"`
+	GroupID      *int             `json:"group-id"`
+	Group        string           `json:"group"`
+	Children     []fileInfoResult `json:"children"`
 }
 
 type fileType string
@@ -281,11 +289,11 @@ func fileInfoToResult(fullPath string, info os.FileInfo, userCache, groupCache m
 	return result
 }
 
-func listFilesResponse(path, pattern string, itself bool) Response {
+func listFilesResponse(path, pattern string, recurse bool, itself bool) Response {
 	if !pathpkg.IsAbs(path) {
 		return statusBadRequest("path must be absolute, got %q", path)
 	}
-	result, err := listFiles(path, pattern, itself)
+	result, err := listFiles(path, pattern, recurse, itself)
 	if err != nil {
 		return &resp{
 			Type:   ResponseTypeError,
@@ -296,7 +304,7 @@ func listFilesResponse(path, pattern string, itself bool) Response {
 	return SyncResponse(result)
 }
 
-func listFiles(path, pattern string, itself bool) ([]fileInfoResult, error) {
+func listFiles(path, pattern string, recurse bool, itself bool) ([]fileInfoResult, error) {
 	info, err := os.Stat(path)
 	if err != nil {
 		return nil, err
@@ -328,7 +336,14 @@ func listFiles(path, pattern string, itself bool) ([]fileInfoResult, error) {
 		}
 		if matched {
 			fullPath := pathpkg.Join(dir, name)
-			result = append(result, fileInfoToResult(fullPath, info, userCache, groupCache))
+			fileInfo := fileInfoToResult(fullPath, info, userCache, groupCache)
+			if recurse && fileInfo.Type == fileTypeDirectory {
+				fileInfo.Children, err = listFiles(fileInfo.Path, pattern, recurse, itself)
+				if err != nil {
+					return nil, err
+				}
+			}
+			result = append(result, fileInfo)
 		}
 	}
 	return result, nil
