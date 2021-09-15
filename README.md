@@ -12,8 +12,8 @@ designed with unique features that help with more specific use cases.
   - [Running pebble](#running-pebble)
   - [Layer specification](#layer-specification)
   - [API and Go client](#api-and-go-client)
-  - [Roadmap/TODO](#roadmap-todo)
-  - [Hacking / Development](#hacking-development)
+  - [Roadmap/TODO](#roadmap--todo)
+  - [Hacking / Development](#hacking--development)
   - [Contributing](#contributing)
 
 ## General model
