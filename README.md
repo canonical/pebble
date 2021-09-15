@@ -1,4 +1,6 @@
-## Take control of your internal daemons!
+# The Pebble service manager
+
+_Take control of your internal daemons!_
 
 **Pebble** helps you to orchestrate a set of local service processes as an organized set.
 It resembles well known tools such as _supervisord_, _runit_, or _s6_, in that it can
@@ -115,7 +117,7 @@ services:
 
 ## Running pebble
 
-Once the `$PEBBLE` directory is setup, running it is easy:
+If pebble is installed and the `$PEBBLE` directory is set up, running it is easy:
 
     $ pebble run
 
@@ -209,10 +211,27 @@ services:
         group-id: <gid>
 ```
 
-## TODO/Contributing
+## API and Go client
+
+The Pebble daemon exposes an API (HTTP over a Unix socket) to allow remote clients to interact with the daemon: start and stop services, add layers the plan, and so on. There is currently no documentation for the API (apart from the [code itself](https://github.com/canonical/pebble/blob/master/internal/daemon/api.go)); most users will interact with it via the Pebble command line interface (`pebble start`, `pebble add`, etc).
+
+There's also a [Go client](https://pkg.go.dev/github.com/canonical/pebble@v0.0.0-20210907234803-4c5d8c174b10/client) that the CLI uses to connect to the Pebble API. You can use this as follows:
+
+```go
+pebble, _ := client.New(&client.Config{Socket: ".pebble.socket"})
+// handle error
+files, err := pebble.Start(&client.ServiceOptions{Names: []string{"srv1"}})
+// handle error
+```
+
+We try to never change the underlying API itself in a backwards-incompatible way, however, we may sometimes change the Go client in backwards-incompatible ways.
+
+In addition to the Go client, there's also a [Python client](https://github.com/canonical/operator/blob/master/ops/pebble.py) for the Pebble API that's part of the Python Operator Framework used by Juju charms ([documentation](https://juju.is/docs/sdk/pebble)).
+
+## Roadmap / TODO
 
 This is a preview of what Pebble is becoming. Please keep that in mind while you
-explore around.
+explore.
 
 Here are some of the things coming soon:
 
@@ -224,11 +243,17 @@ Here are some of the things coming soon:
   - [x] General system modification commands (writing configuration files, etc)
   - [x] Better log caching and retrieval support
   - [x] Consider showing unified log as output of `pebble run` (use `-v`)
-  - [ ] Add support for automatically removing (double) timestamps from logs
+  - [ ] Automatically restart services that fail
+  - [ ] Support for custom health checks (HTTP, TCP, command)
+  - [ ] Automatically remove (double) timestamps from logs
   - [ ] Improve signal handling, e.g., sending SIGHUP to a service
   - [ ] Terminate all services before exiting run command
   - [ ] More tests for existing CLI commands
 
-## Have fun!
+## Hacking / Development
 
-... and enjoy the rest of 2021!
+See [HACKING.md](HACKING.md) for information on how to run and hack on the Pebble codebase during development. In short, use `go run ./cmd/pebble`.
+
+## Contributing
+
+We welcome quality external contributions. We have good unit tests for much of the code, and a thorough code review process. Please note that unless it's a trivial fix, it's generally worth opening an issue to discuss before submitting a pull request.
