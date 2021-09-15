@@ -4,8 +4,6 @@ Hacking on Pebble is easy. It's written in Go, so install or [download](https://
 
 To compile and run Pebble, use the `go run` command on the `cmd/pebble` directory. The first time you run it, it will download dependencies and build packages, so will take a few seconds (but after that be very fast):
 
-It will show something like this:
-
 ```
 $ go run ./cmd/pebble
 Pebble lets you control services and perform management actions on
@@ -15,7 +13,7 @@ Usage: pebble <command> [<options>...]
 ...
 ```
 
-If you want to build and install the Pebble executable to your `~/go/bin` directory (which you may want to add to your path), use `go install`:
+If you want to build and install the executable to your `~/go/bin` directory (which you may want to add to your path), use `go install`:
 
 ```
 $ go install ./cmd/pebble

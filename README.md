@@ -11,7 +11,10 @@ designed with unique features that help with more specific use cases.
   - [Layer configuration examples](#layer-configuration-examples)
   - [Running pebble](#running-pebble)
   - [Layer specification](#layer-specification)
-  - [TODO/Contributing](#todo-contributing)
+  - [API and Go client](#api-and-go-client)
+  - [Roadmap/TODO](#roadmap-todo)
+  - [Hacking / Development](#hacking-development)
+  - [Contributing](#contributing)
 
 ## General model
 
@@ -213,20 +216,24 @@ services:
 
 ## API and Go client
 
-The Pebble daemon exposes an API (HTTP over a Unix socket) to allow remote clients to interact with the daemon: start and stop services, add layers the plan, and so on. There is currently no documentation for the API (apart from the [code itself](https://github.com/canonical/pebble/blob/master/internal/daemon/api.go)); most users will interact with it via the Pebble command line interface (`pebble start`, `pebble add`, etc).
+The Pebble daemon exposes an API (HTTP over a Unix socket) to allow remote clients to interact with the daemon. It can start and stop services, add configuration layers the plan, and so on. There is currently no official documentation for the API (apart from the [code itself](https://github.com/canonical/pebble/blob/master/internal/daemon/api.go)!); most users will interact with it via the Pebble command line interface or the Go or Python client.
 
-There's also a [Go client](https://pkg.go.dev/github.com/canonical/pebble@v0.0.0-20210907234803-4c5d8c174b10/client) that the CLI uses to connect to the Pebble API. You can use this as follows:
+The [Go client](https://pkg.go.dev/github.com/canonical/pebble@v0.0.0-20210907234803-4c5d8c174b10/client) is used by the CLI to connect to the Pebble API. You can use this as follows:
 
 ```go
-pebble, _ := client.New(&client.Config{Socket: ".pebble.socket"})
-// handle error
+pebble, err := client.New(&client.Config{Socket: ".pebble.socket"})
+if err != nil {
+    return err
+}
 files, err := pebble.Start(&client.ServiceOptions{Names: []string{"srv1"}})
-// handle error
+if err != nil {
+    return err
+}
 ```
 
 We try to never change the underlying API itself in a backwards-incompatible way, however, we may sometimes change the Go client in backwards-incompatible ways.
 
-In addition to the Go client, there's also a [Python client](https://github.com/canonical/operator/blob/master/ops/pebble.py) for the Pebble API that's part of the Python Operator Framework used by Juju charms ([documentation](https://juju.is/docs/sdk/pebble)).
+In addition to the Go client, there's also a [Python client](https://github.com/canonical/operator/blob/master/ops/pebble.py) for the Pebble API that's part of the Python Operator Framework used by Juju charms ([documentation here](https://juju.is/docs/sdk/pebble)).
 
 ## Roadmap / TODO
 
