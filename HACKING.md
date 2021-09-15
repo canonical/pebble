@@ -27,7 +27,8 @@ However, during development it's easiest just to use `go run`, as that will auto
 To run the Pebble daemon, set the `$PEBBLE` environment variable and use the `pebble run` sub-command, something like this:
 
 ```
-$ export PEBBLE=~
+$ mkdir ~/pebble
+$ export PEBBLE=~/pebble
 $ go run ./cmd/pebble run
 2021-09-15T01:37:23.962Z [pebble] Started daemon.
 ...
@@ -39,7 +40,7 @@ $ go run ./cmd/pebble run
 The use the Pebble command line client, run one of the other Pebble sub-commands, such as `pebble plan` or `pebble services` (if the server is running in one terminal, do this in another):
 
 ```
-$ export PEBBLE=~
+$ export PEBBLE=~/pebble
 $ go run ./cmd/pebble plan
 services:
     snappass:
@@ -57,7 +58,7 @@ snappass  disabled  inactive
 For debugging, you can also use [curl](https://curl.se/) in Unix socket mode to hit the Pebble API:
 
 ```
-$ curl --unix-socket ~/.pebble.socket 'http://localhost/v1/services?names=snappass' | jq
+$ curl --unix-socket ~/pebble/.pebble.socket 'http://localhost/v1/services?names=snappass' | jq
   % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
                                  Dload  Upload   Total   Spent    Left  Speed
 100   120  100   120    0     0   117k      0 --:--:-- --:--:-- --:--:--  117k
