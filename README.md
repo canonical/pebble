@@ -218,7 +218,7 @@ services:
 
 The Pebble daemon exposes an API (HTTP over a Unix socket) to allow remote clients to interact with the daemon. It can start and stop services, add configuration layers the plan, and so on. There is currently no official documentation for the API (apart from the [code itself](https://github.com/canonical/pebble/blob/master/internal/daemon/api.go)!); most users will interact with it via the Pebble command line interface or the Go or Python client.
 
-The [Go client](https://pkg.go.dev/github.com/canonical/pebble@v0.0.0-20210907234803-4c5d8c174b10/client) is used by the CLI to connect to the Pebble API. You can use this as follows:
+The [Go client](https://pkg.go.dev/github.com/canonical/pebble/client) is used by the CLI to connect to the Pebble API. You can use this as follows:
 
 ```go
 pebble, err := client.New(&client.Config{Socket: ".pebble.socket"})
@@ -264,3 +264,9 @@ See [HACKING.md](HACKING.md) for information on how to run and hack on the Pebbl
 ## Contributing
 
 We welcome quality external contributions. We have good unit tests for much of the code, and a thorough code review process. Please note that unless it's a trivial fix, it's generally worth opening an issue to discuss before submitting a pull request.
+
+Before you contribute a pull request you should sign the [Canonical contributor agreement](https://ubuntu.com/legal/contributors) -- it's the easiest way for you to give us permission to use your contributions.
+
+## Have fun!
+
+... and enjoy the rest of the year!
