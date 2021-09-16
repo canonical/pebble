@@ -18,7 +18,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
+	"io/ioutil"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -67,9 +69,13 @@ type ExecOptions struct {
 	Width  int
 	Height int
 
-	// Standard input, output, and error streams.
-	Stdin  io.ReadCloser
+	// Standard input stream. If nil, no input is sent.
+	Stdin io.Reader
+
+	// Standard output stream. If nil, output is discarded.
 	Stdout io.Writer
+
+	// Standard error stream. If nil, error output is discarded.
 	Stderr io.Writer
 }
 
@@ -109,6 +115,25 @@ type jsonWriter interface {
 // Exec starts a command execution with the given options, returning a value
 // representing the execution.
 func (client *Client) Exec(opts *ExecOptions) (*Execution, error) {
+	stdin := opts.Stdin
+	if stdin == nil {
+		stdin = bytes.NewReader(nil)
+	}
+	stdout := opts.Stdout
+	if stdout == nil {
+		stdout = ioutil.Discard
+	}
+	var stderr io.Writer
+	if opts.SeparateStderr {
+		stderr = opts.Stderr
+		if stderr == nil {
+			stderr = ioutil.Discard
+		}
+	} else if stderr != nil {
+		return nil, fmt.Errorf("Stderr must be nil if SeparateStderr is false")
+	}
+
+	// Hit the /v1/exec endpoint to start the command.
 	var timeoutStr string
 	if opts.Timeout != 0 {
 		timeoutStr = opts.Timeout.String()
@@ -145,70 +170,66 @@ func (client *Client) Exec(opts *ExecOptions) (*Execution, error) {
 		return nil, err
 	}
 
-	// Process additional arguments (connecting I/O and websockets)
-	fds := result.WebsocketIDs
+	wsIDs := result.WebsocketIDs
+	if wsIDs["control"] == "" {
+		return nil, fmt.Errorf(`response did not include "control" websocket`)
+	}
+	if wsIDs["io"] == "" {
+		return nil, fmt.Errorf(`response did not include "io" websocket`)
+	}
+	if opts.SeparateStderr && wsIDs["stderr"] == "" {
+		return nil, fmt.Errorf(`response did not include "stderr" websocket`)
+	}
 
-	var controlWebsocket *websocket.Conn
-	closeControl := func() {}
-	if fds["control"] != "" {
-		conn, err := client.getChangeWebsocket(changeID, fds["control"])
-		if err != nil {
-			return nil, err
-		}
-		controlWebsocket = conn
-		closeControl = func() {
-			closeMsg := websocket.FormatCloseMessage(websocket.CloseNormalClosure, "")
-			controlWebsocket.WriteMessage(websocket.CloseMessage, closeMsg)
-			controlWebsocket.Close()
-		}
+	controlWebsocket, err := client.getChangeWebsocket(changeID, wsIDs["control"])
+	if err != nil {
+		return nil, err
+	}
+	closeControl := func() {
+		closeMsg := websocket.FormatCloseMessage(websocket.CloseNormalClosure, "")
+		controlWebsocket.WriteMessage(websocket.CloseMessage, closeMsg)
+		controlWebsocket.Close()
 	}
 
 	dataDone := make(chan struct{})
 
 	if opts.UseTerminal {
 		// Handle terminal-based executions
-		if opts.Stdin != nil && opts.Stdout != nil {
-			// Connect to the websocket
-			conn, err := client.getChangeWebsocket(changeID, fds["io"])
-			if err != nil {
-				return nil, err
-			}
-
-			// And attach stdin and stdout to it
-			go func() {
-				wsutil.WebsocketSendStream(conn, opts.Stdin, -1)
-				<-wsutil.WebsocketRecvStream(opts.Stdout, conn)
-				conn.Close()
-				close(dataDone)
-				closeControl()
-			}()
-		} else {
-			close(dataDone)
+		conn, err := client.getChangeWebsocket(changeID, wsIDs["io"])
+		if err != nil {
+			return nil, err
 		}
+
+		// And attach stdin and stdout to it
+		go func() {
+			wsutil.WebsocketSendStream(conn, stdin, -1)
+			<-wsutil.WebsocketRecvStream(stdout, conn)
+			conn.Close()
+			close(dataDone)
+			closeControl()
+		}()
 	} else {
 		// Handle non-terminal executions
 		dones := map[string]chan bool{}
 		conns := []*websocket.Conn{}
 
 		// Handle stdin and stdout
-		if fds["io"] != "" {
-			conn, err := client.getChangeWebsocket(changeID, fds["io"])
-			if err != nil {
-				return nil, err
-			}
-			conns = append(conns, conn)
-			dones["stdin"] = wsutil.WebsocketSendStream(conn, opts.Stdin, -1)
-			dones["stdout"] = wsutil.WebsocketRecvStream(opts.Stdout, conn)
+		conn, err := client.getChangeWebsocket(changeID, wsIDs["io"])
+		if err != nil {
+			return nil, err
 		}
+		conns = append(conns, conn)
+		dones["stdin"] = wsutil.WebsocketSendStream(conn, stdin, -1)
+		dones["stdout"] = wsutil.WebsocketRecvStream(stdout, conn)
 
 		// Handle stderr separately if needed
-		if opts.SeparateStderr && fds["stderr"] != "" {
-			conn, err := client.getChangeWebsocket(changeID, fds["stderr"])
+		if opts.SeparateStderr {
+			conn, err := client.getChangeWebsocket(changeID, wsIDs["stderr"])
 			if err != nil {
 				return nil, err
 			}
 			conns = append(conns, conn)
-			dones["stderr"] = wsutil.WebsocketRecvStream(opts.Stderr, conn)
+			dones["stderr"] = wsutil.WebsocketRecvStream(stderr, conn)
 		}
 
 		// Wait for everything to be done
@@ -221,11 +242,7 @@ func (client *Client) Exec(opts *ExecOptions) (*Execution, error) {
 				<-done
 			}
 
-			if fds["io"] != "" {
-				if opts.Stdin != nil {
-					opts.Stdin.Close()
-				}
-
+			if wsIDs["io"] != "" {
 				// Empty the stdin channel but don't block on it as
 				// stdin may be stuck in Read()
 				go func() {

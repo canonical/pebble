@@ -167,7 +167,7 @@ func (s *execSuite) TestUserIDGroupID(c *C) {
 func (s *execSuite) exec(c *C, stdin string, opts *client.ExecOptions) (stdout, stderr string, exitCode int, waitErr error) {
 	outBuf := &bytes.Buffer{}
 	errBuf := &bytes.Buffer{}
-	opts.Stdin = ioutil.NopCloser(strings.NewReader(stdin))
+	opts.Stdin = strings.NewReader(stdin)
 	opts.Stdout = outBuf
 	opts.Stderr = errBuf
 	execution, err := s.client.Exec(opts)
@@ -183,7 +183,7 @@ func (s *execSuite) TestSignal(c *C) {
 	opts := &client.ExecOptions{
 		Command:        []string{"sleep", "1"},
 		SeparateStderr: true,
-		Stdin:          ioutil.NopCloser(strings.NewReader("")),
+		Stdin:          strings.NewReader(""),
 		Stdout:         ioutil.Discard,
 		Stderr:         ioutil.Discard,
 	}
@@ -205,7 +205,7 @@ func (s *execSuite) TestStreaming(c *C) {
 	opts := &client.ExecOptions{
 		Command:        []string{"cat"},
 		SeparateStderr: true,
-		Stdin:          ioutil.NopCloser(channelReader{stdinCh}),
+		Stdin:          channelReader{stdinCh},
 		Stdout:         channelWriter{stdoutCh},
 		Stderr:         ioutil.Discard,
 	}
