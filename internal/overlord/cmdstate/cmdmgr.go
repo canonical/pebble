@@ -76,7 +76,7 @@ type ExecArgs struct {
 	Height         int
 }
 
-// ExecMetadata is the metadata from an Exec call.
+// ExecMetadata is the metadata returned from an Exec call.
 type ExecMetadata struct {
 	WebsocketIDs map[string]string // keys are "control", "io", and "stderr" if SeparateStderr true
 	Environment  map[string]string

@@ -83,6 +83,25 @@ type ExecOptions struct {
 	DataDone chan bool
 }
 
+type execPayload struct {
+	Command        []string          `json:"command"`
+	Environment    map[string]string `json:"environment"`
+	WorkingDir     string            `json:"working-dir"`
+	Timeout        string            `json:"timeout"`
+	UserID         *int              `json:"user-id"`
+	User           string            `json:"user"`
+	GroupID        *int              `json:"group-id"`
+	Group          string            `json:"group"`
+	UseTerminal    bool              `json:"use-terminal"`
+	SeparateStderr bool              `json:"separate-stderr"`
+	Width          int               `json:"width"`
+	Height         int               `json:"height"`
+}
+
+type execResult struct {
+	WebsocketIDs map[string]string `json:"websocket-ids"`
+}
+
 // Exec starts a command execution with the given options and additional
 // control arguments, returning the execution's change ID.
 func (client *Client) Exec(opts *ExecOptions) (string, error) {
@@ -98,20 +117,7 @@ func (client *Client) Exec(opts *ExecOptions) (string, error) {
 		timeoutStr = opts.Timeout.String()
 	}
 
-	var payload = struct {
-		Command        []string          `json:"command"`
-		Environment    map[string]string `json:"environment"`
-		WorkingDir     string            `json:"working-dir"`
-		Timeout        string            `json:"timeout"`
-		UserID         *int              `json:"user-id"`
-		User           string            `json:"user"`
-		GroupID        *int              `json:"group-id"`
-		Group          string            `json:"group"`
-		UseTerminal    bool              `json:"use-terminal"`
-		SeparateStderr bool              `json:"separate-stderr"`
-		Width          int               `json:"width"`
-		Height         int               `json:"height"`
-	}{
+	payload := execPayload{
 		Command:        opts.Command,
 		Environment:    opts.Environment,
 		WorkingDir:     opts.WorkingDir,
@@ -137,9 +143,7 @@ func (client *Client) Exec(opts *ExecOptions) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	var result struct {
-		WebsocketIDs map[string]string `json:"websocket-ids"`
-	}
+	var result execResult
 	err = json.Unmarshal(resultBytes, &result)
 	if err != nil {
 		return "", err

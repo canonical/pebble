@@ -343,26 +343,13 @@ type execResponse struct {
 }
 
 // execRequest directly calls exec via the ServeHTTP endpoint, rather than
-// going through the Go client.
+// using the Go client.
 func execRequest(c *C, opts *client.ExecOptions) (*http.Response, execResponse) {
 	var timeoutStr string
 	if opts.Timeout != 0 {
 		timeoutStr = opts.Timeout.String()
 	}
-	var payload = struct {
-		Command        []string          `json:"command"`
-		Environment    map[string]string `json:"environment"`
-		WorkingDir     string            `json:"working-dir"`
-		Timeout        string            `json:"timeout"`
-		UserID         *int              `json:"user-id"`
-		User           string            `json:"user"`
-		GroupID        *int              `json:"group-id"`
-		Group          string            `json:"group"`
-		Terminal       bool              `json:"use-terminal"`
-		SeparateStderr bool              `json:"separate-stderr"`
-		Width          int               `json:"width"`
-		Height         int               `json:"height"`
-	}{
+	payload := execPayload{
 		Command:        opts.Command,
 		Environment:    opts.Environment,
 		WorkingDir:     opts.WorkingDir,
@@ -371,12 +358,12 @@ func execRequest(c *C, opts *client.ExecOptions) (*http.Response, execResponse) 
 		User:           opts.User,
 		GroupID:        opts.GroupID,
 		Group:          opts.Group,
-		Terminal:       opts.UseTerminal,
+		UseTerminal:    opts.UseTerminal,
 		SeparateStderr: opts.SeparateStderr,
 		Width:          opts.Width,
 		Height:         opts.Height,
 	}
-	requestBody, err := json.Marshal(payload)
+	requestBody, err := json.Marshal(&payload)
 	c.Assert(err, IsNil)
 
 	httpResp, body := doRequest(c, v1PostExec, "POST", "/v1/exec", nil, nil, requestBody)

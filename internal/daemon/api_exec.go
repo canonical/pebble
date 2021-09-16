@@ -24,21 +24,23 @@ import (
 	"github.com/canonical/pebble/internal/overlord/cmdstate"
 )
 
+type execPayload struct {
+	Command        []string          `json:"command"`
+	Environment    map[string]string `json:"environment"`
+	WorkingDir     string            `json:"working-dir"`
+	Timeout        string            `json:"timeout"`
+	UserID         *int              `json:"user-id"`
+	User           string            `json:"user"`
+	GroupID        *int              `json:"group-id"`
+	Group          string            `json:"group"`
+	UseTerminal    bool              `json:"use-terminal"`
+	SeparateStderr bool              `json:"separate-stderr"`
+	Width          int               `json:"width"`
+	Height         int               `json:"height"`
+}
+
 func v1PostExec(c *Command, req *http.Request, _ *userState) Response {
-	var payload struct {
-		Command        []string          `json:"command"`
-		Environment    map[string]string `json:"environment"`
-		WorkingDir     string            `json:"working-dir"`
-		Timeout        string            `json:"timeout"`
-		UserID         *int              `json:"user-id"`
-		User           string            `json:"user"`
-		GroupID        *int              `json:"group-id"`
-		Group          string            `json:"group"`
-		UseTerminal    bool              `json:"use-terminal"`
-		SeparateStderr bool              `json:"separate-stderr"`
-		Width          int               `json:"width"`
-		Height         int               `json:"height"`
-	}
+	var payload execPayload
 	decoder := json.NewDecoder(req.Body)
 	if err := decoder.Decode(&payload); err != nil {
 		return statusBadRequest("cannot decode request body: %v", err)
