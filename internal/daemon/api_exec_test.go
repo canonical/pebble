@@ -62,34 +62,34 @@ func (s *execSuite) TearDownTest(c *C) {
 // Some of these tests use the Go client (tested elsewhere) for simplicity.
 
 func (s *execSuite) TestStdinStdout(c *C) {
-	changeErr, stdout, stderr, exitCode := s.exec(c, "foo bar", &client.ExecOptions{
+	stdout, stderr, exitCode, waitErr := s.exec(c, "foo bar", &client.ExecOptions{
 		Command:        []string{"cat"},
 		SeparateStderr: true,
 	})
-	c.Check(changeErr, Equals, "")
+	c.Check(waitErr, IsNil)
 	c.Check(stdout, Equals, "foo bar")
 	c.Check(stderr, Equals, "")
 	c.Check(exitCode, Equals, 0)
 }
 
 func (s *execSuite) TestStderr(c *C) {
-	changeErr, stdout, stderr, exitCode := s.exec(c, "", &client.ExecOptions{
+	stdout, stderr, exitCode, waitErr := s.exec(c, "", &client.ExecOptions{
 		Command:        []string{"/bin/sh", "-c", "echo some stderr! >&2"},
 		SeparateStderr: true,
 	})
-	c.Check(changeErr, Equals, "")
+	c.Check(waitErr, IsNil)
 	c.Check(stdout, Equals, "")
 	c.Check(stderr, Equals, "some stderr!\n")
 	c.Check(exitCode, Equals, 0)
 }
 
 func (s *execSuite) TestEnvironment(c *C) {
-	changeErr, stdout, stderr, exitCode := s.exec(c, "", &client.ExecOptions{
+	stdout, stderr, exitCode, waitErr := s.exec(c, "", &client.ExecOptions{
 		Command:        []string{"/bin/sh", "-c", "echo FOO=$FOO"},
 		Environment:    map[string]string{"FOO": "bar"},
 		SeparateStderr: true,
 	})
-	c.Check(changeErr, Equals, "")
+	c.Check(waitErr, IsNil)
 	c.Check(stdout, Equals, "FOO=bar\n")
 	c.Check(stderr, Equals, "")
 	c.Check(exitCode, Equals, 0)
@@ -97,27 +97,26 @@ func (s *execSuite) TestEnvironment(c *C) {
 
 func (s *execSuite) TestWorkingDir(c *C) {
 	workingDir := c.MkDir()
-	changeErr, stdout, stderr, exitCode := s.exec(c, "", &client.ExecOptions{
+	stdout, stderr, exitCode, waitErr := s.exec(c, "", &client.ExecOptions{
 		Command:        []string{"pwd"},
 		SeparateStderr: true,
 		WorkingDir:     workingDir,
 	})
-	c.Check(changeErr, Equals, "")
+	c.Check(waitErr, IsNil)
 	c.Check(stdout, Equals, workingDir+"\n")
 	c.Check(stderr, Equals, "")
 	c.Check(exitCode, Equals, 0)
 }
 
 func (s *execSuite) TestTimeout(c *C) {
-	changeErr, stdout, stderr, exitCode := s.exec(c, "", &client.ExecOptions{
+	stdout, stderr, _, waitErr := s.exec(c, "", &client.ExecOptions{
 		Command:        []string{"sleep", "1"},
 		SeparateStderr: true,
 		Timeout:        time.Millisecond,
 	})
-	c.Check(changeErr, Matches, `cannot perform the following tasks:\n.*timed out after 1ms.*`)
+	c.Check(waitErr, ErrorMatches, `cannot perform the following tasks:\n.*timed out after 1ms.*`)
 	c.Check(stdout, Equals, "")
 	c.Check(stderr, Equals, "")
-	c.Check(exitCode, Equals, -1)
 }
 
 // You can run these tests as root with the following commands:
@@ -129,13 +128,13 @@ func (s *execSuite) TestUserGroup(c *C) {
 	if os.Getuid() != 0 {
 		c.Skip("exec user/group test requires running as root")
 	}
-	changeErr, stdout, stderr, exitCode := s.exec(c, "", &client.ExecOptions{
+	stdout, stderr, exitCode, waitErr := s.exec(c, "", &client.ExecOptions{
 		Command:        []string{"/bin/sh", "-c", "id -n -u && id -n -g"},
 		SeparateStderr: true,
 		User:           "nobody",
 		Group:          "nogroup",
 	})
-	c.Check(changeErr, Equals, "")
+	c.Check(waitErr, IsNil)
 	c.Check(stdout, Equals, "nobody\nnogroup\n")
 	c.Check(stderr, Equals, "")
 	c.Check(exitCode, Equals, 0)
@@ -153,67 +152,51 @@ func (s *execSuite) TestUserIDGroupID(c *C) {
 	c.Assert(err, IsNil)
 	gid, err := strconv.Atoi(nogroup.Gid)
 	c.Assert(err, IsNil)
-	changeErr, stdout, stderr, exitCode := s.exec(c, "", &client.ExecOptions{
+	stdout, stderr, exitCode, waitErr := s.exec(c, "", &client.ExecOptions{
 		Command:        []string{"/bin/sh", "-c", "id -n -u && id -n -g"},
 		SeparateStderr: true,
 		UserID:         &uid,
 		GroupID:        &gid,
 	})
-	c.Check(changeErr, Equals, "")
+	c.Check(waitErr, IsNil)
 	c.Check(stdout, Equals, "nobody\nnogroup\n")
 	c.Check(stderr, Equals, "")
 	c.Check(exitCode, Equals, 0)
 }
 
-func (s *execSuite) exec(c *C, stdin string, opts *client.ExecOptions) (changeErr, stdout, stderr string, exitCode int) {
+func (s *execSuite) exec(c *C, stdin string, opts *client.ExecOptions) (stdout, stderr string, exitCode int, waitErr error) {
 	outBuf := &bytes.Buffer{}
 	errBuf := &bytes.Buffer{}
 	opts.Stdin = ioutil.NopCloser(strings.NewReader(stdin))
 	opts.Stdout = outBuf
 	opts.Stderr = errBuf
-	opts.DataDone = make(chan bool)
-	changeID, err := s.client.Exec(opts)
+	execution, err := s.client.Exec(opts)
 	c.Assert(err, IsNil)
 
-	change, err := s.client.WaitChange(changeID, nil)
+	exitCode, waitErr = execution.Wait()
 	c.Check(err, IsNil)
-	c.Check(change.Ready, Equals, true)
-	exitCode = getExitCode(c, change)
 
-	<-opts.DataDone
-
-	return change.Err, outBuf.String(), errBuf.String(), exitCode
+	return outBuf.String(), errBuf.String(), exitCode, waitErr
 }
 
 func (s *execSuite) TestSignal(c *C) {
-	signalCh := make(chan string, 1)
 	opts := &client.ExecOptions{
 		Command:        []string{"sleep", "1"},
 		SeparateStderr: true,
 		Stdin:          ioutil.NopCloser(strings.NewReader("")),
 		Stdout:         ioutil.Discard,
 		Stderr:         ioutil.Discard,
-		Control: func(conn client.WebsocketWriter) {
-			signal := <-signalCh
-			err := client.ExecSendSignal(conn, signal)
-			c.Check(err, IsNil)
-		},
 	}
-	changeID, err := s.client.Exec(opts)
+	execution, err := s.client.Exec(opts)
 	c.Assert(err, IsNil)
 
-	select {
-	case signalCh <- "SIGINT":
-	case <-time.After(time.Second):
-		c.Fatalf("timed out sending to signal channel")
-	}
+	err = execution.SendSignal("SIGINT")
+	c.Assert(err, IsNil)
 
-	change, err := s.client.WaitChange(changeID, nil)
+	exitCode, err := execution.Wait()
 	c.Check(err, IsNil)
-	c.Check(change.Ready, Equals, true)
-	c.Check(change.Err, Equals, "")
 
-	c.Check(getExitCode(c, change), Equals, 130)
+	c.Check(exitCode, Equals, 130)
 }
 
 func (s *execSuite) TestStreaming(c *C) {
@@ -226,7 +209,7 @@ func (s *execSuite) TestStreaming(c *C) {
 		Stdout:         channelWriter{stdoutCh},
 		Stderr:         ioutil.Discard,
 	}
-	changeID, err := s.client.Exec(opts)
+	execution, err := s.client.Exec(opts)
 	c.Assert(err, IsNil)
 
 	for i := 0; i < 20; i++ {
@@ -250,11 +233,9 @@ func (s *execSuite) TestStreaming(c *C) {
 		c.Fatalf("timed out waiting to write to stdin")
 	}
 
-	change, err := s.client.WaitChange(changeID, nil)
+	exitCode, err := execution.Wait()
 	c.Check(err, IsNil)
-	c.Check(change.Ready, Equals, true)
-	c.Check(change.Err, Equals, "")
-	c.Check(getExitCode(c, change), Equals, 0)
+	c.Check(exitCode, Equals, 0)
 }
 
 type channelReader struct {

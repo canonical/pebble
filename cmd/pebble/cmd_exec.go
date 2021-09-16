@@ -22,7 +22,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gorilla/websocket"
 	"github.com/jessevdk/go-flags"
 	"golang.org/x/sys/unix"
 
@@ -142,7 +141,7 @@ func (cmd *cmdExec) Execute(args []string) error {
 		}
 	}
 
-	// Run the command
+	// Start the command.
 	opts := &client.ExecOptions{
 		Command:        command,
 		Environment:    env,
@@ -159,31 +158,19 @@ func (cmd *cmdExec) Execute(args []string) error {
 		Stdin:          os.Stdin,
 		Stdout:         os.Stdout,
 		Stderr:         os.Stderr,
-		Control: func(conn client.WebsocketWriter) {
-			execControlHandler(conn, useTerminal)
-		},
-		DataDone: make(chan bool),
 	}
-	changeID, err := cmd.client.Exec(opts)
+	execution, err := cmd.client.Exec(opts)
 	if err != nil {
 		return err
 	}
 
-	// Wait till the command (change) is finished
-	waitOpts := &client.WaitChangeOptions{}
-	if cmd.Timeout != 0 {
-		// A little more than the command timeout to ensure that happens first
-		waitOpts.Timeout = cmd.Timeout + time.Second
-	}
-	change, err := cmd.client.WaitChange(changeID, waitOpts)
-	if err != nil {
-		return err
-	}
-	if change.Err != "" {
-		return errors.New(change.Err)
-	}
-	var exitCode int
-	err = change.Get("exit-code", &exitCode)
+	// Start a goroutine to handle signals and window resizing.
+	done := make(chan struct{})
+	defer close(done)
+	go execControlHandler(execution, useTerminal, done)
+
+	// Wait for the command to finish.
+	exitCode, err := execution.Wait()
 	if err != nil {
 		return err
 	}
@@ -192,13 +179,10 @@ func (cmd *cmdExec) Execute(args []string) error {
 		return &exitStatus{exitCode}
 	}
 
-	// Wait for any remaining I/O to be flushed
-	<-opts.DataDone
-
 	return nil
 }
 
-func execControlHandler(control client.WebsocketWriter, terminal bool) {
+func execControlHandler(execution *client.Execution, useTerminal bool, done <-chan struct{}) {
 	ch := make(chan os.Signal, 10)
 	signal.Notify(ch,
 		unix.SIGWINCH, unix.SIGHUP,
@@ -206,14 +190,17 @@ func execControlHandler(control client.WebsocketWriter, terminal bool) {
 		unix.SIGTSTP, unix.SIGTTIN, unix.SIGTTOU, unix.SIGUSR1,
 		unix.SIGUSR2, unix.SIGSEGV, unix.SIGCONT)
 
-	closeMsg := websocket.FormatCloseMessage(websocket.CloseNormalClosure, "")
-	defer control.WriteMessage(websocket.CloseMessage, closeMsg)
-
 	for {
-		sig := <-ch
+		var sig os.Signal
+		select {
+		case sig = <-ch:
+		case <-done:
+			return
+		}
+
 		switch sig {
 		case unix.SIGWINCH:
-			if !terminal {
+			if !useTerminal {
 				logger.Debugf("Received SIGWINCH but not in terminal mode, ignoring")
 				break
 			}
@@ -224,7 +211,7 @@ func execControlHandler(control client.WebsocketWriter, terminal bool) {
 				break
 			}
 			logger.Debugf("Window size is now: %dx%d", width, height)
-			err = client.ExecSendResize(control, width, height)
+			err = execution.SendResize(width, height)
 			if err != nil {
 				logger.Debugf("Error setting terminal size: %v", err)
 				break
@@ -233,9 +220,9 @@ func execControlHandler(control client.WebsocketWriter, terminal bool) {
 			file, err := os.OpenFile("/dev/tty", os.O_RDONLY|unix.O_NOCTTY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0666)
 			if err == nil {
 				file.Close()
-				err = client.ExecSendSignal(control, "SIGHUP")
+				err = execution.SendSignal("SIGHUP")
 			} else {
-				err = client.ExecSendSignal(control, "SIGTERM")
+				err = execution.SendSignal("SIGTERM")
 				sig = unix.SIGTERM
 			}
 			logger.Debugf("Received '%s' signal, forwarding to executing program", sig)
@@ -247,7 +234,7 @@ func execControlHandler(control client.WebsocketWriter, terminal bool) {
 			unix.SIGTSTP, unix.SIGTTIN, unix.SIGTTOU, unix.SIGUSR1,
 			unix.SIGUSR2, unix.SIGSEGV, unix.SIGCONT:
 			logger.Debugf("Received '%s signal', forwarding to executing program", sig)
-			err := client.ExecSendSignal(control, unix.SignalName(sig.(unix.Signal)))
+			err := execution.SendSignal(unix.SignalName(sig.(unix.Signal)))
 			if err != nil {
 				logger.Debugf("Failed to forward signal '%s': %v", sig, err)
 				break

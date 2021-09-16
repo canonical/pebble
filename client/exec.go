@@ -17,10 +17,8 @@ package client
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
+	"errors"
 	"io"
-	"net/http"
-	"net/url"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -73,12 +71,6 @@ type ExecOptions struct {
 	Stdin  io.ReadCloser
 	Stdout io.Writer
 	Stderr io.Writer
-
-	// Control message handler (for window resizing and signal forwarding)
-	Control func(conn WebsocketWriter)
-
-	// Channel that will be closed when all data operations are done
-	DataDone chan bool
 }
 
 type execPayload struct {
@@ -100,9 +92,23 @@ type execResult struct {
 	WebsocketIDs map[string]string `json:"websocket-ids"`
 }
 
-// Exec starts a command execution with the given options and additional
-// control arguments, returning the execution's change ID.
-func (client *Client) Exec(opts *ExecOptions) (string, error) {
+// Execution represents a running command. Use Wait to wait for it to finish.
+type Execution struct {
+	changeID         string
+	client           *Client
+	timeout          time.Duration
+	dataDone         chan struct{}
+	controlWebsocket jsonWriter
+}
+
+// jsonWriter makes it easier to write tests for SendSignal and SendResize.
+type jsonWriter interface {
+	WriteJSON(v interface{}) error
+}
+
+// Exec starts a command execution with the given options, returning a value
+// representing the execution.
+func (client *Client) Exec(opts *ExecOptions) (*Execution, error) {
 	var timeoutStr string
 	if opts.Timeout != 0 {
 		timeoutStr = opts.Timeout.String()
@@ -124,32 +130,40 @@ func (client *Client) Exec(opts *ExecOptions) (string, error) {
 	var body bytes.Buffer
 	err := json.NewEncoder(&body).Encode(&payload)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	headers := map[string]string{
 		"Content-Type": "application/json",
 	}
 	resultBytes, changeID, err := client.doAsyncFull("POST", "/v1/exec", nil, headers, &body)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	var result execResult
 	err = json.Unmarshal(resultBytes, &result)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	// Process additional arguments (connecting I/O and websockets)
 	fds := result.WebsocketIDs
 
-	// Call the control handler with a connection to the control socket
-	if opts.Control != nil && fds["control"] != "" {
+	var controlWebsocket *websocket.Conn
+	closeControl := func() {}
+	if fds["control"] != "" {
 		conn, err := client.getChangeWebsocket(changeID, fds["control"])
 		if err != nil {
-			return "", err
+			return nil, err
 		}
-		go opts.Control(conn)
+		controlWebsocket = conn
+		closeControl = func() {
+			closeMsg := websocket.FormatCloseMessage(websocket.CloseNormalClosure, "")
+			controlWebsocket.WriteMessage(websocket.CloseMessage, closeMsg)
+			controlWebsocket.Close()
+		}
 	}
+
+	dataDone := make(chan struct{})
 
 	if opts.UseTerminal {
 		// Handle terminal-based executions
@@ -157,7 +171,7 @@ func (client *Client) Exec(opts *ExecOptions) (string, error) {
 			// Connect to the websocket
 			conn, err := client.getChangeWebsocket(changeID, fds["io"])
 			if err != nil {
-				return "", err
+				return nil, err
 			}
 
 			// And attach stdin and stdout to it
@@ -165,14 +179,11 @@ func (client *Client) Exec(opts *ExecOptions) (string, error) {
 				wsutil.WebsocketSendStream(conn, opts.Stdin, -1)
 				<-wsutil.WebsocketRecvStream(opts.Stdout, conn)
 				conn.Close()
-				if opts.DataDone != nil {
-					close(opts.DataDone)
-				}
+				close(dataDone)
+				closeControl()
 			}()
 		} else {
-			if opts.DataDone != nil {
-				close(opts.DataDone)
-			}
+			close(dataDone)
 		}
 	} else {
 		// Handle non-terminal executions
@@ -183,7 +194,7 @@ func (client *Client) Exec(opts *ExecOptions) (string, error) {
 		if fds["io"] != "" {
 			conn, err := client.getChangeWebsocket(changeID, fds["io"])
 			if err != nil {
-				return "", err
+				return nil, err
 			}
 			conns = append(conns, conn)
 			dones["stdin"] = wsutil.WebsocketSendStream(conn, opts.Stdin, -1)
@@ -194,7 +205,7 @@ func (client *Client) Exec(opts *ExecOptions) (string, error) {
 		if opts.SeparateStderr && fds["stderr"] != "" {
 			conn, err := client.getChangeWebsocket(changeID, fds["stderr"])
 			if err != nil {
-				return "", err
+				return nil, err
 			}
 			conns = append(conns, conn)
 			dones["stderr"] = wsutil.WebsocketRecvStream(opts.Stderr, conn)
@@ -226,43 +237,46 @@ func (client *Client) Exec(opts *ExecOptions) (string, error) {
 				conn.Close()
 			}
 
-			if opts.DataDone != nil {
-				close(opts.DataDone)
-			}
+			close(dataDone)
+			closeControl()
 		}()
 	}
 
-	return changeID, nil
+	execution := &Execution{
+		changeID:         changeID,
+		client:           client,
+		timeout:          opts.Timeout,
+		dataDone:         dataDone,
+		controlWebsocket: controlWebsocket,
+	}
+	return execution, nil
 }
 
-// getChangeWebsocket creates a websocket connection for the given change ID
-// and websocket ID combination.
-func (client *Client) getChangeWebsocket(changeID, websocketID string) (*websocket.Conn, error) {
-	// Set up a new websocket dialer based on the HTTP client
-	httpClient := client.doer.(*http.Client)
-	httpTransport := httpClient.Transport.(*http.Transport)
-	dialer := websocket.Dialer{
-		NetDial:          httpTransport.Dial,
-		Proxy:            httpTransport.Proxy,
-		TLSClientConfig:  httpTransport.TLSClientConfig,
-		HandshakeTimeout: 5 * time.Second,
+// Wait waits for the command execution to finish and returns its exit code.
+func (e *Execution) Wait() (int, error) {
+	// Wait till the command (change) is finished.
+	waitOpts := &WaitChangeOptions{}
+	if e.timeout != 0 {
+		// A little more than the command timeout to ensure that happens first
+		waitOpts.Timeout = e.timeout + time.Second
 	}
-
-	// Establish the connection
-	url := fmt.Sprintf("ws://localhost/v1/changes/%s/websocket?id=%s", changeID, url.QueryEscape(websocketID))
-	conn, _, err := dialer.Dial(url, nil)
+	change, err := e.client.WaitChange(e.changeID, waitOpts)
 	if err != nil {
-		return nil, err
+		return 0, err
 	}
-	return conn, err
-}
+	if change.Err != "" {
+		return 0, errors.New(change.Err)
+	}
+	var exitCode int
+	err = change.Get("exit-code", &exitCode)
+	if err != nil {
+		return 0, err
+	}
 
-// WebsocketWriter is a websocket writer interface that can write a websocket
-// or a value as JSON, for example, for sending commands to an executing
-// program's "control" websocket.
-type WebsocketWriter interface {
-	WriteMessage(messageType int, data []byte) error
-	WriteJSON(v interface{}) error
+	// Wait for any remaining I/O to be flushed.
+	<-e.dataDone
+
+	return exitCode, nil
 }
 
 type execCommand struct {
@@ -280,8 +294,8 @@ type execResizeArgs struct {
 	Height int `json:"height"`
 }
 
-// ExecSendResize sends a resize message to the Exec control websocket.
-func ExecSendResize(conn WebsocketWriter, width, height int) error {
+// SendResize sends a resize message to this command execution.
+func (e *Execution) SendResize(width, height int) error {
 	msg := execCommand{
 		Command: "resize",
 		Resize: &execResizeArgs{
@@ -289,16 +303,16 @@ func ExecSendResize(conn WebsocketWriter, width, height int) error {
 			Height: height,
 		},
 	}
-	return conn.WriteJSON(msg)
+	return e.controlWebsocket.WriteJSON(msg)
 }
 
-// ExecSendSignal sends a signal to the Exec control websocket.
-func ExecSendSignal(conn WebsocketWriter, signal string) error {
+// SendSignal sends a signal to this command execution.
+func (e *Execution) SendSignal(signal string) error {
 	msg := execCommand{
 		Command: "signal",
 		Signal: &execSignalArgs{
 			Name: signal,
 		},
 	}
-	return conn.WriteJSON(msg)
+	return e.controlWebsocket.WriteJSON(msg)
 }

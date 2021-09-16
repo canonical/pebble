@@ -18,8 +18,11 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"net/url"
 	"time"
+
+	"github.com/gorilla/websocket"
 )
 
 // A Change is a modification to the system state.
@@ -183,4 +186,26 @@ func (client *Client) WaitChange(id string, opts *WaitChangeOptions) (*Change, e
 
 	chgd.Change.data = chgd.Data
 	return &chgd.Change, nil
+}
+
+// getChangeWebsocket creates a websocket connection for the given change ID
+// and websocket ID combination.
+func (client *Client) getChangeWebsocket(changeID, websocketID string) (*websocket.Conn, error) {
+	// Set up a new websocket dialer based on the HTTP client
+	httpClient := client.doer.(*http.Client)
+	httpTransport := httpClient.Transport.(*http.Transport)
+	dialer := websocket.Dialer{
+		NetDial:          httpTransport.Dial,
+		Proxy:            httpTransport.Proxy,
+		TLSClientConfig:  httpTransport.TLSClientConfig,
+		HandshakeTimeout: 5 * time.Second,
+	}
+
+	// Establish the connection
+	url := fmt.Sprintf("ws://localhost/v1/changes/%s/websocket?id=%s", changeID, url.QueryEscape(websocketID))
+	conn, _, err := dialer.Dial(url, nil)
+	if err != nil {
+		return nil, err
+	}
+	return conn, err
 }

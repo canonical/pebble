@@ -12,7 +12,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package client_test
+package client
 
 import (
 	"bytes"
@@ -20,21 +20,21 @@ import (
 	"io"
 
 	. "gopkg.in/check.v1"
-
-	"github.com/canonical/pebble/client"
 )
 
 type execSuite struct{}
 
 var _ = Suite(&execSuite{})
 
-func (s *execSuite) TestForwardSignal(c *C) {
+func (s *execSuite) TestSendSignal(c *C) {
 	buf := &bytes.Buffer{}
-	w := testWebsocketWriter{buf}
+	execution := &Execution{
+		controlWebsocket: testJSONWriter{buf},
+	}
 
-	err := client.ExecSendSignal(w, "SIGHUP")
+	err := execution.SendSignal("SIGHUP")
 	c.Check(err, IsNil)
-	err = client.ExecSendSignal(w, "SIGUSR1")
+	err = execution.SendSignal("SIGUSR1")
 	c.Check(err, IsNil)
 
 	c.Check(buf.String(), Equals, `
@@ -43,13 +43,15 @@ func (s *execSuite) TestForwardSignal(c *C) {
 `[1:])
 }
 
-func (s *execSuite) TestSendTermSize(c *C) {
+func (s *execSuite) TestSendResize(c *C) {
 	buf := &bytes.Buffer{}
-	w := testWebsocketWriter{buf}
+	execution := &Execution{
+		controlWebsocket: testJSONWriter{buf},
+	}
 
-	err := client.ExecSendResize(w, 150, 50)
+	err := execution.SendResize(150, 50)
 	c.Check(err, IsNil)
-	err = client.ExecSendResize(w, 80, 25)
+	err = execution.SendResize(80, 25)
 	c.Check(err, IsNil)
 
 	c.Check(buf.String(), Equals, `
@@ -58,15 +60,11 @@ func (s *execSuite) TestSendTermSize(c *C) {
 `[1:])
 }
 
-type testWebsocketWriter struct {
+type testJSONWriter struct {
 	w io.Writer
 }
 
-func (w testWebsocketWriter) WriteMessage(messageType int, data []byte) error {
-	panic("not implemented")
-}
-
-func (w testWebsocketWriter) WriteJSON(v interface{}) error {
+func (w testJSONWriter) WriteJSON(v interface{}) error {
 	encoder := json.NewEncoder(w.w)
 	return encoder.Encode(v)
 }
