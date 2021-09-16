@@ -27,7 +27,6 @@ import (
 	"strings"
 	"time"
 
-	"golang.org/x/sys/unix"
 	. "gopkg.in/check.v1"
 
 	"github.com/canonical/pebble/client"
@@ -187,7 +186,7 @@ func (s *execSuite) exec(c *C, stdin string, opts *client.ExecOptions) (changeEr
 }
 
 func (s *execSuite) TestSignal(c *C) {
-	signalCh := make(chan int, 1)
+	signalCh := make(chan string, 1)
 	opts := &client.ExecOptions{
 		Command:        []string{"sleep", "1"},
 		SeparateStderr: true,
@@ -196,7 +195,7 @@ func (s *execSuite) TestSignal(c *C) {
 		Stderr:         ioutil.Discard,
 		Control: func(conn client.WebsocketWriter) {
 			signal := <-signalCh
-			err := client.ExecForwardSignal(conn, signal)
+			err := client.ExecSendSignal(conn, signal)
 			c.Check(err, IsNil)
 		},
 	}
@@ -204,7 +203,7 @@ func (s *execSuite) TestSignal(c *C) {
 	c.Assert(err, IsNil)
 
 	select {
-	case signalCh <- int(unix.SIGINT):
+	case signalCh <- "SIGINT":
 	case <-time.After(time.Second):
 		c.Fatalf("timed out sending to signal channel")
 	}

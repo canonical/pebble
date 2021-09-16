@@ -536,6 +536,17 @@ func setApiData(change *state.Change, exitCode int) {
 	})
 }
 
+type execCommand struct {
+	Command string `json:"command"`
+	Signal  *struct {
+		Name string `json:"name"`
+	} `json:"signal"`
+	Resize *struct {
+		Width  int `json:"width"`
+		Height int `json:"height"`
+	} `json:"resize"`
+}
+
 func (s *execWs) controlLoop(pidCh <-chan int, exitCh <-chan bool, ptyFd int) {
 	logger.Debugf("Control handler waiting")
 	defer logger.Debugf("Control handler finished")
@@ -587,42 +598,43 @@ func (s *execWs) controlLoop(pidCh <-chan int, exitCh <-chan bool, ptyFd int) {
 			break
 		}
 
-		var command struct {
-			Command string            `json:"command"`
-			Args    map[string]string `json:"args"`
-			Signal  int               `json:"signal"`
-		}
+		var command execCommand
 		if err := json.Unmarshal(buf, &command); err != nil {
 			logger.Noticef("Failed to unmarshal control socket command: %s", err)
 			continue
 		}
 
 		switch {
-		case command.Command == "window-resize" && s.useTerminal:
-			logger.Debugf("Received 'window-resize' command with size %sx%s",
-				command.Args["width"], command.Args["height"])
-			width, err := strconv.Atoi(command.Args["width"])
-			if err != nil {
-				logger.Noticef("Unable to extract window width: %s", err)
+		case command.Command == "resize" && s.useTerminal:
+			if command.Resize == nil {
+				logger.Noticef("Resize command requires width and height arguments")
 				continue
 			}
-			height, err := strconv.Atoi(command.Args["height"])
+			w, h := command.Resize.Width, command.Resize.Height
+			logger.Debugf("Received 'resize' command with size %dx%d", w, h)
+			err = ptyutil.SetSize(ptyFd, w, h)
 			if err != nil {
-				logger.Noticef("Unable to extract window height: %s", err)
-				continue
-			}
-			err = ptyutil.SetSize(ptyFd, width, height)
-			if err != nil {
-				logger.Noticef("Failed to set window size to: %dx%d", width, height)
+				logger.Noticef("Failed to set window size to: %dx%d", w, h)
 				continue
 			}
 		case command.Command == "signal":
-			logger.Debugf("Received 'signal' command with signal %d", command.Signal)
-			if err := unix.Kill(pid, unix.Signal(command.Signal)); err != nil {
-				logger.Noticef("Failed forwarding signal '%d' to PID %d", command.Signal, pid)
+			if command.Signal == nil {
+				logger.Noticef("Signal command requires signal name argument")
 				continue
 			}
-			logger.Noticef("Forwarded signal '%d' to PID %d", command.Signal, pid)
+			name := command.Signal.Name
+			sig := unix.SignalNum(name)
+			if sig == 0 {
+				logger.Noticef("Invalid signal name %q", name)
+				continue
+			}
+			logger.Debugf("Received 'signal' command with signal %s", name)
+			err := unix.Kill(pid, sig)
+			if err != nil {
+				logger.Noticef("Failed forwarding %s to PID %d", name, pid)
+				continue
+			}
+			logger.Noticef("Forwarded signal %s to PID %d", name, pid)
 		default:
 			logger.Noticef("Invalid command %q", command.Command)
 		}

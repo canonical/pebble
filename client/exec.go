@@ -21,7 +21,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"strconv"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -267,28 +266,39 @@ type WebsocketWriter interface {
 }
 
 type execCommand struct {
-	Command string            `json:"command"`
-	Args    map[string]string `json:"args,omitempty"`
-	Signal  int               `json:"signal,omitempty"`
+	Command string          `json:"command"`
+	Signal  *execSignalArgs `json:"signal,omitempty"`
+	Resize  *execResizeArgs `json:"resize,omitempty"`
 }
 
-// ExecSendTermSize sends a window-resize message to the Exec control websocket.
-func ExecSendTermSize(conn WebsocketWriter, width, height int) error {
+type execSignalArgs struct {
+	Name string `json:"name"`
+}
+
+type execResizeArgs struct {
+	Width  int `json:"width"`
+	Height int `json:"height"`
+}
+
+// ExecSendResize sends a resize message to the Exec control websocket.
+func ExecSendResize(conn WebsocketWriter, width, height int) error {
 	msg := execCommand{
-		Command: "window-resize",
-		Args: map[string]string{
-			"width":  strconv.Itoa(width),
-			"height": strconv.Itoa(height),
+		Command: "resize",
+		Resize: &execResizeArgs{
+			Width:  width,
+			Height: height,
 		},
 	}
 	return conn.WriteJSON(msg)
 }
 
-// ExecForwardSignal forwards a signal to the Exec control websocket.
-func ExecForwardSignal(conn WebsocketWriter, signal int) error {
+// ExecSendSignal sends a signal to the Exec control websocket.
+func ExecSendSignal(conn WebsocketWriter, signal string) error {
 	msg := execCommand{
 		Command: "signal",
-		Signal:  signal,
+		Signal: &execSignalArgs{
+			Name: signal,
+		},
 	}
 	return conn.WriteJSON(msg)
 }

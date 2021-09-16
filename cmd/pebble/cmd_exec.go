@@ -224,7 +224,7 @@ func execControlHandler(control client.WebsocketWriter, terminal bool) {
 				break
 			}
 			logger.Debugf("Window size is now: %dx%d", width, height)
-			err = client.ExecSendTermSize(control, width, height)
+			err = client.ExecSendResize(control, width, height)
 			if err != nil {
 				logger.Debugf("Error setting terminal size: %v", err)
 				break
@@ -233,9 +233,9 @@ func execControlHandler(control client.WebsocketWriter, terminal bool) {
 			file, err := os.OpenFile("/dev/tty", os.O_RDONLY|unix.O_NOCTTY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0666)
 			if err == nil {
 				file.Close()
-				err = client.ExecForwardSignal(control, int(unix.SIGHUP))
+				err = client.ExecSendSignal(control, "SIGHUP")
 			} else {
-				err = client.ExecForwardSignal(control, int(unix.SIGTERM))
+				err = client.ExecSendSignal(control, "SIGTERM")
 				sig = unix.SIGTERM
 			}
 			logger.Debugf("Received '%s' signal, forwarding to executing program", sig)
@@ -247,7 +247,7 @@ func execControlHandler(control client.WebsocketWriter, terminal bool) {
 			unix.SIGTSTP, unix.SIGTTIN, unix.SIGTTOU, unix.SIGUSR1,
 			unix.SIGUSR2, unix.SIGSEGV, unix.SIGCONT:
 			logger.Debugf("Received '%s signal', forwarding to executing program", sig)
-			err := client.ExecForwardSignal(control, int(sig.(unix.Signal)))
+			err := client.ExecSendSignal(control, unix.SignalName(sig.(unix.Signal)))
 			if err != nil {
 				logger.Debugf("Failed to forward signal '%s': %v", sig, err)
 				break

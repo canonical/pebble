@@ -32,14 +32,14 @@ func (s *execSuite) TestForwardSignal(c *C) {
 	buf := &bytes.Buffer{}
 	w := testWebsocketWriter{buf}
 
-	err := client.ExecForwardSignal(w, 1)
+	err := client.ExecSendSignal(w, "SIGHUP")
 	c.Check(err, IsNil)
-	err = client.ExecForwardSignal(w, 42)
+	err = client.ExecSendSignal(w, "SIGUSR1")
 	c.Check(err, IsNil)
 
 	c.Check(buf.String(), Equals, `
-{"command":"signal","signal":1}
-{"command":"signal","signal":42}
+{"command":"signal","signal":{"name":"SIGHUP"}}
+{"command":"signal","signal":{"name":"SIGUSR1"}}
 `[1:])
 }
 
@@ -47,14 +47,14 @@ func (s *execSuite) TestSendTermSize(c *C) {
 	buf := &bytes.Buffer{}
 	w := testWebsocketWriter{buf}
 
-	err := client.ExecSendTermSize(w, 150, 50)
+	err := client.ExecSendResize(w, 150, 50)
 	c.Check(err, IsNil)
-	err = client.ExecSendTermSize(w, 80, 25)
+	err = client.ExecSendResize(w, 80, 25)
 	c.Check(err, IsNil)
 
 	c.Check(buf.String(), Equals, `
-{"command":"window-resize","args":{"height":"50","width":"150"}}
-{"command":"window-resize","args":{"height":"25","width":"80"}}
+{"command":"resize","resize":{"width":150,"height":50}}
+{"command":"resize","resize":{"width":80,"height":25}}
 `[1:])
 }
 
