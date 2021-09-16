@@ -29,7 +29,7 @@ var _ = Suite(&execSuite{})
 func (s *execSuite) TestSendSignal(c *C) {
 	buf := &bytes.Buffer{}
 	execution := &Execution{
-		controlWebsocket: testJSONWriter{buf},
+		controlConn: testJSONWriter{buf},
 	}
 
 	err := execution.SendSignal("SIGHUP")
@@ -46,7 +46,7 @@ func (s *execSuite) TestSendSignal(c *C) {
 func (s *execSuite) TestSendResize(c *C) {
 	buf := &bytes.Buffer{}
 	execution := &Execution{
-		controlWebsocket: testJSONWriter{buf},
+		controlConn: testJSONWriter{buf},
 	}
 
 	err := execution.SendResize(150, 50)

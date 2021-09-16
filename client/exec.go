@@ -100,11 +100,11 @@ type execResult struct {
 
 // Execution represents a running command. Use Wait to wait for it to finish.
 type Execution struct {
-	changeID         string
-	client           *Client
-	timeout          time.Duration
-	dataDone         chan struct{}
-	controlWebsocket jsonWriter
+	changeID    string
+	client      *Client
+	timeout     time.Duration
+	dataDone    chan struct{}
+	controlConn jsonWriter
 }
 
 // jsonWriter makes it easier to write tests for SendSignal and SendResize.
@@ -115,6 +115,7 @@ type jsonWriter interface {
 // Exec starts a command execution with the given options, returning a value
 // representing the execution.
 func (client *Client) Exec(opts *ExecOptions) (*Execution, error) {
+	// Set up stdin/stdout/stderr defaults.
 	stdin := opts.Stdin
 	if stdin == nil {
 		stdin = bytes.NewReader(nil)
@@ -133,7 +134,7 @@ func (client *Client) Exec(opts *ExecOptions) (*Execution, error) {
 		return nil, fmt.Errorf("Stderr must be nil if SeparateStderr is false")
 	}
 
-	// Hit the /v1/exec endpoint to start the command.
+	// Call the /v1/exec endpoint to start the command.
 	var timeoutStr string
 	if opts.Timeout != 0 {
 		timeoutStr = opts.Timeout.String()
@@ -170,6 +171,7 @@ func (client *Client) Exec(opts *ExecOptions) (*Execution, error) {
 		return nil, err
 	}
 
+	// Check that we have the websocket IDs we expect.
 	wsIDs := result.WebsocketIDs
 	if wsIDs["control"] == "" {
 		return nil, fmt.Errorf(`response did not include "control" websocket`)
@@ -181,90 +183,63 @@ func (client *Client) Exec(opts *ExecOptions) (*Execution, error) {
 		return nil, fmt.Errorf(`response did not include "stderr" websocket`)
 	}
 
-	controlWebsocket, err := client.getChangeWebsocket(changeID, wsIDs["control"])
+	// Connect to the "control" websocket.
+	controlConn, err := client.getChangeWebsocket(changeID, wsIDs["control"])
 	if err != nil {
 		return nil, err
 	}
-	closeControl := func() {
-		closeMsg := websocket.FormatCloseMessage(websocket.CloseNormalClosure, "")
-		controlWebsocket.WriteMessage(websocket.CloseMessage, closeMsg)
-		controlWebsocket.Close()
+
+	// Forward stdin and stdout.
+	ioConn, err := client.getChangeWebsocket(changeID, wsIDs["io"])
+	if err != nil {
+		return nil, err
+	}
+	stdinDone := wsutil.WebsocketSendStream(ioConn, stdin, -1)
+	stdoutDone := wsutil.WebsocketRecvStream(stdout, ioConn)
+
+	// Handle stderr separately if needed.
+	var stderrConn *websocket.Conn
+	var stderrDone chan bool
+	if opts.SeparateStderr {
+		stderrConn, err = client.getChangeWebsocket(changeID, wsIDs["stderr"])
+		if err != nil {
+			return nil, err
+		}
+		stderrDone = wsutil.WebsocketRecvStream(stderr, stderrConn)
 	}
 
+	// Fire up a goroutine to wait for everything to be done.
 	dataDone := make(chan struct{})
-
-	if opts.UseTerminal {
-		// Handle terminal-based executions
-		conn, err := client.getChangeWebsocket(changeID, wsIDs["io"])
-		if err != nil {
-			return nil, err
+	go func() {
+		<-stdoutDone
+		if stderrDone != nil {
+			<-stderrDone
 		}
 
-		// And attach stdin and stdout to it
+		// Empty the stdin channel, but don't block on it as stdin may be
+		// stuck in Read.
 		go func() {
-			wsutil.WebsocketSendStream(conn, stdin, -1)
-			<-wsutil.WebsocketRecvStream(stdout, conn)
-			conn.Close()
-			close(dataDone)
-			closeControl()
+			<-stdinDone
 		}()
-	} else {
-		// Handle non-terminal executions
-		dones := map[string]chan bool{}
-		conns := []*websocket.Conn{}
 
-		// Handle stdin and stdout
-		conn, err := client.getChangeWebsocket(changeID, wsIDs["io"])
-		if err != nil {
-			return nil, err
-		}
-		conns = append(conns, conn)
-		dones["stdin"] = wsutil.WebsocketSendStream(conn, stdin, -1)
-		dones["stdout"] = wsutil.WebsocketRecvStream(stdout, conn)
-
-		// Handle stderr separately if needed
-		if opts.SeparateStderr {
-			conn, err := client.getChangeWebsocket(changeID, wsIDs["stderr"])
-			if err != nil {
-				return nil, err
-			}
-			conns = append(conns, conn)
-			dones["stderr"] = wsutil.WebsocketRecvStream(stderr, conn)
+		ioConn.Close()
+		if stderrConn != nil {
+			stderrConn.Close()
 		}
 
-		// Wait for everything to be done
-		go func() {
-			for name, done := range dones {
-				// Skip stdin, dealing with it separately below
-				if name == "stdin" {
-					continue
-				}
-				<-done
-			}
+		close(dataDone)
 
-			if wsIDs["io"] != "" {
-				// Empty the stdin channel but don't block on it as
-				// stdin may be stuck in Read()
-				go func() {
-					<-dones["stdin"]
-				}()
-			}
-
-			for _, conn := range conns {
-				conn.Close()
-			}
-
-			close(dataDone)
-			closeControl()
-		}()
-	}
+		closeMsg := websocket.FormatCloseMessage(websocket.CloseNormalClosure, "")
+		controlConn.WriteMessage(websocket.CloseMessage, closeMsg)
+		controlConn.Close()
+	}()
 
 	execution := &Execution{
-		changeID:         changeID,
-		client:           client,
-		timeout:          opts.Timeout,
-		dataDone:         dataDone,
-		controlWebsocket: controlWebsocket,
+		changeID:    changeID,
+		client:      client,
+		timeout:     opts.Timeout,
+		dataDone:    dataDone,
+		controlConn: controlConn,
 	}
 	return execution, nil
 }
@@ -320,7 +295,7 @@ func (e *Execution) SendResize(width, height int) error {
 			Height: height,
 		},
 	}
-	return e.controlWebsocket.WriteJSON(msg)
+	return e.controlConn.WriteJSON(msg)
 }
 
 // SendSignal sends a signal to this command execution.
@@ -331,5 +306,5 @@ func (e *Execution) SendSignal(signal string) error {
 			Name: signal,
 		},
 	}
-	return e.controlWebsocket.WriteJSON(msg)
+	return e.controlConn.WriteJSON(msg)
 }
