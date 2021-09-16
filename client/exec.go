@@ -17,7 +17,6 @@ package client
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -105,18 +104,10 @@ type execResult struct {
 // Exec starts a command execution with the given options and additional
 // control arguments, returning the execution's change ID.
 func (client *Client) Exec(opts *ExecOptions) (string, error) {
-	if opts.UseTerminal && opts.SeparateStderr {
-		return "", errors.New("separate stderr not currently supported in terminal mode")
-	}
-	if !opts.UseTerminal && !opts.SeparateStderr {
-		return "", errors.New("combined stderr not currently supported in non-terminal mode")
-	}
-
 	var timeoutStr string
 	if opts.Timeout != 0 {
 		timeoutStr = opts.Timeout.String()
 	}
-
 	payload := execPayload{
 		Command:        opts.Command,
 		Environment:    opts.Environment,
