@@ -28,13 +28,13 @@ var _ = Suite(&execSuite{})
 
 func (s *execSuite) TestSendSignal(c *C) {
 	buf := &bytes.Buffer{}
-	execution := &Execution{
+	process := &ExecProcess{
 		controlConn: testJSONWriter{buf},
 	}
 
-	err := execution.SendSignal("SIGHUP")
+	err := process.SendSignal("SIGHUP")
 	c.Check(err, IsNil)
-	err = execution.SendSignal("SIGUSR1")
+	err = process.SendSignal("SIGUSR1")
 	c.Check(err, IsNil)
 
 	c.Check(buf.String(), Equals, `
@@ -45,13 +45,13 @@ func (s *execSuite) TestSendSignal(c *C) {
 
 func (s *execSuite) TestSendResize(c *C) {
 	buf := &bytes.Buffer{}
-	execution := &Execution{
+	process := &ExecProcess{
 		controlConn: testJSONWriter{buf},
 	}
 
-	err := execution.SendResize(150, 50)
+	err := process.SendResize(150, 50)
 	c.Check(err, IsNil)
-	err = execution.SendResize(80, 25)
+	err = process.SendResize(80, 25)
 	c.Check(err, IsNil)
 
 	c.Check(buf.String(), Equals, `

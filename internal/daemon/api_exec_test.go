@@ -170,10 +170,10 @@ func (s *execSuite) exec(c *C, stdin string, opts *client.ExecOptions) (stdout, 
 	opts.Stdin = strings.NewReader(stdin)
 	opts.Stdout = outBuf
 	opts.Stderr = errBuf
-	execution, err := s.client.Exec(opts)
+	process, err := s.client.Exec(opts)
 	c.Assert(err, IsNil)
 
-	exitCode, waitErr = execution.Wait()
+	exitCode, waitErr = process.Wait()
 	c.Check(err, IsNil)
 
 	return outBuf.String(), errBuf.String(), exitCode, waitErr
@@ -187,13 +187,13 @@ func (s *execSuite) TestSignal(c *C) {
 		Stdout:         ioutil.Discard,
 		Stderr:         ioutil.Discard,
 	}
-	execution, err := s.client.Exec(opts)
+	process, err := s.client.Exec(opts)
 	c.Assert(err, IsNil)
 
-	err = execution.SendSignal("SIGINT")
+	err = process.SendSignal("SIGINT")
 	c.Assert(err, IsNil)
 
-	exitCode, err := execution.Wait()
+	exitCode, err := process.Wait()
 	c.Check(err, IsNil)
 
 	c.Check(exitCode, Equals, 130)
@@ -209,7 +209,7 @@ func (s *execSuite) TestStreaming(c *C) {
 		Stdout:         channelWriter{stdoutCh},
 		Stderr:         ioutil.Discard,
 	}
-	execution, err := s.client.Exec(opts)
+	process, err := s.client.Exec(opts)
 	c.Assert(err, IsNil)
 
 	for i := 0; i < 20; i++ {
@@ -233,7 +233,7 @@ func (s *execSuite) TestStreaming(c *C) {
 		c.Fatalf("timed out waiting to write to stdin")
 	}
 
-	exitCode, err := execution.Wait()
+	exitCode, err := process.Wait()
 	c.Check(err, IsNil)
 	c.Check(exitCode, Equals, 0)
 }

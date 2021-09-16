@@ -159,7 +159,7 @@ func (cmd *cmdExec) Execute(args []string) error {
 		Stdout:         os.Stdout,
 		Stderr:         os.Stderr,
 	}
-	execution, err := cmd.client.Exec(opts)
+	process, err := cmd.client.Exec(opts)
 	if err != nil {
 		return err
 	}
@@ -167,10 +167,10 @@ func (cmd *cmdExec) Execute(args []string) error {
 	// Start a goroutine to handle signals and window resizing.
 	done := make(chan struct{})
 	defer close(done)
-	go execControlHandler(execution, useTerminal, done)
+	go execControlHandler(process, useTerminal, done)
 
 	// Wait for the command to finish.
-	exitCode, err := execution.Wait()
+	exitCode, err := process.Wait()
 	if err != nil {
 		return err
 	}
@@ -182,7 +182,7 @@ func (cmd *cmdExec) Execute(args []string) error {
 	return nil
 }
 
-func execControlHandler(execution *client.Execution, useTerminal bool, done <-chan struct{}) {
+func execControlHandler(process *client.ExecProcess, useTerminal bool, done <-chan struct{}) {
 	ch := make(chan os.Signal, 10)
 	signal.Notify(ch,
 		unix.SIGWINCH, unix.SIGHUP,
@@ -211,7 +211,7 @@ func execControlHandler(execution *client.Execution, useTerminal bool, done <-ch
 				break
 			}
 			logger.Debugf("Window size is now: %dx%d", width, height)
-			err = execution.SendResize(width, height)
+			err = process.SendResize(width, height)
 			if err != nil {
 				logger.Debugf("Error setting terminal size: %v", err)
 				break
@@ -220,9 +220,9 @@ func execControlHandler(execution *client.Execution, useTerminal bool, done <-ch
 			file, err := os.OpenFile("/dev/tty", os.O_RDONLY|unix.O_NOCTTY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0666)
 			if err == nil {
 				file.Close()
-				err = execution.SendSignal("SIGHUP")
+				err = process.SendSignal("SIGHUP")
 			} else {
-				err = execution.SendSignal("SIGTERM")
+				err = process.SendSignal("SIGTERM")
 				sig = unix.SIGTERM
 			}
 			logger.Debugf("Received '%s' signal, forwarding to executing program", sig)
@@ -234,7 +234,7 @@ func execControlHandler(execution *client.Execution, useTerminal bool, done <-ch
 			unix.SIGTSTP, unix.SIGTTIN, unix.SIGTTOU, unix.SIGUSR1,
 			unix.SIGUSR2, unix.SIGSEGV, unix.SIGCONT:
 			logger.Debugf("Received '%s signal', forwarding to executing program", sig)
-			err := execution.SendSignal(unix.SignalName(sig.(unix.Signal)))
+			err := process.SendSignal(unix.SignalName(sig.(unix.Signal)))
 			if err != nil {
 				logger.Debugf("Failed to forward signal '%s': %v", sig, err)
 				break

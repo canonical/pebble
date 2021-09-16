@@ -98,8 +98,8 @@ type execResult struct {
 	WebsocketIDs map[string]string `json:"websocket-ids"`
 }
 
-// Execution represents a running command. Use Wait to wait for it to finish.
-type Execution struct {
+// ExecProcess represents a running process. Use Wait to wait for it to finish.
+type ExecProcess struct {
 	changeID    string
 	client      *Client
 	timeout     time.Duration
@@ -112,9 +112,9 @@ type jsonWriter interface {
 	WriteJSON(v interface{}) error
 }
 
-// Exec starts a command execution with the given options, returning a value
-// representing the execution.
-func (client *Client) Exec(opts *ExecOptions) (*Execution, error) {
+// Exec starts a command with the given options, returning a value
+// representing the process.
+func (client *Client) Exec(opts *ExecOptions) (*ExecProcess, error) {
 	// Set up stdin/stdout/stderr defaults.
 	stdin := opts.Stdin
 	if stdin == nil {
@@ -234,25 +234,25 @@ func (client *Client) Exec(opts *ExecOptions) (*Execution, error) {
 		controlConn.Close()
 	}()
 
-	execution := &Execution{
+	process := &ExecProcess{
 		changeID:    changeID,
 		client:      client,
 		timeout:     opts.Timeout,
 		dataDone:    dataDone,
 		controlConn: controlConn,
 	}
-	return execution, nil
+	return process, nil
 }
 
-// Wait waits for the command execution to finish and returns its exit code.
-func (e *Execution) Wait() (int, error) {
+// Wait waits for the command process to finish and returns its exit code.
+func (p *ExecProcess) Wait() (int, error) {
 	// Wait till the command (change) is finished.
 	waitOpts := &WaitChangeOptions{}
-	if e.timeout != 0 {
+	if p.timeout != 0 {
 		// A little more than the command timeout to ensure that happens first
-		waitOpts.Timeout = e.timeout + time.Second
+		waitOpts.Timeout = p.timeout + time.Second
 	}
-	change, err := e.client.WaitChange(e.changeID, waitOpts)
+	change, err := p.client.WaitChange(p.changeID, waitOpts)
 	if err != nil {
 		return 0, err
 	}
@@ -266,7 +266,7 @@ func (e *Execution) Wait() (int, error) {
 	}
 
 	// Wait for any remaining I/O to be flushed.
-	<-e.dataDone
+	<-p.dataDone
 
 	return exitCode, nil
 }
@@ -286,8 +286,8 @@ type execResizeArgs struct {
 	Height int `json:"height"`
 }
 
-// SendResize sends a resize message to this command execution.
-func (e *Execution) SendResize(width, height int) error {
+// SendResize sends a resize message to the process.
+func (p *ExecProcess) SendResize(width, height int) error {
 	msg := execCommand{
 		Command: "resize",
 		Resize: &execResizeArgs{
@@ -295,16 +295,16 @@ func (e *Execution) SendResize(width, height int) error {
 			Height: height,
 		},
 	}
-	return e.controlConn.WriteJSON(msg)
+	return p.controlConn.WriteJSON(msg)
 }
 
-// SendSignal sends a signal to this command execution.
-func (e *Execution) SendSignal(signal string) error {
+// SendSignal sends a signal to the process.
+func (p *ExecProcess) SendSignal(signal string) error {
 	msg := execCommand{
 		Command: "signal",
 		Signal: &execSignalArgs{
 			Name: signal,
 		},
 	}
-	return e.controlConn.WriteJSON(msg)
+	return p.controlConn.WriteJSON(msg)
 }
