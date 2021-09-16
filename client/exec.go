@@ -103,7 +103,7 @@ type ExecProcess struct {
 	changeID    string
 	client      *Client
 	timeout     time.Duration
-	dataDone    chan struct{}
+	writesDone  chan struct{}
 	controlConn jsonWriter
 }
 
@@ -131,7 +131,7 @@ func (client *Client) Exec(opts *ExecOptions) (*ExecProcess, error) {
 			stderr = ioutil.Discard
 		}
 	} else if stderr != nil {
-		return nil, fmt.Errorf("Stderr must be nil if SeparateStderr is false")
+		return nil, fmt.Errorf("opts.Stderr must be nil if opts.SeparateStderr is false")
 	}
 
 	// Call the /v1/exec endpoint to start the command.
@@ -209,8 +209,11 @@ func (client *Client) Exec(opts *ExecOptions) (*ExecProcess, error) {
 	}
 
 	// Fire up a goroutine to wait for everything to be done.
-	dataDone := make(chan struct{})
+	writesDone := make(chan struct{})
 	go func() {
+		// Wait till the WebsocketRecvStream goroutines are done writing to
+		// stdout and stderr. This happens when EOF is signalled or websocket
+		// is closed.
 		<-stdoutDone
 		if stderrDone != nil {
 			<-stderrDone
@@ -219,26 +222,25 @@ func (client *Client) Exec(opts *ExecOptions) (*ExecProcess, error) {
 		// Empty the stdin channel, but don't block on it as stdin may be
 		// stuck in Read.
 		go func() {
-			<-stdinDone
+			<-stdinDone // happens when reading stdin returns EOF
 		}()
 
-		ioConn.Close()
+		// Try to close websocket connections gracefully, but ignore errors.
+		_ = ioConn.Close()
 		if stderrConn != nil {
-			stderrConn.Close()
+			_ = stderrConn.Close()
 		}
+		_ = controlConn.Close()
 
-		close(dataDone)
-
-		closeMsg := websocket.FormatCloseMessage(websocket.CloseNormalClosure, "")
-		controlConn.WriteMessage(websocket.CloseMessage, closeMsg)
-		controlConn.Close()
+		// Tell ExecProcess.Wait we're done writing to stdout/stderr.
+		close(writesDone)
 	}()
 
 	process := &ExecProcess{
 		changeID:    changeID,
 		client:      client,
 		timeout:     opts.Timeout,
-		dataDone:    dataDone,
+		writesDone:  writesDone,
 		controlConn: controlConn,
 	}
 	return process, nil
@@ -265,8 +267,8 @@ func (p *ExecProcess) Wait() (int, error) {
 		return 0, err
 	}
 
-	// Wait for any remaining I/O to be flushed.
-	<-p.dataDone
+	// Wait for any remaining I/O to be flushed to stdout/stderr.
+	<-p.writesDone
 
 	return exitCode, nil
 }
@@ -286,7 +288,7 @@ type execResizeArgs struct {
 	Height int `json:"height"`
 }
 
-// SendResize sends a resize message to the process.
+// SendResize sends a resize message to the running process.
 func (p *ExecProcess) SendResize(width, height int) error {
 	msg := execCommand{
 		Command: "resize",
@@ -298,7 +300,7 @@ func (p *ExecProcess) SendResize(width, height int) error {
 	return p.controlConn.WriteJSON(msg)
 }
 
-// SendSignal sends a signal to the process.
+// SendSignal sends a signal to the running process.
 func (p *ExecProcess) SendSignal(signal string) error {
 	msg := execCommand{
 		Command: "signal",
