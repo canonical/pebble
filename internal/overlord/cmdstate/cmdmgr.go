@@ -331,15 +331,14 @@ func (e *execution) do(ctx context.Context, change *state.Change) error {
 	var stdout *os.File
 	var stderr *os.File
 
-	controlExit := make(chan bool, 1)
-	attachedChildIsBorn := make(chan int)
-	attachedChildIsDead := make(chan struct{})
-	var wgEOF sync.WaitGroup
+	controlExit := make(chan struct{})
+	defer close(controlExit)
+
+	pidCh := make(chan int)
+	childDead := make(chan struct{})
+	var wg sync.WaitGroup
 
 	if e.useTerminal {
-		ttys = make([]*os.File, 1)
-		ptys = make([]*os.File, 1)
-
 		var uid, gid int
 		if e.uid != nil && e.gid != nil {
 			uid, gid = *e.uid, *e.gid
@@ -348,39 +347,42 @@ func (e *execution) do(ctx context.Context, change *state.Change) error {
 			gid = os.Getgid()
 		}
 
-		ptys[0], ttys[0], err = ptyutil.OpenPty(int64(uid), int64(gid))
+		pty, tty, err := ptyutil.OpenPty(int64(uid), int64(gid))
 		if err != nil {
 			return err
 		}
+		ptys = append(ptys, pty)
+		ttys = append(ttys, tty)
 
-		stdin = ttys[0]
-		stdout = ttys[0]
-		stderr = ttys[0]
+		stdin = tty
+		stdout = tty
+		stderr = tty
 
 		if e.width > 0 && e.height > 0 {
-			ptyutil.SetSize(int(ptys[0].Fd()), e.width, e.height)
+			ptyutil.SetSize(int(pty.Fd()), e.width, e.height)
 		}
 
-		go e.controlLoop(attachedChildIsBorn, controlExit, int(ptys[0].Fd()))
+		go e.controlLoop(pidCh, controlExit, int(pty.Fd()))
 
-		wgEOF.Add(1)
+		// Start goroutine to mirror PTY I/O to "io" websocket.
+		wg.Add(1)
 		go func() {
 			e.websocketsLock.Lock()
 			conn := e.websockets[wsIO]
 			e.websocketsLock.Unlock()
 
 			logger.Debugf("Started mirroring websocket")
-			readDone, writeDone := wsutil.WebsocketExecMirror(conn, ptys[0], ptys[0], attachedChildIsDead, int(ptys[0].Fd()))
-
+			readDone, writeDone := wsutil.WebsocketExecMirror(
+				conn, pty, pty, childDead, int(pty.Fd()))
 			<-readDone
 			<-writeDone
 			logger.Debugf("Finished mirroring websocket")
 
-			conn.Close()
-			wgEOF.Done()
+			_ = conn.Close()
+			wg.Done()
 		}()
 	} else {
-		go e.controlLoop(attachedChildIsBorn, controlExit, -1)
+		go e.controlLoop(pidCh, controlExit, -1)
 
 		// Receive stdin from "io" websocket, write to cmd.Stdin pipe
 		e.websocketsLock.Lock()
@@ -406,11 +408,11 @@ func (e *execution) do(ctx context.Context, change *state.Change) error {
 		ptys = append(ptys, stdoutReader)
 		ttys = append(ttys, stdoutWriter)
 		stdout = stdoutWriter
-		wgEOF.Add(1)
+		wg.Add(1)
 		go func() {
 			<-wsutil.WebsocketSendStream(ioConn, stdoutReader, -1)
 			stdoutReader.Close()
-			wgEOF.Done()
+			wg.Done()
 		}()
 
 		// Receive from cmd.Stderr pipe, write to separate "stderr" websocket.
@@ -424,40 +426,12 @@ func (e *execution) do(ctx context.Context, change *state.Change) error {
 		e.websocketsLock.Lock()
 		stderrConn := e.websockets[wsStderr]
 		e.websocketsLock.Unlock()
-		wgEOF.Add(1)
+		wg.Add(1)
 		go func() {
 			<-wsutil.WebsocketSendStream(stderrConn, stderrReader, -1)
 			stderrReader.Close()
-			wgEOF.Done()
+			wg.Done()
 		}()
-	}
-
-	finisher := func(exitCode int, cmdErr error) error {
-		for _, tty := range ttys {
-			tty.Close()
-		}
-
-		e.websocketsLock.Lock()
-		conn := e.websockets[wsControl]
-		e.websocketsLock.Unlock()
-
-		if conn == nil {
-			controlExit <- true
-		} else {
-			conn.Close()
-		}
-
-		close(attachedChildIsDead)
-
-		wgEOF.Wait()
-
-		for _, pty := range ptys {
-			pty.Close()
-		}
-
-		setApiData(change, exitCode)
-
-		return cmdErr
 	}
 
 	if e.timeout != 0 {
@@ -468,10 +442,11 @@ func (e *execution) do(ctx context.Context, change *state.Change) error {
 
 	cmd := exec.CommandContext(ctx, e.command[0], e.command[1:]...)
 
-	// Prepare the environment
 	for k, v := range e.env {
 		cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", k, v))
 	}
+
+	cmd.Dir = e.workingDir
 
 	cmd.Stdin = stdin
 	cmd.Stdout = stdout
@@ -485,30 +460,59 @@ func (e *execution) do(ctx context.Context, change *state.Change) error {
 		}
 	}
 
-	// Creates a new session if the calling process is not a process group leader.
-	// The calling process is the leader of the new session, the process group leader of
-	// the new process group, and has no controlling terminal.
-	// This is important to allow remote shells to handle ctrl+c.
+	// Creates a new session if the calling process is not a process group
+	// leader. The calling process is the leader of the new session, the
+	// process group leader of the new process group, and has no controlling
+	// terminal. This is important to allow remote shells to handle Ctrl+C.
 	cmd.SysProcAttr.Setsid = true
 
-	// Make the given terminal the controlling terminal of the calling process.
-	// The calling process must be a session leader and not have a controlling terminal already.
-	// This is important as allows ctrl+c to work as expected for non-shell programs.
+	// Make the given terminal the controlling terminal of the calling
+	// process. The calling process must be a session leader and not have a
+	// controlling terminal already. This is important as allows Ctrl+C to
+	// work as expected for non-shell programs.
 	if e.useTerminal {
 		cmd.SysProcAttr.Setctty = true
 	}
 
-	cmd.Dir = e.workingDir
+	finisher := func(exitCode int, cmdErr error) error {
+		for _, tty := range ttys {
+			_ = tty.Close()
+		}
 
+		// Close the control channel, if connected.
+		e.websocketsLock.Lock()
+		conn := e.websockets[wsControl]
+		e.websocketsLock.Unlock()
+		if conn != nil {
+			_ = conn.Close()
+		}
+
+		close(childDead)
+
+		wg.Wait()
+
+		for _, pty := range ptys {
+			_ = pty.Close()
+		}
+
+		setApiData(change, exitCode)
+
+		return cmdErr
+	}
+
+	// Start the command!
 	err = cmd.Start()
 	if err != nil {
 		return finisher(-1, err)
 	}
 
-	attachedChildIsBorn <- cmd.Process.Pid
+	// Send its PID to the control loop.
+	pidCh <- cmd.Process.Pid
 
+	// Wait for it to finish.
 	err = cmd.Wait()
 
+	// Handle errors: timeout, non-zero exit code, or other error.
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 		return finisher(-1, fmt.Errorf("timed out after %v: %w", e.timeout, ctx.Err()))
 	} else if exitErr, ok := err.(*exec.ExitError); ok {
@@ -525,6 +529,7 @@ func (e *execution) do(ctx context.Context, change *state.Change) error {
 		return finisher(-1, err)
 	}
 
+	// Successful exit (exit code 0).
 	return finisher(0, nil)
 }
 
@@ -552,12 +557,20 @@ type execResizeArgs struct {
 	Height int `json:"height"`
 }
 
-func (e *execution) controlLoop(pidCh <-chan int, exitCh <-chan bool, ptyFd int) {
+func (e *execution) controlLoop(pidCh <-chan int, exitCh <-chan struct{}, ptyFd int) {
 	logger.Debugf("Control handler waiting")
 	defer logger.Debugf("Control handler finished")
 
-	pid := <-pidCh
+	// Wait till we receive the process's PID (command started).
+	var pid int
+	select {
+	case pid = <-pidCh:
+		break
+	case <-exitCh:
+		return
+	}
 
+	// Wait till the control websocket is connected.
 	select {
 	case <-e.controlConnected:
 		break
