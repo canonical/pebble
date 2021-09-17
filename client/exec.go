@@ -54,13 +54,10 @@ type ExecOptions struct {
 	// to use pipes for stdin/stdout/stderr.
 	UseTerminal bool
 
-	// True to separate the process's stderr into a separate websocket. The
-	// default is to send combined stdout+stderr on a single websocket.
-	//
-	// Note: currently only the combinations UseTerminal=true,
-	// SeparateStderr=false and UseTerminal=false, SeparateStderr=true are
-	// supported.
-	SeparateStderr bool
+	// True to combine the process's stderr into the "io" websocket, along
+	// with stdout. The default is to send stderr on a separate "stderr"
+	// websocket.
+	CombineStderr bool
 
 	// Initial terminal width and height (only apply if UseTerminal is true).
 	// If not specified, the Pebble server uses the target's default (usually
@@ -80,18 +77,18 @@ type ExecOptions struct {
 }
 
 type execPayload struct {
-	Command        []string          `json:"command"`
-	Environment    map[string]string `json:"environment"`
-	WorkingDir     string            `json:"working-dir"`
-	Timeout        string            `json:"timeout"`
-	UserID         *int              `json:"user-id"`
-	User           string            `json:"user"`
-	GroupID        *int              `json:"group-id"`
-	Group          string            `json:"group"`
-	UseTerminal    bool              `json:"use-terminal"`
-	SeparateStderr bool              `json:"separate-stderr"`
-	Width          int               `json:"width"`
-	Height         int               `json:"height"`
+	Command       []string          `json:"command"`
+	Environment   map[string]string `json:"environment"`
+	WorkingDir    string            `json:"working-dir"`
+	Timeout       string            `json:"timeout"`
+	UserID        *int              `json:"user-id"`
+	User          string            `json:"user"`
+	GroupID       *int              `json:"group-id"`
+	Group         string            `json:"group"`
+	UseTerminal   bool              `json:"use-terminal"`
+	CombineStderr bool              `json:"combine-stderr"`
+	Width         int               `json:"width"`
+	Height        int               `json:"height"`
 }
 
 type execResult struct {
@@ -125,13 +122,13 @@ func (client *Client) Exec(opts *ExecOptions) (*ExecProcess, error) {
 		stdout = ioutil.Discard
 	}
 	var stderr io.Writer
-	if opts.SeparateStderr {
+	if !opts.CombineStderr {
 		stderr = opts.Stderr
 		if stderr == nil {
 			stderr = ioutil.Discard
 		}
 	} else if stderr != nil {
-		return nil, fmt.Errorf("opts.Stderr must be nil if opts.SeparateStderr is false")
+		return nil, fmt.Errorf("opts.Stderr must be nil if opts.CombineStderr is true")
 	}
 
 	// Call the /v1/exec endpoint to start the command.
@@ -140,18 +137,18 @@ func (client *Client) Exec(opts *ExecOptions) (*ExecProcess, error) {
 		timeoutStr = opts.Timeout.String()
 	}
 	payload := execPayload{
-		Command:        opts.Command,
-		Environment:    opts.Environment,
-		WorkingDir:     opts.WorkingDir,
-		Timeout:        timeoutStr,
-		UserID:         opts.UserID,
-		User:           opts.User,
-		GroupID:        opts.GroupID,
-		Group:          opts.Group,
-		UseTerminal:    opts.UseTerminal,
-		SeparateStderr: opts.SeparateStderr,
-		Width:          opts.Width,
-		Height:         opts.Height,
+		Command:       opts.Command,
+		Environment:   opts.Environment,
+		WorkingDir:    opts.WorkingDir,
+		Timeout:       timeoutStr,
+		UserID:        opts.UserID,
+		User:          opts.User,
+		GroupID:       opts.GroupID,
+		Group:         opts.Group,
+		UseTerminal:   opts.UseTerminal,
+		CombineStderr: opts.CombineStderr,
+		Width:         opts.Width,
+		Height:        opts.Height,
 	}
 	var body bytes.Buffer
 	err := json.NewEncoder(&body).Encode(&payload)
@@ -179,7 +176,7 @@ func (client *Client) Exec(opts *ExecOptions) (*ExecProcess, error) {
 	if wsIDs["io"] == "" {
 		return nil, fmt.Errorf(`response did not include "io" websocket`)
 	}
-	if opts.SeparateStderr && wsIDs["stderr"] == "" {
+	if !opts.CombineStderr && wsIDs["stderr"] == "" {
 		return nil, fmt.Errorf(`response did not include "stderr" websocket`)
 	}
 
@@ -200,7 +197,7 @@ func (client *Client) Exec(opts *ExecOptions) (*ExecProcess, error) {
 	// Handle stderr separately if needed.
 	var stderrConn *websocket.Conn
 	var stderrDone chan bool
-	if opts.SeparateStderr {
+	if !opts.CombineStderr {
 		stderrConn, err = client.getChangeWebsocket(changeID, wsIDs["stderr"])
 		if err != nil {
 			return nil, err

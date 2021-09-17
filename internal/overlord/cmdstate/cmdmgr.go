@@ -63,21 +63,21 @@ func (m *CommandManager) Ensure() error {
 
 // ExecArgs holds the arguments for a command execution.
 type ExecArgs struct {
-	Command        []string
-	Environment    map[string]string
-	WorkingDir     string
-	Timeout        time.Duration
-	UserID         *int
-	GroupID        *int
-	UseTerminal    bool
-	SeparateStderr bool
-	Width          int
-	Height         int
+	Command       []string
+	Environment   map[string]string
+	WorkingDir    string
+	Timeout       time.Duration
+	UserID        *int
+	GroupID       *int
+	UseTerminal   bool
+	CombineStderr bool
+	Width         int
+	Height        int
 }
 
 // ExecMetadata is the metadata returned from an Exec call.
 type ExecMetadata struct {
-	WebsocketIDs map[string]string // keys are "control", "io", and "stderr" if SeparateStderr true
+	WebsocketIDs map[string]string // keys are "control", "io", and "stderr" if CombineStderr false
 	Environment  map[string]string
 	WorkingDir   string
 }
@@ -141,7 +141,7 @@ func Exec(st *state.State, args *ExecArgs) (*state.Change, ExecMetadata, error) 
 		ioConnected:      make(chan struct{}),
 		controlConnected: make(chan struct{}),
 		useTerminal:      args.UseTerminal,
-		separateStderr:   args.SeparateStderr,
+		combineStderr:    args.CombineStderr,
 		width:            args.Width,
 		height:           args.Height,
 		uid:              args.UserID,
@@ -152,7 +152,7 @@ func Exec(st *state.State, args *ExecArgs) (*state.Change, ExecMetadata, error) 
 	// Generate unique identifier for each websocket (used by connect API).
 	e.websockets[wsControl] = nil
 	e.websockets[wsIO] = nil
-	if args.SeparateStderr {
+	if !args.CombineStderr {
 		e.websockets[wsStderr] = nil
 	}
 	for key := range e.websockets {
@@ -253,7 +253,7 @@ type execution struct {
 	ioConnected      chan struct{}
 	controlConnected chan struct{}
 	useTerminal      bool
-	separateStderr   bool
+	combineStderr    bool
 	width            int
 	height           int
 	uid              *int
@@ -292,7 +292,7 @@ func (e *execution) connect(r *http.Request, w http.ResponseWriter, id string) e
 	// Signal that we're connected.
 	if key == wsControl {
 		close(e.controlConnected)
-	} else if e.websockets[wsIO] != nil && (!e.separateStderr || e.websockets[wsStderr] != nil) {
+	} else if e.websockets[wsIO] != nil && (e.combineStderr || e.websockets[wsStderr] != nil) {
 		close(e.ioConnected)
 	}
 	return nil
@@ -362,7 +362,7 @@ func (e *execution) do(ctx context.Context, change *state.Change) error {
 
 		stdin = tty
 		stdout = tty
-		stderr = tty // stderr will be overwritten below if separateStderr true
+		stderr = tty // stderr will be overwritten below if combineStderr false
 
 		if e.width > 0 && e.height > 0 {
 			ptyutil.SetSize(int(pty.Fd()), e.width, e.height)
@@ -411,7 +411,7 @@ func (e *execution) do(ctx context.Context, change *state.Change) error {
 		ptys = append(ptys, stdoutReader)
 		ttys = append(ttys, stdoutWriter)
 		stdout = stdoutWriter
-		stderr = stdoutWriter // stderr will be overwritten below if separateStderr true
+		stderr = stdoutWriter // stderr will be overwritten below if combineStderr false
 		wg.Add(1)
 		go func() {
 			<-wsutil.WebsocketSendStream(ioConn, stdoutReader, -1)
@@ -420,7 +420,7 @@ func (e *execution) do(ctx context.Context, change *state.Change) error {
 		}()
 	}
 
-	if e.separateStderr {
+	if !e.combineStderr {
 		// Start goroutine to receive from cmd.Stderr pipe and write to a
 		// separate "stderr" websocket.
 		stderrReader, stderrWriter, err := os.Pipe()
