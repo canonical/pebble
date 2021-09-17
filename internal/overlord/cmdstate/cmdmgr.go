@@ -19,7 +19,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"os/exec"
@@ -90,13 +89,13 @@ func Exec(st *state.State, args *ExecArgs) (*state.Change, ExecMetadata, error) 
 		env[k] = v
 	}
 
-	// Set a reasonable default for PATH
+	// Set a reasonable default for PATH.
 	_, ok := env["PATH"]
 	if !ok {
 		env["PATH"] = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 	}
 
-	// Set HOME and USER based on the UserID
+	// Set HOME and USER based on the UserID.
 	if env["HOME"] == "" || env["USER"] == "" {
 		var userID int
 		if args.UserID != nil {
@@ -117,13 +116,13 @@ func Exec(st *state.State, args *ExecArgs) (*state.Change, ExecMetadata, error) 
 		}
 	}
 
-	// Set default value for LANG
+	// Set default value for LANG.
 	_, ok = env["LANG"]
 	if !ok {
 		env["LANG"] = "C.UTF-8"
 	}
 
-	// Set default working directory to $HOME, or / if $HOME not set
+	// Set default working directory to $HOME, or / if $HOME not set.
 	cwd := args.WorkingDir
 	if cwd == "" {
 		cwd = env["HOME"]
@@ -132,55 +131,55 @@ func Exec(st *state.State, args *ExecArgs) (*state.Change, ExecMetadata, error) 
 		}
 	}
 
-	ws := &execWs{}
-
-	ws.conns = map[string]*websocket.Conn{}
-	ws.conns[wsControl] = nil
-	ws.conns[wsIO] = nil
-	if args.SeparateStderr {
-		ws.conns[wsStderr] = nil
+	// Set up the object that will track the execution.
+	e := &execution{
+		command:          args.Command,
+		env:              env,
+		timeout:          args.Timeout,
+		websockets:       make(map[string]*websocket.Conn),
+		websocketIDs:     make(map[string]string),
+		ioConnected:      make(chan struct{}),
+		controlConnected: make(chan struct{}),
+		useTerminal:      args.UseTerminal,
+		separateStderr:   args.SeparateStderr,
+		width:            args.Width,
+		height:           args.Height,
+		uid:              args.UserID,
+		gid:              args.GroupID,
+		workingDir:       cwd,
 	}
-	ws.allConnected = make(chan bool, 1)
-	ws.controlConnected = make(chan bool, 1)
-	ws.useTerminal = args.UseTerminal
-	ws.separateStderr = args.SeparateStderr
 
-	ws.wsIDs = map[string]string{}
-	for key := range ws.conns {
+	// Generate unique identifier for each websocket (used by connect API).
+	e.websockets[wsControl] = nil
+	e.websockets[wsIO] = nil
+	if args.SeparateStderr {
+		e.websockets[wsStderr] = nil
+	}
+	for key := range e.websockets {
 		var err error
-		ws.wsIDs[key], err = strutil.UUID()
+		e.websocketIDs[key], err = strutil.UUID()
 		if err != nil {
 			return nil, ExecMetadata{}, err
 		}
 	}
 
-	ws.command = args.Command
-	ws.env = env
-	ws.timeout = args.Timeout
-
-	ws.width = args.Width
-	ws.height = args.Height
-
-	ws.cwd = cwd
-	ws.uid = args.UserID
-	ws.gid = args.GroupID
-
-	fds := make(map[string]string, len(ws.wsIDs))
-	for key, id := range ws.wsIDs {
-		fds[key] = id
+	// Make a copy of websocketIDs map for the return value.
+	ids := make(map[string]string, len(e.websocketIDs))
+	for key, id := range e.websocketIDs {
+		ids[key] = id
 	}
 	metadata := ExecMetadata{
-		WebsocketIDs: fds,
+		WebsocketIDs: ids,
 		Environment:  env,
 		WorkingDir:   cwd,
 	}
 
-	// Create change object and store it in state
+	// Create change object for this execution and store it in state.
 	cacheKey, err := strutil.UUID()
 	if err != nil {
 		return nil, ExecMetadata{}, err
 	}
-	st.Cache("exec-"+cacheKey, ws)
+	st.Cache("exec-"+cacheKey, e)
 	change := st.NewChange("exec", fmt.Sprintf("Execute command %q", args.Command[0]))
 	task := st.NewTask("exec", fmt.Sprintf("exec command %q", args.Command[0]))
 	change.AddAll(state.NewTaskSet(task))
@@ -195,20 +194,21 @@ func doExec(task *state.Task, tomb *tomb.Tomb) error {
 	change := task.Change()
 	st.Unlock()
 
-	ws, cacheKey, err := getWsAndCacheKey(change)
+	e, cacheKey, err := getExecutionAndCacheKey(change)
 	if err != nil {
 		return err
 	}
 
+	// Run the command! Killing the tomb will terminate the command.
 	ctx := tomb.Context(context.Background())
-	err = ws.do(ctx, change)
+	err = e.do(ctx, change)
 
-	deleteWsFromCache(change, cacheKey)
+	deleteExecutionFromCache(change, cacheKey)
 
 	return err
 }
 
-func getWsAndCacheKey(change *state.Change) (*execWs, string, error) {
+func getExecutionAndCacheKey(change *state.Change) (*execution, string, error) {
 	st := change.State()
 	st.Lock()
 	defer st.Unlock()
@@ -219,44 +219,46 @@ func getWsAndCacheKey(change *state.Change) (*execWs, string, error) {
 		return nil, "", err
 	}
 
-	ws, ok := st.Cached("exec-" + cacheKey).(*execWs)
+	e, ok := st.Cached("exec-" + cacheKey).(*execution)
 	if !ok {
 		return nil, "", fmt.Errorf("exec for change %q no longer active", change.ID())
 	}
-	return ws, cacheKey, nil
+	return e, cacheKey, nil
 }
 
-func deleteWsFromCache(change *state.Change, cacheKey string) {
+func deleteExecutionFromCache(change *state.Change, cacheKey string) {
 	st := change.State()
 	st.Lock()
 	defer st.Unlock()
 	st.Cache("exec-"+cacheKey, nil)
 }
 
-func Connect(change *state.Change, websocketID string, r *http.Request, w http.ResponseWriter) error {
-	ws, _, err := getWsAndCacheKey(change)
+// Connect upgrades the HTTP connection and connects to the given websocket.
+func Connect(r *http.Request, w http.ResponseWriter, change *state.Change, websocketID string) error {
+	e, _, err := getExecutionAndCacheKey(change)
 	if err != nil {
 		return err
 	}
-	return ws.connect(websocketID, r, w)
+	return e.connect(r, w, websocketID)
 }
 
-type execWs struct {
+// execution tracks the execution of a command.
+type execution struct {
 	command          []string
 	env              map[string]string
 	timeout          time.Duration
-	conns            map[string]*websocket.Conn
-	connsLock        sync.Mutex
-	allConnected     chan bool
-	controlConnected chan bool
+	websockets       map[string]*websocket.Conn
+	websocketsLock   sync.Mutex
+	websocketIDs     map[string]string
+	ioConnected      chan struct{}
+	controlConnected chan struct{}
 	useTerminal      bool
 	separateStderr   bool
-	wsIDs            map[string]string
 	width            int
 	height           int
 	uid              *int
 	gid              *int
-	cwd              string
+	workingDir       string
 }
 
 var websocketUpgrader = websocket.Upgrader{
@@ -264,45 +266,41 @@ var websocketUpgrader = websocket.Upgrader{
 	HandshakeTimeout: handshakeTimeout,
 }
 
-func (s *execWs) connect(id string, r *http.Request, w http.ResponseWriter) error {
-	for key, wsID := range s.wsIDs {
-		if id != wsID {
-			continue
+func (e *execution) connect(r *http.Request, w http.ResponseWriter, id string) error {
+	// Find websocket key by websocket's unique ID.
+	var key, wsID string
+	for key, wsID = range e.websocketIDs {
+		if id == wsID {
+			break
 		}
-
-		conn, err := websocketUpgrader.Upgrade(w, r, nil)
-		if err != nil {
-			return err
-		}
-
-		s.connsLock.Lock()
-		s.conns[key] = conn
-		s.connsLock.Unlock()
-
-		if key == wsControl {
-			s.controlConnected <- true
-			return nil
-		}
-
-		s.connsLock.Lock()
-		for k, c := range s.conns {
-			if k != wsControl && c == nil {
-				s.connsLock.Unlock()
-				return nil
-			}
-		}
-		s.connsLock.Unlock()
-
-		s.allConnected <- true
-		return nil
+	}
+	if id != wsID {
+		return fmt.Errorf("websocket ID %q not found", id)
 	}
 
-	return os.ErrNotExist
+	// Upgrade the HTTP connection to a websocket connection.
+	conn, err := websocketUpgrader.Upgrade(w, r, nil)
+	if err != nil {
+		return err
+	}
+
+	// Save the connection.
+	e.websocketsLock.Lock()
+	defer e.websocketsLock.Unlock()
+	e.websockets[key] = conn
+
+	// Signal that we're connected.
+	if key == wsControl {
+		close(e.controlConnected)
+	} else if e.websockets[wsIO] != nil && (!e.separateStderr || e.websockets[wsStderr] != nil) {
+		close(e.ioConnected)
+	}
+	return nil
 }
 
-// waitAllConnected waits till all the websockets are connected or the connect
-// timeout elapses (or the provided ctx is cancelled).
-func (s *execWs) waitAllConnected(ctx context.Context) error {
+// waitIOConnected waits till all the I/O websockets are connected or the
+// connect timeout elapses (or the provided ctx is cancelled).
+func (e *execution) waitIOConnected(ctx context.Context) error {
 	ctx, cancel := context.WithTimeout(ctx, connectTimeout)
 	defer cancel()
 	select {
@@ -312,13 +310,16 @@ func (s *execWs) waitAllConnected(ctx context.Context) error {
 			return fmt.Errorf("timeout waiting for websocket connections: %w", ctx.Err())
 		}
 		return ctx.Err()
-	case <-s.allConnected:
+	case <-e.ioConnected:
 		return nil
 	}
 }
 
-func (s *execWs) do(ctx context.Context, change *state.Change) error {
-	err := s.waitAllConnected(ctx)
+// do actually runs the command.
+func (e *execution) do(ctx context.Context, change *state.Change) error {
+	// Wait till client has connected to "io" websocket (and "stderr" if
+	// separating stderr), to avoid race conditions forwarding I/O.
+	err := e.waitIOConnected(ctx)
 	if err != nil {
 		return err
 	}
@@ -335,13 +336,13 @@ func (s *execWs) do(ctx context.Context, change *state.Change) error {
 	attachedChildIsDead := make(chan struct{})
 	var wgEOF sync.WaitGroup
 
-	if s.useTerminal {
+	if e.useTerminal {
 		ttys = make([]*os.File, 1)
 		ptys = make([]*os.File, 1)
 
 		var uid, gid int
-		if s.uid != nil && s.gid != nil {
-			uid, gid = *s.uid, *s.gid
+		if e.uid != nil && e.gid != nil {
+			uid, gid = *e.uid, *e.gid
 		} else {
 			uid = os.Getuid()
 			gid = os.Getgid()
@@ -356,17 +357,17 @@ func (s *execWs) do(ctx context.Context, change *state.Change) error {
 		stdout = ttys[0]
 		stderr = ttys[0]
 
-		if s.width > 0 && s.height > 0 {
-			ptyutil.SetSize(int(ptys[0].Fd()), s.width, s.height)
+		if e.width > 0 && e.height > 0 {
+			ptyutil.SetSize(int(ptys[0].Fd()), e.width, e.height)
 		}
 
-		go s.controlLoop(attachedChildIsBorn, controlExit, int(ptys[0].Fd()))
+		go e.controlLoop(attachedChildIsBorn, controlExit, int(ptys[0].Fd()))
 
 		wgEOF.Add(1)
 		go func() {
-			s.connsLock.Lock()
-			conn := s.conns[wsIO]
-			s.connsLock.Unlock()
+			e.websocketsLock.Lock()
+			conn := e.websockets[wsIO]
+			e.websocketsLock.Unlock()
 
 			logger.Debugf("Started mirroring websocket")
 			readDone, writeDone := wsutil.WebsocketExecMirror(conn, ptys[0], ptys[0], attachedChildIsDead, int(ptys[0].Fd()))
@@ -379,12 +380,12 @@ func (s *execWs) do(ctx context.Context, change *state.Change) error {
 			wgEOF.Done()
 		}()
 	} else {
-		go s.controlLoop(attachedChildIsBorn, controlExit, -1)
+		go e.controlLoop(attachedChildIsBorn, controlExit, -1)
 
 		// Receive stdin from "io" websocket, write to cmd.Stdin pipe
-		s.connsLock.Lock()
-		ioConn := s.conns[wsIO]
-		s.connsLock.Unlock()
+		e.websocketsLock.Lock()
+		ioConn := e.websockets[wsIO]
+		e.websocketsLock.Unlock()
 		stdinReader, stdinWriter, err := os.Pipe()
 		if err != nil {
 			return err
@@ -420,9 +421,9 @@ func (s *execWs) do(ctx context.Context, change *state.Change) error {
 		ptys = append(ptys, stderrReader)
 		ttys = append(ttys, stderrWriter)
 		stderr = stderrWriter
-		s.connsLock.Lock()
-		stderrConn := s.conns[wsStderr]
-		s.connsLock.Unlock()
+		e.websocketsLock.Lock()
+		stderrConn := e.websockets[wsStderr]
+		e.websocketsLock.Unlock()
 		wgEOF.Add(1)
 		go func() {
 			<-wsutil.WebsocketSendStream(stderrConn, stderrReader, -1)
@@ -436,9 +437,9 @@ func (s *execWs) do(ctx context.Context, change *state.Change) error {
 			tty.Close()
 		}
 
-		s.connsLock.Lock()
-		conn := s.conns[wsControl]
-		s.connsLock.Unlock()
+		e.websocketsLock.Lock()
+		conn := e.websockets[wsControl]
+		e.websocketsLock.Unlock()
 
 		if conn == nil {
 			controlExit <- true
@@ -459,16 +460,16 @@ func (s *execWs) do(ctx context.Context, change *state.Change) error {
 		return cmdErr
 	}
 
-	if s.timeout != 0 {
+	if e.timeout != 0 {
 		var cancel func()
-		ctx, cancel = context.WithTimeout(ctx, s.timeout)
+		ctx, cancel = context.WithTimeout(ctx, e.timeout)
 		defer cancel()
 	}
 
-	cmd := exec.CommandContext(ctx, s.command[0], s.command[1:]...)
+	cmd := exec.CommandContext(ctx, e.command[0], e.command[1:]...)
 
 	// Prepare the environment
-	for k, v := range s.env {
+	for k, v := range e.env {
 		cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", k, v))
 	}
 
@@ -477,10 +478,10 @@ func (s *execWs) do(ctx context.Context, change *state.Change) error {
 	cmd.Stderr = stderr
 
 	cmd.SysProcAttr = &syscall.SysProcAttr{}
-	if s.uid != nil && s.gid != nil {
+	if e.uid != nil && e.gid != nil {
 		cmd.SysProcAttr.Credential = &syscall.Credential{
-			Uid: uint32(*s.uid),
-			Gid: uint32(*s.gid),
+			Uid: uint32(*e.uid),
+			Gid: uint32(*e.gid),
 		}
 	}
 
@@ -493,11 +494,11 @@ func (s *execWs) do(ctx context.Context, change *state.Change) error {
 	// Make the given terminal the controlling terminal of the calling process.
 	// The calling process must be a session leader and not have a controlling terminal already.
 	// This is important as allows ctrl+c to work as expected for non-shell programs.
-	if s.useTerminal {
+	if e.useTerminal {
 		cmd.SysProcAttr.Setctty = true
 	}
 
-	cmd.Dir = s.cwd
+	cmd.Dir = e.workingDir
 
 	err = cmd.Start()
 	if err != nil {
@@ -509,7 +510,7 @@ func (s *execWs) do(ctx context.Context, change *state.Change) error {
 	err = cmd.Wait()
 
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-		return finisher(-1, fmt.Errorf("timed out after %v: %w", s.timeout, ctx.Err()))
+		return finisher(-1, fmt.Errorf("timed out after %v: %w", e.timeout, ctx.Err()))
 	} else if exitErr, ok := err.(*exec.ExitError); ok {
 		status, ok := exitErr.Sys().(syscall.WaitStatus)
 		if ok {
@@ -537,24 +538,28 @@ func setApiData(change *state.Change, exitCode int) {
 }
 
 type execCommand struct {
-	Command string `json:"command"`
-	Signal  *struct {
-		Name string `json:"name"`
-	} `json:"signal"`
-	Resize *struct {
-		Width  int `json:"width"`
-		Height int `json:"height"`
-	} `json:"resize"`
+	Command string          `json:"command"`
+	Signal  *execSignalArgs `json:"signal"`
+	Resize  *execResizeArgs `json:"resize"`
 }
 
-func (s *execWs) controlLoop(pidCh <-chan int, exitCh <-chan bool, ptyFd int) {
+type execSignalArgs struct {
+	Name string `json:"name"`
+}
+
+type execResizeArgs struct {
+	Width  int `json:"width"`
+	Height int `json:"height"`
+}
+
+func (e *execution) controlLoop(pidCh <-chan int, exitCh <-chan bool, ptyFd int) {
 	logger.Debugf("Control handler waiting")
 	defer logger.Debugf("Control handler finished")
 
 	pid := <-pidCh
 
 	select {
-	case <-s.controlConnected:
+	case <-e.controlConnected:
 		break
 	case <-exitCh:
 		return
@@ -562,9 +567,9 @@ func (s *execWs) controlLoop(pidCh <-chan int, exitCh <-chan bool, ptyFd int) {
 
 	logger.Debugf("Control handler started for child PID %d", pid)
 	for {
-		s.connsLock.Lock()
-		conn := s.conns[wsControl]
-		s.connsLock.Unlock()
+		e.websocketsLock.Lock()
+		conn := e.websockets[wsControl]
+		e.websocketsLock.Unlock()
 
 		mt, r, err := conn.NextReader()
 		if mt == websocket.CloseMessage {
@@ -572,12 +577,11 @@ func (s *execWs) controlLoop(pidCh <-chan int, exitCh <-chan bool, ptyFd int) {
 		}
 
 		if err != nil {
-			logger.Debugf("Got error getting next reader for child PID %d: %v", pid, err)
+			logger.Debugf("Error getting next reader for PID %d: %v", pid, err)
 			er, ok := err.(*websocket.CloseError)
 			if !ok {
 				break
 			}
-
 			if er.Code != websocket.CloseAbnormalClosure {
 				break
 			}
@@ -589,23 +593,18 @@ func (s *execWs) controlLoop(pidCh <-chan int, exitCh <-chan bool, ptyFd int) {
 			} else {
 				logger.Noticef("Sent SIGKILL to pid %d", pid)
 			}
-			return
-		}
-
-		buf, err := ioutil.ReadAll(r)
-		if err != nil {
-			logger.Noticef("Failed to read message %s", err)
 			break
 		}
 
 		var command execCommand
-		if err := json.Unmarshal(buf, &command); err != nil {
+		err = json.NewDecoder(r).Decode(&command)
+		if err != nil {
 			logger.Noticef("Failed to unmarshal control socket command: %s", err)
 			continue
 		}
 
 		switch {
-		case command.Command == "resize" && s.useTerminal:
+		case command.Command == "resize" && e.useTerminal:
 			if command.Resize == nil {
 				logger.Noticef("Resize command requires width and height arguments")
 				continue

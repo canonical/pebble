@@ -28,12 +28,12 @@ import (
 	"github.com/canonical/pebble/internal/wsutil"
 )
 
-// ExecOptions are the main options for the Exec call.
+// ExecOptions are the options for an Exec call.
 type ExecOptions struct {
-	// Required: command and arguments (first element is the executable)
+	// Required: command and arguments (first element is the executable).
 	Command []string
 
-	// Optional environment variables
+	// Optional environment variables.
 	Environment map[string]string
 
 	// Optional working directory (default is $HOME or "/" if $HOME not set).

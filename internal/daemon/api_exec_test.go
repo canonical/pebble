@@ -352,9 +352,3 @@ func execRequest(c *C, opts *client.ExecOptions) (*http.Response, execResponse) 
 	c.Assert(err, IsNil)
 	return httpResp, execResp
 }
-
-func getExitCode(c *C, change *client.Change) int {
-	exitCode := 1
-	_ = change.Get("exit-code", &exitCode)
-	return exitCode
-}

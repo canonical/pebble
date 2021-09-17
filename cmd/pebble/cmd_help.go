@@ -179,7 +179,7 @@ var helpCategories = []helpCategory{{
 	Commands:    []string{"changes", "tasks"},
 }, {
 	Label:       "Command execution",
-	Description: "execute a command",
+	Description: "run a command remotely",
 	Commands:    []string{"exec"},
 }, {
 	Label:       "Other",

@@ -294,6 +294,7 @@ func (w *wrappedWriter) Flush() {
 	}
 }
 
+// Hijack is needed for websockets to take over an HTTP connection.
 func (w *wrappedWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 	hijacker, ok := w.w.(http.Hijacker)
 	if !ok {

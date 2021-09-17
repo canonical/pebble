@@ -256,7 +256,7 @@ type websocketResponse struct {
 }
 
 func (wr websocketResponse) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	err := wr.connect(wr.change, wr.websocketID, r, w)
+	err := wr.connect(r, w, wr.change, wr.websocketID)
 	if errors.Is(err, os.ErrNotExist) {
 		rsp := statusNotFound("websocket not found")
 		rsp.ServeHTTP(w, r)
@@ -271,7 +271,7 @@ func (wr websocketResponse) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// the websocket protocol.
 }
 
-type connectFunc func(change *state.Change, websocketID string, r *http.Request, w http.ResponseWriter) error
+type connectFunc func(r *http.Request, w http.ResponseWriter, change *state.Change, websocketID string) error
 
 // connectFuncs maps change kind to websocket connect function.
 var connectFuncs = map[string]connectFunc{

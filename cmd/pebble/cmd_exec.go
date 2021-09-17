@@ -54,7 +54,7 @@ var execDescs = map[string]string{
 	"no-terminal": "Disable pseudo-terminal allocation",
 }
 
-var shortExecHelp = "Execute a command"
+var shortExecHelp = "Execute a command and wait for it to finish"
 var longExecHelp = `
 The exec command executes a command via the Pebble API and waits for it to
 finish. Stdin is forwarded, and stdout and stderr are received. By default,
@@ -75,7 +75,7 @@ func (cmd *cmdExec) Execute(args []string) error {
 	command := append([]string{cmd.Positional.Command}, args...)
 	logger.Debugf("Executing command %q", command)
 
-	// Set up environment variables
+	// Set up environment variables.
 	env := make(map[string]string)
 	term, ok := os.LookupEnv("TERM")
 	if ok {
@@ -91,7 +91,7 @@ func (cmd *cmdExec) Execute(args []string) error {
 		env[key] = value
 	}
 
-	// Send UID if it looks like an integer, otherwise send user name.
+	// Send UID if it looks like an integer, otherwise send username.
 	var user string
 	var userID *int
 	uid, err := strconv.Atoi(cmd.User)
@@ -111,7 +111,8 @@ func (cmd *cmdExec) Execute(args []string) error {
 		groupID = &gid
 	}
 
-	// Determine interaction mode
+	// Specify UseTerminal if -t/--terminal is given, or if both stdin and
+	// stdout are TTYs.
 	stdinIsTerminal := ptyutil.IsTerminal(unix.Stdin)
 	stdoutIsTerminal := ptyutil.IsTerminal(unix.Stdout)
 	var useTerminal bool
@@ -123,7 +124,7 @@ func (cmd *cmdExec) Execute(args []string) error {
 		useTerminal = stdinIsTerminal && stdoutIsTerminal
 	}
 
-	// Record terminal state (and restore it later)
+	// Record terminal state (and restore it before we exit).
 	if useTerminal && stdinIsTerminal {
 		oldState, err := ptyutil.MakeRaw(unix.Stdin)
 		if err != nil {
@@ -132,7 +133,7 @@ func (cmd *cmdExec) Execute(args []string) error {
 		defer ptyutil.Restore(unix.Stdin, oldState)
 	}
 
-	// Grab current terminal dimensions
+	// Grab current terminal dimensions.
 	var width, height int
 	if stdoutIsTerminal {
 		width, height, err = ptyutil.GetSize(unix.Stdout)
