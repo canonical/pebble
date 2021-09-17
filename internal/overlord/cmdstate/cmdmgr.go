@@ -356,7 +356,7 @@ func (e *execution) do(ctx context.Context, change *state.Change) error {
 
 		stdin = tty
 		stdout = tty
-		stderr = tty
+		stderr = tty // stderr will be overwritten below if separateStderr true
 
 		if e.width > 0 && e.height > 0 {
 			ptyutil.SetSize(int(pty.Fd()), e.width, e.height)
@@ -408,13 +408,16 @@ func (e *execution) do(ctx context.Context, change *state.Change) error {
 		ptys = append(ptys, stdoutReader)
 		ttys = append(ttys, stdoutWriter)
 		stdout = stdoutWriter
+		stderr = stdoutWriter // stderr will be overwritten below if separateStderr true
 		wg.Add(1)
 		go func() {
 			<-wsutil.WebsocketSendStream(ioConn, stdoutReader, -1)
 			stdoutReader.Close()
 			wg.Done()
 		}()
+	}
 
+	if e.separateStderr {
 		// Receive from cmd.Stderr pipe, write to separate "stderr" websocket.
 		stderrReader, stderrWriter, err := os.Pipe()
 		if err != nil {

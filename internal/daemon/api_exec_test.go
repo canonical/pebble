@@ -268,29 +268,6 @@ func (s *execSuite) TestNoCommand(c *C) {
 	c.Check(execResp.Result["message"], Equals, "must specify command")
 }
 
-func (s *execSuite) TestNotSupported(c *C) {
-	// These combinations aren't currently supported (but will be later)
-	httpResp, execResp := execRequest(c, &client.ExecOptions{
-		Command:        []string{"echo", "foo"},
-		UseTerminal:    true,
-		SeparateStderr: true,
-	})
-	c.Check(httpResp.StatusCode, Equals, http.StatusBadRequest)
-	c.Check(execResp.StatusCode, Equals, http.StatusBadRequest)
-	c.Check(execResp.Type, Equals, "error")
-	c.Check(execResp.Result["message"], Matches, ".*not currently supported.*")
-
-	httpResp, execResp = execRequest(c, &client.ExecOptions{
-		Command:        []string{"echo", "foo"},
-		UseTerminal:    false,
-		SeparateStderr: false,
-	})
-	c.Check(httpResp.StatusCode, Equals, http.StatusBadRequest)
-	c.Check(execResp.StatusCode, Equals, http.StatusBadRequest)
-	c.Check(execResp.Type, Equals, "error")
-	c.Check(execResp.Result["message"], Matches, ".*not currently supported.*")
-}
-
 func (s *execSuite) TestCommandNotFound(c *C) {
 	httpResp, execResp := execRequest(c, &client.ExecOptions{
 		Command:        []string{"badcmd"},

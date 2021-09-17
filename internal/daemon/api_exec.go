@@ -48,12 +48,6 @@ func v1PostExec(c *Command, req *http.Request, _ *userState) Response {
 	if len(payload.Command) < 1 {
 		return statusBadRequest("must specify command")
 	}
-	if payload.UseTerminal && payload.SeparateStderr {
-		return statusBadRequest("separate stderr not currently supported in terminal mode")
-	}
-	if !payload.UseTerminal && !payload.SeparateStderr {
-		return statusBadRequest("combined stderr not currently supported in non-terminal mode")
-	}
 
 	var timeout time.Duration
 	if payload.Timeout != "" {
