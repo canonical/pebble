@@ -298,6 +298,12 @@ func (e *execution) connect(r *http.Request, w http.ResponseWriter, id string) e
 	return nil
 }
 
+func (e *execution) getWebsocket(key string) *websocket.Conn {
+	e.websocketsLock.Lock()
+	defer e.websocketsLock.Unlock()
+	return e.websockets[key]
+}
+
 // waitIOConnected waits till all the I/O websockets are connected or the
 // connect timeout elapses (or the provided ctx is cancelled).
 func (e *execution) waitIOConnected(ctx context.Context) error {
@@ -367,27 +373,23 @@ func (e *execution) do(ctx context.Context, change *state.Change) error {
 		// Start goroutine to mirror PTY I/O to "io" websocket.
 		wg.Add(1)
 		go func() {
-			e.websocketsLock.Lock()
-			conn := e.websockets[wsIO]
-			e.websocketsLock.Unlock()
-
 			logger.Debugf("Started mirroring websocket")
+			ioConn := e.getWebsocket(wsIO)
 			readDone, writeDone := wsutil.WebsocketExecMirror(
-				conn, pty, pty, childDead, int(pty.Fd()))
+				ioConn, pty, pty, childDead, int(pty.Fd()))
 			<-readDone
 			<-writeDone
 			logger.Debugf("Finished mirroring websocket")
 
-			_ = conn.Close()
+			_ = ioConn.Close()
 			wg.Done()
 		}()
 	} else {
 		go e.controlLoop(pidCh, controlExit, -1)
 
-		// Receive stdin from "io" websocket, write to cmd.Stdin pipe
-		e.websocketsLock.Lock()
-		ioConn := e.websockets[wsIO]
-		e.websocketsLock.Unlock()
+		// Start goroutine to receive stdin from "io" websocket and write to
+		// cmd.Stdin pipe.
+		ioConn := e.getWebsocket(wsIO)
 		stdinReader, stdinWriter, err := os.Pipe()
 		if err != nil {
 			return err
@@ -400,7 +402,8 @@ func (e *execution) do(ctx context.Context, change *state.Change) error {
 			stdinWriter.Close()
 		}()
 
-		// Receive from cmd.Stdout pipe, write to "io" websocket
+		// Start goroutine to receive from cmd.Stdout pipe and write to "io"
+		// websocket.
 		stdoutReader, stdoutWriter, err := os.Pipe()
 		if err != nil {
 			return err
@@ -418,7 +421,8 @@ func (e *execution) do(ctx context.Context, change *state.Change) error {
 	}
 
 	if e.separateStderr {
-		// Receive from cmd.Stderr pipe, write to separate "stderr" websocket.
+		// Start goroutine to receive from cmd.Stderr pipe and write to a
+		// separate "stderr" websocket.
 		stderrReader, stderrWriter, err := os.Pipe()
 		if err != nil {
 			return err
@@ -426,9 +430,7 @@ func (e *execution) do(ctx context.Context, change *state.Change) error {
 		ptys = append(ptys, stderrReader)
 		ttys = append(ttys, stderrWriter)
 		stderr = stderrWriter
-		e.websocketsLock.Lock()
-		stderrConn := e.websockets[wsStderr]
-		e.websocketsLock.Unlock()
+		stderrConn := e.getWebsocket(wsStderr)
 		wg.Add(1)
 		go func() {
 			<-wsutil.WebsocketSendStream(stderrConn, stderrReader, -1)
@@ -483,11 +485,9 @@ func (e *execution) do(ctx context.Context, change *state.Change) error {
 		}
 
 		// Close the control channel, if connected.
-		e.websocketsLock.Lock()
-		conn := e.websockets[wsControl]
-		e.websocketsLock.Unlock()
-		if conn != nil {
-			_ = conn.Close()
+		controlConn := e.getWebsocket(wsControl)
+		if controlConn != nil {
+			_ = controlConn.Close()
 		}
 
 		close(childDead)
@@ -583,11 +583,8 @@ func (e *execution) controlLoop(pidCh <-chan int, exitCh <-chan struct{}, ptyFd 
 
 	logger.Debugf("Control handler started for child PID %d", pid)
 	for {
-		e.websocketsLock.Lock()
-		conn := e.websockets[wsControl]
-		e.websocketsLock.Unlock()
-
-		mt, r, err := conn.NextReader()
+		controlConn := e.getWebsocket(wsControl)
+		mt, r, err := controlConn.NextReader()
 		if mt == websocket.CloseMessage {
 			break
 		}
