@@ -1,8 +1,11 @@
 package servstate
 
 import (
+	"bytes"
+	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"syscall"
@@ -51,8 +54,11 @@ var (
 	okayWait = 1 * time.Second
 	killWait = 5 * time.Second
 	failWait = 10 * time.Second
+)
 
-	maxLogBytes = 100 * 1024
+const (
+	maxLogBytes  = 100 * 1024
+	lastLogLines = 20
 )
 
 // Start starts the named service after also starting all of its dependencies.
@@ -131,11 +137,20 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 		logBuffer: logBuffer,
 	}
 	m.services[req.Name] = active
+
 	go func() {
 		active.err = cmd.Wait()
+
+		lastLogs, err := readLastLogs(logBuffer, lastLogLines)
+		if err != nil {
+			logger.Noticef("could not read service %q logs: %v", req.Name, err)
+		}
+		active.lastLogs = lastLogs
+
 		_ = active.logBuffer.Close()
 		close(active.done)
 	}()
+
 	if m.serviceOutput != nil {
 		go func() {
 			defer outputIterator.Close()
@@ -162,9 +177,21 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 			}
 			releasePlan()
 		}
-		return fmt.Errorf("cannot start service: exited quickly with code %d", cmd.ProcessState.ExitCode())
+		msg := fmt.Sprintf("cannot start service: exited quickly with code %d", cmd.ProcessState.ExitCode())
+		if len(active.lastLogs) > 0 {
+			msg = fmt.Sprintf("%s - last %d lines of output:\n%s",
+				msg, lastLogLines, bytes.TrimSuffix(active.lastLogs, []byte("\n")))
+		}
+		return errors.New(msg)
 	}
 	// unreachable
+}
+
+func readLastLogs(logBuffer *servicelog.RingBuffer, numLines int) ([]byte, error) {
+	it := logBuffer.HeadIterator(numLines)
+	defer it.Close()
+	b, err := ioutil.ReadAll(it)
+	return b, err
 }
 
 func (m *ServiceManager) doStop(task *state.Task, tomb *tomb.Tomb) error {
