@@ -62,23 +62,21 @@ func (s *execSuite) TearDownTest(c *C) {
 // Some of these tests use the Go client (tested elsewhere) for simplicity.
 
 func (s *execSuite) TestStdinStdout(c *C) {
-	stdout, stderr, exitCode, waitErr := s.exec(c, "foo bar", &client.ExecOptions{
+	stdout, stderr, waitErr := s.exec(c, "foo bar", &client.ExecOptions{
 		Command: []string{"cat"},
 	})
 	c.Check(waitErr, IsNil)
 	c.Check(stdout, Equals, "foo bar")
 	c.Check(stderr, Equals, "")
-	c.Check(exitCode, Equals, 0)
 }
 
 func (s *execSuite) TestStderr(c *C) {
-	stdout, stderr, exitCode, waitErr := s.exec(c, "", &client.ExecOptions{
+	stdout, stderr, waitErr := s.exec(c, "", &client.ExecOptions{
 		Command: []string{"/bin/sh", "-c", "echo some stderr! >&2"},
 	})
 	c.Check(waitErr, IsNil)
 	c.Check(stdout, Equals, "")
 	c.Check(stderr, Equals, "some stderr!\n")
-	c.Check(exitCode, Equals, 0)
 }
 
 func (s *execSuite) TestCombinedStderr(c *C) {
@@ -92,34 +90,45 @@ func (s *execSuite) TestCombinedStderr(c *C) {
 	err = process.Wait()
 	c.Check(err, IsNil)
 	c.Check(outBuf.String(), Equals, "OUT\nERR!\n")
-	c.Check(process.ExitCode(), Equals, 0)
 }
 
 func (s *execSuite) TestEnvironment(c *C) {
-	stdout, stderr, exitCode, waitErr := s.exec(c, "", &client.ExecOptions{
+	stdout, stderr, waitErr := s.exec(c, "", &client.ExecOptions{
 		Command:     []string{"/bin/sh", "-c", "echo FOO=$FOO"},
 		Environment: map[string]string{"FOO": "bar"},
 	})
 	c.Check(waitErr, IsNil)
 	c.Check(stdout, Equals, "FOO=bar\n")
 	c.Check(stderr, Equals, "")
-	c.Check(exitCode, Equals, 0)
 }
 
 func (s *execSuite) TestWorkingDir(c *C) {
 	workingDir := c.MkDir()
-	stdout, stderr, exitCode, waitErr := s.exec(c, "", &client.ExecOptions{
+	stdout, stderr, waitErr := s.exec(c, "", &client.ExecOptions{
 		Command:    []string{"pwd"},
 		WorkingDir: workingDir,
 	})
 	c.Check(waitErr, IsNil)
 	c.Check(stdout, Equals, workingDir+"\n")
 	c.Check(stderr, Equals, "")
-	c.Check(exitCode, Equals, 0)
+}
+
+func (s *execSuite) TestExitError(c *C) {
+	stdout, stderr, waitErr := s.exec(c, "", &client.ExecOptions{
+		Command: []string{"/bin/sh", "-c", "echo OUT; echo ERR >&2; exit 42"},
+	})
+	c.Check(waitErr.Error(), Equals, "exit status 42")
+	exitCode := 0
+	if exitError, ok := waitErr.(*client.ExitError); ok {
+		exitCode = exitError.ExitCode()
+	}
+	c.Check(exitCode, Equals, 42)
+	c.Check(stdout, Equals, "OUT\n")
+	c.Check(stderr, Equals, "ERR\n")
 }
 
 func (s *execSuite) TestTimeout(c *C) {
-	stdout, stderr, _, waitErr := s.exec(c, "", &client.ExecOptions{
+	stdout, stderr, waitErr := s.exec(c, "", &client.ExecOptions{
 		Command: []string{"sleep", "1"},
 		Timeout: 10 * time.Millisecond,
 	})
@@ -137,7 +146,7 @@ func (s *execSuite) TestUserGroup(c *C) {
 	if os.Getuid() != 0 {
 		c.Skip("exec user/group test requires running as root")
 	}
-	stdout, stderr, exitCode, waitErr := s.exec(c, "", &client.ExecOptions{
+	stdout, stderr, waitErr := s.exec(c, "", &client.ExecOptions{
 		Command: []string{"/bin/sh", "-c", "id -n -u && id -n -g"},
 		User:    "nobody",
 		Group:   "nogroup",
@@ -145,7 +154,6 @@ func (s *execSuite) TestUserGroup(c *C) {
 	c.Check(waitErr, IsNil)
 	c.Check(stdout, Equals, "nobody\nnogroup\n")
 	c.Check(stderr, Equals, "")
-	c.Check(exitCode, Equals, 0)
 }
 
 func (s *execSuite) TestUserIDGroupID(c *C) {
@@ -160,7 +168,7 @@ func (s *execSuite) TestUserIDGroupID(c *C) {
 	c.Assert(err, IsNil)
 	gid, err := strconv.Atoi(nogroup.Gid)
 	c.Assert(err, IsNil)
-	stdout, stderr, exitCode, waitErr := s.exec(c, "", &client.ExecOptions{
+	stdout, stderr, waitErr := s.exec(c, "", &client.ExecOptions{
 		Command: []string{"/bin/sh", "-c", "id -n -u && id -n -g"},
 		UserID:  &uid,
 		GroupID: &gid,
@@ -168,10 +176,9 @@ func (s *execSuite) TestUserIDGroupID(c *C) {
 	c.Check(waitErr, IsNil)
 	c.Check(stdout, Equals, "nobody\nnogroup\n")
 	c.Check(stderr, Equals, "")
-	c.Check(exitCode, Equals, 0)
 }
 
-func (s *execSuite) exec(c *C, stdin string, opts *client.ExecOptions) (stdout, stderr string, exitCode int, waitErr error) {
+func (s *execSuite) exec(c *C, stdin string, opts *client.ExecOptions) (stdout, stderr string, waitErr error) {
 	outBuf := &bytes.Buffer{}
 	errBuf := &bytes.Buffer{}
 	opts.Stdin = strings.NewReader(stdin)
@@ -179,11 +186,8 @@ func (s *execSuite) exec(c *C, stdin string, opts *client.ExecOptions) (stdout, 
 	opts.Stderr = errBuf
 	process, err := s.client.Exec(opts)
 	c.Assert(err, IsNil)
-
 	waitErr = process.Wait()
-	c.Check(err, IsNil)
-
-	return outBuf.String(), errBuf.String(), process.ExitCode(), waitErr
+	return outBuf.String(), errBuf.String(), waitErr
 }
 
 func (s *execSuite) TestSignal(c *C) {
@@ -200,9 +204,13 @@ func (s *execSuite) TestSignal(c *C) {
 	c.Assert(err, IsNil)
 
 	err = process.Wait()
-	c.Check(err, IsNil)
+	c.Check(err, NotNil)
 
-	c.Check(process.ExitCode(), Equals, 130)
+	exitCode := 0
+	if exitError, ok := err.(*client.ExitError); ok {
+		exitCode = exitError.ExitCode()
+	}
+	c.Check(exitCode, Equals, 130)
 }
 
 func (s *execSuite) TestStreaming(c *C) {
@@ -240,7 +248,6 @@ func (s *execSuite) TestStreaming(c *C) {
 
 	err = process.Wait()
 	c.Check(err, IsNil)
-	c.Check(process.ExitCode(), Equals, 0)
 }
 
 type channelReader struct {

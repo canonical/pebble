@@ -98,7 +98,6 @@ type ExecProcess struct {
 	timeout     time.Duration
 	writesDone  chan struct{}
 	controlConn jsonWriter
-	exitCode    int
 }
 
 // jsonWriter makes it easier to write tests for SendSignal and SendResize.
@@ -141,7 +140,7 @@ func (client *Client) Exec(opts *ExecOptions) (*ExecProcess, error) {
 	var body bytes.Buffer
 	err := json.NewEncoder(&body).Encode(&payload)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("cannot encode JSON payload: %v", err)
 	}
 	headers := map[string]string{
 		"Content-Type": "application/json",
@@ -153,7 +152,7 @@ func (client *Client) Exec(opts *ExecOptions) (*ExecProcess, error) {
 	var result execResult
 	err = json.Unmarshal(resultBytes, &result)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("cannot unmarshal JSON response: %v", err)
 	}
 
 	// Check that we have the websocket IDs we expect.
@@ -171,13 +170,13 @@ func (client *Client) Exec(opts *ExecOptions) (*ExecProcess, error) {
 	// Connect to the "control" websocket.
 	controlConn, err := client.getChangeWebsocket(changeID, wsIDs["control"])
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf(`cannot connect to "control" websocket: %v`, err)
 	}
 
 	// Forward stdin and stdout.
 	ioConn, err := client.getChangeWebsocket(changeID, wsIDs["io"])
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf(`cannot connect to "io" websocket: %v`, err)
 	}
 	_ = wsutil.WebsocketSendStream(ioConn, stdin, -1)
 	stdoutDone := wsutil.WebsocketRecvStream(stdout, ioConn)
@@ -188,7 +187,7 @@ func (client *Client) Exec(opts *ExecOptions) (*ExecProcess, error) {
 	if opts.Stderr != nil {
 		stderrConn, err = client.getChangeWebsocket(changeID, wsIDs["stderr"])
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf(`cannot connect to "stderr" websocket: %v`, err)
 		}
 		stderrDone = wsutil.WebsocketRecvStream(opts.Stderr, stderrConn)
 	}
@@ -225,7 +224,9 @@ func (client *Client) Exec(opts *ExecOptions) (*ExecProcess, error) {
 	return process, nil
 }
 
-// Wait waits for the command process to finish.
+// Wait waits for the command process to finish. The returned error is nil if
+// the process runs successfully and returns a zero exit code. If the command
+// fails with a nonzero exit code, the error is of type *ExitError.
 func (p *ExecProcess) Wait() error {
 	// Wait till the command (change) is finished.
 	waitOpts := &WaitChangeOptions{}
@@ -235,30 +236,40 @@ func (p *ExecProcess) Wait() error {
 	}
 	change, err := p.client.WaitChange(p.changeID, waitOpts)
 	if err != nil {
-		return err
+		return fmt.Errorf("cannot wait for command to finish: %v", err)
 	}
 	if change.Err != "" {
 		return errors.New(change.Err)
 	}
-	err = change.Get("exit-code", &p.exitCode)
-	if err != nil {
-		return err
-	}
 
 	// Wait for any remaining I/O to be flushed to stdout/stderr.
 	<-p.writesDone
+
+	var exitCode int
+	err = change.Get("exit-code", &exitCode)
+	if err != nil {
+		return fmt.Errorf("cannot get exit-code: %v", err)
+	}
+	if exitCode != 0 {
+		return &ExitError{exitCode: exitCode}
+	}
+
 	return nil
 }
 
-// ExitCode returns the process's exit code (after a Wait), or -1 if the
-// process hasn't yet exited.
-func (p *ExecProcess) ExitCode() int {
-	select {
-	case <-p.writesDone:
-	default:
-		return -1 // Wait() hasn't yet finished
-	}
-	return p.exitCode
+// ExitError reports an unsuccessful exit by a command (a nonzero exit code).
+type ExitError struct {
+	exitCode int
+}
+
+// ExitCode returns the command's exit code (it will always be nonzero).
+func (e *ExitError) ExitCode() int {
+	return e.exitCode
+}
+
+// Error implements the error interface.
+func (e *ExitError) Error() string {
+	return fmt.Sprintf("exit status %d", e.exitCode)
 }
 
 type execCommand struct {

@@ -68,8 +68,3 @@ func (w testJSONWriter) WriteJSON(v interface{}) error {
 	encoder := json.NewEncoder(w.w)
 	return encoder.Encode(v)
 }
-
-func (s *execSuite) TestExitCodeNoWait(c *C) {
-	process := &ExecProcess{}
-	c.Check(process.ExitCode(), Equals, -1)
-}

@@ -173,16 +173,15 @@ func (cmd *cmdExec) Execute(args []string) error {
 
 	// Wait for the command to finish.
 	err = process.Wait()
-	if err != nil {
+	switch e := err.(type) {
+	case nil:
+		return nil
+	case *client.ExitError:
+		logger.Debugf("Process exited with return code %d", e.ExitCode())
+		return &exitStatus{e.ExitCode()}
+	default:
 		return err
 	}
-	exitCode := process.ExitCode()
-	if exitCode != 0 {
-		logger.Debugf("Process exited with return code %d", exitCode)
-		return &exitStatus{exitCode}
-	}
-
-	return nil
 }
 
 func execControlHandler(process *client.ExecProcess, useTerminal bool, done <-chan struct{}) {
