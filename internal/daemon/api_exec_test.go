@@ -89,11 +89,10 @@ func (s *execSuite) TestCombinedStderr(c *C) {
 	}
 	process, err := s.client.Exec(opts)
 	c.Assert(err, IsNil)
-	exitCode, waitErr := process.Wait()
+	err = process.Wait()
 	c.Check(err, IsNil)
-	c.Check(waitErr, IsNil)
 	c.Check(outBuf.String(), Equals, "OUT\nERR!\n")
-	c.Check(exitCode, Equals, 0)
+	c.Check(process.ExitCode(), Equals, 0)
 }
 
 func (s *execSuite) TestEnvironment(c *C) {
@@ -181,10 +180,10 @@ func (s *execSuite) exec(c *C, stdin string, opts *client.ExecOptions) (stdout, 
 	process, err := s.client.Exec(opts)
 	c.Assert(err, IsNil)
 
-	exitCode, waitErr = process.Wait()
+	waitErr = process.Wait()
 	c.Check(err, IsNil)
 
-	return outBuf.String(), errBuf.String(), exitCode, waitErr
+	return outBuf.String(), errBuf.String(), process.ExitCode(), waitErr
 }
 
 func (s *execSuite) TestSignal(c *C) {
@@ -200,10 +199,10 @@ func (s *execSuite) TestSignal(c *C) {
 	err = process.SendSignal("SIGINT")
 	c.Assert(err, IsNil)
 
-	exitCode, err := process.Wait()
+	err = process.Wait()
 	c.Check(err, IsNil)
 
-	c.Check(exitCode, Equals, 130)
+	c.Check(process.ExitCode(), Equals, 130)
 }
 
 func (s *execSuite) TestStreaming(c *C) {
@@ -239,9 +238,9 @@ func (s *execSuite) TestStreaming(c *C) {
 		c.Fatalf("timed out waiting to write to stdin")
 	}
 
-	exitCode, err := process.Wait()
+	err = process.Wait()
 	c.Check(err, IsNil)
-	c.Check(exitCode, Equals, 0)
+	c.Check(process.ExitCode(), Equals, 0)
 }
 
 type channelReader struct {

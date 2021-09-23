@@ -98,6 +98,7 @@ type ExecProcess struct {
 	timeout     time.Duration
 	writesDone  chan struct{}
 	controlConn jsonWriter
+	exitCode    int
 }
 
 // jsonWriter makes it easier to write tests for SendSignal and SendResize.
@@ -224,8 +225,8 @@ func (client *Client) Exec(opts *ExecOptions) (*ExecProcess, error) {
 	return process, nil
 }
 
-// Wait waits for the command process to finish and returns its exit code.
-func (p *ExecProcess) Wait() (int, error) {
+// Wait waits for the command process to finish.
+func (p *ExecProcess) Wait() error {
 	// Wait till the command (change) is finished.
 	waitOpts := &WaitChangeOptions{}
 	if p.timeout != 0 {
@@ -234,21 +235,30 @@ func (p *ExecProcess) Wait() (int, error) {
 	}
 	change, err := p.client.WaitChange(p.changeID, waitOpts)
 	if err != nil {
-		return 0, err
+		return err
 	}
 	if change.Err != "" {
-		return 0, errors.New(change.Err)
+		return errors.New(change.Err)
 	}
-	var exitCode int
-	err = change.Get("exit-code", &exitCode)
+	err = change.Get("exit-code", &p.exitCode)
 	if err != nil {
-		return 0, err
+		return err
 	}
 
 	// Wait for any remaining I/O to be flushed to stdout/stderr.
 	<-p.writesDone
+	return nil
+}
 
-	return exitCode, nil
+// ExitCode returns the process's exit code (after a Wait), or -1 if the
+// process hasn't yet exited.
+func (p *ExecProcess) ExitCode() int {
+	select {
+	case <-p.writesDone:
+	default:
+		return -1 // Wait() hasn't yet finished
+	}
+	return p.exitCode
 }
 
 type execCommand struct {

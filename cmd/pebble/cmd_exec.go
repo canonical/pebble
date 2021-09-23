@@ -172,10 +172,11 @@ func (cmd *cmdExec) Execute(args []string) error {
 	go execControlHandler(process, useTerminal, done)
 
 	// Wait for the command to finish.
-	exitCode, err := process.Wait()
+	err = process.Wait()
 	if err != nil {
 		return err
 	}
+	exitCode := process.ExitCode()
 	if exitCode != 0 {
 		logger.Debugf("Process exited with return code %d", exitCode)
 		return &exitStatus{exitCode}
