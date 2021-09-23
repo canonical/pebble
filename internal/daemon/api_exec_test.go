@@ -122,9 +122,9 @@ func (s *execSuite) TestWorkingDir(c *C) {
 func (s *execSuite) TestTimeout(c *C) {
 	stdout, stderr, _, waitErr := s.exec(c, "", &client.ExecOptions{
 		Command: []string{"sleep", "1"},
-		Timeout: time.Millisecond,
+		Timeout: 10 * time.Millisecond,
 	})
-	c.Check(waitErr, ErrorMatches, `cannot perform the following tasks:\n.*timed out after 1ms.*`)
+	c.Check(waitErr, ErrorMatches, `cannot perform the following tasks:\n.*timed out after 10ms.*`)
 	c.Check(stdout, Equals, "")
 	c.Check(stderr, Equals, "")
 }
