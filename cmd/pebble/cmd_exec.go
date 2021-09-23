@@ -144,21 +144,22 @@ func (cmd *cmdExec) Execute(args []string) error {
 
 	// Start the command.
 	opts := &client.ExecOptions{
-		Command:       command,
-		Environment:   env,
-		WorkingDir:    cmd.WorkingDir,
-		Timeout:       cmd.Timeout,
-		User:          user,
-		UserID:        userID,
-		Group:         group,
-		GroupID:       groupID,
-		UseTerminal:   useTerminal,
-		CombineStderr: useTerminal,
-		Width:         width,
-		Height:        height,
-		Stdin:         os.Stdin,
-		Stdout:        os.Stdout,
-		Stderr:        os.Stderr,
+		Command:     command,
+		Environment: env,
+		WorkingDir:  cmd.WorkingDir,
+		Timeout:     cmd.Timeout,
+		User:        user,
+		UserID:      userID,
+		Group:       group,
+		GroupID:     groupID,
+		UseTerminal: useTerminal,
+		Width:       width,
+		Height:      height,
+		Stdin:       os.Stdin,
+		Stdout:      os.Stdout,
+	}
+	if !useTerminal {
+		opts.Stderr = os.Stderr
 	}
 	process, err := cmd.client.Exec(opts)
 	if err != nil {

@@ -54,11 +54,6 @@ type ExecOptions struct {
 	// to use pipes for stdin/stdout/stderr.
 	UseTerminal bool
 
-	// True to combine the process's stderr into the "io" websocket, along
-	// with stdout. The default is to send stderr on a separate "stderr"
-	// websocket.
-	CombineStderr bool
-
 	// Initial terminal width and height (only apply if UseTerminal is true).
 	// If not specified, the Pebble server uses the target's default (usually
 	// 80x25). When using the "pebble exec" CLI, these are set to the host's
@@ -72,7 +67,8 @@ type ExecOptions struct {
 	// Standard output stream. If nil, output is discarded.
 	Stdout io.Writer
 
-	// Standard error stream. If nil, error output is discarded.
+	// Standard error stream. If nil, error output is combined with standard
+	// output and goes to the Stdout stream.
 	Stderr io.Writer
 }
 
@@ -112,7 +108,7 @@ type jsonWriter interface {
 // Exec starts a command with the given options, returning a value
 // representing the process.
 func (client *Client) Exec(opts *ExecOptions) (*ExecProcess, error) {
-	// Set up stdin/stdout/stderr defaults.
+	// Set up stdin/stdout defaults.
 	stdin := opts.Stdin
 	if stdin == nil {
 		stdin = bytes.NewReader(nil)
@@ -120,15 +116,6 @@ func (client *Client) Exec(opts *ExecOptions) (*ExecProcess, error) {
 	stdout := opts.Stdout
 	if stdout == nil {
 		stdout = ioutil.Discard
-	}
-	var stderr io.Writer
-	if !opts.CombineStderr {
-		stderr = opts.Stderr
-		if stderr == nil {
-			stderr = ioutil.Discard
-		}
-	} else if stderr != nil {
-		return nil, fmt.Errorf("opts.Stderr must be nil if opts.CombineStderr is true")
 	}
 
 	// Call the /v1/exec endpoint to start the command.
@@ -146,7 +133,7 @@ func (client *Client) Exec(opts *ExecOptions) (*ExecProcess, error) {
 		GroupID:       opts.GroupID,
 		Group:         opts.Group,
 		UseTerminal:   opts.UseTerminal,
-		CombineStderr: opts.CombineStderr,
+		CombineStderr: opts.Stderr == nil,
 		Width:         opts.Width,
 		Height:        opts.Height,
 	}
@@ -171,13 +158,13 @@ func (client *Client) Exec(opts *ExecOptions) (*ExecProcess, error) {
 	// Check that we have the websocket IDs we expect.
 	wsIDs := result.WebsocketIDs
 	if wsIDs["control"] == "" {
-		return nil, fmt.Errorf(`response did not include "control" websocket`)
+		return nil, fmt.Errorf(`exec response missing "control" websocket`)
 	}
 	if wsIDs["io"] == "" {
-		return nil, fmt.Errorf(`response did not include "io" websocket`)
+		return nil, fmt.Errorf(`exec response missing "io" websocket`)
 	}
-	if !opts.CombineStderr && wsIDs["stderr"] == "" {
-		return nil, fmt.Errorf(`response did not include "stderr" websocket`)
+	if opts.Stderr != nil && wsIDs["stderr"] == "" {
+		return nil, fmt.Errorf(`exec response missing "stderr" websocket`)
 	}
 
 	// Connect to the "control" websocket.
@@ -197,12 +184,12 @@ func (client *Client) Exec(opts *ExecOptions) (*ExecProcess, error) {
 	// Handle stderr separately if needed.
 	var stderrConn *websocket.Conn
 	var stderrDone chan bool
-	if !opts.CombineStderr {
+	if opts.Stderr != nil {
 		stderrConn, err = client.getChangeWebsocket(changeID, wsIDs["stderr"])
 		if err != nil {
 			return nil, err
 		}
-		stderrDone = wsutil.WebsocketRecvStream(stderr, stderrConn)
+		stderrDone = wsutil.WebsocketRecvStream(opts.Stderr, stderrConn)
 	}
 
 	// Fire up a goroutine to wait for everything to be done.
