@@ -73,18 +73,18 @@ type ExecOptions struct {
 }
 
 type execPayload struct {
-	Command       []string          `json:"command"`
-	Environment   map[string]string `json:"environment"`
-	WorkingDir    string            `json:"working-dir"`
-	Timeout       string            `json:"timeout"`
-	UserID        *int              `json:"user-id"`
-	User          string            `json:"user"`
-	GroupID       *int              `json:"group-id"`
-	Group         string            `json:"group"`
-	UseTerminal   bool              `json:"use-terminal"`
-	CombineStderr bool              `json:"combine-stderr"`
-	Width         int               `json:"width"`
-	Height        int               `json:"height"`
+	Command     []string          `json:"command"`
+	Environment map[string]string `json:"environment"`
+	WorkingDir  string            `json:"working-dir"`
+	Timeout     string            `json:"timeout"`
+	UserID      *int              `json:"user-id"`
+	User        string            `json:"user"`
+	GroupID     *int              `json:"group-id"`
+	Group       string            `json:"group"`
+	UseTerminal bool              `json:"use-terminal"`
+	SplitStderr bool              `json:"split-stderr"`
+	Width       int               `json:"width"`
+	Height      int               `json:"height"`
 }
 
 type execResult struct {
@@ -124,18 +124,18 @@ func (client *Client) Exec(opts *ExecOptions) (*ExecProcess, error) {
 		timeoutStr = opts.Timeout.String()
 	}
 	payload := execPayload{
-		Command:       opts.Command,
-		Environment:   opts.Environment,
-		WorkingDir:    opts.WorkingDir,
-		Timeout:       timeoutStr,
-		UserID:        opts.UserID,
-		User:          opts.User,
-		GroupID:       opts.GroupID,
-		Group:         opts.Group,
-		UseTerminal:   opts.UseTerminal,
-		CombineStderr: opts.Stderr == nil,
-		Width:         opts.Width,
-		Height:        opts.Height,
+		Command:     opts.Command,
+		Environment: opts.Environment,
+		WorkingDir:  opts.WorkingDir,
+		Timeout:     timeoutStr,
+		UserID:      opts.UserID,
+		User:        opts.User,
+		GroupID:     opts.GroupID,
+		Group:       opts.Group,
+		UseTerminal: opts.UseTerminal,
+		SplitStderr: opts.Stderr != nil,
+		Width:       opts.Width,
+		Height:      opts.Height,
 	}
 	var body bytes.Buffer
 	err := json.NewEncoder(&body).Encode(&payload)

@@ -81,14 +81,18 @@ func (s *execSuite) TestStderr(c *C) {
 	c.Check(exitCode, Equals, 0)
 }
 
-func (s *execSuite) TestCombineStderr(c *C) {
-	stdout, stderr, exitCode, waitErr := s.exec(c, "", &client.ExecOptions{
-		Command:       []string{"/bin/sh", "-c", "echo some stderr! >&2"},
-		CombineStderr: true,
-	})
+func (s *execSuite) TestCombinedStderr(c *C) {
+	outBuf := &bytes.Buffer{}
+	opts := &client.ExecOptions{
+		Command: []string{"/bin/sh", "-c", "echo OUT; echo ERR! >&2"},
+		Stdout:  outBuf,
+	}
+	process, err := s.client.Exec(opts)
+	c.Assert(err, IsNil)
+	exitCode, waitErr := process.Wait()
+	c.Check(err, IsNil)
 	c.Check(waitErr, IsNil)
-	c.Check(stdout, Equals, "some stderr!\n")
-	c.Check(stderr, Equals, "")
+	c.Check(outBuf.String(), Equals, "OUT\nERR!\n")
 	c.Check(exitCode, Equals, 0)
 }
 
@@ -307,18 +311,18 @@ func execRequest(c *C, opts *client.ExecOptions) (*http.Response, execResponse) 
 		timeoutStr = opts.Timeout.String()
 	}
 	payload := execPayload{
-		Command:       opts.Command,
-		Environment:   opts.Environment,
-		WorkingDir:    opts.WorkingDir,
-		Timeout:       timeoutStr,
-		UserID:        opts.UserID,
-		User:          opts.User,
-		GroupID:       opts.GroupID,
-		Group:         opts.Group,
-		UseTerminal:   opts.UseTerminal,
-		CombineStderr: opts.CombineStderr,
-		Width:         opts.Width,
-		Height:        opts.Height,
+		Command:     opts.Command,
+		Environment: opts.Environment,
+		WorkingDir:  opts.WorkingDir,
+		Timeout:     timeoutStr,
+		UserID:      opts.UserID,
+		User:        opts.User,
+		GroupID:     opts.GroupID,
+		Group:       opts.Group,
+		UseTerminal: opts.UseTerminal,
+		SplitStderr: opts.Stderr != nil,
+		Width:       opts.Width,
+		Height:      opts.Height,
 	}
 	requestBody, err := json.Marshal(&payload)
 	c.Assert(err, IsNil)
