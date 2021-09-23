@@ -32,34 +32,34 @@ import (
 
 type cmdExec struct {
 	clientMixin
-	WorkingDir string        `long:"cwd"`
+	WorkingDir string        `short:"w"`
 	Env        []string      `long:"env"`
 	User       string        `long:"user"`
 	Group      string        `long:"group"`
 	Timeout    time.Duration `long:"timeout"`
-	Terminal   bool          `short:"t" long:"terminal"`
-	NoTerminal bool          `short:"T" long:"no-terminal"`
+	Terminal   bool          `short:"t"`
+	NoTerminal bool          `short:"T"`
 	Positional struct {
 		Command string `positional-arg-name:"<command>" required:"1"`
 	} `positional-args:"yes"`
 }
 
 var execDescs = map[string]string{
-	"cwd":         "Working directory to run command in",
-	"env":         "Environment variable to set (in 'FOO=bar' format)",
-	"user":        "User name or ID to run command as",
-	"group":       "Group name or ID to run command as",
-	"timeout":     "Timeout after which to terminate command",
-	"terminal":    "Force pseudo-terminal allocation",
-	"no-terminal": "Disable pseudo-terminal allocation",
+	"w":       "Working directory to run command in",
+	"env":     "Environment variable to set (in 'FOO=bar' format)",
+	"user":    "User name or ID to run command as",
+	"group":   "Group name or ID to run command as",
+	"timeout": "Timeout after which to terminate command",
+	"t":       "Force pseudo-terminal allocation",
+	"T":       "Disable pseudo-terminal allocation",
 }
 
 var shortExecHelp = "Execute a command and wait for it to finish"
 var longExecHelp = `
 The exec command executes a command via the Pebble API and waits for it to
 finish. Stdin is forwarded, and stdout and stderr are received. By default,
-exec's terminal mode is used if the terminal is a TTY (use -t/--terminal or
--T/--no-terminal to override).
+exec's terminal mode is used if the terminal is a TTY (use -t or -T to
+override).
 
 To avoid confusion, exec options may be separated from the command and its
 arguments using "--", for example:
