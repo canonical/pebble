@@ -329,7 +329,7 @@ func WebsocketSendStream(conn *websocket.Conn, r io.Reader, bufferSize int) chan
 			}
 		}
 		conn.WriteMessage(websocket.TextMessage, []byte{})
-		ch <- true
+		close(ch) // NOTE(benhoyt): this was "ch <- true", but that can block
 	}(conn, r)
 
 	return ch

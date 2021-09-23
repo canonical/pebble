@@ -178,7 +178,7 @@ func (client *Client) Exec(opts *ExecOptions) (*ExecProcess, error) {
 	if err != nil {
 		return nil, err
 	}
-	stdinDone := wsutil.WebsocketSendStream(ioConn, stdin, -1)
+	_ = wsutil.WebsocketSendStream(ioConn, stdin, -1)
 	stdoutDone := wsutil.WebsocketRecvStream(stdout, ioConn)
 
 	// Handle stderr separately if needed.
@@ -192,7 +192,7 @@ func (client *Client) Exec(opts *ExecOptions) (*ExecProcess, error) {
 		stderrDone = wsutil.WebsocketRecvStream(opts.Stderr, stderrConn)
 	}
 
-	// Fire up a goroutine to wait for everything to be done.
+	// Fire up a goroutine to wait for writes to be done.
 	writesDone := make(chan struct{})
 	go func() {
 		// Wait till the WebsocketRecvStream goroutines are done writing to
@@ -202,15 +202,6 @@ func (client *Client) Exec(opts *ExecOptions) (*ExecProcess, error) {
 		if stderrDone != nil {
 			<-stderrDone
 		}
-
-		// Empty the stdin channel, but don't block on it as stdin may be
-		// stuck in Read. This is due to the somewhat poor design of
-		// WebsocketSendStream, which writes to an unbuffered channel
-		// (instead of closing it or using a buffered channel). We'd rather
-		// not modify that package much, so it's closer to the LXD code.
-		go func() {
-			<-stdinDone // happens when reading stdin returns EOF
-		}()
 
 		// Try to close websocket connections gracefully, but ignore errors.
 		_ = ioConn.Close()
