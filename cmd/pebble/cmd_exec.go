@@ -193,13 +193,13 @@ func execControlHandler(process *client.ExecProcess, useTerminal bool, done <-ch
 			logger.Debugf("Received '%s signal', updating window geometry", sig)
 			width, height, err := ptyutil.GetSize(unix.Stdout)
 			if err != nil {
-				logger.Debugf("Error getting terminal size: %v", err)
+				logger.Debugf("Cannot get terminal size: %v", err)
 				break
 			}
 			logger.Debugf("Window size is now: %dx%d", width, height)
 			err = process.SendResize(width, height)
 			if err != nil {
-				logger.Debugf("Error setting terminal size: %v", err)
+				logger.Debugf("Cannot set terminal size: %v", err)
 				break
 			}
 		case unix.SIGHUP:
@@ -213,16 +213,16 @@ func execControlHandler(process *client.ExecProcess, useTerminal bool, done <-ch
 			}
 			logger.Debugf("Received '%s' signal, forwarding to executing program", sig)
 			if err != nil {
-				logger.Debugf("Failed to forward signal '%s': %v", sig, err)
+				logger.Debugf("Cannot forward signal '%s': %v", sig, err)
 				return
 			}
 		case unix.SIGTERM, unix.SIGINT, unix.SIGQUIT, unix.SIGABRT,
 			unix.SIGTSTP, unix.SIGTTIN, unix.SIGTTOU, unix.SIGUSR1,
 			unix.SIGUSR2, unix.SIGSEGV, unix.SIGCONT:
-			logger.Debugf("Received '%s signal', forwarding to executing program", sig)
+			logger.Debugf("Received '%s' signal, forwarding to executing program", sig)
 			err := process.SendSignal(unix.SignalName(sig.(unix.Signal)))
 			if err != nil {
-				logger.Debugf("Failed to forward signal '%s': %v", sig, err)
+				logger.Debugf("Cannot forward signal '%s': %v", sig, err)
 				break
 			}
 		}

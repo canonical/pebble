@@ -105,7 +105,7 @@ func Exec(st *state.State, args *ExecArgs) (*state.Change, ExecMetadata, error) 
 		}
 		u, err := user.LookupId(strconv.Itoa(userID))
 		if err != nil {
-			logger.Noticef("Failed to look up user %d: %v", userID, err)
+			logger.Noticef("Cannot look up user %d: %v", userID, err)
 		} else {
 			if env["HOME"] == "" {
 				env["HOME"] = u.HomeDir
@@ -275,7 +275,7 @@ func (e *execution) connect(r *http.Request, w http.ResponseWriter, id string) e
 		}
 	}
 	if id != wsID {
-		return fmt.Errorf("websocket ID %q not found", id)
+		return fmt.Errorf("cannot find websocket ID %q", id)
 	}
 
 	// Upgrade the HTTP connection to a websocket connection.
@@ -590,7 +590,7 @@ func (e *execution) controlLoop(pidCh <-chan int, exitCh <-chan struct{}, ptyFd 
 		}
 
 		if err != nil {
-			logger.Debugf("Error getting next reader for PID %d: %v", pid, err)
+			logger.Debugf("Cannot get next reader for PID %d: %v", pid, err)
 			er, ok := err.(*websocket.CloseError)
 			if !ok {
 				break
@@ -602,7 +602,7 @@ func (e *execution) controlLoop(pidCh <-chan int, exitCh <-chan struct{}, ptyFd 
 			// If an abnormal closure occurred, kill the attached process.
 			err := unix.Kill(pid, unix.SIGKILL)
 			if err != nil {
-				logger.Noticef("Failed to send SIGKILL to pid %d", pid)
+				logger.Noticef("Cannot send SIGKILL to pid %d", pid)
 			} else {
 				logger.Noticef("Sent SIGKILL to pid %d", pid)
 			}
@@ -612,7 +612,7 @@ func (e *execution) controlLoop(pidCh <-chan int, exitCh <-chan struct{}, ptyFd 
 		var command execCommand
 		err = json.NewDecoder(r).Decode(&command)
 		if err != nil {
-			logger.Noticef("Failed to unmarshal control socket command: %s", err)
+			logger.Noticef("Cannot decode control socket command: %s", err)
 			continue
 		}
 
@@ -626,7 +626,7 @@ func (e *execution) controlLoop(pidCh <-chan int, exitCh <-chan struct{}, ptyFd 
 			logger.Debugf("Received 'resize' command with size %dx%d", w, h)
 			err = ptyutil.SetSize(ptyFd, w, h)
 			if err != nil {
-				logger.Noticef("Failed to set window size to: %dx%d", w, h)
+				logger.Noticef("Cannot set window size to: %dx%d", w, h)
 				continue
 			}
 		case command.Command == "signal":
@@ -643,7 +643,7 @@ func (e *execution) controlLoop(pidCh <-chan int, exitCh <-chan struct{}, ptyFd 
 			logger.Debugf("Received 'signal' command with signal %s", name)
 			err := unix.Kill(pid, sig)
 			if err != nil {
-				logger.Noticef("Failed forwarding %s to PID %d", name, pid)
+				logger.Noticef("Cannot forward %s to PID %d", name, pid)
 				continue
 			}
 			logger.Noticef("Forwarded signal %s to PID %d", name, pid)
