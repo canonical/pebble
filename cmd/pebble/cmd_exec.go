@@ -162,7 +162,7 @@ func (cmd *cmdExec) Execute(args []string) error {
 		return nil
 	case *client.ExitError:
 		logger.Debugf("Process exited with return code %d", e.ExitCode())
-		return &exitStatus{e.ExitCode()}
+		panic(&exitStatus{e.ExitCode()})
 	default:
 		return err
 	}
