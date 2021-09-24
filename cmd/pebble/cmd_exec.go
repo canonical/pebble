@@ -141,7 +141,8 @@ func (cmd *cmdExec) Execute(args []string) error {
 		Stdin:       os.Stdin,
 		Stdout:      os.Stdout,
 	}
-	if !useTerminal {
+	stderrIsTerminal := ptyutil.IsTerminal(unix.Stderr)
+	if !stdoutIsTerminal || !stderrIsTerminal {
 		opts.Stderr = os.Stderr
 	}
 	process, err := cmd.client.Exec(opts)
