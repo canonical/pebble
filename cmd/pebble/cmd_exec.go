@@ -54,12 +54,12 @@ var execDescs = map[string]string{
 	"T":       "Disable pseudo-terminal allocation",
 }
 
-var shortExecHelp = "Execute a command and wait for it to finish"
+var shortExecHelp = "Execute a remote command and wait for it to finish"
 var longExecHelp = `
-The exec command executes a command via the Pebble API and waits for it to
-finish. Stdin is forwarded, and stdout and stderr are received. By default,
-exec's terminal mode is used if the terminal is a TTY (use -t or -T to
-override).
+The exec command runs a remote command and waits for it to finish. The local
+stdin is sent as the input to the remote process, while the remote stdout and
+stderr are output locally. By default, exec allocates a pseudo-terminal on the
+remote if the local stdin and stdout are terminals (use -t or -T to override).
 
 To avoid confusion, exec options may be separated from the command and its
 arguments using "--", for example:
