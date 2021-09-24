@@ -53,16 +53,15 @@ var execDescs = map[string]string{
 	"gid":     "Group ID to run command as",
 	"group":   "Group name to run command as (group's GID must match gid if both present)",
 	"timeout": "Timeout after which to terminate command",
-	"t":       "Force pseudo-terminal allocation",
-	"T":       "Disable pseudo-terminal allocation",
+	"t":       "Allocate remote pseudo-terminal (default if stdin and stdout are TTYs)",
+	"T":       "Disable remote pseudo-terminal allocation",
 }
 
 var shortExecHelp = "Execute a remote command and wait for it to finish"
 var longExecHelp = `
 The exec command runs a remote command and waits for it to finish. The local
 stdin is sent as the input to the remote process, while the remote stdout and
-stderr are output locally. By default, exec allocates a pseudo-terminal on the
-remote if the local stdin and stdout are terminals (use -t or -T to override).
+stderr are output locally.
 
 To avoid confusion, exec options may be separated from the command and its
 arguments using "--", for example:
