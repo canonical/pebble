@@ -18,7 +18,6 @@ import (
 	"errors"
 	"os"
 	"os/signal"
-	"strconv"
 	"strings"
 	"time"
 
@@ -34,7 +33,9 @@ type cmdExec struct {
 	clientMixin
 	WorkingDir string        `short:"w"`
 	Env        []string      `long:"env"`
+	UserID     *int          `long:"uid"`
 	User       string        `long:"user"`
+	GroupID    *int          `long:"gid"`
 	Group      string        `long:"group"`
 	Timeout    time.Duration `long:"timeout"`
 	Terminal   bool          `short:"t"`
@@ -47,8 +48,10 @@ type cmdExec struct {
 var execDescs = map[string]string{
 	"w":       "Working directory to run command in",
 	"env":     "Environment variable to set (in 'FOO=bar' format)",
-	"user":    "User name or ID to run command as",
-	"group":   "Group name or ID to run command as",
+	"uid":     "User ID to run command as",
+	"user":    "Username to run command as (user's UID must match uid if both present)",
+	"gid":     "Group ID to run command as",
+	"group":   "Group name to run command as (group's GID must match gid if both present)",
 	"timeout": "Timeout after which to terminate command",
 	"t":       "Force pseudo-terminal allocation",
 	"T":       "Disable pseudo-terminal allocation",
@@ -69,7 +72,7 @@ pebble exec --timeout 10s -- echo -n foo bar
 
 func (cmd *cmdExec) Execute(args []string) error {
 	if cmd.Terminal && cmd.NoTerminal {
-		return errors.New("can't pass -t and -T at the same time")
+		return errors.New("cannot use -t and -T at the same time")
 	}
 
 	command := append([]string{cmd.Positional.Command}, args...)
@@ -89,26 +92,6 @@ func (cmd *cmdExec) Execute(args []string) error {
 			value = parts[1]
 		}
 		env[key] = value
-	}
-
-	// Send UID if it looks like an integer, otherwise send username.
-	var user string
-	var userID *int
-	uid, err := strconv.Atoi(cmd.User)
-	if err != nil {
-		user = cmd.User
-	} else {
-		userID = &uid
-	}
-
-	// Send GID if it looks like an integer, otherwise send group name.
-	var group string
-	var groupID *int
-	gid, err := strconv.Atoi(cmd.Group)
-	if err != nil {
-		group = cmd.Group
-	} else {
-		groupID = &gid
 	}
 
 	// Specify UseTerminal if -t/--terminal is given, or if both stdin and
@@ -136,6 +119,7 @@ func (cmd *cmdExec) Execute(args []string) error {
 	// Grab current terminal dimensions.
 	var width, height int
 	if stdoutIsTerminal {
+		var err error
 		width, height, err = ptyutil.GetSize(unix.Stdout)
 		if err != nil {
 			return err
@@ -148,10 +132,10 @@ func (cmd *cmdExec) Execute(args []string) error {
 		Environment: env,
 		WorkingDir:  cmd.WorkingDir,
 		Timeout:     cmd.Timeout,
-		User:        user,
-		UserID:      userID,
-		Group:       group,
-		GroupID:     groupID,
+		UserID:      cmd.UserID,
+		User:        cmd.User,
+		GroupID:     cmd.GroupID,
+		Group:       cmd.Group,
 		UseTerminal: useTerminal,
 		Width:       width,
 		Height:      height,
