@@ -202,23 +202,9 @@ func execControlHandler(process *client.ExecProcess, useTerminal bool, done <-ch
 				logger.Debugf("Cannot set terminal size: %v", err)
 				break
 			}
-		case unix.SIGHUP:
-			file, err := os.OpenFile("/dev/tty", os.O_RDONLY|unix.O_NOCTTY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0666)
-			if err == nil {
-				file.Close()
-				err = process.SendSignal("SIGHUP")
-			} else {
-				err = process.SendSignal("SIGTERM")
-				sig = unix.SIGTERM
-			}
-			logger.Debugf("Received '%s' signal, forwarding to executing program", sig)
-			if err != nil {
-				logger.Debugf("Cannot forward signal '%s': %v", sig, err)
-				return
-			}
-		case unix.SIGTERM, unix.SIGINT, unix.SIGQUIT, unix.SIGABRT,
-			unix.SIGTSTP, unix.SIGTTIN, unix.SIGTTOU, unix.SIGUSR1,
-			unix.SIGUSR2, unix.SIGSEGV, unix.SIGCONT:
+		case unix.SIGHUP, unix.SIGTERM, unix.SIGINT, unix.SIGQUIT,
+			unix.SIGABRT, unix.SIGTSTP, unix.SIGTTIN, unix.SIGTTOU,
+			unix.SIGUSR1, unix.SIGUSR2, unix.SIGSEGV, unix.SIGCONT:
 			logger.Debugf("Received '%s' signal, forwarding to executing program", sig)
 			err := process.SendSignal(unix.SignalName(sig.(unix.Signal)))
 			if err != nil {
