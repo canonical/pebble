@@ -190,8 +190,7 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 func readLastLogs(logBuffer *servicelog.RingBuffer, numLines int) ([]byte, error) {
 	it := logBuffer.HeadIterator(numLines)
 	defer it.Close()
-	b, err := ioutil.ReadAll(it)
-	return b, err
+	return ioutil.ReadAll(it)
 }
 
 func (m *ServiceManager) doStop(task *state.Task, tomb *tomb.Tomb) error {
