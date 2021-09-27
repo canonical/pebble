@@ -29,7 +29,6 @@ type activeService struct {
 	err       error
 	done      chan struct{}
 	logBuffer *servicelog.RingBuffer
-	lastLogs  []byte
 }
 
 // LabelExists is the error returned by AppendLayer when a layer with that

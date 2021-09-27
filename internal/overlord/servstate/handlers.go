@@ -137,20 +137,11 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 		logBuffer: logBuffer,
 	}
 	m.services[req.Name] = active
-
 	go func() {
 		active.err = cmd.Wait()
-
-		lastLogs, err := readLastLogs(logBuffer, lastLogLines)
-		if err != nil {
-			logger.Noticef("could not read service %q logs: %v", req.Name, err)
-		}
-		active.lastLogs = lastLogs
-
 		_ = active.logBuffer.Close()
 		close(active.done)
 	}()
-
 	if m.serviceOutput != nil {
 		go func() {
 			defer outputIterator.Close()
@@ -177,20 +168,22 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 			}
 			releasePlan()
 		}
+
+		it := logBuffer.HeadIterator(lastLogLines)
+		defer it.Close()
+		lastLogs, err := ioutil.ReadAll(it)
+		if err != nil {
+			logger.Noticef("could not read service %q logs: %v", req.Name, err)
+		}
+
 		msg := fmt.Sprintf("cannot start service: exited quickly with code %d", cmd.ProcessState.ExitCode())
-		if len(active.lastLogs) > 0 {
+		if len(lastLogs) > 0 {
 			msg = fmt.Sprintf("%s - last %d lines of output:\n%s",
-				msg, lastLogLines, bytes.TrimSuffix(active.lastLogs, []byte("\n")))
+				msg, lastLogLines, bytes.TrimSuffix(lastLogs, []byte("\n")))
 		}
 		return errors.New(msg)
 	}
 	// unreachable
-}
-
-func readLastLogs(logBuffer *servicelog.RingBuffer, numLines int) ([]byte, error) {
-	it := logBuffer.HeadIterator(numLines)
-	defer it.Close()
-	return ioutil.ReadAll(it)
 }
 
 func (m *ServiceManager) doStop(task *state.Task, tomb *tomb.Tomb) error {
