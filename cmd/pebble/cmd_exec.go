@@ -125,7 +125,6 @@ func (cmd *cmdExec) Execute(args []string) error {
 		}
 	}
 
-	// Start the command.
 	opts := &client.ExecOptions{
 		Command:     command,
 		Environment: env,
@@ -140,11 +139,20 @@ func (cmd *cmdExec) Execute(args []string) error {
 		Height:      height,
 		Stdin:       os.Stdin,
 		Stdout:      os.Stdout,
+		Stderr:      os.Stderr,
 	}
-	stderrIsTerminal := ptyutil.IsTerminal(unix.Stderr)
-	if !stdoutIsTerminal || !stderrIsTerminal {
-		opts.Stderr = os.Stderr
+
+	// If stdout and stderr both refer to the same file or device (e.g.,
+	// "/dev/pts/1"), combine stderr into stdout on the server.
+	stdoutPath, err := os.Readlink("/proc/self/fd/1")
+	if err == nil {
+		stderrPath, err := os.Readlink("/proc/self/fd/2")
+		if err == nil && stdoutPath == stderrPath {
+			opts.Stderr = nil // opts.Stderr nil uses "combine stderr" mode
+		}
 	}
+
+	// Start the command.
 	process, err := cmd.client.Exec(opts)
 	if err != nil {
 		return err
