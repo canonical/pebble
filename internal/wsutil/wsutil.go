@@ -217,7 +217,7 @@ func ExecReaderToChannel(r io.Reader, bufferSize int, exited <-chan struct{}, fd
 				// handled and triggers another codepath. (See [2].)"
 				if avoidAtomicLoad || atomic.LoadInt32(&attachedChildIsDead) == 1 {
 					avoidAtomicLoad = true
-					// Handle race between atomic.StorInt32() in the go routine
+					// Handle race between atomic.StoreInt32() in the go routine
 					// explained in [1] and atomic.LoadInt32() in the go routine
 					// here:
 					// We need to check for (POLLHUP | POLLRDHUP) here again since we might
