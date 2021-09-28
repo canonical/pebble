@@ -258,12 +258,12 @@ type websocketResponse struct {
 func (wr websocketResponse) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	err := wr.connect(r, w, wr.change, wr.websocketID)
 	if errors.Is(err, os.ErrNotExist) {
-		rsp := statusNotFound("websocket not found")
+		rsp := statusNotFound("cannot find websocket with id %q", wr.websocketID)
 		rsp.ServeHTTP(w, r)
 		return
 	}
 	if err != nil {
-		rsp := statusInternalError("%v", err)
+		rsp := statusInternalError("cannot connect to websocket: %v", err)
 		rsp.ServeHTTP(w, r)
 		return
 	}

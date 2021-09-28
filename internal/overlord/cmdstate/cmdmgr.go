@@ -275,7 +275,7 @@ func (e *execution) connect(r *http.Request, w http.ResponseWriter, id string) e
 		}
 	}
 	if id != wsID {
-		return fmt.Errorf("cannot find websocket ID %q", id)
+		return os.ErrNotExist
 	}
 
 	// Upgrade the HTTP connection to a websocket connection.
