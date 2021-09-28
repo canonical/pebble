@@ -368,7 +368,7 @@ func (s *S) TestParseLayer(c *C) {
 				}
 				for name, order := range test.stop {
 					p := plan.Plan{Services: result.Services}
-					names, err := p.StopOrder([]string{name}, true)
+					names, err := p.StopOrder([]string{name})
 					c.Assert(err, IsNil)
 					c.Assert(names, DeepEquals, order)
 				}
@@ -485,7 +485,7 @@ func (s *S) TestReadDir(c *C) {
 				}
 				for name, order := range test.stop {
 					p := plan.Plan{Services: result.Services}
-					names, err := p.StopOrder([]string{name}, true)
+					names, err := p.StopOrder([]string{name})
 					c.Assert(err, IsNil)
 					c.Assert(names, DeepEquals, order)
 				}

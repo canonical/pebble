@@ -172,21 +172,21 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 // An error is returned when a provided service name does not exist, or there
 // is an order cycle involving the provided service or its dependencies.
 func (p *Plan) StartOrder(names []string) ([]string, error) {
-	return order(p.Services, names, false, true)
+	return order(p.Services, names, false)
 }
 
 // StopOrder returns the required services that must be stopped for the named
 // services to be properly stopped, in the order that they must be stopped.
 // An error is returned when a provided service name does not exist, or there
 // is an order cycle involving the provided service or its dependencies.
-func (p *Plan) StopOrder(names []string, includeDependants bool) ([]string, error) {
-	return order(p.Services, names, true, includeDependants)
+func (p *Plan) StopOrder(names []string) ([]string, error) {
+	return order(p.Services, names, true)
 }
 
-func order(services map[string]*Service, names []string, stop bool, includeRelated bool) ([]string, error) {
+func order(services map[string]*Service, names []string, stop bool) ([]string, error) {
 	// For stop, create a list of reversed dependencies.
 	predecessors := map[string][]string(nil)
-	if stop && includeRelated {
+	if stop {
 		predecessors = make(map[string][]string)
 		for name, service := range services {
 			for _, req := range service.Requires {
@@ -204,18 +204,16 @@ func order(services map[string]*Service, names []string, stop bool, includeRelat
 			continue
 		}
 		successors[name] = nil
-		if includeRelated {
-			if stop {
-				pending = append(pending, predecessors[name]...)
-			} else {
-				service, ok := services[name]
-				if !ok {
-					return nil, &FormatError{
-						Message: fmt.Sprintf("service %q does not exist", name),
-					}
+		if stop {
+			pending = append(pending, predecessors[name]...)
+		} else {
+			service, ok := services[name]
+			if !ok {
+				return nil, &FormatError{
+					Message: fmt.Sprintf("service %q does not exist", name),
 				}
-				pending = append(pending, service.Requires...)
 			}
+			pending = append(pending, service.Requires...)
 		}
 	}
 
@@ -264,7 +262,7 @@ func (l *Layer) checkCycles() error {
 	for name := range l.Services {
 		names = append(names, name)
 	}
-	_, err := order(l.Services, names, false, true)
+	_, err := order(l.Services, names, false)
 	return err
 }
 

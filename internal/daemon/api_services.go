@@ -101,16 +101,17 @@ func v1PostServices(c *Command, r *http.Request, _ *userState) Response {
 		}
 		taskSet, err = servstate.Start(st, services)
 	case "stop":
-		services, err = servmgr.StopOrder(payload.Services, true)
+		services, err = servmgr.StopOrder(payload.Services)
 		if err != nil {
 			break
 		}
 		taskSet, err = servstate.Stop(st, services)
 	case "restart":
-		services, err = servmgr.StopOrder(payload.Services, false)
+		services, err = servmgr.StopOrder(payload.Services)
 		if err != nil {
 			break
 		}
+		services = intersectOrdered(payload.Services, services)
 		var stopTasks *state.TaskSet
 		stopTasks, err = servstate.Stop(st, services)
 		if err != nil {
@@ -157,4 +158,20 @@ func v1GetService(c *Command, r *http.Request, _ *userState) Response {
 
 func v1PostService(c *Command, r *http.Request, _ *userState) Response {
 	return statusBadRequest("not implemented")
+}
+
+// intersectOrdered returns the intersection of left and right where
+// the right's ordering is persisted in the resulting set.
+func intersectOrdered(left []string, orderedRight []string) []string {
+	m := map[string]bool{}
+	for _, v := range left {
+		m[v] = true
+	}
+	var out []string
+	for _, v := range orderedRight {
+		if m[v] {
+			out = append(out, v)
+		}
+	}
+	return out
 }
