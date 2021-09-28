@@ -81,6 +81,9 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 			// Service exited but not yet removed, safe to override.
 		default:
 			// Already started
+			m.state.Lock()
+			task.Logf("service %q already started", req.Name)
+			m.state.Unlock()
 			return nil
 		}
 	}
@@ -188,6 +191,9 @@ func (m *ServiceManager) doStop(task *state.Task, tomb *tomb.Tomb) error {
 	active, ok := m.services[req.Name]
 	if !ok {
 		// Already stopped
+		m.state.Lock()
+		task.Logf("service %q already stopped", req.Name)
+		m.state.Unlock()
 		return nil
 	}
 	cmd := active.cmd
