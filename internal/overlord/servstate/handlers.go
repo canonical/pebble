@@ -82,7 +82,7 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 		default:
 			// Already started
 			m.state.Lock()
-			task.Logf("service %q already started", req.Name)
+			task.Logf("Service %q already started.", req.Name)
 			m.state.Unlock()
 			return nil
 		}
@@ -192,7 +192,7 @@ func (m *ServiceManager) doStop(task *state.Task, tomb *tomb.Tomb) error {
 	if !ok {
 		// Already stopped
 		m.state.Lock()
-		task.Logf("service %q already stopped", req.Name)
+		task.Logf("Service %q already stopped.", req.Name)
 		m.state.Unlock()
 		return nil
 	}
