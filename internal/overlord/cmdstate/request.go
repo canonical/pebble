@@ -19,6 +19,7 @@ import (
 	"os"
 	"os/user"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/canonical/pebble/internal/logger"
@@ -43,13 +44,33 @@ type ExecArgs struct {
 
 // ExecMetadata is the metadata returned from an Exec call.
 type ExecMetadata struct {
+	TaskID       string
 	WebsocketIDs map[string]string // keys are "control", "stdio", as well as "stderr" if SplitStderr true
 	Environment  map[string]string
 	WorkingDir   string
 }
 
+// execution tracks the execution of a command.
+type execution struct {
+	command          []string
+	env              map[string]string
+	timeout          time.Duration
+	websockets       map[string]*websocket.Conn
+	websocketsLock   sync.Mutex
+	websocketIDs     map[string]string
+	ioConnected      chan struct{}
+	controlConnected chan struct{}
+	useTerminal      bool
+	splitStderr      bool
+	width            int
+	height           int
+	uid              *int
+	gid              *int
+	workingDir       string
+}
+
 // Exec creates a change that will execute the command with the given arguments.
-func Exec(st *state.State, args *ExecArgs) (*state.Change, ExecMetadata, error) {
+func Exec(st *state.State, args *ExecArgs) (*state.Task, ExecMetadata, error) {
 	env := map[string]string{}
 	for k, v := range args.Environment {
 		env[k] = v
@@ -129,27 +150,21 @@ func Exec(st *state.State, args *ExecArgs) (*state.Change, ExecMetadata, error) 
 		}
 	}
 
+	// Create a task for this execution (though it's not started here).
+	task := st.NewTask("exec", fmt.Sprintf("exec command %q", args.Command[0]))
+	task.SetObject(e)
+
 	// Make a copy of websocketIDs map for the return value.
 	ids := make(map[string]string, len(e.websocketIDs))
 	for key, id := range e.websocketIDs {
 		ids[key] = id
 	}
 	metadata := ExecMetadata{
+		TaskID:       task.ID(),
 		WebsocketIDs: ids,
 		Environment:  env,
 		WorkingDir:   cwd,
 	}
 
-	// Create change object for this execution and store it in state.
-	cacheKey, err := strutil.UUID()
-	if err != nil {
-		return nil, ExecMetadata{}, err
-	}
-	st.Cache("exec-"+cacheKey, e)
-	change := st.NewChange("exec", fmt.Sprintf("Execute command %q", args.Command[0]))
-	task := st.NewTask("exec", fmt.Sprintf("exec command %q", args.Command[0]))
-	change.AddAll(state.NewTaskSet(task))
-	change.Set("cache-key", cacheKey)
-
-	return change, metadata, nil
+	return task, metadata, nil
 }

@@ -45,77 +45,15 @@ const (
 	wsStderr  = "stderr"
 )
 
-func doExec(task *state.Task, tomb *tomb.Tomb) error {
-	st := task.State()
-	st.Lock()
-	change := task.Change()
-	st.Unlock()
-
-	e, cacheKey, err := getExecutionAndCacheKey(change)
-	if err != nil {
-		return err
+func (m *CommandManager) doExec(task *state.Task, tomb *tomb.Tomb) error {
+	e, ok := task.Object().(*execution)
+	if !ok {
+		return fmt.Errorf("task %q has no execution object", task.ID())
 	}
 
 	// Run the command! Killing the tomb will terminate the command.
 	ctx := tomb.Context(context.Background())
-	err = e.do(ctx, change)
-
-	deleteExecutionFromCache(change, cacheKey)
-
-	return err
-}
-
-func getExecutionAndCacheKey(change *state.Change) (*execution, string, error) {
-	st := change.State()
-	st.Lock()
-	defer st.Unlock()
-
-	var cacheKey string
-	err := change.Get("cache-key", &cacheKey)
-	if err != nil {
-		return nil, "", err
-	}
-
-	e, ok := st.Cached("exec-" + cacheKey).(*execution)
-	if !ok {
-		return nil, "", fmt.Errorf("exec for change %q no longer active", change.ID())
-	}
-	return e, cacheKey, nil
-}
-
-func deleteExecutionFromCache(change *state.Change, cacheKey string) {
-	st := change.State()
-	st.Lock()
-	defer st.Unlock()
-	st.Cache("exec-"+cacheKey, nil)
-}
-
-// Connect upgrades the HTTP connection and connects to the given websocket.
-func Connect(r *http.Request, w http.ResponseWriter, change *state.Change, websocketID string) error {
-	e, _, err := getExecutionAndCacheKey(change)
-	if err != nil {
-		return err
-	}
-	return e.connect(r, w, websocketID)
-}
-
-// execution tracks the execution of a command.
-type execution struct {
-	command          []string
-	env              map[string]string
-	timeout          time.Duration
-	websockets       map[string]*websocket.Conn
-	websocketsLock   sync.Mutex
-	websocketIDs     map[string]string
-	ioConnected      chan struct{}
-	controlConnected chan struct{}
-	useTerminal      bool
-	splitStderr      bool
-	width            int
-	height           int
-	uid              *int
-	gid              *int
-	workingDir       string
+	return e.do(ctx, task)
 }
 
 var websocketUpgrader = websocket.Upgrader{
@@ -179,10 +117,10 @@ func (e *execution) waitIOConnected(ctx context.Context, execID string) error {
 }
 
 // do actually runs the command.
-func (e *execution) do(ctx context.Context, change *state.Change) error {
+func (e *execution) do(ctx context.Context, task *state.Task) error {
 	// Wait till client has connected to "stdio" websocket (and "stderr" if
 	// separating stderr), to avoid race conditions forwarding I/O.
-	err := e.waitIOConnected(ctx, change.ID())
+	err := e.waitIOConnected(ctx, task.ID())
 	if err != nil {
 		return err
 	}
@@ -225,24 +163,24 @@ func (e *execution) do(ctx context.Context, change *state.Change) error {
 			ptyutil.SetSize(int(pty.Fd()), e.width, e.height)
 		}
 
-		go e.controlLoop(change.ID(), pidCh, controlExit, int(pty.Fd()))
+		go e.controlLoop(task.ID(), pidCh, controlExit, int(pty.Fd()))
 
 		// Start goroutine to mirror PTY I/O to "stdio" websocket.
 		wg.Add(1)
 		go func() {
-			logger.Debugf("Exec %s: started mirroring websocket", change.ID())
+			logger.Debugf("Exec %s: started mirroring websocket", task.ID())
 			ioConn := e.getWebsocket(wsStdio)
 			readDone, writeDone := wsutil.WebsocketExecMirror(
 				ioConn, pty, pty, childDead, int(pty.Fd()))
 			<-readDone
 			<-writeDone
-			logger.Debugf("Exec %s: finished mirroring websocket", change.ID())
+			logger.Debugf("Exec %s: finished mirroring websocket", task.ID())
 
 			_ = ioConn.Close()
 			wg.Done()
 		}()
 	} else {
-		go e.controlLoop(change.ID(), pidCh, controlExit, -1)
+		go e.controlLoop(task.ID(), pidCh, controlExit, -1)
 
 		// Start goroutine to receive stdin from "stdio" websocket and write to
 		// cmd.Stdin pipe.
@@ -355,7 +293,7 @@ func (e *execution) do(ctx context.Context, change *state.Change) error {
 			_ = pty.Close()
 		}
 
-		setApiData(change, exitCode)
+		setApiData(task, exitCode)
 
 		return cmdErr
 	}
@@ -393,11 +331,11 @@ func (e *execution) do(ctx context.Context, change *state.Change) error {
 	return finisher(0, nil)
 }
 
-func setApiData(change *state.Change, exitCode int) {
-	st := change.State()
+func setApiData(task *state.Task, exitCode int) {
+	st := task.State()
 	st.Lock()
 	defer st.Unlock()
-	change.Set("api-data", map[string]interface{}{
+	task.Set("api-data", map[string]interface{}{
 		"exit-code": exitCode,
 	})
 }

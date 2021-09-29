@@ -16,12 +16,14 @@ package daemon
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"os/exec"
 	"time"
 
 	"github.com/canonical/pebble/internal/osutil"
 	"github.com/canonical/pebble/internal/overlord/cmdstate"
+	"github.com/canonical/pebble/internal/overlord/state"
 )
 
 type execPayload struct {
@@ -86,15 +88,20 @@ func v1PostExec(c *Command, req *http.Request, _ *userState) Response {
 		Width:       payload.Width,
 		Height:      payload.Height,
 	}
-	change, metadata, err := cmdstate.Exec(st, args)
+	task, metadata, err := cmdstate.Exec(st, args)
 	if err != nil {
 		return statusInternalError("cannot create exec change: %v", err)
 	}
+
+	change := st.NewChange("exec", fmt.Sprintf("Execute command %q", args.Command[0]))
+	taskSet := state.NewTaskSet(task)
+	change.AddAll(taskSet)
 
 	stateEnsureBefore(st, 0) // start it right away
 
 	result := map[string]interface{}{
 		"environment":   metadata.Environment,
+		"task-id":       metadata.TaskID,
 		"websocket-ids": metadata.WebsocketIDs,
 		"working-dir":   metadata.WorkingDir,
 	}

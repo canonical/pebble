@@ -16,13 +16,10 @@ package daemon
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/canonical/pebble/internal/logger"
-	"github.com/canonical/pebble/internal/overlord/cmdstate"
 	"github.com/canonical/pebble/internal/overlord/state"
 )
 
@@ -101,9 +98,15 @@ func change2changeInfo(chg *state.Change) *changeInfo {
 			taskInfo.ReadyTime = &readyTime
 		}
 		taskInfos[j] = taskInfo
+
+		var data map[string]*json.RawMessage
+		if t.Get("api-data", &data) == nil {
+			chgInfo.Data = data
+		}
 	}
 	chgInfo.Tasks = taskInfos
 
+	// If change's "api-data" is set, that overrides any task "api-data".
 	var data map[string]*json.RawMessage
 	if chg.Get("api-data", &data) == nil {
 		chgInfo.Data = data
@@ -219,63 +222,6 @@ func v1GetChangeWait(c *Command, r *http.Request, _ *userState) Response {
 	st.Lock()
 	defer st.Unlock()
 	return SyncResponse(change2changeInfo(change))
-}
-
-func v1GetChangeWebsocket(c *Command, req *http.Request, _ *userState) Response {
-	changeID := muxVars(req)["id"]
-
-	websocketID := req.URL.Query().Get("id")
-	if websocketID == "" {
-		return statusBadRequest("must specify id")
-	}
-
-	st := c.d.overlord.State()
-	st.Lock()
-	defer st.Unlock()
-
-	change := st.Change(changeID)
-	if change == nil {
-		return statusNotFound("cannot find change with id %q", changeID)
-	}
-	connect := connectFuncs[change.Kind()]
-	if connect == nil {
-		return statusBadRequest("%q changes do not have websockets", change.Kind())
-	}
-
-	return websocketResponse{
-		change:      change,
-		websocketID: websocketID,
-		connect:     connect,
-	}
-}
-
-type websocketResponse struct {
-	change      *state.Change
-	websocketID string
-	connect     connectFunc
-}
-
-func (wr websocketResponse) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	err := wr.connect(r, w, wr.change, wr.websocketID)
-	if errors.Is(err, os.ErrNotExist) {
-		rsp := statusNotFound("cannot find websocket with id %q", wr.websocketID)
-		rsp.ServeHTTP(w, r)
-		return
-	}
-	if err != nil {
-		rsp := statusInternalError("cannot connect to websocket: %v", err)
-		rsp.ServeHTTP(w, r)
-		return
-	}
-	// In the success case, Connect takes over the connection and upgrades to
-	// the websocket protocol.
-}
-
-type connectFunc func(r *http.Request, w http.ResponseWriter, change *state.Change, websocketID string) error
-
-// connectFuncs maps change kind to websocket connect function.
-var connectFuncs = map[string]connectFunc{
-	"exec": cmdstate.Connect,
 }
 
 func v1PostChange(c *Command, r *http.Request, _ *userState) Response {

@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net/http"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -88,6 +89,7 @@ type execPayload struct {
 }
 
 type execResult struct {
+	TaskID       string            `json:"task-id"`
 	WebsocketIDs map[string]string `json:"websocket-ids"`
 }
 
@@ -168,13 +170,14 @@ func (client *Client) Exec(opts *ExecOptions) (*ExecProcess, error) {
 	}
 
 	// Connect to the "control" websocket.
-	controlConn, err := client.getChangeWebsocket(changeID, wsIDs["control"])
+	taskID := result.TaskID
+	controlConn, err := client.getTaskWebsocket(taskID, wsIDs["control"])
 	if err != nil {
 		return nil, fmt.Errorf(`cannot connect to "control" websocket: %v`, err)
 	}
 
 	// Forward stdin and stdout.
-	ioConn, err := client.getChangeWebsocket(changeID, wsIDs["stdio"])
+	ioConn, err := client.getTaskWebsocket(taskID, wsIDs["stdio"])
 	if err != nil {
 		return nil, fmt.Errorf(`cannot connect to "stdio" websocket: %v`, err)
 	}
@@ -185,7 +188,7 @@ func (client *Client) Exec(opts *ExecOptions) (*ExecProcess, error) {
 	var stderrConn *websocket.Conn
 	var stderrDone chan bool
 	if opts.Stderr != nil {
-		stderrConn, err = client.getChangeWebsocket(changeID, wsIDs["stderr"])
+		stderrConn, err = client.getTaskWebsocket(taskID, wsIDs["stderr"])
 		if err != nil {
 			return nil, fmt.Errorf(`cannot connect to "stderr" websocket: %v`, err)
 		}
@@ -222,6 +225,28 @@ func (client *Client) Exec(opts *ExecOptions) (*ExecProcess, error) {
 		controlConn: controlConn,
 	}
 	return process, nil
+}
+
+// getTaskWebsocket creates a websocket connection for the given task ID and
+// websocket ID combination.
+func (client *Client) getTaskWebsocket(taskID, websocketID string) (*websocket.Conn, error) {
+	// Set up a new websocket dialer based on the HTTP client
+	httpClient := client.doer.(*http.Client)
+	httpTransport := httpClient.Transport.(*http.Transport)
+	dialer := websocket.Dialer{
+		NetDial:          httpTransport.Dial,
+		Proxy:            httpTransport.Proxy,
+		TLSClientConfig:  httpTransport.TLSClientConfig,
+		HandshakeTimeout: 5 * time.Second,
+	}
+
+	// Establish the connection
+	url := fmt.Sprintf("ws://localhost/v1/tasks/%s/websocket/%s", taskID, websocketID)
+	conn, _, err := dialer.Dial(url, nil)
+	if err != nil {
+		return nil, err
+	}
+	return conn, err
 }
 
 // Wait waits for the command process to finish. The returned error is nil if

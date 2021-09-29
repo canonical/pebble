@@ -15,6 +15,9 @@
 package cmdstate
 
 import (
+	"fmt"
+	"net/http"
+
 	"github.com/canonical/pebble/internal/overlord/state"
 )
 
@@ -22,11 +25,21 @@ type CommandManager struct{}
 
 // NewManager creates a new CommandManager.
 func NewManager(runner *state.TaskRunner) *CommandManager {
-	runner.AddHandler("exec", doExec, nil)
-	return &CommandManager{}
+	manager := &CommandManager{}
+	runner.AddHandler("exec", manager.doExec, nil)
+	return manager
 }
 
 // Ensure is part of the overlord.StateManager interface.
 func (m *CommandManager) Ensure() error {
 	return nil
+}
+
+// Connect upgrades the HTTP connection and connects to the given websocket.
+func (m *CommandManager) Connect(r *http.Request, w http.ResponseWriter, task *state.Task, websocketID string) error {
+	e, ok := task.Object().(*execution)
+	if !ok {
+		return fmt.Errorf("task %q has no execution object", task.ID())
+	}
+	return e.connect(r, w, websocketID)
 }

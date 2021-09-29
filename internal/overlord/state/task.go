@@ -62,6 +62,10 @@ type Task struct {
 	undoingTime time.Duration
 
 	atTime time.Time
+
+	// An arbitrary object attached to this task, for example an execution
+	// instance for "exec" tasks.
+	object interface{}
 }
 
 func newTask(state *State, id, kind, summary string) *Task {
@@ -463,6 +467,17 @@ func (t *Task) At(when time.Time) {
 		}
 		t.state.EnsureBefore(d)
 	}
+}
+
+// Object returns the arbitrary object associated with this task, or nil if
+// not set.
+func (t *Task) Object() interface{} {
+	return t.object
+}
+
+// SetObject sets the arbitrary object associated with this task.
+func (t *Task) SetObject(object interface{}) {
+	t.object = object
 }
 
 // TaskSetEdge designates tasks inside a TaskSet for outside reference.

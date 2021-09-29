@@ -630,3 +630,24 @@ func (cs *taskSuite) TestTaskAddAllWithEdges(c *C) {
 	err = ts2.AddAllWithEdges(tsWithDuplicatedEdge)
 	c.Assert(err, ErrorMatches, `cannot add taskset: duplicated edge "install"`)
 }
+
+func (cs *taskSuite) TestObject(c *C) {
+	st := state.New(nil)
+	st.Lock()
+	defer st.Unlock()
+
+	t1 := st.NewTask("test1", "this is a test")
+	c.Assert(t1.Object(), IsNil)
+	t1.SetObject(1234)
+	c.Assert(t1.Object(), Equals, 1234)
+	ch := make(chan int)
+	t1.SetObject(ch) // should work even if not JSON serializable
+	c.Assert(t1.Object(), Equals, ch)
+	t1.SetObject(nil)
+	c.Assert(t1.Object(), IsNil)
+
+	t2 := st.NewTask("test2", "this is a test")
+	c.Assert(t2.Object(), IsNil)
+	t2.SetObject("x")
+	c.Assert(t2.Object(), Equals, "x")
+}
