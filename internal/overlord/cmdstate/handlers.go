@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"os/exec"
@@ -124,19 +125,22 @@ func (e *execution) do(ctx context.Context, task *state.Task) error {
 		return err
 	}
 
-	var ttys []*os.File
-	var ptys []*os.File
+	// Files/pipes to close before and after waiting for output to be finished sending.
+	var beforeClosers []io.Closer
+	var afterClosers []io.Closer
 
+	// Stdin/stdout/stderr for the exec.Cmd process.
 	var stdin *os.File
 	var stdout *os.File
 	var stderr *os.File
 
+	// Closed to make the controlLoop exit early.
 	controlExit := make(chan struct{})
 	defer close(controlExit)
 
 	pidCh := make(chan int)
 	childDead := make(chan struct{})
-	var wg sync.WaitGroup
+	var wgOutputSent sync.WaitGroup
 
 	if e.useTerminal {
 		var uid, gid int
@@ -147,36 +151,44 @@ func (e *execution) do(ctx context.Context, task *state.Task) error {
 			gid = os.Getgid()
 		}
 
-		pty, tty, err := ptyutil.OpenPty(int64(uid), int64(gid))
+		master, slave, err := ptyutil.OpenPty(int64(uid), int64(gid))
 		if err != nil {
 			return err
 		}
-		ptys = append(ptys, pty)
-		ttys = append(ttys, tty)
+		afterClosers = append(afterClosers, master)
+		beforeClosers = append(beforeClosers, slave)
 
-		stdin = tty
-		stdout = tty
-		stderr = tty // stderr will be overwritten below if splitStderr true
+		stdin = slave
+		stdout = slave
+		stderr = slave // stderr will be overwritten below if splitStderr true
 
 		if e.width > 0 && e.height > 0 {
-			ptyutil.SetSize(int(pty.Fd()), e.width, e.height)
+			err = ptyutil.SetSize(int(master.Fd()), e.width, e.height)
+			if err != nil {
+				logger.Noticef("Exec %s: cannot set initial terminal size to %dx%d: %v",
+					task.ID(), e.width, e.height, err)
+			}
 		}
 
-		go e.controlLoop(task.ID(), pidCh, controlExit, int(pty.Fd()))
+		go e.controlLoop(task.ID(), pidCh, controlExit, int(master.Fd()))
 
 		// Start goroutine to mirror PTY I/O to "stdio" websocket.
-		wg.Add(1)
+		wgOutputSent.Add(1)
 		go func() {
+			defer wgOutputSent.Done()
+
 			logger.Debugf("Exec %s: started mirroring websocket", task.ID())
+			defer logger.Debugf("Exec %s: finished mirroring websocket", task.ID())
+
 			ioConn := e.getWebsocket(wsStdio)
+			defer func() {
+				_ = ioConn.Close()
+			}()
+
 			readDone, writeDone := wsutil.WebsocketExecMirror(
-				ioConn, pty, pty, childDead, int(pty.Fd()))
+				ioConn, master, master, childDead, int(master.Fd()))
 			<-readDone
 			<-writeDone
-			logger.Debugf("Exec %s: finished mirroring websocket", task.ID())
-
-			_ = ioConn.Close()
-			wg.Done()
 		}()
 	} else {
 		go e.controlLoop(task.ID(), pidCh, controlExit, -1)
@@ -189,8 +201,8 @@ func (e *execution) do(ctx context.Context, task *state.Task) error {
 			return err
 		}
 		stdin = stdinReader
-		ptys = append(ptys, stdinReader)
-		ttys = append(ttys, stdinWriter)
+		afterClosers = append(afterClosers, stdinReader)
+		beforeClosers = append(beforeClosers, stdinWriter)
 		go func() {
 			<-wsutil.WebsocketRecvStream(stdinWriter, ioConn)
 			stdinWriter.Close()
@@ -202,15 +214,15 @@ func (e *execution) do(ctx context.Context, task *state.Task) error {
 		if err != nil {
 			return err
 		}
-		ptys = append(ptys, stdoutReader)
-		ttys = append(ttys, stdoutWriter)
+		afterClosers = append(afterClosers, stdoutReader)
+		beforeClosers = append(beforeClosers, stdoutWriter)
 		stdout = stdoutWriter
 		stderr = stdoutWriter // stderr will be overwritten below if splitStderr true
-		wg.Add(1)
+		wgOutputSent.Add(1)
 		go func() {
+			defer wgOutputSent.Done()
 			<-wsutil.WebsocketSendStream(ioConn, stdoutReader, -1)
 			stdoutReader.Close()
-			wg.Done()
 		}()
 	}
 
@@ -221,15 +233,15 @@ func (e *execution) do(ctx context.Context, task *state.Task) error {
 		if err != nil {
 			return err
 		}
-		ptys = append(ptys, stderrReader)
-		ttys = append(ttys, stderrWriter)
+		afterClosers = append(afterClosers, stderrReader)
+		beforeClosers = append(beforeClosers, stderrWriter)
 		stderr = stderrWriter
 		stderrConn := e.getWebsocket(wsStderr)
-		wg.Add(1)
+		wgOutputSent.Add(1)
 		go func() {
+			defer wgOutputSent.Done()
 			<-wsutil.WebsocketSendStream(stderrConn, stderrReader, -1)
 			stderrReader.Close()
-			wg.Done()
 		}()
 	}
 
@@ -284,8 +296,8 @@ func (e *execution) do(ctx context.Context, task *state.Task) error {
 	}
 
 	// Close open files and channels.
-	for _, tty := range ttys {
-		_ = tty.Close()
+	for _, closer := range beforeClosers {
+		_ = closer.Close()
 	}
 
 	// Close the control channel, if connected.
@@ -296,10 +308,10 @@ func (e *execution) do(ctx context.Context, task *state.Task) error {
 
 	close(childDead)
 
-	wg.Wait()
+	wgOutputSent.Wait()
 
-	for _, pty := range ptys {
-		_ = pty.Close()
+	for _, closer := range afterClosers {
+		_ = closer.Close()
 	}
 
 	// Handle errors: timeout, non-zero exit code, or other error.
