@@ -115,6 +115,8 @@ func (wl *ucrednetListener) Accept() (net.Conn, error) {
 		}
 		var ucred *syscall.Ucred
 		var ucredErr error
+		// Call getUcred inside a Control() block to ensure fd is valid for
+		// the duration of the call, avoiding a race condition.
 		err = rawConn.Control(func(fd uintptr) {
 			ucred, ucredErr = getUcred(int(fd), syscall.SOL_SOCKET, syscall.SO_PEERCRED)
 		})
