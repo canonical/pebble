@@ -46,11 +46,65 @@ const (
 	wsStderr  = "stderr"
 )
 
+// execution tracks the execution of a command.
+type execution struct {
+	command     []string
+	environment map[string]string
+	timeout     time.Duration
+	useTerminal bool
+	splitStderr bool
+	width       int
+	height      int
+	userID      *int
+	groupID     *int
+	workingDir  string
+
+	websockets       map[string]*websocket.Conn
+	websocketsLock   sync.Mutex
+	ioConnected      chan struct{}
+	controlConnected chan struct{}
+}
+
 func (m *CommandManager) doExec(task *state.Task, tomb *tomb.Tomb) error {
-	e, ok := task.Object().(*execution)
-	if !ok {
-		return fmt.Errorf("task %q has no execution object", task.ID())
+	var request executionRequest
+	err := task.Get("execution-request", &request)
+	if err != nil {
+		return fmt.Errorf("cannot get execution request for task %q: %v", task.ID(), err)
 	}
+
+	// Set up the object that will track the execution.
+	e := &execution{
+		command:          request.Command,
+		environment:      request.Environment,
+		timeout:          request.Timeout,
+		useTerminal:      request.UseTerminal,
+		splitStderr:      request.SplitStderr,
+		width:            request.Width,
+		height:           request.Height,
+		userID:           request.UserID,
+		groupID:          request.GroupID,
+		workingDir:       request.WorkingDir,
+		websockets:       make(map[string]*websocket.Conn),
+		ioConnected:      make(chan struct{}),
+		controlConnected: make(chan struct{}),
+	}
+
+	// Populate the websockets map (with nil connections until connected).
+	e.websockets[wsControl] = nil
+	e.websockets[wsStdio] = nil
+	if e.splitStderr {
+		e.websockets[wsStderr] = nil
+	}
+
+	// Store the execution object on the manager (for Connect).
+	m.executionsMutex.Lock()
+	m.executions[task.ID()] = e
+	m.executionsMutex.Unlock()
+	defer func() {
+		m.executionsMutex.Lock()
+		delete(m.executions, task.ID())
+		m.executionsMutex.Unlock()
+	}()
 
 	// Run the command! Killing the tomb will terminate the command.
 	ctx := tomb.Context(context.Background())
@@ -144,8 +198,8 @@ func (e *execution) do(ctx context.Context, task *state.Task) error {
 
 	if e.useTerminal {
 		var uid, gid int
-		if e.uid != nil && e.gid != nil {
-			uid, gid = *e.uid, *e.gid
+		if e.userID != nil && e.groupID != nil {
+			uid, gid = *e.userID, *e.groupID
 		} else {
 			uid = os.Getuid()
 			gid = os.Getgid()
@@ -253,7 +307,7 @@ func (e *execution) do(ctx context.Context, task *state.Task) error {
 
 	cmd := exec.CommandContext(ctx, e.command[0], e.command[1:]...)
 
-	for k, v := range e.env {
+	for k, v := range e.environment {
 		cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", k, v))
 	}
 
@@ -264,10 +318,10 @@ func (e *execution) do(ctx context.Context, task *state.Task) error {
 	cmd.Stderr = stderr
 
 	cmd.SysProcAttr = &syscall.SysProcAttr{}
-	if e.uid != nil && e.gid != nil {
+	if e.userID != nil && e.groupID != nil {
 		cmd.SysProcAttr.Credential = &syscall.Credential{
-			Uid: uint32(*e.uid),
-			Gid: uint32(*e.gid),
+			Uid: uint32(*e.userID),
+			Gid: uint32(*e.groupID),
 		}
 	}
 

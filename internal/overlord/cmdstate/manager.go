@@ -17,15 +17,21 @@ package cmdstate
 import (
 	"fmt"
 	"net/http"
+	"sync"
 
 	"github.com/canonical/pebble/internal/overlord/state"
 )
 
-type CommandManager struct{}
+type CommandManager struct {
+	executions      map[string]*execution
+	executionsMutex sync.Mutex
+}
 
 // NewManager creates a new CommandManager.
 func NewManager(runner *state.TaskRunner) *CommandManager {
-	manager := &CommandManager{}
+	manager := &CommandManager{
+		executions: make(map[string]*execution),
+	}
 	runner.AddHandler("exec", manager.doExec, nil)
 	return manager
 }
@@ -37,8 +43,10 @@ func (m *CommandManager) Ensure() error {
 
 // Connect upgrades the HTTP connection and connects to the given websocket.
 func (m *CommandManager) Connect(r *http.Request, w http.ResponseWriter, task *state.Task, websocketID string) error {
-	e, ok := task.Object().(*execution)
-	if !ok {
+	m.executionsMutex.Lock()
+	e := m.executions[task.ID()]
+	m.executionsMutex.Unlock()
+	if e == nil {
 		return fmt.Errorf("task %q has no execution object", task.ID())
 	}
 	return e.connect(r, w, websocketID)

@@ -19,12 +19,10 @@ import (
 	"os"
 	"os/user"
 	"strconv"
-	"sync"
 	"time"
 
 	"github.com/canonical/pebble/internal/logger"
 	"github.com/canonical/pebble/internal/overlord/state"
-	"github.com/gorilla/websocket"
 )
 
 // ExecArgs holds the arguments for a command execution.
@@ -48,39 +46,35 @@ type ExecMetadata struct {
 	WorkingDir  string
 }
 
-// execution tracks the execution of a command.
-type execution struct {
-	command          []string
-	env              map[string]string
-	timeout          time.Duration
-	websockets       map[string]*websocket.Conn
-	websocketsLock   sync.Mutex
-	ioConnected      chan struct{}
-	controlConnected chan struct{}
-	useTerminal      bool
-	splitStderr      bool
-	width            int
-	height           int
-	uid              *int
-	gid              *int
-	workingDir       string
+// executionRequest is stored on a task to specify the args for an execution.
+type executionRequest struct {
+	Command     []string
+	Environment map[string]string
+	Timeout     time.Duration
+	UseTerminal bool
+	SplitStderr bool
+	Width       int
+	Height      int
+	UserID      *int
+	GroupID     *int
+	WorkingDir  string
 }
 
 // Exec creates a change that will execute the command with the given arguments.
 func Exec(st *state.State, args *ExecArgs) (*state.Task, ExecMetadata, error) {
-	env := map[string]string{}
+	environment := map[string]string{}
 	for k, v := range args.Environment {
-		env[k] = v
+		environment[k] = v
 	}
 
 	// Set a reasonable default for PATH.
-	_, ok := env["PATH"]
+	_, ok := environment["PATH"]
 	if !ok {
-		env["PATH"] = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+		environment["PATH"] = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 	}
 
 	// Set HOME and USER based on the UserID.
-	if env["HOME"] == "" || env["USER"] == "" {
+	if environment["HOME"] == "" || environment["USER"] == "" {
 		var userID int
 		if args.UserID != nil {
 			userID = *args.UserID
@@ -91,62 +85,50 @@ func Exec(st *state.State, args *ExecArgs) (*state.Task, ExecMetadata, error) {
 		if err != nil {
 			logger.Noticef("Cannot look up user %d: %v", userID, err)
 		} else {
-			if env["HOME"] == "" {
-				env["HOME"] = u.HomeDir
+			if environment["HOME"] == "" {
+				environment["HOME"] = u.HomeDir
 			}
-			if env["USER"] == "" {
-				env["USER"] = u.Username
+			if environment["USER"] == "" {
+				environment["USER"] = u.Username
 			}
 		}
 	}
 
 	// Set default value for LANG.
-	_, ok = env["LANG"]
+	_, ok = environment["LANG"]
 	if !ok {
-		env["LANG"] = "C.UTF-8"
+		environment["LANG"] = "C.UTF-8"
 	}
 
 	// Set default working directory to $HOME, or / if $HOME not set.
-	cwd := args.WorkingDir
-	if cwd == "" {
-		cwd = env["HOME"]
-		if cwd == "" {
-			cwd = "/"
+	workingDir := args.WorkingDir
+	if workingDir == "" {
+		workingDir = environment["HOME"]
+		if workingDir == "" {
+			workingDir = "/"
 		}
-	}
-
-	// Set up the object that will track the execution.
-	e := &execution{
-		command:          args.Command,
-		env:              env,
-		timeout:          args.Timeout,
-		websockets:       make(map[string]*websocket.Conn),
-		ioConnected:      make(chan struct{}),
-		controlConnected: make(chan struct{}),
-		useTerminal:      args.UseTerminal,
-		splitStderr:      args.SplitStderr,
-		width:            args.Width,
-		height:           args.Height,
-		uid:              args.UserID,
-		gid:              args.GroupID,
-		workingDir:       cwd,
-	}
-
-	// Generate unique identifier for each websocket (used by connect API).
-	e.websockets[wsControl] = nil
-	e.websockets[wsStdio] = nil
-	if args.SplitStderr {
-		e.websockets[wsStderr] = nil
 	}
 
 	// Create a task for this execution (though it's not started here).
 	task := st.NewTask("exec", fmt.Sprintf("exec command %q", args.Command[0]))
-	task.SetObject(e)
+	request := executionRequest{
+		Command:     args.Command,
+		Environment: environment,
+		Timeout:     args.Timeout,
+		UseTerminal: args.UseTerminal,
+		SplitStderr: args.SplitStderr,
+		Width:       args.Width,
+		Height:      args.Height,
+		UserID:      args.UserID,
+		GroupID:     args.GroupID,
+		WorkingDir:  workingDir,
+	}
+	task.Set("execution-request", &request)
 
 	metadata := ExecMetadata{
 		TaskID:      task.ID(),
-		Environment: env,
-		WorkingDir:  cwd,
+		Environment: environment,
+		WorkingDir:  workingDir,
 	}
 
 	return task, metadata, nil
