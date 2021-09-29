@@ -306,14 +306,14 @@ func (e *execution) getWebsocket(key string) *websocket.Conn {
 
 // waitIOConnected waits till all the I/O websockets are connected or the
 // connect timeout elapses (or the provided ctx is cancelled).
-func (e *execution) waitIOConnected(ctx context.Context) error {
+func (e *execution) waitIOConnected(ctx context.Context, execID string) error {
 	ctx, cancel := context.WithTimeout(ctx, connectTimeout)
 	defer cancel()
 	select {
 	case <-ctx.Done():
 		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-			logger.Noticef("Timeout waiting for websocket connections: %v", ctx.Err())
-			return fmt.Errorf("timeout waiting for websocket connections: %w", ctx.Err())
+			logger.Noticef("Exec %s: timeout waiting for websocket connections: %v", execID, ctx.Err())
+			return fmt.Errorf("exec %s: timeout waiting for websocket connections: %w", execID, ctx.Err())
 		}
 		return ctx.Err()
 	case <-e.ioConnected:
@@ -325,7 +325,7 @@ func (e *execution) waitIOConnected(ctx context.Context) error {
 func (e *execution) do(ctx context.Context, change *state.Change) error {
 	// Wait till client has connected to "stdio" websocket (and "stderr" if
 	// separating stderr), to avoid race conditions forwarding I/O.
-	err := e.waitIOConnected(ctx)
+	err := e.waitIOConnected(ctx, change.ID())
 	if err != nil {
 		return err
 	}
@@ -368,24 +368,24 @@ func (e *execution) do(ctx context.Context, change *state.Change) error {
 			ptyutil.SetSize(int(pty.Fd()), e.width, e.height)
 		}
 
-		go e.controlLoop(pidCh, controlExit, int(pty.Fd()))
+		go e.controlLoop(change.ID(), pidCh, controlExit, int(pty.Fd()))
 
 		// Start goroutine to mirror PTY I/O to "stdio" websocket.
 		wg.Add(1)
 		go func() {
-			logger.Debugf("Started mirroring websocket")
+			logger.Debugf("Exec %s: started mirroring websocket", change.ID())
 			ioConn := e.getWebsocket(wsStdio)
 			readDone, writeDone := wsutil.WebsocketExecMirror(
 				ioConn, pty, pty, childDead, int(pty.Fd()))
 			<-readDone
 			<-writeDone
-			logger.Debugf("Finished mirroring websocket")
+			logger.Debugf("Exec %s: finished mirroring websocket", change.ID())
 
 			_ = ioConn.Close()
 			wg.Done()
 		}()
 	} else {
-		go e.controlLoop(pidCh, controlExit, -1)
+		go e.controlLoop(change.ID(), pidCh, controlExit, -1)
 
 		// Start goroutine to receive stdin from "stdio" websocket and write to
 		// cmd.Stdin pipe.
@@ -560,9 +560,9 @@ type execResizeArgs struct {
 	Height int `json:"height"`
 }
 
-func (e *execution) controlLoop(pidCh <-chan int, exitCh <-chan struct{}, ptyFd int) {
-	logger.Debugf("Control handler waiting")
-	defer logger.Debugf("Control handler finished")
+func (e *execution) controlLoop(execID string, pidCh <-chan int, exitCh <-chan struct{}, ptyFd int) {
+	logger.Debugf("Exec %s: control handler waiting", execID)
+	defer logger.Debugf("Exec %s: control handler finished", execID)
 
 	// Wait till we receive the process's PID (command started).
 	var pid int
@@ -581,7 +581,7 @@ func (e *execution) controlLoop(pidCh <-chan int, exitCh <-chan struct{}, ptyFd 
 		return
 	}
 
-	logger.Debugf("Control handler started for child PID %d", pid)
+	logger.Debugf("Exec %s: control handler started for PID %d", execID, pid)
 	for {
 		controlConn := e.getWebsocket(wsControl)
 		mt, r, err := controlConn.NextReader()
@@ -590,7 +590,7 @@ func (e *execution) controlLoop(pidCh <-chan int, exitCh <-chan struct{}, ptyFd 
 		}
 
 		if err != nil {
-			logger.Debugf("Cannot get next reader for PID %d: %v", pid, err)
+			logger.Debugf("Exec %s: cannot get next websocket reader for PID %d: %v", execID, pid, err)
 			er, ok := err.(*websocket.CloseError)
 			if !ok {
 				break
@@ -602,9 +602,9 @@ func (e *execution) controlLoop(pidCh <-chan int, exitCh <-chan struct{}, ptyFd 
 			// If an abnormal closure occurred, kill the attached process.
 			err := unix.Kill(pid, unix.SIGKILL)
 			if err != nil {
-				logger.Noticef("Cannot send SIGKILL to pid %d: %v", pid, err)
+				logger.Noticef("Exec %s: cannot send SIGKILL to pid %d: %v", execID, pid, err)
 			} else {
-				logger.Noticef("Sent SIGKILL to pid %d", pid)
+				logger.Debugf("Exec %s: sent SIGKILL to pid %d", execID, pid)
 			}
 			break
 		}
@@ -612,43 +612,43 @@ func (e *execution) controlLoop(pidCh <-chan int, exitCh <-chan struct{}, ptyFd 
 		var command execCommand
 		err = json.NewDecoder(r).Decode(&command)
 		if err != nil {
-			logger.Noticef("Cannot decode control socket command: %v", err)
+			logger.Noticef("Exec %s: cannot decode control websocket command: %v", execID, err)
 			continue
 		}
 
 		switch {
 		case command.Command == "resize" && e.useTerminal:
 			if command.Resize == nil {
-				logger.Noticef("Resize command requires width and height arguments")
+				logger.Noticef(`Exec %s: control command "resize" requires terminal width and height`, execID)
 				continue
 			}
 			w, h := command.Resize.Width, command.Resize.Height
-			logger.Debugf("Received 'resize' command with size %dx%d", w, h)
 			err = ptyutil.SetSize(ptyFd, w, h)
 			if err != nil {
-				logger.Noticef("Cannot set window size to %dx%d: %v", w, h, err)
+				logger.Noticef(`Exec %s: control command "resize" cannot set terminal size to %dx%d: %v`, execID, w, h, err)
 				continue
 			}
+			logger.Debugf(`Exec %s: PID %d terminal resized to %dx%d`, execID, pid, w, h)
 		case command.Command == "signal":
 			if command.Signal == nil {
-				logger.Noticef("Signal command requires signal name argument")
+				logger.Noticef(`Exec %s: control command "signal" requires signal name`, execID)
 				continue
 			}
 			name := command.Signal.Name
 			sig := unix.SignalNum(name)
 			if sig == 0 {
-				logger.Noticef("Invalid signal name %q", name)
+				logger.Noticef("Exec %s: invalid signal name %q", execID, name)
 				continue
 			}
-			logger.Debugf("Received 'signal' command with signal %s", name)
+			logger.Debugf(`Exec %s: received control command "signal" with name %q`, execID, name)
 			err := unix.Kill(pid, sig)
 			if err != nil {
-				logger.Noticef("Cannot forward %s to PID %d: %v", name, pid, err)
+				logger.Noticef(`Exec %s: control command "signal" cannot forward %s to PID %d: %v`, execID, name, pid, err)
 				continue
 			}
-			logger.Noticef("Forwarded signal %s to PID %d", name, pid)
+			logger.Noticef("Exec %s: forwarded signal %s to PID %d", execID, name, pid)
 		default:
-			logger.Noticef("Invalid command %q", command.Command)
+			logger.Noticef("Exec %s: invalid control websocket command %q", execID, command.Command)
 		}
 	}
 }
