@@ -89,8 +89,7 @@ type execPayload struct {
 }
 
 type execResult struct {
-	TaskID       string            `json:"task-id"`
-	WebsocketIDs map[string]string `json:"websocket-ids"`
+	TaskID string `json:"task-id"`
 }
 
 // ExecProcess represents a running process. Use Wait to wait for it to finish.
@@ -157,27 +156,15 @@ func (client *Client) Exec(opts *ExecOptions) (*ExecProcess, error) {
 		return nil, fmt.Errorf("cannot unmarshal JSON response: %v", err)
 	}
 
-	// Check that we have the websocket IDs we expect.
-	wsIDs := result.WebsocketIDs
-	if wsIDs["control"] == "" {
-		return nil, fmt.Errorf(`exec response missing "control" websocket`)
-	}
-	if wsIDs["stdio"] == "" {
-		return nil, fmt.Errorf(`exec response missing "stdio" websocket`)
-	}
-	if opts.Stderr != nil && wsIDs["stderr"] == "" {
-		return nil, fmt.Errorf(`exec response missing "stderr" websocket`)
-	}
-
 	// Connect to the "control" websocket.
 	taskID := result.TaskID
-	controlConn, err := client.getTaskWebsocket(taskID, wsIDs["control"])
+	controlConn, err := client.getTaskWebsocket(taskID, "control")
 	if err != nil {
 		return nil, fmt.Errorf(`cannot connect to "control" websocket: %v`, err)
 	}
 
 	// Forward stdin and stdout.
-	ioConn, err := client.getTaskWebsocket(taskID, wsIDs["stdio"])
+	ioConn, err := client.getTaskWebsocket(taskID, "stdio")
 	if err != nil {
 		return nil, fmt.Errorf(`cannot connect to "stdio" websocket: %v`, err)
 	}
@@ -188,7 +175,7 @@ func (client *Client) Exec(opts *ExecOptions) (*ExecProcess, error) {
 	var stderrConn *websocket.Conn
 	var stderrDone chan bool
 	if opts.Stderr != nil {
-		stderrConn, err = client.getTaskWebsocket(taskID, wsIDs["stderr"])
+		stderrConn, err = client.getTaskWebsocket(taskID, "stderr")
 		if err != nil {
 			return nil, fmt.Errorf(`cannot connect to "stderr" websocket: %v`, err)
 		}

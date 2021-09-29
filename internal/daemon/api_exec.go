@@ -100,10 +100,9 @@ func v1PostExec(c *Command, req *http.Request, _ *userState) Response {
 	stateEnsureBefore(st, 0) // start it right away
 
 	result := map[string]interface{}{
-		"environment":   metadata.Environment,
-		"task-id":       metadata.TaskID,
-		"websocket-ids": metadata.WebsocketIDs,
-		"working-dir":   metadata.WorkingDir,
+		"environment": metadata.Environment,
+		"task-id":     metadata.TaskID,
+		"working-dir": metadata.WorkingDir,
 	}
 	return AsyncResponse(result, change.ID())
 }

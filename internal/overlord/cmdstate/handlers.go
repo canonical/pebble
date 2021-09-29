@@ -62,15 +62,14 @@ var websocketUpgrader = websocket.Upgrader{
 }
 
 func (e *execution) connect(r *http.Request, w http.ResponseWriter, id string) error {
-	// Find websocket key by websocket's unique ID.
-	var key, wsID string
-	for key, wsID = range e.websocketIDs {
-		if id == wsID {
-			break
-		}
-	}
-	if id != wsID {
+	e.websocketsLock.Lock()
+	conn, ok := e.websockets[id]
+	e.websocketsLock.Unlock()
+	if !ok {
 		return os.ErrNotExist
+	}
+	if conn != nil {
+		return fmt.Errorf("websocket %q already connected", id)
 	}
 
 	// Upgrade the HTTP connection to a websocket connection.
@@ -82,10 +81,10 @@ func (e *execution) connect(r *http.Request, w http.ResponseWriter, id string) e
 	// Save the connection.
 	e.websocketsLock.Lock()
 	defer e.websocketsLock.Unlock()
-	e.websockets[key] = conn
+	e.websockets[id] = conn
 
 	// Signal that we're connected.
-	if key == wsControl {
+	if id == wsControl {
 		close(e.controlConnected)
 	} else if e.websockets[wsStdio] != nil && (!e.splitStderr || e.websockets[wsStderr] != nil) {
 		close(e.ioConnected)

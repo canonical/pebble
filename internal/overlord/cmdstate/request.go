@@ -24,7 +24,6 @@ import (
 
 	"github.com/canonical/pebble/internal/logger"
 	"github.com/canonical/pebble/internal/overlord/state"
-	"github.com/canonical/pebble/internal/strutil"
 	"github.com/gorilla/websocket"
 )
 
@@ -44,10 +43,9 @@ type ExecArgs struct {
 
 // ExecMetadata is the metadata returned from an Exec call.
 type ExecMetadata struct {
-	TaskID       string
-	WebsocketIDs map[string]string // keys are "control", "stdio", as well as "stderr" if SplitStderr true
-	Environment  map[string]string
-	WorkingDir   string
+	TaskID      string
+	Environment map[string]string
+	WorkingDir  string
 }
 
 // execution tracks the execution of a command.
@@ -57,7 +55,6 @@ type execution struct {
 	timeout          time.Duration
 	websockets       map[string]*websocket.Conn
 	websocketsLock   sync.Mutex
-	websocketIDs     map[string]string
 	ioConnected      chan struct{}
 	controlConnected chan struct{}
 	useTerminal      bool
@@ -124,7 +121,6 @@ func Exec(st *state.State, args *ExecArgs) (*state.Task, ExecMetadata, error) {
 		env:              env,
 		timeout:          args.Timeout,
 		websockets:       make(map[string]*websocket.Conn),
-		websocketIDs:     make(map[string]string),
 		ioConnected:      make(chan struct{}),
 		controlConnected: make(chan struct{}),
 		useTerminal:      args.UseTerminal,
@@ -142,28 +138,15 @@ func Exec(st *state.State, args *ExecArgs) (*state.Task, ExecMetadata, error) {
 	if args.SplitStderr {
 		e.websockets[wsStderr] = nil
 	}
-	for key := range e.websockets {
-		var err error
-		e.websocketIDs[key], err = strutil.UUID()
-		if err != nil {
-			return nil, ExecMetadata{}, err
-		}
-	}
 
 	// Create a task for this execution (though it's not started here).
 	task := st.NewTask("exec", fmt.Sprintf("exec command %q", args.Command[0]))
 	task.SetObject(e)
 
-	// Make a copy of websocketIDs map for the return value.
-	ids := make(map[string]string, len(e.websocketIDs))
-	for key, id := range e.websocketIDs {
-		ids[key] = id
-	}
 	metadata := ExecMetadata{
-		TaskID:       task.ID(),
-		WebsocketIDs: ids,
-		Environment:  env,
-		WorkingDir:   cwd,
+		TaskID:      task.ID(),
+		Environment: env,
+		WorkingDir:  cwd,
 	}
 
 	return task, metadata, nil
