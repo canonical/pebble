@@ -78,7 +78,8 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 	if service, previous := m.services[req.Name]; previous {
 		select {
 		case <-service.done:
-			// Service exited but not yet removed, safe to override.
+			// Service exited but not yet removed. It's safe to replace it
+			// because the removal will check if the cmd still matches.
 		default:
 			// Already started
 			m.state.Lock()

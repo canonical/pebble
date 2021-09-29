@@ -357,9 +357,14 @@ func (m *ServiceManager) Replan() ([]string, []string, error) {
 		}
 	}
 
-	stop, err = m.plan.StopOrder(stop, false)
+	stop, err = m.plan.StopOrder(stop)
 	if err != nil {
 		return nil, nil, err
+	}
+	for i, name := range stop {
+		if !needsRestart[name] {
+			stop = append(stop[:i], stop[i+1:]...)
+		}
 	}
 
 	start, err = m.plan.StartOrder(start)
