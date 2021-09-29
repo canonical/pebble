@@ -74,17 +74,17 @@ type ExecOptions struct {
 
 type execPayload struct {
 	Command     []string          `json:"command"`
-	Environment map[string]string `json:"environment"`
-	WorkingDir  string            `json:"working-dir"`
-	Timeout     string            `json:"timeout"`
-	UserID      *int              `json:"user-id"`
-	User        string            `json:"user"`
-	GroupID     *int              `json:"group-id"`
-	Group       string            `json:"group"`
-	UseTerminal bool              `json:"use-terminal"`
-	SplitStderr bool              `json:"split-stderr"`
-	Width       int               `json:"width"`
-	Height      int               `json:"height"`
+	Environment map[string]string `json:"environment,omitempty"`
+	WorkingDir  string            `json:"working-dir,omitempty"`
+	Timeout     string            `json:"timeout,omitempty"`
+	UserID      *int              `json:"user-id,omitempty"`
+	User        string            `json:"user,omitempty"`
+	GroupID     *int              `json:"group-id,omitempty"`
+	Group       string            `json:"group,omitempty"`
+	UseTerminal bool              `json:"use-terminal,omitempty"`
+	SplitStderr bool              `json:"split-stderr,omitempty"`
+	Width       int               `json:"width,omitempty"`
+	Height      int               `json:"height,omitempty"`
 }
 
 type execResult struct {
