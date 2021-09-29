@@ -160,8 +160,8 @@ func (client *Client) Exec(opts *ExecOptions) (*ExecProcess, error) {
 	if wsIDs["control"] == "" {
 		return nil, fmt.Errorf(`exec response missing "control" websocket`)
 	}
-	if wsIDs["io"] == "" {
-		return nil, fmt.Errorf(`exec response missing "io" websocket`)
+	if wsIDs["stdio"] == "" {
+		return nil, fmt.Errorf(`exec response missing "stdio" websocket`)
 	}
 	if opts.Stderr != nil && wsIDs["stderr"] == "" {
 		return nil, fmt.Errorf(`exec response missing "stderr" websocket`)
@@ -174,9 +174,9 @@ func (client *Client) Exec(opts *ExecOptions) (*ExecProcess, error) {
 	}
 
 	// Forward stdin and stdout.
-	ioConn, err := client.getChangeWebsocket(changeID, wsIDs["io"])
+	ioConn, err := client.getChangeWebsocket(changeID, wsIDs["stdio"])
 	if err != nil {
-		return nil, fmt.Errorf(`cannot connect to "io" websocket: %v`, err)
+		return nil, fmt.Errorf(`cannot connect to "stdio" websocket: %v`, err)
 	}
 	_ = wsutil.WebsocketSendStream(ioConn, stdin, -1)
 	stdoutDone := wsutil.WebsocketRecvStream(stdout, ioConn)

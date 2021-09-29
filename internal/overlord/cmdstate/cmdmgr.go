@@ -44,7 +44,7 @@ const (
 	handshakeTimeout = 5 * time.Second
 
 	wsControl = "control"
-	wsIO      = "io"
+	wsStdio   = "stdio"
 	wsStderr  = "stderr"
 )
 
@@ -77,7 +77,7 @@ type ExecArgs struct {
 
 // ExecMetadata is the metadata returned from an Exec call.
 type ExecMetadata struct {
-	WebsocketIDs map[string]string // keys are "control", "io", and "stderr" if SplitStderr true
+	WebsocketIDs map[string]string // keys are "control", "stdio", as well as "stderr" if SplitStderr true
 	Environment  map[string]string
 	WorkingDir   string
 }
@@ -151,7 +151,7 @@ func Exec(st *state.State, args *ExecArgs) (*state.Change, ExecMetadata, error) 
 
 	// Generate unique identifier for each websocket (used by connect API).
 	e.websockets[wsControl] = nil
-	e.websockets[wsIO] = nil
+	e.websockets[wsStdio] = nil
 	if args.SplitStderr {
 		e.websockets[wsStderr] = nil
 	}
@@ -292,7 +292,7 @@ func (e *execution) connect(r *http.Request, w http.ResponseWriter, id string) e
 	// Signal that we're connected.
 	if key == wsControl {
 		close(e.controlConnected)
-	} else if e.websockets[wsIO] != nil && (!e.splitStderr || e.websockets[wsStderr] != nil) {
+	} else if e.websockets[wsStdio] != nil && (!e.splitStderr || e.websockets[wsStderr] != nil) {
 		close(e.ioConnected)
 	}
 	return nil
@@ -323,7 +323,7 @@ func (e *execution) waitIOConnected(ctx context.Context) error {
 
 // do actually runs the command.
 func (e *execution) do(ctx context.Context, change *state.Change) error {
-	// Wait till client has connected to "io" websocket (and "stderr" if
+	// Wait till client has connected to "stdio" websocket (and "stderr" if
 	// separating stderr), to avoid race conditions forwarding I/O.
 	err := e.waitIOConnected(ctx)
 	if err != nil {
@@ -370,11 +370,11 @@ func (e *execution) do(ctx context.Context, change *state.Change) error {
 
 		go e.controlLoop(pidCh, controlExit, int(pty.Fd()))
 
-		// Start goroutine to mirror PTY I/O to "io" websocket.
+		// Start goroutine to mirror PTY I/O to "stdio" websocket.
 		wg.Add(1)
 		go func() {
 			logger.Debugf("Started mirroring websocket")
-			ioConn := e.getWebsocket(wsIO)
+			ioConn := e.getWebsocket(wsStdio)
 			readDone, writeDone := wsutil.WebsocketExecMirror(
 				ioConn, pty, pty, childDead, int(pty.Fd()))
 			<-readDone
@@ -387,9 +387,9 @@ func (e *execution) do(ctx context.Context, change *state.Change) error {
 	} else {
 		go e.controlLoop(pidCh, controlExit, -1)
 
-		// Start goroutine to receive stdin from "io" websocket and write to
+		// Start goroutine to receive stdin from "stdio" websocket and write to
 		// cmd.Stdin pipe.
-		ioConn := e.getWebsocket(wsIO)
+		ioConn := e.getWebsocket(wsStdio)
 		stdinReader, stdinWriter, err := os.Pipe()
 		if err != nil {
 			return err
@@ -402,7 +402,7 @@ func (e *execution) do(ctx context.Context, change *state.Change) error {
 			stdinWriter.Close()
 		}()
 
-		// Start goroutine to receive from cmd.Stdout pipe and write to "io"
+		// Start goroutine to receive from cmd.Stdout pipe and write to "stdio"
 		// websocket.
 		stdoutReader, stdoutWriter, err := os.Pipe()
 		if err != nil {
