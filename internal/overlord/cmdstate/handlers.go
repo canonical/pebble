@@ -273,64 +273,63 @@ func (e *execution) do(ctx context.Context, task *state.Task) error {
 		cmd.SysProcAttr.Setctty = true
 	}
 
-	finisher := func(exitCode int, cmdErr error) error {
-		for _, tty := range ttys {
-			_ = tty.Close()
-		}
-
-		// Close the control channel, if connected.
-		controlConn := e.getWebsocket(wsControl)
-		if controlConn != nil {
-			_ = controlConn.Close()
-		}
-
-		close(childDead)
-
-		wg.Wait()
-
-		for _, pty := range ptys {
-			_ = pty.Close()
-		}
-
-		setApiData(task, exitCode)
-
-		return cmdErr
-	}
-
 	// Start the command!
 	err = cmd.Start()
-	if err != nil {
-		return finisher(-1, err)
+	if err == nil {
+		// Send its PID to the control loop.
+		pidCh <- cmd.Process.Pid
+
+		// Wait for it to finish.
+		err = cmd.Wait()
 	}
 
-	// Send its PID to the control loop.
-	pidCh <- cmd.Process.Pid
+	// Close open files and channels.
+	for _, tty := range ttys {
+		_ = tty.Close()
+	}
 
-	// Wait for it to finish.
-	err = cmd.Wait()
+	// Close the control channel, if connected.
+	controlConn := e.getWebsocket(wsControl)
+	if controlConn != nil {
+		_ = controlConn.Close()
+	}
+
+	close(childDead)
+
+	wg.Wait()
+
+	for _, pty := range ptys {
+		_ = pty.Close()
+	}
 
 	// Handle errors: timeout, non-zero exit code, or other error.
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-		return finisher(-1, fmt.Errorf("timed out after %v: %w", e.timeout, ctx.Err()))
+		setExitCode(task, -1)
+		return fmt.Errorf("timed out after %v: %w", e.timeout, ctx.Err())
 	} else if exitErr, ok := err.(*exec.ExitError); ok {
 		status, ok := exitErr.Sys().(syscall.WaitStatus)
 		if ok {
 			if status.Signaled() {
 				// 128 + n == Fatal error signal "n"
-				return finisher(128+int(status.Signal()), nil)
+				setExitCode(task, 128+int(status.Signal()))
+				return nil
 			}
-			return finisher(status.ExitStatus(), nil)
+			setExitCode(task, status.ExitStatus())
+			return nil
 		}
-		return finisher(-1, err)
+		setExitCode(task, -1)
+		return err
 	} else if err != nil {
-		return finisher(-1, err)
+		setExitCode(task, -1)
+		return err
 	}
 
 	// Successful exit (exit code 0).
-	return finisher(0, nil)
+	setExitCode(task, 0)
+	return nil
 }
 
-func setApiData(task *state.Task, exitCode int) {
+func setExitCode(task *state.Task, exitCode int) {
 	st := task.State()
 	st.Lock()
 	defer st.Unlock()
