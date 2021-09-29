@@ -602,7 +602,7 @@ func (e *execution) controlLoop(pidCh <-chan int, exitCh <-chan struct{}, ptyFd 
 			// If an abnormal closure occurred, kill the attached process.
 			err := unix.Kill(pid, unix.SIGKILL)
 			if err != nil {
-				logger.Noticef("Cannot send SIGKILL to pid %d", pid)
+				logger.Noticef("Cannot send SIGKILL to pid %d: %v", pid, err)
 			} else {
 				logger.Noticef("Sent SIGKILL to pid %d", pid)
 			}
@@ -612,7 +612,7 @@ func (e *execution) controlLoop(pidCh <-chan int, exitCh <-chan struct{}, ptyFd 
 		var command execCommand
 		err = json.NewDecoder(r).Decode(&command)
 		if err != nil {
-			logger.Noticef("Cannot decode control socket command: %s", err)
+			logger.Noticef("Cannot decode control socket command: %v", err)
 			continue
 		}
 
@@ -626,7 +626,7 @@ func (e *execution) controlLoop(pidCh <-chan int, exitCh <-chan struct{}, ptyFd 
 			logger.Debugf("Received 'resize' command with size %dx%d", w, h)
 			err = ptyutil.SetSize(ptyFd, w, h)
 			if err != nil {
-				logger.Noticef("Cannot set window size to: %dx%d", w, h)
+				logger.Noticef("Cannot set window size to %dx%d: %v", w, h, err)
 				continue
 			}
 		case command.Command == "signal":
@@ -643,7 +643,7 @@ func (e *execution) controlLoop(pidCh <-chan int, exitCh <-chan struct{}, ptyFd 
 			logger.Debugf("Received 'signal' command with signal %s", name)
 			err := unix.Kill(pid, sig)
 			if err != nil {
-				logger.Noticef("Cannot forward %s to PID %d", name, pid)
+				logger.Noticef("Cannot forward %s to PID %d: %v", name, pid, err)
 				continue
 			}
 			logger.Noticef("Forwarded signal %s to PID %d", name, pid)
