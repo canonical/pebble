@@ -1,13 +1,13 @@
 package servstate
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"strings"
 	"syscall"
 	"time"
 
@@ -169,21 +169,39 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 			releasePlan()
 		}
 
-		it := logBuffer.HeadIterator(lastLogLines)
-		defer it.Close()
-		lastLogs, err := ioutil.ReadAll(it)
+		logs, err := getLastLogs(logBuffer)
 		if err != nil {
-			logger.Noticef("could not read service %q logs: %v", req.Name, err)
+			logger.Noticef("Cannot read service %q logs: %v", req.Name, err)
 		}
 
-		msg := fmt.Sprintf("cannot start service: exited quickly with code %d", cmd.ProcessState.ExitCode())
-		if len(lastLogs) > 0 {
-			msg = fmt.Sprintf("%s - last %d lines of output:\n%s",
-				msg, lastLogLines, bytes.TrimSuffix(lastLogs, []byte("\n")))
+		msg := fmt.Sprintf("service exited too quickly with code %d", cmd.ProcessState.ExitCode())
+		if logs != "" {
+			msg += ":\n" + logs
 		}
 		return errors.New(msg)
 	}
 	// unreachable
+}
+
+func getLastLogs(logBuffer *servicelog.RingBuffer) (string, error) {
+	it := logBuffer.HeadIterator(lastLogLines + 1)
+	defer it.Close()
+	logBytes, err := ioutil.ReadAll(it)
+	if err != nil {
+		return "", err
+	}
+
+	// Indent lines
+	trimmed := strings.TrimSpace(string(logBytes))
+	lines := strings.Split(trimmed, "\n")
+	if len(lines) > lastLogLines {
+		// Prefix with truncation marker if too many lines
+		lines[0] = "(...)"
+	}
+	for i, line := range lines {
+		lines[i] = "    " + line
+	}
+	return strings.Join(lines, "\n"), nil
 }
 
 func (m *ServiceManager) doStop(task *state.Task, tomb *tomb.Tomb) error {
