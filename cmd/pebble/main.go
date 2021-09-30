@@ -327,7 +327,7 @@ func main() {
 }
 
 // exitStatus can be used in panic(&exitStatus{code}) to cause Pebble's main
-// function to exit with a given status code, for the rare cases when you want
+// function to exit with a given exit code, for the rare cases when you want
 // to return an exit code other than 0 or 1, or when an error return is not
 // possible.
 type exitStatus struct {

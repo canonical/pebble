@@ -46,8 +46,8 @@ type ExecMetadata struct {
 	WorkingDir  string
 }
 
-// executionRequest is stored on a task to specify the args for an execution.
-type executionRequest struct {
+// execSetup is stored on a task to specify the args for an execution.
+type execSetup struct {
 	Command     []string
 	Environment map[string]string
 	Timeout     time.Duration
@@ -60,7 +60,7 @@ type executionRequest struct {
 	WorkingDir  string
 }
 
-// Exec creates a change that will execute the command with the given arguments.
+// Exec creates a task that will execute the command with the given arguments.
 func Exec(st *state.State, args *ExecArgs) (*state.Task, ExecMetadata, error) {
 	environment := map[string]string{}
 	for k, v := range args.Environment {
@@ -111,7 +111,7 @@ func Exec(st *state.State, args *ExecArgs) (*state.Task, ExecMetadata, error) {
 
 	// Create a task for this execution (though it's not started here).
 	task := st.NewTask("exec", fmt.Sprintf("exec command %q", args.Command[0]))
-	request := executionRequest{
+	setup := execSetup{
 		Command:     args.Command,
 		Environment: environment,
 		Timeout:     args.Timeout,
@@ -123,7 +123,7 @@ func Exec(st *state.State, args *ExecArgs) (*state.Task, ExecMetadata, error) {
 		GroupID:     args.GroupID,
 		WorkingDir:  workingDir,
 	}
-	task.Set("execution-request", &request)
+	task.Set("exec-setup", &setup)
 
 	metadata := ExecMetadata{
 		TaskID:      task.ID(),

@@ -66,27 +66,27 @@ type execution struct {
 }
 
 func (m *CommandManager) doExec(task *state.Task, tomb *tomb.Tomb) error {
-	var request executionRequest
+	var setup execSetup
 	st := task.State()
 	st.Lock()
-	err := task.Get("execution-request", &request)
+	err := task.Get("exec-setup", &setup)
 	st.Unlock()
 	if err != nil {
-		return fmt.Errorf("cannot get execution request for task %q: %v", task.ID(), err)
+		return fmt.Errorf("cannot get exec setup object for task %q: %v", task.ID(), err)
 	}
 
 	// Set up the object that will track the execution.
 	e := &execution{
-		command:          request.Command,
-		environment:      request.Environment,
-		timeout:          request.Timeout,
-		useTerminal:      request.UseTerminal,
-		splitStderr:      request.SplitStderr,
-		width:            request.Width,
-		height:           request.Height,
-		userID:           request.UserID,
-		groupID:          request.GroupID,
-		workingDir:       request.WorkingDir,
+		command:          setup.Command,
+		environment:      setup.Environment,
+		timeout:          setup.Timeout,
+		useTerminal:      setup.UseTerminal,
+		splitStderr:      setup.SplitStderr,
+		width:            setup.Width,
+		height:           setup.Height,
+		userID:           setup.UserID,
+		groupID:          setup.GroupID,
+		workingDir:       setup.WorkingDir,
 		websockets:       make(map[string]*websocket.Conn),
 		ioConnected:      make(chan struct{}),
 		controlConnected: make(chan struct{}),
@@ -192,9 +192,9 @@ func (e *execution) do(ctx context.Context, task *state.Task) error {
 	var stdout *os.File
 	var stderr *os.File
 
-	// Closed to make the controlLoop exit early.
-	controlExit := make(chan struct{})
-	defer close(controlExit)
+	// Closed to make the controlLoop stop early.
+	stopControl := make(chan struct{})
+	defer close(stopControl)
 
 	pidCh := make(chan int)
 	childDead := make(chan struct{})
@@ -228,7 +228,7 @@ func (e *execution) do(ctx context.Context, task *state.Task) error {
 			}
 		}
 
-		go e.controlLoop(task.ID(), pidCh, controlExit, int(master.Fd()))
+		go e.controlLoop(task.ID(), pidCh, stopControl, int(master.Fd()))
 
 		// Start goroutine to mirror PTY I/O to "stdio" websocket.
 		wgOutputSent.Add(1)
@@ -249,7 +249,7 @@ func (e *execution) do(ctx context.Context, task *state.Task) error {
 			<-writeDone
 		}()
 	} else {
-		go e.controlLoop(task.ID(), pidCh, controlExit, -1)
+		go e.controlLoop(task.ID(), pidCh, stopControl, -1)
 
 		// Start goroutine to receive stdin from "stdio" websocket and write to
 		// cmd.Stdin pipe.
@@ -423,7 +423,7 @@ type execResizeArgs struct {
 	Height int `json:"height"`
 }
 
-func (e *execution) controlLoop(execID string, pidCh <-chan int, exitCh <-chan struct{}, ptyFd int) {
+func (e *execution) controlLoop(execID string, pidCh <-chan int, stop <-chan struct{}, ptyFd int) {
 	logger.Debugf("Exec %s: control handler waiting", execID)
 	defer logger.Debugf("Exec %s: control handler finished", execID)
 
@@ -432,7 +432,7 @@ func (e *execution) controlLoop(execID string, pidCh <-chan int, exitCh <-chan s
 	select {
 	case pid = <-pidCh:
 		break
-	case <-exitCh:
+	case <-stop:
 		return
 	}
 
@@ -440,7 +440,7 @@ func (e *execution) controlLoop(execID string, pidCh <-chan int, exitCh <-chan s
 	select {
 	case <-e.controlConnected:
 		break
-	case <-exitCh:
+	case <-stop:
 		return
 	}
 

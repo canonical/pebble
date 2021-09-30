@@ -44,16 +44,16 @@ func (m *CommandManager) Ensure() error {
 
 // Connect upgrades the HTTP connection and connects to the given websocket.
 func (m *CommandManager) Connect(r *http.Request, w http.ResponseWriter, task *state.Task, websocketID string) error {
-	connectDone := make(chan struct{})
+	stopWait := make(chan struct{})
 	defer func() {
 		// So waitExecution wakes up if it's stuck in Wait().
-		close(connectDone)
+		close(stopWait)
 		m.executionsCond.Broadcast()
 	}()
 
 	executionCh := make(chan *execution)
 	go func() {
-		e := m.waitExecution(task.ID(), connectDone)
+		e := m.waitExecution(task.ID(), stopWait)
 		if e != nil {
 			executionCh <- e
 		}
@@ -68,13 +68,13 @@ func (m *CommandManager) Connect(r *http.Request, w http.ResponseWriter, task *s
 	}
 }
 
-func (m *CommandManager) waitExecution(taskID string, connectDone <-chan struct{}) *execution {
+func (m *CommandManager) waitExecution(taskID string, stop <-chan struct{}) *execution {
 	m.executionsCond.L.Lock()
 	defer m.executionsCond.L.Unlock()
 
 	for {
 		select {
-		case <-connectDone:
+		case <-stop:
 			return nil
 		default:
 		}

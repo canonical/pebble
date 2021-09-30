@@ -160,10 +160,10 @@ func (cmd *cmdExec) Execute(args []string) error {
 	}
 
 	// Start the control goroutine to handle signals and window resizing.
-	controlDone := make(chan struct{})
-	defer close(controlDone)
+	stopControl := make(chan struct{})
+	defer close(stopControl)
 	sighup := make(chan struct{})
-	go execControlHandler(process, useTerminal, controlDone, sighup)
+	go execControlHandler(process, useTerminal, stopControl, sighup)
 
 	finished := make(chan error)
 	go func() {
@@ -177,7 +177,7 @@ func (cmd *cmdExec) Execute(args []string) error {
 		case nil:
 			return nil
 		case *client.ExitError:
-			logger.Debugf("Process exited with return code %d", e.ExitCode())
+			logger.Debugf("Process exited with code %d", e.ExitCode())
 			panic(&exitStatus{e.ExitCode()})
 		default:
 			return err
@@ -191,7 +191,7 @@ func (cmd *cmdExec) Execute(args []string) error {
 	}
 }
 
-func execControlHandler(process *client.ExecProcess, useTerminal bool, done <-chan struct{}, sighup chan<- struct{}) {
+func execControlHandler(process *client.ExecProcess, useTerminal bool, stop <-chan struct{}, sighup chan<- struct{}) {
 	ch := make(chan os.Signal, 10)
 	signal.Notify(ch,
 		unix.SIGWINCH, unix.SIGHUP,
@@ -203,7 +203,7 @@ func execControlHandler(process *client.ExecProcess, useTerminal bool, done <-ch
 		var sig os.Signal
 		select {
 		case sig = <-ch:
-		case <-done:
+		case <-stop:
 			return
 		}
 
