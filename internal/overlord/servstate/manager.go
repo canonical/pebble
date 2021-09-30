@@ -351,8 +351,7 @@ func (m *ServiceManager) Replan() ([]string, []string, error) {
 
 	var start []string
 	for name, service := range m.plan.Services {
-		if needsRestart[name] ||
-			service.Startup == plan.StartupEnabled {
+		if needsRestart[name] || service.Startup == plan.StartupEnabled {
 			start = append(start, name)
 		}
 	}
