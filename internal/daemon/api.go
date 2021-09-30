@@ -19,6 +19,7 @@ import (
 
 	"github.com/gorilla/mux"
 
+	"github.com/canonical/pebble/internal/overlord"
 	"github.com/canonical/pebble/internal/overlord/state"
 )
 
@@ -79,6 +80,8 @@ var (
 	stateAllWarnings     = (*state.State).AllWarnings
 	statePendingWarnings = (*state.State).PendingWarnings
 	stateEnsureBefore    = (*state.State).EnsureBefore
+
+	overlordServiceManager = (*overlord.Overlord).ServiceManager
 
 	muxVars = mux.Vars
 )

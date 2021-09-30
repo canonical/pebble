@@ -25,10 +25,11 @@ type ServiceManager struct {
 }
 
 type activeService struct {
-	cmd       *exec.Cmd
-	err       error
-	done      chan struct{}
-	logBuffer *servicelog.RingBuffer
+	originalPlan *plan.Service
+	cmd          *exec.Cmd
+	err          error
+	done         chan struct{}
+	logBuffer    *servicelog.RingBuffer
 }
 
 // LabelExists is the error returned by AppendLayer when a layer with that
@@ -326,4 +327,49 @@ func (m *ServiceManager) ServiceLogs(services []string, last int) (map[string]se
 	}
 
 	return iterators, nil
+}
+
+// Replan returns a list of services to stop and services to start because
+// their plans had changed between when they started and this call.
+func (m *ServiceManager) Replan() ([]string, []string, error) {
+	releasePlan, err := m.acquirePlan()
+	if err != nil {
+		return nil, nil, err
+	}
+	defer releasePlan()
+
+	needsRestart := make(map[string]bool)
+	var stop []string
+	for name, activeService := range m.services {
+		if currentService, ok := m.plan.Services[name]; ok &&
+			currentService.Equal(activeService.originalPlan) {
+			continue
+		}
+		needsRestart[name] = true
+		stop = append(stop, name)
+	}
+
+	var start []string
+	for name, service := range m.plan.Services {
+		if needsRestart[name] || service.Startup == plan.StartupEnabled {
+			start = append(start, name)
+		}
+	}
+
+	stop, err = m.plan.StopOrder(stop)
+	if err != nil {
+		return nil, nil, err
+	}
+	for i, name := range stop {
+		if !needsRestart[name] {
+			stop = append(stop[:i], stop[i+1:]...)
+		}
+	}
+
+	start, err = m.plan.StartOrder(start)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return stop, start, nil
 }

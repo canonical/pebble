@@ -89,6 +89,13 @@ services:
         group: nogroup
 `
 
+var planLayer3 = `
+services:
+    test2:
+        override: merge
+        command: /bin/sh -c "echo test2b | tee -a %s; sleep 300"
+`
+
 func (s *S) SetUpTest(c *C) {
 	s.BaseTest.SetUpTest(c)
 	s.st = state.New(nil)
@@ -256,6 +263,26 @@ func (s *S) stopServicesAlreadyDead(c *C, services []string) {
 	s.st.Lock()
 	c.Check(chg.Status(), Equals, state.DoneStatus, Commentf("Error: %v", chg.Err()))
 	s.st.Unlock()
+}
+
+func (s *S) TestReplanServices(c *C) {
+	services := []string{"test1", "test2"}
+	s.startServices(c, services)
+
+	if c.Failed() {
+		return
+	}
+
+	layer := parseLayer(c, 0, "layer3", planLayer3)
+	err := s.manager.CombineLayer(layer)
+	c.Assert(err, IsNil)
+
+	stops, starts, err := s.manager.Replan()
+	c.Assert(err, IsNil)
+	c.Check(stops, DeepEquals, []string{"test2"})
+	c.Check(starts, DeepEquals, []string{"test1", "test2"})
+
+	s.stopServices(c, services)
 }
 
 func (s *S) TestServiceLogs(c *C) {
