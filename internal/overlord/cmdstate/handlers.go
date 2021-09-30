@@ -103,6 +103,7 @@ func (m *CommandManager) doExec(task *state.Task, tomb *tomb.Tomb) error {
 	m.executionsMutex.Lock()
 	m.executions[task.ID()] = e
 	m.executionsMutex.Unlock()
+	m.executionsCond.Broadcast() // signal that Connects can start happening
 	defer func() {
 		m.executionsMutex.Lock()
 		delete(m.executions, task.ID())

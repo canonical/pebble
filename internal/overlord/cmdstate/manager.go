@@ -15,7 +15,6 @@
 package cmdstate
 
 import (
-	"fmt"
 	"net/http"
 	"sync"
 
@@ -24,13 +23,15 @@ import (
 
 type CommandManager struct {
 	executions      map[string]*execution
+	executionsCond  *sync.Cond
 	executionsMutex sync.Mutex
 }
 
 // NewManager creates a new CommandManager.
 func NewManager(runner *state.TaskRunner) *CommandManager {
 	manager := &CommandManager{
-		executions: make(map[string]*execution),
+		executions:     make(map[string]*execution),
+		executionsCond: sync.NewCond(&sync.Mutex{}),
 	}
 	runner.AddHandler("exec", manager.doExec, nil)
 	return manager
@@ -43,11 +44,47 @@ func (m *CommandManager) Ensure() error {
 
 // Connect upgrades the HTTP connection and connects to the given websocket.
 func (m *CommandManager) Connect(r *http.Request, w http.ResponseWriter, task *state.Task, websocketID string) error {
-	m.executionsMutex.Lock()
-	e := m.executions[task.ID()]
-	m.executionsMutex.Unlock()
-	if e == nil {
-		return fmt.Errorf("task %q has no execution object", task.ID())
+	connectDone := make(chan struct{})
+	defer func() {
+		// So waitExecution wakes up if it's stuck in Wait().
+		close(connectDone)
+		m.executionsCond.Broadcast()
+	}()
+
+	executionCh := make(chan *execution)
+	go func() {
+		e := m.waitExecution(task.ID(), connectDone)
+		if e != nil {
+			executionCh <- e
+		}
+	}()
+
+	// Wait till the execution object is ready or the request is cancelled.
+	select {
+	case e := <-executionCh:
+		return e.connect(r, w, websocketID)
+	case <-r.Context().Done():
+		return r.Context().Err()
 	}
-	return e.connect(r, w, websocketID)
+}
+
+func (m *CommandManager) waitExecution(taskID string, connectDone <-chan struct{}) *execution {
+	m.executionsCond.L.Lock()
+	defer m.executionsCond.L.Unlock()
+
+	for {
+		select {
+		case <-connectDone:
+			return nil
+		default:
+		}
+
+		m.executionsMutex.Lock()
+		e := m.executions[taskID]
+		m.executionsMutex.Unlock()
+		if e != nil {
+			return e
+		}
+		m.executionsCond.Wait()
+	}
 }
