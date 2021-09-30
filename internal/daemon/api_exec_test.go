@@ -30,6 +30,7 @@ import (
 	. "gopkg.in/check.v1"
 
 	"github.com/canonical/pebble/client"
+	"github.com/canonical/pebble/internal/logger"
 )
 
 var _ = Suite(&execSuite{})
@@ -37,6 +38,10 @@ var _ = Suite(&execSuite{})
 type execSuite struct {
 	daemon *Daemon
 	client *client.Client
+}
+
+func (s *execSuite) SetUpSuite(c *C) {
+	logger.SetLogger(logger.New(os.Stderr, "[test] "))
 }
 
 func (s *execSuite) SetUpTest(c *C) {
@@ -59,7 +64,7 @@ func (s *execSuite) TearDownTest(c *C) {
 	c.Check(err, IsNil)
 }
 
-// Some of these tests use the Go client (tested elsewhere) for simplicity.
+// Some of these tests use the Go client for simplicity.
 
 func (s *execSuite) TestStdinStdout(c *C) {
 	stdout, stderr, waitErr := s.exec(c, "foo bar", &client.ExecOptions{

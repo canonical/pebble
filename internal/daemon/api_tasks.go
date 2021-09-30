@@ -19,6 +19,7 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/canonical/pebble/internal/logger"
 	"github.com/canonical/pebble/internal/overlord/state"
 )
 
@@ -33,6 +34,10 @@ func v1GetTaskWebsocket(c *Command, req *http.Request, _ *userState) Response {
 
 	task := st.Task(taskID)
 	if task == nil {
+		// These errors are logged as well, because when a client is
+		// connecting to a websocket they may only see the error
+		// "bad handshake".
+		logger.Noticef("Websocket: cannot find task with id %q", taskID)
 		return statusNotFound("cannot find task with id %q", taskID)
 	}
 
@@ -42,6 +47,7 @@ func v1GetTaskWebsocket(c *Command, req *http.Request, _ *userState) Response {
 		commandMgr := c.d.overlord.CommandManager()
 		connect = commandMgr.Connect
 	default:
+		logger.Noticef("Websocket %s: %q tasks do not have websockets", task.ID(), task.Kind())
 		return statusBadRequest("%q tasks do not have websockets", task.Kind())
 	}
 
@@ -63,11 +69,13 @@ type websocketResponse struct {
 func (wr websocketResponse) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	err := wr.connect(r, w, wr.task, wr.websocketID)
 	if errors.Is(err, os.ErrNotExist) {
+		logger.Noticef("Websocket %s: cannot find websocket with id %q", wr.task.ID(), wr.websocketID)
 		rsp := statusNotFound("cannot find websocket with id %q", wr.websocketID)
 		rsp.ServeHTTP(w, r)
 		return
 	}
 	if err != nil {
+		logger.Noticef("Websocket %s: cannot connect to websocket %q: %v", wr.task.ID(), wr.websocketID, err)
 		rsp := statusInternalError("cannot connect to websocket %q: %v", wr.websocketID, err)
 		rsp.ServeHTTP(w, r)
 		return
