@@ -283,8 +283,8 @@ func (m *ServiceManager) StartOrder(services []string) ([]string, error) {
 	return m.plan.StartOrder(services)
 }
 
-// StartOrder returns the provided services, together with any required
-// dependencies, in the proper order for starting them all up.
+// StopOrder returns the provided services, together with any dependants,
+// in the proper order for starting them all up.
 func (m *ServiceManager) StopOrder(services []string) ([]string, error) {
 	releasePlan, err := m.acquirePlan()
 	if err != nil {

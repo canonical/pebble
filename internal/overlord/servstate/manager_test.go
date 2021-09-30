@@ -183,6 +183,26 @@ func (s *S) TestStartStopServices(c *C) {
 	s.stopServices(c, services)
 }
 
+func (s *S) TestStartStopServicesIdempotency(c *C) {
+	services := []string{"test1", "test2"}
+	s.startServices(c, services)
+	if c.Failed() {
+		return
+	}
+
+	s.startServices(c, services)
+	if c.Failed() {
+		return
+	}
+
+	s.stopServices(c, services)
+	if c.Failed() {
+		return
+	}
+
+	s.stopServicesAlreadyDead(c, services)
+}
+
 func (s *S) stopServices(c *C, services []string) {
 	cmds := s.manager.CmdsForTest()
 	c.Check(cmds, HasLen, len(services))
@@ -209,6 +229,29 @@ func (s *S) stopServices(c *C, services []string) {
 			c.Check(err, ErrorMatches, ".*process already finished.*")
 		}
 	}
+
+	s.st.Lock()
+	c.Check(chg.Status(), Equals, state.DoneStatus, Commentf("Error: %v", chg.Err()))
+	s.st.Unlock()
+}
+
+func (s *S) stopServicesAlreadyDead(c *C, services []string) {
+	cmds := s.manager.CmdsForTest()
+	c.Check(cmds, HasLen, 0)
+
+	s.st.Lock()
+	// Stopping should happen in reverse order in practice. For now
+	// it's up to the call site to organize that.
+	ts, err := servstate.Stop(s.st, services)
+	c.Check(err, IsNil)
+	chg := s.st.NewChange("test", "Stop test")
+	chg.AddAll(ts)
+	s.st.Unlock()
+
+	// Twice due to the cross-task dependency.
+	s.ensure(c, 2)
+
+	c.Assert(cmds, HasLen, 0)
 
 	s.st.Lock()
 	c.Check(chg.Status(), Equals, state.DoneStatus, Commentf("Error: %v", chg.Err()))

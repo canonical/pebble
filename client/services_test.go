@@ -109,3 +109,29 @@ func (cs *clientSuite) TestServicesGet(c *check.C) {
 		"names": {"svc1,svc2"},
 	})
 }
+
+func (cs *clientSuite) TestRestart(c *check.C) {
+	cs.rsp = `{
+		"result": {},
+		"status": "OK",
+		"status-code": 202,
+		"type": "async",
+		"change": "42"
+	}`
+
+	opts := client.ServiceOptions{
+		Names: []string{"one", "two"},
+	}
+
+	changeId, err := cs.cli.Restart(&opts)
+	c.Check(err, check.IsNil)
+	c.Check(changeId, check.Equals, "42")
+	c.Check(cs.req.Method, check.Equals, "POST")
+	c.Check(cs.req.URL.Path, check.Equals, "/v1/services")
+
+	var body map[string]interface{}
+	c.Assert(json.NewDecoder(cs.req.Body).Decode(&body), check.IsNil)
+	c.Check(body, check.HasLen, 2)
+	c.Check(body["action"], check.Equals, "restart")
+	c.Check(body["services"], check.DeepEquals, []interface{}{"one", "two"})
+}

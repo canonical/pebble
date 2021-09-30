@@ -75,9 +75,17 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 		return fmt.Errorf("cannot find service %q in plan", req.Name)
 	}
 
-	_, previous := m.services[req.Name]
-	if previous {
-		return fmt.Errorf("service %q was previously started", req.Name)
+	if service, previous := m.services[req.Name]; previous {
+		select {
+		case <-service.done:
+			// Service exited but not yet removed, safe to override.
+		default:
+			// Already started
+			m.state.Lock()
+			task.Logf("Service %q already started.", req.Name)
+			m.state.Unlock()
+			return nil
+		}
 	}
 
 	args, err := shlex.Split(service.Command)
@@ -106,7 +114,6 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 	for k, v := range service.Environment {
 		cmd.Env = append(cmd.Env, k+"="+v)
 	}
-
 	logBuffer := servicelog.NewRingBuffer(maxLogBytes)
 	var outputIterator servicelog.Iterator
 	if m.serviceOutput != nil {
@@ -183,7 +190,11 @@ func (m *ServiceManager) doStop(task *state.Task, tomb *tomb.Tomb) error {
 
 	active, ok := m.services[req.Name]
 	if !ok {
-		return fmt.Errorf("service %q is not active", req.Name)
+		// Already stopped
+		m.state.Lock()
+		task.Logf("Service %q already stopped.", req.Name)
+		m.state.Unlock()
+		return nil
 	}
 	cmd := active.cmd
 
