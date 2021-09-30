@@ -48,6 +48,8 @@ type taskInfo struct {
 
 	SpawnTime time.Time  `json:"spawn-time,omitempty"`
 	ReadyTime *time.Time `json:"ready-time,omitempty"`
+
+	Data map[string]*json.RawMessage `json:"data,omitempty"`
 }
 
 type taskInfoProgress struct {
@@ -97,16 +99,14 @@ func change2changeInfo(chg *state.Change) *changeInfo {
 		if !readyTime.IsZero() {
 			taskInfo.ReadyTime = &readyTime
 		}
-		taskInfos[j] = taskInfo
-
 		var data map[string]*json.RawMessage
 		if t.Get("api-data", &data) == nil {
-			chgInfo.Data = data
+			taskInfo.Data = data
 		}
+		taskInfos[j] = taskInfo
 	}
 	chgInfo.Tasks = taskInfos
 
-	// If change's "api-data" is set, that overrides any task "api-data".
 	var data map[string]*json.RawMessage
 	if chg.Get("api-data", &data) == nil {
 		chgInfo.Data = data

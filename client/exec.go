@@ -258,9 +258,13 @@ func (p *ExecProcess) Wait() error {
 	<-p.writesDone
 
 	var exitCode int
-	err = change.Get("exit-code", &exitCode)
+	if len(change.Tasks) == 0 {
+		return fmt.Errorf("expected exec change to have at least one task")
+	}
+	task := change.Tasks[0]
+	err = task.Get("exit-code", &exitCode)
 	if err != nil {
-		return fmt.Errorf("cannot get exit-code: %v", err)
+		return fmt.Errorf("cannot get exit code: %v", err)
 	}
 	if exitCode != 0 {
 		return &ExitError{exitCode: exitCode}

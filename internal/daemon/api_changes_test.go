@@ -202,6 +202,8 @@ func (s *apiSuite) TestStateChange(c *check.C) {
 	ids := setupChanges(st)
 	chg := st.Change(ids[0])
 	chg.Set("api-data", map[string]int{"n": 42})
+	task := chg.Tasks()[0]
+	task.Set("api-data", map[string]string{"foo": "bar"})
 	st.Unlock()
 	s.vars = map[string]string{"id": ids[0]}
 
@@ -239,6 +241,9 @@ func (s *apiSuite) TestStateChange(c *check.C) {
 				"log":        []interface{}{"2016-04-21T01:02:03Z INFO l11", "2016-04-21T01:02:03Z INFO l12"},
 				"progress":   map[string]interface{}{"label": "", "done": 0., "total": 1.},
 				"spawn-time": "2016-04-21T01:02:03Z",
+				"data": map[string]interface{}{
+					"foo": "bar",
+				},
 			},
 			map[string]interface{}{
 				"id":         ids[3],
