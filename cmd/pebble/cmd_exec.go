@@ -16,6 +16,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"os/signal"
 	"strings"
@@ -158,25 +159,39 @@ func (cmd *cmdExec) Execute(args []string) error {
 		return err
 	}
 
-	// Start a goroutine to handle signals and window resizing.
-	done := make(chan struct{})
-	defer close(done)
-	go execControlHandler(process, useTerminal, done)
+	// Start the control goroutine to handle signals and window resizing.
+	controlDone := make(chan struct{})
+	defer close(controlDone)
+	sighup := make(chan struct{})
+	go execControlHandler(process, useTerminal, controlDone, sighup)
 
-	// Wait for the command to finish.
-	err = process.Wait()
-	switch e := err.(type) {
-	case nil:
+	finished := make(chan error)
+	go func() {
+		finished <- process.Wait()
+	}()
+
+	// Wait for either the command to finish, or SIGHUP to be received.
+	select {
+	case err = <-finished:
+		switch e := err.(type) {
+		case nil:
+			return nil
+		case *client.ExitError:
+			logger.Debugf("Process exited with return code %d", e.ExitCode())
+			panic(&exitStatus{e.ExitCode()})
+		default:
+			return err
+		}
+	case <-sighup:
+		// The \r is because we might be in raw mode, and it moves the cursor
+		// back to the start of the line.
+		fmt.Fprintf(os.Stderr, "SIGHUP received, exiting\r\n")
+		// Exit with exit code 0 in this case (same behaviour as ssh).
 		return nil
-	case *client.ExitError:
-		logger.Debugf("Process exited with return code %d", e.ExitCode())
-		panic(&exitStatus{e.ExitCode()})
-	default:
-		return err
 	}
 }
 
-func execControlHandler(process *client.ExecProcess, useTerminal bool, done <-chan struct{}) {
+func execControlHandler(process *client.ExecProcess, useTerminal bool, done <-chan struct{}, sighup chan<- struct{}) {
 	ch := make(chan os.Signal, 10)
 	signal.Notify(ch,
 		unix.SIGWINCH, unix.SIGHUP,
@@ -198,7 +213,7 @@ func execControlHandler(process *client.ExecProcess, useTerminal bool, done <-ch
 				logger.Debugf("Received SIGWINCH but not in terminal mode, ignoring")
 				break
 			}
-			logger.Debugf("Received '%s signal', updating window geometry", sig)
+			logger.Debugf("Received '%s' signal, updating window geometry", sig)
 			width, height, err := ptyutil.GetSize(unix.Stdout)
 			if err != nil {
 				logger.Debugf("Cannot get terminal size: %v", err)
@@ -210,9 +225,17 @@ func execControlHandler(process *client.ExecProcess, useTerminal bool, done <-ch
 				logger.Debugf("Cannot set terminal size: %v", err)
 				break
 			}
-		case unix.SIGHUP, unix.SIGTERM, unix.SIGINT, unix.SIGQUIT,
-			unix.SIGABRT, unix.SIGTSTP, unix.SIGTTIN, unix.SIGTTOU,
-			unix.SIGUSR1, unix.SIGUSR2, unix.SIGSEGV, unix.SIGCONT:
+		case unix.SIGHUP:
+			logger.Debugf("Received 'SIGHUP' signal, forwarding and exiting")
+			err := process.SendSignal("SIGHUP")
+			if err != nil {
+				logger.Debugf("Cannot forward signal '%s': %v", sig, err)
+				break
+			}
+			close(sighup)
+		case unix.SIGTERM, unix.SIGINT, unix.SIGQUIT, unix.SIGABRT,
+			unix.SIGTSTP, unix.SIGTTIN, unix.SIGTTOU, unix.SIGUSR1,
+			unix.SIGUSR2, unix.SIGSEGV, unix.SIGCONT:
 			logger.Debugf("Received '%s' signal, forwarding to executing program", sig)
 			err := process.SendSignal(unix.SignalName(sig.(unix.Signal)))
 			if err != nil {
