@@ -54,7 +54,7 @@ var execDescs = map[string]string{
 	"gid":     "Group ID to run command as",
 	"group":   "Group name to run command as (group's GID must match gid if both present)",
 	"timeout": "Timeout after which to terminate command",
-	"t":       "Allocate remote pseudo-terminal (default if stdin and stdout are TTYs)",
+	"t":       "Allocate remote pseudo-terminal (default if stdout is a TTY)",
 	"T":       "Disable remote pseudo-terminal allocation",
 }
 
@@ -94,9 +94,7 @@ func (cmd *cmdExec) Execute(args []string) error {
 		env[key] = value
 	}
 
-	// Specify UseTerminal if -t/--terminal is given, or if both stdin and
-	// stdout are TTYs.
-	stdinIsTerminal := ptyutil.IsTerminal(unix.Stdin)
+	// Specify UseTerminal if -t/--terminal is given, or if stdout is a TTY.
 	stdoutIsTerminal := ptyutil.IsTerminal(unix.Stdout)
 	var useTerminal bool
 	if cmd.Terminal {
@@ -104,14 +102,14 @@ func (cmd *cmdExec) Execute(args []string) error {
 	} else if cmd.NoTerminal {
 		useTerminal = false
 	} else {
-		useTerminal = stdinIsTerminal && stdoutIsTerminal
+		useTerminal = stdoutIsTerminal
 	}
 
 	// Record terminal state (and restore it before we exit).
-	if useTerminal && stdinIsTerminal {
+	if useTerminal && ptyutil.IsTerminal(unix.Stdin) {
 		oldState, err := ptyutil.MakeRaw(unix.Stdin)
 		if err != nil {
-			return err
+			return fmt.Errorf("cannot change terminal to raw mode: %v", err)
 		}
 		defer ptyutil.Restore(unix.Stdin, oldState)
 	}
