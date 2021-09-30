@@ -67,7 +67,10 @@ type execution struct {
 
 func (m *CommandManager) doExec(task *state.Task, tomb *tomb.Tomb) error {
 	var request executionRequest
+	st := task.State()
+	st.Lock()
 	err := task.Get("execution-request", &request)
+	st.Unlock()
 	if err != nil {
 		return fmt.Errorf("cannot get execution request for task %q: %v", task.ID(), err)
 	}
