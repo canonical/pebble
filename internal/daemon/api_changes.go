@@ -48,6 +48,8 @@ type taskInfo struct {
 
 	SpawnTime time.Time  `json:"spawn-time,omitempty"`
 	ReadyTime *time.Time `json:"ready-time,omitempty"`
+
+	Data map[string]*json.RawMessage `json:"data,omitempty"`
 }
 
 type taskInfoProgress struct {
@@ -96,6 +98,10 @@ func change2changeInfo(chg *state.Change) *changeInfo {
 		readyTime := t.ReadyTime()
 		if !readyTime.IsZero() {
 			taskInfo.ReadyTime = &readyTime
+		}
+		var data map[string]*json.RawMessage
+		if t.Get("api-data", &data) == nil {
+			taskInfo.Data = data
 		}
 		taskInfos[j] = taskInfo
 	}

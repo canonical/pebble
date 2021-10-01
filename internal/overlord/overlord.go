@@ -28,6 +28,7 @@ import (
 
 	"github.com/canonical/pebble/internal/logger"
 	"github.com/canonical/pebble/internal/osutil"
+	"github.com/canonical/pebble/internal/overlord/cmdstate"
 	"github.com/canonical/pebble/internal/overlord/patch"
 	"github.com/canonical/pebble/internal/overlord/servstate"
 	"github.com/canonical/pebble/internal/overlord/state"
@@ -81,6 +82,7 @@ type Overlord struct {
 	inited     bool
 	runner     *state.TaskRunner
 	serviceMgr *servstate.ServiceManager
+	commandMgr *cmdstate.CommandManager
 }
 
 // New creates a new Overlord with all its state managers.
@@ -120,11 +122,14 @@ func New(pebbleDir string, restartBehavior RestartBehavior, serviceOutput io.Wri
 	}
 	o.runner.AddOptionalHandler(matchAnyUnknownTask, handleUnknownTask, nil)
 
-	serviceMgr, err := servstate.NewManager(s, o.runner, o.pebbleDir, serviceOutput)
+	o.serviceMgr, err = servstate.NewManager(s, o.runner, o.pebbleDir, serviceOutput)
 	if err != nil {
 		return nil, err
 	}
-	o.addManager(serviceMgr)
+	o.addManager(o.serviceMgr)
+
+	o.commandMgr = cmdstate.NewManager(o.runner)
+	o.addManager(o.commandMgr)
 
 	// the shared task runner should be added last!
 	o.stateEng.AddManager(o.runner)
@@ -133,11 +138,6 @@ func New(pebbleDir string, restartBehavior RestartBehavior, serviceOutput io.Wri
 }
 
 func (o *Overlord) addManager(mgr StateManager) {
-	// It may be necessary to keep a reference in the overlord itself.
-	switch x := mgr.(type) {
-	case *servstate.ServiceManager:
-		o.serviceMgr = x
-	}
 	o.stateEng.AddManager(mgr)
 }
 
@@ -426,6 +426,12 @@ func (o *Overlord) TaskRunner() *state.TaskRunner {
 // under the overlord.
 func (o *Overlord) ServiceManager() *servstate.ServiceManager {
 	return o.serviceMgr
+}
+
+// CommandManager returns the command manager responsible for executing
+// commands under the overlord.
+func (o *Overlord) CommandManager() *cmdstate.CommandManager {
+	return o.commandMgr
 }
 
 // Fake creates an Overlord without any managers and with a backend
