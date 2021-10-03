@@ -27,14 +27,31 @@ import (
 	"github.com/canonical/pebble/internal/logger"
 )
 
+// MessageReader is an interface that wraps websocket message reading.
+type MessageReader interface {
+	NextReader() (messageType int, r io.Reader, err error)
+}
+
+// MessageWriter is an interface that wraps websocket message writing.
+type MessageWriter interface {
+	WriteMessage(messageType int, data []byte) error
+}
+
+// MessageReadWriter is an interface that wraps websocket message reading and
+// writing.
+type MessageReadWriter interface {
+	MessageReader
+	MessageWriter
+}
+
 // WebsocketExecMirror mirrors a websocket connection with a set of Writer/Reader.
-func WebsocketExecMirror(conn *websocket.Conn, w io.WriteCloser, r io.ReadCloser, exited chan struct{}, fd int) (chan bool, chan bool) {
+func WebsocketExecMirror(conn MessageReadWriter, w io.WriteCloser, r io.ReadCloser, exited chan struct{}, fd int) (chan bool, chan bool) {
 	readDone := make(chan bool, 1)
 	writeDone := make(chan bool, 1)
 
 	go DefaultWriter(conn, w, writeDone)
 
-	go func(conn *websocket.Conn, r io.ReadCloser) {
+	go func(conn MessageWriter, r io.ReadCloser) {
 		in := ExecReaderToChannel(r, -1, exited, fd)
 		for {
 			buf, ok := <-in
@@ -65,7 +82,7 @@ func WebsocketExecMirror(conn *websocket.Conn, w io.WriteCloser, r io.ReadCloser
 	return readDone, writeDone
 }
 
-func DefaultWriter(conn *websocket.Conn, w io.WriteCloser, writeDone chan<- bool) {
+func DefaultWriter(conn MessageReader, w io.WriteCloser, writeDone chan<- bool) {
 	for {
 		mt, r, err := conn.NextReader()
 		if err != nil {
@@ -306,7 +323,7 @@ again:
 	return n, int(pollFds[0].Revents), err
 }
 
-func WebsocketSendStream(conn *websocket.Conn, r io.Reader, bufferSize int) chan bool {
+func WebsocketSendStream(conn MessageWriter, r io.Reader, bufferSize int) chan bool {
 	ch := make(chan bool)
 
 	if r == nil {
@@ -314,7 +331,7 @@ func WebsocketSendStream(conn *websocket.Conn, r io.Reader, bufferSize int) chan
 		return ch
 	}
 
-	go func(conn *websocket.Conn, r io.Reader) {
+	go func(conn MessageWriter, r io.Reader) {
 		in := ReaderToChannel(r, bufferSize)
 		for {
 			buf, ok := <-in
@@ -335,10 +352,10 @@ func WebsocketSendStream(conn *websocket.Conn, r io.Reader, bufferSize int) chan
 	return ch
 }
 
-func WebsocketRecvStream(w io.Writer, conn *websocket.Conn) chan bool {
+func WebsocketRecvStream(w io.Writer, conn MessageReader) chan bool {
 	ch := make(chan bool)
 
-	go func(w io.Writer, conn *websocket.Conn) {
+	go func(w io.Writer, conn MessageReader) {
 		for {
 			mt, r, err := conn.NextReader()
 			if mt == websocket.CloseMessage {

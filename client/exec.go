@@ -21,10 +21,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"net/http"
 	"time"
-
-	"github.com/gorilla/websocket"
 
 	"github.com/canonical/pebble/internal/wsutil"
 )
@@ -101,11 +98,6 @@ type ExecProcess struct {
 	controlConn jsonWriter
 }
 
-// jsonWriter makes it easier to write tests for SendSignal and SendResize.
-type jsonWriter interface {
-	WriteJSON(v interface{}) error
-}
-
 // Exec starts a command with the given options, returning a value
 // representing the process.
 func (client *Client) Exec(opts *ExecOptions) (*ExecProcess, error) {
@@ -172,7 +164,7 @@ func (client *Client) Exec(opts *ExecOptions) (*ExecProcess, error) {
 	stdoutDone := wsutil.WebsocketRecvStream(stdout, ioConn)
 
 	// Handle stderr separately if needed.
-	var stderrConn *websocket.Conn
+	var stderrConn clientWebsocket
 	var stderrDone chan bool
 	if opts.Stderr != nil {
 		stderrConn, err = client.getTaskWebsocket(taskID, "stderr")
@@ -212,28 +204,6 @@ func (client *Client) Exec(opts *ExecOptions) (*ExecProcess, error) {
 		controlConn: controlConn,
 	}
 	return process, nil
-}
-
-// getTaskWebsocket creates a websocket connection for the given task ID and
-// websocket ID combination.
-func (client *Client) getTaskWebsocket(taskID, websocketID string) (*websocket.Conn, error) {
-	// Set up a new websocket dialer based on the HTTP client
-	httpClient := client.doer.(*http.Client)
-	httpTransport := httpClient.Transport.(*http.Transport)
-	dialer := websocket.Dialer{
-		NetDial:          httpTransport.Dial,
-		Proxy:            httpTransport.Proxy,
-		TLSClientConfig:  httpTransport.TLSClientConfig,
-		HandshakeTimeout: 5 * time.Second,
-	}
-
-	// Establish the connection
-	url := fmt.Sprintf("ws://localhost/v1/tasks/%s/websocket/%s", taskID, websocketID)
-	conn, _, err := dialer.Dial(url, nil)
-	if err != nil {
-		return nil, err
-	}
-	return conn, err
 }
 
 // Wait waits for the command process to finish. The returned error is nil if

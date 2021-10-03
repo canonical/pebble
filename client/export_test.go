@@ -37,3 +37,13 @@ func (client *Client) FakeAsyncRequest() (changeId string, err error) {
 	}
 	return changeId, nil
 }
+
+func (client *Client) SetGetWebsocket(f getWebsocketFunc) {
+	client.getWebsocket = f
+}
+
+func (p *ExecProcess) SetControlConn(c jsonWriter) {
+	p.controlConn = c
+}
+
+type ClientWebsocket = clientWebsocket
