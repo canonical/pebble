@@ -101,7 +101,7 @@ type jsonWriter interface {
 }
 
 // New returns a new instance of Client
-func New(config *Config) *Client {
+func New(config *Config) (*Client, error) {
 	if config == nil {
 		config = &Config{}
 	}
@@ -118,7 +118,7 @@ func New(config *Config) *Client {
 		// Otherwise talk regular HTTP-over-TCP.
 		baseURL, err := url.Parse(config.BaseURL)
 		if err != nil {
-			panic(fmt.Sprintf("cannot parse server base URL: %q (%v)", config.BaseURL, err))
+			return nil, fmt.Errorf("cannot parse base URL: %v", err)
 		}
 		transport = &http.Transport{DisableKeepAlives: config.DisableKeepAlive}
 		client = &Client{baseURL: *baseURL}
@@ -130,7 +130,7 @@ func New(config *Config) *Client {
 		return getWebsocket(transport, url)
 	}
 
-	return client
+	return client, nil
 }
 
 func (client *Client) getTaskWebsocket(taskID, websocketID string) (clientWebsocket, error) {

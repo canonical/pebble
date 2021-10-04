@@ -56,7 +56,8 @@ func (s *execSuite) SetUpTest(c *C) {
 	daemon.Start()
 	s.daemon = daemon
 
-	s.client = client.New(&client.Config{Socket: socketPath})
+	s.client, err = client.New(&client.Config{Socket: socketPath})
+	c.Assert(err, IsNil)
 }
 
 func (s *execSuite) TearDownTest(c *C) {
