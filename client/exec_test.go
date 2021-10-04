@@ -231,8 +231,29 @@ func (s *execSuite) TestSendSignal(c *C) {
 	})
 	err := process.SendSignal("SIGHUP")
 	c.Assert(err, IsNil)
+	err = process.SendSignal("SIGUSR1")
+	c.Assert(err, IsNil)
 	c.Assert(s.controlWs.writes, DeepEquals, []write{
 		{websocket.TextMessage, `{"command":"signal","signal":{"name":"SIGHUP"}}`},
+		{websocket.TextMessage, `{"command":"signal","signal":{"name":"SIGUSR1"}}`},
+	})
+}
+
+func (s *execSuite) TestSendResize(c *C) {
+	opts := &client.ExecOptions{
+		Command: []string{"server"},
+	}
+	process, reqBody := s.exec(c, opts, 0)
+	c.Assert(reqBody, DeepEquals, map[string]interface{}{
+		"command": []interface{}{"server"},
+	})
+	err := process.SendResize(150, 50)
+	c.Assert(err, IsNil)
+	err = process.SendResize(80, 25)
+	c.Assert(err, IsNil)
+	c.Assert(s.controlWs.writes, DeepEquals, []write{
+		{websocket.TextMessage, `{"command":"resize","resize":{"width":150,"height":50}}`},
+		{websocket.TextMessage, `{"command":"resize","resize":{"width":80,"height":25}}`},
 	})
 }
 
@@ -397,49 +418,4 @@ func (s *execSuite) addResponses(changeID string, exitCode int) {
 		"status-code": 200,
 		"type": "sync"
 	}`, changeID, exitCode, taskID))
-}
-
-type execControlSuite struct{}
-
-var _ = Suite(&execControlSuite{})
-
-func (s *execControlSuite) TestSendSignal(c *C) {
-	buf := &bytes.Buffer{}
-	process := &client.ExecProcess{}
-	process.SetControlConn(testJSONWriter{buf})
-
-	err := process.SendSignal("SIGHUP")
-	c.Check(err, IsNil)
-	err = process.SendSignal("SIGUSR1")
-	c.Check(err, IsNil)
-
-	c.Check(buf.String(), Equals, `
-{"command":"signal","signal":{"name":"SIGHUP"}}
-{"command":"signal","signal":{"name":"SIGUSR1"}}
-`[1:])
-}
-
-func (s *execControlSuite) TestSendResize(c *C) {
-	buf := &bytes.Buffer{}
-	process := &client.ExecProcess{}
-	process.SetControlConn(testJSONWriter{buf})
-
-	err := process.SendResize(150, 50)
-	c.Check(err, IsNil)
-	err = process.SendResize(80, 25)
-	c.Check(err, IsNil)
-
-	c.Check(buf.String(), Equals, `
-{"command":"resize","resize":{"width":150,"height":50}}
-{"command":"resize","resize":{"width":80,"height":25}}
-`[1:])
-}
-
-type testJSONWriter struct {
-	w io.Writer
-}
-
-func (w testJSONWriter) WriteJSON(v interface{}) error {
-	encoder := json.NewEncoder(w.w)
-	return encoder.Encode(v)
 }
