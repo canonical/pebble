@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"regexp"
 	"strings"
 	"syscall"
 	"time"
@@ -183,6 +184,10 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 	// unreachable
 }
 
+// Used to strip the Pebble log prefix, for example: "2006-01-02T15:04:05.000Z [service] "
+// Timestamp must match format in logger.timestampFormat.
+var timestampServiceRegexp = regexp.MustCompile(`\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z \[.*?\] `)
+
 func getLastLogs(logBuffer *servicelog.RingBuffer) (string, error) {
 	it := logBuffer.HeadIterator(lastLogLines + 1)
 	defer it.Close()
@@ -199,6 +204,8 @@ func getLastLogs(logBuffer *servicelog.RingBuffer) (string, error) {
 		lines[0] = "(...)"
 	}
 	for i, line := range lines {
+		// Strip Pebble timestamp and "[service]" prefix
+		line = timestampServiceRegexp.ReplaceAllString(line, "")
 		lines[i] = "    " + line
 	}
 	return strings.Join(lines, "\n"), nil
