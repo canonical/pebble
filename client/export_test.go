@@ -46,4 +46,10 @@ func (p *ExecProcess) SetControlConn(c jsonWriter) {
 	p.controlConn = c
 }
 
+// WaitStdinDone waits for WebsocketSendStream to be finished calling
+// WriteMessage to avoid a race condition.
+func (p *ExecProcess) WaitStdinDone() {
+	<-p.stdinDone
+}
+
 type ClientWebsocket = clientWebsocket

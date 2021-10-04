@@ -96,6 +96,7 @@ type ExecProcess struct {
 	timeout     time.Duration
 	writesDone  chan struct{}
 	controlConn jsonWriter
+	stdinDone   chan bool // only used by tests
 }
 
 // Exec starts a command with the given options, returning a value
@@ -160,7 +161,7 @@ func (client *Client) Exec(opts *ExecOptions) (*ExecProcess, error) {
 	if err != nil {
 		return nil, fmt.Errorf(`cannot connect to "stdio" websocket: %v`, err)
 	}
-	_ = wsutil.WebsocketSendStream(ioConn, stdin, -1)
+	stdinDone := wsutil.WebsocketSendStream(ioConn, stdin, -1)
 	stdoutDone := wsutil.WebsocketRecvStream(stdout, ioConn)
 
 	// Handle stderr separately if needed.
@@ -202,6 +203,7 @@ func (client *Client) Exec(opts *ExecOptions) (*ExecProcess, error) {
 		timeout:     opts.Timeout,
 		writesDone:  writesDone,
 		controlConn: controlConn,
+		stdinDone:   stdinDone,
 	}
 	return process, nil
 }
@@ -229,7 +231,7 @@ func (p *ExecProcess) Wait() error {
 
 	var exitCode int
 	if len(change.Tasks) == 0 {
-		return fmt.Errorf("expected exec change to have at least one task")
+		return fmt.Errorf("expected exec change to contain at least one task")
 	}
 	task := change.Tasks[0]
 	err = task.Get("exit-code", &exitCode)
