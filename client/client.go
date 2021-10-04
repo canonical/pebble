@@ -133,6 +133,11 @@ func New(config *Config) *Client {
 	return client
 }
 
+func (client *Client) getTaskWebsocket(taskID, websocketID string) (clientWebsocket, error) {
+	url := fmt.Sprintf("ws://localhost/v1/tasks/%s/websocket/%s", taskID, websocketID)
+	return client.getWebsocket(url)
+}
+
 func getWebsocket(transport *http.Transport, url string) (clientWebsocket, error) {
 	dialer := websocket.Dialer{
 		NetDial:          transport.Dial,
