@@ -343,7 +343,11 @@ func run() error {
 
 	_, clientConfig.Socket = getEnvPaths()
 
-	cli := client.New(&clientConfig)
+	cli, err := client.New(&clientConfig)
+	if err != nil {
+		return fmt.Errorf("cannot create client: %v", err)
+	}
+
 	parser := Parser(cli)
 	xtra, err := parser.Parse()
 	if err != nil {

@@ -23,7 +23,11 @@ var RunMain = run
 var ClientConfig = &clientConfig
 
 func Client() *client.Client {
-	return client.New(ClientConfig)
+	cli, err := client.New(ClientConfig)
+	if err != nil {
+		panic("cannot create client:" + err.Error())
+	}
+	return cli
 }
 
 var (

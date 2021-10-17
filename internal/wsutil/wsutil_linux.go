@@ -27,13 +27,13 @@ import (
 )
 
 // WebsocketExecMirror mirrors a websocket connection with a set of Writer/Reader.
-func WebsocketExecMirror(conn *websocket.Conn, w io.WriteCloser, r io.ReadCloser, exited chan struct{}, fd int) (chan bool, chan bool) {
+func WebsocketExecMirror(conn MessageReadWriter, w io.WriteCloser, r io.ReadCloser, exited chan struct{}, fd int) (chan bool, chan bool) {
 	readDone := make(chan bool, 1)
 	writeDone := make(chan bool, 1)
 
 	go DefaultWriter(conn, w, writeDone)
 
-	go func(conn *websocket.Conn, r io.ReadCloser) {
+	go func(conn MessageWriter, r io.ReadCloser) {
 		in := ExecReaderToChannel(r, -1, exited, fd)
 		for {
 			buf, ok := <-in

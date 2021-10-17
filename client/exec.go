@@ -21,10 +21,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"net/http"
 	"time"
-
-	"github.com/gorilla/websocket"
 
 	"github.com/canonical/pebble/internal/wsutil"
 )
@@ -99,11 +96,7 @@ type ExecProcess struct {
 	timeout     time.Duration
 	writesDone  chan struct{}
 	controlConn jsonWriter
-}
-
-// jsonWriter makes it easier to write tests for SendSignal and SendResize.
-type jsonWriter interface {
-	WriteJSON(v interface{}) error
+	stdinDone   chan bool // only used by tests
 }
 
 // Exec starts a command with the given options, returning a value
@@ -168,11 +161,11 @@ func (client *Client) Exec(opts *ExecOptions) (*ExecProcess, error) {
 	if err != nil {
 		return nil, fmt.Errorf(`cannot connect to "stdio" websocket: %v`, err)
 	}
-	_ = wsutil.WebsocketSendStream(ioConn, stdin, -1)
+	stdinDone := wsutil.WebsocketSendStream(ioConn, stdin, -1)
 	stdoutDone := wsutil.WebsocketRecvStream(stdout, ioConn)
 
 	// Handle stderr separately if needed.
-	var stderrConn *websocket.Conn
+	var stderrConn clientWebsocket
 	var stderrDone chan bool
 	if opts.Stderr != nil {
 		stderrConn, err = client.getTaskWebsocket(taskID, "stderr")
@@ -210,30 +203,9 @@ func (client *Client) Exec(opts *ExecOptions) (*ExecProcess, error) {
 		timeout:     opts.Timeout,
 		writesDone:  writesDone,
 		controlConn: controlConn,
+		stdinDone:   stdinDone,
 	}
 	return process, nil
-}
-
-// getTaskWebsocket creates a websocket connection for the given task ID and
-// websocket ID combination.
-func (client *Client) getTaskWebsocket(taskID, websocketID string) (*websocket.Conn, error) {
-	// Set up a new websocket dialer based on the HTTP client
-	httpClient := client.doer.(*http.Client)
-	httpTransport := httpClient.Transport.(*http.Transport)
-	dialer := websocket.Dialer{
-		NetDial:          httpTransport.Dial,
-		Proxy:            httpTransport.Proxy,
-		TLSClientConfig:  httpTransport.TLSClientConfig,
-		HandshakeTimeout: 5 * time.Second,
-	}
-
-	// Establish the connection
-	url := fmt.Sprintf("ws://localhost/v1/tasks/%s/websocket/%s", taskID, websocketID)
-	conn, _, err := dialer.Dial(url, nil)
-	if err != nil {
-		return nil, err
-	}
-	return conn, err
 }
 
 // Wait waits for the command process to finish. The returned error is nil if
@@ -259,7 +231,7 @@ func (p *ExecProcess) Wait() error {
 
 	var exitCode int
 	if len(change.Tasks) == 0 {
-		return fmt.Errorf("expected exec change to have at least one task")
+		return fmt.Errorf("expected exec change to contain at least one task")
 	}
 	task := change.Tasks[0]
 	err = task.Get("exit-code", &exitCode)

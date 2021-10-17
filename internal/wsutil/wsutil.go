@@ -23,7 +23,24 @@ import (
 	"github.com/canonical/pebble/internal/logger"
 )
 
-func DefaultWriter(conn *websocket.Conn, w io.WriteCloser, writeDone chan<- bool) {
+// MessageReader is an interface that wraps websocket message reading.
+type MessageReader interface {
+	NextReader() (messageType int, r io.Reader, err error)
+}
+
+// MessageWriter is an interface that wraps websocket message writing.
+type MessageWriter interface {
+	WriteMessage(messageType int, data []byte) error
+}
+
+// MessageReadWriter is an interface that wraps websocket message reading and
+// writing.
+type MessageReadWriter interface {
+	MessageReader
+	MessageWriter
+}
+
+func DefaultWriter(conn MessageReader, w io.WriteCloser, writeDone chan<- bool) {
 	for {
 		mt, r, err := conn.NextReader()
 		if err != nil {
@@ -60,7 +77,7 @@ func DefaultWriter(conn *websocket.Conn, w io.WriteCloser, writeDone chan<- bool
 	w.Close()
 }
 
-func WebsocketSendStream(conn *websocket.Conn, r io.Reader, bufferSize int) chan bool {
+func WebsocketSendStream(conn MessageWriter, r io.Reader, bufferSize int) chan bool {
 	ch := make(chan bool)
 
 	if r == nil {
@@ -68,7 +85,7 @@ func WebsocketSendStream(conn *websocket.Conn, r io.Reader, bufferSize int) chan
 		return ch
 	}
 
-	go func(conn *websocket.Conn, r io.Reader) {
+	go func(conn MessageWriter, r io.Reader) {
 		in := ReaderToChannel(r, bufferSize)
 		for {
 			buf, ok := <-in
@@ -89,10 +106,10 @@ func WebsocketSendStream(conn *websocket.Conn, r io.Reader, bufferSize int) chan
 	return ch
 }
 
-func WebsocketRecvStream(w io.Writer, conn *websocket.Conn) chan bool {
+func WebsocketRecvStream(w io.Writer, conn MessageReader) chan bool {
 	ch := make(chan bool)
 
-	go func(w io.Writer, conn *websocket.Conn) {
+	go func(w io.Writer, conn MessageReader) {
 		for {
 			mt, r, err := conn.NextReader()
 			if mt == websocket.CloseMessage {
