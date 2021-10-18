@@ -172,7 +172,8 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 
 		logs, err := getLastLogs(logBuffer)
 		if err != nil {
-			logger.Noticef("Cannot read service %q logs: %v", req.Name, err)
+			// If error, append log-reading error to service-exited error message.
+			logs = fmt.Sprintf("    [cannot read service %q logs: %v]", req.Name, err)
 		}
 
 		msg := fmt.Sprintf("service exited too quickly with code %d", cmd.ProcessState.ExitCode())
