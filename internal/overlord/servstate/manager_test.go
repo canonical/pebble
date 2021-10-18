@@ -80,7 +80,7 @@ services:
 
     test4:
         override: replace
-        command: echo too-fast
+        command: echo -e 'too-fast\nsecond line'
 
     test5:
         override: replace
@@ -331,7 +331,7 @@ func (s *S) TestStartFastExitCommand(c *C) {
 
 	s.st.Lock()
 	c.Check(chg.Status(), Equals, state.ErrorStatus)
-	c.Check(chg.Err(), ErrorMatches, `(?s).*service exited too quickly with code 0:\n    too-fast`)
+	c.Check(chg.Err(), ErrorMatches, `(?s).*service exited too quickly with code 0:\n    too-fast\n    second line`)
 	s.st.Unlock()
 
 	svc := s.serviceByName(c, "test4")
@@ -365,7 +365,7 @@ services:
         command: some-bad-command
     test4:
         override: replace
-        command: echo too-fast
+        command: echo -e 'too-fast\nsecond line'
     test5:
         override: replace
         command: /bin/sh -c "sleep 300"

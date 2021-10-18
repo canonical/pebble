@@ -186,7 +186,7 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 
 // Used to strip the Pebble log prefix, for example: "2006-01-02T15:04:05.000Z [service] "
 // Timestamp must match format in logger.timestampFormat.
-var timestampServiceRegexp = regexp.MustCompile(`\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z \[.*?\] `)
+var timestampServiceRegexp = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z \[[^]]+\] `)
 
 func getLastLogs(logBuffer *servicelog.RingBuffer) (string, error) {
 	it := logBuffer.HeadIterator(lastLogLines + 1)
