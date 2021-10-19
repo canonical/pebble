@@ -331,7 +331,10 @@ func (s *S) TestStartFastExitCommand(c *C) {
 
 	s.st.Lock()
 	c.Check(chg.Status(), Equals, state.ErrorStatus)
-	c.Check(chg.Err(), ErrorMatches, `(?s).*service exited too quickly with code 0:\n    too-fast\n    second line`)
+	c.Check(chg.Err(), ErrorMatches, `(?s).*\n- Start service "test4" \(service exited too quickly with code 0\)`)
+	c.Check(chg.Tasks()[0].Log(), HasLen, 2)
+	c.Check(chg.Tasks()[0].Log()[0], Matches, `(?s).* INFO most recent service output:\n    too-fast\n    second line`)
+	c.Check(chg.Tasks()[0].Log()[1], Matches, `.* ERROR service exited too quickly with code 0`)
 	s.st.Unlock()
 
 	svc := s.serviceByName(c, "test4")

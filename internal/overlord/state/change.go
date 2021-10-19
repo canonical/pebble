@@ -408,7 +408,7 @@ func (e *changeError) Error() string {
 	var buf bytes.Buffer
 	buf.WriteString("cannot perform the following tasks:\n")
 	for _, te := range e.errors {
-		fmt.Fprintf(&buf, "- %s: %s\n", te.task, te.error)
+		fmt.Fprintf(&buf, "- %s (%s)\n", te.task, te.error)
 	}
 	return strings.TrimSuffix(buf.String(), "\n")
 }

@@ -374,13 +374,13 @@ func (cs *changeSuite) TestErr(c *C) {
 	t1.Errorf("Download error")
 	c.Assert(chg.Err(), ErrorMatches, ""+
 		"cannot perform the following tasks:\n"+
-		"- Download: Download error")
+		"- Download \\(Download error\\)")
 
 	t2.Errorf("Activate error")
 	c.Assert(chg.Err(), ErrorMatches, ""+
 		"cannot perform the following tasks:\n"+
-		"- Download: Download error\n"+
-		"- Activate: Activate error")
+		"- Download \\(Download error\\)\n"+
+		"- Activate \\(Activate error\\)")
 }
 
 func (cs *changeSuite) TestMethodEntrance(c *C) {

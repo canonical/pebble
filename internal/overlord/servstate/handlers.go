@@ -1,7 +1,6 @@
 package servstate
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -170,17 +169,21 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 			releasePlan()
 		}
 
-		logs, err := getLastLogs(logBuffer)
-		if err != nil {
-			// If error, append log-reading error to service-exited error message.
-			logs = fmt.Sprintf("    [cannot read service %q logs: %v]", req.Name, err)
-		}
+		func() {
+			task.State().Lock()
+			defer task.State().Unlock()
 
-		msg := fmt.Sprintf("service exited too quickly with code %d", cmd.ProcessState.ExitCode())
-		if logs != "" {
-			msg += ":\n" + logs
-		}
-		return errors.New(msg)
+			logs, err := getLastLogs(logBuffer)
+			if err != nil {
+				task.Errorf("cannot read service %q logs: %v", req.Name, err)
+			}
+			if logs != "" {
+				// Add lastLogLines last lines of service output to the task's log.
+				task.Logf("most recent service output:\n%s", logs)
+			}
+		}()
+
+		return fmt.Errorf("service exited too quickly with code %d", cmd.ProcessState.ExitCode())
 	}
 	// unreachable
 }
