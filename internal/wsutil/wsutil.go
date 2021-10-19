@@ -41,38 +41,7 @@ type MessageReadWriter interface {
 }
 
 func DefaultWriter(conn MessageReader, w io.WriteCloser, writeDone chan<- bool) {
-	for {
-		mt, r, err := conn.NextReader()
-		if err != nil {
-			logger.Debugf("Got error getting next reader %s", err)
-			break
-		}
-
-		if mt == websocket.CloseMessage {
-			logger.Debugf("Got close message for reader")
-			break
-		}
-
-		if mt == websocket.TextMessage {
-			logger.Debugf("Got message barrier, resetting stream")
-			break
-		}
-
-		buf, err := ioutil.ReadAll(r)
-		if err != nil {
-			logger.Debugf("Got error writing to writer %s", err)
-			break
-		}
-		i, err := w.Write(buf)
-		if i != len(buf) {
-			logger.Debugf("Didn't write all of buf")
-			break
-		}
-		if err != nil {
-			logger.Debugf("Error writing buf %s", err)
-			break
-		}
-	}
+	recvLoop(w, conn)
 	writeDone <- true
 	w.Close()
 }
@@ -109,48 +78,47 @@ func WebsocketSendStream(conn MessageWriter, r io.Reader, bufferSize int) chan b
 func WebsocketRecvStream(w io.Writer, conn MessageReader) chan bool {
 	ch := make(chan bool)
 
-	go func(w io.Writer, conn MessageReader) {
-		for {
-			mt, r, err := conn.NextReader()
-			if mt == websocket.CloseMessage {
-				logger.Debugf("Got close message for reader")
-				break
-			}
-
-			if mt == websocket.TextMessage {
-				logger.Debugf("Got message barrier")
-				break
-			}
-
-			if err != nil {
-				logger.Debugf("Got error getting next reader %s", err)
-				break
-			}
-
-			buf, err := ioutil.ReadAll(r)
-			if err != nil {
-				logger.Debugf("Got error writing to writer %s", err)
-				break
-			}
-
-			if w == nil {
-				continue
-			}
-
-			i, err := w.Write(buf)
-			if i != len(buf) {
-				logger.Debugf("Didn't write all of buf")
-				break
-			}
-			if err != nil {
-				logger.Debugf("Error writing buf %s", err)
-				break
-			}
-		}
+	go func() {
+		recvLoop(w, conn)
 		ch <- true
-	}(w, conn)
+	}()
 
 	return ch
+}
+
+func recvLoop(w io.Writer, conn MessageReader) {
+	for {
+		mt, r, err := conn.NextReader()
+		if err != nil {
+			logger.Debugf("Cannot get next reader: %v", err)
+			break
+		}
+
+		if mt == websocket.CloseMessage {
+			logger.Debugf("Got close message for reader")
+			break
+		}
+
+		if mt == websocket.TextMessage {
+			logger.Debugf("Got message barrier (EOF command)")
+			break
+		}
+
+		buf, err := ioutil.ReadAll(r)
+		if err != nil {
+			logger.Debugf("Cannot read from message reader: %v", err)
+			break
+		}
+		n, err := w.Write(buf)
+		if n != len(buf) {
+			logger.Debugf("Wrote %d bytes instead of %d", n, len(buf))
+			break
+		}
+		if err != nil {
+			logger.Debugf("Cannot write buf: %v", err)
+			break
+		}
+	}
 }
 
 func ReaderToChannel(r io.Reader, bufferSize int) <-chan []byte {
