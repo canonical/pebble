@@ -15,6 +15,7 @@
 package wsutil
 
 import (
+	"encoding/json"
 	"io"
 	"io/ioutil"
 
@@ -46,6 +47,8 @@ func DefaultWriter(conn MessageReader, w io.WriteCloser, writeDone chan<- bool) 
 	w.Close()
 }
 
+var endCommandJSON = []byte(`{"command":"end"}`)
+
 func WebsocketSendStream(conn MessageWriter, r io.Reader, bufferSize int) chan bool {
 	ch := make(chan bool)
 
@@ -68,7 +71,7 @@ func WebsocketSendStream(conn MessageWriter, r io.Reader, bufferSize int) chan b
 				break
 			}
 		}
-		conn.WriteMessage(websocket.TextMessage, []byte{})
+		conn.WriteMessage(websocket.TextMessage, endCommandJSON)
 		close(ch) // NOTE(benhoyt): this was "ch <- true", but that can block
 	}(conn, r)
 
@@ -100,7 +103,19 @@ func recvLoop(w io.Writer, conn MessageReader) {
 		}
 
 		if mt == websocket.TextMessage {
-			logger.Debugf("Got message barrier (EOF command)")
+			var command struct {
+				Command string `json:"command"`
+			}
+			err := json.NewDecoder(r).Decode(&command)
+			if err != nil {
+				logger.Noticef("Cannot decode I/O command: %v", err)
+				continue
+			}
+			if command.Command != "end" {
+				logger.Noticef("Invalid I/O command %q", command.Command)
+				continue
+			}
+			logger.Debugf("Got message barrier (%q command)", command.Command)
 			break
 		}
 
