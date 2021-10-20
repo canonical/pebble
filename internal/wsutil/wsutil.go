@@ -83,7 +83,7 @@ func WebsocketRecvStream(w io.Writer, conn MessageReader) chan bool {
 
 	go func() {
 		recvLoop(w, conn)
-		ch <- true
+		close(ch)
 	}()
 
 	return ch
