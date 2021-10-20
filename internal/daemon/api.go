@@ -19,6 +19,7 @@ import (
 
 	"github.com/gorilla/mux"
 
+	"github.com/canonical/pebble/internal/overlord"
 	"github.com/canonical/pebble/internal/overlord/state"
 )
 
@@ -72,6 +73,14 @@ var api = []*Command{{
 	Path:   "/v1/logs",
 	UserOK: true,
 	GET:    v1GetLogs,
+}, {
+	Path:   "/v1/exec",
+	UserOK: true,
+	POST:   v1PostExec,
+}, {
+	Path:   "/v1/tasks/{task-id}/websocket/{websocket-id}",
+	UserOK: true,
+	GET:    v1GetTaskWebsocket,
 }}
 
 var (
@@ -79,6 +88,8 @@ var (
 	stateAllWarnings     = (*state.State).AllWarnings
 	statePendingWarnings = (*state.State).PendingWarnings
 	stateEnsureBefore    = (*state.State).EnsureBefore
+
+	overlordServiceManager = (*overlord.Overlord).ServiceManager
 
 	muxVars = mux.Vars
 )

@@ -109,18 +109,23 @@ func (wl *ucrednetListener) Accept() (net.Conn, error) {
 
 	var unet *ucrednet
 	if ucon, ok := con.(*net.UnixConn); ok {
-		f, err := ucon.File()
+		rawConn, err := ucon.SyscallConn()
 		if err != nil {
 			return nil, err
 		}
-		// File() is a dup(); needs closing
-		defer f.Close()
-
-		ucred, err := getUcred(int(f.Fd()), syscall.SOL_SOCKET, syscall.SO_PEERCRED)
+		var ucred *syscall.Ucred
+		var ucredErr error
+		// Call getUcred inside a Control() block to ensure fd is valid for
+		// the duration of the call, avoiding a race condition.
+		err = rawConn.Control(func(fd uintptr) {
+			ucred, ucredErr = getUcred(int(fd), syscall.SOL_SOCKET, syscall.SO_PEERCRED)
+		})
 		if err != nil {
 			return nil, err
 		}
-
+		if ucredErr != nil {
+			return nil, ucredErr
+		}
 		unet = &ucrednet{
 			pid:    ucred.Pid,
 			uid:    ucred.Uid,

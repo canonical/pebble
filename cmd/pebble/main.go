@@ -326,6 +326,10 @@ func main() {
 	}
 }
 
+// exitStatus can be used in panic(&exitStatus{code}) to cause Pebble's main
+// function to exit with a given exit code, for the rare cases when you want
+// to return an exit code other than 0 or 1, or when an error return is not
+// possible.
 type exitStatus struct {
 	code int
 }
@@ -339,7 +343,11 @@ func run() error {
 
 	_, clientConfig.Socket = getEnvPaths()
 
-	cli := client.New(&clientConfig)
+	cli, err := client.New(&clientConfig)
+	if err != nil {
+		return fmt.Errorf("cannot create client: %v", err)
+	}
+
 	parser := Parser(cli)
 	xtra, err := parser.Parse()
 	if err != nil {

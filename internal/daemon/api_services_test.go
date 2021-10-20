@@ -24,6 +24,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/canonical/pebble/internal/overlord/servstate"
 	"github.com/canonical/pebble/internal/overlord/state"
 
 	. "gopkg.in/check.v1"
@@ -160,7 +161,6 @@ func (s *apiSuite) TestServicesStop(c *C) {
 }
 
 func (s *apiSuite) TestServicesAutoStart(c *C) {
-
 	// Setup
 	writeTestLayer(s.pebbleDir, servicesLayer)
 	d := s.daemon(c)
@@ -229,4 +229,107 @@ func (s *apiSuite) TestServicesGet(c *C) {
 		map[string]interface{}{"startup": "disabled", "name": "test3", "current": "inactive"},
 		map[string]interface{}{"startup": "disabled", "name": "test4", "current": "inactive"},
 	})
+}
+
+func (s *apiSuite) TestServicesRestart(c *C) {
+	// Setup
+	writeTestLayer(s.pebbleDir, servicesLayer)
+	d := s.daemon(c)
+	st := d.overlord.State()
+
+	soon := 0
+	restore := FakeStateEnsureBefore(func(st *state.State, d time.Duration) {
+		soon++
+	})
+	defer restore()
+
+	servicesCmd := apiCmd("/v1/services")
+
+	payload := bytes.NewBufferString(`{"action": "restart", "services": ["test3", "test1"]}`)
+
+	// Execute
+	req, err := http.NewRequest("POST", "/v1/services", payload)
+	c.Assert(err, IsNil)
+	rsp := v1PostServices(servicesCmd, req, nil).(*resp)
+	rec := httptest.NewRecorder()
+	rsp.ServeHTTP(rec, req)
+
+	// Verify
+	c.Check(rec.Code, Equals, 202)
+	c.Check(rsp.Status, Equals, 202)
+	c.Check(rsp.Type, Equals, ResponseTypeAsync)
+	c.Check(rsp.Result, IsNil)
+
+	st.Lock()
+	defer st.Unlock()
+
+	chg := st.Change(rsp.Change)
+	c.Assert(chg, NotNil)
+	c.Assert(chg.Summary(), Equals, `Restart service "test3" and 2 more`)
+
+	c.Check(chg.Kind(), Equals, "restart")
+
+	tasks := chg.Tasks()
+	c.Assert(tasks, HasLen, 5)
+
+	// In the proper order, with dependencies.
+	c.Assert(tasks[0].Summary(), Equals, `Stop service "test1"`)
+	c.Assert(tasks[1].Summary(), Equals, `Stop service "test3"`)
+	c.Assert(tasks[2].Summary(), Equals, `Start service "test1"`)
+	c.Assert(tasks[3].Summary(), Equals, `Start service "test2"`)
+	c.Assert(tasks[4].Summary(), Equals, `Start service "test3"`)
+}
+
+func (s *apiSuite) TestServicesReplan(c *C) {
+	// Setup
+	writeTestLayer(s.pebbleDir, servicesLayer)
+	d := s.daemon(c)
+	st := d.overlord.State()
+
+	soon := 0
+	restore := FakeStateEnsureBefore(func(st *state.State, d time.Duration) {
+		soon++
+	})
+	defer restore()
+
+	servicesCmd := apiCmd("/v1/services")
+
+	payload := bytes.NewBufferString(`{"action": "replan"}`)
+
+	// Execute
+	req, err := http.NewRequest("POST", "/v1/services", payload)
+	c.Assert(err, IsNil)
+	rsp := v1PostServices(servicesCmd, req, nil).(*resp)
+	rec := httptest.NewRecorder()
+	rsp.ServeHTTP(rec, req)
+
+	// Verify
+	c.Check(rec.Code, Equals, 202)
+	c.Check(rsp.Status, Equals, 202)
+	c.Check(rsp.Type, Equals, ResponseTypeAsync)
+	c.Check(rsp.Result, IsNil)
+
+	st.Lock()
+	defer st.Unlock()
+
+	chg := st.Change(rsp.Change)
+	c.Check(chg, NotNil)
+	c.Check(chg.Kind(), Equals, "replan")
+	c.Check(chg.Summary(), Equals, `Replan service "test1" and 1 more`)
+	tasks := chg.Tasks()
+	c.Check(tasks, HasLen, 2)
+	c.Check(tasks[0].Summary(), Equals, `Start service "test1"`)
+	c.Check(tasks[1].Summary(), Equals, `Start service "test2"`)
+}
+
+type wrappedServiceManager struct {
+	servstate.ServiceManager
+	replan func() ([]string, []string, error)
+}
+
+func (w *wrappedServiceManager) Replan() ([]string, []string, error) {
+	if w.replan != nil {
+		return w.replan()
+	}
+	return w.ServiceManager.Replan()
 }

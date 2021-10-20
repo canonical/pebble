@@ -46,7 +46,7 @@ func (c *Change) Get(key string, value interface{}) error {
 	if raw == nil {
 		return ErrNoData
 	}
-	return json.Unmarshal([]byte(*raw), value)
+	return json.Unmarshal(*raw, value)
 }
 
 // A Task is an operation done to change the system's state.
@@ -60,6 +60,17 @@ type Task struct {
 
 	SpawnTime time.Time `json:"spawn-time,omitempty"`
 	ReadyTime time.Time `json:"ready-time,omitempty"`
+
+	Data map[string]*json.RawMessage
+}
+
+// Get unmarshals into value the kind-specific data with the provided key.
+func (t *Task) Get(key string, value interface{}) error {
+	raw := t.Data[key]
+	if raw == nil {
+		return ErrNoData
+	}
+	return json.Unmarshal(*raw, value)
 }
 
 type TaskProgress struct {

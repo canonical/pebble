@@ -53,7 +53,9 @@ type clientSuite struct {
 var _ = Suite(&clientSuite{})
 
 func (cs *clientSuite) SetUpTest(c *C) {
-	cs.cli = client.New(nil)
+	var err error
+	cs.cli, err = client.New(nil)
+	c.Assert(err, IsNil)
 	cs.cli.SetDoer(cs)
 	cs.err = nil
 	cs.req = nil
@@ -91,10 +93,9 @@ func (cs *clientSuite) Do(req *http.Request) (*http.Response, error) {
 	return rsp, cs.err
 }
 
-func (cs *clientSuite) TestNewPanics(c *C) {
-	c.Assert(func() {
-		client.New(&client.Config{BaseURL: ":"})
-	}, PanicMatches, `cannot parse server base URL: ":" \(parse ":": missing protocol scheme\)`)
+func (cs *clientSuite) TestNewBaseURLError(c *C) {
+	_, err := client.New(&client.Config{BaseURL: ":"})
+	c.Assert(err, ErrorMatches, `cannot parse base URL: parse ":": missing protocol scheme`)
 }
 
 func (cs *clientSuite) TestClientDoReportsErrors(c *C) {
@@ -155,7 +156,8 @@ func (cs *clientSuite) TestClientIntegration(c *C) {
 	srv.Start()
 	defer srv.Close()
 
-	cli := client.New(&client.Config{Socket: cs.socketPath})
+	cli, err := client.New(&client.Config{Socket: cs.socketPath})
+	c.Assert(err, IsNil)
 	si, err := cli.SysInfo()
 	c.Check(err, IsNil)
 	c.Check(si.Version, Equals, "1")
@@ -266,7 +268,8 @@ func (cs *clientSuite) TestParseError(c *C) {
 }
 
 func (cs *clientSuite) TestUserAgent(c *C) {
-	cli := client.New(&client.Config{UserAgent: "some-agent/9.87"})
+	cli, err := client.New(&client.Config{UserAgent: "some-agent/9.87"})
+	c.Assert(err, IsNil)
 	cli.SetDoer(cs)
 
 	var v string

@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sort"
 	"strings"
 
 	"github.com/canonical/pebble/internal/overlord/servstate"
@@ -34,7 +35,7 @@ type serviceInfo struct {
 func v1GetServices(c *Command, r *http.Request, _ *userState) Response {
 	names := strutil.CommaSeparatedList(r.URL.Query().Get("names"))
 
-	servmgr := c.d.overlord.ServiceManager()
+	servmgr := overlordServiceManager(c.d.overlord)
 	services, err := servmgr.Services(names)
 	if err != nil {
 		return statusInternalError("%v", err)
@@ -64,13 +65,17 @@ func v1PostServices(c *Command, r *http.Request, _ *userState) Response {
 	}
 
 	var err error
-	var services []string
-	servmgr := c.d.overlord.ServiceManager()
-	if payload.Action == "autostart" {
+	servmgr := overlordServiceManager(c.d.overlord)
+	switch payload.Action {
+	case "replan":
 		if len(payload.Services) != 0 {
 			return statusBadRequest("%s accepts no service names", payload.Action)
 		}
-		services, err = servmgr.DefaultServiceNames()
+	case "autostart":
+		if len(payload.Services) != 0 {
+			return statusBadRequest("%s accepts no service names", payload.Action)
+		}
+		services, err := servmgr.DefaultServiceNames()
 		if err != nil {
 			return statusInternalError("%v", err)
 		}
@@ -82,20 +87,9 @@ func v1PostServices(c *Command, r *http.Request, _ *userState) Response {
 			})
 		}
 		payload.Services = services
-	} else {
+	default:
 		if len(payload.Services) == 0 {
 			return statusBadRequest("no services to %s provided", payload.Action)
-		}
-		var err error
-		if payload.Action == "start" {
-			services, err = servmgr.StartOrder(payload.Services)
-		} else if payload.Action == "stop" {
-			services, err = servmgr.StopOrder(payload.Services)
-		} else {
-			err = fmt.Errorf("action %q is unsupported", payload.Action)
-		}
-		if err != nil {
-			return statusBadRequest("%v", err)
 		}
 	}
 
@@ -104,11 +98,78 @@ func v1PostServices(c *Command, r *http.Request, _ *userState) Response {
 	defer st.Unlock()
 
 	var taskSet *state.TaskSet
+	var services []string
 	switch payload.Action {
 	case "start", "autostart":
+		services, err = servmgr.StartOrder(payload.Services)
+		if err != nil {
+			break
+		}
 		taskSet, err = servstate.Start(st, services)
 	case "stop":
+		services, err = servmgr.StopOrder(payload.Services)
+		if err != nil {
+			break
+		}
 		taskSet, err = servstate.Stop(st, services)
+	case "restart":
+		services, err = servmgr.StopOrder(payload.Services)
+		if err != nil {
+			break
+		}
+		services = intersectOrdered(payload.Services, services)
+		var stopTasks *state.TaskSet
+		stopTasks, err = servstate.Stop(st, services)
+		if err != nil {
+			break
+		}
+		services, err = servmgr.StartOrder(payload.Services)
+		if err != nil {
+			break
+		}
+		var startTasks *state.TaskSet
+		startTasks, err = servstate.Start(st, services)
+		if err != nil {
+			break
+		}
+		startTasks.WaitAll(stopTasks)
+		taskSet = state.NewTaskSet()
+		taskSet.AddAll(stopTasks)
+		taskSet.AddAll(startTasks)
+	case "replan":
+		var stopNames, startNames []string
+		stopNames, startNames, err = servmgr.Replan()
+		if err != nil {
+			break
+		}
+		var stopTasks *state.TaskSet
+		stopTasks, err = servstate.Stop(st, stopNames)
+		if err != nil {
+			break
+		}
+		var startTasks *state.TaskSet
+		startTasks, err = servstate.Start(st, startNames)
+		if err != nil {
+			break
+		}
+		startTasks.WaitAll(stopTasks)
+		taskSet = state.NewTaskSet()
+		taskSet.AddAll(stopTasks)
+		taskSet.AddAll(startTasks)
+
+		// Populate a list of services affected by the replan for summary.
+		replanned := make(map[string]bool)
+		for _, v := range stopNames {
+			replanned[v] = true
+		}
+		for _, v := range startNames {
+			replanned[v] = true
+		}
+		for k := range replanned {
+			services = append(services, k)
+		}
+		sort.Strings(services)
+		payload.Services = services
 	default:
 		return statusBadRequest("action %q is unsupported", payload.Action)
 	}
@@ -137,4 +198,20 @@ func v1GetService(c *Command, r *http.Request, _ *userState) Response {
 
 func v1PostService(c *Command, r *http.Request, _ *userState) Response {
 	return statusBadRequest("not implemented")
+}
+
+// intersectOrdered returns the intersection of left and right where
+// the right's ordering is persisted in the resulting set.
+func intersectOrdered(left []string, orderedRight []string) []string {
+	m := map[string]bool{}
+	for _, v := range left {
+		m[v] = true
+	}
+	var out []string
+	for _, v := range orderedRight {
+		if m[v] {
+			out = append(out, v)
+		}
+	}
+	return out
 }

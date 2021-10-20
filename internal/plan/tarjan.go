@@ -38,8 +38,15 @@ func tarjanSort(successors map[string][]string) [][]string {
 		index:      make(map[string]int, len(successors)),
 	}
 
+	// Stabilize iteration through successors map to prevent
+	// disjointed components producing unstable output due to
+	// golang map randomized iteration.
+	stableIDs := make([]string, 0, len(successors))
 	for id := range successors {
-		id := string(string(id))
+		stableIDs = append(stableIDs, id)
+	}
+	sort.Strings(stableIDs)
+	for _, id := range stableIDs {
 		if _, seen := data.index[id]; !seen {
 			data.strongConnect(id)
 		}

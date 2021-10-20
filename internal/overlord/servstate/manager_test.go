@@ -89,6 +89,13 @@ services:
         group: nogroup
 `
 
+var planLayer3 = `
+services:
+    test2:
+        override: merge
+        command: /bin/sh -c "echo test2b | tee -a %s; sleep 300"
+`
+
 func (s *S) SetUpTest(c *C) {
 	s.BaseTest.SetUpTest(c)
 	s.st = state.New(nil)
@@ -183,6 +190,26 @@ func (s *S) TestStartStopServices(c *C) {
 	s.stopServices(c, services)
 }
 
+func (s *S) TestStartStopServicesIdempotency(c *C) {
+	services := []string{"test1", "test2"}
+	s.startServices(c, services)
+	if c.Failed() {
+		return
+	}
+
+	s.startServices(c, services)
+	if c.Failed() {
+		return
+	}
+
+	s.stopServices(c, services)
+	if c.Failed() {
+		return
+	}
+
+	s.stopServicesAlreadyDead(c, services)
+}
+
 func (s *S) stopServices(c *C, services []string) {
 	cmds := s.manager.CmdsForTest()
 	c.Check(cmds, HasLen, len(services))
@@ -213,6 +240,49 @@ func (s *S) stopServices(c *C, services []string) {
 	s.st.Lock()
 	c.Check(chg.Status(), Equals, state.DoneStatus, Commentf("Error: %v", chg.Err()))
 	s.st.Unlock()
+}
+
+func (s *S) stopServicesAlreadyDead(c *C, services []string) {
+	cmds := s.manager.CmdsForTest()
+	c.Check(cmds, HasLen, 0)
+
+	s.st.Lock()
+	// Stopping should happen in reverse order in practice. For now
+	// it's up to the call site to organize that.
+	ts, err := servstate.Stop(s.st, services)
+	c.Check(err, IsNil)
+	chg := s.st.NewChange("test", "Stop test")
+	chg.AddAll(ts)
+	s.st.Unlock()
+
+	// Twice due to the cross-task dependency.
+	s.ensure(c, 2)
+
+	c.Assert(cmds, HasLen, 0)
+
+	s.st.Lock()
+	c.Check(chg.Status(), Equals, state.DoneStatus, Commentf("Error: %v", chg.Err()))
+	s.st.Unlock()
+}
+
+func (s *S) TestReplanServices(c *C) {
+	services := []string{"test1", "test2"}
+	s.startServices(c, services)
+
+	if c.Failed() {
+		return
+	}
+
+	layer := parseLayer(c, 0, "layer3", planLayer3)
+	err := s.manager.CombineLayer(layer)
+	c.Assert(err, IsNil)
+
+	stops, starts, err := s.manager.Replan()
+	c.Assert(err, IsNil)
+	c.Check(stops, DeepEquals, []string{"test2"})
+	c.Check(starts, DeepEquals, []string{"test1", "test2"})
+
+	s.stopServices(c, services)
 }
 
 func (s *S) TestServiceLogs(c *C) {
