@@ -262,7 +262,7 @@ func (s *execSuite) TestOutputCombined(c *C) {
 	s.stdioWs.reads = append(s.stdioWs.reads,
 		read{websocket.BinaryMessage, "OUT\n"},
 		read{websocket.BinaryMessage, "ERR\n"},
-		read{websocket.TextMessage, ""},
+		read{websocket.TextMessage, `{"command":"end"}`},
 	)
 	opts := &client.ExecOptions{
 		Command: []string{"/bin/sh", "-c", "echo OUT; echo ERR >err"},
@@ -282,11 +282,11 @@ func (s *execSuite) TestOutputSplit(c *C) {
 	stderr := bytes.Buffer{}
 	s.stdioWs.reads = append(s.stdioWs.reads,
 		read{websocket.BinaryMessage, "OUT\n"},
-		read{websocket.TextMessage, ""},
+		read{websocket.TextMessage, `{"command":"end"}`},
 	)
 	s.stderrWs.reads = append(s.stderrWs.reads,
 		read{websocket.BinaryMessage, "ERR\n"},
-		read{websocket.TextMessage, ""},
+		read{websocket.TextMessage, `{"command":"end"}`},
 	)
 	opts := &client.ExecOptions{
 		Command: []string{"/bin/sh", "-c", "echo OUT; echo ERR >err"},
@@ -308,7 +308,7 @@ func (s *execSuite) TestStdinAndStdout(c *C) {
 	stdout := bytes.Buffer{}
 	s.stdioWs.reads = append(s.stdioWs.reads,
 		read{websocket.BinaryMessage, "FOO\nBAR BAZZ\n"},
-		read{websocket.TextMessage, ""},
+		read{websocket.TextMessage, `{"command":"end"}`},
 	)
 	opts := &client.ExecOptions{
 		Command: []string{"awk", "{ print toupper($0) }"},
@@ -324,7 +324,7 @@ func (s *execSuite) TestStdinAndStdout(c *C) {
 	c.Assert(stdout.String(), Equals, "FOO\nBAR BAZZ\n")
 	c.Assert(s.stdioWs.writes, DeepEquals, []write{
 		{websocket.BinaryMessage, "foo\nBar BAZZ\n"},
-		{websocket.TextMessage, ""},
+		{websocket.TextMessage, `{"command":"end"}`},
 	})
 }
 
