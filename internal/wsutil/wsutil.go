@@ -94,12 +94,12 @@ func recvLoop(w io.Writer, conn MessageReader) {
 		mt, r, err := conn.NextReader()
 		if err != nil {
 			logger.Debugf("Cannot get next reader: %v", err)
-			break
+			return
 		}
 
 		if mt == websocket.CloseMessage {
 			logger.Debugf("Got close message for reader")
-			break
+			return
 		}
 
 		if mt == websocket.TextMessage {
@@ -111,27 +111,29 @@ func recvLoop(w io.Writer, conn MessageReader) {
 				logger.Noticef("Cannot decode I/O command: %v", err)
 				continue
 			}
-			if command.Command != "end" {
+			switch command.Command {
+			case "end":
+				logger.Debugf(`Got message barrier ("end" command)`)
+				return
+			default:
 				logger.Noticef("Invalid I/O command %q", command.Command)
 				continue
 			}
-			logger.Debugf("Got message barrier (%q command)", command.Command)
-			break
 		}
 
 		buf, err := ioutil.ReadAll(r)
 		if err != nil {
 			logger.Debugf("Cannot read from message reader: %v", err)
-			break
+			return
 		}
 		n, err := w.Write(buf)
 		if n != len(buf) {
 			logger.Debugf("Wrote %d bytes instead of %d", n, len(buf))
-			break
+			return
 		}
 		if err != nil {
 			logger.Debugf("Cannot write buf: %v", err)
-			break
+			return
 		}
 	}
 }
