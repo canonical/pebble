@@ -90,6 +90,8 @@ func WebsocketRecvStream(w io.Writer, conn MessageReader) chan bool {
 }
 
 func recvLoop(w io.Writer, conn MessageReader) {
+	buf := make([]byte, 32*1024) // only allocate once per websocket, not once per loop
+
 	for {
 		mt, r, err := conn.NextReader()
 		if err != nil {
@@ -97,16 +99,22 @@ func recvLoop(w io.Writer, conn MessageReader) {
 			return
 		}
 
-		if mt == websocket.CloseMessage {
+		switch mt {
+		case websocket.CloseMessage:
 			logger.Debugf("Got close message for reader")
 			return
-		}
 
-		if mt == websocket.TextMessage {
+		case websocket.TextMessage:
+			// A TEXT message is an out-of-band "command".
+			payload, err := ioutil.ReadAll(r)
+			if err != nil {
+				logger.Debugf("Cannot read from message reader: %v", err)
+				return
+			}
 			var command struct {
 				Command string `json:"command"`
 			}
-			err := json.NewDecoder(r).Decode(&command)
+			err = json.Unmarshal(payload, &command)
 			if err != nil {
 				logger.Noticef("Cannot decode I/O command: %v", err)
 				continue
@@ -117,23 +125,18 @@ func recvLoop(w io.Writer, conn MessageReader) {
 				return
 			default:
 				logger.Noticef("Invalid I/O command %q", command.Command)
-				continue
 			}
-		}
 
-		buf, err := ioutil.ReadAll(r)
-		if err != nil {
-			logger.Debugf("Cannot read from message reader: %v", err)
-			return
-		}
-		n, err := w.Write(buf)
-		if n != len(buf) {
-			logger.Debugf("Wrote %d bytes instead of %d", n, len(buf))
-			return
-		}
-		if err != nil {
-			logger.Debugf("Cannot write buf: %v", err)
-			return
+		case websocket.BinaryMessage:
+			// A BINARY message is actual I/O data.
+			_, err := io.CopyBuffer(w, r, buf)
+			if err != nil {
+				logger.Debugf("Cannot copy message to writer: %v", err)
+				return
+			}
+
+		default:
+			logger.Noticef("Invalid message type %d", mt)
 		}
 	}
 }
