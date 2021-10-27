@@ -92,8 +92,12 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 	okay := time.After(okayWait)
 	select {
 	case <-okay:
+		// Service still running after okayWait, start goroutine to monitor it.
+		go m.monitor(service, active)
 		return nil
+
 	case <-active.done:
+		// Service died too quickly, return an error.
 		releasePlan, err := m.acquirePlan()
 		if err == nil {
 			if m.services[req.Name].cmd == active.cmd {
@@ -176,6 +180,97 @@ func startService(service *plan.Service, output io.Writer) (*activeService, erro
 			}
 		}()
 	}
+
+	return active, nil
+}
+
+func (m *ServiceManager) monitor(service *plan.Service, active *activeService) {
+	// TODO: need to prevent this if stopService was called
+	successful := false
+	for {
+		// If there is a running process, wait for it to stop.
+		if active != nil {
+			<-active.done
+		}
+
+		// TODO: wait backoff delay. if no more backoffs, exit
+
+		if active != nil {
+			successful = false
+			switch err := active.err.(type) {
+			case nil:
+				logger.Noticef("Service %q stopped unexpectedly with code 0", service.Name)
+				successful = true
+			case *exec.ExitError:
+				logger.Noticef("Service %q stopped unexpectedly with code %d", service.Name, err.ExitCode())
+			default:
+				// TODO: handle signals as 128+signalNum as per exec?
+				logger.Noticef("Service %q stopped unexpectedly: %v", service.Name, err)
+			}
+		}
+
+		// TODO: factor this out so logic is testable?
+		var err error
+		switch {
+		case !successful && service.OnFailure != "":
+			active, err = m.handleAction(service.Name, "on-failure", service.OnFailure)
+		case successful && service.OnSuccess != "":
+			active, err = m.handleAction(service.Name, "on-success", service.OnSuccess)
+		default:
+			onExit := service.OnExit
+			if onExit == "" {
+				onExit = plan.ActionRestart // default for "on-exit"
+			}
+			active, err = m.handleAction(service.Name, "on-exit", onExit)
+		}
+		if err != nil {
+			logger.Noticef("Cannot perform action, retrying: %v", err)
+			successful = false
+		} else if active == nil {
+			// TODO: mark service as inactive
+			break
+		}
+	}
+}
+
+func (m *ServiceManager) handleAction(serviceName, on string, action plan.ServiceAction) (*activeService, error) {
+	switch action {
+	case plan.ActionRestart:
+		logger.Noticef("Service %q %s set to %q, restarting service", serviceName, on, action)
+		return m.restart(serviceName)
+
+	case plan.ActionExitPebble:
+		logger.Noticef("Service %q %s set to %q, exiting Pebble daemon", serviceName, on, action)
+		os.Exit(1)      // TODO: more graceful exit
+		return nil, nil // satisfy compiler (need a return on all code paths)
+
+	case plan.ActionLog:
+		logger.Noticef("Service %q %s set to %q, not auto-restarting", serviceName, on, action)
+		return nil, nil
+
+	default:
+		return nil, fmt.Errorf("internal error: unexpected action %q", action)
+	}
+}
+
+func (m *ServiceManager) restart(serviceName string) (*activeService, error) {
+	// TODO: update backoff state, queue service to restart
+	releasePlan, err := m.acquirePlan()
+	if err != nil {
+		return nil, fmt.Errorf("cannot acquire plan lock: %w", err)
+	}
+	defer releasePlan()
+
+	service, ok := m.plan.Services[serviceName]
+	if !ok {
+		return nil, fmt.Errorf("cannot find service %q in plan", serviceName)
+	}
+
+	active, err := startService(service, m.serviceOutput)
+	if err != nil {
+		return nil, fmt.Errorf("cannot start service: %w", err)
+	}
+	m.services[serviceName] = active
 
 	return active, nil
 }
