@@ -92,7 +92,8 @@ func (cs *clientSuite) TestLogsN(c *check.C) {
 
 func (cs *clientSuite) TestFollowLogs(c *check.C) {
 	readsChan := make(chan string)
-	cli := client.New(nil)
+	cli, err := client.New(nil)
+	c.Assert(err, check.IsNil)
 	cli.SetDoer(doerFunc(func(req *http.Request) (*http.Response, error) {
 		c.Check(req.Method, check.Equals, "GET")
 		c.Check(req.URL.Path, check.Equals, "/v1/logs")
@@ -114,7 +115,7 @@ func (cs *clientSuite) TestFollowLogs(c *check.C) {
 	}()
 	out, writeLog := makeLogWriter()
 
-	err := cli.FollowLogs(context.Background(), &client.LogsOptions{
+	err = cli.FollowLogs(context.Background(), &client.LogsOptions{
 		WriteLog: writeLog,
 	})
 	c.Assert(err, check.IsNil)

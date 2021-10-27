@@ -168,7 +168,7 @@ type helpCategory struct {
 var helpCategories = []helpCategory{{
 	Label:       "Basics",
 	Description: "basic management",
-	Commands:    []string{"run", "autostart", "start", "stop", "services", "logs"},
+	Commands:    []string{"run", "autostart", "start", "stop", "exec", "services", "logs"},
 }, {
 	Label:       "Configuration",
 	Description: "manage configuration",

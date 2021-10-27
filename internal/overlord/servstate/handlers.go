@@ -76,9 +76,18 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 		return fmt.Errorf("cannot find service %q in plan", req.Name)
 	}
 
-	_, previous := m.services[req.Name]
-	if previous {
-		return fmt.Errorf("service %q was previously started", req.Name)
+	if service, previous := m.services[req.Name]; previous {
+		select {
+		case <-service.done:
+			// Service exited but not yet removed. It's safe to replace it
+			// because the removal will check if the cmd still matches.
+		default:
+			// Already started
+			m.state.Lock()
+			task.Logf("Service %q already started.", req.Name)
+			m.state.Unlock()
+			return nil
+		}
 	}
 
 	active, err := startService(service, m.serviceOutput)
@@ -138,7 +147,6 @@ func startService(service *plan.Service, output io.Writer) (*activeService, erro
 	for k, v := range service.Environment {
 		cmd.Env = append(cmd.Env, k+"="+v)
 	}
-
 	logBuffer := servicelog.NewRingBuffer(maxLogBytes)
 	var outputIterator servicelog.Iterator
 	if output != nil {
@@ -158,9 +166,10 @@ func startService(service *plan.Service, output io.Writer) (*activeService, erro
 	}
 
 	active := &activeService{
-		cmd:       cmd,
-		done:      make(chan struct{}),
-		logBuffer: logBuffer,
+		originalPlan: service.Copy(),
+		cmd:          cmd,
+		done:         make(chan struct{}),
+		logBuffer:    logBuffer,
 	}
 
 	go func() {
@@ -291,7 +300,11 @@ func (m *ServiceManager) doStop(task *state.Task, tomb *tomb.Tomb) error {
 
 	active, ok := m.services[req.Name]
 	if !ok {
-		return fmt.Errorf("service %q is not active", req.Name)
+		// Already stopped
+		m.state.Lock()
+		task.Logf("Service %q already stopped.", req.Name)
+		m.state.Unlock()
+		return nil
 	}
 	cmd := active.cmd
 

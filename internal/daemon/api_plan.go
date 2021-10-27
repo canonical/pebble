@@ -30,7 +30,7 @@ func v1GetPlan(c *Command, r *http.Request, _ *userState) Response {
 		return statusBadRequest("invalid format %q", format)
 	}
 
-	servmgr := c.d.overlord.ServiceManager()
+	servmgr := overlordServiceManager(c.d.overlord)
 	plan, err := servmgr.Plan()
 	if err != nil {
 		return statusInternalError("%v", err)
@@ -69,7 +69,7 @@ func v1PostLayers(c *Command, r *http.Request, _ *userState) Response {
 		return statusBadRequest("cannot parse layer YAML: %v", err)
 	}
 
-	servmgr := c.d.overlord.ServiceManager()
+	servmgr := overlordServiceManager(c.d.overlord)
 	if payload.Combine {
 		err = servmgr.CombineLayer(layer)
 	} else {

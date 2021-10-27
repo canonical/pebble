@@ -26,6 +26,10 @@ import (
 	"net/url"
 	"path"
 	"time"
+
+	"github.com/gorilla/websocket"
+
+	"github.com/canonical/pebble/internal/wsutil"
 )
 
 // decodeWithNumber decodes input data using json.Decoder, ensuring numbers are preserved
@@ -79,36 +83,70 @@ type Client struct {
 
 	warningCount     int
 	warningTimestamp time.Time
+
+	getWebsocket getWebsocketFunc
+}
+
+type getWebsocketFunc func(url string) (clientWebsocket, error)
+
+type clientWebsocket interface {
+	wsutil.MessageReader
+	wsutil.MessageWriter
+	io.Closer
+	jsonWriter
+}
+
+type jsonWriter interface {
+	WriteJSON(v interface{}) error
 }
 
 // New returns a new instance of Client
-func New(config *Config) *Client {
+func New(config *Config) (*Client, error) {
 	if config == nil {
 		config = &Config{}
 	}
 
-	// By default talk over a UNIX socket.
+	var client *Client
+	var transport *http.Transport
+
 	if config.BaseURL == "" {
-		transport := &http.Transport{Dial: unixDialer(config.Socket), DisableKeepAlives: config.DisableKeepAlive}
-		return &Client{
-			baseURL: url.URL{
-				Scheme: "http",
-				Host:   "localhost",
-			},
-			doer:      &http.Client{Transport: transport},
-			userAgent: config.UserAgent,
+		// By default talk over a UNIX socket.
+		transport = &http.Transport{Dial: unixDialer(config.Socket), DisableKeepAlives: config.DisableKeepAlive}
+		baseURL := url.URL{Scheme: "http", Host: "localhost"}
+		client = &Client{baseURL: baseURL}
+	} else {
+		// Otherwise talk regular HTTP-over-TCP.
+		baseURL, err := url.Parse(config.BaseURL)
+		if err != nil {
+			return nil, fmt.Errorf("cannot parse base URL: %v", err)
 		}
+		transport = &http.Transport{DisableKeepAlives: config.DisableKeepAlive}
+		client = &Client{baseURL: *baseURL}
 	}
 
-	baseURL, err := url.Parse(config.BaseURL)
-	if err != nil {
-		panic(fmt.Sprintf("cannot parse server base URL: %q (%v)", config.BaseURL, err))
+	client.doer = &http.Client{Transport: transport}
+	client.userAgent = config.UserAgent
+	client.getWebsocket = func(url string) (clientWebsocket, error) {
+		return getWebsocket(transport, url)
 	}
-	return &Client{
-		baseURL:   *baseURL,
-		doer:      &http.Client{Transport: &http.Transport{DisableKeepAlives: config.DisableKeepAlive}},
-		userAgent: config.UserAgent,
+
+	return client, nil
+}
+
+func (client *Client) getTaskWebsocket(taskID, websocketID string) (clientWebsocket, error) {
+	url := fmt.Sprintf("ws://localhost/v1/tasks/%s/websocket/%s", taskID, websocketID)
+	return client.getWebsocket(url)
+}
+
+func getWebsocket(transport *http.Transport, url string) (clientWebsocket, error) {
+	dialer := websocket.Dialer{
+		NetDial:          transport.Dial,
+		Proxy:            transport.Proxy,
+		TLSClientConfig:  transport.TLSClientConfig,
+		HandshakeTimeout: 5 * time.Second,
 	}
+	conn, _, err := dialer.Dial(url, nil)
+	return conn, err
 }
 
 func (client *Client) CloseIdleConnections() {

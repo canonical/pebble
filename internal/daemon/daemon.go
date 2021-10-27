@@ -15,6 +15,7 @@
 package daemon
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"io"
@@ -293,6 +294,15 @@ func (w *wrappedWriter) Flush() {
 	}
 }
 
+// Hijack is needed for websockets to take over an HTTP connection.
+func (w *wrappedWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	hijacker, ok := w.w.(http.Hijacker)
+	if !ok {
+		return nil, nil, fmt.Errorf("underlying writer does not implement Hijack")
+	}
+	return hijacker.Hijack()
+}
+
 func (w *wrappedWriter) status() int {
 	if w.s == 0 {
 		// If status was not explicitly written, HTTP 200 is implied.
@@ -313,7 +323,9 @@ func logit(handler http.Handler) http.Handler {
 		// don't log GET /v1/system-info to avoid it filling logs with noise
 		// when that endpoint is used as a kind of health check (Juju hits it
 		// every 5s, for example).
-		skipLog := r.Method == "GET" && (strings.HasPrefix(r.URL.Path, "/v1/changes/") || r.URL.Path == "/v1/system-info")
+		skipLog := r.Method == "GET" &&
+			(strings.HasPrefix(r.URL.Path, "/v1/changes/") && strings.Count(r.URL.Path, "/") == 3 ||
+				r.URL.Path == "/v1/system-info")
 		if !skipLog {
 			if strings.HasSuffix(r.RemoteAddr, ";") {
 				logger.Debugf("%s %s %s %s %d", r.RemoteAddr, r.Method, r.URL, t, ww.status())
@@ -350,7 +362,7 @@ func (d *Daemon) Init() error {
 	return nil
 }
 
-// SetDegradedMode puts the daemon into an degraded mode which will the
+// SetDegradedMode puts the daemon into a degraded mode which will the
 // error given in the "err" argument for commands that are not marked
 // as readonlyOK.
 //

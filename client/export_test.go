@@ -37,3 +37,15 @@ func (client *Client) FakeAsyncRequest() (changeId string, err error) {
 	}
 	return changeId, nil
 }
+
+func (client *Client) SetGetWebsocket(f getWebsocketFunc) {
+	client.getWebsocket = f
+}
+
+// WaitStdinDone waits for WebsocketSendStream to be finished calling
+// WriteMessage to avoid a race condition.
+func (p *ExecProcess) WaitStdinDone() {
+	<-p.stdinDone
+}
+
+type ClientWebsocket = clientWebsocket
