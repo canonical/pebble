@@ -19,7 +19,9 @@ type ServiceManager struct {
 
 	planLock sync.Mutex
 	plan     *plan.Plan
-	services map[string]*activeService
+
+	servicesLock sync.Mutex
+	services     map[string]*activeService
 
 	serviceOutput io.Writer
 }
@@ -30,6 +32,8 @@ type activeService struct {
 	err          error
 	done         chan struct{}
 	logBuffer    *servicelog.RingBuffer
+	backoffIndex int
+	stopping     bool
 }
 
 // LabelExists is the error returned by AppendLayer when a layer with that

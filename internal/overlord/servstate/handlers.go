@@ -60,7 +60,7 @@ var (
 func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 	releasePlan, err := m.acquirePlan()
 	if err != nil {
-		return err
+		return fmt.Errorf("cannot acquire plan lock: %w", err)
 	}
 	defer releasePlan()
 
@@ -76,56 +76,51 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 		return fmt.Errorf("cannot find service %q in plan", req.Name)
 	}
 
-	if service, previous := m.services[req.Name]; previous {
-		select {
-		case <-service.done:
-			// Service exited but not yet removed. It's safe to replace it
-			// because the removal will check if the cmd still matches.
-		default:
-			// Already started
-			m.state.Lock()
-			task.Logf("Service %q already started.", req.Name)
-			m.state.Unlock()
-			return nil
-		}
+	m.servicesLock.Lock()
+	_, ok = m.services[req.Name]
+	if ok {
+		m.servicesLock.Unlock()
+		m.state.Lock()
+		task.Logf("Service %q already started.", req.Name)
+		m.state.Unlock()
+		return nil
 	}
-
-	active, err := startService(service, m.serviceOutput)
-	if err != nil {
-		return err
+	active := &activeService{
+		originalPlan: service.Copy(),
 	}
 	m.services[req.Name] = active
+	m.servicesLock.Unlock()
+
+	err = m.startOnce(active, service, m.serviceOutput)
+	if err != nil {
+		return fmt.Errorf("cannot start service: %w", err)
+	}
 
 	releasePlan()
 
 	okay := time.After(okayWait)
 	select {
 	case <-okay:
-		// Service still running after okayWait, start goroutine to monitor it.
-		go m.monitor(service, active)
+		// Service still running after okayWait delay, start goroutine to monitor it.
+		go m.monitor(active, service)
 		return nil
 
 	case <-active.done:
 		// Service died too quickly, return an error.
-		releasePlan, err := m.acquirePlan()
-		if err == nil {
-			if m.services[req.Name].cmd == active.cmd {
-				delete(m.services, req.Name)
-			}
-			releasePlan()
-		}
+		m.servicesLock.Lock()
+		delete(m.services, req.Name)
+		m.servicesLock.Unlock()
 		return fmt.Errorf("cannot start service: exited quickly with code %d",
 			active.cmd.ProcessState.ExitCode())
 	}
-	// unreachable
 }
 
-func startService(service *plan.Service, output io.Writer) (*activeService, error) {
+func (m *ServiceManager) startOnce(active *activeService, service *plan.Service, output io.Writer) error {
 	args, err := shlex.Split(service.Command)
 	if err != nil {
 		// Shouldn't happen as it should have failed on parsing, but
 		// it does not hurt to double check and report.
-		return nil, fmt.Errorf("cannot parse service command: %s", err)
+		return fmt.Errorf("cannot parse service command: %s", err)
 	}
 	cmd := exec.Command(args[0], args[1:]...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
@@ -133,7 +128,7 @@ func startService(service *plan.Service, output io.Writer) (*activeService, erro
 	// Start as another user if specified in plan
 	uid, gid, err := osutil.NormalizeUidGid(service.UserID, service.GroupID, service.User, service.Group)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	if uid != nil && gid != nil {
 		setCmdCredential(cmd, &syscall.Credential{
@@ -162,22 +157,21 @@ func startService(service *plan.Service, output io.Writer) (*activeService, erro
 			_ = outputIterator.Close()
 		}
 		_ = logBuffer.Close()
-		return nil, fmt.Errorf("cannot start service: %v", err)
+		return fmt.Errorf("cannot start service: %v", err)
 	}
 
-	active := &activeService{
-		originalPlan: service.Copy(),
-		cmd:          cmd,
-		done:         make(chan struct{}),
-		logBuffer:    logBuffer,
-	}
+	active.cmd = cmd
+	active.done = make(chan struct{})
+	active.logBuffer = logBuffer
 
+	// Start a goroutine to wait for the process to finish.
 	go func() {
 		active.err = cmd.Wait()
 		_ = active.logBuffer.Close()
 		close(active.done)
 	}()
 
+	// Start a goroutine to read from the service's log buffer and copy to the output.
 	if output != nil {
 		go func() {
 			defer outputIterator.Close()
@@ -190,22 +184,43 @@ func startService(service *plan.Service, output io.Writer) (*activeService, erro
 		}()
 	}
 
-	return active, nil
+	return nil
 }
 
-func (m *ServiceManager) monitor(service *plan.Service, active *activeService) {
-	// TODO: need to prevent this if stopService was called
-	successful := false
-	for {
-		// If there is a running process, wait for it to stop.
-		if active != nil {
-			<-active.done
+func (m *ServiceManager) monitor(_ *activeService, service *plan.Service) {
+	logger.Debugf("Service %q monitor starting", service.Name)
+	defer logger.Debugf("Service %q monitor finished", service.Name)
+
+	var prevErr error
+	stopMonitor := false
+
+	for !stopMonitor {
+		m.servicesLock.Lock()
+		active, ok := m.services[service.Name]
+		m.servicesLock.Unlock()
+		if !ok || active.stopping {
+			// Service stopped or stopping, stop monitoring.
+			break
 		}
 
-		// TODO: wait backoff delay. if no more backoffs, exit
+		// If there is a running process, wait for it to stop.
+		if prevErr == nil {
+			<-active.done // TODO: cancel if doStop called
+		}
 
-		if active != nil {
-			successful = false
+		// Wait the next backoff duration. If there are no more backoff durations, stop.
+		if active.backoffIndex >= len(active.originalPlan.BackoffDurations) {
+			logger.Noticef("Service %q finished %d auto-restart backoffs", service.Name, active.backoffIndex)
+			break
+		}
+		backoff := active.originalPlan.BackoffDurations[active.backoffIndex]
+		active.backoffIndex++
+		logger.Noticef("Service %q waiting backoff delay %d/%d: %s",
+			service.Name, active.backoffIndex, len(active.originalPlan.BackoffDurations), backoff)
+		time.Sleep(backoff) // TODO: cancel if doStop called
+
+		successful := false
+		if prevErr == nil {
 			switch err := active.err.(type) {
 			case nil:
 				logger.Noticef("Service %q stopped unexpectedly with code 0", service.Name)
@@ -216,102 +231,99 @@ func (m *ServiceManager) monitor(service *plan.Service, active *activeService) {
 				// TODO: handle signals as 128+signalNum as per exec?
 				logger.Noticef("Service %q stopped unexpectedly: %v", service.Name, err)
 			}
+			active.done = nil
 		}
 
 		// TODO: factor this out so logic is testable?
-		var err error
 		switch {
 		case !successful && service.OnFailure != "":
-			active, err = m.handleAction(service.Name, "on-failure", service.OnFailure)
+			stopMonitor, prevErr = m.handleAction(active, service.Name, "on-failure", service.OnFailure)
 		case successful && service.OnSuccess != "":
-			active, err = m.handleAction(service.Name, "on-success", service.OnSuccess)
+			stopMonitor, prevErr = m.handleAction(active, service.Name, "on-success", service.OnSuccess)
 		default:
 			onExit := service.OnExit
 			if onExit == "" {
 				onExit = plan.ActionRestart // default for "on-exit"
 			}
-			active, err = m.handleAction(service.Name, "on-exit", onExit)
+			stopMonitor, prevErr = m.handleAction(active, service.Name, "on-exit", onExit)
 		}
-		if err != nil {
-			logger.Noticef("Cannot perform action, retrying: %v", err)
-			successful = false
-		} else if active == nil {
-			// TODO: mark service as inactive
-			break
+		if prevErr != nil {
+			logger.Noticef("Cannot perform action, retrying: %v", prevErr)
 		}
 	}
+
+	// TODO: should we remove it from services here?
+	m.servicesLock.Lock()
+	delete(m.services, service.Name)
+	m.servicesLock.Unlock()
 }
 
-func (m *ServiceManager) handleAction(serviceName, on string, action plan.ServiceAction) (*activeService, error) {
+func (m *ServiceManager) handleAction(active *activeService, serviceName, on string, action plan.ServiceAction) (stopMonitor bool, err error) {
 	switch action {
 	case plan.ActionRestart:
 		logger.Noticef("Service %q %s set to %q, restarting service", serviceName, on, action)
-		return m.restart(serviceName)
+		err := m.restart(active, serviceName)
+		if err != nil {
+			return false, fmt.Errorf("cannot restart service: %w", err)
+		}
+		return false, nil
 
 	case plan.ActionExitPebble:
 		logger.Noticef("Service %q %s set to %q, exiting Pebble daemon", serviceName, on, action)
-		os.Exit(1)      // TODO: more graceful exit
-		return nil, nil // satisfy compiler (need a return on all code paths)
+		os.Exit(1)        // TODO: more graceful exit
+		return false, nil // satisfy compiler (need a return on all code paths)
 
 	case plan.ActionLog:
 		logger.Noticef("Service %q %s set to %q, not auto-restarting", serviceName, on, action)
-		return nil, nil
+		return true, nil
 
 	default:
-		return nil, fmt.Errorf("internal error: unexpected action %q", action)
+		return false, fmt.Errorf("internal error: unexpected action %q", action)
 	}
 }
 
-func (m *ServiceManager) restart(serviceName string) (*activeService, error) {
-	// TODO: update backoff state, queue service to restart
+func (m *ServiceManager) restart(active *activeService, serviceName string) error {
 	releasePlan, err := m.acquirePlan()
 	if err != nil {
-		return nil, fmt.Errorf("cannot acquire plan lock: %w", err)
+		return fmt.Errorf("cannot acquire plan lock: %w", err)
 	}
 	defer releasePlan()
 
 	service, ok := m.plan.Services[serviceName]
 	if !ok {
-		return nil, fmt.Errorf("cannot find service %q in plan", serviceName)
+		return fmt.Errorf("cannot find service %q in plan", serviceName)
 	}
 
-	active, err := startService(service, m.serviceOutput)
+	err = m.startOnce(active, service, m.serviceOutput)
 	if err != nil {
-		return nil, fmt.Errorf("cannot start service: %w", err)
+		return fmt.Errorf("cannot start service: %w", err)
 	}
-	m.services[serviceName] = active
 
-	return active, nil
+	return nil
 }
 
 func (m *ServiceManager) doStop(task *state.Task, tomb *tomb.Tomb) error {
-	releasePlan, err := m.acquirePlan()
-	if err != nil {
-		return err
-	}
-	defer releasePlan()
-
 	m.state.Lock()
 	req, err := TaskServiceRequest(task)
 	m.state.Unlock()
 	if err != nil {
-		return err
+		return fmt.Errorf("cannot create service request: %w", err)
 	}
 
+	m.servicesLock.Lock()
 	active, ok := m.services[req.Name]
 	if !ok {
-		// Already stopped
+		m.servicesLock.Unlock()
 		m.state.Lock()
 		task.Logf("Service %q already stopped.", req.Name)
 		m.state.Unlock()
 		return nil
 	}
+	active.stopping = true
 	cmd := active.cmd
-
-	releasePlan()
+	m.servicesLock.Unlock()
 
 	syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM)
-	//cmd.Process.Signal(syscall.SIGTERM)
 
 	// TODO Make these timings configurable in the layer itself.
 	kill := time.After(killWait)
@@ -321,17 +333,14 @@ func (m *ServiceManager) doStop(task *state.Task, tomb *tomb.Tomb) error {
 		select {
 		case <-kill:
 			syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
-			//cmd.Process.Signal(syscall.SIGKILL)
+
 		case <-fail:
-			return fmt.Errorf("process still runs after SIGTERM and SIGKILL")
+			return fmt.Errorf("process still running after SIGTERM and SIGKILL")
+
 		case <-active.done:
-			releasePlan, err := m.acquirePlan()
-			if err == nil {
-				if m.services[req.Name].cmd == cmd {
-					delete(m.services, req.Name)
-				}
-				releasePlan()
-			}
+			m.servicesLock.Lock()
+			delete(m.services, req.Name)
+			m.servicesLock.Unlock()
 			return nil
 		}
 	}

@@ -387,7 +387,10 @@ func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 					Message: fmt.Sprintf("invalid backoff duration list %q", *service.Backoff),
 				}
 			}
+		} else {
+			service.BackoffDurations = []time.Duration{0, time.Second, 2 * time.Second} // TODO: better handling of default?
 		}
+
 		if service.StartTime != "" {
 			service.StartTimeDuration, err = time.ParseDuration(service.StartTime)
 			if err != nil {
@@ -395,6 +398,8 @@ func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 					Message: fmt.Sprintf("invalid backoff-reset duration %q", service.StartTime),
 				}
 			}
+		} else {
+			service.StartTimeDuration = 10 * time.Second // TODO: better handling of default?
 		}
 
 		service.Name = name
