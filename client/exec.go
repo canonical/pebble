@@ -47,12 +47,16 @@ type ExecOptions struct {
 	GroupID *int
 	Group   string
 
-	// True to ask the server to set up a pseudo-terminal (PTY) -- this allows
-	// full interactivity and window resizing. The default is no PTY, and just
-	// to use pipes for stdin/stdout/stderr.
-	UseTerminal bool
+	// True to ask the server to set up a pseudo-terminal (PTY) for stdout
+	// (this also allows window resizing). The default is no PTY, and just
+	// to use pipes for stdout/stderr.
+	Terminal bool
 
-	// Initial terminal width and height (only apply if UseTerminal is true).
+	// True to use the pseudo-terminal for stdin (only allowed when Terminal
+	// is true). The default is to use a pipe for stdin.
+	Interactive bool
+
+	// Initial terminal width and height (only apply if Terminal is true).
 	// If not specified, the Pebble server uses the target's default (usually
 	// 80x25). When using the "pebble exec" CLI, these are set to the host's
 	// terminal size automatically.
@@ -79,7 +83,8 @@ type execPayload struct {
 	User        string            `json:"user,omitempty"`
 	GroupID     *int              `json:"group-id,omitempty"`
 	Group       string            `json:"group,omitempty"`
-	UseTerminal bool              `json:"use-terminal,omitempty"`
+	Terminal    bool              `json:"terminal,omitempty"`
+	Interactive bool              `json:"interactive,omitempty"`
 	SplitStderr bool              `json:"split-stderr,omitempty"`
 	Width       int               `json:"width,omitempty"`
 	Height      int               `json:"height,omitempty"`
@@ -126,7 +131,8 @@ func (client *Client) Exec(opts *ExecOptions) (*ExecProcess, error) {
 		User:        opts.User,
 		GroupID:     opts.GroupID,
 		Group:       opts.Group,
-		UseTerminal: opts.UseTerminal,
+		Terminal:    opts.Terminal,
+		Interactive: opts.Interactive,
 		SplitStderr: opts.Stderr != nil,
 		Width:       opts.Width,
 		Height:      opts.Height,

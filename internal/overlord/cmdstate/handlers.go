@@ -51,7 +51,8 @@ type execution struct {
 	command     []string
 	environment map[string]string
 	timeout     time.Duration
-	useTerminal bool
+	terminal    bool
+	interactive bool
 	splitStderr bool
 	width       int
 	height      int
@@ -80,7 +81,8 @@ func (m *CommandManager) doExec(task *state.Task, tomb *tomb.Tomb) error {
 		command:          setup.Command,
 		environment:      setup.Environment,
 		timeout:          setup.Timeout,
-		useTerminal:      setup.UseTerminal,
+		terminal:         setup.Terminal,
+		interactive:      setup.Interactive,
 		splitStderr:      setup.SplitStderr,
 		width:            setup.Width,
 		height:           setup.Height,
@@ -200,7 +202,7 @@ func (e *execution) do(ctx context.Context, task *state.Task) error {
 	childDead := make(chan struct{})
 	var wgOutputSent sync.WaitGroup
 
-	if e.useTerminal {
+	if e.terminal {
 		var uid, gid int
 		if e.userID != nil && e.groupID != nil {
 			uid, gid = *e.userID, *e.groupID
@@ -339,7 +341,7 @@ func (e *execution) do(ctx context.Context, task *state.Task) error {
 	// process. The calling process must be a session leader and not have a
 	// controlling terminal already. This is important as allows Ctrl+C to
 	// work as expected for non-shell programs.
-	if e.useTerminal {
+	if e.terminal {
 		cmd.SysProcAttr.Setctty = true
 	}
 
@@ -480,7 +482,7 @@ func (e *execution) controlLoop(execID string, pidCh <-chan int, stop <-chan str
 		}
 
 		switch {
-		case command.Command == "resize" && e.useTerminal:
+		case command.Command == "resize" && e.terminal:
 			if command.Resize == nil {
 				logger.Noticef(`Exec %s: control command "resize" requires terminal width and height`, execID)
 				continue
