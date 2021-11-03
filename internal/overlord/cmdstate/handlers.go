@@ -218,9 +218,9 @@ func (e *execution) do(ctx context.Context, task *state.Task) error {
 		afterClosers = append(afterClosers, master)
 		beforeClosers = append(beforeClosers, slave)
 
-		stdin = slave
+		stdin = slave // stdin will be overwritten below if interactive is true
 		stdout = slave
-		stderr = slave // stderr will be overwritten below if splitStderr true
+		stderr = slave // stderr will be overwritten below if splitStderr is true
 
 		if e.width > 0 && e.height > 0 {
 			err = ptyutil.SetSize(int(master.Fd()), e.width, e.height)
@@ -232,7 +232,8 @@ func (e *execution) do(ctx context.Context, task *state.Task) error {
 
 		go e.controlLoop(task.ID(), pidCh, stopControl, int(master.Fd()))
 
-		// Start goroutine to mirror PTY I/O to "stdio" websocket.
+		// Start goroutine to mirror PTY output to "stdio" websocket.
+		ioConn := e.getWebsocket(wsStdio)
 		wgOutputSent.Add(1)
 		go func() {
 			defer wgOutputSent.Done()
@@ -240,17 +241,33 @@ func (e *execution) do(ctx context.Context, task *state.Task) error {
 			logger.Debugf("Exec %s: started mirroring websocket", task.ID())
 			defer logger.Debugf("Exec %s: finished mirroring websocket", task.ID())
 
-			ioConn := e.getWebsocket(wsStdio)
-			defer func() {
-				_ = ioConn.Close()
-			}()
-
-			readDone, writeDone := wsutil.WebsocketExecMirror(
-				ioConn, master, master, childDead, int(master.Fd()))
-			<-readDone
-			<-writeDone
+			wsutil.MirrorToWebsocket(ioConn, master, childDead, int(master.Fd()))
 		}()
+
+		if e.interactive {
+			// Interactive: start goroutine to receive stdin from "stdio"
+			// websocket and write to the PTY.
+			go func() {
+				<-wsutil.WebsocketRecvStream(master, ioConn)
+				master.Close()
+			}()
+		} else {
+			// Non-interactive: start goroutine to receive stdin from "stdio"
+			// websocket and write to cmd.Stdin pipe.
+			stdinReader, stdinWriter, err := os.Pipe()
+			if err != nil {
+				return err
+			}
+			stdin = stdinReader
+			afterClosers = append(afterClosers, stdinReader)
+			go func() {
+				<-wsutil.WebsocketRecvStream(stdinWriter, ioConn)
+				stdinWriter.Close()
+			}()
+		}
 	} else {
+		// No PTY/terminal, all I/O uses pipes.
+
 		go e.controlLoop(task.ID(), pidCh, stopControl, -1)
 
 		// Start goroutine to receive stdin from "stdio" websocket and write to
@@ -262,7 +279,6 @@ func (e *execution) do(ctx context.Context, task *state.Task) error {
 		}
 		stdin = stdinReader
 		afterClosers = append(afterClosers, stdinReader)
-		beforeClosers = append(beforeClosers, stdinWriter)
 		go func() {
 			<-wsutil.WebsocketRecvStream(stdinWriter, ioConn)
 			stdinWriter.Close()
@@ -274,7 +290,6 @@ func (e *execution) do(ctx context.Context, task *state.Task) error {
 		if err != nil {
 			return err
 		}
-		afterClosers = append(afterClosers, stdoutReader)
 		beforeClosers = append(beforeClosers, stdoutWriter)
 		stdout = stdoutWriter
 		stderr = stdoutWriter // stderr will be overwritten below if splitStderr true
@@ -293,7 +308,6 @@ func (e *execution) do(ctx context.Context, task *state.Task) error {
 		if err != nil {
 			return err
 		}
-		afterClosers = append(afterClosers, stderrReader)
 		beforeClosers = append(beforeClosers, stderrWriter)
 		stderr = stderrWriter
 		stderrConn := e.getWebsocket(wsStderr)
@@ -341,7 +355,7 @@ func (e *execution) do(ctx context.Context, task *state.Task) error {
 	// process. The calling process must be a session leader and not have a
 	// controlling terminal already. This is important as allows Ctrl+C to
 	// work as expected for non-shell programs.
-	if e.terminal {
+	if e.terminal && e.interactive {
 		cmd.SysProcAttr.Setctty = true
 	}
 

@@ -65,9 +65,6 @@ type execSetup struct {
 
 // Exec creates a task that will execute the command with the given arguments.
 func Exec(st *state.State, args *ExecArgs) (*state.Task, ExecMetadata, error) {
-	if args.Terminal && !args.Interactive { // TODO: implement this
-		return nil, ExecMetadata{}, errors.New("terminal with non-interactive mode not yet supported")
-	}
 	if args.Interactive && !args.Terminal {
 		return nil, ExecMetadata{}, errors.New("cannot use interactive mode without a terminal")
 	}
