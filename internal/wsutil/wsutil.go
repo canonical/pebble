@@ -41,12 +41,6 @@ type MessageReadWriter interface {
 	MessageWriter
 }
 
-func DefaultWriter(conn MessageReader, w io.WriteCloser, writeDone chan<- bool) {
-	recvLoop(w, conn)
-	writeDone <- true
-	w.Close()
-}
-
 var endCommandJSON = []byte(`{"command":"end"}`)
 
 func WebsocketSendStream(conn MessageWriter, r io.Reader, bufferSize int) chan bool {
