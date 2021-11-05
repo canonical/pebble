@@ -3,7 +3,6 @@ package servstate
 import (
 	"fmt"
 	"io"
-	"os/exec"
 	"sort"
 	"sync"
 
@@ -21,19 +20,9 @@ type ServiceManager struct {
 	plan     *plan.Plan
 
 	servicesLock sync.Mutex
-	services     map[string]*activeService
+	services     map[string]*service
 
 	serviceOutput io.Writer
-}
-
-type activeService struct {
-	originalPlan *plan.Service
-	cmd          *exec.Cmd
-	err          error
-	done         chan struct{}
-	logBuffer    *servicelog.RingBuffer
-	backoffIndex int
-	stopping     bool
 }
 
 // LabelExists is the error returned by AppendLayer when a layer with that
@@ -51,7 +40,7 @@ func NewManager(s *state.State, runner *state.TaskRunner, pebbleDir string, serv
 		state:         s,
 		runner:        runner,
 		pebbleDir:     pebbleDir,
-		services:      make(map[string]*activeService),
+		services:      make(map[string]*service),
 		serviceOutput: serviceOutput,
 	}
 
@@ -320,13 +309,13 @@ func (m *ServiceManager) ServiceLogs(services []string, last int) (map[string]se
 		if !requested[name] {
 			continue
 		}
-		if service == nil || service.logBuffer == nil {
+		if service == nil || service.logs == nil {
 			continue
 		}
 		if last >= 0 {
-			iterators[name] = service.logBuffer.HeadIterator(last)
+			iterators[name] = service.logs.HeadIterator(last)
 		} else {
-			iterators[name] = service.logBuffer.TailIterator()
+			iterators[name] = service.logs.TailIterator()
 		}
 	}
 
@@ -346,7 +335,7 @@ func (m *ServiceManager) Replan() ([]string, []string, error) {
 	var stop []string
 	for name, activeService := range m.services {
 		if currentService, ok := m.plan.Services[name]; ok &&
-			currentService.Equal(activeService.originalPlan) {
+			currentService.Equal(activeService.config) {
 			continue
 		}
 		needsRestart[name] = true
