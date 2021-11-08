@@ -96,8 +96,8 @@ type service struct {
 	state        serviceState
 	config       *plan.Service
 	logs         *servicelog.RingBuffer
-	startedErr   chan error
-	stoppedErr   chan error
+	started      chan *int
+	stopped      chan error
 	cmd          *exec.Cmd
 	backoffIndex int
 }
@@ -131,11 +131,11 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 		return nil
 	}
 	s := &service{
-		manager:    m,
-		state:      stateInitial,
-		config:     config.Copy(),
-		logs:       servicelog.NewRingBuffer(maxLogBytes),
-		startedErr: make(chan error, 1),
+		manager: m,
+		state:   stateInitial,
+		config:  config.Copy(),
+		logs:    servicelog.NewRingBuffer(maxLogBytes),
+		started: make(chan *int, 1),
 	}
 	m.services[config.Name] = s
 	m.servicesLock.Unlock()
@@ -149,10 +149,10 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 	// Wait for a small amount of time, and if the service hasn't exited,
 	// consider it a success.
 	select {
-	case err := <-s.startedErr:
-		if err != nil {
+	case exitCode := <-s.started:
+		if exitCode != nil {
 			m.removeService(config.Name)
-			return fmt.Errorf("cannot start service: exited quickly with code %d", exitCode(err))
+			return fmt.Errorf("cannot start service: exited quickly with code %d", *exitCode)
 		}
 		// Started successfully (ran for small amount of time without exiting).
 		return nil
@@ -171,15 +171,6 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 	}
 }
 
-func exitCode(err error) int {
-	switch err := err.(type) {
-	case *exec.ExitError:
-		return err.ExitCode()
-	default:
-		return -1
-	}
-}
-
 func (m *ServiceManager) doStop(task *state.Task, tomb *tomb.Tomb) error {
 	m.state.Lock()
 	request, err := TaskServiceRequest(task)
@@ -190,7 +181,7 @@ func (m *ServiceManager) doStop(task *state.Task, tomb *tomb.Tomb) error {
 
 	m.servicesLock.Lock()
 	s, ok := m.services[request.Name]
-	if !ok {
+	if !ok || s.state == stateStopped {
 		m.servicesLock.Unlock()
 		m.state.Lock()
 		task.Logf("Service %q already stopped.", request.Name)
@@ -208,7 +199,7 @@ func (m *ServiceManager) doStop(task *state.Task, tomb *tomb.Tomb) error {
 
 	for {
 		select {
-		case err := <-s.stoppedErr:
+		case err := <-s.stopped:
 			if err != nil {
 				return fmt.Errorf("cannot stop service: %w", err)
 			}
@@ -246,6 +237,7 @@ func (s *service) start() error {
 			return err
 		}
 		s.transition(stateStarting)
+		time.AfterFunc(okayWait, func() { _ = s.okayWaitElapsed() })
 
 	case stateBackoffWait, stateStopped:
 		err := s.startHelper()
@@ -331,17 +323,18 @@ func (s *service) startHelper() error {
 	return nil
 }
 
-func (s *service) okayTimeElapsed() error {
+func (s *service) okayWaitElapsed() error {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
 	switch s.state {
 	case stateStarting:
-		s.startedErr <- nil // still running fine after short duration, no error
+		s.started <- nil // still running fine after short duration, no error
 		s.transition(stateRunning)
 
 	default:
-		return fmt.Errorf("okayTimeElapsed invalid in state %q", s.state)
+		// Ignore if timer elapsed in any other state.
+		return nil
 	}
 	return nil
 }
@@ -352,7 +345,8 @@ func (s *service) exited(err error) error {
 
 	switch s.state {
 	case stateStarting:
-		s.startedErr <- err
+		exitCode := s.cmd.ProcessState.ExitCode()
+		s.started <- &exitCode
 
 	case stateRunning:
 		logger.Noticef("Service %q stopped unexpectedly with code %d", s.config.Name, s.cmd.ProcessState.ExitCode())
@@ -381,20 +375,14 @@ func (s *service) exited(err error) error {
 			if duration == 0 {
 				return s.backoffWaitElapsed()
 			}
-			time.AfterFunc(duration, func() {
-				_ = s.backoffWaitElapsed()
-			})
+			time.AfterFunc(duration, func() { _ = s.backoffWaitElapsed() })
 
 		default:
 			return fmt.Errorf("internal error: unexpected action %q", action)
 		}
 
-	case stateTerminating:
-		s.stoppedErr <- nil
-		s.transition(stateStopped)
-
-	case stateKilling:
-		s.stoppedErr <- nil
+	case stateTerminating, stateKilling:
+		s.stopped <- nil
 		s.transition(stateStopped)
 
 	default:
@@ -429,7 +417,7 @@ func (s *service) stop() error {
 		if err != nil {
 			logger.Noticef("cannot send SIGTERM to process: %v", err)
 		}
-		s.stoppedErr = make(chan error)
+		s.stopped = make(chan error)
 		s.transition(stateTerminating)
 		time.AfterFunc(killWait, func() { _ = s.terminateTimeElapsed() })
 
@@ -489,7 +477,7 @@ func (s *service) killTimeElapsed() error {
 
 	switch s.state {
 	case stateKilling:
-		s.stoppedErr <- fmt.Errorf("process still running after SIGTERM and SIGKILL")
+		s.stopped <- fmt.Errorf("process still running after SIGTERM and SIGKILL")
 
 	default:
 		// Ignore if timer elapsed in any other state.

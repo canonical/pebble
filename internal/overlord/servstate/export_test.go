@@ -20,13 +20,17 @@ import (
 	"time"
 )
 
-func (m *ServiceManager) CmdsForTest() map[string]*exec.Cmd {
+func (m *ServiceManager) RunningCmds() map[string]*exec.Cmd {
 	m.servicesLock.Lock()
 	defer m.servicesLock.Unlock()
 
 	cmds := make(map[string]*exec.Cmd)
-	for name, active := range m.services {
-		cmds[name] = active.cmd
+	for name, s := range m.services {
+		s.lock.Lock()
+		if s.state == stateRunning {
+			cmds[name] = s.cmd
+		}
+		s.lock.Unlock()
 	}
 	return cmds
 }

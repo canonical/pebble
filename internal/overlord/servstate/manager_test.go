@@ -32,6 +32,7 @@ import (
 	. "gopkg.in/check.v1"
 	"gopkg.in/yaml.v3"
 
+	"github.com/canonical/pebble/internal/logger"
 	"github.com/canonical/pebble/internal/overlord/servstate"
 	"github.com/canonical/pebble/internal/overlord/state"
 	"github.com/canonical/pebble/internal/plan"
@@ -128,6 +129,8 @@ func (s *S) SetUpTest(c *C) {
 	s.AddCleanup(restore)
 	restore = servstate.FakeKillWait(100*time.Millisecond, 1000*time.Millisecond)
 	s.AddCleanup(restore)
+
+	logger.SetLogger(logger.New(os.Stderr, "[test] "))
 }
 
 func (s *S) TearDownTest(c *C) {
@@ -175,7 +178,7 @@ func (s *S) startServices(c *C, services []string) {
 
 	s.assertLog(c, ".*test1\n.*test2\n")
 
-	cmds := s.manager.CmdsForTest()
+	cmds := s.manager.RunningCmds()
 	c.Check(cmds, HasLen, len(services))
 }
 
@@ -211,7 +214,7 @@ func (s *S) TestStartStopServicesIdempotency(c *C) {
 }
 
 func (s *S) stopServices(c *C, services []string) {
-	cmds := s.manager.CmdsForTest()
+	cmds := s.manager.RunningCmds()
 	c.Check(cmds, HasLen, len(services))
 
 	s.st.Lock()
@@ -243,7 +246,7 @@ func (s *S) stopServices(c *C, services []string) {
 }
 
 func (s *S) stopServicesAlreadyDead(c *C, services []string) {
-	cmds := s.manager.CmdsForTest()
+	cmds := s.manager.RunningCmds()
 	c.Check(cmds, HasLen, 0)
 
 	s.st.Lock()

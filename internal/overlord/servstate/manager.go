@@ -216,6 +216,9 @@ func (m *ServiceManager) Services(names []string) ([]*ServiceInfo, error) {
 	}
 	defer releasePlan()
 
+	m.servicesLock.Lock()
+	defer m.servicesLock.Unlock()
+
 	requested := make(map[string]bool, len(names))
 	for _, name := range names {
 		requested[name] = true
@@ -223,7 +226,7 @@ func (m *ServiceManager) Services(names []string) ([]*ServiceInfo, error) {
 
 	var services []*ServiceInfo
 	matchNames := len(names) > 0
-	for name, service := range m.plan.Services {
+	for name, config := range m.plan.Services {
 		if matchNames && !requested[name] {
 			continue
 		}
@@ -232,11 +235,18 @@ func (m *ServiceManager) Services(names []string) ([]*ServiceInfo, error) {
 			Startup: StartupDisabled,
 			Current: StatusInactive,
 		}
-		if service.Startup == plan.StartupEnabled {
+		if config.Startup == plan.StartupEnabled {
 			info.Startup = StartupEnabled
 		}
-		if _, ok := m.services[name]; ok {
-			info.Current = StatusActive
+		if s, ok := m.services[name]; ok {
+			s.lock.Lock()
+			switch s.state {
+			case stateInitial, stateStarting, stateRunning:
+				info.Current = StatusActive
+			case stateBackoffWait:
+				info.Current = StatusError
+			}
+			s.lock.Unlock()
 		}
 		services = append(services, info)
 	}
@@ -331,20 +341,25 @@ func (m *ServiceManager) Replan() ([]string, []string, error) {
 	}
 	defer releasePlan()
 
+	m.servicesLock.Lock()
+	defer m.servicesLock.Unlock()
+
 	needsRestart := make(map[string]bool)
 	var stop []string
-	for name, activeService := range m.services {
-		if currentService, ok := m.plan.Services[name]; ok &&
-			currentService.Equal(activeService.config) {
+	for name, s := range m.services {
+		s.lock.Lock()
+		if config, ok := m.plan.Services[name]; ok && config.Equal(s.config) {
+			s.lock.Unlock()
 			continue
 		}
+		s.lock.Unlock()
 		needsRestart[name] = true
 		stop = append(stop, name)
 	}
 
 	var start []string
-	for name, service := range m.plan.Services {
-		if needsRestart[name] || service.Startup == plan.StartupEnabled {
+	for name, config := range m.plan.Services {
+		if needsRestart[name] || config.Startup == plan.StartupEnabled {
 			start = append(start, name)
 		}
 	}
