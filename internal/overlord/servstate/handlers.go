@@ -19,8 +19,6 @@ import (
 	"github.com/canonical/pebble/internal/strutil/shlex"
 )
 
-// TODO: add start-time handling (reset backoff counter after start-time / 10s)
-
 // TaskServiceRequest extracts the *ServiceRequest that was associated
 // with the provided task when it was created, reflecting details of
 // the operation requested.
