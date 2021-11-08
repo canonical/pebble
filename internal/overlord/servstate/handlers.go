@@ -100,6 +100,7 @@ type service struct {
 	stopped      chan error
 	cmd          *exec.Cmd
 	backoffIndex int
+	resetTimer   *time.Timer
 }
 
 func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
@@ -122,22 +123,27 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 	releasePlan()
 
 	m.servicesLock.Lock()
-	_, ok = m.services[config.Name]
-	if ok {
+	s := m.services[config.Name]
+	if s != nil && s.state != stateStopped {
 		m.servicesLock.Unlock()
 		m.state.Lock()
 		task.Logf("Service %q already started.", config.Name)
 		m.state.Unlock()
 		return nil
 	}
-	s := &service{
-		manager: m,
-		state:   stateInitial,
-		config:  config.Copy(),
-		logs:    servicelog.NewRingBuffer(maxLogBytes),
-		started: make(chan *int, 1),
+	if s == nil {
+		s = &service{
+			manager: m,
+			state:   stateInitial,
+			config:  config.Copy(),
+			logs:    servicelog.NewRingBuffer(maxLogBytes),
+		}
+		m.services[config.Name] = s
+	} else {
+		s.backoffIndex = 0
+		s.transition(stateInitial)
 	}
-	m.services[config.Name] = s
+	s.started = make(chan *int, 1)
 	m.servicesLock.Unlock()
 
 	err = s.start()
@@ -180,8 +186,8 @@ func (m *ServiceManager) doStop(task *state.Task, tomb *tomb.Tomb) error {
 	}
 
 	m.servicesLock.Lock()
-	s, ok := m.services[request.Name]
-	if !ok || s.state == stateStopped {
+	s := m.services[request.Name]
+	if s == nil || s.state == stateStopped {
 		m.servicesLock.Unlock()
 		m.state.Lock()
 		task.Logf("Service %q already stopped.", request.Name)
@@ -298,8 +304,8 @@ func (s *service) startHelper() error {
 		_ = s.logs.Close()
 		return fmt.Errorf("cannot start service: %v", err)
 	}
-	startTime, _ := s.config.ParseStartTime()
-	time.AfterFunc(startTime, func() { _ = s.startTimeElapsed() })
+	startTime, _ := s.config.ParseStartTime() // ignore error; it's already been validated
+	s.resetTimer = time.AfterFunc(startTime, func() { _ = s.startTimeElapsed() })
 
 	// Start a goroutine to wait for the process to finish.
 	done := make(chan struct{})
@@ -345,6 +351,10 @@ func (s *service) exited(err error) error {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
+	if s.resetTimer != nil {
+		s.resetTimer.Stop()
+	}
+
 	switch s.state {
 	case stateStarting:
 		exitCode := s.cmd.ProcessState.ExitCode()
@@ -363,7 +373,7 @@ func (s *service) exited(err error) error {
 			os.Exit(1)
 
 		case plan.ActionRestart:
-			backoffDurations, _ := s.config.ParseBackoff() // it's already been validated
+			backoffDurations, _ := s.config.ParseBackoff() // ignore error; it's already been validated
 			if s.backoffIndex >= len(backoffDurations) {
 				// No more backoffs, transition to stopped state.
 				logger.Noticef("Service %q %s action is %q: no more backoffs", s.config.Name, onType, action)
@@ -375,9 +385,6 @@ func (s *service) exited(err error) error {
 				s.config.Name, onType, action, duration, s.backoffIndex+1, len(backoffDurations))
 			s.backoffIndex++
 			s.transition(stateBackoffWait)
-			if duration == 0 {
-				return s.backoffWaitElapsed()
-			}
 			time.AfterFunc(duration, func() { _ = s.backoffWaitElapsed() })
 
 		default:
