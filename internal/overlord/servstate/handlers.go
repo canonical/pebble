@@ -300,6 +300,8 @@ func (s *service) startHelper() error {
 		_ = s.logs.Close()
 		return fmt.Errorf("cannot start service: %v", err)
 	}
+	startTime, _ := s.config.ParseStartTime()
+	time.AfterFunc(startTime, func() { _ = s.startTimeElapsed() })
 
 	// Start a goroutine to wait for the process to finish.
 	done := make(chan struct{})
@@ -481,6 +483,22 @@ func (s *service) killTimeElapsed() error {
 	switch s.state {
 	case stateKilling:
 		s.stopped <- fmt.Errorf("process still running after SIGTERM and SIGKILL")
+
+	default:
+		// Ignore if timer elapsed in any other state.
+		return nil
+	}
+	return nil
+}
+
+func (s *service) startTimeElapsed() error {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
+	switch s.state {
+	case stateRunning:
+		logger.Debugf("Start time elapsed, resetting backoff counter (was %d)", s.backoffIndex)
+		s.backoffIndex = 0
 
 	default:
 		// Ignore if timer elapsed in any other state.
