@@ -19,6 +19,8 @@ import (
 	"github.com/canonical/pebble/internal/strutil/shlex"
 )
 
+// TODO: add start-time handling (reset backoff counter after start-time / 10s)
+
 // TaskServiceRequest extracts the *ServiceRequest that was associated
 // with the provided task when it was created, reflecting details of
 // the operation requested.
@@ -361,15 +363,16 @@ func (s *service) exited(err error) error {
 			os.Exit(1)
 
 		case plan.ActionRestart:
-			if s.backoffIndex >= len(s.config.BackoffDurations) {
+			backoffDurations, _ := s.config.ParseBackoff() // it's already been validated
+			if s.backoffIndex >= len(backoffDurations) {
 				// No more backoffs, transition to stopped state.
 				logger.Noticef("Service %q %s action is %q: no more backoffs", s.config.Name, onType, action)
 				s.transition(stateStopped)
 				return nil
 			}
-			duration := s.config.BackoffDurations[s.backoffIndex]
+			duration := backoffDurations[s.backoffIndex]
 			logger.Noticef("Service %q %s action is %q, waiting %s before restart (backoff %d/%d)",
-				s.config.Name, onType, action, duration, s.backoffIndex+1, len(s.config.BackoffDurations))
+				s.config.Name, onType, action, duration, s.backoffIndex+1, len(backoffDurations))
 			s.backoffIndex++
 			s.transition(stateBackoffWait)
 			if duration == 0 {

@@ -361,6 +361,7 @@ func (m *ServiceManager) Replan() ([]string, []string, error) {
 	for name, config := range m.plan.Services {
 		if needsRestart[name] || config.Startup == plan.StartupEnabled {
 			start = append(start, name)
+			// TODO: need to copy config again?
 		}
 	}
 

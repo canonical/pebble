@@ -62,10 +62,6 @@ type Service struct {
 	OnSuccess   ServiceAction     `yaml:"on-success,omitempty"`
 	Backoff     *[]string         `yaml:"backoff,omitempty"`
 	StartTime   string            `yaml:"start-time,omitempty"`
-
-	// Parsed versions of fields above that require special handling
-	BackoffDurations  []time.Duration `yaml:"-"`
-	StartTimeDuration time.Duration   `yaml:"-"`
 }
 
 // Copy returns a deep copy of the service.
@@ -97,6 +93,44 @@ func (s *Service) Equal(other *Service) bool {
 		return true
 	}
 	return reflect.DeepEqual(s, other)
+}
+
+// ParseBackoff returns the parsed version of the backoff duration list, or
+// the default if it's not specified.
+func (s *Service) ParseBackoff() ([]time.Duration, error) {
+	if s.Backoff == nil {
+		return []time.Duration{
+			0,
+			10 * time.Second,
+			20 * time.Second,
+			40 * time.Second,
+			80 * time.Second,
+			160 * time.Second,
+			320 * time.Second,
+		}, nil
+	}
+	return parseDurationList(*s.Backoff)
+}
+
+func parseDurationList(strings []string) ([]time.Duration, error) {
+	durations := make([]time.Duration, len(strings))
+	for i, s := range strings {
+		d, err := time.ParseDuration(s)
+		if err != nil {
+			return nil, err
+		}
+		durations[i] = d
+	}
+	return durations, nil
+}
+
+// ParseStartTime returns the parsed version of the start time duration, or
+// the default if it's not specified.
+func (s *Service) ParseStartTime() (time.Duration, error) {
+	if s.StartTime == "" {
+		return 10 * time.Second, nil
+	}
+	return time.ParseDuration(s.StartTime)
 }
 
 type ServiceStartup string
@@ -197,7 +231,6 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 						}
 						backoff = append(backoff, *service.Backoff...)
 						copy.Backoff = &backoff
-						copy.BackoffDurations = append(copy.BackoffDurations, service.BackoffDurations...)
 					}
 					if service.StartTime != "" {
 						copy.StartTime = service.StartTime
@@ -380,26 +413,18 @@ func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 			return nil, &FormatError{Message: fmt.Sprintf("invalid on-success action %q", service.OnSuccess)}
 		}
 
-		if service.Backoff != nil {
-			service.BackoffDurations, err = parseDurationList(*service.Backoff)
-			if err != nil {
-				return nil, &FormatError{
-					Message: fmt.Sprintf("invalid backoff duration list %q", *service.Backoff),
-				}
+		// Validate fields that are specified as strings and require parsing.
+		_, err := service.ParseBackoff()
+		if err != nil {
+			return nil, &FormatError{
+				Message: fmt.Sprintf("invalid backoff duration list %q", *service.Backoff),
 			}
-		} else {
-			service.BackoffDurations = []time.Duration{0, time.Second, 2 * time.Second} // TODO: better handling of default?
 		}
-
-		if service.StartTime != "" {
-			service.StartTimeDuration, err = time.ParseDuration(service.StartTime)
-			if err != nil {
-				return nil, &FormatError{
-					Message: fmt.Sprintf("invalid backoff-reset duration %q", service.StartTime),
-				}
+		_, err = service.ParseStartTime()
+		if err != nil {
+			return nil, &FormatError{
+				Message: fmt.Sprintf("invalid start-time duration %q", service.StartTime),
 			}
-		} else {
-			service.StartTimeDuration = 10 * time.Second // TODO: better handling of default?
 		}
 
 		service.Name = name
@@ -418,18 +443,6 @@ func validServiceAction(action ServiceAction) bool {
 	default:
 		return false
 	}
-}
-
-func parseDurationList(strings []string) ([]time.Duration, error) {
-	durations := make([]time.Duration, len(strings))
-	for i, s := range strings {
-		d, err := time.ParseDuration(s)
-		if err != nil {
-			return nil, err
-		}
-		durations[i] = d
-	}
-	return durations, nil
 }
 
 var fnameExp = regexp.MustCompile("^([0-9]{3})-([a-z](?:-?[a-z0-9]){2,}).yaml$")
