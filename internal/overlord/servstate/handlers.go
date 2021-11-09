@@ -57,6 +57,7 @@ var (
 	maxLogBytes = 100 * 1024
 )
 
+// serviceState represents the state a service's state machine is in.
 type serviceState int
 
 const (
@@ -90,6 +91,7 @@ func (s serviceState) String() string {
 	}
 }
 
+// service holds the information for a service under our control.
 type service struct {
 	lock         sync.Mutex
 	manager      *ServiceManager
@@ -146,6 +148,7 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 	s.started = make(chan *int, 1)
 	m.servicesLock.Unlock()
 
+	// Start the service and transition to stateStarting.
 	err = s.start()
 	if err != nil {
 		m.removeService(config.Name)
@@ -227,18 +230,20 @@ func (m *ServiceManager) removeService(name string) {
 	m.servicesLock.Unlock()
 }
 
+// transition changes the service's state machine to the given state.
 func (s *service) transition(state serviceState) {
 	logger.Debugf("Service %q transitioning to state %q", s.config.Name, state)
 	s.state = state
 }
 
+// start is called to transition from the initial state and start the service.
 func (s *service) start() error {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
 	switch s.state {
 	case stateInitial:
-		err := s.startHelper()
+		err := s.startInternal()
 		if err != nil {
 			return err
 		}
@@ -251,7 +256,10 @@ func (s *service) start() error {
 	return nil
 }
 
-func (s *service) startHelper() error {
+// startInternal is an internal helper used to actually start (or restart) the
+// command. It assumes the caller has ensures the service is in a valid state,
+// and it sets s.cmd and other relevant fields.
+func (s *service) startInternal() error {
 	args, err := shlex.Split(s.config.Command)
 	if err != nil {
 		// Shouldn't happen as it should have failed on parsing, but
@@ -324,6 +332,8 @@ func (s *service) startHelper() error {
 	return nil
 }
 
+// okayWaitElapsed is called when the okay-wait timer has elapsed (and the
+// service is considered running successfully).
 func (s *service) okayWaitElapsed() error {
 	s.lock.Lock()
 	defer s.lock.Unlock()
@@ -340,6 +350,7 @@ func (s *service) okayWaitElapsed() error {
 	return nil
 }
 
+// exited is called when the service's process exits.
 func (s *service) exited(err error) error {
 	s.lock.Lock()
 	defer s.lock.Unlock()
@@ -363,7 +374,7 @@ func (s *service) exited(err error) error {
 
 		case plan.ActionExitPebble:
 			logger.Noticef("Service %q %s action is %q, exiting server", s.config.Name, onType, action)
-			os.Exit(1)
+			os.Exit(1) // TODO: figure out more graceful way to tell the daemon to exit
 
 		case plan.ActionRestart:
 			backoffDurations, _ := s.config.ParseBackoff() // ignore error; it's already been validated
@@ -394,6 +405,7 @@ func (s *service) exited(err error) error {
 	return nil
 }
 
+// getAction returns the correct action to perform from the plan, given an exit error.
 func (s *service) getAction(err error) (action plan.ServiceAction, onType string) {
 	switch {
 	case err != nil && s.config.OnFailure != "":
@@ -409,6 +421,7 @@ func (s *service) getAction(err error) (action plan.ServiceAction, onType string
 	}
 }
 
+// stop is called to stop a running (and backing off) service.
 func (s *service) stop() error {
 	s.lock.Lock()
 	defer s.lock.Unlock()
@@ -433,6 +446,8 @@ func (s *service) stop() error {
 	return nil
 }
 
+// backoffWaitElapsed is called when the current backoff's timer has elapsed,
+// to restart the service.
 func (s *service) backoffWaitElapsed() error {
 	s.lock.Lock()
 	defer s.lock.Unlock()
@@ -440,7 +455,7 @@ func (s *service) backoffWaitElapsed() error {
 	switch s.state {
 	case stateBackoffWait:
 		logger.Debugf("Restarting service %q", s.config.Name)
-		err := s.startHelper()
+		err := s.startInternal()
 		if err != nil {
 			return err
 		}
@@ -453,6 +468,8 @@ func (s *service) backoffWaitElapsed() error {
 	return nil
 }
 
+// terminateTimeElapsed is called after stop sends SIGTERM and the service
+// still hasn't exited (and we then send SIGTERM).
 func (s *service) terminateTimeElapsed() error {
 	s.lock.Lock()
 	defer s.lock.Unlock()
@@ -474,6 +491,8 @@ func (s *service) terminateTimeElapsed() error {
 	return nil
 }
 
+// killTimeElapsed is called some time after we've send SIGKILL to acknowledge
+// to stop's caller that we can't seem to stop the service.
 func (s *service) killTimeElapsed() error {
 	s.lock.Lock()
 	defer s.lock.Unlock()
@@ -489,6 +508,8 @@ func (s *service) killTimeElapsed() error {
 	return nil
 }
 
+// startTimeElapsed is called after the plan's start-time has elapsed,
+// indicating the service is running successfully.
 func (s *service) startTimeElapsed() error {
 	s.lock.Lock()
 	defer s.lock.Unlock()
