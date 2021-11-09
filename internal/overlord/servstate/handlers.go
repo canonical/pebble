@@ -245,13 +245,6 @@ func (s *service) start() error {
 		s.transition(stateStarting)
 		time.AfterFunc(okayWait, func() { _ = s.okayWaitElapsed() })
 
-	case stateBackoffWait, stateStopped:
-		err := s.startHelper()
-		if err != nil {
-			return err
-		}
-		s.transition(stateRunning)
-
 	default:
 		return fmt.Errorf("start invalid in state %q", s.state)
 	}
