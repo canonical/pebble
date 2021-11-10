@@ -63,7 +63,7 @@ func (cmd *cmdServices) Execute(args []string) error {
 
 	for _, svc := range services {
 		fmt.Fprintf(w, "%s\t%s\t%s\t", svc.Name, svc.Startup, svc.Current)
-		if svc.NumBackoffs > 0 && svc.Current == client.StatusError {
+		if svc.NumBackoffs > 0 {
 			fmt.Fprintf(w, "%d/%d", svc.BackoffNum, svc.NumBackoffs)
 		} else {
 			fmt.Fprintf(w, "-")
