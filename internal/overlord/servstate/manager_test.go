@@ -23,6 +23,7 @@ import (
 	"os/exec"
 	"os/user"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"sync"
 	"syscall"
@@ -723,4 +724,116 @@ type writerFunc func([]byte) (int, error)
 
 func (f writerFunc) Write(p []byte) (int, error) {
 	return f(p)
+}
+
+func (s *S) TestStartedOkay(c *C) {
+	advance := s.manager.FakeTime()
+
+	go advance(shortOkayWait, 2) // 2 timers are: start-time and okay-wait
+	chg := s.startServices(c, []string{"test2"}, 1)
+
+	s.st.Lock()
+	c.Check(chg.Status(), Equals, state.DoneStatus)
+	s.st.Unlock()
+
+	svc := s.serviceByName(c, "test2")
+	c.Assert(svc.Current, Equals, servstate.StatusActive)
+}
+
+func (s *S) TestAutoRestart(c *C) {
+	layer := parseLayer(c, 0, "restart", `
+services:
+    test2:
+        override: merge
+        backoff: [0, 1s, 2s]
+`)
+	err := s.manager.AppendLayer(layer)
+	c.Assert(err, IsNil)
+
+	advance := s.manager.FakeTime()
+
+	go advance(shortOkayWait, 2) // 2 timers are: start-time, okay-wait
+	chg := s.startServices(c, []string{"test2"}, 1)
+
+	s.st.Lock()
+	c.Check(chg.Status(), Equals, state.DoneStatus)
+	s.st.Unlock()
+
+	svc := s.serviceByName(c, "test2")
+	c.Assert(svc.Current, Equals, servstate.StatusActive)
+
+	// Send signal to process to terminate it early
+	err = s.manager.SendSignal([]string{"test2"}, "SIGTERM")
+	c.Assert(err, IsNil)
+
+	svc = s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
+		return svc.Current == servstate.StatusError && svc.BackoffNum == 1
+	})
+	c.Assert(svc.NumBackoffs, Equals, 3)
+	s.logBufferMut.Lock()
+	c.Assert(s.logBuffer.String(), Matches, `2.* \[test2\] test2\n`)
+	s.logBufferMut.Unlock()
+
+	svc = s.serviceByName(c, "test2")
+	c.Assert(svc.Current, Equals, servstate.StatusError)
+
+	advance(0, 3) // 3 timers are: start-time, okay-time, backoff
+
+	err = s.manager.SendSignal([]string{"test2"}, "SIGTERM")
+	c.Assert(err, IsNil)
+
+	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
+		s.logBufferMut.Lock()
+		defer s.logBufferMut.Unlock()
+		b, err := regexp.MatchString(`2.* \[test2\] test2\n2.* \[test2\] test2\n`, s.logBuffer.String())
+		c.Assert(err, IsNil)
+		return b && svc.BackoffNum == 2
+	})
+
+	svc = s.serviceByName(c, "test2")
+	c.Assert(svc.Current, Equals, servstate.StatusError)
+
+	advance(time.Second, 4) // 4 timers are: start-time, okay-time, backoff, backoff
+
+	err = s.manager.SendSignal([]string{"test2"}, "SIGTERM")
+	c.Assert(err, IsNil)
+
+	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
+		s.logBufferMut.Lock()
+		defer s.logBufferMut.Unlock()
+		b, err := regexp.MatchString(`2.* \[test2\] test2\n2.* \[test2\] test2\n2.* \[test2\] test2\n`, s.logBuffer.String())
+		c.Assert(err, IsNil)
+		return b && svc.BackoffNum == 3
+	})
+
+	svc = s.serviceByName(c, "test2")
+	c.Assert(svc.Current, Equals, servstate.StatusError)
+
+	advance(2*time.Second, 5) // 4 timers are: start-time, okay-time, backoff, backoff, backoff
+
+	err = s.manager.SendSignal([]string{"test2"}, "SIGTERM")
+	c.Assert(err, IsNil)
+
+	svc = s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
+		return svc.Current == servstate.StatusInactive
+	})
+	c.Assert(svc.BackoffNum, Equals, 3)
+	c.Assert(svc.NumBackoffs, Equals, 3)
+
+	s.logBufferMut.Lock()
+	c.Assert(s.logBuffer.String(), Matches, `2.* \[test2\] test2\n2.* \[test2\] test2\n2.* \[test2\] test2\n2.* \[test2\] test2\n`)
+	s.logBufferMut.Unlock()
+}
+
+func (s *S) waitUntilService(c *C, service string, f func(svc *servstate.ServiceInfo) bool) *servstate.ServiceInfo {
+	for i := 0; i < 10; i++ {
+		svc := s.serviceByName(c, service)
+		if f(svc) {
+			return svc
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	c.Fatalf("failed waiting for service after 10 retries")
+	return nil
+
 }

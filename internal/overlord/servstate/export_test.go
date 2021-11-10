@@ -86,6 +86,7 @@ func (t *fakeTime) AfterFunc(d time.Duration, f func()) timer {
 	return &fakeTimer{time: t, index: index}
 }
 
+// TODO: make it remove stopped timers so nTimers is only the new ones
 func (t *fakeTime) Advance(d time.Duration, nTimers int) {
 	// First wait for at least nTimers timer funcs to be added.
 	for i := 0; i < 100; i++ {
