@@ -161,7 +161,7 @@ func (s *S) ensure(c *C, n int) {
 	}
 }
 
-func (s *S) startServices(c *C, services []string) {
+func (s *S) startServices(c *C, services []string, nEnsure int) *state.Change {
 	s.st.Lock()
 	ts, err := servstate.Start(s.st, services)
 	c.Check(err, IsNil)
@@ -169,9 +169,14 @@ func (s *S) startServices(c *C, services []string) {
 	chg.AddAll(ts)
 	s.st.Unlock()
 
-	// Twice due to the cross-task dependency.
-	s.ensure(c, 2)
+	// Num to ensure may be more than one due to the cross-task dependencies.
+	s.ensure(c, nEnsure)
 
+	return chg
+}
+
+func (s *S) startTestServices(c *C) {
+	chg := s.startServices(c, []string{"test1", "test2"}, 2)
 	s.st.Lock()
 	c.Check(chg.Status(), Equals, state.DoneStatus, Commentf("Error: %v", chg.Err()))
 	s.st.Unlock()
@@ -179,48 +184,46 @@ func (s *S) startServices(c *C, services []string) {
 	s.assertLog(c, ".*test1\n.*test2\n")
 
 	cmds := s.manager.RunningCmds()
-	c.Check(cmds, HasLen, len(services))
+	c.Check(cmds, HasLen, 2)
 }
 
 func (s *S) TestStartStopServices(c *C) {
-	services := []string{"test1", "test2"}
-	s.startServices(c, services)
+	s.startTestServices(c)
 
 	if c.Failed() {
 		return
 	}
 
-	s.stopServices(c, services)
+	s.stopTestServices(c)
 }
 
 func (s *S) TestStartStopServicesIdempotency(c *C) {
-	services := []string{"test1", "test2"}
-	s.startServices(c, services)
+	s.startTestServices(c)
 	if c.Failed() {
 		return
 	}
 
-	s.startServices(c, services)
+	s.startTestServices(c)
 	if c.Failed() {
 		return
 	}
 
-	s.stopServices(c, services)
+	s.stopTestServices(c)
 	if c.Failed() {
 		return
 	}
 
-	s.stopServicesAlreadyDead(c, services)
+	s.stopTestServicesAlreadyDead(c)
 }
 
-func (s *S) stopServices(c *C, services []string) {
+func (s *S) stopTestServices(c *C) {
 	cmds := s.manager.RunningCmds()
-	c.Check(cmds, HasLen, len(services))
+	c.Check(cmds, HasLen, 2)
 
 	s.st.Lock()
 	// Stopping should happen in reverse order in practice. For now
 	// it's up to the call site to organize that.
-	ts, err := servstate.Stop(s.st, services)
+	ts, err := servstate.Stop(s.st, []string{"test1", "test2"})
 	c.Check(err, IsNil)
 	chg := s.st.NewChange("test", "Stop test")
 	chg.AddAll(ts)
@@ -230,7 +233,7 @@ func (s *S) stopServices(c *C, services []string) {
 	s.ensure(c, 2)
 
 	// Ensure processes are gone indeed.
-	c.Assert(cmds, HasLen, len(services))
+	c.Assert(cmds, HasLen, 2)
 	for name, cmd := range cmds {
 		err := cmd.Process.Signal(syscall.Signal(0))
 		if err == nil {
@@ -245,14 +248,14 @@ func (s *S) stopServices(c *C, services []string) {
 	s.st.Unlock()
 }
 
-func (s *S) stopServicesAlreadyDead(c *C, services []string) {
+func (s *S) stopTestServicesAlreadyDead(c *C) {
 	cmds := s.manager.RunningCmds()
 	c.Check(cmds, HasLen, 0)
 
 	s.st.Lock()
 	// Stopping should happen in reverse order in practice. For now
 	// it's up to the call site to organize that.
-	ts, err := servstate.Stop(s.st, services)
+	ts, err := servstate.Stop(s.st, []string{"test1", "test2"})
 	c.Check(err, IsNil)
 	chg := s.st.NewChange("test", "Stop test")
 	chg.AddAll(ts)
@@ -269,8 +272,7 @@ func (s *S) stopServicesAlreadyDead(c *C, services []string) {
 }
 
 func (s *S) TestReplanServices(c *C) {
-	services := []string{"test1", "test2"}
-	s.startServices(c, services)
+	s.startTestServices(c)
 
 	if c.Failed() {
 		return
@@ -285,24 +287,23 @@ func (s *S) TestReplanServices(c *C) {
 	c.Check(stops, DeepEquals, []string{"test2"})
 	c.Check(starts, DeepEquals, []string{"test1", "test2"})
 
-	s.stopServices(c, services)
+	s.stopTestServices(c)
 }
 
 func (s *S) TestServiceLogs(c *C) {
-	services := []string{"test1", "test2"}
 	outputs := map[string]string{
 		"test1": `\d+-\d+-\d+T\d+:\d+:\d+\.\d+Z \[test1\] test1\n`,
 		"test2": `\d+-\d+-\d+T\d+:\d+:\d+\.\d+Z \[test2\] test2\n`,
 	}
-	s.startServices(c, services)
+	s.startTestServices(c)
 
 	if c.Failed() {
 		return
 	}
 
-	iterators, err := s.manager.ServiceLogs(services, -1)
+	iterators, err := s.manager.ServiceLogs([]string{"test1", "test2"}, -1)
 	c.Assert(err, IsNil)
-	c.Assert(iterators, HasLen, len(services))
+	c.Assert(iterators, HasLen, 2)
 
 	for serviceName, it := range iterators {
 		buf := &bytes.Buffer{}
@@ -317,18 +318,11 @@ func (s *S) TestServiceLogs(c *C) {
 		c.Assert(err, IsNil)
 	}
 
-	s.stopServices(c, services)
+	s.stopTestServices(c)
 }
 
 func (s *S) TestStartBadCommand(c *C) {
-	s.st.Lock()
-	ts, err := servstate.Start(s.st, []string{"test3"})
-	c.Check(err, IsNil)
-	chg := s.st.NewChange("test", "Start test")
-	chg.AddAll(ts)
-	s.st.Unlock()
-
-	s.ensure(c, 1)
+	chg := s.startServices(c, []string{"test3"}, 1)
 
 	s.st.Lock()
 	c.Check(chg.Status(), Equals, state.ErrorStatus)
@@ -355,14 +349,7 @@ func (s *S) TestUserGroupFails(c *C) {
 	})
 	defer restore()
 
-	s.st.Lock()
-	ts, err := servstate.Start(s.st, []string{"test5"})
-	c.Check(err, IsNil)
-	chg := s.st.NewChange("test", "Start test")
-	chg.AddAll(ts)
-	s.st.Unlock()
-
-	s.ensure(c, 1)
+	chg := s.startServices(c, []string{"test5"}, 1)
 
 	s.st.Lock()
 	c.Check(chg.Status(), Equals, state.ErrorStatus)
@@ -393,14 +380,7 @@ func (s *S) serviceByName(c *C, name string) *servstate.ServiceInfo {
 func (s *S) TestStartFastExitCommand(c *C) {
 	servstate.FakeOkayWait(3000 * time.Millisecond)
 
-	s.st.Lock()
-	ts, err := servstate.Start(s.st, []string{"test4"})
-	c.Check(err, IsNil)
-	chg := s.st.NewChange("test", "Start test")
-	chg.AddAll(ts)
-	s.st.Unlock()
-
-	s.ensure(c, 1)
+	chg := s.startServices(c, []string{"test4"}, 1)
 
 	s.st.Lock()
 	c.Check(chg.Status(), Equals, state.ErrorStatus)
@@ -674,13 +654,7 @@ func (s *S) TestServices(c *C) {
 	})
 
 	// Start a service and ensure it's marked active
-	s.st.Lock()
-	ts, err := servstate.Start(s.st, []string{"test2"})
-	c.Check(err, IsNil)
-	chg := s.st.NewChange("test", "Start test")
-	chg.AddAll(ts)
-	s.st.Unlock()
-	s.ensure(c, 1)
+	s.startServices(c, []string{"test2"}, 1)
 
 	services, err = s.manager.Services(nil)
 	c.Assert(err, IsNil)
@@ -705,15 +679,11 @@ services:
 
 func (s *S) TestEnvironment(c *C) {
 	// Setup new state and add "envtest" layer
-	st := state.New(nil)
 	dir := c.MkDir()
-	runner := state.NewTaskRunner(st)
-	manager, err := servstate.NewManager(st, runner, dir, nil)
-	c.Assert(err, IsNil)
 	logPath := filepath.Join(dir, "log.txt")
 	layerYAML := fmt.Sprintf(planLayerEnv, logPath)
 	layer := parseLayer(c, 0, "envlayer", layerYAML)
-	err = manager.AppendLayer(layer)
+	err := s.manager.AppendLayer(layer)
 	c.Assert(err, IsNil)
 
 	// Set environment variables in the current process to ensure we're
@@ -725,17 +695,10 @@ func (s *S) TestEnvironment(c *C) {
 	c.Assert(err, IsNil)
 
 	// Start "envtest" service
-	st.Lock()
-	ts, err := servstate.Start(st, []string{"envtest"})
-	c.Check(err, IsNil)
-	chg := st.NewChange("envtest", "Start envtest")
-	chg.AddAll(ts)
-	st.Unlock()
-	runner.Ensure()
-	runner.Wait()
-	st.Lock()
+	chg := s.startServices(c, []string{"envtest"}, 1)
+	s.st.Lock()
 	c.Check(chg.Status(), Equals, state.DoneStatus, Commentf("Error: %v", chg.Err()))
-	st.Unlock()
+	s.st.Unlock()
 
 	// Ensure it read environment variables correctly
 	data, err := ioutil.ReadFile(logPath)
