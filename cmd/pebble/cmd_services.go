@@ -59,10 +59,16 @@ func (cmd *cmdServices) Execute(args []string) error {
 	w := tabWriter()
 	defer w.Flush()
 
-	fmt.Fprintln(w, "Service\tStartup\tCurrent")
+	fmt.Fprintln(w, "Service\tStartup\tCurrent\tBackoff")
 
 	for _, svc := range services {
-		fmt.Fprintf(w, "%s\t%s\t%s\n", svc.Name, svc.Startup, svc.Current)
+		fmt.Fprintf(w, "%s\t%s\t%s\t", svc.Name, svc.Startup, svc.Current)
+		if svc.NumBackoffs > 0 && svc.Current == client.StatusError {
+			fmt.Fprintf(w, "%d/%d", svc.BackoffNum, svc.NumBackoffs)
+		} else {
+			fmt.Fprintf(w, "-")
+		}
+		fmt.Fprintf(w, "\n")
 	}
 	return nil
 }

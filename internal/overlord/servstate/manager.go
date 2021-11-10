@@ -44,7 +44,7 @@ func NewManager(s *state.State, runner *state.TaskRunner, pebbleDir string, serv
 		pebbleDir:     pebbleDir,
 		services:      make(map[string]*service),
 		serviceOutput: serviceOutput,
-		time:          &realTimeFuncs{},
+		time:          &realTime{},
 	}
 
 	runner.AddHandler("start", manager.doStart, nil)
@@ -190,9 +190,11 @@ func (m *ServiceManager) Ensure() error {
 }
 
 type ServiceInfo struct {
-	Name    string
-	Startup ServiceStartup
-	Current ServiceStatus
+	Name        string
+	Startup     ServiceStartup
+	Current     ServiceStatus
+	BackoffNum  int
+	NumBackoffs int
 }
 
 type ServiceStartup string
@@ -241,6 +243,8 @@ func (m *ServiceManager) Services(names []string) ([]*ServiceInfo, error) {
 		if config.Startup == plan.StartupEnabled {
 			info.Startup = StartupEnabled
 		}
+		backoffs, _ := config.ParseBackoff()
+		info.NumBackoffs = len(backoffs)
 		if s, ok := m.services[name]; ok {
 			s.lock.Lock()
 			switch s.state {
@@ -249,6 +253,7 @@ func (m *ServiceManager) Services(names []string) ([]*ServiceInfo, error) {
 			case stateBackoffWait:
 				info.Current = StatusError
 			}
+			info.BackoffNum = s.backoffIndex
 			s.lock.Unlock()
 		}
 		services = append(services, info)
@@ -393,10 +398,10 @@ type timeFuncs interface {
 	AfterFunc(d time.Duration, f func()) timer
 }
 
-// realTimeFuncs is an implementation of timeFuncs using the real time package.
-type realTimeFuncs struct{}
+// realTime is an implementation of timeFuncs using the real time package.
+type realTime struct{}
 
-func (*realTimeFuncs) AfterFunc(d time.Duration, f func()) timer {
+func (*realTime) AfterFunc(d time.Duration, f func()) timer {
 	t := time.AfterFunc(d, f)
 	return &realTimer{t}
 }

@@ -80,9 +80,11 @@ type ServicesOptions struct {
 
 // ServiceInfo holds status information for a single service.
 type ServiceInfo struct {
-	Name    string         `json:"name"` // service name
-	Startup ServiceStartup `json:"startup"`
-	Current ServiceStatus  `json:"current"`
+	Name        string         `json:"name"` // service name
+	Startup     ServiceStartup `json:"startup"`
+	Current     ServiceStatus  `json:"current"`
+	BackoffNum  int            `json:"backoff-num"`
+	NumBackoffs int            `json:"num-backoffs"`
 }
 
 // ServiceStartup defines the different startup modes for a service.
