@@ -39,6 +39,12 @@ import (
 	"github.com/canonical/pebble/internal/testutil"
 )
 
+const (
+	shortOkayWait = 100 * time.Millisecond
+	shortKillWait = 100 * time.Millisecond
+	shortFailWait = 1000 * time.Millisecond
+)
+
 func Test(t *testing.T) { TestingT(t) }
 
 type S struct {
@@ -97,6 +103,10 @@ services:
         command: /bin/sh -c "echo test2b | tee -a %s; sleep 300"
 `
 
+func (s *S) SetUpSuite(c *C) {
+	logger.SetLogger(logger.New(os.Stderr, "[test] "))
+}
+
 func (s *S) SetUpTest(c *C) {
 	s.BaseTest.SetUpTest(c)
 	s.st = state.New(nil)
@@ -125,12 +135,10 @@ func (s *S) SetUpTest(c *C) {
 	c.Assert(err, IsNil)
 	s.manager = manager
 
-	restore := servstate.FakeOkayWait(100 * time.Millisecond)
+	restore := servstate.FakeOkayWait(shortOkayWait)
 	s.AddCleanup(restore)
-	restore = servstate.FakeKillWait(100*time.Millisecond, 1000*time.Millisecond)
+	restore = servstate.FakeKillWait(shortKillWait, shortFailWait)
 	s.AddCleanup(restore)
-
-	logger.SetLogger(logger.New(os.Stderr, "[test] "))
 }
 
 func (s *S) TearDownTest(c *C) {
@@ -378,8 +386,6 @@ func (s *S) serviceByName(c *C, name string) *servstate.ServiceInfo {
 }
 
 func (s *S) TestStartFastExitCommand(c *C) {
-	servstate.FakeOkayWait(3000 * time.Millisecond)
-
 	chg := s.startServices(c, []string{"test4"}, 1)
 
 	s.st.Lock()
@@ -639,18 +645,18 @@ func (s *S) TestServices(c *C) {
 	services, err := s.manager.Services(nil)
 	c.Assert(err, IsNil)
 	c.Assert(services, DeepEquals, []*servstate.ServiceInfo{
-		{Name: "test1", Current: servstate.StatusInactive, Startup: servstate.StartupEnabled},
-		{Name: "test2", Current: servstate.StatusInactive, Startup: servstate.StartupDisabled},
-		{Name: "test3", Current: servstate.StatusInactive, Startup: servstate.StartupDisabled},
-		{Name: "test4", Current: servstate.StatusInactive, Startup: servstate.StartupDisabled},
-		{Name: "test5", Current: servstate.StatusInactive, Startup: servstate.StartupDisabled},
+		{Name: "test1", Current: servstate.StatusInactive, Startup: servstate.StartupEnabled, NumBackoffs: 7},
+		{Name: "test2", Current: servstate.StatusInactive, Startup: servstate.StartupDisabled, NumBackoffs: 7},
+		{Name: "test3", Current: servstate.StatusInactive, Startup: servstate.StartupDisabled, NumBackoffs: 7},
+		{Name: "test4", Current: servstate.StatusInactive, Startup: servstate.StartupDisabled, NumBackoffs: 7},
+		{Name: "test5", Current: servstate.StatusInactive, Startup: servstate.StartupDisabled, NumBackoffs: 7},
 	})
 
 	services, err = s.manager.Services([]string{"test2", "test3"})
 	c.Assert(err, IsNil)
 	c.Assert(services, DeepEquals, []*servstate.ServiceInfo{
-		{Name: "test2", Current: servstate.StatusInactive, Startup: servstate.StartupDisabled},
-		{Name: "test3", Current: servstate.StatusInactive, Startup: servstate.StartupDisabled},
+		{Name: "test2", Current: servstate.StatusInactive, Startup: servstate.StartupDisabled, NumBackoffs: 7},
+		{Name: "test3", Current: servstate.StatusInactive, Startup: servstate.StartupDisabled, NumBackoffs: 7},
 	})
 
 	// Start a service and ensure it's marked active
@@ -659,11 +665,11 @@ func (s *S) TestServices(c *C) {
 	services, err = s.manager.Services(nil)
 	c.Assert(err, IsNil)
 	c.Assert(services, DeepEquals, []*servstate.ServiceInfo{
-		{Name: "test1", Current: servstate.StatusInactive, Startup: servstate.StartupEnabled},
-		{Name: "test2", Current: servstate.StatusActive, Startup: servstate.StartupDisabled},
-		{Name: "test3", Current: servstate.StatusInactive, Startup: servstate.StartupDisabled},
-		{Name: "test4", Current: servstate.StatusInactive, Startup: servstate.StartupDisabled},
-		{Name: "test5", Current: servstate.StatusInactive, Startup: servstate.StartupDisabled},
+		{Name: "test1", Current: servstate.StatusInactive, Startup: servstate.StartupEnabled, NumBackoffs: 7},
+		{Name: "test2", Current: servstate.StatusActive, Startup: servstate.StartupDisabled, NumBackoffs: 7},
+		{Name: "test3", Current: servstate.StatusInactive, Startup: servstate.StartupDisabled, NumBackoffs: 7},
+		{Name: "test4", Current: servstate.StatusInactive, Startup: servstate.StartupDisabled, NumBackoffs: 7},
+		{Name: "test5", Current: servstate.StatusInactive, Startup: servstate.StartupDisabled, NumBackoffs: 7},
 	})
 }
 
