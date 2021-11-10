@@ -53,9 +53,9 @@ var (
 	okayWait = 1 * time.Second
 	killWait = 5 * time.Second
 	failWait = 10 * time.Second
-
-	maxLogBytes = 100 * 1024
 )
+
+const maxLogBytes = 100 * 1024
 
 // serviceState represents the state a service's state machine is in.
 type serviceState int
@@ -157,26 +157,24 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 
 	// Wait for a small amount of time, and if the service hasn't exited,
 	// consider it a success.
-	select {
-	case exitCode := <-s.started:
-		if exitCode != nil {
+	timeout := time.After(okayWait + 100*time.Millisecond)
+	for {
+		select {
+		case exitCode := <-s.started:
+			if exitCode != nil {
+				m.removeService(config.Name)
+				return fmt.Errorf("cannot start service: exited quickly with code %d", *exitCode)
+			}
+			// Started successfully (ran for small amount of time without exiting).
+			return nil
+		case <-tomb.Dying():
+			// Start cancelled (shouldn't really happen, so disallow for simplicity).
+			logger.Noticef("Cannot cancel start (service %q)", config.Name)
+		case <-timeout:
+			// Should never happen, but don't block just in case we get something wrong.
 			m.removeService(config.Name)
-			return fmt.Errorf("cannot start service: exited quickly with code %d", *exitCode)
+			return fmt.Errorf("internal error: timed out waiting for start")
 		}
-		// Started successfully (ran for small amount of time without exiting).
-		return nil
-	case <-tomb.Dying():
-		// Start cancelled (unlikely to happen, but allow it).
-		m.removeService(config.Name)
-		err := s.stop()
-		if err != nil {
-			return fmt.Errorf("cannot stop service while trying to cancel start: %w", err)
-		}
-		return fmt.Errorf("start cancelled: %w", tomb.Err())
-	case <-time.After(okayWait + 100*time.Millisecond):
-		// Should never happen, but don't block just in case we get something wrong.
-		m.removeService(config.Name)
-		return fmt.Errorf("internal error: timed out waiting for start")
 	}
 }
 
@@ -206,6 +204,7 @@ func (m *ServiceManager) doStop(task *state.Task, tomb *tomb.Tomb) error {
 		return err
 	}
 
+	timeout := time.After(failWait + 100*time.Millisecond)
 	for {
 		select {
 		case err := <-s.stopped:
@@ -217,7 +216,7 @@ func (m *ServiceManager) doStop(task *state.Task, tomb *tomb.Tomb) error {
 		case <-tomb.Dying():
 			// Stop cancelled (shouldn't really happen, so disallow for simplicity).
 			logger.Noticef("Cannot cancel stop (service %q)", request.Name)
-		case <-time.After(failWait + 100*time.Millisecond):
+		case <-timeout:
 			// Should never happen, but don't block just in case we get something wrong.
 			return fmt.Errorf("internal error: timed out waiting for stop")
 		}
@@ -248,12 +247,18 @@ func (s *service) start() error {
 			return err
 		}
 		s.transition(stateStarting)
-		s.manager.time.AfterFunc(okayWait, func() { _ = s.okayWaitElapsed() })
+		s.manager.time.AfterFunc(okayWait, func() { logError(s.okayWaitElapsed()) })
 
 	default:
 		return fmt.Errorf("start invalid in state %q", s.state)
 	}
 	return nil
+}
+
+func logError(err error) {
+	if err != nil {
+		logger.Noticef("%s", err)
+	}
 }
 
 // startInternal is an internal helper used to actually start (or restart) the
@@ -306,7 +311,7 @@ func (s *service) startInternal() error {
 		return fmt.Errorf("cannot start service: %v", err)
 	}
 	startTime, _ := s.config.ParseStartTime() // ignore error; it's already been validated
-	s.resetTimer = s.manager.time.AfterFunc(startTime, func() { _ = s.startTimeElapsed() })
+	s.resetTimer = s.manager.time.AfterFunc(startTime, func() { logError(s.startTimeElapsed()) })
 
 	// Start a goroutine to wait for the process to finish.
 	done := make(chan struct{})
@@ -389,7 +394,7 @@ func (s *service) exited(err error) error {
 				s.config.Name, onType, action, duration, s.backoffIndex+1, len(backoffDurations))
 			s.backoffIndex++
 			s.transition(stateBackoffWait)
-			s.manager.time.AfterFunc(duration, func() { _ = s.backoffWaitElapsed() })
+			s.manager.time.AfterFunc(duration, func() { logError(s.backoffWaitElapsed()) })
 
 		default:
 			return fmt.Errorf("internal error: unexpected action %q", action)
@@ -433,9 +438,9 @@ func (s *service) stop() error {
 		if err != nil {
 			logger.Noticef("cannot send SIGTERM to process: %v", err)
 		}
-		s.stopped = make(chan error)
+		s.stopped = make(chan error, 1)
 		s.transition(stateTerminating)
-		s.manager.time.AfterFunc(killWait, func() { _ = s.terminateTimeElapsed() })
+		s.manager.time.AfterFunc(killWait, func() { logError(s.terminateTimeElapsed()) })
 
 	case stateBackoffWait:
 		s.transition(stateStopped)
@@ -482,7 +487,7 @@ func (s *service) terminateTimeElapsed() error {
 			logger.Noticef("Cannot send SIGKILL to process: %v", err)
 		}
 		s.transition(stateKilling)
-		s.manager.time.AfterFunc(failWait-killWait, func() { _ = s.killTimeElapsed() })
+		s.manager.time.AfterFunc(failWait-killWait, func() { logError(s.killTimeElapsed()) })
 
 	default:
 		// Ignore if timer elapsed in any other state.
