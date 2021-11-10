@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	"golang.org/x/sys/unix"
 	"gopkg.in/tomb.v2"
 
 	"github.com/canonical/pebble/internal/logger"
@@ -366,6 +367,7 @@ func (s *service) exited(err error) error {
 
 	switch s.state {
 	case stateStarting:
+		// TODO: make exit code +128 if signalled, see exec code
 		exitCode := s.cmd.ProcessState.ExitCode()
 		s.started <- &exitCode
 
@@ -424,6 +426,27 @@ func (s *service) getAction(err error) (action plan.ServiceAction, onType string
 		}
 		return onExit, "on-exit"
 	}
+}
+
+// sendSignal sends the given signal to a running service.
+func (s *service) sendSignal(signal string) error {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
+	switch s.state {
+	case stateStarting, stateRunning:
+		err := s.cmd.Process.Signal(unix.SignalNum(signal))
+		if err != nil {
+			return err
+		}
+
+	case stateBackoffWait, stateTerminating, stateKilling, stateStopped:
+		return fmt.Errorf("cannot send signal while service is stopped or stopping")
+
+	default:
+		return fmt.Errorf("sendSignal invalid in state %q", s.state)
+	}
+	return nil
 }
 
 // stop is called to stop a running (and backing off) service.

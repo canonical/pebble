@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -322,6 +323,9 @@ func (m *ServiceManager) ServiceLogs(services []string, last int) (map[string]se
 		requested[name] = true
 	}
 
+	m.servicesLock.Lock()
+	defer m.servicesLock.Unlock()
+
 	iterators := make(map[string]servicelog.Iterator)
 	for name, service := range m.services {
 		if !requested[name] {
@@ -391,6 +395,27 @@ func (m *ServiceManager) Replan() ([]string, []string, error) {
 	}
 
 	return stop, start, nil
+}
+
+func (m *ServiceManager) SendSignal(services []string, signal string) error {
+	m.servicesLock.Lock()
+	defer m.servicesLock.Unlock()
+
+	var errors []string
+	for _, name := range services {
+		s := m.services[name]
+		if s == nil {
+			continue
+		}
+		err := s.sendSignal(signal)
+		if err != nil {
+			errors = append(errors, fmt.Sprintf("cannot send signal to %q: %v", name, err))
+		}
+	}
+	if len(errors) > 0 {
+		return fmt.Errorf("%s", strings.Join(errors, "; "))
+	}
+	return nil
 }
 
 // timeFuncs is an interface with the functions from the time package that we need.
