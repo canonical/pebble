@@ -370,12 +370,11 @@ func (s *service) exited(err error) error {
 
 	switch s.state {
 	case stateStarting:
-		// TODO: make exit code +128 if signalled, see exec code
-		exitCode := s.cmd.ProcessState.ExitCode()
-		s.started <- &exitCode
+		code := exitCode(s.cmd)
+		s.started <- &code
 
 	case stateRunning:
-		logger.Noticef("Service %q stopped unexpectedly with code %d", s.config.Name, s.cmd.ProcessState.ExitCode())
+		logger.Noticef("Service %q stopped unexpectedly with code %d", s.config.Name, exitCode(s.cmd))
 		action, onType := s.getAction(err)
 		switch action {
 		case plan.ActionLog:
@@ -413,6 +412,19 @@ func (s *service) exited(err error) error {
 		return fmt.Errorf("exited invalid in state %q", s.state)
 	}
 	return nil
+}
+
+// exitCode returns the exit code of the given command, or 128+signal if it
+// exited via a signal.
+func exitCode(cmd *exec.Cmd) int {
+	status, ok := cmd.ProcessState.Sys().(syscall.WaitStatus)
+	if ok {
+		if status.Signaled() {
+			return 128 + int(status.Signal())
+		}
+		return status.ExitStatus()
+	}
+	return cmd.ProcessState.ExitCode()
 }
 
 // getAction returns the correct action to perform from the plan, given an exit error.
