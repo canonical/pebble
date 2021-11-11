@@ -20,6 +20,8 @@ import (
 	"time"
 )
 
+var GetAction = getAction
+
 func (m *ServiceManager) RunningCmds() map[string]*exec.Cmd {
 	m.servicesLock.Lock()
 	defer m.servicesLock.Unlock()

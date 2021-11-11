@@ -858,3 +858,73 @@ services:
 		c.Fatalf("timed out waiting for exit-pebble channel")
 	}
 }
+
+func (s *S) TestOnExitLog(c *C) {
+	// Override on-exit to specify we should simply log when service exits.
+	layer := parseLayer(c, 0, "layer", `
+services:
+    test2:
+        override: replace
+        command: sleep 0.15
+        on-exit: log
+`)
+	err := s.manager.AppendLayer(layer)
+	c.Assert(err, IsNil)
+
+	// Start service and wait till it starts up the first time.
+	s.startServices(c, []string{"test2"}, 1)
+	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
+		return svc.Current == servstate.StatusActive
+	})
+
+	// Wait till it terminates.
+	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
+		return svc.Current == servstate.StatusInactive
+	})
+}
+
+func (s *S) TestGetAction(c *C) {
+	tests := []struct {
+		onExit    string
+		onFailure string
+		onSuccess string
+		success   bool
+		action    string
+		onType    string
+	}{
+		{onFailure: "", success: false, action: "restart", onType: "on-exit"},
+		{onFailure: "log", success: false, action: "log", onType: "on-failure"},
+		{onFailure: "exit-pebble", success: false, action: "exit-pebble", onType: "on-failure"},
+		{onFailure: "restart", success: false, action: "restart", onType: "on-failure"},
+		{onFailure: "exit-pebble", success: true, action: "restart", onType: "on-exit"},
+
+		{onSuccess: "", success: true, action: "restart", onType: "on-exit"},
+		{onSuccess: "log", success: true, action: "log", onType: "on-success"},
+		{onSuccess: "exit-pebble", success: true, action: "exit-pebble", onType: "on-success"},
+		{onSuccess: "restart", success: true, action: "restart", onType: "on-success"},
+		{onSuccess: "exit-pebble", success: false, action: "restart", onType: "on-exit"},
+
+		{onExit: "", success: true, action: "restart", onType: "on-exit"},
+		{onExit: "log", success: true, action: "log", onType: "on-exit"},
+		{onExit: "exit-pebble", success: true, action: "exit-pebble", onType: "on-exit"},
+		{onExit: "restart", success: true, action: "restart", onType: "on-exit"},
+		{onExit: "exit-pebble", success: false, action: "exit-pebble", onType: "on-exit"},
+
+		{onFailure: "restart", onSuccess: "exit-pebble", success: true, action: "exit-pebble", onType: "on-success"},
+		{onFailure: "restart", onSuccess: "exit-pebble", success: false, action: "restart", onType: "on-failure"},
+		{onFailure: "restart", onSuccess: "exit-pebble", onExit: "log", success: true, action: "exit-pebble", onType: "on-success"},
+		{onFailure: "restart", onSuccess: "exit-pebble", onExit: "log", success: false, action: "restart", onType: "on-failure"},
+	}
+	for _, test := range tests {
+		config := &plan.Service{
+			OnExit:    plan.ServiceAction(test.onExit),
+			OnFailure: plan.ServiceAction(test.onFailure),
+			OnSuccess: plan.ServiceAction(test.onSuccess),
+		}
+		action, onType := servstate.GetAction(config, test.success)
+		c.Check(string(action), Equals, test.action, Commentf("onExit=%q, onFailure=%q, onSuccess=%q, success=%v",
+			test.onExit, test.onFailure, test.onSuccess, test.success))
+		c.Check(onType, Equals, test.onType, Commentf("onExit=%q, onFailure=%q, onSuccess=%q, success=%v",
+			test.onExit, test.onFailure, test.onSuccess, test.success))
+	}
+}

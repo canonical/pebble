@@ -360,7 +360,7 @@ func (s *service) okayWaitElapsed() error {
 }
 
 // exited is called when the service's process exits.
-func (s *service) exited(err error) error {
+func (s *service) exited(waitErr error) error {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
@@ -375,9 +375,10 @@ func (s *service) exited(err error) error {
 
 	case stateRunning:
 		logger.Noticef("Service %q stopped unexpectedly with code %d", s.config.Name, exitCode(s.cmd))
-		action, onType := s.getAction(err)
+		action, onType := getAction(s.config, waitErr == nil)
 		switch action {
 		case plan.ActionLog:
+			// Log has already been written above, no further log is necessary.
 			logger.Debugf("Service %q %s action is %q, transitioning to stopped state", s.config.Name, onType, action)
 			s.transition(stateStopped)
 
@@ -428,15 +429,16 @@ func exitCode(cmd *exec.Cmd) int {
 	return cmd.ProcessState.ExitCode()
 }
 
-// getAction returns the correct action to perform from the plan, given an exit error.
-func (s *service) getAction(err error) (action plan.ServiceAction, onType string) {
+// getAction returns the correct action to perform from the plan and whether
+// or not the service exited with a success exit code (0).
+func getAction(config *plan.Service, success bool) (action plan.ServiceAction, onType string) {
 	switch {
-	case err != nil && s.config.OnFailure != "":
-		return s.config.OnFailure, "on-failure"
-	case err == nil && s.config.OnSuccess != "":
-		return s.config.OnSuccess, "on-success"
+	case !success && config.OnFailure != "":
+		return config.OnFailure, "on-failure"
+	case success && config.OnSuccess != "":
+		return config.OnSuccess, "on-success"
 	default:
-		onExit := s.config.OnExit
+		onExit := config.OnExit
 		if onExit == "" {
 			onExit = plan.ActionRestart // default for "on-exit"
 		}
