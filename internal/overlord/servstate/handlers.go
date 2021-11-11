@@ -317,9 +317,12 @@ func (s *service) startInternal() error {
 	// Start a goroutine to wait for the process to finish.
 	done := make(chan struct{})
 	go func() {
-		err := s.cmd.Wait()
+		waitErr := s.cmd.Wait()
 		close(done)
-		_ = s.exited(err)
+		err := s.exited(waitErr)
+		if err != nil {
+			logger.Noticef("Cannot execute exited action: %v", err)
+		}
 	}()
 
 	// Start a goroutine to read from the service's log buffer and copy to the output.
@@ -435,7 +438,7 @@ func (s *service) sendSignal(signal string) error {
 
 	switch s.state {
 	case stateStarting, stateRunning:
-		err := s.cmd.Process.Signal(unix.SignalNum(signal))
+		err := syscall.Kill(-s.cmd.Process.Pid, unix.SignalNum(signal))
 		if err != nil {
 			return err
 		}
