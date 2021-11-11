@@ -57,8 +57,9 @@ type S struct {
 
 	st *state.State
 
-	manager *servstate.ServiceManager
-	runner  *state.TaskRunner
+	manager    *servstate.ServiceManager
+	runner     *state.TaskRunner
+	exitPebble chan struct{}
 }
 
 var _ = Suite(&S{})
@@ -131,7 +132,8 @@ func (s *S) SetUpTest(c *C) {
 	})
 
 	s.runner = state.NewTaskRunner(s.st)
-	manager, err := servstate.NewManager(s.st, s.runner, s.dir, logOutput)
+	s.exitPebble = make(chan struct{})
+	manager, err := servstate.NewManager(s.st, s.runner, s.dir, logOutput, s.exitPebble)
 	c.Assert(err, IsNil)
 	s.manager = manager
 
@@ -458,7 +460,7 @@ func (s *S) TestAppendLayer(c *C) {
 	dir := c.MkDir()
 	os.Mkdir(filepath.Join(dir, "layers"), 0755)
 	runner := state.NewTaskRunner(s.st)
-	manager, err := servstate.NewManager(s.st, runner, dir, nil)
+	manager, err := servstate.NewManager(s.st, runner, dir, nil, nil)
 	c.Assert(err, IsNil)
 
 	// Append a layer when there are no layers.
@@ -540,7 +542,7 @@ func (s *S) TestCombineLayer(c *C) {
 	dir := c.MkDir()
 	os.Mkdir(filepath.Join(dir, "layers"), 0755)
 	runner := state.NewTaskRunner(s.st)
-	manager, err := servstate.NewManager(s.st, runner, dir, nil)
+	manager, err := servstate.NewManager(s.st, runner, dir, nil, nil)
 	c.Assert(err, IsNil)
 
 	// "Combine" layer with no layers should just append.
@@ -733,7 +735,7 @@ func (f writerFunc) Write(p []byte) (int, error) {
 	return f(p)
 }
 
-func (s *S) TestAutoRestart(c *C) {
+func (s *S) TestRestart(c *C) {
 	// Add custom backoff time so it auto-restarts quickly.
 	layer := parseLayer(c, 0, "restart", `
 services:
@@ -824,4 +826,35 @@ func (s *S) waitUntilService(c *C, service string, f func(svc *servstate.Service
 	}
 	c.Fatalf("failed waiting for service")
 	return nil // satisfy compiler
+}
+
+func (s *S) TestExitPebble(c *C) {
+	// Override on-exit to specify we should exit Pebble when service exits.
+	layer := parseLayer(c, 0, "restart", `
+services:
+    test2:
+        override: replace
+        command: sleep 0.15
+        on-exit: exit-pebble
+`)
+	err := s.manager.AppendLayer(layer)
+	c.Assert(err, IsNil)
+
+	// Start service and wait till it starts up the first time.
+	s.startServices(c, []string{"test2"}, 1)
+	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
+		return svc.Current == servstate.StatusActive
+	})
+
+	// Wait till it terminates.
+	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
+		return svc.Current == servstate.StatusInactive
+	})
+
+	// It should have closed the exitPebble channel.
+	select {
+	case <-s.exitPebble:
+	case <-time.After(time.Second):
+		c.Fatalf("timed out waiting for exit-pebble channel")
+	}
 }

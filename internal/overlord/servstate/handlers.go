@@ -382,8 +382,9 @@ func (s *service) exited(err error) error {
 			s.transition(stateStopped)
 
 		case plan.ActionExitPebble:
-			logger.Noticef("Service %q %s action is %q, exiting server", s.config.Name, onType, action)
-			os.Exit(1) // TODO: figure out more graceful way to tell the daemon to exit
+			logger.Noticef("Service %q %s action is %q, triggering server exit", s.config.Name, onType, action)
+			close(s.manager.exitPebble)
+			s.transition(stateStopped)
 
 		case plan.ActionRestart:
 			backoffDurations, _ := s.config.ParseBackoff() // ignore error; it's already been validated
