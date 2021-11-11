@@ -65,10 +65,10 @@ const (
 	stateInitial serviceState = iota
 	stateStarting
 	stateRunning
-	stateBackoffWait
 	stateTerminating
 	stateKilling
 	stateStopped
+	stateBackoffWait
 )
 
 func (s serviceState) String() string {
