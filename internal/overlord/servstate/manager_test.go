@@ -765,7 +765,7 @@ services:
 		return svc.Current == servstate.StatusActive && svc.BackoffNum == 1
 	})
 	time.Sleep(25 * time.Millisecond) // ensure it has enough time to write to the log
-	//c.Check(s.logBufferString(), Matches, `2.* \[test2\] test2\n.*`) // TODO: fix, should be one
+	c.Check(s.logBufferString(), Matches, `2.* \[test2\] test2\n`)
 
 	// Send signal to terminate it again.
 	err = s.manager.SendSignal([]string{"test2"}, "SIGTERM")
@@ -780,7 +780,7 @@ services:
 	time.Sleep(75 * time.Millisecond)
 	svc = s.serviceByName(c, "test2")
 	c.Assert(svc.Current, Equals, servstate.StatusActive)
-	//c.Check(s.logBufferString(), Matches, `2.* \[test2\] test2\n.*`) // TODO: fix, should be one
+	c.Check(s.logBufferString(), Matches, `2.* \[test2\] test2\n`)
 
 	// Send signal to terminate it again.
 	err = s.manager.SendSignal([]string{"test2"}, "SIGTERM")
@@ -795,7 +795,7 @@ services:
 	time.Sleep(125 * time.Millisecond)
 	svc = s.serviceByName(c, "test2")
 	c.Assert(svc.Current, Equals, servstate.StatusActive)
-	//c.Check(s.logBufferString(), Matches, `2.* \[test2\] test2\n.*`) // TODO: fix, should be one
+	c.Check(s.logBufferString(), Matches, `2.* \[test2\] test2\n`)
 
 	// Send signal to terminate it one last time.
 	err = s.manager.SendSignal([]string{"test2"}, "SIGTERM")
@@ -811,7 +811,7 @@ services:
 	time.Sleep(125 * time.Millisecond)
 	svc = s.serviceByName(c, "test2")
 	c.Assert(svc.Current, Equals, servstate.StatusInactive)
-	//c.Check(s.logBufferString(), Matches, ``)
+	c.Check(s.logBufferString(), Matches, ``)
 }
 
 func (s *S) waitUntilService(c *C, service string, f func(svc *servstate.ServiceInfo) bool) *servstate.ServiceInfo {

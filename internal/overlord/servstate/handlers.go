@@ -296,7 +296,7 @@ func (s *service) startInternal() error {
 	// Set up stdout and stderr to write to log ring buffer.
 	var outputIterator servicelog.Iterator
 	if s.manager.serviceOutput != nil {
-		outputIterator = s.logs.TailIterator()
+		outputIterator = s.logs.HeadIterator(0)
 	}
 	logWriter := servicelog.NewFormatWriter(s.logs, s.config.Name)
 	s.cmd.Stdout = logWriter
