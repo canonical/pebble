@@ -127,7 +127,7 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 
 	m.servicesLock.Lock()
 	s := m.services[config.Name]
-	if s != nil && s.state != stateStopped {
+	if s != nil && s.getStateLocked() != stateStopped {
 		m.servicesLock.Unlock()
 		m.state.Lock()
 		task.Logf("Service %q already started.", config.Name)
@@ -189,7 +189,7 @@ func (m *ServiceManager) doStop(task *state.Task, tomb *tomb.Tomb) error {
 
 	m.servicesLock.Lock()
 	s := m.services[request.Name]
-	if s == nil || s.state == stateStopped {
+	if s == nil || s.getStateLocked() == stateStopped {
 		m.servicesLock.Unlock()
 		m.state.Lock()
 		task.Logf("Service %q already stopped.", request.Name)
@@ -234,6 +234,12 @@ func (m *ServiceManager) removeService(name string) {
 func (s *service) transition(state serviceState) {
 	logger.Debugf("Service %q transitioning to state %q", s.config.Name, state)
 	s.state = state
+}
+
+func (s *service) getStateLocked() serviceState {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	return s.state
 }
 
 // start is called to transition from the initial state and start the service.
