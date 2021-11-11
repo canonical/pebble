@@ -310,9 +310,18 @@ func (s *S) TestReplanServices(c *C) {
 
 func (s *S) TestServiceLogs(c *C) {
 	outputs := map[string]string{
-		"test1": `\d+-\d+-\d+T\d+:\d+:\d+\.\d+Z \[test1\] test1\n`,
-		"test2": `\d+-\d+-\d+T\d+:\d+:\d+\.\d+Z \[test2\] test2\n`,
+		"test1": `2.* \[test1\] test1\n`,
+		"test2": `2.* \[test2\] test2\n`,
 	}
+	s.testServiceLogs(c, outputs)
+
+	// Run test again, but ensure the logs from the previous run are still in the ring buffer.
+	outputs["test1"] += outputs["test1"]
+	outputs["test2"] += outputs["test2"]
+	s.testServiceLogs(c, outputs)
+}
+
+func (s *S) testServiceLogs(c *C, outputs map[string]string) {
 	s.startTestServices(c)
 
 	if c.Failed() {
@@ -737,7 +746,7 @@ func (f writerFunc) Write(p []byte) (int, error) {
 
 func (s *S) TestRestart(c *C) {
 	// Add custom backoff time so it auto-restarts quickly.
-	layer := parseLayer(c, 0, "restart", `
+	layer := parseLayer(c, 0, "layer", `
 services:
     test2:
         override: merge
@@ -830,7 +839,7 @@ func (s *S) waitUntilService(c *C, service string, f func(svc *servstate.Service
 
 func (s *S) TestExitPebble(c *C) {
 	// Override on-exit to specify we should exit Pebble when service exits.
-	layer := parseLayer(c, 0, "restart", `
+	layer := parseLayer(c, 0, "layer", `
 services:
     test2:
         override: replace
