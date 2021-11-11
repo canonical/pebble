@@ -103,7 +103,7 @@ type service struct {
 	stopped      chan error
 	cmd          *exec.Cmd
 	backoffIndex int
-	resetTimer   timer
+	resetTimer   *time.Timer
 }
 
 func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
@@ -248,7 +248,7 @@ func (s *service) start() error {
 			return err
 		}
 		s.transition(stateStarting)
-		s.manager.time.AfterFunc(okayWait, func() { logError(s.okayWaitElapsed()) })
+		time.AfterFunc(okayWait, func() { logError(s.okayWaitElapsed()) })
 
 	default:
 		return fmt.Errorf("start invalid in state %q", s.state)
@@ -312,7 +312,7 @@ func (s *service) startInternal() error {
 		return fmt.Errorf("cannot start service: %v", err)
 	}
 	startTime, _ := s.config.ParseStartTime() // ignore error; it's already been validated
-	s.resetTimer = s.manager.time.AfterFunc(startTime, func() { logError(s.startTimeElapsed()) })
+	s.resetTimer = time.AfterFunc(startTime, func() { logError(s.startTimeElapsed()) })
 
 	// Start a goroutine to wait for the process to finish.
 	done := make(chan struct{})
@@ -399,7 +399,7 @@ func (s *service) exited(err error) error {
 				s.config.Name, onType, action, duration, s.backoffIndex+1, len(backoffDurations))
 			s.backoffIndex++
 			s.transition(stateBackoffWait)
-			s.manager.time.AfterFunc(duration, func() { logError(s.backoffWaitElapsed()) })
+			time.AfterFunc(duration, func() { logError(s.backoffWaitElapsed()) })
 
 		default:
 			return fmt.Errorf("internal error: unexpected action %q", action)
@@ -466,7 +466,7 @@ func (s *service) stop() error {
 		}
 		s.stopped = make(chan error, 1)
 		s.transition(stateTerminating)
-		s.manager.time.AfterFunc(killWait, func() { logError(s.terminateTimeElapsed()) })
+		time.AfterFunc(killWait, func() { logError(s.terminateTimeElapsed()) })
 
 	case stateBackoffWait:
 		s.transition(stateStopped)
@@ -513,7 +513,7 @@ func (s *service) terminateTimeElapsed() error {
 			logger.Noticef("Cannot send SIGKILL to process: %v", err)
 		}
 		s.transition(stateKilling)
-		s.manager.time.AfterFunc(failWait-killWait, func() { logError(s.killTimeElapsed()) })
+		time.AfterFunc(failWait-killWait, func() { logError(s.killTimeElapsed()) })
 
 	default:
 		// Ignore if timer elapsed in any other state.

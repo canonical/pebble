@@ -6,7 +6,6 @@ import (
 	"sort"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/canonical/pebble/internal/overlord/state"
 	"github.com/canonical/pebble/internal/plan"
@@ -25,7 +24,6 @@ type ServiceManager struct {
 	services     map[string]*service
 
 	serviceOutput io.Writer
-	time          timeFuncs
 }
 
 // LabelExists is the error returned by AppendLayer when a layer with that
@@ -45,7 +43,6 @@ func NewManager(s *state.State, runner *state.TaskRunner, pebbleDir string, serv
 		pebbleDir:     pebbleDir,
 		services:      make(map[string]*service),
 		serviceOutput: serviceOutput,
-		time:          &realTime{},
 	}
 
 	runner.AddHandler("start", manager.doStart, nil)
@@ -416,31 +413,4 @@ func (m *ServiceManager) SendSignal(services []string, signal string) error {
 		return fmt.Errorf("%s", strings.Join(errors, "; "))
 	}
 	return nil
-}
-
-// timeFuncs is an interface with the functions from the time package that we need.
-type timeFuncs interface {
-	AfterFunc(d time.Duration, f func()) timer
-}
-
-// realTime is an implementation of timeFuncs using the real time package.
-type realTime struct{}
-
-func (*realTime) AfterFunc(d time.Duration, f func()) timer {
-	t := time.AfterFunc(d, f)
-	return &realTimer{t}
-}
-
-// timer is the subset of *time.Timer methods that we need.
-type timer interface {
-	Stop() bool
-}
-
-// realTimer is an implementation of timer using a real *time.Timer.
-type realTimer struct {
-	timer *time.Timer
-}
-
-func (t *realTimer) Stop() bool {
-	return t.timer.Stop()
 }
