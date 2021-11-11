@@ -104,8 +104,13 @@ services:
         command: /bin/sh -c "echo test2b | tee -a %s; sleep 300"
 `
 
+var setLoggerOnce sync.Once
+
 func (s *S) SetUpSuite(c *C) {
-	logger.SetLogger(logger.New(os.Stderr, "[test] "))
+	// This can happen in parallel with tests if -test.count=N with N>1 is specified.
+	setLoggerOnce.Do(func() {
+		logger.SetLogger(logger.New(os.Stderr, "[test] "))
+	})
 }
 
 func (s *S) SetUpTest(c *C) {
