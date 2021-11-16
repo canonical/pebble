@@ -119,33 +119,17 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 		return fmt.Errorf("cannot acquire plan lock: %w", err)
 	}
 	config, ok := m.plan.Services[request.Name]
+	releasePlan()
 	if !ok {
-		releasePlan()
 		return fmt.Errorf("cannot find service %q in plan", request.Name)
 	}
-	releasePlan()
 
-	m.servicesLock.Lock()
-	s := m.services[config.Name]
-	if s != nil && s.getStateLocked() != stateStopped {
-		m.servicesLock.Unlock()
+	// Create the service object (or reuse the existing one by name).
+	s := m.serviceForStart(config)
+	if s == nil {
 		taskLogf(task, "Service %q already started.", config.Name)
 		return nil
 	}
-	if s == nil {
-		s = &service{
-			manager: m,
-			state:   stateInitial,
-			config:  config.Copy(),
-			logs:    servicelog.NewRingBuffer(maxLogBytes),
-		}
-		m.services[config.Name] = s
-	} else {
-		s.backoffIndex = 0
-		s.transition(stateInitial)
-	}
-	s.started = make(chan *int, 1)
-	m.servicesLock.Unlock()
 
 	// Start the service and transition to stateStarting.
 	err = s.start()
@@ -177,6 +161,35 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 	}
 }
 
+// serviceForStart looks up the service by name in the services map; it
+// creates a new service object if one doesn't exist, returns the existing one
+// if it already exists but is stopped, or returns nil if it already exists
+// and is running.
+func (m *ServiceManager) serviceForStart(config *plan.Service) *service {
+	m.servicesLock.Lock()
+	defer m.servicesLock.Unlock()
+
+	s := m.services[config.Name]
+	if s != nil && s.getStateLocked() != stateStopped {
+		return nil
+	}
+
+	if s == nil {
+		s = &service{
+			manager: m,
+			state:   stateInitial,
+			config:  config.Copy(),
+			logs:    servicelog.NewRingBuffer(maxLogBytes),
+		}
+		m.services[config.Name] = s
+	} else {
+		s.backoffIndex = 0
+		s.transition(stateInitial)
+	}
+	s.started = make(chan *int, 1)
+	return s
+}
+
 func taskLogf(task *state.Task, format string, args ...interface{}) {
 	st := task.State()
 	st.Lock()
@@ -193,14 +206,11 @@ func (m *ServiceManager) doStop(task *state.Task, tomb *tomb.Tomb) error {
 		return fmt.Errorf("cannot get service request: %w", err)
 	}
 
-	m.servicesLock.Lock()
-	s := m.services[request.Name]
-	if s == nil || s.getStateLocked() == stateStopped {
-		m.servicesLock.Unlock()
+	s := m.serviceForStop(request.Name)
+	if s == nil {
 		taskLogf(task, "Service %q already stopped.", request.Name)
 		return nil
 	}
-	m.servicesLock.Unlock()
 
 	// Stop service: send SIGTERM, and if that doesn't stop the process in a
 	// short time, send SIGKILL.
@@ -228,10 +238,25 @@ func (m *ServiceManager) doStop(task *state.Task, tomb *tomb.Tomb) error {
 	}
 }
 
+// serviceForStart looks up the service by name in the services map; it
+// returns the service object if it exists and is running, or nil if it
+// doesn't exist or is stopped.
+func (m *ServiceManager) serviceForStop(name string) *service {
+	m.servicesLock.Lock()
+	defer m.servicesLock.Unlock()
+
+	s := m.services[name]
+	if s == nil || s.getStateLocked() == stateStopped {
+		return nil
+	}
+	return s
+}
+
 func (m *ServiceManager) removeService(name string) {
 	m.servicesLock.Lock()
+	defer m.servicesLock.Unlock()
+
 	delete(m.services, name)
-	m.servicesLock.Unlock()
 }
 
 // transition changes the service's state machine to the given state.
