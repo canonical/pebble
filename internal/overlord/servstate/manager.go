@@ -253,7 +253,7 @@ func (m *ServiceManager) Services(names []string) ([]*ServiceInfo, error) {
 			case stateTerminating, stateKilling, stateStopped:
 				// Already set to inactive above, but it's nice to be explicit for each state
 				info.Current = StatusInactive
-			case stateBackoffWait:
+			case stateBackoff:
 				info.Current = StatusBackoff
 			default:
 				info.Current = StatusError

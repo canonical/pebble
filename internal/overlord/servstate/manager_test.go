@@ -792,7 +792,7 @@ services:
 	err = s.manager.SendSignal([]string{"test2"}, "SIGTERM")
 	c.Assert(err, IsNil)
 
-	// Wait for it to go into backoff-wait state (which translates to StatusError).
+	// Wait for it to go into backoff state.
 	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
 		return svc.Current == servstate.StatusBackoff && svc.BackoffNum == 2
 	})
@@ -807,7 +807,7 @@ services:
 	err = s.manager.SendSignal([]string{"test2"}, "SIGTERM")
 	c.Assert(err, IsNil)
 
-	// Wait for it to go into backoff-wait state (which translates to StatusError).
+	// Wait for it to go into backoff state.
 	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
 		return svc.Current == servstate.StatusBackoff && svc.BackoffNum == 3
 	})

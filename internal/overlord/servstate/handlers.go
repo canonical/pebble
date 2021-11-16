@@ -67,7 +67,7 @@ const (
 	stateTerminating
 	stateKilling
 	stateStopped
-	stateBackoffWait
+	stateBackoff
 )
 
 func (s serviceState) String() string {
@@ -78,8 +78,8 @@ func (s serviceState) String() string {
 		return "starting"
 	case stateRunning:
 		return "running"
-	case stateBackoffWait:
-		return "backoff-wait"
+	case stateBackoff:
+		return "backoff"
 	case stateTerminating:
 		return "terminating"
 	case stateKilling:
@@ -429,8 +429,8 @@ func (s *service) exited(waitErr error) error {
 			logger.Noticef("Service %q %s action is %q, waiting %s before restart (backoff %d/%d)",
 				s.config.Name, onType, action, duration, s.backoffIndex+1, len(backoffDurations))
 			s.backoffIndex++
-			s.transition(stateBackoffWait)
-			time.AfterFunc(duration, func() { logError(s.backoffWaitElapsed()) })
+			s.transition(stateBackoff)
+			time.AfterFunc(duration, func() { logError(s.backoffElapsed()) })
 
 		default:
 			return fmt.Errorf("internal error: unexpected action %q", action)
@@ -486,7 +486,7 @@ func (s *service) sendSignal(signal string) error {
 			return err
 		}
 
-	case stateBackoffWait, stateTerminating, stateKilling, stateStopped:
+	case stateBackoff, stateTerminating, stateKilling, stateStopped:
 		return fmt.Errorf("cannot send signal while service is stopped or stopping")
 
 	default:
@@ -511,7 +511,7 @@ func (s *service) stop() error {
 		s.transition(stateTerminating)
 		time.AfterFunc(killWait, func() { logError(s.terminateTimeElapsed()) })
 
-	case stateBackoffWait:
+	case stateBackoff:
 		s.transition(stateStopped)
 
 	default:
@@ -520,14 +520,14 @@ func (s *service) stop() error {
 	return nil
 }
 
-// backoffWaitElapsed is called when the current backoff's timer has elapsed,
-// to restart the service.
-func (s *service) backoffWaitElapsed() error {
+// backoffElapsed is called when the current backoff's timer has elapsed, to
+// restart the service.
+func (s *service) backoffElapsed() error {
 	s.manager.servicesLock.Lock()
 	defer s.manager.servicesLock.Unlock()
 
 	switch s.state {
-	case stateBackoffWait:
+	case stateBackoff:
 		logger.Debugf("Restarting service %q", s.config.Name)
 		err := s.startInternal()
 		if err != nil {
