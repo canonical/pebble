@@ -3,9 +3,11 @@ package servstate
 import (
 	"fmt"
 	"io"
+	"math/rand"
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/canonical/pebble/internal/overlord/state"
 	"github.com/canonical/pebble/internal/plan"
@@ -25,6 +27,9 @@ type ServiceManager struct {
 
 	serviceOutput io.Writer
 	stopDaemon    func() error
+
+	randLock sync.Mutex
+	rand     *rand.Rand
 }
 
 // LabelExists is the error returned by AppendLayer when a layer with that
@@ -45,6 +50,7 @@ func NewManager(s *state.State, runner *state.TaskRunner, pebbleDir string, serv
 		services:      make(map[string]*serviceData),
 		serviceOutput: serviceOutput,
 		stopDaemon:    stopDaemon,
+		rand:          rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
 
 	runner.AddHandler("start", manager.doStart, nil)

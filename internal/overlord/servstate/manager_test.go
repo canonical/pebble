@@ -946,3 +946,29 @@ func (s *S) TestGetAction(c *C) {
 			test.onExit, test.onFailure, test.onSuccess, test.success))
 	}
 }
+
+func (s *S) TestGetJitter(c *C) {
+	// It's tricky to test a function that generates randomness, but ensure all
+	// the values are in range, and that the number of values distributed across
+	// each of 3 buckets is reasonable.
+	var buckets [3]int
+	for i := 0; i < 3000; i++ {
+		jitter := s.manager.GetJitter(3 * time.Second)
+		c.Assert(jitter >= 0 && jitter < 300*time.Millisecond, Equals, true)
+		switch {
+		case jitter >= 0 && jitter < 100*time.Millisecond:
+			buckets[0]++
+		case jitter >= 100*time.Millisecond && jitter < 200*time.Millisecond:
+			buckets[1]++
+		case jitter >= 200*time.Millisecond && jitter < 300*time.Millisecond:
+			buckets[2]++
+		default:
+			c.Errorf("jitter %s outside range [0, 300ms)", jitter)
+		}
+	}
+	for i := 0; i < 3; i++ {
+		if buckets[i] < 800 || buckets[i] > 1200 { // exceedingly unlikely to be outside this range
+			c.Errorf("bucket[%d] has too few or too many values in it (%d)", i, buckets[i])
+		}
+	}
+}

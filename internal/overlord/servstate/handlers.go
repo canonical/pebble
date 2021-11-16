@@ -429,10 +429,11 @@ func (s *serviceData) exited(waitErr error) error {
 				return nil
 			}
 			duration := backoffDurations[s.backoffIndex]
-			logger.Noticef("Service %q %s action is %q, waiting %s before restart (backoff %d/%d)",
+			logger.Noticef("Service %q %s action is %q, waiting ~%s before restart (backoff %d/%d)",
 				s.config.Name, onType, action, duration, s.backoffIndex+1, len(backoffDurations))
 			s.backoffIndex++
 			s.transition(stateBackoff)
+			duration += s.manager.getJitter(duration)
 			time.AfterFunc(duration, func() { logError(s.backoffElapsed()) })
 
 		default:
@@ -447,6 +448,16 @@ func (s *serviceData) exited(waitErr error) error {
 		return fmt.Errorf("exited invalid in state %q", s.state)
 	}
 	return nil
+}
+
+// getJitter returns a randomized time jitter amount from 0-10% of the duration.
+func (s *ServiceManager) getJitter(duration time.Duration) time.Duration {
+	s.randLock.Lock()
+	defer s.randLock.Unlock()
+
+	maxJitter := duration.Seconds() * 0.1
+	jitter := s.rand.Float64() * maxJitter
+	return time.Duration(jitter * float64(time.Second))
 }
 
 // exitCode returns the exit code of the given command, or 128+signal if it

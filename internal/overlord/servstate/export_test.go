@@ -46,6 +46,10 @@ func (m *ServiceManager) BackoffIndex(serviceName string) int {
 	return s.backoffIndex
 }
 
+func (m *ServiceManager) GetJitter(duration time.Duration) time.Duration {
+	return m.getJitter(duration)
+}
+
 func FakeOkayWait(wait time.Duration) (restore func()) {
 	old := okayWait
 	okayWait = wait
