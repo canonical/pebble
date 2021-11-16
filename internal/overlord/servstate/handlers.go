@@ -129,9 +129,7 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 	s := m.services[config.Name]
 	if s != nil && s.getStateLocked() != stateStopped {
 		m.servicesLock.Unlock()
-		m.state.Lock()
-		task.Logf("Service %q already started.", config.Name)
-		m.state.Unlock()
+		taskLogf(task, "Service %q already started.", config.Name)
 		return nil
 	}
 	if s == nil {
@@ -179,6 +177,14 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 	}
 }
 
+func taskLogf(task *state.Task, format string, args ...interface{}) {
+	st := task.State()
+	st.Lock()
+	defer st.Unlock()
+
+	task.Logf(format, args...)
+}
+
 func (m *ServiceManager) doStop(task *state.Task, tomb *tomb.Tomb) error {
 	m.state.Lock()
 	request, err := TaskServiceRequest(task)
@@ -191,9 +197,7 @@ func (m *ServiceManager) doStop(task *state.Task, tomb *tomb.Tomb) error {
 	s := m.services[request.Name]
 	if s == nil || s.getStateLocked() == stateStopped {
 		m.servicesLock.Unlock()
-		m.state.Lock()
-		task.Logf("Service %q already stopped.", request.Name)
-		m.state.Unlock()
+		taskLogf(task, "Service %q already stopped.", request.Name)
 		return nil
 	}
 	m.servicesLock.Unlock()
