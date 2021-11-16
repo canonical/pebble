@@ -702,16 +702,10 @@ func New(opts *Options) (*Daemon, error) {
 		untrustedSocketPath: opts.SocketPath + ".untrusted",
 	}
 
-	exitPebble := make(chan struct{})
-	go func() {
-		<-exitPebble
-		err := d.Stop(nil)
-		if err != nil {
-			logger.Noticef("Cannot stop daemon: %v", err)
-		}
-	}()
-
-	ovld, err := overlord.New(opts.Dir, d, opts.ServiceOutput, exitPebble)
+	stopDaemon := func() error {
+		return d.Stop(nil)
+	}
+	ovld, err := overlord.New(opts.Dir, d, opts.ServiceOutput, stopDaemon)
 	if err == state.ErrExpectedReboot {
 		// we proceed without overlord until we reach Stop
 		// where we will schedule and wait again for a system restart.

@@ -24,7 +24,7 @@ type ServiceManager struct {
 	services     map[string]*service
 
 	serviceOutput io.Writer
-	exitPebble    chan<- struct{}
+	stopDaemon    func() error
 }
 
 // LabelExists is the error returned by AppendLayer when a layer with that
@@ -37,14 +37,14 @@ func (e *LabelExists) Error() string {
 	return fmt.Sprintf("layer %q already exists", e.Label)
 }
 
-func NewManager(s *state.State, runner *state.TaskRunner, pebbleDir string, serviceOutput io.Writer, exitPebble chan<- struct{}) (*ServiceManager, error) {
+func NewManager(s *state.State, runner *state.TaskRunner, pebbleDir string, serviceOutput io.Writer, stopDaemon func() error) (*ServiceManager, error) {
 	manager := &ServiceManager{
 		state:         s,
 		runner:        runner,
 		pebbleDir:     pebbleDir,
 		services:      make(map[string]*service),
 		serviceOutput: serviceOutput,
-		exitPebble:    exitPebble,
+		stopDaemon:    stopDaemon,
 	}
 
 	runner.AddHandler("start", manager.doStart, nil)

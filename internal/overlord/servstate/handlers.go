@@ -411,7 +411,10 @@ func (s *service) exited(waitErr error) error {
 
 		case plan.ActionExitPebble:
 			logger.Noticef("Service %q %s action is %q, triggering server exit", s.config.Name, onType, action)
-			close(s.manager.exitPebble)
+			err := s.manager.stopDaemon()
+			if err != nil {
+				logger.Noticef("Cannot stop server: %v", err)
+			}
 			s.transition(stateStopped)
 
 		case plan.ActionRestart:

@@ -61,7 +61,7 @@ type S struct {
 
 	manager    *servstate.ServiceManager
 	runner     *state.TaskRunner
-	exitPebble chan struct{}
+	stopDaemon chan struct{}
 }
 
 var _ = Suite(&S{})
@@ -139,8 +139,11 @@ func (s *S) SetUpTest(c *C) {
 	})
 
 	s.runner = state.NewTaskRunner(s.st)
-	s.exitPebble = make(chan struct{})
-	manager, err := servstate.NewManager(s.st, s.runner, s.dir, logOutput, s.exitPebble)
+	s.stopDaemon = make(chan struct{})
+	manager, err := servstate.NewManager(s.st, s.runner, s.dir, logOutput, func() error {
+		close(s.stopDaemon)
+		return nil
+	})
 	c.Assert(err, IsNil)
 	s.manager = manager
 
@@ -867,9 +870,9 @@ services:
 		return svc.Current == servstate.StatusInactive
 	})
 
-	// It should have closed the exitPebble channel.
+	// It should have closed the stopDaemon channel.
 	select {
-	case <-s.exitPebble:
+	case <-s.stopDaemon:
 	case <-time.After(time.Second):
 		c.Fatalf("timed out waiting for exit-pebble channel")
 	}
