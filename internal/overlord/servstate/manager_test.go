@@ -674,18 +674,18 @@ func (s *S) TestServices(c *C) {
 	services, err := s.manager.Services(nil)
 	c.Assert(err, IsNil)
 	c.Assert(services, DeepEquals, []*servstate.ServiceInfo{
-		{Name: "test1", Current: servstate.StatusInactive, Startup: servstate.StartupEnabled, NumBackoffs: 7},
-		{Name: "test2", Current: servstate.StatusInactive, Startup: servstate.StartupDisabled, NumBackoffs: 7},
-		{Name: "test3", Current: servstate.StatusInactive, Startup: servstate.StartupDisabled, NumBackoffs: 7},
-		{Name: "test4", Current: servstate.StatusInactive, Startup: servstate.StartupDisabled, NumBackoffs: 7},
-		{Name: "test5", Current: servstate.StatusInactive, Startup: servstate.StartupDisabled, NumBackoffs: 7},
+		{Name: "test1", Current: servstate.StatusInactive, Startup: servstate.StartupEnabled},
+		{Name: "test2", Current: servstate.StatusInactive, Startup: servstate.StartupDisabled},
+		{Name: "test3", Current: servstate.StatusInactive, Startup: servstate.StartupDisabled},
+		{Name: "test4", Current: servstate.StatusInactive, Startup: servstate.StartupDisabled},
+		{Name: "test5", Current: servstate.StatusInactive, Startup: servstate.StartupDisabled},
 	})
 
 	services, err = s.manager.Services([]string{"test2", "test3"})
 	c.Assert(err, IsNil)
 	c.Assert(services, DeepEquals, []*servstate.ServiceInfo{
-		{Name: "test2", Current: servstate.StatusInactive, Startup: servstate.StartupDisabled, NumBackoffs: 7},
-		{Name: "test3", Current: servstate.StatusInactive, Startup: servstate.StartupDisabled, NumBackoffs: 7},
+		{Name: "test2", Current: servstate.StatusInactive, Startup: servstate.StartupDisabled},
+		{Name: "test3", Current: servstate.StatusInactive, Startup: servstate.StartupDisabled},
 	})
 
 	// Start a service and ensure it's marked active
@@ -694,11 +694,11 @@ func (s *S) TestServices(c *C) {
 	services, err = s.manager.Services(nil)
 	c.Assert(err, IsNil)
 	c.Assert(services, DeepEquals, []*servstate.ServiceInfo{
-		{Name: "test1", Current: servstate.StatusInactive, Startup: servstate.StartupEnabled, NumBackoffs: 7},
-		{Name: "test2", Current: servstate.StatusActive, Startup: servstate.StartupDisabled, NumBackoffs: 7},
-		{Name: "test3", Current: servstate.StatusInactive, Startup: servstate.StartupDisabled, NumBackoffs: 7},
-		{Name: "test4", Current: servstate.StatusInactive, Startup: servstate.StartupDisabled, NumBackoffs: 7},
-		{Name: "test5", Current: servstate.StatusInactive, Startup: servstate.StartupDisabled, NumBackoffs: 7},
+		{Name: "test1", Current: servstate.StatusInactive, Startup: servstate.StartupEnabled},
+		{Name: "test2", Current: servstate.StatusActive, Startup: servstate.StartupDisabled},
+		{Name: "test3", Current: servstate.StatusInactive, Startup: servstate.StartupDisabled},
+		{Name: "test4", Current: servstate.StatusInactive, Startup: servstate.StartupDisabled},
+		{Name: "test5", Current: servstate.StatusInactive, Startup: servstate.StartupDisabled},
 	})
 }
 
@@ -770,8 +770,7 @@ services:
 	svc := s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
 		return svc.Current == servstate.StatusActive
 	})
-	c.Assert(svc.BackoffNum, Equals, 0)
-	c.Assert(svc.NumBackoffs, Equals, 3)
+	c.Assert(s.manager.BackoffIndex("test2"), Equals, 0)
 	s.st.Lock()
 	c.Check(chg.Status(), Equals, state.DoneStatus)
 	s.st.Unlock()
@@ -783,7 +782,7 @@ services:
 
 	// Wait for it to restart (first backoff time is 0).
 	svc = s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
-		return svc.Current == servstate.StatusActive && svc.BackoffNum == 1
+		return svc.Current == servstate.StatusActive && s.manager.BackoffIndex("test2") == 1
 	})
 	time.Sleep(25 * time.Millisecond) // ensure it has enough time to write to the log
 	c.Check(s.logBufferString(), Matches, `2.* \[test2\] test2\n`)
@@ -794,7 +793,7 @@ services:
 
 	// Wait for it to go into backoff state.
 	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
-		return svc.Current == servstate.StatusBackoff && svc.BackoffNum == 2
+		return svc.Current == servstate.StatusBackoff && s.manager.BackoffIndex("test2") == 2
 	})
 
 	// Then wait for it to auto-restart (backoff time plus a bit).
@@ -809,7 +808,7 @@ services:
 
 	// Wait for it to go into backoff state.
 	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
-		return svc.Current == servstate.StatusBackoff && svc.BackoffNum == 3
+		return svc.Current == servstate.StatusBackoff && s.manager.BackoffIndex("test2") == 3
 	})
 
 	// Then wait for it to auto-restart (backoff time plus a bit).
@@ -826,7 +825,7 @@ services:
 	svc = s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
 		return svc.Current == servstate.StatusInactive
 	})
-	c.Assert(svc.BackoffNum, Equals, 3)
+	c.Assert(s.manager.BackoffIndex("test2"), Equals, 3)
 
 	// Ensure it's still stopped after a bit.
 	time.Sleep(125 * time.Millisecond)

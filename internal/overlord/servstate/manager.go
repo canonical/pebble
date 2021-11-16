@@ -190,11 +190,9 @@ func (m *ServiceManager) Ensure() error {
 }
 
 type ServiceInfo struct {
-	Name        string
-	Startup     ServiceStartup
-	Current     ServiceStatus
-	BackoffNum  int
-	NumBackoffs int
+	Name    string
+	Startup ServiceStartup
+	Current ServiceStatus
 }
 
 type ServiceStartup string
@@ -244,8 +242,6 @@ func (m *ServiceManager) Services(names []string) ([]*ServiceInfo, error) {
 		if config.Startup == plan.StartupEnabled {
 			info.Startup = StartupEnabled
 		}
-		backoffs, _ := config.ParseBackoff()
-		info.NumBackoffs = len(backoffs)
 		if s, ok := m.services[name]; ok {
 			switch s.state {
 			case stateInitial, stateStarting, stateRunning:
@@ -258,7 +254,6 @@ func (m *ServiceManager) Services(names []string) ([]*ServiceInfo, error) {
 			default:
 				info.Current = StatusError
 			}
-			info.BackoffNum = s.backoffIndex
 		}
 		services = append(services, info)
 	}

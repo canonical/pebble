@@ -224,10 +224,10 @@ func (s *apiSuite) TestServicesGet(c *C) {
 	err = json.Unmarshal(rec.Body.Bytes(), &body)
 	c.Check(err, IsNil)
 	c.Check(body["result"], DeepEquals, []interface{}{
-		map[string]interface{}{"startup": "enabled", "name": "test1", "current": "inactive", "backoff-num": 0.0, "num-backoffs": 7.0},
-		map[string]interface{}{"startup": "disabled", "name": "test2", "current": "inactive", "backoff-num": 0.0, "num-backoffs": 7.0},
-		map[string]interface{}{"startup": "disabled", "name": "test3", "current": "inactive", "backoff-num": 0.0, "num-backoffs": 7.0},
-		map[string]interface{}{"startup": "disabled", "name": "test4", "current": "inactive", "backoff-num": 0.0, "num-backoffs": 7.0},
+		map[string]interface{}{"startup": "enabled", "name": "test1", "current": "inactive"},
+		map[string]interface{}{"startup": "disabled", "name": "test2", "current": "inactive"},
+		map[string]interface{}{"startup": "disabled", "name": "test3", "current": "inactive"},
+		map[string]interface{}{"startup": "disabled", "name": "test4", "current": "inactive"},
 	})
 }
 

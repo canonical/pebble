@@ -27,11 +27,9 @@ import (
 )
 
 type serviceInfo struct {
-	Name        string `json:"name"`
-	Startup     string `json:"startup"`
-	Current     string `json:"current"`
-	BackoffNum  int    `json:"backoff-num"`
-	NumBackoffs int    `json:"num-backoffs"`
+	Name    string `json:"name"`
+	Startup string `json:"startup"`
+	Current string `json:"current"`
 }
 
 func v1GetServices(c *Command, r *http.Request, _ *userState) Response {
@@ -46,11 +44,9 @@ func v1GetServices(c *Command, r *http.Request, _ *userState) Response {
 	infos := make([]serviceInfo, 0, len(services))
 	for _, svc := range services {
 		info := serviceInfo{
-			Name:        svc.Name,
-			Startup:     string(svc.Startup),
-			Current:     string(svc.Current),
-			BackoffNum:  svc.BackoffNum,
-			NumBackoffs: svc.NumBackoffs,
+			Name:    svc.Name,
+			Startup: string(svc.Startup),
+			Current: string(svc.Current),
 		}
 		infos = append(infos, info)
 	}

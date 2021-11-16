@@ -35,6 +35,17 @@ func (m *ServiceManager) RunningCmds() map[string]*exec.Cmd {
 	return cmds
 }
 
+func (m *ServiceManager) BackoffIndex(serviceName string) int {
+	m.servicesLock.Lock()
+	defer m.servicesLock.Unlock()
+
+	s := m.services[serviceName]
+	if s == nil {
+		return -1
+	}
+	return s.backoffIndex
+}
+
 func FakeOkayWait(wait time.Duration) (restore func()) {
 	old := okayWait
 	okayWait = wait
