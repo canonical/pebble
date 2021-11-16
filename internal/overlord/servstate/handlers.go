@@ -91,8 +91,8 @@ func (s serviceState) String() string {
 	}
 }
 
-// serviceInfo holds the information for a service under our control.
-type serviceInfo struct {
+// serviceData holds the state and other data for a service under our control.
+type serviceData struct {
 	manager      *ServiceManager
 	state        serviceState
 	config       *plan.Service
@@ -164,7 +164,7 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 // creates a new service object if one doesn't exist, returns the existing one
 // if it already exists but is stopped, or returns nil if it already exists
 // and is running.
-func (m *ServiceManager) serviceForStart(config *plan.Service) *serviceInfo {
+func (m *ServiceManager) serviceForStart(config *plan.Service) *serviceData {
 	m.servicesLock.Lock()
 	defer m.servicesLock.Unlock()
 
@@ -174,7 +174,7 @@ func (m *ServiceManager) serviceForStart(config *plan.Service) *serviceInfo {
 	}
 
 	if service == nil {
-		service = &serviceInfo{
+		service = &serviceData{
 			manager: m,
 			state:   stateInitial,
 			config:  config.Copy(),
@@ -241,7 +241,7 @@ func (m *ServiceManager) doStop(task *state.Task, tomb *tomb.Tomb) error {
 // serviceForStart looks up the service by name in the services map; it
 // returns the service object if it exists and is running, or nil if it
 // doesn't exist or is stopped.
-func (m *ServiceManager) serviceForStop(name string) *serviceInfo {
+func (m *ServiceManager) serviceForStop(name string) *serviceData {
 	m.servicesLock.Lock()
 	defer m.servicesLock.Unlock()
 
@@ -260,13 +260,13 @@ func (m *ServiceManager) removeService(name string) {
 }
 
 // transition changes the service's state machine to the given state.
-func (s *serviceInfo) transition(state serviceState) {
+func (s *serviceData) transition(state serviceState) {
 	logger.Debugf("Service %q transitioning to state %q", s.config.Name, state)
 	s.state = state
 }
 
 // start is called to transition from the initial state and start the service.
-func (s *serviceInfo) start() error {
+func (s *serviceData) start() error {
 	s.manager.servicesLock.Lock()
 	defer s.manager.servicesLock.Unlock()
 
@@ -294,7 +294,7 @@ func logError(err error) {
 // startInternal is an internal helper used to actually start (or restart) the
 // command. It assumes the caller has ensures the service is in a valid state,
 // and it sets s.cmd and other relevant fields.
-func (s *serviceInfo) startInternal() error {
+func (s *serviceData) startInternal() error {
 	args, err := shlex.Split(s.config.Command)
 	if err != nil {
 		// Shouldn't happen as it should have failed on parsing, but
@@ -374,7 +374,7 @@ func (s *serviceInfo) startInternal() error {
 
 // okayWaitElapsed is called when the okay-wait timer has elapsed (and the
 // service is considered running successfully).
-func (s *serviceInfo) okayWaitElapsed() error {
+func (s *serviceData) okayWaitElapsed() error {
 	s.manager.servicesLock.Lock()
 	defer s.manager.servicesLock.Unlock()
 
@@ -391,7 +391,7 @@ func (s *serviceInfo) okayWaitElapsed() error {
 }
 
 // exited is called when the service's process exits.
-func (s *serviceInfo) exited(waitErr error) error {
+func (s *serviceData) exited(waitErr error) error {
 	s.manager.servicesLock.Lock()
 	defer s.manager.servicesLock.Unlock()
 
@@ -481,7 +481,7 @@ func getAction(config *plan.Service, success bool) (action plan.ServiceAction, o
 
 // sendSignal sends the given signal to a running service. Note that this
 // function doesn't lock; it assumes the caller will.
-func (s *serviceInfo) sendSignal(signal string) error {
+func (s *serviceData) sendSignal(signal string) error {
 	switch s.state {
 	case stateStarting, stateRunning:
 		err := syscall.Kill(-s.cmd.Process.Pid, unix.SignalNum(signal))
@@ -499,7 +499,7 @@ func (s *serviceInfo) sendSignal(signal string) error {
 }
 
 // stop is called to stop a running (and backing off) service.
-func (s *serviceInfo) stop() error {
+func (s *serviceData) stop() error {
 	s.manager.servicesLock.Lock()
 	defer s.manager.servicesLock.Unlock()
 
@@ -525,7 +525,7 @@ func (s *serviceInfo) stop() error {
 
 // backoffElapsed is called when the current backoff's timer has elapsed, to
 // restart the service.
-func (s *serviceInfo) backoffElapsed() error {
+func (s *serviceData) backoffElapsed() error {
 	s.manager.servicesLock.Lock()
 	defer s.manager.servicesLock.Unlock()
 
@@ -547,7 +547,7 @@ func (s *serviceInfo) backoffElapsed() error {
 
 // terminateTimeElapsed is called after stop sends SIGTERM and the service
 // still hasn't exited (and we then send SIGTERM).
-func (s *serviceInfo) terminateTimeElapsed() error {
+func (s *serviceData) terminateTimeElapsed() error {
 	s.manager.servicesLock.Lock()
 	defer s.manager.servicesLock.Unlock()
 
@@ -570,7 +570,7 @@ func (s *serviceInfo) terminateTimeElapsed() error {
 
 // killTimeElapsed is called some time after we've send SIGKILL to acknowledge
 // to stop's caller that we can't seem to stop the service.
-func (s *serviceInfo) killTimeElapsed() error {
+func (s *serviceData) killTimeElapsed() error {
 	s.manager.servicesLock.Lock()
 	defer s.manager.servicesLock.Unlock()
 
@@ -587,7 +587,7 @@ func (s *serviceInfo) killTimeElapsed() error {
 
 // startTimeElapsed is called after the plan's start-time has elapsed,
 // indicating the service is running successfully.
-func (s *serviceInfo) startTimeElapsed() error {
+func (s *serviceData) startTimeElapsed() error {
 	s.manager.servicesLock.Lock()
 	defer s.manager.servicesLock.Unlock()
 

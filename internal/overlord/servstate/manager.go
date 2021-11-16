@@ -21,7 +21,7 @@ type ServiceManager struct {
 	plan     *plan.Plan
 
 	servicesLock sync.Mutex
-	services     map[string]*serviceInfo
+	services     map[string]*serviceData
 
 	serviceOutput io.Writer
 	stopDaemon    func() error
@@ -42,7 +42,7 @@ func NewManager(s *state.State, runner *state.TaskRunner, pebbleDir string, serv
 		state:         s,
 		runner:        runner,
 		pebbleDir:     pebbleDir,
-		services:      make(map[string]*serviceInfo),
+		services:      make(map[string]*serviceData),
 		serviceOutput: serviceOutput,
 		stopDaemon:    stopDaemon,
 	}
