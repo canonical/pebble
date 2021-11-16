@@ -5,7 +5,6 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"sync"
 	"syscall"
 	"time"
 
@@ -94,7 +93,6 @@ func (s serviceState) String() string {
 
 // service holds the information for a service under our control.
 type service struct {
-	lock         sync.Mutex
 	manager      *ServiceManager
 	state        serviceState
 	config       *plan.Service
@@ -170,7 +168,7 @@ func (m *ServiceManager) serviceForStart(config *plan.Service) *service {
 	defer m.servicesLock.Unlock()
 
 	s := m.services[config.Name]
-	if s != nil && s.getStateLocked() != stateStopped {
+	if s != nil && s.state != stateStopped {
 		return nil
 	}
 
@@ -246,7 +244,7 @@ func (m *ServiceManager) serviceForStop(name string) *service {
 	defer m.servicesLock.Unlock()
 
 	s := m.services[name]
-	if s == nil || s.getStateLocked() == stateStopped {
+	if s == nil || s.state == stateStopped {
 		return nil
 	}
 	return s
@@ -265,16 +263,10 @@ func (s *service) transition(state serviceState) {
 	s.state = state
 }
 
-func (s *service) getStateLocked() serviceState {
-	s.lock.Lock()
-	defer s.lock.Unlock()
-	return s.state
-}
-
 // start is called to transition from the initial state and start the service.
 func (s *service) start() error {
-	s.lock.Lock()
-	defer s.lock.Unlock()
+	s.manager.servicesLock.Lock()
+	defer s.manager.servicesLock.Unlock()
 
 	switch s.state {
 	case stateInitial:
@@ -379,8 +371,8 @@ func (s *service) startInternal() error {
 // okayWaitElapsed is called when the okay-wait timer has elapsed (and the
 // service is considered running successfully).
 func (s *service) okayWaitElapsed() error {
-	s.lock.Lock()
-	defer s.lock.Unlock()
+	s.manager.servicesLock.Lock()
+	defer s.manager.servicesLock.Unlock()
 
 	switch s.state {
 	case stateStarting:
@@ -396,8 +388,8 @@ func (s *service) okayWaitElapsed() error {
 
 // exited is called when the service's process exits.
 func (s *service) exited(waitErr error) error {
-	s.lock.Lock()
-	defer s.lock.Unlock()
+	s.manager.servicesLock.Lock()
+	defer s.manager.servicesLock.Unlock()
 
 	if s.resetTimer != nil {
 		s.resetTimer.Stop()
@@ -481,11 +473,9 @@ func getAction(config *plan.Service, success bool) (action plan.ServiceAction, o
 	}
 }
 
-// sendSignal sends the given signal to a running service.
+// sendSignal sends the given signal to a running service. Note that this
+// function doesn't lock; it assumes the caller will.
 func (s *service) sendSignal(signal string) error {
-	s.lock.Lock()
-	defer s.lock.Unlock()
-
 	switch s.state {
 	case stateStarting, stateRunning:
 		err := syscall.Kill(-s.cmd.Process.Pid, unix.SignalNum(signal))
@@ -504,8 +494,8 @@ func (s *service) sendSignal(signal string) error {
 
 // stop is called to stop a running (and backing off) service.
 func (s *service) stop() error {
-	s.lock.Lock()
-	defer s.lock.Unlock()
+	s.manager.servicesLock.Lock()
+	defer s.manager.servicesLock.Unlock()
 
 	switch s.state {
 	case stateRunning:
@@ -530,8 +520,8 @@ func (s *service) stop() error {
 // backoffWaitElapsed is called when the current backoff's timer has elapsed,
 // to restart the service.
 func (s *service) backoffWaitElapsed() error {
-	s.lock.Lock()
-	defer s.lock.Unlock()
+	s.manager.servicesLock.Lock()
+	defer s.manager.servicesLock.Unlock()
 
 	switch s.state {
 	case stateBackoffWait:
@@ -552,8 +542,8 @@ func (s *service) backoffWaitElapsed() error {
 // terminateTimeElapsed is called after stop sends SIGTERM and the service
 // still hasn't exited (and we then send SIGTERM).
 func (s *service) terminateTimeElapsed() error {
-	s.lock.Lock()
-	defer s.lock.Unlock()
+	s.manager.servicesLock.Lock()
+	defer s.manager.servicesLock.Unlock()
 
 	switch s.state {
 	case stateTerminating:
@@ -575,8 +565,8 @@ func (s *service) terminateTimeElapsed() error {
 // killTimeElapsed is called some time after we've send SIGKILL to acknowledge
 // to stop's caller that we can't seem to stop the service.
 func (s *service) killTimeElapsed() error {
-	s.lock.Lock()
-	defer s.lock.Unlock()
+	s.manager.servicesLock.Lock()
+	defer s.manager.servicesLock.Unlock()
 
 	switch s.state {
 	case stateKilling:
@@ -592,8 +582,8 @@ func (s *service) killTimeElapsed() error {
 // startTimeElapsed is called after the plan's start-time has elapsed,
 // indicating the service is running successfully.
 func (s *service) startTimeElapsed() error {
-	s.lock.Lock()
-	defer s.lock.Unlock()
+	s.manager.servicesLock.Lock()
+	defer s.manager.servicesLock.Unlock()
 
 	switch s.state {
 	case stateRunning:

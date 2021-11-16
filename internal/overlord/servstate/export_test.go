@@ -28,11 +28,9 @@ func (m *ServiceManager) RunningCmds() map[string]*exec.Cmd {
 
 	cmds := make(map[string]*exec.Cmd)
 	for name, s := range m.services {
-		s.lock.Lock()
 		if s.state == stateRunning {
 			cmds[name] = s.cmd
 		}
-		s.lock.Unlock()
 	}
 	return cmds
 }

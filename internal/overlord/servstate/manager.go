@@ -246,7 +246,6 @@ func (m *ServiceManager) Services(names []string) ([]*ServiceInfo, error) {
 		backoffs, _ := config.ParseBackoff()
 		info.NumBackoffs = len(backoffs)
 		if s, ok := m.services[name]; ok {
-			s.lock.Lock()
 			switch s.state {
 			case stateInitial, stateStarting, stateRunning:
 				info.Current = StatusActive
@@ -254,7 +253,6 @@ func (m *ServiceManager) Services(names []string) ([]*ServiceInfo, error) {
 				info.Current = StatusError
 			}
 			info.BackoffNum = s.backoffIndex
-			s.lock.Unlock()
 		}
 		services = append(services, info)
 	}
@@ -358,15 +356,12 @@ func (m *ServiceManager) Replan() ([]string, []string, error) {
 	needsRestart := make(map[string]bool)
 	var stop []string
 	for name, s := range m.services {
-		s.lock.Lock()
 		if config, ok := m.plan.Services[name]; ok && config.Equal(s.config) {
 			if config.Equal(s.config) {
-				s.lock.Unlock()
 				continue
 			}
 			s.config = config.Copy() // update service config from plan
 		}
-		s.lock.Unlock()
 		needsRestart[name] = true
 		stop = append(stop, name)
 	}
