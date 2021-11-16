@@ -97,7 +97,7 @@ type serviceInfo struct {
 	state        serviceState
 	config       *plan.Service
 	logs         *servicelog.RingBuffer
-	started      chan *int
+	started      chan error
 	stopped      chan error
 	cmd          *exec.Cmd
 	backoffIndex int
@@ -141,10 +141,10 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 	timeout := time.After(okayWait + 100*time.Millisecond)
 	for {
 		select {
-		case exitCode := <-service.started:
-			if exitCode != nil {
+		case err := <-service.started:
+			if err != nil {
 				m.removeService(config.Name)
-				return fmt.Errorf("cannot start service: exited quickly with code %d", *exitCode)
+				return fmt.Errorf("cannot start service: %w", err)
 			}
 			// Started successfully (ran for small amount of time without exiting).
 			return nil
@@ -184,7 +184,7 @@ func (m *ServiceManager) serviceForStart(config *plan.Service) *serviceInfo {
 		service.backoffIndex = 0
 		service.transition(stateInitial)
 	}
-	service.started = make(chan *int, 1)
+	service.started = make(chan error, 1)
 	return service
 }
 
@@ -397,8 +397,7 @@ func (s *serviceInfo) exited(waitErr error) error {
 
 	switch s.state {
 	case stateStarting:
-		code := exitCode(s.cmd)
-		s.started <- &code
+		s.started <- fmt.Errorf("exited quickly with code %d", exitCode(s.cmd))
 
 	case stateRunning:
 		logger.Noticef("Service %q stopped unexpectedly with code %d", s.config.Name, exitCode(s.cmd))
