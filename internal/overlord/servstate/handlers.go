@@ -149,10 +149,11 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 			// Started successfully (ran for small amount of time without exiting).
 			return nil
 		case <-tomb.Dying():
-			// Start cancelled (shouldn't really happen, so disallow for simplicity).
-			logger.Noticef("Cannot cancel start (service %q)", config.Name)
+			// Start operation cancelled (ignore for simplicity).
+			logger.Noticef("Ignoring cancellation of start for service %q", config.Name)
 		case <-timeout:
-			// Should never happen, but don't block just in case we get something wrong.
+			// Should never happen, because okayWaitElapsed and exited both send to the
+			// "started" channel, but don't block in case we got something wrong.
 			m.removeService(config.Name)
 			return fmt.Errorf("internal error: timed out waiting for start")
 		}
@@ -227,10 +228,11 @@ func (m *ServiceManager) doStop(task *state.Task, tomb *tomb.Tomb) error {
 			// Stopped successfully.
 			return nil
 		case <-tomb.Dying():
-			// Stop cancelled (shouldn't really happen, so disallow for simplicity).
-			logger.Noticef("Cannot cancel stop (service %q)", request.Name)
+			// Stop operation cancelled (ignore for simplicity).
+			logger.Noticef("Ignoring cancellation of stop for service %q", request.Name)
 		case <-timeout:
-			// Should never happen, but don't block just in case we get something wrong.
+			// Should never happen, because killTimeElapsed and exited both send to the
+			// "stopped" channel, but don't block in case we got something wrong.
 			return fmt.Errorf("internal error: timed out waiting for stop")
 		}
 	}
