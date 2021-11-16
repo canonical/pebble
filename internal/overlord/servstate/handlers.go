@@ -407,12 +407,12 @@ func (s *serviceInfo) exited(waitErr error) error {
 		logger.Noticef("Service %q stopped unexpectedly with code %d", s.config.Name, exitCode(s.cmd))
 		action, onType := getAction(s.config, waitErr == nil)
 		switch action {
-		case plan.ActionLog:
+		case plan.ActionIgnore:
 			// Log has already been written above, no further log is necessary.
 			logger.Debugf("Service %q %s action is %q, transitioning to stopped state", s.config.Name, onType, action)
 			s.transition(stateStopped)
 
-		case plan.ActionExitPebble:
+		case plan.ActionExit:
 			logger.Noticef("Service %q %s action is %q, triggering server exit", s.config.Name, onType, action)
 			err := s.manager.stopDaemon()
 			if err != nil {

@@ -152,10 +152,10 @@ const (
 type ServiceAction string
 
 const (
-	ActionUnset      ServiceAction = ""
-	ActionRestart    ServiceAction = "restart"
-	ActionExitPebble ServiceAction = "exit-pebble"
-	ActionLog        ServiceAction = "log"
+	ActionUnset   ServiceAction = ""
+	ActionRestart ServiceAction = "restart"
+	ActionExit    ServiceAction = "exit"
+	ActionIgnore  ServiceAction = "ignore"
 )
 
 // FormatError is the error returned when a layer has a format error, such as
@@ -438,7 +438,7 @@ func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 
 func validServiceAction(action ServiceAction) bool {
 	switch action {
-	case ActionUnset, ActionRestart, ActionExitPebble, ActionLog:
+	case ActionUnset, ActionRestart, ActionExit, ActionIgnore:
 		return true
 	default:
 		return false

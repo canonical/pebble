@@ -847,14 +847,14 @@ func (s *S) waitUntilService(c *C, service string, f func(svc *servstate.Service
 	return nil // satisfy compiler
 }
 
-func (s *S) TestExitPebble(c *C) {
+func (s *S) TestExit(c *C) {
 	// Override on-exit to specify we should exit Pebble when service exits.
 	layer := parseLayer(c, 0, "layer", `
 services:
     test2:
         override: replace
         command: sleep 0.15
-        on-exit: exit-pebble
+        on-exit: exit
 `)
 	err := s.manager.AppendLayer(layer)
 	c.Assert(err, IsNil)
@@ -874,18 +874,18 @@ services:
 	select {
 	case <-s.stopDaemon:
 	case <-time.After(time.Second):
-		c.Fatalf("timed out waiting for exit-pebble channel")
+		c.Fatalf("timed out waiting for stop-daemon channel")
 	}
 }
 
-func (s *S) TestOnExitLog(c *C) {
+func (s *S) TestOnExitIgnore(c *C) {
 	// Override on-exit to specify we should simply log when service exits.
 	layer := parseLayer(c, 0, "layer", `
 services:
     test2:
         override: replace
         command: sleep 0.15
-        on-exit: log
+        on-exit: ignore
 `)
 	err := s.manager.AppendLayer(layer)
 	c.Assert(err, IsNil)
@@ -912,27 +912,27 @@ func (s *S) TestGetAction(c *C) {
 		onType    string
 	}{
 		{onFailure: "", success: false, action: "restart", onType: "on-exit"},
-		{onFailure: "log", success: false, action: "log", onType: "on-failure"},
-		{onFailure: "exit-pebble", success: false, action: "exit-pebble", onType: "on-failure"},
+		{onFailure: "ignore", success: false, action: "ignore", onType: "on-failure"},
+		{onFailure: "exit", success: false, action: "exit", onType: "on-failure"},
 		{onFailure: "restart", success: false, action: "restart", onType: "on-failure"},
-		{onFailure: "exit-pebble", success: true, action: "restart", onType: "on-exit"},
+		{onFailure: "exit", success: true, action: "restart", onType: "on-exit"},
 
 		{onSuccess: "", success: true, action: "restart", onType: "on-exit"},
-		{onSuccess: "log", success: true, action: "log", onType: "on-success"},
-		{onSuccess: "exit-pebble", success: true, action: "exit-pebble", onType: "on-success"},
+		{onSuccess: "ignore", success: true, action: "ignore", onType: "on-success"},
+		{onSuccess: "exit", success: true, action: "exit", onType: "on-success"},
 		{onSuccess: "restart", success: true, action: "restart", onType: "on-success"},
-		{onSuccess: "exit-pebble", success: false, action: "restart", onType: "on-exit"},
+		{onSuccess: "exit", success: false, action: "restart", onType: "on-exit"},
 
 		{onExit: "", success: true, action: "restart", onType: "on-exit"},
-		{onExit: "log", success: true, action: "log", onType: "on-exit"},
-		{onExit: "exit-pebble", success: true, action: "exit-pebble", onType: "on-exit"},
+		{onExit: "ignore", success: true, action: "ignore", onType: "on-exit"},
+		{onExit: "exit", success: true, action: "exit", onType: "on-exit"},
 		{onExit: "restart", success: true, action: "restart", onType: "on-exit"},
-		{onExit: "exit-pebble", success: false, action: "exit-pebble", onType: "on-exit"},
+		{onExit: "exit", success: false, action: "exit", onType: "on-exit"},
 
-		{onFailure: "restart", onSuccess: "exit-pebble", success: true, action: "exit-pebble", onType: "on-success"},
-		{onFailure: "restart", onSuccess: "exit-pebble", success: false, action: "restart", onType: "on-failure"},
-		{onFailure: "restart", onSuccess: "exit-pebble", onExit: "log", success: true, action: "exit-pebble", onType: "on-success"},
-		{onFailure: "restart", onSuccess: "exit-pebble", onExit: "log", success: false, action: "restart", onType: "on-failure"},
+		{onFailure: "restart", onSuccess: "exit", success: true, action: "exit", onType: "on-success"},
+		{onFailure: "restart", onSuccess: "exit", success: false, action: "restart", onType: "on-failure"},
+		{onFailure: "restart", onSuccess: "exit", onExit: "ignore", success: true, action: "exit", onType: "on-success"},
+		{onFailure: "restart", onSuccess: "exit", onExit: "ignore", success: false, action: "restart", onType: "on-failure"},
 	}
 	for _, test := range tests {
 		config := &plan.Service{
