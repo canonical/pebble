@@ -208,8 +208,9 @@ type ServiceStatus string
 
 const (
 	StatusActive   ServiceStatus = "active"
-	StatusInactive ServiceStatus = "inactive"
+	StatusBackoff  ServiceStatus = "backoff"
 	StatusError    ServiceStatus = "error"
+	StatusInactive ServiceStatus = "inactive"
 )
 
 // Services returns the list of configured services and their status, sorted
@@ -249,7 +250,12 @@ func (m *ServiceManager) Services(names []string) ([]*ServiceInfo, error) {
 			switch s.state {
 			case stateInitial, stateStarting, stateRunning:
 				info.Current = StatusActive
+			case stateTerminating, stateKilling, stateStopped:
+				// Already set to inactive above, but it's nice to be explicit for each state
+				info.Current = StatusInactive
 			case stateBackoffWait:
+				info.Current = StatusBackoff
+			default:
 				info.Current = StatusError
 			}
 			info.BackoffNum = s.backoffIndex

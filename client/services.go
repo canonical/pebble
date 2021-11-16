@@ -100,8 +100,9 @@ type ServiceStatus string
 
 const (
 	StatusActive   ServiceStatus = "active"
-	StatusInactive ServiceStatus = "inactive"
+	StatusBackoff  ServiceStatus = "backoff"
 	StatusError    ServiceStatus = "error"
+	StatusInactive ServiceStatus = "inactive"
 )
 
 // Services fetches information about specific services (or all of them),

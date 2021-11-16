@@ -794,7 +794,7 @@ services:
 
 	// Wait for it to go into backoff-wait state (which translates to StatusError).
 	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
-		return svc.Current == servstate.StatusError && svc.BackoffNum == 2
+		return svc.Current == servstate.StatusBackoff && svc.BackoffNum == 2
 	})
 
 	// Then wait for it to auto-restart (backoff time plus a bit).
@@ -809,7 +809,7 @@ services:
 
 	// Wait for it to go into backoff-wait state (which translates to StatusError).
 	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
-		return svc.Current == servstate.StatusError && svc.BackoffNum == 3
+		return svc.Current == servstate.StatusBackoff && svc.BackoffNum == 3
 	})
 
 	// Then wait for it to auto-restart (backoff time plus a bit).
