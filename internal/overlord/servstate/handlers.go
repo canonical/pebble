@@ -325,6 +325,8 @@ func (s *serviceInfo) startInternal() error {
 	// Set up stdout and stderr to write to log ring buffer.
 	var outputIterator servicelog.Iterator
 	if s.manager.serviceOutput != nil {
+		// Use the head iterator so that we copy from where this service
+		// started (previous logs have already been copied).
 		outputIterator = s.logs.HeadIterator(0)
 	}
 	logWriter := servicelog.NewFormatWriter(s.logs, s.config.Name)
