@@ -12,8 +12,6 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-// TODO: add test of backoff-reset (backoffIndex reset to 0)
-
 package servstate_test
 
 import (
