@@ -344,7 +344,7 @@ func (s *serviceData) startInternal() error {
 		_ = s.logs.Close()
 		return fmt.Errorf("cannot start service: %v", err)
 	}
-	s.resetTimer = time.AfterFunc(s.config.StartTime.Value, func() { logError(s.startTimeElapsed()) })
+	s.resetTimer = time.AfterFunc(s.config.BackoffReset.Value, func() { logError(s.backoffResetElapsed()) })
 
 	// Start a goroutine to wait for the process to finish.
 	done := make(chan struct{})
@@ -409,7 +409,6 @@ func (s *serviceData) exited(waitErr error) error {
 		action, onType := getAction(s.config, waitErr == nil)
 		switch action {
 		case plan.ActionIgnore:
-			// Log has already been written above, no further log is necessary.
 			logger.Debugf("Service %q %s action is %q, transitioning to stopped state", s.config.Name, onType, action)
 			s.transition(stateStopped)
 
@@ -608,15 +607,16 @@ func (s *serviceData) killTimeElapsed() error {
 	return nil
 }
 
-// startTimeElapsed is called after the plan's start-time has elapsed,
-// indicating the service is running successfully.
-func (s *serviceData) startTimeElapsed() error {
+// backoffResetElapsed is called after the plan's backoff-reset has elapsed,
+// indicating we should reset the backoff time because the service is running
+// successfully.
+func (s *serviceData) backoffResetElapsed() error {
 	s.manager.servicesLock.Lock()
 	defer s.manager.servicesLock.Unlock()
 
 	switch s.state {
 	case stateRunning:
-		logger.Debugf("Start time elapsed, resetting backoff state (was backoff %d: %s)",
+		logger.Debugf("Backoff reset elapsed, resetting backoff state (was backoff %d: %s)",
 			s.backoffNum, s.backoffTime)
 		s.backoffNum = 0
 		s.backoffTime = 0

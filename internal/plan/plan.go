@@ -33,7 +33,7 @@ const (
 	defaultBackoffDelay  = 500 * time.Millisecond
 	defaultBackoffFactor = 2.0
 	defaultBackoffLimit  = 30 * time.Second
-	defaultStartTime     = 10 * time.Second
+	defaultBackoffReset  = 10 * time.Second
 )
 
 type Plan struct {
@@ -50,27 +50,34 @@ type Layer struct {
 }
 
 type Service struct {
-	Name          string            `yaml:"-"`
-	Summary       string            `yaml:"summary,omitempty"`
-	Description   string            `yaml:"description,omitempty"`
-	Startup       ServiceStartup    `yaml:"startup,omitempty"`
-	Override      ServiceOverride   `yaml:"override,omitempty"`
-	Command       string            `yaml:"command,omitempty"`
-	After         []string          `yaml:"after,omitempty"`
-	Before        []string          `yaml:"before,omitempty"`
-	Requires      []string          `yaml:"requires,omitempty"`
-	Environment   map[string]string `yaml:"environment,omitempty"`
-	UserID        *int              `yaml:"user-id,omitempty"`
-	User          string            `yaml:"user,omitempty"`
-	GroupID       *int              `yaml:"group-id,omitempty"`
-	Group         string            `yaml:"group,omitempty"`
-	OnExit        ServiceAction     `yaml:"on-exit,omitempty"`
-	OnFailure     ServiceAction     `yaml:"on-failure,omitempty"`
-	OnSuccess     ServiceAction     `yaml:"on-success,omitempty"`
-	BackoffDelay  OptionalDuration  `yaml:"backoff-delay,omitempty"`
-	BackoffFactor OptionalFloat     `yaml:"backoff-factor,omitempty"`
-	BackoffLimit  OptionalDuration  `yaml:"backoff-limit,omitempty"`
-	StartTime     OptionalDuration  `yaml:"start-time,omitempty"`
+	// Basic details
+	Name        string          `yaml:"-"`
+	Summary     string          `yaml:"summary,omitempty"`
+	Description string          `yaml:"description,omitempty"`
+	Startup     ServiceStartup  `yaml:"startup,omitempty"`
+	Override    ServiceOverride `yaml:"override,omitempty"`
+	Command     string          `yaml:"command,omitempty"`
+
+	// Service dependencies
+	After    []string `yaml:"after,omitempty"`
+	Before   []string `yaml:"before,omitempty"`
+	Requires []string `yaml:"requires,omitempty"`
+
+	// Options for command execution
+	Environment map[string]string `yaml:"environment,omitempty"`
+	UserID      *int              `yaml:"user-id,omitempty"`
+	User        string            `yaml:"user,omitempty"`
+	GroupID     *int              `yaml:"group-id,omitempty"`
+	Group       string            `yaml:"group,omitempty"`
+
+	// Auto-restart and backoff functionality
+	OnExit        ServiceAction    `yaml:"on-exit,omitempty"`
+	OnFailure     ServiceAction    `yaml:"on-failure,omitempty"`
+	OnSuccess     ServiceAction    `yaml:"on-success,omitempty"`
+	BackoffDelay  OptionalDuration `yaml:"backoff-delay,omitempty"`
+	BackoffFactor OptionalFloat    `yaml:"backoff-factor,omitempty"`
+	BackoffLimit  OptionalDuration `yaml:"backoff-limit,omitempty"`
+	BackoffReset  OptionalDuration `yaml:"backoff-reset,omitempty"`
 }
 
 // Copy returns a deep copy of the service.
@@ -204,8 +211,8 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 					if service.BackoffLimit.IsSet {
 						copy.BackoffLimit = service.BackoffLimit
 					}
-					if service.StartTime.IsSet {
-						copy.StartTime = service.StartTime
+					if service.BackoffReset.IsSet {
+						copy.BackoffReset = service.BackoffReset
 					}
 					combined.Services[name] = copy
 					break
@@ -396,10 +403,10 @@ func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 		if !service.BackoffLimit.IsSet {
 			service.BackoffLimit.Value = defaultBackoffLimit
 		}
-		if !service.StartTime.IsSet {
-			service.StartTime.Value = defaultStartTime
-		} else if service.StartTime.Value == 0 {
-			return nil, &FormatError{Message: "start-time must not be zero"}
+		if !service.BackoffReset.IsSet {
+			service.BackoffReset.Value = defaultBackoffReset
+		} else if service.BackoffReset.Value == 0 {
+			return nil, &FormatError{Message: "backoff-reset must not be zero"}
 		}
 
 		service.Name = name
