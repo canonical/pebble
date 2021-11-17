@@ -435,6 +435,7 @@ func (s *serviceData) exited(waitErr error) error {
 		}
 
 	case stateTerminating, stateKilling:
+		logger.Noticef("Service %q stopped", s.config.Name)
 		s.stopped <- nil
 		s.transition(stateStopped)
 
@@ -507,6 +508,7 @@ func getAction(config *plan.Service, success bool) (action plan.ServiceAction, o
 func (s *serviceData) sendSignal(signal string) error {
 	switch s.state {
 	case stateStarting, stateRunning:
+		logger.Noticef("Sending %s to service %q", signal, s.config.Name)
 		err := syscall.Kill(-s.cmd.Process.Pid, unix.SignalNum(signal))
 		if err != nil {
 			return err
@@ -528,6 +530,7 @@ func (s *serviceData) stop() error {
 
 	switch s.state {
 	case stateRunning:
+		logger.Debugf("Attempting to stop service %q by sending SIGTERM", s.config.Name)
 		// First send SIGTERM to try to terminate it gracefully.
 		err := syscall.Kill(-s.cmd.Process.Pid, syscall.SIGTERM)
 		if err != nil {
@@ -538,6 +541,7 @@ func (s *serviceData) stop() error {
 		time.AfterFunc(killWait, func() { logError(s.terminateTimeElapsed()) })
 
 	case stateBackoff:
+		logger.Noticef("Service %q stopped while waiting for backoff", s.config.Name)
 		s.transition(stateStopped)
 
 	default:
@@ -575,6 +579,7 @@ func (s *serviceData) terminateTimeElapsed() error {
 
 	switch s.state {
 	case stateTerminating:
+		logger.Debugf("Attempting to stop service %q again by sending SIGKILL", s.config.Name)
 		// Process hasn't exited after SIGTERM, try SIGKILL.
 		err := syscall.Kill(-s.cmd.Process.Pid, syscall.SIGKILL)
 		if err != nil {
@@ -598,6 +603,7 @@ func (s *serviceData) killTimeElapsed() error {
 
 	switch s.state {
 	case stateKilling:
+		logger.Noticef("Service %q still running after SIGTERM and SIGKILL", s.config.Name)
 		s.stopped <- fmt.Errorf("process still running after SIGTERM and SIGKILL")
 
 	default:
@@ -616,8 +622,8 @@ func (s *serviceData) backoffResetElapsed() error {
 
 	switch s.state {
 	case stateRunning:
-		logger.Debugf("Backoff reset elapsed, resetting backoff state (was backoff %d: %s)",
-			s.backoffNum, s.backoffTime)
+		logger.Debugf("Service %q backoff reset elapsed, resetting backoff state (was %d: %s)",
+			s.config.Name, s.backoffNum, s.backoffTime)
 		s.backoffNum = 0
 		s.backoffTime = 0
 
