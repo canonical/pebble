@@ -42,9 +42,9 @@ import (
 )
 
 const (
-	shortOkayWait = 100 * time.Millisecond
+	shortOkayWait = 50 * time.Millisecond
 	shortKillWait = 100 * time.Millisecond
-	shortFailWait = 1000 * time.Millisecond
+	shortFailWait = 200 * time.Millisecond
 )
 
 func Test(t *testing.T) { TestingT(t) }
@@ -755,6 +755,7 @@ services:
     test2:
         override: merge
         backoff-delay: 50ms
+        backoff-reset: 150ms
 `)
 	err := s.manager.AppendLayer(layer)
 	c.Assert(err, IsNil)
@@ -797,6 +798,25 @@ services:
 
 	// Then wait for it to auto-restart (backoff time plus a bit).
 	time.Sleep(125 * time.Millisecond)
+	svc = s.serviceByName(c, "test2")
+	c.Assert(svc.Current, Equals, servstate.StatusActive)
+	c.Check(s.logBufferString(), Matches, `2.* \[test2\] test2\n`)
+
+	// Test that backoff-reset is working
+	time.Sleep(175 * time.Millisecond)
+	c.Check(s.manager.BackoffNum("test2"), Equals, 0)
+
+	// Send signal to process to terminate it early.
+	err = s.manager.SendSignal([]string{"test2"}, "SIGTERM")
+	c.Assert(err, IsNil)
+
+	// Wait for it to go into backoff state (back to backoff 1 again).
+	svc = s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
+		return svc.Current == servstate.StatusBackoff && s.manager.BackoffNum("test2") == 1
+	})
+
+	// Then wait for it to auto-restart (backoff time plus a bit).
+	time.Sleep(75 * time.Millisecond)
 	svc = s.serviceByName(c, "test2")
 	c.Assert(svc.Current, Equals, servstate.StatusActive)
 	c.Check(s.logBufferString(), Matches, `2.* \[test2\] test2\n`)
