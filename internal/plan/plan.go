@@ -29,6 +29,13 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+const (
+	defaultBackoffDelay  = 500 * time.Millisecond
+	defaultBackoffFactor = 2.0
+	defaultBackoffLimit  = 30 * time.Second
+	defaultStartTime     = 10 * time.Second
+)
+
 type Plan struct {
 	Layers   []*Layer            `yaml:"-"`
 	Services map[string]*Service `yaml:"services,omitempty"`
@@ -43,25 +50,27 @@ type Layer struct {
 }
 
 type Service struct {
-	Name        string            `yaml:"-"`
-	Summary     string            `yaml:"summary,omitempty"`
-	Description string            `yaml:"description,omitempty"`
-	Startup     ServiceStartup    `yaml:"startup,omitempty"`
-	Override    ServiceOverride   `yaml:"override,omitempty"`
-	Command     string            `yaml:"command,omitempty"`
-	After       []string          `yaml:"after,omitempty"`
-	Before      []string          `yaml:"before,omitempty"`
-	Requires    []string          `yaml:"requires,omitempty"`
-	Environment map[string]string `yaml:"environment,omitempty"`
-	UserID      *int              `yaml:"user-id,omitempty"`
-	User        string            `yaml:"user,omitempty"`
-	GroupID     *int              `yaml:"group-id,omitempty"`
-	Group       string            `yaml:"group,omitempty"`
-	OnExit      ServiceAction     `yaml:"on-exit,omitempty"`
-	OnFailure   ServiceAction     `yaml:"on-failure,omitempty"`
-	OnSuccess   ServiceAction     `yaml:"on-success,omitempty"`
-	Backoff     *[]string         `yaml:"backoff,omitempty"`
-	StartTime   string            `yaml:"start-time,omitempty"`
+	Name          string            `yaml:"-"`
+	Summary       string            `yaml:"summary,omitempty"`
+	Description   string            `yaml:"description,omitempty"`
+	Startup       ServiceStartup    `yaml:"startup,omitempty"`
+	Override      ServiceOverride   `yaml:"override,omitempty"`
+	Command       string            `yaml:"command,omitempty"`
+	After         []string          `yaml:"after,omitempty"`
+	Before        []string          `yaml:"before,omitempty"`
+	Requires      []string          `yaml:"requires,omitempty"`
+	Environment   map[string]string `yaml:"environment,omitempty"`
+	UserID        *int              `yaml:"user-id,omitempty"`
+	User          string            `yaml:"user,omitempty"`
+	GroupID       *int              `yaml:"group-id,omitempty"`
+	Group         string            `yaml:"group,omitempty"`
+	OnExit        ServiceAction     `yaml:"on-exit,omitempty"`
+	OnFailure     ServiceAction     `yaml:"on-failure,omitempty"`
+	OnSuccess     ServiceAction     `yaml:"on-success,omitempty"`
+	BackoffDelay  OptionalDuration  `yaml:"backoff-delay,omitempty"`
+	BackoffFactor OptionalFloat     `yaml:"backoff-factor,omitempty"`
+	BackoffLimit  OptionalDuration  `yaml:"backoff-limit,omitempty"`
+	StartTime     OptionalDuration  `yaml:"start-time,omitempty"`
 }
 
 // Copy returns a deep copy of the service.
@@ -93,44 +102,6 @@ func (s *Service) Equal(other *Service) bool {
 		return true
 	}
 	return reflect.DeepEqual(s, other)
-}
-
-// ParseBackoff returns the parsed version of the backoff duration list, or
-// the default if it's not specified.
-func (s *Service) ParseBackoff() ([]time.Duration, error) {
-	if s.Backoff == nil {
-		return []time.Duration{
-			0,
-			10 * time.Second,
-			20 * time.Second,
-			40 * time.Second,
-			80 * time.Second,
-			160 * time.Second,
-			320 * time.Second,
-		}, nil
-	}
-	return parseDurationList(*s.Backoff)
-}
-
-func parseDurationList(strings []string) ([]time.Duration, error) {
-	durations := make([]time.Duration, len(strings))
-	for i, s := range strings {
-		d, err := time.ParseDuration(s)
-		if err != nil {
-			return nil, err
-		}
-		durations[i] = d
-	}
-	return durations, nil
-}
-
-// ParseStartTime returns the parsed version of the start time duration, or
-// the default if it's not specified.
-func (s *Service) ParseStartTime() (time.Duration, error) {
-	if s.StartTime == "" {
-		return 10 * time.Second, nil
-	}
-	return time.ParseDuration(s.StartTime)
 }
 
 type ServiceStartup string
@@ -224,15 +195,16 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 					if service.OnSuccess != "" {
 						copy.OnSuccess = service.OnSuccess
 					}
-					if service.Backoff != nil {
-						var backoff []string
-						if copy.Backoff != nil {
-							backoff = *copy.Backoff
-						}
-						backoff = append(backoff, *service.Backoff...)
-						copy.Backoff = &backoff
+					if service.BackoffDelay.IsSet {
+						copy.BackoffDelay = service.BackoffDelay
 					}
-					if service.StartTime != "" {
+					if service.BackoffFactor.IsSet {
+						copy.BackoffFactor = service.BackoffFactor
+					}
+					if service.BackoffLimit.IsSet {
+						copy.BackoffLimit = service.BackoffLimit
+					}
+					if service.StartTime.IsSet {
 						copy.StartTime = service.StartTime
 					}
 					combined.Services[name] = copy
@@ -403,6 +375,7 @@ func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 			}
 		}
 
+		// Set defaults and validate values
 		if !validServiceAction(service.OnExit) {
 			return nil, &FormatError{Message: fmt.Sprintf("invalid on-exit action %q", service.OnExit)}
 		}
@@ -412,19 +385,21 @@ func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 		if !validServiceAction(service.OnSuccess) {
 			return nil, &FormatError{Message: fmt.Sprintf("invalid on-success action %q", service.OnSuccess)}
 		}
-
-		// Validate fields that are specified as strings and require parsing.
-		_, err := service.ParseBackoff()
-		if err != nil {
-			return nil, &FormatError{
-				Message: fmt.Sprintf("invalid backoff duration list %q", *service.Backoff),
-			}
+		if !service.BackoffDelay.IsSet {
+			service.BackoffDelay.Value = defaultBackoffDelay
 		}
-		_, err = service.ParseStartTime()
-		if err != nil {
-			return nil, &FormatError{
-				Message: fmt.Sprintf("invalid start-time duration %q", service.StartTime),
-			}
+		if !service.BackoffFactor.IsSet {
+			service.BackoffFactor.Value = defaultBackoffFactor
+		} else if service.BackoffFactor.Value < 1 {
+			return nil, &FormatError{Message: fmt.Sprintf("backoff-factor must be 1.0 or greater, not %g", service.BackoffFactor.Value)}
+		}
+		if !service.BackoffLimit.IsSet {
+			service.BackoffLimit.Value = defaultBackoffLimit
+		}
+		if !service.StartTime.IsSet {
+			service.StartTime.Value = defaultStartTime
+		} else if service.StartTime.Value == 0 {
+			return nil, &FormatError{Message: "start-time must not be zero"}
 		}
 
 		service.Name = name

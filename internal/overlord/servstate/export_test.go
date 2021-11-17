@@ -20,6 +20,7 @@ import (
 	"time"
 )
 
+var CalculateNextBackoff = calculateNextBackoff
 var GetAction = getAction
 
 func (m *ServiceManager) RunningCmds() map[string]*exec.Cmd {
@@ -35,7 +36,7 @@ func (m *ServiceManager) RunningCmds() map[string]*exec.Cmd {
 	return cmds
 }
 
-func (m *ServiceManager) BackoffIndex(serviceName string) int {
+func (m *ServiceManager) BackoffNum(serviceName string) int {
 	m.servicesLock.Lock()
 	defer m.servicesLock.Unlock()
 
@@ -43,7 +44,7 @@ func (m *ServiceManager) BackoffIndex(serviceName string) int {
 	if s == nil {
 		return -1
 	}
-	return s.backoffIndex
+	return s.backoffNum
 }
 
 func (m *ServiceManager) GetJitter(duration time.Duration) time.Duration {

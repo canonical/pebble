@@ -203,6 +203,20 @@ func (s *S) startServices(c *C, services []string, nEnsure int) *state.Change {
 	return chg
 }
 
+func (s *S) stopServices(c *C, services []string, nEnsure int) *state.Change {
+	s.st.Lock()
+	ts, err := servstate.Stop(s.st, services)
+	c.Check(err, IsNil)
+	chg := s.st.NewChange("test", "Stop test")
+	chg.AddAll(ts)
+	s.st.Unlock()
+
+	// Num to ensure may be more than one due to the cross-task dependencies.
+	s.ensure(c, nEnsure)
+
+	return chg
+}
+
 func (s *S) startTestServices(c *C) {
 	chg := s.startServices(c, []string{"test1", "test2"}, 2)
 	s.st.Lock()
@@ -248,17 +262,7 @@ func (s *S) stopTestServices(c *C) {
 	cmds := s.manager.RunningCmds()
 	c.Check(cmds, HasLen, 2)
 
-	s.st.Lock()
-	// Stopping should happen in reverse order in practice. For now
-	// it's up to the call site to organize that.
-	ts, err := servstate.Stop(s.st, []string{"test1", "test2"})
-	c.Check(err, IsNil)
-	chg := s.st.NewChange("test", "Stop test")
-	chg.AddAll(ts)
-	s.st.Unlock()
-
-	// Twice due to the cross-task dependency.
-	s.ensure(c, 2)
+	chg := s.stopServices(c, []string{"test1", "test2"}, 2)
 
 	// Ensure processes are gone indeed.
 	c.Assert(cmds, HasLen, 2)
@@ -280,17 +284,7 @@ func (s *S) stopTestServicesAlreadyDead(c *C) {
 	cmds := s.manager.RunningCmds()
 	c.Check(cmds, HasLen, 0)
 
-	s.st.Lock()
-	// Stopping should happen in reverse order in practice. For now
-	// it's up to the call site to organize that.
-	ts, err := servstate.Stop(s.st, []string{"test1", "test2"})
-	c.Check(err, IsNil)
-	chg := s.st.NewChange("test", "Stop test")
-	chg.AddAll(ts)
-	s.st.Unlock()
-
-	// Twice due to the cross-task dependency.
-	s.ensure(c, 2)
+	chg := s.stopServices(c, []string{"test1", "test2"}, 2)
 
 	c.Assert(cmds, HasLen, 0)
 
@@ -755,12 +749,12 @@ func (f writerFunc) Write(p []byte) (int, error) {
 }
 
 func (s *S) TestRestart(c *C) {
-	// Add custom backoff time so it auto-restarts quickly.
+	// Add custom backoff delay so it auto-restarts quickly.
 	layer := parseLayer(c, 0, "layer", `
 services:
     test2:
         override: merge
-        backoff: [0, 50ms, 100ms]
+        backoff-delay: 50ms
 `)
 	err := s.manager.AppendLayer(layer)
 	c.Assert(err, IsNil)
@@ -770,30 +764,20 @@ services:
 	svc := s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
 		return svc.Current == servstate.StatusActive
 	})
-	c.Assert(s.manager.BackoffIndex("test2"), Equals, 0)
+	c.Assert(s.manager.BackoffNum("test2"), Equals, 0)
 	s.st.Lock()
 	c.Check(chg.Status(), Equals, state.DoneStatus)
 	s.st.Unlock()
+	time.Sleep(10 * time.Millisecond) // ensure it has enough time to write to the log
 	c.Check(s.logBufferString(), Matches, `2.* \[test2\] test2\n`)
 
 	// Send signal to process to terminate it early.
 	err = s.manager.SendSignal([]string{"test2"}, "SIGTERM")
 	c.Assert(err, IsNil)
 
-	// Wait for it to restart (first backoff time is 0).
-	svc = s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
-		return svc.Current == servstate.StatusActive && s.manager.BackoffIndex("test2") == 1
-	})
-	time.Sleep(25 * time.Millisecond) // ensure it has enough time to write to the log
-	c.Check(s.logBufferString(), Matches, `2.* \[test2\] test2\n`)
-
-	// Send signal to terminate it again.
-	err = s.manager.SendSignal([]string{"test2"}, "SIGTERM")
-	c.Assert(err, IsNil)
-
 	// Wait for it to go into backoff state.
-	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
-		return svc.Current == servstate.StatusBackoff && s.manager.BackoffIndex("test2") == 2
+	svc = s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
+		return svc.Current == servstate.StatusBackoff && s.manager.BackoffNum("test2") == 1
 	})
 
 	// Then wait for it to auto-restart (backoff time plus a bit).
@@ -808,7 +792,7 @@ services:
 
 	// Wait for it to go into backoff state.
 	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
-		return svc.Current == servstate.StatusBackoff && s.manager.BackoffIndex("test2") == 3
+		return svc.Current == servstate.StatusBackoff && s.manager.BackoffNum("test2") == 2
 	})
 
 	// Then wait for it to auto-restart (backoff time plus a bit).
@@ -816,22 +800,6 @@ services:
 	svc = s.serviceByName(c, "test2")
 	c.Assert(svc.Current, Equals, servstate.StatusActive)
 	c.Check(s.logBufferString(), Matches, `2.* \[test2\] test2\n`)
-
-	// Send signal to terminate it one last time.
-	err = s.manager.SendSignal([]string{"test2"}, "SIGTERM")
-	c.Assert(err, IsNil)
-
-	// Wait for it to go into stopped state after last backoff (which translates to StatusInactive).
-	svc = s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
-		return svc.Current == servstate.StatusInactive
-	})
-	c.Assert(s.manager.BackoffIndex("test2"), Equals, 3)
-
-	// Ensure it's still stopped after a bit.
-	time.Sleep(125 * time.Millisecond)
-	svc = s.serviceByName(c, "test2")
-	c.Assert(svc.Current, Equals, servstate.StatusInactive)
-	c.Check(s.logBufferString(), Matches, ``)
 }
 
 func (s *S) waitUntilService(c *C, service string, f func(svc *servstate.ServiceInfo) bool) *servstate.ServiceInfo {
@@ -970,5 +938,39 @@ func (s *S) TestGetJitter(c *C) {
 		if buckets[i] < 800 || buckets[i] > 1200 { // exceedingly unlikely to be outside this range
 			c.Errorf("bucket[%d] has too few or too many values in it (%d)", i, buckets[i])
 		}
+	}
+}
+
+func (s *S) TestCalculateNextBackoff(c *C) {
+	tests := []struct {
+		delay   time.Duration
+		factor  float64
+		limit   time.Duration
+		current time.Duration
+		next    time.Duration
+	}{
+		{delay: 500 * time.Millisecond, factor: 2, limit: 30 * time.Second, current: 0, next: 500 * time.Millisecond},
+		{delay: 500 * time.Millisecond, factor: 2, limit: 30 * time.Second, current: 500 * time.Millisecond, next: time.Second},
+		{delay: 500 * time.Millisecond, factor: 2, limit: 30 * time.Second, current: time.Second, next: 2 * time.Second},
+		{delay: 500 * time.Millisecond, factor: 2, limit: 30 * time.Second, current: 16 * time.Second, next: 30 * time.Second},
+		{delay: 500 * time.Millisecond, factor: 2, limit: 30 * time.Second, current: 30 * time.Second, next: 30 * time.Second},
+		{delay: 500 * time.Millisecond, factor: 2, limit: 30 * time.Second, current: 1000 * time.Second, next: 30 * time.Second},
+
+		{delay: time.Second, factor: 1.5, limit: 60 * time.Second, current: 0, next: time.Second},
+		{delay: time.Second, factor: 1.5, limit: 60 * time.Second, current: time.Second, next: 1500 * time.Millisecond},
+		{delay: time.Second, factor: 1.5, limit: 60 * time.Second, current: 1500 * time.Millisecond, next: 2250 * time.Millisecond},
+		{delay: time.Second, factor: 1.5, limit: 60 * time.Second, current: 50 * time.Second, next: 60 * time.Second},
+		{delay: time.Second, factor: 1.5, limit: 60 * time.Second, current: 60 * time.Second, next: 60 * time.Second},
+		{delay: time.Second, factor: 1.5, limit: 60 * time.Second, current: 70 * time.Second, next: 60 * time.Second},
+	}
+	for _, test := range tests {
+		config := &plan.Service{
+			BackoffDelay:  plan.OptionalDuration{Value: test.delay},
+			BackoffFactor: plan.OptionalFloat{Value: test.factor},
+			BackoffLimit:  plan.OptionalDuration{Value: test.limit},
+		}
+		next := servstate.CalculateNextBackoff(config, test.current)
+		c.Check(next, Equals, test.next, Commentf("delay=%s, factor=%g, limit=%s, current=%s",
+			test.delay, test.factor, test.limit, test.current))
 	}
 }

@@ -93,15 +93,16 @@ func (s serviceState) String() string {
 
 // serviceData holds the state and other data for a service under our control.
 type serviceData struct {
-	manager      *ServiceManager
-	state        serviceState
-	config       *plan.Service
-	logs         *servicelog.RingBuffer
-	started      chan error
-	stopped      chan error
-	cmd          *exec.Cmd
-	backoffIndex int
-	resetTimer   *time.Timer
+	manager     *ServiceManager
+	state       serviceState
+	config      *plan.Service
+	logs        *servicelog.RingBuffer
+	started     chan error
+	stopped     chan error
+	cmd         *exec.Cmd
+	backoffNum  int
+	backoffTime time.Duration
+	resetTimer  *time.Timer
 }
 
 func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
@@ -182,7 +183,8 @@ func (m *ServiceManager) serviceForStart(config *plan.Service) *serviceData {
 		}
 		m.services[config.Name] = service
 	} else {
-		service.backoffIndex = 0
+		service.backoffNum = 0
+		service.backoffTime = 0
 		service.transition(stateInitial)
 	}
 	service.started = make(chan error, 1)
@@ -342,8 +344,7 @@ func (s *serviceData) startInternal() error {
 		_ = s.logs.Close()
 		return fmt.Errorf("cannot start service: %v", err)
 	}
-	startTime, _ := s.config.ParseStartTime() // ignore error; it's already been validated
-	s.resetTimer = time.AfterFunc(startTime, func() { logError(s.startTimeElapsed()) })
+	s.resetTimer = time.AfterFunc(s.config.StartTime.Value, func() { logError(s.startTimeElapsed()) })
 
 	// Start a goroutine to wait for the process to finish.
 	done := make(chan struct{})
@@ -421,19 +422,12 @@ func (s *serviceData) exited(waitErr error) error {
 			s.transition(stateStopped)
 
 		case plan.ActionRestart:
-			backoffDurations, _ := s.config.ParseBackoff() // ignore error; it's already been validated
-			if s.backoffIndex >= len(backoffDurations) {
-				// No more backoffs, transition to stopped state.
-				logger.Noticef("Service %q %s action is %q: no more backoffs", s.config.Name, onType, action)
-				s.transition(stateStopped)
-				return nil
-			}
-			duration := backoffDurations[s.backoffIndex]
-			logger.Noticef("Service %q %s action is %q, waiting ~%s before restart (backoff %d/%d)",
-				s.config.Name, onType, action, duration, s.backoffIndex+1, len(backoffDurations))
-			s.backoffIndex++
+			s.backoffNum++
+			s.backoffTime = calculateNextBackoff(s.config, s.backoffTime)
+			logger.Noticef("Service %q %s action is %q, waiting ~%s before restart (backoff %d)",
+				s.config.Name, onType, action, s.backoffTime, s.backoffNum)
 			s.transition(stateBackoff)
-			duration += s.manager.getJitter(duration)
+			duration := s.backoffTime + s.manager.getJitter(s.backoffTime)
 			time.AfterFunc(duration, func() { logError(s.backoffElapsed()) })
 
 		default:
@@ -448,6 +442,24 @@ func (s *serviceData) exited(waitErr error) error {
 		return fmt.Errorf("exited invalid in state %q", s.state)
 	}
 	return nil
+}
+
+func calculateNextBackoff(config *plan.Service, current time.Duration) time.Duration {
+	if current == 0 {
+		// First backoff time
+		return config.BackoffDelay.Value
+	}
+	if current >= config.BackoffLimit.Value {
+		// We've already hit the limit.
+		return config.BackoffLimit.Value
+	}
+	// Multiply current time by backoff factor. If it has exceeded the limit, clamp it.
+	nextSeconds := current.Seconds() * config.BackoffFactor.Value
+	next := time.Duration(nextSeconds * float64(time.Second))
+	if next > config.BackoffLimit.Value {
+		next = config.BackoffLimit.Value
+	}
+	return next
 }
 
 // getJitter returns a randomized time jitter amount from 0-10% of the duration.
@@ -483,7 +495,7 @@ func getAction(config *plan.Service, success bool) (action plan.ServiceAction, o
 		return config.OnSuccess, "on-success"
 	default:
 		onExit := config.OnExit
-		if onExit == "" {
+		if onExit == plan.ActionUnset {
 			onExit = plan.ActionRestart // default for "on-exit"
 		}
 		return onExit, "on-exit"
@@ -604,8 +616,10 @@ func (s *serviceData) startTimeElapsed() error {
 
 	switch s.state {
 	case stateRunning:
-		logger.Debugf("Start time elapsed, resetting backoff counter (was %d)", s.backoffIndex)
-		s.backoffIndex = 0
+		logger.Debugf("Start time elapsed, resetting backoff state (was backoff %d: %s)",
+			s.backoffNum, s.backoffTime)
+		s.backoffNum = 0
+		s.backoffTime = 0
 
 	default:
 		// Ignore if timer elapsed in any other state.
