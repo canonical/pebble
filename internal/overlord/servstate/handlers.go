@@ -240,7 +240,7 @@ func (m *ServiceManager) doStop(task *state.Task, tomb *tomb.Tomb) error {
 	}
 }
 
-// serviceForStart looks up the service by name in the services map; it
+// serviceForStop looks up the service by name in the services map; it
 // returns the service object if it exists and is running, or nil if it
 // doesn't exist or is stopped.
 func (m *ServiceManager) serviceForStop(name string) *serviceData {
@@ -336,13 +336,14 @@ func (s *serviceData) startInternal() error {
 	s.cmd.Stderr = logWriter
 
 	// Start the process!
+	logger.Noticef("Service %q starting: %s", s.config.Name, s.config.Command)
 	err = s.cmd.Start()
 	if err != nil {
 		if outputIterator != nil {
 			_ = outputIterator.Close()
 		}
 		_ = s.logs.Close()
-		return fmt.Errorf("cannot start service: %v", err)
+		return fmt.Errorf("cannot start service: %w", err)
 	}
 	s.resetTimer = time.AfterFunc(s.config.BackoffReset.Value, func() { logError(s.backoffResetElapsed()) })
 
@@ -353,7 +354,7 @@ func (s *serviceData) startInternal() error {
 		close(done)
 		err := s.exited(waitErr)
 		if err != nil {
-			logger.Noticef("Cannot execute exited action: %v", err)
+			logger.Noticef("Cannot transition state after service exit: %v", err)
 		}
 	}()
 
@@ -364,7 +365,7 @@ func (s *serviceData) startInternal() error {
 			for outputIterator.Next(done) {
 				_, err := io.Copy(s.manager.serviceOutput, outputIterator)
 				if err != nil {
-					logger.Noticef("service %q log write failed: %v", s.config.Name, err)
+					logger.Noticef("Service %q log write failed: %v", s.config.Name, err)
 				}
 			}
 		}()
@@ -438,7 +439,7 @@ func (s *serviceData) exited(waitErr error) error {
 		s.transition(stateStopped)
 
 	default:
-		return fmt.Errorf("exited invalid in state %q", s.state)
+		return fmt.Errorf("internal error: exited invalid in state %q", s.state)
 	}
 	return nil
 }
@@ -515,12 +516,12 @@ func (s *serviceData) sendSignal(signal string) error {
 		return fmt.Errorf("cannot send signal while service is stopped or stopping")
 
 	default:
-		return fmt.Errorf("sendSignal invalid in state %q", s.state)
+		return fmt.Errorf("sending signal invalid in state %q", s.state)
 	}
 	return nil
 }
 
-// stop is called to stop a running (and backing off) service.
+// stop is called to stop a running (or backing off) service.
 func (s *serviceData) stop() error {
 	s.manager.servicesLock.Lock()
 	defer s.manager.servicesLock.Unlock()
@@ -530,9 +531,9 @@ func (s *serviceData) stop() error {
 		// First send SIGTERM to try to terminate it gracefully.
 		err := syscall.Kill(-s.cmd.Process.Pid, syscall.SIGTERM)
 		if err != nil {
-			logger.Noticef("cannot send SIGTERM to process: %v", err)
+			logger.Noticef("Cannot send SIGTERM to process: %v", err)
 		}
-		s.stopped = make(chan error, 1)
+		s.stopped = make(chan error, 2)
 		s.transition(stateTerminating)
 		time.AfterFunc(killWait, func() { logError(s.terminateTimeElapsed()) })
 
@@ -553,7 +554,6 @@ func (s *serviceData) backoffElapsed() error {
 
 	switch s.state {
 	case stateBackoff:
-		logger.Debugf("Restarting service %q", s.config.Name)
 		err := s.startInternal()
 		if err != nil {
 			return err
