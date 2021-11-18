@@ -124,9 +124,8 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 	}
 
 	// Create the service object (or reuse the existing one by name).
-	service := m.serviceForStart(config)
+	service := m.serviceForStart(task, config)
 	if service == nil {
-		taskLogf(task, "Service %q already started.", config.Name)
 		return nil
 	}
 
@@ -165,13 +164,22 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 // creates a new service object if one doesn't exist, returns the existing one
 // if it already exists but is stopped, or returns nil if it already exists
 // and is running.
-func (m *ServiceManager) serviceForStart(config *plan.Service) *serviceData {
+func (m *ServiceManager) serviceForStart(task *state.Task, config *plan.Service) *serviceData {
 	m.servicesLock.Lock()
 	defer m.servicesLock.Unlock()
 
 	service := m.services[config.Name]
-	if service != nil && service.state != stateStopped {
-		return nil
+	if service != nil {
+		switch service.state {
+		case stateInitial, stateStarting, stateRunning:
+			taskLogf(task, "Service %q already started.", config.Name)
+			return nil
+		case stateBackoff, stateStopped:
+			// Start allowed in "stopped" and "backoff" states, handle below.
+		default:
+			// Cannot start service while terminating or killing, handle in start().
+			return service
+		}
 	}
 
 	if service == nil {
@@ -207,9 +215,8 @@ func (m *ServiceManager) doStop(task *state.Task, tomb *tomb.Tomb) error {
 		return fmt.Errorf("cannot get service request: %w", err)
 	}
 
-	service := m.serviceForStop(request.Name)
+	service := m.serviceForStop(task, request.Name)
 	if service == nil {
-		taskLogf(task, "Service %q already stopped.", request.Name)
 		return nil
 	}
 
@@ -241,17 +248,28 @@ func (m *ServiceManager) doStop(task *state.Task, tomb *tomb.Tomb) error {
 }
 
 // serviceForStop looks up the service by name in the services map; it
-// returns the service object if it exists and is running, or nil if it
-// doesn't exist or is stopped.
-func (m *ServiceManager) serviceForStop(name string) *serviceData {
+// returns the service object if it exists and is running, or nil if it's
+// already stopped or has never been started.
+func (m *ServiceManager) serviceForStop(task *state.Task, name string) *serviceData {
 	m.servicesLock.Lock()
 	defer m.servicesLock.Unlock()
 
 	service := m.services[name]
-	if service == nil || service.state == stateStopped {
+	if service == nil {
+		taskLogf(task, "Service %q has never been started.", name)
 		return nil
 	}
-	return service
+
+	switch service.state {
+	case stateTerminating, stateKilling:
+		taskLogf(task, "Service %q already stopping.", name)
+		return nil
+	case stateStopped:
+		taskLogf(task, "Service %q already stopped.", name)
+		return nil
+	default:
+		return service
+	}
 }
 
 func (m *ServiceManager) removeService(name string) {
@@ -282,7 +300,7 @@ func (s *serviceData) start() error {
 		time.AfterFunc(okayWait, func() { logError(s.okayWaitElapsed()) })
 
 	default:
-		return fmt.Errorf("start invalid in state %q", s.state)
+		return fmt.Errorf("cannot start service while %s", s.state)
 	}
 	return nil
 }
@@ -428,7 +446,7 @@ func (s *serviceData) exited(waitErr error) error {
 				s.config.Name, onType, action, s.backoffTime, s.backoffNum)
 			s.transition(stateBackoff)
 			duration := s.backoffTime + s.manager.getJitter(s.backoffTime)
-			time.AfterFunc(duration, func() { logError(s.backoffElapsed()) })
+			time.AfterFunc(duration, func() { logError(s.backoffTimeElapsed()) })
 
 		default:
 			return fmt.Errorf("internal error: unexpected action %q", action)
@@ -547,14 +565,14 @@ func (s *serviceData) stop() error {
 		s.transition(stateStopped)
 
 	default:
-		return fmt.Errorf("stop invalid in state %q", s.state)
+		return fmt.Errorf("cannot stop service while %s", s.state)
 	}
 	return nil
 }
 
-// backoffElapsed is called when the current backoff's timer has elapsed, to
-// restart the service.
-func (s *serviceData) backoffElapsed() error {
+// backoffTimeElapsed is called when the current backoff's timer has elapsed,
+// to restart the service.
+func (s *serviceData) backoffTimeElapsed() error {
 	s.manager.servicesLock.Lock()
 	defer s.manager.servicesLock.Unlock()
 
