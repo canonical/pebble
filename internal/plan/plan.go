@@ -39,6 +39,7 @@ const (
 type Plan struct {
 	Layers   []*Layer            `yaml:"-"`
 	Services map[string]*Service `yaml:"services,omitempty"`
+	Checks   map[string]*Check   `yaml:"checks,omitempty"`
 }
 
 type Layer struct {
@@ -47,16 +48,17 @@ type Layer struct {
 	Summary     string              `yaml:"summary,omitempty"`
 	Description string              `yaml:"description,omitempty"`
 	Services    map[string]*Service `yaml:"services,omitempty"`
+	Checks      map[string]*Check   `yaml:"checks,omitempty"`
 }
 
 type Service struct {
 	// Basic details
-	Name        string          `yaml:"-"`
-	Summary     string          `yaml:"summary,omitempty"`
-	Description string          `yaml:"description,omitempty"`
-	Startup     ServiceStartup  `yaml:"startup,omitempty"`
-	Override    ServiceOverride `yaml:"override,omitempty"`
-	Command     string          `yaml:"command,omitempty"`
+	Name        string         `yaml:"-"`
+	Summary     string         `yaml:"summary,omitempty"`
+	Description string         `yaml:"description,omitempty"`
+	Startup     ServiceStartup `yaml:"startup,omitempty"`
+	Override    Override       `yaml:"override,omitempty"`
+	Command     string         `yaml:"command,omitempty"`
 
 	// Service dependencies
 	After    []string `yaml:"after,omitempty"`
@@ -119,12 +121,12 @@ const (
 	StartupDisabled ServiceStartup = "disabled"
 )
 
-type ServiceOverride string
+type Override string
 
 const (
-	UnknownOverride ServiceOverride = ""
-	MergeOverride   ServiceOverride = "merge"
-	ReplaceOverride ServiceOverride = "replace"
+	UnknownOverride Override = ""
+	MergeOverride   Override = "merge"
+	ReplaceOverride Override = "replace"
 )
 
 type ServiceAction string
@@ -135,6 +137,51 @@ const (
 	ActionExit    ServiceAction = "exit"
 	ActionIgnore  ServiceAction = "ignore"
 )
+
+type Check struct {
+	// Basic details
+	Name     string     `yaml:"-"`
+	Override Override   `yaml:"override,omitempty"`
+	Level    CheckLevel `yaml:"level,omitempty"`
+
+	// Common check settings
+	Period   OptionalDuration `yaml:"period,omitempty"`
+	Timeout  OptionalDuration `yaml:"timeout,omitempty"`
+	Failures int              `yaml:"failures,omitempty"`
+
+	// Type-specific check settings (only one of these can be set)
+	HTTP *HTTPCheckConfig `yaml:"http,omitempty"`
+	TCP  *TCPCheckConfig  `yaml:"tcp,omitempty"`
+	Exec *ExecCheckConfig `yaml:"exec,omitempty"`
+}
+
+type CheckLevel string
+
+const (
+	UnsetLevel CheckLevel = ""
+	AliveLevel CheckLevel = "alive"
+	ReadyLevel CheckLevel = "ready"
+)
+
+type HTTPCheckConfig struct {
+	URL     string            `yaml:"url,omitempty"`
+	Headers map[string]string `yaml:"headers,omitempty"`
+}
+
+type TCPCheckConfig struct {
+	Host string `yaml:"host,omitempty"`
+	Port int    `yaml:"port,omitempty"`
+}
+
+type ExecCheckConfig struct {
+	Command     string            `yaml:"command,omitempty"`
+	Environment map[string]string `yaml:"environment,omitempty"`
+	UserID      *int              `yaml:"user-id,omitempty"`
+	User        string            `yaml:"user,omitempty"`
+	GroupID     *int              `yaml:"group-id,omitempty"`
+	Group       string            `yaml:"group,omitempty"`
+	WorkingDir  string            `yaml:"working-dir,omitempty"`
+}
 
 // FormatError is the error returned when a layer has a format error, such as
 // a missing "override" field.
