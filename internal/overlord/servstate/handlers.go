@@ -58,38 +58,17 @@ var (
 const maxLogBytes = 100 * 1024
 
 // serviceState represents the state a service's state machine is in.
-type serviceState int
+type serviceState string
 
 const (
-	stateInitial serviceState = iota
-	stateStarting
-	stateRunning
-	stateTerminating
-	stateKilling
-	stateStopped
-	stateBackoff
+	stateInitial     serviceState = "initial"
+	stateStarting    serviceState = "starting"
+	stateRunning     serviceState = "running"
+	stateTerminating serviceState = "terminating"
+	stateKilling     serviceState = "killing"
+	stateStopped     serviceState = "stopped"
+	stateBackoff     serviceState = "backoff"
 )
-
-func (s serviceState) String() string {
-	switch s {
-	case stateInitial:
-		return "initial"
-	case stateStarting:
-		return "starting"
-	case stateRunning:
-		return "running"
-	case stateBackoff:
-		return "backoff"
-	case stateTerminating:
-		return "terminating"
-	case stateKilling:
-		return "killing"
-	case stateStopped:
-		return "stopped"
-	default:
-		return "unknown"
-	}
-}
 
 // serviceData holds the state and other data for a service under our control.
 type serviceData struct {
@@ -482,12 +461,12 @@ func calculateNextBackoff(config *plan.Service, current time.Duration) time.Dura
 }
 
 // getJitter returns a randomized time jitter amount from 0-10% of the duration.
-func (s *ServiceManager) getJitter(duration time.Duration) time.Duration {
-	s.randLock.Lock()
-	defer s.randLock.Unlock()
+func (m *ServiceManager) getJitter(duration time.Duration) time.Duration {
+	m.randLock.Lock()
+	defer m.randLock.Unlock()
 
 	maxJitter := duration.Seconds() * 0.1
-	jitter := s.rand.Float64() * maxJitter
+	jitter := m.rand.Float64() * maxJitter
 	return time.Duration(jitter * float64(time.Second))
 }
 
