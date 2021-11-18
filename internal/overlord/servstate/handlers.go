@@ -528,6 +528,8 @@ func (s *serviceData) stop() error {
 	s.manager.servicesLock.Lock()
 	defer s.manager.servicesLock.Unlock()
 
+	s.stopped = make(chan error, 2)
+
 	switch s.state {
 	case stateRunning:
 		logger.Debugf("Attempting to stop service %q by sending SIGTERM", s.config.Name)
@@ -536,12 +538,12 @@ func (s *serviceData) stop() error {
 		if err != nil {
 			logger.Noticef("Cannot send SIGTERM to process: %v", err)
 		}
-		s.stopped = make(chan error, 2)
 		s.transition(stateTerminating)
 		time.AfterFunc(killWait, func() { logError(s.terminateTimeElapsed()) })
 
 	case stateBackoff:
 		logger.Noticef("Service %q stopped while waiting for backoff", s.config.Name)
+		s.stopped <- nil
 		s.transition(stateStopped)
 
 	default:

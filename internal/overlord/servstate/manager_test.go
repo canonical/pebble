@@ -820,6 +820,41 @@ services:
 	c.Check(s.logBufferString(), Matches, `2.* \[test2\] test2\n`)
 }
 
+func (s *S) TestStopDuringBackoff(c *C) {
+	layer := parseLayer(c, 0, "layer", `
+services:
+    test2:
+        override: merge
+        command: sleep 0.1
+`)
+	err := s.manager.AppendLayer(layer)
+	c.Assert(err, IsNil)
+
+	// Start service and wait till it starts up the first time.
+	chg := s.startServices(c, []string{"test2"}, 1)
+	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
+		return svc.Current == servstate.StatusActive
+	})
+	c.Assert(s.manager.BackoffNum("test2"), Equals, 0)
+	s.st.Lock()
+	c.Check(chg.Status(), Equals, state.DoneStatus)
+	s.st.Unlock()
+
+	// Wait for it to exit and go into backoff state.
+	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
+		return svc.Current == servstate.StatusBackoff && s.manager.BackoffNum("test2") == 1
+	})
+
+	// Ensure it can be stopped successfully.
+	chg = s.stopServices(c, []string{"test2"}, 1)
+	s.st.Lock()
+	c.Check(chg.Status(), Equals, state.DoneStatus, Commentf("Error: %v", chg.Err()))
+	s.st.Unlock()
+	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
+		return svc.Current == servstate.StatusInactive
+	})
+}
+
 func (s *S) waitUntilService(c *C, service string, f func(svc *servstate.ServiceInfo) bool) *servstate.ServiceInfo {
 	for i := 0; i < 20; i++ {
 		svc := s.serviceByName(c, service)
