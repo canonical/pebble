@@ -186,6 +186,7 @@ var planTests = []planTest{{
 				BackoffReset:  plan.OptionalDuration{Value: defaultBackoffReset},
 			},
 		},
+		Checks: map[string]*plan.Check{},
 	}, {
 		Order:       1,
 		Label:       "layer-1",
@@ -236,6 +237,7 @@ var planTests = []planTest{{
 				BackoffReset:  plan.OptionalDuration{Value: defaultBackoffReset},
 			},
 		},
+		Checks: map[string]*plan.Check{},
 	}},
 	result: &plan.Layer{
 		Summary:     "Simple override layer.",
@@ -301,6 +303,7 @@ var planTests = []planTest{{
 				BackoffReset:  plan.OptionalDuration{Value: defaultBackoffReset},
 			},
 		},
+		Checks: map[string]*plan.Check{},
 	},
 	start: map[string][]string{
 		"srv1": {"srv2", "srv1", "srv3"},
@@ -365,6 +368,7 @@ var planTests = []planTest{{
 				BackoffReset:  plan.OptionalDuration{Value: defaultBackoffReset},
 			},
 		},
+		Checks: map[string]*plan.Check{},
 	}},
 }, {
 	summary: "Unknown keys are not accepted",

@@ -113,7 +113,7 @@ type execChecker struct {
 }
 
 func (c *execChecker) check(ctx context.Context) error {
-	logger.Debugf("Check %q (exec): running %q", c.name, c.command)
+	logger.Debugf("Check %q (Exec): running %q", c.name, c.command)
 
 	args, err := shlex.Split(c.command)
 	if err != nil {
@@ -142,7 +142,13 @@ func (c *execChecker) check(ctx context.Context) error {
 	if err != nil {
 		outputStr := ""
 		if len(output) > 0 {
-			outputStr += ", output:\n" + string(output)
+			const maxLength = 200
+			if len(output) > maxLength {
+				// Truncate to first few hundred characters of output
+				output = output[:maxLength]
+				output = append(output, "..."...)
+			}
+			outputStr = fmt.Sprintf(", output: %q", output)
 		}
 		return fmt.Errorf("%v%s", err, outputStr)
 	}

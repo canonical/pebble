@@ -155,6 +155,21 @@ type Check struct {
 	Exec *ExecCheckConfig `yaml:"exec,omitempty"`
 }
 
+// Copy returns a deep copy of the check config.
+func (c *Check) Copy() *Check {
+	copied := *c
+	if c.HTTP != nil {
+		copied.HTTP = c.HTTP.Copy()
+	}
+	if c.TCP != nil {
+		copied.TCP = c.TCP.Copy()
+	}
+	if copied.Exec != nil {
+		copied.Exec = c.Exec.Copy()
+	}
+	return &copied
+}
+
 type CheckLevel string
 
 const (
@@ -168,9 +183,27 @@ type HTTPCheckConfig struct {
 	Headers map[string]string `yaml:"headers,omitempty"`
 }
 
+// Copy returns a deep copy of the HTTP check config.
+func (c *HTTPCheckConfig) Copy() *HTTPCheckConfig {
+	copied := *c
+	if c.Headers != nil {
+		copied.Headers = make(map[string]string, len(c.Headers))
+		for k, v := range c.Headers {
+			copied.Headers[k] = v
+		}
+	}
+	return &copied
+}
+
 type TCPCheckConfig struct {
-	Host string `yaml:"host,omitempty"`
 	Port int    `yaml:"port,omitempty"`
+	Host string `yaml:"host,omitempty"`
+}
+
+// Copy returns a deep copy of the TCP check config.
+func (c *TCPCheckConfig) Copy() *TCPCheckConfig {
+	copied := *c
+	return &copied
 }
 
 type ExecCheckConfig struct {
@@ -181,6 +214,26 @@ type ExecCheckConfig struct {
 	GroupID     *int              `yaml:"group-id,omitempty"`
 	Group       string            `yaml:"group,omitempty"`
 	WorkingDir  string            `yaml:"working-dir,omitempty"`
+}
+
+// Copy returns a deep copy of the exec check config.
+func (c *ExecCheckConfig) Copy() *ExecCheckConfig {
+	copied := *c
+	if c.Environment != nil {
+		copied.Environment = make(map[string]string, len(c.Environment))
+		for k, v := range c.Environment {
+			copied.Environment[k] = v
+		}
+	}
+	if c.UserID != nil {
+		userID := *c.UserID
+		copied.UserID = &userID
+	}
+	if c.GroupID != nil {
+		groupID := *c.GroupID
+		copied.GroupID = &groupID
+	}
+	return &copied
 }
 
 // FormatError is the error returned when a layer has a format error, such as
@@ -198,6 +251,7 @@ func (e *FormatError) Error() string {
 func CombineLayers(layers ...*Layer) (*Layer, error) {
 	combined := &Layer{
 		Services: make(map[string]*Service),
+		Checks:   make(map[string]*Check),
 	}
 	if len(layers) == 0 {
 		return combined, nil
@@ -279,6 +333,55 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 				}
 			}
 		}
+
+		for name, check := range layer.Checks {
+			switch check.Override {
+			case MergeOverride:
+				if old, ok := combined.Checks[name]; ok {
+					copied := old.Copy()
+					if check.Level != "" {
+						copied.Level = check.Level
+					}
+					if check.Period.IsSet {
+						copied.Period = check.Period
+					}
+					if check.Timeout.IsSet {
+						copied.Timeout = check.Timeout
+					}
+					if check.Failures != 0 {
+						copied.Failures = check.Failures
+					}
+					if check.HTTP != nil {
+						copied.HTTP = check.HTTP.Copy()
+					}
+					if check.TCP != nil {
+						copied.TCP = check.TCP.Copy()
+					}
+					if check.Exec != nil {
+						copied.Exec = check.Exec.Copy()
+					}
+					combined.Checks[name] = copied
+					break
+				}
+				fallthrough
+
+			case ReplaceOverride:
+				combined.Checks[name] = check.Copy()
+
+			case UnknownOverride:
+				return nil, &FormatError{
+					Message: fmt.Sprintf(`layer %q must define "override" for check %q`,
+						layer.Label, check.Name),
+				}
+
+			default:
+				return nil, &FormatError{
+					Message: fmt.Sprintf(`layer %q has invalid "override" value for check %q`,
+						layer.Label, check.Name),
+				}
+			}
+		}
+
 	}
 
 	// Ensure fields in combined layers validate correctly.
@@ -289,6 +392,7 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 			}
 		}
 	}
+	// TODO: validate checks
 
 	// Ensure combined layers don't have cycles.
 	err := combined.checkCycles()
@@ -399,7 +503,10 @@ func (l *Layer) checkCycles() error {
 }
 
 func ParseLayer(order int, label string, data []byte) (*Layer, error) {
-	var layer Layer
+	layer := Layer{
+		Services: map[string]*Service{},
+		Checks:   map[string]*Check{},
+	}
 	dec := yaml.NewDecoder(bytes.NewBuffer(data))
 	dec.KnownFields(true)
 	err := dec.Decode(&layer)
@@ -410,6 +517,7 @@ func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 	}
 	layer.Order = order
 	layer.Label = label
+
 	for name, service := range layer.Services {
 		if name == "" {
 			return nil, &FormatError{
@@ -458,6 +566,65 @@ func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 
 		service.Name = name
 	}
+
+	for name, check := range layer.Checks {
+		if name == "" {
+			return nil, &FormatError{
+				Message: fmt.Sprintf("cannot use empty string as check name"),
+			}
+		}
+		if check == nil {
+			return nil, &FormatError{
+				Message: fmt.Sprintf("check object cannot be null for check %q", name),
+			}
+		}
+
+		// Set defaults and validate values
+		if check.Level != UnsetLevel && check.Level != AliveLevel && check.Level != ReadyLevel {
+			return nil, &FormatError{Message: `check level must be "alive" or "ready"`}
+		}
+		if !check.Period.IsSet {
+			check.Period.Value = 10 * time.Second
+		} else if check.Period.Value == 0 {
+			return nil, &FormatError{Message: "check period must not be zero"}
+		}
+		if !check.Timeout.IsSet {
+			check.Timeout.Value = 3 * time.Second
+		} else if check.Timeout.Value == 0 {
+			return nil, &FormatError{Message: "check timeout must not be zero"}
+		} else if check.Timeout.Value >= check.Period.Value {
+			return nil, &FormatError{Message: "check timeout must be less than period"}
+		}
+		if check.Failures == 0 {
+			check.Failures = 1
+		}
+		// TODO: should this be checked at the combine level?
+		numTypes := 0
+		if check.HTTP != nil {
+			if check.HTTP.URL == "" {
+				return nil, &FormatError{Message: `HTTP check "url" must be specified`}
+			}
+			numTypes++
+		}
+		if check.TCP != nil {
+			if check.TCP.Port == 0 {
+				return nil, &FormatError{Message: `TCP check "port" must be specified`}
+			}
+			numTypes++
+		}
+		if check.Exec != nil {
+			if check.Exec.Command == "" {
+				return nil, &FormatError{Message: `Exec check "command" must be specified`}
+			}
+			numTypes++
+		}
+		if numTypes != 1 {
+			return nil, &FormatError{Message: `check must specify one of "http", "tcp", or "exec"`}
+		}
+
+		check.Name = name
+	}
+
 	err = layer.checkCycles()
 	if err != nil {
 		return nil, err
@@ -559,6 +726,7 @@ func ReadDir(dir string) (*Plan, error) {
 	plan := &Plan{
 		Layers:   layers,
 		Services: combined.Services,
+		Checks:   combined.Checks,
 	}
 	return plan, err
 }

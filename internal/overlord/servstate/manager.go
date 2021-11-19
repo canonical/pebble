@@ -120,6 +120,7 @@ func (m *ServiceManager) updatePlan(layers []*plan.Layer) error {
 	m.plan = &plan.Plan{
 		Layers:   layers,
 		Services: combined.Services,
+		Checks:   combined.Checks,
 	}
 	return nil
 }
