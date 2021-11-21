@@ -134,13 +134,13 @@ func New(pebbleDir string, restartBehavior RestartBehavior, serviceOutput io.Wri
 	o.commandMgr = cmdstate.NewManager(o.runner)
 	o.addManager(o.commandMgr)
 
-	checkMgr := checkstate.NewManager()
+	o.checkMgr = checkstate.NewManager()
 	// TODO: wire this up properly
 	p, err := plan.ReadDir(o.pebbleDir)
 	if err != nil {
 		return nil, err
 	}
-	checkMgr.Configure(p.Checks)
+	o.checkMgr.Configure(p.Checks)
 
 	// the shared task runner should be added last!
 	o.stateEng.AddManager(o.runner)

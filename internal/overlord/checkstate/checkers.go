@@ -140,17 +140,23 @@ func (c *execChecker) check(ctx context.Context) error {
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		outputStr := ""
 		if len(output) > 0 {
-			const maxLength = 200
+			const maxLength = 1024
 			if len(output) > maxLength {
-				// Truncate to first few hundred characters of output
 				output = output[:maxLength]
 				output = append(output, "..."...)
 			}
-			outputStr = fmt.Sprintf(", output: %q", output)
 		}
-		return fmt.Errorf("%v%s", err, outputStr)
+		return &outputError{error: err, out: string(output)}
 	}
 	return nil
+}
+
+type outputError struct {
+	error
+	out string
+}
+
+func (e *outputError) output() string {
+	return e.out
 }

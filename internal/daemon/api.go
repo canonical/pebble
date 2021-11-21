@@ -81,6 +81,10 @@ var api = []*Command{{
 	Path:   "/v1/tasks/{task-id}/websocket/{websocket-id}",
 	UserOK: true,
 	GET:    v1GetTaskWebsocket,
+}, {
+	Path:   "/v1/checks",
+	UserOK: true,
+	GET:    v1GetChecks,
 }}
 
 var (

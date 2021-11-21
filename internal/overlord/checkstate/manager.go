@@ -4,6 +4,7 @@ package checkstate
 import (
 	"context"
 	"errors"
+	"sort"
 	"sync"
 	"time"
 
@@ -48,26 +49,52 @@ func (m *CheckManager) Configure(checksConfig map[string]*plan.Check) error {
 	return nil
 }
 
-// Checks returns the list of currently-configured checks and their status.
-func (m *CheckManager) Checks() ([]*CheckInfo, error) {
+// Checks returns the list of currently-configured checks and their status,
+// ordered by name.
+//
+// If level is not UnsetLevel, the list of checks is filtered to only include
+// checks with the given level. If names is non-empty, the list of checks is
+// filtered to only include the named checks.
+func (m *CheckManager) Checks(level plan.CheckLevel, names []string) ([]*CheckInfo, error) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
-	infos := make([]*CheckInfo, 0, len(m.checks))
+	var infos []*CheckInfo
 	for _, check := range m.checks {
+		if level != plan.UnsetLevel && level != check.config.Level {
+			continue
+		}
+		if len(names) > 0 && !containsString(names, check.config.Name) {
+			continue
+		}
 		infos = append(infos, check.info())
 	}
+
+	sort.Slice(infos, func(i, j int) bool {
+		return infos[i].Name < infos[j].Name
+	})
 	return infos, nil
 }
 
-// CheckInfo holds status information about a single check.
-type CheckInfo struct {
-	Name      string
-	Healthy   bool
-	Failures  int
-	LastError string
+func containsString(slice []string, value string) bool {
+	for _, v := range slice {
+		if v == value {
+			return true
+		}
+	}
+	return false
 }
 
+// CheckInfo provides status information about a single check.
+type CheckInfo struct {
+	Name         string
+	Healthy      bool
+	Failures     int
+	LastError    string
+	ErrorDetails string
+}
+
+// checkData holds state for an active health check.
 type checkData struct {
 	config  *plan.Check
 	checker checker
@@ -116,6 +143,7 @@ func (c *checkData) check() {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
+	c.cancel = nil
 	c.lastErr = err
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
@@ -138,7 +166,6 @@ func (c *checkData) check() {
 	}
 	c.failures = 0
 	c.actionRan = false
-	c.cancel = nil
 }
 
 func (c *checkData) stop() {
@@ -162,6 +189,10 @@ func (c *checkData) info() *CheckInfo {
 	}
 	if c.lastErr != nil {
 		info.LastError = c.lastErr.Error()
+		switch e := c.lastErr.(type) {
+		case *outputError:
+			info.ErrorDetails = e.output()
+		}
 	}
 	return info
 }
