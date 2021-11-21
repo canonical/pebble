@@ -30,6 +30,12 @@ type checkInfo struct {
 
 func v1GetChecks(c *Command, r *http.Request, _ *userState) Response {
 	level := r.URL.Query().Get("level")
+	switch level {
+	case "", "alive", "ready":
+	default:
+		return statusBadRequest(`level must be "alive" or "ready"`)
+	}
+
 	names := r.URL.Query()["names"]
 
 	checkmgr := c.d.overlord.CheckManager()
