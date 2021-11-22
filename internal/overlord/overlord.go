@@ -33,7 +33,6 @@ import (
 	"github.com/canonical/pebble/internal/overlord/patch"
 	"github.com/canonical/pebble/internal/overlord/servstate"
 	"github.com/canonical/pebble/internal/overlord/state"
-	"github.com/canonical/pebble/internal/plan"
 	"github.com/canonical/pebble/internal/strutil"
 	"github.com/canonical/pebble/internal/timing"
 )
@@ -135,12 +134,7 @@ func New(pebbleDir string, restartBehavior RestartBehavior, serviceOutput io.Wri
 	o.addManager(o.commandMgr)
 
 	o.checkMgr = checkstate.NewManager()
-	// TODO: wire this up properly
-	p, err := plan.ReadDir(o.pebbleDir)
-	if err != nil {
-		return nil, err
-	}
-	o.checkMgr.Configure(p.Checks)
+	o.serviceMgr.AddPlanHandler(o.checkMgr.PlanHandler)
 
 	// the shared task runner should be added last!
 	o.stateEng.AddManager(o.runner)

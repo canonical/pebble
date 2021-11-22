@@ -19,8 +19,9 @@ type ServiceManager struct {
 	runner    *state.TaskRunner
 	pebbleDir string
 
-	planLock sync.Mutex
-	plan     *plan.Plan
+	planLock     sync.Mutex
+	plan         *plan.Plan
+	planHandlers []PlanFunc
 
 	servicesLock sync.Mutex
 	services     map[string]*serviceData
@@ -31,6 +32,8 @@ type ServiceManager struct {
 	randLock sync.Mutex
 	rand     *rand.Rand
 }
+
+type PlanFunc func(p *plan.Plan)
 
 // LabelExists is the error returned by AppendLayer when a layer with that
 // label already exists.
@@ -59,12 +62,29 @@ func NewManager(s *state.State, runner *state.TaskRunner, pebbleDir string, serv
 	return manager, nil
 }
 
+// AddPlanHandler adds f to the list of "plan handlers", functions that are
+// called whenever the plan is updated. Each function is called with a copy
+// of the plan, so it can safely store or modify it.
+func (m *ServiceManager) AddPlanHandler(f PlanFunc) {
+	m.planLock.Lock()
+	defer m.planLock.Unlock()
+
+	m.planHandlers = append(m.planHandlers, f)
+}
+
+func (m *ServiceManager) updatePlan(p *plan.Plan) {
+	m.plan = p
+	for _, f := range m.planHandlers {
+		f(p.Copy())
+	}
+}
+
 func (m *ServiceManager) reloadPlan() error {
 	p, err := plan.ReadDir(m.pebbleDir)
 	if err != nil {
 		return err
 	}
-	m.plan = p
+	m.updatePlan(p)
 	return nil
 }
 
@@ -104,7 +124,7 @@ func (m *ServiceManager) appendLayer(layer *plan.Layer) error {
 	}
 
 	newLayers := append(m.plan.Layers, layer)
-	err := m.updatePlan(newLayers)
+	err := m.updatePlanLayers(newLayers)
 	if err != nil {
 		return err
 	}
@@ -112,16 +132,17 @@ func (m *ServiceManager) appendLayer(layer *plan.Layer) error {
 	return nil
 }
 
-func (m *ServiceManager) updatePlan(layers []*plan.Layer) error {
+func (m *ServiceManager) updatePlanLayers(layers []*plan.Layer) error {
 	combined, err := plan.CombineLayers(layers...)
 	if err != nil {
 		return err
 	}
-	m.plan = &plan.Plan{
+	p := &plan.Plan{
 		Layers:   layers,
 		Services: combined.Services,
 		Checks:   combined.Checks,
 	}
+	m.updatePlan(p)
 	return nil
 }
 
@@ -164,7 +185,7 @@ func (m *ServiceManager) CombineLayer(layer *plan.Layer) error {
 	newLayers := make([]*plan.Layer, len(m.plan.Layers))
 	copy(newLayers, m.plan.Layers)
 	newLayers[index] = combined
-	err = m.updatePlan(newLayers)
+	err = m.updatePlanLayers(newLayers)
 	if err != nil {
 		return err
 	}

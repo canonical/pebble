@@ -23,11 +23,22 @@ func NewManager() *CheckManager {
 	return &CheckManager{}
 }
 
-// Configure configures (or reconfigures) the manager with the given check
-// configuration.
-func (m *CheckManager) Configure(checksConfig map[string]*plan.Check) error {
+// PlanHandler handles updated to the plan (server configuration).
+func (m *CheckManager) PlanHandler(p *plan.Plan) {
+	err := m.configure(p.Checks)
+	if err != nil {
+		logger.Noticef("Cannot configure check manager: %v", err)
+	}
+}
+
+// configure reconfigures the manager with the given check configuration,
+// stopping the previous checks and starting the new ones as required.
+func (m *CheckManager) configure(checksConfig map[string]*plan.Check) error {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
+
+	logger.Debugf("Configuring check manager (stopping %d, starting %d)",
+		len(m.checks), len(checksConfig))
 
 	// First stop existing checks.
 	for _, check := range m.checks {

@@ -42,6 +42,24 @@ type Plan struct {
 	Checks   map[string]*Check   `yaml:"checks,omitempty"`
 }
 
+func (p *Plan) Copy() *Plan {
+	copied := Plan{
+		Layers:   make([]*Layer, len(p.Layers)),
+		Services: make(map[string]*Service, len(p.Services)),
+		Checks:   make(map[string]*Check, len(p.Checks)),
+	}
+	for i, layer := range p.Layers {
+		copied.Layers[i] = layer.Copy()
+	}
+	for name, service := range p.Services {
+		copied.Services[name] = service.Copy()
+	}
+	for name, check := range p.Checks {
+		copied.Checks[name] = check.Copy()
+	}
+	return &copied
+}
+
 type Layer struct {
 	Order       int                 `yaml:"-"`
 	Label       string              `yaml:"-"`
@@ -49,6 +67,19 @@ type Layer struct {
 	Description string              `yaml:"description,omitempty"`
 	Services    map[string]*Service `yaml:"services,omitempty"`
 	Checks      map[string]*Check   `yaml:"checks,omitempty"`
+}
+
+func (l *Layer) Copy() *Layer {
+	copied := *l
+	copied.Services = make(map[string]*Service, len(l.Services))
+	for name, service := range l.Services {
+		copied.Services[name] = service.Copy()
+	}
+	copied.Checks = make(map[string]*Check, len(l.Checks))
+	for name, check := range l.Checks {
+		copied.Checks[name] = check.Copy()
+	}
+	return &copied
 }
 
 type Service struct {
@@ -84,25 +115,25 @@ type Service struct {
 
 // Copy returns a deep copy of the service.
 func (s *Service) Copy() *Service {
-	copy := *s
-	copy.After = append([]string(nil), s.After...)
-	copy.Before = append([]string(nil), s.Before...)
-	copy.Requires = append([]string(nil), s.Requires...)
+	copied := *s
+	copied.After = append([]string(nil), s.After...)
+	copied.Before = append([]string(nil), s.Before...)
+	copied.Requires = append([]string(nil), s.Requires...)
 	if s.Environment != nil {
-		copy.Environment = make(map[string]string)
+		copied.Environment = make(map[string]string)
 		for k, v := range s.Environment {
-			copy.Environment[k] = v
+			copied.Environment[k] = v
 		}
 	}
 	if s.UserID != nil {
 		userID := *s.UserID
-		copy.UserID = &userID
+		copied.UserID = &userID
 	}
 	if s.GroupID != nil {
 		groupID := *s.GroupID
-		copy.GroupID = &groupID
+		copied.GroupID = &groupID
 	}
-	return &copy
+	return &copied
 }
 
 // Equal returns true when the two services are equal in value.

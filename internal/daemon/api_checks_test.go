@@ -43,6 +43,9 @@ checks:
 `)
 	s.daemon(c)
 
+	_, err := s.d.overlord.ServiceManager().Plan() // ensure plan is loaded
+	c.Assert(err, IsNil)
+
 	// Execute
 	req, err := http.NewRequest("GET", "/v1/checks", nil)
 	c.Assert(err, IsNil)
