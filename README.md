@@ -229,19 +229,15 @@ services:
         backoff-delay: <duration>
 
         # (Optional) After each backoff, the backoff delay is multiplied by
-        # this factor to get the next backoff time. Must be greater than or
+        # this factor to get the next backoff delay. Must be greater than or
         # equal to one. Default is 2.0.
         backoff-factor: <factor>
 
         # (Optional) Limit for the backoff delay: when multiplying by
-        # backoff-factor to get the next backoff time, if the result is
+        # backoff-factor to get the next backoff delay, if the result is
         # greater than this value, it is capped to this value. Default is
         # half a minute ("30s").
         backoff-limit: <duration>
-
-        # (Optional) After the service has been running successfully for this
-        # time, reset the backoff time. Default is ten seconds ("10s").
-        backoff-reset: <duration>
 ```
 
 ## API and clients

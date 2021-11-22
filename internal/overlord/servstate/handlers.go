@@ -342,7 +342,7 @@ func (s *serviceData) startInternal() error {
 		_ = s.logs.Close()
 		return fmt.Errorf("cannot start service: %w", err)
 	}
-	s.resetTimer = time.AfterFunc(s.config.BackoffReset.Value, func() { logError(s.backoffResetElapsed()) })
+	s.resetTimer = time.AfterFunc(s.config.BackoffLimit.Value, func() { logError(s.backoffResetElapsed()) })
 
 	// Start a goroutine to wait for the process to finish.
 	done := make(chan struct{})
@@ -611,9 +611,9 @@ func (s *serviceData) killTimeElapsed() error {
 	return nil
 }
 
-// backoffResetElapsed is called after the plan's backoff-reset has elapsed,
-// indicating we should reset the backoff time because the service is running
-// successfully.
+// backoffResetElapsed is called after the plan's backoff reset has elapsed
+// (set to the backoff-limit value), indicating we should reset the backoff
+// time because the service is running successfully.
 func (s *serviceData) backoffResetElapsed() error {
 	s.manager.servicesLock.Lock()
 	defer s.manager.servicesLock.Unlock()

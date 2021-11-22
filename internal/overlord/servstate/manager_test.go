@@ -753,7 +753,7 @@ services:
     test2:
         override: merge
         backoff-delay: 50ms
-        backoff-reset: 150ms
+        backoff-limit: 150ms
 `)
 	err := s.manager.AppendLayer(layer)
 	c.Assert(err, IsNil)
@@ -800,7 +800,7 @@ services:
 	c.Assert(svc.Current, Equals, servstate.StatusActive)
 	c.Check(s.logBufferString(), Matches, `2.* \[test2\] test2\n`)
 
-	// Test that backoff-reset is working
+	// Test that backoff reset time is working (set to backoff-limit)
 	time.Sleep(175 * time.Millisecond)
 	c.Check(s.manager.BackoffNum("test2"), Equals, 0)
 
