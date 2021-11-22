@@ -71,9 +71,8 @@ type Service struct {
 	Group       string            `yaml:"group,omitempty"`
 
 	// Auto-restart and backoff functionality
-	OnExit        ServiceAction    `yaml:"on-exit,omitempty"`
-	OnFailure     ServiceAction    `yaml:"on-failure,omitempty"`
 	OnSuccess     ServiceAction    `yaml:"on-success,omitempty"`
+	OnFailure     ServiceAction    `yaml:"on-failure,omitempty"`
 	BackoffDelay  OptionalDuration `yaml:"backoff-delay,omitempty"`
 	BackoffFactor OptionalFloat    `yaml:"backoff-factor,omitempty"`
 	BackoffLimit  OptionalDuration `yaml:"backoff-limit,omitempty"`
@@ -132,7 +131,7 @@ type ServiceAction string
 const (
 	ActionUnset   ServiceAction = ""
 	ActionRestart ServiceAction = "restart"
-	ActionExit    ServiceAction = "exit"
+	ActionHalt    ServiceAction = "halt"
 	ActionIgnore  ServiceAction = "ignore"
 )
 
@@ -193,14 +192,11 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 					for k, v := range service.Environment {
 						copy.Environment[k] = v
 					}
-					if service.OnExit != "" {
-						copy.OnExit = service.OnExit
+					if service.OnSuccess != "" {
+						copy.OnSuccess = service.OnSuccess
 					}
 					if service.OnFailure != "" {
 						copy.OnFailure = service.OnFailure
-					}
-					if service.OnSuccess != "" {
-						copy.OnSuccess = service.OnSuccess
 					}
 					if service.BackoffDelay.IsSet {
 						copy.BackoffDelay = service.BackoffDelay
@@ -383,14 +379,11 @@ func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 		}
 
 		// Set defaults and validate values
-		if !validServiceAction(service.OnExit) {
-			return nil, &FormatError{Message: fmt.Sprintf("invalid on-exit action %q", service.OnExit)}
+		if !validServiceAction(service.OnSuccess) {
+			return nil, &FormatError{Message: fmt.Sprintf("invalid on-success action %q", service.OnSuccess)}
 		}
 		if !validServiceAction(service.OnFailure) {
 			return nil, &FormatError{Message: fmt.Sprintf("invalid on-failure action %q", service.OnFailure)}
-		}
-		if !validServiceAction(service.OnSuccess) {
-			return nil, &FormatError{Message: fmt.Sprintf("invalid on-success action %q", service.OnSuccess)}
 		}
 		if !service.BackoffDelay.IsSet {
 			service.BackoffDelay.Value = defaultBackoffDelay
@@ -420,7 +413,7 @@ func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 
 func validServiceAction(action ServiceAction) bool {
 	switch action {
-	case ActionUnset, ActionRestart, ActionExit, ActionIgnore:
+	case ActionUnset, ActionRestart, ActionHalt, ActionIgnore:
 		return true
 	default:
 		return false

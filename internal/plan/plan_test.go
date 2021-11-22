@@ -402,13 +402,13 @@ var planTests = []planTest{{
 	`},
 }, {
 	summary: `Invalid action`,
-	error:   `invalid on-exit action "foo"`,
+	error:   `invalid on-success action "foo"`,
 	input: []string{`
 		services:
 			"svc1":
 				override: replace
 				command: cmd
-				on-exit: foo
+				on-success: foo
 	`},
 }, {
 	summary: `Invalid backoff-delay duration`,

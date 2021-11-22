@@ -868,13 +868,12 @@ func (s *S) waitUntilService(c *C, service string, f func(svc *servstate.Service
 }
 
 func (s *S) TestExit(c *C) {
-	// Override on-exit to specify we should exit Pebble when service exits.
 	layer := parseLayer(c, 0, "layer", `
 services:
     test2:
         override: replace
         command: sleep 0.15
-        on-exit: exit
+        on-success: halt
 `)
 	err := s.manager.AppendLayer(layer)
 	c.Assert(err, IsNil)
@@ -898,14 +897,13 @@ services:
 	}
 }
 
-func (s *S) TestOnExitIgnore(c *C) {
-	// Override on-exit to specify we should simply log when service exits.
+func (s *S) TestActionIgnore(c *C) {
 	layer := parseLayer(c, 0, "layer", `
 services:
     test2:
         override: replace
         command: sleep 0.15
-        on-exit: ignore
+        on-success: ignore
 `)
 	err := s.manager.AppendLayer(layer)
 	c.Assert(err, IsNil)
@@ -924,47 +922,55 @@ services:
 
 func (s *S) TestGetAction(c *C) {
 	tests := []struct {
-		onExit    string
-		onFailure string
-		onSuccess string
+		onSuccess plan.ServiceAction
+		onFailure plan.ServiceAction
 		success   bool
 		action    string
 		onType    string
 	}{
-		{onFailure: "", success: false, action: "restart", onType: "on-exit"},
-		{onFailure: "ignore", success: false, action: "ignore", onType: "on-failure"},
-		{onFailure: "exit", success: false, action: "exit", onType: "on-failure"},
-		{onFailure: "restart", success: false, action: "restart", onType: "on-failure"},
-		{onFailure: "exit", success: true, action: "restart", onType: "on-exit"},
-
-		{onSuccess: "", success: true, action: "restart", onType: "on-exit"},
-		{onSuccess: "ignore", success: true, action: "ignore", onType: "on-success"},
-		{onSuccess: "exit", success: true, action: "exit", onType: "on-success"},
-		{onSuccess: "restart", success: true, action: "restart", onType: "on-success"},
-		{onSuccess: "exit", success: false, action: "restart", onType: "on-exit"},
-
-		{onExit: "", success: true, action: "restart", onType: "on-exit"},
-		{onExit: "ignore", success: true, action: "ignore", onType: "on-exit"},
-		{onExit: "exit", success: true, action: "exit", onType: "on-exit"},
-		{onExit: "restart", success: true, action: "restart", onType: "on-exit"},
-		{onExit: "exit", success: false, action: "exit", onType: "on-exit"},
-
-		{onFailure: "restart", onSuccess: "exit", success: true, action: "exit", onType: "on-success"},
-		{onFailure: "restart", onSuccess: "exit", success: false, action: "restart", onType: "on-failure"},
-		{onFailure: "restart", onSuccess: "exit", onExit: "ignore", success: true, action: "exit", onType: "on-success"},
-		{onFailure: "restart", onSuccess: "exit", onExit: "ignore", success: false, action: "restart", onType: "on-failure"},
+		{onSuccess: "", onFailure: "", success: false, action: "restart", onType: "on-failure"},
+		{onSuccess: "", onFailure: "", success: true, action: "restart", onType: "on-success"},
+		{onSuccess: "", onFailure: "restart", success: false, action: "restart", onType: "on-failure"},
+		{onSuccess: "", onFailure: "restart", success: true, action: "restart", onType: "on-success"},
+		{onSuccess: "", onFailure: "halt", success: false, action: "halt", onType: "on-failure"},
+		{onSuccess: "", onFailure: "halt", success: true, action: "restart", onType: "on-success"},
+		{onSuccess: "", onFailure: "ignore", success: false, action: "ignore", onType: "on-failure"},
+		{onSuccess: "", onFailure: "ignore", success: true, action: "restart", onType: "on-success"},
+		{onSuccess: "restart", onFailure: "", success: false, action: "restart", onType: "on-failure"},
+		{onSuccess: "restart", onFailure: "", success: true, action: "restart", onType: "on-success"},
+		{onSuccess: "restart", onFailure: "restart", success: false, action: "restart", onType: "on-failure"},
+		{onSuccess: "restart", onFailure: "restart", success: true, action: "restart", onType: "on-success"},
+		{onSuccess: "restart", onFailure: "halt", success: false, action: "halt", onType: "on-failure"},
+		{onSuccess: "restart", onFailure: "halt", success: true, action: "restart", onType: "on-success"},
+		{onSuccess: "restart", onFailure: "ignore", success: false, action: "ignore", onType: "on-failure"},
+		{onSuccess: "restart", onFailure: "ignore", success: true, action: "restart", onType: "on-success"},
+		{onSuccess: "halt", onFailure: "", success: false, action: "restart", onType: "on-failure"},
+		{onSuccess: "halt", onFailure: "", success: true, action: "halt", onType: "on-success"},
+		{onSuccess: "halt", onFailure: "restart", success: false, action: "restart", onType: "on-failure"},
+		{onSuccess: "halt", onFailure: "restart", success: true, action: "halt", onType: "on-success"},
+		{onSuccess: "halt", onFailure: "halt", success: false, action: "halt", onType: "on-failure"},
+		{onSuccess: "halt", onFailure: "halt", success: true, action: "halt", onType: "on-success"},
+		{onSuccess: "halt", onFailure: "ignore", success: false, action: "ignore", onType: "on-failure"},
+		{onSuccess: "halt", onFailure: "ignore", success: true, action: "halt", onType: "on-success"},
+		{onSuccess: "ignore", onFailure: "", success: false, action: "restart", onType: "on-failure"},
+		{onSuccess: "ignore", onFailure: "", success: true, action: "ignore", onType: "on-success"},
+		{onSuccess: "ignore", onFailure: "restart", success: false, action: "restart", onType: "on-failure"},
+		{onSuccess: "ignore", onFailure: "restart", success: true, action: "ignore", onType: "on-success"},
+		{onSuccess: "ignore", onFailure: "halt", success: false, action: "halt", onType: "on-failure"},
+		{onSuccess: "ignore", onFailure: "halt", success: true, action: "ignore", onType: "on-success"},
+		{onSuccess: "ignore", onFailure: "ignore", success: false, action: "ignore", onType: "on-failure"},
+		{onSuccess: "ignore", onFailure: "ignore", success: true, action: "ignore", onType: "on-success"},
 	}
 	for _, test := range tests {
 		config := &plan.Service{
-			OnExit:    plan.ServiceAction(test.onExit),
-			OnFailure: plan.ServiceAction(test.onFailure),
-			OnSuccess: plan.ServiceAction(test.onSuccess),
+			OnFailure: test.onFailure,
+			OnSuccess: test.onSuccess,
 		}
 		action, onType := servstate.GetAction(config, test.success)
-		c.Check(string(action), Equals, test.action, Commentf("onExit=%q, onFailure=%q, onSuccess=%q, success=%v",
-			test.onExit, test.onFailure, test.onSuccess, test.success))
-		c.Check(onType, Equals, test.onType, Commentf("onExit=%q, onFailure=%q, onSuccess=%q, success=%v",
-			test.onExit, test.onFailure, test.onSuccess, test.success))
+		c.Check(string(action), Equals, test.action, Commentf("onSuccess=%q, onFailure=%q, success=%v",
+			test.onSuccess, test.onFailure, test.success))
+		c.Check(onType, Equals, test.onType, Commentf("onSuccess=%q, onFailure=%q, success=%v",
+			test.onSuccess, test.onFailure, test.success))
 	}
 }
 

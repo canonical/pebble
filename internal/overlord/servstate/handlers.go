@@ -410,7 +410,7 @@ func (s *serviceData) exited(waitErr error) error {
 			logger.Debugf("Service %q %s action is %q, transitioning to stopped state", s.config.Name, onType, action)
 			s.transition(stateStopped)
 
-		case plan.ActionExit:
+		case plan.ActionHalt:
 			logger.Noticef("Service %q %s action is %q, triggering server exit", s.config.Name, onType, action)
 			err := s.manager.stopDaemon()
 			if err != nil {
@@ -486,18 +486,17 @@ func exitCode(cmd *exec.Cmd) int {
 // getAction returns the correct action to perform from the plan and whether
 // or not the service exited with a success exit code (0).
 func getAction(config *plan.Service, success bool) (action plan.ServiceAction, onType string) {
-	switch {
-	case !success && config.OnFailure != "":
-		return config.OnFailure, "on-failure"
-	case success && config.OnSuccess != "":
-		return config.OnSuccess, "on-success"
-	default:
-		onExit := config.OnExit
-		if onExit == plan.ActionUnset {
-			onExit = plan.ActionRestart // default for "on-exit"
-		}
-		return onExit, "on-exit"
+	if success {
+		action = config.OnSuccess
+		onType = "on-success"
+	} else {
+		action = config.OnFailure
+		onType = "on-failure"
 	}
+	if action == plan.ActionUnset {
+		action = plan.ActionRestart // default for "on-success" and "on-failure"
+	}
+	return action, onType
 }
 
 // sendSignal sends the given signal to a running service. Note that this
