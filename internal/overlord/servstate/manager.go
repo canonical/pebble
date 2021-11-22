@@ -443,8 +443,7 @@ func (m *ServiceManager) CheckFailure(name string) {
 	defer m.servicesLock.Unlock()
 
 	for _, service := range m.services {
-		onCheckFailure := map[string]plan.ServiceAction{} // TODO: service.config.OnCheckFailure
-		for checkName, action := range onCheckFailure {
+		for checkName, action := range service.config.OnCheckFailure {
 			if checkName == name {
 				service.checkFailure(action)
 			}

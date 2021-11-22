@@ -61,9 +61,9 @@ func (m *CheckManager) PlanUpdated(p *plan.Plan) {
 	m.checks = checks
 }
 
-func (m *CheckManager) callFailureHandlers(info *CheckInfo) {
+func (m *CheckManager) callFailureHandlers(name string) {
 	for _, f := range m.failureHandlers {
-		f(info.Name)
+		f(name)
 	}
 }
 
@@ -120,7 +120,7 @@ type checkData struct {
 
 	mutex     sync.Mutex
 	failures  int
-	action    func(info *CheckInfo)
+	action    FailureFunc
 	actionRan bool
 	lastErr   error
 	cancel    context.CancelFunc
@@ -178,7 +178,7 @@ func (c *checkData) check() {
 		if !c.actionRan && c.failures >= c.config.Failures {
 			logger.Noticef("Check %q failure threshold %d hit, triggering action",
 				c.config.Name, c.config.Failures)
-			c.action(c.info())
+			c.action(c.config.Name)
 			c.actionRan = true
 		}
 		return

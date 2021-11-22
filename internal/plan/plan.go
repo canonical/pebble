@@ -104,13 +104,14 @@ type Service struct {
 	Group       string            `yaml:"group,omitempty"`
 
 	// Auto-restart and backoff functionality
-	OnExit        ServiceAction    `yaml:"on-exit,omitempty"`
-	OnFailure     ServiceAction    `yaml:"on-failure,omitempty"`
-	OnSuccess     ServiceAction    `yaml:"on-success,omitempty"`
-	BackoffDelay  OptionalDuration `yaml:"backoff-delay,omitempty"`
-	BackoffFactor OptionalFloat    `yaml:"backoff-factor,omitempty"`
-	BackoffLimit  OptionalDuration `yaml:"backoff-limit,omitempty"`
-	BackoffReset  OptionalDuration `yaml:"backoff-reset,omitempty"`
+	OnExit         ServiceAction            `yaml:"on-exit,omitempty"`
+	OnFailure      ServiceAction            `yaml:"on-failure,omitempty"`
+	OnSuccess      ServiceAction            `yaml:"on-success,omitempty"`
+	OnCheckFailure map[string]ServiceAction `yaml:"on-check-failure,omitempty"`
+	BackoffDelay   OptionalDuration         `yaml:"backoff-delay,omitempty"`
+	BackoffFactor  OptionalFloat            `yaml:"backoff-factor,omitempty"`
+	BackoffLimit   OptionalDuration         `yaml:"backoff-limit,omitempty"`
+	BackoffReset   OptionalDuration         `yaml:"backoff-reset,omitempty"`
 }
 
 // Copy returns a deep copy of the service.
@@ -132,6 +133,12 @@ func (s *Service) Copy() *Service {
 	if s.GroupID != nil {
 		groupID := *s.GroupID
 		copied.GroupID = &groupID
+	}
+	if s.OnCheckFailure != nil {
+		copied.OnCheckFailure = make(map[string]ServiceAction)
+		for k, v := range s.OnCheckFailure {
+			copied.OnCheckFailure[k] = v
+		}
 	}
 	return &copied
 }
@@ -333,6 +340,9 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 					}
 					if service.OnSuccess != "" {
 						copy.OnSuccess = service.OnSuccess
+					}
+					for k, v := range service.OnCheckFailure {
+						copy.OnCheckFailure[k] = v
 					}
 					if service.BackoffDelay.IsSet {
 						copy.BackoffDelay = service.BackoffDelay
@@ -577,6 +587,11 @@ func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 		}
 		if !validServiceAction(service.OnSuccess) {
 			return nil, &FormatError{Message: fmt.Sprintf("invalid on-success action %q", service.OnSuccess)}
+		}
+		for _, action := range service.OnCheckFailure {
+			if !validServiceAction(action) {
+				return nil, &FormatError{Message: fmt.Sprintf("invalid on-check-failure action %q", action)}
+			}
 		}
 		if !service.BackoffDelay.IsSet {
 			service.BackoffDelay.Value = defaultBackoffDelay

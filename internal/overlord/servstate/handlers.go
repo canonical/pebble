@@ -664,9 +664,6 @@ func (s *serviceData) backoffResetElapsed() error {
 
 // checkFailure handles a health check failure (from the check manager).
 func (s *serviceData) checkFailure(action plan.ServiceAction) {
-	s.manager.servicesLock.Lock()
-	defer s.manager.servicesLock.Unlock()
-
 	switch s.state {
 	case stateRunning, stateBackoff:
 		err := s.performAction(action, "on-check-failure")
