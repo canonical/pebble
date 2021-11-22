@@ -134,7 +134,12 @@ func New(pebbleDir string, restartBehavior RestartBehavior, serviceOutput io.Wri
 	o.addManager(o.commandMgr)
 
 	o.checkMgr = checkstate.NewManager()
-	o.serviceMgr.AddPlanHandler(o.checkMgr.PlanHandler)
+
+	// Tell check manager about plan updates.
+	o.serviceMgr.AddPlanHandler(o.checkMgr.PlanUpdated)
+
+	// Tell service manager about check failures.
+	o.checkMgr.AddFailureHandler(o.serviceMgr.CheckFailure)
 
 	// the shared task runner should be added last!
 	o.stateEng.AddManager(o.runner)

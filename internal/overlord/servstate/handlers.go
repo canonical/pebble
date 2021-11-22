@@ -426,30 +426,9 @@ func (s *serviceData) exited(waitErr error) error {
 	case stateRunning:
 		logger.Noticef("Service %q stopped unexpectedly with code %d", s.config.Name, exitCode(s.cmd))
 		action, onType := getAction(s.config, waitErr == nil)
-		switch action {
-		case plan.ActionIgnore:
-			logger.Debugf("Service %q %s action is %q, transitioning to stopped state", s.config.Name, onType, action)
-			s.transition(stateStopped)
-
-		case plan.ActionExit:
-			logger.Noticef("Service %q %s action is %q, triggering server exit", s.config.Name, onType, action)
-			err := s.manager.stopDaemon()
-			if err != nil {
-				logger.Noticef("Cannot stop server: %v", err)
-			}
-			s.transition(stateStopped)
-
-		case plan.ActionRestart:
-			s.backoffNum++
-			s.backoffTime = calculateNextBackoff(s.config, s.backoffTime)
-			logger.Noticef("Service %q %s action is %q, waiting ~%s before restart (backoff %d)",
-				s.config.Name, onType, action, s.backoffTime, s.backoffNum)
-			s.transition(stateBackoff)
-			duration := s.backoffTime + s.manager.getJitter(s.backoffTime)
-			time.AfterFunc(duration, func() { logError(s.backoffTimeElapsed()) })
-
-		default:
-			return fmt.Errorf("internal error: unexpected action %q", action)
+		err := s.performAction(action, onType)
+		if err != nil {
+			return err
 		}
 
 	case stateTerminating, stateKilling:
@@ -459,6 +438,35 @@ func (s *serviceData) exited(waitErr error) error {
 
 	default:
 		return fmt.Errorf("internal error: exited invalid in state %q", s.state)
+	}
+	return nil
+}
+
+func (s *serviceData) performAction(action plan.ServiceAction, onType string) error {
+	switch action {
+	case plan.ActionIgnore:
+		logger.Debugf("Service %q %s action is %q, transitioning to stopped state", s.config.Name, onType, action)
+		s.transition(stateStopped)
+
+	case plan.ActionExit:
+		logger.Noticef("Service %q %s action is %q, triggering server exit", s.config.Name, onType, action)
+		err := s.manager.stopDaemon()
+		if err != nil {
+			logger.Noticef("Cannot stop server: %v", err)
+		}
+		s.transition(stateStopped)
+
+	case plan.ActionRestart:
+		s.backoffNum++
+		s.backoffTime = calculateNextBackoff(s.config, s.backoffTime)
+		logger.Noticef("Service %q %s action is %q, waiting ~%s before restart (backoff %d)",
+			s.config.Name, onType, action, s.backoffTime, s.backoffNum)
+		s.transition(stateBackoff)
+		duration := s.backoffTime + s.manager.getJitter(s.backoffTime)
+		time.AfterFunc(duration, func() { logError(s.backoffTimeElapsed()) })
+
+	default:
+		return fmt.Errorf("internal error: unexpected action %q", action)
 	}
 	return nil
 }
@@ -652,6 +660,25 @@ func (s *serviceData) backoffResetElapsed() error {
 		return nil
 	}
 	return nil
+}
+
+// checkFailure handles a health check failure (from the check manager).
+func (s *serviceData) checkFailure(action plan.ServiceAction) {
+	s.manager.servicesLock.Lock()
+	defer s.manager.servicesLock.Unlock()
+
+	switch s.state {
+	case stateRunning, stateBackoff:
+		err := s.performAction(action, "on-check-failure")
+		if err != nil {
+			logger.Noticef("Service %q: cannot perform on-check-failure action %q: %v",
+				s.config.Name, action, err)
+		}
+
+	default:
+		logger.Debugf("Service %q: ignoring on-check-failure action %q in state %s",
+			s.config.Name, action, s.state)
+	}
 }
 
 var setCmdCredential = func(cmd *exec.Cmd, credential *syscall.Credential) {

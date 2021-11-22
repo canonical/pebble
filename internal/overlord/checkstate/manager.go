@@ -14,31 +14,32 @@ import (
 
 // CheckManager starts and manages the health checks.
 type CheckManager struct {
-	mutex  sync.Mutex
-	checks map[string]*checkData
+	mutex           sync.Mutex
+	checks          map[string]*checkData
+	failureHandlers []FailureFunc
 }
+
+type FailureFunc func(name string)
 
 // NewManager creates a new check manager.
 func NewManager() *CheckManager {
 	return &CheckManager{}
 }
 
-// PlanHandler handles updated to the plan (server configuration).
-func (m *CheckManager) PlanHandler(p *plan.Plan) {
-	err := m.configure(p.Checks)
-	if err != nil {
-		logger.Noticef("Cannot configure check manager: %v", err)
-	}
+// AddFailureHandler adds f to the list of "failure handlers", functions that
+// are called whenever a check hits its failure threshold.
+func (m *CheckManager) AddFailureHandler(f FailureFunc) {
+	m.failureHandlers = append(m.failureHandlers, f)
 }
 
-// configure reconfigures the manager with the given check configuration,
+// PlanUpdated handles updated to the plan (server configuration),
 // stopping the previous checks and starting the new ones as required.
-func (m *CheckManager) configure(checksConfig map[string]*plan.Check) error {
+func (m *CheckManager) PlanUpdated(p *plan.Plan) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
 	logger.Debugf("Configuring check manager (stopping %d, starting %d)",
-		len(m.checks), len(checksConfig))
+		len(m.checks), len(p.Checks))
 
 	// First stop existing checks.
 	for _, check := range m.checks {
@@ -46,18 +47,24 @@ func (m *CheckManager) configure(checksConfig map[string]*plan.Check) error {
 	}
 
 	// Then configure and start new checks.
-	checks := make(map[string]*checkData, len(checksConfig))
-	for name, config := range checksConfig {
+	checks := make(map[string]*checkData, len(p.Checks))
+	for name, config := range p.Checks {
 		check := &checkData{
 			config:  config,
 			checker: newChecker(config),
 			done:    make(chan struct{}),
+			action:  m.callFailureHandlers,
 		}
 		checks[name] = check
 		go check.loop()
 	}
 	m.checks = checks
-	return nil
+}
+
+func (m *CheckManager) callFailureHandlers(info *CheckInfo) {
+	for _, f := range m.failureHandlers {
+		f(info.Name)
+	}
 }
 
 // Checks returns the list of currently-configured checks and their status,
@@ -113,6 +120,7 @@ type checkData struct {
 
 	mutex     sync.Mutex
 	failures  int
+	action    func(info *CheckInfo)
 	actionRan bool
 	lastErr   error
 	cancel    context.CancelFunc
@@ -170,8 +178,8 @@ func (c *checkData) check() {
 		if !c.actionRan && c.failures >= c.config.Failures {
 			logger.Noticef("Check %q failure threshold %d hit, triggering action",
 				c.config.Name, c.config.Failures)
+			c.action(c.info())
 			c.actionRan = true
-			// TODO: trigger action
 		}
 		return
 	}

@@ -66,9 +66,6 @@ func NewManager(s *state.State, runner *state.TaskRunner, pebbleDir string, serv
 // called whenever the plan is updated. Each function is called with a copy
 // of the plan, so it can safely store or modify it.
 func (m *ServiceManager) AddPlanHandler(f PlanFunc) {
-	m.planLock.Lock()
-	defer m.planLock.Unlock()
-
 	m.planHandlers = append(m.planHandlers, f)
 }
 
@@ -439,4 +436,18 @@ func (m *ServiceManager) SendSignal(services []string, signal string) error {
 		return fmt.Errorf("%s", strings.Join(errors, "; "))
 	}
 	return nil
+}
+
+func (m *ServiceManager) CheckFailure(name string) {
+	m.servicesLock.Lock()
+	defer m.servicesLock.Unlock()
+
+	for _, service := range m.services {
+		onCheckFailure := map[string]plan.ServiceAction{} // TODO: service.config.OnCheckFailure
+		for checkName, action := range onCheckFailure {
+			if checkName == name {
+				service.checkFailure(action)
+			}
+		}
+	}
 }
