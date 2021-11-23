@@ -89,7 +89,7 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 	request, err := TaskServiceRequest(task)
 	m.state.Unlock()
 	if err != nil {
-		return fmt.Errorf("cannot get service request: %w", err)
+		return err
 	}
 
 	releasePlan, err := m.acquirePlan()
@@ -117,25 +117,25 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 
 	// Wait for a small amount of time, and if the service hasn't exited,
 	// consider it a success.
-	timeout := time.After(okayWait + 100*time.Millisecond)
-	for {
-		select {
-		case err := <-service.started:
-			if err != nil {
-				m.removeService(config.Name)
-				return fmt.Errorf("cannot start service: %w", err)
-			}
-			// Started successfully (ran for small amount of time without exiting).
-			return nil
-		case <-tomb.Dying():
-			// Start operation cancelled (ignore for simplicity).
-			logger.Noticef("Ignoring cancellation of start for service %q", config.Name)
-		case <-timeout:
-			// Should never happen, because okayWaitElapsed and exited both send to the
-			// "started" channel, but don't block in case we got something wrong.
+	select {
+	case err := <-service.started:
+		if err != nil {
 			m.removeService(config.Name)
-			return fmt.Errorf("internal error: timed out waiting for start")
+			return fmt.Errorf("cannot start service: %w", err)
 		}
+		// Started successfully (ran for small amount of time without exiting).
+		return nil
+	case <-tomb.Dying():
+		// User tried to abort the start, sending SIGKILL to process is about
+		// the best we can do.
+		m.removeService(config.Name)
+		m.servicesLock.Lock()
+		defer m.servicesLock.Unlock()
+		err := syscall.Kill(-service.cmd.Process.Pid, syscall.SIGKILL)
+		if err != nil {
+			return fmt.Errorf("start aborted, but cannot send SIGKILL to process: %v", err)
+		}
+		return fmt.Errorf("start aborted, sent SIGKILL to process")
 	}
 }
 
@@ -148,34 +148,34 @@ func (m *ServiceManager) serviceForStart(task *state.Task, config *plan.Service)
 	defer m.servicesLock.Unlock()
 
 	service := m.services[config.Name]
-	if service != nil {
-		switch service.state {
-		case stateInitial, stateStarting, stateRunning:
-			taskLogf(task, "Service %q already started.", config.Name)
-			return nil
-		case stateBackoff, stateStopped:
-			// Start allowed in "stopped" and "backoff" states, handle below.
-		default:
-			// Cannot start service while terminating or killing, handle in start().
-			return service
-		}
-	}
-
 	if service == nil {
+		// Not already started, create a new service object.
 		service = &serviceData{
 			manager: m,
 			state:   stateInitial,
 			config:  config.Copy(),
 			logs:    servicelog.NewRingBuffer(maxLogBytes),
+			started: make(chan error, 1),
+			stopped: make(chan error, 2), // enough for killTimeElapsed to send, and exit if it happens after
 		}
 		m.services[config.Name] = service
-	} else {
+		return service
+	}
+
+	switch service.state {
+	case stateInitial, stateStarting, stateRunning:
+		taskLogf(task, "Service %q already started.", config.Name)
+		return nil
+	case stateBackoff, stateStopped:
+		// Start allowed in "backoff" and "stopped" states.
 		service.backoffNum = 0
 		service.backoffTime = 0
 		service.transition(stateInitial)
+		return service
+	default:
+		// Cannot start service while terminating or killing, handle in start().
+		return service
 	}
-	service.started = make(chan error, 1)
-	return service
 }
 
 func taskLogf(task *state.Task, format string, args ...interface{}) {
@@ -191,7 +191,7 @@ func (m *ServiceManager) doStop(task *state.Task, tomb *tomb.Tomb) error {
 	request, err := TaskServiceRequest(task)
 	m.state.Unlock()
 	if err != nil {
-		return fmt.Errorf("cannot get service request: %w", err)
+		return err
 	}
 
 	service := m.serviceForStop(task, request.Name)
@@ -206,7 +206,6 @@ func (m *ServiceManager) doStop(task *state.Task, tomb *tomb.Tomb) error {
 		return err
 	}
 
-	timeout := time.After(failWait + 100*time.Millisecond)
 	for {
 		select {
 		case err := <-service.stopped:
@@ -216,12 +215,10 @@ func (m *ServiceManager) doStop(task *state.Task, tomb *tomb.Tomb) error {
 			// Stopped successfully.
 			return nil
 		case <-tomb.Dying():
-			// Stop operation cancelled (ignore for simplicity).
-			logger.Noticef("Ignoring cancellation of stop for service %q", request.Name)
-		case <-timeout:
-			// Should never happen, because killTimeElapsed and exited both send to the
-			// "stopped" channel, but don't block in case we got something wrong.
-			return fmt.Errorf("internal error: timed out waiting for stop")
+			// User tried to abort the stop, but SIGTERM and/or SIGKILL have
+			// already been sent to the process, so there's not much more we
+			// can do than log it.
+			logger.Noticef("Cannot abort stop for service %q, kill signals already sent", request.Name)
 		}
 	}
 }
@@ -401,6 +398,7 @@ func (s *serviceData) exited(waitErr error) error {
 	switch s.state {
 	case stateStarting:
 		s.started <- fmt.Errorf("exited quickly with code %d", exitCode(s.cmd))
+		s.transition(stateStopped) // not strictly necessary as doStart will return, but doesn't hurt
 
 	case stateRunning:
 		logger.Noticef("Service %q stopped unexpectedly with code %d", s.config.Name, exitCode(s.cmd))
@@ -521,8 +519,6 @@ func (s *serviceData) stop() error {
 	s.manager.servicesLock.Lock()
 	defer s.manager.servicesLock.Unlock()
 
-	s.stopped = make(chan error, 2)
-
 	switch s.state {
 	case stateRunning:
 		logger.Debugf("Attempting to stop service %q by sending SIGTERM", s.config.Name)
@@ -600,6 +596,7 @@ func (s *serviceData) killTimeElapsed() error {
 	case stateKilling:
 		logger.Noticef("Service %q still running after SIGTERM and SIGKILL", s.config.Name)
 		s.stopped <- fmt.Errorf("process still running after SIGTERM and SIGKILL")
+		s.transition(stateStopped)
 
 	default:
 		// Ignore if timer elapsed in any other state.
