@@ -424,7 +424,38 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 			}
 		}
 	}
-	// TODO: validate checks
+	for name, check := range combined.Checks {
+		numTypes := 0
+		if check.HTTP != nil {
+			if check.HTTP.URL == "" {
+				return nil, &FormatError{
+					Message: fmt.Sprintf(`plan must set "url" for http check %q`, name),
+				}
+			}
+			numTypes++
+		}
+		if check.TCP != nil {
+			if check.TCP.Port == 0 {
+				return nil, &FormatError{
+					Message: fmt.Sprintf(`plan must set "port" for tcp check %q`, name),
+				}
+			}
+			numTypes++
+		}
+		if check.Exec != nil {
+			if check.Exec.Command == "" {
+				return nil, &FormatError{
+					Message: fmt.Sprintf(`plan must set "command" for exec check %q`, name),
+				}
+			}
+			numTypes++
+		}
+		if numTypes != 1 {
+			return nil, &FormatError{
+				Message: fmt.Sprintf(`plan must specify one of "http", "tcp", or "exec" for check %q`, name),
+			}
+		}
+	}
 
 	// Ensure combined layers don't have cycles.
 	err := combined.checkCycles()
@@ -625,30 +656,7 @@ func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 			return nil, &FormatError{Message: "check timeout must be less than period"}
 		}
 		if check.Failures == 0 {
-			check.Failures = 1
-		}
-		// TODO: should this be checked at the combine level?
-		numTypes := 0
-		if check.HTTP != nil {
-			if check.HTTP.URL == "" {
-				return nil, &FormatError{Message: `HTTP check "url" must be specified`}
-			}
-			numTypes++
-		}
-		if check.TCP != nil {
-			if check.TCP.Port == 0 {
-				return nil, &FormatError{Message: `TCP check "port" must be specified`}
-			}
-			numTypes++
-		}
-		if check.Exec != nil {
-			if check.Exec.Command == "" {
-				return nil, &FormatError{Message: `Exec check "command" must be specified`}
-			}
-			numTypes++
-		}
-		if numTypes != 1 {
-			return nil, &FormatError{Message: `check must specify one of "http", "tcp", or "exec"`}
+			check.Failures = 1 // TODO: is this too aggressive? K8s uses a default of 3
 		}
 
 		check.Name = name
