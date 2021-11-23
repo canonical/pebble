@@ -412,10 +412,7 @@ func (s *serviceData) exited(waitErr error) error {
 
 		case plan.ActionHalt:
 			logger.Noticef("Service %q %s action is %q, triggering server exit", s.config.Name, onType, action)
-			err := s.manager.stopDaemon()
-			if err != nil {
-				logger.Noticef("Cannot stop server: %v", err)
-			}
+			s.manager.restarter.HandleRestart(state.RestartDaemon)
 			s.transition(stateStopped)
 
 		case plan.ActionRestart:

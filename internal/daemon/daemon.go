@@ -702,10 +702,7 @@ func New(opts *Options) (*Daemon, error) {
 		untrustedSocketPath: opts.SocketPath + ".untrusted",
 	}
 
-	stopDaemon := func() error {
-		return d.Stop(nil)
-	}
-	ovld, err := overlord.New(opts.Dir, d, opts.ServiceOutput, stopDaemon)
+	ovld, err := overlord.New(opts.Dir, d, opts.ServiceOutput)
 	if err == state.ErrExpectedReboot {
 		// we proceed without overlord until we reach Stop
 		// where we will schedule and wait again for a system restart.

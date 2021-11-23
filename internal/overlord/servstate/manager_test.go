@@ -138,10 +138,7 @@ func (s *S) SetUpTest(c *C) {
 
 	s.runner = state.NewTaskRunner(s.st)
 	s.stopDaemon = make(chan struct{})
-	manager, err := servstate.NewManager(s.st, s.runner, s.dir, logOutput, func() error {
-		close(s.stopDaemon)
-		return nil
-	})
+	manager, err := servstate.NewManager(s.st, s.runner, s.dir, logOutput, testRestarter{s.stopDaemon})
 	c.Assert(err, IsNil)
 	s.manager = manager
 
@@ -152,6 +149,14 @@ func (s *S) SetUpTest(c *C) {
 }
 
 func (s *S) TearDownTest(c *C) {
+}
+
+type testRestarter struct {
+	ch chan struct{}
+}
+
+func (r testRestarter) HandleRestart(t state.RestartType) {
+	close(r.ch)
 }
 
 func (s *S) assertLog(c *C, expected string) {
