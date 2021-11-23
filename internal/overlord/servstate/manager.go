@@ -27,13 +27,17 @@ type ServiceManager struct {
 	services     map[string]*serviceData
 
 	serviceOutput io.Writer
-	stopDaemon    func() error
+	restarter     Restarter
 
 	randLock sync.Mutex
 	rand     *rand.Rand
 }
 
 type PlanFunc func(p *plan.Plan)
+
+type Restarter interface {
+	HandleRestart(t state.RestartType)
+}
 
 // LabelExists is the error returned by AppendLayer when a layer with that
 // label already exists.
@@ -45,14 +49,14 @@ func (e *LabelExists) Error() string {
 	return fmt.Sprintf("layer %q already exists", e.Label)
 }
 
-func NewManager(s *state.State, runner *state.TaskRunner, pebbleDir string, serviceOutput io.Writer, stopDaemon func() error) (*ServiceManager, error) {
+func NewManager(s *state.State, runner *state.TaskRunner, pebbleDir string, serviceOutput io.Writer, restarter Restarter) (*ServiceManager, error) {
 	manager := &ServiceManager{
 		state:         s,
 		runner:        runner,
 		pebbleDir:     pebbleDir,
 		services:      make(map[string]*serviceData),
 		serviceOutput: serviceOutput,
-		stopDaemon:    stopDaemon,
+		restarter:     restarter,
 		rand:          rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
 

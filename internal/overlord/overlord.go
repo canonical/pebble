@@ -89,7 +89,7 @@ type Overlord struct {
 
 // New creates a new Overlord with all its state managers.
 // It can be provided with an optional RestartBehavior.
-func New(pebbleDir string, restartBehavior RestartBehavior, serviceOutput io.Writer, stopDaemon func() error) (*Overlord, error) {
+func New(pebbleDir string, restartBehavior RestartBehavior, serviceOutput io.Writer) (*Overlord, error) {
 	o := &Overlord{
 		pebbleDir:       pebbleDir,
 		loopTomb:        new(tomb.Tomb),
@@ -124,7 +124,7 @@ func New(pebbleDir string, restartBehavior RestartBehavior, serviceOutput io.Wri
 	}
 	o.runner.AddOptionalHandler(matchAnyUnknownTask, handleUnknownTask, nil)
 
-	o.serviceMgr, err = servstate.NewManager(s, o.runner, o.pebbleDir, serviceOutput, stopDaemon)
+	o.serviceMgr, err = servstate.NewManager(s, o.runner, o.pebbleDir, serviceOutput, restartBehavior)
 	if err != nil {
 		return nil, err
 	}

@@ -34,7 +34,6 @@ const (
 	defaultBackoffDelay  = 500 * time.Millisecond
 	defaultBackoffFactor = 2.0
 	defaultBackoffLimit  = 30 * time.Second
-	defaultBackoffReset  = 10 * time.Second
 )
 
 // TODOs:
@@ -104,7 +103,6 @@ var planTests = []planTest{{
 				backoff-delay: 1s
 				backoff-factor: 1.5
 				backoff-limit: 10s
-				backoff-reset: 3s
 			srv2:
 				override: replace
 				startup: enabled
@@ -162,7 +160,6 @@ var planTests = []planTest{{
 				BackoffDelay:  plan.OptionalDuration{Value: time.Second, IsSet: true},
 				BackoffFactor: plan.OptionalFloat{Value: 1.5, IsSet: true},
 				BackoffLimit:  plan.OptionalDuration{Value: 10 * time.Second, IsSet: true},
-				BackoffReset:  plan.OptionalDuration{Value: 3 * time.Second, IsSet: true},
 			},
 			"srv2": {
 				Name:          "srv2",
@@ -173,7 +170,6 @@ var planTests = []planTest{{
 				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
 				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
 				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
-				BackoffReset:  plan.OptionalDuration{Value: defaultBackoffReset},
 			},
 			"srv3": {
 				Name:          "srv3",
@@ -183,7 +179,6 @@ var planTests = []planTest{{
 				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
 				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
 				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
-				BackoffReset:  plan.OptionalDuration{Value: defaultBackoffReset},
 			},
 		},
 		Checks: map[string]*plan.Check{},
@@ -204,7 +199,6 @@ var planTests = []planTest{{
 				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
 				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
 				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
-				BackoffReset:  plan.OptionalDuration{Value: defaultBackoffReset},
 			},
 			"srv2": {
 				Name:          "srv2",
@@ -215,7 +209,6 @@ var planTests = []planTest{{
 				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
 				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
 				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
-				BackoffReset:  plan.OptionalDuration{Value: defaultBackoffReset},
 			},
 			"srv4": {
 				Name:          "srv4",
@@ -225,7 +218,6 @@ var planTests = []planTest{{
 				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
 				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
 				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
-				BackoffReset:  plan.OptionalDuration{Value: defaultBackoffReset},
 			},
 			"srv5": {
 				Name:          "srv5",
@@ -234,7 +226,6 @@ var planTests = []planTest{{
 				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
 				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
 				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
-				BackoffReset:  plan.OptionalDuration{Value: defaultBackoffReset},
 			},
 		},
 		Checks: map[string]*plan.Check{},
@@ -261,7 +252,6 @@ var planTests = []planTest{{
 				BackoffDelay:  plan.OptionalDuration{Value: time.Second, IsSet: true},
 				BackoffFactor: plan.OptionalFloat{Value: 1.5, IsSet: true},
 				BackoffLimit:  plan.OptionalDuration{Value: 10 * time.Second, IsSet: true},
-				BackoffReset:  plan.OptionalDuration{Value: 3 * time.Second, IsSet: true},
 			},
 			"srv2": {
 				Name:          "srv2",
@@ -272,7 +262,6 @@ var planTests = []planTest{{
 				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
 				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
 				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
-				BackoffReset:  plan.OptionalDuration{Value: defaultBackoffReset},
 			},
 			"srv3": {
 				Name:          "srv3",
@@ -281,7 +270,6 @@ var planTests = []planTest{{
 				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
 				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
 				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
-				BackoffReset:  plan.OptionalDuration{Value: defaultBackoffReset},
 			},
 			"srv4": {
 				Name:          "srv4",
@@ -291,7 +279,6 @@ var planTests = []planTest{{
 				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
 				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
 				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
-				BackoffReset:  plan.OptionalDuration{Value: defaultBackoffReset},
 			},
 			"srv5": {
 				Name:          "srv5",
@@ -300,7 +287,6 @@ var planTests = []planTest{{
 				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
 				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
 				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
-				BackoffReset:  plan.OptionalDuration{Value: defaultBackoffReset},
 			},
 		},
 		Checks: map[string]*plan.Check{},
@@ -365,7 +351,6 @@ var planTests = []planTest{{
 				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
 				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
 				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
-				BackoffReset:  plan.OptionalDuration{Value: defaultBackoffReset},
 			},
 		},
 		Checks: map[string]*plan.Check{},
@@ -406,13 +391,13 @@ var planTests = []planTest{{
 	`},
 }, {
 	summary: `Invalid action`,
-	error:   `invalid on-exit action "foo"`,
+	error:   `invalid on-success action "foo"`,
 	input: []string{`
 		services:
 			"svc1":
 				override: replace
 				command: cmd
-				on-exit: foo
+				on-success: foo
 	`},
 }, {
 	summary: `Invalid backoff-delay duration`,
@@ -453,16 +438,6 @@ var planTests = []planTest{{
 				override: replace
 				command: cmd
 				backoff-factor: foo
-	`},
-}, {
-	summary: `Zero backoff-reset`,
-	error:   `backoff-reset must not be zero`,
-	input: []string{`
-		services:
-			"svc1":
-				override: replace
-				command: cmd
-				backoff-reset: 0
 	`},
 }}
 
@@ -707,7 +682,6 @@ func (s *S) TestMarshalLayer(c *C) {
 				backoff-delay: 1s
 				backoff-factor: 1.5
 				backoff-limit: 10s
-				backoff-reset: 3s
 			srv2:
 				override: replace
 				command: srv2cmd

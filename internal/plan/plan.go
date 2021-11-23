@@ -33,7 +33,6 @@ const (
 	defaultBackoffDelay  = 500 * time.Millisecond
 	defaultBackoffFactor = 2.0
 	defaultBackoffLimit  = 30 * time.Second
-	defaultBackoffReset  = 10 * time.Second
 )
 
 type Plan struct {
@@ -104,14 +103,12 @@ type Service struct {
 	Group       string            `yaml:"group,omitempty"`
 
 	// Auto-restart and backoff functionality
-	OnExit         ServiceAction            `yaml:"on-exit,omitempty"`
-	OnFailure      ServiceAction            `yaml:"on-failure,omitempty"`
 	OnSuccess      ServiceAction            `yaml:"on-success,omitempty"`
+	OnFailure      ServiceAction            `yaml:"on-failure,omitempty"`
 	OnCheckFailure map[string]ServiceAction `yaml:"on-check-failure,omitempty"`
 	BackoffDelay   OptionalDuration         `yaml:"backoff-delay,omitempty"`
 	BackoffFactor  OptionalFloat            `yaml:"backoff-factor,omitempty"`
 	BackoffLimit   OptionalDuration         `yaml:"backoff-limit,omitempty"`
-	BackoffReset   OptionalDuration         `yaml:"backoff-reset,omitempty"`
 }
 
 // Copy returns a deep copy of the service.
@@ -172,7 +169,7 @@ type ServiceAction string
 const (
 	ActionUnset   ServiceAction = ""
 	ActionRestart ServiceAction = "restart"
-	ActionExit    ServiceAction = "exit"
+	ActionHalt    ServiceAction = "halt"
 	ActionIgnore  ServiceAction = "ignore"
 )
 
@@ -332,14 +329,11 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 					for k, v := range service.Environment {
 						copy.Environment[k] = v
 					}
-					if service.OnExit != "" {
-						copy.OnExit = service.OnExit
+					if service.OnSuccess != "" {
+						copy.OnSuccess = service.OnSuccess
 					}
 					if service.OnFailure != "" {
 						copy.OnFailure = service.OnFailure
-					}
-					if service.OnSuccess != "" {
-						copy.OnSuccess = service.OnSuccess
 					}
 					for k, v := range service.OnCheckFailure {
 						copy.OnCheckFailure[k] = v
@@ -352,9 +346,6 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 					}
 					if service.BackoffLimit.IsSet {
 						copy.BackoffLimit = service.BackoffLimit
-					}
-					if service.BackoffReset.IsSet {
-						copy.BackoffReset = service.BackoffReset
 					}
 					combined.Services[name] = copy
 					break
@@ -579,14 +570,11 @@ func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 		}
 
 		// Set defaults and validate values
-		if !validServiceAction(service.OnExit) {
-			return nil, &FormatError{Message: fmt.Sprintf("invalid on-exit action %q", service.OnExit)}
+		if !validServiceAction(service.OnSuccess) {
+			return nil, &FormatError{Message: fmt.Sprintf("invalid on-success action %q", service.OnSuccess)}
 		}
 		if !validServiceAction(service.OnFailure) {
 			return nil, &FormatError{Message: fmt.Sprintf("invalid on-failure action %q", service.OnFailure)}
-		}
-		if !validServiceAction(service.OnSuccess) {
-			return nil, &FormatError{Message: fmt.Sprintf("invalid on-success action %q", service.OnSuccess)}
 		}
 		for _, action := range service.OnCheckFailure {
 			if !validServiceAction(action) {
@@ -603,11 +591,6 @@ func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 		}
 		if !service.BackoffLimit.IsSet {
 			service.BackoffLimit.Value = defaultBackoffLimit
-		}
-		if !service.BackoffReset.IsSet {
-			service.BackoffReset.Value = defaultBackoffReset
-		} else if service.BackoffReset.Value == 0 {
-			return nil, &FormatError{Message: "backoff-reset must not be zero"}
 		}
 
 		service.Name = name
@@ -680,7 +663,7 @@ func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 
 func validServiceAction(action ServiceAction) bool {
 	switch action {
-	case ActionUnset, ActionRestart, ActionExit, ActionIgnore:
+	case ActionUnset, ActionRestart, ActionHalt, ActionIgnore:
 		return true
 	default:
 		return false
