@@ -27,6 +27,9 @@ import (
 	"time"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/canonical/pebble/internal/osutil"
+	"github.com/canonical/pebble/internal/strutil/shlex"
 )
 
 const (
@@ -423,6 +426,12 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 				Message: fmt.Sprintf(`plan must define "command" for service %q`, name),
 			}
 		}
+		_, err := shlex.Split(service.Command)
+		if err != nil {
+			return nil, &FormatError{
+				Message: fmt.Sprintf("plan service %q command invalid: %v", name, err),
+			}
+		}
 	}
 	for name, check := range combined.Checks {
 		numTypes := 0
@@ -446,6 +455,18 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 			if check.Exec.Command == "" {
 				return nil, &FormatError{
 					Message: fmt.Sprintf(`plan must set "command" for exec check %q`, name),
+				}
+			}
+			_, err := shlex.Split(check.Exec.Command)
+			if err != nil {
+				return nil, &FormatError{
+					Message: fmt.Sprintf("plan check %q command invalid: %v", name, err),
+				}
+			}
+			_, _, err = osutil.NormalizeUidGid(check.Exec.UserID, check.Exec.GroupID, check.Exec.User, check.Exec.Group)
+			if err != nil {
+				return nil, &FormatError{
+					Message: fmt.Sprintf("plan check %q has invalid user/group: %v", name, err),
 				}
 			}
 			numTypes++
