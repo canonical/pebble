@@ -218,7 +218,7 @@ func (m *ServiceManager) doStop(task *state.Task, tomb *tomb.Tomb) error {
 			// User tried to abort the stop, but SIGTERM and/or SIGKILL have
 			// already been sent to the process, so there's not much more we
 			// can do than log it.
-			logger.Noticef("Cannot abort stop for service %q, kill signals already sent", request.Name)
+			logger.Noticef("Cannot abort stop for service %q, signals already sent", request.Name)
 		}
 	}
 }
