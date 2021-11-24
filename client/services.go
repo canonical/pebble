@@ -80,7 +80,7 @@ type ServicesOptions struct {
 
 // ServiceInfo holds status information for a single service.
 type ServiceInfo struct {
-	Name    string         `json:"name"` // service name
+	Name    string         `json:"name"`
 	Startup ServiceStartup `json:"startup"`
 	Current ServiceStatus  `json:"current"`
 }
@@ -98,8 +98,9 @@ type ServiceStatus string
 
 const (
 	StatusActive   ServiceStatus = "active"
-	StatusInactive ServiceStatus = "inactive"
+	StatusBackoff  ServiceStatus = "backoff"
 	StatusError    ServiceStatus = "error"
+	StatusInactive ServiceStatus = "inactive"
 )
 
 // Services fetches information about specific services (or all of them),

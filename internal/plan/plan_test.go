@@ -22,11 +22,18 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	. "gopkg.in/check.v1"
 	"gopkg.in/yaml.v3"
 
 	"github.com/canonical/pebble/internal/plan"
+)
+
+const (
+	defaultBackoffDelay  = 500 * time.Millisecond
+	defaultBackoffFactor = 2.0
+	defaultBackoffLimit  = 30 * time.Second
 )
 
 // TODOs:
@@ -93,6 +100,9 @@ var planTests = []planTest{{
 					var1: val1
 					var0: val0
 					var2: val2
+				backoff-delay: 1s
+				backoff-factor: 1.5
+				backoff-limit: 10s
 			srv2:
 				override: replace
 				startup: enabled
@@ -147,19 +157,28 @@ var planTests = []planTest{{
 					"var0": "val0",
 					"var2": "val2",
 				},
+				BackoffDelay:  plan.OptionalDuration{Value: time.Second, IsSet: true},
+				BackoffFactor: plan.OptionalFloat{Value: 1.5, IsSet: true},
+				BackoffLimit:  plan.OptionalDuration{Value: 10 * time.Second, IsSet: true},
 			},
 			"srv2": {
-				Name:     "srv2",
-				Override: "replace",
-				Command:  "cmd",
-				Startup:  plan.StartupEnabled,
-				Before:   []string{"srv3"},
+				Name:          "srv2",
+				Override:      "replace",
+				Command:       "cmd",
+				Startup:       plan.StartupEnabled,
+				Before:        []string{"srv3"},
+				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
+				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
+				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
 			},
 			"srv3": {
-				Name:     "srv3",
-				Override: "replace",
-				Command:  "cmd",
-				Startup:  plan.StartupUnknown,
+				Name:          "srv3",
+				Override:      "replace",
+				Command:       "cmd",
+				Startup:       plan.StartupUnknown,
+				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
+				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
+				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
 			},
 		},
 	}, {
@@ -176,24 +195,36 @@ var planTests = []planTest{{
 				Environment: map[string]string{
 					"var3": "val3",
 				},
+				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
+				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
+				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
 			},
 			"srv2": {
-				Name:     "srv2",
-				Summary:  "Replaced service",
-				Override: "replace",
-				Command:  "cmd",
-				Startup:  plan.StartupDisabled,
+				Name:          "srv2",
+				Summary:       "Replaced service",
+				Override:      "replace",
+				Command:       "cmd",
+				Startup:       plan.StartupDisabled,
+				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
+				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
+				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
 			},
 			"srv4": {
-				Name:     "srv4",
-				Override: "replace",
-				Command:  "cmd",
-				Startup:  plan.StartupEnabled,
+				Name:          "srv4",
+				Override:      "replace",
+				Command:       "cmd",
+				Startup:       plan.StartupEnabled,
+				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
+				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
+				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
 			},
 			"srv5": {
-				Name:     "srv5",
-				Override: "replace",
-				Command:  "cmd",
+				Name:          "srv5",
+				Override:      "replace",
+				Command:       "cmd",
+				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
+				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
+				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
 			},
 		},
 	}},
@@ -216,29 +247,44 @@ var planTests = []planTest{{
 					"var2": "val2",
 					"var3": "val3",
 				},
+				BackoffDelay:  plan.OptionalDuration{Value: time.Second, IsSet: true},
+				BackoffFactor: plan.OptionalFloat{Value: 1.5, IsSet: true},
+				BackoffLimit:  plan.OptionalDuration{Value: 10 * time.Second, IsSet: true},
 			},
 			"srv2": {
-				Name:     "srv2",
-				Summary:  "Replaced service",
-				Override: "replace",
-				Command:  "cmd",
-				Startup:  plan.StartupDisabled,
+				Name:          "srv2",
+				Summary:       "Replaced service",
+				Override:      "replace",
+				Command:       "cmd",
+				Startup:       plan.StartupDisabled,
+				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
+				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
+				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
 			},
 			"srv3": {
-				Name:     "srv3",
-				Override: "replace",
-				Command:  "cmd",
+				Name:          "srv3",
+				Override:      "replace",
+				Command:       "cmd",
+				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
+				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
+				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
 			},
 			"srv4": {
-				Name:     "srv4",
-				Override: "replace",
-				Command:  "cmd",
-				Startup:  plan.StartupEnabled,
+				Name:          "srv4",
+				Override:      "replace",
+				Command:       "cmd",
+				Startup:       plan.StartupEnabled,
+				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
+				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
+				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
 			},
 			"srv5": {
-				Name:     "srv5",
-				Override: "replace",
-				Command:  "cmd",
+				Name:          "srv5",
+				Override:      "replace",
+				Command:       "cmd",
+				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
+				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
+				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
 			},
 		},
 	},
@@ -299,6 +345,9 @@ var planTests = []planTest{{
 					"b": "1.1",
 					"c": "",
 				},
+				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
+				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
+				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
 			},
 		},
 	}},
@@ -335,6 +384,56 @@ var planTests = []planTest{{
 			"":
 				override: replace
 				command: cmd
+	`},
+}, {
+	summary: `Invalid action`,
+	error:   `invalid on-success action "foo"`,
+	input: []string{`
+		services:
+			"svc1":
+				override: replace
+				command: cmd
+				on-success: foo
+	`},
+}, {
+	summary: `Invalid backoff-delay duration`,
+	error:   `cannot parse layer "layer-0": invalid duration "foo"`,
+	input: []string{`
+		services:
+			"svc1":
+				override: replace
+				command: cmd
+				backoff-delay: foo
+	`},
+}, {
+	summary: `Zero backoff-factor`,
+	error:   `backoff-factor must be 1.0 or greater, not 0`,
+	input: []string{`
+		services:
+			"svc1":
+				override: replace
+				command: cmd
+				backoff-factor: 0
+	`},
+}, {
+	summary: `Too small backoff-factor`,
+	error:   `backoff-factor must be 1.0 or greater, not 0.5`,
+	input: []string{`
+		services:
+			"svc1":
+				override: replace
+				command: cmd
+				backoff-factor: 0.5
+	`},
+}, {
+	summary: `Invalid backoff-factor`,
+	error:   `cannot parse layer "layer-0": invalid floating-point number "foo"`,
+	input: []string{`
+		services:
+			"svc1":
+				override: replace
+				command: cmd
+				backoff-factor: foo
 	`},
 }}
 
@@ -576,6 +675,9 @@ func (s *S) TestMarshalLayer(c *C) {
 					var0: val0
 					var1: val1
 					var2: val2
+				backoff-delay: 1s
+				backoff-factor: 1.5
+				backoff-limit: 10s
 			srv2:
 				override: replace
 				command: srv2cmd

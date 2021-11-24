@@ -33,7 +33,9 @@ func (s *PebbleSuite) TestServices(c *check.C) {
     "type": "sync",
     "status-code": 200,
     "result": [
-		{"name": "svc1", "current": "inactive", "startup": "enabled"}
+		{"name": "svc1", "current": "inactive", "startup": "enabled"},
+		{"name": "svc2", "current": "inactive", "startup": "enabled"},
+		{"name": "svc3", "current": "backoff", "startup": "enabled"}
 	]
 }`)
 	})
@@ -43,6 +45,8 @@ func (s *PebbleSuite) TestServices(c *check.C) {
 	c.Check(s.Stdout(), check.Equals, `
 Service  Startup  Current
 svc1     enabled  inactive
+svc2     enabled  inactive
+svc3     enabled  backoff
 `[1:])
 	c.Check(s.Stderr(), check.Equals, "")
 }

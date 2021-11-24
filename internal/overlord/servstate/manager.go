@@ -3,9 +3,11 @@ package servstate
 import (
 	"fmt"
 	"io"
-	"os/exec"
+	"math/rand"
 	"sort"
+	"strings"
 	"sync"
+	"time"
 
 	"github.com/canonical/pebble/internal/overlord/state"
 	"github.com/canonical/pebble/internal/plan"
@@ -19,17 +21,19 @@ type ServiceManager struct {
 
 	planLock sync.Mutex
 	plan     *plan.Plan
-	services map[string]*activeService
+
+	servicesLock sync.Mutex
+	services     map[string]*serviceData
 
 	serviceOutput io.Writer
+	restarter     Restarter
+
+	randLock sync.Mutex
+	rand     *rand.Rand
 }
 
-type activeService struct {
-	originalPlan *plan.Service
-	cmd          *exec.Cmd
-	err          error
-	done         chan struct{}
-	logBuffer    *servicelog.RingBuffer
+type Restarter interface {
+	HandleRestart(t state.RestartType)
 }
 
 // LabelExists is the error returned by AppendLayer when a layer with that
@@ -42,13 +46,15 @@ func (e *LabelExists) Error() string {
 	return fmt.Sprintf("layer %q already exists", e.Label)
 }
 
-func NewManager(s *state.State, runner *state.TaskRunner, pebbleDir string, serviceOutput io.Writer) (*ServiceManager, error) {
+func NewManager(s *state.State, runner *state.TaskRunner, pebbleDir string, serviceOutput io.Writer, restarter Restarter) (*ServiceManager, error) {
 	manager := &ServiceManager{
 		state:         s,
 		runner:        runner,
 		pebbleDir:     pebbleDir,
-		services:      make(map[string]*activeService),
+		services:      make(map[string]*serviceData),
 		serviceOutput: serviceOutput,
+		restarter:     restarter,
+		rand:          rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
 
 	runner.AddHandler("start", manager.doStart, nil)
@@ -210,8 +216,9 @@ type ServiceStatus string
 
 const (
 	StatusActive   ServiceStatus = "active"
-	StatusInactive ServiceStatus = "inactive"
+	StatusBackoff  ServiceStatus = "backoff"
 	StatusError    ServiceStatus = "error"
+	StatusInactive ServiceStatus = "inactive"
 )
 
 // Services returns the list of configured services and their status, sorted
@@ -223,6 +230,9 @@ func (m *ServiceManager) Services(names []string) ([]*ServiceInfo, error) {
 	}
 	defer releasePlan()
 
+	m.servicesLock.Lock()
+	defer m.servicesLock.Unlock()
+
 	requested := make(map[string]bool, len(names))
 	for _, name := range names {
 		requested[name] = true
@@ -230,7 +240,7 @@ func (m *ServiceManager) Services(names []string) ([]*ServiceInfo, error) {
 
 	var services []*ServiceInfo
 	matchNames := len(names) > 0
-	for name, service := range m.plan.Services {
+	for name, config := range m.plan.Services {
 		if matchNames && !requested[name] {
 			continue
 		}
@@ -239,11 +249,21 @@ func (m *ServiceManager) Services(names []string) ([]*ServiceInfo, error) {
 			Startup: StartupDisabled,
 			Current: StatusInactive,
 		}
-		if service.Startup == plan.StartupEnabled {
+		if config.Startup == plan.StartupEnabled {
 			info.Startup = StartupEnabled
 		}
-		if _, ok := m.services[name]; ok {
-			info.Current = StatusActive
+		if s, ok := m.services[name]; ok {
+			switch s.state {
+			case stateInitial, stateStarting, stateRunning:
+				info.Current = StatusActive
+			case stateTerminating, stateKilling, stateStopped:
+				// Already set to inactive above, but it's nice to be explicit for each state
+				info.Current = StatusInactive
+			case stateBackoff:
+				info.Current = StatusBackoff
+			default:
+				info.Current = StatusError
+			}
 		}
 		services = append(services, info)
 	}
@@ -311,18 +331,21 @@ func (m *ServiceManager) ServiceLogs(services []string, last int) (map[string]se
 		requested[name] = true
 	}
 
+	m.servicesLock.Lock()
+	defer m.servicesLock.Unlock()
+
 	iterators := make(map[string]servicelog.Iterator)
 	for name, service := range m.services {
 		if !requested[name] {
 			continue
 		}
-		if service == nil || service.logBuffer == nil {
+		if service == nil || service.logs == nil {
 			continue
 		}
 		if last >= 0 {
-			iterators[name] = service.logBuffer.HeadIterator(last)
+			iterators[name] = service.logs.HeadIterator(last)
 		} else {
-			iterators[name] = service.logBuffer.TailIterator()
+			iterators[name] = service.logs.TailIterator()
 		}
 	}
 
@@ -338,20 +361,25 @@ func (m *ServiceManager) Replan() ([]string, []string, error) {
 	}
 	defer releasePlan()
 
+	m.servicesLock.Lock()
+	defer m.servicesLock.Unlock()
+
 	needsRestart := make(map[string]bool)
 	var stop []string
-	for name, activeService := range m.services {
-		if currentService, ok := m.plan.Services[name]; ok &&
-			currentService.Equal(activeService.originalPlan) {
-			continue
+	for name, s := range m.services {
+		if config, ok := m.plan.Services[name]; ok && config.Equal(s.config) {
+			if config.Equal(s.config) {
+				continue
+			}
+			s.config = config.Copy() // update service config from plan
 		}
 		needsRestart[name] = true
 		stop = append(stop, name)
 	}
 
 	var start []string
-	for name, service := range m.plan.Services {
-		if needsRestart[name] || service.Startup == plan.StartupEnabled {
+	for name, config := range m.plan.Services {
+		if needsRestart[name] || config.Startup == plan.StartupEnabled {
 			start = append(start, name)
 		}
 	}
@@ -372,4 +400,25 @@ func (m *ServiceManager) Replan() ([]string, []string, error) {
 	}
 
 	return stop, start, nil
+}
+
+func (m *ServiceManager) SendSignal(services []string, signal string) error {
+	m.servicesLock.Lock()
+	defer m.servicesLock.Unlock()
+
+	var errors []string
+	for _, name := range services {
+		s := m.services[name]
+		if s == nil {
+			continue
+		}
+		err := s.sendSignal(signal)
+		if err != nil {
+			errors = append(errors, fmt.Sprintf("cannot send signal to %q: %v", name, err))
+		}
+	}
+	if len(errors) > 0 {
+		return fmt.Errorf("%s", strings.Join(errors, "; "))
+	}
+	return nil
 }

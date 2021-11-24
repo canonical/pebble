@@ -32,10 +32,17 @@ import (
 	. "gopkg.in/check.v1"
 	"gopkg.in/yaml.v3"
 
+	"github.com/canonical/pebble/internal/logger"
 	"github.com/canonical/pebble/internal/overlord/servstate"
 	"github.com/canonical/pebble/internal/overlord/state"
 	"github.com/canonical/pebble/internal/plan"
 	"github.com/canonical/pebble/internal/testutil"
+)
+
+const (
+	shortOkayWait = 50 * time.Millisecond
+	shortKillWait = 100 * time.Millisecond
+	shortFailWait = 200 * time.Millisecond
 )
 
 func Test(t *testing.T) { TestingT(t) }
@@ -50,8 +57,9 @@ type S struct {
 
 	st *state.State
 
-	manager *servstate.ServiceManager
-	runner  *state.TaskRunner
+	manager    *servstate.ServiceManager
+	runner     *state.TaskRunner
+	stopDaemon chan struct{}
 }
 
 var _ = Suite(&S{})
@@ -96,6 +104,15 @@ services:
         command: /bin/sh -c "echo test2b | tee -a %s; sleep 300"
 `
 
+var setLoggerOnce sync.Once
+
+func (s *S) SetUpSuite(c *C) {
+	// This can happen in parallel with tests if -test.count=N with N>1 is specified.
+	setLoggerOnce.Do(func() {
+		logger.SetLogger(logger.New(os.Stderr, "[test] "))
+	})
+}
+
 func (s *S) SetUpTest(c *C) {
 	s.BaseTest.SetUpTest(c)
 	s.st = state.New(nil)
@@ -120,17 +137,26 @@ func (s *S) SetUpTest(c *C) {
 	})
 
 	s.runner = state.NewTaskRunner(s.st)
-	manager, err := servstate.NewManager(s.st, s.runner, s.dir, logOutput)
+	s.stopDaemon = make(chan struct{})
+	manager, err := servstate.NewManager(s.st, s.runner, s.dir, logOutput, testRestarter{s.stopDaemon})
 	c.Assert(err, IsNil)
 	s.manager = manager
 
-	restore := servstate.FakeOkayWait(100 * time.Millisecond)
+	restore := servstate.FakeOkayWait(shortOkayWait)
 	s.AddCleanup(restore)
-	restore = servstate.FakeKillWait(100*time.Millisecond, 1000*time.Millisecond)
+	restore = servstate.FakeKillWait(shortKillWait, shortFailWait)
 	s.AddCleanup(restore)
 }
 
 func (s *S) TearDownTest(c *C) {
+}
+
+type testRestarter struct {
+	ch chan struct{}
+}
+
+func (r testRestarter) HandleRestart(t state.RestartType) {
+	close(r.ch)
 }
 
 func (s *S) assertLog(c *C, expected string) {
@@ -143,6 +169,14 @@ func (s *S) assertLog(c *C, expected string) {
 	c.Assert(err, IsNil)
 	c.Assert(string(data), Matches, "(?s)"+expected)
 	c.Assert(s.logBuffer.String(), Matches, "(?s)"+expected)
+}
+
+func (s *S) logBufferString() string {
+	s.logBufferMut.Lock()
+	defer s.logBufferMut.Unlock()
+	str := s.logBuffer.String()
+	s.logBuffer.Reset()
+	return str
 }
 
 func (s *S) TestDefaultServiceNames(c *C) {
@@ -158,7 +192,7 @@ func (s *S) ensure(c *C, n int) {
 	}
 }
 
-func (s *S) startServices(c *C, services []string) {
+func (s *S) startServices(c *C, services []string, nEnsure int) *state.Change {
 	s.st.Lock()
 	ts, err := servstate.Start(s.st, services)
 	c.Check(err, IsNil)
@@ -166,68 +200,75 @@ func (s *S) startServices(c *C, services []string) {
 	chg.AddAll(ts)
 	s.st.Unlock()
 
-	// Twice due to the cross-task dependency.
-	s.ensure(c, 2)
+	// Num to ensure may be more than one due to the cross-task dependencies.
+	s.ensure(c, nEnsure)
 
+	return chg
+}
+
+func (s *S) stopServices(c *C, services []string, nEnsure int) *state.Change {
 	s.st.Lock()
-	c.Check(chg.Status(), Equals, state.DoneStatus, Commentf("Error: %v", chg.Err()))
-	s.st.Unlock()
-
-	s.assertLog(c, ".*test1\n.*test2\n")
-
-	cmds := s.manager.CmdsForTest()
-	c.Check(cmds, HasLen, len(services))
-}
-
-func (s *S) TestStartStopServices(c *C) {
-	services := []string{"test1", "test2"}
-	s.startServices(c, services)
-
-	if c.Failed() {
-		return
-	}
-
-	s.stopServices(c, services)
-}
-
-func (s *S) TestStartStopServicesIdempotency(c *C) {
-	services := []string{"test1", "test2"}
-	s.startServices(c, services)
-	if c.Failed() {
-		return
-	}
-
-	s.startServices(c, services)
-	if c.Failed() {
-		return
-	}
-
-	s.stopServices(c, services)
-	if c.Failed() {
-		return
-	}
-
-	s.stopServicesAlreadyDead(c, services)
-}
-
-func (s *S) stopServices(c *C, services []string) {
-	cmds := s.manager.CmdsForTest()
-	c.Check(cmds, HasLen, len(services))
-
-	s.st.Lock()
-	// Stopping should happen in reverse order in practice. For now
-	// it's up to the call site to organize that.
 	ts, err := servstate.Stop(s.st, services)
 	c.Check(err, IsNil)
 	chg := s.st.NewChange("test", "Stop test")
 	chg.AddAll(ts)
 	s.st.Unlock()
 
-	// Twice due to the cross-task dependency.
-	s.ensure(c, 2)
+	// Num to ensure may be more than one due to the cross-task dependencies.
+	s.ensure(c, nEnsure)
+
+	return chg
+}
+
+func (s *S) startTestServices(c *C) {
+	chg := s.startServices(c, []string{"test1", "test2"}, 2)
+	s.st.Lock()
+	c.Check(chg.Status(), Equals, state.DoneStatus, Commentf("Error: %v", chg.Err()))
+	s.st.Unlock()
+
+	s.assertLog(c, ".*test1\n.*test2\n")
+
+	cmds := s.manager.RunningCmds()
+	c.Check(cmds, HasLen, 2)
+}
+
+func (s *S) TestStartStopServices(c *C) {
+	s.startTestServices(c)
+
+	if c.Failed() {
+		return
+	}
+
+	s.stopTestServices(c)
+}
+
+func (s *S) TestStartStopServicesIdempotency(c *C) {
+	s.startTestServices(c)
+	if c.Failed() {
+		return
+	}
+
+	s.startTestServices(c)
+	if c.Failed() {
+		return
+	}
+
+	s.stopTestServices(c)
+	if c.Failed() {
+		return
+	}
+
+	s.stopTestServicesAlreadyDead(c)
+}
+
+func (s *S) stopTestServices(c *C) {
+	cmds := s.manager.RunningCmds()
+	c.Check(cmds, HasLen, 2)
+
+	chg := s.stopServices(c, []string{"test1", "test2"}, 2)
 
 	// Ensure processes are gone indeed.
-	c.Assert(cmds, HasLen, len(services))
+	c.Assert(cmds, HasLen, 2)
 	for name, cmd := range cmds {
 		err := cmd.Process.Signal(syscall.Signal(0))
 		if err == nil {
@@ -242,21 +283,11 @@ func (s *S) stopServices(c *C, services []string) {
 	s.st.Unlock()
 }
 
-func (s *S) stopServicesAlreadyDead(c *C, services []string) {
-	cmds := s.manager.CmdsForTest()
+func (s *S) stopTestServicesAlreadyDead(c *C) {
+	cmds := s.manager.RunningCmds()
 	c.Check(cmds, HasLen, 0)
 
-	s.st.Lock()
-	// Stopping should happen in reverse order in practice. For now
-	// it's up to the call site to organize that.
-	ts, err := servstate.Stop(s.st, services)
-	c.Check(err, IsNil)
-	chg := s.st.NewChange("test", "Stop test")
-	chg.AddAll(ts)
-	s.st.Unlock()
-
-	// Twice due to the cross-task dependency.
-	s.ensure(c, 2)
+	chg := s.stopServices(c, []string{"test1", "test2"}, 2)
 
 	c.Assert(cmds, HasLen, 0)
 
@@ -266,8 +297,7 @@ func (s *S) stopServicesAlreadyDead(c *C, services []string) {
 }
 
 func (s *S) TestReplanServices(c *C) {
-	services := []string{"test1", "test2"}
-	s.startServices(c, services)
+	s.startTestServices(c)
 
 	if c.Failed() {
 		return
@@ -282,24 +312,32 @@ func (s *S) TestReplanServices(c *C) {
 	c.Check(stops, DeepEquals, []string{"test2"})
 	c.Check(starts, DeepEquals, []string{"test1", "test2"})
 
-	s.stopServices(c, services)
+	s.stopTestServices(c)
 }
 
 func (s *S) TestServiceLogs(c *C) {
-	services := []string{"test1", "test2"}
 	outputs := map[string]string{
-		"test1": `\d+-\d+-\d+T\d+:\d+:\d+\.\d+Z \[test1\] test1\n`,
-		"test2": `\d+-\d+-\d+T\d+:\d+:\d+\.\d+Z \[test2\] test2\n`,
+		"test1": `2.* \[test1\] test1\n`,
+		"test2": `2.* \[test2\] test2\n`,
 	}
-	s.startServices(c, services)
+	s.testServiceLogs(c, outputs)
+
+	// Run test again, but ensure the logs from the previous run are still in the ring buffer.
+	outputs["test1"] += outputs["test1"]
+	outputs["test2"] += outputs["test2"]
+	s.testServiceLogs(c, outputs)
+}
+
+func (s *S) testServiceLogs(c *C, outputs map[string]string) {
+	s.startTestServices(c)
 
 	if c.Failed() {
 		return
 	}
 
-	iterators, err := s.manager.ServiceLogs(services, -1)
+	iterators, err := s.manager.ServiceLogs([]string{"test1", "test2"}, -1)
 	c.Assert(err, IsNil)
-	c.Assert(iterators, HasLen, len(services))
+	c.Assert(iterators, HasLen, 2)
 
 	for serviceName, it := range iterators {
 		buf := &bytes.Buffer{}
@@ -314,18 +352,11 @@ func (s *S) TestServiceLogs(c *C) {
 		c.Assert(err, IsNil)
 	}
 
-	s.stopServices(c, services)
+	s.stopTestServices(c)
 }
 
 func (s *S) TestStartBadCommand(c *C) {
-	s.st.Lock()
-	ts, err := servstate.Start(s.st, []string{"test3"})
-	c.Check(err, IsNil)
-	chg := s.st.NewChange("test", "Start test")
-	chg.AddAll(ts)
-	s.st.Unlock()
-
-	s.ensure(c, 1)
+	chg := s.startServices(c, []string{"test3"}, 1)
 
 	s.st.Lock()
 	c.Check(chg.Status(), Equals, state.ErrorStatus)
@@ -352,14 +383,7 @@ func (s *S) TestUserGroupFails(c *C) {
 	})
 	defer restore()
 
-	s.st.Lock()
-	ts, err := servstate.Start(s.st, []string{"test5"})
-	c.Check(err, IsNil)
-	chg := s.st.NewChange("test", "Start test")
-	chg.AddAll(ts)
-	s.st.Unlock()
-
-	s.ensure(c, 1)
+	chg := s.startServices(c, []string{"test5"}, 1)
 
 	s.st.Lock()
 	c.Check(chg.Status(), Equals, state.ErrorStatus)
@@ -388,16 +412,7 @@ func (s *S) serviceByName(c *C, name string) *servstate.ServiceInfo {
 }
 
 func (s *S) TestStartFastExitCommand(c *C) {
-	servstate.FakeOkayWait(3000 * time.Millisecond)
-
-	s.st.Lock()
-	ts, err := servstate.Start(s.st, []string{"test4"})
-	c.Check(err, IsNil)
-	chg := s.st.NewChange("test", "Start test")
-	chg.AddAll(ts)
-	s.st.Unlock()
-
-	s.ensure(c, 1)
+	chg := s.startServices(c, []string{"test4"}, 1)
 
 	s.st.Lock()
 	c.Check(chg.Status(), Equals, state.ErrorStatus)
@@ -461,7 +476,7 @@ func (s *S) TestAppendLayer(c *C) {
 	dir := c.MkDir()
 	os.Mkdir(filepath.Join(dir, "layers"), 0755)
 	runner := state.NewTaskRunner(s.st)
-	manager, err := servstate.NewManager(s.st, runner, dir, nil)
+	manager, err := servstate.NewManager(s.st, runner, dir, nil, nil)
 	c.Assert(err, IsNil)
 
 	// Append a layer when there are no layers.
@@ -543,7 +558,7 @@ func (s *S) TestCombineLayer(c *C) {
 	dir := c.MkDir()
 	os.Mkdir(filepath.Join(dir, "layers"), 0755)
 	runner := state.NewTaskRunner(s.st)
-	manager, err := servstate.NewManager(s.st, runner, dir, nil)
+	manager, err := servstate.NewManager(s.st, runner, dir, nil, nil)
 	c.Assert(err, IsNil)
 
 	// "Combine" layer with no layers should just append.
@@ -671,13 +686,7 @@ func (s *S) TestServices(c *C) {
 	})
 
 	// Start a service and ensure it's marked active
-	s.st.Lock()
-	ts, err := servstate.Start(s.st, []string{"test2"})
-	c.Check(err, IsNil)
-	chg := s.st.NewChange("test", "Start test")
-	chg.AddAll(ts)
-	s.st.Unlock()
-	s.ensure(c, 1)
+	s.startServices(c, []string{"test2"}, 1)
 
 	services, err = s.manager.Services(nil)
 	c.Assert(err, IsNil)
@@ -702,15 +711,11 @@ services:
 
 func (s *S) TestEnvironment(c *C) {
 	// Setup new state and add "envtest" layer
-	st := state.New(nil)
 	dir := c.MkDir()
-	runner := state.NewTaskRunner(st)
-	manager, err := servstate.NewManager(st, runner, dir, nil)
-	c.Assert(err, IsNil)
 	logPath := filepath.Join(dir, "log.txt")
 	layerYAML := fmt.Sprintf(planLayerEnv, logPath)
 	layer := parseLayer(c, 0, "envlayer", layerYAML)
-	err = manager.AppendLayer(layer)
+	err := s.manager.AppendLayer(layer)
 	c.Assert(err, IsNil)
 
 	// Set environment variables in the current process to ensure we're
@@ -722,17 +727,10 @@ func (s *S) TestEnvironment(c *C) {
 	c.Assert(err, IsNil)
 
 	// Start "envtest" service
-	st.Lock()
-	ts, err := servstate.Start(st, []string{"envtest"})
-	c.Check(err, IsNil)
-	chg := st.NewChange("envtest", "Start envtest")
-	chg.AddAll(ts)
-	st.Unlock()
-	runner.Ensure()
-	runner.Wait()
-	st.Lock()
+	chg := s.startServices(c, []string{"envtest"}, 1)
+	s.st.Lock()
 	c.Check(chg.Status(), Equals, state.DoneStatus, Commentf("Error: %v", chg.Err()))
-	st.Unlock()
+	s.st.Unlock()
 
 	// Ensure it read environment variables correctly
 	data, err := ioutil.ReadFile(logPath)
@@ -751,4 +749,292 @@ type writerFunc func([]byte) (int, error)
 
 func (f writerFunc) Write(p []byte) (int, error) {
 	return f(p)
+}
+
+func (s *S) TestRestart(c *C) {
+	// Add custom backoff delay so it auto-restarts quickly.
+	layer := parseLayer(c, 0, "layer", `
+services:
+    test2:
+        override: merge
+        backoff-delay: 50ms
+        backoff-limit: 150ms
+`)
+	err := s.manager.AppendLayer(layer)
+	c.Assert(err, IsNil)
+
+	// Start service and wait till it starts up the first time.
+	chg := s.startServices(c, []string{"test2"}, 1)
+	svc := s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
+		return svc.Current == servstate.StatusActive
+	})
+	c.Assert(s.manager.BackoffNum("test2"), Equals, 0)
+	s.st.Lock()
+	c.Check(chg.Status(), Equals, state.DoneStatus)
+	s.st.Unlock()
+	time.Sleep(10 * time.Millisecond) // ensure it has enough time to write to the log
+	c.Check(s.logBufferString(), Matches, `2.* \[test2\] test2\n`)
+
+	// Send signal to process to terminate it early.
+	err = s.manager.SendSignal([]string{"test2"}, "SIGTERM")
+	c.Assert(err, IsNil)
+
+	// Wait for it to go into backoff state.
+	svc = s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
+		return svc.Current == servstate.StatusBackoff && s.manager.BackoffNum("test2") == 1
+	})
+
+	// Then wait for it to auto-restart (backoff time plus a bit).
+	time.Sleep(75 * time.Millisecond)
+	svc = s.serviceByName(c, "test2")
+	c.Assert(svc.Current, Equals, servstate.StatusActive)
+	c.Check(s.logBufferString(), Matches, `2.* \[test2\] test2\n`)
+
+	// Send signal to terminate it again.
+	err = s.manager.SendSignal([]string{"test2"}, "SIGTERM")
+	c.Assert(err, IsNil)
+
+	// Wait for it to go into backoff state.
+	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
+		return svc.Current == servstate.StatusBackoff && s.manager.BackoffNum("test2") == 2
+	})
+
+	// Then wait for it to auto-restart (backoff time plus a bit).
+	time.Sleep(125 * time.Millisecond)
+	svc = s.serviceByName(c, "test2")
+	c.Assert(svc.Current, Equals, servstate.StatusActive)
+	c.Check(s.logBufferString(), Matches, `2.* \[test2\] test2\n`)
+
+	// Test that backoff reset time is working (set to backoff-limit)
+	time.Sleep(175 * time.Millisecond)
+	c.Check(s.manager.BackoffNum("test2"), Equals, 0)
+
+	// Send signal to process to terminate it early.
+	err = s.manager.SendSignal([]string{"test2"}, "SIGTERM")
+	c.Assert(err, IsNil)
+
+	// Wait for it to go into backoff state (back to backoff 1 again).
+	svc = s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
+		return svc.Current == servstate.StatusBackoff && s.manager.BackoffNum("test2") == 1
+	})
+
+	// Then wait for it to auto-restart (backoff time plus a bit).
+	time.Sleep(75 * time.Millisecond)
+	svc = s.serviceByName(c, "test2")
+	c.Assert(svc.Current, Equals, servstate.StatusActive)
+	c.Check(s.logBufferString(), Matches, `2.* \[test2\] test2\n`)
+}
+
+func (s *S) TestStopDuringBackoff(c *C) {
+	layer := parseLayer(c, 0, "layer", `
+services:
+    test2:
+        override: merge
+        command: sleep 0.1
+`)
+	err := s.manager.AppendLayer(layer)
+	c.Assert(err, IsNil)
+
+	// Start service and wait till it starts up the first time.
+	chg := s.startServices(c, []string{"test2"}, 1)
+	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
+		return svc.Current == servstate.StatusActive
+	})
+	c.Assert(s.manager.BackoffNum("test2"), Equals, 0)
+	s.st.Lock()
+	c.Check(chg.Status(), Equals, state.DoneStatus)
+	s.st.Unlock()
+
+	// Wait for it to exit and go into backoff state.
+	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
+		return svc.Current == servstate.StatusBackoff && s.manager.BackoffNum("test2") == 1
+	})
+
+	// Ensure it can be stopped successfully.
+	chg = s.stopServices(c, []string{"test2"}, 1)
+	s.st.Lock()
+	c.Check(chg.Status(), Equals, state.DoneStatus, Commentf("Error: %v", chg.Err()))
+	s.st.Unlock()
+	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
+		return svc.Current == servstate.StatusInactive
+	})
+}
+
+func (s *S) waitUntilService(c *C, service string, f func(svc *servstate.ServiceInfo) bool) *servstate.ServiceInfo {
+	for i := 0; i < 20; i++ {
+		svc := s.serviceByName(c, service)
+		if f(svc) {
+			return svc
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	c.Fatalf("failed waiting for service")
+	return nil // satisfy compiler
+}
+
+func (s *S) TestExit(c *C) {
+	layer := parseLayer(c, 0, "layer", `
+services:
+    test2:
+        override: replace
+        command: sleep 0.15
+        on-success: halt
+`)
+	err := s.manager.AppendLayer(layer)
+	c.Assert(err, IsNil)
+
+	// Start service and wait till it starts up the first time.
+	s.startServices(c, []string{"test2"}, 1)
+	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
+		return svc.Current == servstate.StatusActive
+	})
+
+	// Wait till it terminates.
+	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
+		return svc.Current == servstate.StatusInactive
+	})
+
+	// It should have closed the stopDaemon channel.
+	select {
+	case <-s.stopDaemon:
+	case <-time.After(time.Second):
+		c.Fatalf("timed out waiting for stop-daemon channel")
+	}
+}
+
+func (s *S) TestActionIgnore(c *C) {
+	layer := parseLayer(c, 0, "layer", `
+services:
+    test2:
+        override: replace
+        command: sleep 0.15
+        on-success: ignore
+`)
+	err := s.manager.AppendLayer(layer)
+	c.Assert(err, IsNil)
+
+	// Start service and wait till it starts up the first time.
+	s.startServices(c, []string{"test2"}, 1)
+	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
+		return svc.Current == servstate.StatusActive
+	})
+
+	// Wait till it terminates.
+	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
+		return svc.Current == servstate.StatusInactive
+	})
+}
+
+func (s *S) TestGetAction(c *C) {
+	tests := []struct {
+		onSuccess plan.ServiceAction
+		onFailure plan.ServiceAction
+		success   bool
+		action    string
+		onType    string
+	}{
+		{onSuccess: "", onFailure: "", success: false, action: "restart", onType: "on-failure"},
+		{onSuccess: "", onFailure: "", success: true, action: "restart", onType: "on-success"},
+		{onSuccess: "", onFailure: "restart", success: false, action: "restart", onType: "on-failure"},
+		{onSuccess: "", onFailure: "restart", success: true, action: "restart", onType: "on-success"},
+		{onSuccess: "", onFailure: "halt", success: false, action: "halt", onType: "on-failure"},
+		{onSuccess: "", onFailure: "halt", success: true, action: "restart", onType: "on-success"},
+		{onSuccess: "", onFailure: "ignore", success: false, action: "ignore", onType: "on-failure"},
+		{onSuccess: "", onFailure: "ignore", success: true, action: "restart", onType: "on-success"},
+		{onSuccess: "restart", onFailure: "", success: false, action: "restart", onType: "on-failure"},
+		{onSuccess: "restart", onFailure: "", success: true, action: "restart", onType: "on-success"},
+		{onSuccess: "restart", onFailure: "restart", success: false, action: "restart", onType: "on-failure"},
+		{onSuccess: "restart", onFailure: "restart", success: true, action: "restart", onType: "on-success"},
+		{onSuccess: "restart", onFailure: "halt", success: false, action: "halt", onType: "on-failure"},
+		{onSuccess: "restart", onFailure: "halt", success: true, action: "restart", onType: "on-success"},
+		{onSuccess: "restart", onFailure: "ignore", success: false, action: "ignore", onType: "on-failure"},
+		{onSuccess: "restart", onFailure: "ignore", success: true, action: "restart", onType: "on-success"},
+		{onSuccess: "halt", onFailure: "", success: false, action: "restart", onType: "on-failure"},
+		{onSuccess: "halt", onFailure: "", success: true, action: "halt", onType: "on-success"},
+		{onSuccess: "halt", onFailure: "restart", success: false, action: "restart", onType: "on-failure"},
+		{onSuccess: "halt", onFailure: "restart", success: true, action: "halt", onType: "on-success"},
+		{onSuccess: "halt", onFailure: "halt", success: false, action: "halt", onType: "on-failure"},
+		{onSuccess: "halt", onFailure: "halt", success: true, action: "halt", onType: "on-success"},
+		{onSuccess: "halt", onFailure: "ignore", success: false, action: "ignore", onType: "on-failure"},
+		{onSuccess: "halt", onFailure: "ignore", success: true, action: "halt", onType: "on-success"},
+		{onSuccess: "ignore", onFailure: "", success: false, action: "restart", onType: "on-failure"},
+		{onSuccess: "ignore", onFailure: "", success: true, action: "ignore", onType: "on-success"},
+		{onSuccess: "ignore", onFailure: "restart", success: false, action: "restart", onType: "on-failure"},
+		{onSuccess: "ignore", onFailure: "restart", success: true, action: "ignore", onType: "on-success"},
+		{onSuccess: "ignore", onFailure: "halt", success: false, action: "halt", onType: "on-failure"},
+		{onSuccess: "ignore", onFailure: "halt", success: true, action: "ignore", onType: "on-success"},
+		{onSuccess: "ignore", onFailure: "ignore", success: false, action: "ignore", onType: "on-failure"},
+		{onSuccess: "ignore", onFailure: "ignore", success: true, action: "ignore", onType: "on-success"},
+	}
+	for _, test := range tests {
+		config := &plan.Service{
+			OnFailure: test.onFailure,
+			OnSuccess: test.onSuccess,
+		}
+		action, onType := servstate.GetAction(config, test.success)
+		c.Check(string(action), Equals, test.action, Commentf("onSuccess=%q, onFailure=%q, success=%v",
+			test.onSuccess, test.onFailure, test.success))
+		c.Check(onType, Equals, test.onType, Commentf("onSuccess=%q, onFailure=%q, success=%v",
+			test.onSuccess, test.onFailure, test.success))
+	}
+}
+
+func (s *S) TestGetJitter(c *C) {
+	// It's tricky to test a function that generates randomness, but ensure all
+	// the values are in range, and that the number of values distributed across
+	// each of 3 buckets is reasonable.
+	var buckets [3]int
+	for i := 0; i < 3000; i++ {
+		jitter := s.manager.GetJitter(3 * time.Second)
+		c.Assert(jitter >= 0 && jitter < 300*time.Millisecond, Equals, true)
+		switch {
+		case jitter >= 0 && jitter < 100*time.Millisecond:
+			buckets[0]++
+		case jitter >= 100*time.Millisecond && jitter < 200*time.Millisecond:
+			buckets[1]++
+		case jitter >= 200*time.Millisecond && jitter < 300*time.Millisecond:
+			buckets[2]++
+		default:
+			c.Errorf("jitter %s outside range [0, 300ms)", jitter)
+		}
+	}
+	for i := 0; i < 3; i++ {
+		if buckets[i] < 800 || buckets[i] > 1200 { // exceedingly unlikely to be outside this range
+			c.Errorf("bucket[%d] has too few or too many values in it (%d)", i, buckets[i])
+		}
+	}
+}
+
+func (s *S) TestCalculateNextBackoff(c *C) {
+	tests := []struct {
+		delay   time.Duration
+		factor  float64
+		limit   time.Duration
+		current time.Duration
+		next    time.Duration
+	}{
+		{delay: 500 * time.Millisecond, factor: 2, limit: 30 * time.Second, current: 0, next: 500 * time.Millisecond},
+		{delay: 500 * time.Millisecond, factor: 2, limit: 30 * time.Second, current: 500 * time.Millisecond, next: time.Second},
+		{delay: 500 * time.Millisecond, factor: 2, limit: 30 * time.Second, current: time.Second, next: 2 * time.Second},
+		{delay: 500 * time.Millisecond, factor: 2, limit: 30 * time.Second, current: 16 * time.Second, next: 30 * time.Second},
+		{delay: 500 * time.Millisecond, factor: 2, limit: 30 * time.Second, current: 30 * time.Second, next: 30 * time.Second},
+		{delay: 500 * time.Millisecond, factor: 2, limit: 30 * time.Second, current: 1000 * time.Second, next: 30 * time.Second},
+
+		{delay: time.Second, factor: 1.5, limit: 60 * time.Second, current: 0, next: time.Second},
+		{delay: time.Second, factor: 1.5, limit: 60 * time.Second, current: time.Second, next: 1500 * time.Millisecond},
+		{delay: time.Second, factor: 1.5, limit: 60 * time.Second, current: 1500 * time.Millisecond, next: 2250 * time.Millisecond},
+		{delay: time.Second, factor: 1.5, limit: 60 * time.Second, current: 50 * time.Second, next: 60 * time.Second},
+		{delay: time.Second, factor: 1.5, limit: 60 * time.Second, current: 60 * time.Second, next: 60 * time.Second},
+		{delay: time.Second, factor: 1.5, limit: 60 * time.Second, current: 70 * time.Second, next: 60 * time.Second},
+	}
+	for _, test := range tests {
+		config := &plan.Service{
+			BackoffDelay:  plan.OptionalDuration{Value: test.delay},
+			BackoffFactor: plan.OptionalFloat{Value: test.factor},
+			BackoffLimit:  plan.OptionalDuration{Value: test.limit},
+		}
+		next := servstate.CalculateNextBackoff(config, test.current)
+		c.Check(next, Equals, test.next, Commentf("delay=%s, factor=%g, limit=%s, current=%s",
+			test.delay, test.factor, test.limit, test.current))
+	}
 }

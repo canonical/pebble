@@ -166,34 +166,34 @@ services:
         # Example: /usr/bin/somecommand -b -t 30
         command: <commmand>
 
-        # (Optional) A short summary of the service
+        # (Optional) A short summary of the service.
         summary: <summary>
 
-        # (Optional) A detailed description of the service
+        # (Optional) A detailed description of the service.
         description: |
             <description>
 
         # (Optional) Control whether the service is started automatically when
-        # Pebble starts. 
+        # Pebble starts. Default is "disabled".
         startup: enabled | disabled
 
         # (Optional) A list of other services in the plan that this service
-        # should start after
+        # should start after.
         after:
             - <other service name>
 
         # (Optional) A list of other services in the plan that this service
-        # should start before
+        # should start before.
         before:
             - <other service name>
 
         # (Optional) A list of other services in the plan that this service
-        # requires in order to start correctly    
+        # requires in order to start correctly.
         requires:
             - <other service name>
 
         # (Optional) A list of key/value pairs defining environment variables
-        # that should be set in the context of the process
+        # that should be set in the context of the process.
         environment:
             <env var name>: <env var value>
 
@@ -212,6 +212,33 @@ services:
         # (Optional) Group ID for starting service as a different user. If both
         # group and group-id are specified, the group's GID must match group-id.
         group-id: <gid>
+
+        # (Optional) Defines what happens when the service exits with a zero
+        # exit code. Possible values are: "restart" (default) which restarts
+        # the service after the backoff delay, "halt" which stops and exits
+        # the Pebble server, and "ignore" which does nothing further.
+        on-success: restart | halt | ignore
+
+        # (Optional) Defines what happens when the service exits with a nonzero
+        # exit code. Possible values are: "restart" (default) which restarts
+        # the service after the backoff delay, "halt" which stops and exits
+        # the Pebble server, and "ignore" which does nothing further.
+        on-failure: restart | halt | ignore
+
+        # (Optional) Initial backoff delay for the "restart" exit action.
+        # Default is half a second ("500ms").
+        backoff-delay: <duration>
+
+        # (Optional) After each backoff, the backoff delay is multiplied by
+        # this factor to get the next backoff delay. Must be greater than or
+        # equal to one. Default is 2.0.
+        backoff-factor: <factor>
+
+        # (Optional) Limit for the backoff delay: when multiplying by
+        # backoff-factor to get the next backoff delay, if the result is
+        # greater than this value, it is capped to this value. Default is
+        # half a minute ("30s").
+        backoff-limit: <duration>
 ```
 
 ## API and clients
@@ -250,7 +277,7 @@ Here are some of the things coming soon:
   - [x] General system modification commands (writing configuration files, etc)
   - [x] Better log caching and retrieval support
   - [x] Consider showing unified log as output of `pebble run` (use `-v`)
-  - [ ] Automatically restart services that fail
+  - [x] Automatically restart services that fail
   - [ ] Support for custom health checks (HTTP, TCP, command)
   - [ ] Automatically remove (double) timestamps from logs
   - [ ] Improve signal handling, e.g., sending SIGHUP to a service
