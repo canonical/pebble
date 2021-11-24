@@ -136,7 +136,7 @@ func New(pebbleDir string, restartBehavior RestartBehavior, serviceOutput io.Wri
 	o.checkMgr = checkstate.NewManager()
 
 	// Tell check manager about plan updates.
-	o.serviceMgr.AddPlanHandler(o.checkMgr.PlanUpdated)
+	o.serviceMgr.AddPlanHandler(o.checkMgr.Configure)
 
 	// Tell service manager about check failures.
 	o.checkMgr.AddFailureHandler(o.serviceMgr.CheckFailure)

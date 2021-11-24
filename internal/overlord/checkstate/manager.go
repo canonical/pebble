@@ -3,7 +3,6 @@ package checkstate
 
 import (
 	"context"
-	"errors"
 	"sort"
 	"sync"
 	"time"
@@ -32,9 +31,9 @@ func (m *CheckManager) AddFailureHandler(f FailureFunc) {
 	m.failureHandlers = append(m.failureHandlers, f)
 }
 
-// PlanUpdated handles updated to the plan (server configuration),
+// Configure handles updates to the plan (server configuration),
 // stopping the previous checks and starting the new ones as required.
-func (m *CheckManager) PlanUpdated(p *plan.Plan) {
+func (m *CheckManager) Configure(p *plan.Plan) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
@@ -165,7 +164,7 @@ func (c *checkData) check() {
 	c.cancel = nil
 	c.lastErr = err
 	if err != nil {
-		if errors.Is(err, context.Canceled) {
+		if ctx.Err() == context.Canceled {
 			// Check was stopped, don't trigger failure action.
 			logger.Debugf("Check %q canceled in flight", c.config.Name)
 			return

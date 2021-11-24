@@ -140,6 +140,9 @@ func (c *execChecker) check(ctx context.Context) error {
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			err = fmt.Errorf("exec check timed out")
+		}
 		if len(output) > 0 {
 			const maxLength = 1024
 			if len(output) > maxLength {
