@@ -677,7 +677,10 @@ func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 			return nil, &FormatError{Message: "check timeout must be less than period"}
 		}
 		if check.Failures == 0 {
-			check.Failures = 1 // TODO: is this too aggressive? K8s uses a default of 3
+			// Default number of failures in a row before check triggers
+			// action, default is >1 to avoid flapping due to glitches. For
+			// what it's worth, Kubernetes probes uses a default of 3 too.
+			check.Failures = 3
 		}
 
 		check.Name = name
