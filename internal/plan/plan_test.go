@@ -34,6 +34,10 @@ const (
 	defaultBackoffDelay  = 500 * time.Millisecond
 	defaultBackoffFactor = 2.0
 	defaultBackoffLimit  = 30 * time.Second
+
+	defaultCheckPeriod   = 10 * time.Second
+	defaultCheckTimeout  = 3 * time.Second
+	defaultCheckFailures = 3
 )
 
 // TODOs:
@@ -438,6 +442,287 @@ var planTests = []planTest{{
 				override: replace
 				command: cmd
 				backoff-factor: foo
+	`},
+}, {
+	summary: `Invalid service command`,
+	error:   `plan service "svc1" command invalid: EOF found when expecting closing quote`,
+	input: []string{`
+		services:
+			svc1:
+				override: replace
+				command: foo '
+	`},
+}, {
+	summary: "Checks fields parse correctly and defaults are correct",
+	input: []string{`
+		checks:
+			chk-http:
+				override: replace
+				level: alive
+				period: 20s
+				timeout: 500ms
+				failures: 7
+				http:
+					url: https://example.com/foo
+					headers:
+						Foo: bar
+						Authorization: Basic password
+		
+			chk-tcp:
+				override: merge
+				level: ready
+				tcp:
+					port: 7777
+					host: somehost
+		
+			chk-exec:
+				override: replace
+				exec:
+					command: sleep 1
+					environment:
+						FOO: bar
+						BAZ: buzz
+					working-dir: /root
+`},
+	layers: []*plan.Layer{{
+		Label:    "layer-0",
+		Services: map[string]*plan.Service{},
+		Checks: map[string]*plan.Check{
+			"chk-http": {
+				Name:     "chk-http",
+				Override: plan.ReplaceOverride,
+				Level:    plan.AliveLevel,
+				Period:   plan.OptionalDuration{Value: 20 * time.Second, IsSet: true},
+				Timeout:  plan.OptionalDuration{Value: 500 * time.Millisecond, IsSet: true},
+				Failures: 7,
+				HTTP: &plan.HTTPCheck{
+					URL: "https://example.com/foo",
+					Headers: map[string]string{
+						"Foo":           "bar",
+						"Authorization": "Basic password",
+					},
+				},
+			},
+			"chk-tcp": {
+				Name:     "chk-tcp",
+				Override: plan.MergeOverride,
+				Level:    plan.ReadyLevel,
+				Period:   plan.OptionalDuration{Value: defaultCheckPeriod},
+				Timeout:  plan.OptionalDuration{Value: defaultCheckTimeout},
+				Failures: defaultCheckFailures,
+				TCP: &plan.TCPCheck{
+					Port: 7777,
+					Host: "somehost",
+				},
+			},
+			"chk-exec": {
+				Name:     "chk-exec",
+				Override: plan.ReplaceOverride,
+				Level:    plan.UnsetLevel,
+				Period:   plan.OptionalDuration{Value: defaultCheckPeriod},
+				Timeout:  plan.OptionalDuration{Value: defaultCheckTimeout},
+				Failures: defaultCheckFailures,
+				Exec: &plan.ExecCheck{
+					Command: "sleep 1",
+					Environment: map[string]string{
+						"FOO": "bar",
+						"BAZ": "buzz",
+					},
+					WorkingDir: "/root",
+				},
+			},
+		},
+	}},
+}, {
+	summary: "Checks override replace works correctly",
+	input: []string{`
+		checks:
+			chk-http:
+				override: replace
+				period: 20s
+				http:
+					url: https://example.com/foo
+					headers:
+						Foo: bar
+		
+			chk-tcp:
+				override: replace
+				level: ready
+				tcp:
+					port: 7777
+					host: somehost
+		
+			chk-exec:
+				override: replace
+				exec:
+					command: sleep 1
+					working-dir: /root
+`, `
+		checks:
+			chk-http:
+				override: replace
+				http:
+					url: https://example.com/bar
+		
+			chk-tcp:
+				override: replace
+				tcp:
+					port: 8888
+		
+			chk-exec:
+				override: replace
+				exec:
+					command: sleep 2
+`},
+	result: &plan.Layer{
+		Services: map[string]*plan.Service{},
+		Checks: map[string]*plan.Check{
+			"chk-http": {
+				Name:     "chk-http",
+				Override: plan.ReplaceOverride,
+				Period:   plan.OptionalDuration{Value: defaultCheckPeriod},
+				Timeout:  plan.OptionalDuration{Value: defaultCheckTimeout},
+				Failures: defaultCheckFailures,
+				HTTP: &plan.HTTPCheck{
+					URL: "https://example.com/bar",
+				},
+			},
+			"chk-tcp": {
+				Name:     "chk-tcp",
+				Override: plan.ReplaceOverride,
+				Period:   plan.OptionalDuration{Value: defaultCheckPeriod},
+				Timeout:  plan.OptionalDuration{Value: defaultCheckTimeout},
+				Failures: defaultCheckFailures,
+				TCP: &plan.TCPCheck{
+					Port: 8888,
+				},
+			},
+			"chk-exec": {
+				Name:     "chk-exec",
+				Override: plan.ReplaceOverride,
+				Period:   plan.OptionalDuration{Value: defaultCheckPeriod},
+				Timeout:  plan.OptionalDuration{Value: defaultCheckTimeout},
+				Failures: defaultCheckFailures,
+				Exec: &plan.ExecCheck{
+					Command: "sleep 2",
+				},
+			},
+		},
+	},
+}, {
+	summary: "Checks override merge works correctly - TODO defaults/validation should be done after merging",
+	input: []string{`
+		checks:
+			chk-http:
+				override: merge
+				period: 1s
+		
+			chk-tcp:
+				override: merge
+				timeout: 300ms
+		
+			chk-exec:
+				override: merge
+				failures: 5
+				exec:
+					command: sleep 1
+`, `
+		checks:
+			chk-http:
+				override: merge
+				http:
+					url: https://example.com/bar
+		
+			chk-tcp:
+				override: merge
+				tcp:
+					port: 80
+		
+			chk-exec:
+				override: merge
+				timeout: 7s
+				exec:
+					command: sleep 2
+`},
+	result: &plan.Layer{
+		Services: map[string]*plan.Service{},
+		Checks: map[string]*plan.Check{
+			"chk-http": {
+				Name:     "chk-http",
+				Override: plan.MergeOverride,
+				Period:   plan.OptionalDuration{Value: time.Second, IsSet: true},
+				Timeout:  plan.OptionalDuration{Value: defaultCheckTimeout},
+				Failures: defaultCheckFailures,
+				HTTP: &plan.HTTPCheck{
+					URL: "https://example.com/bar",
+				},
+			},
+			"chk-tcp": {
+				Name:     "chk-tcp",
+				Override: plan.MergeOverride,
+				Period:   plan.OptionalDuration{Value: defaultCheckPeriod},
+				Timeout:  plan.OptionalDuration{Value: 300 * time.Millisecond, IsSet: true},
+				Failures: defaultCheckFailures,
+				TCP: &plan.TCPCheck{
+					Port: 80,
+				},
+			},
+			"chk-exec": {
+				Name:     "chk-exec",
+				Override: plan.MergeOverride,
+				Period:   plan.OptionalDuration{Value: defaultCheckPeriod},
+				Timeout:  plan.OptionalDuration{Value: 7 * time.Second, IsSet: true},
+				Failures: 3, // TODO: should be 5
+				Exec: &plan.ExecCheck{
+					Command: "sleep 2",
+				},
+			},
+		},
+	},
+}, {
+	summary: "One of http, tcp, or exec must be present for check",
+	error:   `plan must specify one of "http", "tcp", or "exec" for check "chk1"`,
+	input: []string{`
+		checks:
+			chk1:
+				override: replace
+`},
+}, {
+	summary: "HTTP check requires url field",
+	error:   `plan must set "url" for http check "chk1"`,
+	input: []string{`
+		checks:
+			chk1:
+				override: replace
+				http: {}
+`},
+}, {
+	summary: "TCP check requires port field",
+	error:   `plan must set "port" for tcp check "chk2"`,
+	input: []string{`
+		checks:
+			chk2:
+				override: replace
+				tcp: {}
+`},
+}, {
+	summary: "Exec check requires command field",
+	error:   `plan must set "command" for exec check "chk3"`,
+	input: []string{`
+		checks:
+			chk3:
+				override: replace
+				exec: {}
+`},
+}, {
+	summary: `Invalid exec check command`,
+	error:   `plan check "chk1" command invalid: EOF found when expecting closing quote`,
+	input: []string{`
+		checks:
+			chk1:
+				override: replace
+				exec:
+					command: foo '
 	`},
 }}
 

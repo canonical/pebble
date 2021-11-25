@@ -36,6 +36,10 @@ const (
 	defaultBackoffDelay  = 500 * time.Millisecond
 	defaultBackoffFactor = 2.0
 	defaultBackoffLimit  = 30 * time.Second
+
+	defaultCheckPeriod   = 10 * time.Second
+	defaultCheckTimeout  = 3 * time.Second
+	defaultCheckFailures = 3
 )
 
 type Plan struct {
@@ -395,7 +399,7 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 						copied.Failures = check.Failures
 					}
 					if check.HTTP != nil {
-						copied.HTTP = check.HTTP.Copy()
+						copied.HTTP = check.HTTP.Copy() // TODO: these should be a merge operation
 					}
 					if check.TCP != nil {
 						copied.TCP = check.TCP.Copy()
@@ -629,6 +633,7 @@ func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 			}
 		}
 
+		// TODO: defaults/validation should be done after merging!
 		// Set defaults and validate values
 		if !validServiceAction(service.OnSuccess) {
 			return nil, &FormatError{Message: fmt.Sprintf("invalid on-success action %q", service.OnSuccess)}
@@ -668,17 +673,18 @@ func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 			}
 		}
 
+		// TODO: defaults/validation should be done after merging!
 		// Set defaults and validate values
 		if check.Level != UnsetLevel && check.Level != AliveLevel && check.Level != ReadyLevel {
 			return nil, &FormatError{Message: `check level must be "alive" or "ready"`}
 		}
 		if !check.Period.IsSet {
-			check.Period.Value = 10 * time.Second
+			check.Period.Value = defaultCheckPeriod
 		} else if check.Period.Value == 0 {
 			return nil, &FormatError{Message: "check period must not be zero"}
 		}
 		if !check.Timeout.IsSet {
-			check.Timeout.Value = 3 * time.Second
+			check.Timeout.Value = defaultCheckTimeout
 		} else if check.Timeout.Value == 0 {
 			return nil, &FormatError{Message: "check timeout must not be zero"}
 		} else if check.Timeout.Value >= check.Period.Value {
@@ -688,7 +694,7 @@ func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 			// Default number of failures in a row before check triggers
 			// action, default is >1 to avoid flapping due to glitches. For
 			// what it's worth, Kubernetes probes uses a default of 3 too.
-			check.Failures = 3
+			check.Failures = defaultCheckFailures
 		}
 
 		check.Name = name
