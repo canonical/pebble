@@ -28,6 +28,7 @@ import (
 
 	"github.com/canonical/pebble/internal/logger"
 	"github.com/canonical/pebble/internal/osutil"
+	"github.com/canonical/pebble/internal/overlord/checkstate"
 	"github.com/canonical/pebble/internal/overlord/cmdstate"
 	"github.com/canonical/pebble/internal/overlord/patch"
 	"github.com/canonical/pebble/internal/overlord/servstate"
@@ -83,6 +84,7 @@ type Overlord struct {
 	runner     *state.TaskRunner
 	serviceMgr *servstate.ServiceManager
 	commandMgr *cmdstate.CommandManager
+	checkMgr   *checkstate.CheckManager
 }
 
 // New creates a new Overlord with all its state managers.
@@ -130,6 +132,14 @@ func New(pebbleDir string, restartBehavior RestartBehavior, serviceOutput io.Wri
 
 	o.commandMgr = cmdstate.NewManager(o.runner)
 	o.addManager(o.commandMgr)
+
+	o.checkMgr = checkstate.NewManager()
+
+	// Tell check manager about plan updates.
+	o.serviceMgr.AddPlanHandler(o.checkMgr.Configure)
+
+	// Tell service manager about check failures.
+	o.checkMgr.AddFailureHandler(o.serviceMgr.CheckFailure)
 
 	// the shared task runner should be added last!
 	o.stateEng.AddManager(o.runner)
@@ -432,6 +442,12 @@ func (o *Overlord) ServiceManager() *servstate.ServiceManager {
 // commands under the overlord.
 func (o *Overlord) CommandManager() *cmdstate.CommandManager {
 	return o.commandMgr
+}
+
+// CheckManager returns the check manager responsible for running health
+// checks under the overlord.
+func (o *Overlord) CheckManager() *checkstate.CheckManager {
+	return o.checkMgr
 }
 
 // Fake creates an Overlord without any managers and with a backend
