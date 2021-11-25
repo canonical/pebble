@@ -132,7 +132,7 @@ func (s *CheckersSuite) TestExec(c *C) {
 	c.Assert(outErr.output(), Matches, `(?s)sleep: invalid time interval.*`)
 
 	// Long output on failure is truncated to 1024 bytes
-	chk = &execChecker{command: "/bin/sh -c 'echo "+strings.Repeat("x", 1100)+"; exit 1'"}
+	chk = &execChecker{command: "/bin/sh -c 'echo " + strings.Repeat("x", 1100) + "; exit 1'"}
 	err = chk.check(context.Background())
 	c.Assert(err, ErrorMatches, "exit status 1")
 	outErr, ok = err.(*outputError)

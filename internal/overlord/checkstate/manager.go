@@ -9,6 +9,7 @@ import (
 
 	"github.com/canonical/pebble/internal/logger"
 	"github.com/canonical/pebble/internal/plan"
+	"github.com/canonical/pebble/internal/strutil"
 )
 
 // CheckManager starts and manages the health checks.
@@ -81,7 +82,7 @@ func (m *CheckManager) Checks(level plan.CheckLevel, names []string) ([]*CheckIn
 		if level != plan.UnsetLevel && level != check.config.Level {
 			continue
 		}
-		if len(names) > 0 && !containsString(names, check.config.Name) {
+		if len(names) > 0 && !strutil.ListContains(names, check.config.Name) {
 			continue
 		}
 		infos = append(infos, check.info())
@@ -91,15 +92,6 @@ func (m *CheckManager) Checks(level plan.CheckLevel, names []string) ([]*CheckIn
 		return infos[i].Name < infos[j].Name
 	})
 	return infos, nil
-}
-
-func containsString(slice []string, value string) bool {
-	for _, v := range slice {
-		if v == value {
-			return true
-		}
-	}
-	return false
 }
 
 // CheckInfo provides status information about a single check.
