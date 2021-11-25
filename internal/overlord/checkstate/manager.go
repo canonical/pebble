@@ -43,16 +43,18 @@ func (m *CheckManager) Configure(p *plan.Plan) {
 
 	// First stop existing checks.
 	for _, check := range m.checks {
-		check.stop()
+		check.cancel()
 	}
 
 	// Then configure and start new checks.
 	checks := make(map[string]*checkData, len(p.Checks))
 	for name, config := range p.Checks {
+		ctx, cancel := context.WithCancel(context.Background())
 		check := &checkData{
 			config:  config,
 			checker: newChecker(config),
-			done:    make(chan struct{}),
+			ctx:     ctx,
+			cancel:  cancel,
 			action:  m.callFailureHandlers,
 		}
 		checks[name] = check
@@ -107,14 +109,14 @@ type CheckInfo struct {
 type checkData struct {
 	config  *plan.Check
 	checker checker
-	done    chan struct{}
+	ctx     context.Context
+	cancel  context.CancelFunc
 
 	mutex     sync.Mutex
 	failures  int
 	action    FailureFunc
 	actionRan bool
 	lastErr   error
-	cancel    context.CancelFunc
 }
 
 type checker interface {
@@ -123,7 +125,6 @@ type checker interface {
 
 func (c *checkData) loop() {
 	logger.Debugf("Check %q starting with period %v", c.config.Name, c.config.Period.Value)
-	defer logger.Debugf("Check %q stopped", c.config.Name)
 
 	ticker := time.NewTicker(c.config.Period.Value)
 	defer ticker.Stop()
@@ -132,29 +133,28 @@ func (c *checkData) loop() {
 		select {
 		case <-ticker.C:
 			c.check()
-		case <-c.done:
+			if c.ctx.Err() != nil {
+				// Don't re-run check in edge case where period is short and
+				// in-flight check was cancelled.
+				return
+			}
+		case <-c.ctx.Done():
+			logger.Debugf("Check %q stopped: %v", c.config.Name, c.ctx.Err())
 			return
 		}
 	}
 }
 
 func (c *checkData) check() {
-	// Set up context: a timeout or call to c.stop() will cancel the check.
-	ctx, cancel := context.WithTimeout(context.Background(), c.config.Timeout.Value)
+	// Run the check with a timeout.
+	ctx, cancel := context.WithTimeout(c.ctx, c.config.Timeout.Value)
 	defer cancel()
-	c.mutex.Lock()
-	c.cancel = cancel
-	c.mutex.Unlock()
-
-	// Run the check!
 	err := c.checker.check(ctx)
 
 	// Lock while we update state, as the manager may access these too.
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
-	c.cancel = nil
-	c.lastErr = err
 	if err != nil {
 		if ctx.Err() == context.Canceled {
 			// Check was stopped, don't trigger failure action.
@@ -163,6 +163,7 @@ func (c *checkData) check() {
 		}
 
 		// Track failure, run failure action if "failures" threshold was hit.
+		c.lastErr = err
 		c.failures++
 		logger.Noticef("Check %q failure %d (threshold %d): %v",
 			c.config.Name, c.failures, c.config.Failures, err)
@@ -174,18 +175,9 @@ func (c *checkData) check() {
 		}
 		return
 	}
+	c.lastErr = nil
 	c.failures = 0
 	c.actionRan = false
-}
-
-func (c *checkData) stop() {
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
-
-	if c.cancel != nil {
-		c.cancel()
-	}
-	close(c.done)
 }
 
 func (c *checkData) info() *CheckInfo {

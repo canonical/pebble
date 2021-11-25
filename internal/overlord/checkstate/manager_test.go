@@ -3,7 +3,10 @@
 package checkstate
 
 import (
+	"fmt"
+	"io/ioutil"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -128,6 +131,69 @@ func (s *ManagerSuite) TestTimeout(c *C) {
 	c.Assert(check.ErrorDetails, Equals, "FOO\n")
 }
 
+func (s *ManagerSuite) TestCheckCanceled(c *C) {
+	mgr := NewManager()
+	failureName := ""
+	mgr.AddFailureHandler(func(name string) {
+		failureName = name
+	})
+	tempDir := c.MkDir()
+	tempFile := filepath.Join(tempDir, "file.txt")
+	command := fmt.Sprintf(`/bin/sh -c "for i in {1..1000}; do echo x >>%s; sleep 0.005; done"`, tempFile)
+	mgr.Configure(&plan.Plan{
+		Checks: map[string]*plan.Check{
+			"chk1": {
+				Name:     "chk1",
+				Period:   plan.OptionalDuration{Value: time.Millisecond},
+				Timeout:  plan.OptionalDuration{Value: time.Second},
+				Failures: 1,
+				Exec:     &plan.ExecCheckConfig{Command: command},
+			},
+		},
+	})
+
+	// Wait for command to start (output file grows in size)
+	prevSize := 0
+	for i := 0; ; i++ {
+		if i >= 100 {
+			c.Fatalf("failed waiting for command to start")
+		}
+		b, _ := ioutil.ReadFile(tempFile)
+		if len(b) != prevSize {
+			break
+		}
+		prevSize = len(b)
+		time.Sleep(time.Millisecond)
+	}
+
+	// For the little bit of white box testing below
+	mgr.mutex.Lock()
+	check := mgr.checks["chk1"]
+	mgr.mutex.Unlock()
+
+	// Cancel the check in-flight
+	stopChecks(c, mgr)
+
+	// Ensure command was terminated (output file didn't grow in size)
+	time.Sleep(50 * time.Millisecond)
+	b1, err := ioutil.ReadFile(tempFile)
+	c.Assert(err, IsNil)
+	time.Sleep(20 * time.Millisecond)
+	b2, err := ioutil.ReadFile(tempFile)
+	c.Assert(err, IsNil)
+	c.Assert(len(b1), Equals, len(b2))
+
+	// Ensure it didn't trigger failure action
+	c.Check(failureName, Equals, "")
+
+	// Ensure it didn't update check failure details (white box testing)
+	info := check.info()
+	c.Check(info.Healthy, Equals, true)
+	c.Check(info.Failures, Equals, 0)
+	c.Check(info.LastError, Equals, "")
+	c.Check(info.ErrorDetails, Equals, "")
+}
+
 func (s *ManagerSuite) TestFailures(c *C) {
 	mgr := NewManager()
 	failureName := ""
@@ -140,7 +206,7 @@ func (s *ManagerSuite) TestFailures(c *C) {
 			"chk1": {
 				Name:     "chk1",
 				Period:   plan.OptionalDuration{Value: 20 * time.Millisecond},
-				Timeout:  plan.OptionalDuration{Value: 10 * time.Millisecond},
+				Timeout:  plan.OptionalDuration{Value: 100 * time.Millisecond},
 				Failures: 3,
 				Exec:     &plan.ExecCheckConfig{Command: `/bin/sh -c '[ -z $FAIL_PEBBLE_TEST ]'`},
 			},
