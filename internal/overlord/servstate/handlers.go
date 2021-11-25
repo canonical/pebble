@@ -220,7 +220,7 @@ func (m *ServiceManager) doStop(task *state.Task, tomb *tomb.Tomb) error {
 			// User tried to abort the stop, but SIGTERM and/or SIGKILL have
 			// already been sent to the process, so there's not much more we
 			// can do than log it.
-			logger.Noticef("Cannot abort stop for service %q, kill signals already sent", request.Name)
+			logger.Noticef("Cannot abort stop for service %q, signals already sent", request.Name)
 		}
 	}
 }
@@ -580,8 +580,8 @@ func (s *serviceData) terminateTimeElapsed() error {
 
 	switch s.state {
 	case stateTerminating, stateCheckTerminating:
-		// Process hasn't exited after SIGTERM, try SIGKILL.
 		logger.Debugf("Attempting to stop service %q again by sending SIGKILL", s.config.Name)
+		// Process hasn't exited after SIGTERM, try SIGKILL.
 		err := syscall.Kill(-s.cmd.Process.Pid, syscall.SIGKILL)
 		if err != nil {
 			logger.Noticef("Cannot send SIGKILL to process: %v", err)
