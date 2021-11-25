@@ -213,15 +213,16 @@ services:
         # group and group-id are specified, the group's GID must match group-id.
         group-id: <gid>
 
-        # (Optional) If the service exits with a zero exit code, perform
-        # this action: either restart the service after a backoff wait, halt
-        # (terminate the Pebble server), or simply ignore it (log the failure
-        # and transition the service to the "stopped" status). Default is
-        # "restart".
+        # (Optional) Defines what happens when the service exits with a zero
+        # exit code. Possible values are: "restart" (default) which restarts
+        # the service after the backoff delay, "halt" which stops and exits
+        # the Pebble server, and "ignore" which does nothing further.
         on-success: restart | halt | ignore
 
-        # (Optional) If the service exits with a nonzero exit code, perform
-        # this action (see on-success for details). Default is "restart".
+        # (Optional) Defines what happens when the service exits with a nonzero
+        # exit code. Possible values are: "restart" (default) which restarts
+        # the service after the backoff delay, "halt" which stops and exits
+        # the Pebble server, and "ignore" which does nothing further.
         on-failure: restart | halt | ignore
 
         # (Optional) Initial backoff delay for the "restart" exit action.
