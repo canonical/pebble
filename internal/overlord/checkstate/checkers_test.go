@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"testing"
 
 	. "gopkg.in/check.v1"
@@ -129,6 +130,14 @@ func (s *CheckersSuite) TestExec(c *C) {
 	outErr, ok := err.(*outputError)
 	c.Assert(ok, Equals, true)
 	c.Assert(outErr.output(), Matches, `(?s)sleep: invalid time interval.*`)
+
+	// Long output on failure is truncated to 1024 bytes
+	chk = &execChecker{command: "/bin/sh -c 'echo "+strings.Repeat("x", 1100)+"; exit 1'"}
+	err = chk.check(context.Background())
+	c.Assert(err, ErrorMatches, "exit status 1")
+	outErr, ok = err.(*outputError)
+	c.Assert(ok, Equals, true)
+	c.Assert(outErr.output(), Equals, strings.Repeat("x", 1024)+"...")
 
 	// Environment variables are passed through
 	chk = &execChecker{
