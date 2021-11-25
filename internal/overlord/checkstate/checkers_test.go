@@ -1,4 +1,16 @@
-// Test the individual checker types
+// Copyright (c) 2021 Canonical Ltd
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License version 3 as
+// published by the Free Software Foundation.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package checkstate
 
@@ -10,16 +22,9 @@ import (
 	"net/http/httptest"
 	"strconv"
 	"strings"
-	"testing"
 
 	. "gopkg.in/check.v1"
-
-	"github.com/canonical/pebble/internal/plan"
 )
-
-func Test(t *testing.T) {
-	TestingT(t)
-}
 
 type CheckersSuite struct{}
 
@@ -168,55 +173,4 @@ func (s *CheckersSuite) TestExec(c *C) {
 	chk = &execChecker{command: "echo foo"}
 	err = chk.check(ctx)
 	c.Assert(err, ErrorMatches, "context canceled")
-}
-
-func (s *CheckersSuite) TestNewChecker(c *C) {
-	chk := newChecker(&plan.Check{
-		Name: "http",
-		HTTP: &plan.HTTPCheckConfig{
-			URL:     "https://example.com/foo",
-			Headers: map[string]string{"k": "v"},
-		},
-	})
-	http, ok := chk.(*httpChecker)
-	c.Assert(ok, Equals, true)
-	c.Check(http.name, Equals, "http")
-	c.Check(http.url, Equals, "https://example.com/foo")
-	c.Check(http.headers, DeepEquals, map[string]string{"k": "v"})
-
-	chk = newChecker(&plan.Check{
-		Name: "tcp",
-		TCP: &plan.TCPCheckConfig{
-			Port: 80,
-			Host: "localhost",
-		},
-	})
-	tcp, ok := chk.(*tcpChecker)
-	c.Assert(ok, Equals, true)
-	c.Check(tcp.name, Equals, "tcp")
-	c.Check(tcp.port, Equals, 80)
-	c.Check(tcp.host, Equals, "localhost")
-
-	userID, groupID := 100, 200
-	chk = newChecker(&plan.Check{
-		Name: "exec",
-		Exec: &plan.ExecCheckConfig{
-			Command:     "sleep 1",
-			Environment: map[string]string{"k": "v"},
-			UserID:      &userID,
-			User:        "user",
-			GroupID:     &groupID,
-			Group:       "group",
-			WorkingDir:  "/working/dir",
-		},
-	})
-	exec, ok := chk.(*execChecker)
-	c.Assert(ok, Equals, true)
-	c.Assert(exec.name, Equals, "exec")
-	c.Assert(exec.command, Equals, "sleep 1")
-	c.Assert(exec.environment, DeepEquals, map[string]string{"k": "v"})
-	c.Assert(exec.userID, Equals, &userID)
-	c.Assert(exec.user, Equals, "user")
-	c.Assert(exec.groupID, Equals, &groupID)
-	c.Assert(exec.workingDir, Equals, "/working/dir")
 }

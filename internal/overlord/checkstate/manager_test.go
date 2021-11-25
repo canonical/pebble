@@ -1,4 +1,16 @@
-// Test the check manager
+// Copyright (c) 2021 Canonical Ltd
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License version 3 as
+// published by the Free Software Foundation.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package checkstate
 
@@ -8,6 +20,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"testing"
 	"time"
 
 	. "gopkg.in/check.v1"
@@ -15,6 +28,10 @@ import (
 	"github.com/canonical/pebble/internal/logger"
 	"github.com/canonical/pebble/internal/plan"
 )
+
+func Test(t *testing.T) {
+	TestingT(t)
+}
 
 type ManagerSuite struct{}
 
@@ -36,18 +53,18 @@ func (s *ManagerSuite) TestChecks(c *C) {
 			"chk1": {
 				Name:   "chk1",
 				Period: plan.OptionalDuration{Value: time.Second},
-				Exec:   &plan.ExecCheckConfig{Command: "echo chk1"},
+				Exec:   &plan.ExecCheck{Command: "echo chk1"},
 			},
 			"chk2": {
 				Name:   "chk2",
 				Level:  "alive",
 				Period: plan.OptionalDuration{Value: time.Second},
-				Exec:   &plan.ExecCheckConfig{Command: "echo chk2"},
+				Exec:   &plan.ExecCheck{Command: "echo chk2"},
 			},
 			"chk3": {
 				Name:   "chk3",
 				Period: plan.OptionalDuration{Value: time.Second},
-				Exec:   &plan.ExecCheckConfig{Command: "echo chk3"},
+				Exec:   &plan.ExecCheck{Command: "echo chk3"},
 			},
 		},
 	})
@@ -90,7 +107,7 @@ func (s *ManagerSuite) TestChecks(c *C) {
 			"chk4": {
 				Name:   "chk4",
 				Period: plan.OptionalDuration{Value: time.Second},
-				Exec:   &plan.ExecCheckConfig{Command: "echo chk4"},
+				Exec:   &plan.ExecCheck{Command: "echo chk4"},
 			},
 		},
 	})
@@ -117,7 +134,7 @@ func (s *ManagerSuite) TestTimeout(c *C) {
 				Period:   plan.OptionalDuration{Value: 20 * time.Millisecond},
 				Timeout:  plan.OptionalDuration{Value: 10 * time.Millisecond},
 				Failures: 1,
-				Exec:     &plan.ExecCheckConfig{Command: "/bin/sh -c 'echo FOO; sleep 0.02'"},
+				Exec:     &plan.ExecCheck{Command: "/bin/sh -c 'echo FOO; sleep 0.02'"},
 			},
 		},
 	})
@@ -147,7 +164,7 @@ func (s *ManagerSuite) TestCheckCanceled(c *C) {
 				Period:   plan.OptionalDuration{Value: time.Millisecond},
 				Timeout:  plan.OptionalDuration{Value: time.Second},
 				Failures: 1,
-				Exec:     &plan.ExecCheckConfig{Command: command},
+				Exec:     &plan.ExecCheck{Command: command},
 			},
 		},
 	})
@@ -208,7 +225,7 @@ func (s *ManagerSuite) TestFailures(c *C) {
 				Period:   plan.OptionalDuration{Value: 20 * time.Millisecond},
 				Timeout:  plan.OptionalDuration{Value: 100 * time.Millisecond},
 				Failures: 3,
-				Exec:     &plan.ExecCheckConfig{Command: `/bin/sh -c '[ -z $FAIL_PEBBLE_TEST ]'`},
+				Exec:     &plan.ExecCheck{Command: `/bin/sh -c '[ -z $FAIL_PEBBLE_TEST ]'`},
 			},
 		},
 	})
@@ -262,4 +279,55 @@ func waitCheck(c *C, mgr *CheckManager, name string, f func(check *CheckInfo) bo
 	}
 	c.Fatalf("timed out waiting for check %q", name)
 	return nil
+}
+
+func (s *CheckersSuite) TestNewChecker(c *C) {
+	chk := newChecker(&plan.Check{
+		Name: "http",
+		HTTP: &plan.HTTPCheck{
+			URL:     "https://example.com/foo",
+			Headers: map[string]string{"k": "v"},
+		},
+	})
+	http, ok := chk.(*httpChecker)
+	c.Assert(ok, Equals, true)
+	c.Check(http.name, Equals, "http")
+	c.Check(http.url, Equals, "https://example.com/foo")
+	c.Check(http.headers, DeepEquals, map[string]string{"k": "v"})
+
+	chk = newChecker(&plan.Check{
+		Name: "tcp",
+		TCP: &plan.TCPCheck{
+			Port: 80,
+			Host: "localhost",
+		},
+	})
+	tcp, ok := chk.(*tcpChecker)
+	c.Assert(ok, Equals, true)
+	c.Check(tcp.name, Equals, "tcp")
+	c.Check(tcp.port, Equals, 80)
+	c.Check(tcp.host, Equals, "localhost")
+
+	userID, groupID := 100, 200
+	chk = newChecker(&plan.Check{
+		Name: "exec",
+		Exec: &plan.ExecCheck{
+			Command:     "sleep 1",
+			Environment: map[string]string{"k": "v"},
+			UserID:      &userID,
+			User:        "user",
+			GroupID:     &groupID,
+			Group:       "group",
+			WorkingDir:  "/working/dir",
+		},
+	})
+	exec, ok := chk.(*execChecker)
+	c.Assert(ok, Equals, true)
+	c.Assert(exec.name, Equals, "exec")
+	c.Assert(exec.command, Equals, "sleep 1")
+	c.Assert(exec.environment, DeepEquals, map[string]string{"k": "v"})
+	c.Assert(exec.userID, Equals, &userID)
+	c.Assert(exec.user, Equals, "user")
+	c.Assert(exec.groupID, Equals, &groupID)
+	c.Assert(exec.workingDir, Equals, "/working/dir")
 }

@@ -33,6 +33,7 @@ type ServiceManager struct {
 	rand     *rand.Rand
 }
 
+// PlanFunc is the type of function used by AddPlanHandler.
 type PlanFunc func(p *plan.Plan)
 
 type Restarter interface {
@@ -442,6 +443,9 @@ func (m *ServiceManager) SendSignal(services []string, signal string) error {
 	return nil
 }
 
+// CheckFailure response to a health check failure. If the given check name is
+// in the on-check-failure map for a service, tell the service to perform the
+// configured action (for example, "restart").
 func (m *ServiceManager) CheckFailure(name string) {
 	m.servicesLock.Lock()
 	defer m.servicesLock.Unlock()

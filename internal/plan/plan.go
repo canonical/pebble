@@ -44,6 +44,7 @@ type Plan struct {
 	Checks   map[string]*Check   `yaml:"checks,omitempty"`
 }
 
+// Copy returns a deep copy of the plan.
 func (p *Plan) Copy() *Plan {
 	copied := Plan{
 		Layers:   make([]*Layer, len(p.Layers)),
@@ -71,6 +72,7 @@ type Layer struct {
 	Checks      map[string]*Check   `yaml:"checks,omitempty"`
 }
 
+// Copy returns a deep copy of the layer.
 func (l *Layer) Copy() *Layer {
 	copied := *l
 	copied.Services = make(map[string]*Service, len(l.Services))
@@ -159,6 +161,7 @@ const (
 	StartupDisabled ServiceStartup = "disabled"
 )
 
+// Override specifies the layer override mechanism (for services and checks).
 type Override string
 
 const (
@@ -176,6 +179,7 @@ const (
 	ActionIgnore  ServiceAction = "ignore"
 )
 
+// Check specifies configuration for a single health check.
 type Check struct {
 	// Basic details
 	Name     string     `yaml:"-"`
@@ -188,12 +192,12 @@ type Check struct {
 	Failures int              `yaml:"failures,omitempty"`
 
 	// Type-specific check settings (only one of these can be set)
-	HTTP *HTTPCheckConfig `yaml:"http,omitempty"`
-	TCP  *TCPCheckConfig  `yaml:"tcp,omitempty"`
-	Exec *ExecCheckConfig `yaml:"exec,omitempty"`
+	HTTP *HTTPCheck `yaml:"http,omitempty"`
+	TCP  *TCPCheck  `yaml:"tcp,omitempty"`
+	Exec *ExecCheck `yaml:"exec,omitempty"`
 }
 
-// Copy returns a deep copy of the check config.
+// Copy returns a deep copy of the check configuration.
 func (c *Check) Copy() *Check {
 	copied := *c
 	if c.HTTP != nil {
@@ -208,6 +212,7 @@ func (c *Check) Copy() *Check {
 	return &copied
 }
 
+// CheckLevel specifies the optional check level.
 type CheckLevel string
 
 const (
@@ -216,13 +221,14 @@ const (
 	ReadyLevel CheckLevel = "ready"
 )
 
-type HTTPCheckConfig struct {
+// HTTPCheck holds the configuration for an HTTP health check.
+type HTTPCheck struct {
 	URL     string            `yaml:"url,omitempty"`
 	Headers map[string]string `yaml:"headers,omitempty"`
 }
 
-// Copy returns a deep copy of the HTTP check config.
-func (c *HTTPCheckConfig) Copy() *HTTPCheckConfig {
+// Copy returns a deep copy of the HTTP check configuration.
+func (c *HTTPCheck) Copy() *HTTPCheck {
 	copied := *c
 	if c.Headers != nil {
 		copied.Headers = make(map[string]string, len(c.Headers))
@@ -233,18 +239,20 @@ func (c *HTTPCheckConfig) Copy() *HTTPCheckConfig {
 	return &copied
 }
 
-type TCPCheckConfig struct {
+// TCPCheck holds the configuration for an HTTP health check.
+type TCPCheck struct {
 	Port int    `yaml:"port,omitempty"`
 	Host string `yaml:"host,omitempty"`
 }
 
-// Copy returns a deep copy of the TCP check config.
-func (c *TCPCheckConfig) Copy() *TCPCheckConfig {
+// Copy returns a deep copy of the TCP check configuration.
+func (c *TCPCheck) Copy() *TCPCheck {
 	copied := *c
 	return &copied
 }
 
-type ExecCheckConfig struct {
+// ExecCheck holds the configuration for an exec health check.
+type ExecCheck struct {
 	Command     string            `yaml:"command,omitempty"`
 	Environment map[string]string `yaml:"environment,omitempty"`
 	UserID      *int              `yaml:"user-id,omitempty"`
@@ -254,8 +262,8 @@ type ExecCheckConfig struct {
 	WorkingDir  string            `yaml:"working-dir,omitempty"`
 }
 
-// Copy returns a deep copy of the exec check config.
-func (c *ExecCheckConfig) Copy() *ExecCheckConfig {
+// Copy returns a deep copy of the exec check configuration.
+func (c *ExecCheck) Copy() *ExecCheck {
 	copied := *c
 	if c.Environment != nil {
 		copied.Environment = make(map[string]string, len(c.Environment))

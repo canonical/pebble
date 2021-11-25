@@ -1,3 +1,17 @@
+// Copyright (c) 2021 Canonical Ltd
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License version 3 as
+// published by the Free Software Foundation.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
 package checkstate
 
 import (
@@ -11,44 +25,10 @@ import (
 
 	"github.com/canonical/pebble/internal/logger"
 	"github.com/canonical/pebble/internal/osutil"
-	"github.com/canonical/pebble/internal/plan"
 	"github.com/canonical/pebble/internal/strutil/shlex"
 )
 
-func newChecker(config *plan.Check) checker {
-	switch {
-	case config.HTTP != nil:
-		return &httpChecker{
-			name:    config.Name,
-			url:     config.HTTP.URL,
-			headers: config.HTTP.Headers,
-		}
-
-	case config.TCP != nil:
-		return &tcpChecker{
-			name: config.Name,
-			host: config.TCP.Host,
-			port: config.TCP.Port,
-		}
-
-	case config.Exec != nil:
-		return &execChecker{
-			name:        config.Name,
-			command:     config.Exec.Command,
-			environment: config.Exec.Environment,
-			userID:      config.Exec.UserID,
-			user:        config.Exec.User,
-			groupID:     config.Exec.GroupID,
-			group:       config.Exec.Group,
-			workingDir:  config.Exec.WorkingDir,
-		}
-
-	default:
-		// This has already been checked when parsing the config.
-		panic("internal error: invalid check config")
-	}
-}
-
+// httpChecker is a checker that ensures an HTTP GET at a specified URL returns 20x.
 type httpChecker struct {
 	name    string
 	url     string
@@ -75,6 +55,7 @@ func (c *httpChecker) check(ctx context.Context) error {
 	return nil
 }
 
+// tcpChecker is a checker that ensures a TCP port is open.
 type tcpChecker struct {
 	name string
 	host string
@@ -101,6 +82,7 @@ func (c *tcpChecker) check(ctx context.Context) error {
 	return nil
 }
 
+// execChecker is a checker that ensures a command executes succesfully.
 type execChecker struct {
 	name        string
 	command     string
