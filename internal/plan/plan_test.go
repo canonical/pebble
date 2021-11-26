@@ -594,16 +594,21 @@ var planTests = []planTest{{
 			chk-http:
 				override: merge
 				period: 1s
+				http:
+					headers:
+						Foo: bar
 		
 			chk-tcp:
 				override: merge
 				timeout: 300ms
+				tcp:
+					host: foobar
 		
 			chk-exec:
 				override: merge
 				failures: 5
 				exec:
-					command: sleep 1
+					working-dir: /root
 `, `
 		checks:
 			chk-http:
@@ -632,7 +637,8 @@ var planTests = []planTest{{
 				Timeout:  plan.OptionalDuration{Value: defaultCheckTimeout},
 				Failures: defaultCheckFailures,
 				HTTP: &plan.HTTPCheck{
-					URL: "https://example.com/bar",
+					URL:     "https://example.com/bar",
+					Headers: map[string]string{"Foo": "bar"},
 				},
 			},
 			"chk-tcp": {
@@ -643,6 +649,7 @@ var planTests = []planTest{{
 				Failures: defaultCheckFailures,
 				TCP: &plan.TCPCheck{
 					Port: 80,
+					Host: "foobar",
 				},
 			},
 			"chk-exec": {
@@ -652,7 +659,8 @@ var planTests = []planTest{{
 				Timeout:  plan.OptionalDuration{Value: 7 * time.Second, IsSet: true},
 				Failures: 5,
 				Exec: &plan.ExecCheck{
-					Command: "sleep 2",
+					Command:    "sleep 2",
+					WorkingDir: "/root",
 				},
 			},
 		},
@@ -744,7 +752,7 @@ func (s *S) TestParseLayer(c *C) {
 			if test.error != "" {
 				c.Assert(err, ErrorMatches, test.error)
 			} else {
-				c.Assert(err, IsNil)
+				c.Assert(err, IsNil, Commentf("summary: %s", test.summary))
 			}
 		}
 	}

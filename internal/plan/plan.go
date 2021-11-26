@@ -149,6 +149,57 @@ func (s *Service) Copy() *Service {
 	return &copied
 }
 
+// Merge merges the fields set in other into c.
+func (s *Service) Merge(other *Service) {
+	if other.Summary != "" {
+		s.Summary = other.Summary
+	}
+	if other.Description != "" {
+		s.Description = other.Description
+	}
+	if other.Startup != StartupUnknown {
+		s.Startup = other.Startup
+	}
+	if other.Command != "" {
+		s.Command = other.Command
+	}
+	if other.UserID != nil {
+		s.UserID = other.UserID
+	}
+	if other.User != "" {
+		s.User = other.User
+	}
+	if other.GroupID != nil {
+		s.GroupID = other.GroupID
+	}
+	if other.Group != "" {
+		s.Group = other.Group
+	}
+	s.Before = append(s.Before, other.Before...)
+	s.After = append(s.After, other.After...)
+	for k, v := range other.Environment {
+		s.Environment[k] = v
+	}
+	if other.OnSuccess != "" {
+		s.OnSuccess = other.OnSuccess
+	}
+	if other.OnFailure != "" {
+		s.OnFailure = other.OnFailure
+	}
+	for k, v := range other.OnCheckFailure {
+		s.OnCheckFailure[k] = v
+	}
+	if other.BackoffDelay.IsSet {
+		s.BackoffDelay = other.BackoffDelay
+	}
+	if other.BackoffFactor.IsSet {
+		s.BackoffFactor = other.BackoffFactor
+	}
+	if other.BackoffLimit.IsSet {
+		s.BackoffLimit = other.BackoffLimit
+	}
+}
+
 // Equal returns true when the two services are equal in value.
 func (s *Service) Equal(other *Service) bool {
 	if s == other {
@@ -216,6 +267,40 @@ func (c *Check) Copy() *Check {
 	return &copied
 }
 
+// Merge merges the fields set in other into c.
+func (c *Check) Merge(other *Check) {
+	if other.Level != "" {
+		c.Level = other.Level
+	}
+	if other.Period.IsSet {
+		c.Period = other.Period
+	}
+	if other.Timeout.IsSet {
+		c.Timeout = other.Timeout
+	}
+	if other.Failures != 0 {
+		c.Failures = other.Failures
+	}
+	if other.HTTP != nil {
+		if c.HTTP == nil {
+			c.HTTP = &HTTPCheck{}
+		}
+		c.HTTP.Merge(other.HTTP)
+	}
+	if other.TCP != nil {
+		if c.TCP == nil {
+			c.TCP = &TCPCheck{}
+		}
+		c.TCP.Merge(other.TCP)
+	}
+	if other.Exec != nil {
+		if c.Exec == nil {
+			c.Exec = &ExecCheck{}
+		}
+		c.Exec.Merge(other.Exec)
+	}
+}
+
 // CheckLevel specifies the optional check level.
 type CheckLevel string
 
@@ -243,6 +328,16 @@ func (c *HTTPCheck) Copy() *HTTPCheck {
 	return &copied
 }
 
+// Merge merges the fields set in other into c.
+func (c *HTTPCheck) Merge(other *HTTPCheck) {
+	if other.URL != "" {
+		c.URL = other.URL
+	}
+	for k, v := range other.Headers {
+		c.Headers[k] = v
+	}
+}
+
 // TCPCheck holds the configuration for an HTTP health check.
 type TCPCheck struct {
 	Port int    `yaml:"port,omitempty"`
@@ -253,6 +348,16 @@ type TCPCheck struct {
 func (c *TCPCheck) Copy() *TCPCheck {
 	copied := *c
 	return &copied
+}
+
+// Merge merges the fields set in other into c.
+func (c *TCPCheck) Merge(other *TCPCheck) {
+	if other.Port != 0 {
+		c.Port = other.Port
+	}
+	if other.Host != "" {
+		c.Host = other.Host
+	}
 }
 
 // ExecCheck holds the configuration for an exec health check.
@@ -286,6 +391,33 @@ func (c *ExecCheck) Copy() *ExecCheck {
 	return &copied
 }
 
+// Merge merges the fields set in other into c.
+func (c *ExecCheck) Merge(other *ExecCheck) {
+	if other.Command != "" {
+		c.Command = other.Command
+	}
+	for k, v := range other.Environment {
+		c.Environment[k] = v
+	}
+	if other.UserID != nil {
+		userID := *other.UserID
+		c.UserID = &userID
+	}
+	if other.User != "" {
+		c.User = other.User
+	}
+	if other.GroupID != nil {
+		groupID := *other.GroupID
+		c.GroupID = &groupID
+	}
+	if other.Group != "" {
+		c.Group = other.Group
+	}
+	if other.WorkingDir != "" {
+		c.WorkingDir = other.WorkingDir
+	}
+}
+
 // FormatError is the error returned when a layer has a format error, such as
 // a missing "override" field.
 type FormatError struct {
@@ -314,55 +446,9 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 			switch service.Override {
 			case MergeOverride:
 				if old, ok := combined.Services[name]; ok {
-					copy := old.Copy()
-					if service.Summary != "" {
-						copy.Summary = service.Summary
-					}
-					if service.Description != "" {
-						copy.Description = service.Description
-					}
-					if service.Startup != StartupUnknown {
-						copy.Startup = service.Startup
-					}
-					if service.Command != "" {
-						copy.Command = service.Command
-					}
-					if service.UserID != nil {
-						copy.UserID = service.UserID
-					}
-					if service.User != "" {
-						copy.User = service.User
-					}
-					if service.GroupID != nil {
-						copy.GroupID = service.GroupID
-					}
-					if service.Group != "" {
-						copy.Group = service.Group
-					}
-					copy.Before = append(copy.Before, service.Before...)
-					copy.After = append(copy.After, service.After...)
-					for k, v := range service.Environment {
-						copy.Environment[k] = v
-					}
-					if service.OnSuccess != "" {
-						copy.OnSuccess = service.OnSuccess
-					}
-					if service.OnFailure != "" {
-						copy.OnFailure = service.OnFailure
-					}
-					for k, v := range service.OnCheckFailure {
-						copy.OnCheckFailure[k] = v
-					}
-					if service.BackoffDelay.IsSet {
-						copy.BackoffDelay = service.BackoffDelay
-					}
-					if service.BackoffFactor.IsSet {
-						copy.BackoffFactor = service.BackoffFactor
-					}
-					if service.BackoffLimit.IsSet {
-						copy.BackoffLimit = service.BackoffLimit
-					}
-					combined.Services[name] = copy
+					copied := old.Copy()
+					copied.Merge(service)
+					combined.Services[name] = copied
 					break
 				}
 				fallthrough
@@ -386,27 +472,7 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 			case MergeOverride:
 				if old, ok := combined.Checks[name]; ok {
 					copied := old.Copy()
-					if check.Level != "" {
-						copied.Level = check.Level
-					}
-					if check.Period.IsSet {
-						copied.Period = check.Period
-					}
-					if check.Timeout.IsSet {
-						copied.Timeout = check.Timeout
-					}
-					if check.Failures != 0 {
-						copied.Failures = check.Failures
-					}
-					if check.HTTP != nil {
-						copied.HTTP = check.HTTP.Copy() // TODO: these should be a merge operation
-					}
-					if check.TCP != nil {
-						copied.TCP = check.TCP.Copy()
-					}
-					if check.Exec != nil {
-						copied.Exec = check.Exec.Copy()
-					}
+					copied.Merge(check)
 					combined.Checks[name] = copied
 					break
 				}
@@ -479,7 +545,8 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 
 	for name, check := range combined.Checks {
 		if check.Level != UnsetLevel && check.Level != AliveLevel && check.Level != ReadyLevel {
-			return nil, &FormatError{Message: fmt.Sprintf(`plan check %q level must be "alive" or "ready"`, name),
+			return nil, &FormatError{
+				Message: fmt.Sprintf(`plan check %q level must be "alive" or "ready"`, name),
 			}
 		}
 		if !check.Period.IsSet {

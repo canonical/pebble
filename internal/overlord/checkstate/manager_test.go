@@ -131,10 +131,10 @@ func (s *ManagerSuite) TestTimeout(c *C) {
 		Checks: map[string]*plan.Check{
 			"chk1": {
 				Name:     "chk1",
-				Period:   plan.OptionalDuration{Value: 20 * time.Millisecond},
-				Timeout:  plan.OptionalDuration{Value: 10 * time.Millisecond},
+				Period:   plan.OptionalDuration{Value: time.Millisecond},
+				Timeout:  plan.OptionalDuration{Value: 25 * time.Millisecond},
 				Failures: 1,
-				Exec:     &plan.ExecCheck{Command: "/bin/sh -c 'echo FOO; sleep 0.02'"},
+				Exec:     &plan.ExecCheck{Command: "/bin/sh -c 'echo FOO; sleep 0.05'"},
 			},
 		},
 	})
