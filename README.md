@@ -368,7 +368,7 @@ Here are some of the things coming soon:
   - [x] Better log caching and retrieval support
   - [x] Consider showing unified log as output of `pebble run` (use `-v`)
   - [x] Automatically restart services that fail
-  - [ ] Support for custom health checks (HTTP, TCP, command)
+  - [x] Support for custom health checks (HTTP, TCP, command)
   - [ ] Automatically remove (double) timestamps from logs
   - [ ] Improve signal handling, e.g., sending SIGHUP to a service
   - [ ] Terminate all services before exiting run command
