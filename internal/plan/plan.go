@@ -431,7 +431,7 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 
 	}
 
-	// Ensure fields in combined layers validate correctly.
+	// Ensure fields in combined layers validate correctly (and set defaults).
 	for name, service := range combined.Services {
 		if service.Command == "" {
 			return nil, &FormatError{
@@ -444,8 +444,69 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 				Message: fmt.Sprintf("plan service %q command invalid: %v", name, err),
 			}
 		}
+		if !validServiceAction(service.OnSuccess) {
+			return nil, &FormatError{
+				Message: fmt.Sprintf("plan service %q on-success action %q invalid", name, service.OnSuccess),
+			}
+		}
+		if !validServiceAction(service.OnFailure) {
+			return nil, &FormatError{
+				Message: fmt.Sprintf("plan service %q on-failure action %q invalid", name, service.OnFailure),
+			}
+		}
+		for _, action := range service.OnCheckFailure {
+			if !validServiceAction(action) {
+				return nil, &FormatError{
+					Message: fmt.Sprintf("plan service %q on-check-failure action %q invalid", name, action),
+				}
+			}
+		}
+		if !service.BackoffDelay.IsSet {
+			service.BackoffDelay.Value = defaultBackoffDelay
+		}
+		if !service.BackoffFactor.IsSet {
+			service.BackoffFactor.Value = defaultBackoffFactor
+		} else if service.BackoffFactor.Value < 1 {
+			return nil, &FormatError{
+				Message: fmt.Sprintf("plan service %q backoff-factor must be 1.0 or greater, not %g", name, service.BackoffFactor.Value),
+			}
+		}
+		if !service.BackoffLimit.IsSet {
+			service.BackoffLimit.Value = defaultBackoffLimit
+		}
+
 	}
+
 	for name, check := range combined.Checks {
+		if check.Level != UnsetLevel && check.Level != AliveLevel && check.Level != ReadyLevel {
+			return nil, &FormatError{Message: fmt.Sprintf(`plan check %q level must be "alive" or "ready"`, name),
+			}
+		}
+		if !check.Period.IsSet {
+			check.Period.Value = defaultCheckPeriod
+		} else if check.Period.Value == 0 {
+			return nil, &FormatError{
+				Message: fmt.Sprintf("plan check %q period must not be zero", name),
+			}
+		}
+		if !check.Timeout.IsSet {
+			check.Timeout.Value = defaultCheckTimeout
+		} else if check.Timeout.Value == 0 {
+			return nil, &FormatError{
+				Message: fmt.Sprintf("plan check %q timeout must not be zero", name),
+			}
+		} else if check.Timeout.Value >= check.Period.Value {
+			return nil, &FormatError{
+				Message: fmt.Sprintf("plan check %q timeout must be less than period", name),
+			}
+		}
+		if check.Failures == 0 {
+			// Default number of failures in a row before check triggers
+			// action, default is >1 to avoid flapping due to glitches. For
+			// what it's worth, Kubernetes probes uses a default of 3 too.
+			check.Failures = defaultCheckFailures
+		}
+
 		numTypes := 0
 		if check.HTTP != nil {
 			if check.HTTP.URL == "" {
@@ -632,32 +693,6 @@ func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 				Message: fmt.Sprintf("service object cannot be null for service %q", name),
 			}
 		}
-
-		// TODO: defaults/validation should be done after merging!
-		// Set defaults and validate values
-		if !validServiceAction(service.OnSuccess) {
-			return nil, &FormatError{Message: fmt.Sprintf("invalid on-success action %q", service.OnSuccess)}
-		}
-		if !validServiceAction(service.OnFailure) {
-			return nil, &FormatError{Message: fmt.Sprintf("invalid on-failure action %q", service.OnFailure)}
-		}
-		for _, action := range service.OnCheckFailure {
-			if !validServiceAction(action) {
-				return nil, &FormatError{Message: fmt.Sprintf("invalid on-check-failure action %q", action)}
-			}
-		}
-		if !service.BackoffDelay.IsSet {
-			service.BackoffDelay.Value = defaultBackoffDelay
-		}
-		if !service.BackoffFactor.IsSet {
-			service.BackoffFactor.Value = defaultBackoffFactor
-		} else if service.BackoffFactor.Value < 1 {
-			return nil, &FormatError{Message: fmt.Sprintf("backoff-factor must be 1.0 or greater, not %g", service.BackoffFactor.Value)}
-		}
-		if !service.BackoffLimit.IsSet {
-			service.BackoffLimit.Value = defaultBackoffLimit
-		}
-
 		service.Name = name
 	}
 
@@ -672,31 +707,6 @@ func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 				Message: fmt.Sprintf("check object cannot be null for check %q", name),
 			}
 		}
-
-		// TODO: defaults/validation should be done after merging!
-		// Set defaults and validate values
-		if check.Level != UnsetLevel && check.Level != AliveLevel && check.Level != ReadyLevel {
-			return nil, &FormatError{Message: `check level must be "alive" or "ready"`}
-		}
-		if !check.Period.IsSet {
-			check.Period.Value = defaultCheckPeriod
-		} else if check.Period.Value == 0 {
-			return nil, &FormatError{Message: "check period must not be zero"}
-		}
-		if !check.Timeout.IsSet {
-			check.Timeout.Value = defaultCheckTimeout
-		} else if check.Timeout.Value == 0 {
-			return nil, &FormatError{Message: "check timeout must not be zero"}
-		} else if check.Timeout.Value >= check.Period.Value {
-			return nil, &FormatError{Message: "check timeout must be less than period"}
-		}
-		if check.Failures == 0 {
-			// Default number of failures in a row before check triggers
-			// action, default is >1 to avoid flapping due to glitches. For
-			// what it's worth, Kubernetes probes uses a default of 3 too.
-			check.Failures = defaultCheckFailures
-		}
-
 		check.Name = name
 	}
 

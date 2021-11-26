@@ -166,23 +166,17 @@ var planTests = []planTest{{
 				BackoffLimit:  plan.OptionalDuration{Value: 10 * time.Second, IsSet: true},
 			},
 			"srv2": {
-				Name:          "srv2",
-				Override:      "replace",
-				Command:       "cmd",
-				Startup:       plan.StartupEnabled,
-				Before:        []string{"srv3"},
-				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
-				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
-				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
+				Name:     "srv2",
+				Override: "replace",
+				Command:  "cmd",
+				Startup:  plan.StartupEnabled,
+				Before:   []string{"srv3"},
 			},
 			"srv3": {
-				Name:          "srv3",
-				Override:      "replace",
-				Command:       "cmd",
-				Startup:       plan.StartupUnknown,
-				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
-				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
-				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
+				Name:     "srv3",
+				Override: "replace",
+				Command:  "cmd",
+				Startup:  plan.StartupUnknown,
 			},
 		},
 		Checks: map[string]*plan.Check{},
@@ -200,36 +194,24 @@ var planTests = []planTest{{
 				Environment: map[string]string{
 					"var3": "val3",
 				},
-				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
-				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
-				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
 			},
 			"srv2": {
-				Name:          "srv2",
-				Summary:       "Replaced service",
-				Override:      "replace",
-				Command:       "cmd",
-				Startup:       plan.StartupDisabled,
-				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
-				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
-				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
+				Name:     "srv2",
+				Summary:  "Replaced service",
+				Override: "replace",
+				Command:  "cmd",
+				Startup:  plan.StartupDisabled,
 			},
 			"srv4": {
-				Name:          "srv4",
-				Override:      "replace",
-				Command:       "cmd",
-				Startup:       plan.StartupEnabled,
-				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
-				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
-				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
+				Name:     "srv4",
+				Override: "replace",
+				Command:  "cmd",
+				Startup:  plan.StartupEnabled,
 			},
 			"srv5": {
-				Name:          "srv5",
-				Override:      "replace",
-				Command:       "cmd",
-				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
-				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
-				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
+				Name:     "srv5",
+				Override: "replace",
+				Command:  "cmd",
 			},
 		},
 		Checks: map[string]*plan.Check{},
@@ -352,9 +334,6 @@ var planTests = []planTest{{
 					"b": "1.1",
 					"c": "",
 				},
-				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
-				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
-				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
 			},
 		},
 		Checks: map[string]*plan.Check{},
@@ -395,7 +374,7 @@ var planTests = []planTest{{
 	`},
 }, {
 	summary: `Invalid action`,
-	error:   `invalid on-success action "foo"`,
+	error:   `plan service "svc1" on-success action "foo" invalid`,
 	input: []string{`
 		services:
 			"svc1":
@@ -415,7 +394,7 @@ var planTests = []planTest{{
 	`},
 }, {
 	summary: `Zero backoff-factor`,
-	error:   `backoff-factor must be 1.0 or greater, not 0`,
+	error:   `plan service "svc1" backoff-factor must be 1.0 or greater, not 0`,
 	input: []string{`
 		services:
 			"svc1":
@@ -425,7 +404,7 @@ var planTests = []planTest{{
 	`},
 }, {
 	summary: `Too small backoff-factor`,
-	error:   `backoff-factor must be 1.0 or greater, not 0.5`,
+	error:   `plan service "svc1" backoff-factor must be 1.0 or greater, not 0.5`,
 	input: []string{`
 		services:
 			"svc1":
@@ -484,8 +463,7 @@ var planTests = []planTest{{
 						BAZ: buzz
 					working-dir: /root
 `},
-	layers: []*plan.Layer{{
-		Label:    "layer-0",
+	result: &plan.Layer{
 		Services: map[string]*plan.Service{},
 		Checks: map[string]*plan.Check{
 			"chk-http": {
@@ -532,7 +510,7 @@ var planTests = []planTest{{
 				},
 			},
 		},
-	}},
+	},
 }, {
 	summary: "Checks override replace works correctly",
 	input: []string{`
@@ -610,7 +588,7 @@ var planTests = []planTest{{
 		},
 	},
 }, {
-	summary: "Checks override merge works correctly - TODO defaults/validation should be done after merging",
+	summary: "Checks override merge works correctly",
 	input: []string{`
 		checks:
 			chk-http:
@@ -672,7 +650,7 @@ var planTests = []planTest{{
 				Override: plan.MergeOverride,
 				Period:   plan.OptionalDuration{Value: defaultCheckPeriod},
 				Timeout:  plan.OptionalDuration{Value: 7 * time.Second, IsSet: true},
-				Failures: 3, // TODO: should be 5
+				Failures: 5,
 				Exec: &plan.ExecCheck{
 					Command: "sleep 2",
 				},
@@ -737,7 +715,7 @@ func (s *S) TestParseLayer(c *C) {
 				break
 			}
 			if len(test.layers) > 0 && test.layers[i] != nil {
-				c.Assert(layer, DeepEquals, test.layers[i])
+				c.Assert(layer, DeepEquals, test.layers[i], Commentf("summary: %s", test.summary))
 			}
 			sup.Layers = append(sup.Layers, layer)
 		}
@@ -745,7 +723,7 @@ func (s *S) TestParseLayer(c *C) {
 			var result *plan.Layer
 			result, err = plan.CombineLayers(sup.Layers...)
 			if err == nil && test.result != nil {
-				c.Assert(result, DeepEquals, test.result)
+				c.Assert(result, DeepEquals, test.result, Commentf("summary: %s", test.summary))
 			}
 			if err == nil {
 				for name, order := range test.start {
@@ -758,7 +736,7 @@ func (s *S) TestParseLayer(c *C) {
 					p := plan.Plan{Services: result.Services}
 					names, err := p.StopOrder([]string{name})
 					c.Assert(err, IsNil)
-					c.Assert(names, DeepEquals, order)
+					c.Assert(names, DeepEquals, order, Commentf("summary: %s", test.summary))
 				}
 			}
 		}
@@ -847,14 +825,16 @@ services:
 }
 
 func (s *S) TestReadDir(c *C) {
-	pebbleDir := c.MkDir()
-	layersDir := filepath.Join(pebbleDir, "layers")
-	err := os.Mkdir(layersDir, 0755)
-	c.Assert(err, IsNil)
+	tempDir := c.MkDir()
 
-	for _, test := range planTests {
+	for testIndex, test := range planTests {
+		pebbleDir := filepath.Join(tempDir, fmt.Sprintf("pebble-%03d", testIndex))
+		layersDir := filepath.Join(pebbleDir, "layers")
+		err := os.MkdirAll(layersDir, 0755)
+		c.Assert(err, IsNil)
+
 		for i, yml := range test.input {
-			err := ioutil.WriteFile(filepath.Join(layersDir, fmt.Sprintf("%03d-layer-%d.yaml", i, i)), []byte(reindent(yml)), 0644)
+			err := ioutil.WriteFile(filepath.Join(layersDir, fmt.Sprintf("%03d-layer-%d.yaml", i, i)), reindent(yml), 0644)
 			c.Assert(err, IsNil)
 		}
 		sup, err := plan.ReadDir(pebbleDir)
@@ -883,7 +863,7 @@ func (s *S) TestReadDir(c *C) {
 			if test.error != "" {
 				c.Assert(err, ErrorMatches, test.error)
 			} else {
-				c.Assert(err, IsNil)
+				c.Assert(err, IsNil, Commentf("summary: %s", test.summary))
 			}
 		}
 	}
