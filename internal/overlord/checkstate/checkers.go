@@ -82,7 +82,7 @@ func (c *tcpChecker) check(ctx context.Context) error {
 	return nil
 }
 
-// execChecker is a checker that ensures a command executes succesfully.
+// execChecker is a checker that ensures a command executes successfully.
 type execChecker struct {
 	name        string
 	command     string

@@ -270,15 +270,15 @@ checks:
         # the period, and must not be zero. Default is "3s".
         timeout: <duration>
 
-        # (Optional) Number of times the check must in a row to be considered
-        # failing and to trigger the on-check-failure action. Default 3.
+        # (Optional) Number of times in a row the check must error to be
+        # considered a failure (which triggers the on-check-failure action).
+        # Default 3.
         failures: <failure threshold>
-
-        # Type-specific check configuration is below. Note that one (and only
-        # one) of the "http", "tcp", or "exec" objects must be specified.
 
         # Configures an HTTP check, which is successful if a GET to the
         # specified URL returns a 20x status code.
+        #
+        # Only one of "http", "tcp", or "exec" may be specified.
         http:
             # (Required) URL to fetch, for example "https://example.com/foo".
             url: <full URL>
@@ -290,6 +290,8 @@ checks:
         # Configures a TCP port check, which is successful if the specified
         # TCP port is listening and we can successfully open it. Nothing is
         # sent to the port.
+        #
+        # Only one of "http", "tcp", or "exec" may be specified.
         tcp:
             # (Required) Port number to open.
             port: <port number>
@@ -299,6 +301,8 @@ checks:
 
         # Configures a command execution check, which is successful if running
         # the specified command returns a zero exit code.
+        #
+        # Only one of "http", "tcp", or "exec" may be specified.
         exec:
             # (Required) Command line to execute. The command is executed
             # directly; use "/bin/sh -c '...'" to run via the shell.
