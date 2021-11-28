@@ -160,10 +160,10 @@ type checkData struct {
 	checker checker
 	ctx     context.Context
 	cancel  context.CancelFunc
+	action  FailureFunc
 
 	mutex     sync.Mutex
 	failures  int
-	action    FailureFunc
 	actionRan bool
 	lastErr   error
 }

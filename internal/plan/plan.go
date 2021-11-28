@@ -50,17 +50,16 @@ type Plan struct {
 
 // Copy returns a deep copy of the plan.
 func (p *Plan) Copy() *Plan {
-	copied := Plan{
-		Layers:   make([]*Layer, len(p.Layers)),
-		Services: make(map[string]*Service, len(p.Services)),
-		Checks:   make(map[string]*Check, len(p.Checks)),
-	}
+	copied := *p
+	copied.Layers = make([]*Layer, len(p.Layers))
 	for i, layer := range p.Layers {
 		copied.Layers[i] = layer.Copy()
 	}
+	copied.Services = make(map[string]*Service, len(p.Services))
 	for name, service := range p.Services {
 		copied.Services[name] = service.Copy()
 	}
+	copied.Checks = make(map[string]*Check, len(p.Checks))
 	for name, check := range p.Checks {
 		copied.Checks[name] = check.Copy()
 	}
@@ -477,16 +476,13 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 					break
 				}
 				fallthrough
-
 			case ReplaceOverride:
 				combined.Checks[name] = check.Copy()
-
 			case UnknownOverride:
 				return nil, &FormatError{
 					Message: fmt.Sprintf(`layer %q must define "override" for check %q`,
 						layer.Label, check.Name),
 				}
-
 			default:
 				return nil, &FormatError{
 					Message: fmt.Sprintf(`layer %q has invalid "override" value for check %q`,

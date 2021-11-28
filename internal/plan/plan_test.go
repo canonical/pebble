@@ -723,7 +723,7 @@ func (s *S) TestParseLayer(c *C) {
 				break
 			}
 			if len(test.layers) > 0 && test.layers[i] != nil {
-				c.Assert(layer, DeepEquals, test.layers[i], Commentf("summary: %s", test.summary))
+				c.Assert(layer, DeepEquals, test.layers[i])
 			}
 			sup.Layers = append(sup.Layers, layer)
 		}
@@ -731,7 +731,7 @@ func (s *S) TestParseLayer(c *C) {
 			var result *plan.Layer
 			result, err = plan.CombineLayers(sup.Layers...)
 			if err == nil && test.result != nil {
-				c.Assert(result, DeepEquals, test.result, Commentf("summary: %s", test.summary))
+				c.Assert(result, DeepEquals, test.result)
 			}
 			if err == nil {
 				for name, order := range test.start {
@@ -744,7 +744,7 @@ func (s *S) TestParseLayer(c *C) {
 					p := plan.Plan{Services: result.Services}
 					names, err := p.StopOrder([]string{name})
 					c.Assert(err, IsNil)
-					c.Assert(names, DeepEquals, order, Commentf("summary: %s", test.summary))
+					c.Assert(names, DeepEquals, order)
 				}
 			}
 		}
@@ -752,7 +752,7 @@ func (s *S) TestParseLayer(c *C) {
 			if test.error != "" {
 				c.Assert(err, ErrorMatches, test.error)
 			} else {
-				c.Assert(err, IsNil, Commentf("summary: %s", test.summary))
+				c.Assert(err, IsNil)
 			}
 		}
 	}
@@ -871,7 +871,7 @@ func (s *S) TestReadDir(c *C) {
 			if test.error != "" {
 				c.Assert(err, ErrorMatches, test.error)
 			} else {
-				c.Assert(err, IsNil, Commentf("summary: %s", test.summary))
+				c.Assert(err, IsNil)
 			}
 		}
 	}

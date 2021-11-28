@@ -265,9 +265,9 @@ checks:
         # elapses. Must not be zero. Default is "10s".
         period: <duration>
 
-        # (Optional) If this time elapses before each check has finished, it
-        # is cancelled and considered to have failed. Must not be less than
-        # the period, and must not be zero. Default is "3s".
+        # (Optional) If this time elapses before a single check operation has
+        # finished, it is cancelled and considered an error. Must not be less
+        # than the period, and must not be zero. Default is "3s".
         timeout: <duration>
 
         # (Optional) Number of times in a row the check must error to be
