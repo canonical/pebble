@@ -45,6 +45,7 @@ type cmdRun struct {
 
 	CreateDirs bool `long:"create-dirs"`
 	Hold       bool `long:"hold"`
+	Finalizer  bool `long:"finalizer"`
 	Verbose    bool `short:"v" long:"verbose"`
 }
 
@@ -54,6 +55,7 @@ func init() {
 			"create-dirs": "Create pebble directory on startup if it doesn't exist",
 			"hold":        "Do not start default services automatically",
 			"verbose":     "Log all output from services to stdout",
+			"finalizer":   "Block shutdown until a remote finalizer has completed",
 		}, nil)
 }
 
@@ -128,6 +130,7 @@ func runDaemon(rcmd *cmdRun, ch chan os.Signal) error {
 	dopts := daemon.Options{
 		Dir:        pebbleDir,
 		SocketPath: socketPath,
+		Finalizer:  rcmd.Finalizer,
 	}
 	if rcmd.Verbose {
 		dopts.ServiceOutput = os.Stdout

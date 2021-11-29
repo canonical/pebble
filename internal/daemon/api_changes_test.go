@@ -50,7 +50,7 @@ func (s *apiSuite) TestStateChangesDefaultToInProgress(c *check.C) {
 	defer restore()
 
 	// Setup
-	d := s.daemon(c)
+	d := s.daemon(c, nil)
 	st := d.overlord.State()
 	st.Lock()
 	setupChanges(st)
@@ -79,7 +79,7 @@ func (s *apiSuite) TestStateChangesInProgress(c *check.C) {
 	defer restore()
 
 	// Setup
-	d := s.daemon(c)
+	d := s.daemon(c, nil)
 	st := d.overlord.State()
 	st.Lock()
 	setupChanges(st)
@@ -108,7 +108,7 @@ func (s *apiSuite) TestStateChangesAll(c *check.C) {
 	defer restore()
 
 	// Setup
-	d := s.daemon(c)
+	d := s.daemon(c, nil)
 	st := d.overlord.State()
 	st.Lock()
 	setupChanges(st)
@@ -137,7 +137,7 @@ func (s *apiSuite) TestStateChangesReady(c *check.C) {
 	defer restore()
 
 	// Setup
-	d := s.daemon(c)
+	d := s.daemon(c, nil)
 	st := d.overlord.State()
 	st.Lock()
 	setupChanges(st)
@@ -165,7 +165,7 @@ func (s *apiSuite) TestStateChangesForServiceName(c *check.C) {
 	defer restore()
 
 	// Setup
-	d := s.daemon(c)
+	d := s.daemon(c, nil)
 	st := d.overlord.State()
 	st.Lock()
 	setupChanges(st)
@@ -196,7 +196,7 @@ func (s *apiSuite) TestStateChange(c *check.C) {
 	defer restore()
 
 	// Setup
-	d := s.daemon(c)
+	d := s.daemon(c, nil)
 	st := d.overlord.State()
 	st.Lock()
 	ids := setupChanges(st)
@@ -271,7 +271,7 @@ func (s *apiSuite) TestStateChangeAbort(c *check.C) {
 	defer restore()
 
 	// Setup
-	d := s.daemon(c)
+	d := s.daemon(c, nil)
 	st := d.overlord.State()
 	st.Lock()
 	ids := setupChanges(st)
@@ -338,7 +338,7 @@ func (s *apiSuite) TestStateChangeAbortIsReady(c *check.C) {
 	defer restore()
 
 	// Setup
-	d := s.daemon(c)
+	d := s.daemon(c, nil)
 	st := d.overlord.State()
 	st.Lock()
 	ids := setupChanges(st)
@@ -372,7 +372,7 @@ func (s *apiSuite) TestStateChangeAbortIsReady(c *check.C) {
 }
 
 func (s *apiSuite) TestWaitChangeNotFound(c *check.C) {
-	s.daemon(c)
+	s.daemon(c, nil)
 	req, err := http.NewRequest("GET", "/v1/changes/x/wait", nil)
 	c.Assert(err, check.IsNil)
 	rsp := v1GetChangeWait(apiCmd("/v1/changes/{id}/wait"), req, nil).(*resp)
@@ -446,7 +446,7 @@ func (s *apiSuite) TestWaitChangeTimeoutCancel(c *check.C) {
 
 func (s *apiSuite) testWaitChange(ctx context.Context, c *check.C, query string, markReady func(st *state.State, change *state.Change)) (*httptest.ResponseRecorder, *resp, string) {
 	// Setup
-	d := s.daemon(c)
+	d := s.daemon(c, nil)
 	st := d.overlord.State()
 	st.Lock()
 	change := st.NewChange("exec", "Exec")

@@ -42,7 +42,7 @@ func (s *apiSuite) TestGetPlanErrors(c *C) {
 		{"/v1/layers?format=foo", 400, `invalid format "foo"`},
 	}
 
-	_ = s.daemon(c)
+	_ = s.daemon(c, nil)
 	planCmd := apiCmd("/v1/plan")
 
 	for _, test := range tests {
@@ -60,7 +60,7 @@ func (s *apiSuite) TestGetPlanErrors(c *C) {
 
 func (s *apiSuite) TestGetPlan(c *C) {
 	writeTestLayer(s.pebbleDir, planLayer)
-	_ = s.daemon(c)
+	_ = s.daemon(c, nil)
 	planCmd := apiCmd("/v1/plan")
 
 	req, err := http.NewRequest("GET", "/v1/plan?format=yaml", nil)
@@ -111,7 +111,7 @@ func (s *apiSuite) TestLayersErrors(c *C) {
 		{`{"action": "add", "label": "x", "format": "yaml", "layer": "@"}`, 400, `cannot parse layer YAML: .*`},
 	}
 
-	_ = s.daemon(c)
+	_ = s.daemon(c, nil)
 	layersCmd := apiCmd("/v1/layers")
 
 	for _, test := range tests {
@@ -129,7 +129,7 @@ func (s *apiSuite) TestLayersErrors(c *C) {
 
 func (s *apiSuite) TestLayersAddAppend(c *C) {
 	writeTestLayer(s.pebbleDir, planLayer)
-	_ = s.daemon(c)
+	_ = s.daemon(c, nil)
 	layersCmd := apiCmd("/v1/layers")
 
 	payload := `{"action": "add", "label": "foo", "format": "yaml", "layer": "services:\n dynamic:\n  override: replace\n  command: echo dynamic\n"}`
@@ -156,7 +156,7 @@ services:
 
 func (s *apiSuite) TestLayersAddCombine(c *C) {
 	writeTestLayer(s.pebbleDir, planLayer)
-	_ = s.daemon(c)
+	_ = s.daemon(c, nil)
 	layersCmd := apiCmd("/v1/layers")
 
 	payload := `{"action": "add", "combine": true, "label": "base", "format": "yaml", "layer": "services:\n dynamic:\n  override: replace\n  command: echo dynamic\n"}`
@@ -183,7 +183,7 @@ services:
 
 func (s *apiSuite) TestLayersCombineFormatError(c *C) {
 	writeTestLayer(s.pebbleDir, planLayer)
-	_ = s.daemon(c)
+	_ = s.daemon(c, nil)
 	layersCmd := apiCmd("/v1/layers")
 
 	payload := `{"action": "add", "combine": true, "label": "base", "format": "yaml", "layer": "services:\n dynamic:\n  command: echo dynamic\n"}`

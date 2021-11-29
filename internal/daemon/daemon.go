@@ -63,6 +63,9 @@ type Options struct {
 	// ServiceOuput is an optional io.Writer for the service log output, if set, all services
 	// log output will be written to the writer.
 	ServiceOutput io.Writer
+
+	// Finalizer is true when the daemon requires an external finalizer to run before it can stop.
+	Finalizer bool
 }
 
 // A Daemon listens for requests and routes them to the right command
@@ -81,6 +84,7 @@ type Daemon struct {
 	tomb                tomb.Tomb
 	router              *mux.Router
 	standbyOpinions     *standby.StandbyOpinions
+	finalizer           chan bool
 
 	// set to remember we need to restart the system
 	restartSystem bool
@@ -503,9 +507,21 @@ var (
 	rebootWaitTimeout      = 10 * time.Minute
 	rebootRetryWaitTimeout = 5 * time.Minute
 	rebootMaxTentatives    = 3
+
+	shutdownTimeout     = 25 * time.Second
+	shutdownMinDuration = 5 * time.Second
 )
 
-var shutdownTimeout = 25 * time.Second
+func FakeShutdownTimeouts(timeout, minDuration time.Duration) (restore func()) {
+	oldShutdownTimeout := shutdownTimeout
+	oldShutdownMinDuration := shutdownMinDuration
+	shutdownTimeout = timeout
+	shutdownMinDuration = minDuration
+	return func() {
+		shutdownTimeout = oldShutdownTimeout
+		shutdownMinDuration = oldShutdownMinDuration
+	}
+}
 
 // Stop shuts down the Daemon.
 func (d *Daemon) Stop(sigCh chan<- os.Signal) error {
@@ -515,6 +531,30 @@ func (d *Daemon) Stop(sigCh chan<- os.Signal) error {
 	}
 	if d.overlord == nil {
 		return fmt.Errorf("internal error: no Overlord")
+	}
+
+	// We're using the background context here because the tomb's
+	// context will likely already have been cancelled when we are
+	// called.
+	ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	defer cancel()
+
+	// If the daemon was run with an external finalizer, wait for it.
+	if d.finalizer != nil {
+		// Always give shutdown at least shutdownMinDuration and
+		// finalizers at least 1 second.
+		finalizerDuration := shutdownTimeout - shutdownMinDuration
+		if finalizerDuration <= time.Second {
+			finalizerDuration = time.Second
+		}
+		fctx, fcancel := context.WithTimeout(ctx, finalizerDuration)
+		logger.Noticef("Waiting for remote finalizer")
+		select {
+		case <-d.finalizer:
+		case <-fctx.Done():
+			logger.Noticef("WARNING: timed out waiting for remote finalizer")
+		}
+		fcancel()
 	}
 
 	d.tomb.Kill(nil)
@@ -536,12 +576,7 @@ func (d *Daemon) Stop(sigCh chan<- os.Signal) error {
 		time.Sleep(rebootNoticeWait)
 	}
 
-	// We're using the background context here because the tomb's
-	// context will likely already have been cancelled when we are
-	// called.
-	ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	d.tomb.Kill(d.serve.Shutdown(ctx))
-	cancel()
 
 	if !restartSystem {
 		// tell systemd that we are stopping
@@ -695,13 +730,27 @@ func (d *Daemon) RebootIsMissing(st *state.State) error {
 	return state.ErrExpectedReboot
 }
 
+// finalize is used by v1Finalize to allow the Daemon to stop when
+// launched with Finalizer set to true.
+func (d *Daemon) finalize() {
+	if d.finalizer == nil {
+		return
+	}
+	select {
+	case d.finalizer <- true:
+	default:
+	}
+}
+
 func New(opts *Options) (*Daemon, error) {
 	d := &Daemon{
 		pebbleDir:           opts.Dir,
 		normalSocketPath:    opts.SocketPath,
 		untrustedSocketPath: opts.SocketPath + ".untrusted",
 	}
-
+	if opts.Finalizer {
+		d.finalizer = make(chan bool, 1)
+	}
 	ovld, err := overlord.New(opts.Dir, d, opts.ServiceOutput)
 	if err == state.ErrExpectedReboot {
 		// we proceed without overlord until we reach Stop

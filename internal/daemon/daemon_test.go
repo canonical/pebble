@@ -54,6 +54,7 @@ type daemonSuite struct {
 	err             error
 	notified        []string
 	restoreBackends func()
+	finalizer       bool
 }
 
 var _ = check.Suite(&daemonSuite{})
@@ -72,10 +73,11 @@ func (s *daemonSuite) TearDownTest(c *check.C) {
 	s.notified = nil
 	s.authorized = false
 	s.err = nil
+	s.finalizer = false
 }
 
 func (s *daemonSuite) newDaemon(c *check.C) *Daemon {
-	d, err := New(&Options{Dir: s.pebbleDir, SocketPath: s.socketPath})
+	d, err := New(&Options{Dir: s.pebbleDir, SocketPath: s.socketPath, Finalizer: s.finalizer})
 	c.Assert(err, check.IsNil)
 	d.addRoutes()
 	return d
@@ -1036,4 +1038,52 @@ func (s *daemonSuite) TestDegradedModeReply(c *check.C) {
 	d.SetDegradedMode(nil)
 	rec = doTestReq(c, cmd, "POST")
 	c.Check(rec.Code, check.Equals, 200)
+}
+
+func (s *daemonSuite) TestFinalize(c *C) {
+	s.finalizer = true
+
+	d := s.newDaemon(c)
+	c.Assert(d.finalizer, NotNil)
+	d.Init()
+	d.Start()
+
+	done := make(chan bool)
+	go func() {
+		defer close(done)
+		d.Stop(nil)
+	}()
+
+	time.Sleep(10 * time.Millisecond)
+
+	d.finalize()
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		c.Fatal("finalizer failed to unblock")
+	}
+}
+
+func (s *daemonSuite) TestFinalizeTimeout(c *C) {
+	defer FakeShutdownTimeouts(5*time.Second, 5*time.Second-10*time.Millisecond)()
+
+	s.finalizer = true
+
+	d := s.newDaemon(c)
+	c.Assert(d.finalizer, NotNil)
+	d.Init()
+	d.Start()
+
+	done := make(chan bool)
+	go func() {
+		defer close(done)
+		d.Stop(nil)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		c.Fatal("finalizer failed to timeout")
+	}
 }

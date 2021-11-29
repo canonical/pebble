@@ -69,7 +69,7 @@ func writeTestLayer(pebbleDir, layerYAML string) {
 func (s *apiSuite) TestServicesStart(c *C) {
 	// Setup
 	writeTestLayer(s.pebbleDir, servicesLayer)
-	d := s.daemon(c)
+	d := s.daemon(c, nil)
 	st := d.overlord.State()
 
 	soon := 0
@@ -116,7 +116,7 @@ func (s *apiSuite) TestServicesStart(c *C) {
 func (s *apiSuite) TestServicesStop(c *C) {
 	// Setup
 	writeTestLayer(s.pebbleDir, servicesLayer)
-	d := s.daemon(c)
+	d := s.daemon(c, nil)
 	st := d.overlord.State()
 
 	soon := 0
@@ -163,7 +163,7 @@ func (s *apiSuite) TestServicesStop(c *C) {
 func (s *apiSuite) TestServicesAutoStart(c *C) {
 	// Setup
 	writeTestLayer(s.pebbleDir, servicesLayer)
-	d := s.daemon(c)
+	d := s.daemon(c, nil)
 	st := d.overlord.State()
 
 	soon := 0
@@ -206,7 +206,7 @@ func (s *apiSuite) TestServicesAutoStart(c *C) {
 func (s *apiSuite) TestServicesGet(c *C) {
 	// Setup
 	writeTestLayer(s.pebbleDir, servicesLayer)
-	s.daemon(c)
+	s.daemon(c, nil)
 
 	// Execute
 	req, err := http.NewRequest("GET", "/v1/services", nil)
@@ -234,7 +234,7 @@ func (s *apiSuite) TestServicesGet(c *C) {
 func (s *apiSuite) TestServicesRestart(c *C) {
 	// Setup
 	writeTestLayer(s.pebbleDir, servicesLayer)
-	d := s.daemon(c)
+	d := s.daemon(c, nil)
 	st := d.overlord.State()
 
 	soon := 0
@@ -283,7 +283,7 @@ func (s *apiSuite) TestServicesRestart(c *C) {
 func (s *apiSuite) TestServicesReplan(c *C) {
 	// Setup
 	writeTestLayer(s.pebbleDir, servicesLayer)
-	d := s.daemon(c)
+	d := s.daemon(c, nil)
 	st := d.overlord.State()
 
 	soon := 0

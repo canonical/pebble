@@ -49,11 +49,16 @@ func (s *apiSuite) muxVars(*http.Request) map[string]string {
 	return s.vars
 }
 
-func (s *apiSuite) daemon(c *check.C) *Daemon {
+func (s *apiSuite) daemon(c *check.C, opts *Options) *Daemon {
 	if s.d != nil {
 		panic("called daemon() twice")
 	}
-	d, err := New(&Options{Dir: s.pebbleDir})
+	if opts == nil {
+		opts = &Options{}
+	}
+	c.Assert(opts.Dir, check.Equals, "")
+	opts.Dir = s.pebbleDir
+	d, err := New(opts)
 	c.Assert(err, check.IsNil)
 	d.addRoutes()
 	s.d = d
@@ -78,7 +83,7 @@ func (s *apiSuite) TestSysInfo(c *check.C) {
 
 	rec := httptest.NewRecorder()
 
-	d := s.daemon(c)
+	d := s.daemon(c, nil)
 	d.Version = "42b1"
 	state := d.overlord.State()
 	state.Lock()
@@ -87,7 +92,7 @@ func (s *apiSuite) TestSysInfo(c *check.C) {
 
 	sysInfoCmd.GET(sysInfoCmd, nil, nil).ServeHTTP(rec, nil)
 	c.Check(rec.Code, check.Equals, 200)
-	c.Check(rec.HeaderMap.Get("Content-Type"), check.Equals, "application/json")
+	c.Check(rec.Header().Get("Content-Type"), check.Equals, "application/json")
 
 	expected := map[string]interface{}{
 		"version": "42b1",
@@ -98,4 +103,34 @@ func (s *apiSuite) TestSysInfo(c *check.C) {
 	c.Check(rsp.Status, check.Equals, 200)
 	c.Check(rsp.Type, check.Equals, ResponseTypeSync)
 	c.Check(rsp.Result, check.DeepEquals, expected)
+}
+
+func (s *apiSuite) TestFinalize(c *check.C) {
+	finalizeCmd := apiCmd("/v1/finalize")
+	c.Check(finalizeCmd.GET, check.IsNil)
+	c.Check(finalizeCmd.PUT, check.IsNil)
+	c.Assert(finalizeCmd.POST, check.NotNil)
+	c.Check(finalizeCmd.DELETE, check.IsNil)
+
+	rec := httptest.NewRecorder()
+
+	d := s.daemon(c, &Options{Finalizer: true})
+	c.Assert(d.finalizer, check.NotNil)
+
+	finalizeCmd.POST(finalizeCmd, nil, nil).ServeHTTP(rec, nil)
+	c.Check(rec.Code, check.Equals, 200)
+	c.Check(rec.Header().Get("Content-Type"), check.Equals, "application/json")
+
+	expected := map[string]interface{}{}
+	var rsp resp
+	c.Assert(json.Unmarshal(rec.Body.Bytes(), &rsp), check.IsNil)
+	c.Check(rsp.Status, check.Equals, 200)
+	c.Check(rsp.Type, check.Equals, ResponseTypeSync)
+	c.Check(rsp.Result, check.DeepEquals, expected)
+
+	select {
+	case <-d.finalizer:
+	default:
+		c.Fatalf("finalizer not fired")
+	}
 }

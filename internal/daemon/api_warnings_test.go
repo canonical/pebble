@@ -27,7 +27,7 @@ import (
 )
 
 func (s *apiSuite) testWarnings(c *check.C, all bool, body io.Reader) (calls string, result interface{}) {
-	s.daemon(c)
+	s.daemon(c, nil)
 
 	oldOK := stateOkayWarnings
 	oldAll := stateAllWarnings

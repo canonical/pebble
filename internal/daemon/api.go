@@ -29,6 +29,10 @@ var api = []*Command{{
 	GuestOK: true,
 	GET:     v1SystemInfo,
 }, {
+	Path:   "/v1/finalize",
+	UserOK: true,
+	POST:   v1Finalize,
+}, {
 	Path:   "/v1/warnings",
 	UserOK: true,
 	GET:    v1GetWarnings,
@@ -114,4 +118,9 @@ func v1SystemInfo(c *Command, r *http.Request, _ *userState) Response {
 		"boot-id": state.BootID(),
 	}
 	return SyncResponse(result)
+}
+
+func v1Finalize(c *Command, r *http.Request, _ *userState) Response {
+	c.d.finalize()
+	return SyncResponse(map[string]interface{}{})
 }
