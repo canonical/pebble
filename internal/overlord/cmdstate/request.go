@@ -15,6 +15,7 @@
 package cmdstate
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/user"
@@ -33,7 +34,8 @@ type ExecArgs struct {
 	Timeout     time.Duration
 	UserID      *int
 	GroupID     *int
-	UseTerminal bool
+	Terminal    bool
+	Interactive bool
 	SplitStderr bool
 	Width       int
 	Height      int
@@ -51,7 +53,8 @@ type execSetup struct {
 	Command     []string
 	Environment map[string]string
 	Timeout     time.Duration
-	UseTerminal bool
+	Terminal    bool
+	Interactive bool
 	SplitStderr bool
 	Width       int
 	Height      int
@@ -62,6 +65,10 @@ type execSetup struct {
 
 // Exec creates a task that will execute the command with the given arguments.
 func Exec(st *state.State, args *ExecArgs) (*state.Task, ExecMetadata, error) {
+	if args.Interactive && !args.Terminal {
+		return nil, ExecMetadata{}, errors.New("cannot use interactive mode without a terminal")
+	}
+
 	environment := map[string]string{}
 	for k, v := range args.Environment {
 		environment[k] = v
@@ -115,7 +122,8 @@ func Exec(st *state.State, args *ExecArgs) (*state.Task, ExecMetadata, error) {
 		Command:     args.Command,
 		Environment: environment,
 		Timeout:     args.Timeout,
-		UseTerminal: args.UseTerminal,
+		Terminal:    args.Terminal,
+		Interactive: args.Interactive,
 		SplitStderr: args.SplitStderr,
 		Width:       args.Width,
 		Height:      args.Height,

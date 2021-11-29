@@ -24,8 +24,15 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
+)
+
+const (
+	defaultBackoffDelay  = 500 * time.Millisecond
+	defaultBackoffFactor = 2.0
+	defaultBackoffLimit  = 30 * time.Second
 )
 
 type Plan struct {
@@ -42,20 +49,32 @@ type Layer struct {
 }
 
 type Service struct {
-	Name        string            `yaml:"-"`
-	Summary     string            `yaml:"summary,omitempty"`
-	Description string            `yaml:"description,omitempty"`
-	Startup     ServiceStartup    `yaml:"startup,omitempty"`
-	Override    ServiceOverride   `yaml:"override,omitempty"`
-	Command     string            `yaml:"command,omitempty"`
-	After       []string          `yaml:"after,omitempty"`
-	Before      []string          `yaml:"before,omitempty"`
-	Requires    []string          `yaml:"requires,omitempty"`
+	// Basic details
+	Name        string          `yaml:"-"`
+	Summary     string          `yaml:"summary,omitempty"`
+	Description string          `yaml:"description,omitempty"`
+	Startup     ServiceStartup  `yaml:"startup,omitempty"`
+	Override    ServiceOverride `yaml:"override,omitempty"`
+	Command     string          `yaml:"command,omitempty"`
+
+	// Service dependencies
+	After    []string `yaml:"after,omitempty"`
+	Before   []string `yaml:"before,omitempty"`
+	Requires []string `yaml:"requires,omitempty"`
+
+	// Options for command execution
 	Environment map[string]string `yaml:"environment,omitempty"`
 	UserID      *int              `yaml:"user-id,omitempty"`
 	User        string            `yaml:"user,omitempty"`
 	GroupID     *int              `yaml:"group-id,omitempty"`
 	Group       string            `yaml:"group,omitempty"`
+
+	// Auto-restart and backoff functionality
+	OnSuccess     ServiceAction    `yaml:"on-success,omitempty"`
+	OnFailure     ServiceAction    `yaml:"on-failure,omitempty"`
+	BackoffDelay  OptionalDuration `yaml:"backoff-delay,omitempty"`
+	BackoffFactor OptionalFloat    `yaml:"backoff-factor,omitempty"`
+	BackoffLimit  OptionalDuration `yaml:"backoff-limit,omitempty"`
 }
 
 // Copy returns a deep copy of the service.
@@ -103,6 +122,15 @@ const (
 	UnknownOverride ServiceOverride = ""
 	MergeOverride   ServiceOverride = "merge"
 	ReplaceOverride ServiceOverride = "replace"
+)
+
+type ServiceAction string
+
+const (
+	ActionUnset   ServiceAction = ""
+	ActionRestart ServiceAction = "restart"
+	ActionHalt    ServiceAction = "halt"
+	ActionIgnore  ServiceAction = "ignore"
 )
 
 // FormatError is the error returned when a layer has a format error, such as
@@ -161,6 +189,21 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 					copy.After = append(copy.After, service.After...)
 					for k, v := range service.Environment {
 						copy.Environment[k] = v
+					}
+					if service.OnSuccess != "" {
+						copy.OnSuccess = service.OnSuccess
+					}
+					if service.OnFailure != "" {
+						copy.OnFailure = service.OnFailure
+					}
+					if service.BackoffDelay.IsSet {
+						copy.BackoffDelay = service.BackoffDelay
+					}
+					if service.BackoffFactor.IsSet {
+						copy.BackoffFactor = service.BackoffFactor
+					}
+					if service.BackoffLimit.IsSet {
+						copy.BackoffLimit = service.BackoffLimit
 					}
 					combined.Services[name] = copy
 					break
@@ -329,6 +372,26 @@ func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 				Message: fmt.Sprintf("service object cannot be null for service %q", name),
 			}
 		}
+
+		// Set defaults and validate values
+		if !validServiceAction(service.OnSuccess) {
+			return nil, &FormatError{Message: fmt.Sprintf("invalid on-success action %q", service.OnSuccess)}
+		}
+		if !validServiceAction(service.OnFailure) {
+			return nil, &FormatError{Message: fmt.Sprintf("invalid on-failure action %q", service.OnFailure)}
+		}
+		if !service.BackoffDelay.IsSet {
+			service.BackoffDelay.Value = defaultBackoffDelay
+		}
+		if !service.BackoffFactor.IsSet {
+			service.BackoffFactor.Value = defaultBackoffFactor
+		} else if service.BackoffFactor.Value < 1 {
+			return nil, &FormatError{Message: fmt.Sprintf("backoff-factor must be 1.0 or greater, not %g", service.BackoffFactor.Value)}
+		}
+		if !service.BackoffLimit.IsSet {
+			service.BackoffLimit.Value = defaultBackoffLimit
+		}
+
 		service.Name = name
 	}
 	err = layer.checkCycles()
@@ -336,6 +399,15 @@ func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 		return nil, err
 	}
 	return &layer, err
+}
+
+func validServiceAction(action ServiceAction) bool {
+	switch action {
+	case ActionUnset, ActionRestart, ActionHalt, ActionIgnore:
+		return true
+	default:
+		return false
+	}
 }
 
 var fnameExp = regexp.MustCompile("^([0-9]{3})-([a-z](?:-?[a-z0-9]){2,}).yaml$")

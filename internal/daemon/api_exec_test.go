@@ -331,7 +331,7 @@ func execRequest(c *C, opts *client.ExecOptions) (*http.Response, execResponse) 
 		User:        opts.User,
 		GroupID:     opts.GroupID,
 		Group:       opts.Group,
-		UseTerminal: opts.UseTerminal,
+		Terminal:    opts.Terminal,
 		SplitStderr: opts.Stderr != nil,
 		Width:       opts.Width,
 		Height:      opts.Height,

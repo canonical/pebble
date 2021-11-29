@@ -32,16 +32,18 @@ import (
 
 type cmdExec struct {
 	clientMixin
-	WorkingDir string        `short:"w"`
-	Env        []string      `long:"env"`
-	UserID     *int          `long:"uid"`
-	User       string        `long:"user"`
-	GroupID    *int          `long:"gid"`
-	Group      string        `long:"group"`
-	Timeout    time.Duration `long:"timeout"`
-	Terminal   bool          `short:"t"`
-	NoTerminal bool          `short:"T"`
-	Positional struct {
+	WorkingDir     string        `short:"w"`
+	Env            []string      `long:"env"`
+	UserID         *int          `long:"uid"`
+	User           string        `long:"user"`
+	GroupID        *int          `long:"gid"`
+	Group          string        `long:"group"`
+	Timeout        time.Duration `long:"timeout"`
+	Terminal       bool          `short:"t"`
+	NoTerminal     bool          `short:"T"`
+	Interactive    bool          `short:"i"`
+	NonInteractive bool          `short:"I"`
+	Positional     struct {
 		Command string `positional-arg-name:"<command>" required:"1"`
 	} `positional-args:"yes"`
 }
@@ -54,8 +56,10 @@ var execDescs = map[string]string{
 	"gid":     "Group ID to run command as",
 	"group":   "Group name to run command as (group's GID must match gid if both present)",
 	"timeout": "Timeout after which to terminate command",
-	"t":       "Allocate remote pseudo-terminal (default if stdout is a TTY)",
+	"t":       "Allocate remote pseudo-terminal and connect stdout to it (default if stdout is a TTY)",
 	"T":       "Disable remote pseudo-terminal allocation",
+	"i":       "Interactive mode: connect stdin to the pseudo-terminal (default if stdin and stdout are TTYs)",
+	"I":       "Disable interactive mode and use a pipe for stdin",
 }
 
 var shortExecHelp = "Execute a remote command and wait for it to finish"
@@ -73,6 +77,9 @@ pebble exec --timeout 10s -- echo -n foo bar
 func (cmd *cmdExec) Execute(args []string) error {
 	if cmd.Terminal && cmd.NoTerminal {
 		return errors.New("cannot use -t and -T at the same time")
+	}
+	if cmd.Interactive && cmd.NonInteractive {
+		return errors.New("cannot use -i and -I at the same time")
 	}
 
 	command := append([]string{cmd.Positional.Command}, args...)
@@ -94,19 +101,30 @@ func (cmd *cmdExec) Execute(args []string) error {
 		env[key] = value
 	}
 
-	// Specify UseTerminal if -t/--terminal is given, or if stdout is a TTY.
+	// Specify Terminal=true if -t is given, or if stdout is a TTY.
 	stdoutIsTerminal := ptyutil.IsTerminal(unix.Stdout)
-	var useTerminal bool
+	var terminal bool
 	if cmd.Terminal {
-		useTerminal = true
+		terminal = true
 	} else if cmd.NoTerminal {
-		useTerminal = false
+		terminal = false
 	} else {
-		useTerminal = stdoutIsTerminal
+		terminal = stdoutIsTerminal
+	}
+
+	// Specify Interactive=true if -i is given, or if stdin and stdout are TTYs.
+	stdinIsTerminal := ptyutil.IsTerminal(unix.Stdin)
+	var interactive bool
+	if cmd.Interactive {
+		interactive = true
+	} else if cmd.NonInteractive {
+		interactive = false
+	} else {
+		interactive = stdinIsTerminal && stdoutIsTerminal
 	}
 
 	// Record terminal state (and restore it before we exit).
-	if useTerminal && ptyutil.IsTerminal(unix.Stdin) {
+	if terminal && stdinIsTerminal {
 		oldState, err := ptyutil.MakeRaw(unix.Stdin)
 		if err != nil {
 			return fmt.Errorf("cannot change terminal to raw mode: %v", err)
@@ -133,7 +151,8 @@ func (cmd *cmdExec) Execute(args []string) error {
 		User:        cmd.User,
 		GroupID:     cmd.GroupID,
 		Group:       cmd.Group,
-		UseTerminal: useTerminal,
+		Terminal:    terminal,
+		Interactive: interactive,
 		Width:       width,
 		Height:      height,
 		Stdin:       os.Stdin,
@@ -161,7 +180,7 @@ func (cmd *cmdExec) Execute(args []string) error {
 	stopControl := make(chan struct{})
 	defer close(stopControl)
 	sighup := make(chan struct{})
-	go execControlHandler(process, useTerminal, stopControl, sighup)
+	go execControlHandler(process, terminal, stopControl, sighup)
 
 	finished := make(chan error)
 	go func() {
@@ -189,7 +208,7 @@ func (cmd *cmdExec) Execute(args []string) error {
 	}
 }
 
-func execControlHandler(process *client.ExecProcess, useTerminal bool, stop <-chan struct{}, sighup chan<- struct{}) {
+func execControlHandler(process *client.ExecProcess, terminal bool, stop <-chan struct{}, sighup chan<- struct{}) {
 	ch := make(chan os.Signal, 10)
 	signal.Notify(ch,
 		unix.SIGWINCH, unix.SIGHUP,
@@ -207,7 +226,7 @@ func execControlHandler(process *client.ExecProcess, useTerminal bool, stop <-ch
 
 		switch sig {
 		case unix.SIGWINCH:
-			if !useTerminal {
+			if !terminal {
 				logger.Debugf("Received SIGWINCH but not in terminal mode, ignoring")
 				break
 			}

@@ -20,18 +20,35 @@ import (
 	"time"
 )
 
-func (m *ServiceManager) CmdsForTest() map[string]*exec.Cmd {
-	releasePlan, err := m.acquirePlan()
-	if err != nil {
-		panic(err)
-	}
-	defer releasePlan()
+var CalculateNextBackoff = calculateNextBackoff
+var GetAction = getAction
+
+func (m *ServiceManager) RunningCmds() map[string]*exec.Cmd {
+	m.servicesLock.Lock()
+	defer m.servicesLock.Unlock()
 
 	cmds := make(map[string]*exec.Cmd)
-	for name, active := range m.services {
-		cmds[name] = active.cmd
+	for name, s := range m.services {
+		if s.state == stateRunning {
+			cmds[name] = s.cmd
+		}
 	}
 	return cmds
+}
+
+func (m *ServiceManager) BackoffNum(serviceName string) int {
+	m.servicesLock.Lock()
+	defer m.servicesLock.Unlock()
+
+	s := m.services[serviceName]
+	if s == nil {
+		return -1
+	}
+	return s.backoffNum
+}
+
+func (m *ServiceManager) GetJitter(duration time.Duration) time.Duration {
+	return m.getJitter(duration)
 }
 
 func FakeOkayWait(wait time.Duration) (restore func()) {

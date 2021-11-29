@@ -15,6 +15,7 @@
 package wsutil
 
 import (
+	"encoding/json"
 	"io"
 	"io/ioutil"
 
@@ -40,42 +41,7 @@ type MessageReadWriter interface {
 	MessageWriter
 }
 
-func DefaultWriter(conn MessageReader, w io.WriteCloser, writeDone chan<- bool) {
-	for {
-		mt, r, err := conn.NextReader()
-		if err != nil {
-			logger.Debugf("Got error getting next reader %s", err)
-			break
-		}
-
-		if mt == websocket.CloseMessage {
-			logger.Debugf("Got close message for reader")
-			break
-		}
-
-		if mt == websocket.TextMessage {
-			logger.Debugf("Got message barrier, resetting stream")
-			break
-		}
-
-		buf, err := ioutil.ReadAll(r)
-		if err != nil {
-			logger.Debugf("Got error writing to writer %s", err)
-			break
-		}
-		i, err := w.Write(buf)
-		if i != len(buf) {
-			logger.Debugf("Didn't write all of buf")
-			break
-		}
-		if err != nil {
-			logger.Debugf("Error writing buf %s", err)
-			break
-		}
-	}
-	writeDone <- true
-	w.Close()
-}
+var endCommandJSON = []byte(`{"command":"end"}`)
 
 func WebsocketSendStream(conn MessageWriter, r io.Reader, bufferSize int) chan bool {
 	ch := make(chan bool)
@@ -99,7 +65,7 @@ func WebsocketSendStream(conn MessageWriter, r io.Reader, bufferSize int) chan b
 				break
 			}
 		}
-		conn.WriteMessage(websocket.TextMessage, []byte{})
+		conn.WriteMessage(websocket.TextMessage, endCommandJSON)
 		close(ch) // NOTE(benhoyt): this was "ch <- true", but that can block
 	}(conn, r)
 
@@ -109,48 +75,64 @@ func WebsocketSendStream(conn MessageWriter, r io.Reader, bufferSize int) chan b
 func WebsocketRecvStream(w io.Writer, conn MessageReader) chan bool {
 	ch := make(chan bool)
 
-	go func(w io.Writer, conn MessageReader) {
-		for {
-			mt, r, err := conn.NextReader()
-			if mt == websocket.CloseMessage {
-				logger.Debugf("Got close message for reader")
-				break
-			}
-
-			if mt == websocket.TextMessage {
-				logger.Debugf("Got message barrier")
-				break
-			}
-
-			if err != nil {
-				logger.Debugf("Got error getting next reader %s", err)
-				break
-			}
-
-			buf, err := ioutil.ReadAll(r)
-			if err != nil {
-				logger.Debugf("Got error writing to writer %s", err)
-				break
-			}
-
-			if w == nil {
-				continue
-			}
-
-			i, err := w.Write(buf)
-			if i != len(buf) {
-				logger.Debugf("Didn't write all of buf")
-				break
-			}
-			if err != nil {
-				logger.Debugf("Error writing buf %s", err)
-				break
-			}
-		}
-		ch <- true
-	}(w, conn)
+	go func() {
+		recvLoop(w, conn)
+		close(ch)
+	}()
 
 	return ch
+}
+
+func recvLoop(w io.Writer, conn MessageReader) {
+	buf := make([]byte, 32*1024) // only allocate once per websocket, not once per loop
+
+	for {
+		mt, r, err := conn.NextReader()
+		if err != nil {
+			logger.Debugf("Cannot get next reader: %v", err)
+			return
+		}
+
+		switch mt {
+		case websocket.CloseMessage:
+			logger.Debugf("Got close message for reader")
+			return
+
+		case websocket.TextMessage:
+			// A TEXT message is an out-of-band "command".
+			payload, err := ioutil.ReadAll(r)
+			if err != nil {
+				logger.Debugf("Cannot read from message reader: %v", err)
+				return
+			}
+			var command struct {
+				Command string `json:"command"`
+			}
+			err = json.Unmarshal(payload, &command)
+			if err != nil {
+				logger.Noticef("Cannot decode I/O command: %v", err)
+				continue
+			}
+			switch command.Command {
+			case "end":
+				logger.Debugf(`Got message barrier ("end" command)`)
+				return
+			default:
+				logger.Noticef("Invalid I/O command %q", command.Command)
+			}
+
+		case websocket.BinaryMessage:
+			// A BINARY message is actual I/O data.
+			_, err := io.CopyBuffer(w, r, buf)
+			if err != nil {
+				logger.Debugf("Cannot copy message to writer: %v", err)
+				return
+			}
+
+		default:
+			logger.Noticef("Invalid message type %d", mt)
+		}
+	}
 }
 
 func ReaderToChannel(r io.Reader, bufferSize int) <-chan []byte {

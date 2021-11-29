@@ -26,42 +26,31 @@ import (
 	"github.com/canonical/pebble/internal/logger"
 )
 
-// WebsocketExecMirror mirrors a websocket connection with a set of Writer/Reader.
-func WebsocketExecMirror(conn MessageReadWriter, w io.WriteCloser, r io.ReadCloser, exited chan struct{}, fd int) (chan bool, chan bool) {
-	readDone := make(chan bool, 1)
-	writeDone := make(chan bool, 1)
-
-	go DefaultWriter(conn, w, writeDone)
-
-	go func(conn MessageWriter, r io.ReadCloser) {
-		in := ExecReaderToChannel(r, -1, exited, fd)
-		for {
-			buf, ok := <-in
-			if !ok {
-				r.Close()
-				logger.Debugf("Sending write barrier")
-				err := conn.WriteMessage(websocket.TextMessage, []byte{})
-				if err != nil {
-					logger.Debugf("Got err writing barrier %s", err)
-				}
-				readDone <- true
-				return
-			}
-
-			err := conn.WriteMessage(websocket.BinaryMessage, buf)
+// MirrorToWebsocket mirrors PTY output from r (file descriptor fd) to the websocket.
+func MirrorToWebsocket(conn MessageWriter, r io.ReadCloser, exited chan struct{}, fd int) {
+	in := ExecReaderToChannel(r, -1, exited, fd)
+	for {
+		buf, ok := <-in
+		if !ok {
+			r.Close()
+			logger.Debugf("Sending write barrier")
+			err := conn.WriteMessage(websocket.TextMessage, endCommandJSON)
 			if err != nil {
-				logger.Debugf("Got err writing %s", err)
-				break
+				logger.Debugf("Got err writing barrier %s", err)
 			}
+			return
 		}
 
-		closeMsg := websocket.FormatCloseMessage(websocket.CloseNormalClosure, "")
-		conn.WriteMessage(websocket.CloseMessage, closeMsg)
-		readDone <- true
-		r.Close()
-	}(conn, r)
+		err := conn.WriteMessage(websocket.BinaryMessage, buf)
+		if err != nil {
+			logger.Debugf("Got err writing %s", err)
+			break
+		}
+	}
 
-	return readDone, writeDone
+	closeMsg := websocket.FormatCloseMessage(websocket.CloseNormalClosure, "")
+	conn.WriteMessage(websocket.CloseMessage, closeMsg)
+	r.Close()
 }
 
 // Extensively commented directly in the code. Please leave the comments!

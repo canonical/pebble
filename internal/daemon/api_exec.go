@@ -35,7 +35,8 @@ type execPayload struct {
 	User        string            `json:"user"`
 	GroupID     *int              `json:"group-id"`
 	Group       string            `json:"group"`
-	UseTerminal bool              `json:"use-terminal"`
+	Terminal    bool              `json:"terminal"`
+	Interactive bool              `json:"interactive"`
 	SplitStderr bool              `json:"split-stderr"`
 	Width       int               `json:"width"`
 	Height      int               `json:"height"`
@@ -83,14 +84,15 @@ func v1PostExec(c *Command, req *http.Request, _ *userState) Response {
 		Timeout:     timeout,
 		UserID:      uid,
 		GroupID:     gid,
-		UseTerminal: payload.UseTerminal,
+		Terminal:    payload.Terminal,
+		Interactive: payload.Interactive,
 		SplitStderr: payload.SplitStderr,
 		Width:       payload.Width,
 		Height:      payload.Height,
 	}
 	task, metadata, err := cmdstate.Exec(st, args)
 	if err != nil {
-		return statusInternalError("cannot create exec change: %v", err)
+		return statusInternalError("cannot call exec: %v", err)
 	}
 
 	change := st.NewChange("exec", fmt.Sprintf("Execute command %q", args.Command[0]))

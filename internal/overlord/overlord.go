@@ -122,7 +122,7 @@ func New(pebbleDir string, restartBehavior RestartBehavior, serviceOutput io.Wri
 	}
 	o.runner.AddOptionalHandler(matchAnyUnknownTask, handleUnknownTask, nil)
 
-	o.serviceMgr, err = servstate.NewManager(s, o.runner, o.pebbleDir, serviceOutput)
+	o.serviceMgr, err = servstate.NewManager(s, o.runner, o.pebbleDir, serviceOutput, restartBehavior)
 	if err != nil {
 		return nil, err
 	}

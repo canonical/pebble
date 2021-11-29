@@ -701,6 +701,7 @@ func New(opts *Options) (*Daemon, error) {
 		normalSocketPath:    opts.SocketPath,
 		untrustedSocketPath: opts.SocketPath + ".untrusted",
 	}
+
 	ovld, err := overlord.New(opts.Dir, d, opts.ServiceOutput)
 	if err == state.ErrExpectedReboot {
 		// we proceed without overlord until we reach Stop
