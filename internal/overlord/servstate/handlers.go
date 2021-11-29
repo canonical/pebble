@@ -126,6 +126,7 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 	select {
 	case err := <-service.started:
 		if err != nil {
+			addLastLogs(task, service.logs)
 			m.removeService(config.Name)
 			return fmt.Errorf("cannot start service: %w", err)
 		}
@@ -443,10 +444,28 @@ func (s *serviceData) exited(waitErr error) error {
 	return nil
 }
 
+// addLastLogs adds the last few lines of service output to the task's log.
+func addLastLogs(task *state.Task, logBuffer *servicelog.RingBuffer) {
+	st := task.State()
+	st.Lock()
+	defer st.Unlock()
+
+	logs, err := getLastLogs(logBuffer)
+	if err != nil {
+		task.Errorf("cannot read service logs: %v", err)
+	}
+	if logs != "" {
+		// Add lastLogLines last lines of service output to the task's log.
+		task.Logf("most recent service output:\n%s", logs)
+	}
+}
+
 // Used to strip the Pebble log prefix, for example: "2006-01-02T15:04:05.000Z [service] "
 // Timestamp must match format in logger.timestampFormat.
 var timestampServiceRegexp = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z \[[^]]+\] `)
 
+// getLastLogs fetches the last few lines of output and strips the timestamp
+// and service name prefix.
 func getLastLogs(logBuffer *servicelog.RingBuffer) (string, error) {
 	it := logBuffer.HeadIterator(lastLogLines + 1)
 	defer it.Close()
