@@ -84,6 +84,7 @@ type serviceData struct {
 	backoffNum  int
 	backoffTime time.Duration
 	resetTimer  *time.Timer
+	restarts    int
 }
 
 func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
@@ -435,6 +436,7 @@ func (s *serviceData) exited(waitErr error) error {
 
 	case stateCheckTerminating, stateCheckKilling:
 		logger.Noticef("Service %q exited after check failure, restarting", s.config.Name)
+		s.restarts++
 		err := s.startInternal()
 		if err != nil {
 			return err
@@ -559,6 +561,7 @@ func (s *serviceData) backoffTimeElapsed() error {
 
 	switch s.state {
 	case stateBackoff:
+		s.restarts++
 		err := s.startInternal()
 		if err != nil {
 			return err
@@ -671,6 +674,7 @@ func (s *serviceData) checkFailure(action plan.ServiceAction) {
 				return
 			}
 			logger.Noticef("Service %q %s action is %q, restarting", s.config.Name, onType, action)
+			s.restarts++
 			err := s.startInternal()
 			if err != nil {
 				logger.Noticef("Cannot restart service %q after check failure: %v", s.config.Name, err)
