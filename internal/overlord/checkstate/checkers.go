@@ -17,6 +17,8 @@ package checkstate
 import (
 	"context"
 	"fmt"
+	"io"
+	"io/ioutil"
 	"net"
 	"net/http"
 	"os/exec"
@@ -27,6 +29,8 @@ import (
 	"github.com/canonical/pebble/internal/osutil"
 	"github.com/canonical/pebble/internal/strutil/shlex"
 )
+
+const maxDetailsLen = 1024
 
 // httpChecker is a checker that ensures an HTTP GET at a specified URL returns 20x.
 type httpChecker struct {
@@ -50,7 +54,20 @@ func (c *httpChecker) check(ctx context.Context) error {
 	defer response.Body.Close()
 
 	if response.StatusCode < 200 || response.StatusCode > 299 {
-		return fmt.Errorf("received non-20x status code %d", response.StatusCode)
+		// Include first 1024 bytes of response body in error details
+		output, err := ioutil.ReadAll(io.LimitReader(response.Body, maxDetailsLen+1))
+		details := ""
+		if err != nil {
+			details = fmt.Sprintf("cannot read response body: %v", err)
+		} else if len(output) > maxDetailsLen {
+			details = string(output[:maxDetailsLen]) + "..."
+		} else {
+			details = string(output)
+		}
+		return &detailsError{
+			error:   fmt.Errorf("received non-20x status code %d", response.StatusCode),
+			details: details,
+		}
 	}
 	return nil
 }
@@ -125,23 +142,23 @@ func (c *execChecker) check(ctx context.Context) error {
 		if ctx.Err() == context.DeadlineExceeded {
 			err = fmt.Errorf("exec check timed out")
 		}
-		if len(output) > 0 {
-			const maxLength = 1024
-			if len(output) > maxLength {
-				output = output[:maxLength]
-				output = append(output, "..."...)
-			}
+		// Include the last 1024 bytes of output in the error details
+		details := ""
+		if len(output) > maxDetailsLen {
+			details = "..." + string(output[len(output)-maxDetailsLen:])
+		} else {
+			details = string(output)
 		}
-		return &outputError{error: err, out: string(output)}
+		return &detailsError{error: err, details: details}
 	}
 	return nil
 }
 
-type outputError struct {
+type detailsError struct {
 	error
-	out string
+	details string
 }
 
-func (e *outputError) output() string {
-	return e.out
+func (e *detailsError) Details() string {
+	return e.details
 }

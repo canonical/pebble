@@ -21,7 +21,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strconv"
-	"strings"
 
 	. "gopkg.in/check.v1"
 )
@@ -33,6 +32,7 @@ var _ = Suite(&CheckersSuite{})
 func (s *CheckersSuite) TestHTTP(c *C) {
 	var path string
 	var headers http.Header
+	var response string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		c.Assert(r.Method, Equals, "GET")
 		path = r.URL.Path
@@ -41,7 +41,11 @@ func (s *CheckersSuite) TestHTTP(c *C) {
 		if err == nil {
 			w.WriteHeader(status)
 		}
-		fmt.Fprintf(w, "%s %s", r.Method, r.URL.Path)
+		if response != "" {
+			fmt.Fprint(w, response)
+		} else {
+			fmt.Fprintf(w, "%s %s", r.Method, r.URL.Path)
+		}
 	}))
 	defer server.Close()
 
@@ -67,6 +71,24 @@ func (s *CheckersSuite) TestHTTP(c *C) {
 	err = chk.check(context.Background())
 	c.Assert(err, ErrorMatches, "received non-20x status code 404")
 	c.Assert(path, Equals, "/404")
+
+	// In case of non-20x status, short response body is fully included in error details
+	response = "error details"
+	chk = &httpChecker{url: server.URL + "/500"}
+	err = chk.check(context.Background())
+	c.Assert(err, ErrorMatches, "received non-20x status code 500")
+	detailsErr, ok := err.(*detailsError)
+	c.Assert(ok, Equals, true)
+	c.Assert(detailsErr.Details(), Equals, "error details")
+
+	// But only first n bytes of long response body is included in error details
+	response = makeLongOutput()
+	chk = &httpChecker{url: server.URL + "/500"}
+	err = chk.check(context.Background())
+	c.Assert(err, ErrorMatches, "received non-20x status code 500")
+	detailsErr, ok = err.(*detailsError)
+	c.Assert(ok, Equals, true)
+	c.Assert(detailsErr.Details(), Equals, response[:1024]+"...")
 
 	// Cancelled context returns error
 	ctx, cancel := context.WithCancel(context.Background())
@@ -132,17 +154,19 @@ func (s *CheckersSuite) TestExec(c *C) {
 	chk = &execChecker{command: "sleep x"}
 	err = chk.check(context.Background())
 	c.Assert(err, ErrorMatches, "exit status 1")
-	outErr, ok := err.(*outputError)
+	detailsErr, ok := err.(*detailsError)
 	c.Assert(ok, Equals, true)
-	c.Assert(outErr.output(), Matches, `(?s)sleep: invalid time interval.*`)
+	c.Assert(detailsErr.Details(), Matches, `(?s)sleep: invalid time interval.*`)
 
-	// Long output on failure is truncated to 1024 bytes
-	chk = &execChecker{command: "/bin/sh -c 'echo " + strings.Repeat("x", 1100) + "; exit 1'"}
+	// Long output on failure provides last n bytes of output
+	output := makeLongOutput()
+	chk = &execChecker{command: "/bin/sh -c 'echo " + output + "; exit 1'"}
 	err = chk.check(context.Background())
 	c.Assert(err, ErrorMatches, "exit status 1")
-	outErr, ok = err.(*outputError)
+	detailsErr, ok = err.(*detailsError)
 	c.Assert(ok, Equals, true)
-	c.Assert(outErr.output(), Equals, strings.Repeat("x", 1024)+"...")
+	output = output + "\n"
+	c.Assert(detailsErr.Details(), Equals, "..."+output[len(output)-1024:])
 
 	// Environment variables are passed through
 	chk = &execChecker{
@@ -151,9 +175,9 @@ func (s *CheckersSuite) TestExec(c *C) {
 	}
 	err = chk.check(context.Background())
 	c.Assert(err, ErrorMatches, "exit status 1")
-	outErr, ok = err.(*outputError)
+	detailsErr, ok = err.(*detailsError)
 	c.Assert(ok, Equals, true)
-	c.Assert(outErr.output(), Equals, "Foo, meet Bar.\n")
+	c.Assert(detailsErr.Details(), Equals, "Foo, meet Bar.\n")
 
 	// Working directory is passed through
 	workingDir := c.MkDir()
@@ -163,9 +187,9 @@ func (s *CheckersSuite) TestExec(c *C) {
 	}
 	err = chk.check(context.Background())
 	c.Assert(err, ErrorMatches, "exit status 1")
-	outErr, ok = err.(*outputError)
+	detailsErr, ok = err.(*detailsError)
 	c.Assert(ok, Equals, true)
-	c.Assert(outErr.output(), Equals, workingDir+"\n")
+	c.Assert(detailsErr.Details(), Equals, workingDir+"\n")
 
 	// Cancelled context returns error
 	ctx, cancel := context.WithCancel(context.Background())
@@ -173,4 +197,17 @@ func (s *CheckersSuite) TestExec(c *C) {
 	chk = &execChecker{command: "echo foo"}
 	err = chk.check(ctx)
 	c.Assert(err, ErrorMatches, "context canceled")
+}
+
+func makeLongOutput() string {
+	var output []byte
+	n := 0
+	for len(output) <= 1024 {
+		if len(output) > 0 {
+			output = append(output, " "...)
+		}
+		output = strconv.AppendInt(output, int64(n), 10)
+		n++
+	}
+	return string(output)
 }

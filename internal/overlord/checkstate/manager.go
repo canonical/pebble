@@ -241,9 +241,8 @@ func (c *checkData) info() *CheckInfo {
 	}
 	if c.lastErr != nil {
 		info.LastError = c.lastErr.Error()
-		switch e := c.lastErr.(type) {
-		case *outputError:
-			info.ErrorDetails = e.output()
+		if d, ok := c.lastErr.(interface{ Details() string }); ok {
+			info.ErrorDetails = d.Details()
 		}
 	}
 	return info
