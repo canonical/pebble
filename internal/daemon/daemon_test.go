@@ -37,6 +37,7 @@ import (
 
 	"github.com/canonical/pebble/internal/osutil"
 	"github.com/canonical/pebble/internal/overlord/patch"
+	"github.com/canonical/pebble/internal/overlord/restart"
 	"github.com/canonical/pebble/internal/overlord/standby"
 	"github.com/canonical/pebble/internal/overlord/state"
 	"github.com/canonical/pebble/internal/systemd"
@@ -169,7 +170,11 @@ func (s *daemonSuite) TestCommandRestartingState(c *check.C) {
 	c.Assert(err, check.IsNil)
 	c.Check(rst.Maintenance, check.IsNil)
 
-	state.FakeRestarting(d.overlord.State(), state.RestartSystem)
+	state := d.overlord.State()
+
+	state.Lock()
+	restart.FakePending(state, restart.RestartSystem)
+	state.Unlock()
 	rec = httptest.NewRecorder()
 	cmd.ServeHTTP(rec, req)
 	c.Check(rec.Code, check.Equals, 200)
@@ -180,7 +185,9 @@ func (s *daemonSuite) TestCommandRestartingState(c *check.C) {
 		Message: "system is restarting",
 	})
 
-	state.FakeRestarting(d.overlord.State(), state.RestartDaemon)
+	state.Lock()
+	restart.FakePending(state, restart.RestartDaemon)
+	state.Unlock()
 	rec = httptest.NewRecorder()
 	cmd.ServeHTTP(rec, req)
 	c.Check(rec.Code, check.Equals, 200)
@@ -513,7 +520,10 @@ func (s *daemonSuite) TestRestartWiring(c *check.C) {
 	<-generalDone
 	<-untrustedDone
 
-	d.overlord.State().RequestRestart(state.RestartDaemon)
+	st := d.overlord.State()
+	st.Lock()
+	restart.Request(st, restart.RestartDaemon)
+	st.Unlock()
 
 	select {
 	case <-d.Dying():
@@ -663,7 +673,7 @@ func (s *daemonSuite) TestRestartSystemWiring(c *check.C) {
 	}
 
 	st.Lock()
-	st.RequestRestart(state.RestartSystem)
+	restart.Request(st, restart.RestartSystem)
 	st.Unlock()
 
 	defer func() {
@@ -769,7 +779,7 @@ func (s *daemonSuite) TestRestartShutdownWithSigtermInBetween(c *check.C) {
 	st := d.overlord.State()
 
 	st.Lock()
-	st.RequestRestart(state.RestartSystem)
+	restart.Request(st, restart.RestartSystem)
 	st.Unlock()
 
 	ch := make(chan os.Signal, 2)
@@ -801,7 +811,7 @@ func (s *daemonSuite) TestRestartShutdown(c *check.C) {
 	st := d.overlord.State()
 
 	st.Lock()
-	st.RequestRestart(state.RestartSystem)
+	restart.Request(st, restart.RestartSystem)
 	st.Unlock()
 
 	sigCh := make(chan os.Signal, 2)
@@ -813,7 +823,7 @@ func (s *daemonSuite) TestRestartShutdown(c *check.C) {
 	c.Assert(chOpen, check.Equals, false)
 }
 
-func (s *daemonSuite) TestRestartExpectedRebootDidNotHappen(c *check.C) {
+func (s *daemonSuite) TestRestartExpectedRebootIsMissing(c *check.C) {
 	curBootID, err := osutil.BootID()
 	c.Assert(err, check.IsNil)
 

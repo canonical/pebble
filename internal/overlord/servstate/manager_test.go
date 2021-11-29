@@ -33,6 +33,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/canonical/pebble/internal/logger"
+	"github.com/canonical/pebble/internal/overlord/restart"
 	"github.com/canonical/pebble/internal/overlord/servstate"
 	"github.com/canonical/pebble/internal/overlord/state"
 	"github.com/canonical/pebble/internal/plan"
@@ -155,7 +156,7 @@ type testRestarter struct {
 	ch chan struct{}
 }
 
-func (r testRestarter) HandleRestart(t state.RestartType) {
+func (r testRestarter) HandleRestart(t restart.RestartType) {
 	close(r.ch)
 }
 

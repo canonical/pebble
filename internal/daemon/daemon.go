@@ -17,6 +17,7 @@ package daemon
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -38,6 +39,7 @@ import (
 	"github.com/canonical/pebble/internal/osutil"
 	"github.com/canonical/pebble/internal/osutil/sys"
 	"github.com/canonical/pebble/internal/overlord"
+	"github.com/canonical/pebble/internal/overlord/restart"
 	"github.com/canonical/pebble/internal/overlord/standby"
 	"github.com/canonical/pebble/internal/overlord/state"
 	"github.com/canonical/pebble/internal/systemd"
@@ -250,13 +252,15 @@ func (c *Command) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if rsp, ok := rsp.(*resp); ok {
-		_, rst := st.Restarting()
+		st.Lock()
+		_, rst := restart.Pending(st)
+		st.Unlock()
 		switch rst {
-		case state.RestartSystem:
+		case restart.RestartSystem:
 			rsp.transmitMaintenance(errorKindSystemRestart, "system is restarting")
-		case state.RestartDaemon:
+		case restart.RestartDaemon:
 			rsp.transmitMaintenance(errorKindDaemonRestart, "daemon is restarting")
-		case state.RestartSocket:
+		case restart.RestartSocket:
 			rsp.transmitMaintenance(errorKindDaemonRestart, "daemon is stopping to wait for socket activation")
 		}
 		if rsp.Type != ResponseTypeError {
@@ -473,11 +477,11 @@ func (d *Daemon) Start() {
 }
 
 // HandleRestart implements overlord.RestartBehavior.
-func (d *Daemon) HandleRestart(t state.RestartType) {
+func (d *Daemon) HandleRestart(t restart.RestartType) {
 	// die when asked to restart (systemd should get us back up!) etc
 	switch t {
-	case state.RestartDaemon:
-	case state.RestartSystem:
+	case restart.RestartDaemon:
+	case restart.RestartSystem:
 		// try to schedule a fallback slow reboot already here
 		// in case we get stuck shutting down
 		if err := reboot(rebootWaitTimeout); err != nil {
@@ -488,7 +492,7 @@ func (d *Daemon) HandleRestart(t state.RestartType) {
 		defer d.mu.Unlock()
 		// remember we need to restart the system
 		d.restartSystem = true
-	case state.RestartSocket:
+	case restart.RestartSocket:
 		d.mu.Lock()
 		defer d.mu.Unlock()
 		d.restartSocket = true
@@ -673,7 +677,9 @@ func (d *Daemon) RebootIsFine(st *state.State) error {
 	return nil
 }
 
-// RebootDidNotHappen implements part of overlord.RestartBehavior.
+var errExpectedReboot = errors.New("expected reboot did not happen")
+
+// RebootIsMissing implements part of overlord.RestartBehavior.
 func (d *Daemon) RebootIsMissing(st *state.State) error {
 	var nTentative int
 	err := st.Get("daemon-system-restart-tentative", &nTentative)
@@ -684,7 +690,7 @@ func (d *Daemon) RebootIsMissing(st *state.State) error {
 	if nTentative > rebootMaxTentatives {
 		// giving up, proceed normally, some in-progress refresh
 		// might get rolled back!!
-		st.ClearReboot()
+		restart.ClearReboot(st)
 		clearReboot(st)
 		logger.Noticef("pebble was restarted while a system restart was expected, pebble retried to schedule and waited again for a system restart %d times and is giving up", rebootMaxTentatives)
 		return nil
@@ -692,7 +698,7 @@ func (d *Daemon) RebootIsMissing(st *state.State) error {
 	st.Set("daemon-system-restart-tentative", nTentative)
 	d.state = st
 	logger.Noticef("pebble was restarted while a system restart was expected, pebble will try to schedule and wait for a system restart again (tenative %d/%d)", nTentative, rebootMaxTentatives)
-	return state.ErrExpectedReboot
+	return errExpectedReboot
 }
 
 func New(opts *Options) (*Daemon, error) {
@@ -703,7 +709,7 @@ func New(opts *Options) (*Daemon, error) {
 	}
 
 	ovld, err := overlord.New(opts.Dir, d, opts.ServiceOutput)
-	if err == state.ErrExpectedReboot {
+	if err == errExpectedReboot {
 		// we proceed without overlord until we reach Stop
 		// where we will schedule and wait again for a system restart.
 		// ATM we cannot do that in New because we need to satisfy

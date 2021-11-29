@@ -13,6 +13,7 @@ import (
 
 	"github.com/canonical/pebble/internal/logger"
 	"github.com/canonical/pebble/internal/osutil"
+	"github.com/canonical/pebble/internal/overlord/restart"
 	"github.com/canonical/pebble/internal/overlord/state"
 	"github.com/canonical/pebble/internal/plan"
 	"github.com/canonical/pebble/internal/servicelog"
@@ -410,7 +411,7 @@ func (s *serviceData) exited(waitErr error) error {
 
 		case plan.ActionHalt:
 			logger.Noticef("Service %q %s action is %q, triggering server exit", s.config.Name, onType, action)
-			s.manager.restarter.HandleRestart(state.RestartDaemon)
+			s.manager.restarter.HandleRestart(restart.RestartDaemon)
 			s.transition(stateStopped)
 
 		case plan.ActionRestart:
