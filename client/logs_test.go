@@ -39,7 +39,7 @@ func (cs *clientSuite) TestLogsNoOptions(c *check.C) {
 	c.Assert(err, check.IsNil)
 	c.Check(cs.req.Method, check.Equals, "GET")
 	c.Check(cs.req.URL.Path, check.Equals, "/v1/logs")
-	c.Check(cs.req.URL.Query(), check.HasLen, 0)
+	c.Check(cs.req.URL.Query(), check.DeepEquals, url.Values{"n": []string{"0"}})
 	c.Check(out.String(), check.Equals, `
 2021-05-03T03:55:49.360Z [thing] log 1
 2021-05-03T03:55:49.654Z [snappass] log two
@@ -55,34 +55,35 @@ func (cs *clientSuite) TestLogsServices(c *check.C) {
 	err := cs.cli.Logs(&client.LogsOptions{
 		WriteLog: writeLog,
 		Services: []string{"snappass"},
+		N:        10,
 	})
 	c.Assert(err, check.IsNil)
 	c.Check(cs.req.Method, check.Equals, "GET")
 	c.Check(cs.req.URL.Path, check.Equals, "/v1/logs")
 	c.Check(cs.req.URL.Query(), check.DeepEquals, url.Values{
 		"services": []string{"snappass"},
+		"n":        []string{"10"},
 	})
 	c.Check(out.String(), check.Equals, `
 2021-05-03T03:55:49.654Z [snappass] log two
 `[1:])
 }
 
-func (cs *clientSuite) TestLogsN(c *check.C) {
+func (cs *clientSuite) TestLogsAll(c *check.C) {
 	cs.rsp = `
 {"time":"2021-05-03T03:55:49.360994155Z","service":"thing","message":"log 1\n"}
 {"time":"2021-05-03T03:55:49.654334232Z","service":"snappass","message":"log two\n"}
 `[1:]
 	out, writeLog := makeLogWriter()
-	n := 2
 	err := cs.cli.Logs(&client.LogsOptions{
 		WriteLog: writeLog,
-		N:        &n,
+		N:        client.AllLogs,
 	})
 	c.Assert(err, check.IsNil)
 	c.Check(cs.req.Method, check.Equals, "GET")
 	c.Check(cs.req.URL.Path, check.Equals, "/v1/logs")
 	c.Check(cs.req.URL.Query(), check.DeepEquals, url.Values{
-		"n": []string{"2"},
+		"n": []string{"-1"},
 	})
 	c.Check(out.String(), check.Equals, `
 2021-05-03T03:55:49.360Z [thing] log 1
@@ -99,6 +100,7 @@ func (cs *clientSuite) TestFollowLogs(c *check.C) {
 		c.Check(req.URL.Path, check.Equals, "/v1/logs")
 		c.Check(req.URL.Query(), check.DeepEquals, url.Values{
 			"follow": []string{"true"},
+			"n":      []string{"0"},
 		})
 		rsp := &http.Response{
 			Body:       &followReader{readsChan},

@@ -59,7 +59,7 @@ func (cmd *cmdLogs) Execute(args []string) error {
 	case "":
 		n = 10
 	case "all":
-		n = -1
+		n = client.AllLogs
 	default:
 		var err error
 		n, err = strconv.Atoi(cmd.N)
@@ -91,7 +91,7 @@ func (cmd *cmdLogs) Execute(args []string) error {
 	opts := client.LogsOptions{
 		WriteLog: writeLog,
 		Services: cmd.Positional.Services,
-		N:        &n,
+		N:        n,
 	}
 	var err error
 	if cmd.Follow {
