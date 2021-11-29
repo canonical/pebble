@@ -19,8 +19,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 
-	"github.com/canonical/pebble/internal/overlord/restart"
 	"gopkg.in/check.v1"
+
+	"github.com/canonical/pebble/internal/overlord/restart"
 )
 
 var _ = check.Suite(&apiSuite{})
