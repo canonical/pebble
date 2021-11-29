@@ -39,11 +39,12 @@ const (
 
 // CheckInfo holds status information for a single health check.
 type CheckInfo struct {
-	Name         string `json:"name"`
-	Healthy      bool   `json:"healthy"`
-	Failures     int    `json:"failures,omitempty"`
-	LastError    string `json:"last-error,omitempty"`
-	ErrorDetails string `json:"error-details,omitempty"`
+	Name         string     `json:"name"`
+	Level        CheckLevel `json:"level"`
+	Healthy      bool       `json:"healthy"`
+	Failures     int        `json:"failures,omitempty"`
+	LastError    string     `json:"last-error,omitempty"`
+	ErrorDetails string     `json:"error-details,omitempty"`
 }
 
 // Checks fetches information about specific health checks (or all of them),

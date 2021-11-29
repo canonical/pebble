@@ -99,6 +99,7 @@ func (m *CheckManager) Checks(level plan.CheckLevel, names []string) ([]*CheckIn
 // CheckInfo provides status information about a single check.
 type CheckInfo struct {
 	Name         string
+	Level        plan.CheckLevel
 	Healthy      bool
 	Failures     int
 	LastError    string
@@ -186,6 +187,7 @@ func (c *checkData) info() *CheckInfo {
 
 	info := &CheckInfo{
 		Name:     c.config.Name,
+		Level:    c.config.Level,
 		Healthy:  c.failures == 0,
 		Failures: c.failures,
 	}
