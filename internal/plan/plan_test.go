@@ -502,6 +502,7 @@ services:
         after:
             - srv1
 `))
+	c.Assert(err, IsNil)
 	_, err = plan.CombineLayers(layer1, layer2)
 	c.Assert(err, ErrorMatches, `services in before/after loop: .*`)
 	_, ok := err.(*plan.FormatError)

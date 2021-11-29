@@ -768,6 +768,7 @@ services:
 	svc := s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
 		return svc.Current == servstate.StatusActive
 	})
+	c.Assert(svc, NotNil)
 	c.Assert(s.manager.BackoffNum("test2"), Equals, 0)
 	s.st.Lock()
 	c.Check(chg.Status(), Equals, state.DoneStatus)
@@ -783,6 +784,7 @@ services:
 	svc = s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
 		return svc.Current == servstate.StatusBackoff && s.manager.BackoffNum("test2") == 1
 	})
+	c.Assert(svc, NotNil)
 
 	// Then wait for it to auto-restart (backoff time plus a bit).
 	time.Sleep(75 * time.Millisecond)
@@ -817,6 +819,7 @@ services:
 	svc = s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
 		return svc.Current == servstate.StatusBackoff && s.manager.BackoffNum("test2") == 1
 	})
+	c.Assert(svc, NotNil)
 
 	// Then wait for it to auto-restart (backoff time plus a bit).
 	time.Sleep(75 * time.Millisecond)
