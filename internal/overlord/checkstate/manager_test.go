@@ -58,7 +58,7 @@ func (s *ManagerSuite) TestChecks(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(checks, DeepEquals, []*CheckInfo{
 		{Name: "chk1", Healthy: true},
-		{Name: "chk2", Healthy: true},
+		{Name: "chk2", Healthy: true, Level: "alive"},
 		{Name: "chk3", Healthy: true},
 	})
 
@@ -66,14 +66,14 @@ func (s *ManagerSuite) TestChecks(c *C) {
 	checks, err = mgr.Checks(plan.AliveLevel, nil)
 	c.Assert(err, IsNil)
 	c.Assert(checks, DeepEquals, []*CheckInfo{
-		{Name: "chk2", Healthy: true},
+		{Name: "chk2", Healthy: true, Level: "alive"},
 	})
 
 	// Check names filter works
 	checks, err = mgr.Checks("", []string{"chk3", "chk2"})
 	c.Assert(err, IsNil)
 	c.Assert(checks, DeepEquals, []*CheckInfo{
-		{Name: "chk2", Healthy: true},
+		{Name: "chk2", Healthy: true, Level: "alive"},
 		{Name: "chk3", Healthy: true},
 	})
 
@@ -81,7 +81,7 @@ func (s *ManagerSuite) TestChecks(c *C) {
 	checks, err = mgr.Checks(plan.AliveLevel, []string{"chk3", "chk2"})
 	c.Assert(err, IsNil)
 	c.Assert(checks, DeepEquals, []*CheckInfo{
-		{Name: "chk2", Healthy: true},
+		{Name: "chk2", Healthy: true, Level: "alive"},
 	})
 
 	// Re-configuring should update checks
