@@ -765,10 +765,9 @@ services:
 
 	// Start service and wait till it starts up the first time.
 	chg := s.startServices(c, []string{"test2"}, 1)
-	svc := s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
+	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
 		return svc.Current == servstate.StatusActive
 	})
-	c.Assert(svc, NotNil)
 	c.Assert(s.manager.BackoffNum("test2"), Equals, 0)
 	s.st.Lock()
 	c.Check(chg.Status(), Equals, state.DoneStatus)
@@ -781,14 +780,13 @@ services:
 	c.Assert(err, IsNil)
 
 	// Wait for it to go into backoff state.
-	svc = s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
+	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
 		return svc.Current == servstate.StatusBackoff && s.manager.BackoffNum("test2") == 1
 	})
-	c.Assert(svc, NotNil)
 
 	// Then wait for it to auto-restart (backoff time plus a bit).
 	time.Sleep(75 * time.Millisecond)
-	svc = s.serviceByName(c, "test2")
+	svc := s.serviceByName(c, "test2")
 	c.Assert(svc.Current, Equals, servstate.StatusActive)
 	c.Check(s.logBufferString(), Matches, `2.* \[test2\] test2\n`)
 
@@ -816,10 +814,9 @@ services:
 	c.Assert(err, IsNil)
 
 	// Wait for it to go into backoff state (back to backoff 1 again).
-	svc = s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
+	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
 		return svc.Current == servstate.StatusBackoff && s.manager.BackoffNum("test2") == 1
 	})
-	c.Assert(svc, NotNil)
 
 	// Then wait for it to auto-restart (backoff time plus a bit).
 	time.Sleep(75 * time.Millisecond)
@@ -863,16 +860,15 @@ services:
 	})
 }
 
-func (s *S) waitUntilService(c *C, service string, f func(svc *servstate.ServiceInfo) bool) *servstate.ServiceInfo {
+func (s *S) waitUntilService(c *C, service string, f func(svc *servstate.ServiceInfo) bool) {
 	for i := 0; i < 20; i++ {
 		svc := s.serviceByName(c, service)
 		if f(svc) {
-			return svc
+			return
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
 	c.Fatalf("failed waiting for service")
-	return nil // satisfy compiler
 }
 
 func (s *S) TestExit(c *C) {
