@@ -46,6 +46,7 @@ func (s *ManagerSuite) TestChecks(c *C) {
 			},
 			"chk3": {
 				Name:   "chk3",
+				Level:  "ready",
 				Period: plan.OptionalDuration{Value: time.Second},
 				Exec:   &plan.ExecCheckConfig{Command: "echo chk3"},
 			},
@@ -59,14 +60,22 @@ func (s *ManagerSuite) TestChecks(c *C) {
 	c.Assert(checks, DeepEquals, []*CheckInfo{
 		{Name: "chk1", Healthy: true},
 		{Name: "chk2", Healthy: true, Level: "alive"},
-		{Name: "chk3", Healthy: true},
+		{Name: "chk3", Healthy: true, Level: "ready"},
 	})
 
-	// Level filter works
+	// Level filter "ready" (alive does not necessarily mean ready)
+	checks, err = mgr.Checks(plan.ReadyLevel, nil)
+	c.Assert(err, IsNil)
+	c.Assert(checks, DeepEquals, []*CheckInfo{
+		{Name: "chk3", Healthy: true, Level: "ready"},
+	})
+
+	// Level filter "alive" (a ready check is always alive)
 	checks, err = mgr.Checks(plan.AliveLevel, nil)
 	c.Assert(err, IsNil)
 	c.Assert(checks, DeepEquals, []*CheckInfo{
 		{Name: "chk2", Healthy: true, Level: "alive"},
+		{Name: "chk3", Healthy: true, Level: "ready"},
 	})
 
 	// Check names filter works
@@ -74,14 +83,14 @@ func (s *ManagerSuite) TestChecks(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(checks, DeepEquals, []*CheckInfo{
 		{Name: "chk2", Healthy: true, Level: "alive"},
-		{Name: "chk3", Healthy: true},
+		{Name: "chk3", Healthy: true, Level: "ready"},
 	})
 
 	// If both filters specified, should be an AND
-	checks, err = mgr.Checks(plan.AliveLevel, []string{"chk3", "chk2"})
+	checks, err = mgr.Checks(plan.ReadyLevel, []string{"chk3", "chk2"})
 	c.Assert(err, IsNil)
 	c.Assert(checks, DeepEquals, []*CheckInfo{
-		{Name: "chk2", Healthy: true, Level: "alive"},
+		{Name: "chk3", Healthy: true, Level: "ready"},
 	})
 
 	// Re-configuring should update checks
