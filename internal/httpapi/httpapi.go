@@ -22,14 +22,19 @@ import (
 
 	"github.com/canonical/pebble/internal/logger"
 	"github.com/canonical/pebble/internal/overlord/checkstate"
+	"github.com/canonical/pebble/internal/plan"
 )
 
 type API struct {
-	checkMgr *checkstate.CheckManager
+	checkMgr CheckManager
 	router   *mux.Router
 }
 
-func NewAPI(checkMgr *checkstate.CheckManager) *API {
+type CheckManager interface {
+	Checks(level plan.CheckLevel, names []string) ([]*checkstate.CheckInfo, error)
+}
+
+func NewAPI(checkMgr CheckManager) *API {
 	s := &API{
 		checkMgr: checkMgr,
 		router:   mux.NewRouter(),

@@ -38,17 +38,15 @@ func (a *API) getHealth(w http.ResponseWriter, r *http.Request) {
 	}
 
 	healthy := true
+	status := http.StatusOK
 	for _, check := range checks {
-		levelMatch := level == "" || level == string(check.Level) || (level == "alive" && check.Level == plan.ReadyLevel)
-		if !levelMatch {
-			continue
-		}
 		if !check.Healthy {
 			healthy = false
+			status = http.StatusBadGateway
 		}
 	}
 
-	writeResponse(w, http.StatusOK, healthResponse{Healthy: healthy})
+	writeResponse(w, status, healthResponse{Healthy: healthy})
 }
 
 type healthResponse struct {
