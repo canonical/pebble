@@ -21,7 +21,8 @@ import (
 // ChecksOptions are the filtering options for querying health checks.
 type ChecksOptions struct {
 	// Level is the check level to query for. If this is UnsetLevel (the zero
-	// value), don't filter by level.
+	// value), don't filter by level. Because "ready" implies "alive", if
+	// level is AliveLevel, checks with level "ready" are included too.
 	Level CheckLevel
 
 	// Names is the list of check names to query for. If slice is nil or

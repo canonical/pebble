@@ -31,7 +31,7 @@ type cmdChecks struct {
 }
 
 var checksDescs = map[string]string{
-	"level": "Check level to filter for",
+	"level": `Check level to filter for ("ready" checks are considered "alive")`,
 }
 
 var shortChecksHelp = "Query the status of configured health checks"
