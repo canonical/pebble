@@ -34,6 +34,7 @@ import (
 
 	"github.com/gorilla/mux"
 
+	"github.com/canonical/pebble/internal/httpapi"
 	"github.com/canonical/pebble/internal/logger"
 	"github.com/canonical/pebble/internal/osutil"
 	"github.com/canonical/pebble/internal/osutil/sys"
@@ -60,6 +61,11 @@ type Options struct {
 	// the pebble directory.
 	SocketPath string
 
+	// HTTPAddress is the address for the plain HTTP API server, for example
+	// ":4000" to listen on any address, port 4000. If not set, the HTTP API
+	// server is not started.
+	HTTPAddress string
+
 	// ServiceOuput is an optional io.Writer for the service log output, if set, all services
 	// log output will be written to the writer.
 	ServiceOutput io.Writer
@@ -81,6 +87,10 @@ type Daemon struct {
 	tomb                tomb.Tomb
 	router              *mux.Router
 	standbyOpinions     *standby.StandbyOpinions
+
+	httpAddress  string
+	httpListener net.Listener
+	httpServer   *http.Server
 
 	// set to remember we need to restart the system
 	restartSystem bool
@@ -358,6 +368,15 @@ func (d *Daemon) Init() error {
 
 	d.addRoutes()
 
+	if d.httpAddress != "" {
+		listener, err := net.Listen("tcp", d.httpAddress)
+		if err != nil {
+			return fmt.Errorf("cannot listen on %q: %v", d.httpAddress, err)
+		}
+		d.httpListener = listener
+		logger.Noticef("HTTP API server listening on %q", d.httpAddress)
+	}
+
 	logger.Noticef("Started daemon.")
 	return nil
 }
@@ -468,6 +487,20 @@ func (d *Daemon) Start() {
 		return nil
 	})
 
+	if d.httpListener != nil {
+		// Start regular HTTP API for handling URLs like /v1/health
+		httpAPI := httpapi.NewAPI(d.overlord.CheckManager())
+		d.httpServer = &http.Server{Handler: httpAPI}
+		d.tomb.Go(func() error {
+			logger.Debugf("Starting HTTP API on http://localhost%s", d.httpServer.Addr)
+			err := d.httpServer.Serve(d.httpListener)
+			if err != http.ErrServerClosed && d.tomb.Err() == tomb.ErrStillAlive {
+				return err
+			}
+			return nil
+		})
+	}
+
 	// notify systemd that we are ready
 	systemdSdNotify("READY=1")
 }
@@ -540,7 +573,11 @@ func (d *Daemon) Stop(sigCh chan<- os.Signal) error {
 	// context will likely already have been cancelled when we are
 	// called.
 	ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
-	d.tomb.Kill(d.serve.Shutdown(ctx))
+	err := d.serve.Shutdown(ctx)
+	if err == nil && d.httpServer != nil {
+		err = d.httpServer.Shutdown(ctx)
+	}
+	d.tomb.Kill(err)
 	cancel()
 
 	if !restartSystem {
@@ -563,7 +600,7 @@ func (d *Daemon) Stop(sigCh chan<- os.Signal) error {
 	}
 	d.overlord.Stop()
 
-	err := d.tomb.Wait()
+	err = d.tomb.Wait()
 	if err != nil {
 		// do not stop the shutdown even if the tomb errors
 		// because we already scheduled a slow shutdown and
@@ -700,6 +737,7 @@ func New(opts *Options) (*Daemon, error) {
 		pebbleDir:           opts.Dir,
 		normalSocketPath:    opts.SocketPath,
 		untrustedSocketPath: opts.SocketPath + ".untrusted",
+		httpAddress:         opts.HTTPAddress,
 	}
 
 	ovld, err := overlord.New(opts.Dir, d, opts.ServiceOutput)
