@@ -44,7 +44,7 @@ type cmdLogs struct {
 var logsDescs = map[string]string{
 	"follow": "Follow (tail) logs for given services until Ctrl-C pressed.",
 	"format": "Output format: \"text\" (default) or \"json\" (JSON lines).",
-	"n":      "Number of logs to show (before following); defaults to 10.\nIf 'all', show all buffered logs.",
+	"n":      "Number of logs to show (before following); defaults to 30.\nIf 'all', show all buffered logs.",
 }
 
 var shortLogsHelp = "Fetch service logs"
@@ -57,9 +57,9 @@ func (cmd *cmdLogs) Execute(args []string) error {
 	var n int
 	switch cmd.N {
 	case "":
-		n = 10
+		n = 30
 	case "all":
-		n = client.AllLogs
+		n = -1
 	default:
 		var err error
 		n, err = strconv.Atoi(cmd.N)

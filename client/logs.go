@@ -27,22 +27,21 @@ import (
 )
 
 const (
-	AllLogs = -1
-
 	logReaderSize = 4 * 1024
 )
 
 // LogsOptions holds the options for a call to Logs or FollowLogs.
 type LogsOptions struct {
-	// Function called to write a single log to the output (required).
+	// WriteLog is called to write a single log to the output (required).
 	WriteLog func(entry LogEntry) error
 
-	// The list of service names to fetch logs for (nil or empty slice means
-	// all services).
+	// Services is the list of service names to fetch logs for (nil or empty
+	// slice means all services).
 	Services []string
 
-	// Number of logs to fetch (before following if calling FollowLogs). To
-	// fetch all buffered logs, set N to AllLogs.
+	// N defines the number of log lines to return from the buffer. In follow
+	// mode, the default is zero, in non-follow mode it's server-defined
+	// (currently 30). Set to -1 to return the entire buffer.
 	N int
 }
 
@@ -69,7 +68,9 @@ func (client *Client) logs(ctx context.Context, opts *LogsOptions, follow bool) 
 	for _, service := range opts.Services {
 		query.Add("services", service)
 	}
-	query.Set("n", strconv.Itoa(opts.N))
+	if opts.N != 0 {
+		query.Set("n", strconv.Itoa(opts.N))
+	}
 	if follow {
 		query.Set("follow", "true")
 	}

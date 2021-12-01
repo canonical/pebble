@@ -95,7 +95,11 @@ func (s *logsSuite) TestInvalidFollow(c *C) {
 func (s *logsSuite) TestInvalidN(c *C) {
 	rec := s.recordResponse(c, "/v1/logs?n=nan", nil)
 	c.Assert(rec.Code, Equals, http.StatusBadRequest)
-	checkError(c, rec.Body.Bytes(), http.StatusBadRequest, `n must be a valid integer`)
+	checkError(c, rec.Body.Bytes(), http.StatusBadRequest, `n must be -1, 0, or a positive integer`)
+
+	rec = s.recordResponse(c, "/v1/logs?n=-2", nil)
+	c.Assert(rec.Code, Equals, http.StatusBadRequest)
+	checkError(c, rec.Body.Bytes(), http.StatusBadRequest, `n must be -1, 0, or a positive integer`)
 }
 
 func (s *logsSuite) TestServicesError(c *C) {
@@ -119,7 +123,7 @@ func (s *logsSuite) TestServiceLogsError(c *C) {
 func (s *logsSuite) TestOneServiceDefaults(c *C) {
 	rb := servicelog.NewRingBuffer(4096)
 	lw := servicelog.NewFormatWriter(rb, "nginx")
-	for i := 0; i < 12; i++ {
+	for i := 0; i < 32; i++ {
 		fmt.Fprintf(lw, "message %d\n", i)
 	}
 	fmt.Fprintf(lw, "truncated")
@@ -133,13 +137,13 @@ func (s *logsSuite) TestOneServiceDefaults(c *C) {
 	c.Assert(rec.Code, Equals, http.StatusOK)
 
 	logs := decodeLogs(c, rec.Body)
-	c.Assert(logs, HasLen, 10)
-	for i := 0; i < 9; i++ {
+	c.Assert(logs, HasLen, 30)
+	for i := 0; i < 29; i++ {
 		checkLog(c, logs[i], "nginx", fmt.Sprintf("message %d", i+3))
 	}
-	c.Check(logs[9].Time, Not(Equals), time.Time{})
-	c.Check(logs[9].Service, Equals, "nginx")
-	c.Check(logs[9].Message, Equals, "truncated")
+	c.Check(logs[29].Time, Not(Equals), time.Time{})
+	c.Check(logs[29].Service, Equals, "nginx")
+	c.Check(logs[29].Message, Equals, "truncated")
 }
 
 func (s *logsSuite) TestOneServiceWithN(c *C) {
@@ -259,7 +263,7 @@ func (s *logsSuite) TestMultipleServicesN(c *C) {
 	rb2 := servicelog.NewRingBuffer(4096)
 	lw1 := servicelog.NewFormatWriter(rb1, "one")
 	lw2 := servicelog.NewFormatWriter(rb2, "two")
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 30; i++ {
 		fmt.Fprintf(lw1, "message1 %d\n", i)
 		time.Sleep(time.Millisecond)
 		fmt.Fprintf(lw2, "message2 %d\n", i)
@@ -276,10 +280,10 @@ func (s *logsSuite) TestMultipleServicesN(c *C) {
 	c.Assert(rec.Code, Equals, http.StatusOK)
 
 	logs := decodeLogs(c, rec.Body)
-	c.Assert(logs, HasLen, 10)
-	for i := 0; i < 5; i++ {
-		checkLog(c, logs[i*2], "one", fmt.Sprintf("message1 %d", 5+i))
-		checkLog(c, logs[i*2+1], "two", fmt.Sprintf("message2 %d", 5+i))
+	c.Assert(logs, HasLen, 30)
+	for i := 0; i < 15; i++ {
+		checkLog(c, logs[i*2], "one", fmt.Sprintf("message1 %d", 15+i))
+		checkLog(c, logs[i*2+1], "two", fmt.Sprintf("message2 %d", 15+i))
 	}
 }
 
@@ -392,7 +396,7 @@ func (s *logsSuite) TestMultipleServicesFollow(c *C) {
 
 	// Start a cancellable request
 	ctx, cancel := context.WithCancel(context.Background())
-	req, err := http.NewRequestWithContext(ctx, "GET", "/v1/logs?follow=true", nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", "/v1/logs?follow=true&n=2", nil)
 	c.Assert(err, IsNil)
 	rsp := logsResponse{svcMgr: svcMgr}
 

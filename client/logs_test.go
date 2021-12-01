@@ -39,7 +39,7 @@ func (cs *clientSuite) TestLogsNoOptions(c *check.C) {
 	c.Assert(err, check.IsNil)
 	c.Check(cs.req.Method, check.Equals, "GET")
 	c.Check(cs.req.URL.Path, check.Equals, "/v1/logs")
-	c.Check(cs.req.URL.Query(), check.DeepEquals, url.Values{"n": []string{"0"}})
+	c.Check(cs.req.URL.Query(), check.HasLen, 0)
 	c.Check(out.String(), check.Equals, `
 2021-05-03T03:55:49.360Z [thing] log 1
 2021-05-03T03:55:49.654Z [snappass] log two
@@ -55,14 +55,12 @@ func (cs *clientSuite) TestLogsServices(c *check.C) {
 	err := cs.cli.Logs(&client.LogsOptions{
 		WriteLog: writeLog,
 		Services: []string{"snappass"},
-		N:        10,
 	})
 	c.Assert(err, check.IsNil)
 	c.Check(cs.req.Method, check.Equals, "GET")
 	c.Check(cs.req.URL.Path, check.Equals, "/v1/logs")
 	c.Check(cs.req.URL.Query(), check.DeepEquals, url.Values{
 		"services": []string{"snappass"},
-		"n":        []string{"10"},
 	})
 	c.Check(out.String(), check.Equals, `
 2021-05-03T03:55:49.654Z [snappass] log two
@@ -77,7 +75,7 @@ func (cs *clientSuite) TestLogsAll(c *check.C) {
 	out, writeLog := makeLogWriter()
 	err := cs.cli.Logs(&client.LogsOptions{
 		WriteLog: writeLog,
-		N:        client.AllLogs,
+		N:        -1,
 	})
 	c.Assert(err, check.IsNil)
 	c.Check(cs.req.Method, check.Equals, "GET")
@@ -100,7 +98,6 @@ func (cs *clientSuite) TestFollowLogs(c *check.C) {
 		c.Check(req.URL.Path, check.Equals, "/v1/logs")
 		c.Check(req.URL.Query(), check.DeepEquals, url.Values{
 			"follow": []string{"true"},
-			"n":      []string{"0"},
 		})
 		rsp := &http.Response{
 			Body:       &followReader{readsChan},
