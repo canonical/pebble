@@ -67,6 +67,28 @@ func (cs *clientSuite) TestLogsServices(c *check.C) {
 `[1:])
 }
 
+func (cs *clientSuite) TestLogsN(c *check.C) {
+	cs.rsp = `
+{"time":"2021-05-03T03:55:49.360994155Z","service":"thing","message":"log 1\n"}
+{"time":"2021-05-03T03:55:49.654334232Z","service":"snappass","message":"log two\n"}
+`[1:]
+	out, writeLog := makeLogWriter()
+	err := cs.cli.Logs(&client.LogsOptions{
+		WriteLog: writeLog,
+		N:        2,
+	})
+	c.Assert(err, check.IsNil)
+	c.Check(cs.req.Method, check.Equals, "GET")
+	c.Check(cs.req.URL.Path, check.Equals, "/v1/logs")
+	c.Check(cs.req.URL.Query(), check.DeepEquals, url.Values{
+		"n": []string{"2"},
+	})
+	c.Check(out.String(), check.Equals, `
+2021-05-03T03:55:49.360Z [thing] log 1
+2021-05-03T03:55:49.654Z [snappass] log two
+`[1:])
+}
+
 func (cs *clientSuite) TestLogsAll(c *check.C) {
 	cs.rsp = `
 {"time":"2021-05-03T03:55:49.360994155Z","service":"thing","message":"log 1\n"}
