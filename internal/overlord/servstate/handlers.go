@@ -499,14 +499,18 @@ func getAction(config *plan.Service, success bool) (action plan.ServiceAction, o
 func (s *serviceData) sendSignal(signal string) error {
 	switch s.state {
 	case stateStarting, stateRunning:
+		sig := unix.SignalNum(signal)
+		if sig == 0 {
+			return fmt.Errorf("invalid signal name %q", signal)
+		}
 		logger.Noticef("Sending %s to service %q", signal, s.config.Name)
-		err := syscall.Kill(-s.cmd.Process.Pid, unix.SignalNum(signal))
+		err := syscall.Kill(-s.cmd.Process.Pid, sig)
 		if err != nil {
 			return err
 		}
 
 	case stateBackoff, stateTerminating, stateKilling, stateStopped:
-		return fmt.Errorf("cannot send signal while service is stopped or stopping")
+		return fmt.Errorf("service is not running")
 
 	default:
 		return fmt.Errorf("sending signal invalid in state %q", s.state)

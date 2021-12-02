@@ -410,11 +410,13 @@ func (m *ServiceManager) SendSignal(services []string, signal string) error {
 	for _, name := range services {
 		s := m.services[name]
 		if s == nil {
+			errors = append(errors, fmt.Sprintf("cannot send signal to %q: service is not running", name))
 			continue
 		}
 		err := s.sendSignal(signal)
 		if err != nil {
 			errors = append(errors, fmt.Sprintf("cannot send signal to %q: %v", name, err))
+			continue
 		}
 	}
 	if len(errors) > 0 {
