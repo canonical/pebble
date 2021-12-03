@@ -47,7 +47,7 @@ func (cmd *cmdSignal) Execute(args []string) error {
 	if !strings.HasPrefix(cmd.Positional.Signal, "SIG") {
 		cmd.Positional.Signal = "SIG" + cmd.Positional.Signal
 	}
-	opts := client.SignalsOptions{
+	opts := client.SendSignalOptions{
 		Signal:   cmd.Positional.Signal,
 		Services: cmd.Positional.Services,
 	}

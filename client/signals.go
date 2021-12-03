@@ -20,14 +20,14 @@ import (
 	"fmt"
 )
 
-// SignalsOptions describe the options for SendSignal.
-type SignalsOptions struct {
+// SendSignalOptions holds the options for SendSignal.
+type SendSignalOptions struct {
 	Signal   string
 	Services []string
 }
 
 // SendSignal sends a signal to each of the specified services.
-func (client *Client) SendSignal(opts *SignalsOptions) error {
+func (client *Client) SendSignal(opts *SendSignalOptions) error {
 	var body bytes.Buffer
 	payload := signalsPayload{
 		Signal:   opts.Signal,

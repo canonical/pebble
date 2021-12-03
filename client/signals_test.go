@@ -29,7 +29,7 @@ func (cs *clientSuite) TestSignals(c *C) {
 		"status-code": 200,
 		"type": "sync"
 	}`
-	err := cs.cli.SendSignal(&client.SignalsOptions{
+	err := cs.cli.SendSignal(&client.SendSignalOptions{
 		Signal:   "SIGHUP",
 		Services: []string{"s1", "s2"},
 	})
