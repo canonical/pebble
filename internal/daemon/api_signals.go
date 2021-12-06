@@ -30,7 +30,7 @@ func v1PostSignals(c *Command, req *http.Request, _ *userState) Response {
 	if err := decoder.Decode(&payload); err != nil {
 		return statusBadRequest("cannot decode request body: %v", err)
 	}
-	if len(payload.Services) <= 0 {
+	if len(payload.Services) == 0 {
 		return statusBadRequest("must specify one or more services")
 	}
 
