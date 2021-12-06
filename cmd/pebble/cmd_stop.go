@@ -33,7 +33,7 @@ type cmdStop struct {
 }
 
 func init() {
-	addCommand("stop", shortStopHelp, longStopHelp, func() flags.Commander { return &cmdStop{} }, nil, nil)
+	addCommand("stop", shortStopHelp, longStopHelp, func() flags.Commander { return &cmdStop{} }, waitDescs, nil)
 }
 
 func (cmd cmdStop) Execute(args []string) error {
