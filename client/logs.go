@@ -30,18 +30,19 @@ const (
 	logReaderSize = 4 * 1024
 )
 
+// LogsOptions holds the options for a call to Logs or FollowLogs.
 type LogsOptions struct {
-	// Function called to write a single log to the output (required).
+	// WriteLog is called to write a single log to the output (required).
 	WriteLog func(entry LogEntry) error
 
-	// The list of service names to fetch logs for (nil or empty slice means
-	// all services).
+	// Services is the list of service names to fetch logs for (nil or empty
+	// slice means all services).
 	Services []string
 
-	// Total number of logs to fetch (before following if calling FollowLogs).
-	// If nil, use Pebble's default (10). If negative, fetch all buffered logs.
-	// If set to zero when calling FollowLogs, write no logs before following.
-	N *int
+	// N defines the number of log lines to return from the buffer. In follow
+	// mode, the default is zero, in non-follow mode it's server-defined
+	// (currently 30). Set to -1 to return the entire buffer.
+	N int
 }
 
 // LogEntry is the struct passed to the WriteLog function.
@@ -67,8 +68,8 @@ func (client *Client) logs(ctx context.Context, opts *LogsOptions, follow bool) 
 	for _, service := range opts.Services {
 		query.Add("services", service)
 	}
-	if opts.N != nil {
-		query.Set("n", strconv.Itoa(*opts.N))
+	if opts.N != 0 {
+		query.Set("n", strconv.Itoa(opts.N))
 	}
 	if follow {
 		query.Set("follow", "true")

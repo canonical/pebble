@@ -31,7 +31,7 @@ import (
 )
 
 const (
-	defaultNumLogs = 10
+	defaultNumLogs = 30
 	logReaderSize  = 4 * 1024
 )
 
@@ -65,16 +65,20 @@ func (r logsResponse) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 	follow := followStr == "true"
 
-	numLogs := defaultNumLogs
+	var numLogs int
 	nStr := query.Get("n")
 	if nStr != "" {
 		n, err := strconv.Atoi(nStr)
-		if err != nil {
-			response := statusBadRequest("n must be a valid integer")
+		if err != nil || n < -1 {
+			response := statusBadRequest("n must be -1, 0, or a positive integer")
 			response.ServeHTTP(w, req)
 			return
 		}
 		numLogs = n
+	} else if follow {
+		numLogs = 0
+	} else {
+		numLogs = defaultNumLogs
 	}
 
 	// If "services" parameter not specified, fetch logs for all services.
