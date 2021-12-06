@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/canonical/pebble/internal/overlord/restart"
 	"github.com/canonical/pebble/internal/overlord/state"
 	"github.com/canonical/pebble/internal/plan"
 	"github.com/canonical/pebble/internal/servicelog"
@@ -33,7 +34,7 @@ type ServiceManager struct {
 }
 
 type Restarter interface {
-	HandleRestart(t state.RestartType)
+	HandleRestart(t restart.RestartType)
 }
 
 // LabelExists is the error returned by AppendLayer when a layer with that

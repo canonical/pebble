@@ -26,10 +26,10 @@ import (
 
 	"gopkg.in/tomb.v2"
 
-	"github.com/canonical/pebble/internal/logger"
 	"github.com/canonical/pebble/internal/osutil"
 	"github.com/canonical/pebble/internal/overlord/cmdstate"
 	"github.com/canonical/pebble/internal/overlord/patch"
+	"github.com/canonical/pebble/internal/overlord/restart"
 	"github.com/canonical/pebble/internal/overlord/servstate"
 	"github.com/canonical/pebble/internal/overlord/state"
 	"github.com/canonical/pebble/internal/strutil"
@@ -47,20 +47,6 @@ var (
 	defaultCachedDownloads = 5
 )
 
-// RestartBehavior controls how to handle and carry forward restart requests
-// via the state.
-type RestartBehavior interface {
-	HandleRestart(t state.RestartType)
-
-	// RebootIsFine is called early when either a reboot was
-	// requested and happened or no reboot was expected at all.
-	RebootIsFine(st *state.State) error
-
-	// RebootIsMissing is called early instead when a reboot was
-	// requested but did not happen.
-	RebootIsMissing(st *state.State) error
-}
-
 // Overlord is the central manager of the system, keeping track
 // of all available state managers and related helpers.
 type Overlord struct {
@@ -75,9 +61,6 @@ type Overlord struct {
 	ensureRun   int32
 	pruneTicker *time.Ticker
 
-	// restarts
-	restartBehavior RestartBehavior
-
 	// managers
 	inited     bool
 	runner     *state.TaskRunner
@@ -86,13 +69,12 @@ type Overlord struct {
 }
 
 // New creates a new Overlord with all its state managers.
-// It can be provided with an optional RestartBehavior.
-func New(pebbleDir string, restartBehavior RestartBehavior, serviceOutput io.Writer) (*Overlord, error) {
+// It can be provided with an optional restart.Handler.
+func New(pebbleDir string, restartHandler restart.Handler, serviceOutput io.Writer) (*Overlord, error) {
 	o := &Overlord{
-		pebbleDir:       pebbleDir,
-		loopTomb:        new(tomb.Tomb),
-		inited:          true,
-		restartBehavior: restartBehavior,
+		pebbleDir: pebbleDir,
+		loopTomb:  new(tomb.Tomb),
+		inited:    true,
 	}
 
 	if !filepath.IsAbs(pebbleDir) {
@@ -104,11 +86,10 @@ func New(pebbleDir string, restartBehavior RestartBehavior, serviceOutput io.Wri
 	statePath := filepath.Join(pebbleDir, ".pebble.state")
 
 	backend := &overlordStateBackend{
-		path:           statePath,
-		ensureBefore:   o.ensureBefore,
-		requestRestart: o.requestRestart,
+		path:         statePath,
+		ensureBefore: o.ensureBefore,
 	}
-	s, err := loadState(statePath, restartBehavior, backend)
+	s, err := loadState(statePath, restartHandler, backend)
 	if err != nil {
 		return nil, err
 	}
@@ -122,7 +103,7 @@ func New(pebbleDir string, restartBehavior RestartBehavior, serviceOutput io.Wri
 	}
 	o.runner.AddOptionalHandler(matchAnyUnknownTask, handleUnknownTask, nil)
 
-	o.serviceMgr, err = servstate.NewManager(s, o.runner, o.pebbleDir, serviceOutput, restartBehavior)
+	o.serviceMgr, err = servstate.NewManager(s, o.runner, o.pebbleDir, serviceOutput, restartHandler)
 	if err != nil {
 		return nil, err
 	}
@@ -141,7 +122,7 @@ func (o *Overlord) addManager(mgr StateManager) {
 	o.stateEng.AddManager(mgr)
 }
 
-func loadState(statePath string, restartBehavior RestartBehavior, backend state.Backend) (*state.State, error) {
+func loadState(statePath string, restartHandler restart.Handler, backend state.Backend) (*state.State, error) {
 	timings := timing.Start("", "", map[string]string{"startup": "load-state"})
 
 	curBootID, err := osutil.BootID()
@@ -167,9 +148,7 @@ func loadState(statePath string, restartBehavior RestartBehavior, backend state.
 			return nil, fmt.Errorf("fatal: directory %q must be present", stateDir)
 		}
 		s := state.New(backend)
-		s.Lock()
-		s.VerifyReboot(curBootID)
-		s.Unlock()
+		initRestart(s, curBootID, restartHandler)
 		patch.Init(s)
 		return s, nil
 	}
@@ -194,7 +173,7 @@ func loadState(statePath string, restartBehavior RestartBehavior, backend state.
 	//perfTimings.Save(s)
 	//s.Unlock()
 
-	err = verifyReboot(s, curBootID, restartBehavior)
+	err = initRestart(s, curBootID, restartHandler)
 	if err != nil {
 		return nil, err
 	}
@@ -207,24 +186,10 @@ func loadState(statePath string, restartBehavior RestartBehavior, backend state.
 	return s, nil
 }
 
-func verifyReboot(s *state.State, curBootID string, restartBehavior RestartBehavior) error {
+func initRestart(s *state.State, curBootID string, restartHandler restart.Handler) error {
 	s.Lock()
 	defer s.Unlock()
-	err := s.VerifyReboot(curBootID)
-	if err != nil && err != state.ErrExpectedReboot {
-		return err
-	}
-	rebootMissing := err == state.ErrExpectedReboot
-	if restartBehavior != nil {
-		if rebootMissing {
-			return restartBehavior.RebootIsMissing(s)
-		}
-		return restartBehavior.RebootIsFine(s)
-	}
-	if rebootMissing {
-		logger.Noticef("expected system reboot but it did not happen")
-	}
-	return nil
+	return restart.Init(s, curBootID, restartHandler)
 }
 
 func (o *Overlord) ensureTimerSetup() {
@@ -266,14 +231,6 @@ func (o *Overlord) ensureBefore(d time.Duration) {
 		}
 		o.ensureTimer.Reset(0)
 		o.ensureNext = now
-	}
-}
-
-func (o *Overlord) requestRestart(t state.RestartType) {
-	if o.restartBehavior == nil {
-		logger.Noticef("restart requested but no behavior set")
-	} else {
-		o.restartBehavior.HandleRestart(t)
 	}
 }
 
@@ -437,18 +394,16 @@ func (o *Overlord) CommandManager() *cmdstate.CommandManager {
 // Fake creates an Overlord without any managers and with a backend
 // not using disk. Managers can be added with AddManager. For testing.
 func Fake() *Overlord {
-	return FakeWithRestartHandler(nil)
+	return FakeWithState(nil)
 }
 
-// FakeWithRestartHandler creates an Overlord without any managers and
-// with a backend not using disk. It will use the given handler on
-// restart requests. Managers can be added with AddManager. For
+// FakeWithState creates an Overlord without any managers and
+// with a backend not using disk. Managers can be added with AddManager. For
 // testing.
-func FakeWithRestartHandler(handleRestart func(state.RestartType)) *Overlord {
+func FakeWithState(handleRestart func(restart.RestartType)) *Overlord {
 	o := &Overlord{
-		loopTomb:        new(tomb.Tomb),
-		inited:          false,
-		restartBehavior: fakeRestartBehavior(handleRestart),
+		loopTomb: new(tomb.Tomb),
+		inited:   false,
 	}
 	s := state.New(fakeBackend{o: o})
 	o.stateEng = NewStateEngine(s)
@@ -463,23 +418,6 @@ func (o *Overlord) AddManager(mgr StateManager) {
 		panic("internal error: cannot add managers to a fully initialized Overlord")
 	}
 	o.addManager(mgr)
-}
-
-type fakeRestartBehavior func(state.RestartType)
-
-func (rb fakeRestartBehavior) HandleRestart(t state.RestartType) {
-	if rb == nil {
-		return
-	}
-	rb(t)
-}
-
-func (rb fakeRestartBehavior) RebootIsFine(*state.State) error {
-	panic("internal error: overlord.Fake should not invoke RebootIsFine")
-}
-
-func (rb fakeRestartBehavior) RebootIsMissing(*state.State) error {
-	panic("internal error: overlord.Fake should not invoke RebootIsMissing")
 }
 
 type fakeBackend struct {
@@ -501,6 +439,6 @@ func (mb fakeBackend) EnsureBefore(d time.Duration) {
 	mb.o.ensureBefore(d)
 }
 
-func (mb fakeBackend) RequestRestart(t state.RestartType) {
-	mb.o.requestRestart(t)
+func (mb fakeBackend) RequestRestart(t restart.RestartType) {
+	panic("SHOULD NOT BE REACHED")
 }

@@ -39,8 +39,6 @@ import (
 type Backend interface {
 	Checkpoint(data []byte) error
 	EnsureBefore(d time.Duration)
-	// TODO: take flags to ask for reboot vs restart?
-	RequestRestart(t RestartType)
 }
 
 type customData map[string]*json.RawMessage
@@ -74,17 +72,6 @@ func (data customData) set(key string, value interface{}) {
 	data[key] = &entryJSON
 }
 
-type RestartType int
-
-const (
-	RestartUnset RestartType = iota
-	RestartDaemon
-	RestartSystem
-	// RestartSocket will restart the daemon so that it goes into
-	// socket activation mode.
-	RestartSocket
-)
-
 // State represents an evolving system state that persists across restarts.
 //
 // The State is concurrency-safe, and all reads and writes to it must be
@@ -110,10 +97,6 @@ type State struct {
 	modified bool
 
 	cache map[interface{}]interface{}
-
-	restarting RestartType
-	restartLck sync.Mutex
-	bootID     string
 }
 
 // New returns a new empty state.
@@ -253,90 +236,6 @@ func (s *State) EnsureBefore(d time.Duration) {
 	if s.backend != nil {
 		s.backend.EnsureBefore(d)
 	}
-}
-
-// FIXME The whole point of having a RestartBehavior was to not make the
-//       state responsible for the detail of system restarts, as that's
-//       way too far from state management. Much of the logic below went
-//       too far and should not be here. That's why we have a backend.
-
-// RequestRestart asks for a restart of the managing process.
-// The state needs to be locked to request a RestartSystem.
-func (s *State) RequestRestart(t RestartType) {
-	if s.backend != nil {
-		if t == RestartSystem {
-			// FIXME See note above. Please clean this up. We have
-			// the state package, the overlord, and the dameon
-			// package, all fiddling with restart state. This is
-			// about orchestration of restarts, so should all be
-			// centralized via the ovelord.
-			if s.bootID == "" {
-				panic("internal error: cannot request a system restart if current boot ID was not provided via VerifyReboot")
-			}
-			s.Set("system-restart-from-boot-id", s.bootID)
-		}
-		s.restartLck.Lock()
-		s.restarting = t
-		s.restartLck.Unlock()
-		s.backend.RequestRestart(t)
-	}
-}
-
-// Restarting returns whether a restart was requested with RequestRestart and of which type.
-func (s *State) Restarting() (bool, RestartType) {
-	s.restartLck.Lock()
-	defer s.restartLck.Unlock()
-	return s.restarting != RestartUnset, s.restarting
-}
-
-var ErrExpectedReboot = errors.New("expected reboot did not happen")
-
-// VerifyReboot checks if the state remembers that a system restart was
-// requested and whether it succeeded based on the provided current
-// boot id.  It returns ErrExpectedReboot if the expected reboot did
-// not happen yet.  It must be called early in the usage of state and
-// before an RequestRestart with RestartSystem is attempted.
-// It must be called with the state lock held.
-func (s *State) VerifyReboot(curBootID string) error {
-	var fromBootID string
-	err := s.Get("system-restart-from-boot-id", &fromBootID)
-	if err != nil && err != ErrNoState {
-		return err
-	}
-	s.bootID = curBootID
-	if fromBootID == "" {
-		return nil
-	}
-	if fromBootID == curBootID {
-		return ErrExpectedReboot
-	}
-	// we rebooted alright
-	s.ClearReboot()
-	return nil
-}
-
-// BootID returns the current boot id set by VerifyReboot.
-func (s *State) BootID() string {
-	s.reading()
-	return s.bootID
-}
-
-// ClearReboot clears state information about tracking requested reboots.
-func (s *State) ClearReboot() {
-	// FIXME See notes above. Please clean this up. We have
-	// the state package, the overlord, and the dameon
-	// package, all fiddling with restart state. This is
-	// about orchestration of restarts, so should all be
-	// centralized via the ovelord.
-	s.Set("system-restart-from-boot-id", nil)
-}
-
-func FakeRestarting(s *State, restarting RestartType) RestartType {
-	s.restartLck.Lock()
-	defer s.restartLck.Unlock()
-	old := s.restarting
-	s.restarting = restarting
-	return old
 }
 
 // ErrNoState represents the case of no state entry for a given key.

@@ -20,6 +20,7 @@ import (
 	"github.com/gorilla/mux"
 
 	"github.com/canonical/pebble/internal/overlord"
+	"github.com/canonical/pebble/internal/overlord/restart"
 	"github.com/canonical/pebble/internal/overlord/state"
 )
 
@@ -111,7 +112,7 @@ func v1SystemInfo(c *Command, r *http.Request, _ *userState) Response {
 	defer state.Unlock()
 	result := map[string]interface{}{
 		"version": c.d.Version,
-		"boot-id": state.BootID(),
+		"boot-id": restart.BootID(state),
 	}
 	return SyncResponse(result)
 }

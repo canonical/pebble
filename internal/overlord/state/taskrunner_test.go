@@ -31,6 +31,7 @@ import (
 	. "gopkg.in/check.v1"
 	"gopkg.in/tomb.v2"
 
+	"github.com/canonical/pebble/internal/overlord/restart"
 	"github.com/canonical/pebble/internal/overlord/state"
 )
 
@@ -57,7 +58,7 @@ func (b *stateBackend) EnsureBefore(d time.Duration) {
 	}
 }
 
-func (b *stateBackend) RequestRestart(t state.RestartType) {}
+func (b *stateBackend) RequestRestart(t restart.RestartType) {}
 
 func ensureChange(c *C, r *state.TaskRunner, sb *stateBackend, chg *state.Change) {
 	for i := 0; i < 20; i++ {
