@@ -26,7 +26,7 @@ import (
 type cmdSignal struct {
 	clientMixin
 	Positional struct {
-		Signal   string   `positional-arg-name:"<SIGNAME>"`
+		Signal   string   `positional-arg-name:"<SIGNAL>"`
 		Services []string `positional-arg-name:"<service>"`
 	} `positional-args:"yes" required:"yes"`
 }
@@ -34,10 +34,9 @@ type cmdSignal struct {
 var shortSignalHelp = "Send a signal to one or more running services"
 var longSignalHelp = `
 The signal command sends a signal to one or more running services. The signal
-name must be uppercase to distinguish it from the service names, for example:
+name must be uppercase, for example:
 
 pebble signal HUP mysql nginx
-pebble signal SIGHUP mysql nginx    # full signal name is fine too
 `
 
 func (cmd *cmdSignal) Execute(args []string) error {

@@ -166,25 +166,29 @@ type helpCategory struct {
 
 // helpCategories helps us by grouping commands
 var helpCategories = []helpCategory{{
-	Label:       "Basics",
-	Description: "basic management",
-	Commands:    []string{"run", "exec"},
+	Label:       "Run",
+	Description: "run pebble",
+	Commands:    []string{"run", "help", "version"},
+}, {
+	Label:       "Plan",
+	Description: "view and change configuration",
+	Commands:    []string{"add", "plan"},
 }, {
 	Label:       "Services",
-	Description: "service management",
-	Commands:    []string{"autostart", "start", "stop", "restart", "services", "logs", "signal"},
+	Description: "manage services",
+	Commands:    []string{"services", "logs", "start", "restart", "signal", "stop", "replan"},
 }, {
-	Label:       "Configuration",
-	Description: "manage configuration",
-	Commands:    []string{"add", "plan", "replan"},
+	Label:       "Operations",
+	Description: "other operations",
+	Commands:    []string{"exec"}, // TODO: "checks" would go here
 }, {
 	Label:       "Changes",
-	Description: "view changes and tasks",
+	Description: "manage changes and their tasks",
 	Commands:    []string{"changes", "tasks"},
 }, {
-	Label:       "Other",
-	Description: "other commands",
-	Commands:    []string{"warnings", "okay", "help", "version"},
+	Label:       "Warnings",
+	Description: "manage warnings",
+	Commands:    []string{"warnings", "okay"},
 }}
 
 var (

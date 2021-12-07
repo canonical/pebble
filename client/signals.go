@@ -20,7 +20,6 @@ import (
 	"fmt"
 )
 
-// SendSignalOptions holds the options for SendSignal.
 type SendSignalOptions struct {
 	Signal   string
 	Services []string
