@@ -504,7 +504,7 @@ func (s *serviceData) sendSignal(signal string) error {
 			return fmt.Errorf("invalid signal name %q", signal)
 		}
 		logger.Noticef("Sending %s to service %q", signal, s.config.Name)
-		err := syscall.Kill(-s.cmd.Process.Pid, sig)
+		err := syscall.Kill(s.cmd.Process.Pid, sig)
 		if err != nil {
 			return err
 		}
@@ -513,7 +513,7 @@ func (s *serviceData) sendSignal(signal string) error {
 		return fmt.Errorf("service is not running")
 
 	default:
-		return fmt.Errorf("sending signal invalid in state %q", s.state)
+		return fmt.Errorf("invalid in state %q", s.state)
 	}
 	return nil
 }

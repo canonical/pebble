@@ -757,6 +757,7 @@ func (s *S) TestRestart(c *C) {
 services:
     test2:
         override: merge
+        command: /bin/sh -c "echo test2; exec sleep 300"
         backoff-delay: 50ms
         backoff-limit: 150ms
 `)
