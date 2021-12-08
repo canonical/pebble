@@ -15,8 +15,9 @@
 package main
 
 import (
-	"github.com/canonical/pebble/client"
 	"github.com/jessevdk/go-flags"
+
+	"github.com/canonical/pebble/client"
 )
 
 var shortAutoStartHelp = "Start services set to start by default"
