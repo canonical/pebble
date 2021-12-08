@@ -178,9 +178,9 @@ var helpCategories = []helpCategory{{
 	Description: "manage services",
 	Commands:    []string{"services", "logs", "start", "restart", "signal", "stop", "replan"},
 }, {
-	Label:       "Operations",
-	Description: "other operations",
-	Commands:    []string{"exec"}, // TODO: "checks" would go here
+	Label:       "Files",
+	Description: "work with files and execute commands",
+	Commands:    []string{"exec"},
 }, {
 	Label:       "Changes",
 	Description: "manage changes and their tasks",
