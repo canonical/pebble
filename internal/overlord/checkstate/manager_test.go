@@ -54,42 +54,11 @@ func (s *ManagerSuite) TestChecks(c *C) {
 	})
 	defer stopChecks(c, mgr)
 
-	// Returns all checks with no filters
-	checks, err := mgr.Checks("", nil)
+	checks, err := mgr.Checks()
 	c.Assert(err, IsNil)
 	c.Assert(checks, DeepEquals, []*CheckInfo{
 		{Name: "chk1", Healthy: true},
 		{Name: "chk2", Healthy: true, Level: "alive"},
-		{Name: "chk3", Healthy: true, Level: "ready"},
-	})
-
-	// Level filter "ready" (alive does not necessarily mean ready)
-	checks, err = mgr.Checks(plan.ReadyLevel, nil)
-	c.Assert(err, IsNil)
-	c.Assert(checks, DeepEquals, []*CheckInfo{
-		{Name: "chk3", Healthy: true, Level: "ready"},
-	})
-
-	// Level filter "alive" (a ready check is always alive)
-	checks, err = mgr.Checks(plan.AliveLevel, nil)
-	c.Assert(err, IsNil)
-	c.Assert(checks, DeepEquals, []*CheckInfo{
-		{Name: "chk2", Healthy: true, Level: "alive"},
-		{Name: "chk3", Healthy: true, Level: "ready"},
-	})
-
-	// Check names filter works
-	checks, err = mgr.Checks("", []string{"chk3", "chk2"})
-	c.Assert(err, IsNil)
-	c.Assert(checks, DeepEquals, []*CheckInfo{
-		{Name: "chk2", Healthy: true, Level: "alive"},
-		{Name: "chk3", Healthy: true, Level: "ready"},
-	})
-
-	// If both filters specified, should be an AND
-	checks, err = mgr.Checks(plan.ReadyLevel, []string{"chk3", "chk2"})
-	c.Assert(err, IsNil)
-	c.Assert(checks, DeepEquals, []*CheckInfo{
 		{Name: "chk3", Healthy: true, Level: "ready"},
 	})
 
@@ -103,7 +72,7 @@ func (s *ManagerSuite) TestChecks(c *C) {
 			},
 		},
 	})
-	checks, err = mgr.Checks("", nil)
+	checks, err = mgr.Checks()
 	c.Assert(err, IsNil)
 	c.Assert(checks, DeepEquals, []*CheckInfo{
 		{Name: "chk4", Healthy: true},
@@ -112,7 +81,7 @@ func (s *ManagerSuite) TestChecks(c *C) {
 
 func stopChecks(c *C, mgr *CheckManager) {
 	mgr.Configure(&plan.Plan{})
-	checks, err := mgr.Checks("", nil)
+	checks, err := mgr.Checks()
 	c.Assert(err, IsNil)
 	c.Assert(checks, HasLen, 0)
 }
@@ -260,7 +229,7 @@ func (s *ManagerSuite) TestFailures(c *C) {
 
 func waitCheck(c *C, mgr *CheckManager, name string, f func(check *CheckInfo) bool) *CheckInfo {
 	for i := 0; i < 100; i++ {
-		checks, err := mgr.Checks("", nil)
+		checks, err := mgr.Checks()
 		c.Assert(err, IsNil)
 		for _, check := range checks {
 			if check.Name == name && f(check) {

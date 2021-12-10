@@ -25,9 +25,7 @@ import (
 )
 
 func (s *APISuite) TestHealthNoChecks(c *C) {
-	checkMgr := &checkManager{checks: func(level plan.CheckLevel, names []string) ([]*checkstate.CheckInfo, error) {
-		c.Assert(level, Equals, plan.UnsetLevel)
-		c.Assert(names, HasLen, 0)
+	checkMgr := &checkManager{checks: func() ([]*checkstate.CheckInfo, error) {
 		return nil, nil
 	}}
 	api := httpapi.NewAPI(checkMgr)
@@ -40,9 +38,7 @@ func (s *APISuite) TestHealthNoChecks(c *C) {
 }
 
 func (s *APISuite) TestHealthHealthy(c *C) {
-	checkMgr := &checkManager{checks: func(level plan.CheckLevel, names []string) ([]*checkstate.CheckInfo, error) {
-		c.Assert(level, Equals, plan.UnsetLevel)
-		c.Assert(names, HasLen, 0)
+	checkMgr := &checkManager{checks: func() ([]*checkstate.CheckInfo, error) {
 		return []*checkstate.CheckInfo{
 			{Name: "chk1", Healthy: true},
 			{Name: "chk2", Healthy: true},
@@ -57,31 +53,11 @@ func (s *APISuite) TestHealthHealthy(c *C) {
 	})
 }
 
-func (s *APISuite) TestHealthFilters(c *C) {
-	checkMgr := &checkManager{checks: func(level plan.CheckLevel, names []string) ([]*checkstate.CheckInfo, error) {
-		c.Assert(level, Equals, plan.AliveLevel)
-		c.Assert(names, DeepEquals, []string{"chk1", "chk3"})
-		return []*checkstate.CheckInfo{
-			{Name: "chk1", Level: plan.AliveLevel, Healthy: true},
-			{Name: "chk3", Level: plan.ReadyLevel, Healthy: true},
-		}, nil
-	}}
-	api := httpapi.NewAPI(checkMgr)
-	status, response := serve(c, api, "GET", "/v1/health?level=alive&names=chk1&names=chk3", nil)
-
-	c.Assert(status, Equals, 200)
-	c.Assert(response, DeepEquals, map[string]interface{}{
-		"healthy": true,
-	})
-}
-
 func (s *APISuite) TestHealthUnhealthy(c *C) {
-	checkMgr := &checkManager{checks: func(level plan.CheckLevel, names []string) ([]*checkstate.CheckInfo, error) {
-		c.Assert(level, Equals, plan.UnsetLevel)
-		c.Assert(names, HasLen, 0)
+	checkMgr := &checkManager{checks: func() ([]*checkstate.CheckInfo, error) {
 		return []*checkstate.CheckInfo{
 			{Name: "chk1", Healthy: true},
-			{Name: "chk2", Healthy: false, Failures: 1, LastError: "error"},
+			{Name: "chk2", Healthy: false},
 			{Name: "chk3", Healthy: true},
 		}, nil
 	}}
@@ -91,6 +67,97 @@ func (s *APISuite) TestHealthUnhealthy(c *C) {
 	c.Assert(status, Equals, 502)
 	c.Assert(response, DeepEquals, map[string]interface{}{
 		"healthy": false,
+	})
+}
+
+func (s *APISuite) TestHealthLevel(c *C) {
+	const (
+		unhealthy = iota
+		healthy
+		none
+	)
+	type levelTest struct {
+		aliveCheck   int  // alive check: unhealthy, healthy, or no alive check
+		readyCheck   int  // ready check: unhealthy, healthy, or no ready check
+		aliveHealthy bool // expected response with ?level=alive filter
+		readyHealthy bool // expected response with ?level=ready filter
+	}
+
+	// All combinations of alive and ready checks (ready implies alive).
+	tests := []levelTest{
+		{aliveCheck: healthy, readyCheck: healthy, aliveHealthy: true, readyHealthy: true},       // alive and ready
+		{aliveCheck: healthy, readyCheck: unhealthy, aliveHealthy: true, readyHealthy: false},    // alive but not ready
+		{aliveCheck: unhealthy, readyCheck: healthy, aliveHealthy: false, readyHealthy: false},   // not alive but ready => ready unhealthy
+		{aliveCheck: unhealthy, readyCheck: unhealthy, aliveHealthy: false, readyHealthy: false}, // not alive nor ready
+		{aliveCheck: healthy, readyCheck: none, aliveHealthy: true, readyHealthy: true},          // alive and no ready check
+		{aliveCheck: unhealthy, readyCheck: none, aliveHealthy: false, readyHealthy: false},      // not alive, no ready check => ready unhealthy
+		{aliveCheck: none, readyCheck: healthy, aliveHealthy: true, readyHealthy: true},          // no alive check, but ready
+		{aliveCheck: none, readyCheck: unhealthy, aliveHealthy: true, readyHealthy: false},       // no alive check, not ready
+		{aliveCheck: none, readyCheck: none, aliveHealthy: true, readyHealthy: true},             // no alive or ready check
+	}
+
+	for _, test := range tests {
+		c.Logf("TestHealthLevels check alive=%d ready=%d, healthy alive=%t ready=%t",
+			test.aliveCheck, test.readyCheck, test.aliveHealthy, test.readyHealthy)
+
+		checkMgr := &checkManager{checks: func() ([]*checkstate.CheckInfo, error) {
+			var checks []*checkstate.CheckInfo
+			if test.aliveCheck != none {
+				checks = append(checks, &checkstate.CheckInfo{Name: "a", Level: plan.AliveLevel, Healthy: test.aliveCheck == healthy})
+			}
+			if test.readyCheck != none {
+				checks = append(checks, &checkstate.CheckInfo{Name: "r", Level: plan.ReadyLevel, Healthy: test.readyCheck == healthy})
+			}
+			return checks, nil
+		}}
+		api := httpapi.NewAPI(checkMgr)
+
+		status, response := serve(c, api, "GET", "/v1/health?level=alive", nil)
+		if test.aliveHealthy {
+			c.Check(status, Equals, 200)
+			c.Check(response, DeepEquals, map[string]interface{}{"healthy": true})
+		} else {
+			c.Check(status, Equals, 502)
+			c.Check(response, DeepEquals, map[string]interface{}{"healthy": false})
+		}
+
+		status, response = serve(c, api, "GET", "/v1/health?level=ready", nil)
+		if test.readyHealthy {
+			c.Check(status, Equals, 200)
+			c.Check(response, DeepEquals, map[string]interface{}{"healthy": true})
+		} else {
+			c.Check(status, Equals, 502)
+			c.Check(response, DeepEquals, map[string]interface{}{"healthy": false})
+		}
+	}
+}
+
+func (s *APISuite) TestHealthNames(c *C) {
+	checkMgr := &checkManager{checks: func() ([]*checkstate.CheckInfo, error) {
+		return []*checkstate.CheckInfo{
+			{Name: "chk1", Healthy: false},
+			{Name: "chk2", Healthy: true},
+			{Name: "chk3", Healthy: true},
+		}, nil
+	}}
+	api := httpapi.NewAPI(checkMgr)
+
+	status, response := serve(c, api, "GET", "/v1/health?names=chk1&names=chk3", nil)
+	c.Assert(status, Equals, 502)
+	c.Assert(response, DeepEquals, map[string]interface{}{
+		"healthy": false,
+	})
+
+	status, response = serve(c, api, "GET", "/v1/health?names=chk2", nil)
+	c.Assert(status, Equals, 200)
+	c.Assert(response, DeepEquals, map[string]interface{}{
+		"healthy": true,
+	})
+
+	status, response = serve(c, api, "GET", "/v1/health?names=chk3", nil)
+	c.Assert(status, Equals, 200)
+	c.Assert(response, DeepEquals, map[string]interface{}{
+		"healthy": true,
 	})
 }
 
@@ -105,7 +172,7 @@ func (s *APISuite) TestHealthBadLevel(c *C) {
 }
 
 func (s *APISuite) TestHealthChecksError(c *C) {
-	checkMgr := &checkManager{checks: func(level plan.CheckLevel, names []string) ([]*checkstate.CheckInfo, error) {
+	checkMgr := &checkManager{checks: func() ([]*checkstate.CheckInfo, error) {
 		return nil, errors.New("oops!")
 	}}
 	api := httpapi.NewAPI(checkMgr)
@@ -121,8 +188,8 @@ type checkManager struct {
 	checks checksFunc
 }
 
-type checksFunc func(level plan.CheckLevel, names []string) ([]*checkstate.CheckInfo, error)
+type checksFunc func() ([]*checkstate.CheckInfo, error)
 
-func (c *checkManager) Checks(level plan.CheckLevel, names []string) ([]*checkstate.CheckInfo, error) {
-	return c.checks(level, names)
+func (c *checkManager) Checks() ([]*checkstate.CheckInfo, error) {
+	return c.checks()
 }

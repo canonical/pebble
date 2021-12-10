@@ -18,6 +18,7 @@ import (
 	"net/http"
 
 	"github.com/canonical/pebble/internal/plan"
+	"github.com/canonical/pebble/internal/strutil"
 )
 
 type checkInfo struct {
@@ -30,32 +31,36 @@ type checkInfo struct {
 }
 
 func v1GetChecks(c *Command, r *http.Request, _ *userState) Response {
-	level := r.URL.Query().Get("level")
+	level := plan.CheckLevel(r.URL.Query().Get("level"))
 	switch level {
-	case "", "alive", "ready":
+	case plan.UnsetLevel, plan.AliveLevel, plan.ReadyLevel:
 	default:
 		return statusBadRequest(`level must be "alive" or "ready"`)
 	}
 
 	names := r.URL.Query()["names"]
 
-	checkmgr := c.d.overlord.CheckManager()
-	checks, err := checkmgr.Checks(plan.CheckLevel(level), names)
+	checkMgr := c.d.overlord.CheckManager()
+	checks, err := checkMgr.Checks()
 	if err != nil {
 		return statusInternalError("%v", err)
 	}
 
-	infos := make([]checkInfo, 0, len(checks))
+	var infos []checkInfo
 	for _, check := range checks {
-		info := checkInfo{
-			Name:         check.Name,
-			Level:        string(check.Level),
-			Healthy:      check.Healthy,
-			Failures:     check.Failures,
-			LastError:    check.LastError,
-			ErrorDetails: check.ErrorDetails,
+		levelMatch := level == plan.UnsetLevel || level == check.Level
+		namesMatch := len(names) == 0 || strutil.ListContains(names, check.Name)
+		if levelMatch && namesMatch {
+			info := checkInfo{
+				Name:         check.Name,
+				Level:        string(check.Level),
+				Healthy:      check.Healthy,
+				Failures:     check.Failures,
+				LastError:    check.LastError,
+				ErrorDetails: check.ErrorDetails,
+			}
+			infos = append(infos, info)
 		}
-		infos = append(infos, info)
 	}
 	return SyncResponse(infos)
 }

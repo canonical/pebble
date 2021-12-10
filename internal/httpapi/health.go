@@ -18,12 +18,13 @@ import (
 	"net/http"
 
 	"github.com/canonical/pebble/internal/plan"
+	"github.com/canonical/pebble/internal/strutil"
 )
 
 func (a *API) getHealth(w http.ResponseWriter, r *http.Request) {
-	level := r.URL.Query().Get("level")
+	level := plan.CheckLevel(r.URL.Query().Get("level"))
 	switch level {
-	case "", "alive", "ready":
+	case plan.UnsetLevel, plan.AliveLevel, plan.ReadyLevel:
 	default:
 		writeError(w, http.StatusBadRequest, `level must be "alive" or "ready"`)
 		return
@@ -31,7 +32,7 @@ func (a *API) getHealth(w http.ResponseWriter, r *http.Request) {
 
 	names := r.URL.Query()["names"]
 
-	checks, err := a.checkMgr.Checks(plan.CheckLevel(level), names)
+	checks, err := a.checkMgr.Checks()
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -40,7 +41,10 @@ func (a *API) getHealth(w http.ResponseWriter, r *http.Request) {
 	healthy := true
 	status := http.StatusOK
 	for _, check := range checks {
-		if !check.Healthy {
+		levelMatch := level == plan.UnsetLevel || level == check.Level ||
+			level == plan.ReadyLevel && check.Level == plan.AliveLevel // ready implies alive
+		namesMatch := len(names) == 0 || strutil.ListContains(names, check.Name)
+		if levelMatch && namesMatch && !check.Healthy {
 			healthy = false
 			status = http.StatusBadGateway
 		}

@@ -23,16 +23,17 @@ import (
 )
 
 func (s *apiSuite) TestChecksGet(c *C) {
-	// Setup
 	writeTestLayer(s.pebbleDir, `
 checks:
     chk1:
         override: replace
+        level: ready
         http:
             url: https://example.com/bad
 
     chk2:
         override: replace
+        level: alive
         tcp:
             port: 8080
 
@@ -42,28 +43,92 @@ checks:
             command: sleep x
 `)
 	s.daemon(c)
-
 	_, err := s.d.overlord.ServiceManager().Plan() // ensure plan is loaded
 	c.Assert(err, IsNil)
 
-	// Execute
+	// Request with no filters
 	req, err := http.NewRequest("GET", "/v1/checks", nil)
 	c.Assert(err, IsNil)
 	rsp := v1GetChecks(apiCmd("/v1/checks"), req, nil).(*resp)
 	rec := httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)
-
-	// Verify
 	c.Check(rec.Code, Equals, 200)
 	c.Check(rsp.Status, Equals, 200)
 	c.Check(rsp.Type, Equals, ResponseTypeSync)
-	c.Check(rsp.Result, NotNil)
 	var body map[string]interface{}
 	err = json.Unmarshal(rec.Body.Bytes(), &body)
 	c.Check(err, IsNil)
 	c.Check(body["result"], DeepEquals, []interface{}{
-		map[string]interface{}{"name": "chk1", "healthy": true},
-		map[string]interface{}{"name": "chk2", "healthy": true},
+		map[string]interface{}{"name": "chk1", "healthy": true, "level": "ready"},
+		map[string]interface{}{"name": "chk2", "healthy": true, "level": "alive"},
 		map[string]interface{}{"name": "chk3", "healthy": true},
+	})
+
+	// Request with names filter
+	req, err = http.NewRequest("GET", "/v1/checks?names=chk1&names=chk3", nil)
+	c.Assert(err, IsNil)
+	rsp = v1GetChecks(apiCmd("/v1/checks"), req, nil).(*resp)
+	rec = httptest.NewRecorder()
+	rsp.ServeHTTP(rec, req)
+	c.Check(rec.Code, Equals, 200)
+	c.Check(rsp.Status, Equals, 200)
+	c.Check(rsp.Type, Equals, ResponseTypeSync)
+	err = json.Unmarshal(rec.Body.Bytes(), &body)
+	c.Check(err, IsNil)
+	c.Check(body["result"], DeepEquals, []interface{}{
+		map[string]interface{}{"name": "chk1", "healthy": true, "level": "ready"},
+		map[string]interface{}{"name": "chk3", "healthy": true},
+	})
+
+	// Request with level filter
+	req, err = http.NewRequest("GET", "/v1/checks?level=alive", nil)
+	c.Assert(err, IsNil)
+	rsp = v1GetChecks(apiCmd("/v1/checks"), req, nil).(*resp)
+	rec = httptest.NewRecorder()
+	rsp.ServeHTTP(rec, req)
+	c.Check(rec.Code, Equals, 200)
+	c.Check(rsp.Status, Equals, 200)
+	c.Check(rsp.Type, Equals, ResponseTypeSync)
+	err = json.Unmarshal(rec.Body.Bytes(), &body)
+	c.Check(err, IsNil)
+	c.Check(body["result"], DeepEquals, []interface{}{
+		map[string]interface{}{"name": "chk2", "healthy": true, "level": "alive"},
+	})
+
+	// Request with names and level filters
+	req, err = http.NewRequest("GET", "/v1/checks?level=ready&names=chk1", nil)
+	c.Assert(err, IsNil)
+	rsp = v1GetChecks(apiCmd("/v1/checks"), req, nil).(*resp)
+	rec = httptest.NewRecorder()
+	rsp.ServeHTTP(rec, req)
+	c.Check(rec.Code, Equals, 200)
+	c.Check(rsp.Status, Equals, 200)
+	c.Check(rsp.Type, Equals, ResponseTypeSync)
+	err = json.Unmarshal(rec.Body.Bytes(), &body)
+	c.Check(err, IsNil)
+	c.Check(body["result"], DeepEquals, []interface{}{
+		map[string]interface{}{"name": "chk1", "healthy": true, "level": "ready"},
+	})
+}
+
+func (s *apiSuite) TestChecksGetInvalidLevel(c *C) {
+	s.daemon(c)
+	_, err := s.d.overlord.ServiceManager().Plan() // ensure plan is loaded
+	c.Assert(err, IsNil)
+
+	req, err := http.NewRequest("GET", "/v1/checks?level=foo", nil)
+	c.Assert(err, IsNil)
+	rsp := v1GetChecks(apiCmd("/v1/checks"), req, nil).(*resp)
+	rec := httptest.NewRecorder()
+	rsp.ServeHTTP(rec, req)
+	c.Check(rec.Code, Equals, 400)
+	c.Check(rsp.Status, Equals, 400)
+	c.Check(rsp.Type, Equals, ResponseTypeError)
+	c.Check(rsp.Result, NotNil)
+	var body map[string]interface{}
+	err = json.Unmarshal(rec.Body.Bytes(), &body)
+	c.Check(err, IsNil)
+	c.Check(body["result"], DeepEquals, map[string]interface{}{
+		"message": `level must be "alive" or "ready"`,
 	})
 }

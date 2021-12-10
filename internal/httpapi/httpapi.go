@@ -22,7 +22,6 @@ import (
 
 	"github.com/canonical/pebble/internal/logger"
 	"github.com/canonical/pebble/internal/overlord/checkstate"
-	"github.com/canonical/pebble/internal/plan"
 )
 
 type API struct {
@@ -31,7 +30,7 @@ type API struct {
 }
 
 type CheckManager interface {
-	Checks(level plan.CheckLevel, names []string) ([]*checkstate.CheckInfo, error)
+	Checks() ([]*checkstate.CheckInfo, error)
 }
 
 func NewAPI(checkMgr CheckManager) *API {

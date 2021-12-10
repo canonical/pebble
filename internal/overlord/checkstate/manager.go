@@ -9,7 +9,6 @@ import (
 
 	"github.com/canonical/pebble/internal/logger"
 	"github.com/canonical/pebble/internal/plan"
-	"github.com/canonical/pebble/internal/strutil"
 )
 
 // CheckManager starts and manages the health checks.
@@ -71,25 +70,13 @@ func (m *CheckManager) callFailureHandlers(name string) {
 
 // Checks returns the list of currently-configured checks and their status,
 // ordered by name.
-//
-// If level is not UnsetLevel, the list of checks is filtered to the checks
-// with the given level. Because "ready" implies "alive", if level is
-// AliveLevel, checks with level "ready" are included too.
-//
-// If names is non-empty, the list of checks is filtered to the named checks.
-func (m *CheckManager) Checks(level plan.CheckLevel, names []string) ([]*CheckInfo, error) {
+func (m *CheckManager) Checks() ([]*CheckInfo, error) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
-	var infos []*CheckInfo
+	infos := make([]*CheckInfo, 0, len(m.checks))
 	for _, check := range m.checks {
-		levelMatch := level == plan.UnsetLevel ||
-			level == check.config.Level ||
-			level == plan.AliveLevel && check.config.Level == plan.ReadyLevel
-		namesMatch := len(names) == 0 || strutil.ListContains(names, check.config.Name)
-		if levelMatch && namesMatch {
-			infos = append(infos, check.info())
-		}
+		infos = append(infos, check.info())
 	}
 
 	sort.Slice(infos, func(i, j int) bool {
