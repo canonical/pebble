@@ -20,6 +20,7 @@ import (
 	"github.com/gorilla/mux"
 
 	"github.com/canonical/pebble/internal/overlord"
+	"github.com/canonical/pebble/internal/overlord/restart"
 	"github.com/canonical/pebble/internal/overlord/state"
 )
 
@@ -81,6 +82,10 @@ var api = []*Command{{
 	Path:   "/v1/tasks/{task-id}/websocket/{websocket-id}",
 	UserOK: true,
 	GET:    v1GetTaskWebsocket,
+}, {
+	Path:   "/v1/signals",
+	UserOK: true,
+	POST:   v1PostSignals,
 }}
 
 var (
@@ -111,7 +116,7 @@ func v1SystemInfo(c *Command, r *http.Request, _ *userState) Response {
 	defer state.Unlock()
 	result := map[string]interface{}{
 		"version": c.d.Version,
-		"boot-id": state.BootID(),
+		"boot-id": restart.BootID(state),
 	}
 	return SyncResponse(result)
 }

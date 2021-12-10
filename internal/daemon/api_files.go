@@ -325,6 +325,9 @@ func listFiles(path, pattern string, itself bool) ([]fileInfoResult, error) {
 		matched := true
 		if pattern != "" {
 			matched, err = pathpkg.Match(pattern, name)
+			if err != nil {
+				return nil, err
+			}
 		}
 		if matched {
 			fullPath := pathpkg.Join(dir, name)

@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/canonical/pebble/internal/overlord/restart"
 	"github.com/canonical/pebble/internal/overlord/state"
 	"github.com/canonical/pebble/internal/plan"
 	"github.com/canonical/pebble/internal/servicelog"
@@ -37,7 +38,7 @@ type ServiceManager struct {
 type PlanFunc func(p *plan.Plan)
 
 type Restarter interface {
-	HandleRestart(t state.RestartType)
+	HandleRestart(t restart.RestartType)
 }
 
 // LabelExists is the error returned by AppendLayer when a layer with that
@@ -430,11 +431,13 @@ func (m *ServiceManager) SendSignal(services []string, signal string) error {
 	for _, name := range services {
 		s := m.services[name]
 		if s == nil {
+			errors = append(errors, fmt.Sprintf("cannot send signal to %q: service is not running", name))
 			continue
 		}
 		err := s.sendSignal(signal)
 		if err != nil {
 			errors = append(errors, fmt.Sprintf("cannot send signal to %q: %v", name, err))
+			continue
 		}
 	}
 	if len(errors) > 0 {

@@ -20,6 +20,8 @@ import (
 	"net/http/httptest"
 
 	"gopkg.in/check.v1"
+
+	"github.com/canonical/pebble/internal/overlord/restart"
 )
 
 var _ = check.Suite(&apiSuite{})
@@ -82,7 +84,7 @@ func (s *apiSuite) TestSysInfo(c *check.C) {
 	d.Version = "42b1"
 	state := d.overlord.State()
 	state.Lock()
-	state.VerifyReboot("ffffffff-ffff-ffff-ffff-ffffffffffff")
+	restart.Init(state, "ffffffff-ffff-ffff-ffff-ffffffffffff", nil)
 	state.Unlock()
 
 	sysInfoCmd.GET(sysInfoCmd, nil, nil).ServeHTTP(rec, nil)

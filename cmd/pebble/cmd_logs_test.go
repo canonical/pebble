@@ -29,7 +29,7 @@ func (s *PebbleSuite) TestLogsText(c *C) {
 		c.Check(r.Method, Equals, "GET")
 		c.Check(r.URL.Path, Equals, "/v1/logs")
 		c.Check(r.URL.Query(), DeepEquals, url.Values{
-			"n": []string{"10"},
+			"n": []string{"30"},
 		})
 		fmt.Fprintf(w, `
 {"time":"2021-05-03T03:55:49.360994155Z","service":"thing","message":"log 1"}
@@ -53,7 +53,7 @@ func (s *PebbleSuite) TestLogsJSON(c *C) {
 		c.Check(r.Method, Equals, "GET")
 		c.Check(r.URL.Path, Equals, "/v1/logs")
 		c.Check(r.URL.Query(), DeepEquals, url.Values{
-			"n": []string{"10"},
+			"n": []string{"30"},
 		})
 		fmt.Fprintf(w, `
 {"time":"2021-05-03T03:55:49.360Z","service":"thing","message":"log 1"}
@@ -123,7 +123,7 @@ func (s *PebbleSuite) TestLogsFollow(c *C) {
 		c.Check(r.Method, Equals, "GET")
 		c.Check(r.URL.Path, Equals, "/v1/logs")
 		c.Check(r.URL.Query(), DeepEquals, url.Values{
-			"n":      []string{"10"},
+			"n":      []string{"30"},
 			"follow": []string{"true"},
 		})
 		fmt.Fprintf(w, `

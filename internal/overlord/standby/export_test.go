@@ -16,18 +16,8 @@ package standby
 
 import (
 	"time"
-
-	"github.com/canonical/pebble/internal/overlord/state"
 )
 
 func (m *StandbyOpinions) SetStartTime(t time.Time) {
 	m.startTime = t
-}
-
-func FakeStateRequestRestart(newStateRequestRestart func(*state.State, state.RestartType)) (restore func()) {
-	oldStateRequestRestart := stateRequestRestart
-	stateRequestRestart = newStateRequestRestart
-	return func() {
-		stateRequestRestart = oldStateRequestRestart
-	}
 }
