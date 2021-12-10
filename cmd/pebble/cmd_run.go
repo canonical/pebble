@@ -31,10 +31,6 @@ import (
 	"github.com/canonical/pebble/internal/systemd"
 )
 
-const (
-	writeLogBufSize = 4096
-)
-
 var shortRunHelp = "Run the pebble environment"
 var longRunHelp = `
 The run command starts pebble and runs the configured environment.

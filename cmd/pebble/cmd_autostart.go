@@ -15,8 +15,9 @@
 package main
 
 import (
-	"github.com/canonical/pebble/client"
 	"github.com/jessevdk/go-flags"
+
+	"github.com/canonical/pebble/client"
 )
 
 var shortAutoStartHelp = "Start services set to start by default"
@@ -30,7 +31,7 @@ type cmdAutoStart struct {
 }
 
 func init() {
-	addCommand("autostart", shortAutoStartHelp, longAutoStartHelp, func() flags.Commander { return &cmdAutoStart{} }, nil, nil)
+	addCommand("autostart", shortAutoStartHelp, longAutoStartHelp, func() flags.Commander { return &cmdAutoStart{} }, waitDescs, nil)
 }
 
 func (cmd cmdAutoStart) Execute(args []string) error {

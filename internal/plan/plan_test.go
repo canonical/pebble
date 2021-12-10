@@ -34,6 +34,10 @@ const (
 	defaultBackoffDelay  = 500 * time.Millisecond
 	defaultBackoffFactor = 2.0
 	defaultBackoffLimit  = 30 * time.Second
+
+	defaultCheckPeriod   = 10 * time.Second
+	defaultCheckTimeout  = 3 * time.Second
+	defaultCheckFailures = 3
 )
 
 // TODOs:
@@ -162,23 +166,17 @@ var planTests = []planTest{{
 				BackoffLimit:  plan.OptionalDuration{Value: 10 * time.Second, IsSet: true},
 			},
 			"srv2": {
-				Name:          "srv2",
-				Override:      "replace",
-				Command:       "cmd",
-				Startup:       plan.StartupEnabled,
-				Before:        []string{"srv3"},
-				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
-				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
-				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
+				Name:     "srv2",
+				Override: "replace",
+				Command:  "cmd",
+				Startup:  plan.StartupEnabled,
+				Before:   []string{"srv3"},
 			},
 			"srv3": {
-				Name:          "srv3",
-				Override:      "replace",
-				Command:       "cmd",
-				Startup:       plan.StartupUnknown,
-				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
-				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
-				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
+				Name:     "srv3",
+				Override: "replace",
+				Command:  "cmd",
+				Startup:  plan.StartupUnknown,
 			},
 		},
 		Checks: map[string]*plan.Check{},
@@ -196,36 +194,24 @@ var planTests = []planTest{{
 				Environment: map[string]string{
 					"var3": "val3",
 				},
-				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
-				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
-				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
 			},
 			"srv2": {
-				Name:          "srv2",
-				Summary:       "Replaced service",
-				Override:      "replace",
-				Command:       "cmd",
-				Startup:       plan.StartupDisabled,
-				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
-				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
-				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
+				Name:     "srv2",
+				Summary:  "Replaced service",
+				Override: "replace",
+				Command:  "cmd",
+				Startup:  plan.StartupDisabled,
 			},
 			"srv4": {
-				Name:          "srv4",
-				Override:      "replace",
-				Command:       "cmd",
-				Startup:       plan.StartupEnabled,
-				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
-				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
-				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
+				Name:     "srv4",
+				Override: "replace",
+				Command:  "cmd",
+				Startup:  plan.StartupEnabled,
 			},
 			"srv5": {
-				Name:          "srv5",
-				Override:      "replace",
-				Command:       "cmd",
-				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
-				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
-				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
+				Name:     "srv5",
+				Override: "replace",
+				Command:  "cmd",
 			},
 		},
 		Checks: map[string]*plan.Check{},
@@ -348,9 +334,6 @@ var planTests = []planTest{{
 					"b": "1.1",
 					"c": "",
 				},
-				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
-				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
-				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
 			},
 		},
 		Checks: map[string]*plan.Check{},
@@ -391,7 +374,7 @@ var planTests = []planTest{{
 	`},
 }, {
 	summary: `Invalid action`,
-	error:   `invalid on-success action "foo"`,
+	error:   `plan service "svc1" on-success action "foo" invalid`,
 	input: []string{`
 		services:
 			"svc1":
@@ -411,7 +394,7 @@ var planTests = []planTest{{
 	`},
 }, {
 	summary: `Zero backoff-factor`,
-	error:   `backoff-factor must be 1.0 or greater, not 0`,
+	error:   `plan service "svc1" backoff-factor must be 1.0 or greater, not 0`,
 	input: []string{`
 		services:
 			"svc1":
@@ -421,7 +404,7 @@ var planTests = []planTest{{
 	`},
 }, {
 	summary: `Too small backoff-factor`,
-	error:   `backoff-factor must be 1.0 or greater, not 0.5`,
+	error:   `plan service "svc1" backoff-factor must be 1.0 or greater, not 0.5`,
 	input: []string{`
 		services:
 			"svc1":
@@ -438,6 +421,294 @@ var planTests = []planTest{{
 				override: replace
 				command: cmd
 				backoff-factor: foo
+	`},
+}, {
+	summary: `Invalid service command`,
+	error:   `plan service "svc1" command invalid: EOF found when expecting closing quote`,
+	input: []string{`
+		services:
+			svc1:
+				override: replace
+				command: foo '
+	`},
+}, {
+	summary: "Checks fields parse correctly and defaults are correct",
+	input: []string{`
+		checks:
+			chk-http:
+				override: replace
+				level: alive
+				period: 20s
+				timeout: 500ms
+				failures: 7
+				http:
+					url: https://example.com/foo
+					headers:
+						Foo: bar
+						Authorization: Basic password
+		
+			chk-tcp:
+				override: merge
+				level: ready
+				tcp:
+					port: 7777
+					host: somehost
+		
+			chk-exec:
+				override: replace
+				exec:
+					command: sleep 1
+					environment:
+						FOO: bar
+						BAZ: buzz
+					working-dir: /root
+`},
+	result: &plan.Layer{
+		Services: map[string]*plan.Service{},
+		Checks: map[string]*plan.Check{
+			"chk-http": {
+				Name:     "chk-http",
+				Override: plan.ReplaceOverride,
+				Level:    plan.AliveLevel,
+				Period:   plan.OptionalDuration{Value: 20 * time.Second, IsSet: true},
+				Timeout:  plan.OptionalDuration{Value: 500 * time.Millisecond, IsSet: true},
+				Failures: 7,
+				HTTP: &plan.HTTPCheck{
+					URL: "https://example.com/foo",
+					Headers: map[string]string{
+						"Foo":           "bar",
+						"Authorization": "Basic password",
+					},
+				},
+			},
+			"chk-tcp": {
+				Name:     "chk-tcp",
+				Override: plan.MergeOverride,
+				Level:    plan.ReadyLevel,
+				Period:   plan.OptionalDuration{Value: defaultCheckPeriod},
+				Timeout:  plan.OptionalDuration{Value: defaultCheckTimeout},
+				Failures: defaultCheckFailures,
+				TCP: &plan.TCPCheck{
+					Port: 7777,
+					Host: "somehost",
+				},
+			},
+			"chk-exec": {
+				Name:     "chk-exec",
+				Override: plan.ReplaceOverride,
+				Level:    plan.UnsetLevel,
+				Period:   plan.OptionalDuration{Value: defaultCheckPeriod},
+				Timeout:  plan.OptionalDuration{Value: defaultCheckTimeout},
+				Failures: defaultCheckFailures,
+				Exec: &plan.ExecCheck{
+					Command: "sleep 1",
+					Environment: map[string]string{
+						"FOO": "bar",
+						"BAZ": "buzz",
+					},
+					WorkingDir: "/root",
+				},
+			},
+		},
+	},
+}, {
+	summary: "Checks override replace works correctly",
+	input: []string{`
+		checks:
+			chk-http:
+				override: replace
+				period: 20s
+				http:
+					url: https://example.com/foo
+					headers:
+						Foo: bar
+		
+			chk-tcp:
+				override: replace
+				level: ready
+				tcp:
+					port: 7777
+					host: somehost
+		
+			chk-exec:
+				override: replace
+				exec:
+					command: sleep 1
+					working-dir: /root
+`, `
+		checks:
+			chk-http:
+				override: replace
+				http:
+					url: https://example.com/bar
+		
+			chk-tcp:
+				override: replace
+				tcp:
+					port: 8888
+		
+			chk-exec:
+				override: replace
+				exec:
+					command: sleep 2
+`},
+	result: &plan.Layer{
+		Services: map[string]*plan.Service{},
+		Checks: map[string]*plan.Check{
+			"chk-http": {
+				Name:     "chk-http",
+				Override: plan.ReplaceOverride,
+				Period:   plan.OptionalDuration{Value: defaultCheckPeriod},
+				Timeout:  plan.OptionalDuration{Value: defaultCheckTimeout},
+				Failures: defaultCheckFailures,
+				HTTP: &plan.HTTPCheck{
+					URL: "https://example.com/bar",
+				},
+			},
+			"chk-tcp": {
+				Name:     "chk-tcp",
+				Override: plan.ReplaceOverride,
+				Period:   plan.OptionalDuration{Value: defaultCheckPeriod},
+				Timeout:  plan.OptionalDuration{Value: defaultCheckTimeout},
+				Failures: defaultCheckFailures,
+				TCP: &plan.TCPCheck{
+					Port: 8888,
+				},
+			},
+			"chk-exec": {
+				Name:     "chk-exec",
+				Override: plan.ReplaceOverride,
+				Period:   plan.OptionalDuration{Value: defaultCheckPeriod},
+				Timeout:  plan.OptionalDuration{Value: defaultCheckTimeout},
+				Failures: defaultCheckFailures,
+				Exec: &plan.ExecCheck{
+					Command: "sleep 2",
+				},
+			},
+		},
+	},
+}, {
+	summary: "Checks override merge works correctly",
+	input: []string{`
+		checks:
+			chk-http:
+				override: merge
+				period: 1s
+				http:
+					headers:
+						Foo: bar
+		
+			chk-tcp:
+				override: merge
+				timeout: 300ms
+				tcp:
+					host: foobar
+		
+			chk-exec:
+				override: merge
+				failures: 5
+				exec:
+					working-dir: /root
+`, `
+		checks:
+			chk-http:
+				override: merge
+				http:
+					url: https://example.com/bar
+		
+			chk-tcp:
+				override: merge
+				tcp:
+					port: 80
+		
+			chk-exec:
+				override: merge
+				timeout: 7s
+				exec:
+					command: sleep 2
+`},
+	result: &plan.Layer{
+		Services: map[string]*plan.Service{},
+		Checks: map[string]*plan.Check{
+			"chk-http": {
+				Name:     "chk-http",
+				Override: plan.MergeOverride,
+				Period:   plan.OptionalDuration{Value: time.Second, IsSet: true},
+				Timeout:  plan.OptionalDuration{Value: defaultCheckTimeout},
+				Failures: defaultCheckFailures,
+				HTTP: &plan.HTTPCheck{
+					URL:     "https://example.com/bar",
+					Headers: map[string]string{"Foo": "bar"},
+				},
+			},
+			"chk-tcp": {
+				Name:     "chk-tcp",
+				Override: plan.MergeOverride,
+				Period:   plan.OptionalDuration{Value: defaultCheckPeriod},
+				Timeout:  plan.OptionalDuration{Value: 300 * time.Millisecond, IsSet: true},
+				Failures: defaultCheckFailures,
+				TCP: &plan.TCPCheck{
+					Port: 80,
+					Host: "foobar",
+				},
+			},
+			"chk-exec": {
+				Name:     "chk-exec",
+				Override: plan.MergeOverride,
+				Period:   plan.OptionalDuration{Value: defaultCheckPeriod},
+				Timeout:  plan.OptionalDuration{Value: 7 * time.Second, IsSet: true},
+				Failures: 5,
+				Exec: &plan.ExecCheck{
+					Command:    "sleep 2",
+					WorkingDir: "/root",
+				},
+			},
+		},
+	},
+}, {
+	summary: "One of http, tcp, or exec must be present for check",
+	error:   `plan must specify one of "http", "tcp", or "exec" for check "chk1"`,
+	input: []string{`
+		checks:
+			chk1:
+				override: replace
+`},
+}, {
+	summary: "HTTP check requires url field",
+	error:   `plan must set "url" for http check "chk1"`,
+	input: []string{`
+		checks:
+			chk1:
+				override: replace
+				http: {}
+`},
+}, {
+	summary: "TCP check requires port field",
+	error:   `plan must set "port" for tcp check "chk2"`,
+	input: []string{`
+		checks:
+			chk2:
+				override: replace
+				tcp: {}
+`},
+}, {
+	summary: "Exec check requires command field",
+	error:   `plan must set "command" for exec check "chk3"`,
+	input: []string{`
+		checks:
+			chk3:
+				override: replace
+				exec: {}
+`},
+}, {
+	summary: `Invalid exec check command`,
+	error:   `plan check "chk1" command invalid: EOF found when expecting closing quote`,
+	input: []string{`
+		checks:
+			chk1:
+				override: replace
+				exec:
+					command: foo '
 	`},
 }}
 
@@ -506,6 +777,7 @@ services:
         after:
             - srv1
 `))
+	c.Assert(err, IsNil)
 	_, err = plan.CombineLayers(layer1, layer2)
 	c.Assert(err, ErrorMatches, `services in before/after loop: .*`)
 	_, ok := err.(*plan.FormatError)
@@ -562,14 +834,16 @@ services:
 }
 
 func (s *S) TestReadDir(c *C) {
-	pebbleDir := c.MkDir()
-	layersDir := filepath.Join(pebbleDir, "layers")
-	err := os.Mkdir(layersDir, 0755)
-	c.Assert(err, IsNil)
+	tempDir := c.MkDir()
 
-	for _, test := range planTests {
+	for testIndex, test := range planTests {
+		pebbleDir := filepath.Join(tempDir, fmt.Sprintf("pebble-%03d", testIndex))
+		layersDir := filepath.Join(pebbleDir, "layers")
+		err := os.MkdirAll(layersDir, 0755)
+		c.Assert(err, IsNil)
+
 		for i, yml := range test.input {
-			err := ioutil.WriteFile(filepath.Join(layersDir, fmt.Sprintf("%03d-layer-%d.yaml", i, i)), []byte(reindent(yml)), 0644)
+			err := ioutil.WriteFile(filepath.Join(layersDir, fmt.Sprintf("%03d-layer-%d.yaml", i, i)), reindent(yml), 0644)
 			c.Assert(err, IsNil)
 		}
 		sup, err := plan.ReadDir(pebbleDir)

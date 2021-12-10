@@ -1,4 +1,17 @@
-// Package checkstate is the manager and "checkers" for custom health checks.
+// Copyright (c) 2021 Canonical Ltd
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License version 3 as
+// published by the Free Software Foundation.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
 package checkstate
 
 import (
@@ -18,6 +31,7 @@ type CheckManager struct {
 	failureHandlers []FailureFunc
 }
 
+// FailureFunc is the type of function called when a failure action is triggered.
 type FailureFunc func(name string)
 
 // NewManager creates a new check manager.
@@ -68,6 +82,41 @@ func (m *CheckManager) callFailureHandlers(name string) {
 	}
 }
 
+// newChecker creates a new checker of the configured type.
+func newChecker(config *plan.Check) checker {
+	switch {
+	case config.HTTP != nil:
+		return &httpChecker{
+			name:    config.Name,
+			url:     config.HTTP.URL,
+			headers: config.HTTP.Headers,
+		}
+
+	case config.TCP != nil:
+		return &tcpChecker{
+			name: config.Name,
+			host: config.TCP.Host,
+			port: config.TCP.Port,
+		}
+
+	case config.Exec != nil:
+		return &execChecker{
+			name:        config.Name,
+			command:     config.Exec.Command,
+			environment: config.Exec.Environment,
+			userID:      config.Exec.UserID,
+			user:        config.Exec.User,
+			groupID:     config.Exec.GroupID,
+			group:       config.Exec.Group,
+			workingDir:  config.Exec.WorkingDir,
+		}
+
+	default:
+		// This has already been checked when parsing the config.
+		panic("internal error: invalid check config")
+	}
+}
+
 // Checks returns the list of currently-configured checks and their status,
 // ordered by name.
 func (m *CheckManager) Checks() ([]*CheckInfo, error) {
@@ -101,10 +150,10 @@ type checkData struct {
 	checker checker
 	ctx     context.Context
 	cancel  context.CancelFunc
+	action  FailureFunc
 
 	mutex     sync.Mutex
 	failures  int
-	action    FailureFunc
 	actionRan bool
 	lastErr   error
 }
@@ -122,7 +171,7 @@ func (c *checkData) loop() {
 	for {
 		select {
 		case <-ticker.C:
-			c.check()
+			c.runCheck()
 			if c.ctx.Err() != nil {
 				// Don't re-run check in edge case where period is short and
 				// in-flight check was cancelled.
@@ -135,7 +184,7 @@ func (c *checkData) loop() {
 	}
 }
 
-func (c *checkData) check() {
+func (c *checkData) runCheck() {
 	// Run the check with a timeout.
 	ctx, cancel := context.WithTimeout(c.ctx, c.config.Timeout.Value)
 	defer cancel()
@@ -170,6 +219,7 @@ func (c *checkData) check() {
 	c.actionRan = false
 }
 
+// info returns user-facing check information for use in Checks (and tests).
 func (c *checkData) info() *CheckInfo {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
@@ -182,9 +232,8 @@ func (c *checkData) info() *CheckInfo {
 	}
 	if c.lastErr != nil {
 		info.LastError = c.lastErr.Error()
-		switch e := c.lastErr.(type) {
-		case *outputError:
-			info.ErrorDetails = e.output()
+		if d, ok := c.lastErr.(interface{ Details() string }); ok {
+			info.ErrorDetails = d.Details()
 		}
 	}
 	return info

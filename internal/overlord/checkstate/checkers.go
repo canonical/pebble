@@ -1,8 +1,24 @@
+// Copyright (c) 2021 Canonical Ltd
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License version 3 as
+// published by the Free Software Foundation.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
 package checkstate
 
 import (
 	"context"
 	"fmt"
+	"io"
+	"io/ioutil"
 	"net"
 	"net/http"
 	"os/exec"
@@ -11,44 +27,12 @@ import (
 
 	"github.com/canonical/pebble/internal/logger"
 	"github.com/canonical/pebble/internal/osutil"
-	"github.com/canonical/pebble/internal/plan"
 	"github.com/canonical/pebble/internal/strutil/shlex"
 )
 
-func newChecker(config *plan.Check) checker {
-	switch {
-	case config.HTTP != nil:
-		return &httpChecker{
-			name:    config.Name,
-			url:     config.HTTP.URL,
-			headers: config.HTTP.Headers,
-		}
+const maxDetailsLen = 1024
 
-	case config.TCP != nil:
-		return &tcpChecker{
-			name: config.Name,
-			host: config.TCP.Host,
-			port: config.TCP.Port,
-		}
-
-	case config.Exec != nil:
-		return &execChecker{
-			name:        config.Name,
-			command:     config.Exec.Command,
-			environment: config.Exec.Environment,
-			userID:      config.Exec.UserID,
-			user:        config.Exec.User,
-			groupID:     config.Exec.GroupID,
-			group:       config.Exec.Group,
-			workingDir:  config.Exec.WorkingDir,
-		}
-
-	default:
-		// This has already been checked when parsing the config.
-		panic("internal error: invalid check config")
-	}
-}
-
+// httpChecker is a checker that ensures an HTTP GET at a specified URL returns 20x.
 type httpChecker struct {
 	name    string
 	url     string
@@ -70,11 +54,25 @@ func (c *httpChecker) check(ctx context.Context) error {
 	defer response.Body.Close()
 
 	if response.StatusCode < 200 || response.StatusCode > 299 {
-		return fmt.Errorf("received non-20x status code %d", response.StatusCode)
+		// Include first 1024 bytes of response body in error details
+		output, err := ioutil.ReadAll(io.LimitReader(response.Body, maxDetailsLen+1))
+		details := ""
+		if err != nil {
+			details = fmt.Sprintf("cannot read response body: %v", err)
+		} else if len(output) > maxDetailsLen {
+			details = string(output[:maxDetailsLen]) + "..."
+		} else {
+			details = string(output)
+		}
+		return &detailsError{
+			error:   fmt.Errorf("received non-20x status code %d", response.StatusCode),
+			details: details,
+		}
 	}
 	return nil
 }
 
+// tcpChecker is a checker that ensures a TCP port is open.
 type tcpChecker struct {
 	name string
 	host string
@@ -101,6 +99,7 @@ func (c *tcpChecker) check(ctx context.Context) error {
 	return nil
 }
 
+// execChecker is a checker that ensures a command executes successfully.
 type execChecker struct {
 	name        string
 	command     string
@@ -143,23 +142,23 @@ func (c *execChecker) check(ctx context.Context) error {
 		if ctx.Err() == context.DeadlineExceeded {
 			err = fmt.Errorf("exec check timed out")
 		}
-		if len(output) > 0 {
-			const maxLength = 1024
-			if len(output) > maxLength {
-				output = output[:maxLength]
-				output = append(output, "..."...)
-			}
+		// Include the last 1024 bytes of output in the error details
+		details := ""
+		if len(output) > maxDetailsLen {
+			details = "..." + string(output[len(output)-maxDetailsLen:])
+		} else {
+			details = string(output)
 		}
-		return &outputError{error: err, out: string(output)}
+		return &detailsError{error: err, details: details}
 	}
 	return nil
 }
 
-type outputError struct {
+type detailsError struct {
 	error
-	out string
+	details string
 }
 
-func (e *outputError) output() string {
-	return e.out
+func (e *detailsError) Details() string {
+	return e.details
 }

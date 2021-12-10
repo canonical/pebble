@@ -32,6 +32,7 @@ import (
 	"github.com/canonical/pebble/internal/osutil"
 	"github.com/canonical/pebble/internal/overlord"
 	"github.com/canonical/pebble/internal/overlord/patch"
+	"github.com/canonical/pebble/internal/overlord/restart"
 	"github.com/canonical/pebble/internal/overlord/state"
 	"github.com/canonical/pebble/internal/testutil"
 )
@@ -729,38 +730,46 @@ func (ovs *overlordSuite) TestRequestRestartNoHandler(c *C) {
 	o, err := overlord.New(ovs.dir, nil, nil)
 	c.Assert(err, IsNil)
 
-	o.State().RequestRestart(state.RestartDaemon)
+	st := o.State()
+	st.Lock()
+	defer st.Unlock()
+
+	restart.Request(st, restart.RestartDaemon)
 }
 
-type testRestartBehavior struct {
-	restartRequested  state.RestartType
+type testRestartHandler struct {
+	restartRequested  restart.RestartType
 	rebootState       string
 	rebootVerifiedErr error
 }
 
-func (rb *testRestartBehavior) HandleRestart(t state.RestartType) {
+func (rb *testRestartHandler) HandleRestart(t restart.RestartType) {
 	rb.restartRequested = t
 }
 
-func (rb *testRestartBehavior) RebootIsFine(_ *state.State) error {
+func (rb *testRestartHandler) RebootIsFine(_ *state.State) error {
 	rb.rebootState = "as-expected"
 	return rb.rebootVerifiedErr
 }
 
-func (rb *testRestartBehavior) RebootIsMissing(_ *state.State) error {
+func (rb *testRestartHandler) RebootIsMissing(_ *state.State) error {
 	rb.rebootState = "did-not-happen"
 	return rb.rebootVerifiedErr
 }
 
 func (ovs *overlordSuite) TestRequestRestartHandler(c *C) {
-	rb := &testRestartBehavior{}
+	rb := &testRestartHandler{}
 
 	o, err := overlord.New(ovs.dir, rb, nil)
 	c.Assert(err, IsNil)
 
-	o.State().RequestRestart(state.RestartDaemon)
+	st := o.State()
+	st.Lock()
+	defer st.Unlock()
 
-	c.Check(rb.restartRequested, Equals, state.RestartDaemon)
+	restart.Request(st, restart.RestartDaemon)
+
+	c.Check(rb.restartRequested, Equals, restart.RestartDaemon)
 }
 
 func (ovs *overlordSuite) TestVerifyRebootNoPendingReboot(c *C) {
@@ -768,7 +777,7 @@ func (ovs *overlordSuite) TestVerifyRebootNoPendingReboot(c *C) {
 	err := ioutil.WriteFile(ovs.statePath, fakeState, 0600)
 	c.Assert(err, IsNil)
 
-	rb := &testRestartBehavior{}
+	rb := &testRestartHandler{}
 
 	_, err = overlord.New(ovs.dir, rb, nil)
 	c.Assert(err, IsNil)
@@ -781,7 +790,7 @@ func (ovs *overlordSuite) TestVerifyRebootOK(c *C) {
 	err := ioutil.WriteFile(ovs.statePath, fakeState, 0600)
 	c.Assert(err, IsNil)
 
-	rb := &testRestartBehavior{}
+	rb := &testRestartHandler{}
 
 	_, err = overlord.New(ovs.dir, rb, nil)
 	c.Assert(err, IsNil)
@@ -795,7 +804,7 @@ func (ovs *overlordSuite) TestVerifyRebootOKButError(c *C) {
 	c.Assert(err, IsNil)
 
 	e := errors.New("boom")
-	rb := &testRestartBehavior{rebootVerifiedErr: e}
+	rb := &testRestartHandler{rebootVerifiedErr: e}
 
 	_, err = overlord.New(ovs.dir, rb, nil)
 	c.Assert(err, Equals, e)
@@ -803,7 +812,7 @@ func (ovs *overlordSuite) TestVerifyRebootOKButError(c *C) {
 	c.Check(rb.rebootState, Equals, "as-expected")
 }
 
-func (ovs *overlordSuite) TestVerifyRebootDidNotHappen(c *C) {
+func (ovs *overlordSuite) TestVerifyRebootIsMissing(c *C) {
 	curBootID, err := osutil.BootID()
 	c.Assert(err, IsNil)
 
@@ -811,7 +820,7 @@ func (ovs *overlordSuite) TestVerifyRebootDidNotHappen(c *C) {
 	err = ioutil.WriteFile(ovs.statePath, fakeState, 0600)
 	c.Assert(err, IsNil)
 
-	rb := &testRestartBehavior{}
+	rb := &testRestartHandler{}
 
 	_, err = overlord.New(ovs.dir, rb, nil)
 	c.Assert(err, IsNil)
@@ -819,7 +828,7 @@ func (ovs *overlordSuite) TestVerifyRebootDidNotHappen(c *C) {
 	c.Check(rb.rebootState, Equals, "did-not-happen")
 }
 
-func (ovs *overlordSuite) TestVerifyRebootDidNotHappenError(c *C) {
+func (ovs *overlordSuite) TestVerifyRebootIsMissingError(c *C) {
 	curBootID, err := osutil.BootID()
 	c.Assert(err, IsNil)
 
@@ -828,7 +837,7 @@ func (ovs *overlordSuite) TestVerifyRebootDidNotHappenError(c *C) {
 	c.Assert(err, IsNil)
 
 	e := errors.New("boom")
-	rb := &testRestartBehavior{rebootVerifiedErr: e}
+	rb := &testRestartHandler{rebootVerifiedErr: e}
 
 	_, err = overlord.New(ovs.dir, rb, nil)
 	c.Assert(err, Equals, e)

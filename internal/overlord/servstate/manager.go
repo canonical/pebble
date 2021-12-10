@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/canonical/pebble/internal/overlord/restart"
 	"github.com/canonical/pebble/internal/overlord/state"
 	"github.com/canonical/pebble/internal/plan"
 	"github.com/canonical/pebble/internal/servicelog"
@@ -33,10 +34,11 @@ type ServiceManager struct {
 	rand     *rand.Rand
 }
 
+// PlanFunc is the type of function used by AddPlanHandler.
 type PlanFunc func(p *plan.Plan)
 
 type Restarter interface {
-	HandleRestart(t state.RestartType)
+	HandleRestart(t restart.RestartType)
 }
 
 // LabelExists is the error returned by AppendLayer when a layer with that
@@ -431,11 +433,13 @@ func (m *ServiceManager) SendSignal(services []string, signal string) error {
 	for _, name := range services {
 		s := m.services[name]
 		if s == nil {
+			errors = append(errors, fmt.Sprintf("cannot send signal to %q: service is not running", name))
 			continue
 		}
 		err := s.sendSignal(signal)
 		if err != nil {
 			errors = append(errors, fmt.Sprintf("cannot send signal to %q: %v", name, err))
+			continue
 		}
 	}
 	if len(errors) > 0 {
@@ -444,6 +448,9 @@ func (m *ServiceManager) SendSignal(services []string, signal string) error {
 	return nil
 }
 
+// CheckFailure response to a health check failure. If the given check name is
+// in the on-check-failure map for a service, tell the service to perform the
+// configured action (for example, "restart").
 func (m *ServiceManager) CheckFailure(name string) {
 	m.servicesLock.Lock()
 	defer m.servicesLock.Unlock()

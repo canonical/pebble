@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2020 Canonical Ltd
+// Copyright (c) 2014-2021 Canonical Ltd
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License version 3 as
@@ -12,25 +12,28 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package overlord
+package servstatetest
 
 import (
-	"time"
-
-	"github.com/canonical/pebble/internal/osutil"
 	"github.com/canonical/pebble/internal/overlord/restart"
+	"github.com/canonical/pebble/internal/overlord/state"
 )
 
-type overlordStateBackend struct {
-	path           string
-	ensureBefore   func(d time.Duration)
-	requestRestart func(t restart.RestartType)
+// FakeRestartHandler fakes a restart.Handler based on a function
+// to witness the restart requests.
+type FakeRestartHandler func(restart.RestartType)
+
+func (h FakeRestartHandler) HandleRestart(t restart.RestartType) {
+	if h == nil {
+		return
+	}
+	h(t)
 }
 
-func (osb *overlordStateBackend) Checkpoint(data []byte) error {
-	return osutil.AtomicWriteFile(osb.path, data, 0600, 0)
+func (h FakeRestartHandler) RebootIsFine(*state.State) error {
+	return nil
 }
 
-func (osb *overlordStateBackend) EnsureBefore(d time.Duration) {
-	osb.ensureBefore(d)
+func (h FakeRestartHandler) RebootIsMissing(*state.State) error {
+	panic("internal error: fakeing should not invoke RebootIsMissing")
 }

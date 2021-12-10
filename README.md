@@ -148,9 +148,7 @@ description: |
 
 # (Required) A list of services managed by this configuration layer
 services:
-
     <service name>:
-
         # (Required) Control how this service definition is combined with any
         # other pre-existing definition with the same name in the Pebble plan.
         #
@@ -225,6 +223,13 @@ services:
         # the Pebble server, and "ignore" which does nothing further.
         on-failure: restart | halt | ignore
 
+        # (Optional) Defines what happens when each of the named health checks
+        # fail. Possible values are: "restart" (default) which restarts
+        # the service once, "halt" which stops and exits the Pebble server,
+        # and "ignore" which does nothing further.
+        on-check-failure:
+            <check name>: restart | halt | ignore
+
         # (Optional) Initial backoff delay for the "restart" exit action.
         # Default is half a second ("500ms").
         backoff-delay: <duration>
@@ -239,6 +244,98 @@ services:
         # greater than this value, it is capped to this value. Default is
         # half a minute ("30s").
         backoff-limit: <duration>
+
+# (Optional) A list of health checks managed by this configuration layer.
+checks:
+    <check name>:
+        # (Required) Control how this check definition is combined with any
+        # other pre-existing definition with the same name in the Pebble plan.
+        #
+        # The value 'merge' will ensure that values in this layer specification
+        # are merged over existing definitions, whereas 'replace' will entirely
+        # override the existing check spec in the plan with the same name.
+        override: merge | replace
+
+        # (Optional) Check level, which can be used for filtering checks when
+        # calling the checks API or health endpoint.
+
+        # For the health endpoint, ready implies alive. In other words, if all
+        # the "ready" checks are succeeding and there are no "alive" checks,
+        # the /v1/health API will return success for level=alive.
+        level: alive | ready
+
+        # (Optional) Check is run every time this period (time interval)
+        # elapses. Must not be zero. Default is "10s".
+        period: <duration>
+
+        # (Optional) If this time elapses before a single check operation has
+        # finished, it is cancelled and considered an error. Must not be less
+        # than the period, and must not be zero. Default is "3s".
+        timeout: <duration>
+
+        # (Optional) Number of times in a row the check must error to be
+        # considered a failure (which triggers the on-check-failure action).
+        # Default 3.
+        failures: <failure threshold>
+
+        # Configures an HTTP check, which is successful if a GET to the
+        # specified URL returns a 20x status code.
+        #
+        # Only one of "http", "tcp", or "exec" may be specified.
+        http:
+            # (Required) URL to fetch, for example "https://example.com/foo".
+            url: <full URL>
+
+            # (Optional) Map of HTTP headers to send with the request.
+            headers:
+                <name>: <value>
+
+        # Configures a TCP port check, which is successful if the specified
+        # TCP port is listening and we can successfully open it. Nothing is
+        # sent to the port.
+        #
+        # Only one of "http", "tcp", or "exec" may be specified.
+        tcp:
+            # (Required) Port number to open.
+            port: <port number>
+
+            # (Optional) Hostname to use. Default is "localhost".
+            host: <host name>
+
+        # Configures a command execution check, which is successful if running
+        # the specified command returns a zero exit code.
+        #
+        # Only one of "http", "tcp", or "exec" may be specified.
+        exec:
+            # (Required) Command line to execute. The command is executed
+            # directly; use "/bin/sh -c '...'" to run via the shell.
+            command: <commmand>
+
+            # (Optional) A list of key/value pairs defining environment
+            # variables that should be set when running the command.
+            environment:
+                <name>: <value>
+
+            # (Optional) Username for starting command as a different user. It
+            # is an error if the user doesn't exist.
+            user: <username>
+
+            # (Optional) User ID for starting command as a different user. If
+            # both user and user-id are specified, the user's UID must match
+            # user-id.
+            user-id: <uid>
+
+            # (Optional) Group name for starting command as a different user.
+            # It is an error if the group doesn't exist.
+            group: <group name>
+
+            # (Optional) Group ID for starting command as a different user. If
+            # both group and group-id are specified, the group's GID must
+            # match group-id.
+            group-id: <gid>
+
+            # (Optional) Working directory to run command in.
+            working-dir: <directory>
 ```
 
 ## API and clients
@@ -278,7 +375,7 @@ Here are some of the things coming soon:
   - [x] Better log caching and retrieval support
   - [x] Consider showing unified log as output of `pebble run` (use `-v`)
   - [x] Automatically restart services that fail
-  - [ ] Support for custom health checks (HTTP, TCP, command)
+  - [x] Support for custom health checks (HTTP, TCP, command)
   - [ ] Automatically remove (double) timestamps from logs
   - [ ] Improve signal handling, e.g., sending SIGHUP to a service
   - [ ] Terminate all services before exiting run command

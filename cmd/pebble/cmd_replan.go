@@ -22,7 +22,8 @@ import (
 var shortReplanHelp = "Ensure running services match the current plan"
 var longReplanHelp = `
 The replan command starts, stops, or restarts services that have changed,
-so that running services match exactly the desired configuration in the current plan.
+so that running services exactly match the desired configuration in the
+current plan.
 `
 
 type cmdReplan struct {
@@ -30,7 +31,7 @@ type cmdReplan struct {
 }
 
 func init() {
-	addCommand("replan", shortReplanHelp, longReplanHelp, func() flags.Commander { return &cmdReplan{} }, nil, nil)
+	addCommand("replan", shortReplanHelp, longReplanHelp, func() flags.Commander { return &cmdReplan{} }, waitDescs, nil)
 }
 
 func (cmd cmdReplan) Execute(args []string) error {

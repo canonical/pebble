@@ -24,7 +24,6 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/canonical/pebble/internal/overlord/servstate"
 	"github.com/canonical/pebble/internal/overlord/state"
 
 	. "gopkg.in/check.v1"
@@ -320,16 +319,4 @@ func (s *apiSuite) TestServicesReplan(c *C) {
 	c.Check(tasks, HasLen, 2)
 	c.Check(tasks[0].Summary(), Equals, `Start service "test1"`)
 	c.Check(tasks[1].Summary(), Equals, `Start service "test2"`)
-}
-
-type wrappedServiceManager struct {
-	servstate.ServiceManager
-	replan func() ([]string, []string, error)
-}
-
-func (w *wrappedServiceManager) Replan() ([]string, []string, error) {
-	if w.replan != nil {
-		return w.replan()
-	}
-	return w.ServiceManager.Replan()
 }
