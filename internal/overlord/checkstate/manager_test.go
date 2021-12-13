@@ -51,21 +51,24 @@ func (s *ManagerSuite) TestChecks(c *C) {
 	mgr.Configure(&plan.Plan{
 		Checks: map[string]*plan.Check{
 			"chk1": {
-				Name:   "chk1",
-				Period: plan.OptionalDuration{Value: time.Second},
-				Exec:   &plan.ExecCheck{Command: "echo chk1"},
+				Name:     "chk1",
+				Period:   plan.OptionalDuration{Value: time.Second},
+				Failures: 3,
+				Exec:     &plan.ExecCheck{Command: "echo chk1"},
 			},
 			"chk2": {
-				Name:   "chk2",
-				Level:  "alive",
-				Period: plan.OptionalDuration{Value: time.Second},
-				Exec:   &plan.ExecCheck{Command: "echo chk2"},
+				Name:     "chk2",
+				Level:    "alive",
+				Period:   plan.OptionalDuration{Value: time.Second},
+				Failures: 3,
+				Exec:     &plan.ExecCheck{Command: "echo chk2"},
 			},
 			"chk3": {
-				Name:   "chk3",
-				Level:  "ready",
-				Period: plan.OptionalDuration{Value: time.Second},
-				Exec:   &plan.ExecCheck{Command: "echo chk3"},
+				Name:     "chk3",
+				Level:    "ready",
+				Period:   plan.OptionalDuration{Value: time.Second},
+				Failures: 3,
+				Exec:     &plan.ExecCheck{Command: "echo chk3"},
 			},
 		},
 	})
@@ -83,9 +86,10 @@ func (s *ManagerSuite) TestChecks(c *C) {
 	mgr.Configure(&plan.Plan{
 		Checks: map[string]*plan.Check{
 			"chk4": {
-				Name:   "chk4",
-				Period: plan.OptionalDuration{Value: time.Second},
-				Exec:   &plan.ExecCheck{Command: "echo chk4"},
+				Name:     "chk4",
+				Period:   plan.OptionalDuration{Value: time.Second},
+				Failures: 3,
+				Exec:     &plan.ExecCheck{Command: "echo chk4"},
 			},
 		},
 	})
@@ -161,7 +165,8 @@ func (s *ManagerSuite) TestCheckCanceled(c *C) {
 		time.Sleep(time.Millisecond)
 	}
 
-	// For the little bit of white box testing below
+	// For the little bit of white box testing below (we can't use mgr.Checks
+	// later, because the checks will have stopped by that point).
 	mgr.mutex.Lock()
 	check := mgr.checks["chk1"]
 	mgr.mutex.Unlock()
@@ -213,7 +218,7 @@ func (s *ManagerSuite) TestFailures(c *C) {
 	check := waitCheck(c, mgr, "chk1", func(check *CheckInfo) bool {
 		return check.Failures == 1
 	})
-	c.Assert(check.Healthy, Equals, false)
+	c.Assert(check.Healthy, Equals, true)
 	c.Assert(check.LastError, Matches, "exit status 1")
 	c.Assert(failureName, Equals, "")
 
@@ -221,11 +226,11 @@ func (s *ManagerSuite) TestFailures(c *C) {
 	check = waitCheck(c, mgr, "chk1", func(check *CheckInfo) bool {
 		return check.Failures == 2
 	})
-	c.Assert(check.Healthy, Equals, false)
+	c.Assert(check.Healthy, Equals, true)
 	c.Assert(check.LastError, Matches, "exit status 1")
 	c.Assert(failureName, Equals, "")
 
-	// Should have called failure handler after 3 failures (threshold)
+	// Should have called failure handler and be unhealthy after 3 failures (threshold)
 	check = waitCheck(c, mgr, "chk1", func(check *CheckInfo) bool {
 		return check.Failures == 3
 	})

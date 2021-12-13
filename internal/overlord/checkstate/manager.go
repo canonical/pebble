@@ -227,7 +227,7 @@ func (c *checkData) info() *CheckInfo {
 	info := &CheckInfo{
 		Name:     c.config.Name,
 		Level:    c.config.Level,
-		Healthy:  c.failures == 0,
+		Healthy:  c.failures < c.config.Failures,
 		Failures: c.failures,
 	}
 	if c.lastErr != nil {

@@ -866,6 +866,7 @@ services:
 func (s *S) TestOnCheckFailureRestartWhileRunning(c *C) {
 	// Create check manager and tell it about plan updates
 	checkMgr := checkstate.NewManager()
+	defer checkMgr.Configure(&plan.Plan{})
 	s.manager.AddPlanHandler(checkMgr.Configure)
 
 	// Tell service manager about check failures
@@ -950,6 +951,7 @@ checks:
 func (s *S) TestOnCheckFailureRestartDuringBackoff(c *C) {
 	// Create check manager and tell it about plan updates
 	checkMgr := checkstate.NewManager()
+	defer checkMgr.Configure(&plan.Plan{})
 	s.manager.AddPlanHandler(checkMgr.Configure)
 
 	// Tell service manager about check failures
@@ -1026,6 +1028,7 @@ checks:
 func (s *S) TestOnCheckFailureIgnore(c *C) {
 	// Create check manager and tell it about plan updates
 	checkMgr := checkstate.NewManager()
+	defer checkMgr.Configure(&plan.Plan{})
 	s.manager.AddPlanHandler(checkMgr.Configure)
 
 	// Tell service manager about check failures
@@ -1097,6 +1100,7 @@ checks:
 func (s *S) TestOnCheckFailureHalt(c *C) {
 	// Create check manager and tell it about plan updates
 	checkMgr := checkstate.NewManager()
+	defer checkMgr.Configure(&plan.Plan{})
 	s.manager.AddPlanHandler(checkMgr.Configure)
 
 	// Tell service manager about check failures
