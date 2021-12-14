@@ -418,7 +418,7 @@ func (s *S) TestStartFastExitCommand(c *C) {
 	c.Check(chg.Status(), Equals, state.ErrorStatus)
 	c.Check(chg.Err(), ErrorMatches, `(?s).*\n- Start service "test4" \(cannot start service: exited quickly with code 0\)`)
 	c.Check(chg.Tasks()[0].Log(), HasLen, 2)
-	c.Check(chg.Tasks()[0].Log()[0], Matches, `(?s).* INFO most recent service output:\n    too-fast\n    second line`)
+	c.Check(chg.Tasks()[0].Log()[0], Matches, `(?s).* INFO Most recent service output:\n    too-fast\n    second line`)
 	c.Check(chg.Tasks()[0].Log()[1], Matches, `.* ERROR cannot start service: exited quickly with code 0`)
 	s.st.Unlock()
 

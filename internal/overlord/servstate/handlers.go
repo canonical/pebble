@@ -452,11 +452,11 @@ func addLastLogs(task *state.Task, logBuffer *servicelog.RingBuffer) {
 
 	logs, err := getLastLogs(logBuffer)
 	if err != nil {
-		task.Errorf("cannot read service logs: %v", err)
+		task.Errorf("Cannot read service logs: %v", err)
 	}
 	if logs != "" {
 		// Add lastLogLines last lines of service output to the task's log.
-		task.Logf("most recent service output:\n%s", logs)
+		task.Logf("Most recent service output:\n%s", logs)
 	}
 }
 
