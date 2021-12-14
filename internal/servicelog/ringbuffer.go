@@ -342,7 +342,12 @@ func (rb *RingBuffer) releaseIterators() {
 	rb.iteratorMutex.Lock()
 	defer rb.iteratorMutex.Unlock()
 	for _, iter := range rb.iteratorList {
-		close(iter.closeChan)
+		// Close closeChan if not already closed
+		select {
+		case <-iter.closeChan:
+		default:
+			close(iter.closeChan)
+		}
 	}
 	rb.iteratorList = nil
 }
@@ -354,7 +359,12 @@ func (rb *RingBuffer) removeIterator(iter *iterator) {
 		if iter != storedIter {
 			continue
 		}
-		close(iter.closeChan)
+		// Close closeChan if not already closed
+		select {
+		case <-iter.closeChan:
+		default:
+			close(iter.closeChan)
+		}
 		rb.iteratorList[i] = rb.iteratorList[len(rb.iteratorList)-1]
 		rb.iteratorList = rb.iteratorList[:len(rb.iteratorList)-1]
 		return
