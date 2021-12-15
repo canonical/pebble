@@ -317,6 +317,38 @@ func (s *S) TestReplanServices(c *C) {
 	s.stopTestServices(c)
 }
 
+func (s *S) TestReplanUpdatesServiceConfig(c *C) {
+	s.startTestServices(c)
+	defer s.stopTestServices(c)
+
+	// Ensure the ServiceManager's config reflects the plan config
+	config := s.manager.Config("test2")
+	c.Assert(config, NotNil)
+	c.Assert(config.OnSuccess, Equals, plan.ActionUnset)
+	c.Assert(config.Summary, Equals, "")
+	command := config.Command
+
+	// Add a layer and override a couple of values
+	layer := parseLayer(c, 0, "layer", `
+services:
+    test2:
+        override: merge
+        summary: A summary!
+        on-success: ignore
+`)
+	err := s.manager.AppendLayer(layer)
+	c.Assert(err, IsNil)
+
+	// Call Replan and ensure the ServiceManager's config has updated.
+	_, _, err = s.manager.Replan()
+	c.Assert(err, IsNil)
+	config = s.manager.Config("test2")
+	c.Assert(config, NotNil)
+	c.Assert(config.OnSuccess, Equals, plan.ActionIgnore)
+	c.Assert(config.Summary, Equals, "A summary!")
+	c.Assert(config.Command, Equals, command)
+}
+
 func (s *S) TestServiceLogs(c *C) {
 	outputs := map[string]string{
 		"test1": `2.* \[test1\] test1\n`,
