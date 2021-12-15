@@ -390,7 +390,7 @@ func (m *ServiceManager) Replan() ([]string, []string, error) {
 	needsRestart := make(map[string]bool)
 	var stop []string
 	for name, s := range m.services {
-		if config, ok := m.plan.Services[name]; ok && config.Equal(s.config) {
+		if config, ok := m.plan.Services[name]; ok {
 			if config.Equal(s.config) {
 				continue
 			}

@@ -18,6 +18,8 @@ import (
 	"os/exec"
 	"syscall"
 	"time"
+
+	"github.com/canonical/pebble/internal/plan"
 )
 
 var CalculateNextBackoff = calculateNextBackoff
@@ -45,6 +47,17 @@ func (m *ServiceManager) BackoffNum(serviceName string) int {
 		return -1
 	}
 	return s.backoffNum
+}
+
+func (m *ServiceManager) Config(serviceName string) *plan.Service {
+	m.servicesLock.Lock()
+	defer m.servicesLock.Unlock()
+
+	s := m.services[serviceName]
+	if s == nil {
+		return nil
+	}
+	return s.config
 }
 
 func (m *ServiceManager) GetJitter(duration time.Duration) time.Duration {
