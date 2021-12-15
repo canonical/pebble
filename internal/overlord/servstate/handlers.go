@@ -409,7 +409,7 @@ func (s *serviceData) exited(waitErr error) error {
 		action, onType := getAction(s.config, waitErr == nil)
 		switch action {
 		case plan.ActionIgnore:
-			logger.Debugf("Service %q %s action is %q, transitioning to stopped state", s.config.Name, onType, action)
+			logger.Noticef("Service %q %s action is %q, transitioning to stopped state", s.config.Name, onType, action)
 			s.transition(stateStopped)
 
 		case plan.ActionHalt:
