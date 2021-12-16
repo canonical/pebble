@@ -935,6 +935,7 @@ services:
     test2:
         override: replace
         command: /bin/sh -c 'echo x >>%s; sleep 1'
+        backoff-delay: 50ms
         on-check-failure:
             chk1: restart
 
@@ -977,7 +978,10 @@ checks:
 		time.Sleep(5 * time.Millisecond)
 	}
 
-	// Check failure should terminate process and restart it, so wait for that
+	// Check failure should terminate process, backoff, and restart it, so wait for that
+	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
+		return svc.Current == servstate.StatusBackoff
+	})
 	for i := 0; ; i++ {
 		if i >= 100 {
 			c.Fatalf("failed waiting for command to start")
@@ -1002,6 +1006,7 @@ checks:
 	c.Assert(checks[0].LastError, Matches, ".* executable file not found .*")
 	svc := s.serviceByName(c, "test2")
 	c.Assert(svc.Current, Equals, servstate.StatusActive)
+	c.Assert(s.manager.BackoffNum("test2"), Equals, 1)
 }
 
 func (s *S) TestOnCheckFailureRestartDuringBackoff(c *C) {
@@ -1020,7 +1025,8 @@ services:
     test2:
         override: replace
         command: /bin/sh -c 'echo x >>%s; sleep 0.075'
-        backoff-factor: 10  # ensure it only backoff-restarts once
+        backoff-delay: 50ms
+        backoff-factor: 100  # ensure it only backoff-restarts once
         on-check-failure:
             chk1: restart
 
@@ -1053,7 +1059,7 @@ checks:
 		return svc.Current == servstate.StatusBackoff
 	})
 
-	// Check failure should start it again, so wait for that
+	// Check failure should wait for current backoff (after which it will be restarted)
 	for i := 0; ; i++ {
 		if i >= 100 {
 			c.Fatalf("failed waiting for command to start")
@@ -1067,7 +1073,7 @@ checks:
 	}
 	svc := s.serviceByName(c, "test2")
 	c.Assert(svc.Current, Equals, servstate.StatusActive)
-	c.Assert(s.manager.BackoffNum("test2"), Equals, 0)
+	c.Assert(s.manager.BackoffNum("test2"), Equals, 1)
 
 	// Shouldn't be restarted again
 	time.Sleep(125 * time.Millisecond)

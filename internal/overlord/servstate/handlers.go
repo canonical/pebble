@@ -421,13 +421,7 @@ func (s *serviceData) exited(waitErr error) error {
 			s.transition(stateStopped)
 
 		case plan.ActionRestart:
-			s.backoffNum++
-			s.backoffTime = calculateNextBackoff(s.config, s.backoffTime)
-			logger.Noticef("Service %q %s action is %q, waiting ~%s before restart (backoff %d)",
-				s.config.Name, onType, action, s.backoffTime, s.backoffNum)
-			s.transition(stateBackoff)
-			duration := s.backoffTime + s.manager.getJitter(s.backoffTime)
-			time.AfterFunc(duration, func() { logError(s.backoffTimeElapsed()) })
+			s.doBackoff(action, onType)
 
 		default:
 			return fmt.Errorf("internal error: unexpected action %q", action)
@@ -440,17 +434,22 @@ func (s *serviceData) exited(waitErr error) error {
 
 	case stateCheckTerminating, stateCheckKilling:
 		logger.Noticef("Service %q exited after check failure, restarting", s.config.Name)
-		s.restarts++
-		err := s.startInternal()
-		if err != nil {
-			return err
-		}
-		s.transition(stateRunning)
+		s.doBackoff(plan.ActionRestart, "on-check-failure")
 
 	default:
 		return fmt.Errorf("internal error: exited invalid in state %q", s.state)
 	}
 	return nil
+}
+
+func (s *serviceData) doBackoff(action plan.ServiceAction, onType string) {
+	s.backoffNum++
+	s.backoffTime = calculateNextBackoff(s.config, s.backoffTime)
+	logger.Noticef("Service %q %s action is %q, waiting ~%s before restart (backoff %d)",
+		s.config.Name, onType, action, s.backoffTime, s.backoffNum)
+	s.transition(stateBackoff)
+	duration := s.backoffTime + s.manager.getJitter(s.backoffTime)
+	time.AfterFunc(duration, func() { logError(s.backoffTimeElapsed()) })
 }
 
 func calculateNextBackoff(config *plan.Service, current time.Duration) time.Duration {
@@ -670,27 +669,19 @@ func (s *serviceData) checkFailure(action plan.ServiceAction) {
 			s.transition(stateStopped)
 
 		case plan.ActionRestart:
-			if s.state == stateRunning {
-				logger.Noticef("Service %q %s action is %q, terminating process before restarting",
+			if s.state == stateBackoff {
+				logger.Noticef("Service %q %s action is %q, waiting for current backoff",
 					s.config.Name, onType, action)
-				err := syscall.Kill(-s.cmd.Process.Pid, syscall.SIGTERM)
-				if err != nil {
-					logger.Noticef("Cannot send SIGTERM to process: %v", err)
-				}
-				s.transition(stateCheckTerminating)
-				time.AfterFunc(killWait, func() { logError(s.terminateTimeElapsed()) })
 				return
 			}
-			logger.Noticef("Service %q %s action is %q, restarting", s.config.Name, onType, action)
-			s.restarts++
-			err := s.startInternal()
+			logger.Noticef("Service %q %s action is %q, terminating process before restarting",
+				s.config.Name, onType, action)
+			err := syscall.Kill(-s.cmd.Process.Pid, syscall.SIGTERM)
 			if err != nil {
-				logger.Noticef("Cannot restart service %q after check failure: %v", s.config.Name, err)
-				return
+				logger.Noticef("Cannot send SIGTERM to process: %v", err)
 			}
-			s.backoffNum = 0
-			s.backoffTime = 0
-			s.transition(stateRunning)
+			s.transition(stateCheckTerminating)
+			time.AfterFunc(killWait, func() { logError(s.terminateTimeElapsed()) })
 
 		default:
 			logger.Noticef("Internal error: unexpected action %q handling check failure for service %q",
