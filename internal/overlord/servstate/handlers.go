@@ -163,6 +163,9 @@ func (m *ServiceManager) serviceForStart(task *state.Task, config *plan.Service)
 		return service
 	}
 
+	// Ensure config is up-to-date from the plan
+	service.config = config.Copy()
+
 	switch service.state {
 	case stateInitial, stateStarting, stateRunning:
 		taskLogf(task, "Service %q already started.", config.Name)

@@ -316,7 +316,7 @@ func (s *S) TestReplanServices(c *C) {
 	s.stopTestServices(c)
 }
 
-func (s *S) TestReplanUpdatesServiceConfig(c *C) {
+func (s *S) TestReplanUpdatesConfig(c *C) {
 	s.startTestServices(c)
 	defer s.stopTestServices(c)
 
@@ -343,9 +343,33 @@ services:
 	c.Assert(err, IsNil)
 	config = s.manager.Config("test2")
 	c.Assert(config, NotNil)
-	c.Assert(config.OnSuccess, Equals, plan.ActionIgnore)
-	c.Assert(config.Summary, Equals, "A summary!")
-	c.Assert(config.Command, Equals, command)
+	c.Check(config.OnSuccess, Equals, plan.ActionIgnore)
+	c.Check(config.Summary, Equals, "A summary!")
+	c.Check(config.Command, Equals, command)
+}
+
+func (s *S) TestStopStartUpdatesConfig(c *C) {
+	s.startTestServices(c)
+	defer s.stopTestServices(c)
+
+	// Add a layer and override a couple of values
+	layer := parseLayer(c, 0, "layer", `
+services:
+    test2:
+        override: merge
+        summary: A summary!
+        on-success: ignore
+`)
+	err := s.manager.AppendLayer(layer)
+	c.Assert(err, IsNil)
+
+	// Call Stop and Start and ensure the ServiceManager's config has updated.
+	s.stopTestServices(c)
+	s.startTestServices(c)
+	config := s.manager.Config("test2")
+	c.Assert(config, NotNil)
+	c.Check(config.OnSuccess, Equals, plan.ActionIgnore)
+	c.Check(config.Summary, Equals, "A summary!")
 }
 
 func (s *S) TestServiceLogs(c *C) {
