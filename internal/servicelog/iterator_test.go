@@ -282,11 +282,13 @@ func (s *iteratorSuite) TestClosed(c *C) {
 	n, err := iter0.WriteTo(buffer0)
 	c.Assert(err, IsNil)
 	c.Assert(n, Equals, int64(10))
+	c.Assert(iter0.Close(), IsNil)
 
 	buffer1 := &bytes.Buffer{}
 	n, err = iter1.WriteTo(buffer1)
 	c.Assert(err, IsNil)
 	c.Assert(n, Equals, int64(10))
+	c.Assert(iter1.Close(), IsNil)
 }
 
 func (s *iteratorSuite) TestClosedIteration(c *C) {
