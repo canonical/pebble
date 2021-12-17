@@ -1258,7 +1258,7 @@ services:
 
 	// Wait till it terminates.
 	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
-		return svc.Current == servstate.StatusInactive
+		return svc.Current == servstate.StatusError
 	})
 
 	// It should have closed the stopDaemon channel.
@@ -1288,7 +1288,7 @@ services:
 
 	// Wait till it terminates.
 	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
-		return svc.Current == servstate.StatusInactive
+		return svc.Current == servstate.StatusError
 	})
 }
 
