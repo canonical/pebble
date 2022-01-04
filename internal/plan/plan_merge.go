@@ -25,11 +25,13 @@ func (s *Service) Merge(other *Service) {
 	s.After = append(s.After, other.After...)
 	s.Before = append(s.Before, other.Before...)
 	s.Requires = append(s.Requires, other.Requires...)
-	for k, v := range other.Environment {
+	if other.Environment != nil {
 		if s.Environment == nil {
-			s.Environment = make(map[string]string)
+			s.Environment = make(map[string]string, len(other.Environment))
 		}
-		s.Environment[k] = v
+		for k, v := range other.Environment {
+			s.Environment[k] = v
+		}
 	}
 	if other.UserID != nil {
 		v := *other.UserID
@@ -51,11 +53,13 @@ func (s *Service) Merge(other *Service) {
 	if other.OnFailure != "" {
 		s.OnFailure = other.OnFailure
 	}
-	for k, v := range other.OnCheckFailure {
+	if other.OnCheckFailure != nil {
 		if s.OnCheckFailure == nil {
-			s.OnCheckFailure = make(map[string]ServiceAction)
+			s.OnCheckFailure = make(map[string]ServiceAction, len(other.OnCheckFailure))
 		}
-		s.OnCheckFailure[k] = v
+		for k, v := range other.OnCheckFailure {
+			s.OnCheckFailure[k] = v
+		}
 	}
 	if !other.BackoffDelay.IsZero() {
 		s.BackoffDelay = other.BackoffDelay
@@ -113,11 +117,13 @@ func (c *HTTPCheck) Merge(other *HTTPCheck) {
 	if other.URL != "" {
 		c.URL = other.URL
 	}
-	for k, v := range other.Headers {
+	if other.Headers != nil {
 		if c.Headers == nil {
-			c.Headers = make(map[string]string)
+			c.Headers = make(map[string]string, len(other.Headers))
 		}
-		c.Headers[k] = v
+		for k, v := range other.Headers {
+			c.Headers[k] = v
+		}
 	}
 }
 
@@ -136,11 +142,13 @@ func (c *ExecCheck) Merge(other *ExecCheck) {
 	if other.Command != "" {
 		c.Command = other.Command
 	}
-	for k, v := range other.Environment {
+	if other.Environment != nil {
 		if c.Environment == nil {
-			c.Environment = make(map[string]string)
+			c.Environment = make(map[string]string, len(other.Environment))
 		}
-		c.Environment[k] = v
+		for k, v := range other.Environment {
+			c.Environment[k] = v
+		}
 	}
 	if other.UserID != nil {
 		v := *other.UserID

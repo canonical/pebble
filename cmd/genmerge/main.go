@@ -119,11 +119,13 @@ func genMerge(w io.Writer, name, receiver string, s *types.Struct) {
 func genMergeField(w io.Writer, receiver, field string, t types.Type) {
 	switch t := t.(type) {
 	case *types.Map:
-		fmt.Fprintf(w, "for k, v := range other.%s {\n", field)
-		fmt.Fprintf(w, "if %s.%s == nil {\n", receiver, field) // TODO: do this outside the loop
-		fmt.Fprintf(w, "%s.%s = make(map[%s]%s)\n", receiver, field, t.Key(), typeName(t.Elem()))
+		fmt.Fprintf(w, "if other.%s != nil {\n", field)
+		fmt.Fprintf(w, "if %s.%s == nil {\n", receiver, field)
+		fmt.Fprintf(w, "%s.%s = make(map[%s]%s, len(other.%s))\n", receiver, field, t.Key(), typeName(t.Elem()), field)
 		fmt.Fprintf(w, "}\n")
+		fmt.Fprintf(w, "for k, v := range other.%s {\n", field)
 		fmt.Fprintf(w, "%s.%s[k] = v\n", receiver, field)
+		fmt.Fprintf(w, "}\n")
 		fmt.Fprintf(w, "}\n")
 
 	case *types.Pointer:
