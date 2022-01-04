@@ -57,13 +57,13 @@ func (s *Service) Merge(other *Service) {
 		}
 		s.OnCheckFailure[k] = v
 	}
-	if other.BackoffDelay.IsSet {
+	if !other.BackoffDelay.IsZero() {
 		s.BackoffDelay = other.BackoffDelay
 	}
-	if other.BackoffFactor.IsSet {
+	if !other.BackoffFactor.IsZero() {
 		s.BackoffFactor = other.BackoffFactor
 	}
-	if other.BackoffLimit.IsSet {
+	if !other.BackoffLimit.IsZero() {
 		s.BackoffLimit = other.BackoffLimit
 	}
 }
@@ -79,10 +79,10 @@ func (c *Check) Merge(other *Check) {
 	if other.Level != "" {
 		c.Level = other.Level
 	}
-	if other.Period.IsSet {
+	if !other.Period.IsZero() {
 		c.Period = other.Period
 	}
-	if other.Timeout.IsSet {
+	if !other.Timeout.IsZero() {
 		c.Timeout = other.Timeout
 	}
 	if other.Failures != 0 {

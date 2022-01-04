@@ -158,7 +158,7 @@ func genMergeField(w io.Writer, receiver, field string, t types.Type) {
 		fmt.Fprintf(w, "}\n")
 
 	case *types.Struct:
-		fmt.Fprintf(w, "if other.%s.IsSet {\n", field)
+		fmt.Fprintf(w, "if !other.%s.IsZero() {\n", field)
 		fmt.Fprintf(w, "%s.%s = other.%s\n", receiver, field, field)
 		fmt.Fprintf(w, "}\n")
 
