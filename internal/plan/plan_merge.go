@@ -14,6 +14,14 @@ func (s *Service) Merge(other *Service) {
 	if other.Command != "" {
 		s.Command = other.Command
 	}
+	s.After = append(s.After, other.After...)
+	s.Before = append(s.Before, other.Before...)
+	for k, v := range other.Environment {
+		if s.Environment == nil {
+			s.Environment = make(map[string]string)
+		}
+		s.Environment[k] = v
+	}
 	if other.UserID != nil {
 		s.UserID = other.UserID
 	}
@@ -25,14 +33,6 @@ func (s *Service) Merge(other *Service) {
 	}
 	if other.Group != "" {
 		s.Group = other.Group
-	}
-	s.Before = append(s.Before, other.Before...)
-	s.After = append(s.After, other.After...)
-	for k, v := range other.Environment {
-		if s.Environment == nil {
-			s.Environment = make(map[string]string)
-		}
-		s.Environment[k] = v
 	}
 	if other.OnSuccess != "" {
 		s.OnSuccess = other.OnSuccess
