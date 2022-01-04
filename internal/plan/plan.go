@@ -34,6 +34,7 @@ import (
 
 // Generate the Copy and Merge operations
 //go:generate go run github.com/canonical/pebble/cmd/gencopy/ -o plan_copy.go . Plan Layer Service Check HTTPCheck:c TCPCheck:c ExecCheck:c
+//go:generate go run github.com/canonical/pebble/cmd/genmerge/ -o plan_merge.go . Service Check HTTPCheck:c TCPCheck:c ExecCheck:c
 
 const (
 	defaultBackoffDelay  = 500 * time.Millisecond
