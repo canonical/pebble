@@ -266,7 +266,7 @@ func (c *Check) Copy() *Check {
 	if c.TCP != nil {
 		copied.TCP = c.TCP.Copy()
 	}
-	if copied.Exec != nil {
+	if c.Exec != nil {
 		copied.Exec = c.Exec.Copy()
 	}
 	return &copied
