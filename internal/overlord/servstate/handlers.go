@@ -174,7 +174,7 @@ func (m *ServiceManager) serviceForStart(task *state.Task, config *plan.Service)
 		return service
 	}
 
-	// Ensure config is up-to-date from the plan whenever the user starts a service
+	// Ensure config is up-to-date from the plan whenever the user starts a service.
 	service.config = config.Copy()
 
 	switch service.state {

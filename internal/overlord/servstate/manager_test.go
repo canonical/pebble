@@ -321,14 +321,14 @@ func (s *S) TestReplanUpdatesConfig(c *C) {
 	s.startTestServices(c)
 	defer s.stopTestServices(c)
 
-	// Ensure the ServiceManager's config reflects the plan config
+	// Ensure the ServiceManager's config reflects the plan config.
 	config := s.manager.Config("test2")
 	c.Assert(config, NotNil)
 	c.Assert(config.OnSuccess, Equals, plan.ActionUnset)
 	c.Assert(config.Summary, Equals, "")
 	command := config.Command
 
-	// Add a layer and override a couple of values
+	// Add a layer and override a couple of values.
 	layer := parseLayer(c, 0, "layer", `
 services:
     test2:
@@ -353,7 +353,7 @@ func (s *S) TestStopStartUpdatesConfig(c *C) {
 	s.startTestServices(c)
 	defer s.stopTestServices(c)
 
-	// Add a layer and override a couple of values
+	// Add a layer and override a couple of values.
 	layer := parseLayer(c, 0, "layer", `
 services:
     test2:
