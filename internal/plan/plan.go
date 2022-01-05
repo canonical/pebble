@@ -174,19 +174,22 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 						copy.Command = service.Command
 					}
 					if service.UserID != nil {
-						copy.UserID = service.UserID
+						v := *service.UserID
+						copy.UserID = &v
 					}
 					if service.User != "" {
 						copy.User = service.User
 					}
 					if service.GroupID != nil {
-						copy.GroupID = service.GroupID
+						v := *service.GroupID
+						copy.GroupID = &v
 					}
 					if service.Group != "" {
 						copy.Group = service.Group
 					}
 					copy.Before = append(copy.Before, service.Before...)
 					copy.After = append(copy.After, service.After...)
+					copy.Requires = append(copy.Requires, service.Requires...)
 					for k, v := range service.Environment {
 						copy.Environment[k] = v
 					}
