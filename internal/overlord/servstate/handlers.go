@@ -170,6 +170,9 @@ func (m *ServiceManager) serviceForStart(task *state.Task, config *plan.Service)
 		return service
 	}
 
+	// Ensure config is up-to-date from the plan whenever the user starts a service.
+	service.config = config.Copy()
+
 	switch service.state {
 	case stateInitial, stateStarting, stateRunning:
 		taskLogf(task, "Service %q already started.", config.Name)
@@ -413,7 +416,7 @@ func (s *serviceData) exited(waitErr error) error {
 		action, onType := getAction(s.config, waitErr == nil)
 		switch action {
 		case plan.ActionIgnore:
-			logger.Debugf("Service %q %s action is %q, transitioning to stopped state", s.config.Name, onType, action)
+			logger.Noticef("Service %q %s action is %q, transitioning to stopped state", s.config.Name, onType, action)
 			s.transition(stateStopped)
 
 		case plan.ActionHalt:
