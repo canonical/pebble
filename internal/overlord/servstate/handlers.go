@@ -588,6 +588,12 @@ func (s *serviceData) stop() error {
 			logger.Noticef("Cannot send SIGTERM to process: %v", err)
 		}
 		s.transition(stateTerminating)
+		for {
+			var wstatus syscall.WaitStatus
+			if _, err := syscall.Wait4(-s.cmd.Process.Pid, &wstatus, syscall.WNOHANG, nil); err != syscall.EINTR && err != nil {
+				break
+			}
+		}
 		time.AfterFunc(killWait, func() { logError(s.terminateTimeElapsed()) })
 
 	case stateBackoff:

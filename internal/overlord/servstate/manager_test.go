@@ -921,6 +921,52 @@ services:
 	})
 }
 
+func (s *S) TestStopWaitChildren(c *C) {
+	layer := parseLayer(c, 0, "layer", `
+services:
+    test2:
+        override: merge
+        command: bash -c "trap \"sleep 0.15; echo Hello Child\" SIGTERM; echo Test Child; sleep 0.1"
+`)
+	err := s.manager.AppendLayer(layer)
+	c.Assert(err, IsNil)
+
+	// Start service and wait till it starts up the first time.
+	chg := s.startServices(c, []string{"test2"}, 1)
+	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
+		return svc.Current == servstate.StatusActive
+	})
+
+	// Ensure it can be stopped successfully.
+	chg = s.stopServices(c, []string{"test2"}, 1)
+	s.st.Lock()
+	c.Check(chg.Status(), Equals, state.DoneStatus, Commentf("Error: %v", chg.Err()))
+	s.st.Unlock()
+	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
+		return svc.Current == servstate.StatusInactive
+	})
+
+	outputs := map[string]string{
+		"test2": `2.* \[test2\] Test Child\n2.* \[test2\] Terminated\n2.* \[test2\] Hello Child\n`,
+	}
+
+	iterators, err := s.manager.ServiceLogs([]string{"test2"}, -1)
+	c.Assert(err, IsNil)
+
+	for serviceName, it := range iterators {
+		buf := &bytes.Buffer{}
+		for it.Next(nil) {
+			_, err = io.Copy(buf, it)
+			c.Assert(err, IsNil)
+		}
+
+		c.Assert(buf.String(), Matches, outputs[serviceName])
+
+		err = it.Close()
+		c.Assert(err, IsNil)
+	}
+}
+
 func (s *S) waitUntilService(c *C, service string, f func(svc *servstate.ServiceInfo) bool) {
 	for i := 0; i < 20; i++ {
 		svc := s.serviceByName(c, service)
