@@ -356,8 +356,13 @@ func (s *serviceData) startInternal() error {
 	done := make(chan struct{})
 	go func() {
 		waitErr := s.cmd.Wait()
+		err := s.waitProcessGroup()
+		if err != nil {
+			logger.Noticef("Cannot wait for process group: %v", err)
+		}
+		time.AfterFunc(killWait, func() { logError(s.terminateTimeElapsed()) })
 		close(done)
-		err := s.exited(waitErr)
+		err = s.exited(waitErr)
 		if err != nil {
 			logger.Noticef("Cannot transition state after service exit: %v", err)
 		}
@@ -588,13 +593,6 @@ func (s *serviceData) stop() error {
 			logger.Noticef("Cannot send SIGTERM to process: %v", err)
 		}
 		s.transition(stateTerminating)
-		for {
-			var wstatus syscall.WaitStatus
-			if _, err := syscall.Wait4(-s.cmd.Process.Pid, &wstatus, syscall.WNOHANG, nil); err != syscall.EINTR && err != nil {
-				break
-			}
-		}
-		time.AfterFunc(killWait, func() { logError(s.terminateTimeElapsed()) })
 
 	case stateBackoff:
 		logger.Noticef("Service %q stopped while waiting for backoff", s.config.Name)
@@ -605,6 +603,18 @@ func (s *serviceData) stop() error {
 		return fmt.Errorf("cannot stop service while %s", s.state)
 	}
 	return nil
+}
+
+func (s *serviceData) waitProcessGroup() error {
+	for {
+		var wstatus syscall.WaitStatus
+		if _, err := syscall.Wait4(-s.cmd.Process.Pid, &wstatus, syscall.WNOHANG, nil); err != syscall.EINTR && err != nil {
+			if syscall.ECHILD == err {
+				return nil
+			}
+			return err
+		}
+	}
 }
 
 // backoffTimeElapsed is called when the current backoff's timer has elapsed,
