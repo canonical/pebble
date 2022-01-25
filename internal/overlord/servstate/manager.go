@@ -9,6 +9,8 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/sys/unix"
+
 	"github.com/canonical/pebble/internal/overlord/restart"
 	"github.com/canonical/pebble/internal/overlord/state"
 	"github.com/canonical/pebble/internal/plan"
@@ -61,7 +63,17 @@ func NewManager(s *state.State, runner *state.TaskRunner, pebbleDir string, serv
 	runner.AddHandler("start", manager.doStart, nil)
 	runner.AddHandler("stop", manager.doStop, nil)
 
+	err := setChildSubreaper()
+	if err != nil {
+		return nil, err
+	}
+
 	return manager, nil
+}
+
+// TODO: For testing https://github.com/canonical/pebble/issues/6
+func setChildSubreaper() error {
+	return unix.Prctl(unix.PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0)
 }
 
 func (m *ServiceManager) reloadPlan() error {
