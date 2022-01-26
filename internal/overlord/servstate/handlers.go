@@ -23,13 +23,6 @@ import (
 	"github.com/canonical/pebble/internal/strutil/shlex"
 )
 
-func init() {
-	// Reap sub-children via setting the child subreaper
-	// that way we can reap "grandchildren" from our main process,
-	// effectively we can wait for the children of the terminating process
-	unix.Prctl(unix.PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0)
-}
-
 // TaskServiceRequest extracts the *ServiceRequest that was associated
 // with the provided task when it was created, reflecting details of
 // the operation requested.
@@ -363,9 +356,9 @@ func (s *serviceData) startInternal() error {
 	done := make(chan struct{})
 	go func() {
 		waitErr := s.cmd.Wait()
-		childErr := s.waitProcessGroup()
-		if childErr != nil {
-			logger.Noticef("Cannot wait for children processes after main process exit: %v", childErr)
+		err := waitChildren(s.cmd.Process.Pid)
+		if err != nil {
+			logger.Noticef("Cannot wait for children processes after main process exit: %v", err)
 		}
 		close(done)
 		err = s.exited(waitErr)
@@ -612,29 +605,20 @@ func (s *serviceData) stop() error {
 	return nil
 }
 
-func (s *serviceData) waitProcessGroup() error {
-	var (
-		status syscall.WaitStatus
-		rusage syscall.Rusage
-		pid1   int
-		err    error
-	)
+func waitChildren(pid int) error {
 	for {
-		// __WALL (since Linux 2.4)
 		// Wait for all children, regardless of type ("clone" or "non-clone").
-		pid1, err = syscall.Wait4(-s.cmd.Process.Pid, &status, syscall.WALL, &rusage)
-		// https://linux.die.net/man/2/waitid
+		wpid, err := syscall.Wait4(-pid, nil, syscall.WALL, nil)
 		// wait(): on success, returns the process ID of the terminated child; on error, -1 is returned.
-		if pid1 == -1 {
-			break
+		if wpid == -1 {
+			// (for wait()) The calling process does not have any unwaited-for children.
+			if err == syscall.ECHILD {
+				return nil
+			}
+			return err
 		}
-		logger.Noticef("Waited for child %d of PGID %d", pid1, s.cmd.Process.Pid)
+		logger.Debugf("Waited for child %d of PGID %d", wpid, pid)
 	}
-	// (for wait()) The calling process does not have any unwaited-for children.
-	if err == syscall.ECHILD {
-		return nil
-	}
-	return err
 }
 
 // backoffTimeElapsed is called when the current backoff's timer has elapsed,

@@ -13,6 +13,7 @@ import (
 	"github.com/canonical/pebble/internal/overlord/state"
 	"github.com/canonical/pebble/internal/plan"
 	"github.com/canonical/pebble/internal/servicelog"
+	"golang.org/x/sys/unix"
 )
 
 type ServiceManager struct {
@@ -48,6 +49,11 @@ func (e *LabelExists) Error() string {
 }
 
 func NewManager(s *state.State, runner *state.TaskRunner, pebbleDir string, serviceOutput io.Writer, restarter Restarter) (*ServiceManager, error) {
+	// Set Pebble as a "child subreaper" so it becomes the parent of orphaned children
+	// rather than PID 1, allowing us to wait for processes that a service starts (see
+	// https://unix.stackexchange.com/a/250156/73491).
+	err := unix.Prctl(unix.PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0)
+
 	manager := &ServiceManager{
 		state:         s,
 		runner:        runner,
@@ -61,7 +67,7 @@ func NewManager(s *state.State, runner *state.TaskRunner, pebbleDir string, serv
 	runner.AddHandler("start", manager.doStart, nil)
 	runner.AddHandler("stop", manager.doStop, nil)
 
-	return manager, nil
+	return manager, err
 }
 
 func (m *ServiceManager) reloadPlan() error {
