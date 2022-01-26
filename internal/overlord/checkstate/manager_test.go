@@ -149,7 +149,7 @@ func (s *ManagerSuite) TestTimeout(c *C) {
 	})
 	c.Assert(check.Failures, Equals, 1)
 	c.Assert(check.LastError, Equals, "exec check timed out")
-	c.Assert(check.ErrorDetails, Equals, "FOO\n")
+	c.Assert(check.ErrorDetails, Equals, "FOO")
 }
 
 func (s *ManagerSuite) TestCheckCanceled(c *C) {

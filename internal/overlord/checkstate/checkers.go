@@ -23,14 +23,19 @@ import (
 	"net/http"
 	"os/exec"
 	"strconv"
+	"strings"
 	"syscall"
 
 	"github.com/canonical/pebble/internal/logger"
 	"github.com/canonical/pebble/internal/osutil"
+	"github.com/canonical/pebble/internal/servicelog"
 	"github.com/canonical/pebble/internal/strutil/shlex"
 )
 
-const maxDetailsLen = 1024
+const (
+	maxErrorBytes = 10 * 1024
+	maxErrorLines = 20
+)
 
 // httpChecker is a checker that ensures an HTTP GET at a specified URL returns 20x.
 type httpChecker struct {
@@ -54,15 +59,18 @@ func (c *httpChecker) check(ctx context.Context) error {
 	defer response.Body.Close()
 
 	if response.StatusCode < 200 || response.StatusCode > 299 {
-		// Include first 1024 bytes of response body in error details
-		output, err := ioutil.ReadAll(io.LimitReader(response.Body, maxDetailsLen+1))
+		// Include first few lines of response body in error details
+		output, err := ioutil.ReadAll(io.LimitReader(response.Body, maxErrorBytes))
 		details := ""
 		if err != nil {
 			details = fmt.Sprintf("cannot read response body: %v", err)
-		} else if len(output) > maxDetailsLen {
-			details = string(output[:maxDetailsLen]) + "..."
 		} else {
-			details = string(output)
+			lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+			if len(lines) > maxErrorLines {
+				lines = lines[:maxErrorLines+1]
+				lines[maxErrorLines] = "(...)"
+			}
+			details = strings.Join(lines, "\n")
 		}
 		return &detailsError{
 			error:   fmt.Errorf("received non-20x status code %d", response.StatusCode),
@@ -137,17 +145,26 @@ func (c *execChecker) check(ctx context.Context) error {
 		}
 	}
 
-	output, err := cmd.CombinedOutput()
+	// Start service, sending output to a ring buffer so we can show the last
+	// few lines of output on error.
+	ringBuffer := servicelog.NewRingBuffer(maxErrorBytes)
+	defer ringBuffer.Close()
+	cmd.Stdout = ringBuffer
+	cmd.Stderr = ringBuffer
+	err = cmd.Start()
+	if err != nil {
+		return err
+	}
+	err = cmd.Wait()
 	if err != nil {
 		if ctx.Err() == context.DeadlineExceeded {
 			err = fmt.Errorf("exec check timed out")
 		}
-		// Include the last 1024 bytes of output in the error details
-		details := ""
-		if len(output) > maxDetailsLen {
-			details = "..." + string(output[len(output)-maxDetailsLen:])
-		} else {
-			details = string(output)
+		// Include the last few lines of output in the error details
+		var details string
+		details, linesErr := servicelog.LastLines(ringBuffer, maxErrorLines, "", false)
+		if linesErr != nil {
+			details = fmt.Sprintf("cannot read output buffer: %v", linesErr)
 		}
 		return &detailsError{error: err, details: details}
 	}
