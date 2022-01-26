@@ -40,7 +40,7 @@ type httpChecker struct {
 }
 
 func (c *httpChecker) check(ctx context.Context) error {
-	logger.Debugf("Check %q (HTTP): requesting %q", c.name, c.url)
+	logger.Debugf("Check %q (http): requesting %q", c.name, c.url)
 	client := &http.Client{}
 	request, err := http.NewRequestWithContext(ctx, "GET", c.url, nil)
 	for k, v := range c.headers {
@@ -80,7 +80,7 @@ type tcpChecker struct {
 }
 
 func (c *tcpChecker) check(ctx context.Context) error {
-	logger.Debugf("Check %q (TCP): opening port %d", c.name, c.port)
+	logger.Debugf("Check %q (tcp): opening port %d", c.name, c.port)
 
 	host := c.host
 	if host == "" {
@@ -94,7 +94,7 @@ func (c *tcpChecker) check(ctx context.Context) error {
 	}
 	err = conn.Close()
 	if err != nil {
-		logger.Noticef("Check %q (TCP): unexpected error closing connection: %v", c.name, err)
+		logger.Noticef("Check %q (tcp): unexpected error closing connection: %v", c.name, err)
 	}
 	return nil
 }
@@ -112,7 +112,7 @@ type execChecker struct {
 }
 
 func (c *execChecker) check(ctx context.Context) error {
-	logger.Debugf("Check %q (Exec): running %q", c.name, c.command)
+	logger.Debugf("Check %q (exec): running %q", c.name, c.command)
 
 	args, err := shlex.Split(c.command)
 	if err != nil {
