@@ -148,7 +148,9 @@ description: |
 
 # (Required) A list of services managed by this configuration layer
 services:
+
     <service name>:
+
         # (Required) Control how this service definition is combined with any
         # other pre-existing definition with the same name in the Pebble plan.
         #
@@ -158,8 +160,7 @@ services:
         override: merge | replace
 
         # (Required in combined layer) The command to run the service. The
-        # command is executed directly; use "/bin/sh -c '...'" to run via the
-        # shell.
+        # command is executed directly, not interpreted by a shell.
         #
         # Example: /usr/bin/somecommand -b -t 30
         command: <commmand>
@@ -245,9 +246,12 @@ services:
         # half a minute ("30s").
         backoff-limit: <duration>
 
+
 # (Optional) A list of health checks managed by this configuration layer.
 checks:
+
     <check name>:
+
         # (Required) Control how this check definition is combined with any
         # other pre-existing definition with the same name in the Pebble plan.
         #
@@ -258,7 +262,7 @@ checks:
 
         # (Optional) Check level, which can be used for filtering checks when
         # calling the checks API or health endpoint.
-
+        #
         # For the health endpoint, ready implies alive. In other words, if all
         # the "ready" checks are succeeding and there are no "alive" checks,
         # the /v1/health API will return success for level=alive.
@@ -276,7 +280,7 @@ checks:
         # (Optional) Number of times in a row the check must error to be
         # considered a failure (which triggers the on-check-failure action).
         # Default 3.
-        failures: <failure threshold>
+        threshold: <failure threshold>
 
         # Configures an HTTP check, which is successful if a GET to the
         # specified URL returns a 20x status code.
@@ -299,7 +303,7 @@ checks:
             # (Required) Port number to open.
             port: <port number>
 
-            # (Optional) Hostname to use. Default is "localhost".
+            # (Optional) Host name or IP address to use. Default is "localhost".
             host: <host name>
 
         # Configures a command execution check, which is successful if running
@@ -308,7 +312,7 @@ checks:
         # Only one of "http", "tcp", or "exec" may be specified.
         exec:
             # (Required) Command line to execute. The command is executed
-            # directly; use "/bin/sh -c '...'" to run via the shell.
+            # directly, not interpreted by a shell.
             command: <commmand>
 
             # (Optional) A list of key/value pairs defining environment
