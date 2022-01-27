@@ -926,7 +926,7 @@ func (s *S) TestStopWaitChildren(c *C) {
 services:
     test2:
         override: merge
-        command: bash -c "trap \"sleep 0.15; echo Hello Child\" SIGTERM; echo Test Child; sleep 0.1"
+        command: bash -c 'bash -c "{ trap \"echo child 1\" SIGTERM; sleep 0.4; } & { trap \"echo child 2\" SIGTERM; sleep 0.3; } & sleep 0.2"; sleep 0.1'
 `)
 	err := s.manager.AppendLayer(layer)
 	c.Assert(err, IsNil)
@@ -947,7 +947,7 @@ services:
 	})
 
 	outputs := map[string]string{
-		"test2": `2.* \[test2\] Test Child\n2.* \[test2\] Terminated\n2.* \[test2\] Hello Child\n`,
+		"test2": `2.* \[test2\] Terminated\n2.* \[test2\] child.*\n2.* \[test2\] Terminated\n2.* \[test2\] child.*\n`,
 	}
 
 	iterators, err := s.manager.ServiceLogs([]string{"test2"}, -1)
