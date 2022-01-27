@@ -445,10 +445,10 @@ func (m *ServiceManager) SendSignal(services []string, signal string) error {
 	return nil
 }
 
-// CheckFailure response to a health check failure. If the given check name is
+// CheckFailed response to a health check failure. If the given check name is
 // in the on-check-failure map for a service, tell the service to perform the
 // configured action (for example, "restart").
-func (m *ServiceManager) CheckFailure(name string) {
+func (m *ServiceManager) CheckFailed(name string) {
 	m.servicesLock.Lock()
 	defer m.servicesLock.Unlock()
 

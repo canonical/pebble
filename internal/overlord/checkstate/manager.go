@@ -46,9 +46,9 @@ func (m *CheckManager) NotifyCheckFailed(f FailureFunc) {
 	m.failureHandlers = append(m.failureHandlers, f)
 }
 
-// Configure handles updates to the plan (server configuration),
+// PlanChanged handles updates to the plan (server configuration),
 // stopping the previous checks and starting the new ones as required.
-func (m *CheckManager) Configure(p *plan.Plan) {
+func (m *CheckManager) PlanChanged(p *plan.Plan) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 

@@ -925,11 +925,11 @@ services:
 func (s *S) TestOnCheckFailureRestartWhileRunning(c *C) {
 	// Create check manager and tell it about plan updates
 	checkMgr := checkstate.NewManager()
-	defer checkMgr.Configure(&plan.Plan{})
-	s.manager.NotifyPlanChanged(checkMgr.Configure)
+	defer checkMgr.PlanChanged(&plan.Plan{})
+	s.manager.NotifyPlanChanged(checkMgr.PlanChanged)
 
 	// Tell service manager about check failures
-	checkMgr.NotifyCheckFailed(s.manager.CheckFailure)
+	checkMgr.NotifyCheckFailed(s.manager.CheckFailed)
 
 	tempDir := c.MkDir()
 	tempFile := filepath.Join(tempDir, "out")
@@ -1015,11 +1015,11 @@ checks:
 func (s *S) TestOnCheckFailureRestartDuringBackoff(c *C) {
 	// Create check manager and tell it about plan updates
 	checkMgr := checkstate.NewManager()
-	defer checkMgr.Configure(&plan.Plan{})
-	s.manager.NotifyPlanChanged(checkMgr.Configure)
+	defer checkMgr.PlanChanged(&plan.Plan{})
+	s.manager.NotifyPlanChanged(checkMgr.PlanChanged)
 
 	// Tell service manager about check failures
-	checkMgr.NotifyCheckFailed(s.manager.CheckFailure)
+	checkMgr.NotifyCheckFailed(s.manager.CheckFailed)
 
 	tempDir := c.MkDir()
 	tempFile := filepath.Join(tempDir, "out")
@@ -1093,11 +1093,11 @@ checks:
 func (s *S) TestOnCheckFailureIgnore(c *C) {
 	// Create check manager and tell it about plan updates
 	checkMgr := checkstate.NewManager()
-	defer checkMgr.Configure(&plan.Plan{})
-	s.manager.NotifyPlanChanged(checkMgr.Configure)
+	defer checkMgr.PlanChanged(&plan.Plan{})
+	s.manager.NotifyPlanChanged(checkMgr.PlanChanged)
 
 	// Tell service manager about check failures
-	checkMgr.NotifyCheckFailed(s.manager.CheckFailure)
+	checkMgr.NotifyCheckFailed(s.manager.CheckFailed)
 
 	tempDir := c.MkDir()
 	tempFile := filepath.Join(tempDir, "out")
@@ -1165,11 +1165,11 @@ checks:
 func (s *S) TestOnCheckFailureHalt(c *C) {
 	// Create check manager and tell it about plan updates
 	checkMgr := checkstate.NewManager()
-	defer checkMgr.Configure(&plan.Plan{})
-	s.manager.NotifyPlanChanged(checkMgr.Configure)
+	defer checkMgr.PlanChanged(&plan.Plan{})
+	s.manager.NotifyPlanChanged(checkMgr.PlanChanged)
 
 	// Tell service manager about check failures
-	checkMgr.NotifyCheckFailed(s.manager.CheckFailure)
+	checkMgr.NotifyCheckFailed(s.manager.CheckFailed)
 
 	tempDir := c.MkDir()
 	tempFile := filepath.Join(tempDir, "out")

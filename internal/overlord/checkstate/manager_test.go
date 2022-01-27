@@ -48,7 +48,7 @@ func (s *ManagerSuite) SetUpSuite(c *C) {
 
 func (s *ManagerSuite) TestChecks(c *C) {
 	mgr := NewManager()
-	mgr.Configure(&plan.Plan{
+	mgr.PlanChanged(&plan.Plan{
 		Checks: map[string]*plan.Check{
 			"chk1": {
 				Name:      "chk1",
@@ -105,7 +105,7 @@ func (s *ManagerSuite) TestChecks(c *C) {
 	})
 
 	// Re-configuring should update checks
-	mgr.Configure(&plan.Plan{
+	mgr.PlanChanged(&plan.Plan{
 		Checks: map[string]*plan.Check{
 			"chk4": {
 				Name:      "chk4",
@@ -123,7 +123,7 @@ func (s *ManagerSuite) TestChecks(c *C) {
 }
 
 func stopChecks(c *C, mgr *CheckManager) {
-	mgr.Configure(&plan.Plan{})
+	mgr.PlanChanged(&plan.Plan{})
 	checks, err := mgr.Checks("", nil)
 	c.Assert(err, IsNil)
 	c.Assert(checks, HasLen, 0)
@@ -131,7 +131,7 @@ func stopChecks(c *C, mgr *CheckManager) {
 
 func (s *ManagerSuite) TestTimeout(c *C) {
 	mgr := NewManager()
-	mgr.Configure(&plan.Plan{
+	mgr.PlanChanged(&plan.Plan{
 		Checks: map[string]*plan.Check{
 			"chk1": {
 				Name:      "chk1",
@@ -161,7 +161,7 @@ func (s *ManagerSuite) TestCheckCanceled(c *C) {
 	tempDir := c.MkDir()
 	tempFile := filepath.Join(tempDir, "file.txt")
 	command := fmt.Sprintf(`/bin/sh -c "for i in {1..1000}; do echo x >>%s; sleep 0.005; done"`, tempFile)
-	mgr.Configure(&plan.Plan{
+	mgr.PlanChanged(&plan.Plan{
 		Checks: map[string]*plan.Check{
 			"chk1": {
 				Name:      "chk1",
@@ -223,7 +223,7 @@ func (s *ManagerSuite) TestFailures(c *C) {
 		failureName = name
 	})
 	os.Setenv("FAIL_PEBBLE_TEST", "1")
-	mgr.Configure(&plan.Plan{
+	mgr.PlanChanged(&plan.Plan{
 		Checks: map[string]*plan.Check{
 			"chk1": {
 				Name:      "chk1",
