@@ -34,7 +34,7 @@ type ServiceManager struct {
 	rand     *rand.Rand
 }
 
-// PlanFunc is the type of function used by AddPlanHandler.
+// PlanFunc is the type of function used by NotifyPlanChanged.
 type PlanFunc func(p *plan.Plan)
 
 type Restarter interface {
@@ -68,9 +68,9 @@ func NewManager(s *state.State, runner *state.TaskRunner, pebbleDir string, serv
 	return manager, nil
 }
 
-// AddPlanHandler adds f to the list of "plan handlers", functions that are
-// called whenever the plan is updated.
-func (m *ServiceManager) AddPlanHandler(f PlanFunc) {
+// NotifyPlanChanged adds f to the list of functions that are called whenever
+// the plan is updated.
+func (m *ServiceManager) NotifyPlanChanged(f PlanFunc) {
 	m.planHandlers = append(m.planHandlers, f)
 }
 

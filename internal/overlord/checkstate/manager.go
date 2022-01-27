@@ -40,9 +40,9 @@ func NewManager() *CheckManager {
 	return &CheckManager{}
 }
 
-// AddFailureHandler adds f to the list of "failure handlers", functions that
-// are called whenever a check hits its failure threshold.
-func (m *CheckManager) AddFailureHandler(f FailureFunc) {
+// NotifyCheckFailed adds f to the list of functions that are called whenever
+// a check hits its failure threshold.
+func (m *CheckManager) NotifyCheckFailed(f FailureFunc) {
 	m.failureHandlers = append(m.failureHandlers, f)
 }
 

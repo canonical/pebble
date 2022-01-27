@@ -155,7 +155,7 @@ func (s *ManagerSuite) TestTimeout(c *C) {
 func (s *ManagerSuite) TestCheckCanceled(c *C) {
 	mgr := NewManager()
 	failureName := ""
-	mgr.AddFailureHandler(func(name string) {
+	mgr.NotifyCheckFailed(func(name string) {
 		failureName = name
 	})
 	tempDir := c.MkDir()
@@ -219,7 +219,7 @@ func (s *ManagerSuite) TestCheckCanceled(c *C) {
 func (s *ManagerSuite) TestFailures(c *C) {
 	mgr := NewManager()
 	failureName := ""
-	mgr.AddFailureHandler(func(name string) {
+	mgr.NotifyCheckFailed(func(name string) {
 		failureName = name
 	})
 	os.Setenv("FAIL_PEBBLE_TEST", "1")
