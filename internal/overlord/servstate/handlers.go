@@ -676,8 +676,8 @@ func (s *serviceData) backoffResetElapsed() error {
 	return nil
 }
 
-// checkFailure handles a health check failure (from the check manager).
-func (s *serviceData) checkFailure(action plan.ServiceAction) {
+// checkFailed handles a health check failure (from the check manager).
+func (s *serviceData) checkFailed(action plan.ServiceAction) {
 	switch s.state {
 	case stateRunning, stateBackoff, stateExited:
 		onType := "on-check-failure"

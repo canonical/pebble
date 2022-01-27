@@ -455,7 +455,7 @@ func (m *ServiceManager) CheckFailed(name string) {
 	for _, service := range m.services {
 		for checkName, action := range service.config.OnCheckFailure {
 			if checkName == name {
-				service.checkFailure(action)
+				service.checkFailed(action)
 			}
 		}
 	}
