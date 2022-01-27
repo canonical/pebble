@@ -215,10 +215,10 @@ func (c *checkData) runCheck() {
 		c.lastErr = err
 		c.failures++
 		logger.Noticef("Check %q failure %d (threshold %d): %v",
-			c.config.Name, c.failures, c.config.Failures, err)
-		if !c.actionRan && c.failures >= c.config.Failures {
+			c.config.Name, c.failures, c.config.Threshold, err)
+		if !c.actionRan && c.failures >= c.config.Threshold {
 			logger.Noticef("Check %q failure threshold %d hit, triggering action",
-				c.config.Name, c.config.Failures)
+				c.config.Name, c.config.Threshold)
 			c.action(c.config.Name)
 			c.actionRan = true
 		}
@@ -236,7 +236,7 @@ func (c *checkData) info() *CheckInfo {
 
 	info := &CheckInfo{
 		Name:     c.config.Name,
-		Healthy:  c.failures < c.config.Failures,
+		Healthy:  c.failures < c.config.Threshold,
 		Failures: c.failures,
 	}
 	if c.lastErr != nil {

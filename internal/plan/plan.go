@@ -39,9 +39,9 @@ const (
 	defaultBackoffFactor = 2.0
 	defaultBackoffLimit  = 30 * time.Second
 
-	defaultCheckPeriod   = 10 * time.Second
-	defaultCheckTimeout  = 3 * time.Second
-	defaultCheckFailures = 3
+	defaultCheckPeriod    = 10 * time.Second
+	defaultCheckTimeout   = 3 * time.Second
+	defaultCheckThreshold = 3
 )
 
 type Plan struct {
@@ -158,9 +158,9 @@ type Check struct {
 	Level    CheckLevel `yaml:"level,omitempty"`
 
 	// Common check settings
-	Period   OptionalDuration `yaml:"period,omitempty"`
-	Timeout  OptionalDuration `yaml:"timeout,omitempty"`
-	Failures int              `yaml:"failures,omitempty"`
+	Period    OptionalDuration `yaml:"period,omitempty"`
+	Timeout   OptionalDuration `yaml:"timeout,omitempty"`
+	Threshold int              `yaml:"threshold,omitempty"`
 
 	// Type-specific check settings (only one of these can be set)
 	HTTP *HTTPCheck `yaml:"http,omitempty"`
@@ -386,11 +386,11 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 				Message: fmt.Sprintf("plan check %q timeout must be less than period", name),
 			}
 		}
-		if check.Failures == 0 {
+		if check.Threshold == 0 {
 			// Default number of failures in a row before check triggers
 			// action, default is >1 to avoid flapping due to glitches. For
 			// what it's worth, Kubernetes probes uses a default of 3 too.
-			check.Failures = defaultCheckFailures
+			check.Threshold = defaultCheckThreshold
 		}
 
 		numTypes := 0

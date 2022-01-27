@@ -946,7 +946,7 @@ checks:
     chk1:
          override: replace
          period: 75ms  # a bit longer than shortOkayWait
-         failures: 1
+         threshold: 1
          exec:
              command: will-fail
 `, tempFile))
@@ -1037,7 +1037,7 @@ checks:
     chk1:
          override: replace
          period: 100ms
-         failures: 1
+         threshold: 1
          exec:
              command: will-fail
 `, tempFile))
@@ -1113,7 +1113,7 @@ checks:
     chk1:
          override: replace
          period: 75ms  # a bit longer than shortOkayWait
-         failures: 1
+         threshold: 1
          exec:
              command: will-fail
 `, tempFile))
@@ -1185,7 +1185,7 @@ checks:
     chk1:
          override: replace
          period: 75ms  # a bit longer than shortOkayWait
-         failures: 1
+         threshold: 1
          exec:
              command: will-fail
 `, tempFile))

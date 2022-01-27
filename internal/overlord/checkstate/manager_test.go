@@ -51,23 +51,23 @@ func (s *ManagerSuite) TestChecks(c *C) {
 	mgr.Configure(&plan.Plan{
 		Checks: map[string]*plan.Check{
 			"chk1": {
-				Name:     "chk1",
-				Period:   plan.OptionalDuration{Value: time.Second},
-				Failures: 3,
-				Exec:     &plan.ExecCheck{Command: "echo chk1"},
+				Name:      "chk1",
+				Period:    plan.OptionalDuration{Value: time.Second},
+				Threshold: 3,
+				Exec:      &plan.ExecCheck{Command: "echo chk1"},
 			},
 			"chk2": {
-				Name:     "chk2",
-				Level:    "alive",
-				Period:   plan.OptionalDuration{Value: time.Second},
-				Failures: 3,
-				Exec:     &plan.ExecCheck{Command: "echo chk2"},
+				Name:      "chk2",
+				Level:     "alive",
+				Period:    plan.OptionalDuration{Value: time.Second},
+				Threshold: 3,
+				Exec:      &plan.ExecCheck{Command: "echo chk2"},
 			},
 			"chk3": {
-				Name:     "chk3",
-				Period:   plan.OptionalDuration{Value: time.Second},
-				Failures: 3,
-				Exec:     &plan.ExecCheck{Command: "echo chk3"},
+				Name:      "chk3",
+				Period:    plan.OptionalDuration{Value: time.Second},
+				Threshold: 3,
+				Exec:      &plan.ExecCheck{Command: "echo chk3"},
 			},
 		},
 	})
@@ -108,10 +108,10 @@ func (s *ManagerSuite) TestChecks(c *C) {
 	mgr.Configure(&plan.Plan{
 		Checks: map[string]*plan.Check{
 			"chk4": {
-				Name:     "chk4",
-				Period:   plan.OptionalDuration{Value: time.Second},
-				Failures: 3,
-				Exec:     &plan.ExecCheck{Command: "echo chk4"},
+				Name:      "chk4",
+				Period:    plan.OptionalDuration{Value: time.Second},
+				Threshold: 3,
+				Exec:      &plan.ExecCheck{Command: "echo chk4"},
 			},
 		},
 	})
@@ -134,11 +134,11 @@ func (s *ManagerSuite) TestTimeout(c *C) {
 	mgr.Configure(&plan.Plan{
 		Checks: map[string]*plan.Check{
 			"chk1": {
-				Name:     "chk1",
-				Period:   plan.OptionalDuration{Value: time.Millisecond},
-				Timeout:  plan.OptionalDuration{Value: 25 * time.Millisecond},
-				Failures: 1,
-				Exec:     &plan.ExecCheck{Command: "/bin/sh -c 'echo FOO; sleep 0.05'"},
+				Name:      "chk1",
+				Period:    plan.OptionalDuration{Value: time.Millisecond},
+				Timeout:   plan.OptionalDuration{Value: 25 * time.Millisecond},
+				Threshold: 1,
+				Exec:      &plan.ExecCheck{Command: "/bin/sh -c 'echo FOO; sleep 0.05'"},
 			},
 		},
 	})
@@ -164,11 +164,11 @@ func (s *ManagerSuite) TestCheckCanceled(c *C) {
 	mgr.Configure(&plan.Plan{
 		Checks: map[string]*plan.Check{
 			"chk1": {
-				Name:     "chk1",
-				Period:   plan.OptionalDuration{Value: time.Millisecond},
-				Timeout:  plan.OptionalDuration{Value: time.Second},
-				Failures: 1,
-				Exec:     &plan.ExecCheck{Command: command},
+				Name:      "chk1",
+				Period:    plan.OptionalDuration{Value: time.Millisecond},
+				Timeout:   plan.OptionalDuration{Value: time.Second},
+				Threshold: 1,
+				Exec:      &plan.ExecCheck{Command: command},
 			},
 		},
 	})
@@ -226,11 +226,11 @@ func (s *ManagerSuite) TestFailures(c *C) {
 	mgr.Configure(&plan.Plan{
 		Checks: map[string]*plan.Check{
 			"chk1": {
-				Name:     "chk1",
-				Period:   plan.OptionalDuration{Value: 20 * time.Millisecond},
-				Timeout:  plan.OptionalDuration{Value: 100 * time.Millisecond},
-				Failures: 3,
-				Exec:     &plan.ExecCheck{Command: `/bin/sh -c '[ -z $FAIL_PEBBLE_TEST ]'`},
+				Name:      "chk1",
+				Period:    plan.OptionalDuration{Value: 20 * time.Millisecond},
+				Timeout:   plan.OptionalDuration{Value: 100 * time.Millisecond},
+				Threshold: 3,
+				Exec:      &plan.ExecCheck{Command: `/bin/sh -c '[ -z $FAIL_PEBBLE_TEST ]'`},
 			},
 		},
 	})
