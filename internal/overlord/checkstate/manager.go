@@ -204,29 +204,31 @@ func (c *checkData) runCheck() {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
-	if err != nil {
-		if ctx.Err() == context.Canceled {
-			// Check was stopped, don't trigger failure action.
-			logger.Debugf("Check %q canceled in flight", c.config.Name)
-			return
-		}
-
-		// Track failure, run failure action if "failures" threshold was hit.
-		c.lastErr = err
-		c.failures++
-		logger.Noticef("Check %q failure %d (threshold %d): %v",
-			c.config.Name, c.failures, c.config.Threshold, err)
-		if !c.actionRan && c.failures >= c.config.Threshold {
-			logger.Noticef("Check %q failure threshold %d hit, triggering action",
-				c.config.Name, c.config.Threshold)
-			c.action(c.config.Name)
-			c.actionRan = true
-		}
+	if err == nil {
+		// Successful check
+		c.lastErr = nil
+		c.failures = 0
+		c.actionRan = false
 		return
 	}
-	c.lastErr = nil
-	c.failures = 0
-	c.actionRan = false
+
+	if ctx.Err() == context.Canceled {
+		// Check was stopped, don't trigger failure action.
+		logger.Debugf("Check %q canceled in flight", c.config.Name)
+		return
+	}
+
+	// Track failure, run failure action if "failures" threshold was hit.
+	c.lastErr = err
+	c.failures++
+	logger.Noticef("Check %q failure %d (threshold %d): %v",
+		c.config.Name, c.failures, c.config.Threshold, err)
+	if !c.actionRan && c.failures >= c.config.Threshold {
+		logger.Noticef("Check %q failure threshold %d hit, triggering action",
+			c.config.Name, c.config.Threshold)
+		c.action(c.config.Name)
+		c.actionRan = true
+	}
 }
 
 // info returns user-facing check information for use in Checks (and tests).
