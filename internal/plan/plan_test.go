@@ -223,7 +223,7 @@ var planTests = []planTest{{
 			"srv1": {
 				Name:     "srv1",
 				Summary:  "Service summary",
-				Override: "merge",
+				Override: "replace",
 				Command:  `cmd arg1 "arg2 arg3"`,
 				Startup:  plan.StartupEnabled,
 				After:    []string{"srv2", "srv4"},

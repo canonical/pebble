@@ -26,8 +26,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/imdario/mergo"
-	"github.com/mitchellh/copystructure"
 	"gopkg.in/yaml.v3"
 
 	"github.com/canonical/pebble/internal/osutil"
@@ -91,18 +89,81 @@ type Service struct {
 
 // Copy returns a deep copy of the service.
 func (s *Service) Copy() *Service {
-	return copystructure.Must(copystructure.Copy(s)).(*Service)
+	copied := *s
+	copied.After = append([]string(nil), s.After...)
+	copied.Before = append([]string(nil), s.Before...)
+	copied.Requires = append([]string(nil), s.Requires...)
+	if s.Environment != nil {
+		copied.Environment = make(map[string]string)
+		for k, v := range s.Environment {
+			copied.Environment[k] = v
+		}
+	}
+	if s.UserID != nil {
+		userID := *s.UserID
+		copied.UserID = &userID
+	}
+	if s.GroupID != nil {
+		groupID := *s.GroupID
+		copied.GroupID = &groupID
+	}
+	if s.OnCheckFailure != nil {
+		copied.OnCheckFailure = make(map[string]ServiceAction)
+		for k, v := range s.OnCheckFailure {
+			copied.OnCheckFailure[k] = v
+		}
+	}
+	return &copied
 }
 
 // Merge merges the fields set in other into c.
 func (s *Service) Merge(other *Service) {
-	mustMerge(s, other)
-}
-
-func mustMerge(dst, src interface{}) {
-	err := mergo.Merge(dst, src, mergo.WithOverride, mergo.WithAppendSlice)
-	if err != nil {
-		panic(err)
+	if other.Summary != "" {
+		s.Summary = other.Summary
+	}
+	if other.Description != "" {
+		s.Description = other.Description
+	}
+	if other.Startup != StartupUnknown {
+		s.Startup = other.Startup
+	}
+	if other.Command != "" {
+		s.Command = other.Command
+	}
+	if other.UserID != nil {
+		s.UserID = other.UserID
+	}
+	if other.User != "" {
+		s.User = other.User
+	}
+	if other.GroupID != nil {
+		s.GroupID = other.GroupID
+	}
+	if other.Group != "" {
+		s.Group = other.Group
+	}
+	s.Before = append(s.Before, other.Before...)
+	s.After = append(s.After, other.After...)
+	for k, v := range other.Environment {
+		s.Environment[k] = v
+	}
+	if other.OnSuccess != "" {
+		s.OnSuccess = other.OnSuccess
+	}
+	if other.OnFailure != "" {
+		s.OnFailure = other.OnFailure
+	}
+	for k, v := range other.OnCheckFailure {
+		s.OnCheckFailure[k] = v
+	}
+	if other.BackoffDelay.IsSet {
+		s.BackoffDelay = other.BackoffDelay
+	}
+	if other.BackoffFactor.IsSet {
+		s.BackoffFactor = other.BackoffFactor
+	}
+	if other.BackoffLimit.IsSet {
+		s.BackoffLimit = other.BackoffLimit
 	}
 }
 
@@ -160,12 +221,51 @@ type Check struct {
 
 // Copy returns a deep copy of the check configuration.
 func (c *Check) Copy() *Check {
-	return copystructure.Must(copystructure.Copy(c)).(*Check)
+	copied := *c
+	if c.HTTP != nil {
+		copied.HTTP = c.HTTP.Copy()
+	}
+	if c.TCP != nil {
+		copied.TCP = c.TCP.Copy()
+	}
+	if copied.Exec != nil {
+		copied.Exec = c.Exec.Copy()
+	}
+	return &copied
 }
 
 // Merge merges the fields set in other into c.
 func (c *Check) Merge(other *Check) {
-	mustMerge(c, other)
+	if other.Level != "" {
+		c.Level = other.Level
+	}
+	if other.Period.IsSet {
+		c.Period = other.Period
+	}
+	if other.Timeout.IsSet {
+		c.Timeout = other.Timeout
+	}
+	if other.Threshold != 0 {
+		c.Threshold = other.Threshold
+	}
+	if other.HTTP != nil {
+		if c.HTTP == nil {
+			c.HTTP = &HTTPCheck{}
+		}
+		c.HTTP.Merge(other.HTTP)
+	}
+	if other.TCP != nil {
+		if c.TCP == nil {
+			c.TCP = &TCPCheck{}
+		}
+		c.TCP.Merge(other.TCP)
+	}
+	if other.Exec != nil {
+		if c.Exec == nil {
+			c.Exec = &ExecCheck{}
+		}
+		c.Exec.Merge(other.Exec)
+	}
 }
 
 // CheckLevel specifies the optional check level.
@@ -185,12 +285,24 @@ type HTTPCheck struct {
 
 // Copy returns a deep copy of the HTTP check configuration.
 func (c *HTTPCheck) Copy() *HTTPCheck {
-	return copystructure.Must(copystructure.Copy(c)).(*HTTPCheck)
+	copied := *c
+	if c.Headers != nil {
+		copied.Headers = make(map[string]string, len(c.Headers))
+		for k, v := range c.Headers {
+			copied.Headers[k] = v
+		}
+	}
+	return &copied
 }
 
 // Merge merges the fields set in other into c.
 func (c *HTTPCheck) Merge(other *HTTPCheck) {
-	mustMerge(c, other)
+	if other.URL != "" {
+		c.URL = other.URL
+	}
+	for k, v := range other.Headers {
+		c.Headers[k] = v
+	}
 }
 
 // TCPCheck holds the configuration for an HTTP health check.
@@ -201,12 +313,18 @@ type TCPCheck struct {
 
 // Copy returns a deep copy of the TCP check configuration.
 func (c *TCPCheck) Copy() *TCPCheck {
-	return copystructure.Must(copystructure.Copy(c)).(*TCPCheck)
+	copied := *c
+	return &copied
 }
 
 // Merge merges the fields set in other into c.
 func (c *TCPCheck) Merge(other *TCPCheck) {
-	mustMerge(c, other)
+	if other.Port != 0 {
+		c.Port = other.Port
+	}
+	if other.Host != "" {
+		c.Host = other.Host
+	}
 }
 
 // ExecCheck holds the configuration for an exec health check.
@@ -222,12 +340,49 @@ type ExecCheck struct {
 
 // Copy returns a deep copy of the exec check configuration.
 func (c *ExecCheck) Copy() *ExecCheck {
-	return copystructure.Must(copystructure.Copy(c)).(*ExecCheck)
+	copied := *c
+	if c.Environment != nil {
+		copied.Environment = make(map[string]string, len(c.Environment))
+		for k, v := range c.Environment {
+			copied.Environment[k] = v
+		}
+	}
+	if c.UserID != nil {
+		userID := *c.UserID
+		copied.UserID = &userID
+	}
+	if c.GroupID != nil {
+		groupID := *c.GroupID
+		copied.GroupID = &groupID
+	}
+	return &copied
 }
 
 // Merge merges the fields set in other into c.
 func (c *ExecCheck) Merge(other *ExecCheck) {
-	mustMerge(c, other)
+	if other.Command != "" {
+		c.Command = other.Command
+	}
+	for k, v := range other.Environment {
+		c.Environment[k] = v
+	}
+	if other.UserID != nil {
+		userID := *other.UserID
+		c.UserID = &userID
+	}
+	if other.User != "" {
+		c.User = other.User
+	}
+	if other.GroupID != nil {
+		groupID := *other.GroupID
+		c.GroupID = &groupID
+	}
+	if other.Group != "" {
+		c.Group = other.Group
+	}
+	if other.WorkingDir != "" {
+		c.WorkingDir = other.WorkingDir
+	}
 }
 
 // FormatError is the error returned when a layer has a format error, such as
