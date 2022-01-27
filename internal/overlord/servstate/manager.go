@@ -69,8 +69,7 @@ func NewManager(s *state.State, runner *state.TaskRunner, pebbleDir string, serv
 }
 
 // AddPlanHandler adds f to the list of "plan handlers", functions that are
-// called whenever the plan is updated. Each function is called with a copy
-// of the plan, so it can safely store or modify it.
+// called whenever the plan is updated.
 func (m *ServiceManager) AddPlanHandler(f PlanFunc) {
 	m.planHandlers = append(m.planHandlers, f)
 }
@@ -78,7 +77,7 @@ func (m *ServiceManager) AddPlanHandler(f PlanFunc) {
 func (m *ServiceManager) updatePlan(p *plan.Plan) {
 	m.plan = p
 	for _, f := range m.planHandlers {
-		f(p.Copy())
+		f(p)
 	}
 }
 

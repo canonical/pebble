@@ -50,11 +50,6 @@ type Plan struct {
 	Checks   map[string]*Check   `yaml:"checks,omitempty"`
 }
 
-// Copy returns a deep copy of the plan.
-func (p *Plan) Copy() *Plan {
-	return copystructure.Must(copystructure.Copy(p)).(*Plan)
-}
-
 type Layer struct {
 	Order       int                 `yaml:"-"`
 	Label       string              `yaml:"-"`
@@ -62,11 +57,6 @@ type Layer struct {
 	Description string              `yaml:"description,omitempty"`
 	Services    map[string]*Service `yaml:"services,omitempty"`
 	Checks      map[string]*Check   `yaml:"checks,omitempty"`
-}
-
-// Copy returns a deep copy of the layer.
-func (l *Layer) Copy() *Layer {
-	return copystructure.Must(copystructure.Copy(l)).(*Layer)
 }
 
 type Service struct {
