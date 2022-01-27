@@ -131,19 +131,22 @@ func (s *Service) Merge(other *Service) {
 		s.Command = other.Command
 	}
 	if other.UserID != nil {
-		s.UserID = other.UserID
+		userID := *other.UserID
+		s.UserID = &userID
 	}
 	if other.User != "" {
 		s.User = other.User
 	}
 	if other.GroupID != nil {
-		s.GroupID = other.GroupID
+		groupID := *other.GroupID
+		s.GroupID = &groupID
 	}
 	if other.Group != "" {
 		s.Group = other.Group
 	}
-	s.Before = append(s.Before, other.Before...)
 	s.After = append(s.After, other.After...)
+	s.Before = append(s.Before, other.Before...)
+	s.Requires = append(s.Requires, other.Requires...)
 	for k, v := range other.Environment {
 		s.Environment[k] = v
 	}
@@ -228,7 +231,7 @@ func (c *Check) Copy() *Check {
 	if c.TCP != nil {
 		copied.TCP = c.TCP.Copy()
 	}
-	if copied.Exec != nil {
+	if c.Exec != nil {
 		copied.Exec = c.Exec.Copy()
 	}
 	return &copied
