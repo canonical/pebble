@@ -1,0 +1,27 @@
+# Create SVG with the following graphviz command:
+#
+# dot -Tsvg internal/overlord/servstate/state-diagram.dot -o ./internal/overlord/servstate/state-diagram.svg
+
+digraph service_state_machine {
+    node [penwidth=3 shape=box fontsize=24] initial
+    node [penwidth=1]
+    {backoff, stopped, exited} -> starting [label="start"]
+    exited -> stopped [label="stop"]
+    initial -> starting [label="start"]
+    starting -> running [label="okayWaitElapsed"]
+    starting -> exited [label="exited"]
+    running -> exited [label="exited (action==ignore)"]
+    running -> exited [label="exited (action==halt)"]
+    running -> backoff [label="exited (action==restart)"]
+    {terminating, killing} -> stopped [label="exited"]
+    {checkTerminating, checkKilling} -> backoff [label="exited"]
+    running -> terminating [label="stop"]
+    backoff -> stopped [label="stop"]
+    backoff -> running [label="backoffTimeElapsed"]
+    terminating -> killing [label="terminateTimeElapsed"]
+    checkTerminating -> checkKilling [label="terminateTimeElapsed"]
+    killing -> stopped [label="killTimeElapsed"]
+    checkKilling -> stopped [label="killTimeElapsed"]
+    running -> checkTerminating [label="checkFailed (action==restart)"]
+    exited -> backoff [label="checkFailed (action==restart)"]
+}
