@@ -3,11 +3,8 @@ package servstate
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"os/exec"
-	"regexp"
-	"strings"
 	"syscall"
 	"time"
 
@@ -75,6 +72,7 @@ const (
 	stateKilling     serviceState = "killing"
 	stateStopped     serviceState = "stopped"
 	stateBackoff     serviceState = "backoff"
+	stateExited      serviceState = "exited"
 )
 
 // serviceData holds the state and other data for a service under our control.
@@ -89,6 +87,7 @@ type serviceData struct {
 	backoffNum  int
 	backoffTime time.Duration
 	resetTimer  *time.Timer
+	restarting  bool
 }
 
 func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
@@ -177,8 +176,8 @@ func (m *ServiceManager) serviceForStart(task *state.Task, config *plan.Service)
 	case stateInitial, stateStarting, stateRunning:
 		taskLogf(task, "Service %q already started.", config.Name)
 		return nil
-	case stateBackoff, stateStopped:
-		// Start allowed in "backoff" and "stopped" states.
+	case stateBackoff, stateStopped, stateExited:
+		// Start allowed when service is backing off, was stopped, or has exited.
 		service.backoffNum = 0
 		service.backoffTime = 0
 		service.transition(stateInitial)
@@ -254,6 +253,10 @@ func (m *ServiceManager) serviceForStop(task *state.Task, name string) *serviceD
 	case stateStopped:
 		taskLogf(task, "Service %q already stopped.", name)
 		return nil
+	case stateExited:
+		taskLogf(task, "Service %q had already exited.", name)
+		service.transition(stateStopped)
+		return nil
 	default:
 		return service
 	}
@@ -269,7 +272,13 @@ func (m *ServiceManager) removeService(name string) {
 // transition changes the service's state machine to the given state.
 func (s *serviceData) transition(state serviceState) {
 	logger.Debugf("Service %q transitioning to state %q", s.config.Name, state)
+	s.transitionRestarting(state, false)
+}
+
+// transitionRestarting changes the service's state and also sets the restarting flag.
+func (s *serviceData) transitionRestarting(state serviceState, restarting bool) {
 	s.state = state
+	s.restarting = restarting
 }
 
 // start is called to transition from the initial state and start the service.
@@ -409,38 +418,37 @@ func (s *serviceData) exited(waitErr error) error {
 	switch s.state {
 	case stateStarting:
 		s.started <- fmt.Errorf("exited quickly with code %d", exitCode(s.cmd))
-		s.transition(stateStopped) // not strictly necessary as doStart will return, but doesn't hurt
+		s.transition(stateExited) // not strictly necessary as doStart will return, but doesn't hurt
 
 	case stateRunning:
 		logger.Noticef("Service %q stopped unexpectedly with code %d", s.config.Name, exitCode(s.cmd))
 		action, onType := getAction(s.config, waitErr == nil)
 		switch action {
 		case plan.ActionIgnore:
-			logger.Noticef("Service %q %s action is %q, transitioning to stopped state", s.config.Name, onType, action)
-			s.transition(stateStopped)
+			logger.Noticef("Service %q %s action is %q, not doing anything further", s.config.Name, onType, action)
+			s.transition(stateExited)
 
-		case plan.ActionHalt:
+		case plan.ActionShutdown:
 			logger.Noticef("Service %q %s action is %q, triggering server exit", s.config.Name, onType, action)
 			s.manager.restarter.HandleRestart(restart.RestartDaemon)
-			s.transition(stateStopped)
+			s.transition(stateExited)
 
 		case plan.ActionRestart:
-			s.backoffNum++
-			s.backoffTime = calculateNextBackoff(s.config, s.backoffTime)
-			logger.Noticef("Service %q %s action is %q, waiting ~%s before restart (backoff %d)",
-				s.config.Name, onType, action, s.backoffTime, s.backoffNum)
-			s.transition(stateBackoff)
-			duration := s.backoffTime + s.manager.getJitter(s.backoffTime)
-			time.AfterFunc(duration, func() { logError(s.backoffTimeElapsed()) })
+			s.doBackoff(action, onType)
 
 		default:
 			return fmt.Errorf("internal error: unexpected action %q", action)
 		}
 
 	case stateTerminating, stateKilling:
-		logger.Noticef("Service %q stopped", s.config.Name)
-		s.stopped <- nil
-		s.transition(stateStopped)
+		if s.restarting {
+			logger.Noticef("Service %q exited after check failure, restarting", s.config.Name)
+			s.doBackoff(plan.ActionRestart, "on-check-failure")
+		} else {
+			logger.Noticef("Service %q stopped", s.config.Name)
+			s.stopped <- nil
+			s.transition(stateStopped)
+		}
 
 	default:
 		return fmt.Errorf("internal error: exited invalid in state %q", s.state)
@@ -454,43 +462,23 @@ func addLastLogs(task *state.Task, logBuffer *servicelog.RingBuffer) {
 	st.Lock()
 	defer st.Unlock()
 
-	logs, err := getLastLogs(logBuffer)
+	logs, err := servicelog.LastLines(logBuffer, lastLogLines, "    ", true)
 	if err != nil {
 		task.Errorf("Cannot read service logs: %v", err)
 	}
 	if logs != "" {
-		// Add lastLogLines last lines of service output to the task's log.
+		// Add last few lines of service output to the task's log.
 		task.Logf("Most recent service output:\n%s", logs)
 	}
 }
-
-// Used to strip the Pebble log prefix, for example: "2006-01-02T15:04:05.000Z [service] "
-// Timestamp must match format in logger.timestampFormat.
-var timestampServiceRegexp = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z \[[^]]+\] `)
-
-// getLastLogs fetches the last few lines of output and strips the timestamp
-// and service name prefix.
-func getLastLogs(logBuffer *servicelog.RingBuffer) (string, error) {
-	it := logBuffer.HeadIterator(lastLogLines + 1)
-	defer it.Close()
-	logBytes, err := ioutil.ReadAll(it)
-	if err != nil {
-		return "", err
-	}
-
-	// Indent lines
-	trimmed := strings.TrimSpace(string(logBytes))
-	lines := strings.Split(trimmed, "\n")
-	if len(lines) > lastLogLines {
-		// Prefix with truncation marker if too many lines
-		lines[0] = "(...)"
-	}
-	for i, line := range lines {
-		// Strip Pebble timestamp and "[service]" prefix
-		line = timestampServiceRegexp.ReplaceAllString(line, "")
-		lines[i] = "    " + line
-	}
-	return strings.Join(lines, "\n"), nil
+func (s *serviceData) doBackoff(action plan.ServiceAction, onType string) {
+	s.backoffNum++
+	s.backoffTime = calculateNextBackoff(s.config, s.backoffTime)
+	logger.Noticef("Service %q %s action is %q, waiting ~%s before restart (backoff %d)",
+		s.config.Name, onType, action, s.backoffTime, s.backoffNum)
+	s.transition(stateBackoff)
+	duration := s.backoffTime + s.manager.getJitter(s.backoffTime)
+	time.AfterFunc(duration, func() { logError(s.backoffTimeElapsed()) })
 }
 
 func calculateNextBackoff(config *plan.Service, current time.Duration) time.Duration {
@@ -565,7 +553,7 @@ func (s *serviceData) sendSignal(signal string) error {
 			return err
 		}
 
-	case stateBackoff, stateTerminating, stateKilling, stateStopped:
+	case stateBackoff, stateTerminating, stateKilling, stateStopped, stateExited:
 		return fmt.Errorf("service is not running")
 
 	default:
@@ -636,7 +624,7 @@ func (s *serviceData) terminateTimeElapsed() error {
 		if err != nil {
 			logger.Noticef("Cannot send SIGKILL to process: %v", err)
 		}
-		s.transition(stateKilling)
+		s.transitionRestarting(stateKilling, s.restarting)
 		time.AfterFunc(failWait-killWait, func() { logError(s.killTimeElapsed()) })
 
 	default:
@@ -654,9 +642,14 @@ func (s *serviceData) killTimeElapsed() error {
 
 	switch s.state {
 	case stateKilling:
-		logger.Noticef("Service %q still running after SIGTERM and SIGKILL", s.config.Name)
-		s.stopped <- fmt.Errorf("process still running after SIGTERM and SIGKILL")
-		s.transition(stateStopped)
+		if s.restarting {
+			logger.Noticef("Service %q still running after SIGTERM and SIGKILL", s.config.Name)
+			s.transition(stateStopped)
+		} else {
+			logger.Noticef("Service %q still running after SIGTERM and SIGKILL", s.config.Name)
+			s.stopped <- fmt.Errorf("process still running after SIGTERM and SIGKILL")
+			s.transition(stateStopped)
+		}
 
 	default:
 		// Ignore if timer elapsed in any other state.
@@ -684,6 +677,49 @@ func (s *serviceData) backoffResetElapsed() error {
 		return nil
 	}
 	return nil
+}
+
+// checkFailed handles a health check failure (from the check manager).
+func (s *serviceData) checkFailed(action plan.ServiceAction) {
+	switch s.state {
+	case stateRunning, stateBackoff, stateExited:
+		onType := "on-check-failure"
+		switch action {
+		case plan.ActionIgnore:
+			logger.Debugf("Service %q %s action is %q, remaining in current state", s.config.Name, onType, action)
+
+		case plan.ActionShutdown:
+			logger.Noticef("Service %q %s action is %q, triggering server exit", s.config.Name, onType, action)
+			s.manager.restarter.HandleRestart(restart.RestartDaemon)
+
+		case plan.ActionRestart:
+			switch s.state {
+			case stateRunning:
+				logger.Noticef("Service %q %s action is %q, terminating process before restarting",
+					s.config.Name, onType, action)
+				err := syscall.Kill(-s.cmd.Process.Pid, syscall.SIGTERM)
+				if err != nil {
+					logger.Noticef("Cannot send SIGTERM to process: %v", err)
+				}
+				s.transitionRestarting(stateTerminating, true)
+				time.AfterFunc(killWait, func() { logError(s.terminateTimeElapsed()) })
+			case stateBackoff:
+				logger.Noticef("Service %q %s action is %q, waiting for current backoff",
+					s.config.Name, onType, action)
+				return
+			case stateExited:
+				s.doBackoff(action, onType)
+			}
+
+		default:
+			logger.Noticef("Internal error: unexpected action %q handling check failure for service %q",
+				action, s.config.Name)
+		}
+
+	default:
+		logger.Debugf("Service %q: ignoring on-check-failure action %q in state %s",
+			s.config.Name, action, s.state)
+	}
 }
 
 var setCmdCredential = func(cmd *exec.Cmd, credential *syscall.Credential) {

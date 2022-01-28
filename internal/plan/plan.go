@@ -27,17 +27,25 @@ import (
 	"time"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/canonical/pebble/internal/osutil"
+	"github.com/canonical/pebble/internal/strutil/shlex"
 )
 
 const (
 	defaultBackoffDelay  = 500 * time.Millisecond
 	defaultBackoffFactor = 2.0
 	defaultBackoffLimit  = 30 * time.Second
+
+	defaultCheckPeriod    = 10 * time.Second
+	defaultCheckTimeout   = 3 * time.Second
+	defaultCheckThreshold = 3
 )
 
 type Plan struct {
 	Layers   []*Layer            `yaml:"-"`
 	Services map[string]*Service `yaml:"services,omitempty"`
+	Checks   map[string]*Check   `yaml:"checks,omitempty"`
 }
 
 type Layer struct {
@@ -46,16 +54,17 @@ type Layer struct {
 	Summary     string              `yaml:"summary,omitempty"`
 	Description string              `yaml:"description,omitempty"`
 	Services    map[string]*Service `yaml:"services,omitempty"`
+	Checks      map[string]*Check   `yaml:"checks,omitempty"`
 }
 
 type Service struct {
 	// Basic details
-	Name        string          `yaml:"-"`
-	Summary     string          `yaml:"summary,omitempty"`
-	Description string          `yaml:"description,omitempty"`
-	Startup     ServiceStartup  `yaml:"startup,omitempty"`
-	Override    ServiceOverride `yaml:"override,omitempty"`
-	Command     string          `yaml:"command,omitempty"`
+	Name        string         `yaml:"-"`
+	Summary     string         `yaml:"summary,omitempty"`
+	Description string         `yaml:"description,omitempty"`
+	Startup     ServiceStartup `yaml:"startup,omitempty"`
+	Override    Override       `yaml:"override,omitempty"`
+	Command     string         `yaml:"command,omitempty"`
 
 	// Service dependencies
 	After    []string `yaml:"after,omitempty"`
@@ -70,34 +79,95 @@ type Service struct {
 	Group       string            `yaml:"group,omitempty"`
 
 	// Auto-restart and backoff functionality
-	OnSuccess     ServiceAction    `yaml:"on-success,omitempty"`
-	OnFailure     ServiceAction    `yaml:"on-failure,omitempty"`
-	BackoffDelay  OptionalDuration `yaml:"backoff-delay,omitempty"`
-	BackoffFactor OptionalFloat    `yaml:"backoff-factor,omitempty"`
-	BackoffLimit  OptionalDuration `yaml:"backoff-limit,omitempty"`
+	OnSuccess      ServiceAction            `yaml:"on-success,omitempty"`
+	OnFailure      ServiceAction            `yaml:"on-failure,omitempty"`
+	OnCheckFailure map[string]ServiceAction `yaml:"on-check-failure,omitempty"`
+	BackoffDelay   OptionalDuration         `yaml:"backoff-delay,omitempty"`
+	BackoffFactor  OptionalFloat            `yaml:"backoff-factor,omitempty"`
+	BackoffLimit   OptionalDuration         `yaml:"backoff-limit,omitempty"`
 }
 
 // Copy returns a deep copy of the service.
 func (s *Service) Copy() *Service {
-	copy := *s
-	copy.After = append([]string(nil), s.After...)
-	copy.Before = append([]string(nil), s.Before...)
-	copy.Requires = append([]string(nil), s.Requires...)
+	copied := *s
+	copied.After = append([]string(nil), s.After...)
+	copied.Before = append([]string(nil), s.Before...)
+	copied.Requires = append([]string(nil), s.Requires...)
 	if s.Environment != nil {
-		copy.Environment = make(map[string]string)
+		copied.Environment = make(map[string]string)
 		for k, v := range s.Environment {
-			copy.Environment[k] = v
+			copied.Environment[k] = v
 		}
 	}
 	if s.UserID != nil {
 		userID := *s.UserID
-		copy.UserID = &userID
+		copied.UserID = &userID
 	}
 	if s.GroupID != nil {
 		groupID := *s.GroupID
-		copy.GroupID = &groupID
+		copied.GroupID = &groupID
 	}
-	return &copy
+	if s.OnCheckFailure != nil {
+		copied.OnCheckFailure = make(map[string]ServiceAction)
+		for k, v := range s.OnCheckFailure {
+			copied.OnCheckFailure[k] = v
+		}
+	}
+	return &copied
+}
+
+// Merge merges the fields set in other into c.
+func (s *Service) Merge(other *Service) {
+	if other.Summary != "" {
+		s.Summary = other.Summary
+	}
+	if other.Description != "" {
+		s.Description = other.Description
+	}
+	if other.Startup != StartupUnknown {
+		s.Startup = other.Startup
+	}
+	if other.Command != "" {
+		s.Command = other.Command
+	}
+	if other.UserID != nil {
+		userID := *other.UserID
+		s.UserID = &userID
+	}
+	if other.User != "" {
+		s.User = other.User
+	}
+	if other.GroupID != nil {
+		groupID := *other.GroupID
+		s.GroupID = &groupID
+	}
+	if other.Group != "" {
+		s.Group = other.Group
+	}
+	s.After = append(s.After, other.After...)
+	s.Before = append(s.Before, other.Before...)
+	s.Requires = append(s.Requires, other.Requires...)
+	for k, v := range other.Environment {
+		s.Environment[k] = v
+	}
+	if other.OnSuccess != "" {
+		s.OnSuccess = other.OnSuccess
+	}
+	if other.OnFailure != "" {
+		s.OnFailure = other.OnFailure
+	}
+	for k, v := range other.OnCheckFailure {
+		s.OnCheckFailure[k] = v
+	}
+	if other.BackoffDelay.IsSet {
+		s.BackoffDelay = other.BackoffDelay
+	}
+	if other.BackoffFactor.IsSet {
+		s.BackoffFactor = other.BackoffFactor
+	}
+	if other.BackoffLimit.IsSet {
+		s.BackoffLimit = other.BackoffLimit
+	}
 }
 
 // Equal returns true when the two services are equal in value.
@@ -116,22 +186,207 @@ const (
 	StartupDisabled ServiceStartup = "disabled"
 )
 
-type ServiceOverride string
+// Override specifies the layer override mechanism (for services and checks).
+type Override string
 
 const (
-	UnknownOverride ServiceOverride = ""
-	MergeOverride   ServiceOverride = "merge"
-	ReplaceOverride ServiceOverride = "replace"
+	UnknownOverride Override = ""
+	MergeOverride   Override = "merge"
+	ReplaceOverride Override = "replace"
 )
 
 type ServiceAction string
 
 const (
-	ActionUnset   ServiceAction = ""
-	ActionRestart ServiceAction = "restart"
-	ActionHalt    ServiceAction = "halt"
-	ActionIgnore  ServiceAction = "ignore"
+	ActionUnset    ServiceAction = ""
+	ActionRestart  ServiceAction = "restart"
+	ActionShutdown ServiceAction = "shutdown"
+	ActionIgnore   ServiceAction = "ignore"
 )
+
+// Check specifies configuration for a single health check.
+type Check struct {
+	// Basic details
+	Name     string     `yaml:"-"`
+	Override Override   `yaml:"override,omitempty"`
+	Level    CheckLevel `yaml:"level,omitempty"`
+
+	// Common check settings
+	Period    OptionalDuration `yaml:"period,omitempty"`
+	Timeout   OptionalDuration `yaml:"timeout,omitempty"`
+	Threshold int              `yaml:"threshold,omitempty"`
+
+	// Type-specific check settings (only one of these can be set)
+	HTTP *HTTPCheck `yaml:"http,omitempty"`
+	TCP  *TCPCheck  `yaml:"tcp,omitempty"`
+	Exec *ExecCheck `yaml:"exec,omitempty"`
+}
+
+// Copy returns a deep copy of the check configuration.
+func (c *Check) Copy() *Check {
+	copied := *c
+	if c.HTTP != nil {
+		copied.HTTP = c.HTTP.Copy()
+	}
+	if c.TCP != nil {
+		copied.TCP = c.TCP.Copy()
+	}
+	if c.Exec != nil {
+		copied.Exec = c.Exec.Copy()
+	}
+	return &copied
+}
+
+// Merge merges the fields set in other into c.
+func (c *Check) Merge(other *Check) {
+	if other.Level != "" {
+		c.Level = other.Level
+	}
+	if other.Period.IsSet {
+		c.Period = other.Period
+	}
+	if other.Timeout.IsSet {
+		c.Timeout = other.Timeout
+	}
+	if other.Threshold != 0 {
+		c.Threshold = other.Threshold
+	}
+	if other.HTTP != nil {
+		if c.HTTP == nil {
+			c.HTTP = &HTTPCheck{}
+		}
+		c.HTTP.Merge(other.HTTP)
+	}
+	if other.TCP != nil {
+		if c.TCP == nil {
+			c.TCP = &TCPCheck{}
+		}
+		c.TCP.Merge(other.TCP)
+	}
+	if other.Exec != nil {
+		if c.Exec == nil {
+			c.Exec = &ExecCheck{}
+		}
+		c.Exec.Merge(other.Exec)
+	}
+}
+
+// CheckLevel specifies the optional check level.
+type CheckLevel string
+
+const (
+	UnsetLevel CheckLevel = ""
+	AliveLevel CheckLevel = "alive"
+	ReadyLevel CheckLevel = "ready"
+)
+
+// HTTPCheck holds the configuration for an HTTP health check.
+type HTTPCheck struct {
+	URL     string            `yaml:"url,omitempty"`
+	Headers map[string]string `yaml:"headers,omitempty"`
+}
+
+// Copy returns a deep copy of the HTTP check configuration.
+func (c *HTTPCheck) Copy() *HTTPCheck {
+	copied := *c
+	if c.Headers != nil {
+		copied.Headers = make(map[string]string, len(c.Headers))
+		for k, v := range c.Headers {
+			copied.Headers[k] = v
+		}
+	}
+	return &copied
+}
+
+// Merge merges the fields set in other into c.
+func (c *HTTPCheck) Merge(other *HTTPCheck) {
+	if other.URL != "" {
+		c.URL = other.URL
+	}
+	for k, v := range other.Headers {
+		c.Headers[k] = v
+	}
+}
+
+// TCPCheck holds the configuration for an HTTP health check.
+type TCPCheck struct {
+	Port int    `yaml:"port,omitempty"`
+	Host string `yaml:"host,omitempty"`
+}
+
+// Copy returns a deep copy of the TCP check configuration.
+func (c *TCPCheck) Copy() *TCPCheck {
+	copied := *c
+	return &copied
+}
+
+// Merge merges the fields set in other into c.
+func (c *TCPCheck) Merge(other *TCPCheck) {
+	if other.Port != 0 {
+		c.Port = other.Port
+	}
+	if other.Host != "" {
+		c.Host = other.Host
+	}
+}
+
+// ExecCheck holds the configuration for an exec health check.
+type ExecCheck struct {
+	Command     string            `yaml:"command,omitempty"`
+	Environment map[string]string `yaml:"environment,omitempty"`
+	UserID      *int              `yaml:"user-id,omitempty"`
+	User        string            `yaml:"user,omitempty"`
+	GroupID     *int              `yaml:"group-id,omitempty"`
+	Group       string            `yaml:"group,omitempty"`
+	WorkingDir  string            `yaml:"working-dir,omitempty"`
+}
+
+// Copy returns a deep copy of the exec check configuration.
+func (c *ExecCheck) Copy() *ExecCheck {
+	copied := *c
+	if c.Environment != nil {
+		copied.Environment = make(map[string]string, len(c.Environment))
+		for k, v := range c.Environment {
+			copied.Environment[k] = v
+		}
+	}
+	if c.UserID != nil {
+		userID := *c.UserID
+		copied.UserID = &userID
+	}
+	if c.GroupID != nil {
+		groupID := *c.GroupID
+		copied.GroupID = &groupID
+	}
+	return &copied
+}
+
+// Merge merges the fields set in other into c.
+func (c *ExecCheck) Merge(other *ExecCheck) {
+	if other.Command != "" {
+		c.Command = other.Command
+	}
+	for k, v := range other.Environment {
+		c.Environment[k] = v
+	}
+	if other.UserID != nil {
+		userID := *other.UserID
+		c.UserID = &userID
+	}
+	if other.User != "" {
+		c.User = other.User
+	}
+	if other.GroupID != nil {
+		groupID := *other.GroupID
+		c.GroupID = &groupID
+	}
+	if other.Group != "" {
+		c.Group = other.Group
+	}
+	if other.WorkingDir != "" {
+		c.WorkingDir = other.WorkingDir
+	}
+}
 
 // FormatError is the error returned when a layer has a format error, such as
 // a missing "override" field.
@@ -148,6 +403,7 @@ func (e *FormatError) Error() string {
 func CombineLayers(layers ...*Layer) (*Layer, error) {
 	combined := &Layer{
 		Services: make(map[string]*Service),
+		Checks:   make(map[string]*Check),
 	}
 	if len(layers) == 0 {
 		return combined, nil
@@ -160,55 +416,9 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 			switch service.Override {
 			case MergeOverride:
 				if old, ok := combined.Services[name]; ok {
-					copy := old.Copy()
-					if service.Summary != "" {
-						copy.Summary = service.Summary
-					}
-					if service.Description != "" {
-						copy.Description = service.Description
-					}
-					if service.Startup != StartupUnknown {
-						copy.Startup = service.Startup
-					}
-					if service.Command != "" {
-						copy.Command = service.Command
-					}
-					if service.UserID != nil {
-						v := *service.UserID
-						copy.UserID = &v
-					}
-					if service.User != "" {
-						copy.User = service.User
-					}
-					if service.GroupID != nil {
-						v := *service.GroupID
-						copy.GroupID = &v
-					}
-					if service.Group != "" {
-						copy.Group = service.Group
-					}
-					copy.Before = append(copy.Before, service.Before...)
-					copy.After = append(copy.After, service.After...)
-					copy.Requires = append(copy.Requires, service.Requires...)
-					for k, v := range service.Environment {
-						copy.Environment[k] = v
-					}
-					if service.OnSuccess != "" {
-						copy.OnSuccess = service.OnSuccess
-					}
-					if service.OnFailure != "" {
-						copy.OnFailure = service.OnFailure
-					}
-					if service.BackoffDelay.IsSet {
-						copy.BackoffDelay = service.BackoffDelay
-					}
-					if service.BackoffFactor.IsSet {
-						copy.BackoffFactor = service.BackoffFactor
-					}
-					if service.BackoffLimit.IsSet {
-						copy.BackoffLimit = service.BackoffLimit
-					}
-					combined.Services[name] = copy
+					copied := old.Copy()
+					copied.Merge(service)
+					combined.Services[name] = copied
 					break
 				}
 				fallthrough
@@ -226,13 +436,151 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 				}
 			}
 		}
+
+		for name, check := range layer.Checks {
+			switch check.Override {
+			case MergeOverride:
+				if old, ok := combined.Checks[name]; ok {
+					copied := old.Copy()
+					copied.Merge(check)
+					combined.Checks[name] = copied
+					break
+				}
+				fallthrough
+			case ReplaceOverride:
+				combined.Checks[name] = check.Copy()
+			case UnknownOverride:
+				return nil, &FormatError{
+					Message: fmt.Sprintf(`layer %q must define "override" for check %q`,
+						layer.Label, check.Name),
+				}
+			default:
+				return nil, &FormatError{
+					Message: fmt.Sprintf(`layer %q has invalid "override" value for check %q`,
+						layer.Label, check.Name),
+				}
+			}
+		}
+
 	}
 
-	// Ensure fields in combined layers validate correctly.
+	// Ensure fields in combined layers validate correctly (and set defaults).
 	for name, service := range combined.Services {
 		if service.Command == "" {
 			return nil, &FormatError{
 				Message: fmt.Sprintf(`plan must define "command" for service %q`, name),
+			}
+		}
+		_, err := shlex.Split(service.Command)
+		if err != nil {
+			return nil, &FormatError{
+				Message: fmt.Sprintf("plan service %q command invalid: %v", name, err),
+			}
+		}
+		if !validServiceAction(service.OnSuccess) {
+			return nil, &FormatError{
+				Message: fmt.Sprintf("plan service %q on-success action %q invalid", name, service.OnSuccess),
+			}
+		}
+		if !validServiceAction(service.OnFailure) {
+			return nil, &FormatError{
+				Message: fmt.Sprintf("plan service %q on-failure action %q invalid", name, service.OnFailure),
+			}
+		}
+		for _, action := range service.OnCheckFailure {
+			if !validServiceAction(action) {
+				return nil, &FormatError{
+					Message: fmt.Sprintf("plan service %q on-check-failure action %q invalid", name, action),
+				}
+			}
+		}
+		if !service.BackoffDelay.IsSet {
+			service.BackoffDelay.Value = defaultBackoffDelay
+		}
+		if !service.BackoffFactor.IsSet {
+			service.BackoffFactor.Value = defaultBackoffFactor
+		} else if service.BackoffFactor.Value < 1 {
+			return nil, &FormatError{
+				Message: fmt.Sprintf("plan service %q backoff-factor must be 1.0 or greater, not %g", name, service.BackoffFactor.Value),
+			}
+		}
+		if !service.BackoffLimit.IsSet {
+			service.BackoffLimit.Value = defaultBackoffLimit
+		}
+
+	}
+
+	for name, check := range combined.Checks {
+		if check.Level != UnsetLevel && check.Level != AliveLevel && check.Level != ReadyLevel {
+			return nil, &FormatError{
+				Message: fmt.Sprintf(`plan check %q level must be "alive" or "ready"`, name),
+			}
+		}
+		if !check.Period.IsSet {
+			check.Period.Value = defaultCheckPeriod
+		} else if check.Period.Value == 0 {
+			return nil, &FormatError{
+				Message: fmt.Sprintf("plan check %q period must not be zero", name),
+			}
+		}
+		if !check.Timeout.IsSet {
+			check.Timeout.Value = defaultCheckTimeout
+		} else if check.Timeout.Value == 0 {
+			return nil, &FormatError{
+				Message: fmt.Sprintf("plan check %q timeout must not be zero", name),
+			}
+		} else if check.Timeout.Value >= check.Period.Value {
+			return nil, &FormatError{
+				Message: fmt.Sprintf("plan check %q timeout must be less than period", name),
+			}
+		}
+		if check.Threshold == 0 {
+			// Default number of failures in a row before check triggers
+			// action, default is >1 to avoid flapping due to glitches. For
+			// what it's worth, Kubernetes probes uses a default of 3 too.
+			check.Threshold = defaultCheckThreshold
+		}
+
+		numTypes := 0
+		if check.HTTP != nil {
+			if check.HTTP.URL == "" {
+				return nil, &FormatError{
+					Message: fmt.Sprintf(`plan must set "url" for http check %q`, name),
+				}
+			}
+			numTypes++
+		}
+		if check.TCP != nil {
+			if check.TCP.Port == 0 {
+				return nil, &FormatError{
+					Message: fmt.Sprintf(`plan must set "port" for tcp check %q`, name),
+				}
+			}
+			numTypes++
+		}
+		if check.Exec != nil {
+			if check.Exec.Command == "" {
+				return nil, &FormatError{
+					Message: fmt.Sprintf(`plan must set "command" for exec check %q`, name),
+				}
+			}
+			_, err := shlex.Split(check.Exec.Command)
+			if err != nil {
+				return nil, &FormatError{
+					Message: fmt.Sprintf("plan check %q command invalid: %v", name, err),
+				}
+			}
+			_, _, err = osutil.NormalizeUidGid(check.Exec.UserID, check.Exec.GroupID, check.Exec.User, check.Exec.Group)
+			if err != nil {
+				return nil, &FormatError{
+					Message: fmt.Sprintf("plan check %q has invalid user/group: %v", name, err),
+				}
+			}
+			numTypes++
+		}
+		if numTypes != 1 {
+			return nil, &FormatError{
+				Message: fmt.Sprintf(`plan must specify one of "http", "tcp", or "exec" for check %q`, name),
 			}
 		}
 	}
@@ -346,7 +694,10 @@ func (l *Layer) checkCycles() error {
 }
 
 func ParseLayer(order int, label string, data []byte) (*Layer, error) {
-	var layer Layer
+	layer := Layer{
+		Services: map[string]*Service{},
+		Checks:   map[string]*Check{},
+	}
 	dec := yaml.NewDecoder(bytes.NewBuffer(data))
 	dec.KnownFields(true)
 	err := dec.Decode(&layer)
@@ -357,6 +708,7 @@ func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 	}
 	layer.Order = order
 	layer.Label = label
+
 	for name, service := range layer.Services {
 		if name == "" {
 			return nil, &FormatError{
@@ -375,28 +727,23 @@ func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 				Message: fmt.Sprintf("service object cannot be null for service %q", name),
 			}
 		}
-
-		// Set defaults and validate values
-		if !validServiceAction(service.OnSuccess) {
-			return nil, &FormatError{Message: fmt.Sprintf("invalid on-success action %q", service.OnSuccess)}
-		}
-		if !validServiceAction(service.OnFailure) {
-			return nil, &FormatError{Message: fmt.Sprintf("invalid on-failure action %q", service.OnFailure)}
-		}
-		if !service.BackoffDelay.IsSet {
-			service.BackoffDelay.Value = defaultBackoffDelay
-		}
-		if !service.BackoffFactor.IsSet {
-			service.BackoffFactor.Value = defaultBackoffFactor
-		} else if service.BackoffFactor.Value < 1 {
-			return nil, &FormatError{Message: fmt.Sprintf("backoff-factor must be 1.0 or greater, not %g", service.BackoffFactor.Value)}
-		}
-		if !service.BackoffLimit.IsSet {
-			service.BackoffLimit.Value = defaultBackoffLimit
-		}
-
 		service.Name = name
 	}
+
+	for name, check := range layer.Checks {
+		if name == "" {
+			return nil, &FormatError{
+				Message: fmt.Sprintf("cannot use empty string as check name"),
+			}
+		}
+		if check == nil {
+			return nil, &FormatError{
+				Message: fmt.Sprintf("check object cannot be null for check %q", name),
+			}
+		}
+		check.Name = name
+	}
+
 	err = layer.checkCycles()
 	if err != nil {
 		return nil, err
@@ -406,7 +753,7 @@ func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 
 func validServiceAction(action ServiceAction) bool {
 	switch action {
-	case ActionUnset, ActionRestart, ActionHalt, ActionIgnore:
+	case ActionUnset, ActionRestart, ActionShutdown, ActionIgnore:
 		return true
 	default:
 		return false
@@ -498,6 +845,7 @@ func ReadDir(dir string) (*Plan, error) {
 	plan := &Plan{
 		Layers:   layers,
 		Services: combined.Services,
+		Checks:   combined.Checks,
 	}
 	return plan, err
 }

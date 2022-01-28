@@ -33,6 +33,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/canonical/pebble/internal/logger"
+	"github.com/canonical/pebble/internal/overlord/checkstate"
 	"github.com/canonical/pebble/internal/overlord/restart"
 	"github.com/canonical/pebble/internal/overlord/servstate"
 	"github.com/canonical/pebble/internal/overlord/state"
@@ -811,7 +812,7 @@ func (f writerFunc) Write(p []byte) (int, error) {
 	return f(p)
 }
 
-func (s *S) TestRestart(c *C) {
+func (s *S) TestActionRestart(c *C) {
 	// Add custom backoff delay so it auto-restarts quickly.
 	layer := parseLayer(c, 0, "layer", `
 services:
@@ -921,6 +922,312 @@ services:
 	})
 }
 
+func (s *S) TestOnCheckFailureRestartWhileRunning(c *C) {
+	// Create check manager and tell it about plan updates
+	checkMgr := checkstate.NewManager()
+	defer checkMgr.PlanChanged(&plan.Plan{})
+	s.manager.NotifyPlanChanged(checkMgr.PlanChanged)
+
+	// Tell service manager about check failures
+	checkMgr.NotifyCheckFailed(s.manager.CheckFailed)
+
+	tempDir := c.MkDir()
+	tempFile := filepath.Join(tempDir, "out")
+	layer := parseLayer(c, 0, "layer", fmt.Sprintf(`
+services:
+    test2:
+        override: replace
+        command: /bin/sh -c 'echo x >>%s; sleep 1'
+        backoff-delay: 50ms
+        on-check-failure:
+            chk1: restart
+
+checks:
+    chk1:
+         override: replace
+         period: 75ms  # a bit longer than shortOkayWait
+         threshold: 1
+         exec:
+             command: will-fail
+`, tempFile))
+	err := s.manager.AppendLayer(layer)
+	c.Assert(err, IsNil)
+
+	// Start service and wait till it starts up (output file is written to)
+	s.startServices(c, []string{"test2"}, 1)
+	for i := 0; ; i++ {
+		if i >= 100 {
+			c.Fatalf("failed waiting for command to start")
+		}
+		b, _ := ioutil.ReadFile(tempFile)
+		if string(b) == "x\n" {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+
+	// Now wait till check happens (it will-fail)
+	for i := 0; ; i++ {
+		if i >= 100 {
+			c.Fatalf("failed waiting for check to fail")
+		}
+		checks, err := checkMgr.Checks("", nil)
+		c.Assert(err, IsNil)
+		if len(checks) == 1 && !checks[0].Healthy {
+			c.Assert(checks[0].Failures, Equals, 1)
+			c.Assert(checks[0].LastError, Matches, ".* executable file not found .*")
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+
+	// Check failure should terminate process, backoff, and restart it, so wait for that
+	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
+		return svc.Current == servstate.StatusBackoff
+	})
+	for i := 0; ; i++ {
+		if i >= 100 {
+			c.Fatalf("failed waiting for command to start")
+		}
+		b, err := ioutil.ReadFile(tempFile)
+		c.Assert(err, IsNil)
+		if string(b) == "x\nx\n" {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+
+	// Shouldn't be restarted again
+	time.Sleep(100 * time.Millisecond)
+	b, err := ioutil.ReadFile(tempFile)
+	c.Assert(err, IsNil)
+	c.Assert(string(b), Equals, "x\nx\n")
+	checks, err := checkMgr.Checks("", nil)
+	c.Assert(err, IsNil)
+	c.Assert(len(checks), Equals, 1)
+	c.Assert(checks[0].Healthy, Equals, false)
+	c.Assert(checks[0].LastError, Matches, ".* executable file not found .*")
+	svc := s.serviceByName(c, "test2")
+	c.Assert(svc.Current, Equals, servstate.StatusActive)
+	c.Assert(s.manager.BackoffNum("test2"), Equals, 1)
+}
+
+func (s *S) TestOnCheckFailureRestartDuringBackoff(c *C) {
+	// Create check manager and tell it about plan updates
+	checkMgr := checkstate.NewManager()
+	defer checkMgr.PlanChanged(&plan.Plan{})
+	s.manager.NotifyPlanChanged(checkMgr.PlanChanged)
+
+	// Tell service manager about check failures
+	checkMgr.NotifyCheckFailed(s.manager.CheckFailed)
+
+	tempDir := c.MkDir()
+	tempFile := filepath.Join(tempDir, "out")
+	layer := parseLayer(c, 0, "layer", fmt.Sprintf(`
+services:
+    test2:
+        override: replace
+        command: /bin/sh -c 'echo x >>%s; sleep 0.075'
+        backoff-delay: 50ms
+        backoff-factor: 100  # ensure it only backoff-restarts once
+        on-check-failure:
+            chk1: restart
+
+checks:
+    chk1:
+         override: replace
+         period: 100ms
+         threshold: 1
+         exec:
+             command: will-fail
+`, tempFile))
+	err := s.manager.AppendLayer(layer)
+	c.Assert(err, IsNil)
+
+	// Start service and wait till it starts up (output file is written to)
+	s.startServices(c, []string{"test2"}, 1)
+	for i := 0; ; i++ {
+		if i >= 100 {
+			c.Fatalf("failed waiting for command to start")
+		}
+		b, _ := ioutil.ReadFile(tempFile)
+		if string(b) == "x\n" {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+
+	// Ensure it exits and goes into backoff state
+	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
+		return svc.Current == servstate.StatusBackoff
+	})
+
+	// Check failure should wait for current backoff (after which it will be restarted)
+	for i := 0; ; i++ {
+		if i >= 100 {
+			c.Fatalf("failed waiting for command to start")
+		}
+		b, err := ioutil.ReadFile(tempFile)
+		c.Assert(err, IsNil)
+		if string(b) == "x\nx\n" {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	svc := s.serviceByName(c, "test2")
+	c.Assert(svc.Current, Equals, servstate.StatusActive)
+	c.Assert(s.manager.BackoffNum("test2"), Equals, 1)
+
+	// Shouldn't be restarted again
+	time.Sleep(125 * time.Millisecond)
+	b, err := ioutil.ReadFile(tempFile)
+	c.Assert(err, IsNil)
+	c.Assert(string(b), Equals, "x\nx\n")
+	checks, err := checkMgr.Checks("", nil)
+	c.Assert(err, IsNil)
+	c.Assert(len(checks), Equals, 1)
+	c.Assert(checks[0].Healthy, Equals, false)
+	c.Assert(checks[0].LastError, Matches, ".* executable file not found .*")
+}
+
+func (s *S) TestOnCheckFailureIgnore(c *C) {
+	// Create check manager and tell it about plan updates
+	checkMgr := checkstate.NewManager()
+	defer checkMgr.PlanChanged(&plan.Plan{})
+	s.manager.NotifyPlanChanged(checkMgr.PlanChanged)
+
+	// Tell service manager about check failures
+	checkMgr.NotifyCheckFailed(s.manager.CheckFailed)
+
+	tempDir := c.MkDir()
+	tempFile := filepath.Join(tempDir, "out")
+	layer := parseLayer(c, 0, "layer", fmt.Sprintf(`
+services:
+    test2:
+        override: replace
+        command: /bin/sh -c 'echo x >>%s; sleep 1'
+        on-check-failure:
+            chk1: ignore
+
+checks:
+    chk1:
+         override: replace
+         period: 75ms  # a bit longer than shortOkayWait
+         threshold: 1
+         exec:
+             command: will-fail
+`, tempFile))
+	err := s.manager.AppendLayer(layer)
+	c.Assert(err, IsNil)
+
+	// Start service and wait till it starts up (output file is written to)
+	s.startServices(c, []string{"test2"}, 1)
+	for i := 0; ; i++ {
+		if i >= 100 {
+			c.Fatalf("failed waiting for command to start")
+		}
+		b, _ := ioutil.ReadFile(tempFile)
+		if string(b) == "x\n" {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+
+	// Now wait till check happens (it will-fail)
+	for i := 0; ; i++ {
+		if i >= 100 {
+			c.Fatalf("failed waiting for check to fail")
+		}
+		checks, err := checkMgr.Checks("", nil)
+		c.Assert(err, IsNil)
+		if len(checks) == 1 && !checks[0].Healthy {
+			c.Assert(checks[0].Failures, Equals, 1)
+			c.Assert(checks[0].LastError, Matches, ".* executable file not found .*")
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+
+	// Service shouldn't have been restarted
+	time.Sleep(100 * time.Millisecond)
+	b, err := ioutil.ReadFile(tempFile)
+	c.Assert(err, IsNil)
+	c.Assert(string(b), Equals, "x\n")
+	checks, err := checkMgr.Checks("", nil)
+	c.Assert(err, IsNil)
+	c.Assert(len(checks), Equals, 1)
+	c.Assert(checks[0].Healthy, Equals, false)
+	c.Assert(checks[0].LastError, Matches, ".* executable file not found .*")
+	svc := s.serviceByName(c, "test2")
+	c.Assert(svc.Current, Equals, servstate.StatusActive)
+}
+
+func (s *S) TestOnCheckFailureShutdown(c *C) {
+	// Create check manager and tell it about plan updates
+	checkMgr := checkstate.NewManager()
+	defer checkMgr.PlanChanged(&plan.Plan{})
+	s.manager.NotifyPlanChanged(checkMgr.PlanChanged)
+
+	// Tell service manager about check failures
+	checkMgr.NotifyCheckFailed(s.manager.CheckFailed)
+
+	tempDir := c.MkDir()
+	tempFile := filepath.Join(tempDir, "out")
+	layer := parseLayer(c, 0, "layer", fmt.Sprintf(`
+services:
+    test2:
+        override: replace
+        command: /bin/sh -c 'echo x >>%s; sleep 1'
+        on-check-failure:
+            chk1: shutdown
+
+checks:
+    chk1:
+         override: replace
+         period: 75ms  # a bit longer than shortOkayWait
+         threshold: 1
+         exec:
+             command: will-fail
+`, tempFile))
+	err := s.manager.AppendLayer(layer)
+	c.Assert(err, IsNil)
+
+	// Start service and wait till it starts up (output file is written to)
+	s.startServices(c, []string{"test2"}, 1)
+	for i := 0; ; i++ {
+		if i >= 100 {
+			c.Fatalf("failed waiting for command to start")
+		}
+		b, _ := ioutil.ReadFile(tempFile)
+		if string(b) == "x\n" {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+
+	// Now wait till check happens (it will-fail)
+	for i := 0; ; i++ {
+		if i >= 100 {
+			c.Fatalf("failed waiting for check to fail")
+		}
+		checks, err := checkMgr.Checks("", nil)
+		c.Assert(err, IsNil)
+		if len(checks) == 1 && !checks[0].Healthy {
+			c.Assert(checks[0].Failures, Equals, 1)
+			c.Assert(checks[0].LastError, Matches, ".* executable file not found .*")
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+
+	// It should have closed the stopDaemon channel.
+	select {
+	case <-s.stopDaemon:
+	case <-time.After(time.Second):
+		c.Fatalf("timed out waiting for stop-daemon channel")
+	}
+}
+
 func (s *S) waitUntilService(c *C, service string, f func(svc *servstate.ServiceInfo) bool) {
 	for i := 0; i < 20; i++ {
 		svc := s.serviceByName(c, service)
@@ -929,16 +1236,16 @@ func (s *S) waitUntilService(c *C, service string, f func(svc *servstate.Service
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	c.Fatalf("failed waiting for service")
+	c.Fatalf("timed out waiting for service")
 }
 
-func (s *S) TestExit(c *C) {
+func (s *S) TestActionShutdown(c *C) {
 	layer := parseLayer(c, 0, "layer", `
 services:
     test2:
         override: replace
         command: sleep 0.15
-        on-success: halt
+        on-success: shutdown
 `)
 	err := s.manager.AppendLayer(layer)
 	c.Assert(err, IsNil)
@@ -951,7 +1258,7 @@ services:
 
 	// Wait till it terminates.
 	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
-		return svc.Current == servstate.StatusInactive
+		return svc.Current == servstate.StatusError
 	})
 
 	// It should have closed the stopDaemon channel.
@@ -981,7 +1288,7 @@ services:
 
 	// Wait till it terminates.
 	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
-		return svc.Current == servstate.StatusInactive
+		return svc.Current == servstate.StatusError
 	})
 }
 
@@ -997,32 +1304,32 @@ func (s *S) TestGetAction(c *C) {
 		{onSuccess: "", onFailure: "", success: true, action: "restart", onType: "on-success"},
 		{onSuccess: "", onFailure: "restart", success: false, action: "restart", onType: "on-failure"},
 		{onSuccess: "", onFailure: "restart", success: true, action: "restart", onType: "on-success"},
-		{onSuccess: "", onFailure: "halt", success: false, action: "halt", onType: "on-failure"},
-		{onSuccess: "", onFailure: "halt", success: true, action: "restart", onType: "on-success"},
+		{onSuccess: "", onFailure: "shutdown", success: false, action: "shutdown", onType: "on-failure"},
+		{onSuccess: "", onFailure: "shutdown", success: true, action: "restart", onType: "on-success"},
 		{onSuccess: "", onFailure: "ignore", success: false, action: "ignore", onType: "on-failure"},
 		{onSuccess: "", onFailure: "ignore", success: true, action: "restart", onType: "on-success"},
 		{onSuccess: "restart", onFailure: "", success: false, action: "restart", onType: "on-failure"},
 		{onSuccess: "restart", onFailure: "", success: true, action: "restart", onType: "on-success"},
 		{onSuccess: "restart", onFailure: "restart", success: false, action: "restart", onType: "on-failure"},
 		{onSuccess: "restart", onFailure: "restart", success: true, action: "restart", onType: "on-success"},
-		{onSuccess: "restart", onFailure: "halt", success: false, action: "halt", onType: "on-failure"},
-		{onSuccess: "restart", onFailure: "halt", success: true, action: "restart", onType: "on-success"},
+		{onSuccess: "restart", onFailure: "shutdown", success: false, action: "shutdown", onType: "on-failure"},
+		{onSuccess: "restart", onFailure: "shutdown", success: true, action: "restart", onType: "on-success"},
 		{onSuccess: "restart", onFailure: "ignore", success: false, action: "ignore", onType: "on-failure"},
 		{onSuccess: "restart", onFailure: "ignore", success: true, action: "restart", onType: "on-success"},
-		{onSuccess: "halt", onFailure: "", success: false, action: "restart", onType: "on-failure"},
-		{onSuccess: "halt", onFailure: "", success: true, action: "halt", onType: "on-success"},
-		{onSuccess: "halt", onFailure: "restart", success: false, action: "restart", onType: "on-failure"},
-		{onSuccess: "halt", onFailure: "restart", success: true, action: "halt", onType: "on-success"},
-		{onSuccess: "halt", onFailure: "halt", success: false, action: "halt", onType: "on-failure"},
-		{onSuccess: "halt", onFailure: "halt", success: true, action: "halt", onType: "on-success"},
-		{onSuccess: "halt", onFailure: "ignore", success: false, action: "ignore", onType: "on-failure"},
-		{onSuccess: "halt", onFailure: "ignore", success: true, action: "halt", onType: "on-success"},
+		{onSuccess: "shutdown", onFailure: "", success: false, action: "restart", onType: "on-failure"},
+		{onSuccess: "shutdown", onFailure: "", success: true, action: "shutdown", onType: "on-success"},
+		{onSuccess: "shutdown", onFailure: "restart", success: false, action: "restart", onType: "on-failure"},
+		{onSuccess: "shutdown", onFailure: "restart", success: true, action: "shutdown", onType: "on-success"},
+		{onSuccess: "shutdown", onFailure: "shutdown", success: false, action: "shutdown", onType: "on-failure"},
+		{onSuccess: "shutdown", onFailure: "shutdown", success: true, action: "shutdown", onType: "on-success"},
+		{onSuccess: "shutdown", onFailure: "ignore", success: false, action: "ignore", onType: "on-failure"},
+		{onSuccess: "shutdown", onFailure: "ignore", success: true, action: "shutdown", onType: "on-success"},
 		{onSuccess: "ignore", onFailure: "", success: false, action: "restart", onType: "on-failure"},
 		{onSuccess: "ignore", onFailure: "", success: true, action: "ignore", onType: "on-success"},
 		{onSuccess: "ignore", onFailure: "restart", success: false, action: "restart", onType: "on-failure"},
 		{onSuccess: "ignore", onFailure: "restart", success: true, action: "ignore", onType: "on-success"},
-		{onSuccess: "ignore", onFailure: "halt", success: false, action: "halt", onType: "on-failure"},
-		{onSuccess: "ignore", onFailure: "halt", success: true, action: "ignore", onType: "on-success"},
+		{onSuccess: "ignore", onFailure: "shutdown", success: false, action: "shutdown", onType: "on-failure"},
+		{onSuccess: "ignore", onFailure: "shutdown", success: true, action: "ignore", onType: "on-success"},
 		{onSuccess: "ignore", onFailure: "ignore", success: false, action: "ignore", onType: "on-failure"},
 		{onSuccess: "ignore", onFailure: "ignore", success: true, action: "ignore", onType: "on-success"},
 	}

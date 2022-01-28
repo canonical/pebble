@@ -20,8 +20,9 @@ type ServiceManager struct {
 	runner    *state.TaskRunner
 	pebbleDir string
 
-	planLock sync.Mutex
-	plan     *plan.Plan
+	planLock     sync.Mutex
+	plan         *plan.Plan
+	planHandlers []PlanFunc
 
 	servicesLock sync.Mutex
 	services     map[string]*serviceData
@@ -32,6 +33,9 @@ type ServiceManager struct {
 	randLock sync.Mutex
 	rand     *rand.Rand
 }
+
+// PlanFunc is the type of function used by NotifyPlanChanged.
+type PlanFunc func(p *plan.Plan)
 
 type Restarter interface {
 	HandleRestart(t restart.RestartType)
@@ -64,12 +68,25 @@ func NewManager(s *state.State, runner *state.TaskRunner, pebbleDir string, serv
 	return manager, nil
 }
 
+// NotifyPlanChanged adds f to the list of functions that are called whenever
+// the plan is updated.
+func (m *ServiceManager) NotifyPlanChanged(f PlanFunc) {
+	m.planHandlers = append(m.planHandlers, f)
+}
+
+func (m *ServiceManager) updatePlan(p *plan.Plan) {
+	m.plan = p
+	for _, f := range m.planHandlers {
+		f(p)
+	}
+}
+
 func (m *ServiceManager) reloadPlan() error {
 	p, err := plan.ReadDir(m.pebbleDir)
 	if err != nil {
 		return err
 	}
-	m.plan = p
+	m.updatePlan(p)
 	return nil
 }
 
@@ -109,7 +126,7 @@ func (m *ServiceManager) appendLayer(layer *plan.Layer) error {
 	}
 
 	newLayers := append(m.plan.Layers, layer)
-	err := m.updatePlan(newLayers)
+	err := m.updatePlanLayers(newLayers)
 	if err != nil {
 		return err
 	}
@@ -117,15 +134,17 @@ func (m *ServiceManager) appendLayer(layer *plan.Layer) error {
 	return nil
 }
 
-func (m *ServiceManager) updatePlan(layers []*plan.Layer) error {
+func (m *ServiceManager) updatePlanLayers(layers []*plan.Layer) error {
 	combined, err := plan.CombineLayers(layers...)
 	if err != nil {
 		return err
 	}
-	m.plan = &plan.Plan{
+	p := &plan.Plan{
 		Layers:   layers,
 		Services: combined.Services,
+		Checks:   combined.Checks,
 	}
+	m.updatePlan(p)
 	return nil
 }
 
@@ -168,7 +187,7 @@ func (m *ServiceManager) CombineLayer(layer *plan.Layer) error {
 	newLayers := make([]*plan.Layer, len(m.plan.Layers))
 	copy(newLayers, m.plan.Layers)
 	newLayers[index] = combined
-	err = m.updatePlan(newLayers)
+	err = m.updatePlanLayers(newLayers)
 	if err != nil {
 		return err
 	}
@@ -424,4 +443,20 @@ func (m *ServiceManager) SendSignal(services []string, signal string) error {
 		return fmt.Errorf("%s", strings.Join(errors, "; "))
 	}
 	return nil
+}
+
+// CheckFailed response to a health check failure. If the given check name is
+// in the on-check-failure map for a service, tell the service to perform the
+// configured action (for example, "restart").
+func (m *ServiceManager) CheckFailed(name string) {
+	m.servicesLock.Lock()
+	defer m.servicesLock.Unlock()
+
+	for _, service := range m.services {
+		for checkName, action := range service.config.OnCheckFailure {
+			if checkName == name {
+				service.checkFailed(action)
+			}
+		}
+	}
 }
