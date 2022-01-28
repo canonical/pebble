@@ -34,7 +34,7 @@ type ServiceManager struct {
 	rand     *rand.Rand
 }
 
-// PlanFunc is the type of function used by AddPlanHandler.
+// PlanFunc is the type of function used by NotifyPlanChanged.
 type PlanFunc func(p *plan.Plan)
 
 type Restarter interface {
@@ -68,17 +68,16 @@ func NewManager(s *state.State, runner *state.TaskRunner, pebbleDir string, serv
 	return manager, nil
 }
 
-// AddPlanHandler adds f to the list of "plan handlers", functions that are
-// called whenever the plan is updated. Each function is called with a copy
-// of the plan, so it can safely store or modify it.
-func (m *ServiceManager) AddPlanHandler(f PlanFunc) {
+// NotifyPlanChanged adds f to the list of functions that are called whenever
+// the plan is updated.
+func (m *ServiceManager) NotifyPlanChanged(f PlanFunc) {
 	m.planHandlers = append(m.planHandlers, f)
 }
 
 func (m *ServiceManager) updatePlan(p *plan.Plan) {
 	m.plan = p
 	for _, f := range m.planHandlers {
-		f(p.Copy())
+		f(p)
 	}
 }
 
@@ -448,17 +447,17 @@ func (m *ServiceManager) SendSignal(services []string, signal string) error {
 	return nil
 }
 
-// CheckFailure response to a health check failure. If the given check name is
+// CheckFailed response to a health check failure. If the given check name is
 // in the on-check-failure map for a service, tell the service to perform the
 // configured action (for example, "restart").
-func (m *ServiceManager) CheckFailure(name string) {
+func (m *ServiceManager) CheckFailed(name string) {
 	m.servicesLock.Lock()
 	defer m.servicesLock.Unlock()
 
 	for _, service := range m.services {
 		for checkName, action := range service.config.OnCheckFailure {
 			if checkName == name {
-				service.checkFailure(action)
+				service.checkFailed(action)
 			}
 		}
 	}

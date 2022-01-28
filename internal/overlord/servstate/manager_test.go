@@ -925,11 +925,11 @@ services:
 func (s *S) TestOnCheckFailureRestartWhileRunning(c *C) {
 	// Create check manager and tell it about plan updates
 	checkMgr := checkstate.NewManager()
-	defer checkMgr.Configure(&plan.Plan{})
-	s.manager.AddPlanHandler(checkMgr.Configure)
+	defer checkMgr.PlanChanged(&plan.Plan{})
+	s.manager.NotifyPlanChanged(checkMgr.PlanChanged)
 
 	// Tell service manager about check failures
-	checkMgr.AddFailureHandler(s.manager.CheckFailure)
+	checkMgr.NotifyCheckFailed(s.manager.CheckFailed)
 
 	tempDir := c.MkDir()
 	tempFile := filepath.Join(tempDir, "out")
@@ -946,7 +946,7 @@ checks:
     chk1:
          override: replace
          period: 75ms  # a bit longer than shortOkayWait
-         failures: 1
+         threshold: 1
          exec:
              command: will-fail
 `, tempFile))
@@ -1015,11 +1015,11 @@ checks:
 func (s *S) TestOnCheckFailureRestartDuringBackoff(c *C) {
 	// Create check manager and tell it about plan updates
 	checkMgr := checkstate.NewManager()
-	defer checkMgr.Configure(&plan.Plan{})
-	s.manager.AddPlanHandler(checkMgr.Configure)
+	defer checkMgr.PlanChanged(&plan.Plan{})
+	s.manager.NotifyPlanChanged(checkMgr.PlanChanged)
 
 	// Tell service manager about check failures
-	checkMgr.AddFailureHandler(s.manager.CheckFailure)
+	checkMgr.NotifyCheckFailed(s.manager.CheckFailed)
 
 	tempDir := c.MkDir()
 	tempFile := filepath.Join(tempDir, "out")
@@ -1037,7 +1037,7 @@ checks:
     chk1:
          override: replace
          period: 100ms
-         failures: 1
+         threshold: 1
          exec:
              command: will-fail
 `, tempFile))
@@ -1093,11 +1093,11 @@ checks:
 func (s *S) TestOnCheckFailureIgnore(c *C) {
 	// Create check manager and tell it about plan updates
 	checkMgr := checkstate.NewManager()
-	defer checkMgr.Configure(&plan.Plan{})
-	s.manager.AddPlanHandler(checkMgr.Configure)
+	defer checkMgr.PlanChanged(&plan.Plan{})
+	s.manager.NotifyPlanChanged(checkMgr.PlanChanged)
 
 	// Tell service manager about check failures
-	checkMgr.AddFailureHandler(s.manager.CheckFailure)
+	checkMgr.NotifyCheckFailed(s.manager.CheckFailed)
 
 	tempDir := c.MkDir()
 	tempFile := filepath.Join(tempDir, "out")
@@ -1113,7 +1113,7 @@ checks:
     chk1:
          override: replace
          period: 75ms  # a bit longer than shortOkayWait
-         failures: 1
+         threshold: 1
          exec:
              command: will-fail
 `, tempFile))
@@ -1162,14 +1162,14 @@ checks:
 	c.Assert(svc.Current, Equals, servstate.StatusActive)
 }
 
-func (s *S) TestOnCheckFailureHalt(c *C) {
+func (s *S) TestOnCheckFailureShutdown(c *C) {
 	// Create check manager and tell it about plan updates
 	checkMgr := checkstate.NewManager()
-	defer checkMgr.Configure(&plan.Plan{})
-	s.manager.AddPlanHandler(checkMgr.Configure)
+	defer checkMgr.PlanChanged(&plan.Plan{})
+	s.manager.NotifyPlanChanged(checkMgr.PlanChanged)
 
 	// Tell service manager about check failures
-	checkMgr.AddFailureHandler(s.manager.CheckFailure)
+	checkMgr.NotifyCheckFailed(s.manager.CheckFailed)
 
 	tempDir := c.MkDir()
 	tempFile := filepath.Join(tempDir, "out")
@@ -1179,13 +1179,13 @@ services:
         override: replace
         command: /bin/sh -c 'echo x >>%s; sleep 1'
         on-check-failure:
-            chk1: halt
+            chk1: shutdown
 
 checks:
     chk1:
          override: replace
          period: 75ms  # a bit longer than shortOkayWait
-         failures: 1
+         threshold: 1
          exec:
              command: will-fail
 `, tempFile))
@@ -1239,13 +1239,13 @@ func (s *S) waitUntilService(c *C, service string, f func(svc *servstate.Service
 	c.Fatalf("timed out waiting for service")
 }
 
-func (s *S) TestActionHalt(c *C) {
+func (s *S) TestActionShutdown(c *C) {
 	layer := parseLayer(c, 0, "layer", `
 services:
     test2:
         override: replace
         command: sleep 0.15
-        on-success: halt
+        on-success: shutdown
 `)
 	err := s.manager.AppendLayer(layer)
 	c.Assert(err, IsNil)
@@ -1304,32 +1304,32 @@ func (s *S) TestGetAction(c *C) {
 		{onSuccess: "", onFailure: "", success: true, action: "restart", onType: "on-success"},
 		{onSuccess: "", onFailure: "restart", success: false, action: "restart", onType: "on-failure"},
 		{onSuccess: "", onFailure: "restart", success: true, action: "restart", onType: "on-success"},
-		{onSuccess: "", onFailure: "halt", success: false, action: "halt", onType: "on-failure"},
-		{onSuccess: "", onFailure: "halt", success: true, action: "restart", onType: "on-success"},
+		{onSuccess: "", onFailure: "shutdown", success: false, action: "shutdown", onType: "on-failure"},
+		{onSuccess: "", onFailure: "shutdown", success: true, action: "restart", onType: "on-success"},
 		{onSuccess: "", onFailure: "ignore", success: false, action: "ignore", onType: "on-failure"},
 		{onSuccess: "", onFailure: "ignore", success: true, action: "restart", onType: "on-success"},
 		{onSuccess: "restart", onFailure: "", success: false, action: "restart", onType: "on-failure"},
 		{onSuccess: "restart", onFailure: "", success: true, action: "restart", onType: "on-success"},
 		{onSuccess: "restart", onFailure: "restart", success: false, action: "restart", onType: "on-failure"},
 		{onSuccess: "restart", onFailure: "restart", success: true, action: "restart", onType: "on-success"},
-		{onSuccess: "restart", onFailure: "halt", success: false, action: "halt", onType: "on-failure"},
-		{onSuccess: "restart", onFailure: "halt", success: true, action: "restart", onType: "on-success"},
+		{onSuccess: "restart", onFailure: "shutdown", success: false, action: "shutdown", onType: "on-failure"},
+		{onSuccess: "restart", onFailure: "shutdown", success: true, action: "restart", onType: "on-success"},
 		{onSuccess: "restart", onFailure: "ignore", success: false, action: "ignore", onType: "on-failure"},
 		{onSuccess: "restart", onFailure: "ignore", success: true, action: "restart", onType: "on-success"},
-		{onSuccess: "halt", onFailure: "", success: false, action: "restart", onType: "on-failure"},
-		{onSuccess: "halt", onFailure: "", success: true, action: "halt", onType: "on-success"},
-		{onSuccess: "halt", onFailure: "restart", success: false, action: "restart", onType: "on-failure"},
-		{onSuccess: "halt", onFailure: "restart", success: true, action: "halt", onType: "on-success"},
-		{onSuccess: "halt", onFailure: "halt", success: false, action: "halt", onType: "on-failure"},
-		{onSuccess: "halt", onFailure: "halt", success: true, action: "halt", onType: "on-success"},
-		{onSuccess: "halt", onFailure: "ignore", success: false, action: "ignore", onType: "on-failure"},
-		{onSuccess: "halt", onFailure: "ignore", success: true, action: "halt", onType: "on-success"},
+		{onSuccess: "shutdown", onFailure: "", success: false, action: "restart", onType: "on-failure"},
+		{onSuccess: "shutdown", onFailure: "", success: true, action: "shutdown", onType: "on-success"},
+		{onSuccess: "shutdown", onFailure: "restart", success: false, action: "restart", onType: "on-failure"},
+		{onSuccess: "shutdown", onFailure: "restart", success: true, action: "shutdown", onType: "on-success"},
+		{onSuccess: "shutdown", onFailure: "shutdown", success: false, action: "shutdown", onType: "on-failure"},
+		{onSuccess: "shutdown", onFailure: "shutdown", success: true, action: "shutdown", onType: "on-success"},
+		{onSuccess: "shutdown", onFailure: "ignore", success: false, action: "ignore", onType: "on-failure"},
+		{onSuccess: "shutdown", onFailure: "ignore", success: true, action: "shutdown", onType: "on-success"},
 		{onSuccess: "ignore", onFailure: "", success: false, action: "restart", onType: "on-failure"},
 		{onSuccess: "ignore", onFailure: "", success: true, action: "ignore", onType: "on-success"},
 		{onSuccess: "ignore", onFailure: "restart", success: false, action: "restart", onType: "on-failure"},
 		{onSuccess: "ignore", onFailure: "restart", success: true, action: "ignore", onType: "on-success"},
-		{onSuccess: "ignore", onFailure: "halt", success: false, action: "halt", onType: "on-failure"},
-		{onSuccess: "ignore", onFailure: "halt", success: true, action: "ignore", onType: "on-success"},
+		{onSuccess: "ignore", onFailure: "shutdown", success: false, action: "shutdown", onType: "on-failure"},
+		{onSuccess: "ignore", onFailure: "shutdown", success: true, action: "ignore", onType: "on-success"},
 		{onSuccess: "ignore", onFailure: "ignore", success: false, action: "ignore", onType: "on-failure"},
 		{onSuccess: "ignore", onFailure: "ignore", success: true, action: "ignore", onType: "on-success"},
 	}

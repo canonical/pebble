@@ -15,6 +15,7 @@
 package checkstate
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"net"
@@ -81,14 +82,18 @@ func (s *CheckersSuite) TestHTTP(c *C) {
 	c.Assert(ok, Equals, true)
 	c.Assert(detailsErr.Details(), Equals, "error details")
 
-	// But only first n bytes of long response body is included in error details
-	response = makeLongOutput()
+	// But only first 20 lines of long response body are included in error details
+	var output bytes.Buffer
+	for i := 1; i <= 30; i++ {
+		fmt.Fprintf(&output, "line %d\n", i)
+	}
+	response = output.String()
 	chk = &httpChecker{url: server.URL + "/500"}
 	err = chk.check(context.Background())
 	c.Assert(err, ErrorMatches, "received non-20x status code 500")
 	detailsErr, ok = err.(*detailsError)
 	c.Assert(ok, Equals, true)
-	c.Assert(detailsErr.Details(), Equals, response[:1024]+"...")
+	c.Assert(detailsErr.Details(), Matches, `(?s)line 1\n.*line 20\n\(\.\.\.\)`)
 
 	// Cancelled context returns error
 	ctx, cancel := context.WithCancel(context.Background())
@@ -158,15 +163,17 @@ func (s *CheckersSuite) TestExec(c *C) {
 	c.Assert(ok, Equals, true)
 	c.Assert(detailsErr.Details(), Matches, `(?s)sleep: invalid time interval.*`)
 
-	// Long output on failure provides last n bytes of output
-	output := makeLongOutput()
-	chk = &execChecker{command: "/bin/sh -c 'echo " + output + "; exit 1'"}
+	// Long output on failure provides last 20 lines of output
+	var output bytes.Buffer
+	for i := 1; i <= 30; i++ {
+		fmt.Fprintf(&output, "echo line %d\n", i)
+	}
+	chk = &execChecker{command: "/bin/sh -c '" + output.String() + "\nexit 1'"}
 	err = chk.check(context.Background())
 	c.Assert(err, ErrorMatches, "exit status 1")
 	detailsErr, ok = err.(*detailsError)
 	c.Assert(ok, Equals, true)
-	output = output + "\n"
-	c.Assert(detailsErr.Details(), Equals, "..."+output[len(output)-1024:])
+	c.Assert(detailsErr.Details(), Matches, `(?s)\(\.\.\.\)\nline 11\n.*line 30`)
 
 	// Environment variables are passed through
 	chk = &execChecker{
@@ -177,7 +184,7 @@ func (s *CheckersSuite) TestExec(c *C) {
 	c.Assert(err, ErrorMatches, "exit status 1")
 	detailsErr, ok = err.(*detailsError)
 	c.Assert(ok, Equals, true)
-	c.Assert(detailsErr.Details(), Equals, "Foo, meet Bar.\n")
+	c.Assert(detailsErr.Details(), Equals, "Foo, meet Bar.")
 
 	// Working directory is passed through
 	workingDir := c.MkDir()
@@ -189,7 +196,7 @@ func (s *CheckersSuite) TestExec(c *C) {
 	c.Assert(err, ErrorMatches, "exit status 1")
 	detailsErr, ok = err.(*detailsError)
 	c.Assert(ok, Equals, true)
-	c.Assert(detailsErr.Details(), Equals, workingDir+"\n")
+	c.Assert(detailsErr.Details(), Equals, workingDir)
 
 	// Cancelled context returns error
 	ctx, cancel := context.WithCancel(context.Background())
@@ -197,17 +204,4 @@ func (s *CheckersSuite) TestExec(c *C) {
 	chk = &execChecker{command: "echo foo"}
 	err = chk.check(ctx)
 	c.Assert(err, ErrorMatches, "context canceled")
-}
-
-func makeLongOutput() string {
-	var output []byte
-	n := 0
-	for len(output) <= 1024 {
-		if len(output) > 0 {
-			output = append(output, " "...)
-		}
-		output = strconv.AppendInt(output, int64(n), 10)
-		n++
-	}
-	return string(output)
 }

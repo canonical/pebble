@@ -35,9 +35,9 @@ const (
 	defaultBackoffFactor = 2.0
 	defaultBackoffLimit  = 30 * time.Second
 
-	defaultCheckPeriod   = 10 * time.Second
-	defaultCheckTimeout  = 3 * time.Second
-	defaultCheckFailures = 3
+	defaultCheckPeriod    = 10 * time.Second
+	defaultCheckTimeout   = 3 * time.Second
+	defaultCheckThreshold = 3
 )
 
 // TODOs:
@@ -223,7 +223,7 @@ var planTests = []planTest{{
 			"srv1": {
 				Name:     "srv1",
 				Summary:  "Service summary",
-				Override: "merge",
+				Override: "replace",
 				Command:  `cmd arg1 "arg2 arg3"`,
 				Startup:  plan.StartupEnabled,
 				After:    []string{"srv2", "srv4"},
@@ -440,7 +440,7 @@ var planTests = []planTest{{
 				level: alive
 				period: 20s
 				timeout: 500ms
-				failures: 7
+				threshold: 7
 				http:
 					url: https://example.com/foo
 					headers:
@@ -467,12 +467,12 @@ var planTests = []planTest{{
 		Services: map[string]*plan.Service{},
 		Checks: map[string]*plan.Check{
 			"chk-http": {
-				Name:     "chk-http",
-				Override: plan.ReplaceOverride,
-				Level:    plan.AliveLevel,
-				Period:   plan.OptionalDuration{Value: 20 * time.Second, IsSet: true},
-				Timeout:  plan.OptionalDuration{Value: 500 * time.Millisecond, IsSet: true},
-				Failures: 7,
+				Name:      "chk-http",
+				Override:  plan.ReplaceOverride,
+				Level:     plan.AliveLevel,
+				Period:    plan.OptionalDuration{Value: 20 * time.Second, IsSet: true},
+				Timeout:   plan.OptionalDuration{Value: 500 * time.Millisecond, IsSet: true},
+				Threshold: 7,
 				HTTP: &plan.HTTPCheck{
 					URL: "https://example.com/foo",
 					Headers: map[string]string{
@@ -482,24 +482,24 @@ var planTests = []planTest{{
 				},
 			},
 			"chk-tcp": {
-				Name:     "chk-tcp",
-				Override: plan.MergeOverride,
-				Level:    plan.ReadyLevel,
-				Period:   plan.OptionalDuration{Value: defaultCheckPeriod},
-				Timeout:  plan.OptionalDuration{Value: defaultCheckTimeout},
-				Failures: defaultCheckFailures,
+				Name:      "chk-tcp",
+				Override:  plan.MergeOverride,
+				Level:     plan.ReadyLevel,
+				Period:    plan.OptionalDuration{Value: defaultCheckPeriod},
+				Timeout:   plan.OptionalDuration{Value: defaultCheckTimeout},
+				Threshold: defaultCheckThreshold,
 				TCP: &plan.TCPCheck{
 					Port: 7777,
 					Host: "somehost",
 				},
 			},
 			"chk-exec": {
-				Name:     "chk-exec",
-				Override: plan.ReplaceOverride,
-				Level:    plan.UnsetLevel,
-				Period:   plan.OptionalDuration{Value: defaultCheckPeriod},
-				Timeout:  plan.OptionalDuration{Value: defaultCheckTimeout},
-				Failures: defaultCheckFailures,
+				Name:      "chk-exec",
+				Override:  plan.ReplaceOverride,
+				Level:     plan.UnsetLevel,
+				Period:    plan.OptionalDuration{Value: defaultCheckPeriod},
+				Timeout:   plan.OptionalDuration{Value: defaultCheckTimeout},
+				Threshold: defaultCheckThreshold,
 				Exec: &plan.ExecCheck{
 					Command: "sleep 1",
 					Environment: map[string]string{
@@ -556,31 +556,31 @@ var planTests = []planTest{{
 		Services: map[string]*plan.Service{},
 		Checks: map[string]*plan.Check{
 			"chk-http": {
-				Name:     "chk-http",
-				Override: plan.ReplaceOverride,
-				Period:   plan.OptionalDuration{Value: defaultCheckPeriod},
-				Timeout:  plan.OptionalDuration{Value: defaultCheckTimeout},
-				Failures: defaultCheckFailures,
+				Name:      "chk-http",
+				Override:  plan.ReplaceOverride,
+				Period:    plan.OptionalDuration{Value: defaultCheckPeriod},
+				Timeout:   plan.OptionalDuration{Value: defaultCheckTimeout},
+				Threshold: defaultCheckThreshold,
 				HTTP: &plan.HTTPCheck{
 					URL: "https://example.com/bar",
 				},
 			},
 			"chk-tcp": {
-				Name:     "chk-tcp",
-				Override: plan.ReplaceOverride,
-				Period:   plan.OptionalDuration{Value: defaultCheckPeriod},
-				Timeout:  plan.OptionalDuration{Value: defaultCheckTimeout},
-				Failures: defaultCheckFailures,
+				Name:      "chk-tcp",
+				Override:  plan.ReplaceOverride,
+				Period:    plan.OptionalDuration{Value: defaultCheckPeriod},
+				Timeout:   plan.OptionalDuration{Value: defaultCheckTimeout},
+				Threshold: defaultCheckThreshold,
 				TCP: &plan.TCPCheck{
 					Port: 8888,
 				},
 			},
 			"chk-exec": {
-				Name:     "chk-exec",
-				Override: plan.ReplaceOverride,
-				Period:   plan.OptionalDuration{Value: defaultCheckPeriod},
-				Timeout:  plan.OptionalDuration{Value: defaultCheckTimeout},
-				Failures: defaultCheckFailures,
+				Name:      "chk-exec",
+				Override:  plan.ReplaceOverride,
+				Period:    plan.OptionalDuration{Value: defaultCheckPeriod},
+				Timeout:   plan.OptionalDuration{Value: defaultCheckTimeout},
+				Threshold: defaultCheckThreshold,
 				Exec: &plan.ExecCheck{
 					Command: "sleep 2",
 				},
@@ -606,7 +606,7 @@ var planTests = []planTest{{
 		
 			chk-exec:
 				override: merge
-				failures: 5
+				threshold: 5
 				exec:
 					working-dir: /root
 `, `
@@ -631,33 +631,33 @@ var planTests = []planTest{{
 		Services: map[string]*plan.Service{},
 		Checks: map[string]*plan.Check{
 			"chk-http": {
-				Name:     "chk-http",
-				Override: plan.MergeOverride,
-				Period:   plan.OptionalDuration{Value: time.Second, IsSet: true},
-				Timeout:  plan.OptionalDuration{Value: defaultCheckTimeout},
-				Failures: defaultCheckFailures,
+				Name:      "chk-http",
+				Override:  plan.MergeOverride,
+				Period:    plan.OptionalDuration{Value: time.Second, IsSet: true},
+				Timeout:   plan.OptionalDuration{Value: defaultCheckTimeout},
+				Threshold: defaultCheckThreshold,
 				HTTP: &plan.HTTPCheck{
 					URL:     "https://example.com/bar",
 					Headers: map[string]string{"Foo": "bar"},
 				},
 			},
 			"chk-tcp": {
-				Name:     "chk-tcp",
-				Override: plan.MergeOverride,
-				Period:   plan.OptionalDuration{Value: defaultCheckPeriod},
-				Timeout:  plan.OptionalDuration{Value: 300 * time.Millisecond, IsSet: true},
-				Failures: defaultCheckFailures,
+				Name:      "chk-tcp",
+				Override:  plan.MergeOverride,
+				Period:    plan.OptionalDuration{Value: defaultCheckPeriod},
+				Timeout:   plan.OptionalDuration{Value: 300 * time.Millisecond, IsSet: true},
+				Threshold: defaultCheckThreshold,
 				TCP: &plan.TCPCheck{
 					Port: 80,
 					Host: "foobar",
 				},
 			},
 			"chk-exec": {
-				Name:     "chk-exec",
-				Override: plan.MergeOverride,
-				Period:   plan.OptionalDuration{Value: defaultCheckPeriod},
-				Timeout:  plan.OptionalDuration{Value: 7 * time.Second, IsSet: true},
-				Failures: 5,
+				Name:      "chk-exec",
+				Override:  plan.MergeOverride,
+				Period:    plan.OptionalDuration{Value: defaultCheckPeriod},
+				Timeout:   plan.OptionalDuration{Value: 7 * time.Second, IsSet: true},
+				Threshold: 5,
 				Exec: &plan.ExecCheck{
 					Command:    "sleep 2",
 					WorkingDir: "/root",

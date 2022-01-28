@@ -26,8 +26,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/imdario/mergo"
-	"github.com/mitchellh/copystructure"
 	"gopkg.in/yaml.v3"
 
 	"github.com/canonical/pebble/internal/osutil"
@@ -39,20 +37,15 @@ const (
 	defaultBackoffFactor = 2.0
 	defaultBackoffLimit  = 30 * time.Second
 
-	defaultCheckPeriod   = 10 * time.Second
-	defaultCheckTimeout  = 3 * time.Second
-	defaultCheckFailures = 3
+	defaultCheckPeriod    = 10 * time.Second
+	defaultCheckTimeout   = 3 * time.Second
+	defaultCheckThreshold = 3
 )
 
 type Plan struct {
 	Layers   []*Layer            `yaml:"-"`
 	Services map[string]*Service `yaml:"services,omitempty"`
 	Checks   map[string]*Check   `yaml:"checks,omitempty"`
-}
-
-// Copy returns a deep copy of the plan.
-func (p *Plan) Copy() *Plan {
-	return copystructure.Must(copystructure.Copy(p)).(*Plan)
 }
 
 type Layer struct {
@@ -62,11 +55,6 @@ type Layer struct {
 	Description string              `yaml:"description,omitempty"`
 	Services    map[string]*Service `yaml:"services,omitempty"`
 	Checks      map[string]*Check   `yaml:"checks,omitempty"`
-}
-
-// Copy returns a deep copy of the layer.
-func (l *Layer) Copy() *Layer {
-	return copystructure.Must(copystructure.Copy(l)).(*Layer)
 }
 
 type Service struct {
@@ -101,18 +89,84 @@ type Service struct {
 
 // Copy returns a deep copy of the service.
 func (s *Service) Copy() *Service {
-	return copystructure.Must(copystructure.Copy(s)).(*Service)
+	copied := *s
+	copied.After = append([]string(nil), s.After...)
+	copied.Before = append([]string(nil), s.Before...)
+	copied.Requires = append([]string(nil), s.Requires...)
+	if s.Environment != nil {
+		copied.Environment = make(map[string]string)
+		for k, v := range s.Environment {
+			copied.Environment[k] = v
+		}
+	}
+	if s.UserID != nil {
+		userID := *s.UserID
+		copied.UserID = &userID
+	}
+	if s.GroupID != nil {
+		groupID := *s.GroupID
+		copied.GroupID = &groupID
+	}
+	if s.OnCheckFailure != nil {
+		copied.OnCheckFailure = make(map[string]ServiceAction)
+		for k, v := range s.OnCheckFailure {
+			copied.OnCheckFailure[k] = v
+		}
+	}
+	return &copied
 }
 
 // Merge merges the fields set in other into c.
 func (s *Service) Merge(other *Service) {
-	mustMerge(s, other)
-}
-
-func mustMerge(dst, src interface{}) {
-	err := mergo.Merge(dst, src, mergo.WithOverride, mergo.WithAppendSlice)
-	if err != nil {
-		panic(err)
+	if other.Summary != "" {
+		s.Summary = other.Summary
+	}
+	if other.Description != "" {
+		s.Description = other.Description
+	}
+	if other.Startup != StartupUnknown {
+		s.Startup = other.Startup
+	}
+	if other.Command != "" {
+		s.Command = other.Command
+	}
+	if other.UserID != nil {
+		userID := *other.UserID
+		s.UserID = &userID
+	}
+	if other.User != "" {
+		s.User = other.User
+	}
+	if other.GroupID != nil {
+		groupID := *other.GroupID
+		s.GroupID = &groupID
+	}
+	if other.Group != "" {
+		s.Group = other.Group
+	}
+	s.After = append(s.After, other.After...)
+	s.Before = append(s.Before, other.Before...)
+	s.Requires = append(s.Requires, other.Requires...)
+	for k, v := range other.Environment {
+		s.Environment[k] = v
+	}
+	if other.OnSuccess != "" {
+		s.OnSuccess = other.OnSuccess
+	}
+	if other.OnFailure != "" {
+		s.OnFailure = other.OnFailure
+	}
+	for k, v := range other.OnCheckFailure {
+		s.OnCheckFailure[k] = v
+	}
+	if other.BackoffDelay.IsSet {
+		s.BackoffDelay = other.BackoffDelay
+	}
+	if other.BackoffFactor.IsSet {
+		s.BackoffFactor = other.BackoffFactor
+	}
+	if other.BackoffLimit.IsSet {
+		s.BackoffLimit = other.BackoffLimit
 	}
 }
 
@@ -144,10 +198,10 @@ const (
 type ServiceAction string
 
 const (
-	ActionUnset   ServiceAction = ""
-	ActionRestart ServiceAction = "restart"
-	ActionHalt    ServiceAction = "halt"
-	ActionIgnore  ServiceAction = "ignore"
+	ActionUnset    ServiceAction = ""
+	ActionRestart  ServiceAction = "restart"
+	ActionShutdown ServiceAction = "shutdown"
+	ActionIgnore   ServiceAction = "ignore"
 )
 
 // Check specifies configuration for a single health check.
@@ -158,9 +212,9 @@ type Check struct {
 	Level    CheckLevel `yaml:"level,omitempty"`
 
 	// Common check settings
-	Period   OptionalDuration `yaml:"period,omitempty"`
-	Timeout  OptionalDuration `yaml:"timeout,omitempty"`
-	Failures int              `yaml:"failures,omitempty"`
+	Period    OptionalDuration `yaml:"period,omitempty"`
+	Timeout   OptionalDuration `yaml:"timeout,omitempty"`
+	Threshold int              `yaml:"threshold,omitempty"`
 
 	// Type-specific check settings (only one of these can be set)
 	HTTP *HTTPCheck `yaml:"http,omitempty"`
@@ -170,12 +224,51 @@ type Check struct {
 
 // Copy returns a deep copy of the check configuration.
 func (c *Check) Copy() *Check {
-	return copystructure.Must(copystructure.Copy(c)).(*Check)
+	copied := *c
+	if c.HTTP != nil {
+		copied.HTTP = c.HTTP.Copy()
+	}
+	if c.TCP != nil {
+		copied.TCP = c.TCP.Copy()
+	}
+	if c.Exec != nil {
+		copied.Exec = c.Exec.Copy()
+	}
+	return &copied
 }
 
 // Merge merges the fields set in other into c.
 func (c *Check) Merge(other *Check) {
-	mustMerge(c, other)
+	if other.Level != "" {
+		c.Level = other.Level
+	}
+	if other.Period.IsSet {
+		c.Period = other.Period
+	}
+	if other.Timeout.IsSet {
+		c.Timeout = other.Timeout
+	}
+	if other.Threshold != 0 {
+		c.Threshold = other.Threshold
+	}
+	if other.HTTP != nil {
+		if c.HTTP == nil {
+			c.HTTP = &HTTPCheck{}
+		}
+		c.HTTP.Merge(other.HTTP)
+	}
+	if other.TCP != nil {
+		if c.TCP == nil {
+			c.TCP = &TCPCheck{}
+		}
+		c.TCP.Merge(other.TCP)
+	}
+	if other.Exec != nil {
+		if c.Exec == nil {
+			c.Exec = &ExecCheck{}
+		}
+		c.Exec.Merge(other.Exec)
+	}
 }
 
 // CheckLevel specifies the optional check level.
@@ -195,12 +288,24 @@ type HTTPCheck struct {
 
 // Copy returns a deep copy of the HTTP check configuration.
 func (c *HTTPCheck) Copy() *HTTPCheck {
-	return copystructure.Must(copystructure.Copy(c)).(*HTTPCheck)
+	copied := *c
+	if c.Headers != nil {
+		copied.Headers = make(map[string]string, len(c.Headers))
+		for k, v := range c.Headers {
+			copied.Headers[k] = v
+		}
+	}
+	return &copied
 }
 
 // Merge merges the fields set in other into c.
 func (c *HTTPCheck) Merge(other *HTTPCheck) {
-	mustMerge(c, other)
+	if other.URL != "" {
+		c.URL = other.URL
+	}
+	for k, v := range other.Headers {
+		c.Headers[k] = v
+	}
 }
 
 // TCPCheck holds the configuration for an HTTP health check.
@@ -211,12 +316,18 @@ type TCPCheck struct {
 
 // Copy returns a deep copy of the TCP check configuration.
 func (c *TCPCheck) Copy() *TCPCheck {
-	return copystructure.Must(copystructure.Copy(c)).(*TCPCheck)
+	copied := *c
+	return &copied
 }
 
 // Merge merges the fields set in other into c.
 func (c *TCPCheck) Merge(other *TCPCheck) {
-	mustMerge(c, other)
+	if other.Port != 0 {
+		c.Port = other.Port
+	}
+	if other.Host != "" {
+		c.Host = other.Host
+	}
 }
 
 // ExecCheck holds the configuration for an exec health check.
@@ -232,12 +343,49 @@ type ExecCheck struct {
 
 // Copy returns a deep copy of the exec check configuration.
 func (c *ExecCheck) Copy() *ExecCheck {
-	return copystructure.Must(copystructure.Copy(c)).(*ExecCheck)
+	copied := *c
+	if c.Environment != nil {
+		copied.Environment = make(map[string]string, len(c.Environment))
+		for k, v := range c.Environment {
+			copied.Environment[k] = v
+		}
+	}
+	if c.UserID != nil {
+		userID := *c.UserID
+		copied.UserID = &userID
+	}
+	if c.GroupID != nil {
+		groupID := *c.GroupID
+		copied.GroupID = &groupID
+	}
+	return &copied
 }
 
 // Merge merges the fields set in other into c.
 func (c *ExecCheck) Merge(other *ExecCheck) {
-	mustMerge(c, other)
+	if other.Command != "" {
+		c.Command = other.Command
+	}
+	for k, v := range other.Environment {
+		c.Environment[k] = v
+	}
+	if other.UserID != nil {
+		userID := *other.UserID
+		c.UserID = &userID
+	}
+	if other.User != "" {
+		c.User = other.User
+	}
+	if other.GroupID != nil {
+		groupID := *other.GroupID
+		c.GroupID = &groupID
+	}
+	if other.Group != "" {
+		c.Group = other.Group
+	}
+	if other.WorkingDir != "" {
+		c.WorkingDir = other.WorkingDir
+	}
 }
 
 // FormatError is the error returned when a layer has a format error, such as
@@ -386,11 +534,11 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 				Message: fmt.Sprintf("plan check %q timeout must be less than period", name),
 			}
 		}
-		if check.Failures == 0 {
+		if check.Threshold == 0 {
 			// Default number of failures in a row before check triggers
 			// action, default is >1 to avoid flapping due to glitches. For
 			// what it's worth, Kubernetes probes uses a default of 3 too.
-			check.Failures = defaultCheckFailures
+			check.Threshold = defaultCheckThreshold
 		}
 
 		numTypes := 0
@@ -605,7 +753,7 @@ func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 
 func validServiceAction(action ServiceAction) bool {
 	switch action {
-	case ActionUnset, ActionRestart, ActionHalt, ActionIgnore:
+	case ActionUnset, ActionRestart, ActionShutdown, ActionIgnore:
 		return true
 	default:
 		return false
