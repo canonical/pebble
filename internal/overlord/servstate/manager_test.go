@@ -947,7 +947,8 @@ services:
 	})
 
 	outputs := map[string]string{
-		"test2": `2.* \[test2\] Terminated\n2.* \[test2\] child.*\n2.* \[test2\] Terminated\n2.* \[test2\] child.*\n`,
+		// Signals are not sent in guaranteed order, so we need to expect either on every line.
+		"test2": `2.* \[test2\] Terminated|child 1|child 2\n2.* \[test2\] Terminated|child 1|child 2\n2.* \[test2\] Terminated|child 1|child 2\n2.* \[test2\] Terminated|child 1|child 2\n`,
 	}
 
 	iterators, err := s.manager.ServiceLogs([]string{"test2"}, -1)
