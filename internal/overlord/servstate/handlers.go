@@ -65,16 +65,14 @@ const (
 type serviceState string
 
 const (
-	stateInitial          serviceState = "initial"
-	stateStarting         serviceState = "starting"
-	stateRunning          serviceState = "running"
-	stateTerminating      serviceState = "terminating"
-	stateKilling          serviceState = "killing"
-	stateStopped          serviceState = "stopped"
-	stateBackoff          serviceState = "backoff"
-	stateExited           serviceState = "exited"
-	stateCheckTerminating serviceState = "terminating (after check failure)"
-	stateCheckKilling     serviceState = "killing (after check failure)"
+	stateInitial     serviceState = "initial"
+	stateStarting    serviceState = "starting"
+	stateRunning     serviceState = "running"
+	stateTerminating serviceState = "terminating"
+	stateKilling     serviceState = "killing"
+	stateStopped     serviceState = "stopped"
+	stateBackoff     serviceState = "backoff"
+	stateExited      serviceState = "exited"
 )
 
 // serviceData holds the state and other data for a service under our control.
@@ -89,6 +87,7 @@ type serviceData struct {
 	backoffNum  int
 	backoffTime time.Duration
 	resetTimer  *time.Timer
+	restarting  bool
 }
 
 func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
@@ -273,7 +272,13 @@ func (m *ServiceManager) removeService(name string) {
 // transition changes the service's state machine to the given state.
 func (s *serviceData) transition(state serviceState) {
 	logger.Debugf("Service %q transitioning to state %q", s.config.Name, state)
+	s.transitionRestarting(state, false)
+}
+
+// transitionRestarting changes the service's state and also sets the restarting flag.
+func (s *serviceData) transitionRestarting(state serviceState, restarting bool) {
 	s.state = state
+	s.restarting = restarting
 }
 
 // start is called to transition from the initial state and start the service.
@@ -436,13 +441,14 @@ func (s *serviceData) exited(waitErr error) error {
 		}
 
 	case stateTerminating, stateKilling:
-		logger.Noticef("Service %q stopped", s.config.Name)
-		s.stopped <- nil
-		s.transition(stateStopped)
-
-	case stateCheckTerminating, stateCheckKilling:
-		logger.Noticef("Service %q exited after check failure, restarting", s.config.Name)
-		s.doBackoff(plan.ActionRestart, "on-check-failure")
+		if s.restarting {
+			logger.Noticef("Service %q exited after check failure, restarting", s.config.Name)
+			s.doBackoff(plan.ActionRestart, "on-check-failure")
+		} else {
+			logger.Noticef("Service %q stopped", s.config.Name)
+			s.stopped <- nil
+			s.transition(stateStopped)
+		}
 
 	default:
 		return fmt.Errorf("internal error: exited invalid in state %q", s.state)
@@ -611,18 +617,14 @@ func (s *serviceData) terminateTimeElapsed() error {
 	defer s.manager.servicesLock.Unlock()
 
 	switch s.state {
-	case stateTerminating, stateCheckTerminating:
+	case stateTerminating:
 		logger.Debugf("Attempting to stop service %q again by sending SIGKILL", s.config.Name)
 		// Process hasn't exited after SIGTERM, try SIGKILL.
 		err := syscall.Kill(-s.cmd.Process.Pid, syscall.SIGKILL)
 		if err != nil {
 			logger.Noticef("Cannot send SIGKILL to process: %v", err)
 		}
-		if s.state == stateTerminating {
-			s.transition(stateKilling)
-		} else {
-			s.transition(stateCheckKilling)
-		}
+		s.transitionRestarting(stateKilling, s.restarting)
 		time.AfterFunc(failWait-killWait, func() { logError(s.killTimeElapsed()) })
 
 	default:
@@ -640,13 +642,14 @@ func (s *serviceData) killTimeElapsed() error {
 
 	switch s.state {
 	case stateKilling:
-		logger.Noticef("Service %q still running after SIGTERM and SIGKILL", s.config.Name)
-		s.stopped <- fmt.Errorf("process still running after SIGTERM and SIGKILL")
-		s.transition(stateStopped)
-
-	case stateCheckKilling:
-		logger.Noticef("Service %q still running after SIGTERM and SIGKILL", s.config.Name)
-		s.transition(stateStopped)
+		if s.restarting {
+			logger.Noticef("Service %q still running after SIGTERM and SIGKILL", s.config.Name)
+			s.transition(stateStopped)
+		} else {
+			logger.Noticef("Service %q still running after SIGTERM and SIGKILL", s.config.Name)
+			s.stopped <- fmt.Errorf("process still running after SIGTERM and SIGKILL")
+			s.transition(stateStopped)
+		}
 
 	default:
 		// Ignore if timer elapsed in any other state.
@@ -698,7 +701,7 @@ func (s *serviceData) checkFailed(action plan.ServiceAction) {
 				if err != nil {
 					logger.Noticef("Cannot send SIGTERM to process: %v", err)
 				}
-				s.transition(stateCheckTerminating)
+				s.transitionRestarting(stateTerminating, true)
 				time.AfterFunc(killWait, func() { logError(s.terminateTimeElapsed()) })
 			case stateBackoff:
 				logger.Noticef("Service %q %s action is %q, waiting for current backoff",
