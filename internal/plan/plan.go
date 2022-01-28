@@ -198,10 +198,10 @@ const (
 type ServiceAction string
 
 const (
-	ActionUnset   ServiceAction = ""
-	ActionRestart ServiceAction = "restart"
-	ActionHalt    ServiceAction = "halt"
-	ActionIgnore  ServiceAction = "ignore"
+	ActionUnset    ServiceAction = ""
+	ActionRestart  ServiceAction = "restart"
+	ActionShutdown ServiceAction = "shutdown"
+	ActionIgnore   ServiceAction = "ignore"
 )
 
 // Check specifies configuration for a single health check.
@@ -753,7 +753,7 @@ func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 
 func validServiceAction(action ServiceAction) bool {
 	switch action {
-	case ActionUnset, ActionRestart, ActionHalt, ActionIgnore:
+	case ActionUnset, ActionRestart, ActionShutdown, ActionIgnore:
 		return true
 	default:
 		return false

@@ -15,7 +15,7 @@ digraph service_state_machine {
     starting -> exited [label="exited"]
     {backoff, stopped, exited} -> starting [label="start"]
     running -> exited [label="exited\n(action \"ignore\")"]
-    running -> exited [label="exited\n(action \"halt\")"]
+    running -> exited [label="exited\n(action \"shutdown\")"]
     running -> backoff [label="exited\n(action \"restart\")"]
     backoff -> stopped [label="stop"]
     backoff -> running [label="backoff time\nelapsed"]

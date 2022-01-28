@@ -214,22 +214,22 @@ services:
 
         # (Optional) Defines what happens when the service exits with a zero
         # exit code. Possible values are: "restart" (default) which restarts
-        # the service after the backoff delay, "halt" which stops and exits
-        # the Pebble server, and "ignore" which does nothing further.
-        on-success: restart | halt | ignore
+        # the service after the backoff delay, "shutdown" which shuts down and
+        # exits the Pebble server, and "ignore" which does nothing further.
+        on-success: restart | shutdown | ignore
 
         # (Optional) Defines what happens when the service exits with a nonzero
         # exit code. Possible values are: "restart" (default) which restarts
-        # the service after the backoff delay, "halt" which stops and exits
-        # the Pebble server, and "ignore" which does nothing further.
-        on-failure: restart | halt | ignore
+        # the service after the backoff delay, "shutdown" which shuts down and
+        # exits the Pebble server, and "ignore" which does nothing further.
+        on-failure: restart | shutdown | ignore
 
         # (Optional) Defines what happens when each of the named health checks
         # fail. Possible values are: "restart" (default) which restarts
-        # the service once, "halt" which stops and exits the Pebble server,
-        # and "ignore" which does nothing further.
+        # the service once, "shutdown" which shuts down and exits the Pebble
+        # server, and "ignore" which does nothing further.
         on-check-failure:
-            <check name>: restart | halt | ignore
+            <check name>: restart | shutdown | ignore
 
         # (Optional) Initial backoff delay for the "restart" exit action.
         # Default is half a second ("500ms").

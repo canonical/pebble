@@ -428,7 +428,7 @@ func (s *serviceData) exited(waitErr error) error {
 			logger.Noticef("Service %q %s action is %q, not doing anything further", s.config.Name, onType, action)
 			s.transition(stateExited)
 
-		case plan.ActionHalt:
+		case plan.ActionShutdown:
 			logger.Noticef("Service %q %s action is %q, triggering server exit", s.config.Name, onType, action)
 			s.manager.restarter.HandleRestart(restart.RestartDaemon)
 			s.transition(stateExited)
@@ -688,7 +688,7 @@ func (s *serviceData) checkFailed(action plan.ServiceAction) {
 		case plan.ActionIgnore:
 			logger.Debugf("Service %q %s action is %q, remaining in current state", s.config.Name, onType, action)
 
-		case plan.ActionHalt:
+		case plan.ActionShutdown:
 			logger.Noticef("Service %q %s action is %q, triggering server exit", s.config.Name, onType, action)
 			s.manager.restarter.HandleRestart(restart.RestartDaemon)
 
