@@ -142,6 +142,7 @@ func (s *S) SetUpTest(c *C) {
 	s.stopDaemon = make(chan struct{})
 	manager, err := servstate.NewManager(s.st, s.runner, s.dir, logOutput, testRestarter{s.stopDaemon})
 	c.Assert(err, IsNil)
+	defer manager.Stop()
 	s.manager = manager
 
 	restore := servstate.FakeOkayWait(shortOkayWait)
@@ -539,6 +540,7 @@ func (s *S) TestAppendLayer(c *C) {
 	runner := state.NewTaskRunner(s.st)
 	manager, err := servstate.NewManager(s.st, runner, dir, nil, nil)
 	c.Assert(err, IsNil)
+	defer manager.Stop()
 
 	// Append a layer when there are no layers.
 	layer := parseLayer(c, 0, "label1", `
@@ -621,6 +623,7 @@ func (s *S) TestCombineLayer(c *C) {
 	runner := state.NewTaskRunner(s.st)
 	manager, err := servstate.NewManager(s.st, runner, dir, nil, nil)
 	c.Assert(err, IsNil)
+	defer manager.Stop()
 
 	// "Combine" layer with no layers should just append.
 	layer := parseLayer(c, 0, "label1", `

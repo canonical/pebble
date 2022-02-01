@@ -359,6 +359,7 @@ func (s *serviceData) startInternal() error {
 		_ = s.logs.Close()
 		return fmt.Errorf("cannot start service: %w", err)
 	}
+	logger.Debugf("Service %q started with PID %d", s.config.Name, s.cmd.Process.Pid)
 	s.resetTimer = time.AfterFunc(s.config.BackoffLimit.Value, func() { logError(s.backoffResetElapsed()) })
 
 	// Start a goroutine to wait for the process to finish.

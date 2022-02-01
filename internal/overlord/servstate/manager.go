@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/canonical/pebble/internal/logger"
 	"github.com/canonical/pebble/internal/overlord/restart"
 	"github.com/canonical/pebble/internal/overlord/state"
 	"github.com/canonical/pebble/internal/plan"
@@ -32,6 +33,8 @@ type ServiceManager struct {
 
 	randLock sync.Mutex
 	rand     *rand.Rand
+
+	stopReaper chan struct{}
 }
 
 // PlanFunc is the type of function used by NotifyPlanChanged.
@@ -62,10 +65,26 @@ func NewManager(s *state.State, runner *state.TaskRunner, pebbleDir string, serv
 		rand:          rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
 
+	isSubreaper, err := setChildSubreaper()
+	if err != nil {
+		return nil, fmt.Errorf("cannot set daemon as child subreaper: %w", err)
+	}
+	if isSubreaper {
+		manager.stopReaper = make(chan struct{})
+		go reapChildren(manager.stopReaper)
+	} else {
+		logger.Noticef("child subreaping unavailable on this platform")
+	}
+
 	runner.AddHandler("start", manager.doStart, nil)
 	runner.AddHandler("stop", manager.doStop, nil)
 
 	return manager, nil
+}
+
+// Stop implements overlord.StateStopper and stops background functions.
+func (m *ServiceManager) Stop() {
+	close(m.stopReaper)
 }
 
 // NotifyPlanChanged adds f to the list of functions that are called whenever
