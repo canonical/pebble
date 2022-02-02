@@ -62,6 +62,9 @@ const (
 )
 
 // serviceState represents the state a service's state machine is in.
+//
+// See state-diagram.dot (and the generated state-diagram.svg image) for a
+// diagram of the states and transitions. Please try to keep these up to date!
 type serviceState string
 
 const (
@@ -513,6 +516,10 @@ func (m *ServiceManager) getJitter(duration time.Duration) time.Duration {
 // exitCode returns the exit code of the given command, or 128+signal if it
 // exited via a signal.
 func exitCode(cmd *exec.Cmd) int {
+	if cmd.ProcessState == nil {
+		logger.Debugf("############################## TODO cmd.ProcessState nil ###########################")
+		return -1
+	}
 	status, ok := cmd.ProcessState.Sys().(syscall.WaitStatus)
 	if ok {
 		if status.Signaled() {

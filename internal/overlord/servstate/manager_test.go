@@ -23,7 +23,9 @@ import (
 	"os/exec"
 	"os/user"
 	"path/filepath"
+	"regexp"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"testing"
@@ -46,6 +48,22 @@ const (
 	shortKillWait = 100 * time.Millisecond
 	shortFailWait = 200 * time.Millisecond
 )
+
+func TestMain(m *testing.M) {
+	// See TestReaper
+	if os.Getenv("PEBBLE_TEST_CREATE_ZOMBIE") == "1" {
+		err := createZombie()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "cannot create zombie: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	} else if os.Getenv("PEBBLE_TEST_ZOMBIE_CHILD") == "1" {
+		return
+	}
+
+	os.Exit(m.Run())
+}
 
 func Test(t *testing.T) { TestingT(t) }
 
@@ -142,7 +160,7 @@ func (s *S) SetUpTest(c *C) {
 	s.stopDaemon = make(chan struct{})
 	manager, err := servstate.NewManager(s.st, s.runner, s.dir, logOutput, testRestarter{s.stopDaemon})
 	c.Assert(err, IsNil)
-	defer manager.Stop()
+	s.AddCleanup(manager.Stop)
 	s.manager = manager
 
 	restore := servstate.FakeOkayWait(shortOkayWait)
@@ -1232,7 +1250,7 @@ checks:
 }
 
 func (s *S) waitUntilService(c *C, service string, f func(svc *servstate.ServiceInfo) bool) {
-	for i := 0; i < 20; i++ {
+	for i := 0; i < 310; i++ {
 		svc := s.serviceByName(c, service)
 		if f(svc) {
 			return
@@ -1407,4 +1425,70 @@ func (s *S) TestCalculateNextBackoff(c *C) {
 		c.Check(next, Equals, test.next, Commentf("delay=%s, factor=%g, limit=%s, current=%s",
 			test.delay, test.factor, test.limit, test.current))
 	}
+}
+
+// TODO: for some reason this passes even with setChildSubreaper commented out
+func (s *S) TestReaper(c *C) {
+	// Start a service which runs this test executable with an environment
+	// variable set so the "service" knows to create a zombie child.
+	testExecutable, err := os.Executable()
+	c.Assert(err, IsNil)
+	layer := parseLayer(c, 0, "layer", fmt.Sprintf(`
+services:
+    test2:
+        override: replace
+        command: %s
+        environment:
+            PEBBLE_TEST_CREATE_ZOMBIE: 1
+        on-success: ignore
+`, testExecutable))
+	err = s.manager.AppendLayer(layer)
+	c.Assert(err, IsNil)
+
+	s.startServices(c, []string{"test2"}, 1)
+	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
+		return svc.Current == servstate.StatusActive
+	})
+
+	// Get the PID of the zombie child (the createZombie process printed it out)
+	childPidRe := regexp.MustCompile(`.* childPid (\d+)`)
+	matches := childPidRe.FindStringSubmatch(s.logBufferString())
+	c.Assert(len(matches), Equals, 2)
+	childPid, err := strconv.Atoi(matches[1])
+	c.Assert(err, IsNil)
+
+	// Ensure it's a zombie (by reading /proc/<pid>/stat)
+	stat, err := ioutil.ReadFile(fmt.Sprintf("/proc/%d/stat", childPid))
+	c.Assert(err, IsNil)
+	statFields := strings.Fields(string(stat))
+	c.Assert(len(statFields) >= 3, Equals, true)
+	state := statFields[2]
+	c.Assert(state, Equals, "Z") // Z for Zombie!
+
+	// Wait till it terminates.
+	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
+		return svc.Current == servstate.StatusError
+	})
+	time.Sleep(25 * time.Millisecond)
+
+	// Ensure the zombie has been reaped (no longer in the process table)
+	stat, err = ioutil.ReadFile(fmt.Sprintf("/proc/%d/stat", childPid))
+	c.Assert(os.IsNotExist(err), Equals, true)
+}
+
+func createZombie() error {
+	testExecutable, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	procAttr := syscall.ProcAttr{
+		Env: []string{"PEBBLE_TEST_ZOMBIE_CHILD=1"},
+	}
+	childPid, err := syscall.ForkExec(testExecutable, []string{"zombie-child"}, &procAttr)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("childPid %d\n", childPid)
+	time.Sleep(shortOkayWait + 25*time.Millisecond)
+	return nil
 }

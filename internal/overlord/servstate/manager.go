@@ -84,7 +84,9 @@ func NewManager(s *state.State, runner *state.TaskRunner, pebbleDir string, serv
 
 // Stop implements overlord.StateStopper and stops background functions.
 func (m *ServiceManager) Stop() {
-	close(m.stopReaper)
+	if m.stopReaper != nil {
+		close(m.stopReaper)
+	}
 }
 
 // NotifyPlanChanged adds f to the list of functions that are called whenever
