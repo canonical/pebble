@@ -1468,7 +1468,6 @@ services:
 	var zombied bool
 	for i := 0; i < 10; i++ {
 		stat, err := ioutil.ReadFile(fmt.Sprintf("/proc/%d/stat", childPid))
-		logger.Noticef("TODO stat of PID %d: %s", childPid, stat)
 		c.Assert(err, IsNil)
 		statFields := strings.Fields(string(stat))
 		c.Assert(len(statFields) >= 3, Equals, true)
