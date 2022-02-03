@@ -17,6 +17,7 @@ package servstate
 import (
 	"os"
 	"os/signal"
+	"time"
 
 	"golang.org/x/sys/unix"
 
@@ -48,10 +49,17 @@ func reapChildren(stop <-chan struct{}) {
 		select {
 		case <-sigChld:
 			logger.Debugf("Reaper received SIGCHLD")
+
+			// This allows ServiceManager's cmd.Wait() to pick it up before
+			// the reaper for normal service process exits, and avoid
+			// returning a "waitid: no child processes" error. A bit hacky,
+			// but I don't know another simple way to prevent this.
+			time.Sleep(25 * time.Millisecond)
+
 			reapOnce()
 		case <-stop:
-			logger.Debugf("Reaper stopped")
 			signal.Reset(unix.SIGCHLD)
+			logger.Debugf("Reaper stopped")
 			return
 		}
 	}

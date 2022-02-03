@@ -34,7 +34,8 @@ type ServiceManager struct {
 	randLock sync.Mutex
 	rand     *rand.Rand
 
-	stopReaper chan struct{}
+	stopReaper    chan struct{}
+	reaperStopped chan struct{}
 }
 
 // PlanFunc is the type of function used by NotifyPlanChanged.
@@ -71,7 +72,11 @@ func NewManager(s *state.State, runner *state.TaskRunner, pebbleDir string, serv
 	}
 	if isSubreaper {
 		manager.stopReaper = make(chan struct{})
-		go reapChildren(manager.stopReaper)
+		manager.reaperStopped = make(chan struct{})
+		go func() {
+			reapChildren(manager.stopReaper)
+			close(manager.reaperStopped)
+		}()
 	} else {
 		logger.Noticef("child subreaping unavailable on this platform")
 	}
@@ -86,6 +91,7 @@ func NewManager(s *state.State, runner *state.TaskRunner, pebbleDir string, serv
 func (m *ServiceManager) Stop() {
 	if m.stopReaper != nil {
 		close(m.stopReaper)
+		<-m.reaperStopped // wait till reapChildren actually finishes
 	}
 }
 

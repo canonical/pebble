@@ -30,7 +30,9 @@ import (
 	"syscall"
 	"testing"
 	"time"
+	"unsafe"
 
+	"golang.org/x/sys/unix"
 	. "gopkg.in/check.v1"
 	"gopkg.in/yaml.v3"
 
@@ -170,6 +172,7 @@ func (s *S) SetUpTest(c *C) {
 }
 
 func (s *S) TearDownTest(c *C) {
+	s.BaseTest.TearDownTest(c)
 }
 
 type testRestarter struct {
@@ -1427,8 +1430,12 @@ func (s *S) TestCalculateNextBackoff(c *C) {
 	}
 }
 
-// TODO: for some reason this passes even with setChildSubreaper commented out
-func (s *S) TestReaper(c *C) {
+func (s *S) TestReapZombies(c *C) {
+	// Ensure we've been set as a child subreaper
+	isSubreaper, err := getChildSubreaper()
+	c.Assert(err, IsNil)
+	c.Assert(isSubreaper, Equals, true)
+
 	// Start a service which runs this test executable with an environment
 	// variable set so the "service" knows to create a zombie child.
 	testExecutable, err := os.Executable()
@@ -1457,23 +1464,52 @@ services:
 	childPid, err := strconv.Atoi(matches[1])
 	c.Assert(err, IsNil)
 
-	// Ensure it's a zombie (by reading /proc/<pid>/stat)
-	stat, err := ioutil.ReadFile(fmt.Sprintf("/proc/%d/stat", childPid))
-	c.Assert(err, IsNil)
-	statFields := strings.Fields(string(stat))
-	c.Assert(len(statFields) >= 3, Equals, true)
-	state := statFields[2]
-	c.Assert(state, Equals, "Z") // Z for Zombie!
+	// Wait till it becomes a zombie (by reading /proc/<pid>/stat)
+	var zombied bool
+	for i := 0; i < 10; i++ {
+		stat, err := ioutil.ReadFile(fmt.Sprintf("/proc/%d/stat", childPid))
+		logger.Noticef("TODO stat of PID %d: %s", childPid, stat)
+		c.Assert(err, IsNil)
+		statFields := strings.Fields(string(stat))
+		c.Assert(len(statFields) >= 3, Equals, true)
+		state := statFields[2]
+		if state == "Z" { // Z for Zombie!
+			zombied = true
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if !zombied {
+		c.Fatalf("timed out waiting for zombie to be created")
+	}
 
-	// Wait till it terminates.
+	// Wait till the main process terminates
 	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
 		return svc.Current == servstate.StatusError
 	})
-	time.Sleep(25 * time.Millisecond)
 
-	// Ensure the zombie has been reaped (no longer in the process table)
-	stat, err = ioutil.ReadFile(fmt.Sprintf("/proc/%d/stat", childPid))
-	c.Assert(os.IsNotExist(err), Equals, true)
+	// Wait till the zombie has been reaped (no longer in the process table)
+	var reaped bool
+	for i := 0; i < 10; i++ {
+		_, err := os.Stat(fmt.Sprintf("/proc/%d/stat", childPid))
+		if os.IsNotExist(err) {
+			reaped = true
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if !reaped {
+		c.Fatalf("timed out waiting for zombie to be reaped")
+	}
+}
+
+func getChildSubreaper() (bool, error) {
+	var i uintptr
+	err := unix.Prctl(unix.PR_GET_CHILD_SUBREAPER, uintptr(unsafe.Pointer(&i)), 0, 0, 0)
+	if err != nil {
+		return false, err
+	}
+	return i != 0, nil
 }
 
 func createZombie() error {

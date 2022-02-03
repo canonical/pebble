@@ -348,12 +348,13 @@ func (s *serviceData) startInternal() error {
 		// started (previous logs have already been copied).
 		outputIterator = s.logs.HeadIterator(0)
 	}
-	logWriter := servicelog.NewFormatWriter(s.logs, s.config.Name)
+	serviceName := s.config.Name
+	logWriter := servicelog.NewFormatWriter(s.logs, serviceName)
 	s.cmd.Stdout = logWriter
 	s.cmd.Stderr = logWriter
 
 	// Start the process!
-	logger.Noticef("Service %q starting: %s", s.config.Name, s.config.Command)
+	logger.Noticef("Service %q starting: %s", serviceName, s.config.Command)
 	err = s.cmd.Start()
 	if err != nil {
 		if outputIterator != nil {
@@ -362,13 +363,16 @@ func (s *serviceData) startInternal() error {
 		_ = s.logs.Close()
 		return fmt.Errorf("cannot start service: %w", err)
 	}
-	logger.Debugf("Service %q started with PID %d", s.config.Name, s.cmd.Process.Pid)
+	logger.Debugf("Service %q started with PID %d", serviceName, s.cmd.Process.Pid)
 	s.resetTimer = time.AfterFunc(s.config.BackoffLimit.Value, func() { logError(s.backoffResetElapsed()) })
 
 	// Start a goroutine to wait for the process to finish.
 	done := make(chan struct{})
 	go func() {
 		waitErr := s.cmd.Wait()
+		if waitErr != nil {
+			logger.Debugf("Service %q Wait() error: %v", serviceName, waitErr)
+		}
 		close(done)
 		err := s.exited(waitErr)
 		if err != nil {
@@ -383,7 +387,7 @@ func (s *serviceData) startInternal() error {
 			for outputIterator.Next(done) {
 				_, err := io.Copy(s.manager.serviceOutput, outputIterator)
 				if err != nil {
-					logger.Noticef("Service %q log write failed: %v", s.config.Name, err)
+					logger.Noticef("Service %q log write failed: %v", serviceName, err)
 				}
 			}
 		}()
@@ -517,7 +521,10 @@ func (m *ServiceManager) getJitter(duration time.Duration) time.Duration {
 // exited via a signal.
 func exitCode(cmd *exec.Cmd) int {
 	if cmd.ProcessState == nil {
-		logger.Debugf("############################## TODO cmd.ProcessState nil ###########################")
+		// Happens when Wait() returns a "waitid: no child processes" error.
+		// Due to the time.Sleep() in reapChildren after SIGCHLD is received,
+		// this shouldn't happen, but protect against a nil pointer error just
+		// in case (the exit code is only used in error/log messages).
 		return -1
 	}
 	status, ok := cmd.ProcessState.Sys().(syscall.WaitStatus)
