@@ -31,13 +31,14 @@ type cmdChecks struct {
 }
 
 var checksDescs = map[string]string{
-	"level": `Check level to filter for ("ready" checks are considered "alive")`,
+	"level": `Check level to filter for ("alive" or "ready")`,
 }
 
 var shortChecksHelp = "Query the status of configured health checks"
 var longChecksHelp = `
 The checks command lists status information about the configured health
-checks, optionally filtered by level and check name.
+checks, optionally filtered by level and check names provided as positional
+arguments.
 `
 
 func (cmd *cmdChecks) Execute(args []string) error {
