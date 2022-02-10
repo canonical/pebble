@@ -39,17 +39,15 @@ func (cs *clientSuite) TestChecksGet(c *check.C) {
 	}
 	checks, err := cs.cli.Checks(&opts)
 	c.Assert(err, check.IsNil)
-	c.Assert(checks, check.DeepEquals, []*client.CheckInfo{
-		{
+	c.Assert(checks, check.DeepEquals,
+		[]*client.CheckInfo{{
 			Name:    "chk1",
 			Healthy: true,
-		},
-		{
+		}, {
 			Name:     "chk3",
 			Healthy:  false,
 			Failures: 42,
-		},
-	})
+		}})
 	c.Assert(cs.req.Method, check.Equals, "GET")
 	c.Assert(cs.req.URL.Path, check.Equals, "/v1/checks")
 	c.Assert(cs.req.URL.Query(), check.DeepEquals, url.Values{
