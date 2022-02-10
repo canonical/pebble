@@ -28,7 +28,7 @@ func (s *PebbleSuite) TestChecks(c *check.C) {
 	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
 		c.Assert(r.Method, check.Equals, "GET")
 		c.Assert(r.URL.Path, check.Equals, "/v1/checks")
-		c.Assert(r.URL.Query(), check.DeepEquals, url.Values{"level": {""}})
+		c.Assert(r.URL.Query(), check.DeepEquals, url.Values{})
 		fmt.Fprint(w, `{
     "type": "sync",
     "status-code": 200,

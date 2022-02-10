@@ -20,13 +20,14 @@ import (
 
 // ChecksOptions are the filtering options for querying health checks.
 type ChecksOptions struct {
-	// Level is the check level to query for. If this is UnsetLevel (the zero
-	// value), don't filter by level. Because "ready" implies "alive", if
-	// level is AliveLevel, checks with level "ready" are included too.
+	// Level is the check level to query for. A check is included in the
+	// results if this field is not set, or if it is equal to the check's
+	// level.
 	Level CheckLevel
 
-	// Names is the list of check names to query for. If slice is nil or
-	// empty, don't filter by name.
+	// Names is the list of check names to query for. A check is included in
+	// the results if this field is nil or empty slice, or if one of the
+	// values in the slice is equal to the check's name.
 	Names []string
 }
 
@@ -40,18 +41,30 @@ const (
 
 // CheckInfo holds status information for a single health check.
 type CheckInfo struct {
-	Name     string     `json:"name"`
-	Level    CheckLevel `json:"level"`
-	Healthy  bool       `json:"healthy"`
-	Failures int        `json:"failures,omitempty"`
+	// Name is the name of this check, from the layer configuration.
+	Name string `json:"name"`
+
+	// Level is this check's level, from the layer configuration.
+	Level CheckLevel `json:"level"`
+
+	// Healthy is true if the check is considered healthy: not failing, or the
+	// number of failures is less than the configured threshold.
+	Healthy bool `json:"healthy"`
+
+	// Failures is the number of times in a row this check has failed. It is
+	// reset to zero as soon as the check succeeds.
+	Failures int `json:"failures,omitempty"`
 }
 
 // Checks fetches information about specific health checks (or all of them),
 // ordered by check name.
 func (client *Client) Checks(opts *ChecksOptions) ([]*CheckInfo, error) {
-	query := url.Values{
-		"level": []string{string(opts.Level)},
-		"names": opts.Names,
+	query := make(url.Values)
+	if opts.Level != UnsetLevel {
+		query.Set("level", string(opts.Level))
+	}
+	if len(opts.Names) > 0 {
+		query["names"] = opts.Names
 	}
 	var checks []*CheckInfo
 	_, err := client.doSync("GET", "/v1/checks", query, nil, nil, &checks)
