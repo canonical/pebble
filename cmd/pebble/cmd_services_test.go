@@ -35,7 +35,7 @@ func (s *PebbleSuite) TestServices(c *check.C) {
     "result": [
 		{"name": "svc1", "current": "inactive", "startup": "enabled"},
 		{"name": "svc2", "current": "inactive", "startup": "enabled"},
-		{"name": "svc3", "current": "backoff", "startup": "enabled", "restarts": 5}
+		{"name": "svc3", "current": "backoff", "startup": "enabled"}
 	]
 }`)
 	})
@@ -43,10 +43,10 @@ func (s *PebbleSuite) TestServices(c *check.C) {
 	c.Assert(err, check.IsNil)
 	c.Assert(rest, check.HasLen, 0)
 	c.Check(s.Stdout(), check.Equals, `
-Service  Startup  Current   Restarts
-svc1     enabled  inactive  0
-svc2     enabled  inactive  0
-svc3     enabled  backoff   5
+Service  Startup  Current
+svc1     enabled  inactive
+svc2     enabled  inactive
+svc3     enabled  backoff
 `[1:])
 	c.Check(s.Stderr(), check.Equals, "")
 }
@@ -69,9 +69,9 @@ func (s *PebbleSuite) TestServicesNames(c *check.C) {
 	c.Assert(err, check.IsNil)
 	c.Assert(rest, check.HasLen, 0)
 	c.Check(s.Stdout(), check.Equals, `
-Service  Startup   Current   Restarts
-bar      disabled  active    0
-foo      enabled   inactive  0
+Service  Startup   Current
+bar      disabled  active
+foo      enabled   inactive
 `[1:])
 	c.Check(s.Stderr(), check.Equals, "")
 }

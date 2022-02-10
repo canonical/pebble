@@ -88,7 +88,7 @@ func (cs *clientSuite) TestServicesGet(c *check.C) {
 		"result": [
 			{"name": "svc1", "startup": "enabled", "current": "inactive"},
 			{"name": "svc2", "startup": "disabled", "current": "active"},
-			{"name": "svc3", "startup": "disabled", "current": "backoff", "restarts": 5}
+			{"name": "svc3", "startup": "disabled", "current": "backoff"}
 		],
 		"status": "OK",
 		"status-code": 200,
@@ -103,7 +103,7 @@ func (cs *clientSuite) TestServicesGet(c *check.C) {
 	c.Assert(services, check.DeepEquals, []*client.ServiceInfo{
 		{Name: "svc1", Startup: client.StartupEnabled, Current: client.StatusInactive},
 		{Name: "svc2", Startup: client.StartupDisabled, Current: client.StatusActive},
-		{Name: "svc3", Startup: client.StartupDisabled, Current: client.StatusBackoff, Restarts: 5},
+		{Name: "svc3", Startup: client.StartupDisabled, Current: client.StatusBackoff},
 	})
 	c.Assert(cs.req.Method, check.Equals, "GET")
 	c.Assert(cs.req.URL.Path, check.Equals, "/v1/services")
