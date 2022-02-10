@@ -49,9 +49,9 @@ func (cmd *cmdServices) Execute(args []string) error {
 	}
 	if len(services) == 0 {
 		if len(cmd.Positional.Services) == 0 {
-			fmt.Fprintln(Stderr, "Plan has no services")
+			fmt.Fprintln(Stderr, "Plan has no services.")
 		} else {
-			fmt.Fprintln(Stderr, "No matching services")
+			fmt.Fprintln(Stderr, "No matching services.")
 		}
 		return nil
 	}

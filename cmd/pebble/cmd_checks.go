@@ -56,9 +56,9 @@ func (cmd *cmdChecks) Execute(args []string) error {
 	}
 	if len(checks) == 0 {
 		if len(cmd.Positional.Checks) == 0 && cmd.Level == "" {
-			fmt.Fprintln(Stderr, "Plan has no health checks")
+			fmt.Fprintln(Stderr, "Plan has no health checks.")
 		} else {
-			fmt.Fprintln(Stderr, "No matching health checks")
+			fmt.Fprintln(Stderr, "No matching health checks.")
 		}
 		return nil
 	}
