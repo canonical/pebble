@@ -34,8 +34,8 @@ func (s *PebbleSuite) TestChecks(c *check.C) {
     "status-code": 200,
     "result": [
 		{"name": "chk1", "healthy": true},
-		{"name": "chk2", "healthy": false, "failures": 1, "last-error": "ERROR!"},
-		{"name": "chk3", "healthy": false, "failures": 42, "last-error": "big error", "error-details": "details..."}
+		{"name": "chk2", "healthy": false, "failures": 1},
+		{"name": "chk3", "healthy": false, "failures": 42}
 	]
 }`)
 	})
@@ -43,10 +43,10 @@ func (s *PebbleSuite) TestChecks(c *check.C) {
 	c.Assert(err, check.IsNil)
 	c.Assert(rest, check.HasLen, 0)
 	c.Check(s.Stdout(), check.Equals, `
-Check  Level  Healthy  Failures  Last Error
-chk1          true     0         
-chk2          false    1         ERROR!
-chk3          false    42        big error
+Check  Level  Healthy  Failures
+chk1          true     0
+chk2          false    1
+chk3          false    42
 `[1:])
 	c.Check(s.Stderr(), check.Equals, "")
 }
@@ -61,7 +61,7 @@ func (s *PebbleSuite) TestChecksFiltering(c *check.C) {
     "status-code": 200,
     "result": [
 		{"name": "chk1", "healthy": true},
-		{"name": "chk3", "healthy": false, "failures": 42, "last-error": "big error", "error-details": "details..."}
+		{"name": "chk3", "healthy": false, "failures": 42}
 	]
 }`)
 	})
@@ -69,9 +69,9 @@ func (s *PebbleSuite) TestChecksFiltering(c *check.C) {
 	c.Assert(err, check.IsNil)
 	c.Assert(rest, check.HasLen, 0)
 	c.Check(s.Stdout(), check.Equals, `
-Check  Level  Healthy  Failures  Last Error
-chk1          true     0         
-chk3          false    42        big error
+Check  Level  Healthy  Failures
+chk1          true     0
+chk3          false    42
 `[1:])
 	c.Check(s.Stderr(), check.Equals, "")
 }

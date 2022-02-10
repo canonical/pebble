@@ -65,10 +65,10 @@ func (cmd *cmdChecks) Execute(args []string) error {
 	w := tabWriter()
 	defer w.Flush()
 
-	fmt.Fprintln(w, "Check\tLevel\tHealthy\tFailures\tLast Error")
+	fmt.Fprintln(w, "Check\tLevel\tHealthy\tFailures")
 
 	for _, check := range checks {
-		fmt.Fprintf(w, "%s\t%s\t%t\t%d\t%s\n", check.Name, check.Level, check.Healthy, check.Failures, check.LastError)
+		fmt.Fprintf(w, "%s\t%s\t%t\t%d\n", check.Name, check.Level, check.Healthy, check.Failures)
 	}
 	return nil
 }
