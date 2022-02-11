@@ -35,11 +35,11 @@ import (
 
 	"github.com/gorilla/mux"
 
-	"github.com/canonical/pebble/internal/httpapi"
 	"github.com/canonical/pebble/internal/logger"
 	"github.com/canonical/pebble/internal/osutil"
 	"github.com/canonical/pebble/internal/osutil/sys"
 	"github.com/canonical/pebble/internal/overlord"
+	"github.com/canonical/pebble/internal/overlord/checkstate"
 	"github.com/canonical/pebble/internal/overlord/restart"
 	"github.com/canonical/pebble/internal/overlord/standby"
 	"github.com/canonical/pebble/internal/overlord/state"
@@ -63,7 +63,7 @@ type Options struct {
 	// the pebble directory.
 	SocketPath string
 
-	// HTTPAddress is the address for the plain HTTP API server, for example
+	// HTTPAddress is the address for the "guest" HTTP API server, for example
 	// ":4000" to listen on any address, port 4000. If not set, the HTTP API
 	// server is not started.
 	HTTPAddress string
@@ -80,19 +80,17 @@ type Daemon struct {
 	pebbleDir           string
 	normalSocketPath    string
 	untrustedSocketPath string
+	httpAddress         string
 	overlord            *overlord.Overlord
 	state               *state.State
 	generalListener     net.Listener
 	untrustedListener   net.Listener
+	httpListener        net.Listener
 	connTracker         *connTracker
 	serve               *http.Server
 	tomb                tomb.Tomb
 	router              *mux.Router
 	standbyOpinions     *standby.StandbyOpinions
-
-	httpAddress  string
-	httpListener net.Listener
-	httpServer   *http.Server
 
 	// set to remember we need to restart the system
 	restartSystem bool
@@ -107,6 +105,12 @@ type Daemon struct {
 	rebootIsMissing bool
 
 	mu sync.Mutex
+
+	checkMgr CheckManager // overridable for testing; default is overlord.CheckManager()
+}
+
+type CheckManager interface {
+	Checks() ([]*checkstate.CheckInfo, error)
 }
 
 // XXX Placeholder for now.
@@ -378,7 +382,7 @@ func (d *Daemon) Init() error {
 			return fmt.Errorf("cannot listen on %q: %v", d.httpAddress, err)
 		}
 		d.httpListener = listener
-		logger.Noticef("HTTP API server listening on %q", d.httpAddress)
+		logger.Noticef("Guest HTTP API server listening on %q.", d.httpAddress)
 	}
 
 	logger.Noticef("Started daemon.")
@@ -492,12 +496,9 @@ func (d *Daemon) Start() {
 	})
 
 	if d.httpListener != nil {
-		// Start regular HTTP API for handling URLs like /v1/health
-		httpAPI := httpapi.NewAPI(d.overlord.CheckManager())
-		d.httpServer = &http.Server{Handler: httpAPI}
+		// Start regular HTTP API for handling "guest" URLs like /v1/health
 		d.tomb.Go(func() error {
-			logger.Debugf("Starting HTTP API on http://localhost%s", d.httpServer.Addr)
-			err := d.httpServer.Serve(d.httpListener)
+			err := d.serve.Serve(d.httpListener)
 			if err != http.ErrServerClosed && d.tomb.Err() == tomb.ErrStillAlive {
 				return err
 			}
@@ -568,6 +569,10 @@ func (d *Daemon) Stop(sigCh chan<- os.Signal) error {
 		d.untrustedListener.Close()
 	}
 
+	if d.httpListener != nil {
+		d.httpListener.Close()
+	}
+
 	if restartSystem {
 		// give time to polling clients to notice restart
 		time.Sleep(rebootNoticeWait)
@@ -577,11 +582,7 @@ func (d *Daemon) Stop(sigCh chan<- os.Signal) error {
 	// context will likely already have been cancelled when we are
 	// called.
 	ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
-	err := d.serve.Shutdown(ctx)
-	if err == nil && d.httpServer != nil {
-		err = d.httpServer.Shutdown(ctx)
-	}
-	d.tomb.Kill(err)
+	d.tomb.Kill(d.serve.Shutdown(ctx))
 	cancel()
 
 	if !restartSystem {
@@ -604,7 +605,7 @@ func (d *Daemon) Stop(sigCh chan<- os.Signal) error {
 	}
 	d.overlord.Stop()
 
-	err = d.tomb.Wait()
+	err := d.tomb.Wait()
 	if err != nil {
 		// do not stop the shutdown even if the tomb errors
 		// because we already scheduled a slow shutdown and
@@ -796,4 +797,12 @@ func getListener(socketPath string, listenerMap map[string]net.Listener) (net.Li
 	logger.Debugf("socket %q was not activated; listening", socketPath)
 
 	return listener, nil
+}
+
+// CheckManager returns the overlord's check manager, or the test manager if set.
+func (d *Daemon) CheckManager() CheckManager {
+	if d.checkMgr != nil {
+		return d.checkMgr
+	}
+	return d.overlord.CheckManager()
 }

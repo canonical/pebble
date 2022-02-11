@@ -50,7 +50,7 @@ func init() {
 		map[string]string{
 			"create-dirs": "Create pebble directory on startup if it doesn't exist",
 			"hold":        "Do not start default services automatically",
-			"http":        `Start HTTP API server listening on this address (e.g., ":4000")`,
+			"http":        `Start guest HTTP API listening on this address (e.g., ":4000")`,
 			"verbose":     "Log all output from services to stdout",
 		}, nil)
 }

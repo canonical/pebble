@@ -1058,21 +1058,30 @@ func (s *daemonSuite) TestHTTPAPI(c *check.C) {
 	d := s.newDaemon(c)
 	d.Init()
 	d.Start()
-
 	port := d.httpListener.Addr().(*net.TCPAddr).Port
+
 	request, err := http.NewRequest("GET", fmt.Sprintf("http://localhost:%d/v1/health", port), nil)
 	c.Assert(err, IsNil)
-
 	response, err := http.DefaultClient.Do(request)
 	c.Assert(err, IsNil)
-
-	c.Assert(response.StatusCode, Equals, 200)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
 	var m map[string]interface{}
 	err = json.NewDecoder(response.Body).Decode(&m)
 	c.Assert(err, IsNil)
 	c.Assert(m, DeepEquals, map[string]interface{}{
-		"healthy": true,
+		"type":        "sync",
+		"status-code": float64(http.StatusOK),
+		"status":      "OK",
+		"result": map[string]interface{}{
+			"healthy": true,
+		},
 	})
+
+	request, err = http.NewRequest("GET", fmt.Sprintf("http://localhost:%d/v1/checks", port), nil)
+	c.Assert(err, IsNil)
+	response, err = http.DefaultClient.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusUnauthorized)
 
 	err = d.Stop(nil)
 	c.Assert(err, IsNil)

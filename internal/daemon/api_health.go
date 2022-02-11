@@ -1,4 +1,4 @@
-// Copyright (c) 2021 Canonical Ltd
+// Copyright (c) 2022 Canonical Ltd
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License version 3 as
@@ -12,30 +12,34 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package httpapi
+package daemon
 
 import (
 	"net/http"
 
+	"github.com/canonical/pebble/internal/logger"
 	"github.com/canonical/pebble/internal/plan"
 	"github.com/canonical/pebble/internal/strutil"
 )
 
-func (a *API) getHealth(w http.ResponseWriter, r *http.Request) {
+type healthInfo struct {
+	Healthy bool `json:"healthy"`
+}
+
+func v1Health(c *Command, r *http.Request, _ *userState) Response {
 	level := plan.CheckLevel(r.URL.Query().Get("level"))
 	switch level {
 	case plan.UnsetLevel, plan.AliveLevel, plan.ReadyLevel:
 	default:
-		writeError(w, http.StatusBadRequest, `level must be "alive" or "ready"`)
-		return
+		return statusBadRequest(`level must be "alive" or "ready"`)
 	}
 
 	names := r.URL.Query()["names"]
 
-	checks, err := a.checkMgr.Checks()
+	checks, err := c.d.CheckManager().Checks()
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
+		logger.Noticef("Cannot fetch checks: %v", err.Error())
+		return statusInternalError("internal server error")
 	}
 
 	healthy := true
@@ -50,9 +54,9 @@ func (a *API) getHealth(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	writeResponse(w, status, healthResponse{Healthy: healthy})
-}
-
-type healthResponse struct {
-	Healthy bool `json:"healthy"`
+	return SyncResponse(&resp{
+		Type:   ResponseTypeSync,
+		Status: status,
+		Result: healthInfo{Healthy: healthy},
+	})
 }
