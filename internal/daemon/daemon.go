@@ -63,7 +63,7 @@ type Options struct {
 	// the pebble directory.
 	SocketPath string
 
-	// HTTPAddress is the address for the "guest" HTTP API server, for example
+	// HTTPAddress is the address for the plain HTTP API server, for example
 	// ":4000" to listen on any address, port 4000. If not set, the HTTP API
 	// server is not started.
 	HTTPAddress string
@@ -382,7 +382,7 @@ func (d *Daemon) Init() error {
 			return fmt.Errorf("cannot listen on %q: %v", d.httpAddress, err)
 		}
 		d.httpListener = listener
-		logger.Noticef("Guest HTTP API server listening on %q.", d.httpAddress)
+		logger.Noticef("HTTP API server listening on %q.", d.httpAddress)
 	}
 
 	logger.Noticef("Started daemon.")
@@ -496,7 +496,8 @@ func (d *Daemon) Start() {
 	})
 
 	if d.httpListener != nil {
-		// Start regular HTTP API for handling "guest" URLs like /v1/health
+		// Start additional HTTP API (currently only GuestOK endpoints are
+		// available because the HTTP API has no authentication right now).
 		d.tomb.Go(func() error {
 			err := d.serve.Serve(d.httpListener)
 			if err != http.ErrServerClosed && d.tomb.Err() == tomb.ErrStillAlive {
