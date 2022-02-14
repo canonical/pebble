@@ -140,6 +140,7 @@ type CheckInfo struct {
 	Level        plan.CheckLevel
 	Healthy      bool
 	Failures     int
+	Threshold    int
 	LastError    string
 	ErrorDetails string
 }
@@ -227,10 +228,11 @@ func (c *checkData) info() *CheckInfo {
 	defer c.mutex.Unlock()
 
 	info := &CheckInfo{
-		Name:     c.config.Name,
-		Level:    c.config.Level,
-		Healthy:  c.failures < c.config.Threshold,
-		Failures: c.failures,
+		Name:      c.config.Name,
+		Level:     c.config.Level,
+		Healthy:   c.failures < c.config.Threshold,
+		Failures:  c.failures,
+		Threshold: c.config.Threshold,
 	}
 	if c.lastErr != nil {
 		info.LastError = c.lastErr.Error()

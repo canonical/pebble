@@ -69,7 +69,11 @@ func (cmd *cmdChecks) Execute(args []string) error {
 	fmt.Fprintln(w, "Check\tLevel\tHealthy\tFailures")
 
 	for _, check := range checks {
-		fmt.Fprintf(w, "%s\t%s\t%t\t%d\n", check.Name, check.Level, check.Healthy, check.Failures)
+		level := check.Level
+		if level == client.UnsetLevel {
+			level = "-"
+		}
+		fmt.Fprintf(w, "%s\t%s\t%t\t%d/%d\n", check.Name, level, check.Healthy, check.Failures, check.Threshold)
 	}
 	return nil
 }

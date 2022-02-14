@@ -77,9 +77,9 @@ func (s *ManagerSuite) TestChecks(c *C) {
 	checks, err := mgr.Checks()
 	c.Assert(err, IsNil)
 	c.Assert(checks, DeepEquals, []*CheckInfo{
-		{Name: "chk1", Healthy: true},
-		{Name: "chk2", Healthy: true, Level: "alive"},
-		{Name: "chk3", Healthy: true, Level: "ready"},
+		{Name: "chk1", Healthy: true, Threshold: 3},
+		{Name: "chk2", Healthy: true, Level: "alive", Threshold: 3},
+		{Name: "chk3", Healthy: true, Level: "ready", Threshold: 3},
 	})
 
 	// Re-configuring should update checks
@@ -96,7 +96,7 @@ func (s *ManagerSuite) TestChecks(c *C) {
 	checks, err = mgr.Checks()
 	c.Assert(err, IsNil)
 	c.Assert(checks, DeepEquals, []*CheckInfo{
-		{Name: "chk4", Healthy: true},
+		{Name: "chk4", Healthy: true, Threshold: 3},
 	})
 }
 
@@ -126,6 +126,7 @@ func (s *ManagerSuite) TestTimeout(c *C) {
 		return !check.Healthy
 	})
 	c.Assert(check.Failures, Equals, 1)
+	c.Assert(check.Threshold, Equals, 1)
 	c.Assert(check.LastError, Equals, "exec check timed out")
 	c.Assert(check.ErrorDetails, Equals, "FOO")
 }
@@ -190,6 +191,7 @@ func (s *ManagerSuite) TestCheckCanceled(c *C) {
 	info := check.info()
 	c.Check(info.Healthy, Equals, true)
 	c.Check(info.Failures, Equals, 0)
+	c.Check(info.Threshold, Equals, 1)
 	c.Check(info.LastError, Equals, "")
 	c.Check(info.ErrorDetails, Equals, "")
 }
@@ -218,6 +220,7 @@ func (s *ManagerSuite) TestFailures(c *C) {
 	check := waitCheck(c, mgr, "chk1", func(check *CheckInfo) bool {
 		return check.Failures == 1
 	})
+	c.Assert(check.Threshold, Equals, 3)
 	c.Assert(check.Healthy, Equals, true)
 	c.Assert(check.LastError, Matches, "exit status 1")
 	c.Assert(failureName, Equals, "")
@@ -226,6 +229,7 @@ func (s *ManagerSuite) TestFailures(c *C) {
 	check = waitCheck(c, mgr, "chk1", func(check *CheckInfo) bool {
 		return check.Failures == 2
 	})
+	c.Assert(check.Threshold, Equals, 3)
 	c.Assert(check.Healthy, Equals, true)
 	c.Assert(check.LastError, Matches, "exit status 1")
 	c.Assert(failureName, Equals, "")
@@ -234,6 +238,7 @@ func (s *ManagerSuite) TestFailures(c *C) {
 	check = waitCheck(c, mgr, "chk1", func(check *CheckInfo) bool {
 		return check.Failures == 3
 	})
+	c.Assert(check.Threshold, Equals, 3)
 	c.Assert(check.Healthy, Equals, false)
 	c.Assert(check.LastError, Matches, "exit status 1")
 	c.Assert(failureName, Equals, "chk1")
@@ -245,6 +250,7 @@ func (s *ManagerSuite) TestFailures(c *C) {
 		return check.Healthy
 	})
 	c.Assert(check.Failures, Equals, 0)
+	c.Assert(check.Threshold, Equals, 3)
 	c.Assert(check.LastError, Equals, "")
 	c.Assert(failureName, Equals, "")
 }

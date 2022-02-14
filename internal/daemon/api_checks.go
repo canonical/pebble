@@ -22,10 +22,11 @@ import (
 )
 
 type checkInfo struct {
-	Name     string `json:"name"`
-	Level    string `json:"level,omitempty"`
-	Healthy  bool   `json:"healthy"`
-	Failures int    `json:"failures,omitempty"`
+	Name      string `json:"name"`
+	Level     string `json:"level,omitempty"`
+	Healthy   bool   `json:"healthy"`
+	Failures  int    `json:"failures,omitempty"`
+	Threshold int    `json:"threshold"`
 }
 
 func v1GetChecks(c *Command, r *http.Request, _ *userState) Response {
@@ -50,10 +51,11 @@ func v1GetChecks(c *Command, r *http.Request, _ *userState) Response {
 		namesMatch := len(names) == 0 || strutil.ListContains(names, check.Name)
 		if levelMatch && namesMatch {
 			info := checkInfo{
-				Name:     check.Name,
-				Level:    string(check.Level),
-				Healthy:  check.Healthy,
-				Failures: check.Failures,
+				Name:      check.Name,
+				Level:     string(check.Level),
+				Healthy:   check.Healthy,
+				Failures:  check.Failures,
+				Threshold: check.Threshold,
 			}
 			infos = append(infos, info)
 		}

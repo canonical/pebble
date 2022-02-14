@@ -53,7 +53,11 @@ type CheckInfo struct {
 
 	// Failures is the number of times in a row this check has failed. It is
 	// reset to zero as soon as the check succeeds.
-	Failures int `json:"failures,omitempty"`
+	Failures int `json:"failures"`
+
+	// Threshold is this check's failure threshold, from the layer
+	// configuration.
+	Threshold int `json:"threshold"`
 }
 
 // Checks fetches information about specific health checks (or all of them),

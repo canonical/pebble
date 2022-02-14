@@ -59,9 +59,9 @@ checks:
 	err = json.Unmarshal(rec.Body.Bytes(), &body)
 	c.Check(err, IsNil)
 	c.Check(body["result"], DeepEquals, []interface{}{
-		map[string]interface{}{"name": "chk1", "healthy": true, "level": "ready"},
-		map[string]interface{}{"name": "chk2", "healthy": true, "level": "alive"},
-		map[string]interface{}{"name": "chk3", "healthy": true},
+		map[string]interface{}{"name": "chk1", "healthy": true, "level": "ready", "threshold": 3.0},
+		map[string]interface{}{"name": "chk2", "healthy": true, "level": "alive", "threshold": 3.0},
+		map[string]interface{}{"name": "chk3", "healthy": true, "threshold": 3.0},
 	})
 
 	// Request with names filter
@@ -76,8 +76,8 @@ checks:
 	err = json.Unmarshal(rec.Body.Bytes(), &body)
 	c.Check(err, IsNil)
 	c.Check(body["result"], DeepEquals, []interface{}{
-		map[string]interface{}{"name": "chk1", "healthy": true, "level": "ready"},
-		map[string]interface{}{"name": "chk3", "healthy": true},
+		map[string]interface{}{"name": "chk1", "healthy": true, "level": "ready", "threshold": 3.0},
+		map[string]interface{}{"name": "chk3", "healthy": true, "threshold": 3.0},
 	})
 
 	// Request with level filter
@@ -92,7 +92,7 @@ checks:
 	err = json.Unmarshal(rec.Body.Bytes(), &body)
 	c.Check(err, IsNil)
 	c.Check(body["result"], DeepEquals, []interface{}{
-		map[string]interface{}{"name": "chk2", "healthy": true, "level": "alive"},
+		map[string]interface{}{"name": "chk2", "healthy": true, "level": "alive", "threshold": 3.0},
 	})
 
 	// Request with names and level filters
@@ -107,7 +107,7 @@ checks:
 	err = json.Unmarshal(rec.Body.Bytes(), &body)
 	c.Check(err, IsNil)
 	c.Check(body["result"], DeepEquals, []interface{}{
-		map[string]interface{}{"name": "chk1", "healthy": true, "level": "ready"},
+		map[string]interface{}{"name": "chk1", "healthy": true, "level": "ready", "threshold": 3.0},
 	})
 }
 
