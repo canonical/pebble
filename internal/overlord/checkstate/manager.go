@@ -138,12 +138,19 @@ func (m *CheckManager) Checks() ([]*CheckInfo, error) {
 type CheckInfo struct {
 	Name         string
 	Level        plan.CheckLevel
-	Healthy      bool
+	Status       CheckStatus
 	Failures     int
 	Threshold    int
 	LastError    string
 	ErrorDetails string
 }
+
+type CheckStatus string
+
+const (
+	CheckStatusUp   CheckStatus = "up"
+	CheckStatusDown CheckStatus = "down"
+)
 
 // checkData holds state for an active health check.
 type checkData struct {
@@ -230,9 +237,12 @@ func (c *checkData) info() *CheckInfo {
 	info := &CheckInfo{
 		Name:      c.config.Name,
 		Level:     c.config.Level,
-		Healthy:   c.failures < c.config.Threshold,
+		Status:    CheckStatusUp,
 		Failures:  c.failures,
 		Threshold: c.config.Threshold,
+	}
+	if c.failures >= c.config.Threshold {
+		info.Status = CheckStatusDown
 	}
 	if c.lastErr != nil {
 		info.LastError = c.lastErr.Error()

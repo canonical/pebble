@@ -66,14 +66,14 @@ func (cmd *cmdChecks) Execute(args []string) error {
 	w := tabWriter()
 	defer w.Flush()
 
-	fmt.Fprintln(w, "Check\tLevel\tHealthy\tFailures")
+	fmt.Fprintln(w, "Check\tLevel\tStatus\tFailures")
 
 	for _, check := range checks {
 		level := check.Level
 		if level == client.UnsetLevel {
 			level = "-"
 		}
-		fmt.Fprintf(w, "%s\t%s\t%t\t%d/%d\n", check.Name, level, check.Healthy, check.Failures, check.Threshold)
+		fmt.Fprintf(w, "%s\t%s\t%s\t%d/%d\n", check.Name, level, check.Status, check.Failures, check.Threshold)
 	}
 	return nil
 }

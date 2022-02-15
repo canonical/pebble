@@ -18,6 +18,7 @@ import (
 	"net/http"
 
 	"github.com/canonical/pebble/internal/logger"
+	"github.com/canonical/pebble/internal/overlord/checkstate"
 	"github.com/canonical/pebble/internal/plan"
 	"github.com/canonical/pebble/internal/strutil"
 )
@@ -48,7 +49,7 @@ func v1Health(c *Command, r *http.Request, _ *userState) Response {
 		levelMatch := level == plan.UnsetLevel || level == check.Level ||
 			level == plan.ReadyLevel && check.Level == plan.AliveLevel // ready implies alive
 		namesMatch := len(names) == 0 || strutil.ListContains(names, check.Name)
-		if levelMatch && namesMatch && !check.Healthy {
+		if levelMatch && namesMatch && check.Status != checkstate.CheckStatusUp {
 			healthy = false
 			status = http.StatusBadGateway
 		}

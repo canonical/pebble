@@ -33,9 +33,9 @@ func (s *PebbleSuite) TestChecks(c *check.C) {
     "type": "sync",
     "status-code": 200,
     "result": [
-		{"name": "chk1", "healthy": true, "threshold": 3},
-		{"name": "chk2", "healthy": false, "failures": 1, "threshold": 1},
-		{"name": "chk3", "level": "alive", "healthy": false, "failures": 42, "threshold": 3}
+		{"name": "chk1", "status": "up", "threshold": 3},
+		{"name": "chk2", "status": "down", "failures": 1, "threshold": 1},
+		{"name": "chk3", "level": "alive", "status": "down", "failures": 42, "threshold": 3}
 	]
 }`)
 	})
@@ -43,10 +43,10 @@ func (s *PebbleSuite) TestChecks(c *check.C) {
 	c.Assert(err, check.IsNil)
 	c.Assert(rest, check.HasLen, 0)
 	c.Check(s.Stdout(), check.Equals, `
-Check  Level  Healthy  Failures
-chk1   -      true     0/3
-chk2   -      false    1/1
-chk3   alive  false    42/3
+Check  Level  Status  Failures
+chk1   -      up      0/3
+chk2   -      down    1/1
+chk3   alive  down    42/3
 `[1:])
 	c.Check(s.Stderr(), check.Equals, "")
 }
@@ -60,8 +60,8 @@ func (s *PebbleSuite) TestChecksFiltering(c *check.C) {
     "type": "sync",
     "status-code": 200,
     "result": [
-		{"name": "chk1", "healthy": true, "threshold": 3},
-		{"name": "chk3", "level": "alive", "healthy": false, "failures": 42, "threshold": 3}
+		{"name": "chk1", "status": "up", "threshold": 3},
+		{"name": "chk3", "level": "alive", "status": "down", "failures": 42, "threshold": 3}
 	]
 }`)
 	})
@@ -69,9 +69,9 @@ func (s *PebbleSuite) TestChecksFiltering(c *check.C) {
 	c.Assert(err, check.IsNil)
 	c.Assert(rest, check.HasLen, 0)
 	c.Check(s.Stdout(), check.Equals, `
-Check  Level  Healthy  Failures
-chk1   -      true     0/3
-chk3   alive  false    42/3
+Check  Level  Status  Failures
+chk1   -      up      0/3
+chk3   alive  down    42/3
 `[1:])
 	c.Check(s.Stderr(), check.Equals, "")
 }

@@ -77,9 +77,9 @@ func (s *ManagerSuite) TestChecks(c *C) {
 	checks, err := mgr.Checks()
 	c.Assert(err, IsNil)
 	c.Assert(checks, DeepEquals, []*CheckInfo{
-		{Name: "chk1", Healthy: true, Threshold: 3},
-		{Name: "chk2", Healthy: true, Level: "alive", Threshold: 3},
-		{Name: "chk3", Healthy: true, Level: "ready", Threshold: 3},
+		{Name: "chk1", Status: "up", Threshold: 3},
+		{Name: "chk2", Status: "up", Level: "alive", Threshold: 3},
+		{Name: "chk3", Status: "up", Level: "ready", Threshold: 3},
 	})
 
 	// Re-configuring should update checks
@@ -96,7 +96,7 @@ func (s *ManagerSuite) TestChecks(c *C) {
 	checks, err = mgr.Checks()
 	c.Assert(err, IsNil)
 	c.Assert(checks, DeepEquals, []*CheckInfo{
-		{Name: "chk4", Healthy: true, Threshold: 3},
+		{Name: "chk4", Status: "up", Threshold: 3},
 	})
 }
 
@@ -123,7 +123,7 @@ func (s *ManagerSuite) TestTimeout(c *C) {
 	defer stopChecks(c, mgr)
 
 	check := waitCheck(c, mgr, "chk1", func(check *CheckInfo) bool {
-		return !check.Healthy
+		return check.Status != CheckStatusUp
 	})
 	c.Assert(check.Failures, Equals, 1)
 	c.Assert(check.Threshold, Equals, 1)
@@ -189,7 +189,7 @@ func (s *ManagerSuite) TestCheckCanceled(c *C) {
 
 	// Ensure it didn't update check failure details (white box testing)
 	info := check.info()
-	c.Check(info.Healthy, Equals, true)
+	c.Check(info.Status, Equals, CheckStatusUp)
 	c.Check(info.Failures, Equals, 0)
 	c.Check(info.Threshold, Equals, 1)
 	c.Check(info.LastError, Equals, "")
@@ -221,7 +221,7 @@ func (s *ManagerSuite) TestFailures(c *C) {
 		return check.Failures == 1
 	})
 	c.Assert(check.Threshold, Equals, 3)
-	c.Assert(check.Healthy, Equals, true)
+	c.Assert(check.Status, Equals, CheckStatusUp)
 	c.Assert(check.LastError, Matches, "exit status 1")
 	c.Assert(failureName, Equals, "")
 
@@ -230,7 +230,7 @@ func (s *ManagerSuite) TestFailures(c *C) {
 		return check.Failures == 2
 	})
 	c.Assert(check.Threshold, Equals, 3)
-	c.Assert(check.Healthy, Equals, true)
+	c.Assert(check.Status, Equals, CheckStatusUp)
 	c.Assert(check.LastError, Matches, "exit status 1")
 	c.Assert(failureName, Equals, "")
 
@@ -239,7 +239,7 @@ func (s *ManagerSuite) TestFailures(c *C) {
 		return check.Failures == 3
 	})
 	c.Assert(check.Threshold, Equals, 3)
-	c.Assert(check.Healthy, Equals, false)
+	c.Assert(check.Status, Equals, CheckStatusDown)
 	c.Assert(check.LastError, Matches, "exit status 1")
 	c.Assert(failureName, Equals, "chk1")
 
@@ -247,7 +247,7 @@ func (s *ManagerSuite) TestFailures(c *C) {
 	failureName = ""
 	os.Setenv("FAIL_PEBBLE_TEST", "")
 	check = waitCheck(c, mgr, "chk1", func(check *CheckInfo) bool {
-		return check.Healthy
+		return check.Status == CheckStatusUp
 	})
 	c.Assert(check.Failures, Equals, 0)
 	c.Assert(check.Threshold, Equals, 3)

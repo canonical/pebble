@@ -24,7 +24,7 @@ import (
 type checkInfo struct {
 	Name      string `json:"name"`
 	Level     string `json:"level,omitempty"`
-	Healthy   bool   `json:"healthy"`
+	Status    string `json:"status"`
 	Failures  int    `json:"failures,omitempty"`
 	Threshold int    `json:"threshold"`
 }
@@ -53,7 +53,7 @@ func v1GetChecks(c *Command, r *http.Request, _ *userState) Response {
 			info := checkInfo{
 				Name:      check.Name,
 				Level:     string(check.Level),
-				Healthy:   check.Healthy,
+				Status:    string(check.Status),
 				Failures:  check.Failures,
 				Threshold: check.Threshold,
 			}

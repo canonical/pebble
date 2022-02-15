@@ -46,8 +46,8 @@ func (s *healthSuite) TestNoChecks(c *C) {
 func (s *healthSuite) TestHealthy(c *C) {
 	daemon := &Daemon{checkMgr: &checkManager{checks: func() ([]*checkstate.CheckInfo, error) {
 		return []*checkstate.CheckInfo{
-			{Name: "chk1", Healthy: true},
-			{Name: "chk2", Healthy: true},
+			{Name: "chk1", Status: checkstate.CheckStatusUp},
+			{Name: "chk2", Status: checkstate.CheckStatusUp},
 		}, nil
 	}}}
 	status, response := serveHealth(c, daemon, "GET", "/v1/health", nil)
@@ -61,9 +61,9 @@ func (s *healthSuite) TestHealthy(c *C) {
 func (s *healthSuite) TestUnhealthy(c *C) {
 	daemon := &Daemon{checkMgr: &checkManager{checks: func() ([]*checkstate.CheckInfo, error) {
 		return []*checkstate.CheckInfo{
-			{Name: "chk1", Healthy: true},
-			{Name: "chk2", Healthy: false},
-			{Name: "chk3", Healthy: true},
+			{Name: "chk1", Status: checkstate.CheckStatusUp},
+			{Name: "chk2", Status: checkstate.CheckStatusDown},
+			{Name: "chk3", Status: checkstate.CheckStatusUp},
 		}, nil
 	}}}
 	status, response := serveHealth(c, daemon, "GET", "/v1/health", nil)
@@ -75,29 +75,24 @@ func (s *healthSuite) TestUnhealthy(c *C) {
 }
 
 func (s *healthSuite) TestLevel(c *C) {
-	const (
-		unhealthy = iota
-		healthy
-		none
-	)
 	type levelTest struct {
-		aliveCheck   int  // alive check: unhealthy, healthy, or no alive check
-		readyCheck   int  // ready check: unhealthy, healthy, or no ready check
-		aliveHealthy bool // expected response with ?level=alive filter
-		readyHealthy bool // expected response with ?level=ready filter
+		aliveCheck   string // alive check: "up", "down", or no alive check
+		readyCheck   string // ready check: "up", "down", or no ready check
+		aliveHealthy bool   // expected response with ?level=alive filter
+		readyHealthy bool   // expected response with ?level=ready filter
 	}
 
 	// All combinations of alive and ready checks (ready implies alive).
 	tests := []levelTest{
-		{aliveCheck: healthy, readyCheck: healthy, aliveHealthy: true, readyHealthy: true},       // alive and ready
-		{aliveCheck: healthy, readyCheck: unhealthy, aliveHealthy: true, readyHealthy: false},    // alive but not ready
-		{aliveCheck: unhealthy, readyCheck: healthy, aliveHealthy: false, readyHealthy: false},   // not alive but ready => ready unhealthy
-		{aliveCheck: unhealthy, readyCheck: unhealthy, aliveHealthy: false, readyHealthy: false}, // not alive nor ready
-		{aliveCheck: healthy, readyCheck: none, aliveHealthy: true, readyHealthy: true},          // alive and no ready check
-		{aliveCheck: unhealthy, readyCheck: none, aliveHealthy: false, readyHealthy: false},      // not alive, no ready check => ready unhealthy
-		{aliveCheck: none, readyCheck: healthy, aliveHealthy: true, readyHealthy: true},          // no alive check, but ready
-		{aliveCheck: none, readyCheck: unhealthy, aliveHealthy: true, readyHealthy: false},       // no alive check, not ready
-		{aliveCheck: none, readyCheck: none, aliveHealthy: true, readyHealthy: true},             // no alive or ready check
+		{aliveCheck: "up", readyCheck: "up", aliveHealthy: true, readyHealthy: true},       // alive and ready
+		{aliveCheck: "up", readyCheck: "down", aliveHealthy: true, readyHealthy: false},    // alive but not ready
+		{aliveCheck: "down", readyCheck: "up", aliveHealthy: false, readyHealthy: false},   // not alive but ready => ready unhealthy
+		{aliveCheck: "down", readyCheck: "down", aliveHealthy: false, readyHealthy: false}, // not alive nor ready
+		{aliveCheck: "up", readyCheck: "", aliveHealthy: true, readyHealthy: true},         // alive and no ready check
+		{aliveCheck: "down", readyCheck: "", aliveHealthy: false, readyHealthy: false},     // not alive, no ready check => ready unhealthy
+		{aliveCheck: "", readyCheck: "up", aliveHealthy: true, readyHealthy: true},         // no alive check, but ready
+		{aliveCheck: "", readyCheck: "down", aliveHealthy: true, readyHealthy: false},      // no alive check, not ready
+		{aliveCheck: "", readyCheck: "", aliveHealthy: true, readyHealthy: true},           // no alive or ready check
 	}
 
 	for _, test := range tests {
@@ -106,11 +101,11 @@ func (s *healthSuite) TestLevel(c *C) {
 
 		daemon := &Daemon{checkMgr: &checkManager{checks: func() ([]*checkstate.CheckInfo, error) {
 			var checks []*checkstate.CheckInfo
-			if test.aliveCheck != none {
-				checks = append(checks, &checkstate.CheckInfo{Name: "a", Level: plan.AliveLevel, Healthy: test.aliveCheck == healthy})
+			if test.aliveCheck != "" {
+				checks = append(checks, &checkstate.CheckInfo{Name: "a", Level: plan.AliveLevel, Status: checkstate.CheckStatus(test.aliveCheck)})
 			}
-			if test.readyCheck != none {
-				checks = append(checks, &checkstate.CheckInfo{Name: "r", Level: plan.ReadyLevel, Healthy: test.readyCheck == healthy})
+			if test.readyCheck != "" {
+				checks = append(checks, &checkstate.CheckInfo{Name: "r", Level: plan.ReadyLevel, Status: checkstate.CheckStatus(test.readyCheck)})
 			}
 			return checks, nil
 		}}}
@@ -138,9 +133,9 @@ func (s *healthSuite) TestLevel(c *C) {
 func (s *healthSuite) TestNames(c *C) {
 	daemon := &Daemon{checkMgr: &checkManager{checks: func() ([]*checkstate.CheckInfo, error) {
 		return []*checkstate.CheckInfo{
-			{Name: "chk1", Healthy: false},
-			{Name: "chk2", Healthy: true},
-			{Name: "chk3", Healthy: true},
+			{Name: "chk1", Status: checkstate.CheckStatusDown},
+			{Name: "chk2", Status: checkstate.CheckStatusUp},
+			{Name: "chk3", Status: checkstate.CheckStatusUp},
 		}, nil
 	}}}
 

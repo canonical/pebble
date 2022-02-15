@@ -973,7 +973,7 @@ checks:
 		}
 		checks, err := checkMgr.Checks()
 		c.Assert(err, IsNil)
-		if len(checks) == 1 && !checks[0].Healthy {
+		if len(checks) == 1 && checks[0].Status != checkstate.CheckStatusUp {
 			c.Assert(checks[0].Failures, Equals, 1)
 			c.Assert(checks[0].LastError, Matches, ".* executable file not found .*")
 			break
@@ -1005,7 +1005,7 @@ checks:
 	checks, err := checkMgr.Checks()
 	c.Assert(err, IsNil)
 	c.Assert(len(checks), Equals, 1)
-	c.Assert(checks[0].Healthy, Equals, false)
+	c.Assert(checks[0].Status, Equals, checkstate.CheckStatusDown)
 	c.Assert(checks[0].LastError, Matches, ".* executable file not found .*")
 	svc := s.serviceByName(c, "test2")
 	c.Assert(svc.Current, Equals, servstate.StatusActive)
@@ -1086,7 +1086,7 @@ checks:
 	checks, err := checkMgr.Checks()
 	c.Assert(err, IsNil)
 	c.Assert(len(checks), Equals, 1)
-	c.Assert(checks[0].Healthy, Equals, false)
+	c.Assert(checks[0].Status, Equals, checkstate.CheckStatusDown)
 	c.Assert(checks[0].LastError, Matches, ".* executable file not found .*")
 }
 
@@ -1140,7 +1140,7 @@ checks:
 		}
 		checks, err := checkMgr.Checks()
 		c.Assert(err, IsNil)
-		if len(checks) == 1 && !checks[0].Healthy {
+		if len(checks) == 1 && checks[0].Status != checkstate.CheckStatusUp {
 			c.Assert(checks[0].Failures, Equals, 1)
 			c.Assert(checks[0].LastError, Matches, ".* executable file not found .*")
 			break
@@ -1156,7 +1156,7 @@ checks:
 	checks, err := checkMgr.Checks()
 	c.Assert(err, IsNil)
 	c.Assert(len(checks), Equals, 1)
-	c.Assert(checks[0].Healthy, Equals, false)
+	c.Assert(checks[0].Status, Equals, checkstate.CheckStatusDown)
 	c.Assert(checks[0].LastError, Matches, ".* executable file not found .*")
 	svc := s.serviceByName(c, "test2")
 	c.Assert(svc.Current, Equals, servstate.StatusActive)
@@ -1212,7 +1212,7 @@ checks:
 		}
 		checks, err := checkMgr.Checks()
 		c.Assert(err, IsNil)
-		if len(checks) == 1 && !checks[0].Healthy {
+		if len(checks) == 1 && checks[0].Status != checkstate.CheckStatusUp {
 			c.Assert(checks[0].Failures, Equals, 1)
 			c.Assert(checks[0].LastError, Matches, ".* executable file not found .*")
 			break

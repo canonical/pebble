@@ -25,8 +25,8 @@ import (
 func (cs *clientSuite) TestChecksGet(c *check.C) {
 	cs.rsp = `{
 		"result": [
-			{"name": "chk1", "healthy": true},
-			{"name": "chk3", "healthy": false, "failures": 42}
+			{"name": "chk1", "status": "up"},
+			{"name": "chk3", "status": "down", "failures": 42}
 		],
 		"status": "OK",
 		"status-code": 200,
@@ -41,11 +41,11 @@ func (cs *clientSuite) TestChecksGet(c *check.C) {
 	c.Assert(err, check.IsNil)
 	c.Assert(checks, check.DeepEquals,
 		[]*client.CheckInfo{{
-			Name:    "chk1",
-			Healthy: true,
+			Name:   "chk1",
+			Status: client.CheckStatusUp,
 		}, {
 			Name:     "chk3",
-			Healthy:  false,
+			Status:   client.CheckStatusDown,
 			Failures: 42,
 		}})
 	c.Assert(cs.req.Method, check.Equals, "GET")

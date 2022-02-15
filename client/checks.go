@@ -39,6 +39,13 @@ const (
 	ReadyLevel CheckLevel = "ready"
 )
 
+type CheckStatus string
+
+const (
+	CheckStatusUp   CheckStatus = "up"
+	CheckStatusDown CheckStatus = "down"
+)
+
 // CheckInfo holds status information for a single health check.
 type CheckInfo struct {
 	// Name is the name of this check, from the layer configuration.
@@ -47,9 +54,9 @@ type CheckInfo struct {
 	// Level is this check's level, from the layer configuration.
 	Level CheckLevel `json:"level"`
 
-	// Healthy is true if the check is considered healthy: not failing, or the
-	// number of failures is less than the configured threshold.
-	Healthy bool `json:"healthy"`
+	// Status is the status of this check: "up" if healthy, "down" if the
+	// number of failures has reached the configured threshold.
+	Status CheckStatus `json:"status"`
 
 	// Failures is the number of times in a row this check has failed. It is
 	// reset to zero as soon as the check succeeds.
