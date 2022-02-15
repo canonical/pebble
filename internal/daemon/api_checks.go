@@ -45,7 +45,7 @@ func v1GetChecks(c *Command, r *http.Request, _ *userState) Response {
 		return statusInternalError("%v", err)
 	}
 
-	var infos []checkInfo
+	infos := []checkInfo{} // if no checks, return [] instead of null
 	for _, check := range checks {
 		levelMatch := level == plan.UnsetLevel || level == check.Level
 		namesMatch := len(names) == 0 || strutil.ListContains(names, check.Name)

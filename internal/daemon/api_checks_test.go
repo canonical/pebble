@@ -132,3 +132,20 @@ func (s *apiSuite) TestChecksGetInvalidLevel(c *C) {
 		"message": `level must be "alive" or "ready"`,
 	})
 }
+
+func (s *apiSuite) TestChecksEmpty(c *C) {
+	s.daemon(c)
+
+	req, err := http.NewRequest("GET", "/v1/checks", nil)
+	c.Assert(err, IsNil)
+	rsp := v1GetChecks(apiCmd("/v1/checks"), req, nil).(*resp)
+	rec := httptest.NewRecorder()
+	rsp.ServeHTTP(rec, req)
+	c.Check(rec.Code, Equals, 200)
+	c.Check(rsp.Status, Equals, 200)
+	c.Check(rsp.Type, Equals, ResponseTypeSync)
+	var body map[string]interface{}
+	err = json.Unmarshal(rec.Body.Bytes(), &body)
+	c.Check(err, IsNil)
+	c.Check(body["result"], DeepEquals, []interface{}{}) // should be [] rather than null
+}
