@@ -105,12 +105,6 @@ type Daemon struct {
 	rebootIsMissing bool
 
 	mu sync.Mutex
-
-	checkMgr CheckManager // overridable for testing; default is overlord.CheckManager()
-}
-
-type CheckManager interface {
-	Checks() ([]*checkstate.CheckInfo, error)
 }
 
 // XXX Placeholder for now.
@@ -800,10 +794,6 @@ func getListener(socketPath string, listenerMap map[string]net.Listener) (net.Li
 	return listener, nil
 }
 
-// CheckManager returns the overlord's check manager, or the test manager if set.
-func (d *Daemon) CheckManager() CheckManager {
-	if d.checkMgr != nil {
-		return d.checkMgr
-	}
-	return d.overlord.CheckManager()
+var getChecks = func(o *overlord.Overlord) ([]*checkstate.CheckInfo, error) {
+	return o.CheckManager().Checks()
 }

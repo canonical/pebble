@@ -37,7 +37,7 @@ func v1Health(c *Command, r *http.Request, _ *userState) Response {
 
 	names := r.URL.Query()["names"]
 
-	checks, err := c.d.CheckManager().Checks()
+	checks, err := getChecks(c.d.overlord)
 	if err != nil {
 		logger.Noticef("Cannot fetch checks: %v", err.Error())
 		return statusInternalError("internal server error")

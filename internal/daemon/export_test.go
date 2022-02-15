@@ -18,12 +18,10 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/canonical/pebble/internal/osutil/sys"
+	"github.com/canonical/pebble/internal/overlord"
+	"github.com/canonical/pebble/internal/overlord/checkstate"
 	"github.com/canonical/pebble/internal/overlord/state"
 )
-
-type Resp = resp
-type ErrorResult = errorResult
 
 func FakeMuxVars(f func(*http.Request) map[string]string) (restore func()) {
 	old := muxVars
@@ -41,10 +39,10 @@ func FakeStateEnsureBefore(f func(st *state.State, d time.Duration)) (restore fu
 	}
 }
 
-func FakeGetuid(f func() sys.UserID) (restore func()) {
-	old := sysGetuid
-	sysGetuid = f
+func FakeGetChecks(f func(o *overlord.Overlord) ([]*checkstate.CheckInfo, error)) (restore func()) {
+	old := getChecks
+	getChecks = f
 	return func() {
-		sysGetuid = old
+		getChecks = old
 	}
 }

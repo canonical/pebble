@@ -23,6 +23,7 @@ import (
 
 	. "gopkg.in/check.v1"
 
+	"github.com/canonical/pebble/internal/overlord"
 	"github.com/canonical/pebble/internal/overlord/checkstate"
 	"github.com/canonical/pebble/internal/plan"
 )
@@ -32,10 +33,12 @@ var _ = Suite(&healthSuite{})
 type healthSuite struct{}
 
 func (s *healthSuite) TestNoChecks(c *C) {
-	daemon := &Daemon{checkMgr: &checkManager{checks: func() ([]*checkstate.CheckInfo, error) {
+	restore := FakeGetChecks(func(o *overlord.Overlord) ([]*checkstate.CheckInfo, error) {
 		return nil, nil
-	}}}
-	status, response := serveHealth(c, daemon, "GET", "/v1/health", nil)
+	})
+	defer restore()
+
+	status, response := serveHealth(c, "GET", "/v1/health", nil)
 
 	c.Assert(status, Equals, 200)
 	c.Assert(response, DeepEquals, map[string]interface{}{
@@ -44,13 +47,15 @@ func (s *healthSuite) TestNoChecks(c *C) {
 }
 
 func (s *healthSuite) TestHealthy(c *C) {
-	daemon := &Daemon{checkMgr: &checkManager{checks: func() ([]*checkstate.CheckInfo, error) {
+	restore := FakeGetChecks(func(o *overlord.Overlord) ([]*checkstate.CheckInfo, error) {
 		return []*checkstate.CheckInfo{
 			{Name: "chk1", Status: checkstate.CheckStatusUp},
 			{Name: "chk2", Status: checkstate.CheckStatusUp},
 		}, nil
-	}}}
-	status, response := serveHealth(c, daemon, "GET", "/v1/health", nil)
+	})
+	defer restore()
+
+	status, response := serveHealth(c, "GET", "/v1/health", nil)
 
 	c.Assert(status, Equals, 200)
 	c.Assert(response, DeepEquals, map[string]interface{}{
@@ -59,14 +64,16 @@ func (s *healthSuite) TestHealthy(c *C) {
 }
 
 func (s *healthSuite) TestUnhealthy(c *C) {
-	daemon := &Daemon{checkMgr: &checkManager{checks: func() ([]*checkstate.CheckInfo, error) {
+	restore := FakeGetChecks(func(o *overlord.Overlord) ([]*checkstate.CheckInfo, error) {
 		return []*checkstate.CheckInfo{
 			{Name: "chk1", Status: checkstate.CheckStatusUp},
 			{Name: "chk2", Status: checkstate.CheckStatusDown},
 			{Name: "chk3", Status: checkstate.CheckStatusUp},
 		}, nil
-	}}}
-	status, response := serveHealth(c, daemon, "GET", "/v1/health", nil)
+	})
+	defer restore()
+
+	status, response := serveHealth(c, "GET", "/v1/health", nil)
 
 	c.Assert(status, Equals, 502)
 	c.Assert(response, DeepEquals, map[string]interface{}{
@@ -96,62 +103,66 @@ func (s *healthSuite) TestLevel(c *C) {
 	}
 
 	for _, test := range tests {
-		c.Logf("TestHealthLevels check alive=%d ready=%d, healthy alive=%t ready=%t",
-			test.aliveCheck, test.readyCheck, test.aliveHealthy, test.readyHealthy)
+		func() {
+			c.Logf("TestHealthLevels check alive=%q ready=%q, healthy alive=%t ready=%t",
+				test.aliveCheck, test.readyCheck, test.aliveHealthy, test.readyHealthy)
 
-		daemon := &Daemon{checkMgr: &checkManager{checks: func() ([]*checkstate.CheckInfo, error) {
-			var checks []*checkstate.CheckInfo
-			if test.aliveCheck != "" {
-				checks = append(checks, &checkstate.CheckInfo{Name: "a", Level: plan.AliveLevel, Status: checkstate.CheckStatus(test.aliveCheck)})
+			restore := FakeGetChecks(func(o *overlord.Overlord) ([]*checkstate.CheckInfo, error) {
+				var checks []*checkstate.CheckInfo
+				if test.aliveCheck != "" {
+					checks = append(checks, &checkstate.CheckInfo{Name: "a", Level: plan.AliveLevel, Status: checkstate.CheckStatus(test.aliveCheck)})
+				}
+				if test.readyCheck != "" {
+					checks = append(checks, &checkstate.CheckInfo{Name: "r", Level: plan.ReadyLevel, Status: checkstate.CheckStatus(test.readyCheck)})
+				}
+				return checks, nil
+			})
+			defer restore()
+
+			status, response := serveHealth(c, "GET", "/v1/health?level=alive", nil)
+			if test.aliveHealthy {
+				c.Check(status, Equals, 200)
+				c.Check(response, DeepEquals, map[string]interface{}{"healthy": true})
+			} else {
+				c.Check(status, Equals, 502)
+				c.Check(response, DeepEquals, map[string]interface{}{"healthy": false})
 			}
-			if test.readyCheck != "" {
-				checks = append(checks, &checkstate.CheckInfo{Name: "r", Level: plan.ReadyLevel, Status: checkstate.CheckStatus(test.readyCheck)})
+
+			status, response = serveHealth(c, "GET", "/v1/health?level=ready", nil)
+			if test.readyHealthy {
+				c.Check(status, Equals, 200)
+				c.Check(response, DeepEquals, map[string]interface{}{"healthy": true})
+			} else {
+				c.Check(status, Equals, 502)
+				c.Check(response, DeepEquals, map[string]interface{}{"healthy": false})
 			}
-			return checks, nil
-		}}}
-
-		status, response := serveHealth(c, daemon, "GET", "/v1/health?level=alive", nil)
-		if test.aliveHealthy {
-			c.Check(status, Equals, 200)
-			c.Check(response, DeepEquals, map[string]interface{}{"healthy": true})
-		} else {
-			c.Check(status, Equals, 502)
-			c.Check(response, DeepEquals, map[string]interface{}{"healthy": false})
-		}
-
-		status, response = serveHealth(c, daemon, "GET", "/v1/health?level=ready", nil)
-		if test.readyHealthy {
-			c.Check(status, Equals, 200)
-			c.Check(response, DeepEquals, map[string]interface{}{"healthy": true})
-		} else {
-			c.Check(status, Equals, 502)
-			c.Check(response, DeepEquals, map[string]interface{}{"healthy": false})
-		}
+		}()
 	}
 }
 
 func (s *healthSuite) TestNames(c *C) {
-	daemon := &Daemon{checkMgr: &checkManager{checks: func() ([]*checkstate.CheckInfo, error) {
+	restore := FakeGetChecks(func(o *overlord.Overlord) ([]*checkstate.CheckInfo, error) {
 		return []*checkstate.CheckInfo{
 			{Name: "chk1", Status: checkstate.CheckStatusDown},
 			{Name: "chk2", Status: checkstate.CheckStatusUp},
 			{Name: "chk3", Status: checkstate.CheckStatusUp},
 		}, nil
-	}}}
+	})
+	defer restore()
 
-	status, response := serveHealth(c, daemon, "GET", "/v1/health?names=chk1&names=chk3", nil)
+	status, response := serveHealth(c, "GET", "/v1/health?names=chk1&names=chk3", nil)
 	c.Assert(status, Equals, 502)
 	c.Assert(response, DeepEquals, map[string]interface{}{
 		"healthy": false,
 	})
 
-	status, response = serveHealth(c, daemon, "GET", "/v1/health?names=chk2", nil)
+	status, response = serveHealth(c, "GET", "/v1/health?names=chk2", nil)
 	c.Assert(status, Equals, 200)
 	c.Assert(response, DeepEquals, map[string]interface{}{
 		"healthy": true,
 	})
 
-	status, response = serveHealth(c, daemon, "GET", "/v1/health?names=chk3", nil)
+	status, response = serveHealth(c, "GET", "/v1/health?names=chk3", nil)
 	c.Assert(status, Equals, 200)
 	c.Assert(response, DeepEquals, map[string]interface{}{
 		"healthy": true,
@@ -159,10 +170,12 @@ func (s *healthSuite) TestNames(c *C) {
 }
 
 func (s *healthSuite) TestBadLevel(c *C) {
-	daemon := &Daemon{checkMgr: &checkManager{checks: func() ([]*checkstate.CheckInfo, error) {
+	restore := FakeGetChecks(func(o *overlord.Overlord) ([]*checkstate.CheckInfo, error) {
 		return nil, nil
-	}}}
-	status, response := serveHealth(c, daemon, "GET", "/v1/health?level=foo", nil)
+	})
+	defer restore()
+
+	status, response := serveHealth(c, "GET", "/v1/health?level=foo", nil)
 
 	c.Assert(status, Equals, 400)
 	c.Assert(response, DeepEquals, map[string]interface{}{
@@ -171,10 +184,12 @@ func (s *healthSuite) TestBadLevel(c *C) {
 }
 
 func (s *healthSuite) TestChecksError(c *C) {
-	daemon := &Daemon{checkMgr: &checkManager{checks: func() ([]*checkstate.CheckInfo, error) {
+	restore := FakeGetChecks(func(o *overlord.Overlord) ([]*checkstate.CheckInfo, error) {
 		return nil, errors.New("oops!")
-	}}}
-	status, response := serveHealth(c, daemon, "GET", "/v1/health", nil)
+	})
+	defer restore()
+
+	status, response := serveHealth(c, "GET", "/v1/health", nil)
 
 	c.Assert(status, Equals, 500)
 	c.Assert(response, DeepEquals, map[string]interface{}{
@@ -182,22 +197,12 @@ func (s *healthSuite) TestChecksError(c *C) {
 	})
 }
 
-type checkManager struct {
-	checks checksFunc
-}
-
-type checksFunc func() ([]*checkstate.CheckInfo, error)
-
-func (c *checkManager) Checks() ([]*checkstate.CheckInfo, error) {
-	return c.checks()
-}
-
-func serveHealth(c *C, daemon *Daemon, method, url string, body io.Reader) (int, map[string]interface{}) {
+func serveHealth(c *C, method, url string, body io.Reader) (int, map[string]interface{}) {
 	recorder := httptest.NewRecorder()
 	request, err := http.NewRequest(method, url, body)
 	c.Assert(err, IsNil)
 
-	server := v1Health(&Command{d: daemon}, request, nil)
+	server := v1Health(&Command{d: &Daemon{}}, request, nil)
 	server.ServeHTTP(recorder, request)
 
 	c.Assert(recorder.Result().Header.Get("Content-Type"), Equals, "application/json")
