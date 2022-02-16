@@ -15,9 +15,11 @@
 package servstate
 
 import (
+	"fmt"
 	"os"
+	"os/exec"
 	"os/signal"
-	"time"
+	"sync"
 
 	"golang.org/x/sys/unix"
 
@@ -45,21 +47,14 @@ func reapChildren(stop <-chan struct{}) {
 	sigChld := make(chan os.Signal, 1)
 	signal.Notify(sigChld, unix.SIGCHLD)
 	for {
-		logger.Debugf("Reaper waiting for SIGCHLD")
+		logger.Debugf("Reaper waiting for SIGCHLD.")
 		select {
 		case <-sigChld:
-			logger.Debugf("Reaper received SIGCHLD")
-
-			// This allows ServiceManager's cmd.Wait() to pick it up before
-			// the reaper for normal service process exits, and avoid
-			// returning a "waitid: no child processes" error. A bit hacky,
-			// but I don't know another simple way to prevent this.
-			time.Sleep(25 * time.Millisecond)
-
+			logger.Debugf("Reaper received SIGCHLD.")
 			reapOnce()
 		case <-stop:
 			signal.Reset(unix.SIGCHLD)
-			logger.Debugf("Reaper stopped")
+			logger.Debugf("Reaper stopped.")
 			return
 		}
 	}
@@ -73,18 +68,70 @@ func reapOnce() {
 		switch err {
 		case nil:
 			if pid <= 0 {
-				logger.Debugf("Reaper found no children have changed state")
+				logger.Debugf("Reaper found no children have changed state.")
 				return
 			}
-			logger.Noticef("Reaped child PID %d", pid)
+
+			exitCode := status.ExitStatus()
+			if status.Signaled() {
+				exitCode = 128 + int(status.Signal())
+			}
+			logger.Debugf("Reaped PID %d which exited with code %d.", pid, exitCode)
+
+			// If there's a WaitCommand waiting for this PID, send it the exit code.
+			waitsMutex.Lock()
+			ch := waits[pid]
+			delete(waits, pid)
+			waitsMutex.Unlock()
+			if ch != nil {
+				ch <- exitCode
+			}
 
 		case unix.ECHILD:
-			logger.Debugf("Reaper has no more children to wait for")
+			logger.Debugf("Reaper has no more children to wait for.")
 			return
 
 		default:
 			logger.Noticef("Cannot wait for children: %v", err)
 			return
 		}
+	}
+}
+
+var (
+	waitsMutex sync.Mutex
+	waits      = make(map[int]chan int)
+)
+
+func WaitCommand(cmd *exec.Cmd) (int, error) {
+	// Create a wait channel to tell reaper to notify us about this PID.
+	ch := make(chan int)
+	waitsMutex.Lock()
+	if _, exists := waits[cmd.Process.Pid]; exists {
+		waitsMutex.Unlock()
+		return 0, fmt.Errorf("PID %d is already being waited on", cmd.Process.Pid)
+	}
+	waits[cmd.Process.Pid] = ch
+	waitsMutex.Unlock()
+
+	// Wait for reaper to reap this PID and send us the exit code.
+	exitCode := <-ch
+
+	// At this point, we expect cmd.Wait() to return a wait() syscall error
+	// ("waitid: no child processes"), because the reaper is already waiting
+	// for all PIDs. This is not pretty, but we need to call cmd.Wait() to
+	// clean up goroutines and file descriptors.
+	err := cmd.Wait()
+	switch err := err.(type) {
+	case nil:
+		logger.Debugf("Expected cmd.Wait error, got nil (exit code %d)", exitCode)
+		return exitCode, nil
+	case *os.SyscallError:
+		if err.Syscall == "wait" {
+			return exitCode, nil
+		}
+		return -1, err
+	default:
+		return -1, err
 	}
 }

@@ -368,13 +368,16 @@ func (s *serviceData) startInternal() error {
 
 	// Start a goroutine to wait for the process to finish.
 	done := make(chan struct{})
+	cmd := s.cmd
 	go func() {
-		waitErr := s.cmd.Wait()
+		exitCode, waitErr := WaitCommand(cmd)
 		if waitErr != nil {
-			logger.Debugf("Service %q Wait() error: %v", serviceName, waitErr)
+			logger.Debugf("Service %q unexpected error: %v", serviceName, waitErr)
+		} else {
+			logger.Debugf("Service %q exited with code %d.", serviceName, exitCode)
 		}
 		close(done)
-		err := s.exited(waitErr)
+		err := s.exited(exitCode)
 		if err != nil {
 			logger.Noticef("Cannot transition state after service exit: %v", err)
 		}
@@ -415,7 +418,7 @@ func (s *serviceData) okayWaitElapsed() error {
 }
 
 // exited is called when the service's process exits.
-func (s *serviceData) exited(waitErr error) error {
+func (s *serviceData) exited(exitCode int) error {
 	s.manager.servicesLock.Lock()
 	defer s.manager.servicesLock.Unlock()
 
@@ -425,12 +428,12 @@ func (s *serviceData) exited(waitErr error) error {
 
 	switch s.state {
 	case stateStarting:
-		s.started <- fmt.Errorf("exited quickly with code %d", exitCode(s.cmd))
+		s.started <- fmt.Errorf("exited quickly with code %d", exitCode)
 		s.transition(stateExited) // not strictly necessary as doStart will return, but doesn't hurt
 
 	case stateRunning:
-		logger.Noticef("Service %q stopped unexpectedly with code %d", s.config.Name, exitCode(s.cmd))
-		action, onType := getAction(s.config, waitErr == nil)
+		logger.Noticef("Service %q stopped unexpectedly with code %d", s.config.Name, exitCode)
+		action, onType := getAction(s.config, exitCode == 0)
 		switch action {
 		case plan.ActionIgnore:
 			logger.Noticef("Service %q %s action is %q, not doing anything further", s.config.Name, onType, action)
@@ -515,26 +518,6 @@ func (m *ServiceManager) getJitter(duration time.Duration) time.Duration {
 	maxJitter := duration.Seconds() * 0.1
 	jitter := m.rand.Float64() * maxJitter
 	return time.Duration(jitter * float64(time.Second))
-}
-
-// exitCode returns the exit code of the given command, or 128+signal if it
-// exited via a signal.
-func exitCode(cmd *exec.Cmd) int {
-	if cmd.ProcessState == nil {
-		// Happens when Wait() returns a "waitid: no child processes" error.
-		// Due to the time.Sleep() in reapChildren after SIGCHLD is received,
-		// this shouldn't happen, but protect against a nil pointer error just
-		// in case (the exit code is only used in error/log messages).
-		return -1
-	}
-	status, ok := cmd.ProcessState.Sys().(syscall.WaitStatus)
-	if ok {
-		if status.Signaled() {
-			return 128 + int(status.Signal())
-		}
-		return status.ExitStatus()
-	}
-	return cmd.ProcessState.ExitCode()
 }
 
 // getAction returns the correct action to perform from the plan and whether
