@@ -13,6 +13,7 @@ import (
 	"github.com/canonical/pebble/internal/overlord/restart"
 	"github.com/canonical/pebble/internal/overlord/state"
 	"github.com/canonical/pebble/internal/plan"
+	"github.com/canonical/pebble/internal/reaper"
 	"github.com/canonical/pebble/internal/servicelog"
 )
 
@@ -33,9 +34,6 @@ type ServiceManager struct {
 
 	randLock sync.Mutex
 	rand     *rand.Rand
-
-	stopReaper    chan struct{}
-	reaperStopped chan struct{}
 }
 
 // PlanFunc is the type of function used by NotifyPlanChanged.
@@ -66,19 +64,9 @@ func NewManager(s *state.State, runner *state.TaskRunner, pebbleDir string, serv
 		rand:          rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
 
-	isSubreaper, err := setChildSubreaper()
+	err := reaper.Start()
 	if err != nil {
-		return nil, fmt.Errorf("cannot set daemon as child subreaper: %w", err)
-	}
-	if isSubreaper {
-		manager.stopReaper = make(chan struct{})
-		manager.reaperStopped = make(chan struct{})
-		go func() {
-			reapChildren(manager.stopReaper)
-			close(manager.reaperStopped)
-		}()
-	} else {
-		logger.Noticef("child subreaping unavailable on this platform")
+		return nil, err
 	}
 
 	runner.AddHandler("start", manager.doStart, nil)
@@ -89,9 +77,9 @@ func NewManager(s *state.State, runner *state.TaskRunner, pebbleDir string, serv
 
 // Stop implements overlord.StateStopper and stops background functions.
 func (m *ServiceManager) Stop() {
-	if m.stopReaper != nil {
-		close(m.stopReaper)
-		<-m.reaperStopped // wait till reapChildren actually finishes
+	err := reaper.Stop()
+	if err != nil {
+		logger.Noticef("Cannot stop child process reaper: %v", err)
 	}
 }
 

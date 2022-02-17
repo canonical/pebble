@@ -16,6 +16,7 @@ import (
 	"github.com/canonical/pebble/internal/overlord/restart"
 	"github.com/canonical/pebble/internal/overlord/state"
 	"github.com/canonical/pebble/internal/plan"
+	"github.com/canonical/pebble/internal/reaper"
 	"github.com/canonical/pebble/internal/servicelog"
 	"github.com/canonical/pebble/internal/strutil/shlex"
 )
@@ -370,7 +371,7 @@ func (s *serviceData) startInternal() error {
 	done := make(chan struct{})
 	cmd := s.cmd
 	go func() {
-		exitCode, waitErr := WaitCommand(cmd)
+		exitCode, waitErr := reaper.WaitCommand(cmd)
 		if waitErr != nil {
 			logger.Debugf("Service %q unexpected error: %v", serviceName, waitErr)
 		} else {

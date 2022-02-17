@@ -1,4 +1,4 @@
-// Copyright (c) 2021 Canonical Ltd
+// Copyright (c) 2022 Canonical Ltd
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License version 3 as
@@ -12,7 +12,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package servstate
+package reaper
 
 import (
 	"fmt"
@@ -25,6 +25,48 @@ import (
 
 	"github.com/canonical/pebble/internal/logger"
 )
+
+var (
+	stop    chan struct{}
+	stopped chan struct{}
+
+	waitsMutex sync.Mutex
+	waits      = make(map[int]chan int)
+)
+
+// Start starts the child process reaper.
+func Start() error {
+	if stop != nil {
+		return fmt.Errorf("reaper already started")
+	}
+
+	isSubreaper, err := setChildSubreaper()
+	if err != nil {
+		return fmt.Errorf("cannot set child subreaper: %w", err)
+	}
+	if !isSubreaper {
+		return fmt.Errorf("child subreaping unavailable on this platform")
+	}
+
+	stop = make(chan struct{})
+	stopped = make(chan struct{})
+	go func() {
+		reapChildren(stop)
+		close(stopped)
+	}()
+	return nil
+}
+
+// Stop stops the child process reaper.
+func Stop() error {
+	if stop == nil {
+		return fmt.Errorf("reaper not started")
+	}
+	close(stop)
+	<-stopped // wait till reapChildren actually finishes
+	stop = nil
+	return nil
+}
 
 // setChildSubreaper sets the current process as a "child subreaper" so we
 // become the parent of dead child processes rather than PID 1. This allows us
@@ -98,18 +140,16 @@ func reapOnce() {
 	}
 }
 
-var (
-	waitsMutex sync.Mutex
-	waits      = make(map[int]chan int)
-)
-
+// WaitCommand waits for the command to finish and returns its exit code.
+// After the reaper has been started, users of os/exec should call this rather
+// than cmd.Wait directly, to ensure PIDs are reaped correctly.
 func WaitCommand(cmd *exec.Cmd) (int, error) {
 	// Create a wait channel to tell reaper to notify us about this PID.
 	ch := make(chan int)
 	waitsMutex.Lock()
 	if _, exists := waits[cmd.Process.Pid]; exists {
 		waitsMutex.Unlock()
-		return 0, fmt.Errorf("PID %d is already being waited on", cmd.Process.Pid)
+		return -1, fmt.Errorf("PID %d is already being waited on", cmd.Process.Pid)
 	}
 	waits[cmd.Process.Pid] = ch
 	waitsMutex.Unlock()
