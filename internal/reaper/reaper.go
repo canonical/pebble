@@ -37,7 +37,7 @@ var (
 // Start starts the child process reaper.
 func Start() error {
 	if stop != nil {
-		return fmt.Errorf("reaper already started")
+		return nil // already started
 	}
 
 	isSubreaper, err := setChildSubreaper()
@@ -60,7 +60,7 @@ func Start() error {
 // Stop stops the child process reaper.
 func Stop() error {
 	if stop == nil {
-		return fmt.Errorf("reaper not started")
+		return nil // already stopped
 	}
 	close(stop)
 	<-stopped // wait till reapChildren actually finishes
@@ -167,7 +167,7 @@ func WaitCommand(cmd *exec.Cmd) (int, error) {
 		logger.Debugf("Expected cmd.Wait error, got nil (exit code %d)", exitCode)
 		return exitCode, nil
 	case *os.SyscallError:
-		if err.Syscall == "wait" {
+		if err.Syscall == "wait" || err.Syscall == "waitid" {
 			return exitCode, nil
 		}
 		return -1, err
