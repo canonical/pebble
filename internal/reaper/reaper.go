@@ -30,8 +30,8 @@ var (
 	stop    chan struct{}
 	stopped chan struct{}
 
-	waitsMutex sync.Mutex
-	waits      = make(map[int]chan int)
+	mutex sync.Mutex
+	waits = make(map[int]chan int)
 )
 
 // Start starts the child process reaper.
@@ -120,10 +120,11 @@ func reapOnce() {
 			logger.Debugf("Reaped PID %d which exited with code %d.", pid, exitCode)
 
 			// If there's a WaitCommand waiting for this PID, send it the exit code.
-			waitsMutex.Lock()
+			mutex.Lock()
 			ch := waits[pid]
-			delete(waits, pid)
-			waitsMutex.Unlock()
+			mutex.Unlock()
+
+			// TODO: this channel should probably be 1-buffered so this doesn't block?
 			if ch != nil {
 				ch <- exitCode
 			}
@@ -138,22 +139,49 @@ func reapOnce() {
 	}
 }
 
-// WaitCommand waits for the command to finish and returns its exit code.
-// After the reaper has been started, users of os/exec should call this rather
-// than cmd.Wait directly, to ensure PIDs are reaped correctly.
-func WaitCommand(cmd *exec.Cmd) (int, error) {
-	// Create a wait channel to tell reaper to notify us about this PID.
-	ch := make(chan int)
-	waitsMutex.Lock()
-	if _, exists := waits[cmd.Process.Pid]; exists {
-		waitsMutex.Unlock()
-		return -1, fmt.Errorf("PID %d is already being waited on", cmd.Process.Pid)
+// TODO: comment
+func StartCommand(cmd *exec.Cmd) error {
+	mutex.Lock()
+	defer mutex.Unlock()
+
+	err := cmd.Start()
+	if err == nil {
+		if ch, ok := waits[cmd.Process.Pid]; ok {
+			// Shouldn't happen, but just in case we get the same PID we're
+			// already waiting on, tell the other waiter to stop waiting.
+			select {
+			case ch <- -1:
+			default:
+			}
+		}
+		waits[cmd.Process.Pid] = make(chan int)
 	}
-	waits[cmd.Process.Pid] = ch
-	waitsMutex.Unlock()
+	return err
+}
+
+// WaitCommand waits for the command (which must have been started with
+// StartCommand) to finish and returns its exit code.
+//
+// After the reaper has been started, users of os/exec should call WaitCommand
+// and StartCommand rather than cmd.Wait directly, to ensure PIDs are reaped
+// correctly.
+func WaitCommand(cmd *exec.Cmd) (int, error) {
+	mutex.Lock()
+	ch, ok := waits[cmd.Process.Pid]
+	if !ok {
+		// Shouldn't happen, but doesn't hurt to handle it.
+		mutex.Unlock()
+		return -1, fmt.Errorf("PID %d was not started with WaitCommand", cmd.Process.Pid)
+	}
+	mutex.Unlock()
 
 	// Wait for reaper to reap this PID and send us the exit code.
 	exitCode := <-ch
+
+	// Remove PID from waits map once we've received exit code from reaper.
+	mutex.Lock()
+	delete(waits, cmd.Process.Pid)
+	mutex.Unlock()
 
 	// At this point, we expect cmd.Wait() to return a wait() syscall error
 	// ("waitid: no child processes"), because the reaper is already waiting

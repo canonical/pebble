@@ -353,7 +353,7 @@ func (s *serviceData) startInternal() error {
 
 	// Start the process!
 	logger.Noticef("Service %q starting: %s", serviceName, s.config.Command)
-	err = s.cmd.Start()
+	err = reaper.StartCommand(s.cmd)
 	if err != nil {
 		if outputIterator != nil {
 			_ = outputIterator.Close()

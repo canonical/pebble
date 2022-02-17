@@ -361,7 +361,7 @@ func (e *execution) do(ctx context.Context, task *state.Task) error {
 	}
 
 	// Start the command!
-	err = cmd.Start()
+	err = reaper.StartCommand(cmd)
 	exitCode := -1
 	if err == nil {
 		// Send its PID to the control loop.

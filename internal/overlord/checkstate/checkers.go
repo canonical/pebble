@@ -151,7 +151,7 @@ func (c *execChecker) check(ctx context.Context) error {
 	defer ringBuffer.Close()
 	cmd.Stdout = ringBuffer
 	cmd.Stderr = ringBuffer
-	err = cmd.Start()
+	err = reaper.StartCommand(cmd)
 	if err != nil {
 		return err
 	}
