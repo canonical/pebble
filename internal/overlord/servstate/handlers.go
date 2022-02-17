@@ -63,9 +63,6 @@ const (
 )
 
 // serviceState represents the state a service's state machine is in.
-//
-// See state-diagram.dot (and the generated state-diagram.svg image) for a
-// diagram of the states and transitions. Please try to keep these up to date!
 type serviceState string
 
 const (
