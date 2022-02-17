@@ -24,6 +24,8 @@ import (
 	"strconv"
 
 	. "gopkg.in/check.v1"
+
+	"github.com/canonical/pebble/internal/reaper"
 )
 
 type CheckersSuite struct{}
@@ -145,9 +147,13 @@ func (s *CheckersSuite) TestTCP(c *C) {
 }
 
 func (s *CheckersSuite) TestExec(c *C) {
+	err := reaper.Start()
+	c.Assert(err, IsNil)
+	defer reaper.Stop()
+
 	// Valid command succeeds
 	chk := &execChecker{command: "echo foo"}
-	err := chk.check(context.Background())
+	err = chk.check(context.Background())
 	c.Assert(err, IsNil)
 
 	// Un-parseable command fails

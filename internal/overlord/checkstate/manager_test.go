@@ -27,6 +27,7 @@ import (
 
 	"github.com/canonical/pebble/internal/logger"
 	"github.com/canonical/pebble/internal/plan"
+	"github.com/canonical/pebble/internal/reaper"
 )
 
 func Test(t *testing.T) {
@@ -44,6 +45,14 @@ func (s *ManagerSuite) SetUpSuite(c *C) {
 	setLoggerOnce.Do(func() {
 		logger.SetLogger(logger.New(os.Stderr, "[test] "))
 	})
+
+	err := reaper.Start()
+	c.Assert(err, IsNil)
+}
+
+func (s *ManagerSuite) TearDownSuite(c *C) {
+	err := reaper.Stop()
+	c.Assert(err, IsNil)
 }
 
 func (s *ManagerSuite) TestChecks(c *C) {

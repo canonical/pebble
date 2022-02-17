@@ -86,10 +86,10 @@ func setChildSubreaper() (bool, error) {
 // reapChildren "reaps" (waits for) child processes whose parents didn't
 // wait() for them. It stops when the stop channel is closed.
 func reapChildren(stop <-chan struct{}) {
+	logger.Debugf("Reaper started, waiting for SIGCHLD.")
 	sigChld := make(chan os.Signal, 1)
 	signal.Notify(sigChld, unix.SIGCHLD)
 	for {
-		logger.Debugf("Reaper waiting for SIGCHLD.")
 		select {
 		case <-sigChld:
 			logger.Debugf("Reaper received SIGCHLD.")
@@ -110,7 +110,6 @@ func reapOnce() {
 		switch err {
 		case nil:
 			if pid <= 0 {
-				logger.Debugf("Reaper found no children have changed state.")
 				return
 			}
 
@@ -130,11 +129,10 @@ func reapOnce() {
 			}
 
 		case unix.ECHILD:
-			logger.Debugf("Reaper has no more children to wait for.")
 			return
 
 		default:
-			logger.Noticef("Cannot wait for children: %v", err)
+			logger.Noticef("Reaper cannot wait for children: %v", err)
 			return
 		}
 	}
@@ -164,7 +162,7 @@ func WaitCommand(cmd *exec.Cmd) (int, error) {
 	err := cmd.Wait()
 	switch err := err.(type) {
 	case nil:
-		logger.Debugf("Expected cmd.Wait error, got nil (exit code %d)", exitCode)
+		logger.Debugf("WaitCommand expected error, got nil (exit code %d)", exitCode)
 		return exitCode, nil
 	case *os.SyscallError:
 		if err.Syscall == "wait" || err.Syscall == "waitid" {
