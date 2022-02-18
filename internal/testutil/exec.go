@@ -27,6 +27,8 @@ import (
 	"sync"
 
 	"gopkg.in/check.v1"
+
+	"github.com/canonical/pebble/internal/reaper"
 )
 
 var shellcheckPath string
@@ -52,7 +54,7 @@ func shellcheckSeenAlready(script string) bool {
 	return false
 }
 
-func maybeShellcheck(c *check.C, script string, wholeScript io.Reader) {
+func maybeShellcheck(c *check.C, script string, wholeScript io.Reader, withReaper bool) {
 	// FakeCommand is used sometimes in SetUptTest, so it adds up
 	// even for the empty script, don't recheck the essentially same
 	// thing again and again!
@@ -66,7 +68,15 @@ func maybeShellcheck(c *check.C, script string, wholeScript io.Reader) {
 	}
 	cmd := exec.Command(shellcheckPath, "-s", "bash", "-")
 	cmd.Stdin = wholeScript
-	out, err := cmd.CombinedOutput()
+
+	var out []byte
+	var err error
+	if withReaper {
+		out, err = reaper.CommandCombinedOutput(cmd)
+	} else {
+		out, err = cmd.CombinedOutput()
+	}
+
 	c.Check(err, check.IsNil, check.Commentf("shellcheck failed:\n%s", string(out)))
 }
 
@@ -104,7 +114,7 @@ printf '\0' >> %[1]q
 // non-empty then it is used as is and the caller is responsible for how the
 // script behaves (exit code and any extra behavior). If script is empty then
 // the command exits successfully without any other side-effect.
-func FakeCommand(c *check.C, basename, script string) *FakeCmd {
+func FakeCommand(c *check.C, basename, script string, withReaper bool) *FakeCmd {
 	var wholeScript bytes.Buffer
 	var binDir, exeFile, logFile string
 	if filepath.IsAbs(basename) {
@@ -123,7 +133,7 @@ func FakeCommand(c *check.C, basename, script string) *FakeCmd {
 		panic(err)
 	}
 
-	maybeShellcheck(c, script, &wholeScript)
+	maybeShellcheck(c, script, &wholeScript, withReaper)
 
 	return &FakeCmd{binDir: binDir, exeFile: exeFile, logFile: logFile}
 }

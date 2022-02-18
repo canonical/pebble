@@ -28,7 +28,7 @@ type fakeCommandSuite struct{}
 var _ = check.Suite(&fakeCommandSuite{})
 
 func (s *fakeCommandSuite) TestFakeCommand(c *check.C) {
-	fake := FakeCommand(c, "cmd", "true")
+	fake := FakeCommand(c, "cmd", "true", false)
 	defer fake.Restore()
 	err := exec.Command("cmd", "first-run", "--arg1", "arg2", "a space").Run()
 	c.Assert(err, check.IsNil)
@@ -41,7 +41,7 @@ func (s *fakeCommandSuite) TestFakeCommand(c *check.C) {
 }
 
 func (s *fakeCommandSuite) TestFakeCommandAlso(c *check.C) {
-	fake := FakeCommand(c, "fst", "")
+	fake := FakeCommand(c, "fst", "", false)
 	also := fake.Also("snd", "")
 	defer fake.Restore()
 
@@ -52,7 +52,7 @@ func (s *fakeCommandSuite) TestFakeCommandAlso(c *check.C) {
 }
 
 func (s *fakeCommandSuite) TestFakeCommandConflictEcho(c *check.C) {
-	fake := FakeCommand(c, "do-not-swallow-echo-args", "")
+	fake := FakeCommand(c, "do-not-swallow-echo-args", "", false)
 	defer fake.Restore()
 
 	c.Assert(exec.Command("do-not-swallow-echo-args", "-E", "-n", "-e").Run(), check.IsNil)
@@ -63,13 +63,13 @@ func (s *fakeCommandSuite) TestFakeCommandConflictEcho(c *check.C) {
 
 func (s *fakeCommandSuite) TestFakeShellchecksWhenAvailable(c *check.C) {
 	tmpDir := c.MkDir()
-	fakeShellcheck := FakeCommand(c, "shellcheck", fmt.Sprintf(`cat > %s/input`, tmpDir))
+	fakeShellcheck := FakeCommand(c, "shellcheck", fmt.Sprintf(`cat > %s/input`, tmpDir), false)
 	defer fakeShellcheck.Restore()
 
 	restore := FakeShellcheckPath(fakeShellcheck.Exe())
 	defer restore()
 
-	fake := FakeCommand(c, "some-command", "echo some-command")
+	fake := FakeCommand(c, "some-command", "echo some-command", false)
 
 	c.Assert(exec.Command("some-command").Run(), check.IsNil)
 
@@ -90,7 +90,7 @@ func (s *fakeCommandSuite) TestFakeShellchecksWhenAvailable(c *check.C) {
 }
 
 func (s *fakeCommandSuite) TestFakeNoShellchecksWhenNotAvailable(c *check.C) {
-	fakeShellcheck := FakeCommand(c, "shellcheck", `echo "i am not called"; exit 1`)
+	fakeShellcheck := FakeCommand(c, "shellcheck", `echo "i am not called"; exit 1`, false)
 	defer fakeShellcheck.Restore()
 
 	restore := FakeShellcheckPath("")
@@ -98,7 +98,7 @@ func (s *fakeCommandSuite) TestFakeNoShellchecksWhenNotAvailable(c *check.C) {
 
 	// This would fail with proper shellcheck due to SC2086: Double quote to
 	// prevent globbing and word splitting.
-	fake := FakeCommand(c, "some-command", "echo $1")
+	fake := FakeCommand(c, "some-command", "echo $1", false)
 
 	c.Assert(exec.Command("some-command").Run(), check.IsNil)
 

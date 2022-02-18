@@ -224,3 +224,30 @@ func WaitCommand(cmd *exec.Cmd) (int, error) {
 		return -1, err
 	}
 }
+
+// CommandCombinedOutput is like cmd.CombinedOutput, but for use when the
+// reaper is running.
+func CommandCombinedOutput(cmd *exec.Cmd) ([]byte, error) {
+	mutex.Lock()
+	if !started {
+		mutex.Unlock()
+		panic("internal error: reaper must be started")
+	}
+	mutex.Unlock()
+
+	var b bytes.Buffer
+	cmd.Stdout = &b
+	cmd.Stderr = &b
+	err := StartCommand(cmd)
+	if err != nil {
+		return nil, err
+	}
+	exitCode, err := WaitCommand(cmd)
+	if err != nil {
+		return nil, err
+	}
+	if exitCode != 0 {
+		return nil, fmt.Errorf("exit status %d", exitCode)
+	}
+	return b.Bytes(), err
+}
