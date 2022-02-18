@@ -15,6 +15,7 @@
 package reaper
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
@@ -22,21 +23,25 @@ import (
 	"sync"
 
 	"golang.org/x/sys/unix"
+	"gopkg.in/tomb.v2"
 
 	"github.com/canonical/pebble/internal/logger"
 )
 
 var (
-	stop    chan struct{}
-	stopped chan struct{}
+	reaperTomb tomb.Tomb
 
-	mutex sync.Mutex
-	pids  = make(map[int]chan int)
+	mutex   sync.Mutex
+	pids    = make(map[int]chan int)
+	started bool
 )
 
 // Start starts the child process reaper.
 func Start() error {
-	if stop != nil {
+	mutex.Lock()
+	defer mutex.Unlock()
+
+	if started {
 		return nil // already started
 	}
 
@@ -48,23 +53,28 @@ func Start() error {
 		return fmt.Errorf("child subreaping unavailable on this platform")
 	}
 
-	stop = make(chan struct{})
-	stopped = make(chan struct{})
-	go func() {
-		reapChildren(stop)
-		close(stopped)
-	}()
+	started = true
+	reaperTomb.Go(reapChildren)
 	return nil
 }
 
 // Stop stops the child process reaper.
 func Stop() error {
-	if stop == nil {
+	mutex.Lock()
+	if !started {
+		mutex.Unlock()
 		return nil // already stopped
 	}
-	close(stop)
-	<-stopped // wait till reapChildren actually finishes
-	stop = nil
+	mutex.Unlock()
+
+	reaperTomb.Kill(nil)
+	reaperTomb.Wait()
+	reaperTomb = tomb.Tomb{}
+
+	mutex.Lock()
+	started = false
+	mutex.Unlock()
+
 	return nil
 }
 
@@ -84,8 +94,8 @@ func setChildSubreaper() (bool, error) {
 }
 
 // reapChildren "reaps" (waits for) child processes whose parents didn't
-// wait() for them. It stops when the stop channel is closed.
-func reapChildren(stop <-chan struct{}) {
+// wait() for them. It stops when the reaper tomb is killed.
+func reapChildren() error {
 	logger.Debugf("Reaper started, waiting for SIGCHLD.")
 	sigChld := make(chan os.Signal, 1)
 	signal.Notify(sigChld, unix.SIGCHLD)
@@ -94,10 +104,10 @@ func reapChildren(stop <-chan struct{}) {
 		case <-sigChld:
 			logger.Debugf("Reaper received SIGCHLD.")
 			reapOnce()
-		case <-stop:
+		case <-reaperTomb.Dying():
 			signal.Reset(unix.SIGCHLD)
 			logger.Debugf("Reaper stopped.")
-			return
+			return nil
 		}
 	}
 }
@@ -150,6 +160,10 @@ func StartCommand(cmd *exec.Cmd) error {
 	mutex.Lock()
 	defer mutex.Unlock()
 
+	if !started {
+		panic("internal error: reaper must be started")
+	}
+
 	err := cmd.Start()
 	if err == nil {
 		if ch, ok := pids[cmd.Process.Pid]; ok {
@@ -168,9 +182,14 @@ func StartCommand(cmd *exec.Cmd) error {
 }
 
 // WaitCommand waits for the command (which must have been started with
-// StartCommand) to finish and returns its exit code.
+// StartCommand) to finish and returns its exit code. Unlike cmd.Wait,
+// WaitCommand doesn't return an error for nonzero exit codes.
 func WaitCommand(cmd *exec.Cmd) (int, error) {
 	mutex.Lock()
+	if !started {
+		mutex.Unlock()
+		panic("internal error: reaper must be started")
+	}
 	ch, ok := pids[cmd.Process.Pid]
 	if !ok {
 		// Shouldn't happen, but doesn't hurt to handle it.
