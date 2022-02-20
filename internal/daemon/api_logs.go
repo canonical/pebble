@@ -28,6 +28,7 @@ import (
 	"github.com/canonical/pebble/internal/logger"
 	"github.com/canonical/pebble/internal/overlord/servstate"
 	"github.com/canonical/pebble/internal/servicelog"
+	"github.com/canonical/pebble/internal/strutil"
 )
 
 const (
@@ -55,7 +56,7 @@ type logsResponse struct {
 func (r logsResponse) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	query := req.URL.Query()
 
-	services := query["services"]
+	services := strutil.MultiCommaSeparatedList(query["services"])
 
 	followStr := query.Get("follow")
 	if followStr != "" && followStr != "true" && followStr != "false" {

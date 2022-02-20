@@ -65,6 +65,7 @@ func (s *ManagerSuite) TestChecks(c *C) {
 			},
 			"chk3": {
 				Name:      "chk3",
+				Level:     "ready",
 				Period:    plan.OptionalDuration{Value: time.Second},
 				Threshold: 3,
 				Exec:      &plan.ExecCheck{Command: "echo chk3"},
@@ -73,35 +74,12 @@ func (s *ManagerSuite) TestChecks(c *C) {
 	})
 	defer stopChecks(c, mgr)
 
-	// Returns all checks with no filters
-	checks, err := mgr.Checks("", nil)
+	checks, err := mgr.Checks()
 	c.Assert(err, IsNil)
 	c.Assert(checks, DeepEquals, []*CheckInfo{
-		{Name: "chk1", Healthy: true},
-		{Name: "chk2", Healthy: true},
-		{Name: "chk3", Healthy: true},
-	})
-
-	// Level filter works
-	checks, err = mgr.Checks(plan.AliveLevel, nil)
-	c.Assert(err, IsNil)
-	c.Assert(checks, DeepEquals, []*CheckInfo{
-		{Name: "chk2", Healthy: true},
-	})
-
-	// Check names filter works
-	checks, err = mgr.Checks("", []string{"chk3", "chk2"})
-	c.Assert(err, IsNil)
-	c.Assert(checks, DeepEquals, []*CheckInfo{
-		{Name: "chk2", Healthy: true},
-		{Name: "chk3", Healthy: true},
-	})
-
-	// If both filters specified, should be an AND
-	checks, err = mgr.Checks(plan.AliveLevel, []string{"chk3", "chk2"})
-	c.Assert(err, IsNil)
-	c.Assert(checks, DeepEquals, []*CheckInfo{
-		{Name: "chk2", Healthy: true},
+		{Name: "chk1", Status: "up", Threshold: 3},
+		{Name: "chk2", Status: "up", Level: "alive", Threshold: 3},
+		{Name: "chk3", Status: "up", Level: "ready", Threshold: 3},
 	})
 
 	// Re-configuring should update checks
@@ -115,16 +93,16 @@ func (s *ManagerSuite) TestChecks(c *C) {
 			},
 		},
 	})
-	checks, err = mgr.Checks("", nil)
+	checks, err = mgr.Checks()
 	c.Assert(err, IsNil)
 	c.Assert(checks, DeepEquals, []*CheckInfo{
-		{Name: "chk4", Healthy: true},
+		{Name: "chk4", Status: "up", Threshold: 3},
 	})
 }
 
 func stopChecks(c *C, mgr *CheckManager) {
 	mgr.PlanChanged(&plan.Plan{})
-	checks, err := mgr.Checks("", nil)
+	checks, err := mgr.Checks()
 	c.Assert(err, IsNil)
 	c.Assert(checks, HasLen, 0)
 }
@@ -145,9 +123,10 @@ func (s *ManagerSuite) TestTimeout(c *C) {
 	defer stopChecks(c, mgr)
 
 	check := waitCheck(c, mgr, "chk1", func(check *CheckInfo) bool {
-		return !check.Healthy
+		return check.Status != CheckStatusUp
 	})
 	c.Assert(check.Failures, Equals, 1)
+	c.Assert(check.Threshold, Equals, 1)
 	c.Assert(check.LastError, Equals, "exec check timed out")
 	c.Assert(check.ErrorDetails, Equals, "FOO")
 }
@@ -210,8 +189,9 @@ func (s *ManagerSuite) TestCheckCanceled(c *C) {
 
 	// Ensure it didn't update check failure details (white box testing)
 	info := check.info()
-	c.Check(info.Healthy, Equals, true)
+	c.Check(info.Status, Equals, CheckStatusUp)
 	c.Check(info.Failures, Equals, 0)
+	c.Check(info.Threshold, Equals, 1)
 	c.Check(info.LastError, Equals, "")
 	c.Check(info.ErrorDetails, Equals, "")
 }
@@ -240,7 +220,8 @@ func (s *ManagerSuite) TestFailures(c *C) {
 	check := waitCheck(c, mgr, "chk1", func(check *CheckInfo) bool {
 		return check.Failures == 1
 	})
-	c.Assert(check.Healthy, Equals, true)
+	c.Assert(check.Threshold, Equals, 3)
+	c.Assert(check.Status, Equals, CheckStatusUp)
 	c.Assert(check.LastError, Matches, "exit status 1")
 	c.Assert(failureName, Equals, "")
 
@@ -248,7 +229,8 @@ func (s *ManagerSuite) TestFailures(c *C) {
 	check = waitCheck(c, mgr, "chk1", func(check *CheckInfo) bool {
 		return check.Failures == 2
 	})
-	c.Assert(check.Healthy, Equals, true)
+	c.Assert(check.Threshold, Equals, 3)
+	c.Assert(check.Status, Equals, CheckStatusUp)
 	c.Assert(check.LastError, Matches, "exit status 1")
 	c.Assert(failureName, Equals, "")
 
@@ -256,7 +238,8 @@ func (s *ManagerSuite) TestFailures(c *C) {
 	check = waitCheck(c, mgr, "chk1", func(check *CheckInfo) bool {
 		return check.Failures == 3
 	})
-	c.Assert(check.Healthy, Equals, false)
+	c.Assert(check.Threshold, Equals, 3)
+	c.Assert(check.Status, Equals, CheckStatusDown)
 	c.Assert(check.LastError, Matches, "exit status 1")
 	c.Assert(failureName, Equals, "chk1")
 
@@ -264,16 +247,17 @@ func (s *ManagerSuite) TestFailures(c *C) {
 	failureName = ""
 	os.Setenv("FAIL_PEBBLE_TEST", "")
 	check = waitCheck(c, mgr, "chk1", func(check *CheckInfo) bool {
-		return check.Healthy
+		return check.Status == CheckStatusUp
 	})
 	c.Assert(check.Failures, Equals, 0)
+	c.Assert(check.Threshold, Equals, 3)
 	c.Assert(check.LastError, Equals, "")
 	c.Assert(failureName, Equals, "")
 }
 
 func waitCheck(c *C, mgr *CheckManager, name string, f func(check *CheckInfo) bool) *CheckInfo {
 	for i := 0; i < 100; i++ {
-		checks, err := mgr.Checks("", nil)
+		checks, err := mgr.Checks()
 		c.Assert(err, IsNil)
 		for _, check := range checks {
 			if check.Name == name && f(check) {

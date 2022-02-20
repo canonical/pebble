@@ -91,6 +91,7 @@ type serviceData struct {
 	backoffTime time.Duration
 	resetTimer  *time.Timer
 	restarting  bool
+	restarts    int
 }
 
 func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
@@ -600,6 +601,7 @@ func (s *serviceData) backoffTimeElapsed() error {
 
 	switch s.state {
 	case stateBackoff:
+		s.restarts++
 		err := s.startInternal()
 		if err != nil {
 			return err

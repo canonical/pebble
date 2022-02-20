@@ -50,6 +50,7 @@ func Test(t *testing.T) { check.TestingT(t) }
 type daemonSuite struct {
 	pebbleDir       string
 	socketPath      string
+	httpAddress     string
 	statePath       string
 	authorized      bool
 	err             error
@@ -76,7 +77,11 @@ func (s *daemonSuite) TearDownTest(c *check.C) {
 }
 
 func (s *daemonSuite) newDaemon(c *check.C) *Daemon {
-	d, err := New(&Options{Dir: s.pebbleDir, SocketPath: s.socketPath})
+	d, err := New(&Options{
+		Dir:         s.pebbleDir,
+		SocketPath:  s.socketPath,
+		HTTPAddress: s.httpAddress,
+	})
 	c.Assert(err, check.IsNil)
 	d.addRoutes()
 	return d
@@ -1046,4 +1051,40 @@ func (s *daemonSuite) TestDegradedModeReply(c *check.C) {
 	d.SetDegradedMode(nil)
 	rec = doTestReq(c, cmd, "POST")
 	c.Check(rec.Code, check.Equals, 200)
+}
+
+func (s *daemonSuite) TestHTTPAPI(c *check.C) {
+	s.httpAddress = ":0" // Go will choose port (use listener.Addr() to find it)
+	d := s.newDaemon(c)
+	d.Init()
+	d.Start()
+	port := d.httpListener.Addr().(*net.TCPAddr).Port
+
+	request, err := http.NewRequest("GET", fmt.Sprintf("http://localhost:%d/v1/health", port), nil)
+	c.Assert(err, IsNil)
+	response, err := http.DefaultClient.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+	var m map[string]interface{}
+	err = json.NewDecoder(response.Body).Decode(&m)
+	c.Assert(err, IsNil)
+	c.Assert(m, DeepEquals, map[string]interface{}{
+		"type":        "sync",
+		"status-code": float64(http.StatusOK),
+		"status":      "OK",
+		"result": map[string]interface{}{
+			"healthy": true,
+		},
+	})
+
+	request, err = http.NewRequest("GET", fmt.Sprintf("http://localhost:%d/v1/checks", port), nil)
+	c.Assert(err, IsNil)
+	response, err = http.DefaultClient.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusUnauthorized)
+
+	err = d.Stop(nil)
+	c.Assert(err, IsNil)
+	_, err = http.DefaultClient.Do(request)
+	c.Assert(err, ErrorMatches, ".* connection refused")
 }

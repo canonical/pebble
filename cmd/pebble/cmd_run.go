@@ -39,9 +39,10 @@ The run command starts pebble and runs the configured environment.
 type cmdRun struct {
 	clientMixin
 
-	CreateDirs bool `long:"create-dirs"`
-	Hold       bool `long:"hold"`
-	Verbose    bool `short:"v" long:"verbose"`
+	CreateDirs bool   `long:"create-dirs"`
+	Hold       bool   `long:"hold"`
+	HTTP       string `long:"http"`
+	Verbose    bool   `short:"v" long:"verbose"`
 }
 
 func init() {
@@ -49,6 +50,7 @@ func init() {
 		map[string]string{
 			"create-dirs": "Create pebble directory on startup if it doesn't exist",
 			"hold":        "Do not start default services automatically",
+			"http":        `Start HTTP API listening on this address (e.g., ":4000")`,
 			"verbose":     "Log all output from services to stdout",
 		}, nil)
 }
@@ -128,6 +130,7 @@ func runDaemon(rcmd *cmdRun, ch chan os.Signal) error {
 	if rcmd.Verbose {
 		dopts.ServiceOutput = os.Stdout
 	}
+	dopts.HTTPAddress = rcmd.HTTP
 
 	d, err := daemon.New(&dopts)
 	if err != nil {

@@ -33,7 +33,7 @@ type serviceInfo struct {
 }
 
 func v1GetServices(c *Command, r *http.Request, _ *userState) Response {
-	names := strutil.CommaSeparatedList(r.URL.Query().Get("names"))
+	names := strutil.MultiCommaSeparatedList(r.URL.Query()["names"])
 
 	servmgr := overlordServiceManager(c.d.overlord)
 	services, err := servmgr.Services(names)

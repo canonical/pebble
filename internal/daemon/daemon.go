@@ -39,6 +39,7 @@ import (
 	"github.com/canonical/pebble/internal/osutil"
 	"github.com/canonical/pebble/internal/osutil/sys"
 	"github.com/canonical/pebble/internal/overlord"
+	"github.com/canonical/pebble/internal/overlord/checkstate"
 	"github.com/canonical/pebble/internal/overlord/restart"
 	"github.com/canonical/pebble/internal/overlord/standby"
 	"github.com/canonical/pebble/internal/overlord/state"
@@ -62,6 +63,11 @@ type Options struct {
 	// the pebble directory.
 	SocketPath string
 
+	// HTTPAddress is the address for the plain HTTP API server, for example
+	// ":4000" to listen on any address, port 4000. If not set, the HTTP API
+	// server is not started.
+	HTTPAddress string
+
 	// ServiceOuput is an optional io.Writer for the service log output, if set, all services
 	// log output will be written to the writer.
 	ServiceOutput io.Writer
@@ -74,10 +80,12 @@ type Daemon struct {
 	pebbleDir           string
 	normalSocketPath    string
 	untrustedSocketPath string
+	httpAddress         string
 	overlord            *overlord.Overlord
 	state               *state.State
 	generalListener     net.Listener
 	untrustedListener   net.Listener
+	httpListener        net.Listener
 	connTracker         *connTracker
 	serve               *http.Server
 	tomb                tomb.Tomb
@@ -362,6 +370,15 @@ func (d *Daemon) Init() error {
 
 	d.addRoutes()
 
+	if d.httpAddress != "" {
+		listener, err := net.Listen("tcp", d.httpAddress)
+		if err != nil {
+			return fmt.Errorf("cannot listen on %q: %v", d.httpAddress, err)
+		}
+		d.httpListener = listener
+		logger.Noticef("HTTP API server listening on %q.", d.httpAddress)
+	}
+
 	logger.Noticef("Started daemon.")
 	return nil
 }
@@ -472,6 +489,18 @@ func (d *Daemon) Start() {
 		return nil
 	})
 
+	if d.httpListener != nil {
+		// Start additional HTTP API (currently only GuestOK endpoints are
+		// available because the HTTP API has no authentication right now).
+		d.tomb.Go(func() error {
+			err := d.serve.Serve(d.httpListener)
+			if err != http.ErrServerClosed && d.tomb.Err() == tomb.ErrStillAlive {
+				return err
+			}
+			return nil
+		})
+	}
+
 	// notify systemd that we are ready
 	systemdSdNotify("READY=1")
 }
@@ -533,6 +562,10 @@ func (d *Daemon) Stop(sigCh chan<- os.Signal) error {
 
 	if d.untrustedListener != nil {
 		d.untrustedListener.Close()
+	}
+
+	if d.httpListener != nil {
+		d.httpListener.Close()
 	}
 
 	if restartSystem {
@@ -706,6 +739,7 @@ func New(opts *Options) (*Daemon, error) {
 		pebbleDir:           opts.Dir,
 		normalSocketPath:    opts.SocketPath,
 		untrustedSocketPath: opts.SocketPath + ".untrusted",
+		httpAddress:         opts.HTTPAddress,
 	}
 
 	ovld, err := overlord.New(opts.Dir, d, opts.ServiceOutput)
@@ -758,4 +792,8 @@ func getListener(socketPath string, listenerMap map[string]net.Listener) (net.Li
 	logger.Debugf("socket %q was not activated; listening", socketPath)
 
 	return listener, nil
+}
+
+var getChecks = func(o *overlord.Overlord) ([]*checkstate.CheckInfo, error) {
+	return o.CheckManager().Checks()
 }

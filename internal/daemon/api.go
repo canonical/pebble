@@ -30,6 +30,10 @@ var api = []*Command{{
 	GuestOK: true,
 	GET:     v1SystemInfo,
 }, {
+	Path:    "/v1/health",
+	GuestOK: true,
+	GET:     v1Health,
+}, {
 	Path:   "/v1/warnings",
 	UserOK: true,
 	GET:    v1GetWarnings,
@@ -86,6 +90,10 @@ var api = []*Command{{
 	Path:   "/v1/signals",
 	UserOK: true,
 	POST:   v1PostSignals,
+}, {
+	Path:   "/v1/checks",
+	UserOK: true,
+	GET:    v1GetChecks,
 }}
 
 var (

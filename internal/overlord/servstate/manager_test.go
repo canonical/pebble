@@ -971,9 +971,9 @@ checks:
 		if i >= 100 {
 			c.Fatalf("failed waiting for check to fail")
 		}
-		checks, err := checkMgr.Checks("", nil)
+		checks, err := checkMgr.Checks()
 		c.Assert(err, IsNil)
-		if len(checks) == 1 && !checks[0].Healthy {
+		if len(checks) == 1 && checks[0].Status != checkstate.CheckStatusUp {
 			c.Assert(checks[0].Failures, Equals, 1)
 			c.Assert(checks[0].LastError, Matches, ".* executable file not found .*")
 			break
@@ -1002,10 +1002,10 @@ checks:
 	b, err := ioutil.ReadFile(tempFile)
 	c.Assert(err, IsNil)
 	c.Assert(string(b), Equals, "x\nx\n")
-	checks, err := checkMgr.Checks("", nil)
+	checks, err := checkMgr.Checks()
 	c.Assert(err, IsNil)
 	c.Assert(len(checks), Equals, 1)
-	c.Assert(checks[0].Healthy, Equals, false)
+	c.Assert(checks[0].Status, Equals, checkstate.CheckStatusDown)
 	c.Assert(checks[0].LastError, Matches, ".* executable file not found .*")
 	svc := s.serviceByName(c, "test2")
 	c.Assert(svc.Current, Equals, servstate.StatusActive)
@@ -1083,10 +1083,10 @@ checks:
 	b, err := ioutil.ReadFile(tempFile)
 	c.Assert(err, IsNil)
 	c.Assert(string(b), Equals, "x\nx\n")
-	checks, err := checkMgr.Checks("", nil)
+	checks, err := checkMgr.Checks()
 	c.Assert(err, IsNil)
 	c.Assert(len(checks), Equals, 1)
-	c.Assert(checks[0].Healthy, Equals, false)
+	c.Assert(checks[0].Status, Equals, checkstate.CheckStatusDown)
 	c.Assert(checks[0].LastError, Matches, ".* executable file not found .*")
 }
 
@@ -1138,9 +1138,9 @@ checks:
 		if i >= 100 {
 			c.Fatalf("failed waiting for check to fail")
 		}
-		checks, err := checkMgr.Checks("", nil)
+		checks, err := checkMgr.Checks()
 		c.Assert(err, IsNil)
-		if len(checks) == 1 && !checks[0].Healthy {
+		if len(checks) == 1 && checks[0].Status != checkstate.CheckStatusUp {
 			c.Assert(checks[0].Failures, Equals, 1)
 			c.Assert(checks[0].LastError, Matches, ".* executable file not found .*")
 			break
@@ -1153,10 +1153,10 @@ checks:
 	b, err := ioutil.ReadFile(tempFile)
 	c.Assert(err, IsNil)
 	c.Assert(string(b), Equals, "x\n")
-	checks, err := checkMgr.Checks("", nil)
+	checks, err := checkMgr.Checks()
 	c.Assert(err, IsNil)
 	c.Assert(len(checks), Equals, 1)
-	c.Assert(checks[0].Healthy, Equals, false)
+	c.Assert(checks[0].Status, Equals, checkstate.CheckStatusDown)
 	c.Assert(checks[0].LastError, Matches, ".* executable file not found .*")
 	svc := s.serviceByName(c, "test2")
 	c.Assert(svc.Current, Equals, servstate.StatusActive)
@@ -1210,9 +1210,9 @@ checks:
 		if i >= 100 {
 			c.Fatalf("failed waiting for check to fail")
 		}
-		checks, err := checkMgr.Checks("", nil)
+		checks, err := checkMgr.Checks()
 		c.Assert(err, IsNil)
-		if len(checks) == 1 && !checks[0].Healthy {
+		if len(checks) == 1 && checks[0].Status != checkstate.CheckStatusUp {
 			c.Assert(checks[0].Failures, Equals, 1)
 			c.Assert(checks[0].LastError, Matches, ".* executable file not found .*")
 			break

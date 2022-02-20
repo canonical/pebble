@@ -22,7 +22,6 @@ import (
 
 	"github.com/canonical/pebble/internal/logger"
 	"github.com/canonical/pebble/internal/plan"
-	"github.com/canonical/pebble/internal/strutil"
 )
 
 // CheckManager starts and manages the health checks.
@@ -120,22 +119,12 @@ func newChecker(config *plan.Check) checker {
 
 // Checks returns the list of currently-configured checks and their status,
 // ordered by name.
-//
-// If level is not UnsetLevel, the list of checks is filtered to only include
-// checks with the given level. If names is non-empty, the list of checks is
-// filtered to only include the named checks.
-func (m *CheckManager) Checks(level plan.CheckLevel, names []string) ([]*CheckInfo, error) {
+func (m *CheckManager) Checks() ([]*CheckInfo, error) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
-	var infos []*CheckInfo
+	infos := make([]*CheckInfo, 0, len(m.checks))
 	for _, check := range m.checks {
-		if level != plan.UnsetLevel && level != check.config.Level {
-			continue
-		}
-		if len(names) > 0 && !strutil.ListContains(names, check.config.Name) {
-			continue
-		}
 		infos = append(infos, check.info())
 	}
 
@@ -148,11 +137,20 @@ func (m *CheckManager) Checks(level plan.CheckLevel, names []string) ([]*CheckIn
 // CheckInfo provides status information about a single check.
 type CheckInfo struct {
 	Name         string
-	Healthy      bool
+	Level        plan.CheckLevel
+	Status       CheckStatus
 	Failures     int
+	Threshold    int
 	LastError    string
 	ErrorDetails string
 }
+
+type CheckStatus string
+
+const (
+	CheckStatusUp   CheckStatus = "up"
+	CheckStatusDown CheckStatus = "down"
+)
 
 // checkData holds state for an active health check.
 type checkData struct {
@@ -237,9 +235,14 @@ func (c *checkData) info() *CheckInfo {
 	defer c.mutex.Unlock()
 
 	info := &CheckInfo{
-		Name:     c.config.Name,
-		Healthy:  c.failures < c.config.Threshold,
-		Failures: c.failures,
+		Name:      c.config.Name,
+		Level:     c.config.Level,
+		Status:    CheckStatusUp,
+		Failures:  c.failures,
+		Threshold: c.config.Threshold,
+	}
+	if c.failures >= c.config.Threshold {
+		info.Status = CheckStatusDown
 	}
 	if c.lastErr != nil {
 		info.LastError = c.lastErr.Error()
