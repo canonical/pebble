@@ -80,6 +80,22 @@ checks:
 		map[string]interface{}{"name": "chk3", "status": "up", "threshold": 3.0},
 	})
 
+	// Request with names filter (comma-separated values)
+	req, err = http.NewRequest("GET", "/v1/checks?names=chk1,chk3", nil)
+	c.Assert(err, IsNil)
+	rsp = v1GetChecks(apiCmd("/v1/checks"), req, nil).(*resp)
+	rec = httptest.NewRecorder()
+	rsp.ServeHTTP(rec, req)
+	c.Check(rec.Code, Equals, 200)
+	c.Check(rsp.Status, Equals, 200)
+	c.Check(rsp.Type, Equals, ResponseTypeSync)
+	err = json.Unmarshal(rec.Body.Bytes(), &body)
+	c.Check(err, IsNil)
+	c.Check(body["result"], DeepEquals, []interface{}{
+		map[string]interface{}{"name": "chk1", "status": "up", "level": "ready", "threshold": 3.0},
+		map[string]interface{}{"name": "chk3", "status": "up", "threshold": 3.0},
+	})
+
 	// Request with level filter
 	req, err = http.NewRequest("GET", "/v1/checks?level=alive", nil)
 	c.Assert(err, IsNil)

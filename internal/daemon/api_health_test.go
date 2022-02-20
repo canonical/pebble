@@ -156,6 +156,12 @@ func (s *healthSuite) TestNames(c *C) {
 		"healthy": false,
 	})
 
+	status, response = serveHealth(c, "GET", "/v1/health?names=chk1,chk3", nil)
+	c.Assert(status, Equals, 502)
+	c.Assert(response, DeepEquals, map[string]interface{}{
+		"healthy": false,
+	})
+
 	status, response = serveHealth(c, "GET", "/v1/health?names=chk2", nil)
 	c.Assert(status, Equals, 200)
 	c.Assert(response, DeepEquals, map[string]interface{}{

@@ -28,14 +28,15 @@ type healthInfo struct {
 }
 
 func v1Health(c *Command, r *http.Request, _ *userState) Response {
-	level := plan.CheckLevel(r.URL.Query().Get("level"))
+	query := r.URL.Query()
+	level := plan.CheckLevel(query.Get("level"))
 	switch level {
 	case plan.UnsetLevel, plan.AliveLevel, plan.ReadyLevel:
 	default:
 		return statusBadRequest(`level must be "alive" or "ready"`)
 	}
 
-	names := r.URL.Query()["names"]
+	names := strutil.MultiCommaSeparatedList(query["names"])
 
 	checks, err := getChecks(c.d.overlord)
 	if err != nil {
