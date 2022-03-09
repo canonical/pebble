@@ -180,8 +180,8 @@ func v1PostServices(c *Command, r *http.Request, _ *userState) Response {
 	// Use the original requested service name for the summary, not the
 	// resolved one. But do use the resolved set for the count.
 	var summary string
-	switch len(services) {
-	case 0:
+	switch {
+	case len(taskSet.Tasks()) == 0:
 		// Can happen with a replan that has no services to stop/start. A
 		// change with no tasks needs to be marked Done manually (normally a
 		// change is marked Done when its last task is finished).
@@ -189,7 +189,7 @@ func v1PostServices(c *Command, r *http.Request, _ *userState) Response {
 		change := st.NewChange(payload.Action, summary)
 		change.SetStatus(state.DoneStatus)
 		return AsyncResponse(nil, change.ID())
-	case 1:
+	case len(services) == 1:
 		summary = fmt.Sprintf("%s service %q", strings.Title(payload.Action), payload.Services[0])
 	default:
 		summary = fmt.Sprintf("%s service %q and %d more", strings.Title(payload.Action), payload.Services[0], len(services)-1)
