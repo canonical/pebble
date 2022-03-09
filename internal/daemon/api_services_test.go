@@ -22,6 +22,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/canonical/pebble/internal/overlord/state"
@@ -319,4 +320,42 @@ func (s *apiSuite) TestServicesReplan(c *C) {
 	c.Check(tasks, HasLen, 2)
 	c.Check(tasks[0].Summary(), Equals, `Start service "test1"`)
 	c.Check(tasks[1].Summary(), Equals, `Start service "test2"`)
+}
+
+func (s *apiSuite) TestServicesReplanNoServices(c *C) {
+	// Setup
+	writeTestLayer(s.pebbleDir, `
+services:
+    test:
+        override: replace
+        command: sleep 300
+`)
+	d := s.daemon(c)
+	st := d.overlord.State()
+	restore := FakeStateEnsureBefore(func(st *state.State, d time.Duration) {})
+	defer restore()
+
+	// Execute
+	req, err := http.NewRequest("POST", "/v1/services", strings.NewReader(`{"action": "replan"}`))
+	c.Assert(err, IsNil)
+	rsp := v1PostServices(apiCmd("/v1/services"), req, nil).(*resp)
+	rec := httptest.NewRecorder()
+	rsp.ServeHTTP(rec, req)
+
+	// Verify
+	c.Check(rec.Code, Equals, 202)
+	c.Check(rsp.Status, Equals, 202)
+	c.Check(rsp.Type, Equals, ResponseTypeAsync)
+	c.Check(rsp.Result, IsNil)
+
+	st.Lock()
+	defer st.Unlock()
+
+	chg := st.Change(rsp.Change)
+	c.Check(chg, NotNil)
+	c.Check(chg.IsReady(), Equals, true)
+	c.Check(chg.Kind(), Equals, "replan")
+	c.Check(chg.Summary(), Equals, "Replan - no services")
+	tasks := chg.Tasks()
+	c.Check(tasks, HasLen, 0)
 }

@@ -107,17 +107,6 @@ var (
 	muxVars = mux.Vars
 )
 
-func newChange(st *state.State, kind, summary string, taskSets []*state.TaskSet, serviceNames []string) *state.Change {
-	chg := st.NewChange(kind, summary)
-	for _, taskSet := range taskSets {
-		chg.AddAll(taskSet)
-	}
-	if serviceNames != nil {
-		chg.Set("service-names", serviceNames)
-	}
-	return chg
-}
-
 func v1SystemInfo(c *Command, r *http.Request, _ *userState) Response {
 	state := c.d.overlord.State()
 	state.Lock()
