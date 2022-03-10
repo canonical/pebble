@@ -42,7 +42,7 @@ type cmdLogs struct {
 }
 
 var logsDescs = map[string]string{
-	"follow": "Follow (tail) logs for given services until Ctrl-C pressed.",
+	"follow": "Follow (tail) logs for given services until Ctrl-C is\npressed. If no services are specified, show logs from\nall services running when the command starts.",
 	"format": "Output format: \"text\" (default) or \"json\" (JSON lines).",
 	"n":      "Number of logs to show (before following); defaults to 30.\nIf 'all', show all buffered logs.",
 }
