@@ -32,6 +32,9 @@ type AtomicWriteFlags uint
 const (
 	// AtomicWriteFollow makes AtomicWriteFile follow symlinks
 	AtomicWriteFollow AtomicWriteFlags = 1 << iota
+	// AtomicWriteChmod performs an explicit chmod to file permissions after
+	// creation for e.g. overcoming any umask modifications.
+	AtomicWriteChmod
 )
 
 // Allow disabling sync for testing. This brings massive improvements on
@@ -93,6 +96,13 @@ func NewAtomicFile(filename string, perm os.FileMode, flags AtomicWriteFlags, ui
 	fd, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_TRUNC|os.O_EXCL, perm)
 	if err != nil {
 		return nil, err
+	}
+
+	if flags&AtomicWriteChmod != 0 {
+		fd.Chmod(perm)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return &AtomicFile{

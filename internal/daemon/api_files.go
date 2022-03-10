@@ -491,7 +491,8 @@ func writeFile(item writeFilesItem, source io.Reader) error {
 	if uid != nil && gid != nil {
 		sysUid, sysGid = sys.UserID(*uid), sys.GroupID(*gid)
 	}
-	return atomicWriteChown(item.Path, source, perm, 0, sysUid, sysGid)
+
+	return atomicWriteChown(item.Path, source, perm, osutil.AtomicWriteChmod, sysUid, sysGid)
 }
 
 func parsePermissions(permissions string, defaultMode os.FileMode) (os.FileMode, error) {
