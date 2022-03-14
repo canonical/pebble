@@ -311,3 +311,16 @@ func (cs *clientSuite) TestDebugGet(c *C) {
 	c.Check(cs.reqs[0].URL.Path, Equals, "/v1/debug")
 	c.Check(cs.reqs[0].URL.Query(), DeepEquals, url.Values{"action": []string{"do-something"}, "foo": []string{"bar"}})
 }
+
+func (cs *clientSuite) TestNonExistentSocketErrors(c *C) {
+	cli, err := client.New(&client.Config{Socket: "/tmp/not-the-droids-you-are-looking-for"})
+	c.Check(err, IsNil)
+
+	_, err = cli.SysInfo()
+	c.Check(err, NotNil)
+	var notFoundErr *client.SocketNotFoundError
+	c.Check(errors.As(err, &notFoundErr), Equals, true)
+
+	c.Check(notFoundErr.Path, Equals, "/tmp/not-the-droids-you-are-looking-for")
+	c.Check(notFoundErr.Err, NotNil)
+}

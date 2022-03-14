@@ -140,7 +140,7 @@ func (client *Client) Exec(opts *ExecOptions) (*ExecProcess, error) {
 	var body bytes.Buffer
 	err := json.NewEncoder(&body).Encode(&payload)
 	if err != nil {
-		return nil, fmt.Errorf("cannot encode JSON payload: %v", err)
+		return nil, fmt.Errorf("cannot encode JSON payload: %w", err)
 	}
 	headers := map[string]string{
 		"Content-Type": "application/json",
@@ -152,20 +152,20 @@ func (client *Client) Exec(opts *ExecOptions) (*ExecProcess, error) {
 	var result execResult
 	err = json.Unmarshal(resultBytes, &result)
 	if err != nil {
-		return nil, fmt.Errorf("cannot unmarshal JSON response: %v", err)
+		return nil, fmt.Errorf("cannot unmarshal JSON response: %w", err)
 	}
 
 	// Connect to the "control" websocket.
 	taskID := result.TaskID
 	controlConn, err := client.getTaskWebsocket(taskID, "control")
 	if err != nil {
-		return nil, fmt.Errorf(`cannot connect to "control" websocket: %v`, err)
+		return nil, fmt.Errorf(`cannot connect to "control" websocket: %w`, err)
 	}
 
 	// Forward stdin and stdout.
 	ioConn, err := client.getTaskWebsocket(taskID, "stdio")
 	if err != nil {
-		return nil, fmt.Errorf(`cannot connect to "stdio" websocket: %v`, err)
+		return nil, fmt.Errorf(`cannot connect to "stdio" websocket: %w`, err)
 	}
 	stdinDone := wsutil.WebsocketSendStream(ioConn, stdin, -1)
 	stdoutDone := wsutil.WebsocketRecvStream(stdout, ioConn)
@@ -176,7 +176,7 @@ func (client *Client) Exec(opts *ExecOptions) (*ExecProcess, error) {
 	if opts.Stderr != nil {
 		stderrConn, err = client.getTaskWebsocket(taskID, "stderr")
 		if err != nil {
-			return nil, fmt.Errorf(`cannot connect to "stderr" websocket: %v`, err)
+			return nil, fmt.Errorf(`cannot connect to "stderr" websocket: %w`, err)
 		}
 		stderrDone = wsutil.WebsocketRecvStream(opts.Stderr, stderrConn)
 	}
@@ -226,7 +226,7 @@ func (p *ExecProcess) Wait() error {
 	}
 	change, err := p.client.WaitChange(p.changeID, waitOpts)
 	if err != nil {
-		return fmt.Errorf("cannot wait for command to finish: %v", err)
+		return fmt.Errorf("cannot wait for command to finish: %w", err)
 	}
 	if change.Err != "" {
 		return errors.New(change.Err)
@@ -242,7 +242,7 @@ func (p *ExecProcess) Wait() error {
 	task := change.Tasks[0]
 	err = task.Get("exit-code", &exitCode)
 	if err != nil {
-		return fmt.Errorf("cannot get exit code: %v", err)
+		return fmt.Errorf("cannot get exit code: %w", err)
 	}
 	if exitCode != 0 {
 		return &ExitError{exitCode: exitCode}
