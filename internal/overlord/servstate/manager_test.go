@@ -100,6 +100,11 @@ services:
     test2:
         override: replace
         command: /bin/sh -c "echo test2 | tee -a %s; sleep 300"
+
+    trim-test:
+        override: replace
+        command: /bin/sh -c "echo prefix-to-trim  trim-test prefix-to-trim | tee -a %s; sleep 300"
+        log-trim: prefix-to-trim *
 `
 
 var planLayer2 = `
@@ -143,7 +148,7 @@ func (s *S) SetUpTest(c *C) {
 	os.Mkdir(filepath.Join(s.dir, "layers"), 0755)
 
 	s.log = filepath.Join(s.dir, "log.txt")
-	data := fmt.Sprintf(planLayer1, s.log, s.log)
+	data := fmt.Sprintf(planLayer1, s.log, s.log, s.log)
 	err := ioutil.WriteFile(filepath.Join(s.dir, "layers", "001-base.yaml"), []byte(data), 0644)
 	c.Assert(err, IsNil)
 	err = ioutil.WriteFile(filepath.Join(s.dir, "layers", "002-two.yaml"), []byte(planLayer2), 0644)
@@ -245,15 +250,15 @@ func (s *S) stopServices(c *C, services []string, nEnsure int) *state.Change {
 }
 
 func (s *S) startTestServices(c *C) {
-	chg := s.startServices(c, []string{"test1", "test2"}, 2)
+	chg := s.startServices(c, []string{"test1", "test2", "trim-test"}, 3)
 	s.st.Lock()
 	c.Check(chg.Status(), Equals, state.DoneStatus, Commentf("Error: %v", chg.Err()))
 	s.st.Unlock()
 
-	s.assertLog(c, ".*test1\n.*test2\n")
+	s.assertLog(c, ".*test1\n.*test2\n.*trim.*\n")
 
 	cmds := s.manager.RunningCmds()
-	c.Check(cmds, HasLen, 2)
+	c.Check(cmds, HasLen, 3)
 }
 
 func (s *S) TestStartStopServices(c *C) {
@@ -287,12 +292,12 @@ func (s *S) TestStartStopServicesIdempotency(c *C) {
 
 func (s *S) stopTestServices(c *C) {
 	cmds := s.manager.RunningCmds()
-	c.Check(cmds, HasLen, 2)
+	c.Check(cmds, HasLen, 3)
 
-	chg := s.stopServices(c, []string{"test1", "test2"}, 2)
+	chg := s.stopServices(c, []string{"test1", "test2", "trim-test"}, 3)
 
 	// Ensure processes are gone indeed.
-	c.Assert(cmds, HasLen, 2)
+	c.Assert(cmds, HasLen, 3)
 	for name, cmd := range cmds {
 		err := cmd.Process.Signal(syscall.Signal(0))
 		if err == nil {
@@ -311,7 +316,7 @@ func (s *S) stopTestServicesAlreadyDead(c *C) {
 	cmds := s.manager.RunningCmds()
 	c.Check(cmds, HasLen, 0)
 
-	chg := s.stopServices(c, []string{"test1", "test2"}, 2)
+	chg := s.stopServices(c, []string{"test1", "test2", "trim-test"}, 3)
 
 	c.Assert(cmds, HasLen, 0)
 
@@ -395,6 +400,15 @@ services:
 	c.Check(config.Summary, Equals, "A summary!")
 }
 
+func (s *S) TestServiceLogTrim(c *C) {
+	outputs := map[string]string{"trim-test": `2.* \[trim-test\] trim-test prefix-to-trim\n`}
+	s.testServiceLogs(c, outputs)
+
+	// Run test again, but ensure the logs from the previous run are still in the ring buffer.
+	outputs["trim-test"] += outputs["trim-test"]
+	s.testServiceLogs(c, outputs)
+}
+
 func (s *S) TestServiceLogs(c *C) {
 	outputs := map[string]string{
 		"test1": `2.* \[test1\] test1\n`,
@@ -415,9 +429,14 @@ func (s *S) testServiceLogs(c *C, outputs map[string]string) {
 		return
 	}
 
-	iterators, err := s.manager.ServiceLogs([]string{"test1", "test2"}, -1)
+	services := []string{}
+	for service := range outputs {
+		services = append(services, service)
+	}
+
+	iterators, err := s.manager.ServiceLogs(services, -1)
 	c.Assert(err, IsNil)
-	c.Assert(iterators, HasLen, 2)
+	c.Assert(iterators, HasLen, len(services))
 
 	for serviceName, it := range iterators {
 		buf := &bytes.Buffer{}
@@ -539,7 +558,11 @@ services:
         command: /bin/sh -c "sleep 300"
         user: nobody
         group: nogroup
-`[1:], s.log, s.log)
+    trim-test:
+        override: replace
+        command: /bin/sh -c "echo prefix-to-trim  trim-test prefix-to-trim | tee -a %s; sleep 300"
+        log-trim: prefix-to-trim *
+`[1:], s.log, s.log, s.log)
 	c.Assert(planYAML(c, s.manager), Equals, expected)
 }
 
@@ -761,6 +784,7 @@ func (s *S) TestServices(c *C) {
 		{Name: "test3", Current: servstate.StatusInactive, Startup: servstate.StartupDisabled},
 		{Name: "test4", Current: servstate.StatusInactive, Startup: servstate.StartupDisabled},
 		{Name: "test5", Current: servstate.StatusInactive, Startup: servstate.StartupDisabled},
+		{Name: "trim-test", Current: servstate.StatusInactive, Startup: servstate.StartupDisabled},
 	})
 
 	services, err = s.manager.Services([]string{"test2", "test3"})
@@ -781,6 +805,7 @@ func (s *S) TestServices(c *C) {
 		{Name: "test3", Current: servstate.StatusInactive, Startup: servstate.StartupDisabled},
 		{Name: "test4", Current: servstate.StatusInactive, Startup: servstate.StartupDisabled},
 		{Name: "test5", Current: servstate.StatusInactive, Startup: servstate.StartupDisabled},
+		{Name: "trim-test", Current: servstate.StatusInactive, Startup: servstate.StartupDisabled},
 	})
 }
 

@@ -17,6 +17,7 @@ package servicelog_test
 import (
 	"bytes"
 	"fmt"
+	"regexp"
 
 	. "gopkg.in/check.v1"
 
@@ -31,7 +32,7 @@ type formatterSuite struct{}
 
 var _ = Suite(&formatterSuite{})
 
-func (s *formatterSuite) TestFormat(c *C) {
+func (s *formatterSuite) TestFormatWriter(c *C) {
 	b := &bytes.Buffer{}
 	w := servicelog.NewFormatWriter(b, "test")
 
@@ -57,4 +58,39 @@ func (s *formatterSuite) TestFormatSingleWrite(c *C) {
 %[1]s \[test\] second
 %[1]s \[test\] third
 `[1:], timeFormatRegex))
+}
+
+func (s *formatterSuite) TestTrimWriter(c *C) {
+	raw := `
+3/4/3005 hello my name is joe
+4/5/4200 and I work in a button factory
+1/1/0033 this log entry is very old
+and dates in the middle 1/1/0033 are kept
+1/1/0034 check that no-trailing-newline case is flushed`[1:]
+
+	trimmed := `
+hello my name is joe
+and I work in a button factory
+this log entry is very old
+and dates in the middle 1/1/0033 are kept
+check that no-trailing-newline case is flushed`[1:]
+
+	chunkSizes := []int{1, 2, 3, 4, 5, 6, 7, 11, 13, 27, 100}
+	for _, size := range chunkSizes {
+		b := &bytes.Buffer{}
+		w := servicelog.NewTrimWriter(b, regexp.MustCompile("^[0-9]{1,2}/[0-9]{1,2}/[0-9]{4} +"))
+		c.Logf("---- chunk size %v ----", size)
+		for pos := 0; pos < len(raw); pos += size {
+			end := pos + size
+			if end > len(raw) {
+				end = len(raw)
+			}
+			fmt.Fprint(w, raw[pos:end])
+			w.Write([]byte{}) // shouldn't break anything
+		}
+		w.Flush()
+		c.Assert(b.String(), Equals, trimmed)
+		w.Flush() // should be idempotent
+		c.Assert(b.String(), Equals, trimmed)
+	}
 }

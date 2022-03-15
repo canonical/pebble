@@ -65,6 +65,7 @@ type Service struct {
 	Startup     ServiceStartup `yaml:"startup,omitempty"`
 	Override    Override       `yaml:"override,omitempty"`
 	Command     string         `yaml:"command,omitempty"`
+	LogTrim     string         `yaml:"log-trim,omitempty"`
 
 	// Service dependencies
 	After    []string `yaml:"after,omitempty"`
@@ -129,6 +130,9 @@ func (s *Service) Merge(other *Service) {
 	}
 	if other.Command != "" {
 		s.Command = other.Command
+	}
+	if other.LogTrim != "" {
+		s.LogTrim = other.LogTrim
 	}
 	if other.UserID != nil {
 		userID := *other.UserID
@@ -469,6 +473,11 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 		if service.Command == "" {
 			return nil, &FormatError{
 				Message: fmt.Sprintf(`plan must define "command" for service %q`, name),
+			}
+		}
+		if _, err := regexp.Compile(service.LogTrim); err != nil {
+			return nil, &FormatError{
+				Message: fmt.Sprintf("plan service %q log-trim expression invalid: %v", name, err),
 			}
 		}
 		_, err := shlex.Split(service.Command)

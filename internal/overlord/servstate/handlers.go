@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"regexp"
 	"syscall"
 	"time"
 
@@ -313,7 +314,7 @@ func logError(err error) {
 }
 
 // startInternal is an internal helper used to actually start (or restart) the
-// command. It assumes the caller has ensures the service is in a valid state,
+// command. It assumes the caller has ensured the service is in a valid state,
 // and it sets s.cmd and other relevant fields.
 func (s *serviceData) startInternal() error {
 	args, err := shlex.Split(s.config.Command)
@@ -351,7 +352,13 @@ func (s *serviceData) startInternal() error {
 		outputIterator = s.logs.HeadIterator(0)
 	}
 	serviceName := s.config.Name
-	logWriter := servicelog.NewFormatWriter(s.logs, serviceName)
+	var logWriter io.Writer = servicelog.NewFormatWriter(s.logs, serviceName)
+	flush := func() error { return nil }
+	if s.config.LogTrim != "" {
+		tw := servicelog.NewTrimWriter(logWriter, regexp.MustCompile("^("+s.config.LogTrim+")"))
+		logWriter = tw
+		flush = tw.Flush
+	}
 	s.cmd.Stdout = logWriter
 	s.cmd.Stderr = logWriter
 
@@ -378,8 +385,12 @@ func (s *serviceData) startInternal() error {
 		} else {
 			logger.Debugf("Service %q exited with code %d.", serviceName, exitCode)
 		}
+		err := flush()
+		if err != nil {
+			logger.Noticef("Cannot flush service logs: %v", err)
+		}
 		close(done)
-		err := s.exited(exitCode)
+		err = s.exited(exitCode)
 		if err != nil {
 			logger.Noticef("Cannot transition state after service exit: %v", err)
 		}

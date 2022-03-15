@@ -15,7 +15,9 @@
 package servicelog
 
 import (
+	"bytes"
 	"io"
+	"regexp"
 	"sync"
 	"time"
 )
@@ -44,7 +46,7 @@ const (
 //   2021-05-13T03:16:51.001Z [test] first\n
 //   2021-05-13T03:16:52.002Z [test] second\n
 //   2021-05-13T03:16:53.003Z [test] third\n
-func NewFormatWriter(dest io.Writer, serviceName string) io.Writer {
+func NewFormatWriter(dest io.Writer, serviceName string) *formatter {
 	return &formatter{
 		serviceName:    serviceName,
 		dest:           dest,
@@ -52,7 +54,7 @@ func NewFormatWriter(dest io.Writer, serviceName string) io.Writer {
 	}
 }
 
-func (f *formatter) Write(p []byte) (nn int, ee error) {
+func (f *formatter) Write(p []byte) (int, error) {
 	f.mut.Lock()
 	defer f.mut.Unlock()
 	written := 0
@@ -94,4 +96,75 @@ func (f *formatter) Write(p []byte) (nn int, ee error) {
 		}
 	}
 	return written, nil
+}
+
+type TrimWriter struct {
+	dest     io.Writer
+	re       *regexp.Regexp
+	buf      []byte
+	postTrim bool
+	mut      sync.Mutex
+}
+
+func NewTrimWriter(dest io.Writer, re *regexp.Regexp) *TrimWriter {
+	return &TrimWriter{
+		dest: dest,
+		re:   re,
+	}
+}
+
+func (w *TrimWriter) Flush() error {
+	w.mut.Lock()
+	defer w.mut.Unlock()
+
+	if len(w.buf) == 0 {
+		return nil
+	}
+
+	write := w.buf
+	w.buf = w.buf[:0]
+	return w.write(write)
+}
+
+func (w *TrimWriter) Write(p []byte) (int, error) {
+	w.mut.Lock()
+	defer w.mut.Unlock()
+
+	// Buffered content has already been searched for newlines - track this.
+	pos := len(w.buf)
+
+	w.buf = append(w.buf, p...)
+	written := len(p) // always report everything we've bufferred as written
+	for {
+		end := bytes.IndexByte(w.buf[pos:], '\n')
+		if end == -1 {
+			return written, nil // wait for rest of line
+		}
+		end += pos
+
+		err := w.write(w.buf[:end+1])
+		if err != nil {
+			return written, err
+		}
+		w.buf = w.buf[end+1:]
+		pos = 0
+	}
+}
+
+func (w *TrimWriter) write(p []byte) error {
+	start := 0
+	loc := w.re.FindIndex(p)
+	if loc != nil {
+		start = loc[1]
+	}
+
+	p = p[start:]
+	for len(p) > 0 {
+		n, err := w.dest.Write(p)
+		p = p[n:]
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
