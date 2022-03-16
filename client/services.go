@@ -63,7 +63,7 @@ func (client *Client) doMultiServiceAction(actionName string, services []string)
 	}
 	data, err := json.Marshal(&action)
 	if err != nil {
-		return nil, "", fmt.Errorf("cannot marshal multi-service action: %s", err)
+		return nil, "", fmt.Errorf("cannot marshal multi-service action: %w", err)
 	}
 	headers := map[string]string{
 		"Content-Type": "application/json",
