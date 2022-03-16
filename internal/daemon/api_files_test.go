@@ -778,6 +778,12 @@ Content-Disposition: form-data; name="files"; filename="%[1]s"
 }
 
 func (s *filesSuite) TestWriteMultiple(c *C) {
+	// Ensure non-zero umask to test the files API's explicit chmod.  This is
+	// also why one file's permissions are 777 - to ensure the umasked
+	// permissions are overwridden as expected.
+	oldmask := syscall.Umask(0002)
+	defer syscall.Umask(oldmask)
+
 	tmpDir := c.MkDir()
 	path0 := tmpDir + "/hello.txt"
 	path1 := tmpDir + "/byebye.txt"
@@ -795,7 +801,7 @@ Content-Disposition: form-data; name="request"
 	"action": "write",
 	"files": [
 		{"path": "%[1]s"},
-		{"path": "%[2]s", "permissions": "600"},
+		{"path": "%[2]s", "permissions": "777"},
 		{"path": "%[3]s", "make-dirs": true}
 	]
 }
@@ -826,7 +832,7 @@ Bar
 	checkFileResult(c, r.Result[2], path2, "", "")
 
 	assertFile(c, path0, 0o644, "Hello")
-	assertFile(c, path1, 0o600, "Bye bye")
+	assertFile(c, path1, 0o777, "Bye bye")
 	assertFile(c, path2, 0o644, "Foo\nBar")
 	info, err := os.Stat(tmpDir + "/foo")
 	c.Assert(err, IsNil)

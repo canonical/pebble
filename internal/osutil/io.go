@@ -99,7 +99,7 @@ func NewAtomicFile(filename string, perm os.FileMode, flags AtomicWriteFlags, ui
 	}
 
 	if flags&AtomicWriteChmod != 0 {
-		fd.Chmod(perm)
+		err := fd.Chmod(perm)
 		if err != nil {
 			return nil, err
 		}

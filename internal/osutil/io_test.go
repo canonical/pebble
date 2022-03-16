@@ -107,14 +107,14 @@ func (ts *AtomicWriteTestSuite) TestAtomicWriteFileAbsoluteSymlinks(c *C) {
 
 func (ts *AtomicWriteTestSuite) TestAtomicWriteFileChmod(c *C) {
 	tmpdir := c.MkDir()
-	oldmask := syscall.Umask(222)
+	oldmask := syscall.Umask(0222)
 	defer syscall.Umask(oldmask)
 
-	p := filepath.Join(tmpdir, "foo")
-	err := osutil.AtomicWriteFile(p, []byte(""), 0777, osutil.AtomicWriteChmod)
+	path := filepath.Join(tmpdir, "foo")
+	err := osutil.AtomicWriteFile(path, []byte{}, 0777, osutil.AtomicWriteChmod)
 	c.Assert(err, IsNil)
 
-	st, err := os.Stat(p)
+	st, err := os.Stat(path)
 	c.Assert(err, IsNil)
 	c.Assert(st.Mode()&os.ModePerm, Equals, os.FileMode(0777))
 }
