@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/canonical/pebble/internal/logger"
 	"github.com/canonical/pebble/internal/overlord/restart"
 	"github.com/canonical/pebble/internal/overlord/state"
 	"github.com/canonical/pebble/internal/plan"
@@ -327,7 +328,7 @@ func (m *ServiceManager) StartOrder(services []string) ([]string, error) {
 }
 
 // StopOrder returns the provided services, together with any dependants,
-// in the proper order for starting them all up.
+// in the proper order for stopping them all.
 func (m *ServiceManager) StopOrder(services []string) ([]string, error) {
 	releasePlan, err := m.acquirePlan()
 	if err != nil {
@@ -461,4 +462,61 @@ func (m *ServiceManager) CheckFailed(name string) {
 			}
 		}
 	}
+}
+
+var shutdownTimeout = killWait + 100*time.Millisecond
+
+// Shutdown shuts down the service manager, stopping all running services.
+func (m *ServiceManager) Shutdown() error {
+	// Determine correct dependency order for stopping services.
+	services, err := m.StopOrder(m.runningServices())
+	if err != nil {
+		return err
+	}
+	if len(services) == 0 {
+		logger.Debugf("No services to stop.")
+		return nil
+	}
+
+	// One change to stop them all.
+	logger.Noticef("Stopping all running services.")
+	st := m.state
+	st.Lock()
+	taskSet, err := Stop(st, services)
+	if err != nil {
+		st.Unlock()
+		return err
+	}
+	chg := st.NewChange("shutdown", "Shut down service manager")
+	chg.AddAll(taskSet)
+	chg.Set("service-names", services)
+	st.Unlock()
+
+	// Kick off the tasks immediately.
+	st.Lock()
+	st.EnsureBefore(0)
+	st.Unlock()
+
+	// Wait for a limited amount of time for them to stop.
+	select {
+	case <-chg.Ready():
+		logger.Debugf("All services stopped.")
+	case <-time.After(shutdownTimeout):
+		return fmt.Errorf("timed out after %v", shutdownTimeout)
+	}
+	return nil
+}
+
+// runningServices returns a slice of the names of running service.
+func (m *ServiceManager) runningServices() []string {
+	m.servicesLock.Lock()
+	defer m.servicesLock.Unlock()
+
+	var services []string
+	for name, s := range m.services {
+		if s.state == stateRunning {
+			services = append(services, name)
+		}
+	}
+	return services
 }

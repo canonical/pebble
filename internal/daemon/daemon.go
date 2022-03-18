@@ -551,6 +551,16 @@ func (d *Daemon) Stop(sigCh chan<- os.Signal) error {
 		return fmt.Errorf("internal error: no Overlord")
 	}
 
+	// Shut down the service manager, stopping all services. Must do this
+	// before overlord.Stop, as it creates a change and waits for the change,
+	// and overlord.Stop calls StateEngine.Stop, which locks, so Ensure would
+	// result in a deadlock.
+	err := d.overlord.ServiceManager().Shutdown()
+	if err != nil {
+		// This isn't fatal for exiting the daemon, so log and continue.
+		logger.Noticef("Cannot shut down service manager: %v", err)
+	}
+
 	d.tomb.Kill(nil)
 
 	d.mu.Lock()
@@ -601,7 +611,7 @@ func (d *Daemon) Stop(sigCh chan<- os.Signal) error {
 	}
 	d.overlord.Stop()
 
-	err := d.tomb.Wait()
+	err = d.tomb.Wait()
 	if err != nil {
 		// do not stop the shutdown even if the tomb errors
 		// because we already scheduled a slow shutdown and
