@@ -1413,18 +1413,6 @@ func (s *S) TestShutdown(c *C) {
 		return svc.Current == servstate.StatusActive
 	})
 
-	getShutdownChange := func() *state.Change {
-		s.st.Lock()
-		defer s.st.Unlock()
-		changes := s.st.Changes()
-		for _, change := range changes {
-			if change.Kind() == "shutdown" {
-				return change
-			}
-		}
-		return nil
-	}
-
 	// We need a goroutine to call ensure because Shutdown is synchronous.
 	ensureDone := make(chan struct{})
 	go func() {
@@ -1433,7 +1421,7 @@ func (s *S) TestShutdown(c *C) {
 			if i >= 100 {
 				c.Fatalf("timed out waiting for shutdown change")
 			}
-			change := getShutdownChange()
+			change := s.shutdownChange()
 			if change != nil {
 				break
 			}
@@ -1459,7 +1447,7 @@ func (s *S) TestShutdown(c *C) {
 	c.Assert(svc.Current, Equals, servstate.StatusInactive)
 
 	// Ensure that it's created the expected "shutdown" change (with stop tasks).
-	change := getShutdownChange()
+	change := s.shutdownChange()
 	c.Assert(change, NotNil)
 	s.st.Lock()
 	defer s.st.Unlock()
@@ -1468,4 +1456,31 @@ func (s *S) TestShutdown(c *C) {
 	shutdownTasks := change.Tasks()
 	c.Assert(shutdownTasks, HasLen, 1)
 	c.Check(shutdownTasks[0].Kind(), Equals, "stop")
+}
+
+func (s *S) shutdownChange() *state.Change {
+	s.st.Lock()
+	defer s.st.Unlock()
+
+	changes := s.st.Changes()
+	for _, change := range changes {
+		if change.Kind() == "shutdown" {
+			return change
+		}
+	}
+	return nil
+}
+
+func (s *S) TestShutdownNoServicesToStop(c *C) {
+	err := s.manager.Shutdown()
+	c.Assert(err, IsNil)
+
+	// No services to stop, shouldn't create shutdown change.
+	for i := 0; i < 10; i++ {
+		change := s.shutdownChange()
+		if change != nil {
+			c.Fatalf("unexpected shutdown change")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
 }
