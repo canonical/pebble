@@ -70,7 +70,7 @@ var planLayer1 = `
 services:
     test1:
         override: replace
-        command: /bin/sh -c "echo test1 | tee -a %s; sleep 300"
+        command: /bin/sh -c "echo test1 | tee -a %s; sleep 10"
         startup: enabled
         requires:
             - test2
@@ -79,7 +79,7 @@ services:
 
     test2:
         override: replace
-        command: /bin/sh -c "echo test2 | tee -a %s; sleep 300"
+        command: /bin/sh -c "echo test2 | tee -a %s; sleep 10"
 `
 
 var planLayer2 = `
@@ -94,7 +94,7 @@ services:
 
     test5:
         override: replace
-        command: /bin/sh -c "sleep 300"
+        command: /bin/sh -c "sleep 10"
         user: nobody
         group: nogroup
 `
@@ -103,7 +103,7 @@ var planLayer3 = `
 services:
     test2:
         override: merge
-        command: /bin/sh -c "echo test2b | tee -a %s; sleep 300"
+        command: /bin/sh -c "echo test2b | tee -a %s; sleep 10"
 `
 
 var setLoggerOnce sync.Once
@@ -499,14 +499,14 @@ services:
     test1:
         startup: enabled
         override: replace
-        command: /bin/sh -c "echo test1 | tee -a %s; sleep 300"
+        command: /bin/sh -c "echo test1 | tee -a %s; sleep 10"
         before:
             - test2
         requires:
             - test2
     test2:
         override: replace
-        command: /bin/sh -c "echo test2 | tee -a %s; sleep 300"
+        command: /bin/sh -c "echo test2 | tee -a %s; sleep 10"
     test3:
         override: replace
         command: some-bad-command
@@ -515,7 +515,7 @@ services:
         command: echo -e 'too-fast\nsecond line'
     test5:
         override: replace
-        command: /bin/sh -c "sleep 300"
+        command: /bin/sh -c "sleep 10"
         user: nobody
         group: nogroup
 `[1:], s.log, s.log)
@@ -765,7 +765,7 @@ var planLayerEnv = `
 services:
     envtest:
         override: replace
-        command: /bin/sh -c "env | grep PEBBLE_ENV_TEST | sort > %s; sleep 300"
+        command: /bin/sh -c "env | grep PEBBLE_ENV_TEST | sort > %s; sleep 10"
         environment:
             PEBBLE_ENV_TEST_1: foo
             PEBBLE_ENV_TEST_2: bar bazz
@@ -819,7 +819,7 @@ func (s *S) TestActionRestart(c *C) {
 services:
     test2:
         override: merge
-        command: /bin/sh -c "echo test2; exec sleep 300"
+        command: /bin/sh -c "echo test2; exec sleep 10"
         backoff-delay: 50ms
         backoff-limit: 150ms
 `)
