@@ -23,6 +23,7 @@ import (
 	"os/exec"
 	"os/user"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"sync"
 	"syscall"
@@ -151,6 +152,7 @@ func (s *S) SetUpTest(c *C) {
 }
 
 func (s *S) TearDownTest(c *C) {
+	s.BaseTest.TearDownTest(c)
 }
 
 type testRestarter struct {
@@ -1404,4 +1406,45 @@ func (s *S) TestCalculateNextBackoff(c *C) {
 		c.Check(next, Equals, test.next, Commentf("delay=%s, factor=%g, limit=%s, current=%s",
 			test.delay, test.factor, test.limit, test.current))
 	}
+}
+
+func (s *S) TestShutdown(c *C) {
+	s.startServices(c, []string{"test2"}, 1)
+	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
+		return svc.Current == servstate.StatusActive
+	})
+
+	// We need a goroutine to call ensure because Shutdown is synchronous.
+	ensureDone := make(chan struct{})
+	go func() {
+		s.ensure(c, 1)
+		close(ensureDone)
+	}()
+
+	err := s.manager.Shutdown()
+	c.Assert(err, IsNil)
+
+	select {
+	case <-ensureDone:
+	case <-time.After(time.Second):
+		c.Fatalf("timed out waiting for ensure goroutine to finish")
+	}
+
+	// Ensure that the service is stopped.
+	svc := s.serviceByName(c, "test2")
+	c.Assert(svc.Current, Equals, servstate.StatusInactive)
+
+	// Ensure that it's created the expected "shutdown" change (with stop tasks).
+	s.st.Lock()
+	defer s.st.Unlock()
+	changes := s.st.Changes()
+	sort.Slice(changes, func(i, j int) bool {
+		return changes[i].SpawnTime().Before(changes[j].SpawnTime())
+	})
+	c.Assert(changes, HasLen, 2)
+	c.Check(changes[1].Kind(), Equals, "shutdown")
+	c.Check(changes[1].Summary(), Equals, "Shut down service manager")
+	shutdownTasks := changes[1].Tasks()
+	c.Assert(shutdownTasks, HasLen, 1)
+	c.Check(shutdownTasks[0].Kind(), Equals, "stop")
 }
