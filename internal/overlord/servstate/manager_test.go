@@ -1453,9 +1453,9 @@ func (s *S) TestShutdown(c *C) {
 	defer s.st.Unlock()
 	c.Check(change.Summary(), Equals, "Shut down service manager")
 	c.Check(change.Status(), Equals, state.DoneStatus)
-	shutdownTasks := change.Tasks()
-	c.Assert(shutdownTasks, HasLen, 1)
-	c.Check(shutdownTasks[0].Kind(), Equals, "stop")
+	tasks := change.Tasks()
+	c.Assert(tasks, HasLen, 1)
+	c.Check(tasks[0].Kind(), Equals, "stop")
 }
 
 func (s *S) shutdownChange() *state.Change {

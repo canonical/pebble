@@ -15,6 +15,7 @@
 package daemon
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -1087,4 +1088,63 @@ func (s *daemonSuite) TestHTTPAPI(c *check.C) {
 	c.Assert(err, IsNil)
 	_, err = http.DefaultClient.Do(request)
 	c.Assert(err, ErrorMatches, ".* connection refused")
+}
+
+func (s *daemonSuite) TestServiceManagerShutdown(c *C) {
+	// Start the daemon.
+	writeTestLayer(s.pebbleDir, `
+services:
+    test1:
+        override: replace
+        command: sleep 10
+`)
+	d := s.newDaemon(c)
+	err := d.Init()
+	c.Assert(err, IsNil)
+	d.Start()
+
+	// Start the test service.
+	payload := bytes.NewBufferString(`{"action": "start", "services": ["test1"]}`)
+	req, err := http.NewRequest("POST", "/v1/services", payload)
+	c.Assert(err, IsNil)
+	rsp := v1PostServices(apiCmd("/v1/services"), req, nil).(*resp)
+	rec := httptest.NewRecorder()
+	rsp.ServeHTTP(rec, req)
+	c.Check(rec.Result().StatusCode, Equals, 202)
+
+	// We have to wait for it be in running state for Shutdown to stop it.
+	for i := 0; ; i++ {
+		if i >= 25 {
+			c.Fatalf("timed out waiting or service to start")
+		}
+		d.state.Lock()
+		change := d.state.Change(rsp.Change)
+		d.state.Unlock()
+		if change != nil && change.IsReady() {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+
+	// Stop the daemon (which should shut down the service manager and stop services).
+	err = d.Stop(nil)
+	c.Assert(err, IsNil)
+
+	// Ensure the "shutdown" change was created, along with its "stop" tasks.
+	d.state.Lock()
+	defer d.state.Unlock()
+	changes := d.state.Changes()
+	var change *state.Change
+	for _, ch := range changes {
+		if ch.Kind() == "shutdown" {
+			change = ch
+		}
+	}
+	if change == nil {
+		c.Fatalf("shutdown change not found")
+	}
+	c.Check(change.Status(), Equals, state.DoneStatus)
+	tasks := change.Tasks()
+	c.Assert(tasks, HasLen, 1)
+	c.Check(tasks[0].Kind(), Equals, "stop")
 }
