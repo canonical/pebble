@@ -489,10 +489,6 @@ func (m *ServiceManager) Shutdown() error {
 	chg := st.NewChange("shutdown", "Shut down service manager")
 	chg.AddAll(taskSet)
 	chg.Set("service-names", services)
-	st.Unlock()
-
-	// Kick off the tasks immediately.
-	st.Lock()
 	st.EnsureBefore(0)
 	st.Unlock()
 

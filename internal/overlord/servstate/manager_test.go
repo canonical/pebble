@@ -23,7 +23,6 @@ import (
 	"os/exec"
 	"os/user"
 	"path/filepath"
-	"sort"
 	"strconv"
 	"sync"
 	"syscall"
@@ -1414,37 +1413,59 @@ func (s *S) TestShutdown(c *C) {
 		return svc.Current == servstate.StatusActive
 	})
 
+	getShutdownChange := func() *state.Change {
+		s.st.Lock()
+		defer s.st.Unlock()
+		changes := s.st.Changes()
+		for _, change := range changes {
+			if change.Kind() == "shutdown" {
+				return change
+			}
+		}
+		return nil
+	}
+
 	// We need a goroutine to call ensure because Shutdown is synchronous.
 	ensureDone := make(chan struct{})
 	go func() {
+		// "shutdown" change should appear almost immediately, but wait gracefully.
+		for i := 0; ; i++ {
+			if i >= 100 {
+				c.Fatalf("timed out waiting for shutdown change")
+			}
+			change := getShutdownChange()
+			if change != nil {
+				break
+			}
+			time.Sleep(5 * time.Millisecond)
+		}
 		s.ensure(c, 1)
 		close(ensureDone)
 	}()
 
+	// Perform the shutdown.
 	err := s.manager.Shutdown()
 	c.Assert(err, IsNil)
 
+	// Cleanly wait for ensure goroutine to finish.
 	select {
 	case <-ensureDone:
 	case <-time.After(time.Second):
 		c.Fatalf("timed out waiting for ensure goroutine to finish")
 	}
 
-	// Ensure that the service is stopped.
+	// Ensure that the service has been stopped.
 	svc := s.serviceByName(c, "test2")
 	c.Assert(svc.Current, Equals, servstate.StatusInactive)
 
 	// Ensure that it's created the expected "shutdown" change (with stop tasks).
+	change := getShutdownChange()
+	c.Assert(change, NotNil)
 	s.st.Lock()
 	defer s.st.Unlock()
-	changes := s.st.Changes()
-	sort.Slice(changes, func(i, j int) bool {
-		return changes[i].SpawnTime().Before(changes[j].SpawnTime())
-	})
-	c.Assert(changes, HasLen, 2)
-	c.Check(changes[1].Kind(), Equals, "shutdown")
-	c.Check(changes[1].Summary(), Equals, "Shut down service manager")
-	shutdownTasks := changes[1].Tasks()
+	c.Check(change.Summary(), Equals, "Shut down service manager")
+	c.Check(change.Status(), Equals, state.DoneStatus)
+	shutdownTasks := change.Tasks()
 	c.Assert(shutdownTasks, HasLen, 1)
 	c.Check(shutdownTasks[0].Kind(), Equals, "stop")
 }
