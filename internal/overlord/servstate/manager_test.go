@@ -103,8 +103,8 @@ services:
 
     trim-test:
         override: replace
-        command: /bin/sh -c "echo prefix-to-trim  trim-test prefix-to-trim | tee -a %s; sleep 300"
-        log-trim: prefix-to-trim *
+        command: /bin/sh -c "echo 3/3/3333 trim-test | tee -a %s; sleep 300"
+        time-trim: 1/2/2006
 `
 
 var planLayer2 = `
@@ -400,8 +400,8 @@ services:
 	c.Check(config.Summary, Equals, "A summary!")
 }
 
-func (s *S) TestServiceLogTrim(c *C) {
-	outputs := map[string]string{"trim-test": `2.* \[trim-test\] trim-test prefix-to-trim\n`}
+func (s *S) TestServiceTimeTrim(c *C) {
+	outputs := map[string]string{"trim-test": `2.* \[trim-test\] trim-test\n`}
 	s.testServiceLogs(c, outputs)
 
 	// Run test again, but ensure the logs from the previous run are still in the ring buffer.
@@ -560,8 +560,8 @@ services:
         group: nogroup
     trim-test:
         override: replace
-        command: /bin/sh -c "echo prefix-to-trim  trim-test prefix-to-trim | tee -a %s; sleep 300"
-        log-trim: prefix-to-trim *
+        command: /bin/sh -c "echo 3/3/3333 trim-test | tee -a %s; sleep 300"
+        time-trim: 1/2/2006
 `[1:], s.log, s.log, s.log)
 	c.Assert(planYAML(c, s.manager), Equals, expected)
 }

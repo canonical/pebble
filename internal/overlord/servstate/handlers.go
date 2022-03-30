@@ -5,7 +5,6 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"regexp"
 	"syscall"
 	"time"
 
@@ -353,12 +352,9 @@ func (s *serviceData) startInternal() error {
 	}
 	serviceName := s.config.Name
 	var logWriter io.Writer = servicelog.NewFormatWriter(s.logs, serviceName)
-	flush := func() error { return nil }
-	if s.config.LogTrim != "" {
-		tw := servicelog.NewTrimWriter(logWriter, regexp.MustCompile("^("+s.config.LogTrim+")"))
-		logWriter = tw
-		flush = tw.Flush
-	}
+	trimmer := servicelog.NewTrimWriter(logWriter, s.config.TimeTrim)
+	logWriter = trimmer
+
 	s.cmd.Stdout = logWriter
 	s.cmd.Stderr = logWriter
 
@@ -385,7 +381,7 @@ func (s *serviceData) startInternal() error {
 		} else {
 			logger.Debugf("Service %q exited with code %d.", serviceName, exitCode)
 		}
-		err := flush()
+		err := trimmer.Flush()
 		if err != nil {
 			logger.Noticef("Cannot flush service logs: %v", err)
 		}

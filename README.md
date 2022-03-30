@@ -246,12 +246,13 @@ services:
         # half a minute ("30s").
         backoff-limit: <duration>
 
-        # (Optional) Regular expression for trimming prefixes from log
-        # messages.  This is used to discard matching prefixes from the
-        # service's log output before pebble attaches its own
-        # timestamp/prefix.  This can be useful for e.g. avoiding redundant
-        # timestamping.
-        log-trim: <regular-expression>
+        # (Optional) Time layout expression for trimming timestamps from log
+        # messages.  It must be specified using the reference-time syntax
+        # of the Go time package. This is used to discard redundant timestamp
+        # prefixes from the service's log output before pebble attaches its own
+        # timestamp/prefix. If omitted, Pebble will attempt to auto-detect and
+        # trim timestamps from the service's logs.
+        time-trim: <timestamp-layout>
 
 
 # (Optional) A list of health checks managed by this configuration layer.
@@ -387,7 +388,7 @@ Here are some of the things coming soon:
   - [x] Consider showing unified log as output of `pebble run` (use `-v`)
   - [x] Automatically restart services that fail
   - [x] Support for custom health checks (HTTP, TCP, command)
-  - [x] Support trimming prefixes (e.g. redundant timestamps) from logs
+  - [x] Automatically remove (double) timestamps from logs
   - [ ] Improve signal handling, e.g., sending SIGHUP to a service
   - [ ] Terminate all services before exiting run command
   - [ ] More tests for existing CLI commands

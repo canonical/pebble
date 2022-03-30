@@ -17,7 +17,6 @@ package servicelog_test
 import (
 	"bytes"
 	"fmt"
-	"regexp"
 
 	. "gopkg.in/check.v1"
 
@@ -62,24 +61,37 @@ func (s *formatterSuite) TestFormatSingleWrite(c *C) {
 
 func (s *formatterSuite) TestTrimWriter(c *C) {
 	raw := `
-3/4/3005 hello my name is joe
-4/5/4200 and I work in a button factory
-1/1/0033 this log entry is very old
-and dates in the middle 1/1/0033 are kept
-1/1/0034 check that no-trailing-newline case is flushed`[1:]
+3/14/3005 hello my name is joe
+4/ 5/4200 and I work in a button factory
+1/ 1/1133  this log entry has extra leading space
+1/ 1/1133  another log entry
+and dates in the middle 1/1/1133 are kept
+1/11/1134 check that no-trailing-newline case is flushed`[1:]
 
 	trimmed := `
 hello my name is joe
 and I work in a button factory
-this log entry is very old
-and dates in the middle 1/1/0033 are kept
+this log entry has extra leading space
+another log entry
+and dates in the middle 1/1/1133 are kept
 check that no-trailing-newline case is flushed`[1:]
 
+	trimmedAutodetect := `
+hello my name is joe
+4/ 5/4200 and I work in a button factory
+1/ 1/1133  this log entry has extra leading space
+another log entry
+and dates in the middle 1/1/1133 are kept
+check that no-trailing-newline case is flushed`[1:]
+
+	layout := "1/_2/2006 "
+	servicelog.DefaultLayouts = append(servicelog.DefaultLayouts, "1/2/2006")
+	servicelog.DefaultLayouts = append(servicelog.DefaultLayouts, layout)
 	chunkSizes := []int{1, 2, 3, 4, 5, 6, 7, 11, 13, 27, 100}
 	for _, size := range chunkSizes {
+		c.Logf("---- chunk size %v, manual layout ----", size)
 		b := &bytes.Buffer{}
-		w := servicelog.NewTrimWriter(b, regexp.MustCompile("^[0-9]{1,2}/[0-9]{1,2}/[0-9]{4} +"))
-		c.Logf("---- chunk size %v ----", size)
+		w := servicelog.NewTrimWriter(b, layout)
 		for pos := 0; pos < len(raw); pos += size {
 			end := pos + size
 			if end > len(raw) {
@@ -92,5 +104,21 @@ check that no-trailing-newline case is flushed`[1:]
 		c.Assert(b.String(), Equals, trimmed)
 		w.Flush() // should be idempotent
 		c.Assert(b.String(), Equals, trimmed)
+
+		c.Logf("---- chunk size %v, autodetect layout ----", size)
+		b = &bytes.Buffer{}
+		w = servicelog.NewTrimWriter(b, "")
+		for pos := 0; pos < len(raw); pos += size {
+			end := pos + size
+			if end > len(raw) {
+				end = len(raw)
+			}
+			fmt.Fprint(w, raw[pos:end])
+			w.Write([]byte{}) // shouldn't break anything
+		}
+		w.Flush()
+		c.Assert(b.String(), Equals, trimmedAutodetect)
+		w.Flush() // should be idempotent
+		c.Assert(b.String(), Equals, trimmedAutodetect)
 	}
 }
