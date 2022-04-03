@@ -370,7 +370,7 @@ func (s *serviceData) startInternal() error {
 	go func() {
 		exitCode, waitErr := reaper.WaitCommand(cmd)
 		if waitErr != nil {
-			logger.Debugf("Service %q unexpected error: %v", serviceName, waitErr)
+			logger.Noticef("Cannot wait for service %q: %v", serviceName, waitErr)
 		} else {
 			logger.Debugf("Service %q exited with code %d.", serviceName, exitCode)
 		}

@@ -112,7 +112,7 @@ func reapChildren() error {
 	}
 }
 
-// reapOnce waits for zombie child processes until there are no more.
+// reapOnce waits for child processes until there are no more to reap.
 func reapOnce() {
 	for {
 		var status unix.WaitStatus
@@ -142,7 +142,7 @@ func reapOnce() {
 			return
 
 		default:
-			logger.Noticef("Reaper cannot wait for children: %v", err)
+			logger.Noticef("Cannot wait for child process: %v", err)
 			return
 		}
 	}
@@ -173,6 +173,7 @@ func StartCommand(cmd *exec.Cmd) error {
 			case ch <- -1:
 			default:
 			}
+			logger.Noticef("internal error: new PID %d observed while still being tracked", cmd.Process.Pid)
 		}
 		// Channel is 1-buffered so the send in reapOnce never blocks, if for
 		// some reason someone forgets to call WaitCommand.
@@ -194,7 +195,7 @@ func WaitCommand(cmd *exec.Cmd) (int, error) {
 	if !ok {
 		// Shouldn't happen, but doesn't hurt to handle it.
 		mutex.Unlock()
-		return -1, fmt.Errorf("PID %d was not started with WaitCommand", cmd.Process.Pid)
+		return -1, fmt.Errorf("internal error: PID %d was not started with WaitCommand", cmd.Process.Pid)
 	}
 	mutex.Unlock()
 
@@ -213,7 +214,7 @@ func WaitCommand(cmd *exec.Cmd) (int, error) {
 	err := cmd.Wait()
 	switch err := err.(type) {
 	case nil:
-		logger.Debugf("WaitCommand expected error, got nil (exit code %d)", exitCode)
+		logger.Noticef("Internal error: WaitCommand expected error but got nil (exit code %d)", exitCode)
 		return exitCode, nil
 	case *os.SyscallError:
 		if err.Syscall == "wait" || err.Syscall == "waitid" {
