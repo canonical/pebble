@@ -724,7 +724,7 @@ func (s *daemonSuite) TestRestartSystemWiring(c *check.C) {
 }
 
 func (s *daemonSuite) TestRebootHelper(c *check.C) {
-	cmd := testutil.FakeCommand(c, "shutdown", "")
+	cmd := testutil.FakeCommand(c, "shutdown", "", true)
 	defer cmd.Restore()
 
 	tests := []struct {
@@ -774,7 +774,7 @@ func (s *daemonSuite) TestRestartShutdownWithSigtermInBetween(c *check.C) {
 	}()
 	rebootNoticeWait = 150 * time.Millisecond
 
-	cmd := testutil.FakeCommand(c, "shutdown", "")
+	cmd := testutil.FakeCommand(c, "shutdown", "", true)
 	defer cmd.Restore()
 
 	d := s.newDaemon(c)
@@ -806,7 +806,7 @@ func (s *daemonSuite) TestRestartShutdown(c *check.C) {
 	rebootWaitTimeout = 100 * time.Millisecond
 	rebootNoticeWait = 150 * time.Millisecond
 
-	cmd := testutil.FakeCommand(c, "shutdown", "")
+	cmd := testutil.FakeCommand(c, "shutdown", "", true)
 	defer cmd.Restore()
 
 	d := s.newDaemon(c)
@@ -845,7 +845,7 @@ func (s *daemonSuite) TestRestartExpectedRebootIsMissing(c *check.C) {
 	rebootRetryWaitTimeout = 100 * time.Millisecond
 	rebootNoticeWait = 150 * time.Millisecond
 
-	cmd := testutil.FakeCommand(c, "shutdown", "")
+	cmd := testutil.FakeCommand(c, "shutdown", "", true)
 	defer cmd.Restore()
 
 	d := s.newDaemon(c)
@@ -884,7 +884,7 @@ func (s *daemonSuite) TestRestartExpectedRebootOK(c *check.C) {
 	err := ioutil.WriteFile(s.statePath, fakeState, 0600)
 	c.Assert(err, check.IsNil)
 
-	cmd := testutil.FakeCommand(c, "shutdown", "")
+	cmd := testutil.FakeCommand(c, "shutdown", "", true)
 	defer cmd.Restore()
 
 	d := s.newDaemon(c)
@@ -908,7 +908,7 @@ func (s *daemonSuite) TestRestartExpectedRebootGiveUp(c *check.C) {
 	err = ioutil.WriteFile(s.statePath, fakeState, 0600)
 	c.Assert(err, check.IsNil)
 
-	cmd := testutil.FakeCommand(c, "shutdown", "")
+	cmd := testutil.FakeCommand(c, "shutdown", "", true)
 	defer cmd.Restore()
 
 	d := s.newDaemon(c)

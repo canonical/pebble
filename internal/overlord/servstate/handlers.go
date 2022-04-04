@@ -16,6 +16,7 @@ import (
 	"github.com/canonical/pebble/internal/overlord/restart"
 	"github.com/canonical/pebble/internal/overlord/state"
 	"github.com/canonical/pebble/internal/plan"
+	"github.com/canonical/pebble/internal/reaper"
 	"github.com/canonical/pebble/internal/servicelog"
 	"github.com/canonical/pebble/internal/strutil/shlex"
 )
@@ -349,13 +350,14 @@ func (s *serviceData) startInternal() error {
 		// started (previous logs have already been copied).
 		outputIterator = s.logs.HeadIterator(0)
 	}
-	logWriter := servicelog.NewFormatWriter(s.logs, s.config.Name)
+	serviceName := s.config.Name
+	logWriter := servicelog.NewFormatWriter(s.logs, serviceName)
 	s.cmd.Stdout = logWriter
 	s.cmd.Stderr = logWriter
 
 	// Start the process!
-	logger.Noticef("Service %q starting: %s", s.config.Name, s.config.Command)
-	err = s.cmd.Start()
+	logger.Noticef("Service %q starting: %s", serviceName, s.config.Command)
+	err = reaper.StartCommand(s.cmd)
 	if err != nil {
 		if outputIterator != nil {
 			_ = outputIterator.Close()
@@ -363,14 +365,21 @@ func (s *serviceData) startInternal() error {
 		_ = s.logs.Close()
 		return fmt.Errorf("cannot start service: %w", err)
 	}
+	logger.Debugf("Service %q started with PID %d", serviceName, s.cmd.Process.Pid)
 	s.resetTimer = time.AfterFunc(s.config.BackoffLimit.Value, func() { logError(s.backoffResetElapsed()) })
 
 	// Start a goroutine to wait for the process to finish.
 	done := make(chan struct{})
+	cmd := s.cmd
 	go func() {
-		waitErr := s.cmd.Wait()
+		exitCode, waitErr := reaper.WaitCommand(cmd)
+		if waitErr != nil {
+			logger.Noticef("Cannot wait for service %q: %v", serviceName, waitErr)
+		} else {
+			logger.Debugf("Service %q exited with code %d.", serviceName, exitCode)
+		}
 		close(done)
-		err := s.exited(waitErr)
+		err := s.exited(exitCode)
 		if err != nil {
 			logger.Noticef("Cannot transition state after service exit: %v", err)
 		}
@@ -383,7 +392,7 @@ func (s *serviceData) startInternal() error {
 			for outputIterator.Next(done) {
 				_, err := io.Copy(s.manager.serviceOutput, outputIterator)
 				if err != nil {
-					logger.Noticef("Service %q log write failed: %v", s.config.Name, err)
+					logger.Noticef("Service %q log write failed: %v", serviceName, err)
 				}
 			}
 		}()
@@ -411,7 +420,7 @@ func (s *serviceData) okayWaitElapsed() error {
 }
 
 // exited is called when the service's process exits.
-func (s *serviceData) exited(waitErr error) error {
+func (s *serviceData) exited(exitCode int) error {
 	s.manager.servicesLock.Lock()
 	defer s.manager.servicesLock.Unlock()
 
@@ -421,12 +430,12 @@ func (s *serviceData) exited(waitErr error) error {
 
 	switch s.state {
 	case stateStarting:
-		s.started <- fmt.Errorf("exited quickly with code %d", exitCode(s.cmd))
+		s.started <- fmt.Errorf("exited quickly with code %d", exitCode)
 		s.transition(stateExited) // not strictly necessary as doStart will return, but doesn't hurt
 
 	case stateRunning:
-		logger.Noticef("Service %q stopped unexpectedly with code %d", s.config.Name, exitCode(s.cmd))
-		action, onType := getAction(s.config, waitErr == nil)
+		logger.Noticef("Service %q stopped unexpectedly with code %d", s.config.Name, exitCode)
+		action, onType := getAction(s.config, exitCode == 0)
 		switch action {
 		case plan.ActionIgnore:
 			logger.Noticef("Service %q %s action is %q, not doing anything further", s.config.Name, onType, action)
@@ -511,19 +520,6 @@ func (m *ServiceManager) getJitter(duration time.Duration) time.Duration {
 	maxJitter := duration.Seconds() * 0.1
 	jitter := m.rand.Float64() * maxJitter
 	return time.Duration(jitter * float64(time.Second))
-}
-
-// exitCode returns the exit code of the given command, or 128+signal if it
-// exited via a signal.
-func exitCode(cmd *exec.Cmd) int {
-	status, ok := cmd.ProcessState.Sys().(syscall.WaitStatus)
-	if ok {
-		if status.Signaled() {
-			return 128 + int(status.Signal())
-		}
-		return status.ExitStatus()
-	}
-	return cmd.ProcessState.ExitCode()
 }
 
 // getAction returns the correct action to perform from the plan and whether
