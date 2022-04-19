@@ -25,6 +25,7 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"syscall"
 
 	"github.com/canonical/pebble/internal/osutil"
 	"github.com/canonical/pebble/internal/osutil/sys"
@@ -102,6 +103,20 @@ func (ts *AtomicWriteTestSuite) TestAtomicWriteFileAbsoluteSymlinks(c *C) {
 	c.Assert(err, IsNil)
 
 	c.Assert(p, testutil.FileEquals, "hi")
+}
+
+func (ts *AtomicWriteTestSuite) TestAtomicWriteFileChmod(c *C) {
+	tmpdir := c.MkDir()
+	oldmask := syscall.Umask(0222)
+	defer syscall.Umask(oldmask)
+
+	path := filepath.Join(tmpdir, "foo")
+	err := osutil.AtomicWriteFile(path, []byte{}, 0777, osutil.AtomicWriteChmod)
+	c.Assert(err, IsNil)
+
+	st, err := os.Stat(path)
+	c.Assert(err, IsNil)
+	c.Assert(st.Mode()&os.ModePerm, Equals, os.FileMode(0777))
 }
 
 func (ts *AtomicWriteTestSuite) TestAtomicWriteFileOverwriteAbsoluteSymlink(c *C) {
