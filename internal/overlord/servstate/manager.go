@@ -302,7 +302,6 @@ func (m *ServiceManager) Services(names []string) ([]*ServiceInfo, error) {
 				info.Current = StatusError
 			}
 			info.StartTime = s.startTime
-			info.Restarts = s.restarts
 		}
 		services = append(services, info)
 	}
