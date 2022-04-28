@@ -16,6 +16,7 @@ package checkstate
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -28,6 +29,7 @@ import (
 
 	"github.com/canonical/pebble/internal/logger"
 	"github.com/canonical/pebble/internal/osutil"
+	"github.com/canonical/pebble/internal/reaper"
 	"github.com/canonical/pebble/internal/servicelog"
 	"github.com/canonical/pebble/internal/strutil/shlex"
 )
@@ -120,8 +122,6 @@ type execChecker struct {
 }
 
 func (c *execChecker) check(ctx context.Context) error {
-	logger.Debugf("Check %q (exec): running %q", c.name, c.command)
-
 	args, err := shlex.Split(c.command)
 	if err != nil {
 		return fmt.Errorf("cannot parse check command: %v", err)
@@ -151,15 +151,20 @@ func (c *execChecker) check(ctx context.Context) error {
 	defer ringBuffer.Close()
 	cmd.Stdout = ringBuffer
 	cmd.Stderr = ringBuffer
-	err = cmd.Start()
+	err = reaper.StartCommand(cmd)
 	if err != nil {
 		return err
 	}
-	err = cmd.Wait()
+	logger.Debugf("Check %q (exec): running %q (PID %d)", c.name, c.command, cmd.Process.Pid)
+
+	exitCode, err := reaper.WaitCommand(cmd)
+	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		err = fmt.Errorf("exec check timed out")
+	}
+	if err == nil && exitCode > 0 {
+		err = fmt.Errorf("exit status %d", exitCode)
+	}
 	if err != nil {
-		if ctx.Err() == context.DeadlineExceeded {
-			err = fmt.Errorf("exec check timed out")
-		}
 		// Include the last few lines of output in the error details
 		var details string
 		details, linesErr := servicelog.LastLines(ringBuffer, maxErrorLines, "", false)

@@ -18,12 +18,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"path"
 	"time"
 
@@ -31,6 +33,29 @@ import (
 
 	"github.com/canonical/pebble/internal/wsutil"
 )
+
+// SocketNotFoundError is the error type returned when the Pebble client fails
+// to find a Unix socket at the specified path.
+type SocketNotFoundError struct {
+	// Err is the wrapped error.
+	Err error
+
+	// Path is the path of the non-existent socket.
+	Path string
+}
+
+// Error implements the error interface.
+func (s SocketNotFoundError) Error() string {
+	if s.Path == "" && s.Err != nil {
+		return s.Err.Error()
+	}
+	return fmt.Sprintf("socket %q not found", s.Path)
+}
+
+// Unwrap implements errors.Unwrap interface.
+func (s SocketNotFoundError) Unwrap() error {
+	return s.Err
+}
 
 // decodeWithNumber decodes input data using json.Decoder, ensuring numbers are preserved
 // via json.Number data type. It errors out on invalid json or any excess input.
@@ -48,6 +73,14 @@ func decodeWithNumber(r io.Reader, value interface{}) error {
 
 func unixDialer(socketPath string) func(string, string) (net.Conn, error) {
 	return func(_, _ string) (net.Conn, error) {
+		_, err := os.Stat(socketPath)
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, &SocketNotFoundError{Err: err, Path: socketPath}
+		}
+		if err != nil {
+			return nil, fmt.Errorf("cannot stat %q: %w", socketPath, err)
+		}
+
 		return net.Dial("unix", socketPath)
 	}
 }
@@ -180,6 +213,11 @@ func (e ConnectionError) Error() string {
 	return fmt.Sprintf("cannot communicate with server: %v", e.error)
 }
 
+// Unwrap implements errors.Unwrap interface.
+func (e ConnectionError) Unwrap() error {
+	return e.error
+}
+
 // raw performs a request and returns the resulting http.Response and
 // error you usually only need to call this directly if you expect the
 // response to not be JSON, otherwise you'd call Do(...) instead.
@@ -281,7 +319,7 @@ func decodeInto(reader io.Reader, v interface{}) error {
 		if err1 != nil {
 			buf = []byte(fmt.Sprintf("error reading buffered response body: %s", err1))
 		}
-		return fmt.Errorf("cannot decode %q: %s", buf, err)
+		return fmt.Errorf("cannot decode %q: %w", buf, err)
 	}
 	return nil
 }
@@ -304,7 +342,7 @@ func (client *Client) doSync(method, path string, query url.Values, headers map[
 
 	if v != nil {
 		if err := decodeWithNumber(bytes.NewReader(rsp.Result), v); err != nil {
-			return nil, fmt.Errorf("cannot unmarshal: %v", err)
+			return nil, fmt.Errorf("cannot unmarshal: %w", err)
 		}
 	}
 
@@ -414,7 +452,7 @@ func parseError(r *http.Response) error {
 
 	dec := json.NewDecoder(r.Body)
 	if err := dec.Decode(&rsp); err != nil {
-		return fmt.Errorf("cannot unmarshal error: %v", err)
+		return fmt.Errorf("cannot unmarshal error: %w", err)
 	}
 
 	err := rsp.err(nil)
@@ -434,7 +472,7 @@ func (client *Client) SysInfo() (*SysInfo, error) {
 	var sysInfo SysInfo
 
 	if _, err := client.doSync("GET", "/v1/system-info", nil, nil, nil, &sysInfo); err != nil {
-		return nil, fmt.Errorf("cannot obtain system details: %v", err)
+		return nil, fmt.Errorf("cannot obtain system details: %w", err)
 	}
 
 	return &sysInfo, nil

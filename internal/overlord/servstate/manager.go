@@ -13,6 +13,7 @@ import (
 	"github.com/canonical/pebble/internal/overlord/restart"
 	"github.com/canonical/pebble/internal/overlord/state"
 	"github.com/canonical/pebble/internal/plan"
+	"github.com/canonical/pebble/internal/reaper"
 	"github.com/canonical/pebble/internal/servicelog"
 )
 
@@ -63,10 +64,23 @@ func NewManager(s *state.State, runner *state.TaskRunner, pebbleDir string, serv
 		rand:          rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
 
+	err := reaper.Start()
+	if err != nil {
+		return nil, err
+	}
+
 	runner.AddHandler("start", manager.doStart, nil)
 	runner.AddHandler("stop", manager.doStop, nil)
 
 	return manager, nil
+}
+
+// Stop implements overlord.StateStopper and stops background functions.
+func (m *ServiceManager) Stop() {
+	err := reaper.Stop()
+	if err != nil {
+		logger.Noticef("Cannot stop child process reaper: %v", err)
+	}
 }
 
 // NotifyPlanChanged adds f to the list of functions that are called whenever

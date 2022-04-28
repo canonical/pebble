@@ -23,12 +23,16 @@ import (
 	"os/exec"
 	"os/user"
 	"path/filepath"
+	"regexp"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"testing"
 	"time"
+	"unsafe"
 
+	"golang.org/x/sys/unix"
 	. "gopkg.in/check.v1"
 	"gopkg.in/yaml.v3"
 
@@ -46,6 +50,22 @@ const (
 	shortKillWait = 100 * time.Millisecond
 	shortFailWait = 200 * time.Millisecond
 )
+
+func TestMain(m *testing.M) {
+	// See TestReaper
+	if os.Getenv("PEBBLE_TEST_CREATE_ZOMBIE") == "1" {
+		err := createZombie()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "cannot create zombie: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	} else if os.Getenv("PEBBLE_TEST_ZOMBIE_CHILD") == "1" {
+		return
+	}
+
+	os.Exit(m.Run())
+}
 
 func Test(t *testing.T) { TestingT(t) }
 
@@ -142,6 +162,7 @@ func (s *S) SetUpTest(c *C) {
 	s.stopDaemon = make(chan struct{})
 	manager, err := servstate.NewManager(s.st, s.runner, s.dir, logOutput, testRestarter{s.stopDaemon})
 	c.Assert(err, IsNil)
+	s.AddCleanup(manager.Stop)
 	s.manager = manager
 
 	restore := servstate.FakeOkayWait(shortOkayWait)
@@ -540,6 +561,7 @@ func (s *S) TestAppendLayer(c *C) {
 	runner := state.NewTaskRunner(s.st)
 	manager, err := servstate.NewManager(s.st, runner, dir, nil, nil)
 	c.Assert(err, IsNil)
+	defer manager.Stop()
 
 	// Append a layer when there are no layers.
 	layer := parseLayer(c, 0, "label1", `
@@ -622,6 +644,7 @@ func (s *S) TestCombineLayer(c *C) {
 	runner := state.NewTaskRunner(s.st)
 	manager, err := servstate.NewManager(s.st, runner, dir, nil, nil)
 	c.Assert(err, IsNil)
+	defer manager.Stop()
 
 	// "Combine" layer with no layers should just append.
 	layer := parseLayer(c, 0, "label1", `
@@ -1230,7 +1253,7 @@ checks:
 }
 
 func (s *S) waitUntilService(c *C, service string, f func(svc *servstate.ServiceInfo) bool) {
-	for i := 0; i < 20; i++ {
+	for i := 0; i < 310; i++ {
 		svc := s.serviceByName(c, service)
 		if f(svc) {
 			return
@@ -1405,6 +1428,104 @@ func (s *S) TestCalculateNextBackoff(c *C) {
 		c.Check(next, Equals, test.next, Commentf("delay=%s, factor=%g, limit=%s, current=%s",
 			test.delay, test.factor, test.limit, test.current))
 	}
+}
+
+func (s *S) TestReapZombies(c *C) {
+	// Ensure we've been set as a child subreaper
+	isSubreaper, err := getChildSubreaper()
+	c.Assert(err, IsNil)
+	c.Assert(isSubreaper, Equals, true)
+
+	// Start a service which runs this test executable with an environment
+	// variable set so the "service" knows to create a zombie child.
+	testExecutable, err := os.Executable()
+	c.Assert(err, IsNil)
+	layer := parseLayer(c, 0, "layer", fmt.Sprintf(`
+services:
+    test2:
+        override: replace
+        command: %s
+        environment:
+            PEBBLE_TEST_CREATE_ZOMBIE: 1
+        on-success: ignore
+`, testExecutable))
+	err = s.manager.AppendLayer(layer)
+	c.Assert(err, IsNil)
+
+	s.startServices(c, []string{"test2"}, 1)
+	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
+		return svc.Current == servstate.StatusActive
+	})
+
+	// Get the PID of the zombie child (the createZombie process printed it out)
+	childPidRe := regexp.MustCompile(`.* childPid (\d+)`)
+	matches := childPidRe.FindStringSubmatch(s.logBufferString())
+	c.Assert(len(matches), Equals, 2)
+	childPid, err := strconv.Atoi(matches[1])
+	c.Assert(err, IsNil)
+
+	// Wait till it becomes a zombie (by reading /proc/<pid>/stat)
+	var zombied bool
+	for i := 0; i < 10; i++ {
+		stat, err := ioutil.ReadFile(fmt.Sprintf("/proc/%d/stat", childPid))
+		c.Assert(err, IsNil)
+		statFields := strings.Fields(string(stat))
+		c.Assert(len(statFields) >= 3, Equals, true)
+		state := statFields[2]
+		if state == "Z" { // Z for Zombie!
+			zombied = true
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if !zombied {
+		c.Fatalf("timed out waiting for zombie to be created")
+	}
+
+	// Wait till the main process terminates
+	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
+		return svc.Current == servstate.StatusError
+	})
+
+	// Wait till the zombie has been reaped (no longer in the process table)
+	var reaped bool
+	for i := 0; i < 10; i++ {
+		_, err := os.Stat(fmt.Sprintf("/proc/%d/stat", childPid))
+		if os.IsNotExist(err) {
+			reaped = true
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if !reaped {
+		c.Fatalf("timed out waiting for zombie to be reaped")
+	}
+}
+
+func getChildSubreaper() (bool, error) {
+	var i uintptr
+	err := unix.Prctl(unix.PR_GET_CHILD_SUBREAPER, uintptr(unsafe.Pointer(&i)), 0, 0, 0)
+	if err != nil {
+		return false, err
+	}
+	return i != 0, nil
+}
+
+func createZombie() error {
+	testExecutable, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	procAttr := syscall.ProcAttr{
+		Env: []string{"PEBBLE_TEST_ZOMBIE_CHILD=1"},
+	}
+	childPid, err := syscall.ForkExec(testExecutable, []string{"zombie-child"}, &procAttr)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("childPid %d\n", childPid)
+	time.Sleep(shortOkayWait + 25*time.Millisecond)
+	return nil
 }
 
 func (s *S) TestShutdown(c *C) {

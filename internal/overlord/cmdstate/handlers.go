@@ -34,6 +34,7 @@ import (
 	"github.com/canonical/pebble/internal/logger"
 	"github.com/canonical/pebble/internal/overlord/state"
 	"github.com/canonical/pebble/internal/ptyutil"
+	"github.com/canonical/pebble/internal/reaper"
 	"github.com/canonical/pebble/internal/wsutil"
 )
 
@@ -360,13 +361,14 @@ func (e *execution) do(ctx context.Context, task *state.Task) error {
 	}
 
 	// Start the command!
-	err = cmd.Start()
+	err = reaper.StartCommand(cmd)
+	exitCode := -1
 	if err == nil {
 		// Send its PID to the control loop.
 		pidCh <- cmd.Process.Pid
 
 		// Wait for it to finish.
-		err = cmd.Wait()
+		exitCode, err = reaper.WaitCommand(cmd)
 	}
 
 	// Close open files and channels.
@@ -388,30 +390,15 @@ func (e *execution) do(ctx context.Context, task *state.Task) error {
 		_ = closer.Close()
 	}
 
-	// Handle errors: timeout, non-zero exit code, or other error.
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 		setExitCode(task, -1)
 		return fmt.Errorf("timed out after %v: %w", e.timeout, ctx.Err())
-	} else if exitErr, ok := err.(*exec.ExitError); ok {
-		status, ok := exitErr.Sys().(syscall.WaitStatus)
-		if ok {
-			if status.Signaled() {
-				// 128 + n == Fatal error signal "n"
-				setExitCode(task, 128+int(status.Signal()))
-				return nil
-			}
-			setExitCode(task, status.ExitStatus())
-			return nil
-		}
-		setExitCode(task, -1)
-		return err
-	} else if err != nil {
+	}
+	if err != nil {
 		setExitCode(task, -1)
 		return err
 	}
-
-	// Successful exit (exit code 0).
-	setExitCode(task, 0)
+	setExitCode(task, exitCode)
 	return nil
 }
 

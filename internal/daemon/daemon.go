@@ -539,7 +539,7 @@ var (
 	rebootMaxTentatives    = 3
 )
 
-var shutdownTimeout = 25 * time.Second
+var shutdownTimeout = time.Second
 
 // Stop shuts down the Daemon.
 func (d *Daemon) Stop(sigCh chan<- os.Signal) error {
