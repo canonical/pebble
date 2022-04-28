@@ -92,6 +92,7 @@ type serviceData struct {
 	backoffTime time.Duration
 	resetTimer  *time.Timer
 	restarting  bool
+	startTime   time.Time
 	restarts    int
 }
 
@@ -366,6 +367,7 @@ func (s *serviceData) startInternal() error {
 		return fmt.Errorf("cannot start service: %w", err)
 	}
 	logger.Debugf("Service %q started with PID %d", serviceName, s.cmd.Process.Pid)
+	s.startTime = time.Now()
 	s.resetTimer = time.AfterFunc(s.config.BackoffLimit.Value, func() { logError(s.backoffResetElapsed()) })
 
 	// Start a goroutine to wait for the process to finish.
@@ -424,6 +426,7 @@ func (s *serviceData) exited(exitCode int) error {
 	s.manager.servicesLock.Lock()
 	defer s.manager.servicesLock.Unlock()
 
+	s.startTime = time.Time{}
 	if s.resetTimer != nil {
 		s.resetTimer.Stop()
 	}

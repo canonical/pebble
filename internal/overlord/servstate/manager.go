@@ -235,10 +235,11 @@ func (m *ServiceManager) Ensure() error {
 }
 
 type ServiceInfo struct {
-	Name     string
-	Startup  ServiceStartup
-	Current  ServiceStatus
-	Restarts int
+	Name      string
+	Startup   ServiceStartup
+	Current   ServiceStatus
+	StartTime time.Time
+	Restarts  int
 }
 
 type ServiceStartup string
@@ -300,6 +301,7 @@ func (m *ServiceManager) Services(names []string) ([]*ServiceInfo, error) {
 			default:
 				info.Current = StatusError
 			}
+			info.StartTime = s.startTime
 			info.Restarts = s.restarts
 		}
 		services = append(services, info)

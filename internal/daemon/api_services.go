@@ -20,6 +20,7 @@ import (
 	"net/http"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/canonical/pebble/internal/overlord/servstate"
 	"github.com/canonical/pebble/internal/overlord/state"
@@ -27,9 +28,10 @@ import (
 )
 
 type serviceInfo struct {
-	Name    string `json:"name"`
-	Startup string `json:"startup"`
-	Current string `json:"current"`
+	Name      string     `json:"name"`
+	Startup   string     `json:"startup"`
+	Current   string     `json:"current"`
+	StartTime *time.Time `json:"start-time,omitempty"` // pointer as omitempty doesn't work with time.Time directly
 }
 
 func v1GetServices(c *Command, r *http.Request, _ *userState) Response {
@@ -47,6 +49,9 @@ func v1GetServices(c *Command, r *http.Request, _ *userState) Response {
 			Name:    svc.Name,
 			Startup: string(svc.Startup),
 			Current: string(svc.Current),
+		}
+		if !svc.StartTime.IsZero() {
+			info.StartTime = &svc.StartTime
 		}
 		infos = append(infos, info)
 	}
