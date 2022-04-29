@@ -8,6 +8,7 @@ digraph service_state_machine {
     initial -> starting [label="start"]
     starting -> running [label="okay wait\nelapsed"]
     running -> terminating [label="stop"]
+    running -> terminating [label="check failed\n(action \"restart\")"]
     terminating -> killing [label="terminate time\nelapsed"]
     {terminating, killing} -> stopped [label="exited\n(not restarting)"]
     {terminating, killing} -> backoff [label="exited\n(restarting)"]
