@@ -81,18 +81,19 @@ const (
 
 // serviceData holds the state and other data for a service under our control.
 type serviceData struct {
-	manager     *ServiceManager
-	state       serviceState
-	config      *plan.Service
-	logs        *servicelog.RingBuffer
-	started     chan error
-	stopped     chan error
-	cmd         *exec.Cmd
-	backoffNum  int
-	backoffTime time.Duration
-	resetTimer  *time.Timer
-	restarting  bool
-	restarts    int
+	manager       *ServiceManager
+	state         serviceState
+	config        *plan.Service
+	logs          *servicelog.RingBuffer
+	started       chan error
+	stopped       chan error
+	cmd           *exec.Cmd
+	backoffNum    int
+	backoffTime   time.Duration
+	resetTimer    *time.Timer
+	restarting    bool
+	restarts      int
+	recoverChange *state.Change
 }
 
 func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
@@ -185,6 +186,7 @@ func (m *ServiceManager) serviceForStart(task *state.Task, config *plan.Service)
 		// Start allowed when service is backing off, was stopped, or has exited.
 		service.backoffNum = 0
 		service.backoffTime = 0
+		service.closeRecoverChange()
 		service.transition(stateInitial)
 		return service
 	default:
@@ -263,6 +265,7 @@ func (m *ServiceManager) serviceForStop(task *state.Task, name string) *serviceD
 		service.transition(stateStopped)
 		return nil
 	default:
+		service.closeRecoverChange()
 		return service
 	}
 }
@@ -484,7 +487,11 @@ func addLastLogs(task *state.Task, logBuffer *servicelog.RingBuffer) {
 		task.Logf("Most recent service output:\n%s", logs)
 	}
 }
+
 func (s *serviceData) doBackoff(action plan.ServiceAction, onType string) {
+	if s.backoffNum == 0 {
+		s.openRecoverChange()
+	}
 	s.backoffNum++
 	s.backoffTime = calculateNextBackoff(s.config, s.backoffTime)
 	logger.Noticef("Service %q %s action is %q, waiting ~%s before restart (backoff %d)",
@@ -492,6 +499,16 @@ func (s *serviceData) doBackoff(action plan.ServiceAction, onType string) {
 	s.transition(stateBackoff)
 	duration := s.backoffTime + s.manager.getJitter(s.backoffTime)
 	time.AfterFunc(duration, func() { logError(s.backoffTimeElapsed()) })
+}
+
+func (s *serviceData) openRecoverChange() {
+	s.closeRecoverChange() // shouldn't be necessary, but won't hurt either
+
+	st := s.manager.state
+	st.Lock()
+	defer st.Unlock()
+
+	s.recoverChange = st.NewChange("recover", fmt.Sprintf("Recover service %q", s.config.Name))
 }
 
 func calculateNextBackoff(config *plan.Service, current time.Duration) time.Duration {
@@ -603,12 +620,25 @@ func (s *serviceData) backoffTimeElapsed() error {
 			return err
 		}
 		s.transition(stateRunning)
+		if s.recoverChange != nil {
+			s.addRecoverTask()
+		}
 
 	default:
 		// Ignore if timer elapsed in any other state.
 		return nil
 	}
 	return nil
+}
+
+func (s *serviceData) addRecoverTask() {
+	st := s.manager.state
+	st.Lock()
+	defer st.Unlock()
+
+	task := st.NewTask("restart", fmt.Sprintf("Restart service %q", s.config.Name))
+	task.SetStatus(state.DoneStatus)
+	s.recoverChange.AddTask(task)
 }
 
 // terminateTimeElapsed is called after stop sends SIGTERM and the service
@@ -672,12 +702,25 @@ func (s *serviceData) backoffResetElapsed() error {
 			s.config.Name, s.backoffNum, s.backoffTime)
 		s.backoffNum = 0
 		s.backoffTime = 0
+		s.closeRecoverChange() // service is running successfully, set "recover" change to Done
 
 	default:
 		// Ignore if timer elapsed in any other state.
 		return nil
 	}
 	return nil
+}
+
+func (s *serviceData) closeRecoverChange() {
+	st := s.manager.state
+	st.Lock()
+	defer st.Unlock()
+
+	if s.recoverChange == nil {
+		return
+	}
+	s.recoverChange.SetStatus(state.DoneStatus)
+	s.recoverChange = nil
 }
 
 // checkFailed handles a health check failure (from the check manager).

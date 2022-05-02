@@ -220,7 +220,7 @@ func (s *S) startServices(c *C, services []string, nEnsure int) *state.Change {
 	s.st.Lock()
 	ts, err := servstate.Start(s.st, services)
 	c.Check(err, IsNil)
-	chg := s.st.NewChange("test", "Start test")
+	chg := s.st.NewChange("start", "Start test")
 	chg.AddAll(ts)
 	s.st.Unlock()
 
@@ -234,7 +234,7 @@ func (s *S) stopServices(c *C, services []string, nEnsure int) *state.Change {
 	s.st.Lock()
 	ts, err := servstate.Stop(s.st, services)
 	c.Check(err, IsNil)
-	chg := s.st.NewChange("test", "Stop test")
+	chg := s.st.NewChange("stop", "Stop test")
 	chg.AddAll(ts)
 	s.st.Unlock()
 
@@ -891,6 +891,25 @@ services:
 	c.Assert(svc.Current, Equals, servstate.StatusActive)
 	c.Check(s.logBufferString(), Matches, `2.* \[test2\] test2\n`)
 
+	// Ensure it has recorded the "recover" change correctly.
+	func() {
+		s.st.Lock()
+		defer s.st.Unlock()
+		var changes []*state.Change
+		for _, chg := range s.st.Changes() {
+			if chg.Kind() == "recover" {
+				changes = append(changes, chg)
+			}
+		}
+		c.Assert(changes, HasLen, 1)
+		tasks := changes[0].Tasks()
+		c.Check(tasks, HasLen, 2)
+		c.Check(tasks[0].Kind(), Equals, "restart")
+		c.Check(tasks[0].Status(), Equals, state.DoneStatus)
+		c.Check(tasks[1].Kind(), Equals, "restart")
+		c.Check(tasks[1].Status(), Equals, state.DoneStatus)
+	}()
+
 	// Test that backoff reset time is working (set to backoff-limit)
 	time.Sleep(175 * time.Millisecond)
 	c.Check(s.manager.BackoffNum("test2"), Equals, 0)
@@ -909,6 +928,23 @@ services:
 	svc = s.serviceByName(c, "test2")
 	c.Assert(svc.Current, Equals, servstate.StatusActive)
 	c.Check(s.logBufferString(), Matches, `2.* \[test2\] test2\n`)
+
+	// Ensure it has recorded the "recover" changes correctly.
+	s.st.Lock()
+	defer s.st.Unlock()
+	var changes []*state.Change
+	for _, chg := range s.st.Changes() {
+		if chg.Kind() == "recover" {
+			changes = append(changes, chg)
+		}
+	}
+	c.Assert(changes, HasLen, 2)
+	c.Check(changes[0].Status(), Equals, state.DoneStatus)
+	c.Check(changes[1].Status(), Equals, state.DoneStatus)
+	tasks := changes[1].Tasks()
+	c.Check(tasks, HasLen, 1)
+	c.Check(tasks[0].Kind(), Equals, "restart")
+	c.Check(tasks[0].Status(), Equals, state.DoneStatus)
 }
 
 func (s *S) TestStopDuringBackoff(c *C) {
@@ -944,6 +980,19 @@ services:
 	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
 		return svc.Current == servstate.StatusInactive
 	})
+
+	// Ensure it has recorded the "recover" change correctly.
+	s.st.Lock()
+	defer s.st.Unlock()
+	var changes []*state.Change
+	for _, chg := range s.st.Changes() {
+		if chg.Kind() == "recover" {
+			changes = append(changes, chg)
+		}
+	}
+	c.Assert(changes, HasLen, 1)
+	c.Check(changes[0].Status(), Equals, state.DoneStatus)
+	c.Check(changes[0].Tasks(), HasLen, 0) // no "restart" tasks because it hadn't been restarted
 }
 
 func (s *S) TestOnCheckFailureRestartWhileRunning(c *C) {
@@ -1034,6 +1083,22 @@ checks:
 	svc := s.serviceByName(c, "test2")
 	c.Assert(svc.Current, Equals, servstate.StatusActive)
 	c.Assert(s.manager.BackoffNum("test2"), Equals, 1)
+
+	// Ensure it has recorded the "recover" change correctly.
+	s.st.Lock()
+	defer s.st.Unlock()
+	var changes []*state.Change
+	for _, chg := range s.st.Changes() {
+		if chg.Kind() == "recover" {
+			changes = append(changes, chg)
+		}
+	}
+	c.Assert(changes, HasLen, 1)
+	c.Check(changes[0].Status(), Equals, state.DoneStatus)
+	tasks := changes[0].Tasks()
+	c.Assert(tasks, HasLen, 1)
+	c.Check(tasks[0].Kind(), Equals, "restart")
+	c.Check(tasks[0].Status(), Equals, state.DoneStatus)
 }
 
 func (s *S) TestOnCheckFailureRestartDuringBackoff(c *C) {
@@ -1112,6 +1177,22 @@ checks:
 	c.Assert(len(checks), Equals, 1)
 	c.Assert(checks[0].Status, Equals, checkstate.CheckStatusDown)
 	c.Assert(checks[0].LastError, Matches, ".* executable file not found .*")
+
+	// Ensure it has recorded the "recover" change correctly.
+	s.st.Lock()
+	defer s.st.Unlock()
+	var changes []*state.Change
+	for _, chg := range s.st.Changes() {
+		if chg.Kind() == "recover" {
+			changes = append(changes, chg)
+		}
+	}
+	c.Assert(changes, HasLen, 1)
+	c.Check(changes[0].Status(), Equals, state.DoneStatus)
+	tasks := changes[0].Tasks()
+	c.Assert(tasks, HasLen, 1)
+	c.Check(tasks[0].Kind(), Equals, "restart")
+	c.Check(tasks[0].Status(), Equals, state.DoneStatus)
 }
 
 func (s *S) TestOnCheckFailureIgnore(c *C) {
