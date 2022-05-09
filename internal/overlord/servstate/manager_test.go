@@ -891,13 +891,13 @@ services:
 	c.Assert(svc.Current, Equals, servstate.StatusActive)
 	c.Check(s.logBufferString(), Matches, `2.* \[test2\] test2\n`)
 
-	// Ensure it has recorded the "recover" change correctly.
+	// Ensure it has recorded the "recover-service" change correctly.
 	func() {
 		s.st.Lock()
 		defer s.st.Unlock()
 		var changes []*state.Change
 		for _, chg := range s.st.Changes() {
-			if chg.Kind() == "recover" {
+			if chg.Kind() == "recover-service" {
 				changes = append(changes, chg)
 			}
 		}
@@ -929,12 +929,12 @@ services:
 	c.Assert(svc.Current, Equals, servstate.StatusActive)
 	c.Check(s.logBufferString(), Matches, `2.* \[test2\] test2\n`)
 
-	// Ensure it has recorded the "recover" changes correctly.
+	// Ensure it has recorded the "recover-service" changes correctly.
 	s.st.Lock()
 	defer s.st.Unlock()
 	var changes []*state.Change
 	for _, chg := range s.st.Changes() {
-		if chg.Kind() == "recover" {
+		if chg.Kind() == "recover-service" {
 			changes = append(changes, chg)
 		}
 	}
@@ -981,12 +981,12 @@ services:
 		return svc.Current == servstate.StatusInactive
 	})
 
-	// Ensure it has recorded the "recover" change correctly.
+	// Ensure it has recorded the "recover-service" change correctly.
 	s.st.Lock()
 	defer s.st.Unlock()
 	var changes []*state.Change
 	for _, chg := range s.st.Changes() {
-		if chg.Kind() == "recover" {
+		if chg.Kind() == "recover-service" {
 			changes = append(changes, chg)
 		}
 	}
@@ -1084,12 +1084,12 @@ checks:
 	c.Assert(svc.Current, Equals, servstate.StatusActive)
 	c.Assert(s.manager.BackoffNum("test2"), Equals, 1)
 
-	// Ensure it has recorded the "recover" change correctly.
+	// Ensure it has recorded the "recover-service" change correctly.
 	s.st.Lock()
 	defer s.st.Unlock()
 	var changes []*state.Change
 	for _, chg := range s.st.Changes() {
-		if chg.Kind() == "recover" {
+		if chg.Kind() == "recover-service" {
 			changes = append(changes, chg)
 		}
 	}
@@ -1178,12 +1178,12 @@ checks:
 	c.Assert(checks[0].Status, Equals, checkstate.CheckStatusDown)
 	c.Assert(checks[0].LastError, Matches, ".* executable file not found .*")
 
-	// Ensure it has recorded the "recover" change correctly.
+	// Ensure it has recorded the "recover-service" change correctly.
 	s.st.Lock()
 	defer s.st.Unlock()
 	var changes []*state.Change
 	for _, chg := range s.st.Changes() {
-		if chg.Kind() == "recover" {
+		if chg.Kind() == "recover-service" {
 			changes = append(changes, chg)
 		}
 	}

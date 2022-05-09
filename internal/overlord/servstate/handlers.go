@@ -508,7 +508,7 @@ func (s *serviceData) openRecoverChange() {
 	st.Lock()
 	defer st.Unlock()
 
-	s.recoverChange = st.NewChange("recover", fmt.Sprintf("Recover service %q", s.config.Name))
+	s.recoverChange = st.NewChange("recover-service", fmt.Sprintf("Recover service %q", s.config.Name))
 }
 
 func calculateNextBackoff(config *plan.Service, current time.Duration) time.Duration {
