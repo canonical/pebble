@@ -114,7 +114,7 @@ func New(pebbleDir string, restartHandler restart.Handler, serviceOutput io.Writ
 	o.commandMgr = cmdstate.NewManager(o.runner)
 	o.addManager(o.commandMgr)
 
-	o.checkMgr = checkstate.NewManager()
+	o.checkMgr = checkstate.NewManager(s)
 
 	// Tell check manager about plan updates.
 	o.serviceMgr.NotifyPlanChanged(o.checkMgr.PlanChanged)

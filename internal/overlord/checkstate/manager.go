@@ -16,11 +16,13 @@ package checkstate
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"sync"
 	"time"
 
 	"github.com/canonical/pebble/internal/logger"
+	"github.com/canonical/pebble/internal/overlord/state"
 	"github.com/canonical/pebble/internal/plan"
 )
 
@@ -29,14 +31,15 @@ type CheckManager struct {
 	mutex           sync.Mutex
 	checks          map[string]*checkData
 	failureHandlers []FailureFunc
+	state           *state.State
 }
 
 // FailureFunc is the type of function called when a failure action is triggered.
 type FailureFunc func(name string)
 
 // NewManager creates a new check manager.
-func NewManager() *CheckManager {
-	return &CheckManager{}
+func NewManager(st *state.State) *CheckManager {
+	return &CheckManager{state: st}
 }
 
 // NotifyCheckFailed adds f to the list of functions that are called whenever
@@ -56,7 +59,8 @@ func (m *CheckManager) PlanChanged(p *plan.Plan) {
 
 	// First stop existing checks.
 	for _, check := range m.checks {
-		check.cancel()
+		check.cancelCtx()
+		check.closeChange()
 	}
 
 	// Then configure and start new checks.
@@ -64,11 +68,12 @@ func (m *CheckManager) PlanChanged(p *plan.Plan) {
 	for name, config := range p.Checks {
 		ctx, cancel := context.WithCancel(context.Background())
 		check := &checkData{
-			config:  config,
-			checker: newChecker(config),
-			ctx:     ctx,
-			cancel:  cancel,
-			action:  m.callFailureHandlers,
+			config:    config,
+			checker:   newChecker(config),
+			ctx:       ctx,
+			cancelCtx: cancel,
+			action:    m.callFailureHandlers,
+			state:     m.state,
 		}
 		checks[name] = check
 		go check.loop()
@@ -136,13 +141,11 @@ func (m *CheckManager) Checks() ([]*CheckInfo, error) {
 
 // CheckInfo provides status information about a single check.
 type CheckInfo struct {
-	Name         string
-	Level        plan.CheckLevel
-	Status       CheckStatus
-	Failures     int
-	Threshold    int
-	LastError    string
-	ErrorDetails string
+	Name      string
+	Level     plan.CheckLevel
+	Status    CheckStatus
+	Failures  int
+	Threshold int
 }
 
 type CheckStatus string
@@ -154,16 +157,17 @@ const (
 
 // checkData holds state for an active health check.
 type checkData struct {
-	config  *plan.Check
-	checker checker
-	ctx     context.Context
-	cancel  context.CancelFunc
-	action  FailureFunc
+	config    *plan.Check
+	checker   checker
+	ctx       context.Context
+	cancelCtx context.CancelFunc
+	action    FailureFunc
 
 	mutex     sync.Mutex
 	failures  int
 	actionRan bool
-	lastErr   error
+	state     *state.State
+	change    *state.Change
 }
 
 type checker interface {
@@ -204,9 +208,9 @@ func (c *checkData) runCheck() {
 
 	if err == nil {
 		// Successful check
-		c.lastErr = nil
 		c.failures = 0
 		c.actionRan = false
+		c.closeChangeNoLock()
 		return
 	}
 
@@ -217,7 +221,6 @@ func (c *checkData) runCheck() {
 	}
 
 	// Track failure, run failure action if "failures" threshold was hit.
-	c.lastErr = err
 	c.failures++
 	logger.Noticef("Check %q failure %d (threshold %d): %v",
 		c.config.Name, c.failures, c.config.Threshold, err)
@@ -227,6 +230,60 @@ func (c *checkData) runCheck() {
 		c.action(c.config.Name)
 		c.actionRan = true
 	}
+	if c.failures <= c.config.Threshold {
+		c.recordFailureTask(err)
+	}
+}
+
+func (c *checkData) recordFailureTask(err error) {
+	c.state.Lock()
+	defer c.state.Unlock()
+
+	if c.change == nil {
+		c.change = c.state.NewChange("recover-check", fmt.Sprintf("Recover check %q", c.config.Name))
+	}
+
+	summary := fmt.Sprintf("Check failure %d (threshold %d)", c.failures, c.config.Threshold)
+	task := c.state.NewTask("check-failure", summary)
+	log := err.Error()
+	if d, ok := err.(interface{ Details() string }); ok && d.Details() != "" {
+		log += "\n" + d.Details()
+	}
+	task.Logf("%s", log)
+	task.SetStatus(state.DoingStatus)
+	c.change.AddTask(task)
+
+	// Mark the previous task as Done (after the Doing task has been added so
+	// the entire change doesn't get marked Done).
+	tasks := c.change.Tasks()
+	if len(tasks) > 1 {
+		tasks[len(tasks)-2].SetStatus(state.DoneStatus)
+	}
+}
+
+func (c *checkData) closeChange() {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	c.closeChangeNoLock()
+}
+
+func (c *checkData) closeChangeNoLock() {
+	if c.change == nil {
+		return
+	}
+
+	c.state.Lock()
+	defer c.state.Unlock()
+
+	// Mark the last task as Done.
+	tasks := c.change.Tasks()
+	if len(tasks) > 0 {
+		tasks[len(tasks)-1].SetStatus(state.DoneStatus)
+	}
+
+	c.change.SetStatus(state.DoneStatus) // should be done automatically, but doesn't hurt
+	c.change = nil
 }
 
 // info returns user-facing check information for use in Checks (and tests).
@@ -243,12 +300,6 @@ func (c *checkData) info() *CheckInfo {
 	}
 	if c.failures >= c.config.Threshold {
 		info.Status = CheckStatusDown
-	}
-	if c.lastErr != nil {
-		info.LastError = c.lastErr.Error()
-		if d, ok := c.lastErr.(interface{ Details() string }); ok {
-			info.ErrorDetails = d.Details()
-		}
 	}
 	return info
 }

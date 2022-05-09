@@ -948,7 +948,7 @@ services:
 
 func (s *S) TestOnCheckFailureRestartWhileRunning(c *C) {
 	// Create check manager and tell it about plan updates
-	checkMgr := checkstate.NewManager()
+	checkMgr := checkstate.NewManager(s.st)
 	defer checkMgr.PlanChanged(&plan.Plan{})
 	s.manager.NotifyPlanChanged(checkMgr.PlanChanged)
 
@@ -999,7 +999,6 @@ checks:
 		c.Assert(err, IsNil)
 		if len(checks) == 1 && checks[0].Status != checkstate.CheckStatusUp {
 			c.Assert(checks[0].Failures, Equals, 1)
-			c.Assert(checks[0].LastError, Matches, ".* executable file not found .*")
 			break
 		}
 		time.Sleep(5 * time.Millisecond)
@@ -1030,7 +1029,6 @@ checks:
 	c.Assert(err, IsNil)
 	c.Assert(len(checks), Equals, 1)
 	c.Assert(checks[0].Status, Equals, checkstate.CheckStatusDown)
-	c.Assert(checks[0].LastError, Matches, ".* executable file not found .*")
 	svc := s.serviceByName(c, "test2")
 	c.Assert(svc.Current, Equals, servstate.StatusActive)
 	c.Assert(s.manager.BackoffNum("test2"), Equals, 1)
@@ -1038,7 +1036,7 @@ checks:
 
 func (s *S) TestOnCheckFailureRestartDuringBackoff(c *C) {
 	// Create check manager and tell it about plan updates
-	checkMgr := checkstate.NewManager()
+	checkMgr := checkstate.NewManager(s.st)
 	defer checkMgr.PlanChanged(&plan.Plan{})
 	s.manager.NotifyPlanChanged(checkMgr.PlanChanged)
 
@@ -1111,12 +1109,11 @@ checks:
 	c.Assert(err, IsNil)
 	c.Assert(len(checks), Equals, 1)
 	c.Assert(checks[0].Status, Equals, checkstate.CheckStatusDown)
-	c.Assert(checks[0].LastError, Matches, ".* executable file not found .*")
 }
 
 func (s *S) TestOnCheckFailureIgnore(c *C) {
 	// Create check manager and tell it about plan updates
-	checkMgr := checkstate.NewManager()
+	checkMgr := checkstate.NewManager(s.st)
 	defer checkMgr.PlanChanged(&plan.Plan{})
 	s.manager.NotifyPlanChanged(checkMgr.PlanChanged)
 
@@ -1166,7 +1163,6 @@ checks:
 		c.Assert(err, IsNil)
 		if len(checks) == 1 && checks[0].Status != checkstate.CheckStatusUp {
 			c.Assert(checks[0].Failures, Equals, 1)
-			c.Assert(checks[0].LastError, Matches, ".* executable file not found .*")
 			break
 		}
 		time.Sleep(5 * time.Millisecond)
@@ -1181,14 +1177,13 @@ checks:
 	c.Assert(err, IsNil)
 	c.Assert(len(checks), Equals, 1)
 	c.Assert(checks[0].Status, Equals, checkstate.CheckStatusDown)
-	c.Assert(checks[0].LastError, Matches, ".* executable file not found .*")
 	svc := s.serviceByName(c, "test2")
 	c.Assert(svc.Current, Equals, servstate.StatusActive)
 }
 
 func (s *S) TestOnCheckFailureShutdown(c *C) {
 	// Create check manager and tell it about plan updates
-	checkMgr := checkstate.NewManager()
+	checkMgr := checkstate.NewManager(s.st)
 	defer checkMgr.PlanChanged(&plan.Plan{})
 	s.manager.NotifyPlanChanged(checkMgr.PlanChanged)
 
@@ -1238,7 +1233,6 @@ checks:
 		c.Assert(err, IsNil)
 		if len(checks) == 1 && checks[0].Status != checkstate.CheckStatusUp {
 			c.Assert(checks[0].Failures, Equals, 1)
-			c.Assert(checks[0].LastError, Matches, ".* executable file not found .*")
 			break
 		}
 		time.Sleep(5 * time.Millisecond)

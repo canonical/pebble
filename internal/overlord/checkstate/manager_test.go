@@ -26,6 +26,7 @@ import (
 	. "gopkg.in/check.v1"
 
 	"github.com/canonical/pebble/internal/logger"
+	"github.com/canonical/pebble/internal/overlord/state"
 	"github.com/canonical/pebble/internal/plan"
 	"github.com/canonical/pebble/internal/reaper"
 )
@@ -56,7 +57,8 @@ func (s *ManagerSuite) TearDownSuite(c *C) {
 }
 
 func (s *ManagerSuite) TestChecks(c *C) {
-	mgr := NewManager()
+	st := state.New(nil)
+	mgr := NewManager(st)
 	mgr.PlanChanged(&plan.Plan{
 		Checks: map[string]*plan.Check{
 			"chk1": {
@@ -117,7 +119,8 @@ func stopChecks(c *C, mgr *CheckManager) {
 }
 
 func (s *ManagerSuite) TestTimeout(c *C) {
-	mgr := NewManager()
+	st := state.New(nil)
+	mgr := NewManager(st)
 	mgr.PlanChanged(&plan.Plan{
 		Checks: map[string]*plan.Check{
 			"chk1": {
@@ -134,14 +137,26 @@ func (s *ManagerSuite) TestTimeout(c *C) {
 	check := waitCheck(c, mgr, "chk1", func(check *CheckInfo) bool {
 		return check.Status != CheckStatusUp
 	})
-	c.Assert(check.Failures, Equals, 1)
-	c.Assert(check.Threshold, Equals, 1)
-	c.Assert(check.LastError, Equals, "exec check timed out")
-	c.Assert(check.ErrorDetails, Equals, "FOO")
+	c.Check(check.Failures, Equals, 1)
+	c.Check(check.Threshold, Equals, 1)
+
+	st.Lock()
+	defer st.Unlock()
+	changes := st.Changes()
+	c.Assert(changes, HasLen, 1)
+	c.Check(changes[0].Kind(), Equals, "recover-check")
+	c.Check(changes[0].Summary(), Equals, `Recover check "chk1"`)
+	tasks := changes[0].Tasks()
+	c.Assert(tasks, HasLen, 1)
+	c.Check(tasks[0].Kind(), Equals, "check-failure")
+	c.Check(tasks[0].Summary(), Equals, `Check failure 1 (threshold 1)`)
+	c.Assert(tasks[0].Log(), HasLen, 1)
+	c.Check(tasks[0].Log()[0], Matches, `2\S+ INFO exec check timed out\nFOO`)
 }
 
 func (s *ManagerSuite) TestCheckCanceled(c *C) {
-	mgr := NewManager()
+	st := state.New(nil)
+	mgr := NewManager(st)
 	failureName := ""
 	mgr.NotifyCheckFailed(func(name string) {
 		failureName = name
@@ -196,17 +211,20 @@ func (s *ManagerSuite) TestCheckCanceled(c *C) {
 	// Ensure it didn't trigger failure action
 	c.Check(failureName, Equals, "")
 
-	// Ensure it didn't update check failure details (white box testing)
+	// Ensure it didn't update check failure details (white box testing) or record a change.
 	info := check.info()
 	c.Check(info.Status, Equals, CheckStatusUp)
 	c.Check(info.Failures, Equals, 0)
 	c.Check(info.Threshold, Equals, 1)
-	c.Check(info.LastError, Equals, "")
-	c.Check(info.ErrorDetails, Equals, "")
+	st.Lock()
+	defer st.Unlock()
+	changes := st.Changes()
+	c.Assert(changes, HasLen, 0)
 }
 
 func (s *ManagerSuite) TestFailures(c *C) {
-	mgr := NewManager()
+	st := state.New(nil)
+	mgr := NewManager(st)
 	failureName := ""
 	mgr.NotifyCheckFailed(func(name string) {
 		failureName = name
@@ -231,8 +249,24 @@ func (s *ManagerSuite) TestFailures(c *C) {
 	})
 	c.Assert(check.Threshold, Equals, 3)
 	c.Assert(check.Status, Equals, CheckStatusUp)
-	c.Assert(check.LastError, Matches, "exit status 1")
 	c.Assert(failureName, Equals, "")
+	checkRecoverChange := func(status state.Status, numTasks int) {
+		st.Lock()
+		defer st.Unlock()
+		changes := st.Changes()
+		c.Assert(changes, HasLen, 1)
+		c.Check(changes[0].Kind(), Equals, "recover-check")
+		c.Check(changes[0].Status(), Equals, status)
+		tasks := changes[0].Tasks()
+		c.Assert(tasks, HasLen, numTasks)
+		task := tasks[len(tasks)-1]
+		c.Check(task.Kind(), Equals, "check-failure")
+		c.Check(task.Status(), Equals, status)
+		c.Check(task.Summary(), Equals, fmt.Sprintf(`Check failure %d (threshold 3)`, numTasks))
+		c.Assert(task.Log(), HasLen, 1)
+		c.Check(task.Log()[0], Matches, `2\S+ INFO exit status 1`)
+	}
+	checkRecoverChange(state.DoingStatus, 1)
 
 	// Shouldn't have called failure handler after only 2 failures
 	check = waitCheck(c, mgr, "chk1", func(check *CheckInfo) bool {
@@ -240,8 +274,8 @@ func (s *ManagerSuite) TestFailures(c *C) {
 	})
 	c.Assert(check.Threshold, Equals, 3)
 	c.Assert(check.Status, Equals, CheckStatusUp)
-	c.Assert(check.LastError, Matches, "exit status 1")
 	c.Assert(failureName, Equals, "")
+	checkRecoverChange(state.DoingStatus, 2)
 
 	// Should have called failure handler and be unhealthy after 3 failures (threshold)
 	check = waitCheck(c, mgr, "chk1", func(check *CheckInfo) bool {
@@ -249,8 +283,8 @@ func (s *ManagerSuite) TestFailures(c *C) {
 	})
 	c.Assert(check.Threshold, Equals, 3)
 	c.Assert(check.Status, Equals, CheckStatusDown)
-	c.Assert(check.LastError, Matches, "exit status 1")
 	c.Assert(failureName, Equals, "chk1")
+	checkRecoverChange(state.DoingStatus, 3)
 
 	// Should reset number of failures if command then succeeds
 	failureName = ""
@@ -260,8 +294,8 @@ func (s *ManagerSuite) TestFailures(c *C) {
 	})
 	c.Assert(check.Failures, Equals, 0)
 	c.Assert(check.Threshold, Equals, 3)
-	c.Assert(check.LastError, Equals, "")
 	c.Assert(failureName, Equals, "")
+	checkRecoverChange(state.DoneStatus, 3)
 }
 
 func waitCheck(c *C, mgr *CheckManager, name string, f func(check *CheckInfo) bool) *CheckInfo {
