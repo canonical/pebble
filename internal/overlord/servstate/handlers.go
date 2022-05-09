@@ -637,8 +637,15 @@ func (s *serviceData) addRecoverTask() {
 	defer st.Unlock()
 
 	task := st.NewTask("restart", fmt.Sprintf("Restart service %q", s.config.Name))
-	task.SetStatus(state.DoneStatus)
+	task.SetStatus(state.DoingStatus)
 	s.recoverChange.AddTask(task)
+
+	// Mark the previous task as Done (after the Doing task has been added so
+	// the entire change doesn't get marked Done).
+	tasks := s.recoverChange.Tasks()
+	if len(tasks) > 1 {
+		tasks[len(tasks)-2].SetStatus(state.DoneStatus)
+	}
 }
 
 // terminateTimeElapsed is called after stop sends SIGTERM and the service
@@ -719,7 +726,14 @@ func (s *serviceData) closeRecoverChange() {
 	if s.recoverChange == nil {
 		return
 	}
-	s.recoverChange.SetStatus(state.DoneStatus)
+
+	// Mark the last task as Done.
+	tasks := s.recoverChange.Tasks()
+	if len(tasks) > 0 {
+		tasks[len(tasks)-1].SetStatus(state.DoneStatus)
+	}
+
+	s.recoverChange.SetStatus(state.DoneStatus) // should be done automatically, but doesn't hurt
 	s.recoverChange = nil
 }
 

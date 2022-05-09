@@ -902,12 +902,13 @@ services:
 			}
 		}
 		c.Assert(changes, HasLen, 1)
+		c.Check(changes[0].Status(), Equals, state.DoingStatus)
 		tasks := changes[0].Tasks()
 		c.Check(tasks, HasLen, 2)
 		c.Check(tasks[0].Kind(), Equals, "restart")
 		c.Check(tasks[0].Status(), Equals, state.DoneStatus)
 		c.Check(tasks[1].Kind(), Equals, "restart")
-		c.Check(tasks[1].Status(), Equals, state.DoneStatus)
+		c.Check(tasks[1].Status(), Equals, state.DoingStatus)
 	}()
 
 	// Test that backoff reset time is working (set to backoff-limit)
@@ -940,11 +941,11 @@ services:
 	}
 	c.Assert(changes, HasLen, 2)
 	c.Check(changes[0].Status(), Equals, state.DoneStatus)
-	c.Check(changes[1].Status(), Equals, state.DoneStatus)
+	c.Check(changes[1].Status(), Equals, state.DoingStatus)
 	tasks := changes[1].Tasks()
 	c.Check(tasks, HasLen, 1)
 	c.Check(tasks[0].Kind(), Equals, "restart")
-	c.Check(tasks[0].Status(), Equals, state.DoneStatus)
+	c.Check(tasks[0].Status(), Equals, state.DoingStatus)
 }
 
 func (s *S) TestStopDuringBackoff(c *C) {
@@ -1094,11 +1095,11 @@ checks:
 		}
 	}
 	c.Assert(changes, HasLen, 1)
-	c.Check(changes[0].Status(), Equals, state.DoneStatus)
+	c.Check(changes[0].Status(), Equals, state.DoingStatus)
 	tasks := changes[0].Tasks()
 	c.Assert(tasks, HasLen, 1)
 	c.Check(tasks[0].Kind(), Equals, "restart")
-	c.Check(tasks[0].Status(), Equals, state.DoneStatus)
+	c.Check(tasks[0].Status(), Equals, state.DoingStatus)
 }
 
 func (s *S) TestOnCheckFailureRestartDuringBackoff(c *C) {
@@ -1188,11 +1189,11 @@ checks:
 		}
 	}
 	c.Assert(changes, HasLen, 1)
-	c.Check(changes[0].Status(), Equals, state.DoneStatus)
+	c.Check(changes[0].Status(), Equals, state.DoingStatus)
 	tasks := changes[0].Tasks()
 	c.Assert(tasks, HasLen, 1)
 	c.Check(tasks[0].Kind(), Equals, "restart")
-	c.Check(tasks[0].Status(), Equals, state.DoneStatus)
+	c.Check(tasks[0].Status(), Equals, state.DoingStatus)
 }
 
 func (s *S) TestOnCheckFailureIgnore(c *C) {
