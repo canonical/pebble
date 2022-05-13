@@ -76,6 +76,10 @@ another log entry
 and dates in the middle 1/1/1133 are kept
 check that no-trailing-newline case is flushed`[1:]
 
+	// This raw log sample has an initial date format that is ambiguous for detection. The second
+	// and third dates are designed to be incompatible with the first line detected layout causing
+	// those prefixes to not be trimmed.  The two consecutive failures should then force
+	// auto-detection to re-occur causing the fourth+ lines to have trimming begin/work again.
 	trimmedAutodetect := `
 hello my name is joe
 4/ 5/4200 and I work in a button factory
@@ -85,8 +89,7 @@ and dates in the middle 1/1/1133 are kept
 check that no-trailing-newline case is flushed`[1:]
 
 	layout := "1/_2/2006 "
-	servicelog.DefaultLayouts = append(servicelog.DefaultLayouts, "1/2/2006")
-	servicelog.DefaultLayouts = append(servicelog.DefaultLayouts, layout)
+	servicelog.DefaultLayouts = []string{"1/2/2006", layout}
 	chunkSizes := []int{1, 2, 3, 4, 5, 6, 7, 11, 13, 27, 100}
 	for _, size := range chunkSizes {
 		c.Logf("---- chunk size %v, manual layout ----", size)
