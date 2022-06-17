@@ -168,7 +168,7 @@ type helpCategory struct {
 var helpCategories = []helpCategory{{
 	Label:       "Run",
 	Description: "run pebble",
-	Commands:    []string{"run", "help", "version"},
+	Commands:    []string{"run", "validate", "help", "version"},
 }, {
 	Label:       "Plan",
 	Description: "view and change configuration",
