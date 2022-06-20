@@ -146,7 +146,7 @@ summary: <summary>
 description: |
     <description>
 
-# (Required) A list of services managed by this configuration layer
+# (Optional) A list of services managed by this configuration layer
 services:
 
     <service name>:
