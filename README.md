@@ -380,9 +380,8 @@ Here are some of the things coming soon:
   - [x] Consider showing unified log as output of `pebble run` (use `-v`)
   - [x] Automatically restart services that fail
   - [x] Support for custom health checks (HTTP, TCP, command)
+  - [x] Terminate all services before exiting run command
   - [ ] Automatically remove (double) timestamps from logs
-  - [ ] Improve signal handling, e.g., sending SIGHUP to a service
-  - [ ] Terminate all services before exiting run command
   - [ ] More tests for existing CLI commands
 
 ## Hacking / Development
