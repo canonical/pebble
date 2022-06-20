@@ -1090,7 +1090,7 @@ func (s *daemonSuite) TestHTTPAPI(c *check.C) {
 	c.Assert(err, ErrorMatches, ".* connection refused")
 }
 
-func (s *daemonSuite) TestServiceManagerShutdown(c *C) {
+func (s *daemonSuite) TestStopRunning(c *C) {
 	// Start the daemon.
 	writeTestLayer(s.pebbleDir, `
 services:
@@ -1112,7 +1112,7 @@ services:
 	rsp.ServeHTTP(rec, req)
 	c.Check(rec.Result().StatusCode, Equals, 202)
 
-	// We have to wait for it be in running state for Shutdown to stop it.
+	// We have to wait for it be in running state for StopRunning to stop it.
 	for i := 0; ; i++ {
 		if i >= 25 {
 			c.Fatalf("timed out waiting or service to start")
@@ -1130,18 +1130,18 @@ services:
 	err = d.Stop(nil)
 	c.Assert(err, IsNil)
 
-	// Ensure the "shutdown" change was created, along with its "stop" tasks.
+	// Ensure the "stop" change was created, along with its "stop" tasks.
 	d.state.Lock()
 	defer d.state.Unlock()
 	changes := d.state.Changes()
 	var change *state.Change
 	for _, ch := range changes {
-		if ch.Kind() == "shutdown" {
+		if ch.Kind() == "stop" {
 			change = ch
 		}
 	}
 	if change == nil {
-		c.Fatalf("shutdown change not found")
+		c.Fatalf("stop change not found")
 	}
 	c.Check(change.Status(), Equals, state.DoneStatus)
 	tasks := change.Tasks()

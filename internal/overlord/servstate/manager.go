@@ -478,46 +478,8 @@ func (m *ServiceManager) CheckFailed(name string) {
 	}
 }
 
-var shutdownTimeout = killWait + 100*time.Millisecond
-
-// Shutdown shuts down the service manager, stopping all running services.
-func (m *ServiceManager) Shutdown() error {
-	services, err := m.servicesToStop()
-	if err != nil {
-		return err
-	}
-	if len(services) == 0 {
-		logger.Debugf("No services to stop.")
-		return nil
-	}
-
-	// One change to stop them all.
-	logger.Noticef("Stopping all running services.")
-	st := m.state
-	st.Lock()
-	taskSet, err := Stop(st, services)
-	if err != nil {
-		st.Unlock()
-		return err
-	}
-	chg := st.NewChange("shutdown", "Shut down service manager")
-	chg.AddAll(taskSet)
-	chg.Set("service-names", services)
-	st.EnsureBefore(0)
-	st.Unlock()
-
-	// Wait for a limited amount of time for them to stop.
-	select {
-	case <-chg.Ready():
-		logger.Debugf("All services stopped.")
-	case <-time.After(shutdownTimeout):
-		return fmt.Errorf("timed out after %v", shutdownTimeout)
-	}
-	return nil
-}
-
 // servicesToStop returns a slice of service names to stop, in dependency order.
-func (m *ServiceManager) servicesToStop() ([]string, error) {
+func servicesToStop(m *ServiceManager) ([]string, error) {
 	releasePlan, err := m.acquirePlan()
 	if err != nil {
 		return nil, err

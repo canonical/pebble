@@ -1528,80 +1528,45 @@ func createZombie() error {
 	return nil
 }
 
-func (s *S) TestShutdown(c *C) {
+func (s *S) TestStopRunning(c *C) {
 	s.startServices(c, []string{"test2"}, 1)
 	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
 		return svc.Current == servstate.StatusActive
 	})
 
-	// We need a goroutine to call ensure because Shutdown is synchronous.
-	ensureDone := make(chan struct{})
-	go func() {
-		// "shutdown" change should appear almost immediately, but wait gracefully.
-		for i := 0; ; i++ {
-			if i >= 100 {
-				c.Fatalf("timed out waiting for shutdown change")
-			}
-			change := s.shutdownChange()
-			if change != nil {
-				break
-			}
-			time.Sleep(5 * time.Millisecond)
-		}
-		s.ensure(c, 1)
-		close(ensureDone)
-	}()
-
-	// Perform the shutdown.
-	err := s.manager.Shutdown()
+	// Create and execute a change for stopping the running services.
+	taskSet, err := servstate.StopRunning(s.st, s.manager)
+	c.Assert(err, IsNil)
+	s.st.Lock()
+	change := s.st.NewChange("stop", "Stop all running services")
+	change.AddAll(taskSet)
+	s.st.Unlock()
+	err = s.runner.Ensure()
 	c.Assert(err, IsNil)
 
-	// Cleanly wait for ensure goroutine to finish.
+	// Wait for it to complete.
 	select {
-	case <-ensureDone:
+	case <-change.Ready():
 	case <-time.After(time.Second):
-		c.Fatalf("timed out waiting for ensure goroutine to finish")
+		c.Fatalf("timed out waiting for services to stop")
 	}
 
-	// Ensure that the service has been stopped.
+	// Ensure that the service has actually been stopped.
 	svc := s.serviceByName(c, "test2")
 	c.Assert(svc.Current, Equals, servstate.StatusInactive)
 
-	// Ensure that it's created the expected "shutdown" change (with stop tasks).
-	change := s.shutdownChange()
-	c.Assert(change, NotNil)
+	// Ensure that the change and tasks are marked Done.
 	s.st.Lock()
 	defer s.st.Unlock()
-	c.Check(change.Summary(), Equals, "Shut down service manager")
 	c.Check(change.Status(), Equals, state.DoneStatus)
 	tasks := change.Tasks()
 	c.Assert(tasks, HasLen, 1)
 	c.Check(tasks[0].Kind(), Equals, "stop")
+	c.Check(tasks[0].Status(), Equals, state.DoneStatus)
 }
 
-func (s *S) shutdownChange() *state.Change {
-	s.st.Lock()
-	defer s.st.Unlock()
-
-	changes := s.st.Changes()
-	for _, change := range changes {
-		if change.Kind() == "shutdown" {
-			return change
-		}
-	}
-	return nil
-}
-
-func (s *S) TestShutdownNoServicesToStop(c *C) {
-	err := s.manager.Shutdown()
+func (s *S) TestStopRunningNoServices(c *C) {
+	taskSet, err := servstate.StopRunning(s.st, s.manager)
 	c.Assert(err, IsNil)
-
-	// No services to stop, shouldn't create shutdown change.
-	for i := 0; i < 10; i++ {
-		change := s.shutdownChange()
-		if change != nil {
-			c.Fatalf("unexpected shutdown change")
-		}
-		time.Sleep(5 * time.Millisecond)
-	}
+	c.Assert(taskSet, IsNil)
 }

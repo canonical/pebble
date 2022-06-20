@@ -41,6 +41,7 @@ import (
 	"github.com/canonical/pebble/internal/overlord"
 	"github.com/canonical/pebble/internal/overlord/checkstate"
 	"github.com/canonical/pebble/internal/overlord/restart"
+	"github.com/canonical/pebble/internal/overlord/servstate"
 	"github.com/canonical/pebble/internal/overlord/standby"
 	"github.com/canonical/pebble/internal/overlord/state"
 	"github.com/canonical/pebble/internal/systemd"
@@ -551,14 +552,13 @@ func (d *Daemon) Stop(sigCh chan<- os.Signal) error {
 		return fmt.Errorf("internal error: no Overlord")
 	}
 
-	// Shut down the service manager, stopping all services. Must do this
-	// before overlord.Stop, as it creates a change and waits for the change,
-	// and overlord.Stop calls StateEngine.Stop, which locks, so Ensure would
-	// result in a deadlock.
-	err := d.overlord.ServiceManager().Shutdown()
+	// Stop all running services. Must do this before overlord.Stop, as it
+	// creates a change and waits for the change, and overlord.Stop calls
+	// StateEngine.Stop, which locks, so Ensure would result in a deadlock.
+	err := d.stopRunningServices()
 	if err != nil {
 		// This isn't fatal for exiting the daemon, so log and continue.
-		logger.Noticef("Cannot shut down service manager: %v", err)
+		logger.Noticef("Cannot stop running services: %v", err)
 	}
 
 	d.tomb.Kill(nil)
@@ -632,6 +632,41 @@ func (d *Daemon) Stop(sigCh chan<- os.Signal) error {
 		return ErrRestartSocket
 	}
 
+	return nil
+}
+
+// This is a little more than servstate.killWait (but that isn't and shouldn't
+// be exported, so just duplicate it here).
+const stopRunningTimeout = 5*time.Second + 100*time.Millisecond
+
+// stopRunningServices stops all running services, waiting for a short time
+// for them all to stop.
+func (d *Daemon) stopRunningServices() error {
+	taskSet, err := servstate.StopRunning(d.state, d.overlord.ServiceManager())
+	if err != nil {
+		return err
+	}
+	if taskSet == nil {
+		logger.Debugf("No services to stop.")
+		return nil
+	}
+
+	// One change to stop them all.
+	logger.Noticef("Stopping all running services.")
+	st := d.state
+	st.Lock()
+	chg := st.NewChange("stop", "Stop all running services")
+	chg.AddAll(taskSet)
+	st.EnsureBefore(0) // start operation right away
+	st.Unlock()
+
+	// Wait for a limited amount of time for them to stop.
+	select {
+	case <-chg.Ready():
+		logger.Debugf("All services stopped.")
+	case <-time.After(stopRunningTimeout):
+		return errors.New("timeout stopping running services")
+	}
 	return nil
 }
 
