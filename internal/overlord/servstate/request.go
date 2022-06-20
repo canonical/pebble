@@ -46,3 +46,24 @@ func Stop(s *state.State, services []string) (*state.TaskSet, error) {
 	}
 	return state.NewTaskSet(tasks...), nil
 }
+
+// StopRunning creates and returns a task set for stopping all running
+// services. It returns a nil *TaskSet if there are no services to stop.
+func StopRunning(s *state.State, m *ServiceManager) (*state.TaskSet, error) {
+	services, err := servicesToStop(m)
+	if err != nil {
+		return nil, err
+	}
+	if len(services) == 0 {
+		return nil, nil
+	}
+
+	// One change to stop them all.
+	s.Lock()
+	defer s.Unlock()
+	taskSet, err := Stop(s, services)
+	if err != nil {
+		return nil, err
+	}
+	return taskSet, nil
+}

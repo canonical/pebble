@@ -342,7 +342,7 @@ func (m *ServiceManager) StartOrder(services []string) ([]string, error) {
 }
 
 // StopOrder returns the provided services, together with any dependants,
-// in the proper order for starting them all up.
+// in the proper order for stopping them all.
 func (m *ServiceManager) StopOrder(services []string) ([]string, error) {
 	releasePlan, err := m.acquirePlan()
 	if err != nil {
@@ -476,4 +476,37 @@ func (m *ServiceManager) CheckFailed(name string) {
 			}
 		}
 	}
+}
+
+// servicesToStop returns a slice of service names to stop, in dependency order.
+func servicesToStop(m *ServiceManager) ([]string, error) {
+	releasePlan, err := m.acquirePlan()
+	if err != nil {
+		return nil, err
+	}
+	defer releasePlan()
+
+	// Get all service names in plan.
+	var services []string
+	for name := range m.plan.Services {
+		services = append(services, name)
+	}
+
+	// Order according to dependency order.
+	stop, err := m.plan.StopOrder(services)
+	if err != nil {
+		return nil, err
+	}
+
+	// Filter down to only those that are running.
+	m.servicesLock.Lock()
+	defer m.servicesLock.Unlock()
+	var running []string
+	for _, name := range stop {
+		s := m.services[name]
+		if s != nil && s.state == stateRunning {
+			running = append(running, name)
+		}
+	}
+	return running, nil
 }

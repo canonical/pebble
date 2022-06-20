@@ -61,7 +61,7 @@ func (rcmd *cmdRun) Execute(args []string) error {
 	}
 
 	sigs := make(chan os.Signal, 2)
-	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 
 	if err := runDaemon(rcmd, sigs); err != nil {
 		if err == daemon.ErrRestartSocket {
