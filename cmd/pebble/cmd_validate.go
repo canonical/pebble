@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2020 Canonical Ltd
+// Copyright (c) 2022 Canonical Ltd
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License version 3 as
@@ -15,16 +15,15 @@
 package main
 
 import (
-	"fmt"
-	"os"
+	"github.com/jessevdk/go-flags"
 
 	"github.com/canonical/pebble/internal/plan"
-	"github.com/jessevdk/go-flags"
 )
 
-var shortValidateHelp = "Validate daemon configration"
+var shortValidateHelp = "Validate daemon configuration"
 var longValidateHelp = `
-Perform validation of daemon configuration files and exit.
+Validate the Pebble configuration layers in the $PEBBLE/layers directory,
+exiting with an error message and non-zero exit code on failure.
 `
 
 type cmdValidate struct {
@@ -43,10 +42,5 @@ func (cmd cmdValidate) Execute(args []string) error {
 	pebbleDir, _ := getEnvPaths()
 
 	_, err := plan.ReadDir(pebbleDir)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "configuration validation failed: %v\n", err)
-		panic(&exitStatus{1})
-	}
-
-	return nil
+	return err
 }
