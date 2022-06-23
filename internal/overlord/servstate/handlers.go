@@ -375,6 +375,10 @@ func (s *serviceData) startInternal() error {
 	}
 	serviceName := s.config.Name
 	logWriter := servicelog.NewFormatWriter(s.logs, serviceName)
+	//sinkDest := &syslogTCP{Host: ...}
+	//w := servicelog.NewBranchWriter(sinkDest, logWriter)
+	//s.cmd.Stdout = w
+	//s.cmd.Stderr = w
 	s.cmd.Stdout = logWriter
 	s.cmd.Stderr = logWriter
 

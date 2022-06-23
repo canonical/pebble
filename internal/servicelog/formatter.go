@@ -20,6 +20,77 @@ import (
 	"time"
 )
 
+type syslogTCP struct {
+	Host string
+}
+
+func (s *syslogTCP) Write(p []byte) (int, error) {
+	panic("unimplemented")
+}
+
+type BranchWriter struct {
+	dsts   []io.Writer
+	buf    []byte
+	ch     chan []byte
+	errors []error
+}
+
+func NewBranchWriter(dst ...io.Writer) *BranchWriter {
+	b := &BranchWriter{dsts: dst, ch: make(chan []byte)}
+	go b.forwardWrites()
+	return b
+}
+
+func (b *BranchWriter) forwardWrites() {
+	// NOTE: do we really want to go async here at the branchling level - this means that the
+	// slowest destination/sink dictates how slow we write to *all* destinations.  Or do we want to
+	// async/buffer at the destination level?
+	for data := range b.ch {
+		for dst := range b.dsts {
+			_, err := dst.Write(line)
+			if err != nil {
+				b.errors = append(b.errors, err)
+			}
+		}
+	}
+}
+
+func (b *BranchWriter) Close() error {
+	b.Flush()
+	close(b.ch)
+}
+
+// Flush causes all buffered data to be written to the underlying destination writer.  This should
+// be called after all writes have been completed.
+func (b *BranchWriter) Flush() error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	if len(b.buf) == 0 {
+		return nil
+	}
+
+	b.write()
+	return nil
+}
+
+func (b *BranchWriter) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	b.buf = append(b.buf, p...)
+	b.write()
+	return len(p), nil
+}
+
+func (b *BranchWriter) write() {
+	select {
+	case w.ch <- w.buf:
+		w.buf = w.buf[:0]
+	default:
+	}
+}
+
 type formatter struct {
 	mut             sync.Mutex
 	serviceName     string
