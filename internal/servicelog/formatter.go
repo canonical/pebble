@@ -30,14 +30,14 @@ type SyslogWriter struct {
 	format func([]byte) []byte
 }
 
-func NewSyslogWriter(host string, clientCert tls.Certificate, serverCert []byte) (*SyslogWriter, error) {
+func NewSyslogWriter(host string, serverCert []byte) (*SyslogWriter, error) {
 	// TODO: figure out how all the cert stuff actually works
 	var pool *x509.CertPool
 	if serverCert != nil {
 		pool = x509.NewCertPool()
 		pool.AppendCertsFromPEM(serverCert)
 	}
-	config := tls.Config{RootCAs: pool, Certificates: []tls.Certificate{clientCert}}
+	config := tls.Config{RootCAs: pool}
 
 	conn, err := tls.Dial("tcp", host, &config)
 	if err != nil {
@@ -50,7 +50,7 @@ func NewSyslogWriter(host string, clientCert tls.Certificate, serverCert []byte)
 		pid := 42         // TODO: Make this be service PID
 		app := "foo"      // TODO: make this be service name
 		hostname := "bar" // TODO: make this be workload container host
-		tag := "TODO_something"
+		tag := "FOO_TAG"
 		priority := 14 // NOTE: see RFC 5424 6.2.1 for available codes
 		version := 1
 		msg := fmt.Sprintf("<%d>%d %s %s %s %d %s - %s",
@@ -64,7 +64,8 @@ func NewSyslogWriter(host string, clientCert tls.Certificate, serverCert []byte)
 func (s *SyslogWriter) Close() error { return s.conn.Close() }
 
 func (s *SyslogWriter) Write(p []byte) (int, error) {
-	return s.conn.Write(s.frame(s.format(p)))
+	msg := s.frame(s.format(p))
+	return s.conn.Write(msg)
 }
 
 type BranchWriter struct {
