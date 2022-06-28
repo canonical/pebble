@@ -350,14 +350,38 @@ func (s *serviceData) startInternal() error {
 		// started (previous logs have already been copied).
 		outputIterator = s.logs.HeadIterator(0)
 	}
+
 	serviceName := s.config.Name
 	logWriter := servicelog.NewFormatWriter(s.logs, serviceName)
-	//sinkDest := &syslogTCP{Host: ...}
-	//w := servicelog.NewBranchWriter(sinkDest, logWriter)
-	//s.cmd.Stdout = w
-	//s.cmd.Stderr = w
-	s.cmd.Stdout = logWriter
-	s.cmd.Stderr = logWriter
+
+	serverCert := []byte(`
+-----BEGIN CERTIFICATE-----
+MIIC4jCCAcqgAwIBAgIQZJl0AKtsRPKSjqv6d4anJTANBgkqhkiG9w0BAQsFADAU
+MRIwEAYDVQQDDAkxMjcuMC4wLjEwIBcNMjIwNjI3MTMxMzI5WhgPMjExMjEyMzEw
+MDAwMDBaMBQxEjAQBgNVBAMMCTEyNy4wLjAuMTCCASIwDQYJKoZIhvcNAQEBBQAD
+ggEPADCCAQoCggEBAKX++OKE2Z/B8iZn7bReByhDI0aZR7ccSfzwD73WBRMsPw6V
+8L2PpkUq9LUlXrtYvKvuqCtXKh+z2UsScaQudl7OHsJqaqpAtITPUqwpVMVtCgYt
+Tim7ENVBAiK6/9FIbBd7c55mgvKk11c03t8ylcHO3y2mzG4404RkYv5iedk38BLK
+AANn/tgr4JAakQrkoVvlvreHn2xtFmRWz3AOzx2j8EBxTZqqZ30MzzG7XIMpD1gK
+jzsTf4/kdb4guAarLrzPHWNLSH/ztmjWC9gs1q3Frtf8KJHkCnkksytI7niKcFRU
+IYUMAYOgQHI4gLlNz1LkaUJQxmbGnSC38lROaSMCAwEAAaMuMCwwDwYDVR0RBAgw
+BocEfwAAATALBgNVHQ8EBAMCAa4wDAYDVR0TBAUwAwEB/zANBgkqhkiG9w0BAQsF
+AAOCAQEANryvj5wZoOqGDmuLQcgWAgFiwhba491LXamSbH/RhsQDK+iQSjhaMHdc
+sfJ3LJGx84Qas7WheXnxhQnPCjNX6w2hS2xErDLpAz4wv2GpI/LSRZG/UboEfDI+
+/kfLX/08I6iDUFqomrDYEcCMhaRXmYAzgPoHEhtj10x9nqEO1HrkJSgDMe5gD59s
+/V84JZ/uMmPHV8Ce1DbjaFmKDs9cUikQMxfX5IJ96cB34U2ybb2NEeOd5a5ro7k+
+qIT6Lw7s3bMXorf83pyNd6+TGAV6doamRYwS7jcJlCKYqAKfqMKMSosdW7ykX1by
+s8fumDOA28EcV2vLMf7jO3e7/bDshw==
+-----END CERTIFICATE-----`)
+
+	syslog, err := servicelog.NewSyslogWriter("127.0.0.1:3107", serverCert)
+	if err != nil {
+		return err
+	}
+
+	w := io.MultiWriter(logWriter, syslog)
+	s.cmd.Stdout = w
+	s.cmd.Stderr = w
 
 	// Start the process!
 	logger.Noticef("Service %q starting: %s", serviceName, s.config.Command)
