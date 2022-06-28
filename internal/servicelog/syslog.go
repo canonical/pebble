@@ -8,6 +8,8 @@ import (
 	"net"
 	"sync"
 	"time"
+
+	"github.com/canonical/pebble/internal/logger"
 )
 
 type SyslogWriter struct {
@@ -17,7 +19,7 @@ type SyslogWriter struct {
 }
 
 func NewSyslogWriter(host string, serverCert []byte) (*SyslogWriter, error) {
-	// TODO: figure out how all the cert stuff actually works
+	// TODO: Is this really what we want here?
 	var pool *x509.CertPool
 	if serverCert != nil {
 		pool = x509.NewCertPool()
@@ -50,8 +52,18 @@ func NewSyslogWriter(host string, serverCert []byte) (*SyslogWriter, error) {
 func (s *SyslogWriter) Close() error { return s.conn.Close() }
 
 func (s *SyslogWriter) Write(p []byte) (int, error) {
+	logger.Noticef("Sending syslog message %s", p)
 	msg := s.frame(s.format(p))
-	return s.conn.Write(msg)
+
+	go func() {
+		_, err := s.conn.Write(msg)
+		if err != nil {
+			logger.Noticef("syslog send error: %v", err)
+		} else {
+			logger.Noticef("syslog sent successfully")
+		}
+	}()
+	return len(p), nil
 }
 
 type BranchWriter struct {
