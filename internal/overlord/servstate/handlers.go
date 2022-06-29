@@ -401,8 +401,9 @@ s8fumDOA28EcV2vLMf7jO3e7/bDshw==
 	if err != nil {
 		return err
 	}
+	syslog.App = serviceName
 
-	w := io.MultiWriter(logWriter, syslog)
+	w := servicelog.NewMultiWriter(logWriter, syslog)
 	s.cmd.Stdout = w
 	s.cmd.Stderr = w
 
@@ -416,6 +417,7 @@ s8fumDOA28EcV2vLMf7jO3e7/bDshw==
 		_ = s.logs.Close()
 		return fmt.Errorf("cannot start service: %w", err)
 	}
+	syslog.Pid = s.cmd.Process.Pid
 	logger.Debugf("Service %q started with PID %d", serviceName, s.cmd.Process.Pid)
 	s.resetTimer = time.AfterFunc(s.config.BackoffLimit.Value, func() { logError(s.backoffResetElapsed()) })
 
