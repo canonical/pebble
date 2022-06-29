@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"os"
 	"sync"
 	"time"
 
@@ -13,12 +14,19 @@ import (
 )
 
 type SyslogWriter struct {
-	conn   net.Conn
-	frame  func([]byte) []byte
-	format func([]byte) []byte
+	conn     net.Conn
+	version  int
+	App      string
+	Host     string
+	Pid      int
+	Msgid    string
+	Priority int
+	Params   map[string]string
+	frame    func([]byte) []byte
+	format   func(*SyslogWriter, []byte) []byte
 }
 
-func NewSyslogWriter(host string, serverCert []byte) (*SyslogWriter, error) {
+func NewSyslogWriter(destHost string, serverCert []byte) (*SyslogWriter, error) {
 	// TODO: Is this really what we want here?
 	var pool *x509.CertPool
 	if serverCert != nil {
@@ -27,46 +35,62 @@ func NewSyslogWriter(host string, serverCert []byte) (*SyslogWriter, error) {
 	}
 	config := tls.Config{RootCAs: pool}
 
-	conn, err := tls.Dial("tcp", host, &config)
+	conn, err := tls.Dial("tcp", destHost, &config)
 	if err != nil {
 		return nil, err
 	}
 
-	frame := func(p []byte) []byte { return []byte(fmt.Sprintf("%d %s", len(p), p)) }
-	format := func(content []byte) []byte {
+	host, err := os.Hostname()
+	if err != nil {
+		host = "localhost"
+	}
+
+	formatFunc := func(w *SyslogWriter, content []byte) []byte {
 		timestamp := time.Now().Format(time.RFC3339)
-		pid := 42         // TODO: Make this be service PID
-		app := "foo"      // TODO: make this be service name
-		hostname := "bar" // TODO: make this be workload container host
-		tag := "FOO_TAG"
-		priority := 14 // NOTE: see RFC 5424 6.2.1 for available codes
-		version := 1
-		msg := fmt.Sprintf("<%d>%d %s %s %s %d %s - %s",
-			priority, version, timestamp, hostname, app, pid, tag, content)
+		privEnterpriseNum := 28978 // num for Canonical Ltd
+		structuredData := fmt.Sprintf("[pebble@%s", privEnterpriseNum)
+		for key, value := range w.Params {
+			structuredData += fmt.Sprintf(" %s=\"%s\"", key, value)
+		}
+		structuredData += "]"
+
+		msg := fmt.Sprintf("<%d>%d %s %s %s %d %s %s %s",
+			w.Priority, w.version, timestamp, w.Host, w.App, w.Pid, w.Msgid, structuredData, content)
 		return []byte(msg)
 	}
 
-	return &SyslogWriter{conn: conn, frame: frame, format: format}, nil
+	// octet framing
+	frameFunc := func(p []byte) []byte { return []byte(fmt.Sprintf("%d %s", len(p), p)) }
+
+	return &SyslogWriter{
+		conn:     conn,
+		version:  1,
+		App:      os.Args[0],
+		Pid:      os.Getpid(),
+		Host:     host,
+		Msgid:    "-", // This is the "nil" value per RFC 5424
+		Priority: 16,  // NOTE: see RFC 5424 6.2.1 for available codes
+		frame:    frameFunc,
+		format:   formatFunc,
+	}, nil
 }
 
 func (s *SyslogWriter) Close() error { return s.conn.Close() }
 
 func (s *SyslogWriter) Write(p []byte) (int, error) {
-	logger.Noticef("Sending syslog message %s", p)
-	msg := s.frame(s.format(p))
-
-	go func() {
-		_, err := s.conn.Write(msg)
-		if err != nil {
-			logger.Noticef("syslog send error: %v", err)
-		} else {
-			logger.Noticef("syslog sent successfully")
-		}
-	}()
+	msg := s.frame(s.format(s, p))
+	logger.Noticef("Sending syslog message: %s", msg) // DEBUG
+	_, err := s.conn.Write(msg)
+	if err != nil {
+		logger.Noticef("syslog send error: %v", err) // DEBUG
+		return 0, err
+	} else { // DEBUG
+		logger.Noticef("syslog sent successfully") // DEBUG
+	} // DEBUG
 	return len(p), nil
 }
 
-type BranchWriter struct {
+type MultiWriter struct {
 	mu     sync.Mutex
 	dsts   []io.Writer
 	buf    []byte
@@ -74,59 +98,59 @@ type BranchWriter struct {
 	errors []error
 }
 
-func NewBranchWriter(dst ...io.Writer) *BranchWriter {
-	b := &BranchWriter{dsts: dst, ch: make(chan []byte)}
-	go b.forwardWrites()
-	return b
+func NewMultiWriter(dst ...io.Writer) *MultiWriter {
+	mw := &MultiWriter{dsts: dst, ch: make(chan []byte)}
+	go mw.forwardWrites()
+	return mw
 }
 
-func (b *BranchWriter) forwardWrites() {
-	// NOTE: do we really want to go async here at the branchling level - this means that the
+func (mw *MultiWriter) forwardWrites() {
+	// NOTE: do we really want to go async here at the dest writer looping level - this means that the
 	// slowest destination/sink dictates how slow we write to *all* destinations.  Or do we want to
-	// async/buffer at the destination level?
-	for data := range b.ch {
-		for _, dst := range b.dsts {
+	// async+buffer at the destination level (i.e. a separate buffer per destination?
+	for data := range mw.ch {
+		for _, dst := range mw.dsts {
 			_, err := dst.Write(data)
 			if err != nil {
-				b.errors = append(b.errors, err)
+				mw.errors = append(mw.errors, err)
 			}
 		}
 	}
 }
 
-func (b *BranchWriter) Close() error {
-	b.Flush()
-	close(b.ch)
+func (mw *MultiWriter) Close() error {
+	mw.Flush()
+	close(mw.ch)
 	return nil // TODO: return accumulated errors here?
 }
 
 // Flush causes all buffered data to be written to the underlying destination writer.  This should
 // be called after all writes have been completed.
-func (b *BranchWriter) Flush() error {
-	b.mu.Lock()
-	defer b.mu.Unlock()
+func (mw *MultiWriter) Flush() error {
+	mw.mu.Lock()
+	defer mw.mu.Unlock()
 
-	if len(b.buf) == 0 {
+	if len(mw.buf) == 0 {
 		return nil
 	}
 
-	b.write()
+	mw.write()
 	return nil
 }
 
-func (b *BranchWriter) Write(p []byte) (int, error) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
+func (mw *MultiWriter) Write(p []byte) (int, error) {
+	mw.mu.Lock()
+	defer mw.mu.Unlock()
 
-	b.buf = append(b.buf, p...)
-	b.write()
+	mw.buf = append(mw.buf, p...)
+	mw.write()
 	return len(p), nil
 }
 
-func (b *BranchWriter) write() {
+func (mw *MultiWriter) write() {
 	select {
-	case b.ch <- b.buf:
-		b.buf = b.buf[:0]
+	case mw.ch <- mw.buf:
+		mw.buf = mw.buf[:0]
 	default:
 	}
 }
