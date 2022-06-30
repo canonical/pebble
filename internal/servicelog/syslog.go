@@ -26,9 +26,10 @@ type SyslogWriter struct {
 	Params     map[string]string
 	frame      func([]byte) []byte
 	format     func(*SyslogWriter, []byte) []byte
+	closed     bool
 }
 
-func NewSyslogWriter(destHost string, serverCert []byte) (*SyslogWriter, error) {
+func NewSyslogWriter(destHost string, serverCert []byte) *SyslogWriter {
 	host, err := os.Hostname()
 	if err != nil {
 		host = "localhost"
@@ -59,16 +60,61 @@ func NewSyslogWriter(destHost string, serverCert []byte) (*SyslogWriter, error) 
 		App:        os.Args[0],
 		Pid:        os.Getpid(),
 		Host:       host,
-		Msgid:      "-", // This is the "nil" value per RFC 5424
-		Priority:   16,  // NOTE: see RFC 5424 6.2.1 for available codes
+		Msgid:      "-",     // This is the "nil" value per RFC 5424
+		Priority:   1*8 + 6, // for facility=user-msg severity=informational. See RFC 5424 6.2.1 for available codes.
 		Params:     map[string]string{},
 		frame:      frameFunc,
 		format:     formatFunc,
 	}
-	return s, s.connect()
+	return s
+}
+
+// Don't emit an error at construction time if dialing/conn fails - remote server could come up later.
+// Do try to reconnect on write failures - retry sending message so we don't lose it.
+// Don't try to reconnect after "Close" has been called.
+
+func (s *SyslogWriter) Close() error {
+	s.closed = true
+	if s.conn != nil {
+		return s.conn.Close()
+	}
+	s.conn = nil
+	return nil
+}
+
+func (s *SyslogWriter) Write(p []byte) (int, error) {
+	return s.write(p, 0)
+}
+
+func (s *SyslogWriter) write(p []byte, nthTry int) (int, error) {
+	err := s.connect()
+	if err != nil {
+		return 0, err
+	}
+	msg := s.frame(s.format(s, p))
+	logger.Noticef("Sending syslog message: %s", msg) // DEBUG
+	_, err = s.conn.Write(msg)
+	if err != nil {
+		// try to reconnect and resend
+		s.conn = nil
+		const maxRetries = 3
+		if nthTry < maxRetries {
+			return s.write(p, nthTry+1)
+		}
+		logger.Noticef("    message send failed") // DEBUG
+		return 0, err
+	}
+	logger.Noticef("    syslog sent successfully") // DEBUG
+	return len(p), nil
 }
 
 func (s *SyslogWriter) connect() error {
+	if s.conn != nil {
+		return nil
+	} else if s.closed {
+		return fmt.Errorf("write to closed SyslogWriter")
+	}
+
 	// TODO: Is this really what we want here?
 	pool := x509.NewCertPool()
 	pool.AppendCertsFromPEM(s.serverCert)
@@ -77,33 +123,12 @@ func (s *SyslogWriter) connect() error {
 	if err != nil {
 		return err
 	}
+
 	if s.conn != nil {
 		s.conn.Close()
 	}
 	s.conn = conn
 	return nil
-}
-
-func (s *SyslogWriter) Close() error {
-	if s.conn != nil {
-		return s.conn.Close()
-	}
-	return nil
-}
-
-func (s *SyslogWriter) Write(p []byte) (int, error) {
-	msg := s.frame(s.format(s, p))
-	logger.Noticef("Sending syslog message: %s", msg) // DEBUG
-	_, err := s.conn.Write(msg)
-	if err != nil {
-		// try to reconnect
-		s.connect()
-		logger.Noticef("syslog send error: %v", err) // DEBUG
-		return 0, err
-	} else { // DEBUG
-		logger.Noticef("syslog sent successfully") // DEBUG
-	} // DEBUG
-	return len(p), nil
 }
 
 type MultiWriter struct {
@@ -121,7 +146,7 @@ func NewMultiWriter(dst ...io.Writer) *MultiWriter {
 }
 
 func (mw *MultiWriter) forwardWrites() {
-	// NOTE: do we really want to go async here at the dest writer looping level - this means that the
+	// NOTE: do we really want to be synchronous here at the dest writer looping level - this means that the
 	// slowest destination/sink dictates how slow we write to *all* destinations.  Or do we want to
 	// async+buffer at the destination level (i.e. a separate buffer per destination?
 	for data := range mw.ch {
@@ -165,7 +190,7 @@ func (mw *MultiWriter) Write(p []byte) (int, error) {
 
 func (mw *MultiWriter) write() {
 	select {
-	case mw.ch <- mw.buf:
+	case mw.ch <- append([]byte{}, mw.buf...):
 		mw.buf = mw.buf[:0]
 	default:
 	}
