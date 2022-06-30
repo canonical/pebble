@@ -379,6 +379,8 @@ s8fumDOA28EcV2vLMf7jO3e7/bDshw==
 		return err
 	}
 	syslog.App = serviceName
+	syslog.Params["juju_unit"] = "foo_unit/0" // DEBUG
+	syslog.Params["juju_app"] = "foo_app"     // DEBUG
 
 	w := servicelog.NewMultiWriter(logWriter, syslog)
 	s.cmd.Stdout = w
