@@ -374,10 +374,7 @@ qIT6Lw7s3bMXorf83pyNd6+TGAV6doamRYwS7jcJlCKYqAKfqMKMSosdW7ykX1by
 s8fumDOA28EcV2vLMf7jO3e7/bDshw==
 -----END CERTIFICATE-----`)
 
-	syslog, err := servicelog.NewSyslogWriter("127.0.0.1:3107", serverCert)
-	if err != nil {
-		return err
-	}
+	syslog := servicelog.NewSyslogWriter("127.0.0.1:3107", serverCert)
 	syslog.App = serviceName
 	syslog.Params["juju_unit"] = "foo_unit/0" // DEBUG
 	syslog.Params["juju_app"] = "foo_app"     // DEBUG
