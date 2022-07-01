@@ -14,6 +14,7 @@ import (
 )
 
 type SyslogWriter struct {
+	mu         sync.Mutex
 	conn       net.Conn
 	destHost   string
 	serverCert []byte
@@ -74,6 +75,9 @@ func NewSyslogWriter(destHost string, serverCert []byte) *SyslogWriter {
 // Don't try to reconnect after "Close" has been called.
 
 func (s *SyslogWriter) Close() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	s.closed = true
 	if s.conn != nil {
 		return s.conn.Close()
@@ -83,6 +87,9 @@ func (s *SyslogWriter) Close() error {
 }
 
 func (s *SyslogWriter) Write(p []byte) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	return s.write(p, 0)
 }
 
@@ -91,6 +98,9 @@ func (s *SyslogWriter) write(p []byte, nthTry int) (int, error) {
 	if err != nil {
 		return 0, err
 	}
+
+	time.Sleep(30 * time.Second) // DEBUG
+
 	msg := s.frame(s.format(s, p))
 	logger.Noticef("Sending syslog message: %s", msg) // DEBUG
 	_, err = s.conn.Write(msg)
@@ -132,66 +142,78 @@ func (s *SyslogWriter) connect() error {
 }
 
 type MultiWriter struct {
-	mu     sync.Mutex
 	dsts   []io.Writer
-	buf    []byte
-	ch     chan []byte
-	errors []error
+	chans  []chan []byte
+	errors [][]error
 }
 
-func NewMultiWriter(dst ...io.Writer) *MultiWriter {
-	mw := &MultiWriter{dsts: dst, ch: make(chan []byte)}
-	go mw.forwardWrites()
-	return mw
+func NewMultiWriter(dsts ...io.Writer) *MultiWriter {
+	chans := []chan []byte{}
+	for _, d := range dsts {
+		ch := make(chan []byte, 1)
+		chans = append(chans, ch)
+		go forwardWrites(ch, d)
+	}
+	return &MultiWriter{dsts: dsts, chans: chans}
 }
 
-func (mw *MultiWriter) forwardWrites() {
-	// NOTE: do we really want to be synchronous here at the dest writer looping level - this means that the
-	// slowest destination/sink dictates how slow we write to *all* destinations.  Or do we want to
-	// async+buffer at the destination level (i.e. a separate buffer per destination?
-	for data := range mw.ch {
-		for _, dst := range mw.dsts {
-			_, err := dst.Write(data)
-			if err != nil {
-				mw.errors = append(mw.errors, err)
+// takes data from ch async style and buffers it in an internal buffer.  It async style forwards
+// those writes to dst.  Data not sent due to failed writes is not dropped until the buffer gets
+// too full.
+func forwardWrites(ch <-chan []byte, dst io.Writer) {
+	buf := []byte{}
+	var mu sync.Mutex
+	tryWrite := make(chan bool)
+
+	go func() {
+		for data := range ch {
+			mu.Lock()
+			buf = append(buf, data...)
+			// TODO: check if buf is getting too big, drop entries as necessary
+			mu.Unlock()
+
+			select {
+			case tryWrite <- true:
+			default:
 			}
+		}
+		close(tryWrite)
+	}()
+
+	for _ = range tryWrite {
+		// take data from buffer
+		mu.Lock()
+		data := append([]byte{}, buf...)
+		buf = buf[:0]
+		mu.Unlock()
+
+		// TODO: would we rather push these messages to dst discretized the same way they came into
+		// the original channel/buffer?  Or keep it like it is where failures cause re-buffering of
+		// data to be aggregated with future writes into a single write to the destination?
+		_, err := dst.Write(data)
+		if err != nil {
+			// TODO: what do we do with these errors?
+			logger.Debugf(" service log write forwarding failed: %v", err) // DEBUG
+
+			// return data to buffer
+			mu.Lock()
+			buf = append(data, buf...)
+			mu.Unlock()
+			continue
 		}
 	}
 }
 
-func (mw *MultiWriter) Close() error {
-	mw.Flush()
-	close(mw.ch)
-	return nil // TODO: return accumulated errors here?
-}
-
-// Flush causes all buffered data to be written to the underlying destination writer.  This should
-// be called after all writes have been completed.
-func (mw *MultiWriter) Flush() error {
-	mw.mu.Lock()
-	defer mw.mu.Unlock()
-
-	if len(mw.buf) == 0 {
-		return nil
+func (mw *MultiWriter) Write(p []byte) (n int, err error) {
+	for _, ch := range mw.chans {
+		ch <- p
 	}
-
-	mw.write()
-	return nil
-}
-
-func (mw *MultiWriter) Write(p []byte) (int, error) {
-	mw.mu.Lock()
-	defer mw.mu.Unlock()
-
-	mw.buf = append(mw.buf, p...)
-	mw.write()
 	return len(p), nil
 }
 
-func (mw *MultiWriter) write() {
-	select {
-	case mw.ch <- append([]byte{}, mw.buf...):
-		mw.buf = mw.buf[:0]
-	default:
+func (mw *MultiWriter) Close() error {
+	for _, ch := range mw.chans {
+		close(ch)
 	}
+	return nil // TODO: return accumulated errors here?
 }
