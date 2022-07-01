@@ -13,8 +13,10 @@ import (
 	"github.com/canonical/pebble/internal/logger"
 )
 
+const maxLogBytes = 100 * 1024
+
 type SyslogWriter struct {
-	mu         sync.Mutex
+	mu         sync.RWMutex
 	conn       net.Conn
 	destHost   string
 	serverCert []byte
@@ -87,30 +89,23 @@ func (s *SyslogWriter) Close() error {
 }
 
 func (s *SyslogWriter) Write(p []byte) (int, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	return s.write(p, 0)
-}
-
-func (s *SyslogWriter) write(p []byte, nthTry int) (int, error) {
 	err := s.connect()
 	if err != nil {
 		return 0, err
 	}
 
-	time.Sleep(30 * time.Second) // DEBUG
+	//time.Sleep(30 * time.Second) // DEBUG
 
 	msg := s.frame(s.format(s, p))
 	logger.Noticef("Sending syslog message: %s", msg) // DEBUG
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
 	_, err = s.conn.Write(msg)
 	if err != nil {
 		// try to reconnect and resend
 		s.conn = nil
-		const maxRetries = 3
-		if nthTry < maxRetries {
-			return s.write(p, nthTry+1)
-		}
 		logger.Noticef("    message send failed") // DEBUG
 		return 0, err
 	}
@@ -119,6 +114,9 @@ func (s *SyslogWriter) write(p []byte, nthTry int) (int, error) {
 }
 
 func (s *SyslogWriter) connect() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	if s.conn != nil {
 		return nil
 	} else if s.closed {
@@ -142,78 +140,54 @@ func (s *SyslogWriter) connect() error {
 }
 
 type MultiWriter struct {
-	dsts   []io.Writer
-	chans  []chan []byte
-	errors [][]error
+	dsts []io.WriteCloser
 }
 
 func NewMultiWriter(dsts ...io.Writer) *MultiWriter {
-	chans := []chan []byte{}
-	for _, d := range dsts {
-		ch := make(chan []byte, 1)
-		chans = append(chans, ch)
-		go forwardWrites(ch, d)
-	}
-	return &MultiWriter{dsts: dsts, chans: chans}
-}
+	bufs := []io.WriteCloser{}
+	for _, dst := range dsts {
+		buf := NewRingBuffer(maxLogBytes)
+		bufs = append(bufs, buf)
 
-// takes data from ch async style and buffers it in an internal buffer.  It async style forwards
-// those writes to dst.  Data not sent due to failed writes is not dropped until the buffer gets
-// too full.
-func forwardWrites(ch <-chan []byte, dst io.Writer) {
-	buf := []byte{}
-	var mu sync.Mutex
-	tryWrite := make(chan bool)
+		go func(buf *RingBuffer, dst io.Writer) {
+			done := make(chan struct{})
+			bufIterator := buf.HeadIterator(0)
+			defer bufIterator.Close()
 
-	go func() {
-		for data := range ch {
-			mu.Lock()
-			buf = append(buf, data...)
-			// TODO: check if buf is getting too big, drop entries as necessary
-			mu.Unlock()
+			notifyWrite := make(chan bool)
+			bufIterator.Notify(notifyWrite)
 
-			select {
-			case tryWrite <- true:
-			default:
+			for bufIterator.Next(done) {
+				_, err := io.Copy(dst, bufIterator)
+				// Retry writes without moving buffer position until we succeed since e.g. syslog
+				// forwarding endpoints may be unreliable. The buffer may start truncating before
+				// then - that's okay.
+				for err != nil {
+					logger.Noticef("log forward failed: %v", err)
+					select {
+					case <-notifyWrite:
+					}
+					_, err = io.Copy(dst, bufIterator)
+				}
 			}
-		}
-		close(tryWrite)
-	}()
-
-	for _ = range tryWrite {
-		// take data from buffer
-		mu.Lock()
-		data := append([]byte{}, buf...)
-		buf = buf[:0]
-		mu.Unlock()
-
-		// TODO: would we rather push these messages to dst discretized the same way they came into
-		// the original channel/buffer?  Or keep it like it is where failures cause re-buffering of
-		// data to be aggregated with future writes into a single write to the destination?
-		_, err := dst.Write(data)
-		if err != nil {
-			// TODO: what do we do with these errors?
-			logger.Debugf(" service log write forwarding failed: %v", err) // DEBUG
-
-			// return data to buffer
-			mu.Lock()
-			buf = append(data, buf...)
-			mu.Unlock()
-			continue
-		}
+		}(buf, dst)
 	}
+	return &MultiWriter{dsts: bufs}
 }
 
 func (mw *MultiWriter) Write(p []byte) (n int, err error) {
-	for _, ch := range mw.chans {
-		ch <- p
+	for _, dst := range mw.dsts {
+		_, err = dst.Write(p)
+		if err != nil {
+			logger.Noticef("multiwriter log forward buffering failed: %v", err)
+		}
 	}
 	return len(p), nil
 }
 
 func (mw *MultiWriter) Close() error {
-	for _, ch := range mw.chans {
-		close(ch)
+	for _, dst := range mw.dsts {
+		dst.Close()
 	}
 	return nil // TODO: return accumulated errors here?
 }
