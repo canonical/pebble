@@ -46,6 +46,7 @@ type Plan struct {
 	Layers   []*Layer            `yaml:"-"`
 	Services map[string]*Service `yaml:"services,omitempty"`
 	Checks   map[string]*Check   `yaml:"checks,omitempty"`
+	Logging  *Logging            `yaml:"logging,omitempty"`
 }
 
 type Layer struct {
@@ -55,6 +56,79 @@ type Layer struct {
 	Description string              `yaml:"description,omitempty"`
 	Services    map[string]*Service `yaml:"services,omitempty"`
 	Checks      map[string]*Check   `yaml:"checks,omitempty"`
+	Logging     *Logging            `yaml:"logging,omitempty"`
+}
+
+type Logging struct {
+	Labels       map[string]string          `yaml:"labels,omitempty"`
+	Destinations map[string]*LogDestination `yaml:"destinations,omitempty"`
+}
+
+func (l *Logging) Copy() *Logging {
+	copied := *l
+	copied.Labels = make(map[string]string)
+	for k, v := range l.Labels {
+		copied.Labels[k] = v
+	}
+	copied.Destinations = make(map[string]*LogDestination)
+	for k, v := range l.Labels {
+		copied.Labels[k] = v
+	}
+	return &copied
+}
+
+func (l *Logging) Merge(other *Logging) {
+	if l.Labels == nil {
+		l.Labels = make(map[string]string)
+	}
+	for k, v := range other.Labels {
+		if v == "" {
+			delete(l.Labels, k)
+		} else {
+			l.Labels[k] = v
+		}
+	}
+	if l.Destinations == nil {
+		l.Destinations = make(map[string]*LogDestination)
+	}
+	for k, v := range other.Destinations {
+		if v == nil {
+			delete(l.Destinations, k)
+		} else {
+			l.Destinations[k] = v.Copy()
+		}
+	}
+}
+
+type LogDestination struct {
+	Type     string            `yaml:"type"`
+	Protocol string            `yaml:"protocol"`
+	Host     string            `yaml:"host"`
+	Port     int               `yaml:"port"`
+	TLS      *LoggingTLSConfig `yaml:"tls"`
+}
+
+func (d *LogDestination) Copy() *LogDestination {
+	copied := *d
+	tls := *d.TLS
+	copied.TLS = &tls
+	return &copied
+}
+
+type LoggingTLSConfig struct {
+	CAfile              string `yaml:"ca_file"`
+	DestinationCertFile string `yaml:"destination_cert_file"`
+	PebbleCertFile      string `yaml:"pebble_cert_file"`
+}
+
+type ServiceLogging struct {
+	Destinations []string `yaml:"destinations,omitempty"`
+}
+
+func (s *ServiceLogging) Copy() *ServiceLogging {
+	copied := *s
+	copied.Destinations = append([]string(nil), s.Destinations...)
+	return &copied
 }
 
 type Service struct {
@@ -65,6 +139,8 @@ type Service struct {
 	Startup     ServiceStartup `yaml:"startup,omitempty"`
 	Override    Override       `yaml:"override,omitempty"`
 	Command     string         `yaml:"command,omitempty"`
+
+	Logging *ServiceLogging `yaml:"logging"`
 
 	// Service dependencies
 	After    []string `yaml:"after,omitempty"`
@@ -93,6 +169,9 @@ func (s *Service) Copy() *Service {
 	copied.After = append([]string(nil), s.After...)
 	copied.Before = append([]string(nil), s.Before...)
 	copied.Requires = append([]string(nil), s.Requires...)
+	if s.Logging != nil {
+		copied.Logging = s.Logging.Copy()
+	}
 	if s.Environment != nil {
 		copied.Environment = make(map[string]string)
 		for k, v := range s.Environment {
@@ -404,6 +483,7 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 	combined := &Layer{
 		Services: make(map[string]*Service),
 		Checks:   make(map[string]*Check),
+		Logging:  &Logging{},
 	}
 	if len(layers) == 0 {
 		return combined, nil
@@ -412,6 +492,8 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 	combined.Summary = last.Summary
 	combined.Description = last.Description
 	for _, layer := range layers {
+		combined.Logging.Merge(layer.Logging)
+
 		for name, service := range layer.Services {
 			switch service.Override {
 			case MergeOverride:
@@ -697,6 +779,7 @@ func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 	layer := Layer{
 		Services: map[string]*Service{},
 		Checks:   map[string]*Check{},
+		Logging:  &Logging{},
 	}
 	dec := yaml.NewDecoder(bytes.NewBuffer(data))
 	dec.KnownFields(true)

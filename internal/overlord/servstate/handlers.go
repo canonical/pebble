@@ -3,6 +3,7 @@ package servstate
 import (
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"syscall"
@@ -354,32 +355,44 @@ func (s *serviceData) startInternal() error {
 	serviceName := s.config.Name
 	logWriter := servicelog.NewFormatWriter(s.logs, serviceName)
 
-	serverCert := []byte(`
------BEGIN CERTIFICATE-----
-MIIC4jCCAcqgAwIBAgIQZJl0AKtsRPKSjqv6d4anJTANBgkqhkiG9w0BAQsFADAU
-MRIwEAYDVQQDDAkxMjcuMC4wLjEwIBcNMjIwNjI3MTMxMzI5WhgPMjExMjEyMzEw
-MDAwMDBaMBQxEjAQBgNVBAMMCTEyNy4wLjAuMTCCASIwDQYJKoZIhvcNAQEBBQAD
-ggEPADCCAQoCggEBAKX++OKE2Z/B8iZn7bReByhDI0aZR7ccSfzwD73WBRMsPw6V
-8L2PpkUq9LUlXrtYvKvuqCtXKh+z2UsScaQudl7OHsJqaqpAtITPUqwpVMVtCgYt
-Tim7ENVBAiK6/9FIbBd7c55mgvKk11c03t8ylcHO3y2mzG4404RkYv5iedk38BLK
-AANn/tgr4JAakQrkoVvlvreHn2xtFmRWz3AOzx2j8EBxTZqqZ30MzzG7XIMpD1gK
-jzsTf4/kdb4guAarLrzPHWNLSH/ztmjWC9gs1q3Frtf8KJHkCnkksytI7niKcFRU
-IYUMAYOgQHI4gLlNz1LkaUJQxmbGnSC38lROaSMCAwEAAaMuMCwwDwYDVR0RBAgw
-BocEfwAAATALBgNVHQ8EBAMCAa4wDAYDVR0TBAUwAwEB/zANBgkqhkiG9w0BAQsF
-AAOCAQEANryvj5wZoOqGDmuLQcgWAgFiwhba491LXamSbH/RhsQDK+iQSjhaMHdc
-sfJ3LJGx84Qas7WheXnxhQnPCjNX6w2hS2xErDLpAz4wv2GpI/LSRZG/UboEfDI+
-/kfLX/08I6iDUFqomrDYEcCMhaRXmYAzgPoHEhtj10x9nqEO1HrkJSgDMe5gD59s
-/V84JZ/uMmPHV8Ce1DbjaFmKDs9cUikQMxfX5IJ96cB34U2ybb2NEeOd5a5ro7k+
-qIT6Lw7s3bMXorf83pyNd6+TGAV6doamRYwS7jcJlCKYqAKfqMKMSosdW7ykX1by
-s8fumDOA28EcV2vLMf7jO3e7/bDshw==
------END CERTIFICATE-----`)
+	plan, err := s.manager.Plan()
+	if err != nil {
+		fmt.Println("failed to retrieve plan configuration")
+	}
 
-	syslog := servicelog.NewSyslogWriter("127.0.0.1:3107", serverCert)
-	syslog.App = serviceName
-	syslog.Params["juju_unit"] = "foo_unit/0" // DEBUG
-	syslog.Params["juju_app"] = "foo_app"     // DEBUG
+	var logDests []*servicelog.SyslogWriter
+	if plan.Logging != nil {
+		for _, name := range s.config.Logging.Destinations {
+			dest, ok := plan.Logging.Destinations[name]
+			if !ok {
+				return fmt.Errorf("invalid service logging destination \"%v\"", name)
+			}
 
-	w := servicelog.NewMultiWriter(logWriter, syslog)
+			if dest.Type == "syslog" && dest.Protocol == "tls" {
+				addr := fmt.Sprintf("%s:%d", dest.Host, dest.Port)
+				caData, err := ioutil.ReadFile(dest.TLS.CAfile)
+				if err != nil {
+					return fmt.Errorf("could not read CA file \"%s\"", dest.TLS.CAfile)
+				}
+
+				syslog := servicelog.NewSyslogWriter(addr, caData)
+				syslog.App = serviceName
+				for label, val := range plan.Logging.Labels {
+					syslog.Params[label] = val
+				}
+				logDests = append(logDests, syslog)
+			} else {
+				return fmt.Errorf("unsupported logging destination type+protocol: %v+%v", dest.Type, dest.Protocol)
+			}
+		}
+	}
+
+	ws := []io.Writer{logWriter}
+	for _, d := range logDests {
+		ws = append(ws, d)
+	}
+
+	w := servicelog.NewMultiWriter(ws...)
 	s.cmd.Stdout = w
 	s.cmd.Stderr = w
 
@@ -393,7 +406,9 @@ s8fumDOA28EcV2vLMf7jO3e7/bDshw==
 		_ = s.logs.Close()
 		return fmt.Errorf("cannot start service: %w", err)
 	}
-	syslog.Pid = s.cmd.Process.Pid
+	for _, dest := range logDests {
+		dest.Pid = s.cmd.Process.Pid
+	}
 	logger.Debugf("Service %q started with PID %d", serviceName, s.cmd.Process.Pid)
 	s.resetTimer = time.AfterFunc(s.config.BackoffLimit.Value, func() { logError(s.backoffResetElapsed()) })
 
@@ -411,6 +426,9 @@ s8fumDOA28EcV2vLMf7jO3e7/bDshw==
 		err := s.exited(exitCode)
 		if err != nil {
 			logger.Noticef("Cannot transition state after service exit: %v", err)
+		}
+		for _, dest := range logDests {
+			dest.Close()
 		}
 	}()
 

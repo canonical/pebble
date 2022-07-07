@@ -158,6 +158,7 @@ func (m *ServiceManager) updatePlanLayers(layers []*plan.Layer) error {
 		Layers:   layers,
 		Services: combined.Services,
 		Checks:   combined.Checks,
+		Logging:  combined.Logging,
 	}
 	m.updatePlan(p)
 	return nil
