@@ -368,22 +368,25 @@ func (s *serviceData) startInternal() error {
 				return fmt.Errorf("invalid service logging destination \"%v\"", name)
 			}
 
-			if dest.Type == "syslog" && dest.Protocol == "tls" {
-				addr := fmt.Sprintf("%s:%d", dest.Host, dest.Port)
-				caData, err := ioutil.ReadFile(dest.TLS.CAfile)
+			if dest.Type != "syslog" {
+				return fmt.Errorf("unsupported logging destination type: %v", dest.Type)
+			}
+
+			addr := fmt.Sprintf("%s:%d", dest.Host, dest.Port)
+
+			var caData []byte
+			if dest.TLS != nil {
+				caData, err = ioutil.ReadFile(dest.TLS.CAfile)
 				if err != nil {
 					return fmt.Errorf("could not read CA file \"%s\"", dest.TLS.CAfile)
 				}
-
-				syslog := servicelog.NewSyslogWriter(addr, caData)
-				syslog.App = serviceName
-				for label, val := range plan.Logging.Labels {
-					syslog.Params[label] = val
-				}
-				logDests = append(logDests, syslog)
-			} else {
-				return fmt.Errorf("unsupported logging destination type+protocol: %v+%v", dest.Type, dest.Protocol)
 			}
+
+			syslog := servicelog.NewSyslogWriter(dest.Protocol, addr, serviceName, caData)
+			for label, val := range plan.Logging.Labels {
+				syslog.Params[label] = val
+			}
+			logDests = append(logDests, syslog)
 		}
 	}
 

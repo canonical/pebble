@@ -23,6 +23,7 @@ type SyslogWriter struct {
 	version    int
 	App        string
 	Host       string
+	Protocol   string
 	Pid        int
 	Msgid      string
 	Priority   int
@@ -32,7 +33,7 @@ type SyslogWriter struct {
 	closed     bool
 }
 
-func NewSyslogWriter(destHost string, serverCert []byte) *SyslogWriter {
+func NewSyslogWriter(protocol string, destHost string, appName string, serverCert []byte) *SyslogWriter {
 	host, err := os.Hostname()
 	if err != nil {
 		host = "localhost"
@@ -60,9 +61,10 @@ func NewSyslogWriter(destHost string, serverCert []byte) *SyslogWriter {
 		serverCert: serverCert,
 		destHost:   destHost,
 		version:    1,
-		App:        os.Args[0],
+		App:        appName,
 		Pid:        os.Getpid(),
 		Host:       host,
+		Protocol:   protocol,
 		Msgid:      "-",     // This is the "nil" value per RFC 5424
 		Priority:   1*8 + 6, // for facility=user-msg severity=informational. See RFC 5424 6.2.1 for available codes.
 		Params:     map[string]string{},
@@ -94,8 +96,6 @@ func (s *SyslogWriter) Write(p []byte) (int, error) {
 		return 0, err
 	}
 
-	//time.Sleep(30 * time.Second) // DEBUG
-
 	msg := s.frame(s.format(s, p))
 	logger.Noticef("Sending syslog message: %s", msg) // DEBUG
 
@@ -124,10 +124,16 @@ func (s *SyslogWriter) connect() error {
 	}
 
 	// TODO: Is this really what we want here?
-	pool := x509.NewCertPool()
-	pool.AppendCertsFromPEM(s.serverCert)
-	config := tls.Config{RootCAs: pool}
-	conn, err := tls.Dial("tcp", s.destHost, &config)
+	var conn net.Conn
+	var err error
+	if s.serverCert != nil {
+		pool := x509.NewCertPool()
+		pool.AppendCertsFromPEM(s.serverCert)
+		config := &tls.Config{RootCAs: pool}
+		conn, err = tls.Dial(s.Protocol, s.destHost, config)
+	} else {
+		conn, err = net.Dial(s.Protocol, s.destHost)
+	}
 	if err != nil {
 		return err
 	}
@@ -156,8 +162,8 @@ func NewMultiWriter(dsts ...io.Writer) *MultiWriter {
 
 			notifyWrite := make(chan bool)
 			bufIterator.Notify(notifyWrite)
-
 			for bufIterator.Next(done) {
+
 				_, err := io.Copy(dst, bufIterator)
 				// Retry writes without moving buffer position until we succeed since e.g. syslog
 				// forwarding endpoints may be unreliable. The buffer may start truncating before
