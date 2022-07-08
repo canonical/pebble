@@ -16,69 +16,95 @@ import (
 const maxLogBytes = 100 * 1024
 
 type SyslogWriter struct {
-	mu         sync.RWMutex
+	mu       sync.RWMutex
+	version  int
+	dst      io.Writer
+	App      string
+	Host     string
+	pid      int
+	msgid    string
+	priority int
+	params   map[string]string
+}
+
+func NewSyslogWriter(dst io.Writer, app string) *SyslogWriter {
+	host, err := os.Hostname()
+	if err != nil {
+		host = "localhost" // TODO: what is the best default here?
+	}
+
+	return &SyslogWriter{
+		version:  1,
+		dst:      dst,
+		App:      app,
+		Host:     host,
+		pid:      os.Getpid(),
+		msgid:    "-",     // This is the "nil" value per RFC 5424
+		priority: 1*8 + 6, // for facility=user-msg severity=informational. See RFC 5424 6.2.1 for available codes.
+		params:   make(map[string]string),
+	}
+}
+
+func (s *SyslogWriter) SetParam(key, val string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.params[key] = val
+}
+
+func (s *SyslogWriter) SetPid(pid int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.pid = pid
+}
+
+func (s *SyslogWriter) Write(p []byte) (int, error) {
+	return s.dst.Write(s.buildMsg(p))
+}
+
+func (s *SyslogWriter) buildMsg(p []byte) []byte {
+	logger.Noticef("building syslog message from: %s", p) // DEBUG
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	// format defined by RFC 5424
+	timestamp := time.Now().Format(time.RFC3339)
+	privEnterpriseNum := 28978 // num for Canonical Ltd
+	structuredData := fmt.Sprintf("[pebble@%d", privEnterpriseNum)
+
+	for key, value := range s.params {
+		structuredData += fmt.Sprintf(" %s=\"%s\"", key, value)
+	}
+	structuredData += "]"
+
+	msg := fmt.Sprintf("<%d>%d %s %s %s %d %s %s %s",
+		s.priority, s.version, timestamp, s.Host, s.App, s.pid, s.msgid, structuredData, p)
+	logger.Noticef("built syslog message: %s", msg) // DEBUG
+	return []byte(msg)
+}
+
+type SyslogTransport struct {
+	mu         sync.Mutex
 	conn       net.Conn
 	destHost   string
 	serverCert []byte
-	version    int
-	App        string
-	Host       string
-	Protocol   string
-	Pid        int
-	Msgid      string
-	Priority   int
-	Params     map[string]string
-	frame      func([]byte) []byte
-	format     func(*SyslogWriter, []byte) []byte
+	protocol   string
 	closed     bool
 }
 
-func NewSyslogWriter(protocol string, destHost string, appName string, serverCert []byte) *SyslogWriter {
-	host, err := os.Hostname()
-	if err != nil {
-		host = "localhost"
-	}
-
-	// format defined by RFC 5424
-	formatFunc := func(w *SyslogWriter, content []byte) []byte {
-		timestamp := time.Now().Format(time.RFC3339)
-		privEnterpriseNum := 28978 // num for Canonical Ltd
-		structuredData := fmt.Sprintf("[pebble@%d", privEnterpriseNum)
-		for key, value := range w.Params {
-			structuredData += fmt.Sprintf(" %s=\"%s\"", key, value)
-		}
-		structuredData += "]"
-
-		msg := fmt.Sprintf("<%d>%d %s %s %s %d %s %s %s",
-			w.Priority, w.version, timestamp, w.Host, w.App, w.Pid, w.Msgid, structuredData, content)
-		return []byte(msg)
-	}
-
-	// octet framing as per RFC 5425
-	frameFunc := func(p []byte) []byte { return []byte(fmt.Sprintf("%d %s", len(p), p)) }
-
-	s := &SyslogWriter{
+func NewSyslogTransport(protocol string, destHost string, serverCert []byte) *SyslogTransport {
+	return &SyslogTransport{
 		serverCert: serverCert,
 		destHost:   destHost,
-		version:    1,
-		App:        appName,
-		Pid:        os.Getpid(),
-		Host:       host,
-		Protocol:   protocol,
-		Msgid:      "-",     // This is the "nil" value per RFC 5424
-		Priority:   1*8 + 6, // for facility=user-msg severity=informational. See RFC 5424 6.2.1 for available codes.
-		Params:     map[string]string{},
-		frame:      frameFunc,
-		format:     formatFunc,
+		protocol:   protocol,
 	}
-	return s
 }
 
 // Don't emit an error at construction time if dialing/conn fails - remote server could come up later.
 // Do try to reconnect on write failures - retry sending message so we don't lose it.
 // Don't try to reconnect after "Close" has been called.
 
-func (s *SyslogWriter) Close() error {
+func (s *SyslogTransport) Close() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -90,19 +116,22 @@ func (s *SyslogWriter) Close() error {
 	return nil
 }
 
-func (s *SyslogWriter) Write(p []byte) (int, error) {
+func (s *SyslogTransport) Write(p []byte) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	err := s.connect()
 	if err != nil {
+		logger.Noticef("transport failed to connect: %v", err) // DEBUG
 		return 0, err
 	}
 
-	msg := s.frame(s.format(s, p))
-	logger.Noticef("Sending syslog message: %s", msg) // DEBUG
+	// octet framing as per RFC 5425
+	framed := []byte(fmt.Sprintf("%d %s", len(p), p))
 
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	logger.Noticef("Sending syslog message: %s", framed) // DEBUG
 
-	_, err = s.conn.Write(msg)
+	_, err = s.conn.Write(framed)
 	if err != nil {
 		// try to reconnect and resend
 		s.conn = nil
@@ -113,26 +142,23 @@ func (s *SyslogWriter) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
-func (s *SyslogWriter) connect() error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
+func (s *SyslogTransport) connect() error {
 	if s.conn != nil {
 		return nil
 	} else if s.closed {
-		return fmt.Errorf("write to closed SyslogWriter")
+		return fmt.Errorf("write to closed SyslogTransport")
 	}
 
-	// TODO: Is this really what we want here?
 	var conn net.Conn
 	var err error
 	if s.serverCert != nil {
+		// TODO: Is this really what we want here?
 		pool := x509.NewCertPool()
 		pool.AppendCertsFromPEM(s.serverCert)
 		config := &tls.Config{RootCAs: pool}
-		conn, err = tls.Dial(s.Protocol, s.destHost, config)
+		conn, err = tls.Dial(s.protocol, s.destHost, config)
 	} else {
-		conn, err = net.Dial(s.Protocol, s.destHost)
+		conn, err = net.Dial(s.protocol, s.destHost)
 	}
 	if err != nil {
 		return err
@@ -163,18 +189,19 @@ func NewMultiWriter(dsts ...io.Writer) *MultiWriter {
 			notifyWrite := make(chan bool)
 			bufIterator.Notify(notifyWrite)
 			for bufIterator.Next(done) {
-
+				logger.Noticef("  - writing content to destination") // DEBUG
 				_, err := io.Copy(dst, bufIterator)
-				// Retry writes without moving buffer position until we succeed since e.g. syslog
-				// forwarding endpoints may be unreliable. The buffer may start truncating before
-				// then - that's okay.
+				// Retry writes without moving buffer position until we succeed since some writers
+				// be intermittently up and down. The buffer may start truncating before then -
+				// that's okay.
 				for err != nil {
-					logger.Noticef("log forward failed: %v", err)
+					logger.Noticef("failed write for one writer destination: %v", err)
 					select {
 					case <-notifyWrite:
 					}
 					_, err = io.Copy(dst, bufIterator)
 				}
+				logger.Noticef("  - finished writing content to destination") // DEBUG
 			}
 		}(buf, dst)
 	}
@@ -183,9 +210,10 @@ func NewMultiWriter(dsts ...io.Writer) *MultiWriter {
 
 func (mw *MultiWriter) Write(p []byte) (n int, err error) {
 	for _, dst := range mw.dsts {
+		logger.Noticef("mutiwriter forwarding content to dst: %s", p) // DEBUG
 		_, err = dst.Write(p)
 		if err != nil {
-			logger.Noticef("multiwriter log forward buffering failed: %v", err)
+			logger.Noticef("multiwriter failed to buffer content: %v", err)
 		}
 	}
 	return len(p), nil
