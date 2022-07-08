@@ -382,9 +382,10 @@ func (s *serviceData) startInternal() error {
 				}
 			}
 
-			syslog := servicelog.NewSyslogWriter(dest.Protocol, addr, serviceName, caData)
+			transport := servicelog.NewSyslogTransport(dest.Protocol, addr, caData)
+			syslog := servicelog.NewSyslogWriter(transport, serviceName)
 			for label, val := range plan.Logging.Labels {
-				syslog.Params[label] = val
+				syslog.SetParam(label, val)
 			}
 			logDests = append(logDests, syslog)
 		}
@@ -395,9 +396,9 @@ func (s *serviceData) startInternal() error {
 		ws = append(ws, d)
 	}
 
-	w := servicelog.NewMultiWriter(ws...)
-	s.cmd.Stdout = w
-	s.cmd.Stderr = w
+	mw := servicelog.NewMultiWriter(ws...)
+	s.cmd.Stdout = mw
+	s.cmd.Stderr = mw
 
 	// Start the process!
 	logger.Noticef("Service %q starting: %s", serviceName, s.config.Command)
@@ -410,7 +411,7 @@ func (s *serviceData) startInternal() error {
 		return fmt.Errorf("cannot start service: %w", err)
 	}
 	for _, dest := range logDests {
-		dest.Pid = s.cmd.Process.Pid
+		dest.SetPid(s.cmd.Process.Pid)
 	}
 	logger.Debugf("Service %q started with PID %d", serviceName, s.cmd.Process.Pid)
 	s.resetTimer = time.AfterFunc(s.config.BackoffLimit.Value, func() { logError(s.backoffResetElapsed()) })
@@ -429,9 +430,6 @@ func (s *serviceData) startInternal() error {
 		err := s.exited(exitCode)
 		if err != nil {
 			logger.Noticef("Cannot transition state after service exit: %v", err)
-		}
-		for _, dest := range logDests {
-			dest.Close()
 		}
 	}()
 

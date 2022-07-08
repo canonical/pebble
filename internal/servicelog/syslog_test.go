@@ -131,20 +131,18 @@ func runStreamSyslog(l net.Listener, msgs chan<- string, errs chan<- error, wg *
 	}
 }
 
-func TestSyslogWriter(t *testing.T) {
+func TestSyslogTransport(t *testing.T) {
 	errs := make(chan error, 10)
 	msgs := make(chan string)
 	addr, closer, wg := startTestServer(msgs, errs)
 	defer wg.Wait()
 	defer closer.Close()
 
-	w, err := servicelog.NewSyslogWriter(addr, testCert)
-	if err != nil {
-		t.Fatal(err)
-	}
+	transport := servicelog.NewSyslogTransport("tcp", addr, testCert)
+	w := servicelog.NewSyslogWriter(transport, "testapp")
 
 	want := "hello"
-	_, err = io.WriteString(w, want)
+	_, err := io.WriteString(w, want)
 	if err != nil {
 		t.Fatal(err)
 	}
