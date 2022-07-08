@@ -106,13 +106,15 @@ type LogDestination struct {
 	Protocol string            `yaml:"protocol"`
 	Host     string            `yaml:"host"`
 	Port     int               `yaml:"port"`
-	TLS      *LoggingTLSConfig `yaml:"tls"`
+	TLS      *LoggingTLSConfig `yaml:"tls,omitempty"`
 }
 
 func (d *LogDestination) Copy() *LogDestination {
 	copied := *d
-	tls := *d.TLS
-	copied.TLS = &tls
+	if d.TLS != nil {
+		tls := *d.TLS
+		copied.TLS = &tls
+	}
 	return &copied
 }
 
