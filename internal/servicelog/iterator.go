@@ -104,7 +104,7 @@ func (it *iterator) Next(cancel <-chan struct{}) bool {
 		start, end := it.rb.Positions()
 		data := make([]byte, 20)   // DEBUG
 		it.rb.Copy(data, it.index) // DEBUG
-		fmt.Printf("...iter %p data: %s\n", it, data)
+		fmt.Printf("...iter %p (index=%v,start=%v,end=%v) data: %s\n", it, it.index, start, end, data)
 		if it.index != TailPosition && it.index < start {
 			it.index = start
 			it.truncated()

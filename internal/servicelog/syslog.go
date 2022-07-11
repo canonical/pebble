@@ -58,7 +58,11 @@ func (s *SyslogWriter) SetPid(pid int) {
 }
 
 func (s *SyslogWriter) Write(p []byte) (int, error) {
-	return s.dst.Write(s.buildMsg(p))
+	_, err := s.dst.Write(s.buildMsg(p))
+	if err != nil {
+		return 0, err
+	}
+	return len(p), nil
 }
 
 func (s *SyslogWriter) buildMsg(p []byte) []byte {
