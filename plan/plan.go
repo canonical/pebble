@@ -93,9 +93,7 @@ func (l *Logging) Merge(other *Logging) {
 		l.Destinations = make(map[string]*LogDestination)
 	}
 	for k, v := range other.Destinations {
-		if v == nil {
-			delete(l.Destinations, k)
-		} else {
+		if v != nil {
 			l.Destinations[k] = v.Copy()
 		}
 	}
