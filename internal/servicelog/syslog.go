@@ -66,7 +66,6 @@ func (s *SyslogWriter) Write(p []byte) (int, error) {
 }
 
 func (s *SyslogWriter) buildMsg(p []byte) []byte {
-	logger.Noticef("building syslog message from: %s", p) // DEBUG
 
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -83,7 +82,6 @@ func (s *SyslogWriter) buildMsg(p []byte) []byte {
 
 	msg := fmt.Sprintf("<%d>%d %s %s %s %d %s %s %s",
 		s.priority, s.version, timestamp, s.Host, s.App, s.pid, s.msgid, structuredData, p)
-	logger.Noticef("built syslog message: %s", msg) // DEBUG
 	return []byte(msg)
 }
 
@@ -126,23 +124,18 @@ func (s *SyslogTransport) Write(p []byte) (int, error) {
 
 	err := s.connect()
 	if err != nil {
-		logger.Noticef("transport failed to connect: %v", err) // DEBUG
 		return 0, err
 	}
 
 	// octet framing as per RFC 5425
 	framed := []byte(fmt.Sprintf("%d %s", len(p), p))
 
-	logger.Noticef("Sending syslog message: %s", framed) // DEBUG
-
 	_, err = s.conn.Write(framed)
 	if err != nil {
 		// try to reconnect and resend
 		s.conn = nil
-		logger.Noticef("    message send failed") // DEBUG
 		return 0, err
 	}
-	logger.Noticef("    syslog sent successfully") // DEBUG
 	return len(p), nil
 }
 
@@ -192,20 +185,16 @@ func NewMultiWriter(dests ...io.Writer) *MultiWriter {
 			iter := bufs[j].HeadIterator(0)
 			defer iter.Close()
 			for iter.Next(done) {
-				logger.Noticef("mw: pushing content to destination %T", dsts[j]) // DEBUG
 				_, err := io.Copy(dsts[j], iter)
 				if err != nil {
-					logger.Noticef("    mw: failed pushing content to destination: %v", err) // DEBUG
+					logger.Noticef("    MultiWriter failed pushing content to destination: %v", err)
+					// TODO: save the bytes that we try to write to dest for retries (with backoff) if
+					// there are errors since e.g. syslog servers could be intermittent in availability.
+					// need to add rewind behavior for iterator. io.Copy uses WriteTo if available -
+					// which seems like it should handle this okay, but iterator currently advances its
+					// index regardless of whether the ring-buffer encounters errors.
 				}
-				logger.Noticef("mw: finished pushing content to destination %T", dsts[j]) // DEBUG
-
-				// TODO: save the bytes that we try to write to dest for retries (with backoff) if
-				// there are errors since e.g. syslog servers could be intermittent in availability.
-				// need to add rewind behavior for iterator. io.Copy uses WriteTo if available -
-				// which seems like it should handle this okay, but iterator currently advances its
-				// index regardless of whether the ring-buffer encounters errors.
 			}
-			logger.Noticef("mw: mw pusher goroutine died") // DEBUG
 		}(i)
 	}
 	return &MultiWriter{dsts: dsts, bufs: bufs, done: done}
@@ -213,11 +202,9 @@ func NewMultiWriter(dests ...io.Writer) *MultiWriter {
 
 func (mw *MultiWriter) Write(p []byte) (n int, err error) {
 	for _, buf := range mw.bufs {
-		logger.Noticef("mw: buffering dst %p content: %s", buf, p) // DEBUG
 		_, err = buf.Write(p)
-		logger.Noticef("    done buffering to %p", buf) // DEBUG
 		if err != nil {
-			logger.Noticef("multiwriter: failed to buffer data: %v", err)
+			logger.Noticef("MultiWriter: failed to buffer data: %v", err)
 		}
 	}
 	return len(p), nil

@@ -15,7 +15,6 @@
 package servicelog
 
 import (
-	"fmt"
 	"io"
 	"sync"
 )
@@ -92,7 +91,6 @@ func (it *iterator) Next(cancel <-chan struct{}) bool {
 	for cancel != nil {
 		// if passed a cancel channel, wait for more data.
 		closed := false
-		fmt.Printf("selecting inside cancel loop %p\n", it)
 		select {
 		case <-it.closeChan:
 			closed = it.rb.Closed()
@@ -100,11 +98,7 @@ func (it *iterator) Next(cancel <-chan struct{}) bool {
 			cancel = nil
 		case <-it.nextChan:
 		}
-		fmt.Printf("....done selecting inside cancel loop %p\n", it)
 		start, end := it.rb.Positions()
-		data := make([]byte, 20)   // DEBUG
-		it.rb.Copy(data, it.index) // DEBUG
-		fmt.Printf("...iter %p (index=%v,start=%v,end=%v) data: %s\n", it, it.index, start, end, data)
 		if it.index != TailPosition && it.index < start {
 			it.index = start
 			it.truncated()
