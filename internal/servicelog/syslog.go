@@ -170,40 +170,39 @@ func (s *SyslogTransport) connect() error {
 
 type MultiWriter struct {
 	bufs []*RingBuffer
-	dsts []io.Writer
 	done chan struct{}
 }
 
 func NewMultiWriter(dests ...io.Writer) *MultiWriter {
-	bufs := make([]*RingBuffer, len(dests))
-	dsts := make([]io.Writer, len(dests))
+	bufs := []*RingBuffer{}
 	done := make(chan struct{})
-	for i := range dests {
-		bufs[i] = NewRingBuffer(maxLogBytes)
-		dsts[i] = dests[i]
-		go func(j int) {
-			iter := bufs[j].HeadIterator(0)
+	for _, dest := range dests {
+		buf := NewRingBuffer(maxLogBytes)
+		bufs = append(bufs, buf)
+		go func(dst io.Writer, b *RingBuffer) {
+			iter := b.HeadIterator(0)
 			defer iter.Close()
 			for iter.Next(done) {
-				_, err := io.Copy(dsts[j], iter)
+				_, err := io.Copy(dst, iter)
 				if err != nil {
+					// TODO: accuulate these errors to return on Close? - maybe not
 					logger.Noticef("    MultiWriter failed pushing content to destination: %v", err)
 					// TODO: save the bytes that we try to write to dest for retries (with backoff) if
 					// there are errors since e.g. syslog servers could be intermittent in availability.
 					// need to add rewind behavior for iterator. io.Copy uses WriteTo if available -
-					// which seems like it should handle this okay, but iterator currently advances its
-					// index regardless of whether the ring-buffer encounters errors.
+					// which seems like it should handle this okay, but confirm this.
 				}
 			}
-		}(i)
+		}(dest, buf)
 	}
-	return &MultiWriter{dsts: dsts, bufs: bufs, done: done}
+	return &MultiWriter{bufs: bufs, done: done}
 }
 
 func (mw *MultiWriter) Write(p []byte) (n int, err error) {
 	for _, buf := range mw.bufs {
 		_, err = buf.Write(p)
 		if err != nil {
+			// TODO: accuulate these errors to return on Close?
 			logger.Noticef("MultiWriter: failed to buffer data: %v", err)
 		}
 	}
