@@ -86,14 +86,15 @@ func (s *SyslogWriter) buildMsg(p []byte) []byte {
 }
 
 type SyslogTransport struct {
-	mu         sync.Mutex
-	conn       net.Conn
-	destHost   string
-	serverCert []byte
-	protocol   string
-	buf        *RingBuffer
-	done       chan struct{}
-	closed     bool
+	mu            sync.Mutex
+	conn          net.Conn
+	destHost      string
+	serverCert    []byte
+	protocol      string
+	buf           *RingBuffer
+	done          chan struct{}
+	closed        bool
+	waitReconnect time.Duration
 }
 
 func NewSyslogTransport(protocol string, destHost string, serverCert []byte) *SyslogTransport {
@@ -166,6 +167,10 @@ func (s *SyslogTransport) connect() error {
 		return fmt.Errorf("write to closed SyslogTransport")
 	}
 
+	if s.waitReconnect > 0 {
+		time.Sleep(s.waitReconnect)
+	}
+
 	var conn net.Conn
 	var err error
 	if s.serverCert != nil {
@@ -177,9 +182,19 @@ func (s *SyslogTransport) connect() error {
 	} else {
 		conn, err = net.Dial(s.protocol, s.destHost)
 	}
+
 	if err != nil {
+		if s.waitReconnect == 0 {
+			s.waitReconnect = 100 * time.Millisecond
+		}
+		newWait := 2 * s.waitReconnect
+		if newWait > 10*time.Second {
+			newWait = 10 * time.Second
+		}
+		s.waitReconnect = newWait
 		return err
 	}
+	s.waitReconnect = 0
 
 	if s.conn != nil {
 		s.conn.Close()
