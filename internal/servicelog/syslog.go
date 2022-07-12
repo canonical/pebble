@@ -91,20 +91,22 @@ type SyslogTransport struct {
 	destHost   string
 	serverCert []byte
 	protocol   string
+	buf        *RingBuffer
+	done       chan struct{}
 	closed     bool
 }
 
 func NewSyslogTransport(protocol string, destHost string, serverCert []byte) *SyslogTransport {
-	return &SyslogTransport{
+	transport := &SyslogTransport{
 		serverCert: serverCert,
 		destHost:   destHost,
 		protocol:   protocol,
+		done:       make(chan struct{}),
+		buf:        NewRingBuffer(maxLogBytes),
 	}
+	go transport.forward()
+	return transport
 }
-
-// Don't emit an error at construction time if dialing/conn fails - remote server could come up later.
-// Do try to reconnect on write failures - retry sending message so we don't lose it.
-// Don't try to reconnect after "Close" has been called.
 
 func (s *SyslogTransport) Close() error {
 	s.mu.Lock()
@@ -115,28 +117,46 @@ func (s *SyslogTransport) Close() error {
 		return s.conn.Close()
 	}
 	s.conn = nil
+
+	close(s.done)
+
 	return nil
 }
 
 func (s *SyslogTransport) Write(p []byte) (int, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	err := s.connect()
-	if err != nil {
-		return 0, err
-	}
-
 	// octet framing as per RFC 5425
-	framed := []byte(fmt.Sprintf("%d %s", len(p), p))
-
-	_, err = s.conn.Write(framed)
+	_, err := fmt.Fprintf(s.buf, "%d %s", len(p), p)
 	if err != nil {
-		// try to reconnect and resend
-		s.conn = nil
 		return 0, err
 	}
 	return len(p), nil
+}
+
+func (s *SyslogTransport) forward() {
+	iter := s.buf.HeadIterator(0)
+	defer iter.Close()
+	for iter.Next(s.done) {
+		s.mu.Lock()
+		err := s.connect()
+		if err != nil {
+			logger.Noticef("syslog transport failed connection: %v", err)
+			s.mu.Unlock()
+			continue
+		}
+		logger.Noticef("syslog transport forwarding message") // DEBUG
+
+		_, err = io.Copy(s.conn, iter)
+		if err != nil {
+			s.conn = nil
+			// TODO: accuulate these errors to return on Close? - maybe not
+			logger.Noticef("syslog transport failed forwarding: %v", err)
+			// TODO: save the bytes that we try to write to dest for retries (with backoff) if
+			// there are errors since e.g. syslog servers could be intermittent in availability.
+			// need to add rewind behavior for iterator. io.Copy uses WriteTo if available -
+			// which seems like it should handle this okay, but confirm this.
+		}
+		s.mu.Unlock()
+	}
 }
 
 func (s *SyslogTransport) connect() error {
@@ -166,53 +186,4 @@ func (s *SyslogTransport) connect() error {
 	}
 	s.conn = conn
 	return nil
-}
-
-type MultiWriter struct {
-	bufs []*RingBuffer
-	done chan struct{}
-}
-
-func NewMultiWriter(dests ...io.Writer) *MultiWriter {
-	bufs := []*RingBuffer{}
-	done := make(chan struct{})
-	for _, dest := range dests {
-		buf := NewRingBuffer(maxLogBytes)
-		bufs = append(bufs, buf)
-		go func(dst io.Writer, b *RingBuffer) {
-			iter := b.HeadIterator(0)
-			defer iter.Close()
-			for iter.Next(done) {
-				_, err := io.Copy(dst, iter)
-				if err != nil {
-					// TODO: accuulate these errors to return on Close? - maybe not
-					logger.Noticef("    MultiWriter failed pushing content to destination: %v", err)
-					// TODO: save the bytes that we try to write to dest for retries (with backoff) if
-					// there are errors since e.g. syslog servers could be intermittent in availability.
-					// need to add rewind behavior for iterator. io.Copy uses WriteTo if available -
-					// which seems like it should handle this okay, but confirm this.
-				}
-			}
-		}(dest, buf)
-	}
-	return &MultiWriter{bufs: bufs, done: done}
-}
-
-func (mw *MultiWriter) Write(p []byte) (n int, err error) {
-	for _, buf := range mw.bufs {
-		_, err = buf.Write(p)
-		if err != nil {
-			// TODO: accuulate these errors to return on Close?
-			logger.Noticef("MultiWriter: failed to buffer data: %v", err)
-		}
-	}
-	return len(p), nil
-}
-
-func (mw *MultiWriter) Close() error {
-	for _, buf := range mw.bufs {
-		buf.Close()
-	}
-	close(mw.done)
-	return nil // TODO: return accumulated errors here?
 }

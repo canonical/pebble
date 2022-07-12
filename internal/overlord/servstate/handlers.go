@@ -396,7 +396,7 @@ func (s *serviceData) startInternal() error {
 		ws = append(ws, d)
 	}
 
-	mw := servicelog.NewMultiWriter(ws...)
+	mw := io.MultiWriter(ws...)
 	s.cmd.Stdout = mw
 	s.cmd.Stderr = mw
 
