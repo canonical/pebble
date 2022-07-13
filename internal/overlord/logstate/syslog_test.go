@@ -1,4 +1,4 @@
-package servicelog_test
+package logstate
 
 import (
 	"bufio"
@@ -11,8 +11,6 @@ import (
 	"sync"
 	"testing"
 	"time"
-
-	"github.com/canonical/pebble/internal/servicelog"
 )
 
 var testCert = []byte(`
@@ -138,8 +136,8 @@ func TestSyslogTransport(t *testing.T) {
 	defer wg.Wait()
 	defer closer.Close()
 
-	transport := servicelog.NewSyslogTransport("tcp", addr, testCert)
-	w := servicelog.NewSyslogWriter(transport, "testapp")
+	transport := NewSyslogTransport("tcp", addr, testCert)
+	w := NewSyslogWriter(transport, "testapp")
 
 	want := "hello"
 	_, err := io.WriteString(w, want)

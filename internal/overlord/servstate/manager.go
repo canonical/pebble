@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/canonical/pebble/internal/logger"
+	"github.com/canonical/pebble/internal/overlord/logstate"
 	"github.com/canonical/pebble/internal/overlord/restart"
 	"github.com/canonical/pebble/internal/overlord/state"
 	"github.com/canonical/pebble/internal/plan"
@@ -34,6 +35,8 @@ type ServiceManager struct {
 
 	randLock sync.Mutex
 	rand     *rand.Rand
+
+	logMgr *logstate.LogManager
 }
 
 // PlanFunc is the type of function used by NotifyPlanChanged.
@@ -53,7 +56,7 @@ func (e *LabelExists) Error() string {
 	return fmt.Sprintf("layer %q already exists", e.Label)
 }
 
-func NewManager(s *state.State, runner *state.TaskRunner, pebbleDir string, serviceOutput io.Writer, restarter Restarter) (*ServiceManager, error) {
+func NewManager(s *state.State, runner *state.TaskRunner, pebbleDir string, serviceOutput io.Writer, restarter Restarter, logMgr *logstate.LogManager) (*ServiceManager, error) {
 	manager := &ServiceManager{
 		state:         s,
 		runner:        runner,
@@ -62,6 +65,7 @@ func NewManager(s *state.State, runner *state.TaskRunner, pebbleDir string, serv
 		serviceOutput: serviceOutput,
 		restarter:     restarter,
 		rand:          rand.New(rand.NewSource(time.Now().UnixNano())),
+		logMgr:        logMgr,
 	}
 
 	err := reaper.Start()

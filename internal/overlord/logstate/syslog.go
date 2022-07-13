@@ -1,4 +1,4 @@
-package servicelog
+package logstate
 
 import (
 	"crypto/tls"
@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/canonical/pebble/internal/logger"
+	"github.com/canonical/pebble/internal/servicelog"
 )
 
 const maxLogBytes = 100 * 1024
@@ -28,18 +29,14 @@ type SyslogWriter struct {
 }
 
 func NewSyslogWriter(dst io.Writer, app string) *SyslogWriter {
-	host, err := os.Hostname()
-	if err != nil {
-		host = "localhost" // TODO: what is the best default here?
-	}
-
+	// "-" is the "nil" value per RFC 5424
 	return &SyslogWriter{
 		version:  1,
 		dst:      dst,
 		App:      app,
-		Host:     host,
+		Host:     "-", // NOTE: could become useful to switch to os.Hostname()
 		pid:      os.Getpid(),
-		msgid:    "-",     // This is the "nil" value per RFC 5424
+		msgid:    "-",
 		priority: 1*8 + 6, // for facility=user-msg severity=informational. See RFC 5424 6.2.1 for available codes.
 		params:   make(map[string]string),
 	}
@@ -86,15 +83,15 @@ func (s *SyslogWriter) buildMsg(p []byte) []byte {
 }
 
 type SyslogTransport struct {
+	closed        bool
 	mu            sync.Mutex
 	conn          net.Conn
+	waitReconnect time.Duration
 	destHost      string
 	serverCert    []byte
 	protocol      string
-	buf           *RingBuffer
+	buf           *servicelog.RingBuffer
 	done          chan struct{}
-	closed        bool
-	waitReconnect time.Duration
 }
 
 func NewSyslogTransport(protocol string, destHost string, serverCert []byte) *SyslogTransport {
@@ -103,10 +100,23 @@ func NewSyslogTransport(protocol string, destHost string, serverCert []byte) *Sy
 		destHost:   destHost,
 		protocol:   protocol,
 		done:       make(chan struct{}),
-		buf:        NewRingBuffer(maxLogBytes),
+		buf:        servicelog.NewRingBuffer(maxLogBytes),
 	}
 	go transport.forward()
 	return transport
+}
+
+func (s *SyslogTransport) Update(protocol string, destHost string, serverCert []byte) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.protocol = protocol
+	s.destHost = destHost
+	s.serverCert = serverCert
+	s.waitReconnect = 0
+
+	s.conn.Close()
+	s.conn = nil
 }
 
 func (s *SyslogTransport) Close() error {
@@ -124,13 +134,16 @@ func (s *SyslogTransport) Close() error {
 	return nil
 }
 
-func (s *SyslogTransport) Write(p []byte) (int, error) {
-	// octet framing as per RFC 5425
-	_, err := fmt.Fprintf(s.buf, "%d %s", len(p), p)
+// Write takes a properly formatted syslog message and sends it to the underlying syslog server.
+func (s *SyslogTransport) Write(msg []byte) (int, error) {
+	// octet framing as per RFC 5425.  This needs to occur here rather than later in order to
+	// preserve framing of syslog messages atomically.  Otherwise failed or partial sends (across
+	// the network) would otherwise cause framing of multiple or partial messages at once.
+	_, err := fmt.Fprintf(s.buf, "%d %s", len(msg), msg)
 	if err != nil {
 		return 0, err
 	}
-	return len(p), nil
+	return len(msg), nil
 }
 
 func (s *SyslogTransport) forward() {
@@ -148,6 +161,7 @@ func (s *SyslogTransport) forward() {
 
 		_, err = io.Copy(s.conn, iter)
 		if err != nil {
+			s.conn.Close()
 			s.conn = nil
 			// TODO: accuulate these errors to return on Close? - maybe not
 			logger.Noticef("syslog transport failed forwarding: %v", err)
