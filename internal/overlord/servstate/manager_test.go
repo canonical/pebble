@@ -38,6 +38,7 @@ import (
 
 	"github.com/canonical/pebble/internal/logger"
 	"github.com/canonical/pebble/internal/overlord/checkstate"
+	"github.com/canonical/pebble/internal/overlord/logstate"
 	"github.com/canonical/pebble/internal/overlord/restart"
 	"github.com/canonical/pebble/internal/overlord/servstate"
 	"github.com/canonical/pebble/internal/overlord/state"
@@ -160,7 +161,7 @@ func (s *S) SetUpTest(c *C) {
 
 	s.runner = state.NewTaskRunner(s.st)
 	s.stopDaemon = make(chan struct{})
-	manager, err := servstate.NewManager(s.st, s.runner, s.dir, logOutput, testRestarter{s.stopDaemon})
+	manager, err := servstate.NewManager(s.st, s.runner, s.dir, logOutput, testRestarter{s.stopDaemon}, logstate.NewLogManager())
 	c.Assert(err, IsNil)
 	s.AddCleanup(manager.Stop)
 	s.manager = manager
@@ -600,7 +601,7 @@ func (s *S) TestAppendLayer(c *C) {
 	dir := c.MkDir()
 	os.Mkdir(filepath.Join(dir, "layers"), 0755)
 	runner := state.NewTaskRunner(s.st)
-	manager, err := servstate.NewManager(s.st, runner, dir, nil, nil)
+	manager, err := servstate.NewManager(s.st, runner, dir, nil, nil, logstate.NewLogManager())
 	c.Assert(err, IsNil)
 	defer manager.Stop()
 
@@ -683,7 +684,7 @@ func (s *S) TestCombineLayer(c *C) {
 	dir := c.MkDir()
 	os.Mkdir(filepath.Join(dir, "layers"), 0755)
 	runner := state.NewTaskRunner(s.st)
-	manager, err := servstate.NewManager(s.st, runner, dir, nil, nil)
+	manager, err := servstate.NewManager(s.st, runner, dir, nil, nil, logstate.NewLogManager())
 	c.Assert(err, IsNil)
 	defer manager.Stop()
 

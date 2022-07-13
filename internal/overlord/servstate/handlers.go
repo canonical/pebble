@@ -3,7 +3,6 @@ package servstate
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"os/user"
@@ -16,6 +15,7 @@ import (
 
 	"github.com/canonical/pebble/internal/logger"
 	"github.com/canonical/pebble/internal/osutil"
+	"github.com/canonical/pebble/internal/overlord/logstate"
 	"github.com/canonical/pebble/internal/overlord/restart"
 	"github.com/canonical/pebble/internal/overlord/state"
 	"github.com/canonical/pebble/internal/reaper"
@@ -383,30 +383,15 @@ func (s *serviceData) startInternal() error {
 		fmt.Println("failed to retrieve plan configuration")
 	}
 
-	var logDests []*servicelog.SyslogWriter
-	if plan.Logging != nil {
+	var logDests []*logstate.SyslogWriter
+	if s.config.Logging != nil {
 		for _, name := range s.config.Logging.Destinations {
-			dest, ok := plan.Logging.Destinations[name]
-			if !ok {
-				return fmt.Errorf("invalid service logging destination \"%v\"", name)
+			transport, err := s.manager.logMgr.GetTransport(name)
+			if err != nil {
+				return err
 			}
 
-			if dest.Type != "syslog" {
-				return fmt.Errorf("unsupported logging destination type: %v", dest.Type)
-			}
-
-			addr := fmt.Sprintf("%s:%d", dest.Host, dest.Port)
-
-			var caData []byte
-			if dest.TLS != nil {
-				caData, err = ioutil.ReadFile(dest.TLS.CAfile)
-				if err != nil {
-					return fmt.Errorf("could not read CA file \"%s\"", dest.TLS.CAfile)
-				}
-			}
-
-			transport := servicelog.NewSyslogTransport(dest.Protocol, addr, caData)
-			syslog := servicelog.NewSyslogWriter(transport, serviceName)
+			syslog := logstate.NewSyslogWriter(transport, serviceName)
 			for label, val := range plan.Logging.Labels {
 				syslog.SetParam(label, val)
 			}
