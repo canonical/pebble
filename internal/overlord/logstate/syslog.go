@@ -3,11 +3,13 @@ package logstate
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"errors"
 	"fmt"
 	"io"
 	"net"
 	"os"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/canonical/pebble/internal/logger"
@@ -151,11 +153,14 @@ func (s *SyslogTransport) forward() {
 	defer iter.Close()
 	for iter.Next(s.done) {
 		err := s.send(iter)
-		for err != nil {
-			// Loop here to avoid calling iter.Next which would shift the iterator index forward
-			// causing failed write/send to result in log data bytes being dropped/skipped.
-			logger.Noticef("syslog transport send failed: %v", err)
-			err = s.send(iter)
+		if err != nil {
+			submsg := ""
+			if errors.Is(err, syscall.EPIPE) && s.serverCert == nil {
+				submsg = " (possible missing TLS config)"
+			} else if errors.Is(err, syscall.ECONNREFUSED) {
+				submsg = " (syslog destination server may be down)"
+			}
+			logger.Noticef("syslog transport error%v: %v", submsg, err)
 		}
 	}
 }
@@ -171,7 +176,7 @@ func (s *SyslogTransport) send(iter servicelog.Iterator) error {
 
 	_, err = io.Copy(s.conn, iter)
 	if err != nil {
-		// The connection might be bad. Close and reset it for later reconnection.
+		// The connection might be bad. Close and reset it for later reconnection attempt(s).
 		s.conn.Close()
 		s.conn = nil
 	}
@@ -215,11 +220,12 @@ func (s *SyslogTransport) ensureConnected() error {
 		s.waitReconnect = newWait
 		return err
 	}
-	s.waitReconnect = 0
 
 	if s.conn != nil {
 		s.conn.Close()
 	}
+
+	s.waitReconnect = 0
 	s.conn = conn
 	return nil
 }
