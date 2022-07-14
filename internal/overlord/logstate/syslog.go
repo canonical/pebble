@@ -216,7 +216,7 @@ func (s *SyslogTransport) ensureConnected() error {
 	var conn net.Conn
 	var err error
 	if s.serverCert != nil {
-		// TODO: Is this really what we want here?
+		// TODO: Is this really what we want here?  Also need to add pebble client cert support, etc.
 		pool := x509.NewCertPool()
 		pool.AppendCertsFromPEM(s.serverCert)
 		config := &tls.Config{RootCAs: pool}
