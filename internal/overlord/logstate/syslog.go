@@ -18,11 +18,15 @@ import (
 
 const maxLogBytes = 100 * 1024
 
+// SyslogWriter takes writes and formats them according to RFC5424.  The formatted syslog messages
+// are then forwarded to the specified underlying destination io.Writer.
 type SyslogWriter struct {
-	mu       sync.RWMutex
-	version  int
-	dst      io.Writer
-	App      string
+	mu      sync.RWMutex
+	version int
+	dst     io.Writer
+	// App is the application name according to RFC5424
+	App string
+	// App is the application name according to RFC5424
 	Host     string
 	pid      int
 	msgid    string
@@ -30,6 +34,9 @@ type SyslogWriter struct {
 	params   map[string]string
 }
 
+// NewSyslogWriter creates a writer forwarding writes as syslog messages to dst.  The forwarded
+// messages will have app as the application name.  Other message parameters are set using
+// reasonable defaults or the RFC5424 nil value "-".
 func NewSyslogWriter(dst io.Writer, app string) *SyslogWriter {
 	// "-" is the "nil" value per RFC 5424
 	return &SyslogWriter{
@@ -44,6 +51,9 @@ func NewSyslogWriter(dst io.Writer, app string) *SyslogWriter {
 	}
 }
 
+// SetParam sets the key val pair for inclusion in the structured data portion of the formatted
+// syslog messages (see RFC5424 section 6.3).  *Every* write/message forwarded will include
+// parameters set this way.
 func (s *SyslogWriter) SetParam(key, val string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -84,6 +94,7 @@ func (s *SyslogWriter) buildMsg(p []byte) []byte {
 	return []byte(msg)
 }
 
+// SyslogTransport represents a connection to a syslog server as per RFC5425.
 type SyslogTransport struct {
 	closed        bool
 	mu            sync.Mutex
@@ -96,6 +107,9 @@ type SyslogTransport struct {
 	done          chan struct{}
 }
 
+// NewSyslogTransport creates a writer that is used to send syslog messages via the specified
+// protocol (e.g. "tcp" or "udp") to the destHost network address.  If serverCert is not nil, then
+// TLS will be used.
 func NewSyslogTransport(protocol string, destHost string, serverCert []byte) *SyslogTransport {
 	transport := &SyslogTransport{
 		serverCert: serverCert,
@@ -108,6 +122,8 @@ func NewSyslogTransport(protocol string, destHost string, serverCert []byte) *Sy
 	return transport
 }
 
+// Update modifies the underlying protocol, host and tls configuration for the transport.  Update
+// is safe for concurrent use.
 func (s *SyslogTransport) Update(protocol string, destHost string, serverCert []byte) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -136,7 +152,7 @@ func (s *SyslogTransport) Close() error {
 	return nil
 }
 
-// Write takes a properly formatted syslog message and writes/sends it to the underlying syslog server.
+// Write takes a properly formatted syslog message and sends it to the underlying syslog server.
 func (s *SyslogTransport) Write(msg []byte) (int, error) {
 	// Octet framing as per RFC 5425.  This needs to occur here rather than later in order to
 	// preserve framing of syslog messages atomically.  Otherwise failed or partial sends (across
@@ -210,6 +226,7 @@ func (s *SyslogTransport) ensureConnected() error {
 	}
 
 	if err != nil {
+		// start an exponential backoff for reconnection attempts
 		if s.waitReconnect == 0 {
 			s.waitReconnect = 100 * time.Millisecond
 		}
@@ -225,7 +242,7 @@ func (s *SyslogTransport) ensureConnected() error {
 		s.conn.Close()
 	}
 
-	s.waitReconnect = 0
+	s.waitReconnect = 0 // reset backoff
 	s.conn = conn
 	return nil
 }
