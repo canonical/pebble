@@ -134,9 +134,9 @@ func (s *SyslogTransport) Close() error {
 	return nil
 }
 
-// Write takes a properly formatted syslog message and sends it to the underlying syslog server.
+// Write takes a properly formatted syslog message and writes/sends it to the underlying syslog server.
 func (s *SyslogTransport) Write(msg []byte) (int, error) {
-	// octet framing as per RFC 5425.  This needs to occur here rather than later in order to
+	// Octet framing as per RFC 5425.  This needs to occur here rather than later in order to
 	// preserve framing of syslog messages atomically.  Otherwise failed or partial sends (across
 	// the network) would otherwise cause framing of multiple or partial messages at once.
 	_, err := fmt.Fprintf(s.buf, "%d %s", len(msg), msg)
@@ -150,36 +150,43 @@ func (s *SyslogTransport) forward() {
 	iter := s.buf.HeadIterator(0)
 	defer iter.Close()
 	for iter.Next(s.done) {
-		s.mu.Lock()
-		err := s.connect()
-		if err != nil {
-			logger.Noticef("syslog transport failed connection: %v", err)
-			s.mu.Unlock()
-			continue
+		err := s.send(iter)
+		for err != nil {
+			// Loop here to avoid calling iter.Next which would shift the iterator index forward
+			// causing failed write/send to result in log data bytes being dropped/skipped.
+			logger.Noticef("syslog transport send failed: %v", err)
+			err = s.send(iter)
 		}
-		logger.Noticef("syslog transport forwarding message") // DEBUG
-
-		_, err = io.Copy(s.conn, iter)
-		if err != nil {
-			s.conn.Close()
-			s.conn = nil
-			// TODO: accuulate these errors to return on Close? - maybe not
-			logger.Noticef("syslog transport failed forwarding: %v", err)
-			// TODO: save the bytes that we try to write to dest for retries (with backoff) if
-			// there are errors since e.g. syslog servers could be intermittent in availability.
-			// need to add rewind behavior for iterator. io.Copy uses WriteTo if available -
-			// which seems like it should handle this okay, but confirm this.
-		}
-		s.mu.Unlock()
 	}
 }
 
-func (s *SyslogTransport) connect() error {
+func (s *SyslogTransport) send(iter servicelog.Iterator) error {
+	err := s.ensureConnected()
+	if err != nil {
+		return err
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	_, err = io.Copy(s.conn, iter)
+	if err != nil {
+		// The connection might be bad. Close and reset it for later reconnection.
+		s.conn.Close()
+		s.conn = nil
+	}
+	return err
+}
+
+func (s *SyslogTransport) ensureConnected() error {
 	if s.conn != nil {
 		return nil
 	} else if s.closed {
 		return fmt.Errorf("write to closed SyslogTransport")
 	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
 	if s.waitReconnect > 0 {
 		time.Sleep(s.waitReconnect)
