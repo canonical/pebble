@@ -1,6 +1,7 @@
 package logstate
 
 import (
+	"bytes"
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
@@ -18,46 +19,61 @@ import (
 
 const maxLogBytes = 100 * 1024
 
+const canonicalPrivEnterpriseNum = 28978
+
 // SyslogWriter takes writes and formats them according to RFC5424.  The formatted syslog messages
-// are then forwarded to the specified underlying destination io.Writer.
+// are then forwarded to the specified underlying destination io.Writer.  SyslogWriter is safe for
+// concurrent writes and use.
 type SyslogWriter struct {
-	mu      sync.RWMutex
-	version int
-	dst     io.Writer
-	// App is the application name according to RFC5424
-	App string
-	// App is the application name according to RFC5424
-	Host     string
-	pid      int
-	msgid    string
-	priority int
-	params   map[string]string
+	mu             sync.RWMutex
+	version        int
+	dst            io.Writer
+	app            string
+	host           string
+	pid            int
+	msgid          string
+	priority       int
+	structuredData string
 }
 
 // NewSyslogWriter creates a writer forwarding writes as syslog messages to dst.  The forwarded
 // messages will have app as the application name.  Other message parameters are set using
-// reasonable defaults or the RFC5424 nil value "-".
-func NewSyslogWriter(dst io.Writer, app string) *SyslogWriter {
+// reasonable defaults or the RFC5424 nil value "-".  params contains key-value pairs to be
+// attached to syslog messages in their structured data section (see. RFC5424 section 6.3).
+// *Every* write/message forwarded will include these parameters.
+func NewSyslogWriter(dst io.Writer, app string, params map[string]string) *SyslogWriter {
+	structuredData := "-"
+	if len(params) > 0 {
+		var buf bytes.Buffer
+		fmt.Fprintf(&buf, "[pebble@%d", canonicalPrivEnterpriseNum)
+		for key, value := range params {
+			fmt.Fprintf(&buf, " %s=\"", key)
+			// escape the value according to RFC5424 6.3.3
+			for i := 0; i < len(value); i++ {
+				// don't use "for _, c := range value" as we don't want runes
+				c := value[i]
+				if c == '"' || c == '\\' || c == ']' {
+					buf.WriteByte('\\')
+				}
+				buf.WriteByte(c)
+			}
+			buf.WriteByte('"')
+		}
+		buf.WriteByte(']')
+		structuredData = buf.String()
+	}
+
 	// "-" is the "nil" value per RFC 5424
 	return &SyslogWriter{
-		version:  1,
-		dst:      dst,
-		App:      app,
-		Host:     "-", // NOTE: could become useful to switch to os.Hostname()
-		pid:      os.Getpid(),
-		msgid:    "-",
-		priority: 1*8 + 6, // for facility=user-msg severity=informational. See RFC 5424 6.2.1 for available codes.
-		params:   make(map[string]string),
+		version:        1,
+		dst:            dst,
+		app:            app,
+		host:           "-", // NOTE: could become useful to switch to os.Hostname()
+		pid:            os.Getpid(),
+		msgid:          "-",
+		priority:       1*8 + 6, // for facility=user-msg severity=informational. See RFC 5424 6.2.1 for available codes.
+		structuredData: structuredData,
 	}
-}
-
-// SetParam sets the key val pair for inclusion in the structured data portion of the formatted
-// syslog messages (see RFC5424 section 6.3).  *Every* write/message forwarded will include
-// parameters set this way.
-func (s *SyslogWriter) SetParam(key, val string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.params[key] = val
 }
 
 func (s *SyslogWriter) SetPid(pid int) {
@@ -75,34 +91,26 @@ func (s *SyslogWriter) Write(p []byte) (int, error) {
 }
 
 func (s *SyslogWriter) buildMsg(p []byte) []byte {
-
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	// format defined by RFC 5424
 	timestamp := time.Now().Format(time.RFC3339)
-	privEnterpriseNum := 28978 // num for Canonical Ltd
-	structuredData := fmt.Sprintf("[pebble@%d", privEnterpriseNum)
-
-	for key, value := range s.params {
-		structuredData += fmt.Sprintf(" %s=\"%s\"", key, value)
-	}
-	structuredData += "]"
-
 	msg := fmt.Sprintf("<%d>%d %s %s %s %d %s %s %s",
-		s.priority, s.version, timestamp, s.Host, s.App, s.pid, s.msgid, structuredData, p)
+		s.priority, s.version, timestamp, s.host, s.app, s.pid, s.msgid, s.structuredData, p)
 	return []byte(msg)
 }
 
-// SyslogTransport represents a connection to a syslog server as per RFC5425.
+// SyslogTransport represents a connection to a syslog server as per RFC5425.  The transport is
+// safe for concurrent writes and use.
 type SyslogTransport struct {
 	closed        bool
 	mu            sync.Mutex
 	conn          net.Conn
-	waitReconnect time.Duration
+	protocol      string
 	destHost      string
 	serverCert    []byte
-	protocol      string
+	waitReconnect time.Duration
 	buf           *servicelog.RingBuffer
 	done          chan struct{}
 }
@@ -137,19 +145,19 @@ func (s *SyslogTransport) Update(protocol string, destHost string, serverCert []
 	s.conn = nil
 }
 
-func (s *SyslogTransport) Close() error {
+func (s *SyslogTransport) Close() (err error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	s.closed = true
 	if s.conn != nil {
-		return s.conn.Close()
+		err = s.conn.Close()
 	}
 	s.conn = nil
 
 	close(s.done)
 
-	return nil
+	return err
 }
 
 // Write takes a properly formatted syslog message and sends it to the underlying syslog server.
@@ -157,6 +165,12 @@ func (s *SyslogTransport) Write(msg []byte) (int, error) {
 	// Octet framing as per RFC 5425.  This needs to occur here rather than later in order to
 	// preserve framing of syslog messages atomically.  Otherwise failed or partial sends (across
 	// the network) would otherwise cause framing of multiple or partial messages at once.
+
+	// TODO: although writes to the ring buffer should always succeed and be basically atomic (as
+	// long as any single write isn't larger than the entire buffer), once the buffer wraps around
+	// and starts discarding data, it is possible that a partial syslog message is discarded
+	// leaving a corrupt message at the "front" of the buffer.  We need to prevent this from
+	// happening somehow.
 	_, err := fmt.Fprintf(s.buf, "%d %s", len(msg), msg)
 	if err != nil {
 		return 0, err
@@ -165,8 +179,9 @@ func (s *SyslogTransport) Write(msg []byte) (int, error) {
 }
 
 func (s *SyslogTransport) forward() {
-	iter := s.buf.HeadIterator(0)
+	iter := s.buf.TailIterator()
 	defer iter.Close()
+
 	for iter.Next(s.done) {
 		err := s.send(iter)
 		if err != nil {
@@ -182,13 +197,16 @@ func (s *SyslogTransport) forward() {
 }
 
 func (s *SyslogTransport) send(iter servicelog.Iterator) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	err := s.ensureConnected()
 	if err != nil {
 		return err
 	}
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	if iter.Buffered() == 0 {
+		return nil
+	}
 
 	_, err = io.Copy(s.conn, iter)
 	if err != nil {
@@ -205,9 +223,6 @@ func (s *SyslogTransport) ensureConnected() error {
 	} else if s.closed {
 		return fmt.Errorf("write to closed SyslogTransport")
 	}
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
 
 	if s.waitReconnect > 0 {
 		time.Sleep(s.waitReconnect)

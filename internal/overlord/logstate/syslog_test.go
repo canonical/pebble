@@ -3,8 +3,8 @@ package logstate
 import (
 	"bufio"
 	"crypto/tls"
+	"errors"
 	"io"
-	"log"
 	"net"
 	"strconv"
 	"strings"
@@ -65,32 +65,36 @@ d6XdnEpQhZ8XMgzxgV4n7FA=
 -----END PRIVATE KEY-----
 `)
 
-func startTestServer(msgs chan<- string, errs chan<- error) (addr string, closer io.Closer, wg *sync.WaitGroup) {
+func startTestServer(t *testing.T, msgs chan<- string, errs chan<- error) (addr string, closer io.Closer, wg *sync.WaitGroup) {
 	wg = new(sync.WaitGroup)
 
 	cert, err := tls.X509KeyPair(testCert, testPrivKey)
 	if err != nil {
-		log.Fatalf("failed to load TLS keypair: %v", err)
+		t.Logf("failed to load TLS keypair: %v", err)
 	}
 	config := tls.Config{Certificates: []tls.Certificate{cert}}
 	l, e := tls.Listen("tcp", "127.0.0.1:0", &config)
 	if e != nil {
-		log.Fatalf("startServer failed: %v", e)
+		t.Logf("startServer failed: %v", e)
 	}
 	addr = l.Addr().String()
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		runStreamSyslog(l, msgs, errs, wg)
+		runStreamSyslog(t, l, msgs, errs, wg)
 	}()
 	return addr, l, wg
 }
 
-func runStreamSyslog(l net.Listener, msgs chan<- string, errs chan<- error, wg *sync.WaitGroup) {
+func runStreamSyslog(t *testing.T, l net.Listener, msgs chan<- string, errs chan<- error, wg *sync.WaitGroup) {
 	for {
 		var c net.Conn
 		var err error
+		err = nil
 		if c, err = l.Accept(); err != nil {
+			if !errors.Is(err, net.ErrClosed) {
+				t.Logf("server failed to accept connection: %v", err)
+			}
 			return
 		}
 		wg.Add(1)
@@ -107,7 +111,6 @@ func runStreamSyslog(l net.Listener, msgs chan<- string, errs chan<- error, wg *
 					}
 					break
 				}
-
 				i, err := strconv.Atoi(strings.TrimSpace(s))
 				if err != nil {
 					if errs != nil {
@@ -115,6 +118,7 @@ func runStreamSyslog(l net.Listener, msgs chan<- string, errs chan<- error, wg *
 					}
 					break
 				}
+
 				msg := make([]byte, i)
 				_, err = io.ReadFull(b, msg)
 				if err != nil {
@@ -132,12 +136,13 @@ func runStreamSyslog(l net.Listener, msgs chan<- string, errs chan<- error, wg *
 func TestSyslogTransport(t *testing.T) {
 	errs := make(chan error, 10)
 	msgs := make(chan string)
-	addr, closer, wg := startTestServer(msgs, errs)
+	addr, closer, wg := startTestServer(t, msgs, errs)
+
 	defer wg.Wait()
 	defer closer.Close()
 
 	transport := NewSyslogTransport("tcp", addr, testCert)
-	w := NewSyslogWriter(transport, "testapp")
+	w := NewSyslogWriter(transport, "testapp", nil)
 
 	want := "hello"
 	_, err := io.WriteString(w, want)
@@ -147,10 +152,12 @@ func TestSyslogTransport(t *testing.T) {
 
 	select {
 	case err := <-errs:
-		t.Error(err)
+		t.Error("unexpected error:", err)
 	case got := <-msgs:
 		if !strings.HasSuffix(got, want) {
 			t.Errorf("wrong result: want suffix '%v', got '%v'", want, got)
 		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("timed out")
 	}
 }

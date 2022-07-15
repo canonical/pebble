@@ -380,7 +380,7 @@ func (s *serviceData) startInternal() error {
 
 	plan, err := s.manager.Plan()
 	if err != nil {
-		fmt.Println("failed to retrieve plan configuration")
+		return err
 	}
 
 	var logDests []*logstate.SyslogWriter
@@ -391,15 +391,12 @@ func (s *serviceData) startInternal() error {
 				return err
 			}
 
-			syslog := logstate.NewSyslogWriter(transport, serviceName)
-			for label, val := range plan.Logging.Labels {
-				// TODO: Feels like maybe labels should be per-logging-destination rather than
-				// global since we need to build the syslog message at the service level anyway (to
-				// get service-specific data into them.  Also How will we handle updating the
-				// labels (e.g. when new layers are added)?  Right now updating only works when
-				// services are (re)started.
-				syslog.SetParam(label, val)
-			}
+			// TODO: Feels like maybe labels should be per-logging-destination rather than
+			// global since we need to build the syslog message at the service level anyway (to
+			// get service-specific data into them.  Also How will we handle updating the
+			// labels (e.g. when new layers are added)?  Right now updating only works when
+			// services are (re)started.
+			syslog := logstate.NewSyslogWriter(transport, serviceName, plan.Logging.Labels)
 			logDests = append(logDests, syslog)
 		}
 	}

@@ -3,6 +3,8 @@ package logstate
 import (
 	"fmt"
 	"io/ioutil"
+	"net"
+	"strconv"
 	"sync"
 
 	"github.com/canonical/pebble/internal/logger"
@@ -24,7 +26,7 @@ func (m *LogManager) GetTransport(destination string) (*SyslogTransport, error) 
 
 	dest, ok := m.destinations[destination]
 	if !ok {
-		return nil, fmt.Errorf("invalid service logging destination \"%v\"", destination)
+		return nil, fmt.Errorf("invalid service logging destination %q", destination)
 	}
 	return dest, nil
 }
@@ -53,7 +55,7 @@ func (m *LogManager) PlanChanged(p *plan.Plan) {
 				logger.Noticef("could not read CA file \"%s\"", dest.TLS.CAfile)
 			}
 		}
-		addr := fmt.Sprintf("%s:%d", dest.Host, dest.Port)
+		addr := net.JoinHostPort(dest.Host, strconv.Itoa(dest.Port))
 
 		orig, ok := m.destinations[name]
 		if ok {
