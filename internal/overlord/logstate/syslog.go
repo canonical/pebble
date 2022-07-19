@@ -21,6 +21,10 @@ const maxLogBytes = 100 * 1024
 
 const canonicalPrivEnterpriseNum = 28978
 
+var timeFunc = func() time.Time {
+	return time.Now()
+}
+
 // SyslogWriter takes writes and formats them according to RFC5424.  The formatted syslog messages
 // are then forwarded to the specified underlying destination io.Writer.  SyslogWriter is safe for
 // concurrent writes and use.
@@ -36,43 +40,46 @@ type SyslogWriter struct {
 	structuredData string
 }
 
+// buildStructuredData formats the given params into a structured data section for a syslog message
+// according to RFC5424 section 6.
+func buildStructuredData(name string, enterpriseNum int, params map[string]string) string {
+	if len(params) == 0 {
+		return "-"
+	}
+	var buf bytes.Buffer
+	fmt.Fprintf(&buf, "[%s@%d", name, enterpriseNum)
+	for key, value := range params {
+		fmt.Fprintf(&buf, " %s=\"", key)
+		// escape the value according to RFC5424 6.3.3
+		for i := 0; i < len(value); i++ {
+			// don't use "for _, c := range value" as we don't want runes
+			c := value[i]
+			if c == '"' || c == '\\' || c == ']' {
+				buf.WriteByte('\\')
+			}
+			buf.WriteByte(c)
+		}
+		buf.WriteByte('"')
+	}
+	buf.WriteByte(']')
+	return buf.String()
+}
+
 // NewSyslogWriter creates a writer forwarding writes as syslog messages to dst.  The forwarded
 // messages will have app as the application name.  Other message parameters are set using
 // reasonable defaults or the RFC5424 nil value "-".  params contains key-value pairs to be
 // attached to syslog messages in their structured data section (see. RFC5424 section 6.3).
 // *Every* write/message forwarded will include these parameters.
 func NewSyslogWriter(dst io.Writer, app string, params map[string]string) *SyslogWriter {
-	structuredData := "-"
-	if len(params) > 0 {
-		var buf bytes.Buffer
-		fmt.Fprintf(&buf, "[pebble@%d", canonicalPrivEnterpriseNum)
-		for key, value := range params {
-			fmt.Fprintf(&buf, " %s=\"", key)
-			// escape the value according to RFC5424 6.3.3
-			for i := 0; i < len(value); i++ {
-				// don't use "for _, c := range value" as we don't want runes
-				c := value[i]
-				if c == '"' || c == '\\' || c == ']' {
-					buf.WriteByte('\\')
-				}
-				buf.WriteByte(c)
-			}
-			buf.WriteByte('"')
-		}
-		buf.WriteByte(']')
-		structuredData = buf.String()
-	}
-
-	// "-" is the "nil" value per RFC 5424
 	return &SyslogWriter{
 		version:        1,
 		dst:            dst,
 		app:            app,
-		host:           "-", // NOTE: could become useful to switch to os.Hostname()
+		host:           "-", // NOTE: would it ever be useful to switch to os.Hostname()?
 		pid:            os.Getpid(),
 		msgid:          "-",
 		priority:       1*8 + 6, // for facility=user-msg severity=informational. See RFC 5424 6.2.1 for available codes.
-		structuredData: structuredData,
+		structuredData: buildStructuredData("pebble", canonicalPrivEnterpriseNum, params),
 	}
 }
 
@@ -95,7 +102,7 @@ func (s *SyslogWriter) buildMsg(p []byte) []byte {
 	defer s.mu.RUnlock()
 
 	// format defined by RFC 5424
-	timestamp := time.Now().Format(time.RFC3339)
+	timestamp := timeFunc().Format(time.RFC3339)
 	msg := fmt.Sprintf("<%d>%d %s %s %s %d %s %s %s",
 		s.priority, s.version, timestamp, s.host, s.app, s.pid, s.msgid, s.structuredData, p)
 	return []byte(msg)
