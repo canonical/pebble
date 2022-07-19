@@ -2,8 +2,10 @@ package logstate
 
 import (
 	"bufio"
+	"bytes"
 	"crypto/tls"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"strconv"
@@ -130,6 +132,67 @@ func runStreamSyslog(t *testing.T, l net.Listener, msgs chan<- string, errs chan
 				msgs <- string(msg)
 			}
 		}(c)
+	}
+}
+
+func TestMain(m *testing.M) {
+	timeFunc = func() time.Time {
+		return time.Time{}
+	}
+	m.Run()
+}
+
+func TestSyslogWriter(t *testing.T) {
+	tests := []struct {
+		name   string
+		input  string
+		pid    int
+		params map[string]string
+		want   string
+	}{
+		{
+			name:  "basic",
+			input: "hello",
+			want:  "<14>1 0001-01-01T00:00:00Z - testapp 0 - - hello",
+		}, {
+			name:   "basic-param",
+			input:  "hello",
+			params: map[string]string{"foo": "bar"},
+			want:   "<14>1 0001-01-01T00:00:00Z - testapp 0 - [pebble@28978 foo=\"bar\"] hello",
+		}, {
+			name:   "basic-multiparam",
+			input:  "hello",
+			params: map[string]string{"foo": "bar", "baz": "quux"},
+			want:   "<14>1 0001-01-01T00:00:00Z - testapp 0 - [pebble@28978 foo=\"bar\" baz=\"quux\"] hello",
+		}, {
+			name:  "basic-pid",
+			input: "hello",
+			pid:   42,
+			want:  "<14>1 0001-01-01T00:00:00Z - testapp 42 - - hello",
+		}, {
+			name:   "param-escapes",
+			input:  "hello",
+			params: map[string]string{"foo": "\"[bar]\\"},
+			want:   "<14>1 0001-01-01T00:00:00Z - testapp 0 - [pebble@28978 foo=\"\\\"[bar\\]\\\\\"] hello",
+		},
+	}
+
+	for i, test := range tests {
+		t.Run(fmt.Sprintf("case %v (%v)", i+1, test.name), func(t *testing.T) {
+			var buf bytes.Buffer
+			w := NewSyslogWriter(&buf, "testapp", test.params)
+			w.SetPid(test.pid)
+
+			_, err := io.WriteString(w, test.input)
+			if err != nil {
+				t.Errorf("write failed: %v", err)
+				return
+			}
+
+			if got := buf.String(); got != test.want {
+				t.Errorf("wrong output:\nwant %q\ngot  %q", test.want, got)
+			}
+		})
 	}
 }
 
