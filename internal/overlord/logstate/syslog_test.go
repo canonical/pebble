@@ -215,6 +215,12 @@ func TestSyslogTransport(t *testing.T) {
 	t.Run("TLS-tcp", testTransport(servConfig{protocol: "tcp", cert: testCert, privkey: testPrivKey}))
 }
 
+func TestSyslogTransport_backoff(t *testing.T) {
+}
+
+func TestSyslogTransport_reconnect(t *testing.T) {
+}
+
 var testCert = []byte(`
 -----BEGIN CERTIFICATE-----
 MIIC4jCCAcqgAwIBAgIQUfp0amlHQ2i3/siLio24lTANBgkqhkiG9w0BAQsFADAU
