@@ -191,6 +191,8 @@ func (s *SyslogTransport) forward() {
 	defer iter.Close()
 
 	for iter.Next(s.done) {
+		// TODO: ensure the iterator wraparound "(data truncated)" text doesn't get sent as a
+		// syslog message.
 		err := s.send(iter)
 		if err != nil {
 			submsg := ""

@@ -215,10 +215,20 @@ func TestSyslogTransport(t *testing.T) {
 	t.Run("TLS-tcp", testTransport(servConfig{protocol: "tcp", cert: testCert, privkey: testPrivKey}))
 }
 
+func TestRoundTrip(t *testing.T) {
+	// TODO: test full integration from layer configuration to syslog destination server message receipt
+}
+
+func TestSyslogTransport_wraparound(t *testing.T) {
+	// TODO: test that message writes don't get munged when the ringbuffer gets full and wraps.
+}
+
 func TestSyslogTransport_backoff(t *testing.T) {
+	// TODO: test the exponential backoff on reconnect attempts works
 }
 
 func TestSyslogTransport_reconnect(t *testing.T) {
+	// TODO: check that we can successfully reconnect without dropping continued incoming logs.
 }
 
 var testCert = []byte(`

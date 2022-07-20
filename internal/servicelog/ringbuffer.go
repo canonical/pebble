@@ -36,11 +36,16 @@ const (
 // linear allocator with sequential frees that must be done in the same order as the
 // allocations.
 type RingBuffer struct {
-	rwlock      sync.RWMutex
-	readIndex   RingPos
-	writeIndex  RingPos
-	writeClosed bool
-	data        []byte
+	rwlock        sync.RWMutex
+	readIndex     RingPos
+	writeIndex    RingPos
+	writeClosed   bool
+	data          []byte
+	atomicDiscard bool
+	// writeOffsets tracks the boundary positions between individual writes to the buffer.  If
+	// atomic discards are enables, this is used to atomically discard full writes when the buffer
+	// becomes full and wraps around.
+	writeOffsets []RingPos
 
 	iteratorMutex sync.RWMutex
 	iteratorList  []*iterator
@@ -56,6 +61,10 @@ func NewRingBuffer(size int) *RingBuffer {
 	}
 	return &rb
 }
+
+// DoAtomicDiscard causes the buffer to track boundaries between Write calls ensuring that when
+// full, bytes are discarded
+func (rb *RingBuffer) DoAtomicDiscard() { rb.atomicDiscard = true }
 
 // Close closes the writer to further writes, readers may continue.
 func (rb *RingBuffer) Close() error {
@@ -108,6 +117,10 @@ func (rb *RingBuffer) Write(p []byte) (written int, err error) {
 	}
 	start := rb.writeIndex
 	end := rb.writeIndex + RingPos(writeLength)
+	if rb.atomicDiscard {
+		rb.writeOffsets = append(rb.writeOffsets, end)
+	}
+
 	low := int(start % RingPos(len(rb.data)))
 	high := int(end % RingPos(len(rb.data)))
 	if high == 0 {
@@ -317,7 +330,17 @@ func (rb *RingBuffer) discard(n int) error {
 	if n > buffered {
 		n = buffered
 	}
-	rb.readIndex = rb.readIndex + RingPos(n)
+
+	nextReadIndex := rb.readIndex + RingPos(n)
+	for i, offset := range rb.writeOffsets {
+		if offset < nextReadIndex {
+			continue
+		}
+		nextReadIndex = offset
+		rb.writeOffsets = rb.writeOffsets[i+1:]
+		break
+	}
+	rb.readIndex = nextReadIndex
 	return nil
 }
 
