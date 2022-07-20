@@ -157,14 +157,15 @@ func (s *SyslogTransport) Close() (err error) {
 	defer s.mu.Unlock()
 
 	s.closed = true
+
 	if s.conn != nil {
 		err = s.conn.Close()
 	}
 	s.conn = nil
 
+	s.buf.Close()
 	close(s.done)
-
-	return err
+	return
 }
 
 // Write takes a properly formatted syslog message and sends it to the underlying syslog server.
