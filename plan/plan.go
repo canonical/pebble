@@ -72,8 +72,8 @@ func (l *Logging) Copy() *Logging {
 		copied.Labels[k] = v
 	}
 	copied.Destinations = make(map[string]*LogDestination)
-	for k, v := range l.Labels {
-		copied.Labels[k] = v
+	for k, v := range l.Destinations {
+		copied.Destinations[k] = v.Copy()
 	}
 	return &copied
 }

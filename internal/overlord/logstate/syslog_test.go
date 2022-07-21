@@ -21,7 +21,29 @@ type servConfig struct {
 	privkey  []byte
 }
 
-func startTestServer(t *testing.T, config servConfig, msgs chan<- string, errs chan<- error) (addr string, closer io.Closer, wg *sync.WaitGroup) {
+type whereCrash int
+
+const (
+	none whereCrash = iota
+	postLengthRead
+	postBodyRead
+	crash3
+	crash4
+	crash5
+)
+
+type crashConfig struct {
+	where   whereCrash
+	trigger chan bool
+}
+
+var noCrash = crashConfig{none, make(chan bool, 1)}
+
+func newCrash(where whereCrash) crashConfig {
+	return crashConfig{where: where, trigger: make(chan bool, 1)}
+}
+
+func startTestServer(t *testing.T, config servConfig, crash crashConfig, msgs chan<- string, errs chan<- error) (addr string, closer io.Closer, wg *sync.WaitGroup) {
 	wg = new(sync.WaitGroup)
 
 	var err error
@@ -44,7 +66,7 @@ func startTestServer(t *testing.T, config servConfig, msgs chan<- string, errs c
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			runListenerServer(t, l, msgs, errs, wg)
+			runListenerServer(t, l, crash, msgs, errs, wg)
 		}()
 		addr = l.Addr().String()
 	} else if config.protocol == "udp" {
@@ -57,7 +79,7 @@ func startTestServer(t *testing.T, config servConfig, msgs chan<- string, errs c
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			runConnServer(t, conn, msgs, errs, wg)
+			runConnServer(t, conn, crash, msgs, errs, wg)
 		}()
 		addr = udpaddr.String()
 	}
@@ -65,7 +87,7 @@ func startTestServer(t *testing.T, config servConfig, msgs chan<- string, errs c
 	return addr, c, wg
 }
 
-func runListenerServer(t *testing.T, l net.Listener, msgs chan<- string, errs chan<- error, wg *sync.WaitGroup) {
+func runListenerServer(t *testing.T, l net.Listener, crash crashConfig, msgs chan<- string, errs chan<- error, wg *sync.WaitGroup) {
 	for {
 		var c net.Conn
 		var err error
@@ -77,27 +99,48 @@ func runListenerServer(t *testing.T, l net.Listener, msgs chan<- string, errs ch
 			return
 		}
 		wg.Add(1)
-		go processMessage(c, msgs, errs, wg)
+		var crashed bool
+		go func() {
+			crashed = processMessage(c, crash, msgs, errs, wg)
+		}()
+		if crashed {
+			break
+		}
 	}
 }
-func runConnServer(t *testing.T, c net.Conn, msgs chan<- string, errs chan<- error, wg *sync.WaitGroup) {
+func runConnServer(t *testing.T, c net.Conn, crash crashConfig, msgs chan<- string, errs chan<- error, wg *sync.WaitGroup) {
 	wg.Add(1)
-	processMessage(c, msgs, errs, wg)
+	processMessage(c, crash, msgs, errs, wg)
 }
 
-func processMessage(c net.Conn, msgs chan<- string, errs chan<- error, wg *sync.WaitGroup) {
+func tryCrash(where whereCrash, c crashConfig) error {
+	if c.where != where {
+		return nil
+	}
+	select {
+	case <-c.trigger:
+		return fmt.Errorf("server crashed")
+	default:
+	}
+	return nil
+}
+
+func processMessage(c net.Conn, crash crashConfig, msgs chan<- string, errs chan<- error, wg *sync.WaitGroup) (crashed bool) {
 	defer wg.Done()
 	defer c.Close()
 	c.SetReadDeadline(time.Now().Add(2 * time.Second))
 	b := bufio.NewReader(c)
 	for n := 0; n < 10; n++ {
 		s, err := b.ReadString(' ')
-		if err != nil {
-			if errs != nil {
-				errs <- err
-			}
-			break
+		if err != nil && errs != nil {
+			errs <- err
 		}
+
+		if err := tryCrash(postLengthRead, crash); err != nil {
+			errs <- err
+			return true
+		}
+
 		i, err := strconv.Atoi(strings.TrimSpace(s))
 		if err != nil {
 			if errs != nil {
@@ -108,14 +151,18 @@ func processMessage(c net.Conn, msgs chan<- string, errs chan<- error, wg *sync.
 
 		msg := make([]byte, i)
 		_, err = io.ReadFull(b, msg)
-		if err != nil {
-			if errs != nil {
-				errs <- err
-			}
-			break
+		if err != nil && errs != nil {
+			errs <- err
 		}
+
+		if err := tryCrash(postBodyRead, crash); err != nil {
+			errs <- err
+			return true
+		}
+
 		msgs <- string(msg)
 	}
+	return false
 }
 
 func TestMain(m *testing.M) {
@@ -183,7 +230,7 @@ func testTransport(config servConfig) func(t *testing.T) {
 	return func(t *testing.T) {
 		errs := make(chan error, 10)
 		msgs := make(chan string)
-		addr, closer, wg := startTestServer(t, config, msgs, errs)
+		addr, closer, wg := startTestServer(t, config, noCrash, msgs, errs)
 
 		defer wg.Wait()
 		defer closer.Close()
@@ -229,6 +276,71 @@ func TestSyslogTransport_backoff(t *testing.T) {
 
 func TestSyslogTransport_reconnect(t *testing.T) {
 	// TODO: check that we can successfully reconnect without dropping continued incoming logs.
+	config := servConfig{protocol: "tcp"}
+	errs := make(chan error, 10)
+	msgs := make(chan string)
+	crash := newCrash(postLengthRead)
+	addr, closer, wg := startTestServer(t, config, crash, msgs, errs)
+
+	defer wg.Wait()
+	defer closer.Close()
+
+	transport := NewSyslogTransport(config.protocol, addr, config.cert)
+
+	// write initial data, send to server
+	_, err := io.WriteString(transport, "test1")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// crash the server and then send some additional data
+	crash.trigger <- true
+	_, err = io.WriteString(transport, "test2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = io.WriteString(transport, "test3")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = io.WriteString(transport, "test4")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// make sure it crashed
+	select {
+	case err := <-errs:
+		if err.Error() != "server crashed" {
+			t.Errorf("wanted crash error, got: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out")
+	}
+
+	// empty out the errors
+	for len(errs) > 0 {
+		<-errs
+	}
+
+	// start a new server and redirect transport to it
+	addr2, closer2, wg2 := startTestServer(t, config, crash, msgs, errs)
+	transport.Update(config.protocol, addr2, config.cert)
+
+	defer wg2.Wait()
+	defer closer2.Close()
+
+	select {
+	case got := <-msgs:
+		want := "test2"
+		if want != got {
+			t.Errorf("post server reboot - wrong message: want %q, got %q", want, got)
+		}
+	case err := <-errs:
+		t.Errorf("got unexpected error: %v", err)
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out")
+	}
 }
 
 var testCert = []byte(`

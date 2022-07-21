@@ -403,14 +403,16 @@ func (s *serviceData) startInternal() error {
 		}
 	}
 
-	ws := []io.Writer{logWriter}
-	for _, d := range logDests {
-		ws = append(ws, d)
+	var outputWriter io.Writer = logWriter
+	if len(logDests) > 0 {
+		ws := []io.Writer{logWriter}
+		for _, d := range logDests {
+			ws = append(ws, d)
+		}
+		outputWriter = io.MultiWriter(ws...)
 	}
-
-	mw := io.MultiWriter(ws...)
-	s.cmd.Stdout = mw
-	s.cmd.Stderr = mw
+	s.cmd.Stdout = outputWriter
+	s.cmd.Stderr = outputWriter
 
 	// Start the process!
 	logger.Noticef("Service %q starting: %s", serviceName, s.config.Command)

@@ -174,12 +174,6 @@ func (s *SyslogTransport) Write(msg []byte) (int, error) {
 	// Octet framing as per RFC 5425.  This needs to occur here rather than later in order to
 	// preserve framing of syslog messages atomically.  Otherwise failed or partial sends (across
 	// the network) would otherwise cause framing of multiple or partial messages at once.
-
-	// TODO: although writes to the ring buffer should always succeed and be basically atomic (as
-	// long as any single write isn't larger than the entire buffer), once the buffer wraps around
-	// and starts discarding data, it is possible that a partial syslog message is discarded
-	// leaving a corrupt message at the "front" of the buffer.  We need to prevent this from
-	// happening somehow.
 	_, err := fmt.Fprintf(s.buf, "%d %s", len(msg), msg)
 	if err != nil {
 		return 0, err
@@ -192,7 +186,7 @@ func (s *SyslogTransport) forward() {
 	defer iter.Close()
 
 	for iter.Next(s.done) {
-		// TODO: ensure the iterator wraparound "(data truncated)" text doesn't get sent as a
+		// TODO: ensure the iterator wraparound "(data truncated...)" text doesn't get sent as a
 		// syslog message.
 		err := s.send(iter)
 		if err != nil {
