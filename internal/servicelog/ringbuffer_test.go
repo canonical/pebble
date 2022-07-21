@@ -98,7 +98,7 @@ func (s *ringBufferSuite) TestCrossBoundaryWriteCopy(c *C) {
 
 func (s *ringBufferSuite) TestCrossBoundaryWriteWithAtomicDiscard(c *C) {
 	buf := servicelog.NewRingBuffer(10)
-	buf.DoAtomicDiscard()
+	buf.EnableAtomicDiscard()
 
 	io.WriteString(buf, "hello ")
 	io.WriteString(buf, "world ")

@@ -62,9 +62,10 @@ func NewRingBuffer(size int) *RingBuffer {
 	return &rb
 }
 
-// DoAtomicDiscard causes the buffer to track boundaries between Write calls ensuring that when
-// full, bytes are discarded
-func (rb *RingBuffer) DoAtomicDiscard() { rb.atomicDiscard = true }
+// EnableAtomicDiscard causes the buffer to track boundaries between Write calls ensuring that when
+// full, bytes are discarded in discrete chunks representing the full writes as they initially came
+// in.
+func (rb *RingBuffer) EnableAtomicDiscard() { rb.atomicDiscard = true }
 
 // Close closes the writer to further writes, readers may continue.
 func (rb *RingBuffer) Close() error {

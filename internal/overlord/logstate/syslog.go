@@ -133,6 +133,7 @@ func NewSyslogTransport(protocol string, destHost string, serverCert []byte) *Sy
 		done:       make(chan struct{}),
 		buf:        servicelog.NewRingBuffer(maxLogBytes),
 	}
+	transport.buf.EnableAtomicDiscard()
 	go transport.forward()
 	return transport
 }
