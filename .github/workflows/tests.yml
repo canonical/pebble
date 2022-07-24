@@ -45,10 +45,12 @@ jobs:
     - name: Test
       run: |
         echo user=$USER group=$GROUP
+        cat /etc/passwd
+        getent group
         go test -c ./internal/daemon
-        PEBBLE_TEST_USER=runner PEBBLE_TEST_GROUP= sudo -E ./daemon.test -check.v -check.f ^execSuite\.TestUserGroup$
-        PEBBLE_TEST_USER=runner PEBBLE_TEST_GROUP= sudo -E ./daemon.test -check.v -check.f ^execSuite\.TestUserIDGroupID$
-        PEBBLE_TEST_USER=runner PEBBLE_TEST_GROUP= sudo -E ./daemon.test -check.v -check.f ^filesSuite\.TestWriteUserGroupReal$
+        PEBBLE_TEST_USER=runner PEBBLE_TEST_GROUP=runner sudo -E ./daemon.test -check.v -check.f ^execSuite\.TestUserGroup$
+        PEBBLE_TEST_USER=runner PEBBLE_TEST_GROUP=runner sudo -E ./daemon.test -check.v -check.f ^execSuite\.TestUserIDGroupID$
+        PEBBLE_TEST_USER=runner PEBBLE_TEST_GROUP=runner sudo -E ./daemon.test -check.v -check.f ^filesSuite\.TestWriteUserGroupReal$
 
   format:
     runs-on: ubuntu-latest
