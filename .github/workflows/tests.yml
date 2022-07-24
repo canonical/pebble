@@ -44,10 +44,12 @@ jobs:
 
     - name: Test
       run: |
+        whoami
         echo user=$USER
         echo group=$GROUP
         go test -c ./internal/daemon
         sudo su
+        whoami
         export PEBBLE_TEST_USER=runner
         export PEBBLE_TEST_GROUP=runner
         ./daemon.test -check.f execSuite.TestUserGroup
