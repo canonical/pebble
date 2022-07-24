@@ -159,7 +159,7 @@ func (s *execSuite) TestUserGroup(c *C) {
 		Group:   group,
 	})
 	c.Assert(waitErr, IsNil)
-	c.Check(stdout, Equals, username+"\n"+group+"\n")
+	c.Check(stdout, Equals, username+"\n"+group+"\nTODO")
 	c.Check(stderr, Equals, "")
 }
 

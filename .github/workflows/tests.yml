@@ -48,8 +48,8 @@ jobs:
         echo group=$GROUP
         go test -c ./internal/daemon
         sudo su
-        export PEBBLE_TEST_USER=usr
-        export PEBBLE_TEST_GROUP=grp
+        export PEBBLE_TEST_USER=runner
+        export PEBBLE_TEST_GROUP=runner
         ./daemon.test -check.f execSuite.TestUserGroup
         ./daemon.test -check.f execSuite.TestUserGroup
         ./daemon.test -check.f filesSuite.TestWriteUserGroupReal
