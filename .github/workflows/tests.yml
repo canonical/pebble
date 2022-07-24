@@ -29,6 +29,31 @@ jobs:
         go test -race ./...
         go build ./cmd/pebble
 
+  root-tests:
+    runs-on: ubuntu-latest
+
+    name: Root Tests
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Set up Go
+      uses: actions/setup-go@v2
+      with:
+        go-version: "1.17"
+
+    - name: Test
+      run: |
+        echo user=$USER
+        echo group=$GROUP
+        go test -c ./internal/daemon
+        sudo su
+        export PEBBLE_TEST_USER=usr
+        export PEBBLE_TEST_GROUP=grp
+        ./daemon.test -check.f execSuite.TestUserGroup
+        ./daemon.test -check.f execSuite.TestUserGroup
+        ./daemon.test -check.f filesSuite.TestWriteUserGroupReal
+
   format:
     runs-on: ubuntu-latest
 

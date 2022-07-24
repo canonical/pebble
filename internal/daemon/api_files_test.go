@@ -881,21 +881,26 @@ func (s *filesSuite) TestWriteUserGroupMocked(c *C) {
 	c.Check(chownCalls[1], Equals, chownArgs{tmpDir + "/user-group", 56, 78})
 }
 
-// This test is normally skipped; run with "sudo go test" to execute.
+// See .github/workflows/tests.yml for how to run this test as root.
 func (s *filesSuite) TestWriteUserGroupReal(c *C) {
 	if os.Getuid() != 0 {
-		c.Skip("real chown test requires running as root")
+		c.Skip("requires running as root")
 	}
-	nobody, err := user.Lookup("nobody")
+	username := os.Getenv("PEBBLE_TEST_USER")
+	group := os.Getenv("PEBBLE_TEST_GROUP")
+	if username == "" || group == "" {
+		c.Fatalf("must set PEBBLE_TEST_USER and PEBBLE_TEST_GROUP")
+	}
+	u, err := user.Lookup(username)
 	c.Assert(err, IsNil)
-	nogroup, err := user.LookupGroup("nogroup")
+	g, err := user.LookupGroup(group)
 	c.Assert(err, IsNil)
-	uid, err := strconv.Atoi(nobody.Uid)
+	uid, err := strconv.Atoi(u.Uid)
 	c.Assert(err, IsNil)
-	gid, err := strconv.Atoi(nogroup.Gid)
+	gid, err := strconv.Atoi(g.Gid)
 	c.Assert(err, IsNil)
 
-	tmpDir := s.testWriteUserGroup(c, uid, gid, "nobody", "nogroup")
+	tmpDir := s.testWriteUserGroup(c, uid, gid, username, group)
 
 	info, err := os.Stat(tmpDir + "/normal")
 	c.Assert(err, IsNil)
