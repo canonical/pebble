@@ -44,17 +44,11 @@ jobs:
 
     - name: Test
       run: |
-        whoami
-        echo user=$USER
-        echo group=$GROUP
+        echo user=$USER group=$GROUP
         go test -c ./internal/daemon
-        sudo su
-        whoami
-        export PEBBLE_TEST_USER=runner
-        export PEBBLE_TEST_GROUP=runner
-        ./daemon.test -check.v -check.f execSuite.TestUserGroup
-        ./daemon.test -check.v -check.f execSuite.TestUserGroup
-        ./daemon.test -check.v -check.f filesSuite.TestWriteUserGroupReal
+        PEBBLE_TEST_USER=runner PEBBLE_TEST_GROUP= sudo -E ./daemon.test -check.v -check.f ^execSuite\.TestUserGroup$
+        PEBBLE_TEST_USER=runner PEBBLE_TEST_GROUP= sudo -E ./daemon.test -check.v -check.f ^execSuite\.TestUserIDGroupID$
+        PEBBLE_TEST_USER=runner PEBBLE_TEST_GROUP= sudo -E ./daemon.test -check.v -check.f ^filesSuite\.TestWriteUserGroupReal$
 
   format:
     runs-on: ubuntu-latest
