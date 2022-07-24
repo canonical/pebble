@@ -146,7 +146,7 @@ func (s *execSuite) TestTimeout(c *C) {
 // See .github/workflows/tests.yml for how to run this test as root.
 func (s *execSuite) TestUserGroup(c *C) {
 	if os.Getuid() != 0 {
-		c.Skip("requires running as root")
+		c.Skip(fmt.Sprintf("requires running as root, not %d", os.Getuid()))
 	}
 	username := os.Getenv("PEBBLE_TEST_USER")
 	group := os.Getenv("PEBBLE_TEST_GROUP")

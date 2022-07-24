@@ -52,9 +52,9 @@ jobs:
         whoami
         export PEBBLE_TEST_USER=runner
         export PEBBLE_TEST_GROUP=runner
-        ./daemon.test -check.f execSuite.TestUserGroup
-        ./daemon.test -check.f execSuite.TestUserGroup
-        ./daemon.test -check.f filesSuite.TestWriteUserGroupReal
+        ./daemon.test -check.v -check.f execSuite.TestUserGroup
+        ./daemon.test -check.v -check.f execSuite.TestUserGroup
+        ./daemon.test -check.v -check.f filesSuite.TestWriteUserGroupReal
 
   format:
     runs-on: ubuntu-latest
