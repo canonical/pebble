@@ -143,44 +143,51 @@ func (s *execSuite) TestTimeout(c *C) {
 	c.Check(stderr, Equals, "")
 }
 
-// You can run these tests as root with the following commands:
-//
-// go test -c -v ./internal/daemon
-// sudo ./daemon.test -check.v -check.f execSuite
-//
+// See .github/workflows/tests.yml for how to run this test as root.
 func (s *execSuite) TestUserGroup(c *C) {
 	if os.Getuid() != 0 {
-		c.Skip("exec user/group test requires running as root")
+		c.Skip("requires running as root")
+	}
+	username := os.Getenv("PEBBLE_TEST_USER")
+	group := os.Getenv("PEBBLE_TEST_GROUP")
+	if username == "" || group == "" {
+		c.Fatalf("must set PEBBLE_TEST_USER and PEBBLE_TEST_GROUP")
 	}
 	stdout, stderr, waitErr := s.exec(c, "", &client.ExecOptions{
 		Command: []string{"/bin/sh", "-c", "id -n -u && id -n -g"},
-		User:    "nobody",
-		Group:   "nogroup",
+		User:    username,
+		Group:   group,
 	})
-	c.Check(waitErr, IsNil)
-	c.Check(stdout, Equals, "nobody\nnogroup\n")
+	c.Assert(waitErr, IsNil)
+	c.Check(stdout, Equals, username+"\n"+group+"\n")
 	c.Check(stderr, Equals, "")
 }
 
+// See .github/workflows/tests.yml for how to run this test as root.
 func (s *execSuite) TestUserIDGroupID(c *C) {
 	if os.Getuid() != 0 {
-		c.Skip("exec user ID/group ID test requires running as root")
+		c.Skip("requires running as root")
 	}
-	nobody, err := user.Lookup("nobody")
+	username := os.Getenv("PEBBLE_TEST_USER")
+	group := os.Getenv("PEBBLE_TEST_GROUP")
+	if username == "" || group == "" {
+		c.Fatalf("must set PEBBLE_TEST_USER and PEBBLE_TEST_GROUP")
+	}
+	u, err := user.Lookup(username)
 	c.Assert(err, IsNil)
-	nogroup, err := user.LookupGroup("nogroup")
+	g, err := user.LookupGroup(group)
 	c.Assert(err, IsNil)
-	uid, err := strconv.Atoi(nobody.Uid)
+	uid, err := strconv.Atoi(u.Uid)
 	c.Assert(err, IsNil)
-	gid, err := strconv.Atoi(nogroup.Gid)
+	gid, err := strconv.Atoi(g.Gid)
 	c.Assert(err, IsNil)
 	stdout, stderr, waitErr := s.exec(c, "", &client.ExecOptions{
 		Command: []string{"/bin/sh", "-c", "id -n -u && id -n -g"},
 		UserID:  &uid,
 		GroupID: &gid,
 	})
-	c.Check(waitErr, IsNil)
-	c.Check(stdout, Equals, "nobody\nnogroup\n")
+	c.Assert(waitErr, IsNil)
+	c.Check(stdout, Equals, username+"\n"+group+"\n")
 	c.Check(stderr, Equals, "")
 }
 
