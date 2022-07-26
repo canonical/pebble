@@ -48,6 +48,8 @@ jobs:
         PEBBLE_TEST_USER=runner PEBBLE_TEST_GROUP=runner sudo -E ./daemon.test -check.v -check.f ^execSuite\.TestUserGroup$
         PEBBLE_TEST_USER=runner PEBBLE_TEST_GROUP=runner sudo -E ./daemon.test -check.v -check.f ^execSuite\.TestUserIDGroupID$
         PEBBLE_TEST_USER=runner PEBBLE_TEST_GROUP=runner sudo -E ./daemon.test -check.v -check.f ^filesSuite\.TestWriteUserGroupReal$
+        go test -c ./internal/overlord/servstate/
+        PEBBLE_TEST_USER=runner PEBBLE_TEST_GROUP=runner sudo -E ./servstate.test -check.v -check.f ^S.TestUserGroup$
 
   format:
     runs-on: ubuntu-latest

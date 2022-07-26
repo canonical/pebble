@@ -484,6 +484,47 @@ func (s *S) TestUserGroupFails(c *C) {
 	c.Check(gotGid, Equals, uint32(gid))
 }
 
+// See .github/workflows/tests.yml for how to run this test as root.
+func (s *S) TestUserGroup(c *C) {
+	if os.Getuid() != 0 {
+		c.Skip("requires running as root")
+	}
+	username := os.Getenv("PEBBLE_TEST_USER")
+	group := os.Getenv("PEBBLE_TEST_GROUP")
+	if username == "" || group == "" {
+		c.Fatalf("must set PEBBLE_TEST_USER and PEBBLE_TEST_GROUP")
+	}
+
+	// Add layer with a service that sets user and group.
+	layer := parseLayer(c, 0, "layer", fmt.Sprintf(`
+services:
+    usrgrp:
+        override: merge
+        command: /bin/sh -c "whoami; echo user=$USER home=$HOME; sleep 10"
+        user: %s
+        group: %s
+`, username, group))
+	err := s.manager.AppendLayer(layer)
+	c.Assert(err, IsNil)
+
+	// Override HOME and USER to ensure service exec updates them.
+	os.Setenv("HOME", "x")
+	os.Setenv("USER", "y")
+
+	// Start service and ensure it has enough time to write to log.
+	chg := s.startServices(c, []string{"usrgrp"}, 1)
+	s.waitUntilService(c, "usrgrp", func(svc *servstate.ServiceInfo) bool {
+		return svc.Current == servstate.StatusActive
+	})
+	c.Assert(s.manager.BackoffNum("usrgrp"), Equals, 0)
+	s.st.Lock()
+	c.Check(chg.Status(), Equals, state.DoneStatus)
+	s.st.Unlock()
+	time.Sleep(10 * time.Millisecond)
+	c.Check(s.logBufferString(), Matches,
+		fmt.Sprintf(`(?s).* \[usrgrp\] %[1]s\n.* \[usrgrp\] user=%[1]s home=/home/%[1]s\n`, username))
+}
+
 func (s *S) serviceByName(c *C, name string) *servstate.ServiceInfo {
 	services, err := s.manager.Services([]string{name})
 	c.Assert(err, IsNil)

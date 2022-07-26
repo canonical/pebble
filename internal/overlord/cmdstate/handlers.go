@@ -328,6 +328,11 @@ func (e *execution) do(ctx context.Context, task *state.Task) error {
 
 	cmd := exec.CommandContext(ctx, e.command[0], e.command[1:]...)
 
+	// Ensure cmd.Env is not nil (does not inherit parent env). This is not
+	// strictly necessary as cmdstate.Exec always sets some environment
+	// variables, but code defensively.
+	cmd.Env = make([]string, 0, len(e.environment))
+
 	for k, v := range e.environment {
 		cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", k, v))
 	}
