@@ -5,6 +5,8 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"os/user"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -325,6 +327,12 @@ func (s *serviceData) startInternal() error {
 	s.cmd = exec.Command(args[0], args[1:]...)
 	s.cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
+	// Copy environment to avoid updating original.
+	environment := make(map[string]string)
+	for k, v := range s.config.Environment {
+		environment[k] = v
+	}
+
 	// Start as another user if specified in plan.
 	uid, gid, err := osutil.NormalizeUidGid(s.config.UserID, s.config.GroupID, s.config.User, s.config.Group)
 	if err != nil {
@@ -335,11 +343,26 @@ func (s *serviceData) startInternal() error {
 			Uid: uint32(*uid),
 			Gid: uint32(*gid),
 		})
+
+		// Also set HOME and USER if not explicitly specified in config.
+		if environment["HOME"] == "" || environment["USER"] == "" {
+			u, err := user.LookupId(strconv.Itoa(*uid))
+			if err != nil {
+				logger.Noticef("Cannot look up user %d: %v", *uid, err)
+			} else {
+				if environment["HOME"] == "" {
+					environment["HOME"] = u.HomeDir
+				}
+				if environment["USER"] == "" {
+					environment["USER"] = u.Username
+				}
+			}
+		}
 	}
 
 	// Pass service description's environment variables to child process.
 	s.cmd.Env = os.Environ()
-	for k, v := range s.config.Environment {
+	for k, v := range environment {
 		s.cmd.Env = append(s.cmd.Env, k+"="+v)
 	}
 
