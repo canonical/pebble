@@ -460,17 +460,36 @@ func (s *filesSuite) TestMakeDirsUserGroupMocked(c *C) {
 		u, g := 56, 78
 		return &u, &g, nil
 	}
+	var mkdirAllChownPaths []string
+	mkdirAllChown = func(path string, perm os.FileMode, uid sys.UserID, gid sys.GroupID) error {
+		c.Check(int(perm), Equals, 0o755)
+		c.Check(int(uid), Equals, 56)
+		c.Check(int(gid), Equals, 78)
+		mkdirAllChownPaths = append(mkdirAllChownPaths, path)
+		return os.MkdirAll(path, perm)
+	}
 	defer func() {
 		chown = os.Chown
 		normalizeUidGid = osutil.NormalizeUidGid
+		mkdirAllChown = osutil.MkdirAllChown
 	}()
 
+	tmpDir := s.testMakeDirsUserGroup(c, 12, 34, "USER", "GROUP")
+
+	c.Assert(chownCalls, HasLen, 2)
+	c.Check(chownCalls[0], Equals, chownArgs{tmpDir + "/uid-gid", 12, 34})
+	c.Check(chownCalls[1], Equals, chownArgs{tmpDir + "/user-group", 56, 78})
+
+	c.Assert(mkdirAllChownPaths, HasLen, 1)
+	c.Check(mkdirAllChownPaths[0], Equals, tmpDir+"/nested2/user-group")
+}
+
+func (s *filesSuite) testMakeDirsUserGroup(c *C, uid, gid int, user, group string) string {
 	tmpDir := c.MkDir()
 
 	headers := http.Header{
 		"Content-Type": []string{"application/json"},
 	}
-	uid, gid := 12, 34
 	payload := struct {
 		Action string
 		Dirs   []makeDirsItem
@@ -479,7 +498,9 @@ func (s *filesSuite) TestMakeDirsUserGroupMocked(c *C) {
 		Dirs: []makeDirsItem{
 			{Path: tmpDir + "/normal"},
 			{Path: tmpDir + "/uid-gid", UserID: &uid, GroupID: &gid},
-			{Path: tmpDir + "/user-group", User: "USER", Group: "GROUP"},
+			{Path: tmpDir + "/user-group", User: user, Group: group},
+			{Path: tmpDir + "/nested1/normal", MakeParents: true},
+			{Path: tmpDir + "/nested2/user-group", User: user, Group: group, MakeParents: true},
 		},
 	}
 	reqBody, err := json.Marshal(payload)
@@ -491,18 +512,86 @@ func (s *filesSuite) TestMakeDirsUserGroupMocked(c *C) {
 	c.Assert(json.NewDecoder(body).Decode(&r), IsNil)
 	c.Check(r.StatusCode, Equals, http.StatusOK)
 	c.Check(r.Type, Equals, "sync")
-	c.Check(r.Result, HasLen, 3)
+	c.Check(r.Result, HasLen, 5)
 	checkFileResult(c, r.Result[0], tmpDir+"/normal", "", "")
 	checkFileResult(c, r.Result[1], tmpDir+"/uid-gid", "", "")
 	checkFileResult(c, r.Result[2], tmpDir+"/user-group", "", "")
-
-	c.Check(chownCalls, HasLen, 2)
-	c.Check(chownCalls[0], Equals, chownArgs{tmpDir + "/uid-gid", 12, 34})
-	c.Check(chownCalls[1], Equals, chownArgs{tmpDir + "/user-group", 56, 78})
+	checkFileResult(c, r.Result[3], tmpDir+"/nested1/normal", "", "")
+	checkFileResult(c, r.Result[4], tmpDir+"/nested2/user-group", "", "")
 
 	c.Check(osutil.IsDir(tmpDir+"/normal"), Equals, true)
 	c.Check(osutil.IsDir(tmpDir+"/uid-gid"), Equals, true)
 	c.Check(osutil.IsDir(tmpDir+"/user-group"), Equals, true)
+	c.Check(osutil.IsDir(tmpDir+"/nested1/normal"), Equals, true)
+	c.Check(osutil.IsDir(tmpDir+"/nested2/user-group"), Equals, true)
+
+	return tmpDir
+}
+
+// See .github/workflows/tests.yml for how to run this test as root.
+func (s *filesSuite) TestMakeDirsUserGroupReal(c *C) {
+	if os.Getuid() != 0 {
+		c.Skip("requires running as root")
+	}
+	username := os.Getenv("PEBBLE_TEST_USER")
+	group := os.Getenv("PEBBLE_TEST_GROUP")
+	if username == "" || group == "" {
+		c.Fatalf("must set PEBBLE_TEST_USER and PEBBLE_TEST_GROUP")
+	}
+	u, err := user.Lookup(username)
+	c.Assert(err, IsNil)
+	g, err := user.LookupGroup(group)
+	c.Assert(err, IsNil)
+	uid, err := strconv.Atoi(u.Uid)
+	c.Assert(err, IsNil)
+	gid, err := strconv.Atoi(g.Gid)
+	c.Assert(err, IsNil)
+
+	tmpDir := s.testMakeDirsUserGroup(c, uid, gid, username, group)
+
+	info, err := os.Stat(tmpDir + "/normal")
+	c.Assert(err, IsNil)
+	statT := info.Sys().(*syscall.Stat_t)
+	c.Check(statT.Uid, Equals, uint32(0))
+	c.Check(statT.Gid, Equals, uint32(0))
+
+	info, err = os.Stat(tmpDir + "/uid-gid")
+	c.Assert(err, IsNil)
+	statT = info.Sys().(*syscall.Stat_t)
+	c.Check(statT.Uid, Equals, uint32(uid))
+	c.Check(statT.Gid, Equals, uint32(uid))
+
+	info, err = os.Stat(tmpDir + "/user-group")
+	c.Assert(err, IsNil)
+	statT = info.Sys().(*syscall.Stat_t)
+	c.Check(statT.Uid, Equals, uint32(uid))
+	c.Check(statT.Gid, Equals, uint32(uid))
+
+	info, err = os.Stat(tmpDir + "/nested1")
+	c.Assert(err, IsNil)
+	c.Check(int(info.Mode()&os.ModePerm), Equals, 0o755)
+	statT = info.Sys().(*syscall.Stat_t)
+	c.Check(statT.Uid, Equals, uint32(0))
+	c.Check(statT.Gid, Equals, uint32(0))
+
+	info, err = os.Stat(tmpDir + "/nested1/normal")
+	c.Assert(err, IsNil)
+	statT = info.Sys().(*syscall.Stat_t)
+	c.Check(statT.Uid, Equals, uint32(0))
+	c.Check(statT.Gid, Equals, uint32(0))
+
+	info, err = os.Stat(tmpDir + "/nested2")
+	c.Assert(err, IsNil)
+	c.Check(int(info.Mode()&os.ModePerm), Equals, 0o755)
+	statT = info.Sys().(*syscall.Stat_t)
+	c.Check(statT.Uid, Equals, uint32(uid))
+	c.Check(statT.Gid, Equals, uint32(gid))
+
+	info, err = os.Stat(tmpDir + "/nested2/user-group")
+	c.Assert(err, IsNil)
+	statT = info.Sys().(*syscall.Stat_t)
+	c.Check(statT.Uid, Equals, uint32(uid))
+	c.Check(statT.Gid, Equals, uint32(gid))
 }
 
 func (s *filesSuite) TestRemoveSingle(c *C) {
@@ -839,7 +928,6 @@ Bar
 	c.Assert(info.Mode().Perm(), Equals, os.FileMode(0o755))
 }
 
-// We mock chown in this test because it's hard to test without running as root.
 func (s *filesSuite) TestWriteUserGroupMocked(c *C) {
 	type chownArgs struct {
 		name string
@@ -869,16 +957,29 @@ func (s *filesSuite) TestWriteUserGroupMocked(c *C) {
 		u, g := 56, 78
 		return &u, &g, nil
 	}
+	var mkdirAllChownPaths []string
+	mkdirAllChown = func(path string, perm os.FileMode, uid sys.UserID, gid sys.GroupID) error {
+		c.Check(int(perm), Equals, 0o755)
+		c.Check(int(uid), Equals, 56)
+		c.Check(int(gid), Equals, 78)
+		mkdirAllChownPaths = append(mkdirAllChownPaths, path)
+		return os.MkdirAll(path, perm)
+	}
 	defer func() {
 		atomicWriteChown = osutil.AtomicWriteChown
 		normalizeUidGid = osutil.NormalizeUidGid
+		mkdirAllChown = osutil.MkdirAllChown
 	}()
 
 	tmpDir := s.testWriteUserGroup(c, 12, 34, "USER", "GROUP")
 
-	c.Check(chownCalls, HasLen, 2)
+	c.Assert(chownCalls, HasLen, 3)
 	c.Check(chownCalls[0], Equals, chownArgs{tmpDir + "/uid-gid", 12, 34})
 	c.Check(chownCalls[1], Equals, chownArgs{tmpDir + "/user-group", 56, 78})
+	c.Check(chownCalls[2], Equals, chownArgs{tmpDir + "/nested2/user-group", 56, 78})
+
+	c.Assert(mkdirAllChownPaths, HasLen, 1)
+	c.Check(mkdirAllChownPaths[0], Equals, tmpDir+"/nested2")
 }
 
 // See .github/workflows/tests.yml for how to run this test as root.
@@ -919,6 +1020,32 @@ func (s *filesSuite) TestWriteUserGroupReal(c *C) {
 	statT = info.Sys().(*syscall.Stat_t)
 	c.Check(statT.Uid, Equals, uint32(uid))
 	c.Check(statT.Gid, Equals, uint32(uid))
+
+	info, err = os.Stat(tmpDir + "/nested1")
+	c.Assert(err, IsNil)
+	c.Check(int(info.Mode()&os.ModePerm), Equals, 0o755)
+	statT = info.Sys().(*syscall.Stat_t)
+	c.Check(statT.Uid, Equals, uint32(0))
+	c.Check(statT.Gid, Equals, uint32(0))
+
+	info, err = os.Stat(tmpDir + "/nested1/normal")
+	c.Assert(err, IsNil)
+	statT = info.Sys().(*syscall.Stat_t)
+	c.Check(statT.Uid, Equals, uint32(0))
+	c.Check(statT.Gid, Equals, uint32(0))
+
+	info, err = os.Stat(tmpDir + "/nested2")
+	c.Assert(err, IsNil)
+	c.Check(int(info.Mode()&os.ModePerm), Equals, 0o755)
+	statT = info.Sys().(*syscall.Stat_t)
+	c.Check(statT.Uid, Equals, uint32(uid))
+	c.Check(statT.Gid, Equals, uint32(gid))
+
+	info, err = os.Stat(tmpDir + "/nested2/user-group")
+	c.Assert(err, IsNil)
+	statT = info.Sys().(*syscall.Stat_t)
+	c.Check(statT.Uid, Equals, uint32(uid))
+	c.Check(statT.Gid, Equals, uint32(gid))
 }
 
 func (s *filesSuite) testWriteUserGroup(c *C, uid, gid int, user, group string) string {
@@ -926,6 +1053,8 @@ func (s *filesSuite) testWriteUserGroup(c *C, uid, gid int, user, group string) 
 	pathNormal := tmpDir + "/normal"
 	pathUidGid := tmpDir + "/uid-gid"
 	pathUserGroup := tmpDir + "/user-group"
+	pathNested := tmpDir + "/nested1/normal"
+	pathNestedUserGroup := tmpDir + "/nested2/user-group"
 
 	headers := http.Header{
 		"Content-Type": []string{"multipart/form-data; boundary=01234567890123456789012345678901"},
@@ -940,7 +1069,9 @@ Content-Disposition: form-data; name="request"
 	"files": [
 		{"path": "%[1]s"},
 		{"path": "%[2]s", "user-id": %[3]d, "group-id": %[4]d},
-		{"path": "%[5]s", "user": "%[6]s", "group": "%[7]s"}
+		{"path": "%[5]s", "user": "%[6]s", "group": "%[7]s"},
+		{"path": "%[8]s", "make-dirs": true},
+		{"path": "%[9]s", "user": "%[10]s", "group": "%[11]s", "make-dirs": true}
 	]
 }
 --01234567890123456789012345678901
@@ -955,22 +1086,35 @@ uid gid
 Content-Disposition: form-data; name="files"; filename="%[5]s"
 
 user group
+--01234567890123456789012345678901
+Content-Disposition: form-data; name="files"; filename="%[8]s"
+
+nested
+--01234567890123456789012345678901
+Content-Disposition: form-data; name="files"; filename="%[9]s"
+
+nested user group
 --01234567890123456789012345678901--
-`, pathNormal, pathUidGid, uid, gid, pathUserGroup, user, group)))
+`, pathNormal, pathUidGid, uid, gid, pathUserGroup, user, group,
+			pathNested, pathNestedUserGroup, user, group)))
 	c.Check(response.StatusCode, Equals, http.StatusOK)
 
 	var r testFilesResponse
 	c.Assert(json.NewDecoder(body).Decode(&r), IsNil)
 	c.Check(r.StatusCode, Equals, http.StatusOK)
 	c.Check(r.Type, Equals, "sync")
-	c.Check(r.Result, HasLen, 3)
+	c.Check(r.Result, HasLen, 5)
 	checkFileResult(c, r.Result[0], pathNormal, "", "")
 	checkFileResult(c, r.Result[1], pathUidGid, "", "")
 	checkFileResult(c, r.Result[2], pathUserGroup, "", "")
+	checkFileResult(c, r.Result[3], pathNested, "", "")
+	checkFileResult(c, r.Result[4], pathNestedUserGroup, "", "")
 
 	assertFile(c, pathNormal, 0o644, "normal")
 	assertFile(c, pathUidGid, 0o644, "uid gid")
 	assertFile(c, pathUserGroup, 0o644, "user group")
+	assertFile(c, pathNested, 0o644, "nested")
+	assertFile(c, pathNestedUserGroup, 0o644, "nested user group")
 
 	return tmpDir
 }
