@@ -503,6 +503,14 @@ func mkdirAllUserGroup(path string, perm os.FileMode, uid, gid *int) error {
 	}
 }
 
+func mkdirUserGroup(path string, perm os.FileMode, uid, gid *int) error {
+	if uid != nil && gid != nil {
+		return mkdirChown(path, perm, sys.UserID(*uid), sys.GroupID(*gid))
+	} else {
+		return os.Mkdir(path, perm)
+	}
+}
+
 func parsePermissions(permissions string, defaultMode os.FileMode) (os.FileMode, error) {
 	if permissions == "" {
 		return defaultMode, nil
@@ -551,30 +559,21 @@ func makeDir(dir makeDirsItem) error {
 		return fmt.Errorf("cannot look up user and group: %w", err)
 	}
 	if dir.MakeParents {
-		err := mkdirAllUserGroup(dir.Path, perm, uid, gid)
-		if err != nil {
-			return err
-		}
+		err = mkdirAllUserGroup(dir.Path, perm, uid, gid)
 	} else {
-		err := os.Mkdir(dir.Path, perm)
-		if err != nil {
-			return err
-		}
-		if uid != nil && gid != nil {
-			err := chown(dir.Path, *uid, *gid)
-			if err != nil {
-				return fmt.Errorf("cannot set user and group: %w", err)
-			}
-		}
+		err = mkdirUserGroup(dir.Path, perm, uid, gid)
+	}
+	if err != nil {
+		return err
 	}
 	return nil
 }
 
 // Because it's hard to test os.Chown without running the tests as root.
 var (
-	chown            = os.Chown
 	atomicWriteChown = osutil.AtomicWriteChown
 	normalizeUidGid  = osutil.NormalizeUidGid
+	mkdirChown       = osutil.MkdirChown
 	mkdirAllChown    = osutil.MkdirAllChown
 )
 

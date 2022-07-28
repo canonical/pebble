@@ -438,15 +438,16 @@ func (s *filesSuite) TestMakeDirsMultiple(c *C) {
 }
 
 func (s *filesSuite) TestMakeDirsUserGroupMocked(c *C) {
-	type chownArgs struct {
-		name string
-		uid  int
-		gid  int
+	type mkdirChownArgs struct {
+		path string
+		perm os.FileMode
+		uid  sys.UserID
+		gid  sys.GroupID
 	}
-	var chownCalls []chownArgs
-	chown = func(name string, uid, gid int) error {
-		chownCalls = append(chownCalls, chownArgs{name, uid, gid})
-		return nil
+	var mkdirChownCalls []mkdirChownArgs
+	mkdirChown = func(path string, perm os.FileMode, uid sys.UserID, gid sys.GroupID) error {
+		mkdirChownCalls = append(mkdirChownCalls, mkdirChownArgs{path, perm, uid, gid})
+		return os.Mkdir(path, perm)
 	}
 	normalizeUidGid = func(uid, gid *int, username, group string) (*int, *int, error) {
 		if uid != nil {
@@ -469,16 +470,16 @@ func (s *filesSuite) TestMakeDirsUserGroupMocked(c *C) {
 		return os.MkdirAll(path, perm)
 	}
 	defer func() {
-		chown = os.Chown
+		mkdirChown = osutil.MkdirChown
 		normalizeUidGid = osutil.NormalizeUidGid
 		mkdirAllChown = osutil.MkdirAllChown
 	}()
 
 	tmpDir := s.testMakeDirsUserGroup(c, 12, 34, "USER", "GROUP")
 
-	c.Assert(chownCalls, HasLen, 2)
-	c.Check(chownCalls[0], Equals, chownArgs{tmpDir + "/uid-gid", 12, 34})
-	c.Check(chownCalls[1], Equals, chownArgs{tmpDir + "/user-group", 56, 78})
+	c.Assert(mkdirChownCalls, HasLen, 2)
+	c.Check(mkdirChownCalls[0], Equals, mkdirChownArgs{tmpDir + "/uid-gid", 0o755, 12, 34})
+	c.Check(mkdirChownCalls[1], Equals, mkdirChownArgs{tmpDir + "/user-group", 0o755, 56, 78})
 
 	c.Assert(mkdirAllChownPaths, HasLen, 1)
 	c.Check(mkdirAllChownPaths[0], Equals, tmpDir+"/nested2/user-group")
