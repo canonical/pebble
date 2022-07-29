@@ -34,6 +34,9 @@ var mu sync.Mutex
 func MkdirAllChown(path string, perm os.FileMode, uid sys.UserID, gid sys.GroupID) error {
 	mu.Lock()
 	defer mu.Unlock()
+	if uid == NoChown && gid == NoChown {
+		return os.MkdirAll(path, perm)
+	}
 	return mkdirAllChown(filepath.Clean(path), perm, uid, gid)
 }
 
@@ -69,10 +72,8 @@ func mkdirChown(path string, perm os.FileMode, uid sys.UserID, gid sys.GroupID) 
 		return err
 	}
 
-	if uid != NoChown || gid != NoChown {
-		if err := sys.ChownPath(cand, uid, gid); err != nil {
-			return err
-		}
+	if err := sys.ChownPath(cand, uid, gid); err != nil {
+		return err
 	}
 
 	if err := os.Rename(cand, path); err != nil {
@@ -93,5 +94,8 @@ func mkdirChown(path string, perm os.FileMode, uid sys.UserID, gid sys.GroupID) 
 func MkdirChown(path string, perm os.FileMode, uid sys.UserID, gid sys.GroupID) error {
 	mu.Lock()
 	defer mu.Unlock()
+	if uid == NoChown && gid == NoChown {
+		return os.Mkdir(path, perm)
+	}
 	return mkdirChown(filepath.Clean(path), perm, uid, gid)
 }

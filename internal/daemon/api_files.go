@@ -499,7 +499,7 @@ func mkdirAllUserGroup(path string, perm os.FileMode, uid, gid *int) error {
 	if uid != nil && gid != nil {
 		return mkdirAllChown(path, perm, sys.UserID(*uid), sys.GroupID(*gid))
 	} else {
-		return os.MkdirAll(path, perm)
+		return mkdirAllChown(path, perm, osutil.NoChown, osutil.NoChown)
 	}
 }
 
@@ -507,7 +507,7 @@ func mkdirUserGroup(path string, perm os.FileMode, uid, gid *int) error {
 	if uid != nil && gid != nil {
 		return mkdirChown(path, perm, sys.UserID(*uid), sys.GroupID(*gid))
 	} else {
-		return os.Mkdir(path, perm)
+		return mkdirChown(path, perm, osutil.NoChown, osutil.NoChown)
 	}
 }
 

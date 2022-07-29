@@ -438,17 +438,18 @@ func (s *filesSuite) TestMakeDirsMultiple(c *C) {
 }
 
 func (s *filesSuite) TestMakeDirsUserGroupMocked(c *C) {
-	type mkdirChownArgs struct {
+	type args struct {
 		path string
 		perm os.FileMode
 		uid  sys.UserID
 		gid  sys.GroupID
 	}
-	var mkdirChownCalls []mkdirChownArgs
+	var mkdirChownCalls []args
 	mkdirChown = func(path string, perm os.FileMode, uid sys.UserID, gid sys.GroupID) error {
-		mkdirChownCalls = append(mkdirChownCalls, mkdirChownArgs{path, perm, uid, gid})
+		mkdirChownCalls = append(mkdirChownCalls, args{path, perm, uid, gid})
 		return os.Mkdir(path, perm)
 	}
+
 	normalizeUidGid = func(uid, gid *int, username, group string) (*int, *int, error) {
 		if uid != nil {
 			return uid, gid, nil
@@ -461,14 +462,13 @@ func (s *filesSuite) TestMakeDirsUserGroupMocked(c *C) {
 		u, g := 56, 78
 		return &u, &g, nil
 	}
-	var mkdirAllChownPaths []string
+
+	var mkdirAllChownCalls []args
 	mkdirAllChown = func(path string, perm os.FileMode, uid sys.UserID, gid sys.GroupID) error {
-		c.Check(int(perm), Equals, 0o755)
-		c.Check(int(uid), Equals, 56)
-		c.Check(int(gid), Equals, 78)
-		mkdirAllChownPaths = append(mkdirAllChownPaths, path)
+		mkdirAllChownCalls = append(mkdirAllChownCalls, args{path, perm, uid, gid})
 		return os.MkdirAll(path, perm)
 	}
+
 	defer func() {
 		mkdirChown = osutil.MkdirChown
 		normalizeUidGid = osutil.NormalizeUidGid
@@ -477,12 +477,14 @@ func (s *filesSuite) TestMakeDirsUserGroupMocked(c *C) {
 
 	tmpDir := s.testMakeDirsUserGroup(c, 12, 34, "USER", "GROUP")
 
-	c.Assert(mkdirChownCalls, HasLen, 2)
-	c.Check(mkdirChownCalls[0], Equals, mkdirChownArgs{tmpDir + "/uid-gid", 0o755, 12, 34})
-	c.Check(mkdirChownCalls[1], Equals, mkdirChownArgs{tmpDir + "/user-group", 0o755, 56, 78})
+	c.Assert(mkdirChownCalls, HasLen, 3)
+	c.Check(mkdirChownCalls[0], Equals, args{tmpDir + "/normal", 0o755, osutil.NoChown, osutil.NoChown})
+	c.Check(mkdirChownCalls[1], Equals, args{tmpDir + "/uid-gid", 0o755, 12, 34})
+	c.Check(mkdirChownCalls[2], Equals, args{tmpDir + "/user-group", 0o755, 56, 78})
 
-	c.Assert(mkdirAllChownPaths, HasLen, 1)
-	c.Check(mkdirAllChownPaths[0], Equals, tmpDir+"/nested2/user-group")
+	c.Assert(mkdirAllChownCalls, HasLen, 2)
+	c.Check(mkdirAllChownCalls[0], Equals, args{tmpDir + "/nested1/normal", 0o755, osutil.NoChown, osutil.NoChown})
+	c.Check(mkdirAllChownCalls[1], Equals, args{tmpDir + "/nested2/user-group", 0o755, 56, 78})
 }
 
 func (s *filesSuite) testMakeDirsUserGroup(c *C, uid, gid int, user, group string) string {
@@ -930,22 +932,18 @@ Bar
 }
 
 func (s *filesSuite) TestWriteUserGroupMocked(c *C) {
-	type chownArgs struct {
+	type args struct {
 		name string
-		uid  int
-		gid  int
+		perm os.FileMode
+		uid  sys.UserID
+		gid  sys.GroupID
 	}
-	var chownCalls []chownArgs
+	var atomicWriteChownCalls []args
 	atomicWriteChown = func(name string, r io.Reader, perm os.FileMode, flags osutil.AtomicWriteFlags, uid sys.UserID, gid sys.GroupID) error {
-		err := osutil.AtomicWrite(name, r, perm, flags)
-		if err != nil {
-			return err
-		}
-		if uid != osutil.NoChown && gid != osutil.NoChown {
-			chownCalls = append(chownCalls, chownArgs{name, int(uid), int(gid)})
-		}
-		return nil
+		atomicWriteChownCalls = append(atomicWriteChownCalls, args{name, perm, uid, gid})
+		return osutil.AtomicWrite(name, r, perm, flags)
 	}
+
 	normalizeUidGid = func(uid, gid *int, username, group string) (*int, *int, error) {
 		if uid != nil {
 			return uid, gid, nil
@@ -958,14 +956,13 @@ func (s *filesSuite) TestWriteUserGroupMocked(c *C) {
 		u, g := 56, 78
 		return &u, &g, nil
 	}
-	var mkdirAllChownPaths []string
+
+	var mkdirAllChownCalls []args
 	mkdirAllChown = func(path string, perm os.FileMode, uid sys.UserID, gid sys.GroupID) error {
-		c.Check(int(perm), Equals, 0o755)
-		c.Check(int(uid), Equals, 56)
-		c.Check(int(gid), Equals, 78)
-		mkdirAllChownPaths = append(mkdirAllChownPaths, path)
+		mkdirAllChownCalls = append(mkdirAllChownCalls, args{path, perm, uid, gid})
 		return os.MkdirAll(path, perm)
 	}
+
 	defer func() {
 		atomicWriteChown = osutil.AtomicWriteChown
 		normalizeUidGid = osutil.NormalizeUidGid
@@ -974,13 +971,16 @@ func (s *filesSuite) TestWriteUserGroupMocked(c *C) {
 
 	tmpDir := s.testWriteUserGroup(c, 12, 34, "USER", "GROUP")
 
-	c.Assert(chownCalls, HasLen, 3)
-	c.Check(chownCalls[0], Equals, chownArgs{tmpDir + "/uid-gid", 12, 34})
-	c.Check(chownCalls[1], Equals, chownArgs{tmpDir + "/user-group", 56, 78})
-	c.Check(chownCalls[2], Equals, chownArgs{tmpDir + "/nested2/user-group", 56, 78})
+	c.Assert(atomicWriteChownCalls, HasLen, 5)
+	c.Check(atomicWriteChownCalls[0], Equals, args{tmpDir + "/normal", 0o644, osutil.NoChown, osutil.NoChown})
+	c.Check(atomicWriteChownCalls[1], Equals, args{tmpDir + "/uid-gid", 0o644, 12, 34})
+	c.Check(atomicWriteChownCalls[2], Equals, args{tmpDir + "/user-group", 0o644, 56, 78})
+	c.Check(atomicWriteChownCalls[3], Equals, args{tmpDir + "/nested1/normal", 0o644, osutil.NoChown, osutil.NoChown})
+	c.Check(atomicWriteChownCalls[4], Equals, args{tmpDir + "/nested2/user-group", 0o644, 56, 78})
 
-	c.Assert(mkdirAllChownPaths, HasLen, 1)
-	c.Check(mkdirAllChownPaths[0], Equals, tmpDir+"/nested2")
+	c.Assert(mkdirAllChownCalls, HasLen, 2)
+	c.Check(mkdirAllChownCalls[0], Equals, args{tmpDir + "/nested1", 0o755, osutil.NoChown, osutil.NoChown})
+	c.Check(mkdirAllChownCalls[1], Equals, args{tmpDir + "/nested2", 0o755, 56, 78})
 }
 
 // See .github/workflows/tests.yml for how to run this test as root.
