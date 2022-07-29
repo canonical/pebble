@@ -211,7 +211,9 @@ func (s *ManagerSuite) TestFailures(c *C) {
 	mgr.NotifyCheckFailed(func(name string) {
 		failureName = name
 	})
-	os.Setenv("FAIL_PEBBLE_TEST", "1")
+	testPath := c.MkDir() + "/test"
+	err := ioutil.WriteFile(testPath, nil, 0o644)
+	c.Assert(err, IsNil)
 	mgr.PlanChanged(&plan.Plan{
 		Checks: map[string]*plan.Check{
 			"chk1": {
@@ -219,7 +221,9 @@ func (s *ManagerSuite) TestFailures(c *C) {
 				Period:    plan.OptionalDuration{Value: 20 * time.Millisecond},
 				Timeout:   plan.OptionalDuration{Value: 100 * time.Millisecond},
 				Threshold: 3,
-				Exec:      &plan.ExecCheck{Command: `/bin/sh -c '[ -z $FAIL_PEBBLE_TEST ]'`},
+				Exec: &plan.ExecCheck{
+					Command: fmt.Sprintf(`/bin/sh -c '[ ! -f %s ]'`, testPath),
+				},
 			},
 		},
 	})
@@ -254,7 +258,8 @@ func (s *ManagerSuite) TestFailures(c *C) {
 
 	// Should reset number of failures if command then succeeds
 	failureName = ""
-	os.Setenv("FAIL_PEBBLE_TEST", "")
+	err = os.Remove(testPath)
+	c.Assert(err, IsNil)
 	check = waitCheck(c, mgr, "chk1", func(check *CheckInfo) bool {
 		return check.Status == CheckStatusUp
 	})
