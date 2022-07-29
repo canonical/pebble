@@ -24,6 +24,9 @@ import (
 )
 
 // XXX: we need to come back and fix this; this is a hack to unblock us.
+// Have a lock so that if one goroutine tries to mkdirallchown /foo/bar, and
+// another tries to mkdirallchown /foo/baz, they can't both decide they need
+// to make /foo and then have one fail.
 var mu sync.Mutex
 
 // MkdirAllChown is like os.MkdirAll but it calls os.Chown on any
@@ -31,6 +34,9 @@ var mu sync.Mutex
 func MkdirAllChown(path string, perm os.FileMode, uid sys.UserID, gid sys.GroupID) error {
 	mu.Lock()
 	defer mu.Unlock()
+	if uid == NoChown && gid == NoChown {
+		return os.MkdirAll(path, perm)
+	}
 	return mkdirAllChown(filepath.Clean(path), perm, uid, gid)
 }
 
@@ -56,6 +62,10 @@ func mkdirAllChown(path string, perm os.FileMode, uid sys.UserID, gid sys.GroupI
 		}
 	}
 
+	return mkdirChown(path, perm, uid, gid)
+}
+
+func mkdirChown(path string, perm os.FileMode, uid sys.UserID, gid sys.GroupID) error {
 	cand := path + ".mkdir-new"
 
 	if err := os.Mkdir(cand, perm); err != nil && !os.IsExist(err) {
@@ -70,11 +80,22 @@ func mkdirAllChown(path string, perm os.FileMode, uid sys.UserID, gid sys.GroupI
 		return err
 	}
 
-	fd, err := os.Open(dir)
+	fd, err := os.Open(filepath.Dir(path))
 	if err != nil {
 		return err
 	}
 	defer fd.Close()
 
 	return fd.Sync()
+}
+
+// MkdirChown is like os.Mkdir but it also calls os.Chown on the directory it
+// creates.
+func MkdirChown(path string, perm os.FileMode, uid sys.UserID, gid sys.GroupID) error {
+	mu.Lock()
+	defer mu.Unlock()
+	if uid == NoChown && gid == NoChown {
+		return os.Mkdir(path, perm)
+	}
+	return mkdirChown(filepath.Clean(path), perm, uid, gid)
 }

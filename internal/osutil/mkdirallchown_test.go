@@ -39,5 +39,29 @@ func (mkdacSuite) TestSlashySlashy(c *check.C) {
 		err := osutil.MkdirAllChown(d+dir, 0755, osutil.NoChown, osutil.NoChown)
 		c.Assert(err, check.IsNil, check.Commentf("%q", dir))
 	}
+}
 
+// Add some very basic tests of the functionality (chown requires root, so use
+// NoChown for these). Permissions and user/group are tested in other places.
+func (mkdacSuite) TestMkdirAllChown(c *check.C) {
+	tmpDir := c.MkDir()
+
+	err := osutil.MkdirAllChown(tmpDir+"/foo/bar", 0o755, osutil.NoChown, osutil.NoChown)
+	c.Assert(err, check.IsNil)
+	c.Assert(osutil.IsDir(tmpDir+"/foo"), check.Equals, true)
+	c.Assert(osutil.IsDir(tmpDir+"/foo/bar"), check.Equals, true)
+
+	err = osutil.MkdirChown(tmpDir+"/foo/bar", 0o755, osutil.NoChown, osutil.NoChown)
+	c.Assert(err, check.ErrorMatches, `.*: file exists`)
+}
+
+func (mkdacSuite) TestMkdirChown(c *check.C) {
+	tmpDir := c.MkDir()
+
+	err := osutil.MkdirChown(tmpDir+"/foo", 0o755, osutil.NoChown, osutil.NoChown)
+	c.Assert(err, check.IsNil)
+	c.Assert(osutil.IsDir(tmpDir+"/foo"), check.Equals, true)
+
+	err = osutil.MkdirChown(tmpDir+"/foo", 0o755, osutil.NoChown, osutil.NoChown)
+	c.Assert(err, check.ErrorMatches, `.*: file exists`)
 }

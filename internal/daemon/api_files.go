@@ -470,9 +470,14 @@ func writeFile(item writeFilesItem, source io.Reader) error {
 		return nonAbsolutePathError(item.Path)
 	}
 
-	// Create parent directory if needed
+	uid, gid, err := normalizeUidGid(item.UserID, item.GroupID, item.User, item.Group)
+	if err != nil {
+		return fmt.Errorf("cannot look up user and group: %w", err)
+	}
+
+	// Create parent directory if needed.
 	if item.MakeDirs {
-		err := os.MkdirAll(pathpkg.Dir(item.Path), 0o755)
+		err := mkdirAllUserGroup(pathpkg.Dir(item.Path), 0o755, uid, gid)
 		if err != nil {
 			return fmt.Errorf("cannot create directory: %w", err)
 		}
@@ -483,16 +488,27 @@ func writeFile(item writeFilesItem, source io.Reader) error {
 	if err != nil {
 		return err
 	}
-	uid, gid, err := normalizeUidGid(item.UserID, item.GroupID, item.User, item.Group)
-	if err != nil {
-		return fmt.Errorf("cannot look up user and group: %w", err)
-	}
 	sysUid, sysGid := sys.UserID(osutil.NoChown), sys.GroupID(osutil.NoChown)
 	if uid != nil && gid != nil {
 		sysUid, sysGid = sys.UserID(*uid), sys.GroupID(*gid)
 	}
-
 	return atomicWriteChown(item.Path, source, perm, osutil.AtomicWriteChmod, sysUid, sysGid)
+}
+
+func mkdirAllUserGroup(path string, perm os.FileMode, uid, gid *int) error {
+	if uid != nil && gid != nil {
+		return mkdirAllChown(path, perm, sys.UserID(*uid), sys.GroupID(*gid))
+	} else {
+		return mkdirAllChown(path, perm, osutil.NoChown, osutil.NoChown)
+	}
+}
+
+func mkdirUserGroup(path string, perm os.FileMode, uid, gid *int) error {
+	if uid != nil && gid != nil {
+		return mkdirChown(path, perm, sys.UserID(*uid), sys.GroupID(*gid))
+	} else {
+		return mkdirChown(path, perm, osutil.NoChown, osutil.NoChown)
+	}
 }
 
 func parsePermissions(permissions string, defaultMode os.FileMode) (os.FileMode, error) {
@@ -538,32 +554,27 @@ func makeDir(dir makeDirsItem) error {
 	if err != nil {
 		return err
 	}
-	if dir.MakeParents {
-		err = os.MkdirAll(dir.Path, perm)
-	} else {
-		err = os.Mkdir(dir.Path, perm)
-	}
-	if err != nil {
-		return err
-	}
 	uid, gid, err := normalizeUidGid(dir.UserID, dir.GroupID, dir.User, dir.Group)
 	if err != nil {
 		return fmt.Errorf("cannot look up user and group: %w", err)
 	}
-	if uid != nil && gid != nil {
-		err = chown(dir.Path, *uid, *gid)
-		if err != nil {
-			return fmt.Errorf("cannot set user and group: %w", err)
-		}
+	if dir.MakeParents {
+		err = mkdirAllUserGroup(dir.Path, perm, uid, gid)
+	} else {
+		err = mkdirUserGroup(dir.Path, perm, uid, gid)
+	}
+	if err != nil {
+		return err
 	}
 	return nil
 }
 
 // Because it's hard to test os.Chown without running the tests as root.
 var (
-	chown            = os.Chown
 	atomicWriteChown = osutil.AtomicWriteChown
 	normalizeUidGid  = osutil.NormalizeUidGid
+	mkdirChown       = osutil.MkdirChown
+	mkdirAllChown    = osutil.MkdirAllChown
 )
 
 // Removing paths
