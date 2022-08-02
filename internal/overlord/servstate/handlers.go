@@ -375,6 +375,8 @@ func (s *serviceData) startInternal() error {
 			// labels (e.g. when new layers are added)?  Right now updating only works when
 			// services are (re)started - since the passed in labels are used immediately to build
 			// the structured-data header for the writer.
+			// Regardless, I think the syslog writers need to be registered with the log manager or
+			// at least we need some way to update them with label changes when plan updates occur.
 			syslog := logstate.NewSyslogWriter(transport, serviceName, plan.Logging.Labels)
 			logDests = append(logDests, syslog)
 		}

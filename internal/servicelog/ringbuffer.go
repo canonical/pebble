@@ -333,6 +333,8 @@ func (rb *RingBuffer) discard(n int) error {
 	}
 
 	nextReadIndex := rb.readIndex + RingPos(n)
+
+	// Remove write offsets corresponding to the buffer data being discarded.
 	for i, offset := range rb.writeOffsets {
 		if offset < nextReadIndex {
 			continue
@@ -341,6 +343,7 @@ func (rb *RingBuffer) discard(n int) error {
 		rb.writeOffsets = rb.writeOffsets[i+1:]
 		break
 	}
+
 	rb.readIndex = nextReadIndex
 	return nil
 }
