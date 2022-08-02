@@ -40,6 +40,24 @@ type SyslogWriter struct {
 	structuredData string
 }
 
+// NewSyslogWriter creates a writer forwarding writes as syslog messages to dst.  The forwarded
+// messages will have app as the application name.  Other message parameters are set using
+// reasonable defaults or the RFC5424 nil value "-".  params contains key-value pairs to be
+// attached to syslog messages in their structured data section (see. RFC5424 section 6.3).
+// *Every* write/message forwarded will include these parameters.
+func NewSyslogWriter(dst io.Writer, app string, params map[string]string) *SyslogWriter {
+	return &SyslogWriter{
+		version:        1,
+		dst:            dst,
+		app:            app,
+		host:           "-", // NOTE: would it ever be useful to switch to os.Hostname()?
+		pid:            os.Getpid(),
+		msgid:          "-",
+		priority:       1*8 + 6, // for facility=user-msg severity=informational. See RFC 5424 6.2.1 for available codes.
+		structuredData: buildStructuredData("pebble", canonicalPrivEnterpriseNum, params),
+	}
+}
+
 // buildStructuredData formats the given params into a structured data section for a syslog message
 // according to RFC5424 section 6.
 func buildStructuredData(name string, enterpriseNum int, params map[string]string) string {
@@ -63,24 +81,6 @@ func buildStructuredData(name string, enterpriseNum int, params map[string]strin
 	}
 	buf.WriteByte(']')
 	return buf.String()
-}
-
-// NewSyslogWriter creates a writer forwarding writes as syslog messages to dst.  The forwarded
-// messages will have app as the application name.  Other message parameters are set using
-// reasonable defaults or the RFC5424 nil value "-".  params contains key-value pairs to be
-// attached to syslog messages in their structured data section (see. RFC5424 section 6.3).
-// *Every* write/message forwarded will include these parameters.
-func NewSyslogWriter(dst io.Writer, app string, params map[string]string) *SyslogWriter {
-	return &SyslogWriter{
-		version:        1,
-		dst:            dst,
-		app:            app,
-		host:           "-", // NOTE: would it ever be useful to switch to os.Hostname()?
-		pid:            os.Getpid(),
-		msgid:          "-",
-		priority:       1*8 + 6, // for facility=user-msg severity=informational. See RFC 5424 6.2.1 for available codes.
-		structuredData: buildStructuredData("pebble", canonicalPrivEnterpriseNum, params),
-	}
 }
 
 func (s *SyslogWriter) SetPid(pid int) {
