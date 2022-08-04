@@ -385,24 +385,22 @@ func (s *serviceData) startInternal() error {
 
 	// set up output logging for the command
 	var logDests []*logstate.SyslogWriter
-	if s.config.Logging != nil {
-		for _, name := range s.config.Logging.Destinations {
-			transport, err := s.manager.logMgr.GetTransport(name)
-			if err != nil {
-				return err
-			}
-
-			// TODO: Feels like maybe labels should be per-logging-destination rather than
-			// global since we need to build the syslog message at the service level anyway (to
-			// get service-specific data into them.  Also How will we handle updating the
-			// labels (e.g. when new layers are added)?  Right now updating only works when
-			// services are (re)started - since the passed in labels are used immediately to build
-			// the structured-data header for the writer.
-			// Regardless, I think the syslog writers need to be registered with the log manager or
-			// at least we need some way to update them with label changes when plan updates occur.
-			syslog := logstate.NewSyslogWriter(transport, serviceName, plan.Logging.Labels)
-			logDests = append(logDests, syslog)
+	for _, name := range s.config.LogDestinations {
+		transport, err := s.manager.logMgr.GetTransport(name)
+		if err != nil {
+			return err
 		}
+
+		// TODO: Feels like maybe labels should be per-logging-destination rather than
+		// global since we need to build the syslog message at the service level anyway (to
+		// get service-specific data into them.  Also How will we handle updating the
+		// labels (e.g. when new layers are added)?  Right now updating only works when
+		// services are (re)started - since the passed in labels are used immediately to build
+		// the structured-data header for the writer.
+		// Regardless, I think the syslog writers need to be registered with the log manager or
+		// at least we need some way to update them with label changes when plan updates occur.
+		syslog := logstate.NewSyslogWriter(transport, serviceName, plan.LogLabels)
+		logDests = append(logDests, syslog)
 	}
 
 	var outputWriter io.Writer = logWriter
@@ -446,10 +444,6 @@ func (s *serviceData) startInternal() error {
 		err := s.exited(exitCode)
 		if err != nil {
 			logger.Noticef("Cannot transition state after service exit: %v", err)
-		}
-
-		for _, dst := range logDests {
-			dst.Close()
 		}
 	}()
 

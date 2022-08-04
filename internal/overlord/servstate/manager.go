@@ -159,10 +159,11 @@ func (m *ServiceManager) updatePlanLayers(layers []*plan.Layer) error {
 		return err
 	}
 	p := &plan.Plan{
-		Layers:   layers,
-		Services: combined.Services,
-		Checks:   combined.Checks,
-		Logging:  combined.Logging,
+		Layers:          layers,
+		Services:        combined.Services,
+		Checks:          combined.Checks,
+		LogDestinations: combined.LogDestinations,
+		LogLabels:       combined.LogLabels,
 	}
 	m.updatePlan(p)
 	return nil
