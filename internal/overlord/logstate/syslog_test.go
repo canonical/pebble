@@ -79,9 +79,11 @@ func startTestServer(t *testing.T, config servConfig, crash crashConfig, msgs ch
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			runConnServer(t, conn, crash, msgs, errs, wg)
+			processMessage(conn, crash, msgs, errs)
 		}()
 		addr = udpaddr.String()
+	} else {
+		t.Fatalf("unsupported test server protocol %q", config.protocol)
 	}
 
 	return addr, c, wg
@@ -98,19 +100,16 @@ func runListenerServer(t *testing.T, l net.Listener, crash crashConfig, msgs cha
 			}
 			return
 		}
-		wg.Add(1)
 		var crashed bool
+		wg.Add(1)
 		go func() {
-			crashed = processMessage(c, crash, msgs, errs, wg)
+			defer wg.Done()
+			crashed = processMessage(c, crash, msgs, errs)
 		}()
 		if crashed {
 			break
 		}
 	}
-}
-func runConnServer(t *testing.T, c net.Conn, crash crashConfig, msgs chan<- string, errs chan<- error, wg *sync.WaitGroup) {
-	wg.Add(1)
-	processMessage(c, crash, msgs, errs, wg)
 }
 
 func tryCrash(where whereCrash, c crashConfig) error {
@@ -125,8 +124,7 @@ func tryCrash(where whereCrash, c crashConfig) error {
 	return nil
 }
 
-func processMessage(c net.Conn, crash crashConfig, msgs chan<- string, errs chan<- error, wg *sync.WaitGroup) (crashed bool) {
-	defer wg.Done()
+func processMessage(c net.Conn, crash crashConfig, msgs chan<- string, errs chan<- error) (crashed bool) {
 	defer c.Close()
 	c.SetReadDeadline(time.Now().Add(2 * time.Second))
 	b := bufio.NewReader(c)
@@ -278,7 +276,7 @@ func TestSyslogTransport_reconnect(t *testing.T) {
 	// TODO: check that we can successfully reconnect without dropping continued incoming logs.
 	config := servConfig{protocol: "tcp"}
 	errs := make(chan error, 10)
-	msgs := make(chan string)
+	msgs := make(chan string, 20)
 	crash := newCrash(postLengthRead)
 	addr, closer, wg := startTestServer(t, config, crash, msgs, errs)
 
@@ -293,8 +291,20 @@ func TestSyslogTransport_reconnect(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// crash the server and then send some additional data
+	// crash the server
 	crash.trigger <- true
+
+	// make sure it crashed
+	select {
+	case err := <-errs:
+		if err.Error() != "server crashed" {
+			t.Errorf("wanted crash error, got: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out")
+	}
+
+	// write some data while server is down
 	_, err = io.WriteString(transport, "test2")
 	if err != nil {
 		t.Fatal(err)
@@ -306,16 +316,6 @@ func TestSyslogTransport_reconnect(t *testing.T) {
 	_, err = io.WriteString(transport, "test4")
 	if err != nil {
 		t.Fatal(err)
-	}
-
-	// make sure it crashed
-	select {
-	case err := <-errs:
-		if err.Error() != "server crashed" {
-			t.Errorf("wanted crash error, got: %v", err)
-		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("timed out")
 	}
 
 	// empty out the errors
@@ -338,7 +338,7 @@ func TestSyslogTransport_reconnect(t *testing.T) {
 		}
 	case err := <-errs:
 		t.Errorf("got unexpected error: %v", err)
-	case <-time.After(2 * time.Second):
+	case <-time.After(3 * time.Second):
 		t.Fatal("timed out")
 	}
 }

@@ -3,8 +3,6 @@ package logstate
 import (
 	"fmt"
 	"io/ioutil"
-	"net"
-	"strconv"
 	"sync"
 
 	"github.com/canonical/pebble/internal/logger"
@@ -34,7 +32,7 @@ func (m *LogManager) GetTransport(destination string) (*SyslogTransport, error) 
 // PlanChanged handles updates to the plan (server configuration),
 // stopping the previous checks and starting the new ones as required.
 func (m *LogManager) PlanChanged(p *plan.Plan) {
-	if p.Logging == nil {
+	if len(p.LogDestinations) == 0 {
 		return
 	}
 
@@ -42,7 +40,7 @@ func (m *LogManager) PlanChanged(p *plan.Plan) {
 	defer m.mutex.Unlock()
 
 	// update destinations
-	for name, dest := range p.Logging.Destinations {
+	for name, dest := range p.LogDestinations {
 		if dest.Type != "syslog" {
 			logger.Noticef("unsupported logging destination type: %v", dest.Type)
 		}
@@ -55,13 +53,12 @@ func (m *LogManager) PlanChanged(p *plan.Plan) {
 				logger.Noticef("could not read CA file \"%s\"", dest.TLS.CAfile)
 			}
 		}
-		addr := net.JoinHostPort(dest.Host, strconv.Itoa(dest.Port))
 
 		orig, ok := m.destinations[name]
 		if ok {
-			orig.Update(dest.Protocol, addr, caData)
+			orig.Update(dest.Protocol, dest.Address, caData)
 		} else {
-			m.destinations[name] = NewSyslogTransport(dest.Protocol, addr, caData)
+			m.destinations[name] = NewSyslogTransport(dest.Protocol, dest.Address, caData)
 		}
 	}
 }
