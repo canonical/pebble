@@ -35,4 +35,8 @@ func (s *PebbleSuite) TestVersionCommand(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(s.Stdout(), Equals, "client  4.56\nserver  7.89\n")
 	c.Assert(s.Stderr(), Equals, "")
+
+	rest, err := pebble.Parser(pebble.Client()).ParseArgs([]string{"version", "extra", "args"})
+	c.Assert(err, Equals, pebble.ErrExtraArgs)
+	c.Assert(rest, HasLen, 1)
 }

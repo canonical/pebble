@@ -18,6 +18,8 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"os"
+	"path/filepath"
 	"time"
 
 	"gopkg.in/check.v1"
@@ -45,6 +47,14 @@ const twoWarnings = `{
 				"first-added": "2018-09-19T12:44:19.680362867Z",
 				"last-added": "2018-09-19T12:44:19.680362867Z",
 				"message": "hello world number two",
+				"repeat-after": "24h0m0s"
+			    },
+				{
+				"expire-after": "672h0m0s",
+				"first-added": "2018-09-19T12:44:30.680362867Z",
+				"last-added": "2018-09-19T12:44:30.680362867Z",
+				"last-shown": "2018-09-19T12:44:50.680362867Z",
+				"message": "hello world number three",
 				"repeat-after": "24h0m0s"
 			    }
 			],
@@ -109,6 +119,10 @@ warning: |
 last-occurrence:  2018-09-19T12:44:19Z
 warning: |
   hello world number two
+---
+last-occurrence:  2018-09-19T12:44:30Z
+warning: |
+  hello world number three
 `[1:])
 }
 
@@ -135,6 +149,14 @@ repeats-after:     1d00h
 expires-after:     28d0h
 warning: |
   hello world number two
+---
+first-occurrence:  2018-09-19T12:44:30Z
+last-occurrence:   2018-09-19T12:44:30Z
+acknowledged:      2018-09-19T12:44:50Z
+repeats-after:     1d00h
+expires-after:     28d0h
+warning: |
+  hello world number three
 `[1:])
 }
 
@@ -175,12 +197,12 @@ func (s *warningSuite) TestOkayBeforeWarnings(c *check.C) {
 }
 
 func (s *warningSuite) TestCommandWithWarnings(c *check.C) {
-	var called bool
+	var responseWarningCount int
+	var responseTimestamp time.Time
+
+	timesCalled := 0
 	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		if called {
-			c.Fatalf("expected a single request")
-		}
-		called = true
+		timesCalled++
 		c.Check(r.URL.Path, check.Equals, "/v1/system-info")
 		c.Check(r.URL.Query(), check.HasLen, 0)
 
@@ -189,26 +211,100 @@ func (s *warningSuite) TestCommandWithWarnings(c *check.C) {
 		c.Check(string(buf), check.Equals, "")
 		c.Check(r.Method, check.Equals, "GET")
 		w.WriteHeader(200)
-		fmt.Fprintln(w, `{
+		fmt.Fprintf(w, `{
 				"result": {},
 				"status": "OK",
 				"status-code": 200,
 				"type": "sync",
-				"warning-count": 2,
-				"warning-timestamp": "2018-09-19T12:44:19.680362867Z"
-			}`)
+				"warning-count": %d,
+				"warning-timestamp": "%s"
+			}\n`, responseWarningCount, responseTimestamp.Format(time.RFC3339Nano))
 	})
+
 	cli := pebble.Client()
-	rest, err := pebble.Parser(cli).ParseArgs([]string{"version"})
+	expectedWarnings := map[int]string{
+		0: "",
+		1: "WARNING: There is 1 new warning. See 'pebble warnings'.\n",
+		2: "WARNING: There are 2 new warnings. See 'pebble warnings'.\n",
+	}
+
+	responseTimestamp = time.Date(2018, 9, 19, 12, 44, 19, 680362867, time.UTC)
+	for warningCount, expectedWarning := range expectedWarnings {
+		responseWarningCount = warningCount
+		rest, err := pebble.Parser(cli).ParseArgs([]string{"version"})
+		c.Assert(err, check.IsNil)
+
+		count, stamp := cli.WarningsSummary()
+		c.Check(count, check.Equals, warningCount)
+		c.Check(stamp, check.Equals, responseTimestamp)
+
+		pebble.MaybePresentWarnings(count, stamp)
+
+		c.Check(rest, check.HasLen, 0)
+		c.Check(s.Stdout(), check.Matches, `(?s)client.*server.*`)
+		c.Check(s.Stderr(), check.Equals, expectedWarning)
+		s.ResetStdStreams()
+	}
+
+	c.Check(timesCalled, check.Equals, len(expectedWarnings))
+}
+
+func (s *warningSuite) TestExtraArgs(c *check.C) {
+	rest, err := pebble.Parser(pebble.Client()).ParseArgs([]string{"warnings", "extra", "args"})
+	c.Assert(err, check.Equals, pebble.ErrExtraArgs)
+	c.Check(rest, check.HasLen, 1)
+
+	rest, err = pebble.Parser(pebble.Client()).ParseArgs([]string{"okay", "extra", "invalid arg"})
+	c.Assert(err, check.Equals, pebble.ErrExtraArgs)
+	c.Check(rest, check.HasLen, 1)
+}
+
+func (s *warningSuite) TestLastWarningTimestamp(c *check.C) {
+	tempDir := c.MkDir()
+	newWarnPath := filepath.Join(tempDir, "warnings.json")
+	const warnFileEnvKey = "PEBBLE_LAST_WARNING_TIMESTAMP_FILENAME"
+	oldWarnPath := os.Getenv(warnFileEnvKey)
+	os.Setenv(warnFileEnvKey, newWarnPath)
+	defer func() { os.Setenv(warnFileEnvKey, oldWarnPath) }()
+
+	// Insert invalid JSON in warnings file
+	err := ioutil.WriteFile(newWarnPath, []byte("invalid JSON"), 0755)
 	c.Assert(err, check.IsNil)
 
-	count, stamp := cli.WarningsSummary()
-	c.Check(count, check.Equals, 2)
-	c.Check(stamp, check.Equals, time.Date(2018, 9, 19, 12, 44, 19, 680362867, time.UTC))
+	rest, err := pebble.Parser(pebble.Client()).ParseArgs([]string{"okay"})
+	c.Assert(err.Error(), check.Equals, "cannot decode timestamp file: invalid character 'i' looking for beginning of value")
+	c.Check(rest, check.HasLen, 1)
 
-	pebble.MaybePresentWarnings(count, stamp)
+	// Insert extra data after JSON
+	err = ioutil.WriteFile(newWarnPath, []byte("{}extra"), 0755)
+	c.Assert(err, check.IsNil)
 
-	c.Check(rest, check.HasLen, 0)
-	c.Check(s.Stdout(), check.Matches, `(?s)client.*server.*`)
-	c.Check(s.Stderr(), check.Equals, "WARNING: There are 2 new warnings. See 'pebble warnings'.\n")
+	rest, err = pebble.Parser(pebble.Client()).ParseArgs([]string{"okay"})
+	c.Assert(err.Error(), check.Equals, "spurious extra data in timestamp file")
+	c.Check(rest, check.HasLen, 1)
+
+	// Make open() fail
+	err = os.Chmod(newWarnPath, 0055)
+	c.Assert(err, check.IsNil)
+
+	rest, err = pebble.Parser(pebble.Client()).ParseArgs([]string{"okay"})
+	c.Assert(err.Error(), check.Equals, fmt.Sprintf("cannot open timestamp file: open %s: permission denied", newWarnPath))
+	c.Check(rest, check.HasLen, 1)
+}
+
+func (s *warningSuite) TestWriteWarningTimestamp(c *check.C) {
+	tempDir := c.MkDir()
+	nonExistingSubdir := filepath.Join(tempDir, "dummy")
+	newWarnPath := filepath.Join(nonExistingSubdir, "warnings.json")
+
+	const warnFileEnvKey = "PEBBLE_LAST_WARNING_TIMESTAMP_FILENAME"
+	oldWarnPath := os.Getenv(warnFileEnvKey)
+	os.Setenv(warnFileEnvKey, newWarnPath)
+	defer func() { os.Setenv(warnFileEnvKey, oldWarnPath) }()
+
+	err := os.Chmod(tempDir, 0600)
+	c.Assert(err, check.IsNil)
+
+	err = pebble.WriteWarningTimestamp(time.Now())
+	c.Assert(os.IsPermission(err), check.Equals, true)
 }

@@ -25,16 +25,27 @@ import (
 )
 
 func (s *PebbleSuite) TestGetPlan(c *check.C) {
+	fail := false
+
 	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
 		c.Check(r.Method, check.Equals, "GET")
 		c.Check(r.URL.Path, check.Equals, "/v1/plan")
 		c.Check(r.URL.Query(), check.DeepEquals, url.Values{"format": []string{"yaml"}})
-		fmt.Fprint(w, `{
+
+		if fail {
+			fmt.Fprint(w, `{
+    "type": "error",
+    "result": {"message": "could not do the thing"}
+}`)
+		} else {
+			fmt.Fprint(w, `{
     "type": "sync",
     "status-code": 200,
     "result": "services:\n    foo:\n        override: replace\n        command: cmd\n"
 }`)
+		}
 	})
+
 	rest, err := pebble.Parser(pebble.Client()).ParseArgs([]string{"plan"})
 	c.Assert(err, check.IsNil)
 	c.Assert(rest, check.HasLen, 0)
@@ -45,4 +56,18 @@ services:
         command: cmd
 `[1:])
 	c.Check(s.Stderr(), check.Equals, "")
+	s.ResetStdStreams()
+
+	fail = true
+	rest, err = pebble.Parser(pebble.Client()).ParseArgs([]string{"plan"})
+	c.Assert(err.Error(), check.Equals, "could not do the thing")
+	c.Assert(rest, check.HasLen, 1)
+	c.Check(s.Stdout(), check.Equals, "")
+	c.Check(s.Stderr(), check.Equals, "")
+}
+
+func (s *PebbleSuite) TestExtraArguments(c *check.C) {
+	rest, err := pebble.Parser(pebble.Client()).ParseArgs([]string{"plan", "extra", "args"})
+	c.Assert(err, check.Equals, pebble.ErrExtraArgs)
+	c.Check(rest, check.HasLen, 1)
 }

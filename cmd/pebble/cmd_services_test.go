@@ -51,6 +51,42 @@ svc3     enabled  backoff
 	c.Check(s.Stderr(), check.Equals, "")
 }
 
+func (s *PebbleSuite) TestPlanNoServices(c *check.C) {
+	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+		c.Assert(r.Method, check.Equals, "GET")
+		c.Assert(r.URL.Path, check.Equals, "/v1/services")
+		c.Assert(r.URL.Query(), check.DeepEquals, url.Values{"names": {""}})
+		fmt.Fprint(w, `{
+    "type": "sync",
+    "status-code": 200,
+    "result": []
+}`)
+	})
+	rest, err := pebble.Parser(pebble.Client()).ParseArgs([]string{"services"})
+	c.Assert(err, check.IsNil)
+	c.Assert(rest, check.HasLen, 0)
+	c.Check(s.Stdout(), check.Equals, "")
+	c.Check(s.Stderr(), check.Equals, "Plan has no services.\n")
+}
+
+func (s *PebbleSuite) TestNoMatchingServices(c *check.C) {
+	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+		c.Assert(r.Method, check.Equals, "GET")
+		c.Assert(r.URL.Path, check.Equals, "/v1/services")
+		c.Assert(r.URL.Query(), check.DeepEquals, url.Values{"names": {"foo,bar"}})
+		fmt.Fprint(w, `{
+    "type": "sync",
+    "status-code": 200,
+    "result": []
+}`)
+	})
+	rest, err := pebble.Parser(pebble.Client()).ParseArgs([]string{"services", "foo", "bar"})
+	c.Assert(err, check.IsNil)
+	c.Assert(rest, check.HasLen, 0)
+	c.Check(s.Stdout(), check.Equals, "")
+	c.Check(s.Stderr(), check.Equals, "No matching services.\n")
+}
+
 func (s *PebbleSuite) TestServicesNames(c *check.C) {
 	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
 		c.Assert(r.Method, check.Equals, "GET")
@@ -73,5 +109,22 @@ Service  Startup   Current
 bar      disabled  active
 foo      enabled   inactive
 `[1:])
+	c.Check(s.Stderr(), check.Equals, "")
+}
+
+func (s *PebbleSuite) TestServicesFail(c *check.C) {
+	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+		c.Assert(r.Method, check.Equals, "GET")
+		c.Assert(r.URL.Path, check.Equals, "/v1/services")
+		c.Assert(r.URL.Query(), check.DeepEquals, url.Values{"names": {""}})
+		fmt.Fprint(w, `{
+    "type": "error",
+    "result": {"message": "could not foo"}
+}`)
+	})
+	rest, err := pebble.Parser(pebble.Client()).ParseArgs([]string{"services"})
+	c.Assert(err, check.ErrorMatches, "could not foo")
+	c.Assert(rest, check.HasLen, 1)
+	c.Check(s.Stdout(), check.Equals, "")
 	c.Check(s.Stderr(), check.Equals, "")
 }
