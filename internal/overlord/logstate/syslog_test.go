@@ -15,6 +15,202 @@ import (
 	"time"
 )
 
+func TestMain(m *testing.M) {
+	// simulate an zero current time to make test timestamps easy
+	timeFunc = func() time.Time {
+		return time.Time{}
+	}
+	m.Run()
+}
+
+func TestSyslogWriter(t *testing.T) {
+	tests := []struct {
+		name   string
+		input  string
+		pid    int
+		params map[string]string
+		want   string
+	}{
+		{
+			name:  "basic",
+			input: "hello",
+			want:  "<14>1 0001-01-01T00:00:00Z - testapp 0 - - hello",
+		}, {
+			name:   "basic-param",
+			input:  "hello",
+			params: map[string]string{"foo": "bar"},
+			want:   "<14>1 0001-01-01T00:00:00Z - testapp 0 - [pebble@28978 foo=\"bar\"] hello",
+		}, {
+			name:   "basic-multiparam",
+			input:  "hello",
+			params: map[string]string{"foo": "bar", "baz": "quux"},
+			want:   "<14>1 0001-01-01T00:00:00Z - testapp 0 - [pebble@28978 foo=\"bar\" baz=\"quux\"] hello",
+		}, {
+			name:  "basic-pid",
+			input: "hello",
+			pid:   42,
+			want:  "<14>1 0001-01-01T00:00:00Z - testapp 42 - - hello",
+		}, {
+			name:   "param-escapes",
+			input:  "hello",
+			params: map[string]string{"foo": "\"[bar]\\"},
+			want:   "<14>1 0001-01-01T00:00:00Z - testapp 0 - [pebble@28978 foo=\"\\\"[bar\\]\\\\\"] hello",
+		},
+	}
+
+	for i, test := range tests {
+		t.Run(fmt.Sprintf("case %v (%v)", i+1, test.name), func(t *testing.T) {
+			var buf bytes.Buffer
+			w := NewSyslogWriter(&buf, "testapp", test.params)
+			w.SetPid(test.pid)
+
+			_, err := io.WriteString(w, test.input)
+			if err != nil {
+				t.Errorf("write failed: %v", err)
+				return
+			}
+
+			if got := buf.String(); got != test.want {
+				t.Errorf("wrong output:\nwant %q\ngot  %q", test.want, got)
+			}
+		})
+	}
+}
+
+// If inputs is nil, a single sample write is generated. If wantMsgs is nil, expect each message in
+// inputs to be transmitted unscathed.  If wantMsgs is not nil, it the test checks that each
+// message in wantMsgs is transmitted by the transport in sequence.
+func testTransport(config servConfig, inputs, wantMsgs []string) func(t *testing.T) {
+	return func(t *testing.T) {
+		errs := make(chan error, 20)
+		// make sure this is synchronous (i.e. blocks) so that we can control the rate at which the
+		// transport sends messages - allowing us to test buffer wrapping.
+		msgs := make(chan string)
+
+		addr, closer, wg := startTestServer(t, config, noCrash, msgs, errs)
+		defer wg.Wait()
+		defer closer.Close()
+
+		transport := NewSyslogTransport(config.protocol, addr, config.cert)
+		defer transport.Close()
+
+		if len(inputs) == 0 {
+			inputs = []string{"hello"}
+		}
+		if wantMsgs == nil {
+			wantMsgs = inputs
+		}
+		for _, msg := range inputs {
+			_, err := io.WriteString(transport, msg)
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+
+		for _, want := range wantMsgs {
+			select {
+			case err := <-errs:
+				t.Errorf("unexpected error: %v", err)
+			case got := <-msgs:
+				if want != got {
+					t.Errorf("wrong result: want %q, got %q", want, got)
+				}
+			case <-time.After(10 * time.Second):
+				t.Fatal("timed out")
+			}
+		}
+	}
+}
+
+func TestSyslogTransport(t *testing.T) {
+	t.Run("tcp", testTransport(servConfig{protocol: "tcp"}, nil, nil))
+	t.Run("udp", testTransport(servConfig{protocol: "udp"}, nil, nil))
+	t.Run("TLS-tcp", testTransport(servConfig{protocol: "tcp", cert: testCert, privkey: testPrivKey}, nil, nil))
+	t.Run("multiple-writes", testTransport(servConfig{protocol: "tcp"}, []string{"hello", "world"}, nil))
+
+	tmp := maxLogBytes
+	maxLogBytes = 10
+	defer func() { maxLogBytes = tmp }()
+	msgs := []string{"hello ", "world "}
+	want := msgs[1:]
+	t.Run("buffer-wrap", testTransport(servConfig{protocol: "tcp"}, msgs, want))
+}
+
+func TestRoundTrip(t *testing.T) {
+	// TODO: test full integration from layer configuration to syslog destination server message receipt
+}
+
+func TestSyslogTransport_reconnect(t *testing.T) {
+	config := servConfig{protocol: "tcp"}
+	errs := make(chan error, 10)
+	msgs := make(chan string, 20)
+	crash := newCrash(postLengthRead)
+	addr, closer, wg := startTestServer(t, config, crash, msgs, errs)
+
+	defer wg.Wait()
+	defer closer.Close()
+
+	transport := NewSyslogTransport(config.protocol, addr, config.cert)
+	defer transport.Close()
+
+	// write initial data, send to server
+	_, err := io.WriteString(transport, "test1")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// crash the server
+	crash.trigger <- true
+
+	// make sure it crashed
+	select {
+	case err := <-errs:
+		if err.Error() != "server crashed" {
+			t.Errorf("wanted crash error, got: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out")
+	}
+
+	// write some data while server is down
+	_, err = io.WriteString(transport, "test2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = io.WriteString(transport, "test3")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = io.WriteString(transport, "test4")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// empty out the errors
+	for len(errs) > 0 {
+		<-errs
+	}
+
+	// start a new server and redirect transport to it
+	addr2, closer2, wg2 := startTestServer(t, config, crash, msgs, errs)
+	transport.Update(config.protocol, addr2, config.cert)
+
+	defer wg2.Wait()
+	defer closer2.Close()
+
+	select {
+	case got := <-msgs:
+		want := "test2"
+		if want != got {
+			t.Errorf("post server reboot - wrong message: want %q, got %q", want, got)
+		}
+	case err := <-errs:
+		t.Errorf("got unexpected error: %v", err)
+	case <-time.After(3 * time.Second):
+		t.Fatal("timed out")
+	}
+}
+
 type servConfig struct {
 	protocol string
 	cert     []byte
@@ -27,9 +223,6 @@ const (
 	none whereCrash = iota
 	postLengthRead
 	postBodyRead
-	crash3
-	crash4
-	crash5
 )
 
 type crashConfig struct {
@@ -161,186 +354,6 @@ func processMessage(c net.Conn, crash crashConfig, msgs chan<- string, errs chan
 		msgs <- string(msg)
 	}
 	return false
-}
-
-func TestMain(m *testing.M) {
-	timeFunc = func() time.Time {
-		return time.Time{}
-	}
-	m.Run()
-}
-
-func TestSyslogWriter(t *testing.T) {
-	tests := []struct {
-		name   string
-		input  string
-		pid    int
-		params map[string]string
-		want   string
-	}{
-		{
-			name:  "basic",
-			input: "hello",
-			want:  "<14>1 0001-01-01T00:00:00Z - testapp 0 - - hello",
-		}, {
-			name:   "basic-param",
-			input:  "hello",
-			params: map[string]string{"foo": "bar"},
-			want:   "<14>1 0001-01-01T00:00:00Z - testapp 0 - [pebble@28978 foo=\"bar\"] hello",
-		}, {
-			name:   "basic-multiparam",
-			input:  "hello",
-			params: map[string]string{"foo": "bar", "baz": "quux"},
-			want:   "<14>1 0001-01-01T00:00:00Z - testapp 0 - [pebble@28978 foo=\"bar\" baz=\"quux\"] hello",
-		}, {
-			name:  "basic-pid",
-			input: "hello",
-			pid:   42,
-			want:  "<14>1 0001-01-01T00:00:00Z - testapp 42 - - hello",
-		}, {
-			name:   "param-escapes",
-			input:  "hello",
-			params: map[string]string{"foo": "\"[bar]\\"},
-			want:   "<14>1 0001-01-01T00:00:00Z - testapp 0 - [pebble@28978 foo=\"\\\"[bar\\]\\\\\"] hello",
-		},
-	}
-
-	for i, test := range tests {
-		t.Run(fmt.Sprintf("case %v (%v)", i+1, test.name), func(t *testing.T) {
-			var buf bytes.Buffer
-			w := NewSyslogWriter(&buf, "testapp", test.params)
-			w.SetPid(test.pid)
-
-			_, err := io.WriteString(w, test.input)
-			if err != nil {
-				t.Errorf("write failed: %v", err)
-				return
-			}
-
-			if got := buf.String(); got != test.want {
-				t.Errorf("wrong output:\nwant %q\ngot  %q", test.want, got)
-			}
-		})
-	}
-}
-
-func testTransport(config servConfig) func(t *testing.T) {
-	return func(t *testing.T) {
-		errs := make(chan error, 10)
-		msgs := make(chan string)
-		addr, closer, wg := startTestServer(t, config, noCrash, msgs, errs)
-
-		defer wg.Wait()
-		defer closer.Close()
-
-		transport := NewSyslogTransport(config.protocol, addr, config.cert)
-
-		want := "hello"
-		_, err := io.WriteString(transport, want)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		select {
-		case err := <-errs:
-			t.Error("unexpected error:", err)
-		case got := <-msgs:
-			if got != want {
-				t.Errorf("wrong result: want %q, got %q", want, got)
-			}
-		case <-time.After(10 * time.Second):
-			t.Fatal("timed out")
-		}
-	}
-}
-
-func TestSyslogTransport(t *testing.T) {
-	t.Run("tcp", testTransport(servConfig{protocol: "tcp"}))
-	t.Run("udp", testTransport(servConfig{protocol: "udp"}))
-	t.Run("TLS-tcp", testTransport(servConfig{protocol: "tcp", cert: testCert, privkey: testPrivKey}))
-}
-
-func TestRoundTrip(t *testing.T) {
-	// TODO: test full integration from layer configuration to syslog destination server message receipt
-}
-
-func TestSyslogTransport_wraparound(t *testing.T) {
-	// TODO: test that message writes don't get munged when the ringbuffer gets full and wraps.
-}
-
-func TestSyslogTransport_backoff(t *testing.T) {
-	// TODO: test the exponential backoff on reconnect attempts works
-}
-
-func TestSyslogTransport_reconnect(t *testing.T) {
-	// TODO: check that we can successfully reconnect without dropping continued incoming logs.
-	config := servConfig{protocol: "tcp"}
-	errs := make(chan error, 10)
-	msgs := make(chan string, 20)
-	crash := newCrash(postLengthRead)
-	addr, closer, wg := startTestServer(t, config, crash, msgs, errs)
-
-	defer wg.Wait()
-	defer closer.Close()
-
-	transport := NewSyslogTransport(config.protocol, addr, config.cert)
-
-	// write initial data, send to server
-	_, err := io.WriteString(transport, "test1")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// crash the server
-	crash.trigger <- true
-
-	// make sure it crashed
-	select {
-	case err := <-errs:
-		if err.Error() != "server crashed" {
-			t.Errorf("wanted crash error, got: %v", err)
-		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("timed out")
-	}
-
-	// write some data while server is down
-	_, err = io.WriteString(transport, "test2")
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = io.WriteString(transport, "test3")
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = io.WriteString(transport, "test4")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// empty out the errors
-	for len(errs) > 0 {
-		<-errs
-	}
-
-	// start a new server and redirect transport to it
-	addr2, closer2, wg2 := startTestServer(t, config, crash, msgs, errs)
-	transport.Update(config.protocol, addr2, config.cert)
-
-	defer wg2.Wait()
-	defer closer2.Close()
-
-	select {
-	case got := <-msgs:
-		want := "test2"
-		if want != got {
-			t.Errorf("post server reboot - wrong message: want %q, got %q", want, got)
-		}
-	case err := <-errs:
-		t.Errorf("got unexpected error: %v", err)
-	case <-time.After(3 * time.Second):
-		t.Fatal("timed out")
-	}
 }
 
 var testCert = []byte(`
