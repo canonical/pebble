@@ -9,22 +9,21 @@ import (
 	"github.com/canonical/pebble/internal/plan"
 )
 
-type PlanWatcher interface {
-	PlanChanged(p *plan.Plan)
+type LoggingWatcher interface {
+	UpdateLabels(map[string]string)
 }
 
 type LogManager struct {
 	mutex        sync.Mutex
 	destinations map[string]*SyslogTransport
-	labels       map[string]string
-	watchers     []PlanWatcher
+	watchers     []LoggingWatcher
 }
 
 func NewLogManager() *LogManager {
 	return &LogManager{destinations: make(map[string]*SyslogTransport)}
 }
 
-func (m *LogManager) Notify(w PlanWatcher) { m.watchers = append(m.watchers, w) }
+func (m *LogManager) Notify(w LoggingWatcher) { m.watchers = append(m.watchers, w) }
 
 func (m *LogManager) GetTransport(destination string) (*SyslogTransport, error) {
 	m.mutex.Lock()
@@ -47,15 +46,6 @@ func (m *LogManager) PlanChanged(p *plan.Plan) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
-	needNotify := false
-	defer func() {
-		if needNotify {
-			for _, w := range m.watchers {
-				w.PlanChanged(p)
-			}
-		}
-	}()
-
 	// update destinations
 	for name, dest := range p.LogDestinations {
 		if dest.Type != "syslog" {
@@ -72,8 +62,6 @@ func (m *LogManager) PlanChanged(p *plan.Plan) {
 			}
 		}
 
-		needNotify = true
-
 		orig, ok := m.destinations[name]
 		if ok {
 			orig.Update(dest.Protocol, dest.Address, caData)
@@ -83,9 +71,7 @@ func (m *LogManager) PlanChanged(p *plan.Plan) {
 	}
 
 	// update labels
-	for key, val := range p.LogLabels {
-		orig, ok := m.labels[key]
-		needNotify = needNotify || !ok || orig != val
-		m.labels[key] = val
+	for _, w := range m.watchers {
+		w.UpdateLabels(p.LogLabels)
 	}
 }

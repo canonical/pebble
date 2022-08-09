@@ -84,8 +84,8 @@ func buildStructuredData(name string, enterpriseNum int, labels map[string]strin
 }
 
 func (s *SyslogWriter) UpdateLabels(labels map[string]string) {
-	//s.mu.Lock()
-	//defer s.mu.Unlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.structuredData = buildStructuredData("pebble", canonicalPrivEnterpriseNum, labels)
 }
 
