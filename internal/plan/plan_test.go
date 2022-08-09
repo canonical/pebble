@@ -116,6 +116,9 @@ var planTests = []planTest{{
 			srv3:
 				override: replace
 				command: cmd
+			srv6:
+				override: replace
+				command: cmd6a
 		`, `
 		summary: Simple override layer.
 		description: The second layer.
@@ -140,6 +143,14 @@ var planTests = []planTest{{
 			srv5:
 				override: replace
 				command: cmd
+			srv6:
+				override: merge
+				command: cmd6b
+				environment:
+					foo: bar
+					baz: buz
+				on-check-failure:
+					chk1: restart
 	`},
 	layers: []*plan.Layer{{
 		Order:       0,
@@ -178,6 +189,12 @@ var planTests = []planTest{{
 				Command:  "cmd",
 				Startup:  plan.StartupUnknown,
 			},
+			"srv6": {
+				Name:     "srv6",
+				Override: "replace",
+				Command:  "cmd6a",
+				Startup:  plan.StartupUnknown,
+			},
 		},
 		Checks: map[string]*plan.Check{},
 	}, {
@@ -212,6 +229,19 @@ var planTests = []planTest{{
 				Name:     "srv5",
 				Override: "replace",
 				Command:  "cmd",
+			},
+			"srv6": {
+				Name:     "srv6",
+				Override: "merge",
+				Command:  "cmd6b",
+				Startup:  plan.StartupUnknown,
+				Environment: map[string]string{
+					"foo": "bar",
+					"baz": "buz",
+				},
+				OnCheckFailure: map[string]plan.ServiceAction{
+					"chk1": plan.ActionRestart,
+				},
 			},
 		},
 		Checks: map[string]*plan.Check{},
@@ -270,6 +300,21 @@ var planTests = []planTest{{
 				Name:          "srv5",
 				Override:      "replace",
 				Command:       "cmd",
+				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
+				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
+				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
+			},
+			"srv6": {
+				Name:     "srv6",
+				Override: "replace",
+				Command:  "cmd6b",
+				Environment: map[string]string{
+					"foo": "bar",
+					"baz": "buz",
+				},
+				OnCheckFailure: map[string]plan.ServiceAction{
+					"chk1": plan.ActionRestart,
+				},
 				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
 				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
 				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
@@ -594,9 +639,6 @@ var planTests = []planTest{{
 			chk-http:
 				override: merge
 				period: 1s
-				http:
-					headers:
-						Foo: bar
 		
 			chk-tcp:
 				override: merge
@@ -615,6 +657,8 @@ var planTests = []planTest{{
 				override: merge
 				http:
 					url: https://example.com/bar
+					headers:
+						Foo: bar
 		
 			chk-tcp:
 				override: merge
@@ -626,6 +670,8 @@ var planTests = []planTest{{
 				timeout: 7s
 				exec:
 					command: sleep 2
+					environment:
+						FOO: bar
 `},
 	result: &plan.Layer{
 		Services: map[string]*plan.Service{},
@@ -661,6 +707,9 @@ var planTests = []planTest{{
 				Exec: &plan.ExecCheck{
 					Command:    "sleep 2",
 					WorkingDir: "/root",
+					Environment: map[string]string{
+						"FOO": "bar",
+					},
 				},
 			},
 		},
