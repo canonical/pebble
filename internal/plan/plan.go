@@ -148,6 +148,9 @@ func (s *Service) Merge(other *Service) {
 	s.Before = append(s.Before, other.Before...)
 	s.Requires = append(s.Requires, other.Requires...)
 	for k, v := range other.Environment {
+		if s.Environment == nil {
+			s.Environment = make(map[string]string)
+		}
 		s.Environment[k] = v
 	}
 	if other.OnSuccess != "" {
@@ -157,6 +160,9 @@ func (s *Service) Merge(other *Service) {
 		s.OnFailure = other.OnFailure
 	}
 	for k, v := range other.OnCheckFailure {
+		if s.OnCheckFailure == nil {
+			s.OnCheckFailure = make(map[string]ServiceAction)
+		}
 		s.OnCheckFailure[k] = v
 	}
 	if other.BackoffDelay.IsSet {
@@ -304,6 +310,9 @@ func (c *HTTPCheck) Merge(other *HTTPCheck) {
 		c.URL = other.URL
 	}
 	for k, v := range other.Headers {
+		if c.Headers == nil {
+			c.Headers = make(map[string]string)
+		}
 		c.Headers[k] = v
 	}
 }
@@ -367,6 +376,9 @@ func (c *ExecCheck) Merge(other *ExecCheck) {
 		c.Command = other.Command
 	}
 	for k, v := range other.Environment {
+		if c.Environment == nil {
+			c.Environment = make(map[string]string)
+		}
 		c.Environment[k] = v
 	}
 	if other.UserID != nil {
