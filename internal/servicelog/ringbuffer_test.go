@@ -96,9 +96,8 @@ func (s *ringBufferSuite) TestCrossBoundaryWriteCopy(c *C) {
 	c.Assert(string(cc), Equals, "PEBBLE")
 }
 
-func (s *ringBufferSuite) TestCrossBoundaryWriteWithAtomicDiscard(c *C) {
+func (s *ringBufferSuite) TestCrossBoundaryWriteAtomicDiscard(c *C) {
 	buf := servicelog.NewRingBuffer(10)
-	buf.EnableAtomicDiscard()
 
 	io.WriteString(buf, "hello ")
 	io.WriteString(buf, "world ")
@@ -108,6 +107,7 @@ func (s *ringBufferSuite) TestCrossBoundaryWriteWithAtomicDiscard(c *C) {
 	_, n, err := buf.Copy(result, servicelog.TailPosition)
 	c.Assert(err, Equals, io.EOF)
 	c.Assert(n, Equals, 6)
+	// Make sure we discarded the entire first write and only have the second remaining.
 	c.Assert(string(result[:n]), Equals, "world ")
 }
 
