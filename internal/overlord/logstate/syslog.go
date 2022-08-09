@@ -17,7 +17,7 @@ import (
 	"github.com/canonical/pebble/internal/servicelog"
 )
 
-const maxLogBytes = 100 * 1024
+var maxLogBytes = 100 * 1024
 
 const canonicalPrivEnterpriseNum = 28978
 
@@ -112,7 +112,7 @@ func (s *SyslogWriter) buildMsg(p []byte) []byte {
 // safe for concurrent writes and use.
 type SyslogTransport struct {
 	closed        bool
-	mu            sync.Mutex
+	mu            sync.RWMutex
 	conn          net.Conn
 	protocol      string
 	destHost      string
@@ -153,6 +153,14 @@ func (s *SyslogTransport) Update(protocol string, destHost string, serverCert []
 }
 
 func (s *SyslogTransport) Close() (err error) {
+	func() {
+		s.mu.RLock()
+		defer s.mu.RUnlock()
+		if s.conn != nil {
+			s.conn.SetDeadline(time.Now().Add(-1 * time.Second))
+		}
+	}()
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -186,8 +194,6 @@ func (s *SyslogTransport) forward() {
 	defer iter.Close()
 
 	for iter.Next(s.done) {
-		// TODO: ensure the iterator wraparound "(data truncated...)" text doesn't get sent as a
-		// syslog message.
 		err := s.send(iter)
 		if err != nil {
 			submsg := ""
@@ -202,8 +208,8 @@ func (s *SyslogTransport) forward() {
 }
 
 func (s *SyslogTransport) send(iter servicelog.Iterator) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 
 	err := s.ensureConnected()
 	if err != nil {
