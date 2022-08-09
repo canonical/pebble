@@ -62,7 +62,7 @@ func TestSyslogWriter(t *testing.T) {
 		t.Run(fmt.Sprintf("case %v (%v)", i+1, test.name), func(t *testing.T) {
 			var buf bytes.Buffer
 			w := NewSyslogWriter(&buf, "testapp", test.params)
-			w.SetPid(test.pid)
+			w.UpdatePid(test.pid)
 
 			_, err := io.WriteString(w, test.input)
 			if err != nil {

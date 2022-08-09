@@ -368,15 +368,8 @@ func (s *serviceData) startInternal() error {
 			return err
 		}
 
-		// TODO: Feels like maybe labels should be per-logging-destination rather than
-		// global since we need to build the syslog message at the service level anyway (to
-		// get service-specific data into them.  Also How will we handle updating the
-		// labels (e.g. when new layers are added)?  Right now updating only works when
-		// services are (re)started - since the passed in labels are used immediately to build
-		// the structured-data header for the writer.
-		// Regardless, I think the syslog writers need to be registered with the log manager or
-		// at least we need some way to update them with label changes when plan updates occur.
 		syslog := logstate.NewSyslogWriter(transport, serviceName, plan.LogLabels)
+		s.manager.logMgr.Notify(syslog)
 		logDests = append(logDests, syslog)
 	}
 
@@ -402,7 +395,7 @@ func (s *serviceData) startInternal() error {
 		return fmt.Errorf("cannot start service: %w", err)
 	}
 	for _, dest := range logDests {
-		dest.SetPid(s.cmd.Process.Pid)
+		dest.UpdatePid(s.cmd.Process.Pid)
 	}
 	logger.Debugf("Service %q started with PID %d", serviceName, s.cmd.Process.Pid)
 	s.resetTimer = time.AfterFunc(s.config.BackoffLimit.Value, func() { logError(s.backoffResetElapsed()) })

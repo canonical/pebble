@@ -42,10 +42,10 @@ type SyslogWriter struct {
 
 // NewSyslogWriter creates a writer forwarding writes as syslog messages to dst.  The forwarded
 // messages will have app as the application name.  Other message parameters are set using
-// reasonable defaults or the RFC5424 nil value "-".  params contains key-value pairs to be
+// reasonable defaults or the RFC5424 nil value "-".  labels contains key-value pairs to be
 // attached to syslog messages in their structured data section (see. RFC5424 section 6.3).
 // *Every* write/message forwarded will include these parameters.
-func NewSyslogWriter(dst io.Writer, app string, params map[string]string) *SyslogWriter {
+func NewSyslogWriter(dst io.Writer, app string, labels map[string]string) *SyslogWriter {
 	return &SyslogWriter{
 		version:        1,
 		dst:            dst,
@@ -54,19 +54,19 @@ func NewSyslogWriter(dst io.Writer, app string, params map[string]string) *Syslo
 		pid:            os.Getpid(),
 		msgid:          "-",
 		priority:       1*8 + 6, // for facility=user-msg severity=informational. See RFC 5424 6.2.1 for available codes.
-		structuredData: buildStructuredData("pebble", canonicalPrivEnterpriseNum, params),
+		structuredData: buildStructuredData("pebble", canonicalPrivEnterpriseNum, labels),
 	}
 }
 
-// buildStructuredData formats the given params into a structured data section for a syslog message
+// buildStructuredData formats the given labels into a structured data section for a syslog message
 // according to RFC5424 section 6.
-func buildStructuredData(name string, enterpriseNum int, params map[string]string) string {
-	if len(params) == 0 {
+func buildStructuredData(name string, enterpriseNum int, labels map[string]string) string {
+	if len(labels) == 0 {
 		return "-"
 	}
 	var buf bytes.Buffer
 	fmt.Fprintf(&buf, "[%s@%d", name, enterpriseNum)
-	for key, value := range params {
+	for key, value := range labels {
 		fmt.Fprintf(&buf, " %s=\"", key)
 		// escape the value according to RFC5424 6.3.3
 		for i := 0; i < len(value); i++ {
@@ -83,7 +83,13 @@ func buildStructuredData(name string, enterpriseNum int, params map[string]strin
 	return buf.String()
 }
 
-func (s *SyslogWriter) SetPid(pid int) {
+func (s *SyslogWriter) UpdateLabels(labels map[string]string) {
+	//s.mu.Lock()
+	//defer s.mu.Unlock()
+	s.structuredData = buildStructuredData("pebble", canonicalPrivEnterpriseNum, labels)
+}
+
+func (s *SyslogWriter) UpdatePid(pid int) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.pid = pid
