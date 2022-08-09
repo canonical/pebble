@@ -252,6 +252,20 @@ func (s *iteratorSuite) TestTruncation(c *C) {
 	c.Assert(buffer.String(), Equals, "\n(... output truncated ...)\n0123456789")
 }
 
+func (s *iteratorSuite) TestOmitTruncBytes(c *C) {
+	rb := servicelog.NewRingBuffer(10)
+	iter := rb.TailIterator()
+	iter.OmitTruncBytes()
+	fmt.Fprint(rb, "1111111111")
+	fmt.Fprint(rb, "2222222222")
+	buffer := &bytes.Buffer{}
+	for iter.Next(nil) {
+		_, err := io.Copy(buffer, iter)
+		c.Assert(err, IsNil)
+	}
+	c.Assert(buffer.String(), Equals, "2222222222")
+}
+
 func (s *iteratorSuite) TestTruncationByteByByte(c *C) {
 	rb := servicelog.NewRingBuffer(10)
 	iter := rb.TailIterator()

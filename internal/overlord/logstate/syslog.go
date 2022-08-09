@@ -133,7 +133,6 @@ func NewSyslogTransport(protocol string, destHost string, serverCert []byte) *Sy
 		done:       make(chan struct{}),
 		buf:        servicelog.NewRingBuffer(maxLogBytes),
 	}
-	transport.buf.EnableAtomicDiscard()
 	go transport.forward()
 	return transport
 }
@@ -183,6 +182,7 @@ func (s *SyslogTransport) Write(msg []byte) (int, error) {
 
 func (s *SyslogTransport) forward() {
 	iter := s.buf.TailIterator()
+	iter.OmitTruncBytes()
 	defer iter.Close()
 
 	for iter.Next(s.done) {
