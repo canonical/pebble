@@ -136,13 +136,13 @@ func (m *CheckManager) Checks() ([]*CheckInfo, error) {
 
 // CheckInfo provides status information about a single check.
 type CheckInfo struct {
-	Name         string
-	Level        plan.CheckLevel
-	Status       CheckStatus
-	Failures     int
-	Threshold    int
-	LastError    string
-	ErrorDetails string
+	Name        string
+	Level       plan.CheckLevel
+	Status      CheckStatus
+	Failures    int
+	Threshold   int
+	LastError   string
+	LastDetails string
 }
 
 type CheckStatus string
@@ -247,7 +247,7 @@ func (c *checkData) info() *CheckInfo {
 	if c.lastErr != nil {
 		info.LastError = c.lastErr.Error()
 		if d, ok := c.lastErr.(interface{ Details() string }); ok {
-			info.ErrorDetails = d.Details()
+			info.LastDetails = d.Details()
 		}
 	}
 	return info

@@ -34,8 +34,8 @@ func (s *PebbleSuite) TestChecks(c *check.C) {
     "status-code": 200,
     "result": [
 		{"name": "chk1", "status": "up", "threshold": 3},
-		{"name": "chk2", "status": "down", "failures": 1, "threshold": 1},
-		{"name": "chk3", "level": "alive", "status": "down", "failures": 42, "threshold": 3}
+		{"name": "chk2", "status": "down", "failures": 1, "threshold": 1, "last-failure": {"error": "small issue"}},
+		{"name": "chk3", "level": "alive", "status": "down", "failures": 42, "threshold": 3, "last-failure": {"error": "big problem!"}}
 	]
 }`)
 	})
@@ -43,10 +43,10 @@ func (s *PebbleSuite) TestChecks(c *check.C) {
 	c.Assert(err, check.IsNil)
 	c.Assert(rest, check.HasLen, 0)
 	c.Check(s.Stdout(), check.Equals, `
-Check  Level  Status  Failures
-chk1   -      up      0/3
-chk2   -      down    1/1
-chk3   alive  down    42/3
+Check  Level  Status  Failures  Last Failure
+chk1   -      up      0/3       -
+chk2   -      down    1/1       small issue
+chk3   alive  down    42/3      big problem!
 `[1:])
 	c.Check(s.Stderr(), check.Equals, "")
 }
@@ -61,7 +61,7 @@ func (s *PebbleSuite) TestChecksFiltering(c *check.C) {
     "status-code": 200,
     "result": [
 		{"name": "chk1", "status": "up", "threshold": 3},
-		{"name": "chk3", "level": "alive", "status": "down", "failures": 42, "threshold": 3}
+		{"name": "chk3", "level": "alive", "status": "down", "failures": 42, "threshold": 3, "last-failure": {"error": "big problem!"}}
 	]
 }`)
 	})
@@ -69,9 +69,85 @@ func (s *PebbleSuite) TestChecksFiltering(c *check.C) {
 	c.Assert(err, check.IsNil)
 	c.Assert(rest, check.HasLen, 0)
 	c.Check(s.Stdout(), check.Equals, `
-Check  Level  Status  Failures
-chk1   -      up      0/3
-chk3   alive  down    42/3
+Check  Level  Status  Failures  Last Failure
+chk1   -      up      0/3       -
+chk3   alive  down    42/3      big problem!
+`[1:])
+	c.Check(s.Stderr(), check.Equals, "")
+}
+
+func (s *PebbleSuite) TestChecksFailures(c *check.C) {
+	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+		c.Assert(r.Method, check.Equals, "GET")
+		c.Assert(r.URL.Path, check.Equals, "/v1/checks")
+		c.Assert(r.URL.Query(), check.DeepEquals, url.Values{})
+		fmt.Fprint(w, `{
+    "type": "sync",
+    "status-code": 200,
+    "result": [
+		{"name": "chk1", "status": "down", "failures": 1, "threshold": 1, "last-failure": {
+            "error": "small issue",
+        	"details": "with details"
+  	    }},
+		{"name": "chk2", "status": "down", "failures": 1, "threshold": 1, "last-failure": {
+            "error": "012345678901234567890123456789012345678901234567890123456789truncated"
+  	    }},
+		{"name": "chk3", "status": "down", "failures": 1, "threshold": 1, "last-failure": {
+            "error": "error",
+            "details": "012345678901234567890123456789012345678901234567890123456789truncated"
+  	    }}
+	]
+}`)
+	})
+	rest, err := pebble.Parser(pebble.Client()).ParseArgs([]string{"checks"})
+	c.Assert(err, check.IsNil)
+	c.Assert(rest, check.HasLen, 0)
+	c.Check(s.Stdout(), check.Equals, `
+Check  Level  Status  Failures  Last Failure
+chk1   -      down    1/1       small issue: with details
+chk2   -      down    1/1       012345678901234567890123456789012345678901234567890123456789...
+chk3   -      down    1/1       error: 01234567890123456789012345678901234567890123456789012...
+`[1:])
+	c.Check(s.Stderr(), check.Equals, "")
+}
+
+func (s *PebbleSuite) TestChecksFailuresVerbose(c *check.C) {
+	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+		c.Assert(r.Method, check.Equals, "GET")
+		c.Assert(r.URL.Path, check.Equals, "/v1/checks")
+		c.Assert(r.URL.Query(), check.DeepEquals, url.Values{})
+		fmt.Fprint(w, `{
+    "type": "sync",
+    "status-code": 200,
+    "result": [
+		{"name": "chk1", "status": "down", "failures": 1, "threshold": 1, "last-failure": {
+            "error": "small issue",
+        	"details": "with details"
+  	    }},
+		{"name": "chk2", "status": "down", "failures": 1, "threshold": 1, "last-failure": {
+            "error": "012345678901234567890123456789012345678901234567890123456789 not truncated"
+  	    }},
+		{"name": "chk3", "status": "down", "failures": 1, "threshold": 1, "last-failure": {
+            "error": "error",
+            "details": "  The quick   \r\nbrown fox\n\njumps over\nthe lazy dog.    \n\n\n"
+  	    }}
+	]
+}`)
+	})
+	rest, err := pebble.Parser(pebble.Client()).ParseArgs([]string{"checks", "--verbose"})
+	c.Assert(err, check.IsNil)
+	c.Assert(rest, check.HasLen, 0)
+	c.Check(s.Stdout(), check.Equals, `
+Check  Level  Status  Failures  Last Failure
+chk1   -      down    1/1       small issue
+                                with details
+chk2   -      down    1/1       012345678901234567890123456789012345678901234567890123456789 not truncated
+chk3   -      down    1/1       error
+                                  The quick
+                                brown fox
+                                
+                                jumps over
+                                the lazy dog.
 `[1:])
 	c.Check(s.Stderr(), check.Equals, "")
 }

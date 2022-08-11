@@ -65,6 +65,16 @@ type CheckInfo struct {
 	// Threshold is this check's failure threshold, from the layer
 	// configuration.
 	Threshold int `json:"threshold"`
+
+	// LastFailure describes the last failure that occurred for this check
+	// (only present if the number of failures is nonzero).
+	LastFailure *CheckFailure `json:"last-failure"`
+}
+
+// CheckFailure holds information about a single check failure.
+type CheckFailure struct {
+	Error   string `json:"error"`
+	Details string `json:"details"`
 }
 
 // Checks fetches information about specific health checks (or all of them),

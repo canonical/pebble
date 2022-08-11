@@ -821,7 +821,7 @@ func (s *daemonSuite) TestRestartShutdown(c *check.C) {
 	st.Unlock()
 
 	sigCh := make(chan os.Signal, 2)
-	// stop (this will timeout but thats not relevant for this test)
+	// stop (this will time out, but that's not relevant for this test)
 	d.Stop(sigCh)
 
 	// ensure that the sigCh got closed as part of the stop

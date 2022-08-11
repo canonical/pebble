@@ -75,7 +75,7 @@ func (c *httpChecker) check(ctx context.Context) error {
 			details = strings.Join(lines, "\n")
 		}
 		return &detailsError{
-			error:   fmt.Errorf("received non-20x status code %d", response.StatusCode),
+			error:   fmt.Errorf("non-20x status code %d", response.StatusCode),
 			details: details,
 		}
 	}

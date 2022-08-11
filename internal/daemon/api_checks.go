@@ -22,11 +22,17 @@ import (
 )
 
 type checkInfo struct {
-	Name      string `json:"name"`
-	Level     string `json:"level,omitempty"`
-	Status    string `json:"status"`
-	Failures  int    `json:"failures,omitempty"`
-	Threshold int    `json:"threshold"`
+	Name        string        `json:"name"`
+	Level       string        `json:"level,omitempty"`
+	Status      string        `json:"status"`
+	Failures    int           `json:"failures,omitempty"`
+	Threshold   int           `json:"threshold"`
+	LastFailure *checkFailure `json:"last-failure,omitempty"`
+}
+
+type checkFailure struct {
+	Error   string `json:"error"`
+	Details string `json:"details,omitempty"`
 }
 
 func v1GetChecks(c *Command, r *http.Request, _ *userState) Response {
@@ -57,6 +63,12 @@ func v1GetChecks(c *Command, r *http.Request, _ *userState) Response {
 				Status:    string(check.Status),
 				Failures:  check.Failures,
 				Threshold: check.Threshold,
+			}
+			if check.LastError != "" {
+				info.LastFailure = &checkFailure{
+					Error:   check.LastError,
+					Details: check.LastDetails,
+				}
 			}
 			infos = append(infos, info)
 		}

@@ -321,7 +321,7 @@ func (s *serviceData) startInternal() error {
 	args, err := shlex.Split(s.config.Command)
 	if err != nil {
 		// Shouldn't happen as it should have failed on parsing, but
-		// it does not hurt to double check and report.
+		// it does not hurt to double-check and report.
 		return fmt.Errorf("cannot parse service command: %s", err)
 	}
 	s.cmd = exec.Command(args[0], args[1:]...)

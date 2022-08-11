@@ -16,6 +16,8 @@ package main
 
 import (
 	"fmt"
+	"strings"
+	"unicode"
 
 	"github.com/jessevdk/go-flags"
 
@@ -25,13 +27,15 @@ import (
 type cmdChecks struct {
 	clientMixin
 	Level      string `long:"level"`
+	Verbose    bool   `short:"v" long:"verbose"`
 	Positional struct {
 		Checks []string `positional-arg-name:"<check>"`
 	} `positional-args:"yes"`
 }
 
 var checksDescs = map[string]string{
-	"level": `Check level to filter for ("alive" or "ready")`,
+	"level":   `Check level to filter for ("alive" or "ready")`,
+	"verbose": "Show verbose output (multi-line failure details)",
 }
 
 var shortChecksHelp = "Query the status of configured health checks"
@@ -66,14 +70,39 @@ func (cmd *cmdChecks) Execute(args []string) error {
 	w := tabWriter()
 	defer w.Flush()
 
-	fmt.Fprintln(w, "Check\tLevel\tStatus\tFailures")
+	fmt.Fprintln(w, "Check\tLevel\tStatus\tFailures\tLast Failure")
 
 	for _, check := range checks {
 		level := check.Level
 		if level == client.UnsetLevel {
 			level = "-"
 		}
-		fmt.Fprintf(w, "%s\t%s\t%s\t%d/%d\n", check.Name, level, check.Status, check.Failures, check.Threshold)
+		fmt.Fprintf(w, "%s\t%s\t%s\t%d/%d\t", check.Name, level, check.Status, check.Failures, check.Threshold)
+		if check.LastFailure != nil {
+			if cmd.Verbose {
+				fmt.Fprintln(w, check.LastFailure.Error)
+				if check.LastFailure.Details != "" {
+					details := strings.TrimRightFunc(check.LastFailure.Details, unicode.IsSpace)
+					lines := strings.Split(details, "\n")
+					for _, line := range lines {
+						line = strings.TrimRightFunc(line, unicode.IsSpace)
+						fmt.Fprintf(w, "\t\t\t\t%s\n", line)
+					}
+				}
+			} else {
+				failure := check.LastFailure.Error
+				if check.LastFailure.Details != "" {
+					failure += ": " + check.LastFailure.Details
+				}
+				runes := []rune(failure)
+				if len(runes) > 60 {
+					runes = append(runes[:60], []rune("...")...)
+				}
+				fmt.Fprintln(w, string(runes))
+			}
+		} else {
+			fmt.Fprintln(w, "-")
+		}
 	}
 	return nil
 }
