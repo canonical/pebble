@@ -15,9 +15,7 @@
 package main_test
 
 import (
-	"encoding/json"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -27,18 +25,6 @@ import (
 
 	pebble "github.com/canonical/pebble/cmd/pebble"
 )
-
-func decodeBody(c *check.C, body io.ReadCloser) map[string]interface{} {
-	defer body.Close()
-	var actual map[string]interface{}
-	err := json.NewDecoder(body).Decode(&actual)
-	c.Assert(err, check.IsNil)
-	return actual
-}
-
-func assertBodyEquals(c *check.C, body io.ReadCloser, expected map[string]interface{}) {
-	c.Assert(decodeBody(c, body), check.DeepEquals, expected)
-}
 
 func (s *PebbleSuite) TestAdd(c *check.C) {
 	for _, combine := range []bool{false, true} {
@@ -54,7 +40,7 @@ services:
 			c.Check(r.Method, check.Equals, "POST")
 			c.Check(r.URL.Path, check.Equals, "/v1/layers")
 
-			body := decodeBody(c, r.Body)
+			body := DecodedRequestBody(c, r)
 
 			layerContent, ok := body["layer"]
 			c.Assert(ok, check.Equals, true)
