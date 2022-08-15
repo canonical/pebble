@@ -39,7 +39,7 @@ const (
 	maxErrorLines = 20
 )
 
-// httpChecker is a checker that ensures an HTTP GET at a specified URL returns 20x.
+// httpChecker is a checker that ensures an HTTP GET at a specified URL returns 2xx.
 type httpChecker struct {
 	name    string
 	url     string
@@ -75,7 +75,7 @@ func (c *httpChecker) check(ctx context.Context) error {
 			details = strings.Join(lines, "\n")
 		}
 		return &detailsError{
-			error:   fmt.Errorf("non-20x status code %d", response.StatusCode),
+			error:   fmt.Errorf("non-2xx status code %d", response.StatusCode),
 			details: details,
 		}
 	}
