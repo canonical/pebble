@@ -21,9 +21,16 @@ import (
 	"time"
 
 	. "gopkg.in/check.v1"
+
+	"github.com/canonical/pebble/internal/plan"
 )
 
 func (s *apiSuite) TestChecksGet(c *C) {
+	// Ensure checks are stopped gracefully when test finishes.
+	defer func() {
+		s.d.overlord.CheckManager().PlanChanged(&plan.Plan{})
+	}()
+
 	writeTestLayer(s.pebbleDir, `
 checks:
     chk1:
@@ -168,6 +175,11 @@ func (s *apiSuite) TestChecksEmpty(c *C) {
 }
 
 func (s *apiSuite) TestChecksFailure(c *C) {
+	// Ensure checks are stopped gracefully when test finishes.
+	defer func() {
+		s.d.overlord.CheckManager().PlanChanged(&plan.Plan{})
+	}()
+
 	writeTestLayer(s.pebbleDir, `
 checks:
     chk1:
