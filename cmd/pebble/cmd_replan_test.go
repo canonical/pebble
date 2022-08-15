@@ -16,40 +16,44 @@ package main_test
 
 import (
 	"fmt"
-	pebble "github.com/canonical/pebble/cmd/pebble"
-	"gopkg.in/check.v1"
 	"net/http"
+
+	"gopkg.in/check.v1"
+
+	pebble "github.com/canonical/pebble/cmd/pebble"
 )
 
+func (s *PebbleSuite) TestReplanExtraArgs(c *check.C) {
+	rest, err := pebble.Parser(pebble.Client()).ParseArgs([]string{"replan", "extra", "args"})
+	c.Assert(err, check.Equals, pebble.ErrExtraArgs)
+	c.Assert(rest, check.HasLen, 1)
+	c.Check(s.Stdout(), check.Equals, "")
+	c.Check(s.Stderr(), check.Equals, "")
+}
+
 func (s *PebbleSuite) TestReplan(c *check.C) {
-	failGetChange := false
 	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		fakeChange := `{
-  "id":   "43",
-  "kind": "replan",
-  "summary": "...",
-  "status": "Done",
-  "ready": true,
-  "spawn-time": "2016-04-21T01:02:03Z",
-  "ready-time": "2016-04-21T01:02:04Z",
-  "tasks": []
-}`
-		if r.URL.Path == "/v1/changes" {
+		if r.URL.Path == "/v1/changes/43" {
 			c.Check(r.Method, check.Equals, "GET")
-			fmt.Fprintf(w, `{"type": "sync", "result": [%s]}`, fakeChange)
-			return
-		} else if r.URL.Path == "/v1/changes/43" {
-			c.Check(r.Method, check.Equals, "GET")
-			if failGetChange {
-				fmt.Fprintf(w, `{"type": "error", "result": {"message": "could not foo"}}`)
-			} else {
-				fmt.Fprintf(w, `{"type": "sync", "result": %s}`, fakeChange)
-			}
+			fmt.Fprintf(w, `{
+	"type": "sync",
+	"result": {
+		"id": "43",
+		"kind": "replan",
+		"summary": "...",
+		"status": "Done",
+		"ready": true,
+		"spawn-time": "2016-04-21T01:02:03Z",
+		"ready-time": "2016-04-21T01:02:04Z",
+		"tasks": []
+	}
+}`)
 			return
 		}
 
 		c.Check(r.Method, check.Equals, "POST")
 		c.Check(r.URL.Path, check.Equals, "/v1/services")
+
 		body := DecodedRequestBody(c, r)
 		c.Check(body, check.DeepEquals, map[string]interface{}{
 			"action":   "replan",
@@ -66,20 +70,11 @@ func (s *PebbleSuite) TestReplan(c *check.C) {
 	rest, err := pebble.Parser(pebble.Client()).ParseArgs([]string{"replan"})
 	c.Assert(err, check.IsNil)
 	c.Assert(rest, check.HasLen, 0)
-
-	rest, err = pebble.Parser(pebble.Client()).ParseArgs([]string{"replan", "--no-wait"})
-	c.Assert(err, check.IsNil)
-	c.Assert(rest, check.HasLen, 0)
-
-	failGetChange = true
-	rest, err = pebble.Parser(pebble.Client()).ParseArgs([]string{"replan"})
-	c.Assert(err, check.ErrorMatches, "could not foo")
-	c.Assert(rest, check.HasLen, 1)
-	failGetChange = false
-
+	c.Check(s.Stdout(), check.Equals, "")
+	c.Check(s.Stderr(), check.Equals, "")
 }
 
-func (s *PebbleSuite) TestReplanFails(c *check.C) {
+func (s *PebbleSuite) TestReplanFailsNoDefaultServices(c *check.C) {
 	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
 		c.Check(r.Method, check.Equals, "POST")
 		c.Check(r.URL.Path, check.Equals, "/v1/services")
@@ -99,10 +94,63 @@ func (s *PebbleSuite) TestReplanFails(c *check.C) {
 	rest, err := pebble.Parser(pebble.Client()).ParseArgs([]string{"replan"})
 	c.Assert(err, check.ErrorMatches, "no default services")
 	c.Assert(rest, check.HasLen, 1)
+	c.Check(s.Stdout(), check.Equals, "")
+	c.Check(s.Stderr(), check.Equals, "")
 }
 
-func (s *PebbleSuite) TestReplanFailsWithExtraArgs(c *check.C) {
-	rest, err := pebble.Parser(pebble.Client()).ParseArgs([]string{"replan", "extra", "args"})
-	c.Assert(err, check.Equals, pebble.ErrExtraArgs)
+func (s *PebbleSuite) TestReplanNoWait(c *check.C) {
+	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+		c.Check(r.Method, check.Equals, "POST")
+		c.Check(r.URL.Path, check.Equals, "/v1/services")
+		c.Check(r.URL.Path, check.Not(check.Equals), "/v1/changes/43")
+
+		body := DecodedRequestBody(c, r)
+		c.Check(body, check.DeepEquals, map[string]interface{}{
+			"action":   "replan",
+			"services": nil,
+		})
+
+		fmt.Fprintf(w, `{
+    "type": "async",
+    "status-code": 202,
+    "change": "43"
+}`)
+	})
+
+	rest, err := pebble.Parser(pebble.Client()).ParseArgs([]string{"replan", "--no-wait"})
+	c.Assert(err, check.IsNil)
+	c.Assert(rest, check.HasLen, 0)
+	c.Check(s.Stdout(), check.Equals, "43\n")
+	c.Check(s.Stderr(), check.Equals, ``)
+}
+
+func (s *PebbleSuite) TestReplanFailsGetChange(c *check.C) {
+	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/v1/changes/43" {
+			c.Check(r.Method, check.Equals, "GET")
+			fmt.Fprintf(w, `{"type": "error", "result": {"message": "could not foo"}}`)
+			return
+		}
+
+		c.Check(r.Method, check.Equals, "POST")
+		c.Check(r.URL.Path, check.Equals, "/v1/services")
+
+		body := DecodedRequestBody(c, r)
+		c.Check(body, check.DeepEquals, map[string]interface{}{
+			"action":   "replan",
+			"services": nil,
+		})
+
+		fmt.Fprintf(w, `{
+    "type": "async",
+    "status-code": 202,
+    "change": "43"
+}`)
+	})
+
+	rest, err := pebble.Parser(pebble.Client()).ParseArgs([]string{"replan"})
+	c.Assert(err, check.ErrorMatches, "could not foo")
 	c.Assert(rest, check.HasLen, 1)
+	c.Check(s.Stdout(), check.Equals, "")
+	c.Check(s.Stderr(), check.Equals, "")
 }
