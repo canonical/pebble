@@ -13,6 +13,9 @@ import (
 	"github.com/canonical/pebble/internal/logger"
 )
 
+const maxLogBytes = 100 * 1024
+const canonicalPrivEnterpriseNum = 28978
+
 type LogBackend interface {
 	Send(*LogMessage) error
 	UpdateLabels(labels map[string]string)
@@ -218,15 +221,15 @@ func NewSyslogBackend(addr string, labels map[string]string) *SyslogBackend {
 		host:           "-",
 		msgid:          "-",
 		priority:       1*8 + 6, // for facility=user-msg severity=informational. See RFC 5424 6.2.1 for available codes.
-		structuredData: buildSyslogStructuredData("pebble", canonicalPrivEnterpriseNum, labels),
+		structuredData: syslogStructuredData("pebble", canonicalPrivEnterpriseNum, labels),
 
 		address: addr,
 	}
 }
 
-// buildStructuredData formats the given labels into a structured data section for a syslog message
+// syslogStructuredData formats the given labels into a structured data section for a syslog message
 // according to RFC5424 section 6.
-func buildSyslogStructuredData(name string, enterpriseNum int, labels map[string]string) string {
+func syslogStructuredData(name string, enterpriseNum int, labels map[string]string) string {
 	if len(labels) == 0 {
 		return "-"
 	}
@@ -250,7 +253,7 @@ func buildSyslogStructuredData(name string, enterpriseNum int, labels map[string
 }
 
 func (s *SyslogBackend) UpdateLabels(labels map[string]string) {
-	s.structuredData = buildStructuredData("pebble", canonicalPrivEnterpriseNum, labels)
+	s.structuredData = syslogStructuredData("pebble", canonicalPrivEnterpriseNum, labels)
 }
 
 func (s *SyslogBackend) Send(m *LogMessage) error {
