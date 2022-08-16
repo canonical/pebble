@@ -2,7 +2,6 @@ package logstate
 
 import (
 	"fmt"
-	"io/ioutil"
 	"sync"
 
 	"github.com/canonical/pebble/internal/logger"
@@ -15,17 +14,14 @@ type LoggingWatcher interface {
 
 type LogManager struct {
 	mutex        sync.Mutex
-	destinations map[string]*SyslogTransport
-	watchers     []LoggingWatcher
+	destinations map[string]*LogCollector
 }
 
 func NewLogManager() *LogManager {
-	return &LogManager{destinations: make(map[string]*SyslogTransport)}
+	return &LogManager{destinations: make(map[string]*LogCollector)}
 }
 
-func (m *LogManager) Notify(w LoggingWatcher) { m.watchers = append(m.watchers, w) }
-
-func (m *LogManager) GetTransport(destination string) (*SyslogTransport, error) {
+func (m *LogManager) GetCollector(destination string) (*LogCollector, error) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
@@ -46,32 +42,32 @@ func (m *LogManager) PlanChanged(p *plan.Plan) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
+	// update labels
+	for _, dest := range m.destinations {
+		dest.UpdateLabels(p.LogLabels)
+	}
+
 	// update destinations
 	for name, dest := range p.LogDestinations {
-		if dest.Type != "syslog" {
+		var b LogBackend
+		switch dest.Type {
+		case "loki":
+			b = NewLokiBackend(dest.Address, p.LogLabels)
+		case "syslog":
+			b = NewSyslogBackend(dest.Address, p.LogLabels)
+		default:
 			logger.Noticef("unsupported logging destination type: %v", dest.Type)
 			continue
-		}
-		var caData []byte
-		var err error
-		if dest.TLS != nil {
-			caData, err = ioutil.ReadFile(dest.TLS.CAfile)
-			if err != nil {
-				logger.Noticef("could not read CA file \"%s\"", dest.TLS.CAfile)
-				continue
-			}
 		}
 
 		orig, ok := m.destinations[name]
 		if ok {
-			orig.Update(dest.Protocol, dest.Address, caData)
+			logger.Noticef("manager setting backend for log collector")
+			orig.SetBackend(b)
 		} else {
-			m.destinations[name] = NewSyslogTransport(dest.Protocol, dest.Address, caData)
+			logger.Noticef("manager making new log collector")
+			m.destinations[name] = NewLogCollector(b)
 		}
 	}
 
-	// update labels
-	for _, w := range m.watchers {
-		w.UpdateLabels(p.LogLabels)
-	}
 }

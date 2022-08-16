@@ -355,30 +355,21 @@ func (s *serviceData) startInternal() error {
 	serviceName := s.config.Name
 	logWriter := servicelog.NewFormatWriter(s.logs, serviceName)
 
-	plan, err := s.manager.Plan()
-	if err != nil {
-		return err
-	}
-
 	// set up output logging for the command
-	var logDests []*logstate.SyslogWriter
+	var logDests []io.Writer
 	for _, name := range s.config.LogDestinations {
-		transport, err := s.manager.logMgr.GetTransport(name)
+		transport, err := s.manager.logMgr.GetCollector(name)
 		if err != nil {
 			return err
 		}
 
-		syslog := logstate.NewSyslogWriter(transport, serviceName, plan.LogLabels)
-		s.manager.logMgr.Notify(syslog)
-		logDests = append(logDests, syslog)
+		dest := logstate.NewLogForwarder(transport, serviceName)
+		logDests = append(logDests, dest)
 	}
 
 	var outputWriter io.Writer = logWriter
 	if len(logDests) > 0 {
-		ws := []io.Writer{logWriter}
-		for _, d := range logDests {
-			ws = append(ws, d)
-		}
+		ws := append([]io.Writer{logWriter}, logDests...)
 		outputWriter = io.MultiWriter(ws...)
 	}
 	s.cmd.Stdout = outputWriter
@@ -393,9 +384,6 @@ func (s *serviceData) startInternal() error {
 		}
 		_ = s.logs.Close()
 		return fmt.Errorf("cannot start service: %w", err)
-	}
-	for _, dest := range logDests {
-		dest.UpdatePid(s.cmd.Process.Pid)
 	}
 	logger.Debugf("Service %q started with PID %d", serviceName, s.cmd.Process.Pid)
 	s.resetTimer = time.AfterFunc(s.config.BackoffLimit.Value, func() { logError(s.backoffResetElapsed()) })
