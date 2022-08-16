@@ -63,7 +63,6 @@ type Layer struct {
 
 type LogDestination struct {
 	Type     string            `yaml:"type"`
-	Protocol string            `yaml:"protocol"`
 	Address  string            `yaml:"address"`
 	Override Override          `yaml:"override,omitempty"`
 	TLS      *LoggingTLSConfig `yaml:"tls,omitempty"`
@@ -81,9 +80,6 @@ func (d *LogDestination) Copy() *LogDestination {
 func (d *LogDestination) Merge(other *LogDestination) {
 	if other.Type != "" {
 		d.Type = other.Type
-	}
-	if other.Protocol != "" {
-		d.Protocol = other.Protocol
 	}
 	if other.Address != "" {
 		d.Address = other.Address
