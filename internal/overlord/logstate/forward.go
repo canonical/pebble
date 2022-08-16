@@ -50,7 +50,7 @@ func (l *LogForwarder) Write(p []byte) (int, error) {
 
 type LogCollector struct {
 	mu      sync.Mutex
-	buf     *AtomicRingBuffer
+	buf     *LogBuffer
 	notify  chan bool
 	backend LogBackend
 	done    chan struct{}
@@ -58,7 +58,7 @@ type LogCollector struct {
 }
 
 func NewLogCollector(backend LogBackend) *LogCollector {
-	buf := NewAtomicRingBuffer(maxLogBytes)
+	buf := NewLogBuffer(maxLogBytes)
 	c := &LogCollector{
 		backend: backend,
 		buf:     buf,
