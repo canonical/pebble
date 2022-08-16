@@ -41,10 +41,6 @@ type RingBuffer struct {
 	writeIndex  RingPos
 	writeClosed bool
 	data        []byte
-	// writeOffsets tracks the boundary positions between individual writes to the buffer.  If
-	// atomic discards are enables, this is used to atomically discard full writes when the buffer
-	// becomes full and wraps around.
-	writeOffsets []RingPos
 
 	iteratorMutex sync.RWMutex
 	iteratorList  []*iterator
@@ -56,8 +52,7 @@ var _ io.WriteCloser = (*RingBuffer)(nil)
 // buffer.
 func NewRingBuffer(size int) *RingBuffer {
 	rb := RingBuffer{
-		data:         make([]byte, size),
-		writeOffsets: make([]RingPos, 0, 10),
+		data: make([]byte, size),
 	}
 	return &rb
 }
@@ -113,8 +108,6 @@ func (rb *RingBuffer) Write(p []byte) (written int, err error) {
 	}
 	start := rb.writeIndex
 	end := rb.writeIndex + RingPos(writeLength)
-	rb.writeOffsets = append(rb.writeOffsets, end)
-
 	low := int(start % RingPos(len(rb.data)))
 	high := int(end % RingPos(len(rb.data)))
 	if high == 0 {
@@ -324,20 +317,7 @@ func (rb *RingBuffer) discard(n int) error {
 	if n > buffered {
 		n = buffered
 	}
-
-	nextReadIndex := rb.readIndex + RingPos(n)
-
-	// Remove write offsets corresponding to the buffer data being discarded.
-	for i, offset := range rb.writeOffsets {
-		if offset < nextReadIndex {
-			continue
-		}
-		nextReadIndex = offset
-		rb.writeOffsets = rb.writeOffsets[i+1:]
-		break
-	}
-
-	rb.readIndex = nextReadIndex
+	rb.readIndex = rb.readIndex + RingPos(n)
 	return nil
 }
 
