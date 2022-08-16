@@ -36,23 +36,18 @@ type Iterator interface {
 	// or full (buffered), the notification will be dropped.
 	Notify(ch chan bool)
 
-	// OmitTruncBytes instructs the iterator to *not* display "output truncated" messages when the
-	// ring buffer wraps around and discards content.
-	OmitTruncBytes()
-
 	Buffered() int
 	io.Reader
 	io.WriterTo
 }
 
 type iterator struct {
-	rb             *RingBuffer
-	index          RingPos
-	omitTruncBytes bool
-	trunc          []byte
-	truncWritten   bool
-	nextChan       chan bool
-	closeChan      chan struct{}
+	rb           *RingBuffer
+	index        RingPos
+	trunc        []byte
+	truncWritten bool
+	nextChan     chan bool
+	closeChan    chan struct{}
 
 	notifyLock sync.Mutex
 	notifyChan chan bool
@@ -181,13 +176,8 @@ func (it *iterator) Notify(ch chan bool) {
 	it.notifyChan = ch
 }
 
-func (it *iterator) OmitTruncBytes() { it.omitTruncBytes = true }
-
 func (it *iterator) truncated() {
 	it.index = TailPosition
-	if it.omitTruncBytes {
-		return
-	}
 	if len(it.trunc) > 0 {
 		// trunc being written
 		return

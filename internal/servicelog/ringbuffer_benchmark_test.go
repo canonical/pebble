@@ -15,7 +15,6 @@
 package servicelog_test
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/canonical/pebble/internal/servicelog"
@@ -27,23 +26,6 @@ func BenchmarkRingBufferWriteSmall(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		rb.Write(payload)
 	}
-}
-
-func benchWrite(size int, payload string) func(b *testing.B) {
-	rb := servicelog.NewRingBuffer(size)
-	data := []byte(payload)
-	return func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
-			rb.Write(data)
-		}
-	}
-}
-
-func BenchmarkRingBufferWrites(b *testing.B) {
-	payload := strings.Repeat("pebble", 7)
-	size := 1000*len(payload) + 5
-	b.Run("basic", benchWrite(size, payload))
-	b.Run("frequent-wrap", benchWrite(len(payload)+5, payload))
 }
 
 func BenchmarkRingBufferWrite(b *testing.B) {
