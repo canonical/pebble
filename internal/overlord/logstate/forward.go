@@ -197,6 +197,7 @@ func (b *LokiBackend) Send(m *LogMessage) error {
 // are then forwarded to the specified underlying destination io.Writer.  SyslogWriter is safe for
 // concurrent writes and use.
 type SyslogBackend struct {
+	mu             sync.RWMutex
 	version        int
 	host           string
 	msgid          string
@@ -207,6 +208,7 @@ type SyslogBackend struct {
 	conn          net.Conn
 	address       string
 	waitReconnect time.Duration
+	closed        bool
 }
 
 // NewSyslogBackend creates a writer forwarding writes as syslog messages to dst.  The forwarded
@@ -262,11 +264,15 @@ func (s *SyslogBackend) Send(m *LogMessage) error {
 		return err
 	}
 
+	s.mu.RLock()
 	_, err = s.conn.Write(s.buildMsg(m))
+	s.mu.RUnlock()
+
 	if err != nil {
 		// The connection might be bad. Close and reset it for later reconnection attempt(s).
+		s.mu.Lock()
 		s.conn.Close()
-		s.conn = nil
+		s.mu.Unlock()
 	}
 	return err
 }
@@ -277,20 +283,33 @@ func (s *SyslogBackend) buildMsg(m *LogMessage) []byte {
 	msg := fmt.Sprintf("<%d>%d %s %s %s %s %s %s %s",
 		s.priority, s.version, timestamp, s.host, m.Service, s.pid, s.msgid, s.structuredData, m.Message)
 
-	// Octet framing as per RFC 5425.  This needs to occur here rather than later in order to
-	// preserve framing of syslog messages atomically.  Otherwise failed or partial sends (across
-	// the network) would otherwise cause framing of multiple or partial messages at once.
+	// Octet framing as per RFC 5425.
 	framed := fmt.Sprintf("%d %s", len(msg), msg)
 	return []byte(framed)
 }
 
 func (s *SyslogBackend) Close() error {
-	return s.conn.Close()
+	s.closed = true
+	func() {
+		s.mu.RLock()
+		defer s.mu.RUnlock()
+		if s.conn != nil {
+			s.conn.SetDeadline(time.Now().Add(-1 * time.Second))
+		}
+	}()
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	err := s.conn.Close()
+	s.conn = nil
+	return err
 }
 
 func (s *SyslogBackend) ensureConnected() error {
 	if s.conn != nil {
 		return nil
+	} else if s.closed {
+		return fmt.Errorf("write to closed SyslogBackend")
 	}
 
 	if s.waitReconnect > 0 {
