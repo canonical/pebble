@@ -130,18 +130,16 @@ type LokiBackend struct {
 }
 
 const lokiPrefix = `
-{
-  "streams": [
-    {
-      "stream": {
-		%s
-      },
-      "values": [
-	  	[`
+{"streams":
+   [
+	  {
+	    "stream": {%s},
+		 "values": [
+			[`
 const lokiSuffix = `]
-      ]
-    }
-  ]
+		 ]
+	  }
+   ]
 }`
 
 func (b *LokiBackend) buildPrefix(labels map[string]string) {
@@ -176,14 +174,19 @@ func (b *LokiBackend) Send(m *LogMessage) error {
 	fmt.Fprintf(&buf, "%q, %s", timestamp, msg)
 	buf.WriteString(lokiSuffix)
 
-	logger.Noticef("loki backend is sending message:\n%v", buf.String())
-	r, err := http.NewRequest("POST", "http://"+b.address+"/loki/api/v1/push", &buf)
+	addr := "http://" + b.address + "/loki/api/v1/push"
+	logger.Noticef("loki backend is sending message (addr=%v):\n%v", addr, buf.String())
+	r, err := http.NewRequest("POST", addr, &buf)
 	if err != nil {
+		logger.Noticef("loki send failed: %v", err)
 		return err
 	}
 	r.Header.Add("Content-Type", "application/json")
 	c := &http.Client{}
 	_, err = c.Do(r)
+	if err != nil {
+		logger.Noticef("loki send failed: %v", err)
+	}
 	return err
 }
 
