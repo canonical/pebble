@@ -54,6 +54,7 @@ func (b *LogBuffer) GetAll() []*LogMessage {
 	defer b.mu.Unlock()
 	buf := b.buf
 	b.buf = b.buf[:0]
+	b.currSize = 0
 	return buf
 }
 
@@ -63,6 +64,7 @@ func (b *LogBuffer) discard(n int) {
 		freed += m.Size()
 		if freed >= n {
 			b.buf = b.buf[i+1:]
+			b.currSize -= freed
 			return
 		}
 	}
