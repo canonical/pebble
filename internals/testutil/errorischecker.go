@@ -16,7 +16,6 @@ package testutil
 
 import (
 	"errors"
-	"fmt"
 
 	"gopkg.in/check.v1"
 )
@@ -37,12 +36,12 @@ func (*errorIsChecker) Check(params []interface{}, names []string) (result bool,
 
 	err, ok := params[0].(error)
 	if !ok {
-		return false, fmt.Sprintf("first argument must be an error")
+		return false, "first argument must be an error"
 	}
 
 	target, ok := params[1].(error)
 	if !ok {
-		return false, fmt.Sprintf("second argument must be an error")
+		return false, "second argument must be an error"
 	}
 
 	return errors.Is(err, target), ""
