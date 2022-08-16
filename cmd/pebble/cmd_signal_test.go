@@ -25,9 +25,10 @@ import (
 
 func (s *PebbleSuite) TestSignalShortName(c *check.C) {
 	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+		body := DecodedRequestBody(c, r)
 		c.Check(r.Method, check.Equals, "POST")
 		c.Check(r.URL.Path, check.Equals, "/v1/signals")
-		assertBodyEquals(c, r.Body, map[string]interface{}{
+		c.Check(body, check.DeepEquals, map[string]interface{}{
 			"signal":   "SIGHUP",
 			"services": []interface{}{"s1"},
 		})
@@ -45,9 +46,10 @@ func (s *PebbleSuite) TestSignalShortName(c *check.C) {
 
 func (s *PebbleSuite) TestSignalFullName(c *check.C) {
 	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+		body := DecodedRequestBody(c, r)
 		c.Check(r.Method, check.Equals, "POST")
 		c.Check(r.URL.Path, check.Equals, "/v1/signals")
-		assertBodyEquals(c, r.Body, map[string]interface{}{
+		c.Check(body, check.DeepEquals, map[string]interface{}{
 			"signal":   "SIGHUP",
 			"services": []interface{}{"s2"},
 		})
@@ -65,9 +67,10 @@ func (s *PebbleSuite) TestSignalFullName(c *check.C) {
 
 func (s *PebbleSuite) TestSignalMultipleServices(c *check.C) {
 	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+		body := DecodedRequestBody(c, r)
 		c.Check(r.Method, check.Equals, "POST")
 		c.Check(r.URL.Path, check.Equals, "/v1/signals")
-		assertBodyEquals(c, r.Body, map[string]interface{}{
+		c.Check(body, check.DeepEquals, map[string]interface{}{
 			"signal":   "SIGHUP",
 			"services": []interface{}{"s1", "s2"},
 		})
@@ -90,9 +93,10 @@ func (s *PebbleSuite) TestSignalErrorLowercase(c *check.C) {
 
 func (s *PebbleSuite) TestSignalServerError(c *check.C) {
 	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+		body := DecodedRequestBody(c, r)
 		c.Check(r.Method, check.Equals, "POST")
 		c.Check(r.URL.Path, check.Equals, "/v1/signals")
-		assertBodyEquals(c, r.Body, map[string]interface{}{
+		c.Check(body, check.DeepEquals, map[string]interface{}{
 			"signal":   "SIGHUP",
 			"services": []interface{}{"s1"},
 		})

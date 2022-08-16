@@ -23,7 +23,7 @@ import (
 	pebble "github.com/canonical/pebble/cmd/pebble"
 )
 
-func (s *PebbleSuite) TestVersionCommand(c *C) {
+func (s *PebbleSuite) TestVersion(c *C) {
 	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintln(w, `{"type":"sync","status-code":200,"status":"OK","result":{"version":"7.89"}}`)
 	})
@@ -33,6 +33,12 @@ func (s *PebbleSuite) TestVersionCommand(c *C) {
 
 	_, err := pebble.Parser(pebble.Client()).ParseArgs([]string{"version"})
 	c.Assert(err, IsNil)
-	c.Assert(s.Stdout(), Equals, "client  4.56\nserver  7.89\n")
-	c.Assert(s.Stderr(), Equals, "")
+	c.Check(s.Stdout(), Equals, "client  4.56\nserver  7.89\n")
+	c.Check(s.Stderr(), Equals, "")
+}
+
+func (s *PebbleSuite) TestVersionExtraArgs(c *C) {
+	rest, err := pebble.Parser(pebble.Client()).ParseArgs([]string{"version", "extra", "args"})
+	c.Assert(err, Equals, pebble.ErrExtraArgs)
+	c.Assert(rest, HasLen, 1)
 }

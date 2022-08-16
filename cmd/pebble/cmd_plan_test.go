@@ -35,14 +35,39 @@ func (s *PebbleSuite) TestGetPlan(c *check.C) {
     "result": "services:\n    foo:\n        override: replace\n        command: cmd\n"
 }`)
 	})
+
 	rest, err := pebble.Parser(pebble.Client()).ParseArgs([]string{"plan"})
 	c.Assert(err, check.IsNil)
 	c.Assert(rest, check.HasLen, 0)
-	c.Check(s.Stdout(), check.Equals, `
+	c.Assert(s.Stdout(), check.Equals, `
 services:
     foo:
         override: replace
         command: cmd
 `[1:])
-	c.Check(s.Stderr(), check.Equals, "")
+	c.Assert(s.Stderr(), check.Equals, ``)
+}
+
+func (s *PebbleSuite) TestGetPlanFails(c *check.C) {
+	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+		c.Check(r.Method, check.Equals, "GET")
+		c.Check(r.URL.Path, check.Equals, "/v1/plan")
+		c.Check(r.URL.Query(), check.DeepEquals, url.Values{"format": []string{"yaml"}})
+		fmt.Fprint(w, `{
+    "type": "error",
+    "result": {"message": "could not do the thing"}
+}`)
+	})
+
+	rest, err := pebble.Parser(pebble.Client()).ParseArgs([]string{"plan"})
+	c.Assert(err.Error(), check.Equals, "could not do the thing")
+	c.Assert(rest, check.HasLen, 1)
+	c.Assert(s.Stdout(), check.Equals, ``)
+	c.Assert(s.Stderr(), check.Equals, ``)
+}
+
+func (s *PebbleSuite) TestPlanExtraArgs(c *check.C) {
+	rest, err := pebble.Parser(pebble.Client()).ParseArgs([]string{"plan", "extra", "args"})
+	c.Assert(err, check.Equals, pebble.ErrExtraArgs)
+	c.Check(rest, check.HasLen, 1)
 }

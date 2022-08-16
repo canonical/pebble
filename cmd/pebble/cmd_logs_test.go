@@ -72,6 +72,12 @@ func (s *PebbleSuite) TestLogsJSON(c *C) {
 	c.Check(s.Stderr(), Equals, "")
 }
 
+func (s *PebbleSuite) TestLogsInvalidFormat(c *C) {
+	rest, err := pebble.Parser(pebble.Client()).ParseArgs([]string{"logs", "--format", "invalid"})
+	c.Assert(err.Error(), Equals, `invalid output format (expected "json" or "text", not "invalid")`)
+	c.Assert(rest, HasLen, 1)
+}
+
 func (s *PebbleSuite) TestLogsN(c *C) {
 	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
 		c.Check(r.Method, Equals, "GET")
@@ -114,6 +120,12 @@ func (s *PebbleSuite) TestLogsAll(c *C) {
 2021-05-03T03:55:49.654Z [snappass] log two
 `[1:])
 	c.Check(s.Stderr(), Equals, "")
+}
+
+func (s *PebbleSuite) TestLogsInvalidNumber(c *C) {
+	rest, err := pebble.Parser(pebble.Client()).ParseArgs([]string{"logs", "-ninvalid"})
+	c.Assert(err.Error(), Equals, `expected n to be a non-negative integer or "all", not "invalid"`)
+	c.Assert(rest, HasLen, 1)
 }
 
 func (s *PebbleSuite) TestLogsFollow(c *C) {
