@@ -55,7 +55,7 @@ func (m *LogManager) PlanChanged(p *plan.Plan) {
 		case "loki":
 			b, err = NewLokiBackend(dest.Address, p.LogLabels)
 		case "syslog":
-			b = NewSyslogBackend(dest.Address, p.LogLabels)
+			b, err = NewSyslogBackend(dest.Address, p.LogLabels)
 		default:
 			logger.Noticef("unsupported logging destination type: %v", dest.Type)
 			continue
