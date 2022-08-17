@@ -2,11 +2,10 @@ package logstate
 
 import (
 	"bufio"
-	"bytes"
-	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net"
 	"strconv"
 	"strings"
@@ -15,15 +14,7 @@ import (
 	"time"
 )
 
-func TestMain(m *testing.M) {
-	// simulate an zero current time to make test timestamps easy
-	timeFunc = func() time.Time {
-		return time.Time{}
-	}
-	m.Run()
-}
-
-func TestSyslogWriter(t *testing.T) {
+func TestSyslogBackend(t *testing.T) {
 	tests := []struct {
 		name   string
 		input  string
@@ -34,43 +25,51 @@ func TestSyslogWriter(t *testing.T) {
 		{
 			name:  "basic",
 			input: "hello",
-			want:  "<14>1 0001-01-01T00:00:00Z - testapp 0 - - hello",
+			want:  "48 <14>1 0001-01-01T00:00:00Z - testapp - - - hello",
 		}, {
 			name:   "basic-param",
 			input:  "hello",
 			params: map[string]string{"foo": "bar"},
-			want:   "<14>1 0001-01-01T00:00:00Z - testapp 0 - [pebble@28978 foo=\"bar\"] hello",
+			want:   "71 <14>1 0001-01-01T00:00:00Z - testapp - - [pebble@28978 foo=\"bar\"] hello",
 		}, {
 			name:   "basic-multiparam",
 			input:  "hello",
 			params: map[string]string{"foo": "bar", "baz": "quux"},
-			want:   "<14>1 0001-01-01T00:00:00Z - testapp 0 - [pebble@28978 foo=\"bar\" baz=\"quux\"] hello",
-		}, {
-			name:  "basic-pid",
-			input: "hello",
-			pid:   42,
-			want:  "<14>1 0001-01-01T00:00:00Z - testapp 42 - - hello",
+			want:   "82 <14>1 0001-01-01T00:00:00Z - testapp - - [pebble@28978 foo=\"bar\" baz=\"quux\"] hello",
 		}, {
 			name:   "param-escapes",
 			input:  "hello",
 			params: map[string]string{"foo": "\"[bar]\\"},
-			want:   "<14>1 0001-01-01T00:00:00Z - testapp 0 - [pebble@28978 foo=\"\\\"[bar\\]\\\\\"] hello",
+			want:   "78 <14>1 0001-01-01T00:00:00Z - testapp - - [pebble@28978 foo=\"\\\"[bar\\]\\\\\"] hello",
 		},
 	}
 
 	for i, test := range tests {
 		t.Run(fmt.Sprintf("case %v (%v)", i+1, test.name), func(t *testing.T) {
-			var buf bytes.Buffer
-			w := NewSyslogWriter(&buf, "testapp", test.params)
-			w.UpdatePid(test.pid)
-
-			_, err := io.WriteString(w, test.input)
+			w, err := NewSyslogBackend("localhost:424242", test.params)
 			if err != nil {
-				t.Errorf("write failed: %v", err)
-				return
+				t.Fatal(err)
 			}
 
-			if got := buf.String(); got != test.want {
+			// mock the internal net.Conn
+			client, server := net.Pipe()
+			w.conn = client
+
+			go func() {
+				err := w.Send(&LogMessage{Service: "testapp", Message: []byte(test.input), Timestamp: time.Time{}})
+				if err != nil {
+					t.Errorf("send failed: %v", err)
+					return
+				}
+				client.Close()
+			}()
+
+			data, err := ioutil.ReadAll(server)
+			if err != io.EOF && err != nil {
+				t.Errorf("read error: %v", err)
+			}
+
+			if got := string(data); got != test.want {
 				t.Errorf("wrong output:\nwant %q\ngot  %q", test.want, got)
 			}
 		})
@@ -91,8 +90,15 @@ func testTransport(config servConfig, inputs, wantMsgs []string) func(t *testing
 		defer wg.Wait()
 		defer closer.Close()
 
-		transport := NewSyslogTransport(config.protocol, addr, config.cert)
-		defer transport.Close()
+		addr = config.protocol + addr
+
+		backend, err := NewSyslogBackend(addr, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		collector := NewLogCollector(backend)
+		defer collector.Close()
+		forwarder := NewLogForwarder(collector, "testservice")
 
 		if len(inputs) == 0 {
 			inputs = []string{"hello"}
@@ -101,7 +107,7 @@ func testTransport(config servConfig, inputs, wantMsgs []string) func(t *testing
 			wantMsgs = inputs
 		}
 		for _, msg := range inputs {
-			_, err := io.WriteString(transport, msg)
+			_, err := io.WriteString(forwarder, msg)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -112,8 +118,8 @@ func testTransport(config servConfig, inputs, wantMsgs []string) func(t *testing
 			case err := <-errs:
 				t.Errorf("unexpected error: %v", err)
 			case got := <-msgs:
-				if want != got {
-					t.Errorf("wrong result: want %q, got %q", want, got)
+				if !strings.HasSuffix(got, want) {
+					t.Errorf("wrong result: want suffix %q, got %q", want, got)
 				}
 			case <-time.After(10 * time.Second):
 				t.Fatal("timed out")
@@ -125,7 +131,6 @@ func testTransport(config servConfig, inputs, wantMsgs []string) func(t *testing
 func TestSyslogTransport(t *testing.T) {
 	t.Run("tcp", testTransport(servConfig{protocol: "tcp"}, nil, nil))
 	t.Run("udp", testTransport(servConfig{protocol: "udp"}, nil, nil))
-	t.Run("TLS-tcp", testTransport(servConfig{protocol: "tcp", cert: testCert, privkey: testPrivKey}, nil, nil))
 	t.Run("multiple-writes", testTransport(servConfig{protocol: "tcp"}, []string{"hello", "world"}, nil))
 
 	tmp := maxLogBytes
@@ -150,11 +155,16 @@ func TestSyslogTransport_reconnect(t *testing.T) {
 	defer wg.Wait()
 	defer closer.Close()
 
-	transport := NewSyslogTransport(config.protocol, addr, config.cert)
-	defer transport.Close()
+	backend, err := NewSyslogBackend(addr, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	collector := NewLogCollector(backend)
+	defer collector.Close()
+	forwarder := NewLogForwarder(collector, "testservice")
 
 	// write initial data, send to server
-	_, err := io.WriteString(transport, "test1")
+	_, err = io.WriteString(forwarder, "test1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -173,15 +183,15 @@ func TestSyslogTransport_reconnect(t *testing.T) {
 	}
 
 	// write some data while server is down
-	_, err = io.WriteString(transport, "test2")
+	_, err = io.WriteString(forwarder, "test2")
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = io.WriteString(transport, "test3")
+	_, err = io.WriteString(forwarder, "test3")
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = io.WriteString(transport, "test4")
+	_, err = io.WriteString(forwarder, "test4")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -191,9 +201,13 @@ func TestSyslogTransport_reconnect(t *testing.T) {
 		<-errs
 	}
 
-	// start a new server and redirect transport to it
+	// start a new server and redirect the collector to it
 	addr2, closer2, wg2 := startTestServer(t, config, crash, msgs, errs)
-	transport.Update(config.protocol, addr2, config.cert)
+	backend, err = NewSyslogBackend(addr2, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	collector.SetBackend(backend)
 
 	defer wg2.Wait()
 	defer closer2.Close()
@@ -201,8 +215,8 @@ func TestSyslogTransport_reconnect(t *testing.T) {
 	select {
 	case got := <-msgs:
 		want := "test2"
-		if want != got {
-			t.Errorf("post server reboot - wrong message: want %q, got %q", want, got)
+		if !strings.HasSuffix(got, want) {
+			t.Errorf("post server reboot - wrong message: want suffix %q, got %q", want, got)
 		}
 	case err := <-errs:
 		t.Errorf("got unexpected error: %v", err)
@@ -213,7 +227,6 @@ func TestSyslogTransport_reconnect(t *testing.T) {
 
 type servConfig struct {
 	protocol string
-	cert     []byte
 	privkey  []byte
 }
 
@@ -246,14 +259,6 @@ func startTestServer(t *testing.T, config servConfig, crash crashConfig, msgs ch
 		l, err = net.Listen(config.protocol, "127.0.0.1:0")
 		if err != nil {
 			t.Fatalf("startServer failed: %v", err)
-		}
-		if config.cert != nil {
-			cert, err := tls.X509KeyPair(config.cert, config.privkey)
-			if err != nil {
-				t.Fatalf("failed to load TLS keypair: %v", err)
-			}
-			tlsconfig := &tls.Config{Certificates: []tls.Certificate{cert}}
-			l = tls.NewListener(l, tlsconfig)
 		}
 		c = l
 		wg.Add(1)
@@ -355,55 +360,3 @@ func processMessage(c net.Conn, crash crashConfig, msgs chan<- string, errs chan
 	}
 	return false
 }
-
-var testCert = []byte(`
------BEGIN CERTIFICATE-----
-MIIC4jCCAcqgAwIBAgIQUfp0amlHQ2i3/siLio24lTANBgkqhkiG9w0BAQsFADAU
-MRIwEAYDVQQDDAkxMjcuMC4wLjEwIBcNMjIwNjI2MDk1NjQ2WhgPMjExMjEyMzEw
-MDAwMDBaMBQxEjAQBgNVBAMMCTEyNy4wLjAuMTCCASIwDQYJKoZIhvcNAQEBBQAD
-ggEPADCCAQoCggEBANsjo9YNaPRMaAVqJZ1/8KoW9KwyscSZNXsegCzomkK4lztE
-6XWDKqNLat6uMX4eo4uQEyLtSYsEUR7lTMOVcWa9i1rG+R0S++rJr7yOqqV/REVe
-hMK+UCYKM80OGf/BUkF3iquTa1xA9AFfBnxgEi1APE1SPsXDb4dmwNHS7rwvaZn0
-k2xO1PCJgb5+CAptZMIqaS4uKVaDQ9G3ExLmEbZD8hWk5XDE9Kxi/NGO8Iid1RmL
-LAMPn5VfnYyl6fapvTg54jISTZ4ELpTW5S+nsTUfqU8GEihMhPfLBZSR8jgdEmmL
-bzMewKf4Z7lEqhqmfvk64PhZWCQcxcJjFOnO9NcCAwEAAaMuMCwwDwYDVR0RBAgw
-BocEfwAAATALBgNVHQ8EBAMCAa4wDAYDVR0TBAUwAwEB/zANBgkqhkiG9w0BAQsF
-AAOCAQEAVI03eM40/58btyB4rG4yOrvIYZKPc2l7Q1r7fjMneJDzsMQq6ctLFGhB
-HEZFnN8BGZxrTmZBRkehJTuW7GQQA5ThCclS207ofWP59iwruqBKZxKHmRQV2Nsx
-mpLTBF4jFM9RS+92Zu+jXgKPeCtEvJEf6TOZfnaUCnvwooIcmUfrC7lHe3GOqyCm
-u6l2Zl7/6jFf04uVhQpoeud4iFfNhzasULPtuxotH598VSwgc8Qk0WaIQfsYxVZr
-0mRV0n/IaflehPm4l4Se8OJ9l1vq/4xFZ1kqPKiXMr79YTfW8lzps0ztVEFIE7wr
-7DFOUCcuTqZbuBJp2DH5t6k0F7q0MA==
------END CERTIFICATE-----
-`)
-
-var testPrivKey = []byte(`
------BEGIN PRIVATE KEY-----
-MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDbI6PWDWj0TGgF
-aiWdf/CqFvSsMrHEmTV7HoAs6JpCuJc7ROl1gyqjS2rerjF+HqOLkBMi7UmLBFEe
-5UzDlXFmvYtaxvkdEvvqya+8jqqlf0RFXoTCvlAmCjPNDhn/wVJBd4qrk2tcQPQB
-XwZ8YBItQDxNUj7Fw2+HZsDR0u68L2mZ9JNsTtTwiYG+fggKbWTCKmkuLilWg0PR
-txMS5hG2Q/IVpOVwxPSsYvzRjvCIndUZiywDD5+VX52Mpen2qb04OeIyEk2eBC6U
-1uUvp7E1H6lPBhIoTIT3ywWUkfI4HRJpi28zHsCn+Ge5RKoapn75OuD4WVgkHMXC
-YxTpzvTXAgMBAAECggEABnRr5Jr+6gZy7SK0FCORaMrF6JySdLWelNw2u+i0dbd1
-abi2t7aZXVEtxxYsCjvIAKbJwxzO+1oXmZvF2xNeN7+1iLYu3rBeEAuVmMdxaom8
-VRH0dYs6VfFO/U2nbmUfXlZLFPeB3g6VVJHPLkxJVmCuzG6m8rEcnXxlVmJ3YPIA
-OHL29+txeCXaVqphXR0Pi/mMaetnxOCDaFUv03BoHu6e6OL9jyh2lfGaRgFwFUa7
-OmmvdxIGPyCrNWMUxix3zvU1PtKF5AI8uEe7cGeksSKVRVKwo63yClILSRrWL/7x
-n2raRpAjYaBogn2sLyjSCGxdnszGSJkoFMguTQQhAQKBgQDqWXMixIekJdjRUipt
-nHrfE/nwSol8zpDq/f9ykErudmugv0+tQGT6mjydMRb5dy6A/r8eEOaVEuaiHAXB
-LU/xNfuP1I0gzR+GdMDmvAqnImcmazM3sUbjCsJKUSqDNzn77kzY1CQoz3oDitwq
-lDhtor8e4mYwx1N8b9dYeKGLYQKBgQDvYnT/mmiwyv4EzbrTriE4oFu0y7DBtkV8
-QXGV0WbJXv2hSjLW75pO8Y3/IpNgzNgvxouDgHHAaSeDEjfnDiVWN3kR23ttFxvw
-rTwDGfs1rgeMjofnhK7wgTvCzXdw9jviZThr9WpeUmvcNhNgOUYgBpiplULKj+QJ
-n1JbGmPjNwKBgQCb2WD4fjq2r3TBwCL3Qll0gZR2eRt2JOm7Xa/EQLGUZKyu+ovC
-bFC7WFd3Mm5U+S20G7Z+CD9QZIF8zaYGElxXzc6+mFxCtCeDA6JF0EhFXlu68Q/e
-ucaqtzz+r3vWR6QIJzJ0AKELgu9h67b/mhLs1o7Du0y6o9ShrL9J1u+YAQKBgFaZ
-2tPBa5BRz3Wza5w6yX/v211btxVNOHQMROg7OiEtgToBWsURJ1TZ5FHhk0mYsbkO
-7dfj9sLyB75OL/Uh0/YN2XnRWiSMEKqQMT65/nxb+hUqVxY1lQgi6Ji/ti8ilWWA
-0tmTjiiTTrv6wCW2cp0RZdcrzV70kT296pBUysAfAoGABle8K4/DZrpawvAY0hep
-x//jQVuTKjlxaxl5StqK64eY+3aPVw5Onl7xTQVwujULwVECKTuX4I4EuiursxZ7
-UNObMyzYtoBJl1gc9PObkuYS5ZfNhkIZDvsV+uva0pLcqhoTHtGw4m76guUDACOV
-d6XdnEpQhZ8XMgzxgV4n7FA=
------END PRIVATE KEY-----
-`)

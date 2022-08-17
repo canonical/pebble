@@ -15,7 +15,8 @@ import (
 	"github.com/canonical/pebble/internal/logger"
 )
 
-const maxLogBytes = 100 * 1024
+var maxLogBytes int = 100 * 1024
+
 const canonicalPrivEnterpriseNum = 28978
 
 type LogBackend interface {
@@ -133,30 +134,11 @@ type LokiBackend struct {
 	labels  map[string]string
 }
 
-const lokiPrefix = `
-{"streams":
-   [
-	  {
-	    "stream": {%s},
-		 "values": [
-			[`
-const lokiSuffix = `]
-		 ]
-	  }
-   ]
-}`
-
-type lokiMessageStream struct {
-	Stream map[string]string `json:"stream"`
-	Values [][2]string       `json:"values"`
-}
-
-type lokiMessage struct {
-	Streams []lokiMessageStream `json:"streams"`
-}
-
 func NewLokiBackend(address string, labels map[string]string) (*LokiBackend, error) {
 	u, err := url.Parse(address)
+	if err != nil || u.Host == "" {
+		u, err = url.Parse("//" + address)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("invalid loki server address: %v", err)
 	} else if u.Scheme != "" && u.Scheme != "http" {
@@ -186,6 +168,15 @@ func (b *LokiBackend) UpdateLabels(labels map[string]string) {
 		tmp[k] = v
 	}
 	b.labels = tmp
+}
+
+type lokiMessageStream struct {
+	Stream map[string]string `json:"stream"`
+	Values [][2]string       `json:"values"`
+}
+
+type lokiMessage struct {
+	Streams []lokiMessageStream `json:"streams"`
 }
 
 func (b *LokiBackend) Send(m *LogMessage) error {
@@ -237,7 +228,7 @@ type SyslogBackend struct {
 	structuredData string
 
 	conn          net.Conn
-	address       string
+	address       *url.URL
 	waitReconnect time.Duration
 	closed        bool
 }
@@ -247,7 +238,20 @@ type SyslogBackend struct {
 // reasonable defaults or the RFC5424 nil value "-".  labels contains key-value pairs to be
 // attached to syslog messages in their structured data section (see. RFC5424 section 6.3).
 // *Every* write/message forwarded will include these parameters.
-func NewSyslogBackend(addr string, labels map[string]string) *SyslogBackend {
+func NewSyslogBackend(addr string, labels map[string]string) (*SyslogBackend, error) {
+	u, err := url.Parse(addr)
+	if err != nil || u.Host == "" {
+		u, err = url.Parse("//" + addr)
+	}
+	if err != nil {
+		return nil, err
+	} else if u.Scheme != "tcp" && u.Scheme != "udp" && u.Scheme != "" {
+		return nil, fmt.Errorf("invalid syslog server address scheme %q", u.Scheme)
+	}
+	if u.Scheme == "" {
+		u.Scheme = "tcp"
+	}
+
 	return &SyslogBackend{
 		version:        1,
 		pid:            "-",
@@ -256,8 +260,8 @@ func NewSyslogBackend(addr string, labels map[string]string) *SyslogBackend {
 		priority:       1*8 + 6, // for facility=user-msg severity=informational. See RFC 5424 6.2.1 for available codes.
 		structuredData: syslogStructuredData("pebble", canonicalPrivEnterpriseNum, labels),
 
-		address: addr,
-	}
+		address: u,
+	}, nil
 }
 
 // syslogStructuredData formats the given labels into a structured data section for a syslog message
@@ -331,6 +335,9 @@ func (s *SyslogBackend) Close() error {
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.conn == nil {
+		return nil
+	}
 	err := s.conn.Close()
 	s.conn = nil
 	return err
@@ -347,7 +354,7 @@ func (s *SyslogBackend) ensureConnected() error {
 		time.Sleep(s.waitReconnect)
 	}
 
-	conn, err := net.Dial("tcp", s.address)
+	conn, err := net.Dial(s.address.Scheme, s.address.Host)
 
 	if err != nil {
 		// start an exponential backoff for reconnection attempts
