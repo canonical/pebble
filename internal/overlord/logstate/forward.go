@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"net"
 	"net/http"
-	"strings"
+	"net/url"
+	"strconv"
 	"sync"
 	"time"
 
@@ -128,8 +130,7 @@ func (c *LogCollector) run() {
 
 type LokiBackend struct {
 	address string
-	prefix  string
-	suffix  string
+	labels  map[string]string
 }
 
 const lokiPrefix = `
@@ -145,50 +146,80 @@ const lokiSuffix = `]
    ]
 }`
 
-func (b *LokiBackend) buildPrefix(labels map[string]string) {
-	var labeltext []string
-	for key, val := range labels {
-		labeltext = append(labeltext, fmt.Sprintf("%q: %q", key, val))
-	}
-	b.prefix = fmt.Sprintf(lokiPrefix, strings.Join(labeltext, ","))
+type lokiMessageStream struct {
+	Stream map[string]string `json:"stream"`
+	Values [][2]string       `json:"values"`
 }
 
-func NewLokiBackend(address string, labels map[string]string) *LokiBackend {
+type lokiMessage struct {
+	Streams []lokiMessageStream `json:"streams"`
+}
+
+func NewLokiBackend(address string, labels map[string]string) (*LokiBackend, error) {
+	u, err := url.Parse(address)
+	if err != nil {
+		return nil, fmt.Errorf("invalid loki server address: %v", err)
+	} else if u.Scheme != "" && u.Scheme != "http" {
+		return nil, fmt.Errorf("unsupported loki address scheme '%v'", u.Scheme)
+	} else if u.RequestURI() != "" {
+		return nil, fmt.Errorf("invalid loki address: extraneous path %q", u.RequestURI())
+	}
+
+	// check for and set loki defaults if ommitted from address
+	if u.Scheme == "" {
+		u.Scheme = "http"
+	}
+	if u.Port() == "" {
+		u.Host += ":3100"
+	}
+
 	b := &LokiBackend{address: address}
-	b.buildPrefix(labels)
-	return b
+	b.UpdateLabels(labels)
+	return b, nil
 }
 
 func (b *LokiBackend) Close() error { return nil }
 
 func (b *LokiBackend) UpdateLabels(labels map[string]string) {
-	b.buildPrefix(labels)
+	tmp := make(map[string]string)
+	for k, v := range labels {
+		tmp[k] = v
+	}
+	b.labels = tmp
 }
 
 func (b *LokiBackend) Send(m *LogMessage) error {
-	timestamp := m.Timestamp.Format(time.RFC3339)
-	msg, err := json.Marshal(string(m.Message))
+	b.labels["pebble_service"] = m.Service
+	timestamp := strconv.FormatInt(m.Timestamp.UnixNano(), 10)
+	data, err := json.Marshal(lokiMessage{
+		Streams: []lokiMessageStream{
+			lokiMessageStream{
+				Stream: b.labels,
+				Values: [][2]string{{timestamp, string(m.Message)}},
+			},
+		}})
 	if err != nil {
-		return err
+		logger.Noticef("failed to build loki message: %v", err)
 	}
 
-	var buf bytes.Buffer
-	buf.WriteString(b.prefix)
-	fmt.Fprintf(&buf, "%q, %s", timestamp, msg)
-	buf.WriteString(lokiSuffix)
-
+	buf := bytes.NewBuffer(data)
 	addr := "http://" + b.address + "/loki/api/v1/push"
 	logger.Noticef("loki backend is sending message (addr=%v):\n%v", addr, buf.String())
-	r, err := http.NewRequest("POST", addr, &buf)
+	r, err := http.NewRequest("POST", addr, buf)
 	if err != nil {
 		logger.Noticef("loki send failed: %v", err)
 		return err
 	}
 	r.Header.Add("Content-Type", "application/json")
 	c := &http.Client{}
-	_, err = c.Do(r)
+	resp, err := c.Do(r)
 	if err != nil {
 		logger.Noticef("loki send failed: %v", err)
+	}
+	defer resp.Body.Close()
+	data, _ = ioutil.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		logger.Noticef("%s", data)
 	}
 	return err
 }

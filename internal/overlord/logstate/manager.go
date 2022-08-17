@@ -50,13 +50,18 @@ func (m *LogManager) PlanChanged(p *plan.Plan) {
 	// update destinations
 	for name, dest := range p.LogDestinations {
 		var b LogBackend
+		var err error
 		switch dest.Type {
 		case "loki":
-			b = NewLokiBackend(dest.Address, p.LogLabels)
+			b, err = NewLokiBackend(dest.Address, p.LogLabels)
 		case "syslog":
 			b = NewSyslogBackend(dest.Address, p.LogLabels)
 		default:
 			logger.Noticef("unsupported logging destination type: %v", dest.Type)
+			continue
+		}
+		if err != nil {
+			logger.Noticef("invalid config for log destination %q: %v", name, err)
 			continue
 		}
 
