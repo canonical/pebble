@@ -22,12 +22,97 @@ package main_test
 import (
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"gopkg.in/check.v1"
 
 	pebble "github.com/canonical/pebble/cmd/pebble"
 )
+
+func (s *PebbleSuite) TestChangesExtraArgs(c *check.C) {
+	rest, err := pebble.Parser(pebble.Client()).ParseArgs([]string{"changes", "extra", "args"})
+	c.Assert(err, check.Equals, pebble.ErrExtraArgs)
+	c.Check(rest, check.HasLen, 1)
+	c.Check(s.Stdout(), check.Equals, "")
+	c.Check(s.Stderr(), check.Equals, "")
+}
+
+func (s *PebbleSuite) TestChangesAllDigitsSuggestion(c *check.C) {
+	rest, err := pebble.Parser(pebble.Client()).ParseArgs([]string{"changes", "42"})
+	c.Assert(err, check.ErrorMatches, `'pebble changes' command expects a service name, try 'pebble tasks 42'`)
+	c.Check(rest, check.HasLen, 1)
+	c.Check(s.Stdout(), check.Equals, "")
+	c.Check(s.Stderr(), check.Equals, "")
+}
+
+func (s *PebbleSuite) TestNoChanges(c *check.C) {
+	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+		c.Check(r.Method, check.Equals, "GET")
+		c.Check(r.URL.Path, check.Equals, "/v1/changes")
+		c.Check(r.URL.Query(), check.DeepEquals, url.Values{"for": {"svc1"}, "select": {"all"}})
+		fmt.Fprintln(w, `{"type":"sync", "result": []}"`)
+	})
+
+	rest, err := pebble.Parser(pebble.Client()).ParseArgs([]string{"changes", "svc1"})
+	c.Assert(err, check.ErrorMatches, "no changes found")
+	c.Check(rest, check.HasLen, 1)
+	c.Check(s.Stdout(), check.Equals, "")
+	c.Check(s.Stderr(), check.Equals, "")
+}
+
+func (s *PebbleSuite) TestGetChangesFails(c *check.C) {
+	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+		c.Check(r.Method, check.Equals, "GET")
+		c.Check(r.URL.Path, check.Equals, "/v1/changes")
+		c.Check(r.URL.Query(), check.DeepEquals, url.Values{"for": {"svc1"}, "select": {"all"}})
+		fmt.Fprintln(w, `{"type":"error", "result": {"message": "could not foo"}}"`)
+	})
+
+	rest, err := pebble.Parser(pebble.Client()).ParseArgs([]string{"changes", "svc1"})
+	c.Assert(err, check.ErrorMatches, "could not foo")
+	c.Check(rest, check.HasLen, 1)
+	c.Check(s.Stdout(), check.Equals, "")
+	c.Check(s.Stderr(), check.Equals, "")
+}
+
+func (s *PebbleSuite) TestChanges(c *check.C) {
+	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+		c.Check(r.Method, check.Equals, "GET")
+		c.Check(r.URL.Path, check.Equals, "/v1/changes")
+		c.Check(r.URL.Query(), check.DeepEquals, url.Values{"select": {"all"}})
+		fmt.Fprintln(w, fakeChangesJSON)
+	})
+
+	expectedChanges := `(?ms)ID +Status +Spawn +Ready +Summary
+four +Do +2015-02-21 +2015-02-21 +...
+three +Do +2016-01-21 +- +...
+one +Do +2016-03-21 +2016-03-21 +...
+two +Do +2016-04-21 +2016-04-21 +...
+`
+
+	rest, err := pebble.Parser(pebble.Client()).ParseArgs([]string{"changes"})
+	c.Assert(err, check.IsNil)
+	c.Check(rest, check.HasLen, 0)
+	c.Check(s.Stdout(), check.Matches, expectedChanges)
+	c.Check(s.Stderr(), check.Equals, "")
+}
+
+func (s *PebbleSuite) TestChangesUnknownMaintenance(c *check.C) {
+	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+		c.Check(r.Method, check.Equals, "GET")
+		c.Check(r.URL.Path, check.Equals, "/v1/changes")
+		c.Check(r.URL.Query(), check.DeepEquals, url.Values{"select": {"all"}})
+		json := strings.Replace(fakeChangesJSON, `"type": "sync"`, `"type": "sync", "maintenance": {"kind": "dachshund", "message": "unknown maintenance reason"}`, 1)
+		fmt.Fprintln(w, json)
+	})
+
+	rest, err := pebble.Parser(pebble.Client()).ParseArgs([]string{"changes"})
+	c.Assert(err, check.ErrorMatches, "unknown maintenance reason")
+	c.Check(rest, check.HasLen, 1)
+	c.Check(s.Stdout(), check.Matches, "")
+	c.Check(s.Stderr(), check.Equals, "")
+}
 
 var fakeChangeJSON = `{"type": "sync", "result": {
   "id":   "uno",
@@ -36,8 +121,7 @@ var fakeChangeJSON = `{"type": "sync", "result": {
   "status": "Do",
   "ready": false,
   "spawn-time": "2016-04-21T01:02:03Z",
-  "ready-time": "2016-04-21T01:02:04Z",
-  "tasks": [{"kind": "bar", "summary": "some summary", "status": "Do", "progress": {"done": 0, "total": 1}, "spawn-time": "2016-04-21T01:02:03Z", "ready-time": "2016-04-21T01:02:04Z"}]
+  "tasks": [{"kind": "bar", "summary": "some summary", "status": "Do", "progress": {"done": 0, "total": 1}, "spawn-time": "2016-04-21T01:02:03Z"}]
 }}`
 
 func (s *PebbleSuite) TestChangeSimple(c *check.C) {
@@ -54,12 +138,26 @@ func (s *PebbleSuite) TestChangeSimple(c *check.C) {
 		n++
 	})
 	expectedChange := `(?ms)Status +Spawn +Ready +Summary
-Do +2016-04-21T01:02:03Z +2016-04-21T01:02:04Z +some summary
+Do +2016-04-21T01:02:03Z +- +some summary
 `
 	rest, err := pebble.Parser(pebble.Client()).ParseArgs([]string{"tasks", "--abs-time", "42"})
 	c.Assert(err, check.IsNil)
-	c.Assert(rest, check.DeepEquals, []string{})
+	c.Assert(rest, check.HasLen, 0)
 	c.Check(s.Stdout(), check.Matches, expectedChange)
+	c.Check(s.Stderr(), check.Equals, "")
+}
+
+func (s *PebbleSuite) TestChangeSimpleFails(c *check.C) {
+	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+		c.Check(r.Method, check.Equals, "GET")
+		c.Check(r.URL.Path, check.Equals, "/v1/changes/42")
+		fmt.Fprintln(w, `{"type": "error", "result": {"message": "could not bar"}}`)
+	})
+
+	rest, err := pebble.Parser(pebble.Client()).ParseArgs([]string{"tasks", "--abs-time", "42"})
+	c.Assert(err, check.ErrorMatches, "could not bar")
+	c.Assert(rest, check.HasLen, 1)
+	c.Check(s.Stdout(), check.Matches, "")
 	c.Check(s.Stderr(), check.Equals, "")
 }
 
@@ -80,6 +178,18 @@ func (s *PebbleSuite) TestChangeSimpleRebooting(c *check.C) {
 	_, err := pebble.Parser(pebble.Client()).ParseArgs([]string{"tasks", "42"})
 	c.Assert(err, check.IsNil)
 	c.Check(s.Stderr(), check.Equals, "WARNING: pebble is about to reboot the system\n")
+}
+
+func (s *PebbleSuite) TestChangeSimpleUnknownMaintenance(c *check.C) {
+	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+		c.Check(r.Method, check.Equals, "GET")
+		c.Check(r.URL.Path, check.Equals, "/v1/changes/42")
+		fmt.Fprintln(w, strings.Replace(fakeChangeJSON, `"type": "sync"`, `"type": "sync", "maintenance": {"kind": "dachshund", "message": "unknown maintenance reason"}`, 1))
+	})
+
+	_, err := pebble.Parser(pebble.Client()).ParseArgs([]string{"tasks", "42"})
+	c.Assert(err, check.ErrorMatches, "unknown maintenance reason")
+	c.Check(s.Stderr(), check.Equals, "")
 }
 
 var fakeChangesJSON = `{"type": "sync", "result": [
@@ -120,7 +230,6 @@ var fakeChangesJSON = `{"type": "sync", "result": [
     "status": "Do",
     "ready": false,
     "spawn-time": "2016-01-21T01:02:03Z",
-    "ready-time": "2016-01-21T01:02:04Z",
     "tasks": [{"kind": "bar", "summary": "some summary", "status": "Do", "progress": {"done": 0, "total": 1}, "spawn-time": "2016-01-21T01:02:03Z", "ready-time": "2016-01-21T01:02:04Z"}]
   }
 ]}`
@@ -136,7 +245,7 @@ func (s *PebbleSuite) TestTasksLast(c *check.C) {
 		fmt.Fprintln(w, fakeChangeJSON)
 	})
 	expectedChange := `(?ms)Status +Spawn +Ready +Summary
-Do +2016-04-21T01:02:03Z +2016-04-21T01:02:04Z +some summary
+Do +2016-04-21T01:02:03Z +- +some summary
 `
 	rest, err := pebble.Parser(pebble.Client()).ParseArgs([]string{"tasks", "--abs-time", "--last=install"})
 	c.Assert(err, check.IsNil)
@@ -200,7 +309,7 @@ var fakeChangeInProgressJSON = `{"type": "sync", "result": {
   "ready": false,
   "spawn-time": "2016-04-21T01:02:03Z",
   "ready-time": "2016-04-21T01:02:04Z",
-  "tasks": [{"kind": "bar", "summary": "some summary", "status": "Doing", "progress": {"done": 50, "total": 100}, "spawn-time": "2016-04-21T01:02:03Z", "ready-time": "2016-04-21T01:02:04Z"}]
+  "tasks": [{"kind": "bar", "summary": "some summary", "status": "Doing", "progress": {"done": 50, "total": 100}, "spawn-time": "2016-04-21T01:02:03Z", "ready-time": "2016-04-21T01:02:04Z", "log": ["a", "b", "c"]}]
 }}`
 
 func (s *PebbleSuite) TestChangeProgress(c *check.C) {
