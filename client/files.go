@@ -15,7 +15,6 @@
 package client
 
 import (
-	"errors"
 	"io/fs"
 	"net/url"
 	"os"
@@ -23,74 +22,99 @@ import (
 	"time"
 )
 
+// ListFilesOptions holds the options for a call to ListFiles
 type ListFilesOptions struct {
-	Path    string
-	Pattern string // optional
-	Itself  bool   // optional
+	// Path is the absolute path of the fiole system entry to list. Note that
+	// when Pattern is specified, it should specify the absolute path of the
+	// parent directory (required)
+	Path string
+
+	// Pattern is the glob-like pattern string to filter results by. When
+	// present, only file system entries with names matching this pattern will
+	// be included in the call results.
+	Pattern string
+
+	// Itself, when set, will force directory entries not to be listed, but
+	// instead have their information returned as if they were regular files.
+	Itself bool
 }
 
-type fileInfo struct {
-	name            string
-	size            int64
-	mode            fs.FileMode
-	modTime         time.Time
-	path            string
-	userID, groupID int
-	user, group     string
+type FileInfo struct {
+	name    string
+	size    int64
+	mode    fs.FileMode
+	modTime time.Time
+
+	// Path is the full absolute path of the file
+	Path string
+	// UserID is the ID of the owner user
+	UserID int
+	// GroupID is the ID of the owner group
+	GroupID int
+	// User is the string representing the owner user name
+	User string
+	// Group is the string representing the owner user group
+	Group string
 }
 
-func (fi fileInfo) Name() string {
+// Name returns the base name of the file
+func (fi FileInfo) Name() string {
 	return fi.name
 }
 
-func (fi fileInfo) Size() int64 {
+// Size returns the length in bytes for regular files. For others, its
+// behavior is system-dependent
+func (fi FileInfo) Size() int64 {
 	return fi.size
 }
 
-func (fi fileInfo) Mode() fs.FileMode {
+// Mode returns the file mode and permission bits
+func (fi FileInfo) Mode() fs.FileMode {
 	return fi.mode
 }
 
-func (fi fileInfo) ModTime() time.Time {
+// ModTime returns the file modification time
+func (fi FileInfo) ModTime() time.Time {
 	return fi.modTime
 }
 
-func (fi fileInfo) IsDir() bool {
+// IsDir is an abbreviation for Mode().IsDir()
+func (fi FileInfo) IsDir() bool {
 	return fi.mode.IsDir()
 }
 
-func (fi fileInfo) Sys() interface{} {
+// Sys returns the underlying data source (can return nil)
+func (fi FileInfo) Sys() interface{} {
 	return nil
 }
 
-func (fi fileInfo) Path() string {
-	return fi.path
-}
+// ListFiles obtains the contents of a directory or glob, or information about a file.
+func (client *Client) ListFiles(opts *ListFilesOptions) ([]*FileInfo, error) {
+	q := make(url.Values)
+	q.Set("action", "list")
+	q.Set("path", opts.Path)
+	if opts.Pattern != "" {
+		q.Set("pattern", opts.Pattern)
+	}
+	if opts.Itself {
+		q.Set("itself", "true")
+	}
 
-func (fi fileInfo) UserID() int {
-	return fi.userID
-}
+	var results []fileInfoResult
+	_, err := client.doSync("GET", "/v1/files", q, nil, nil, &results)
+	if err != nil {
+		return nil, err
+	}
 
-func (fi fileInfo) GroupID() int {
-	return fi.groupID
-}
+	infos := make([]*FileInfo, len(results))
+	for i, result := range results {
+		infos[i], err = resultToFileInfo(result)
+		if err != nil {
+			return nil, err
+		}
+	}
 
-func (fi fileInfo) User() string {
-	return fi.user
-}
-
-func (fi fileInfo) Group() string {
-	return fi.group
-}
-
-type FileInfo interface {
-	os.FileInfo
-
-	Path() string
-	UserID() int
-	GroupID() int
-	User() string
-	Group() string
+	return infos, nil
 }
 
 type fileInfoResult struct {
@@ -114,8 +138,6 @@ func calculateFileMode(fileType string, permissions string) (mode os.FileMode, e
 
 	mode = os.FileMode(p)
 	switch fileType {
-	case "file":
-		mode |= os.ModeType
 	case "directory":
 		mode |= os.ModeDir
 	case "symlink":
@@ -127,14 +149,14 @@ func calculateFileMode(fileType string, permissions string) (mode os.FileMode, e
 	case "device":
 		mode |= os.ModeDevice
 	default:
-		return 0, errors.New("invalid file type")
+		mode |= os.ModeIrregular
 	}
 
 	return mode, nil
 }
 
-func resultToFileInfo(result fileInfoResult) (FileInfo, error) {
-	fi := fileInfo{}
+func resultToFileInfo(result fileInfoResult) (*FileInfo, error) {
+	fi := &FileInfo{}
 
 	mode, err := calculateFileMode(result.Type, result.Permissions)
 	if err != nil {
@@ -150,46 +172,17 @@ func resultToFileInfo(result fileInfoResult) (FileInfo, error) {
 		fi.size = *result.Size
 	}
 	if result.UserID != nil {
-		fi.userID = *result.UserID
+		fi.UserID = *result.UserID
 	}
 	if result.GroupID != nil {
-		fi.groupID = *result.GroupID
+		fi.GroupID = *result.GroupID
 	}
 
-	fi.path = result.Path
+	fi.Path = result.Path
 	fi.name = result.Name
 	fi.mode = mode
-	fi.user = result.User
-	fi.group = result.Group
+	fi.User = result.User
+	fi.Group = result.Group
 
 	return fi, nil
-}
-
-// ListFiles obtains the contents of a directory or glob, or information about a file.
-func (client *Client) ListFiles(opts *ListFilesOptions) ([]FileInfo, error) {
-	q := make(url.Values)
-	q.Set("action", "list")
-	q.Set("path", opts.Path)
-	if opts.Pattern != "" {
-		q.Set("pattern", opts.Pattern)
-	}
-	if opts.Itself {
-		q.Set("itself", "true")
-	}
-
-	var results []fileInfoResult
-	_, err := client.doSync("GET", "/v1/files", q, nil, nil, &results)
-	if err != nil {
-		return nil, err
-	}
-
-	infos := make([]FileInfo, len(results))
-	for i, result := range results {
-		infos[i], err = resultToFileInfo(result)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return infos, nil
 }

@@ -16,6 +16,9 @@ package main
 
 import (
 	"fmt"
+	"os"
+	"text/tabwriter"
+
 	"github.com/jessevdk/go-flags"
 
 	"github.com/canonical/pebble/client"
@@ -23,17 +26,22 @@ import (
 
 type cmdLs struct {
 	clientMixin
-	Itself     bool `long:"itself"`
+	timeMixin
+
+	Directory  bool `short:"d" long:"directory"`
+	LongFormat bool `short:"l" long:"long"`
+
 	Positional struct {
 		Path string `positional-arg-name:"<path>"`
 	} `positional-args:"yes" required:"yes"`
 }
 
 var lsDescs = map[string]string{
-	"itself": `Display information about the file system entry, instead of listing directory contents.`,
+	"directory": `Display information about the file system entry, instead of listing directory contents.`,
+	"long":      `Display file system entries in a list format`,
 }
 
-var shortLsHelp = "Lists path contents"
+var shortLsHelp = "List path contents"
 var longLsHelp = `
 The ls command takes a path (a file, directory or glob) and obtains its
 contents.
@@ -47,20 +55,26 @@ func (cmd *cmdLs) Execute(args []string) error {
 	opts := client.ListFilesOptions{
 		Path:    cmd.Positional.Path,
 		Pattern: "",
-		Itself:  cmd.Itself,
+		Itself:  cmd.Directory,
 	}
 	files, err := cmd.client.ListFiles(&opts)
 	if err != nil {
 		return err
 	}
 
-	fmt.Println("Name\tUser\tGroup\t")
+	w := tabwriter.NewWriter(os.Stdout, 1, 1, 1, ' ', 0)
 	for _, fi := range files {
-		fmt.Printf("%s\t%s\t%s\n", fi.Name(), fi.User(), fi.Group())
+		if cmd.LongFormat {
+			fmt.Fprintf(w, "%s %s\t%s\t%s\t%s\n", fi.Mode().String(), fi.User, fi.Group, cmd.fmtTime(fi.ModTime()), fi.Name())
+		} else {
+			fmt.Fprintln(w, fi.Name())
+		}
 	}
+	w.Flush()
+
 	return nil
 }
 
 func init() {
-	addCommand("ls", shortLsHelp, longLsHelp, func() flags.Commander { return &cmdLs{} }, lsDescs, nil)
+	addCommand("ls", shortLsHelp, longLsHelp, func() flags.Commander { return &cmdLs{} }, merge(lsDescs, timeDescs), nil)
 }
