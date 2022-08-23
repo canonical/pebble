@@ -15,18 +15,15 @@
 package client
 
 import (
-	"io/fs"
 	"net/url"
 	"os"
 	"strconv"
 	"time"
 )
 
-// ListFilesOptions holds the options for a call to ListFiles
+// ListFilesOptions holds the options for a call to ListFiles.
 type ListFilesOptions struct {
-	// Path is the absolute path of the fiole system entry to list. Note that
-	// when Pattern is specified, it should specify the absolute path of the
-	// parent directory (required)
+	// Path is the absolute path of the file system entry to be listed.
 	Path string
 
 	// Pattern is the glob-like pattern string to filter results by. When
@@ -42,50 +39,69 @@ type ListFilesOptions struct {
 type FileInfo struct {
 	name    string
 	size    int64
-	mode    fs.FileMode
+	mode    os.FileMode
 	modTime time.Time
-
-	// Path is the full absolute path of the file
-	Path string
-	// UserID is the ID of the owner user
-	UserID int
-	// GroupID is the ID of the owner group
-	GroupID int
-	// User is the string representing the owner user name
-	User string
-	// Group is the string representing the owner user group
-	Group string
+	path    string
+	userID  int
+	groupID int
+	user    string
+	group   string
 }
 
-// Name returns the base name of the file
+// Name returns the base name of the file.
 func (fi FileInfo) Name() string {
 	return fi.name
 }
 
 // Size returns the length in bytes for regular files. For others, its
-// behavior is system-dependent
+// behavior is system-dependent.
 func (fi FileInfo) Size() int64 {
 	return fi.size
 }
 
-// Mode returns the file mode and permission bits
-func (fi FileInfo) Mode() fs.FileMode {
+// Mode returns the file mode and permission bits.
+func (fi FileInfo) Mode() os.FileMode {
 	return fi.mode
 }
 
-// ModTime returns the file modification time
+// ModTime returns the file modification time.
 func (fi FileInfo) ModTime() time.Time {
 	return fi.modTime
 }
 
-// IsDir is an abbreviation for Mode().IsDir()
+// IsDir is an abbreviation for Mode().IsDir().
 func (fi FileInfo) IsDir() bool {
 	return fi.mode.IsDir()
 }
 
-// Sys returns the underlying data source (can return nil)
+// Sys returns the underlying data source (can return nil).
 func (fi FileInfo) Sys() interface{} {
 	return nil
+}
+
+// Path is the full absolute path of the file.
+func (fi FileInfo) Path() string {
+	return fi.path
+}
+
+// UserID is the ID of the owner user.
+func (fi FileInfo) UserID() int {
+	return fi.userID
+}
+
+// GroupID is the ID of the owner group.
+func (fi FileInfo) GroupID() int {
+	return fi.groupID
+}
+
+// User is the string representing the owner user name.
+func (fi FileInfo) User() string {
+	return fi.user
+}
+
+// Group is the string representing the owner user group.
+func (fi FileInfo) Group() string {
+	return fi.group
 }
 
 // ListFiles obtains the contents of a directory or glob, or information about a file.
@@ -136,8 +152,9 @@ func calculateFileMode(fileType string, permissions string) (mode os.FileMode, e
 		return 0, err
 	}
 
-	mode = os.FileMode(p)
+	mode = os.FileMode(p) & os.ModePerm
 	switch fileType {
+	case "file":
 	case "directory":
 		mode |= os.ModeDir
 	case "symlink":
@@ -172,17 +189,17 @@ func resultToFileInfo(result fileInfoResult) (*FileInfo, error) {
 		fi.size = *result.Size
 	}
 	if result.UserID != nil {
-		fi.UserID = *result.UserID
+		fi.userID = *result.UserID
 	}
 	if result.GroupID != nil {
-		fi.GroupID = *result.GroupID
+		fi.groupID = *result.GroupID
 	}
 
-	fi.Path = result.Path
+	fi.path = result.Path
 	fi.name = result.Name
 	fi.mode = mode
-	fi.User = result.User
-	fi.Group = result.Group
+	fi.user = result.User
+	fi.group = result.Group
 
 	return fi, nil
 }

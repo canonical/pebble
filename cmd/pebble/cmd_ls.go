@@ -16,9 +16,6 @@ package main
 
 import (
 	"fmt"
-	"os"
-	"text/tabwriter"
-
 	"github.com/jessevdk/go-flags"
 
 	"github.com/canonical/pebble/client"
@@ -29,7 +26,7 @@ type cmdLs struct {
 	timeMixin
 
 	Directory  bool `short:"d" long:"directory"`
-	LongFormat bool `short:"l" long:"long"`
+	LongFormat bool `short:"l"`
 
 	Positional struct {
 		Path string `positional-arg-name:"<path>"`
@@ -38,7 +35,7 @@ type cmdLs struct {
 
 var lsDescs = map[string]string{
 	"directory": `Display information about the file system entry, instead of listing directory contents.`,
-	"long":      `Display file system entries in a list format`,
+	"l":         `Display file system entries in a list format.`,
 }
 
 var shortLsHelp = "List path contents"
@@ -62,15 +59,15 @@ func (cmd *cmdLs) Execute(args []string) error {
 		return err
 	}
 
-	w := tabwriter.NewWriter(os.Stdout, 1, 1, 1, ' ', 0)
+	w := tabWriter()
+	defer w.Flush()
 	for _, fi := range files {
 		if cmd.LongFormat {
-			fmt.Fprintf(w, "%s %s\t%s\t%s\t%s\n", fi.Mode().String(), fi.User, fi.Group, cmd.fmtTime(fi.ModTime()), fi.Name())
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", fi.Mode().String(), fi.User(), fi.Group(), cmd.fmtTime(fi.ModTime()), fi.Name())
 		} else {
 			fmt.Fprintln(w, fi.Name())
 		}
 	}
-	w.Flush()
 
 	return nil
 }
