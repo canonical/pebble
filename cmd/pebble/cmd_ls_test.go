@@ -126,3 +126,26 @@ func (s *PebbleSuite) TestLsFails(c *C) {
 	c.Check(s.Stdout(), Equals, "")
 	c.Check(s.Stderr(), Equals, "")
 }
+
+func (s *PebbleSuite) TestLsPattern(c *C) {
+	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+		c.Assert(r.Method, Equals, "GET")
+		c.Assert(r.URL.Path, Equals, "/v1/files")
+		c.Assert(r.URL.Query(), DeepEquals, url.Values{"path": {"/foo/"}, "action": {"list"}, "pattern": {"bar.*"}})
+		fmt.Fprintln(w, `{"type":"sync","result":[]}`)
+	})
+
+	rest, err := pebble.Parser(pebble.Client()).ParseArgs([]string{"ls", "/foo/bar.*"})
+	c.Assert(err, IsNil)
+	c.Assert(rest, HasLen, 0)
+	c.Check(s.Stdout(), Equals, "")
+	c.Check(s.Stderr(), Equals, "")
+}
+
+func (s *PebbleSuite) TestLsInvalidPattern(c *C) {
+	rest, err := pebble.Parser(pebble.Client()).ParseArgs([]string{"ls", "/foo/ba[rz]/fail"})
+	c.Assert(err, Equals, pebble.ErrPatternOutsideFileName)
+	c.Assert(rest, HasLen, 1)
+	c.Check(s.Stdout(), Equals, "")
+	c.Check(s.Stderr(), Equals, "")
+}

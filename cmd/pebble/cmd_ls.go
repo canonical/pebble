@@ -15,11 +15,18 @@
 package main
 
 import (
+	"errors"
 	"fmt"
+	pathpkg "path"
+	"strings"
+
 	"github.com/jessevdk/go-flags"
 
 	"github.com/canonical/pebble/client"
 )
+
+// ErrPatternOutsideFileName is returned if a pattern is found anywhere but the file name of a path
+var ErrPatternOutsideFileName = errors.New("patterns can only be applied to file names, not directories")
 
 type cmdLs struct {
 	clientMixin
@@ -49,12 +56,16 @@ func (cmd *cmdLs) Execute(args []string) error {
 		return ErrExtraArgs
 	}
 
-	opts := client.ListFilesOptions{
-		Path:    cmd.Positional.Path,
-		Pattern: "",
-		Itself:  cmd.Directory,
+	path, pattern, err := parseGlob(cmd.Positional.Path)
+	if err != nil {
+		return err
 	}
-	files, err := cmd.client.ListFiles(&opts)
+
+	files, err := cmd.client.ListFiles(&client.ListFilesOptions{
+		Path:    path,
+		Pattern: pattern,
+		Itself:  cmd.Directory,
+	})
 	if err != nil {
 		return err
 	}
@@ -74,4 +85,22 @@ func (cmd *cmdLs) Execute(args []string) error {
 
 func init() {
 	addCommand("ls", shortLsHelp, longLsHelp, func() flags.Commander { return &cmdLs{} }, merge(lsDescs, timeDescs), nil)
+}
+
+func parseGlob(path string) (parsedPath string, parsedPattern string, err error) {
+	dir, file := pathpkg.Split(strings.TrimRight(path, "/"))
+
+	const patternCharacters = "*?["
+	if strings.ContainsAny(dir, patternCharacters) {
+		// Patterns can not be applied recursively, only on file names
+		return "", "", ErrPatternOutsideFileName
+	}
+
+	if strings.ContainsAny(file, patternCharacters) {
+		// File name contains a pattern
+		return dir, file, nil
+	}
+
+	// No patterns could be extracted
+	return path, "", nil
 }
