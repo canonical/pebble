@@ -23,6 +23,7 @@ import (
 	"github.com/jessevdk/go-flags"
 
 	"github.com/canonical/pebble/client"
+	"github.com/canonical/pebble/internal/strutil/quantity"
 )
 
 // ErrPatternOutsideFileName is returned if a pattern is found anywhere but the file name of a path
@@ -74,7 +75,13 @@ func (cmd *cmdLs) Execute(args []string) error {
 	defer w.Flush()
 	for _, fi := range files {
 		if cmd.LongFormat {
-			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", fi.Mode().String(), fi.User(), fi.Group(), cmd.fmtTime(fi.ModTime()), fi.Name())
+			var size string
+			if fi.Mode().IsRegular() {
+				size = quantity.FormatAmount(uint64(fi.Size()), -1) + "B"
+			} else {
+				size = "-"
+			}
+			fmt.Fprintf(w, "%s\t%s\t%s\t%6s\t%s\t%s\n", fi.Mode().String(), fi.User(), fi.Group(), size, cmd.fmtTime(fi.ModTime()), fi.Name())
 		} else {
 			fmt.Fprintln(w, fi.Name())
 		}

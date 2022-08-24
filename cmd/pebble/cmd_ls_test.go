@@ -91,13 +91,14 @@ func (s *PebbleSuite) TestLsLongFormat(c *C) {
 		{
 			"path": "/bar",
 			"name": "bar",
-			"type": "directory",
+			"type": "file",
 			"permissions": "000",
 			"last-modified": "2021-04-21T01:02:03Z",
 			"user-id": 600,
 			"user": "toor",
 			"group-id": 600,
-			"group": "toor"
+			"group": "toor",
+			"size": 1000000000
 		}
 	]
 }`)
@@ -107,8 +108,8 @@ func (s *PebbleSuite) TestLsLongFormat(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(rest, HasLen, 0)
 
-	c.Check(s.Stdout(), Matches, `(?ms)drwxrwxrwx +root +root +2016-04-21 +foo
-d--------- +toor +toor +2021-04-21 +bar
+	c.Check(s.Stdout(), Matches, `(?ms)drwxrwxrwx +root +root +- +2016-04-21 +foo
+---------- +toor +toor +1.00GB +2021-04-21 +bar
 `)
 	c.Check(s.Stderr(), Equals, "")
 }

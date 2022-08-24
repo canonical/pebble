@@ -21,6 +21,8 @@ import (
 	"time"
 )
 
+var _ os.FileInfo = (*FileInfo)(nil)
+
 // ListFilesOptions holds the options for a call to ListFiles.
 type ListFilesOptions struct {
 	// Path is the absolute path of the file system entry to be listed.
@@ -49,58 +51,58 @@ type FileInfo struct {
 }
 
 // Name returns the base name of the file.
-func (fi FileInfo) Name() string {
+func (fi *FileInfo) Name() string {
 	return fi.name
 }
 
 // Size returns the length in bytes for regular files. For others, its
 // behavior is system-dependent.
-func (fi FileInfo) Size() int64 {
+func (fi *FileInfo) Size() int64 {
 	return fi.size
 }
 
 // Mode returns the file mode and permission bits.
-func (fi FileInfo) Mode() os.FileMode {
+func (fi *FileInfo) Mode() os.FileMode {
 	return fi.mode
 }
 
 // ModTime returns the file modification time.
-func (fi FileInfo) ModTime() time.Time {
+func (fi *FileInfo) ModTime() time.Time {
 	return fi.modTime
 }
 
 // IsDir is an abbreviation for Mode().IsDir().
-func (fi FileInfo) IsDir() bool {
+func (fi *FileInfo) IsDir() bool {
 	return fi.mode.IsDir()
 }
 
-// Sys returns the underlying data source (can return nil).
-func (fi FileInfo) Sys() interface{} {
+// Sys returns the underlying data source (always nil for client.FileInfo).
+func (fi *FileInfo) Sys() interface{} {
 	return nil
 }
 
 // Path is the full absolute path of the file.
-func (fi FileInfo) Path() string {
+func (fi *FileInfo) Path() string {
 	return fi.path
 }
 
 // UserID is the ID of the owner user.
-func (fi FileInfo) UserID() int {
+func (fi *FileInfo) UserID() int {
 	return fi.userID
 }
 
 // GroupID is the ID of the owner group.
-func (fi FileInfo) GroupID() int {
+func (fi *FileInfo) GroupID() int {
 	return fi.groupID
 }
 
 // User is the string representing the owner user name.
-func (fi FileInfo) User() string {
+func (fi *FileInfo) User() string {
 	return fi.user
 }
 
 // Group is the string representing the owner user group.
-func (fi FileInfo) Group() string {
+func (fi *FileInfo) Group() string {
 	return fi.group
 }
 
