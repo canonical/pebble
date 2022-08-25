@@ -44,8 +44,8 @@ type FileInfo struct {
 	mode    os.FileMode
 	modTime time.Time
 	path    string
-	userID  int
-	groupID int
+	userID  *int
+	groupID *int
 	user    string
 	group   string
 }
@@ -86,13 +86,13 @@ func (fi *FileInfo) Path() string {
 	return fi.path
 }
 
-// UserID is the ID of the owner user.
-func (fi *FileInfo) UserID() int {
+// UserID is the ID of the owner user (can be nil).
+func (fi *FileInfo) UserID() *int {
 	return fi.userID
 }
 
-// GroupID is the ID of the owner group.
-func (fi *FileInfo) GroupID() int {
+// GroupID is the ID of the owner group (can be nil).
+func (fi *FileInfo) GroupID() *int {
 	return fi.groupID
 }
 
@@ -190,13 +190,9 @@ func resultToFileInfo(result fileInfoResult) (*FileInfo, error) {
 	if result.Size != nil {
 		fi.size = *result.Size
 	}
-	if result.UserID != nil {
-		fi.userID = *result.UserID
-	}
-	if result.GroupID != nil {
-		fi.groupID = *result.GroupID
-	}
 
+	fi.userID = result.UserID
+	fi.groupID = result.GroupID
 	fi.path = result.Path
 	fi.name = result.Name
 	fi.mode = mode

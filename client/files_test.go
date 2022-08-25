@@ -61,24 +61,24 @@ func (cs *clientSuite) TestListFiles(c *C) {
 	c.Check(result[0].Size(), Equals, int64(0))
 	c.Check(result[0].Mode(), Equals, 0o777|os.ModeSymlink)
 	c.Check(result[0].ModTime(), DeepEquals, time.Date(2022, 4, 21, 3, 2, 51, 0, time.UTC))
-	c.Check(result[0].UserID(), Equals, 1000)
-	c.Check(result[0].GroupID(), Equals, 1000)
+	c.Check(*result[0].UserID(), Equals, 1000)
+	c.Check(*result[0].GroupID(), Equals, 1000)
 	c.Check(result[0].User(), Equals, "toor")
 	c.Check(result[0].Group(), Equals, "toor")
 	c.Check(result[0].IsDir(), Equals, false)
-	c.Check(result[0].Sys(), Equals, nil)
+	c.Check(result[0].Sys(), IsNil)
 
 	c.Check(result[1].Path(), Equals, "/swap.img")
 	c.Check(result[1].Name(), Equals, "swap.img")
 	c.Check(result[1].Size(), Equals, int64(1337))
 	c.Check(result[1].Mode(), Equals, os.FileMode(0o655))
 	c.Check(result[1].ModTime(), DeepEquals, time.Date(2022, 4, 21, 3, 2, 51, 0, time.UTC))
-	c.Check(result[1].UserID(), Equals, 0)
-	c.Check(result[1].GroupID(), Equals, 0)
+	c.Check(result[1].UserID(), IsNil)
+	c.Check(result[1].GroupID(), IsNil)
 	c.Check(result[1].User(), Equals, "")
 	c.Check(result[1].Group(), Equals, "")
 	c.Check(result[1].IsDir(), Equals, false)
-	c.Check(result[1].Sys(), Equals, nil)
+	c.Check(result[1].Sys(), IsNil)
 }
 
 func (cs *clientSuite) TestListDirectoryItself(c *C) {
@@ -111,12 +111,12 @@ func (cs *clientSuite) TestListDirectoryItself(c *C) {
 	c.Check(result[0].Mode(), Equals, 0o777|os.ModeSymlink)
 	c.Check(result[0].ModTime(), DeepEquals, time.Date(2022, 4, 21, 3, 2, 51, 0, time.UTC))
 	c.Check(result[0].Path(), Equals, "/bin")
-	c.Check(result[0].UserID(), Equals, 1000)
-	c.Check(result[0].GroupID(), Equals, 1000)
+	c.Check(*result[0].UserID(), Equals, 1000)
+	c.Check(*result[0].GroupID(), Equals, 1000)
 	c.Check(result[0].User(), Equals, "user")
 	c.Check(result[0].Group(), Equals, "user")
 	c.Check(result[0].IsDir(), Equals, false)
-	c.Check(result[0].Sys(), Equals, nil)
+	c.Check(result[0].Sys(), IsNil)
 }
 
 func (cs *clientSuite) TestListFilesWithPattern(c *C) {
