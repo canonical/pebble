@@ -16,6 +16,7 @@ package client_test
 
 import (
 	"encoding/json"
+	"os"
 
 	. "gopkg.in/check.v1"
 
@@ -38,7 +39,7 @@ type makeDirsItem struct {
 }
 
 func (cs *clientSuite) TestMakeDir(c *C) {
-	cs.rsp = `{"type":"sync","result":[]}`
+	cs.rsp = `{"type": "sync", "result": [{"path": "/foo/bar"}]}`
 
 	err := cs.cli.MakeDir(&client.MakeDirOptions{
 		Path:        "/foo/bar",
@@ -58,6 +59,34 @@ func (cs *clientSuite) TestMakeDir(c *C) {
 		Dirs: []makeDirsItem{{
 			Path:        "/foo/bar",
 			MakeParents: true,
+		}},
+	})
+}
+
+func (cs *clientSuite) TestMakeDirWithPermissions(c *C) {
+	cs.rsp = `{"type": "sync", "result": [{"path": "/foo/bar"}]}`
+
+	permissions := os.FileMode(0o755)
+	err := cs.cli.MakeDir(&client.MakeDirOptions{
+		Path:        "/foo/bar",
+		MakeParents: true,
+		Permissions: &permissions,
+	})
+	c.Assert(err, IsNil)
+
+	c.Assert(cs.req.URL.Path, Equals, "/v1/files")
+	c.Assert(cs.req.Method, Equals, "POST")
+
+	var payload makeDirPayload
+	decoder := json.NewDecoder(cs.req.Body)
+	err = decoder.Decode(&payload)
+	c.Assert(err, IsNil)
+	c.Check(payload, DeepEquals, makeDirPayload{
+		Action: "make-dirs",
+		Dirs: []makeDirsItem{{
+			Path:        "/foo/bar",
+			MakeParents: true,
+			Permissions: "755",
 		}},
 	})
 }
@@ -104,6 +133,50 @@ func (cs *clientSuite) TestMakeDirFailsOnDirectory(c *C) {
 		Path: "/foobar",
 	})
 	c.Assert(err, ErrorMatches, "could not bar")
+
+	c.Assert(cs.req.URL.Path, Equals, "/v1/files")
+	c.Assert(cs.req.Method, Equals, "POST")
+
+	var payload makeDirPayload
+	decoder := json.NewDecoder(cs.req.Body)
+	err = decoder.Decode(&payload)
+	c.Assert(err, IsNil)
+	c.Check(payload, DeepEquals, makeDirPayload{
+		Action: "make-dirs",
+		Dirs: []makeDirsItem{{
+			Path: "/foobar",
+		}},
+	})
+}
+
+func (cs *clientSuite) TestMakeDirFailsWithMultipleAPIResults(c *C) {
+	cs.rsp = `
+{
+	"type": "sync",
+	"result": [
+		{
+			"path": "/foobar",
+			"error": {
+				"message": "could not bar",
+				"kind": "permission-denied",
+				"value": 42
+			}
+		},
+		{
+			"path": "/foobar",
+			"error": {
+				"message": "could not baz",
+				"kind": "generic-file-error",
+				"value": 47
+			}
+		}
+	]
+}`
+
+	err := cs.cli.MakeDir(&client.MakeDirOptions{
+		Path: "/foobar",
+	})
+	c.Assert(err, ErrorMatches, "expected exactly one result from API, got 2")
 
 	c.Assert(cs.req.URL.Path, Equals, "/v1/files")
 	c.Assert(cs.req.Method, Equals, "POST")

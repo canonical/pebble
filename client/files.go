@@ -19,34 +19,41 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 )
 
-// MakeDirOptions holds the options for a call to ListFiles.
+// MakeDirOptions holds the options for a call to MakeDir.
 type MakeDirOptions struct {
 	// Path is the absolute path of the directory to be created (required).
 	Path string
 
 	// MakeParents specifies whether the non-existing parent directories will
 	// be created or not. If one of the parent directories of the specified
-	// path do not exist and MakeParents is set to false, the call will fail.
+	// path does not exist and MakeParents is false, the call will fail.
+
+	// MakeParents, if true, specifies that any non-existent parent directories
+	// should be created. If false (the default), the call will fail if the
+	// directory to be created has at least one parent directory that does not
+	// exist.
 	MakeParents bool
 
-	// Permissions specifies the 3-digit octal UNIX permissions the created
-	// directories will have.
-	Permissions string
+	// Permissions specifies the permission bits of the directories to be created.
+	Permissions *os.FileMode
 
 	// UserID indicates the ID of the owner user for the created directories.
 	UserID *int
 
 	// User indicates the name of the owner user for the created directories.
-	// If used together with UserID, UserID takes precedence.
+	// If used together with UserID, this value must match the name of the user
+	// with that ID.
 	User string
 
 	// GroupID indicates the ID of the owner group for the created directories.
 	GroupID *int
 
 	// Group indicates the name of the owner group for the created directories.
-	// If used together with GroupID, GroupID takes precedence.
+	// If used together with GroupID, this value must match the name of the group
+	// with that ID.
 	Group string
 }
 
@@ -76,13 +83,28 @@ type errorResult struct {
 
 // MakeDir creates a directory or directory tree.
 func (client *Client) MakeDir(opts *MakeDirOptions) error {
-	payload, err := convertOptionsToPayload(opts)
-	if err != nil {
-		return err
+	var permissions string
+	if opts.Permissions != nil {
+		permissions = fmt.Sprintf("%o", *opts.Permissions)
+	}
+
+	payload := &makeDirPayload{
+		Action: "make-dirs",
+		Dirs: []makeDirsItem{
+			{
+				Path:        opts.Path,
+				MakeParents: opts.MakeParents,
+				Permissions: permissions,
+				UserID:      opts.UserID,
+				User:        opts.User,
+				GroupID:     opts.GroupID,
+				Group:       opts.Group,
+			},
+		},
 	}
 
 	var body bytes.Buffer
-	err = json.NewEncoder(&body).Encode(&payload)
+	err := json.NewEncoder(&body).Encode(&payload)
 	if err != nil {
 		return err
 	}
@@ -93,43 +115,13 @@ func (client *Client) MakeDir(opts *MakeDirOptions) error {
 		return err
 	}
 
-	if len(result) > 1 {
-		panic(fmt.Sprintf("expected at most 1 result from API, got %d", len(result)))
+	if len(result) != 1 {
+		return fmt.Errorf("expected exactly one result from API, got %d", len(result))
 	}
 
-	if len(result) > 0 && result[0].Error != nil {
+	if result[0].Error != nil {
 		return errors.New(result[0].Error.Message)
 	}
 
 	return nil
-}
-
-func convertOptionsToPayload(opts *MakeDirOptions) (*makeDirPayload, error) {
-	user := opts.User
-	group := opts.Group
-
-	// UserID/GroupID take precedence over User/Group
-	// If we don't do this, the call to MakeDir can fail if the user/group
-	// name is not consistent with the ID, which can be counter-intuitive
-	if opts.User != "" && opts.UserID != nil {
-		user = ""
-	}
-	if opts.Group != "" && opts.GroupID != nil {
-		group = ""
-	}
-
-	return &makeDirPayload{
-		Action: "make-dirs",
-		Dirs: []makeDirsItem{
-			{
-				Path:        opts.Path,
-				MakeParents: opts.MakeParents,
-				Permissions: opts.Permissions,
-				UserID:      opts.UserID,
-				User:        user,
-				GroupID:     opts.GroupID,
-				Group:       group,
-			},
-		},
-	}, nil
 }
