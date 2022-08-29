@@ -66,11 +66,10 @@ func (cs *clientSuite) TestMakeDir(c *C) {
 func (cs *clientSuite) TestMakeDirWithPermissions(c *C) {
 	cs.rsp = `{"type": "sync", "result": [{"path": "/foo/bar"}]}`
 
-	permissions := os.FileMode(0o755)
 	err := cs.cli.MakeDir(&client.MakeDirOptions{
 		Path:        "/foo/bar",
 		MakeParents: true,
-		Permissions: &permissions,
+		Permissions: os.FileMode(0o644),
 	})
 	c.Assert(err, IsNil)
 
@@ -86,7 +85,7 @@ func (cs *clientSuite) TestMakeDirWithPermissions(c *C) {
 		Dirs: []makeDirsItem{{
 			Path:        "/foo/bar",
 			MakeParents: true,
-			Permissions: "755",
+			Permissions: "644",
 		}},
 	})
 }
@@ -132,7 +131,10 @@ func (cs *clientSuite) TestMakeDirFailsOnDirectory(c *C) {
 	err := cs.cli.MakeDir(&client.MakeDirOptions{
 		Path: "/foobar",
 	})
-	c.Assert(err, ErrorMatches, "could not bar")
+	clientErr, ok := err.(*client.Error)
+	c.Assert(ok, Equals, true)
+	c.Assert(clientErr.Message, Equals, "could not bar")
+	c.Assert(clientErr.Kind, Equals, "permission-denied")
 
 	c.Assert(cs.req.URL.Path, Equals, "/v1/files")
 	c.Assert(cs.req.Method, Equals, "POST")

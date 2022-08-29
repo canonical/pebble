@@ -29,8 +29,10 @@ type cmdMkdir struct {
 
 	MakeParents bool   `short:"p" long:"parents"`
 	Permissions string `short:"m" long:"mode"`
-	User        string `short:"u" long:"user"`
-	Group       string `short:"g" long:"group"`
+	UserID      *int   `long:"uid"`
+	User        string `long:"user"`
+	GroupID     *int   `long:"gid"`
+	Group       string `long:"group"`
 
 	Positional struct {
 		Path string `positional-arg-name:"<path>"`
@@ -40,13 +42,15 @@ type cmdMkdir struct {
 var mkdirDescs = map[string]string{
 	"parents": "Create parent directories as needed.",
 	"mode":    "Set permissions for the newly created directories (in 3-digit octal format).",
-	"user":    "Set owner user name or ID.",
-	"group":   "Set owner group name or ID.",
+	"uid":     "Set owner user ID.",
+	"user":    "Set owner user name.",
+	"gid":     "Set owner group ID.",
+	"group":   "Set owner group name.",
 }
 
 var shortMkdirHelp = "Create a directory or directory tree"
 var longMkdirHelp = `
-The mkdir command creates a directory on the specified path.
+The mkdir command creates a directory at the specified path.
 If --parents is specified, create a directory tree.
 `
 
@@ -65,29 +69,13 @@ func (cmd *cmdMkdir) Execute(args []string) error {
 		if err != nil {
 			return fmt.Errorf("error parsing permissions: %w", err)
 		}
-		mode := os.FileMode(p)
-		opts.Permissions = &mode
+		opts.Permissions = os.FileMode(p)
 	}
 
-	if cmd.User != "" {
-		uid, err := strconv.Atoi(cmd.User)
-		if err != nil {
-			// Not a number
-			opts.User = cmd.User
-		} else {
-			opts.UserID = &uid
-		}
-	}
-
-	if cmd.Group != "" {
-		gid, err := strconv.Atoi(cmd.Group)
-		if err != nil {
-			// Not a number
-			opts.Group = cmd.Group
-		} else {
-			opts.GroupID = &gid
-		}
-	}
+	opts.UserID = cmd.UserID
+	opts.User = cmd.User
+	opts.GroupID = cmd.GroupID
+	opts.Group = cmd.Group
 
 	err := cmd.client.MakeDir(&opts)
 	if err != nil {

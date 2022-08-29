@@ -157,7 +157,7 @@ func (s *PebbleSuite) TestMkdirOwnerIDs(c *C) {
 		fmt.Fprintln(w, `{"type": "sync", "result": [{"path": "/foo/bar"}]}`)
 	})
 
-	rest, err := pebble.Parser(pebble.Client()).ParseArgs([]string{"mkdir", "-u", "1000", "-g", "1000", "/foo/bar"})
+	rest, err := pebble.Parser(pebble.Client()).ParseArgs([]string{"mkdir", "--uid", "1000", "--gid", "1000", "/foo/bar"})
 	c.Assert(err, IsNil)
 	c.Assert(rest, HasLen, 0)
 	c.Check(s.Stdout(), Equals, "")
@@ -188,7 +188,7 @@ func (s *PebbleSuite) TestMkdirOwnerNames(c *C) {
 		fmt.Fprintln(w, `{"type": "sync", "result": [{"path": "/foo/bar"}]}`)
 	})
 
-	rest, err := pebble.Parser(pebble.Client()).ParseArgs([]string{"mkdir", "-u", "root", "-g", "wheel", "/foo/bar"})
+	rest, err := pebble.Parser(pebble.Client()).ParseArgs([]string{"mkdir", "--user", "root", "--group", "wheel", "/foo/bar"})
 	c.Assert(err, IsNil)
 	c.Assert(rest, HasLen, 0)
 	c.Check(s.Stdout(), Equals, "")

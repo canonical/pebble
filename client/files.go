@@ -17,7 +17,6 @@ package client
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 )
@@ -38,7 +37,8 @@ type MakeDirOptions struct {
 	MakeParents bool
 
 	// Permissions specifies the permission bits of the directories to be created.
-	Permissions *os.FileMode
+	// If 0 or unset, defaults to 755.
+	Permissions os.FileMode
 
 	// UserID indicates the ID of the owner user for the created directories.
 	UserID *int
@@ -78,14 +78,16 @@ type fileResult struct {
 }
 
 type errorResult struct {
-	Message string `json:"message"`
+	Message string      `json:"message"`
+	Kind    string      `json:"kind,omitempty"`
+	Value   interface{} `json:"value,omitempty"`
 }
 
 // MakeDir creates a directory or directory tree.
 func (client *Client) MakeDir(opts *MakeDirOptions) error {
 	var permissions string
-	if opts.Permissions != nil {
-		permissions = fmt.Sprintf("%o", *opts.Permissions)
+	if opts.Permissions != 0 {
+		permissions = fmt.Sprintf("%3o", opts.Permissions)
 	}
 
 	payload := &makeDirPayload{
@@ -110,7 +112,9 @@ func (client *Client) MakeDir(opts *MakeDirOptions) error {
 	}
 
 	var result []fileResult
-	_, err = client.doSync("POST", "/v1/files", nil, nil, &body, &result)
+	_, err = client.doSync("POST", "/v1/files", nil, map[string]string{
+		"Content-Type": "application/json",
+	}, &body, &result)
 	if err != nil {
 		return err
 	}
@@ -120,7 +124,11 @@ func (client *Client) MakeDir(opts *MakeDirOptions) error {
 	}
 
 	if result[0].Error != nil {
-		return errors.New(result[0].Error.Message)
+		return &Error{
+			Kind:    result[0].Error.Kind,
+			Value:   result[0].Error.Value,
+			Message: result[0].Error.Message,
+		}
 	}
 
 	return nil
