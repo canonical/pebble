@@ -180,7 +180,7 @@ var helpCategories = []helpCategory{{
 }, {
 	Label:       "Files",
 	Description: "work with files and execute commands",
-	Commands:    []string{"exec"},
+	Commands:    []string{"rm", "exec"},
 }, {
 	Label:       "Changes",
 	Description: "manage changes and their tasks",
