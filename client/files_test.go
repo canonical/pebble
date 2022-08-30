@@ -90,6 +90,33 @@ func (cs *clientSuite) TestMakeDirWithPermissions(c *C) {
 	})
 }
 
+func (cs *clientSuite) TestMakeDirWithInvalidPermissions(c *C) {
+	cs.rsp = `{"type": "sync", "result": [{"path": "/foo/bar"}]}`
+
+	err := cs.cli.MakeDir(&client.MakeDirOptions{
+		Path:        "/foo/bar",
+		MakeParents: true,
+		Permissions: os.FileMode(0o077),
+	})
+	c.Assert(err, IsNil)
+
+	c.Assert(cs.req.URL.Path, Equals, "/v1/files")
+	c.Assert(cs.req.Method, Equals, "POST")
+
+	var payload makeDirPayload
+	decoder := json.NewDecoder(cs.req.Body)
+	err = decoder.Decode(&payload)
+	c.Assert(err, IsNil)
+	c.Check(payload, DeepEquals, makeDirPayload{
+		Action: "make-dirs",
+		Dirs: []makeDirsItem{{
+			Path:        "/foo/bar",
+			MakeParents: true,
+			Permissions: "077",
+		}},
+	})
+}
+
 func (cs *clientSuite) TestMakeDirFails(c *C) {
 	cs.rsp = `{"type": "error", "result": {"message": "could not foo"}}`
 	err := cs.cli.MakeDir(&client.MakeDirOptions{

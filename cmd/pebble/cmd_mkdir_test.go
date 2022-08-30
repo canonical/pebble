@@ -21,6 +21,7 @@ import (
 
 	. "gopkg.in/check.v1"
 
+	"github.com/canonical/pebble/client"
 	pebble "github.com/canonical/pebble/cmd/pebble"
 )
 
@@ -264,7 +265,12 @@ func (s *PebbleSuite) TestMkdirFailsOnDirectory(c *C) {
 	})
 
 	rest, err := pebble.Parser(pebble.Client()).ParseArgs([]string{"mkdir", "/foobar"})
-	c.Assert(err, ErrorMatches, "could not bar")
+
+	clientErr, ok := err.(*client.Error)
+	c.Assert(ok, Equals, true)
+	c.Assert(clientErr.Message, Equals, "could not bar")
+	c.Assert(clientErr.Kind, Equals, "permission-denied")
+
 	c.Assert(rest, HasLen, 1)
 	c.Check(s.Stdout(), Equals, "")
 	c.Check(s.Stderr(), Equals, "")

@@ -26,10 +26,6 @@ type MakeDirOptions struct {
 	// Path is the absolute path of the directory to be created (required).
 	Path string
 
-	// MakeParents specifies whether the non-existing parent directories will
-	// be created or not. If one of the parent directories of the specified
-	// path does not exist and MakeParents is false, the call will fail.
-
 	// MakeParents, if true, specifies that any non-existent parent directories
 	// should be created. If false (the default), the call will fail if the
 	// directory to be created has at least one parent directory that does not
@@ -84,10 +80,13 @@ type errorResult struct {
 }
 
 // MakeDir creates a directory or directory tree.
+// The error returned is a *Error if the request went through successfully
+// but there was an OS-level error creating the directory, with the Kind
+// field set to the specific error kind, for example "permission-denied".
 func (client *Client) MakeDir(opts *MakeDirOptions) error {
 	var permissions string
 	if opts.Permissions != 0 {
-		permissions = fmt.Sprintf("%3o", opts.Permissions)
+		permissions = fmt.Sprintf("%03o", opts.Permissions)
 	}
 
 	payload := &makeDirPayload{

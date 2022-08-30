@@ -62,6 +62,10 @@ func (cmd *cmdMkdir) Execute(args []string) error {
 	opts := client.MakeDirOptions{
 		Path:        cmd.Positional.Path,
 		MakeParents: cmd.MakeParents,
+		UserID:      cmd.UserID,
+		User:        cmd.User,
+		GroupID:     cmd.GroupID,
+		Group:       cmd.Group,
 	}
 
 	if cmd.Permissions != "" {
@@ -72,17 +76,7 @@ func (cmd *cmdMkdir) Execute(args []string) error {
 		opts.Permissions = os.FileMode(p)
 	}
 
-	opts.UserID = cmd.UserID
-	opts.User = cmd.User
-	opts.GroupID = cmd.GroupID
-	opts.Group = cmd.Group
-
-	err := cmd.client.MakeDir(&opts)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return cmd.client.MakeDir(&opts)
 }
 
 func init() {
