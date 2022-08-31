@@ -31,14 +31,12 @@ type cmdRm struct {
 }
 
 var rmDescs = map[string]string{
-	"recursive": "Create parent directories as needed.",
+	"recursive": "Remove all files and directories contained within the specified path.",
 }
 
-var shortRmHelp = "Remove files and directories"
+var shortRmHelp = "Remove a file or directory."
 var longRmHelp = `
 The rm command removes a file or directory.
-If --recursive is specified, all files and directories contained
-within the specified path will also be removed.
 `
 
 func (cmd *cmdRm) Execute(args []string) error {

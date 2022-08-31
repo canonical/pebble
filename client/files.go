@@ -25,10 +25,8 @@ type RemovePathOptions struct {
 	// Path is the absolute path to be deleted (required).
 	Path string
 
-	// MakeParents, if true, specifies that any non-existent parent directories
-	// should be created. If false (the default), the call will fail if the
-	// directory to be created has at least one parent directory that does not
-	// exist.
+	// Recursive, if true, will delete all files and directories contained
+	// within the specified path, recursively. Defaults to false.
 	Recursive bool
 }
 
@@ -53,9 +51,9 @@ type errorResult struct {
 	Value   interface{} `json:"value,omitempty"`
 }
 
-// RemovePath deletes files and directories.
+// RemovePath deletes a file or directory.
 // The error returned is a *Error if the request went through successfully
-// but there was an OS-level error creating the directory, with the Kind
+// but there was an OS-level error deleting a file or directory, with the Kind
 // field set to the specific error kind, for example "permission-denied".
 func (client *Client) RemovePath(opts *RemovePathOptions) error {
 	payload := &removePathsPayload{
