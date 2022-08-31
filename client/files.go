@@ -33,18 +33,18 @@ type MakeDirOptions struct {
 	MakeParents bool
 
 	// Permissions specifies the permission bits of the directories to be created.
-	// If 0 or unset, defaults to 755.
+	// If 0 or unset, defaults to 0755.
 	Permissions os.FileMode
 
-	// UserID indicates the ID of the owner user for the created directories.
+	// UserID indicates the user ID of the owner for the created directories.
 	UserID *int
 
-	// User indicates the name of the owner user for the created directories.
+	// User indicates the user name of the owner for the created directories.
 	// If used together with UserID, this value must match the name of the user
 	// with that ID.
 	User string
 
-	// GroupID indicates the ID of the owner group for the created directories.
+	// GroupID indicates the group ID of the owner for the created directories.
 	GroupID *int
 
 	// Group indicates the name of the owner group for the created directories.
