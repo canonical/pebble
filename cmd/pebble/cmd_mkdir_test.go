@@ -66,7 +66,7 @@ func (s *PebbleSuite) TestMkdir(c *C) {
 
 func (s *PebbleSuite) TestMkdirFailsParsingPermissions(c *C) {
 	rest, err := pebble.Parser(pebble.Client()).ParseArgs([]string{"mkdir", "-m", "foobar", "/foo"})
-	c.Assert(err, ErrorMatches, "error parsing permissions: .*")
+	c.Assert(err, ErrorMatches, `file permissions must be a 3- or 4-digit octal string, got "foobar"`)
 	c.Assert(rest, HasLen, 1)
 	c.Check(s.Stdout(), Equals, "")
 	c.Check(s.Stderr(), Equals, "")
@@ -115,7 +115,7 @@ func (s *PebbleSuite) TestMkdirPermissions(c *C) {
 				map[string]interface{}{
 					"path":         "/foo/bar",
 					"make-parents": false,
-					"permissions":  "755",
+					"permissions":  "0755",
 					"user-id":      nil,
 					"user":         "",
 					"group-id":     nil,

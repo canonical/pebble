@@ -86,7 +86,7 @@ type errorResult struct {
 func (client *Client) MakeDir(opts *MakeDirOptions) error {
 	var permissions string
 	if opts.Permissions != 0 {
-		permissions = fmt.Sprintf("%03o", opts.Permissions)
+		permissions = fmt.Sprintf("%04o", opts.Permissions)
 	}
 
 	payload := &makeDirPayload{

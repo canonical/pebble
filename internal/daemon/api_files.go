@@ -250,7 +250,7 @@ func fileInfoToResult(fullPath string, info os.FileInfo, userCache, groupCache m
 		Name:         pathpkg.Base(fullPath),
 		Type:         fileModeToType(mode),
 		Size:         psize,
-		Permissions:  fmt.Sprintf("%03o", mode.Perm()),
+		Permissions:  fmt.Sprintf("%04o", mode.Perm()),
 		LastModified: info.ModTime().Format(time.RFC3339),
 	}
 	if stat, ok := info.Sys().(*syscall.Stat_t); ok {
@@ -484,7 +484,7 @@ func writeFile(item writeFilesItem, source io.Reader) error {
 	}
 
 	// Atomically write file content to destination.
-	perm, err := parsePermissions(item.Permissions, 0o644)
+	perm, err := osutil.ParsePermissions(item.Permissions, 0o644)
 	if err != nil {
 		return err
 	}
@@ -509,17 +509,6 @@ func mkdirUserGroup(path string, perm os.FileMode, uid, gid *int) error {
 	} else {
 		return mkdirChown(path, perm, osutil.NoChown, osutil.NoChown)
 	}
-}
-
-func parsePermissions(permissions string, defaultMode os.FileMode) (os.FileMode, error) {
-	if permissions == "" {
-		return defaultMode, nil
-	}
-	perm, err := strconv.ParseUint(permissions, 8, 32)
-	if err != nil || len(permissions) != 3 {
-		return 0, fmt.Errorf("permissions must be a 3-digit octal string, got %q", permissions)
-	}
-	return os.FileMode(perm), nil
 }
 
 // Creating directories
@@ -550,7 +539,7 @@ func makeDir(dir makeDirsItem) error {
 	if !pathpkg.IsAbs(dir.Path) {
 		return nonAbsolutePathError(dir.Path)
 	}
-	perm, err := parsePermissions(dir.Permissions, 0o755)
+	perm, err := osutil.ParsePermissions(dir.Permissions, 0o755)
 	if err != nil {
 		return err
 	}

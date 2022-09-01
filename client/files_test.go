@@ -85,7 +85,7 @@ func (cs *clientSuite) TestMakeDirWithPermissions(c *C) {
 		Dirs: []makeDirsItem{{
 			Path:        "/foo/bar",
 			MakeParents: true,
-			Permissions: "644",
+			Permissions: "0644",
 		}},
 	})
 }
@@ -112,7 +112,7 @@ func (cs *clientSuite) TestMakeDirWithInvalidPermissions(c *C) {
 		Dirs: []makeDirsItem{{
 			Path:        "/foo/bar",
 			MakeParents: true,
-			Permissions: "077",
+			Permissions: "0077",
 		}},
 	})
 }

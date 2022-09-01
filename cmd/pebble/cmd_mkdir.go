@@ -15,13 +15,9 @@
 package main
 
 import (
-	"fmt"
-	"os"
-	"strconv"
-
-	"github.com/jessevdk/go-flags"
-
 	"github.com/canonical/pebble/client"
+	"github.com/canonical/pebble/internal/osutil"
+	"github.com/jessevdk/go-flags"
 )
 
 type cmdMkdir struct {
@@ -69,11 +65,11 @@ func (cmd *cmdMkdir) Execute(args []string) error {
 	}
 
 	if cmd.Permissions != "" {
-		p, err := strconv.ParseUint(cmd.Permissions, 8, 32)
+		p, err := osutil.ParsePermissions(cmd.Permissions, 0)
 		if err != nil {
-			return fmt.Errorf("error parsing permissions: %w", err)
+			return err
 		}
-		opts.Permissions = os.FileMode(p)
+		opts.Permissions = p
 	}
 
 	return cmd.client.MakeDir(&opts)
