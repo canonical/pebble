@@ -90,15 +90,15 @@ func testTransport(config servConfig, inputs, wantMsgs []string) func(t *testing
 		defer wg.Wait()
 		defer closer.Close()
 
-		addr = config.protocol + addr
+		addr = config.protocol + "://" + addr
 
 		backend, err := NewSyslogBackend(addr, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
-		collector := NewLogCollector(backend)
-		defer collector.Close()
-		forwarder := NewLogForwarder(collector, "testservice")
+		dest := NewLogDestination(backend)
+		defer dest.Close()
+		forwarder := NewLogForwarder(dest, "testservice")
 
 		if len(inputs) == 0 {
 			inputs = []string{"hello"}
@@ -159,9 +159,9 @@ func TestSyslogTransport_reconnect(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	collector := NewLogCollector(backend)
-	defer collector.Close()
-	forwarder := NewLogForwarder(collector, "testservice")
+	dest := NewLogDestination(backend)
+	defer dest.Close()
+	forwarder := NewLogForwarder(dest, "testservice")
 
 	// write initial data, send to server
 	_, err = io.WriteString(forwarder, "test1")
@@ -201,13 +201,13 @@ func TestSyslogTransport_reconnect(t *testing.T) {
 		<-errs
 	}
 
-	// start a new server and redirect the collector to it
+	// start a new server and redirect the dest to it
 	addr2, closer2, wg2 := startTestServer(t, config, crash, msgs, errs)
 	backend, err = NewSyslogBackend(addr2, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	collector.SetBackend(backend)
+	dest.SetBackend(backend)
 
 	defer wg2.Wait()
 	defer closer2.Close()

@@ -14,14 +14,14 @@ type LoggingWatcher interface {
 
 type LogManager struct {
 	mutex        sync.Mutex
-	destinations map[string]*LogCollector
+	destinations map[string]*LogDestination
 }
 
 func NewLogManager() *LogManager {
-	return &LogManager{destinations: make(map[string]*LogCollector)}
+	return &LogManager{destinations: make(map[string]*LogDestination)}
 }
 
-func (m *LogManager) GetCollector(destination string) (*LogCollector, error) {
+func (m *LogManager) GetDestination(destination string) (*LogDestination, error) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
@@ -67,11 +67,11 @@ func (m *LogManager) PlanChanged(p *plan.Plan) {
 
 		orig, ok := m.destinations[name]
 		if ok {
-			logger.Noticef("manager setting backend for log collector")
+			logger.Noticef("manager setting backend for log destination")
 			orig.SetBackend(b)
 		} else {
-			logger.Noticef("manager making new log collector")
-			m.destinations[name] = NewLogCollector(b)
+			logger.Noticef("manager making new log destination")
+			m.destinations[name] = NewLogDestination(b)
 		}
 	}
 
