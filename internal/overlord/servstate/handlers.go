@@ -358,7 +358,7 @@ func (s *serviceData) startInternal() error {
 	// set up output logging for the command
 	var logDests []io.Writer
 	for _, name := range s.config.LogDestinations {
-		transport, err := s.manager.logMgr.GetCollector(name)
+		transport, err := s.manager.logMgr.GetDestination(name)
 		if err != nil {
 			return err
 		}

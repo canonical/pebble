@@ -36,17 +36,19 @@ func (l *LogMessage) Size() int {
 }
 
 type LogForwarder struct {
-	service   string
-	collector *LogCollector
+	service     string
+	destination *LogDestination
 }
 
-func NewLogForwarder(c *LogCollector, service string) *LogForwarder {
-	return &LogForwarder{service: service, collector: c}
+func NewLogForwarder(c *LogDestination, service string) *LogForwarder {
+	return &LogForwarder{service: service, destination: c}
 }
 
 func (l *LogForwarder) Write(p []byte) (int, error) {
 	data := append([]byte{}, p...)
-	err := l.collector.Send(&LogMessage{Message: data, Service: l.service, Timestamp: time.Now()})
+	// TODO: should we sync this timestamp with the one that goes to pebble's service log buffer?
+	// If so, how?
+	err := l.destination.Send(&LogMessage{Message: data, Service: l.service, Timestamp: time.Now()})
 	if err != nil {
 		logger.Noticef("log destination write failed: %v", err)
 		return 0, err
@@ -54,7 +56,7 @@ func (l *LogForwarder) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
-type LogCollector struct {
+type LogDestination struct {
 	mu      sync.Mutex
 	buf     *LogBuffer
 	notify  chan bool
@@ -63,9 +65,9 @@ type LogCollector struct {
 	closed  bool
 }
 
-func NewLogCollector(backend LogBackend) *LogCollector {
+func NewLogDestination(backend LogBackend) *LogDestination {
 	buf := NewLogBuffer(maxLogBytes)
-	c := &LogCollector{
+	c := &LogDestination{
 		backend: backend,
 		buf:     buf,
 		notify:  make(chan bool, 1),
@@ -77,9 +79,9 @@ func NewLogCollector(backend LogBackend) *LogCollector {
 	return c
 }
 
-func (c *LogCollector) SetBackend(b LogBackend) error {
+func (c *LogDestination) SetBackend(b LogBackend) error {
 	if c.closed {
-		return fmt.Errorf("cannot modify a closed collector")
+		return fmt.Errorf("cannot modify a closed destination")
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -90,20 +92,20 @@ func (c *LogCollector) SetBackend(b LogBackend) error {
 	return nil
 }
 
-func (c *LogCollector) UpdateLabels(labels map[string]string) {
+func (c *LogDestination) UpdateLabels(labels map[string]string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.backend.UpdateLabels(labels)
 }
 
-func (c *LogCollector) Send(msg *LogMessage) error {
+func (c *LogDestination) Send(msg *LogMessage) error {
 	if c.closed {
-		return fmt.Errorf("cannot send messages to a closed collector")
+		return fmt.Errorf("cannot send messages to a closed destination")
 	}
 	return c.buf.Put(msg)
 }
 
-func (c *LogCollector) Close() {
+func (c *LogDestination) Close() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.closed = true
@@ -111,7 +113,7 @@ func (c *LogCollector) Close() {
 	close(c.done)
 }
 
-func (c *LogCollector) run() {
+func (c *LogDestination) run() {
 	for {
 		select {
 		case <-c.notify:
@@ -119,7 +121,7 @@ func (c *LogCollector) run() {
 				c.mu.Lock()
 				err := c.backend.Send(msg)
 				if err != nil {
-					logger.Noticef("collector error: %v", err)
+					logger.Noticef("destination error: %v", err)
 				}
 				c.mu.Unlock()
 			}
