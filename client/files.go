@@ -15,24 +15,26 @@
 package client
 
 import (
-	"bufio"
+	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"mime/multipart"
-	"os"
+	"net/textproto"
+	"strings"
 )
 
-// PushFileOptions contains the options for a call to PushFile.
-type PushFileOptions struct {
-	// LocalPath indicates the path to the file that will be pushed (required).
-	LocalPath string
+// PushOptions contains the options for a call to Push.
+type PushOptions struct {
+	// Source is the source of data to write (required).
+	Source io.Reader
 
-	// RemotePath indicates the absolute path of the file in the destination
+	// Path indicates the absolute path of the file in the destination
 	// machine (required).
-	RemotePath string
+	Path string
 
 	// MakeDirs, if true, will create any non-existing directories in the path
-	// to the remote file. If false, the default, the call to PushFile will
+	// to the remote file. If false, the default, the call to Push will
 	// fail if any non-existing directory is found on the remote path.
 	MakeDirs bool
 
@@ -88,116 +90,73 @@ type errorResult struct {
 	Value   interface{} `json:"value,omitempty"`
 }
 
-type fileUpload struct {
-	localPath string
-	info      writeFilesItem
-}
+// Push writes content to a path on the remote system.
+func (client *Client) Push(opts *PushOptions) error {
+	// Buffer for multipart header/footer
+	var b bytes.Buffer
+	mw := multipart.NewWriter(&b)
 
-type fileUploader struct {
-	pr *io.PipeReader
-	pw *io.PipeWriter
-
-	r *bufio.Reader
-	w *bufio.Writer
-
-	mw    *multipart.Writer
-	files *[]fileUpload
-}
-
-func newFileUploader() (*fileUploader, error) {
-	u := &fileUploader{}
-	u.pr, u.pw = io.Pipe()
-	u.r = bufio.NewReader(u.pr)
-	u.w = bufio.NewWriter(u.pw)
-	u.mw = multipart.NewWriter(u.w)
-
-	return u, nil
-}
-
-func (u *fileUploader) prepareUpload(files []fileUpload) error {
-	// Create metadata form field
-	metaWriter, err := u.mw.CreateFormField("request")
-	if err != nil {
-		return err
-	}
-
-	// Build and encode JSON payload
-	payload := writeFilesPayload{
-		Action: "write",
-		Files:  make([]writeFilesItem, len(files)),
-	}
-	for i, file := range files {
-		payload.Files[i] = file.info
-	}
-
-	encoder := json.NewEncoder(metaWriter)
-	if err := encoder.Encode(&payload); err != nil {
-		return err
-	}
-
-	u.files = &files
-	return nil
-}
-
-func (u *fileUploader) uploadFiles() error {
-	for _, file := range *u.files {
-		w, err := u.mw.CreateFormFile("files", file.info.Path)
-		if err != nil {
-			return err
-		}
-
-		r, err := os.Open(file.localPath)
-		if err != nil {
-			return err
-		}
-		defer r.Close()
-
-		if _, err := io.Copy(w, r); err != nil {
-			return err
-		}
-	}
-	return u.mw.Close()
-}
-
-// PushFile sends a local file to the remote machine.
-func (client *Client) PushFile(opts *PushFileOptions) error {
-	u, err := newFileUploader()
-	if err != nil {
-		return err
-	}
-
-	err = u.prepareUpload([]fileUpload{
-		{
-			localPath: opts.LocalPath,
-			info: writeFilesItem{
-				Path:        opts.RemotePath,
-				MakeDirs:    opts.MakeDirs,
-				Permissions: opts.Permissions,
-				UserID:      opts.UserID,
-				User:        opts.User,
-				GroupID:     opts.GroupID,
-				Group:       opts.Group,
-			},
-		},
+	// Encode metadata part of the header
+	part, err := mw.CreatePart(textproto.MIMEHeader{
+		"Content-Type":        {"application/json"},
+		"Content-Disposition": {`form-data; name="request"`},
 	})
 	if err != nil {
 		return err
 	}
 
-	go func() {
-		if err := u.uploadFiles(); err != nil {
-			panic(err)
-		}
-		u.w.Flush()
-		u.pw.Close()
-	}()
+	payload := writeFilesPayload{
+		Action: "write",
+		Files: []writeFilesItem{{
+			Path:        opts.Path,
+			MakeDirs:    opts.MakeDirs,
+			Permissions: opts.Permissions,
+			UserID:      opts.UserID,
+			User:        opts.User,
+			GroupID:     opts.GroupID,
+			Group:       opts.Group,
+		}},
+	}
+	if err = json.NewEncoder(part).Encode(&payload); err != nil {
+		return err
+	}
+
+	// Encode file part of the header
+	part, err = mw.CreatePart(textproto.MIMEHeader{
+		"Content-Type":        {"application/octet-stream"},
+		"Content-Disposition": {fmt.Sprintf(`form-data; name="files"; filename=%q`, opts.Path)},
+	})
+	if err != nil {
+		return err
+	}
+
+	header := b.String()
+
+	// Encode multipart footer
+	b.Reset()
+	mw.Close()
+	footer := b.String()
+
+	body := io.MultiReader(strings.NewReader(header), opts.Source, strings.NewReader(footer))
 
 	var result []fileResult
 	_, err = client.doSync("POST", "/v1/files", nil, map[string]string{
-		"Content-Type": u.mw.FormDataContentType(),
-	}, u.r, &result)
+		"Content-Type": mw.FormDataContentType(),
+	}, body, &result)
 	if err != nil {
 		return err
+	}
+
+	if len(result) != 1 {
+		return fmt.Errorf("expected exactly one result from API, got %d", len(result))
+	}
+
+	if result[0].Error != nil {
+		return &Error{
+			Kind:    result[0].Error.Kind,
+			Value:   result[0].Error.Value,
+			Message: result[0].Error.Message,
+		}
 	}
 
 	return nil
