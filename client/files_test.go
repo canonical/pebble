@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"path"
 	"strings"
 
 	. "gopkg.in/check.v1"
@@ -79,7 +80,7 @@ func (cs *clientSuite) TestPush(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(file.Header.Get("Content-Type"), Equals, "application/octet-stream")
 	c.Assert(file.FormName(), Equals, "files")
-	c.Assert(file.FileName(), Equals, "file.dat")
+	c.Assert(path.Base(file.FileName()), Equals, "file.dat")
 
 	buf.Reset()
 	_, err = buf.ReadFrom(file)
