@@ -115,7 +115,7 @@ func (s *PebbleSuite) TestMkdirPermissions(c *C) {
 				map[string]interface{}{
 					"path":         "/foo/bar",
 					"make-parents": false,
-					"permissions":  "0755",
+					"permissions":  "755",
 					"user-id":      nil,
 					"user":         "",
 					"group-id":     nil,

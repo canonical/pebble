@@ -250,7 +250,7 @@ func fileInfoToResult(fullPath string, info os.FileInfo, userCache, groupCache m
 		Name:         pathpkg.Base(fullPath),
 		Type:         fileModeToType(mode),
 		Size:         psize,
-		Permissions:  fmt.Sprintf("%04o", mode.Perm()),
+		Permissions:  fmt.Sprintf("%03o", mode.Perm()),
 		LastModified: info.ModTime().Format(time.RFC3339),
 	}
 	if stat, ok := info.Sys().(*syscall.Stat_t); ok {

@@ -85,7 +85,7 @@ func (cs *clientSuite) TestMakeDirWithPermissions(c *C) {
 		Dirs: []makeDirsItem{{
 			Path:        "/foo/bar",
 			MakeParents: true,
-			Permissions: "0644",
+			Permissions: "644",
 		}},
 	})
 }
@@ -96,7 +96,7 @@ func (cs *clientSuite) TestMakeDirWithInvalidPermissions(c *C) {
 	err := cs.cli.MakeDir(&client.MakeDirOptions{
 		Path:        "/foo/bar",
 		MakeParents: true,
-		Permissions: os.FileMode(0o077),
+		Permissions: os.FileMode(0o1077),
 	})
 	c.Assert(err, IsNil)
 
@@ -112,7 +112,7 @@ func (cs *clientSuite) TestMakeDirWithInvalidPermissions(c *C) {
 		Dirs: []makeDirsItem{{
 			Path:        "/foo/bar",
 			MakeParents: true,
-			Permissions: "0077",
+			Permissions: "1077",
 		}},
 	})
 }

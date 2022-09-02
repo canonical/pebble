@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2020 Canonical Ltd
+// Copyright (c) 2022 Canonical Ltd
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License version 3 as
@@ -20,7 +20,7 @@ import (
 	"strconv"
 )
 
-// ParsePermissions parses an octal string representing UNIX file permissions
+// ParsePermissions parses an octal string representing Unix file permissions
 // into a os.FileMode value. If permissions is an empty string, defaultMode will
 // be used instead.
 func ParsePermissions(permissions string, defaultMode os.FileMode) (os.FileMode, error) {
@@ -35,7 +35,7 @@ func ParsePermissions(permissions string, defaultMode os.FileMode) (os.FileMode,
 
 	v, err := strconv.ParseUint(permissions, 8, 32)
 	if err != nil {
-		return 0, fmt.Errorf("file permissions must be a valid %d-digit octal string, got %q", len(permissions), permissions)
+		return 0, fmt.Errorf("file permissions must be a 3- or 4-digit octal string, got %q", permissions)
 	}
 
 	return os.FileMode(v), nil
