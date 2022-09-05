@@ -15,9 +15,10 @@
 package main
 
 import (
+	"github.com/jessevdk/go-flags"
+
 	"github.com/canonical/pebble/client"
 	"github.com/canonical/pebble/internal/osutil"
-	"github.com/jessevdk/go-flags"
 )
 
 type cmdMkdir struct {
