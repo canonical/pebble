@@ -16,12 +16,18 @@ package client
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime"
 	"mime/multipart"
+	"net/http"
 	"net/textproto"
+	"net/url"
+	"strconv"
 	"strings"
+	"time"
 )
 
 // PushOptions contains the options for a call to Push.
@@ -62,6 +68,21 @@ type PushOptions struct {
 	// destination machine. When used together with MakeDirs, the directories
 	// that might be created will also be owned by this group.
 	Group string
+}
+
+// PullOptions contains the options for a call to Pull.
+type PullOptions struct {
+	// Path indicates the absolute path of the file in the remote system
+	// (required).
+	Path string
+}
+
+// PullResult contains information about the result of a call to Pull.
+type PullResult struct {
+	// Reader is an io.ReadCloser for the file retrieved from the remote system.
+	Reader io.ReadCloser
+	// Size is the length in bytes of the file retrieved from the remote system.
+	Size int64
 }
 
 type writeFilesPayload struct {
@@ -160,4 +181,95 @@ func (client *Client) Push(opts *PushOptions) error {
 	}
 
 	return nil
+}
+
+// Pull retrieves a file from the remote system.
+func (client *Client) Pull(opts *PullOptions) (*PullResult, error) {
+	query := url.Values{
+		"action": {"read"},
+		"path":   {opts.Path},
+	}
+	headers := map[string]string{
+		"Accept": "multipart/form-data",
+	}
+
+	retry := time.NewTicker(doRetry)
+	defer retry.Stop()
+	timeout := time.After(doTimeout)
+	var rsp *http.Response
+	var err error
+	for {
+		rsp, err = client.raw(context.Background(), "GET", "/v1/files", query, headers, nil)
+		if err == nil {
+			break
+		}
+		select {
+		case <-retry.C:
+			continue
+		case <-timeout:
+		}
+		break
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	// Obtain Content-Type to check for a multipart payload and parse its value
+	// in order to obtain the multipart boundary
+	contentType := rsp.Header.Get("Content-Type")
+	mediaType, params, err := mime.ParseMediaType(contentType)
+	if err != nil {
+		return nil, err
+	}
+
+	if mediaType != "multipart/form-data" {
+		// Probably JSON-encoded error response
+		var res response
+		var fr []fileResult
+
+		if err := decodeInto(rsp.Body, &res); err != nil {
+			return nil, err
+		}
+		if err := res.err(client); err != nil {
+			return nil, err
+		}
+		if res.Type != "sync" {
+			return nil, fmt.Errorf("expected sync response, got %q", res.Type)
+		}
+		if err := decodeWithNumber(bytes.NewReader(res.Result), &fr); err != nil {
+			return nil, fmt.Errorf("cannot unmarshal: %w", err)
+		}
+
+		if len(fr) != 1 {
+			return nil, fmt.Errorf("expected exactly one result from API, got %d", len(fr))
+		}
+
+		if fr[0].Error != nil {
+			return nil, &Error{
+				Kind:    fr[0].Error.Kind,
+				Value:   fr[0].Error.Value,
+				Message: fr[0].Error.Message,
+			}
+		}
+
+		// Not an error response after all
+		return nil, fmt.Errorf("expected a multipart response but didn't get one")
+	}
+
+	// Obtain the file from the multipart payload
+	mr := multipart.NewReader(rsp.Body, params["boundary"])
+	part, err := mr.NextPart()
+	if err != nil {
+		return nil, err
+	}
+	// Obtain the file size from the Content-Length header
+	size, err := strconv.ParseInt(part.Header.Get("Content-Length"), 10, 64)
+	if err != nil {
+		return nil, err
+	}
+
+	return &PullResult{
+		Reader: part,
+		Size:   size,
+	}, nil
 }

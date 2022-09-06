@@ -79,7 +79,7 @@ func (p *pushProgress) Read(b []byte) (n int, err error) {
 
 		size := quantity.FormatAmount(uint64(p.size), 0)
 		duration := quantity.FormatDuration(time.Since(p.started).Seconds())
-		p.pb.Notify(fmt.Sprintf("Transferred %s in %s", size, duration))
+		p.pb.Notify(fmt.Sprintf("Transferred %sB in %s", size, duration))
 	}
 
 	return
