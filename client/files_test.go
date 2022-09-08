@@ -57,6 +57,7 @@ func (cs *clientSuite) TestPush(c *C) {
 
 	// Check metadata part
 	metadata, err := mr.NextPart()
+	c.Assert(err, IsNil)
 	c.Assert(metadata.Header.Get("Content-Type"), Equals, "application/json")
 	c.Assert(metadata.FormName(), Equals, "request")
 

@@ -17,13 +17,11 @@ package main
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/jessevdk/go-flags"
 
 	"github.com/canonical/pebble/client"
-	"github.com/canonical/pebble/internal/progress"
 	"github.com/canonical/pebble/internal/strutil/quantity"
 )
 
@@ -57,53 +55,6 @@ var longPushHelp = `
 The push command transfers a file to the remote system.
 `
 
-type pushProgress struct {
-	file    *os.File
-	size    int64
-	current int64
-	pb      progress.Meter
-	started time.Time
-}
-
-func (p *pushProgress) Read(b []byte) (n int, err error) {
-	n, err = p.file.Read(b)
-	if err != nil {
-		return
-	}
-
-	p.current += int64(n)
-	p.pb.Set(float64(p.current))
-
-	if p.current == p.size {
-		p.pb.Finished()
-
-		size := quantity.FormatAmount(uint64(p.size), 0)
-		duration := quantity.FormatDuration(time.Since(p.started).Seconds())
-		p.pb.Notify(fmt.Sprintf("Transferred %sB in %s", size, duration))
-	}
-
-	return
-}
-
-func newPushProgress(f *os.File, remotePath string) (*pushProgress, error) {
-	st, err := f.Stat()
-	if err != nil {
-		return nil, err
-	}
-
-	p := &pushProgress{
-		file:    f,
-		size:    st.Size(),
-		pb:      progress.MakeProgressBar(),
-		started: time.Now(),
-	}
-
-	msg := fmt.Sprintf("Transferring %s -> %s", filepath.Base(f.Name()), remotePath)
-	p.pb.Start(msg, float64(p.size))
-
-	return p, nil
-}
-
 func (cmd *cmdPush) Execute(args []string) error {
 	if len(args) > 0 {
 		return ErrExtraArgs
@@ -115,13 +66,14 @@ func (cmd *cmdPush) Execute(args []string) error {
 	}
 	defer f.Close()
 
-	p, err := newPushProgress(f, cmd.Positional.RemotePath)
+	st, err := f.Stat()
 	if err != nil {
 		return err
 	}
 
-	return cmd.client.Push(&client.PushOptions{
-		Source:      p,
+	t := time.Now()
+	err = cmd.client.Push(&client.PushOptions{
+		Source:      f,
 		Path:        cmd.Positional.RemotePath,
 		MakeDirs:    cmd.MakeDirs,
 		Permissions: cmd.Permissions,
@@ -130,6 +82,15 @@ func (cmd *cmdPush) Execute(args []string) error {
 		GroupID:     cmd.GroupID,
 		Group:       cmd.Group,
 	})
+	if err != nil {
+		return err
+	}
+
+	size := quantity.FormatAmount(uint64(st.Size()), -1)
+	duration := quantity.FormatDuration(time.Since(t).Seconds())
+	fmt.Fprintf(Stdout, "Transferred %sB in %s\n", size, duration)
+
+	return nil
 }
 
 func init() {
