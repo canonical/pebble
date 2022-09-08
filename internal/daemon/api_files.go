@@ -149,13 +149,7 @@ func readFile(path string, mw *multipart.Writer) error {
 	}
 	defer f.Close()
 
-	h := make(textproto.MIMEHeader)
-	h.Set("Content-Disposition",
-		fmt.Sprintf(`form-data; name="files"; filename=%q`, path))
-	h.Set("Content-Type", "application/octet-stream")
-	h.Set("Content-Length", fmt.Sprint(info.Size()))
-
-	fw, err := mw.CreatePart(h)
+	fw, err := mw.CreateFormFile("files", path)
 	if err != nil {
 		return err
 	}
@@ -163,7 +157,6 @@ func readFile(path string, mw *multipart.Writer) error {
 	if err != nil {
 		return err
 	}
-
 	return nil
 }
 
