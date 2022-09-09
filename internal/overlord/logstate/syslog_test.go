@@ -82,7 +82,8 @@ func testTransport(config servConfig, inputs, wantMsgs []string) func(t *testing
 		}
 		dest := NewLogDestination("testdest", backend)
 		defer dest.Close()
-		forwarder := NewLogForwarder(dest, "testservice")
+		destsFunc := func(string) ([]*LogDestination, error) { return []*LogDestination{dest}, nil }
+		forwarder := NewLogForwarder(destsFunc, "testservice")
 
 		if len(inputs) == 0 {
 			inputs = []string{"hello"}
@@ -145,7 +146,9 @@ func TestSyslogTransport_reconnect(t *testing.T) {
 	}
 	dest := NewLogDestination("testdest", backend)
 	defer dest.Close()
-	forwarder := NewLogForwarder(dest, "testservice")
+
+	destsFunc := func(string) ([]*LogDestination, error) { return []*LogDestination{dest}, nil }
+	forwarder := NewLogForwarder(destsFunc, "testservice")
 
 	// write initial data, send to server
 	_, err = io.WriteString(forwarder, "test1")

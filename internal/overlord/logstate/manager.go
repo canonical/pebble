@@ -9,23 +9,27 @@ import (
 )
 
 type LogManager struct {
-	mutex        sync.Mutex
-	destinations map[string]*LogDestination
+	mutex                 sync.Mutex
+	destinations          map[string]*LogDestination
+	destinationsByService map[string][]*LogDestination
 }
 
 func NewLogManager() *LogManager {
-	return &LogManager{destinations: make(map[string]*LogDestination)}
+	return &LogManager{
+		destinations:          make(map[string]*LogDestination),
+		destinationsByService: make(map[string][]*LogDestination),
+	}
 }
 
-func (m *LogManager) GetDestination(destination string) (*LogDestination, error) {
+func (m *LogManager) GetDestinations(serviceName string) ([]*LogDestination, error) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
-	dest, ok := m.destinations[destination]
+	dests, ok := m.destinationsByService[serviceName]
 	if !ok {
-		return nil, fmt.Errorf("invalid service logging destination %q", destination)
+		return nil, fmt.Errorf("no known logging destinations for service %q", serviceName)
 	}
-	return dest, nil
+	return dests, nil
 }
 
 // PlanChanged handles updates to the plan (server configuration),
@@ -66,4 +70,20 @@ func (m *LogManager) PlanChanged(p *plan.Plan) {
 		}
 	}
 
+	// update each service's destinations
+	// TODO: update this with the appropriate config we settle on for defaults, explicit, all, etc.
+	for name, service := range p.Services {
+		m.destinationsByService[name] = make([]*LogDestination, 0)
+		if len(service.LogDestinations) == 0 {
+			// by default forward service's logs to all destinations
+			for _, dest := range m.destinations {
+				m.destinationsByService[name] = append(m.destinationsByService[name], dest)
+			}
+		} else {
+			// only forward to explicitly named destinations
+			for _, destName := range service.LogDestinations {
+				m.destinationsByService[name] = append(m.destinationsByService[name], m.destinations[destName])
+			}
+		}
+	}
 }
