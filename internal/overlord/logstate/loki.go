@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -26,7 +28,7 @@ func NewLokiBackend(address string) (*LokiBackend, error) {
 		return nil, fmt.Errorf("invalid loki server address: %v", err)
 	} else if u.Scheme != "" && u.Scheme != "http" {
 		return nil, fmt.Errorf("unsupported loki address scheme '%v'", u.Scheme)
-	} else if u.RequestURI() != "" {
+	} else if u.RequestURI() != "" && u.RequestURI() != "/" {
 		return nil, fmt.Errorf("invalid loki address: extraneous path %q", u.RequestURI())
 	}
 
@@ -60,6 +62,7 @@ func (b *LokiBackend) Send(m *LogMessage) error {
 		Streams: []lokiMessageStream{
 			lokiMessageStream{
 				Values: [][2]string{{timestamp, string(m.Message)}},
+				Stream: map[string]string{"service": m.Service},
 			},
 		}})
 	if err != nil {
@@ -88,7 +91,9 @@ func (b *LokiBackend) Send(m *LogMessage) error {
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		data, err = ioutil.ReadAll(resp.Body)
-		return fmt.Errorf("failed to send loki message: %v", data)
+		if err != nil && !errors.Is(err, io.EOF) {
+			return fmt.Errorf("failed to send loki message: %s", data)
+		}
 	}
-	return err
+	return nil
 }

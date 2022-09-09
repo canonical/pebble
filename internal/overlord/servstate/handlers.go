@@ -375,26 +375,11 @@ func (s *serviceData) startInternal() error {
 		outputIterator = s.logs.HeadIterator(0)
 	}
 
+	// set up output logging for the command
 	serviceName := s.config.Name
 	logWriter := servicelog.NewFormatWriter(s.logs, serviceName)
-
-	// set up output logging for the command
-	var logDests []io.Writer
-	for _, name := range s.config.LogDestinations {
-		transport, err := s.manager.logMgr.GetDestination(name)
-		if err != nil {
-			return err
-		}
-
-		dest := logstate.NewLogForwarder(transport, serviceName)
-		logDests = append(logDests, dest)
-	}
-
-	var outputWriter io.Writer = logWriter
-	if len(logDests) > 0 {
-		ws := append([]io.Writer{logWriter}, logDests...)
-		outputWriter = io.MultiWriter(ws...)
-	}
+	forwarder := logstate.NewLogForwarder(s.manager.logMgr.GetDestinations, serviceName)
+	outputWriter := io.MultiWriter(logWriter, forwarder)
 	s.cmd.Stdout = outputWriter
 	s.cmd.Stderr = outputWriter
 

@@ -32,26 +32,36 @@ func (l *LogMessage) Size() int {
 	return len(l.Message)
 }
 
+type DestsFunc func(service string) ([]*LogDestination, error)
+
 // LogForwarder is a simple writer that is used to intercept (stdout+stderr) output from running services
-// and annotate it with relevant metadata (e.g. service name) before conveying it to a particular
+// and annotate it with relevant metadata (e.g. service name) before conveying it to the
+// appropriate log destinations for the service.
 // log destination.
 type LogForwarder struct {
-	service     string
-	destination *LogDestination
+	service   string
+	destsFunc DestsFunc
 }
 
-func NewLogForwarder(c *LogDestination, service string) *LogForwarder {
-	return &LogForwarder{service: service, destination: c}
+func NewLogForwarder(destsFunc DestsFunc, service string) *LogForwarder {
+	return &LogForwarder{service: service, destsFunc: destsFunc}
 }
 
 func (l *LogForwarder) Write(p []byte) (int, error) {
 	data := append([]byte{}, p...)
 	// TODO: should we sync this timestamp with the one that goes to pebble's service log buffer?
 	// If so, how?
-	err := l.destination.Send(&LogMessage{Message: data, Service: l.service, Timestamp: time.Now()})
+	msg := &LogMessage{Message: data, Service: l.service, Timestamp: time.Now()}
+	dests, err := l.destsFunc(l.service)
 	if err != nil {
-		logger.Noticef("failed to transmit service %q logs to destination %q: %v", l.service, l.destination.name, err)
-		return 0, err
+		return 0, fmt.Errorf("failed to forward log message: %v", err)
+	}
+
+	for _, dest := range dests {
+		if err := dest.Send(msg); err != nil {
+			logger.Noticef("failed to transmit service %q logs to destination %q: %v", l.service, dest.name, err)
+			continue
+		}
 	}
 	return len(p), nil
 }
@@ -163,7 +173,7 @@ func (b *LogBuffer) Put(m *LogMessage) error {
 	defer b.mu.Unlock()
 
 	if m.Size() > b.capacity {
-		return fmt.Errorf("LogBuffer.Put failed: capacity %v cannot fit object of size %v", b.capacity, m.Size())
+		return fmt.Errorf("LogBuffer capacity %v cannot fit object of size %v", b.capacity, m.Size())
 	}
 
 	available := b.capacity - b.currSize
