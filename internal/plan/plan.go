@@ -47,7 +47,6 @@ type Plan struct {
 	Services        map[string]*Service        `yaml:"services,omitempty"`
 	Checks          map[string]*Check          `yaml:"checks,omitempty"`
 	LogDestinations map[string]*LogDestination `yaml:"log-destinations,omitempty"`
-	LogLabels       map[string]string          `yaml:"log-labels,omitempty"`
 }
 
 type Layer struct {
@@ -58,7 +57,6 @@ type Layer struct {
 	Services        map[string]*Service        `yaml:"services,omitempty"`
 	Checks          map[string]*Check          `yaml:"checks,omitempty"`
 	LogDestinations map[string]*LogDestination `yaml:"log-destinations,omitempty"`
-	LogLabels       map[string]string          `yaml:"log-labels,omitempty"`
 }
 
 type LogDestination struct {
@@ -462,7 +460,6 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 	combined := &Layer{
 		Services:        make(map[string]*Service),
 		Checks:          make(map[string]*Check),
-		LogLabels:       make(map[string]string),
 		LogDestinations: make(map[string]*LogDestination),
 	}
 	if len(layers) == 0 {
@@ -546,12 +543,6 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 				}
 			}
 		}
-
-		for key, val := range layer.LogLabels {
-			// TODO: how to remove a value added by a prev layer?
-			combined.LogLabels[key] = val
-		}
-
 	}
 
 	// Ensure fields in combined layers validate correctly (and set defaults).

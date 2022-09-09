@@ -21,7 +21,6 @@ const canonicalPrivEnterpriseNum = 28978
 
 type LogBackend interface {
 	Send(*LogMessage) error
-	UpdateLabels(labels map[string]string)
 	Close() error
 }
 
@@ -92,12 +91,6 @@ func (c *LogDestination) SetBackend(b LogBackend) error {
 	return nil
 }
 
-func (c *LogDestination) UpdateLabels(labels map[string]string) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.backend.UpdateLabels(labels)
-}
-
 func (c *LogDestination) Send(msg *LogMessage) error {
 	if c.closed {
 		return fmt.Errorf("cannot send messages to a closed destination")
@@ -133,10 +126,9 @@ func (c *LogDestination) run() {
 
 type LokiBackend struct {
 	address string
-	labels  map[string]string
 }
 
-func NewLokiBackend(address string, labels map[string]string) (*LokiBackend, error) {
+func NewLokiBackend(address string) (*LokiBackend, error) {
 	u, err := url.Parse(address)
 	if err != nil || u.Host == "" {
 		u, err = url.Parse("//" + address)
@@ -158,19 +150,10 @@ func NewLokiBackend(address string, labels map[string]string) (*LokiBackend, err
 	}
 
 	b := &LokiBackend{address: address}
-	b.UpdateLabels(labels)
 	return b, nil
 }
 
 func (b *LokiBackend) Close() error { return nil }
-
-func (b *LokiBackend) UpdateLabels(labels map[string]string) {
-	tmp := make(map[string]string)
-	for k, v := range labels {
-		tmp[k] = v
-	}
-	b.labels = tmp
-}
 
 type lokiMessageStream struct {
 	Stream map[string]string `json:"stream"`
@@ -182,12 +165,10 @@ type lokiMessage struct {
 }
 
 func (b *LokiBackend) Send(m *LogMessage) error {
-	b.labels["pebble_service"] = m.Service
 	timestamp := strconv.FormatInt(m.Timestamp.UnixNano(), 10)
 	data, err := json.Marshal(lokiMessage{
 		Streams: []lokiMessageStream{
 			lokiMessageStream{
-				Stream: b.labels,
 				Values: [][2]string{{timestamp, string(m.Message)}},
 			},
 		}})
@@ -237,10 +218,8 @@ type SyslogBackend struct {
 
 // NewSyslogBackend creates a writer forwarding writes as syslog messages to dst.  The forwarded
 // messages will have app as the application name.  Other message parameters are set using
-// reasonable defaults or the RFC5424 nil value "-".  labels contains key-value pairs to be
-// attached to syslog messages in their structured data section (see. RFC5424 section 6.3).
-// *Every* write/message forwarded will include these parameters.
-func NewSyslogBackend(addr string, labels map[string]string) (*SyslogBackend, error) {
+// reasonable defaults or the RFC5424 nil value "-".
+func NewSyslogBackend(addr string) (*SyslogBackend, error) {
 	u, err := url.Parse(addr)
 	if err != nil || u.Host == "" {
 		u, err = url.Parse("//" + addr)
@@ -260,7 +239,7 @@ func NewSyslogBackend(addr string, labels map[string]string) (*SyslogBackend, er
 		host:           "-",
 		msgid:          "-",
 		priority:       1*8 + 6, // for facility=user-msg severity=informational. See RFC 5424 6.2.1 for available codes.
-		structuredData: syslogStructuredData("pebble", canonicalPrivEnterpriseNum, labels),
+		structuredData: syslogStructuredData("pebble", canonicalPrivEnterpriseNum, nil),
 
 		address: u,
 	}, nil
@@ -289,10 +268,6 @@ func syslogStructuredData(name string, enterpriseNum int, labels map[string]stri
 	}
 	buf.WriteByte(']')
 	return buf.String()
-}
-
-func (s *SyslogBackend) UpdateLabels(labels map[string]string) {
-	s.structuredData = syslogStructuredData("pebble", canonicalPrivEnterpriseNum, labels)
 }
 
 func (s *SyslogBackend) Send(m *LogMessage) error {

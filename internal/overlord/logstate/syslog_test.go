@@ -16,37 +16,21 @@ import (
 
 func TestSyslogBackend(t *testing.T) {
 	tests := []struct {
-		name   string
-		input  string
-		pid    int
-		params map[string]string
-		want   string
+		name  string
+		input string
+		pid   int
+		want  string
 	}{
 		{
 			name:  "basic",
 			input: "hello",
 			want:  "48 <14>1 0001-01-01T00:00:00Z - testapp - - - hello",
-		}, {
-			name:   "basic-param",
-			input:  "hello",
-			params: map[string]string{"foo": "bar"},
-			want:   "71 <14>1 0001-01-01T00:00:00Z - testapp - - [pebble@28978 foo=\"bar\"] hello",
-		}, {
-			name:   "basic-multiparam",
-			input:  "hello",
-			params: map[string]string{"foo": "bar", "baz": "quux"},
-			want:   "82 <14>1 0001-01-01T00:00:00Z - testapp - - [pebble@28978 foo=\"bar\" baz=\"quux\"] hello",
-		}, {
-			name:   "param-escapes",
-			input:  "hello",
-			params: map[string]string{"foo": "\"[bar]\\"},
-			want:   "78 <14>1 0001-01-01T00:00:00Z - testapp - - [pebble@28978 foo=\"\\\"[bar\\]\\\\\"] hello",
 		},
 	}
 
 	for i, test := range tests {
 		t.Run(fmt.Sprintf("case %v (%v)", i+1, test.name), func(t *testing.T) {
-			w, err := NewSyslogBackend("localhost:424242", test.params)
+			w, err := NewSyslogBackend("localhost:424242")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -92,7 +76,7 @@ func testTransport(config servConfig, inputs, wantMsgs []string) func(t *testing
 
 		addr = config.protocol + "://" + addr
 
-		backend, err := NewSyslogBackend(addr, nil)
+		backend, err := NewSyslogBackend(addr)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -155,7 +139,7 @@ func TestSyslogTransport_reconnect(t *testing.T) {
 	defer wg.Wait()
 	defer closer.Close()
 
-	backend, err := NewSyslogBackend(addr, nil)
+	backend, err := NewSyslogBackend(addr)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -178,7 +162,7 @@ func TestSyslogTransport_reconnect(t *testing.T) {
 		if err.Error() != "server crashed" {
 			t.Errorf("wanted crash error, got: %v", err)
 		}
-	case <-time.After(2 * time.Second):
+	case <-time.After(3 * time.Second):
 		t.Fatal("timed out")
 	}
 
@@ -203,7 +187,7 @@ func TestSyslogTransport_reconnect(t *testing.T) {
 
 	// start a new server and redirect the dest to it
 	addr2, closer2, wg2 := startTestServer(t, config, crash, msgs, errs)
-	backend, err = NewSyslogBackend(addr2, nil)
+	backend, err = NewSyslogBackend(addr2)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -220,7 +204,7 @@ func TestSyslogTransport_reconnect(t *testing.T) {
 		}
 	case err := <-errs:
 		t.Errorf("got unexpected error: %v", err)
-	case <-time.After(3 * time.Second):
+	case <-time.After(4 * time.Second):
 		t.Fatal("timed out")
 	}
 }
