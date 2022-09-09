@@ -62,7 +62,7 @@ func (m *LogManager) PlanChanged(p *plan.Plan) {
 			orig.SetBackend(b)
 		} else {
 			logger.Noticef("manager making new log destination")
-			m.destinations[name] = NewLogDestination(b)
+			m.destinations[name] = NewLogDestination(name, b)
 		}
 	}
 
