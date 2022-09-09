@@ -8,10 +8,6 @@ import (
 	"github.com/canonical/pebble/internal/plan"
 )
 
-type LoggingWatcher interface {
-	UpdateLabels(map[string]string)
-}
-
 type LogManager struct {
 	mutex        sync.Mutex
 	destinations map[string]*LogDestination
@@ -35,17 +31,12 @@ func (m *LogManager) GetDestination(destination string) (*LogDestination, error)
 // PlanChanged handles updates to the plan (server configuration),
 // stopping the previous checks and starting the new ones as required.
 func (m *LogManager) PlanChanged(p *plan.Plan) {
-	if len(p.LogDestinations) == 0 && len(p.LogLabels) == 0 {
+	if len(p.LogDestinations) == 0 {
 		return
 	}
 
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
-
-	// update labels
-	for _, dest := range m.destinations {
-		dest.UpdateLabels(p.LogLabels)
-	}
 
 	// update destinations
 	for name, dest := range p.LogDestinations {
@@ -53,9 +44,9 @@ func (m *LogManager) PlanChanged(p *plan.Plan) {
 		var err error
 		switch dest.Type {
 		case "loki":
-			b, err = NewLokiBackend(dest.Address, p.LogLabels)
+			b, err = NewLokiBackend(dest.Address)
 		case "syslog":
-			b, err = NewSyslogBackend(dest.Address, p.LogLabels)
+			b, err = NewSyslogBackend(dest.Address)
 		default:
 			logger.Noticef("unsupported logging destination type: %v", dest.Type)
 			continue
