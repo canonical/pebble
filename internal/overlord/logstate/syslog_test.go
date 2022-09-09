@@ -80,7 +80,7 @@ func testTransport(config servConfig, inputs, wantMsgs []string) func(t *testing
 		if err != nil {
 			t.Fatal(err)
 		}
-		dest := NewLogDestination(backend)
+		dest := NewLogDestination("testdest", backend)
 		defer dest.Close()
 		forwarder := NewLogForwarder(dest, "testservice")
 
@@ -143,7 +143,7 @@ func TestSyslogTransport_reconnect(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	dest := NewLogDestination(backend)
+	dest := NewLogDestination("testdest", backend)
 	defer dest.Close()
 	forwarder := NewLogForwarder(dest, "testservice")
 
