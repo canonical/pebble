@@ -29,8 +29,8 @@ func TestLogBuffer_Notify(t *testing.T) {
 	}
 }
 
-// TestLogBuffer_NotifyDrop ensures that notification sends that block don't cause the buffer to
-// sieze up.
+// TestLogBuffer_NotifyDrop ensures that notifications sendt to a blocked channel don't cause the
+// buffer to sieze up.
 func TestLogBuffer_NotifyDrop(t *testing.T) {
 	capacity := 1000
 	b := NewLogBuffer(capacity)
@@ -154,4 +154,8 @@ func TestLogForwarder(t *testing.T) {
 	case <-time.After(200 * time.Millisecond):
 		t.Error("failed to receive forwarded result in time")
 	}
+}
+
+func TestLogDestination(t *testing.T) {
+
 }
