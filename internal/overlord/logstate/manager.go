@@ -62,10 +62,8 @@ func (m *LogManager) PlanChanged(p *plan.Plan) {
 
 		orig, ok := m.destinations[name]
 		if ok {
-			logger.Noticef("manager setting backend for log destination")
 			orig.SetBackend(b)
 		} else {
-			logger.Noticef("manager making new log destination")
 			m.destinations[name] = NewLogDestination(name, b)
 		}
 	}

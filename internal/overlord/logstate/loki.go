@@ -11,8 +11,6 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
-
-	"github.com/canonical/pebble/internal/logger"
 )
 
 type LokiBackend struct {
@@ -64,8 +62,6 @@ func (b *LokiBackend) Send(m *LogMessage) error {
 		return fmt.Errorf("failed to compress loki message: %v", err)
 	}
 
-	logger.Noticef("loki backend holds compressed content len=%v", buf.Len())
-	logger.Noticef("loki backend is sending message (addr=%v):\n%s", b.address, data)
 	r, err := http.NewRequest("POST", b.address.String(), &buf)
 	if err != nil {
 		return fmt.Errorf("failed to build loki message request: %v", err)
