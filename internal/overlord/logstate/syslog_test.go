@@ -62,12 +62,12 @@ func TestSyslogBackend(t *testing.T) {
 
 // If inputs is nil, a single sample write is generated. If wantMsgs is nil, expect each message in
 // inputs to be transmitted unscathed.  If wantMsgs is not nil, it the test checks that each
-// message in wantMsgs is transmitted by the transport in sequence.
-func testTransport(config servConfig, inputs, wantMsgs []string) func(t *testing.T) {
+// message in wantMsgs is transmitted by the backend in sequence.
+func testBackend(config servConfig, inputs, wantMsgs []string) func(t *testing.T) {
 	return func(t *testing.T) {
 		errs := make(chan error, 20)
 		// make sure this is synchronous (i.e. blocks) so that we can control the rate at which the
-		// transport sends messages - allowing us to test buffer wrapping.
+		// backend sends messages - allowing us to test buffer wrapping.
 		msgs := make(chan string)
 
 		addr, closer, wg := startTestServer(t, config, noCrash, msgs, errs)
@@ -113,24 +113,24 @@ func testTransport(config servConfig, inputs, wantMsgs []string) func(t *testing
 	}
 }
 
-func TestSyslogTransport(t *testing.T) {
-	t.Run("tcp", testTransport(servConfig{protocol: "tcp"}, nil, nil))
-	t.Run("udp", testTransport(servConfig{protocol: "udp"}, nil, nil))
-	t.Run("multiple-writes", testTransport(servConfig{protocol: "tcp"}, []string{"hello", "world"}, nil))
+func TestSyslogBackend(t *testing.T) {
+	t.Run("tcp", testBackend(servConfig{protocol: "tcp"}, nil, nil))
+	t.Run("udp", testBackend(servConfig{protocol: "udp"}, nil, nil))
+	t.Run("multiple-writes", testBackend(servConfig{protocol: "tcp"}, []string{"hello", "world"}, nil))
 
 	tmp := maxLogBytes
 	maxLogBytes = 10
 	defer func() { maxLogBytes = tmp }()
 	msgs := []string{"hello ", "world "}
 	want := msgs[1:]
-	t.Run("buffer-wrap", testTransport(servConfig{protocol: "tcp"}, msgs, want))
+	t.Run("buffer-wrap", testBackend(servConfig{protocol: "tcp"}, msgs, want))
 }
 
 func TestRoundTrip(t *testing.T) {
 	// TODO: test full integration from layer configuration to syslog destination server message receipt
 }
 
-func TestSyslogTransport_reconnect(t *testing.T) {
+func TestSyslogBackend_reconnect(t *testing.T) {
 	config := servConfig{protocol: "tcp"}
 	errs := make(chan error, 10)
 	msgs := make(chan string, 20)
