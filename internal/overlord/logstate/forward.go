@@ -59,7 +59,7 @@ func (l *LogForwarder) Write(p []byte) (int, error) {
 
 	for _, dest := range dests {
 		if err := dest.Send(msg); err != nil {
-			logger.Noticef("failed to transmit service %q logs to destination %q: %v", l.service, dest.name, err)
+			logger.Noticef("failed to transmit service %q logs to destination %q: %v", l.service, dest.Name(), err)
 			continue
 		}
 	}
@@ -72,7 +72,8 @@ func (l *LogForwarder) Write(p []byte) (int, error) {
 // pushed/sent to the underlying backend.  If the backend is unable to keep up and the buffer fills
 // up, logs are discarded incrementally as necessary in FIFO order.  LogDestination is safe to use
 // concurrently.  Close should be called when the destination will no longer be used to clean up
-// internal goroutines, etc.
+// internal goroutines, etc.  LogDestination takes ownership of the backend it is initialized with
+// and will handle calling Close on it.
 type LogDestination struct {
 	mu      sync.Mutex
 	name    string
@@ -97,6 +98,8 @@ func NewLogDestination(name string, backend LogBackend) *LogDestination {
 	go c.run()
 	return c
 }
+
+func (c *LogDestination) Name() string { return c.name }
 
 // SetBackend updates the backend to which log messages are sent.  This method is concurrency-safe.
 func (c *LogDestination) SetBackend(b LogBackend) error {
