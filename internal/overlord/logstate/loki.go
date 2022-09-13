@@ -47,24 +47,8 @@ func NewLokiBackend(address string) (*LokiBackend, error) {
 
 func (b *LokiBackend) Close() error { return nil }
 
-type lokiMessageStream struct {
-	Stream map[string]string `json:"stream"` // TODO: use this for future log labels
-	Values [][2]string       `json:"values"`
-}
-
-type lokiMessage struct {
-	Streams []lokiMessageStream `json:"streams"`
-}
-
 func (b *LokiBackend) Send(m *LogMessage) error {
-	timestamp := strconv.FormatInt(m.Timestamp.UnixNano(), 10)
-	data, err := json.Marshal(lokiMessage{
-		Streams: []lokiMessageStream{
-			lokiMessageStream{
-				Values: [][2]string{{timestamp, string(m.Message)}},
-				Stream: map[string]string{"service": m.Service},
-			},
-		}})
+	data, err := json.Marshal(newLokiMessage(m))
 	if err != nil {
 		return fmt.Errorf("failed to build loki message: %v", err)
 	}
@@ -75,7 +59,12 @@ func (b *LokiBackend) Send(m *LogMessage) error {
 	if err != nil {
 		return fmt.Errorf("failed to compress loki message: %v", err)
 	}
+	err = gzWriter.Close()
+	if err != nil {
+		return fmt.Errorf("failed to compress loki message: %v", err)
+	}
 
+	logger.Noticef("loki backend holds compressed content len=%v", buf.Len())
 	logger.Noticef("loki backend is sending message (addr=%v):\n%s", b.address, data)
 	r, err := http.NewRequest("POST", b.address.String(), &buf)
 	if err != nil {
@@ -96,4 +85,25 @@ func (b *LokiBackend) Send(m *LogMessage) error {
 		}
 	}
 	return nil
+}
+
+type lokiMessageStream struct {
+	Stream map[string]string `json:"stream"` // TODO: use this for future log labels
+	Values [][2]string       `json:"values"`
+}
+
+type lokiMessage struct {
+	Streams []lokiMessageStream `json:"streams"`
+}
+
+func newLokiMessage(msg *LogMessage) *lokiMessage {
+	timestamp := strconv.FormatInt(msg.Timestamp.UnixNano(), 10)
+	return &lokiMessage{
+		Streams: []lokiMessageStream{
+			lokiMessageStream{
+				Values: [][2]string{{timestamp, string(msg.Message)}},
+				Stream: map[string]string{"service": msg.Service},
+			},
+		},
+	}
 }
