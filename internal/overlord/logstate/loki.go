@@ -11,13 +11,19 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+
+	"github.com/canonical/pebble/internal/plan"
 )
+
+func init() {
+	RegisterLogBackend("loki", func(t *plan.LogTarget) (LogBackend, error) { return NewLokiBackend(t.Location) })
+}
 
 type LokiBackend struct {
 	address *url.URL
 }
 
-func NewLokiBackend(address string) (*LokiBackend, error) {
+func NewLokiBackend(address string) (LogBackend, error) {
 	u, err := url.Parse(address)
 	if err != nil || u.Host == "" {
 		u, err = url.Parse("//" + address)

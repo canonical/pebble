@@ -8,25 +8,33 @@ import (
 	"github.com/canonical/pebble/internal/plan"
 )
 
-const (
-	logSelectionOptOut  = "opt-out"
-	logSelectionOptIn   = "opt-in"
-	logSelectionDisable = "disable"
-)
+var logBackends = map[string]func(*plan.LogTarget) (LogBackend, error){}
+
+func RegisterLogBackend(name string, builder func(*plan.LogTarget) (LogBackend, error)) {
+	validator := func(t *plan.LogTarget) error {
+		backend, err := builder(t)
+		if backend != nil {
+			backend.Close()
+		}
+		return err
+	}
+	plan.RegisterLogBackend(name, validator)
+}
 
 type LogManager struct {
 	mutex   sync.Mutex
 	targets map[string]*LogTarget
-	// targetSelection maps log target names to selection criteria.
-	targetSelection map[string]string
 	// targetsByService maps service name to the list of targets to receive its logs.
 	targetsByService map[string][]*LogTarget
+	// targetSelection maps log target names to selection criteria.
+	targetSelection map[string]string
 }
 
 func NewLogManager() *LogManager {
 	return &LogManager{
 		targets:          make(map[string]*LogTarget),
 		targetsByService: make(map[string][]*LogTarget),
+		targetSelection:  make(map[string]string),
 	}
 }
 
@@ -44,69 +52,34 @@ func (m *LogManager) GetTargets(serviceName string) ([]*LogTarget, error) {
 // PlanChanged handles updates to the plan (server configuration),
 // stopping the previous checks and starting the new ones as required.
 func (m *LogManager) PlanChanged(p *plan.Plan) {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+
 	if len(p.LogTargets) == 0 {
 		return
 	}
 
-	m.mutex.Lock()
-	defer m.mutex.Unlock()
-
 	// update targets
 	for name, target := range p.LogTargets {
-		var b LogBackend
-		var err error
-		switch target.Type {
-		case "loki":
-			b, err = NewLokiBackend(target.Location)
-		case "syslog":
-			b, err = NewSyslogBackend(target.Location)
-		default:
-			logger.Noticef("unsupported logging target type: %v", target.Type)
-			continue
-		}
+		backend, err := logBackends[name](target)
 		if err != nil {
-			logger.Noticef("invalid config for log target %q: %v", name, err)
-			continue
-		}
-		switch target.Selection {
-		case "":
-			m.targetSelection[name] = logSelectionOptOut
-		case logSelectionOptIn, logSelectionOptOut, logSelectionDisable:
-			m.targetSelection[name] = target.Selection
-		default:
-			logger.Noticef("invalid selection for log target %q: %v", name, target.Selection)
-			continue
+			logger.Noticef("%v", err)
 		}
 
 		orig, ok := m.targets[name]
 		if ok {
-			orig.SetBackend(b)
+			orig.SetBackend(backend)
 		} else {
-			m.targets[name] = NewLogTarget(name, b)
+			m.targets[name] = NewLogTarget(name, backend)
 		}
-
 	}
 
 	// update each service's targets
-	// TODO: update this with the appropriate config we settle on for defaults, explicit, all, etc.
 	for name, service := range p.Services {
-		m.targetsByService[name] = make([]*LogTarget, 0)
-		if len(service.LogTargets) == 0 {
-			for targetName, target := range m.targets {
-				switch m.targetSelection[targetName] {
-				case logSelectionOptIn, logSelectionDisable: // skip
-				case logSelectionOptOut:
-					m.targetsByService[name] = append(m.targetsByService[name], target)
-				}
-			}
-		} else {
-			for _, targetName := range service.LogTargets {
-				switch m.targetSelection[targetName] {
-				case logSelectionDisable: // skip
-				case logSelectionOptOut, logSelectionOptIn:
-					m.targetsByService[name] = append(m.targetsByService[name], m.targets[targetName])
-				}
-			}
+		serviceTargets := make([]*LogTarget, len(service.LogTargets))
+		for i, targetName := range service.LogTargets {
+			serviceTargets[i] = m.targets[targetName]
 		}
+		m.targetsByService[name] = serviceTargets
 	}
 }

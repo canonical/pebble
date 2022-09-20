@@ -7,7 +7,21 @@ import (
 	"net/url"
 	"sync"
 	"time"
+
+	"github.com/canonical/pebble/internal/plan"
 )
+
+func init() {
+	RegisterLogBackend("syslog", func(t *plan.LogTarget) (LogBackend, error) { return NewSyslogBackend(t.Location) })
+}
+
+func validateSyslog(t *plan.LogTarget) error {
+	b, err := NewSyslogBackend(t.Location)
+	if b != nil {
+		b.Close()
+	}
+	return err
+}
 
 // SyslogBackend takes writes and formats them according to RFC5424.  The formatted syslog messages
 // are then forwarded to the underlying syslog server.  SyslogWriter is safe for concurrent writes
