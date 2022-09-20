@@ -61,9 +61,10 @@ type Layer struct {
 }
 
 type LogTarget struct {
-	Type     string   `yaml:"type"`
-	Address  string   `yaml:"address"`
-	Override Override `yaml:"override,omitempty"`
+	Type      string   `yaml:"type"`
+	Location  string   `yaml:"location"`
+	Selection string   `yaml:"selection",omitempty`
+	Override  Override `yaml:"override,omitempty"`
 }
 
 func (d *LogTarget) Copy() *LogTarget {
@@ -75,8 +76,11 @@ func (d *LogTarget) Merge(other *LogTarget) {
 	if other.Type != "" {
 		d.Type = other.Type
 	}
-	if other.Address != "" {
-		d.Address = other.Address
+	if other.Location != "" {
+		d.Location = other.Location
+	}
+	if other.Selection != "" {
+		d.Selection = other.Selection
 	}
 }
 
