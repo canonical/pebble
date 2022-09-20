@@ -59,11 +59,44 @@ type Layer struct {
 	LogTargets  map[string]*LogTarget `yaml:"log-targets,omitempty"`
 }
 
+const (
+	logSelectionOptOut  = "opt-out"
+	logSelectionOptIn   = "opt-in"
+	logSelectionDisable = "disable"
+)
+
+var logBackends = map[string]func(*LogTarget) error{}
+
+func RegisterLogBackend(name string, validator func(*LogTarget) error) { logBackends[name] = validator }
+
 type LogTarget struct {
 	Type      string   `yaml:"type"`
 	Location  string   `yaml:"location"`
 	Selection string   `yaml:"selection",omitempty`
 	Override  Override `yaml:"override,omitempty"`
+}
+
+// Prepare validates the log target configuration and then creates and returns the
+// appropriate backend along with the target's selection configuration (opt-in, opt-out, etc.). The
+// returned backend either needs to be added/set on a LogTarget or must be closed by the caller.
+// name is the name of the target from the corresponding plan map and is used to annotate error
+// messages.
+func (t *LogTarget) Prepare(name string) error {
+	validator, ok := logBackends[t.Type]
+	if !ok {
+		return fmt.Errorf("unsupported type %q for log target %q: %v", t.Type, name)
+	} else if err := validator(t); err != nil {
+		return fmt.Errorf("invalid configuration for log target %q: %v", name, err)
+	}
+
+	switch t.Selection {
+	case "":
+		t.Selection = logSelectionOptOut
+	case logSelectionOptIn, logSelectionOptOut, logSelectionDisable: // fine
+	default:
+		return fmt.Errorf("invalid selection for log target %q: %v", name, t.Selection)
+	}
+	return nil
 }
 
 func (d *LogTarget) Copy() *LogTarget {
@@ -113,6 +146,35 @@ type Service struct {
 	BackoffDelay   OptionalDuration         `yaml:"backoff-delay,omitempty"`
 	BackoffFactor  OptionalFloat            `yaml:"backoff-factor,omitempty"`
 	BackoffLimit   OptionalDuration         `yaml:"backoff-limit,omitempty"`
+}
+
+// buildLogTargets converts a service's log targets list and converts it into the actual targets
+// that should receive logs from the service - accounting for all available targets and their
+// associated selection criteria (e.g. opt-in, opt-out, disabled).
+func (s *Service) buildLogTargets(targetSelections map[string]string) {
+	selected := []string{}
+	if len(s.LogTargets) == 0 {
+		for name, selection := range targetSelections {
+			switch selection {
+			case logSelectionOptIn, logSelectionDisable: // skip
+			case logSelectionOptOut:
+				selected = append(selected, name)
+			default:
+				panic("selection information missing for log target")
+			}
+		}
+	} else {
+		for name, selection := range targetSelections {
+			switch selection {
+			case logSelectionDisable: // skip
+			case logSelectionOptOut, logSelectionOptIn:
+				selected = append(selected, name)
+			default:
+				panic("selection information missing for log target")
+			}
+		}
+	}
+	s.LogTargets = selected
 }
 
 // Copy returns a deep copy of the service.
@@ -562,6 +624,11 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 			service.BackoffLimit.Value = defaultBackoffLimit
 		}
 
+		logSelections := map[string]string{}
+		for name, target := range combined.LogTargets {
+			logSelections[name] = target.Selection
+		}
+		service.buildLogTargets(logSelections)
 	}
 
 	for name, check := range combined.Checks {
@@ -636,6 +703,12 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 			return nil, &FormatError{
 				Message: fmt.Sprintf(`plan must specify one of "http", "tcp", or "exec" for check %q`, name),
 			}
+		}
+	}
+
+	for name, target := range combined.LogTargets {
+		if err := target.Prepare(name); err != nil {
+			return nil, &FormatError{Message: err.Error()}
 		}
 	}
 
