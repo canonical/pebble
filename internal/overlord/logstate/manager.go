@@ -8,9 +8,18 @@ import (
 	"github.com/canonical/pebble/internal/plan"
 )
 
+const (
+	logSelectionOptOut  = "opt-out"
+	logSelectionOptIn   = "opt-in"
+	logSelectionDisable = "disable"
+)
+
 type LogManager struct {
-	mutex            sync.Mutex
-	targets          map[string]*LogTarget
+	mutex   sync.Mutex
+	targets map[string]*LogTarget
+	// targetSelection maps log target names to selection criteria.
+	targetSelection map[string]string
+	// targetsByService maps service name to the list of targets to receive its logs.
 	targetsByService map[string][]*LogTarget
 }
 
@@ -48,15 +57,24 @@ func (m *LogManager) PlanChanged(p *plan.Plan) {
 		var err error
 		switch target.Type {
 		case "loki":
-			b, err = NewLokiBackend(target.Address)
+			b, err = NewLokiBackend(target.Location)
 		case "syslog":
-			b, err = NewSyslogBackend(target.Address)
+			b, err = NewSyslogBackend(target.Location)
 		default:
 			logger.Noticef("unsupported logging target type: %v", target.Type)
 			continue
 		}
 		if err != nil {
 			logger.Noticef("invalid config for log target %q: %v", name, err)
+			continue
+		}
+		switch target.Selection {
+		case "":
+			m.targetSelection[name] = logSelectionOptOut
+		case logSelectionOptIn, logSelectionOptOut, logSelectionDisable:
+			m.targetSelection[name] = target.Selection
+		default:
+			logger.Noticef("invalid selection for log target %q: %v", name, target.Selection)
 			continue
 		}
 
@@ -66,6 +84,7 @@ func (m *LogManager) PlanChanged(p *plan.Plan) {
 		} else {
 			m.targets[name] = NewLogTarget(name, b)
 		}
+
 	}
 
 	// update each service's targets
@@ -73,14 +92,20 @@ func (m *LogManager) PlanChanged(p *plan.Plan) {
 	for name, service := range p.Services {
 		m.targetsByService[name] = make([]*LogTarget, 0)
 		if len(service.LogTargets) == 0 {
-			// by default forward service's logs to all targets
-			for _, target := range m.targets {
-				m.targetsByService[name] = append(m.targetsByService[name], target)
+			for targetName, target := range m.targets {
+				switch m.targetSelection[targetName] {
+				case logSelectionOptIn, logSelectionDisable: // skip
+				case logSelectionOptOut:
+					m.targetsByService[name] = append(m.targetsByService[name], target)
+				}
 			}
 		} else {
-			// only forward to explicitly named targets
 			for _, targetName := range service.LogTargets {
-				m.targetsByService[name] = append(m.targetsByService[name], m.targets[targetName])
+				switch m.targetSelection[targetName] {
+				case logSelectionDisable: // skip
+				case logSelectionOptOut, logSelectionOptIn:
+					m.targetsByService[name] = append(m.targetsByService[name], m.targets[targetName])
+				}
 			}
 		}
 	}
