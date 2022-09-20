@@ -9,78 +9,78 @@ import (
 )
 
 type LogManager struct {
-	mutex                 sync.Mutex
-	destinations          map[string]*LogDestination
-	destinationsByService map[string][]*LogDestination
+	mutex            sync.Mutex
+	targets          map[string]*LogTarget
+	targetsByService map[string][]*LogTarget
 }
 
 func NewLogManager() *LogManager {
 	return &LogManager{
-		destinations:          make(map[string]*LogDestination),
-		destinationsByService: make(map[string][]*LogDestination),
+		targets:          make(map[string]*LogTarget),
+		targetsByService: make(map[string][]*LogTarget),
 	}
 }
 
-func (m *LogManager) GetDestinations(serviceName string) ([]*LogDestination, error) {
+func (m *LogManager) GetTargets(serviceName string) ([]*LogTarget, error) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
-	dests, ok := m.destinationsByService[serviceName]
+	targets, ok := m.targetsByService[serviceName]
 	if !ok {
-		return nil, fmt.Errorf("no known logging destinations for service %q", serviceName)
+		return nil, fmt.Errorf("no known logging targets for service %q", serviceName)
 	}
-	return dests, nil
+	return targets, nil
 }
 
 // PlanChanged handles updates to the plan (server configuration),
 // stopping the previous checks and starting the new ones as required.
 func (m *LogManager) PlanChanged(p *plan.Plan) {
-	if len(p.LogDestinations) == 0 {
+	if len(p.LogTargets) == 0 {
 		return
 	}
 
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
-	// update destinations
-	for name, dest := range p.LogDestinations {
+	// update targets
+	for name, target := range p.LogTargets {
 		var b LogBackend
 		var err error
-		switch dest.Type {
+		switch target.Type {
 		case "loki":
-			b, err = NewLokiBackend(dest.Address)
+			b, err = NewLokiBackend(target.Address)
 		case "syslog":
-			b, err = NewSyslogBackend(dest.Address)
+			b, err = NewSyslogBackend(target.Address)
 		default:
-			logger.Noticef("unsupported logging destination type: %v", dest.Type)
+			logger.Noticef("unsupported logging target type: %v", target.Type)
 			continue
 		}
 		if err != nil {
-			logger.Noticef("invalid config for log destination %q: %v", name, err)
+			logger.Noticef("invalid config for log target %q: %v", name, err)
 			continue
 		}
 
-		orig, ok := m.destinations[name]
+		orig, ok := m.targets[name]
 		if ok {
 			orig.SetBackend(b)
 		} else {
-			m.destinations[name] = NewLogDestination(name, b)
+			m.targets[name] = NewLogTarget(name, b)
 		}
 	}
 
-	// update each service's destinations
+	// update each service's targets
 	// TODO: update this with the appropriate config we settle on for defaults, explicit, all, etc.
 	for name, service := range p.Services {
-		m.destinationsByService[name] = make([]*LogDestination, 0)
-		if len(service.LogDestinations) == 0 {
-			// by default forward service's logs to all destinations
-			for _, dest := range m.destinations {
-				m.destinationsByService[name] = append(m.destinationsByService[name], dest)
+		m.targetsByService[name] = make([]*LogTarget, 0)
+		if len(service.LogTargets) == 0 {
+			// by default forward service's logs to all targets
+			for _, target := range m.targets {
+				m.targetsByService[name] = append(m.targetsByService[name], target)
 			}
 		} else {
-			// only forward to explicitly named destinations
-			for _, destName := range service.LogDestinations {
-				m.destinationsByService[name] = append(m.destinationsByService[name], m.destinations[destName])
+			// only forward to explicitly named targets
+			for _, targetName := range service.LogTargets {
+				m.targetsByService[name] = append(m.targetsByService[name], m.targets[targetName])
 			}
 		}
 	}

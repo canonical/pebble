@@ -378,7 +378,7 @@ func (s *serviceData) startInternal() error {
 	// set up output logging for the command
 	serviceName := s.config.Name
 	logWriter := servicelog.NewFormatWriter(s.logs, serviceName)
-	forwarder := logstate.NewLogForwarder(s.manager.logMgr.GetDestinations, serviceName)
+	forwarder := logstate.NewLogForwarder(s.manager.logMgr.GetTargets, serviceName)
 	outputWriter := io.MultiWriter(logWriter, forwarder)
 	s.cmd.Stdout = outputWriter
 	s.cmd.Stderr = outputWriter

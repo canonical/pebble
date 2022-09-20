@@ -44,70 +44,39 @@ const (
 )
 
 type Plan struct {
-	Layers          []*Layer                   `yaml:"-"`
-	Services        map[string]*Service        `yaml:"services,omitempty"`
-	Checks          map[string]*Check          `yaml:"checks,omitempty"`
-	LogDestinations map[string]*LogDestination `yaml:"log-destinations,omitempty"`
+	Layers     []*Layer              `yaml:"-"`
+	Services   map[string]*Service   `yaml:"services,omitempty"`
+	Checks     map[string]*Check     `yaml:"checks,omitempty"`
+	LogTargets map[string]*LogTarget `yaml:"log-targets,omitempty"`
 }
 
 type Layer struct {
-	Order           int                        `yaml:"-"`
-	Label           string                     `yaml:"-"`
-	Summary         string                     `yaml:"summary,omitempty"`
-	Description     string                     `yaml:"description,omitempty"`
-	Services        map[string]*Service        `yaml:"services,omitempty"`
-	Checks          map[string]*Check          `yaml:"checks,omitempty"`
-	LogDestinations map[string]*LogDestination `yaml:"log-destinations,omitempty"`
+	Order       int                   `yaml:"-"`
+	Label       string                `yaml:"-"`
+	Summary     string                `yaml:"summary,omitempty"`
+	Description string                `yaml:"description,omitempty"`
+	Services    map[string]*Service   `yaml:"services,omitempty"`
+	Checks      map[string]*Check     `yaml:"checks,omitempty"`
+	LogTargets  map[string]*LogTarget `yaml:"log-targets,omitempty"`
 }
 
-type LogDestination struct {
-	Type     string            `yaml:"type"`
-	Address  string            `yaml:"address"`
-	Override Override          `yaml:"override,omitempty"`
-	TLS      *LoggingTLSConfig `yaml:"tls,omitempty"`
+type LogTarget struct {
+	Type     string   `yaml:"type"`
+	Address  string   `yaml:"address"`
+	Override Override `yaml:"override,omitempty"`
 }
 
-func (d *LogDestination) Copy() *LogDestination {
+func (d *LogTarget) Copy() *LogTarget {
 	copied := *d
-	if d.TLS != nil {
-		tls := *d.TLS
-		copied.TLS = &tls
-	}
 	return &copied
 }
 
-func (d *LogDestination) Merge(other *LogDestination) {
+func (d *LogTarget) Merge(other *LogTarget) {
 	if other.Type != "" {
 		d.Type = other.Type
 	}
 	if other.Address != "" {
 		d.Address = other.Address
-	}
-
-	if d.TLS != nil {
-		d.TLS.Merge(other.TLS)
-	} else {
-		tls := *other.TLS
-		d.TLS = &tls
-	}
-
-}
-
-type LoggingTLSConfig struct {
-	CAfile              string `yaml:"ca_file"`
-	DestinationCertFile string `yaml:"destination_cert_file"`
-	PebbleCertFile      string `yaml:"pebble_cert_file"`
-}
-
-func (c *LoggingTLSConfig) Merge(other *LoggingTLSConfig) {
-	if other.CAfile != "" {
-		c.CAfile = other.CAfile
-	}
-	if other.DestinationCertFile != "" {
-		c.DestinationCertFile = other.DestinationCertFile
-	}
-	if other.PebbleCertFile != "" {
-		c.PebbleCertFile = other.PebbleCertFile
 	}
 }
 
@@ -120,7 +89,7 @@ type Service struct {
 	Override    Override       `yaml:"override,omitempty"`
 	Command     string         `yaml:"command,omitempty"`
 
-	LogDestinations []string `yaml:"log-destinations,omitempty"`
+	LogTargets []string `yaml:"log-targets,omitempty"`
 
 	// Service dependencies
 	After    []string `yaml:"after,omitempty"`
@@ -149,7 +118,7 @@ func (s *Service) Copy() *Service {
 	copied.After = append([]string(nil), s.After...)
 	copied.Before = append([]string(nil), s.Before...)
 	copied.Requires = append([]string(nil), s.Requires...)
-	copied.LogDestinations = append([]string(nil), s.LogDestinations...)
+	copied.LogTargets = append([]string(nil), s.LogTargets...)
 	if s.Environment != nil {
 		copied.Environment = make(map[string]string)
 		for k, v := range s.Environment {
@@ -471,9 +440,9 @@ func (e *FormatError) Error() string {
 // layers overriding earlier ones.
 func CombineLayers(layers ...*Layer) (*Layer, error) {
 	combined := &Layer{
-		Services:        make(map[string]*Service),
-		Checks:          make(map[string]*Check),
-		LogDestinations: make(map[string]*LogDestination),
+		Services:   make(map[string]*Service),
+		Checks:     make(map[string]*Check),
+		LogTargets: make(map[string]*LogTarget),
 	}
 	if len(layers) == 0 {
 		return combined, nil
@@ -532,26 +501,26 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 			}
 		}
 
-		for name, dest := range layer.LogDestinations {
-			switch dest.Override {
+		for name, target := range layer.LogTargets {
+			switch target.Override {
 			case MergeOverride:
-				if old, ok := combined.LogDestinations[name]; ok {
+				if old, ok := combined.LogTargets[name]; ok {
 					copied := old.Copy()
-					copied.Merge(dest)
-					combined.LogDestinations[name] = copied
+					copied.Merge(target)
+					combined.LogTargets[name] = copied
 					break
 				}
 				fallthrough
 			case ReplaceOverride:
-				combined.LogDestinations[name] = dest.Copy()
+				combined.LogTargets[name] = target.Copy()
 			case UnknownOverride:
 				return nil, &FormatError{
-					Message: fmt.Sprintf(`layer %q must define "override" for log destination %q`,
+					Message: fmt.Sprintf(`layer %q must define "override" for log target %q`,
 						layer.Label, name),
 				}
 			default:
 				return nil, &FormatError{
-					Message: fmt.Sprintf(`layer %q has invalid "override" value for log destination %q`,
+					Message: fmt.Sprintf(`layer %q has invalid "override" value for log target %q`,
 						layer.Label, name),
 				}
 			}

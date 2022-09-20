@@ -127,11 +127,11 @@ func (b *testBackend) Send(m *LogMessage) error {
 
 func TestLogForwarder(t *testing.T) {
 	backend := newTestBackend(nil)
-	dest := NewLogDestination("testdest", backend)
-	defer dest.Close()
-	destsFunc := func(string) ([]*LogDestination, error) { return []*LogDestination{dest}, nil }
+	tgt := NewLogTarget("test-target", backend)
+	defer tgt.Close()
+	tgtFunc := func(string) ([]*LogTarget, error) { return []*LogTarget{tgt}, nil }
 	serviceName := "foo"
-	fwd := NewLogForwarder(destsFunc, serviceName)
+	fwd := NewLogForwarder(tgtFunc, serviceName)
 
 	text := "hello"
 	_, err := io.WriteString(fwd, text)
@@ -156,6 +156,6 @@ func TestLogForwarder(t *testing.T) {
 	}
 }
 
-func TestLogDestination(t *testing.T) {
+func TestLogTarget(t *testing.T) {
 
 }

@@ -10,8 +10,8 @@ import (
 )
 
 // SyslogBackend takes writes and formats them according to RFC5424.  The formatted syslog messages
-// are then forwarded to the specified underlying destination io.Writer.  SyslogWriter is safe for
-// concurrent writes and use.
+// are then forwarded to the underlying syslog server.  SyslogWriter is safe for concurrent writes
+// and use.
 type SyslogBackend struct {
 	version        int
 	host           string
