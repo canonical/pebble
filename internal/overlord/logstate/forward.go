@@ -12,7 +12,7 @@ var maxLogBytes int = 100 * 1024
 
 const canonicalPrivEnterpriseNum = 28978
 
-// LogBackend defines an interface to facilitate support for different log destination "types"
+// LogBackend defines an interface to facilitate support for different log target "types"
 // (e.g. syslog, loki, etc.).
 type LogBackend interface {
 	Send(*LogMessage) error
@@ -32,19 +32,19 @@ func (l *LogMessage) Size() int {
 	return len(l.Message)
 }
 
-type DestsFunc func(service string) ([]*LogDestination, error)
+type TargetsFunc func(service string) ([]*LogTarget, error)
 
 // LogForwarder is a simple writer that is used to intercept (stdout+stderr) output from running services
 // and annotate it with relevant metadata (e.g. service name) before conveying it to the
-// appropriate log destinations for the service.
-// log destination.
+// appropriate log target for the service.
+// log target.
 type LogForwarder struct {
-	service   string
-	destsFunc DestsFunc
+	service     string
+	targetsFunc TargetsFunc
 }
 
-func NewLogForwarder(destsFunc DestsFunc, service string) *LogForwarder {
-	return &LogForwarder{service: service, destsFunc: destsFunc}
+func NewLogForwarder(targetsFunc TargetsFunc, service string) *LogForwarder {
+	return &LogForwarder{service: service, targetsFunc: targetsFunc}
 }
 
 func (l *LogForwarder) Write(p []byte) (int, error) {
@@ -52,29 +52,29 @@ func (l *LogForwarder) Write(p []byte) (int, error) {
 	// TODO: should we sync this timestamp with the one that goes to pebble's service log buffer?
 	// If so, how?
 	msg := &LogMessage{Message: data, Service: l.service, Timestamp: time.Now()}
-	dests, err := l.destsFunc(l.service)
+	targets, err := l.targetsFunc(l.service)
 	if err != nil {
 		return 0, fmt.Errorf("failed to forward log message: %v", err)
 	}
 
-	for _, dest := range dests {
-		if err := dest.Send(msg); err != nil {
-			logger.Noticef("failed to transmit service %q logs to destination %q: %v", l.service, dest.Name(), err)
+	for _, target := range targets {
+		if err := target.Send(msg); err != nil {
+			logger.Noticef("failed to transmit service %q logs to target %q: %v", l.service, target.Name(), err)
 			continue
 		}
 	}
 	return len(p), nil
 }
 
-// LogDestination manages fowarding log content to some destination.  It can be configured to send
-// logs to any sort of underlying destination (e.g. syslog, loki, etc.) by priming it with an
+// LogTarget manages fowarding log content to some destination.  It can be configured to send
+// logs to any kind of underlying target (e.g. syslog, loki, etc.) by priming it with an
 // appropriate backend.  Messages accumulate in a fixed-size internal buffer and are concurrently
 // pushed/sent to the underlying backend.  If the backend is unable to keep up and the buffer fills
-// up, logs are discarded incrementally as necessary in FIFO order.  LogDestination is safe to use
-// concurrently.  Close should be called when the destination will no longer be used to clean up
-// internal goroutines, etc.  LogDestination takes ownership of the backend it is initialized with
+// up, logs are discarded incrementally as necessary in FIFO order.  LogTarget is safe to use
+// concurrently.  Close should be called when the target will no longer be used to clean up
+// internal goroutines, etc.  LogTarget takes ownership of the backend it is initialized with
 // and will handle calling Close on it.
-type LogDestination struct {
+type LogTarget struct {
 	mu      sync.Mutex
 	name    string
 	buf     *LogBuffer
@@ -84,9 +84,9 @@ type LogDestination struct {
 	closed  bool
 }
 
-func NewLogDestination(name string, backend LogBackend) *LogDestination {
+func NewLogTarget(name string, backend LogBackend) *LogTarget {
 	buf := NewLogBuffer(maxLogBytes)
-	c := &LogDestination{
+	c := &LogTarget{
 		name:    name,
 		backend: backend,
 		buf:     buf,
@@ -99,12 +99,12 @@ func NewLogDestination(name string, backend LogBackend) *LogDestination {
 	return c
 }
 
-func (c *LogDestination) Name() string { return c.name }
+func (c *LogTarget) Name() string { return c.name }
 
 // SetBackend updates the backend to which log messages are sent.  This method is concurrency-safe.
-func (c *LogDestination) SetBackend(b LogBackend) error {
+func (c *LogTarget) SetBackend(b LogBackend) error {
 	if c.closed {
-		return fmt.Errorf("cannot modify a closed destination")
+		return fmt.Errorf("cannot modify a closed log target")
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -116,17 +116,17 @@ func (c *LogDestination) SetBackend(b LogBackend) error {
 }
 
 // Send conveys msg to the underlying backend.
-func (c *LogDestination) Send(msg *LogMessage) error {
+func (c *LogTarget) Send(msg *LogMessage) error {
 	if c.closed {
-		return fmt.Errorf("cannot send messages to a closed destination")
+		return fmt.Errorf("cannot send messages to a closed log target")
 	}
 	return c.buf.Put(msg)
 }
 
-// Close marks the destination as no longer available for use.  Further calls to Send will return
+// Close marks the target as no longer available for use.  Further calls to Send will return
 // an error.  Internal resources/goroutines will be cleaned up.  Any unsent buffered logs will
 // *not* be forwarded to the backend.
-func (c *LogDestination) Close() {
+func (c *LogTarget) Close() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.closed = true
@@ -134,7 +134,7 @@ func (c *LogDestination) Close() {
 	close(c.done)
 }
 
-func (c *LogDestination) run() {
+func (c *LogTarget) run() {
 	for {
 		select {
 		case <-c.notify:
@@ -142,7 +142,7 @@ func (c *LogDestination) run() {
 				c.mu.Lock()
 				err := c.backend.Send(msg)
 				if err != nil {
-					logger.Noticef("destination error: %v", err)
+					logger.Noticef("log target error: %v", err)
 				}
 				c.mu.Unlock()
 			}

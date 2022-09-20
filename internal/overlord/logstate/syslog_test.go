@@ -15,55 +15,41 @@ import (
 )
 
 func TestSyslogBackend(t *testing.T) {
-	tests := []struct {
-		name  string
-		input string
-		pid   int
-		want  string
-	}{
-		{
-			name:  "basic",
-			input: "hello",
-			want:  "48 <14>1 0001-01-01T00:00:00Z - testapp - - - hello",
-		},
+	input := "hello"
+	want := "48 <14>1 0001-01-01T00:00:00Z - testapp - - - hello"
+
+	w, err := NewSyslogBackend("localhost:424242")
+	if err != nil {
+		t.Fatal(err)
 	}
 
-	for i, test := range tests {
-		t.Run(fmt.Sprintf("case %v (%v)", i+1, test.name), func(t *testing.T) {
-			w, err := NewSyslogBackend("localhost:424242")
-			if err != nil {
-				t.Fatal(err)
-			}
+	// mock the internal net.Conn
+	client, server := net.Pipe()
+	w.conn = client
 
-			// mock the internal net.Conn
-			client, server := net.Pipe()
-			w.conn = client
+	go func() {
+		err := w.Send(&LogMessage{Service: "testapp", Message: []byte(input), Timestamp: time.Time{}})
+		if err != nil {
+			t.Errorf("send failed: %v", err)
+			return
+		}
+		client.Close()
+	}()
 
-			go func() {
-				err := w.Send(&LogMessage{Service: "testapp", Message: []byte(test.input), Timestamp: time.Time{}})
-				if err != nil {
-					t.Errorf("send failed: %v", err)
-					return
-				}
-				client.Close()
-			}()
+	data, err := ioutil.ReadAll(server)
+	if err != io.EOF && err != nil {
+		t.Errorf("read error: %v", err)
+	}
 
-			data, err := ioutil.ReadAll(server)
-			if err != io.EOF && err != nil {
-				t.Errorf("read error: %v", err)
-			}
-
-			if got := string(data); got != test.want {
-				t.Errorf("wrong output:\nwant %q\ngot  %q", test.want, got)
-			}
-		})
+	if got := string(data); got != want {
+		t.Errorf("wrong output:\nwant %q\ngot  %q", want, got)
 	}
 }
 
 // If inputs is nil, a single sample write is generated. If wantMsgs is nil, expect each message in
 // inputs to be transmitted unscathed.  If wantMsgs is not nil, it the test checks that each
 // message in wantMsgs is transmitted by the backend in sequence.
-func testBackend(config servConfig, inputs, wantMsgs []string) func(t *testing.T) {
+func syslogTestBackend(config servConfig, inputs, wantMsgs []string) func(t *testing.T) {
 	return func(t *testing.T) {
 		errs := make(chan error, 20)
 		// make sure this is synchronous (i.e. blocks) so that we can control the rate at which the
@@ -80,10 +66,10 @@ func testBackend(config servConfig, inputs, wantMsgs []string) func(t *testing.T
 		if err != nil {
 			t.Fatal(err)
 		}
-		dest := NewLogDestination("testdest", backend)
-		defer dest.Close()
-		destsFunc := func(string) ([]*LogDestination, error) { return []*LogDestination{dest}, nil }
-		forwarder := NewLogForwarder(destsFunc, "testservice")
+		target := NewLogTarget("test-target", backend)
+		defer target.Close()
+		targetsFunc := func(string) ([]*LogTarget, error) { return []*LogTarget{target}, nil }
+		forwarder := NewLogForwarder(targetsFunc, "testservice")
 
 		if len(inputs) == 0 {
 			inputs = []string{"hello"}
@@ -113,21 +99,21 @@ func testBackend(config servConfig, inputs, wantMsgs []string) func(t *testing.T
 	}
 }
 
-func TestSyslogBackend(t *testing.T) {
-	t.Run("tcp", testBackend(servConfig{protocol: "tcp"}, nil, nil))
-	t.Run("udp", testBackend(servConfig{protocol: "udp"}, nil, nil))
-	t.Run("multiple-writes", testBackend(servConfig{protocol: "tcp"}, []string{"hello", "world"}, nil))
+func TestSyslogBackend_protocols(t *testing.T) {
+	t.Run("tcp", syslogTestBackend(servConfig{protocol: "tcp"}, nil, nil))
+	t.Run("udp", syslogTestBackend(servConfig{protocol: "udp"}, nil, nil))
+	t.Run("multiple-writes", syslogTestBackend(servConfig{protocol: "tcp"}, []string{"hello", "world"}, nil))
 
 	tmp := maxLogBytes
 	maxLogBytes = 10
 	defer func() { maxLogBytes = tmp }()
 	msgs := []string{"hello ", "world "}
 	want := msgs[1:]
-	t.Run("buffer-wrap", testBackend(servConfig{protocol: "tcp"}, msgs, want))
+	t.Run("buffer-wrap", syslogTestBackend(servConfig{protocol: "tcp"}, msgs, want))
 }
 
 func TestRoundTrip(t *testing.T) {
-	// TODO: test full integration from layer configuration to syslog destination server message receipt
+	// TODO: test full integration from layer configuration to syslog targetination server message receipt
 }
 
 func TestSyslogBackend_reconnect(t *testing.T) {
@@ -144,11 +130,11 @@ func TestSyslogBackend_reconnect(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	dest := NewLogDestination("testdest", backend)
-	defer dest.Close()
+	target := NewLogTarget("testtarget", backend)
+	defer target.Close()
 
-	destsFunc := func(string) ([]*LogDestination, error) { return []*LogDestination{dest}, nil }
-	forwarder := NewLogForwarder(destsFunc, "testservice")
+	targetsFunc := func(string) ([]*LogTarget, error) { return []*LogTarget{target}, nil }
+	forwarder := NewLogForwarder(targetsFunc, "testservice")
 
 	// write initial data, send to server
 	_, err = io.WriteString(forwarder, "test1")
@@ -188,13 +174,13 @@ func TestSyslogBackend_reconnect(t *testing.T) {
 		<-errs
 	}
 
-	// start a new server and redirect the dest to it
+	// start a new server and redirect the target to it
 	addr2, closer2, wg2 := startTestServer(t, config, crash, msgs, errs)
 	backend, err = NewSyslogBackend(addr2)
 	if err != nil {
 		t.Fatal(err)
 	}
-	dest.SetBackend(backend)
+	target.SetBackend(backend)
 
 	defer wg2.Wait()
 	defer closer2.Close()
