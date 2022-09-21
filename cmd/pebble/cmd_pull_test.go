@@ -75,7 +75,7 @@ func (s *PebbleSuite) TestPull(c *C) {
 	rest, err := pebble.Parser(pebble.Client()).ParseArgs(args)
 	c.Assert(err, IsNil)
 	c.Assert(rest, HasLen, 0)
-	c.Check(s.Stdout(), Matches, "(?s)Transferred +13B in .*s\n$")
+	c.Check(s.Stdout(), Equals, "")
 	c.Check(s.Stderr(), Equals, "")
 
 	f, err := os.Open(filePath)

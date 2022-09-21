@@ -17,12 +17,11 @@ package main
 import (
 	"fmt"
 	"os"
-	"time"
 
 	"github.com/jessevdk/go-flags"
 
 	"github.com/canonical/pebble/client"
-	"github.com/canonical/pebble/internal/strutil/quantity"
+	"github.com/canonical/pebble/internal/logger"
 )
 
 type cmdPull struct {
@@ -50,27 +49,17 @@ func (cmd *cmdPull) Execute(args []string) error {
 	}
 	defer f.Close()
 
-	t := time.Now()
 	err = cmd.client.Pull(&client.PullOptions{
-		Path: cmd.Positional.RemotePath,
-		Dest: f,
+		Path:   cmd.Positional.RemotePath,
+		Target: f,
 	})
 	if err != nil {
 		// Discard file (we could have written data to it)
-		if err1 := os.Remove(f.Name()); err1 != nil {
-			return fmt.Errorf("cannot discard pulled file: %w", err1)
+		if err := os.Remove(f.Name()); err != nil {
+			logger.Noticef("Cannot discard pulled file: %s", err)
 		}
 		return err
 	}
-
-	st, err := f.Stat()
-	if err != nil {
-		return fmt.Errorf("cannot retrieve file info: %w", err)
-	}
-
-	size := quantity.FormatAmount(uint64(st.Size()), -1)
-	duration := quantity.FormatDuration(time.Since(t).Seconds())
-	fmt.Fprintf(Stdout, "Transferred %sB in %s\n", size, duration)
 
 	return nil
 }

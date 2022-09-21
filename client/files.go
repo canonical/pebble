@@ -31,19 +31,13 @@ type PullOptions struct {
 	// (required).
 	Path string
 
-	// Dest is the destination io.Writer that will receive the data (required).
-	Dest io.Writer
+	// Target is the destination io.Writer that will receive the data (required).
+	Target io.Writer
 }
 
 type fileResult struct {
-	Path  string       `json:"path"`
-	Error *errorResult `json:"error,omitempty"`
-}
-
-type errorResult struct {
-	Message string      `json:"message"`
-	Kind    string      `json:"kind,omitempty"`
-	Value   interface{} `json:"value,omitempty"`
+	Path  string `json:"path"`
+	Error *Error `json:"error,omitempty"`
 }
 
 // Pull retrieves a file from the remote system.
@@ -86,7 +80,7 @@ func (client *Client) Pull(opts *PullOptions) error {
 		defer part.Close()
 
 		if part.FormName() == "files" {
-			if _, err = io.Copy(opts.Dest, part); err != nil {
+			if _, err = io.Copy(opts.Target, part); err != nil {
 				return fmt.Errorf("cannot write: %w", err)
 			}
 		} else if part.FormName() == "response" {

@@ -58,21 +58,21 @@ func (cs *clientSuite) TestPull(c *C) {
 	cs.rsp = srcBuf.String()
 
 	// Check response
-	var dstBuf bytes.Buffer
+	var targetBuf bytes.Buffer
 	err = cs.cli.Pull(&client.PullOptions{
-		Path: "/foo/bar.dat",
-		Dest: &dstBuf,
+		Path:   "/foo/bar.dat",
+		Target: &targetBuf,
 	})
 	c.Assert(err, IsNil)
-	c.Check(dstBuf.String(), Equals, "Hello, world!")
+	c.Check(targetBuf.String(), Equals, "Hello, world!")
 }
 
 func (cs *clientSuite) TestPullFailsWithNoContentType(c *C) {
 	// Check response
-	var dstBuf bytes.Buffer
+	var targetBuf bytes.Buffer
 	err := cs.cli.Pull(&client.PullOptions{
-		Path: "/foo/bar.dat",
-		Dest: &dstBuf,
+		Path:   "/foo/bar.dat",
+		Target: &targetBuf,
 	})
 	c.Assert(err, ErrorMatches, "invalid Content-Type: .*")
 }
@@ -83,10 +83,10 @@ func (cs *clientSuite) TestPullFailsWithNonMultipartResponse(c *C) {
 	cs.rsp = "Hello, world!"
 
 	// Check response
-	var dstBuf bytes.Buffer
+	var targetBuf bytes.Buffer
 	err := cs.cli.Pull(&client.PullOptions{
-		Path: "/foo/bar.dat",
-		Dest: &dstBuf,
+		Path:   "/foo/bar.dat",
+		Target: &targetBuf,
 	})
 	c.Assert(err, ErrorMatches, "expected a multipart response but didn't get one")
 }
@@ -97,10 +97,10 @@ func (cs *clientSuite) TestPullFailsWithInvalidMultipartResponse(c *C) {
 	cs.rsp = "Definitely not a multipart payload"
 
 	// Check response
-	var dstBuf bytes.Buffer
+	var targetBuf bytes.Buffer
 	err := cs.cli.Pull(&client.PullOptions{
-		Path: "/foo/bar.dat",
-		Dest: &dstBuf,
+		Path:   "/foo/bar.dat",
+		Target: &targetBuf,
 	})
 	c.Assert(err, ErrorMatches, "cannot decode multipart payload: .*")
 }
@@ -144,8 +144,8 @@ func (cs *clientSuite) TestPullFailsOnWrite(c *C) {
 	// Check response
 	var dest defectiveWriter
 	err = cs.cli.Pull(&client.PullOptions{
-		Path: "/foo/bar.dat",
-		Dest: &dest,
+		Path:   "/foo/bar.dat",
+		Target: &dest,
 	})
 	c.Assert(err, ErrorMatches, "cannot write: I always fail!")
 }
@@ -171,10 +171,10 @@ func (cs *clientSuite) TestPullFailsWithInvalidJSON(c *C) {
 	cs.rsp = srcBuf.String()
 
 	// Check response
-	var dstBuf bytes.Buffer
+	var targetBuf bytes.Buffer
 	err = cs.cli.Pull(&client.PullOptions{
-		Path: "/foo/bar.dat",
-		Dest: &dstBuf,
+		Path:   "/foo/bar.dat",
+		Target: &targetBuf,
 	})
 	c.Assert(err, ErrorMatches, "cannot decode response: .*")
 }
