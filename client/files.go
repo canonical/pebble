@@ -41,14 +41,8 @@ type removePathsItem struct {
 }
 
 type fileResult struct {
-	Path  string       `json:"path"`
-	Error *errorResult `json:"error,omitempty"`
-}
-
-type errorResult struct {
-	Message string      `json:"message"`
-	Kind    string      `json:"kind,omitempty"`
-	Value   interface{} `json:"value,omitempty"`
+	Path  string `json:"path"`
+	Error *Error `json:"error,omitempty"`
 }
 
 // RemovePath deletes a file or directory.

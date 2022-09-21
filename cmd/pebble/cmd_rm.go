@@ -23,7 +23,7 @@ import (
 type cmdRm struct {
 	clientMixin
 
-	Recursive bool `short:"r" long:"recursive"`
+	Recursive bool `short:"r"`
 
 	Positional struct {
 		Path string `positional-arg-name:"<path>"`
@@ -31,7 +31,7 @@ type cmdRm struct {
 }
 
 var rmDescs = map[string]string{
-	"recursive": "Remove all files and directories contained within the specified path.",
+	"r": "Remove all files and directories contained within the specified path.",
 }
 
 var shortRmHelp = "Remove a file or directory."
