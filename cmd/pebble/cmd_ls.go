@@ -33,7 +33,7 @@ type cmdLs struct {
 	clientMixin
 	timeMixin
 
-	Directory  bool `short:"d" long:"directory"`
+	Directory  bool `short:"d"`
 	LongFormat bool `short:"l"`
 
 	Positional struct {
@@ -42,8 +42,8 @@ type cmdLs struct {
 }
 
 var lsDescs = map[string]string{
-	"directory": `Display information about the file system entry, instead of listing directory contents.`,
-	"l":         `Display file system entries in a list format.`,
+	"d": `Display information about the file system entry, instead of listing directory contents.`,
+	"l": `Display file system entries in a list format.`,
 }
 
 var shortLsHelp = "List path contents"

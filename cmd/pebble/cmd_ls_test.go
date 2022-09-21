@@ -59,14 +59,6 @@ func (s *PebbleSuite) TestLsDirectory(c *C) {
 
 	c.Check(s.Stdout(), Equals, "/\n")
 	c.Check(s.Stderr(), Equals, "")
-	s.ResetStdStreams()
-
-	rest, err = pebble.Parser(pebble.Client()).ParseArgs([]string{"ls", "--directory", "/"})
-	c.Assert(err, IsNil)
-	c.Assert(rest, HasLen, 0)
-
-	c.Check(s.Stdout(), Equals, "/\n")
-	c.Check(s.Stderr(), Equals, "")
 }
 
 func (s *PebbleSuite) TestLsLongFormat(c *C) {
