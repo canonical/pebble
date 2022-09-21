@@ -72,7 +72,8 @@ func (s *PebbleSuite) TestPush(c *C) {
 		c.Assert(payload, DeepEquals, writeFilesPayload{
 			Action: "write",
 			Files: []writeFilesItem{{
-				Path: "/tmp/file.bin",
+				Path:        "/tmp/file.bin",
+				Permissions: "755",
 			}},
 		})
 
@@ -105,7 +106,7 @@ func (s *PebbleSuite) TestPush(c *C) {
 	rest, err := pebble.Parser(pebble.Client()).ParseArgs(args)
 	c.Assert(err, IsNil)
 	c.Assert(rest, HasLen, 0)
-	c.Check(s.Stdout(), Matches, "(?s)Transferred +13B in .*s\n$")
+	c.Check(s.Stdout(), Equals, "")
 	c.Check(s.Stderr(), Equals, "")
 }
 
@@ -154,7 +155,8 @@ func (s *PebbleSuite) TestPushAPIFails(c *C) {
 		c.Assert(payload, DeepEquals, writeFilesPayload{
 			Action: "write",
 			Files: []writeFilesItem{{
-				Path: "/tmp/file.bin",
+				Path:        "/tmp/file.bin",
+				Permissions: "600",
 			}},
 		})
 
@@ -196,7 +198,7 @@ func (s *PebbleSuite) TestPushAPIFails(c *C) {
 	err := ioutil.WriteFile(filePath, []byte("Hello, world!"), 0755)
 	c.Assert(err, IsNil)
 
-	args := []string{"push", filePath, "/tmp/file.bin"}
+	args := []string{"push", "-m", "600", filePath, "/tmp/file.bin"}
 	rest, err := pebble.Parser(pebble.Client()).ParseArgs(args)
 
 	clientErr, ok := err.(*client.Error)

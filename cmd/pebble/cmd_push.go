@@ -17,19 +17,17 @@ package main
 import (
 	"fmt"
 	"os"
-	"time"
 
 	"github.com/jessevdk/go-flags"
 
 	"github.com/canonical/pebble/client"
-	"github.com/canonical/pebble/internal/strutil/quantity"
 )
 
 type cmdPush struct {
 	clientMixin
 
-	MakeDirs    bool   `short:"p" long:"parents"`
-	Permissions string `short:"m" long:"mode"`
+	MakeDirs    bool   `short:"p"`
+	Permissions string `short:"m"`
 	UserID      *int   `long:"uid"`
 	User        string `long:"user"`
 	GroupID     *int   `long:"gid"`
@@ -42,12 +40,12 @@ type cmdPush struct {
 }
 
 var pushDescs = map[string]string{
-	"parents": "Create parent directories for this file.",
-	"mode":    "Set permissions for the file in the remote system (in octal format).",
-	"uid":     "Set owner user ID.",
-	"user":    "Set owner user name.",
-	"gid":     "Set owner group ID.",
-	"group":   "Set owner group name.",
+	"p":     "Create parent directories for this file.",
+	"m":     "Set permissions for the file in the remote system (in octal format).",
+	"uid":   "Set owner user ID.",
+	"user":  "Set owner user name.",
+	"gid":   "Set owner group ID.",
+	"group": "Set owner group name.",
 }
 
 var shortPushHelp = "Transfer a file to the remote system"
@@ -71,12 +69,18 @@ func (cmd *cmdPush) Execute(args []string) error {
 		return err
 	}
 
-	t := time.Now()
+	var permissions string
+	if cmd.Permissions != "" {
+		permissions = cmd.Permissions
+	} else {
+		permissions = fmt.Sprintf("%03o", st.Mode().Perm())
+	}
+
 	err = cmd.client.Push(&client.PushOptions{
 		Source:      f,
 		Path:        cmd.Positional.RemotePath,
 		MakeDirs:    cmd.MakeDirs,
-		Permissions: cmd.Permissions,
+		Permissions: permissions,
 		UserID:      cmd.UserID,
 		User:        cmd.User,
 		GroupID:     cmd.GroupID,
@@ -85,10 +89,6 @@ func (cmd *cmdPush) Execute(args []string) error {
 	if err != nil {
 		return err
 	}
-
-	size := quantity.FormatAmount(uint64(st.Size()), -1)
-	duration := quantity.FormatDuration(time.Since(t).Seconds())
-	fmt.Fprintf(Stdout, "Transferred %sB in %s\n", size, duration)
 
 	return nil
 }
