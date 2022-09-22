@@ -81,18 +81,18 @@ const (
 
 // serviceData holds the state and other data for a service under our control.
 type serviceData struct {
-	manager     *ServiceManager
-	state       serviceState
-	config      *plan.Service
-	logs        *servicelog.RingBuffer
-	started     chan error
-	stopped     chan error
-	cmd         *exec.Cmd
-	backoffNum  int
-	backoffTime time.Duration
-	resetTimer  *time.Timer
-	restarting  bool
-	startTime   time.Time
+	manager      *ServiceManager
+	state        serviceState
+	config       *plan.Service
+	logs         *servicelog.RingBuffer
+	started      chan error
+	stopped      chan error
+	cmd          *exec.Cmd
+	backoffNum   int
+	backoffTime  time.Duration
+	resetTimer   *time.Timer
+	restarting   bool
+	currentSince time.Time
 }
 
 func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
@@ -282,6 +282,13 @@ func (s *serviceData) transition(state serviceState) {
 
 // transitionRestarting changes the service's state and also sets the restarting flag.
 func (s *serviceData) transitionRestarting(state serviceState, restarting bool) {
+	// Update current-since time if derived status is changing.
+	oldStatus := stateToStatus(s.state)
+	newStatus := stateToStatus(state)
+	if oldStatus != newStatus {
+		s.currentSince = time.Now()
+	}
+
 	s.state = state
 	s.restarting = restarting
 }
@@ -366,7 +373,6 @@ func (s *serviceData) startInternal() error {
 		return fmt.Errorf("cannot start service: %w", err)
 	}
 	logger.Debugf("Service %q started with PID %d", serviceName, s.cmd.Process.Pid)
-	s.startTime = time.Now()
 	s.resetTimer = time.AfterFunc(s.config.BackoffLimit.Value, func() { logError(s.backoffResetElapsed()) })
 
 	// Start a goroutine to wait for the process to finish.
@@ -425,7 +431,6 @@ func (s *serviceData) exited(exitCode int) error {
 	s.manager.servicesLock.Lock()
 	defer s.manager.servicesLock.Unlock()
 
-	s.startTime = time.Time{}
 	if s.resetTimer != nil {
 		s.resetTimer.Stop()
 	}

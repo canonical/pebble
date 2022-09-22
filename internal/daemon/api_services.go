@@ -28,10 +28,10 @@ import (
 )
 
 type serviceInfo struct {
-	Name      string     `json:"name"`
-	Startup   string     `json:"startup"`
-	Current   string     `json:"current"`
-	StartTime *time.Time `json:"start-time,omitempty"` // pointer as omitempty doesn't work with time.Time directly
+	Name         string     `json:"name"`
+	Startup      string     `json:"startup"`
+	Current      string     `json:"current"`
+	CurrentSince *time.Time `json:"current-since,omitempty"` // pointer as omitempty doesn't work with time.Time directly
 }
 
 func v1GetServices(c *Command, r *http.Request, _ *userState) Response {
@@ -50,8 +50,8 @@ func v1GetServices(c *Command, r *http.Request, _ *userState) Response {
 			Startup: string(svc.Startup),
 			Current: string(svc.Current),
 		}
-		if !svc.StartTime.IsZero() {
-			info.StartTime = &svc.StartTime
+		if !svc.CurrentSince.IsZero() {
+			info.CurrentSince = &svc.CurrentSince
 		}
 		infos = append(infos, info)
 	}

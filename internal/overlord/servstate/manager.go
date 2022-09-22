@@ -235,11 +235,10 @@ func (m *ServiceManager) Ensure() error {
 }
 
 type ServiceInfo struct {
-	Name      string
-	Startup   ServiceStartup
-	Current   ServiceStatus
-	StartTime time.Time
-	Restarts  int
+	Name         string
+	Startup      ServiceStartup
+	Current      ServiceStatus
+	CurrentSince time.Time
 }
 
 type ServiceStartup string
@@ -290,18 +289,8 @@ func (m *ServiceManager) Services(names []string) ([]*ServiceInfo, error) {
 			info.Startup = StartupEnabled
 		}
 		if s, ok := m.services[name]; ok {
-			switch s.state {
-			case stateInitial, stateStarting, stateRunning:
-				info.Current = StatusActive
-			case stateTerminating, stateKilling, stateStopped:
-				// Already set to inactive above, but it's nice to be explicit for each state
-				info.Current = StatusInactive
-			case stateBackoff:
-				info.Current = StatusBackoff
-			default:
-				info.Current = StatusError
-			}
-			info.StartTime = s.startTime
+			info.Current = stateToStatus(s.state)
+			info.CurrentSince = s.currentSince
 		}
 		services = append(services, info)
 	}
@@ -309,6 +298,19 @@ func (m *ServiceManager) Services(names []string) ([]*ServiceInfo, error) {
 		return services[i].Name < services[j].Name
 	})
 	return services, nil
+}
+
+func stateToStatus(state serviceState) ServiceStatus {
+	switch state {
+	case stateStarting, stateRunning:
+		return StatusActive
+	case stateTerminating, stateKilling, stateStopped:
+		return StatusInactive
+	case stateBackoff:
+		return StatusBackoff
+	default: // stateInitial (should never happen) and stateExited
+		return StatusError
+	}
 }
 
 // DefaultServiceNames returns the name of the services set to start

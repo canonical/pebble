@@ -60,14 +60,14 @@ func (cmd *cmdServices) Execute(args []string) error {
 	w := tabWriter()
 	defer w.Flush()
 
-	fmt.Fprintln(w, "Service\tStartup\tCurrent\tStart Time")
+	fmt.Fprintln(w, "Service\tStartup\tCurrent\tSince")
 
 	for _, svc := range services {
-		startTime := "-"
-		if !svc.StartTime.IsZero() {
-			startTime = cmd.fmtTime(svc.StartTime)
+		since := "-"
+		if !svc.CurrentSince.IsZero() {
+			since = cmd.fmtTime(svc.CurrentSince)
 		}
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", svc.Name, svc.Startup, svc.Current, startTime)
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", svc.Name, svc.Startup, svc.Current, since)
 	}
 	return nil
 }
