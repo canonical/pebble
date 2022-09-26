@@ -26,9 +26,6 @@ import (
 	"github.com/canonical/pebble/internal/strutil/quantity"
 )
 
-// ErrPatternOutsideFileName is returned if a pattern is found anywhere but the file name of a path
-var ErrPatternOutsideFileName = errors.New("patterns can only be applied to file names, not directories")
-
 type cmdLs struct {
 	clientMixin
 	timeMixin
@@ -42,14 +39,14 @@ type cmdLs struct {
 }
 
 var lsDescs = map[string]string{
-	"d": `Display information about the file system entry, instead of listing directory contents.`,
-	"l": `Display file system entries in a list format.`,
+	"d": `List matching entries themselves, not directory contents`,
+	"l": `Use a long listing format`,
 }
 
 var shortLsHelp = "List path contents"
 var longLsHelp = `
-The ls command takes a path (a file, directory or glob) and obtains its
-contents.
+The ls command lists entries in the filesystem at the specified path. A glob pattern
+may be specified for the last path element.
 `
 
 func (cmd *cmdLs) Execute(args []string) error {
@@ -90,24 +87,21 @@ func (cmd *cmdLs) Execute(args []string) error {
 	return nil
 }
 
-func init() {
-	addCommand("ls", shortLsHelp, longLsHelp, func() flags.Commander { return &cmdLs{} }, merge(lsDescs, timeDescs), nil)
-}
-
-func parseGlob(path string) (parsedPath string, parsedPattern string, err error) {
+func parseGlob(path string) (parsedPath, parsedPattern string, err error) {
 	dir, file := pathpkg.Split(strings.TrimRight(path, "/"))
 
 	const patternCharacters = "*?["
 	if strings.ContainsAny(dir, patternCharacters) {
-		// Patterns can not be applied recursively, only on file names
-		return "", "", ErrPatternOutsideFileName
+		return "", "", errors.New("can only use globs on the last path element")
 	}
 
 	if strings.ContainsAny(file, patternCharacters) {
-		// File name contains a pattern
 		return dir, file, nil
 	}
 
-	// No patterns could be extracted
 	return path, "", nil
+}
+
+func init() {
+	addCommand("ls", shortLsHelp, longLsHelp, func() flags.Commander { return &cmdLs{} }, merge(lsDescs, timeDescs), nil)
 }

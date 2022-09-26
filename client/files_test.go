@@ -25,31 +25,28 @@ import (
 
 func (cs *clientSuite) TestListFiles(c *C) {
 	cs.rsp = `{
-  "type": "sync",
-  "status-code": 200,
-  "status": "OK",
-  "result": [
-    {
-      "path": "/bin",
-      "name": "bin",
-      "type": "symlink",
-      "permissions": "777",
-      "last-modified": "2022-04-21T03:02:51Z",
-      "user-id": 1000,
-      "user": "toor",
-      "group-id": 1000,
-      "group": "toor"
-    },
-    {
-      "path": "/swap.img",
-      "name": "swap.img",
-      "type": "file",
-      "size": 1337,
-      "permissions": "655",
-      "last-modified": "2022-04-21T03:02:51Z"
-    }
-  ]
-}`
+		"type": "sync",
+		"status-code": 200,
+		"status": "OK",
+		"result": [{
+			"path": "/bin",
+			"name": "bin",
+			"type": "symlink",
+			"permissions": "777",
+			"last-modified": "2022-04-21T03:02:51Z",
+			"user-id": 1000,
+			"user": "toor",
+			"group-id": 1000,
+			"group": "toor"
+		}, {
+			"path": "/swap.img",
+			"name": "swap.img",
+			"type": "file",
+			"size": 1337,
+			"permissions": "655",
+			"last-modified": "2022-04-21T03:02:51Z"
+		}]
+	}`
 	result, err := cs.cli.ListFiles(&client.ListFilesOptions{
 		Path: "/",
 	})
@@ -83,23 +80,21 @@ func (cs *clientSuite) TestListFiles(c *C) {
 
 func (cs *clientSuite) TestListDirectoryItself(c *C) {
 	cs.rsp = `{
-  "type": "sync",
-  "status-code": 200,
-  "status": "OK",
-  "result": [
-    {
-      "path": "/bin",
-      "name": "bin",
-      "type": "symlink",
-      "permissions": "777",
-      "last-modified": "2022-04-21T03:02:51Z",
-      "user-id": 1000,
-      "user": "user",
-      "group-id": 1000,
-      "group": "user"
-    }
-  ]
-}`
+		"type": "sync",
+		"status-code": 200,
+		"status": "OK",
+		"result": [{
+			"path": "/bin",
+			"name": "bin",
+			"type": "symlink",
+			"permissions": "777",
+			"last-modified": "2022-04-21T03:02:51Z",
+			"user-id": 1000,
+			"user": "user",
+			"group-id": 1000,
+			"group": "user"
+		}]
+	}`
 	result, err := cs.cli.ListFiles(&client.ListFilesOptions{
 		Path:   "/bin",
 		Itself: true,
@@ -121,23 +116,21 @@ func (cs *clientSuite) TestListDirectoryItself(c *C) {
 
 func (cs *clientSuite) TestListFilesWithPattern(c *C) {
 	cs.rsp = `{
-  "type": "sync",
-  "status-code": 200,
-  "status": "OK",
-  "result": [
-    {
-      "path": "/bin",
-      "name": "bin",
-      "type": "symlink",
-      "permissions": "777",
-      "last-modified": "2022-04-21T03:02:51Z",
-      "user-id": 1000,
-      "user": "user",
-      "group-id": 1000,
-      "group": "user"
-    }
-  ]
-}`
+		"type": "sync",
+		"status-code": 200,
+		"status": "OK",
+		"result": [{
+			"path": "/bin",
+			"name": "bin",
+			"type": "symlink",
+			"permissions": "777",
+			"last-modified": "2022-04-21T03:02:51Z",
+			"user-id": 1000,
+			"user": "user",
+			"group-id": 1000,
+			"group": "user"
+		}]
+	}`
 
 	result, err := cs.cli.ListFiles(&client.ListFilesOptions{
 		Path:    "/",
@@ -148,12 +141,7 @@ func (cs *clientSuite) TestListFilesWithPattern(c *C) {
 }
 
 func (cs *clientSuite) TestListFilesFails(c *C) {
-	cs.rsp = `{
-  "type": "error",
-  "result": {
-    "message": "could not foo"
-  }
-}`
+	cs.rsp = `{"type": "error", "result": {"message": "could not foo"}}`
 	_, err := cs.cli.ListFiles(&client.ListFilesOptions{
 		Path:   "/",
 		Itself: true,
@@ -163,52 +151,48 @@ func (cs *clientSuite) TestListFilesFails(c *C) {
 
 func (cs *clientSuite) TestListFilesFailsWithInvalidDate(c *C) {
 	cs.rsp = `{
-  "type": "sync",
-  "status-code": 200,
-  "status": "OK",
-  "result": [
-    {
-      "path": "/irreg",
-      "name": "irreg",
-      "type": "sfdeljknesv",
-      "permissions": "777",
-      "last-modified": "2022-08-32T12:42:49Z",
-      "user-id": 1000,
-      "user": "toor",
-      "group-id": 1000,
-      "group": "toor"
-	}
-  ]
-}`
+		"type": "sync",
+		"status-code": 200,
+		"status": "OK",
+		"result": [{
+			"path": "/irreg",
+			"name": "irreg",
+			"type": "sfdeljknesv",
+			"permissions": "777",
+			"last-modified": "2022-08-32T12:42:49Z",
+			"user-id": 1000,
+			"user": "toor",
+			"group-id": 1000,
+			"group": "toor"
+		}]
+	}`
 	_, err := cs.cli.ListFiles(&client.ListFilesOptions{
 		Path: "/irreg",
 	})
-	c.Assert(err, ErrorMatches, ".*day out of range")
+	c.Assert(err, ErrorMatches, `remote file "irreg" has invalid last modified time: "2022-08-32T12:42:49Z"`)
 }
 
 func (cs *clientSuite) TestListFilesFailsWithInvalidPermissions(c *C) {
 	cs.rsp = `{
-  "type": "sync",
-  "status-code": 200,
-  "status": "OK",
-  "result": [
-    {
-      "path": "/irreg",
-      "name": "irreg",
-      "type": "sfdeljknesv",
-      "permissions": "not a number",
-      "last-modified": "2022-08-32T12:42:49Z",
-      "user-id": 1000,
-      "user": "toor",
-      "group-id": 1000,
-      "group": "toor"
-	}
-  ]
-}`
+		"type": "sync",
+		"status-code": 200,
+		"status": "OK",
+		"result": [{
+			"path": "/irreg",
+			"name": "irreg",
+			"type": "sfdeljknesv",
+			"permissions": "not a number",
+			"last-modified": "2022-08-32T12:42:49Z",
+			"user-id": 1000,
+			"user": "toor",
+			"group-id": 1000,
+			"group": "toor"
+		}]
+	}`
 	_, err := cs.cli.ListFiles(&client.ListFilesOptions{
 		Path: "/irreg",
 	})
-	c.Assert(err, ErrorMatches, ".*invalid syntax")
+	c.Assert(err, ErrorMatches, `remote file "irreg" has invalid permission bits: "not a number"`)
 }
 
 func (cs *clientSuite) TestCalculateFileMode(c *C) {
@@ -236,6 +220,6 @@ func (cs *clientSuite) TestCalculateFileMode(c *C) {
 func (cs *clientSuite) TestCalculateFileModeFails(c *C) {
 	for _, p := range []string{"-1", "x", "778"} {
 		_, err := client.CalculateFileMode("file", p)
-		c.Check(err, ErrorMatches, ".*invalid syntax")
+		c.Check(err, ErrorMatches, `invalid permission bits: ".*"`)
 	}
 }

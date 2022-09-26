@@ -15,6 +15,7 @@
 package client
 
 import (
+	"fmt"
 	"net/url"
 	"os"
 	"strconv"
@@ -151,7 +152,7 @@ type fileInfoResult struct {
 func calculateFileMode(fileType string, permissions string) (mode os.FileMode, err error) {
 	p, err := strconv.ParseUint(permissions, 8, 32)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("invalid permission bits: %q", permissions)
 	}
 
 	mode = os.FileMode(p) & os.ModePerm
@@ -179,12 +180,12 @@ func resultToFileInfo(result fileInfoResult) (*FileInfo, error) {
 
 	mode, err := calculateFileMode(result.Type, result.Permissions)
 	if err != nil {
-		return fi, err
+		return nil, fmt.Errorf("remote file %q has invalid permission bits: %q", result.Name, result.Permissions)
 	}
 
 	fi.modTime, err = time.Parse(time.RFC3339, result.LastModified)
 	if err != nil {
-		return fi, err
+		return nil, fmt.Errorf("remote file %q has invalid last modified time: %q", result.Name, result.LastModified)
 	}
 
 	if result.Size != nil {

@@ -137,7 +137,7 @@ func (s *PebbleSuite) TestLsPattern(c *C) {
 
 func (s *PebbleSuite) TestLsInvalidPattern(c *C) {
 	rest, err := pebble.Parser(pebble.Client()).ParseArgs([]string{"ls", "/foo/ba[rz]/fail"})
-	c.Assert(err, Equals, pebble.ErrPatternOutsideFileName)
+	c.Assert(err, ErrorMatches, "can only use globs on the last path element")
 	c.Assert(rest, HasLen, 1)
 	c.Check(s.Stdout(), Equals, "")
 	c.Check(s.Stderr(), Equals, "")
