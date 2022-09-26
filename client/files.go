@@ -69,20 +69,11 @@ type makeDirsItem struct {
 }
 
 type fileResult struct {
-	Path  string       `json:"path"`
-	Error *errorResult `json:"error,omitempty"`
-}
-
-type errorResult struct {
-	Message string      `json:"message"`
-	Kind    string      `json:"kind,omitempty"`
-	Value   interface{} `json:"value,omitempty"`
+	Path  string `json:"path"`
+	Error *Error `json:"error,omitempty"`
 }
 
 // MakeDir creates a directory or directory tree.
-// The error returned is a *Error if the request went through successfully
-// but there was an OS-level error creating the directory, with the Kind
-// field set to the specific error kind, for example "permission-denied".
 func (client *Client) MakeDir(opts *MakeDirOptions) error {
 	var permissions string
 	if opts.Permissions != 0 {
@@ -105,23 +96,21 @@ func (client *Client) MakeDir(opts *MakeDirOptions) error {
 	}
 
 	var body bytes.Buffer
-	err := json.NewEncoder(&body).Encode(&payload)
-	if err != nil {
-		return err
+	if err := json.NewEncoder(&body).Encode(&payload); err != nil {
+		return fmt.Errorf("cannot encode JSON payload: %w", err)
 	}
 
 	var result []fileResult
-	_, err = client.doSync("POST", "/v1/files", nil, map[string]string{
+	headers := map[string]string{
 		"Content-Type": "application/json",
-	}, &body, &result)
-	if err != nil {
+	}
+	if _, err := client.doSync("POST", "/v1/files", nil, headers, &body, &result); err != nil {
 		return err
 	}
 
 	if len(result) != 1 {
 		return fmt.Errorf("expected exactly one result from API, got %d", len(result))
 	}
-
 	if result[0].Error != nil {
 		return &Error{
 			Kind:    result[0].Error.Kind,

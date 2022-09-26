@@ -15,17 +15,20 @@
 package main
 
 import (
+	"fmt"
+	"os"
+	"strconv"
+
 	"github.com/jessevdk/go-flags"
 
 	"github.com/canonical/pebble/client"
-	"github.com/canonical/pebble/internal/osutil"
 )
 
 type cmdMkdir struct {
 	clientMixin
 
-	MakeParents bool   `short:"p" long:"parents"`
-	Permissions string `short:"m" long:"mode"`
+	MakeParents bool   `short:"p"`
+	Permissions string `short:"m"`
 	UserID      *int   `long:"uid"`
 	User        string `long:"user"`
 	GroupID     *int   `long:"gid"`
@@ -37,18 +40,17 @@ type cmdMkdir struct {
 }
 
 var mkdirDescs = map[string]string{
-	"parents": "Create parent directories as needed.",
-	"mode":    "Set permissions for the newly created directories (in 3-digit octal format).",
-	"uid":     "Set owner user ID.",
-	"user":    "Set owner user name.",
-	"gid":     "Set owner group ID.",
-	"group":   "Set owner group name.",
+	"p":     "Create parent directories as needed",
+	"m":     "Set permissions (e.g. 0644)",
+	"uid":   "Use specified user ID",
+	"user":  "Use specified username",
+	"gid":   "Use specified group ID",
+	"group": "Use specified group name",
 }
 
-var shortMkdirHelp = "Create a directory or directory tree"
+var shortMkdirHelp = "Create a directory"
 var longMkdirHelp = `
-The mkdir command creates a directory at the specified path.
-If --parents is specified, create a directory tree.
+The mkdir command creates the specified directory.
 `
 
 func (cmd *cmdMkdir) Execute(args []string) error {
@@ -66,11 +68,11 @@ func (cmd *cmdMkdir) Execute(args []string) error {
 	}
 
 	if cmd.Permissions != "" {
-		p, err := osutil.ParsePermissions(cmd.Permissions, 0)
+		p, err := strconv.ParseUint(cmd.Permissions, 8, 32)
 		if err != nil {
-			return err
+			return fmt.Errorf("invalid mode for directory: %q", cmd.Permissions)
 		}
-		opts.Permissions = p
+		opts.Permissions = os.FileMode(p)
 	}
 
 	return cmd.client.MakeDir(&opts)

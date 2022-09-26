@@ -90,7 +90,7 @@ func (cs *clientSuite) TestMakeDirWithPermissions(c *C) {
 	})
 }
 
-func (cs *clientSuite) TestMakeDirWithInvalidPermissions(c *C) {
+func (cs *clientSuite) TestMakeDirWithSpecialPermissions(c *C) {
 	cs.rsp = `{"type": "sync", "result": [{"path": "/foo/bar"}]}`
 
 	err := cs.cli.MakeDir(&client.MakeDirOptions{
@@ -140,20 +140,17 @@ func (cs *clientSuite) TestMakeDirFails(c *C) {
 }
 
 func (cs *clientSuite) TestMakeDirFailsOnDirectory(c *C) {
-	cs.rsp = `
-{
-	"type": "sync",
-	"result": [
-		{
+	cs.rsp = ` {
+		"type": "sync",
+		"result": [{
 			"path": "/foobar",
 			"error": {
 				"message": "could not bar",
 				"kind": "permission-denied",
 				"value": 42
 			}
-		}
-	]
-}`
+		}]
+	}`
 
 	err := cs.cli.MakeDir(&client.MakeDirOptions{
 		Path: "/foobar",
@@ -179,28 +176,24 @@ func (cs *clientSuite) TestMakeDirFailsOnDirectory(c *C) {
 }
 
 func (cs *clientSuite) TestMakeDirFailsWithMultipleAPIResults(c *C) {
-	cs.rsp = `
-{
-	"type": "sync",
-	"result": [
-		{
+	cs.rsp = ` {
+		"type": "sync",
+		"result": [{
 			"path": "/foobar",
 			"error": {
 				"message": "could not bar",
 				"kind": "permission-denied",
 				"value": 42
 			}
-		},
-		{
+		}, {
 			"path": "/foobar",
 			"error": {
 				"message": "could not baz",
 				"kind": "generic-file-error",
 				"value": 47
 			}
-		}
-	]
-}`
+		}]
+	}`
 
 	err := cs.cli.MakeDir(&client.MakeDirOptions{
 		Path: "/foobar",

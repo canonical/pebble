@@ -66,7 +66,7 @@ func (s *PebbleSuite) TestMkdir(c *C) {
 
 func (s *PebbleSuite) TestMkdirFailsParsingPermissions(c *C) {
 	rest, err := pebble.Parser(pebble.Client()).ParseArgs([]string{"mkdir", "-m", "foobar", "/foo"})
-	c.Assert(err, ErrorMatches, `file permissions must be a 3- or 4-digit octal string, got "foobar"`)
+	c.Assert(err, ErrorMatches, `invalid mode for directory: "foobar"`)
 	c.Assert(rest, HasLen, 1)
 	c.Check(s.Stdout(), Equals, "")
 	c.Check(s.Stderr(), Equals, "")
@@ -248,20 +248,17 @@ func (s *PebbleSuite) TestMkdirFailsOnDirectory(c *C) {
 			},
 		})
 
-		fmt.Fprintln(w, `
-{
-	"type": "sync",
-	"result": [
-		{
-			"path": "/foobar",
-			"error": {
-				"message": "could not bar",
-				"kind": "permission-denied",
-				"value": 42
-			}
-		}
-	]
-}`)
+		fmt.Fprintln(w, ` {
+			"type": "sync",
+			"result": [{
+				"path": "/foobar",
+				"error": {
+					"message": "could not bar",
+					"kind": "permission-denied",
+					"value": 42
+				}
+			}]
+		}`)
 	})
 
 	rest, err := pebble.Parser(pebble.Client()).ParseArgs([]string{"mkdir", "/foobar"})
