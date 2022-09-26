@@ -40,12 +40,12 @@ type cmdPush struct {
 }
 
 var pushDescs = map[string]string{
-	"p":     "Create parent directories for this file.",
-	"m":     "Set permissions for the file in the remote system (in octal format).",
-	"uid":   "Set owner user ID.",
-	"user":  "Set owner user name.",
-	"gid":   "Set owner group ID.",
-	"group": "Set owner group name.",
+	"p":     "Create parent directories for the file",
+	"m":     "Set permissions for the file (e.g. 0644)",
+	"uid":   "Use specified user ID",
+	"user":  "Use specified username",
+	"gid":   "Use specified group ID",
+	"group": "Use specified group name",
 }
 
 var shortPushHelp = "Transfer a file to the remote system"
@@ -76,7 +76,7 @@ func (cmd *cmdPush) Execute(args []string) error {
 		permissions = fmt.Sprintf("%03o", st.Mode().Perm())
 	}
 
-	err = cmd.client.Push(&client.PushOptions{
+	return cmd.client.Push(&client.PushOptions{
 		Source:      f,
 		Path:        cmd.Positional.RemotePath,
 		MakeDirs:    cmd.MakeDirs,
@@ -86,11 +86,6 @@ func (cmd *cmdPush) Execute(args []string) error {
 		GroupID:     cmd.GroupID,
 		Group:       cmd.Group,
 	})
-	if err != nil {
-		return err
-	}
-
-	return nil
 }
 
 func init() {

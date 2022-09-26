@@ -80,14 +80,8 @@ type writeFilesItem struct {
 }
 
 type fileResult struct {
-	Path  string       `json:"path"`
-	Error *errorResult `json:"error,omitempty"`
-}
-
-type errorResult struct {
-	Message string      `json:"message"`
-	Kind    string      `json:"kind,omitempty"`
-	Value   interface{} `json:"value,omitempty"`
+	Path  string `json:"path"`
+	Error *Error `json:"error,omitempty"`
 }
 
 var quoteEscaper = strings.NewReplacer("\\", "\\\\", `"`, "\\\"")
@@ -108,7 +102,7 @@ func (client *Client) Push(opts *PushOptions) error {
 		"Content-Disposition": {`form-data; name="request"`},
 	})
 	if err != nil {
-		return err
+		return fmt.Errorf("cannot encode metadata in request payload: %w", err)
 	}
 
 	payload := writeFilesPayload{
@@ -129,12 +123,12 @@ func (client *Client) Push(opts *PushOptions) error {
 
 	// Encode file part of the header
 	escapedPath := escapeQuotes(opts.Path)
-	part, err = mw.CreatePart(textproto.MIMEHeader{
+	_, err = mw.CreatePart(textproto.MIMEHeader{
 		"Content-Type":        {"application/octet-stream"},
 		"Content-Disposition": {fmt.Sprintf(`form-data; name="files"; filename="%s"`, escapedPath)},
 	})
 	if err != nil {
-		return err
+		return fmt.Errorf("cannot encode file in request payload: %w", err)
 	}
 
 	header := b.String()
@@ -144,12 +138,11 @@ func (client *Client) Push(opts *PushOptions) error {
 	mw.Close()
 	footer := b.String()
 
+	var result []fileResult
 	body := io.MultiReader(strings.NewReader(header), opts.Source, strings.NewReader(footer))
 	headers := map[string]string{
 		"Content-Type": mw.FormDataContentType(),
 	}
-
-	var result []fileResult
 	if _, err := client.doSync("POST", "/v1/files", nil, headers, body, &result); err != nil {
 		return err
 	}
@@ -157,7 +150,6 @@ func (client *Client) Push(opts *PushOptions) error {
 	if len(result) != 1 {
 		return fmt.Errorf("expected exactly one result from API, got %d", len(result))
 	}
-
 	if result[0].Error != nil {
 		return &Error{
 			Kind:    result[0].Error.Kind,

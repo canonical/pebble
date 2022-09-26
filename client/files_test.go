@@ -104,20 +104,17 @@ func (cs *clientSuite) TestPushFails(c *C) {
 }
 
 func (cs *clientSuite) TestPushFailsOnFile(c *C) {
-	cs.rsp = `
-{
-	"type": "sync",
-	"result": [
-		{
+	cs.rsp = `{
+		"type": "sync",
+		"result": [{
 			"path": "/file.dat",
 			"error": {
 				"message": "could not bar",
 				"kind": "permission-denied",
 				"value": 42
 			}
-		}
-	]
-}`
+		}]
+	}`
 
 	err := cs.cli.Push(&client.PushOptions{
 		Path:   "/file.dat",
@@ -130,28 +127,24 @@ func (cs *clientSuite) TestPushFailsOnFile(c *C) {
 }
 
 func (cs *clientSuite) TestPushFailsWithMultipleAPIResults(c *C) {
-	cs.rsp = `
-{
-	"type": "sync",
-	"result": [
-		{
+	cs.rsp = `{
+		"type": "sync",
+		"result": [{
 			"path": "/file.dat",
 			"error": {
 				"message": "could not bar",
 				"kind": "permission-denied",
 				"value": 42
 			}
-		},
-		{
+		}, {
 			"path": "/file.dat",
 			"error": {
 				"message": "could not baz",
 				"kind": "generic-file-error",
 				"value": 41
 			}
-		}
-	]
-}`
+		}]
+	}`
 
 	err := cs.cli.Push(&client.PushOptions{
 		Path:   "/file.dat",

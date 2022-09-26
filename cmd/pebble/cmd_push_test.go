@@ -176,20 +176,17 @@ func (s *PebbleSuite) TestPushAPIFails(c *C) {
 		_, err = mr.NextPart()
 		c.Assert(err, Equals, io.EOF)
 
-		fmt.Fprintln(w, `
-{
-	"type": "sync",
-	"result": [
-		{
-			"path": "/tmp/file.bin",
-			"error": {
-				"message": "could not bar",
-				"kind": "permission-denied",
-				"value": 42
-			}
-		}
-	]
-}`)
+		fmt.Fprintln(w, `{
+			"type": "sync",
+			"result": [{
+				"path": "/tmp/file.bin",
+				"error": {
+					"message": "could not bar",
+					"kind": "permission-denied",
+					"value": 42
+				}
+			}]
+		}`)
 	})
 
 	// Create temporary file
