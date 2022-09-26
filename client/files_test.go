@@ -46,13 +46,12 @@ func (cs *clientSuite) TestPull(c *C) {
 
 	part, err := mw.CreatePart(mh)
 	c.Assert(err, IsNil)
-	fmt.Fprintf(part, `
-{
-	"type": "sync",
-	"status-code": 200,
-	"status": "OK",
-	"result": [{"path": "/foo/bar.dat"}]
-}`)
+	fmt.Fprintf(part, `{
+		"type": "sync",
+		"status-code": 200,
+		"status": "OK",
+		"result": [{"path": "/foo/bar.dat"}]
+	}`)
 
 	mw.Close()
 	cs.rsp = srcBuf.String()
@@ -130,13 +129,12 @@ func (cs *clientSuite) TestPullFailsOnWrite(c *C) {
 
 	part, err := mw.CreatePart(mh)
 	c.Assert(err, IsNil)
-	fmt.Fprintf(part, `
-{
-	"type": "sync",
-	"status-code": 200,
-	"status": "OK",
-	"result": [{"path": "/foo/bar.dat"}]
-}`)
+	fmt.Fprintf(part, `{
+		"type": "sync",
+		"status-code": 200,
+		"status": "OK",
+		"result": [{"path": "/foo/bar.dat"}]
+	}`)
 
 	mw.Close()
 	cs.rsp = srcBuf.String()
@@ -302,20 +300,17 @@ func (cs *clientSuite) TestPullFailsWithClientError(c *C) {
 
 	part, err := mw.CreatePart(mh)
 	c.Assert(err, IsNil)
-	fmt.Fprintf(part, `
-{
- 	"type": "sync",
- 	"result": [
- 		{
- 			"path": "/foo/bar.dat",
- 			"error": {
- 				"message": "could not do something",
- 				"kind": "generic-file-error",
- 				"value": 1337
- 			}
- 		}
- 	]
- }`)
+	fmt.Fprintf(part, `{
+		"type": "sync",
+		"result": [{
+			"path": "/foo/bar.dat",
+			"error": {
+				"message": "could not do something",
+				"kind": "generic-file-error",
+				"value": 1337
+			}
+		}]
+	}`)
 
 	mw.Close()
 	cs.rsp = srcBuf.String()

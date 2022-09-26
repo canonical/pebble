@@ -15,7 +15,6 @@
 package main
 
 import (
-	"fmt"
 	"os"
 
 	"github.com/jessevdk/go-flags"
@@ -45,7 +44,7 @@ func (cmd *cmdPull) Execute(args []string) error {
 
 	f, err := os.Create(cmd.Positional.LocalPath)
 	if err != nil {
-		return fmt.Errorf("error creating file: %w", err)
+		return err
 	}
 	defer f.Close()
 

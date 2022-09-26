@@ -105,7 +105,6 @@ func (client *Client) Pull(opts *PullOptions) error {
 			if len(fr) != 1 {
 				return fmt.Errorf("expected exactly one result from API, got %d", len(fr))
 			}
-
 			if fr[0].Error != nil {
 				return &Error{
 					Kind:    fr[0].Error.Kind,

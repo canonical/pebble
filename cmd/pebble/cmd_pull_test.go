@@ -56,13 +56,12 @@ func (s *PebbleSuite) TestPull(c *C) {
 
 		part, err := mw.CreatePart(mh)
 		c.Assert(err, IsNil)
-		fmt.Fprintf(part, `
-{
-	"type": "sync",
-	"status-code": 200,
-	"status": "OK",
-	"result": [{"path": "/foo/bar.dat"}]
-}`)
+		fmt.Fprintf(part, `{
+			"type": "sync",
+			"status-code": 200,
+			"status": "OK",
+			"result": [{"path": "/foo/bar.dat"}]
+		}`)
 
 		mw.Close()
 	})
@@ -119,20 +118,17 @@ func (s *PebbleSuite) TestPullFailsAPI(c *C) {
 
 		part, err := mw.CreatePart(mh)
 		c.Assert(err, IsNil)
-		fmt.Fprintf(part, `
-{
-	"type": "sync",
-	"result": [
-		{
-			"path": "/foo/bar.dat",
-			"error": {
-				"message": "could not foo",
-				"kind": "permission-denied",
-				"value": 42
-			}
-		}
-	]
-}`)
+		fmt.Fprintf(part, ` {
+			"type": "sync",
+			"result": [{
+				"path": "/foo/bar.dat",
+				"error": {
+					"message": "could not foo",
+					"kind": "permission-denied",
+					"value": 42
+				}
+			}]
+		}`)
 
 		mw.Close()
 	})
@@ -184,20 +180,17 @@ func (s *PebbleSuite) TestPullFailsCreateFile(c *C) {
 
 		part, err := mw.CreatePart(mh)
 		c.Assert(err, IsNil)
-		fmt.Fprintf(part, `
-{
-	"type": "sync",
-	"result": [
-		{
-			"path": "/foo/bar.dat",
-			"error": {
-				"message": "could not foo",
-				"kind": "permission-denied",
-				"value": 42
-			}
-		}
-	]
-}`)
+		fmt.Fprintf(part, `{
+			"type": "sync",
+			"result": [{
+				"path": "/foo/bar.dat",
+				"error": {
+					"message": "could not foo",
+					"kind": "permission-denied",
+					"value": 42
+				}
+			}]
+		}`)
 
 		mw.Close()
 	})
