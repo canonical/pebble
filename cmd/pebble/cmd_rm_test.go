@@ -126,20 +126,17 @@ func (s *PebbleSuite) TestRmFailsOnPath(c *C) {
 			},
 		})
 
-		fmt.Fprintln(w, `
-{
-	"type": "sync",
-	"result": [
-		{
-			"path": "/foo/bar/baz.qux",
-			"error": {
-				"message": "could not baz",
-				"kind": "permission-denied",
-				"value": 42
-			}
-		}
-	]
-}`)
+		fmt.Fprintln(w, ` {
+			"type": "sync",
+			"result": [{
+				"path": "/foo/bar/baz.qux",
+				"error": {
+					"message": "could not baz",
+					"kind": "permission-denied",
+					"value": 42
+				}
+			}]
+		}`)
 	})
 
 	rest, err := pebble.Parser(pebble.Client()).ParseArgs([]string{"rm", "-r", "/foo/bar"})

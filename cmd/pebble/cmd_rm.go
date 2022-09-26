@@ -31,7 +31,7 @@ type cmdRm struct {
 }
 
 var rmDescs = map[string]string{
-	"r": "Remove all files and directories contained within the specified path.",
+	"r": "Remove all files and directories recursively in the specified path",
 }
 
 var shortRmHelp = "Remove a file or directory."

@@ -61,23 +61,21 @@ func (client *Client) RemovePath(opts *RemovePathOptions) error {
 	}
 
 	var body bytes.Buffer
-	err := json.NewEncoder(&body).Encode(&payload)
-	if err != nil {
-		return err
+	if err := json.NewEncoder(&body).Encode(&payload); err != nil {
+		return fmt.Errorf("cannot encode JSON payload: %w", err)
 	}
 
 	var result []fileResult
-	_, err = client.doSync("POST", "/v1/files", nil, map[string]string{
+	headers := map[string]string{
 		"Content-Type": "application/json",
-	}, &body, &result)
-	if err != nil {
+	}
+	if _, err := client.doSync("POST", "/v1/files", nil, headers, &body, &result); err != nil {
 		return err
 	}
 
 	if len(result) != 1 {
 		return fmt.Errorf("expected exactly one result from API, got %d", len(result))
 	}
-
 	if result[0].Error != nil {
 		return &Error{
 			Kind:    result[0].Error.Kind,

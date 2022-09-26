@@ -103,20 +103,17 @@ func (cs *clientSuite) TestRemovePathFails(c *C) {
 }
 
 func (cs *clientSuite) TestRemovePathFailsOnPath(c *C) {
-	cs.rsp = `
-{
-	"type": "sync",
-	"result": [
-		{
+	cs.rsp = ` {
+		"type": "sync",
+		"result": [{
 			"path": "/foo/bar/baz.qux",
 			"error": {
 				"message": "could not bar",
 				"kind": "permission-denied",
 				"value": 42
 			}
-		}
-	]
-}`
+		}]
+	}`
 
 	err := cs.cli.RemovePath(&client.RemovePathOptions{
 		Path:      "/foo/bar",
@@ -144,28 +141,24 @@ func (cs *clientSuite) TestRemovePathFailsOnPath(c *C) {
 }
 
 func (cs *clientSuite) TestMakeDirFailsWithMultipleAPIResults(c *C) {
-	cs.rsp = `
-{
-	"type": "sync",
-	"result": [
-		{
+	cs.rsp = `{
+		"type": "sync",
+		"result": [{
 			"path": "/foobar",
 			"error": {
 				"message": "could not bar",
 				"kind": "permission-denied",
 				"value": 42
 			}
-		},
-		{
+		}, {
 			"path": "/foobar",
 			"error": {
 				"message": "could not baz",
 				"kind": "generic-file-error",
 				"value": 47
 			}
-		}
-	]
-}`
+		}]
+	}`
 
 	err := cs.cli.RemovePath(&client.RemovePathOptions{
 		Path: "/foobar",
