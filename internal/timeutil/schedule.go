@@ -463,8 +463,8 @@ func parseClockRange(s string) (start, end Clock, err error) {
 
 // ParseLegacySchedule takes an obsolete schedule string in the form of:
 //
-// 9:00-15:00 (every day between 9am and 3pm)
-// 9:00-15:00/21:00-22:00 (every day between 9am,5pm and 9pm,10pm)
+//	9:00-15:00 (every day between 9am and 3pm)
+//	9:00-15:00/21:00-22:00 (every day between 9am,5pm and 9pm,10pm)
 //
 // and returns a list of Schedule types or an error
 func ParseLegacySchedule(scheduleSpec string) ([]*Schedule, error) {
@@ -489,29 +489,30 @@ func ParseLegacySchedule(scheduleSpec string) ([]*Schedule, error) {
 
 // ParseSchedule parses a schedule in V2 format. The format is described as:
 //
-//     eventlist = eventset *( ",," eventset )
-//     eventset = wdaylist / timelist / wdaylist "," timelist
+//	eventlist = eventset *( ",," eventset )
+//	eventset = wdaylist / timelist / wdaylist "," timelist
 //
-//     wdaylist = wdayset *( "," wdayset )
-//     wdayset = wday / wdayspan
-//     wday =  ( "sun" / "mon" / "tue" / "wed" / "thu" / "fri" / "sat" ) [ DIGIT ]
-//     wdayspan = wday "-" wday
+//	wdaylist = wdayset *( "," wdayset )
+//	wdayset = wday / wdayspan
+//	wday =  ( "sun" / "mon" / "tue" / "wed" / "thu" / "fri" / "sat" ) [ DIGIT ]
+//	wdayspan = wday "-" wday
 //
-//     timelist = timeset *( "," timeset )
-//     timeset = time / timespan
-//     time = 2DIGIT ":" 2DIGIT
-//     timespan = time ( "-" / "~" ) time [ "/" ( time / count ) ]
-//     count = 1*DIGIT
+//	timelist = timeset *( "," timeset )
+//	timeset = time / timespan
+//	time = 2DIGIT ":" 2DIGIT
+//	timespan = time ( "-" / "~" ) time [ "/" ( time / count ) ]
+//	count = 1*DIGIT
 //
 // Examples:
-// mon,10:00,,fri,15:00 (Monday at 10:00, Friday at 15:00)
-// mon,fri,10:00,15:00 (Monday at 10:00 and 15:00, Friday at 10:00 and 15:00)
-// mon-wed,fri,9:00-11:00/2 (Monday to Wednesday and on Friday, twice between
-//                           9:00 and 11:00)
-// mon,9:00~11:00,,wed,22:00~23:00 (Monday, sometime between 9:00 and 11:00, and
-//                                  on Wednesday, sometime between 22:00 and 23:00)
-// mon,wed  (Monday and on Wednesday)
-// mon,,wed (same as above)
+//
+//	mon,10:00,,fri,15:00 (Monday at 10:00, Friday at 15:00)
+//	mon,fri,10:00,15:00 (Monday at 10:00 and 15:00, Friday at 10:00 and 15:00)
+//	mon-wed,fri,9:00-11:00/2 (Monday to Wednesday and on Friday, twice between
+//	                          9:00 and 11:00)
+//	mon,9:00~11:00,,wed,22:00~23:00 (Monday, sometime between 9:00 and 11:00, and
+//	                                 on Wednesday, sometime between 22:00 and 23:00)
+//	mon,wed  (Monday and on Wednesday)
+//	mon,,wed (same as above)
 //
 // Returns a slice of schedules or an error if parsing failed
 func ParseSchedule(scheduleSpec string) ([]*Schedule, error) {

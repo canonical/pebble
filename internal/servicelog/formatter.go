@@ -37,13 +37,16 @@ const (
 // NewFormatWriter returns a io.Writer that inserts timestamp and service name for every
 // line in the stream.
 // For the input:
-//   first\n
-//   second\n
-//   third\n
+//
+//	first\n
+//	second\n
+//	third\n
+//
 // The expected output is:
-//   2021-05-13T03:16:51.001Z [test] first\n
-//   2021-05-13T03:16:52.002Z [test] second\n
-//   2021-05-13T03:16:53.003Z [test] third\n
+//
+//	2021-05-13T03:16:51.001Z [test] first\n
+//	2021-05-13T03:16:52.002Z [test] second\n
+//	2021-05-13T03:16:53.003Z [test] third\n
 func NewFormatWriter(dest io.Writer, serviceName string) io.Writer {
 	return &formatter{
 		serviceName:    serviceName,
