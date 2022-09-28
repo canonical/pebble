@@ -41,8 +41,8 @@ import (
 	"github.com/canonical/pebble/internal/overlord/restart"
 	"github.com/canonical/pebble/internal/overlord/servstate"
 	"github.com/canonical/pebble/internal/overlord/state"
-	"github.com/canonical/pebble/internal/plan"
 	"github.com/canonical/pebble/internal/testutil"
+	"github.com/canonical/pebble/plan"
 )
 
 const (
