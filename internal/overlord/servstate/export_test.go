@@ -19,7 +19,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/canonical/pebble/internal/plan"
+	"github.com/canonical/pebble/plan"
 )
 
 var CalculateNextBackoff = calculateNextBackoff
