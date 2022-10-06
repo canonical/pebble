@@ -36,7 +36,7 @@ func NewLokiBackend(address string) (LogBackend, error) {
 		return nil, fmt.Errorf("invalid loki address: extraneous path %q", u.RequestURI())
 	}
 
-	// check for and set loki defaults if ommitted from address
+	// check for and set loki defaults if omitted from address
 	if u.Scheme == "" {
 		u.Scheme = "http"
 	}
