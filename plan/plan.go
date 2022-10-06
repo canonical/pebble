@@ -73,7 +73,7 @@ func RegisterLogBackend(name string, validator func(*LogTarget) error) { logBack
 type LogTarget struct {
 	Type      string   `yaml:"type"`
 	Location  string   `yaml:"location"`
-	Selection string   `yaml:"selection",omitempty`
+	Selection string   `yaml:"selection,omitempty"`
 	Override  Override `yaml:"override,omitempty"`
 }
 
@@ -87,7 +87,7 @@ func (t *LogTarget) Prepare(name string) error {
 	if !ok {
 		return fmt.Errorf("unsupported type %q for log target %q: %v", t.Type, name)
 	} else if err := validator(t); err != nil {
-		return fmt.Errorf("invalid configuration for log target %q: %v", name, err)
+		return fmt.Errorf("invalid configuration for log target %q: %w", name, err)
 	}
 
 	switch t.Selection {

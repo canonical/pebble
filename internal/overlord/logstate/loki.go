@@ -20,7 +20,7 @@ func init() {
 }
 
 type LokiBackend struct {
-	address *url.URL
+	lokiURL *url.URL
 }
 
 func NewLokiBackend(address string) (LogBackend, error) {
@@ -29,11 +29,9 @@ func NewLokiBackend(address string) (LogBackend, error) {
 		u, err = url.Parse("//" + address)
 	}
 	if err != nil {
-		return nil, fmt.Errorf("invalid loki server address: %v", err)
+		return nil, fmt.Errorf("invalid Loki server address: %v", err)
 	} else if u.Scheme != "" && u.Scheme != "http" {
-		return nil, fmt.Errorf("unsupported loki address scheme '%v'", u.Scheme)
-	} else if u.RequestURI() != "" && u.RequestURI() != "/" {
-		return nil, fmt.Errorf("invalid loki address: extraneous path %q", u.RequestURI())
+		return nil, fmt.Errorf("unsupported Loki URL scheme '%v'", u.Scheme)
 	}
 
 	// check for and set loki defaults if omitted from address
@@ -45,7 +43,7 @@ func NewLokiBackend(address string) (LogBackend, error) {
 	}
 	u.Path = "/loki/api/v1/push"
 
-	b := &LokiBackend{address: u}
+	b := &LokiBackend{lokiURL: u}
 	return b, nil
 }
 
@@ -54,30 +52,30 @@ func (b *LokiBackend) Close() error { return nil }
 func (b *LokiBackend) Send(m *LogMessage) error {
 	data, err := json.Marshal(newLokiMessage(m))
 	if err != nil {
-		return fmt.Errorf("failed to build loki message: %v", err)
+		return fmt.Errorf("failed to build loki message: %w", err)
 	}
 
 	var buf bytes.Buffer
 	gzWriter := gzip.NewWriter(&buf)
 	_, err = gzWriter.Write(data)
 	if err != nil {
-		return fmt.Errorf("failed to compress loki message: %v", err)
+		return fmt.Errorf("failed to compress loki message: %w", err)
 	}
 	err = gzWriter.Close()
 	if err != nil {
-		return fmt.Errorf("failed to compress loki message: %v", err)
+		return fmt.Errorf("failed to compress loki message: %w", err)
 	}
 
-	r, err := http.NewRequest("POST", b.address.String(), &buf)
+	r, err := http.NewRequest(http.MethodPost, b.lokiURL.String(), &buf)
 	if err != nil {
-		return fmt.Errorf("failed to build loki message request: %v", err)
+		return fmt.Errorf("failed to build loki message request: %w", err)
 	}
 	r.Header.Add("Content-Type", "application/json")
 	r.Header.Add("Content-Encoding", "gzip")
 	c := &http.Client{}
 	resp, err := c.Do(r)
 	if err != nil {
-		return fmt.Errorf("failed to send loki message: %v", err)
+		return fmt.Errorf("failed to send loki message: %w", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/canonical/pebble/internal/plan"
+	"io"
 )
 
 func init() {
@@ -66,7 +67,7 @@ func NewSyslogBackend(addr string) (*SyslogBackend, error) {
 		pid:            "-",
 		host:           "-",
 		msgid:          "-",
-		priority:       1*8 + 6, // for facility=user-msg severity=informational. See RFC 5424 6.2.1 for available codes.
+		priority:       priorityVal(FacilityUserLevelMessage, SeverityInformational),
 		structuredData: syslogStructuredData("pebble", canonicalPrivEnterpriseNum, nil),
 
 		address: u,
@@ -105,7 +106,7 @@ func (s *SyslogBackend) Send(m *LogMessage) error {
 	}
 
 	s.mu.RLock()
-	_, err = s.conn.Write(s.buildMsg(m))
+	err = s.buildMsg(m, s.conn)
 	s.mu.RUnlock()
 
 	if err != nil {
@@ -117,7 +118,7 @@ func (s *SyslogBackend) Send(m *LogMessage) error {
 	return err
 }
 
-func (s *SyslogBackend) buildMsg(m *LogMessage) []byte {
+func (s *SyslogBackend) buildMsg(m *LogMessage, w io.Writer) error {
 	// format defined by RFC 5424
 	timestamp := m.Timestamp.Format(time.RFC3339)
 	msg := fmt.Sprintf("<%d>%d %s %s %s %s %s %s %s",
@@ -125,7 +126,8 @@ func (s *SyslogBackend) buildMsg(m *LogMessage) []byte {
 
 	// Octet framing as per RFC 5425.
 	framed := fmt.Sprintf("%d %s", len(msg), msg)
-	return []byte(framed)
+	_, err := w.Write([]byte(framed))
+	return err
 }
 
 func (s *SyslogBackend) Close() error {
@@ -160,7 +162,6 @@ func (s *SyslogBackend) ensureConnected() error {
 	}
 
 	conn, err := net.Dial(s.address.Scheme, s.address.Host)
-
 	if err != nil {
 		// start an exponential backoff for reconnection attempts
 		if s.waitReconnect == 0 {
@@ -175,10 +176,28 @@ func (s *SyslogBackend) ensureConnected() error {
 	}
 
 	if s.conn != nil {
-		s.conn.Close()
+		err = s.conn.Close()
+		if err != nil {
+			return err
+		}
 	}
 
 	s.waitReconnect = 0 // reset backoff
 	s.conn = conn
 	return nil
+}
+
+// Syslog Priority values - see RFC 5424 6.2.1
+const (
+	// Facility values
+	FacilityUserLevelMessage = 1
+
+	// Severity values
+	SeverityInformational = 6
+)
+
+// priorityVal calculates the syslog Priority value (PRIVAL) from the given
+// Facility and Severity values. See RFC 5424, sec 6.2.1 for details.
+func priorityVal(facility, severity int) int {
+	return facility*8 + severity
 }

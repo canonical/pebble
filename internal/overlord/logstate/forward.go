@@ -8,7 +8,7 @@ import (
 	"github.com/canonical/pebble/internal/logger"
 )
 
-var maxLogBytes int = 100 * 1024
+const maxLogBytes int = 100 * 1024
 
 const canonicalPrivEnterpriseNum = 28978
 
@@ -54,7 +54,7 @@ func (l *LogForwarder) Write(p []byte) (int, error) {
 	msg := &LogMessage{Message: data, Service: l.service, Timestamp: time.Now()}
 	targets, err := l.targetsFunc(l.service)
 	if err != nil {
-		return 0, fmt.Errorf("failed to forward log message: %v", err)
+		return 0, fmt.Errorf("failed to forward log message: %w", err)
 	}
 
 	for _, target := range targets {
@@ -157,13 +157,13 @@ type LogBuffer struct {
 	mu       sync.Mutex
 	capacity int
 	buf      []*LogMessage
-	currSize int
 	notify   []chan<- bool
 }
 
 func NewLogBuffer(capacity int) *LogBuffer {
 	return &LogBuffer{
 		capacity: capacity,
+		buf:      make([]*LogMessage, 0, capacity),
 	}
 }
 
@@ -179,13 +179,15 @@ func (b *LogBuffer) Put(m *LogMessage) error {
 		return fmt.Errorf("LogBuffer capacity %v cannot fit object of size %v", b.capacity, m.Size())
 	}
 
-	available := b.capacity - b.currSize
+	available := b.capacity - len(b.buf)
 	need := m.Size()
 	if available < need {
-		b.discard(need - available)
+		err := b.discard(need - available)
+		if err != nil {
+			return err
+		}
 	}
 
-	b.currSize += m.Size()
 	b.buf = append(b.buf, m)
 
 	for _, ch := range b.notify {
@@ -202,19 +204,17 @@ func (b *LogBuffer) GetAll() []*LogMessage {
 	defer b.mu.Unlock()
 	buf := b.buf
 	b.buf = b.buf[:0]
-	b.currSize = 0
 	return buf
 }
 
-func (b *LogBuffer) discard(n int) {
+func (b *LogBuffer) discard(n int) error {
 	freed := 0
 	for i, m := range b.buf {
 		freed += m.Size()
 		if freed >= n {
 			b.buf = b.buf[i+1:]
-			b.currSize -= freed
-			return
+			return nil
 		}
 	}
-	panic("failed to free up enough enough space")
+	return fmt.Errorf("failed to free up enough enough space")
 }
