@@ -3,13 +3,13 @@ package logstate
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"net"
 	"net/url"
 	"sync"
 	"time"
 
-	"github.com/canonical/pebble/internal/plan"
-	"io"
+	"github.com/canonical/pebble/plan"
 )
 
 func init() {

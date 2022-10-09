@@ -5,7 +5,7 @@ import (
 	"sync"
 
 	"github.com/canonical/pebble/internal/logger"
-	"github.com/canonical/pebble/internal/plan"
+	"github.com/canonical/pebble/plan"
 )
 
 var logBackends = map[string]func(*plan.LogTarget) (LogBackend, error){}

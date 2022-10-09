@@ -12,7 +12,7 @@ import (
 	"net/url"
 	"strconv"
 
-	"github.com/canonical/pebble/internal/plan"
+	"github.com/canonical/pebble/plan"
 )
 
 func init() {
