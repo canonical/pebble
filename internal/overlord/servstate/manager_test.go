@@ -41,6 +41,7 @@ import (
 	"github.com/canonical/pebble/internal/overlord/restart"
 	"github.com/canonical/pebble/internal/overlord/servstate"
 	"github.com/canonical/pebble/internal/overlord/state"
+	"github.com/canonical/pebble/internal/planutil"
 	"github.com/canonical/pebble/internal/testutil"
 	"github.com/canonical/pebble/plan"
 )
@@ -585,7 +586,7 @@ services:
 }
 
 func parseLayer(c *C, order int, label, layerYAML string) *plan.Layer {
-	layer, err := plan.ParseLayer(order, label, []byte(layerYAML))
+	layer, err := planutil.ParseLayer(order, label, []byte(layerYAML))
 	c.Assert(err, IsNil)
 	return layer
 }
