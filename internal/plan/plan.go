@@ -29,7 +29,6 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/canonical/pebble/internal/osutil"
-	"github.com/canonical/pebble/internal/sortutil"
 	"github.com/canonical/pebble/internal/strutil/shlex"
 )
 
@@ -686,7 +685,7 @@ func order(services map[string]*Service, names []string, stop bool) ([]string, e
 
 	// Sort them up.
 	var order []string
-	for _, names := range sortutil.TarjanSort(successors) {
+	for _, names := range tarjanSort(successors) {
 		if len(names) > 1 {
 			return nil, &FormatError{
 				Message: fmt.Sprintf("services in before/after loop: %s", strings.Join(names, ", ")),

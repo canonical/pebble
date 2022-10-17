@@ -17,10 +17,10 @@ import (
 	"github.com/canonical/pebble/internal/osutil"
 	"github.com/canonical/pebble/internal/overlord/restart"
 	"github.com/canonical/pebble/internal/overlord/state"
+	"github.com/canonical/pebble/internal/plan"
 	"github.com/canonical/pebble/internal/reaper"
 	"github.com/canonical/pebble/internal/servicelog"
 	"github.com/canonical/pebble/internal/strutil/shlex"
-	"github.com/canonical/pebble/plan"
 )
 
 // TaskServiceRequest extracts the *ServiceRequest that was associated

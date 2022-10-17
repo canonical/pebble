@@ -25,7 +25,7 @@ import (
 
 	"github.com/canonical/pebble/internal/overlord"
 	"github.com/canonical/pebble/internal/overlord/checkstate"
-	"github.com/canonical/pebble/plan"
+	"github.com/canonical/pebble/internal/plan"
 )
 
 var _ = Suite(&healthSuite{})

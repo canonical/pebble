@@ -21,7 +21,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/canonical/pebble/internal/overlord/servstate"
-	"github.com/canonical/pebble/plan"
+	"github.com/canonical/pebble/internal/plan"
 )
 
 func v1GetPlan(c *Command, r *http.Request, _ *userState) Response {

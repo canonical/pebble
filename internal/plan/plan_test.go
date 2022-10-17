@@ -27,7 +27,7 @@ import (
 	. "gopkg.in/check.v1"
 	"gopkg.in/yaml.v3"
 
-	"github.com/canonical/pebble/plan"
+	"github.com/canonical/pebble/internal/plan"
 )
 
 const (
@@ -1010,33 +1010,7 @@ func (s *S) TestMarshalLayer(c *C) {
 				command: srv2cmd
 			srv3:
 				override: replace
-				command: srv3cmd
-		checks:
-			chk-exec:
-				override: replace
-				exec:
-					command: sleep 1
-					environment:
-						BAZ: buzz
-						FOO: bar
-					working-dir: /root
-			chk-http:
-				override: replace
-				level: alive
-				period: 20s
-				timeout: 500ms
-				threshold: 7
-				http:
-					url: https://example.com/foo
-					headers:
-						Authorization: Basic password
-						Foo: bar
-			chk-tcp:
-				override: merge
-				level: ready
-				tcp:
-					port: 7777
-					host: somehost`)
+				command: srv3cmd`)
 	layer, err := plan.ParseLayer(1, "layer1", layerBytes)
 	c.Assert(err, IsNil)
 	out, err := yaml.Marshal(layer)

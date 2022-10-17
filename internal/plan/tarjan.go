@@ -24,13 +24,13 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 // SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-package sortutil
+package plan
 
 import (
 	"sort"
 )
 
-func TarjanSort(successors map[string][]string) [][]string {
+func tarjanSort(successors map[string][]string) [][]string {
 	// http://en.wikipedia.org/wiki/Tarjan%27s_strongly_connected_components_algorithm
 	data := &tarjanData{
 		successors: successors,

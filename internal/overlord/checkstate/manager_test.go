@@ -26,8 +26,8 @@ import (
 	. "gopkg.in/check.v1"
 
 	"github.com/canonical/pebble/internal/logger"
+	"github.com/canonical/pebble/internal/plan"
 	"github.com/canonical/pebble/internal/reaper"
-	"github.com/canonical/pebble/plan"
 )
 
 func Test(t *testing.T) {
