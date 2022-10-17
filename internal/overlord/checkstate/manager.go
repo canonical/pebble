@@ -21,7 +21,7 @@ import (
 	"time"
 
 	"github.com/canonical/pebble/internal/logger"
-	"github.com/canonical/pebble/plan"
+	"github.com/canonical/pebble/internal/plan"
 )
 
 // CheckManager starts and manages the health checks.

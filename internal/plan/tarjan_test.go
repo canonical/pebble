@@ -24,12 +24,10 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 // SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-package sortutil_test
+package plan
 
 import (
 	. "gopkg.in/check.v1"
-
-	"github.com/canonical/pebble/internal/sortutil"
 )
 
 type TarjanSuite struct{}
@@ -49,7 +47,7 @@ func (TarjanSuite) TestExample(c *C) {
 		"9": {},
 	}
 
-	c.Assert(sortutil.TarjanSort(successors), DeepEquals, [][]string{
+	c.Assert(tarjanSort(successors), DeepEquals, [][]string{
 		{"9"},
 		{"6", "7", "8"},
 		{"5"},

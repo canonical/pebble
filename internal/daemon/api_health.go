@@ -19,8 +19,8 @@ import (
 
 	"github.com/canonical/pebble/internal/logger"
 	"github.com/canonical/pebble/internal/overlord/checkstate"
+	"github.com/canonical/pebble/internal/plan"
 	"github.com/canonical/pebble/internal/strutil"
-	"github.com/canonical/pebble/plan"
 )
 
 type healthInfo struct {

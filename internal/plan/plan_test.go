@@ -1,3 +1,4 @@
+//
 // Copyright (c) 2020 Canonical Ltd
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package planutil_test
+package plan_test
 
 import (
 	"bytes"
@@ -26,8 +27,7 @@ import (
 	. "gopkg.in/check.v1"
 	"gopkg.in/yaml.v3"
 
-	"github.com/canonical/pebble/internal/planutil"
-	"github.com/canonical/pebble/plan"
+	"github.com/canonical/pebble/internal/plan"
 )
 
 const (
@@ -766,7 +766,7 @@ func (s *S) TestParseLayer(c *C) {
 		var sup plan.Plan
 		var err error
 		for i, yml := range test.input {
-			layer, e := planutil.ParseLayer(i, fmt.Sprintf("layer-%d", i), reindent(yml))
+			layer, e := plan.ParseLayer(i, fmt.Sprintf("layer-%d", i), reindent(yml))
 			if e != nil {
 				err = e
 				break
@@ -778,20 +778,20 @@ func (s *S) TestParseLayer(c *C) {
 		}
 		if err == nil {
 			var result *plan.Layer
-			result, err = planutil.CombineLayers(sup.Layers...)
+			result, err = plan.CombineLayers(sup.Layers...)
 			if err == nil && test.result != nil {
 				c.Assert(result, DeepEquals, test.result)
 			}
 			if err == nil {
 				for name, order := range test.start {
 					p := plan.Plan{Services: result.Services}
-					names, err := planutil.StartOrder(&p, []string{name})
+					names, err := p.StartOrder([]string{name})
 					c.Assert(err, IsNil)
 					c.Assert(names, DeepEquals, order)
 				}
 				for name, order := range test.stop {
 					p := plan.Plan{Services: result.Services}
-					names, err := planutil.StopOrder(&p, []string{name})
+					names, err := p.StopOrder([]string{name})
 					c.Assert(err, IsNil)
 					c.Assert(names, DeepEquals, order)
 				}
@@ -809,7 +809,7 @@ func (s *S) TestParseLayer(c *C) {
 
 func (s *S) TestCombineLayersCycle(c *C) {
 	// Even if individual layers don't have cycles, combined layers might.
-	layer1, err := planutil.ParseLayer(1, "label1", []byte(`
+	layer1, err := plan.ParseLayer(1, "label1", []byte(`
 services:
     srv1:
         override: replace
@@ -818,7 +818,7 @@ services:
             - srv2
 `))
 	c.Assert(err, IsNil)
-	layer2, err := planutil.ParseLayer(2, "label2", []byte(`
+	layer2, err := plan.ParseLayer(2, "label2", []byte(`
 services:
     srv2:
         override: replace
@@ -827,57 +827,57 @@ services:
             - srv1
 `))
 	c.Assert(err, IsNil)
-	_, err = planutil.CombineLayers(layer1, layer2)
+	_, err = plan.CombineLayers(layer1, layer2)
 	c.Assert(err, ErrorMatches, `services in before/after loop: .*`)
-	_, ok := err.(*planutil.FormatError)
-	c.Assert(ok, Equals, true, Commentf("error must be *planutil.FormatError, not %T", err))
+	_, ok := err.(*plan.FormatError)
+	c.Assert(ok, Equals, true, Commentf("error must be *plan.FormatError, not %T", err))
 }
 
 func (s *S) TestMissingOverride(c *C) {
-	layer1, err := planutil.ParseLayer(1, "label1", []byte("{}"))
+	layer1, err := plan.ParseLayer(1, "label1", []byte("{}"))
 	c.Assert(err, IsNil)
-	layer2, err := planutil.ParseLayer(2, "label2", []byte(`
+	layer2, err := plan.ParseLayer(2, "label2", []byte(`
 services:
     srv1:
         command: cmd
 `))
 	c.Assert(err, IsNil)
-	_, err = planutil.CombineLayers(layer1, layer2)
+	_, err = plan.CombineLayers(layer1, layer2)
 	c.Check(err, ErrorMatches, `layer "label2" must define \"override\" for service "srv1"`)
-	_, ok := err.(*planutil.FormatError)
-	c.Check(ok, Equals, true, Commentf("error must be *planutil.FormatError, not %T", err))
+	_, ok := err.(*plan.FormatError)
+	c.Check(ok, Equals, true, Commentf("error must be *plan.FormatError, not %T", err))
 }
 
 func (s *S) TestMissingCommand(c *C) {
 	// Combine fails if no command in combined plan
-	layer1, err := planutil.ParseLayer(1, "label1", []byte("{}"))
+	layer1, err := plan.ParseLayer(1, "label1", []byte("{}"))
 	c.Assert(err, IsNil)
-	layer2, err := planutil.ParseLayer(2, "label2", []byte(`
+	layer2, err := plan.ParseLayer(2, "label2", []byte(`
 services:
     srv1:
         override: merge
 `))
 	c.Assert(err, IsNil)
-	_, err = planutil.CombineLayers(layer1, layer2)
+	_, err = plan.CombineLayers(layer1, layer2)
 	c.Check(err, ErrorMatches, `plan must define "command" for service "srv1"`)
-	_, ok := err.(*planutil.FormatError)
-	c.Check(ok, Equals, true, Commentf("error must be *planutil.FormatError, not %T", err))
+	_, ok := err.(*plan.FormatError)
+	c.Check(ok, Equals, true, Commentf("error must be *plan.FormatError, not %T", err))
 
 	// Combine succeeds if there is a command in combined plan
-	layer1, err = planutil.ParseLayer(1, "label1", []byte(`
+	layer1, err = plan.ParseLayer(1, "label1", []byte(`
 services:
     srv1:
         override: merge
         command: foo --bar
 `))
 	c.Assert(err, IsNil)
-	layer2, err = planutil.ParseLayer(2, "label2", []byte(`
+	layer2, err = plan.ParseLayer(2, "label2", []byte(`
 services:
     srv1:
         override: merge
 `))
 	c.Assert(err, IsNil)
-	combined, err := planutil.CombineLayers(layer1, layer2)
+	combined, err := plan.CombineLayers(layer1, layer2)
 	c.Assert(err, IsNil)
 	c.Assert(combined.Services["srv1"].Command, Equals, "foo --bar")
 }
@@ -895,23 +895,23 @@ func (s *S) TestReadDir(c *C) {
 			err := ioutil.WriteFile(filepath.Join(layersDir, fmt.Sprintf("%03d-layer-%d.yaml", i, i)), reindent(yml), 0644)
 			c.Assert(err, IsNil)
 		}
-		sup, err := planutil.ReadDir(pebbleDir)
+		sup, err := plan.ReadDir(pebbleDir)
 		if err == nil {
 			var result *plan.Layer
-			result, err = planutil.CombineLayers(sup.Layers...)
+			result, err = plan.CombineLayers(sup.Layers...)
 			if err == nil && test.result != nil {
 				c.Assert(result, DeepEquals, test.result)
 			}
 			if err == nil {
 				for name, order := range test.start {
 					p := plan.Plan{Services: result.Services}
-					names, err := planutil.StartOrder(&p, []string{name})
+					names, err := p.StartOrder([]string{name})
 					c.Assert(err, IsNil)
 					c.Assert(names, DeepEquals, order)
 				}
 				for name, order := range test.stop {
 					p := plan.Plan{Services: result.Services}
-					names, err := planutil.StopOrder(&p, []string{name})
+					names, err := p.StopOrder([]string{name})
 					c.Assert(err, IsNil)
 					c.Assert(names, DeepEquals, order)
 				}
@@ -947,7 +947,7 @@ func (s *S) TestReadDirBadNames(c *C) {
 		fpath := filepath.Join(layersDir, fname)
 		err := ioutil.WriteFile(fpath, []byte("<ignore>"), 0644)
 		c.Assert(err, IsNil)
-		_, err = planutil.ReadDir(pebbleDir)
+		_, err = plan.ReadDir(pebbleDir)
 		c.Assert(err.Error(), Equals, fmt.Sprintf("invalid layer filename: %q (must look like \"123-some-label.yaml\")", fname))
 		err = os.Remove(fpath)
 		c.Assert(err, IsNil)
@@ -971,7 +971,7 @@ func (s *S) TestReadDirDupNames(c *C) {
 			err := ioutil.WriteFile(fpath, []byte("summary: ignore"), 0644)
 			c.Assert(err, IsNil)
 		}
-		_, err = planutil.ReadDir(pebbleDir)
+		_, err = plan.ReadDir(pebbleDir)
 		c.Assert(err.Error(), Equals, fmt.Sprintf("invalid layer filename: %q not unique (have %q already)", fnames[1], fnames[0]))
 		for _, fname := range fnames {
 			fpath := filepath.Join(layersDir, fname)
@@ -1010,34 +1010,8 @@ func (s *S) TestMarshalLayer(c *C) {
 				command: srv2cmd
 			srv3:
 				override: replace
-				command: srv3cmd
-		checks:
-			chk-exec:
-				override: replace
-				exec:
-					command: sleep 1
-					environment:
-						BAZ: buzz
-						FOO: bar
-					working-dir: /root
-			chk-http:
-				override: replace
-				level: alive
-				period: 20s
-				timeout: 500ms
-				threshold: 7
-				http:
-					url: https://example.com/foo
-					headers:
-						Authorization: Basic password
-						Foo: bar
-			chk-tcp:
-				override: merge
-				level: ready
-				tcp:
-					port: 7777
-					host: somehost`)
-	layer, err := planutil.ParseLayer(1, "layer1", layerBytes)
+				command: srv3cmd`)
+	layer, err := plan.ParseLayer(1, "layer1", layerBytes)
 	c.Assert(err, IsNil)
 	out, err := yaml.Marshal(layer)
 	c.Assert(err, IsNil)

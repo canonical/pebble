@@ -17,8 +17,8 @@ package daemon
 import (
 	"net/http"
 
+	"github.com/canonical/pebble/internal/plan"
 	"github.com/canonical/pebble/internal/strutil"
-	"github.com/canonical/pebble/plan"
 )
 
 type checkInfo struct {
