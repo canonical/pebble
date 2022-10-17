@@ -21,7 +21,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/canonical/pebble/internal/overlord/servstate"
-	"github.com/canonical/pebble/internal/planutil"
+	"github.com/canonical/pebble/plan"
 )
 
 func v1GetPlan(c *Command, r *http.Request, _ *userState) Response {
@@ -64,7 +64,7 @@ func v1PostLayers(c *Command, r *http.Request, _ *userState) Response {
 	if payload.Format != "yaml" {
 		return statusBadRequest("invalid format %q", payload.Format)
 	}
-	layer, err := planutil.ParseLayer(0, payload.Label, []byte(payload.Layer))
+	layer, err := plan.ParseLayer(0, payload.Label, []byte(payload.Layer))
 	if err != nil {
 		return statusBadRequest("cannot parse layer YAML: %v", err)
 	}
@@ -79,7 +79,7 @@ func v1PostLayers(c *Command, r *http.Request, _ *userState) Response {
 		if _, ok := err.(*servstate.LabelExists); ok {
 			return statusBadRequest("%v", err)
 		}
-		if _, ok := err.(*planutil.FormatError); ok {
+		if _, ok := err.(*plan.FormatError); ok {
 			return statusBadRequest("%v", err)
 		}
 		return statusInternalError("%v", err)

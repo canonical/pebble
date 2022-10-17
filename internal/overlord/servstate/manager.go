@@ -1,17 +1,3 @@
-// Copyright (c) 2022 Canonical Ltd
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
 package servstate
 
 import (
@@ -26,7 +12,6 @@ import (
 	"github.com/canonical/pebble/internal/logger"
 	"github.com/canonical/pebble/internal/overlord/restart"
 	"github.com/canonical/pebble/internal/overlord/state"
-	"github.com/canonical/pebble/internal/planutil"
 	"github.com/canonical/pebble/internal/reaper"
 	"github.com/canonical/pebble/internal/servicelog"
 	"github.com/canonical/pebble/plan"
@@ -112,7 +97,7 @@ func (m *ServiceManager) updatePlan(p *plan.Plan) {
 }
 
 func (m *ServiceManager) reloadPlan() error {
-	p, err := planutil.ReadDir(m.pebbleDir)
+	p, err := plan.ReadDir(m.pebbleDir)
 	if err != nil {
 		return err
 	}
@@ -165,7 +150,7 @@ func (m *ServiceManager) appendLayer(layer *plan.Layer) error {
 }
 
 func (m *ServiceManager) updatePlanLayers(layers []*plan.Layer) error {
-	combined, err := planutil.CombineLayers(layers...)
+	combined, err := plan.CombineLayers(layers...)
 	if err != nil {
 		return err
 	}
@@ -206,7 +191,7 @@ func (m *ServiceManager) CombineLayer(layer *plan.Layer) error {
 	}
 
 	// Layer found with this label, combine into that one.
-	combined, err := planutil.CombineLayers(found, layer)
+	combined, err := plan.CombineLayers(found, layer)
 	if err != nil {
 		return err
 	}
@@ -341,7 +326,7 @@ func (m *ServiceManager) DefaultServiceNames() ([]string, error) {
 		}
 	}
 
-	return planutil.StartOrder(m.plan, names)
+	return m.plan.StartOrder(names)
 }
 
 // StartOrder returns the provided services, together with any required
@@ -353,7 +338,7 @@ func (m *ServiceManager) StartOrder(services []string) ([]string, error) {
 	}
 	defer releasePlan()
 
-	return planutil.StartOrder(m.plan, services)
+	return m.plan.StartOrder(services)
 }
 
 // StopOrder returns the provided services, together with any dependants,
@@ -365,7 +350,7 @@ func (m *ServiceManager) StopOrder(services []string) ([]string, error) {
 	}
 	defer releasePlan()
 
-	return planutil.StopOrder(m.plan, services)
+	return m.plan.StopOrder(services)
 }
 
 // ServiceLogs returns iterators to the provided services. If last is negative,
@@ -436,7 +421,7 @@ func (m *ServiceManager) Replan() ([]string, []string, error) {
 		}
 	}
 
-	stop, err = planutil.StopOrder(m.plan, stop)
+	stop, err = m.plan.StopOrder(stop)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -446,7 +431,7 @@ func (m *ServiceManager) Replan() ([]string, []string, error) {
 		}
 	}
 
-	start, err = planutil.StartOrder(m.plan, start)
+	start, err = m.plan.StartOrder(start)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -508,7 +493,7 @@ func servicesToStop(m *ServiceManager) ([]string, error) {
 	}
 
 	// Order according to dependency order.
-	stop, err := planutil.StopOrder(m.plan, services)
+	stop, err := m.plan.StopOrder(services)
 	if err != nil {
 		return nil, err
 	}
