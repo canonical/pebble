@@ -15,6 +15,8 @@
 package client
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"os"
@@ -201,4 +203,103 @@ func resultToFileInfo(result fileInfoResult) (*FileInfo, error) {
 	fi.group = result.Group
 
 	return fi, nil
+}
+
+// MakeDirOptions holds the options for a call to MakeDir.
+type MakeDirOptions struct {
+	// Path is the absolute path of the directory to be created (required).
+	Path string
+
+	// MakeParents, if true, specifies that any non-existent parent directories
+	// should be created. If false (the default), the call will fail if the
+	// directory to be created has at least one parent directory that does not
+	// exist.
+	MakeParents bool
+
+	// Permissions specifies the permission bits of the directories to be created.
+	// If 0 or unset, defaults to 0755.
+	Permissions os.FileMode
+
+	// UserID indicates the user ID of the owner for the created directories.
+	UserID *int
+
+	// User indicates the user name of the owner for the created directories.
+	// If used together with UserID, this value must match the name of the user
+	// with that ID.
+	User string
+
+	// GroupID indicates the group ID of the owner for the created directories.
+	GroupID *int
+
+	// Group indicates the name of the owner group for the created directories.
+	// If used together with GroupID, this value must match the name of the group
+	// with that ID.
+	Group string
+}
+
+type makeDirPayload struct {
+	Action string         `json:"action"`
+	Dirs   []makeDirsItem `json:"dirs"`
+}
+
+type makeDirsItem struct {
+	Path        string `json:"path"`
+	MakeParents bool   `json:"make-parents"`
+	Permissions string `json:"permissions"`
+	UserID      *int   `json:"user-id"`
+	User        string `json:"user"`
+	GroupID     *int   `json:"group-id"`
+	Group       string `json:"group"`
+}
+
+type fileResult struct {
+	Path  string `json:"path"`
+	Error *Error `json:"error,omitempty"`
+}
+
+// MakeDir creates a directory or directory tree.
+func (client *Client) MakeDir(opts *MakeDirOptions) error {
+	var permissions string
+	if opts.Permissions != 0 {
+		permissions = fmt.Sprintf("%03o", opts.Permissions)
+	}
+
+	payload := &makeDirPayload{
+		Action: "make-dirs",
+		Dirs: []makeDirsItem{{
+			Path:        opts.Path,
+			MakeParents: opts.MakeParents,
+			Permissions: permissions,
+			UserID:      opts.UserID,
+			User:        opts.User,
+			GroupID:     opts.GroupID,
+			Group:       opts.Group,
+		}},
+	}
+
+	var body bytes.Buffer
+	if err := json.NewEncoder(&body).Encode(&payload); err != nil {
+		return fmt.Errorf("cannot encode JSON payload: %w", err)
+	}
+
+	var result []fileResult
+	headers := map[string]string{
+		"Content-Type": "application/json",
+	}
+	if _, err := client.doSync("POST", "/v1/files", nil, headers, &body, &result); err != nil {
+		return err
+	}
+
+	if len(result) != 1 {
+		return fmt.Errorf("expected exactly one result from API, got %d", len(result))
+	}
+	if result[0].Error != nil {
+		return &Error{
+			Kind:    result[0].Error.Kind,
+			Value:   result[0].Error.Value,
+			Message: result[0].Error.Message,
+		}
+	}
+
+	return nil
 }
