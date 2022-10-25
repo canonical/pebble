@@ -15,7 +15,7 @@
 package client_test
 
 import (
-	"fmt"
+	"log"
 
 	"github.com/canonical/pebble/client"
 )
@@ -29,15 +29,14 @@ func Example() {
 
 	pebble, err := client.New(&client.Config{Socket: ".pebble.socket"})
 	if err != nil {
-		fmt.Println(err)
-		return
+		log.Fatal(err)
 	}
-	files, err := pebble.ListFiles(&client.ListFilesOptions{Path: "/tmp"})
+	changeID, err := pebble.Stop(&client.ServiceOptions{Names: []string{"mysvc"}})
 	if err != nil {
-		fmt.Println(err)
-		return
+		log.Fatal(err)
 	}
-	for _, file := range files {
-		fmt.Println(file.Name())
+	_, err = pebble.WaitChange(changeID, &client.WaitChangeOptions{})
+	if err != nil {
+		log.Fatal(err)
 	}
 }
