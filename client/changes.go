@@ -22,7 +22,7 @@ import (
 	"time"
 )
 
-// A Change is a modification to the system state.
+// Change is a modification to the system state.
 type Change struct {
 	ID      string  `json:"id"`
 	Kind    string  `json:"kind"`
@@ -38,6 +38,7 @@ type Change struct {
 	data map[string]*json.RawMessage
 }
 
+// ErrNoData is returned when there is no data associated with a given key.
 var ErrNoData = fmt.Errorf("data entry not found")
 
 // Get unmarshals into value the kind-specific data with the provided key.
@@ -49,7 +50,7 @@ func (c *Change) Get(key string, value interface{}) error {
 	return json.Unmarshal(*raw, value)
 }
 
-// A Task is an operation done to change the system's state.
+// Task represents a single operation done to change the system's state.
 type Task struct {
 	ID       string       `json:"id"`
 	Kind     string       `json:"kind"`
@@ -73,6 +74,7 @@ func (t *Task) Get(key string, value interface{}) error {
 	return json.Unmarshal(*raw, value)
 }
 
+// TaskProgress represents the completion progress of a task.
 type TaskProgress struct {
 	Label string `json:"label"`
 	Done  int    `json:"done"`
@@ -96,7 +98,7 @@ func (client *Client) Change(id string) (*Change, error) {
 	return &chgd.Change, nil
 }
 
-// Abort attempts to abort a change that is in not yet ready.
+// Abort attempts to abort a change that is not yet ready.
 func (client *Client) Abort(id string) (*Change, error) {
 	var postData struct {
 		Action string `json:"action"`
@@ -116,8 +118,10 @@ func (client *Client) Abort(id string) (*Change, error) {
 	return &chg, nil
 }
 
+// ChangeSelector represents a selection of changes to query for.
 type ChangeSelector uint8
 
+// String returns a human-readable representation of c.
 func (c ChangeSelector) String() string {
 	switch c {
 	case ChangesInProgress:
@@ -137,11 +141,13 @@ const (
 	ChangesAll = ChangesReady | ChangesInProgress
 )
 
+// ChangesOptions holds the options for a call to Changes.
 type ChangesOptions struct {
 	ServiceName string // if empty, no filtering by service is done
 	Selector    ChangeSelector
 }
 
+// Changes fetches information for the changes specified.
 func (client *Client) Changes(opts *ChangesOptions) ([]*Change, error) {
 	query := url.Values{}
 	if opts != nil {

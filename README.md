@@ -20,7 +20,7 @@ designed with unique features that help with more specific use cases.
 
 Pebble is organized as a single binary that works as a daemon and also as a
 client to itself. When the daemon runs it loads its own configuration from the
-`$PEBBLE` directory, as defined in the environment, and also writes down in
+`$PEBBLE` directory, as defined in the environment, and also records in
 that same directory its state and Unix sockets for communication. If that variable
 is not defined, Pebble will attempt to look for its configuration from a default
 system-level setup at `/var/lib/pebble/default`. Using that directory is encouraged
@@ -74,20 +74,15 @@ services:
         command: cmd
 ```
 
-Some details worth highlighting:
-
-  - The `startup` option can be `enabled` or `disabled`.
-  - There is the `override` field (for now required) which defines whether this 
-entry _overrides_ the previous service of the same name (if any - missing is 
-okay), or merges with it.
-  - The optional `user` field allows starting a service with a different user
-    than the one Pebble was started with. The `group` field is similar but for
-    a group name (it is optional even if `user` is specified).
+The `override` field (which is required) defines whether this 
+entry _overrides_ the previous service of the same name (if any),
+or merges with it. See the [full layer specification](#layer-specification)
+for more details.
 
 ### Layer override example
 
 Any of the fields can be replaced individually in a merged service configuration.
-To illustrate, here is a sample override layer that might sit atop the one above:
+To illustrate, here is a sample override layer that might sit on top of the one above:
 
 ```yaml
 summary: Simple override layer
@@ -124,14 +119,15 @@ If pebble is installed and the `$PEBBLE` directory is set up, running it is easy
 
     $ pebble run
 
-This will start the pebble daemon itself, and start all default services as well. Then
+This will start the pebble daemon itself, as well as starting all the services that
+are marked as `startup: enabled`. Then
 other pebble commands may be used to interact with the running daemon.
 
 For example, to see any recent changes, for this or previous runs, use:
 
     $ pebble changes
 
-And start or stop a specific service with:
+To start or stop specific services, use:
 
     $ pebble start <name1> [<name2> ...]
     $ pebble stop  <name1> [<name2> ...]
@@ -344,22 +340,13 @@ checks:
 
 ## API and clients
 
-The Pebble daemon exposes an API (HTTP over a Unix socket) to allow remote clients to interact with the daemon. It can start and stop services, add configuration layers the plan, and so on. There is currently no official documentation for the API (apart from the [code itself](https://github.com/canonical/pebble/blob/master/internal/daemon/api.go)!); most users will interact with it via the Pebble command line interface or the Go or Python client.
+The Pebble daemon exposes an API (HTTP over a Unix socket) to allow remote clients to interact with the daemon. It can start and stop services, add configuration layers the plan, and so on.
 
-The [Go client](https://pkg.go.dev/github.com/canonical/pebble/client) is used by the CLI to connect to the Pebble API. You can use this as follows:
+There is currently no official documentation for the API at the HTTP level (apart from the [code itself](https://github.com/canonical/pebble/blob/master/internal/daemon/api.go)!); most users will interact with it via the Pebble command line interface or by using the Go or Python clients.
 
-```go
-pebble, err := client.New(&client.Config{Socket: ".pebble.socket"})
-if err != nil {
-    return err
-}
-files, err := pebble.Start(&client.ServiceOptions{Names: []string{"srv1"}})
-if err != nil {
-    return err
-}
-```
+The Go client is used primarily by the CLI, but is importable and can be used by other tools too. See the [reference documentation and examples](https://pkg.go.dev/github.com/canonical/pebble/client) at pkg.go.dev.
 
-We try to never change the underlying API itself in a backwards-incompatible way, however, we may sometimes change the Go client in backwards-incompatible ways.
+We try to never change the underlying HTTP API in a backwards-incompatible way, however, in rare cases we may change the Go client in a backwards-incompatible way.
 
 In addition to the Go client, there's also a [Python client](https://github.com/canonical/operator/blob/master/ops/pebble.py) for the Pebble API that's part of the Python Operator Framework used by Juju charms ([documentation here](https://juju.is/docs/sdk/pebble)).
 
@@ -381,8 +368,9 @@ Here are some of the things coming soon:
   - [x] Automatically restart services that fail
   - [x] Support for custom health checks (HTTP, TCP, command)
   - [x] Terminate all services before exiting run command
-  - [ ] Automatically remove (double) timestamps from logs
-  - [ ] More tests for existing CLI commands
+  - [ ] Log forwarding (syslog and Loki)
+  - [ ] [Other in-progress PRs](https://github.com/canonical/pebble/pulls)
+  - [ ] [Other requested features](https://github.com/canonical/pebble/issues)
 
 ## Hacking / Development
 

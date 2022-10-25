@@ -39,6 +39,7 @@ type ListFilesOptions struct {
 	Itself bool
 }
 
+// FileInfo holds information about a single file.
 type FileInfo struct {
 	name    string
 	size    int64

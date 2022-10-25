@@ -34,7 +34,7 @@ import (
 	"github.com/canonical/pebble/internal/wsutil"
 )
 
-// SocketNotFoundError is the error type returned when the Pebble client fails
+// SocketNotFoundError is the error type returned when the client fails
 // to find a Unix socket at the specified path.
 type SocketNotFoundError struct {
 	// Err is the wrapped error.
@@ -91,22 +91,22 @@ type doer interface {
 
 // Config allows the user to customize client behavior.
 type Config struct {
-	// BaseURL contains the base URL where the pebble daemon is expected to be.
-	// It can be empty for a default behavior of talking over a unix socket.
+	// BaseURL contains the base URL where the Pebble daemon is expected to be.
+	// It can be empty for a default behavior of talking over a Unix socket.
 	BaseURL string
 
-	// Socket is the path to the unix socket to use
+	// Socket is the path to the Unix socket to use.
 	Socket string
 
-	// DisableKeepAlive indicates whether the connections should not be kept
-	// alive for later reuse
+	// DisableKeepAlive indicates that the connections should not be kept
+	// alive for later reuse (the default is to keep them alive).
 	DisableKeepAlive bool
 
-	// User-Agent to sent to the pebble daemon
+	// UserAgent is the User-Agent header sent to the Pebble daemon.
 	UserAgent string
 }
 
-// A Client knows how to talk to the pebble daemon.
+// A Client knows how to talk to the Pebble daemon.
 type Client struct {
 	baseURL   url.URL
 	doer      doer
@@ -133,7 +133,7 @@ type jsonWriter interface {
 	WriteJSON(v interface{}) error
 }
 
-// New returns a new instance of Client
+// New returns a new Client with the given configuration.
 func New(config *Config) (*Client, error) {
 	if config == nil {
 		config = &Config{}
@@ -182,6 +182,7 @@ func getWebsocket(transport *http.Transport, url string) (clientWebsocket, error
 	return conn, err
 }
 
+// CloseIdleConnections closes any idle API connections.
 func (client *Client) CloseIdleConnections() {
 	c, ok := client.doer.(*http.Client)
 	if ok {
@@ -201,14 +202,20 @@ func (client *Client) WarningsSummary() (count int, timestamp time.Time) {
 	return client.warningCount, client.warningTimestamp
 }
 
+// RequestError is returned when there's an error creating an http.Request.
 type RequestError struct{ error }
 
+// Error implements the error interface.
 func (e RequestError) Error() string {
 	return fmt.Sprintf("cannot build request: %v", e.error)
 }
 
-type ConnectionError struct{ error }
+// ConnectionError represents a connection or communication error.
+type ConnectionError struct {
+	error
+}
 
+// Error implements the error interface.
 func (e ConnectionError) Error() string {
 	return fmt.Sprintf("cannot communicate with server: %v", e.error)
 }
@@ -271,7 +278,7 @@ func (h hijacked) Do(req *http.Request) (*http.Response, error) {
 	return h.do(req)
 }
 
-// Hijack lets the caller take over the raw http request
+// Hijack lets the caller take over the raw HTTP request.
 func (client *Client) Hijack(f func(*http.Request) (*http.Response, error)) {
 	client.doer = hijacked{f}
 }
@@ -410,11 +417,13 @@ type Error struct {
 	StatusCode int
 }
 
+// Error implements the error interface.
 func (e *Error) Error() string {
 	return e.Message
 }
 
 const (
+	// Possible values for Error.Kind
 	ErrorKindLoginRequired     = "login-required"
 	ErrorKindSystemRestart     = "system-restart"
 	ErrorKindDaemonRestart     = "daemon-restart"
@@ -462,9 +471,13 @@ func parseError(r *http.Response) error {
 	return err
 }
 
+// SysInfo holds system information returned from the server.
 type SysInfo struct {
+	// Version is the server version.
 	Version string `json:"version,omitempty"`
-	BootID  string `json:"boot-id,omitempty"`
+
+	// BootID is a unique string that represents this boot of the server.
+	BootID string `json:"boot-id,omitempty"`
 }
 
 // SysInfo gets system information from the remote API.

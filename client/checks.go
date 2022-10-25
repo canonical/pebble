@@ -31,6 +31,7 @@ type ChecksOptions struct {
 	Names []string
 }
 
+// CheckLevel represents the level of a health check.
 type CheckLevel string
 
 const (
@@ -39,6 +40,7 @@ const (
 	ReadyLevel CheckLevel = "ready"
 )
 
+// CheckStatus represents the status of a health check.
 type CheckStatus string
 
 const (

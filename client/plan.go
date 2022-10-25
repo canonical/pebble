@@ -20,6 +20,7 @@ import (
 	"net/url"
 )
 
+// AddLayerOptions holds the options for a call to AddLayer.
 type AddLayerOptions struct {
 	// Combine true means combine the new layer with an existing layer that
 	// has the given label. False (the default) means append a new layer.
@@ -33,7 +34,7 @@ type AddLayerOptions struct {
 	LayerData []byte
 }
 
-// AddLayer adds a layer to the plan's layers according to opts.Action.
+// AddLayer adds a layer to the plan's layers.
 func (client *Client) AddLayer(opts *AddLayerOptions) error {
 	var payload = struct {
 		Action  string `json:"action"`
@@ -56,6 +57,7 @@ func (client *Client) AddLayer(opts *AddLayerOptions) error {
 	return err
 }
 
+// PlanOptions holds the options for a call to PlanBytes.
 type PlanOptions struct{}
 
 // PlanBytes fetches the plan in YAML format.
