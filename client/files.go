@@ -82,17 +82,15 @@ func (client *Client) MakeDir(opts *MakeDirOptions) error {
 
 	payload := &makeDirPayload{
 		Action: "make-dirs",
-		Dirs: []makeDirsItem{
-			{
-				Path:        opts.Path,
-				MakeParents: opts.MakeParents,
-				Permissions: permissions,
-				UserID:      opts.UserID,
-				User:        opts.User,
-				GroupID:     opts.GroupID,
-				Group:       opts.Group,
-			},
-		},
+		Dirs: []makeDirsItem{{
+			Path:        opts.Path,
+			MakeParents: opts.MakeParents,
+			Permissions: permissions,
+			UserID:      opts.UserID,
+			User:        opts.User,
+			GroupID:     opts.GroupID,
+			Group:       opts.Group,
+		}},
 	}
 
 	var body bytes.Buffer
