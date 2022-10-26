@@ -251,18 +251,6 @@ var (
 	doTimeout = 5 * time.Second
 )
 
-// FakeDoRetry fakes the delays used by the do retry loop.
-func FakeDoRetry(retry, timeout time.Duration) (restore func()) {
-	oldRetry := doRetry
-	oldTimeout := doTimeout
-	doRetry = retry
-	doTimeout = timeout
-	return func() {
-		doRetry = oldRetry
-		doTimeout = oldTimeout
-	}
-}
-
 type hijacked struct {
 	do func(*http.Request) (*http.Response, error)
 }
@@ -476,33 +464,4 @@ func (client *Client) SysInfo() (*SysInfo, error) {
 	}
 
 	return &sysInfo, nil
-}
-
-type debugAction struct {
-	Action string      `json:"action"`
-	Params interface{} `json:"params,omitempty"`
-}
-
-// DebugPost sends a POST debug action to the server with the provided parameters.
-func (client *Client) DebugPost(action string, params interface{}, result interface{}) error {
-	body, err := json.Marshal(debugAction{
-		Action: action,
-		Params: params,
-	})
-	if err != nil {
-		return err
-	}
-
-	_, err = client.doSync("POST", "/v1/debug", nil, nil, bytes.NewReader(body), result)
-	return err
-}
-
-// DebugGet sends a GET debug action to the server with the provided parameters.
-func (client *Client) DebugGet(action string, result interface{}, params map[string]string) error {
-	urlParams := url.Values{"action": []string{action}}
-	for k, v := range params {
-		urlParams.Set(k, v)
-	}
-	_, err := client.doSync("GET", "/v1/debug", urlParams, nil, nil, &result)
-	return err
 }
