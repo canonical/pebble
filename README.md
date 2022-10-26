@@ -9,7 +9,7 @@ designed with unique features that help with more specific use cases.
 
   - [General model](#general-model)
   - [Layer configuration examples](#layer-configuration-examples)
-  - [Running pebble](#running-pebble)
+  - [Using pebble](#using-pebble)
   - [Layer specification](#layer-specification)
   - [API and clients](#api-and-clients)
   - [Roadmap/TODO](#roadmap--todo)
@@ -118,25 +118,247 @@ services:
         command: cmd
 ```
 
-## Running pebble
+## Using pebble
 
-If pebble is installed and the `$PEBBLE` directory is set up, running it is easy:
+Pebble is invoked using `pebble <command>`. To get more information:
 
-    $ pebble run
+* To see a help summary, type `pebble -h`.
+* To see short description of all commands, type `pebble help --all`.
+* To see details for one command, type `pebble help <command>` or `pebble <command> -h`.
 
-This will start the pebble daemon itself, and start all default services as well. Then
-other pebble commands may be used to interact with the running daemon.
+A few of the commands that need more explanation are detailed below.
 
-For example, to see any recent changes, for this or previous runs, use:
+### Running the daemon (server)
 
-    $ pebble changes
+If pebble is installed and the `$PEBBLE` directory is set up, running the daemon is easy:
 
-And start or stop a specific service with:
+```
+$ pebble run
+2022-10-26T01:18:26.904Z [pebble] Started daemon.
+2022-10-26T01:18:26.921Z [pebble] POST /v1/services 15.53132ms 202
+2022-10-26T01:18:26.921Z [pebble] Started default services with change 50.
+2022-10-26T01:18:26.936Z [pebble] Service "srv1" starting: sleep 300
+```
 
-    $ pebble start <name1> [<name2> ...]
-    $ pebble stop  <name1> [<name2> ...]
+This will start the pebble daemon itself, as well as starting all the services that
+are marked as `startup: enabled` (if you don't want that, use `--hold`). Then
+other pebble commands may be used to interact with the running daemon (for example,
+in another terminal window).
+
+To override the default configuration directory, set the `PEBBLE` environment variable when running:
+
+```
+$ PEBBLE=~/pebble pebble run
+2022-10-26T01:18:26.904Z [pebble] Started daemon.
+...
+```
+
+The daemon's service manager stores the most recent stdout and stderr from each service (using a 100KB ring buffer per service). These are accessible via the logs API or using `pebble logs`. If you want to also write service logs to Pebble's own stdout, run the daemon with `--verbose`:
+
+```
+$ pebble run --verbose
+2022-10-26T01:41:32.805Z [pebble] Started daemon.
+2022-10-26T01:41:32.835Z [pebble] POST /v1/services 29.743632ms 202
+2022-10-26T01:41:32.835Z [pebble] Started default services with change 7.
+2022-10-26T01:41:32.849Z [pebble] Service "srv1" starting: python3 -u /path/to/srv1.py
+2022-10-26T01:41:32.866Z [srv1] This is log number 0
+2022-10-26T01:41:35.870Z [srv1] This is log number 1
+2022-10-26T01:41:38.873Z [srv1] This is log number 2
+...
+```
+
+### Starting and stopping services
+
+To start or stop specific services, type `pebble start` or `pebble stop` followed by one or more service names, for example:
+
+```
+$ pebble start srv1 srv2  # start two services (and any dependencies)
+
+$ pebble stop srv1        # stop one service
+```
+
+When starting a service, Pebble records a "Start" [change](#changes-and-tasks) for the operation, executes the service's `command`, and waits 1 second to ensure the command doesn't exit too quickly. Assuming the command doesn't exit within 1 second, the start is considered successful, otherwise `pebble start` will exit with an error.
+
+When stopping a service, Pebble records a "Stop" change for the operation, and sends SIGTERM to the service's process group. If the command exits within 10 seconds, the stop is considered successful. If the command hasn't exited after 5 seconds, Pebble sends SIGKILL to the service's process group and waits another 5 seconds. If the command still hasn't exited then, `pebble stop` will exit with an error.
+
+You can view the status of one or more services by using `pebble services`:
+
+```
+$ pebble services srv1       # show status of a single service
+Service  Startup  Current
+srv1     enabled  active
+
+$ pebble services            # show status of all services
+Service  Startup   Current
+srv1     enabled   active
+srv2     disabled  inactive
+```
+
+The "Startup" column shows whether this service should be automatically started when Pebble starts ("enabled" means auto-start, "disabled" means don't auto-start).
+
+The "Current" column shows the current status of the service, and can be one of the following:
+
+* `active`: starting or running
+* `inactive`: not yet started, being stopped, or stopped
+* `backoff`: in a backoff-restart loop (see below)
+* `error`: in an error state (currently: exited and exit action is "ignore")
+
+Implementation note: Pebble's service manager uses a [state machine](https://github.com/canonical/pebble/blob/a1f52239079e58cb6e3b6c7472ef5438b91eefab/internal/overlord/servstate/handlers.go#L67-L82) to manage the life cycle of a service. You can see these internal states and their transitions in the [state diagram](https://raw.githubusercontent.com/canonical/pebble/master/internal/overlord/servstate/state-diagram.svg).
+
+### Service dependencies
+
+Pebble takes service dependencies into account when starting and stopping services. Before the service manager starts a service, it first starts the services that service depends on (configured with `required`). Conversely, before stopping a service, it first stops services that depend on that service.
+
+For example, if service `nginx` requires `logger`, `pebble start nginx` will start `logger` and then start `nginx`. Running `pebble stop logger` will stop `nginx` and then `logger`; however, running `pebble stop nginx` will only stop `nginx` (`nginx` depends on `logger`, not the other way around).
+
+If multiple dependencies need to be started at once, they're started in order according to the `before` and `after` configuration: `before` is a list of services that must be started before this one (but it doesn't `require` them). Or if it's easier to specify the other way around, `after` is a list of services that must be started after this one.
+
+### Service auto-restart
+
+Pebble's service manager automatically restarts services that exit unexpectedly. By default, this is done whether the exit code is zero or non-zero, but you can change this using the `on-success` and `on-failure` fields in a configuration layer. The possible values for these fields are:
+
+* `restart`: restart the service and enter a restart-backoff loop (the default behaviour).
+* `shutdown`: shut down and exit the Pebble daemon
+* `ignore`: ignore the service exiting and do nothing further
+
+In `restart` mode, the first time a service exits, Pebble waits the `backoff-delay`, which defaults to half a second. If the service exits again, Pebble calculates the next backoff delay by multiplying the current delay by `backoff-factor`, which defaults to 2.0 (doubling). The increasing delay is capped at `backoff-limit`, which defaults to 30 seconds.
+
+The `backoff-limit` value is also used as a "backoff reset" time. If the service stays running after a restart for `backoff-limit` seconds, the backoff process is reset and the delay reverts to `backoff-delay`.
+
+### Health checks
+
+Separate from the service manager, Pebble implements custom "health checks" that can be configured to restart services when they fail.
+
+Each check can be one of three types. The types and their success criteria are:
+
+* `http`: an HTTP `GET` request to the URL specified must return an HTTP 2xx status code
+* `tcp`: opening the given TCP port must be successful
+* `exec`: executing the specified command must yield a zero exit code
+
+Checks are configured in the layer configuration using the top-level field `checks`. Below is an example layer showing the three different types of checks:
+
+```
+checks:
+    up:
+        override: replace
+        level: alive
+        period: 30s
+        threshold: 1  # an aggressive threshold
+        exec:
+            command: service nginx status
+
+    online:
+        override: replace
+        level: ready
+        tcp:
+            port: 8080
+
+    test:
+        override: replace
+        http:
+            url: http://localhost:8080/test
+```
+
+Each check is performed with the specified `period` (the default is 10 seconds apart), and is considered an error if a timeout happens before the check responds -- for example, before the HTTP request is complete or before the command finishes executing.
+
+A check is considered healthy until it's had `threshold` errors in a row (the default is 3). At that point, the check is considered "down", and any associated `on-check-failure` actions will be triggered. When the check succeeds again, the failure count is reset to 0.
+
+To enable Pebble auto-restart behavior based on a check, use the `on-check-failure` map in the service configuration (this is what ties together services and checks). For example, to restart the "server" service when the "test" check fails, use the following:
+
+```
+services:
+    server:
+        override: merge
+        on-check-failure:
+            test: restart   # can also be "shutdown" or "ignore" (the default)
+```
+
+You can view check status using the `pebble checks` command. This reports the checks along with their status (`up` or `down`) and number of failures. For example:
+
+```
+$ pebble checks
+Check   Level  Status  Failures
+up      alive  up      0/1
+online  ready  down    1/3
+test    -      down    42/3
+```
+
+The "Failures" column shows the current number of failures, a slash, and the configured threshold.
+
+If `--http` option was given when running `pebble run`, Pebble exposes a `/v1/health` endpoint that allows a user to query the health of configured checks, optionally filtered by check level with the query string `?level=<level>` This endpoint returns an HTTP 200 status if the checks are healthy, HTTP 502 otherwise.
+
+Each check can specify a `level` of "alive" or "ready". These have semantic meaning: "alive" means the check or the service it's connected to is up and running; "ready" means it's properly accepting network traffic. These correspond to [Kubernetes "liveness" and "readiness" probes](https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/).
+
+The tool running the Pebble server can make use of this, for example, under Kubernetes you could initialize the liveness and readiness probes to hit the `/v1/health` endpoint with `?level=alive` and `?level=ready` filters, respectively.
+
+Ready implies alive, and not alive implies not ready. If you've configured an "alive" check but no "ready" check, and the "alive" check is unhealthy, `/v1/health?level=ready` will report unhealthy as well, and the Kubernetes readiness probe will act on that.
+
+If there are no checks configured, Pebble returns HTTP 200 so the liveness and readiness probes are successful by default. To use this feature, you must explicitly create checks with `level: alive` or `level: ready` in the layer configuration.
+
+### Changes and tasks
+
+When Pebble performs a (potentially invasive or long-running) operation such as starting or stopping a service, it records a "change" object with one or more "tasks" in it. The daemon records this state in a JSON file on disk at `$PEBBLE/.pebble.state`.
+
+To see recent changes, for this or previous server runs, use `pebble changes`. You might see something like this:
+
+```
+$ pebble changes
+ID  Status  Spawn                Ready                Summary
+1   Done    today at 14:33 NZDT  today at 14:33 NZDT  Autostart service "srv1"
+2   Done    today at 15:26 NZDT  today at 15:26 NZDT  Start service "srv2"
+3   Done    today at 15:26 NZDT  today at 15:26 NZDT  Stop service "srv1" and 1 more
+```
+
+To drill down and see the tasks that make up a change, use `pebble tasks <change-id>`:
+
+```
+$ pebble tasks 3
+Status  Spawn                Ready                Summary
+Done    today at 15:26 NZDT  today at 15:26 NZDT  Stop service "srv1"
+Done    today at 15:26 NZDT  today at 15:26 NZDT  Stop service "srv2"
+```
+
+### Exec (one-shot commands)
+
+Pebble's "exec" feature allows you to run arbitrary commands on the server. This is intended for short-running programs; the processes started with exec bypass Pebble's service manager.
+
+For example, you could use `exec` to run pg_dump and create a PostgreSQL database backup:
+
+```
+$ pebble exec pg_dump mydb
+--
+-- PostgreSQL database dump
+--
+...
+```
+
+The exec feature uses WebSockets under the hood, and allows you to stream stdin to the process, as well as stream stdout and stderr back. When running `pebble exec`, you can specify the working directory to run in (`-w`), environment variables to set (`--env`), and the user and group to run as (`--uid`/`--user` and `--gid`/`--group`).
+
+You can also apply a timeout with `--timeout`, for example:
+
+```
+$ pebble exec --timeout 1s -- sleep 3
+error: cannot perform the following tasks:
+- exec command "sleep" (timed out after 1s: context deadline exceeded)
+```
+
+### File management
+
+Pebble provides various API calls and commands to manage files and directories on the server. The simplest way to use these is with the commands below, several of which should be familiar:
+
+```
+$ pebble ls <path>              # list file information (like "ls")
+$ pebble mkdir <path>           # create a directory (like "mkdir")
+
+# TODO -- the following commands are coming soon
+$ pebble rm <path>              # remove a file or directory (like "rm")
+$ pebble push <local> <remote>  # copy file to server (like "cp")
+$ pebble pull <remote> <local>  # copy file from server (like "cp")
+```
 
 ## Layer specification
+
+Below is the full specification for a Pebble configuration layer. Layers are added statically using a file in `$PEBBLE/layers`, or dynamically via the layers API or `pebble add`.
 
 ```yaml
 # (Optional) A short one line summary of the layer
@@ -361,7 +583,7 @@ if err != nil {
 
 We try to never change the underlying API itself in a backwards-incompatible way, however, we may sometimes change the Go client in backwards-incompatible ways.
 
-In addition to the Go client, there's also a [Python client](https://github.com/canonical/operator/blob/master/ops/pebble.py) for the Pebble API that's part of the Python Operator Framework used by Juju charms ([documentation here](https://juju.is/docs/sdk/pebble)).
+In addition to the Go client, there's also a [Python client](https://github.com/canonical/operator/blob/master/ops/pebble.py) for the Pebble API that's part of the Python Operator Framework used by Juju charms ([documentation here](https://juju.is/docs/sdk/interact-with-pebble)).
 
 ## Roadmap / TODO
 
