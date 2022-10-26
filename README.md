@@ -123,7 +123,7 @@ services:
 Pebble is invoked using `pebble <command>`. To get more information:
 
 * To see a help summary, type `pebble -h`.
-* To see short description of all commands, type `pebble help --all`.
+* To see a short description of all commands, type `pebble help --all`.
 * To see details for one command, type `pebble help <command>` or `pebble <command> -h`.
 
 A few of the commands that need more explanation are detailed below.
@@ -142,8 +142,8 @@ $ pebble run
 
 This will start the pebble daemon itself, as well as starting all the services that
 are marked as `startup: enabled` (if you don't want that, use `--hold`). Then
-other pebble commands may be used to interact with the running daemon (for example,
-in another terminal window).
+other pebble commands may be used to interact with the running daemon, for example,
+in another terminal window.
 
 To override the default configuration directory, set the `PEBBLE` environment variable when running:
 
@@ -179,7 +179,7 @@ $ pebble stop srv1        # stop one service
 
 When starting a service, Pebble records a "Start" [change](#changes-and-tasks) for the operation, executes the service's `command`, and waits 1 second to ensure the command doesn't exit too quickly. Assuming the command doesn't exit within 1 second, the start is considered successful, otherwise `pebble start` will exit with an error.
 
-When stopping a service, Pebble records a "Stop" change for the operation, and sends SIGTERM to the service's process group. If the command exits within 10 seconds, the stop is considered successful. If the command hasn't exited after 5 seconds, Pebble sends SIGKILL to the service's process group and waits another 5 seconds. If the command still hasn't exited then, `pebble stop` will exit with an error.
+When stopping a service, Pebble records a "Stop" change for the operation, sends SIGTERM to the service's process group, and waits up to 5 seconds. If the command hasn't exited after 5 seconds, Pebble sends SIGKILL to the service's process group and waits up to 5 more seconds. If the command exits within that 10 seconds, the stop is considered successful, otherwise `pebble stop` will exit with an error.
 
 You can view the status of one or more services by using `pebble services`:
 
@@ -200,18 +200,20 @@ The "Current" column shows the current status of the service, and can be one of 
 
 * `active`: starting or running
 * `inactive`: not yet started, being stopped, or stopped
-* `backoff`: in a backoff-restart loop (see below)
+* `backoff`: in a [backoff-restart loop](#service-auto-restart)
 * `error`: in an error state (currently: exited and exit action is "ignore")
 
 Implementation note: Pebble's service manager uses a [state machine](https://github.com/canonical/pebble/blob/a1f52239079e58cb6e3b6c7472ef5438b91eefab/internal/overlord/servstate/handlers.go#L67-L82) to manage the life cycle of a service. You can see these internal states and their transitions in the [state diagram](https://raw.githubusercontent.com/canonical/pebble/master/internal/overlord/servstate/state-diagram.svg).
 
 ### Service dependencies
 
-Pebble takes service dependencies into account when starting and stopping services. Before the service manager starts a service, it first starts the services that service depends on (configured with `required`). Conversely, before stopping a service, it first stops services that depend on that service.
+Pebble takes service dependencies into account when starting and stopping services. Before the service manager starts a service, Pebble first starts the services that service depends on (configured with `required`). Conversely, before stopping a service, Pebble first stops services that depend on that service.
 
 For example, if service `nginx` requires `logger`, `pebble start nginx` will start `logger` and then start `nginx`. Running `pebble stop logger` will stop `nginx` and then `logger`; however, running `pebble stop nginx` will only stop `nginx` (`nginx` depends on `logger`, not the other way around).
 
 If multiple dependencies need to be started at once, they're started in order according to the `before` and `after` configuration: `before` is a list of services that must be started before this one (but it doesn't `require` them). Or if it's easier to specify the other way around, `after` is a list of services that must be started after this one.
+
+If the configuration of `requires`, `before`, and `after` for a service results in a cycle or "loop", an error will be returned when attempting to start or stop the service.
 
 ### Service auto-restart
 
@@ -283,17 +285,17 @@ online  ready  down    1/3
 test    -      down    42/3
 ```
 
-The "Failures" column shows the current number of failures, a slash, and the configured threshold.
+The "Failures" column shows the current number of failures since the check started failing, a slash, and the configured threshold.
 
-If `--http` option was given when running `pebble run`, Pebble exposes a `/v1/health` endpoint that allows a user to query the health of configured checks, optionally filtered by check level with the query string `?level=<level>` This endpoint returns an HTTP 200 status if the checks are healthy, HTTP 502 otherwise.
+If the `--http` option was given when starting `pebble run`, Pebble exposes a `/v1/health` HTTP endpoint that allows a user to query the health of configured checks, optionally filtered by check level with the query string `?level=<level>` This endpoint returns an HTTP 200 status if the checks are healthy, HTTP 502 otherwise.
 
 Each check can specify a `level` of "alive" or "ready". These have semantic meaning: "alive" means the check or the service it's connected to is up and running; "ready" means it's properly accepting network traffic. These correspond to [Kubernetes "liveness" and "readiness" probes](https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/).
 
-The tool running the Pebble server can make use of this, for example, under Kubernetes you could initialize the liveness and readiness probes to hit the `/v1/health` endpoint with `?level=alive` and `?level=ready` filters, respectively.
+The tool running the Pebble server can make use of this, for example, under Kubernetes you could initialize its liveness and readiness probes to hit Pebble's `/v1/health` endpoint with `?level=alive` and `?level=ready` filters, respectively.
 
-Ready implies alive, and not alive implies not ready. If you've configured an "alive" check but no "ready" check, and the "alive" check is unhealthy, `/v1/health?level=ready` will report unhealthy as well, and the Kubernetes readiness probe will act on that.
+Ready implies alive, and not-alive implies not-ready. If you've configured an "alive" check but no "ready" check, and the "alive" check is unhealthy, `/v1/health?level=ready` will report unhealthy as well, and the Kubernetes readiness probe will act on that.
 
-If there are no checks configured, Pebble returns HTTP 200 so the liveness and readiness probes are successful by default. To use this feature, you must explicitly create checks with `level: alive` or `level: ready` in the layer configuration.
+If there are no checks configured, the `/v1/health` endpoint returns HTTP 200 so the liveness and readiness probes are successful by default. To use this feature, you must explicitly create checks with `level: alive` or `level: ready` in the layer configuration.
 
 ### Changes and tasks
 
@@ -320,7 +322,7 @@ Done    today at 15:26 NZDT  today at 15:26 NZDT  Stop service "srv2"
 
 ### Exec (one-shot commands)
 
-Pebble's "exec" feature allows you to run arbitrary commands on the server. This is intended for short-running programs; the processes started with exec bypass Pebble's service manager.
+Pebble's "exec" feature allows you to run arbitrary commands on the server. This is intended for short-running programs; the processes started with exec don't use the service manager.
 
 For example, you could use `exec` to run pg_dump and create a PostgreSQL database backup:
 
