@@ -237,7 +237,7 @@ Each check can be one of three types. The types and their success criteria are:
 * `tcp`: opening the given TCP port must be successful
 * `exec`: executing the specified command must yield a zero exit code
 
-Checks are configured in the layer configuration using the top-level field `checks`. Below is an example layer showing the three different types of checks:
+Checks are configured in the layer configuration using the top-level field `checks`. Full details are given in the [layer specification](#layer-specification), but below is an example layer showing the three different types of checks:
 
 ```
 checks:
