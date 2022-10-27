@@ -157,13 +157,22 @@ func (cs *clientSuite) TestPullFailsWithInvalidJSON(c *C) {
 	cs.header.Set("Content-Type", mw.FormDataContentType())
 	cs.status = http.StatusOK
 
-	mh := textproto.MIMEHeader{}
-	mh.Set("Content-Type", "application/json")
-	mh.Set("Content-Disposition", `form-data; name="response"`)
+	// Encode file part
+	filesHeader := textproto.MIMEHeader{}
+	filesHeader.Set("Content-Type", "application/octet-stream")
+	filesHeader.Set("Content-Disposition", `form-data; name="files"`)
 
-	part, err := mw.CreatePart(mh)
+	_, err := mw.CreatePart(filesHeader)
 	c.Assert(err, IsNil)
-	fmt.Fprintf(part, `NJSON stands for Not-JSON`)
+
+	// Encode response part
+	responseHeader := textproto.MIMEHeader{}
+	responseHeader.Set("Content-Type", "application/json")
+	responseHeader.Set("Content-Disposition", `form-data; name="response"`)
+
+	responsePart, err := mw.CreatePart(responseHeader)
+	c.Assert(err, IsNil)
+	fmt.Fprintf(responsePart, `NJSON stands for Not-JSON`)
 
 	mw.Close()
 	cs.rsp = srcBuf.String()
@@ -186,13 +195,22 @@ func (cs *clientSuite) TestPullFailsWithMetadataError(c *C) {
 	cs.header.Set("Content-Type", mw.FormDataContentType())
 	cs.status = http.StatusOK
 
-	mh := textproto.MIMEHeader{}
-	mh.Set("Content-Type", "application/json")
-	mh.Set("Content-Disposition", `form-data; name="response"`)
+	// Encode file part
+	filesHeader := textproto.MIMEHeader{}
+	filesHeader.Set("Content-Type", "application/octet-stream")
+	filesHeader.Set("Content-Disposition", `form-data; name="files"`)
 
-	part, err := mw.CreatePart(mh)
+	_, err := mw.CreatePart(filesHeader)
 	c.Assert(err, IsNil)
-	fmt.Fprintf(part, `{"type": "error", "result": {"message": "could not foo"}}`)
+
+	// Encode response part
+	responseHeader := textproto.MIMEHeader{}
+	responseHeader.Set("Content-Type", "application/json")
+	responseHeader.Set("Content-Disposition", `form-data; name="response"`)
+
+	responsePart, err := mw.CreatePart(responseHeader)
+	c.Assert(err, IsNil)
+	fmt.Fprintf(responsePart, `{"type": "error", "result": {"message": "could not foo"}}`)
 
 	mw.Close()
 	cs.rsp = srcBuf.String()
@@ -213,13 +231,22 @@ func (cs *clientSuite) TestPullFailsWithNonSyncResponse(c *C) {
 	cs.header.Set("Content-Type", mw.FormDataContentType())
 	cs.status = http.StatusOK
 
-	mh := textproto.MIMEHeader{}
-	mh.Set("Content-Type", "application/json")
-	mh.Set("Content-Disposition", `form-data; name="response"`)
+	// Encode file part
+	filesHeader := textproto.MIMEHeader{}
+	filesHeader.Set("Content-Type", "application/octet-stream")
+	filesHeader.Set("Content-Disposition", `form-data; name="files"`)
 
-	part, err := mw.CreatePart(mh)
+	_, err := mw.CreatePart(filesHeader)
 	c.Assert(err, IsNil)
-	fmt.Fprintf(part, `{"type": "sfdeljknesv"}`)
+
+	// Encode response part
+	responseHeader := textproto.MIMEHeader{}
+	responseHeader.Set("Content-Type", "application/json")
+	responseHeader.Set("Content-Disposition", `form-data; name="response"`)
+
+	responsePart, err := mw.CreatePart(responseHeader)
+	c.Assert(err, IsNil)
+	fmt.Fprintf(responsePart, `{"type": "sfdeljknesv"}`)
 
 	mw.Close()
 	cs.rsp = srcBuf.String()
@@ -240,13 +267,22 @@ func (cs *clientSuite) TestPullFailsWithInvalidResult(c *C) {
 	cs.header.Set("Content-Type", mw.FormDataContentType())
 	cs.status = http.StatusOK
 
-	mh := textproto.MIMEHeader{}
-	mh.Set("Content-Type", "application/json")
-	mh.Set("Content-Disposition", `form-data; name="response"`)
+	// Encode file part
+	filesHeader := textproto.MIMEHeader{}
+	filesHeader.Set("Content-Type", "application/octet-stream")
+	filesHeader.Set("Content-Disposition", `form-data; name="files"`)
 
-	part, err := mw.CreatePart(mh)
+	_, err := mw.CreatePart(filesHeader)
 	c.Assert(err, IsNil)
-	fmt.Fprintf(part, `{"type": "sync", "result": "not what you expected"}`)
+
+	// Encode response part
+	responseHeader := textproto.MIMEHeader{}
+	responseHeader.Set("Content-Type", "application/json")
+	responseHeader.Set("Content-Disposition", `form-data; name="response"`)
+
+	responsePart, err := mw.CreatePart(responseHeader)
+	c.Assert(err, IsNil)
+	fmt.Fprintf(responsePart, `{"type": "sync", "result": "not what you expected"}`)
 
 	mw.Close()
 	cs.rsp = srcBuf.String()
@@ -267,13 +303,22 @@ func (cs *clientSuite) TestPullFailsWithMultipleResults(c *C) {
 	cs.header.Set("Content-Type", mw.FormDataContentType())
 	cs.status = http.StatusOK
 
-	mh := textproto.MIMEHeader{}
-	mh.Set("Content-Type", "application/json")
-	mh.Set("Content-Disposition", `form-data; name="response"`)
+	// Encode file part
+	filesHeader := textproto.MIMEHeader{}
+	filesHeader.Set("Content-Type", "application/octet-stream")
+	filesHeader.Set("Content-Disposition", `form-data; name="files"`)
 
-	part, err := mw.CreatePart(mh)
+	_, err := mw.CreatePart(filesHeader)
 	c.Assert(err, IsNil)
-	fmt.Fprintf(part, `{"type": "sync", "result": [{"path": ""},{"path": ""}]}`)
+
+	// Encode response part
+	responseHeader := textproto.MIMEHeader{}
+	responseHeader.Set("Content-Type", "application/json")
+	responseHeader.Set("Content-Disposition", `form-data; name="response"`)
+
+	responsePart, err := mw.CreatePart(responseHeader)
+	c.Assert(err, IsNil)
+	fmt.Fprintf(responsePart, `{"type": "sync", "result": [{"path": ""},{"path": ""}]}`)
 
 	mw.Close()
 	cs.rsp = srcBuf.String()
@@ -294,13 +339,22 @@ func (cs *clientSuite) TestPullFailsWithClientError(c *C) {
 	cs.header.Set("Content-Type", mw.FormDataContentType())
 	cs.status = http.StatusOK
 
-	mh := textproto.MIMEHeader{}
-	mh.Set("Content-Type", "application/json")
-	mh.Set("Content-Disposition", `form-data; name="response"`)
+	// Encode file part
+	filesHeader := textproto.MIMEHeader{}
+	filesHeader.Set("Content-Type", "application/octet-stream")
+	filesHeader.Set("Content-Disposition", `form-data; name="files"`)
 
-	part, err := mw.CreatePart(mh)
+	_, err := mw.CreatePart(filesHeader)
 	c.Assert(err, IsNil)
-	fmt.Fprintf(part, `{
+
+	// Encode response part
+	responseHeader := textproto.MIMEHeader{}
+	responseHeader.Set("Content-Type", "application/json")
+	responseHeader.Set("Content-Disposition", `form-data; name="response"`)
+
+	responsePart, err := mw.CreatePart(responseHeader)
+	c.Assert(err, IsNil)
+	fmt.Fprintf(responsePart, `{
 		"type": "sync",
 		"result": [{
 			"path": "/foo/bar.dat",

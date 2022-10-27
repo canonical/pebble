@@ -69,49 +69,54 @@ func (client *Client) Pull(opts *PullOptions) error {
 	}
 
 	mr := multipart.NewReader(rsp.Body, params["boundary"])
-	for {
-		part, err := mr.NextPart()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return fmt.Errorf("cannot decode multipart payload: %w", err)
-		}
-		defer part.Close()
 
-		if part.FormName() == "files" {
-			if _, err = io.Copy(opts.Target, part); err != nil {
-				return fmt.Errorf("cannot write: %w", err)
-			}
-		} else if part.FormName() == "response" {
-			// Process response metadata
-			var res response
-			var fr []fileResult
+	filesPart, err := mr.NextPart()
+	if err != nil {
+		return fmt.Errorf("cannot decode multipart payload: %w", err)
+	}
+	defer filesPart.Close()
+	if filesPart.FormName() != "files" {
+		return fmt.Errorf(`expected first field name to be "files", got %q`, filesPart.FormName())
+	}
+	if _, err = io.Copy(opts.Target, filesPart); err != nil {
+		return fmt.Errorf("cannot write: %w", err)
+	}
 
-			decoder := json.NewDecoder(part)
-			if err := decoder.Decode(&res); err != nil {
-				return fmt.Errorf("cannot decode response: %w", err)
-			}
-			if err := res.err(client); err != nil {
-				return err
-			}
-			if res.Type != "sync" {
-				return fmt.Errorf("expected sync response, got %q", res.Type)
-			}
-			if err := decodeWithNumber(bytes.NewReader(res.Result), &fr); err != nil {
-				return fmt.Errorf("cannot unmarshal result: %w", err)
-			}
+	responsePart, err := mr.NextPart()
+	if err != nil {
+		return fmt.Errorf("cannot decode multipart payload: %w", err)
+	}
+	defer responsePart.Close()
+	if responsePart.FormName() != "response" {
+		return fmt.Errorf(`expected second field name to be "response", got %q`, responsePart.FormName())
+	}
 
-			if len(fr) != 1 {
-				return fmt.Errorf("expected exactly one result from API, got %d", len(fr))
-			}
-			if fr[0].Error != nil {
-				return &Error{
-					Kind:    fr[0].Error.Kind,
-					Value:   fr[0].Error.Value,
-					Message: fr[0].Error.Message,
-				}
-			}
+	// Process response metadata
+	var res response
+	var fr []fileResult
+
+	decoder := json.NewDecoder(responsePart)
+	if err := decoder.Decode(&res); err != nil {
+		return fmt.Errorf("cannot decode response: %w", err)
+	}
+	if err := res.err(client); err != nil {
+		return err
+	}
+	if res.Type != "sync" {
+		return fmt.Errorf("expected sync response, got %q", res.Type)
+	}
+	if err := decodeWithNumber(bytes.NewReader(res.Result), &fr); err != nil {
+		return fmt.Errorf("cannot unmarshal result: %w", err)
+	}
+
+	if len(fr) != 1 {
+		return fmt.Errorf("expected exactly one result from API, got %d", len(fr))
+	}
+	if fr[0].Error != nil {
+		return &Error{
+			Kind:    fr[0].Error.Kind,
+			Value:   fr[0].Error.Value,
+			Message: fr[0].Error.Message,
 		}
 	}
 
