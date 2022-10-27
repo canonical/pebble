@@ -32,6 +32,7 @@ type PullOptions struct {
 	Path string
 
 	// Target is the destination io.Writer that will receive the data (required).
+	// During a call to Pull, Target may be written to even if an error is returned.
 	Target io.Writer
 }
 
@@ -65,7 +66,7 @@ func (client *Client) Pull(opts *PullOptions) error {
 	}
 	if mediaType != "multipart/form-data" {
 		// Not an error response after all
-		return fmt.Errorf("expected a multipart response but didn't get one")
+		return fmt.Errorf("expected a multipart response, got %q", mediaType)
 	}
 
 	mr := multipart.NewReader(rsp.Body, params["boundary"])
@@ -93,18 +94,20 @@ func (client *Client) Pull(opts *PullOptions) error {
 
 	// Process response metadata
 	var res response
-	var fr []fileResult
 
 	decoder := json.NewDecoder(responsePart)
 	if err := decoder.Decode(&res); err != nil {
 		return fmt.Errorf("cannot decode response: %w", err)
 	}
+
+	// This checking/decoding logic has been taken from Client.do()
 	if err := res.err(client); err != nil {
 		return err
 	}
 	if res.Type != "sync" {
 		return fmt.Errorf("expected sync response, got %q", res.Type)
 	}
+	var fr []fileResult
 	if err := decodeWithNumber(bytes.NewReader(res.Result), &fr); err != nil {
 		return fmt.Errorf("cannot unmarshal result: %w", err)
 	}

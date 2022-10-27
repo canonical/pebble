@@ -87,7 +87,7 @@ func (cs *clientSuite) TestPullFailsWithNonMultipartResponse(c *C) {
 		Path:   "/foo/bar.dat",
 		Target: &targetBuf,
 	})
-	c.Assert(err, ErrorMatches, "expected a multipart response but didn't get one")
+	c.Assert(err, ErrorMatches, `expected a multipart response, got "text/plain"`)
 }
 
 func (cs *clientSuite) TestPullFailsWithInvalidMultipartResponse(c *C) {
