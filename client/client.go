@@ -258,7 +258,8 @@ var (
 	doTimeout = 5 * time.Second
 )
 
-// FakeDoRetry fakes the delays used by the do retry loop.
+// FakeDoRetry fakes the delays used by the do retry loop (intended for
+// testing). Calling restore will revert the changes.
 func FakeDoRetry(retry, timeout time.Duration) (restore func()) {
 	oldRetry := doRetry
 	oldTimeout := doTimeout
