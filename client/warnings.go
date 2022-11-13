@@ -40,10 +40,8 @@ type jsonWarning struct {
 	RepeatAfter string `json:"repeat-after,omitempty"`
 }
 
-// WarningsOptions contains options for querying Pebble for warnings
-// supported options:
-// - All: return all warnings, instead of only the un-okayed ones.
 type WarningsOptions struct {
+	// All means return all warnings, instead of only the un-okayed ones.
 	All bool
 }
 

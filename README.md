@@ -21,7 +21,7 @@ designed with unique features that help with more specific use cases.
 Pebble is organized as a single binary that works as a daemon and also as a
 client to itself. When the daemon runs it loads its own configuration from the
 `$PEBBLE` directory, as defined in the environment, and also records in
-that same directory its state and Unix sockets for communication. If that variable
+that same directory its state and unix sockets for communication. If that variable
 is not defined, Pebble will attempt to look for its configuration from a default
 system-level setup at `/var/lib/pebble/default`. Using that directory is encouraged
 for whole-system setup such as when using Pebble to control services in a container.
@@ -340,7 +340,7 @@ checks:
 
 ## API and clients
 
-The Pebble daemon exposes an API (HTTP over a Unix socket) to allow remote clients to interact with the daemon. It can start and stop services, add configuration layers the plan, and so on.
+The Pebble daemon exposes an API (HTTP over a unix socket) to allow remote clients to interact with the daemon. It can start and stop services, add configuration layers the plan, and so on.
 
 There is currently no official documentation for the API at the HTTP level (apart from the [code itself](https://github.com/canonical/pebble/blob/master/internal/daemon/api.go)!); most users will interact with it via the Pebble command line interface or by using the Go or Python clients.
 

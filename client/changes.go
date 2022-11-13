@@ -121,7 +121,6 @@ func (client *Client) Abort(id string) (*Change, error) {
 // ChangeSelector represents a selection of changes to query for.
 type ChangeSelector uint8
 
-// String returns a human-readable representation of c.
 func (c ChangeSelector) String() string {
 	switch c {
 	case ChangesInProgress:
@@ -141,7 +140,6 @@ const (
 	ChangesAll = ChangesReady | ChangesInProgress
 )
 
-// ChangesOptions holds the options for a call to Changes.
 type ChangesOptions struct {
 	ServiceName string // if empty, no filtering by service is done
 	Selector    ChangeSelector
@@ -175,7 +173,6 @@ func (client *Client) Changes(opts *ChangesOptions) ([]*Change, error) {
 	return chgs, err
 }
 
-// WaitChangeOptions holds the options for the WaitChange call.
 type WaitChangeOptions struct {
 	// If nonzero, wait at most this long before returning. If a timeout
 	// occurs, WaitChange will return an error.

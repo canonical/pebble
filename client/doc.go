@@ -12,7 +12,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-// Package client implements a Go client for Pebble's HTTP-over-Unix-socket
+// Package client implements a Go client for Pebble's HTTP-over-unix-socket
 // API.
 //
 // To use the API, first create a client using [New], and then call the

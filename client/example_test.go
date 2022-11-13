@@ -20,11 +20,11 @@ import (
 	"github.com/canonical/pebble/client"
 )
 
-var runExample = false
+var runExample = false // example won't actually be run, just type-checked
 
 func Example() {
 	if !runExample {
-		return // don't run this example under "go test"
+		return
 	}
 
 	pebble, err := client.New(&client.Config{Socket: ".pebble.socket"})

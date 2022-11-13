@@ -22,8 +22,6 @@ import (
 	"strings"
 )
 
-// ServiceOptions holds the options for a service operation such as
-// [Client.Start].
 type ServiceOptions struct {
 	Names []string
 }
@@ -81,7 +79,6 @@ func (client *Client) doMultiServiceAction(actionName string, services []string)
 	return client.doAsyncFull("POST", "/v1/services", nil, headers, bytes.NewBuffer(data))
 }
 
-// ServicesOptions are the filtering options for querying services.
 type ServicesOptions struct {
 	// Names is the list of service names to query for. If slice is nil or
 	// empty, fetch information for all services.
