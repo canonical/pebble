@@ -10,6 +10,7 @@ designed with unique features that help with more specific use cases.
   - [General model](#general-model)
   - [Layer configuration examples](#layer-configuration-examples)
   - [Using pebble](#using-pebble)
+  - [Container usage](#container-usage)
   - [Layer specification](#layer-specification)
   - [API and clients](#api-and-clients)
   - [Roadmap/TODO](#roadmap--todo)
@@ -34,7 +35,8 @@ redefine the service configuration as desired.
 
 ## Layer configuration examples
 
-This is a complete example of the current [configuration format](#layer-specification):
+Below is an example of the current configuration format.
+For full details of all fields, see the [complete layer specification](#layer-specification).
 
 ```yaml
 summary: Simple layer
@@ -59,8 +61,6 @@ services:
             VAR1: val1
             VAR2: val2
             VAR3: val3
-        user: bob
-        group: staff
 
     srv2:
         override: replace
@@ -78,11 +78,8 @@ Some details worth highlighting:
 
   - The `startup` option can be `enabled` or `disabled`.
   - There is the `override` field (for now required) which defines whether this 
-entry _overrides_ the previous service of the same name (if any - missing is 
+entry _overrides_ the previous service of the same name (if any -- missing is 
 okay), or merges with it.
-  - The optional `user` field allows starting a service with a different user
-    than the one Pebble was started with. The `group` field is similar but for
-    a group name (it is optional even if `user` is specified).
 
 ### Layer override example
 
@@ -118,7 +115,7 @@ services:
         command: cmd
 ```
 
-## Using pebble
+## Using Pebble
 
 Pebble is invoked using `pebble <command>`. To get more information:
 
@@ -148,38 +145,13 @@ in another terminal window.
 To override the default configuration directory, set the `PEBBLE` environment variable when running:
 
 ```
-$ PEBBLE=~/pebble pebble run
+$ export PEBBLE=~/pebble
+pebble run
 2022-10-26T01:18:26.904Z [pebble] Started daemon.
 ...
 ```
 
-The daemon's service manager stores the most recent stdout and stderr from each service (using a 100KB ring buffer per service). These are accessible via the logs API or using `pebble logs`. If you want to also write service logs to Pebble's own stdout, run the daemon with `--verbose`:
-
-```
-$ pebble run --verbose
-2022-10-26T01:41:32.805Z [pebble] Started daemon.
-2022-10-26T01:41:32.835Z [pebble] POST /v1/services 29.743632ms 202
-2022-10-26T01:41:32.835Z [pebble] Started default services with change 7.
-2022-10-26T01:41:32.849Z [pebble] Service "srv1" starting: python3 -u /path/to/srv1.py
-2022-10-26T01:41:32.866Z [srv1] This is log number 0
-2022-10-26T01:41:35.870Z [srv1] This is log number 1
-2022-10-26T01:41:38.873Z [srv1] This is log number 2
-...
-```
-
-### Starting and stopping services
-
-To start or stop specific services, type `pebble start` or `pebble stop` followed by one or more service names, for example:
-
-```
-$ pebble start srv1 srv2  # start two services (and any dependencies)
-
-$ pebble stop srv1        # stop one service
-```
-
-When starting a service, Pebble records a "Start" [change](#changes-and-tasks) for the operation, executes the service's `command`, and waits 1 second to ensure the command doesn't exit too quickly. Assuming the command doesn't exit within 1 second, the start is considered successful, otherwise `pebble start` will exit with an error.
-
-When stopping a service, Pebble records a "Stop" change for the operation, sends SIGTERM to the service's process group, and waits up to 5 seconds. If the command hasn't exited after 5 seconds, Pebble sends SIGKILL to the service's process group and waits up to 5 more seconds. If the command exits within that 10 seconds, the stop is considered successful, otherwise `pebble stop` will exit with an error.
+### Viewing, starting, and stopping services
 
 You can view the status of one or more services by using `pebble services`:
 
@@ -194,16 +166,30 @@ srv1     enabled   active
 srv2     disabled  inactive
 ```
 
-The "Startup" column shows whether this service should be automatically started when Pebble starts ("enabled" means auto-start, "disabled" means don't auto-start).
+The "Startup" column shows whether this service is automatically started when Pebble starts ("enabled" means auto-start, "disabled" means don't auto-start).
 
 The "Current" column shows the current status of the service, and can be one of the following:
 
 * `active`: starting or running
 * `inactive`: not yet started, being stopped, or stopped
 * `backoff`: in a [backoff-restart loop](#service-auto-restart)
-* `error`: in an error state (currently: exited and exit action is "ignore")
+* `error`: in an error state
 
-Implementation note: Pebble's service manager uses a [state machine](https://github.com/canonical/pebble/blob/a1f52239079e58cb6e3b6c7472ef5438b91eefab/internal/overlord/servstate/handlers.go#L67-L82) to manage the life cycle of a service. You can see these internal states and their transitions in the [state diagram](https://raw.githubusercontent.com/canonical/pebble/master/internal/overlord/servstate/state-diagram.svg).
+To start specific services, type `pebble start` followed by one or more service names:
+
+```
+$ pebble start srv1 srv2  # start two services (and any dependencies)
+```
+
+When starting a service, Pebble executes the service's `command`, and waits 1 second to ensure the command doesn't exit too quickly. Assuming the command doesn't exit within that time window, the start is considered successful, otherwise `pebble start` will exit with an error.
+
+Similarly, to stop specific services, use `pebble stop` followed by one or more service names:
+
+```
+$ pebble stop srv1        # stop one service
+```
+
+When stopping a service, Pebble sends SIGTERM to the service's process group, and waits up to 5 seconds. If the command hasn't exited within that time window, Pebble sends SIGKILL to the service's process group and waits up to 5 more seconds. If the command exits within that 10-second time window, the stop is considered successful, otherwise `pebble stop` will exit with an error.
 
 ### Service dependencies
 
@@ -319,6 +305,56 @@ Status  Spawn                Ready                Summary
 Done    today at 15:26 NZDT  today at 15:26 NZDT  Stop service "srv1"
 Done    today at 15:26 NZDT  today at 15:26 NZDT  Stop service "srv2"
 ```
+
+### Logs
+
+The daemon's service manager stores the most recent stdout and stderr from each service, using a 100KB ring buffer per service. Each log line is prefixed with an RFC-3339 timestamp and the `[service-name]` in square brackets.
+
+Logs are viewable via the logs API or using `pebble logs`, for example:
+
+```
+$ pebble logs
+2022-11-14T01:35:06.979Z [srv1] Log 0 from srv1
+2022-11-14T01:35:08.041Z [srv2] Log 0 from srv2
+2022-11-14T01:35:09.982Z [srv1] Log 1 from srv1
+```
+
+To view existing logs and follow (tail) new output, use `-f` (press Ctrl-C to exit):
+
+```
+$ pebble logs -f
+2022-11-14T01:37:56.936Z [srv1] Log 0 from srv1
+2022-11-14T01:37:57.978Z [srv2] Log 0 from srv2
+2022-11-14T01:37:59.939Z [srv1] Log 1 from srv1
+^C
+```
+
+You can output logs in JSON Lines format, using `--format=json`:
+
+```
+$ pebble logs --format=json
+{"time":"2022-11-14T01:39:10.886Z","service":"srv1","message":"Log 0 from srv1"}
+{"time":"2022-11-14T01:39:11.943Z","service":"srv2","message":"Log 0 from srv2"}
+{"time":"2022-11-14T01:39:13.889Z","service":"srv1","message":"Log 1 from srv1"}
+```
+
+If you want to also write service logs to Pebble's own stdout, run the daemon with `--verbose`:
+
+```
+$ pebble run --verbose
+2022-10-26T01:41:32.805Z [pebble] Started daemon.
+2022-10-26T01:41:32.835Z [pebble] POST /v1/services 29.743632ms 202
+2022-10-26T01:41:32.835Z [pebble] Started default services with change 7.
+2022-10-26T01:41:32.849Z [pebble] Service "srv1" starting: python3 -u /path/to/srv1.py
+2022-10-26T01:41:32.866Z [srv1] Log 0 from srv1
+2022-10-26T01:41:35.870Z [srv1] Log 1 from srv1
+2022-10-26T01:41:38.873Z [srv1] Log 2 from srv1
+...
+```
+
+## Container usage
+
+Pebble works well as a local service manager, but if running Pebble in a separate container, you can use the exec and file management APIs to coordinate with the remote system over the shared unix socket.
 
 ### Exec (one-shot commands)
 
