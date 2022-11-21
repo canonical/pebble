@@ -55,7 +55,7 @@ snappass  disabled  inactive
 
 ## Using Curl to hit the API
 
-For debugging, you can also use [curl](https://curl.se/) in Unix socket mode to hit the Pebble API:
+For debugging, you can also use [curl](https://curl.se/) in unix socket mode to hit the Pebble API:
 
 ```
 $ curl --unix-socket ~/pebble/.pebble.socket 'http://localhost/v1/services?names=snappass' | jq

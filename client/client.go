@@ -34,8 +34,8 @@ import (
 	"github.com/canonical/pebble/internal/wsutil"
 )
 
-// SocketNotFoundError is the error type returned when the Pebble client fails
-// to find a Unix socket at the specified path.
+// SocketNotFoundError is the error type returned when the client fails
+// to find a unix socket at the specified path.
 type SocketNotFoundError struct {
 	// Err is the wrapped error.
 	Err error
@@ -44,7 +44,6 @@ type SocketNotFoundError struct {
 	Path string
 }
 
-// Error implements the error interface.
 func (s SocketNotFoundError) Error() string {
 	if s.Path == "" && s.Err != nil {
 		return s.Err.Error()
@@ -52,7 +51,6 @@ func (s SocketNotFoundError) Error() string {
 	return fmt.Sprintf("socket %q not found", s.Path)
 }
 
-// Unwrap implements errors.Unwrap interface.
 func (s SocketNotFoundError) Unwrap() error {
 	return s.Err
 }
@@ -91,22 +89,22 @@ type doer interface {
 
 // Config allows the user to customize client behavior.
 type Config struct {
-	// BaseURL contains the base URL where the pebble daemon is expected to be.
+	// BaseURL contains the base URL where the Pebble daemon is expected to be.
 	// It can be empty for a default behavior of talking over a unix socket.
 	BaseURL string
 
-	// Socket is the path to the unix socket to use
+	// Socket is the path to the unix socket to use.
 	Socket string
 
-	// DisableKeepAlive indicates whether the connections should not be kept
-	// alive for later reuse
+	// DisableKeepAlive indicates that the connections should not be kept
+	// alive for later reuse (the default is to keep them alive).
 	DisableKeepAlive bool
 
-	// User-Agent to sent to the pebble daemon
+	// UserAgent is the User-Agent header sent to the Pebble daemon.
 	UserAgent string
 }
 
-// A Client knows how to talk to the pebble daemon.
+// A Client knows how to talk to the Pebble daemon.
 type Client struct {
 	baseURL   url.URL
 	doer      doer
@@ -133,7 +131,6 @@ type jsonWriter interface {
 	WriteJSON(v interface{}) error
 }
 
-// New returns a new instance of Client
 func New(config *Config) (*Client, error) {
 	if config == nil {
 		config = &Config{}
@@ -143,7 +140,7 @@ func New(config *Config) (*Client, error) {
 	var transport *http.Transport
 
 	if config.BaseURL == "" {
-		// By default talk over a UNIX socket.
+		// By default talk over a unix socket.
 		transport = &http.Transport{Dial: unixDialer(config.Socket), DisableKeepAlives: config.DisableKeepAlive}
 		baseURL := url.URL{Scheme: "http", Host: "localhost"}
 		client = &Client{baseURL: baseURL}
@@ -182,6 +179,7 @@ func getWebsocket(transport *http.Transport, url string) (clientWebsocket, error
 	return conn, err
 }
 
+// CloseIdleConnections closes any API connections that are currently unused.
 func (client *Client) CloseIdleConnections() {
 	c, ok := client.doer.(*http.Client)
 	if ok {
@@ -201,19 +199,22 @@ func (client *Client) WarningsSummary() (count int, timestamp time.Time) {
 	return client.warningCount, client.warningTimestamp
 }
 
+// RequestError is returned when there's an error processing the request.
 type RequestError struct{ error }
 
 func (e RequestError) Error() string {
 	return fmt.Sprintf("cannot build request: %v", e.error)
 }
 
-type ConnectionError struct{ error }
+// ConnectionError represents a connection or communication error.
+type ConnectionError struct {
+	error
+}
 
 func (e ConnectionError) Error() string {
 	return fmt.Sprintf("cannot communicate with server: %v", e.error)
 }
 
-// Unwrap implements errors.Unwrap interface.
 func (e ConnectionError) Unwrap() error {
 	return e.error
 }
@@ -251,7 +252,8 @@ var (
 	doTimeout = 5 * time.Second
 )
 
-// FakeDoRetry fakes the delays used by the do retry loop.
+// FakeDoRetry fakes the delays used by the do retry loop (intended for
+// testing). Calling restore will revert the changes.
 func FakeDoRetry(retry, timeout time.Duration) (restore func()) {
 	oldRetry := doRetry
 	oldTimeout := doTimeout
@@ -271,7 +273,7 @@ func (h hijacked) Do(req *http.Request) (*http.Response, error) {
 	return h.do(req)
 }
 
-// Hijack lets the caller take over the raw http request
+// Hijack lets the caller take over the raw HTTP request.
 func (client *Client) Hijack(f func(*http.Request) (*http.Response, error)) {
 	client.doer = hijacked{f}
 }
@@ -463,8 +465,11 @@ func parseError(r *http.Response) error {
 }
 
 type SysInfo struct {
+	// Version is the server version.
 	Version string `json:"version,omitempty"`
-	BootID  string `json:"boot-id,omitempty"`
+
+	// BootID is a unique string that represents this boot of the server.
+	BootID string `json:"boot-id,omitempty"`
 }
 
 // SysInfo gets system information from the remote API.

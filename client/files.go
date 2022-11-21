@@ -26,7 +26,6 @@ import (
 
 var _ os.FileInfo = (*FileInfo)(nil)
 
-// ListFilesOptions holds the options for a call to ListFiles.
 type ListFilesOptions struct {
 	// Path is the absolute path of the file system entry to be listed.
 	Path string
