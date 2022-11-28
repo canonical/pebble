@@ -72,6 +72,8 @@ type Options struct {
 	// ServiceOuput is an optional io.Writer for the service log output, if set, all services
 	// log output will be written to the writer.
 	ServiceOutput io.Writer
+
+	Dry bool
 }
 
 // A Daemon listens for requests and routes them to the right command
@@ -92,6 +94,7 @@ type Daemon struct {
 	tomb                tomb.Tomb
 	router              *mux.Router
 	standbyOpinions     *standby.StandbyOpinions
+	dry                 bool
 
 	// set to remember we need to restart the system
 	restartSystem bool
@@ -354,6 +357,13 @@ func logit(handler http.Handler) http.Handler {
 // Init sets up the Daemon's internal workings.
 // Don't call more than once.
 func (d *Daemon) Init() error {
+	if _, err := d.overlord.ServiceManager().Plan(); err != nil {
+		return err
+	}
+	if d.dry {
+		return nil
+	}
+
 	listenerMap := make(map[string]net.Listener)
 
 	if listener, err := getListener(d.normalSocketPath, listenerMap); err == nil {
@@ -453,6 +463,9 @@ func (d *Daemon) initStandbyHandling() {
 }
 
 func (d *Daemon) Start() {
+	if d.dry {
+		return
+	}
 	if d.rebootIsMissing {
 		// we need to schedule and wait for a system restart
 		d.tomb.Kill(nil)
@@ -786,6 +799,7 @@ func New(opts *Options) (*Daemon, error) {
 		normalSocketPath:    opts.SocketPath,
 		untrustedSocketPath: opts.SocketPath + ".untrusted",
 		httpAddress:         opts.HTTPAddress,
+		dry:                 opts.Dry,
 	}
 
 	ovld, err := overlord.New(opts.Dir, d, opts.ServiceOutput)
