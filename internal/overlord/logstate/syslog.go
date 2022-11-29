@@ -99,15 +99,18 @@ func syslogStructuredData(name string, enterpriseNum int, labels map[string]stri
 	return buf.String()
 }
 
-func (s *SyslogBackend) Send(m *LogMessage) error {
+func (s *SyslogBackend) Send(msgs []*LogMessage) error {
 	err := s.ensureConnected()
 	if err != nil {
 		return err
 	}
 
-	s.mu.RLock()
-	err = s.buildMsg(m, s.conn)
-	s.mu.RUnlock()
+	for _, m := range msgs {
+		// TODO: can we send multiple messages at once?
+		s.mu.RLock()
+		err = s.buildMsg(m, s.conn)
+		s.mu.RUnlock()
+	}
 
 	if err != nil {
 		// The connection might be bad. Close and reset it for later reconnection attempt(s).

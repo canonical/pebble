@@ -68,6 +68,7 @@ func (m *LogManager) PlanChanged(p *plan.Plan) {
 
 		orig, ok := m.targets[name]
 		if ok {
+			// TODO: unhandled error
 			orig.SetBackend(backend)
 		} else {
 			m.targets[name] = NewLogTarget(name, backend)

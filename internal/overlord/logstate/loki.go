@@ -49,23 +49,30 @@ func NewLokiBackend(address string) (LogBackend, error) {
 
 func (b *LokiBackend) Close() error { return nil }
 
-func (b *LokiBackend) Send(m *LogMessage) error {
-	data, err := json.Marshal(newLokiMessage(m))
-	if err != nil {
-		return fmt.Errorf("failed to build loki message: %w", err)
-	}
-
+func (b *LokiBackend) Send(msgs []*LogMessage) error {
 	var buf bytes.Buffer
 	gzWriter := gzip.NewWriter(&buf)
-	_, err = gzWriter.Write(data)
-	if err != nil {
-		return fmt.Errorf("failed to compress loki message: %w", err)
+
+	for _, m := range msgs {
+		data, err := json.Marshal(newLokiMessage(m))
+		if err != nil {
+			// TODO: log error and continue with remaining messages
+			return fmt.Errorf("failed to build loki message: %w", err)
+		}
+
+		_, err = gzWriter.Write(data)
+		if err != nil {
+			// TODO: log error and continue with remaining messages
+			return fmt.Errorf("failed to compress loki message: %w", err)
+		}
 	}
-	err = gzWriter.Close()
+
+	err := gzWriter.Close()
 	if err != nil {
 		return fmt.Errorf("failed to compress loki message: %w", err)
 	}
 
+	// TODO: make sure this request is valid for multiple messages
 	r, err := http.NewRequest(http.MethodPost, b.lokiURL.String(), &buf)
 	if err != nil {
 		return fmt.Errorf("failed to build loki message request: %w", err)
@@ -79,7 +86,7 @@ func (b *LokiBackend) Send(m *LogMessage) error {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		data, err = ioutil.ReadAll(resp.Body)
+		data, err := ioutil.ReadAll(resp.Body)
 		if err != nil && !errors.Is(err, io.EOF) {
 			return fmt.Errorf("failed to send loki message: %s", data)
 		}

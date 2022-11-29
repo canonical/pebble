@@ -120,8 +120,10 @@ func newTestBackend(ch chan *LogMessage) *testBackend {
 }
 
 func (b *testBackend) Close() error { return nil }
-func (b *testBackend) Send(m *LogMessage) error {
-	b.ch <- m
+func (b *testBackend) Send(msgs []*LogMessage) error {
+	for _, m := range msgs {
+		b.ch <- m
+	}
 	return nil
 }
 

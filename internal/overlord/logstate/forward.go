@@ -3,6 +3,7 @@ package logstate
 import (
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/canonical/pebble/internal/logger"
@@ -15,7 +16,8 @@ const canonicalPrivEnterpriseNum = 28978
 // LogBackend defines an interface to facilitate support for different log target "types"
 // (e.g. syslog, loki, etc.).
 type LogBackend interface {
-	Send(*LogMessage) error
+	Send([]*LogMessage) error
+	// TODO: why does this need to be closed?
 	Close() error
 }
 
@@ -66,7 +68,7 @@ func (l *LogForwarder) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
-// LogTarget manages fowarding log content to some destination.  It can be configured to send
+// LogTarget manages forwarding log content to some destination.  It can be configured to send
 // logs to any kind of underlying target (e.g. syslog, loki, etc.) by priming it with an
 // appropriate backend.  Messages accumulate in a fixed-size internal buffer and are concurrently
 // pushed/sent to the underlying backend.  If the backend is unable to keep up and the buffer fills
@@ -81,7 +83,7 @@ type LogTarget struct {
 	notify  chan bool
 	backend LogBackend
 	done    chan struct{}
-	closed  bool
+	closed  atomic.Bool
 }
 
 func NewLogTarget(name string, backend LogBackend) *LogTarget {
@@ -103,7 +105,7 @@ func (c *LogTarget) Name() string { return c.name }
 
 // SetBackend updates the backend to which log messages are sent.  This method is concurrency-safe.
 func (c *LogTarget) SetBackend(b LogBackend) error {
-	if c.closed {
+	if c.closed.Load() {
 		return fmt.Errorf("cannot modify a closed log target")
 	}
 	c.mu.Lock()
@@ -117,7 +119,7 @@ func (c *LogTarget) SetBackend(b LogBackend) error {
 
 // Send conveys msg to the underlying backend.
 func (c *LogTarget) Send(msg *LogMessage) error {
-	if c.closed {
+	if c.closed.Load() {
 		return fmt.Errorf("cannot send messages to a closed log target")
 	}
 	return c.buf.Put(msg)
@@ -129,7 +131,8 @@ func (c *LogTarget) Send(msg *LogMessage) error {
 func (c *LogTarget) Close() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.closed = true
+	c.closed.Store(true)
+	// TODO: unhandled error
 	c.backend.Close()
 	close(c.done)
 }
@@ -138,14 +141,12 @@ func (c *LogTarget) run() {
 	for {
 		select {
 		case <-c.notify:
-			for _, msg := range c.buf.GetAll() {
-				c.mu.Lock()
-				err := c.backend.Send(msg)
-				if err != nil {
-					logger.Noticef("log target error: %v", err)
-				}
-				c.mu.Unlock()
+			c.mu.Lock()
+			err := c.backend.Send(c.buf.GetAll())
+			if err != nil {
+				logger.Noticef("log target error: %v", err)
 			}
+			c.mu.Unlock()
 		case <-c.done:
 			// TODO: should we try to drain the buffer first?
 			return
@@ -157,7 +158,9 @@ type LogBuffer struct {
 	mu       sync.Mutex
 	capacity int
 	buf      []*LogMessage
-	notify   []chan<- bool
+	// TODO: it seems that each LogTarget has its own LogBuffer, so why is this a slice?
+	// Can't we just use a single channel?
+	notify []chan<- bool
 }
 
 func NewLogBuffer(capacity int) *LogBuffer {
@@ -191,6 +194,7 @@ func (b *LogBuffer) Put(m *LogMessage) error {
 	b.buf = append(b.buf, m)
 
 	for _, ch := range b.notify {
+		// TODO: logic missing here?
 		select {
 		case ch <- true:
 		default:
