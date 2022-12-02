@@ -7,9 +7,10 @@ It resembles well known tools such as _supervisord_, _runit_, or _s6_, in that i
 easily manage non-system processes independently from the system services, but it was
 designed with unique features that help with more specific use cases.
 
+  - [Installation](#installation)
   - [General model](#general-model)
   - [Layer configuration examples](#layer-configuration-examples)
-  - [Using pebble](#using-pebble)
+  - [Using Pebble](#using-pebble)
   - [Container usage](#container-usage)
   - [Layer specification](#layer-specification)
   - [API and clients](#api-and-clients)
@@ -115,6 +116,12 @@ services:
 
 ## Using Pebble
 
+To install the latest version of Pebble, run the following command (we don't currently
+ship binaries, so you must first [install Go](https://go.dev/doc/install)):
+```
+go install github.com/canonical/pebble/cmd/pebble@latest
+```
+
 Pebble is invoked using `pebble <command>`. To get more information:
 
 * To see a help summary, type `pebble -h`.
@@ -125,7 +132,7 @@ A few of the commands that need more explanation are detailed below.
 
 ### Running the daemon (server)
 
-If pebble is installed and the `$PEBBLE` directory is set up, running the daemon is easy:
+If Pebble is installed and the `$PEBBLE` directory is set up, running the daemon is easy:
 
 ```
 $ pebble run
@@ -135,9 +142,9 @@ $ pebble run
 2022-10-26T01:18:26.936Z [pebble] Service "srv1" starting: sleep 300
 ```
 
-This will start the pebble daemon itself, as well as starting all the services that
+This will start the Pebble daemon itself, as well as starting all the services that
 are marked as `startup: enabled` (if you don't want that, use `--hold`). Then
-other pebble commands may be used to interact with the running daemon, for example,
+other Pebble commands may be used to interact with the running daemon, for example,
 in another terminal window.
 
 To override the default configuration directory, set the `PEBBLE` environment variable when running:
