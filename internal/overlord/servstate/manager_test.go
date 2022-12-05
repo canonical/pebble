@@ -794,6 +794,7 @@ services:
 }
 
 func (s *S) TestServices(c *C) {
+	started := time.Now()
 	services, err := s.manager.Services(nil)
 	c.Assert(err, IsNil)
 	c.Assert(services, DeepEquals, []*servstate.ServiceInfo{
@@ -816,6 +817,8 @@ func (s *S) TestServices(c *C) {
 
 	services, err = s.manager.Services(nil)
 	c.Assert(err, IsNil)
+	c.Assert(services[1].CurrentSince.After(started) && services[1].CurrentSince.Before(started.Add(5*time.Second)), Equals, true)
+	services[1].CurrentSince = time.Time{}
 	c.Assert(services, DeepEquals, []*servstate.ServiceInfo{
 		{Name: "test1", Current: servstate.StatusInactive, Startup: servstate.StartupEnabled},
 		{Name: "test2", Current: servstate.StatusActive, Startup: servstate.StartupDisabled},

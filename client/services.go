@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"time"
 )
 
 type ServiceOptions struct {
@@ -87,9 +88,10 @@ type ServicesOptions struct {
 
 // ServiceInfo holds status information for a single service.
 type ServiceInfo struct {
-	Name    string         `json:"name"`
-	Startup ServiceStartup `json:"startup"`
-	Current ServiceStatus  `json:"current"`
+	Name         string         `json:"name"`
+	Startup      ServiceStartup `json:"startup"`
+	Current      ServiceStatus  `json:"current"`
+	CurrentSince time.Time      `json:"current-since"`
 }
 
 // ServiceStartup defines the different startup modes for a service.

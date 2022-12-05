@@ -24,6 +24,7 @@ import (
 
 type cmdServices struct {
 	clientMixin
+	timeMixin
 	Positional struct {
 		Services []string `positional-arg-name:"<service>"`
 	} `positional-args:"yes"`
@@ -59,14 +60,20 @@ func (cmd *cmdServices) Execute(args []string) error {
 	w := tabWriter()
 	defer w.Flush()
 
-	fmt.Fprintln(w, "Service\tStartup\tCurrent")
+	fmt.Fprintln(w, "Service\tStartup\tCurrent\tSince")
 
 	for _, svc := range services {
-		fmt.Fprintf(w, "%s\t%s\t%s\n", svc.Name, svc.Startup, svc.Current)
+		since := "-"
+		if !svc.CurrentSince.IsZero() {
+			since = cmd.fmtTime(svc.CurrentSince)
+		}
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", svc.Name, svc.Startup, svc.Current, since)
 	}
 	return nil
 }
 
 func init() {
-	addCommand("services", shortServicesHelp, longServicesHelp, func() flags.Commander { return &cmdServices{} }, nil, nil)
+	addCommand("services", shortServicesHelp, longServicesHelp,
+		func() flags.Commander { return &cmdServices{} },
+		timeDescs, nil)
 }

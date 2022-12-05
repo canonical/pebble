@@ -83,18 +83,18 @@ const (
 
 // serviceData holds the state and other data for a service under our control.
 type serviceData struct {
-	manager     *ServiceManager
-	state       serviceState
-	config      *plan.Service
-	logs        *servicelog.RingBuffer
-	started     chan error
-	stopped     chan error
-	cmd         *exec.Cmd
-	backoffNum  int
-	backoffTime time.Duration
-	resetTimer  *time.Timer
-	restarting  bool
-	restarts    int
+	manager      *ServiceManager
+	state        serviceState
+	config       *plan.Service
+	logs         *servicelog.RingBuffer
+	started      chan error
+	stopped      chan error
+	cmd          *exec.Cmd
+	backoffNum   int
+	backoffTime  time.Duration
+	resetTimer   *time.Timer
+	restarting   bool
+	currentSince time.Time
 }
 
 func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
@@ -284,6 +284,13 @@ func (s *serviceData) transition(state serviceState) {
 
 // transitionRestarting changes the service's state and also sets the restarting flag.
 func (s *serviceData) transitionRestarting(state serviceState, restarting bool) {
+	// Update current-since time if derived status is changing.
+	oldStatus := stateToStatus(s.state)
+	newStatus := stateToStatus(state)
+	if oldStatus != newStatus {
+		s.currentSince = time.Now()
+	}
+
 	s.state = state
 	s.restarting = restarting
 }
@@ -620,7 +627,6 @@ func (s *serviceData) backoffTimeElapsed() error {
 
 	switch s.state {
 	case stateBackoff:
-		s.restarts++
 		err := s.startInternal()
 		if err != nil {
 			return err
