@@ -33,7 +33,7 @@ func (s *PebbleSuite) TestServices(c *check.C) {
     "type": "sync",
     "status-code": 200,
     "result": [
-		{"name": "svc1", "current": "inactive", "startup": "enabled"},
+		{"name": "svc1", "current": "inactive", "startup": "enabled", "current-since": "2022-04-28T17:05:23+12:00"},
 		{"name": "svc2", "current": "inactive", "startup": "enabled"},
 		{"name": "svc3", "current": "backoff", "startup": "enabled"}
 	]
@@ -43,10 +43,10 @@ func (s *PebbleSuite) TestServices(c *check.C) {
 	c.Assert(err, check.IsNil)
 	c.Assert(rest, check.HasLen, 0)
 	c.Check(s.Stdout(), check.Equals, `
-Service  Startup  Current
-svc1     enabled  inactive
-svc2     enabled  inactive
-svc3     enabled  backoff
+Service  Startup  Current   Since
+svc1     enabled  inactive  2022-04-28
+svc2     enabled  inactive  -
+svc3     enabled  backoff   -
 `[1:])
 	c.Check(s.Stderr(), check.Equals, "")
 }
@@ -96,18 +96,18 @@ func (s *PebbleSuite) TestServicesNames(c *check.C) {
     "type": "sync",
     "status-code": 200,
     "result": [
-		{"name": "bar", "current": "active", "startup": "disabled"},
+		{"name": "bar", "current": "active", "startup": "disabled", "current-since": "2022-04-28T17:05:23+12:00"},
 		{"name": "foo", "current": "inactive", "startup": "enabled"}
 	]
 }`)
 	})
-	rest, err := pebble.Parser(pebble.Client()).ParseArgs([]string{"services", "foo", "bar"})
+	rest, err := pebble.Parser(pebble.Client()).ParseArgs([]string{"services", "foo", "bar", "--abs-time"})
 	c.Assert(err, check.IsNil)
 	c.Assert(rest, check.HasLen, 0)
 	c.Check(s.Stdout(), check.Equals, `
-Service  Startup   Current
-bar      disabled  active
-foo      enabled   inactive
+Service  Startup   Current   Since
+bar      disabled  active    2022-04-28T17:05:23+12:00
+foo      enabled   inactive  -
 `[1:])
 	c.Check(s.Stderr(), check.Equals, "")
 }

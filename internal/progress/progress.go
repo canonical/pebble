@@ -82,10 +82,10 @@ var inTesting bool = len(os.Args) > 0 && strings.HasSuffix(os.Args[0], ".test") 
 // MakeProgressBar creates an appropriate progress.Meter for the environ in
 // which it is called:
 //
-// * if MockMeter has been called, return that.
-// * if no terminal is attached, or we think we're running a test, a
-//   minimalistic QuietMeter is returned.
-// * otherwise, an ANSIMeter is returned.
+//   - if MockMeter has been called, return that.
+//   - if no terminal is attached, or we think we're running a test, a
+//     minimalistic QuietMeter is returned.
+//   - otherwise, an ANSIMeter is returned.
 //
 // TODO: instead of making the pivot at creation time, do it at every call.
 func MakeProgressBar() Meter {

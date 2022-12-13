@@ -26,7 +26,6 @@ import (
 	"github.com/canonical/pebble/internal/wsutil"
 )
 
-// ExecOptions are the options for an Exec call.
 type ExecOptions struct {
 	// Required: command and arguments (first element is the executable).
 	Command []string
@@ -261,7 +260,6 @@ func (e *ExitError) ExitCode() int {
 	return e.exitCode
 }
 
-// Error implements the error interface.
 func (e *ExitError) Error() string {
 	return fmt.Sprintf("exit status %d", e.exitCode)
 }

@@ -131,7 +131,6 @@ func (cmd *cmdWarnings) Execute(args []string) error {
 // - trim trailing whitespace
 // - word wrap at "max" chars preserving line indent
 // - keep \n intact and break there
-//
 func writeWarning(w io.Writer, descr string, termWidth int) error {
 	var err error
 	descr = strings.TrimRightFunc(descr, unicode.IsSpace)

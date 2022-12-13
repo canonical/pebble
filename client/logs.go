@@ -30,7 +30,6 @@ const (
 	logReaderSize = 4 * 1024
 )
 
-// LogsOptions holds the options for a call to Logs or FollowLogs.
 type LogsOptions struct {
 	// WriteLog is called to write a single log to the output (required).
 	WriteLog func(entry LogEntry) error

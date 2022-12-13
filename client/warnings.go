@@ -21,10 +21,10 @@ import (
 	"time"
 )
 
-// A Warning is a short messages that's meant to alert about system events.
+// Warning holds a short message that's meant to alert about system events.
 // There'll only ever be one Warning with the same message, and it can be
 // silenced for a while before repeating. After a (supposedly longer) while
-// it'll go away on its own (unless it recurrs).
+// it'll go away on its own (unless it recurs).
 type Warning struct {
 	Message     string        `json:"message"`
 	FirstAdded  time.Time     `json:"first-added"`
@@ -40,10 +40,8 @@ type jsonWarning struct {
 	RepeatAfter string `json:"repeat-after,omitempty"`
 }
 
-// WarningsOptions contains options for querying pebble for warnings
-// supported options:
-// - All: return all warnings, instead of only the un-okayed ones.
 type WarningsOptions struct {
+	// All means return all warnings, instead of only the un-okayed ones.
 	All bool
 }
 
@@ -71,7 +69,7 @@ type warningsAction struct {
 	Timestamp time.Time `json:"timestamp"`
 }
 
-// Okay asks pebble to chill about the warnings that would have been returned by
+// Okay asks the server to silence the warnings that would have been returned by
 // Warnings at the given time.
 func (client *Client) Okay(t time.Time) error {
 	var body bytes.Buffer

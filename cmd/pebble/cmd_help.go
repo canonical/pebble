@@ -180,7 +180,7 @@ var helpCategories = []helpCategory{{
 }, {
 	Label:       "Files",
 	Description: "work with files and execute commands",
-	Commands:    []string{"rm", "exec"},
+	Commands:    []string{"ls", "mkdir", "rm", "exec"},
 }, {
 	Label:       "Changes",
 	Description: "manage changes and their tasks",
@@ -200,7 +200,7 @@ the system that is running them.
 	pebbleHelpCategoriesIntro = "Commands can be classified as follows:"
 	pebbleHelpAllFooter       = "Set the PEBBLE environment variable to override the configuration directory \n" +
 		"(which defaults to " + defaultPebbleDir + "). Set PEBBLE_SOCKET to override \n" +
-		"the Unix socket used for the API (defaults to $PEBBLE/.pebble.socket).\n" +
+		"the unix socket used for the API (defaults to $PEBBLE/.pebble.socket).\n" +
 		"\n" +
 		"For more information about a command, run 'pebble help <command>'."
 	pebbleHelpFooter = "For a short summary of all commands, run 'pebble help --all'."
