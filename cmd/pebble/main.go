@@ -30,6 +30,7 @@ import (
 	"golang.org/x/crypto/ssh/terminal"
 
 	"github.com/canonical/pebble/client"
+	"github.com/canonical/pebble/internal/boot"
 	"github.com/canonical/pebble/internal/logger"
 )
 
@@ -43,11 +44,6 @@ var (
 	// set to logger.Panicf in testing
 	noticef = logger.Noticef
 )
-
-// defaultPebbleDir is the Pebble directory used if $PEBBLE is not set. It is
-// created by the daemon ("pebble run") if it doesn't exist, and also used by
-// the pebble client.
-const defaultPebbleDir = "/var/lib/pebble/default"
 
 type options struct {
 	Version func() `long:"version"`
@@ -348,8 +344,15 @@ func run() error {
 		return fmt.Errorf("cannot create client: %v", err)
 	}
 
+	var xtra []string
 	parser := Parser(cli)
-	xtra, err := parser.Parse()
+	if err2 := boot.CheckBootstrap(); err2 == nil {
+		args := append([]string{"boot-firmware"}, os.Args[1:]...)
+		xtra, err = parser.ParseArgs(args)
+	} else {
+		xtra, err = parser.Parse()
+	}
+
 	if err != nil {
 		if e, ok := err.(*flags.Error); ok {
 			switch e.Type {
