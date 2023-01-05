@@ -19,10 +19,12 @@ package boot
 
 import "errors"
 
+// CheckBootstrap validates the environment to ensure Bootstrap can be called.
 func CheckBootstrap() error {
 	return errors.New("cannot bootstrap an unsupported platform")
 }
 
+// Bootstrap prepares the environment in order to get the system in a working state.
 func Bootstrap() error {
 	return errors.New("cannot bootstrap an unsupported platform")
 }

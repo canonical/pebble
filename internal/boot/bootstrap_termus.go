@@ -39,16 +39,18 @@ func mountCommon() error {
 	return nil
 }
 
+// CheckBootstrap validates the environment to ensure Bootstrap can be called.
 func CheckBootstrap() error {
 	if Getpid() != 1 {
-		return errors.New(`must run as PID 1. Use --force to supress this check`)
+		return errors.New(`must run as PID 1. Use --force to suppress this check`)
 	}
 	if v, ok := os.LookupEnv("TERMUS"); !ok || v != "1" {
-		return errors.New(`TERMUS environment variable must be set to 1. Use --force to supress this check`)
+		return errors.New(`TERMUS environment variable must be set to 1. Use --force to suppress this check`)
 	}
 	return nil
 }
 
+// Bootstrap prepares the environment in order to get the system in a working state.
 func Bootstrap() error {
 	if err := mountCommon(); err != nil {
 		return err
