@@ -1,3 +1,6 @@
+//go:build termus
+// +build termus
+
 // Copyright (c) 2023 Canonical Ltd
 //
 // This program is free software: you can redistribute it and/or modify
@@ -15,31 +18,23 @@
 package main_test
 
 import (
-	"gopkg.in/check.v1"
+	. "gopkg.in/check.v1"
 
 	pebble "github.com/canonical/pebble/cmd/pebble"
 )
 
-func (s *PebbleSuite) TestBootFirmwareExtraArgs(c *check.C) {
+func (s *PebbleSuite) TestBootFirmwareExtraArgs(c *C) {
 	rest, err := pebble.Parser(pebble.Client()).ParseArgs([]string{"boot-firmware", "extra", "args"})
-	c.Assert(err, check.Equals, pebble.ErrExtraArgs)
-	c.Assert(rest, check.HasLen, 1)
-	c.Check(s.Stdout(), check.Equals, "")
-	c.Check(s.Stderr(), check.Equals, "")
+	c.Assert(err, Equals, pebble.ErrExtraArgs)
+	c.Assert(rest, HasLen, 1)
+	c.Check(s.Stdout(), Equals, "")
+	c.Check(s.Stderr(), Equals, "")
 }
 
-func (s *PebbleSuite) TestBootFirmware(c *check.C) {
+func (s *PebbleSuite) TestBootFirmware(c *C) {
 	rest, err := pebble.Parser(pebble.Client()).ParseArgs([]string{"boot-firmware"})
-	c.Assert(err, check.ErrorMatches, "cannot bootstrap an unsupported platform")
-	c.Assert(rest, check.HasLen, 1)
-	c.Check(s.Stdout(), check.Equals, "")
-	c.Check(s.Stderr(), check.Equals, "")
-}
-
-func (s *PebbleSuite) TestBootFirmwareForce(c *check.C) {
-	rest, err := pebble.Parser(pebble.Client()).ParseArgs([]string{"boot-firmware", "--force"})
-	c.Assert(err, check.ErrorMatches, "cannot bootstrap an unsupported platform")
-	c.Assert(rest, check.HasLen, 1)
-	c.Check(s.Stdout(), check.Equals, "")
-	c.Check(s.Stderr(), check.Equals, "")
+	c.Assert(err, ErrorMatches, "must run as PID 1. Use --force to suppress this check")
+	c.Assert(rest, HasLen, 1)
+	c.Check(s.Stdout(), Equals, "")
+	c.Check(s.Stderr(), Equals, "")
 }

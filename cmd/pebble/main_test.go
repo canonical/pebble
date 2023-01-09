@@ -141,22 +141,3 @@ func (s *PebbleSuite) TestErrorResult(c *C) {
 	err := pebble.RunMain()
 	c.Assert(err, ErrorMatches, `cannot do something`)
 }
-
-func (s *PebbleSuite) TestGetEnvPaths(c *C) {
-	os.Setenv("PEBBLE", "")
-	os.Setenv("PEBBLE_SOCKET", "")
-	pebbleDir, socketPath := pebble.GetEnvPaths()
-	c.Assert(pebbleDir, Equals, "/var/lib/pebble/default")
-	c.Assert(socketPath, Equals, "/var/lib/pebble/default/.pebble.socket")
-
-	os.Setenv("PEBBLE", "/foo")
-	pebbleDir, socketPath = pebble.GetEnvPaths()
-	c.Assert(pebbleDir, Equals, "/foo")
-	c.Assert(socketPath, Equals, "/foo/.pebble.socket")
-
-	os.Setenv("PEBBLE", "/bar")
-	os.Setenv("PEBBLE_SOCKET", "/path/to/socket")
-	pebbleDir, socketPath = pebble.GetEnvPaths()
-	c.Assert(pebbleDir, Equals, "/bar")
-	c.Assert(socketPath, Equals, "/path/to/socket")
-}

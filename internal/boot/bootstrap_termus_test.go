@@ -18,6 +18,7 @@
 package boot
 
 import (
+	"errors"
 	"os"
 	"testing"
 
@@ -54,5 +55,41 @@ func (s *bootstrapSuite) TestCheckBootstrapPID1AndEnv(c *C) {
 }
 
 func (s *bootstrapSuite) TestBootstrap(c *C) {
-	//err := Bootstrap()
+	var attemptedMounts []mount
+
+	oldMountImpl := MountImpl
+	defer func() { MountImpl = oldMountImpl }()
+	MountImpl = func(source string, target string, fstype string, flags uintptr, data string) error {
+		attemptedMounts = append(attemptedMounts, mount{source, target, fstype, flags, data})
+		return nil
+	}
+
+	err := Bootstrap()
+	c.Assert(err, IsNil)
+	c.Assert(attemptedMounts, DeepEquals, []mount{
+		{"procfs", "/proc", "proc", 0, ""},
+		{"devtmpfs", "/dev", "devtmpfs", 0, ""},
+		{"devpts", "/dev/pts", "devpts", 0, ""},
+	})
+}
+
+func (s *bootstrapSuite) TestBootstrapFails(c *C) {
+	var attemptedMounts []mount
+
+	oldMountImpl := MountImpl
+	defer func() { MountImpl = oldMountImpl }()
+	MountImpl = func(source string, target string, fstype string, flags uintptr, data string) error {
+		attemptedMounts = append(attemptedMounts, mount{source, target, fstype, flags, data})
+		if len(attemptedMounts) == 2 {
+			return errors.New("cannot foo")
+		}
+		return nil
+	}
+
+	err := Bootstrap()
+	c.Assert(err, ErrorMatches, `cannot mount "devtmpfs": cannot foo`)
+	c.Assert(attemptedMounts, DeepEquals, []mount{
+		{"procfs", "/proc", "proc", 0, ""},
+		{"devtmpfs", "/dev", "devtmpfs", 0, ""},
+	})
 }
