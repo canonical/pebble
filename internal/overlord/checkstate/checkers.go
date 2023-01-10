@@ -27,11 +27,12 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/canonical/x-go/strutil/shlex"
+
 	"github.com/canonical/pebble/internal/logger"
 	"github.com/canonical/pebble/internal/osutil"
 	"github.com/canonical/pebble/internal/reaper"
 	"github.com/canonical/pebble/internal/servicelog"
-	"github.com/canonical/pebble/internal/strutil/shlex"
 )
 
 const (

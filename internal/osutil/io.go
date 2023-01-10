@@ -22,8 +22,9 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/canonical/x-go/strutil"
+
 	"github.com/canonical/pebble/internal/osutil/sys"
-	"github.com/canonical/pebble/internal/strutil"
 )
 
 // AtomicWriteFlags are a bitfield of flags for AtomicWriteFile

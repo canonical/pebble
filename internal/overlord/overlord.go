@@ -24,6 +24,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/canonical/x-go/strutil"
 	"gopkg.in/tomb.v2"
 
 	"github.com/canonical/pebble/internal/osutil"
@@ -33,7 +34,6 @@ import (
 	"github.com/canonical/pebble/internal/overlord/restart"
 	"github.com/canonical/pebble/internal/overlord/servstate"
 	"github.com/canonical/pebble/internal/overlord/state"
-	"github.com/canonical/pebble/internal/strutil"
 	"github.com/canonical/pebble/internal/timing"
 )
 

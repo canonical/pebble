@@ -26,10 +26,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/canonical/x-go/strutil/shlex"
 	"gopkg.in/yaml.v3"
 
 	"github.com/canonical/pebble/internal/osutil"
-	"github.com/canonical/pebble/internal/strutil/shlex"
 )
 
 const (

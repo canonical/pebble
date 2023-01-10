@@ -22,9 +22,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/canonical/x-go/strutil"
 	"gopkg.in/tomb.v2"
-
-	"github.com/canonical/pebble/internal/strutil"
 )
 
 var (

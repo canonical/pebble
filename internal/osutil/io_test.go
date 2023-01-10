@@ -27,12 +27,12 @@ import (
 	"path/filepath"
 	"syscall"
 
+	"github.com/canonical/x-go/strutil"
+	. "gopkg.in/check.v1"
+
 	"github.com/canonical/pebble/internal/osutil"
 	"github.com/canonical/pebble/internal/osutil/sys"
-	"github.com/canonical/pebble/internal/strutil"
 	"github.com/canonical/pebble/internal/testutil"
-
-	. "gopkg.in/check.v1"
 )
 
 type AtomicWriteTestSuite struct{}
