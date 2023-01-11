@@ -22,7 +22,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/canonical/x-go/strutil"
+	"github.com/canonical/x-go/randutil"
 
 	"github.com/canonical/pebble/internal/osutil/sys"
 )
@@ -92,7 +92,7 @@ func NewAtomicFile(filename string, perm os.FileMode, flags AtomicWriteFlags, ui
 	// aa-enforce. Tools from this package enumerate all profiles by loading
 	// parsing any file found in /etc/apparmor.d/, skipping only very specific
 	// suffixes, such as the one we selected below.
-	tmp := filename + "." + strutil.MakeRandomString(12) + "~"
+	tmp := filename + "." + randutil.RandomString(12) + "~"
 
 	fd, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_TRUNC|os.O_EXCL, perm)
 	if err != nil {
