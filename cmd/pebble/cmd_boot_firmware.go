@@ -17,13 +17,14 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/signal"
 	"syscall"
 	"time"
 
 	"github.com/jessevdk/go-flags"
 
 	"github.com/canonical/pebble/client"
-	. "github.com/canonical/pebble/cmd"
+	"github.com/canonical/pebble/cmd"
 	"github.com/canonical/pebble/internal/boot"
 	"github.com/canonical/pebble/internal/daemon"
 	"github.com/canonical/pebble/internal/logger"
@@ -46,15 +47,17 @@ var shortBootFirmwareHelp = `Bootstrap a system with Pebble running as PID 1`
 
 var longBootFirmwareHelp = `
 The boot-firmware command performs checks on the running system, prepares the
-environment to get a working system and starts the Pebble daemon.
+environment to get a working system, and starts the Pebble daemon.
 `
 
-func (cmd *cmdBootFirmware) Execute(args []string) error {
+func (rcmd *cmdBootFirmware) Execute(args []string) error {
 	if len(args) > 1 {
 		return ErrExtraArgs
 	}
 
-	if !cmd.Force {
+	t0 := time.Now().Truncate(time.Millisecond)
+
+	if !rcmd.Force {
 		if err := boot.CheckBootstrap(); err != nil {
 			return err
 		}
@@ -64,8 +67,7 @@ func (cmd *cmdBootFirmware) Execute(args []string) error {
 		return err
 	}
 
-	t0 := time.Now().Truncate(time.Millisecond)
-
+	// Create the Pebble state directory. This has no effect if the directory already exists.
 	pebbleDir, socketPath := getEnvPaths()
 	if err := os.MkdirAll(pebbleDir, 0755); err != nil {
 		return err
@@ -78,7 +80,7 @@ func (cmd *cmdBootFirmware) Execute(args []string) error {
 		Dir:        pebbleDir,
 		SocketPath: socketPath,
 	}
-	if cmd.Verbose {
+	if rcmd.Verbose {
 		dopts.ServiceOutput = os.Stdout
 	}
 
@@ -90,29 +92,35 @@ func (cmd *cmdBootFirmware) Execute(args []string) error {
 		return err
 	}
 
-	d.Version = Version
+	d.Version = cmd.Version
 	d.Start()
 
 	logger.Debugf("activation done in %v", time.Now().Truncate(time.Millisecond).Sub(t0))
 
 	servopts := client.ServiceOptions{}
-	changeID, err := cmd.client.AutoStart(&servopts)
+	changeID, err := rcmd.client.AutoStart(&servopts)
 	if err != nil {
 		logger.Noticef("Cannot start default services: %v", err)
 	} else {
 		logger.Noticef("Started default services with change %s.", changeID)
 	}
 
+	sigs := make(chan os.Signal, 2)
+	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+
 out:
 	for {
 		select {
+		case sig := <-sigs:
+			logger.Noticef("Exiting on %s signal.\n", sig)
+			break out
 		case <-d.Dying():
 			logger.Noticef("Server exiting!")
 			break out
 		}
 	}
 
-	cmd.client.CloseIdleConnections()
+	rcmd.client.CloseIdleConnections()
 	if err := d.Stop(nil); err != nil {
 		return err
 	}

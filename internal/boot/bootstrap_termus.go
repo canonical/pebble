@@ -22,7 +22,7 @@ import (
 	"os"
 )
 
-var Getpid = os.Getpid
+var osGetpid = os.Getpid
 
 var commonMounts = []mount{
 	{"procfs", "/proc", "proc", 0, ""},
@@ -41,7 +41,7 @@ func mountCommon() error {
 
 // CheckBootstrap validates the environment to ensure Bootstrap can be called.
 func CheckBootstrap() error {
-	if Getpid() != 1 {
+	if osGetpid() != 1 {
 		return errors.New(`must run as PID 1. Use --force to suppress this check`)
 	}
 	if v, ok := os.LookupEnv("TERMUS"); !ok || v != "1" {

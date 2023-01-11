@@ -344,13 +344,13 @@ func run() error {
 		return fmt.Errorf("cannot create client: %v", err)
 	}
 
-	var xtra []string
+	var extra []string
 	parser := Parser(cli)
 	if err2 := boot.CheckBootstrap(); err2 == nil {
 		args := append([]string{"boot-firmware"}, os.Args[1:]...)
-		xtra, err = parser.ParseArgs(args)
+		extra, err = parser.ParseArgs(args)
 	} else {
-		xtra, err = parser.Parse()
+		extra, err = parser.Parse()
 	}
 
 	if err != nil {
@@ -365,8 +365,8 @@ func run() error {
 			case flags.ErrUnknownCommand:
 				sub := os.Args[1]
 				sug := "pebble help"
-				if len(xtra) > 0 {
-					sub = xtra[0]
+				if len(extra) > 0 {
+					sub = extra[0]
 					if x := parser.Command.Active; x != nil && x.Name != "help" {
 						sug = "pebble help " + x.Name
 					}

@@ -24,8 +24,8 @@ import (
 )
 
 var (
-	MountImpl   = syscall.Mount
-	UnmountImpl = syscall.Unmount
+	syscallMount   = syscall.Mount
+	syscallUnmount = syscall.Unmount
 )
 
 type mount struct {
@@ -37,17 +37,17 @@ type mount struct {
 }
 
 func (m *mount) mount() error {
-	if err := os.MkdirAll(m.target, 0644); err != nil {
+	if err := os.MkdirAll(m.target, 0755); err != nil {
 		return fmt.Errorf("cannot create directory %q: %w", m.target, err)
 	}
-	if err := MountImpl(m.source, m.target, m.fstype, m.flags, m.data); err != nil {
+	if err := syscallMount(m.source, m.target, m.fstype, m.flags, m.data); err != nil {
 		return fmt.Errorf("cannot mount %q: %w", m.source, err)
 	}
 	return nil
 }
 
 func (m *mount) unmount() error {
-	if err := UnmountImpl(m.target, 0); err != nil {
+	if err := syscallUnmount(m.target, 0); err != nil {
 		return fmt.Errorf("cannot unmount %q: %w", m.target, err)
 	}
 	return nil

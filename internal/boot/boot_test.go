@@ -1,6 +1,3 @@
-//go:build !termus
-// +build !termus
-
 // Copyright (c) 2023 Canonical Ltd
 //
 // This program is free software: you can redistribute it and/or modify
@@ -18,19 +15,10 @@
 package boot
 
 import (
-	. "gopkg.in/check.v1"
+	"testing"
+
+	"gopkg.in/check.v1"
 )
 
-type bootstrapSuite struct{}
-
-var _ = Suite(&bootstrapSuite{})
-
-func (s *bootstrapSuite) TestCheckBootstrap(c *C) {
-	err := CheckBootstrap()
-	c.Assert(err, ErrorMatches, "cannot bootstrap an unsupported platform")
-}
-
-func (s *bootstrapSuite) TestBootstrap(c *C) {
-	err := Bootstrap()
-	c.Assert(err, ErrorMatches, "cannot bootstrap an unsupported platform")
-}
+// Hook up check.v1 into the "go test" runner
+func Test(t *testing.T) { check.TestingT(t) }

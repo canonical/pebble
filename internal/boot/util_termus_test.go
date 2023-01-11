@@ -19,7 +19,10 @@ package boot
 
 import (
 	"errors"
+	"os"
+	"path"
 
+	"github.com/canonical/pebble/internal/osutil"
 	. "gopkg.in/check.v1"
 )
 
@@ -27,54 +30,125 @@ type utilSuite struct{}
 
 var _ = Suite(&utilSuite{})
 
-func buildMountImpl(err error) func(string, string, string, uintptr, string) error {
-	return func(string, string, string, uintptr, string) error {
-		return err
-	}
-}
-
-func buildUnmountImpl(err error) func(string, int) error {
-	return func(string, int) error {
-		return err
-	}
-}
-
 func (s *utilSuite) TestMount(c *C) {
-	oldMountImpl := MountImpl
-	defer func() { MountImpl = oldMountImpl }()
-	MountImpl = buildMountImpl(nil)
+	m := &mount{
+		source: "/dev/nvme0n1p3",
+		target: path.Join(c.MkDir(), "test", "mountpoint"),
+		fstype: "btrfs",
+		flags:  42,
+		data:   "test",
+	}
 
-	m := &mount{"/dev/nvme0n1p3", "/boot", "ext4", 0, ""}
+	oldSyscallMount := syscallMount
+	defer func() { syscallMount = oldSyscallMount }()
+	syscallMount = func(source, target, fstype string, flags uintptr, data string) error {
+		c.Assert(source, Equals, m.source)
+		c.Assert(target, Equals, m.target)
+		c.Assert(fstype, Equals, m.fstype)
+		c.Assert(flags, Equals, m.flags)
+		c.Assert(data, Equals, m.data)
+		return nil
+	}
+
 	err := m.mount()
 	c.Assert(err, IsNil)
+	c.Assert(osutil.IsDir(m.target), Equals, true)
+
+	info, err := os.Stat(m.target)
+	c.Assert(err, IsNil)
+	c.Assert(info.Mode()&os.ModePerm, Equals, os.FileMode(0755))
 }
 
-func (s *utilSuite) TestMountFails(c *C) {
-	oldMountImpl := MountImpl
-	defer func() { MountImpl = oldMountImpl }()
-	MountImpl = buildMountImpl(errors.New("cannot foo"))
+func (s *utilSuite) TestMountFailsOnSyscall(c *C) {
+	m := &mount{
+		source: "/dev/nvme0n1p3",
+		target: path.Join(c.MkDir(), "test", "mountpoint"),
+		fstype: "btrfs",
+		flags:  42,
+		data:   "test",
+	}
 
-	m := &mount{"/dev/nvme0n1p3", "/boot", "ext4", 0, ""}
+	oldSyscallMount := syscallMount
+	defer func() { syscallMount = oldSyscallMount }()
+	syscallMount = func(source, target, fstype string, flags uintptr, data string) error {
+		c.Assert(source, Equals, m.source)
+		c.Assert(target, Equals, m.target)
+		c.Assert(fstype, Equals, m.fstype)
+		c.Assert(flags, Equals, m.flags)
+		c.Assert(data, Equals, m.data)
+		return errors.New("cannot foo")
+	}
+
 	err := m.mount()
 	c.Assert(err, ErrorMatches, `cannot mount "/dev/nvme0n1p3": cannot foo`)
 }
 
-func (s *utilSuite) TestUnmount(c *C) {
-	oldUnmountImpl := UnmountImpl
-	defer func() { UnmountImpl = oldUnmountImpl }()
-	UnmountImpl = buildUnmountImpl(nil)
+func (s *utilSuite) TestMountFailsOnMkdir(c *C) {
+	root := c.MkDir()
+	m := &mount{
+		source: "/dev/nvme0n1p3",
+		target: path.Join(root, "test", "mountpoint"),
+		fstype: "btrfs",
+		flags:  42,
+		data:   "test",
+	}
 
-	m := &mount{"/dev/nvme0n1p3", "/boot", "ext4", 0, ""}
+	err := os.Chmod(root, os.FileMode(0400))
+	c.Assert(err, IsNil)
+
+	oldSyscallMount := syscallMount
+	defer func() { syscallMount = oldSyscallMount }()
+	syscallMount = func(source, target, fstype string, flags uintptr, data string) error {
+		c.Assert(source, Equals, m.source)
+		c.Assert(target, Equals, m.target)
+		c.Assert(fstype, Equals, m.fstype)
+		c.Assert(flags, Equals, m.flags)
+		c.Assert(data, Equals, m.data)
+		return errors.New("cannot foo")
+	}
+
+	err = m.mount()
+	c.Assert(err, ErrorMatches, `cannot create directory .*: .*permission denied`)
+}
+
+func (s *utilSuite) TestUnmount(c *C) {
+	m := &mount{
+		source: "/dev/nvme0n1p3",
+		target: path.Join(c.MkDir(), "test", "mountpoint"),
+		fstype: "btrfs",
+		flags:  42,
+		data:   "test",
+	}
+
+	oldSyscallUnmount := syscallUnmount
+	defer func() { syscallUnmount = oldSyscallUnmount }()
+	syscallUnmount = func(target string, flags int) error {
+		c.Assert(target, Equals, m.target)
+		c.Assert(flags, Equals, 0)
+		return nil
+	}
+
 	err := m.unmount()
 	c.Assert(err, IsNil)
 }
 
 func (s *utilSuite) TestUnmountFails(c *C) {
-	oldUnmountImpl := UnmountImpl
-	defer func() { UnmountImpl = oldUnmountImpl }()
-	UnmountImpl = buildUnmountImpl(errors.New("cannot bar"))
+	m := &mount{
+		source: "/dev/nvme0n1p3",
+		target: path.Join(c.MkDir(), "test", "mountpoint"),
+		fstype: "btrfs",
+		flags:  42,
+		data:   "test",
+	}
 
-	m := &mount{"/dev/nvme0n1p3", "/boot", "ext4", 0, ""}
+	oldSyscallUnmount := syscallUnmount
+	defer func() { syscallUnmount = oldSyscallUnmount }()
+	syscallUnmount = func(target string, flags int) error {
+		c.Assert(target, Equals, m.target)
+		c.Assert(flags, Equals, 0)
+		return errors.New("cannot foo")
+	}
+
 	err := m.unmount()
-	c.Assert(err, ErrorMatches, `cannot unmount "/boot": cannot bar`)
+	c.Assert(err, ErrorMatches, `cannot unmount .*: cannot foo`)
 }
