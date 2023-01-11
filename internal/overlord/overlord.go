@@ -24,7 +24,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/canonical/x-go/strutil"
+	"github.com/canonical/x-go/randutil"
 	"gopkg.in/tomb.v2"
 
 	"github.com/canonical/pebble/internal/osutil"
@@ -143,9 +143,9 @@ func loadState(statePath string, restartHandler restart.Handler, backend state.B
 	// as we are most likely running in a container. LXD mounts it's own boot_id
 	// to correctly emulate the boot_id behaviour of non-containerized systems.
 	// Within containerd/docker, boot_id is consistent with the host, which provides
-	// us no context of restarts.
+	// us no context of restarts, so instead fallback to /proc/sys/kernel/random/uuid.
 	if os.Getpid() == 1 {
-		curBootID, err = strutil.UUID()
+		curBootID, err = randutil.RandomKernelUUID()
 		if err != nil {
 			return nil, fmt.Errorf("fatal: cannot generate psuedo boot-id: %v", err)
 		}
