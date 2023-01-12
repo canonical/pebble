@@ -1,0 +1,23 @@
+name: Pebble snap
+
+on: [pull_request]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Pebble repo
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+
+      - name: Build Pebble Snap
+        id: build-pebble-snap
+        uses: snapcore/action-build@v1
+
+      - name: Attach pebble snap to GH workflow execution
+        uses: actions/upload-artifact@v2
+        with:
+          name: snap
+          path: ${{ steps.build-pebble-snap.outputs.snap }}
