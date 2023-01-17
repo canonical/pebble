@@ -353,10 +353,18 @@ func logit(handler http.Handler) http.Handler {
 	})
 }
 
+// Validate performs the checks needed to ensure that the Pebble daemon can be started.
+func (d *Daemon) Validate() error {
+	if _, err := d.overlord.ServiceManager().Plan(); err != nil {
+		return err
+	}
+	return nil
+}
+
 // Init sets up the Daemon's internal workings.
 // Don't call more than once.
 func (d *Daemon) Init() error {
-	if _, err := d.overlord.ServiceManager().Plan(); err != nil {
+	if err := d.Validate(); err != nil {
 		return err
 	}
 
