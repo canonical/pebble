@@ -15,7 +15,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"os/signal"
@@ -51,7 +50,7 @@ func init() {
 	addCommand("run", shortRunHelp, longRunHelp, func() flags.Commander { return &cmdRun{} },
 		map[string]string{
 			"create-dirs": "Create pebble directory on startup if it doesn't exist",
-			"dry":         "Don't start the pebble daemon. This option is incompatible with --create-dirs",
+			"dry":         "Validate plan without starting the pebble daemon.",
 			"hold":        "Do not start default services automatically",
 			"http":        `Start HTTP API listening on this address (e.g., ":4000")`,
 			"verbose":     "Log all output from services to stdout",
@@ -61,10 +60,6 @@ func init() {
 func (rcmd *cmdRun) Execute(args []string) error {
 	if len(args) > 0 {
 		return ErrExtraArgs
-	}
-
-	if rcmd.CreateDirs && rcmd.Dry {
-		return errors.New("cannot run pebble: --create-dirs and --dry are mutually exclusive")
 	}
 
 	sigs := make(chan os.Signal, 2)
@@ -133,7 +128,6 @@ func runDaemon(rcmd *cmdRun, ch chan os.Signal) error {
 	dopts := daemon.Options{
 		Dir:        pebbleDir,
 		SocketPath: socketPath,
-		Dry:        rcmd.Dry,
 	}
 	if rcmd.Verbose {
 		dopts.ServiceOutput = os.Stdout
@@ -146,6 +140,9 @@ func runDaemon(rcmd *cmdRun, ch chan os.Signal) error {
 	}
 	if err := d.Init(); err != nil {
 		return err
+	}
+	if rcmd.Dry {
+		return nil
 	}
 
 	// Run sanity check now, if anything goes wrong with the
@@ -162,10 +159,6 @@ func runDaemon(rcmd *cmdRun, ch chan os.Signal) error {
 	}
 	d.Version = cmd.Version
 	d.Start()
-
-	if rcmd.Dry {
-		return nil
-	}
 
 	watchdog, err := runWatchdog(d)
 	if err != nil {

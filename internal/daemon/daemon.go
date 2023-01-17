@@ -94,7 +94,6 @@ type Daemon struct {
 	tomb                tomb.Tomb
 	router              *mux.Router
 	standbyOpinions     *standby.StandbyOpinions
-	dry                 bool
 
 	// set to remember we need to restart the system
 	restartSystem bool
@@ -360,9 +359,6 @@ func (d *Daemon) Init() error {
 	if _, err := d.overlord.ServiceManager().Plan(); err != nil {
 		return err
 	}
-	if d.dry {
-		return nil
-	}
 
 	listenerMap := make(map[string]net.Listener)
 
@@ -463,9 +459,6 @@ func (d *Daemon) initStandbyHandling() {
 }
 
 func (d *Daemon) Start() {
-	if d.dry {
-		return
-	}
 	if d.rebootIsMissing {
 		// we need to schedule and wait for a system restart
 		d.tomb.Kill(nil)
@@ -799,7 +792,6 @@ func New(opts *Options) (*Daemon, error) {
 		normalSocketPath:    opts.SocketPath,
 		untrustedSocketPath: opts.SocketPath + ".untrusted",
 		httpAddress:         opts.HTTPAddress,
-		dry:                 opts.Dry,
 	}
 
 	ovld, err := overlord.New(opts.Dir, d, opts.ServiceOutput)
