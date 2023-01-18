@@ -138,11 +138,15 @@ func runDaemon(rcmd *cmdRun, ch chan os.Signal) error {
 	if err != nil {
 		return err
 	}
-	if err := d.Init(); err != nil {
+	if err := d.Validate(); err != nil {
 		return err
 	}
 	if rcmd.Dry {
 		return nil
+	}
+
+	if err := d.Init(); err != nil {
+		return err
 	}
 
 	// Run sanity check now, if anything goes wrong with the

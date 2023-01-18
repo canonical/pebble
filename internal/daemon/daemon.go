@@ -72,8 +72,6 @@ type Options struct {
 	// ServiceOuput is an optional io.Writer for the service log output, if set, all services
 	// log output will be written to the writer.
 	ServiceOutput io.Writer
-
-	Dry bool
 }
 
 // A Daemon listens for requests and routes them to the right command
@@ -355,10 +353,8 @@ func logit(handler http.Handler) http.Handler {
 
 // Validate performs the checks needed to ensure that the Pebble daemon can be started.
 func (d *Daemon) Validate() error {
-	if _, err := d.overlord.ServiceManager().Plan(); err != nil {
-		return err
-	}
-	return nil
+	_, err := d.overlord.ServiceManager().Plan()
+	return err
 }
 
 // Init sets up the Daemon's internal workings.
