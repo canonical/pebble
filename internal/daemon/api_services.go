@@ -22,9 +22,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/canonical/x-go/strutil"
+
 	"github.com/canonical/pebble/internal/overlord/servstate"
 	"github.com/canonical/pebble/internal/overlord/state"
-	"github.com/canonical/pebble/internal/strutil"
 )
 
 type serviceInfo struct {

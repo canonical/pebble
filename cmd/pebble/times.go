@@ -18,7 +18,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/canonical/pebble/internal/strutil/quantity"
+	"github.com/canonical/x-go/strutil/quantity"
+
 	"github.com/canonical/pebble/internal/timeutil"
 )
 

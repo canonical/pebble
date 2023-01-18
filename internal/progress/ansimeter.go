@@ -21,9 +21,8 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/canonical/x-go/strutil/quantity"
 	"golang.org/x/crypto/ssh/terminal"
-
-	"github.com/canonical/pebble/internal/strutil/quantity"
 )
 
 var stdout io.Writer = os.Stdout

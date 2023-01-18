@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/canonical/x-go/strutil/shlex"
 	"golang.org/x/sys/unix"
 	"gopkg.in/tomb.v2"
 
@@ -20,7 +21,6 @@ import (
 	"github.com/canonical/pebble/internal/plan"
 	"github.com/canonical/pebble/internal/reaper"
 	"github.com/canonical/pebble/internal/servicelog"
-	"github.com/canonical/pebble/internal/strutil/shlex"
 )
 
 // TaskServiceRequest extracts the *ServiceRequest that was associated

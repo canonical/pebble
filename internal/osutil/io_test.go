@@ -27,12 +27,12 @@ import (
 	"path/filepath"
 	"syscall"
 
+	"github.com/canonical/x-go/randutil"
+	. "gopkg.in/check.v1"
+
 	"github.com/canonical/pebble/internal/osutil"
 	"github.com/canonical/pebble/internal/osutil/sys"
-	"github.com/canonical/pebble/internal/strutil"
 	"github.com/canonical/pebble/internal/testutil"
-
-	. "gopkg.in/check.v1"
 )
 
 type AtomicWriteTestSuite struct{}
@@ -170,7 +170,7 @@ func (ts *AtomicWriteTestSuite) TestAtomicWriteFileNoOverwriteTmpExisting(c *C) 
 	tmpdir := c.MkDir()
 	// ensure we always get the same result
 	rand.Seed(1)
-	expectedRandomness := strutil.MakeRandomString(12) + "~"
+	expectedRandomness := randutil.RandomString(12) + "~"
 	// ensure we always get the same result
 	rand.Seed(1)
 
