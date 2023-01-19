@@ -1,6 +1,3 @@
-//go:build termus
-// +build termus
-
 // Copyright (c) 2022 Canonical Ltd
 //
 // This program is free software: you can redistribute it and/or modify
@@ -15,7 +12,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package boot
+package bootstrap
 
 import (
 	"errors"
@@ -39,8 +36,8 @@ func mountCommon() error {
 	return nil
 }
 
-// CheckBootstrap validates the environment to ensure Bootstrap can be called.
-func CheckBootstrap() error {
+// Validate checks for the proper environment to ensure Bootstrap can be called.
+func Validate() error {
 	if osGetpid() != 1 {
 		return errors.New(`must run as PID 1. Use --force to suppress this check`)
 	}
@@ -50,8 +47,8 @@ func CheckBootstrap() error {
 	return nil
 }
 
-// Bootstrap prepares the environment in order to get the system in a working state.
-func Bootstrap() error {
+// Do prepares the environment in order to get the system in a working state.
+func Do() error {
 	if err := mountCommon(); err != nil {
 		return err
 	}

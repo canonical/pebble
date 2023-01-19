@@ -1,6 +1,3 @@
-//go:build termus
-// +build termus
-
 // Copyright (c) 2023 Canonical Ltd
 //
 // This program is free software: you can redistribute it and/or modify
@@ -15,12 +12,14 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package boot
+package bootstrap
 
 import (
 	"errors"
 	"os"
+	"testing"
 
+	"gopkg.in/check.v1"
 	. "gopkg.in/check.v1"
 )
 
@@ -28,21 +27,24 @@ type bootstrapSuite struct{}
 
 var _ = Suite(&bootstrapSuite{})
 
-func (s *bootstrapSuite) TestCheckBootstrap(c *C) {
-	err := CheckBootstrap()
+// Hook up check.v1 into the "go test" runner
+func Test(t *testing.T) { check.TestingT(t) }
+
+func (s *bootstrapSuite) TestValidate(c *C) {
+	err := Validate()
 	c.Assert(err, ErrorMatches, "must run as PID 1. Use --force to suppress this check")
 }
 
-func (s *bootstrapSuite) TestCheckBootstrapPID1(c *C) {
+func (s *bootstrapSuite) TestValidatePID1(c *C) {
 	oldGetpid := osGetpid
 	osGetpid = func() int { return 1 }
 	defer func() { osGetpid = oldGetpid }()
 
-	err := CheckBootstrap()
+	err := Validate()
 	c.Assert(err, ErrorMatches, "TERMUS environment variable must be set to 1. Use --force to suppress this check")
 }
 
-func (s *bootstrapSuite) TestCheckBootstrapPID1AndEnv(c *C) {
+func (s *bootstrapSuite) TestValidatePID1AndEnv(c *C) {
 	oldGetpid := osGetpid
 	osGetpid = func() int { return 1 }
 	defer func() { osGetpid = oldGetpid }()
@@ -51,11 +53,11 @@ func (s *bootstrapSuite) TestCheckBootstrapPID1AndEnv(c *C) {
 	defer func() { os.Setenv("TERMUS", oldTermus) }()
 	os.Setenv("TERMUS", "1")
 
-	err := CheckBootstrap()
+	err := Validate()
 	c.Assert(err, IsNil)
 }
 
-func (s *bootstrapSuite) TestBootstrap(c *C) {
+func (s *bootstrapSuite) TestDo(c *C) {
 	var attemptedMounts []mount
 
 	oldSyscallMount := syscallMount
@@ -65,7 +67,7 @@ func (s *bootstrapSuite) TestBootstrap(c *C) {
 		return nil
 	}
 
-	err := Bootstrap()
+	err := Do()
 	c.Assert(err, IsNil)
 	c.Assert(attemptedMounts, DeepEquals, []mount{
 		{"procfs", "/proc", "proc", 0, ""},
@@ -74,13 +76,13 @@ func (s *bootstrapSuite) TestBootstrap(c *C) {
 	})
 }
 
-func (s *bootstrapSuite) TestBootstrapFails(c *C) {
+func (s *bootstrapSuite) TestDoFails(c *C) {
 	oldSyscallMount := syscallMount
 	defer func() { syscallMount = oldSyscallMount }()
 	syscallMount = func(string, string, string, uintptr, string) error {
 		return errors.New("cannot foo")
 	}
 
-	err := Bootstrap()
+	err := Do()
 	c.Assert(err, ErrorMatches, `cannot mount "procfs": cannot foo`)
 }

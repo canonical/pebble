@@ -30,7 +30,6 @@ import (
 	"golang.org/x/crypto/ssh/terminal"
 
 	"github.com/canonical/pebble/client"
-	"github.com/canonical/pebble/internal/boot"
 	"github.com/canonical/pebble/internal/logger"
 )
 
@@ -346,7 +345,7 @@ func run() error {
 
 	var extra []string
 	parser := Parser(cli)
-	if err2 := boot.CheckBootstrap(); err2 == nil {
+	if os.Getenv("TERMUS") == "1" && os.Getpid() == 1 {
 		args := append([]string{"boot-firmware"}, os.Args[1:]...)
 		extra, err = parser.ParseArgs(args)
 	} else {

@@ -1,4 +1,7 @@
-// Copyright (c) 2022 Canonical Ltd
+//go:build termus
+// +build termus
+
+// Copyright (c) 2023 Canonical Ltd
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License version 3 as
@@ -25,7 +28,7 @@ import (
 
 	"github.com/canonical/pebble/client"
 	"github.com/canonical/pebble/cmd"
-	"github.com/canonical/pebble/internal/boot"
+	"github.com/canonical/pebble/internal/bootstrap"
 	"github.com/canonical/pebble/internal/daemon"
 	"github.com/canonical/pebble/internal/logger"
 	"github.com/canonical/pebble/internal/plan"
@@ -58,12 +61,12 @@ func (rcmd *cmdBootFirmware) Execute(args []string) error {
 	t0 := time.Now().Truncate(time.Millisecond)
 
 	if !rcmd.Force {
-		if err := boot.CheckBootstrap(); err != nil {
+		if err := bootstrap.Validate(); err != nil {
 			return err
 		}
 	}
 
-	if err := boot.Bootstrap(); err != nil {
+	if err := bootstrap.Do(); err != nil {
 		return err
 	}
 
