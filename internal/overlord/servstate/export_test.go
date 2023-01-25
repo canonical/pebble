@@ -72,11 +72,13 @@ func FakeOkayWait(wait time.Duration) (restore func()) {
 	}
 }
 
-func FakeKillWait(kill, fail time.Duration) (restore func()) {
-	old1, old2 := killWait, failWait
-	killWait, failWait = kill, fail
+// FakeGraceKillWait changes both the defaultGracePeriod and killWaitDuration
+// respectively for testing purposes.
+func FakeGraceKillWait(gracePeriod, killWait time.Duration) (restore func()) {
+	old1, old2 := defaultGracePeriod, killWaitDuration
+	defaultGracePeriod, killWaitDuration = gracePeriod, killWait
 	return func() {
-		killWait, failWait = old1, old2
+		defaultGracePeriod, killWaitDuration = old1, old2
 	}
 }
 

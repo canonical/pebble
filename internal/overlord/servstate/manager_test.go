@@ -46,9 +46,9 @@ import (
 )
 
 const (
-	shortOkayWait = 50 * time.Millisecond
-	shortKillWait = 100 * time.Millisecond
-	shortFailWait = 200 * time.Millisecond
+	shortOkayWait         = 50 * time.Millisecond
+	shortGracePeriod      = 100 * time.Millisecond
+	shortKillWaitDuration = 100 * time.Millisecond
 )
 
 func TestMain(m *testing.M) {
@@ -126,6 +126,14 @@ services:
         command: /bin/sh -c "echo test2b | tee -a %s; sleep 10"
 `
 
+var planLayer4 = `
+services:
+    test6:
+        override: merge
+        command: /bin/bash -c "trap 'sleep 10' SIGTERM; sleep 20;"
+        grace-period: 12s
+`
+
 var setLoggerOnce sync.Once
 
 func (s *S) SetUpSuite(c *C) {
@@ -167,7 +175,7 @@ func (s *S) SetUpTest(c *C) {
 
 	restore := servstate.FakeOkayWait(shortOkayWait)
 	s.AddCleanup(restore)
-	restore = servstate.FakeKillWait(shortKillWait, shortFailWait)
+	restore = servstate.FakeGraceKillWait(shortGracePeriod, shortKillWaitDuration)
 	s.AddCleanup(restore)
 }
 
@@ -318,6 +326,32 @@ func (s *S) stopTestServicesAlreadyDead(c *C) {
 	s.st.Lock()
 	c.Check(chg.Status(), Equals, state.DoneStatus, Commentf("Error: %v", chg.Err()))
 	s.st.Unlock()
+}
+
+func (s *S) TestGracePeriodIsUsed(c *C) {
+	layer4 := parseLayer(c, 0, "layer4", planLayer4)
+	err := s.manager.AppendLayer(layer4)
+	c.Assert(err, IsNil)
+	_, _, err = s.manager.Replan()
+	c.Assert(err, IsNil)
+
+	s.startServices(c, []string{"test6"}, 1)
+	s.waitUntilService(c, "test6", func(svc *servstate.ServiceInfo) bool {
+		return svc.Current == servstate.StatusActive
+	})
+
+	startTime := time.Now()
+	chg := s.stopServices(c, []string{"test6"}, 1)
+	s.st.Lock()
+	c.Check(chg.Status(), Equals, state.DoneStatus, Commentf("Error: %v", chg.Err()))
+	s.st.Unlock()
+	s.waitUntilService(c, "test6", func(svc *servstate.ServiceInfo) bool {
+		if svc.Current == servstate.StatusInactive {
+			c.Assert(time.Now().Sub(startTime) > time.Second*10, Equals, true)
+			return true
+		}
+		return false
+	})
 }
 
 func (s *S) TestReplanServices(c *C) {

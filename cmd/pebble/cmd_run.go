@@ -19,10 +19,13 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
+	"github.com/canonical/x-go/strutil"
 	"github.com/jessevdk/go-flags"
+	"golang.org/x/sys/unix"
 
 	"github.com/canonical/pebble/client"
 	"github.com/canonical/pebble/cmd"
@@ -39,20 +42,39 @@ The run command starts pebble and runs the configured environment.
 type cmdRun struct {
 	clientMixin
 
-	CreateDirs bool   `long:"create-dirs"`
-	Hold       bool   `long:"hold"`
-	HTTP       string `long:"http"`
-	Verbose    bool   `short:"v" long:"verbose"`
+	CreateDirs      bool   `long:"create-dirs"`
+	Hold            bool   `long:"hold"`
+	HTTP            string `long:"http"`
+	ShutdownSignals string `long:"shutdown-signals" default:"INT,QUIT,TERM"`
+	Verbose         bool   `short:"v" long:"verbose"`
 }
 
 func init() {
 	addCommand("run", shortRunHelp, longRunHelp, func() flags.Commander { return &cmdRun{} },
 		map[string]string{
-			"create-dirs": "Create pebble directory on startup if it doesn't exist",
-			"hold":        "Do not start default services automatically",
-			"http":        `Start HTTP API listening on this address (e.g., ":4000")`,
-			"verbose":     "Log all output from services to stdout",
+			"create-dirs":      "Create pebble directory on startup if it doesn't exist",
+			"hold":             "Do not start default services automatically",
+			"http":             `Start HTTP API listening on this address (e.g., ":4000")`,
+			"shutdown-signals": "Signals that trigger shutdown",
+			"verbose":          "Log all output from services to stdout",
 		}, nil)
+}
+
+func processSignalNames(signalNames string) ([]os.Signal, error) {
+	sigs := strutil.CommaSeparatedList(signalNames)
+	signals := make([]os.Signal, 0, len(sigs))
+	for _, userSig := range sigs {
+		signal := strings.ToUpper(userSig)
+		if !strings.HasPrefix(signal, "SIG") {
+			signal = "SIG" + signal
+		}
+		sig := unix.SignalNum(signal)
+		if sig == 0 { /* error */
+			return signals, fmt.Errorf("unrecognised signal %q", userSig)
+		}
+		signals = append(signals, sig)
+	}
+	return signals, nil
 }
 
 func (rcmd *cmdRun) Execute(args []string) error {
@@ -60,8 +82,22 @@ func (rcmd *cmdRun) Execute(args []string) error {
 		return ErrExtraArgs
 	}
 
+	// We purposely ignore certain signals here. This is so the default go
+	// handlers don't process the signals. They may be added back in to our
+	// signal handler via the user provided ShutdownSignals.
+	signal.Ignore(syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
+	shutdownSignals, err := processSignalNames(rcmd.ShutdownSignals)
+	if err != nil {
+		return err
+	}
+
 	sigs := make(chan os.Signal, 2)
-	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+	if len(shutdownSignals) != 0 {
+		// We don't want to call Notify with an empty slice of signals. Doing
+		// this will cause us to receive every signal when the user has asked
+		// us to ignore them all.
+		signal.Notify(sigs, shutdownSignals...)
+	}
 
 	if err := runDaemon(rcmd, sigs); err != nil {
 		if err == daemon.ErrRestartSocket {

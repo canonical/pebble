@@ -445,6 +445,11 @@ services:
         after:
             - <other service name>
 
+        # (Optional) The amount of time afforded to this service to handle
+        # SIGTERM and exit gracefully before being force killed.
+        # Default is 5 seconds ("5s").
+        grace-period: <grace-period>
+
         # (Optional) A list of other services in the plan that this service
         # should start before.
         before:

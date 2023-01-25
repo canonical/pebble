@@ -79,6 +79,7 @@ type Service struct {
 	Group       string            `yaml:"group,omitempty"`
 
 	// Auto-restart and backoff functionality
+	GracePeriod    OptionalDuration         `yaml:"grace-period,omitempty"`
 	OnSuccess      ServiceAction            `yaml:"on-success,omitempty"`
 	OnFailure      ServiceAction            `yaml:"on-failure,omitempty"`
 	OnCheckFailure map[string]ServiceAction `yaml:"on-check-failure,omitempty"`
@@ -129,6 +130,9 @@ func (s *Service) Merge(other *Service) {
 	}
 	if other.Command != "" {
 		s.Command = other.Command
+	}
+	if other.GracePeriod.IsSet {
+		s.GracePeriod = other.GracePeriod
 	}
 	if other.UserID != nil {
 		userID := *other.UserID
