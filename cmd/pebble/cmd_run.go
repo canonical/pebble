@@ -36,23 +36,28 @@ var longRunHelp = `
 The run command starts pebble and runs the configured environment.
 `
 
-type cmdRun struct {
-	clientMixin
-
+type sharedRunEnterOpts struct {
 	CreateDirs bool   `long:"create-dirs"`
 	Hold       bool   `long:"hold"`
 	HTTP       string `long:"http"`
 	Verbose    bool   `short:"v" long:"verbose"`
 }
 
+var sharedRunEnterOptsHelp = map[string]string{
+	"create-dirs": "Create pebble directory on startup if it doesn't exist",
+	"hold":        "Do not start default services automatically",
+	"http":        `Start HTTP API listening on this address (e.g., ":4000")`,
+	"verbose":     "Log all output from services to stdout",
+}
+
+type cmdRun struct {
+	clientMixin
+	sharedRunEnterOpts
+}
+
 func init() {
 	addCommand("run", shortRunHelp, longRunHelp, func() flags.Commander { return &cmdRun{} },
-		map[string]string{
-			"create-dirs": "Create pebble directory on startup if it doesn't exist",
-			"hold":        "Do not start default services automatically",
-			"http":        `Start HTTP API listening on this address (e.g., ":4000")`,
-			"verbose":     "Log all output from services to stdout",
-		}, nil)
+		sharedRunEnterOptsHelp, nil)
 }
 
 func (rcmd *cmdRun) Execute(args []string) error {
@@ -60,10 +65,16 @@ func (rcmd *cmdRun) Execute(args []string) error {
 		return ErrExtraArgs
 	}
 
+	rcmd.run(nil)
+
+	return nil
+}
+
+func (rcmd *cmdRun) run(ready chan<- func()) {
 	sigs := make(chan os.Signal, 2)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 
-	if err := runDaemon(rcmd, sigs); err != nil {
+	if err := runDaemon(rcmd, sigs, ready); err != nil {
 		if err == daemon.ErrRestartSocket {
 			// No "error: " prefix as this isn't an error.
 			fmt.Fprintf(os.Stdout, "%v\n", err)
@@ -73,8 +84,6 @@ func (rcmd *cmdRun) Execute(args []string) error {
 		fmt.Fprintf(os.Stderr, "cannot run pebble: %v\n", err)
 		panic(&exitStatus{1})
 	}
-
-	return nil
 }
 
 func runWatchdog(d *daemon.Daemon) (*time.Ticker, error) {
@@ -113,7 +122,7 @@ func sanityCheck() error {
 	return nil
 }
 
-func runDaemon(rcmd *cmdRun, ch chan os.Signal) error {
+func runDaemon(rcmd *cmdRun, ch chan os.Signal, ready chan<- func()) error {
 	t0 := time.Now().Truncate(time.Millisecond)
 
 	pebbleDir, socketPath := getEnvPaths()
@@ -176,6 +185,13 @@ func runDaemon(rcmd *cmdRun, ch chan os.Signal) error {
 		}
 	}
 
+	var stop chan struct{}
+	if ready != nil {
+		stop = make(chan struct{}, 1)
+		ready <- func() { close(stop) }
+		close(ready)
+	}
+
 out:
 	for {
 		select {
@@ -191,6 +207,8 @@ out:
 				d.SetDegradedMode(nil)
 				tic.Stop()
 			}
+		case <-stop:
+			break out
 		}
 	}
 
