@@ -65,6 +65,7 @@ type Service struct {
 	Startup     ServiceStartup `yaml:"startup,omitempty"`
 	Override    Override       `yaml:"override,omitempty"`
 	Command     string         `yaml:"command,omitempty"`
+	cmdArgs     []string
 
 	// Service dependencies
 	After    []string `yaml:"after,omitempty"`
@@ -90,6 +91,7 @@ type Service struct {
 // Copy returns a deep copy of the service.
 func (s *Service) Copy() *Service {
 	copied := *s
+	copied.cmdArgs = append([]string(nil), s.cmdArgs...)
 	copied.After = append([]string(nil), s.After...)
 	copied.Before = append([]string(nil), s.Before...)
 	copied.Requires = append([]string(nil), s.Requires...)
@@ -129,6 +131,7 @@ func (s *Service) Merge(other *Service) {
 	}
 	if other.Command != "" {
 		s.Command = other.Command
+		s.cmdArgs = append([]string(nil), other.cmdArgs...)
 	}
 	if other.UserID != nil {
 		userID := *other.UserID
@@ -182,6 +185,53 @@ func (s *Service) Equal(other *Service) bool {
 		return true
 	}
 	return reflect.DeepEqual(s, other)
+}
+
+// Returns the command as a stream of strings.
+// Filters "[", "]" (if present, denoting optional arguments).
+func (s *Service) GetCommand() ([]string, error) {
+	args, err := shlex.Split(s.Command)
+	if err != nil {
+		return nil, fmt.Errorf("cannot parse service %q command: %s", s.Name, err)
+	}
+	fargs := make([]string, 0)
+	for _, arg := range args {
+		if arg == "[" || arg == "]" {
+			if len(s.cmdArgs) > 0 {
+				break
+			} else {
+				continue
+			}
+		}
+		fargs = append(fargs, arg)
+	}
+	for _, arg := range s.cmdArgs {
+		fargs = append(fargs, arg)
+	}
+	return fargs, nil
+}
+
+func (s *Service) checkCommand() error {
+	args, err := shlex.Split(s.Command)
+	if err != nil {
+		return err
+	}
+	leftCnt := 0
+	rightCnt := 0
+	for _, arg := range args {
+		if arg == "[" {
+			leftCnt++
+		}
+		if arg == "]" {
+			rightCnt++
+		}
+	}
+	if leftCnt > 0 || rightCnt > 0 {
+		if leftCnt != 1 || rightCnt != 1 || args[len(args)-1] != "]" {
+			return fmt.Errorf("bad syntax regarding optional/overridable arguments")
+		}
+	}
+	return nil
 }
 
 type ServiceStartup string
@@ -483,7 +533,7 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 				Message: fmt.Sprintf(`plan must define "command" for service %q`, name),
 			}
 		}
-		_, err := shlex.Split(service.Command)
+		err := service.checkCommand()
 		if err != nil {
 			return nil, &FormatError{
 				Message: fmt.Sprintf("plan service %q command invalid: %v", name, err),

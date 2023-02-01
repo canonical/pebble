@@ -325,11 +325,9 @@ func logError(err error) {
 // command. It assumes the caller has ensures the service is in a valid state,
 // and it sets s.cmd and other relevant fields.
 func (s *serviceData) startInternal() error {
-	args, err := shlex.Split(s.config.Command)
+	args, err := s.config.GetCommand()
 	if err != nil {
-		// Shouldn't happen as it should have failed on parsing, but
-		// it does not hurt to double check and report.
-		return fmt.Errorf("cannot parse service command: %s", err)
+		return err
 	}
 	s.cmd = exec.Command(args[0], args[1:]...)
 	s.cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
@@ -386,7 +384,7 @@ func (s *serviceData) startInternal() error {
 	s.cmd.Stderr = logWriter
 
 	// Start the process!
-	logger.Noticef("Service %q starting: %s", serviceName, s.config.Command)
+	logger.Noticef("Service %q starting: %q", serviceName, args)
 	err = reaper.StartCommand(s.cmd)
 	if err != nil {
 		if outputIterator != nil {
