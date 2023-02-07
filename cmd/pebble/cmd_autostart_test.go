@@ -56,8 +56,9 @@ func (s *PebbleSuite) TestAutostart(c *check.C) {
 
 		body := DecodedRequestBody(c, r)
 		c.Check(body, check.DeepEquals, map[string]interface{}{
-			"action":   "autostart",
-			"services": nil,
+			"action":       "autostart",
+			"services":     nil,
+			"service-args": nil,
 		})
 
 		fmt.Fprintf(w, `{
@@ -80,8 +81,9 @@ func (s *PebbleSuite) TestAutostartFailsNoDefaultServices(c *check.C) {
 		c.Check(r.URL.Path, check.Equals, "/v1/services")
 		body := DecodedRequestBody(c, r)
 		c.Check(body, check.DeepEquals, map[string]interface{}{
-			"action":   "autostart",
-			"services": nil,
+			"action":       "autostart",
+			"services":     nil,
+			"service-args": nil,
 		})
 
 		fmt.Fprint(w, `{
@@ -106,8 +108,9 @@ func (s *PebbleSuite) TestAutostartNoWait(c *check.C) {
 
 		body := DecodedRequestBody(c, r)
 		c.Check(body, check.DeepEquals, map[string]interface{}{
-			"action":   "autostart",
-			"services": nil,
+			"action":       "autostart",
+			"services":     nil,
+			"service-args": nil,
 		})
 
 		fmt.Fprintf(w, `{
@@ -137,8 +140,9 @@ func (s *PebbleSuite) TestAutostartFailsGetChange(c *check.C) {
 
 		body := DecodedRequestBody(c, r)
 		c.Check(body, check.DeepEquals, map[string]interface{}{
-			"action":   "autostart",
-			"services": nil,
+			"action":       "autostart",
+			"services":     nil,
+			"service-args": nil,
 		})
 
 		fmt.Fprintf(w, `{

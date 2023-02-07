@@ -55,7 +55,7 @@ func (cs *clientSuite) TestStartStop(c *check.C) {
 
 		var body map[string]interface{}
 		c.Assert(json.NewDecoder(cs.req.Body).Decode(&body), check.IsNil)
-		c.Check(body, check.HasLen, 2)
+		c.Check(body, check.HasLen, 3)
 		c.Check(body["action"], check.Equals, action)
 		c.Check(body["services"], check.DeepEquals, []interface{}{"one", "two"})
 	}
@@ -80,7 +80,7 @@ func (cs *clientSuite) TestAutostart(c *check.C) {
 
 	var body map[string]interface{}
 	c.Assert(json.NewDecoder(cs.req.Body).Decode(&body), check.IsNil)
-	c.Check(body, check.HasLen, 2)
+	c.Check(body, check.HasLen, 3)
 	c.Check(body["action"], check.Equals, "autostart")
 }
 
@@ -132,7 +132,7 @@ func (cs *clientSuite) TestRestart(c *check.C) {
 
 	var body map[string]interface{}
 	c.Assert(json.NewDecoder(cs.req.Body).Decode(&body), check.IsNil)
-	c.Check(body, check.HasLen, 2)
+	c.Check(body, check.HasLen, 3)
 	c.Check(body["action"], check.Equals, "restart")
 	c.Check(body["services"], check.DeepEquals, []interface{}{"one", "two"})
 }
@@ -156,6 +156,6 @@ func (cs *clientSuite) TestReplan(c *check.C) {
 
 	var body map[string]interface{}
 	c.Assert(json.NewDecoder(cs.req.Body).Decode(&body), check.IsNil)
-	c.Check(body, check.HasLen, 2)
+	c.Check(body, check.HasLen, 3)
 	c.Check(body["action"], check.Equals, "replan")
 }

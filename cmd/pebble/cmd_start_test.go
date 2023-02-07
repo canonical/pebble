@@ -48,8 +48,9 @@ func (s *PebbleSuite) TestStart(c *check.C) {
 
 		body := DecodedRequestBody(c, r)
 		c.Check(body, check.DeepEquals, map[string]interface{}{
-			"action":   "start",
-			"services": []interface{}{"srv1", "srv2"},
+			"action":       "start",
+			"services":     []interface{}{"srv1", "srv2"},
+			"service-args": nil,
 		})
 
 		fmt.Fprintf(w, `{
@@ -73,8 +74,9 @@ func (s *PebbleSuite) TestStartFails(c *check.C) {
 
 		body := DecodedRequestBody(c, r)
 		c.Check(body, check.DeepEquals, map[string]interface{}{
-			"action":   "start",
-			"services": []interface{}{"srv1", "srv3"},
+			"action":       "start",
+			"services":     []interface{}{"srv1", "srv3"},
+			"service-args": nil,
 		})
 
 		fmt.Fprintf(w, `{"type": "error", "result": {"message": "could not foo"}}`)
@@ -95,8 +97,9 @@ func (s *PebbleSuite) TestStartNoWait(c *check.C) {
 
 		body := DecodedRequestBody(c, r)
 		c.Check(body, check.DeepEquals, map[string]interface{}{
-			"action":   "start",
-			"services": []interface{}{"srv1", "srv2"},
+			"action":       "start",
+			"services":     []interface{}{"srv1", "srv2"},
+			"service-args": nil,
 		})
 
 		fmt.Fprintf(w, `{
@@ -126,8 +129,9 @@ func (s *PebbleSuite) TestStartFailsGetChange(c *check.C) {
 
 		body := DecodedRequestBody(c, r)
 		c.Check(body, check.DeepEquals, map[string]interface{}{
-			"action":   "start",
-			"services": []interface{}{"srv1", "srv2"},
+			"action":       "start",
+			"services":     []interface{}{"srv1", "srv2"},
+			"service-args": nil,
 		})
 
 		fmt.Fprintf(w, `{
