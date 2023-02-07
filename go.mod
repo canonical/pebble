@@ -9,8 +9,10 @@ require (
 	github.com/jessevdk/go-flags v1.4.0
 	github.com/pkg/term v1.1.0
 	golang.org/x/crypto v0.0.0-20201221181555-eec23a3978ad
-	golang.org/x/sys v0.0.0-20210119212857-b64e53b001e4
+	golang.org/x/sys v0.0.0-20210320140829-1e4c9ba3b0c4
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c
 	gopkg.in/tomb.v2 v2.0.0-20161208151619-d5d1b5820637
 	gopkg.in/yaml.v3 v3.0.1
 )
+
+replace github.com/jessevdk/go-flags v1.4.0 => github.com/rebornplusplus/go-flags v0.0.0-20230201113816-1dbaf4443e95
