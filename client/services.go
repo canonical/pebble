@@ -25,50 +25,63 @@ import (
 
 type ServiceOptions struct {
 	Names []string
+	Args  map[string][]string
 }
 
 // AutoStart starts the services makes as "startup: enabled". opts.Names must
 // be empty for this call.
 func (client *Client) AutoStart(opts *ServiceOptions) (changeID string, err error) {
-	_, changeID, err = client.doMultiServiceAction("autostart", opts.Names)
+	_, changeID, err = client.doMultiServiceAction("autostart", &multiActionOptions{services: opts.Names})
 	return changeID, err
 }
 
 // Start starts the services named in opts.Names in dependency order.
 func (client *Client) Start(opts *ServiceOptions) (changeID string, err error) {
-	_, changeID, err = client.doMultiServiceAction("start", opts.Names)
+	_, changeID, err = client.doMultiServiceAction("start", &multiActionOptions{services: opts.Names})
 	return changeID, err
 }
 
 // Stop stops the services named in opts.Names in dependency order.
 func (client *Client) Stop(opts *ServiceOptions) (changeID string, err error) {
-	_, changeID, err = client.doMultiServiceAction("stop", opts.Names)
+	_, changeID, err = client.doMultiServiceAction("stop", &multiActionOptions{services: opts.Names})
 	return changeID, err
 }
 
 // Restart stops and then starts the services named in opts.Names in
 // dependency order.
 func (client *Client) Restart(opts *ServiceOptions) (changeID string, err error) {
-	_, changeID, err = client.doMultiServiceAction("restart", opts.Names)
+	_, changeID, err = client.doMultiServiceAction("restart", &multiActionOptions{services: opts.Names})
 	return changeID, err
 }
 
 // Replan stops and (re)starts the services whose configuration has changed
 // since they were started. opts.Names must be empty for this call.
 func (client *Client) Replan(opts *ServiceOptions) (changeID string, err error) {
-	_, changeID, err = client.doMultiServiceAction("replan", opts.Names)
+	_, changeID, err = client.doMultiServiceAction("replan", &multiActionOptions{services: opts.Names})
 	return changeID, err
 }
 
-type multiActionData struct {
-	Action   string   `json:"action"`
-	Services []string `json:"services"`
+func (client *Client) PassServiceArgs(opts *ServiceOptions) (changeID string, err error) {
+	_, changeID, err = client.doMultiServiceAction("pass-args", &multiActionOptions{serviceArgs: opts.Args})
+	return changeID, err
 }
 
-func (client *Client) doMultiServiceAction(actionName string, services []string) (result json.RawMessage, changeID string, err error) {
+type multiActionOptions struct {
+	services    []string
+	serviceArgs map[string][]string
+}
+
+type multiActionData struct {
+	Action      string              `json:"action"`
+	Services    []string            `json:"services"`
+	ServiceArgs map[string][]string `json:"service-args"`
+}
+
+func (client *Client) doMultiServiceAction(actionName string, opts *multiActionOptions) (result json.RawMessage, changeID string, err error) {
 	action := multiActionData{
-		Action:   actionName,
-		Services: services,
+		Action:      actionName,
+		Services:    opts.services,
+		ServiceArgs: opts.serviceArgs,
 	}
 	data, err := json.Marshal(&action)
 	if err != nil {

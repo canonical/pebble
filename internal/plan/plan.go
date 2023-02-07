@@ -211,6 +211,11 @@ func (s *Service) GetCommand() ([]string, error) {
 	return fargs, nil
 }
 
+func (s *Service) setArgs(args []string) error {
+	s.cmdArgs = append([]string(nil), args...)
+	return nil
+}
+
 func (s *Service) checkCommand() error {
 	args, err := shlex.Split(s.Command)
 	if err != nil {
@@ -670,6 +675,28 @@ func (p *Plan) StartOrder(names []string) ([]string, error) {
 // is an order cycle involving the provided service or its dependencies.
 func (p *Plan) StopOrder(names []string) ([]string, error) {
 	return order(p.Services, names, true)
+}
+
+func (p *Plan) SetServiceArgs(serviceArgs map[string][]string) error {
+	for svcName, svcArgs := range serviceArgs {
+		service, ok := p.Services[svcName]
+		if !ok {
+			return fmt.Errorf("Service %s does not exist in the plan (arguments passed via --args)", svcName)
+		}
+		if err := service.setArgs(svcArgs); err != nil {
+			return err
+		}
+		for i := len(p.Layers) - 1; i >= 0; i-- {
+			layerService, ok := p.Layers[i].Services[svcName]
+			if ok {
+				if err := layerService.setArgs(svcArgs); err != nil {
+					return err
+				}
+				break
+			}
+		}
+	}
+	return nil
 }
 
 func order(services map[string]*Service, names []string, stop bool) ([]string, error) {

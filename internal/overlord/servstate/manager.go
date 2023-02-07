@@ -356,6 +356,16 @@ func (m *ServiceManager) StopOrder(services []string) ([]string, error) {
 	return m.plan.StopOrder(services)
 }
 
+func (m *ServiceManager) SetServiceArgs(serviceArgs map[string][]string) error {
+	releasePlan, err := m.acquirePlan()
+	if err != nil {
+		return err
+	}
+	defer releasePlan()
+
+	return m.plan.SetServiceArgs(serviceArgs)
+}
+
 // ServiceLogs returns iterators to the provided services. If last is negative,
 // return tail iterators; if last is zero or positive, return head iterators
 // going back last elements. Each iterator must be closed via the Close method.

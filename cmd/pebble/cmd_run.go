@@ -39,10 +39,11 @@ The run command starts pebble and runs the configured environment.
 type cmdRun struct {
 	clientMixin
 
-	CreateDirs bool   `long:"create-dirs"`
-	Hold       bool   `long:"hold"`
-	HTTP       string `long:"http"`
-	Verbose    bool   `short:"v" long:"verbose"`
+	CreateDirs bool       `long:"create-dirs"`
+	Hold       bool       `long:"hold"`
+	HTTP       string     `long:"http"`
+	Verbose    bool       `short:"v" long:"verbose"`
+	Args       [][]string `long:"args" terminator:";"`
 }
 
 func init() {
@@ -52,6 +53,7 @@ func init() {
 			"hold":        "Do not start default services automatically",
 			"http":        `Start HTTP API listening on this address (e.g., ":4000")`,
 			"verbose":     "Log all output from services to stdout",
+			"args":        "Pass terminated arguments",
 		}, nil)
 }
 
@@ -166,6 +168,20 @@ func runDaemon(rcmd *cmdRun, ch chan os.Signal) error {
 
 	logger.Debugf("activation done in %v", time.Now().Truncate(time.Millisecond).Sub(t0))
 
+	if rcmd.Args != nil {
+		mappedArgs, err := convertArgs(rcmd.Args)
+		if err != nil {
+			logger.Noticef("cannot parse service arguments: %v", err)
+		}
+		servopts := client.ServiceOptions{Args: mappedArgs}
+		changeID, err := rcmd.client.PassServiceArgs(&servopts)
+		if err != nil {
+			return fmt.Errorf("cannot pass arguments to services: %v", err)
+		} else {
+			logger.Noticef("Passed arguments to services with change %s.", changeID)
+		}
+	}
+
 	if !rcmd.Hold {
 		servopts := client.ServiceOptions{}
 		changeID, err := rcmd.client.AutoStart(&servopts)
@@ -198,4 +214,22 @@ out:
 	rcmd.client.CloseIdleConnections()
 
 	return d.Stop(ch)
+}
+
+func convertArgs(args [][]string) (map[string][]string, error) {
+	mappedArgs := make(map[string][]string)
+
+	for _, arg := range args {
+		if len(arg) < 2 {
+			continue
+		}
+
+		name := arg[0]
+		if _, ok := mappedArgs[name]; ok {
+			return nil, fmt.Errorf("Passing args twice to a service is not supported, in --args %s", name)
+		}
+		mappedArgs[name] = append([]string(nil), arg[1:]...)
+	}
+
+	return mappedArgs, nil
 }
