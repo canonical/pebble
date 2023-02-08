@@ -635,10 +635,6 @@ func (d *Daemon) Stop(sigCh chan<- os.Signal) error {
 	return nil
 }
 
-// This is a little more than servstate.killWait (but that isn't and shouldn't
-// be exported, so just duplicate it here).
-const stopRunningTimeout = 5*time.Second + 100*time.Millisecond
-
 // stopRunningServices stops all running services, waiting for a short time
 // for them all to stop.
 func (d *Daemon) stopRunningServices() error {
@@ -664,7 +660,7 @@ func (d *Daemon) stopRunningServices() error {
 	select {
 	case <-chg.Ready():
 		logger.Debugf("All services stopped.")
-	case <-time.After(stopRunningTimeout):
+	case <-time.After(d.overlord.ServiceManager().StopTimeout()):
 		return errors.New("timeout stopping running services")
 	}
 	return nil

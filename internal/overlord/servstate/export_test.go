@@ -65,18 +65,20 @@ func (m *ServiceManager) GetJitter(duration time.Duration) time.Duration {
 }
 
 func FakeOkayWait(wait time.Duration) (restore func()) {
-	old := okayWait
-	okayWait = wait
+	old := okayDelay
+	okayDelay = wait
 	return func() {
-		okayWait = old
+		okayDelay = old
 	}
 }
 
-func FakeKillWait(kill, fail time.Duration) (restore func()) {
-	old1, old2 := killWait, failWait
-	killWait, failWait = kill, fail
+// FakeKillFailDelay changes both the killDelayDefault and failDelay
+// respectively for testing purposes.
+func FakeKillFailDelay(newKillDelay, newFailDelay time.Duration) (restore func()) {
+	old1, old2 := killDelayDefault, failDelay
+	killDelayDefault, failDelay = newKillDelay, newFailDelay
 	return func() {
-		killWait, failWait = old1, old2
+		killDelayDefault, failDelay = old1, old2
 	}
 }
 

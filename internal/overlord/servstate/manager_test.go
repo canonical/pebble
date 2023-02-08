@@ -46,9 +46,9 @@ import (
 )
 
 const (
-	shortOkayWait = 50 * time.Millisecond
-	shortKillWait = 100 * time.Millisecond
-	shortFailWait = 200 * time.Millisecond
+	shortOkayDelay = 50 * time.Millisecond
+	shortKillDelay = 100 * time.Millisecond
+	shortFailDelay = 100 * time.Millisecond
 )
 
 func TestMain(m *testing.M) {
@@ -126,6 +126,14 @@ services:
         command: /bin/sh -c "echo test2b | tee -a %s; sleep 10"
 `
 
+var planLayer4 = `
+services:
+    test6:
+        override: merge
+        command: /bin/bash -c "trap 'sleep 10' SIGTERM; sleep 20;"
+        kill-delay: 300ms
+`
+
 var setLoggerOnce sync.Once
 
 func (s *S) SetUpSuite(c *C) {
@@ -165,9 +173,9 @@ func (s *S) SetUpTest(c *C) {
 	s.AddCleanup(manager.Stop)
 	s.manager = manager
 
-	restore := servstate.FakeOkayWait(shortOkayWait)
+	restore := servstate.FakeOkayWait(shortOkayDelay)
 	s.AddCleanup(restore)
-	restore = servstate.FakeKillWait(shortKillWait, shortFailWait)
+	restore = servstate.FakeKillFailDelay(shortKillDelay, shortFailDelay)
 	s.AddCleanup(restore)
 }
 
@@ -318,6 +326,55 @@ func (s *S) stopTestServicesAlreadyDead(c *C) {
 	s.st.Lock()
 	c.Check(chg.Status(), Equals, state.DoneStatus, Commentf("Error: %v", chg.Err()))
 	s.st.Unlock()
+}
+
+func (s *S) TestStopTimeout(c *C) {
+	layer := parseLayer(c, 0, "layer99", `
+services:
+    test9:
+        override: merge
+        command: /bin/bash -c "sleep 20;"
+        kill-delay: 1h
+    test10:
+        override: merge
+        command: /bin/bash -c "sleep 20;"
+        kill-delay: 2h
+`)
+	err := s.manager.AppendLayer(layer)
+	c.Assert(err, IsNil)
+	_, _, err = s.manager.Replan()
+	c.Assert(err, IsNil)
+	s.startServices(c, []string{"test9"}, 1)
+	s.waitUntilService(c, "test9", func(service *servstate.ServiceInfo) bool {
+		return service.Current == servstate.StatusActive
+	})
+	c.Assert(s.manager.StopTimeout(), Equals, time.Minute*60+time.Millisecond*200)
+}
+
+func (s *S) TestKillDelayIsUsed(c *C) {
+	layer4 := parseLayer(c, 0, "layer4", planLayer4)
+	err := s.manager.AppendLayer(layer4)
+	c.Assert(err, IsNil)
+	_, _, err = s.manager.Replan()
+	c.Assert(err, IsNil)
+
+	s.startServices(c, []string{"test6"}, 1)
+	s.waitUntilService(c, "test6", func(service *servstate.ServiceInfo) bool {
+		return service.Current == servstate.StatusActive
+	})
+
+	startTime := time.Now()
+	chg := s.stopServices(c, []string{"test6"}, 1)
+	s.st.Lock()
+	c.Check(chg.Status(), Equals, state.DoneStatus, Commentf("Error: %v", chg.Err()))
+	s.st.Unlock()
+	s.waitUntilService(c, "test6", func(service *servstate.ServiceInfo) bool {
+		if service.Current == servstate.StatusInactive {
+			c.Assert(time.Now().Sub(startTime) > time.Millisecond*300, Equals, true)
+			return true
+		}
+		return false
+	})
 }
 
 func (s *S) TestReplanServices(c *C) {
@@ -1013,7 +1070,7 @@ services:
 checks:
     chk1:
          override: replace
-         period: 75ms  # a bit longer than shortOkayWait
+         period: 75ms  # a bit longer than shortOkayDelay
          threshold: 1
          exec:
              command: will-fail
@@ -1180,7 +1237,7 @@ services:
 checks:
     chk1:
          override: replace
-         period: 75ms  # a bit longer than shortOkayWait
+         period: 75ms  # a bit longer than shortOkayDelay
          threshold: 1
          exec:
              command: will-fail
@@ -1252,7 +1309,7 @@ services:
 checks:
     chk1:
          override: replace
-         period: 75ms  # a bit longer than shortOkayWait
+         period: 75ms  # a bit longer than shortOkayDelay
          threshold: 1
          exec:
              command: will-fail
@@ -1568,7 +1625,7 @@ func createZombie() error {
 		return err
 	}
 	fmt.Printf("childPid %d\n", childPid)
-	time.Sleep(shortOkayWait + 25*time.Millisecond)
+	time.Sleep(shortOkayDelay + 25*time.Millisecond)
 	return nil
 }
 
