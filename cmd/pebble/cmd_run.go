@@ -53,7 +53,7 @@ func init() {
 			"hold":        "Do not start default services automatically",
 			"http":        `Start HTTP API listening on this address (e.g., ":4000")`,
 			"verbose":     "Log all output from services to stdout",
-			"args":        "Pass terminated arguments",
+			"args":        `Provide arguments to service (e.g., "SERVICE ARGS.. ; ")`,
 		}, nil)
 }
 
@@ -171,7 +171,7 @@ func runDaemon(rcmd *cmdRun, ch chan os.Signal) error {
 	if rcmd.Args != nil {
 		mappedArgs, err := convertArgs(rcmd.Args)
 		if err != nil {
-			logger.Noticef("cannot parse service arguments: %v", err)
+			return err
 		}
 		servopts := client.ServiceOptions{Args: mappedArgs}
 		changeID, err := rcmd.client.PassServiceArgs(&servopts)
@@ -216,17 +216,22 @@ out:
 	return d.Stop(ch)
 }
 
+// convert args from [][]string type to map[string][]string
+// and check for empty or duplicated --args usage
 func convertArgs(args [][]string) (map[string][]string, error) {
 	mappedArgs := make(map[string][]string)
 
 	for _, arg := range args {
-		if len(arg) < 2 {
-			continue
+		switch len(arg) {
+		case 0:
+			return nil, fmt.Errorf("--args cannot have empty arguments")
+		case 1:
+			return nil, fmt.Errorf("cannot pass empty arguments to service %q", arg[0])
 		}
 
 		name := arg[0]
 		if _, ok := mappedArgs[name]; ok {
-			return nil, fmt.Errorf("Passing args twice to a service is not supported, in --args %s", name)
+			return nil, fmt.Errorf("cannot pass args twice to service %q", name)
 		}
 		mappedArgs[name] = append([]string(nil), arg[1:]...)
 	}

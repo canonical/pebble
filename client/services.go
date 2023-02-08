@@ -61,6 +61,7 @@ func (client *Client) Replan(opts *ServiceOptions) (changeID string, err error) 
 	return changeID, err
 }
 
+// PassServiceArgs sets the service arguments provided by "pebble run --args"
 func (client *Client) PassServiceArgs(opts *ServiceOptions) (changeID string, err error) {
 	_, changeID, err = client.doMultiServiceAction("pass-args", &multiActionOptions{serviceArgs: opts.Args})
 	return changeID, err

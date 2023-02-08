@@ -65,7 +65,7 @@ type Service struct {
 	Startup     ServiceStartup `yaml:"startup,omitempty"`
 	Override    Override       `yaml:"override,omitempty"`
 	Command     string         `yaml:"command,omitempty"`
-	cmdArgs     []string
+	CmdArgs     []string       `yaml:"-"`
 
 	// Service dependencies
 	After    []string `yaml:"after,omitempty"`
@@ -91,7 +91,7 @@ type Service struct {
 // Copy returns a deep copy of the service.
 func (s *Service) Copy() *Service {
 	copied := *s
-	copied.cmdArgs = append([]string(nil), s.cmdArgs...)
+	copied.CmdArgs = append([]string(nil), s.CmdArgs...)
 	copied.After = append([]string(nil), s.After...)
 	copied.Before = append([]string(nil), s.Before...)
 	copied.Requires = append([]string(nil), s.Requires...)
@@ -131,7 +131,7 @@ func (s *Service) Merge(other *Service) {
 	}
 	if other.Command != "" {
 		s.Command = other.Command
-		s.cmdArgs = append([]string(nil), other.cmdArgs...)
+		s.CmdArgs = append([]string(nil), other.CmdArgs...)
 	}
 	if other.UserID != nil {
 		userID := *other.UserID
@@ -187,8 +187,8 @@ func (s *Service) Equal(other *Service) bool {
 	return reflect.DeepEqual(s, other)
 }
 
-// Returns the command as a stream of strings.
-// Filters "[", "]" (if present, denoting optional arguments).
+// GetCommand overrides the default arguments (inside [ ]) if
+// CmdArgs is present and returns the command as a stream of strings.
 func (s *Service) GetCommand() ([]string, error) {
 	args, err := shlex.Split(s.Command)
 	if err != nil {
@@ -197,7 +197,7 @@ func (s *Service) GetCommand() ([]string, error) {
 	fargs := make([]string, 0)
 	for _, arg := range args {
 		if arg == "[" || arg == "]" {
-			if len(s.cmdArgs) > 0 {
+			if len(s.CmdArgs) > 0 {
 				break
 			} else {
 				continue
@@ -205,14 +205,32 @@ func (s *Service) GetCommand() ([]string, error) {
 		}
 		fargs = append(fargs, arg)
 	}
-	for _, arg := range s.cmdArgs {
+	for _, arg := range s.CmdArgs {
 		fargs = append(fargs, arg)
 	}
 	return fargs, nil
 }
 
+// GetCommandStr takes in the output of GetCommand and
+// returns the command as a string in good print format
+func (s *Service) GetCommandStr(cmd []string) string {
+	f := func(str string) string {
+		for _, c := range str {
+			if c < '!' {
+				return strconv.Quote(str)
+			}
+		}
+		return str
+	}
+	args := make([]string, 0)
+	for _, arg := range cmd {
+		args = append(args, f(arg))
+	}
+	return strings.Join(args, " ")
+}
+
 func (s *Service) setArgs(args []string) error {
-	s.cmdArgs = append([]string(nil), args...)
+	s.CmdArgs = append([]string(nil), args...)
 	return nil
 }
 
@@ -677,11 +695,16 @@ func (p *Plan) StopOrder(names []string) ([]string, error) {
 	return order(p.Services, names, true)
 }
 
+// SetServiceArgs sets the service arguments provided by "pebble run --args"
+// to their respective services. Additionally, for a service the arguments
+// are also updated in the layer of the highest order that defines the service
+// so that the arguments to a service can persist if it is not affected
+// by a "pebble add" layer or similar.
 func (p *Plan) SetServiceArgs(serviceArgs map[string][]string) error {
 	for svcName, svcArgs := range serviceArgs {
 		service, ok := p.Services[svcName]
 		if !ok {
-			return fmt.Errorf("Service %s does not exist in the plan (arguments passed via --args)", svcName)
+			return fmt.Errorf("Service %q does not exist in the plan (arguments passed via --args)", svcName)
 		}
 		if err := service.setArgs(svcArgs); err != nil {
 			return err

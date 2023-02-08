@@ -10,7 +10,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/canonical/x-go/strutil/shlex"
 	"golang.org/x/sys/unix"
 	"gopkg.in/tomb.v2"
 
@@ -384,7 +383,7 @@ func (s *serviceData) startInternal() error {
 	s.cmd.Stderr = logWriter
 
 	// Start the process!
-	logger.Noticef("Service %q starting: %q", serviceName, args)
+	logger.Noticef("Service %q starting: %v", serviceName, s.config.GetCommandStr(args))
 	err = reaper.StartCommand(s.cmd)
 	if err != nil {
 		if outputIterator != nil {

@@ -198,8 +198,8 @@ func v1PostServices(c *Command, r *http.Request, _ *userState) Response {
 	var summary string
 	switch {
 	case taskSet == nil || len(taskSet.Tasks()) == 0:
-		// Can happen with a replan that has no services to stop/start. A
-		// change with no tasks needs to be marked Done manually (normally a
+		// Can happen with a pass-args or replan that has no services to stop/start.
+		// A change with no tasks needs to be marked Done manually (normally a
 		// change is marked Done when its last task is finished).
 		summary = fmt.Sprintf("%s - no services", strings.Title(payload.Action))
 		change := st.NewChange(payload.Action, summary)

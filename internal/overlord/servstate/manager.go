@@ -356,6 +356,8 @@ func (m *ServiceManager) StopOrder(services []string) ([]string, error) {
 	return m.plan.StopOrder(services)
 }
 
+// SetServiceArgs sets the service arguments provided via "pebble run --args"
+// in the plan. See plan.SetServiceArgs.
 func (m *ServiceManager) SetServiceArgs(serviceArgs map[string][]string) error {
 	releasePlan, err := m.acquirePlan()
 	if err != nil {
