@@ -477,6 +477,35 @@ var planTests = []planTest{{
 				command: foo '
 	`},
 }, {
+	summary: `Optional/overridable arguments in service command`,
+	input: []string{`
+		services:
+			"svc1":
+				override: replace
+				command: cmd -v [ --foo bar -e "x [ y ] z" ]
+	`},
+	layers: []*plan.Layer{{
+		Order: 0,
+		Label: "layer-0",
+		Services: map[string]*plan.Service{
+			"svc1": {
+				Name:     "svc1",
+				Override: "replace",
+				Command:  `cmd -v [ --foo bar -e "x [ y ] z" ]`,
+			},
+		},
+		Checks: map[string]*plan.Check{},
+	}},
+}, {
+	summary: `Invalid syntax in Optional/overridable arguments to service command`,
+	error:   `plan service "svc1" command invalid: bad syntax regarding optional/overridable arguments`,
+	input: []string{`
+		services:
+			"svc1":
+				override: replace
+				command: cmd -v [ --foo ] bar
+	`},
+}, {
 	summary: "Checks fields parse correctly and defaults are correct",
 	input: []string{`
 		checks:
@@ -1016,4 +1045,136 @@ func (s *S) TestMarshalLayer(c *C) {
 	out, err := yaml.Marshal(layer)
 	c.Assert(err, IsNil)
 	c.Assert(string(out), Equals, string(layerBytes))
+}
+
+var svcArgsTests = []struct {
+	summary     string
+	input       []string
+	moreInput   string
+	serviceArgs map[string][]string
+	err         string
+	result      plan.Plan
+}{
+	{
+		summary: `plan.Services and plan.Layers should be updated accordingly`,
+		input: []string{`
+			services:
+				svc1:
+					override: replace
+					command: svc1cmd -v [ --foo bar ]
+				svc2:
+					override: replace
+					command: svc2cmd [ --wait 15 ]
+			`, `
+			services:
+				svc2:
+					override: replace
+					command: newsvc2cmd [ -b -c foo ]
+		`},
+		serviceArgs: map[string][]string{
+			"svc1": {"--bar", "foo"},
+			"svc2": {"-xyz"},
+		},
+		result: plan.Plan{
+			Layers: []*plan.Layer{
+				{
+					Label: "layer-0",
+					Services: map[string]*plan.Service{
+						"svc1": {
+							Name:     "svc1",
+							Override: plan.ReplaceOverride,
+							Command:  "svc1cmd -v [ --foo bar ]",
+							CmdArgs:  []string{"--bar", "foo"},
+						},
+						"svc2": {
+							Name:     "svc2",
+							Override: plan.ReplaceOverride,
+							Command:  "svc2cmd [ --wait 15 ]",
+						},
+					},
+				},
+				{
+					Label: "layer-1",
+					Services: map[string]*plan.Service{
+						"svc2": {
+							Name:     "svc2",
+							Override: plan.ReplaceOverride,
+							Command:  "newsvc2cmd [ -b -c foo ]",
+							CmdArgs:  []string{"-xyz"},
+						},
+					},
+				},
+			},
+			Services: map[string]*plan.Service{
+				"svc1": {
+					Name:          "svc1",
+					Override:      plan.ReplaceOverride,
+					Command:       "svc1cmd -v [ --foo bar ]",
+					CmdArgs:       []string{"--bar", "foo"},
+					BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
+					BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
+					BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
+				},
+				"svc2": {
+					Name:          "svc2",
+					Override:      plan.ReplaceOverride,
+					Command:       "newsvc2cmd [ -b -c foo ]",
+					CmdArgs:       []string{"-xyz"},
+					BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
+					BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
+					BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
+				},
+			},
+		},
+	}, {
+		summary: `invalid service name should raise error`,
+		input: []string{`
+			services:
+				svc1:
+					override: replace
+					command: svc1cmd -v [ --foo bar ]
+		`},
+		serviceArgs: map[string][]string{
+			"foo": {"bar"},
+		},
+		err: `Service "foo" does not exist in the plan \(arguments passed via --args\)`,
+	},
+}
+
+func (s *S) TestSetServiceArgs(c *C) {
+	for _, test := range svcArgsTests {
+		var err error
+
+		layers := make([]*plan.Layer, 0)
+		for i, yml := range test.input {
+			layer, err := plan.ParseLayer(i, fmt.Sprintf("layer-%d", i), reindent(yml))
+			c.Assert(err, IsNil)
+			layers = append(layers, layer)
+		}
+
+		combined, err := plan.CombineLayers(layers...)
+		c.Assert(err, IsNil)
+
+		p := plan.Plan{
+			Layers:   layers,
+			Services: combined.Services,
+		}
+
+		err = p.SetServiceArgs(test.serviceArgs)
+		if err != nil || test.err != "" {
+			if test.err != "" {
+				c.Assert(err, ErrorMatches, test.err)
+			} else {
+				c.Assert(err, IsNil)
+			}
+			continue
+		}
+
+		c.Assert(len(p.Layers), Equals, len(test.result.Layers))
+		for i := range p.Layers {
+			c.Assert(fmt.Sprintf("layer-%d", i), Equals, test.result.Layers[i].Label)
+			c.Assert(p.Layers[i].Services, DeepEquals, test.result.Layers[i].Services)
+		}
+		c.Assert(p.Services, DeepEquals, test.result.Services)
+	}
 }
