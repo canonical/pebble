@@ -28,6 +28,7 @@ type ServiceManager struct {
 
 	servicesLock sync.Mutex
 	services     map[string]*serviceData
+	serviceArgs  map[string][]string
 
 	serviceOutput io.Writer
 	restarter     Restarter
@@ -115,9 +116,10 @@ func (m *ServiceManager) Plan() (*plan.Plan, error) {
 	return m.plan, nil
 }
 
-// AppendLayer appends the given layer to the plan's layers and updates the
-// layer.Order field to the new order. If a layer with layer.Label already
-// exists, return an error of type *LabelExists.
+// AppendLayer appends the given layer to the plan's layers, updates the
+// layer.Order field to the new order and removes the existing arguments
+// of this layer's services. If a layer with layer.Label already exists,
+// return an error of type *LabelExists.
 func (m *ServiceManager) AppendLayer(layer *plan.Layer) error {
 	releasePlan, err := m.acquirePlan()
 	if err != nil {
@@ -146,6 +148,12 @@ func (m *ServiceManager) appendLayer(layer *plan.Layer) error {
 		return err
 	}
 	layer.Order = newOrder
+
+	// Remove the existing arguments of this layer's services
+	for _, service := range layer.Services {
+		delete(m.serviceArgs, service.Name)
+	}
+
 	return nil
 }
 
@@ -176,7 +184,8 @@ func findLayer(layers []*plan.Layer, label string) (int, *plan.Layer) {
 
 // CombineLayer combines the given layer with an existing layer that has the
 // same label. If no existing layer has the label, append a new one. In either
-// case, update the layer.Order field to the new order.
+// case, update the layer.Order field to the new order and remove existing
+// arguments of this layer's services.
 func (m *ServiceManager) CombineLayer(layer *plan.Layer) error {
 	releasePlan, err := m.acquirePlan()
 	if err != nil {
@@ -207,6 +216,12 @@ func (m *ServiceManager) CombineLayer(layer *plan.Layer) error {
 		return err
 	}
 	layer.Order = found.Order
+
+	// Remove the existing arguments of this layer's services
+	for _, service := range layer.Services {
+		delete(m.serviceArgs, service.Name)
+	}
+
 	return nil
 }
 
@@ -356,16 +371,10 @@ func (m *ServiceManager) StopOrder(services []string) ([]string, error) {
 	return m.plan.StopOrder(services)
 }
 
-// SetServiceArgs sets the service arguments provided via "pebble run --args"
-// in the plan. See plan.SetServiceArgs.
+// SetServiceArgs sets the service arguments provided via "pebble run --args".
 func (m *ServiceManager) SetServiceArgs(serviceArgs map[string][]string) error {
-	releasePlan, err := m.acquirePlan()
-	if err != nil {
-		return err
-	}
-	defer releasePlan()
-
-	return m.plan.SetServiceArgs(serviceArgs)
+	m.serviceArgs = serviceArgs
+	return nil
 }
 
 // ServiceLogs returns iterators to the provided services. If last is negative,

@@ -146,6 +146,32 @@ are marked as `startup: enabled` (if you don't want that, use `--hold`). Then
 other Pebble commands may be used to interact with the running daemon, for example,
 in another terminal window.
 
+To provide arguments to a service, you can use the `--args` option. The arguments will
+override the default arguments (if any) specified in the plan. To indicate the end
+of arguments, a terminator `;` is used which must be backslash-escaped if used in
+the shell. The terminator maybe omitted for an `--args` if there are no other `run`
+options that follow. For example,
+
+* start the Pebble server and only pass some arguments to “svc”:
+
+    ```
+    $ pebble run --args svc --verbose --foo "multi str arg"
+    ```
+
+* start the Pebble server with all services on hold, and give some
+  args to “svc”:
+
+    ```
+    $ pebble run --args svc --verbose --foo "multi str arg" \; --hold
+    ```
+
+* start the Pebble server and pass arguments to multiple services:
+
+    ```
+    $ pebble run --args svc1 --verbose --foo "multi str arg" \; \
+                 --args svc2 --somearg 1 --payload '{"foo": "bar"}'
+    ```
+
 To override the default configuration directory, set the `PEBBLE` environment variable when running:
 
 ```
@@ -426,8 +452,13 @@ services:
         # (Required in combined layer) The command to run the service. The
         # command is executed directly, not interpreted by a shell.
         #
+        # (Optional) The command can have default arguments inside a [ ... ]
+        # block, which can also be overridden by providing args via
+        #   pebble run --args <svc-name> <arguments..> ;
+        # The default (or, overridden) arguments are appended to the command.
+        #
         # Example: /usr/bin/somecommand -b -t 30
-        command: <commmand>
+        command: <commmand> [ <default-arguments...> ]
 
         # (Optional) A short summary of the service.
         summary: <summary>

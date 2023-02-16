@@ -48,9 +48,8 @@ func (s *PebbleSuite) TestRestart(c *check.C) {
 
 		body := DecodedRequestBody(c, r)
 		c.Check(body, check.DeepEquals, map[string]interface{}{
-			"action":       "restart",
-			"services":     []interface{}{"srv1", "srv2"},
-			"service-args": nil,
+			"action":   "restart",
+			"services": []interface{}{"srv1", "srv2"},
 		})
 
 		fmt.Fprintf(w, `{
@@ -74,9 +73,8 @@ func (s *PebbleSuite) TestRestartFails(c *check.C) {
 
 		body := DecodedRequestBody(c, r)
 		c.Check(body, check.DeepEquals, map[string]interface{}{
-			"action":       "restart",
-			"services":     []interface{}{"srv1", "srv3"},
-			"service-args": nil,
+			"action":   "restart",
+			"services": []interface{}{"srv1", "srv3"},
 		})
 
 		fmt.Fprintf(w, `{"type": "error", "result": {"message": "could not foo"}}`)
@@ -97,9 +95,8 @@ func (s *PebbleSuite) TestRestartNoWait(c *check.C) {
 
 		body := DecodedRequestBody(c, r)
 		c.Check(body, check.DeepEquals, map[string]interface{}{
-			"action":       "restart",
-			"services":     []interface{}{"srv1", "srv2"},
-			"service-args": nil,
+			"action":   "restart",
+			"services": []interface{}{"srv1", "srv2"},
 		})
 
 		fmt.Fprintf(w, `{
@@ -129,9 +126,8 @@ func (s *PebbleSuite) TestRestartFailsGetChange(c *check.C) {
 
 		body := DecodedRequestBody(c, r)
 		c.Check(body, check.DeepEquals, map[string]interface{}{
-			"action":       "restart",
-			"services":     []interface{}{"srv1", "srv2"},
-			"service-args": nil,
+			"action":   "restart",
+			"services": []interface{}{"srv1", "srv2"},
 		})
 
 		fmt.Fprintf(w, `{

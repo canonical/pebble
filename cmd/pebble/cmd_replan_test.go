@@ -56,9 +56,8 @@ func (s *PebbleSuite) TestReplan(c *check.C) {
 
 		body := DecodedRequestBody(c, r)
 		c.Check(body, check.DeepEquals, map[string]interface{}{
-			"action":       "replan",
-			"services":     nil,
-			"service-args": nil,
+			"action":   "replan",
+			"services": nil,
 		})
 
 		fmt.Fprintf(w, `{
@@ -81,9 +80,8 @@ func (s *PebbleSuite) TestReplanFailsNoDefaultServices(c *check.C) {
 		c.Check(r.URL.Path, check.Equals, "/v1/services")
 		body := DecodedRequestBody(c, r)
 		c.Check(body, check.DeepEquals, map[string]interface{}{
-			"action":       "replan",
-			"services":     nil,
-			"service-args": nil,
+			"action":   "replan",
+			"services": nil,
 		})
 
 		fmt.Fprint(w, `{
@@ -108,9 +106,8 @@ func (s *PebbleSuite) TestReplanNoWait(c *check.C) {
 
 		body := DecodedRequestBody(c, r)
 		c.Check(body, check.DeepEquals, map[string]interface{}{
-			"action":       "replan",
-			"services":     nil,
-			"service-args": nil,
+			"action":   "replan",
+			"services": nil,
 		})
 
 		fmt.Fprintf(w, `{
@@ -140,9 +137,8 @@ func (s *PebbleSuite) TestReplanFailsGetChange(c *check.C) {
 
 		body := DecodedRequestBody(c, r)
 		c.Check(body, check.DeepEquals, map[string]interface{}{
-			"action":       "replan",
-			"services":     nil,
-			"service-args": nil,
+			"action":   "replan",
+			"services": nil,
 		})
 
 		fmt.Fprintf(w, `{

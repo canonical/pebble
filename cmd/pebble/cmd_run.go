@@ -34,6 +34,15 @@ import (
 var shortRunHelp = "Run the pebble environment"
 var longRunHelp = `
 The run command starts pebble and runs the configured environment.
+
+Additional arguments to a service command can be provided by the
+--args option in the format:
+    --args <service-name> <arguments..> ;
+The arguments will override the default arguments if specified in
+the plan within [ ... ] group. The semi-colon at the end acts as a
+terminator (end-marker) for the --args option, and needs to be
+backslash-escaped if used at the shell. If no other options follow
+after --args, the terminator ";" may be omitted.
 `
 
 type cmdRun struct {
@@ -53,7 +62,7 @@ func init() {
 			"hold":        "Do not start default services automatically",
 			"http":        `Start HTTP API listening on this address (e.g., ":4000")`,
 			"verbose":     "Log all output from services to stdout",
-			"args":        `Provide arguments to service (e.g., "SERVICE ARGS.. ; ")`,
+			"args":        `Provide arguments to a service`,
 		}, nil)
 }
 
@@ -132,6 +141,13 @@ func runDaemon(rcmd *cmdRun, ch chan os.Signal) error {
 	if rcmd.Verbose {
 		dopts.ServiceOutput = os.Stdout
 	}
+	if rcmd.Args != nil {
+		mappedArgs, err := convertArgs(rcmd.Args)
+		if err != nil {
+			return err
+		}
+		dopts.ServiceArgs = mappedArgs
+	}
 	dopts.HTTPAddress = rcmd.HTTP
 
 	d, err := daemon.New(&dopts)
@@ -167,20 +183,6 @@ func runDaemon(rcmd *cmdRun, ch chan os.Signal) error {
 	}
 
 	logger.Debugf("activation done in %v", time.Now().Truncate(time.Millisecond).Sub(t0))
-
-	if rcmd.Args != nil {
-		mappedArgs, err := convertArgs(rcmd.Args)
-		if err != nil {
-			return err
-		}
-		servopts := client.ServiceOptions{Args: mappedArgs}
-		changeID, err := rcmd.client.PassServiceArgs(&servopts)
-		if err != nil {
-			return fmt.Errorf("cannot pass arguments to services: %v", err)
-		} else {
-			logger.Noticef("Passed arguments to services with change %s.", changeID)
-		}
-	}
 
 	if !rcmd.Hold {
 		servopts := client.ServiceOptions{}
@@ -222,18 +224,11 @@ func convertArgs(args [][]string) (map[string][]string, error) {
 	mappedArgs := make(map[string][]string)
 
 	for _, arg := range args {
-		switch len(arg) {
-		case 0:
-			return nil, fmt.Errorf("--args cannot have empty arguments")
-		case 1:
-			return nil, fmt.Errorf("cannot pass empty arguments to service %q", arg[0])
+		if len(arg) < 2 {
+			return nil, fmt.Errorf("--args requires a service name and one or more additional arguments")
 		}
-
 		name := arg[0]
-		if _, ok := mappedArgs[name]; ok {
-			return nil, fmt.Errorf("cannot pass args twice to service %q", name)
-		}
-		mappedArgs[name] = append([]string(nil), arg[1:]...)
+		mappedArgs[name] = append(mappedArgs[name], arg[1:]...)
 	}
 
 	return mappedArgs, nil

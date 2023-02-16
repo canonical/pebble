@@ -407,6 +407,15 @@ func (o *Overlord) CheckManager() *checkstate.CheckManager {
 	return o.checkMgr
 }
 
+// PassServiceArgs passes the provided service arguments to the
+// service manager responsible for services under the overlord.
+func (o *Overlord) PassServiceArgs(serviceArgs map[string][]string) error {
+	if o.serviceMgr == nil {
+		return fmt.Errorf("cannot pass service arguments to nil service manager")
+	}
+	return o.serviceMgr.SetServiceArgs(serviceArgs)
+}
+
 // Fake creates an Overlord without any managers and with a backend
 // not using disk. Managers can be added with AddManager. For testing.
 func Fake() *Overlord {

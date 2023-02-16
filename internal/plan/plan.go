@@ -65,7 +65,6 @@ type Service struct {
 	Startup     ServiceStartup `yaml:"startup,omitempty"`
 	Override    Override       `yaml:"override,omitempty"`
 	Command     string         `yaml:"command,omitempty"`
-	CmdArgs     []string       `yaml:"-"`
 
 	// Service dependencies
 	After    []string `yaml:"after,omitempty"`
@@ -91,7 +90,6 @@ type Service struct {
 // Copy returns a deep copy of the service.
 func (s *Service) Copy() *Service {
 	copied := *s
-	copied.CmdArgs = append([]string(nil), s.CmdArgs...)
 	copied.After = append([]string(nil), s.After...)
 	copied.Before = append([]string(nil), s.Before...)
 	copied.Requires = append([]string(nil), s.Requires...)
@@ -131,7 +129,6 @@ func (s *Service) Merge(other *Service) {
 	}
 	if other.Command != "" {
 		s.Command = other.Command
-		s.CmdArgs = append([]string(nil), other.CmdArgs...)
 	}
 	if other.UserID != nil {
 		userID := *other.UserID
@@ -187,74 +184,59 @@ func (s *Service) Equal(other *Service) bool {
 	return reflect.DeepEqual(s, other)
 }
 
-// GetCommand overrides the default arguments (inside [ ]) if
-// CmdArgs is present and returns the command as a stream of strings.
-func (s *Service) GetCommand() ([]string, error) {
+// GetCommand returns the service command as a stream of strings.
+// It adds the arguments in cmdArgs to the command if no default
+// argument is specified in [ ... ] group in the plan.
+// If default arguments are specified in the plan, the default
+// arguments are added to the command if cmdArgs is empty.
+// If not empty, the default arguments are overrided by arguments in cmdArgs.
+func (s *Service) GetCommand(cmdArgs []string) ([]string, error) {
 	args, err := shlex.Split(s.Command)
 	if err != nil {
-		return nil, fmt.Errorf("cannot parse service %q command: %s", s.Name, err)
+		return nil, err
 	}
-	fargs := make([]string, 0)
-	for _, arg := range args {
-		if arg == "[" || arg == "]" {
-			if len(s.CmdArgs) > 0 {
-				break
-			} else {
+
+	var inBrackets, gotBrackets bool
+	var fargs []string
+
+	for idx, arg := range args {
+		if inBrackets {
+			if arg == "[" {
+				return nil, fmt.Errorf("cannot nest [ ... ] groups")
+			}
+			if arg == "]" {
+				inBrackets = false
 				continue
 			}
-		}
-		fargs = append(fargs, arg)
-	}
-	for _, arg := range s.CmdArgs {
-		fargs = append(fargs, arg)
-	}
-	return fargs, nil
-}
-
-// GetCommandStr takes in the output of GetCommand and
-// returns the command as a string in good print format
-func (s *Service) GetCommandStr(cmd []string) string {
-	f := func(str string) string {
-		for _, c := range str {
-			if c < '!' {
-				return strconv.Quote(str)
+			if len(cmdArgs) == 0 {
+				fargs = append(fargs, arg)
 			}
+			continue
 		}
-		return str
-	}
-	args := make([]string, 0)
-	for _, arg := range cmd {
-		args = append(args, f(arg))
-	}
-	return strings.Join(args, " ")
-}
-
-func (s *Service) setArgs(args []string) error {
-	s.CmdArgs = append([]string(nil), args...)
-	return nil
-}
-
-func (s *Service) checkCommand() error {
-	args, err := shlex.Split(s.Command)
-	if err != nil {
-		return err
-	}
-	leftCnt := 0
-	rightCnt := 0
-	for _, arg := range args {
+		if gotBrackets {
+			return nil, fmt.Errorf("cannot have any args after [ ... ] group")
+		}
 		if arg == "[" {
-			leftCnt++
+			if idx == 0 {
+				return nil, fmt.Errorf("cannot have [ ... ] group as prefix")
+			}
+			if len(cmdArgs) > 0 {
+				fargs = append(fargs, cmdArgs...)
+			}
+			inBrackets = true
+			gotBrackets = true
+			continue
 		}
 		if arg == "]" {
-			rightCnt++
+			return nil, fmt.Errorf("cannot have ] outside of [ ... ] group")
 		}
+		fargs = append(fargs, arg)
 	}
-	if leftCnt > 0 || rightCnt > 0 {
-		if leftCnt != 1 || rightCnt != 1 || args[len(args)-1] != "]" {
-			return fmt.Errorf("bad syntax regarding optional/overridable arguments")
-		}
+	if !gotBrackets && len(cmdArgs) > 0 {
+		fargs = append(fargs, cmdArgs...)
 	}
-	return nil
+
+	return fargs, nil
 }
 
 type ServiceStartup string
@@ -556,7 +538,7 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 				Message: fmt.Sprintf(`plan must define "command" for service %q`, name),
 			}
 		}
-		err := service.checkCommand()
+		_, err := service.GetCommand(nil)
 		if err != nil {
 			return nil, &FormatError{
 				Message: fmt.Sprintf("plan service %q command invalid: %v", name, err),
@@ -693,33 +675,6 @@ func (p *Plan) StartOrder(names []string) ([]string, error) {
 // is an order cycle involving the provided service or its dependencies.
 func (p *Plan) StopOrder(names []string) ([]string, error) {
 	return order(p.Services, names, true)
-}
-
-// SetServiceArgs sets the service arguments provided by "pebble run --args"
-// to their respective services. Additionally, for a service the arguments
-// are also updated in the layer of the highest order that defines the service
-// so that the arguments to a service can persist if it is not affected
-// by a "pebble add" layer or similar.
-func (p *Plan) SetServiceArgs(serviceArgs map[string][]string) error {
-	for svcName, svcArgs := range serviceArgs {
-		service, ok := p.Services[svcName]
-		if !ok {
-			return fmt.Errorf("Service %q does not exist in the plan (arguments passed via --args)", svcName)
-		}
-		if err := service.setArgs(svcArgs); err != nil {
-			return err
-		}
-		for i := len(p.Layers) - 1; i >= 0; i-- {
-			layerService, ok := p.Layers[i].Services[svcName]
-			if ok {
-				if err := layerService.setArgs(svcArgs); err != nil {
-					return err
-				}
-				break
-			}
-		}
-	}
-	return nil
 }
 
 func order(services map[string]*Service, names []string, stop bool) ([]string, error) {

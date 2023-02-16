@@ -324,7 +324,7 @@ func logError(err error) {
 // command. It assumes the caller has ensures the service is in a valid state,
 // and it sets s.cmd and other relevant fields.
 func (s *serviceData) startInternal() error {
-	args, err := s.config.GetCommand()
+	args, err := s.buildCmdArgs()
 	if err != nil {
 		return err
 	}
@@ -383,7 +383,7 @@ func (s *serviceData) startInternal() error {
 	s.cmd.Stderr = logWriter
 
 	// Start the process!
-	logger.Noticef("Service %q starting: %v", serviceName, s.config.GetCommandStr(args))
+	logger.Noticef("Service %q starting: %q", serviceName, args)
 	err = reaper.StartCommand(s.cmd)
 	if err != nil {
 		if outputIterator != nil {
@@ -426,6 +426,11 @@ func (s *serviceData) startInternal() error {
 	}
 
 	return nil
+}
+
+// buildCmdArgs returns the service command as a stream of arguments
+func (s *serviceData) buildCmdArgs() ([]string, error) {
+	return s.config.GetCommand(s.manager.serviceArgs[s.config.Name])
 }
 
 // okayWaitElapsed is called when the okay-wait timer has elapsed (and the

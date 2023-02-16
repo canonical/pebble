@@ -72,6 +72,9 @@ type Options struct {
 	// ServiceOuput is an optional io.Writer for the service log output, if set, all services
 	// log output will be written to the writer.
 	ServiceOutput io.Writer
+
+	// ServiceArgs holds the service arguments provided via ``pebble run --args``.
+	ServiceArgs map[string][]string
 }
 
 // A Daemon listens for requests and routes them to the right command
@@ -798,6 +801,9 @@ func New(opts *Options) (*Daemon, error) {
 		return d, nil
 	}
 	if err != nil {
+		return nil, err
+	}
+	if err = ovld.PassServiceArgs(opts.ServiceArgs); err != nil {
 		return nil, err
 	}
 	d.overlord = ovld

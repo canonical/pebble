@@ -55,7 +55,7 @@ func (cs *clientSuite) TestStartStop(c *check.C) {
 
 		var body map[string]interface{}
 		c.Assert(json.NewDecoder(cs.req.Body).Decode(&body), check.IsNil)
-		c.Check(body, check.HasLen, 3)
+		c.Check(body, check.HasLen, 2)
 		c.Check(body["action"], check.Equals, action)
 		c.Check(body["services"], check.DeepEquals, []interface{}{"one", "two"})
 	}
@@ -80,7 +80,7 @@ func (cs *clientSuite) TestAutostart(c *check.C) {
 
 	var body map[string]interface{}
 	c.Assert(json.NewDecoder(cs.req.Body).Decode(&body), check.IsNil)
-	c.Check(body, check.HasLen, 3)
+	c.Check(body, check.HasLen, 2)
 	c.Check(body["action"], check.Equals, "autostart")
 }
 
@@ -132,7 +132,7 @@ func (cs *clientSuite) TestRestart(c *check.C) {
 
 	var body map[string]interface{}
 	c.Assert(json.NewDecoder(cs.req.Body).Decode(&body), check.IsNil)
-	c.Check(body, check.HasLen, 3)
+	c.Check(body, check.HasLen, 2)
 	c.Check(body["action"], check.Equals, "restart")
 	c.Check(body["services"], check.DeepEquals, []interface{}{"one", "two"})
 }
@@ -156,38 +156,6 @@ func (cs *clientSuite) TestReplan(c *check.C) {
 
 	var body map[string]interface{}
 	c.Assert(json.NewDecoder(cs.req.Body).Decode(&body), check.IsNil)
-	c.Check(body, check.HasLen, 3)
+	c.Check(body, check.HasLen, 2)
 	c.Check(body["action"], check.Equals, "replan")
-}
-
-func (cs *clientSuite) TestPassArgs(c *check.C) {
-	cs.rsp = `{
-		"result": {},
-		"status": "OK",
-		"status-code": 202,
-		"type": "async",
-		"change": "42"
-	}`
-
-	opts := client.ServiceOptions{
-		Args: map[string][]string{
-			"one": {"--foo", "bar"},
-			"two": {"-v", "--bar=foo"},
-		},
-	}
-
-	changeId, err := cs.cli.PassServiceArgs(&opts)
-	c.Check(err, check.IsNil)
-	c.Check(changeId, check.Equals, "42")
-	c.Check(cs.req.Method, check.Equals, "POST")
-	c.Check(cs.req.URL.Path, check.Equals, "/v1/services")
-
-	var body map[string]interface{}
-	c.Assert(json.NewDecoder(cs.req.Body).Decode(&body), check.IsNil)
-	c.Check(body, check.HasLen, 3)
-	c.Check(body["action"], check.Equals, "pass-args")
-	c.Check(body["service-args"], check.DeepEquals, map[string]interface{}{
-		"one": []interface{}{"--foo", "bar"},
-		"two": []interface{}{"-v", "--bar=foo"},
-	})
 }

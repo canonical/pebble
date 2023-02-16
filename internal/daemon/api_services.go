@@ -61,9 +61,8 @@ func v1GetServices(c *Command, r *http.Request, _ *userState) Response {
 
 func v1PostServices(c *Command, r *http.Request, _ *userState) Response {
 	var payload struct {
-		Action      string              `json:"action"`
-		Services    []string            `json:"services"`
-		ServiceArgs map[string][]string `json:"service-args"`
+		Action   string   `json:"action"`
+		Services []string `json:"services"`
 	}
 
 	decoder := json.NewDecoder(r.Body)
@@ -94,10 +93,6 @@ func v1PostServices(c *Command, r *http.Request, _ *userState) Response {
 			})
 		}
 		payload.Services = services
-	case "pass-args":
-		if len(payload.Services) != 0 {
-			return statusBadRequest("%s accepts no service names", payload.Action)
-		}
 	default:
 		if len(payload.Services) == 0 {
 			return statusBadRequest("no services to %s provided", payload.Action)
@@ -181,11 +176,6 @@ func v1PostServices(c *Command, r *http.Request, _ *userState) Response {
 		}
 		sort.Strings(services)
 		payload.Services = services
-	case "pass-args":
-		err = servmgr.SetServiceArgs(payload.ServiceArgs)
-		if err != nil {
-			break
-		}
 	default:
 		return statusBadRequest("action %q is unsupported", payload.Action)
 	}
@@ -197,9 +187,9 @@ func v1PostServices(c *Command, r *http.Request, _ *userState) Response {
 	// resolved one. But do use the resolved set for the count.
 	var summary string
 	switch {
-	case taskSet == nil || len(taskSet.Tasks()) == 0:
-		// Can happen with a pass-args or replan that has no services to stop/start.
-		// A change with no tasks needs to be marked Done manually (normally a
+	case len(taskSet.Tasks()) == 0:
+		// Can happen with a replan that has no services to stop/start. A
+		// change with no tasks needs to be marked Done manually (normally a
 		// change is marked Done when its last task is finished).
 		summary = fmt.Sprintf("%s - no services", strings.Title(payload.Action))
 		change := st.NewChange(payload.Action, summary)
