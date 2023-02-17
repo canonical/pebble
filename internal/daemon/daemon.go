@@ -791,7 +791,7 @@ func New(opts *Options) (*Daemon, error) {
 		httpAddress:         opts.HTTPAddress,
 	}
 
-	ovld, err := overlord.New(opts.Dir, d, opts.ServiceOutput)
+	ovld, err := overlord.New(opts.Dir, d, opts.ServiceOutput, opts.ServiceArgs)
 	if err == errExpectedReboot {
 		// we proceed without overlord until we reach Stop
 		// where we will schedule and wait again for a system restart.
@@ -801,9 +801,6 @@ func New(opts *Options) (*Daemon, error) {
 		return d, nil
 	}
 	if err != nil {
-		return nil, err
-	}
-	if err = ovld.PassServiceArgs(opts.ServiceArgs); err != nil {
 		return nil, err
 	}
 	d.overlord = ovld

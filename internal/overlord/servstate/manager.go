@@ -54,12 +54,13 @@ func (e *LabelExists) Error() string {
 	return fmt.Sprintf("layer %q already exists", e.Label)
 }
 
-func NewManager(s *state.State, runner *state.TaskRunner, pebbleDir string, serviceOutput io.Writer, restarter Restarter) (*ServiceManager, error) {
+func NewManager(s *state.State, runner *state.TaskRunner, pebbleDir string, serviceOutput io.Writer, restarter Restarter, serviceArgs map[string][]string) (*ServiceManager, error) {
 	manager := &ServiceManager{
 		state:         s,
 		runner:        runner,
 		pebbleDir:     pebbleDir,
 		services:      make(map[string]*serviceData),
+		serviceArgs:   serviceArgs,
 		serviceOutput: serviceOutput,
 		restarter:     restarter,
 		rand:          rand.New(rand.NewSource(time.Now().UnixNano())),
@@ -369,12 +370,6 @@ func (m *ServiceManager) StopOrder(services []string) ([]string, error) {
 	defer releasePlan()
 
 	return m.plan.StopOrder(services)
-}
-
-// SetServiceArgs sets the service arguments provided via "pebble run --args".
-func (m *ServiceManager) SetServiceArgs(serviceArgs map[string][]string) error {
-	m.serviceArgs = serviceArgs
-	return nil
 }
 
 // ServiceLogs returns iterators to the provided services. If last is negative,

@@ -72,7 +72,8 @@ type Overlord struct {
 
 // New creates a new Overlord with all its state managers.
 // It can be provided with an optional restart.Handler.
-func New(pebbleDir string, restartHandler restart.Handler, serviceOutput io.Writer) (*Overlord, error) {
+// And optionally additional arguments to services.
+func New(pebbleDir string, restartHandler restart.Handler, serviceOutput io.Writer, serviceArgs map[string][]string) (*Overlord, error) {
 	o := &Overlord{
 		pebbleDir: pebbleDir,
 		loopTomb:  new(tomb.Tomb),
@@ -105,7 +106,7 @@ func New(pebbleDir string, restartHandler restart.Handler, serviceOutput io.Writ
 	}
 	o.runner.AddOptionalHandler(matchAnyUnknownTask, handleUnknownTask, nil)
 
-	o.serviceMgr, err = servstate.NewManager(s, o.runner, o.pebbleDir, serviceOutput, restartHandler)
+	o.serviceMgr, err = servstate.NewManager(s, o.runner, o.pebbleDir, serviceOutput, restartHandler, serviceArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -405,15 +406,6 @@ func (o *Overlord) CommandManager() *cmdstate.CommandManager {
 // checks under the overlord.
 func (o *Overlord) CheckManager() *checkstate.CheckManager {
 	return o.checkMgr
-}
-
-// PassServiceArgs passes the provided service arguments to the
-// service manager responsible for services under the overlord.
-func (o *Overlord) PassServiceArgs(serviceArgs map[string][]string) error {
-	if o.serviceMgr == nil {
-		return fmt.Errorf("cannot pass service arguments to nil service manager")
-	}
-	return o.serviceMgr.SetServiceArgs(serviceArgs)
 }
 
 // Fake creates an Overlord without any managers and with a backend

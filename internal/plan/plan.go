@@ -184,20 +184,20 @@ func (s *Service) Equal(other *Service) bool {
 	return reflect.DeepEqual(s, other)
 }
 
-// GetCommand returns the service command as a stream of strings.
+// CommandArgs returns a service command as a stream of strings.
 // It adds the arguments in cmdArgs to the command if no default
 // argument is specified in [ ... ] group in the plan.
 // If default arguments are specified in the plan, the default
 // arguments are added to the command if cmdArgs is empty.
 // If not empty, the default arguments are overrided by arguments in cmdArgs.
-func (s *Service) GetCommand(cmdArgs []string) ([]string, error) {
-	args, err := shlex.Split(s.Command)
+func CommandArgs(command string, cmdArgs []string) ([]string, error) {
+	args, err := shlex.Split(command)
 	if err != nil {
 		return nil, err
 	}
 
 	var inBrackets, gotBrackets bool
-	var fargs []string
+	var result []string
 
 	for idx, arg := range args {
 		if inBrackets {
@@ -209,7 +209,7 @@ func (s *Service) GetCommand(cmdArgs []string) ([]string, error) {
 				continue
 			}
 			if len(cmdArgs) == 0 {
-				fargs = append(fargs, arg)
+				result = append(result, arg)
 			}
 			continue
 		}
@@ -221,7 +221,7 @@ func (s *Service) GetCommand(cmdArgs []string) ([]string, error) {
 				return nil, fmt.Errorf("cannot have [ ... ] group as prefix")
 			}
 			if len(cmdArgs) > 0 {
-				fargs = append(fargs, cmdArgs...)
+				result = append(result, cmdArgs...)
 			}
 			inBrackets = true
 			gotBrackets = true
@@ -230,13 +230,13 @@ func (s *Service) GetCommand(cmdArgs []string) ([]string, error) {
 		if arg == "]" {
 			return nil, fmt.Errorf("cannot have ] outside of [ ... ] group")
 		}
-		fargs = append(fargs, arg)
+		result = append(result, arg)
 	}
 	if !gotBrackets && len(cmdArgs) > 0 {
-		fargs = append(fargs, cmdArgs...)
+		result = append(result, cmdArgs...)
 	}
 
-	return fargs, nil
+	return result, nil
 }
 
 type ServiceStartup string
@@ -538,7 +538,7 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 				Message: fmt.Sprintf(`plan must define "command" for service %q`, name),
 			}
 		}
-		_, err := service.GetCommand(nil)
+		_, err := CommandArgs(service.Command, nil)
 		if err != nil {
 			return nil, &FormatError{
 				Message: fmt.Sprintf("plan service %q command invalid: %v", name, err),

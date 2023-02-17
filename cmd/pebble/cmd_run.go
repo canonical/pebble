@@ -35,14 +35,18 @@ var shortRunHelp = "Run the pebble environment"
 var longRunHelp = `
 The run command starts pebble and runs the configured environment.
 
-Additional arguments to a service command can be provided by the
---args option in the format:
-    --args <service-name> <arguments..> ;
-The arguments will override the default arguments if specified in
-the plan within [ ... ] group. The semi-colon at the end acts as a
-terminator (end-marker) for the --args option, and needs to be
-backslash-escaped if used at the shell. If no other options follow
-after --args, the terminator ";" may be omitted.
+Additional arguments can be provided to a service command with the
+--args option, in the following format:
+
+    --args <service-name> <arguments...> ;
+
+If the command field in the service's plan has a [ <default-arguments...> ]
+list, the --args arguments will replace those default arguments. If not, the
+--args arguments will be appended to the command.
+
+The semicolon terminator at the end of the --args list is only required
+if other "run" arguments follow. If used at the shell, the ';' must be
+backslash-escaped.
 `
 
 type cmdRun struct {
@@ -62,7 +66,7 @@ func init() {
 			"hold":        "Do not start default services automatically",
 			"http":        `Start HTTP API listening on this address (e.g., ":4000")`,
 			"verbose":     "Log all output from services to stdout",
-			"args":        `Provide arguments to a service`,
+			"args":        `Provide additional arguments to a service`,
 		}, nil)
 }
 
@@ -228,6 +232,9 @@ func convertArgs(args [][]string) (map[string][]string, error) {
 			return nil, fmt.Errorf("--args requires a service name and one or more additional arguments")
 		}
 		name := arg[0]
+		if _, ok := mappedArgs[name]; ok {
+			return nil, fmt.Errorf("cannot use --args twice on a service")
+		}
 		mappedArgs[name] = append(mappedArgs[name], arg[1:]...)
 	}
 

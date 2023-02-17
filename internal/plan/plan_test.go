@@ -1113,7 +1113,7 @@ func (s *S) TestGetCommand(c *C) {
 
 	for _, test := range cmdTests {
 		svc := plan.Service{Command: test.command}
-		cmd, err := svc.GetCommand(test.cmdArgs)
+		cmd, err := plan.CommandArgs(svc.Command, test.cmdArgs)
 		if err == nil {
 			c.Assert(cmd, DeepEquals, test.expectedCommand)
 		}

@@ -160,7 +160,7 @@ func (s *S) SetUpTest(c *C) {
 
 	s.runner = state.NewTaskRunner(s.st)
 	s.stopDaemon = make(chan struct{})
-	manager, err := servstate.NewManager(s.st, s.runner, s.dir, logOutput, testRestarter{s.stopDaemon})
+	manager, err := servstate.NewManager(s.st, s.runner, s.dir, logOutput, testRestarter{s.stopDaemon}, nil)
 	c.Assert(err, IsNil)
 	s.AddCleanup(manager.Stop)
 	s.manager = manager
@@ -600,7 +600,7 @@ func (s *S) TestAppendLayer(c *C) {
 	dir := c.MkDir()
 	os.Mkdir(filepath.Join(dir, "layers"), 0755)
 	runner := state.NewTaskRunner(s.st)
-	manager, err := servstate.NewManager(s.st, runner, dir, nil, nil)
+	manager, err := servstate.NewManager(s.st, runner, dir, nil, nil, nil)
 	c.Assert(err, IsNil)
 	defer manager.Stop()
 
@@ -683,7 +683,7 @@ func (s *S) TestCombineLayer(c *C) {
 	dir := c.MkDir()
 	os.Mkdir(filepath.Join(dir, "layers"), 0755)
 	runner := state.NewTaskRunner(s.st)
-	manager, err := servstate.NewManager(s.st, runner, dir, nil, nil)
+	manager, err := servstate.NewManager(s.st, runner, dir, nil, nil, nil)
 	c.Assert(err, IsNil)
 	defer manager.Stop()
 

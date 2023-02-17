@@ -324,7 +324,7 @@ func logError(err error) {
 // command. It assumes the caller has ensures the service is in a valid state,
 // and it sets s.cmd and other relevant fields.
 func (s *serviceData) startInternal() error {
-	args, err := s.buildCmdArgs()
+	args, err := plan.CommandArgs(s.config.Command, s.manager.serviceArgs[s.config.Name])
 	if err != nil {
 		return err
 	}
@@ -426,11 +426,6 @@ func (s *serviceData) startInternal() error {
 	}
 
 	return nil
-}
-
-// buildCmdArgs returns the service command as a stream of arguments
-func (s *serviceData) buildCmdArgs() ([]string, error) {
-	return s.config.GetCommand(s.manager.serviceArgs[s.config.Name])
 }
 
 // okayWaitElapsed is called when the okay-wait timer has elapsed (and the
