@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 	"path"
 	"strings"
@@ -96,7 +97,7 @@ var DevfsPath = "/dev"
 
 func enumerateDisks() ([]string, error) {
 	base := path.Join(SysfsPath, "block")
-	dirs, err := os.ReadDir(base)
+	dirs, err := ioutil.ReadDir(base)
 	if err != nil {
 		return nil, err
 	}
@@ -115,7 +116,7 @@ func EnumeratePartitions() ([]partition, error) {
 	parts := make([]partition, 0)
 	for _, bdev := range disks {
 		name := path.Base(bdev)
-		dirs, err := os.ReadDir(bdev)
+		dirs, err := ioutil.ReadDir(bdev)
 		if err != nil {
 			return nil, err
 		}
