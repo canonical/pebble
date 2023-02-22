@@ -42,7 +42,6 @@ import (
 	"github.com/canonical/pebble/internal/overlord/standby"
 	"github.com/canonical/pebble/internal/overlord/state"
 	"github.com/canonical/pebble/internal/systemd"
-	"github.com/canonical/pebble/internal/testutil"
 )
 
 // Hook up check.v1 into the "go test" runner
@@ -725,29 +724,39 @@ func (s *daemonSuite) TestRestartSystemWiring(c *check.C) {
 }
 
 func (s *daemonSuite) TestRebootHelper(c *check.C) {
-	cmd := testutil.FakeCommand(c, "shutdown", "", true)
-	defer cmd.Restore()
+	var lastDelay time.Duration
+	var didSleep, didReboot bool
 
-	tests := []struct {
-		delay    time.Duration
-		delayArg string
-	}{
-		{-1, "+0"},
-		{0, "+0"},
-		{time.Minute, "+1"},
-		{10 * time.Minute, "+10"},
-		{30 * time.Second, "+0"},
+	oldTimeSleep := timeSleep
+	oldSyscallReboot := syscallReboot
+	defer func() {
+		timeSleep = oldTimeSleep
+		syscallReboot = oldSyscallReboot
+	}()
+
+	timeSleep = func(d time.Duration) {
+		didSleep = true
+		lastDelay = d
+	}
+	syscallReboot = func(cmd int) error {
+		didReboot = true
+		return nil
 	}
 
-	for _, t := range tests {
-		err := reboot(t.delay)
-		c.Assert(err, check.IsNil)
-		c.Check(cmd.Calls(), check.DeepEquals, [][]string{
-			{"shutdown", "-r", t.delayArg, "reboot scheduled to update the system"},
-		})
+	err := reboot(-1)
+	c.Assert(err, IsNil)
+	c.Check(didSleep, Equals, true)
+	c.Check(didReboot, Equals, true)
+	c.Check(lastDelay, Equals, time.Duration(0))
 
-		cmd.ForgetCalls()
-	}
+	didSleep, didReboot = false, false
+	lastDelay = 0
+
+	err = reboot(3 * time.Second)
+	c.Assert(err, IsNil)
+	c.Check(didSleep, Equals, true)
+	c.Check(didReboot, Equals, true)
+	c.Check(lastDelay, Equals, 3*time.Second)
 }
 
 func makeDaemonListeners(c *check.C, d *Daemon) {
@@ -775,8 +784,15 @@ func (s *daemonSuite) TestRestartShutdownWithSigtermInBetween(c *check.C) {
 	}()
 	rebootNoticeWait = 150 * time.Millisecond
 
-	cmd := testutil.FakeCommand(c, "shutdown", "", true)
-	defer cmd.Restore()
+	oldTimeSleep := timeSleep
+	oldSyscallReboot := syscallReboot
+	defer func() {
+		timeSleep = oldTimeSleep
+		syscallReboot = oldSyscallReboot
+	}()
+
+	timeSleep = func(d time.Duration) {}
+	syscallReboot = func(cmd int) error { return nil }
 
 	d := s.newDaemon(c)
 	makeDaemonListeners(c, d)
@@ -807,8 +823,15 @@ func (s *daemonSuite) TestRestartShutdown(c *check.C) {
 	rebootWaitTimeout = 100 * time.Millisecond
 	rebootNoticeWait = 150 * time.Millisecond
 
-	cmd := testutil.FakeCommand(c, "shutdown", "", true)
-	defer cmd.Restore()
+	oldTimeSleep := timeSleep
+	oldSyscallReboot := syscallReboot
+	defer func() {
+		timeSleep = oldTimeSleep
+		syscallReboot = oldSyscallReboot
+	}()
+
+	timeSleep = func(d time.Duration) {}
+	syscallReboot = func(cmd int) error { return nil }
 
 	d := s.newDaemon(c)
 	makeDaemonListeners(c, d)
@@ -846,8 +869,24 @@ func (s *daemonSuite) TestRestartExpectedRebootIsMissing(c *check.C) {
 	rebootRetryWaitTimeout = 100 * time.Millisecond
 	rebootNoticeWait = 150 * time.Millisecond
 
-	cmd := testutil.FakeCommand(c, "shutdown", "", true)
-	defer cmd.Restore()
+	var lastDelay time.Duration
+	var didSleep, didReboot bool
+
+	oldTimeSleep := timeSleep
+	oldSyscallReboot := syscallReboot
+	defer func() {
+		timeSleep = oldTimeSleep
+		syscallReboot = oldSyscallReboot
+	}()
+
+	timeSleep = func(d time.Duration) {
+		didSleep = true
+		lastDelay = d
+	}
+	syscallReboot = func(cmd int) error {
+		didReboot = true
+		return nil
+	}
 
 	d := s.newDaemon(c)
 	c.Check(d.overlord, check.IsNil)
@@ -875,9 +914,9 @@ func (s *daemonSuite) TestRestartExpectedRebootIsMissing(c *check.C) {
 	d.Stop(sigCh)
 
 	// an immediate shutdown was scheduled again
-	c.Check(cmd.Calls(), check.DeepEquals, [][]string{
-		{"shutdown", "-r", "+0", "reboot scheduled to update the system"},
-	})
+	c.Check(didSleep, Equals, true)
+	c.Check(lastDelay, Equals, time.Duration(0))
+	c.Check(didReboot, Equals, true)
 }
 
 func (s *daemonSuite) TestRestartExpectedRebootOK(c *check.C) {
@@ -885,8 +924,15 @@ func (s *daemonSuite) TestRestartExpectedRebootOK(c *check.C) {
 	err := ioutil.WriteFile(s.statePath, fakeState, 0600)
 	c.Assert(err, check.IsNil)
 
-	cmd := testutil.FakeCommand(c, "shutdown", "", true)
-	defer cmd.Restore()
+	oldTimeSleep := timeSleep
+	oldSyscallReboot := syscallReboot
+	defer func() {
+		timeSleep = oldTimeSleep
+		syscallReboot = oldSyscallReboot
+	}()
+
+	timeSleep = func(d time.Duration) {}
+	syscallReboot = func(cmd int) error { return nil }
 
 	d := s.newDaemon(c)
 	c.Assert(d.overlord, check.NotNil)
@@ -909,8 +955,15 @@ func (s *daemonSuite) TestRestartExpectedRebootGiveUp(c *check.C) {
 	err = ioutil.WriteFile(s.statePath, fakeState, 0600)
 	c.Assert(err, check.IsNil)
 
-	cmd := testutil.FakeCommand(c, "shutdown", "", true)
-	defer cmd.Restore()
+	oldTimeSleep := timeSleep
+	oldSyscallReboot := syscallReboot
+	defer func() {
+		timeSleep = oldTimeSleep
+		syscallReboot = oldSyscallReboot
+	}()
+
+	timeSleep = func(d time.Duration) {}
+	syscallReboot = func(cmd int) error { return nil }
 
 	d := s.newDaemon(c)
 	c.Assert(d.overlord, check.NotNil)

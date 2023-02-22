@@ -23,20 +23,19 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"os/exec"
 	"os/signal"
 	"runtime"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"gopkg.in/tomb.v2"
 
+	"golang.org/x/sys/unix"
+
 	"github.com/gorilla/mux"
 
 	"github.com/canonical/pebble/internal/logger"
-	"github.com/canonical/pebble/internal/osutil"
 	"github.com/canonical/pebble/internal/osutil/sys"
 	"github.com/canonical/pebble/internal/overlord"
 	"github.com/canonical/pebble/internal/overlord/checkstate"
@@ -721,18 +720,19 @@ func (d *Daemon) doReboot(sigCh chan<- os.Signal, waitTimeout time.Duration) err
 	return fmt.Errorf("expected reboot did not happen")
 }
 
-var shutdownMsg = "reboot scheduled to update the system"
+var (
+	syscallReboot = unix.Reboot
+	syscallSync   = unix.Sync
+	timeSleep     = time.Sleep
+)
 
-func rebootImpl(rebootDelay time.Duration) error {
-	if rebootDelay < 0 {
-		rebootDelay = 0
+func rebootImpl(delay time.Duration) error {
+	if delay < 0 {
+		delay = 0
 	}
-	mins := int64(rebootDelay / time.Minute)
-	cmd := exec.Command("shutdown", "-r", fmt.Sprintf("+%d", mins), shutdownMsg)
-	if out, err := cmd.CombinedOutput(); err != nil {
-		return osutil.OutputErr(out, err)
-	}
-	return nil
+	timeSleep(delay)
+	syscallSync()
+	return syscallReboot(unix.LINUX_REBOOT_CMD_RESTART)
 }
 
 var reboot = rebootImpl
@@ -827,9 +827,9 @@ func getListener(socketPath string, listenerMap map[string]net.Listener) (net.Li
 	}
 
 	runtime.LockOSThread()
-	oldmask := syscall.Umask(0111)
+	oldmask := unix.Umask(0111)
 	listener, err := net.ListenUnix("unix", address)
-	syscall.Umask(oldmask)
+	unix.Umask(oldmask)
 	runtime.UnlockOSThread()
 	if err != nil {
 		return nil, err
