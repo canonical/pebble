@@ -1,6 +1,6 @@
 module github.com/canonical/pebble
 
-go 1.17
+go 1.14
 
 require (
 	github.com/canonical/x-go v0.0.0-20230113154138-0ccdb0b57a43
@@ -15,10 +15,4 @@ require (
 	gopkg.in/yaml.v3 v3.0.1
 )
 
-require (
-	github.com/kr/pretty v0.2.1 // indirect
-	github.com/kr/text v0.1.0 // indirect
-	golang.org/x/net v0.7.0 // indirect
-	golang.org/x/term v0.5.0 // indirect
-	gopkg.in/yaml.v2 v2.3.0 // indirect
-)
+require golang.org/x/net v0.7.0 // indirect
