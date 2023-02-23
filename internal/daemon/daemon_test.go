@@ -725,7 +725,7 @@ func (s *daemonSuite) TestRestartSystemWiring(c *check.C) {
 
 func (s *daemonSuite) TestRebootHelper(c *check.C) {
 	var lastDelay time.Duration
-	var didSleep, didReboot bool
+	var numSleeps, numReboots int
 
 	oldTimeSleep := timeSleep
 	oldSyscallReboot := syscallReboot
@@ -735,27 +735,24 @@ func (s *daemonSuite) TestRebootHelper(c *check.C) {
 	}()
 
 	timeSleep = func(d time.Duration) {
-		didSleep = true
+		numSleeps++
 		lastDelay = d
 	}
 	syscallReboot = func(cmd int) error {
-		didReboot = true
+		numReboots++
 		return nil
 	}
 
 	err := reboot(-1)
 	c.Assert(err, IsNil)
-	c.Check(didSleep, Equals, true)
-	c.Check(didReboot, Equals, true)
+	c.Check(numSleeps, Equals, 1)
+	c.Check(numReboots, Equals, 1)
 	c.Check(lastDelay, Equals, time.Duration(0))
-
-	didSleep, didReboot = false, false
-	lastDelay = 0
 
 	err = reboot(3 * time.Second)
 	c.Assert(err, IsNil)
-	c.Check(didSleep, Equals, true)
-	c.Check(didReboot, Equals, true)
+	c.Check(numSleeps, Equals, 2)
+	c.Check(numReboots, Equals, 2)
 	c.Check(lastDelay, Equals, 3*time.Second)
 }
 
@@ -870,7 +867,7 @@ func (s *daemonSuite) TestRestartExpectedRebootIsMissing(c *check.C) {
 	rebootNoticeWait = 150 * time.Millisecond
 
 	var lastDelay time.Duration
-	var didSleep, didReboot bool
+	var numSleeps, numReboots int
 
 	oldTimeSleep := timeSleep
 	oldSyscallReboot := syscallReboot
@@ -880,11 +877,11 @@ func (s *daemonSuite) TestRestartExpectedRebootIsMissing(c *check.C) {
 	}()
 
 	timeSleep = func(d time.Duration) {
-		didSleep = true
+		numSleeps++
 		lastDelay = d
 	}
 	syscallReboot = func(cmd int) error {
-		didReboot = true
+		numReboots++
 		return nil
 	}
 
@@ -914,9 +911,9 @@ func (s *daemonSuite) TestRestartExpectedRebootIsMissing(c *check.C) {
 	d.Stop(sigCh)
 
 	// an immediate shutdown was scheduled again
-	c.Check(didSleep, Equals, true)
+	c.Check(numSleeps, Equals, 1)
 	c.Check(lastDelay, Equals, time.Duration(0))
-	c.Check(didReboot, Equals, true)
+	c.Check(numReboots, Equals, 1)
 }
 
 func (s *daemonSuite) TestRestartExpectedRebootOK(c *check.C) {
