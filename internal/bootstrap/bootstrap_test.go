@@ -19,7 +19,6 @@ import (
 	"os"
 	"testing"
 
-	"gopkg.in/check.v1"
 	. "gopkg.in/check.v1"
 )
 
@@ -28,7 +27,7 @@ type bootstrapSuite struct{}
 var _ = Suite(&bootstrapSuite{})
 
 // Hook up check.v1 into the "go test" runner
-func Test(t *testing.T) { check.TestingT(t) }
+func Test(t *testing.T) { TestingT(t) }
 
 func (s *bootstrapSuite) TestValidate(c *C) {
 	err := Validate()
@@ -73,6 +72,7 @@ func (s *bootstrapSuite) TestDo(c *C) {
 		{"procfs", "/proc", "proc", 0, ""},
 		{"devtmpfs", "/dev", "devtmpfs", 0, ""},
 		{"devpts", "/dev/pts", "devpts", 0, ""},
+		{"sysfs", "/sys", "sysfs", 0, ""},
 	})
 }
 

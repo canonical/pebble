@@ -25,6 +25,7 @@ var commonMounts = []mount{
 	{"procfs", "/proc", "proc", 0, ""},
 	{"devtmpfs", "/dev", "devtmpfs", 0, ""},
 	{"devpts", "/dev/pts", "devpts", 0, ""},
+	{"sysfs", "/sys", "sysfs", 0, ""},
 }
 
 func mountCommon() error {
