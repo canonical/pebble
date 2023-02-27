@@ -15,4 +15,4 @@ require (
 	gopkg.in/yaml.v3 v3.0.1
 )
 
-replace github.com/jessevdk/go-flags v1.4.0 => github.com/rebornplusplus/go-flags v0.0.0-20230201113816-1dbaf4443e95
+replace github.com/jessevdk/go-flags v1.4.0 => github.com/rebornplusplus/go-flags v0.0.0-20230227064049-18b729e1c185
