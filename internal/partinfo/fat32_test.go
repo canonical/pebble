@@ -15,10 +15,8 @@
 package partinfo
 
 import (
-	"os"
-	"strings"
-
 	. "gopkg.in/check.v1"
+	"os"
 )
 
 func (s *partinfoSuite) TestFat32PartitionLabels(c *C) {
@@ -31,12 +29,14 @@ func (s *partinfoSuite) TestFat32PartitionLabels(c *C) {
 	}
 
 	for _, e := range expected {
-		f, err := os.OpenFile(e.path, os.O_RDONLY, 0)
+		f, err := os.Open(e.path)
 		c.Assert(err, IsNil)
 
-		sb, err := newFat32Superblock(f)
+		p, err := newFAT32Partition(f)
 		c.Assert(err, IsNil)
-		c.Assert(strings.TrimRight(string(sb.Label[:]), " "), Equals, e.label)
+		c.Assert(p.FSType(), Equals, "vfat")
+		c.Assert(p.Path(), Equals, f.Name())
+		c.Assert(p.Label(), Equals, e.label)
 
 		err = f.Close()
 		c.Assert(err, IsNil)
@@ -47,8 +47,8 @@ func (s *partinfoSuite) TestFat32FailsNotEnoughBytes(c *C) {
 	f, err := os.OpenFile("testdata/garbage-small.bin", os.O_RDONLY, 0)
 	c.Assert(err, IsNil)
 
-	_, err = newFat32Superblock(f)
-	c.Assert(err, ErrorMatches, "cannot read FAT32 superblock: unexpected EOF")
+	_, err = newFAT32Partition(f)
+	c.Assert(err, ErrorMatches, "cannot read superblock: unexpected EOF")
 
 	err = f.Close()
 	c.Assert(err, IsNil)
@@ -58,8 +58,8 @@ func (s *partinfoSuite) TestFat32FailsOnGarbage(c *C) {
 	f, err := os.OpenFile("testdata/garbage.bin", os.O_RDONLY, 0)
 	c.Assert(err, IsNil)
 
-	_, err = newFat32Superblock(f)
-	c.Assert(err, ErrorMatches, "cannot read FAT32 superblock: not a FAT32 partition")
+	_, err = newFAT32Partition(f)
+	c.Assert(err, ErrorMatches, "invalid MBR signature")
 
 	err = f.Close()
 	c.Assert(err, IsNil)

@@ -43,16 +43,16 @@ func (s *partinfoSuite) SetUpSuite(c *C) {
 	err = os.MkdirAll(s.devfsPath, 0777)
 	c.Assert(err, IsNil)
 
-	s.oldSysfsPath = SysfsPath
-	s.oldDevfsPath = DevfsPath
+	s.oldSysfsPath = sysfsPath
+	s.oldDevfsPath = devfsPath
 
-	SysfsPath = s.sysfsPath
-	DevfsPath = s.devfsPath
+	sysfsPath = s.sysfsPath
+	devfsPath = s.devfsPath
 }
 
-func (s *partinfoSuite) TearDownSuite(c *C) {
-	SysfsPath = s.oldSysfsPath
-	DevfsPath = s.oldDevfsPath
+func (s *partinfoSuite) TearDownSuite(_ *C) {
+	sysfsPath = s.oldSysfsPath
+	devfsPath = s.oldDevfsPath
 }
 
 func (s *partinfoSuite) TestEnumeratePartitions(c *C) {
@@ -79,12 +79,15 @@ func (s *partinfoSuite) TestEnumeratePartitions(c *C) {
 	_, err = os.Create(path.Join(s.sysfsPath, "block", "sda", "ro"))
 	c.Assert(err, IsNil)
 
-	p, err := EnumeratePartitions()
+	p, err := Enumerate()
 	c.Assert(err, IsNil)
-	c.Assert(p, DeepEquals, []partition{
-		{path.Join(s.devfsPath, "sda1"), "My label", FAT32},
-		{path.Join(s.devfsPath, "sda2"), "A great label", Ext},
-	})
+	c.Assert(p, HasLen, 2)
+	c.Assert(p[0].Path(), Equals, path.Join(s.devfsPath, "sda1"))
+	c.Assert(p[0].Label(), Equals, "My label")
+	c.Assert(p[0].FSType(), Equals, "vfat")
+	c.Assert(p[1].Path(), Equals, path.Join(s.devfsPath, "sda2"))
+	c.Assert(p[1].Label(), Equals, "A great label")
+	c.Assert(p[1].FSType(), Equals, "ext4")
 }
 
 func (s *partinfoSuite) TestEnumeratePartitionsFailsWithInaccessibleSysfs(c *C) {
@@ -93,7 +96,7 @@ func (s *partinfoSuite) TestEnumeratePartitionsFailsWithInaccessibleSysfs(c *C) 
 
 	defer func() { os.Chmod(path.Join(s.sysfsPath, "block"), 0777) }()
 
-	_, err = EnumeratePartitions()
+	_, err = Enumerate()
 	c.Assert(os.IsPermission(err), Equals, true)
 }
 
@@ -101,43 +104,6 @@ func (s *partinfoSuite) TestEnumeratePartitionsFailsWithInaccessibleBlockDeviceE
 	err := os.MkdirAll(path.Join(s.sysfsPath, "block", "inaccessible"), 0)
 	c.Assert(err, IsNil)
 
-	_, err = EnumeratePartitions()
+	_, err = Enumerate()
 	c.Assert(os.IsPermission(err), Equals, true)
-}
-
-func (s *partinfoSuite) TestParseSuperblockFailsOnSmallFile(c *C) {
-	// Fail on non-existing file
-	p := partition{path: "/non-existing"}
-	err := p.parseSuperblock()
-	c.Assert(err, ErrorMatches, "cannot parse superblock: open /non-existing: no such file or directory")
-
-	// Fail on empty file (EOF during first 512-byte read)
-	p = partition{path: "/dev/null"}
-	err = p.parseSuperblock()
-	c.Assert(err, ErrorMatches, "cannot parse superblock: EOF")
-
-	// Fail on <512 byte file (first 512-byte read OK, read less than 512 bytes)
-	p = partition{path: "testdata/garbage-small.bin"}
-	err = p.parseSuperblock()
-	c.Assert(err, ErrorMatches, "cannot parse superblock: cannot read first sector")
-
-	// Fail on >512 byte file (first 512-byte read OK, 1KiB seek OK, second 1KiB read fail)
-	p = partition{path: "testdata/garbage-768.bin"}
-	err = p.parseSuperblock()
-	c.Assert(err, ErrorMatches, "cannot parse superblock: EOF")
-
-	// Fail on 1KiB byte file (first 512-byte read OK, 1KiB seek OK, second 1KiB read fail)
-	p = partition{path: "testdata/garbage.bin"}
-	err = p.parseSuperblock()
-	c.Assert(err, ErrorMatches, "cannot parse superblock: EOF")
-
-	// Fail on >1KiB byte file (first 512-byte read OK, 1KiB seek OK, second 1KiB read OK, read less than 1KiB)
-	p = partition{path: "testdata/garbage-1366.bin"}
-	err = p.parseSuperblock()
-	c.Assert(err, ErrorMatches, "cannot parse superblock: cannot read ext4 superblock")
-
-	// Fail on >2KiB file (no superblock match)
-	p = partition{path: "/dev/zero"}
-	err = p.parseSuperblock()
-	c.Assert(err, ErrorMatches, "cannot parse superblock: unrecognized file system")
 }

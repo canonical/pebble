@@ -19,28 +19,50 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
+	"strings"
 )
 
-const extMagic uint16 = 0xEF53 // ext2/3/4 magic signature.
+const (
+	extMagic uint16 = 0xEF53 // Ext magic signature
+)
 
-type extSuperblock struct {
-	_     [56]byte // Reserved.
-	Magic uint16   // ext2/3/4 magic signature.
-	_     [62]byte // Reserved.
-	Label [16]byte // Volume name.
+type extPartition struct {
+	f          *os.File
+	superblock struct {
+		_       [56]byte
+		Magic   uint16 // Ext magic signature
+		_       [62]byte
+		VolName [16]byte // Volume name
+	}
 }
 
-func (sb *extSuperblock) isValid() bool {
-	return sb.Magic == extMagic
+func (p extPartition) Path() string {
+	return p.f.Name()
 }
 
-func newExtSuperblock(r io.Reader) (*extSuperblock, error) {
-	sb := &extSuperblock{}
-	if err := binary.Read(r, binary.LittleEndian, sb); err != nil {
-		return nil, fmt.Errorf("cannot read ext2/3/4 superblock: %w", err)
+func (p extPartition) FSType() string {
+	// TODO: Could this lead to issues when attempting to mount ext2/3 partitions?
+	return "ext4"
+}
+
+func (p extPartition) Label() string {
+	return strings.TrimRight(string(p.superblock.VolName[:]), "\x00")
+}
+
+func newExtPartition(f *os.File) (Partition, error) {
+	p := extPartition{f: f}
+
+	// Skip the 2-sector padding of ext2/3/4
+	if _, err := f.Seek(1024, io.SeekStart); err != nil {
+		return nil, fmt.Errorf("cannot seek: %w", err)
 	}
-	if !sb.isValid() {
-		return nil, errors.New("cannot read ext2/3/4 superblock: not an ext2/3/4 partition")
+
+	if err := binary.Read(f, binary.LittleEndian, &p.superblock); err != nil {
+		return nil, fmt.Errorf("cannot read superblock: %w", err)
 	}
-	return sb, nil
+	if p.superblock.Magic != extMagic {
+		return nil, errors.New("invalid Ext magic")
+	}
+	return p, nil
 }

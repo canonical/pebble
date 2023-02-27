@@ -18,39 +18,53 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"io"
+	"os"
 	"strings"
 )
 
-const mbrSig uint16 = 0xAA55          // MBR boot signature.
-const fat32Sig string = "FAT32"       // FAT32 signature.
-const defaultLabel string = "NO NAME" // Default empty volume label.
+const (
+	fat32Sig          = "FAT32"   // FAT32 filesystem type signature
+	emptyLabel        = "NO NAME" // Default empty volume label
+	mbrSig     uint16 = 0xAA55    // MBR signature
+)
 
-type fat32Superblock struct {
-	_      [71]byte  // Reserved.
-	Label  [11]byte  // Volume label.
-	FSType [8]byte   // FS type.
-	_      [420]byte // Reserved.
-	MBRSig uint16    // MBR boot signature.
+type fat32Partition struct {
+	f          *os.File
+	superblock struct {
+		_      [71]byte
+		Label  [11]byte // Volume label
+		FSType [8]byte  // FAT filesystem type
+		_      [420]byte
+		MBRSig uint16 // MBR signature
+	}
 }
 
-func (sb *fat32Superblock) isValid() bool {
-	fsType := strings.TrimSpace(string(sb.FSType[:]))
-	return sb.MBRSig == mbrSig && fsType == fat32Sig
+func (p fat32Partition) Path() string {
+	return p.f.Name()
 }
 
-func newFat32Superblock(r io.Reader) (*fat32Superblock, error) {
-	sb := &fat32Superblock{}
-	if err := binary.Read(r, binary.LittleEndian, sb); err != nil {
-		return nil, fmt.Errorf("cannot read FAT32 superblock: %w", err)
+func (p fat32Partition) FSType() string {
+	return "vfat"
+}
+
+func (p fat32Partition) Label() string {
+	if s := strings.TrimSpace(string(p.superblock.Label[:])); s != emptyLabel {
+		return s
+	} else {
+		return ""
 	}
-	if !sb.isValid() {
-		return nil, errors.New("cannot read FAT32 superblock: not a FAT32 partition")
+}
+
+func newFAT32Partition(f *os.File) (Partition, error) {
+	p := fat32Partition{f: f}
+	if err := binary.Read(f, binary.LittleEndian, &p.superblock); err != nil {
+		return nil, fmt.Errorf("cannot read superblock: %w", err)
 	}
-	if strings.TrimSpace(string(sb.Label[:])) == defaultLabel {
-		for i := range sb.Label {
-			sb.Label[i] = ' '
-		}
+	if p.superblock.MBRSig != mbrSig {
+		return nil, errors.New("invalid MBR signature")
 	}
-	return sb, nil
+	if fsType := strings.TrimSpace(string(p.superblock.FSType[:])); fsType != fat32Sig {
+		return nil, errors.New("unsupported FAT filesystem type")
+	}
+	return p, nil
 }

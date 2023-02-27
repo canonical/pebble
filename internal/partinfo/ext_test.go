@@ -15,11 +15,8 @@
 package partinfo
 
 import (
-	"io"
-	"os"
-	"strings"
-
 	. "gopkg.in/check.v1"
+	"os"
 )
 
 func (s *partinfoSuite) TestExtPartitionLabels(c *C) {
@@ -36,15 +33,14 @@ func (s *partinfoSuite) TestExtPartitionLabels(c *C) {
 	}
 
 	for _, e := range expected {
-		f, err := os.OpenFile(e.path, os.O_RDONLY, os.FileMode(0))
+		f, err := os.Open(e.path)
 		c.Assert(err, IsNil)
 
-		_, err = f.Seek(1024, io.SeekStart)
+		p, err := newExtPartition(f)
 		c.Assert(err, IsNil)
-
-		sb, err := newExtSuperblock(f)
-		c.Assert(err, IsNil)
-		c.Assert(strings.TrimRight(string(sb.Label[:]), "\x00"), Equals, e.label)
+		c.Assert(p.FSType(), Equals, "ext4")
+		c.Assert(p.Path(), Equals, f.Name())
+		c.Assert(p.Label(), Equals, e.label)
 
 		err = f.Close()
 		c.Assert(err, IsNil)
@@ -52,11 +48,11 @@ func (s *partinfoSuite) TestExtPartitionLabels(c *C) {
 }
 
 func (s *partinfoSuite) TestExtFailsNotEnoughBytes(c *C) {
-	f, err := os.OpenFile("testdata/garbage-small.bin", os.O_RDONLY, 0)
+	f, err := os.Open("testdata/garbage-small.bin")
 	c.Assert(err, IsNil)
 
-	_, err = newExtSuperblock(f)
-	c.Assert(err, ErrorMatches, "cannot read ext2/3/4 superblock: unexpected EOF")
+	_, err = newExtPartition(f)
+	c.Assert(err, ErrorMatches, "cannot read superblock: EOF")
 
 	err = f.Close()
 	c.Assert(err, IsNil)
@@ -66,8 +62,8 @@ func (s *partinfoSuite) TestExtFailsOnGarbage(c *C) {
 	f, err := os.OpenFile("testdata/garbage.bin", os.O_RDONLY, 0)
 	c.Assert(err, IsNil)
 
-	_, err = newExtSuperblock(f)
-	c.Assert(err, ErrorMatches, "cannot read ext2/3/4 superblock: not an ext2/3/4 partition")
+	_, err = newExtPartition(f)
+	c.Assert(err, ErrorMatches, "invalid Ext magic")
 
 	err = f.Close()
 	c.Assert(err, IsNil)
