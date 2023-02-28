@@ -1356,7 +1356,7 @@ services:
 
 	// Wait till it terminates.
 	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
-		return svc.Current == servstate.StatusError
+		return svc.Current == servstate.StatusInactive
 	})
 }
 
@@ -1528,7 +1528,7 @@ services:
 
 	// Wait till the main process terminates
 	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
-		return svc.Current == servstate.StatusError
+		return svc.Current == servstate.StatusInactive
 	})
 
 	// Wait till the zombie has been reaped (no longer in the process table)
