@@ -45,27 +45,6 @@ func (b *mockBootloader) Name() string {
 	return b.name
 }
 
-func (b *mockBootloader) GetBootVars(names ...string) (map[string]string, error) {
-	if b.getBootVarsError != nil {
-		return nil, b.getBootVarsError
-	}
-	var vars map[string]string
-	for _, name := range names {
-		vars[name] = b.bootVars[name]
-	}
-	return vars, nil
-}
-
-func (b *mockBootloader) SetBootVars(values map[string]string) error {
-	if b.setBootVarsError != nil {
-		return b.setBootVarsError
-	}
-	for name, value := range values {
-		b.bootVars[name] = value
-	}
-	return nil
-}
-
 func (b *mockBootloader) Present() (bool, error) {
 	if b.presentError != nil {
 		return false, b.presentError
@@ -73,11 +52,8 @@ func (b *mockBootloader) Present() (bool, error) {
 	return b.isPresent, nil
 }
 
-func (b *mockBootloader) GetActiveSlot() (string, error) {
-	if b.getActiveSlotError != nil {
-		return "", b.getActiveSlotError
-	}
-	return b.activeSlot, nil
+func (b *mockBootloader) ActiveSlot() string {
+	return b.activeSlot
 }
 
 func (b *mockBootloader) SetActiveSlot(label string) error {
@@ -88,11 +64,8 @@ func (b *mockBootloader) SetActiveSlot(label string) error {
 	return nil
 }
 
-func (b *mockBootloader) GetStatus(label string) (bootloader.Status, error) {
-	if b.getStatusError != nil {
-		return "", b.getStatusError
-	}
-	return b.statuses[label], nil
+func (b *mockBootloader) Status(label string) bootloader.Status {
+	return b.statuses[label]
 }
 
 // Hook up check.v1 into the "go test" runner
@@ -101,24 +74,23 @@ func Test(t *testing.T) { TestingT(t) }
 var _ = Suite(&bootloaderSuite{})
 
 type bootloaderSuite struct {
-	b                 *mockBootloader
-	newMockBootloader bootloader.BootloaderNewFunc
-
-	oldBootloaders []bootloader.BootloaderNewFunc
+	b                  *mockBootloader
+	newMockBootloader  bootloader.BootloaderNewFunc
+	restoreBootloaders func()
 }
 
-func (s *bootloaderSuite) SetUpTest(c *C) {
+func (s *bootloaderSuite) SetUpTest(_ *C) {
 	s.b = &mockBootloader{name: "mock"}
 	s.newMockBootloader = func(string) bootloader.Bootloader {
 		return s.b
 	}
 
-	s.oldBootloaders = bootloader.Bootloaders
-	bootloader.Bootloaders = append(bootloader.Bootloaders, s.newMockBootloader)
+	bootloaders := []bootloader.BootloaderNewFunc{s.newMockBootloader}
+	s.restoreBootloaders = bootloader.MockBootloaders(bootloaders)
 }
 
-func (s *bootloaderSuite) TearDownTest(c *C) {
-	bootloader.Bootloaders = s.oldBootloaders
+func (s *bootloaderSuite) TearDownTest(_ *C) {
+	s.restoreBootloaders()
 }
 
 func (s *bootloaderSuite) TestFind(c *C) {

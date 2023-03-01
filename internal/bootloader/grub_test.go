@@ -32,6 +32,8 @@ type grubSuite struct {
 	rootdir string
 	envFile string
 	cfgFile string
+
+	env *grubenv.Env
 }
 
 func (s *grubSuite) SetUpTest(c *C) {
@@ -41,10 +43,11 @@ func (s *grubSuite) SetUpTest(c *C) {
 	s.envFile = filepath.Join(s.rootdir, "grubenv")
 	s.cfgFile = filepath.Join(s.rootdir, "grub.cfg")
 
-	env := grubenv.NewEnv(s.envFile)
-	env.Set("my_var", "42")
-	env.Set("my_other_var", "foo")
-	err := env.Save()
+	s.env = grubenv.NewEnv(s.envFile)
+	s.env.Set("boot.slot", "a")
+	s.env.Set("my_var", "42")
+	s.env.Set("my_other_var", "foo")
+	err := s.env.Save()
 	c.Assert(err, IsNil)
 
 	_, err = os.Create(s.cfgFile)
@@ -55,71 +58,6 @@ func (s *grubSuite) TestName(c *C) {
 	c.Assert(s.b.Name(), Equals, "grub")
 }
 
-func (s *grubSuite) TestGetBootVars(c *C) {
-	vars, err := s.b.GetBootVars("my_var", "my_other_var")
-	c.Assert(err, IsNil)
-	c.Assert(vars, DeepEquals, map[string]string{
-		"my_var":       "42",
-		"my_other_var": "foo",
-	})
-}
-
-func (s *grubSuite) TestGetBootVarsFails(c *C) {
-	newEnvFile := s.envFile + "bak"
-	err := os.Rename(s.envFile, newEnvFile)
-	c.Assert(err, IsNil)
-	defer os.Rename(newEnvFile, s.envFile)
-
-	vars, err := s.b.GetBootVars("my_var", "my_other_var")
-	c.Assert(os.IsNotExist(err), Equals, true)
-	c.Assert(vars, IsNil)
-}
-
-func (s *grubSuite) TestSetBootVars(c *C) {
-	err := s.b.SetBootVars(map[string]string{
-		"my_var":     "43",
-		"my_new_var": "bar",
-	})
-	c.Assert(err, IsNil)
-
-	vars, err := s.b.GetBootVars("my_var", "my_other_var", "my_new_var")
-	c.Assert(err, IsNil)
-	c.Assert(vars, DeepEquals, map[string]string{
-		"my_var":       "43",
-		"my_other_var": "foo",
-		"my_new_var":   "bar",
-	})
-}
-
-func (s *grubSuite) TestSetBootVarsNotExist(c *C) {
-	os.Remove(s.envFile)
-	err := s.b.SetBootVars(map[string]string{
-		"my_var":     "43",
-		"my_new_var": "bar",
-	})
-	c.Assert(err, IsNil)
-
-	vars, err := s.b.GetBootVars("my_var", "my_other_var", "my_new_var")
-	c.Assert(err, IsNil)
-	c.Assert(vars, DeepEquals, map[string]string{
-		"my_var":       "43",
-		"my_other_var": "",
-		"my_new_var":   "bar",
-	})
-}
-
-func (s *grubSuite) TestSetBootVarsFails(c *C) {
-	err := os.Chmod(s.envFile, os.FileMode(0o400))
-	c.Assert(err, IsNil)
-	defer os.Chmod(s.envFile, os.FileMode(0o644))
-
-	err = s.b.SetBootVars(map[string]string{
-		"my_var":     "43",
-		"my_new_var": "bar",
-	})
-	c.Assert(os.IsPermission(err), Equals, true)
-}
-
 func (s *grubSuite) TestPresent(c *C) {
 	isPresent, err := s.b.Present()
 	c.Assert(isPresent, Equals, true)
@@ -128,7 +66,8 @@ func (s *grubSuite) TestPresent(c *C) {
 
 func (s *grubSuite) TestNotPresent(c *C) {
 	newCfgFile := s.cfgFile + "bak"
-	os.Rename(s.cfgFile, newCfgFile)
+	err := os.Rename(s.cfgFile, newCfgFile)
+	c.Assert(err, IsNil)
 	defer os.Rename(newCfgFile, s.cfgFile)
 
 	isPresent, err := s.b.Present()
@@ -139,42 +78,32 @@ func (s *grubSuite) TestNotPresent(c *C) {
 func (s *grubSuite) TestPresentFails(c *C) {
 	err := os.Chmod(s.rootdir, os.FileMode(0o000))
 	c.Assert(err, IsNil)
-	defer os.Chmod(s.rootdir, os.FileMode(0o644))
+	defer os.Chmod(s.rootdir, os.FileMode(0o755))
 
 	isPresent, err := s.b.Present()
 	c.Assert(isPresent, Equals, false)
 	c.Assert(os.IsPermission(err), Equals, true)
 }
 
-func (s *grubSuite) TestGetActiveSlot(c *C) {
-	slot, err := s.b.GetActiveSlot()
-	c.Assert(slot, Equals, "")
-	c.Assert(err, IsNil)
-
-	err = s.b.SetBootVars(map[string]string{
-		"boot.slot": "a",
-	})
-	slot, err = s.b.GetActiveSlot()
+func (s *grubSuite) TestActiveSlot(c *C) {
+	slot := s.b.ActiveSlot()
 	c.Assert(slot, Equals, "a")
-	c.Assert(err, IsNil)
 }
 
-func (s *grubSuite) TestGetActiveSlotFails(c *C) {
+func (s *grubSuite) TestActiveSlotFails(c *C) {
 	newEnvFile := s.envFile + "bak"
 	err := os.Rename(s.envFile, newEnvFile)
 	c.Assert(err, IsNil)
 	defer os.Rename(newEnvFile, s.envFile)
 
-	slot, err := s.b.GetActiveSlot()
+	slot := s.b.ActiveSlot()
 	c.Assert(slot, Equals, "")
-	c.Assert(os.IsNotExist(err), Equals, true)
 }
 
 func (s *grubSuite) TestSetActiveSlot(c *C) {
 	err := s.b.SetActiveSlot("x")
 	c.Assert(err, IsNil)
-	slot, err := s.b.GetActiveSlot()
-	c.Assert(err, IsNil)
+	slot := s.b.ActiveSlot()
 	c.Assert(slot, Equals, "x")
 }
 
@@ -187,15 +116,15 @@ func (s *grubSuite) TestSetActiveSlotFails(c *C) {
 	c.Assert(os.IsPermission(err), Equals, true)
 }
 
-func (s *grubSuite) TestGetStatusUndefined(c *C) {
-	st, err := s.b.GetStatus("a")
-	c.Assert(err, IsNil)
+func (s *grubSuite) TestStatusUndefined(c *C) {
+	st := s.b.Status("a")
 	c.Assert(st, Equals, bootloader.Try)
 }
 
 func (s *grubSuite) TestGetStatus(c *C) {
-	err := s.b.SetBootVars(map[string]string{"boot.b.status": "unbootable"})
-	st, err := s.b.GetStatus("b")
+	s.env.Set("boot.b.status", "unbootable")
+	err := s.env.Save()
 	c.Assert(err, IsNil)
+	st := s.b.Status("b")
 	c.Assert(st, Equals, bootloader.Unbootable)
 }

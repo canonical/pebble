@@ -25,13 +25,6 @@ type Bootloader interface {
 	// Name returns the bootloader name.
 	Name() string
 
-	// GetBootVars populates the specified variables from the bootloader.
-	// These variables are preserved across reboots.
-	GetBootVars(names ...string) (map[string]string, error)
-
-	// SetBootVars saves a set of variables to be persisted across reboots.
-	SetBootVars(values map[string]string) error
-
 	// Present returns whether the bootloader is currently present on the
 	// system--in other words, whether this bootloader has been installed to
 	// the current system. Implementations should only return non-nil error if
@@ -39,17 +32,17 @@ type Bootloader interface {
 	// is actually an error with the installation.
 	Present() (bool, error)
 
-	// GetActiveSlot obtains the label of the currently booted slot.
-	GetActiveSlot() (label string, err error)
+	// ActiveSlot obtains the label of the currently booted slot.
+	ActiveSlot() string
 
 	// SetActiveSlot instructs the bootloader to select the slot with the
 	// specified label on the next reboot.
 	SetActiveSlot(label string) error
 
-	// GetStatus obtains the status of the slot with the specified label.
+	// Status obtains the status of the slot with the specified label.
 	// If there is no saved status for the slot, or if the saved status is not
 	// any of Unbootable, Try or Fail, Try will be returned.
-	GetStatus(label string) (Status, error)
+	Status(label string) Status
 }
 
 // Status represents the conditions in which a boot attempt was made.
@@ -70,23 +63,21 @@ const (
 
 // BootloaderMountpoint is the path where the root directory for the current
 // bootloader configuration is mounted on bootstrap.
-const BootloaderMountpoint = "/var/termus/boot"
+const bootloaderMountpoint = "/var/termus/boot"
 
-type BootloaderNewFunc func(rootdir string) Bootloader
+type bootloaderNewFunc func(rootdir string) Bootloader
 
-var (
-	// bootloaders list all possible bootloaders by their constructor
-	// function.
-	Bootloaders = []BootloaderNewFunc{
-		NewGRUB,
-	}
-)
+// bootloaders list all possible bootloaders by their constructor
+// function.
+var bootloaders = []bootloaderNewFunc{
+	newGrub,
+}
 
 // Find obtains an instance of the first supported bootloader that is available
 // on the system.
 func Find() (*Bootloader, error) {
-	for _, newBl := range Bootloaders {
-		bl := newBl(BootloaderMountpoint)
+	for _, newFunc := range bootloaders {
+		bl := newFunc(bootloaderMountpoint)
 		isPresent, err := bl.Present()
 		if err != nil {
 			return nil, fmt.Errorf("bootloader %q found but not usable: %w", bl.Name(), err)

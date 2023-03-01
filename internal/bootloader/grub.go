@@ -15,90 +15,56 @@
 package bootloader
 
 import (
-	"os"
 	"path/filepath"
 
 	"github.com/canonical/pebble/internal/bootloader/grubenv"
 	"github.com/canonical/pebble/internal/osutil"
 )
 
-// GRUB implements the Bootloader interface to support bootloader operations
+// grub implements the Bootloader interface to support bootloader operations
 // on GRUB 2.
-type GRUB struct {
-	// rootdir is the directory where the GRUB prefix is mounted.
+type grub struct {
 	rootdir string
+	env     *grubenv.Env
 }
 
 // newGrub initializes a new instance of the GRUB bootloader.
-func NewGRUB(rootdir string) Bootloader {
-	return &GRUB{
+func newGrub(rootdir string) Bootloader {
+	return &grub{
 		rootdir: rootdir,
+		env:     grubenv.NewEnv(filepath.Join(rootdir, "grubenv")),
 	}
 }
 
-func (g *GRUB) envFile() string {
-	return filepath.Join(g.rootdir, "grubenv")
-}
-
-func (g *GRUB) Name() string {
+func (g *grub) Name() string {
 	return "grub"
 }
 
-func (g *GRUB) GetBootVars(names ...string) (map[string]string, error) {
-	out := make(map[string]string)
-
-	env := grubenv.NewEnv(g.envFile())
-	if err := env.Load(); err != nil {
-		return nil, err
-	}
-
-	for _, name := range names {
-		out[name] = env.Get(name)
-	}
-
-	return out, nil
-}
-
-func (g *GRUB) SetBootVars(values map[string]string) error {
-	env := grubenv.NewEnv(g.envFile())
-	if err := env.Load(); err != nil && !os.IsNotExist(err) {
-		return err
-	}
-	for k, v := range values {
-		env.Set(k, v)
-	}
-	return env.Save()
-}
-
-func (g *GRUB) Present() (bool, error) {
+func (g *grub) Present() (bool, error) {
 	doesExist, _, err := osutil.ExistsIsDir(filepath.Join(g.rootdir, "grub.cfg"))
 	return doesExist, err
 }
 
-func (g *GRUB) GetActiveSlot() (string, error) {
-	vars, err := g.GetBootVars("boot.slot")
-	if err != nil {
-		return "", err
+func (g *grub) ActiveSlot() string {
+	if err := g.env.Load(); err != nil {
+		return ""
 	}
-	return vars["boot.slot"], nil
+	return g.env.Get("boot.slot")
 }
 
-func (g *GRUB) SetActiveSlot(label string) error {
-	return g.SetBootVars(map[string]string{
-		"boot.slot": label,
-	})
+func (g *grub) SetActiveSlot(label string) error {
+	g.env.Set("boot.slot", label)
+	return g.env.Save()
 }
 
-func (g *GRUB) GetStatus(label string) (Status, error) {
-	varName := "boot." + label + ".status"
-	vars, err := g.GetBootVars(varName)
-	if err != nil {
-		return "", err
+func (g *grub) Status(label string) Status {
+	if err := g.env.Load(); err != nil {
+		return Try
 	}
-	s := Status(vars[varName])
+	s := Status(g.env.Get("boot." + label + ".status"))
 	switch s {
 	case Unbootable, Try, Fail:
-		return s, nil
+		return s
 	}
-	return Try, nil
+	return Try
 }
