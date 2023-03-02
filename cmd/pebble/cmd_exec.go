@@ -155,9 +155,9 @@ func (cmd *cmdExec) Execute(args []string) error {
 		Interactive: interactive,
 		Width:       width,
 		Height:      height,
-		Stdin:       os.Stdin,
-		Stdout:      os.Stdout,
-		Stderr:      os.Stderr,
+		Stdin:       Stdin,
+		Stdout:      Stdout,
+		Stderr:      Stderr,
 	}
 
 	// If stdout and stderr both refer to the same file or device (e.g.,
