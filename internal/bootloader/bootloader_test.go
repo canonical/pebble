@@ -97,7 +97,7 @@ func (s *bootloaderSuite) TestFind(c *C) {
 	s.b.isPresent = true
 	b, err := bootloader.Find()
 	c.Assert(err, IsNil)
-	c.Assert(*b, DeepEquals, s.b)
+	c.Assert(b, DeepEquals, s.b)
 }
 
 func (s *bootloaderSuite) TestFindFailsNotPresent(c *C) {

@@ -75,7 +75,7 @@ var bootloaders = []bootloaderNewFunc{
 
 // Find obtains an instance of the first supported bootloader that is available
 // on the system.
-func Find() (*Bootloader, error) {
+func Find() (Bootloader, error) {
 	for _, newFunc := range bootloaders {
 		bl := newFunc(bootloaderMountpoint)
 		isPresent, err := bl.Present()
@@ -83,7 +83,7 @@ func Find() (*Bootloader, error) {
 			return nil, fmt.Errorf("bootloader %q found but not usable: %w", bl.Name(), err)
 		}
 		if isPresent {
-			return &bl, nil
+			return bl, nil
 		}
 	}
 	return nil, errors.New("cannot determine bootloader")
