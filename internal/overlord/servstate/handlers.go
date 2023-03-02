@@ -469,6 +469,11 @@ func (s *serviceData) exited(exitCode int) error {
 		switch action {
 		case plan.ActionIgnore:
 			logger.Noticef("Service %q %s action is %q, not doing anything further", s.config.Name, onType, action)
+			// On success we transition to state stopped.
+			if exitCode == 0 {
+				s.transition(stateStopped)
+				break
+			}
 			s.transition(stateExited)
 
 		case plan.ActionShutdown:
