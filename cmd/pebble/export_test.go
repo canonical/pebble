@@ -58,3 +58,22 @@ func FakeIsStdinTTY(t bool) (restore func()) {
 		isStdinTTY = oldIsStdinTTY
 	}
 }
+
+func RealMain() (exitCode int) {
+	oldOsExit := osExit
+	osExit = func(code int) {
+		panic(&exitStatus{code})
+	}
+	defer func() {
+		osExit = oldOsExit
+		if v := recover(); v != nil {
+			if e, ok := v.(*exitStatus); ok {
+				exitCode = e.code
+			} else {
+				panic(v)
+			}
+		}
+	}()
+	main()
+	return
+}

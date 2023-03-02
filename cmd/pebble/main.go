@@ -305,6 +305,7 @@ func Parser(cli *client.Client) *flags.Parser {
 var (
 	isStdinTTY  = terminal.IsTerminal(0)
 	isStdoutTTY = terminal.IsTerminal(1)
+	osExit      = os.Exit
 )
 
 // ClientConfig is the configuration of the Client used by all commands.
@@ -314,7 +315,7 @@ func main() {
 	defer func() {
 		if v := recover(); v != nil {
 			if e, ok := v.(*exitStatus); ok {
-				os.Exit(e.code)
+				osExit(e.code)
 			}
 			panic(v)
 		}
@@ -322,7 +323,7 @@ func main() {
 
 	if err := run(); err != nil {
 		fmt.Fprintf(Stderr, errorPrefix+"%v\n", err)
-		os.Exit(1)
+		osExit(1)
 	}
 }
 
