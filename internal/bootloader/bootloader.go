@@ -14,11 +14,6 @@
 
 package bootloader
 
-import (
-	"errors"
-	"fmt"
-)
-
 // Bootloader provides primitives to retain state across boots and handle
 // boot slots.
 type Bootloader interface {
@@ -60,31 +55,3 @@ const (
 	// booted from.
 	Fail Status = "fail"
 )
-
-// BootloaderMountpoint is the path where the root directory for the current
-// bootloader configuration is mounted on bootstrap.
-const bootloaderMountpoint = "/var/termus/boot"
-
-type bootloaderNewFunc func(rootdir string) Bootloader
-
-// bootloaders list all possible bootloaders by their constructor
-// function.
-var bootloaders = []bootloaderNewFunc{
-	newGrub,
-}
-
-// Find obtains an instance of the first supported bootloader that is available
-// on the system.
-func Find() (Bootloader, error) {
-	for _, newFunc := range bootloaders {
-		bl := newFunc(bootloaderMountpoint)
-		isPresent, err := bl.Present()
-		if err != nil {
-			return nil, fmt.Errorf("bootloader %q found but not usable: %w", bl.Name(), err)
-		}
-		if isPresent {
-			return bl, nil
-		}
-	}
-	return nil, errors.New("cannot determine bootloader")
-}

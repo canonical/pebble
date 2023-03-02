@@ -1,3 +1,6 @@
+//go:build termus
+// +build termus
+
 // Copyright (c) 2023 Canonical Ltd
 //
 // This program is free software: you can redistribute it and/or modify
