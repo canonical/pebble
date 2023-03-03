@@ -14,8 +14,21 @@
 
 package osutil
 
-// ProcSelfMountInfo is a path to the mountinfo table of the current process.
+import (
+	"fmt"
+	"os"
+
+	"golang.org/x/sys/unix"
+)
+
+// procSelfMountInfo is a path to the mountinfo table of the current process.
 var procSelfMountInfo = "/proc/self/mountinfo"
+
+var (
+	syscallSync    = unix.Sync
+	syscallMount   = unix.Mount
+	syscallUnmount = unix.Unmount
+)
 
 // IsMounted checks if a given directory is a mount point.
 func IsMounted(baseDir string) (bool, error) {
@@ -29,4 +42,31 @@ func IsMounted(baseDir string) (bool, error) {
 		}
 	}
 	return false, nil
+}
+
+// Mount attaches a filesystem accessible via the device node specified by source
+// to the specified baseDir. If not existing, baseDir will be created before
+// mounting the filesystem.
+func Mount(source, baseDir, fstype string, readOnly bool) error {
+	if err := os.MkdirAll(baseDir, 0755); err != nil {
+		return fmt.Errorf("cannot create directory %q: %w", baseDir, err)
+	}
+
+	flags := uintptr(0)
+	if readOnly {
+		flags |= unix.MS_RDONLY
+	}
+	if err := syscallMount(source, baseDir, fstype, flags, ""); err != nil {
+		return fmt.Errorf("cannot mount %q: %w", source, err)
+	}
+	return nil
+}
+
+// Unmount removes the attachment of the topmost filesystem mounted on baseDir.
+func Unmount(baseDir string) error {
+	syscallSync()
+	if err := syscallUnmount(baseDir, 0); err != nil {
+		return fmt.Errorf("cannot unmount %q: %w", baseDir, err)
+	}
+	return nil
 }

@@ -111,3 +111,21 @@ func FakeSyscallGetpgid(f func(int) (int, error)) (restore func()) {
 		syscallGetpgid = oldSyscallGetpgid
 	}
 }
+
+func FakeSyscallSync(f func()) (restore func()) {
+	oldSyscallSync := syscallSync
+	syscallSync = f
+	return func() { syscallSync = oldSyscallSync }
+}
+
+func FakeSyscallMount(f func(source, target, fstype string, flags uintptr, data string) error) (restore func()) {
+	oldSyscallMount := syscallMount
+	syscallMount = f
+	return func() { syscallMount = oldSyscallMount }
+}
+
+func FakeSyscallUnmount(f func(target string, flags int) error) (restore func()) {
+	oldSyscallUnmount := syscallUnmount
+	syscallUnmount = f
+	return func() { syscallUnmount = oldSyscallUnmount }
+}
