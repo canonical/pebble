@@ -54,9 +54,18 @@ func TaskServiceRequest(task *state.Task) (*ServiceRequest, error) {
 }
 
 var (
-	okayWait = 1 * time.Second
-	killWait = 5 * time.Second
-	failWait = 10 * time.Second
+	// okayDelay is the time to wait after starting a service before we conclude
+	// that it's running successfully.
+	okayDelay = 1 * time.Second
+
+	// killDelayDefault is the duration afforded to services for processing
+	// SIGTERM signals and shutting down cleanly if the service hasn't specified
+	// their own duration.
+	killDelayDefault = 5 * time.Second
+
+	// failDelay is the duration given to services for shutting down when Pebble
+	// sends a SIGKILL signal.
+	failDelay = 5 * time.Second
 )
 
 const (
@@ -307,7 +316,7 @@ func (s *serviceData) start() error {
 			return err
 		}
 		s.transition(stateStarting)
-		time.AfterFunc(okayWait, func() { logError(s.okayWaitElapsed()) })
+		time.AfterFunc(okayDelay, func() { logError(s.okayWaitElapsed()) })
 
 	default:
 		return fmt.Errorf("cannot start service while %s", s.state)
@@ -597,6 +606,17 @@ func (s *serviceData) sendSignal(signal string) error {
 	return nil
 }
 
+// killDelay reports the duration that this service should be given when being
+// asked to shutdown gracefully before being force terminated. The value
+// returned will either be the services pre configured value or the default
+// kill delay for pebble.
+func (s *serviceData) killDelay() time.Duration {
+	if s.config.KillDelay.IsSet {
+		return s.config.KillDelay.Value
+	}
+	return killDelayDefault
+}
+
 // stop is called to stop a running (or backing off) service.
 func (s *serviceData) stop() error {
 	s.manager.servicesLock.Lock()
@@ -611,7 +631,7 @@ func (s *serviceData) stop() error {
 			logger.Noticef("Cannot send SIGTERM to process: %v", err)
 		}
 		s.transition(stateTerminating)
-		time.AfterFunc(killWait, func() { logError(s.terminateTimeElapsed()) })
+		time.AfterFunc(s.killDelay(), func() { logError(s.terminateTimeElapsed()) })
 
 	case stateBackoff:
 		logger.Noticef("Service %q stopped while waiting for backoff", s.config.Name)
@@ -659,8 +679,9 @@ func (s *serviceData) terminateTimeElapsed() error {
 		if err != nil {
 			logger.Noticef("Cannot send SIGKILL to process: %v", err)
 		}
+
 		s.transitionRestarting(stateKilling, s.restarting)
-		time.AfterFunc(failWait-killWait, func() { logError(s.killTimeElapsed()) })
+		time.AfterFunc(failDelay, func() { logError(s.killTimeElapsed()) })
 
 	default:
 		// Ignore if timer elapsed in any other state.
@@ -737,7 +758,7 @@ func (s *serviceData) checkFailed(action plan.ServiceAction) {
 					logger.Noticef("Cannot send SIGTERM to process: %v", err)
 				}
 				s.transitionRestarting(stateTerminating, true)
-				time.AfterFunc(killWait, func() { logError(s.terminateTimeElapsed()) })
+				time.AfterFunc(s.killDelay(), func() { logError(s.terminateTimeElapsed()) })
 			case stateBackoff:
 				logger.Noticef("Service %q %s action is %q, waiting for current backoff",
 					s.config.Name, onType, action)

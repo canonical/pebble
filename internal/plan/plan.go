@@ -85,6 +85,7 @@ type Service struct {
 	BackoffDelay   OptionalDuration         `yaml:"backoff-delay,omitempty"`
 	BackoffFactor  OptionalFloat            `yaml:"backoff-factor,omitempty"`
 	BackoffLimit   OptionalDuration         `yaml:"backoff-limit,omitempty"`
+	KillDelay      OptionalDuration         `yaml:"kill-delay,omitempty"`
 }
 
 // Copy returns a deep copy of the service.
@@ -129,6 +130,9 @@ func (s *Service) Merge(other *Service) {
 	}
 	if other.Command != "" {
 		s.Command = other.Command
+	}
+	if other.KillDelay.IsSet {
+		s.KillDelay = other.KillDelay
 	}
 	if other.UserID != nil {
 		userID := *other.UserID
