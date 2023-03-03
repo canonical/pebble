@@ -16,10 +16,12 @@ package osutil_test
 
 import (
 	"errors"
-	"golang.org/x/sys/unix"
-	. "gopkg.in/check.v1"
 	"os"
 	"path"
+
+	. "gopkg.in/check.v1"
+
+	"golang.org/x/sys/unix"
 
 	"github.com/canonical/pebble/internal/osutil"
 )
