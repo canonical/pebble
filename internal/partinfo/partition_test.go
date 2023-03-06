@@ -61,22 +61,22 @@ func (s *partinfoSuite) TestEnumeratePartitions(c *C) {
 	c.Assert(err, IsNil)
 	err = os.Symlink(fat32Path, path.Join(s.devfsPath, "sda1"))
 	c.Assert(err, IsNil)
-	// Create /sys/block/sda and /sys/block/sda/sda1
-	err = os.MkdirAll(path.Join(s.sysfsPath, "block", "sda", "sda1"), 0777)
+	// Create /sys/block/sda and /sys/class/block/sda/sda1
+	err = os.MkdirAll(path.Join(s.sysfsPath, "class", "block", "sda", "sda1"), 0777)
 	c.Assert(err, IsNil)
 
 	// Create /dev/sda2
 	ext4Path, err := filepath.Abs("testdata/labelled.ext4")
 	err = os.Symlink(ext4Path, path.Join(s.devfsPath, "sda2"))
 	c.Assert(err, IsNil)
-	// Create /sys/block/sda/sda2
-	err = os.MkdirAll(path.Join(s.sysfsPath, "block", "sda", "sda2"), 0777)
+	// Create /sys/class/block/sda/sda2
+	err = os.MkdirAll(path.Join(s.sysfsPath, "class", "block", "sda", "sda2"), 0777)
 	c.Assert(err, IsNil)
 
-	// Create /sys/block/sda/trace and /sys/block/sda/ro (which do not represent partitions)
-	err = os.MkdirAll(path.Join(s.sysfsPath, "block", "sda", "trace"), 0777)
+	// Create /sys/class/block/sda/trace and /sys/class/block/sda/ro (which do not represent partitions)
+	err = os.MkdirAll(path.Join(s.sysfsPath, "class", "block", "sda", "trace"), 0777)
 	c.Assert(err, IsNil)
-	_, err = os.Create(path.Join(s.sysfsPath, "block", "sda", "ro"))
+	_, err = os.Create(path.Join(s.sysfsPath, "class", "block", "sda", "ro"))
 	c.Assert(err, IsNil)
 
 	p, err := Enumerate()
@@ -91,17 +91,17 @@ func (s *partinfoSuite) TestEnumeratePartitions(c *C) {
 }
 
 func (s *partinfoSuite) TestEnumeratePartitionsFailsWithInaccessibleSysfs(c *C) {
-	err := os.Chmod(path.Join(s.sysfsPath, "block"), 0)
+	err := os.Chmod(path.Join(s.sysfsPath, "class", "block"), 0)
 	c.Assert(err, IsNil)
 
-	defer func() { os.Chmod(path.Join(s.sysfsPath, "block"), 0777) }()
+	defer func() { os.Chmod(path.Join(s.sysfsPath, "class", "block"), 0777) }()
 
 	_, err = Enumerate()
 	c.Assert(os.IsPermission(err), Equals, true)
 }
 
 func (s *partinfoSuite) TestEnumeratePartitionsFailsWithInaccessibleBlockDeviceEntry(c *C) {
-	err := os.MkdirAll(path.Join(s.sysfsPath, "block", "inaccessible"), 0)
+	err := os.MkdirAll(path.Join(s.sysfsPath, "class", "block", "inaccessible"), 0)
 	c.Assert(err, IsNil)
 
 	_, err = Enumerate()

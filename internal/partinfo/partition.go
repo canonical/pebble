@@ -57,7 +57,7 @@ func newPartition(path string) (Partition, error) {
 		}
 	}
 
-	return nil, errors.New("unrecognized partition")
+	return nil, errors.New("unsupported partition type")
 }
 
 var (
@@ -68,7 +68,7 @@ var (
 // Enumerate returns a slice of Partition elements representing the disk partitions that can be mounted.
 func Enumerate() ([]Partition, error) {
 	// Enumerate disks
-	bdevBase := path.Join(sysfsPath, "block")
+	bdevBase := path.Join(sysfsPath, "class", "block")
 	disks, err := ioutil.ReadDir(bdevBase)
 	if err != nil {
 		return nil, err

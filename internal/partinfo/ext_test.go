@@ -16,6 +16,7 @@ package partinfo
 
 import (
 	. "gopkg.in/check.v1"
+
 	"os"
 )
 
