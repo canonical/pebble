@@ -110,7 +110,7 @@ func (s *mountSuite) TestMountFailsOnSyscall(c *C) {
 		return errors.New("cannot foo")
 	})()
 	err := osutil.Mount("/dev/whatever", c.MkDir(), "ext4", false)
-	c.Assert(err, ErrorMatches, `cannot mount "/dev/whatever": cannot foo`)
+	c.Assert(err, ErrorMatches, `cannot foo`)
 }
 
 func (s *mountSuite) TestMountFailsOnMkDir(c *C) {
@@ -144,5 +144,5 @@ func (s *mountSuite) TestUnmountFails(c *C) {
 		return errors.New("cannot bar")
 	})()
 	err := osutil.Unmount(mountpoint)
-	c.Assert(err, ErrorMatches, `cannot unmount .*: cannot bar`)
+	c.Assert(err, ErrorMatches, `cannot bar`)
 }

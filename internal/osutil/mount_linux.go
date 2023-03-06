@@ -57,7 +57,7 @@ func Mount(source, baseDir, fstype string, readOnly bool) error {
 		flags |= unix.MS_RDONLY
 	}
 	if err := syscallMount(source, baseDir, fstype, flags, ""); err != nil {
-		return fmt.Errorf("cannot mount %q: %w", source, err)
+		return err
 	}
 	return nil
 }
@@ -66,7 +66,7 @@ func Mount(source, baseDir, fstype string, readOnly bool) error {
 func Unmount(baseDir string) error {
 	syscallSync()
 	if err := syscallUnmount(baseDir, 0); err != nil {
-		return fmt.Errorf("cannot unmount %q: %w", baseDir, err)
+		return err
 	}
 	return nil
 }
