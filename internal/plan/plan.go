@@ -20,7 +20,6 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
@@ -43,18 +42,20 @@ const (
 )
 
 type Plan struct {
-	Layers   []*Layer            `yaml:"-"`
-	Services map[string]*Service `yaml:"services,omitempty"`
-	Checks   map[string]*Check   `yaml:"checks,omitempty"`
+	Layers     []*Layer              `yaml:"-"`
+	Services   map[string]*Service   `yaml:"services,omitempty"`
+	Checks     map[string]*Check     `yaml:"checks,omitempty"`
+	LogTargets map[string]*LogTarget `yaml:"log-targets,omitempty"`
 }
 
 type Layer struct {
-	Order       int                 `yaml:"-"`
-	Label       string              `yaml:"-"`
-	Summary     string              `yaml:"summary,omitempty"`
-	Description string              `yaml:"description,omitempty"`
-	Services    map[string]*Service `yaml:"services,omitempty"`
-	Checks      map[string]*Check   `yaml:"checks,omitempty"`
+	Order       int                   `yaml:"-"`
+	Label       string                `yaml:"-"`
+	Summary     string                `yaml:"summary,omitempty"`
+	Description string                `yaml:"description,omitempty"`
+	Services    map[string]*Service   `yaml:"services,omitempty"`
+	Checks      map[string]*Check     `yaml:"checks,omitempty"`
+	LogTargets  map[string]*LogTarget `yaml:"log-targets,omitempty"`
 }
 
 type Service struct {
@@ -86,6 +87,9 @@ type Service struct {
 	BackoffFactor  OptionalFloat            `yaml:"backoff-factor,omitempty"`
 	BackoffLimit   OptionalDuration         `yaml:"backoff-limit,omitempty"`
 	KillDelay      OptionalDuration         `yaml:"kill-delay,omitempty"`
+
+	// Log forwarding
+	LogTargets []string `yaml:"log-targets,omitempty"`
 }
 
 // Copy returns a deep copy of the service.
@@ -114,10 +118,11 @@ func (s *Service) Copy() *Service {
 			copied.OnCheckFailure[k] = v
 		}
 	}
+	copied.LogTargets = append([]string(nil), s.LogTargets...)
 	return &copied
 }
 
-// Merge merges the fields set in other into c.
+// Merge merges the fields set in other into s.
 func (s *Service) Merge(other *Service) {
 	if other.Summary != "" {
 		s.Summary = other.Summary
@@ -178,14 +183,7 @@ func (s *Service) Merge(other *Service) {
 	if other.BackoffLimit.IsSet {
 		s.BackoffLimit = other.BackoffLimit
 	}
-}
-
-// Equal returns true when the two services are equal in value.
-func (s *Service) Equal(other *Service) bool {
-	if s == other {
-		return true
-	}
-	return reflect.DeepEqual(s, other)
+	s.LogTargets = append(s.LogTargets, other.LogTargets...)
 }
 
 type ServiceStartup string
@@ -196,7 +194,8 @@ const (
 	StartupDisabled ServiceStartup = "disabled"
 )
 
-// Override specifies the layer override mechanism (for services and checks).
+// Override specifies the layer override mechanism (for services, checks, and
+// log targets).
 type Override string
 
 const (
@@ -404,6 +403,53 @@ func (c *ExecCheck) Merge(other *ExecCheck) {
 	}
 }
 
+// LogTarget specifies a remote server to forward logs to.
+type LogTarget struct {
+	Name      string        `yaml:"-"`
+	Type      LogTargetType `yaml:"type"`
+	Location  string        `yaml:"location"`
+	Selection Selection     `yaml:"selection,omitempty"`
+	Override  Override      `yaml:"override,omitempty"`
+}
+
+// LogTargetType defines the protocol to use to forward logs.
+type LogTargetType string
+
+const (
+	LokiTarget   LogTargetType = "loki"
+	SyslogTarget LogTargetType = "syslog"
+	UnsetTarget  LogTargetType = ""
+)
+
+// Selection describes which services' logs will be forwarded to this target.
+type Selection string
+
+const (
+	OptOutSelection   Selection = "opt-out"
+	OptInSelection    Selection = "opt-in"
+	DisabledSelection Selection = "disabled"
+	UnsetSelection    Selection = ""
+)
+
+// Copy returns a deep copy of the log target configuration.
+func (t *LogTarget) Copy() *LogTarget {
+	copied := *t
+	return &copied
+}
+
+// Merge merges the fields set in other into t.
+func (t *LogTarget) Merge(other *LogTarget) {
+	if other.Type != "" {
+		t.Type = other.Type
+	}
+	if other.Location != "" {
+		t.Location = other.Location
+	}
+	if other.Selection != "" {
+		t.Selection = other.Selection
+	}
+}
+
 // FormatError is the error returned when a layer has a format error, such as
 // a missing "override" field.
 type FormatError struct {
@@ -418,8 +464,9 @@ func (e *FormatError) Error() string {
 // layers overriding earlier ones.
 func CombineLayers(layers ...*Layer) (*Layer, error) {
 	combined := &Layer{
-		Services: make(map[string]*Service),
-		Checks:   make(map[string]*Check),
+		Services:   make(map[string]*Service),
+		Checks:     make(map[string]*Check),
+		LogTargets: make(map[string]*LogTarget),
 	}
 	if len(layers) == 0 {
 		return combined, nil
@@ -478,6 +525,30 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 			}
 		}
 
+		for name, target := range layer.LogTargets {
+			switch target.Override {
+			case MergeOverride:
+				if old, ok := combined.LogTargets[name]; ok {
+					copied := old.Copy()
+					copied.Merge(target)
+					combined.LogTargets[name] = copied
+					break
+				}
+				fallthrough
+			case ReplaceOverride:
+				combined.LogTargets[name] = target.Copy()
+			case UnknownOverride:
+				return nil, &FormatError{
+					Message: fmt.Sprintf(`layer %q must define "override" for log target %q`,
+						layer.Label, target.Name),
+				}
+			default:
+				return nil, &FormatError{
+					Message: fmt.Sprintf(`layer %q has invalid "override" value for log target %q`,
+						layer.Label, target.Name),
+				}
+			}
+		}
 	}
 
 	// Ensure fields in combined layers validate correctly (and set defaults).
@@ -601,6 +672,47 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 		}
 	}
 
+	for name, target := range combined.LogTargets {
+		switch target.Type {
+		case LokiTarget, SyslogTarget:
+			// valid, continue
+		case UnsetTarget:
+			return nil, &FormatError{
+				Message: fmt.Sprintf(`plan must define "type" (%q or %q) for log target %q`,
+					LokiTarget, SyslogTarget, name),
+			}
+		default:
+			return nil, &FormatError{
+				Message: fmt.Sprintf(`log target %q has unsupported type %q, must be %q or %q`,
+					name, target.Type, LokiTarget, SyslogTarget),
+			}
+		}
+
+		switch target.Selection {
+		case OptOutSelection, OptInSelection, DisabledSelection, UnsetSelection:
+			// valid, continue
+		default:
+			return nil, &FormatError{
+				Message: fmt.Sprintf(`log target %q has invalid selection %q, must be %q, %q or %q`,
+					name, target.Selection, OptOutSelection, OptInSelection, DisabledSelection),
+			}
+		}
+
+		// TODO: check that location is nonempty?
+	}
+
+	// Validate service log targets
+	for serviceName, service := range combined.Services {
+		for _, targetName := range service.LogTargets {
+			_, ok := combined.LogTargets[targetName]
+			if !ok {
+				return nil, &FormatError{
+					Message: fmt.Sprintf(`unknown log target %q for service %q`, targetName, serviceName),
+				}
+			}
+		}
+	}
+
 	// Ensure combined layers don't have cycles.
 	err := combined.checkCycles()
 	if err != nil {
@@ -711,8 +823,9 @@ func (l *Layer) checkCycles() error {
 
 func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 	layer := Layer{
-		Services: map[string]*Service{},
-		Checks:   map[string]*Check{},
+		Services:   map[string]*Service{},
+		Checks:     map[string]*Check{},
+		LogTargets: map[string]*LogTarget{},
 	}
 	dec := yaml.NewDecoder(bytes.NewBuffer(data))
 	dec.KnownFields(true)
@@ -758,6 +871,20 @@ func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 			}
 		}
 		check.Name = name
+	}
+
+	for name, target := range layer.LogTargets {
+		if name == "" {
+			return nil, &FormatError{
+				Message: fmt.Sprintf("cannot use empty string as log target name"),
+			}
+		}
+		if target == nil {
+			return nil, &FormatError{
+				Message: fmt.Sprintf("log target object cannot be null for log target %q", name),
+			}
+		}
+		target.Name = name
 	}
 
 	err = layer.checkCycles()
@@ -859,9 +986,10 @@ func ReadDir(dir string) (*Plan, error) {
 		return nil, err
 	}
 	plan := &Plan{
-		Layers:   layers,
-		Services: combined.Services,
-		Checks:   combined.Checks,
+		Layers:     layers,
+		Services:   combined.Services,
+		Checks:     combined.Checks,
+		LogTargets: combined.LogTargets,
 	}
 	return plan, err
 }

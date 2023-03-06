@@ -1,4 +1,3 @@
-//
 // Copyright (c) 2020 Canonical Ltd
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -198,7 +197,8 @@ var planTests = []planTest{{
 				Startup:  plan.StartupUnknown,
 			},
 		},
-		Checks: map[string]*plan.Check{},
+		Checks:     map[string]*plan.Check{},
+		LogTargets: map[string]*plan.LogTarget{},
 	}, {
 		Order:       1,
 		Label:       "layer-1",
@@ -246,7 +246,8 @@ var planTests = []planTest{{
 				},
 			},
 		},
-		Checks: map[string]*plan.Check{},
+		Checks:     map[string]*plan.Check{},
+		LogTargets: map[string]*plan.LogTarget{},
 	}},
 	result: &plan.Layer{
 		Summary:     "Simple override layer.",
@@ -323,7 +324,8 @@ var planTests = []planTest{{
 				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
 			},
 		},
-		Checks: map[string]*plan.Check{},
+		Checks:     map[string]*plan.Check{},
+		LogTargets: map[string]*plan.LogTarget{},
 	},
 	start: map[string][]string{
 		"srv1": {"srv2", "srv1", "srv3"},
@@ -384,7 +386,8 @@ var planTests = []planTest{{
 				},
 			},
 		},
-		Checks: map[string]*plan.Check{},
+		Checks:     map[string]*plan.Check{},
+		LogTargets: map[string]*plan.LogTarget{},
 	}},
 }, {
 	summary: "Unknown keys are not accepted",
@@ -558,6 +561,7 @@ var planTests = []planTest{{
 				},
 			},
 		},
+		LogTargets: map[string]*plan.LogTarget{},
 	},
 }, {
 	summary: "Checks override replace works correctly",
@@ -634,6 +638,7 @@ var planTests = []planTest{{
 				},
 			},
 		},
+		LogTargets: map[string]*plan.LogTarget{},
 	},
 }, {
 	summary: "Checks override merge works correctly",
@@ -716,6 +721,7 @@ var planTests = []planTest{{
 				},
 			},
 		},
+		LogTargets: map[string]*plan.LogTarget{},
 	},
 }, {
 	summary: "One of http, tcp, or exec must be present for check",
@@ -762,10 +768,294 @@ var planTests = []planTest{{
 				exec:
 					command: foo '
 	`},
+}, {
+	summary: "Simple layer with log targets",
+	input: []string{`
+		services:
+			svc1:
+				command: foo
+				override: merge
+				startup: enabled
+				log-targets:
+					- tgt1
+			svc2:
+				command: bar
+				override: merge
+				startup: enabled
+				log-targets:
+					- tgt1
+					- tgt2
+		
+		log-targets:
+			tgt1:
+				type: loki
+				location: http://10.1.77.196:3100/loki/api/v1/push
+				override: merge
+			tgt2:
+				type: syslog
+				location: udp://0.0.0.0:514
+				override: merge
+`},
+	result: &plan.Layer{
+		Services: map[string]*plan.Service{
+			"svc1": {
+				Name:          "svc1",
+				Command:       "foo",
+				Override:      plan.MergeOverride,
+				Startup:       plan.StartupEnabled,
+				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
+				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
+				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
+				LogTargets:    []string{"tgt1"},
+			},
+			"svc2": {
+				Name:          "svc2",
+				Command:       "bar",
+				Override:      plan.MergeOverride,
+				Startup:       plan.StartupEnabled,
+				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
+				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
+				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
+				LogTargets:    []string{"tgt1", "tgt2"},
+			},
+		},
+		Checks: map[string]*plan.Check{},
+		LogTargets: map[string]*plan.LogTarget{
+			"tgt1": {
+				Name:     "tgt1",
+				Type:     plan.LokiTarget,
+				Location: "http://10.1.77.196:3100/loki/api/v1/push",
+				Override: plan.MergeOverride,
+			},
+			"tgt2": {
+				Name:     "tgt2",
+				Type:     plan.SyslogTarget,
+				Location: "udp://0.0.0.0:514",
+				Override: plan.MergeOverride,
+			},
+		},
+	},
+}, {
+	summary: "Overriding log targets",
+	input: []string{`
+		services:
+			svc1:
+				command: foo
+				override: merge
+				startup: enabled
+				log-targets:
+					- tgt1
+			svc2:
+				command: bar
+				override: merge
+				startup: enabled
+				log-targets:
+					- tgt1
+					- tgt2
+		
+		log-targets:
+			tgt1:
+				type: loki
+				location: http://10.1.77.196:3100/loki/api/v1/push
+				override: merge
+			tgt2:
+				type: syslog
+				location: udp://0.0.0.0:514
+				override: merge
+`, `
+		services:
+			svc1:
+				command: foo
+				override: merge
+				log-targets:
+					- tgt3
+			svc2:
+				command: bar
+				override: replace
+				startup: enabled
+				log-targets:
+					- tgt3
+		
+		log-targets:
+			tgt1:
+				override: merge
+				selection: opt-in
+			tgt2:
+				type: syslog
+				override: replace
+				selection: disabled
+			tgt3:
+				type: loki
+				override: merge
+`},
+	layers: []*plan.Layer{{
+		Label: "layer-0",
+		Order: 0,
+		Services: map[string]*plan.Service{
+			"svc1": {
+				Name:       "svc1",
+				Command:    "foo",
+				Override:   plan.MergeOverride,
+				Startup:    plan.StartupEnabled,
+				LogTargets: []string{"tgt1"},
+			},
+			"svc2": {
+				Name:       "svc2",
+				Command:    "bar",
+				Override:   plan.MergeOverride,
+				Startup:    plan.StartupEnabled,
+				LogTargets: []string{"tgt1", "tgt2"},
+			},
+		},
+		Checks: map[string]*plan.Check{},
+		LogTargets: map[string]*plan.LogTarget{
+			"tgt1": {
+				Name:     "tgt1",
+				Type:     plan.LokiTarget,
+				Location: "http://10.1.77.196:3100/loki/api/v1/push",
+				Override: plan.MergeOverride,
+			},
+			"tgt2": {
+				Name:     "tgt2",
+				Type:     plan.SyslogTarget,
+				Location: "udp://0.0.0.0:514",
+				Override: plan.MergeOverride,
+			},
+		},
+	}, {
+		Label: "layer-1",
+		Order: 1,
+		Services: map[string]*plan.Service{
+			"svc1": {
+				Name:       "svc1",
+				Command:    "foo",
+				Override:   plan.MergeOverride,
+				LogTargets: []string{"tgt3"},
+			},
+			"svc2": {
+				Name:       "svc2",
+				Command:    "bar",
+				Override:   plan.ReplaceOverride,
+				Startup:    plan.StartupEnabled,
+				LogTargets: []string{"tgt3"},
+			},
+		},
+		Checks: map[string]*plan.Check{},
+		LogTargets: map[string]*plan.LogTarget{
+			"tgt1": {
+				Name:      "tgt1",
+				Override:  plan.MergeOverride,
+				Selection: plan.OptInSelection,
+			},
+			"tgt2": {
+				Name:      "tgt2",
+				Type:      plan.SyslogTarget,
+				Override:  plan.ReplaceOverride,
+				Selection: plan.DisabledSelection,
+			},
+			"tgt3": {
+				Name:     "tgt3",
+				Type:     plan.LokiTarget,
+				Override: plan.MergeOverride,
+			},
+		},
+	}},
+	result: &plan.Layer{
+		Services: map[string]*plan.Service{
+			"svc1": {
+				Name:          "svc1",
+				Command:       "foo",
+				Override:      plan.MergeOverride,
+				Startup:       plan.StartupEnabled,
+				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
+				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
+				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
+				LogTargets:    []string{"tgt1", "tgt3"},
+			},
+			"svc2": {
+				Name:          "svc2",
+				Command:       "bar",
+				Override:      plan.ReplaceOverride,
+				Startup:       plan.StartupEnabled,
+				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
+				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
+				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
+				LogTargets:    []string{"tgt3"},
+			},
+		},
+		Checks: map[string]*plan.Check{},
+		LogTargets: map[string]*plan.LogTarget{
+			"tgt1": {
+				Name:      "tgt1",
+				Type:      plan.LokiTarget,
+				Location:  "http://10.1.77.196:3100/loki/api/v1/push",
+				Override:  plan.MergeOverride,
+				Selection: plan.OptInSelection,
+			},
+			"tgt2": {
+				Name:      "tgt2",
+				Type:      plan.SyslogTarget,
+				Override:  plan.ReplaceOverride,
+				Selection: plan.DisabledSelection,
+			},
+			"tgt3": {
+				Name:     "tgt3",
+				Type:     plan.LokiTarget,
+				Override: plan.MergeOverride,
+			},
+		},
+	},
+}, {
+	summary: "Log target requires type field",
+	error:   `plan must define "type" \("loki" or "syslog"\) for log target "tgt1"`,
+	input: []string{`
+		log-targets:
+			tgt1:
+				location: http://10.1.77.196:3100/loki/api/v1/push
+				override: merge
+`},
+}, {
+	summary: "Unsupported log target type",
+	error:   `log target "tgt1" has unsupported type "foobar", must be "loki" or "syslog"`,
+	input: []string{`
+		log-targets:
+			tgt1:
+				type: foobar
+				location: http://10.1.77.196:3100/loki/api/v1/push
+				override: merge
+`},
+}, {
+	summary: "Invalid selection for log target",
+	error:   `log target "tgt1" has invalid selection "foobar", must be "opt-out", "opt-in" or "disabled"`,
+	input: []string{`
+		log-targets:
+			tgt1:
+				type: loki
+				location: http://10.1.77.196:3100/loki/api/v1/push
+				override: merge
+				selection: foobar
+`},
+}, {
+	summary: "Service specifies unknown log target",
+	error:   `unknown log target "tgt2" for service "svc1"`,
+	input: []string{`
+		services:
+			svc1:
+				command: foo
+				override: merge
+				log-targets:
+					- tgt2
+		log-targets:
+			tgt1:
+				type: loki
+				location: http://10.1.77.196:3100/loki/api/v1/push
+				override: merge
+`},
 }}
 
 func (s *S) TestParseLayer(c *C) {
 	for _, test := range planTests {
+		fmt.Println(test.summary)
 		var sup plan.Plan
 		var err error
 		for i, yml := range test.input {
@@ -889,6 +1179,7 @@ func (s *S) TestReadDir(c *C) {
 	tempDir := c.MkDir()
 
 	for testIndex, test := range planTests {
+		fmt.Println(test.summary)
 		pebbleDir := filepath.Join(tempDir, fmt.Sprintf("pebble-%03d", testIndex))
 		layersDir := filepath.Join(pebbleDir, "layers")
 		err := os.MkdirAll(layersDir, 0755)
