@@ -35,7 +35,7 @@ type grub struct {
 func newGrub(rootdir string) Bootloader {
 	return &grub{
 		rootdir: rootdir,
-		env:     grubenv.NewEnv(filepath.Join(rootdir, "grubenv")),
+		env:     grubenv.NewEnv(filepath.Join(rootdir, "grub.env")),
 	}
 }
 
@@ -52,22 +52,10 @@ func (g *grub) ActiveSlot() string {
 	if err := g.env.Load(); err != nil {
 		return ""
 	}
-	return g.env.Get("boot.slot")
+	return g.env.Get("boot_slot")
 }
 
 func (g *grub) SetActiveSlot(label string) error {
-	g.env.Set("boot.slot", label)
+	g.env.Set("boot_slot", label)
 	return g.env.Save()
-}
-
-func (g *grub) Status(label string) Status {
-	if err := g.env.Load(); err != nil {
-		return Try
-	}
-	s := Status(g.env.Get("boot." + label + ".status"))
-	switch s {
-	case Unbootable, Try, Fail:
-		return s
-	}
-	return Try
 }

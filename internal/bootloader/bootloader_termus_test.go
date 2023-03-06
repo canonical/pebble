@@ -29,19 +29,11 @@ import (
 type mockBootloader struct {
 	name string
 
-	bootVars         map[string]string
-	getBootVarsError error
-	setBootVarsError error
-
 	isPresent    bool
 	presentError error
 
 	activeSlot         string
-	getActiveSlotError error
 	setActiveSlotError error
-
-	getStatusError error
-	statuses       map[string]bootloader.Status
 }
 
 func (b *mockBootloader) Name() string {
@@ -65,10 +57,6 @@ func (b *mockBootloader) SetActiveSlot(label string) error {
 	}
 	b.activeSlot = label
 	return nil
-}
-
-func (b *mockBootloader) Status(label string) bootloader.Status {
-	return b.statuses[label]
 }
 
 // Hook up check.v1 into the "go test" runner

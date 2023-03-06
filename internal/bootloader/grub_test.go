@@ -43,11 +43,11 @@ func (s *grubSuite) SetUpTest(c *C) {
 	s.rootdir = c.MkDir()
 	s.b = bootloader.NewGRUB(s.rootdir)
 
-	s.envFile = filepath.Join(s.rootdir, "grubenv")
+	s.envFile = filepath.Join(s.rootdir, "grub.env")
 	s.cfgFile = filepath.Join(s.rootdir, "grub.cfg")
 
 	s.env = grubenv.NewEnv(s.envFile)
-	s.env.Set("boot.slot", "a")
+	s.env.Set("boot_slot", "a")
 	s.env.Set("my_var", "42")
 	s.env.Set("my_other_var", "foo")
 	err := s.env.Save()
@@ -117,17 +117,4 @@ func (s *grubSuite) TestSetActiveSlotFails(c *C) {
 
 	err = s.b.SetActiveSlot("x")
 	c.Assert(os.IsPermission(err), Equals, true)
-}
-
-func (s *grubSuite) TestStatusUndefined(c *C) {
-	st := s.b.Status("a")
-	c.Assert(st, Equals, bootloader.Try)
-}
-
-func (s *grubSuite) TestGetStatus(c *C) {
-	s.env.Set("boot.b.status", "unbootable")
-	err := s.env.Save()
-	c.Assert(err, IsNil)
-	st := s.b.Status("b")
-	c.Assert(st, Equals, bootloader.Unbootable)
 }

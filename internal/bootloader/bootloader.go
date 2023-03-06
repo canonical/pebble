@@ -33,25 +33,4 @@ type Bootloader interface {
 	// SetActiveSlot instructs the bootloader to select the slot with the
 	// specified label on the next reboot.
 	SetActiveSlot(label string) error
-
-	// Status obtains the status of the slot with the specified label.
-	// If there is no saved status for the slot, or if the saved status is not
-	// any of Unbootable, Try or Fail, Try will be returned.
-	Status(label string) Status
 }
-
-// Status represents the conditions in which a boot attempt was made.
-type Status string
-
-const (
-	// Unbootable indicates that the slot cannot be booted from in any case.
-	// For example, this slot might be empty.
-	Unbootable Status = "unbootable"
-
-	// Try indicates that the slot can potentially be booted from.
-	Try Status = "try"
-
-	// Fail indicates that there was a problem preventing a slot from being
-	// booted from.
-	Fail Status = "fail"
-)
