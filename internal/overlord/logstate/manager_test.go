@@ -168,7 +168,7 @@ func checkForwarderExists(c *C, forwarders []*logForwarder, serviceName, targetN
 func (s *managerSuite) TestNoLogDuplication(c *C) {
 	// Reduce Loki flush time
 	flushDelayOld := flushDelay
-	flushDelay = 1 * time.Microsecond
+	flushDelay = 10 * time.Millisecond
 	defer func() {
 		flushDelay = flushDelayOld
 	}()
@@ -177,7 +177,7 @@ func (s *managerSuite) TestNoLogDuplication(c *C) {
 	rb := servicelog.NewRingBuffer(1024)
 
 	// Set up fake "Loki" server
-	requests := make(chan string)
+	requests := make(chan string, 2)
 	srv := newFakeLokiServer(requests)
 	defer srv.Close()
 
@@ -191,7 +191,7 @@ func (s *managerSuite) TestNoLogDuplication(c *C) {
 		select {
 		case req := <-requests:
 			c.Assert(req, Equals, expected)
-		case <-time.After(10 * time.Millisecond):
+		case <-time.After(1 * time.Second):
 			c.Fatalf("timed out waiting for request %q", expected)
 		}
 	}

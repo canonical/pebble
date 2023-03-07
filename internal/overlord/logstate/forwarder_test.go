@@ -34,7 +34,7 @@ func (s *forwarderSuite) TestForwarder(c *C) {
 	w := servicelog.NewFormatWriter(rb, serviceName)
 
 	cl := &fakeLogClient{make(chan []string, 1)}
-	f := newLogForwarderForTest(serviceName, it, cl, 1*time.Microsecond)
+	f := newLogForwarderForTest(serviceName, it, cl, 10*time.Millisecond)
 
 	forwardStopped := make(chan struct{})
 	go func() {
@@ -50,7 +50,7 @@ func (s *forwarderSuite) TestForwarder(c *C) {
 		select {
 		case req := <-cl.requests:
 			c.Assert(req, DeepEquals, request)
-		case <-time.After(10 * time.Millisecond):
+		case <-time.After(1 * time.Second):
 			c.Fatalf("timed out waiting for request %q", request)
 		}
 	}
