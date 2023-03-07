@@ -122,6 +122,7 @@ func syslogStructuredData(name string, enterpriseNum int, labels map[string]stri
 }
 
 func (c *syslogClient) encodeEntry(entry servicelog.Entry) {
+	// TODO: optimise memory allocations here
 	// format defined by RFC 5424
 	timestamp := entry.Time.Format(time.RFC3339)
 	msg := fmt.Sprintf("<%d>%d %s %s %s %s %s %s %s",

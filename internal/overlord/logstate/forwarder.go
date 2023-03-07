@@ -105,8 +105,8 @@ func newLogForwarderInternal(
 		parser:      servicelog.NewParser(iterator, parserSize),
 		iteratorCh:  iteratorCh,
 		stopCh:      make(chan chan struct{}, 1),
-		maxMessages: maxMessages,
-		delay:       delay,
+		maxMessages: maxMessages, // TODO: make this value configurable in plan
+		delay:       delay,       // TODO: make this value configurable in plan
 		flushTimer:  flushTimer,
 		timerSet:    false,
 		timeoutCh:   timeoutCh,

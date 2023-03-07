@@ -514,6 +514,12 @@ services:
         # SIGTERM and exit gracefully before SIGKILL terminates it forcefully.
         # Default is 5 seconds ("5s").
         kill-delay: <duration>
+        
+        # (Optional) A list of log targets to forward this service's logs to.
+        # The names given here will be matched against targets defined in the
+        # `log-targets` section of the plan. If no targets are specified, this
+        # service's logs will be forwarded to all "opt-out" targets.
+        log-targets: [<log target names>]
 
 # (Optional) A list of health checks managed by this configuration layer.
 checks:
@@ -608,6 +614,42 @@ checks:
 
             # (Optional) Working directory to run command in.
             working-dir: <directory>
+
+# (Optional) A list of remote log receivers, to which service logs can be sent.
+log-targets:
+
+    <log target name>:
+
+        # (Required) Control how this log target definition is combined with
+        # other pre-existing definitions with the same name in the Pebble plan.
+        #
+        # The value 'merge' will ensure that values in this layer specification
+        # are merged over existing definitions, whereas 'replace' will entirely
+        # override the existing target spec in the plan with the same name.
+        override: merge | replace
+
+        # (Required) The type of log target, which determines the format in
+        # which logs will be sent. Pebble currently supports forwarding to
+        # Loki (over HTTP) and syslog (over UDP/TCP).
+        type: loki | syslog
+        
+        # (Required) The URL of the remote log target. For Loki, this needs to
+        # be the fully-qualified URL of the push API, including the API
+        # endpoint, e.g. `http://<ip-address>:3100/loki/api/v1/push`.
+        # For syslog, this should be the URL of the syslog receiver, in the
+        # format `udp://...` or `tcp://...`.
+        location: <url>
+        
+        # (Optional) Determines which services' logs will be forwarded to this
+        # log target.
+        #   - 'opt-out': all services which don't explicitly specify log
+        #      targets will have their logs forwarded to this target.
+        #   - 'opt-in': only services which explicitly specify this target in
+        #      the `log-targets` section of the service spec.
+        #   - 'disabled': no logs will be forwarded to this target. This is
+        #      useful to deactivate a target defined in an earlier layer.
+        # If unspecified, the selection defaults to 'opt-out'.
+        selection: opt-out | opt-in | disabled
 ```
 
 ## API and clients
