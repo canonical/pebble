@@ -19,11 +19,11 @@ set -e
 #   that dh-golang creates and that only contains a subset of the
 #   files of the toplevel buildir. 
 PKG_BUILDDIR=$(dirname "$0")/..
-GO_GENERATE_BUILDDIR="$(pwd)"
+GO_GENERATE_BUILDDIR="$(pwd)/cmd"
 
 # run from "go generate" adjust path
 if [ "$GOPACKAGE" = "cmd" ]; then
-    GO_GENERATE_BUILDDIR="$(pwd)/.."
+    GO_GENERATE_BUILDDIR="$(pwd)"
 fi
 
 OUTPUT_ONLY=false
