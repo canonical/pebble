@@ -55,7 +55,7 @@ func (s *syslogSuite) TestEncodeEntryWithStructuredData(c *C) {
 		structuredData: syslogStructuredData("pebble", canonicalPrivEnterpriseNum,
 			map[string]string{
 				"foo": "bar",
-				"baz": "bing",
+				"goo": "baz",
 			},
 		),
 	}
@@ -64,7 +64,7 @@ func (s *syslogSuite) TestEncodeEntryWithStructuredData(c *C) {
 		Service: "foo",
 		Message: "this is a log entry",
 	})
-	c.Check(client.data.String(), Equals, `102 <14>1 2021-05-26T12:37:01Z mycontainer foo - - [pebble@28978 foo="bar" baz="bing"] this is a log entry`)
+	c.Check(client.data.String(), Equals, `101 <14>1 2021-05-26T12:37:01Z mycontainer foo - - [pebble@28978 foo="bar" goo="baz"] this is a log entry`)
 }
 
 func (s *syslogSuite) TestSyslogClient(c *C) {

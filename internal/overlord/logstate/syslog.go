@@ -21,6 +21,7 @@ import (
 	"net"
 	"net/url"
 	"os"
+	"sort"
 	"time"
 
 	"github.com/canonical/pebble/internal/servicelog"
@@ -104,8 +105,17 @@ func syslogStructuredData(name string, enterpriseNum int, labels map[string]stri
 	}
 	var buf bytes.Buffer
 	fmt.Fprintf(&buf, "[%s@%d", name, enterpriseNum)
-	for key, value := range labels {
+
+	// Sort label keys to get deterministic output
+	keys := make([]string, 0, len(labels))
+	for key := range labels {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	for _, key := range keys {
 		fmt.Fprintf(&buf, " %s=\"", key)
+		value := labels[key]
 		// escape the value according to RFC5424 6.3.3
 		for i := 0; i < len(value); i++ {
 			// don't use "for _, c := range value" as we don't want runes
