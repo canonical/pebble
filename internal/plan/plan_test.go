@@ -886,6 +886,7 @@ var planTests = []planTest{{
 				selection: disabled
 			tgt3:
 				type: loki
+				location: http://10.1.77.206:3100/loki/api/v1/push
 				override: merge
 `},
 	layers: []*plan.Layer{{
@@ -956,6 +957,7 @@ var planTests = []planTest{{
 			"tgt3": {
 				Name:     "tgt3",
 				Type:     plan.LokiTarget,
+				Location: "http://10.1.77.206:3100/loki/api/v1/push",
 				Override: plan.MergeOverride,
 			},
 		},
@@ -1001,6 +1003,7 @@ var planTests = []planTest{{
 			"tgt3": {
 				Name:     "tgt3",
 				Type:     plan.LokiTarget,
+				Location: "http://10.1.77.206:3100/loki/api/v1/push",
 				Override: plan.MergeOverride,
 			},
 		},
@@ -1015,6 +1018,14 @@ var planTests = []planTest{{
 				override: merge
 `},
 }, {
+	summary: "Log target location must be specified",
+	error:   `plan must define "location" for log target "tgt1"`,
+	input: []string{`
+		log-targets:
+			tgt1:
+				type: loki
+				override: merge
+`}}, {
 	summary: "Unsupported log target type",
 	error:   `log target "tgt1" has unsupported type "foobar", must be "loki" or "syslog"`,
 	input: []string{`

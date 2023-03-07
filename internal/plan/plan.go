@@ -698,7 +698,11 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 			}
 		}
 
-		// TODO: check that location is nonempty?
+		if target.Location == "" && target.Selection != DisabledSelection {
+			return nil, &FormatError{
+				Message: fmt.Sprintf(`plan must define "location" for log target %q`, name),
+			}
+		}
 	}
 
 	// Validate service log targets
