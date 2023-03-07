@@ -356,6 +356,53 @@ $ pebble run --verbose
 ...
 ```
 
+#### Log forwarding
+
+Pebble supports forwarding its services' logs to a remote Loki server or syslog receiver (via UDP/TCP). In the `log-targets` section of the plan, you can specify destinations for log forwarding:
+```yaml
+log-targets:
+    loki-example:
+        override: merge
+        type: loki
+        location: http://10.1.77.205:3100/loki/api/v1/push
+    syslog-example:
+        override: merge
+        type: syslog
+        location: tcp://0.0.0.0:1514
+```
+
+By default, all services' logs will be forwarded to these targets. There are two ways to control which services' logs are sent to which targets:
+- For each log target, you can optionally specify the `selection` key. The possible values for this key are:
+  - `opt-out`: each service which doesn't **explicitly specify** log targets will have its logs forwarded to this target. This is the default behaviour.
+  - `opt-in`: a service must explicitly specify this log target to have its logs forwarded here.
+  - `disabled`: no logs will be sent to this target. This can be used in combination with `override: replace` to disable a log target defined in an earlier layer.
+- In the definition for each service, you can specify a list `log-targets` of log targets to forward this service's logs to. The names in the list will be matched against targets defined in the `log-targets` section of the plan. If no targets are specified, the service's logs will be sent to all "opt-out" targets.
+
+For example, in the following (incomplete) plan:
+```yaml
+services:
+    svc1:
+        ...
+    svc2:
+        log-targets: ['default', 'opt-in']
+    svc3:
+        log-targets: ['disabled']
+
+log-targets:
+    default:
+        ...
+    opt-out:
+        selection: opt-out
+    opt-in:
+        selection: opt-in
+    disabled:
+        selection: disabled
+```
+
+- `svc1` doesn't explicitly specify log-targets, so its logs will be forwarded to the `default` and `opt-out` targets.
+- `svc2` explicitly specifies the `default` and `opt-in` targets, so its logs will be sent to those targets. `svc2`'s logs will not be sent to the `opt-out` or `disabled` targets.
+- `svc3` explicitly specifies the `disabled` target, but since this target is disabled, it will not receive any logs. Hence, `svc3`'s logs will not be sent anywhere.
+
 ## Container usage
 
 Pebble works well as a local service manager, but if running Pebble in a separate container, you can use the exec and file management APIs to coordinate with the remote system over the shared unix socket.
@@ -682,7 +729,7 @@ Here are some of the things coming soon:
   - [x] Automatically restart services that fail
   - [x] Support for custom health checks (HTTP, TCP, command)
   - [x] Terminate all services before exiting run command
-  - [ ] Log forwarding (syslog and Loki)
+  - [x] Log forwarding (syslog and Loki)
   - [ ] [Other in-progress PRs](https://github.com/canonical/pebble/pulls)
   - [ ] [Other requested features](https://github.com/canonical/pebble/issues)
 
