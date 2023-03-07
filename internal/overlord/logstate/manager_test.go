@@ -15,6 +15,7 @@
 package logstate
 
 import (
+	"bytes"
 	"fmt"
 	"sync"
 	"testing"
@@ -26,11 +27,22 @@ import (
 	. "gopkg.in/check.v1"
 )
 
-type managerSuite struct{}
+type managerSuite struct {
+	logbuf        *bytes.Buffer
+	restoreLogger func()
+}
 
 var _ = Suite(&managerSuite{})
 
 func Test(t *testing.T) { TestingT(t) }
+
+func (s *managerSuite) SetUpTest(c *C) {
+	s.logbuf, s.restoreLogger = logger.MockLogger("PREFIX: ")
+}
+
+func (s *managerSuite) TearDownTest(c *C) {
+	s.restoreLogger()
+}
 
 func (s *managerSuite) TestSelectTargets(c *C) {
 	unset := plan.LogTarget{Selection: plan.UnsetSelection}
@@ -66,13 +78,10 @@ func (s *managerSuite) TestSelectTargets(c *C) {
 		"svc7": {"unset": &unset, "optin": &optin},
 	}
 
-	logbuf, restore := logger.MockLogger("")
-	defer restore()
-
 	planTargets := selectTargets(&input)
 	c.Check(planTargets, DeepEquals, expected)
 	// Check no error messages were logged
-	c.Check(logbuf.Bytes(), HasLen, 0)
+	c.Check(s.logbuf.Bytes(), HasLen, 0)
 }
 
 func (s *managerSuite) TestLogManager(c *C) {
