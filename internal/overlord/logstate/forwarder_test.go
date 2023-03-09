@@ -79,6 +79,38 @@ func (s *forwarderSuite) TestForwarder(c *C) {
 	expectLogs([]string{"log line #7"})
 }
 
+func (s *forwarderSuite) TestBufferFull(c *C) {
+	serviceName := "foobar"
+	rb := servicelog.NewRingBuffer(1024)
+	it := rb.HeadIterator(0)
+	w := servicelog.NewFormatWriter(rb, serviceName)
+
+	cl := &fakeLogClient{make(chan []string)}
+	f := newLogForwarderForTest(serviceName, it, cl, 1*time.Second)
+
+	go func() {
+		f.forward()
+	}()
+
+	writeLog := func(logLine string) {
+		_, err := fmt.Fprintln(w, logLine)
+		c.Assert(err, IsNil)
+	}
+
+	writeLog("log line #1")
+	writeLog("log line #2")
+	writeLog("log line #3")
+	writeLog("log line #4")
+	writeLog("log line #5")
+
+	select {
+	case req := <-cl.requests:
+		c.Assert(req, DeepEquals, []string{"log line #1", "log line #2", "log line #3", "log line #4", "log line #5"})
+	case <-time.After(100 * time.Millisecond):
+		c.Fatalf("timed out waiting for request")
+	}
+}
+
 type fakeLogClient struct {
 	requests chan []string
 }

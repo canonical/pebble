@@ -147,7 +147,7 @@ func (f *logForwarder) forward() {
 			// continue loop
 		}
 
-		if len(f.messages) > f.maxMessages {
+		if len(f.messages) >= f.maxMessages {
 			f.flushBuffer()
 		}
 
