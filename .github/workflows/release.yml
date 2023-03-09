@@ -20,7 +20,10 @@ jobs:
           fetch-depth: 0
 
       - name: Run GoReleaser
-        run: goreleaser release --clean
+        run: |
+          pwd
+          cat .goreleaser.yaml
+          goreleaser release --clean --debug
 
       - name: Upload binaries
         uses: softprops/action-gh-release@v1
