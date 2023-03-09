@@ -7,27 +7,20 @@ on:
 
 jobs:
   binaries:
-    name: GoReleaser release
     runs-on: ubuntu-latest
-    container:
-      image: goreleaser/goreleaser-cross:v1.20.2
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
-      - name: Check out the code
+      - name: Checkout
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
 
-      - name: Run GoReleaser
-        run: |
-          pwd
-          cat .goreleaser.yaml
-          goreleaser release --clean --debug
+      - name: Set up Go
+        uses: actions/setup-go@v3
 
-      - name: Upload binaries
-        uses: softprops/action-gh-release@v1
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v4
         with:
-          files: |
-            dist/*_checksums.txt
-            dist/*.tar.gz
+          version: latest
+          args: release --clean --debug
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
