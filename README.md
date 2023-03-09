@@ -358,7 +358,7 @@ $ pebble run --verbose
 
 #### Log forwarding
 
-Pebble supports forwarding its services' logs to a remote Loki server or syslog receiver (via UDP/TCP). In the `log-targets` section of the plan, you can specify destinations for log forwarding:
+Pebble supports forwarding its services' logs to a remote Loki server or syslog receiver (via UDP/TCP). In the `log-targets` section of the plan, you can specify destinations for log forwarding, for example:
 ```yaml
 log-targets:
     loki-example:
@@ -368,15 +368,16 @@ log-targets:
     syslog-example:
         override: merge
         type: syslog
-        location: tcp://0.0.0.0:1514
+        location: tcp://192.168.10.241:1514
 ```
 
-By default, all services' logs will be forwarded to these targets. There are two ways to control which services' logs are sent to which targets:
-- For each log target, you can optionally specify the `selection` key. The possible values for this key are:
-  - `opt-out`: each service which doesn't **explicitly specify** log targets will have its logs forwarded to this target. This is the default behaviour.
-  - `opt-in`: a service must explicitly specify this log target to have its logs forwarded here.
-  - `disabled`: no logs will be sent to this target. This can be used in combination with `override: replace` to disable a log target defined in an earlier layer.
-- In the definition for each service, you can specify a list `log-targets` of log targets to forward this service's logs to. The names in the list will be matched against targets defined in the `log-targets` section of the plan. If no targets are specified, the service's logs will be sent to all "opt-out" targets.
+By default, all services' logs will be forwarded to these targets. For each log target, you can optionally specify the `selection` key, with the following possible values:
+
+* `opt-out`: each service which doesn't *explicitly specify* log targets will have its logs forwarded to this target. This is the default behaviour.
+* `opt-in`: a service must explicitly specify this log target to have its logs forwarded here.
+* `disabled`: no logs will be sent to this target. This can be used in combination with `override: replace` to disable a log target defined in an earlier layer.
+
+In the definition for each service, you can also specify a list `log-targets` of log targets to forward this service's logs to. The names in the list will be matched against targets defined in the `log-targets` section of the plan. If no targets are specified, the service's logs will be sent to all "opt-out" targets.
 
 For example, in the following (incomplete) plan:
 ```yaml
@@ -564,7 +565,7 @@ services:
         
         # (Optional) A list of log targets to forward this service's logs to.
         # The names given here will be matched against targets defined in the
-        # `log-targets` section of the plan. If no targets are specified, this
+        # "log-targets" section of the plan. If no targets are specified, this
         # service's logs will be forwarded to all "opt-out" targets.
         log-targets: [<log target names>]
 
@@ -682,9 +683,9 @@ log-targets:
         
         # (Required) The URL of the remote log target. For Loki, this needs to
         # be the fully-qualified URL of the push API, including the API
-        # endpoint, e.g. `http://<ip-address>:3100/loki/api/v1/push`.
+        # endpoint, e.g. "http://<ip-address>:3100/loki/api/v1/push".
         # For syslog, this should be the URL of the syslog receiver, in the
-        # format `udp://...` or `tcp://...`.
+        # format "udp://..." or "tcp://...".
         location: <url>
         
         # (Optional) Determines which services' logs will be forwarded to this
@@ -692,7 +693,7 @@ log-targets:
         #   - 'opt-out': all services which don't explicitly specify log
         #      targets will have their logs forwarded to this target.
         #   - 'opt-in': only services which explicitly specify this target in
-        #      the `log-targets` section of the service spec.
+        #      the "log-targets" section of the service spec.
         #   - 'disabled': no logs will be forwarded to this target. This is
         #      useful to deactivate a target defined in an earlier layer.
         # If unspecified, the selection defaults to 'opt-out'.

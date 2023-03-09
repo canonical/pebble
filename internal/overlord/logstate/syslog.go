@@ -146,6 +146,10 @@ func (c *syslogClient) encodeEntry(entry servicelog.Entry) {
 
 // Send messages to remote syslog server.
 func (c *syslogClient) Send(entries []servicelog.Entry) error {
+	if len(entries) == 0 {
+		return nil // no-op
+	}
+
 	err := c.ensureConnected()
 	if err != nil {
 		return err
