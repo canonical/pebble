@@ -12,7 +12,9 @@ builds:
       - amd64
       - arm64
     flags:
-      - "-trimpath"
+      - '-trimpath'
+    ldflags:
+      - '-s -w'
 
 archives:
   - format: tar.gz
