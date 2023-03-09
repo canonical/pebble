@@ -1,0 +1,28 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - v*
+
+jobs:
+  binaries:
+    name: GoReleaser release
+    runs-on: ubuntu-latest
+    container:
+      image: goreleaser/goreleaser-cross:v1.20.2
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v3
+
+      - name: Run GoReleaser
+        run: goreleaser release --clean
+
+      - name: Upload binaries
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            dist/*_checksums.txt
+            dist/*.tar.gz
