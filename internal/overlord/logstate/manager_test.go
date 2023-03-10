@@ -104,11 +104,10 @@ func (s *managerSuite) TestLogManager(c *C) {
 		},
 	})
 
-	// Start 3 services
+	// Start the three services. We do this concurrently to simulate Pebble's
+	// actual service startup, and check there are no race conditions.
 	var wg sync.WaitGroup
 	wg.Add(3)
-
-	// Call ServiceStarted
 	go func() {
 		defer wg.Done()
 		m.ServiceStarted("svc1", &rb)

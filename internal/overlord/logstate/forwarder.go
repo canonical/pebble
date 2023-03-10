@@ -32,25 +32,28 @@ const (
 var flushDelay = 1 * time.Second
 
 // logForwarder is responsible for forwarding logs from a single service to
-// a single target.
+// a single target. A forwarder f should be started in a new goroutine:
+//
+//	go f.forward()
+//
+// This starts the main control loop, which will spawn an additional iterate
+// goroutine to pull logs from the iterator and send them through a channel.
+// f can be stopped by calling f.stop(), which will gracefully terminate the
+// forward and iterate goroutines.
 type logForwarder struct {
-	service string
-	target  *plan.LogTarget
-
-	iterator   servicelog.Iterator
-	parser     *servicelog.Parser
-	iteratorCh chan struct{}
-	stopCh     chan chan struct{}
-
-	messages    []servicelog.Entry
+	service     string
+	target      *plan.LogTarget
+	iterator    servicelog.Iterator
 	maxMessages int
+	delay       time.Duration
+	client      logClient
 
-	delay      time.Duration
-	flushTimer *time.Timer
-	timerSet   bool
-	timeoutCh  chan struct{}
-
-	client logClient
+	// Channels for communication
+	// stopCh is closed in stop() to tell the forward() method to stop.
+	stopCh chan struct{}
+	// doneWithIterator is closed in forward() to tell the stop() method that we
+	// are done with the iterator, so it's safe to return from stop().
+	doneWithIterator chan struct{}
 }
 
 func newLogForwarder(
@@ -84,143 +87,134 @@ func newLogForwarderInternal(
 	client logClient, maxMessages int, delay time.Duration,
 ) *logForwarder {
 
-	iteratorCh := make(chan struct{})
-	timeoutCh := make(chan struct{}, 1)
-	// Create timer. Here we set the timer duration to a large value and
-	// immediately stop it, to ensure the timer starts off unset.
-	flushTimer := time.AfterFunc(time.Hour, func() {
-		timeoutCh <- struct{}{}
-		// If we are waiting on iterator.Next, cancel this
-		select {
-		case iteratorCh <- struct{}{}:
-		default:
-		}
-	})
-	flushTimer.Stop()
-
 	return &logForwarder{
-		service:     service,
-		target:      target,
-		iterator:    iterator,
-		parser:      servicelog.NewParser(iterator, parserSize),
-		iteratorCh:  iteratorCh,
-		stopCh:      make(chan chan struct{}, 1),
-		maxMessages: maxMessages, // TODO: make this value configurable in plan
-		delay:       delay,       // TODO: make this value configurable in plan
-		flushTimer:  flushTimer,
-		timerSet:    false,
-		timeoutCh:   timeoutCh,
-		client:      client,
+		service:          service,
+		target:           target,
+		iterator:         iterator,
+		maxMessages:      maxMessages,
+		delay:            delay,
+		client:           client,
+		stopCh:           make(chan struct{}),
+		doneWithIterator: make(chan struct{}),
 	}
 }
 
-// forward continually pulls logs from the service buffer and forwards them
-// to the remote log target.
+// forward continually receives logs from the iterator and buffers them. It
+// flushes the buffer after a timeout, or when a certain number of messages
+// have been written.
 // This method will block until the service is stopped, or stop() is called.
 // Hence, it should be run in a separate goroutine.
 func (f *logForwarder) forward() {
+	// Create a timer and immediately stop it, so it starts unset
+	flushTimer := time.NewTimer(0)
+	stopTimer(flushTimer)
+
+	cancelIterator := make(chan struct{})
+	messagesCh := make(chan servicelog.Entry)
+	go f.iterate(cancelIterator, messagesCh)
+
+	var buffer []servicelog.Entry
 	for {
 		select {
-		// f.stop() called
-		case release := <-f.stopCh:
-			// Pull all remaining logs from parser/iterator
-			for f.parser.Next() {
-				if err := f.parser.Err(); err != nil {
-					logger.Noticef(
-						"Forwarding logs to target %q: error reading logs for service %q: %v",
-						f.target.Name, f.service, err)
-					continue
+		case message := <-messagesCh:
+			buffer = append(buffer, message)
+
+			if len(buffer) >= f.maxMessages {
+				// Buffer full - send logs to target
+				stopTimer(flushTimer)
+				f.sendLogs(buffer)
+				buffer = buffer[:0]
+
+			} else if len(buffer) == 1 {
+				// First write - set the timeout
+				stopTimer(flushTimer)
+				flushTimer.Reset(f.delay)
+			}
+
+		case <-flushTimer.C:
+			f.sendLogs(buffer)
+			buffer = buffer[:0]
+
+		case <-f.stopCh:
+			// Cancel the iterator channel, so it will stop waiting for more data
+			close(cancelIterator)
+
+			// Drain remaining messages from parser
+			for message := range messagesCh {
+				buffer = append(buffer, message)
+				if len(buffer) >= f.maxMessages {
+					f.sendLogs(buffer)
+					buffer = buffer[:0]
 				}
-
-				f.messages = append(f.messages, f.parser.Entry())
 			}
-			// Done with iterator - release call to stop()
-			close(release)
-			f.close()
+
+			// Once the above for loop returns, the iterate method has finished,
+			// so we are done using the iterator.
+			close(f.doneWithIterator)
+			f.sendLogs(buffer)
+
+			err := f.client.Close()
+			if err != nil {
+				logger.Noticef("Internal error: closing log client %q -> %q: %s",
+					f.service, f.target.Name, err)
+			}
 			return
-
-		// Timeout on buffered messages
-		case <-f.timeoutCh:
-			f.flushBuffer()
-
-		default:
-			// continue loop
 		}
-
-		if len(f.messages) >= f.maxMessages {
-			f.flushBuffer()
-		}
-
-		// Check if parser has buffered logs
-		if f.parser.Next() {
-			if err := f.parser.Err(); err != nil {
-				logger.Noticef(
-					"Forwarding logs to target %q: error reading logs for service %q: %v",
-					f.target.Name, f.service, err)
-				continue
-			}
-
-			f.messages = append(f.messages, f.parser.Entry())
-
-			// Set deadline
-			if !f.timerSet {
-				f.flushTimer.Reset(f.delay)
-				f.timerSet = true
-			}
-
-			continue
-		}
-
-		// Parser has no buffered logs. Wait for iterator to receive more data
-		f.iterator.Next(f.iteratorCh)
 	}
 }
 
-// stop stops the forwarding of logs.
+// iterate continually pulls logs from the iterator/parser, and sends these to
+// the forward loop via the messages channel. When the provided cancel channel
+// is closed, iterate will pull all remaining logs from the parser before
+// exiting.
+func (f *logForwarder) iterate(cancel <-chan struct{}, messages chan servicelog.Entry) {
+	parser := servicelog.NewParser(f.iterator, parserSize)
+
+	for f.iterator.Next(cancel) {
+		for parser.Next() {
+			// The forward loop is either selecting on this channel or draining it
+			// in the cancel case. So no need for a select here.
+			messages <- parser.Entry()
+		}
+		if err := parser.Err(); err != nil {
+			logger.Noticef(
+				"Forwarding logs to target %q: error reading logs for service %q: %v",
+				f.target.Name, f.service, err)
+		}
+	}
+	close(messages)
+}
+
+// stop interrupts the main forward loop, telling the forwarder to shut down.
+// Once this method returns, it is safe to re-use the iterator.
 func (f *logForwarder) stop() {
-	// Create a "release" channel - the other goroutine will close this to signal
-	// it has finished, then we can exit the stop() call.
-	release := make(chan struct{})
-	f.stopCh <- release
-
-	// Cancel iterator.Next call - wait for release channel to be closed
-	for {
-		select {
-		case f.iteratorCh <- struct{}{}:
-		case <-release:
-			return
-		}
-	}
+	close(f.stopCh)
+	// Wait till we are done with the iterator to avoid race conditions
+	<-f.doneWithIterator
 }
 
-// close flushes the buffer, closes the client and cleans up.
-func (f *logForwarder) close() {
-	f.flushBuffer()
-
-	err := f.client.Close()
-	if err != nil {
-		logger.Noticef("Internal error: closing log client %q -> %q: %s",
-			f.service, f.target.Name, err)
+// sendLogs passes the buffered logs to the client, to send to the remote log
+// target.
+func (f *logForwarder) sendLogs(messages []servicelog.Entry) {
+	if len(messages) == 0 {
+		return
 	}
-}
 
-// flushBuffer sends the buffered messages to the client, then resets the buffer.
-func (f *logForwarder) flushBuffer() {
-	err := f.client.Send(f.messages)
+	err := f.client.Send(messages)
 	if err != nil {
 		logger.Noticef(
 			"Forwarding logs to target %q: cannot send logs for service %q: %v",
 			f.target.Name, f.service, err)
 	}
+}
 
-	f.messages = f.messages[:0]
-
-	// Reset timer
-	f.flushTimer.Stop()
-	f.timerSet = false
-	// Drain timer channel
+// stopTimer is a utility method which correctly stops a time.Timer, and drains
+// the channel if necessary.
+func stopTimer(timer *time.Timer) {
+	timer.Stop()
+	// Drain timer channel if non-empty
 	select {
-	case <-f.flushTimer.C:
+	case <-timer.C:
 	default:
 	}
 }

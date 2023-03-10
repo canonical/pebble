@@ -87,10 +87,7 @@ func (s *forwarderSuite) TestBufferFull(c *C) {
 
 	cl := &fakeLogClient{make(chan []string)}
 	f := newLogForwarderForTest(serviceName, it, cl, 1*time.Second)
-
-	go func() {
-		f.forward()
-	}()
+	go f.forward()
 
 	writeLog := func(logLine string) {
 		_, err := fmt.Fprintln(w, logLine)
