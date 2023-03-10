@@ -67,10 +67,11 @@ func (c *lokiClient) Send(entries []servicelog.Entry) error {
 
 	requestStruct := lokiRequest{
 		Streams: []lokiStream{{
-			// Add default labels
-			// TODO: allow specifying custom labels
 			Labels: map[string]string{
+				// We need this label to distinguish where the logs came from.
+				// Otherwise, we have no way to tell which service generated these logs.
 				"pebble_service": entries[0].Service, // all entries should be from same service
+				// TODO: allow specifying custom labels
 			},
 			Entries: encodedEntries,
 		}},

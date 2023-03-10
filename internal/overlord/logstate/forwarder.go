@@ -39,7 +39,7 @@ var flushDelay = 1 * time.Second
 // This starts the main control loop, which will spawn an additional iterate
 // goroutine to pull logs from the iterator and send them through a channel.
 // f can be stopped by calling f.stop(), which will gracefully terminate the
-// forward and iterate goroutines.
+// forward and iterate goroutines, and flush out all remaining logs.
 type logForwarder struct {
 	service     string
 	target      *plan.LogTarget
