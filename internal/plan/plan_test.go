@@ -1065,64 +1065,86 @@ func (s *S) TestMarshalLayer(c *C) {
 	c.Assert(string(out), Equals, string(layerBytes))
 }
 
-func (s *S) TestGetCommand(c *C) {
-	cmdTests := []struct {
-		summary         string
-		command         string
-		cmdArgs         []string
-		expectedCommand []string
-		error           string
-	}{
-		{
-			summary:         "No default arguments, no additional cmdArgs",
-			command:         "cmd --foo bar",
-			expectedCommand: []string{"cmd", "--foo", "bar"},
-		}, {
-			summary:         "No default arguments, add cmdArgs only",
-			command:         "cmd --foo bar",
-			cmdArgs:         []string{"-v", "--opt"},
-			expectedCommand: []string{"cmd", "--foo", "bar", "-v", "--opt"},
-		}, {
-			summary:         "Default arguments only",
-			command:         "cmd [ --foo bar ]",
-			expectedCommand: []string{"cmd", "--foo", "bar"},
-		}, {
-			summary:         "Override default arguments with cmdArgs",
-			command:         "cmd [ --foo bar ]",
-			cmdArgs:         []string{"--bar", "foo"},
-			expectedCommand: []string{"cmd", "--bar", "foo"},
-		}, {
-			summary:         "Empty [ ... ], no cmdArgs",
-			command:         "cmd --foo bar [ ]",
-			expectedCommand: []string{"cmd", "--foo", "bar"},
-		}, {
-			summary:         "Empty [ ... ], override with cmdArgs",
-			command:         "cmd --foo bar [ ]",
-			cmdArgs:         []string{"-v", "--opt"},
-			expectedCommand: []string{"cmd", "--foo", "bar", "-v", "--opt"},
-		}, {
-			summary: "[ ... ] should be a suffix",
-			command: "cmd [ --foo ] --bar",
-			error:   `cannot have any args after \[ ... \] group`,
-		}, {
-			summary: "[ ... ] should not be prefix",
-			command: "[ cmd --foo ]",
-			error:   `cannot have \[ ... \] group as prefix`,
-		},
-	}
+var cmdTests = []struct {
+	summary            string
+	command            string
+	cmdArgs            []string
+	expectedBase       []string
+	expectedExtra      []string
+	expectedNewCommand string
+	error              string
+}{{
+	summary:            "No default arguments, no additional cmdArgs",
+	command:            "cmd --foo bar",
+	expectedBase:       []string{"cmd", "--foo", "bar"},
+	expectedNewCommand: "cmd --foo bar",
+}, {
+	summary:            "No default arguments, add cmdArgs only",
+	command:            "cmd --foo bar",
+	cmdArgs:            []string{"-v", "--opt"},
+	expectedBase:       []string{"cmd", "--foo", "bar"},
+	expectedNewCommand: "cmd --foo bar [ -v --opt ]",
+}, {
+	summary:            "Override default arguments with empty cmdArgs",
+	command:            "cmd [ --foo bar ]",
+	expectedBase:       []string{"cmd"},
+	expectedExtra:      []string{"--foo", "bar"},
+	expectedNewCommand: "cmd",
+}, {
+	summary:            "Override default arguments with cmdArgs",
+	command:            "cmd [ --foo bar ]",
+	cmdArgs:            []string{"--bar", "foo"},
+	expectedBase:       []string{"cmd"},
+	expectedExtra:      []string{"--foo", "bar"},
+	expectedNewCommand: "cmd [ --bar foo ]",
+}, {
+	summary:            "Empty [ ... ], no cmdArgs",
+	command:            "cmd --foo bar [ ]",
+	expectedBase:       []string{"cmd", "--foo", "bar"},
+	expectedNewCommand: "cmd --foo bar",
+}, {
+	summary:            "Empty [ ... ], override with cmdArgs",
+	command:            "cmd --foo bar [ ]",
+	cmdArgs:            []string{"-v", "--opt"},
+	expectedBase:       []string{"cmd", "--foo", "bar"},
+	expectedNewCommand: "cmd --foo bar [ -v --opt ]",
+}, {
+	summary: "[ ... ] should be a suffix",
+	command: "cmd [ --foo ] --bar",
+	error:   `cannot have any args after \[ ... \] group`,
+}, {
+	summary: "[ ... ] should not be prefix",
+	command: "[ cmd --foo ]",
+	error:   `cannot have \[ ... \] group as prefix`,
+}}
 
+func (s *S) TestParseCommand(c *C) {
 	for _, test := range cmdTests {
-		svc := plan.Service{Command: test.command}
-		cmd, err := plan.CommandArgs(svc.Command, test.cmdArgs)
-		if err == nil {
-			c.Assert(cmd, DeepEquals, test.expectedCommand)
-		}
+		service := plan.Service{Command: test.command}
+
+		// parse base and the default arguments in [ ... ]
+		base, extra, err := service.ParseCommand()
 		if err != nil || test.error != "" {
 			if test.error != "" {
 				c.Assert(err, ErrorMatches, test.error)
 			} else {
 				c.Assert(err, IsNil)
 			}
+			continue
 		}
+		c.Assert(base, DeepEquals, test.expectedBase)
+		c.Assert(extra, DeepEquals, test.expectedExtra)
+
+		// add cmdArgs to base and produce a new command string
+		newCommand := plan.CommandString(base, test.cmdArgs)
+		c.Assert(newCommand, DeepEquals, test.expectedNewCommand)
+
+		// parse the new command string again and check if base is
+		// the same and cmdArgs is the new default arguments in [ ... ]
+		service.Command = newCommand
+		base, extra, err = service.ParseCommand()
+		c.Assert(err, IsNil)
+		c.Assert(base, DeepEquals, test.expectedBase)
+		c.Assert(extra, DeepEquals, test.cmdArgs)
 	}
 }

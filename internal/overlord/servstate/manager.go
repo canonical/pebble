@@ -28,7 +28,6 @@ type ServiceManager struct {
 
 	servicesLock sync.Mutex
 	services     map[string]*serviceData
-	serviceArgs  map[string][]string
 
 	serviceOutput io.Writer
 	restarter     Restarter
@@ -54,13 +53,12 @@ func (e *LabelExists) Error() string {
 	return fmt.Sprintf("layer %q already exists", e.Label)
 }
 
-func NewManager(s *state.State, runner *state.TaskRunner, pebbleDir string, serviceOutput io.Writer, restarter Restarter, serviceArgs map[string][]string) (*ServiceManager, error) {
+func NewManager(s *state.State, runner *state.TaskRunner, pebbleDir string, serviceOutput io.Writer, restarter Restarter) (*ServiceManager, error) {
 	manager := &ServiceManager{
 		state:         s,
 		runner:        runner,
 		pebbleDir:     pebbleDir,
 		services:      make(map[string]*serviceData),
-		serviceArgs:   serviceArgs,
 		serviceOutput: serviceOutput,
 		restarter:     restarter,
 		rand:          rand.New(rand.NewSource(time.Now().UnixNano())),
@@ -150,11 +148,6 @@ func (m *ServiceManager) appendLayer(layer *plan.Layer) error {
 	}
 	layer.Order = newOrder
 
-	// Remove the existing arguments of this layer's services
-	for _, service := range layer.Services {
-		delete(m.serviceArgs, service.Name)
-	}
-
 	return nil
 }
 
@@ -217,11 +210,6 @@ func (m *ServiceManager) CombineLayer(layer *plan.Layer) error {
 		return err
 	}
 	layer.Order = found.Order
-
-	// Remove the existing arguments of this layer's services
-	for _, service := range layer.Services {
-		delete(m.serviceArgs, service.Name)
-	}
 
 	return nil
 }
@@ -495,6 +483,44 @@ func (m *ServiceManager) CheckFailed(name string) {
 			}
 		}
 	}
+}
+
+// SetServiceArgs sets the service arguments provided by "pebble run --args"
+// to their respective services. It updates the service command in the top most
+// layer which contains the service in the plan.
+func (m *ServiceManager) SetServiceArgs(serviceArgs map[string][]string) error {
+	releasePlan, err := m.acquirePlan()
+	if err != nil {
+		return err
+	}
+	defer releasePlan()
+
+	layers := m.plan.Layers
+
+	for serviceName, args := range serviceArgs {
+		var layer *plan.Layer
+
+		// search for the topmost layer which contains the service
+		// assuming the layers are sorted by order ASC
+		for i := len(layers) - 1; i >= 0; i-- {
+			if _, ok := layers[i].Services[serviceName]; ok {
+				layer = layers[i]
+				break
+			}
+		}
+		if layer == nil {
+			return fmt.Errorf("service %q not found in plan", serviceName)
+		}
+
+		service := layer.Services[serviceName]
+		base, _, err := service.ParseCommand()
+		if err != nil {
+			return err
+		}
+		service.Command = plan.CommandString(base, args)
+	}
+
+	return m.updatePlanLayers(layers)
 }
 
 // servicesToStop returns a slice of service names to stop, in dependency order.

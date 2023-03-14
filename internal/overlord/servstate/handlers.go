@@ -324,10 +324,11 @@ func logError(err error) {
 // command. It assumes the caller has ensures the service is in a valid state,
 // and it sets s.cmd and other relevant fields.
 func (s *serviceData) startInternal() error {
-	args, err := plan.CommandArgs(s.config.Command, s.manager.serviceArgs[s.config.Name])
+	base, extra, err := s.config.ParseCommand()
 	if err != nil {
 		return err
 	}
+	args := append(base, extra...)
 	s.cmd = exec.Command(args[0], args[1:]...)
 	s.cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
@@ -383,7 +384,7 @@ func (s *serviceData) startInternal() error {
 	s.cmd.Stderr = logWriter
 
 	// Start the process!
-	logger.Noticef("Service %q starting: %q", serviceName, args)
+	logger.Noticef("Service %q starting: %s", serviceName, s.config.Command)
 	err = reaper.StartCommand(s.cmd)
 	if err != nil {
 		if outputIterator != nil {

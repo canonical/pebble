@@ -184,59 +184,57 @@ func (s *Service) Equal(other *Service) bool {
 	return reflect.DeepEqual(s, other)
 }
 
-// CommandArgs returns a service command as a stream of strings.
-// It adds the arguments in cmdArgs to the command if no default
-// argument is specified in [ ... ] group in the plan.
-// If default arguments are specified in the plan, the default
-// arguments are added to the command if cmdArgs is empty.
-// If not empty, the default arguments are overrided by arguments in cmdArgs.
-func CommandArgs(command string, cmdArgs []string) ([]string, error) {
-	args, err := shlex.Split(command)
+// ParseCommand returns a service command as two stream of strings.
+// The base command is returned as a stream and the default arguments
+// in [ ... ] group is returned as another stream.
+func (s *Service) ParseCommand() (base, extra []string, err error) {
+	args, err := shlex.Split(s.Command)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	var inBrackets, gotBrackets bool
-	var result []string
 
 	for idx, arg := range args {
 		if inBrackets {
 			if arg == "[" {
-				return nil, fmt.Errorf("cannot nest [ ... ] groups")
+				return nil, nil, fmt.Errorf("cannot nest [ ... ] groups")
 			}
 			if arg == "]" {
 				inBrackets = false
 				continue
 			}
-			if len(cmdArgs) == 0 {
-				result = append(result, arg)
-			}
+			extra = append(extra, arg)
 			continue
 		}
 		if gotBrackets {
-			return nil, fmt.Errorf("cannot have any args after [ ... ] group")
+			return nil, nil, fmt.Errorf("cannot have any args after [ ... ] group")
 		}
 		if arg == "[" {
 			if idx == 0 {
-				return nil, fmt.Errorf("cannot have [ ... ] group as prefix")
-			}
-			if len(cmdArgs) > 0 {
-				result = append(result, cmdArgs...)
+				return nil, nil, fmt.Errorf("cannot have [ ... ] group as prefix")
 			}
 			inBrackets = true
 			gotBrackets = true
 			continue
 		}
 		if arg == "]" {
-			return nil, fmt.Errorf("cannot have ] outside of [ ... ] group")
+			return nil, nil, fmt.Errorf("cannot have ] outside of [ ... ] group")
 		}
-		result = append(result, arg)
-	}
-	if !gotBrackets && len(cmdArgs) > 0 {
-		result = append(result, cmdArgs...)
+		base = append(base, arg)
 	}
 
-	return result, nil
+	return base, extra, nil
+}
+
+// CommandString returns a service command as a string after
+// appending the arguments in "extra" to the command in "base"
+func CommandString(base, extra []string) string {
+	output := shlex.Join(base)
+	if len(extra) > 0 {
+		output = output + " [ " + shlex.Join(extra) + " ]"
+	}
+	return output
 }
 
 type ServiceStartup string
@@ -538,7 +536,7 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 				Message: fmt.Sprintf(`plan must define "command" for service %q`, name),
 			}
 		}
-		_, err := CommandArgs(service.Command, nil)
+		_, _, err := service.ParseCommand()
 		if err != nil {
 			return nil, &FormatError{
 				Message: fmt.Sprintf("plan service %q command invalid: %v", name, err),

@@ -44,9 +44,10 @@ If the command field in the service's plan has a [ <default-arguments...> ]
 list, the --args arguments will replace those default arguments. If not, the
 --args arguments will be appended to the command.
 
-The semicolon terminator at the end of the --args list is only required
-if other "run" arguments follow. If used at the shell, the ';' must be
-backslash-escaped.
+The optional --args flags is followed by a service name and its arguments, and must be
+terminated by ";" unless there are no further Pebble options. For example:
+
+    pebble run --args myservice --port=8080 \; --hold
 `
 
 type cmdRun struct {
@@ -145,13 +146,6 @@ func runDaemon(rcmd *cmdRun, ch chan os.Signal) error {
 	if rcmd.Verbose {
 		dopts.ServiceOutput = os.Stdout
 	}
-	if rcmd.Args != nil {
-		mappedArgs, err := convertArgs(rcmd.Args)
-		if err != nil {
-			return err
-		}
-		dopts.ServiceArgs = mappedArgs
-	}
 	dopts.HTTPAddress = rcmd.HTTP
 
 	d, err := daemon.New(&dopts)
@@ -160,6 +154,16 @@ func runDaemon(rcmd *cmdRun, ch chan os.Signal) error {
 	}
 	if err := d.Init(); err != nil {
 		return err
+	}
+
+	if rcmd.Args != nil {
+		mappedArgs, err := convertArgs(rcmd.Args)
+		if err != nil {
+			return err
+		}
+		if err := d.PassServiceArgs(mappedArgs); err != nil {
+			return err
+		}
 	}
 
 	// Run sanity check now, if anything goes wrong with the
@@ -228,14 +232,14 @@ func convertArgs(args [][]string) (map[string][]string, error) {
 	mappedArgs := make(map[string][]string)
 
 	for _, arg := range args {
-		if len(arg) < 2 {
-			return nil, fmt.Errorf("--args requires a service name and one or more additional arguments")
+		if len(arg) < 1 {
+			return nil, fmt.Errorf("--args requires a service name")
 		}
 		name := arg[0]
 		if _, ok := mappedArgs[name]; ok {
-			return nil, fmt.Errorf("cannot use --args twice on a service")
+			return nil, fmt.Errorf("--args provided more than once for %q service", name)
 		}
-		mappedArgs[name] = append(mappedArgs[name], arg[1:]...)
+		mappedArgs[name] = arg[1:]
 	}
 
 	return mappedArgs, nil

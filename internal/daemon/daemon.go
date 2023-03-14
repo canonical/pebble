@@ -72,9 +72,6 @@ type Options struct {
 	// ServiceOuput is an optional io.Writer for the service log output, if set, all services
 	// log output will be written to the writer.
 	ServiceOutput io.Writer
-
-	// ServiceArgs holds the service arguments provided via ``pebble run --args``.
-	ServiceArgs map[string][]string
 }
 
 // A Daemon listens for requests and routes them to the right command
@@ -783,6 +780,19 @@ func (d *Daemon) RebootIsMissing(st *state.State) error {
 	return errExpectedReboot
 }
 
+// PassServiceArgs passes the provided service arguments to
+// the service manager responsible for services under daemon overlord.
+func (d *Daemon) PassServiceArgs(serviceArgs map[string][]string) error {
+	if d.overlord == nil {
+		return fmt.Errorf("internal error: no Overlord")
+	}
+	serviceMgr := d.overlord.ServiceManager()
+	if serviceMgr == nil {
+		return fmt.Errorf("internal error: no Service Manager")
+	}
+	return serviceMgr.SetServiceArgs(serviceArgs)
+}
+
 func New(opts *Options) (*Daemon, error) {
 	d := &Daemon{
 		pebbleDir:           opts.Dir,
@@ -791,7 +801,7 @@ func New(opts *Options) (*Daemon, error) {
 		httpAddress:         opts.HTTPAddress,
 	}
 
-	ovld, err := overlord.New(opts.Dir, d, opts.ServiceOutput, opts.ServiceArgs)
+	ovld, err := overlord.New(opts.Dir, d, opts.ServiceOutput)
 	if err == errExpectedReboot {
 		// we proceed without overlord until we reach Stop
 		// where we will schedule and wait again for a system restart.
