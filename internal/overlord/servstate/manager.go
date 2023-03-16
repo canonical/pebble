@@ -498,21 +498,19 @@ func (m *ServiceManager) SetServiceArgs(serviceArgs map[string][]string) error {
 	layers := m.plan.Layers
 
 	for serviceName, args := range serviceArgs {
-		var layer *plan.Layer
+		var service *plan.Service
 
 		// search for the topmost layer which contains the service
 		// assuming the layers are sorted by order ASC
 		for i := len(layers) - 1; i >= 0; i-- {
-			if _, ok := layers[i].Services[serviceName]; ok {
-				layer = layers[i]
+			if service = layers[i].Services[serviceName]; service != nil {
 				break
 			}
 		}
-		if layer == nil {
+		if service == nil {
 			return fmt.Errorf("service %q not found in plan", serviceName)
 		}
 
-		service := layer.Services[serviceName]
 		base, _, err := service.ParseCommand()
 		if err != nil {
 			return err
