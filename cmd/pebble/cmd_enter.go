@@ -47,6 +47,7 @@ type cmdEnter struct {
 	Positional struct {
 		Cmd []string `positional-arg-name:"<subcommand>"`
 	} `positional-args:"yes"`
+	parser *flags.Parser
 }
 
 func init() {
@@ -111,6 +112,7 @@ func (cmd *cmdEnter) Execute(args []string) error {
 	}
 
 	if _, err := parser.ParseArgs(cmd.Positional.Cmd); err != nil {
+		cmd.parser.Command.Active = parser.Command.Active
 		return err
 	}
 
@@ -133,7 +135,11 @@ func (cmd *cmdEnter) Execute(args []string) error {
 	}
 
 	if enterFlags&enterNoServiceManager != 0 {
-		return commander.Execute(extraArgs)
+		if err := commander.Execute(extraArgs); err != nil {
+			cmd.parser.Command.Active = parser.Command.Active
+			return err
+		}
+		return nil
 	}
 
 	if enterFlags&enterSilenceLogging != 0 && !cmd.Verbose {
@@ -160,6 +166,10 @@ func (cmd *cmdEnter) Execute(args []string) error {
 
 	err := commander.Execute(extraArgs)
 
+	if err != nil {
+		cmd.parser.Command.Active = parser.Command.Active
+	}
+
 	if err != nil || enterFlags&enterKeepServiceManager == 0 {
 		runStop()
 	}
@@ -169,4 +179,8 @@ func (cmd *cmdEnter) Execute(args []string) error {
 	}
 
 	return err
+}
+
+func (cmd *cmdEnter) setParser(parser *flags.Parser) {
+	cmd.parser = parser
 }

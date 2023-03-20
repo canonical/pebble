@@ -99,7 +99,7 @@ func (s *PebbleSuite) TestEnterUnknownCommand(c *C) {
 	defer restore()
 
 	exitCode := pebble.PebbleMain()
-	c.Check(s.Stderr(), Equals, "error: unknown command \"foo\", see 'pebble help enter'.\n")
+	c.Check(s.Stderr(), Equals, "error: unknown command \"foo\", see 'pebble help'.\n")
 	c.Check(s.Stdout(), Equals, "")
 	c.Check(exitCode, Equals, 1)
 }
@@ -170,4 +170,64 @@ func (s *PebbleSuite) TestEnterExecReadServiceOutputFile(c *C) {
 	c.Check(s.Stderr(), Equals, "")
 	c.Check(s.Stdout(), Equals, "foo\ncat: msg2: No such file or directory\n")
 	c.Check(exitCode, Equals, 1)
+}
+
+func (s *PebbleSuite) TestEnterExecCommandHelpOption(c *C) {
+	cmd := []string{"pebble", "enter", "exec", "--help"}
+	restore := fakeArgs(cmd...)
+	defer restore()
+
+	exitCode := pebble.PebbleMain()
+	// stderr is written to stdout buffer because of "combine stderr" mode,
+	// see cmd/pebble/cmd_exec.go:163
+	c.Check(s.Stderr(), Equals, "")
+	stdout := s.Stdout()
+	c.Check(stdout, Matches, "^(?s)Usage:\n  pebble exec \\[exec-OPTIONS\\] <command>\n.*")
+	c.Check(stdout, Matches, "(?s).*\\bThe exec command runs a remote command and waits for it to finish\\..*")
+	c.Check(exitCode, Equals, 0)
+}
+
+func (s *PebbleSuite) TestEnterHelpCommandHelpOption(c *C) {
+	cmd := []string{"pebble", "enter", "help", "--help"}
+	restore := fakeArgs(cmd...)
+	defer restore()
+
+	exitCode := pebble.PebbleMain()
+	// stderr is written to stdout buffer because of "combine stderr" mode,
+	// see cmd/pebble/cmd_exec.go:163
+	c.Check(s.Stderr(), Equals, "")
+	stdout := s.Stdout()
+	c.Check(stdout, Matches, "^(?s)Usage:\n  pebble help \\[help-OPTIONS\\] \\[<command>\\.\\.\\.\\]\n.*")
+	c.Check(stdout, Matches, "(?s).*\\bThe help command displays information about commands\\..*")
+	c.Check(exitCode, Equals, 0)
+}
+
+func (s *PebbleSuite) TestEnterHelpCommandExecArg(c *C) {
+	cmd := []string{"pebble", "enter", "help", "exec"}
+	restore := fakeArgs(cmd...)
+	defer restore()
+
+	exitCode := pebble.PebbleMain()
+	// stderr is written to stdout buffer because of "combine stderr" mode,
+	// see cmd/pebble/cmd_exec.go:163
+	c.Check(s.Stderr(), Equals, "")
+	stdout := s.Stdout()
+	c.Check(stdout, Matches, "^(?s)Usage:\n  pebble exec \\[exec-OPTIONS\\] <command>\n.*")
+	c.Check(stdout, Matches, "(?s).*\\bThe exec command runs a remote command and waits for it to finish\\..*")
+	c.Check(exitCode, Equals, 0)
+}
+
+func (s *PebbleSuite) TestEnterHelpCommandHelpArg(c *C) {
+	cmd := []string{"pebble", "enter", "help", "help"}
+	restore := fakeArgs(cmd...)
+	defer restore()
+
+	exitCode := pebble.PebbleMain()
+	// stderr is written to stdout buffer because of "combine stderr" mode,
+	// see cmd/pebble/cmd_exec.go:163
+	c.Check(s.Stderr(), Equals, "")
+	stdout := s.Stdout()
+	c.Check(stdout, Matches, "^(?s)Usage:\n  pebble help \\[help-OPTIONS\\] \\[<command>\\.\\.\\.\\]\n.*")
+	c.Check(stdout, Matches, "(?s).*\\bThe help command displays information about commands\\..*")
+	c.Check(exitCode, Equals, 0)
 }
