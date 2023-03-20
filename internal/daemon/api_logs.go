@@ -25,10 +25,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/canonical/x-go/strutil"
+
 	"github.com/canonical/pebble/internal/logger"
 	"github.com/canonical/pebble/internal/overlord/servstate"
 	"github.com/canonical/pebble/internal/servicelog"
-	"github.com/canonical/pebble/internal/strutil"
 )
 
 const (

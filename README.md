@@ -510,6 +510,10 @@ services:
         # half a minute ("30s").
         backoff-limit: <duration>
 
+        # (Optional) The amount of time afforded to this service to handle
+        # SIGTERM and exit gracefully before SIGKILL terminates it forcefully.
+        # Default is 5 seconds ("5s").
+        kill-delay: <duration>
 
 # (Optional) A list of health checks managed by this configuration layer.
 checks:

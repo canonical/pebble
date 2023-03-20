@@ -92,6 +92,7 @@ var planTests = []planTest{{
 				override: replace
 				summary: Service summary
 				command: cmd arg1 "arg2 arg3"
+				kill-delay: 10s
 				startup: enabled
 				after:
 					- srv2
@@ -159,14 +160,15 @@ var planTests = []planTest{{
 		Description: "A simple layer.",
 		Services: map[string]*plan.Service{
 			"srv1": {
-				Name:     "srv1",
-				Summary:  "Service summary",
-				Override: "replace",
-				Command:  `cmd arg1 "arg2 arg3"`,
-				Startup:  plan.StartupEnabled,
-				Before:   []string{"srv3"},
-				After:    []string{"srv2"},
-				Requires: []string{"srv2", "srv3"},
+				Name:      "srv1",
+				Summary:   "Service summary",
+				Override:  "replace",
+				Command:   `cmd arg1 "arg2 arg3"`,
+				KillDelay: plan.OptionalDuration{Value: time.Second * 10, IsSet: true},
+				Startup:   plan.StartupEnabled,
+				Before:    []string{"srv3"},
+				After:     []string{"srv2"},
+				Requires:  []string{"srv2", "srv3"},
 				Environment: map[string]string{
 					"var1": "val1",
 					"var0": "val0",
@@ -251,14 +253,15 @@ var planTests = []planTest{{
 		Description: "The second layer.",
 		Services: map[string]*plan.Service{
 			"srv1": {
-				Name:     "srv1",
-				Summary:  "Service summary",
-				Override: "replace",
-				Command:  `cmd arg1 "arg2 arg3"`,
-				Startup:  plan.StartupEnabled,
-				After:    []string{"srv2", "srv4"},
-				Before:   []string{"srv3", "srv5"},
-				Requires: []string{"srv2", "srv3"},
+				Name:      "srv1",
+				Summary:   "Service summary",
+				Override:  "replace",
+				Command:   `cmd arg1 "arg2 arg3"`,
+				KillDelay: plan.OptionalDuration{Value: time.Second * 10, IsSet: true},
+				Startup:   plan.StartupEnabled,
+				After:     []string{"srv2", "srv4"},
+				Before:    []string{"srv3", "srv5"},
+				Requires:  []string{"srv2", "srv3"},
 				Environment: map[string]string{
 					"var1": "val1",
 					"var0": "val0",

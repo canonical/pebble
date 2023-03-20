@@ -300,6 +300,30 @@ func (m *ServiceManager) Services(names []string) ([]*ServiceInfo, error) {
 	return services, nil
 }
 
+// StopTimeout returns the worst case duration that will have to be waited for
+// to have all services in this manager stopped.
+func (m *ServiceManager) StopTimeout() time.Duration {
+	m.servicesLock.Lock()
+	defer m.servicesLock.Unlock()
+
+	maxDuration := killDelayDefault
+	for _, service := range m.services {
+		if service == nil {
+			continue
+		}
+		switch service.state {
+		case stateStarting, stateRunning, stateTerminating:
+			if service.killDelay() > maxDuration {
+				maxDuration = service.killDelay()
+			}
+		}
+	}
+
+	// We add a little extra time here to allow for signals to be sent and
+	// processed.
+	return maxDuration + failDelay + 100*time.Millisecond
+}
+
 func stateToStatus(state serviceState) ServiceStatus {
 	switch state {
 	case stateStarting, stateRunning:

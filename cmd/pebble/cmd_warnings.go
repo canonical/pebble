@@ -24,11 +24,11 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/canonical/x-go/strutil/quantity"
 	"github.com/jessevdk/go-flags"
 
 	"github.com/canonical/pebble/client"
 	"github.com/canonical/pebble/internal/osutil"
-	"github.com/canonical/pebble/internal/strutil/quantity"
 )
 
 type cmdWarnings struct {

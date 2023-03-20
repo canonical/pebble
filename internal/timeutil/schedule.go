@@ -17,11 +17,12 @@ package timeutil
 import (
 	"bytes"
 	"fmt"
-	"math/rand"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/canonical/x-go/randutil"
 )
 
 // Match 0:00-24:00, where 24:00 means the later end of the day.
@@ -391,16 +392,12 @@ func randDur(a, b time.Time) time.Duration {
 		return 0
 	}
 
-	return time.Duration(rand.Int63n(int64(dur)))
+	return randutil.RandomDuration(dur)
 }
 
 var (
 	timeNow = time.Now
 )
-
-func init() {
-	rand.Seed(time.Now().UnixNano())
-}
 
 // Next returns the earliest event after last according to the provided
 // schedule but no later than maxDuration since last.
