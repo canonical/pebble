@@ -34,9 +34,9 @@ func (s *partinfoSuite) TestFat32PartitionLabels(c *C) {
 
 		p, err := newFAT32Partition(f)
 		c.Assert(err, IsNil)
-		c.Assert(p.FSType(), Equals, "vfat")
-		c.Assert(p.Path(), Equals, f.Name())
-		c.Assert(p.Label(), Equals, e.label)
+		c.Assert(p.MountType(), Equals, MountTypeFAT32)
+		c.Assert(p.DevicePath(), Equals, f.Name())
+		c.Assert(p.MountLabel(), Equals, e.label)
 
 		err = f.Close()
 		c.Assert(err, IsNil)

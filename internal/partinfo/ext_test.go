@@ -39,9 +39,9 @@ func (s *partinfoSuite) TestExtPartitionLabels(c *C) {
 
 		p, err := newExtPartition(f)
 		c.Assert(err, IsNil)
-		c.Assert(p.FSType(), Equals, "ext4")
-		c.Assert(p.Path(), Equals, f.Name())
-		c.Assert(p.Label(), Equals, e.label)
+		c.Assert(p.MountType(), Equals, MountTypeExt)
+		c.Assert(p.DevicePath(), Equals, f.Name())
+		c.Assert(p.MountLabel(), Equals, e.label)
 
 		err = f.Close()
 		c.Assert(err, IsNil)

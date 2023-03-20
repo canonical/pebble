@@ -82,12 +82,12 @@ func (s *partinfoSuite) TestEnumeratePartitions(c *C) {
 	p, err := Enumerate()
 	c.Assert(err, IsNil)
 	c.Assert(p, HasLen, 2)
-	c.Assert(p[0].Path(), Equals, path.Join(s.devfsPath, "sda1"))
-	c.Assert(p[0].Label(), Equals, "My label")
-	c.Assert(p[0].FSType(), Equals, "vfat")
-	c.Assert(p[1].Path(), Equals, path.Join(s.devfsPath, "sda2"))
-	c.Assert(p[1].Label(), Equals, "A great label")
-	c.Assert(p[1].FSType(), Equals, "ext4")
+	c.Assert(p[0].DevicePath(), Equals, path.Join(s.devfsPath, "sda1"))
+	c.Assert(p[0].MountLabel(), Equals, "My label")
+	c.Assert(p[0].MountType(), Equals, MountTypeFAT32)
+	c.Assert(p[1].DevicePath(), Equals, path.Join(s.devfsPath, "sda2"))
+	c.Assert(p[1].MountLabel(), Equals, "A great label")
+	c.Assert(p[1].MountType(), Equals, MountTypeExt)
 }
 
 func (s *partinfoSuite) TestEnumeratePartitionsFailsWithInaccessibleSysfs(c *C) {

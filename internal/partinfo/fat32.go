@@ -39,15 +39,15 @@ type fat32Partition struct {
 	}
 }
 
-func (p fat32Partition) Path() string {
+func (p fat32Partition) DevicePath() string {
 	return p.f.Name()
 }
 
-func (p fat32Partition) FSType() string {
-	return "vfat"
+func (p fat32Partition) MountType() MountType {
+	return MountTypeFAT32
 }
 
-func (p fat32Partition) Label() string {
+func (p fat32Partition) MountLabel() string {
 	if s := strings.TrimSpace(string(p.superblock.Label[:])); s != emptyLabel {
 		return s
 	} else {

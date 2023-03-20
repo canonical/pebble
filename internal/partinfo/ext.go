@@ -37,16 +37,16 @@ type extPartition struct {
 	}
 }
 
-func (p extPartition) Path() string {
+func (p extPartition) DevicePath() string {
 	return p.f.Name()
 }
 
-func (p extPartition) FSType() string {
+func (p extPartition) MountType() MountType {
 	// TODO: Could this lead to issues when attempting to mount ext2/3 partitions?
-	return "ext4"
+	return MountTypeExt
 }
 
-func (p extPartition) Label() string {
+func (p extPartition) MountLabel() string {
 	return strings.TrimRight(string(p.superblock.VolName[:]), "\x00")
 }
 

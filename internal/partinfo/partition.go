@@ -24,14 +24,21 @@ import (
 	"strings"
 )
 
+type MountType string
+
+const (
+	MountTypeFAT32 MountType = "vfat"
+	MountTypeExt   MountType = "ext4"
+)
+
 // Partition contains information for identifying and mounting disk partitions.
 type Partition interface {
-	// Path is the path to the device node file associated to the disk partinfo.
-	Path() string
-	// FSType is the string representing the filesystem type to be used for mounting the partinfo.
-	FSType() string
-	// Label is an optional user-supplied volume name.
-	Label() string
+	// DevicePath is the path to the device node file associated to the disk partinfo.
+	DevicePath() string
+	// MountType is the string representing the filesystem type to be used for mounting the partinfo.
+	MountType() MountType
+	// MountLabel is an optional user-supplied volume name.
+	MountLabel() string
 }
 
 var newPartitionFuncs = []func(*os.File) (Partition, error){
