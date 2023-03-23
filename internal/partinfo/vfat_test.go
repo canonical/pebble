@@ -15,31 +15,27 @@
 package partinfo
 
 import (
-	. "gopkg.in/check.v1"
-
 	"os"
+
+	. "gopkg.in/check.v1"
 )
 
-func (s *partinfoSuite) TestExtPartitionLabels(c *C) {
+func (s *partinfoSuite) TestVfatPartitionLabels(c *C) {
 	expected := []struct {
 		path  string
 		label string
 	}{
-		{path: "testdata/empty.ext2", label: ""},
-		{path: "testdata/empty.ext3", label: ""},
-		{path: "testdata/empty.ext4", label: ""},
-		{path: "testdata/labelled.ext2", label: "A simple label"},
-		{path: "testdata/labelled.ext3", label: "A nice label"},
-		{path: "testdata/labelled.ext4", label: "A great label"},
+		{path: "testdata/vfat-superblock-empty.dat", label: ""},
+		{path: "testdata/vfat-superblock-labelled.dat", label: "My label"},
 	}
 
 	for _, e := range expected {
 		f, err := os.Open(e.path)
 		c.Assert(err, IsNil)
 
-		p, err := newExtPartition(f)
+		p, err := newVFATPartition(f)
 		c.Assert(err, IsNil)
-		c.Assert(p.MountType(), Equals, MountTypeExt)
+		c.Assert(p.MountType(), Equals, MountTypeFAT32)
 		c.Assert(p.DevicePath(), Equals, f.Name())
 		c.Assert(p.MountLabel(), Equals, e.label)
 
@@ -48,23 +44,23 @@ func (s *partinfoSuite) TestExtPartitionLabels(c *C) {
 	}
 }
 
-func (s *partinfoSuite) TestExtFailsNotEnoughBytes(c *C) {
-	f, err := os.Open("testdata/garbage-small.bin")
+func (s *partinfoSuite) TestVfatFailsNotEnoughBytes(c *C) {
+	f, err := os.OpenFile("testdata/garbage-8.bin", os.O_RDONLY, 0)
 	c.Assert(err, IsNil)
 
-	_, err = newExtPartition(f)
-	c.Assert(err, ErrorMatches, "cannot read superblock: EOF")
+	_, err = newVFATPartition(f)
+	c.Assert(err, ErrorMatches, "cannot read superblock: unexpected EOF")
 
 	err = f.Close()
 	c.Assert(err, IsNil)
 }
 
-func (s *partinfoSuite) TestExtFailsOnGarbage(c *C) {
-	f, err := os.OpenFile("testdata/garbage.bin", os.O_RDONLY, 0)
+func (s *partinfoSuite) TestVfatFailsOnGarbage(c *C) {
+	f, err := os.OpenFile("testdata/garbage-2k.bin", os.O_RDONLY, 0)
 	c.Assert(err, IsNil)
 
-	_, err = newExtPartition(f)
-	c.Assert(err, ErrorMatches, "invalid Ext magic")
+	_, err = newVFATPartition(f)
+	c.Assert(err, ErrorMatches, "invalid MBR signature")
 
 	err = f.Close()
 	c.Assert(err, IsNil)

@@ -15,26 +15,27 @@
 package partinfo
 
 import (
-	. "gopkg.in/check.v1"
 	"os"
+
+	. "gopkg.in/check.v1"
 )
 
-func (s *partinfoSuite) TestFat32PartitionLabels(c *C) {
+func (s *partinfoSuite) TestExt4PartitionLabels(c *C) {
 	expected := []struct {
 		path  string
 		label string
 	}{
-		{path: "testdata/empty.fat32", label: ""},
-		{path: "testdata/labelled.fat32", label: "My label"},
+		{path: "testdata/ext4-superblock-empty.dat", label: ""},
+		{path: "testdata/ext4-superblock-label.dat", label: "A great label"},
 	}
 
 	for _, e := range expected {
 		f, err := os.Open(e.path)
 		c.Assert(err, IsNil)
 
-		p, err := newFAT32Partition(f)
+		p, err := newExt4Partition(f)
 		c.Assert(err, IsNil)
-		c.Assert(p.MountType(), Equals, MountTypeFAT32)
+		c.Assert(p.MountType(), Equals, MountTypeExt4)
 		c.Assert(p.DevicePath(), Equals, f.Name())
 		c.Assert(p.MountLabel(), Equals, e.label)
 
@@ -43,23 +44,23 @@ func (s *partinfoSuite) TestFat32PartitionLabels(c *C) {
 	}
 }
 
-func (s *partinfoSuite) TestFat32FailsNotEnoughBytes(c *C) {
-	f, err := os.OpenFile("testdata/garbage-small.bin", os.O_RDONLY, 0)
+func (s *partinfoSuite) TestExt4FailsNotEnoughBytes(c *C) {
+	f, err := os.Open("testdata/garbage-8.bin")
 	c.Assert(err, IsNil)
 
-	_, err = newFAT32Partition(f)
-	c.Assert(err, ErrorMatches, "cannot read superblock: unexpected EOF")
+	_, err = newExt4Partition(f)
+	c.Assert(err, ErrorMatches, "cannot read superblock: EOF")
 
 	err = f.Close()
 	c.Assert(err, IsNil)
 }
 
-func (s *partinfoSuite) TestFat32FailsOnGarbage(c *C) {
-	f, err := os.OpenFile("testdata/garbage.bin", os.O_RDONLY, 0)
+func (s *partinfoSuite) TestExt4FailsOnGarbage(c *C) {
+	f, err := os.OpenFile("testdata/garbage-2k.bin", os.O_RDONLY, 0)
 	c.Assert(err, IsNil)
 
-	_, err = newFAT32Partition(f)
-	c.Assert(err, ErrorMatches, "invalid MBR signature")
+	_, err = newExt4Partition(f)
+	c.Assert(err, ErrorMatches, "invalid ext4 magic")
 
 	err = f.Close()
 	c.Assert(err, IsNil)

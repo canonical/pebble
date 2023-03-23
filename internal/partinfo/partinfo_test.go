@@ -57,16 +57,16 @@ func (s *partinfoSuite) TearDownSuite(_ *C) {
 
 func (s *partinfoSuite) TestEnumeratePartitions(c *C) {
 	// Create /dev/sda1
-	fat32Path, err := filepath.Abs("testdata/labelled.fat32")
+	vfatPath, err := filepath.Abs("testdata/vfat-superblock-labelled.dat")
 	c.Assert(err, IsNil)
-	err = os.Symlink(fat32Path, path.Join(s.devfsPath, "sda1"))
+	err = os.Symlink(vfatPath, path.Join(s.devfsPath, "sda1"))
 	c.Assert(err, IsNil)
 	// Create /sys/block/sda and /sys/class/block/sda/sda1
 	err = os.MkdirAll(path.Join(s.sysfsPath, "class", "block", "sda", "sda1"), 0777)
 	c.Assert(err, IsNil)
 
 	// Create /dev/sda2
-	ext4Path, err := filepath.Abs("testdata/labelled.ext4")
+	ext4Path, err := filepath.Abs("testdata/ext4-superblock-label.dat")
 	err = os.Symlink(ext4Path, path.Join(s.devfsPath, "sda2"))
 	c.Assert(err, IsNil)
 	// Create /sys/class/block/sda/sda2
@@ -87,7 +87,7 @@ func (s *partinfoSuite) TestEnumeratePartitions(c *C) {
 	c.Assert(p[0].MountType(), Equals, MountTypeFAT32)
 	c.Assert(p[1].DevicePath(), Equals, path.Join(s.devfsPath, "sda2"))
 	c.Assert(p[1].MountLabel(), Equals, "A great label")
-	c.Assert(p[1].MountType(), Equals, MountTypeExt)
+	c.Assert(p[1].MountType(), Equals, MountTypeExt4)
 }
 
 func (s *partinfoSuite) TestEnumeratePartitionsFailsWithInaccessibleSysfs(c *C) {

@@ -28,7 +28,7 @@ type MountType string
 
 const (
 	MountTypeFAT32 MountType = "vfat"
-	MountTypeExt   MountType = "ext4"
+	MountTypeExt4  MountType = "ext4"
 )
 
 // Partition contains information for identifying and mounting disk partitions.
@@ -42,8 +42,8 @@ type Partition interface {
 }
 
 var newPartitionFuncs = []func(*os.File) (Partition, error){
-	newFAT32Partition,
-	newExtPartition,
+	newVFATPartition,
+	newExt4Partition,
 }
 
 func newPartition(path string) (Partition, error) {

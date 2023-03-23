@@ -22,49 +22,48 @@ import (
 	"strings"
 )
 
-const (
-	fat32Sig          = "FAT32"   // FAT32 filesystem type signature
-	emptyLabel        = "NO NAME" // Default empty volume label
-	mbrSig     uint16 = 0xAA55    // MBR signature
-)
+const vfatMagic = "FAT32"
+const emptyLabel = "NO NAME"
+const mbrSig = uint16(0xAA55)
 
-type fat32Partition struct {
-	f          *os.File
+type vfatPartition struct {
+	f *os.File
+
+	// See <https://github.com/util-linux/util-linux/blob/master/libblkid/src/superblocks/vfat.c#L24>
 	superblock struct {
-		_      [71]byte
-		Label  [11]byte // Volume label
-		FSType [8]byte  // FAT filesystem type
-		_      [420]byte
-		MBRSig uint16 // MBR signature
+		_      [0x47]byte               // [0x000:0x046] Padding
+		Label  [11]byte                 // [0x047:0x051] Volume label
+		Magic  [8]byte                  // [0x052:0x059] VFAT magic
+		_      [0x1FE - (0x52 + 8)]byte // [0x05A:0x1FD] Padding
+		MBRSig uint16                   // [0x1FE:0x1FF] MBR signature
 	}
 }
 
-func (p fat32Partition) DevicePath() string {
+func (p vfatPartition) DevicePath() string {
 	return p.f.Name()
 }
 
-func (p fat32Partition) MountType() MountType {
+func (p vfatPartition) MountType() MountType {
 	return MountTypeFAT32
 }
 
-func (p fat32Partition) MountLabel() string {
+func (p vfatPartition) MountLabel() string {
 	if s := strings.TrimSpace(string(p.superblock.Label[:])); s != emptyLabel {
 		return s
-	} else {
-		return ""
 	}
+	return ""
 }
 
-func newFAT32Partition(f *os.File) (Partition, error) {
-	p := fat32Partition{f: f}
+func newVFATPartition(f *os.File) (Partition, error) {
+	p := vfatPartition{f: f}
 	if err := binary.Read(f, binary.LittleEndian, &p.superblock); err != nil {
 		return nil, fmt.Errorf("cannot read superblock: %w", err)
 	}
 	if p.superblock.MBRSig != mbrSig {
 		return nil, errors.New("invalid MBR signature")
 	}
-	if fsType := strings.TrimSpace(string(p.superblock.FSType[:])); fsType != fat32Sig {
-		return nil, errors.New("unsupported FAT filesystem type")
+	if magic := strings.TrimSpace(string(p.superblock.Magic[:])); magic != vfatMagic {
+		return nil, errors.New("invalid vfat magic")
 	}
 	return p, nil
 }
