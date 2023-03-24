@@ -39,10 +39,10 @@ jobs:
 
         cp COPYING dist/build
         cp README.md dist/build
-        PEBBLE_VERSION=$(go run ./cmd/pebble version | awk '/client/ { print $2 }')
+        PEBBLE_VERSION=$(git describe --tags --always | awk '{ print substr($0, 2) }')  # trim "v" prefix
         ARCHIVE_FILE=pebble_${PEBBLE_VERSION}_${GOOS}_${GOARCH}.tar.gz
         echo Creating archive $ARCHIVE_FILE
         tar -czf dist/$ARCHIVE_FILE -C dist/build .
 
-        echo Uploading $ARCHIVE_FILE to relase v$PEBBLE_VERSION
+        echo Uploading $ARCHIVE_FILE to release v$PEBBLE_VERSION
         gh release upload v$PEBBLE_VERSION dist/$ARCHIVE_FILE
