@@ -39,10 +39,9 @@ jobs:
 
         cp COPYING dist/build
         cp README.md dist/build
-        RELEASE_TAG=$(git describe --tags --always)
-        ARCHIVE_FILE=pebble_${RELEASE_TAG}_${GOOS}_${GOARCH}.tar.gz
+        ARCHIVE_FILE=pebble_${GITHUB_REF_NAME}_${GOOS}_${GOARCH}.tar.gz
         echo Creating archive $ARCHIVE_FILE
         tar -czf dist/$ARCHIVE_FILE -C dist/build .
 
-        echo Uploading $ARCHIVE_FILE to release $RELEASE_TAG
-        gh release upload $RELEASE_TAG dist/$ARCHIVE_FILE
+        echo Uploading $ARCHIVE_FILE to release $GITHUB_REF_NAME
+        gh release upload $GITHUB_REF_NAME dist/$ARCHIVE_FILE
