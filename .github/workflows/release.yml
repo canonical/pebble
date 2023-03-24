@@ -7,7 +7,13 @@ on:
 
 jobs:
   binaries:
+    strategy:
+      matrix:
+        goos: [linux]
+        goarch: [amd64, arm64]
+
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -17,10 +23,25 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v3
 
-      - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@v4
-        with:
-          version: latest
-          args: release --clean
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - name: Build binary
+      env:
+        GOOS: ${{ matrix.goos }}
+        GOARCH: ${{ matrix.goarch }}
+        CGO_ENABLED: "0"
+      run: |
+        go generate ./cmd
+
+        rm -rf dist/build
+        go build -trimpath -ldflags='-s -w' -o dist/build/pebble ./cmd/pebble
+        cp COPYING dist/build
+        cp README.md dist/build
+
+        export PEBBLE_VERSION=$(go run ./cmd/pebble version | awk '/client/ { print $2 }')
+        export ARCHIVE_FILE=pebble_${PEBBLE_VERSION}_${GOOS}_${GOARCH}.tar.gz
+        tar -czf dist/$ARCHIVE_FILE -C dist/build .
+
+    - name: Upload archive
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        gh release upload v$PEBBLE_VERSION dist/$ARCHIVE_FILE
