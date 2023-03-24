@@ -34,13 +34,12 @@ jobs:
         go generate ./cmd
 
         echo Building for $GOOS $GOARCH
-        rm -rf dist/build
         go build -trimpath -ldflags='-s -w' -o dist/build/pebble ./cmd/pebble
 
-        cp COPYING dist/build
-        cp README.md dist/build
         ARCHIVE_FILE=pebble_${GITHUB_REF_NAME}_${GOOS}_${GOARCH}.tar.gz
         echo Creating archive $ARCHIVE_FILE
+        cp COPYING dist/build
+        cp README.md dist/build
         tar -czf dist/$ARCHIVE_FILE -C dist/build .
 
         echo Uploading $ARCHIVE_FILE to release $GITHUB_REF_NAME
