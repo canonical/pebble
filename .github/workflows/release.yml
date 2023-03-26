@@ -10,7 +10,7 @@ jobs:
     strategy:
       matrix:
         goos: [linux]
-        goarch: [amd64, arm64, ppc64le, s390x]
+        goarch: [amd64, arm64, ppc64le, riscv64, s390x]
 
     runs-on: ubuntu-latest
 
