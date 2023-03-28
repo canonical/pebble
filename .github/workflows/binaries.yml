@@ -61,6 +61,7 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       if: ${{ github.event_name == 'release' }}
+      run: |
         ARCHIVE_FILE=${{ steps.build.outputs.ARCHIVE_FILE }}
         echo Uploading $ARCHIVE_FILE to release $GITHUB_REF_NAME
         gh release upload $GITHUB_REF_NAME dist/$ARCHIVE_FILE
