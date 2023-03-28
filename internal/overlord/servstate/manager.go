@@ -442,6 +442,7 @@ func (m *ServiceManager) Replan() ([]string, []string, error) {
 		if newConfig, ok := m.plan.Services[name]; ok {
 			// TODO: be more conservative with restarts. Changes to metadata, log
 			// targets, dependencies, etc shouldn't require a restart.
+			// https://github.com/canonical/pebble/pull/165#discussion_r1142800922
 			if newConfig.Equal(s.config) {
 				continue
 			}
