@@ -20,7 +20,7 @@ import (
 	"github.com/jessevdk/go-flags"
 
 	"github.com/canonical/pebble/client"
-	"github.com/canonical/pebble/cmd"
+	cmdpkg "github.com/canonical/pebble/cmd"
 )
 
 var shortVersionHelp = "Show version details"
@@ -30,15 +30,25 @@ The version command displays the versions of the running client and server.
 
 type cmdVersion struct {
 	clientMixin
+	ClientOnly bool `long:"client"`
+}
+
+var versionDescs = map[string]string{
+	"client": `Only display the client version`,
 }
 
 func init() {
-	addCommand("version", shortVersionHelp, longVersionHelp, func() flags.Commander { return &cmdVersion{} }, nil, nil)
+	addCommand("version", shortVersionHelp, longVersionHelp, func() flags.Commander { return &cmdVersion{} }, versionDescs, nil)
 }
 
 func (cmd cmdVersion) Execute(args []string) error {
 	if len(args) > 0 {
 		return ErrExtraArgs
+	}
+
+	if cmd.ClientOnly {
+		fmt.Fprintln(Stdout, cmdpkg.Version)
+		return nil
 	}
 
 	return printVersions(cmd.client)
@@ -51,7 +61,7 @@ func printVersions(cli *client.Client) error {
 		serverVersion = sysInfo.Version
 	}
 	w := tabWriter()
-	fmt.Fprintf(w, "client\t%s\n", cmd.Version)
+	fmt.Fprintf(w, "client\t%s\n", cmdpkg.Version)
 	fmt.Fprintf(w, "server\t%s\n", serverVersion)
 	w.Flush()
 	return nil
