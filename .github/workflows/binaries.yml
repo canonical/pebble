@@ -1,12 +1,16 @@
-name: Release
+name: Binaries
 
 on:
   push:
-    tags:
-      - v*
+    tags: [v*]
+    branches: [master]
+  pull_request:
+    branches: [master]
+  release:
+    types: [published]
 
 jobs:
-  binaries:
+  create-binaries:
     strategy:
       matrix:
         goos: [linux]
@@ -25,12 +29,12 @@ jobs:
       with:
         go-version: stable  # latest stable version of Go
 
-    - name: Build and upload binary
+    - name: Build binary and create archive
+      id: build
       env:
         GOOS: ${{ matrix.goos }}
         GOARCH: ${{ matrix.goarch }}
         CGO_ENABLED: "0"
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         echo Generating version file
         go generate ./cmd
@@ -44,5 +48,19 @@ jobs:
         cp README.md dist/build
         tar -czf dist/$ARCHIVE_FILE -C dist/build .
 
+        # Share archive filename with subsequent steps
+        echo "ARCHIVE_FILE=${ARCHIVE_FILE}" >>$GITHUB_OUTPUT
+
+    - name: Upload archive as Actions artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: ${{ steps.build.outputs.ARCHIVE_FILE }}
+        path: dist/${{ steps.build.outputs.ARCHIVE_FILE }}
+
+    - name: Upload archive to release
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      if: ${{ github.event_name == 'release' }}
+        ARCHIVE_FILE=${{ steps.build.outputs.ARCHIVE_FILE }}
         echo Uploading $ARCHIVE_FILE to release $GITHUB_REF_NAME
         gh release upload $GITHUB_REF_NAME dist/$ARCHIVE_FILE
