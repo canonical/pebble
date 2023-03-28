@@ -385,24 +385,24 @@ services:
     svc1:
         ...
     svc2:
-        log-targets: ['default', 'opt-in']
+        log-targets: ['tgtA', 'tgtC']
     svc3:
-        log-targets: ['disabled']
+        log-targets: ['tgtD']
 
 log-targets:
-    default:
+    tgtA:
         ...
-    opt-out:
+    tgtB:
         selection: opt-out
-    opt-in:
+    tgtC:
         selection: opt-in
-    disabled:
+    tgtD:
         selection: disabled
 ```
 
-- `svc1` doesn't explicitly specify log-targets, so its logs will be forwarded to the `default` and `opt-out` targets.
-- `svc2` explicitly specifies the `default` and `opt-in` targets, so its logs will be sent to those targets. `svc2`'s logs will not be sent to the `opt-out` or `disabled` targets.
-- `svc3` explicitly specifies the `disabled` target, but since this target is disabled, it will not receive any logs. Hence, `svc3`'s logs will not be sent anywhere.
+- `svc1` doesn't explicitly specify log-targets, so its logs will be forwarded to `tgtA` and `tgtB`.
+- `svc2` explicitly specifies `tgtA` and `tgtC`, so its logs will be sent to those targets. `svc2`'s logs will not be sent to `tgtB` or `tgtD`.
+- `svc3` explicitly specifies `tgtD`, but since this target is disabled, it will not receive any logs. Hence, `svc3`'s logs will not be sent anywhere.
 
 ## Container usage
 

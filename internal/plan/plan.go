@@ -183,7 +183,27 @@ func (s *Service) Merge(other *Service) {
 	if other.BackoffLimit.IsSet {
 		s.BackoffLimit = other.BackoffLimit
 	}
-	s.LogTargets = append(s.LogTargets, other.LogTargets...)
+	s.LogTargets = dedupStrings(s.LogTargets, other.LogTargets)
+}
+
+// dedupStrings merges arr1 and arr2 with deduplication (removing any duplicate
+// entries in the merged slice).
+func dedupStrings(arr1, arr2 []string) []string {
+	seen := map[string]struct{}{}
+	var merged []string
+
+	for _, s := range arr1 {
+		if _, ok := seen[s]; !ok {
+			merged = append(merged, s)
+		}
+	}
+	for _, s := range arr2 {
+		if _, ok := seen[s]; !ok {
+			merged = append(merged, s)
+		}
+	}
+
+	return merged
 }
 
 type ServiceStartup string
@@ -194,8 +214,7 @@ const (
 	StartupDisabled ServiceStartup = "disabled"
 )
 
-// Override specifies the layer override mechanism (for services, checks, and
-// log targets).
+// Override specifies the layer override mechanism for an object.
 type Override string
 
 const (

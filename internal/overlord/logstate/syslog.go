@@ -139,8 +139,7 @@ func (c *syslogClient) encodeEntry(entry servicelog.Entry) {
 		c.pid, c.msgid, c.structuredData, entry.Message)
 
 	// Octet framing as per RFC 5425.
-	framed := fmt.Sprintf("%d %s", len(msg), msg)
-	c.data.Write([]byte(framed))
+	_, _ = fmt.Fprintf(&c.data, "%d %s", len(msg), msg)
 }
 
 // Send messages to remote syslog server.

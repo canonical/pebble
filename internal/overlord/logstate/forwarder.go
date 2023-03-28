@@ -178,8 +178,8 @@ func (f *logForwarder) iterate(cancel <-chan struct{}, messages chan servicelog.
 		}
 		if err := parser.Err(); err != nil {
 			logger.Noticef(
-				"Forwarding logs to target %q: error reading logs for service %q: %v",
-				f.target.Name, f.service, err)
+				"Cannot read logs from service %q (target %q): %v",
+				f.service, f.target.Name, err)
 		}
 	}
 	close(messages)
@@ -203,8 +203,8 @@ func (f *logForwarder) sendLogs(messages []servicelog.Entry) {
 	err := f.client.Send(messages)
 	if err != nil {
 		logger.Noticef(
-			"Forwarding logs to target %q: cannot send logs for service %q: %v",
-			f.target.Name, f.service, err)
+			"Cannot forward logs from service %q to target %q: %v",
+			f.service, f.target.Name, err)
 	}
 }
 
