@@ -18,7 +18,6 @@ import (
 	"sync"
 
 	"github.com/canonical/pebble/internal/logger"
-	"github.com/canonical/pebble/internal/overlord/servstate"
 	"github.com/canonical/pebble/internal/plan"
 	"github.com/canonical/pebble/internal/servicelog"
 )
@@ -76,7 +75,7 @@ func (m *LogManager) PlanChanged(pl *plan.Plan) {
 	unchangedServices := []string{}
 	for serviceName, oldConfig := range m.services {
 		if newConfig, ok := pl.Services[serviceName]; ok {
-			if !servstate.NeedsRestart(oldConfig, newConfig) {
+			if newConfig.Equal(oldConfig) {
 				unchangedServices = append(unchangedServices, serviceName)
 			}
 		}

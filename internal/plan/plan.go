@@ -20,6 +20,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
@@ -204,6 +205,14 @@ func dedupStrings(arr1, arr2 []string) []string {
 	}
 
 	return merged
+}
+
+// Equal returns true when the two services are equal in value.
+func (s *Service) Equal(other *Service) bool {
+	if s == other {
+		return true
+	}
+	return reflect.DeepEqual(s, other)
 }
 
 type ServiceStartup string

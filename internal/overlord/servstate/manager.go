@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io"
 	"math/rand"
-	"reflect"
 	"sort"
 	"strings"
 	"sync"
@@ -441,7 +440,9 @@ func (m *ServiceManager) Replan() ([]string, []string, error) {
 	var stop []string
 	for name, s := range m.services {
 		if newConfig, ok := m.plan.Services[name]; ok {
-			if !NeedsRestart(s.config, newConfig) {
+			// TODO: be more conservative with restarts. Changes to metadata, log
+			// targets, dependencies, etc shouldn't require a restart.
+			if newConfig.Equal(s.config) {
 				continue
 			}
 			s.config = newConfig.Copy() // update service config from plan
@@ -473,19 +474,6 @@ func (m *ServiceManager) Replan() ([]string, []string, error) {
 	}
 
 	return stop, start, nil
-}
-
-// NeedsRestart compares the old and new config structs for a service, to
-// determine if the service needs to be restarted. For example, a service
-// should not be restarted if only the log targets have changed.
-func NeedsRestart(old, new *plan.Service) bool {
-	// TODO: make this more conservative. Changes to metadata, dependencies,
-	// service actions, etc shouldn't require a restart.
-	oldCopy := old.Copy()
-	oldCopy.LogTargets = nil
-	newCopy := new.Copy()
-	newCopy.LogTargets = nil
-	return !reflect.DeepEqual(oldCopy, newCopy)
 }
 
 func (m *ServiceManager) SendSignal(services []string, signal string) error {
