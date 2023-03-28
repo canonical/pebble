@@ -42,14 +42,18 @@ jobs:
         echo Building for $GOOS $GOARCH
         go build -trimpath -ldflags='-s -w' -o dist/build/pebble ./cmd/pebble
 
-        ARCHIVE_FILE=pebble_${GITHUB_REF_NAME}_${GOOS}_${GOARCH}.tar.gz
+        # Get version via "pebble version" to ensure it matches that exactly
+        PEBBLE_VERSION=$(GOOS=linux GOARCH=amd64 go run ./cmd/pebble version | awk '/client/ { print $2 }')
+
+        ARCHIVE_FILE=pebble_${PEBBLE_VERSION}_${GOOS}_${GOARCH}.tar.gz
         echo Creating archive $ARCHIVE_FILE
         cp COPYING dist/build
         cp README.md dist/build
         tar -czf dist/$ARCHIVE_FILE -C dist/build .
 
-        # Share archive filename with subsequent steps
+        # Share variables with subsequent steps
         echo "ARCHIVE_FILE=${ARCHIVE_FILE}" >>$GITHUB_OUTPUT
+        echo "PEBBLE_VERSION=${PEBBLE_VERSION}" >>$GITHUB_OUTPUT
 
     - name: Upload archive as Actions artifact
       uses: actions/upload-artifact@v3
@@ -59,9 +63,10 @@ jobs:
 
     - name: Upload archive to release
       env:
+        ARCHIVE_FILE: ${{ steps.build.outputs.ARCHIVE_FILE }}
+        PEBBLE_VERSION: ${{ steps.build.outputs.PEBBLE_VERSION }}
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       if: ${{ github.event_name == 'release' }}
       run: |
-        ARCHIVE_FILE=${{ steps.build.outputs.ARCHIVE_FILE }}
-        echo Uploading $ARCHIVE_FILE to release $GITHUB_REF_NAME
-        gh release upload $GITHUB_REF_NAME dist/$ARCHIVE_FILE
+        echo Uploading $ARCHIVE_FILE to release $PEBBLE_VERSION
+        gh release upload $PEBBLE_VERSION dist/$ARCHIVE_FILE
