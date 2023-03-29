@@ -356,54 +356,6 @@ $ pebble run --verbose
 ...
 ```
 
-#### Log forwarding
-
-Pebble supports forwarding its services' logs to a remote Loki server or syslog receiver (via UDP/TCP). In the `log-targets` section of the plan, you can specify destinations for log forwarding, for example:
-```yaml
-log-targets:
-    loki-example:
-        override: merge
-        type: loki
-        location: http://10.1.77.205:3100/loki/api/v1/push
-    syslog-example:
-        override: merge
-        type: syslog
-        location: tcp://192.168.10.241:1514
-```
-
-By default, all services' logs will be forwarded to these targets. For each log target, you can optionally specify the `selection` key, with the following possible values:
-
-* `opt-out`: each service which doesn't *explicitly specify* log targets will have its logs forwarded to this target. This is the default behaviour.
-* `opt-in`: a service must explicitly specify this log target to have its logs forwarded here.
-* `disabled`: no logs will be sent to this target. This can be used in combination with `override: replace` to disable a log target defined in an earlier layer.
-
-In the definition for each service, you can also specify a list `log-targets` of log targets to forward this service's logs to. The names in the list will be matched against targets defined in the `log-targets` section of the plan. If no targets are specified, the service's logs will be sent to all "opt-out" targets.
-
-For example, in the following (incomplete) plan:
-```yaml
-services:
-    svc1:
-        ...
-    svc2:
-        log-targets: ['tgtA', 'tgtC']
-    svc3:
-        log-targets: ['tgtD']
-
-log-targets:
-    tgtA:
-        ...
-    tgtB:
-        selection: opt-out
-    tgtC:
-        selection: opt-in
-    tgtD:
-        selection: disabled
-```
-
-- `svc1` doesn't explicitly specify log-targets, so its logs will be forwarded to `tgtA` and `tgtB`.
-- `svc2` explicitly specifies `tgtA` and `tgtC`, so its logs will be sent to those targets. `svc2`'s logs will not be sent to `tgtB` or `tgtD`.
-- `svc3` explicitly specifies `tgtD`, but since this target is disabled, it will not receive any logs. Hence, `svc3`'s logs will not be sent anywhere.
-
 ## Container usage
 
 Pebble works well as a local service manager, but if running Pebble in a separate container, you can use the exec and file management APIs to coordinate with the remote system over the shared unix socket.
@@ -562,12 +514,6 @@ services:
         # SIGTERM and exit gracefully before SIGKILL terminates it forcefully.
         # Default is 5 seconds ("5s").
         kill-delay: <duration>
-        
-        # (Optional) A list of log targets to forward this service's logs to.
-        # The names given here will be matched against targets defined in the
-        # "log-targets" section of the plan. If no targets are specified, this
-        # service's logs will be forwarded to all "opt-out" targets.
-        log-targets: [<log target names>]
 
 # (Optional) A list of health checks managed by this configuration layer.
 checks:
@@ -662,42 +608,6 @@ checks:
 
             # (Optional) Working directory to run command in.
             working-dir: <directory>
-
-# (Optional) A list of remote log receivers, to which service logs can be sent.
-log-targets:
-
-    <log target name>:
-
-        # (Required) Control how this log target definition is combined with
-        # other pre-existing definitions with the same name in the Pebble plan.
-        #
-        # The value 'merge' will ensure that values in this layer specification
-        # are merged over existing definitions, whereas 'replace' will entirely
-        # override the existing target spec in the plan with the same name.
-        override: merge | replace
-
-        # (Required) The type of log target, which determines the format in
-        # which logs will be sent. Pebble currently supports forwarding to
-        # Loki (over HTTP) and syslog (over UDP/TCP).
-        type: loki | syslog
-        
-        # (Required) The URL of the remote log target. For Loki, this needs to
-        # be the fully-qualified URL of the push API, including the API
-        # endpoint, e.g. "http://<ip-address>:3100/loki/api/v1/push".
-        # For syslog, this should be the URL of the syslog receiver, in the
-        # format "udp://..." or "tcp://...".
-        location: <url>
-        
-        # (Optional) Determines which services' logs will be forwarded to this
-        # log target.
-        #   - 'opt-out': all services which don't explicitly specify log
-        #      targets will have their logs forwarded to this target.
-        #   - 'opt-in': only services which explicitly specify this target in
-        #      the "log-targets" section of the service spec.
-        #   - 'disabled': no logs will be forwarded to this target. This is
-        #      useful to deactivate a target defined in an earlier layer.
-        # If unspecified, the selection defaults to 'opt-out'.
-        selection: opt-out | opt-in | disabled
 ```
 
 ## API and clients
