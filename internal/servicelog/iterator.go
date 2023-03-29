@@ -69,6 +69,10 @@ func (it *iterator) Close() error {
 	return nil
 }
 
+// Next returns true if there is more data to read from the RingBuffer.
+// If a non-nil cancel channel is passed in, Next will wait for more data to
+// become available. Sending on this channel, or closing it, will cause Next to
+// return immediately.
 func (it *iterator) Next(cancel <-chan struct{}) bool {
 	if it.rb == nil {
 		return false

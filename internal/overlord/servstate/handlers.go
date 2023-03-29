@@ -437,6 +437,9 @@ func (s *serviceData) startInternal() error {
 		}()
 	}
 
+	// Pass buffer reference to logMgr to start log forwarding
+	s.manager.logMgr.ServiceStarted(serviceName, s.logs)
+
 	return nil
 }
 

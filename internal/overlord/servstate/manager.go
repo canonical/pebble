@@ -34,6 +34,12 @@ type ServiceManager struct {
 
 	randLock sync.Mutex
 	rand     *rand.Rand
+
+	logMgr LogManager
+}
+
+type LogManager interface {
+	ServiceStarted(serviceName string, buffer *servicelog.RingBuffer)
 }
 
 // PlanFunc is the type of function used by NotifyPlanChanged.
@@ -53,7 +59,7 @@ func (e *LabelExists) Error() string {
 	return fmt.Sprintf("layer %q already exists", e.Label)
 }
 
-func NewManager(s *state.State, runner *state.TaskRunner, pebbleDir string, serviceOutput io.Writer, restarter Restarter) (*ServiceManager, error) {
+func NewManager(s *state.State, runner *state.TaskRunner, pebbleDir string, serviceOutput io.Writer, restarter Restarter, logMgr LogManager) (*ServiceManager, error) {
 	manager := &ServiceManager{
 		state:         s,
 		runner:        runner,
@@ -62,6 +68,7 @@ func NewManager(s *state.State, runner *state.TaskRunner, pebbleDir string, serv
 		serviceOutput: serviceOutput,
 		restarter:     restarter,
 		rand:          rand.New(rand.NewSource(time.Now().UnixNano())),
+		logMgr:        logMgr,
 	}
 
 	err := reaper.Start()
@@ -155,9 +162,10 @@ func (m *ServiceManager) updatePlanLayers(layers []*plan.Layer) error {
 		return err
 	}
 	p := &plan.Plan{
-		Layers:   layers,
-		Services: combined.Services,
-		Checks:   combined.Checks,
+		Layers:     layers,
+		Services:   combined.Services,
+		Checks:     combined.Checks,
+		LogTargets: combined.LogTargets,
 	}
 	m.updatePlan(p)
 	return nil
@@ -431,11 +439,14 @@ func (m *ServiceManager) Replan() ([]string, []string, error) {
 	needsRestart := make(map[string]bool)
 	var stop []string
 	for name, s := range m.services {
-		if config, ok := m.plan.Services[name]; ok {
-			if config.Equal(s.config) {
+		if newConfig, ok := m.plan.Services[name]; ok {
+			// TODO: be more conservative with restarts. Changes to metadata, log
+			// targets, dependencies, etc shouldn't require a restart.
+			// https://github.com/canonical/pebble/pull/165#discussion_r1142800922
+			if newConfig.Equal(s.config) {
 				continue
 			}
-			s.config = config.Copy() // update service config from plan
+			s.config = newConfig.Copy() // update service config from plan
 		}
 		needsRestart[name] = true
 		stop = append(stop, name)
