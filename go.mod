@@ -15,6 +15,6 @@ require (
 	gopkg.in/yaml.v3 v3.0.1
 )
 
-replace github.com/jessevdk/go-flags v1.4.0 => github.com/rebornplusplus/go-flags v0.0.0-20230227064049-18b729e1c185
+replace github.com/jessevdk/go-flags v1.4.0 => github.com/canonical/go-flags v0.0.0-20230327193835-01157a7cbb96
 
 replace github.com/canonical/x-go => github.com/rebornplusplus/canonical-x-go v0.0.0-20230309051359-1ec2b2ee698e

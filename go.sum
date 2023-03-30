@@ -1,3 +1,5 @@
+github.com/canonical/go-flags v0.0.0-20230327193835-01157a7cbb96 h1:vu+hci8voxBgl6vmdL8/WkCfPItYNJpHY1OBi1knWV8=
+github.com/canonical/go-flags v0.0.0-20230327193835-01157a7cbb96/go.mod h1:Fw0T6WPc1dYxT4mKEZRfG5kJhaTDP9pj1c2EWnYs/m4=
 github.com/gorilla/mux v1.8.0 h1:i40aqfkR1h2SlN9hojwV5ZA91wcXFOvkdNIeFDP5koI=
 github.com/gorilla/mux v1.8.0/go.mod h1:DVbg23sWSpFRCP0SfiEN6jmj59UnW/n46BH5rLB71So=
 github.com/gorilla/websocket v1.4.2 h1:+/TMaTYc4QFitKJxsQ7Yye35DkWvkdLcvGKqM+x0Ufc=
@@ -11,8 +13,6 @@ github.com/pkg/term v1.1.0 h1:xIAAdCMh3QIAy+5FrE8Ad8XoDhEU4ufwbaSozViP9kk=
 github.com/pkg/term v1.1.0/go.mod h1:E25nymQcrSllhX42Ok8MRm1+hyBdHY0dCeiKZ9jpNGw=
 github.com/rebornplusplus/canonical-x-go v0.0.0-20230309051359-1ec2b2ee698e h1:KTgUhUsyol7xrNN4OOyCsqyeKApjsWqr+CPtXqJ/xyc=
 github.com/rebornplusplus/canonical-x-go v0.0.0-20230309051359-1ec2b2ee698e/go.mod h1:A0/Jvt7qKuCDss37TYRNXSscVyS+tLWM5kBYipQOpWQ=
-github.com/rebornplusplus/go-flags v0.0.0-20230227064049-18b729e1c185 h1:08TEzxf9kSvLku2H82Q68c1FYsmdZYmKLDWDbUYIooI=
-github.com/rebornplusplus/go-flags v0.0.0-20230227064049-18b729e1c185/go.mod h1:Fw0T6WPc1dYxT4mKEZRfG5kJhaTDP9pj1c2EWnYs/m4=
 golang.org/x/crypto v0.0.0-20190308221718-c2843e01d9a2/go.mod h1:djNgcEr1/C05ACkg1iLfiJU5Ep61QUkGW8qpdssI0+w=
 golang.org/x/crypto v0.0.0-20201221181555-eec23a3978ad h1:DN0cp81fZ3njFcrLCytUHRSUkqBjfTo4Tx9RJTWs0EY=
 golang.org/x/crypto v0.0.0-20201221181555-eec23a3978ad/go.mod h1:jdWPYTVW3xRLrWPugEBEK3UY2ZEsg3UU495nc5E+M+I=
