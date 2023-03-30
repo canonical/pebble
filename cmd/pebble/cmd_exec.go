@@ -22,7 +22,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jessevdk/go-flags"
+	"github.com/canonical/go-flags"
 	"golang.org/x/sys/unix"
 
 	"github.com/canonical/pebble/client"

@@ -19,7 +19,7 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/jessevdk/go-flags"
+	"github.com/canonical/go-flags"
 
 	"github.com/canonical/pebble/client"
 )

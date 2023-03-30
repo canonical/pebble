@@ -25,7 +25,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/jessevdk/go-flags"
+	"github.com/canonical/go-flags"
 
 	"golang.org/x/crypto/ssh/terminal"
 
