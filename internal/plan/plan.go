@@ -212,7 +212,7 @@ func (s *Service) ParseCommand() (base, extra []string, err error) {
 		}
 		if arg == "[" {
 			if idx == 0 {
-				return nil, nil, fmt.Errorf("cannot have [ ... ] group as prefix")
+				return nil, nil, fmt.Errorf("command cannot be started with default arguments")
 			}
 			inBrackets = true
 			gotBrackets = true

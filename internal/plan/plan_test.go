@@ -1115,7 +1115,7 @@ var cmdTests = []struct {
 }, {
 	summary: "[ ... ] should not be prefix",
 	command: "[ cmd --foo ]",
-	error:   `cannot have \[ ... \] group as prefix`,
+	error:   `command cannot be started with default arguments`,
 }}
 
 func (s *S) TestParseCommand(c *C) {
