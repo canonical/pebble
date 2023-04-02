@@ -1322,3 +1322,42 @@ func (s *S) TestMarshalLayer(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(string(out), Equals, string(layerBytes))
 }
+
+func (s *S) TestSelectTargets(c *C) {
+	logTargets := []*plan.LogTarget{
+		{Name: "unset", Selection: plan.UnsetSelection},
+		{Name: "optout", Selection: plan.OptOutSelection},
+		{Name: "optin", Selection: plan.OptInSelection},
+		{Name: "disabled", Selection: plan.DisabledSelection},
+	}
+	services := []*plan.Service{
+		{Name: "svc1", LogTargets: nil},
+		{Name: "svc2", LogTargets: []string{}},
+		{Name: "svc3", LogTargets: []string{"unset"}},
+		{Name: "svc4", LogTargets: []string{"optout"}},
+		{Name: "svc5", LogTargets: []string{"optin"}},
+		{Name: "svc6", LogTargets: []string{"disabled"}},
+		{Name: "svc7", LogTargets: []string{"unset", "optin", "disabled"}},
+	}
+
+	// Use pointers to bools so the test will fail if we forget to set a value
+	t, f := true, false
+	expected := map[string]map[string]*bool{
+		"svc1": {"unset": &t, "optout": &t, "optin": &f, "disabled": &f},
+		"svc2": {"unset": &t, "optout": &t, "optin": &f, "disabled": &f},
+		"svc3": {"unset": &t, "optout": &f, "optin": &f, "disabled": &f},
+		"svc4": {"unset": &f, "optout": &t, "optin": &f, "disabled": &f},
+		"svc5": {"unset": &f, "optout": &f, "optin": &t, "disabled": &f},
+		"svc6": {"unset": &f, "optout": &f, "optin": &f, "disabled": &f},
+		"svc7": {"unset": &t, "optout": &f, "optin": &t, "disabled": &f},
+	}
+
+	for _, service := range services {
+		for _, target := range logTargets {
+			exp := expected[service.Name][target.Name]
+			c.Assert(exp, NotNil, Commentf("no expected value defined for %s.LogsTo(%s)", service.Name, target.Name))
+			c.Check(service.LogsTo(target), Equals, *exp,
+				Commentf("unexpected value for %s.LogsTo(%s)", service.Name, target.Name))
+		}
+	}
+}

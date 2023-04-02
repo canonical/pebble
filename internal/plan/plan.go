@@ -215,6 +215,27 @@ func (s *Service) Equal(other *Service) bool {
 	return reflect.DeepEqual(s, other)
 }
 
+// LogsTo returns true if the logs from s should be forwarded to target t.
+// This happens if:
+//   - t.Selection is "opt-out" or empty, and s.LogTargets is empty; or
+//   - t.Selection is not "disabled", and s.LogTargets contains t.
+func (s *Service) LogsTo(t *LogTarget) bool {
+	if t.Selection == DisabledSelection {
+		return false
+	}
+	if len(s.LogTargets) == 0 {
+		if t.Selection == UnsetSelection || t.Selection == OptOutSelection {
+			return true
+		}
+	}
+	for _, targetName := range s.LogTargets {
+		if targetName == t.Name {
+			return true
+		}
+	}
+	return false
+}
+
 type ServiceStartup string
 
 const (
