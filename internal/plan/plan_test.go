@@ -1066,7 +1066,7 @@ var planTests = []planTest{{
 
 func (s *S) TestParseLayer(c *C) {
 	for _, test := range planTests {
-		fmt.Println(test.summary)
+		c.Logf(test.summary)
 		var sup plan.Plan
 		var err error
 		for i, yml := range test.input {
@@ -1190,7 +1190,7 @@ func (s *S) TestReadDir(c *C) {
 	tempDir := c.MkDir()
 
 	for testIndex, test := range planTests {
-		fmt.Println(test.summary)
+		c.Logf(test.summary)
 		pebbleDir := filepath.Join(tempDir, fmt.Sprintf("pebble-%03d", testIndex))
 		layersDir := filepath.Join(pebbleDir, "layers")
 		err := os.MkdirAll(layersDir, 0755)

@@ -1675,10 +1675,6 @@ func (s *S) TestStopRunningNoServices(c *C) {
 
 type fakeLogManager struct{}
 
-func (f fakeLogManager) PlanChanged(p *plan.Plan) {
-	// no-op
-}
-
-func (f fakeLogManager) ServiceStarted(serviceName string, buffer *servicelog.RingBuffer) {
+func (f fakeLogManager) ServiceStarted(serviceName string, logs *servicelog.RingBuffer) {
 	// no-op
 }

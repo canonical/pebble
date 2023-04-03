@@ -184,27 +184,23 @@ func (s *Service) Merge(other *Service) {
 	if other.BackoffLimit.IsSet {
 		s.BackoffLimit = other.BackoffLimit
 	}
-	s.LogTargets = dedupStrings(s.LogTargets, other.LogTargets)
+	s.LogTargets = appendUnique(s.LogTargets, other.LogTargets...)
 }
 
-// dedupStrings merges arr1 and arr2 with deduplication (removing any duplicate
-// entries in the merged slice).
-func dedupStrings(arr1, arr2 []string) []string {
-	seen := map[string]struct{}{}
-	var merged []string
-
-	for _, s := range arr1 {
-		if _, ok := seen[s]; !ok {
-			merged = append(merged, s)
+// appendUnique appends into a the elements from b which are not yet present
+// and returns the modified slice.
+// TODO: move this function into canonical/x-go/strutil
+func appendUnique(a []string, b ...string) []string {
+Outer:
+	for _, bn := range b {
+		for _, an := range a {
+			if an == bn {
+				continue Outer
+			}
 		}
+		a = append(a, bn)
 	}
-	for _, s := range arr2 {
-		if _, ok := seen[s]; !ok {
-			merged = append(merged, s)
-		}
-	}
-
-	return merged
+	return a
 }
 
 // Equal returns true when the two services are equal in value.
@@ -465,9 +461,9 @@ type LogTarget struct {
 type LogTargetType string
 
 const (
-	LokiTarget   LogTargetType = "loki"
-	SyslogTarget LogTargetType = "syslog"
-	UnsetTarget  LogTargetType = ""
+	LokiTarget     LogTargetType = "loki"
+	SyslogTarget   LogTargetType = "syslog"
+	UnsetLogTarget LogTargetType = ""
 )
 
 // Selection describes which services' logs will be forwarded to this target.
@@ -725,7 +721,7 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 		switch target.Type {
 		case LokiTarget, SyslogTarget:
 			// valid, continue
-		case UnsetTarget:
+		case UnsetLogTarget:
 			return nil, &FormatError{
 				Message: fmt.Sprintf(`plan must define "type" (%q or %q) for log target %q`,
 					LokiTarget, SyslogTarget, name),

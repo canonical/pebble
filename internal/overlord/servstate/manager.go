@@ -39,7 +39,7 @@ type ServiceManager struct {
 }
 
 type LogManager interface {
-	ServiceStarted(serviceName string, buffer *servicelog.RingBuffer)
+	ServiceStarted(serviceName string, logs *servicelog.RingBuffer)
 }
 
 // PlanFunc is the type of function used by NotifyPlanChanged.
@@ -439,14 +439,11 @@ func (m *ServiceManager) Replan() ([]string, []string, error) {
 	needsRestart := make(map[string]bool)
 	var stop []string
 	for name, s := range m.services {
-		if newConfig, ok := m.plan.Services[name]; ok {
-			// TODO: be more conservative with restarts. Changes to metadata, log
-			// targets, dependencies, etc shouldn't require a restart.
-			// https://github.com/canonical/pebble/pull/165#discussion_r1142800922
-			if newConfig.Equal(s.config) {
+		if config, ok := m.plan.Services[name]; ok {
+			if config.Equal(s.config) {
 				continue
 			}
-			s.config = newConfig.Copy() // update service config from plan
+			s.config = config.Copy() // update service config from plan
 		}
 		needsRestart[name] = true
 		stop = append(stop, name)

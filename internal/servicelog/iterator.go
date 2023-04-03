@@ -29,6 +29,10 @@ type Iterator interface {
 	// can read it, the iterator will eventually be truncated and restarted. The truncation
 	// will be identified in the iterator output with the text specified when the iterator was
 	// created.
+	// Next returns true if there is more data to read from the RingBuffer.
+	// If a non-nil cancel channel is passed in, Next will wait for more data to
+	// become available. Sending on this channel, or closing it, will cause Next to
+	// return immediately.
 	Next(cancel <-chan struct{}) bool
 
 	// Notify sets the notification channel. When more data is available, the channel
@@ -69,10 +73,6 @@ func (it *iterator) Close() error {
 	return nil
 }
 
-// Next returns true if there is more data to read from the RingBuffer.
-// If a non-nil cancel channel is passed in, Next will wait for more data to
-// become available. Sending on this channel, or closing it, will cause Next to
-// return immediately.
 func (it *iterator) Next(cancel <-chan struct{}) bool {
 	if it.rb == nil {
 		return false
