@@ -15,8 +15,8 @@
 package main
 
 import (
+	"github.com/canonical/go-flags"
 	"github.com/canonical/pebble/client"
-	"github.com/jessevdk/go-flags"
 )
 
 var shortReplanHelp = "Ensure running services match the current plan"
