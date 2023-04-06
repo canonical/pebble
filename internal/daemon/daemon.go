@@ -780,17 +780,10 @@ func (d *Daemon) RebootIsMissing(st *state.State) error {
 	return errExpectedReboot
 }
 
-// PassServiceArgs passes the provided service arguments to
-// the service manager responsible for services under daemon overlord.
-func (d *Daemon) PassServiceArgs(serviceArgs map[string][]string) error {
-	if d.overlord == nil {
-		return fmt.Errorf("internal error: no Overlord")
-	}
-	serviceMgr := d.overlord.ServiceManager()
-	if serviceMgr == nil {
-		return fmt.Errorf("internal error: no Service Manager")
-	}
-	return serviceMgr.SetServiceArgs(serviceArgs)
+// SetServiceArgs sets the provided service arguments to their respective services,
+// by passing the arguments to the service manager responsible under daemon overlord.
+func (d *Daemon) SetServiceArgs(serviceArgs map[string][]string) error {
+	return d.overlord.ServiceManager().SetServiceArgs(serviceArgs)
 }
 
 func New(opts *Options) (*Daemon, error) {

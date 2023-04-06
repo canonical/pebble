@@ -35,19 +35,12 @@ var shortRunHelp = "Run the pebble environment"
 var longRunHelp = `
 The run command starts pebble and runs the configured environment.
 
-Additional arguments can be provided to a service command with the
---args option, in the following format:
+Additional arguments may be provided to the service command with the --args option, which
+must be terminated with ";" unless there are no further Pebble options.  These arguments
+are appended to the end of the service command, and replace any default arguments defined
+in the service plan. For example:
 
-    --args <service-name> <arguments...> ;
-
-If the command field in the service's plan has a [ <default-arguments...> ]
-list, the --args arguments will replace those default arguments. If not, the
---args arguments will be appended to the command.
-
-The optional --args flags is followed by a service name and its arguments, and must be
-terminated by ";" unless there are no further Pebble options. For example:
-
-    pebble run --args myservice --port=8080 \; --hold
+    $ pebble run --args myservice --port 8080 \; --hold
 `
 
 type cmdRun struct {
@@ -161,7 +154,7 @@ func runDaemon(rcmd *cmdRun, ch chan os.Signal) error {
 		if err != nil {
 			return err
 		}
-		if err := d.PassServiceArgs(mappedArgs); err != nil {
+		if err := d.SetServiceArgs(mappedArgs); err != nil {
 			return err
 		}
 	}

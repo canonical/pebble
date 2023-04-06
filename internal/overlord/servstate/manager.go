@@ -115,10 +115,9 @@ func (m *ServiceManager) Plan() (*plan.Plan, error) {
 	return m.plan, nil
 }
 
-// AppendLayer appends the given layer to the plan's layers, updates the
-// layer.Order field to the new order and removes the existing arguments
-// of this layer's services. If a layer with layer.Label already exists,
-// return an error of type *LabelExists.
+// AppendLayer appends the given layer to the plan's layers and updates the
+// layer.Order field to the new order. If a layer with layer.Label already
+// exists, return an error of type *LabelExists.
 func (m *ServiceManager) AppendLayer(layer *plan.Layer) error {
 	releasePlan, err := m.acquirePlan()
 	if err != nil {
@@ -178,8 +177,7 @@ func findLayer(layers []*plan.Layer, label string) (int, *plan.Layer) {
 
 // CombineLayer combines the given layer with an existing layer that has the
 // same label. If no existing layer has the label, append a new one. In either
-// case, update the layer.Order field to the new order and remove existing
-// arguments of this layer's services.
+// case, update the layer.Order field to the new order.
 func (m *ServiceManager) CombineLayer(layer *plan.Layer) error {
 	releasePlan, err := m.acquirePlan()
 	if err != nil {
@@ -486,8 +484,8 @@ func (m *ServiceManager) CheckFailed(name string) {
 }
 
 // SetServiceArgs sets the service arguments provided by "pebble run --args"
-// to their respective services. It updates the service command in the top most
-// layer which contains the service in the plan.
+// to their respective services. It adds a new layer in the plan, the layer
+// consisting of services with commands having their arguments changed.
 func (m *ServiceManager) SetServiceArgs(serviceArgs map[string][]string) error {
 	releasePlan, err := m.acquirePlan()
 	if err != nil {
@@ -495,30 +493,26 @@ func (m *ServiceManager) SetServiceArgs(serviceArgs map[string][]string) error {
 	}
 	defer releasePlan()
 
-	layers := m.plan.Layers
+	newLayer := &plan.Layer{
+		Services: make(map[string]*plan.Service),
+	}
 
-	for serviceName, args := range serviceArgs {
-		var service *plan.Service
-
-		// search for the topmost layer which contains the service
-		// assuming the layers are sorted by order ASC
-		for i := len(layers) - 1; i >= 0; i-- {
-			if service = layers[i].Services[serviceName]; service != nil {
-				break
-			}
+	for name, args := range serviceArgs {
+		service, ok := m.plan.Services[name]
+		if !ok {
+			return fmt.Errorf("service %q not found in plan", name)
 		}
-		if service == nil {
-			return fmt.Errorf("service %q not found in plan", serviceName)
-		}
-
 		base, _, err := service.ParseCommand()
 		if err != nil {
 			return err
 		}
-		service.Command = plan.CommandString(base, args)
+		newLayer.Services[name] = &plan.Service{
+			Override: plan.MergeOverride,
+			Command:  plan.CommandString(base, args),
+		}
 	}
 
-	return m.updatePlanLayers(layers)
+	return m.appendLayer(newLayer)
 }
 
 // servicesToStop returns a slice of service names to stop, in dependency order.
