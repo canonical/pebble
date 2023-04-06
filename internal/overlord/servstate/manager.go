@@ -146,7 +146,6 @@ func (m *ServiceManager) appendLayer(layer *plan.Layer) error {
 		return err
 	}
 	layer.Order = newOrder
-
 	return nil
 }
 
@@ -208,7 +207,6 @@ func (m *ServiceManager) CombineLayer(layer *plan.Layer) error {
 		return err
 	}
 	layer.Order = found.Order
-
 	return nil
 }
 
