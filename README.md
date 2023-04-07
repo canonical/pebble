@@ -541,7 +541,7 @@ checks:
         period: <duration>
 
         # (Optional) If this time elapses before a single check operation has
-        # finished, it is cancelled and considered an error. Must not be less
+        # finished, it is cancelled and considered an error. Must not be more
         # than the period, and must not be zero. Default is "3s".
         timeout: <duration>
 
