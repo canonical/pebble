@@ -1,0 +1,39 @@
+name: pebble
+adopt-info: pebble-version
+summary:  Pebble - take control of your internal daemons!
+description: |
+    Pebble helps you to orchestrate a set of local service processes as an organized set. 
+    It resembles well known tools such as supervisord, runit, or s6, in that it can easily manage
+    non-system processes independently from the system services, but it was designed 
+    with unique features that help with more specific use cases.
+license: GPL-3.0
+base: bare
+build-base: core22
+confinement: classic
+# `grade` should be dynamic once there is automated versioning and promotion
+# See an example at: https://github.com/snapcore/snapcraft/blob/main/snap/snapcraft.yaml#L136
+grade: devel
+
+system-usernames:
+  snap_daemon: shared
+
+apps:
+  pebble:
+    command: bin/pebble
+
+parts:
+  pebble:
+    plugin: go
+    source: .
+    build-snaps:
+      - go
+    build-environment:
+      - CGO_ENABLED: 0
+      - GOFLAGS: -ldflags=-w -ldflags=-s
+  
+  pebble-version:
+    plugin: nil
+    source: .
+    override-build: |
+      snapcraftctl set-version "$(cat cmd/VERSION || ./cmd/mkversion.sh --output-only)"
+    after: [pebble]
