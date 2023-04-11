@@ -24,8 +24,8 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/canonical/go-flags"
 	"github.com/canonical/x-go/strutil/quantity"
-	"github.com/jessevdk/go-flags"
 
 	"github.com/canonical/pebble/client"
 	"github.com/canonical/pebble/internal/osutil"
@@ -56,7 +56,7 @@ var shortOkayHelp = "Acknowledge warnings"
 var longOkayHelp = `
 The okay command acknowledges the warnings listed with 'pebble warnings'.
 
-Once acknowledged a warning won't appear again unless it re-occurrs and
+Once acknowledged, a warning won't appear again unless it reoccurs and
 sufficient time has passed.
 `
 

@@ -1,5 +1,5 @@
-github.com/canonical/go-flags v0.0.0-20230327193835-01157a7cbb96 h1:vu+hci8voxBgl6vmdL8/WkCfPItYNJpHY1OBi1knWV8=
-github.com/canonical/go-flags v0.0.0-20230327193835-01157a7cbb96/go.mod h1:Fw0T6WPc1dYxT4mKEZRfG5kJhaTDP9pj1c2EWnYs/m4=
+github.com/canonical/go-flags v0.0.0-20230403090104-105d09a091b8 h1:zGaJEJI9qPVyM+QKFJagiyrM91Ke5S9htoL1D470g6E=
+github.com/canonical/go-flags v0.0.0-20230403090104-105d09a091b8/go.mod h1:ZZFeR9K9iGgpwOaLYF9PdT44/+lfSJ9sQz3B+SsGsYU=
 github.com/gorilla/mux v1.8.0 h1:i40aqfkR1h2SlN9hojwV5ZA91wcXFOvkdNIeFDP5koI=
 github.com/gorilla/mux v1.8.0/go.mod h1:DVbg23sWSpFRCP0SfiEN6jmj59UnW/n46BH5rLB71So=
 github.com/gorilla/websocket v1.4.2 h1:+/TMaTYc4QFitKJxsQ7Yye35DkWvkdLcvGKqM+x0Ufc=

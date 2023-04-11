@@ -7,3 +7,5 @@ cmd/VERSION
 .idea
 .vscode
 /pebble
+
+dist/

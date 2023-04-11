@@ -42,13 +42,14 @@ import (
 	"github.com/canonical/pebble/internal/overlord/servstate"
 	"github.com/canonical/pebble/internal/overlord/state"
 	"github.com/canonical/pebble/internal/plan"
+	"github.com/canonical/pebble/internal/servicelog"
 	"github.com/canonical/pebble/internal/testutil"
 )
 
 const (
-	shortOkayWait = 50 * time.Millisecond
-	shortKillWait = 100 * time.Millisecond
-	shortFailWait = 200 * time.Millisecond
+	shortOkayDelay = 50 * time.Millisecond
+	shortKillDelay = 100 * time.Millisecond
+	shortFailDelay = 100 * time.Millisecond
 )
 
 func TestMain(m *testing.M) {
@@ -126,6 +127,14 @@ services:
         command: /bin/sh -c "echo test2b | tee -a %s; sleep 10"
 `
 
+var planLayer4 = `
+services:
+    test6:
+        override: merge
+        command: /bin/bash -c "trap 'sleep 10' SIGTERM; sleep 20;"
+        kill-delay: 300ms
+`
+
 var setLoggerOnce sync.Once
 
 func (s *S) SetUpSuite(c *C) {
@@ -160,14 +169,14 @@ func (s *S) SetUpTest(c *C) {
 
 	s.runner = state.NewTaskRunner(s.st)
 	s.stopDaemon = make(chan struct{})
-	manager, err := servstate.NewManager(s.st, s.runner, s.dir, logOutput, testRestarter{s.stopDaemon})
+	manager, err := servstate.NewManager(s.st, s.runner, s.dir, logOutput, testRestarter{s.stopDaemon}, fakeLogManager{})
 	c.Assert(err, IsNil)
 	s.AddCleanup(manager.Stop)
 	s.manager = manager
 
-	restore := servstate.FakeOkayWait(shortOkayWait)
+	restore := servstate.FakeOkayWait(shortOkayDelay)
 	s.AddCleanup(restore)
-	restore = servstate.FakeKillWait(shortKillWait, shortFailWait)
+	restore = servstate.FakeKillFailDelay(shortKillDelay, shortFailDelay)
 	s.AddCleanup(restore)
 }
 
@@ -318,6 +327,55 @@ func (s *S) stopTestServicesAlreadyDead(c *C) {
 	s.st.Lock()
 	c.Check(chg.Status(), Equals, state.DoneStatus, Commentf("Error: %v", chg.Err()))
 	s.st.Unlock()
+}
+
+func (s *S) TestStopTimeout(c *C) {
+	layer := parseLayer(c, 0, "layer99", `
+services:
+    test9:
+        override: merge
+        command: /bin/bash -c "sleep 20;"
+        kill-delay: 1h
+    test10:
+        override: merge
+        command: /bin/bash -c "sleep 20;"
+        kill-delay: 2h
+`)
+	err := s.manager.AppendLayer(layer)
+	c.Assert(err, IsNil)
+	_, _, err = s.manager.Replan()
+	c.Assert(err, IsNil)
+	s.startServices(c, []string{"test9"}, 1)
+	s.waitUntilService(c, "test9", func(service *servstate.ServiceInfo) bool {
+		return service.Current == servstate.StatusActive
+	})
+	c.Assert(s.manager.StopTimeout(), Equals, time.Minute*60+time.Millisecond*200)
+}
+
+func (s *S) TestKillDelayIsUsed(c *C) {
+	layer4 := parseLayer(c, 0, "layer4", planLayer4)
+	err := s.manager.AppendLayer(layer4)
+	c.Assert(err, IsNil)
+	_, _, err = s.manager.Replan()
+	c.Assert(err, IsNil)
+
+	s.startServices(c, []string{"test6"}, 1)
+	s.waitUntilService(c, "test6", func(service *servstate.ServiceInfo) bool {
+		return service.Current == servstate.StatusActive
+	})
+
+	startTime := time.Now()
+	chg := s.stopServices(c, []string{"test6"}, 1)
+	s.st.Lock()
+	c.Check(chg.Status(), Equals, state.DoneStatus, Commentf("Error: %v", chg.Err()))
+	s.st.Unlock()
+	s.waitUntilService(c, "test6", func(service *servstate.ServiceInfo) bool {
+		if service.Current == servstate.StatusInactive {
+			c.Assert(time.Now().Sub(startTime) > time.Millisecond*300, Equals, true)
+			return true
+		}
+		return false
+	})
 }
 
 func (s *S) TestReplanServices(c *C) {
@@ -600,7 +658,7 @@ func (s *S) TestAppendLayer(c *C) {
 	dir := c.MkDir()
 	os.Mkdir(filepath.Join(dir, "layers"), 0755)
 	runner := state.NewTaskRunner(s.st)
-	manager, err := servstate.NewManager(s.st, runner, dir, nil, nil)
+	manager, err := servstate.NewManager(s.st, runner, dir, nil, nil, fakeLogManager{})
 	c.Assert(err, IsNil)
 	defer manager.Stop()
 
@@ -683,7 +741,7 @@ func (s *S) TestCombineLayer(c *C) {
 	dir := c.MkDir()
 	os.Mkdir(filepath.Join(dir, "layers"), 0755)
 	runner := state.NewTaskRunner(s.st)
-	manager, err := servstate.NewManager(s.st, runner, dir, nil, nil)
+	manager, err := servstate.NewManager(s.st, runner, dir, nil, nil, fakeLogManager{})
 	c.Assert(err, IsNil)
 	defer manager.Stop()
 
@@ -1013,7 +1071,7 @@ services:
 checks:
     chk1:
          override: replace
-         period: 75ms  # a bit longer than shortOkayWait
+         period: 75ms  # a bit longer than shortOkayDelay
          threshold: 1
          exec:
              command: will-fail
@@ -1180,7 +1238,7 @@ services:
 checks:
     chk1:
          override: replace
-         period: 75ms  # a bit longer than shortOkayWait
+         period: 75ms  # a bit longer than shortOkayDelay
          threshold: 1
          exec:
              command: will-fail
@@ -1252,7 +1310,7 @@ services:
 checks:
     chk1:
          override: replace
-         period: 75ms  # a bit longer than shortOkayWait
+         period: 75ms  # a bit longer than shortOkayDelay
          threshold: 1
          exec:
              command: will-fail
@@ -1356,7 +1414,7 @@ services:
 
 	// Wait till it terminates.
 	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
-		return svc.Current == servstate.StatusError
+		return svc.Current == servstate.StatusInactive
 	})
 }
 
@@ -1528,7 +1586,7 @@ services:
 
 	// Wait till the main process terminates
 	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
-		return svc.Current == servstate.StatusError
+		return svc.Current == servstate.StatusInactive
 	})
 
 	// Wait till the zombie has been reaped (no longer in the process table)
@@ -1568,7 +1626,7 @@ func createZombie() error {
 		return err
 	}
 	fmt.Printf("childPid %d\n", childPid)
-	time.Sleep(shortOkayWait + 25*time.Millisecond)
+	time.Sleep(shortOkayDelay + 25*time.Millisecond)
 	return nil
 }
 
@@ -1613,4 +1671,10 @@ func (s *S) TestStopRunningNoServices(c *C) {
 	taskSet, err := servstate.StopRunning(s.st, s.manager)
 	c.Assert(err, IsNil)
 	c.Assert(taskSet, IsNil)
+}
+
+type fakeLogManager struct{}
+
+func (f fakeLogManager) ServiceStarted(serviceName string, logs *servicelog.RingBuffer) {
+	// no-op
 }
