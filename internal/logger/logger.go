@@ -44,11 +44,14 @@ func (nullLogger) Debug(string)  {}
 var NullLogger = nullLogger{}
 
 var (
-	logger Logger = NullLogger
+	logger     Logger = NullLogger
+	loggerLock sync.Mutex
 )
 
 // Panicf notifies the user and then panics
 func Panicf(format string, v ...interface{}) {
+	loggerLock.Lock()
+	defer loggerLock.Unlock()
 	msg := fmt.Sprintf(format, v...)
 	logger.Notice("PANIC " + msg)
 	panic(msg)
@@ -56,12 +59,16 @@ func Panicf(format string, v ...interface{}) {
 
 // Noticef notifies the user of something
 func Noticef(format string, v ...interface{}) {
+	loggerLock.Lock()
+	defer loggerLock.Unlock()
 	msg := fmt.Sprintf(format, v...)
 	logger.Notice(msg)
 }
 
 // Debugf records something in the debug log
 func Debugf(format string, v ...interface{}) {
+	loggerLock.Lock()
+	defer loggerLock.Unlock()
 	msg := fmt.Sprintf(format, v...)
 	logger.Debug(msg)
 }
@@ -70,8 +77,7 @@ func Debugf(format string, v ...interface{}) {
 // the log buffer and a restore function.
 func MockLogger(prefix string) (buf *bytes.Buffer, restore func()) {
 	buf = &bytes.Buffer{}
-	oldLogger := logger
-	SetLogger(New(buf, prefix))
+	oldLogger := SetLogger(New(buf, prefix))
 	return buf, func() {
 		SetLogger(oldLogger)
 	}
@@ -79,8 +85,12 @@ func MockLogger(prefix string) (buf *bytes.Buffer, restore func()) {
 
 // SetLogger sets the global logger to the given one. It must be called
 // from a single goroutine before any logs are written.
-func SetLogger(l Logger) {
+func SetLogger(l Logger) (old Logger) {
+	loggerLock.Lock()
+	defer loggerLock.Unlock()
+	old = logger
 	logger = l
+	return old
 }
 
 type defaultLogger struct {
@@ -88,7 +98,6 @@ type defaultLogger struct {
 	prefix string
 
 	buf []byte
-	mu  sync.Mutex
 }
 
 // Debug only prints if PEBBLE_DEBUG is set.
@@ -100,9 +109,6 @@ func (l *defaultLogger) Debug(msg string) {
 
 // Notice alerts the user about something, as well as putting it syslog
 func (l *defaultLogger) Notice(msg string) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-
 	l.buf = l.buf[:0]
 	now := time.Now().UTC()
 	l.buf = now.AppendFormat(l.buf, timestampFormat)

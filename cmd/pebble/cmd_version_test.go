@@ -37,6 +37,16 @@ func (s *PebbleSuite) TestVersion(c *C) {
 	c.Check(s.Stderr(), Equals, "")
 }
 
+func (s *PebbleSuite) TestVersionClientOnly(c *C) {
+	restore := fakeVersion("v1.2.3")
+	defer restore()
+
+	_, err := pebble.Parser(pebble.Client()).ParseArgs([]string{"version", "--client"})
+	c.Assert(err, IsNil)
+	c.Check(s.Stdout(), Equals, "v1.2.3\n")
+	c.Check(s.Stderr(), Equals, "")
+}
+
 func (s *PebbleSuite) TestVersionExtraArgs(c *C) {
 	rest, err := pebble.Parser(pebble.Client()).ParseArgs([]string{"version", "extra", "args"})
 	c.Assert(err, Equals, pebble.ErrExtraArgs)

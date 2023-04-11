@@ -42,6 +42,7 @@ import (
 	"github.com/canonical/pebble/internal/overlord/servstate"
 	"github.com/canonical/pebble/internal/overlord/state"
 	"github.com/canonical/pebble/internal/plan"
+	"github.com/canonical/pebble/internal/servicelog"
 	"github.com/canonical/pebble/internal/testutil"
 )
 
@@ -168,7 +169,7 @@ func (s *S) SetUpTest(c *C) {
 
 	s.runner = state.NewTaskRunner(s.st)
 	s.stopDaemon = make(chan struct{})
-	manager, err := servstate.NewManager(s.st, s.runner, s.dir, logOutput, testRestarter{s.stopDaemon})
+	manager, err := servstate.NewManager(s.st, s.runner, s.dir, logOutput, testRestarter{s.stopDaemon}, fakeLogManager{})
 	c.Assert(err, IsNil)
 	s.AddCleanup(manager.Stop)
 	s.manager = manager
@@ -657,7 +658,7 @@ func (s *S) TestAppendLayer(c *C) {
 	dir := c.MkDir()
 	os.Mkdir(filepath.Join(dir, "layers"), 0755)
 	runner := state.NewTaskRunner(s.st)
-	manager, err := servstate.NewManager(s.st, runner, dir, nil, nil)
+	manager, err := servstate.NewManager(s.st, runner, dir, nil, nil, fakeLogManager{})
 	c.Assert(err, IsNil)
 	defer manager.Stop()
 
@@ -740,7 +741,7 @@ func (s *S) TestCombineLayer(c *C) {
 	dir := c.MkDir()
 	os.Mkdir(filepath.Join(dir, "layers"), 0755)
 	runner := state.NewTaskRunner(s.st)
-	manager, err := servstate.NewManager(s.st, runner, dir, nil, nil)
+	manager, err := servstate.NewManager(s.st, runner, dir, nil, nil, fakeLogManager{})
 	c.Assert(err, IsNil)
 	defer manager.Stop()
 
@@ -1670,4 +1671,10 @@ func (s *S) TestStopRunningNoServices(c *C) {
 	taskSet, err := servstate.StopRunning(s.st, s.manager)
 	c.Assert(err, IsNil)
 	c.Assert(taskSet, IsNil)
+}
+
+type fakeLogManager struct{}
+
+func (f fakeLogManager) ServiceStarted(serviceName string, logs *servicelog.RingBuffer) {
+	// no-op
 }

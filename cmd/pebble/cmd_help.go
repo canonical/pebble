@@ -22,7 +22,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/jessevdk/go-flags"
+	"github.com/canonical/go-flags"
 )
 
 var shortHelpHelp = "Show help about a command"

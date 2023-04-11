@@ -30,6 +30,7 @@ import (
 	"github.com/canonical/pebble/internal/osutil"
 	"github.com/canonical/pebble/internal/overlord/checkstate"
 	"github.com/canonical/pebble/internal/overlord/cmdstate"
+	"github.com/canonical/pebble/internal/overlord/logstate"
 	"github.com/canonical/pebble/internal/overlord/patch"
 	"github.com/canonical/pebble/internal/overlord/restart"
 	"github.com/canonical/pebble/internal/overlord/servstate"
@@ -68,6 +69,7 @@ type Overlord struct {
 	serviceMgr *servstate.ServiceManager
 	commandMgr *cmdstate.CommandManager
 	checkMgr   *checkstate.CheckManager
+	logMgr     *logstate.LogManager
 }
 
 // New creates a new Overlord with all its state managers.
@@ -105,7 +107,10 @@ func New(pebbleDir string, restartHandler restart.Handler, serviceOutput io.Writ
 	}
 	o.runner.AddOptionalHandler(matchAnyUnknownTask, handleUnknownTask, nil)
 
-	o.serviceMgr, err = servstate.NewManager(s, o.runner, o.pebbleDir, serviceOutput, restartHandler)
+	o.logMgr = logstate.NewLogManager()
+	o.addManager(o.logMgr)
+
+	o.serviceMgr, err = servstate.NewManager(s, o.runner, o.pebbleDir, serviceOutput, restartHandler, o.logMgr)
 	if err != nil {
 		return nil, err
 	}
@@ -118,6 +123,9 @@ func New(pebbleDir string, restartHandler restart.Handler, serviceOutput io.Writ
 
 	// Tell check manager about plan updates.
 	o.serviceMgr.NotifyPlanChanged(o.checkMgr.PlanChanged)
+
+	// Tell log manager about plan updates.
+	o.serviceMgr.NotifyPlanChanged(o.logMgr.PlanChanged)
 
 	// Tell service manager about check failures.
 	o.checkMgr.NotifyCheckFailed(o.serviceMgr.CheckFailed)
