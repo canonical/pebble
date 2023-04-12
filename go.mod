@@ -3,10 +3,10 @@ module github.com/canonical/pebble
 go 1.14
 
 require (
+	github.com/canonical/go-flags v0.0.0-20230403090104-105d09a091b8
 	github.com/canonical/x-go v0.0.0-20230113154138-0ccdb0b57a43
 	github.com/gorilla/mux v1.8.0
 	github.com/gorilla/websocket v1.4.2
-	github.com/jessevdk/go-flags v1.4.0
 	github.com/pkg/term v1.1.0
 	golang.org/x/crypto v0.0.0-20220314234659-1baeb1ce4c0b
 	golang.org/x/net v0.0.0-20220906165146-f3363e06e74c // indirect

@@ -34,6 +34,12 @@ type ServiceManager struct {
 
 	randLock sync.Mutex
 	rand     *rand.Rand
+
+	logMgr LogManager
+}
+
+type LogManager interface {
+	ServiceStarted(serviceName string, logs *servicelog.RingBuffer)
 }
 
 // PlanFunc is the type of function used by NotifyPlanChanged.
@@ -53,7 +59,7 @@ func (e *LabelExists) Error() string {
 	return fmt.Sprintf("layer %q already exists", e.Label)
 }
 
-func NewManager(s *state.State, runner *state.TaskRunner, pebbleDir string, serviceOutput io.Writer, restarter Restarter) (*ServiceManager, error) {
+func NewManager(s *state.State, runner *state.TaskRunner, pebbleDir string, serviceOutput io.Writer, restarter Restarter, logMgr LogManager) (*ServiceManager, error) {
 	manager := &ServiceManager{
 		state:         s,
 		runner:        runner,
@@ -62,6 +68,7 @@ func NewManager(s *state.State, runner *state.TaskRunner, pebbleDir string, serv
 		serviceOutput: serviceOutput,
 		restarter:     restarter,
 		rand:          rand.New(rand.NewSource(time.Now().UnixNano())),
+		logMgr:        logMgr,
 	}
 
 	err := reaper.Start()
@@ -155,9 +162,10 @@ func (m *ServiceManager) updatePlanLayers(layers []*plan.Layer) error {
 		return err
 	}
 	p := &plan.Plan{
-		Layers:   layers,
-		Services: combined.Services,
-		Checks:   combined.Checks,
+		Layers:     layers,
+		Services:   combined.Services,
+		Checks:     combined.Checks,
+		LogTargets: combined.LogTargets,
 	}
 	m.updatePlan(p)
 	return nil
@@ -298,6 +306,30 @@ func (m *ServiceManager) Services(names []string) ([]*ServiceInfo, error) {
 		return services[i].Name < services[j].Name
 	})
 	return services, nil
+}
+
+// StopTimeout returns the worst case duration that will have to be waited for
+// to have all services in this manager stopped.
+func (m *ServiceManager) StopTimeout() time.Duration {
+	m.servicesLock.Lock()
+	defer m.servicesLock.Unlock()
+
+	maxDuration := killDelayDefault
+	for _, service := range m.services {
+		if service == nil {
+			continue
+		}
+		switch service.state {
+		case stateStarting, stateRunning, stateTerminating:
+			if service.killDelay() > maxDuration {
+				maxDuration = service.killDelay()
+			}
+		}
+	}
+
+	// We add a little extra time here to allow for signals to be sent and
+	// processed.
+	return maxDuration + failDelay + 100*time.Millisecond
 }
 
 func stateToStatus(state serviceState) ServiceStatus {

@@ -22,7 +22,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jessevdk/go-flags"
+	"github.com/canonical/go-flags"
 	"golang.org/x/sys/unix"
 
 	"github.com/canonical/pebble/client"
@@ -155,9 +155,9 @@ func (cmd *cmdExec) Execute(args []string) error {
 		Interactive: interactive,
 		Width:       width,
 		Height:      height,
-		Stdin:       os.Stdin,
-		Stdout:      os.Stdout,
-		Stderr:      os.Stderr,
+		Stdin:       Stdin,
+		Stdout:      Stdout,
+		Stderr:      Stderr,
 	}
 
 	// If stdout and stderr both refer to the same file or device (e.g.,
@@ -264,5 +264,8 @@ func execControlHandler(process *client.ExecProcess, terminal bool, stop <-chan 
 }
 
 func init() {
-	addCommand("exec", shortExecHelp, longExecHelp, func() flags.Commander { return &cmdExec{} }, execDescs, nil)
+	info := addCommand("exec", shortExecHelp, longExecHelp, func() flags.Commander { return &cmdExec{} }, execDescs, nil)
+	info.extra = func(cmd *flags.Command) {
+		cmd.PassAfterNonOption = true
+	}
 }

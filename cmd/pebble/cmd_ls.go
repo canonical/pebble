@@ -20,8 +20,8 @@ import (
 	pathpkg "path"
 	"strings"
 
+	"github.com/canonical/go-flags"
 	"github.com/canonical/x-go/strutil/quantity"
-	"github.com/jessevdk/go-flags"
 
 	"github.com/canonical/pebble/client"
 )
