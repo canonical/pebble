@@ -61,31 +61,28 @@ func (s *grubSuite) TestName(c *C) {
 	c.Assert(s.b.Name(), Equals, "grub")
 }
 
-func (s *grubSuite) TestPresent(c *C) {
-	isPresent, err := s.b.Present()
-	c.Assert(isPresent, Equals, true)
+func (s *grubSuite) TestFind(c *C) {
+	err := s.b.Find()
 	c.Assert(err, IsNil)
 }
 
-func (s *grubSuite) TestNotPresent(c *C) {
+func (s *grubSuite) TestFindNotExisting(c *C) {
 	newCfgFile := s.cfgFile + "bak"
 	err := os.Rename(s.cfgFile, newCfgFile)
 	c.Assert(err, IsNil)
 	defer os.Rename(newCfgFile, s.cfgFile)
 
-	isPresent, err := s.b.Present()
-	c.Assert(isPresent, Equals, false)
-	c.Assert(err, IsNil)
+	err = s.b.Find()
+	c.Assert(err, Equals, bootloader.ErrNoBootloader)
 }
 
-func (s *grubSuite) TestPresentFails(c *C) {
+func (s *grubSuite) TestFindFails(c *C) {
 	err := os.Chmod(s.rootdir, os.FileMode(0o000))
 	c.Assert(err, IsNil)
 	defer os.Chmod(s.rootdir, os.FileMode(0o755))
 
-	isPresent, err := s.b.Present()
-	c.Assert(isPresent, Equals, false)
-	c.Assert(os.IsPermission(err), Equals, true)
+	err = s.b.Find()
+	c.Assert(err, Equals, bootloader.ErrNoBootloader)
 }
 
 func (s *grubSuite) TestActiveSlot(c *C) {

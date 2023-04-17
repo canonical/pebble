@@ -43,9 +43,12 @@ func (g *grub) Name() string {
 	return "grub"
 }
 
-func (g *grub) Present() (bool, error) {
+func (g *grub) Find() error {
 	doesExist, _, err := osutil.ExistsIsDir(filepath.Join(g.rootdir, "grub.cfg"))
-	return doesExist, err
+	if !doesExist || err != nil {
+		return ErrNoBootloader
+	}
+	return nil
 }
 
 func (g *grub) ActiveSlot() string {

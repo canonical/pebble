@@ -14,18 +14,19 @@
 
 package bootloader
 
+import "errors"
+
+var ErrNoBootloader = errors.New("bootloader not present")
+
 // Bootloader provides primitives to retain state across boots and handle
 // boot slots.
 type Bootloader interface {
 	// Name returns the bootloader name.
 	Name() string
 
-	// Present returns whether the bootloader is currently present on the
-	// system--in other words, whether this bootloader has been installed to
-	// the current system. Implementations should only return non-nil error if
-	// they can positively identify that the bootloader is installed, but there
-	// is actually an error with the installation.
-	Present() (bool, error)
+	// Find attempts to locate this bootloader in the running system.
+	// If the bootloader cannot be located, an error will be returned.
+	Find() error
 
 	// ActiveSlot obtains the label of the currently booted slot.
 	ActiveSlot() string

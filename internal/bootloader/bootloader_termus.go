@@ -19,7 +19,6 @@ package bootloader
 
 import (
 	"errors"
-	"fmt"
 )
 
 // BootloaderMountpoint is the path where the root directory for the current
@@ -39,11 +38,7 @@ var bootloaders = []bootloaderNewFunc{
 func Find() (Bootloader, error) {
 	for _, newFunc := range bootloaders {
 		bl := newFunc(bootloaderMountpoint)
-		isPresent, err := bl.Present()
-		if err != nil {
-			return nil, fmt.Errorf("bootloader %q found but not usable: %w", bl.Name(), err)
-		}
-		if isPresent {
+		if err := bl.Find(); err == nil {
 			return bl, nil
 		}
 	}

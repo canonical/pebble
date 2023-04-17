@@ -18,7 +18,6 @@
 package bootloader_test
 
 import (
-	"errors"
 	"testing"
 
 	. "gopkg.in/check.v1"
@@ -29,8 +28,7 @@ import (
 type mockBootloader struct {
 	name string
 
-	isPresent    bool
-	presentError error
+	isPresent bool
 
 	activeSlot         string
 	setActiveSlotError error
@@ -40,11 +38,11 @@ func (b *mockBootloader) Name() string {
 	return b.name
 }
 
-func (b *mockBootloader) Present() (bool, error) {
-	if b.presentError != nil {
-		return false, b.presentError
+func (b *mockBootloader) Find() error {
+	if !b.isPresent {
+		return bootloader.ErrNoBootloader
 	}
-	return b.isPresent, nil
+	return nil
 }
 
 func (b *mockBootloader) ActiveSlot() string {
@@ -95,10 +93,4 @@ func (s *bootloaderSuite) TestFindFailsNotPresent(c *C) {
 	s.b.isPresent = false
 	_, err := bootloader.Find()
 	c.Assert(err, ErrorMatches, "cannot determine bootloader")
-}
-
-func (s *bootloaderSuite) TestFindFailsPresentError(c *C) {
-	s.b.presentError = errors.New("foobar")
-	_, err := bootloader.Find()
-	c.Assert(err, ErrorMatches, `bootloader "mock" found but not usable: foobar`)
 }
