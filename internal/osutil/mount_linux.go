@@ -30,6 +30,31 @@ var (
 	syscallUnmount = unix.Unmount
 )
 
+// MountOptions has all the options that can be passed to Mount()
+type MountOptions struct {
+	// Source is the device node to be mounted.
+	Source string
+	// Target is the directory where the device will be mounted.
+	Target string
+	// MountType is the type of the file system that will be mounted.
+	MountType string
+	// ReadOnly, when true, will mount the device read-only. If the
+	// device was already mounted and this option is specified in a
+	// second call to Mount, the device will be remounted as read-only.
+	ReadOnly bool
+	// Remount, when true, will remount the device. For this to work,
+	// you must supply the same target for the previous mount.
+	Remount bool
+}
+
+// UnmountOptions has all the options that can be passed to Unmount()
+type UnmountOptions struct {
+	// Target is the directory where the device is currently mounted.
+	Target string
+	// Force, when true, will unmount the device even if it's busy.
+	Force bool
+}
+
 // IsMounted checks if a given directory is a mount point.
 func IsMounted(baseDir string) (bool, error) {
 	entries, err := LoadMountInfo(procSelfMountInfo)
@@ -44,29 +69,59 @@ func IsMounted(baseDir string) (bool, error) {
 	return false, nil
 }
 
-// Mount attaches a filesystem accessible via the device node specified by source
-// to the specified baseDir. If not existing, baseDir will be created before
+// Mount attaches a filesystem accessible via the device node specified by the source
+// to the specified target. If not existing, target will be created before
 // mounting the filesystem.
-func Mount(source, baseDir, fstype string, readOnly bool) error {
-	if err := os.MkdirAll(baseDir, 0755); err != nil {
-		return fmt.Errorf("cannot create directory %q: %w", baseDir, err)
+func Mount(opts *MountOptions) error {
+	if err := os.MkdirAll(opts.Target, 0755); err != nil {
+		return fmt.Errorf("cannot create directory %q: %w", opts.Target, err)
 	}
-
 	flags := uintptr(0)
-	if readOnly {
+	if opts.ReadOnly {
 		flags |= unix.MS_RDONLY
 	}
-	if err := syscallMount(source, baseDir, fstype, flags, ""); err != nil {
+	if opts.Remount {
+		flags |= unix.MS_REMOUNT
+	}
+	if err := syscallMount(opts.Source, opts.Target, opts.MountType, flags, ""); err != nil {
 		return err
 	}
 	return nil
 }
 
-// Unmount removes the attachment of the topmost filesystem mounted on baseDir.
-func Unmount(baseDir string) error {
-	syscallSync()
-	if err := syscallUnmount(baseDir, 0); err != nil {
+// Unmount removes the attachment of the topmost filesystem mounted on the specified target.
+func Unmount(opts *UnmountOptions) error {
+	if opts.Force {
+		// Force unmount without taking care of flushing data to the disk
+		if err := syscallUnmount(opts.Target, unix.MNT_FORCE); err != nil {
+			return err
+		}
+		return nil
+	}
+	entries, err := LoadMountInfo(procSelfMountInfo)
+	if err != nil {
 		return err
 	}
-	return nil
+	for _, entry := range entries {
+		if opts.Target == entry.MountDir {
+			syscallSync()
+			// Attempt to remount as read-only
+			err = Mount(&MountOptions{
+				Source:    entry.MountSource,
+				Target:    entry.MountDir,
+				MountType: entry.FsType,
+				ReadOnly:  true,
+				Remount:   true,
+			})
+			if err != nil {
+				return err
+			}
+			// Attempt to actually unmount
+			if err := syscallUnmount(opts.Target, 0); err != nil {
+				return err
+			}
+			return nil
+		}
+	}
+	return fmt.Errorf("no device mounted at %q", opts.Target)
 }

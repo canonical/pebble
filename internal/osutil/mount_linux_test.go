@@ -77,7 +77,12 @@ func (s *mountSuite) TestMount(c *C) {
 		return nil
 	})()
 
-	err := osutil.Mount(devNode, mountpoint, fsType, false)
+	err := osutil.Mount(&osutil.MountOptions{
+		Source:    devNode,
+		Target:    mountpoint,
+		MountType: fsType,
+		ReadOnly:  false,
+	})
 	c.Assert(err, IsNil)
 	c.Assert(osutil.IsDir(mountpoint), Equals, true)
 
@@ -100,7 +105,12 @@ func (s *mountSuite) TestMountReadOnly(c *C) {
 		return nil
 	})()
 
-	err := osutil.Mount(devNode, mountpoint, fsType, true)
+	err := osutil.Mount(&osutil.MountOptions{
+		Source:    devNode,
+		Target:    mountpoint,
+		MountType: fsType,
+		ReadOnly:  true,
+	})
 	c.Assert(err, IsNil)
 	c.Assert(osutil.IsDir(mountpoint), Equals, true)
 }
@@ -109,7 +119,12 @@ func (s *mountSuite) TestMountFailsOnSyscall(c *C) {
 	defer osutil.FakeSyscallMount(func(source, target, fstype string, flags uintptr, data string) error {
 		return errors.New("cannot foo")
 	})()
-	err := osutil.Mount("/dev/whatever", c.MkDir(), "ext4", false)
+	err := osutil.Mount(&osutil.MountOptions{
+		Source:    "/dev/whatever",
+		Target:    c.MkDir(),
+		MountType: "ext4",
+		ReadOnly:  false,
+	})
 	c.Assert(err, ErrorMatches, `cannot foo`)
 }
 
@@ -120,29 +135,102 @@ func (s *mountSuite) TestMountFailsOnMkDir(c *C) {
 	err := os.Chmod(root, 0400)
 	c.Assert(err, IsNil)
 
-	err = osutil.Mount("/dev/whatever", mountpoint, "ext4", false)
+	err = osutil.Mount(&osutil.MountOptions{
+		Source:    "/dev/whatever",
+		Target:    mountpoint,
+		MountType: "ext4",
+		ReadOnly:  false,
+	})
 	c.Assert(err, ErrorMatches, `cannot create directory .*: .*permission denied`)
 }
 
-func (s *mountSuite) TestUnmount(c *C) {
+func (s *mountSuite) TestUnmountForce(c *C) {
 	mountpoint := "/mnt/foo"
-	callsToSync := 0
-	defer osutil.FakeSyscallSync(func() { callsToSync++ })()
+	defer osutil.FakeSyscallUnmount(func(target string, flags int) error {
+		c.Assert(target, Equals, mountpoint)
+		c.Assert(flags, Equals, unix.MNT_FORCE)
+		return nil
+	})()
+	err := osutil.Unmount(&osutil.UnmountOptions{
+		Target: mountpoint,
+		Force:  true,
+	})
+	c.Assert(err, IsNil)
+}
+
+func (s *mountSuite) TestUnmountForceFails(c *C) {
+	mountpoint := "/mnt/foo"
+	defer osutil.FakeSyscallUnmount(func(target string, flags int) error {
+		return errors.New("cannot bar")
+	})()
+	err := osutil.Unmount(&osutil.UnmountOptions{
+		Target: mountpoint,
+		Force:  true,
+	})
+	c.Assert(err, ErrorMatches, `cannot bar`)
+}
+
+func (s *mountSuite) TestUnmountFailsMountInfo(c *C) {
+	defer osutil.FakeMountInfo("bad mountinfo\n")()
+	err := osutil.Unmount(&osutil.UnmountOptions{
+		Target: "/mnt/whatever",
+	})
+	c.Assert(err, ErrorMatches, `incorrect number of fields, .*`)
+}
+
+func (s *mountSuite) TestUnmountFailsNoSuchMount(c *C) {
+	err := osutil.Unmount(&osutil.UnmountOptions{
+		Target: "/not/a/mountpoint",
+		Force:  false,
+	})
+	c.Assert(err, ErrorMatches, `no device mounted at "/not/a/mountpoint"`)
+}
+
+func (s *mountSuite) TestUnmountFailsRemount(c *C) {
+	mountpoint := c.MkDir()
+	defer osutil.FakeMountInfo("29 1 253:0 / " + mountpoint + " rw - ext4 /dev/source rw,errors=remount-ro\n")()
+	defer osutil.FakeSyscallMount(func(source, target, fstype string, flags uintptr, data string) error {
+		return errors.New("cannot foo")
+	})()
+	err := osutil.Unmount(&osutil.UnmountOptions{
+		Target: mountpoint,
+	})
+	c.Assert(err, ErrorMatches, `cannot foo`)
+}
+
+func (s *mountSuite) TestUnmountFailsUnmount(c *C) {
+	mountpoint := c.MkDir()
+	defer osutil.FakeMountInfo("29 1 253:0 / " + mountpoint + " rw - ext4 /dev/source rw,errors=remount-ro\n")()
+	defer osutil.FakeSyscallMount(func(source, target, fstype string, flags uintptr, data string) error {
+		return nil
+	})()
+	defer osutil.FakeSyscallUnmount(func(target string, flags int) error {
+		return errors.New("cannot bar")
+	})()
+	err := osutil.Unmount(&osutil.UnmountOptions{
+		Target: mountpoint,
+	})
+	c.Assert(err, ErrorMatches, `cannot bar`)
+}
+
+func (s *mountSuite) TestUnmount(c *C) {
+	mountpoint := c.MkDir()
+	defer osutil.FakeMountInfo("29 1 253:0 / " + mountpoint + " rw - ext4 /dev/source rw,errors=remount-ro\n")()
+	defer osutil.FakeSyscallMount(func(source, target, fstype string, flags uintptr, data string) error {
+		c.Assert(source, Equals, "/dev/source")
+		c.Assert(target, Equals, mountpoint)
+		c.Assert(fstype, Equals, "ext4")
+		c.Assert(flags, Equals, uintptr(unix.MS_RDONLY|unix.MS_REMOUNT))
+		c.Assert(data, Equals, "")
+		return nil
+	})()
 	defer osutil.FakeSyscallUnmount(func(target string, flags int) error {
 		c.Assert(target, Equals, mountpoint)
 		c.Assert(flags, Equals, 0)
 		return nil
 	})()
-	err := osutil.Unmount(mountpoint)
+	err := osutil.Unmount(&osutil.UnmountOptions{
+		Target: mountpoint,
+	})
 	c.Assert(err, IsNil)
-	c.Assert(callsToSync, Equals, 1)
-}
-
-func (s *mountSuite) TestUnmountFails(c *C) {
-	mountpoint := "/mnt/foo"
-	defer osutil.FakeSyscallUnmount(func(target string, flags int) error {
-		return errors.New("cannot bar")
-	})()
-	err := osutil.Unmount(mountpoint)
-	c.Assert(err, ErrorMatches, `cannot bar`)
 }
