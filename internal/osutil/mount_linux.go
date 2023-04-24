@@ -30,7 +30,7 @@ var (
 	syscallUnmount = unix.Unmount
 )
 
-// MountOptions has all the options that can be passed to Mount()
+// MountOptions holds the options that can be passed to Mount.
 type MountOptions struct {
 	// Source is the device node to be mounted.
 	Source string
@@ -69,9 +69,9 @@ func IsMounted(baseDir string) (bool, error) {
 	return false, nil
 }
 
-// Mount attaches a filesystem accessible via the device node specified by the source
-// to the specified target. If not existing, target will be created before
-// mounting the filesystem.
+// Mount attaches a filesystem accessible via the device node specified by the
+// source to the specified target. If target doesn't exist, it will be created
+// before mounting the filesystem.
 func Mount(opts *MountOptions) error {
 	if err := os.MkdirAll(opts.Target, 0755); err != nil {
 		return fmt.Errorf("cannot create directory %q: %w", opts.Target, err)
