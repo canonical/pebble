@@ -195,6 +195,31 @@ $ pebble stop srv1        # stop one service
 
 When stopping a service, Pebble sends SIGTERM to the service's process group, and waits up to 5 seconds. If the command hasn't exited within that time window, Pebble sends SIGKILL to the service's process group and waits up to 5 more seconds. If the command exits within that 10-second time window, the stop is considered successful, otherwise `pebble stop` will exit with an error.
 
+### Updating and restarting services
+
+When you add update service configuration (by adding a layer), the services changed won't be automatically restarted. To restart them and bring the service state in sync with the new configuration, use `pebble replan`.
+
+The "replan" operation restarts `startup: enabled` services whose configuration has changed between when they started and now; if the configuration hasn't changed, replan does nothing. Replan also starts `startup: enabled` services that have not yet been started.
+
+Here is an example, where `srv1` is a service that has `startup: enabled`, and `srv2` does not:
+
+```
+$ pebble replan
+2023-04-25T15:06:50+02:00 INFO Service "srv1" already started.
+$ pebble add lay1 layer.yaml  # update srv1 config
+Layer "lay1" added successfully from "layer.yaml"
+$ pebble replan
+Stop service "srv1"
+Start service "srv1"
+$ pebble add lay2 layer.yaml  # change srv2 to "startup: enabled"
+Layer "lay2" added successfully from "layer.yaml"
+$ pebble replan
+2023-04-25T15:11:22+02:00 INFO Service "srv1" already started.
+Start service "srv2"
+```
+
+If you want to force a service to restart even if its service configuration hasn't changed, use `pebble restart <service>`.
+
 ### Service dependencies
 
 Pebble takes service dependencies into account when starting and stopping services. Before the service manager starts a service, Pebble first starts the services that service depends on (configured with `required`). Conversely, before stopping a service, Pebble first stops services that depend on that service.
