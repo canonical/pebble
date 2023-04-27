@@ -197,9 +197,9 @@ When stopping a service, Pebble sends SIGTERM to the service's process group, an
 
 ### Updating and restarting services
 
-When you add update service configuration (by adding a layer), the services changed won't be automatically restarted. To restart them and bring the service state in sync with the new configuration, use `pebble replan`.
+When you update service configuration (by adding a layer), the services changed won't be automatically restarted. To restart them and bring the service state in sync with the new configuration, use `pebble replan`.
 
-The "replan" operation restarts `startup: enabled` services whose configuration has changed between when they started and now; if the configuration hasn't changed, replan does nothing. Replan also starts `startup: enabled` services that have not yet been started.
+The "replan" operation restarts `startup: enabled` services whose configuration have changed between when they started and now; if the configuration hasn't changed, replan does nothing. Replan also starts `startup: enabled` services that have not yet been started.
 
 Here is an example, where `srv1` is a service that has `startup: enabled`, and `srv2` does not:
 
