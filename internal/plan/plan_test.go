@@ -1062,6 +1062,329 @@ var planTests = []planTest{{
 				location: http://10.1.77.196:3100/loki/api/v1/push
 				override: merge
 `},
+}, {
+	summary: "Null vs empty log targets",
+	input: []string{`
+		services:
+			svc1:
+				command: foo
+				override: merge
+				# log-targets unspecified
+			svc2:
+				command: foo
+				override: merge
+				log-targets: null
+			svc3:
+				command: foo
+				override: merge
+				log-targets: ~
+			svc4:
+				command: foo
+				override: merge
+				log-targets:
+			svc5:
+				command: foo
+				override: merge
+				log-targets: []
+`},
+	layers: []*plan.Layer{{
+		Label: "layer-0",
+		Order: 0,
+		Services: map[string]*plan.Service{
+			"svc1": {
+				Name:       "svc1",
+				Command:    "foo",
+				Override:   plan.MergeOverride,
+				LogTargets: nil,
+			},
+			"svc2": {
+				Name:       "svc2",
+				Command:    "foo",
+				Override:   plan.MergeOverride,
+				LogTargets: nil,
+			},
+			"svc3": {
+				Name:       "svc3",
+				Command:    "foo",
+				Override:   plan.MergeOverride,
+				LogTargets: nil,
+			},
+			"svc4": {
+				Name:       "svc4",
+				Command:    "foo",
+				Override:   plan.MergeOverride,
+				LogTargets: nil,
+			},
+			"svc5": {
+				Name:       "svc5",
+				Command:    "foo",
+				Override:   plan.MergeOverride,
+				LogTargets: []string{},
+			},
+		},
+		Checks:     map[string]*plan.Check{},
+		LogTargets: map[string]*plan.LogTarget{},
+	}},
+}, {
+	summary: "Merging unspecified and empty log-targets",
+	input: []string{`
+		services:
+			eem:
+				command: foo
+				override: merge
+				log-targets: []
+			eer:
+				command: foo
+				override: replace
+				log-targets: []
+			enm:
+				command: foo
+				override: merge
+				log-targets: []
+			enr:
+				command: foo
+				override: replace
+				log-targets: []
+			nem:
+				command: foo
+				override: merge
+				log-targets: ~
+			ner:
+				command: foo
+				override: replace
+				log-targets: ~
+			nnm:
+				command: foo
+				override: merge
+				log-targets: ~
+			nnr:
+				command: foo
+				override: replace
+				log-targets: ~
+`, `
+		services:
+			eem:
+				command: foo
+				override: merge
+				log-targets: []
+			eer:
+				command: foo
+				override: replace
+				log-targets: []
+			enm:
+				command: foo
+				override: merge
+				log-targets: ~
+			enr:
+				command: foo
+				override: replace
+				log-targets: ~
+			nem:
+				command: foo
+				override: merge
+				log-targets: []
+			ner:
+				command: foo
+				override: replace
+				log-targets: []
+			nnm:
+				command: foo
+				override: merge
+				log-targets: ~
+			nnr:
+				command: foo
+				override: replace
+				log-targets: ~
+`},
+	layers: []*plan.Layer{{
+		Label: "layer-0",
+		Order: 0,
+		Services: map[string]*plan.Service{
+			"eem": {
+				Name:       "eem",
+				Command:    "foo",
+				Override:   plan.MergeOverride,
+				LogTargets: []string{},
+			},
+			"eer": {
+				Name:       "eer",
+				Command:    "foo",
+				Override:   plan.ReplaceOverride,
+				LogTargets: []string{},
+			},
+			"enm": {
+				Name:       "enm",
+				Command:    "foo",
+				Override:   plan.MergeOverride,
+				LogTargets: []string{},
+			},
+			"enr": {
+				Name:       "enr",
+				Command:    "foo",
+				Override:   plan.ReplaceOverride,
+				LogTargets: []string{},
+			},
+			"nem": {
+				Name:       "nem",
+				Command:    "foo",
+				Override:   plan.MergeOverride,
+				LogTargets: nil,
+			},
+			"ner": {
+				Name:       "ner",
+				Command:    "foo",
+				Override:   plan.ReplaceOverride,
+				LogTargets: nil,
+			},
+			"nnm": {
+				Name:       "nnm",
+				Command:    "foo",
+				Override:   plan.MergeOverride,
+				LogTargets: nil,
+			},
+			"nnr": {
+				Name:       "nnr",
+				Command:    "foo",
+				Override:   plan.ReplaceOverride,
+				LogTargets: nil,
+			},
+		},
+		Checks:     map[string]*plan.Check{},
+		LogTargets: map[string]*plan.LogTarget{},
+	}, {
+		Label: "layer-1",
+		Order: 1,
+		Services: map[string]*plan.Service{
+			"eem": {
+				Name:       "eem",
+				Command:    "foo",
+				Override:   plan.MergeOverride,
+				LogTargets: []string{},
+			},
+			"eer": {
+				Name:       "eer",
+				Command:    "foo",
+				Override:   plan.ReplaceOverride,
+				LogTargets: []string{},
+			},
+			"enm": {
+				Name:       "enm",
+				Command:    "foo",
+				Override:   plan.MergeOverride,
+				LogTargets: nil,
+			},
+			"enr": {
+				Name:       "enr",
+				Command:    "foo",
+				Override:   plan.ReplaceOverride,
+				LogTargets: nil,
+			},
+			"nem": {
+				Name:       "nem",
+				Command:    "foo",
+				Override:   plan.MergeOverride,
+				LogTargets: []string{},
+			},
+			"ner": {
+				Name:       "ner",
+				Command:    "foo",
+				Override:   plan.ReplaceOverride,
+				LogTargets: []string{},
+			},
+			"nnm": {
+				Name:       "nnm",
+				Command:    "foo",
+				Override:   plan.MergeOverride,
+				LogTargets: nil,
+			},
+			"nnr": {
+				Name:       "nnr",
+				Command:    "foo",
+				Override:   plan.ReplaceOverride,
+				LogTargets: nil,
+			},
+		},
+		Checks:     map[string]*plan.Check{},
+		LogTargets: map[string]*plan.LogTarget{},
+	}},
+	result: &plan.Layer{
+		Services: map[string]*plan.Service{
+			"eem": {
+				Name:          "eem",
+				Command:       "foo",
+				Override:      plan.MergeOverride,
+				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
+				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
+				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
+				LogTargets:    []string{}, // merge [] <- [] = []
+			},
+			"eer": {
+				Name:          "eer",
+				Command:       "foo",
+				Override:      plan.ReplaceOverride,
+				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
+				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
+				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
+				LogTargets:    []string{}, // replace [] <- [] = []
+			},
+			"enm": {
+				Name:          "enm",
+				Command:       "foo",
+				Override:      plan.MergeOverride,
+				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
+				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
+				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
+				LogTargets:    []string{}, // merge [] <- nil = []
+			},
+			"enr": {
+				Name:          "enr",
+				Command:       "foo",
+				Override:      plan.ReplaceOverride,
+				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
+				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
+				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
+				LogTargets:    nil, // replace [] <- nil = nil
+			},
+			"nem": {
+				Name:          "nem",
+				Command:       "foo",
+				Override:      plan.MergeOverride,
+				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
+				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
+				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
+				LogTargets:    []string{}, // merge nil <- [] = []
+			},
+			"ner": {
+				Name:          "ner",
+				Command:       "foo",
+				Override:      plan.ReplaceOverride,
+				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
+				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
+				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
+				LogTargets:    []string{}, // replace nil <- [] = []
+			},
+			"nnm": {
+				Name:          "nnm",
+				Command:       "foo",
+				Override:      plan.MergeOverride,
+				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
+				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
+				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
+				LogTargets:    nil, // merge nil <- nil = nil
+			},
+			"nnr": {
+				Name:          "nnr",
+				Command:       "foo",
+				Override:      plan.ReplaceOverride,
+				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
+				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
+				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
+				LogTargets:    nil, // replace nil <- nil = nil
+			},
+		},
+		Checks:     map[string]*plan.Check{},
+		LogTargets: map[string]*plan.LogTarget{},
+	},
 }}
 
 func (s *S) TestParseLayer(c *C) {
@@ -1344,7 +1667,7 @@ func (s *S) TestSelectTargets(c *C) {
 	t, f := true, false
 	expected := map[string]map[string]*bool{
 		"svc1": {"unset": &t, "optout": &t, "optin": &f, "disabled": &f},
-		"svc2": {"unset": &t, "optout": &t, "optin": &f, "disabled": &f},
+		"svc2": {"unset": &f, "optout": &f, "optin": &f, "disabled": &f},
 		"svc3": {"unset": &t, "optout": &f, "optin": &f, "disabled": &f},
 		"svc4": {"unset": &f, "optout": &t, "optin": &f, "disabled": &f},
 		"svc5": {"unset": &f, "optout": &f, "optin": &t, "disabled": &f},

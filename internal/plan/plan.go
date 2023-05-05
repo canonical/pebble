@@ -119,7 +119,7 @@ func (s *Service) Copy() *Service {
 			copied.OnCheckFailure[k] = v
 		}
 	}
-	copied.LogTargets = append([]string(nil), s.LogTargets...)
+	copied.LogTargets = copyStrings(s.LogTargets)
 	return &copied
 }
 
@@ -184,7 +184,25 @@ func (s *Service) Merge(other *Service) {
 	if other.BackoffLimit.IsSet {
 		s.BackoffLimit = other.BackoffLimit
 	}
-	s.LogTargets = appendUnique(s.LogTargets, other.LogTargets...)
+	if s.LogTargets == nil {
+		s.LogTargets = copyStrings(other.LogTargets)
+	} else {
+		s.LogTargets = appendUnique(s.LogTargets, other.LogTargets...)
+	}
+}
+
+// copyStrings returns a copy of the provided []string, in such a way that:
+//   - copyStrings(nil) returns nil;
+//   - copyStrings([]string{}) returns []string{}.
+//
+// TODO: move this function into canonical/x-go/strutil
+func copyStrings(s []string) []string {
+	if s == nil {
+		return nil
+	}
+	ret := make([]string, len(s))
+	copy(ret, s)
+	return ret
 }
 
 // appendUnique appends into a the elements from b which are not yet present
@@ -213,13 +231,13 @@ func (s *Service) Equal(other *Service) bool {
 
 // LogsTo returns true if the logs from s should be forwarded to target t.
 // This happens if:
-//   - t.Selection is "opt-out" or empty, and s.LogTargets is empty; or
+//   - t.Selection is "opt-out" or empty, and s.LogTargets is nil; or
 //   - t.Selection is not "disabled", and s.LogTargets contains t.
 func (s *Service) LogsTo(t *LogTarget) bool {
 	if t.Selection == DisabledSelection {
 		return false
 	}
-	if len(s.LogTargets) == 0 {
+	if s.LogTargets == nil {
 		if t.Selection == UnsetSelection || t.Selection == OptOutSelection {
 			return true
 		}
