@@ -15,4 +15,4 @@ require (
 	gopkg.in/yaml.v3 v3.0.1
 )
 
-replace github.com/canonical/x-go => github.com/rebornplusplus/canonical-x-go v0.0.0-20230309051359-1ec2b2ee698e
+replace github.com/canonical/x-go => github.com/rebornplusplus/canonical-x-go v0.0.0-20230425082201-61c9f268b5f0
