@@ -14,5 +14,3 @@ require (
 	gopkg.in/tomb.v2 v2.0.0-20161208151619-d5d1b5820637
 	gopkg.in/yaml.v3 v3.0.1
 )
-
-replace github.com/canonical/x-go => github.com/rebornplusplus/canonical-x-go v0.0.0-20230425082201-61c9f268b5f0
