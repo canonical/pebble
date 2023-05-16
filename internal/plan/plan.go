@@ -215,6 +215,12 @@ func (s *Service) Equal(other *Service) bool {
 // The base command is returned as a stream and the default arguments
 // in [ ... ] group is returned as another stream.
 func (s *Service) ParseCommand() (base, extra []string, err error) {
+	defer func() {
+		if err != nil {
+			err = fmt.Errorf("cannot parse service %q command: %w", s.Name, err)
+		}
+	}()
+
 	args, err := shlex.Split(s.Command)
 	if err != nil {
 		return nil, nil, err
@@ -235,11 +241,11 @@ func (s *Service) ParseCommand() (base, extra []string, err error) {
 			continue
 		}
 		if gotBrackets {
-			return nil, nil, fmt.Errorf("cannot have any args after [ ... ] group")
+			return nil, nil, fmt.Errorf("cannot have any arguments after [ ... ] group")
 		}
 		if arg == "[" {
 			if idx == 0 {
-				return nil, nil, fmt.Errorf("command cannot be started with default arguments")
+				return nil, nil, fmt.Errorf("cannot start command with [ ... ] group")
 			}
 			inBrackets = true
 			gotBrackets = true

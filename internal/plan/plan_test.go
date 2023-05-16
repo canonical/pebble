@@ -475,7 +475,7 @@ var planTests = []planTest{{
 	`},
 }, {
 	summary: `Invalid service command`,
-	error:   `plan service "svc1" command invalid: EOF found when expecting closing quote`,
+	error:   `plan service "svc1" command invalid: cannot parse service "svc1" command: EOF found when expecting closing quote`,
 	input: []string{`
 		services:
 			svc1:
@@ -504,8 +504,8 @@ var planTests = []planTest{{
 		LogTargets: map[string]*plan.LogTarget{},
 	}},
 }, {
-	summary: `Invalid service command: cannot have any args after [ ... ] group`,
-	error:   `plan service "svc1" command invalid: cannot have any args after \[ ... \] group`,
+	summary: `Invalid service command: cannot have any arguments after [ ... ] group`,
+	error:   `plan service "svc1" command invalid: cannot parse service "svc1" command: cannot have any arguments after \[ ... \] group`,
 	input: []string{`
 		services:
 			"svc1":
@@ -514,7 +514,7 @@ var planTests = []planTest{{
 	`},
 }, {
 	summary: `Invalid service command: cannot have ] outside of [ ... ] group`,
-	error:   `plan service "svc1" command invalid: cannot have \] outside of \[ ... \] group`,
+	error:   `plan service "svc1" command invalid: cannot parse service "svc1" command: cannot have \] outside of \[ ... \] group`,
 	input: []string{`
 		services:
 			"svc1":
@@ -523,7 +523,7 @@ var planTests = []planTest{{
 	`},
 }, {
 	summary: `Invalid service command: cannot nest [ ... ] groups`,
-	error:   `plan service "svc1" command invalid: cannot nest \[ ... \] groups`,
+	error:   `plan service "svc1" command invalid: cannot parse service "svc1" command: cannot nest \[ ... \] groups`,
 	input: []string{`
 		services:
 			"svc1":
@@ -1417,16 +1417,16 @@ var cmdTests = []struct {
 }, {
 	summary: "[ ... ] should be a suffix",
 	command: "cmd [ --foo ] --bar",
-	error:   `cannot have any args after \[ ... \] group`,
+	error:   `cannot parse service "svc" command: cannot have any arguments after \[ ... \] group`,
 }, {
 	summary: "[ ... ] should not be prefix",
 	command: "[ cmd --foo ]",
-	error:   `command cannot be started with default arguments`,
+	error:   `cannot parse service "svc" command: cannot start command with \[ ... \] group`,
 }}
 
 func (s *S) TestParseCommand(c *C) {
 	for _, test := range cmdTests {
-		service := plan.Service{Command: test.command}
+		service := plan.Service{Name: "svc", Command: test.command}
 
 		// parse base and the default arguments in [ ... ]
 		base, extra, err := service.ParseCommand()

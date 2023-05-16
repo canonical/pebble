@@ -524,8 +524,7 @@ func (m *ServiceManager) SetServiceArgs(serviceArgs map[string][]string) error {
 	defer releasePlan()
 
 	newLayer := &plan.Layer{
-		// TODO: Consider making "pebble-service-args" a reserved label.
-		// Or more generally, consider making any labels starting with
+		// TODO: Consider making any labels starting with
 		// the "pebble-" prefix reserved.
 		Label:    "pebble-service-args",
 		Services: make(map[string]*plan.Service),
