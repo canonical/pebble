@@ -806,7 +806,9 @@ var planTests = []planTest{{
 				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
 				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
 				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
-				LogTargets:    []string{"tgt1"},
+				LogTargets: plan.LogTargets{
+					Targets: []string{"tgt1"},
+				},
 			},
 			"svc2": {
 				Name:          "svc2",
@@ -816,7 +818,9 @@ var planTests = []planTest{{
 				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
 				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
 				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
-				LogTargets:    []string{"tgt1", "tgt2"},
+				LogTargets: plan.LogTargets{
+					Targets: []string{"tgt1", "tgt2"},
+				},
 			},
 		},
 		Checks: map[string]*plan.Check{},
@@ -894,18 +898,22 @@ var planTests = []planTest{{
 		Order: 0,
 		Services: map[string]*plan.Service{
 			"svc1": {
-				Name:       "svc1",
-				Command:    "foo",
-				Override:   plan.MergeOverride,
-				Startup:    plan.StartupEnabled,
-				LogTargets: []string{"tgt1"},
+				Name:     "svc1",
+				Command:  "foo",
+				Override: plan.MergeOverride,
+				Startup:  plan.StartupEnabled,
+				LogTargets: plan.LogTargets{
+					Targets: []string{"tgt1"},
+				},
 			},
 			"svc2": {
-				Name:       "svc2",
-				Command:    "bar",
-				Override:   plan.MergeOverride,
-				Startup:    plan.StartupEnabled,
-				LogTargets: []string{"tgt1", "tgt2"},
+				Name:     "svc2",
+				Command:  "bar",
+				Override: plan.MergeOverride,
+				Startup:  plan.StartupEnabled,
+				LogTargets: plan.LogTargets{
+					Targets: []string{"tgt1", "tgt2"},
+				},
 			},
 		},
 		Checks: map[string]*plan.Check{},
@@ -928,17 +936,21 @@ var planTests = []planTest{{
 		Order: 1,
 		Services: map[string]*plan.Service{
 			"svc1": {
-				Name:       "svc1",
-				Command:    "foo",
-				Override:   plan.MergeOverride,
-				LogTargets: []string{"tgt3"},
+				Name:     "svc1",
+				Command:  "foo",
+				Override: plan.MergeOverride,
+				LogTargets: plan.LogTargets{
+					Targets: []string{"tgt3"},
+				},
 			},
 			"svc2": {
-				Name:       "svc2",
-				Command:    "bar",
-				Override:   plan.ReplaceOverride,
-				Startup:    plan.StartupEnabled,
-				LogTargets: []string{"tgt3"},
+				Name:     "svc2",
+				Command:  "bar",
+				Override: plan.ReplaceOverride,
+				Startup:  plan.StartupEnabled,
+				LogTargets: plan.LogTargets{
+					Targets: []string{"tgt3"},
+				},
 			},
 		},
 		Checks: map[string]*plan.Check{},
@@ -972,7 +984,9 @@ var planTests = []planTest{{
 				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
 				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
 				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
-				LogTargets:    []string{"tgt1", "tgt3"},
+				LogTargets: plan.LogTargets{
+					Targets: []string{"tgt1", "tgt3"},
+				},
 			},
 			"svc2": {
 				Name:          "svc2",
@@ -982,7 +996,9 @@ var planTests = []planTest{{
 				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
 				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
 				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
-				LogTargets:    []string{"tgt3"},
+				LogTargets: plan.LogTargets{
+					Targets: []string{"tgt3"},
+				},
 			},
 		},
 		Checks: map[string]*plan.Check{},
@@ -1331,13 +1347,27 @@ func (s *S) TestSelectTargets(c *C) {
 		{Name: "disabled", Selection: plan.DisabledSelection},
 	}
 	services := []*plan.Service{
-		{Name: "svc1", LogTargets: nil},
-		{Name: "svc2", LogTargets: []string{}},
-		{Name: "svc3", LogTargets: []string{"unset"}},
-		{Name: "svc4", LogTargets: []string{"optout"}},
-		{Name: "svc5", LogTargets: []string{"optin"}},
-		{Name: "svc6", LogTargets: []string{"disabled"}},
-		{Name: "svc7", LogTargets: []string{"unset", "optin", "disabled"}},
+		{Name: "svc1", LogTargets: plan.LogTargets{
+			Targets: nil,
+		}},
+		{Name: "svc2", LogTargets: plan.LogTargets{
+			Targets: []string{},
+		}},
+		{Name: "svc3", LogTargets: plan.LogTargets{
+			Targets: []string{"unset"},
+		}},
+		{Name: "svc4", LogTargets: plan.LogTargets{
+			Targets: []string{"optout"},
+		}},
+		{Name: "svc5", LogTargets: plan.LogTargets{
+			Targets: []string{"optin"},
+		}},
+		{Name: "svc6", LogTargets: plan.LogTargets{
+			Targets: []string{"disabled"},
+		}},
+		{Name: "svc7", LogTargets: plan.LogTargets{
+			Targets: []string{"unset", "optin", "disabled"},
+		}},
 	}
 
 	// Use pointers to bools so the test will fail if we forget to set a value
@@ -1359,5 +1389,26 @@ func (s *S) TestSelectTargets(c *C) {
 			c.Check(service.LogsTo(target), Equals, *exp,
 				Commentf("unexpected value for %s.LogsTo(%s)", service.Name, target.Name))
 		}
+	}
+}
+
+func (s *S) TestMergeLogTargets(c *C) {
+	tests := []struct {
+		t1, t2, res plan.LogTargets
+	}{{
+		t1: plan.LogTargets{
+			Targets: []string{"tgt1"},
+		},
+		t2: plan.LogTargets{
+			Targets: []string{"tgt3"},
+		},
+		res: plan.LogTargets{
+			Targets: []string{"tgt1", "tgt3"},
+		},
+	}}
+
+	for _, t := range tests {
+		merged := plan.MergeLogTargets(t.t1, t.t2)
+		c.Check(merged, DeepEquals, t.res)
 	}
 }
