@@ -90,7 +90,7 @@ type Service struct {
 	KillDelay      OptionalDuration         `yaml:"kill-delay,omitempty"`
 
 	// Log forwarding
-	LogTargets []string `yaml:"log-targets,omitempty"`
+	LogTargets *LogTargets `yaml:"log-targets,omitempty"`
 }
 
 // Copy returns a deep copy of the service.
@@ -119,7 +119,7 @@ func (s *Service) Copy() *Service {
 			copied.OnCheckFailure[k] = v
 		}
 	}
-	copied.LogTargets = append([]string(nil), s.LogTargets...)
+	copied.LogTargets = s.LogTargets.Copy()
 	return &copied
 }
 
@@ -184,7 +184,7 @@ func (s *Service) Merge(other *Service) {
 	if other.BackoffLimit.IsSet {
 		s.BackoffLimit = other.BackoffLimit
 	}
-	s.LogTargets = appendUnique(s.LogTargets, other.LogTargets...)
+	s.LogTargets.Merge(other.LogTargets)
 }
 
 // appendUnique appends into a the elements from b which are not yet present
@@ -275,20 +275,7 @@ func CommandString(base, extra []string) string {
 //   - t.Selection is "opt-out" or empty, and s.LogTargets is empty; or
 //   - t.Selection is not "disabled", and s.LogTargets contains t.
 func (s *Service) LogsTo(t *LogTarget) bool {
-	if t.Selection == DisabledSelection {
-		return false
-	}
-	if len(s.LogTargets) == 0 {
-		if t.Selection == UnsetSelection || t.Selection == OptOutSelection {
-			return true
-		}
-	}
-	for _, targetName := range s.LogTargets {
-		if targetName == t.Name {
-			return true
-		}
-	}
-	return false
+	return s.LogTargets.LogsTo(t)
 }
 
 type ServiceStartup string
@@ -316,6 +303,91 @@ const (
 	ActionShutdown ServiceAction = "shutdown"
 	ActionIgnore   ServiceAction = "ignore"
 )
+
+type LogTargets struct {
+	targets []string
+	keyword string
+	replace bool
+}
+
+const (
+	// Valid keywords for LogTargets
+	defaultLogTargets = "default"
+	allLogTargets     = "all"
+	noLogTargets      = "none"
+
+	// Tag used to replace value (rather than append)
+	logTargetsReplaceTag = "!replace"
+)
+
+func (t *LogTargets) UnmarshalYAML(value *yaml.Node) error {
+	// Check for !replace tag
+	t.replace = (value.Tag == logTargetsReplaceTag)
+
+	if value.Kind == yaml.ScalarNode {
+		switch value.Value {
+		case defaultLogTargets, allLogTargets, noLogTargets:
+			t.keyword = value.Value
+			return nil
+		default:
+			return fmt.Errorf("invalid value %q for LogTargets", value.Value)
+		}
+	}
+
+	// unmarshal to []string
+	return value.Decode(&t.targets)
+}
+
+// Copy returns a deep copy of this LogTargets struct.
+func (t *LogTargets) Copy() *LogTargets {
+	return &LogTargets{
+		targets: append([]string(nil), t.targets...),
+		keyword: t.keyword,
+		replace: t.replace,
+	}
+}
+
+// Merge merges the fields set in other into t.
+func (t *LogTargets) Merge(other *LogTargets) {
+	if other.replace {
+		t.targets = append([]string(nil), other.targets...)
+		t.keyword = other.keyword
+		return
+	}
+
+	t.targets = appendUnique(t.targets, other.targets...)
+	if other.keyword != "" {
+		t.keyword = other.keyword
+	}
+}
+
+func (t *LogTargets) LogsTo(tgt *LogTarget) bool {
+	// Handle keywords
+	switch t.keyword {
+	case allLogTargets:
+		return tgt.Selection != DisabledSelection
+	case defaultLogTargets:
+		return tgt.Selection == OptOutSelection || tgt.Selection == UnsetSelection
+	case noLogTargets:
+		return false
+	}
+
+	// No keyword
+	if tgt.Selection == DisabledSelection {
+		return false
+	}
+	if len(t.targets) == 0 {
+		if tgt.Selection == UnsetSelection || tgt.Selection == OptOutSelection {
+			return true
+		}
+	}
+	for _, targetName := range t.targets {
+		if targetName == tgt.Name {
+			return true
+		}
+	}
+	return false
+}
 
 // Check specifies configuration for a single health check.
 type Check struct {
@@ -811,7 +883,7 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 
 	// Validate service log targets
 	for serviceName, service := range combined.Services {
-		for _, targetName := range service.LogTargets {
+		for _, targetName := range service.LogTargets.targets {
 			_, ok := combined.LogTargets[targetName]
 			if !ok {
 				return nil, &FormatError{
