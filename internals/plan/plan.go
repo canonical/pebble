@@ -90,7 +90,7 @@ type Service struct {
 	KillDelay      OptionalDuration         `yaml:"kill-delay,omitempty"`
 
 	// Log forwarding
-	LogTargets *LogTargets `yaml:"log-targets,omitempty"`
+	LogTargets LogTargets `yaml:"log-targets,omitempty"`
 }
 
 // Copy returns a deep copy of the service.
@@ -184,7 +184,7 @@ func (s *Service) Merge(other *Service) {
 	if other.BackoffLimit.IsSet {
 		s.BackoffLimit = other.BackoffLimit
 	}
-	s.LogTargets.Merge(other.LogTargets)
+	s.LogTargets = MergeLogTargets(s.LogTargets, other.LogTargets)
 }
 
 // appendUnique appends into a the elements from b which are not yet present
@@ -305,9 +305,9 @@ const (
 )
 
 type LogTargets struct {
-	targets []string
-	keyword string
-	replace bool
+	Targets []string
+	Keyword string
+	Replace bool
 }
 
 const (
@@ -322,12 +322,12 @@ const (
 
 func (t *LogTargets) UnmarshalYAML(value *yaml.Node) error {
 	// Check for !replace tag
-	t.replace = (value.Tag == logTargetsReplaceTag)
+	t.Replace = (value.Tag == logTargetsReplaceTag)
 
 	if value.Kind == yaml.ScalarNode {
 		switch value.Value {
 		case defaultLogTargets, allLogTargets, noLogTargets:
-			t.keyword = value.Value
+			t.Keyword = value.Value
 			return nil
 		default:
 			return fmt.Errorf("invalid value %q for LogTargets", value.Value)
@@ -335,35 +335,36 @@ func (t *LogTargets) UnmarshalYAML(value *yaml.Node) error {
 	}
 
 	// unmarshal to []string
-	return value.Decode(&t.targets)
+	return value.Decode(&t.Targets)
 }
 
 // Copy returns a deep copy of this LogTargets struct.
-func (t *LogTargets) Copy() *LogTargets {
-	return &LogTargets{
-		targets: append([]string(nil), t.targets...),
-		keyword: t.keyword,
-		replace: t.replace,
+func (t *LogTargets) Copy() LogTargets {
+	return LogTargets{
+		Targets: append([]string(nil), t.Targets...),
+		Keyword: t.Keyword,
+		Replace: t.Replace,
 	}
 }
 
-// Merge merges the fields set in other into t.
-func (t *LogTargets) Merge(other *LogTargets) {
-	if other.replace {
-		t.targets = append([]string(nil), other.targets...)
-		t.keyword = other.keyword
-		return
+// MergeLogTargets returns the result of merging other into t.
+func MergeLogTargets(t, other LogTargets) (res LogTargets) {
+	if other.Replace {
+		return other
 	}
 
-	t.targets = appendUnique(t.targets, other.targets...)
-	if other.keyword != "" {
-		t.keyword = other.keyword
+	res.Targets = appendUnique(t.Targets, other.Targets...)
+	if other.Keyword == "" {
+		res.Keyword = t.Keyword
+	} else {
+		res.Keyword = other.Keyword
 	}
+	return
 }
 
 func (t *LogTargets) LogsTo(tgt *LogTarget) bool {
 	// Handle keywords
-	switch t.keyword {
+	switch t.Keyword {
 	case allLogTargets:
 		return tgt.Selection != DisabledSelection
 	case defaultLogTargets:
@@ -376,12 +377,12 @@ func (t *LogTargets) LogsTo(tgt *LogTarget) bool {
 	if tgt.Selection == DisabledSelection {
 		return false
 	}
-	if len(t.targets) == 0 {
+	if len(t.Targets) == 0 {
 		if tgt.Selection == UnsetSelection || tgt.Selection == OptOutSelection {
 			return true
 		}
 	}
-	for _, targetName := range t.targets {
+	for _, targetName := range t.Targets {
 		if targetName == tgt.Name {
 			return true
 		}
@@ -883,7 +884,7 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 
 	// Validate service log targets
 	for serviceName, service := range combined.Services {
-		for _, targetName := range service.LogTargets.targets {
+		for _, targetName := range service.LogTargets.Targets {
 			_, ok := combined.LogTargets[targetName]
 			if !ok {
 				return nil, &FormatError{
