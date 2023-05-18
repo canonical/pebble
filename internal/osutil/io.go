@@ -43,6 +43,8 @@ const (
 // all unit tests in general.
 var unsafeIO bool = len(os.Args) > 0 && strings.HasSuffix(os.Args[0], ".test") && os.Getenv("UNSAFE_IO") == "1"
 
+var atomicFilePrng = randutil.NewPseudoRand(nil)
+
 // An AtomicFile is similar to an os.File but it has an additional
 // Commit() method that does whatever needs to be done so the
 // modification is "atomic": an AtomicFile will do its best to leave
@@ -92,7 +94,7 @@ func NewAtomicFile(filename string, perm os.FileMode, flags AtomicWriteFlags, ui
 	// aa-enforce. Tools from this package enumerate all profiles by loading
 	// parsing any file found in /etc/apparmor.d/, skipping only very specific
 	// suffixes, such as the one we selected below.
-	tmp := filename + "." + randutil.RandomString(12) + "~"
+	tmp := filename + "." + atomicFilePrng.RandomString(12) + "~"
 
 	fd, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_TRUNC|os.O_EXCL, perm)
 	if err != nil {

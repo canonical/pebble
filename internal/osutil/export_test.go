@@ -27,6 +27,8 @@ import (
 	"github.com/canonical/pebble/internal/osutil/sys"
 )
 
+var AtomicFilePrng = atomicFilePrng
+
 func FakeUserCurrent(f func() (*user.User, error)) func() {
 	realUserCurrent := userCurrent
 	userCurrent = f

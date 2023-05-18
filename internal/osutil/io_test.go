@@ -22,12 +22,10 @@ package osutil_test
 import (
 	"errors"
 	"io/ioutil"
-	"math/rand"
 	"os"
 	"path/filepath"
 	"syscall"
 
-	"github.com/canonical/x-go/randutil"
 	. "gopkg.in/check.v1"
 
 	"github.com/canonical/pebble/internal/osutil"
@@ -169,10 +167,10 @@ func (ts *AtomicWriteTestSuite) TestAtomicWriteFileOverwriteRelativeSymlink(c *C
 func (ts *AtomicWriteTestSuite) TestAtomicWriteFileNoOverwriteTmpExisting(c *C) {
 	tmpdir := c.MkDir()
 	// ensure we always get the same result
-	rand.Seed(1)
-	expectedRandomness := randutil.RandomString(12) + "~"
+	osutil.AtomicFilePrng.Reseed(1)
+	expectedRandomness := osutil.AtomicFilePrng.RandomString(12) + "~"
 	// ensure we always get the same result
-	rand.Seed(1)
+	osutil.AtomicFilePrng.Reseed(1)
 
 	p := filepath.Join(tmpdir, "foo")
 	err := ioutil.WriteFile(p+"."+expectedRandomness, []byte(""), 0644)
