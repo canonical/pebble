@@ -1078,6 +1078,275 @@ var planTests = []planTest{{
 				location: http://10.1.77.196:3100/loki/api/v1/push
 				override: merge
 `},
+}, {
+	summary: "LogTargets parsing",
+	input: []string{`
+		services:
+			svc1:
+				command: foo
+				override: merge
+				log-targets: default
+			svc2:
+				command: foo
+				override: merge
+				log-targets: all
+			svc3:
+				command: foo
+				override: merge
+				log-targets: none
+			svc4:
+				command: foo
+				override: merge
+				log-targets: [tgt1, tgt2]
+			svc5:
+				command: foo
+				override: merge
+				log-targets: !replace default
+			svc6:
+				command: foo
+				override: merge
+				log-targets: !replace all
+			svc7:
+				command: foo
+				override: merge
+				log-targets: !replace none
+			svc8:
+				command: foo
+				override: merge
+				log-targets: !replace [tgt1, tgt2]
+
+		log-targets:
+			tgt1:
+				type: loki
+				selection: disabled
+				override: merge
+			tgt2:
+				type: loki
+				selection: disabled
+				override: merge
+`},
+	layers: []*plan.Layer{{
+		Label: "layer-0",
+		Order: 0,
+		Services: map[string]*plan.Service{
+			"svc1": {
+				Name:     "svc1",
+				Command:  "foo",
+				Override: plan.MergeOverride,
+				LogTargets: plan.LogTargets{
+					Keyword: plan.DefaultLogTargets,
+				},
+			},
+			"svc2": {
+				Name:     "svc2",
+				Command:  "foo",
+				Override: plan.MergeOverride,
+				LogTargets: plan.LogTargets{
+					Keyword: plan.AllLogTargets,
+				},
+			},
+			"svc3": {
+				Name:     "svc3",
+				Command:  "foo",
+				Override: plan.MergeOverride,
+				LogTargets: plan.LogTargets{
+					Keyword: plan.NoLogTargets,
+				},
+			},
+			"svc4": {
+				Name:     "svc4",
+				Command:  "foo",
+				Override: plan.MergeOverride,
+				LogTargets: plan.LogTargets{
+					Targets: []string{"tgt1", "tgt2"},
+				},
+			},
+			"svc5": {
+				Name:     "svc5",
+				Command:  "foo",
+				Override: plan.MergeOverride,
+				LogTargets: plan.LogTargets{
+					Keyword: plan.DefaultLogTargets,
+					Replace: true,
+				},
+			},
+			"svc6": {
+				Name:     "svc6",
+				Command:  "foo",
+				Override: plan.MergeOverride,
+				LogTargets: plan.LogTargets{
+					Keyword: plan.AllLogTargets,
+					Replace: true,
+				},
+			},
+			"svc7": {
+				Name:     "svc7",
+				Command:  "foo",
+				Override: plan.MergeOverride,
+				LogTargets: plan.LogTargets{
+					Keyword: plan.NoLogTargets,
+					Replace: true,
+				},
+			},
+			"svc8": {
+				Name:     "svc8",
+				Command:  "foo",
+				Override: plan.MergeOverride,
+				LogTargets: plan.LogTargets{
+					Targets: []string{"tgt1", "tgt2"},
+					Replace: true,
+				},
+			},
+		},
+		Checks: map[string]*plan.Check{},
+		LogTargets: map[string]*plan.LogTarget{
+			"tgt1": {
+				Name:      "tgt1",
+				Type:      plan.LokiTarget,
+				Selection: plan.DisabledSelection,
+				Override:  plan.MergeOverride,
+			},
+			"tgt2": {
+				Name:      "tgt2",
+				Type:      plan.LokiTarget,
+				Selection: plan.DisabledSelection,
+				Override:  plan.MergeOverride,
+			},
+		},
+	}},
+}, {
+	summary: "Replacing LogTargets in merge",
+	input: []string{`
+		services:
+			svc1:
+				command: foo
+				override: merge
+				log-targets: [tgt1, tgt2]
+			svc2:
+				command: foo
+				override: merge
+				log-targets: [tgt1, tgt2]
+			svc3:
+				command: foo
+				override: merge
+				log-targets: [tgt1, tgt2]
+			svc4:
+				command: foo
+				override: merge
+				log-targets: none
+
+		log-targets:
+			tgt1:
+				type: loki
+				selection: disabled
+				override: merge
+			tgt2:
+				type: loki
+				selection: disabled
+				override: merge
+`, `
+		services:
+			svc1:
+				command: foo
+				override: merge
+				log-targets: [tgt3]
+			svc2:
+				command: foo
+				override: merge
+				log-targets: !replace [tgt3]
+			svc3:
+				command: foo
+				override: merge
+				log-targets: default
+			svc4:
+				command: foo
+				override: merge
+				log-targets: [tgt1, tgt2]
+
+		log-targets:
+			tgt1:
+				type: loki
+				selection: disabled
+				override: merge
+			tgt2:
+				type: loki
+				selection: disabled
+				override: merge
+			tgt3:
+				type: loki
+				selection: disabled
+				override: merge
+`},
+	result: &plan.Layer{
+		Services: map[string]*plan.Service{
+			"svc1": {
+				Name:          "svc1",
+				Command:       "foo",
+				Override:      plan.MergeOverride,
+				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
+				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
+				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
+				LogTargets: plan.LogTargets{
+					Targets: []string{"tgt1", "tgt2", "tgt3"},
+				},
+			},
+			"svc2": {
+				Name:          "svc2",
+				Command:       "foo",
+				Override:      plan.MergeOverride,
+				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
+				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
+				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
+				LogTargets: plan.LogTargets{
+					Targets: []string{"tgt3"},
+					Replace: true,
+				},
+			},
+			"svc3": {
+				Name:          "svc3",
+				Command:       "foo",
+				Override:      plan.MergeOverride,
+				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
+				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
+				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
+				LogTargets: plan.LogTargets{
+					Keyword: plan.DefaultLogTargets,
+				},
+			},
+			"svc4": {
+				Name:          "svc4",
+				Command:       "foo",
+				Override:      plan.MergeOverride,
+				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
+				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
+				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
+				LogTargets: plan.LogTargets{
+					Targets: []string{"tgt1", "tgt2"},
+				},
+			},
+		},
+		Checks: map[string]*plan.Check{},
+		LogTargets: map[string]*plan.LogTarget{
+			"tgt1": {
+				Name:      "tgt1",
+				Type:      plan.LokiTarget,
+				Selection: plan.DisabledSelection,
+				Override:  plan.MergeOverride,
+			},
+			"tgt2": {
+				Name:      "tgt2",
+				Type:      plan.LokiTarget,
+				Selection: plan.DisabledSelection,
+				Override:  plan.MergeOverride,
+			},
+			"tgt3": {
+				Name:      "tgt3",
+				Type:      plan.LokiTarget,
+				Selection: plan.DisabledSelection,
+				Override:  plan.MergeOverride,
+			},
+		},
+	},
 }}
 
 func (s *S) TestParseLayer(c *C) {
@@ -1392,23 +1661,76 @@ func (s *S) TestSelectTargets(c *C) {
 	}
 }
 
-func (s *S) TestMergeLogTargets(c *C) {
+func (s *S) TestParseAndMergeLogTargets(c *C) {
 	tests := []struct {
-		t1, t2, res plan.LogTargets
+		base, override string
+		res            plan.LogTargets
 	}{{
-		t1: plan.LogTargets{
-			Targets: []string{"tgt1"},
-		},
-		t2: plan.LogTargets{
-			Targets: []string{"tgt3"},
-		},
+		base: "[tgt1]", override: "[tgt3]",
 		res: plan.LogTargets{
 			Targets: []string{"tgt1", "tgt3"},
 		},
+	}, {
+		base: "[tgt1]", override: "!replace [tgt3]",
+		res: plan.LogTargets{
+			Targets: []string{"tgt3"},
+			Replace: true,
+		},
+	}, {
+		base: "default", override: "all",
+		res: plan.LogTargets{
+			Keyword: plan.AllLogTargets,
+		},
+	}, {
+		base: "[tgt1]", override: "default",
+		res: plan.LogTargets{
+			Keyword: plan.DefaultLogTargets,
+		},
+	}, {
+		base: "[tgt1]", override: "!replace default",
+		res: plan.LogTargets{
+			Keyword: plan.DefaultLogTargets,
+			Replace: true,
+		},
+	}, {
+		base: "[tgt1]", override: "none",
+		res: plan.LogTargets{
+			Keyword: plan.NoLogTargets,
+		},
+	}, {
+		base: "[tgt1]", override: "!replace none",
+		res: plan.LogTargets{
+			Keyword: plan.NoLogTargets,
+			Replace: true,
+		},
+	}, {
+		base: "default", override: "[tgt1]",
+		res: plan.LogTargets{
+			Targets: []string{"tgt1"},
+		},
+	}, {
+		base: "all", override: "[tgt1]",
+		res: plan.LogTargets{
+			Targets: []string{"tgt1"},
+		},
+	}, {
+		base: "none", override: "[tgt1]",
+		res: plan.LogTargets{
+			Targets: []string{"tgt1"},
+		},
 	}}
 
+	parseLogTargets := func(raw string) plan.LogTargets {
+		parsed := plan.LogTargets{}
+		err := yaml.Unmarshal([]byte(raw), &parsed)
+		c.Assert(err, IsNil)
+		return parsed
+	}
+
 	for _, t := range tests {
-		merged := plan.MergeLogTargets(t.t1, t.t2)
-		c.Check(merged, DeepEquals, t.res)
+		base := parseLogTargets(t.base)
+		override := parseLogTargets(t.override)
+		merged := plan.MergeLogTargets(base, override)
+		c.Check(merged, DeepEquals, t.res, Commentf("merge %s <- %s", t.base, t.override))
 	}
 }

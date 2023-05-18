@@ -253,9 +253,9 @@ type LogTargets struct {
 
 const (
 	// Valid keywords for LogTargets
-	defaultLogTargets = "default"
-	allLogTargets     = "all"
-	noLogTargets      = "none"
+	DefaultLogTargets = "default"
+	AllLogTargets     = "all"
+	NoLogTargets      = "none"
 
 	// Tag used to replace value (rather than append)
 	logTargetsReplaceTag = "!replace"
@@ -267,7 +267,7 @@ func (t *LogTargets) UnmarshalYAML(value *yaml.Node) error {
 
 	if value.Kind == yaml.ScalarNode {
 		switch value.Value {
-		case defaultLogTargets, allLogTargets, noLogTargets:
+		case DefaultLogTargets, AllLogTargets, NoLogTargets:
 			t.Keyword = value.Value
 			return nil
 		default:
@@ -290,27 +290,28 @@ func (t *LogTargets) Copy() LogTargets {
 
 // MergeLogTargets returns the result of merging other into t.
 func MergeLogTargets(t, other LogTargets) (res LogTargets) {
-	if other.Replace {
+	if other.Replace || other.Keyword != "" {
 		return other
 	}
 
-	res.Targets = appendUnique(t.Targets, other.Targets...)
-	if other.Keyword == "" {
-		res.Keyword = t.Keyword
-	} else {
-		res.Keyword = other.Keyword
+	// keyword <- [list] yields [list]
+	if t.Keyword != "" && len(other.Targets) > 0 {
+		return other
 	}
+
+	// [list] <- [list] - merge lists
+	res.Targets = appendUnique(t.Targets, other.Targets...)
 	return
 }
 
 func (t *LogTargets) LogsTo(tgt *LogTarget) bool {
 	// Handle keywords
 	switch t.Keyword {
-	case allLogTargets:
+	case AllLogTargets:
 		return tgt.Selection != DisabledSelection
-	case defaultLogTargets:
+	case DefaultLogTargets:
 		return tgt.Selection == OptOutSelection || tgt.Selection == UnsetSelection
-	case noLogTargets:
+	case NoLogTargets:
 		return false
 	}
 
