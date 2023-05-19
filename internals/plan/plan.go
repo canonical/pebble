@@ -90,7 +90,8 @@ type Service struct {
 	KillDelay      OptionalDuration         `yaml:"kill-delay,omitempty"`
 
 	// Log forwarding
-	LogTargets LogTargets `yaml:"log-targets,omitempty"`
+	LogTargets        *LogTargets `yaml:"log-targets,omitempty"`
+	LogTargetsReplace *LogTargets `yaml:"^log-targets,omitempty"`
 }
 
 // Copy returns a deep copy of the service.
@@ -119,7 +120,12 @@ func (s *Service) Copy() *Service {
 			copied.OnCheckFailure[k] = v
 		}
 	}
-	copied.LogTargets = s.LogTargets.Copy()
+	if s.LogTargets != nil {
+		copied.LogTargets = s.LogTargets.Copy()
+	}
+	if s.LogTargetsReplace != nil {
+		copied.LogTargetsReplace = s.LogTargetsReplace.Copy()
+	}
 	return &copied
 }
 
@@ -184,7 +190,15 @@ func (s *Service) Merge(other *Service) {
 	if other.BackoffLimit.IsSet {
 		s.BackoffLimit = other.BackoffLimit
 	}
-	s.LogTargets = MergeLogTargets(s.LogTargets, other.LogTargets)
+
+	// Merge log targets
+	if other.LogTargetsReplace != nil {
+		s.LogTargets = other.LogTargetsReplace.Copy()
+	} else if s.LogTargets != nil {
+		s.LogTargets.Merge(other.LogTargets)
+	} else {
+		s.LogTargets = other.LogTargets
+	}
 }
 
 // appendUnique appends into a the elements from b which are not yet present
@@ -307,7 +321,6 @@ const (
 type LogTargets struct {
 	Targets []string
 	Keyword string
-	Replace bool
 }
 
 const (
@@ -315,15 +328,9 @@ const (
 	DefaultLogTargets = "default"
 	AllLogTargets     = "all"
 	NoLogTargets      = "none"
-
-	// Tag used to replace value (rather than append)
-	logTargetsReplaceTag = "!replace"
 )
 
 func (t *LogTargets) UnmarshalYAML(value *yaml.Node) error {
-	// Check for !replace tag
-	t.Replace = (value.Tag == logTargetsReplaceTag)
-
 	if value.Kind == yaml.ScalarNode {
 		switch value.Value {
 		case DefaultLogTargets, AllLogTargets, NoLogTargets:
@@ -339,28 +346,24 @@ func (t *LogTargets) UnmarshalYAML(value *yaml.Node) error {
 }
 
 // Copy returns a deep copy of this LogTargets struct.
-func (t *LogTargets) Copy() LogTargets {
-	return LogTargets{
+func (t *LogTargets) Copy() *LogTargets {
+	return &LogTargets{
 		Targets: append([]string(nil), t.Targets...),
 		Keyword: t.Keyword,
-		Replace: t.Replace,
 	}
 }
 
-// MergeLogTargets returns the result of merging other into t.
-func MergeLogTargets(t, other LogTargets) (res LogTargets) {
-	if other.Replace || other.Keyword != "" {
-		return other
-	}
-
+// Merge merges the fields from other into t.
+func (t *LogTargets) Merge(other *LogTargets) {
 	// keyword <- [list] yields [list]
 	if t.Keyword != "" && len(other.Targets) > 0 {
-		return other
+		t.Keyword = ""
+		t.Targets = append([]string(nil), other.Targets...)
+		return
 	}
 
 	// [list] <- [list] - merge lists
-	res.Targets = appendUnique(t.Targets, other.Targets...)
-	return
+	t.Targets = appendUnique(t.Targets, other.Targets...)
 }
 
 func (t *LogTargets) LogsTo(tgt *LogTarget) bool {
@@ -885,11 +888,23 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 
 	// Validate service log targets
 	for serviceName, service := range combined.Services {
-		for _, targetName := range service.LogTargets.Targets {
-			_, ok := combined.LogTargets[targetName]
-			if !ok {
-				return nil, &FormatError{
-					Message: fmt.Sprintf(`unknown log target %q for service %q`, targetName, serviceName),
+		if service.LogTargets != nil {
+			for _, targetName := range service.LogTargets.Targets {
+				_, ok := combined.LogTargets[targetName]
+				if !ok {
+					return nil, &FormatError{
+						Message: fmt.Sprintf(`unknown log target %q for service %q`, targetName, serviceName),
+					}
+				}
+			}
+		}
+		if service.LogTargetsReplace != nil {
+			for _, targetName := range service.LogTargetsReplace.Targets {
+				_, ok := combined.LogTargets[targetName]
+				if !ok {
+					return nil, &FormatError{
+						Message: fmt.Sprintf(`unknown log target %q for service %q`, targetName, serviceName),
+					}
 				}
 			}
 		}

@@ -854,7 +854,7 @@ var planTests = []planTest{{
 				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
 				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
 				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
-				LogTargets: plan.LogTargets{
+				LogTargets: &plan.LogTargets{
 					Targets: []string{"tgt1"},
 				},
 			},
@@ -866,7 +866,7 @@ var planTests = []planTest{{
 				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
 				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
 				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
-				LogTargets: plan.LogTargets{
+				LogTargets: &plan.LogTargets{
 					Targets: []string{"tgt1", "tgt2"},
 				},
 			},
@@ -950,7 +950,7 @@ var planTests = []planTest{{
 				Command:  "foo",
 				Override: plan.MergeOverride,
 				Startup:  plan.StartupEnabled,
-				LogTargets: plan.LogTargets{
+				LogTargets: &plan.LogTargets{
 					Targets: []string{"tgt1"},
 				},
 			},
@@ -959,7 +959,7 @@ var planTests = []planTest{{
 				Command:  "bar",
 				Override: plan.MergeOverride,
 				Startup:  plan.StartupEnabled,
-				LogTargets: plan.LogTargets{
+				LogTargets: &plan.LogTargets{
 					Targets: []string{"tgt1", "tgt2"},
 				},
 			},
@@ -987,7 +987,7 @@ var planTests = []planTest{{
 				Name:     "svc1",
 				Command:  "foo",
 				Override: plan.MergeOverride,
-				LogTargets: plan.LogTargets{
+				LogTargets: &plan.LogTargets{
 					Targets: []string{"tgt3"},
 				},
 			},
@@ -996,7 +996,7 @@ var planTests = []planTest{{
 				Command:  "bar",
 				Override: plan.ReplaceOverride,
 				Startup:  plan.StartupEnabled,
-				LogTargets: plan.LogTargets{
+				LogTargets: &plan.LogTargets{
 					Targets: []string{"tgt3"},
 				},
 			},
@@ -1032,7 +1032,7 @@ var planTests = []planTest{{
 				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
 				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
 				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
-				LogTargets: plan.LogTargets{
+				LogTargets: &plan.LogTargets{
 					Targets: []string{"tgt1", "tgt3"},
 				},
 			},
@@ -1044,7 +1044,7 @@ var planTests = []planTest{{
 				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
 				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
 				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
-				LogTargets: plan.LogTargets{
+				LogTargets: &plan.LogTargets{
 					Targets: []string{"tgt3"},
 				},
 			},
@@ -1149,19 +1149,19 @@ var planTests = []planTest{{
 			svc5:
 				command: foo
 				override: merge
-				log-targets: !replace default
+				^log-targets: default
 			svc6:
 				command: foo
 				override: merge
-				log-targets: !replace all
+				^log-targets: all
 			svc7:
 				command: foo
 				override: merge
-				log-targets: !replace none
+				^log-targets: none
 			svc8:
 				command: foo
 				override: merge
-				log-targets: !replace [tgt1, tgt2]
+				^log-targets: [tgt1, tgt2]
 
 		log-targets:
 			tgt1:
@@ -1181,7 +1181,7 @@ var planTests = []planTest{{
 				Name:     "svc1",
 				Command:  "foo",
 				Override: plan.MergeOverride,
-				LogTargets: plan.LogTargets{
+				LogTargets: &plan.LogTargets{
 					Keyword: plan.DefaultLogTargets,
 				},
 			},
@@ -1189,7 +1189,7 @@ var planTests = []planTest{{
 				Name:     "svc2",
 				Command:  "foo",
 				Override: plan.MergeOverride,
-				LogTargets: plan.LogTargets{
+				LogTargets: &plan.LogTargets{
 					Keyword: plan.AllLogTargets,
 				},
 			},
@@ -1197,7 +1197,7 @@ var planTests = []planTest{{
 				Name:     "svc3",
 				Command:  "foo",
 				Override: plan.MergeOverride,
-				LogTargets: plan.LogTargets{
+				LogTargets: &plan.LogTargets{
 					Keyword: plan.NoLogTargets,
 				},
 			},
@@ -1205,7 +1205,7 @@ var planTests = []planTest{{
 				Name:     "svc4",
 				Command:  "foo",
 				Override: plan.MergeOverride,
-				LogTargets: plan.LogTargets{
+				LogTargets: &plan.LogTargets{
 					Targets: []string{"tgt1", "tgt2"},
 				},
 			},
@@ -1213,36 +1213,32 @@ var planTests = []planTest{{
 				Name:     "svc5",
 				Command:  "foo",
 				Override: plan.MergeOverride,
-				LogTargets: plan.LogTargets{
+				LogTargetsReplace: &plan.LogTargets{
 					Keyword: plan.DefaultLogTargets,
-					Replace: true,
 				},
 			},
 			"svc6": {
 				Name:     "svc6",
 				Command:  "foo",
 				Override: plan.MergeOverride,
-				LogTargets: plan.LogTargets{
+				LogTargetsReplace: &plan.LogTargets{
 					Keyword: plan.AllLogTargets,
-					Replace: true,
 				},
 			},
 			"svc7": {
 				Name:     "svc7",
 				Command:  "foo",
 				Override: plan.MergeOverride,
-				LogTargets: plan.LogTargets{
+				LogTargetsReplace: &plan.LogTargets{
 					Keyword: plan.NoLogTargets,
-					Replace: true,
 				},
 			},
 			"svc8": {
 				Name:     "svc8",
 				Command:  "foo",
 				Override: plan.MergeOverride,
-				LogTargets: plan.LogTargets{
+				LogTargetsReplace: &plan.LogTargets{
 					Targets: []string{"tgt1", "tgt2"},
-					Replace: true,
 				},
 			},
 		},
@@ -1301,7 +1297,7 @@ var planTests = []planTest{{
 			svc2:
 				command: foo
 				override: merge
-				log-targets: !replace [tgt3]
+				^log-targets: [tgt3]
 			svc3:
 				command: foo
 				override: merge
@@ -1334,7 +1330,7 @@ var planTests = []planTest{{
 				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
 				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
 				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
-				LogTargets: plan.LogTargets{
+				LogTargets: &plan.LogTargets{
 					Targets: []string{"tgt1", "tgt2", "tgt3"},
 				},
 			},
@@ -1345,9 +1341,8 @@ var planTests = []planTest{{
 				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
 				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
 				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
-				LogTargets: plan.LogTargets{
+				LogTargets: &plan.LogTargets{
 					Targets: []string{"tgt3"},
-					Replace: true,
 				},
 			},
 			"svc3": {
@@ -1357,7 +1352,7 @@ var planTests = []planTest{{
 				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
 				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
 				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
-				LogTargets: plan.LogTargets{
+				LogTargets: &plan.LogTargets{
 					Keyword: plan.DefaultLogTargets,
 				},
 			},
@@ -1368,7 +1363,7 @@ var planTests = []planTest{{
 				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
 				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
 				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
-				LogTargets: plan.LogTargets{
+				LogTargets: &plan.LogTargets{
 					Targets: []string{"tgt1", "tgt2"},
 				},
 			},
@@ -1748,25 +1743,25 @@ func (s *S) TestSelectTargets(c *C) {
 		{Name: "disabled", Selection: plan.DisabledSelection},
 	}
 	services := []*plan.Service{
-		{Name: "svc1", LogTargets: plan.LogTargets{
+		{Name: "svc1", LogTargets: &plan.LogTargets{
 			Targets: nil,
 		}},
-		{Name: "svc2", LogTargets: plan.LogTargets{
+		{Name: "svc2", LogTargets: &plan.LogTargets{
 			Targets: []string{},
 		}},
-		{Name: "svc3", LogTargets: plan.LogTargets{
+		{Name: "svc3", LogTargets: &plan.LogTargets{
 			Targets: []string{"unset"},
 		}},
-		{Name: "svc4", LogTargets: plan.LogTargets{
+		{Name: "svc4", LogTargets: &plan.LogTargets{
 			Targets: []string{"optout"},
 		}},
-		{Name: "svc5", LogTargets: plan.LogTargets{
+		{Name: "svc5", LogTargets: &plan.LogTargets{
 			Targets: []string{"optin"},
 		}},
-		{Name: "svc6", LogTargets: plan.LogTargets{
+		{Name: "svc6", LogTargets: &plan.LogTargets{
 			Targets: []string{"disabled"},
 		}},
-		{Name: "svc7", LogTargets: plan.LogTargets{
+		{Name: "svc7", LogTargets: &plan.LogTargets{
 			Targets: []string{"unset", "optin", "disabled"},
 		}},
 	}
@@ -1796,73 +1791,80 @@ func (s *S) TestSelectTargets(c *C) {
 func (s *S) TestParseAndMergeLogTargets(c *C) {
 	tests := []struct {
 		base, override string
-		res            plan.LogTargets
+		res            *plan.LogTargets
 	}{{
-		base: "[tgt1]", override: "[tgt3]",
-		res: plan.LogTargets{
+		base:     "log-targets: [tgt1]",
+		override: "log-targets: [tgt3]",
+		res: &plan.LogTargets{
 			Targets: []string{"tgt1", "tgt3"},
 		},
 	}, {
-		base: "[tgt1]", override: "!replace [tgt3]",
-		res: plan.LogTargets{
+		base:     "log-targets: [tgt1]",
+		override: "^log-targets: [tgt3]",
+		res: &plan.LogTargets{
 			Targets: []string{"tgt3"},
-			Replace: true,
 		},
 	}, {
-		base: "default", override: "all",
-		res: plan.LogTargets{
+		base:     "log-targets: default",
+		override: "log-targets: all",
+		res: &plan.LogTargets{
 			Keyword: plan.AllLogTargets,
 		},
 	}, {
-		base: "[tgt1]", override: "default",
-		res: plan.LogTargets{
+		base:     "log-targets: [tgt1]",
+		override: "log-targets: default",
+		res: &plan.LogTargets{
 			Keyword: plan.DefaultLogTargets,
 		},
 	}, {
-		base: "[tgt1]", override: "!replace default",
-		res: plan.LogTargets{
+		base:     "log-targets: [tgt1]",
+		override: "^log-targets: default",
+		res: &plan.LogTargets{
 			Keyword: plan.DefaultLogTargets,
-			Replace: true,
 		},
 	}, {
-		base: "[tgt1]", override: "none",
-		res: plan.LogTargets{
+		base:     "log-targets: [tgt1]",
+		override: "log-targets: none",
+		res: &plan.LogTargets{
 			Keyword: plan.NoLogTargets,
 		},
 	}, {
-		base: "[tgt1]", override: "!replace none",
-		res: plan.LogTargets{
+		base:     "log-targets: [tgt1]",
+		override: "^log-targets: none",
+		res: &plan.LogTargets{
 			Keyword: plan.NoLogTargets,
-			Replace: true,
 		},
 	}, {
-		base: "default", override: "[tgt1]",
-		res: plan.LogTargets{
+		base:     "log-targets: default",
+		override: "log-targets: [tgt1]",
+		res: &plan.LogTargets{
 			Targets: []string{"tgt1"},
 		},
 	}, {
-		base: "all", override: "[tgt1]",
-		res: plan.LogTargets{
+		base:     "log-targets: all",
+		override: "log-targets: [tgt1]",
+		res: &plan.LogTargets{
 			Targets: []string{"tgt1"},
 		},
 	}, {
-		base: "none", override: "[tgt1]",
-		res: plan.LogTargets{
+		base:     "log-targets: none",
+		override: "log-targets: [tgt1]",
+		res: &plan.LogTargets{
 			Targets: []string{"tgt1"},
 		},
 	}}
 
-	parseLogTargets := func(raw string) plan.LogTargets {
-		parsed := plan.LogTargets{}
-		err := yaml.Unmarshal([]byte(raw), &parsed)
+	parseService := func(raw string) *plan.Service {
+		parsed := &plan.Service{}
+		err := yaml.Unmarshal([]byte(raw), parsed)
 		c.Assert(err, IsNil)
 		return parsed
 	}
 
 	for _, t := range tests {
-		base := parseLogTargets(t.base)
-		override := parseLogTargets(t.override)
-		merged := plan.MergeLogTargets(base, override)
-		c.Check(merged, DeepEquals, t.res, Commentf("merge %s <- %s", t.base, t.override))
+		base := parseService(t.base)
+		override := parseService(t.override)
+		base.Merge(override)
+		c.Check(base.LogTargets, DeepEquals, t.res, Commentf("merge %q <- %q", t.base, t.override))
 	}
 }
