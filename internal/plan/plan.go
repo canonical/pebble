@@ -90,7 +90,7 @@ type Service struct {
 	KillDelay      OptionalDuration         `yaml:"kill-delay,omitempty"`
 
 	// Log forwarding
-	LogTargets LogTargets `yaml:"log-targets,omitempty"`
+	LogTargets *LogTargets `yaml:"log-targets,omitempty"`
 }
 
 // Copy returns a deep copy of the service.
@@ -119,7 +119,9 @@ func (s *Service) Copy() *Service {
 			copied.OnCheckFailure[k] = v
 		}
 	}
-	copied.LogTargets = s.LogTargets.Copy()
+	if s.LogTargets != nil {
+		copied.LogTargets = s.LogTargets.Copy()
+	}
 	return &copied
 }
 
@@ -184,7 +186,9 @@ func (s *Service) Merge(other *Service) {
 	if other.BackoffLimit.IsSet {
 		s.BackoffLimit = other.BackoffLimit
 	}
-	s.LogTargets = MergeLogTargets(s.LogTargets, other.LogTargets)
+	if s.LogTargets != nil {
+		s.LogTargets.Merge(other.LogTargets)
+	}
 }
 
 // appendUnique appends into a the elements from b which are not yet present
@@ -280,27 +284,29 @@ func (t *LogTargets) UnmarshalYAML(value *yaml.Node) error {
 }
 
 // Copy returns a deep copy of this LogTargets struct.
-func (t *LogTargets) Copy() LogTargets {
-	return LogTargets{
+func (t *LogTargets) Copy() *LogTargets {
+	return &LogTargets{
 		Targets: append([]string(nil), t.Targets...),
 		Keyword: t.Keyword,
 		Replace: t.Replace,
 	}
 }
 
-// MergeLogTargets returns the result of merging other into t.
-func MergeLogTargets(t, other LogTargets) (res LogTargets) {
-	if other.Replace || other.Keyword != "" {
-		return other
-	}
+// Merge merges the fields set in other into t.
+func (t *LogTargets) Merge(other *LogTargets) {
+	if other.Replace ||
+		// anything <- keyword yields keyword
+		other.Keyword != "" ||
+		// keyword <- [list] yields [list]
+		t.Keyword != "" && len(other.Targets) > 0 {
 
-	// keyword <- [list] yields [list]
-	if t.Keyword != "" && len(other.Targets) > 0 {
-		return other
+		// Replace t with other
+		t.Keyword = other.Keyword
+		t.Targets = append([]string(nil), other.Targets...)
 	}
 
 	// [list] <- [list] - merge lists
-	res.Targets = appendUnique(t.Targets, other.Targets...)
+	t.Targets = appendUnique(t.Targets, other.Targets...)
 	return
 }
 
@@ -826,6 +832,9 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 
 	// Validate service log targets
 	for serviceName, service := range combined.Services {
+		if service.LogTargets == nil {
+			break
+		}
 		for _, targetName := range service.LogTargets.Targets {
 			_, ok := combined.LogTargets[targetName]
 			if !ok {
