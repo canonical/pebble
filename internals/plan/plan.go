@@ -355,6 +355,12 @@ func (t *LogTargets) Copy() *LogTargets {
 
 // Merge merges the fields from other into t.
 func (t *LogTargets) Merge(other *LogTargets) {
+	// anything <- keyword yields keyword
+	if other.Keyword != "" {
+		t.Keyword = other.Keyword
+		t.Targets = nil
+	}
+
 	// keyword <- [list] yields [list]
 	if t.Keyword != "" && len(other.Targets) > 0 {
 		t.Keyword = ""
