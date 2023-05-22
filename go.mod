@@ -4,7 +4,7 @@ go 1.14
 
 require (
 	github.com/canonical/go-flags v0.0.0-20230403090104-105d09a091b8
-	github.com/canonical/x-go v0.0.0-20230113154138-0ccdb0b57a43
+	github.com/canonical/x-go v0.0.0-20230522092633-7947a7587f5b
 	github.com/gorilla/mux v1.8.0
 	github.com/gorilla/websocket v1.4.2
 	github.com/pkg/term v1.1.0

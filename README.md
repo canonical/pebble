@@ -146,6 +146,28 @@ are marked as `startup: enabled` (if you don't want that, use `--hold`). Then
 other Pebble commands may be used to interact with the running daemon, for example,
 in another terminal window.
 
+To provide additional arguments to a service, use `--args <service> <args> ...`.
+If the `command` field in the service's plan has a `[ <default-arguments...> ]`
+list, the `--args` arguments will replace the defaults. If not, they will be
+appended to the command.
+
+To indicate the end of an `--args` list, use a `;` (semicolon) terminator,
+which must be backslash-escaped if used in the shell. The terminator
+may be omitted if there are no other Pebble options that follow.
+
+For example:
+
+```
+# Start the daemon and pass additional arguments to "myservice".
+$ pebble run --args myservice --verbose --foo "multi str arg"
+
+# Use args terminator to pass --hold to Pebble at the end of the line.
+$ pebble run --args myservice --verbose \; --hold
+
+# Start the daemon and pass arguments to multiple services.
+$ pebble run --args myservice1 --arg1 \; --args myservice2 --arg2
+```
+
 To override the default configuration directory, set the `PEBBLE` environment variable when running:
 
 ```
@@ -448,10 +470,10 @@ services:
         # override the existing service spec in the plan with the same name.
         override: merge | replace
 
-        # (Required in combined layer) The command to run the service. The
-        # command is executed directly, not interpreted by a shell.
-        #
-        # Example: /usr/bin/somecommand -b -t 30
+        # (Required in combined layer) The command to run the service. It is executed
+        # directly, not interpreted by a shell, and may be optionally suffixed by default
+        # arguments within "[" and "]" which may be overriden via --args.
+        # Example: /usr/bin/somedaemon --db=/db/path [ --port 8080 ]
         command: <commmand>
 
         # (Optional) A short summary of the service.

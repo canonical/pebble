@@ -10,7 +10,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/canonical/x-go/strutil/shlex"
 	"golang.org/x/sys/unix"
 	"gopkg.in/tomb.v2"
 
@@ -334,12 +333,11 @@ func logError(err error) {
 // command. It assumes the caller has ensures the service is in a valid state,
 // and it sets s.cmd and other relevant fields.
 func (s *serviceData) startInternal() error {
-	args, err := shlex.Split(s.config.Command)
+	base, extra, err := s.config.ParseCommand()
 	if err != nil {
-		// Shouldn't happen as it should have failed on parsing, but
-		// it does not hurt to double check and report.
-		return fmt.Errorf("cannot parse service command: %s", err)
+		return err
 	}
+	args := append(base, extra...)
 	s.cmd = exec.Command(args[0], args[1:]...)
 	s.cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
