@@ -851,6 +851,54 @@ services:
 	s.planLayersHasLen(c, manager, 3)
 }
 
+func (s *S) TestSetServiceArgs(c *C) {
+	dir := c.MkDir()
+	os.Mkdir(filepath.Join(dir, "layers"), 0755)
+	runner := state.NewTaskRunner(s.st)
+	manager, err := servstate.NewManager(s.st, runner, dir, nil, nil, fakeLogManager{})
+	c.Assert(err, IsNil)
+	defer manager.Stop()
+
+	// Append a layer with a few services having default args.
+	layer := parseLayer(c, 0, "base-layer", `
+services:
+    svc1:
+        override: replace
+        command: foo [ --bar ]
+    svc2:
+        override: replace
+        command: foo
+    svc3:
+        override: replace
+        command: foo
+`)
+	err = manager.AppendLayer(layer)
+	c.Assert(err, IsNil)
+	c.Assert(layer.Order, Equals, 1)
+	s.planLayersHasLen(c, manager, 1)
+
+	// Set arguments to services.
+	serviceArgs := map[string][]string{
+		"svc1": {"-abc", "--xyz"},
+		"svc2": {"--bar"},
+	}
+	err = manager.SetServiceArgs(serviceArgs)
+	c.Assert(err, IsNil)
+	c.Assert(planYAML(c, manager), Equals, `
+services:
+    svc1:
+        override: replace
+        command: foo [ -abc --xyz ]
+    svc2:
+        override: replace
+        command: foo [ --bar ]
+    svc3:
+        override: replace
+        command: foo
+`[1:])
+	s.planLayersHasLen(c, manager, 2)
+}
+
 func (s *S) TestServices(c *C) {
 	started := time.Now()
 	services, err := s.manager.Services(nil)

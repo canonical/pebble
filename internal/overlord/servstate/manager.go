@@ -513,6 +513,41 @@ func (m *ServiceManager) CheckFailed(name string) {
 	}
 }
 
+// SetServiceArgs sets the service arguments provided by "pebble run --args"
+// to their respective services. It adds a new layer in the plan, the layer
+// consisting of services with commands having their arguments changed.
+func (m *ServiceManager) SetServiceArgs(serviceArgs map[string][]string) error {
+	releasePlan, err := m.acquirePlan()
+	if err != nil {
+		return err
+	}
+	defer releasePlan()
+
+	newLayer := &plan.Layer{
+		// TODO: Consider making any labels starting with
+		// the "pebble-" prefix reserved.
+		Label:    "pebble-service-args",
+		Services: make(map[string]*plan.Service),
+	}
+
+	for name, args := range serviceArgs {
+		service, ok := m.plan.Services[name]
+		if !ok {
+			return fmt.Errorf("service %q not found in plan", name)
+		}
+		base, _, err := service.ParseCommand()
+		if err != nil {
+			return err
+		}
+		newLayer.Services[name] = &plan.Service{
+			Override: plan.MergeOverride,
+			Command:  plan.CommandString(base, args),
+		}
+	}
+
+	return m.appendLayer(newLayer)
+}
+
 // servicesToStop returns a slice of service names to stop, in dependency order.
 func servicesToStop(m *ServiceManager) ([]string, error) {
 	releasePlan, err := m.acquirePlan()

@@ -211,6 +211,65 @@ func (s *Service) Equal(other *Service) bool {
 	return reflect.DeepEqual(s, other)
 }
 
+// ParseCommand returns a service command as two stream of strings.
+// The base command is returned as a stream and the default arguments
+// in [ ... ] group is returned as another stream.
+func (s *Service) ParseCommand() (base, extra []string, err error) {
+	defer func() {
+		if err != nil {
+			err = fmt.Errorf("cannot parse service %q command: %w", s.Name, err)
+		}
+	}()
+
+	args, err := shlex.Split(s.Command)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	var inBrackets, gotBrackets bool
+
+	for idx, arg := range args {
+		if inBrackets {
+			if arg == "[" {
+				return nil, nil, fmt.Errorf("cannot nest [ ... ] groups")
+			}
+			if arg == "]" {
+				inBrackets = false
+				continue
+			}
+			extra = append(extra, arg)
+			continue
+		}
+		if gotBrackets {
+			return nil, nil, fmt.Errorf("cannot have any arguments after [ ... ] group")
+		}
+		if arg == "[" {
+			if idx == 0 {
+				return nil, nil, fmt.Errorf("cannot start command with [ ... ] group")
+			}
+			inBrackets = true
+			gotBrackets = true
+			continue
+		}
+		if arg == "]" {
+			return nil, nil, fmt.Errorf("cannot have ] outside of [ ... ] group")
+		}
+		base = append(base, arg)
+	}
+
+	return base, extra, nil
+}
+
+// CommandString returns a service command as a string after
+// appending the arguments in "extra" to the command in "base"
+func CommandString(base, extra []string) string {
+	output := shlex.Join(base)
+	if len(extra) > 0 {
+		output = output + " [ " + shlex.Join(extra) + " ]"
+	}
+	return output
+}
+
 // LogsTo returns true if the logs from s should be forwarded to target t.
 // This happens if:
 //   - t.Selection is "opt-out" or empty, and s.LogTargets is empty; or
@@ -603,7 +662,7 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 				Message: fmt.Sprintf(`plan must define "command" for service %q`, name),
 			}
 		}
-		_, err := shlex.Split(service.Command)
+		_, _, err := service.ParseCommand()
 		if err != nil {
 			return nil, &FormatError{
 				Message: fmt.Sprintf("plan service %q command invalid: %v", name, err),

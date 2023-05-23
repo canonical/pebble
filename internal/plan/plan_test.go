@@ -475,12 +475,60 @@ var planTests = []planTest{{
 	`},
 }, {
 	summary: `Invalid service command`,
-	error:   `plan service "svc1" command invalid: EOF found when expecting closing quote`,
+	error:   `plan service "svc1" command invalid: cannot parse service "svc1" command: EOF found when expecting closing quote`,
 	input: []string{`
 		services:
 			svc1:
 				override: replace
 				command: foo '
+	`},
+}, {
+	summary: `Optional/overridable arguments in service command`,
+	input: []string{`
+		services:
+			"svc1":
+				override: replace
+				command: cmd -v [ --foo bar -e "x [ y ] z" ]
+	`},
+	layers: []*plan.Layer{{
+		Order: 0,
+		Label: "layer-0",
+		Services: map[string]*plan.Service{
+			"svc1": {
+				Name:     "svc1",
+				Override: "replace",
+				Command:  `cmd -v [ --foo bar -e "x [ y ] z" ]`,
+			},
+		},
+		Checks:     map[string]*plan.Check{},
+		LogTargets: map[string]*plan.LogTarget{},
+	}},
+}, {
+	summary: `Invalid service command: cannot have any arguments after [ ... ] group`,
+	error:   `plan service "svc1" command invalid: cannot parse service "svc1" command: cannot have any arguments after \[ ... \] group`,
+	input: []string{`
+		services:
+			"svc1":
+				override: replace
+				command: cmd -v [ --foo ] bar
+	`},
+}, {
+	summary: `Invalid service command: cannot have ] outside of [ ... ] group`,
+	error:   `plan service "svc1" command invalid: cannot parse service "svc1" command: cannot have \] outside of \[ ... \] group`,
+	input: []string{`
+		services:
+			"svc1":
+				override: replace
+				command: cmd -v ] foo
+	`},
+}, {
+	summary: `Invalid service command: cannot nest [ ... ] groups`,
+	error:   `plan service "svc1" command invalid: cannot parse service "svc1" command: cannot nest \[ ... \] groups`,
+	input: []string{`
+		services:
+			"svc1":
+				override: replace
+				command: cmd -v [ foo [ --bar ] ]
 	`},
 }, {
 	summary: "Checks fields parse correctly and defaults are correct",
@@ -1321,6 +1369,90 @@ func (s *S) TestMarshalLayer(c *C) {
 	out, err := yaml.Marshal(layer)
 	c.Assert(err, IsNil)
 	c.Assert(string(out), Equals, string(layerBytes))
+}
+
+var cmdTests = []struct {
+	summary            string
+	command            string
+	cmdArgs            []string
+	expectedBase       []string
+	expectedExtra      []string
+	expectedNewCommand string
+	error              string
+}{{
+	summary:            "No default arguments, no additional cmdArgs",
+	command:            "cmd --foo bar",
+	expectedBase:       []string{"cmd", "--foo", "bar"},
+	expectedNewCommand: "cmd --foo bar",
+}, {
+	summary:            "No default arguments, add cmdArgs only",
+	command:            "cmd --foo bar",
+	cmdArgs:            []string{"-v", "--opt"},
+	expectedBase:       []string{"cmd", "--foo", "bar"},
+	expectedNewCommand: "cmd --foo bar [ -v --opt ]",
+}, {
+	summary:            "Override default arguments with empty cmdArgs",
+	command:            "cmd [ --foo bar ]",
+	expectedBase:       []string{"cmd"},
+	expectedExtra:      []string{"--foo", "bar"},
+	expectedNewCommand: "cmd",
+}, {
+	summary:            "Override default arguments with cmdArgs",
+	command:            "cmd [ --foo bar ]",
+	cmdArgs:            []string{"--bar", "foo"},
+	expectedBase:       []string{"cmd"},
+	expectedExtra:      []string{"--foo", "bar"},
+	expectedNewCommand: "cmd [ --bar foo ]",
+}, {
+	summary:            "Empty [ ... ], no cmdArgs",
+	command:            "cmd --foo bar [ ]",
+	expectedBase:       []string{"cmd", "--foo", "bar"},
+	expectedNewCommand: "cmd --foo bar",
+}, {
+	summary:            "Empty [ ... ], override with cmdArgs",
+	command:            "cmd --foo bar [ ]",
+	cmdArgs:            []string{"-v", "--opt"},
+	expectedBase:       []string{"cmd", "--foo", "bar"},
+	expectedNewCommand: "cmd --foo bar [ -v --opt ]",
+}, {
+	summary: "[ ... ] should be a suffix",
+	command: "cmd [ --foo ] --bar",
+	error:   `cannot parse service "svc" command: cannot have any arguments after \[ ... \] group`,
+}, {
+	summary: "[ ... ] should not be prefix",
+	command: "[ cmd --foo ]",
+	error:   `cannot parse service "svc" command: cannot start command with \[ ... \] group`,
+}}
+
+func (s *S) TestParseCommand(c *C) {
+	for _, test := range cmdTests {
+		service := plan.Service{Name: "svc", Command: test.command}
+
+		// parse base and the default arguments in [ ... ]
+		base, extra, err := service.ParseCommand()
+		if err != nil || test.error != "" {
+			if test.error != "" {
+				c.Assert(err, ErrorMatches, test.error)
+			} else {
+				c.Assert(err, IsNil)
+			}
+			continue
+		}
+		c.Assert(base, DeepEquals, test.expectedBase)
+		c.Assert(extra, DeepEquals, test.expectedExtra)
+
+		// add cmdArgs to base and produce a new command string
+		newCommand := plan.CommandString(base, test.cmdArgs)
+		c.Assert(newCommand, DeepEquals, test.expectedNewCommand)
+
+		// parse the new command string again and check if base is
+		// the same and cmdArgs is the new default arguments in [ ... ]
+		service.Command = newCommand
+		base, extra, err = service.ParseCommand()
+		c.Assert(err, IsNil)
+		c.Assert(base, DeepEquals, test.expectedBase)
+		c.Assert(extra, DeepEquals, test.cmdArgs)
+	}
 }
 
 func (s *S) TestSelectTargets(c *C) {
