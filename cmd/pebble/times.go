@@ -20,7 +20,7 @@ import (
 
 	"github.com/canonical/x-go/strutil/quantity"
 
-	"github.com/canonical/pebble/internal/timeutil"
+	"github.com/canonical/pebble/internals/timeutil"
 )
 
 var timeutilHuman = timeutil.Human

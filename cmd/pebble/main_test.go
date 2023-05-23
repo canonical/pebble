@@ -15,7 +15,7 @@ import (
 	. "gopkg.in/check.v1"
 
 	"github.com/canonical/pebble/cmd"
-	"github.com/canonical/pebble/internal/testutil"
+	"github.com/canonical/pebble/internals/testutil"
 
 	pebble "github.com/canonical/pebble/cmd/pebble"
 )

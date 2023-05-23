@@ -22,7 +22,7 @@ import (
 	"time"
 
 	"github.com/canonical/pebble/client"
-	"github.com/canonical/pebble/internal/progress"
+	"github.com/canonical/pebble/internals/progress"
 )
 
 var (

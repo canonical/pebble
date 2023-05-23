@@ -28,7 +28,7 @@ import (
 	"github.com/canonical/x-go/strutil/quantity"
 
 	"github.com/canonical/pebble/client"
-	"github.com/canonical/pebble/internal/osutil"
+	"github.com/canonical/pebble/internals/osutil"
 )
 
 type cmdWarnings struct {

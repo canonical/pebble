@@ -26,8 +26,8 @@ import (
 	"golang.org/x/sys/unix"
 
 	"github.com/canonical/pebble/client"
-	"github.com/canonical/pebble/internal/logger"
-	"github.com/canonical/pebble/internal/ptyutil"
+	"github.com/canonical/pebble/internals/logger"
+	"github.com/canonical/pebble/internals/ptyutil"
 )
 
 type cmdExec struct {

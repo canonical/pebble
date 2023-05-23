@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/canonical/go-flags"
-	"github.com/canonical/pebble/internal/logger"
+	"github.com/canonical/pebble/internals/logger"
 )
 
 const shortEnterHelp = "Run subcommand under a container environment"
