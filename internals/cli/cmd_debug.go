@@ -12,18 +12,14 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package main
+package cli
 
-import (
-	"fmt"
-	"os"
+type cmdDebug struct{}
 
-	"github.com/canonical/pebble/internals/cli"
-)
+var shortDebugHelp = "Run debug commands"
+var longDebugHelp = `
+The debug command contains a selection of additional sub-commands.
 
-func main() {
-	if err := cli.Run(); err != nil {
-		fmt.Fprintf(cli.Stderr, "error: %v\n", err)
-		os.Exit(1)
-	}
-}
+Debug commands can be removed without notice and may not work on
+non-development systems.
+`
