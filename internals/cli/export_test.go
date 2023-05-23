@@ -78,7 +78,7 @@ func PebbleMain() (exitCode int) {
 	}()
 	if err := Run(); err != nil {
 		fmt.Fprintf(Stderr, "error: %v\n", err)
-		exitCode = 1
+		osExit(1)
 	}
 	return
 }
