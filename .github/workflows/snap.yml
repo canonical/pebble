@@ -19,5 +19,5 @@ jobs:
       - name: Attach pebble snap to GH workflow execution
         uses: actions/upload-artifact@v2
         with:
-          name: snap
+          name: ${{ steps.build-pebble-snap.outputs.snap }}
           path: ${{ steps.build-pebble-snap.outputs.snap }}
