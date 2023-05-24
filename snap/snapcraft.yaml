@@ -1,25 +1,33 @@
 name: pebble
-adopt-info: pebble-version
-summary:  Pebble - take control of your internal daemons!
+adopt-info: pebble-release-data
+summary: Pebble - take control of your internal daemons!
 description: |
-    Pebble helps you to orchestrate a set of local service processes as an organized set. 
-    It resembles well known tools such as supervisord, runit, or s6, in that it can easily manage
-    non-system processes independently from the system services, but it was designed 
-    with unique features that help with more specific use cases.
+  Pebble helps you to orchestrate a set of local service processes
+  as an organized set. It resembles well-known tools such as supervisord,
+  runit, or s6, in that it can easily manage non-system processes
+  independently from the system services, but it was designed with unique
+  features that help with more specific use cases.
+
+  **Usage**
+
+  * The Pebble snap's default directory is
+  `$HOME/snap/pebble/<rev>/var/lib/pebble/default`. This directory is **not**
+  created at installation time.
+
+  **Documentation**
+
+  To learn more about Pebble please check the project's documentation at
+  https://github.com/canonical/pebble.
+issues: https://github.com/canonical/pebble/issues
+source-code: https://github.com/canonical/pebble
 license: GPL-3.0
 base: bare
 build-base: core22
 confinement: classic
-# `grade` should be dynamic once there is automated versioning and promotion
-# See an example at: https://github.com/snapcore/snapcraft/blob/main/snap/snapcraft.yaml#L136
-grade: devel
-
-system-usernames:
-  snap_daemon: shared
 
 apps:
   pebble:
-    command: bin/pebble
+    command: pebble-wrapper
 
 parts:
   pebble:
@@ -30,10 +38,22 @@ parts:
     build-environment:
       - CGO_ENABLED: 0
       - GOFLAGS: -ldflags=-w -ldflags=-s
-  
-  pebble-version:
+
+  pebble-release-data:
     plugin: nil
     source: .
     override-build: |
-      snapcraftctl set-version "$(cat cmd/VERSION || ./cmd/mkversion.sh --output-only)"
+      version="$(cat cmd/VERSION || ./cmd/mkversion.sh --output-only)"
+
+      # Set snap version
+      snapcraftctl set-version "$version"
+
+      # Pebble releases are semantically versioned and have a "v" prefix
+      [[ "${version}" == "v"* ]] && grade=stable || grade=devel
+      snapcraftctl set-grade "$grade"
     after: [pebble]
+
+  # Dump the pebble-wrapper into the snap.
+  pebble-wrapper:
+    plugin: dump
+    source: ./snap/local
