@@ -146,6 +146,28 @@ are marked as `startup: enabled` (if you don't want that, use `--hold`). Then
 other Pebble commands may be used to interact with the running daemon, for example,
 in another terminal window.
 
+To provide additional arguments to a service, use `--args <service> <args> ...`.
+If the `command` field in the service's plan has a `[ <default-arguments...> ]`
+list, the `--args` arguments will replace the defaults. If not, they will be
+appended to the command.
+
+To indicate the end of an `--args` list, use a `;` (semicolon) terminator,
+which must be backslash-escaped if used in the shell. The terminator
+may be omitted if there are no other Pebble options that follow.
+
+For example:
+
+```
+# Start the daemon and pass additional arguments to "myservice".
+$ pebble run --args myservice --verbose --foo "multi str arg"
+
+# Use args terminator to pass --hold to Pebble at the end of the line.
+$ pebble run --args myservice --verbose \; --hold
+
+# Start the daemon and pass arguments to multiple services.
+$ pebble run --args myservice1 --arg1 \; --args myservice2 --arg2
+```
+
 To override the default configuration directory, set the `PEBBLE` environment variable when running:
 
 ```
@@ -194,6 +216,31 @@ $ pebble stop srv1        # stop one service
 ```
 
 When stopping a service, Pebble sends SIGTERM to the service's process group, and waits up to 5 seconds. If the command hasn't exited within that time window, Pebble sends SIGKILL to the service's process group and waits up to 5 more seconds. If the command exits within that 10-second time window, the stop is considered successful, otherwise `pebble stop` will exit with an error.
+
+### Updating and restarting services
+
+When you update service configuration (by adding a layer), the services changed won't be automatically restarted. To restart them and bring the service state in sync with the new configuration, use `pebble replan`.
+
+The "replan" operation restarts `startup: enabled` services whose configuration have changed between when they started and now; if the configuration hasn't changed, replan does nothing. Replan also starts `startup: enabled` services that have not yet been started.
+
+Here is an example, where `srv1` is a service that has `startup: enabled`, and `srv2` does not:
+
+```
+$ pebble replan
+2023-04-25T15:06:50+02:00 INFO Service "srv1" already started.
+$ pebble add lay1 layer.yaml  # update srv1 config
+Layer "lay1" added successfully from "layer.yaml"
+$ pebble replan
+Stop service "srv1"
+Start service "srv1"
+$ pebble add lay2 layer.yaml  # change srv2 to "startup: enabled"
+Layer "lay2" added successfully from "layer.yaml"
+$ pebble replan
+2023-04-25T15:11:22+02:00 INFO Service "srv1" already started.
+Start service "srv2"
+```
+
+If you want to force a service to restart even if its service configuration hasn't changed, use `pebble restart <service>`.
 
 ### Service dependencies
 
@@ -423,10 +470,10 @@ services:
         # override the existing service spec in the plan with the same name.
         override: merge | replace
 
-        # (Required in combined layer) The command to run the service. The
-        # command is executed directly, not interpreted by a shell.
-        #
-        # Example: /usr/bin/somecommand -b -t 30
+        # (Required in combined layer) The command to run the service. It is executed
+        # directly, not interpreted by a shell, and may be optionally suffixed by default
+        # arguments within "[" and "]" which may be overriden via --args.
+        # Example: /usr/bin/somedaemon --db=/db/path [ --port 8080 ]
         command: <commmand>
 
         # (Optional) A short summary of the service.

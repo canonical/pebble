@@ -34,13 +34,21 @@ import (
 var shortRunHelp = "Run the pebble environment"
 var longRunHelp = `
 The run command starts pebble and runs the configured environment.
+
+Additional arguments may be provided to the service command with the --args option, which
+must be terminated with ";" unless there are no further Pebble options.  These arguments
+are appended to the end of the service command, and replace any default arguments defined
+in the service plan. For example:
+
+    $ pebble run --args myservice --port 8080 \; --hold
 `
 
 type sharedRunEnterOpts struct {
-	CreateDirs bool   `long:"create-dirs"`
-	Hold       bool   `long:"hold"`
-	HTTP       string `long:"http"`
-	Verbose    bool   `short:"v" long:"verbose"`
+	CreateDirs bool       `long:"create-dirs"`
+	Hold       bool       `long:"hold"`
+	HTTP       string     `long:"http"`
+	Verbose    bool       `short:"v" long:"verbose"`
+	Args       [][]string `long:"args" terminator:";"`
 }
 
 var sharedRunEnterOptsHelp = map[string]string{
@@ -48,6 +56,7 @@ var sharedRunEnterOptsHelp = map[string]string{
 	"hold":        "Do not start default services automatically",
 	"http":        `Start HTTP API listening on this address (e.g., ":4000")`,
 	"verbose":     "Log all output from services to stdout",
+	"args":        `Provide additional arguments to a service`,
 }
 
 type cmdRun struct {
@@ -149,6 +158,16 @@ func runDaemon(rcmd *cmdRun, ch chan os.Signal, ready chan<- func()) error {
 		return err
 	}
 
+	if rcmd.Args != nil {
+		mappedArgs, err := convertArgs(rcmd.Args)
+		if err != nil {
+			return err
+		}
+		if err := d.SetServiceArgs(mappedArgs); err != nil {
+			return err
+		}
+	}
+
 	// Run sanity check now, if anything goes wrong with the
 	// check we go into "degraded" mode where we always report
 	// the given error to any client.
@@ -216,4 +235,23 @@ out:
 	rcmd.client.CloseIdleConnections()
 
 	return d.Stop(ch)
+}
+
+// convert args from [][]string type to map[string][]string
+// and check for empty or duplicated --args usage
+func convertArgs(args [][]string) (map[string][]string, error) {
+	mappedArgs := make(map[string][]string)
+
+	for _, arg := range args {
+		if len(arg) < 1 {
+			return nil, fmt.Errorf("--args requires a service name")
+		}
+		name := arg[0]
+		if _, ok := mappedArgs[name]; ok {
+			return nil, fmt.Errorf("--args provided more than once for %q service", name)
+		}
+		mappedArgs[name] = arg[1:]
+	}
+
+	return mappedArgs, nil
 }
