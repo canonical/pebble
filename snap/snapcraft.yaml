@@ -37,7 +37,7 @@ parts:
       - go
     build-environment:
       - CGO_ENABLED: 0
-      - GOFLAGS: -ldflags=-w -ldflags=-s
+      - GOFLAGS: -trimpath -ldflags=-w -ldflags=-s
 
   pebble-release-data:
     plugin: nil
