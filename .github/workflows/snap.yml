@@ -5,6 +5,8 @@ on: [pull_request]
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      pebble-snap: ${{ steps.build-pebble-snap.outputs.snap }}
 
     steps:
       - name: Checkout Pebble repo
@@ -21,3 +23,23 @@ jobs:
         with:
           name: ${{ steps.build-pebble-snap.outputs.snap }}
           path: ${{ steps.build-pebble-snap.outputs.snap }}
+
+  test:
+    runs-on: ubuntu-latest
+    needs: [build]
+
+    steps:
+      - uses: actions/download-artifact@v3
+        with:
+          name: ${{ needs.build.outputs.pebble-snap }}
+
+      - name: Install the Pebble snap
+        run: |
+          # Install the Pebble snap from the artifact built in the previous job
+          sudo snap install --dangerous --classic ${{ needs.build.outputs.pebble-snap }}
+
+          # Make sure Pebble is installed
+          pebble version
+
+      - name: Run sanity test
+        run: pebble enter --create-dirs exec echo Hello | grep Hello
