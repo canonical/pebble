@@ -38,6 +38,9 @@ parts:
     build-environment:
       - CGO_ENABLED: 0
       - GOFLAGS: -trimpath -ldflags=-w -ldflags=-s
+    override-build: |
+      go generate ./cmd
+      craftctl default
 
   pebble-release-data:
     plugin: nil
@@ -49,7 +52,7 @@ parts:
       snapcraftctl set-version "$version"
 
       # Pebble releases are semantically versioned and have a "v" prefix
-      [[ "${version}" == "v"* ]] && grade=stable || grade=devel
+      [[ "${version}" == *"git"* ]] && grade=devel || grade=stable
       snapcraftctl set-grade "$grade"
     after: [pebble]
 
