@@ -43,7 +43,7 @@ parts:
     plugin: nil
     source: .
     override-build: |
-      version="$(cat cmd/VERSION || ./cmd/mkversion.sh --output-only)"
+      version="$(${CRAFT_STAGE}/bin/pebble version --client)"
 
       # Set snap version
       snapcraftctl set-version "$version"
