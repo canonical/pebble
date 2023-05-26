@@ -145,4 +145,4 @@ To create a new tagged release, go to the [GitHub Releases page](https://github.
 - Enter a release title: include the version tag and a short summary of the release
 - Write release notes: describe new features and bug fixes, and include a link to the full list of commits
 
-Binaries will be created and uploaded automatically to this release by the [release.yml](https://github.com/canonical/pebble/blob/master/.github/workflows/release.yml) GitHub Actions job.
+Binaries will be created and uploaded automatically to this release by the [binaries.yml](https://github.com/canonical/pebble/blob/master/.github/workflows/binaries.yml) GitHub Actions job.
