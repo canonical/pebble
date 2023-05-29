@@ -73,7 +73,7 @@ func (cmd *cmdServices) Execute(args []string) error {
 }
 
 func init() {
-	addCommand("services", shortServicesHelp, longServicesHelp,
+	AddCommand("services", shortServicesHelp, longServicesHelp,
 		func() flags.Commander { return &cmdServices{} },
 		timeDescs, nil)
 }

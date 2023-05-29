@@ -79,7 +79,7 @@ type cmdHelp struct {
 }
 
 func init() {
-	addCommand("help", shortHelpHelp, longHelpHelp, func() flags.Commander { return &cmdHelp{} },
+	AddCommand("help", shortHelpHelp, longHelpHelp, func() flags.Commander { return &cmdHelp{} },
 		map[string]string{
 			"all": "Show a short summary of all commands",
 			"man": "Generate the manpage",

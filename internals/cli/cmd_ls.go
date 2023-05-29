@@ -103,5 +103,5 @@ func parseGlob(path string) (parsedPath, parsedPattern string, err error) {
 }
 
 func init() {
-	addCommand("ls", shortLsHelp, longLsHelp, func() flags.Commander { return &cmdLs{} }, merge(lsDescs, timeDescs), nil)
+	AddCommand("ls", shortLsHelp, longLsHelp, func() flags.Commander { return &cmdLs{} }, merge(lsDescs, timeDescs), nil)
 }
