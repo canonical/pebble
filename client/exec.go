@@ -23,7 +23,7 @@ import (
 	"io/ioutil"
 	"time"
 
-	"github.com/canonical/pebble/internal/wsutil"
+	"github.com/canonical/pebble/internals/wsutil"
 )
 
 type ExecOptions struct {

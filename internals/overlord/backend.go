@@ -12,18 +12,25 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package main
+package overlord
 
 import (
-	"fmt"
-	"os"
+	"time"
 
-	"github.com/canonical/pebble/internals/cli"
+	"github.com/canonical/pebble/internals/osutil"
+	"github.com/canonical/pebble/internals/overlord/restart"
 )
 
-func main() {
-	if err := cli.Run(); err != nil {
-		fmt.Fprintf(cli.Stderr, "error: %v\n", err)
-		os.Exit(1)
-	}
+type overlordStateBackend struct {
+	path           string
+	ensureBefore   func(d time.Duration)
+	requestRestart func(t restart.RestartType)
+}
+
+func (osb *overlordStateBackend) Checkpoint(data []byte) error {
+	return osutil.AtomicWriteFile(osb.path, data, 0600, 0)
+}
+
+func (osb *overlordStateBackend) EnsureBefore(d time.Duration) {
+	osb.ensureBefore(d)
 }

@@ -31,7 +31,7 @@ import (
 
 	"github.com/gorilla/websocket"
 
-	"github.com/canonical/pebble/internal/wsutil"
+	"github.com/canonical/pebble/internals/wsutil"
 )
 
 // SocketNotFoundError is the error type returned when the client fails

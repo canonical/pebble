@@ -12,18 +12,18 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package main
+package overlord
 
 import (
-	"fmt"
-	"os"
+	"gopkg.in/tomb.v2"
 
-	"github.com/canonical/pebble/internals/cli"
+	"github.com/canonical/pebble/internals/overlord/state"
 )
 
-func main() {
-	if err := cli.Run(); err != nil {
-		fmt.Fprintf(cli.Stderr, "error: %v\n", err)
-		os.Exit(1)
-	}
+func handleUnknownTask(task *state.Task, tomb *tomb.Tomb) error {
+	st := task.State()
+	st.Lock()
+	defer st.Unlock()
+	task.Logf("no handler for task %q, task ignored", task.Kind())
+	return nil
 }
