@@ -33,7 +33,7 @@ type cmdRestart struct {
 }
 
 func init() {
-	addCommand("restart", shortRestartHelp, longRestartHelp, func() flags.Commander { return &cmdRestart{} }, waitDescs, nil)
+	AddCommand("restart", shortRestartHelp, longRestartHelp, func() flags.Commander { return &cmdRestart{} }, waitDescs, nil)
 }
 
 func (cmd cmdRestart) Execute(args []string) error {

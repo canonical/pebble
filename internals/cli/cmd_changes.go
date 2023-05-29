@@ -48,9 +48,9 @@ type cmdTasks struct {
 }
 
 func init() {
-	addCommand("changes", shortChangesHelp, longChangesHelp,
+	AddCommand("changes", shortChangesHelp, longChangesHelp,
 		func() flags.Commander { return &cmdChanges{} }, timeDescs, nil)
-	addCommand("tasks", shortTasksHelp, longTasksHelp,
+	AddCommand("tasks", shortTasksHelp, longTasksHelp,
 		func() flags.Commander { return &cmdTasks{} },
 		merge(changeIDMixinOptDesc, timeDescs),
 		changeIDMixinArgDesc)

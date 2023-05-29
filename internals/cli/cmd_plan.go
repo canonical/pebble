@@ -43,5 +43,5 @@ func (cmd *cmdPlan) Execute(args []string) error {
 }
 
 func init() {
-	addCommand("plan", shortPlanHelp, longPlanHelp, func() flags.Commander { return &cmdPlan{} }, nil, nil)
+	AddCommand("plan", shortPlanHelp, longPlanHelp, func() flags.Commander { return &cmdPlan{} }, nil, nil)
 }

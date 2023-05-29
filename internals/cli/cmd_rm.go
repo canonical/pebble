@@ -51,5 +51,5 @@ func (cmd *cmdRm) Execute(args []string) error {
 }
 
 func init() {
-	addCommand("rm", shortRmHelp, longRmHelp, func() flags.Commander { return &cmdRm{} }, rmDescs, nil)
+	AddCommand("rm", shortRmHelp, longRmHelp, func() flags.Commander { return &cmdRm{} }, rmDescs, nil)
 }
