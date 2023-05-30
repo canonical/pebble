@@ -158,14 +158,14 @@ func (cmd cmdHelp) Execute(args []string) error {
 	return &flags.Error{Type: flags.ErrCommandRequired}
 }
 
-type helpCategory struct {
+type HelpCategory struct {
 	Label       string
 	Description string
 	Commands    []string
 }
 
 // helpCategories helps us by grouping commands
-var helpCategories = []helpCategory{{
+var helpCategories = []HelpCategory{{
 	Label:       "Run",
 	Description: "run pebble",
 	Commands:    []string{"run", "help", "version"},
@@ -190,6 +190,11 @@ var helpCategories = []helpCategory{{
 	Description: "manage warnings",
 	Commands:    []string{"warnings", "okay"},
 }}
+
+// AddHelpCategory appends an existing help category to the Pebble help manual.
+func AddHelpCategory(categ HelpCategory) {
+	helpCategories = append(helpCategories, categ)
+}
 
 var (
 	longPebbleDescription = strings.TrimSpace(`
