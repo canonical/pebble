@@ -41,5 +41,5 @@ jobs:
           # Make sure Pebble is installed
           pebble version
 
-      - name: Run sanity test
+      - name: Run smoke test
         run: pebble enter exec echo Hello | grep Hello
