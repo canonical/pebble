@@ -42,4 +42,4 @@ jobs:
           pebble version
 
       - name: Run sanity test
-        run: pebble enter --create-dirs exec echo Hello | grep Hello
+        run: pebble enter exec echo Hello | grep Hello

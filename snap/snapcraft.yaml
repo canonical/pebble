@@ -10,9 +10,8 @@ description: |
 
   **Usage**
 
-  * The Pebble snap's default directory is
-  `$HOME/snap/pebble/<rev>/var/lib/pebble/default`. This directory is **not**
-  created at installation time.
+  * The Pebble snap's default directory is `$SNAP_USER_DATA` (which translates
+  to `$HOME/snap/pebble/<rev>/`).
 
   **Documentation**
 
