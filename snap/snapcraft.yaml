@@ -48,11 +48,11 @@ parts:
       version="$(${CRAFT_STAGE}/bin/pebble version --client)"
 
       # Set snap version
-      snapcraftctl set-version "$version"
+      craftctl set version="$version"
 
       # Pebble releases are semantically versioned and have a "v" prefix
       [[ "${version}" == *"git"* ]] && grade=devel || grade=stable
-      snapcraftctl set-grade "$grade"
+      craftctl set grade="$grade"
     after: [pebble]
 
   # Dump the pebble-wrapper into the snap.
