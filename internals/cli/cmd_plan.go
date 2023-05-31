@@ -15,9 +15,12 @@
 package cli
 
 import (
+	"fmt"
+
 	"github.com/canonical/go-flags"
 
 	"github.com/canonical/pebble/client"
+	"github.com/canonical/pebble/cmd"
 )
 
 type cmdPlan struct {
@@ -25,10 +28,11 @@ type cmdPlan struct {
 }
 
 var shortPlanHelp = "Show the plan with layers combined"
-var longPlanHelp = `
-The plan command prints out the effective configuration of pebble in YAML
+var longPlanHelp = fmt.Sprintf(`
+The plan command prints out the effective configuration of %s in YAML
 format. Layers are combined according to the override rules defined in them.
-`
+`,
+	cmd.Personality.DisplayName)
 
 func (cmd *cmdPlan) Execute(args []string) error {
 	if len(args) > 0 {

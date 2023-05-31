@@ -30,6 +30,7 @@ import (
 	"golang.org/x/crypto/ssh/terminal"
 
 	"github.com/canonical/pebble/client"
+	"github.com/canonical/pebble/cmd"
 	"github.com/canonical/pebble/internals/logger"
 )
 
@@ -179,7 +180,7 @@ func Parser(cli *client.Client) *flags.Parser {
 	}
 	flagopts := flags.Options(flags.PassDoubleDash)
 	parser := flags.NewParser(&optionsData, flagopts)
-	parser.ShortDescription = "Tool to interact with pebble"
+	parser.ShortDescription = fmt.Sprintf("Tool to interact with %s", cmd.Personality.DisplayName)
 	parser.LongDescription = longPebbleDescription
 	// hide the unhelpful "[OPTIONS]" from help output
 	parser.Usage = ""
@@ -333,7 +334,7 @@ func Run() error {
 		}
 	}()
 
-	logger.SetLogger(logger.New(os.Stderr, "[pebble] "))
+	logger.SetLogger(logger.New(os.Stderr, fmt.Sprintf("[%s] ", cmd.Personality.ProgramName)))
 
 	_, clientConfig.Socket = getEnvPaths()
 
@@ -355,11 +356,11 @@ func Run() error {
 				return nil
 			case flags.ErrUnknownCommand:
 				sub := os.Args[1]
-				sug := "pebble help"
+				sug := cmd.Personality.ProgramName + " help"
 				if len(xtra) > 0 {
 					sub = xtra[0]
 					if x := parser.Command.Active; x != nil && x.Name != "help" {
-						sug = "pebble help " + x.Name
+						sug = cmd.Personality.ProgramName + " help " + x.Name
 					}
 				}
 				return fmt.Errorf("unknown command %q, see '%s'.", sub, sug)
@@ -403,7 +404,7 @@ func errorToMessage(e error) (normalMessage string, err error) {
 		}
 	case client.ErrorKindSystemRestart:
 		isError = false
-		msg = "pebble is about to reboot the system"
+		msg = cmd.Personality.DisplayName + " is about to reboot the system"
 	case client.ErrorKindNoDefaultServices:
 		msg = "no default services"
 	default:

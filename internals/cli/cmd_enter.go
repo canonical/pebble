@@ -5,12 +5,13 @@ import (
 
 	"github.com/canonical/go-flags"
 
+	"github.com/canonical/pebble/cmd"
 	"github.com/canonical/pebble/internals/logger"
 )
 
-const shortEnterHelp = "Run subcommand under a container environment"
-const longEnterHelp = `
-The enter command facilitates the use of Pebble as an entrypoint for containers.
+var shortEnterHelp = "Run subcommand under a container environment"
+var longEnterHelp = fmt.Sprintf(`
+The enter command facilitates the use of %s as an entrypoint for containers.
 When used without a subcommand it mimics the behavior of the run command
 alone, while if used with a subcommand it runs that subcommand in the most
 appropriate environment taking into account its purpose.
@@ -29,7 +30,8 @@ These subcommands are currently supported:
 (1) Services are not started.
 (2) No logs on stdout unless -v is used.
 (3) Services continue running after the subcommand succeeds.
-`
+`,
+	cmd.Personality.ProgramName)
 
 type enterFlags int
 
@@ -160,7 +162,7 @@ func (cmd *cmdEnter) Execute(args []string) error {
 	case runStop = <-runReadyCh:
 	case runPanic := <-runResultCh:
 		if runPanic == nil {
-			panic("internal error: pebble daemon stopped early")
+			panic("internal error: daemon stopped early")
 		}
 		panic(runPanic)
 	}
