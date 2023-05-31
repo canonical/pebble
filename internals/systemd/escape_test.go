@@ -12,18 +12,21 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package main
+package systemd_test
 
 import (
-	"fmt"
-	"os"
+	. "gopkg.in/check.v1"
 
-	"github.com/canonical/pebble/internals/cli"
+	. "github.com/canonical/pebble/internals/systemd"
 )
 
-func main() {
-	if err := cli.Run(); err != nil {
-		fmt.Fprintf(cli.Stderr, "error: %v\n", err)
-		os.Exit(1)
-	}
+func (s *SystemdTestSuite) TestEscape(c *C) {
+	c.Check(EscapeUnitNamePath("Hallöchen, Meister"), Equals, `Hall\xc3\xb6chen\x2c\x20Meister`)
+
+	c.Check(EscapeUnitNamePath("/tmp//waldi/foobar/"), Equals, `tmp-waldi-foobar`)
+	c.Check(EscapeUnitNamePath("/.foo/.bar"), Equals, `\x2efoo-.bar`)
+	c.Check(EscapeUnitNamePath("////"), Equals, `-`)
+	c.Check(EscapeUnitNamePath("."), Equals, `\x2e`)
+	c.Check(EscapeUnitNamePath("/foo/bar-baz"), Equals, `foo-bar\x2dbaz`)
+	c.Check(EscapeUnitNamePath("/foo/bar--baz"), Equals, `foo-bar\x2d\x2dbaz`)
 }

@@ -12,18 +12,39 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package main
+package overlord_test
+
+// test the various managers and their operation together through overlord
 
 import (
-	"fmt"
-	"os"
+	"time"
 
-	"github.com/canonical/pebble/internals/cli"
+	. "gopkg.in/check.v1"
+
+	"github.com/canonical/pebble/internals/overlord"
+	"github.com/canonical/pebble/internals/testutil"
 )
 
-func main() {
-	if err := cli.Run(); err != nil {
-		fmt.Fprintf(cli.Stderr, "error: %v\n", err)
-		os.Exit(1)
-	}
+type mgrsSuite struct {
+	testutil.BaseTest
+
+	dir string
+
+	o *overlord.Overlord
 }
+
+var (
+	_ = Suite(&mgrsSuite{})
+)
+
+func (s *mgrsSuite) SetUpTest(c *C) {
+	s.BaseTest.SetUpTest(c)
+
+	s.dir = c.MkDir()
+
+	o, err := overlord.New(s.dir, nil, nil)
+	c.Assert(err, IsNil)
+	s.o = o
+}
+
+var settleTimeout = 15 * time.Second
