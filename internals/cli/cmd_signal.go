@@ -21,6 +21,7 @@ import (
 	"github.com/canonical/go-flags"
 
 	"github.com/canonical/pebble/client"
+	"github.com/canonical/pebble/cmd"
 )
 
 type cmdSignal struct {
@@ -32,12 +33,13 @@ type cmdSignal struct {
 }
 
 var shortSignalHelp = "Send a signal to one or more running services"
-var longSignalHelp = `
+var longSignalHelp = fmt.Sprintf(`
 The signal command sends a signal to one or more running services. The signal
 name must be uppercase, for example:
 
-pebble signal HUP mysql nginx
-`
+%s signal HUP mysql nginx
+`,
+	cmd.Personality.ProgramName)
 
 func (cmd *cmdSignal) Execute(args []string) error {
 	if strings.ToUpper(cmd.Positional.Signal) != cmd.Positional.Signal {

@@ -31,17 +31,19 @@ import (
 	"github.com/canonical/pebble/internals/systemd"
 )
 
-var shortRunHelp = "Run the pebble environment"
-var longRunHelp = `
-The run command starts pebble and runs the configured environment.
+var shortRunHelp = fmt.Sprintf("Run the %s environment", cmd.Personality.DisplayName)
+var longRunHelp = fmt.Sprintf(`
+The run command starts %[1]s and runs the configured environment.
 
 Additional arguments may be provided to the service command with the --args option, which
-must be terminated with ";" unless there are no further Pebble options.  These arguments
+must be terminated with ";" unless there are no further %[2]s options.  These arguments
 are appended to the end of the service command, and replace any default arguments defined
 in the service plan. For example:
 
-    $ pebble run --args myservice --port 8080 \; --hold
-`
+    $ %[1]s run --args myservice --port 8080 \; --hold
+`,
+	cmd.Personality.DisplayName, cmd.Personality.ProgramName,
+)
 
 type sharedRunEnterOpts struct {
 	CreateDirs bool       `long:"create-dirs"`
@@ -52,7 +54,7 @@ type sharedRunEnterOpts struct {
 }
 
 var sharedRunEnterOptsHelp = map[string]string{
-	"create-dirs": "Create pebble directory on startup if it doesn't exist",
+	"create-dirs": fmt.Sprintf("Create %s directory on startup if it doesn't exist", cmd.Personality.DisplayName),
 	"hold":        "Do not start default services automatically",
 	"http":        `Start HTTP API listening on this address (e.g., ":4000")`,
 	"verbose":     "Log all output from services to stdout",

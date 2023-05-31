@@ -26,6 +26,7 @@ import (
 	"golang.org/x/sys/unix"
 
 	"github.com/canonical/pebble/client"
+	"github.com/canonical/pebble/cmd"
 	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/ptyutil"
 )
@@ -63,7 +64,7 @@ var execDescs = map[string]string{
 }
 
 var shortExecHelp = "Execute a remote command and wait for it to finish"
-var longExecHelp = `
+var longExecHelp = fmt.Sprintf(`
 The exec command runs a remote command and waits for it to finish. The local
 stdin is sent as the input to the remote process, while the remote stdout and
 stderr are output locally.
@@ -71,8 +72,9 @@ stderr are output locally.
 To avoid confusion, exec options may be separated from the command and its
 arguments using "--", for example:
 
-pebble exec --timeout 10s -- echo -n foo bar
-`
+%s exec --timeout 10s -- echo -n foo bar
+`,
+	cmd.Personality.ProgramName)
 
 func (cmd *cmdExec) Execute(args []string) error {
 	if cmd.Terminal && cmd.NoTerminal {

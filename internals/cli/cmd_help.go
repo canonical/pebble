@@ -23,6 +23,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/canonical/go-flags"
+	"github.com/canonical/pebble/cmd"
 )
 
 var shortHelpHelp = "Show help about a command"
@@ -167,7 +168,7 @@ type HelpCategory struct {
 // helpCategories helps us by grouping commands
 var helpCategories = []HelpCategory{{
 	Label:       "Run",
-	Description: "run pebble",
+	Description: "run " + cmd.Personality.DisplayName,
 	Commands:    []string{"run", "help", "version"},
 }, {
 	Label:       "Plan",
@@ -197,18 +198,23 @@ func AddHelpCategory(categ HelpCategory) {
 }
 
 var (
-	longPebbleDescription = strings.TrimSpace(`
-Pebble lets you control services and perform management actions on
+	longPebbleDescription = strings.TrimSpace(fmt.Sprintf(`
+%s lets you control services and perform management actions on
 the system that is running them.
-`)
-	pebbleUsage               = "Usage: pebble <command> [<options>...]"
+`, cmd.Personality.DisplayName))
+	pebbleUsage               = fmt.Sprintf("Usage: %s <command> [<options>...]", cmd.Personality.ProgramName)
 	pebbleHelpCategoriesIntro = "Commands can be classified as follows:"
-	pebbleHelpAllFooter       = "Set the PEBBLE environment variable to override the configuration directory \n" +
-		"(which defaults to " + defaultPebbleDir + "). Set PEBBLE_SOCKET to override \n" +
-		"the unix socket used for the API (defaults to $PEBBLE/.pebble.socket).\n" +
-		"\n" +
-		"For more information about a command, run 'pebble help <command>'."
-	pebbleHelpFooter = "For a short summary of all commands, run 'pebble help --all'."
+	pebbleHelpAllFooter       = strings.TrimSpace(fmt.Sprintf(`
+Set the PEBBLE environment variable to override the configuration directory 
+(which defaults to %s). Set PEBBLE_SOCKET to override 
+the unix socket used for the API (defaults to $PEBBLE/.pebble.socket).
+
+For more information about a command, run '%s help <command>'.
+`, defaultPebbleDir, cmd.Personality.ProgramName))
+	pebbleHelpFooter = fmt.Sprintf(
+		"For a short summary of all commands, run '%s help --all'.",
+		cmd.Personality.ProgramName,
+	)
 )
 
 func printHelpHeader() {

@@ -24,3 +24,9 @@ func MockVersion(version string) (restore func()) {
 	Version = version
 	return func() { Version = old }
 }
+
+// Personality holds the binary and display names for the application.
+var Personality = struct {
+	ProgramName string
+	DisplayName string
+}{"pebble", "Pebble"}
