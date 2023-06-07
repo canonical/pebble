@@ -80,7 +80,7 @@ var commands []*cmdInfo
 // debugCommands holds information about all debug commands.
 var debugCommands []*cmdInfo
 
-// AddCommand replaces parser.AddCommand() in a way that is compatible with
+// AddCommand replaces parser.addCommand() in a way that is compatible with
 // re-constructing a pristine parser.
 func AddCommand(name, shortHelp, longHelp string, builder func() flags.Commander, optDescs map[string]string, argDescs []argDesc) *cmdInfo {
 	info := &cmdInfo{

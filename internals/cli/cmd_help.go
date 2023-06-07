@@ -192,8 +192,8 @@ var helpCategories = []HelpCategory{{
 }}
 
 // AddHelpCategory appends an existing help category to the Pebble help manual.
-func AddHelpCategory(categ HelpCategory) {
-	helpCategories = append(helpCategories, categ)
+func AddHelpCategory(category HelpCategory) {
+	helpCategories = append(helpCategories, category)
 }
 
 var (
