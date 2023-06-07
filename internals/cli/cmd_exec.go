@@ -264,8 +264,14 @@ func execControlHandler(process *client.ExecProcess, terminal bool, stop <-chan 
 }
 
 func init() {
-	info := AddCommand("exec", shortExecHelp, longExecHelp, func() flags.Commander { return &cmdExec{} }, execDescs, nil)
-	info.extra = func(cmd *flags.Command) {
-		cmd.PassAfterNonOption = true
-	}
+	AddCommand(&CmdInfo{
+		Name:      "exec",
+		ShortHelp: shortExecHelp,
+		LongHelp:  longExecHelp,
+		Builder:   func() flags.Commander { return &cmdExec{} },
+		OptDescs:  execDescs,
+		Extra: func(cmd *flags.Command) {
+			cmd.PassAfterNonOption = true
+		},
+	})
 }

@@ -121,5 +121,11 @@ func notifyContext(parent context.Context, signals ...os.Signal) context.Context
 }
 
 func init() {
-	AddCommand("logs", shortLogsHelp, longLogsHelp, func() flags.Commander { return &cmdLogs{} }, logsDescs, nil)
+	AddCommand(&CmdInfo{
+		Name:      "logs",
+		ShortHelp: shortLogsHelp,
+		LongHelp:  longLogsHelp,
+		Builder:   func() flags.Commander { return &cmdLogs{} },
+		OptDescs:  logsDescs,
+	})
 }

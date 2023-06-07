@@ -34,7 +34,13 @@ type cmdStop struct {
 }
 
 func init() {
-	AddCommand("stop", shortStopHelp, longStopHelp, func() flags.Commander { return &cmdStop{} }, waitDescs, nil)
+	AddCommand(&CmdInfo{
+		Name:      "stop",
+		ShortHelp: shortStopHelp,
+		LongHelp:  longStopHelp,
+		Builder:   func() flags.Commander { return &cmdStop{} },
+		OptDescs:  waitDescs,
+	})
 }
 
 func (cmd cmdStop) Execute(args []string) error {

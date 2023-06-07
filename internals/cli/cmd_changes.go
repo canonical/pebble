@@ -48,12 +48,21 @@ type cmdTasks struct {
 }
 
 func init() {
-	AddCommand("changes", shortChangesHelp, longChangesHelp,
-		func() flags.Commander { return &cmdChanges{} }, timeDescs, nil)
-	AddCommand("tasks", shortTasksHelp, longTasksHelp,
-		func() flags.Commander { return &cmdTasks{} },
-		merge(changeIDMixinOptDesc, timeDescs),
-		changeIDMixinArgDesc)
+	AddCommand(&CmdInfo{
+		Name:      "changes",
+		ShortHelp: shortChangesHelp,
+		LongHelp:  longChangesHelp,
+		Builder:   func() flags.Commander { return &cmdChanges{} },
+		OptDescs:  timeDescs,
+	})
+	AddCommand(&CmdInfo{
+		Name:      "tasks",
+		ShortHelp: shortTasksHelp,
+		LongHelp:  longTasksHelp,
+		Builder:   func() flags.Commander { return &cmdTasks{} },
+		OptDescs:  merge(changeIDMixinOptDesc, timeDescs),
+		ArgDescs:  changeIDMixinArgDesc,
+	})
 }
 
 type changesByTime []*client.Change

@@ -114,7 +114,7 @@ func (s *PebbleSuite) TestAddHelpCategory(c *C) {
 	restore := fakeArgs("pebble")
 	defer restore()
 
-	cli.AddHelpCategory(cli.HelpCategory{
+	cli.HelpCategories = append(cli.HelpCategories, cli.HelpCategory{
 		Label:       "Test category",
 		Description: "Test description",
 		Commands:    []string{"run", "logs"},

@@ -38,7 +38,13 @@ var versionDescs = map[string]string{
 }
 
 func init() {
-	AddCommand("version", shortVersionHelp, longVersionHelp, func() flags.Commander { return &cmdVersion{} }, versionDescs, nil)
+	AddCommand(&CmdInfo{
+		Name:      "version",
+		ShortHelp: shortVersionHelp,
+		LongHelp:  longVersionHelp,
+		Builder:   func() flags.Commander { return &cmdVersion{} },
+		OptDescs:  versionDescs,
+	})
 }
 
 func (cmd cmdVersion) Execute(args []string) error {

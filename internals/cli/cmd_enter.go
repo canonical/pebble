@@ -58,10 +58,17 @@ func init() {
 	for k, v := range sharedRunEnterOptsHelp {
 		optsHelp[k] = v
 	}
-	cmdInfo := AddCommand("enter", shortEnterHelp, longEnterHelp, func() flags.Commander { return &cmdEnter{} }, optsHelp, nil)
-	cmdInfo.extra = func(cmd *flags.Command) {
-		cmd.PassAfterNonOption = true
-	}
+	AddCommand(&CmdInfo{
+		Name:      "enter",
+		ShortHelp: shortEnterHelp,
+		LongHelp:  longEnterHelp,
+		Builder:   func() flags.Commander { return &cmdEnter{} },
+		OptDescs:  optsHelp,
+
+		Extra: func(cmd *flags.Command) {
+			cmd.PassAfterNonOption = true
+		},
+	})
 }
 
 func commandEnterFlags(commander flags.Commander) (enterFlags enterFlags, supported bool) {

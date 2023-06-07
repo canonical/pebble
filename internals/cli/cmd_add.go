@@ -67,5 +67,11 @@ func (cmd *cmdAdd) Execute(args []string) error {
 }
 
 func init() {
-	AddCommand("add", shortAddHelp, longAddHelp, func() flags.Commander { return &cmdAdd{} }, addDescs, nil)
+	AddCommand(&CmdInfo{
+		Name:      "add",
+		ShortHelp: shortAddHelp,
+		LongHelp:  longAddHelp,
+		Builder:   func() flags.Commander { return &cmdAdd{} },
+		OptDescs:  addDescs,
+	})
 }

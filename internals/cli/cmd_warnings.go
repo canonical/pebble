@@ -61,11 +61,22 @@ sufficient time has passed.
 `
 
 func init() {
-	AddCommand("warnings", shortWarningsHelp, longWarningsHelp, func() flags.Commander { return &cmdWarnings{} }, merge(timeDescs, unicodeDescs, map[string]string{
-		"all":     "Show all warnings",
-		"verbose": "Show more information",
-	}), nil)
-	AddCommand("okay", shortOkayHelp, longOkayHelp, func() flags.Commander { return &cmdOkay{} }, nil, nil)
+	AddCommand(&CmdInfo{
+		Name:      "warnings",
+		ShortHelp: shortWarningsHelp,
+		LongHelp:  longWarningsHelp,
+		Builder:   func() flags.Commander { return &cmdWarnings{} },
+		OptDescs: merge(timeDescs, unicodeDescs, map[string]string{
+			"all":     "Show all warnings",
+			"verbose": "Show more information",
+		}),
+	})
+	AddCommand(&CmdInfo{
+		Name:      "okay",
+		ShortHelp: shortOkayHelp,
+		LongHelp:  longOkayHelp,
+		Builder:   func() flags.Commander { return &cmdOkay{} },
+	})
 }
 
 func (cmd *cmdWarnings) Execute(args []string) error {

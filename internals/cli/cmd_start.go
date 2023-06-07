@@ -34,7 +34,13 @@ type cmdStart struct {
 }
 
 func init() {
-	AddCommand("start", shortStartHelp, longStartHelp, func() flags.Commander { return &cmdStart{} }, waitDescs, nil)
+	AddCommand(&CmdInfo{
+		Name:      "start",
+		ShortHelp: shortStartHelp,
+		LongHelp:  longStartHelp,
+		Builder:   func() flags.Commander { return &cmdStart{} },
+		OptDescs:  waitDescs,
+	})
 }
 
 func (cmd cmdStart) Execute(args []string) error {

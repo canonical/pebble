@@ -65,8 +65,13 @@ type cmdRun struct {
 }
 
 func init() {
-	AddCommand("run", shortRunHelp, longRunHelp, func() flags.Commander { return &cmdRun{} },
-		sharedRunEnterOptsHelp, nil)
+	AddCommand(&CmdInfo{
+		Name:      "run",
+		ShortHelp: shortRunHelp,
+		LongHelp:  longRunHelp,
+		Builder:   func() flags.Commander { return &cmdRun{} },
+		OptDescs:  sharedRunEnterOptsHelp,
+	})
 }
 
 func (rcmd *cmdRun) Execute(args []string) error {

@@ -79,11 +79,16 @@ type cmdHelp struct {
 }
 
 func init() {
-	AddCommand("help", shortHelpHelp, longHelpHelp, func() flags.Commander { return &cmdHelp{} },
-		map[string]string{
+	AddCommand(&CmdInfo{
+		Name:      "help",
+		ShortHelp: shortHelpHelp,
+		LongHelp:  longHelpHelp,
+		Builder:   func() flags.Commander { return &cmdHelp{} },
+		OptDescs: map[string]string{
 			"all": "Show a short summary of all commands",
 			"man": "Generate the manpage",
-		}, nil)
+		},
+	})
 }
 
 func (cmd *cmdHelp) setParser(parser *flags.Parser) {
@@ -164,8 +169,8 @@ type HelpCategory struct {
 	Commands    []string
 }
 
-// helpCategories helps us by grouping commands
-var helpCategories = []HelpCategory{{
+// HelpCategories helps us by grouping commands
+var HelpCategories = []HelpCategory{{
 	Label:       "Run",
 	Description: "run pebble",
 	Commands:    []string{"run", "help", "version"},
@@ -190,11 +195,6 @@ var helpCategories = []HelpCategory{{
 	Description: "manage warnings",
 	Commands:    []string{"warnings", "okay"},
 }}
-
-// AddHelpCategory appends an existing help category to the Pebble help manual.
-func AddHelpCategory(category HelpCategory) {
-	helpCategories = append(helpCategories, category)
-}
 
 var (
 	longPebbleDescription = strings.TrimSpace(`
@@ -234,12 +234,12 @@ func printShortHelp() {
 	printHelpHeader()
 	fmt.Fprintln(Stdout)
 	maxLen := 0
-	for _, categ := range helpCategories {
+	for _, categ := range HelpCategories {
 		if l := utf8.RuneCountInString(categ.Label); l > maxLen {
 			maxLen = l
 		}
 	}
-	for _, categ := range helpCategories {
+	for _, categ := range HelpCategories {
 		fmt.Fprintf(Stdout, "%*s: %s\n", maxLen+2, categ.Label, strings.Join(categ.Commands, ", "))
 	}
 	printHelpFooter()
@@ -249,7 +249,7 @@ func printShortHelp() {
 func printLongHelp(parser *flags.Parser) {
 	printHelpHeader()
 	maxLen := 0
-	for _, categ := range helpCategories {
+	for _, categ := range HelpCategories {
 		for _, command := range categ.Commands {
 			if l := len(command); l > maxLen {
 				maxLen = l
@@ -264,7 +264,7 @@ func printLongHelp(parser *flags.Parser) {
 		cmdLookup[cmd.Name] = cmd
 	}
 
-	for _, categ := range helpCategories {
+	for _, categ := range HelpCategories {
 		fmt.Fprintln(Stdout)
 		fmt.Fprintf(Stdout, "  %s (%s):\n", categ.Label, categ.Description)
 		for _, name := range categ.Commands {
