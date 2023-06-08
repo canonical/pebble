@@ -72,6 +72,9 @@ type Options struct {
 	// ServiceOuput is an optional io.Writer for the service log output, if set, all services
 	// log output will be written to the writer.
 	ServiceOutput io.Writer
+
+	// Dry will only perform initialization tasks that don't have system-wide side effects.
+	Dry bool
 }
 
 // A Daemon listens for requests and routes them to the right command
@@ -790,7 +793,7 @@ func New(opts *Options) (*Daemon, error) {
 		httpAddress:         opts.HTTPAddress,
 	}
 
-	ovld, err := overlord.New(opts.Dir, d, opts.ServiceOutput)
+	ovld, err := overlord.New(opts.Dir, d, opts.ServiceOutput, opts.Dry)
 	if err == errExpectedReboot {
 		// we proceed without overlord until we reach Stop
 		// where we will schedule and wait again for a system restart.

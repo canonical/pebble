@@ -237,6 +237,12 @@ func (m *ServiceManager) acquirePlan() (release func(), err error) {
 	return release, nil
 }
 
+// DryStart implements StateManager.DryStart.
+func (m *ServiceManager) DryStart() error {
+	_, err := plan.ReadDir(m.pebbleDir)
+	return err
+}
+
 // Ensure implements StateManager.Ensure.
 func (m *ServiceManager) Ensure() error {
 	return nil

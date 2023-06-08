@@ -74,7 +74,7 @@ type Overlord struct {
 
 // New creates a new Overlord with all its state managers.
 // It can be provided with an optional restart.Handler.
-func New(pebbleDir string, restartHandler restart.Handler, serviceOutput io.Writer) (*Overlord, error) {
+func New(pebbleDir string, restartHandler restart.Handler, serviceOutput io.Writer, dry bool) (*Overlord, error) {
 	o := &Overlord{
 		pebbleDir: pebbleDir,
 		loopTomb:  new(tomb.Tomb),
@@ -89,10 +89,18 @@ func New(pebbleDir string, restartHandler restart.Handler, serviceOutput io.Writ
 	}
 	statePath := filepath.Join(pebbleDir, ".pebble.state")
 
-	backend := &overlordStateBackend{
-		path:         statePath,
-		ensureBefore: o.ensureBefore,
+	var backend state.Backend
+	if dry {
+		backend = &noopStateBackend{
+			ensureBefore: o.ensureBefore,
+		}
+	} else {
+		backend = &overlordStateBackend{
+			path:         statePath,
+			ensureBefore: o.ensureBefore,
+		}
 	}
+
 	s, err := loadState(statePath, restartHandler, backend)
 	if err != nil {
 		return nil, err
@@ -132,6 +140,11 @@ func New(pebbleDir string, restartHandler restart.Handler, serviceOutput io.Writ
 
 	// the shared task runner should be added last!
 	o.stateEng.AddManager(o.runner)
+
+	// Dry start all managers.
+	if err := o.stateEng.DryStart(); err != nil {
+		return nil, err
+	}
 
 	return o, nil
 }
@@ -318,7 +331,7 @@ func (o *Overlord) settle(timeout time.Duration, beforeCleanups func()) error {
 		if timeout > 0 && time.Since(t0) > timeout {
 			err := fmt.Errorf("Settle is not converging")
 			if len(errs) != 0 {
-				return &ensureError{append(errs, err)}
+				return &multiError{append(errs, err)}
 			}
 			return err
 		}
@@ -326,7 +339,7 @@ func (o *Overlord) settle(timeout time.Duration, beforeCleanups func()) error {
 		err := o.stateEng.Ensure()
 		switch ee := err.(type) {
 		case nil:
-		case *ensureError:
+		case *multiError:
 			errs = append(errs, ee.errs...)
 		default:
 			errs = append(errs, err)
@@ -353,7 +366,7 @@ func (o *Overlord) settle(timeout time.Duration, beforeCleanups func()) error {
 		}
 	}
 	if len(errs) != 0 {
-		return &ensureError{errs}
+		return &multiError{errs}
 	}
 	return nil
 }

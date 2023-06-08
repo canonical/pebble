@@ -35,9 +35,14 @@ func (ses *stateEngineSuite) TestNewAndState(c *C) {
 }
 
 type fakeManager struct {
-	name                   string
-	calls                  *[]string
-	ensureError, stopError error
+	name                       string
+	calls                      *[]string
+	ensureError, dryStartError error
+}
+
+func (fm *fakeManager) DryStart() error {
+	*fm.calls = append(*fm.calls, "drystart:"+fm.name)
+	return fm.dryStartError
 }
 
 func (fm *fakeManager) Ensure() error {
@@ -67,13 +72,33 @@ func (ses *stateEngineSuite) TestEnsure(c *C) {
 	se.AddManager(mgr1)
 	se.AddManager(mgr2)
 
-	err := se.Ensure()
+	err := se.DryStart()
 	c.Assert(err, IsNil)
-	c.Check(calls, DeepEquals, []string{"ensure:mgr1", "ensure:mgr2"})
+	c.Check(calls, DeepEquals, []string{"drystart:mgr1", "drystart:mgr2"})
 
 	err = se.Ensure()
 	c.Assert(err, IsNil)
-	c.Check(calls, DeepEquals, []string{"ensure:mgr1", "ensure:mgr2", "ensure:mgr1", "ensure:mgr2"})
+	c.Check(calls, DeepEquals, []string{"drystart:mgr1", "drystart:mgr2", "ensure:mgr1", "ensure:mgr2"})
+}
+
+func (ses *stateEngineSuite) TestDryStartError(c *C) {
+	s := state.New(nil)
+	se := overlord.NewStateEngine(s)
+
+	calls := []string{}
+
+	err1 := errors.New("boom1")
+	err2 := errors.New("boom2")
+
+	mgr1 := &fakeManager{name: "mgr1", calls: &calls, dryStartError: err1}
+	mgr2 := &fakeManager{name: "mgr2", calls: &calls, dryStartError: err2}
+
+	se.AddManager(mgr1)
+	se.AddManager(mgr2)
+
+	err := se.DryStart()
+	c.Check(err.Error(), DeepEquals, "multiple errors: boom1; boom2")
+	c.Check(calls, DeepEquals, []string{"drystart:mgr1", "drystart:mgr2"})
 }
 
 func (ses *stateEngineSuite) TestEnsureError(c *C) {
@@ -92,7 +117,7 @@ func (ses *stateEngineSuite) TestEnsureError(c *C) {
 	se.AddManager(mgr2)
 
 	err := se.Ensure()
-	c.Check(err.Error(), DeepEquals, "state ensure errors: [boom1 boom2]")
+	c.Check(err.Error(), DeepEquals, "multiple errors: boom1; boom2")
 	c.Check(calls, DeepEquals, []string{"ensure:mgr1", "ensure:mgr2"})
 }
 

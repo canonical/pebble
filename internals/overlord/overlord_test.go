@@ -58,7 +58,7 @@ func (ovs *overlordSuite) TestNew(c *C) {
 	restore := patch.Fake(42, 2, nil)
 	defer restore()
 
-	o, err := overlord.New(ovs.dir, nil, nil)
+	o, err := overlord.New(ovs.dir, nil, nil, false)
 	c.Assert(err, IsNil)
 	c.Check(o, NotNil)
 
@@ -83,7 +83,7 @@ func (ovs *overlordSuite) TestNewWithGoodState(c *C) {
 	err := ioutil.WriteFile(ovs.statePath, fakeState, 0600)
 	c.Assert(err, IsNil)
 
-	o, err := overlord.New(ovs.dir, nil, nil)
+	o, err := overlord.New(ovs.dir, nil, nil, false)
 	c.Assert(err, IsNil)
 
 	state := o.State()
@@ -111,7 +111,7 @@ func (ovs *overlordSuite) TestNewWithInvalidState(c *C) {
 	err := ioutil.WriteFile(ovs.statePath, fakeState, 0600)
 	c.Assert(err, IsNil)
 
-	_, err = overlord.New(ovs.dir, nil, nil)
+	_, err = overlord.New(ovs.dir, nil, nil, false)
 	c.Assert(err, ErrorMatches, "cannot read state: EOF")
 }
 
@@ -130,7 +130,7 @@ func (ovs *overlordSuite) TestNewWithPatches(c *C) {
 	err := ioutil.WriteFile(ovs.statePath, fakeState, 0600)
 	c.Assert(err, IsNil)
 
-	o, err := overlord.New(ovs.dir, nil, nil)
+	o, err := overlord.New(ovs.dir, nil, nil, false)
 	c.Assert(err, IsNil)
 
 	state := o.State()
@@ -163,6 +163,10 @@ type witnessManager struct {
 	ensureCallback func(s *state.State) error
 }
 
+func (wm *witnessManager) DryStart() error {
+	return nil
+}
+
 func (wm *witnessManager) Ensure() error {
 	if wm.expectedEnsure--; wm.expectedEnsure == 0 {
 		close(wm.ensureCalled)
@@ -175,7 +179,7 @@ func (wm *witnessManager) Ensure() error {
 }
 
 func (ovs *overlordSuite) TestTrivialRunAndStop(c *C) {
-	o, err := overlord.New(ovs.dir, nil, nil)
+	o, err := overlord.New(ovs.dir, nil, nil, false)
 	c.Assert(err, IsNil)
 
 	o.Loop()
@@ -185,7 +189,7 @@ func (ovs *overlordSuite) TestTrivialRunAndStop(c *C) {
 }
 
 func (ovs *overlordSuite) TestUnknownTasks(c *C) {
-	o, err := overlord.New(ovs.dir, nil, nil)
+	o, err := overlord.New(ovs.dir, nil, nil, false)
 	c.Assert(err, IsNil)
 
 	// unknown tasks are ignored and succeed
@@ -486,7 +490,7 @@ func (ovs *overlordSuite) TestCheckpoint(c *C) {
 	oldUmask := syscall.Umask(0)
 	defer syscall.Umask(oldUmask)
 
-	o, err := overlord.New(ovs.dir, nil, nil)
+	o, err := overlord.New(ovs.dir, nil, nil, false)
 	c.Assert(err, IsNil)
 
 	s := o.State()
@@ -502,7 +506,8 @@ func (ovs *overlordSuite) TestCheckpoint(c *C) {
 }
 
 type sampleManager struct {
-	ensureCallback func()
+	dryStartCallback func()
+	ensureCallback   func()
 }
 
 func newSampleManager(s *state.State, runner *state.TaskRunner) *sampleManager {
@@ -552,6 +557,13 @@ func newSampleManager(s *state.State, runner *state.TaskRunner) *sampleManager {
 	})
 
 	return sm
+}
+
+func (sm *sampleManager) DryStart() error {
+	if sm.dryStartCallback != nil {
+		sm.dryStartCallback()
+	}
+	return nil
 }
 
 func (sm *sampleManager) Ensure() error {
@@ -727,7 +739,7 @@ func (ovs *overlordSuite) TestSettleExplicitEnsureBefore(c *C) {
 }
 
 func (ovs *overlordSuite) TestRequestRestartNoHandler(c *C) {
-	o, err := overlord.New(ovs.dir, nil, nil)
+	o, err := overlord.New(ovs.dir, nil, nil, false)
 	c.Assert(err, IsNil)
 
 	st := o.State()
@@ -760,7 +772,7 @@ func (rb *testRestartHandler) RebootIsMissing(_ *state.State) error {
 func (ovs *overlordSuite) TestRequestRestartHandler(c *C) {
 	rb := &testRestartHandler{}
 
-	o, err := overlord.New(ovs.dir, rb, nil)
+	o, err := overlord.New(ovs.dir, rb, nil, false)
 	c.Assert(err, IsNil)
 
 	st := o.State()
@@ -779,7 +791,7 @@ func (ovs *overlordSuite) TestVerifyRebootNoPendingReboot(c *C) {
 
 	rb := &testRestartHandler{}
 
-	_, err = overlord.New(ovs.dir, rb, nil)
+	_, err = overlord.New(ovs.dir, rb, nil, false)
 	c.Assert(err, IsNil)
 
 	c.Check(rb.rebootState, Equals, "as-expected")
@@ -792,7 +804,7 @@ func (ovs *overlordSuite) TestVerifyRebootOK(c *C) {
 
 	rb := &testRestartHandler{}
 
-	_, err = overlord.New(ovs.dir, rb, nil)
+	_, err = overlord.New(ovs.dir, rb, nil, false)
 	c.Assert(err, IsNil)
 
 	c.Check(rb.rebootState, Equals, "as-expected")
@@ -806,7 +818,7 @@ func (ovs *overlordSuite) TestVerifyRebootOKButError(c *C) {
 	e := errors.New("boom")
 	rb := &testRestartHandler{rebootVerifiedErr: e}
 
-	_, err = overlord.New(ovs.dir, rb, nil)
+	_, err = overlord.New(ovs.dir, rb, nil, false)
 	c.Assert(err, Equals, e)
 
 	c.Check(rb.rebootState, Equals, "as-expected")
@@ -822,7 +834,7 @@ func (ovs *overlordSuite) TestVerifyRebootIsMissing(c *C) {
 
 	rb := &testRestartHandler{}
 
-	_, err = overlord.New(ovs.dir, rb, nil)
+	_, err = overlord.New(ovs.dir, rb, nil, false)
 	c.Assert(err, IsNil)
 
 	c.Check(rb.rebootState, Equals, "did-not-happen")
@@ -839,7 +851,7 @@ func (ovs *overlordSuite) TestVerifyRebootIsMissingError(c *C) {
 	e := errors.New("boom")
 	rb := &testRestartHandler{rebootVerifiedErr: e}
 
-	_, err = overlord.New(ovs.dir, rb, nil)
+	_, err = overlord.New(ovs.dir, rb, nil, false)
 	c.Assert(err, Equals, e)
 
 	c.Check(rb.rebootState, Equals, "did-not-happen")

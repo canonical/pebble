@@ -331,6 +331,10 @@ func (r *TaskRunner) tryUndo(t *Task) {
 	}
 }
 
+func (r *TaskRunner) DryStart() error {
+	return nil
+}
+
 // Ensure starts new goroutines for all known tasks with no pending
 // dependencies.
 // Note that Ensure will lock the state.

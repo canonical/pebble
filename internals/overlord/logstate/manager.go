@@ -37,6 +37,11 @@ func (m *LogManager) ServiceStarted(serviceName string, buffer *servicelog.RingB
 	// TODO: implement
 }
 
+// DryStart implements overlord.StateManager.
+func (m *LogManager) DryStart() error {
+	return nil
+}
+
 // Ensure implements overlord.StateManager.
 func (m *LogManager) Ensure() error {
 	return nil

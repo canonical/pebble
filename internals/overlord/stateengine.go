@@ -15,16 +15,24 @@
 package overlord
 
 import (
-	"fmt"
+	"errors"
+	"strings"
 	"sync"
 
 	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/overlord/state"
 )
 
+var ErrStateEngineStopped = errors.New("state engine already stopped")
+
 // StateManager is implemented by types responsible for observing
 // the system and manipulating it to reflect the desired state.
 type StateManager interface {
+	// DryStart prepares the manager to run its activities without
+	// incurring side effects that might affect the system
+	// state.
+	DryStart() error
+
 	// Ensure forces a complete evaluation of the current state.
 	// See StateEngine.Ensure for more details.
 	Ensure() error
@@ -72,12 +80,38 @@ func (se *StateEngine) State() *state.State {
 	return se.state
 }
 
-type ensureError struct {
+type multiError struct {
 	errs []error
 }
 
-func (e *ensureError) Error() string {
-	return fmt.Sprintf("state ensure errors: %v", e.errs)
+func (e *multiError) Error() string {
+	errStrings := make([]string, len(e.errs))
+	for i, err := range e.errs {
+		errStrings[i] = err.Error()
+	}
+	return "multiple errors: " + strings.Join(errStrings, "; ")
+}
+
+// DryStart ensures all managers are ready to run their activities
+// before the first call to Ensure() is made.
+func (se *StateEngine) DryStart() error {
+	se.mgrLock.Lock()
+	defer se.mgrLock.Unlock()
+	if se.stopped {
+		return ErrStateEngineStopped
+	}
+	var errs []error
+	for _, m := range se.managers {
+		err := m.DryStart()
+		if err != nil {
+			logger.Noticef("dry start error: %v", err)
+			errs = append(errs, err)
+		}
+	}
+	if len(errs) != 0 {
+		return &multiError{errs}
+	}
+	return nil
 }
 
 // Ensure asks every manager to ensure that they are doing the necessary
@@ -92,18 +126,17 @@ func (se *StateEngine) Ensure() error {
 	se.mgrLock.Lock()
 	defer se.mgrLock.Unlock()
 	if se.stopped {
-		return fmt.Errorf("state engine already stopped")
+		return ErrStateEngineStopped
 	}
 	var errs []error
 	for _, m := range se.managers {
 		err := m.Ensure()
 		if err != nil {
-			logger.Noticef("state ensure error: %v", err)
 			errs = append(errs, err)
 		}
 	}
 	if len(errs) != 0 {
-		return &ensureError{errs}
+		return &multiError{errs}
 	}
 	return nil
 }

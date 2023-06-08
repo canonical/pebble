@@ -48,6 +48,7 @@ type sharedRunEnterOpts struct {
 	Hold       bool       `long:"hold"`
 	HTTP       string     `long:"http"`
 	Verbose    bool       `short:"v" long:"verbose"`
+	Dry        bool       `long:"dry"`
 	Args       [][]string `long:"args" terminator:";"`
 }
 
@@ -56,6 +57,7 @@ var sharedRunEnterOptsHelp = map[string]string{
 	"hold":        "Do not start default services automatically",
 	"http":        `Start HTTP API listening on this address (e.g., ":4000")`,
 	"verbose":     "Log all output from services to stdout",
+	"dry":         `Attempt to run without actually running`,
 	"args":        `Provide additional arguments to a service`,
 }
 
@@ -144,6 +146,7 @@ func runDaemon(rcmd *cmdRun, ch chan os.Signal, ready chan<- func()) error {
 	dopts := daemon.Options{
 		Dir:        pebbleDir,
 		SocketPath: socketPath,
+		Dry:        rcmd.Dry,
 	}
 	if rcmd.Verbose {
 		dopts.ServiceOutput = os.Stdout
@@ -153,6 +156,9 @@ func runDaemon(rcmd *cmdRun, ch chan os.Signal, ready chan<- func()) error {
 	d, err := daemon.New(&dopts)
 	if err != nil {
 		return err
+	}
+	if rcmd.Dry {
+		return nil
 	}
 	if err := d.Init(); err != nil {
 		return err

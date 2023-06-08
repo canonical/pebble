@@ -37,6 +37,11 @@ func NewManager(runner *state.TaskRunner) *CommandManager {
 	return manager
 }
 
+// DryStart is part of the overlord.StateManager interface.
+func (m *CommandManager) DryStart() error {
+	return nil
+}
+
 // Ensure is part of the overlord.StateManager interface.
 func (m *CommandManager) Ensure() error {
 	return nil
