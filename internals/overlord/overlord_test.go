@@ -506,8 +506,7 @@ func (ovs *overlordSuite) TestCheckpoint(c *C) {
 }
 
 type sampleManager struct {
-	dryStartCallback func()
-	ensureCallback   func()
+	ensureCallback func()
 }
 
 func newSampleManager(s *state.State, runner *state.TaskRunner) *sampleManager {
@@ -560,9 +559,6 @@ func newSampleManager(s *state.State, runner *state.TaskRunner) *sampleManager {
 }
 
 func (sm *sampleManager) DryStart() error {
-	if sm.dryStartCallback != nil {
-		sm.dryStartCallback()
-	}
 	return nil
 }
 

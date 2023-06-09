@@ -23,7 +23,7 @@ import (
 	"github.com/canonical/pebble/internals/overlord/state"
 )
 
-var ErrStateEngineStopped = errors.New("state engine already stopped")
+var errStateEngineStopped = errors.New("state engine already stopped")
 
 // StateManager is implemented by types responsible for observing
 // the system and manipulating it to reflect the desired state.
@@ -85,6 +85,10 @@ type multiError struct {
 }
 
 func (e *multiError) Error() string {
+	if len(e.errs) == 1 {
+		return e.errs[0].Error()
+	}
+
 	errStrings := make([]string, len(e.errs))
 	for i, err := range e.errs {
 		errStrings[i] = err.Error()
@@ -98,13 +102,12 @@ func (se *StateEngine) DryStart() error {
 	se.mgrLock.Lock()
 	defer se.mgrLock.Unlock()
 	if se.stopped {
-		return ErrStateEngineStopped
+		return errStateEngineStopped
 	}
 	var errs []error
 	for _, m := range se.managers {
 		err := m.DryStart()
 		if err != nil {
-			logger.Noticef("dry start error: %v", err)
 			errs = append(errs, err)
 		}
 	}
@@ -126,12 +129,13 @@ func (se *StateEngine) Ensure() error {
 	se.mgrLock.Lock()
 	defer se.mgrLock.Unlock()
 	if se.stopped {
-		return ErrStateEngineStopped
+		return errStateEngineStopped
 	}
 	var errs []error
 	for _, m := range se.managers {
 		err := m.Ensure()
 		if err != nil {
+			logger.Noticef("state ensure error: %v", err)
 			errs = append(errs, err)
 		}
 	}
