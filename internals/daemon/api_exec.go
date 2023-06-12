@@ -18,7 +18,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"os/exec"
+	"strings"
 	"time"
 
 	"github.com/canonical/pebble/internals/osutil"
@@ -73,13 +75,29 @@ func v1PostExec(c *Command, req *http.Request, _ *userState) Response {
 		return statusBadRequest("%v", err)
 	}
 
+	// Inherit the pebble daemon environment.
+	environment := make(map[string]string)
+	for _, kv := range os.Environ() {
+		parts := strings.SplitN(kv, "=", 2)
+		key := parts[0]
+		val := ""
+		if len(parts) == 2 {
+			val = parts[1]
+		}
+		environment[key] = val
+	}
+	for key, val := range payload.Environment {
+		// Client env will overwrite existing daemon env, if exists.
+		environment[key] = val
+	}
+
 	st := c.d.overlord.State()
 	st.Lock()
 	defer st.Unlock()
 
 	args := &cmdstate.ExecArgs{
 		Command:     payload.Command,
-		Environment: payload.Environment,
+		Environment: environment,
 		WorkingDir:  payload.WorkingDir,
 		Timeout:     timeout,
 		UserID:      uid,
