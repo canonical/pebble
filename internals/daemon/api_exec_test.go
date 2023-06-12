@@ -109,18 +109,8 @@ func (s *execSuite) TestEnvironment(c *C) {
 }
 
 func (s *execSuite) TestEnvironmentInheritedFromDaemon(c *C) {
-	oldEnv, envWasSet := os.LookupEnv("FOO")
-	err := os.Setenv("FOO", "bar")
-	c.Check(err, IsNil)
-	defer func() {
-		var err error
-		if envWasSet {
-			err = os.Setenv("FOO", oldEnv)
-		} else {
-			err = os.Unsetenv("FOO")
-		}
-		c.Check(err, IsNil)
-	}()
+	restore := fakeEnv("FOO", "bar")
+	defer restore()
 
 	stdout, stderr, waitErr := s.exec(c, "", &client.ExecOptions{
 		Command: []string{"/bin/sh", "-c", "echo FOO=$FOO"},
