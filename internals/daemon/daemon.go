@@ -73,7 +73,7 @@ type Options struct {
 	// log output will be written to the writer.
 	ServiceOutput io.Writer
 
-	// Dry will only perform initialization tasks that don't have system-wide side effects.
+	// Dry will only perform initialization tasks that don't have unwanted side effects.
 	Dry bool
 }
 

@@ -34,15 +34,3 @@ func (osb *overlordStateBackend) Checkpoint(data []byte) error {
 func (osb *overlordStateBackend) EnsureBefore(d time.Duration) {
 	osb.ensureBefore(d)
 }
-
-type noopStateBackend struct {
-	ensureBefore func(d time.Duration)
-}
-
-func (nsb *noopStateBackend) Checkpoint(data []byte) error {
-	return nil
-}
-
-func (nsb *noopStateBackend) EnsureBefore(d time.Duration) {
-	nsb.ensureBefore(d)
-}

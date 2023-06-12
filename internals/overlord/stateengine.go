@@ -29,8 +29,7 @@ var errStateEngineStopped = errors.New("state engine already stopped")
 // the system and manipulating it to reflect the desired state.
 type StateManager interface {
 	// DryStart prepares the manager to run its activities without
-	// incurring side effects that might affect the system
-	// state.
+	// incurring unwanted side effects.
 	DryStart() error
 
 	// Ensure forces a complete evaluation of the current state.
@@ -61,8 +60,9 @@ type StateStopper interface {
 // cope with Ensure calls in any order, coordinating among themselves
 // solely via the state.
 type StateEngine struct {
-	state   *state.State
-	stopped bool
+	state      *state.State
+	dryStarted bool
+	stopped    bool
 	// managers in use
 	mgrLock  sync.Mutex
 	managers []StateManager
@@ -114,6 +114,7 @@ func (se *StateEngine) DryStart() error {
 	if len(errs) != 0 {
 		return &multiError{errs}
 	}
+	se.dryStarted = true
 	return nil
 }
 
@@ -128,6 +129,9 @@ func (se *StateEngine) DryStart() error {
 func (se *StateEngine) Ensure() error {
 	se.mgrLock.Lock()
 	defer se.mgrLock.Unlock()
+	if !se.dryStarted {
+		return errors.New("state engine did not dry-start")
+	}
 	if se.stopped {
 		return errStateEngineStopped
 	}

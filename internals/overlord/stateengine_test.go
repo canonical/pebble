@@ -97,8 +97,18 @@ func (ses *stateEngineSuite) TestDryStartError(c *C) {
 	se.AddManager(mgr2)
 
 	err := se.DryStart()
-	c.Check(err.Error(), DeepEquals, "multiple errors: boom1; boom2")
+	c.Check(err, ErrorMatches, `multiple errors: boom1; boom2`)
 	c.Check(calls, DeepEquals, []string{"drystart:mgr1", "drystart:mgr2"})
+}
+
+func (ses *stateEngineSuite) TestEnsureFailsNoDryStart(c *C) {
+	s := state.New(nil)
+	se := overlord.NewStateEngine(s)
+	mgr := &fakeManager{name: "mgr"}
+	se.AddManager(mgr)
+
+	err := se.Ensure()
+	c.Check(err, ErrorMatches, `state engine did not dry-start`)
 }
 
 func (ses *stateEngineSuite) TestEnsureError(c *C) {
@@ -116,9 +126,12 @@ func (ses *stateEngineSuite) TestEnsureError(c *C) {
 	se.AddManager(mgr1)
 	se.AddManager(mgr2)
 
-	err := se.Ensure()
+	err := se.DryStart()
+	c.Check(err, IsNil)
+
+	err = se.Ensure()
 	c.Check(err.Error(), DeepEquals, "multiple errors: boom1; boom2")
-	c.Check(calls, DeepEquals, []string{"ensure:mgr1", "ensure:mgr2"})
+	c.Check(calls, DeepEquals, []string{"drystart:mgr1", "drystart:mgr2", "ensure:mgr1", "ensure:mgr2"})
 }
 
 func (ses *stateEngineSuite) TestStop(c *C) {
@@ -133,11 +146,14 @@ func (ses *stateEngineSuite) TestStop(c *C) {
 	se.AddManager(mgr1)
 	se.AddManager(mgr2)
 
-	se.Stop()
-	c.Check(calls, DeepEquals, []string{"stop:mgr1", "stop:mgr2"})
-	se.Stop()
-	c.Check(calls, HasLen, 2)
+	err := se.DryStart()
+	c.Check(err, IsNil)
 
-	err := se.Ensure()
+	se.Stop()
+	c.Check(calls, DeepEquals, []string{"drystart:mgr1", "drystart:mgr2", "stop:mgr1", "stop:mgr2"})
+	se.Stop()
+	c.Check(calls, HasLen, 4)
+
+	err = se.Ensure()
 	c.Check(err, ErrorMatches, "state engine already stopped")
 }

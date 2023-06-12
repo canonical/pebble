@@ -89,16 +89,9 @@ func New(pebbleDir string, restartHandler restart.Handler, serviceOutput io.Writ
 	}
 	statePath := filepath.Join(pebbleDir, ".pebble.state")
 
-	var backend state.Backend
-	if dry {
-		backend = &noopStateBackend{
-			ensureBefore: o.ensureBefore,
-		}
-	} else {
-		backend = &overlordStateBackend{
-			path:         statePath,
-			ensureBefore: o.ensureBefore,
-		}
+	backend := &overlordStateBackend{
+		path:         statePath,
+		ensureBefore: o.ensureBefore,
 	}
 
 	s, err := loadState(statePath, restartHandler, backend)
@@ -116,16 +109,16 @@ func New(pebbleDir string, restartHandler restart.Handler, serviceOutput io.Writ
 	o.runner.AddOptionalHandler(matchAnyUnknownTask, handleUnknownTask, nil)
 
 	o.logMgr = logstate.NewLogManager()
-	o.addManager(o.logMgr)
+	o.stateEng.AddManager(o.logMgr)
 
 	o.serviceMgr, err = servstate.NewManager(s, o.runner, o.pebbleDir, serviceOutput, restartHandler, o.logMgr)
 	if err != nil {
 		return nil, err
 	}
-	o.addManager(o.serviceMgr)
+	o.stateEng.AddManager(o.serviceMgr)
 
 	o.commandMgr = cmdstate.NewManager(o.runner)
-	o.addManager(o.commandMgr)
+	o.stateEng.AddManager(o.commandMgr)
 
 	o.checkMgr = checkstate.NewManager()
 
@@ -147,10 +140,6 @@ func New(pebbleDir string, restartHandler restart.Handler, serviceOutput io.Writ
 	}
 
 	return o, nil
-}
-
-func (o *Overlord) addManager(mgr StateManager) {
-	o.stateEng.AddManager(mgr)
 }
 
 func loadState(statePath string, restartHandler restart.Handler, backend state.Backend) (*state.State, error) {
@@ -445,6 +434,7 @@ func FakeWithState(handleRestart func(restart.RestartType)) *Overlord {
 	s := state.New(fakeBackend{o: o})
 	o.stateEng = NewStateEngine(s)
 	o.runner = state.NewTaskRunner(s)
+	o.stateEng.DryStart()
 	return o
 }
 
@@ -454,7 +444,7 @@ func (o *Overlord) AddManager(mgr StateManager) {
 	if o.inited {
 		panic("internal error: cannot add managers to a fully initialized Overlord")
 	}
-	o.addManager(mgr)
+	o.stateEng.AddManager(mgr)
 }
 
 type fakeBackend struct {
