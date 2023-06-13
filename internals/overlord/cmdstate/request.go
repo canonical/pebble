@@ -20,6 +20,7 @@ import (
 	"os"
 	"os/user"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/canonical/pebble/internals/logger"
@@ -69,8 +70,19 @@ func Exec(st *state.State, args *ExecArgs) (*state.Task, ExecMetadata, error) {
 		return nil, ExecMetadata{}, errors.New("cannot use interactive mode without a terminal")
 	}
 
+	// Inherit the pebble daemon environment.
 	environment := map[string]string{}
+	for _, kv := range os.Environ() {
+		parts := strings.SplitN(kv, "=", 2)
+		key := parts[0]
+		val := ""
+		if len(parts) == 2 {
+			val = parts[1]
+		}
+		environment[key] = val
+	}
 	for k, v := range args.Environment {
+		// Requested environment takes precedence.
 		environment[k] = v
 	}
 
