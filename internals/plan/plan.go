@@ -372,26 +372,24 @@ func (t *LogTargets) Merge(other *LogTargets) {
 	t.Targets = appendUnique(t.Targets, other.Targets...)
 }
 
+// LogsTo returns true if t specifies sending logs to tgt.
 func (t *LogTargets) LogsTo(tgt *LogTarget) bool {
-	// Handle keywords
-	switch t.Keyword {
-	case AllLogTargets:
-		return tgt.Selection != DisabledSelection
-	case DefaultLogTargets:
-		return tgt.Selection == OptOutSelection || tgt.Selection == UnsetSelection
-	case NoLogTargets:
+	// False if `log-targets: none` specified, or if target disabled
+	if t.Keyword == NoLogTargets || tgt.Selection == DisabledSelection {
 		return false
 	}
 
-	// No keyword
-	if tgt.Selection == DisabledSelection {
-		return false
+	// All log-targets selected
+	if t.Keyword == AllLogTargets {
+		return true // already handled the case tgt.Selection == "disabled"
 	}
-	if len(t.Targets) == 0 {
-		if tgt.Selection == UnsetSelection || tgt.Selection == OptOutSelection {
-			return true
-		}
+
+	// Default log-targets
+	if t.Keyword == DefaultLogTargets || len(t.Targets) == 0 {
+		return tgt.Selection == OptOutSelection || tgt.Selection == UnsetSelection
 	}
+
+	// No keyword - check if log target is specified
 	for _, targetName := range t.Targets {
 		if targetName == tgt.Name {
 			return true

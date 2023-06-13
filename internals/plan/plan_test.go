@@ -1764,18 +1764,30 @@ func (s *S) TestSelectTargets(c *C) {
 		{Name: "svc7", LogTargets: &plan.LogTargets{
 			Targets: []string{"unset", "optin", "disabled"},
 		}},
+		{Name: "svc8", LogTargets: &plan.LogTargets{
+			Keyword: plan.DefaultLogTargets,
+		}},
+		{Name: "svc9", LogTargets: &plan.LogTargets{
+			Keyword: plan.AllLogTargets,
+		}},
+		{Name: "svc10", LogTargets: &plan.LogTargets{
+			Keyword: plan.NoLogTargets,
+		}},
 	}
 
 	// Use pointers to bools so the test will fail if we forget to set a value
 	t, f := true, false
 	expected := map[string]map[string]*bool{
-		"svc1": {"unset": &t, "optout": &t, "optin": &f, "disabled": &f},
-		"svc2": {"unset": &t, "optout": &t, "optin": &f, "disabled": &f},
-		"svc3": {"unset": &t, "optout": &f, "optin": &f, "disabled": &f},
-		"svc4": {"unset": &f, "optout": &t, "optin": &f, "disabled": &f},
-		"svc5": {"unset": &f, "optout": &f, "optin": &t, "disabled": &f},
-		"svc6": {"unset": &f, "optout": &f, "optin": &f, "disabled": &f},
-		"svc7": {"unset": &t, "optout": &f, "optin": &t, "disabled": &f},
+		"svc1":  {"unset": &t, "optout": &t, "optin": &f, "disabled": &f},
+		"svc2":  {"unset": &t, "optout": &t, "optin": &f, "disabled": &f},
+		"svc3":  {"unset": &t, "optout": &f, "optin": &f, "disabled": &f},
+		"svc4":  {"unset": &f, "optout": &t, "optin": &f, "disabled": &f},
+		"svc5":  {"unset": &f, "optout": &f, "optin": &t, "disabled": &f},
+		"svc6":  {"unset": &f, "optout": &f, "optin": &f, "disabled": &f},
+		"svc7":  {"unset": &t, "optout": &f, "optin": &t, "disabled": &f},
+		"svc8":  {"unset": &t, "optout": &t, "optin": &f, "disabled": &f},
+		"svc9":  {"unset": &t, "optout": &t, "optin": &t, "disabled": &f},
+		"svc10": {"unset": &f, "optout": &f, "optin": &f, "disabled": &f},
 	}
 
 	for _, service := range services {
