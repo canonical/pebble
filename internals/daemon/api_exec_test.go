@@ -119,7 +119,7 @@ func (s *execSuite) TestEnvironmentInheritedFromDaemon(c *C) {
 	c.Check(stdout, Equals, "FOO=bar\n")
 	c.Check(stderr, Equals, "")
 
-	// Check that client env variables overwrite daemon env.
+	// Check that requested environment takes precedence.
 	stdout, stderr, waitErr = s.exec(c, "", &client.ExecOptions{
 		Command:     []string{"/bin/sh", "-c", "echo FOO=$FOO"},
 		Environment: map[string]string{"FOO": "foo"},
