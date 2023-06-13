@@ -20,10 +20,10 @@ import (
 	"os"
 	"os/user"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/canonical/pebble/internals/logger"
+	"github.com/canonical/pebble/internals/osutil"
 	"github.com/canonical/pebble/internals/overlord/state"
 )
 
@@ -71,16 +71,7 @@ func Exec(st *state.State, args *ExecArgs) (*state.Task, ExecMetadata, error) {
 	}
 
 	// Inherit the pebble daemon environment.
-	environment := map[string]string{}
-	for _, kv := range os.Environ() {
-		parts := strings.SplitN(kv, "=", 2)
-		key := parts[0]
-		val := ""
-		if len(parts) == 2 {
-			val = parts[1]
-		}
-		environment[key] = val
-	}
+	environment := osutil.Environ()
 	for k, v := range args.Environment {
 		// Requested environment takes precedence.
 		environment[k] = v
