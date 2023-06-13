@@ -196,7 +196,7 @@ func (s *Service) Merge(other *Service) {
 		s.LogTargets = other.LogTargetsReplace.Copy()
 	} else if s.LogTargets != nil {
 		s.LogTargets.Merge(other.LogTargets)
-	} else {
+	} else if other.LogTargets != nil {
 		s.LogTargets = other.LogTargets.Copy()
 	}
 }
