@@ -894,6 +894,12 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 
 	// Validate service log targets
 	for serviceName, service := range combined.Services {
+		if service.LogTargets != nil && service.LogTargetsReplace != nil {
+			return nil, &FormatError{
+				Message: fmt.Sprintf(`service %q can't define both "log-targets" and "^log-targets" keys'`, serviceName),
+			}
+		}
+
 		if service.LogTargets != nil {
 			for _, targetName := range service.LogTargets.Targets {
 				_, ok := combined.LogTargets[targetName]
