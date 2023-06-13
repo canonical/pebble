@@ -355,21 +355,22 @@ func (t *LogTargets) Copy() *LogTargets {
 
 // Merge merges the fields from other into t.
 func (t *LogTargets) Merge(other *LogTargets) {
-	// anything <- keyword yields keyword
 	if other.Keyword != "" {
+		// anything <- keyword yields keyword
 		t.Keyword = other.Keyword
 		t.Targets = nil
-	}
 
-	// keyword <- [list] yields [list]
-	if t.Keyword != "" && len(other.Targets) > 0 {
-		t.Keyword = ""
-		t.Targets = append([]string(nil), other.Targets...)
-		return
-	}
+	} else {
+		if t.Keyword != "" {
+			// keyword <- [list] yields [list]
+			t.Keyword = ""
+			t.Targets = append([]string(nil), other.Targets...)
 
-	// [list] <- [list] - merge lists
-	t.Targets = appendUnique(t.Targets, other.Targets...)
+		} else {
+			// [list] <- [list] - merge lists
+			t.Targets = appendUnique(t.Targets, other.Targets...)
+		}
+	}
 }
 
 // LogsTo returns true if t specifies sending logs to tgt.
