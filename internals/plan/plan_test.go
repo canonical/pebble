@@ -1880,3 +1880,58 @@ func (s *S) TestParseAndMergeLogTargets(c *C) {
 		c.Check(base.LogTargets, DeepEquals, t.res, Commentf("merge %q <- %q", t.base, t.override))
 	}
 }
+
+func (s *S) TestLogTargetsUnmarshalYAML(c *C) {
+	tests := []struct {
+		input    string
+		expected *plan.LogTargets
+		err      string
+	}{{
+		input:    "",
+		expected: &plan.LogTargets{},
+	}, {
+		input:    "~",
+		expected: &plan.LogTargets{},
+	}, {
+		input:    "null",
+		expected: &plan.LogTargets{},
+	}, {
+		input:    "[]",
+		expected: &plan.LogTargets{Targets: []string{}},
+	}, {
+		input:    "[tgt1]",
+		expected: &plan.LogTargets{Targets: []string{"tgt1"}},
+	}, {
+		input:    "[tgt1, tgt2, tgt3]",
+		expected: &plan.LogTargets{Targets: []string{"tgt1", "tgt2", "tgt3"}},
+	}, {
+		input:    "all",
+		expected: &plan.LogTargets{Keyword: plan.AllLogTargets},
+	}, {
+		input:    "default",
+		expected: &plan.LogTargets{Keyword: plan.DefaultLogTargets},
+	}, {
+		input:    "none",
+		expected: &plan.LogTargets{Keyword: plan.NoLogTargets},
+	}, {
+		input: "invalidkeyword",
+		err:   `invalid value "invalidkeyword" for LogTargets`,
+	}}
+
+	for _, t := range tests {
+		out := &plan.LogTargets{}
+		err := yaml.Unmarshal([]byte(t.input), out)
+
+		if t.err != "" {
+			c.Assert(err, ErrorMatches, t.err)
+			continue
+		}
+
+		c.Assert(err, IsNil)
+		c.Check(out, DeepEquals, t.expected)
+	}
+}
+
+func (s *S) TestLogTargetsMarshalYAML(c *C) {
+
+}
