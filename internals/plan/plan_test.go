@@ -1933,5 +1933,39 @@ func (s *S) TestLogTargetsUnmarshalYAML(c *C) {
 }
 
 func (s *S) TestLogTargetsMarshalYAML(c *C) {
+	tests := []struct {
+		input    *plan.LogTargets
+		expected string
+	}{{
+		input: &plan.LogTargets{},
+		// nil slice unmarshals to []
+		expected: `[]
+`}, {
+		input: &plan.LogTargets{Targets: []string{}},
+		expected: `[]
+`}, {
+		input: &plan.LogTargets{Targets: []string{"tgt1"}},
+		expected: `- tgt1
+`}, {
+		input: &plan.LogTargets{Targets: []string{"tgt1", "tgt2", "tgt3"}},
+		expected: `
+- tgt1
+- tgt2
+- tgt3
+`[1:]}, {
+		input: &plan.LogTargets{Keyword: plan.AllLogTargets},
+		expected: `all
+`}, {
+		input: &plan.LogTargets{Keyword: plan.DefaultLogTargets},
+		expected: `default
+`}, {
+		input: &plan.LogTargets{Keyword: plan.NoLogTargets},
+		expected: `none
+`}}
 
+	for _, t := range tests {
+		out, err := yaml.Marshal(t.input)
+		c.Assert(err, IsNil)
+		c.Check(string(out), DeepEquals, t.expected)
+	}
 }

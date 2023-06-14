@@ -352,6 +352,13 @@ func (t *LogTargets) UnmarshalYAML(value *yaml.Node) error {
 	return value.Decode(&t.Targets)
 }
 
+func (t *LogTargets) MarshalYAML() (interface{}, error) {
+	if t.Keyword != "" {
+		return t.Keyword, nil
+	}
+	return t.Targets, nil
+}
+
 // Copy returns a deep copy of this LogTargets struct.
 func (t *LogTargets) Copy() *LogTargets {
 	return &LogTargets{
