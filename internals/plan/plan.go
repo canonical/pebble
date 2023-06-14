@@ -906,18 +906,13 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 			}
 		}
 
-		if service.LogTargets != nil {
-			for _, targetName := range service.LogTargets.Targets {
-				_, ok := combined.LogTargets[targetName]
-				if !ok {
-					return nil, &FormatError{
-						Message: fmt.Sprintf(`unknown log target %q for service %q`, targetName, serviceName),
-					}
-				}
-			}
+		logTargets := service.LogTargets
+		if logTargets == nil {
+			logTargets = service.LogTargetsReplace
 		}
-		if service.LogTargetsReplace != nil {
-			for _, targetName := range service.LogTargetsReplace.Targets {
+
+		if logTargets != nil {
+			for _, targetName := range service.LogTargets.Targets {
 				_, ok := combined.LogTargets[targetName]
 				if !ok {
 					return nil, &FormatError{
