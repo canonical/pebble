@@ -58,7 +58,7 @@ func init() {
 	for k, v := range sharedRunEnterOptsHelp {
 		optsHelp[k] = v
 	}
-	AddCommand(&CmdInfo{
+	AddCommand(CmdInfo{
 		Name:      "enter",
 		ShortHelp: shortEnterHelp,
 		LongHelp:  longEnterHelp,

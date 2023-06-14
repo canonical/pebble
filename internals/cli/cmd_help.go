@@ -79,7 +79,7 @@ type cmdHelp struct {
 }
 
 func init() {
-	AddCommand(&CmdInfo{
+	AddCommand(CmdInfo{
 		Name:      "help",
 		ShortHelp: shortHelpHelp,
 		LongHelp:  longHelpHelp,

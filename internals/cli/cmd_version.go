@@ -38,7 +38,7 @@ var versionDescs = map[string]string{
 }
 
 func init() {
-	AddCommand(&CmdInfo{
+	AddCommand(CmdInfo{
 		Name:      "version",
 		ShortHelp: shortVersionHelp,
 		LongHelp:  longVersionHelp,

@@ -73,7 +73,7 @@ func (cmd *cmdServices) Execute(args []string) error {
 }
 
 func init() {
-	AddCommand(&CmdInfo{
+	AddCommand(CmdInfo{
 		Name:      "services",
 		ShortHelp: shortServicesHelp,
 		LongHelp:  longServicesHelp,

@@ -34,7 +34,7 @@ type cmdStop struct {
 }
 
 func init() {
-	AddCommand(&CmdInfo{
+	AddCommand(CmdInfo{
 		Name:      "stop",
 		ShortHelp: shortStopHelp,
 		LongHelp:  longStopHelp,

@@ -67,7 +67,7 @@ func (cmd *cmdAdd) Execute(args []string) error {
 }
 
 func init() {
-	AddCommand(&CmdInfo{
+	AddCommand(CmdInfo{
 		Name:      "add",
 		ShortHelp: shortAddHelp,
 		LongHelp:  longAddHelp,

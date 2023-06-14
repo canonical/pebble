@@ -79,7 +79,7 @@ func (cmd *cmdChecks) Execute(args []string) error {
 }
 
 func init() {
-	AddCommand(&CmdInfo{
+	AddCommand(CmdInfo{
 		Name:      "checks",
 		ShortHelp: shortChecksHelp,
 		LongHelp:  longChecksHelp,

@@ -65,7 +65,7 @@ type cmdRun struct {
 }
 
 func init() {
-	AddCommand(&CmdInfo{
+	AddCommand(CmdInfo{
 		Name:      "run",
 		ShortHelp: shortRunHelp,
 		LongHelp:  longRunHelp,

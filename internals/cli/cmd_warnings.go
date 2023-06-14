@@ -61,7 +61,7 @@ sufficient time has passed.
 `
 
 func init() {
-	AddCommand(&CmdInfo{
+	AddCommand(CmdInfo{
 		Name:      "warnings",
 		ShortHelp: shortWarningsHelp,
 		LongHelp:  longWarningsHelp,
@@ -71,7 +71,7 @@ func init() {
 			"verbose": "Show more information",
 		}),
 	})
-	AddCommand(&CmdInfo{
+	AddCommand(CmdInfo{
 		Name:      "okay",
 		ShortHelp: shortOkayHelp,
 		LongHelp:  longOkayHelp,

@@ -58,7 +58,7 @@ func (cmd *cmdSignal) Execute(args []string) error {
 }
 
 func init() {
-	AddCommand(&CmdInfo{
+	AddCommand(CmdInfo{
 		Name:      "signal",
 		ShortHelp: shortSignalHelp,
 		LongHelp:  longSignalHelp,

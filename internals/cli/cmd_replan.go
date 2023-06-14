@@ -32,7 +32,7 @@ type cmdReplan struct {
 }
 
 func init() {
-	AddCommand(&CmdInfo{
+	AddCommand(CmdInfo{
 		Name:      "replan",
 		ShortHelp: shortReplanHelp,
 		LongHelp:  longReplanHelp,

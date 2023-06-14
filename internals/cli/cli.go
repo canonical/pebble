@@ -82,15 +82,15 @@ var debugCommands []*CmdInfo
 
 // AddCommand replaces parser.addCommand() in a way that is compatible with
 // re-constructing a pristine parser.
-func AddCommand(info *CmdInfo) {
-	commands = append(commands, info)
+func AddCommand(info CmdInfo) {
+	commands = append(commands, &info)
 }
 
 // addDebugCommand replaces parser.addCommand() in a way that is
 // compatible with re-constructing a pristine parser. It is meant for
 // adding debug commands.
-func addDebugCommand(info *CmdInfo) {
-	debugCommands = append(debugCommands, info)
+func addDebugCommand(info CmdInfo) {
+	debugCommands = append(debugCommands, &info)
 }
 
 type parserSetter interface {

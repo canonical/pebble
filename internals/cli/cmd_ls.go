@@ -103,7 +103,7 @@ func parseGlob(path string) (parsedPath, parsedPattern string, err error) {
 }
 
 func init() {
-	AddCommand(&CmdInfo{
+	AddCommand(CmdInfo{
 		Name:      "ls",
 		ShortHelp: shortLsHelp,
 		LongHelp:  longLsHelp,
