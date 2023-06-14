@@ -319,25 +319,29 @@ const (
 )
 
 // LogTargets specifies which log targets should receive a service's logs.
-// It is either an explicit list of targets, or one of the below keywords.
+// It is either an explicit list of targets, or a LogTargetsKeyword.
 type LogTargets struct {
 	Targets []string
-	Keyword string
+	Keyword LogTargetsKeyword
 }
 
+// LogTargetsKeyword represents a valid keyword for a service's `log-targets`
+// field.
+type LogTargetsKeyword string
+
 const (
-	// Valid keywords for LogTargets
-	DefaultLogTargets = "default"
-	AllLogTargets     = "all"
-	NoLogTargets      = "none"
+	DefaultLogTargets LogTargetsKeyword = "default"
+	AllLogTargets     LogTargetsKeyword = "all"
+	NoLogTargets      LogTargetsKeyword = "none"
 )
 
 func (t *LogTargets) UnmarshalYAML(value *yaml.Node) error {
 	if value.Kind == yaml.ScalarNode {
 		// decode keyword
-		switch value.Value {
+		keyword := LogTargetsKeyword(value.Value)
+		switch keyword {
 		case DefaultLogTargets, AllLogTargets, NoLogTargets:
-			t.Keyword = value.Value
+			t.Keyword = keyword
 			return nil
 		default:
 			return fmt.Errorf("invalid value %q for LogTargets", value.Value)
@@ -358,22 +362,22 @@ func (t *LogTargets) Copy() *LogTargets {
 
 // Merge merges the fields from other into t.
 func (t *LogTargets) Merge(other *LogTargets) {
+	// anything <- keyword yields keyword
 	if other.Keyword != "" {
-		// anything <- keyword yields keyword
 		t.Keyword = other.Keyword
 		t.Targets = nil
-
-	} else {
-		if t.Keyword != "" {
-			// keyword <- [list] yields [list]
-			t.Keyword = ""
-			t.Targets = append([]string(nil), other.Targets...)
-
-		} else {
-			// [list] <- [list] - merge lists
-			t.Targets = appendUnique(t.Targets, other.Targets...)
-		}
+		return
 	}
+
+	// keyword <- [list] yields [list]
+	if t.Keyword != "" {
+		t.Keyword = ""
+		t.Targets = append([]string(nil), other.Targets...)
+		return
+	}
+
+	// [list] <- [list] - merge lists
+	t.Targets = appendUnique(t.Targets, other.Targets...)
 }
 
 // LogsTo returns true if t specifies sending logs to tgt.
@@ -898,7 +902,7 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 	for serviceName, service := range combined.Services {
 		if service.LogTargets != nil && service.LogTargetsReplace != nil {
 			return nil, &FormatError{
-				Message: fmt.Sprintf(`service %q can't define both "log-targets" and "^log-targets" keys'`, serviceName),
+				Message: fmt.Sprintf(`service %q cannot define both "log-targets" and "^log-targets" keys'`, serviceName),
 			}
 		}
 
