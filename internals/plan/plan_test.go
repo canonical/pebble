@@ -1969,3 +1969,27 @@ func (s *S) TestLogTargetsMarshalYAML(c *C) {
 		c.Check(string(out), DeepEquals, t.expected)
 	}
 }
+
+// Test that marshalling then unmarshalling yields the original value.
+func (s *S) TestLogTargetsYAMLRoundTrip(c *C) {
+	tests := []*plan.LogTargets{
+		// nil ends up as empty slice. We are treating these as equivalent.
+		// {},
+		{Targets: []string{}},
+		{Targets: []string{"tgt1"}},
+		{Targets: []string{"tgt1", "tgt2", "tgt3"}},
+		{Keyword: plan.AllLogTargets},
+		{Keyword: plan.DefaultLogTargets},
+		{Keyword: plan.NoLogTargets},
+	}
+
+	for _, input := range tests {
+		marshalled, err := yaml.Marshal(input)
+		c.Assert(err, IsNil)
+
+		out := &plan.LogTargets{}
+		err = yaml.Unmarshal(marshalled, out)
+		c.Assert(err, IsNil)
+		c.Check(out, DeepEquals, input)
+	}
+}

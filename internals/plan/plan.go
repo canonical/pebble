@@ -919,7 +919,7 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 		}
 
 		if logTargets != nil {
-			for _, targetName := range service.LogTargets.Targets {
+			for _, targetName := range logTargets.Targets {
 				_, ok := combined.LogTargets[targetName]
 				if !ok {
 					return nil, &FormatError{
