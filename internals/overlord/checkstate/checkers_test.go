@@ -193,7 +193,7 @@ func (s *CheckersSuite) TestExec(c *C) {
 	c.Assert(ok, Equals, true)
 	c.Assert(detailsErr.Details(), Equals, "Foo, meet Bar.")
 
-	// Does not inherit environment when no environment vars set
+	// Inherits environment when no environment vars set
 	os.Setenv("PEBBLE_TEST_CHECKERS_EXEC", "parent")
 	chk = &execChecker{
 		command: "/bin/sh -c 'echo $PEBBLE_TEST_CHECKERS_EXEC; exit 1'",
@@ -202,9 +202,9 @@ func (s *CheckersSuite) TestExec(c *C) {
 	c.Assert(err, ErrorMatches, "exit status 1")
 	detailsErr, ok = err.(*detailsError)
 	c.Assert(ok, Equals, true)
-	c.Assert(detailsErr.Details(), Equals, "")
+	c.Assert(detailsErr.Details(), Equals, "parent")
 
-	// Does not inherit environment when some environment vars set
+	// Inherits environment when some environment vars set
 	os.Setenv("PEBBLE_TEST_CHECKERS_EXEC", "parent")
 	chk = &execChecker{
 		command:     "/bin/sh -c 'echo FOO=$FOO test=$PEBBLE_TEST_CHECKERS_EXEC; exit 1'",
@@ -214,7 +214,7 @@ func (s *CheckersSuite) TestExec(c *C) {
 	c.Assert(err, ErrorMatches, "exit status 1")
 	detailsErr, ok = err.(*detailsError)
 	c.Assert(ok, Equals, true)
-	c.Assert(detailsErr.Details(), Equals, "FOO=foo test=")
+	c.Assert(detailsErr.Details(), Equals, "FOO=foo test=parent")
 
 	// Working directory is passed through
 	workingDir := c.MkDir()

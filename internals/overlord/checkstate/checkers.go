@@ -128,9 +128,16 @@ func (c *execChecker) check(ctx context.Context) error {
 		return fmt.Errorf("cannot parse check command: %v", err)
 	}
 
-	cmd := exec.CommandContext(ctx, args[0], args[1:]...)
-	cmd.Env = make([]string, 0, len(c.environment)) // avoid nil to ensure we don't inherit parent env
+	// Similar to services and exec, inherit the daemon's environment.
+	environment := osutil.Environ()
 	for k, v := range c.environment {
+		// Requested environment takes precedence.
+		environment[k] = v
+	}
+
+	cmd := exec.CommandContext(ctx, args[0], args[1:]...)
+	cmd.Env = make([]string, 0, len(environment)) // avoid nil to ensure we don't inherit parent env
+	for k, v := range environment {
 		cmd.Env = append(cmd.Env, k+"="+v)
 	}
 	cmd.Dir = c.workingDir
