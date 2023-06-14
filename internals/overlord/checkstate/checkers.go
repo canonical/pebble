@@ -22,6 +22,7 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -128,9 +129,16 @@ func (c *execChecker) check(ctx context.Context) error {
 		return fmt.Errorf("cannot parse check command: %v", err)
 	}
 
-	cmd := exec.CommandContext(ctx, args[0], args[1:]...)
-	cmd.Env = make([]string, 0, len(c.environment)) // avoid nil to ensure we don't inherit parent env
+	// Similar to services and exec, inherit the daemon's environment.
+	environment := environ()
 	for k, v := range c.environment {
+		// Requested environment takes precedence.
+		environment[k] = v
+	}
+
+	cmd := exec.CommandContext(ctx, args[0], args[1:]...)
+	cmd.Env = make([]string, 0, len(environment)) // avoid nil to ensure we don't inherit parent env
+	for k, v := range environment {
 		cmd.Env = append(cmd.Env, k+"="+v)
 	}
 	cmd.Dir = c.workingDir
@@ -176,6 +184,21 @@ func (c *execChecker) check(ctx context.Context) error {
 		return &detailsError{error: err, details: details}
 	}
 	return nil
+}
+
+// TODO(benhoyt): use osutil.Environ() when #234 is merged
+func environ() map[string]string {
+	env := make(map[string]string)
+	for _, kv := range os.Environ() {
+		parts := strings.SplitN(kv, "=", 2)
+		key := parts[0]
+		val := ""
+		if len(parts) == 2 {
+			val = parts[1]
+		}
+		env[key] = val
+	}
+	return env
 }
 
 type detailsError struct {
