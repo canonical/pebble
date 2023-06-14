@@ -318,6 +318,8 @@ const (
 	ActionIgnore   ServiceAction = "ignore"
 )
 
+// LogTargets specifies which log targets should receive a service's logs.
+// It is either an explicit list of targets, or one of the below keywords.
 type LogTargets struct {
 	Targets []string
 	Keyword string
@@ -332,6 +334,7 @@ const (
 
 func (t *LogTargets) UnmarshalYAML(value *yaml.Node) error {
 	if value.Kind == yaml.ScalarNode {
+		// decode keyword
 		switch value.Value {
 		case DefaultLogTargets, AllLogTargets, NoLogTargets:
 			t.Keyword = value.Value
