@@ -36,7 +36,7 @@ var longSignalHelp = `
 The signal command sends a signal to one or more running services. The signal
 name must be uppercase, for example:
 
-pebble signal HUP mysql nginx
+	signal HUP mysql nginx
 `
 
 func (cmd *cmdSignal) Execute(args []string) error {

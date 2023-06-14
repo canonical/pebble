@@ -10,7 +10,7 @@ import (
 
 const shortEnterHelp = "Run subcommand under a container environment"
 const longEnterHelp = `
-The enter command facilitates the use of Pebble as an entrypoint for containers.
+The enter command facilitates the use of the daemon as an entrypoint for containers.
 When used without a subcommand it mimics the behavior of the run command
 alone, while if used with a subcommand it runs that subcommand in the most
 appropriate environment taking into account its purpose.
@@ -160,7 +160,7 @@ func (cmd *cmdEnter) Execute(args []string) error {
 	case runStop = <-runReadyCh:
 	case runPanic := <-runResultCh:
 		if runPanic == nil {
-			panic("internal error: pebble daemon stopped early")
+			panic("internal error: daemon stopped early")
 		}
 		panic(runPanic)
 	}

@@ -56,7 +56,7 @@ func (s *PebbleSuite) TestHelpMan(c *C) {
 
 	err := cli.RunMain()
 	c.Assert(err, Equals, nil)
-	c.Check(s.Stdout(), Matches, `(?s)\.TH.*\.SH NAME.*pebble \\- Tool to interact with pebble.*`)
+	c.Check(s.Stdout(), Matches, `(?s)\.TH.*\.SH NAME.*pebble \\- Tool to interact with Pebble.*`)
 	c.Check(s.Stderr(), Equals, "")
 }
 

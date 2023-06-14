@@ -28,6 +28,7 @@ import (
 	"github.com/canonical/x-go/strutil/quantity"
 
 	"github.com/canonical/pebble/client"
+	"github.com/canonical/pebble/cmd"
 	"github.com/canonical/pebble/internals/osutil"
 )
 
@@ -45,7 +46,7 @@ var shortWarningsHelp = "List warnings"
 var longWarningsHelp = `
 The warnings command lists the warnings that have been reported to the system.
 
-Once warnings have been listed with 'pebble warnings', 'pebble okay' may be used to
+Once warnings have been listed with 'warnings', 'okay' may be used to
 silence them. A warning that's been silenced in this way will not be listed
 again unless it happens again, _and_ a cooldown time has passed.
 
@@ -54,7 +55,7 @@ Warnings expire automatically, and once expired they are forgotten.
 
 var shortOkayHelp = "Acknowledge warnings"
 var longOkayHelp = `
-The okay command acknowledges the warnings listed with 'pebble warnings'.
+The okay command acknowledges the warnings listed with 'warnings'.
 
 Once acknowledged, a warning won't appear again unless it reoccurs and
 sufficient time has passed.
@@ -211,7 +212,7 @@ func lastWarningTimestamp() (time.Time, error) {
 	f, err := os.Open(warnFilename(user.HomeDir))
 	if err != nil {
 		if os.IsNotExist(err) {
-			return time.Time{}, fmt.Errorf("you must have looked at the warnings before acknowledging them. Try 'pebble warnings'.")
+			return time.Time{}, fmt.Errorf("you must have looked at the warnings before acknowledging them. Try '%s warnings'.", cmd.Personality.ProgramName)
 		}
 		return time.Time{}, fmt.Errorf("cannot open timestamp file: %v", err)
 	}
@@ -235,9 +236,9 @@ func maybePresentWarnings(count int, timestamp time.Time) {
 		return
 	}
 
-	format := "WARNING: There are %d new warnings. See 'pebble warnings'.\n"
+	format := "WARNING: There are %d new warnings. See '%s warnings'.\n"
 	if count == 1 {
-		format = "WARNING: There is %d new warning. See 'pebble warnings'.\n"
+		format = "WARNING: There is %d new warning. See '%s warnings'.\n"
 	}
-	fmt.Fprintf(Stderr, format, count)
+	fmt.Fprintf(Stderr, format, count, cmd.Personality.ProgramName)
 }
