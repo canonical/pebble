@@ -136,7 +136,7 @@ func (c *execChecker) check(ctx context.Context) error {
 	}
 
 	cmd := exec.CommandContext(ctx, args[0], args[1:]...)
-	cmd.Env = make([]string, 0, len(environment)) // avoid nil to ensure we don't inherit parent env
+	cmd.Env = make([]string, 0, len(environment)) // avoid additional allocations
 	for k, v := range environment {
 		cmd.Env = append(cmd.Env, k+"="+v)
 	}
