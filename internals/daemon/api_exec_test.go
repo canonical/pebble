@@ -108,6 +108,27 @@ func (s *execSuite) TestEnvironment(c *C) {
 	c.Check(stderr, Equals, "")
 }
 
+func (s *execSuite) TestEnvironmentInheritedFromDaemon(c *C) {
+	restore := fakeEnv("FOO", "bar")
+	defer restore()
+
+	stdout, stderr, waitErr := s.exec(c, "", &client.ExecOptions{
+		Command: []string{"/bin/sh", "-c", "echo FOO=$FOO"},
+	})
+	c.Check(waitErr, IsNil)
+	c.Check(stdout, Equals, "FOO=bar\n")
+	c.Check(stderr, Equals, "")
+
+	// Check that requested environment takes precedence.
+	stdout, stderr, waitErr = s.exec(c, "", &client.ExecOptions{
+		Command:     []string{"/bin/sh", "-c", "echo FOO=$FOO"},
+		Environment: map[string]string{"FOO": "foo"},
+	})
+	c.Check(waitErr, IsNil)
+	c.Check(stdout, Equals, "FOO=foo\n")
+	c.Check(stderr, Equals, "")
+}
+
 func (s *execSuite) TestWorkingDir(c *C) {
 	workingDir := c.MkDir()
 	stdout, stderr, waitErr := s.exec(c, "", &client.ExecOptions{
