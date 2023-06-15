@@ -65,12 +65,12 @@ type cmdRun struct {
 }
 
 func init() {
-	AddCommand(CmdInfo{
-		Name:      "run",
-		ShortHelp: shortRunHelp,
-		LongHelp:  longRunHelp,
-		Builder:   func() flags.Commander { return &cmdRun{} },
-		OptDescs:  sharedRunEnterOptsHelp,
+	AddCommand(&CmdInfo{
+		Name:        "run",
+		ShortHelp:   shortRunHelp,
+		LongHelp:    longRunHelp,
+		Builder:     func() flags.Commander { return &cmdRun{} },
+		OptionsHelp: sharedRunEnterOptsHelp,
 	})
 }
 

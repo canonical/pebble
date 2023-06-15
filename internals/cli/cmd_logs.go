@@ -41,7 +41,7 @@ type cmdLogs struct {
 	} `positional-args:"yes"`
 }
 
-var logsDescs = map[string]string{
+var logsOptionsHelp = map[string]string{
 	"follow": "Follow (tail) logs for given services until Ctrl-C is\npressed. If no services are specified, show logs from\nall services running when the command starts.",
 	"format": "Output format: \"text\" (default) or \"json\" (JSON lines).",
 	"n":      "Number of logs to show (before following); defaults to 30.\nIf 'all', show all buffered logs.",
@@ -121,11 +121,11 @@ func notifyContext(parent context.Context, signals ...os.Signal) context.Context
 }
 
 func init() {
-	AddCommand(CmdInfo{
-		Name:      "logs",
-		ShortHelp: shortLogsHelp,
-		LongHelp:  longLogsHelp,
-		Builder:   func() flags.Commander { return &cmdLogs{} },
-		OptDescs:  logsDescs,
+	AddCommand(&CmdInfo{
+		Name:        "logs",
+		ShortHelp:   shortLogsHelp,
+		LongHelp:    longLogsHelp,
+		Builder:     func() flags.Commander { return &cmdLogs{} },
+		OptionsHelp: logsOptionsHelp,
 	})
 }

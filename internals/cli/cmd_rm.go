@@ -30,7 +30,7 @@ type cmdRm struct {
 	} `positional-args:"yes" required:"yes"`
 }
 
-var rmDescs = map[string]string{
+var rmOptionsHelp = map[string]string{
 	"r": "Remove all files and directories recursively in the specified path",
 }
 
@@ -51,11 +51,11 @@ func (cmd *cmdRm) Execute(args []string) error {
 }
 
 func init() {
-	AddCommand(CmdInfo{
-		Name:      "rm",
-		ShortHelp: shortRmHelp,
-		LongHelp:  longRmHelp,
-		Builder:   func() flags.Commander { return &cmdRm{} },
-		OptDescs:  rmDescs,
+	AddCommand(&CmdInfo{
+		Name:        "rm",
+		ShortHelp:   shortRmHelp,
+		LongHelp:    longRmHelp,
+		Builder:     func() flags.Commander { return &cmdRm{} },
+		OptionsHelp: rmOptionsHelp,
 	})
 }

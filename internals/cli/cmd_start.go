@@ -34,12 +34,12 @@ type cmdStart struct {
 }
 
 func init() {
-	AddCommand(CmdInfo{
-		Name:      "start",
-		ShortHelp: shortStartHelp,
-		LongHelp:  longStartHelp,
-		Builder:   func() flags.Commander { return &cmdStart{} },
-		OptDescs:  waitDescs,
+	AddCommand(&CmdInfo{
+		Name:        "start",
+		ShortHelp:   shortStartHelp,
+		LongHelp:    longStartHelp,
+		Builder:     func() flags.Commander { return &cmdStart{} },
+		OptionsHelp: waitOptionsHelp,
 	})
 }
 

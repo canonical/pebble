@@ -32,12 +32,12 @@ type cmdReplan struct {
 }
 
 func init() {
-	AddCommand(CmdInfo{
-		Name:      "replan",
-		ShortHelp: shortReplanHelp,
-		LongHelp:  longReplanHelp,
-		Builder:   func() flags.Commander { return &cmdReplan{} },
-		OptDescs:  waitDescs,
+	AddCommand(&CmdInfo{
+		Name:        "replan",
+		ShortHelp:   shortReplanHelp,
+		LongHelp:    longReplanHelp,
+		Builder:     func() flags.Commander { return &cmdReplan{} },
+		OptionsHelp: waitOptionsHelp,
 	})
 }
 

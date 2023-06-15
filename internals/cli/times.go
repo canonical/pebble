@@ -29,7 +29,7 @@ type timeMixin struct {
 	AbsTime bool `long:"abs-time"`
 }
 
-var timeDescs = map[string]string{
+var timeOptionsHelp = map[string]string{
 	"abs-time": "Display absolute times (in RFC 3339 format). Otherwise, display relative times up to 60 days, then YYYY-MM-DD.",
 }
 
@@ -44,7 +44,7 @@ type durationMixin struct {
 	AbsTime bool `long:"abs-time"`
 }
 
-var durationDescs = map[string]string{
+var durationOptionsHelp = map[string]string{
 	"abs-time": "Display absolute times (in RFC 3339 format). Otherwise, display short relative times.",
 }
 

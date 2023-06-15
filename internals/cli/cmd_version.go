@@ -33,17 +33,17 @@ type cmdVersion struct {
 	ClientOnly bool `long:"client"`
 }
 
-var versionDescs = map[string]string{
+var versionOptionsHelp = map[string]string{
 	"client": `Only display the client version`,
 }
 
 func init() {
-	AddCommand(CmdInfo{
-		Name:      "version",
-		ShortHelp: shortVersionHelp,
-		LongHelp:  longVersionHelp,
-		Builder:   func() flags.Commander { return &cmdVersion{} },
-		OptDescs:  versionDescs,
+	AddCommand(&CmdInfo{
+		Name:        "version",
+		ShortHelp:   shortVersionHelp,
+		LongHelp:    longVersionHelp,
+		Builder:     func() flags.Commander { return &cmdVersion{} },
+		OptionsHelp: versionOptionsHelp,
 	})
 }
 

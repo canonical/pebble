@@ -33,12 +33,12 @@ type cmdRestart struct {
 }
 
 func init() {
-	AddCommand(CmdInfo{
-		Name:      "restart",
-		ShortHelp: shortRestartHelp,
-		LongHelp:  longRestartHelp,
-		Builder:   func() flags.Commander { return &cmdRestart{} },
-		OptDescs:  waitDescs,
+	AddCommand(&CmdInfo{
+		Name:        "restart",
+		ShortHelp:   shortRestartHelp,
+		LongHelp:    longRestartHelp,
+		Builder:     func() flags.Commander { return &cmdRestart{} },
+		OptionsHelp: waitOptionsHelp,
 	})
 }
 

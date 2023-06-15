@@ -61,17 +61,17 @@ sufficient time has passed.
 `
 
 func init() {
-	AddCommand(CmdInfo{
+	AddCommand(&CmdInfo{
 		Name:      "warnings",
 		ShortHelp: shortWarningsHelp,
 		LongHelp:  longWarningsHelp,
 		Builder:   func() flags.Commander { return &cmdWarnings{} },
-		OptDescs: merge(timeDescs, unicodeDescs, map[string]string{
+		OptionsHelp: merge(timeOptionsHelp, unicodeOptionsHelp, map[string]string{
 			"all":     "Show all warnings",
 			"verbose": "Show more information",
 		}),
 	})
-	AddCommand(CmdInfo{
+	AddCommand(&CmdInfo{
 		Name:      "okay",
 		ShortHelp: shortOkayHelp,
 		LongHelp:  longOkayHelp,

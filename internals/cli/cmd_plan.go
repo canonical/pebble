@@ -43,7 +43,7 @@ func (cmd *cmdPlan) Execute(args []string) error {
 }
 
 func init() {
-	AddCommand(CmdInfo{
+	AddCommand(&CmdInfo{
 		Name:      "plan",
 		ShortHelp: shortPlanHelp,
 		LongHelp:  longPlanHelp,

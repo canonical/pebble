@@ -32,7 +32,7 @@ type cmdAdd struct {
 	} `positional-args:"yes"`
 }
 
-var addDescs = map[string]string{
+var addOptionsHelp = map[string]string{
 	"combine": `Combine the new layer with an existing layer that has the given label (default is to append)`,
 }
 
@@ -67,11 +67,11 @@ func (cmd *cmdAdd) Execute(args []string) error {
 }
 
 func init() {
-	AddCommand(CmdInfo{
-		Name:      "add",
-		ShortHelp: shortAddHelp,
-		LongHelp:  longAddHelp,
-		Builder:   func() flags.Commander { return &cmdAdd{} },
-		OptDescs:  addDescs,
+	AddCommand(&CmdInfo{
+		Name:        "add",
+		ShortHelp:   shortAddHelp,
+		LongHelp:    longAddHelp,
+		Builder:     func() flags.Commander { return &cmdAdd{} },
+		OptionsHelp: addOptionsHelp,
 	})
 }

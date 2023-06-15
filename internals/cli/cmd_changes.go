@@ -48,20 +48,20 @@ type cmdTasks struct {
 }
 
 func init() {
-	AddCommand(CmdInfo{
-		Name:      "changes",
-		ShortHelp: shortChangesHelp,
-		LongHelp:  longChangesHelp,
-		Builder:   func() flags.Commander { return &cmdChanges{} },
-		OptDescs:  timeDescs,
+	AddCommand(&CmdInfo{
+		Name:        "changes",
+		ShortHelp:   shortChangesHelp,
+		LongHelp:    longChangesHelp,
+		Builder:     func() flags.Commander { return &cmdChanges{} },
+		OptionsHelp: timeOptionsHelp,
 	})
-	AddCommand(CmdInfo{
-		Name:      "tasks",
-		ShortHelp: shortTasksHelp,
-		LongHelp:  longTasksHelp,
-		Builder:   func() flags.Commander { return &cmdTasks{} },
-		OptDescs:  merge(changeIDMixinOptDesc, timeDescs),
-		ArgDescs:  changeIDMixinArgDesc,
+	AddCommand(&CmdInfo{
+		Name:           "tasks",
+		ShortHelp:      shortTasksHelp,
+		LongHelp:       longTasksHelp,
+		Builder:        func() flags.Commander { return &cmdTasks{} },
+		OptionsHelp:    merge(changeIDMixinOptDesc, timeOptionsHelp),
+		PositionalArgs: changeIDMixinArgDesc,
 	})
 }
 

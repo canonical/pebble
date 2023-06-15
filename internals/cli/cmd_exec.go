@@ -48,7 +48,7 @@ type cmdExec struct {
 	} `positional-args:"yes"`
 }
 
-var execDescs = map[string]string{
+var execOptionsHelp = map[string]string{
 	"w":       "Working directory to run command in",
 	"env":     "Environment variable to set (in 'FOO=bar' format)",
 	"uid":     "User ID to run command as",
@@ -264,14 +264,12 @@ func execControlHandler(process *client.ExecProcess, terminal bool, stop <-chan 
 }
 
 func init() {
-	AddCommand(CmdInfo{
-		Name:      "exec",
-		ShortHelp: shortExecHelp,
-		LongHelp:  longExecHelp,
-		Builder:   func() flags.Commander { return &cmdExec{} },
-		OptDescs:  execDescs,
-		Extra: func(cmd *flags.Command) {
-			cmd.PassAfterNonOption = true
-		},
+	AddCommand(&CmdInfo{
+		Name:               "exec",
+		ShortHelp:          shortExecHelp,
+		LongHelp:           longExecHelp,
+		Builder:            func() flags.Commander { return &cmdExec{} },
+		OptionsHelp:        execOptionsHelp,
+		PassAfterNonOption: true,
 	})
 }

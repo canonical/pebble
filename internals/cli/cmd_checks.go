@@ -30,7 +30,7 @@ type cmdChecks struct {
 	} `positional-args:"yes"`
 }
 
-var checksDescs = map[string]string{
+var checksOptionsHelp = map[string]string{
 	"level": `Check level to filter for ("alive" or "ready")`,
 }
 
@@ -79,11 +79,11 @@ func (cmd *cmdChecks) Execute(args []string) error {
 }
 
 func init() {
-	AddCommand(CmdInfo{
-		Name:      "checks",
-		ShortHelp: shortChecksHelp,
-		LongHelp:  longChecksHelp,
-		Builder:   func() flags.Commander { return &cmdChecks{} },
-		OptDescs:  checksDescs,
+	AddCommand(&CmdInfo{
+		Name:        "checks",
+		ShortHelp:   shortChecksHelp,
+		LongHelp:    longChecksHelp,
+		Builder:     func() flags.Commander { return &cmdChecks{} },
+		OptionsHelp: checksOptionsHelp,
 	})
 }

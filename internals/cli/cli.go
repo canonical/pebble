@@ -53,9 +53,14 @@ type options struct {
 	Version func() `long:"version"`
 }
 
-type argDesc struct {
-	name string
-	desc string
+// PositionalArg contains information about the positional arguments accepted
+// by a command.
+type PositionalArg struct {
+	// Name of the positional argument as displayed in the command usage string.
+	Name string
+	// ShortHelp is a single-line help string that will be displayed in the
+	// command's manual alongside the argument name.
+	ShortHelp string
 }
 
 var optionsData options
@@ -63,15 +68,37 @@ var optionsData options
 // ErrExtraArgs is returned  if extra arguments to a command are found
 var ErrExtraArgs = fmt.Errorf("too many arguments for command")
 
-// CmdInfo holds information needed to call parser.AddCommand(...).
+// CmdInfo holds information needed by the CLI to execute commands and
+// populate entries in the help manual.
 type CmdInfo struct {
-	Name, ShortHelp, LongHelp string
-	Builder                   func() flags.Commander
-	Hidden                    bool
-	OptDescs                  map[string]string
-	ArgDescs                  []argDesc
-	Alias                     string
-	Extra                     func(*flags.Command)
+	// Name of the command
+	Name string
+
+	// ShortHelp is a single-line help string that will be displayed
+	// in the full Pebble help manual (i.e. help --all)
+	ShortHelp string
+
+	// LongHelp contains exhaustive documentation about the command,
+	// that will be reflected in the specific help manual for the
+	// command, and in the Pebble man page.
+	LongHelp string
+
+	// Builder is a function that creates a new instance of the command
+	// struct containing an Execute(args []string) implementation.
+	Builder func() flags.Commander
+
+	// OptionsHelp (optional) maps long option names (e.g. "foo" for --foo),
+	// to the help strings that will be shown in the command's manual
+	// besides every option.
+	OptionsHelp map[string]string
+
+	// PositionalArgs (optional) contains help information about the
+	// positional arguments accepted by the command.
+	PositionalArgs []PositionalArg
+
+	// Whether to pass all arguments after the first non-option as remaining
+	// command line arguments. This is equivalent to strict POSIX processing.
+	PassAfterNonOption bool
 }
 
 // commands holds information about all non-debug commands.
@@ -82,15 +109,15 @@ var debugCommands []*CmdInfo
 
 // AddCommand replaces parser.addCommand() in a way that is compatible with
 // re-constructing a pristine parser.
-func AddCommand(info CmdInfo) {
-	commands = append(commands, &info)
+func AddCommand(info *CmdInfo) {
+	commands = append(commands, info)
 }
 
 // addDebugCommand replaces parser.addCommand() in a way that is
 // compatible with re-constructing a pristine parser. It is meant for
 // adding debug commands.
-func addDebugCommand(info CmdInfo) {
-	debugCommands = append(debugCommands, &info)
+func addDebugCommand(info *CmdInfo) {
+	debugCommands = append(debugCommands, info)
 }
 
 type parserSetter interface {
@@ -186,22 +213,19 @@ func Parser(cli *client.Client) *flags.Parser {
 		if err != nil {
 			logger.Panicf("cannot add command %q: %v", c.Name, err)
 		}
-		cmd.Hidden = c.Hidden
-		if c.Alias != "" {
-			cmd.Aliases = append(cmd.Aliases, c.Alias)
-		}
+		cmd.PassAfterNonOption = c.PassAfterNonOption
 
 		opts := cmd.Options()
-		if c.OptDescs != nil && len(opts) != len(c.OptDescs) {
-			logger.Panicf("wrong number of option descriptions for %s: expected %d, got %d", c.Name, len(opts), len(c.OptDescs))
+		if c.OptionsHelp != nil && len(opts) != len(c.OptionsHelp) {
+			logger.Panicf("wrong number of option descriptions for %s: expected %d, got %d", c.Name, len(opts), len(c.OptionsHelp))
 		}
 		for _, opt := range opts {
 			name := opt.LongName
 			if name == "" {
 				name = string(opt.ShortName)
 			}
-			desc, ok := c.OptDescs[name]
-			if !(c.OptDescs == nil || ok) {
+			desc, ok := c.OptionsHelp[name]
+			if !(c.OptionsHelp == nil || ok) {
 				logger.Panicf("%s missing description for %s", c.Name, name)
 			}
 			lintDesc(c.Name, name, desc, opt.Description)
@@ -211,22 +235,19 @@ func Parser(cli *client.Client) *flags.Parser {
 		}
 
 		args := cmd.Args()
-		if c.ArgDescs != nil && len(args) != len(c.ArgDescs) {
-			logger.Panicf("wrong number of argument descriptions for %s: expected %d, got %d", c.Name, len(args), len(c.ArgDescs))
+		if c.PositionalArgs != nil && len(args) != len(c.PositionalArgs) {
+			logger.Panicf("wrong number of argument descriptions for %s: expected %d, got %d", c.Name, len(args), len(c.PositionalArgs))
 		}
 		for i, arg := range args {
 			name, desc := arg.Name, ""
-			if c.ArgDescs != nil {
-				name = c.ArgDescs[i].name
-				desc = c.ArgDescs[i].desc
+			if c.PositionalArgs != nil {
+				name = c.PositionalArgs[i].Name
+				desc = c.PositionalArgs[i].ShortHelp
 			}
 			lintArg(c.Name, name, desc, arg.Description)
 			name = fixupArg(name)
 			arg.Name = name
 			arg.Description = desc
-		}
-		if c.Extra != nil {
-			c.Extra(cmd)
 		}
 	}
 	// Add the debug command
@@ -245,18 +266,17 @@ func Parser(cli *client.Client) *flags.Parser {
 		if err != nil {
 			logger.Panicf("cannot add debug command %q: %v", c.Name, err)
 		}
-		cmd.Hidden = c.Hidden
 		opts := cmd.Options()
-		if c.OptDescs != nil && len(opts) != len(c.OptDescs) {
-			logger.Panicf("wrong number of option descriptions for %s: expected %d, got %d", c.Name, len(opts), len(c.OptDescs))
+		if c.OptionsHelp != nil && len(opts) != len(c.OptionsHelp) {
+			logger.Panicf("wrong number of option descriptions for %s: expected %d, got %d", c.Name, len(opts), len(c.OptionsHelp))
 		}
 		for _, opt := range opts {
 			name := opt.LongName
 			if name == "" {
 				name = string(opt.ShortName)
 			}
-			desc, ok := c.OptDescs[name]
-			if !(c.OptDescs == nil || ok) {
+			desc, ok := c.OptionsHelp[name]
+			if !(c.OptionsHelp == nil || ok) {
 				logger.Panicf("%s missing description for %s", c.Name, name)
 			}
 			lintDesc(c.Name, name, desc, opt.Description)
@@ -266,14 +286,14 @@ func Parser(cli *client.Client) *flags.Parser {
 		}
 
 		args := cmd.Args()
-		if c.ArgDescs != nil && len(args) != len(c.ArgDescs) {
-			logger.Panicf("wrong number of argument descriptions for %s: expected %d, got %d", c.Name, len(args), len(c.ArgDescs))
+		if c.PositionalArgs != nil && len(args) != len(c.PositionalArgs) {
+			logger.Panicf("wrong number of argument descriptions for %s: expected %d, got %d", c.Name, len(args), len(c.PositionalArgs))
 		}
 		for i, arg := range args {
 			name, desc := arg.Name, ""
-			if c.ArgDescs != nil {
-				name = c.ArgDescs[i].name
-				desc = c.ArgDescs[i].desc
+			if c.PositionalArgs != nil {
+				name = c.PositionalArgs[i].Name
+				desc = c.PositionalArgs[i].ShortHelp
 			}
 			lintArg(c.Name, name, desc, arg.Description)
 			name = fixupArg(name)

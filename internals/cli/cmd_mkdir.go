@@ -39,7 +39,7 @@ type cmdMkdir struct {
 	} `positional-args:"yes" required:"yes"`
 }
 
-var mkdirDescs = map[string]string{
+var mkdirOptionsHelp = map[string]string{
 	"p":     "Create parent directories as needed",
 	"m":     "Set permissions (e.g. 0644)",
 	"uid":   "Use specified user ID",
@@ -79,11 +79,11 @@ func (cmd *cmdMkdir) Execute(args []string) error {
 }
 
 func init() {
-	AddCommand(CmdInfo{
-		Name:      "mkdir",
-		ShortHelp: shortMkdirHelp,
-		LongHelp:  longMkdirHelp,
-		Builder:   func() flags.Commander { return &cmdMkdir{} },
-		OptDescs:  mkdirDescs,
+	AddCommand(&CmdInfo{
+		Name:        "mkdir",
+		ShortHelp:   shortMkdirHelp,
+		LongHelp:    longMkdirHelp,
+		Builder:     func() flags.Commander { return &cmdMkdir{} },
+		OptionsHelp: mkdirOptionsHelp,
 	})
 }

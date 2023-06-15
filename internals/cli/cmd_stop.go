@@ -34,12 +34,12 @@ type cmdStop struct {
 }
 
 func init() {
-	AddCommand(CmdInfo{
-		Name:      "stop",
-		ShortHelp: shortStopHelp,
-		LongHelp:  longStopHelp,
-		Builder:   func() flags.Commander { return &cmdStop{} },
-		OptDescs:  waitDescs,
+	AddCommand(&CmdInfo{
+		Name:        "stop",
+		ShortHelp:   shortStopHelp,
+		LongHelp:    longStopHelp,
+		Builder:     func() flags.Commander { return &cmdStop{} },
+		OptionsHelp: waitOptionsHelp,
 	})
 }
 

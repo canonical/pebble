@@ -38,7 +38,7 @@ type cmdLs struct {
 	} `positional-args:"yes" required:"yes"`
 }
 
-var lsDescs = map[string]string{
+var lsOptionsHelp = map[string]string{
 	"d": `List matching entries themselves, not directory contents`,
 	"l": `Use a long listing format`,
 }
@@ -103,11 +103,11 @@ func parseGlob(path string) (parsedPath, parsedPattern string, err error) {
 }
 
 func init() {
-	AddCommand(CmdInfo{
-		Name:      "ls",
-		ShortHelp: shortLsHelp,
-		LongHelp:  longLsHelp,
-		Builder:   func() flags.Commander { return &cmdLs{} },
-		OptDescs:  merge(lsDescs, timeDescs),
+	AddCommand(&CmdInfo{
+		Name:        "ls",
+		ShortHelp:   shortLsHelp,
+		LongHelp:    longLsHelp,
+		Builder:     func() flags.Commander { return &cmdLs{} },
+		OptionsHelp: merge(lsOptionsHelp, timeOptionsHelp),
 	})
 }
