@@ -204,7 +204,7 @@ func printHelpHeader() {
 	fmt.Fprintln(Stdout)
 	fmt.Fprintf(Stdout, "Usage: %s <command> [<options>...]\n", cmd.Personality.ProgramName)
 	fmt.Fprintln(Stdout)
-	fmt.Fprintln(Stdout, `Commands can be classified as follows:`)
+	fmt.Fprintln(Stdout, "Commands can be classified as follows:")
 }
 
 func printHelpAllFooter() {
