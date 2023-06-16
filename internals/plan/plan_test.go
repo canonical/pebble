@@ -1805,16 +1805,52 @@ func (s *S) TestParseAndMergeLogTargets(c *C) {
 		base, override string
 		res            *plan.LogTargets
 	}{{
-		base:     "log-targets: [tgt1]",
-		override: "log-targets: [tgt3]",
+		base:     "log-targets: ~",
+		override: "log-targets: ~",
+		res:      &plan.LogTargets{},
+	}, {
+		base:     "log-targets: ~",
+		override: "log-targets: default",
 		res: &plan.LogTargets{
-			Targets: []string{"tgt1", "tgt3"},
+			Keyword: plan.DefaultLogTargets,
 		},
 	}, {
-		base:     "log-targets: [tgt1]",
-		override: "^log-targets: [tgt3]",
+		base:     "log-targets: ~",
+		override: "log-targets: none",
 		res: &plan.LogTargets{
-			Targets: []string{"tgt3"},
+			Keyword: plan.NoLogTargets,
+		},
+	}, {
+		base:     "log-targets: ~",
+		override: "log-targets: all",
+		res: &plan.LogTargets{
+			Keyword: plan.AllLogTargets,
+		},
+	}, {
+		base:     "log-targets: ~",
+		override: "log-targets: [tgt1, tgt2]",
+		res: &plan.LogTargets{
+			Targets: []string{"tgt1", "tgt2"},
+		},
+	}, {
+		base:     "log-targets: default",
+		override: "log-targets: ~",
+		res: &plan.LogTargets{
+			Keyword: plan.DefaultLogTargets,
+		},
+	}, {
+		base:     "log-targets: default",
+		override: "log-targets: default",
+		res: &plan.LogTargets{
+			Keyword: plan.DefaultLogTargets,
+		},
+	}, {
+		// `default` should behave like an unspecified value.
+		// Merging `default` <- `anything` yields `anything`.
+		base:     "log-targets: default",
+		override: "log-targets: none",
+		res: &plan.LogTargets{
+			Keyword: plan.NoLogTargets,
 		},
 	}, {
 		base:     "log-targets: default",
@@ -1823,47 +1859,136 @@ func (s *S) TestParseAndMergeLogTargets(c *C) {
 			Keyword: plan.AllLogTargets,
 		},
 	}, {
-		base:     "log-targets: [tgt1]",
+		// `default` should behave like an unspecified value.
+		// Merging `default` <- `anything` yields `anything`.
+		base:     "log-targets: default",
+		override: "log-targets: [tgt1, tgt2]",
+		res: &plan.LogTargets{
+			Targets: []string{"tgt1", "tgt2"},
+		},
+	}, {
+		base:     "log-targets: none",
+		override: "log-targets: ~",
+		res: &plan.LogTargets{
+			Keyword: plan.NoLogTargets,
+		},
+	}, {
+		// `default` should behave like an unspecified value.
+		// Merging `anything` <- `default` yields `anything`.
+		base:     "log-targets: none",
 		override: "log-targets: default",
 		res: &plan.LogTargets{
-			Keyword: plan.DefaultLogTargets,
+			Keyword: plan.NoLogTargets,
 		},
 	}, {
-		base:     "log-targets: [tgt1]",
-		override: "^log-targets: default",
-		res: &plan.LogTargets{
-			Keyword: plan.DefaultLogTargets,
-		},
-	}, {
-		base:     "log-targets: [tgt1]",
+		base:     "log-targets: none",
 		override: "log-targets: none",
 		res: &plan.LogTargets{
 			Keyword: plan.NoLogTargets,
 		},
 	}, {
-		base:     "log-targets: [tgt1]",
-		override: "^log-targets: none",
+		base:     "log-targets: none",
+		override: "log-targets: all",
 		res: &plan.LogTargets{
-			Keyword: plan.NoLogTargets,
-		},
-	}, {
-		base:     "log-targets: default",
-		override: "log-targets: [tgt1]",
-		res: &plan.LogTargets{
-			Targets: []string{"tgt1"},
-		},
-	}, {
-		base:     "log-targets: all",
-		override: "log-targets: [tgt1]",
-		res: &plan.LogTargets{
-			Targets: []string{"tgt1"},
+			Keyword: plan.AllLogTargets,
 		},
 	}, {
 		base:     "log-targets: none",
+		override: "log-targets: [tgt1, tgt2]",
+		res: &plan.LogTargets{
+			Targets: []string{"tgt1", "tgt2"},
+		},
+	}, {
+		base:     "log-targets: all",
+		override: "log-targets: ~",
+		res: &plan.LogTargets{
+			Keyword: plan.AllLogTargets,
+		},
+	}, {
+		base:     "log-targets: all",
+		override: "log-targets: default",
+		res: &plan.LogTargets{
+			Keyword: plan.AllLogTargets,
+		},
+	}, {
+		base:     "log-targets: all",
+		override: "log-targets: none",
+		res: &plan.LogTargets{
+			Keyword: plan.AllLogTargets,
+		},
+	}, {
+		base:     "log-targets: all",
+		override: "log-targets: all",
+		res: &plan.LogTargets{
+			Keyword: plan.AllLogTargets,
+		},
+	}, {
+		base:     "log-targets: all",
+		override: "log-targets: [tgt1, tgt2]",
+		res: &plan.LogTargets{
+			Keyword: plan.AllLogTargets,
+		},
+	}, {
+		base:     "log-targets: [tgt1, tgt2]",
+		override: "log-targets: ~",
+		res: &plan.LogTargets{
+			Targets: []string{"tgt1", "tgt2"},
+		},
+	}, {
+		// `default` should behave like an unspecified value.
+		// Merging `anything` <- `default` yields `anything`.
+		base:     "log-targets: [tgt1, tgt2]",
+		override: "log-targets: default",
+		res: &plan.LogTargets{
+			Targets: []string{"tgt1", "tgt2"},
+		},
+	}, {
+		base:     "log-targets: [tgt1, tgt2]",
+		override: "log-targets: none",
+		res: &plan.LogTargets{
+			Targets: []string{"tgt1", "tgt2"},
+		},
+	}, {
+		base:     "log-targets: [tgt1, tgt2]",
+		override: "log-targets: all",
+		res: &plan.LogTargets{
+			Keyword: plan.AllLogTargets,
+		},
+	}, {
+		// A few tests merging lists
+		base:     "log-targets: [tgt1]",
+		override: "log-targets: [tgt2]",
+		res: &plan.LogTargets{
+			Targets: []string{"tgt1", "tgt2"},
+		},
+	}, {
+		base:     "log-targets: [tgt1]",
 		override: "log-targets: [tgt1]",
 		res: &plan.LogTargets{
 			Targets: []string{"tgt1"},
 		},
+	}, {
+		base:     "log-targets: [tgt1, tgt2, tgt3, tgt4]",
+		override: "log-targets: [tgt2, tgt4]",
+		res: &plan.LogTargets{
+			Targets: []string{"tgt1", "tgt2", "tgt3", "tgt4"},
+		},
+	}, {
+		base:     "log-targets: [tgt1, tgt2]",
+		override: "log-targets: [tgt1, tgt3]",
+		res: &plan.LogTargets{
+			Targets: []string{"tgt1", "tgt2", "tgt3"},
+		},
+	}, {
+		// Replace should always replace
+		// TODO: add tests for `^log-targets`
+		base:     "log-targets: ",
+		override: "log-targets: ",
+		res:      &plan.LogTargets{},
+	}, {
+		base:     "log-targets: ",
+		override: "log-targets: ",
+		res:      &plan.LogTargets{},
 	}}
 
 	parseService := func(raw string) *plan.Service {
