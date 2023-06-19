@@ -5,6 +5,7 @@ import (
 
 	"github.com/canonical/go-flags"
 
+	"github.com/canonical/pebble/cmd"
 	"github.com/canonical/pebble/internals/logger"
 )
 
@@ -83,37 +84,37 @@ func commandEnterFlags(commander flags.Commander) (enterFlags enterFlags, suppor
 	return
 }
 
-func (cmd *cmdEnter) Execute(args []string) error {
+func (rcmd *cmdEnter) Execute(args []string) error {
 	if len(args) > 0 {
 		return ErrExtraArgs
 	}
 
 	runCmd := cmdRun{
-		sharedRunEnterOpts: cmd.sharedRunEnterOpts,
+		sharedRunEnterOpts: rcmd.sharedRunEnterOpts,
 	}
-	runCmd.setClient(cmd.client)
+	runCmd.setClient(rcmd.client)
 
-	if len(cmd.Positional.Cmd) == 0 {
+	if len(rcmd.Positional.Cmd) == 0 {
 		runCmd.run(nil)
 		return nil
 	}
 
-	runCmd.Hold = !cmd.Run
+	runCmd.Hold = !rcmd.Run
 
 	var (
 		commander flags.Commander
 		extraArgs []string
 	)
 
-	parser := Parser(cmd.client)
+	parser := Parser(rcmd.client)
 	parser.CommandHandler = func(c flags.Commander, a []string) error {
 		commander = c
 		extraArgs = a
 		return nil
 	}
 
-	if _, err := parser.ParseArgs(cmd.Positional.Cmd); err != nil {
-		cmd.parser.Command.Active = parser.Command.Active
+	if _, err := parser.ParseArgs(rcmd.Positional.Cmd); err != nil {
+		rcmd.parser.Command.Active = parser.Command.Active
 		return err
 	}
 
@@ -127,23 +128,23 @@ func (cmd *cmdEnter) Execute(args []string) error {
 		return fmt.Errorf("enter: subcommand %q is not supported", parser.Active.Name)
 	}
 
-	if enterFlags&enterRequireServiceAutostart != 0 && !cmd.Run {
+	if enterFlags&enterRequireServiceAutostart != 0 && !rcmd.Run {
 		return fmt.Errorf("enter: must use --run before %q subcommand", parser.Active.Name)
 	}
 
-	if enterFlags&(enterProhibitServiceAutostart|enterNoServiceManager) != 0 && cmd.Run {
+	if enterFlags&(enterProhibitServiceAutostart|enterNoServiceManager) != 0 && rcmd.Run {
 		return fmt.Errorf("enter: cannot provide --run before %q subcommand", parser.Active.Name)
 	}
 
 	if enterFlags&enterNoServiceManager != 0 {
 		if err := commander.Execute(extraArgs); err != nil {
-			cmd.parser.Command.Active = parser.Command.Active
+			rcmd.parser.Command.Active = parser.Command.Active
 			return err
 		}
 		return nil
 	}
 
-	if enterFlags&enterSilenceLogging != 0 && !cmd.Verbose {
+	if enterFlags&enterSilenceLogging != 0 && !rcmd.Verbose {
 		logger.SetLogger(logger.NullLogger)
 	}
 
@@ -160,7 +161,7 @@ func (cmd *cmdEnter) Execute(args []string) error {
 	case runStop = <-runReadyCh:
 	case runPanic := <-runResultCh:
 		if runPanic == nil {
-			panic("internal error: daemon stopped early")
+			panic(fmt.Sprintf("internal error: %s daemon stopped early", cmd.Personality.ProgramName))
 		}
 		panic(runPanic)
 	}
@@ -168,7 +169,7 @@ func (cmd *cmdEnter) Execute(args []string) error {
 	err := commander.Execute(extraArgs)
 
 	if err != nil {
-		cmd.parser.Command.Active = parser.Command.Active
+		rcmd.parser.Command.Active = parser.Command.Active
 	}
 
 	if err != nil || enterFlags&enterKeepServiceManager == 0 {
