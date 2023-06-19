@@ -111,3 +111,11 @@ func FakeSyscallGetpgid(f func(int) (int, error)) (restore func()) {
 		syscallGetpgid = oldSyscallGetpgid
 	}
 }
+
+func FakeEnviron(f func() []string) (restore func()) {
+	oldEnviron := osEnviron
+	osEnviron = f
+	return func() {
+		osEnviron = oldEnviron
+	}
+}

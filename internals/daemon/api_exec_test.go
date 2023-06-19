@@ -108,6 +108,27 @@ func (s *execSuite) TestEnvironment(c *C) {
 	c.Check(stderr, Equals, "")
 }
 
+func (s *execSuite) TestEnvironmentInheritedFromDaemon(c *C) {
+	restore := fakeEnv("FOO", "bar")
+	defer restore()
+
+	stdout, stderr, waitErr := s.exec(c, "", &client.ExecOptions{
+		Command: []string{"/bin/sh", "-c", "echo FOO=$FOO"},
+	})
+	c.Check(waitErr, IsNil)
+	c.Check(stdout, Equals, "FOO=bar\n")
+	c.Check(stderr, Equals, "")
+
+	// Check that requested environment takes precedence.
+	stdout, stderr, waitErr = s.exec(c, "", &client.ExecOptions{
+		Command:     []string{"/bin/sh", "-c", "echo FOO=$FOO"},
+		Environment: map[string]string{"FOO": "foo"},
+	})
+	c.Check(waitErr, IsNil)
+	c.Check(stdout, Equals, "FOO=foo\n")
+	c.Check(stderr, Equals, "")
+}
+
 func (s *execSuite) TestWorkingDir(c *C) {
 	workingDir := c.MkDir()
 	stdout, stderr, waitErr := s.exec(c, "", &client.ExecOptions{
@@ -140,6 +161,21 @@ func (s *execSuite) TestTimeout(c *C) {
 	})
 	c.Check(waitErr, ErrorMatches, `cannot perform the following tasks:\n.*timed out after 10ms.*`)
 	c.Check(stdout, Equals, "")
+	c.Check(stderr, Equals, "")
+}
+
+func (s *execSuite) TestCurrentUserGroup(c *C) {
+	current, err := user.Current()
+	c.Assert(err, IsNil)
+	group, err := user.LookupGroupId(current.Gid)
+	c.Assert(err, IsNil)
+	stdout, stderr, waitErr := s.exec(c, "", &client.ExecOptions{
+		Command: []string{"/bin/sh", "-c", "id -n -u && id -n -g"},
+		User:    current.Username,
+		Group:   group.Name,
+	})
+	c.Assert(waitErr, IsNil)
+	c.Check(stdout, Equals, current.Username+"\n"+group.Name+"\n")
 	c.Check(stderr, Equals, "")
 }
 

@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/canonical/pebble/internals/logger"
+	"github.com/canonical/pebble/internals/osutil"
 	"github.com/canonical/pebble/internals/overlord/state"
 )
 
@@ -69,8 +70,10 @@ func Exec(st *state.State, args *ExecArgs) (*state.Task, ExecMetadata, error) {
 		return nil, ExecMetadata{}, errors.New("cannot use interactive mode without a terminal")
 	}
 
-	environment := map[string]string{}
+	// Inherit the pebble daemon environment.
+	environment := osutil.Environ()
 	for k, v := range args.Environment {
+		// Requested environment takes precedence.
 		environment[k] = v
 	}
 
