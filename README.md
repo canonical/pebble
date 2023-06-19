@@ -439,6 +439,8 @@ services:
         log-targets: ['tgtA', 'tgtC']
     svc3:
         log-targets: ['tgtD']
+    svc4:
+        log-targets: []
 log-targets:
     tgtA:
         ...
@@ -450,9 +452,12 @@ log-targets:
         selection: disabled
 ```
 
-- `svc1` doesn't explicitly specify log-targets, so its logs will be forwarded to `tgtA` and `tgtB`.
+- `svc1` doesn't explicitly specify log-targets, so its logs will be forwarded to the opt-out targets: `tgtA` and `tgtB`.
 - `svc2` explicitly specifies `tgtA` and `tgtC`, so its logs will be sent to those targets. `svc2`'s logs will not be sent to `tgtB` or `tgtD`.
 - `svc3` explicitly specifies `tgtD`, but since this target is disabled, it will not receive any logs. Hence, `svc3`'s logs will not be sent anywhere.
+- `svc4` explicitly specifies an *empty list* of log targets. Hence, its logs will not be sent anywhere.
+
+TODO: document the replace key ^log-targets and default value
 -->
 
 ## Container usage
