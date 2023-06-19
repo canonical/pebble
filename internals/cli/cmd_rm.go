@@ -53,8 +53,8 @@ func (cmd *cmdRm) Execute(args []string) error {
 func init() {
 	AddCommand(&CmdInfo{
 		Name:        "rm",
-		ShortHelp:   shortRmHelp,
-		LongHelp:    longRmHelp,
+		Summary:     shortRmHelp,
+		Description: longRmHelp,
 		Builder:     func() flags.Commander { return &cmdRm{} },
 		OptionsHelp: rmOptionsHelp,
 	})

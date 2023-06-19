@@ -266,8 +266,8 @@ func execControlHandler(process *client.ExecProcess, terminal bool, stop <-chan 
 func init() {
 	AddCommand(&CmdInfo{
 		Name:               "exec",
-		ShortHelp:          shortExecHelp,
-		LongHelp:           longExecHelp,
+		Summary:            shortExecHelp,
+		Description:        longExecHelp,
 		Builder:            func() flags.Commander { return &cmdExec{} },
 		OptionsHelp:        execOptionsHelp,
 		PassAfterNonOption: true,

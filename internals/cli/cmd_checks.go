@@ -81,8 +81,8 @@ func (cmd *cmdChecks) Execute(args []string) error {
 func init() {
 	AddCommand(&CmdInfo{
 		Name:        "checks",
-		ShortHelp:   shortChecksHelp,
-		LongHelp:    longChecksHelp,
+		Summary:     shortChecksHelp,
+		Description: longChecksHelp,
 		Builder:     func() flags.Commander { return &cmdChecks{} },
 		OptionsHelp: checksOptionsHelp,
 	})

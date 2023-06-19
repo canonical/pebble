@@ -53,14 +53,13 @@ type options struct {
 	Version func() `long:"version"`
 }
 
-// PositionalArg contains information about the positional arguments accepted
+// ArgumentHelp contains help information about the positional arguments accepted
 // by a command.
-type PositionalArg struct {
-	// Name of the positional argument as displayed in the command usage string.
-	Name string
-	// ShortHelp is a single-line help string that will be displayed in the
-	// command's manual alongside the argument name.
-	ShortHelp string
+type ArgumentHelp struct {
+	// Placeholer supplies a string representation of the argument.
+	Placeholder string
+	// Help provides information on how to use the argument.
+	Help string
 }
 
 var optionsData options
@@ -74,14 +73,14 @@ type CmdInfo struct {
 	// Name of the command
 	Name string
 
-	// ShortHelp is a single-line help string that will be displayed
+	// Summary is a single-line help string that will be displayed
 	// in the full Pebble help manual (i.e. help --all)
-	ShortHelp string
+	Summary string
 
-	// LongHelp contains exhaustive documentation about the command,
+	// Description contains exhaustive documentation about the command,
 	// that will be reflected in the specific help manual for the
 	// command, and in the Pebble man page.
-	LongHelp string
+	Description string
 
 	// Builder is a function that creates a new instance of the command
 	// struct containing an Execute(args []string) implementation.
@@ -92,9 +91,9 @@ type CmdInfo struct {
 	// besides every option.
 	OptionsHelp map[string]string
 
-	// PositionalArgs (optional) contains help information about the
+	// ArgumentsHelp (optional) contains help information about the
 	// positional arguments accepted by the command.
-	PositionalArgs []PositionalArg
+	ArgumentsHelp []ArgumentHelp
 
 	// Whether to pass all arguments after the first non-option as remaining
 	// command line arguments. This is equivalent to strict POSIX processing.
@@ -209,7 +208,7 @@ func Parser(cli *client.Client) *flags.Parser {
 			x.setParser(parser)
 		}
 
-		cmd, err := parser.AddCommand(c.Name, c.ShortHelp, strings.TrimSpace(c.LongHelp), obj)
+		cmd, err := parser.AddCommand(c.Name, c.Summary, strings.TrimSpace(c.Description), obj)
 		if err != nil {
 			logger.Panicf("cannot add command %q: %v", c.Name, err)
 		}
@@ -235,14 +234,14 @@ func Parser(cli *client.Client) *flags.Parser {
 		}
 
 		args := cmd.Args()
-		if c.PositionalArgs != nil && len(args) != len(c.PositionalArgs) {
-			logger.Panicf("wrong number of argument descriptions for %s: expected %d, got %d", c.Name, len(args), len(c.PositionalArgs))
+		if c.ArgumentsHelp != nil && len(args) != len(c.ArgumentsHelp) {
+			logger.Panicf("wrong number of argument descriptions for %s: expected %d, got %d", c.Name, len(args), len(c.ArgumentsHelp))
 		}
 		for i, arg := range args {
 			name, desc := arg.Name, ""
-			if c.PositionalArgs != nil {
-				name = c.PositionalArgs[i].Name
-				desc = c.PositionalArgs[i].ShortHelp
+			if c.ArgumentsHelp != nil {
+				name = c.ArgumentsHelp[i].Placeholder
+				desc = c.ArgumentsHelp[i].Help
 			}
 			lintArg(c.Name, name, desc, arg.Description)
 			name = fixupArg(name)
@@ -262,7 +261,7 @@ func Parser(cli *client.Client) *flags.Parser {
 		if x, ok := obj.(clientSetter); ok {
 			x.setClient(cli)
 		}
-		cmd, err := debugCommand.AddCommand(c.Name, c.ShortHelp, strings.TrimSpace(c.LongHelp), obj)
+		cmd, err := debugCommand.AddCommand(c.Name, c.Summary, strings.TrimSpace(c.Description), obj)
 		if err != nil {
 			logger.Panicf("cannot add debug command %q: %v", c.Name, err)
 		}
@@ -286,14 +285,14 @@ func Parser(cli *client.Client) *flags.Parser {
 		}
 
 		args := cmd.Args()
-		if c.PositionalArgs != nil && len(args) != len(c.PositionalArgs) {
-			logger.Panicf("wrong number of argument descriptions for %s: expected %d, got %d", c.Name, len(args), len(c.PositionalArgs))
+		if c.ArgumentsHelp != nil && len(args) != len(c.ArgumentsHelp) {
+			logger.Panicf("wrong number of argument descriptions for %s: expected %d, got %d", c.Name, len(args), len(c.ArgumentsHelp))
 		}
 		for i, arg := range args {
 			name, desc := arg.Name, ""
-			if c.PositionalArgs != nil {
-				name = c.PositionalArgs[i].Name
-				desc = c.PositionalArgs[i].ShortHelp
+			if c.ArgumentsHelp != nil {
+				name = c.ArgumentsHelp[i].Placeholder
+				desc = c.ArgumentsHelp[i].Help
 			}
 			lintArg(c.Name, name, desc, arg.Description)
 			name = fixupArg(name)

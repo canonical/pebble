@@ -105,8 +105,8 @@ func parseGlob(path string) (parsedPath, parsedPattern string, err error) {
 func init() {
 	AddCommand(&CmdInfo{
 		Name:        "ls",
-		ShortHelp:   shortLsHelp,
-		LongHelp:    longLsHelp,
+		Summary:     shortLsHelp,
+		Description: longLsHelp,
 		Builder:     func() flags.Commander { return &cmdLs{} },
 		OptionsHelp: merge(lsOptionsHelp, timeOptionsHelp),
 	})

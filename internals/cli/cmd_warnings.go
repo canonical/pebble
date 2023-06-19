@@ -62,20 +62,20 @@ sufficient time has passed.
 
 func init() {
 	AddCommand(&CmdInfo{
-		Name:      "warnings",
-		ShortHelp: shortWarningsHelp,
-		LongHelp:  longWarningsHelp,
-		Builder:   func() flags.Commander { return &cmdWarnings{} },
+		Name:        "warnings",
+		Summary:     shortWarningsHelp,
+		Description: longWarningsHelp,
+		Builder:     func() flags.Commander { return &cmdWarnings{} },
 		OptionsHelp: merge(timeOptionsHelp, unicodeOptionsHelp, map[string]string{
 			"all":     "Show all warnings",
 			"verbose": "Show more information",
 		}),
 	})
 	AddCommand(&CmdInfo{
-		Name:      "okay",
-		ShortHelp: shortOkayHelp,
-		LongHelp:  longOkayHelp,
-		Builder:   func() flags.Commander { return &cmdOkay{} },
+		Name:        "okay",
+		Summary:     shortOkayHelp,
+		Description: longOkayHelp,
+		Builder:     func() flags.Commander { return &cmdOkay{} },
 	})
 }
 

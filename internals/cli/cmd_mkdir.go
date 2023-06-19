@@ -81,8 +81,8 @@ func (cmd *cmdMkdir) Execute(args []string) error {
 func init() {
 	AddCommand(&CmdInfo{
 		Name:        "mkdir",
-		ShortHelp:   shortMkdirHelp,
-		LongHelp:    longMkdirHelp,
+		Summary:     shortMkdirHelp,
+		Description: longMkdirHelp,
 		Builder:     func() flags.Commander { return &cmdMkdir{} },
 		OptionsHelp: mkdirOptionsHelp,
 	})

@@ -33,8 +33,8 @@ type cmdAutoStart struct {
 func init() {
 	AddCommand(&CmdInfo{
 		Name:        "autostart",
-		ShortHelp:   shortAutoStartHelp,
-		LongHelp:    longAutoStartHelp,
+		Summary:     shortAutoStartHelp,
+		Description: longAutoStartHelp,
 		Builder:     func() flags.Commander { return &cmdAutoStart{} },
 		OptionsHelp: waitOptionsHelp,
 	})

@@ -80,10 +80,10 @@ type cmdHelp struct {
 
 func init() {
 	AddCommand(&CmdInfo{
-		Name:      "help",
-		ShortHelp: shortHelpHelp,
-		LongHelp:  longHelpHelp,
-		Builder:   func() flags.Commander { return &cmdHelp{} },
+		Name:        "help",
+		Summary:     shortHelpHelp,
+		Description: longHelpHelp,
+		Builder:     func() flags.Commander { return &cmdHelp{} },
 		OptionsHelp: map[string]string{
 			"all": "Show a short summary of all commands",
 			"man": "Generate the manpage",

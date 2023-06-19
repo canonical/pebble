@@ -75,8 +75,8 @@ func (cmd *cmdServices) Execute(args []string) error {
 func init() {
 	AddCommand(&CmdInfo{
 		Name:        "services",
-		ShortHelp:   shortServicesHelp,
-		LongHelp:    longServicesHelp,
+		Summary:     shortServicesHelp,
+		Description: longServicesHelp,
 		Builder:     func() flags.Commander { return &cmdServices{} },
 		OptionsHelp: timeOptionsHelp,
 	})

@@ -60,8 +60,8 @@ func init() {
 	}
 	AddCommand(&CmdInfo{
 		Name:               "enter",
-		ShortHelp:          shortEnterHelp,
-		LongHelp:           longEnterHelp,
+		Summary:            shortEnterHelp,
+		Description:        longEnterHelp,
 		Builder:            func() flags.Commander { return &cmdEnter{} },
 		OptionsHelp:        optsHelp,
 		PassAfterNonOption: true,

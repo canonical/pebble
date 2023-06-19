@@ -40,8 +40,8 @@ var versionOptionsHelp = map[string]string{
 func init() {
 	AddCommand(&CmdInfo{
 		Name:        "version",
-		ShortHelp:   shortVersionHelp,
-		LongHelp:    longVersionHelp,
+		Summary:     shortVersionHelp,
+		Description: longVersionHelp,
 		Builder:     func() flags.Commander { return &cmdVersion{} },
 		OptionsHelp: versionOptionsHelp,
 	})
