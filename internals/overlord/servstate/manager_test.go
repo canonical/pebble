@@ -505,7 +505,7 @@ func (s *S) TestStartBadCommand(c *C) {
 	c.Assert(svc.Current, Equals, servstate.StatusInactive)
 }
 
-func (s *S) TestUserGroup(c *C) {
+func (s *S) TestCurrentUserGroup(c *C) {
 	current, err := user.Current()
 	c.Assert(err, IsNil)
 	group, err := user.LookupGroupId(current.Gid)
@@ -573,7 +573,7 @@ func (s *S) TestUserGroupFails(c *C) {
 }
 
 // See .github/workflows/tests.yml for how to run this test as root.
-func (s *S) TestUserGroupRoot(c *C) {
+func (s *S) TestUserGroup(c *C) {
 	if os.Getuid() != 0 {
 		c.Skip("requires running as root")
 	}
