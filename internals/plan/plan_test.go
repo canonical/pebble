@@ -1073,7 +1073,8 @@ var planTests = []planTest{{
 			tgt1:
 				type: loki
 				override: merge
-`}}, {
+`},
+}, {
 	summary: "Unsupported log target type",
 	error:   `log target "tgt1" has unsupported type "foobar", must be "loki" or "syslog"`,
 	input: []string{`
@@ -1137,6 +1138,106 @@ var planTests = []planTest{{
 				log-targets: [tgt1]
 				^log-targets: [tgt2]
 `},
+}, {
+	summary: "Merging with ^log-targets",
+	input: []string{`
+		services:
+			svc1:
+				command: foo
+				log-targets: [tgt1]
+				override: merge
+			svc2:
+				command: foo
+				log-targets: [tgt1]
+				override: merge
+			svc3:
+				command: foo
+				log-targets: [tgt1]
+				override: merge
+			svc4:
+				command: foo
+				log-targets: [tgt1, tgt2]
+				override: merge
+
+		log-targets:
+			tgt1:
+				type: loki
+				location: foo
+				override: merge
+			tgt2:
+				type: loki
+				location: foo
+				override: merge
+`, `
+		services:
+			svc1:
+				log-targets: [tgt2]
+				override: merge
+			svc2:
+				^log-targets: [tgt2]
+				override: merge
+			svc3:
+				^log-targets: default
+				override: merge
+			svc4:
+				command: bar
+				override: replace
+`},
+	result: &plan.Layer{
+		Services: map[string]*plan.Service{
+			"svc1": {
+				Name:          "svc1",
+				Command:       "foo",
+				LogTargets:    []string{"tgt1", "tgt2"},
+				Override:      plan.MergeOverride,
+				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
+				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
+				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
+			},
+			"svc2": {
+				Name:          "svc2",
+				Command:       "foo",
+				LogTargets:    []string{"tgt2"},
+				Override:      plan.MergeOverride,
+				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
+				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
+				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
+			},
+			"svc3": {
+				Name:          "svc3",
+				Command:       "foo",
+				LogTargets:    nil,
+				Override:      plan.MergeOverride,
+				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
+				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
+				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
+			},
+			"svc4": {
+				Name:          "svc4",
+				Command:       "bar",
+				LogTargets:    nil,
+				Override:      plan.ReplaceOverride,
+				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
+				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
+				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
+			},
+		},
+		Checks: map[string]*plan.Check{},
+		LogTargets: map[string]*plan.LogTarget{
+			"tgt1": {
+				Name:     "tgt1",
+				Type:     plan.LokiTarget,
+				Location: "foo",
+				Override: plan.MergeOverride,
+			},
+			"tgt2": {
+				Name:     "tgt2",
+				Type:     plan.LokiTarget,
+				Location: "foo",
+				Override: plan.MergeOverride,
+			},
+		},
+	},
 }}
 
 func (s *S) TestParseLayer(c *C) {
