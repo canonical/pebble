@@ -120,9 +120,7 @@ func (s *Service) Copy() *Service {
 			copied.OnCheckFailure[k] = v
 		}
 	}
-	if s.LogTargets != nil {
-		copied.LogTargets = s.LogTargets.Copy()
-	}
+	copied.LogTargets = copyStrings(s.LogTargets)
 	if s.LogTargetsReplace != nil {
 		copied.LogTargetsReplace = s.LogTargetsReplace.Copy()
 	}
@@ -193,12 +191,28 @@ func (s *Service) Merge(other *Service) {
 
 	// Merge log targets
 	if other.LogTargetsReplace != nil {
-		s.LogTargets = other.LogTargetsReplace.Copy()
-	} else if s.LogTargets != nil {
-		s.LogTargets.Merge(other.LogTargets)
-	} else if other.LogTargets != nil {
-		s.LogTargets = other.LogTargets.Copy()
+		if other.LogTargetsReplace.Default {
+			s.LogTargets = nil
+		} else {
+			s.LogTargets = other.LogTargetsReplace.Targets
+		}
+	} else {
+		s.LogTargets = appendUnique(s.LogTargets, other.LogTargets...)
 	}
+}
+
+// copyStrings returns a copy of the provided []string, in such a way that:
+//   - copyStrings(nil) returns nil;
+//   - copyStrings([]string{}) returns []string{}.
+//
+// TODO: move this function into canonical/x-go/strutil
+func copyStrings(s []string) []string {
+	if s == nil {
+		return nil
+	}
+	ret := make([]string, len(s))
+	copy(ret, s)
+	return ret
 }
 
 // appendUnique appends into a the elements from b which are not yet present
@@ -286,10 +300,23 @@ func CommandString(base, extra []string) string {
 
 // LogsTo returns true if the logs from s should be forwarded to target t.
 // This happens if:
-//   - t.Selection is "opt-out" or empty, and s.LogTargets is empty; or
+//   - t.Selection is "opt-out" or empty, and s.LogTargets is nil; or
 //   - t.Selection is not "disabled", and s.LogTargets contains t.
 func (s *Service) LogsTo(t *LogTarget) bool {
-	return s.LogTargets.LogsTo(t)
+	if t.Selection == DisabledSelection {
+		return false
+	}
+	if s.LogTargets == nil {
+		if t.Selection == UnsetSelection || t.Selection == OptOutSelection {
+			return true
+		}
+	}
+	for _, targetName := range s.LogTargets {
+		if targetName == t.Name {
+			return true
+		}
+	}
+	return false
 }
 
 type ServiceStartup string
@@ -330,6 +357,7 @@ const LogTargetsReplaceDefaultKeyword = "default"
 func (t *LogTargetsReplace) UnmarshalYAML(value *yaml.Node) error {
 	if value.Kind == yaml.ScalarNode && value.Value == LogTargetsReplaceDefaultKeyword {
 		t.Default = true
+		return nil
 	}
 
 	// unmarshal to []string
@@ -343,58 +371,12 @@ func (t *LogTargetsReplace) MarshalYAML() (interface{}, error) {
 	return t.Targets, nil
 }
 
-// Copy returns a deep copy of this LogTargets struct.
-func (t *LogTargets) Copy() *LogTargets {
-	return &LogTargets{
-		Targets: append([]string(nil), t.Targets...),
-		Keyword: t.Keyword,
+// Copy returns a deep copy of this LogTargetsReplace struct.
+func (t *LogTargetsReplace) Copy() *LogTargetsReplace {
+	return &LogTargetsReplace{
+		Targets: copyStrings(t.Targets),
+		Default: t.Default,
 	}
-}
-
-// Merge merges the fields from other into t.
-func (t *LogTargets) Merge(other *LogTargets) {
-	// anything <- keyword yields keyword
-	if other.Keyword != "" {
-		t.Keyword = other.Keyword
-		t.Targets = nil
-		return
-	}
-
-	// keyword <- [list] yields [list]
-	if t.Keyword != "" {
-		t.Keyword = ""
-		t.Targets = append([]string(nil), other.Targets...)
-		return
-	}
-
-	// [list] <- [list] - merge lists
-	t.Targets = appendUnique(t.Targets, other.Targets...)
-}
-
-// LogsTo returns true if t specifies sending logs to tgt.
-func (t *LogTargets) LogsTo(tgt *LogTarget) bool {
-	// False if `log-targets: none` specified, or if target disabled
-	if t.Keyword == NoLogTargets || tgt.Selection == DisabledSelection {
-		return false
-	}
-
-	// All log-targets selected
-	if t.Keyword == AllLogTargets {
-		return true // already handled the case tgt.Selection == "disabled"
-	}
-
-	// Default log-targets
-	if t.Keyword == DefaultLogTargets || len(t.Targets) == 0 {
-		return tgt.Selection == OptOutSelection || tgt.Selection == UnsetSelection
-	}
-
-	// No keyword - check if log target is specified
-	for _, targetName := range t.Targets {
-		if targetName == tgt.Name {
-			return true
-		}
-	}
-	return false
 }
 
 // Check specifies configuration for a single health check.
@@ -899,11 +881,11 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 
 		logTargets := service.LogTargets
 		if logTargets == nil {
-			logTargets = service.LogTargetsReplace
+			logTargets = service.LogTargetsReplace.Targets
 		}
 
 		if logTargets != nil {
-			for _, targetName := range logTargets.Targets {
+			for _, targetName := range logTargets {
 				_, ok := combined.LogTargets[targetName]
 				if !ok {
 					return nil, &FormatError{
