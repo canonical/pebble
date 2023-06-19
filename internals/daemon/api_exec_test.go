@@ -164,6 +164,21 @@ func (s *execSuite) TestTimeout(c *C) {
 	c.Check(stderr, Equals, "")
 }
 
+func (s *execSuite) TestCurrentUserGroup(c *C) {
+	current, err := user.Current()
+	c.Assert(err, IsNil)
+	group, err := user.LookupGroupId(current.Gid)
+	c.Assert(err, IsNil)
+	stdout, stderr, waitErr := s.exec(c, "", &client.ExecOptions{
+		Command: []string{"/bin/sh", "-c", "id -n -u && id -n -g"},
+		User:    current.Username,
+		Group:   group.Name,
+	})
+	c.Assert(waitErr, IsNil)
+	c.Check(stdout, Equals, current.Username+"\n"+group.Name+"\n")
+	c.Check(stderr, Equals, "")
+}
+
 // See .github/workflows/tests.yml for how to run this test as root.
 func (s *execSuite) TestUserGroup(c *C) {
 	if os.Getuid() != 0 {

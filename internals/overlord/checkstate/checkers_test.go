@@ -22,6 +22,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/user"
 	"strconv"
 
 	. "gopkg.in/check.v1"
@@ -234,4 +235,20 @@ func (s *CheckersSuite) TestExec(c *C) {
 	chk = &execChecker{command: "echo foo"}
 	err = chk.check(ctx)
 	c.Assert(err, ErrorMatches, "context canceled")
+
+	// Can run as current user and group
+	currentUser, err := user.Current()
+	c.Assert(err, IsNil)
+	group, err := user.LookupGroupId(currentUser.Gid)
+	c.Assert(err, IsNil)
+	chk = &execChecker{
+		command: "/bin/sh -c 'id -n -u; exit 1'",
+		user:    currentUser.Username,
+		group:   group.Name,
+	}
+	err = chk.check(context.Background())
+	c.Assert(err, ErrorMatches, "exit status 1")
+	detailsErr, ok = err.(*detailsError)
+	c.Assert(ok, Equals, true)
+	c.Assert(detailsErr.Details(), Equals, currentUser.Username)
 }

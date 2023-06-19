@@ -505,9 +505,39 @@ func (s *S) TestStartBadCommand(c *C) {
 	c.Assert(svc.Current, Equals, servstate.StatusInactive)
 }
 
+func (s *S) TestUserGroup(c *C) {
+	current, err := user.Current()
+	c.Assert(err, IsNil)
+	group, err := user.LookupGroupId(current.Gid)
+	c.Assert(err, IsNil)
+
+	layer := parseLayer(c, 0, "layer99", fmt.Sprintf(`
+services:
+    usrtest:
+        override: replace
+        command: /bin/sh -c "id -n -u | tee -a %s; sleep %g"
+        user: %s
+        group: %s
+`, s.log, shortOkayDelay.Seconds()+0.01, current.Username, group.Name))
+	err = s.manager.AppendLayer(layer)
+	c.Assert(err, IsNil)
+	_, _, err = s.manager.Replan()
+	c.Assert(err, IsNil)
+
+	chg := s.startServices(c, []string{"usrtest"}, 1)
+	s.st.Lock()
+	c.Assert(chg.Err(), IsNil)
+	s.st.Unlock()
+
+	s.waitUntilService(c, "usrtest", func(service *servstate.ServiceInfo) bool {
+		return service.Current == servstate.StatusBackoff
+	})
+	s.assertLog(c, ".*"+current.Username+"\n")
+}
+
 func (s *S) TestUserGroupFails(c *C) {
-	// Test with user and group will fail due to permission issues (unless
-	// running as root)
+	// Test with non-current user and group will fail due to permission issues
+	// (unless running as root)
 	if os.Getuid() == 0 {
 		c.Skip("requires non-root user")
 	}
@@ -543,7 +573,7 @@ func (s *S) TestUserGroupFails(c *C) {
 }
 
 // See .github/workflows/tests.yml for how to run this test as root.
-func (s *S) TestUserGroup(c *C) {
+func (s *S) TestUserGroupRoot(c *C) {
 	if os.Getuid() != 0 {
 		c.Skip("requires running as root")
 	}

@@ -148,9 +148,16 @@ func (c *execChecker) check(ctx context.Context) error {
 		return err
 	}
 	if uid != nil && gid != nil {
-		cmd.SysProcAttr.Credential = &syscall.Credential{
-			Uid: uint32(*uid),
-			Gid: uint32(*gid),
+		isCurrent, err := osutil.IsCurrent(*uid, *gid)
+		if err != nil {
+			logger.Debugf("Cannot determine if uid %d gid %d is current user", *uid, *gid)
+		}
+		if !isCurrent {
+			cmd.SysProcAttr = &syscall.SysProcAttr{}
+			cmd.SysProcAttr.Credential = &syscall.Credential{
+				Uid: uint32(*uid),
+				Gid: uint32(*gid),
+			}
 		}
 	}
 
