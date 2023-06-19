@@ -90,8 +90,8 @@ type Service struct {
 	KillDelay      OptionalDuration         `yaml:"kill-delay,omitempty"`
 
 	// Log forwarding
-	LogTargets        *LogTargets `yaml:"log-targets,omitempty"`
-	LogTargetsReplace *LogTargets `yaml:"^log-targets,omitempty"`
+	LogTargets        []string           `yaml:"log-targets,omitempty"`
+	LogTargetsReplace *LogTargetsReplace `yaml:"^log-targets,omitempty"`
 }
 
 // Copy returns a deep copy of the service.
@@ -318,43 +318,27 @@ const (
 	ActionIgnore   ServiceAction = "ignore"
 )
 
-// LogTargets specifies which log targets should receive a service's logs.
-// It is either an explicit list of targets, or a LogTargetsKeyword.
-type LogTargets struct {
+// LogTargetsReplace represents a possible value for a service's `^log-targets`
+// field - either an explicit list of targets, or the special keyword "default".
+type LogTargetsReplace struct {
 	Targets []string
-	Keyword LogTargetsKeyword
+	Default bool
 }
 
-// LogTargetsKeyword represents a valid keyword for a service's `log-targets`
-// field.
-type LogTargetsKeyword string
+const LogTargetsReplaceDefaultKeyword = "default"
 
-const (
-	DefaultLogTargets LogTargetsKeyword = "default"
-	AllLogTargets     LogTargetsKeyword = "all"
-	NoLogTargets      LogTargetsKeyword = "none"
-)
-
-func (t *LogTargets) UnmarshalYAML(value *yaml.Node) error {
-	if value.Kind == yaml.ScalarNode {
-		// decode keyword
-		keyword := LogTargetsKeyword(value.Value)
-		switch keyword {
-		case DefaultLogTargets, AllLogTargets, NoLogTargets:
-			t.Keyword = keyword
-			return nil
-		default:
-			return fmt.Errorf("invalid value %q for LogTargets", value.Value)
-		}
+func (t *LogTargetsReplace) UnmarshalYAML(value *yaml.Node) error {
+	if value.Kind == yaml.ScalarNode && value.Value == LogTargetsReplaceDefaultKeyword {
+		t.Default = true
 	}
 
 	// unmarshal to []string
 	return value.Decode(&t.Targets)
 }
 
-func (t *LogTargets) MarshalYAML() (interface{}, error) {
-	if t.Keyword != "" {
-		return t.Keyword, nil
+func (t *LogTargetsReplace) MarshalYAML() (interface{}, error) {
+	if t.Default {
+		return LogTargetsReplaceDefaultKeyword, nil
 	}
 	return t.Targets, nil
 }
