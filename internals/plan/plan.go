@@ -880,7 +880,7 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 		}
 
 		logTargets := service.LogTargets
-		if logTargets == nil {
+		if logTargets == nil && service.LogTargetsReplace != nil {
 			logTargets = service.LogTargetsReplace.Targets
 		}
 
