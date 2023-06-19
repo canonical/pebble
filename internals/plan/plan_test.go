@@ -1111,243 +1111,32 @@ var planTests = []planTest{{
 				override: merge
 `},
 }, {
-	summary: "LogTargets parsing",
+	summary: `Service specifies unknown log target in "^log-targets"`,
+	error:   `unknown log target "tgt2" for service "svc1"`,
 	input: []string{`
 		services:
 			svc1:
 				command: foo
 				override: merge
-				log-targets: default
-			svc2:
-				command: foo
-				override: merge
-				log-targets: all
-			svc3:
-				command: foo
-				override: merge
-				log-targets: none
-			svc4:
-				command: foo
-				override: merge
-				log-targets: [tgt1, tgt2]
-			svc5:
-				command: foo
-				override: merge
-				^log-targets: default
-			svc6:
-				command: foo
-				override: merge
-				^log-targets: all
-			svc7:
-				command: foo
-				override: merge
-				^log-targets: none
-			svc8:
-				command: foo
-				override: merge
-				^log-targets: [tgt1, tgt2]
-
+				^log-targets:
+					- tgt2
 		log-targets:
 			tgt1:
 				type: loki
-				selection: disabled
-				override: merge
-			tgt2:
-				type: loki
-				selection: disabled
+				location: http://10.1.77.196:3100/loki/api/v1/push
 				override: merge
 `},
-	layers: []*plan.Layer{{
-		Label: "layer-0",
-		Order: 0,
-		Services: map[string]*plan.Service{
-			"svc1": {
-				Name:     "svc1",
-				Command:  "foo",
-				Override: plan.MergeOverride,
-			},
-			"svc2": {
-				Name:     "svc2",
-				Command:  "foo",
-				Override: plan.MergeOverride,
-			},
-			"svc3": {
-				Name:     "svc3",
-				Command:  "foo",
-				Override: plan.MergeOverride,
-			},
-			"svc4": {
-				Name:       "svc4",
-				Command:    "foo",
-				Override:   plan.MergeOverride,
-				LogTargets: []string{"tgt1", "tgt2"},
-			},
-			"svc5": {
-				Name:     "svc5",
-				Command:  "foo",
-				Override: plan.MergeOverride,
-				LogTargetsReplace: &plan.LogTargetsReplace{
-					Default: true,
-				},
-			},
-			"svc6": {
-				Name:     "svc6",
-				Command:  "foo",
-				Override: plan.MergeOverride,
-			},
-			"svc7": {
-				Name:     "svc7",
-				Command:  "foo",
-				Override: plan.MergeOverride,
-			},
-			"svc8": {
-				Name:     "svc8",
-				Command:  "foo",
-				Override: plan.MergeOverride,
-				LogTargetsReplace: &plan.LogTargetsReplace{
-					Targets: []string{"tgt1", "tgt2"},
-				},
-			},
-		},
-		Checks: map[string]*plan.Check{},
-		LogTargets: map[string]*plan.LogTarget{
-			"tgt1": {
-				Name:      "tgt1",
-				Type:      plan.LokiTarget,
-				Selection: plan.DisabledSelection,
-				Override:  plan.MergeOverride,
-			},
-			"tgt2": {
-				Name:      "tgt2",
-				Type:      plan.LokiTarget,
-				Selection: plan.DisabledSelection,
-				Override:  plan.MergeOverride,
-			},
-		},
-	}},
 }, {
-	summary: "Replacing LogTargets in merge",
+	summary: `Service defines both "log-targets" and "^log-targets"`,
+	error:   `service "svc1" cannot define both "log-targets" and "\^log-targets" keys`,
 	input: []string{`
 		services:
 			svc1:
 				command: foo
 				override: merge
-				log-targets: [tgt1, tgt2]
-			svc2:
-				command: foo
-				override: merge
-				log-targets: [tgt1, tgt2]
-			svc3:
-				command: foo
-				override: merge
-				log-targets: [tgt1, tgt2]
-			svc4:
-				command: foo
-				override: merge
-				log-targets: none
-
-		log-targets:
-			tgt1:
-				type: loki
-				selection: disabled
-				override: merge
-			tgt2:
-				type: loki
-				selection: disabled
-				override: merge
-`, `
-		services:
-			svc1:
-				command: foo
-				override: merge
-				log-targets: [tgt3]
-			svc2:
-				command: foo
-				override: merge
-				^log-targets: [tgt3]
-			svc3:
-				command: foo
-				override: merge
-				log-targets: default
-			svc4:
-				command: foo
-				override: merge
-				log-targets: [tgt1, tgt2]
-
-		log-targets:
-			tgt1:
-				type: loki
-				selection: disabled
-				override: merge
-			tgt2:
-				type: loki
-				selection: disabled
-				override: merge
-			tgt3:
-				type: loki
-				selection: disabled
-				override: merge
+				log-targets: [tgt1]
+				^log-targets: [tgt2]
 `},
-	result: &plan.Layer{
-		Services: map[string]*plan.Service{
-			"svc1": {
-				Name:          "svc1",
-				Command:       "foo",
-				Override:      plan.MergeOverride,
-				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
-				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
-				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
-				LogTargets:    []string{"tgt1", "tgt2", "tgt3"},
-			},
-			"svc2": {
-				Name:          "svc2",
-				Command:       "foo",
-				Override:      plan.MergeOverride,
-				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
-				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
-				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
-				LogTargets:    []string{"tgt3"},
-			},
-			"svc3": {
-				Name:          "svc3",
-				Command:       "foo",
-				Override:      plan.MergeOverride,
-				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
-				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
-				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
-			},
-			"svc4": {
-				Name:          "svc4",
-				Command:       "foo",
-				Override:      plan.MergeOverride,
-				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
-				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
-				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
-				LogTargets:    []string{"tgt1", "tgt2"},
-			},
-		},
-		Checks: map[string]*plan.Check{},
-		LogTargets: map[string]*plan.LogTarget{
-			"tgt1": {
-				Name:      "tgt1",
-				Type:      plan.LokiTarget,
-				Selection: plan.DisabledSelection,
-				Override:  plan.MergeOverride,
-			},
-			"tgt2": {
-				Name:      "tgt2",
-				Type:      plan.LokiTarget,
-				Selection: plan.DisabledSelection,
-				Override:  plan.MergeOverride,
-			},
-			"tgt3": {
-				Name:      "tgt3",
-				Type:      plan.LokiTarget,
-				Selection: plan.DisabledSelection,
-				Override:  plan.MergeOverride,
-			},
-		},
-	},
 }}
 
 func (s *S) TestParseLayer(c *C) {
@@ -1701,51 +1490,25 @@ func (s *S) TestSelectTargets(c *C) {
 		{Name: "disabled", Selection: plan.DisabledSelection},
 	}
 	services := []*plan.Service{
-		//	{Name: "svc1", LogTargets: &plan.LogTargets{
-		//		Targets: nil,
-		//	}},
-		//	{Name: "svc2", LogTargets: &plan.LogTargets{
-		//		Targets: []string{},
-		//	}},
-		//	{Name: "svc3", LogTargets: &plan.LogTargets{
-		//		Targets: []string{"unset"},
-		//	}},
-		//	{Name: "svc4", LogTargets: &plan.LogTargets{
-		//		Targets: []string{"optout"},
-		//	}},
-		//	{Name: "svc5", LogTargets: &plan.LogTargets{
-		//		Targets: []string{"optin"},
-		//	}},
-		//	{Name: "svc6", LogTargets: &plan.LogTargets{
-		//		Targets: []string{"disabled"},
-		//	}},
-		//	{Name: "svc7", LogTargets: &plan.LogTargets{
-		//		Targets: []string{"unset", "optin", "disabled"},
-		//	}},
-		//	{Name: "svc8", LogTargets: &plan.LogTargets{
-		//		Keyword: plan.DefaultLogTargets,
-		//	}},
-		//	{Name: "svc9", LogTargets: &plan.LogTargets{
-		//		Keyword: plan.AllLogTargets,
-		//	}},
-		//	{Name: "svc10", LogTargets: &plan.LogTargets{
-		//		Keyword: plan.NoLogTargets,
-		//	}},
+		{Name: "svc1", LogTargets: nil},
+		{Name: "svc2", LogTargets: []string{}},
+		{Name: "svc3", LogTargets: []string{"unset"}},
+		{Name: "svc4", LogTargets: []string{"optout"}},
+		{Name: "svc5", LogTargets: []string{"optin"}},
+		{Name: "svc6", LogTargets: []string{"disabled"}},
+		{Name: "svc7", LogTargets: []string{"unset", "optin", "disabled"}},
 	}
 
 	// Use pointers to bools so the test will fail if we forget to set a value
 	t, f := true, false
 	expected := map[string]map[string]*bool{
-		"svc1":  {"unset": &t, "optout": &t, "optin": &f, "disabled": &f},
-		"svc2":  {"unset": &t, "optout": &t, "optin": &f, "disabled": &f},
-		"svc3":  {"unset": &t, "optout": &f, "optin": &f, "disabled": &f},
-		"svc4":  {"unset": &f, "optout": &t, "optin": &f, "disabled": &f},
-		"svc5":  {"unset": &f, "optout": &f, "optin": &t, "disabled": &f},
-		"svc6":  {"unset": &f, "optout": &f, "optin": &f, "disabled": &f},
-		"svc7":  {"unset": &t, "optout": &f, "optin": &t, "disabled": &f},
-		"svc8":  {"unset": &t, "optout": &t, "optin": &f, "disabled": &f},
-		"svc9":  {"unset": &t, "optout": &t, "optin": &t, "disabled": &f},
-		"svc10": {"unset": &f, "optout": &f, "optin": &f, "disabled": &f},
+		"svc1": {"unset": &t, "optout": &t, "optin": &f, "disabled": &f},
+		"svc2": {"unset": &f, "optout": &f, "optin": &f, "disabled": &f},
+		"svc3": {"unset": &t, "optout": &f, "optin": &f, "disabled": &f},
+		"svc4": {"unset": &f, "optout": &t, "optin": &f, "disabled": &f},
+		"svc5": {"unset": &f, "optout": &f, "optin": &t, "disabled": &f},
+		"svc6": {"unset": &f, "optout": &f, "optin": &f, "disabled": &f},
+		"svc7": {"unset": &t, "optout": &f, "optin": &t, "disabled": &f},
 	}
 
 	for _, service := range services {
@@ -1766,6 +1529,54 @@ func (s *S) TestParseAndMergeLogTargets(c *C) {
 		base:       "log-targets: ~",
 		override:   "log-targets: ~",
 		logTargets: nil,
+	}, {
+		base:       "log-targets: ~",
+		override:   "log-targets: []",
+		logTargets: []string{},
+	}, {
+		base:       "log-targets: ~",
+		override:   "log-targets: [tgt1, tgt2]",
+		logTargets: []string{"tgt1", "tgt2"},
+	}, {
+		base:       "log-targets: []",
+		override:   "log-targets: ~",
+		logTargets: []string{},
+	}, {
+		base:       "log-targets: []",
+		override:   "^log-targets: ~",
+		logTargets: []string{},
+	}, {
+		base:       "log-targets: []",
+		override:   "^log-targets: default",
+		logTargets: nil,
+	}, {
+		base:       "log-targets: ~",
+		override:   "^log-targets: default",
+		logTargets: nil,
+	}, {
+		base:       "log-targets: [tgt1, tgt2]",
+		override:   "^log-targets: default",
+		logTargets: nil,
+	}, {
+		base:       "log-targets: [tgt1]",
+		override:   "log-targets: [tgt2]",
+		logTargets: []string{"tgt1", "tgt2"},
+	}, {
+		base:       "log-targets: [tgt1]",
+		override:   "^log-targets: [tgt2]",
+		logTargets: []string{"tgt2"},
+	}, {
+		base:       "log-targets: [tgt1, tgt2, tgt3]",
+		override:   "log-targets: [tgt2]",
+		logTargets: []string{"tgt1", "tgt2", "tgt3"},
+	}, {
+		base:       "log-targets: [tgt1, tgt2, tgt3]",
+		override:   "^log-targets: [tgt2]",
+		logTargets: []string{"tgt2"},
+	}, {
+		base:       "log-targets: [tgt1, tgt2, tgt3]",
+		override:   "^log-targets: default",
+		logTargets: nil,
 	}}
 
 	parseService := func(raw string) *plan.Service {
@@ -1783,116 +1594,91 @@ func (s *S) TestParseAndMergeLogTargets(c *C) {
 	}
 }
 
-//
-//func (s *S) TestLogTargetsUnmarshalYAML(c *C) {
-//	tests := []struct {
-//		input    string
-//		expected *plan.LogTargets
-//		err      string
-//	}{{
-//		input:    "",
-//		expected: &plan.LogTargets{},
-//	}, {
-//		input:    "~",
-//		expected: &plan.LogTargets{},
-//	}, {
-//		input:    "null",
-//		expected: &plan.LogTargets{},
-//	}, {
-//		input:    "[]",
-//		expected: &plan.LogTargets{Targets: []string{}},
-//	}, {
-//		input:    "[tgt1]",
-//		expected: &plan.LogTargets{Targets: []string{"tgt1"}},
-//	}, {
-//		input:    "[tgt1, tgt2, tgt3]",
-//		expected: &plan.LogTargets{Targets: []string{"tgt1", "tgt2", "tgt3"}},
-//	}, {
-//		input:    "all",
-//		expected: &plan.LogTargets{Keyword: plan.AllLogTargets},
-//	}, {
-//		input:    "default",
-//		expected: &plan.LogTargets{Keyword: plan.DefaultLogTargets},
-//	}, {
-//		input:    "none",
-//		expected: &plan.LogTargets{Keyword: plan.NoLogTargets},
-//	}, {
-//		input: "invalidkeyword",
-//		err:   `invalid value "invalidkeyword" for LogTargets`,
-//	}}
-//
-//	for _, t := range tests {
-//		out := &plan.LogTargets{}
-//		err := yaml.Unmarshal([]byte(t.input), out)
-//
-//		if t.err != "" {
-//			c.Assert(err, ErrorMatches, t.err)
-//			continue
-//		}
-//
-//		c.Assert(err, IsNil)
-//		c.Check(out, DeepEquals, t.expected)
-//	}
-//}
-//
-//func (s *S) TestLogTargetsMarshalYAML(c *C) {
-//	tests := []struct {
-//		input    *plan.LogTargets
-//		expected string
-//	}{{
-//		input: &plan.LogTargets{},
-//		// nil slice unmarshals to []
-//		expected: `[]
-//`}, {
-//		input: &plan.LogTargets{Targets: []string{}},
-//		expected: `[]
-//`}, {
-//		input: &plan.LogTargets{Targets: []string{"tgt1"}},
-//		expected: `- tgt1
-//`}, {
-//		input: &plan.LogTargets{Targets: []string{"tgt1", "tgt2", "tgt3"}},
-//		expected: `
-//- tgt1
-//- tgt2
-//- tgt3
-//`[1:]}, {
-//		input: &plan.LogTargets{Keyword: plan.AllLogTargets},
-//		expected: `all
-//`}, {
-//		input: &plan.LogTargets{Keyword: plan.DefaultLogTargets},
-//		expected: `default
-//`}, {
-//		input: &plan.LogTargets{Keyword: plan.NoLogTargets},
-//		expected: `none
-//`}}
-//
-//	for _, t := range tests {
-//		out, err := yaml.Marshal(t.input)
-//		c.Assert(err, IsNil)
-//		c.Check(string(out), DeepEquals, t.expected)
-//	}
-//}
-//
-//// Test that marshalling then unmarshalling yields the original value.
-//func (s *S) TestLogTargetsYAMLRoundTrip(c *C) {
-//	tests := []*plan.LogTargets{
-//		// nil ends up as empty slice. We are treating these as equivalent.
-//		// {},
-//		{Targets: []string{}},
-//		{Targets: []string{"tgt1"}},
-//		{Targets: []string{"tgt1", "tgt2", "tgt3"}},
-//		{Keyword: plan.AllLogTargets},
-//		{Keyword: plan.DefaultLogTargets},
-//		{Keyword: plan.NoLogTargets},
-//	}
-//
-//	for _, input := range tests {
-//		marshalled, err := yaml.Marshal(input)
-//		c.Assert(err, IsNil)
-//
-//		out := &plan.LogTargets{}
-//		err = yaml.Unmarshal(marshalled, out)
-//		c.Assert(err, IsNil)
-//		c.Check(out, DeepEquals, input)
-//	}
-//}
+func (s *S) TestLogTargetsReplaceUnmarshalYAML(c *C) {
+	tests := []struct {
+		input    string
+		expected *plan.LogTargetsReplace
+	}{{
+		input:    "",
+		expected: &plan.LogTargetsReplace{},
+	}, {
+		input:    "~",
+		expected: &plan.LogTargetsReplace{},
+	}, {
+		input:    "null",
+		expected: &plan.LogTargetsReplace{},
+	}, {
+		input:    "[]",
+		expected: &plan.LogTargetsReplace{Targets: []string{}},
+	}, {
+		input:    "[tgt1]",
+		expected: &plan.LogTargetsReplace{Targets: []string{"tgt1"}},
+	}, {
+		input:    "[tgt1, tgt2, tgt3]",
+		expected: &plan.LogTargetsReplace{Targets: []string{"tgt1", "tgt2", "tgt3"}},
+	}, {
+		input:    "default",
+		expected: &plan.LogTargetsReplace{Default: true},
+	}}
+
+	for _, t := range tests {
+		out := &plan.LogTargetsReplace{}
+		err := yaml.Unmarshal([]byte(t.input), out)
+		c.Assert(err, IsNil)
+		c.Check(out, DeepEquals, t.expected)
+	}
+}
+
+func (s *S) TestLogTargetsReplaceMarshalYAML(c *C) {
+	tests := []struct {
+		input    *plan.LogTargetsReplace
+		expected string
+	}{{
+		input: &plan.LogTargetsReplace{},
+		// nil slice unmarshals to []
+		expected: `[]
+`}, {
+		input: &plan.LogTargetsReplace{Targets: []string{}},
+		expected: `[]
+`}, {
+		input: &plan.LogTargetsReplace{Targets: []string{"tgt1"}},
+		expected: `- tgt1
+`}, {
+		input: &plan.LogTargetsReplace{Targets: []string{"tgt1", "tgt2", "tgt3"}},
+		expected: `
+- tgt1
+- tgt2
+- tgt3
+`[1:]}, {
+		input: &plan.LogTargetsReplace{Default: true},
+		expected: `default
+`}}
+
+	for _, t := range tests {
+		out, err := yaml.Marshal(t.input)
+		c.Assert(err, IsNil)
+		c.Check(string(out), DeepEquals, t.expected)
+	}
+}
+
+// Test that marshalling then unmarshalling yields the original value.
+func (s *S) TestLogTargetsReplaceYAMLRoundTrip(c *C) {
+	tests := []*plan.LogTargetsReplace{
+		// nil ends up as empty slice. We are treating these as equivalent.
+		// {},
+		{Targets: []string{}},
+		{Targets: []string{"tgt1"}},
+		{Targets: []string{"tgt1", "tgt2", "tgt3"}},
+		{Default: true},
+	}
+
+	for _, input := range tests {
+		marshalled, err := yaml.Marshal(input)
+		c.Assert(err, IsNil)
+
+		out := &plan.LogTargetsReplace{}
+		err = yaml.Unmarshal(marshalled, out)
+		c.Assert(err, IsNil)
+		c.Check(out, DeepEquals, input)
+	}
+}

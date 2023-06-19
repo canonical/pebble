@@ -196,6 +196,8 @@ func (s *Service) Merge(other *Service) {
 		} else {
 			s.LogTargets = other.LogTargetsReplace.Targets
 		}
+	} else if s.LogTargets == nil {
+		s.LogTargets = copyStrings(other.LogTargets)
 	} else {
 		s.LogTargets = appendUnique(s.LogTargets, other.LogTargets...)
 	}
@@ -875,7 +877,7 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 	for serviceName, service := range combined.Services {
 		if service.LogTargets != nil && service.LogTargetsReplace != nil {
 			return nil, &FormatError{
-				Message: fmt.Sprintf(`service %q cannot define both "log-targets" and "^log-targets" keys'`, serviceName),
+				Message: fmt.Sprintf(`service %q cannot define both "log-targets" and "^log-targets" keys`, serviceName),
 			}
 		}
 
