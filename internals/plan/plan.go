@@ -206,8 +206,6 @@ func (s *Service) Merge(other *Service) {
 // copyStrings returns a copy of the provided []string, in such a way that:
 //   - copyStrings(nil) returns nil;
 //   - copyStrings([]string{}) returns []string{}.
-//
-// TODO: move this function into canonical/x-go/strutil
 func copyStrings(s []string) []string {
 	if s == nil {
 		return nil
@@ -219,7 +217,6 @@ func copyStrings(s []string) []string {
 
 // appendUnique appends into a the elements from b which are not yet present
 // and returns the modified slice.
-// TODO: move this function into canonical/x-go/strutil
 func appendUnique(a []string, b ...string) []string {
 Outer:
 	for _, bn := range b {
@@ -354,10 +351,10 @@ type LogTargetsReplace struct {
 	Default bool
 }
 
-const LogTargetsReplaceDefaultKeyword = "default"
+const LogTargetsReplaceDefault = "default"
 
 func (t *LogTargetsReplace) UnmarshalYAML(value *yaml.Node) error {
-	if value.Kind == yaml.ScalarNode && value.Value == LogTargetsReplaceDefaultKeyword {
+	if value.Kind == yaml.ScalarNode && value.Value == LogTargetsReplaceDefault {
 		t.Default = true
 		return nil
 	}
@@ -368,7 +365,7 @@ func (t *LogTargetsReplace) UnmarshalYAML(value *yaml.Node) error {
 
 func (t *LogTargetsReplace) MarshalYAML() (interface{}, error) {
 	if t.Default {
-		return LogTargetsReplaceDefaultKeyword, nil
+		return LogTargetsReplaceDefault, nil
 	}
 	return t.Targets, nil
 }
@@ -886,13 +883,11 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 			logTargets = service.LogTargetsReplace.Targets
 		}
 
-		if logTargets != nil {
-			for _, targetName := range logTargets {
-				_, ok := combined.LogTargets[targetName]
-				if !ok {
-					return nil, &FormatError{
-						Message: fmt.Sprintf(`unknown log target %q for service %q`, targetName, serviceName),
-					}
+		for _, targetName := range logTargets {
+			_, ok := combined.LogTargets[targetName]
+			if !ok {
+				return nil, &FormatError{
+					Message: fmt.Sprintf(`unknown log target %q for service %q`, targetName, serviceName),
 				}
 			}
 		}
