@@ -457,7 +457,47 @@ log-targets:
 - `svc3` explicitly specifies `tgtD`, but since this target is disabled, it will not receive any logs. Hence, `svc3`'s logs will not be sent anywhere.
 - `svc4` explicitly specifies an *empty list* of log targets. Hence, its logs will not be sent anywhere.
 
-TODO: document the replace key ^log-targets and default value
+When merging services, new `log-targets` specified in the override layer will be *appended* to the existing `log-targets` specified in the base layer. For example, with the (partial) base layer:
+```yaml
+svc1:
+    log-targets: [tgt1]
+```
+and override layer
+```yaml
+svc1:
+    log-targets: [tgt2]
+    override: merge
+```
+the resulting merged layer will be
+```yaml
+svc1:
+    log-targets: [tgt1, tgt2]
+```
+
+To remove existing `log-targets` specified by a service, use the special `^log-targets` key. This behaves like `log-targets` but has "replace" semantics, even in a merge. Taking the previous example, if we instead use the override layer
+```yaml
+svc1:
+    ^log-targets: [tgt2]
+    override: merge
+```
+the resulting merged layer will be
+```yaml
+svc1:
+  log-targets: [tgt2]
+```
+
+To restore the default unspecified behaviour for `log-targets` (i.e. forwarding logs to all opt-out targets), we can use the special `default` keyword for `^log-targets`. For example, using the following override layer
+```yaml
+svc1:
+    ^log-targets: default
+    override: merge
+```
+will result in
+```yaml
+svc1:
+    log-targets: ~
+```
+equivalent to if `svc1.log-targets` had never been specified at all.
 -->
 
 ## Container usage
