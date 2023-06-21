@@ -34,9 +34,15 @@ func (s *fakeCommandSuite) TestFakeCommand(c *check.C) {
 	c.Assert(err, check.IsNil)
 	err = exec.Command("cmd", "second-run", "--arg1", "arg2", "a %s").Run()
 	c.Assert(err, check.IsNil)
+	err = exec.Command("cmd", "third-run", "--arg1", "arg2", "").Run()
+	c.Assert(err, check.IsNil)
+	err = exec.Command("cmd", "forth-run", "--arg1", "arg2", "", "a %s").Run()
+	c.Assert(err, check.IsNil)
 	c.Assert(fake.Calls(), check.DeepEquals, [][]string{
 		{"cmd", "first-run", "--arg1", "arg2", "a space"},
 		{"cmd", "second-run", "--arg1", "arg2", "a %s"},
+		{"cmd", "third-run", "--arg1", "arg2", ""},
+		{"cmd", "forth-run", "--arg1", "arg2", "", "a %s"},
 	})
 }
 
