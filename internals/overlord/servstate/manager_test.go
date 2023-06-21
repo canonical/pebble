@@ -506,22 +506,30 @@ func (s *S) TestStartBadCommand(c *C) {
 }
 
 func (s *S) TestCurrentUserGroup(c *C) {
+	// Don't re-use s.manager, because we're adding a layer and service, and
+	// that would conflict with other tests like TestServiceLogs.
+	dir := c.MkDir()
+	err := os.Mkdir(filepath.Join(dir, "layers"), 0755)
+	c.Assert(err, IsNil)
+	manager, err := servstate.NewManager(s.st, s.runner, dir, nil, nil, fakeLogManager{})
+	c.Assert(err, IsNil)
+	defer manager.Stop()
+
 	current, err := user.Current()
 	c.Assert(err, IsNil)
 	group, err := user.LookupGroupId(current.Gid)
 	c.Assert(err, IsNil)
 
-	layer := parseLayer(c, 0, "layer99", fmt.Sprintf(`
+	outputPath := filepath.Join(dir, "output")
+	layer := parseLayer(c, 0, "layer", fmt.Sprintf(`
 services:
     usrtest:
         override: replace
-        command: /bin/sh -c "id -n -u | tee -a %s; sleep %g"
+        command: /bin/sh -c "id -n -u >%s; sleep %g"
         user: %s
         group: %s
-`, s.log, shortOkayDelay.Seconds()+0.01, current.Username, group.Name))
-	err = s.manager.AppendLayer(layer)
-	c.Assert(err, IsNil)
-	_, _, err = s.manager.Replan()
+`, outputPath, shortOkayDelay.Seconds()+0.01, current.Username, group.Name))
+	err = manager.AppendLayer(layer)
 	c.Assert(err, IsNil)
 
 	chg := s.startServices(c, []string{"usrtest"}, 1)
@@ -529,10 +537,9 @@ services:
 	c.Assert(chg.Err(), IsNil)
 	s.st.Unlock()
 
-	s.waitUntilService(c, "usrtest", func(service *servstate.ServiceInfo) bool {
-		return service.Current == servstate.StatusBackoff
-	})
-	s.assertLog(c, ".*"+current.Username+"\n")
+	output, err := ioutil.ReadFile(outputPath)
+	c.Assert(err, IsNil)
+	c.Check(string(output), Equals, current.Username+"\n")
 }
 
 func (s *S) TestUserGroupFails(c *C) {
