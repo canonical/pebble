@@ -56,23 +56,44 @@ type daemonSuite struct {
 	authorized      bool
 	err             error
 	notified        []string
+	delays          []time.Duration
 	restoreBackends func()
 }
 
 var _ = check.Suite(&daemonSuite{})
 
+type fakeNotify struct {
+	d *daemonSuite
+}
+
+func (f fakeNotify) Available() bool {
+	return true
+}
+
+func (f fakeNotify) Send(state string) error {
+	f.d.notified = append(f.d.notified, state)
+	return nil
+}
+
+type fakeShutdown struct {
+	d *daemonSuite
+}
+
+func (f fakeShutdown) Reboot(delay time.Duration, msg string) error {
+	f.d.delays = append(f.d.delays, delay)
+	return nil
+}
+
 func (s *daemonSuite) SetUpTest(c *check.C) {
 	s.pebbleDir = c.MkDir()
 	s.statePath = filepath.Join(s.pebbleDir, ".pebble.state")
-	systemdSdNotify = func(notif string) error {
-		s.notified = append(s.notified, notif)
-		return nil
-	}
+	Notify = &fakeNotify{d: s}
 }
 
 func (s *daemonSuite) TearDownTest(c *check.C) {
-	systemdSdNotify = systemd.SdNotify
+	Notify = systemd.Notifier
 	s.notified = nil
+	s.delays = nil
 	s.authorized = false
 	s.err = nil
 }
@@ -665,18 +686,14 @@ func (s *daemonSuite) TestRestartSystemWiring(c *check.C) {
 	oldRebootNoticeWait := rebootNoticeWait
 	oldRebootWaitTimeout := rebootWaitTimeout
 	defer func() {
-		reboot = rebootImpl
+		Shutdown = systemd.Shutdown
 		rebootNoticeWait = oldRebootNoticeWait
 		rebootWaitTimeout = oldRebootWaitTimeout
 	}()
 	rebootWaitTimeout = 100 * time.Millisecond
 	rebootNoticeWait = 150 * time.Millisecond
 
-	var delays []time.Duration
-	reboot = func(d time.Duration) error {
-		delays = append(delays, d)
-		return nil
-	}
+	Shutdown = &fakeShutdown{d: s}
 
 	st.Lock()
 	restart.Request(st, restart.RestartSystem)
@@ -700,8 +717,8 @@ func (s *daemonSuite) TestRestartSystemWiring(c *check.C) {
 
 	c.Check(rs, check.Equals, true)
 
-	c.Check(delays, check.HasLen, 1)
-	c.Check(delays[0], check.DeepEquals, rebootWaitTimeout)
+	c.Check(s.delays, check.HasLen, 1)
+	c.Check(s.delays[0], check.DeepEquals, rebootWaitTimeout)
 
 	now := time.Now()
 
@@ -709,8 +726,8 @@ func (s *daemonSuite) TestRestartSystemWiring(c *check.C) {
 
 	c.Check(err, check.ErrorMatches, "expected reboot did not happen")
 
-	c.Check(delays, check.HasLen, 2)
-	c.Check(delays[1], check.DeepEquals, 1*time.Minute)
+	c.Check(s.delays, check.HasLen, 2)
+	c.Check(s.delays[1], check.DeepEquals, 1*time.Minute)
 
 	// we are not stopping, we wait for the reboot instead
 	c.Check(s.notified, check.DeepEquals, []string{"READY=1"})
@@ -722,32 +739,6 @@ func (s *daemonSuite) TestRestartSystemWiring(c *check.C) {
 	c.Assert(err, check.IsNil)
 	approxAt := now.Add(time.Minute)
 	c.Check(rebootAt.After(approxAt) || rebootAt.Equal(approxAt), check.Equals, true)
-}
-
-func (s *daemonSuite) TestRebootHelper(c *check.C) {
-	cmd := testutil.FakeCommand(c, "shutdown", "", true)
-	defer cmd.Restore()
-
-	tests := []struct {
-		delay    time.Duration
-		delayArg string
-	}{
-		{-1, "+0"},
-		{0, "+0"},
-		{time.Minute, "+1"},
-		{10 * time.Minute, "+10"},
-		{30 * time.Second, "+0"},
-	}
-
-	for _, t := range tests {
-		err := reboot(t.delay)
-		c.Assert(err, check.IsNil)
-		c.Check(cmd.Calls(), check.DeepEquals, [][]string{
-			{"shutdown", "-r", t.delayArg, "reboot scheduled to update the system"},
-		})
-
-		cmd.ForgetCalls()
-	}
 }
 
 func makeDaemonListeners(c *check.C, d *Daemon) {
@@ -926,10 +917,6 @@ func (s *daemonSuite) TestRestartExpectedRebootGiveUp(c *check.C) {
 }
 
 func (s *daemonSuite) TestRestartIntoSocketModeNoNewChanges(c *check.C) {
-	notifySocket := filepath.Join(c.MkDir(), "notify.socket")
-	os.Setenv("NOTIFY_SOCKET", notifySocket)
-	defer os.Setenv("NOTIFY_SOCKET", "")
-
 	restore := standby.FakeStandbyWait(5 * time.Millisecond)
 	defer restore()
 
@@ -944,9 +931,6 @@ func (s *daemonSuite) TestRestartIntoSocketModeNoNewChanges(c *check.C) {
 		time.Sleep(5 * time.Millisecond)
 	}
 
-	c.Assert(d.standbyOpinions.CanStandby(), check.Equals, false)
-	f, _ := os.Create(notifySocket)
-	f.Close()
 	c.Assert(d.standbyOpinions.CanStandby(), check.Equals, true)
 
 	select {
@@ -961,9 +945,6 @@ func (s *daemonSuite) TestRestartIntoSocketModeNoNewChanges(c *check.C) {
 }
 
 func (s *daemonSuite) TestRestartIntoSocketModePendingChanges(c *check.C) {
-	os.Setenv("NOTIFY_SOCKET", c.MkDir())
-	defer os.Setenv("NOTIFY_SOCKET", "")
-
 	restore := standby.FakeStandbyWait(5 * time.Millisecond)
 	defer restore()
 

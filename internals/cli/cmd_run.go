@@ -28,7 +28,6 @@ import (
 	"github.com/canonical/pebble/cmd"
 	"github.com/canonical/pebble/internals/daemon"
 	"github.com/canonical/pebble/internals/logger"
-	"github.com/canonical/pebble/internals/systemd"
 )
 
 var shortRunHelp = "Run the pebble environment"
@@ -114,7 +113,7 @@ func runWatchdog(d *daemon.Daemon) (*time.Ticker, error) {
 			case <-wt.C:
 				// TODO: poke the API here and only report WATCHDOG=1 if it
 				//       replies with valid data.
-				systemd.SdNotify("WATCHDOG=1")
+				daemon.Notify.Send("WATCHDOG=1")
 			case <-d.Dying():
 				return
 			}

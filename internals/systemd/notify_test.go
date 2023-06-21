@@ -44,16 +44,16 @@ func (sd *sdNotifyTestSuite) TearDownTest(c *C) {
 
 func (sd *sdNotifyTestSuite) TestSocketAvailable(c *C) {
 	socketPath := filepath.Join(c.MkDir(), "notify.socket")
-	c.Assert(systemd.SocketAvailable(), Equals, false)
+	c.Assert(systemd.Notifier.Available(), Equals, false)
 	sd.env["NOTIFY_SOCKET"] = socketPath
-	c.Assert(systemd.SocketAvailable(), Equals, false)
+	c.Assert(systemd.Notifier.Available(), Equals, false)
 	f, _ := os.Create(socketPath)
 	f.Close()
-	c.Assert(systemd.SocketAvailable(), Equals, true)
+	c.Assert(systemd.Notifier.Available(), Equals, true)
 }
 
 func (sd *sdNotifyTestSuite) TestSdNotifyMissingNotifyState(c *C) {
-	c.Check(systemd.SdNotify(""), ErrorMatches, "cannot use empty notify state")
+	c.Check(systemd.Notifier.Send(""), ErrorMatches, "cannot use empty notify state")
 }
 
 func (sd *sdNotifyTestSuite) TestSdNotifyWrongNotifySocket(c *C) {
@@ -65,7 +65,7 @@ func (sd *sdNotifyTestSuite) TestSdNotifyWrongNotifySocket(c *C) {
 		{"xxx", `cannot use \$NOTIFY_SOCKET value: "xxx"`},
 	} {
 		sd.env["NOTIFY_SOCKET"] = t.env
-		c.Check(systemd.SdNotify("something"), ErrorMatches, t.errStr)
+		c.Check(systemd.Notifier.Send("something"), ErrorMatches, t.errStr)
 	}
 }
 
@@ -91,7 +91,7 @@ func (sd *sdNotifyTestSuite) TestSdNotifyIntegration(c *C) {
 			ch <- string(buf[:n])
 		}()
 
-		err = systemd.SdNotify("something")
+		err = systemd.Notifier.Send("something")
 		c.Assert(err, IsNil)
 		c.Check(<-ch, Equals, "something")
 	}

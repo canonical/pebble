@@ -23,7 +23,6 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"os/exec"
 	"os/signal"
 	"runtime"
 	"strings"
@@ -36,7 +35,6 @@ import (
 	"github.com/gorilla/mux"
 
 	"github.com/canonical/pebble/internals/logger"
-	"github.com/canonical/pebble/internals/osutil"
 	"github.com/canonical/pebble/internals/osutil/sys"
 	"github.com/canonical/pebble/internals/overlord"
 	"github.com/canonical/pebble/internals/overlord/checkstate"
@@ -47,12 +45,39 @@ import (
 	"github.com/canonical/pebble/internals/systemd"
 )
 
+// notifySupervisor interface defines the required API for
+// sending notifications to a supervisor daemon.
+type notifySupervisor interface {
+	Available() bool
+	Send(state string) error
+}
+
+// shutdown defines the required API for reboot, poweroff
+// and halt control of the underlying system
+type shutdown interface {
+	Reboot(delay time.Duration, msg string) error
+}
+
 var (
 	ErrRestartSocket = fmt.Errorf("daemon stop requested to wait for socket activation")
 
-	systemdSdNotify = systemd.SdNotify
-	sysGetuid       = sys.Getuid
+	sysGetuid = sys.Getuid
+
+	// The following functions should be modified depending on the
+	// underlying system in use. For example, some systems may
+	// not have systemd, and will use this system manager directly.
+
+	// Notify provides a way to send a notification to a supervisor
+	// daemon, if one exists. The default implementation assumes
+	// systemd and should be replaced if not available.
+	Notify notifySupervisor = systemd.Notifier
+
+	// Shutdown provides the system specific functionality to
+	// halt, poweroff or reboot.
+	Shutdown shutdown = systemd.Shutdown
 )
+
+var shutdownMsg = "reboot scheduled to update the system"
 
 // Options holds the daemon setup required for the initialization of a new daemon.
 type Options struct {
@@ -441,7 +466,7 @@ func (ct *connTracker) trackConn(conn net.Conn, state http.ConnState) {
 }
 
 func (d *Daemon) CanStandby() bool {
-	return systemd.SocketAvailable()
+	return Notify.Available()
 }
 
 func (d *Daemon) initStandbyHandling() {
@@ -457,7 +482,7 @@ func (d *Daemon) Start() {
 		// we need to schedule and wait for a system restart
 		d.tomb.Kill(nil)
 		// avoid systemd killing us again while we wait
-		systemdSdNotify("READY=1")
+		Notify.Send("READY=1")
 		return
 	}
 	if d.overlord == nil {
@@ -504,7 +529,7 @@ func (d *Daemon) Start() {
 	}
 
 	// notify systemd that we are ready
-	systemdSdNotify("READY=1")
+	Notify.Send("READY=1")
 }
 
 // HandleRestart implements overlord.RestartBehavior.
@@ -515,7 +540,7 @@ func (d *Daemon) HandleRestart(t restart.RestartType) {
 	case restart.RestartSystem:
 		// try to schedule a fallback slow reboot already here
 		// in case we get stuck shutting down
-		if err := reboot(rebootWaitTimeout); err != nil {
+		if err := Shutdown.Reboot(rebootWaitTimeout, shutdownMsg); err != nil {
 			logger.Noticef("%s", err)
 		}
 
@@ -593,7 +618,7 @@ func (d *Daemon) Stop(sigCh chan<- os.Signal) error {
 
 	if !restartSystem {
 		// tell systemd that we are stopping
-		systemdSdNotify("STOPPING=1")
+		Notify.Send("STOPPING=1")
 	}
 
 	if restartSocket {
@@ -700,7 +725,7 @@ func (d *Daemon) doReboot(sigCh chan<- os.Signal, waitTimeout time.Duration) err
 	}
 	// ask for shutdown and wait for it to happen.
 	// if we exit, pebble will be restarted by systemd
-	if err := reboot(rebootDelay); err != nil {
+	if err := Shutdown.Reboot(rebootDelay, shutdownMsg); err != nil {
 		return err
 	}
 	// wait for reboot to happen
@@ -716,22 +741,6 @@ func (d *Daemon) doReboot(sigCh chan<- os.Signal, waitTimeout time.Duration) err
 	time.Sleep(waitTimeout)
 	return fmt.Errorf("expected reboot did not happen")
 }
-
-var shutdownMsg = "reboot scheduled to update the system"
-
-func rebootImpl(rebootDelay time.Duration) error {
-	if rebootDelay < 0 {
-		rebootDelay = 0
-	}
-	mins := int64(rebootDelay / time.Minute)
-	cmd := exec.Command("shutdown", "-r", fmt.Sprintf("+%d", mins), shutdownMsg)
-	if out, err := cmd.CombinedOutput(); err != nil {
-		return osutil.OutputErr(out, err)
-	}
-	return nil
-}
-
-var reboot = rebootImpl
 
 func (d *Daemon) Dying() <-chan struct{} {
 	return d.tomb.Dying()

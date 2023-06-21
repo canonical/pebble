@@ -23,18 +23,24 @@ import (
 	"github.com/canonical/pebble/internals/osutil"
 )
 
-var osGetenv = os.Getenv
+type notifySystemd struct{}
 
-func SocketAvailable() bool {
+var (
+	osGetenv = os.Getenv
+	Notifier = &notifySystemd{}
+)
+
+// Available determines if the systemd unit supports notifications.
+func (n notifySystemd) Available() bool {
 	notifySocket := osGetenv("NOTIFY_SOCKET")
 	return notifySocket != "" && osutil.CanStat(notifySocket)
 }
 
-// SdNotify sends the given state string notification to systemd.
+// Send the given state string notification to systemd.
 //
 // inspired by libsystemd/sd-daemon/sd-daemon.c from the systemd source
-func SdNotify(notifyState string) error {
-	if notifyState == "" {
+func (n notifySystemd) Send(state string) error {
+	if state == "" {
 		return fmt.Errorf("cannot use empty notify state")
 	}
 
@@ -56,6 +62,6 @@ func SdNotify(notifyState string) error {
 	}
 	defer conn.Close()
 
-	_, err = conn.Write([]byte(notifyState))
+	_, err = conn.Write([]byte(state))
 	return err
 }
