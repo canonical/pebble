@@ -92,9 +92,10 @@ type FakeCmd struct {
 // faking commands that need "\n" in their args (like zenity)
 // we use the following convention:
 // - generate \0 to separate args
-// - generate \0\0 to separate commands
+// - generate \0\f\n\r magic sequence to separate commands
 var scriptTpl = `#!/bin/bash
 printf "%%s" "$(basename "$0")" >> %[1]q
+
 printf '\0' >> %[1]q
 
 for arg in "$@"; do
@@ -102,7 +103,7 @@ for arg in "$@"; do
      printf '\0'  >> %[1]q
 done
 
-printf '\0' >> %[1]q
+printf '\f\n\r' >> %[1]q
 %s
 `
 
@@ -176,12 +177,11 @@ func (cmd *FakeCmd) Calls() [][]string {
 	if err != nil {
 		panic(err)
 	}
-	logContent := strings.TrimSuffix(string(raw), "\000")
+	logContent := strings.TrimSuffix(string(raw), "\000\f\n\r")
 
 	allCalls := [][]string{}
-	calls := strings.Split(logContent, "\000\000")
+	calls := strings.Split(logContent, "\000\f\n\r")
 	for _, call := range calls {
-		call = strings.TrimSuffix(call, "\000")
 		allCalls = append(allCalls, strings.Split(call, "\000"))
 	}
 	return allCalls
