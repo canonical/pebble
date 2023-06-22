@@ -60,8 +60,8 @@ func init() {
 		Summary:       shortTasksHelp,
 		Description:   longTasksHelp,
 		Builder:       func() flags.Commander { return &cmdTasks{} },
-		OptionsHelp:   merge(changeIDMixinOptDesc, timeOptionsHelp),
-		ArgumentsHelp: changeIDMixinArgDesc,
+		OptionsHelp:   merge(changeIDMixinOptionsHelp, timeOptionsHelp),
+		ArgumentsHelp: changeIDMixinArgumentsHelp,
 	})
 }
 

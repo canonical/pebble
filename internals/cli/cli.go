@@ -93,7 +93,7 @@ type CmdInfo struct {
 
 	// ArgumentsHelp (optional) contains help information about the
 	// positional arguments accepted by the command.
-	ArgumentsHelp []ArgumentHelp
+	ArgumentsHelp map[string]ArgumentHelp
 
 	// Whether to pass all arguments after the first non-option as remaining
 	// command line arguments. This is equivalent to strict POSIX processing.
@@ -237,11 +237,11 @@ func Parser(cli *client.Client) *flags.Parser {
 		if c.ArgumentsHelp != nil && len(args) != len(c.ArgumentsHelp) {
 			logger.Panicf("wrong number of argument descriptions for %s: expected %d, got %d", c.Name, len(args), len(c.ArgumentsHelp))
 		}
-		for i, arg := range args {
+		for _, arg := range args {
 			name, desc := arg.Name, ""
 			if c.ArgumentsHelp != nil {
-				name = c.ArgumentsHelp[i].Placeholder
-				desc = c.ArgumentsHelp[i].Help
+				name = c.ArgumentsHelp[name].Placeholder
+				desc = c.ArgumentsHelp[name].Help
 			}
 			lintArg(c.Name, name, desc, arg.Description)
 			name = fixupArg(name)
@@ -288,11 +288,11 @@ func Parser(cli *client.Client) *flags.Parser {
 		if c.ArgumentsHelp != nil && len(args) != len(c.ArgumentsHelp) {
 			logger.Panicf("wrong number of argument descriptions for %s: expected %d, got %d", c.Name, len(args), len(c.ArgumentsHelp))
 		}
-		for i, arg := range args {
+		for _, arg := range args {
 			name, desc := arg.Name, ""
 			if c.ArgumentsHelp != nil {
-				name = c.ArgumentsHelp[i].Placeholder
-				desc = c.ArgumentsHelp[i].Help
+				name = c.ArgumentsHelp[name].Placeholder
+				desc = c.ArgumentsHelp[name].Help
 			}
 			lintArg(c.Name, name, desc, arg.Description)
 			name = fixupArg(name)

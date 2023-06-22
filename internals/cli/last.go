@@ -29,14 +29,16 @@ type changeIDMixin struct {
 	} `positional-args:"yes"`
 }
 
-var changeIDMixinOptDesc = map[string]string{
+var changeIDMixinOptionsHelp = map[string]string{
 	"last": "Select last change of given type (install, refresh, remove, try, auto-refresh, etc.). A question mark at the end of the type means to do nothing (instead of returning an error) if no change of the given type is found. Note the question mark could need protecting from the shell.",
 }
 
-var changeIDMixinArgDesc = []ArgumentHelp{{
-	Placeholder: "<change-id>",
-	Help:        "Change ID",
-}}
+var changeIDMixinArgumentsHelp = map[string]ArgumentHelp{
+	"<id>": ArgumentHelp{
+		Placeholder: "<change-id>",
+		Help:        "Change ID",
+	},
+}
 
 // should not be user-visible, but keep it clear and polite because mistakes happen
 var noChangeFoundOK = errors.New("no change found but that's ok")
