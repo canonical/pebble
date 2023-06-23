@@ -180,7 +180,7 @@ func Parser(cli *client.Client) *flags.Parser {
 	}
 	flagopts := flags.Options(flags.PassDoubleDash)
 	parser := flags.NewParser(&optionsData, flagopts)
-	parser.ShortDescription = fmt.Sprintf("Tool to interact with %s", cmd.Personality.DisplayName)
+	parser.ShortDescription = "System and service manager"
 	parser.LongDescription = longPebbleDescription()
 	// hide the unhelpful "[OPTIONS]" from help output
 	parser.Usage = ""

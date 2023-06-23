@@ -11,10 +11,10 @@ import (
 
 const shortEnterHelp = "Run subcommand under a container environment"
 const longEnterHelp = `
-The enter command facilitates the use of the daemon as an entrypoint for containers.
-When used without a subcommand it mimics the behavior of the run command
-alone, while if used with a subcommand it runs that subcommand in the most
-appropriate environment taking into account its purpose.
+The enter command facilitates the use of the service manager as an entrypoint
+for containers. When used without a subcommand it mimics the behavior of the
+run command alone, while if used with a subcommand it runs that subcommand in
+the most appropriate environment taking into account its purpose.
 
 These subcommands are currently supported:
 
@@ -84,37 +84,37 @@ func commandEnterFlags(commander flags.Commander) (enterFlags enterFlags, suppor
 	return
 }
 
-func (rcmd *cmdEnter) Execute(args []string) error {
+func (c *cmdEnter) Execute(args []string) error {
 	if len(args) > 0 {
 		return ErrExtraArgs
 	}
 
 	runCmd := cmdRun{
-		sharedRunEnterOpts: rcmd.sharedRunEnterOpts,
+		sharedRunEnterOpts: c.sharedRunEnterOpts,
 	}
-	runCmd.setClient(rcmd.client)
+	runCmd.setClient(c.client)
 
-	if len(rcmd.Positional.Cmd) == 0 {
+	if len(c.Positional.Cmd) == 0 {
 		runCmd.run(nil)
 		return nil
 	}
 
-	runCmd.Hold = !rcmd.Run
+	runCmd.Hold = !c.Run
 
 	var (
 		commander flags.Commander
 		extraArgs []string
 	)
 
-	parser := Parser(rcmd.client)
+	parser := Parser(c.client)
 	parser.CommandHandler = func(c flags.Commander, a []string) error {
 		commander = c
 		extraArgs = a
 		return nil
 	}
 
-	if _, err := parser.ParseArgs(rcmd.Positional.Cmd); err != nil {
-		rcmd.parser.Command.Active = parser.Command.Active
+	if _, err := parser.ParseArgs(c.Positional.Cmd); err != nil {
+		c.parser.Command.Active = parser.Command.Active
 		return err
 	}
 
@@ -128,23 +128,23 @@ func (rcmd *cmdEnter) Execute(args []string) error {
 		return fmt.Errorf("enter: subcommand %q is not supported", parser.Active.Name)
 	}
 
-	if enterFlags&enterRequireServiceAutostart != 0 && !rcmd.Run {
+	if enterFlags&enterRequireServiceAutostart != 0 && !c.Run {
 		return fmt.Errorf("enter: must use --run before %q subcommand", parser.Active.Name)
 	}
 
-	if enterFlags&(enterProhibitServiceAutostart|enterNoServiceManager) != 0 && rcmd.Run {
+	if enterFlags&(enterProhibitServiceAutostart|enterNoServiceManager) != 0 && c.Run {
 		return fmt.Errorf("enter: cannot provide --run before %q subcommand", parser.Active.Name)
 	}
 
 	if enterFlags&enterNoServiceManager != 0 {
 		if err := commander.Execute(extraArgs); err != nil {
-			rcmd.parser.Command.Active = parser.Command.Active
+			c.parser.Command.Active = parser.Command.Active
 			return err
 		}
 		return nil
 	}
 
-	if enterFlags&enterSilenceLogging != 0 && !rcmd.Verbose {
+	if enterFlags&enterSilenceLogging != 0 && !c.Verbose {
 		logger.SetLogger(logger.NullLogger)
 	}
 
@@ -169,7 +169,7 @@ func (rcmd *cmdEnter) Execute(args []string) error {
 	err := commander.Execute(extraArgs)
 
 	if err != nil {
-		rcmd.parser.Command.Active = parser.Command.Active
+		c.parser.Command.Active = parser.Command.Active
 	}
 
 	if err != nil || enterFlags&enterKeepServiceManager == 0 {

@@ -102,12 +102,13 @@ type manfixer struct {
 func (w *manfixer) Write(buf []byte) (int, error) {
 	if !w.done {
 		w.done = true
-		if bytes.HasPrefix(buf, []byte(fmt.Sprintf(".TH %s 1 ", cmd.Personality.ProgramName))) {
-			// io.Writer.Write must not modify the buffer, even temporarily
-			n, _ := w.Buffer.Write(buf[:5+len(cmd.Personality.ProgramName)])
-			w.Buffer.Write([]byte{'8'})
-			m, err := w.Buffer.Write(buf[6+len(cmd.Personality.ProgramName):])
-			return n + m + 1, err
+		if bytes.HasPrefix(buf, []byte(".TH")) {
+			// buf is of the form:
+			//   .TH pebble 1 "4 July 2023"
+			// We want to locate the `1` byte and substitute it by `8`
+			if i := bytes.Index(buf, []byte("1")); i != -1 {
+				buf[i] = '8'
+			}
 		}
 	}
 	return w.Buffer.Write(buf)
@@ -168,7 +169,7 @@ type helpCategory struct {
 // helpCategories helps us by grouping commands
 var helpCategories = []helpCategory{{
 	Label:       "Run",
-	Description: "run the daemon",
+	Description: "run the service manager",
 	Commands:    []string{"run", "help", "version"},
 }, {
 	Label:       "Plan",
