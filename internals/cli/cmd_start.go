@@ -20,12 +20,6 @@ import (
 	"github.com/canonical/pebble/client"
 )
 
-var shortStartHelp = "Start a service and its dependencies"
-var longStartHelp = `
-The start command starts the service with the provided name and
-any other services it depends on, in the correct order.
-`
-
 type cmdStart struct {
 	waitMixin
 	Positional struct {
@@ -35,11 +29,14 @@ type cmdStart struct {
 
 func init() {
 	AddCommand(&CmdInfo{
-		Name:        "start",
-		Summary:     shortStartHelp,
-		Description: longStartHelp,
-		Builder:     func() flags.Commander { return &cmdStart{} },
-		OptionsHelp: waitOptionsHelp,
+		Name:    "start",
+		Summary: "Start a service and its dependencies",
+		Description: `
+The start command starts the service with the provided name and
+any other services it depends on, in the correct order.
+`,
+		ArgsHelp: waitArgsHelp,
+		Builder:  func() flags.Commander { return &cmdStart{} },
 	})
 }
 

@@ -39,19 +39,24 @@ type cmdMkdir struct {
 	} `positional-args:"yes" required:"yes"`
 }
 
-var mkdirOptionsHelp = map[string]string{
-	"p":     "Create parent directories as needed",
-	"m":     "Set permissions (e.g. 0644)",
-	"uid":   "Use specified user ID",
-	"user":  "Use specified username",
-	"gid":   "Use specified group ID",
-	"group": "Use specified group name",
-}
-
-var shortMkdirHelp = "Create a directory"
-var longMkdirHelp = `
+func init() {
+	AddCommand(&CmdInfo{
+		Name:    "mkdir",
+		Summary: "Create a directory",
+		Description: `
 The mkdir command creates the specified directory.
-`
+`,
+		Builder: func() flags.Commander { return &cmdMkdir{} },
+		ArgsHelp: map[string]string{
+			"-p":      "Create parent directories as needed",
+			"-m":      "Set permissions (e.g. 0644)",
+			"--uid":   "Use specified user ID",
+			"--user":  "Use specified username",
+			"--gid":   "Use specified group ID",
+			"--group": "Use specified group name",
+		},
+	})
+}
 
 func (cmd *cmdMkdir) Execute(args []string) error {
 	if len(args) > 0 {
@@ -76,14 +81,4 @@ func (cmd *cmdMkdir) Execute(args []string) error {
 	}
 
 	return cmd.client.MakeDir(&opts)
-}
-
-func init() {
-	AddCommand(&CmdInfo{
-		Name:        "mkdir",
-		Summary:     shortMkdirHelp,
-		Description: longMkdirHelp,
-		Builder:     func() flags.Commander { return &cmdMkdir{} },
-		OptionsHelp: mkdirOptionsHelp,
-	})
 }

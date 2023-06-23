@@ -18,7 +18,6 @@ import (
 	"fmt"
 
 	"github.com/canonical/go-flags"
-
 	"github.com/canonical/pebble/client"
 )
 
@@ -30,16 +29,21 @@ type cmdChecks struct {
 	} `positional-args:"yes"`
 }
 
-var checksOptionsHelp = map[string]string{
-	"level": `Check level to filter for ("alive" or "ready")`,
-}
-
-var shortChecksHelp = "Query the status of configured health checks"
-var longChecksHelp = `
+func init() {
+	AddCommand(&CmdInfo{
+		Name:    "checks",
+		Summary: "Query the status of configured health checks",
+		Description: `
 The checks command lists status information about the configured health
 checks, optionally filtered by level and check names provided as positional
 arguments.
-`
+`,
+		ArgsHelp: map[string]string{
+			"--level": `Check level to filter for ("alive" or "ready")`,
+		},
+		Builder: func() flags.Commander { return &cmdChecks{} },
+	})
+}
 
 func (cmd *cmdChecks) Execute(args []string) error {
 	if len(args) > 0 {
@@ -76,14 +80,4 @@ func (cmd *cmdChecks) Execute(args []string) error {
 		fmt.Fprintf(w, "%s\t%s\t%s\t%d/%d\n", check.Name, level, check.Status, check.Failures, check.Threshold)
 	}
 	return nil
-}
-
-func init() {
-	AddCommand(&CmdInfo{
-		Name:        "checks",
-		Summary:     shortChecksHelp,
-		Description: longChecksHelp,
-		Builder:     func() flags.Commander { return &cmdChecks{} },
-		OptionsHelp: checksOptionsHelp,
-	})
 }

@@ -49,10 +49,6 @@ var (
 // the pebble client.
 const defaultPebbleDir = "/var/lib/pebble/default"
 
-type options struct {
-	Version func() `long:"version"`
-}
-
 // ArgumentHelp contains help information about the positional arguments accepted
 // by a command.
 type ArgumentHelp struct {
@@ -61,8 +57,6 @@ type ArgumentHelp struct {
 	// Help provides information on how to use the argument.
 	Help string
 }
-
-var optionsData options
 
 // ErrExtraArgs is returned  if extra arguments to a command are found
 var ErrExtraArgs = fmt.Errorf("too many arguments for command")
@@ -86,14 +80,15 @@ type CmdInfo struct {
 	// struct containing an Execute(args []string) implementation.
 	Builder func() flags.Commander
 
-	// OptionsHelp (optional) maps long option names (e.g. "foo" for --foo),
-	// to the help strings that will be shown in the command's manual
-	// besides every option.
-	OptionsHelp map[string]string
-
-	// ArgumentsHelp (optional) contains help information about the
-	// positional arguments accepted by the command.
-	ArgumentsHelp map[string]ArgumentHelp
+	// ArgsHelp (optional) contains help about the command-line arguments
+	// (including options) supported by the command.
+	//
+	//  map[string]string{
+	//	    "--long-option": "my very long option",
+	//      "-v": "verbose output",
+	//      "<change-id>": "named positional argument"
+	//  }
+	ArgsHelp map[string]string
 
 	// Whether to pass all arguments after the first non-option as remaining
 	// command line arguments. This is equivalent to strict POSIX processing.
@@ -103,24 +98,10 @@ type CmdInfo struct {
 // commands holds information about all non-debug commands.
 var commands []*CmdInfo
 
-// debugCommands holds information about all debug commands.
-var debugCommands []*CmdInfo
-
 // AddCommand replaces parser.addCommand() in a way that is compatible with
 // re-constructing a pristine parser.
 func AddCommand(info *CmdInfo) {
 	commands = append(commands, info)
-}
-
-// addDebugCommand replaces parser.addCommand() in a way that is
-// compatible with re-constructing a pristine parser. It is meant for
-// adding debug commands.
-func addDebugCommand(info *CmdInfo) {
-	debugCommands = append(debugCommands, info)
-}
-
-type parserSetter interface {
-	setParser(*flags.Parser)
 }
 
 func lintDesc(cmdName, optName, desc, origDesc string) {
@@ -165,37 +146,50 @@ func fixupArg(optName string) string {
 	return optName
 }
 
-type clientSetter interface {
-	setClient(*client.Client)
-}
-
 type clientMixin struct {
 	client *client.Client
+}
+
+type clientSetter interface {
+	setClient(*client.Client)
 }
 
 func (ch *clientMixin) setClient(cli *client.Client) {
 	ch.client = cli
 }
 
+type parserSetter interface {
+	setParser(*flags.Parser)
+}
+
+type options struct {
+	Version func() `long:"version"`
+}
+
 // Parser creates and populates a fresh parser.
 // Since commands have local state a fresh parser is required to isolate tests
 // from each other.
 func Parser(cli *client.Client) *flags.Parser {
-	optionsData.Version = func() {
-		printVersions(cli)
-		panic(&exitStatus{0})
+	// Implement --version by default on every command
+	defaultOptions := options{
+		Version: func() {
+			printVersions(cli)
+			panic(&exitStatus{0})
+		},
 	}
-	flagopts := flags.Options(flags.PassDoubleDash)
-	parser := flags.NewParser(&optionsData, flagopts)
+
+	flagOpts := flags.Options(flags.PassDoubleDash)
+	parser := flags.NewParser(&defaultOptions, flagOpts)
 	parser.ShortDescription = "Tool to interact with pebble"
 	parser.LongDescription = longPebbleDescription
-	// hide the unhelpful "[OPTIONS]" from help output
-	parser.Usage = ""
+
+	// Hide the global --version option on every command
 	if version := parser.FindOptionByLongName("version"); version != nil {
 		version.Description = "Print the version and exit"
 		version.Hidden = true
 	}
-	// add --help like what go-flags would do for us, but hidden
+
+	// Add --help like what go-flags would do for us, but hidden
 	addHelp(parser)
 
 	// Add all regular commands
@@ -214,92 +208,57 @@ func Parser(cli *client.Client) *flags.Parser {
 		}
 		cmd.PassAfterNonOption = c.PassAfterNonOption
 
-		opts := cmd.Options()
-		if c.OptionsHelp != nil && len(opts) != len(c.OptionsHelp) {
-			logger.Panicf("wrong number of option descriptions for %s: expected %d, got %d", c.Name, len(opts), len(c.OptionsHelp))
-		}
-		for _, opt := range opts {
-			name := opt.LongName
-			if name == "" {
-				name = string(opt.ShortName)
-			}
-			desc, ok := c.OptionsHelp[name]
-			if !(c.OptionsHelp == nil || ok) {
-				logger.Panicf("%s missing description for %s", c.Name, name)
-			}
-			lintDesc(c.Name, name, desc, opt.Description)
-			if desc != "" {
-				opt.Description = desc
+		optionsHelp := map[string]string{}
+		positionalArgsHelp := map[string]string{}
+
+		for specifier, help := range c.ArgsHelp {
+			if strings.HasPrefix(specifier, "--") {
+				optionsHelp[specifier] = help
+			} else if utf8.RuneCountInString(specifier) == 2 && strings.HasPrefix(specifier, "-") {
+				optionsHelp[specifier] = help
+			} else if strings.HasPrefix(specifier, "<") && strings.HasSuffix(specifier, ">") {
+				positionalArgsHelp[specifier] = help
+			} else {
+				logger.Panicf("invalid help specifier: %#v %#v", c.Name, strings.HasPrefix(specifier, "-"))
 			}
 		}
 
-		args := cmd.Args()
-		if c.ArgumentsHelp != nil && len(args) != len(c.ArgumentsHelp) {
-			logger.Panicf("wrong number of argument descriptions for %s: expected %d, got %d", c.Name, len(args), len(c.ArgumentsHelp))
-		}
-		for _, arg := range args {
-			name, desc := arg.Name, ""
-			if c.ArgumentsHelp != nil {
-				name = c.ArgumentsHelp[name].Placeholder
-				desc = c.ArgumentsHelp[name].Help
-			}
-			lintArg(c.Name, name, desc, arg.Description)
-			name = fixupArg(name)
-			arg.Name = name
-			arg.Description = desc
-		}
-	}
-	// Add the debug command
-	debugCommand, err := parser.AddCommand("debug", shortDebugHelp, longDebugHelp, &cmdDebug{})
-	debugCommand.Hidden = true
-	if err != nil {
-		logger.Panicf("cannot add command %q: %v", "debug", err)
-	}
-	// Add all the sub-commands of the debug command
-	for _, c := range debugCommands {
-		obj := c.Builder()
-		if x, ok := obj.(clientSetter); ok {
-			x.setClient(cli)
-		}
-		cmd, err := debugCommand.AddCommand(c.Name, c.Summary, strings.TrimSpace(c.Description), obj)
-		if err != nil {
-			logger.Panicf("cannot add debug command %q: %v", c.Name, err)
-		}
+		hasAnyOptionHelp := len(optionsHelp) > 0
+		hasAnyPositionalHelp := len(positionalArgsHelp) > 0
+
+		// Check either all or none opts/positional argument descriptions are set
 		opts := cmd.Options()
-		if c.OptionsHelp != nil && len(opts) != len(c.OptionsHelp) {
-			logger.Panicf("wrong number of option descriptions for %s: expected %d, got %d", c.Name, len(opts), len(c.OptionsHelp))
+		if hasAnyOptionHelp && len(opts) != len(optionsHelp) {
+			logger.Panicf("wrong number of option descriptions for %s: expected %d, got %d", c.Name, len(opts), len(optionsHelp))
 		}
+		args := cmd.Args()
+		if hasAnyPositionalHelp && len(args) != len(positionalArgsHelp) {
+			logger.Panicf("wrong number of argument descriptions for %s: expected %d, got %d", c.Name, len(args), len(positionalArgsHelp))
+		}
+
 		for _, opt := range opts {
-			name := opt.LongName
-			if name == "" {
-				name = string(opt.ShortName)
-			}
-			desc, ok := c.OptionsHelp[name]
-			if !(c.OptionsHelp == nil || ok) {
-				logger.Panicf("%s missing description for %s", c.Name, name)
-			}
-			lintDesc(c.Name, name, desc, opt.Description)
-			if desc != "" {
-				opt.Description = desc
+			if description, ok := optionsHelp["--"+opt.LongName]; ok {
+				lintDesc(c.Name, opt.LongName, description, opt.Description)
+				opt.Description = description
+			} else if description, ok := optionsHelp["-"+string(opt.ShortName)]; ok {
+				lintDesc(c.Name, string(opt.ShortName), description, opt.Description)
+				opt.Description = description
+			} else if hasAnyOptionHelp {
+				logger.Panicf("%s missing description for %s", c.Name, opt)
 			}
 		}
 
-		args := cmd.Args()
-		if c.ArgumentsHelp != nil && len(args) != len(c.ArgumentsHelp) {
-			logger.Panicf("wrong number of argument descriptions for %s: expected %d, got %d", c.Name, len(args), len(c.ArgumentsHelp))
-		}
 		for _, arg := range args {
-			name, desc := arg.Name, ""
-			if c.ArgumentsHelp != nil {
-				name = c.ArgumentsHelp[name].Placeholder
-				desc = c.ArgumentsHelp[name].Help
+			if description, ok := positionalArgsHelp[arg.Name]; ok {
+				lintArg(c.Name, arg.Name, description, arg.Description)
+				arg.Name = fixupArg(arg.Name)
+				arg.Description = description
+			} else if hasAnyPositionalHelp {
+				logger.Panicf("%s missing description for %s", c.Name, arg.Name)
 			}
-			lintArg(c.Name, name, desc, arg.Description)
-			name = fixupArg(name)
-			arg.Name = name
-			arg.Description = desc
 		}
 	}
+
 	return parser
 }
 

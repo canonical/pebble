@@ -38,16 +38,21 @@ type cmdLs struct {
 	} `positional-args:"yes" required:"yes"`
 }
 
-var lsOptionsHelp = map[string]string{
-	"d": `List matching entries themselves, not directory contents`,
-	"l": `Use a long listing format`,
-}
-
-var shortLsHelp = "List path contents"
-var longLsHelp = `
+func init() {
+	AddCommand(&CmdInfo{
+		Name:    "ls",
+		Summary: "List path contents",
+		Description: `
 The ls command lists entries in the filesystem at the specified path. A glob pattern
 may be specified for the last path element.
-`
+`,
+		ArgsHelp: merge(timeArgsHelp, map[string]string{
+			"-d": "List matching entries themselves, not directory contents",
+			"-l": "Use a long listing format",
+		}),
+		Builder: func() flags.Commander { return &cmdLs{} },
+	})
+}
 
 func (cmd *cmdLs) Execute(args []string) error {
 	if len(args) > 0 {
@@ -100,14 +105,4 @@ func parseGlob(path string) (parsedPath, parsedPattern string, err error) {
 	}
 
 	return path, "", nil
-}
-
-func init() {
-	AddCommand(&CmdInfo{
-		Name:        "ls",
-		Summary:     shortLsHelp,
-		Description: longLsHelp,
-		Builder:     func() flags.Commander { return &cmdLs{} },
-		OptionsHelp: merge(lsOptionsHelp, timeOptionsHelp),
-	})
 }

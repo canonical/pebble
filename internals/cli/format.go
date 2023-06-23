@@ -111,13 +111,8 @@ func colorTable(mode string) escapes {
 	return color
 }
 
-var colorOptionsHelp = map[string]string{
-	"color":   "Use a little bit of color to highlight some things.",
-	"unicode": unicodeOptionsHelp["unicode"],
-}
-
-var unicodeOptionsHelp = map[string]string{
-	"unicode": "Use a little bit of Unicode to improve legibility.",
+var unicodeArgsHelp = map[string]string{
+	"--unicode": "Use a little bit of Unicode to improve legibility.",
 }
 
 func merge(maps ...map[string]string) map[string]string {

@@ -29,8 +29,8 @@ type timeMixin struct {
 	AbsTime bool `long:"abs-time"`
 }
 
-var timeOptionsHelp = map[string]string{
-	"abs-time": "Display absolute times (in RFC 3339 format). Otherwise, display relative times up to 60 days, then YYYY-MM-DD.",
+var timeArgsHelp = map[string]string{
+	"--abs-time": "Display absolute times (in RFC 3339 format). Otherwise, display relative times up to 60 days, then YYYY-MM-DD.",
 }
 
 func (mx timeMixin) fmtTime(t time.Time) string {

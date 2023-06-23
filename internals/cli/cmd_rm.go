@@ -16,28 +16,30 @@ package cli
 
 import (
 	"github.com/canonical/go-flags"
-
 	"github.com/canonical/pebble/client"
 )
 
 type cmdRm struct {
 	clientMixin
-
-	Recursive bool `short:"r"`
-
+	Recursive  bool `short:"r"`
 	Positional struct {
 		Path string `positional-arg-name:"<path>"`
 	} `positional-args:"yes" required:"yes"`
 }
 
-var rmOptionsHelp = map[string]string{
-	"r": "Remove all files and directories recursively in the specified path",
-}
-
-var shortRmHelp = "Remove a file or directory."
-var longRmHelp = `
+func init() {
+	AddCommand(&CmdInfo{
+		Name:    "rm",
+		Summary: "Remove a file or directory",
+		Description: `
 The rm command removes a file or directory.
-`
+`,
+		ArgsHelp: map[string]string{
+			"-r": "Remove all files and directories recursively in the specified path",
+		},
+		Builder: func() flags.Commander { return &cmdRm{} },
+	})
+}
 
 func (cmd *cmdRm) Execute(args []string) error {
 	if len(args) > 0 {
@@ -47,15 +49,5 @@ func (cmd *cmdRm) Execute(args []string) error {
 	return cmd.client.RemovePath(&client.RemovePathOptions{
 		Path:      cmd.Positional.Path,
 		Recursive: cmd.Recursive,
-	})
-}
-
-func init() {
-	AddCommand(&CmdInfo{
-		Name:        "rm",
-		Summary:     shortRmHelp,
-		Description: longRmHelp,
-		Builder:     func() flags.Commander { return &cmdRm{} },
-		OptionsHelp: rmOptionsHelp,
 	})
 }

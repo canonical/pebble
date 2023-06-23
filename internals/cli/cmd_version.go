@@ -20,30 +20,25 @@ import (
 	"github.com/canonical/go-flags"
 
 	"github.com/canonical/pebble/client"
-	cmdpkg "github.com/canonical/pebble/cmd"
+	version "github.com/canonical/pebble/cmd"
 )
-
-var shortVersionHelp = "Show version details"
-var longVersionHelp = `
-The version command displays the versions of the running client and server.
-`
 
 type cmdVersion struct {
 	clientMixin
 	ClientOnly bool `long:"client"`
 }
 
-var versionOptionsHelp = map[string]string{
-	"client": `Only display the client version`,
-}
-
 func init() {
 	AddCommand(&CmdInfo{
-		Name:        "version",
-		Summary:     shortVersionHelp,
-		Description: longVersionHelp,
-		Builder:     func() flags.Commander { return &cmdVersion{} },
-		OptionsHelp: versionOptionsHelp,
+		Name:    "version",
+		Summary: "Show version details",
+		Description: `
+The version command displays the versions of the running client and server.
+`,
+		ArgsHelp: map[string]string{
+			"--client": "Only display the client version",
+		},
+		Builder: func() flags.Commander { return &cmdVersion{} },
 	})
 }
 
@@ -53,7 +48,7 @@ func (cmd cmdVersion) Execute(args []string) error {
 	}
 
 	if cmd.ClientOnly {
-		fmt.Fprintln(Stdout, cmdpkg.Version)
+		fmt.Fprintln(Stdout, version.Version)
 		return nil
 	}
 
@@ -67,7 +62,7 @@ func printVersions(cli *client.Client) error {
 		serverVersion = sysInfo.Version
 	}
 	w := tabWriter()
-	fmt.Fprintf(w, "client\t%s\n", cmdpkg.Version)
+	fmt.Fprintf(w, "client\t%s\n", version.Version)
 	fmt.Fprintf(w, "server\t%s\n", serverVersion)
 	w.Flush()
 	return nil

@@ -20,23 +20,20 @@ import (
 	"github.com/canonical/pebble/client"
 )
 
-var shortAutoStartHelp = "Start services set to start by default"
-var longAutoStartHelp = `
-The autostart command starts the services that were configured
-to start by default.
-`
-
 type cmdAutoStart struct {
 	waitMixin
 }
 
 func init() {
 	AddCommand(&CmdInfo{
-		Name:        "autostart",
-		Summary:     shortAutoStartHelp,
-		Description: longAutoStartHelp,
-		Builder:     func() flags.Commander { return &cmdAutoStart{} },
-		OptionsHelp: waitOptionsHelp,
+		Name:    "autostart",
+		Summary: "Start services set to start by default",
+		Description: `
+The autostart command starts the services that were configured
+to start by default.
+`,
+		ArgsHelp: waitArgsHelp,
+		Builder:  func() flags.Commander { return &cmdAutoStart{} },
 	})
 }
 

@@ -16,14 +16,8 @@ package cli
 
 import (
 	"github.com/canonical/go-flags"
-
 	"github.com/canonical/pebble/client"
 )
-
-var shortRestartHelp = "Restart a service"
-var longRestartHelp = `
-The restart command restarts the named service(s) in the correct order.
-`
 
 type cmdRestart struct {
 	waitMixin
@@ -34,11 +28,13 @@ type cmdRestart struct {
 
 func init() {
 	AddCommand(&CmdInfo{
-		Name:        "restart",
-		Summary:     shortRestartHelp,
-		Description: longRestartHelp,
-		Builder:     func() flags.Commander { return &cmdRestart{} },
-		OptionsHelp: waitOptionsHelp,
+		Name:    "restart",
+		Summary: "Restart a service",
+		Description: `
+The restart command restarts the named service(s) in the correct order.
+`,
+		ArgsHelp: waitArgsHelp,
+		Builder:  func() flags.Commander { return &cmdRestart{} },
 	})
 }
 

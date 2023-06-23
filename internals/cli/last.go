@@ -25,35 +25,29 @@ type changeIDMixin struct {
 	clientMixin
 	LastChangeType string `long:"last"`
 	Positional     struct {
-		ID string `positional-arg-name:"<id>"`
+		ChangeID string `positional-arg-name:"<change-id>"`
 	} `positional-args:"yes"`
 }
 
-var changeIDMixinOptionsHelp = map[string]string{
-	"last": "Select last change of given type (install, refresh, remove, try, auto-refresh, etc.). A question mark at the end of the type means to do nothing (instead of returning an error) if no change of the given type is found. Note the question mark could need protecting from the shell.",
-}
-
-var changeIDMixinArgumentsHelp = map[string]ArgumentHelp{
-	"<id>": ArgumentHelp{
-		Placeholder: "<change-id>",
-		Help:        "Change ID",
-	},
+var changeIDMixinArgsHelp = map[string]string{
+	"<change-id>": "Change ID",
+	"--last":      "Select last change of given type (install, refresh, remove, try, auto-refresh, etc.). A question mark at the end of the type means to do nothing (instead of returning an error) if no change of the given type is found. Note the question mark could need protecting from the shell.",
 }
 
 // should not be user-visible, but keep it clear and polite because mistakes happen
 var noChangeFoundOK = errors.New("no change found but that's ok")
 
 func (l *changeIDMixin) GetChangeID() (string, error) {
-	if l.Positional.ID == "" && l.LastChangeType == "" {
+	if l.Positional.ChangeID == "" && l.LastChangeType == "" {
 		return "", fmt.Errorf("please provide change ID or type with --last=<type>")
 	}
 
-	if l.Positional.ID != "" {
+	if l.Positional.ChangeID != "" {
 		if l.LastChangeType != "" {
 			return "", fmt.Errorf("cannot use change ID and type together")
 		}
 
-		return string(l.Positional.ID), nil
+		return string(l.Positional.ChangeID), nil
 	}
 
 	cli := l.client

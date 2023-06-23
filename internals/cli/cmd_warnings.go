@@ -41,8 +41,11 @@ type cmdWarnings struct {
 
 type cmdOkay struct{ clientMixin }
 
-var shortWarningsHelp = "List warnings"
-var longWarningsHelp = `
+func init() {
+	AddCommand(&CmdInfo{
+		Name:    "warnings",
+		Summary: "List warnings",
+		Description: `
 The warnings command lists the warnings that have been reported to the system.
 
 Once warnings have been listed with 'pebble warnings', 'pebble okay' may be used to
@@ -50,32 +53,23 @@ silence them. A warning that's been silenced in this way will not be listed
 again unless it happens again, _and_ a cooldown time has passed.
 
 Warnings expire automatically, and once expired they are forgotten.
-`
-
-var shortOkayHelp = "Acknowledge warnings"
-var longOkayHelp = `
+`,
+		ArgsHelp: merge(timeArgsHelp, unicodeArgsHelp, map[string]string{
+			"--all":     "Show all warnings",
+			"--verbose": "Show more information",
+		}),
+		Builder: func() flags.Commander { return &cmdWarnings{} },
+	})
+	AddCommand(&CmdInfo{
+		Name:    "okay",
+		Summary: "Acknowledge warnings",
+		Description: `
 The okay command acknowledges the warnings listed with 'pebble warnings'.
 
 Once acknowledged, a warning won't appear again unless it reoccurs and
 sufficient time has passed.
-`
-
-func init() {
-	AddCommand(&CmdInfo{
-		Name:        "warnings",
-		Summary:     shortWarningsHelp,
-		Description: longWarningsHelp,
-		Builder:     func() flags.Commander { return &cmdWarnings{} },
-		OptionsHelp: merge(timeOptionsHelp, unicodeOptionsHelp, map[string]string{
-			"all":     "Show all warnings",
-			"verbose": "Show more information",
-		}),
-	})
-	AddCommand(&CmdInfo{
-		Name:        "okay",
-		Summary:     shortOkayHelp,
-		Description: longOkayHelp,
-		Builder:     func() flags.Commander { return &cmdOkay{} },
+`,
+		Builder: func() flags.Commander { return &cmdOkay{} },
 	})
 }
 

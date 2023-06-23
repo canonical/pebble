@@ -18,7 +18,6 @@ import (
 	"fmt"
 
 	"github.com/canonical/go-flags"
-
 	"github.com/canonical/pebble/client"
 )
 
@@ -30,11 +29,18 @@ type cmdServices struct {
 	} `positional-args:"yes"`
 }
 
-var shortServicesHelp = "Query the status of configured services"
-var longServicesHelp = `
+func init() {
+	AddCommand(&CmdInfo{
+		Name:    "services",
+		Summary: "Query the status of configured services",
+		Description: `
 The services command lists status information about the services specified, or
 about all services if none are specified.
-`
+`,
+		ArgsHelp: timeArgsHelp,
+		Builder:  func() flags.Commander { return &cmdServices{} },
+	})
+}
 
 func (cmd *cmdServices) Execute(args []string) error {
 	if len(args) > 0 {
@@ -70,14 +76,4 @@ func (cmd *cmdServices) Execute(args []string) error {
 		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", svc.Name, svc.Startup, svc.Current, since)
 	}
 	return nil
-}
-
-func init() {
-	AddCommand(&CmdInfo{
-		Name:        "services",
-		Summary:     shortServicesHelp,
-		Description: longServicesHelp,
-		Builder:     func() flags.Commander { return &cmdServices{} },
-		OptionsHelp: timeOptionsHelp,
-	})
 }

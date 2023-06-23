@@ -24,16 +24,6 @@ import (
 	"github.com/canonical/pebble/client"
 )
 
-var shortChangesHelp = "List system changes"
-var shortTasksHelp = "List a change's tasks"
-var longChangesHelp = `
-The changes command displays a summary of system changes performed recently.
-`
-var longTasksHelp = `
-The tasks command displays a summary of tasks associated with an individual
-change that happened recently.
-`
-
 type cmdChanges struct {
 	clientMixin
 	timeMixin
@@ -49,19 +39,23 @@ type cmdTasks struct {
 
 func init() {
 	AddCommand(&CmdInfo{
-		Name:        "changes",
-		Summary:     shortChangesHelp,
-		Description: longChangesHelp,
-		Builder:     func() flags.Commander { return &cmdChanges{} },
-		OptionsHelp: timeOptionsHelp,
+		Name:    "changes",
+		Summary: "List system changes",
+		Description: `
+The changes command displays a summary of system changes performed recently.
+`,
+		ArgsHelp: timeArgsHelp,
+		Builder:  func() flags.Commander { return &cmdChanges{} },
 	})
 	AddCommand(&CmdInfo{
-		Name:          "tasks",
-		Summary:       shortTasksHelp,
-		Description:   longTasksHelp,
-		Builder:       func() flags.Commander { return &cmdTasks{} },
-		OptionsHelp:   merge(changeIDMixinOptionsHelp, timeOptionsHelp),
-		ArgumentsHelp: changeIDMixinArgumentsHelp,
+		Name:    "tasks",
+		Summary: "List a change's tasks",
+		Description: `
+The tasks command displays a summary of tasks associated with an individual
+change that happened recently.
+`,
+		ArgsHelp: merge(changeIDMixinArgsHelp, timeArgsHelp),
+		Builder:  func() flags.Commander { return &cmdTasks{} },
 	})
 }
 

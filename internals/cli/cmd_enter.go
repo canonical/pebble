@@ -8,8 +8,21 @@ import (
 	"github.com/canonical/pebble/internals/logger"
 )
 
-const shortEnterHelp = "Run subcommand under a container environment"
-const longEnterHelp = `
+type cmdEnter struct {
+	clientMixin
+	sharedRunEnterOpts
+	Run        bool `long:"run"`
+	Positional struct {
+		Cmd []string `positional-arg-name:"<subcommand>"`
+	} `positional-args:"yes"`
+	parser *flags.Parser
+}
+
+func init() {
+	AddCommand(&CmdInfo{
+		Name:    "enter",
+		Summary: "Run subcommand under a container environment",
+		Description: `
 The enter command facilitates the use of Pebble as an entrypoint for containers.
 When used without a subcommand it mimics the behavior of the run command
 alone, while if used with a subcommand it runs that subcommand in the most
@@ -29,7 +42,14 @@ These subcommands are currently supported:
 (1) Services are not started.
 (2) No logs on stdout unless -v is used.
 (3) Services continue running after the subcommand succeeds.
-`
+`,
+		Builder: func() flags.Commander { return &cmdEnter{} },
+		ArgsHelp: merge(sharedRunEnterArgsHelp, map[string]string{
+			"--run": "Start default services before executing subcommand",
+		}),
+		PassAfterNonOption: true,
+	})
+}
 
 type enterFlags int
 
@@ -40,33 +60,6 @@ const (
 	enterRequireServiceAutostart
 	enterProhibitServiceAutostart
 )
-
-type cmdEnter struct {
-	clientMixin
-	sharedRunEnterOpts
-	Run        bool `long:"run"`
-	Positional struct {
-		Cmd []string `positional-arg-name:"<subcommand>"`
-	} `positional-args:"yes"`
-	parser *flags.Parser
-}
-
-func init() {
-	optsHelp := map[string]string{
-		"run": "Start default services before executing subcommand",
-	}
-	for k, v := range sharedRunEnterOptsHelp {
-		optsHelp[k] = v
-	}
-	AddCommand(&CmdInfo{
-		Name:               "enter",
-		Summary:            shortEnterHelp,
-		Description:        longEnterHelp,
-		Builder:            func() flags.Commander { return &cmdEnter{} },
-		OptionsHelp:        optsHelp,
-		PassAfterNonOption: true,
-	})
-}
 
 func commandEnterFlags(commander flags.Commander) (enterFlags enterFlags, supported bool) {
 	supported = true

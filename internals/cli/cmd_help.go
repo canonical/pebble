@@ -25,10 +25,29 @@ import (
 	"github.com/canonical/go-flags"
 )
 
-var shortHelpHelp = "Show help about a command"
-var longHelpHelp = `
+type cmdHelp struct {
+	All        bool `long:"all"`
+	Manpage    bool `long:"man" hidden:"true"`
+	Positional struct {
+		Subs []string `positional-arg-name:"<command>"`
+	} `positional-args:"yes"`
+	parser *flags.Parser
+}
+
+func init() {
+	AddCommand(&CmdInfo{
+		Name:    "help",
+		Summary: "Show help about a command",
+		Description: `
 The help command displays information about commands.
-`
+`,
+		ArgsHelp: map[string]string{
+			"--all": "Show a short summary of all commands",
+			"--man": "Generate the manpage",
+		},
+		Builder: func() flags.Commander { return &cmdHelp{} },
+	})
+}
 
 // addHelp adds --help like what go-flags would do for us, but hidden
 func addHelp(parser *flags.Parser) error {
@@ -67,28 +86,6 @@ func addHelp(parser *flags.Parser) error {
 	hlp.Hidden = true
 
 	return nil
-}
-
-type cmdHelp struct {
-	All        bool `long:"all"`
-	Manpage    bool `long:"man" hidden:"true"`
-	Positional struct {
-		Subs []string `positional-arg-name:"<command>"`
-	} `positional-args:"yes"`
-	parser *flags.Parser
-}
-
-func init() {
-	AddCommand(&CmdInfo{
-		Name:        "help",
-		Summary:     shortHelpHelp,
-		Description: longHelpHelp,
-		Builder:     func() flags.Commander { return &cmdHelp{} },
-		OptionsHelp: map[string]string{
-			"all": "Show a short summary of all commands",
-			"man": "Generate the manpage",
-		},
-	})
 }
 
 func (cmd *cmdHelp) setParser(parser *flags.Parser) {

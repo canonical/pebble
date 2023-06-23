@@ -31,18 +31,6 @@ import (
 	"github.com/canonical/pebble/internals/systemd"
 )
 
-var shortRunHelp = "Run the pebble environment"
-var longRunHelp = `
-The run command starts pebble and runs the configured environment.
-
-Additional arguments may be provided to the service command with the --args option, which
-must be terminated with ";" unless there are no further Pebble options.  These arguments
-are appended to the end of the service command, and replace any default arguments defined
-in the service plan. For example:
-
-    $ pebble run --args myservice --port 8080 \; --hold
-`
-
 type sharedRunEnterOpts struct {
 	CreateDirs bool       `long:"create-dirs"`
 	Hold       bool       `long:"hold"`
@@ -51,12 +39,12 @@ type sharedRunEnterOpts struct {
 	Args       [][]string `long:"args" terminator:";"`
 }
 
-var sharedRunEnterOptsHelp = map[string]string{
-	"create-dirs": "Create pebble directory on startup if it doesn't exist",
-	"hold":        "Do not start default services automatically",
-	"http":        `Start HTTP API listening on this address (e.g., ":4000")`,
-	"verbose":     "Log all output from services to stdout",
-	"args":        `Provide additional arguments to a service`,
+var sharedRunEnterArgsHelp = map[string]string{
+	"--create-dirs": "Create pebble directory on startup if it doesn't exist",
+	"--hold":        "Do not start default services automatically",
+	"--http":        `Start HTTP API listening on this address (e.g., ":4000")`,
+	"--verbose":     "Log all output from services to stdout",
+	"--args":        `Provide additional arguments to a service`,
 }
 
 type cmdRun struct {
@@ -66,11 +54,20 @@ type cmdRun struct {
 
 func init() {
 	AddCommand(&CmdInfo{
-		Name:        "run",
-		Summary:     shortRunHelp,
-		Description: longRunHelp,
-		Builder:     func() flags.Commander { return &cmdRun{} },
-		OptionsHelp: sharedRunEnterOptsHelp,
+		Name:    "run",
+		Summary: "Run the pebble environment",
+		Description: `
+The run command starts pebble and runs the configured environment.
+
+Additional arguments may be provided to the service command with the --args option, which
+must be terminated with ";" unless there are no further Pebble options.  These arguments
+are appended to the end of the service command, and replace any default arguments defined
+in the service plan. For example:
+
+    $ pebble run --args myservice --port 8080 \; --hold
+`,
+		ArgsHelp: sharedRunEnterArgsHelp,
+		Builder:  func() flags.Commander { return &cmdRun{} },
 	})
 }
 

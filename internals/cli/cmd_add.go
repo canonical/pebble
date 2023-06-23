@@ -19,7 +19,6 @@ import (
 	"io/ioutil"
 
 	"github.com/canonical/go-flags"
-
 	"github.com/canonical/pebble/client"
 )
 
@@ -32,17 +31,22 @@ type cmdAdd struct {
 	} `positional-args:"yes"`
 }
 
-var addOptionsHelp = map[string]string{
-	"combine": `Combine the new layer with an existing layer that has the given label (default is to append)`,
-}
-
-var shortAddHelp = "Dynamically add a layer to the plan's layers"
-var longAddHelp = `
+func init() {
+	AddCommand(&CmdInfo{
+		Name:    "add",
+		Summary: "Dynamically add a layer to the plan's layers",
+		Description: `
 The add command reads the plan's layer YAML from the path specified and
 appends a layer with the given label to the plan's layers. If --combine
 is specified, combine the layer with an existing layer that has the given
 label (or append if the label is not found).
-`
+`,
+		ArgsHelp: map[string]string{
+			"--combine": "Combine the new layer with an existing layer that has the given label (default is to append)",
+		},
+		Builder: func() flags.Commander { return &cmdAdd{} },
+	})
+}
 
 func (cmd *cmdAdd) Execute(args []string) error {
 	if len(args) > 0 {
@@ -64,14 +68,4 @@ func (cmd *cmdAdd) Execute(args []string) error {
 	fmt.Fprintf(Stdout, "Layer %q added successfully from %q\n",
 		cmd.Positional.Label, cmd.Positional.LayerPath)
 	return nil
-}
-
-func init() {
-	AddCommand(&CmdInfo{
-		Name:        "add",
-		Summary:     shortAddHelp,
-		Description: longAddHelp,
-		Builder:     func() flags.Commander { return &cmdAdd{} },
-		OptionsHelp: addOptionsHelp,
-	})
 }
