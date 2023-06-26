@@ -52,7 +52,7 @@ const defaultPebbleDir = "/var/lib/pebble/default"
 // ArgumentHelp contains help information about the positional arguments accepted
 // by a command.
 type ArgumentHelp struct {
-	// Placeholer supplies a string representation of the argument.
+	// Placeholder supplies a string representation of the argument.
 	Placeholder string
 	// Help provides information on how to use the argument.
 	Help string
@@ -84,7 +84,7 @@ type CmdInfo struct {
 	// (including options) supported by the command.
 	//
 	//  map[string]string{
-	//	    "--long-option": "my very long option",
+	//      "--long-option": "my very long option",
 	//      "-v": "verbose output",
 	//      "<change-id>": "named positional argument"
 	//  }
@@ -212,11 +212,12 @@ func Parser(cli *client.Client) *flags.Parser {
 		positionalArgsHelp := map[string]string{}
 
 		for specifier, help := range c.ArgsHelp {
-			if strings.HasPrefix(specifier, "--") {
-				optionsHelp[specifier] = help
-			} else if utf8.RuneCountInString(specifier) == 2 && strings.HasPrefix(specifier, "-") {
+			isLongOption := strings.HasPrefix(specifier, "--")
+			isShortOption := utf8.RuneCountInString(specifier) == 2 && strings.HasPrefix(specifier, "-")
+			if isShortOption || isLongOption {
 				optionsHelp[specifier] = help
 			} else if strings.HasPrefix(specifier, "<") && strings.HasSuffix(specifier, ">") {
+				// This is a positional argument
 				positionalArgsHelp[specifier] = help
 			} else {
 				logger.Panicf("invalid help specifier: %#v %#v", c.Name, strings.HasPrefix(specifier, "-"))
