@@ -291,7 +291,7 @@ func (s *CheckersSuite) TestNewChecker(c *C) {
 			URL:     "https://example.com/foo",
 			Headers: map[string]string{"k": "v"},
 		},
-	})
+	}, nil)
 	http, ok := chk.(*httpChecker)
 	c.Assert(ok, Equals, true)
 	c.Check(http.name, Equals, "http")
@@ -304,7 +304,7 @@ func (s *CheckersSuite) TestNewChecker(c *C) {
 			Port: 80,
 			Host: "localhost",
 		},
-	})
+	}, nil)
 	tcp, ok := chk.(*tcpChecker)
 	c.Assert(ok, Equals, true)
 	c.Check(tcp.name, Equals, "tcp")
@@ -323,7 +323,7 @@ func (s *CheckersSuite) TestNewChecker(c *C) {
 			Group:       "group",
 			WorkingDir:  "/working/dir",
 		},
-	})
+	}, nil)
 	exec, ok := chk.(*execChecker)
 	c.Assert(ok, Equals, true)
 	c.Assert(exec.name, Equals, "exec")
@@ -333,4 +333,71 @@ func (s *CheckersSuite) TestNewChecker(c *C) {
 	c.Assert(exec.user, Equals, "user")
 	c.Assert(exec.groupID, Equals, &groupID)
 	c.Assert(exec.workingDir, Equals, "/working/dir")
+}
+
+func (s *CheckersSuite) TestExecContextNoOverride(c *C) {
+	svcUserID, svcGroupID := 10, 20
+	chk := newChecker(&plan.Check{
+		Name: "exec",
+		Exec: &plan.ExecCheck{
+			Command: "sleep 1",
+			Context: "svc1",
+		},
+	}, &plan.Plan{Services: map[string]*plan.Service{
+		"svc1": {
+			Name:        "svc1",
+			Environment: map[string]string{"k": "x", "a": "1"},
+			UserID:      &svcUserID,
+			User:        "svcuser",
+			GroupID:     &svcGroupID,
+			Group:       "svcgroup",
+			WorkingDir:  "/working/svc",
+		},
+	}})
+	exec, ok := chk.(*execChecker)
+	c.Assert(ok, Equals, true)
+	c.Check(exec.name, Equals, "exec")
+	c.Check(exec.command, Equals, "sleep 1")
+	c.Check(exec.environment, DeepEquals, map[string]string{"k": "x", "a": "1"})
+	c.Check(exec.userID, Equals, &svcUserID)
+	c.Check(exec.user, Equals, "svcuser")
+	c.Check(exec.groupID, Equals, &svcGroupID)
+	c.Check(exec.workingDir, Equals, "/working/svc")
+}
+
+func (s *CheckersSuite) TestExecContextOverride(c *C) {
+	userID, groupID := 100, 200
+	svcUserID, svcGroupID := 10, 20
+	chk := newChecker(&plan.Check{
+		Name: "exec",
+		Exec: &plan.ExecCheck{
+			Command:     "sleep 1",
+			Context:     "svc1",
+			Environment: map[string]string{"k": "v"},
+			UserID:      &userID,
+			User:        "user",
+			GroupID:     &groupID,
+			Group:       "group",
+			WorkingDir:  "/working/dir",
+		},
+	}, &plan.Plan{Services: map[string]*plan.Service{
+		"svc1": {
+			Name:        "svc1",
+			Environment: map[string]string{"k": "x", "a": "1"},
+			UserID:      &svcUserID,
+			User:        "svcuser",
+			GroupID:     &svcGroupID,
+			Group:       "svcgroup",
+			WorkingDir:  "/working/svc",
+		},
+	}})
+	exec, ok := chk.(*execChecker)
+	c.Assert(ok, Equals, true)
+	c.Check(exec.name, Equals, "exec")
+	c.Check(exec.command, Equals, "sleep 1")
+	c.Check(exec.environment, DeepEquals, map[string]string{"k": "v", "a": "1"})
+	c.Check(exec.userID, Equals, &userID)
+	c.Check(exec.user, Equals, "user")
+	c.Check(exec.groupID, Equals, &groupID)
+	c.Check(exec.workingDir, Equals, "/working/dir")
 }

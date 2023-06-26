@@ -817,6 +817,17 @@ var planTests = []planTest{{
 					command: foo '
 	`},
 }, {
+	summary: `Invalid exec check context`,
+	error:   `plan check "chk1" context "nosvc" is not a service name`,
+	input: []string{`
+		checks:
+			chk1:
+				override: replace
+				exec:
+					command: foo
+					context: nosvc
+	`},
+}, {
 	summary: "Simple layer with log targets",
 	input: []string{`
 		services:

@@ -453,6 +453,7 @@ func (c *TCPCheck) Merge(other *TCPCheck) {
 // ExecCheck holds the configuration for an exec health check.
 type ExecCheck struct {
 	Command     string            `yaml:"command,omitempty"`
+	Context     string            `yaml:"context,omitempty"`
 	Environment map[string]string `yaml:"environment,omitempty"`
 	UserID      *int              `yaml:"user-id,omitempty"`
 	User        string            `yaml:"user,omitempty"`
@@ -485,6 +486,9 @@ func (c *ExecCheck) Copy() *ExecCheck {
 func (c *ExecCheck) Merge(other *ExecCheck) {
 	if other.Command != "" {
 		c.Command = other.Command
+	}
+	if other.Context != "" {
+		c.Context = other.Context
 	}
 	for k, v := range other.Environment {
 		if c.Environment == nil {
@@ -660,7 +664,9 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 	}
 
 	// Ensure fields in combined layers validate correctly (and set defaults).
+	serviceNames := make(map[string]bool)
 	for name, service := range combined.Services {
+		serviceNames[name] = true
 		if service.Command == "" {
 			return nil, &FormatError{
 				Message: fmt.Sprintf(`plan must define "command" for service %q`, name),
@@ -763,6 +769,12 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 			if err != nil {
 				return nil, &FormatError{
 					Message: fmt.Sprintf("plan check %q command invalid: %v", name, err),
+				}
+			}
+			if check.Exec.Context != "" && !serviceNames[check.Exec.Context] {
+				return nil, &FormatError{
+					Message: fmt.Sprintf("plan check %q context %q is not a service name",
+						name, check.Exec.Context),
 				}
 			}
 			_, _, err = osutil.NormalizeUidGid(check.Exec.UserID, check.Exec.GroupID, check.Exec.User, check.Exec.Group)
