@@ -1763,3 +1763,62 @@ type fakeLogManager struct{}
 func (f fakeLogManager) ServiceStarted(serviceName string, logs *servicelog.RingBuffer) {
 	// no-op
 }
+
+func (s *S) TestNoWorkingDir(c *C) {
+	// Service command should run in current directory (package directory)
+	// if "working-dir" config option not set.
+	dir := c.MkDir()
+	err := os.Mkdir(filepath.Join(dir, "layers"), 0755)
+	c.Assert(err, IsNil)
+	manager, err := servstate.NewManager(s.st, s.runner, dir, nil, nil, fakeLogManager{})
+	c.Assert(err, IsNil)
+	defer manager.Stop()
+
+	outputPath := filepath.Join(dir, "output")
+	layer := parseLayer(c, 0, "layer", fmt.Sprintf(`
+services:
+    nowrkdir:
+        override: replace
+        command: /bin/sh -c "pwd >%s; sleep %g"
+`, outputPath, shortOkayDelay.Seconds()+0.01))
+	err = manager.AppendLayer(layer)
+	c.Assert(err, IsNil)
+
+	chg := s.startServices(c, []string{"nowrkdir"}, 1)
+	s.st.Lock()
+	c.Assert(chg.Err(), IsNil)
+	s.st.Unlock()
+
+	output, err := ioutil.ReadFile(outputPath)
+	c.Assert(err, IsNil)
+	c.Check(string(output), Matches, ".*/overlord/servstate\n")
+}
+
+func (s *S) TestWorkingDir(c *C) {
+	dir := c.MkDir()
+	err := os.Mkdir(filepath.Join(dir, "layers"), 0755)
+	c.Assert(err, IsNil)
+	manager, err := servstate.NewManager(s.st, s.runner, dir, nil, nil, fakeLogManager{})
+	c.Assert(err, IsNil)
+	defer manager.Stop()
+
+	outputPath := filepath.Join(dir, "output")
+	layer := parseLayer(c, 0, "layer", fmt.Sprintf(`
+services:
+    wrkdir:
+        override: replace
+        command: /bin/sh -c "pwd >%s; sleep %g"
+        working-dir: %s
+`, outputPath, shortOkayDelay.Seconds()+0.01, dir))
+	err = manager.AppendLayer(layer)
+	c.Assert(err, IsNil)
+
+	chg := s.startServices(c, []string{"wrkdir"}, 1)
+	s.st.Lock()
+	c.Assert(chg.Err(), IsNil)
+	s.st.Unlock()
+
+	output, err := ioutil.ReadFile(outputPath)
+	c.Assert(err, IsNil)
+	c.Check(string(output), Equals, dir+"\n")
+}

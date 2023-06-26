@@ -79,6 +79,7 @@ type Service struct {
 	User        string            `yaml:"user,omitempty"`
 	GroupID     *int              `yaml:"group-id,omitempty"`
 	Group       string            `yaml:"group,omitempty"`
+	WorkingDir  string            `yaml:"working-dir,omitempty"`
 
 	// Auto-restart and backoff functionality
 	OnSuccess      ServiceAction            `yaml:"on-success,omitempty"`
@@ -153,6 +154,9 @@ func (s *Service) Merge(other *Service) {
 	}
 	if other.Group != "" {
 		s.Group = other.Group
+	}
+	if other.WorkingDir != "" {
+		s.WorkingDir = other.WorkingDir
 	}
 	s.After = append(s.After, other.After...)
 	s.Before = append(s.Before, other.Before...)
