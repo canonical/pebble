@@ -27,6 +27,7 @@ import (
 	"github.com/canonical/x-go/randutil"
 	"gopkg.in/tomb.v2"
 
+	"github.com/canonical/pebble/cmd"
 	"github.com/canonical/pebble/internals/osutil"
 	"github.com/canonical/pebble/internals/overlord/checkstate"
 	"github.com/canonical/pebble/internals/overlord/cmdstate"
@@ -147,12 +148,13 @@ func loadState(statePath string, restartHandler restart.Handler, backend state.B
 	if err != nil {
 		return nil, fmt.Errorf("fatal: cannot find current boot ID: %v", err)
 	}
-	// If pebble is PID 1 we don't care about /proc/sys/kernel/random/boot_id
-	// as we are most likely running in a container. LXD mounts it's own boot_id
-	// to correctly emulate the boot_id behaviour of non-containerized systems.
-	// Within containerd/docker, boot_id is consistent with the host, which provides
-	// us no context of restarts, so instead fallback to /proc/sys/kernel/random/uuid.
-	if os.Getpid() == 1 {
+
+	if cmd.Containerised() {
+		// We need a unique boot id to support failed reboot detection logic in the
+		// overlord. This is not guaranteed for a container runtime because not
+		// all implementations (e.g. Docker) updates the boot id on restart of the
+		// container. In this case we always return a different id on request,
+		// which will disable reboot failure detection for container runtimes.
 		curBootID, err = randutil.RandomKernelUUID()
 		if err != nil {
 			return nil, fmt.Errorf("fatal: cannot generate psuedo boot-id: %v", err)
