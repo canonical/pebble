@@ -347,6 +347,8 @@ func (s *serviceData) startInternal() error {
 		environment[k] = v
 	}
 
+	s.cmd.Dir = s.config.WorkingDir
+
 	// Start as another user if specified in plan.
 	uid, gid, err := osutil.NormalizeUidGid(s.config.UserID, s.config.GroupID, s.config.User, s.config.Group)
 	if err != nil {

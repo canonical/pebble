@@ -523,6 +523,10 @@ services:
         # group and group-id are specified, the group's GID must match group-id.
         group-id: <gid>
 
+        # (Optional) Working directory to run command in. By default, the
+        # command is run in the service manager's current directory.
+        working-dir: <directory>
+
         # (Optional) Defines what happens when the service exits with a zero
         # exit code. Possible values are: "restart" (default) which restarts
         # the service after the backoff delay, "shutdown" which shuts down and
@@ -653,7 +657,8 @@ checks:
             # match group-id.
             group-id: <gid>
 
-            # (Optional) Working directory to run command in.
+            # (Optional) Working directory to run command in. By default, the
+            # command is run in the service manager's current directory.
             working-dir: <directory>
 ```
 
