@@ -97,7 +97,9 @@ func (ses *stateEngineSuite) TestDryStartError(c *C) {
 	se.AddManager(mgr2)
 
 	err := se.DryStart()
-	c.Check(err, ErrorMatches, `multiple errors: boom1; boom2`)
+	c.Check(err, ErrorMatches, `dry-start failed:
+- boom1
+- boom2`)
 	c.Check(calls, DeepEquals, []string{"drystart:mgr1", "drystart:mgr2"})
 }
 
@@ -130,7 +132,9 @@ func (ses *stateEngineSuite) TestEnsureError(c *C) {
 	c.Check(err, IsNil)
 
 	err = se.Ensure()
-	c.Check(err.Error(), DeepEquals, "multiple errors: boom1; boom2")
+	c.Check(err, ErrorMatches, `state ensure errors:
+- boom1
+- boom2`)
 	c.Check(calls, DeepEquals, []string{"drystart:mgr1", "drystart:mgr2", "ensure:mgr1", "ensure:mgr2"})
 }
 

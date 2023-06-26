@@ -15,15 +15,15 @@
 package overlord
 
 import (
+	"bytes"
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 
 	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/overlord/state"
 )
-
-var errStateEngineStopped = errors.New("state engine already stopped")
 
 // StateManager is implemented by types responsible for observing
 // the system and manipulating it to reflect the desired state.
@@ -80,21 +80,47 @@ func (se *StateEngine) State() *state.State {
 	return se.state
 }
 
+// multiError collects multiple errors that affected an operation.
 type multiError struct {
-	errs []error
+	header string
+	errs   []error
 }
 
-func (e *multiError) Error() string {
-	if len(e.errs) == 1 {
-		return e.errs[0].Error()
-	}
-
-	errStrings := make([]string, len(e.errs))
-	for i, err := range e.errs {
-		errStrings[i] = err.Error()
-	}
-	return "multiple errors: " + strings.Join(errStrings, "; ")
+// newMultiError returns a new multiError struct initialized with
+// the given format string that explains what operation potentially
+// went wrong. multiError can be nested and will render correctly
+// in these cases.
+func newMultiError(header string, errs []error) error {
+	return &multiError{header: header, errs: errs}
 }
+
+// Error formats the error string.
+func (me *multiError) Error() string {
+	return me.nestedError(0)
+}
+
+// helper to ensure formating of nested multiErrors works.
+func (me *multiError) nestedError(level int) string {
+	indent := strings.Repeat(" ", level)
+	buf := bytes.NewBufferString(fmt.Sprintf("%s:\n", me.header))
+	if level > 8 {
+		return "circular or too deep error nesting (max 8)?!"
+	}
+	for i, err := range me.errs {
+		switch v := err.(type) {
+		case *multiError:
+			fmt.Fprintf(buf, "%s- %v", indent, v.nestedError(level+1))
+		default:
+			fmt.Fprintf(buf, "%s- %v", indent, err)
+		}
+		if i < len(me.errs)-1 {
+			fmt.Fprintf(buf, "\n")
+		}
+	}
+	return buf.String()
+}
+
+var errStateEngineStopped = errors.New("state engine already stopped")
 
 // DryStart ensures all managers are ready to run their activities
 // before the first call to Ensure() is made.
@@ -112,7 +138,7 @@ func (se *StateEngine) DryStart() error {
 		}
 	}
 	if len(errs) != 0 {
-		return &multiError{errs}
+		return newMultiError("dry-start failed", errs)
 	}
 	se.dryStarted = true
 	return nil
@@ -144,7 +170,7 @@ func (se *StateEngine) Ensure() error {
 		}
 	}
 	if len(errs) != 0 {
-		return &multiError{errs}
+		return newMultiError("state ensure errors", errs)
 	}
 	return nil
 }

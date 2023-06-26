@@ -621,7 +621,7 @@ func (ovs *overlordSuite) TestSettleNotConverging(c *C) {
 	err := o.Settle(250 * time.Millisecond)
 	s.Lock()
 
-	c.Check(err, ErrorMatches, `Settle is not converging`)
+	c.Check(err, ErrorMatches, `settle is not converging`)
 
 }
 

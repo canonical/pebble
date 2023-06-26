@@ -16,6 +16,7 @@
 package overlord
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -318,11 +319,10 @@ func (o *Overlord) settle(timeout time.Duration, beforeCleanups func()) error {
 	var errs []error
 	for !done {
 		if timeout > 0 && time.Since(t0) > timeout {
-			err := fmt.Errorf("Settle is not converging")
 			if len(errs) != 0 {
-				return &multiError{append(errs, err)}
+				return newMultiError("settle is not converging", errs)
 			}
-			return err
+			return errors.New("settle is not converging")
 		}
 		next := o.ensureTimerReset()
 		err := o.stateEng.Ensure()
@@ -355,7 +355,7 @@ func (o *Overlord) settle(timeout time.Duration, beforeCleanups func()) error {
 		}
 	}
 	if len(errs) != 0 {
-		return &multiError{errs}
+		return newMultiError("state ensure errors", errs)
 	}
 	return nil
 }
