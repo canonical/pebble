@@ -30,6 +30,12 @@ type ExecOptions struct {
 	// Required: command and arguments (first element is the executable).
 	Command []string
 
+	// Optional service name to run the command in the context of this service,
+	// that is, inherit its environment variables, user/group settings,
+	// and working directory. The other options in this struct will override
+	// the service context; Environment will be merged on top of the service's.
+	Context string
+
 	// Optional environment variables.
 	Environment map[string]string
 
@@ -75,6 +81,7 @@ type ExecOptions struct {
 
 type execPayload struct {
 	Command     []string          `json:"command"`
+	Context     string            `json:"context,omitempty"`
 	Environment map[string]string `json:"environment,omitempty"`
 	WorkingDir  string            `json:"working-dir,omitempty"`
 	Timeout     string            `json:"timeout,omitempty"`
@@ -123,6 +130,7 @@ func (client *Client) Exec(opts *ExecOptions) (*ExecProcess, error) {
 	}
 	payload := execPayload{
 		Command:     opts.Command,
+		Context:     opts.Context,
 		Environment: opts.Environment,
 		WorkingDir:  opts.WorkingDir,
 		Timeout:     timeoutStr,

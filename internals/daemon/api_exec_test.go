@@ -31,6 +31,7 @@ import (
 
 	"github.com/canonical/pebble/client"
 	"github.com/canonical/pebble/internals/logger"
+	"github.com/canonical/pebble/internals/plan"
 )
 
 var _ = Suite(&execSuite{})
@@ -161,6 +162,54 @@ func (s *execSuite) TestTimeout(c *C) {
 	})
 	c.Check(waitErr, ErrorMatches, `cannot perform the following tasks:\n.*timed out after 10ms.*`)
 	c.Check(stdout, Equals, "")
+	c.Check(stderr, Equals, "")
+}
+
+func (s *execSuite) TestContextNoOverrides(c *C) {
+	dir := c.MkDir()
+	err := s.daemon.overlord.ServiceManager().AppendLayer(&plan.Layer{
+		Label: "layer1",
+		Services: map[string]*plan.Service{"svc1": {
+			Name:        "svc1",
+			Override:    "replace",
+			Command:     "dummy",
+			Environment: map[string]string{"FOO": "foo", "BAR": "bar"},
+			WorkingDir:  dir,
+		}},
+	})
+	c.Assert(err, IsNil)
+
+	stdout, stderr, err := s.exec(c, "", &client.ExecOptions{
+		Command: []string{"/bin/sh", "-c", "echo FOO=$FOO BAR=$BAR; pwd"},
+		Context: "svc1",
+	})
+	c.Assert(err, IsNil)
+	c.Check(stdout, Equals, "FOO=foo BAR=bar\n"+dir+"\n")
+	c.Check(stderr, Equals, "")
+}
+
+func (s *execSuite) TestContextOverrides(c *C) {
+	err := s.daemon.overlord.ServiceManager().AppendLayer(&plan.Layer{
+		Label: "layer1",
+		Services: map[string]*plan.Service{"svc1": {
+			Name:        "svc1",
+			Override:    "replace",
+			Command:     "dummy",
+			Environment: map[string]string{"FOO": "foo", "BAR": "bar"},
+			WorkingDir:  c.MkDir(),
+		}},
+	})
+	c.Assert(err, IsNil)
+
+	overrideDir := c.MkDir()
+	stdout, stderr, err := s.exec(c, "", &client.ExecOptions{
+		Command:     []string{"/bin/sh", "-c", "echo FOO=$FOO BAR=$BAR; pwd"},
+		Context:     "svc1",
+		Environment: map[string]string{"FOO": "oof"},
+		WorkingDir:  overrideDir,
+	})
+	c.Assert(err, IsNil)
+	c.Check(stdout, Equals, "FOO=oof BAR=bar\n"+overrideDir+"\n")
 	c.Check(stderr, Equals, "")
 }
 

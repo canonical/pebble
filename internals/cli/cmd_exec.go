@@ -39,6 +39,7 @@ type cmdExec struct {
 	GroupID        *int          `long:"gid"`
 	Group          string        `long:"group"`
 	Timeout        time.Duration `long:"timeout"`
+	Context        string        `long:"context"`
 	Terminal       bool          `short:"t"`
 	NoTerminal     bool          `short:"T"`
 	Interactive    bool          `short:"i"`
@@ -56,6 +57,7 @@ var execDescs = map[string]string{
 	"gid":     "Group ID to run command as",
 	"group":   "Group name to run command as (group's GID must match gid if both present)",
 	"timeout": "Timeout after which to terminate command",
+	"context": "Run the command in the context of this service (overridden by -w, --env, --user, --uid, --group, --gid)",
 	"t":       "Allocate remote pseudo-terminal and connect stdout to it (default if stdout is a TTY)",
 	"T":       "Disable remote pseudo-terminal allocation",
 	"i":       "Interactive mode: connect stdin to the pseudo-terminal (default if stdin and stdout are TTYs)",
@@ -144,6 +146,7 @@ func (cmd *cmdExec) Execute(args []string) error {
 
 	opts := &client.ExecOptions{
 		Command:     command,
+		Context:     cmd.Context,
 		Environment: env,
 		WorkingDir:  cmd.WorkingDir,
 		Timeout:     cmd.Timeout,
