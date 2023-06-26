@@ -107,12 +107,14 @@ var planTests = []planTest{{
 				backoff-delay: 1s
 				backoff-factor: 1.5
 				backoff-limit: 10s
+				working-dir: /workdir/srv1
 			srv2:
 				override: replace
 				startup: enabled
 				command: cmd
 				before:
 					- srv3
+				working-dir: /workdir/srv2
 			srv3:
 				override: replace
 				command: cmd
@@ -131,6 +133,7 @@ var planTests = []planTest{{
 					- srv4
 				before:
 					- srv5
+				working-dir: /workdir/srv1/override
 			srv2:
 				override: replace
 				startup: disabled
@@ -173,16 +176,18 @@ var planTests = []planTest{{
 					"var0": "val0",
 					"var2": "val2",
 				},
+				WorkingDir:    "/workdir/srv1",
 				BackoffDelay:  plan.OptionalDuration{Value: time.Second, IsSet: true},
 				BackoffFactor: plan.OptionalFloat{Value: 1.5, IsSet: true},
 				BackoffLimit:  plan.OptionalDuration{Value: 10 * time.Second, IsSet: true},
 			},
 			"srv2": {
-				Name:     "srv2",
-				Override: "replace",
-				Command:  "cmd",
-				Startup:  plan.StartupEnabled,
-				Before:   []string{"srv3"},
+				Name:       "srv2",
+				Override:   "replace",
+				Command:    "cmd",
+				WorkingDir: "/workdir/srv2",
+				Startup:    plan.StartupEnabled,
+				Before:     []string{"srv3"},
 			},
 			"srv3": {
 				Name:     "srv3",
@@ -213,6 +218,7 @@ var planTests = []planTest{{
 				Environment: map[string]string{
 					"var3": "val3",
 				},
+				WorkingDir: "/workdir/srv1/override",
 			},
 			"srv2": {
 				Name:     "srv2",
@@ -269,6 +275,7 @@ var planTests = []planTest{{
 					"var2": "val2",
 					"var3": "val3",
 				},
+				WorkingDir:    "/workdir/srv1/override",
 				BackoffDelay:  plan.OptionalDuration{Value: time.Second, IsSet: true},
 				BackoffFactor: plan.OptionalFloat{Value: 1.5, IsSet: true},
 				BackoffLimit:  plan.OptionalDuration{Value: 10 * time.Second, IsSet: true},
