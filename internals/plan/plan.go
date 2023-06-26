@@ -1117,3 +1117,66 @@ func ReadDir(dir string) (*Plan, error) {
 	}
 	return plan, err
 }
+
+// MergeServiceContext merges the overrides on top of the service context
+// specified by serviceName, returning a new ContextOptions value.
+func MergeServiceContext(p *Plan, serviceName string, overrides ContextOptions) (ContextOptions, error) {
+	if serviceName == "" {
+		return overrides, nil
+	}
+	var service *Service
+	for _, s := range p.Services {
+		if s.Name == serviceName {
+			service = s
+			break
+		}
+	}
+	if service == nil {
+		return ContextOptions{}, fmt.Errorf("context service %q not found", serviceName)
+	}
+
+	// Start with the config values from the context service.
+	merged := ContextOptions{
+		Environment: make(map[string]string),
+	}
+	for k, v := range service.Environment {
+		merged.Environment[k] = v
+	}
+	merged.UserID = service.UserID
+	merged.User = service.User
+	merged.GroupID = service.GroupID
+	merged.Group = service.Group
+	merged.WorkingDir = service.WorkingDir
+
+	// Merge in fields from the overrides, if set.
+	for k, v := range overrides.Environment {
+		merged.Environment[k] = v
+	}
+	if overrides.UserID != nil {
+		merged.UserID = overrides.UserID
+	}
+	if overrides.User != "" {
+		merged.User = overrides.User
+	}
+	if overrides.GroupID != nil {
+		merged.GroupID = overrides.GroupID
+	}
+	if overrides.Group != "" {
+		merged.Group = overrides.Group
+	}
+	if overrides.WorkingDir != "" {
+		merged.WorkingDir = overrides.WorkingDir
+	}
+
+	return merged, nil
+}
+
+// ContextOptions holds service context config fields.
+type ContextOptions struct {
+	Environment map[string]string
+	UserID      *int
+	User        string
+	GroupID     *int
+	Group       string
+	WorkingDir  string
+}

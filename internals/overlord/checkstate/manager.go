@@ -100,55 +100,28 @@ func newChecker(config *plan.Check, p *plan.Plan) checker {
 		}
 
 	case config.Exec != nil:
-		var (
-			environment     = make(map[string]string)
-			userID, groupID *int
-			user, group     string
-			workingDir      string
-		)
-		if config.Exec.Context != "" {
-			// Use service context as a base, with check's context overriding.
-			for _, service := range p.Services {
-				if service.Name == config.Exec.Context {
-					for k, v := range service.Environment {
-						environment[k] = v
-					}
-					userID = service.UserID
-					user = service.User
-					groupID = service.GroupID
-					group = service.Group
-					workingDir = service.WorkingDir
-					break
-				}
-			}
+		overrides := plan.ContextOptions{
+			Environment: config.Exec.Environment,
+			UserID:      config.Exec.UserID,
+			User:        config.Exec.User,
+			GroupID:     config.Exec.GroupID,
+			Group:       config.Exec.Group,
+			WorkingDir:  config.Exec.WorkingDir,
 		}
-		for k, v := range config.Exec.Environment {
-			environment[k] = v
-		}
-		if config.Exec.UserID != nil {
-			userID = config.Exec.UserID
-		}
-		if config.Exec.User != "" {
-			user = config.Exec.User
-		}
-		if config.Exec.GroupID != nil {
-			groupID = config.Exec.GroupID
-		}
-		if config.Exec.Group != "" {
-			group = config.Exec.Group
-		}
-		if config.Exec.WorkingDir != "" {
-			workingDir = config.Exec.WorkingDir
+		merged, err := plan.MergeServiceContext(p, config.Exec.Context, overrides)
+		if err != nil {
+			// Context service name has already been checked when plan was loaded.
+			panic("internal error: " + err.Error())
 		}
 		return &execChecker{
 			name:        config.Name,
 			command:     config.Exec.Command,
-			environment: environment,
-			userID:      userID,
-			user:        user,
-			groupID:     groupID,
-			group:       group,
-			workingDir:  workingDir,
+			environment: merged.Environment,
+			userID:      merged.UserID,
+			user:        merged.User,
+			groupID:     merged.GroupID,
+			group:       merged.Group,
+			workingDir:  merged.WorkingDir,
 		}
 
 	default:
