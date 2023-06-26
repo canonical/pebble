@@ -1142,9 +1142,15 @@ func MergeServiceContext(p *Plan, serviceName string, overrides ContextOptions) 
 	for k, v := range service.Environment {
 		merged.Environment[k] = v
 	}
-	merged.UserID = service.UserID
+	if service.UserID != nil {
+		copied := *service.UserID
+		merged.UserID = &copied
+	}
 	merged.User = service.User
-	merged.GroupID = service.GroupID
+	if service.GroupID != nil {
+		copied := *service.GroupID
+		merged.GroupID = &copied
+	}
 	merged.Group = service.Group
 	merged.WorkingDir = service.WorkingDir
 
@@ -1153,13 +1159,15 @@ func MergeServiceContext(p *Plan, serviceName string, overrides ContextOptions) 
 		merged.Environment[k] = v
 	}
 	if overrides.UserID != nil {
-		merged.UserID = overrides.UserID
+		userID := *overrides.UserID
+		merged.UserID = &userID
 	}
 	if overrides.User != "" {
 		merged.User = overrides.User
 	}
 	if overrides.GroupID != nil {
-		merged.GroupID = overrides.GroupID
+		groupID := *overrides.GroupID
+		merged.GroupID = &groupID
 	}
 	if overrides.Group != "" {
 		merged.Group = overrides.Group

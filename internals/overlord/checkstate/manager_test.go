@@ -359,9 +359,9 @@ func (s *CheckersSuite) TestExecContextNoOverride(c *C) {
 	c.Check(exec.name, Equals, "exec")
 	c.Check(exec.command, Equals, "sleep 1")
 	c.Check(exec.environment, DeepEquals, map[string]string{"k": "x", "a": "1"})
-	c.Check(exec.userID, Equals, &svcUserID)
+	c.Check(exec.userID, DeepEquals, &svcUserID)
 	c.Check(exec.user, Equals, "svcuser")
-	c.Check(exec.groupID, Equals, &svcGroupID)
+	c.Check(exec.groupID, DeepEquals, &svcGroupID)
 	c.Check(exec.workingDir, Equals, "/working/svc")
 }
 
@@ -396,8 +396,8 @@ func (s *CheckersSuite) TestExecContextOverride(c *C) {
 	c.Check(exec.name, Equals, "exec")
 	c.Check(exec.command, Equals, "sleep 1")
 	c.Check(exec.environment, DeepEquals, map[string]string{"k": "v", "a": "1"})
-	c.Check(exec.userID, Equals, &userID)
+	c.Check(exec.userID, DeepEquals, &userID)
 	c.Check(exec.user, Equals, "user")
-	c.Check(exec.groupID, Equals, &groupID)
+	c.Check(exec.groupID, DeepEquals, &groupID)
 	c.Check(exec.workingDir, Equals, "/working/dir")
 }
