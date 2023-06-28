@@ -27,7 +27,7 @@ import (
 // CheckManager starts and manages the health checks.
 type CheckManager struct {
 	mutex           sync.Mutex
-	group           sync.WaitGroup
+	wg              sync.WaitGroup
 	checks          map[string]*checkData
 	failureHandlers []FailureFunc
 }
@@ -61,10 +61,10 @@ func (m *CheckManager) PlanChanged(p *plan.Plan) {
 	}
 	// Wait for all context cancellations to propagate and allow
 	// each goroutine to cleanly exit.
-	m.group.Wait()
+	m.wg.Wait()
 
 	// Set the size of the next wait group
-	m.group.Add(len(p.Checks))
+	m.wg.Add(len(p.Checks))
 
 	// Then configure and start new checks.
 	checks := make(map[string]*checkData, len(p.Checks))
@@ -72,14 +72,16 @@ func (m *CheckManager) PlanChanged(p *plan.Plan) {
 		ctx, cancel := context.WithCancel(context.Background())
 		check := &checkData{
 			config:  config,
-			group:   &m.group,
 			checker: newChecker(config),
 			ctx:     ctx,
 			cancel:  cancel,
 			action:  m.callFailureHandlers,
 		}
 		checks[name] = check
-		go check.loop()
+		go func() {
+			defer m.wg.Done()
+			check.loop()
+		}()
 	}
 	m.checks = checks
 }
@@ -163,7 +165,6 @@ const (
 // checkData holds state for an active health check.
 type checkData struct {
 	config  *plan.Check
-	group   *sync.WaitGroup
 	checker checker
 	ctx     context.Context
 	cancel  context.CancelFunc
@@ -180,10 +181,6 @@ type checker interface {
 }
 
 func (c *checkData) loop() {
-	// Schedule a notification on exit to indicate another
-	// checker in the group is complete.
-	defer c.group.Done()
-
 	logger.Debugf("Check %q starting with period %v", c.config.Name, c.config.Period.Value)
 
 	ticker := time.NewTicker(c.config.Period.Value)

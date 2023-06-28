@@ -269,13 +269,13 @@ func (s *ManagerSuite) TestFailures(c *C) {
 
 // waitCheck is a time based approach to wait for a checker run to complete.
 // The timeout value does not impact the general time it takes for tests to
-// complete, but determines a worse case waiting period before giving up.
+// complete, but determines a worst case waiting period before giving up.
 // The timeout value must take into account single core or very busy machines
 // so it makes sense to pick a conservative number here as failing a test
 // due to a busy test resource is more extensive than waiting a few more
 // seconds.
 func waitCheck(c *C, mgr *CheckManager, name string, f func(check *CheckInfo) bool) *CheckInfo {
-	// Worse case waiting time for checker run(s) to complete. This
+	// Worst case waiting time for checker run(s) to complete. This
 	// period should be much longer (10x is good) than the longest
 	// check timeout value.
 	timeout := time.Second * 10
