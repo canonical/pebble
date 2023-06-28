@@ -30,8 +30,8 @@ type ExecOptions struct {
 	// Required: command and arguments (first element is the executable).
 	Command []string
 
-	// Optional service name to run the command in the context of this service,
-	// that is, inherit its environment variables, user/group settings,
+	// Optional: run the command in the context of this service. Specifically,
+	// inherit its environment variables, user/group settings, and working
 	// and working directory. The other options in this struct will override
 	// the service context; Environment will be merged on top of the service's.
 	Context string
@@ -42,15 +42,15 @@ type ExecOptions struct {
 	// Optional working directory (default is $HOME or "/" if $HOME not set).
 	WorkingDir string
 
-	// Optional timeout for the command execution, after which the process
-	// will be terminated. If zero, no timeout applies.
-	Timeout time.Duration
-
 	// Optional user ID and group ID for the process to run as.
 	UserID  *int
 	User    string
 	GroupID *int
 	Group   string
+
+	// Optional timeout for the command execution, after which the process
+	// will be terminated. If zero, no timeout applies.
+	Timeout time.Duration
 
 	// True to ask the server to set up a pseudo-terminal (PTY) for stdout
 	// (this also allows window resizing). The default is no PTY, and just

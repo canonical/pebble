@@ -664,9 +664,7 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 	}
 
 	// Ensure fields in combined layers validate correctly (and set defaults).
-	serviceNames := make(map[string]bool)
 	for name, service := range combined.Services {
-		serviceNames[name] = true
 		if service.Command == "" {
 			return nil, &FormatError{
 				Message: fmt.Sprintf(`plan must define "command" for service %q`, name),
@@ -771,9 +769,10 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 					Message: fmt.Sprintf("plan check %q command invalid: %v", name, err),
 				}
 			}
-			if check.Exec.Context != "" && !serviceNames[check.Exec.Context] {
+			_, contextExists := combined.Services[check.Exec.Context]
+			if check.Exec.Context != "" && !contextExists {
 				return nil, &FormatError{
-					Message: fmt.Sprintf("plan check %q context %q is not a service name",
+					Message: fmt.Sprintf("plan check %q context specifies non-existent service %q",
 						name, check.Exec.Context),
 				}
 			}
@@ -1119,7 +1118,8 @@ func ReadDir(dir string) (*Plan, error) {
 }
 
 // MergeServiceContext merges the overrides on top of the service context
-// specified by serviceName, returning a new ContextOptions value.
+// specified by serviceName, returning a new ContextOptions value. If
+// serviceName is "" (context not specified), return overrides directly.
 func MergeServiceContext(p *Plan, serviceName string, overrides ContextOptions) (ContextOptions, error) {
 	if serviceName == "" {
 		return overrides, nil

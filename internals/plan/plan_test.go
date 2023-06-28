@@ -825,7 +825,7 @@ var planTests = []planTest{{
 	`},
 }, {
 	summary: `Invalid exec check context`,
-	error:   `plan check "chk1" context "nosvc" is not a service name`,
+	error:   `plan check "chk1" context specifies non-existent service "nosvc"`,
 	input: []string{`
 		checks:
 			chk1:
