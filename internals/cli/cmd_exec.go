@@ -57,7 +57,7 @@ var execDescs = map[string]string{
 	"gid":     "Group ID to run command as",
 	"group":   "Group name to run command as (group's GID must match gid if both present)",
 	"timeout": "Timeout after which to terminate command",
-	"context": "Inherit the context (env, user/group, and working dir) of the named service",
+	"context": "Inherit the context of the named service (overridden by -w, --env, --uid/user, --gid/group)",
 	"t":       "Allocate remote pseudo-terminal and connect stdout to it (default if stdout is a TTY)",
 	"T":       "Disable remote pseudo-terminal allocation",
 	"i":       "Interactive mode: connect stdin to the pseudo-terminal (default if stdin and stdout are TTYs)",
