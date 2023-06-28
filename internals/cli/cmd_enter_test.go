@@ -99,7 +99,7 @@ func (s *PebbleSuite) TestEnterUnknownCommand(c *C) {
 	defer restore()
 
 	exitCode := cli.PebbleMain()
-	c.Check(s.Stderr(), Equals, "error: unknown command \"foo\", see 'pebble help'.\n")
+	c.Check(s.Stderr(), Equals, "error: unknown command \"foo\", see 'pebble help'\n")
 	c.Check(s.Stdout(), Equals, "")
 	c.Check(exitCode, Equals, 1)
 }

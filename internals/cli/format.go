@@ -26,7 +26,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"golang.org/x/crypto/ssh/terminal"
+	"golang.org/x/term"
 )
 
 type unicodeMixin struct {
@@ -49,17 +49,6 @@ func (ux unicodeMixin) getEscapes() *escapes {
 	esc := &escapes{}
 	ux.addUnicodeChars(esc)
 	return esc
-}
-
-type colorMixin struct {
-	Color string `long:"color" default:"auto" choice:"auto" choice:"never" choice:"always"`
-	unicodeMixin
-}
-
-func (mx colorMixin) getEscapes() *escapes {
-	esc := colorTable(mx.Color)
-	mx.addUnicodeChars(&esc)
-	return &esc
 }
 
 func canUnicode(mode string) bool {
@@ -161,7 +150,7 @@ var termSize = termSizeImpl
 
 func termSizeImpl() (width, height int) {
 	if f, ok := Stdout.(*os.File); ok {
-		width, height, _ = terminal.GetSize(int(f.Fd()))
+		width, height, _ = term.GetSize(int(f.Fd()))
 	}
 
 	if width <= 0 {
@@ -245,12 +234,6 @@ func wrapLine(out io.Writer, text []rune, pad string, termWidth int) error {
 		indent = pad + "  "
 	}
 	return wrapGeneric(out, text, indent, indent, termWidth)
-}
-
-// wrapFlow wraps the text using yaml's flow style, allowing indent
-// characters for the first line.
-func wrapFlow(out io.Writer, text []rune, indent string, termWidth int) error {
-	return wrapGeneric(out, text, indent, "  ", termWidth)
 }
 
 // wrapGeneric wraps the given text to the given width, prefixing the
