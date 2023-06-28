@@ -149,7 +149,11 @@ func loadState(statePath string, restartHandler restart.Handler, backend state.B
 		return nil, fmt.Errorf("fatal: cannot find current boot ID: %v", err)
 	}
 
-	if cmd.Containerised() {
+	confined, err := cmd.IsConfined()
+	if err != nil {
+		return nil, fmt.Errorf("fatal: confinement detection returned an error: %v", err)
+	}
+	if confined {
 		// We need a unique boot id to support failed reboot detection logic in the
 		// overlord. This is not guaranteed for a container runtime because not
 		// all implementations (e.g. Docker) updates the boot id on restart of the

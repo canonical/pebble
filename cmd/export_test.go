@@ -18,6 +18,13 @@ import (
 	"sync"
 )
 
+var (
+	IsRock   = isRock
+	IsDocker = isDocker
+	IsLxd    = isLxd
+	NoKernel = noKernel
+)
+
 // MockPid2ProcPath assigns a temporary path to where the PID2
 // status can be found.
 func MockPid2ProcPath(path string) (restore func()) {
@@ -45,6 +52,6 @@ func MockVersion(version string) (restore func()) {
 // ResetContainerInit forces the container runtime check
 // to retry with globals reset
 func ResetContainerInit() {
-	containerOnce = sync.Once{}
-	containerRuntime = true
+	once = sync.Once{}
+	Confined = nil
 }
