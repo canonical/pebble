@@ -89,9 +89,6 @@ type Service struct {
 	BackoffFactor  OptionalFloat            `yaml:"backoff-factor,omitempty"`
 	BackoffLimit   OptionalDuration         `yaml:"backoff-limit,omitempty"`
 	KillDelay      OptionalDuration         `yaml:"kill-delay,omitempty"`
-
-	// Log forwarding
-	LogTargets []string `yaml:"log-targets,omitempty"`
 }
 
 // Copy returns a deep copy of the service.
@@ -120,7 +117,6 @@ func (s *Service) Copy() *Service {
 			copied.OnCheckFailure[k] = v
 		}
 	}
-	copied.LogTargets = append([]string(nil), s.LogTargets...)
 	return &copied
 }
 
@@ -188,23 +184,6 @@ func (s *Service) Merge(other *Service) {
 	if other.BackoffLimit.IsSet {
 		s.BackoffLimit = other.BackoffLimit
 	}
-	s.LogTargets = appendUnique(s.LogTargets, other.LogTargets...)
-}
-
-// appendUnique appends into a the elements from b which are not yet present
-// and returns the modified slice.
-// TODO: move this function into canonical/x-go/strutil
-func appendUnique(a []string, b ...string) []string {
-Outer:
-	for _, bn := range b {
-		for _, an := range a {
-			if an == bn {
-				continue Outer
-			}
-		}
-		a = append(a, bn)
-	}
-	return a
 }
 
 // Equal returns true when the two services are equal in value.
@@ -275,23 +254,8 @@ func CommandString(base, extra []string) string {
 }
 
 // LogsTo returns true if the logs from s should be forwarded to target t.
-// This happens if:
-//   - t.Selection is "opt-out" or empty, and s.LogTargets is empty; or
-//   - t.Selection is not "disabled", and s.LogTargets contains t.
 func (s *Service) LogsTo(t *LogTarget) bool {
-	if t.Selection == DisabledSelection {
-		return false
-	}
-	if len(s.LogTargets) == 0 {
-		if t.Selection == UnsetSelection || t.Selection == OptOutSelection {
-			return true
-		}
-	}
-	for _, targetName := range s.LogTargets {
-		if targetName == t.Name {
-			return true
-		}
-	}
+	// TODO: implement
 	return false
 }
 
@@ -809,18 +773,6 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 		if target.Location == "" && target.Selection != DisabledSelection {
 			return nil, &FormatError{
 				Message: fmt.Sprintf(`plan must define "location" for log target %q`, name),
-			}
-		}
-	}
-
-	// Validate service log targets
-	for serviceName, service := range combined.Services {
-		for _, targetName := range service.LogTargets {
-			_, ok := combined.LogTargets[targetName]
-			if !ok {
-				return nil, &FormatError{
-					Message: fmt.Sprintf(`unknown log target %q for service %q`, targetName, serviceName),
-				}
 			}
 		}
 	}
