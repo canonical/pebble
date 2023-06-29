@@ -26,7 +26,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"golang.org/x/term"
+	"golang.org/x/crypto/ssh/terminal"
 )
 
 type unicodeMixin struct {
@@ -150,7 +150,7 @@ var termSize = termSizeImpl
 
 func termSizeImpl() (width, height int) {
 	if f, ok := Stdout.(*os.File); ok {
-		width, height, _ = term.GetSize(int(f.Fd()))
+		width, height, _ = terminal.GetSize(int(f.Fd()))
 	}
 
 	if width <= 0 {

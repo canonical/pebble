@@ -27,7 +27,7 @@ import (
 
 	"github.com/canonical/go-flags"
 
-	"golang.org/x/term"
+	"golang.org/x/crypto/ssh/terminal"
 
 	"github.com/canonical/pebble/client"
 	"github.com/canonical/pebble/internals/logger"
@@ -39,7 +39,7 @@ var (
 	Stdout io.Writer = os.Stdout
 	Stderr io.Writer = os.Stderr
 	// overridden for testing
-	ReadPassword = term.ReadPassword
+	ReadPassword = terminal.ReadPassword
 	// set to logger.Panicf in testing
 	noticef = logger.Noticef
 )
@@ -255,8 +255,8 @@ func Parser(cli *client.Client) *flags.Parser {
 }
 
 var (
-	isStdinTTY  = term.IsTerminal(0)
-	isStdoutTTY = term.IsTerminal(1)
+	isStdinTTY  = terminal.IsTerminal(0)
+	isStdoutTTY = terminal.IsTerminal(1)
 	osExit      = os.Exit
 )
 
