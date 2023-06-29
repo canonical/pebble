@@ -28,9 +28,9 @@ import (
 	"runtime"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
+	"golang.org/x/sys/unix"
 	"gopkg.in/tomb.v2"
 
 	"github.com/gorilla/mux"
@@ -515,7 +515,7 @@ func (d *Daemon) HandleRestart(t restart.RestartType) {
 	case restart.RestartSystem:
 		// try to schedule a fallback slow reboot already here
 		// in case we get stuck shutting down
-		if err := reboot(rebootWaitTimeout); err != nil {
+		if err := rebootHandler(rebootWaitTimeout); err != nil {
 			logger.Noticef("%s", err)
 		}
 
@@ -700,7 +700,7 @@ func (d *Daemon) doReboot(sigCh chan<- os.Signal, waitTimeout time.Duration) err
 	}
 	// ask for shutdown and wait for it to happen.
 	// if we exit, pebble will be restarted by systemd
-	if err := reboot(rebootDelay); err != nil {
+	if err := rebootHandler(rebootDelay); err != nil {
 		return err
 	}
 	// wait for reboot to happen
@@ -717,21 +717,55 @@ func (d *Daemon) doReboot(sigCh chan<- os.Signal, waitTimeout time.Duration) err
 	return fmt.Errorf("expected reboot did not happen")
 }
 
-var shutdownMsg = "reboot scheduled to update the system"
+var (
+	rebootMsg     = "reboot scheduled to update the system"
+	rebootHandler = commandReboot
+)
 
-func rebootImpl(rebootDelay time.Duration) error {
+// SetSyscallReboot replaces the default command-based reboot
+// with a direct Linux kernel syscall based implementation.
+func SetSyscallReboot() {
+	rebootHandler = syscallReboot
+}
+
+// commandReboot assumes a userspace shutdown command exists.
+func commandReboot(rebootDelay time.Duration) error {
 	if rebootDelay < 0 {
 		rebootDelay = 0
 	}
 	mins := int64(rebootDelay / time.Minute)
-	cmd := exec.Command("shutdown", "-r", fmt.Sprintf("+%d", mins), shutdownMsg)
+	cmd := exec.Command("shutdown", "-r", fmt.Sprintf("+%d", mins), rebootMsg)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return osutil.OutputErr(out, err)
 	}
 	return nil
 }
 
-var reboot = rebootImpl
+var shutdownSyscall = func() {
+	// As per the requirements of the reboot syscall, we have to
+	// first call sync.
+	unix.Sync()
+	// This syscall can fail (EINVAL) if invalid arguments are
+	// supplied, which should not be the case, but let's panic if
+	// that were ever to be true just to be sure we catch it.
+	err := unix.Reboot(unix.LINUX_REBOOT_CMD_RESTART)
+	if err != nil {
+		panic("internal error: reboot syscall failed")
+	}
+}
+
+// syscallReboot performs a reboot using direct Linux kernel syscalls.
+//
+// Note: Reboot message not currently supported.
+func syscallReboot(rebootDelay time.Duration) error {
+	if rebootDelay < 0 {
+		rebootDelay = 0
+	}
+	// This has to be non-blocking, and scheduled for a future
+	// point in time to mimic shutdown.
+	time.AfterFunc(rebootDelay, shutdownSyscall)
+	return nil
+}
 
 func (d *Daemon) Dying() <-chan struct{} {
 	return d.tomb.Dying()
@@ -829,9 +863,9 @@ func getListener(socketPath string, listenerMap map[string]net.Listener) (net.Li
 	}
 
 	runtime.LockOSThread()
-	oldmask := syscall.Umask(0111)
+	oldmask := unix.Umask(0111)
 	listener, err := net.ListenUnix("unix", address)
-	syscall.Umask(oldmask)
+	unix.Umask(oldmask)
 	runtime.UnlockOSThread()
 	if err != nil {
 		return nil, err

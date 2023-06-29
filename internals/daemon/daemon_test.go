@@ -665,7 +665,7 @@ func (s *daemonSuite) TestRestartSystemWiring(c *check.C) {
 	oldRebootNoticeWait := rebootNoticeWait
 	oldRebootWaitTimeout := rebootWaitTimeout
 	defer func() {
-		reboot = rebootImpl
+		rebootHandler = commandReboot
 		rebootNoticeWait = oldRebootNoticeWait
 		rebootWaitTimeout = oldRebootWaitTimeout
 	}()
@@ -673,7 +673,7 @@ func (s *daemonSuite) TestRestartSystemWiring(c *check.C) {
 	rebootNoticeWait = 150 * time.Millisecond
 
 	var delays []time.Duration
-	reboot = func(d time.Duration) error {
+	rebootHandler = func(d time.Duration) error {
 		delays = append(delays, d)
 		return nil
 	}
@@ -740,7 +740,7 @@ func (s *daemonSuite) TestRebootHelper(c *check.C) {
 	}
 
 	for _, t := range tests {
-		err := reboot(t.delay)
+		err := rebootHandler(t.delay)
 		c.Assert(err, check.IsNil)
 		c.Check(cmd.Calls(), check.DeepEquals, [][]string{
 			{"shutdown", "-r", t.delayArg, "reboot scheduled to update the system"},
@@ -1147,4 +1147,36 @@ services:
 	tasks := change.Tasks()
 	c.Assert(tasks, HasLen, 1)
 	c.Check(tasks[0].Kind(), Equals, "stop")
+}
+
+func (s *daemonSuite) TestSyscallRebootDelay(c *C) {
+	waitState := 0
+	old := shutdownSyscall
+	shutdownSyscall = func() {
+		waitState = 1
+	}
+	defer func() {
+		shutdownSyscall = old
+	}()
+	syscallReboot(time.Millisecond * 25)
+	c.Assert(waitState, Equals, 0)
+	time.Sleep(time.Millisecond * 50)
+	c.Assert(waitState, Equals, 1)
+}
+
+func (s *daemonSuite) TestSetSyscall(c *C) {
+	check := 0
+	old := shutdownSyscall
+	shutdownSyscall = func() {
+		check = 1
+	}
+	defer func() {
+		shutdownSyscall = old
+	}()
+	// We know the default is commandReboot otherwise the unit tests
+	// above will fail. We need to check the switch works.
+	SetSyscallReboot()
+	rebootHandler(0)
+	time.Sleep(time.Millisecond * 50)
+	c.Assert(check, Equals, 1)
 }
