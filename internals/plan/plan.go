@@ -26,6 +26,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/x-go/strutil/shlex"
 	"gopkg.in/yaml.v3"
 
@@ -927,6 +928,10 @@ func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 			return nil, &FormatError{
 				Message: fmt.Sprintf("cannot use reserved service name %q", name),
 			}
+		}
+		// Deprecated service names
+		if name == "all" || name == "default" || name == "none" {
+			logger.Noticef("WARNING: using %q as service name is deprecated", name)
 		}
 		if service == nil {
 			return nil, &FormatError{
