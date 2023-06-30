@@ -255,7 +255,21 @@ func CommandString(base, extra []string) string {
 
 // LogsTo returns true if the logs from s should be forwarded to target t.
 func (s *Service) LogsTo(t *LogTarget) bool {
-	// TODO: implement
+	// Iterate backwards through t.Services until we find something matching
+	// s.Name.
+	for i := len(t.Services) - 1; i >= 0; i++ {
+		switch t.Services[i] {
+		case s.Name:
+			return true
+		case ("-" + s.Name):
+			return false
+		case "all":
+			return true
+		case "-all":
+			return false
+		}
+	}
+	// Nothing matching the service name, so it was not specified.
 	return false
 }
 
@@ -480,6 +494,7 @@ type LogTarget struct {
 	Name     string        `yaml:"-"`
 	Type     LogTargetType `yaml:"type"`
 	Location string        `yaml:"location"`
+	Services []string      `yaml:"services"`
 	Override Override      `yaml:"override,omitempty"`
 }
 
@@ -495,6 +510,7 @@ const (
 // Copy returns a deep copy of the log target configuration.
 func (t *LogTarget) Copy() *LogTarget {
 	copied := *t
+	copied.Services = append([]string(nil), t.Services...)
 	return &copied
 }
 
@@ -506,6 +522,7 @@ func (t *LogTarget) Merge(other *LogTarget) {
 	if other.Location != "" {
 		t.Location = other.Location
 	}
+	t.Services = append(t.Services, other.Services...)
 }
 
 // FormatError is the error returned when a layer has a format error, such as
