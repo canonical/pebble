@@ -258,7 +258,7 @@ func CommandString(base, extra []string) string {
 func (s *Service) LogsTo(t *LogTarget) bool {
 	// Iterate backwards through t.Services until we find something matching
 	// s.Name.
-	for i := len(t.Services) - 1; i >= 0; i++ {
+	for i := len(t.Services) - 1; i >= 0; i-- {
 		switch t.Services[i] {
 		case s.Name:
 			return true

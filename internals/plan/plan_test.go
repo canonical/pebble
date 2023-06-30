@@ -911,6 +911,11 @@ var planTests = []planTest{{
 				location: udp://0.0.0.0:514
 				services: [svc2]
 				override: merge
+			tgt3:
+				type: loki
+				location: http://10.1.77.206:3100/loki/api/v1/push
+				services: [all]
+				override: merge
 `, `
 		services:
 			svc1:
@@ -930,9 +935,9 @@ var planTests = []planTest{{
 				services: []
 				override: replace
 			tgt3:
-				type: loki
-				location: http://10.1.77.206:3100/loki/api/v1/push
-				services: [all]
+				type: syslog
+				location: udp://0.0.0.0:514
+				services: [-svc1]
 				override: merge
 `},
 	layers: []*plan.Layer{{
@@ -968,6 +973,13 @@ var planTests = []planTest{{
 				Services: []string{"svc2"},
 				Override: plan.MergeOverride,
 			},
+			"tgt3": {
+				Name:     "tgt3",
+				Type:     plan.LokiTarget,
+				Location: "http://10.1.77.206:3100/loki/api/v1/push",
+				Services: []string{"all"},
+				Override: plan.MergeOverride,
+			},
 		},
 	}, {
 		Label: "layer-1",
@@ -1000,9 +1012,9 @@ var planTests = []planTest{{
 			},
 			"tgt3": {
 				Name:     "tgt3",
-				Type:     plan.LokiTarget,
-				Location: "http://10.1.77.206:3100/loki/api/v1/push",
-				Services: []string{"all"},
+				Type:     plan.SyslogTarget,
+				Location: "udp://0.0.0.0:514",
+				Services: []string{"-svc1"},
 				Override: plan.MergeOverride,
 			},
 		},
@@ -1044,9 +1056,9 @@ var planTests = []planTest{{
 			},
 			"tgt3": {
 				Name:     "tgt3",
-				Type:     plan.LokiTarget,
-				Location: "http://10.1.77.206:3100/loki/api/v1/push",
-				Services: []string{"all"},
+				Type:     plan.SyslogTarget,
+				Location: "udp://0.0.0.0:514",
+				Services: []string{"all", "-svc1"},
 				Override: plan.MergeOverride,
 			},
 		},
@@ -1435,4 +1447,89 @@ func (s *S) TestParseCommand(c *C) {
 	}
 }
 
-func (s *S) TestLogsTo(c *C) {}
+func (s *S) TestLogsTo(c *C) {
+	tests := []struct {
+		services []string
+		logsTo   map[string]bool
+	}{{
+		services: nil,
+		logsTo: map[string]bool{
+			"svc1": false,
+			"svc2": false,
+		},
+	}, {
+		services: []string{},
+		logsTo: map[string]bool{
+			"svc1": false,
+			"svc2": false,
+		},
+	}, {
+		services: []string{"all"},
+		logsTo: map[string]bool{
+			"svc1": true,
+			"svc2": true,
+		},
+	}, {
+		services: []string{"svc1"},
+		logsTo: map[string]bool{
+			"svc1": true,
+			"svc2": false,
+		},
+	}, {
+		services: []string{"svc1", "svc2"},
+		logsTo: map[string]bool{
+			"svc1": true,
+			"svc2": true,
+			"svc3": false,
+		},
+	}, {
+		services: []string{"all", "-svc2"},
+		logsTo: map[string]bool{
+			"svc1": true,
+			"svc2": false,
+			"svc3": true,
+		},
+	}, {
+		services: []string{"svc1", "svc2", "-svc1", "all"},
+		logsTo: map[string]bool{
+			"svc1": true,
+			"svc2": true,
+			"svc3": true,
+		},
+	}, {
+		services: []string{"svc1", "svc2", "-all"},
+		logsTo: map[string]bool{
+			"svc1": false,
+			"svc2": false,
+			"svc3": false,
+		},
+	}, {
+		services: []string{"all", "-all"},
+		logsTo: map[string]bool{
+			"svc1": false,
+			"svc2": false,
+			"svc3": false,
+		},
+	}, {
+		services: []string{"svc1", "svc2", "-all", "svc3", "svc1", "-svc3"},
+		logsTo: map[string]bool{
+			"svc1": true,
+			"svc2": false,
+			"svc3": false,
+		},
+	}}
+
+	for _, test := range tests {
+		target := &plan.LogTarget{
+			Services: test.services,
+		}
+
+		for serviceName, shouldLogTo := range test.logsTo {
+			service := &plan.Service{
+				Name: serviceName,
+			}
+			c.Check(service.LogsTo(target), Equals, shouldLogTo,
+				Commentf("matching service %q against 'services: %v'", serviceName, test.services))
+		}
+	}
+}
