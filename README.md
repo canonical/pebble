@@ -439,7 +439,7 @@ my-target:
     services: [-svc1]
     override: merge
 ```
-then in the merged layer, `my-target` will collect logs from only `svc2`. You can also use `-all` to remove all services from the list.
+then in the merged layer, the `services` list will be merged to `[svc1, svc2, -svc1]`, which evaluates left to right as simply `[svc2]`. So `my-target` will collect logs from only `svc2`. You can also use `-all` to remove all services from the list.
 -->
 
 ## Container usage
