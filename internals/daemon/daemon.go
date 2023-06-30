@@ -717,10 +717,9 @@ func (d *Daemon) doReboot(sigCh chan<- os.Signal, waitTimeout time.Duration) err
 	return fmt.Errorf("expected reboot did not happen")
 }
 
-var (
-	rebootMsg     = "reboot scheduled to update the system"
-	rebootHandler = commandReboot
-)
+const rebootMsg = "reboot scheduled to update the system"
+
+var rebootHandler = commandReboot
 
 // SetSyscallReboot replaces the default command-based reboot
 // with a direct Linux kernel syscall based implementation.
@@ -741,23 +740,48 @@ func commandReboot(rebootDelay time.Duration) error {
 	return nil
 }
 
-var shutdownSyscall = func() {
-	// As per the requirements of the reboot syscall, we have to
-	// first call sync.
-	unix.Sync()
-	// This syscall can fail (EINVAL) if invalid arguments are
-	// supplied, which should not be the case, but let's panic if
-	// that were ever to be true just to be sure we catch it.
-	err := unix.Reboot(unix.LINUX_REBOOT_CMD_RESTART)
-	if err != nil {
-		panic("internal error: reboot syscall failed")
+var (
+	// checkCapSysBoot returns nil if the system has the correct
+	// permissions to issue a reboot request to the Linux kernel
+	checkCapSysBoot = func() error {
+		var caps unix.CapUserData
+		// We deliberately use v1 caps here due to:
+		// https://github.com/golang/go/issues/44312
+		hdr := unix.CapUserHeader{Version: unix.LINUX_CAPABILITY_VERSION_1}
+		err := unix.Capget(&hdr, &caps)
+		if err == nil {
+			if (int32(caps.Effective) & (1 << unix.CAP_SYS_BOOT)) == 0 {
+				err = fmt.Errorf("no capability to reboot")
+			}
+		}
+		return err
 	}
-}
+
+	shutdownSyscall = func() {
+		// As per the requirements of the reboot syscall, we have to
+		// first call sync.
+		unix.Sync()
+		// This syscall can fail (EINVAL/EPERM) if invalid arguments are
+		// supplied or CAP_SYS_BOOT capability is missing. We cover the
+		// latter case in a separate capability check, so this will not
+		// happen here, but let's panic if we see something to make sure
+		// we catch anything unexpected.
+		err := unix.Reboot(unix.LINUX_REBOOT_CMD_RESTART)
+		if err != nil {
+			panic("internal error: reboot syscall failed")
+		}
+	}
+)
 
 // syscallReboot performs a reboot using direct Linux kernel syscalls.
 //
 // Note: Reboot message not currently supported.
 func syscallReboot(rebootDelay time.Duration) error {
+	err := checkCapSysBoot()
+	if err != nil {
+		return err
+	}
+
 	if rebootDelay < 0 {
 		rebootDelay = 0
 	}

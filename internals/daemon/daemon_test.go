@@ -1149,34 +1149,97 @@ services:
 	c.Check(tasks[0].Kind(), Equals, "stop")
 }
 
-func (s *daemonSuite) TestSyscallRebootDelay(c *C) {
-	waitState := 0
+func mockShutdownSyscall(f func()) (restore func()) {
 	old := shutdownSyscall
-	shutdownSyscall = func() {
-		waitState = 1
-	}
-	defer func() {
+	shutdownSyscall = f
+	return func() {
 		shutdownSyscall = old
-	}()
-	syscallReboot(time.Millisecond * 25)
-	c.Assert(waitState, Equals, 0)
-	time.Sleep(time.Millisecond * 50)
-	c.Assert(waitState, Equals, 1)
+	}
+}
+
+func mockCheckCapSysBoot(f func() error) (restore func()) {
+	old := checkCapSysBoot
+	checkCapSysBoot = f
+	return func() {
+		checkCapSysBoot = old
+	}
+}
+
+func (s *daemonSuite) TestSyscallPosRebootDelay(c *C) {
+	wait := make(chan int)
+	defer mockCheckCapSysBoot(func() error {
+		return nil
+	})()
+	defer mockShutdownSyscall(func() {
+		wait <- 1
+	})()
+
+	period := time.Millisecond * 25
+	syscallReboot(period)
+	start := time.Now()
+	<-wait
+	elapse := time.Now().Sub(start)
+	c.Assert(elapse >= period, Equals, true)
+}
+
+func (s *daemonSuite) TestSyscallNegRebootDelay(c *C) {
+	wait := make(chan int)
+	defer mockCheckCapSysBoot(func() error {
+		return nil
+	})()
+	defer mockShutdownSyscall(func() {
+		wait <- 1
+	})()
+
+	// Negative periods will be zeroed, so do not fear the huge negative.
+	// We do supply a rather big value here because this test is
+	// effectively a race, but given the huge timeout, it is not going
+	// to be a problem (c).
+	period := time.Second * 10
+	syscallReboot(-period)
+	start := time.Now()
+	<-wait
+	elapse := time.Now().Sub(start)
+	c.Assert(elapse < period, Equals, true)
 }
 
 func (s *daemonSuite) TestSetSyscall(c *C) {
-	check := 0
-	old := shutdownSyscall
-	shutdownSyscall = func() {
-		check = 1
-	}
-	defer func() {
-		shutdownSyscall = old
-	}()
+	wait := make(chan int)
+	defer mockCheckCapSysBoot(func() error {
+		return nil
+	})()
+	defer mockShutdownSyscall(func() {
+		wait <- 1
+	})()
+
 	// We know the default is commandReboot otherwise the unit tests
 	// above will fail. We need to check the switch works.
 	SetSyscallReboot()
-	rebootHandler(0)
-	time.Sleep(time.Millisecond * 50)
-	c.Assert(check, Equals, 1)
+	defer func() {
+		rebootHandler = commandReboot
+	}()
+
+	err := rebootHandler(0)
+	c.Assert(err, IsNil)
+	// This would block forever if the switch did not work.
+	<-wait
+}
+
+func (s *daemonSuite) TestCapSysBootFail(c *C) {
+	defer mockCheckCapSysBoot(func() error {
+		return fmt.Errorf("no reboot cap")
+	})()
+	defer mockShutdownSyscall(func() {
+		panic("this should not happen")
+	})()
+
+	// We know the default is commandReboot otherwise the unit tests
+	// above will fail. We need to check the switch works.
+	SetSyscallReboot()
+	defer func() {
+		rebootHandler = commandReboot
+	}()
+
+	err := rebootHandler(0)
+	c.Assert(err, ErrorMatches, "no reboot cap")
 }
