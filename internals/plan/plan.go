@@ -523,8 +523,6 @@ func (t *LogTarget) Merge(other *LogTarget) {
 	if other.Location != "" {
 		t.Location = other.Location
 	}
-	// TODO: reduce log targets?
-	// e.g. [..., all, -svc1] -> [all, -svc1]
 	t.Services = append(t.Services, other.Services...)
 }
 
@@ -774,6 +772,7 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 			if _, ok := combined.Services[serviceName]; ok {
 				continue
 			}
+			// Check if this is `-svc`
 			serviceName = strings.TrimPrefix(serviceName, "-")
 			if _, ok := combined.Services[serviceName]; ok {
 				continue
