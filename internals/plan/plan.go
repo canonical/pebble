@@ -522,6 +522,8 @@ func (t *LogTarget) Merge(other *LogTarget) {
 	if other.Location != "" {
 		t.Location = other.Location
 	}
+	// TODO: reduce log targets?
+	// e.g. [..., all, -svc1] -> [all, -svc1]
 	t.Services = append(t.Services, other.Services...)
 }
 
@@ -763,7 +765,21 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 			}
 		}
 
-		if target.Location == "" {
+		// Validate service names specified in log target
+		for _, serviceName := range target.Services {
+			if serviceName == "all" {
+				continue
+			}
+			if _, ok := combined.Services[serviceName]; ok {
+				continue
+			}
+			return nil, &FormatError{
+				Message: fmt.Sprintf(`log target %q specifies unknown service %q`,
+					target.Name, serviceName),
+			}
+		}
+
+		if target.Location == "" && len(target.Services) > 0 {
 			return nil, &FormatError{
 				Message: fmt.Sprintf(`plan must define "location" for log target %q`, name),
 			}
