@@ -477,11 +477,10 @@ func (c *ExecCheck) Merge(other *ExecCheck) {
 
 // LogTarget specifies a remote server to forward logs to.
 type LogTarget struct {
-	Name      string        `yaml:"-"`
-	Type      LogTargetType `yaml:"type"`
-	Location  string        `yaml:"location"`
-	Selection Selection     `yaml:"selection,omitempty"`
-	Override  Override      `yaml:"override,omitempty"`
+	Name     string        `yaml:"-"`
+	Type     LogTargetType `yaml:"type"`
+	Location string        `yaml:"location"`
+	Override Override      `yaml:"override,omitempty"`
 }
 
 // LogTargetType defines the protocol to use to forward logs.
@@ -491,16 +490,6 @@ const (
 	LokiTarget     LogTargetType = "loki"
 	SyslogTarget   LogTargetType = "syslog"
 	UnsetLogTarget LogTargetType = ""
-)
-
-// Selection describes which services' logs will be forwarded to this target.
-type Selection string
-
-const (
-	OptOutSelection   Selection = "opt-out"
-	OptInSelection    Selection = "opt-in"
-	DisabledSelection Selection = "disabled"
-	UnsetSelection    Selection = ""
 )
 
 // Copy returns a deep copy of the log target configuration.
@@ -516,9 +505,6 @@ func (t *LogTarget) Merge(other *LogTarget) {
 	}
 	if other.Location != "" {
 		t.Location = other.Location
-	}
-	if other.Selection != "" {
-		t.Selection = other.Selection
 	}
 }
 
@@ -760,17 +746,7 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 			}
 		}
 
-		switch target.Selection {
-		case OptOutSelection, OptInSelection, DisabledSelection, UnsetSelection:
-			// valid, continue
-		default:
-			return nil, &FormatError{
-				Message: fmt.Sprintf(`log target %q has invalid selection %q, must be %q, %q or %q`,
-					name, target.Selection, OptOutSelection, OptInSelection, DisabledSelection),
-			}
-		}
-
-		if target.Location == "" && target.Selection != DisabledSelection {
+		if target.Location == "" {
 			return nil, &FormatError{
 				Message: fmt.Sprintf(`plan must define "location" for log target %q`, name),
 			}

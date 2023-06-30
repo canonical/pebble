@@ -918,11 +918,10 @@ var planTests = []planTest{{
 		log-targets:
 			tgt1:
 				override: merge
-				selection: opt-in
 			tgt2:
 				type: syslog
+				location: foo
 				override: replace
-				selection: disabled
 			tgt3:
 				type: loki
 				location: http://10.1.77.206:3100/loki/api/v1/push
@@ -979,15 +978,14 @@ var planTests = []planTest{{
 		Checks: map[string]*plan.Check{},
 		LogTargets: map[string]*plan.LogTarget{
 			"tgt1": {
-				Name:      "tgt1",
-				Override:  plan.MergeOverride,
-				Selection: plan.OptInSelection,
+				Name:     "tgt1",
+				Override: plan.MergeOverride,
 			},
 			"tgt2": {
-				Name:      "tgt2",
-				Type:      plan.SyslogTarget,
-				Override:  plan.ReplaceOverride,
-				Selection: plan.DisabledSelection,
+				Name:     "tgt2",
+				Type:     plan.SyslogTarget,
+				Location: "foo",
+				Override: plan.ReplaceOverride,
 			},
 			"tgt3": {
 				Name:     "tgt3",
@@ -1021,17 +1019,16 @@ var planTests = []planTest{{
 		Checks: map[string]*plan.Check{},
 		LogTargets: map[string]*plan.LogTarget{
 			"tgt1": {
-				Name:      "tgt1",
-				Type:      plan.LokiTarget,
-				Location:  "http://10.1.77.196:3100/loki/api/v1/push",
-				Override:  plan.MergeOverride,
-				Selection: plan.OptInSelection,
+				Name:     "tgt1",
+				Type:     plan.LokiTarget,
+				Location: "http://10.1.77.196:3100/loki/api/v1/push",
+				Override: plan.MergeOverride,
 			},
 			"tgt2": {
-				Name:      "tgt2",
-				Type:      plan.SyslogTarget,
-				Override:  plan.ReplaceOverride,
-				Selection: plan.DisabledSelection,
+				Name:     "tgt2",
+				Type:     plan.SyslogTarget,
+				Location: "foo",
+				Override: plan.ReplaceOverride,
 			},
 			"tgt3": {
 				Name:     "tgt3",
@@ -1067,17 +1064,6 @@ var planTests = []planTest{{
 				type: foobar
 				location: http://10.1.77.196:3100/loki/api/v1/push
 				override: merge
-`},
-}, {
-	summary: "Invalid selection for log target",
-	error:   `log target "tgt1" has invalid selection "foobar", must be "opt-out", "opt-in" or "disabled"`,
-	input: []string{`
-		log-targets:
-			tgt1:
-				type: loki
-				location: http://10.1.77.196:3100/loki/api/v1/push
-				override: merge
-				selection: foobar
 `},
 }}
 
