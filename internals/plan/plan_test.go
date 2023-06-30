@@ -1102,6 +1102,15 @@ var planTests = []planTest{{
 				services: [nonexistent]
 				override: merge
 `},
+}, {
+	summary: `Service name can't start with "-"`,
+	error:   `cannot use service name "-svc1": starting with "-" not allowed`,
+	input: []string{`
+		services:
+			-svc1:
+				command: foo
+				override: merge
+`},
 }}
 
 func (s *S) TestParseLayer(c *C) {

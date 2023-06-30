@@ -769,10 +769,7 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 			if serviceName == "all" || serviceName == "-all" {
 				continue
 			}
-			if _, ok := combined.Services[serviceName]; ok {
-				continue
-			}
-			// Check if this is `-svc`
+			// This could be `-svc` - try to trim a preceding
 			serviceName = strings.TrimPrefix(serviceName, "-")
 			if _, ok := combined.Services[serviceName]; ok {
 				continue
@@ -931,6 +928,11 @@ func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 		// Deprecated service names
 		if name == "all" || name == "default" || name == "none" {
 			logger.Noticef("WARNING: using %q as service name is deprecated", name)
+		}
+		if strings.HasPrefix(name, "-") {
+			return nil, &FormatError{
+				Message: fmt.Sprintf(`cannot use service name %q: starting with "-" not allowed`, name),
+			}
 		}
 		if service == nil {
 			return nil, &FormatError{
