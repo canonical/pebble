@@ -780,7 +780,7 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 			}
 		}
 
-		if target.Location == "" && len(target.Services) > 0 {
+		if target.Location == "" {
 			return nil, &FormatError{
 				Message: fmt.Sprintf(`plan must define "location" for log target %q`, name),
 			}

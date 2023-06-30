@@ -932,6 +932,7 @@ var planTests = []planTest{{
 				override: merge
 			tgt2:
 				type: syslog
+				location: udp://1.2.3.4:514
 				services: []
 				override: replace
 			tgt3:
@@ -1007,6 +1008,7 @@ var planTests = []planTest{{
 			"tgt2": {
 				Name:     "tgt2",
 				Type:     plan.SyslogTarget,
+				Location: "udp://1.2.3.4:514",
 				Services: []string{},
 				Override: plan.ReplaceOverride,
 			},
@@ -1052,6 +1054,7 @@ var planTests = []planTest{{
 			"tgt2": {
 				Name:     "tgt2",
 				Type:     plan.SyslogTarget,
+				Location: "udp://1.2.3.4:514",
 				Override: plan.ReplaceOverride,
 			},
 			"tgt3": {
