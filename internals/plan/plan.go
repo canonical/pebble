@@ -767,9 +767,13 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 
 		// Validate service names specified in log target
 		for _, serviceName := range target.Services {
-			if serviceName == "all" {
+			if serviceName == "all" || serviceName == "-all" {
 				continue
 			}
+			if _, ok := combined.Services[serviceName]; ok {
+				continue
+			}
+			serviceName = strings.TrimPrefix(serviceName, "-")
 			if _, ok := combined.Services[serviceName]; ok {
 				continue
 			}

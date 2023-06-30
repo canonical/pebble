@@ -840,10 +840,12 @@ var planTests = []planTest{{
 			tgt1:
 				type: loki
 				location: http://10.1.77.196:3100/loki/api/v1/push
+				services: [all]
 				override: merge
 			tgt2:
 				type: syslog
 				location: udp://0.0.0.0:514
+				services: [svc2]
 				override: merge
 `},
 	result: &plan.Layer{
@@ -873,12 +875,14 @@ var planTests = []planTest{{
 				Name:     "tgt1",
 				Type:     plan.LokiTarget,
 				Location: "http://10.1.77.196:3100/loki/api/v1/push",
+				Services: []string{"all"},
 				Override: plan.MergeOverride,
 			},
 			"tgt2": {
 				Name:     "tgt2",
 				Type:     plan.SyslogTarget,
 				Location: "udp://0.0.0.0:514",
+				Services: []string{"svc2"},
 				Override: plan.MergeOverride,
 			},
 		},
@@ -900,10 +904,12 @@ var planTests = []planTest{{
 			tgt1:
 				type: loki
 				location: http://10.1.77.196:3100/loki/api/v1/push
+				services: [all]
 				override: merge
 			tgt2:
 				type: syslog
 				location: udp://0.0.0.0:514
+				services: [svc2]
 				override: merge
 `, `
 		services:
@@ -917,14 +923,16 @@ var planTests = []planTest{{
 		
 		log-targets:
 			tgt1:
+				services: [-all, svc1]
 				override: merge
 			tgt2:
 				type: syslog
-				location: foo
+				services: []
 				override: replace
 			tgt3:
 				type: loki
 				location: http://10.1.77.206:3100/loki/api/v1/push
+				services: [all]
 				override: merge
 `},
 	layers: []*plan.Layer{{
@@ -950,12 +958,14 @@ var planTests = []planTest{{
 				Name:     "tgt1",
 				Type:     plan.LokiTarget,
 				Location: "http://10.1.77.196:3100/loki/api/v1/push",
+				Services: []string{"all"},
 				Override: plan.MergeOverride,
 			},
 			"tgt2": {
 				Name:     "tgt2",
 				Type:     plan.SyslogTarget,
 				Location: "udp://0.0.0.0:514",
+				Services: []string{"svc2"},
 				Override: plan.MergeOverride,
 			},
 		},
@@ -979,18 +989,20 @@ var planTests = []planTest{{
 		LogTargets: map[string]*plan.LogTarget{
 			"tgt1": {
 				Name:     "tgt1",
+				Services: []string{"-all", "svc1"},
 				Override: plan.MergeOverride,
 			},
 			"tgt2": {
 				Name:     "tgt2",
 				Type:     plan.SyslogTarget,
-				Location: "foo",
+				Services: []string{},
 				Override: plan.ReplaceOverride,
 			},
 			"tgt3": {
 				Name:     "tgt3",
 				Type:     plan.LokiTarget,
 				Location: "http://10.1.77.206:3100/loki/api/v1/push",
+				Services: []string{"all"},
 				Override: plan.MergeOverride,
 			},
 		},
@@ -1022,18 +1034,19 @@ var planTests = []planTest{{
 				Name:     "tgt1",
 				Type:     plan.LokiTarget,
 				Location: "http://10.1.77.196:3100/loki/api/v1/push",
+				Services: []string{"all", "-all", "svc1"},
 				Override: plan.MergeOverride,
 			},
 			"tgt2": {
 				Name:     "tgt2",
 				Type:     plan.SyslogTarget,
-				Location: "foo",
 				Override: plan.ReplaceOverride,
 			},
 			"tgt3": {
 				Name:     "tgt3",
 				Type:     plan.LokiTarget,
 				Location: "http://10.1.77.206:3100/loki/api/v1/push",
+				Services: []string{"all"},
 				Override: plan.MergeOverride,
 			},
 		},
@@ -1054,6 +1067,7 @@ var planTests = []planTest{{
 		log-targets:
 			tgt1:
 				type: loki
+				services: [all]
 				override: merge
 `}}, {
 	summary: "Unsupported log target type",
@@ -1063,6 +1077,17 @@ var planTests = []planTest{{
 			tgt1:
 				type: foobar
 				location: http://10.1.77.196:3100/loki/api/v1/push
+				override: merge
+`},
+}, {
+	summary: "Log target specifies invalid service",
+	error:   `log target "tgt1" specifies unknown service "nonexistent"`,
+	input: []string{`
+		log-targets:
+			tgt1:
+				type: loki
+				location: http://10.1.77.196:3100/loki/api/v1/push
+				services: [nonexistent]
 				override: merge
 `},
 }}
@@ -1409,3 +1434,5 @@ func (s *S) TestParseCommand(c *C) {
 		c.Assert(extra, DeepEquals, test.cmdArgs)
 	}
 }
+
+func (s *S) TestLogsTo(c *C) {}
