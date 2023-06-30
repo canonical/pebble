@@ -336,7 +336,7 @@ func (s *execSuite) TestCommandNotFound(c *C) {
 	c.Check(httpResp.StatusCode, Equals, http.StatusBadRequest)
 	c.Check(execResp.StatusCode, Equals, http.StatusBadRequest)
 	c.Check(execResp.Type, Equals, "error")
-	c.Check(execResp.Result["message"], Matches, ".*executable file not found.*")
+	c.Check(execResp.Result["message"], Matches, "cannot find executable .*")
 }
 
 func (s *execSuite) TestUserGroupError(c *C) {
