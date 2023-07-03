@@ -85,15 +85,27 @@ type CmdInfo struct {
 	// Whether to pass all arguments after the first non-option as remaining
 	// command line arguments. This is equivalent to strict POSIX processing.
 	PassAfterNonOption bool
+
+	// When set, the command will be a subcommand of the `debug` command.
+	// Do not set this flag manually, use AddDebugCommand instead.
+	debug bool
 }
 
-// commands holds information about all non-debug commands.
+// commands holds information about all the regular Pebble commands.
 var commands []*CmdInfo
 
-// AddCommand replaces parser.addCommand() in a way that is compatible with
-// re-constructing a pristine parser.
+// debugCommands holds information about all the subcommands of the `pebble debug` command.
+var debugCommands []*CmdInfo
+
+// AddCommand adds a command to the top-level parser.
 func AddCommand(info *CmdInfo) {
 	commands = append(commands, info)
+}
+
+// AddDebugCommand adds a subcommand to the `debug` command.
+func AddDebugCommand(info *CmdInfo) {
+	info.debug = true
+	debugCommands = append(debugCommands, info)
 }
 
 func lintDesc(cmdName, optName, desc, origDesc string) {
@@ -138,12 +150,12 @@ func fixupArg(optName string) string {
 	return optName
 }
 
-type clientMixin struct {
-	client *client.Client
-}
-
 type clientSetter interface {
 	setClient(*client.Client)
+}
+
+type clientMixin struct {
+	client *client.Client
 }
 
 func (ch *clientMixin) setClient(cli *client.Client) {
@@ -154,7 +166,7 @@ type parserSetter interface {
 	setParser(*flags.Parser)
 }
 
-type options struct {
+type defaultOptions struct {
 	Version func() `long:"version" hidden:"yes" description:"Print the version and exit"`
 }
 
@@ -163,7 +175,7 @@ type options struct {
 // from each other.
 func Parser(cli *client.Client) *flags.Parser {
 	// Implement --version by default on every command
-	defaultOptions := options{
+	defaultOpts := defaultOptions{
 		Version: func() {
 			printVersions(cli)
 			panic(&exitStatus{0})
@@ -171,7 +183,7 @@ func Parser(cli *client.Client) *flags.Parser {
 	}
 
 	flagOpts := flags.Options(flags.PassDoubleDash)
-	parser := flags.NewParser(&defaultOptions, flagOpts)
+	parser := flags.NewParser(&defaultOpts, flagOpts)
 	parser.ShortDescription = "Tool to interact with pebble"
 	parser.LongDescription = longPebbleDescription
 
@@ -182,8 +194,15 @@ func Parser(cli *client.Client) *flags.Parser {
 	positionalRegexp := regexp.MustCompile(`^<[\w-]+>$`)
 	flagRegexp := regexp.MustCompile(`^-(\w|-[\w-]+)$`)
 
-	// Add all regular commands
-	for _, c := range commands {
+	// Create debug command
+	debugCmd, err := parser.AddCommand("debug", shortDebugHelp, longDebugHelp, &cmdDebug{})
+	debugCmd.Hidden = true
+	if err != nil {
+		logger.Panicf("cannot add command %q: %v", "debug", err)
+	}
+
+	// Add all commands
+	for _, c := range append(commands, debugCommands...) {
 		obj := c.Builder()
 		if x, ok := obj.(clientSetter); ok {
 			x.setClient(cli)
@@ -192,12 +211,22 @@ func Parser(cli *client.Client) *flags.Parser {
 			x.setParser(parser)
 		}
 
-		cmd, err := parser.AddCommand(c.Name, c.Summary, strings.TrimSpace(c.Description), obj)
+		// Target either the `debug` command or the top-level parser depending on this command
+		// being or not marked as debug.
+		var target *flags.Command
+		if c.debug {
+			target = debugCmd
+		} else {
+			target = parser.Command
+		}
+
+		cmd, err := target.AddCommand(c.Name, c.Summary, strings.TrimSpace(c.Description), obj)
 		if err != nil {
 			logger.Panicf("cannot add command %q: %v", c.Name, err)
 		}
 		cmd.PassAfterNonOption = c.PassAfterNonOption
 
+		// Extract help for flags and positional arguments from ArgsHelp
 		flagHelp := map[string]string{}
 		positionalHelp := map[string]string{}
 
@@ -207,14 +236,14 @@ func Parser(cli *client.Client) *flags.Parser {
 			} else if positionalRegexp.MatchString(specifier) {
 				positionalHelp[specifier] = help
 			} else {
-				logger.Panicf("invalid help specifier from %s: %s", c.Name, specifier)
+				logger.Panicf("invalid help specifier from %q: %q", c.Name, specifier)
 			}
 		}
 
 		// Make sure all argument descriptions are set
 		opts := cmd.Options()
 		if len(opts) != len(flagHelp) {
-			logger.Panicf("wrong number of flag descriptions for %s: expected %d, got %d", c.Name, len(opts), len(flagHelp))
+			logger.Panicf("wrong number of flag descriptions for %q: expected %d, got %d", c.Name, len(opts), len(flagHelp))
 		}
 		for _, opt := range opts {
 			if description, ok := flagHelp["--"+opt.LongName]; ok {
@@ -224,7 +253,7 @@ func Parser(cli *client.Client) *flags.Parser {
 				lintDesc(c.Name, string(opt.ShortName), description, opt.Description)
 				opt.Description = description
 			} else if !opt.Hidden {
-				logger.Panicf("%s missing description for %s", c.Name, opt)
+				logger.Panicf("%q missing description for %q", c.Name, opt)
 			}
 		}
 
@@ -237,7 +266,6 @@ func Parser(cli *client.Client) *flags.Parser {
 			}
 		}
 	}
-
 	return parser
 }
 
