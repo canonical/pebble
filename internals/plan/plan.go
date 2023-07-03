@@ -766,11 +766,10 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 
 		// Validate service names specified in log target
 		for _, serviceName := range target.Services {
-			if serviceName == "all" || serviceName == "-all" {
+			serviceName = strings.TrimPrefix(serviceName, "-")
+			if serviceName == "all" {
 				continue
 			}
-			// This could be `-svc` - try to trim a preceding
-			serviceName = strings.TrimPrefix(serviceName, "-")
 			if _, ok := combined.Services[serviceName]; ok {
 				continue
 			}
@@ -927,7 +926,7 @@ func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 		}
 		// Deprecated service names
 		if name == "all" || name == "default" || name == "none" {
-			logger.Noticef("WARNING: using %q as service name is deprecated", name)
+			logger.Noticef("Using keyword %q as a service name is deprecated", name)
 		}
 		if strings.HasPrefix(name, "-") {
 			return nil, &FormatError{
