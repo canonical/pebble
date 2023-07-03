@@ -29,6 +29,7 @@ import (
 	"github.com/canonical/x-go/strutil/shlex"
 	"gopkg.in/yaml.v3"
 
+	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/osutil"
 )
 
@@ -89,9 +90,6 @@ type Service struct {
 	BackoffFactor  OptionalFloat            `yaml:"backoff-factor,omitempty"`
 	BackoffLimit   OptionalDuration         `yaml:"backoff-limit,omitempty"`
 	KillDelay      OptionalDuration         `yaml:"kill-delay,omitempty"`
-
-	// Log forwarding
-	LogTargets []string `yaml:"log-targets,omitempty"`
 }
 
 // Copy returns a deep copy of the service.
@@ -120,7 +118,6 @@ func (s *Service) Copy() *Service {
 			copied.OnCheckFailure[k] = v
 		}
 	}
-	copied.LogTargets = append([]string(nil), s.LogTargets...)
 	return &copied
 }
 
@@ -188,23 +185,6 @@ func (s *Service) Merge(other *Service) {
 	if other.BackoffLimit.IsSet {
 		s.BackoffLimit = other.BackoffLimit
 	}
-	s.LogTargets = appendUnique(s.LogTargets, other.LogTargets...)
-}
-
-// appendUnique appends into a the elements from b which are not yet present
-// and returns the modified slice.
-// TODO: move this function into canonical/x-go/strutil
-func appendUnique(a []string, b ...string) []string {
-Outer:
-	for _, bn := range b {
-		for _, an := range a {
-			if an == bn {
-				continue Outer
-			}
-		}
-		a = append(a, bn)
-	}
-	return a
 }
 
 // Equal returns true when the two services are equal in value.
@@ -275,23 +255,22 @@ func CommandString(base, extra []string) string {
 }
 
 // LogsTo returns true if the logs from s should be forwarded to target t.
-// This happens if:
-//   - t.Selection is "opt-out" or empty, and s.LogTargets is empty; or
-//   - t.Selection is not "disabled", and s.LogTargets contains t.
 func (s *Service) LogsTo(t *LogTarget) bool {
-	if t.Selection == DisabledSelection {
-		return false
-	}
-	if len(s.LogTargets) == 0 {
-		if t.Selection == UnsetSelection || t.Selection == OptOutSelection {
+	// Iterate backwards through t.Services until we find something matching
+	// s.Name.
+	for i := len(t.Services) - 1; i >= 0; i-- {
+		switch t.Services[i] {
+		case s.Name:
 			return true
+		case ("-" + s.Name):
+			return false
+		case "all":
+			return true
+		case "-all":
+			return false
 		}
 	}
-	for _, targetName := range s.LogTargets {
-		if targetName == t.Name {
-			return true
-		}
-	}
+	// Nothing matching the service name, so it was not specified.
 	return false
 }
 
@@ -513,11 +492,11 @@ func (c *ExecCheck) Merge(other *ExecCheck) {
 
 // LogTarget specifies a remote server to forward logs to.
 type LogTarget struct {
-	Name      string        `yaml:"-"`
-	Type      LogTargetType `yaml:"type"`
-	Location  string        `yaml:"location"`
-	Selection Selection     `yaml:"selection,omitempty"`
-	Override  Override      `yaml:"override,omitempty"`
+	Name     string        `yaml:"-"`
+	Type     LogTargetType `yaml:"type"`
+	Location string        `yaml:"location"`
+	Services []string      `yaml:"services"`
+	Override Override      `yaml:"override,omitempty"`
 }
 
 // LogTargetType defines the protocol to use to forward logs.
@@ -529,19 +508,10 @@ const (
 	UnsetLogTarget LogTargetType = ""
 )
 
-// Selection describes which services' logs will be forwarded to this target.
-type Selection string
-
-const (
-	OptOutSelection   Selection = "opt-out"
-	OptInSelection    Selection = "opt-in"
-	DisabledSelection Selection = "disabled"
-	UnsetSelection    Selection = ""
-)
-
 // Copy returns a deep copy of the log target configuration.
 func (t *LogTarget) Copy() *LogTarget {
 	copied := *t
+	copied.Services = append([]string(nil), t.Services...)
 	return &copied
 }
 
@@ -553,9 +523,7 @@ func (t *LogTarget) Merge(other *LogTarget) {
 	if other.Location != "" {
 		t.Location = other.Location
 	}
-	if other.Selection != "" {
-		t.Selection = other.Selection
-	}
+	t.Services = append(t.Services, other.Services...)
 }
 
 // FormatError is the error returned when a layer has a format error, such as
@@ -796,31 +764,24 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 			}
 		}
 
-		switch target.Selection {
-		case OptOutSelection, OptInSelection, DisabledSelection, UnsetSelection:
-			// valid, continue
-		default:
+		// Validate service names specified in log target
+		for _, serviceName := range target.Services {
+			serviceName = strings.TrimPrefix(serviceName, "-")
+			if serviceName == "all" {
+				continue
+			}
+			if _, ok := combined.Services[serviceName]; ok {
+				continue
+			}
 			return nil, &FormatError{
-				Message: fmt.Sprintf(`log target %q has invalid selection %q, must be %q, %q or %q`,
-					name, target.Selection, OptOutSelection, OptInSelection, DisabledSelection),
+				Message: fmt.Sprintf(`log target %q specifies unknown service %q`,
+					target.Name, serviceName),
 			}
 		}
 
-		if target.Location == "" && target.Selection != DisabledSelection {
+		if target.Location == "" {
 			return nil, &FormatError{
 				Message: fmt.Sprintf(`plan must define "location" for log target %q`, name),
-			}
-		}
-	}
-
-	// Validate service log targets
-	for serviceName, service := range combined.Services {
-		for _, targetName := range service.LogTargets {
-			_, ok := combined.LogTargets[targetName]
-			if !ok {
-				return nil, &FormatError{
-					Message: fmt.Sprintf(`unknown log target %q for service %q`, targetName, serviceName),
-				}
 			}
 		}
 	}
@@ -961,6 +922,15 @@ func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 			// in log output).
 			return nil, &FormatError{
 				Message: fmt.Sprintf("cannot use reserved service name %q", name),
+			}
+		}
+		// Deprecated service names
+		if name == "all" || name == "default" || name == "none" {
+			logger.Noticef("Using keyword %q as a service name is deprecated", name)
+		}
+		if strings.HasPrefix(name, "-") {
+			return nil, &FormatError{
+				Message: fmt.Sprintf(`cannot use service name %q: starting with "-" not allowed`, name),
 			}
 		}
 		if service == nil {
