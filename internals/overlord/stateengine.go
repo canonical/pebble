@@ -136,10 +136,17 @@ func (se *StateEngine) Stop() {
 	if se.stopped {
 		return
 	}
+
+	var wg sync.WaitGroup
 	for _, m := range se.managers {
 		if stopper, ok := m.(StateStopper); ok {
-			stopper.Stop()
+			wg.Add(1)
+			go func() {
+				stopper.Stop()
+				wg.Done()
+			}()
 		}
 	}
+	wg.Wait()
 	se.stopped = true
 }
