@@ -31,6 +31,17 @@ import (
 	"github.com/canonical/pebble/internals/osutil"
 )
 
+const cmdWarningsSummary = "List warnings"
+const cmdWarningsDescription = `
+The warnings command lists the warnings that have been reported to the system.
+
+Once warnings have been listed with 'pebble warnings', 'pebble okay' may be used to
+silence them. A warning that's been silenced in this way will not be listed
+again unless it happens again, _and_ a cooldown time has passed.
+
+Warnings expire automatically, and once expired they are forgotten.
+`
+
 type cmdWarnings struct {
 	clientMixin
 	timeMixin
@@ -39,21 +50,21 @@ type cmdWarnings struct {
 	Verbose bool `long:"verbose"`
 }
 
+const cmdOkaySummary = "Acknowledge warnings"
+const cmdOkayDescription = `
+The okay command acknowledges the warnings listed with 'pebble warnings'.
+
+Once acknowledged, a warning won't appear again unless it reoccurs and
+sufficient time has passed.
+`
+
 type cmdOkay struct{ clientMixin }
 
 func init() {
 	AddCommand(&CmdInfo{
-		Name:    "warnings",
-		Summary: "List warnings",
-		Description: `
-The warnings command lists the warnings that have been reported to the system.
-
-Once warnings have been listed with 'pebble warnings', 'pebble okay' may be used to
-silence them. A warning that's been silenced in this way will not be listed
-again unless it happens again, _and_ a cooldown time has passed.
-
-Warnings expire automatically, and once expired they are forgotten.
-`,
+		Name:        "warnings",
+		Summary:     cmdWarningsSummary,
+		Description: cmdWarningsDescription,
 		ArgsHelp: merge(timeArgsHelp, unicodeArgsHelp, map[string]string{
 			"--all":     "Show all warnings",
 			"--verbose": "Show more information",
@@ -61,15 +72,10 @@ Warnings expire automatically, and once expired they are forgotten.
 		Builder: func() flags.Commander { return &cmdWarnings{} },
 	})
 	AddCommand(&CmdInfo{
-		Name:    "okay",
-		Summary: "Acknowledge warnings",
-		Description: `
-The okay command acknowledges the warnings listed with 'pebble warnings'.
-
-Once acknowledged, a warning won't appear again unless it reoccurs and
-sufficient time has passed.
-`,
-		Builder: func() flags.Commander { return &cmdOkay{} },
+		Name:        "okay",
+		Summary:     cmdOkaySummary,
+		Description: cmdOkayDescription,
+		Builder:     func() flags.Commander { return &cmdOkay{} },
 	})
 }
 

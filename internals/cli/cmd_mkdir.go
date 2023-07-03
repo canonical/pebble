@@ -24,6 +24,9 @@ import (
 	"github.com/canonical/pebble/client"
 )
 
+const cmdMkdirSummary = "Create a directory"
+const cmdMkdirDescription = "The mkdir command creates the specified directory."
+
 type cmdMkdir struct {
 	clientMixin
 
@@ -41,12 +44,10 @@ type cmdMkdir struct {
 
 func init() {
 	AddCommand(&CmdInfo{
-		Name:    "mkdir",
-		Summary: "Create a directory",
-		Description: `
-The mkdir command creates the specified directory.
-`,
-		Builder: func() flags.Commander { return &cmdMkdir{} },
+		Name:        "mkdir",
+		Summary:     cmdMkdirSummary,
+		Description: cmdMkdirDescription,
+		Builder:     func() flags.Commander { return &cmdMkdir{} },
 		ArgsHelp: map[string]string{
 			"-p":      "Create parent directories as needed",
 			"-m":      "Set permissions (e.g. 0644)",

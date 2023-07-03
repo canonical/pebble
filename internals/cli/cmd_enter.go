@@ -1,3 +1,17 @@
+// Copyright (c) 2023 Canonical Ltd
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License version 3 as
+// published by the Free Software Foundation.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
 package cli
 
 import (
@@ -8,21 +22,8 @@ import (
 	"github.com/canonical/pebble/internals/logger"
 )
 
-type cmdEnter struct {
-	clientMixin
-	sharedRunEnterOpts
-	Run        bool `long:"run"`
-	Positional struct {
-		Cmd []string `positional-arg-name:"<subcommand>"`
-	} `positional-args:"yes"`
-	parser *flags.Parser
-}
-
-func init() {
-	AddCommand(&CmdInfo{
-		Name:    "enter",
-		Summary: "Run subcommand under a container environment",
-		Description: `
+const cmdEnterSummary = "Run subcommand under a container environment"
+const cmdEnterDescription = `
 The enter command facilitates the use of Pebble as an entrypoint for containers.
 When used without a subcommand it mimics the behavior of the run command
 alone, while if used with a subcommand it runs that subcommand in the most
@@ -42,8 +43,24 @@ These subcommands are currently supported:
 (1) Services are not started.
 (2) No logs on stdout unless -v is used.
 (3) Services continue running after the subcommand succeeds.
-`,
-		Builder: func() flags.Commander { return &cmdEnter{} },
+`
+
+type cmdEnter struct {
+	clientMixin
+	sharedRunEnterOpts
+	Run        bool `long:"run"`
+	Positional struct {
+		Cmd []string `positional-arg-name:"<subcommand>"`
+	} `positional-args:"yes"`
+	parser *flags.Parser
+}
+
+func init() {
+	AddCommand(&CmdInfo{
+		Name:        "enter",
+		Summary:     cmdEnterSummary,
+		Description: cmdEnterDescription,
+		Builder:     func() flags.Commander { return &cmdEnter{} },
 		ArgsHelp: merge(sharedRunEnterArgsHelp, map[string]string{
 			"--run": "Start default services before executing subcommand",
 		}),

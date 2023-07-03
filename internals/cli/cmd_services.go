@@ -21,6 +21,12 @@ import (
 	"github.com/canonical/pebble/client"
 )
 
+const cmdServicesSummary = "Query the status of configured services"
+const cmdServicesDescription = `
+The services command lists status information about the services specified, or
+about all services if none are specified.
+`
+
 type cmdServices struct {
 	clientMixin
 	timeMixin
@@ -31,14 +37,11 @@ type cmdServices struct {
 
 func init() {
 	AddCommand(&CmdInfo{
-		Name:    "services",
-		Summary: "Query the status of configured services",
-		Description: `
-The services command lists status information about the services specified, or
-about all services if none are specified.
-`,
-		ArgsHelp: timeArgsHelp,
-		Builder:  func() flags.Commander { return &cmdServices{} },
+		Name:        "services",
+		Summary:     cmdServicesSummary,
+		Description: cmdServicesDescription,
+		ArgsHelp:    timeArgsHelp,
+		Builder:     func() flags.Commander { return &cmdServices{} },
 	})
 }
 

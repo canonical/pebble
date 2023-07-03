@@ -20,6 +20,12 @@ import (
 	"github.com/canonical/pebble/client"
 )
 
+const cmdStopSummary = "Stop a service and its dependents"
+const cmdStopDescription = `
+The stop command stops the service with the provided name and
+any other service that depends on it, in the correct order.
+`
+
 type cmdStop struct {
 	waitMixin
 	Positional struct {
@@ -29,14 +35,11 @@ type cmdStop struct {
 
 func init() {
 	AddCommand(&CmdInfo{
-		Name:    "stop",
-		Summary: "Stop a service and its dependents",
-		Description: `
-The stop command stops the service with the provided name and
-any other service that depends on it, in the correct order.
-`,
-		Builder:  func() flags.Commander { return &cmdStop{} },
-		ArgsHelp: waitArgsHelp,
+		Name:        "stop",
+		Summary:     cmdStopSummary,
+		Description: cmdStopDescription,
+		Builder:     func() flags.Commander { return &cmdStop{} },
+		ArgsHelp:    waitArgsHelp,
 	})
 }
 

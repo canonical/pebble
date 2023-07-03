@@ -195,7 +195,7 @@ func Parser(cli *client.Client) *flags.Parser {
 	flagRegexp := regexp.MustCompile(`^-(\w|-[\w-]+)$`)
 
 	// Create debug command
-	debugCmd, err := parser.AddCommand("debug", shortDebugHelp, longDebugHelp, &cmdDebug{})
+	debugCmd, err := parser.AddCommand("debug", cmdDebugSummary, cmdDebugDescription, &cmdDebug{})
 	debugCmd.Hidden = true
 	if err != nil {
 		logger.Panicf("cannot add command %q: %v", "debug", err)

@@ -25,6 +25,9 @@ import (
 	"github.com/canonical/go-flags"
 )
 
+const cmdHelpSummary = "Show help about a command"
+const cmdHelpDescription = "The help command displays information about commands."
+
 type cmdHelp struct {
 	All        bool `long:"all"`
 	Manpage    bool `long:"man" hidden:"true"`
@@ -36,11 +39,9 @@ type cmdHelp struct {
 
 func init() {
 	AddCommand(&CmdInfo{
-		Name:    "help",
-		Summary: "Show help about a command",
-		Description: `
-The help command displays information about commands.
-`,
+		Name:        "help",
+		Summary:     cmdHelpSummary,
+		Description: cmdHelpDescription,
 		ArgsHelp: map[string]string{
 			"--all": "Show a short summary of all commands",
 			"--man": "Generate the manpage",

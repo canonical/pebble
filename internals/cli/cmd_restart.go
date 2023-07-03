@@ -19,6 +19,9 @@ import (
 	"github.com/canonical/pebble/client"
 )
 
+const cmdRestartSummary = "Restart a service"
+const cmdRestartDescription = "The restart command restarts the named service(s) in the correct order."
+
 type cmdRestart struct {
 	waitMixin
 	Positional struct {
@@ -28,13 +31,11 @@ type cmdRestart struct {
 
 func init() {
 	AddCommand(&CmdInfo{
-		Name:    "restart",
-		Summary: "Restart a service",
-		Description: `
-The restart command restarts the named service(s) in the correct order.
-`,
-		ArgsHelp: waitArgsHelp,
-		Builder:  func() flags.Commander { return &cmdRestart{} },
+		Name:        "restart",
+		Summary:     cmdRestartSummary,
+		Description: cmdRestartDescription,
+		ArgsHelp:    waitArgsHelp,
+		Builder:     func() flags.Commander { return &cmdRestart{} },
 	})
 }
 

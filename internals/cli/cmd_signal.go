@@ -22,6 +22,14 @@ import (
 	"github.com/canonical/pebble/client"
 )
 
+const cmdSignalSummary = "Send a signal to one or more running services"
+const cmdSignalDescription = `
+The signal command sends a signal to one or more running services. The signal
+name must be uppercase, for example:
+
+pebble signal HUP mysql nginx
+`
+
 type cmdSignal struct {
 	clientMixin
 	Positional struct {
@@ -32,15 +40,10 @@ type cmdSignal struct {
 
 func init() {
 	AddCommand(&CmdInfo{
-		Name:    "signal",
-		Summary: "Send a signal to one or more running services",
-		Description: `
-The signal command sends a signal to one or more running services. The signal
-name must be uppercase, for example:
-
-pebble signal HUP mysql nginx
-`,
-		Builder: func() flags.Commander { return &cmdSignal{} },
+		Name:        "signal",
+		Summary:     cmdSignalSummary,
+		Description: cmdSignalDescription,
+		Builder:     func() flags.Commander { return &cmdSignal{} },
 	})
 }
 

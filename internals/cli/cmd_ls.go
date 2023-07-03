@@ -26,6 +26,12 @@ import (
 	"github.com/canonical/pebble/client"
 )
 
+const cmdLsSummary = "List path contents"
+const cmdLsDescription = `
+The ls command lists entries in the filesystem at the specified path. A glob pattern
+may be specified for the last path element.
+`
+
 type cmdLs struct {
 	clientMixin
 	timeMixin
@@ -40,12 +46,9 @@ type cmdLs struct {
 
 func init() {
 	AddCommand(&CmdInfo{
-		Name:    "ls",
-		Summary: "List path contents",
-		Description: `
-The ls command lists entries in the filesystem at the specified path. A glob pattern
-may be specified for the last path element.
-`,
+		Name:        "ls",
+		Summary:     cmdLsSummary,
+		Description: cmdLsDescription,
 		ArgsHelp: merge(timeArgsHelp, map[string]string{
 			"-d": "List matching entries themselves, not directory contents",
 			"-l": "Use a long listing format",

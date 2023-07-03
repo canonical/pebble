@@ -26,6 +26,12 @@ import (
 	"github.com/canonical/pebble/client"
 )
 
+const cmdLogsSummary = "Fetch service logs"
+const cmdLogsDescription = `
+The logs command fetches buffered logs from the given services (or all services
+if none are specified) and displays them in chronological order.
+`
+
 type cmdLogs struct {
 	clientMixin
 	Follow     bool   `short:"f" long:"follow"`
@@ -38,12 +44,9 @@ type cmdLogs struct {
 
 func init() {
 	AddCommand(&CmdInfo{
-		Name:    "logs",
-		Summary: "Fetch service logs",
-		Description: `
-The logs command fetches buffered logs from the given services (or all services
-if none are specified) and displays them in chronological order.
-`,
+		Name:        "logs",
+		Summary:     cmdLogsSummary,
+		Description: cmdLogsDescription,
 		ArgsHelp: map[string]string{
 			"--follow": "Follow (tail) logs for given services until Ctrl-C is\npressed. If no services are specified, show logs from\nall services running when the command starts.",
 			"--format": "Output format: \"text\" (default) or \"json\" (JSON lines).",

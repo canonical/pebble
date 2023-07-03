@@ -19,6 +19,9 @@ import (
 	"github.com/canonical/pebble/client"
 )
 
+const cmdRmSummary = "Remove a file or directory"
+const cmdRmDescription = "The rm command removes a file or directory."
+
 type cmdRm struct {
 	clientMixin
 	Recursive  bool `short:"r"`
@@ -29,11 +32,9 @@ type cmdRm struct {
 
 func init() {
 	AddCommand(&CmdInfo{
-		Name:    "rm",
-		Summary: "Remove a file or directory",
-		Description: `
-The rm command removes a file or directory.
-`,
+		Name:        "rm",
+		Summary:     cmdRmSummary,
+		Description: cmdRmDescription,
 		ArgsHelp: map[string]string{
 			"-r": "Remove all files and directories recursively in the specified path",
 		},

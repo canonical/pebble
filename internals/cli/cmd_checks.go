@@ -21,6 +21,13 @@ import (
 	"github.com/canonical/pebble/client"
 )
 
+const cmdChecksSummary = "Query the status of configured health checks"
+const cmdChecksDescription = `
+The checks command lists status information about the configured health
+checks, optionally filtered by level and check names provided as positional
+arguments.
+`
+
 type cmdChecks struct {
 	clientMixin
 	Level      string `long:"level"`
@@ -31,13 +38,9 @@ type cmdChecks struct {
 
 func init() {
 	AddCommand(&CmdInfo{
-		Name:    "checks",
-		Summary: "Query the status of configured health checks",
-		Description: `
-The checks command lists status information about the configured health
-checks, optionally filtered by level and check names provided as positional
-arguments.
-`,
+		Name:        "checks",
+		Summary:     cmdChecksSummary,
+		Description: cmdChecksDescription,
 		ArgsHelp: map[string]string{
 			"--level": `Check level to filter for ("alive" or "ready")`,
 		},

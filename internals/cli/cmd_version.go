@@ -23,6 +23,9 @@ import (
 	version "github.com/canonical/pebble/cmd"
 )
 
+const cmdVersionSummary = "Show version details"
+const cmdVersionDescription = "The version command displays the versions of the running client and server."
+
 type cmdVersion struct {
 	clientMixin
 	ClientOnly bool `long:"client"`
@@ -30,11 +33,9 @@ type cmdVersion struct {
 
 func init() {
 	AddCommand(&CmdInfo{
-		Name:    "version",
-		Summary: "Show version details",
-		Description: `
-The version command displays the versions of the running client and server.
-`,
+		Name:        "version",
+		Summary:     cmdVersionSummary,
+		Description: cmdVersionDescription,
 		ArgsHelp: map[string]string{
 			"--client": "Only display the client version",
 		},

@@ -47,16 +47,8 @@ var sharedRunEnterArgsHelp = map[string]string{
 	"--args":        `Provide additional arguments to a service`,
 }
 
-type cmdRun struct {
-	clientMixin
-	sharedRunEnterOpts
-}
-
-func init() {
-	AddCommand(&CmdInfo{
-		Name:    "run",
-		Summary: "Run the pebble environment",
-		Description: `
+const cmdRunSummary = "Run the pebble environment"
+const cmdRunDescription = `
 The run command starts pebble and runs the configured environment.
 
 Additional arguments may be provided to the service command with the --args option, which
@@ -65,9 +57,20 @@ are appended to the end of the service command, and replace any default argument
 in the service plan. For example:
 
     $ pebble run --args myservice --port 8080 \; --hold
-`,
-		ArgsHelp: sharedRunEnterArgsHelp,
-		Builder:  func() flags.Commander { return &cmdRun{} },
+`
+
+type cmdRun struct {
+	clientMixin
+	sharedRunEnterOpts
+}
+
+func init() {
+	AddCommand(&CmdInfo{
+		Name:        "run",
+		Summary:     cmdRunSummary,
+		Description: cmdRunDescription,
+		ArgsHelp:    sharedRunEnterArgsHelp,
+		Builder:     func() flags.Commander { return &cmdRun{} },
 	})
 }
 
