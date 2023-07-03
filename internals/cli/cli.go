@@ -21,6 +21,7 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -154,7 +155,7 @@ type parserSetter interface {
 }
 
 type options struct {
-	Version func() `long:"version"`
+	Version func() `long:"version" hidden:"yes" description:"Print the version and exit"`
 }
 
 // Parser creates and populates a fresh parser.
@@ -174,14 +175,12 @@ func Parser(cli *client.Client) *flags.Parser {
 	parser.ShortDescription = "Tool to interact with pebble"
 	parser.LongDescription = longPebbleDescription
 
-	// Hide the global --version option on every command
-	if version := parser.FindOptionByLongName("version"); version != nil {
-		version.Description = "Print the version and exit"
-		version.Hidden = true
-	}
-
 	// Add --help like what go-flags would do for us, but hidden
 	addHelp(parser)
+
+	// Regular expressions for positional and flag arguments
+	positionalRegexp := regexp.MustCompile(`^<[\w-]+>$`)
+	flagRegexp := regexp.MustCompile(`^-(\w|-[\w-]+)$`)
 
 	// Add all regular commands
 	for _, c := range commands {
@@ -199,54 +198,42 @@ func Parser(cli *client.Client) *flags.Parser {
 		}
 		cmd.PassAfterNonOption = c.PassAfterNonOption
 
-		optionsHelp := map[string]string{}
-		positionalArgsHelp := map[string]string{}
+		flagHelp := map[string]string{}
+		positionalHelp := map[string]string{}
 
 		for specifier, help := range c.ArgsHelp {
-			isLongOption := strings.HasPrefix(specifier, "--")
-			isShortOption := utf8.RuneCountInString(specifier) == 2 && strings.HasPrefix(specifier, "-")
-			if isShortOption || isLongOption {
-				optionsHelp[specifier] = help
-			} else if strings.HasPrefix(specifier, "<") && strings.HasSuffix(specifier, ">") {
-				// This is a positional argument
-				positionalArgsHelp[specifier] = help
+			if flagRegexp.MatchString(specifier) {
+				flagHelp[specifier] = help
+			} else if positionalRegexp.MatchString(specifier) {
+				positionalHelp[specifier] = help
 			} else {
-				logger.Panicf("invalid help specifier: %#v %#v", c.Name, strings.HasPrefix(specifier, "-"))
+				logger.Panicf("invalid help specifier from %s: %s", c.Name, specifier)
 			}
 		}
 
-		hasAnyOptionHelp := len(optionsHelp) > 0
-		hasAnyPositionalHelp := len(positionalArgsHelp) > 0
-
-		// Check either all or none opts/positional argument descriptions are set
+		// Make sure all argument descriptions are set
 		opts := cmd.Options()
-		if hasAnyOptionHelp && len(opts) != len(optionsHelp) {
-			logger.Panicf("wrong number of option descriptions for %s: expected %d, got %d", c.Name, len(opts), len(optionsHelp))
+		if len(opts) != len(flagHelp) {
+			logger.Panicf("wrong number of flag descriptions for %s: expected %d, got %d", c.Name, len(opts), len(flagHelp))
 		}
-		args := cmd.Args()
-		if hasAnyPositionalHelp && len(args) != len(positionalArgsHelp) {
-			logger.Panicf("wrong number of argument descriptions for %s: expected %d, got %d", c.Name, len(args), len(positionalArgsHelp))
-		}
-
 		for _, opt := range opts {
-			if description, ok := optionsHelp["--"+opt.LongName]; ok {
+			if description, ok := flagHelp["--"+opt.LongName]; ok {
 				lintDesc(c.Name, opt.LongName, description, opt.Description)
 				opt.Description = description
-			} else if description, ok := optionsHelp["-"+string(opt.ShortName)]; ok {
+			} else if description, ok := flagHelp["-"+string(opt.ShortName)]; ok {
 				lintDesc(c.Name, string(opt.ShortName), description, opt.Description)
 				opt.Description = description
-			} else if hasAnyOptionHelp {
+			} else if !opt.Hidden {
 				logger.Panicf("%s missing description for %s", c.Name, opt)
 			}
 		}
 
+		args := cmd.Args()
 		for _, arg := range args {
-			if description, ok := positionalArgsHelp[arg.Name]; ok {
+			if description, ok := positionalHelp[arg.Name]; ok {
 				lintArg(c.Name, arg.Name, description, arg.Description)
 				arg.Name = fixupArg(arg.Name)
 				arg.Description = description
-			} else if hasAnyPositionalHelp {
-				logger.Panicf("%s missing description for %s", c.Name, arg.Name)
 			}
 		}
 	}
