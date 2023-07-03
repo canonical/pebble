@@ -1175,9 +1175,14 @@ func (s *daemonSuite) TestSyscallPosRebootDelay(c *C) {
 	})()
 
 	period := time.Millisecond * 25
+	timeout := time.Second * 10
 	syscallReboot(period)
 	start := time.Now()
-	<-wait
+	select {
+	case <-wait:
+	case <-time.After(timeout): // exit test if we fail and get stuck
+		c.Fail()
+	}
 	elapse := time.Now().Sub(start)
 	c.Assert(elapse >= period, Equals, true)
 }
@@ -1198,7 +1203,11 @@ func (s *daemonSuite) TestSyscallNegRebootDelay(c *C) {
 	period := time.Second * 10
 	syscallReboot(-period)
 	start := time.Now()
-	<-wait
+	select {
+	case <-wait:
+	case <-time.After(period): // exit test if we fail and get stuck
+		c.Fail()
+	}
 	elapse := time.Now().Sub(start)
 	c.Assert(elapse < period, Equals, true)
 }
@@ -1222,7 +1231,12 @@ func (s *daemonSuite) TestSetSyscall(c *C) {
 	err := rebootHandler(0)
 	c.Assert(err, IsNil)
 	// This would block forever if the switch did not work.
-	<-wait
+	timeout := time.Second * 10
+	select {
+	case <-wait:
+	case <-time.After(timeout): // exit test if we fail and get stuck
+		c.Fail()
+	}
 }
 
 func (s *daemonSuite) TestCapSysBootFail(c *C) {
