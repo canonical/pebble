@@ -16,13 +16,14 @@ package logstate
 
 import (
 	"bytes"
+	"sort"
 	"sync"
 	"time"
 
 	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/plan"
 	"github.com/canonical/pebble/internals/servicelog"
-	"github.com/canonical/pebble/internals/testutil"
+
 	. "gopkg.in/check.v1"
 )
 
@@ -49,15 +50,15 @@ func (s *managerSuite) TestLogManager(c *C) {
 	// Call PlanChanged with new plan
 	m.PlanChanged(&plan.Plan{
 		Services: map[string]*plan.Service{
-			"svc1": {},
-			"svc2": {LogTargets: []string{"tgt3", "tgt4"}},
-			"svc3": {LogTargets: []string{"tgt1"}},
+			"svc1": {Name: "svc1"},
+			"svc2": {Name: "svc2"},
+			"svc3": {Name: "svc3"},
 		},
 		LogTargets: map[string]*plan.LogTarget{
-			"tgt1": {Name: "tgt1", Type: plan.LokiTarget, Selection: plan.UnsetSelection},
-			"tgt2": {Name: "tgt2", Type: plan.LokiTarget, Selection: plan.OptOutSelection},
-			"tgt3": {Name: "tgt3", Type: plan.LokiTarget, Selection: plan.OptInSelection},
-			"tgt4": {Name: "tgt4", Type: plan.LokiTarget, Selection: plan.DisabledSelection},
+			"tgt1": {Name: "tgt1", Type: plan.LokiTarget, Services: []string{"svc1"}},
+			"tgt2": {Name: "tgt2", Type: plan.LokiTarget, Services: []string{"all", "-svc2"}},
+			"tgt3": {Name: "tgt3", Type: plan.LokiTarget, Services: []string{"svc1", "svc3", "-svc1"}},
+			"tgt4": {Name: "tgt4", Type: plan.LokiTarget, Services: []string{}},
 		},
 	})
 
@@ -79,61 +80,48 @@ func (s *managerSuite) TestLogManager(c *C) {
 	}()
 
 	wg.Wait()
-	checkForwarders(c, m.forwarders, map[string][]string{
-		"svc1": {"tgt1", "tgt2"},
-		"svc2": {"tgt3"},
-		"svc3": {"tgt1"},
-	})
-	checkGatherers(c, m.gatherers, []string{"tgt1", "tgt2", "tgt3"})
+	c.Assert(getServiceNames(m.forwarders), DeepEquals, []string{"svc1", "svc2", "svc3"})
+	c.Assert(getTargets(m.forwarders["svc1"]), DeepEquals, []string{"tgt1", "tgt2"})
+	c.Assert(getTargets(m.forwarders["svc2"]), DeepEquals, []string(nil))
+	c.Assert(getTargets(m.forwarders["svc3"]), DeepEquals, []string{"tgt2", "tgt3"})
 
 	// Update the plan
 	m.PlanChanged(&plan.Plan{
 		Services: map[string]*plan.Service{
-			"svc1": {},
-			"svc2": {LogTargets: []string{"tgt2", "tgt4"}},
-			"svc4": {LogTargets: []string{"tgt3"}},
+			"svc1": {Name: "svc1"},
+			"svc2": {Name: "svc2"},
+			"svc4": {Name: "svc4"},
 		},
 		LogTargets: map[string]*plan.LogTarget{
-			"tgt1": {Name: "tgt1", Type: plan.LokiTarget, Selection: plan.UnsetSelection},
-			"tgt2": {Name: "tgt2", Type: plan.LokiTarget, Selection: plan.OptOutSelection},
-			"tgt3": {Name: "tgt3", Type: plan.LokiTarget, Selection: plan.OptInSelection},
-			"tgt4": {Name: "tgt4", Type: plan.LokiTarget, Selection: plan.DisabledSelection},
+			"tgt1": {Name: "tgt1", Type: plan.LokiTarget, Services: []string{"svc1", "svc2"}},
+			"tgt2": {Name: "tgt2", Type: plan.LokiTarget, Services: []string{"svc2"}},
+			"tgt3": {Name: "tgt3", Type: plan.LokiTarget, Services: []string{}},
+			"tgt4": {Name: "tgt4", Type: plan.LokiTarget, Services: []string{"all"}},
 		},
 	})
 
 	// Call ServiceStarted
 	m.ServiceStarted("svc4", &rb)
-	checkForwarders(c, m.forwarders, map[string][]string{
-		"svc1": {"tgt1", "tgt2"},
-		"svc2": {"tgt2"},
-		"svc4": {"tgt3"},
-	})
-	checkGatherers(c, m.gatherers, []string{"tgt1", "tgt2", "tgt3"})
+	c.Assert(getServiceNames(m.forwarders), DeepEquals, []string{"svc1", "svc2", "svc4"})
+	c.Assert(getTargets(m.forwarders["svc1"]), DeepEquals, []string{"tgt1", "tgt4"})
+	c.Assert(getTargets(m.forwarders["svc2"]), DeepEquals, []string{"tgt1", "tgt2", "tgt4"})
+	c.Assert(getTargets(m.forwarders["svc4"]), DeepEquals, []string{"tgt4"})
 }
 
-// checkForwarders checks that the arrangement of forwarders -> gatherers is
-// as described in the provided map.
-func checkForwarders(c *C, forwarders map[string]*logForwarder, expected map[string][]string) {
-	c.Check(len(forwarders), Equals, len(expected))
-	for serviceName := range expected {
-		forwarder, ok := forwarders[serviceName]
-		c.Assert(ok, Equals, true)
-		c.Assert(forwarder, Not(IsNil))
-		//forwarder.mu.Lock() - race still passes without this
-		c.Check(len(forwarder.gatherers), Equals, len(expected[serviceName]))
-		for _, gatherer := range forwarder.gatherers {
-			c.Check(expected[serviceName], testutil.Contains, gatherer.target.Name)
-		}
-		//forwarder.mu.Unlock()
+func getServiceNames(forwarders map[string]*logForwarder) (serviceNames []string) {
+	for serviceName := range forwarders {
+		serviceNames = append(serviceNames, serviceName)
 	}
+	sort.Strings(serviceNames)
+	return
 }
 
-// checkGatherers checks that the expected gatherers exist.
-func checkGatherers(c *C, gatherers map[string]*logGatherer, expected []string) {
-	c.Check(len(gatherers), Equals, len(expected))
-	for targetName := range gatherers {
-		c.Check(expected, testutil.Contains, targetName)
+func getTargets(forwarder *logForwarder) (targetNames []string) {
+	for _, gatherers := range forwarder.gatherers {
+		targetNames = append(targetNames, gatherers.target.Name)
 	}
+	sort.Strings(targetNames)
+	return
 }
 
 //func (s *managerSuite) TestNoLogDuplication(c *C) {
