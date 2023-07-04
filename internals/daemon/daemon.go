@@ -568,16 +568,7 @@ func (d *Daemon) Stop(sigCh chan<- os.Signal) error {
 	restartSocket := d.restartSocket
 	d.mu.Unlock()
 
-	d.generalListener.Close()
 	d.standbyOpinions.Stop()
-
-	if d.untrustedListener != nil {
-		d.untrustedListener.Close()
-	}
-
-	if d.httpListener != nil {
-		d.httpListener.Close()
-	}
 
 	if restartSystem {
 		// give time to polling clients to notice restart
