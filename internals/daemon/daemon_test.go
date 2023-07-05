@@ -30,8 +30,6 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
-	"gopkg.in/check.v1"
-	// XXX Delete import above and make this file like the other ones.
 	. "gopkg.in/check.v1"
 
 	"github.com/canonical/pebble/internals/osutil"
@@ -44,7 +42,7 @@ import (
 )
 
 // Hook up check.v1 into the "go test" runner
-func Test(t *testing.T) { check.TestingT(t) }
+func Test(t *testing.T) { TestingT(t) }
 
 type daemonSuite struct {
 	pebbleDir       string
@@ -57,9 +55,9 @@ type daemonSuite struct {
 	restoreBackends func()
 }
 
-var _ = check.Suite(&daemonSuite{})
+var _ = Suite(&daemonSuite{})
 
-func (s *daemonSuite) SetUpTest(c *check.C) {
+func (s *daemonSuite) SetUpTest(c *C) {
 	s.pebbleDir = c.MkDir()
 	s.statePath = filepath.Join(s.pebbleDir, ".pebble.state")
 	systemdSdNotify = func(notif string) error {
@@ -68,20 +66,20 @@ func (s *daemonSuite) SetUpTest(c *check.C) {
 	}
 }
 
-func (s *daemonSuite) TearDownTest(c *check.C) {
+func (s *daemonSuite) TearDownTest(c *C) {
 	systemdSdNotify = systemd.SdNotify
 	s.notified = nil
 	s.authorized = false
 	s.err = nil
 }
 
-func (s *daemonSuite) newDaemon(c *check.C) *Daemon {
+func (s *daemonSuite) newDaemon(c *C) *Daemon {
 	d, err := New(&Options{
 		Dir:         s.pebbleDir,
 		SocketPath:  s.socketPath,
 		HTTPAddress: s.httpAddress,
 	})
-	c.Assert(err, check.IsNil)
+	c.Assert(err, IsNil)
 	d.addRoutes()
 	return d
 }
@@ -113,13 +111,13 @@ func (s *daemonSuite) TestExplicitPaths(c *C) {
 	c.Assert(info.Mode(), Equals, os.ModeSocket|0666)
 }
 
-func (s *daemonSuite) TestCommandMethodDispatch(c *check.C) {
+func (s *daemonSuite) TestCommandMethodDispatch(c *C) {
 	fakeUserAgent := "some-agent-talking-to-pebble/1.0"
 
 	cmd := &Command{d: s.newDaemon(c)}
 	handler := &fakeHandler{cmd: cmd}
 	rf := func(innerCmd *Command, req *http.Request, user *userState) Response {
-		c.Assert(cmd, check.Equals, innerCmd)
+		c.Assert(cmd, Equals, innerCmd)
 		return handler
 	}
 	cmd.GET = rf
@@ -130,30 +128,30 @@ func (s *daemonSuite) TestCommandMethodDispatch(c *check.C) {
 	for _, method := range []string{"GET", "POST", "PUT", "DELETE"} {
 		req, err := http.NewRequest(method, "", nil)
 		req.Header.Add("User-Agent", fakeUserAgent)
-		c.Assert(err, check.IsNil)
+		c.Assert(err, IsNil)
 
 		rec := httptest.NewRecorder()
 		cmd.ServeHTTP(rec, req)
-		c.Check(rec.Code, check.Equals, 401, check.Commentf(method))
+		c.Check(rec.Code, Equals, 401, Commentf(method))
 
 		rec = httptest.NewRecorder()
 		req.RemoteAddr = "pid=100;uid=0;socket=;"
 
 		cmd.ServeHTTP(rec, req)
-		c.Check(handler.lastMethod, check.Equals, method)
-		c.Check(rec.Code, check.Equals, 200)
+		c.Check(handler.lastMethod, Equals, method)
+		c.Check(rec.Code, Equals, 200)
 	}
 
 	req, err := http.NewRequest("POTATO", "", nil)
-	c.Assert(err, check.IsNil)
+	c.Assert(err, IsNil)
 	req.RemoteAddr = "pid=100;uid=0;socket=;"
 
 	rec := httptest.NewRecorder()
 	cmd.ServeHTTP(rec, req)
-	c.Check(rec.Code, check.Equals, 405)
+	c.Check(rec.Code, Equals, 405)
 }
 
-func (s *daemonSuite) TestCommandRestartingState(c *check.C) {
+func (s *daemonSuite) TestCommandRestartingState(c *C) {
 	d := s.newDaemon(c)
 
 	cmd := &Command{d: d}
@@ -161,18 +159,18 @@ func (s *daemonSuite) TestCommandRestartingState(c *check.C) {
 		return SyncResponse(nil)
 	}
 	req, err := http.NewRequest("GET", "", nil)
-	c.Assert(err, check.IsNil)
+	c.Assert(err, IsNil)
 	req.RemoteAddr = "pid=100;uid=0;socket=;"
 
 	rec := httptest.NewRecorder()
 	cmd.ServeHTTP(rec, req)
-	c.Check(rec.Code, check.Equals, 200)
+	c.Check(rec.Code, Equals, 200)
 	var rst struct {
 		Maintenance *errorResult `json:"maintenance"`
 	}
 	err = json.Unmarshal(rec.Body.Bytes(), &rst)
-	c.Assert(err, check.IsNil)
-	c.Check(rst.Maintenance, check.IsNil)
+	c.Assert(err, IsNil)
+	c.Check(rst.Maintenance, IsNil)
 
 	state := d.overlord.State()
 
@@ -181,10 +179,10 @@ func (s *daemonSuite) TestCommandRestartingState(c *check.C) {
 	state.Unlock()
 	rec = httptest.NewRecorder()
 	cmd.ServeHTTP(rec, req)
-	c.Check(rec.Code, check.Equals, 200)
+	c.Check(rec.Code, Equals, 200)
 	err = json.Unmarshal(rec.Body.Bytes(), &rst)
-	c.Assert(err, check.IsNil)
-	c.Check(rst.Maintenance, check.DeepEquals, &errorResult{
+	c.Assert(err, IsNil)
+	c.Check(rst.Maintenance, DeepEquals, &errorResult{
 		Kind:    errorKindSystemRestart,
 		Message: "system is restarting",
 	})
@@ -194,16 +192,16 @@ func (s *daemonSuite) TestCommandRestartingState(c *check.C) {
 	state.Unlock()
 	rec = httptest.NewRecorder()
 	cmd.ServeHTTP(rec, req)
-	c.Check(rec.Code, check.Equals, 200)
+	c.Check(rec.Code, Equals, 200)
 	err = json.Unmarshal(rec.Body.Bytes(), &rst)
-	c.Assert(err, check.IsNil)
-	c.Check(rst.Maintenance, check.DeepEquals, &errorResult{
+	c.Assert(err, IsNil)
+	c.Check(rst.Maintenance, DeepEquals, &errorResult{
 		Kind:    errorKindDaemonRestart,
 		Message: "daemon is restarting",
 	})
 }
 
-func (s *daemonSuite) TestFillsWarnings(c *check.C) {
+func (s *daemonSuite) TestFillsWarnings(c *C) {
 	d := s.newDaemon(c)
 
 	cmd := &Command{d: d}
@@ -211,20 +209,20 @@ func (s *daemonSuite) TestFillsWarnings(c *check.C) {
 		return SyncResponse(nil)
 	}
 	req, err := http.NewRequest("GET", "", nil)
-	c.Assert(err, check.IsNil)
+	c.Assert(err, IsNil)
 	req.RemoteAddr = "pid=100;uid=0;socket=;"
 
 	rec := httptest.NewRecorder()
 	cmd.ServeHTTP(rec, req)
-	c.Check(rec.Code, check.Equals, 200)
+	c.Check(rec.Code, Equals, 200)
 	var rst struct {
 		WarningTimestamp *time.Time `json:"warning-timestamp,omitempty"`
 		WarningCount     int        `json:"warning-count,omitempty"`
 	}
 	err = json.Unmarshal(rec.Body.Bytes(), &rst)
-	c.Assert(err, check.IsNil)
-	c.Check(rst.WarningCount, check.Equals, 0)
-	c.Check(rst.WarningTimestamp, check.IsNil)
+	c.Assert(err, IsNil)
+	c.Check(rst.WarningCount, Equals, 0)
+	c.Check(rst.WarningTimestamp, IsNil)
 
 	st := d.overlord.State()
 	st.Lock()
@@ -233,14 +231,14 @@ func (s *daemonSuite) TestFillsWarnings(c *check.C) {
 
 	rec = httptest.NewRecorder()
 	cmd.ServeHTTP(rec, req)
-	c.Check(rec.Code, check.Equals, 200)
+	c.Check(rec.Code, Equals, 200)
 	err = json.Unmarshal(rec.Body.Bytes(), &rst)
-	c.Assert(err, check.IsNil)
-	c.Check(rst.WarningCount, check.Equals, 1)
-	c.Check(rst.WarningTimestamp, check.NotNil)
+	c.Assert(err, IsNil)
+	c.Check(rst.WarningCount, Equals, 1)
+	c.Check(rst.WarningTimestamp, NotNil)
 }
 
-func (s *daemonSuite) TestGuestAccess(c *check.C) {
+func (s *daemonSuite) TestGuestAccess(c *C) {
 	d := s.newDaemon(c)
 
 	get := &http.Request{Method: "GET"}
@@ -249,31 +247,31 @@ func (s *daemonSuite) TestGuestAccess(c *check.C) {
 	del := &http.Request{Method: "DELETE"}
 
 	cmd := &Command{d: d}
-	c.Check(cmd.canAccess(get, nil), check.Equals, accessUnauthorized)
-	c.Check(cmd.canAccess(put, nil), check.Equals, accessUnauthorized)
-	c.Check(cmd.canAccess(pst, nil), check.Equals, accessUnauthorized)
-	c.Check(cmd.canAccess(del, nil), check.Equals, accessUnauthorized)
+	c.Check(cmd.canAccess(get, nil), Equals, accessUnauthorized)
+	c.Check(cmd.canAccess(put, nil), Equals, accessUnauthorized)
+	c.Check(cmd.canAccess(pst, nil), Equals, accessUnauthorized)
+	c.Check(cmd.canAccess(del, nil), Equals, accessUnauthorized)
 
 	cmd = &Command{d: d, AdminOnly: true}
-	c.Check(cmd.canAccess(get, nil), check.Equals, accessUnauthorized)
-	c.Check(cmd.canAccess(put, nil), check.Equals, accessUnauthorized)
-	c.Check(cmd.canAccess(pst, nil), check.Equals, accessUnauthorized)
-	c.Check(cmd.canAccess(del, nil), check.Equals, accessUnauthorized)
+	c.Check(cmd.canAccess(get, nil), Equals, accessUnauthorized)
+	c.Check(cmd.canAccess(put, nil), Equals, accessUnauthorized)
+	c.Check(cmd.canAccess(pst, nil), Equals, accessUnauthorized)
+	c.Check(cmd.canAccess(del, nil), Equals, accessUnauthorized)
 
 	cmd = &Command{d: d, UserOK: true}
-	c.Check(cmd.canAccess(get, nil), check.Equals, accessUnauthorized)
-	c.Check(cmd.canAccess(put, nil), check.Equals, accessUnauthorized)
-	c.Check(cmd.canAccess(pst, nil), check.Equals, accessUnauthorized)
-	c.Check(cmd.canAccess(del, nil), check.Equals, accessUnauthorized)
+	c.Check(cmd.canAccess(get, nil), Equals, accessUnauthorized)
+	c.Check(cmd.canAccess(put, nil), Equals, accessUnauthorized)
+	c.Check(cmd.canAccess(pst, nil), Equals, accessUnauthorized)
+	c.Check(cmd.canAccess(del, nil), Equals, accessUnauthorized)
 
 	cmd = &Command{d: d, GuestOK: true}
-	c.Check(cmd.canAccess(get, nil), check.Equals, accessOK)
-	c.Check(cmd.canAccess(put, nil), check.Equals, accessUnauthorized)
-	c.Check(cmd.canAccess(pst, nil), check.Equals, accessUnauthorized)
-	c.Check(cmd.canAccess(del, nil), check.Equals, accessUnauthorized)
+	c.Check(cmd.canAccess(get, nil), Equals, accessOK)
+	c.Check(cmd.canAccess(put, nil), Equals, accessUnauthorized)
+	c.Check(cmd.canAccess(pst, nil), Equals, accessUnauthorized)
+	c.Check(cmd.canAccess(del, nil), Equals, accessUnauthorized)
 }
 
-func (s *daemonSuite) TestUntrustedAccessUntrustedOKWithUser(c *check.C) {
+func (s *daemonSuite) TestUntrustedAccessUntrustedOKWithUser(c *C) {
 	d := s.newDaemon(c)
 
 	remoteAddr := "pid=100;uid=1000;socket=" + d.untrustedSocketPath + ";"
@@ -283,13 +281,13 @@ func (s *daemonSuite) TestUntrustedAccessUntrustedOKWithUser(c *check.C) {
 	del := &http.Request{Method: "DELETE", RemoteAddr: remoteAddr}
 
 	cmd := &Command{d: d, UntrustedOK: true}
-	c.Check(cmd.canAccess(get, nil), check.Equals, accessOK)
-	c.Check(cmd.canAccess(put, nil), check.Equals, accessOK)
-	c.Check(cmd.canAccess(pst, nil), check.Equals, accessOK)
-	c.Check(cmd.canAccess(del, nil), check.Equals, accessOK)
+	c.Check(cmd.canAccess(get, nil), Equals, accessOK)
+	c.Check(cmd.canAccess(put, nil), Equals, accessOK)
+	c.Check(cmd.canAccess(pst, nil), Equals, accessOK)
+	c.Check(cmd.canAccess(del, nil), Equals, accessOK)
 }
 
-func (s *daemonSuite) TestUntrustedAccessUntrustedOKWithRoot(c *check.C) {
+func (s *daemonSuite) TestUntrustedAccessUntrustedOKWithRoot(c *C) {
 	d := s.newDaemon(c)
 
 	remoteAddr := "pid=100;uid=0;socket=" + d.untrustedSocketPath + ";"
@@ -299,43 +297,43 @@ func (s *daemonSuite) TestUntrustedAccessUntrustedOKWithRoot(c *check.C) {
 	del := &http.Request{Method: "DELETE", RemoteAddr: remoteAddr}
 
 	cmd := &Command{d: d, UntrustedOK: true}
-	c.Check(cmd.canAccess(get, nil), check.Equals, accessOK)
-	c.Check(cmd.canAccess(put, nil), check.Equals, accessOK)
-	c.Check(cmd.canAccess(pst, nil), check.Equals, accessOK)
-	c.Check(cmd.canAccess(del, nil), check.Equals, accessOK)
+	c.Check(cmd.canAccess(get, nil), Equals, accessOK)
+	c.Check(cmd.canAccess(put, nil), Equals, accessOK)
+	c.Check(cmd.canAccess(pst, nil), Equals, accessOK)
+	c.Check(cmd.canAccess(del, nil), Equals, accessOK)
 }
 
-func (s *daemonSuite) TestUserAccess(c *check.C) {
+func (s *daemonSuite) TestUserAccess(c *C) {
 	d := s.newDaemon(c)
 
 	get := &http.Request{Method: "GET", RemoteAddr: "pid=100;uid=42;socket=;"}
 	put := &http.Request{Method: "PUT", RemoteAddr: "pid=100;uid=42;socket=;"}
 
 	cmd := &Command{d: d}
-	c.Check(cmd.canAccess(get, nil), check.Equals, accessUnauthorized)
-	c.Check(cmd.canAccess(put, nil), check.Equals, accessUnauthorized)
+	c.Check(cmd.canAccess(get, nil), Equals, accessUnauthorized)
+	c.Check(cmd.canAccess(put, nil), Equals, accessUnauthorized)
 
 	cmd = &Command{d: d, AdminOnly: true}
-	c.Check(cmd.canAccess(get, nil), check.Equals, accessUnauthorized)
-	c.Check(cmd.canAccess(put, nil), check.Equals, accessUnauthorized)
+	c.Check(cmd.canAccess(get, nil), Equals, accessUnauthorized)
+	c.Check(cmd.canAccess(put, nil), Equals, accessUnauthorized)
 
 	cmd = &Command{d: d, UserOK: true}
-	c.Check(cmd.canAccess(get, nil), check.Equals, accessOK)
-	c.Check(cmd.canAccess(put, nil), check.Equals, accessUnauthorized)
+	c.Check(cmd.canAccess(get, nil), Equals, accessOK)
+	c.Check(cmd.canAccess(put, nil), Equals, accessUnauthorized)
 
 	cmd = &Command{d: d, GuestOK: true}
-	c.Check(cmd.canAccess(get, nil), check.Equals, accessOK)
-	c.Check(cmd.canAccess(put, nil), check.Equals, accessUnauthorized)
+	c.Check(cmd.canAccess(get, nil), Equals, accessOK)
+	c.Check(cmd.canAccess(put, nil), Equals, accessUnauthorized)
 
 	// Since this request has a RemoteAddr, it must be coming from the pebble server
 	// socket instead of the pebble one. In that case, UntrustedOK should have no
 	// bearing on the default behavior, which is to deny access.
 	cmd = &Command{d: d, UntrustedOK: true}
-	c.Check(cmd.canAccess(get, nil), check.Equals, accessUnauthorized)
-	c.Check(cmd.canAccess(put, nil), check.Equals, accessUnauthorized)
+	c.Check(cmd.canAccess(get, nil), Equals, accessUnauthorized)
+	c.Check(cmd.canAccess(put, nil), Equals, accessUnauthorized)
 }
 
-func (s *daemonSuite) TestLoggedInUserAccess(c *check.C) {
+func (s *daemonSuite) TestLoggedInUserAccess(c *C) {
 	d := s.newDaemon(c)
 
 	user := &userState{}
@@ -343,27 +341,27 @@ func (s *daemonSuite) TestLoggedInUserAccess(c *check.C) {
 	put := &http.Request{Method: "PUT", RemoteAddr: "pid=100;uid=42;socket=;"}
 
 	cmd := &Command{d: d}
-	c.Check(cmd.canAccess(get, user), check.Equals, accessOK)
-	c.Check(cmd.canAccess(put, user), check.Equals, accessOK)
+	c.Check(cmd.canAccess(get, user), Equals, accessOK)
+	c.Check(cmd.canAccess(put, user), Equals, accessOK)
 
 	cmd = &Command{d: d, AdminOnly: true}
-	c.Check(cmd.canAccess(get, user), check.Equals, accessUnauthorized)
-	c.Check(cmd.canAccess(put, user), check.Equals, accessUnauthorized)
+	c.Check(cmd.canAccess(get, user), Equals, accessUnauthorized)
+	c.Check(cmd.canAccess(put, user), Equals, accessUnauthorized)
 
 	cmd = &Command{d: d, UserOK: true}
-	c.Check(cmd.canAccess(get, user), check.Equals, accessOK)
-	c.Check(cmd.canAccess(put, user), check.Equals, accessOK)
+	c.Check(cmd.canAccess(get, user), Equals, accessOK)
+	c.Check(cmd.canAccess(put, user), Equals, accessOK)
 
 	cmd = &Command{d: d, GuestOK: true}
-	c.Check(cmd.canAccess(get, user), check.Equals, accessOK)
-	c.Check(cmd.canAccess(put, user), check.Equals, accessOK)
+	c.Check(cmd.canAccess(get, user), Equals, accessOK)
+	c.Check(cmd.canAccess(put, user), Equals, accessOK)
 
 	cmd = &Command{d: d, UntrustedOK: true}
-	c.Check(cmd.canAccess(get, user), check.Equals, accessOK)
-	c.Check(cmd.canAccess(put, user), check.Equals, accessOK)
+	c.Check(cmd.canAccess(get, user), Equals, accessOK)
+	c.Check(cmd.canAccess(put, user), Equals, accessOK)
 }
 
-func (s *daemonSuite) TestSuperAccess(c *check.C) {
+func (s *daemonSuite) TestSuperAccess(c *C) {
 	d := s.newDaemon(c)
 
 	for _, uid := range []int{0, os.Getuid()} {
@@ -372,28 +370,28 @@ func (s *daemonSuite) TestSuperAccess(c *check.C) {
 		put := &http.Request{Method: "PUT", RemoteAddr: remoteAddr}
 
 		cmd := &Command{d: d}
-		c.Check(cmd.canAccess(get, nil), check.Equals, accessOK)
-		c.Check(cmd.canAccess(put, nil), check.Equals, accessOK)
+		c.Check(cmd.canAccess(get, nil), Equals, accessOK)
+		c.Check(cmd.canAccess(put, nil), Equals, accessOK)
 
 		cmd = &Command{d: d, AdminOnly: true}
-		c.Check(cmd.canAccess(get, nil), check.Equals, accessOK)
-		c.Check(cmd.canAccess(put, nil), check.Equals, accessOK)
+		c.Check(cmd.canAccess(get, nil), Equals, accessOK)
+		c.Check(cmd.canAccess(put, nil), Equals, accessOK)
 
 		cmd = &Command{d: d, UserOK: true}
-		c.Check(cmd.canAccess(get, nil), check.Equals, accessOK)
-		c.Check(cmd.canAccess(put, nil), check.Equals, accessOK)
+		c.Check(cmd.canAccess(get, nil), Equals, accessOK)
+		c.Check(cmd.canAccess(put, nil), Equals, accessOK)
 
 		cmd = &Command{d: d, GuestOK: true}
-		c.Check(cmd.canAccess(get, nil), check.Equals, accessOK)
-		c.Check(cmd.canAccess(put, nil), check.Equals, accessOK)
+		c.Check(cmd.canAccess(get, nil), Equals, accessOK)
+		c.Check(cmd.canAccess(put, nil), Equals, accessOK)
 
 		cmd = &Command{d: d, UntrustedOK: true}
-		c.Check(cmd.canAccess(get, nil), check.Equals, accessOK)
-		c.Check(cmd.canAccess(put, nil), check.Equals, accessOK)
+		c.Check(cmd.canAccess(get, nil), Equals, accessOK)
+		c.Check(cmd.canAccess(put, nil), Equals, accessOK)
 	}
 }
 
-func (s *daemonSuite) TestAddRoutes(c *check.C) {
+func (s *daemonSuite) TestAddRoutes(c *C) {
 	d := s.newDaemon(c)
 
 	expected := make([]string, len(api))
@@ -409,9 +407,9 @@ func (s *daemonSuite) TestAddRoutes(c *check.C) {
 	c.Assert(d.router.Walk(func(route *mux.Route, router *mux.Router, ancestors []*mux.Route) error {
 		got = append(got, route.GetName())
 		return nil
-	}), check.IsNil)
+	}), IsNil)
 
-	c.Check(got, check.DeepEquals, expected) // this'll stop being true if routes are added that aren't commands (e.g. for the favicon)
+	c.Check(got, DeepEquals, expected) // this'll stop being true if routes are added that aren't commands (e.g. for the favicon)
 }
 
 type witnessAcceptListener struct {
@@ -443,13 +441,13 @@ func (l *witnessAcceptListener) Close() error {
 	return l.closeErr
 }
 
-func (s *daemonSuite) TestStartStop(c *check.C) {
+func (s *daemonSuite) TestStartStop(c *C) {
 	d := s.newDaemon(c)
 
 	l1, err := net.Listen("tcp", "127.0.0.1:0")
-	c.Assert(err, check.IsNil)
+	c.Assert(err, IsNil)
 	l2, err := net.Listen("tcp", "127.0.0.1:0")
-	c.Assert(err, check.IsNil)
+	c.Assert(err, IsNil)
 
 	generalAccept := make(chan struct{})
 	d.generalListener = &witnessAcceptListener{Listener: l1, accept: generalAccept}
@@ -483,14 +481,14 @@ func (s *daemonSuite) TestStartStop(c *check.C) {
 	<-untrustedDone
 
 	err = d.Stop(nil)
-	c.Check(err, check.IsNil)
+	c.Check(err, IsNil)
 }
 
-func (s *daemonSuite) TestRestartWiring(c *check.C) {
+func (s *daemonSuite) TestRestartWiring(c *C) {
 	d := s.newDaemon(c)
 
 	l, err := net.Listen("tcp", "127.0.0.1:0")
-	c.Assert(err, check.IsNil)
+	c.Assert(err, IsNil)
 
 	generalAccept := make(chan struct{})
 	d.generalListener = &witnessAcceptListener{Listener: l, accept: generalAccept}
@@ -536,7 +534,7 @@ func (s *daemonSuite) TestRestartWiring(c *check.C) {
 	}
 }
 
-func (s *daemonSuite) TestGracefulStop(c *check.C) {
+func (s *daemonSuite) TestGracefulStop(c *C) {
 	d := s.newDaemon(c)
 
 	responding := make(chan struct{})
@@ -553,10 +551,10 @@ func (s *daemonSuite) TestGracefulStop(c *check.C) {
 	})
 
 	generalL, err := net.Listen("tcp", "127.0.0.1:0")
-	c.Assert(err, check.IsNil)
+	c.Assert(err, IsNil)
 
 	untrustedL, err := net.Listen("tcp", "127.0.0.1:0")
-	c.Assert(err, check.IsNil)
+	c.Assert(err, IsNil)
 
 	generalAccept := make(chan struct{})
 	generalClosed := make(chan struct{})
@@ -594,12 +592,12 @@ func (s *daemonSuite) TestGracefulStop(c *check.C) {
 
 	go func() {
 		res, err := http.Get(fmt.Sprintf("http://%s/endp", generalL.Addr()))
-		c.Assert(err, check.IsNil)
-		c.Check(res.StatusCode, check.Equals, 200)
+		c.Assert(err, IsNil)
+		c.Check(res.StatusCode, Equals, 200)
 		body, err := ioutil.ReadAll(res.Body)
 		res.Body.Close()
-		c.Assert(err, check.IsNil)
-		c.Check(string(body), check.Equals, "OKOK")
+		c.Assert(err, IsNil)
+		c.Check(string(body), Equals, "OKOK")
 		close(alright)
 	}()
 	go func() {
@@ -611,7 +609,7 @@ func (s *daemonSuite) TestGracefulStop(c *check.C) {
 	<-responding
 	err = d.Stop(nil)
 	doRespond <- false
-	c.Check(err, check.IsNil)
+	c.Check(err, IsNil)
 
 	select {
 	case <-alright:
@@ -620,11 +618,11 @@ func (s *daemonSuite) TestGracefulStop(c *check.C) {
 	}
 }
 
-func (s *daemonSuite) TestRestartSystemWiring(c *check.C) {
+func (s *daemonSuite) TestRestartSystemWiring(c *C) {
 	d := s.newDaemon(c)
 
 	l, err := net.Listen("tcp", "127.0.0.1:0")
-	c.Assert(err, check.IsNil)
+	c.Assert(err, IsNil)
 
 	generalAccept := make(chan struct{})
 	d.generalListener = &witnessAcceptListener{Listener: l, accept: generalAccept}
@@ -696,33 +694,33 @@ func (s *daemonSuite) TestRestartSystemWiring(c *check.C) {
 	rs := d.restartSystem
 	d.mu.Unlock()
 
-	c.Check(rs, check.Equals, true)
+	c.Check(rs, Equals, true)
 
-	c.Check(delays, check.HasLen, 1)
-	c.Check(delays[0], check.DeepEquals, rebootWaitTimeout)
+	c.Check(delays, HasLen, 1)
+	c.Check(delays[0], DeepEquals, rebootWaitTimeout)
 
 	now := time.Now()
 
 	err = d.Stop(nil)
 
-	c.Check(err, check.ErrorMatches, "expected reboot did not happen")
+	c.Check(err, ErrorMatches, "expected reboot did not happen")
 
-	c.Check(delays, check.HasLen, 2)
-	c.Check(delays[1], check.DeepEquals, 1*time.Minute)
+	c.Check(delays, HasLen, 2)
+	c.Check(delays[1], DeepEquals, 1*time.Minute)
 
 	// we are not stopping, we wait for the reboot instead
-	c.Check(s.notified, check.DeepEquals, []string{"READY=1"})
+	c.Check(s.notified, DeepEquals, []string{"READY=1"})
 
 	st.Lock()
 	defer st.Unlock()
 	var rebootAt time.Time
 	err = st.Get("daemon-system-restart-at", &rebootAt)
-	c.Assert(err, check.IsNil)
+	c.Assert(err, IsNil)
 	approxAt := now.Add(time.Minute)
-	c.Check(rebootAt.After(approxAt) || rebootAt.Equal(approxAt), check.Equals, true)
+	c.Check(rebootAt.After(approxAt) || rebootAt.Equal(approxAt), Equals, true)
 }
 
-func (s *daemonSuite) TestRebootHelper(c *check.C) {
+func (s *daemonSuite) TestRebootHelper(c *C) {
 	cmd := testutil.FakeCommand(c, "shutdown", "", true)
 	defer cmd.Restore()
 
@@ -739,8 +737,8 @@ func (s *daemonSuite) TestRebootHelper(c *check.C) {
 
 	for _, t := range tests {
 		err := reboot(t.delay)
-		c.Assert(err, check.IsNil)
-		c.Check(cmd.Calls(), check.DeepEquals, [][]string{
+		c.Assert(err, IsNil)
+		c.Check(cmd.Calls(), DeepEquals, [][]string{
 			{"shutdown", "-r", t.delayArg, "reboot scheduled to update the system"},
 		})
 
@@ -748,12 +746,12 @@ func (s *daemonSuite) TestRebootHelper(c *check.C) {
 	}
 }
 
-func makeDaemonListeners(c *check.C, d *Daemon) {
+func makeDaemonListeners(c *C, d *Daemon) {
 	generalL, err := net.Listen("tcp", "127.0.0.1:0")
-	c.Assert(err, check.IsNil)
+	c.Assert(err, IsNil)
 
 	untrustedL, err := net.Listen("tcp", "127.0.0.1:0")
-	c.Assert(err, check.IsNil)
+	c.Assert(err, IsNil)
 
 	generalAccept := make(chan struct{})
 	generalClosed := make(chan struct{})
@@ -766,7 +764,7 @@ func makeDaemonListeners(c *check.C, d *Daemon) {
 // This test tests that when a restart of the system is called
 // a sigterm (from e.g. systemd) is handled when it arrives before
 // stop is fully done.
-func (s *daemonSuite) TestRestartShutdownWithSigtermInBetween(c *check.C) {
+func (s *daemonSuite) TestRestartShutdownWithSigtermInBetween(c *C) {
 	oldRebootNoticeWait := rebootNoticeWait
 	defer func() {
 		rebootNoticeWait = oldRebootNoticeWait
@@ -790,12 +788,12 @@ func (s *daemonSuite) TestRestartShutdownWithSigtermInBetween(c *check.C) {
 	ch <- syscall.SIGTERM
 	// stop will check if we got a sigterm in between (which we did)
 	err := d.Stop(ch)
-	c.Assert(err, check.IsNil)
+	c.Assert(err, IsNil)
 }
 
 // This test tests that when there is a shutdown we close the sigterm
 // handler so that systemd can kill pebble.
-func (s *daemonSuite) TestRestartShutdown(c *check.C) {
+func (s *daemonSuite) TestRestartShutdown(c *C) {
 	oldRebootNoticeWait := rebootNoticeWait
 	oldRebootWaitTimeout := rebootWaitTimeout
 	defer func() {
@@ -824,16 +822,16 @@ func (s *daemonSuite) TestRestartShutdown(c *check.C) {
 
 	// ensure that the sigCh got closed as part of the stop
 	_, chOpen := <-sigCh
-	c.Assert(chOpen, check.Equals, false)
+	c.Assert(chOpen, Equals, false)
 }
 
-func (s *daemonSuite) TestRestartExpectedRebootIsMissing(c *check.C) {
+func (s *daemonSuite) TestRestartExpectedRebootIsMissing(c *C) {
 	curBootID, err := osutil.BootID()
-	c.Assert(err, check.IsNil)
+	c.Assert(err, IsNil)
 
 	fakeState := []byte(fmt.Sprintf(`{"data":{"patch-level":%d,"patch-sublevel":%d,"some":"data","system-restart-from-boot-id":%q,"daemon-system-restart-at":"%s"},"changes":null,"tasks":null,"last-change-id":0,"last-task-id":0,"last-lane-id":0}`, patch.Level, patch.Sublevel, curBootID, time.Now().UTC().Format(time.RFC3339)))
 	err = ioutil.WriteFile(s.statePath, fakeState, 0600)
-	c.Assert(err, check.IsNil)
+	c.Assert(err, IsNil)
 
 	oldRebootNoticeWait := rebootNoticeWait
 	oldRebootRetryWaitTimeout := rebootRetryWaitTimeout
@@ -848,19 +846,19 @@ func (s *daemonSuite) TestRestartExpectedRebootIsMissing(c *check.C) {
 	defer cmd.Restore()
 
 	d := s.newDaemon(c)
-	c.Check(d.overlord, check.IsNil)
-	c.Check(d.rebootIsMissing, check.Equals, true)
+	c.Check(d.overlord, IsNil)
+	c.Check(d.rebootIsMissing, Equals, true)
 
 	var n int
 	d.state.Lock()
 	err = d.state.Get("daemon-system-restart-tentative", &n)
 	d.state.Unlock()
-	c.Check(err, check.IsNil)
-	c.Check(n, check.Equals, 1)
+	c.Check(err, IsNil)
+	c.Check(n, Equals, 1)
 
 	d.Start()
 
-	c.Check(s.notified, check.DeepEquals, []string{"READY=1"})
+	c.Check(s.notified, DeepEquals, []string{"READY=1"})
 
 	select {
 	case <-d.Dying():
@@ -873,57 +871,57 @@ func (s *daemonSuite) TestRestartExpectedRebootIsMissing(c *check.C) {
 	d.Stop(sigCh)
 
 	// an immediate shutdown was scheduled again
-	c.Check(cmd.Calls(), check.DeepEquals, [][]string{
+	c.Check(cmd.Calls(), DeepEquals, [][]string{
 		{"shutdown", "-r", "+0", "reboot scheduled to update the system"},
 	})
 }
 
-func (s *daemonSuite) TestRestartExpectedRebootOK(c *check.C) {
+func (s *daemonSuite) TestRestartExpectedRebootOK(c *C) {
 	fakeState := []byte(fmt.Sprintf(`{"data":{"patch-level":%d,"patch-sublevel":%d,"some":"data","system-restart-from-boot-id":%q,"daemon-system-restart-at":"%s"},"changes":null,"tasks":null,"last-change-id":0,"last-task-id":0,"last-lane-id":0}`, patch.Level, patch.Sublevel, "boot-id-0", time.Now().UTC().Format(time.RFC3339)))
 	err := ioutil.WriteFile(s.statePath, fakeState, 0600)
-	c.Assert(err, check.IsNil)
+	c.Assert(err, IsNil)
 
 	cmd := testutil.FakeCommand(c, "shutdown", "", true)
 	defer cmd.Restore()
 
 	d := s.newDaemon(c)
-	c.Assert(d.overlord, check.NotNil)
+	c.Assert(d.overlord, NotNil)
 
 	st := d.overlord.State()
 	st.Lock()
 	defer st.Unlock()
 	var v interface{}
 	// these were cleared
-	c.Check(st.Get("daemon-system-restart-at", &v), check.Equals, state.ErrNoState)
-	c.Check(st.Get("system-restart-from-boot-id", &v), check.Equals, state.ErrNoState)
+	c.Check(st.Get("daemon-system-restart-at", &v), Equals, state.ErrNoState)
+	c.Check(st.Get("system-restart-from-boot-id", &v), Equals, state.ErrNoState)
 }
 
-func (s *daemonSuite) TestRestartExpectedRebootGiveUp(c *check.C) {
+func (s *daemonSuite) TestRestartExpectedRebootGiveUp(c *C) {
 	// we give up trying to restart the system after 3 retry tentatives
 	curBootID, err := osutil.BootID()
-	c.Assert(err, check.IsNil)
+	c.Assert(err, IsNil)
 
 	fakeState := []byte(fmt.Sprintf(`{"data":{"patch-level":%d,"patch-sublevel":%d,"some":"data","system-restart-from-boot-id":%q,"daemon-system-restart-at":"%s","daemon-system-restart-tentative":3},"changes":null,"tasks":null,"last-change-id":0,"last-task-id":0,"last-lane-id":0}`, patch.Level, patch.Sublevel, curBootID, time.Now().UTC().Format(time.RFC3339)))
 	err = ioutil.WriteFile(s.statePath, fakeState, 0600)
-	c.Assert(err, check.IsNil)
+	c.Assert(err, IsNil)
 
 	cmd := testutil.FakeCommand(c, "shutdown", "", true)
 	defer cmd.Restore()
 
 	d := s.newDaemon(c)
-	c.Assert(d.overlord, check.NotNil)
+	c.Assert(d.overlord, NotNil)
 
 	st := d.overlord.State()
 	st.Lock()
 	defer st.Unlock()
 	var v interface{}
 	// these were cleared
-	c.Check(st.Get("daemon-system-restart-at", &v), check.Equals, state.ErrNoState)
-	c.Check(st.Get("system-restart-from-boot-id", &v), check.Equals, state.ErrNoState)
-	c.Check(st.Get("daemon-system-restart-tentative", &v), check.Equals, state.ErrNoState)
+	c.Check(st.Get("daemon-system-restart-at", &v), Equals, state.ErrNoState)
+	c.Check(st.Get("system-restart-from-boot-id", &v), Equals, state.ErrNoState)
+	c.Check(st.Get("daemon-system-restart-tentative", &v), Equals, state.ErrNoState)
 }
 
-func (s *daemonSuite) TestRestartIntoSocketModeNoNewChanges(c *check.C) {
+func (s *daemonSuite) TestRestartIntoSocketModeNoNewChanges(c *C) {
 	notifySocket := filepath.Join(c.MkDir(), "notify.socket")
 	os.Setenv("NOTIFY_SOCKET", notifySocket)
 	defer os.Setenv("NOTIFY_SOCKET", "")
@@ -942,10 +940,10 @@ func (s *daemonSuite) TestRestartIntoSocketModeNoNewChanges(c *check.C) {
 		time.Sleep(5 * time.Millisecond)
 	}
 
-	c.Assert(d.standbyOpinions.CanStandby(), check.Equals, false)
+	c.Assert(d.standbyOpinions.CanStandby(), Equals, false)
 	f, _ := os.Create(notifySocket)
 	f.Close()
-	c.Assert(d.standbyOpinions.CanStandby(), check.Equals, true)
+	c.Assert(d.standbyOpinions.CanStandby(), Equals, true)
 
 	select {
 	case <-d.Dying():
@@ -954,11 +952,11 @@ func (s *daemonSuite) TestRestartIntoSocketModeNoNewChanges(c *check.C) {
 		c.Errorf("daemon did not stop after 15s")
 	}
 	err := d.Stop(nil)
-	c.Check(err, check.Equals, ErrRestartSocket)
-	c.Check(d.restartSocket, check.Equals, true)
+	c.Check(err, Equals, ErrRestartSocket)
+	c.Check(d.restartSocket, Equals, true)
 }
 
-func (s *daemonSuite) TestRestartIntoSocketModePendingChanges(c *check.C) {
+func (s *daemonSuite) TestRestartIntoSocketModePendingChanges(c *C) {
 	os.Setenv("NOTIFY_SOCKET", c.MkDir())
 	defer os.Setenv("NOTIFY_SOCKET", "")
 
@@ -991,38 +989,38 @@ func (s *daemonSuite) TestRestartIntoSocketModePendingChanges(c *check.C) {
 		chgStatus := chg.Status()
 		st.Unlock()
 		// ensure our change is valid and ready
-		c.Check(chgStatus, check.Equals, state.DoStatus)
+		c.Check(chgStatus, Equals, state.DoStatus)
 	case <-time.After(5 * time.Second):
 		c.Errorf("daemon did not stop after 5s")
 	}
 	// when the daemon got a pending change it just restarts
 	err := d.Stop(nil)
-	c.Check(err, check.IsNil)
-	c.Check(d.restartSocket, check.Equals, false)
+	c.Check(err, IsNil)
+	c.Check(d.restartSocket, Equals, false)
 }
 
-func (s *daemonSuite) TestConnTrackerCanShutdown(c *check.C) {
+func (s *daemonSuite) TestConnTrackerCanShutdown(c *C) {
 	ct := &connTracker{conns: make(map[net.Conn]struct{})}
-	c.Check(ct.CanStandby(), check.Equals, true)
+	c.Check(ct.CanStandby(), Equals, true)
 
 	con := &net.IPConn{}
 	ct.trackConn(con, http.StateActive)
-	c.Check(ct.CanStandby(), check.Equals, false)
+	c.Check(ct.CanStandby(), Equals, false)
 
 	ct.trackConn(con, http.StateIdle)
-	c.Check(ct.CanStandby(), check.Equals, true)
+	c.Check(ct.CanStandby(), Equals, true)
 }
 
-func doTestReq(c *check.C, cmd *Command, mth string) *httptest.ResponseRecorder {
+func doTestReq(c *C, cmd *Command, mth string) *httptest.ResponseRecorder {
 	req, err := http.NewRequest(mth, "", nil)
-	c.Assert(err, check.IsNil)
+	c.Assert(err, IsNil)
 	req.RemoteAddr = "pid=100;uid=0;socket=;"
 	rec := httptest.NewRecorder()
 	cmd.ServeHTTP(rec, req)
 	return rec
 }
 
-func (s *daemonSuite) TestDegradedModeReply(c *check.C) {
+func (s *daemonSuite) TestDegradedModeReply(c *C) {
 	d := s.newDaemon(c)
 	cmd := &Command{d: d}
 	cmd.GET = func(*Command, *http.Request, *userState) Response {
@@ -1037,22 +1035,22 @@ func (s *daemonSuite) TestDegradedModeReply(c *check.C) {
 
 	// GET is ok even in degraded mode
 	rec := doTestReq(c, cmd, "GET")
-	c.Check(rec.Code, check.Equals, 200)
+	c.Check(rec.Code, Equals, 200)
 	// POST is not allowed
 	rec = doTestReq(c, cmd, "POST")
-	c.Check(rec.Code, check.Equals, 500)
+	c.Check(rec.Code, Equals, 500)
 	// verify we get the error
 	var v struct{ Result errorResult }
-	c.Assert(json.NewDecoder(rec.Body).Decode(&v), check.IsNil)
-	c.Check(v.Result.Message, check.Equals, "foo error")
+	c.Assert(json.NewDecoder(rec.Body).Decode(&v), IsNil)
+	c.Check(v.Result.Message, Equals, "foo error")
 
 	// clean degraded mode
 	d.SetDegradedMode(nil)
 	rec = doTestReq(c, cmd, "POST")
-	c.Check(rec.Code, check.Equals, 200)
+	c.Check(rec.Code, Equals, 200)
 }
 
-func (s *daemonSuite) TestHTTPAPI(c *check.C) {
+func (s *daemonSuite) TestHTTPAPI(c *C) {
 	s.httpAddress = ":0" // Go will choose port (use listener.Addr() to find it)
 	d := s.newDaemon(c)
 	d.Init()
