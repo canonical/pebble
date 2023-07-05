@@ -15,33 +15,20 @@
 package logstate
 
 import (
-	"bytes"
 	"fmt"
 	"sort"
 	"sync"
 	"time"
 
-	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/plan"
 	"github.com/canonical/pebble/internals/servicelog"
 
 	. "gopkg.in/check.v1"
 )
 
-type managerSuite struct {
-	logbuf        *bytes.Buffer
-	restoreLogger func()
-}
+type managerSuite struct{}
 
 var _ = Suite(&managerSuite{})
-
-func (s *managerSuite) SetUpTest(c *C) {
-	s.logbuf, s.restoreLogger = logger.MockLogger("PREFIX: ")
-}
-
-func (s *managerSuite) TearDownTest(c *C) {
-	s.restoreLogger()
-}
 
 func (s *managerSuite) TestLogManager(c *C) {
 	m := newLogManagerForTest(1*time.Second, 10, make(chan []servicelog.Entry))
@@ -109,22 +96,6 @@ func (s *managerSuite) TestLogManager(c *C) {
 	c.Assert(getTargets(m.forwarders["svc4"]), DeepEquals, []string{"tgt4"})
 }
 
-func getServiceNames(forwarders map[string]*logForwarder) (serviceNames []string) {
-	for serviceName := range forwarders {
-		serviceNames = append(serviceNames, serviceName)
-	}
-	sort.Strings(serviceNames)
-	return
-}
-
-func getTargets(forwarder *logForwarder) (targetNames []string) {
-	for _, gatherers := range forwarder.gatherers {
-		targetNames = append(targetNames, gatherers.target.Name)
-	}
-	sort.Strings(targetNames)
-	return
-}
-
 func (s *managerSuite) TestNoLogDuplication(c *C) {
 	recv := make(chan []servicelog.Entry)
 	m := newLogManagerForTest(10*time.Microsecond, 10, recv)
@@ -185,11 +156,54 @@ func (s *managerSuite) TestNoLogDuplication(c *C) {
 }
 
 func (s *managerSuite) TestFlushLogsOnInterrupt(c *C) {
-	m := newLogManagerForTest(1*time.Hour, 10, make(chan []servicelog.Entry))
+	recv := make(chan []servicelog.Entry)
+	m := newLogManagerForTest(10*time.Microsecond, 10, recv)
+	rb := servicelog.NewRingBuffer(1024)
+
+	// Utility functions for this test
+	writeLog := func(timestamp time.Time, logLine string) {
+		_, err := fmt.Fprintf(rb, "%s [svc1] %s\n",
+			timestamp.UTC().Format("2006-01-02T15:04:05.000Z07:00"), logLine)
+		c.Assert(err, IsNil)
+	}
+	expectLogs := func(expected ...string) {
+		select {
+		case entries := <-recv:
+			c.Assert(entries, HasLen, len(expected))
+			for i, entry := range entries {
+				c.Check(entry.Message, Equals, expected[i]+"\n")
+			}
+
+		case <-time.After(10 * time.Millisecond):
+			c.Fatalf("timed out waiting for request %q", expected)
+		}
+	}
+
+	m.PlanChanged(&plan.Plan{
+		Services: map[string]*plan.Service{
+			"svc1": {Name: "svc1"},
+		},
+		LogTargets: map[string]*plan.LogTarget{
+			"tgt1": {Name: "tgt1", Services: []string{"svc1"}},
+		},
+	})
+	m.ServiceStarted("svc1", rb)
+	c.Assert(getServiceNames(m.forwarders), DeepEquals, []string{"svc1"})
+	c.Assert(getTargets(m.forwarders["svc1"]), DeepEquals, []string{"tgt1"})
+
+	// Write logs
+	writeLog(time.Now(), "log line #1")
+	writeLog(time.Now(), "log line #2")
+
+	// Logs shouldn't be sent through yet
+	select {
+	case e := <-recv:
+		c.Fatalf("unexpected logs received: %v", e)
+	default:
+	}
 
 	m.Stop()
-
-	// check buffered logs are sent through
+	expectLogs("log line #1", "log line #2")
 }
 
 func newLogManagerForTest(
@@ -203,4 +217,20 @@ func newLogManagerForTest(
 			return newLogGathererForTest(target, tickPeriod, bufferCapacity, recv)
 		},
 	}
+}
+
+func getServiceNames(forwarders map[string]*logForwarder) (serviceNames []string) {
+	for serviceName := range forwarders {
+		serviceNames = append(serviceNames, serviceName)
+	}
+	sort.Strings(serviceNames)
+	return
+}
+
+func getTargets(forwarder *logForwarder) (targetNames []string) {
+	for _, gatherers := range forwarder.gatherers {
+		targetNames = append(targetNames, gatherers.target.Name)
+	}
+	sort.Strings(targetNames)
+	return
 }
