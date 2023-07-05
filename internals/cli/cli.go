@@ -192,7 +192,7 @@ func Parser(cli *client.Client) *flags.Parser {
 
 	// Regular expressions for positional and flag arguments
 	positionalRegexp := regexp.MustCompile(`^<[\w-]+>$`)
-	flagRegexp := regexp.MustCompile(`^-(\w|-[\w-]+)$`)
+	flagRegexp := regexp.MustCompile(`^-(\w|-[\w]+(-?[\w]+)*)$`)
 
 	// Create debug command
 	debugCmd, err := parser.AddCommand("debug", cmdDebugSummary, cmdDebugDescription, &cmdDebug{})
