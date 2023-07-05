@@ -31,9 +31,8 @@ import (
 	"syscall"
 	"time"
 
-	"gopkg.in/tomb.v2"
-
 	"github.com/gorilla/mux"
+	"gopkg.in/tomb.v2"
 
 	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/osutil"

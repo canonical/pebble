@@ -15,8 +15,9 @@
 package osutil_test
 
 import (
-	"github.com/canonical/pebble/internals/osutil"
 	. "gopkg.in/check.v1"
+
+	"github.com/canonical/pebble/internals/osutil"
 )
 
 type envSuite struct{}
