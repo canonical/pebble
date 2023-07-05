@@ -16,6 +16,7 @@ package logstate
 
 import (
 	"bytes"
+	"fmt"
 	"sort"
 	"sync"
 	"time"
@@ -124,80 +125,67 @@ func getTargets(forwarder *logForwarder) (targetNames []string) {
 	return
 }
 
-//func (s *managerSuite) TestNoLogDuplication(c *C) {
-//	// Reduce Loki flush time
-//	flushDelayOld := flushDelay
-//	flushDelay = 10 * time.Millisecond
-//	defer func() {
-//		flushDelay = flushDelayOld
-//	}()
-//
-//	m := NewLogManager()
-//	rb := servicelog.NewRingBuffer(1024)
-//
-//	// Set up fake "Loki" server
-//	requests := make(chan string, 2)
-//	srv := newFakeLokiServer(requests)
-//	defer srv.Close()
-//
-//	// Utility functions for this test
-//	writeLog := func(timestamp time.Time, logLine string) {
-//		_, err := fmt.Fprintf(rb, "%s [svc1] %s\n",
-//			timestamp.UTC().Format("2006-01-02T15:04:05.000Z07:00"), logLine)
-//		c.Assert(err, IsNil)
-//	}
-//	expectLogs := func(expected string) {
-//		select {
-//		case req := <-requests:
-//			c.Assert(req, Equals, expected)
-//		case <-time.After(1 * time.Second):
-//			c.Fatalf("timed out waiting for request %q", expected)
-//		}
-//	}
-//
-//	m.PlanChanged(&plan.Plan{
-//		Services: map[string]*plan.Service{
-//			"svc1": {},
-//		},
-//		LogTargets: map[string]*plan.LogTarget{
-//			"tgt1": {
-//				Type:      plan.LokiTarget,
-//				Location:  srv.URL(),
-//				Selection: plan.UnsetSelection,
-//			},
-//		},
-//	})
-//	m.ServiceStarted("svc1", rb)
-//	c.Assert(m.forwarders, HasLen, 1)
-//
-//	// Write logs
-//	writeLog(time.Date(2023, 1, 31, 1, 23, 45, 67890, time.UTC), "log line #1")
-//	writeLog(time.Date(2023, 1, 31, 1, 23, 46, 67890, time.UTC), "log line #2")
-//	expectLogs(`{"streams":[{"stream":{"pebble_service":"svc1"},"values":[["1675128225000000000","log line #1"],["1675128226000000000","log line #2"]]}]}`)
-//
-//	// Call PlanChanged again
-//	m.PlanChanged(&plan.Plan{
-//		Services: map[string]*plan.Service{
-//			"svc1": {},
-//		},
-//		LogTargets: map[string]*plan.LogTarget{
-//			"tgt1": {
-//				Type:      plan.LokiTarget,
-//				Location:  srv.URL(),
-//				Selection: plan.UnsetSelection,
-//			},
-//		},
-//	})
-//	c.Check(m.forwarders, HasLen, 1)
-//
-//	// Write logs
-//	writeLog(time.Date(2023, 1, 31, 1, 23, 47, 67890, time.UTC), "log line #3")
-//	writeLog(time.Date(2023, 1, 31, 1, 23, 48, 67890, time.UTC), "log line #4")
-//	expectLogs(`{"streams":[{"stream":{"pebble_service":"svc1"},"values":[["1675128227000000000","log line #3"],["1675128228000000000","log line #4"]]}]}`)
-//}
+func (s *managerSuite) TestNoLogDuplication(c *C) {
+	recv := make(chan []servicelog.Entry)
+	m := newLogManagerForTest(10*time.Microsecond, 10, recv)
+	rb := servicelog.NewRingBuffer(1024)
+
+	// Utility functions for this test
+	writeLog := func(timestamp time.Time, logLine string) {
+		_, err := fmt.Fprintf(rb, "%s [svc1] %s\n",
+			timestamp.UTC().Format("2006-01-02T15:04:05.000Z07:00"), logLine)
+		c.Assert(err, IsNil)
+	}
+	expectLogs := func(expected ...string) {
+		select {
+		case entries := <-recv:
+			c.Assert(entries, HasLen, len(expected))
+			for i, entry := range entries {
+				c.Check(entry.Message, Equals, expected[i]+"\n")
+			}
+
+		case <-time.After(10 * time.Millisecond):
+			c.Fatalf("timed out waiting for request %q", expected)
+		}
+	}
+
+	m.PlanChanged(&plan.Plan{
+		Services: map[string]*plan.Service{
+			"svc1": {Name: "svc1"},
+		},
+		LogTargets: map[string]*plan.LogTarget{
+			"tgt1": {Name: "tgt1", Services: []string{"svc1"}},
+		},
+	})
+	m.ServiceStarted("svc1", rb)
+	c.Assert(getServiceNames(m.forwarders), DeepEquals, []string{"svc1"})
+	c.Assert(getTargets(m.forwarders["svc1"]), DeepEquals, []string{"tgt1"})
+
+	// Write logs
+	writeLog(time.Now(), "log line #1")
+	writeLog(time.Now(), "log line #2")
+	expectLogs("log line #1", "log line #2")
+
+	// Call PlanChanged again
+	m.PlanChanged(&plan.Plan{
+		Services: map[string]*plan.Service{
+			"svc1": {Name: "svc1"},
+		},
+		LogTargets: map[string]*plan.LogTarget{
+			"tgt1": {Name: "tgt1", Services: []string{"svc1"}},
+		},
+	})
+	c.Assert(getServiceNames(m.forwarders), DeepEquals, []string{"svc1"})
+	c.Assert(getTargets(m.forwarders["svc1"]), DeepEquals, []string{"tgt1"})
+
+	// Write logs
+	writeLog(time.Now(), "log line #3")
+	writeLog(time.Now(), "log line #4")
+	expectLogs("log line #3", "log line #4")
+}
 
 func (s *managerSuite) TestFlushLogsOnInterrupt(c *C) {
-	m := newLogManagerForTest(1*time.Second, 10, make(chan []servicelog.Entry))
+	m := newLogManagerForTest(1*time.Hour, 10, make(chan []servicelog.Entry))
 
 	m.Stop()
 
