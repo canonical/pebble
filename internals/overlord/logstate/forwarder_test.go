@@ -18,8 +18,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/canonical/pebble/internals/servicelog"
 	. "gopkg.in/check.v1"
+
+	"github.com/canonical/pebble/internals/servicelog"
 )
 
 type forwarderSuite struct{}

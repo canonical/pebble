@@ -20,10 +20,10 @@ import (
 	"sync"
 	"time"
 
+	. "gopkg.in/check.v1"
+
 	"github.com/canonical/pebble/internals/plan"
 	"github.com/canonical/pebble/internals/servicelog"
-
-	. "gopkg.in/check.v1"
 )
 
 type managerSuite struct{}
@@ -43,10 +43,10 @@ func (s *managerSuite) TestLogManager(c *C) {
 			"svc3": {Name: "svc3"},
 		},
 		LogTargets: map[string]*plan.LogTarget{
-			"tgt1": {Name: "tgt1", Type: plan.LokiTarget, Services: []string{"svc1"}},
-			"tgt2": {Name: "tgt2", Type: plan.LokiTarget, Services: []string{"all", "-svc2"}},
-			"tgt3": {Name: "tgt3", Type: plan.LokiTarget, Services: []string{"svc1", "svc3", "-svc1"}},
-			"tgt4": {Name: "tgt4", Type: plan.LokiTarget, Services: []string{}},
+			"tgt1": {Name: "tgt1", Services: []string{"svc1"}},
+			"tgt2": {Name: "tgt2", Services: []string{"all", "-svc2"}},
+			"tgt3": {Name: "tgt3", Services: []string{"svc1", "svc3", "-svc1"}},
+			"tgt4": {Name: "tgt4", Services: []string{}},
 		},
 	})
 
@@ -81,10 +81,10 @@ func (s *managerSuite) TestLogManager(c *C) {
 			"svc4": {Name: "svc4"},
 		},
 		LogTargets: map[string]*plan.LogTarget{
-			"tgt1": {Name: "tgt1", Type: plan.LokiTarget, Services: []string{"svc1", "svc2"}},
-			"tgt2": {Name: "tgt2", Type: plan.LokiTarget, Services: []string{"svc2"}},
-			"tgt3": {Name: "tgt3", Type: plan.LokiTarget, Services: []string{}},
-			"tgt4": {Name: "tgt4", Type: plan.LokiTarget, Services: []string{"all"}},
+			"tgt1": {Name: "tgt1", Services: []string{"svc1", "svc2"}},
+			"tgt2": {Name: "tgt2", Services: []string{"svc2"}},
+			"tgt3": {Name: "tgt3", Services: []string{}},
+			"tgt4": {Name: "tgt4", Services: []string{"all"}},
 		},
 	})
 
@@ -212,7 +212,7 @@ func newLogManagerForTest(
 	return &LogManager{
 		forwarders:   map[string]*logForwarder{},
 		gatherers:    map[string]*logGatherer{},
-		newForwarder: newLogForwarder, // ForTest ?
+		newForwarder: newLogForwarder,
 		newGatherer: func(target *plan.LogTarget) *logGatherer {
 			return newLogGathererForTest(target, tickPeriod, bufferCapacity, recv)
 		},

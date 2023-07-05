@@ -20,7 +20,6 @@ import (
 	"time"
 
 	"github.com/canonical/pebble/internals/logger"
-
 	"github.com/canonical/pebble/internals/plan"
 	"github.com/canonical/pebble/internals/servicelog"
 )
@@ -36,16 +35,14 @@ import (
 //   - when the buffer reaches a certain size
 //   - when it is told to shut down.
 type logGatherer struct {
-	target *plan.LogTarget
-
+	target     *plan.LogTarget
 	tickPeriod time.Duration
+	writeCh    chan struct{}
+	cancel     chan struct{}
 
 	bufferLock sync.Mutex
 	buffer     logBuffer
 	client     logClient
-
-	writeCh chan struct{}
-	cancel  chan struct{}
 }
 
 func newLogGatherer(target *plan.LogTarget) *logGatherer {
@@ -54,12 +51,12 @@ func newLogGatherer(target *plan.LogTarget) *logGatherer {
 	return &logGatherer{
 		target:     target,
 		tickPeriod: tickPeriod,
-		buffer:     newLogBuffer(target),
-		client:     newLogClient(target),
 		// writeCh should be buffered, so that addLog can send write notifications,
 		// even when the control loop is not ready to receive.
 		writeCh: make(chan struct{}, 1),
 		cancel:  make(chan struct{}),
+		buffer:  newLogBuffer(target),
+		client:  newLogClient(target),
 	}
 }
 
@@ -91,9 +88,8 @@ func (g *logGatherer) addLog(entry servicelog.Entry) {
 	g.bufferLock.Unlock()
 
 	// Try to notify the control loop of a new write to the buffer.
-	// We don't want this method to block, so if the control loop is not ready
-	// to receive, then drop the notification.
-	// TODO: this is getting dropped 99% of the time. Not good.
+	// If there is already a notification waiting, no need to notify again - just
+	// drop it.
 	select {
 	case g.writeCh <- struct{}{}:
 	default:
@@ -112,10 +108,9 @@ func (g *logGatherer) flush(force bool) {
 		// No point doing anything
 		return
 	}
-	if !force {
-		if !g.buffer.IsFull() {
-			return
-		}
+	if !force && !g.buffer.IsFull() {
+		// Not ready to flush yet
+		return
 	}
 
 	req, err := g.buffer.Request()
@@ -127,6 +122,7 @@ func (g *logGatherer) flush(force bool) {
 	err = g.client.Send(req)
 	if err != nil {
 		logger.Noticef("couldn't send logs to target %q: %v", g.target.Name, err)
+		// TODO: early return here? should we reset buffer if send fails?
 	}
 
 	g.buffer.Reset()

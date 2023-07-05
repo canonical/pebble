@@ -47,6 +47,7 @@ func (m *LogManager) PlanChanged(pl *plan.Plan) {
 	newGatherers := make(map[string]*logGatherer, len(pl.LogTargets))
 
 	for serviceName, service := range pl.Services {
+		// TODO: don't create forwarders if there are no targets for this service?
 		forwarder := m.forwarders[serviceName]
 		if forwarder == nil {
 			// Create new forwarder
@@ -64,7 +65,6 @@ func (m *LogManager) PlanChanged(pl *plan.Plan) {
 
 		for _, target := range pl.LogTargets {
 			// Only create the gatherer if there is a service logging to it.
-			// Don't need gatherers for disabled or unselected targets.
 			if service.LogsTo(target) {
 				gatherer := m.gatherers[serviceName]
 				if gatherer == nil {

@@ -19,12 +19,11 @@ import (
 	"io"
 	"time"
 
-	"github.com/canonical/pebble/internals/plan"
+	. "gopkg.in/check.v1"
 	"gopkg.in/yaml.v3"
 
+	"github.com/canonical/pebble/internals/plan"
 	"github.com/canonical/pebble/internals/servicelog"
-
-	. "gopkg.in/check.v1"
 )
 
 type gathererSuite struct{}
@@ -115,10 +114,7 @@ func (s *gathererSuite) TestGathererStop(c *C) {
 	}
 }
 
-func newLogGathererForTest(
-	target *plan.LogTarget,
-	tickPeriod time.Duration, bufferCapacity int, recv chan []servicelog.Entry,
-) *logGatherer {
+func newLogGathererForTest(target *plan.LogTarget, tickPeriod time.Duration, bufferCapacity int, recv chan []servicelog.Entry) *logGatherer {
 	g := newLogGatherer(target)
 	g.tickPeriod = tickPeriod
 	g.buffer = &testBuffer{
