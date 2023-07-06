@@ -29,6 +29,7 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/sys/unix"
 	"github.com/gorilla/mux"
 
 	"gopkg.in/check.v1"
@@ -1149,29 +1150,45 @@ services:
 	c.Check(tasks[0].Kind(), Equals, "stop")
 }
 
-func mockShutdownSyscall(f func()) (restore func()) {
-	old := shutdownSyscall
-	shutdownSyscall = f
+func mockSyncSyscall(f func()) (restore func()) {
+	old := syncSyscall
+	syncSyscall = f
 	return func() {
-		shutdownSyscall = old
+		syncSyscall = old
 	}
 }
 
-func mockCheckCapSysBoot(f func() error) (restore func()) {
-	old := checkCapSysBoot
-	checkCapSysBoot = f
+func mockRebootSyscall(f func(cmd int) error) (restore func()) {
+	old := rebootSyscall
+	rebootSyscall = f
 	return func() {
-		checkCapSysBoot = old
+		rebootSyscall = old
 	}
 }
+
+func mockCapGetSyscall(f func(hdr *unix.CapUserHeader, data *unix.CapUserData) error) (restore func()) {
+	old := capGetSyscall
+	capGetSyscall = f
+	return func() {
+		capGetSyscall = old
+	}
+}
+
 
 func (s *daemonSuite) TestSyscallPosRebootDelay(c *C) {
 	wait := make(chan int)
-	defer mockCheckCapSysBoot(func() error {
+	defer mockCapGetSyscall(func(hdr *unix.CapUserHeader, data *unix.CapUserData) error {
+		if hdr.Version == unix.LINUX_CAPABILITY_VERSION_1 {
+			data.Effective = 0xFFFFFFFF
+		}
 		return nil
 	})()
-	defer mockShutdownSyscall(func() {
-		wait <- 1
+	defer mockSyncSyscall(func() {})()
+	defer mockRebootSyscall(func(cmd int) error {
+		if cmd == unix.LINUX_REBOOT_CMD_RESTART {
+			wait <- 1
+		}
+		return nil
 	})()
 
 	period := time.Millisecond * 25
@@ -1189,11 +1206,18 @@ func (s *daemonSuite) TestSyscallPosRebootDelay(c *C) {
 
 func (s *daemonSuite) TestSyscallNegRebootDelay(c *C) {
 	wait := make(chan int)
-	defer mockCheckCapSysBoot(func() error {
+	defer mockCapGetSyscall(func(hdr *unix.CapUserHeader, data *unix.CapUserData) error {
+		if hdr.Version == unix.LINUX_CAPABILITY_VERSION_1 {
+			data.Effective = 0xFFFFFFFF
+		}
 		return nil
 	})()
-	defer mockShutdownSyscall(func() {
-		wait <- 1
+	defer mockSyncSyscall(func() {})()
+	defer mockRebootSyscall(func(cmd int) error {
+		if cmd == unix.LINUX_REBOOT_CMD_RESTART {
+			wait <- 1
+		}
+		return nil
 	})()
 
 	// Negative periods will be zeroed, so do not fear the huge negative.
@@ -1214,11 +1238,18 @@ func (s *daemonSuite) TestSyscallNegRebootDelay(c *C) {
 
 func (s *daemonSuite) TestSetSyscall(c *C) {
 	wait := make(chan int)
-	defer mockCheckCapSysBoot(func() error {
+	defer mockCapGetSyscall(func(hdr *unix.CapUserHeader, data *unix.CapUserData) error {
+		if hdr.Version == unix.LINUX_CAPABILITY_VERSION_1 {
+			data.Effective = 0xFFFFFFFF
+		}
 		return nil
 	})()
-	defer mockShutdownSyscall(func() {
-		wait <- 1
+	defer mockSyncSyscall(func() {})()
+	defer mockRebootSyscall(func(cmd int) error {
+		if cmd == unix.LINUX_REBOOT_CMD_RESTART {
+			wait <- 1
+		}
+		return nil
 	})()
 
 	// We know the default is commandReboot otherwise the unit tests
@@ -1240,12 +1271,35 @@ func (s *daemonSuite) TestSetSyscall(c *C) {
 }
 
 func (s *daemonSuite) TestCapSysBootFail(c *C) {
-	defer mockCheckCapSysBoot(func() error {
-		return fmt.Errorf("no reboot cap")
+	defer mockCapGetSyscall(func(hdr *unix.CapUserHeader, data *unix.CapUserData) error {
+		if hdr.Version == unix.LINUX_CAPABILITY_VERSION_1 {
+			data.Effective = ^(uint32(1 << unix.CAP_SYS_BOOT))
+		}
+		return fmt.Errorf("get cap syscall failed")
 	})()
-	defer mockShutdownSyscall(func() {
-		panic("this should not happen")
+	defer mockSyncSyscall(func() {})()
+	defer mockRebootSyscall(func(cmd int) error { return nil })()
+
+	// We know the default is commandReboot otherwise the unit tests
+	// above will fail. We need to check the switch works.
+	SetSyscallReboot()
+	defer func() {
+		rebootHandler = commandReboot
+	}()
+
+	err := rebootHandler(0)
+	c.Assert(err, ErrorMatches, "get cap syscall failed")
+}
+
+func (s *daemonSuite) TestCapSysBootNotAvail(c *C) {
+	defer mockCapGetSyscall(func(hdr *unix.CapUserHeader, data *unix.CapUserData) error {
+		if hdr.Version == unix.LINUX_CAPABILITY_VERSION_1 {
+			data.Effective = ^(uint32(1 << unix.CAP_SYS_BOOT))
+		}
+		return nil
 	})()
+	defer mockSyncSyscall(func() {})()
+	defer mockRebootSyscall(func(cmd int) error { return nil })()
 
 	// We know the default is commandReboot otherwise the unit tests
 	// above will fail. We need to check the switch works.
