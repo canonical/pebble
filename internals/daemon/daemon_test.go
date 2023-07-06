@@ -29,14 +29,13 @@ import (
 	"testing"
 	"time"
 
-	"golang.org/x/sys/unix"
 	"github.com/gorilla/mux"
-
 	"gopkg.in/check.v1"
 
 	// XXX Delete import above and make this file like the other ones.
 	. "gopkg.in/check.v1"
 
+	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/osutil"
 	"github.com/canonical/pebble/internals/overlord/patch"
 	"github.com/canonical/pebble/internals/overlord/restart"
@@ -1166,26 +1165,11 @@ func mockRebootSyscall(f func(cmd int) error) (restore func()) {
 	}
 }
 
-func mockCapGetSyscall(f func(hdr *unix.CapUserHeader, data *unix.CapUserData) error) (restore func()) {
-	old := capGetSyscall
-	capGetSyscall = f
-	return func() {
-		capGetSyscall = old
-	}
-}
-
-
 func (s *daemonSuite) TestSyscallPosRebootDelay(c *C) {
 	wait := make(chan int)
-	defer mockCapGetSyscall(func(hdr *unix.CapUserHeader, data *unix.CapUserData) error {
-		if hdr.Version == unix.LINUX_CAPABILITY_VERSION_1 {
-			data.Effective = 0xFFFFFFFF
-		}
-		return nil
-	})()
 	defer mockSyncSyscall(func() {})()
 	defer mockRebootSyscall(func(cmd int) error {
-		if cmd == unix.LINUX_REBOOT_CMD_RESTART {
+		if cmd == syscall.LINUX_REBOOT_CMD_RESTART {
 			wait <- 1
 		}
 		return nil
@@ -1206,15 +1190,9 @@ func (s *daemonSuite) TestSyscallPosRebootDelay(c *C) {
 
 func (s *daemonSuite) TestSyscallNegRebootDelay(c *C) {
 	wait := make(chan int)
-	defer mockCapGetSyscall(func(hdr *unix.CapUserHeader, data *unix.CapUserData) error {
-		if hdr.Version == unix.LINUX_CAPABILITY_VERSION_1 {
-			data.Effective = 0xFFFFFFFF
-		}
-		return nil
-	})()
 	defer mockSyncSyscall(func() {})()
 	defer mockRebootSyscall(func(cmd int) error {
-		if cmd == unix.LINUX_REBOOT_CMD_RESTART {
+		if cmd == syscall.LINUX_REBOOT_CMD_RESTART {
 			wait <- 1
 		}
 		return nil
@@ -1238,15 +1216,9 @@ func (s *daemonSuite) TestSyscallNegRebootDelay(c *C) {
 
 func (s *daemonSuite) TestSetSyscall(c *C) {
 	wait := make(chan int)
-	defer mockCapGetSyscall(func(hdr *unix.CapUserHeader, data *unix.CapUserData) error {
-		if hdr.Version == unix.LINUX_CAPABILITY_VERSION_1 {
-			data.Effective = 0xFFFFFFFF
-		}
-		return nil
-	})()
 	defer mockSyncSyscall(func() {})()
 	defer mockRebootSyscall(func(cmd int) error {
-		if cmd == unix.LINUX_REBOOT_CMD_RESTART {
+		if cmd == syscall.LINUX_REBOOT_CMD_RESTART {
 			wait <- 1
 		}
 		return nil
@@ -1270,36 +1242,23 @@ func (s *daemonSuite) TestSetSyscall(c *C) {
 	}
 }
 
-func (s *daemonSuite) TestCapSysBootFail(c *C) {
-	defer mockCapGetSyscall(func(hdr *unix.CapUserHeader, data *unix.CapUserData) error {
-		if hdr.Version == unix.LINUX_CAPABILITY_VERSION_1 {
-			data.Effective = ^(uint32(1 << unix.CAP_SYS_BOOT))
-		}
-		return fmt.Errorf("get cap syscall failed")
-	})()
-	defer mockSyncSyscall(func() {})()
-	defer mockRebootSyscall(func(cmd int) error { return nil })()
-
-	// We know the default is commandReboot otherwise the unit tests
-	// above will fail. We need to check the switch works.
-	SetSyscallReboot()
-	defer func() {
-		rebootHandler = commandReboot
-	}()
-
-	err := rebootHandler(0)
-	c.Assert(err, ErrorMatches, "get cap syscall failed")
+type fakeLogger struct {
+	s string
+	c chan int
 }
 
-func (s *daemonSuite) TestCapSysBootNotAvail(c *C) {
-	defer mockCapGetSyscall(func(hdr *unix.CapUserHeader, data *unix.CapUserData) error {
-		if hdr.Version == unix.LINUX_CAPABILITY_VERSION_1 {
-			data.Effective = ^(uint32(1 << unix.CAP_SYS_BOOT))
-		}
-		return nil
-	})()
+func (f *fakeLogger) Notice(msg string) {
+	f.s = msg
+	f.c <- 1
+}
+
+func (f *fakeLogger) Debug(msg string) {}
+
+func (s *daemonSuite) TestSyscallRebootError(c *C) {
 	defer mockSyncSyscall(func() {})()
-	defer mockRebootSyscall(func(cmd int) error { return nil })()
+	defer mockRebootSyscall(func(cmd int) error {
+		return fmt.Errorf("-EPERM")
+	})()
 
 	// We know the default is commandReboot otherwise the unit tests
 	// above will fail. We need to check the switch works.
@@ -1307,7 +1266,21 @@ func (s *daemonSuite) TestCapSysBootNotAvail(c *C) {
 	defer func() {
 		rebootHandler = commandReboot
 	}()
+	complete := make(chan int)
+	l := fakeLogger{c: complete}
+	old := logger.SetLogger(&l)
+	defer func() {
+		logger.SetLogger(old)
+	}()
 
 	err := rebootHandler(0)
-	c.Assert(err, ErrorMatches, "no reboot cap")
+	c.Assert(err, IsNil)
+	// This would block forever if the switch did not work.
+	timeout := time.Second * 10
+	select {
+	case <-complete:
+	case <-time.After(timeout): // exit test if we fail and get stuck
+		c.Fail()
+	}
+	c.Assert(l.s, Matches, "*-EPERM")
 }

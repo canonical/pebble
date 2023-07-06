@@ -28,9 +28,9 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
-	"golang.org/x/sys/unix"
 	"gopkg.in/tomb.v2"
 
 	"github.com/gorilla/mux"
@@ -704,7 +704,7 @@ func (d *Daemon) doReboot(sigCh chan<- os.Signal, waitTimeout time.Duration) err
 		return err
 	}
 	// wait for reboot to happen
-	logger.Noticef("Waiting for system reboot")
+	logger.Noticef("Waiting for system reboot...")
 	if sigCh != nil {
 		signal.Stop(sigCh)
 		if len(sigCh) > 0 {
@@ -741,9 +741,8 @@ func commandReboot(rebootDelay time.Duration) error {
 }
 
 var (
-	capGetSyscall = unix.Capget
-	syncSyscall   = unix.Sync
-	rebootSyscall = unix.Reboot
+	syncSyscall   = syscall.Sync
+	rebootSyscall = syscall.Reboot
 )
 
 // syscallReboot performs a delayed async reboot using direct Linux
@@ -751,35 +750,18 @@ var (
 //
 // Note: Reboot message not currently supported.
 func syscallReboot(rebootDelay time.Duration) error {
-	var caps unix.CapUserData
-	// We deliberately use v1 caps here due to:
-	// https://github.com/golang/go/issues/44312
-	hdr := unix.CapUserHeader{Version: unix.LINUX_CAPABILITY_VERSION_1}
-	err := capGetSyscall(&hdr, &caps)
-	if err != nil {
-		return err
-	}
-	if (int32(caps.Effective) & (1 << unix.CAP_SYS_BOOT)) == 0 {
-		return fmt.Errorf("no capability to reboot")
-	}
-
 	if rebootDelay < 0 {
 		rebootDelay = 0
 	}
 	// This has to be non-blocking, and scheduled for a future
 	// point in time to mimic shutdown.
 	time.AfterFunc(rebootDelay, func() {
-		// As per the requirements of the reboot syscall, we have to
-		// first call sync.
+		// As per the requirements of the reboot syscall, we
+		// have to first call sync.
 		syncSyscall()
-		// This syscall can fail (EINVAL/EPERM) if invalid arguments are
-		// supplied or CAP_SYS_BOOT capability is missing. We cover the
-		// latter case in a separate capability check, so this will not
-		// happen here, but let's panic if we see something to make sure
-		// we catch anything unexpected.
-		err := rebootSyscall(unix.LINUX_REBOOT_CMD_RESTART)
+		err := rebootSyscall(syscall.LINUX_REBOOT_CMD_RESTART)
 		if err != nil {
-			panic("internal error: reboot syscall failed")
+			logger.Noticef("reboot syscall failed : %v", err)
 		}
 	})
 	return nil
@@ -881,9 +863,9 @@ func getListener(socketPath string, listenerMap map[string]net.Listener) (net.Li
 	}
 
 	runtime.LockOSThread()
-	oldmask := unix.Umask(0111)
+	oldmask := syscall.Umask(0111)
 	listener, err := net.ListenUnix("unix", address)
-	unix.Umask(oldmask)
+	syscall.Umask(oldmask)
 	runtime.UnlockOSThread()
 	if err != nil {
 		return nil, err
