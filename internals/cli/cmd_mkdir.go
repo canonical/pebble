@@ -25,7 +25,9 @@ import (
 )
 
 const cmdMkdirSummary = "Create a directory"
-const cmdMkdirDescription = "The mkdir command creates the specified directory."
+const cmdMkdirDescription = `
+The mkdir command creates the specified directory.
+`
 
 type cmdMkdir struct {
 	clientMixin

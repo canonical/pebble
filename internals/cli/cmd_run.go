@@ -31,6 +31,18 @@ import (
 	"github.com/canonical/pebble/internals/systemd"
 )
 
+const cmdRunSummary = "Run the pebble environment"
+const cmdRunDescription = `
+The run command starts pebble and runs the configured environment.
+
+Additional arguments may be provided to the service command with the --args option, which
+must be terminated with ";" unless there are no further Pebble options.  These arguments
+are appended to the end of the service command, and replace any default arguments defined
+in the service plan. For example:
+
+    $ pebble run --args myservice --port 8080 \; --hold
+`
+
 type sharedRunEnterOpts struct {
 	CreateDirs bool       `long:"create-dirs"`
 	Hold       bool       `long:"hold"`
@@ -46,18 +58,6 @@ var sharedRunEnterArgsHelp = map[string]string{
 	"--verbose":     "Log all output from services to stdout",
 	"--args":        `Provide additional arguments to a service`,
 }
-
-const cmdRunSummary = "Run the pebble environment"
-const cmdRunDescription = `
-The run command starts pebble and runs the configured environment.
-
-Additional arguments may be provided to the service command with the --args option, which
-must be terminated with ";" unless there are no further Pebble options.  These arguments
-are appended to the end of the service command, and replace any default arguments defined
-in the service plan. For example:
-
-    $ pebble run --args myservice --port 8080 \; --hold
-`
 
 type cmdRun struct {
 	clientMixin

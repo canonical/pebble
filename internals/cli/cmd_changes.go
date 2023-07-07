@@ -25,7 +25,9 @@ import (
 )
 
 const cmdChangesSummary = "List system changes"
-const cmdChangesDescription = "The changes command displays a summary of system changes performed recently."
+const cmdChangesDescription = `
+The changes command displays a summary of system changes performed recently.
+`
 
 type cmdChanges struct {
 	clientMixin

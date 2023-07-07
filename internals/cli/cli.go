@@ -87,8 +87,7 @@ type CmdInfo struct {
 	PassAfterNonOption bool
 
 	// When set, the command will be a subcommand of the `debug` command.
-	// Do not set this flag manually, use AddDebugCommand instead.
-	debug bool
+	Debug bool
 }
 
 // commands holds information about all the regular Pebble commands.
@@ -100,12 +99,6 @@ var debugCommands []*CmdInfo
 // AddCommand adds a command to the top-level parser.
 func AddCommand(info *CmdInfo) {
 	commands = append(commands, info)
-}
-
-// AddDebugCommand adds a subcommand to the `debug` command.
-func AddDebugCommand(info *CmdInfo) {
-	info.debug = true
-	debugCommands = append(debugCommands, info)
 }
 
 func lintDesc(cmdName, optName, desc, origDesc string) {
@@ -191,18 +184,22 @@ func Parser(cli *client.Client) *flags.Parser {
 	addHelp(parser)
 
 	// Regular expressions for positional and flag arguments
-	positionalRegexp := regexp.MustCompile(`^<[\w-]+>$`)
-	flagRegexp := regexp.MustCompile(`^-(\w|-[\w]+(-?[\w]+)*)$`)
+	positionalRegexp := regexp.MustCompile(`^<\w+(-\w+)>$`)
+	flagRegexp := regexp.MustCompile(`^-\w|--\w+(-\w+)*$`)
 
 	// Create debug command
 	debugCmd, err := parser.AddCommand("debug", cmdDebugSummary, cmdDebugDescription, &cmdDebug{})
 	debugCmd.Hidden = true
 	if err != nil {
-		logger.Panicf("cannot add command %q: %v", "debug", err)
+		logger.Panicf("internal error: cannot add command %q: %v", "debug", err)
 	}
 
 	// Add all commands
-	for _, c := range append(commands, debugCommands...) {
+	ncmds := len(commands)
+	allCmds := make([]*CmdInfo, ncmds, ncmds+len(debugCommands))
+	copy(allCmds, commands)
+	copy(allCmds[ncmds:], debugCommands)
+	for _, c := range allCmds {
 		obj := c.Builder()
 		if x, ok := obj.(clientSetter); ok {
 			x.setClient(cli)
@@ -211,39 +208,35 @@ func Parser(cli *client.Client) *flags.Parser {
 			x.setParser(parser)
 		}
 
-		// Target either the `debug` command or the top-level parser depending on this command
-		// being or not marked as debug.
 		var target *flags.Command
-		if c.debug {
+		if c.Debug {
 			target = debugCmd
 		} else {
 			target = parser.Command
 		}
-
 		cmd, err := target.AddCommand(c.Name, c.Summary, strings.TrimSpace(c.Description), obj)
 		if err != nil {
-			logger.Panicf("cannot add command %q: %v", c.Name, err)
+			logger.Panicf("internal error: cannot add command %q: %v", c.Name, err)
 		}
 		cmd.PassAfterNonOption = c.PassAfterNonOption
 
 		// Extract help for flags and positional arguments from ArgsHelp
 		flagHelp := map[string]string{}
 		positionalHelp := map[string]string{}
-
 		for specifier, help := range c.ArgsHelp {
 			if flagRegexp.MatchString(specifier) {
 				flagHelp[specifier] = help
 			} else if positionalRegexp.MatchString(specifier) {
 				positionalHelp[specifier] = help
 			} else {
-				logger.Panicf("invalid help specifier from %q: %q", c.Name, specifier)
+				logger.Panicf("internal error: invalid help specifier from %q: %q", c.Name, specifier)
 			}
 		}
 
 		// Make sure all argument descriptions are set
 		opts := cmd.Options()
 		if len(opts) != len(flagHelp) {
-			logger.Panicf("wrong number of flag descriptions for %q: expected %d, got %d", c.Name, len(opts), len(flagHelp))
+			logger.Panicf("internal error: wrong number of flag descriptions for %q: expected %d, got %d", c.Name, len(opts), len(flagHelp))
 		}
 		for _, opt := range opts {
 			if description, ok := flagHelp["--"+opt.LongName]; ok {
@@ -253,7 +246,7 @@ func Parser(cli *client.Client) *flags.Parser {
 				lintDesc(c.Name, string(opt.ShortName), description, opt.Description)
 				opt.Description = description
 			} else if !opt.Hidden {
-				logger.Panicf("%q missing description for %q", c.Name, opt)
+				logger.Panicf("internal error: %q missing description for %q", c.Name, opt)
 			}
 		}
 

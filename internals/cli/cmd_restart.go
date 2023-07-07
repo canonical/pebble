@@ -20,7 +20,9 @@ import (
 )
 
 const cmdRestartSummary = "Restart a service"
-const cmdRestartDescription = "The restart command restarts the named service(s) in the correct order."
+const cmdRestartDescription = `
+The restart command restarts the named service(s) in the correct order.
+`
 
 type cmdRestart struct {
 	waitMixin

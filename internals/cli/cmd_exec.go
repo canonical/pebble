@@ -30,6 +30,18 @@ import (
 	"github.com/canonical/pebble/internals/ptyutil"
 )
 
+const cmdExecSummary = "Execute a remote command and wait for it to finish"
+const cmdExecDescription = `
+The exec command runs a remote command and waits for it to finish. The local
+stdin is sent as the input to the remote process, while the remote stdout and
+stderr are output locally.
+
+To avoid confusion, exec options may be separated from the command and its
+arguments using "--", for example:
+
+pebble exec --timeout 10s -- echo -n foo bar
+`
+
 type cmdExec struct {
 	clientMixin
 	WorkingDir     string        `short:"w"`
@@ -50,18 +62,9 @@ type cmdExec struct {
 
 func init() {
 	AddCommand(&CmdInfo{
-		Name:    "exec",
-		Summary: "Execute a remote command and wait for it to finish",
-		Description: `
-The exec command runs a remote command and waits for it to finish. The local
-stdin is sent as the input to the remote process, while the remote stdout and
-stderr are output locally.
-
-To avoid confusion, exec options may be separated from the command and its
-arguments using "--", for example:
-
-pebble exec --timeout 10s -- echo -n foo bar
-`,
+		Name:        "exec",
+		Summary:     cmdExecSummary,
+		Description: cmdExecDescription,
 		ArgsHelp: map[string]string{
 			"-w":        "Working directory to run command in",
 			"--env":     "Environment variable to set (in 'FOO=bar' format)",

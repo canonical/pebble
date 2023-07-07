@@ -24,7 +24,9 @@ import (
 )
 
 const cmdVersionSummary = "Show version details"
-const cmdVersionDescription = "The version command displays the versions of the running client and server."
+const cmdVersionDescription = `
+The version command displays the versions of the running client and server.
+`
 
 type cmdVersion struct {
 	clientMixin

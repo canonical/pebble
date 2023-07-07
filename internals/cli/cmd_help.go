@@ -26,7 +26,9 @@ import (
 )
 
 const cmdHelpSummary = "Show help about a command"
-const cmdHelpDescription = "The help command displays information about commands."
+const cmdHelpDescription = `
+The help command displays information about commands.
+`
 
 type cmdHelp struct {
 	All        bool `long:"all"`

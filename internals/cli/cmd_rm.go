@@ -20,7 +20,9 @@ import (
 )
 
 const cmdRmSummary = "Remove a file or directory"
-const cmdRmDescription = "The rm command removes a file or directory."
+const cmdRmDescription = `
+The rm command removes a file or directory.
+`
 
 type cmdRm struct {
 	clientMixin
