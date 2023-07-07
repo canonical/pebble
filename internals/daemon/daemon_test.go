@@ -1149,6 +1149,10 @@ services:
 	c.Check(tasks[0].Kind(), Equals, "stop")
 }
 
+type rebootSuite struct{}
+
+var _ = check.Suite(&rebootSuite{})
+
 func mockSyncSyscall(f func()) (restore func()) {
 	old := syncSyscall
 	syncSyscall = f
@@ -1165,7 +1169,7 @@ func mockRebootSyscall(f func(cmd int) error) (restore func()) {
 	}
 }
 
-func (s *daemonSuite) TestSyscallPosRebootDelay(c *C) {
+func (s *rebootSuite) TestSyscallPosRebootDelay(c *C) {
 	wait := make(chan int)
 	defer mockSyncSyscall(func() {})()
 	defer mockRebootSyscall(func(cmd int) error {
@@ -1175,20 +1179,19 @@ func (s *daemonSuite) TestSyscallPosRebootDelay(c *C) {
 		return nil
 	})()
 
-	period := time.Millisecond * 25
-	timeout := time.Second * 10
+	period := 25 * time.Millisecond
 	syscallReboot(period)
 	start := time.Now()
 	select {
 	case <-wait:
-	case <-time.After(timeout): // exit test if we fail and get stuck
-		c.Fail()
+	case <-time.After(10 * time.Second):
+		c.Fatal("syscall did not take place and we timed out")
 	}
-	elapse := time.Now().Sub(start)
-	c.Assert(elapse >= period, Equals, true)
+	elapsed := time.Now().Sub(start)
+	c.Assert(elapsed >= period, Equals, true)
 }
 
-func (s *daemonSuite) TestSyscallNegRebootDelay(c *C) {
+func (s *rebootSuite) TestSyscallNegRebootDelay(c *C) {
 	wait := make(chan int)
 	defer mockSyncSyscall(func() {})()
 	defer mockRebootSyscall(func(cmd int) error {
@@ -1202,19 +1205,19 @@ func (s *daemonSuite) TestSyscallNegRebootDelay(c *C) {
 	// We do supply a rather big value here because this test is
 	// effectively a race, but given the huge timeout, it is not going
 	// to be a problem (c).
-	period := time.Second * 10
+	period := 10 * time.Second
 	syscallReboot(-period)
 	start := time.Now()
 	select {
 	case <-wait:
-	case <-time.After(period): // exit test if we fail and get stuck
-		c.Fail()
+	case <-time.After(10 * time.Second):
+		c.Fatal("syscall did not take place and we timed out")
 	}
-	elapse := time.Now().Sub(start)
-	c.Assert(elapse < period, Equals, true)
+	elapsed := time.Now().Sub(start)
+	c.Assert(elapsed < period, Equals, true)
 }
 
-func (s *daemonSuite) TestSetSyscall(c *C) {
+func (s *rebootSuite) TestSetSyscall(c *C) {
 	wait := make(chan int)
 	defer mockSyncSyscall(func() {})()
 	defer mockRebootSyscall(func(cmd int) error {
@@ -1233,28 +1236,26 @@ func (s *daemonSuite) TestSetSyscall(c *C) {
 
 	err := rebootHandler(0)
 	c.Assert(err, IsNil)
-	// This would block forever if the switch did not work.
-	timeout := time.Second * 10
 	select {
 	case <-wait:
-	case <-time.After(timeout): // exit test if we fail and get stuck
-		c.Fail()
+	case <-time.After(10 * time.Second):
+		c.Fatal("syscall did not take place and we timed out")
 	}
 }
 
 type fakeLogger struct {
-	s string
-	c chan int
+	msg      string
+	noticeCh chan int
 }
 
 func (f *fakeLogger) Notice(msg string) {
-	f.s = msg
-	f.c <- 1
+	f.msg = msg
+	f.noticeCh <- 1
 }
 
 func (f *fakeLogger) Debug(msg string) {}
 
-func (s *daemonSuite) TestSyscallRebootError(c *C) {
+func (s *rebootSuite) TestSyscallRebootError(c *C) {
 	defer mockSyncSyscall(func() {})()
 	defer mockRebootSyscall(func(cmd int) error {
 		return fmt.Errorf("-EPERM")
@@ -1267,20 +1268,16 @@ func (s *daemonSuite) TestSyscallRebootError(c *C) {
 		rebootHandler = commandReboot
 	}()
 	complete := make(chan int)
-	l := fakeLogger{c: complete}
+	l := fakeLogger{noticeCh: complete}
 	old := logger.SetLogger(&l)
-	defer func() {
-		logger.SetLogger(old)
-	}()
+	defer logger.SetLogger(old)
 
 	err := rebootHandler(0)
 	c.Assert(err, IsNil)
-	// This would block forever if the switch did not work.
-	timeout := time.Second * 10
 	select {
 	case <-complete:
-	case <-time.After(timeout): // exit test if we fail and get stuck
-		c.Fail()
+	case <-time.After(10 * time.Second):
+		c.Fatal("syscall did not take place and we timed out")
 	}
-	c.Assert(l.s, Matches, "*-EPERM")
+	c.Assert(l.msg, Matches, "*-EPERM")
 }

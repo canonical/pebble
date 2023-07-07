@@ -761,7 +761,7 @@ func syscallReboot(rebootDelay time.Duration) error {
 		syncSyscall()
 		err := rebootSyscall(syscall.LINUX_REBOOT_CMD_RESTART)
 		if err != nil {
-			logger.Noticef("reboot syscall failed : %v", err)
+			logger.Noticef("Failed on reboot syscall: %v", err)
 		}
 	})
 	return nil
