@@ -32,8 +32,9 @@ var (
 
 type waitMixin struct {
 	clientMixin
-	NoWait    bool `long:"no-wait"`
-	skipAbort bool
+	NoWait       bool `long:"no-wait"`
+	skipAbort    bool
+	hideProgress bool
 }
 
 var waitDescs = map[string]string{
@@ -64,7 +65,12 @@ func (wmx waitMixin) wait(id string) (*client.Change, error) {
 		}
 	}()
 
-	pb := progress.MakeProgressBar()
+	var pb progress.Meter
+	if wmx.hideProgress {
+		pb = progress.NullMeter{}
+	} else {
+		pb = progress.MakeProgressBar()
+	}
 	defer func() {
 		pb.Finished()
 		// Next two are not strictly needed for CLI, but
