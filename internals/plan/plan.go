@@ -105,12 +105,10 @@ func (s *Service) Copy() *Service {
 		}
 	}
 	if s.UserID != nil {
-		userID := *s.UserID
-		copied.UserID = &userID
+		copied.UserID = copyIntPtr(s.UserID)
 	}
 	if s.GroupID != nil {
-		groupID := *s.GroupID
-		copied.GroupID = &groupID
+		copied.GroupID = copyIntPtr(s.GroupID)
 	}
 	if s.OnCheckFailure != nil {
 		copied.OnCheckFailure = make(map[string]ServiceAction)
@@ -139,15 +137,13 @@ func (s *Service) Merge(other *Service) {
 		s.KillDelay = other.KillDelay
 	}
 	if other.UserID != nil {
-		userID := *other.UserID
-		s.UserID = &userID
+		s.UserID = copyIntPtr(other.UserID)
 	}
 	if other.User != "" {
 		s.User = other.User
 	}
 	if other.GroupID != nil {
-		groupID := *other.GroupID
-		s.GroupID = &groupID
+		s.GroupID = copyIntPtr(other.GroupID)
 	}
 	if other.Group != "" {
 		s.Group = other.Group
@@ -451,12 +447,10 @@ func (c *ExecCheck) Copy() *ExecCheck {
 		}
 	}
 	if c.UserID != nil {
-		userID := *c.UserID
-		copied.UserID = &userID
+		copied.UserID = copyIntPtr(c.UserID)
 	}
 	if c.GroupID != nil {
-		groupID := *c.GroupID
-		copied.GroupID = &groupID
+		copied.GroupID = copyIntPtr(c.GroupID)
 	}
 	return &copied
 }
@@ -476,15 +470,13 @@ func (c *ExecCheck) Merge(other *ExecCheck) {
 		c.Environment[k] = v
 	}
 	if other.UserID != nil {
-		userID := *other.UserID
-		c.UserID = &userID
+		c.UserID = copyIntPtr(other.UserID)
 	}
 	if other.User != "" {
 		c.User = other.User
 	}
 	if other.GroupID != nil {
-		groupID := *other.GroupID
-		c.GroupID = &groupID
+		c.GroupID = copyIntPtr(other.GroupID)
 	}
 	if other.Group != "" {
 		c.Group = other.Group
@@ -1113,13 +1105,11 @@ func MergeServiceContext(p *Plan, serviceName string, overrides ContextOptions) 
 		merged.Environment[k] = v
 	}
 	if service.UserID != nil {
-		copied := *service.UserID
-		merged.UserID = &copied
+		merged.UserID = copyIntPtr(service.UserID)
 	}
 	merged.User = service.User
 	if service.GroupID != nil {
-		copied := *service.GroupID
-		merged.GroupID = &copied
+		merged.GroupID = copyIntPtr(service.GroupID)
 	}
 	merged.Group = service.Group
 	merged.WorkingDir = service.WorkingDir
@@ -1129,15 +1119,13 @@ func MergeServiceContext(p *Plan, serviceName string, overrides ContextOptions) 
 		merged.Environment[k] = v
 	}
 	if overrides.UserID != nil {
-		userID := *overrides.UserID
-		merged.UserID = &userID
+		merged.UserID = copyIntPtr(overrides.UserID)
 	}
 	if overrides.User != "" {
 		merged.User = overrides.User
 	}
 	if overrides.GroupID != nil {
-		groupID := *overrides.GroupID
-		merged.GroupID = &groupID
+		merged.GroupID = copyIntPtr(overrides.GroupID)
 	}
 	if overrides.Group != "" {
 		merged.Group = overrides.Group
@@ -1157,4 +1145,12 @@ type ContextOptions struct {
 	GroupID     *int
 	Group       string
 	WorkingDir  string
+}
+
+func copyIntPtr(p *int) *int {
+	if p == nil {
+		return nil
+	}
+	copied := *p
+	return &copied
 }
