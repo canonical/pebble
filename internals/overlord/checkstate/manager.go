@@ -27,6 +27,7 @@ import (
 // CheckManager starts and manages the health checks.
 type CheckManager struct {
 	mutex           sync.Mutex
+	wg              sync.WaitGroup
 	checks          map[string]*checkData
 	failureHandlers []FailureFunc
 }
@@ -58,6 +59,12 @@ func (m *CheckManager) PlanChanged(p *plan.Plan) {
 	for _, check := range m.checks {
 		check.cancel()
 	}
+	// Wait for all context cancellations to propagate and allow
+	// each goroutine to cleanly exit.
+	m.wg.Wait()
+
+	// Set the size of the next wait group
+	m.wg.Add(len(p.Checks))
 
 	// Then configure and start new checks.
 	checks := make(map[string]*checkData, len(p.Checks))
@@ -71,7 +78,10 @@ func (m *CheckManager) PlanChanged(p *plan.Plan) {
 			action:  m.callFailureHandlers,
 		}
 		checks[name] = check
-		go check.loop()
+		go func() {
+			defer m.wg.Done()
+			check.loop()
+		}()
 	}
 	m.checks = checks
 }
