@@ -220,7 +220,10 @@ func runDaemon(rcmd *cmdRun, ch chan os.Signal, ready chan<- func()) error {
 					hideProgress: true,
 				}
 				waitCmd.setClient(rcmd.client)
-				waitCmd.wait(changeID)
+				_, err := waitCmd.wait(changeID)
+				if err != nil {
+					logger.Debugf("Error starting default services: %v", err)
+				}
 				autoStartReady <- struct{}{}
 			}()
 		}
