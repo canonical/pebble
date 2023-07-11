@@ -427,14 +427,14 @@ func (c *TCPCheck) Merge(other *TCPCheck) {
 
 // ExecCheck holds the configuration for an exec health check.
 type ExecCheck struct {
-	Command     string            `yaml:"command,omitempty"`
-	Context     string            `yaml:"context,omitempty"`
-	Environment map[string]string `yaml:"environment,omitempty"`
-	UserID      *int              `yaml:"user-id,omitempty"`
-	User        string            `yaml:"user,omitempty"`
-	GroupID     *int              `yaml:"group-id,omitempty"`
-	Group       string            `yaml:"group,omitempty"`
-	WorkingDir  string            `yaml:"working-dir,omitempty"`
+	Command        string            `yaml:"command,omitempty"`
+	ServiceContext string            `yaml:"service-context,omitempty"`
+	Environment    map[string]string `yaml:"environment,omitempty"`
+	UserID         *int              `yaml:"user-id,omitempty"`
+	User           string            `yaml:"user,omitempty"`
+	GroupID        *int              `yaml:"group-id,omitempty"`
+	Group          string            `yaml:"group,omitempty"`
+	WorkingDir     string            `yaml:"working-dir,omitempty"`
 }
 
 // Copy returns a deep copy of the exec check configuration.
@@ -460,8 +460,8 @@ func (c *ExecCheck) Merge(other *ExecCheck) {
 	if other.Command != "" {
 		c.Command = other.Command
 	}
-	if other.Context != "" {
-		c.Context = other.Context
+	if other.ServiceContext != "" {
+		c.ServiceContext = other.ServiceContext
 	}
 	for k, v := range other.Environment {
 		if c.Environment == nil {
@@ -729,11 +729,11 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 					Message: fmt.Sprintf("plan check %q command invalid: %v", name, err),
 				}
 			}
-			_, contextExists := combined.Services[check.Exec.Context]
-			if check.Exec.Context != "" && !contextExists {
+			_, contextExists := combined.Services[check.Exec.ServiceContext]
+			if check.Exec.ServiceContext != "" && !contextExists {
 				return nil, &FormatError{
-					Message: fmt.Sprintf("plan check %q context specifies non-existent service %q",
-						name, check.Exec.Context),
+					Message: fmt.Sprintf("plan check %q service context specifies non-existent service %q",
+						name, check.Exec.ServiceContext),
 				}
 			}
 			_, _, err = osutil.NormalizeUidGid(check.Exec.UserID, check.Exec.GroupID, check.Exec.User, check.Exec.Group)

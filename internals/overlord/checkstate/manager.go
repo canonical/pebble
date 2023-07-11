@@ -118,7 +118,7 @@ func newChecker(config *plan.Check, p *plan.Plan) checker {
 			Group:       config.Exec.Group,
 			WorkingDir:  config.Exec.WorkingDir,
 		}
-		merged, err := plan.MergeServiceContext(p, config.Exec.Context, overrides)
+		merged, err := plan.MergeServiceContext(p, config.Exec.ServiceContext, overrides)
 		if err != nil {
 			// Context service name has already been checked when plan was loaded.
 			panic("internal error: " + err.Error())

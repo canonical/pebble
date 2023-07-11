@@ -824,15 +824,15 @@ var planTests = []planTest{{
 					command: foo '
 	`},
 }, {
-	summary: `Invalid exec check context`,
-	error:   `plan check "chk1" context specifies non-existent service "nosvc"`,
+	summary: `Invalid exec check service context`,
+	error:   `plan check "chk1" service context specifies non-existent service "nosvc"`,
 	input: []string{`
 		checks:
 			chk1:
 				override: replace
 				exec:
 					command: foo
-					context: nosvc
+					service-context: nosvc
 	`},
 }, {
 	summary: "Simple layer with log targets",

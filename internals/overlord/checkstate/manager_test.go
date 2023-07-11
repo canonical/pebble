@@ -351,8 +351,8 @@ func (s *CheckersSuite) TestExecContextNoOverride(c *C) {
 	chk := newChecker(&plan.Check{
 		Name: "exec",
 		Exec: &plan.ExecCheck{
-			Command: "sleep 1",
-			Context: "svc1",
+			Command:        "sleep 1",
+			ServiceContext: "svc1",
 		},
 	}, &plan.Plan{Services: map[string]*plan.Service{
 		"svc1": {
@@ -382,14 +382,14 @@ func (s *CheckersSuite) TestExecContextOverride(c *C) {
 	chk := newChecker(&plan.Check{
 		Name: "exec",
 		Exec: &plan.ExecCheck{
-			Command:     "sleep 1",
-			Context:     "svc1",
-			Environment: map[string]string{"k": "v"},
-			UserID:      &userID,
-			User:        "user",
-			GroupID:     &groupID,
-			Group:       "group",
-			WorkingDir:  "/working/dir",
+			Command:        "sleep 1",
+			ServiceContext: "svc1",
+			Environment:    map[string]string{"k": "v"},
+			UserID:         &userID,
+			User:           "user",
+			GroupID:        &groupID,
+			Group:          "group",
+			WorkingDir:     "/working/dir",
 		},
 	}, &plan.Plan{Services: map[string]*plan.Service{
 		"svc1": {
