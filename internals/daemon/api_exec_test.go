@@ -180,8 +180,8 @@ func (s *execSuite) TestContextNoOverrides(c *C) {
 	c.Assert(err, IsNil)
 
 	stdout, stderr, err := s.exec(c, "", &client.ExecOptions{
-		Command: []string{"/bin/sh", "-c", "echo FOO=$FOO BAR=$BAR; pwd"},
-		Context: "svc1",
+		Command:        []string{"/bin/sh", "-c", "echo FOO=$FOO BAR=$BAR; pwd"},
+		ServiceContext: "svc1",
 	})
 	c.Assert(err, IsNil)
 	c.Check(stdout, Equals, "FOO=foo BAR=bar\n"+dir+"\n")
@@ -203,10 +203,10 @@ func (s *execSuite) TestContextOverrides(c *C) {
 
 	overrideDir := c.MkDir()
 	stdout, stderr, err := s.exec(c, "", &client.ExecOptions{
-		Command:     []string{"/bin/sh", "-c", "echo FOO=$FOO BAR=$BAR; pwd"},
-		Context:     "svc1",
-		Environment: map[string]string{"FOO": "oof"},
-		WorkingDir:  overrideDir,
+		Command:        []string{"/bin/sh", "-c", "echo FOO=$FOO BAR=$BAR; pwd"},
+		ServiceContext: "svc1",
+		Environment:    map[string]string{"FOO": "oof"},
+		WorkingDir:     overrideDir,
 	})
 	c.Assert(err, IsNil)
 	c.Check(stdout, Equals, "FOO=oof BAR=bar\n"+overrideDir+"\n")

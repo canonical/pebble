@@ -28,20 +28,20 @@ import (
 )
 
 type execPayload struct {
-	Command     []string          `json:"command"`
-	Context     string            `json:"context"`
-	Environment map[string]string `json:"environment"`
-	WorkingDir  string            `json:"working-dir"`
-	Timeout     string            `json:"timeout"`
-	UserID      *int              `json:"user-id"`
-	User        string            `json:"user"`
-	GroupID     *int              `json:"group-id"`
-	Group       string            `json:"group"`
-	Terminal    bool              `json:"terminal"`
-	Interactive bool              `json:"interactive"`
-	SplitStderr bool              `json:"split-stderr"`
-	Width       int               `json:"width"`
-	Height      int               `json:"height"`
+	Command        []string          `json:"command"`
+	ServiceContext string            `json:"service-context"`
+	Environment    map[string]string `json:"environment"`
+	WorkingDir     string            `json:"working-dir"`
+	Timeout        string            `json:"timeout"`
+	UserID         *int              `json:"user-id"`
+	User           string            `json:"user"`
+	GroupID        *int              `json:"group-id"`
+	Group          string            `json:"group"`
+	Terminal       bool              `json:"terminal"`
+	Interactive    bool              `json:"interactive"`
+	SplitStderr    bool              `json:"split-stderr"`
+	Width          int               `json:"width"`
+	Height         int               `json:"height"`
 }
 
 func v1PostExec(c *Command, req *http.Request, _ *userState) Response {
@@ -94,7 +94,7 @@ func v1PostExec(c *Command, req *http.Request, _ *userState) Response {
 		Group:       payload.Group,
 		WorkingDir:  payload.WorkingDir,
 	}
-	merged, err := plan.MergeServiceContext(p, payload.Context, overrides)
+	merged, err := plan.MergeServiceContext(p, payload.ServiceContext, overrides)
 	if err != nil {
 		return statusBadRequest("%v", err)
 	}

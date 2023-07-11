@@ -693,7 +693,7 @@ checks:
             # settings, and working directory. The check's context (the
             # settings below) will override the service's; the check's
             # environment map will be merged on top of the service's.
-            context: <service-name>
+            service-context: <service-name>
 
             # (Optional) A list of key/value pairs defining environment
             # variables that should be set when running the command.
