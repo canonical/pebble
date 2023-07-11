@@ -194,7 +194,7 @@ func runDaemon(rcmd *cmdRun, ch chan os.Signal, ready chan<- func()) error {
 
 	logger.Debugf("activation done in %v", time.Now().Truncate(time.Millisecond).Sub(t0))
 
-	var autoStartReady chan struct{}
+	var autoStartReady chan error
 	var stop chan struct{}
 
 	notifyReady := func() {
@@ -214,17 +214,14 @@ func runDaemon(rcmd *cmdRun, ch chan os.Signal, ready chan<- func()) error {
 
 		if ready != nil {
 			// wait for the default services to start
-			autoStartReady = make(chan struct{}, 1)
+			autoStartReady = make(chan error, 1)
 			go func() {
 				waitCmd := waitMixin{
 					hideProgress: true,
 				}
 				waitCmd.setClient(rcmd.client)
 				_, err := waitCmd.wait(changeID)
-				if err != nil {
-					logger.Debugf("Error starting default services: %v", err)
-				}
-				autoStartReady <- struct{}{}
+				autoStartReady <- err
 			}()
 		}
 	} else if ready != nil {
@@ -246,7 +243,10 @@ out:
 				d.SetDegradedMode(nil)
 				tic.Stop()
 			}
-		case <-autoStartReady:
+		case chgErr := <-autoStartReady:
+			if chgErr != nil {
+				return fmt.Errorf("error starting default services: %w", chgErr)
+			}
 			notifyReady()
 		case <-stop:
 			break out
