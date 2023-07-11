@@ -93,9 +93,6 @@ type CmdInfo struct {
 // commands holds information about all the regular Pebble commands.
 var commands []*CmdInfo
 
-// debugCommands holds information about all the subcommands of the `pebble debug` command.
-var debugCommands []*CmdInfo
-
 // AddCommand adds a command to the top-level parser.
 func AddCommand(info *CmdInfo) {
 	commands = append(commands, info)
@@ -195,11 +192,7 @@ func Parser(cli *client.Client) *flags.Parser {
 	}
 
 	// Add all commands
-	ncmds := len(commands)
-	allCmds := make([]*CmdInfo, ncmds, ncmds+len(debugCommands))
-	copy(allCmds, commands)
-	copy(allCmds[ncmds:], debugCommands)
-	for _, c := range allCmds {
+	for _, c := range commands {
 		obj := c.Builder()
 		if x, ok := obj.(clientSetter); ok {
 			x.setClient(cli)
