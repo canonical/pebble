@@ -824,6 +824,17 @@ var planTests = []planTest{{
 					command: foo '
 	`},
 }, {
+	summary: `Invalid exec check service context`,
+	error:   `plan check "chk1" service context specifies non-existent service "nosvc"`,
+	input: []string{`
+		checks:
+			chk1:
+				override: replace
+				exec:
+					command: foo
+					service-context: nosvc
+	`},
+}, {
 	summary: "Simple layer with log targets",
 	input: []string{`
 		services:
@@ -1544,4 +1555,79 @@ func (s *S) TestLogsTo(c *C) {
 				Commentf("matching service %q against 'services: %v'", serviceName, test.services))
 		}
 	}
+}
+
+func (s *S) TestMergeServiceContextNoContext(c *C) {
+	userID, groupID := 10, 20
+	overrides := plan.ContextOptions{
+		Environment: map[string]string{"x": "y"},
+		UserID:      &userID,
+		User:        "usr",
+		GroupID:     &groupID,
+		Group:       "grp",
+		WorkingDir:  "/working/dir",
+	}
+	merged, err := plan.MergeServiceContext(nil, "", overrides)
+	c.Assert(err, IsNil)
+	c.Check(merged, DeepEquals, overrides)
+}
+
+func (s *S) TestMergeServiceContextBadService(c *C) {
+	_, err := plan.MergeServiceContext(&plan.Plan{}, "nosvc", plan.ContextOptions{})
+	c.Assert(err, ErrorMatches, `context service "nosvc" not found`)
+}
+
+func (s *S) TestMergeServiceContextNoOverrides(c *C) {
+	userID, groupID := 11, 22
+	p := &plan.Plan{Services: map[string]*plan.Service{"svc1": {
+		Name:        "svc1",
+		Environment: map[string]string{"x": "y"},
+		UserID:      &userID,
+		User:        "svcuser",
+		GroupID:     &groupID,
+		Group:       "svcgroup",
+		WorkingDir:  "/working/svc",
+	}}}
+	merged, err := plan.MergeServiceContext(p, "svc1", plan.ContextOptions{})
+	c.Assert(err, IsNil)
+	c.Check(merged, DeepEquals, plan.ContextOptions{
+		Environment: map[string]string{"x": "y"},
+		UserID:      &userID,
+		User:        "svcuser",
+		GroupID:     &groupID,
+		Group:       "svcgroup",
+		WorkingDir:  "/working/svc",
+	})
+}
+
+func (s *S) TestMergeServiceContextOverrides(c *C) {
+	svcUserID, svcGroupID := 10, 20
+	p := &plan.Plan{Services: map[string]*plan.Service{"svc1": {
+		Name:        "svc1",
+		Environment: map[string]string{"x": "y", "w": "z"},
+		UserID:      &svcUserID,
+		User:        "svcuser",
+		GroupID:     &svcGroupID,
+		Group:       "svcgroup",
+		WorkingDir:  "/working/svc",
+	}}}
+	userID, groupID := 11, 22
+	overrides := plan.ContextOptions{
+		Environment: map[string]string{"x": "a"},
+		UserID:      &userID,
+		User:        "usr",
+		GroupID:     &groupID,
+		Group:       "grp",
+		WorkingDir:  "/working/dir",
+	}
+	merged, err := plan.MergeServiceContext(p, "svc1", overrides)
+	c.Assert(err, IsNil)
+	c.Check(merged, DeepEquals, plan.ContextOptions{
+		Environment: map[string]string{"x": "a", "w": "z"},
+		UserID:      &userID,
+		User:        "usr",
+		GroupID:     &groupID,
+		Group:       "grp",
+		WorkingDir:  "/working/dir",
+	})
 }

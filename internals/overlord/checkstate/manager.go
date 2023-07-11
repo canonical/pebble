@@ -72,7 +72,7 @@ func (m *CheckManager) PlanChanged(p *plan.Plan) {
 		ctx, cancel := context.WithCancel(context.Background())
 		check := &checkData{
 			config:  config,
-			checker: newChecker(config),
+			checker: newChecker(config, p),
 			ctx:     ctx,
 			cancel:  cancel,
 			action:  m.callFailureHandlers,
@@ -93,7 +93,7 @@ func (m *CheckManager) callFailureHandlers(name string) {
 }
 
 // newChecker creates a new checker of the configured type.
-func newChecker(config *plan.Check) checker {
+func newChecker(config *plan.Check, p *plan.Plan) checker {
 	switch {
 	case config.HTTP != nil:
 		return &httpChecker{
@@ -110,15 +110,28 @@ func newChecker(config *plan.Check) checker {
 		}
 
 	case config.Exec != nil:
+		overrides := plan.ContextOptions{
+			Environment: config.Exec.Environment,
+			UserID:      config.Exec.UserID,
+			User:        config.Exec.User,
+			GroupID:     config.Exec.GroupID,
+			Group:       config.Exec.Group,
+			WorkingDir:  config.Exec.WorkingDir,
+		}
+		merged, err := plan.MergeServiceContext(p, config.Exec.ServiceContext, overrides)
+		if err != nil {
+			// Context service name has already been checked when plan was loaded.
+			panic("internal error: " + err.Error())
+		}
 		return &execChecker{
 			name:        config.Name,
 			command:     config.Exec.Command,
-			environment: config.Exec.Environment,
-			userID:      config.Exec.UserID,
-			user:        config.Exec.User,
-			groupID:     config.Exec.GroupID,
-			group:       config.Exec.Group,
-			workingDir:  config.Exec.WorkingDir,
+			environment: merged.Environment,
+			userID:      merged.UserID,
+			user:        merged.User,
+			groupID:     merged.GroupID,
+			group:       merged.Group,
+			workingDir:  merged.WorkingDir,
 		}
 
 	default:
