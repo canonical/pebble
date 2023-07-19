@@ -262,7 +262,7 @@ func (s *PebbleSuite) TestEnterSubCommandWaits(c *C) {
 	subCmdExecTime, err := time.Parse(layout, strings.TrimSpace(stdout))
 	c.Check(err, IsNil)
 
-	svcOut, err := os.ReadFile(filepath.Join(s.pebbleDir, "stat"))
+	svcOut, err := ioutil.ReadFile(filepath.Join(s.pebbleDir, "stat"))
 	c.Check(err, IsNil)
 	svcStartTime, err := time.Parse(layout, strings.TrimSpace(string(svcOut)))
 	c.Check(err, IsNil)
