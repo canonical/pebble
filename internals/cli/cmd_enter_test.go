@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"text/template"
+	"time"
 
 	. "gopkg.in/check.v1"
 
@@ -230,4 +231,41 @@ func (s *PebbleSuite) TestEnterHelpCommandHelpArg(c *C) {
 	c.Check(stdout, Matches, "^(?s)Usage:\n  pebble help \\[help-OPTIONS\\] \\[<command>\\.\\.\\.\\]\n.*")
 	c.Check(stdout, Matches, "(?s).*\\bThe help command displays information about commands\\..*")
 	c.Check(exitCode, Equals, 0)
+}
+
+// TestEnterSubCommandWaits checks that the subcommand in enter
+// starts **after** the default services have started. It utilizes
+// the modification time of /proc/[PID] directory for checking.
+func (s *PebbleSuite) TestEnterSubCommandWaits(c *C) {
+	layerTemplate := dumbDedent(`
+		services:
+		  stat:
+		    override: replace
+		    command: /bin/sh -c 'stat -c "%y" /proc/$$ > $PEBBLE/stat; sleep 1;'
+		    startup: enabled
+	`)
+	layerPath := filepath.Join(s.pebbleDir, "layers", "001-stat.yaml")
+	writeTemplate(layerPath, layerTemplate, nil)
+
+	cmd := []string{"pebble", "enter", "--run", "exec", "/bin/sh", "-c", "stat -c '%y' /proc/$$"}
+	restore := fakeArgs(cmd...)
+	defer restore()
+
+	exitCode := cli.PebbleMain()
+	c.Check(exitCode, Equals, 0)
+	// stderr is written to stdout buffer because of "combine stderr" mode,
+	// see cmd/pebble/cmd_exec.go:163
+	c.Check(s.Stderr(), Equals, "")
+	stdout := s.Stdout()
+
+	layout := "2006-01-02 15:04:05.000000000 -0700"
+	subCmdExecTime, err := time.Parse(layout, strings.TrimSpace(stdout))
+	c.Check(err, IsNil)
+
+	svcOut, err := os.ReadFile(filepath.Join(s.pebbleDir, "stat"))
+	c.Check(err, IsNil)
+	svcStartTime, err := time.Parse(layout, strings.TrimSpace(string(svcOut)))
+	c.Check(err, IsNil)
+
+	c.Check(svcStartTime.Before(subCmdExecTime), Equals, true)
 }
