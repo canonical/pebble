@@ -71,7 +71,7 @@ stderr are output locally.
 To avoid confusion, exec options may be separated from the command and its
 arguments using "--", for example:
 
-	exec --timeout 10s -- echo -n foo bar
+	<program name> exec --timeout 10s -- echo -n foo bar
 `
 
 func (cmd *cmdExec) Execute(args []string) error {

@@ -40,7 +40,7 @@ must be terminated with ";" unless there are no further program options.  These 
 are appended to the end of the service command, and replace any default arguments defined
 in the service plan. For example:
 
-    run --args myservice --port 8080 \; --hold
+    <program name> run --args myservice --port 8080 \; --hold
 `
 
 type sharedRunEnterOpts struct {

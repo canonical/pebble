@@ -169,7 +169,7 @@ type helpCategory struct {
 // helpCategories helps us by grouping commands
 var helpCategories = []helpCategory{{
 	Label:       "Run",
-	Description: "run the service manager",
+	Description: "run <display name>",
 	Commands:    []string{"run", "help", "version"},
 }, {
 	Label:       "Plan",

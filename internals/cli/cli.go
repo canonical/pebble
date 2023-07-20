@@ -201,7 +201,7 @@ func Parser(cli *client.Client) *flags.Parser {
 			x.setParser(parser)
 		}
 
-		cmd, err := parser.AddCommand(c.name, c.shortHelp, strings.TrimSpace(c.longHelp), obj)
+		cmd, err := parser.AddCommand(c.name, applyPersonality(c.shortHelp), applyPersonality(strings.TrimSpace(c.longHelp)), obj)
 		if err != nil {
 			logger.Panicf("cannot add command %q: %v", c.name, err)
 		}
@@ -225,7 +225,7 @@ func Parser(cli *client.Client) *flags.Parser {
 			}
 			lintDesc(c.name, name, desc, opt.Description)
 			if desc != "" {
-				opt.Description = desc
+				opt.Description = applyPersonality(desc)
 			}
 		}
 
@@ -242,14 +242,14 @@ func Parser(cli *client.Client) *flags.Parser {
 			lintArg(c.name, name, desc, arg.Description)
 			name = fixupArg(name)
 			arg.Name = name
-			arg.Description = desc
+			arg.Description = applyPersonality(desc)
 		}
 		if c.extra != nil {
 			c.extra(cmd)
 		}
 	}
 	// Add the debug command
-	debugCommand, err := parser.AddCommand("debug", shortDebugHelp, longDebugHelp, &cmdDebug{})
+	debugCommand, err := parser.AddCommand("debug", applyPersonality(shortDebugHelp), applyPersonality(longDebugHelp), &cmdDebug{})
 	debugCommand.Hidden = true
 	if err != nil {
 		logger.Panicf("cannot add command %q: %v", "debug", err)
@@ -280,7 +280,7 @@ func Parser(cli *client.Client) *flags.Parser {
 			}
 			lintDesc(c.name, name, desc, opt.Description)
 			if desc != "" {
-				opt.Description = desc
+				opt.Description = applyPersonality(desc)
 			}
 		}
 
@@ -297,10 +297,15 @@ func Parser(cli *client.Client) *flags.Parser {
 			lintArg(c.name, name, desc, arg.Description)
 			name = fixupArg(name)
 			arg.Name = name
-			arg.Description = desc
+			arg.Description = applyPersonality(desc)
 		}
 	}
 	return parser
+}
+
+func applyPersonality(s string) string {
+	r := strings.NewReplacer("<program name>", cmd.Personality.ProgramName, "<display name>", cmd.Personality.DisplayName)
+	return r.Replace(s)
 }
 
 var (
