@@ -269,3 +269,36 @@ func (s *PebbleSuite) TestEnterSubCommandWaits(c *C) {
 
 	c.Check(svcStartTime.Before(subCmdExecTime), Equals, true)
 }
+
+// TestEnterDefaultServiceStartError tests whether default service
+// start errors are reported with non-zero exit codes. Note that,
+// for now this is only tested for
+//
+//	pebble enter --run <subcommand> [args..]
+//
+// Discussions about having this error reporting for “pebble run“
+// and similar scenarios can be found at:
+//   - https://github.com/canonical/pebble/pull/257#discussion_r1259070650
+//   - https://github.com/canonical/pebble/issues/167
+func (s *PebbleSuite) TestEnterDefaultServiceStartError(c *C) {
+	layerTemplate := dumbDedent(`
+		services:
+		  srv:
+		    override: replace
+		    command: unknownBinary123
+		    startup: enabled
+	`)
+	layerPath := filepath.Join(s.pebbleDir, "layers", "001-stat.yaml")
+	writeTemplate(layerPath, layerTemplate, nil)
+
+	cmd := []string{"pebble", "enter", "--run", "stop", "srv1"}
+	restore := fakeArgs(cmd...)
+	defer restore()
+
+	exitCode := cli.PebbleMain()
+	c.Check(exitCode, Equals, 1)
+	stderr := s.Stderr()
+	c.Check(stderr, Matches, "^(?s)cannot run pebble: error starting default services.*")
+	c.Check(stderr, Matches, "(?s).*Start service .* executable file not found in \\$PATH.*")
+	c.Check(s.Stdout(), Equals, "")
+}
