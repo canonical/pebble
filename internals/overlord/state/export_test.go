@@ -1,7 +1,7 @@
 // -*- Mode: Go; indent-tabs-mode: t -*-
 
 /*
- * Copyright (c) 2016 Canonical Ltd
+ * Copyright (C) 2016 Canonical Ltd
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -23,8 +23,8 @@ import (
 	"time"
 )
 
-// FakeCheckpointRetryDelay changes unlockCheckpointRetryInterval and unlockCheckpointRetryMaxTime.
-func FakeCheckpointRetryDelay(retryInterval, retryMaxTime time.Duration) (restore func()) {
+// MockCheckpointRetryDelay changes unlockCheckpointRetryInterval and unlockCheckpointRetryMaxTime.
+func MockCheckpointRetryDelay(retryInterval, retryMaxTime time.Duration) (restore func()) {
 	oldInterval := unlockCheckpointRetryInterval
 	oldMaxTime := unlockCheckpointRetryMaxTime
 	unlockCheckpointRetryInterval = retryInterval
@@ -35,12 +35,12 @@ func FakeCheckpointRetryDelay(retryInterval, retryMaxTime time.Duration) (restor
 	}
 }
 
-func FakeChangeTimes(chg *Change, spawnTime, readyTime time.Time) {
+func MockChangeTimes(chg *Change, spawnTime, readyTime time.Time) {
 	chg.spawnTime = spawnTime
 	chg.readyTime = readyTime
 }
 
-func FakeTaskTimes(t *Task, spawnTime, readyTime time.Time) {
+func MockTaskTimes(t *Task, spawnTime, readyTime time.Time) {
 	t.spawnTime = spawnTime
 	t.readyTime = readyTime
 }

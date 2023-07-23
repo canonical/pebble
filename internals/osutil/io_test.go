@@ -245,9 +245,9 @@ func (ts *AtomicWriteTestSuite) TestAtomicFileCancel(c *C) {
 	aw, err := osutil.NewAtomicFile(p, 0644, 0, osutil.NoChown, osutil.NoChown)
 	c.Assert(err, IsNil)
 	fn := aw.File.Name()
-	c.Check(osutil.CanStat(fn), Equals, true)
+	c.Check(osutil.FileExists(fn), Equals, true)
 	c.Check(aw.Cancel(), IsNil)
-	c.Check(osutil.CanStat(fn), Equals, false)
+	c.Check(osutil.FileExists(fn), Equals, false)
 }
 
 // SafeIoAtomicWriteTestSuite runs all AtomicWrite with safe

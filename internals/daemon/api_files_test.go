@@ -625,7 +625,7 @@ func (s *filesSuite) TestRemoveSingle(c *C) {
 	c.Check(r.Result, HasLen, 1)
 	checkFileResult(c, r.Result[0], tmpDir+"/file", "", "")
 
-	c.Check(osutil.CanStat(tmpDir+"/file"), Equals, false)
+	c.Check(osutil.FileExists(tmpDir+"/file"), Equals, false)
 }
 
 func (s *filesSuite) TestRemoveMultiple(c *C) {
@@ -667,7 +667,7 @@ func (s *filesSuite) TestRemoveMultiple(c *C) {
 	checkFileResult(c, r.Result[2], tmpDir+"/non-empty", "generic-file-error", ".*directory not empty")
 	checkFileResult(c, r.Result[3], tmpDir+"/recursive", "", "")
 
-	c.Check(osutil.CanStat(tmpDir+"/file"), Equals, false)
+	c.Check(osutil.FileExists(tmpDir+"/file"), Equals, false)
 	c.Check(osutil.IsDir(tmpDir+"/empty"), Equals, false)
 	c.Check(osutil.IsDir(tmpDir+"/non-empty"), Equals, true)
 	c.Check(osutil.IsDir(tmpDir+"/recursive"), Equals, false)
@@ -1186,10 +1186,10 @@ group not found
 	checkFileResult(c, r.Result[4], pathUserNotFound, "generic-file-error", ".*unknown user.*")
 	checkFileResult(c, r.Result[5], pathGroupNotFound, "generic-file-error", ".*unknown group.*")
 
-	c.Check(osutil.CanStat(pathNoContent), Equals, false)
-	c.Check(osutil.CanStat(pathNotAbsolute), Equals, false)
-	c.Check(osutil.CanStat(pathNotFound), Equals, false)
-	c.Check(osutil.CanStat(pathPermissionDenied), Equals, false)
+	c.Check(osutil.FileExists(pathNoContent), Equals, false)
+	c.Check(osutil.FileExists(pathNotAbsolute), Equals, false)
+	c.Check(osutil.FileExists(pathNotFound), Equals, false)
+	c.Check(osutil.FileExists(pathPermissionDenied), Equals, false)
 }
 
 func assertFile(c *C, path string, perm os.FileMode, content string) {

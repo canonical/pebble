@@ -21,6 +21,7 @@ import (
 
 	"github.com/canonical/pebble/internals/overlord/restart"
 	"github.com/canonical/pebble/internals/overlord/state"
+	"github.com/canonical/pebble/internals/testutil"
 )
 
 func TestRestart(t *testing.T) { TestingT(t) }
@@ -134,5 +135,5 @@ func (s *restartSuite) TestRequestRestartSystemAndVerifyReboot(c *C) {
 	err = restart.Init(st, "boot-id-2", h2)
 	c.Assert(err, IsNil)
 	c.Check(h2.rebootAsExpected, Equals, true)
-	c.Check(st.Get("system-restart-from-boot-id", &fromBootID), Equals, state.ErrNoState)
+	c.Check(st.Get("system-restart-from-boot-id", &fromBootID), testutil.ErrorIs, state.ErrNoState)
 }

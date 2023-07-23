@@ -25,9 +25,9 @@ import (
 	"syscall"
 )
 
-// CanStat returns true if stat succeeds on the given path.
+// FileExists returns true if stat succeeds on the given path.
 // It may return false on permission issues.
-func CanStat(path string) bool {
+func FileExists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
 }

@@ -46,6 +46,26 @@ type overlordSuite struct {
 
 var _ = Suite(&overlordSuite{})
 
+type ticker struct {
+	tickerChannel chan time.Time
+}
+
+func (w *ticker) tick(n int) {
+	for i := 0; i < n; i++ {
+		w.tickerChannel <- time.Now()
+	}
+}
+
+func fakePruneTicker() (w *ticker, restore func()) {
+	w = &ticker{
+		tickerChannel: make(chan time.Time),
+	}
+	restore = overlord.FakePruneTicker(func(t *time.Ticker) <-chan time.Time {
+		return w.tickerChannel
+	})
+	return w, restore
+}
+
 func (ovs *overlordSuite) SetUpTest(c *C) {
 	ovs.dir = c.MkDir()
 	ovs.statePath = filepath.Join(ovs.dir, ".pebble.state")
@@ -161,6 +181,12 @@ type witnessManager struct {
 	expectedEnsure int
 	ensureCalled   chan struct{}
 	ensureCallback func(s *state.State) error
+	startedUp      int
+}
+
+func (wm *witnessManager) StartUp() error {
+	wm.startedUp++
+	return nil
 }
 
 func (wm *witnessManager) Ensure() error {
@@ -176,6 +202,9 @@ func (wm *witnessManager) Ensure() error {
 
 func (ovs *overlordSuite) TestTrivialRunAndStop(c *C) {
 	o, err := overlord.New(ovs.dir, nil, nil)
+	c.Assert(err, IsNil)
+
+	err = o.StartUp()
 	c.Assert(err, IsNil)
 
 	o.Loop()
@@ -216,6 +245,10 @@ func (ovs *overlordSuite) TestEnsureLoopRunAndStop(c *C) {
 	}
 	o.AddManager(witness)
 
+	err := o.StartUp()
+
+	c.Assert(err, IsNil)
+
 	o.Loop()
 	defer o.Stop()
 
@@ -227,8 +260,9 @@ func (ovs *overlordSuite) TestEnsureLoopRunAndStop(c *C) {
 	}
 	c.Check(time.Since(t0) >= 10*time.Millisecond, Equals, true)
 
-	err := o.Stop()
+	err = o.Stop()
 	c.Assert(err, IsNil)
+	c.Check(witness.startedUp, Equals, 1)
 }
 
 func (ovs *overlordSuite) TestEnsureLoopMediatedEnsureBeforeImmediate(c *C) {
@@ -248,7 +282,7 @@ func (ovs *overlordSuite) TestEnsureLoopMediatedEnsureBeforeImmediate(c *C) {
 		ensureCallback: ensure,
 	}
 	o.AddManager(witness)
-
+	c.Assert(o.StartUp(), IsNil)
 	o.Loop()
 	defer o.Stop()
 
@@ -276,6 +310,8 @@ func (ovs *overlordSuite) TestEnsureLoopMediatedEnsureBefore(c *C) {
 		ensureCallback: ensure,
 	}
 	o.AddManager(witness)
+
+	c.Assert(o.StartUp(), IsNil)
 
 	o.Loop()
 	defer o.Stop()
@@ -306,6 +342,8 @@ func (ovs *overlordSuite) TestEnsureBeforeSleepy(c *C) {
 	}
 	o.AddManager(witness)
 
+	c.Assert(o.StartUp(), IsNil)
+
 	o.Loop()
 	defer o.Stop()
 
@@ -335,6 +373,8 @@ func (ovs *overlordSuite) TestEnsureBeforeLater(c *C) {
 	}
 	o.AddManager(witness)
 
+	c.Assert(o.StartUp(), IsNil)
+
 	o.Loop()
 	defer o.Stop()
 
@@ -363,6 +403,8 @@ func (ovs *overlordSuite) TestEnsureLoopMediatedEnsureBeforeOutsideEnsure(c *C) 
 		ensureCallback: ensure,
 	}
 	o.AddManager(witness)
+
+	c.Assert(o.StartUp(), IsNil)
 
 	o.Loop()
 	defer o.Stop()
@@ -420,6 +462,8 @@ func (ovs *overlordSuite) TestEnsureLoopPrune(c *C) {
 	}
 	o.AddManager(witness)
 
+	c.Assert(o.StartUp(), IsNil)
+
 	o.Loop()
 
 	select {
@@ -441,7 +485,7 @@ func (ovs *overlordSuite) TestEnsureLoopPrune(c *C) {
 }
 
 func (ovs *overlordSuite) TestEnsureLoopPruneRunsMultipleTimes(c *C) {
-	restoreIntv := overlord.FakePruneInterval(100*time.Millisecond, 1000*time.Millisecond, 1*time.Hour)
+	restoreIntv := overlord.FakePruneInterval(100*time.Millisecond, 5*time.Millisecond, 1*time.Hour)
 	defer restoreIntv()
 	o := overlord.Fake()
 
@@ -459,20 +503,26 @@ func (ovs *overlordSuite) TestEnsureLoopPruneRunsMultipleTimes(c *C) {
 	c.Check(st.Changes(), HasLen, 2)
 	st.Unlock()
 
+	w, restoreTicker := fakePruneTicker()
+	defer restoreTicker()
+
 	// start the loop that runs the prune ticker
 	o.Loop()
 
-	// ensure the first change is pruned
-	time.Sleep(1500 * time.Millisecond)
+	// this needs to be more than pruneWait=5ms mocked above
+	time.Sleep(10 * time.Millisecond)
+	w.tick(2)
+
 	st.Lock()
 	c.Check(st.Changes(), HasLen, 1)
-	st.Unlock()
-
-	// ensure the second is also purged after it is ready
-	st.Lock()
 	chg2.SetStatus(state.DoneStatus)
 	st.Unlock()
-	time.Sleep(1500 * time.Millisecond)
+
+	// this needs to be more than pruneWait=5ms mocked above
+	time.Sleep(10 * time.Millisecond)
+	// tick twice for extra Ensure
+	w.tick(2)
+
 	st.Lock()
 	c.Check(st.Changes(), HasLen, 0)
 	st.Unlock()
@@ -480,6 +530,134 @@ func (ovs *overlordSuite) TestEnsureLoopPruneRunsMultipleTimes(c *C) {
 	// cleanup loop ticker
 	err := o.Stop()
 	c.Assert(err, IsNil)
+}
+
+func (ovs *overlordSuite) TestOverlordStartUpSetsStartOfOperation(c *C) {
+	restoreIntv := overlord.FakePruneInterval(100*time.Millisecond, 1000*time.Millisecond, 1*time.Hour)
+	defer restoreIntv()
+
+	o, err := overlord.New(ovs.dir, nil, nil)
+	c.Assert(err, IsNil)
+
+	st := o.State()
+	st.Lock()
+	defer st.Unlock()
+
+	// validity check, not set
+	var opTime time.Time
+	c.Assert(st.Get("start-of-operation-time", &opTime), testutil.ErrorIs, state.ErrNoState)
+	st.Unlock()
+
+	c.Assert(o.StartUp(), IsNil)
+
+	st.Lock()
+	c.Assert(st.Get("start-of-operation-time", &opTime), IsNil)
+}
+
+func (ovs *overlordSuite) TestEnsureLoopPruneDoesntAbortShortlyAfterStartOfOperation(c *C) {
+	w, restoreTicker := fakePruneTicker()
+	defer restoreTicker()
+
+	o, err := overlord.New(ovs.dir, nil, nil)
+	c.Assert(err, IsNil)
+
+	// avoid immediate transition to Done due to unknown kind
+	o.TaskRunner().AddHandler("bar", func(t *state.Task, _ *tomb.Tomb) error {
+		return &state.Retry{}
+	}, nil)
+
+	st := o.State()
+	st.Lock()
+
+	// start of operation time is 50min ago, this is less then abort limit
+	opTime := time.Now().Add(-50 * time.Minute)
+	st.Set("start-of-operation-time", opTime)
+
+	// spawn time one month ago
+	spawnTime := time.Now().AddDate(0, -1, 0)
+	restoreTimeNow := state.MockTime(spawnTime)
+
+	t := st.NewTask("bar", "...")
+	chg := st.NewChange("other-change", "...")
+	chg.AddTask(t)
+
+	restoreTimeNow()
+
+	// validity
+	c.Check(st.Changes(), HasLen, 1)
+
+	st.Unlock()
+	c.Assert(o.StartUp(), IsNil)
+
+	// start the loop that runs the prune ticker
+	o.Loop()
+	w.tick(2)
+
+	c.Assert(o.Stop(), IsNil)
+
+	st.Lock()
+	defer st.Unlock()
+	c.Assert(st.Changes(), HasLen, 1)
+	c.Check(chg.Status(), Equals, state.DoingStatus)
+}
+
+func (ovs *overlordSuite) TestEnsureLoopPruneAbortsOld(c *C) {
+	// Ensure interval is not relevant for this test
+	restoreEnsureIntv := overlord.FakeEnsureInterval(10 * time.Hour)
+	defer restoreEnsureIntv()
+
+	w, restoreTicker := fakePruneTicker()
+	defer restoreTicker()
+
+	o, err := overlord.New(ovs.dir, nil, nil)
+	c.Assert(err, IsNil)
+
+	// avoid immediate transition to Done due to having unknown kind
+	o.TaskRunner().AddHandler("bar", func(t *state.Task, _ *tomb.Tomb) error {
+		return &state.Retry{}
+	}, nil)
+
+	st := o.State()
+	st.Lock()
+
+	// start of operation time is a year ago
+	opTime := time.Now().AddDate(-1, 0, 0)
+	st.Set("start-of-operation-time", opTime)
+
+	st.Unlock()
+	c.Assert(o.StartUp(), IsNil)
+	st.Lock()
+
+	// spawn time one month ago
+	spawnTime := time.Now().AddDate(0, -1, 0)
+	restoreTimeNow := state.MockTime(spawnTime)
+	t := st.NewTask("bar", "...")
+	chg := st.NewChange("other-change", "...")
+	chg.AddTask(t)
+
+	restoreTimeNow()
+
+	// validity
+	c.Check(st.Changes(), HasLen, 1)
+	st.Unlock()
+
+	// start the loop that runs the prune ticker
+	o.Loop()
+	w.tick(2)
+
+	c.Assert(o.Stop(), IsNil)
+
+	st.Lock()
+	defer st.Unlock()
+
+	// validity
+	op, err := o.StartOfOperationTime()
+	c.Assert(err, IsNil)
+	c.Check(op.Equal(opTime), Equals, true)
+
+	c.Assert(st.Changes(), HasLen, 1)
+	// change was aborted
+	c.Check(chg.Status(), Equals, state.HoldStatus)
 }
 
 func (ovs *overlordSuite) TestCheckpoint(c *C) {
@@ -855,6 +1033,8 @@ func (ovs *overlordSuite) TestOverlordCanStandby(c *C) {
 		ensureCalled:   make(chan struct{}),
 	}
 	o.AddManager(witness)
+
+	c.Assert(o.StartUp(), IsNil)
 
 	// can only standby after loop ran once
 	c.Assert(o.CanStandby(), Equals, false)

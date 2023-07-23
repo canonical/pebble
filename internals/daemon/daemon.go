@@ -385,6 +385,10 @@ func (d *Daemon) Init() error {
 	return nil
 }
 
+func (d *Daemon) Overlord() *overlord.Overlord {
+	return d.overlord
+}
+
 // SetDegradedMode puts the daemon into a degraded mode which will the
 // error given in the "err" argument for commands that are not marked
 // as readonlyOK.
@@ -452,13 +456,13 @@ func (d *Daemon) initStandbyHandling() {
 	d.standbyOpinions.Start()
 }
 
-func (d *Daemon) Start() {
+func (d *Daemon) Start() error {
 	if d.rebootIsMissing {
 		// we need to schedule and wait for a system restart
 		d.tomb.Kill(nil)
 		// avoid systemd killing us again while we wait
 		systemdSdNotify("READY=1")
-		return
+		return nil
 	}
 	if d.overlord == nil {
 		panic("internal error: no Overlord")
@@ -466,6 +470,10 @@ func (d *Daemon) Start() {
 
 	d.StartTime = time.Now()
 
+	// now perform expensive overlord/manages initialization
+	if err := d.overlord.StartUp(); err != nil {
+		return err
+	}
 	d.connTracker = &connTracker{conns: make(map[net.Conn]struct{})}
 	d.serve = &http.Server{
 		Handler:   logit(d.router),
@@ -505,6 +513,7 @@ func (d *Daemon) Start() {
 
 	// notify systemd that we are ready
 	systemdSdNotify("READY=1")
+	return nil
 }
 
 // HandleRestart implements overlord.RestartBehavior.
@@ -673,7 +682,7 @@ func (d *Daemon) rebootDelay() (time.Duration, error) {
 	// see whether a reboot had already been scheduled
 	var rebootAt time.Time
 	err := d.state.Get("daemon-system-restart-at", &rebootAt)
-	if err != nil && err != state.ErrNoState {
+	if err != nil && !errors.Is(err, state.ErrNoState) {
 		return 0, err
 	}
 	rebootDelay := 1 * time.Minute
@@ -758,7 +767,7 @@ var errExpectedReboot = errors.New("expected reboot did not happen")
 func (d *Daemon) RebootIsMissing(st *state.State) error {
 	var nTentative int
 	err := st.Get("daemon-system-restart-tentative", &nTentative)
-	if err != nil && err != state.ErrNoState {
+	if err != nil && !errors.Is(err, state.ErrNoState) {
 		return err
 	}
 	nTentative++

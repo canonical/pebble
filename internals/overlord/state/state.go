@@ -1,7 +1,7 @@
 // -*- Mode: Go; indent-tabs-mode: t -*-
 
 /*
- * Copyright (c) 2016 Canonical Ltd
+ * Copyright (C) 2016-2022 Canonical Ltd
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -46,7 +46,7 @@ type customData map[string]*json.RawMessage
 func (data customData) get(key string, value interface{}) error {
 	entryJSON := data[key]
 	if entryJSON == nil {
-		return ErrNoState
+		return &NoStateError{Key: key}
 	}
 	err := json.Unmarshal(*entryJSON, value)
 	if err != nil {
@@ -87,6 +87,9 @@ type State struct {
 	lastTaskId   int
 	lastChangeId int
 	lastLaneId   int
+	// lastHandlerId is not serialized, it's only used during runtime
+	// for registering runtime callbacks
+	lastHandlerId int
 
 	backend  Backend
 	data     customData
@@ -97,18 +100,27 @@ type State struct {
 	modified bool
 
 	cache map[interface{}]interface{}
+
+	pendingChangeByAttr map[string]func(*Change) bool
+
+	// task/changes observing
+	taskHandlers   map[int]func(t *Task, old, new Status)
+	changeHandlers map[int]func(chg *Change, old, new Status)
 }
 
 // New returns a new empty state.
 func New(backend Backend) *State {
 	return &State{
-		backend:  backend,
-		data:     make(customData),
-		changes:  make(map[string]*Change),
-		tasks:    make(map[string]*Task),
-		warnings: make(map[string]*Warning),
-		modified: true,
-		cache:    make(map[interface{}]interface{}),
+		backend:             backend,
+		data:                make(customData),
+		changes:             make(map[string]*Change),
+		tasks:               make(map[string]*Task),
+		warnings:            make(map[string]*Warning),
+		modified:            true,
+		cache:               make(map[interface{}]interface{}),
+		pendingChangeByAttr: make(map[string]func(*Change) bool),
+		taskHandlers:        make(map[int]func(t *Task, old Status, new Status)),
+		changeHandlers:      make(map[int]func(chg *Change, old Status, new Status)),
 	}
 }
 
@@ -241,12 +253,40 @@ func (s *State) EnsureBefore(d time.Duration) {
 // ErrNoState represents the case of no state entry for a given key.
 var ErrNoState = errors.New("no state entry for key")
 
+// NoStateError represents the case where no state could be found for a given key.
+type NoStateError struct {
+	// Key is the key for which no state could be found.
+	Key string
+}
+
+func (e *NoStateError) Error() string {
+	var keyMsg string
+	if e.Key != "" {
+		keyMsg = fmt.Sprintf(" %q", e.Key)
+	}
+
+	return fmt.Sprintf("no state entry for key%s", keyMsg)
+}
+
+// Is returns true if the error is of type *NoStateError or equal to ErrNoState.
+// NoStateError's key isn't compared between errors.
+func (e *NoStateError) Is(err error) bool {
+	_, ok := err.(*NoStateError)
+	return ok || errors.Is(err, ErrNoState)
+}
+
 // Get unmarshals the stored value associated with the provided key
 // into the value parameter.
 // It returns ErrNoState if there is no entry for key.
 func (s *State) Get(key string, value interface{}) error {
 	s.reading()
 	return s.data.get(key, value)
+}
+
+// Has returns whether the provided key has an associated value.
+func (s *State) Has(key string) bool {
+	s.reading()
+	return s.data.has(key)
 }
 
 // Set associates value with key for future consulting by managers.
@@ -357,15 +397,25 @@ func (s *State) tasksIn(tids []string) []*Task {
 	return res
 }
 
+// RegisterPendingChangeByAttr registers predicates that will be invoked by
+// Prune on changes with the specified attribute set to check whether even if
+// they meet the time criteria they must not be aborted yet.
+func (s *State) RegisterPendingChangeByAttr(attr string, f func(*Change) bool) {
+	s.pendingChangeByAttr[attr] = f
+}
+
 // Prune does several cleanup tasks to the in-memory state:
 //
 //   - it removes changes that became ready for more than pruneWait and aborts
-//     tasks spawned for more than abortWait.
+//     tasks spawned for more than abortWait unless prevented by predicates
+//     registered with RegisterPendingChangeByAttr.
+//
 //   - it removes tasks unlinked to changes after pruneWait. When there are more
 //     changes than the limit set via "maxReadyChanges" those changes in ready
 //     state will also removed even if they are below the pruneWait duration.
+//
 //   - it removes expired warnings.
-func (s *State) Prune(pruneWait, abortWait time.Duration, maxReadyChanges int) {
+func (s *State) Prune(startOfOperation time.Time, pruneWait, abortWait time.Duration, maxReadyChanges int) {
 	now := time.Now()
 	pruneLimit := now.Add(-pruneWait)
 	abortLimit := now.Add(-abortWait)
@@ -392,15 +442,24 @@ func (s *State) Prune(pruneWait, abortWait time.Duration, maxReadyChanges int) {
 		}
 	}
 
+NextChange:
 	for _, chg := range changes {
-		spawnTime := chg.SpawnTime()
 		readyTime := chg.ReadyTime()
+		spawnTime := chg.SpawnTime()
+		if spawnTime.Before(startOfOperation) {
+			spawnTime = startOfOperation
+		}
 		if readyTime.IsZero() {
 			if spawnTime.Before(pruneLimit) && len(chg.Tasks()) == 0 {
 				chg.Abort()
 				delete(s.changes, chg.ID())
 			} else if spawnTime.Before(abortLimit) {
-				chg.Abort()
+				for attr, pending := range s.pendingChangeByAttr {
+					if chg.Has(attr) && pending(chg) {
+						continue NextChange
+					}
+				}
+				chg.AbortUnreadyLanes()
 			}
 			continue
 		}
@@ -424,6 +483,75 @@ func (s *State) Prune(pruneWait, abortWait time.Duration, maxReadyChanges int) {
 	}
 }
 
+// GetMaybeTimings implements snapcore/snapd/timings.GetSaver
+func (s *State) GetMaybeTimings(timings interface{}) error {
+	if err := s.Get("timings", timings); err != nil && !errors.Is(err, ErrNoState) {
+		return err
+	}
+	return nil
+}
+
+// AddTaskStatusChangedHandler adds a callback function that will be invoked
+// whenever tasks change status.
+// NOTE: Callbacks registered this way may be invoked in the context
+// of the taskrunner, so the callbacks should be as simple as possible, and return
+// as quickly as possible, and should avoid the use of i/o code or blocking, as this
+// will stop the entire task system.
+func (s *State) AddTaskStatusChangedHandler(f func(t *Task, old, new Status)) (id int) {
+	// We are reading here as we want to ensure access to the state is serialized,
+	// and not writing as we are not changing the part of state that goes on the disk.
+	s.reading()
+	id = s.lastHandlerId
+	s.lastHandlerId++
+	s.taskHandlers[id] = f
+	return id
+}
+
+func (s *State) RemoveTaskStatusChangedHandler(id int) {
+	s.reading()
+	delete(s.taskHandlers, id)
+}
+
+func (s *State) notifyTaskStatusChangedHandlers(t *Task, old, new Status) {
+	s.reading()
+	for _, f := range s.taskHandlers {
+		f(t, old, new)
+	}
+}
+
+// AddChangeStatusChangedHandler adds a callback function that will be invoked
+// whenever a Change changes status.
+// NOTE: Callbacks registered this way may be invoked in the context
+// of the taskrunner, so the callbacks should be as simple as possible, and return
+// as quickly as possible, and should avoid the use of i/o code or blocking, as this
+// will stop the entire task system.
+func (s *State) AddChangeStatusChangedHandler(f func(chg *Change, old, new Status)) (id int) {
+	// We are reading here as we want to ensure access to the state is serialized,
+	// and not writing as we are not changing the part of state that goes on the disk.
+	s.reading()
+	id = s.lastHandlerId
+	s.lastHandlerId++
+	s.changeHandlers[id] = f
+	return id
+}
+
+func (s *State) RemoveChangeStatusChangedHandler(id int) {
+	s.reading()
+	delete(s.changeHandlers, id)
+}
+
+func (s *State) notifyChangeStatusChangedHandlers(chg *Change, old, new Status) {
+	s.reading()
+	for _, f := range s.changeHandlers {
+		f(chg, old, new)
+	}
+}
+
+// SaveTimings implements snapcore/snapd/timings.GetSaver
+func (s *State) SaveTimings(timings interface{}) {
+	s.Set("timings", timings)
+}
+
 // ReadState returns the state deserialized from r.
 func ReadState(backend Backend, r io.Reader) (*State, error) {
 	s := new(State)
@@ -437,5 +565,6 @@ func ReadState(backend Backend, r io.Reader) (*State, error) {
 	s.backend = backend
 	s.modified = false
 	s.cache = make(map[interface{}]interface{})
+	s.pendingChangeByAttr = make(map[string]func(*Change) bool)
 	return s, err
 }

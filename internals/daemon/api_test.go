@@ -58,6 +58,7 @@ func (s *apiSuite) daemon(c *check.C) *Daemon {
 	}
 	d, err := New(&Options{Dir: s.pebbleDir})
 	c.Assert(err, check.IsNil)
+	c.Assert(d.Overlord().StartUp(), check.IsNil)
 	d.addRoutes()
 	s.d = d
 	return d

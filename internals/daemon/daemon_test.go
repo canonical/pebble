@@ -103,7 +103,8 @@ func (s *daemonSuite) TestExplicitPaths(c *C) {
 
 	d := s.newDaemon(c)
 	d.Init()
-	d.Start()
+	err := d.Start()
+	c.Assert(err, check.IsNil)
 	defer d.Stop(nil)
 
 	info, err := os.Stat(s.socketPath)
@@ -459,7 +460,8 @@ func (s *daemonSuite) TestStartStop(c *check.C) {
 	untrustedAccept := make(chan struct{})
 	d.untrustedListener = &witnessAcceptListener{Listener: l2, accept: untrustedAccept}
 
-	d.Start()
+	err = d.Start()
+	c.Assert(err, check.IsNil)
 
 	generalDone := make(chan struct{})
 	go func() {
@@ -500,7 +502,8 @@ func (s *daemonSuite) TestRestartWiring(c *check.C) {
 	untrustedAccept := make(chan struct{})
 	d.untrustedListener = &witnessAcceptListener{Listener: l, accept: untrustedAccept}
 
-	d.Start()
+	err = d.Start()
+	c.Assert(err, check.IsNil)
 	defer d.Stop(nil)
 
 	generalDone := make(chan struct{})
@@ -567,7 +570,8 @@ func (s *daemonSuite) TestGracefulStop(c *check.C) {
 	untrustedAccept := make(chan struct{})
 	d.untrustedListener = &witnessAcceptListener{Listener: untrustedL, accept: untrustedAccept}
 
-	d.Start()
+	err = d.Start()
+	c.Assert(err, check.IsNil)
 
 	generalAccepting := make(chan struct{})
 	go func() {
@@ -634,7 +638,8 @@ func (s *daemonSuite) TestRestartSystemWiring(c *check.C) {
 	untrustedAccept := make(chan struct{})
 	d.untrustedListener = &witnessAcceptListener{Listener: l, accept: untrustedAccept}
 
-	d.Start()
+	err = d.Start()
+	c.Assert(err, check.IsNil)
 	defer d.Stop(nil)
 
 	st := d.overlord.State()
@@ -781,7 +786,8 @@ func (s *daemonSuite) TestRestartShutdownWithSigtermInBetween(c *check.C) {
 	d := s.newDaemon(c)
 	makeDaemonListeners(c, d)
 
-	d.Start()
+	err := d.Start()
+	c.Assert(err, check.IsNil)
 	st := d.overlord.State()
 
 	st.Lock()
@@ -791,7 +797,7 @@ func (s *daemonSuite) TestRestartShutdownWithSigtermInBetween(c *check.C) {
 	ch := make(chan os.Signal, 2)
 	ch <- syscall.SIGTERM
 	// stop will check if we got a sigterm in between (which we did)
-	err := d.Stop(ch)
+	err = d.Stop(ch)
 	c.Assert(err, check.IsNil)
 }
 
@@ -813,7 +819,8 @@ func (s *daemonSuite) TestRestartShutdown(c *check.C) {
 	d := s.newDaemon(c)
 	makeDaemonListeners(c, d)
 
-	d.Start()
+	err := d.Start()
+	c.Assert(err, check.IsNil)
 	st := d.overlord.State()
 
 	st.Lock()
@@ -860,7 +867,8 @@ func (s *daemonSuite) TestRestartExpectedRebootIsMissing(c *check.C) {
 	c.Check(err, check.IsNil)
 	c.Check(n, check.Equals, 1)
 
-	d.Start()
+	err = d.Start()
+	c.Assert(err, check.IsNil)
 
 	c.Check(s.notified, check.DeepEquals, []string{"READY=1"})
 
@@ -896,8 +904,8 @@ func (s *daemonSuite) TestRestartExpectedRebootOK(c *check.C) {
 	defer st.Unlock()
 	var v interface{}
 	// these were cleared
-	c.Check(st.Get("daemon-system-restart-at", &v), check.Equals, state.ErrNoState)
-	c.Check(st.Get("system-restart-from-boot-id", &v), check.Equals, state.ErrNoState)
+	c.Check(st.Get("daemon-system-restart-at", &v), testutil.ErrorIs, state.ErrNoState)
+	c.Check(st.Get("system-restart-from-boot-id", &v), testutil.ErrorIs, state.ErrNoState)
 }
 
 func (s *daemonSuite) TestRestartExpectedRebootGiveUp(c *check.C) {
@@ -920,9 +928,9 @@ func (s *daemonSuite) TestRestartExpectedRebootGiveUp(c *check.C) {
 	defer st.Unlock()
 	var v interface{}
 	// these were cleared
-	c.Check(st.Get("daemon-system-restart-at", &v), check.Equals, state.ErrNoState)
-	c.Check(st.Get("system-restart-from-boot-id", &v), check.Equals, state.ErrNoState)
-	c.Check(st.Get("daemon-system-restart-tentative", &v), check.Equals, state.ErrNoState)
+	c.Check(st.Get("daemon-system-restart-at", &v), testutil.ErrorIs, state.ErrNoState)
+	c.Check(st.Get("system-restart-from-boot-id", &v), testutil.ErrorIs, state.ErrNoState)
+	c.Check(st.Get("daemon-system-restart-tentative", &v), testutil.ErrorIs, state.ErrNoState)
 }
 
 func (s *daemonSuite) TestRestartIntoSocketModeNoNewChanges(c *check.C) {
@@ -936,7 +944,8 @@ func (s *daemonSuite) TestRestartIntoSocketModeNoNewChanges(c *check.C) {
 	d := s.newDaemon(c)
 	makeDaemonListeners(c, d)
 
-	d.Start()
+	err := d.Start()
+	c.Assert(err, check.IsNil)
 
 	// pretend some ensure happened
 	for i := 0; i < 5; i++ {
@@ -955,7 +964,7 @@ func (s *daemonSuite) TestRestartIntoSocketModeNoNewChanges(c *check.C) {
 	case <-time.After(15 * time.Second):
 		c.Errorf("daemon did not stop after 15s")
 	}
-	err := d.Stop(nil)
+	err = d.Stop(nil)
 	c.Check(err, check.Equals, ErrRestartSocket)
 	c.Check(d.restartSocket, check.Equals, true)
 }
@@ -972,7 +981,8 @@ func (s *daemonSuite) TestRestartIntoSocketModePendingChanges(c *check.C) {
 
 	st := d.overlord.State()
 
-	d.Start()
+	err := d.Start()
+	c.Assert(err, check.IsNil)
 	// pretend some ensure happened
 	for i := 0; i < 5; i++ {
 		d.overlord.StateEngine().Ensure()
@@ -998,7 +1008,7 @@ func (s *daemonSuite) TestRestartIntoSocketModePendingChanges(c *check.C) {
 		c.Errorf("daemon did not stop after 5s")
 	}
 	// when the daemon got a pending change it just restarts
-	err := d.Stop(nil)
+	err = d.Stop(nil)
 	c.Check(err, check.IsNil)
 	c.Check(d.restartSocket, check.Equals, false)
 }
@@ -1058,7 +1068,8 @@ func (s *daemonSuite) TestHTTPAPI(c *check.C) {
 	s.httpAddress = ":0" // Go will choose port (use listener.Addr() to find it)
 	d := s.newDaemon(c)
 	d.Init()
-	d.Start()
+	err := d.Start()
+	c.Assert(err, check.IsNil)
 	port := d.httpListener.Addr().(*net.TCPAddr).Port
 
 	request, err := http.NewRequest("GET", fmt.Sprintf("http://localhost:%d/v1/health", port), nil)
@@ -1101,7 +1112,8 @@ services:
 	d := s.newDaemon(c)
 	err := d.Init()
 	c.Assert(err, IsNil)
-	d.Start()
+	err = d.Start()
+	c.Assert(err, check.IsNil)
 
 	// Start the test service.
 	payload := bytes.NewBufferString(`{"action": "start", "services": ["test1"]}`)

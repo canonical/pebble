@@ -27,7 +27,7 @@ var osGetenv = os.Getenv
 
 func SocketAvailable() bool {
 	notifySocket := osGetenv("NOTIFY_SOCKET")
-	return notifySocket != "" && osutil.CanStat(notifySocket)
+	return notifySocket != "" && osutil.FileExists(notifySocket)
 }
 
 // SdNotify sends the given state string notification to systemd.

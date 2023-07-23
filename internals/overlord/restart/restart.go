@@ -16,6 +16,8 @@
 package restart
 
 import (
+	"errors"
+
 	"github.com/canonical/pebble/internals/overlord/state"
 )
 
@@ -61,7 +63,7 @@ func Init(st *state.State, curBootID string, h Handler) error {
 	}
 	var fromBootID string
 	err := st.Get("system-restart-from-boot-id", &fromBootID)
-	if err != nil && err != state.ErrNoState {
+	if err != nil && !errors.Is(err, state.ErrNoState) {
 		return err
 	}
 	st.Cache(restartStateKey{}, rs)

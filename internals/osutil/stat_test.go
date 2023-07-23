@@ -34,8 +34,8 @@ func (ts *StatTestSuite) TestCanStat(c *C) {
 	err := ioutil.WriteFile(fname, []byte(fname), 0644)
 	c.Assert(err, IsNil)
 
-	c.Assert(CanStat(fname), Equals, true)
-	c.Assert(CanStat("/i-do-not-exist"), Equals, false)
+	c.Assert(FileExists(fname), Equals, true)
+	c.Assert(FileExists("/i-do-not-exist"), Equals, false)
 }
 
 func (ts *StatTestSuite) TestCanStatOddPerms(c *C) {
@@ -43,7 +43,7 @@ func (ts *StatTestSuite) TestCanStatOddPerms(c *C) {
 	err := ioutil.WriteFile(fname, []byte(fname), 0100)
 	c.Assert(err, IsNil)
 
-	c.Assert(CanStat(fname), Equals, true)
+	c.Assert(FileExists(fname), Equals, true)
 }
 
 func (ts *StatTestSuite) TestIsDir(c *C) {

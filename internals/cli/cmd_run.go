@@ -182,7 +182,10 @@ func runDaemon(rcmd *cmdRun, ch chan os.Signal, ready chan<- func()) error {
 	}
 
 	d.Version = cmd.Version
-	d.Start()
+	err = d.Start()
+	if err != nil {
+		return err
+	}
 
 	watchdog, err := runWatchdog(d)
 	if err != nil {

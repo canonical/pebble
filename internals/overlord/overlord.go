@@ -16,6 +16,7 @@
 package overlord
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -49,6 +50,10 @@ var (
 	defaultCachedDownloads = 5
 )
 
+var pruneTickerC = func(t *time.Ticker) <-chan time.Time {
+	return t.C
+}
+
 // Overlord is the central manager of the system, keeping track
 // of all available state managers and related helpers.
 type Overlord struct {
@@ -63,8 +68,11 @@ type Overlord struct {
 	ensureRun   int32
 	pruneTicker *time.Ticker
 
+	startOfOperationTime time.Time
+
 	// managers
 	inited     bool
+	startedUp  bool
 	runner     *state.TaskRunner
 	serviceMgr *servstate.ServiceManager
 	commandMgr *cmdstate.CommandManager
@@ -136,6 +144,47 @@ func New(pebbleDir string, restartHandler restart.Handler, serviceOutput io.Writ
 	return o, nil
 }
 
+var timeNow = time.Now
+
+// StartOfOperationTime returns the time when pebble started operating,
+// and sets it in the state when called for the first time.
+// The StartOfOperationTime time is seed-time if available,
+// or current time otherwise.
+func (m *Overlord) StartOfOperationTime() (time.Time, error) {
+	var opTime time.Time
+	err := m.State().Get("start-of-operation-time", &opTime)
+	if err == nil {
+		return opTime, nil
+	}
+	if err != nil && !errors.Is(err, state.ErrNoState) {
+		return opTime, err
+	}
+
+	opTime = timeNow()
+	m.State().Set("start-of-operation-time", opTime)
+	return opTime, nil
+}
+
+// StartUp proceeds to run any expensive Overlord or managers initialization.
+// After this is done once it is a noop.
+func (o *Overlord) StartUp() error {
+	if o.startedUp {
+		return nil
+	}
+	o.startedUp = true
+
+	var err error
+	st := o.State()
+	st.Lock()
+	o.startOfOperationTime, err = o.StartOfOperationTime()
+	st.Unlock()
+	if err != nil {
+		return fmt.Errorf("cannot get start of operation time: %s", err)
+	}
+
+	return o.stateEng.StartUp()
+}
+
 func (o *Overlord) addManager(mgr StateManager) {
 	o.stateEng.AddManager(mgr)
 }
@@ -159,7 +208,7 @@ func loadState(statePath string, restartHandler restart.Handler, backend state.B
 		}
 	}
 
-	if !osutil.CanStat(statePath) {
+	if !osutil.FileExists(statePath) {
 		// fail fast, mostly interesting for tests, this dir is set up by pebble
 		stateDir := filepath.Dir(statePath)
 		if !osutil.IsDir(stateDir) {
@@ -255,6 +304,9 @@ func (o *Overlord) ensureBefore(d time.Duration) {
 // Loop runs a loop in a goroutine to ensure the current state regularly through StateEngine Ensure.
 func (o *Overlord) Loop() {
 	o.ensureTimerSetup()
+	if o.loopTomb == nil {
+		o.loopTomb = new(tomb.Tomb)
+	}
 	o.loopTomb.Go(func() error {
 		for {
 			// TODO: pass a proper context into Ensure
@@ -263,14 +315,15 @@ func (o *Overlord) Loop() {
 			// continue to the next Ensure() try for now
 			o.stateEng.Ensure()
 			o.ensureDidRun()
+			pruneC := pruneTickerC(o.pruneTicker)
 			select {
 			case <-o.loopTomb.Dying():
 				return nil
 			case <-o.ensureTimer.C:
-			case <-o.pruneTicker.C:
+			case <-pruneC:
 				st := o.State()
 				st.Lock()
-				st.Prune(pruneWait, abortWait, pruneMaxChanges)
+				st.Prune(o.startOfOperationTime, pruneWait, abortWait, pruneMaxChanges)
 				st.Unlock()
 			}
 		}
@@ -295,6 +348,10 @@ func (o *Overlord) Stop() error {
 }
 
 func (o *Overlord) settle(timeout time.Duration, beforeCleanups func()) error {
+	if err := o.StartUp(); err != nil {
+		return err
+	}
+
 	func() {
 		o.ensureLock.Lock()
 		defer o.ensureLock.Unlock()

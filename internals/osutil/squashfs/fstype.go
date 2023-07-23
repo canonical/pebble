@@ -25,7 +25,7 @@ import (
 var useFuse = useFuseImpl
 
 func useFuseImpl() bool {
-	if !osutil.CanStat("/dev/fuse") {
+	if !osutil.FileExists("/dev/fuse") {
 		return false
 	}
 

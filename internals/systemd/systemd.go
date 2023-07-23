@@ -713,7 +713,7 @@ func (s *systemd) RemoveMountUnitFile(mountedDir string) error {
 	}
 
 	unit := MountUnitPath(unitNamePath)
-	if !osutil.CanStat(unit) {
+	if !osutil.FileExists(unit) {
 		return nil
 	}
 

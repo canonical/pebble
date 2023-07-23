@@ -1,16 +1,21 @@
-// Copyright (c) 2014-2020 Canonical Ltd
-//
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License version 3 as
-// published by the Free Software Foundation.
-//
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-//
-// You should have received a copy of the GNU General Public License
-// along with this program.  If not, see <http://www.gnu.org/licenses/>.
+// -*- Mode: Go; indent-tabs-mode: t -*-
+
+/*
+ * Copyright (C) 2016 Canonical Ltd
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 3 as
+ * published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
 
 package overlord
 
@@ -30,10 +35,18 @@ type StateManager interface {
 	Ensure() error
 }
 
+// StateStarterUp is optionally implemented by StateManager that have expensive
+// initialization to perform before the main Overlord loop.
+type StateStarterUp interface {
+	// StartUp asks manager to perform any expensive initialization.
+	StartUp() error
+}
+
 // StateWaiter is optionally implemented by StateManagers that have running
 // activities that can be waited.
 type StateWaiter interface {
-	// Wait asks manager to wait for all running activities to finish.
+	// Wait asks manager to wait for all running activities to
+	// finish.
 	Wait()
 }
 
@@ -53,8 +66,9 @@ type StateStopper interface {
 // cope with Ensure calls in any order, coordinating among themselves
 // solely via the state.
 type StateEngine struct {
-	state   *state.State
-	stopped bool
+	state     *state.State
+	stopped   bool
+	startedUp bool
 	// managers in use
 	mgrLock  sync.Mutex
 	managers []StateManager
@@ -70,6 +84,37 @@ func NewStateEngine(s *state.State) *StateEngine {
 // State returns the current system state.
 func (se *StateEngine) State() *state.State {
 	return se.state
+}
+
+type startupError struct {
+	errs []error
+}
+
+func (e *startupError) Error() string {
+	return fmt.Sprintf("state startup errors: %v", e.errs)
+}
+
+// StartUp asks all managers to perform any expensive initialization. It is a noop after the first invocation.
+func (se *StateEngine) StartUp() error {
+	se.mgrLock.Lock()
+	defer se.mgrLock.Unlock()
+	if se.startedUp {
+		return nil
+	}
+	se.startedUp = true
+	var errs []error
+	for _, m := range se.managers {
+		if starterUp, ok := m.(StateStarterUp); ok {
+			err := starterUp.StartUp()
+			if err != nil {
+				errs = append(errs, err)
+			}
+		}
+	}
+	if len(errs) != 0 {
+		return &startupError{errs}
+	}
+	return nil
 }
 
 type ensureError struct {
@@ -91,6 +136,9 @@ func (e *ensureError) Error() string {
 func (se *StateEngine) Ensure() error {
 	se.mgrLock.Lock()
 	defer se.mgrLock.Unlock()
+	if !se.startedUp {
+		return fmt.Errorf("state engine skipped startup")
+	}
 	if se.stopped {
 		return fmt.Errorf("state engine already stopped")
 	}
