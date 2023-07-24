@@ -245,7 +245,7 @@ out:
 			}
 		case chgErr := <-autoStartReady:
 			if chgErr != nil {
-				return fmt.Errorf("error starting default services: %w", chgErr)
+				logger.Noticef("Error starting default services: %v", chgErr)
 			}
 			notifyReady()
 		case <-stop:
