@@ -44,7 +44,7 @@ type execPayload struct {
 	Height         int               `json:"height"`
 }
 
-func v1PostExec(c *Command, req *http.Request, _ *userState) Response {
+func v1PostExec(c *Command, req *http.Request, _ *UserState) Response {
 	var payload execPayload
 	decoder := json.NewDecoder(req.Body)
 	if err := decoder.Decode(&payload); err != nil {

@@ -107,7 +107,7 @@ var (
 	muxVars = mux.Vars
 )
 
-func v1SystemInfo(c *Command, r *http.Request, _ *userState) Response {
+func v1SystemInfo(c *Command, r *http.Request, _ *UserState) Response {
 	state := c.d.overlord.State()
 	state.Lock()
 	defer state.Unlock()

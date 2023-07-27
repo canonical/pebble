@@ -24,7 +24,7 @@ type signalsPayload struct {
 	Services []string `json:"services"`
 }
 
-func v1PostSignals(c *Command, req *http.Request, _ *userState) Response {
+func v1PostSignals(c *Command, req *http.Request, _ *UserState) Response {
 	var payload signalsPayload
 	decoder := json.NewDecoder(req.Body)
 	if err := decoder.Decode(&payload); err != nil {

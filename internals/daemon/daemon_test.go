@@ -99,16 +99,14 @@ func (h *fakeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *daemonSuite) TestRegisterCommand(c *C) {
-
+	const endpoint = "/v1/addedendpoint"
 	var handler fakeHandler
-
-	getCallback := func(c *Command, r *http.Request, s *userState) Response {
+	getCallback := func(c *Command, r *http.Request, s *UserState) Response {
 		handler.cmd = c
 		return &handler
 	}
-
 	command := Command{
-		Path:    "/v1/addedendpoint",
+		Path:    endpoint,
 		GuestOK: true,
 		GET:     getCallback,
 	}
@@ -119,7 +117,7 @@ func (s *daemonSuite) TestRegisterCommand(c *C) {
 	d.Start()
 	defer d.Stop(nil)
 
-	result := d.router.Get("/v1/addedendpoint").GetHandler()
+	result := d.router.Get(endpoint).GetHandler()
 	c.Assert(result, Equals, &command)
 }
 
@@ -145,7 +143,7 @@ func (s *daemonSuite) TestCommandMethodDispatch(c *check.C) {
 
 	cmd := &Command{d: s.newDaemon(c)}
 	handler := &fakeHandler{cmd: cmd}
-	rf := func(innerCmd *Command, req *http.Request, user *userState) Response {
+	rf := func(innerCmd *Command, req *http.Request, user *UserState) Response {
 		c.Assert(cmd, check.Equals, innerCmd)
 		return handler
 	}
@@ -184,7 +182,7 @@ func (s *daemonSuite) TestCommandRestartingState(c *check.C) {
 	d := s.newDaemon(c)
 
 	cmd := &Command{d: d}
-	cmd.GET = func(*Command, *http.Request, *userState) Response {
+	cmd.GET = func(*Command, *http.Request, *UserState) Response {
 		return SyncResponse(nil)
 	}
 	req, err := http.NewRequest("GET", "", nil)
@@ -234,7 +232,7 @@ func (s *daemonSuite) TestFillsWarnings(c *check.C) {
 	d := s.newDaemon(c)
 
 	cmd := &Command{d: d}
-	cmd.GET = func(*Command, *http.Request, *userState) Response {
+	cmd.GET = func(*Command, *http.Request, *UserState) Response {
 		return SyncResponse(nil)
 	}
 	req, err := http.NewRequest("GET", "", nil)
@@ -365,7 +363,7 @@ func (s *daemonSuite) TestUserAccess(c *check.C) {
 func (s *daemonSuite) TestLoggedInUserAccess(c *check.C) {
 	d := s.newDaemon(c)
 
-	user := &userState{}
+	user := &UserState{}
 	get := &http.Request{Method: "GET", RemoteAddr: "pid=100;uid=42;socket=;"}
 	put := &http.Request{Method: "PUT", RemoteAddr: "pid=100;uid=42;socket=;"}
 
@@ -1052,10 +1050,10 @@ func doTestReq(c *check.C, cmd *Command, mth string) *httptest.ResponseRecorder 
 func (s *daemonSuite) TestDegradedModeReply(c *check.C) {
 	d := s.newDaemon(c)
 	cmd := &Command{d: d}
-	cmd.GET = func(*Command, *http.Request, *userState) Response {
+	cmd.GET = func(*Command, *http.Request, *UserState) Response {
 		return SyncResponse(nil)
 	}
-	cmd.POST = func(*Command, *http.Request, *userState) Response {
+	cmd.POST = func(*Command, *http.Request, *UserState) Response {
 		return SyncResponse(nil)
 	}
 

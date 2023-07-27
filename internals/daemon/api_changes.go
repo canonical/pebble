@@ -115,7 +115,7 @@ func change2changeInfo(chg *state.Change) *changeInfo {
 	return chgInfo
 }
 
-func v1GetChanges(c *Command, r *http.Request, _ *userState) Response {
+func v1GetChanges(c *Command, r *http.Request, _ *UserState) Response {
 	query := r.URL.Query()
 	qselect := query.Get("select")
 	if qselect == "" {
@@ -170,7 +170,7 @@ func v1GetChanges(c *Command, r *http.Request, _ *userState) Response {
 	return SyncResponse(chgInfos)
 }
 
-func v1GetChange(c *Command, r *http.Request, _ *userState) Response {
+func v1GetChange(c *Command, r *http.Request, _ *UserState) Response {
 	changeID := muxVars(r)["id"]
 	st := c.d.overlord.State()
 	st.Lock()
@@ -183,7 +183,7 @@ func v1GetChange(c *Command, r *http.Request, _ *userState) Response {
 	return SyncResponse(change2changeInfo(chg))
 }
 
-func v1GetChangeWait(c *Command, r *http.Request, _ *userState) Response {
+func v1GetChangeWait(c *Command, r *http.Request, _ *UserState) Response {
 	changeID := muxVars(r)["id"]
 	st := c.d.overlord.State()
 	st.Lock()
@@ -224,7 +224,7 @@ func v1GetChangeWait(c *Command, r *http.Request, _ *userState) Response {
 	return SyncResponse(change2changeInfo(change))
 }
 
-func v1PostChange(c *Command, r *http.Request, _ *userState) Response {
+func v1PostChange(c *Command, r *http.Request, _ *UserState) Response {
 	chID := muxVars(r)["id"]
 	state := c.d.overlord.State()
 	state.Lock()
