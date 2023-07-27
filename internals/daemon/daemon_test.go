@@ -98,6 +98,31 @@ func (h *fakeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.lastMethod = r.Method
 }
 
+func (s *daemonSuite) TestRegisterCommand(c *C) {
+
+	var handler fakeHandler
+
+	getCallback := func(c *Command, r *http.Request, s *userState) Response {
+		handler.cmd = c
+		return &handler
+	}
+
+	command := Command{
+		Path:    "/v1/addedendpoint",
+		GuestOK: true,
+		GET:     getCallback,
+	}
+	RegisterCommand(&command)
+
+	d := s.newDaemon(c)
+	d.Init()
+	d.Start()
+	defer d.Stop(nil)
+
+	result := d.router.Get("/v1/addedendpoint").GetHandler()
+	c.Assert(result, Equals, &command)
+}
+
 func (s *daemonSuite) TestExplicitPaths(c *C) {
 	s.socketPath = filepath.Join(c.MkDir(), "custom.socket")
 
