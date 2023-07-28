@@ -118,6 +118,6 @@ func v1SystemInfo(c *Command, r *http.Request, _ *UserState) Response {
 	return SyncResponse(result)
 }
 
-func RegisterCommand(c *Command) {
+func Register(c *Command) {
 	api = append(api, c)
 }

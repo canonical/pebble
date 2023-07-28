@@ -110,7 +110,7 @@ func (s *daemonSuite) TestRegisterCommand(c *C) {
 		GuestOK: true,
 		GET:     getCallback,
 	}
-	RegisterCommand(&command)
+	Register(&command)
 
 	d := s.newDaemon(c)
 	d.Init()
