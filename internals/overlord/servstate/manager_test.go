@@ -77,6 +77,7 @@ type S struct {
 	log          string
 	logBuffer    bytes.Buffer
 	logBufferMut sync.Mutex
+	logOutput    writerFunc
 
 	st *state.State
 
@@ -148,20 +149,10 @@ func (s *S) SetUpTest(c *C) {
 	s.BaseTest.SetUpTest(c)
 	s.st = state.New(nil)
 
-	s.dir = c.MkDir()
-	os.Mkdir(filepath.Join(s.dir, "layers"), 0755)
-
-	s.log = filepath.Join(s.dir, "log.txt")
-	data := fmt.Sprintf(planLayer1, s.log, s.log)
-	err := ioutil.WriteFile(filepath.Join(s.dir, "layers", "001-base.yaml"), []byte(data), 0644)
-	c.Assert(err, IsNil)
-	err = ioutil.WriteFile(filepath.Join(s.dir, "layers", "002-two.yaml"), []byte(planLayer2), 0644)
-	c.Assert(err, IsNil)
-
 	s.logBufferMut.Lock()
 	s.logBuffer.Reset()
 	s.logBufferMut.Unlock()
-	logOutput := writerFunc(func(p []byte) (int, error) {
+	s.logOutput = writerFunc(func(p []byte) (int, error) {
 		s.logBufferMut.Lock()
 		defer s.logBufferMut.Unlock()
 		return s.logBuffer.Write(p)
@@ -169,10 +160,6 @@ func (s *S) SetUpTest(c *C) {
 
 	s.runner = state.NewTaskRunner(s.st)
 	s.stopDaemon = make(chan struct{})
-	manager, err := servstate.NewManager(s.st, s.runner, s.dir, logOutput, testRestarter{s.stopDaemon}, fakeLogManager{})
-	c.Assert(err, IsNil)
-	s.AddCleanup(manager.Stop)
-	s.manager = manager
 
 	restore := servstate.FakeOkayWait(shortOkayDelay)
 	s.AddCleanup(restore)
@@ -181,91 +168,23 @@ func (s *S) SetUpTest(c *C) {
 }
 
 func (s *S) TearDownTest(c *C) {
+	// Make sure all services are stopped
+	s.stopRunningServices(c)
+	// Kill the reaper
+	s.manager.Stop()
+	// General test cleanup
 	s.BaseTest.TearDownTest(c)
 }
 
-type testRestarter struct {
-	ch chan struct{}
-}
-
-func (r testRestarter) HandleRestart(t restart.RestartType) {
-	close(r.ch)
-}
-
-func (s *S) assertLog(c *C, expected string) {
-	s.logBufferMut.Lock()
-	defer s.logBufferMut.Unlock()
-	data, err := ioutil.ReadFile(s.log)
-	if os.IsNotExist(err) {
-		c.Fatal("Services have not run")
-	}
-	c.Assert(err, IsNil)
-	c.Assert(string(data), Matches, "(?s)"+expected)
-	c.Assert(s.logBuffer.String(), Matches, "(?s)"+expected)
-}
-
-func (s *S) logBufferString() string {
-	s.logBufferMut.Lock()
-	defer s.logBufferMut.Unlock()
-	str := s.logBuffer.String()
-	s.logBuffer.Reset()
-	return str
-}
-
 func (s *S) TestDefaultServiceNames(c *C) {
+	s.setupDefaultServiceManager(c)
 	services, err := s.manager.DefaultServiceNames()
 	c.Assert(err, IsNil)
 	c.Assert(services, DeepEquals, []string{"test1", "test2"})
 }
 
-func (s *S) ensure(c *C, n int) {
-	for i := 0; i < n; i++ {
-		s.runner.Ensure()
-		s.runner.Wait()
-	}
-}
-
-func (s *S) startServices(c *C, services []string, nEnsure int) *state.Change {
-	s.st.Lock()
-	ts, err := servstate.Start(s.st, services)
-	c.Check(err, IsNil)
-	chg := s.st.NewChange("test", "Start test")
-	chg.AddAll(ts)
-	s.st.Unlock()
-
-	// Num to ensure may be more than one due to the cross-task dependencies.
-	s.ensure(c, nEnsure)
-
-	return chg
-}
-
-func (s *S) stopServices(c *C, services []string, nEnsure int) *state.Change {
-	s.st.Lock()
-	ts, err := servstate.Stop(s.st, services)
-	c.Check(err, IsNil)
-	chg := s.st.NewChange("test", "Stop test")
-	chg.AddAll(ts)
-	s.st.Unlock()
-
-	// Num to ensure may be more than one due to the cross-task dependencies.
-	s.ensure(c, nEnsure)
-
-	return chg
-}
-
-func (s *S) startTestServices(c *C) {
-	chg := s.startServices(c, []string{"test1", "test2"}, 2)
-	s.st.Lock()
-	c.Check(chg.Status(), Equals, state.DoneStatus, Commentf("Error: %v", chg.Err()))
-	s.st.Unlock()
-
-	s.assertLog(c, ".*test1\n.*test2\n")
-
-	cmds := s.manager.RunningCmds()
-	c.Check(cmds, HasLen, 2)
-}
-
 func (s *S) TestStartStopServices(c *C) {
+	s.setupDefaultServiceManager(c)
 	s.startTestServices(c)
 
 	if c.Failed() {
@@ -276,6 +195,7 @@ func (s *S) TestStartStopServices(c *C) {
 }
 
 func (s *S) TestStartStopServicesIdempotency(c *C) {
+	s.setupDefaultServiceManager(c)
 	s.startTestServices(c)
 	if c.Failed() {
 		return
@@ -294,42 +214,8 @@ func (s *S) TestStartStopServicesIdempotency(c *C) {
 	s.stopTestServicesAlreadyDead(c)
 }
 
-func (s *S) stopTestServices(c *C) {
-	cmds := s.manager.RunningCmds()
-	c.Check(cmds, HasLen, 2)
-
-	chg := s.stopServices(c, []string{"test1", "test2"}, 2)
-
-	// Ensure processes are gone indeed.
-	c.Assert(cmds, HasLen, 2)
-	for name, cmd := range cmds {
-		err := cmd.Process.Signal(syscall.Signal(0))
-		if err == nil {
-			c.Fatalf("Process for %q did not stop properly", name)
-		} else {
-			c.Check(err, ErrorMatches, ".*process already finished.*")
-		}
-	}
-
-	s.st.Lock()
-	c.Check(chg.Status(), Equals, state.DoneStatus, Commentf("Error: %v", chg.Err()))
-	s.st.Unlock()
-}
-
-func (s *S) stopTestServicesAlreadyDead(c *C) {
-	cmds := s.manager.RunningCmds()
-	c.Check(cmds, HasLen, 0)
-
-	chg := s.stopServices(c, []string{"test1", "test2"}, 2)
-
-	c.Assert(cmds, HasLen, 0)
-
-	s.st.Lock()
-	c.Check(chg.Status(), Equals, state.DoneStatus, Commentf("Error: %v", chg.Err()))
-	s.st.Unlock()
-}
-
 func (s *S) TestStopTimeout(c *C) {
+	s.setupDefaultServiceManager(c)
 	layer := parseLayer(c, 0, "layer99", `
 services:
     test9:
@@ -353,6 +239,7 @@ services:
 }
 
 func (s *S) TestKillDelayIsUsed(c *C) {
+	s.setupDefaultServiceManager(c)
 	layer4 := parseLayer(c, 0, "layer4", planLayer4)
 	err := s.manager.AppendLayer(layer4)
 	c.Assert(err, IsNil)
@@ -379,6 +266,7 @@ func (s *S) TestKillDelayIsUsed(c *C) {
 }
 
 func (s *S) TestReplanServices(c *C) {
+	s.setupDefaultServiceManager(c)
 	s.startTestServices(c)
 
 	if c.Failed() {
@@ -398,6 +286,7 @@ func (s *S) TestReplanServices(c *C) {
 }
 
 func (s *S) TestReplanUpdatesConfig(c *C) {
+	s.setupDefaultServiceManager(c)
 	s.startTestServices(c)
 	defer s.stopTestServices(c)
 
@@ -430,6 +319,7 @@ services:
 }
 
 func (s *S) TestStopStartUpdatesConfig(c *C) {
+	s.setupDefaultServiceManager(c)
 	s.startTestServices(c)
 	defer s.stopTestServices(c)
 
@@ -454,6 +344,7 @@ services:
 }
 
 func (s *S) TestServiceLogs(c *C) {
+	s.setupDefaultServiceManager(c)
 	outputs := map[string]string{
 		"test1": `2.* \[test1\] test1\n`,
 		"test2": `2.* \[test2\] test2\n`,
@@ -466,34 +357,8 @@ func (s *S) TestServiceLogs(c *C) {
 	s.testServiceLogs(c, outputs)
 }
 
-func (s *S) testServiceLogs(c *C, outputs map[string]string) {
-	s.startTestServices(c)
-
-	if c.Failed() {
-		return
-	}
-
-	iterators, err := s.manager.ServiceLogs([]string{"test1", "test2"}, -1)
-	c.Assert(err, IsNil)
-	c.Assert(iterators, HasLen, 2)
-
-	for serviceName, it := range iterators {
-		buf := &bytes.Buffer{}
-		for it.Next(nil) {
-			_, err = io.Copy(buf, it)
-			c.Assert(err, IsNil)
-		}
-
-		c.Assert(buf.String(), Matches, outputs[serviceName])
-
-		err = it.Close()
-		c.Assert(err, IsNil)
-	}
-
-	s.stopTestServices(c)
-}
-
 func (s *S) TestStartBadCommand(c *C) {
+	s.setupDefaultServiceManager(c)
 	chg := s.startServices(c, []string{"test3"}, 1)
 
 	s.st.Lock()
@@ -506,14 +371,11 @@ func (s *S) TestStartBadCommand(c *C) {
 }
 
 func (s *S) TestCurrentUserGroup(c *C) {
-	// Don't re-use s.manager, because we're adding a layer and service, and
-	// that would conflict with other tests like TestServiceLogs.
 	dir := c.MkDir()
 	err := os.Mkdir(filepath.Join(dir, "layers"), 0755)
 	c.Assert(err, IsNil)
-	manager, err := servstate.NewManager(s.st, s.runner, dir, nil, nil, fakeLogManager{})
+	s.manager, err = servstate.NewManager(s.st, s.runner, dir, nil, nil, fakeLogManager{})
 	c.Assert(err, IsNil)
-	defer manager.Stop()
 
 	current, err := user.Current()
 	c.Assert(err, IsNil)
@@ -529,7 +391,7 @@ services:
         user: %s
         group: %s
 `, outputPath, shortOkayDelay.Seconds()+0.01, current.Username, group.Name))
-	err = manager.AppendLayer(layer)
+	err = s.manager.AppendLayer(layer)
 	c.Assert(err, IsNil)
 
 	chg := s.startServices(c, []string{"usrtest"}, 1)
@@ -543,6 +405,7 @@ services:
 }
 
 func (s *S) TestUserGroupFails(c *C) {
+	s.setupDefaultServiceManager(c)
 	// Test with non-current user and group will fail due to permission issues
 	// (unless running as root)
 	if os.Getuid() == 0 {
@@ -581,6 +444,7 @@ func (s *S) TestUserGroupFails(c *C) {
 
 // See .github/workflows/tests.yml for how to run this test as root.
 func (s *S) TestUserGroup(c *C) {
+	s.setupDefaultServiceManager(c)
 	if os.Getuid() != 0 {
 		c.Skip("requires running as root")
 	}
@@ -620,14 +484,8 @@ services:
 		fmt.Sprintf(`(?s).* \[usrgrp\] %[1]s\n.* \[usrgrp\] user=%[1]s home=/home/%[1]s\n`, username))
 }
 
-func (s *S) serviceByName(c *C, name string) *servstate.ServiceInfo {
-	services, err := s.manager.Services([]string{name})
-	c.Assert(err, IsNil)
-	c.Assert(services, HasLen, 1)
-	return services[0]
-}
-
 func (s *S) TestStartFastExitCommand(c *C) {
+	s.setupDefaultServiceManager(c)
 	chg := s.startServices(c, []string{"test4"}, 1)
 
 	s.st.Lock()
@@ -642,15 +500,8 @@ func (s *S) TestStartFastExitCommand(c *C) {
 	c.Assert(svc.Current, Equals, servstate.StatusInactive)
 }
 
-func planYAML(c *C, manager *servstate.ServiceManager) string {
-	plan, err := manager.Plan()
-	c.Assert(err, IsNil)
-	yml, err := yaml.Marshal(plan)
-	c.Assert(err, IsNil)
-	return string(yml)
-}
-
 func (s *S) TestPlan(c *C) {
+	s.setupDefaultServiceManager(c)
 	expected := fmt.Sprintf(`
 services:
     test1:
@@ -679,25 +530,12 @@ services:
 	c.Assert(planYAML(c, s.manager), Equals, expected)
 }
 
-func parseLayer(c *C, order int, label, layerYAML string) *plan.Layer {
-	layer, err := plan.ParseLayer(order, label, []byte(layerYAML))
-	c.Assert(err, IsNil)
-	return layer
-}
-
-func (s *S) planLayersHasLen(c *C, manager *servstate.ServiceManager, expectedLen int) {
-	plan, err := manager.Plan()
-	c.Assert(err, IsNil)
-	c.Assert(plan.Layers, HasLen, expectedLen)
-}
-
 func (s *S) TestAppendLayer(c *C) {
 	dir := c.MkDir()
-	os.Mkdir(filepath.Join(dir, "layers"), 0755)
-	runner := state.NewTaskRunner(s.st)
-	manager, err := servstate.NewManager(s.st, runner, dir, nil, nil, fakeLogManager{})
+	err := os.Mkdir(filepath.Join(dir, "layers"), 0755)
 	c.Assert(err, IsNil)
-	defer manager.Stop()
+	s.manager, err = servstate.NewManager(s.st, s.runner, dir, nil, nil, fakeLogManager{})
+	c.Assert(err, IsNil)
 
 	// Append a layer when there are no layers.
 	layer := parseLayer(c, 0, "label1", `
@@ -706,16 +544,16 @@ services:
         override: replace
         command: /bin/sh
 `)
-	err = manager.AppendLayer(layer)
+	err = s.manager.AppendLayer(layer)
 	c.Assert(err, IsNil)
 	c.Assert(layer.Order, Equals, 1)
-	c.Assert(planYAML(c, manager), Equals, `
+	c.Assert(planYAML(c, s.manager), Equals, `
 services:
     svc1:
         override: replace
         command: /bin/sh
 `[1:])
-	s.planLayersHasLen(c, manager, 1)
+	s.planLayersHasLen(c, s.manager, 1)
 
 	// Try to append a layer when that label already exists.
 	layer = parseLayer(c, 0, "label1", `
@@ -724,15 +562,15 @@ services:
         override: foobar
         command: /bin/bar
 `)
-	err = manager.AppendLayer(layer)
+	err = s.manager.AppendLayer(layer)
 	c.Assert(err.(*servstate.LabelExists).Label, Equals, "label1")
-	c.Assert(planYAML(c, manager), Equals, `
+	c.Assert(planYAML(c, s.manager), Equals, `
 services:
     svc1:
         override: replace
         command: /bin/sh
 `[1:])
-	s.planLayersHasLen(c, manager, 1)
+	s.planLayersHasLen(c, s.manager, 1)
 
 	// Append another layer on top.
 	layer = parseLayer(c, 0, "label2", `
@@ -741,16 +579,16 @@ services:
         override: replace
         command: /bin/bash
 `)
-	err = manager.AppendLayer(layer)
+	err = s.manager.AppendLayer(layer)
 	c.Assert(err, IsNil)
 	c.Assert(layer.Order, Equals, 2)
-	c.Assert(planYAML(c, manager), Equals, `
+	c.Assert(planYAML(c, s.manager), Equals, `
 services:
     svc1:
         override: replace
         command: /bin/bash
 `[1:])
-	s.planLayersHasLen(c, manager, 2)
+	s.planLayersHasLen(c, s.manager, 2)
 
 	// Append a layer with a different service.
 	layer = parseLayer(c, 0, "label3", `
@@ -759,10 +597,10 @@ services:
         override: replace
         command: /bin/foo
 `)
-	err = manager.AppendLayer(layer)
+	err = s.manager.AppendLayer(layer)
 	c.Assert(err, IsNil)
 	c.Assert(layer.Order, Equals, 3)
-	c.Assert(planYAML(c, manager), Equals, `
+	c.Assert(planYAML(c, s.manager), Equals, `
 services:
     svc1:
         override: replace
@@ -771,16 +609,15 @@ services:
         override: replace
         command: /bin/foo
 `[1:])
-	s.planLayersHasLen(c, manager, 3)
+	s.planLayersHasLen(c, s.manager, 3)
 }
 
 func (s *S) TestCombineLayer(c *C) {
 	dir := c.MkDir()
-	os.Mkdir(filepath.Join(dir, "layers"), 0755)
-	runner := state.NewTaskRunner(s.st)
-	manager, err := servstate.NewManager(s.st, runner, dir, nil, nil, fakeLogManager{})
+	err := os.Mkdir(filepath.Join(dir, "layers"), 0755)
 	c.Assert(err, IsNil)
-	defer manager.Stop()
+	s.manager, err = servstate.NewManager(s.st, s.runner, dir, nil, nil, fakeLogManager{})
+	c.Assert(err, IsNil)
 
 	// "Combine" layer with no layers should just append.
 	layer := parseLayer(c, 0, "label1", `
@@ -789,16 +626,16 @@ services:
         override: replace
         command: /bin/sh
 `)
-	err = manager.CombineLayer(layer)
+	err = s.manager.CombineLayer(layer)
 	c.Assert(err, IsNil)
 	c.Assert(layer.Order, Equals, 1)
-	c.Assert(planYAML(c, manager), Equals, `
+	c.Assert(planYAML(c, s.manager), Equals, `
 services:
     svc1:
         override: replace
         command: /bin/sh
 `[1:])
-	s.planLayersHasLen(c, manager, 1)
+	s.planLayersHasLen(c, s.manager, 1)
 
 	// Combine layer with different label should just append.
 	layer = parseLayer(c, 0, "label2", `
@@ -807,10 +644,10 @@ services:
         override: replace
         command: /bin/foo
 `)
-	err = manager.CombineLayer(layer)
+	err = s.manager.CombineLayer(layer)
 	c.Assert(err, IsNil)
 	c.Assert(layer.Order, Equals, 2)
-	c.Assert(planYAML(c, manager), Equals, `
+	c.Assert(planYAML(c, s.manager), Equals, `
 services:
     svc1:
         override: replace
@@ -819,7 +656,7 @@ services:
         override: replace
         command: /bin/foo
 `[1:])
-	s.planLayersHasLen(c, manager, 2)
+	s.planLayersHasLen(c, s.manager, 2)
 
 	// Combine layer with first layer.
 	layer = parseLayer(c, 0, "label1", `
@@ -828,10 +665,10 @@ services:
         override: replace
         command: /bin/bash
 `)
-	err = manager.CombineLayer(layer)
+	err = s.manager.CombineLayer(layer)
 	c.Assert(err, IsNil)
 	c.Assert(layer.Order, Equals, 1)
-	c.Assert(planYAML(c, manager), Equals, `
+	c.Assert(planYAML(c, s.manager), Equals, `
 services:
     svc1:
         override: replace
@@ -840,7 +677,7 @@ services:
         override: replace
         command: /bin/foo
 `[1:])
-	s.planLayersHasLen(c, manager, 2)
+	s.planLayersHasLen(c, s.manager, 2)
 
 	// Combine layer with second layer.
 	layer = parseLayer(c, 0, "label2", `
@@ -849,10 +686,10 @@ services:
         override: replace
         command: /bin/bar
 `)
-	err = manager.CombineLayer(layer)
+	err = s.manager.CombineLayer(layer)
 	c.Assert(err, IsNil)
 	c.Assert(layer.Order, Equals, 2)
-	c.Assert(planYAML(c, manager), Equals, `
+	c.Assert(planYAML(c, s.manager), Equals, `
 services:
     svc1:
         override: replace
@@ -861,7 +698,7 @@ services:
         override: replace
         command: /bin/bar
 `[1:])
-	s.planLayersHasLen(c, manager, 2)
+	s.planLayersHasLen(c, s.manager, 2)
 
 	// One last append for good measure.
 	layer = parseLayer(c, 0, "label3", `
@@ -873,10 +710,10 @@ services:
         override: replace
         command: /bin/b
 `)
-	err = manager.CombineLayer(layer)
+	err = s.manager.CombineLayer(layer)
 	c.Assert(err, IsNil)
 	c.Assert(layer.Order, Equals, 3)
-	c.Assert(planYAML(c, manager), Equals, `
+	c.Assert(planYAML(c, s.manager), Equals, `
 services:
     svc1:
         override: replace
@@ -885,16 +722,15 @@ services:
         override: replace
         command: /bin/b
 `[1:])
-	s.planLayersHasLen(c, manager, 3)
+	s.planLayersHasLen(c, s.manager, 3)
 }
 
 func (s *S) TestSetServiceArgs(c *C) {
 	dir := c.MkDir()
-	os.Mkdir(filepath.Join(dir, "layers"), 0755)
-	runner := state.NewTaskRunner(s.st)
-	manager, err := servstate.NewManager(s.st, runner, dir, nil, nil, fakeLogManager{})
+	err := os.Mkdir(filepath.Join(dir, "layers"), 0755)
 	c.Assert(err, IsNil)
-	defer manager.Stop()
+	s.manager, err = servstate.NewManager(s.st, s.runner, dir, nil, nil, fakeLogManager{})
+	c.Assert(err, IsNil)
 
 	// Append a layer with a few services having default args.
 	layer := parseLayer(c, 0, "base-layer", `
@@ -909,19 +745,19 @@ services:
         override: replace
         command: foo
 `)
-	err = manager.AppendLayer(layer)
+	err = s.manager.AppendLayer(layer)
 	c.Assert(err, IsNil)
 	c.Assert(layer.Order, Equals, 1)
-	s.planLayersHasLen(c, manager, 1)
+	s.planLayersHasLen(c, s.manager, 1)
 
 	// Set arguments to services.
 	serviceArgs := map[string][]string{
 		"svc1": {"-abc", "--xyz"},
 		"svc2": {"--bar"},
 	}
-	err = manager.SetServiceArgs(serviceArgs)
+	err = s.manager.SetServiceArgs(serviceArgs)
 	c.Assert(err, IsNil)
-	c.Assert(planYAML(c, manager), Equals, `
+	c.Assert(planYAML(c, s.manager), Equals, `
 services:
     svc1:
         override: replace
@@ -933,10 +769,11 @@ services:
         override: replace
         command: foo
 `[1:])
-	s.planLayersHasLen(c, manager, 2)
+	s.planLayersHasLen(c, s.manager, 2)
 }
 
 func (s *S) TestServices(c *C) {
+	s.setupDefaultServiceManager(c)
 	started := time.Now()
 	services, err := s.manager.Services(nil)
 	c.Assert(err, IsNil)
@@ -971,7 +808,12 @@ func (s *S) TestServices(c *C) {
 	})
 }
 
-var planLayerEnv = `
+func (s *S) TestEnvironment(c *C) {
+	s.setupDefaultServiceManager(c)
+	// Setup new state and add "envtest" layer
+	dir := c.MkDir()
+	logPath := filepath.Join(dir, "log.txt")
+	layerYAML := fmt.Sprintf(`
 services:
     envtest:
         override: replace
@@ -979,13 +821,7 @@ services:
         environment:
             PEBBLE_ENV_TEST_1: foo
             PEBBLE_ENV_TEST_2: bar bazz
-`
-
-func (s *S) TestEnvironment(c *C) {
-	// Setup new state and add "envtest" layer
-	dir := c.MkDir()
-	logPath := filepath.Join(dir, "log.txt")
-	layerYAML := fmt.Sprintf(planLayerEnv, logPath)
+`, logPath)
 	layer := parseLayer(c, 0, "envlayer", layerYAML)
 	err := s.manager.AppendLayer(layer)
 	c.Assert(err, IsNil)
@@ -1017,13 +853,8 @@ PEBBLE_ENV_TEST_PARENT=from-parent
 `[1:])
 }
 
-type writerFunc func([]byte) (int, error)
-
-func (f writerFunc) Write(p []byte) (int, error) {
-	return f(p)
-}
-
 func (s *S) TestActionRestart(c *C) {
+	s.setupDefaultServiceManager(c)
 	// Add custom backoff delay so it auto-restarts quickly.
 	layer := parseLayer(c, 0, "layer", `
 services:
@@ -1099,6 +930,7 @@ services:
 }
 
 func (s *S) TestStopDuringBackoff(c *C) {
+	s.setupDefaultServiceManager(c)
 	layer := parseLayer(c, 0, "layer", `
 services:
     test2:
@@ -1134,6 +966,7 @@ services:
 }
 
 func (s *S) TestOnCheckFailureRestartWhileRunning(c *C) {
+	s.setupDefaultServiceManager(c)
 	// Create check manager and tell it about plan updates
 	checkMgr := checkstate.NewManager()
 	defer checkMgr.PlanChanged(&plan.Plan{})
@@ -1224,6 +1057,7 @@ checks:
 }
 
 func (s *S) TestOnCheckFailureRestartDuringBackoff(c *C) {
+	s.setupDefaultServiceManager(c)
 	// Create check manager and tell it about plan updates
 	checkMgr := checkstate.NewManager()
 	defer checkMgr.PlanChanged(&plan.Plan{})
@@ -1302,6 +1136,7 @@ checks:
 }
 
 func (s *S) TestOnCheckFailureIgnore(c *C) {
+	s.setupDefaultServiceManager(c)
 	// Create check manager and tell it about plan updates
 	checkMgr := checkstate.NewManager()
 	defer checkMgr.PlanChanged(&plan.Plan{})
@@ -1374,6 +1209,7 @@ checks:
 }
 
 func (s *S) TestOnCheckFailureShutdown(c *C) {
+	s.setupDefaultServiceManager(c)
 	// Create check manager and tell it about plan updates
 	checkMgr := checkstate.NewManager()
 	defer checkMgr.PlanChanged(&plan.Plan{})
@@ -1439,18 +1275,8 @@ checks:
 	}
 }
 
-func (s *S) waitUntilService(c *C, service string, f func(svc *servstate.ServiceInfo) bool) {
-	for i := 0; i < 310; i++ {
-		svc := s.serviceByName(c, service)
-		if f(svc) {
-			return
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-	c.Fatalf("timed out waiting for service")
-}
-
 func (s *S) TestActionShutdown(c *C) {
+	s.setupDefaultServiceManager(c)
 	layer := parseLayer(c, 0, "layer", `
 services:
     test2:
@@ -1481,6 +1307,7 @@ services:
 }
 
 func (s *S) TestActionIgnore(c *C) {
+	s.setupDefaultServiceManager(c)
 	layer := parseLayer(c, 0, "layer", `
 services:
     test2:
@@ -1504,6 +1331,7 @@ services:
 }
 
 func (s *S) TestGetAction(c *C) {
+	s.setupDefaultServiceManager(c)
 	tests := []struct {
 		onSuccess plan.ServiceAction
 		onFailure plan.ServiceAction
@@ -1558,6 +1386,7 @@ func (s *S) TestGetAction(c *C) {
 }
 
 func (s *S) TestGetJitter(c *C) {
+	s.setupDefaultServiceManager(c)
 	// It's tricky to test a function that generates randomness, but ensure all
 	// the values are in range, and that the number of values distributed across
 	// each of 3 buckets is reasonable.
@@ -1584,6 +1413,7 @@ func (s *S) TestGetJitter(c *C) {
 }
 
 func (s *S) TestCalculateNextBackoff(c *C) {
+	s.setupDefaultServiceManager(c)
 	tests := []struct {
 		delay   time.Duration
 		factor  float64
@@ -1618,6 +1448,7 @@ func (s *S) TestCalculateNextBackoff(c *C) {
 }
 
 func (s *S) TestReapZombies(c *C) {
+	s.setupDefaultServiceManager(c)
 	// Ensure we've been set as a child subreaper
 	isSubreaper, err := getChildSubreaper()
 	c.Assert(err, IsNil)
@@ -1689,33 +1520,8 @@ services:
 	}
 }
 
-func getChildSubreaper() (bool, error) {
-	var i uintptr
-	err := unix.Prctl(unix.PR_GET_CHILD_SUBREAPER, uintptr(unsafe.Pointer(&i)), 0, 0, 0)
-	if err != nil {
-		return false, err
-	}
-	return i != 0, nil
-}
-
-func createZombie() error {
-	testExecutable, err := os.Executable()
-	if err != nil {
-		return err
-	}
-	procAttr := syscall.ProcAttr{
-		Env: []string{"PEBBLE_TEST_ZOMBIE_CHILD=1"},
-	}
-	childPid, err := syscall.ForkExec(testExecutable, []string{"zombie-child"}, &procAttr)
-	if err != nil {
-		return err
-	}
-	fmt.Printf("childPid %d\n", childPid)
-	time.Sleep(shortOkayDelay + 25*time.Millisecond)
-	return nil
-}
-
 func (s *S) TestStopRunning(c *C) {
+	s.setupDefaultServiceManager(c)
 	s.startServices(c, []string{"test2"}, 1)
 	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
 		return svc.Current == servstate.StatusActive
@@ -1753,26 +1559,18 @@ func (s *S) TestStopRunning(c *C) {
 }
 
 func (s *S) TestStopRunningNoServices(c *C) {
+	s.setupDefaultServiceManager(c)
 	taskSet, err := servstate.StopRunning(s.st, s.manager)
 	c.Assert(err, IsNil)
 	c.Assert(taskSet, IsNil)
 }
 
-type fakeLogManager struct{}
-
-func (f fakeLogManager) ServiceStarted(serviceName string, logs *servicelog.RingBuffer) {
-	// no-op
-}
-
 func (s *S) TestNoWorkingDir(c *C) {
-	// Service command should run in current directory (package directory)
-	// if "working-dir" config option not set.
 	dir := c.MkDir()
 	err := os.Mkdir(filepath.Join(dir, "layers"), 0755)
 	c.Assert(err, IsNil)
-	manager, err := servstate.NewManager(s.st, s.runner, dir, nil, nil, fakeLogManager{})
+	s.manager, err = servstate.NewManager(s.st, s.runner, dir, nil, nil, fakeLogManager{})
 	c.Assert(err, IsNil)
-	defer manager.Stop()
 
 	outputPath := filepath.Join(dir, "output")
 	layer := parseLayer(c, 0, "layer", fmt.Sprintf(`
@@ -1781,9 +1579,11 @@ services:
         override: replace
         command: /bin/sh -c "pwd >%s; sleep %g"
 `, outputPath, shortOkayDelay.Seconds()+0.01))
-	err = manager.AppendLayer(layer)
+	err = s.manager.AppendLayer(layer)
 	c.Assert(err, IsNil)
 
+	// Service command should run in current directory (package directory)
+	// if "working-dir" config option not set.
 	chg := s.startServices(c, []string{"nowrkdir"}, 1)
 	s.st.Lock()
 	c.Assert(chg.Err(), IsNil)
@@ -1798,9 +1598,8 @@ func (s *S) TestWorkingDir(c *C) {
 	dir := c.MkDir()
 	err := os.Mkdir(filepath.Join(dir, "layers"), 0755)
 	c.Assert(err, IsNil)
-	manager, err := servstate.NewManager(s.st, s.runner, dir, nil, nil, fakeLogManager{})
+	s.manager, err = servstate.NewManager(s.st, s.runner, dir, nil, nil, fakeLogManager{})
 	c.Assert(err, IsNil)
-	defer manager.Stop()
 
 	outputPath := filepath.Join(dir, "output")
 	layer := parseLayer(c, 0, "layer", fmt.Sprintf(`
@@ -1810,7 +1609,7 @@ services:
         command: /bin/sh -c "pwd >%s; sleep %g"
         working-dir: %s
 `, outputPath, shortOkayDelay.Seconds()+0.01, dir))
-	err = manager.AppendLayer(layer)
+	err = s.manager.AppendLayer(layer)
 	c.Assert(err, IsNil)
 
 	chg := s.startServices(c, []string{"wrkdir"}, 1)
@@ -1821,4 +1620,266 @@ services:
 	output, err := ioutil.ReadFile(outputPath)
 	c.Assert(err, IsNil)
 	c.Check(string(output), Equals, dir+"\n")
+}
+
+// setupDefaultServiceManager provides a basic setup that can be used by many
+// of the unit tests without having to create a custom setup.
+func (s *S) setupDefaultServiceManager(c *C) {
+	s.dir = c.MkDir()
+	s.log = filepath.Join(s.dir, "log.txt")
+	os.Mkdir(filepath.Join(s.dir, "layers"), 0755)
+	data := fmt.Sprintf(planLayer1, s.log, s.log)
+	err := ioutil.WriteFile(filepath.Join(s.dir, "layers", "001-base.yaml"), []byte(data), 0644)
+	c.Assert(err, IsNil)
+	err = ioutil.WriteFile(filepath.Join(s.dir, "layers", "002-two.yaml"), []byte(planLayer2), 0644)
+	c.Assert(err, IsNil)
+
+	s.manager, err = servstate.NewManager(s.st, s.runner, s.dir, s.logOutput, testRestarter{s.stopDaemon}, fakeLogManager{})
+	c.Assert(err, IsNil)
+}
+
+// Make sure services are all stopped before the next test starts.
+func (s *S) stopRunningServices(c *C) {
+	taskSet, err := servstate.StopRunning(s.st, s.manager)
+	c.Assert(err, IsNil)
+
+	if taskSet == nil {
+		return
+	}
+
+	// One change to stop them all.
+	s.st.Lock()
+	chg := s.st.NewChange("stop", "Stop all running services")
+	chg.AddAll(taskSet)
+	s.st.EnsureBefore(0) // start operation right away
+	s.st.Unlock()
+
+	// Wait for a limited amount of time for them to stop.
+	timeout := time.After(10 * time.Second)
+	for {
+		s.runner.Ensure()
+		s.runner.Wait()
+
+		// Exit loop if change is complete
+		select {
+		case <-chg.Ready():
+			return
+		case <-timeout:
+			c.Fatal("timeout waiting for services to stop")
+		default:
+		}
+	}
+}
+
+type testRestarter struct {
+	ch chan struct{}
+}
+
+func (r testRestarter) HandleRestart(t restart.RestartType) {
+	close(r.ch)
+}
+
+func (s *S) assertLog(c *C, expected string) {
+	s.logBufferMut.Lock()
+	defer s.logBufferMut.Unlock()
+	data, err := ioutil.ReadFile(s.log)
+	if os.IsNotExist(err) {
+		c.Fatal("Services have not run")
+	}
+	c.Assert(err, IsNil)
+	c.Assert(string(data), Matches, "(?s)"+expected)
+	c.Assert(s.logBuffer.String(), Matches, "(?s)"+expected)
+}
+
+func (s *S) logBufferString() string {
+	s.logBufferMut.Lock()
+	defer s.logBufferMut.Unlock()
+	str := s.logBuffer.String()
+	s.logBuffer.Reset()
+	return str
+}
+
+func (s *S) testServiceLogs(c *C, outputs map[string]string) {
+	s.startTestServices(c)
+
+	if c.Failed() {
+		return
+	}
+
+	iterators, err := s.manager.ServiceLogs([]string{"test1", "test2"}, -1)
+	c.Assert(err, IsNil)
+	c.Assert(iterators, HasLen, 2)
+
+	for serviceName, it := range iterators {
+		buf := &bytes.Buffer{}
+		for it.Next(nil) {
+			_, err = io.Copy(buf, it)
+			c.Assert(err, IsNil)
+		}
+
+		c.Assert(buf.String(), Matches, outputs[serviceName])
+
+		err = it.Close()
+		c.Assert(err, IsNil)
+	}
+
+	s.stopTestServices(c)
+}
+
+func (s *S) ensure(c *C, n int) {
+	for i := 0; i < n; i++ {
+		s.runner.Ensure()
+		s.runner.Wait()
+	}
+}
+
+func (s *S) startServices(c *C, services []string, nEnsure int) *state.Change {
+	s.st.Lock()
+	ts, err := servstate.Start(s.st, services)
+	c.Check(err, IsNil)
+	chg := s.st.NewChange("test", "Start test")
+	chg.AddAll(ts)
+	s.st.Unlock()
+
+	// Num to ensure may be more than one due to the cross-task dependencies.
+	s.ensure(c, nEnsure)
+
+	return chg
+}
+
+func (s *S) stopServices(c *C, services []string, nEnsure int) *state.Change {
+	s.st.Lock()
+	ts, err := servstate.Stop(s.st, services)
+	c.Check(err, IsNil)
+	chg := s.st.NewChange("test", "Stop test")
+	chg.AddAll(ts)
+	s.st.Unlock()
+
+	// Num to ensure may be more than one due to the cross-task dependencies.
+	s.ensure(c, nEnsure)
+
+	return chg
+}
+
+func (s *S) serviceByName(c *C, name string) *servstate.ServiceInfo {
+	services, err := s.manager.Services([]string{name})
+	c.Assert(err, IsNil)
+	c.Assert(services, HasLen, 1)
+	return services[0]
+}
+
+func (s *S) startTestServices(c *C) {
+	chg := s.startServices(c, []string{"test1", "test2"}, 2)
+	s.st.Lock()
+	c.Check(chg.Status(), Equals, state.DoneStatus, Commentf("Error: %v", chg.Err()))
+	s.st.Unlock()
+
+	s.assertLog(c, ".*test1\n.*test2\n")
+
+	cmds := s.manager.RunningCmds()
+	c.Check(cmds, HasLen, 2)
+}
+
+func (s *S) stopTestServices(c *C) {
+	cmds := s.manager.RunningCmds()
+	c.Check(cmds, HasLen, 2)
+
+	chg := s.stopServices(c, []string{"test1", "test2"}, 2)
+
+	// Ensure processes are gone indeed.
+	c.Assert(cmds, HasLen, 2)
+	for name, cmd := range cmds {
+		err := cmd.Process.Signal(syscall.Signal(0))
+		if err == nil {
+			c.Fatalf("Process for %q did not stop properly", name)
+		} else {
+			c.Check(err, ErrorMatches, ".*process already finished.*")
+		}
+	}
+
+	s.st.Lock()
+	c.Check(chg.Status(), Equals, state.DoneStatus, Commentf("Error: %v", chg.Err()))
+	s.st.Unlock()
+}
+
+func (s *S) stopTestServicesAlreadyDead(c *C) {
+	cmds := s.manager.RunningCmds()
+	c.Check(cmds, HasLen, 0)
+
+	chg := s.stopServices(c, []string{"test1", "test2"}, 2)
+
+	c.Assert(cmds, HasLen, 0)
+
+	s.st.Lock()
+	c.Check(chg.Status(), Equals, state.DoneStatus, Commentf("Error: %v", chg.Err()))
+	s.st.Unlock()
+}
+
+func planYAML(c *C, manager *servstate.ServiceManager) string {
+	plan, err := manager.Plan()
+	c.Assert(err, IsNil)
+	yml, err := yaml.Marshal(plan)
+	c.Assert(err, IsNil)
+	return string(yml)
+}
+
+func parseLayer(c *C, order int, label, layerYAML string) *plan.Layer {
+	layer, err := plan.ParseLayer(order, label, []byte(layerYAML))
+	c.Assert(err, IsNil)
+	return layer
+}
+
+func (s *S) planLayersHasLen(c *C, manager *servstate.ServiceManager, expectedLen int) {
+	plan, err := manager.Plan()
+	c.Assert(err, IsNil)
+	c.Assert(plan.Layers, HasLen, expectedLen)
+}
+
+type writerFunc func([]byte) (int, error)
+
+func (f writerFunc) Write(p []byte) (int, error) {
+	return f(p)
+}
+
+func (s *S) waitUntilService(c *C, service string, f func(svc *servstate.ServiceInfo) bool) {
+	for i := 0; i < 310; i++ {
+		svc := s.serviceByName(c, service)
+		if f(svc) {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	c.Fatalf("timed out waiting for service")
+}
+
+func getChildSubreaper() (bool, error) {
+	var i uintptr
+	err := unix.Prctl(unix.PR_GET_CHILD_SUBREAPER, uintptr(unsafe.Pointer(&i)), 0, 0, 0)
+	if err != nil {
+		return false, err
+	}
+	return i != 0, nil
+}
+
+func createZombie() error {
+	testExecutable, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	procAttr := syscall.ProcAttr{
+		Env: []string{"PEBBLE_TEST_ZOMBIE_CHILD=1"},
+	}
+	childPid, err := syscall.ForkExec(testExecutable, []string{"zombie-child"}, &procAttr)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("childPid %d\n", childPid)
+	time.Sleep(shortOkayDelay + 25*time.Millisecond)
+	return nil
+}
+
+type fakeLogManager struct{}
+
+func (f fakeLogManager) ServiceStarted(serviceName string, logs *servicelog.RingBuffer) {
+	// no-op
 }
