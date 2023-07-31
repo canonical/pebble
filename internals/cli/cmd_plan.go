@@ -21,7 +21,7 @@ import (
 )
 
 type cmdPlan struct {
-	clientMixin
+	ClientMixin
 }
 
 var shortPlanHelp = "Show the plan with layers combined"
@@ -34,7 +34,7 @@ func (cmd *cmdPlan) Execute(args []string) error {
 	if len(args) > 0 {
 		return ErrExtraArgs
 	}
-	planYAML, err := cmd.client.PlanBytes(&client.PlanOptions{})
+	planYAML, err := cmd.Client().PlanBytes(&client.PlanOptions{})
 	if err != nil {
 		return err
 	}

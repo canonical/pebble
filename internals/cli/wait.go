@@ -31,7 +31,7 @@ var (
 )
 
 type waitMixin struct {
-	clientMixin
+	ClientMixin
 	NoWait    bool `long:"no-wait"`
 	skipAbort bool
 }
@@ -47,7 +47,7 @@ func (wmx waitMixin) wait(id string) (*client.Change, error) {
 		fmt.Fprintf(Stdout, "%s\n", id)
 		return nil, noWait
 	}
-	cli := wmx.client
+	cli := wmx.Client()
 
 	// Intercept sigint
 	sigs := make(chan os.Signal, 2)
@@ -58,7 +58,7 @@ func (wmx waitMixin) wait(id string) (*client.Change, error) {
 		if sig == nil || wmx.skipAbort {
 			return
 		}
-		_, err := wmx.client.Abort(id)
+		_, err := wmx.Client().Abort(id)
 		if err != nil {
 			fmt.Fprintf(Stderr, err.Error()+"\n")
 		}

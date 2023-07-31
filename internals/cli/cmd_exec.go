@@ -31,7 +31,7 @@ import (
 )
 
 type cmdExec struct {
-	clientMixin
+	ClientMixin
 	WorkingDir     string        `short:"w"`
 	Env            []string      `long:"env"`
 	UserID         *int          `long:"uid"`
@@ -174,7 +174,7 @@ func (cmd *cmdExec) Execute(args []string) error {
 	}
 
 	// Start the command.
-	process, err := cmd.client.Exec(opts)
+	process, err := cmd.Client().Exec(opts)
 	if err != nil {
 		return err
 	}

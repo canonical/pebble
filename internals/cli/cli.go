@@ -157,24 +157,12 @@ func fixupArg(optName string) string {
 	return optName
 }
 
-type clientSetter interface {
-	setClient(*client.Client)
-}
-
-type clientMixin struct {
-	client *client.Client
-}
-
-func (ch *clientMixin) setClient(cli *client.Client) {
-	ch.client = cli
-}
-
 // Parser creates and populates a fresh parser.
 // Since commands have local state a fresh parser is required to isolate tests
 // from each other.
-func Parser(cli *client.Client) *flags.Parser {
+func Parser(cg client.ClientGetter) *flags.Parser {
 	optionsData.Version = func() {
-		printVersions(cli)
+		printVersions(cg)
 		panic(&exitStatus{0})
 	}
 	flagopts := flags.Options(flags.PassDoubleDash)
@@ -193,8 +181,8 @@ func Parser(cli *client.Client) *flags.Parser {
 	// Add all regular commands
 	for _, c := range commands {
 		obj := c.builder()
-		if x, ok := obj.(clientSetter); ok {
-			x.setClient(cli)
+		if x, ok := obj.(client.ClientSetter); ok {
+			x.SetClient(cg)
 		}
 		if x, ok := obj.(parserSetter); ok {
 			x.setParser(parser)
@@ -256,8 +244,8 @@ func Parser(cli *client.Client) *flags.Parser {
 	// Add all the sub-commands of the debug command
 	for _, c := range debugCommands {
 		obj := c.builder()
-		if x, ok := obj.(clientSetter); ok {
-			x.setClient(cli)
+		if x, ok := obj.(client.ClientSetter); ok {
+			x.SetClient(cg)
 		}
 		cmd, err := debugCommand.AddCommand(c.name, c.shortHelp, strings.TrimSpace(c.longHelp), obj)
 		if err != nil {
@@ -323,7 +311,30 @@ func (e *exitStatus) Error() string {
 	return fmt.Sprintf("internal error: exitStatus{%d} being handled as normal error", e.code)
 }
 
+// ClientMixin is embedded in the structs of commands that require a client
+// instance in order to communicate with the daemon.
+type ClientMixin struct {
+	client.ClientGetter
+}
+
+func (cm *ClientMixin) SetClient(cg client.ClientGetter) {
+	cm.ClientGetter = cg
+}
+
 func Run() error {
+	_, clientConfig.Socket = getEnvPaths()
+
+	cli, err := client.New(&clientConfig)
+	if err != nil {
+		return fmt.Errorf("cannot create client: %v", err)
+	}
+
+	err = RunWithClient(cli.Client())
+	maybePresentWarnings(cli.WarningsSummary())
+	return err
+}
+
+func RunWithClient(cg client.ClientGetter) error {
 	defer func() {
 		if v := recover(); v != nil {
 			if e, ok := v.(*exitStatus); ok {
@@ -335,14 +346,7 @@ func Run() error {
 
 	logger.SetLogger(logger.New(os.Stderr, "[pebble] "))
 
-	_, clientConfig.Socket = getEnvPaths()
-
-	cli, err := client.New(&clientConfig)
-	if err != nil {
-		return fmt.Errorf("cannot create client: %v", err)
-	}
-
-	parser := Parser(cli)
+	parser := Parser(cg)
 	xtra, err := parser.Parse()
 	if err != nil {
 		if e, ok := err.(*flags.Error); ok {
@@ -374,8 +378,6 @@ func Run() error {
 		fmt.Fprintln(Stderr, msg)
 		return nil
 	}
-
-	maybePresentWarnings(cli.WarningsSummary())
 
 	return nil
 }

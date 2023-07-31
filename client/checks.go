@@ -79,7 +79,11 @@ func (client *Client) Checks(opts *ChecksOptions) ([]*CheckInfo, error) {
 		query["names"] = opts.Names
 	}
 	var checks []*CheckInfo
-	_, err := client.doSync("GET", "/v1/checks", query, nil, nil, &checks)
+	_, err := client.DoSync(&RequestInfo{
+		Method: "GET",
+		Path:   "/v1/checks",
+		Query:  query,
+	}, &checks)
 	if err != nil {
 		return nil, err
 	}

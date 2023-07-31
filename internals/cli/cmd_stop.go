@@ -45,7 +45,7 @@ func (cmd cmdStop) Execute(args []string) error {
 	servopts := client.ServiceOptions{
 		Names: cmd.Positional.Services,
 	}
-	changeID, err := cmd.client.Stop(&servopts)
+	changeID, err := cmd.Client().Stop(&servopts)
 	if err != nil {
 		return err
 	}

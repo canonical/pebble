@@ -52,7 +52,11 @@ func (client *Client) Warnings(opts WarningsOptions) ([]*Warning, error) {
 	if opts.All {
 		q.Add("select", "all")
 	}
-	_, err := client.doSync("GET", "/v1/warnings", q, nil, nil, &jws)
+	_, err := client.DoSync(&RequestInfo{
+		Method: "GET",
+		Path:   "/v1/warnings",
+		Query:  q,
+	}, &jws)
 
 	ws := make([]*Warning, len(jws))
 	for i, jw := range jws {
@@ -77,6 +81,10 @@ func (client *Client) Okay(t time.Time) error {
 	if err := json.NewEncoder(&body).Encode(op); err != nil {
 		return err
 	}
-	_, err := client.doSync("POST", "/v1/warnings", nil, nil, &body, nil)
+	_, err := client.DoSync(&RequestInfo{
+		Method: "POST",
+		Path:   "/v1/warnings",
+		Body:   &body,
+	}, nil)
 	return err
 }

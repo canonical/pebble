@@ -41,7 +41,7 @@ func (cmd cmdReplan) Execute(args []string) error {
 	}
 
 	servopts := client.ServiceOptions{}
-	changeID, err := cmd.client.Replan(&servopts)
+	changeID, err := cmd.Client().Replan(&servopts)
 	if err != nil {
 		return err
 	}

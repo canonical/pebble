@@ -25,7 +25,7 @@ import (
 )
 
 type cmdMkdir struct {
-	clientMixin
+	ClientMixin
 
 	MakeParents bool   `short:"p"`
 	Permissions string `short:"m"`
@@ -75,7 +75,7 @@ func (cmd *cmdMkdir) Execute(args []string) error {
 		opts.Permissions = os.FileMode(p)
 	}
 
-	return cmd.client.MakeDir(&opts)
+	return cmd.Client().MakeDir(&opts)
 }
 
 func init() {

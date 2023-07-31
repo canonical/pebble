@@ -42,7 +42,7 @@ const (
 )
 
 type cmdEnter struct {
-	clientMixin
+	ClientMixin
 	sharedRunEnterOpts
 	Run        bool `long:"run"`
 	Positional struct {
@@ -91,7 +91,7 @@ func (cmd *cmdEnter) Execute(args []string) error {
 	runCmd := cmdRun{
 		sharedRunEnterOpts: cmd.sharedRunEnterOpts,
 	}
-	runCmd.setClient(cmd.client)
+	runCmd.SetClient(cmd.Client())
 
 	if len(cmd.Positional.Cmd) == 0 {
 		runCmd.run(nil)
@@ -105,7 +105,7 @@ func (cmd *cmdEnter) Execute(args []string) error {
 		extraArgs []string
 	)
 
-	parser := Parser(cmd.client)
+	parser := Parser(cmd.Client())
 	parser.CommandHandler = func(c flags.Commander, a []string) error {
 		commander = c
 		extraArgs = a

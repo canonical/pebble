@@ -36,7 +36,11 @@ func (client *Client) SendSignal(opts *SendSignalOptions) error {
 	if err != nil {
 		return fmt.Errorf("cannot encode JSON payload: %w", err)
 	}
-	_, err = client.doSync("POST", "/v1/signals", nil, nil, &body, nil)
+	_, err = client.DoSync(&RequestInfo{
+		Method: "POST",
+		Path:   "/v1/signals",
+		Body:   &body,
+	}, nil)
 	return err
 }
 

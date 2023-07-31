@@ -40,7 +40,7 @@ func (cmd cmdAutoStart) Execute(args []string) error {
 	}
 
 	servopts := client.ServiceOptions{}
-	changeID, err := cmd.client.AutoStart(&servopts)
+	changeID, err := cmd.Client().AutoStart(&servopts)
 	if err != nil {
 		return err
 	}

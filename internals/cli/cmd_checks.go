@@ -23,7 +23,7 @@ import (
 )
 
 type cmdChecks struct {
-	clientMixin
+	ClientMixin
 	Level      string `long:"level"`
 	Positional struct {
 		Checks []string `positional-arg-name:"<check>"`
@@ -50,7 +50,7 @@ func (cmd *cmdChecks) Execute(args []string) error {
 		Level: client.CheckLevel(cmd.Level),
 		Names: cmd.Positional.Checks,
 	}
-	checks, err := cmd.client.Checks(&opts)
+	checks, err := cmd.Client().Checks(&opts)
 	if err != nil {
 		return err
 	}

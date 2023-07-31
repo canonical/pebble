@@ -29,7 +29,7 @@ The version command displays the versions of the running client and server.
 `
 
 type cmdVersion struct {
-	clientMixin
+	ClientMixin
 	ClientOnly bool `long:"client"`
 }
 
@@ -51,12 +51,12 @@ func (cmd cmdVersion) Execute(args []string) error {
 		return nil
 	}
 
-	return printVersions(cmd.client)
+	return printVersions(cmd.Client())
 }
 
-func printVersions(cli *client.Client) error {
+func printVersions(cg client.ClientGetter) error {
 	serverVersion := "-"
-	sysInfo, err := cli.SysInfo()
+	sysInfo, err := cg.Client().SysInfo()
 	if err == nil {
 		serverVersion = sysInfo.Version
 	}

@@ -32,14 +32,14 @@ import (
 )
 
 type cmdWarnings struct {
-	clientMixin
+	ClientMixin
 	timeMixin
 	unicodeMixin
 	All     bool `long:"all"`
 	Verbose bool `long:"verbose"`
 }
 
-type cmdOkay struct{ clientMixin }
+type cmdOkay struct{ ClientMixin }
 
 var shortWarningsHelp = "List warnings"
 var longWarningsHelp = `
@@ -74,7 +74,7 @@ func (cmd *cmdWarnings) Execute(args []string) error {
 	}
 	now := time.Now()
 
-	warnings, err := cmd.client.Warnings(client.WarningsOptions{All: cmd.All})
+	warnings, err := cmd.Client().Warnings(client.WarningsOptions{All: cmd.All})
 	if err != nil {
 		return err
 	}
@@ -153,7 +153,7 @@ func (cmd *cmdOkay) Execute(args []string) error {
 		return err
 	}
 
-	return cmd.client.Okay(last)
+	return cmd.Client().Okay(last)
 }
 
 const warnFileEnvKey = "PEBBLE_LAST_WARNING_TIMESTAMP_FILENAME"

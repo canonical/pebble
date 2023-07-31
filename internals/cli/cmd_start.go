@@ -45,7 +45,7 @@ func (cmd cmdStart) Execute(args []string) error {
 	servopts := client.ServiceOptions{
 		Names: cmd.Positional.Services,
 	}
-	changeID, err := cmd.client.Start(&servopts)
+	changeID, err := cmd.Client().Start(&servopts)
 	if err != nil {
 		return err
 	}

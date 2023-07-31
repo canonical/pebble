@@ -87,6 +87,17 @@ type doer interface {
 	Do(*http.Request) (*http.Response, error)
 }
 
+// ClientGetter implementations must provide a way to convert themselves to
+// Pebble client instances.
+type ClientGetter interface {
+	// Client returns a Pebble client instance.
+	Client() *Client
+}
+
+type ClientSetter interface {
+	SetClient(ClientGetter)
+}
+
 // Config allows the user to customize client behavior.
 type Config struct {
 	// BaseURL contains the base URL where the Pebble daemon is expected to be.
@@ -116,6 +127,10 @@ type Client struct {
 	warningTimestamp time.Time
 
 	getWebsocket getWebsocketFunc
+}
+
+func (c *Client) Client() *Client {
+	return c
 }
 
 type getWebsocketFunc func(url string) (clientWebsocket, error)
@@ -326,13 +341,27 @@ func decodeInto(reader io.Reader, v interface{}) error {
 	return nil
 }
 
-// doSync performs a request to the given path using the specified HTTP method.
+// RequestInfo holds the information to perform a request to the daemon.
+type RequestInfo struct {
+	Method  string
+	Path    string
+	Query   url.Values
+	Headers map[string]string
+	Body    io.Reader
+}
+
+// ResultInfo is empty for now, but this is the mechanism that conveys
+// general information that makes sense to requests at a more general
+// level, and might be disconnected from the specific request at hand.
+type ResultInfo struct{}
+
+// DoSync performs a request to the given path using the specified HTTP method.
 // It expects a "sync" response from the API and on success decodes the JSON
 // response payload into the given value using the "UseNumber" json decoding
 // which produces json.Numbers instead of float64 types for numbers.
-func (client *Client) doSync(method, path string, query url.Values, headers map[string]string, body io.Reader, v interface{}) (*ResultInfo, error) {
+func (client *Client) DoSync(req *RequestInfo, v interface{}) (*ResultInfo, error) {
 	var rsp response
-	if err := client.do(method, path, query, headers, body, &rsp); err != nil {
+	if err := client.do(req.Method, req.Path, req.Query, req.Headers, req.Body, &rsp); err != nil {
 		return nil, err
 	}
 	if err := rsp.err(client); err != nil {
@@ -354,22 +383,28 @@ func (client *Client) doSync(method, path string, query url.Values, headers map[
 	return &rsp.ResultInfo, nil
 }
 
-func (client *Client) doAsync(method, path string, query url.Values, headers map[string]string, body io.Reader) (changeID string, err error) {
-	_, changeID, err = client.doAsyncFull(method, path, query, headers, body)
+// DoAsync performs a request to the given path using the specified HTTP method.
+// It expects an "async" response from the API and on success returns the
+// change ID.
+func (client *Client) DoAsync(req *RequestInfo) (changeID string, err error) {
+	_, changeID, err = client.DoAsyncFull(req)
 	return
 }
 
-func (client *Client) doAsyncFull(method, path string, query url.Values, headers map[string]string, body io.Reader) (result json.RawMessage, changeID string, err error) {
+// DoAsync performs a request to the given path using the specified HTTP method.
+// It expects an "async" response from the API and on success returns the raw
+// JSON response from the daemon alongside the change ID.
+func (client *Client) DoAsyncFull(req *RequestInfo) (result json.RawMessage, changeID string, err error) {
 	var rsp response
 
-	if err := client.do(method, path, query, headers, body, &rsp); err != nil {
+	if err := client.do(req.Method, req.Path, req.Query, req.Headers, req.Body, &rsp); err != nil {
 		return nil, "", err
 	}
 	if err := rsp.err(client); err != nil {
 		return nil, "", err
 	}
 	if rsp.Type != "async" {
-		return nil, "", fmt.Errorf("expected async response for %q on %q, got %q", method, path, rsp.Type)
+		return nil, "", fmt.Errorf("expected async response for %q on %q, got %q", req.Method, req.Path, rsp.Type)
 	}
 	if rsp.StatusCode != 202 {
 		return nil, "", fmt.Errorf("operation not accepted")
@@ -380,11 +415,6 @@ func (client *Client) doAsyncFull(method, path string, query url.Values, headers
 
 	return rsp.Result, rsp.Change, nil
 }
-
-// ResultInfo is empty for now, but this is the mechanism that conveys
-// general information that makes sense to requests at a more general
-// level, and might be disconnected from the specific request at hand.
-type ResultInfo struct{}
 
 // A response produced by the REST API will usually fit in this
 // (exceptions are the icons/ endpoints obvs)
@@ -476,7 +506,10 @@ type SysInfo struct {
 func (client *Client) SysInfo() (*SysInfo, error) {
 	var sysInfo SysInfo
 
-	if _, err := client.doSync("GET", "/v1/system-info", nil, nil, nil, &sysInfo); err != nil {
+	if _, err := client.DoSync(&RequestInfo{
+		Method: "GET",
+		Path:   "/v1/system-info",
+	}, &sysInfo); err != nil {
 		return nil, fmt.Errorf("cannot obtain system details: %w", err)
 	}
 
@@ -497,8 +530,11 @@ func (client *Client) DebugPost(action string, params interface{}, result interf
 	if err != nil {
 		return err
 	}
-
-	_, err = client.doSync("POST", "/v1/debug", nil, nil, bytes.NewReader(body), result)
+	_, err = client.DoSync(&RequestInfo{
+		Method: "POST",
+		Path:   "/v1/debug",
+		Body:   bytes.NewReader(body),
+	}, result)
 	return err
 }
 
@@ -508,6 +544,10 @@ func (client *Client) DebugGet(action string, result interface{}, params map[str
 	for k, v := range params {
 		urlParams.Set(k, v)
 	}
-	_, err := client.doSync("GET", "/v1/debug", urlParams, nil, nil, &result)
+	_, err := client.DoSync(&RequestInfo{
+		Method: "GET",
+		Path:   "/v1/debug",
+		Query:  urlParams,
+	}, &result)
 	return err
 }

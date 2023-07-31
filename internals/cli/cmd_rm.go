@@ -21,7 +21,7 @@ import (
 )
 
 type cmdRm struct {
-	clientMixin
+	ClientMixin
 
 	Recursive bool `short:"r"`
 
@@ -44,7 +44,7 @@ func (cmd *cmdRm) Execute(args []string) error {
 		return ErrExtraArgs
 	}
 
-	return cmd.client.RemovePath(&client.RemovePathOptions{
+	return cmd.Client().RemovePath(&client.RemovePathOptions{
 		Path:      cmd.Positional.Path,
 		Recursive: cmd.Recursive,
 	})
