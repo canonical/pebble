@@ -24,7 +24,7 @@ import (
 	"github.com/canonical/pebble/internals/overlord/state"
 )
 
-var api = []*Command{{
+var Api = []*Command{{
 	// See daemon.go:canAccess for details how the access is controlled.
 	Path:    "/v1/system-info",
 	GuestOK: true,
@@ -116,8 +116,4 @@ func v1SystemInfo(c *Command, r *http.Request, _ *UserState) Response {
 		"boot-id": restart.BootID(state),
 	}
 	return SyncResponse(result)
-}
-
-func Register(c *Command) {
-	api = append(api, c)
 }

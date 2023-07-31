@@ -108,7 +108,10 @@ type Daemon struct {
 	mu sync.Mutex
 }
 
-// XXX Placeholder for now.
+// UserState represents the state of an authenticated API user.
+//
+// The struct is currently empty as the behaviors haven't been implemented
+// yet.
 type UserState struct{}
 
 // A ResponseFunc handles one of the individual verbs for a method
@@ -402,7 +405,7 @@ func (d *Daemon) SetDegradedMode(err error) {
 func (d *Daemon) addRoutes() {
 	d.router = mux.NewRouter()
 
-	for _, c := range api {
+	for _, c := range Api {
 		c.d = d
 		if c.PathPrefix == "" {
 			d.router.Handle(c.Path, c).Name(c.Path)

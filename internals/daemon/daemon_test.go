@@ -110,7 +110,7 @@ func (s *daemonSuite) TestRegisterCommand(c *C) {
 		GuestOK: true,
 		GET:     getCallback,
 	}
-	Register(&command)
+	Api = append(Api, &command)
 
 	d := s.newDaemon(c)
 	d.Init()
@@ -421,8 +421,8 @@ func (s *daemonSuite) TestSuperAccess(c *check.C) {
 func (s *daemonSuite) TestAddRoutes(c *check.C) {
 	d := s.newDaemon(c)
 
-	expected := make([]string, len(api))
-	for i, v := range api {
+	expected := make([]string, len(Api))
+	for i, v := range Api {
 		if v.PathPrefix != "" {
 			expected[i] = v.PathPrefix
 			continue
@@ -430,7 +430,7 @@ func (s *daemonSuite) TestAddRoutes(c *check.C) {
 		expected[i] = v.Path
 	}
 
-	got := make([]string, 0, len(api))
+	got := make([]string, 0, len(Api))
 	c.Assert(d.router.Walk(func(route *mux.Route, router *mux.Router, ancestors []*mux.Route) error {
 		got = append(got, route.GetName())
 		return nil
