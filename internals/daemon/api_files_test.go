@@ -32,9 +32,10 @@ import (
 	"syscall"
 	"time"
 
+	. "gopkg.in/check.v1"
+
 	"github.com/canonical/pebble/internals/osutil"
 	"github.com/canonical/pebble/internals/osutil/sys"
-	. "gopkg.in/check.v1"
 )
 
 var _ = Suite(&filesSuite{})

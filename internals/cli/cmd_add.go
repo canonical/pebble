@@ -23,6 +23,14 @@ import (
 	"github.com/canonical/pebble/client"
 )
 
+const cmdAddSummary = "Dynamically add a layer to the plan's layers"
+const cmdAddDescription = `
+The add command reads the plan's layer YAML from the path specified and
+appends a layer with the given label to the plan's layers. If --combine
+is specified, combine the layer with an existing layer that has the given
+label (or append if the label is not found).
+`
+
 type cmdAdd struct {
 	clientMixin
 	Combine    bool `long:"combine"`
@@ -32,17 +40,17 @@ type cmdAdd struct {
 	} `positional-args:"yes"`
 }
 
-var addDescs = map[string]string{
-	"combine": `Combine the new layer with an existing layer that has the given label (default is to append)`,
+func init() {
+	AddCommand(&CmdInfo{
+		Name:        "add",
+		Summary:     cmdAddSummary,
+		Description: cmdAddDescription,
+		ArgsHelp: map[string]string{
+			"--combine": "Combine the new layer with an existing layer that has the given label (default is to append)",
+		},
+		Builder: func() flags.Commander { return &cmdAdd{} },
+	})
 }
-
-var shortAddHelp = "Dynamically add a layer to the plan's layers"
-var longAddHelp = `
-The add command reads the plan's layer YAML from the path specified and
-appends a layer with the given label to the plan's layers. If --combine
-is specified, combine the layer with an existing layer that has the given
-label (or append if the label is not found).
-`
 
 func (cmd *cmdAdd) Execute(args []string) error {
 	if len(args) > 0 {
@@ -64,8 +72,4 @@ func (cmd *cmdAdd) Execute(args []string) error {
 	fmt.Fprintf(Stdout, "Layer %q added successfully from %q\n",
 		cmd.Positional.Label, cmd.Positional.LayerPath)
 	return nil
-}
-
-func init() {
-	addCommand("add", shortAddHelp, longAddHelp, func() flags.Commander { return &cmdAdd{} }, addDescs, nil)
 }

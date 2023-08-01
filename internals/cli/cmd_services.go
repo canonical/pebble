@@ -22,6 +22,12 @@ import (
 	"github.com/canonical/pebble/client"
 )
 
+const cmdServicesSummary = "Query the status of configured services"
+const cmdServicesDescription = `
+The services command lists status information about the services specified, or
+about all services if none are specified.
+`
+
 type cmdServices struct {
 	clientMixin
 	timeMixin
@@ -30,11 +36,15 @@ type cmdServices struct {
 	} `positional-args:"yes"`
 }
 
-var shortServicesHelp = "Query the status of configured services"
-var longServicesHelp = `
-The services command lists status information about the services specified, or
-about all services if none are specified.
-`
+func init() {
+	AddCommand(&CmdInfo{
+		Name:        "services",
+		Summary:     cmdServicesSummary,
+		Description: cmdServicesDescription,
+		ArgsHelp:    timeArgsHelp,
+		Builder:     func() flags.Commander { return &cmdServices{} },
+	})
+}
 
 func (cmd *cmdServices) Execute(args []string) error {
 	if len(args) > 0 {
@@ -70,10 +80,4 @@ func (cmd *cmdServices) Execute(args []string) error {
 		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", svc.Name, svc.Startup, svc.Current, since)
 	}
 	return nil
-}
-
-func init() {
-	addCommand("services", shortServicesHelp, longServicesHelp,
-		func() flags.Commander { return &cmdServices{} },
-		timeDescs, nil)
 }

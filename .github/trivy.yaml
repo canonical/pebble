@@ -1,0 +1,4 @@
+timeout: 20m
+scan:
+  offline-scan: true
+ignore-file: .github/.trivyignore

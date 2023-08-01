@@ -25,9 +25,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/canonical/pebble/internals/overlord/state"
-
 	. "gopkg.in/check.v1"
+
+	"github.com/canonical/pebble/internals/overlord/state"
 )
 
 var servicesLayer = `
