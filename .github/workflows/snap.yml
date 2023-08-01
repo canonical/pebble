@@ -1,0 +1,45 @@
+name: Pebble snap
+
+on: [pull_request]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      pebble-snap: ${{ steps.build-pebble-snap.outputs.snap }}
+
+    steps:
+      - name: Checkout Pebble repo
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+
+      - name: Build Pebble Snap
+        id: build-pebble-snap
+        uses: snapcore/action-build@v1
+
+      - name: Attach pebble snap to GH workflow execution
+        uses: actions/upload-artifact@v2
+        with:
+          name: ${{ steps.build-pebble-snap.outputs.snap }}
+          path: ${{ steps.build-pebble-snap.outputs.snap }}
+
+  test:
+    runs-on: ubuntu-latest
+    needs: [build]
+
+    steps:
+      - uses: actions/download-artifact@v3
+        with:
+          name: ${{ needs.build.outputs.pebble-snap }}
+
+      - name: Install the Pebble snap
+        run: |
+          # Install the Pebble snap from the artifact built in the previous job
+          sudo snap install --dangerous --classic ${{ needs.build.outputs.pebble-snap }}
+
+          # Make sure Pebble is installed
+          pebble version
+
+      - name: Run smoke test
+        run: pebble enter exec echo Hello | grep Hello

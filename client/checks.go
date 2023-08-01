@@ -18,7 +18,6 @@ import (
 	"net/url"
 )
 
-// ChecksOptions are the filtering options for querying health checks.
 type ChecksOptions struct {
 	// Level is the check level to query for. A check is included in the
 	// results if this field is not set, or if it is equal to the check's
@@ -31,6 +30,7 @@ type ChecksOptions struct {
 	Names []string
 }
 
+// CheckLevel represents the level of a health check.
 type CheckLevel string
 
 const (
@@ -39,6 +39,7 @@ const (
 	ReadyLevel CheckLevel = "ready"
 )
 
+// CheckStatus represents the status of a health check.
 type CheckStatus string
 
 const (

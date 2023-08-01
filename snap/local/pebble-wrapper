@@ -1,0 +1,9 @@
+#!/bin/sh -eu
+
+# The default Pebble directory should sit within the $SNAP_USER_DATA because:
+# - access to the system's /var/lib/pebble/default isn't guaranteed, and
+# - the default $PEBBLE path should also be removed when removing the snap.
+DEFAULT_PEBBLE_DIRECTORY="${SNAP_USER_DATA}"
+export PEBBLE="${PEBBLE:-$DEFAULT_PEBBLE_DIRECTORY}"
+
+exec "${SNAP}/bin/pebble" "$@"

@@ -33,7 +33,7 @@ type AddLayerOptions struct {
 	LayerData []byte
 }
 
-// AddLayer adds a layer to the plan's layers according to opts.Action.
+// AddLayer adds a layer to the plan's configuration layers.
 func (client *Client) AddLayer(opts *AddLayerOptions) error {
 	var payload = struct {
 		Action  string `json:"action"`

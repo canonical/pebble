@@ -19,11 +19,11 @@ set -e
 #   that dh-golang creates and that only contains a subset of the
 #   files of the toplevel buildir. 
 PKG_BUILDDIR=$(dirname "$0")/..
-GO_GENERATE_BUILDDIR="$(pwd)"
+GO_GENERATE_BUILDDIR="$(pwd)/cmd"
 
 # run from "go generate" adjust path
 if [ "$GOPACKAGE" = "cmd" ]; then
-    GO_GENERATE_BUILDDIR="$(pwd)/.."
+    GO_GENERATE_BUILDDIR="$(pwd)"
 fi
 
 OUTPUT_ONLY=false
@@ -43,7 +43,7 @@ if [ -z "$v" ]; then
     if command -v git >/dev/null; then
         # not using "--dirty" here until the following bug is fixed:
         # https://bugs.launchpad.net/snapcraft/+bug/1662388
-        v="$(git describe --always | sed -e 's/-/+git/;y/-/./' )"
+        v="$(git describe --tags --always | sed -e 's/-/+git/;y/-/./' )"
         o=git
     fi
 fi
