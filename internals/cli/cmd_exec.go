@@ -22,9 +22,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/canonical/go-flags"
 	"golang.org/x/sys/unix"
 
-	"github.com/canonical/go-flags"
 	"github.com/canonical/pebble/client"
 	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/ptyutil"
