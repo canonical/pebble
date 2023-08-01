@@ -11,22 +11,23 @@ jobs:
     runs-on: ubuntu-latest
 
     strategy:
+      fail-fast: false
       matrix:
-        go: ['1.17', '1.16', '1.15', '1.14']
+        go: ['1.19', '1.18', '1.17', '1.16', '1.15', '1.14']
 
     name: Go ${{ matrix.go }}
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
 
     - name: Set up Go
-      uses: actions/setup-go@v2
+      uses: actions/setup-go@v3
       with:
         go-version: ${{ matrix.go }}
 
     - name: Test and build
       run: |
-        go test -race ./...
+        go test -race ./... -check.vv
         go build ./cmd/pebble
 
   root-tests:
@@ -35,21 +36,21 @@ jobs:
     name: Root Tests
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
 
     - name: Set up Go
-      uses: actions/setup-go@v2
+      uses: actions/setup-go@v3
       with:
-        go-version: "1.17"
+        go-version-file: 'go.mod'
 
     - name: Test
       run: |
-        go test -c ./internal/daemon
+        go test -c ./internals/daemon
         PEBBLE_TEST_USER=runner PEBBLE_TEST_GROUP=runner sudo -E ./daemon.test -check.v -check.f ^execSuite\.TestUserGroup$
         PEBBLE_TEST_USER=runner PEBBLE_TEST_GROUP=runner sudo -E ./daemon.test -check.v -check.f ^execSuite\.TestUserIDGroupID$
         PEBBLE_TEST_USER=runner PEBBLE_TEST_GROUP=runner sudo -E ./daemon.test -check.v -check.f ^filesSuite\.TestWriteUserGroupReal$
         PEBBLE_TEST_USER=runner PEBBLE_TEST_GROUP=runner sudo -E ./daemon.test -check.v -check.f ^filesSuite\.TestMakeDirsUserGroupReal$
-        go test -c ./internal/overlord/servstate/
+        go test -c ./internals/overlord/servstate/
         PEBBLE_TEST_USER=runner PEBBLE_TEST_GROUP=runner sudo -E ./servstate.test -check.v -check.f ^S.TestUserGroup$
 
   format:
@@ -58,12 +59,12 @@ jobs:
     name: Format check
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
 
     - name: Set up Go
-      uses: actions/setup-go@v2
+      uses: actions/setup-go@v3
       with:
-        go-version: '1.17'
+        go-version-file: 'go.mod'
 
     - name: Ensure no formatting changes
       run: |

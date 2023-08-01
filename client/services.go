@@ -20,32 +20,41 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"time"
 )
 
 type ServiceOptions struct {
 	Names []string
 }
 
+// AutoStart starts the services makes as "startup: enabled". opts.Names must
+// be empty for this call.
 func (client *Client) AutoStart(opts *ServiceOptions) (changeID string, err error) {
 	_, changeID, err = client.doMultiServiceAction("autostart", opts.Names)
 	return changeID, err
 }
 
+// Start starts the services named in opts.Names in dependency order.
 func (client *Client) Start(opts *ServiceOptions) (changeID string, err error) {
 	_, changeID, err = client.doMultiServiceAction("start", opts.Names)
 	return changeID, err
 }
 
+// Stop stops the services named in opts.Names in dependency order.
 func (client *Client) Stop(opts *ServiceOptions) (changeID string, err error) {
 	_, changeID, err = client.doMultiServiceAction("stop", opts.Names)
 	return changeID, err
 }
 
+// Restart stops and then starts the services named in opts.Names in
+// dependency order.
 func (client *Client) Restart(opts *ServiceOptions) (changeID string, err error) {
 	_, changeID, err = client.doMultiServiceAction("restart", opts.Names)
 	return changeID, err
 }
 
+// Replan stops and (re)starts the services whose configuration has changed
+// since they were started. opts.Names must be empty for this call.
 func (client *Client) Replan(opts *ServiceOptions) (changeID string, err error) {
 	_, changeID, err = client.doMultiServiceAction("replan", opts.Names)
 	return changeID, err
@@ -71,7 +80,6 @@ func (client *Client) doMultiServiceAction(actionName string, services []string)
 	return client.doAsyncFull("POST", "/v1/services", nil, headers, bytes.NewBuffer(data))
 }
 
-// ServicesOptions are the filtering options for querying services.
 type ServicesOptions struct {
 	// Names is the list of service names to query for. If slice is nil or
 	// empty, fetch information for all services.
@@ -80,9 +88,10 @@ type ServicesOptions struct {
 
 // ServiceInfo holds status information for a single service.
 type ServiceInfo struct {
-	Name    string         `json:"name"`
-	Startup ServiceStartup `json:"startup"`
-	Current ServiceStatus  `json:"current"`
+	Name         string         `json:"name"`
+	Startup      ServiceStartup `json:"startup"`
+	Current      ServiceStatus  `json:"current"`
+	CurrentSince time.Time      `json:"current-since"`
 }
 
 // ServiceStartup defines the different startup modes for a service.

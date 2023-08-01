@@ -1,5 +1,11 @@
 # Hacking on Pebble
 
+- [Running the daemon](#running-the-daemon)
+- [Using the CLI client](#using-the-cli-client)
+- [Using Curl to hit the API](#using-curl-to-hit-the-api)
+- [Running the tests](#running-the-tests)
+- [Creating a release](#creating-a-release)
+
 Hacking on Pebble is easy. It's written in Go, so install or [download](https://golang.org/dl/) a copy of the latest version of Go. Pebble uses [Go modules](https://golang.org/ref/mod) for managing dependencies, so all of the standard Go tooling just works.
 
 To compile and run Pebble, use the `go run` command on the `cmd/pebble` directory. The first time you run it, it will download dependencies and build packages, so will take a few seconds (but after that be very fast):
@@ -55,7 +61,7 @@ snappass  disabled  inactive
 
 ## Using Curl to hit the API
 
-For debugging, you can also use [curl](https://curl.se/) in Unix socket mode to hit the Pebble API:
+For debugging, you can also use [curl](https://curl.se/) in unix socket mode to hit the Pebble API:
 
 ```
 $ curl --unix-socket ~/pebble/.pebble.socket 'http://localhost/v1/services?names=snappass' | jq
@@ -74,6 +80,39 @@ $ curl --unix-socket ~/pebble/.pebble.socket 'http://localhost/v1/services?names
     }
   ]
 }
+```
+
+
+## Code style
+
+Pebble imports should be arranged in three groups:
+- standard library imports
+- third-party / non-Pebble imports
+- Pebble imports (i.e. those prefixed with `github.com/canonical/pebble`)
+
+Imports should be sorted alphabetically within each group.
+
+We use the [`gopkg.in/check.v1`](https://pkg.go.dev/gopkg.in/check.v1) package for testing. Inside a test file, import this as follows:
+```go
+. "gopkg.in/check.v1"
+```
+so that identifiers from that package will be added to the local namespace.
+
+
+Here is an example of correctly arranged imports:
+
+```go
+import (
+	"fmt"
+	"net"
+	"os"
+
+	"github.com/gorilla/mux"
+	. "gopkg.in/check.v1"
+
+	"github.com/canonical/pebble/internals/systemd"
+	"github.com/canonical/pebble/internals/testutil"
+)
 ```
 
 
@@ -128,3 +167,15 @@ ok      github.com/canonical/pebble/client  (cached)
 ok      github.com/canonical/pebble/cmd/pebble  0.165s
 ...
 ```
+
+
+## Creating a release
+
+To create a new tagged release, go to the [GitHub Releases page](https://github.com/canonical/pebble/releases) and:
+
+- Click "Create a new release"
+- Enter the version tag (eg: `v1.2.3`) and select "Create new tag: on publish"
+- Enter a release title: include the version tag and a short summary of the release
+- Write release notes: describe new features and bug fixes, and include a link to the full list of commits
+
+Binaries will be created and uploaded automatically to this release by the [binaries.yml](https://github.com/canonical/pebble/blob/master/.github/workflows/binaries.yml) GitHub Actions job.
