@@ -19,9 +19,13 @@ import (
 	"os"
 
 	"github.com/canonical/go-flags"
-
 	"github.com/canonical/pebble/client"
 )
+
+const cmdPushSummary = "Transfer a file to the remote system"
+const cmdPushDescription = `
+The push command transfers a file to the remote system.
+`
 
 type cmdPush struct {
 	clientMixin
@@ -39,20 +43,22 @@ type cmdPush struct {
 	} `positional-args:"yes"`
 }
 
-var pushDescs = map[string]string{
-	"p":     "Create parent directories for the file",
-	"m":     "Set permissions for the file (e.g. 0644)",
-	"uid":   "Use specified user ID",
-	"user":  "Use specified username",
-	"gid":   "Use specified group ID",
-	"group": "Use specified group name",
+func init() {
+	AddCommand(&CmdInfo{
+		Name:        "push",
+		Summary:     cmdPushSummary,
+		Description: cmdPushDescription,
+		ArgsHelp: map[string]string{
+			"-p":      "Create parent directories for the file",
+			"-m":      "Set permissions for the file (e.g. 0644)",
+			"--uid":   "Use specified user ID",
+			"--user":  "Use specified username",
+			"--gid":   "Use specified group ID",
+			"--group": "Use specified group name",
+		},
+		Builder: func() flags.Commander { return &cmdPush{} },
+	})
 }
-
-var shortPushHelp = "Transfer a file to the remote system"
-var longPushHelp = `
-The push command transfers a file to the remote system.
-`
-
 func (cmd *cmdPush) Execute(args []string) error {
 	if len(args) > 0 {
 		return ErrExtraArgs
@@ -86,8 +92,4 @@ func (cmd *cmdPush) Execute(args []string) error {
 		GroupID:     cmd.GroupID,
 		Group:       cmd.Group,
 	})
-}
-
-func init() {
-	addCommand("push", shortPushHelp, longPushHelp, func() flags.Commander { return &cmdPush{} }, pushDescs, nil)
 }
