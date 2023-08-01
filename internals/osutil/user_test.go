@@ -149,3 +149,43 @@ func (s *userSuite) TestNormalizeUidGid(c *check.C) {
 	groupErr = fmt.Errorf("GROUP ERROR!")
 	test(ptr(1), nil, "", "GROUP", nil, nil, "GROUP ERROR!")
 }
+
+func (s *userSuite) TestIsCurrent(c *check.C) {
+	isCurrent, err := osutil.IsCurrent(os.Getuid(), os.Getgid())
+	c.Assert(err, check.IsNil)
+	c.Check(isCurrent, check.Equals, true)
+
+	// Different uid and gid
+	restore := osutil.FakeUserCurrent(func() (*user.User, error) {
+		return &user.User{
+			Uid: strconv.Itoa(os.Getuid() + 1),
+			Gid: strconv.Itoa(os.Getgid() + 1),
+		}, nil
+	})
+	defer restore()
+	isCurrent, err = osutil.IsCurrent(os.Getuid(), os.Getpid())
+	c.Assert(err, check.IsNil)
+	c.Check(isCurrent, check.Equals, false)
+
+	// Different uid only
+	_ = osutil.FakeUserCurrent(func() (*user.User, error) {
+		return &user.User{
+			Uid: strconv.Itoa(os.Getuid() + 1),
+			Gid: strconv.Itoa(os.Getgid()),
+		}, nil
+	})
+	isCurrent, err = osutil.IsCurrent(os.Getuid(), os.Getpid())
+	c.Assert(err, check.IsNil)
+	c.Check(isCurrent, check.Equals, false)
+
+	// Different gid only
+	_ = osutil.FakeUserCurrent(func() (*user.User, error) {
+		return &user.User{
+			Uid: strconv.Itoa(os.Getuid()),
+			Gid: strconv.Itoa(os.Getgid() + 1),
+		}, nil
+	})
+	isCurrent, err = osutil.IsCurrent(os.Getuid(), os.Getgid())
+	c.Assert(err, check.IsNil)
+	c.Check(isCurrent, check.Equals, false)
+}

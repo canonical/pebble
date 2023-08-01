@@ -1,9 +1,9 @@
 package servstate
 
 import (
-	"github.com/canonical/pebble/internals/overlord/state"
-
 	"fmt"
+
+	"github.com/canonical/pebble/internals/overlord/state"
 )
 
 // ServiceRequest holds the details required to perform service tasks.

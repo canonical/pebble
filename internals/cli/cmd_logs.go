@@ -114,9 +114,9 @@ func (cmd *cmdLogs) Execute(args []string) error {
 // Needed because signal.NotifyContext is Go 1.16+
 func notifyContext(parent context.Context, signals ...os.Signal) context.Context {
 	ctx, cancel := context.WithCancel(parent)
-	// This channel doesn't really need to be buffered here, but it shuts up
-	// "go vet" (and other places in Pebble use a buffer size of 2, so be
-	// consistent).
+	// Need a buffered channel in case the signal arrives between the
+	// signal.Notify call and the goroutine waiting on the channel. In
+	// cmd_run.go Pebble uses a buffer size of 2, so be consistent.
 	ch := make(chan os.Signal, 2)
 	signal.Notify(ch, signals...)
 	go func() {

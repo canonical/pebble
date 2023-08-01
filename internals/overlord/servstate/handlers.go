@@ -347,16 +347,24 @@ func (s *serviceData) startInternal() error {
 		environment[k] = v
 	}
 
+	s.cmd.Dir = s.config.WorkingDir
+
 	// Start as another user if specified in plan.
 	uid, gid, err := osutil.NormalizeUidGid(s.config.UserID, s.config.GroupID, s.config.User, s.config.Group)
 	if err != nil {
 		return err
 	}
 	if uid != nil && gid != nil {
-		setCmdCredential(s.cmd, &syscall.Credential{
-			Uid: uint32(*uid),
-			Gid: uint32(*gid),
-		})
+		isCurrent, err := osutil.IsCurrent(*uid, *gid)
+		if err != nil {
+			logger.Debugf("Cannot determine if uid %d gid %d is current user", *uid, *gid)
+		}
+		if !isCurrent {
+			setCmdCredential(s.cmd, &syscall.Credential{
+				Uid: uint32(*uid),
+				Gid: uint32(*gid),
+			})
+		}
 
 		// Also set HOME and USER if not explicitly specified in config.
 		if environment["HOME"] == "" || environment["USER"] == "" {

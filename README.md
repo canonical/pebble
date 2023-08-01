@@ -403,6 +403,60 @@ $ pebble run --verbose
 ...
 ```
 
+<!--
+TODO: uncomment this section once log forwarding is fully implemented
+TODO: add log targets to the Pebble layer spec below
+
+#### Log forwarding
+
+Pebble supports forwarding its services' logs to a remote Loki server or syslog receiver (via UDP/TCP). In the `log-targets` section of the plan, you can specify destinations for log forwarding, for example:
+```yaml
+log-targets:
+    loki-example:
+        override: merge
+        type: loki
+        location: http://10.1.77.205:3100/loki/api/v1/push
+        services: [all]
+    syslog-example:
+        override: merge
+        type: syslog
+        location: tcp://192.168.10.241:1514
+        services: [svc1, svc2]
+```
+
+For each log target, use the `services` key to specify a list of services to collect logs from. In the above example, the `syslog-example` target will collect logs from `svc1` and `svc2`.
+
+Use the special keyword `all` to match all services, including services that might be added in future layers. In the above example, `loki-example` will collect logs from all services.
+
+To remove a service from a log target when merging, prefix the service name with a minus `-`. For example, if we have a base layer with
+```yaml
+my-target:
+    services: [svc1, svc2]
+```
+and override layer with
+```yaml
+my-target:
+    services: [-svc1]
+    override: merge
+```
+then in the merged layer, the `services` list will be merged to `[svc1, svc2, -svc1]`, which evaluates left to right as simply `[svc2]`. So `my-target` will collect logs from only `svc2`.
+
+You can also use `-all` to remove all services from the list. For example, adding an override layer with
+```yaml
+my-target:
+    services: [-all]
+    override: merge
+```
+would remove all services from `my-target`, effectively disabling `my-target`. Meanwhile, adding an override layer with
+```yaml
+my-target:
+    services: [-all, svc1]
+    override: merge
+```
+would remove all services and then add `svc1`, so `my-target` would receive logs from only `svc1`.
+
+-->
+
 ## Container usage
 
 Pebble works well as a local service manager, but if running Pebble in a separate container, you can use the exec and file management APIs to coordinate with the remote system over the shared unix socket.
@@ -523,6 +577,10 @@ services:
         # group and group-id are specified, the group's GID must match group-id.
         group-id: <gid>
 
+        # (Optional) Working directory to run command in. By default, the
+        # command is run in the service manager's current directory.
+        working-dir: <directory>
+
         # (Optional) Defines what happens when the service exits with a zero
         # exit code. Possible values are: "restart" (default) which restarts
         # the service after the backoff delay, "shutdown" which shuts down and
@@ -630,6 +688,13 @@ checks:
             # directly, not interpreted by a shell.
             command: <commmand>
 
+            # (Optional) Run the command in the context of this service.
+            # Specifically, inherit its environment variables, user/group
+            # settings, and working directory. The check's context (the
+            # settings below) will override the service's; the check's
+            # environment map will be merged on top of the service's.
+            service-context: <service-name>
+
             # (Optional) A list of key/value pairs defining environment
             # variables that should be set when running the command.
             environment:
@@ -653,7 +718,8 @@ checks:
             # match group-id.
             group-id: <gid>
 
-            # (Optional) Working directory to run command in.
+            # (Optional) Working directory to run command in. By default, the
+            # command is run in the service manager's current directory.
             working-dir: <directory>
 ```
 
@@ -667,7 +733,7 @@ The Go client is used primarily by the CLI, but is importable and can be used by
 
 We try to never change the underlying HTTP API in a backwards-incompatible way, however, in rare cases we may change the Go client in a backwards-incompatible way.
 
-In addition to the Go client, there's also a [Python client](https://github.com/canonical/operator/blob/master/ops/pebble.py) for the Pebble API that's part of the Python Operator Framework used by Juju charms ([documentation here](https://juju.is/docs/sdk/interact-with-pebble)).
+In addition to the Go client, there's also a [Python client](https://github.com/canonical/operator/blob/master/ops/pebble.py) for the Pebble API that's part of the [`ops` library](https://github.com/canonical/operator) used by Juju charms ([documentation here](https://juju.is/docs/sdk/interact-with-pebble)).
 
 ## Roadmap / TODO
 

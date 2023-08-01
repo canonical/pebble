@@ -124,3 +124,21 @@ func NormalizeUidGid(uid, gid *int, username, group string) (*int, *int, error) 
 	}
 	return uid, gid, nil
 }
+
+// IsCurrent reports whether the given user ID and group ID are those of the
+// current user.
+func IsCurrent(uid, gid int) (bool, error) {
+	current, err := userCurrent()
+	if err != nil {
+		return false, err
+	}
+	currentUid, err := strconv.Atoi(current.Uid)
+	if err != nil {
+		return false, err
+	}
+	currentGid, err := strconv.Atoi(current.Gid)
+	if err != nil {
+		return false, err
+	}
+	return uid == currentUid && gid == currentGid, nil
+}

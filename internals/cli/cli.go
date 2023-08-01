@@ -27,7 +27,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/canonical/go-flags"
-
 	"golang.org/x/crypto/ssh/terminal"
 
 	"github.com/canonical/pebble/client"

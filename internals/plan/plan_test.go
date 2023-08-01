@@ -107,12 +107,14 @@ var planTests = []planTest{{
 				backoff-delay: 1s
 				backoff-factor: 1.5
 				backoff-limit: 10s
+				working-dir: /workdir/srv1
 			srv2:
 				override: replace
 				startup: enabled
 				command: cmd
 				before:
 					- srv3
+				working-dir: /workdir/srv2
 			srv3:
 				override: replace
 				command: cmd
@@ -131,6 +133,7 @@ var planTests = []planTest{{
 					- srv4
 				before:
 					- srv5
+				working-dir: /workdir/srv1/override
 			srv2:
 				override: replace
 				startup: disabled
@@ -173,16 +176,18 @@ var planTests = []planTest{{
 					"var0": "val0",
 					"var2": "val2",
 				},
+				WorkingDir:    "/workdir/srv1",
 				BackoffDelay:  plan.OptionalDuration{Value: time.Second, IsSet: true},
 				BackoffFactor: plan.OptionalFloat{Value: 1.5, IsSet: true},
 				BackoffLimit:  plan.OptionalDuration{Value: 10 * time.Second, IsSet: true},
 			},
 			"srv2": {
-				Name:     "srv2",
-				Override: "replace",
-				Command:  "cmd",
-				Startup:  plan.StartupEnabled,
-				Before:   []string{"srv3"},
+				Name:       "srv2",
+				Override:   "replace",
+				Command:    "cmd",
+				WorkingDir: "/workdir/srv2",
+				Startup:    plan.StartupEnabled,
+				Before:     []string{"srv3"},
 			},
 			"srv3": {
 				Name:     "srv3",
@@ -213,6 +218,7 @@ var planTests = []planTest{{
 				Environment: map[string]string{
 					"var3": "val3",
 				},
+				WorkingDir: "/workdir/srv1/override",
 			},
 			"srv2": {
 				Name:     "srv2",
@@ -269,6 +275,7 @@ var planTests = []planTest{{
 					"var2": "val2",
 					"var3": "val3",
 				},
+				WorkingDir:    "/workdir/srv1/override",
 				BackoffDelay:  plan.OptionalDuration{Value: time.Second, IsSet: true},
 				BackoffFactor: plan.OptionalFloat{Value: 1.5, IsSet: true},
 				BackoffLimit:  plan.OptionalDuration{Value: 10 * time.Second, IsSet: true},
@@ -817,6 +824,17 @@ var planTests = []planTest{{
 					command: foo '
 	`},
 }, {
+	summary: `Invalid exec check service context`,
+	error:   `plan check "chk1" service context specifies non-existent service "nosvc"`,
+	input: []string{`
+		checks:
+			chk1:
+				override: replace
+				exec:
+					command: foo
+					service-context: nosvc
+	`},
+}, {
 	summary: "Simple layer with log targets",
 	input: []string{`
 		services:
@@ -824,24 +842,21 @@ var planTests = []planTest{{
 				command: foo
 				override: merge
 				startup: enabled
-				log-targets:
-					- tgt1
 			svc2:
 				command: bar
 				override: merge
 				startup: enabled
-				log-targets:
-					- tgt1
-					- tgt2
 		
 		log-targets:
 			tgt1:
 				type: loki
 				location: http://10.1.77.196:3100/loki/api/v1/push
+				services: [all]
 				override: merge
 			tgt2:
 				type: syslog
 				location: udp://0.0.0.0:514
+				services: [svc2]
 				override: merge
 `},
 	result: &plan.Layer{
@@ -854,7 +869,6 @@ var planTests = []planTest{{
 				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
 				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
 				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
-				LogTargets:    []string{"tgt1"},
 			},
 			"svc2": {
 				Name:          "svc2",
@@ -864,7 +878,6 @@ var planTests = []planTest{{
 				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
 				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
 				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
-				LogTargets:    []string{"tgt1", "tgt2"},
 			},
 		},
 		Checks: map[string]*plan.Check{},
@@ -873,12 +886,14 @@ var planTests = []planTest{{
 				Name:     "tgt1",
 				Type:     plan.LokiTarget,
 				Location: "http://10.1.77.196:3100/loki/api/v1/push",
+				Services: []string{"all"},
 				Override: plan.MergeOverride,
 			},
 			"tgt2": {
 				Name:     "tgt2",
 				Type:     plan.SyslogTarget,
 				Location: "udp://0.0.0.0:514",
+				Services: []string{"svc2"},
 				Override: plan.MergeOverride,
 			},
 		},
@@ -891,50 +906,50 @@ var planTests = []planTest{{
 				command: foo
 				override: merge
 				startup: enabled
-				log-targets:
-					- tgt1
 			svc2:
 				command: bar
 				override: merge
 				startup: enabled
-				log-targets:
-					- tgt1
-					- tgt2
 		
 		log-targets:
 			tgt1:
 				type: loki
 				location: http://10.1.77.196:3100/loki/api/v1/push
+				services: [all]
 				override: merge
 			tgt2:
 				type: syslog
 				location: udp://0.0.0.0:514
+				services: [svc2]
+				override: merge
+			tgt3:
+				type: loki
+				location: http://10.1.77.206:3100/loki/api/v1/push
+				services: [all]
 				override: merge
 `, `
 		services:
 			svc1:
 				command: foo
 				override: merge
-				log-targets:
-					- tgt3
 			svc2:
 				command: bar
 				override: replace
 				startup: enabled
-				log-targets:
-					- tgt3
 		
 		log-targets:
 			tgt1:
+				services: [-all, svc1]
 				override: merge
-				selection: opt-in
 			tgt2:
 				type: syslog
+				location: udp://1.2.3.4:514
+				services: []
 				override: replace
-				selection: disabled
 			tgt3:
-				type: loki
-				location: http://10.1.77.206:3100/loki/api/v1/push
+				type: syslog
+				location: udp://0.0.0.0:514
+				services: [-svc1]
 				override: merge
 `},
 	layers: []*plan.Layer{{
@@ -942,18 +957,16 @@ var planTests = []planTest{{
 		Order: 0,
 		Services: map[string]*plan.Service{
 			"svc1": {
-				Name:       "svc1",
-				Command:    "foo",
-				Override:   plan.MergeOverride,
-				Startup:    plan.StartupEnabled,
-				LogTargets: []string{"tgt1"},
+				Name:     "svc1",
+				Command:  "foo",
+				Override: plan.MergeOverride,
+				Startup:  plan.StartupEnabled,
 			},
 			"svc2": {
-				Name:       "svc2",
-				Command:    "bar",
-				Override:   plan.MergeOverride,
-				Startup:    plan.StartupEnabled,
-				LogTargets: []string{"tgt1", "tgt2"},
+				Name:     "svc2",
+				Command:  "bar",
+				Override: plan.MergeOverride,
+				Startup:  plan.StartupEnabled,
 			},
 		},
 		Checks: map[string]*plan.Check{},
@@ -962,12 +975,21 @@ var planTests = []planTest{{
 				Name:     "tgt1",
 				Type:     plan.LokiTarget,
 				Location: "http://10.1.77.196:3100/loki/api/v1/push",
+				Services: []string{"all"},
 				Override: plan.MergeOverride,
 			},
 			"tgt2": {
 				Name:     "tgt2",
 				Type:     plan.SyslogTarget,
 				Location: "udp://0.0.0.0:514",
+				Services: []string{"svc2"},
+				Override: plan.MergeOverride,
+			},
+			"tgt3": {
+				Name:     "tgt3",
+				Type:     plan.LokiTarget,
+				Location: "http://10.1.77.206:3100/loki/api/v1/push",
+				Services: []string{"all"},
 				Override: plan.MergeOverride,
 			},
 		},
@@ -976,36 +998,36 @@ var planTests = []planTest{{
 		Order: 1,
 		Services: map[string]*plan.Service{
 			"svc1": {
-				Name:       "svc1",
-				Command:    "foo",
-				Override:   plan.MergeOverride,
-				LogTargets: []string{"tgt3"},
+				Name:     "svc1",
+				Command:  "foo",
+				Override: plan.MergeOverride,
 			},
 			"svc2": {
-				Name:       "svc2",
-				Command:    "bar",
-				Override:   plan.ReplaceOverride,
-				Startup:    plan.StartupEnabled,
-				LogTargets: []string{"tgt3"},
+				Name:     "svc2",
+				Command:  "bar",
+				Override: plan.ReplaceOverride,
+				Startup:  plan.StartupEnabled,
 			},
 		},
 		Checks: map[string]*plan.Check{},
 		LogTargets: map[string]*plan.LogTarget{
 			"tgt1": {
-				Name:      "tgt1",
-				Override:  plan.MergeOverride,
-				Selection: plan.OptInSelection,
+				Name:     "tgt1",
+				Services: []string{"-all", "svc1"},
+				Override: plan.MergeOverride,
 			},
 			"tgt2": {
-				Name:      "tgt2",
-				Type:      plan.SyslogTarget,
-				Override:  plan.ReplaceOverride,
-				Selection: plan.DisabledSelection,
+				Name:     "tgt2",
+				Type:     plan.SyslogTarget,
+				Location: "udp://1.2.3.4:514",
+				Services: []string{},
+				Override: plan.ReplaceOverride,
 			},
 			"tgt3": {
 				Name:     "tgt3",
-				Type:     plan.LokiTarget,
-				Location: "http://10.1.77.206:3100/loki/api/v1/push",
+				Type:     plan.SyslogTarget,
+				Location: "udp://0.0.0.0:514",
+				Services: []string{"-svc1"},
 				Override: plan.MergeOverride,
 			},
 		},
@@ -1020,7 +1042,6 @@ var planTests = []planTest{{
 				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
 				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
 				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
-				LogTargets:    []string{"tgt1", "tgt3"},
 			},
 			"svc2": {
 				Name:          "svc2",
@@ -1030,28 +1051,28 @@ var planTests = []planTest{{
 				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
 				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
 				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
-				LogTargets:    []string{"tgt3"},
 			},
 		},
 		Checks: map[string]*plan.Check{},
 		LogTargets: map[string]*plan.LogTarget{
 			"tgt1": {
-				Name:      "tgt1",
-				Type:      plan.LokiTarget,
-				Location:  "http://10.1.77.196:3100/loki/api/v1/push",
-				Override:  plan.MergeOverride,
-				Selection: plan.OptInSelection,
+				Name:     "tgt1",
+				Type:     plan.LokiTarget,
+				Location: "http://10.1.77.196:3100/loki/api/v1/push",
+				Services: []string{"all", "-all", "svc1"},
+				Override: plan.MergeOverride,
 			},
 			"tgt2": {
-				Name:      "tgt2",
-				Type:      plan.SyslogTarget,
-				Override:  plan.ReplaceOverride,
-				Selection: plan.DisabledSelection,
+				Name:     "tgt2",
+				Type:     plan.SyslogTarget,
+				Location: "udp://1.2.3.4:514",
+				Override: plan.ReplaceOverride,
 			},
 			"tgt3": {
 				Name:     "tgt3",
-				Type:     plan.LokiTarget,
-				Location: "http://10.1.77.206:3100/loki/api/v1/push",
+				Type:     plan.SyslogTarget,
+				Location: "udp://0.0.0.0:514",
+				Services: []string{"all", "-svc1"},
 				Override: plan.MergeOverride,
 			},
 		},
@@ -1072,6 +1093,7 @@ var planTests = []planTest{{
 		log-targets:
 			tgt1:
 				type: loki
+				services: [all]
 				override: merge
 `}}, {
 	summary: "Unsupported log target type",
@@ -1084,30 +1106,23 @@ var planTests = []planTest{{
 				override: merge
 `},
 }, {
-	summary: "Invalid selection for log target",
-	error:   `log target "tgt1" has invalid selection "foobar", must be "opt-out", "opt-in" or "disabled"`,
+	summary: "Log target specifies invalid service",
+	error:   `log target "tgt1" specifies unknown service "nonexistent"`,
 	input: []string{`
 		log-targets:
 			tgt1:
 				type: loki
 				location: http://10.1.77.196:3100/loki/api/v1/push
+				services: [nonexistent]
 				override: merge
-				selection: foobar
 `},
 }, {
-	summary: "Service specifies unknown log target",
-	error:   `unknown log target "tgt2" for service "svc1"`,
+	summary: `Service name can't start with "-"`,
+	error:   `cannot use service name "-svc1": starting with "-" not allowed`,
 	input: []string{`
 		services:
-			svc1:
+			-svc1:
 				command: foo
-				override: merge
-				log-targets:
-					- tgt2
-		log-targets:
-			tgt1:
-				type: loki
-				location: http://10.1.77.196:3100/loki/api/v1/push
 				override: merge
 `},
 }}
@@ -1455,41 +1470,164 @@ func (s *S) TestParseCommand(c *C) {
 	}
 }
 
-func (s *S) TestSelectTargets(c *C) {
-	logTargets := []*plan.LogTarget{
-		{Name: "unset", Selection: plan.UnsetSelection},
-		{Name: "optout", Selection: plan.OptOutSelection},
-		{Name: "optin", Selection: plan.OptInSelection},
-		{Name: "disabled", Selection: plan.DisabledSelection},
-	}
-	services := []*plan.Service{
-		{Name: "svc1", LogTargets: nil},
-		{Name: "svc2", LogTargets: []string{}},
-		{Name: "svc3", LogTargets: []string{"unset"}},
-		{Name: "svc4", LogTargets: []string{"optout"}},
-		{Name: "svc5", LogTargets: []string{"optin"}},
-		{Name: "svc6", LogTargets: []string{"disabled"}},
-		{Name: "svc7", LogTargets: []string{"unset", "optin", "disabled"}},
-	}
+func (s *S) TestLogsTo(c *C) {
+	tests := []struct {
+		services []string
+		logsTo   map[string]bool
+	}{{
+		services: nil,
+		logsTo: map[string]bool{
+			"svc1": false,
+			"svc2": false,
+		},
+	}, {
+		services: []string{},
+		logsTo: map[string]bool{
+			"svc1": false,
+			"svc2": false,
+		},
+	}, {
+		services: []string{"all"},
+		logsTo: map[string]bool{
+			"svc1": true,
+			"svc2": true,
+		},
+	}, {
+		services: []string{"svc1"},
+		logsTo: map[string]bool{
+			"svc1": true,
+			"svc2": false,
+		},
+	}, {
+		services: []string{"svc1", "svc2"},
+		logsTo: map[string]bool{
+			"svc1": true,
+			"svc2": true,
+			"svc3": false,
+		},
+	}, {
+		services: []string{"all", "-svc2"},
+		logsTo: map[string]bool{
+			"svc1": true,
+			"svc2": false,
+			"svc3": true,
+		},
+	}, {
+		services: []string{"svc1", "svc2", "-svc1", "all"},
+		logsTo: map[string]bool{
+			"svc1": true,
+			"svc2": true,
+			"svc3": true,
+		},
+	}, {
+		services: []string{"svc1", "svc2", "-all"},
+		logsTo: map[string]bool{
+			"svc1": false,
+			"svc2": false,
+			"svc3": false,
+		},
+	}, {
+		services: []string{"all", "-all"},
+		logsTo: map[string]bool{
+			"svc1": false,
+			"svc2": false,
+			"svc3": false,
+		},
+	}, {
+		services: []string{"svc1", "svc2", "-all", "svc3", "svc1", "-svc3"},
+		logsTo: map[string]bool{
+			"svc1": true,
+			"svc2": false,
+			"svc3": false,
+		},
+	}}
 
-	// Use pointers to bools so the test will fail if we forget to set a value
-	t, f := true, false
-	expected := map[string]map[string]*bool{
-		"svc1": {"unset": &t, "optout": &t, "optin": &f, "disabled": &f},
-		"svc2": {"unset": &t, "optout": &t, "optin": &f, "disabled": &f},
-		"svc3": {"unset": &t, "optout": &f, "optin": &f, "disabled": &f},
-		"svc4": {"unset": &f, "optout": &t, "optin": &f, "disabled": &f},
-		"svc5": {"unset": &f, "optout": &f, "optin": &t, "disabled": &f},
-		"svc6": {"unset": &f, "optout": &f, "optin": &f, "disabled": &f},
-		"svc7": {"unset": &t, "optout": &f, "optin": &t, "disabled": &f},
-	}
+	for _, test := range tests {
+		target := &plan.LogTarget{
+			Services: test.services,
+		}
 
-	for _, service := range services {
-		for _, target := range logTargets {
-			exp := expected[service.Name][target.Name]
-			c.Assert(exp, NotNil, Commentf("no expected value defined for %s.LogsTo(%s)", service.Name, target.Name))
-			c.Check(service.LogsTo(target), Equals, *exp,
-				Commentf("unexpected value for %s.LogsTo(%s)", service.Name, target.Name))
+		for serviceName, shouldLogTo := range test.logsTo {
+			service := &plan.Service{
+				Name: serviceName,
+			}
+			c.Check(service.LogsTo(target), Equals, shouldLogTo,
+				Commentf("matching service %q against 'services: %v'", serviceName, test.services))
 		}
 	}
+}
+
+func (s *S) TestMergeServiceContextNoContext(c *C) {
+	userID, groupID := 10, 20
+	overrides := plan.ContextOptions{
+		Environment: map[string]string{"x": "y"},
+		UserID:      &userID,
+		User:        "usr",
+		GroupID:     &groupID,
+		Group:       "grp",
+		WorkingDir:  "/working/dir",
+	}
+	merged, err := plan.MergeServiceContext(nil, "", overrides)
+	c.Assert(err, IsNil)
+	c.Check(merged, DeepEquals, overrides)
+}
+
+func (s *S) TestMergeServiceContextBadService(c *C) {
+	_, err := plan.MergeServiceContext(&plan.Plan{}, "nosvc", plan.ContextOptions{})
+	c.Assert(err, ErrorMatches, `context service "nosvc" not found`)
+}
+
+func (s *S) TestMergeServiceContextNoOverrides(c *C) {
+	userID, groupID := 11, 22
+	p := &plan.Plan{Services: map[string]*plan.Service{"svc1": {
+		Name:        "svc1",
+		Environment: map[string]string{"x": "y"},
+		UserID:      &userID,
+		User:        "svcuser",
+		GroupID:     &groupID,
+		Group:       "svcgroup",
+		WorkingDir:  "/working/svc",
+	}}}
+	merged, err := plan.MergeServiceContext(p, "svc1", plan.ContextOptions{})
+	c.Assert(err, IsNil)
+	c.Check(merged, DeepEquals, plan.ContextOptions{
+		Environment: map[string]string{"x": "y"},
+		UserID:      &userID,
+		User:        "svcuser",
+		GroupID:     &groupID,
+		Group:       "svcgroup",
+		WorkingDir:  "/working/svc",
+	})
+}
+
+func (s *S) TestMergeServiceContextOverrides(c *C) {
+	svcUserID, svcGroupID := 10, 20
+	p := &plan.Plan{Services: map[string]*plan.Service{"svc1": {
+		Name:        "svc1",
+		Environment: map[string]string{"x": "y", "w": "z"},
+		UserID:      &svcUserID,
+		User:        "svcuser",
+		GroupID:     &svcGroupID,
+		Group:       "svcgroup",
+		WorkingDir:  "/working/svc",
+	}}}
+	userID, groupID := 11, 22
+	overrides := plan.ContextOptions{
+		Environment: map[string]string{"x": "a"},
+		UserID:      &userID,
+		User:        "usr",
+		GroupID:     &groupID,
+		Group:       "grp",
+		WorkingDir:  "/working/dir",
+	}
+	merged, err := plan.MergeServiceContext(p, "svc1", overrides)
+	c.Assert(err, IsNil)
+	c.Check(merged, DeepEquals, plan.ContextOptions{
+		Environment: map[string]string{"x": "a", "w": "z"},
+		UserID:      &userID,
+		User:        "usr",
+		GroupID:     &groupID,
+		Group:       "grp",
+		WorkingDir:  "/working/dir",
+	})
 }

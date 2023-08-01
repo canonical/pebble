@@ -51,6 +51,7 @@ type cmdExec struct {
 	GroupID        *int          `long:"gid"`
 	Group          string        `long:"group"`
 	Timeout        time.Duration `long:"timeout"`
+	Context        string        `long:"context"`
 	Terminal       bool          `short:"t"`
 	NoTerminal     bool          `short:"T"`
 	Interactive    bool          `short:"i"`
@@ -73,6 +74,7 @@ func init() {
 			"--gid":     "Group ID to run command as",
 			"--group":   "Group name to run command as (group's GID must match gid if both present)",
 			"--timeout": "Timeout after which to terminate command",
+			"--context": "Inherit the context of the named service (overridden by -w, --env, --uid/user, --gid/group)",
 			"-t":        "Allocate remote pseudo-terminal and connect stdout to it (default if stdout is a TTY)",
 			"-T":        "Disable remote pseudo-terminal allocation",
 			"-i":        "Interactive mode: connect stdin to the pseudo-terminal (default if stdin and stdout are TTYs)",
@@ -152,21 +154,22 @@ func (cmd *cmdExec) Execute(args []string) error {
 	}
 
 	opts := &client.ExecOptions{
-		Command:     command,
-		Environment: env,
-		WorkingDir:  cmd.WorkingDir,
-		Timeout:     cmd.Timeout,
-		UserID:      cmd.UserID,
-		User:        cmd.User,
-		GroupID:     cmd.GroupID,
-		Group:       cmd.Group,
-		Terminal:    terminal,
-		Interactive: interactive,
-		Width:       width,
-		Height:      height,
-		Stdin:       Stdin,
-		Stdout:      Stdout,
-		Stderr:      Stderr,
+		Command:        command,
+		ServiceContext: cmd.Context,
+		Environment:    env,
+		WorkingDir:     cmd.WorkingDir,
+		Timeout:        cmd.Timeout,
+		UserID:         cmd.UserID,
+		User:           cmd.User,
+		GroupID:        cmd.GroupID,
+		Group:          cmd.Group,
+		Terminal:       terminal,
+		Interactive:    interactive,
+		Width:          width,
+		Height:         height,
+		Stdin:          Stdin,
+		Stdout:         Stdout,
+		Stderr:         Stderr,
 	}
 
 	// If stdout and stderr both refer to the same file or device (e.g.,
