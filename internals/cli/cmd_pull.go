@@ -18,10 +18,14 @@ import (
 	"os"
 
 	"github.com/canonical/go-flags"
-
 	"github.com/canonical/pebble/client"
 	"github.com/canonical/pebble/internals/logger"
 )
+
+const cmdPullSummary = "Retrieve a file from the remote system"
+const cmdPullDescription = `
+The pull command retrieves a file from the remote system.
+`
 
 type cmdPull struct {
 	clientMixin
@@ -32,10 +36,14 @@ type cmdPull struct {
 	} `positional-args:"yes"`
 }
 
-var shortPullHelp = "Retrieve a file from the remote system"
-var longPullHelp = `
-The pull command retrieves a file from the remote system.
-`
+func init() {
+	AddCommand(&CmdInfo{
+		Name:        "pull",
+		Summary:     cmdPullSummary,
+		Description: cmdPullDescription,
+		Builder:     func() flags.Commander { return &cmdPull{} },
+	})
+}
 
 func (cmd *cmdPull) Execute(args []string) error {
 	if len(args) > 0 {
@@ -61,8 +69,4 @@ func (cmd *cmdPull) Execute(args []string) error {
 	}
 
 	return nil
-}
-
-func init() {
-	addCommand("pull", shortPullHelp, longPullHelp, func() flags.Commander { return &cmdPull{} }, nil, nil)
 }
