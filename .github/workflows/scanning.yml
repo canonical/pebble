@@ -7,13 +7,13 @@ on:
     branches: [master]
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
-
+  scan:
     name: Scan for known vulnerabilities
-
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
       - name: Run Github Trivy FS Action
         uses: aquasecurity/trivy-action@master
         with:
