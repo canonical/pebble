@@ -73,8 +73,9 @@ func Test(t *testing.T) { TestingT(t) }
 type S struct {
 	testutil.BaseTest
 
-	dir          string
-	log          string
+	// Unique tmp directory for each test
+	dir string
+
 	logBuffer    bytes.Buffer
 	logBufferMut sync.Mutex
 	logOutput    writerFunc
@@ -94,7 +95,7 @@ var planLayer1 = `
 services:
     test1:
         override: replace
-        command: /bin/sh -c "echo test1 | tee -a %s; sleep 10"
+        command: /bin/sh -c "echo test1; %s; sleep 10"
         startup: enabled
         requires:
             - test2
@@ -103,7 +104,7 @@ services:
 
     test2:
         override: replace
-        command: /bin/sh -c "echo test2 | tee -a %s; sleep 10"
+        command: /bin/sh -c "echo test2; %s; sleep 10"
 `
 
 var planLayer2 = `
@@ -127,7 +128,7 @@ var planLayer3 = `
 services:
     test2:
         override: merge
-        command: /bin/sh -c "echo test2b | tee -a %s; sleep 10"
+        command: /bin/sh -c "echo test2b; sleep 10"
 `
 
 var planLayer4 = `
@@ -149,6 +150,8 @@ func (s *S) SetUpSuite(c *C) {
 
 func (s *S) SetUpTest(c *C) {
 	s.BaseTest.SetUpTest(c)
+
+	s.dir = c.MkDir()
 	s.st = state.New(nil)
 
 	s.logBufferMut.Lock()
@@ -167,10 +170,6 @@ func (s *S) SetUpTest(c *C) {
 	s.AddCleanup(restore)
 	restore = servstate.FakeKillFailDelay(shortKillDelay, shortFailDelay)
 	s.AddCleanup(restore)
-
-	// Sync feature to ensure service action is complete. See
-	// waitForDoneFile()
-	s.donePath = filepath.Join(c.MkDir(), "done")
 }
 
 func (s *S) TearDownTest(c *C) {
@@ -191,7 +190,7 @@ func (s *S) TestDefaultServiceNames(c *C) {
 
 func (s *S) TestStartStopServices(c *C) {
 	s.setupDefaultServiceManager(c)
-	s.startTestServices(c)
+	s.startTestServices(c, true)
 
 	if c.Failed() {
 		return
@@ -202,12 +201,14 @@ func (s *S) TestStartStopServices(c *C) {
 
 func (s *S) TestStartStopServicesIdempotency(c *C) {
 	s.setupDefaultServiceManager(c)
-	s.startTestServices(c)
+	s.startTestServices(c, true)
 	if c.Failed() {
 		return
 	}
 
-	s.startTestServices(c)
+	// Do not check the logs again, the service
+	// is not actually restarted here.
+	s.startTestServices(c, false)
 	if c.Failed() {
 		return
 	}
@@ -273,7 +274,7 @@ func (s *S) TestKillDelayIsUsed(c *C) {
 
 func (s *S) TestReplanServices(c *C) {
 	s.setupDefaultServiceManager(c)
-	s.startTestServices(c)
+	s.startTestServices(c, true)
 
 	if c.Failed() {
 		return
@@ -293,7 +294,7 @@ func (s *S) TestReplanServices(c *C) {
 
 func (s *S) TestReplanUpdatesConfig(c *C) {
 	s.setupDefaultServiceManager(c)
-	s.startTestServices(c)
+	s.startTestServices(c, true)
 	defer s.stopTestServices(c)
 
 	// Ensure the ServiceManager's config reflects the plan config.
@@ -326,7 +327,7 @@ services:
 
 func (s *S) TestStopStartUpdatesConfig(c *C) {
 	s.setupDefaultServiceManager(c)
-	s.startTestServices(c)
+	s.startTestServices(c, true)
 	defer s.stopTestServices(c)
 
 	// Add a layer and override a couple of values.
@@ -342,7 +343,7 @@ services:
 
 	// Call Stop and Start and ensure the ServiceManager's config has updated.
 	s.stopTestServices(c)
-	s.startTestServices(c)
+	s.startTestServices(c, true)
 	config := s.manager.Config("test2")
 	c.Assert(config, NotNil)
 	c.Check(config.OnSuccess, Equals, plan.ActionIgnore)
@@ -393,10 +394,10 @@ func (s *S) TestCurrentUserGroup(c *C) {
 services:
     usrtest:
         override: replace
-        command: /bin/sh -c "id -n -u >%s; sync; touch %s; sleep %g"
+        command: /bin/sh -c "id -n -u >%s; sync; %s; sleep %g"
         user: %s
         group: %s
-`, outputPath, s.donePath, shortOkayDelay.Seconds()+0.01, current.Username, group.Name))
+`, outputPath, s.insertDoneCheck(c, "usrtest"), shortOkayDelay.Seconds()+0.01, current.Username, group.Name))
 	err = s.manager.AppendLayer(layer)
 	c.Assert(err, IsNil)
 
@@ -405,7 +406,7 @@ services:
 	c.Assert(chg.Err(), IsNil)
 	s.st.Unlock()
 
-	s.waitForDoneFile(c)
+	s.waitForDoneCheck(c, "usrtest")
 
 	output, err := ioutil.ReadFile(outputPath)
 	c.Assert(err, IsNil)
@@ -515,14 +516,14 @@ services:
     test1:
         startup: enabled
         override: replace
-        command: /bin/sh -c "echo test1 | tee -a %s; sleep 10"
+        command: /bin/sh -c "echo test1; %s; sleep 10"
         before:
             - test2
         requires:
             - test2
     test2:
         override: replace
-        command: /bin/sh -c "echo test2 | tee -a %s; sleep 10"
+        command: /bin/sh -c "echo test2; %s; sleep 10"
     test3:
         override: replace
         command: some-bad-command
@@ -534,7 +535,7 @@ services:
         command: /bin/sh -c "sleep 10"
         user: nobody
         group: nogroup
-`[1:], s.log, s.log)
+`[1:], s.insertDoneCheck(c, "test1"), s.insertDoneCheck(c, "test2"))
 	c.Assert(planYAML(c, s.manager), Equals, expected)
 }
 
@@ -825,11 +826,11 @@ func (s *S) TestEnvironment(c *C) {
 services:
     envtest:
         override: replace
-        command: /bin/sh -c "env | grep PEBBLE_ENV_TEST | sort > %s; sync; touch %s; sleep 10"
+        command: /bin/sh -c "env | grep PEBBLE_ENV_TEST | sort > %s; %s; sleep 10"
         environment:
             PEBBLE_ENV_TEST_1: foo
             PEBBLE_ENV_TEST_2: bar bazz
-`, logPath, s.donePath)
+`, logPath, s.insertDoneCheck(c, "envtest"))
 	layer := parseLayer(c, 0, "envlayer", layerYAML)
 	err := s.manager.AppendLayer(layer)
 	c.Assert(err, IsNil)
@@ -848,7 +849,7 @@ services:
 	c.Check(chg.Status(), Equals, state.DoneStatus, Commentf("Error: %v", chg.Err()))
 	s.st.Unlock()
 
-	s.waitForDoneFile(c)
+	s.waitForDoneCheck(c, "envtest")
 
 	// Ensure it read environment variables correctly
 	data, err := ioutil.ReadFile(logPath)
@@ -991,7 +992,7 @@ func (s *S) TestOnCheckFailureRestartWhileRunning(c *C) {
 services:
     test2:
         override: replace
-        command: /bin/sh -c 'echo x >>%s; sync; touch %s; sleep 1'
+        command: /bin/sh -c 'echo x >>%s; %s; sleep 1'
         backoff-delay: 50ms
         on-check-failure:
             chk1: restart
@@ -1003,14 +1004,14 @@ checks:
          threshold: 1
          exec:
              command: will-fail
-`, tempFile, s.donePath))
+`, tempFile, s.insertDoneCheck(c, "test2")))
 	err := s.manager.AppendLayer(layer)
 	c.Assert(err, IsNil)
 
 	// Start service and wait till it starts up (output file is written to)
 	s.startServices(c, []string{"test2"}, 1)
 
-	s.waitForDoneFile(c)
+	s.waitForDoneCheck(c, "test2")
 
 	b, err := ioutil.ReadFile(tempFile)
 	c.Assert(err, IsNil)
@@ -1036,7 +1037,7 @@ checks:
 		return svc.Current == servstate.StatusBackoff
 	})
 
-	s.waitForDoneFile(c)
+	s.waitForDoneCheck(c, "test2")
 
 	b, err = ioutil.ReadFile(tempFile)
 	c.Assert(err, IsNil)
@@ -1073,7 +1074,7 @@ func (s *S) TestOnCheckFailureRestartDuringBackoff(c *C) {
 services:
     test2:
         override: replace
-        command: /bin/sh -c 'echo x >>%s; sync; touch %s; sleep 0.075'
+        command: /bin/sh -c 'echo x >>%s; %s; sleep 0.075'
         backoff-delay: 50ms
         backoff-factor: 100  # ensure it only backoff-restarts once
         on-check-failure:
@@ -1086,14 +1087,14 @@ checks:
          threshold: 1
          exec:
              command: will-fail
-`, tempFile, s.donePath))
+`, tempFile, s.insertDoneCheck(c, "test2")))
 	err := s.manager.AppendLayer(layer)
 	c.Assert(err, IsNil)
 
 	// Start service and wait till it starts up (output file is written to)
 	s.startServices(c, []string{"test2"}, 1)
 
-	s.waitForDoneFile(c)
+	s.waitForDoneCheck(c, "test2")
 
 	b, err := ioutil.ReadFile(tempFile)
 	c.Assert(err, IsNil)
@@ -1106,7 +1107,7 @@ checks:
 
 	// Check failure should wait for current backoff (after which it will be restarted)
 
-	s.waitForDoneFile(c)
+	s.waitForDoneCheck(c, "test2")
 
 	b, err = ioutil.ReadFile(tempFile)
 	c.Assert(err, IsNil)
@@ -1144,7 +1145,7 @@ func (s *S) TestOnCheckFailureIgnore(c *C) {
 services:
     test2:
         override: replace
-        command: /bin/sh -c 'echo x >>%s; sync; touch %s; sleep 1'
+        command: /bin/sh -c 'echo x >>%s; %s; sleep 1'
         on-check-failure:
             chk1: ignore
 
@@ -1155,14 +1156,14 @@ checks:
          threshold: 1
          exec:
              command: will-fail
-`, tempFile, s.donePath))
+`, tempFile, s.insertDoneCheck(c, "test2")))
 	err := s.manager.AppendLayer(layer)
 	c.Assert(err, IsNil)
 
 	// Start service and wait till it starts up (output file is written to)
 	s.startServices(c, []string{"test2"}, 1)
 
-	s.waitForDoneFile(c)
+	s.waitForDoneCheck(c, "test2")
 
 	b, err := ioutil.ReadFile(tempFile)
 	c.Assert(err, IsNil)
@@ -1213,7 +1214,7 @@ func (s *S) TestOnCheckFailureShutdown(c *C) {
 services:
     test2:
         override: replace
-        command: /bin/sh -c 'echo x >>%s; sync; touch %s; sleep 1'
+        command: /bin/sh -c 'echo x >>%s; %s; sleep 1'
         on-check-failure:
             chk1: shutdown
 
@@ -1224,14 +1225,14 @@ checks:
          threshold: 1
          exec:
              command: will-fail
-`, tempFile, s.donePath))
+`, tempFile, s.insertDoneCheck(c, "test2")))
 	err := s.manager.AppendLayer(layer)
 	c.Assert(err, IsNil)
 
 	// Start service and wait till it starts up (output file is written to)
 	s.startServices(c, []string{"test2"}, 1)
 
-	s.waitForDoneFile(c)
+	s.waitForDoneCheck(c, "test2")
 
 	b, err := ioutil.ReadFile(tempFile)
 	c.Assert(err, IsNil)
@@ -1562,8 +1563,8 @@ func (s *S) TestNoWorkingDir(c *C) {
 services:
     nowrkdir:
         override: replace
-        command: /bin/sh -c "pwd >%s; sync; touch %s; sleep %g"
-`, outputPath, s.donePath, shortOkayDelay.Seconds()+0.01))
+        command: /bin/sh -c "pwd >%s; %s; sleep %g"
+`, outputPath, s.insertDoneCheck(c, "nowrkdir"), shortOkayDelay.Seconds()+0.01))
 	err = s.manager.AppendLayer(layer)
 	c.Assert(err, IsNil)
 
@@ -1574,7 +1575,7 @@ services:
 	c.Assert(chg.Err(), IsNil)
 	s.st.Unlock()
 
-	s.waitForDoneFile(c)
+	s.waitForDoneCheck(c, "nowrkdir")
 
 	output, err := ioutil.ReadFile(outputPath)
 	c.Assert(err, IsNil)
@@ -1593,9 +1594,9 @@ func (s *S) TestWorkingDir(c *C) {
 services:
     wrkdir:
         override: replace
-        command: /bin/sh -c "pwd >%s; sync; touch %s; sleep %g"
+        command: /bin/sh -c "pwd >%s; %s; sleep %g"
         working-dir: %s
-`, outputPath, s.donePath, shortOkayDelay.Seconds()+0.01, dir))
+`, outputPath, s.insertDoneCheck(c, "wrkdir"), shortOkayDelay.Seconds()+0.01, dir))
 	err = s.manager.AppendLayer(layer)
 	c.Assert(err, IsNil)
 
@@ -1604,7 +1605,7 @@ services:
 	c.Assert(chg.Err(), IsNil)
 	s.st.Unlock()
 
-	s.waitForDoneFile(c)
+	s.waitForDoneCheck(c, "wrkdir")
 
 	output, err := ioutil.ReadFile(outputPath)
 	c.Assert(err, IsNil)
@@ -1614,40 +1615,17 @@ services:
 // setupDefaultServiceManager provides a basic setup that can be used by many
 // of the unit tests without having to create a custom setup.
 func (s *S) setupDefaultServiceManager(c *C) {
-	s.dir = c.MkDir()
-	s.log = filepath.Join(s.dir, "log.txt")
-	os.Mkdir(filepath.Join(s.dir, "layers"), 0755)
-	data := fmt.Sprintf(planLayer1, s.log, s.log)
-	err := ioutil.WriteFile(filepath.Join(s.dir, "layers", "001-base.yaml"), []byte(data), 0644)
+	layers := filepath.Join(s.dir, "layers")
+	err := os.Mkdir(layers, 0755)
 	c.Assert(err, IsNil)
-	err = ioutil.WriteFile(filepath.Join(s.dir, "layers", "002-two.yaml"), []byte(planLayer2), 0644)
+	data := fmt.Sprintf(planLayer1, s.insertDoneCheck(c, "test1"), s.insertDoneCheck(c, "test2"))
+	err = ioutil.WriteFile(filepath.Join(layers, "001-base.yaml"), []byte(data), 0644)
+	c.Assert(err, IsNil)
+	err = ioutil.WriteFile(filepath.Join(layers, "002-two.yaml"), []byte(planLayer2), 0644)
 	c.Assert(err, IsNil)
 
 	s.manager, err = servstate.NewManager(s.st, s.runner, s.dir, s.logOutput, testRestarter{s.stopDaemon}, fakeLogManager{})
 	c.Assert(err, IsNil)
-}
-
-// Return on timeout or when the file appears. This is used to determine
-// when the expected service output is actually available, not when the
-// service starts to run.
-func (s *S) waitForDoneFile(c *C) {
-	timeout := time.After(10 * time.Second)
-	ticker := time.NewTicker(time.Millisecond)
-	for {
-		select {
-		case <-timeout:
-			c.Fatal("timeout waiting for service output")
-
-		case <-ticker.C:
-			stat, err := os.Stat(s.donePath)
-			if err == nil && stat.Mode().IsRegular() {
-				// Delete it so we can reuse this feature
-				// in the same test.
-				os.Remove(s.donePath)
-				return
-			}
-		}
-	}
 }
 
 // Make sure services are all stopped before the next test starts.
@@ -1691,18 +1669,6 @@ func (r testRestarter) HandleRestart(t restart.RestartType) {
 	close(r.ch)
 }
 
-func (s *S) assertLog(c *C, expected string) {
-	s.logBufferMut.Lock()
-	defer s.logBufferMut.Unlock()
-	data, err := ioutil.ReadFile(s.log)
-	if os.IsNotExist(err) {
-		c.Fatal("Services have not run")
-	}
-	c.Assert(err, IsNil)
-	c.Assert(string(data), Matches, "(?s)"+expected)
-	c.Assert(s.logBuffer.String(), Matches, "(?s)"+expected)
-}
-
 func (s *S) logBufferString() string {
 	s.logBufferMut.Lock()
 	defer s.logBufferMut.Unlock()
@@ -1712,7 +1678,7 @@ func (s *S) logBufferString() string {
 }
 
 func (s *S) testServiceLogs(c *C, outputs map[string]string) {
-	s.startTestServices(c)
+	s.startTestServices(c, true)
 
 	if c.Failed() {
 		return
@@ -1780,16 +1746,25 @@ func (s *S) serviceByName(c *C, name string) *servstate.ServiceInfo {
 	return services[0]
 }
 
-func (s *S) startTestServices(c *C) {
+func (s *S) startTestServices(c *C, logCheck bool) {
 	chg := s.startServices(c, []string{"test1", "test2"}, 2)
 	s.st.Lock()
 	c.Check(chg.Status(), Equals, state.DoneStatus, Commentf("Error: %v", chg.Err()))
 	s.st.Unlock()
 
-	s.assertLog(c, ".*test1\n.*test2\n")
-
 	cmds := s.manager.RunningCmds()
 	c.Check(cmds, HasLen, 2)
+
+	// When this helper is used for testing idempotence
+	// the services are not actually started unless they
+	// they are not running. In this case we have to disable
+	// the log checks, as no new entries are expected.
+	if logCheck {
+		s.waitForDoneCheck(c, "test1")
+		s.waitForDoneCheck(c, "test2")
+
+		c.Assert(s.logBufferString(), Matches, "(?s).*test1\n.*test2\n")
+	}
 }
 
 func (s *S) stopTestServices(c *C) {
@@ -1894,4 +1869,33 @@ type fakeLogManager struct{}
 
 func (f fakeLogManager) ServiceStarted(serviceName string, logs *servicelog.RingBuffer) {
 	// no-op
+}
+
+func (s *S) insertDoneCheck(c *C, service string) string {
+	return fmt.Sprintf("sync; touch %s", filepath.Join(s.dir, service))
+}
+
+// Return on timeout or when the file appears. This is used to determine
+// when the expected service output is actually available, not when the
+// service starts to run.
+func (s *S) waitForDoneCheck(c *C, service string) {
+	timeout := time.After(10 * time.Second)
+	ticker := time.NewTicker(time.Millisecond)
+	donePath := filepath.Join(s.dir, service)
+	for {
+		select {
+		case <-timeout:
+			c.Fatal("timeout waiting for service output")
+
+		case <-ticker.C:
+			stat, err := os.Stat(donePath)
+			if err == nil && stat.Mode().IsRegular() {
+				// Delete it so we can reuse this feature
+				// in the same test once a service gets
+				// restarted.
+				os.Remove(donePath)
+				return
+			}
+		}
+	}
 }
