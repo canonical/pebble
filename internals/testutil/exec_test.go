@@ -21,11 +21,23 @@ import (
 	"path/filepath"
 
 	"gopkg.in/check.v1"
+
+	"github.com/canonical/pebble/internals/reaper"
 )
 
 type fakeCommandSuite struct{}
 
 var _ = check.Suite(&fakeCommandSuite{})
+
+func (s *fakeCommandSuite) SetUpSuite(c *check.C) {
+	err := reaper.Start()
+	c.Assert(err, check.IsNil)
+}
+
+func (s *fakeCommandSuite) TearDownSuite(c *check.C) {
+	err := reaper.Stop()
+	c.Assert(err, check.IsNil)
+}
 
 func (s *fakeCommandSuite) TestFakeCommand(c *check.C) {
 	fake := FakeCommand(c, "cmd", "true", false)
@@ -44,6 +56,13 @@ func (s *fakeCommandSuite) TestFakeCommand(c *check.C) {
 		{"cmd", "third-run", "--arg1", "arg2", ""},
 		{"cmd", "forth-run", "--arg1", "arg2", "", "a %s"},
 	})
+}
+
+func (s *fakeCommandSuite) TestFakeCommandWithReaper(c *check.C) {
+	fake := FakeCommand(c, "cmd", "true", true)
+	defer fake.Restore()
+	err := exec.Command("cmd", "").Run()
+	c.Assert(err, check.IsNil)
 }
 
 func (s *fakeCommandSuite) TestFakeCommandAlso(c *check.C) {
