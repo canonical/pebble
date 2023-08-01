@@ -36,8 +36,8 @@ type waitMixin struct {
 	skipAbort bool
 }
 
-var waitDescs = map[string]string{
-	"no-wait": "Do not wait for the operation to finish but just print the change id.",
+var waitArgsHelp = map[string]string{
+	"--no-wait": "Do not wait for the operation to finish but just print the change id.",
 }
 
 var noWait = errors.New("no wait for op")

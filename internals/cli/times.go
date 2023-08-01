@@ -15,10 +15,7 @@
 package cli
 
 import (
-	"strings"
 	"time"
-
-	"github.com/canonical/x-go/strutil/quantity"
 
 	"github.com/canonical/pebble/internals/timeutil"
 )
@@ -29,8 +26,8 @@ type timeMixin struct {
 	AbsTime bool `long:"abs-time"`
 }
 
-var timeDescs = map[string]string{
-	"abs-time": "Display absolute times (in RFC 3339 format). Otherwise, display relative times up to 60 days, then YYYY-MM-DD.",
+var timeArgsHelp = map[string]string{
+	"--abs-time": "Display absolute times (in RFC 3339 format). Otherwise, display relative times up to 60 days, then YYYY-MM-DD.",
 }
 
 func (mx timeMixin) fmtTime(t time.Time) string {
@@ -38,19 +35,4 @@ func (mx timeMixin) fmtTime(t time.Time) string {
 		return t.Format(time.RFC3339)
 	}
 	return timeutilHuman(t)
-}
-
-type durationMixin struct {
-	AbsTime bool `long:"abs-time"`
-}
-
-var durationDescs = map[string]string{
-	"abs-time": "Display absolute times (in RFC 3339 format). Otherwise, display short relative times.",
-}
-
-func (mx durationMixin) fmtDuration(t time.Time) string {
-	if mx.AbsTime {
-		return t.Format(time.RFC3339)
-	}
-	return strings.TrimSpace(quantity.FormatDuration(time.Since(t).Seconds()))
 }
