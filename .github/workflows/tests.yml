@@ -12,10 +12,8 @@ jobs:
 
     strategy:
       fail-fast: false
-      matrix:
-        go: ['1.20', '1.19', '1.18', '1.17']
 
-    name: Go ${{ matrix.go }}
+    name: Go unit tests
 
     steps:
     - uses: actions/checkout@v3
@@ -23,7 +21,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v3
       with:
-        go-version: ${{ matrix.go }}
+        go-version-file: 'go.mod'
 
     - name: Test and build
       run: |
