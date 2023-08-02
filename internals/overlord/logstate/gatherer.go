@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/canonical/pebble/internals/logger"
 	"gopkg.in/tomb.v2"
 
 	"github.com/canonical/pebble/internals/plan"
@@ -167,13 +168,13 @@ mainLoop:
 			// Timeout - flush
 			err := g.client.Flush(g.clientCtx)
 			if err != nil {
-				return fmt.Errorf("sending logs to target %q: %v", g.targetName, err)
+				logger.Noticef("sending logs to target %q: %v", g.targetName, err)
 			}
 
 		case entry := <-g.entryCh:
 			err := g.client.Write(g.clientCtx, entry)
 			if err != nil {
-				return fmt.Errorf("writing logs to target %q: %v", g.targetName, err)
+				logger.Noticef("writing logs to target %q: %v", g.targetName, err)
 			}
 		}
 	}
@@ -183,7 +184,7 @@ mainLoop:
 	defer cancel()
 	err := g.client.Flush(ctx)
 	if err != nil {
-		return fmt.Errorf("sending logs to target %q: %v", g.targetName, err)
+		logger.Noticef("sending logs to target %q: %v", g.targetName, err)
 	}
 	return nil
 }
