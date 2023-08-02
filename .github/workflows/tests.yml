@@ -12,16 +12,17 @@ jobs:
 
     strategy:
       fail-fast: false
+      matrix:
+        go: ['1.20']
 
-    name: Go unit tests
-
+    name: Go ${{ matrix.go }}
     steps:
     - uses: actions/checkout@v3
 
     - name: Set up Go
-      uses: actions/setup-go@v3
+      uses: actions/setup-go@v4
       with:
-        go-version-file: 'go.mod'
+        go-version: ${{ matrix.go }}
 
     - name: Test and build
       run: |
@@ -32,14 +33,13 @@ jobs:
     runs-on: ubuntu-latest
 
     name: Root Tests
-
     steps:
     - uses: actions/checkout@v3
 
     - name: Set up Go
-      uses: actions/setup-go@v3
+      uses: actions/setup-go@v4
       with:
-        go-version-file: 'go.mod'
+        go-version: ${{ matrix.go }}
 
     - name: Test
       run: |
@@ -55,12 +55,11 @@ jobs:
     runs-on: ubuntu-latest
 
     name: Format check
-
     steps:
     - uses: actions/checkout@v3
 
     - name: Set up Go
-      uses: actions/setup-go@v3
+      uses: actions/setup-go@v4
       with:
         go-version-file: 'go.mod'
 
