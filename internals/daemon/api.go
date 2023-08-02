@@ -24,7 +24,7 @@ import (
 	"github.com/canonical/pebble/internals/overlord/state"
 )
 
-var Api = []*Command{{
+var API = []*Command{{
 	// See daemon.go:canAccess for details how the access is controlled.
 	Path:    "/v1/system-info",
 	GuestOK: true,

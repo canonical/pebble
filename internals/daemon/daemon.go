@@ -405,7 +405,7 @@ func (d *Daemon) SetDegradedMode(err error) {
 func (d *Daemon) addRoutes() {
 	d.router = mux.NewRouter()
 
-	for _, c := range Api {
+	for _, c := range API {
 		c.d = d
 		if c.PathPrefix == "" {
 			d.router.Handle(c.Path, c).Name(c.Path)

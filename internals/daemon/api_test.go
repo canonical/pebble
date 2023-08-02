@@ -64,7 +64,7 @@ func (s *apiSuite) daemon(c *check.C) *Daemon {
 }
 
 func apiCmd(path string) *Command {
-	for _, cmd := range Api {
+	for _, cmd := range API {
 		if cmd.Path == path {
 			return cmd
 		}
