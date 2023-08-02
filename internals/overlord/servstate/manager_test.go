@@ -976,6 +976,11 @@ services:
 	})
 }
 
+// The aim of this test is to make sure that the actioned check
+// failure terminates the service, after which it will first go
+// to back-off state and then finally starts again (only once).
+// Since the check always fail, it should only ever send an action
+// once.
 func (s *S) TestOnCheckFailureRestartWhileRunning(c *C) {
 	s.setupDefaultServiceManager(c)
 	// Create check manager and tell it about plan updates
@@ -984,7 +989,16 @@ func (s *S) TestOnCheckFailureRestartWhileRunning(c *C) {
 	s.manager.NotifyPlanChanged(checkMgr.PlanChanged)
 
 	// Tell service manager about check failures
-	checkMgr.NotifyCheckFailed(s.manager.CheckFailed)
+	checkFailed := make(chan struct{})
+	checkMgr.NotifyCheckFailed(func(name string) {
+		// Control when the action should be applied
+		select {
+		case checkFailed <- struct{}{}:
+		case <-time.After(10 * time.Second):
+			panic("timed out waiting to send on check-failed channel")
+		}
+		s.manager.CheckFailed(name)
+	})
 
 	tempDir := c.MkDir()
 	tempFile := filepath.Join(tempDir, "out")
@@ -992,15 +1006,15 @@ func (s *S) TestOnCheckFailureRestartWhileRunning(c *C) {
 services:
     test2:
         override: replace
-        command: /bin/sh -c 'echo x >>%s; %s; sleep 1'
-        backoff-delay: 50ms
+        command: /bin/sh -c 'echo x >>%s; %s; sleep 10'
+        backoff-delay: 100ms
         on-check-failure:
             chk1: restart
 
 checks:
     chk1:
          override: replace
-         period: 75ms  # a bit longer than shortOkayDelay
+         period: 100ms
          threshold: 1
          exec:
              command: will-fail
@@ -1008,7 +1022,7 @@ checks:
 	err := s.manager.AppendLayer(layer)
 	c.Assert(err, IsNil)
 
-	// Start service and wait till it starts up (output file is written to)
+	// Start service and wait till it starts up
 	s.startServices(c, []string{"test2"}, 1)
 
 	s.waitForDoneCheck(c, "test2")
@@ -1018,19 +1032,17 @@ checks:
 	c.Assert(string(b), Equals, "x\n")
 
 	// Now wait till check happens (it will-fail)
-	for i := 0; ; i++ {
-		if i >= 100 {
-			c.Fatalf("failed waiting for check to fail")
-		}
-		checks, err := checkMgr.Checks()
-		c.Assert(err, IsNil)
-		if len(checks) == 1 && checks[0].Status != checkstate.CheckStatusUp {
-			c.Assert(checks[0].Failures, Equals, 1)
-			c.Assert(checks[0].LastError, Matches, ".* executable file not found .*")
-			break
-		}
-		time.Sleep(5 * time.Millisecond)
+	select {
+	case <-checkFailed:
+	case <-time.After(10 * time.Second):
+		c.Fatalf("timed out waiting for check failure to arrive")
 	}
+	checks, err := checkMgr.Checks()
+	c.Assert(err, IsNil)
+	c.Assert(len(checks), Equals, 1)
+	c.Assert(checks[0].Status, Equals, checkstate.CheckStatusDown)
+	c.Assert(checks[0].Failures, Equals, 1)
+	c.Assert(checks[0].LastError, Matches, ".* executable file not found .*")
 
 	// Check failure should terminate process, backoff, and restart it, so wait for that
 	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
@@ -1044,11 +1056,11 @@ checks:
 	c.Assert(string(b), Equals, "x\nx\n")
 
 	// Shouldn't be restarted again
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(125 * time.Millisecond)
 	b, err = ioutil.ReadFile(tempFile)
 	c.Assert(err, IsNil)
 	c.Assert(string(b), Equals, "x\nx\n")
-	checks, err := checkMgr.Checks()
+	checks, err = checkMgr.Checks()
 	c.Assert(err, IsNil)
 	c.Assert(len(checks), Equals, 1)
 	c.Assert(checks[0].Status, Equals, checkstate.CheckStatusDown)
@@ -1058,6 +1070,11 @@ checks:
 	c.Assert(s.manager.BackoffNum("test2"), Equals, 1)
 }
 
+// The aim of this test is to make sure that the actioned check
+// failure occurring during service back-off has no effect on
+// on that service. The service is expected to restart by itself
+// (due to back-off). Since the check always fail, it should only
+// ever send an action once.
 func (s *S) TestOnCheckFailureRestartDuringBackoff(c *C) {
 	s.setupDefaultServiceManager(c)
 	// Create check manager and tell it about plan updates
@@ -1066,7 +1083,16 @@ func (s *S) TestOnCheckFailureRestartDuringBackoff(c *C) {
 	s.manager.NotifyPlanChanged(checkMgr.PlanChanged)
 
 	// Tell service manager about check failures
-	checkMgr.NotifyCheckFailed(s.manager.CheckFailed)
+	checkFailed := make(chan struct{})
+	checkMgr.NotifyCheckFailed(func(name string) {
+		// Control when the action should be applied
+		select {
+		case checkFailed <- struct{}{}:
+		case <-time.After(10 * time.Second):
+			panic("timed out waiting to send on check-failed channel")
+		}
+		s.manager.CheckFailed(name)
+	})
 
 	tempDir := c.MkDir()
 	tempFile := filepath.Join(tempDir, "out")
@@ -1074,8 +1100,8 @@ func (s *S) TestOnCheckFailureRestartDuringBackoff(c *C) {
 services:
     test2:
         override: replace
-        command: /bin/sh -c 'echo x >>%s; %s; sleep 0.075'
-        backoff-delay: 50ms
+        command: /bin/sh -c 'echo x >>%s; %s; sleep 0.1'
+        backoff-delay: 100ms
         backoff-factor: 100  # ensure it only backoff-restarts once
         on-check-failure:
             chk1: restart
@@ -1091,7 +1117,7 @@ checks:
 	err := s.manager.AppendLayer(layer)
 	c.Assert(err, IsNil)
 
-	// Start service and wait till it starts up (output file is written to)
+	// Start service and wait till it starts up
 	s.startServices(c, []string{"test2"}, 1)
 
 	s.waitForDoneCheck(c, "test2")
@@ -1105,7 +1131,12 @@ checks:
 		return svc.Current == servstate.StatusBackoff
 	})
 
-	// Check failure should wait for current backoff (after which it will be restarted)
+	// Now wait till check happens (it will-fail)
+	select {
+	case <-checkFailed:
+	case <-time.After(10 * time.Second):
+		c.Fatalf("timed out waiting for check failure to arrive")
+	}
 
 	s.waitForDoneCheck(c, "test2")
 
@@ -1129,6 +1160,10 @@ checks:
 	c.Assert(checks[0].LastError, Matches, ".* executable file not found .*")
 }
 
+// The aim of this test is to make sure that the actioned check
+// failure is ignored, and as a result the service keeps on
+// running. Since the check always fail, it should only ever
+// send an action once.
 func (s *S) TestOnCheckFailureIgnore(c *C) {
 	s.setupDefaultServiceManager(c)
 	// Create check manager and tell it about plan updates
@@ -1137,7 +1172,16 @@ func (s *S) TestOnCheckFailureIgnore(c *C) {
 	s.manager.NotifyPlanChanged(checkMgr.PlanChanged)
 
 	// Tell service manager about check failures
-	checkMgr.NotifyCheckFailed(s.manager.CheckFailed)
+	checkFailed := make(chan struct{})
+	checkMgr.NotifyCheckFailed(func(name string) {
+		// Control when the action should be applied
+		select {
+		case checkFailed <- struct{}{}:
+		case <-time.After(10 * time.Second):
+			panic("timed out waiting to send on check-failed channel")
+		}
+		s.manager.CheckFailed(name)
+	})
 
 	tempDir := c.MkDir()
 	tempFile := filepath.Join(tempDir, "out")
@@ -1145,14 +1189,14 @@ func (s *S) TestOnCheckFailureIgnore(c *C) {
 services:
     test2:
         override: replace
-        command: /bin/sh -c 'echo x >>%s; %s; sleep 1'
+        command: /bin/sh -c 'echo x >>%s; %s; sleep 10'
         on-check-failure:
             chk1: ignore
 
 checks:
     chk1:
          override: replace
-         period: 75ms  # a bit longer than shortOkayDelay
+         period: 100ms
          threshold: 1
          exec:
              command: will-fail
@@ -1170,26 +1214,24 @@ checks:
 	c.Assert(string(b), Equals, "x\n")
 
 	// Now wait till check happens (it will-fail)
-	for i := 0; ; i++ {
-		if i >= 100 {
-			c.Fatalf("failed waiting for check to fail")
-		}
-		checks, err := checkMgr.Checks()
-		c.Assert(err, IsNil)
-		if len(checks) == 1 && checks[0].Status != checkstate.CheckStatusUp {
-			c.Assert(checks[0].Failures, Equals, 1)
-			c.Assert(checks[0].LastError, Matches, ".* executable file not found .*")
-			break
-		}
-		time.Sleep(5 * time.Millisecond)
+	select {
+	case <-checkFailed:
+	case <-time.After(10 * time.Second):
+		c.Fatalf("timed out waiting for check failure to arrive")
 	}
+	checks, err := checkMgr.Checks()
+	c.Assert(err, IsNil)
+	c.Assert(len(checks), Equals, 1)
+	c.Assert(checks[0].Status, Equals, checkstate.CheckStatusDown)
+	c.Assert(checks[0].Failures, Equals, 1)
+	c.Assert(checks[0].LastError, Matches, ".* executable file not found .*")
 
 	// Service shouldn't have been restarted
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(125 * time.Millisecond)
 	b, err = ioutil.ReadFile(tempFile)
 	c.Assert(err, IsNil)
 	c.Assert(string(b), Equals, "x\n")
-	checks, err := checkMgr.Checks()
+	checks, err = checkMgr.Checks()
 	c.Assert(err, IsNil)
 	c.Assert(len(checks), Equals, 1)
 	c.Assert(checks[0].Status, Equals, checkstate.CheckStatusDown)
@@ -1206,7 +1248,16 @@ func (s *S) TestOnCheckFailureShutdown(c *C) {
 	s.manager.NotifyPlanChanged(checkMgr.PlanChanged)
 
 	// Tell service manager about check failures
-	checkMgr.NotifyCheckFailed(s.manager.CheckFailed)
+	checkFailed := make(chan struct{})
+	checkMgr.NotifyCheckFailed(func(name string) {
+		// Control when the action should be applied
+		select {
+		case checkFailed <- struct{}{}:
+		case <-time.After(10 * time.Second):
+			panic("timed out waiting to send on check-failed channel")
+		}
+		s.manager.CheckFailed(name)
+	})
 
 	tempDir := c.MkDir()
 	tempFile := filepath.Join(tempDir, "out")
@@ -1214,14 +1265,14 @@ func (s *S) TestOnCheckFailureShutdown(c *C) {
 services:
     test2:
         override: replace
-        command: /bin/sh -c 'echo x >>%s; %s; sleep 1'
+        command: /bin/sh -c 'echo x >>%s; %s; sleep 10'
         on-check-failure:
             chk1: shutdown
 
 checks:
     chk1:
          override: replace
-         period: 75ms  # a bit longer than shortOkayDelay
+         period: 100ms
          threshold: 1
          exec:
              command: will-fail
@@ -1239,19 +1290,17 @@ checks:
 	c.Assert(string(b), Equals, "x\n")
 
 	// Now wait till check happens (it will-fail)
-	for i := 0; ; i++ {
-		if i >= 100 {
-			c.Fatalf("failed waiting for check to fail")
-		}
-		checks, err := checkMgr.Checks()
-		c.Assert(err, IsNil)
-		if len(checks) == 1 && checks[0].Status != checkstate.CheckStatusUp {
-			c.Assert(checks[0].Failures, Equals, 1)
-			c.Assert(checks[0].LastError, Matches, ".* executable file not found .*")
-			break
-		}
-		time.Sleep(5 * time.Millisecond)
+	select {
+	case <-checkFailed:
+	case <-time.After(10 * time.Second):
+		c.Fatalf("timed out waiting for check failure to arrive")
 	}
+	checks, err := checkMgr.Checks()
+	c.Assert(err, IsNil)
+	c.Assert(len(checks), Equals, 1)
+	c.Assert(checks[0].Status, Equals, checkstate.CheckStatusDown)
+	c.Assert(checks[0].Failures, Equals, 1)
+	c.Assert(checks[0].LastError, Matches, ".* executable file not found .*")
 
 	// It should have closed the stopDaemon channel.
 	select {
