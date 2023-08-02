@@ -19,9 +19,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/canonical/pebble/internals/logger"
 	"gopkg.in/tomb.v2"
 
+	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/plan"
 	"github.com/canonical/pebble/internals/servicelog"
 )
