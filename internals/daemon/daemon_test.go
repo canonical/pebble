@@ -98,7 +98,7 @@ func (h *fakeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.lastMethod = r.Method
 }
 
-func (s *daemonSuite) TestRegisterCommand(c *C) {
+func (s *daemonSuite) TestAddCommand(c *C) {
 	const endpoint = "/v1/addedendpoint"
 	var handler fakeHandler
 	getCallback := func(c *Command, r *http.Request, s *UserState) Response {
