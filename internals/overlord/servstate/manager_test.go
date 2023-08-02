@@ -989,13 +989,13 @@ func (s *S) TestOnCheckFailureRestartWhileRunning(c *C) {
 	s.manager.NotifyPlanChanged(checkMgr.PlanChanged)
 
 	// Tell service manager about check failures
-	checkFailed := make(chan int)
+	checkFailed := make(chan struct{})
 	checkMgr.NotifyCheckFailed(func(name string) {
 		// Control when the action should be applied
 		select {
-		case checkFailed <- 1:
+		case checkFailed <- struct{}{}:
 		case <-time.After(10 * time.Second):
-			panic("this test is broken")
+			panic("timed out waiting to send on check-failed channel")
 		}
 		s.manager.CheckFailed(name)
 	})
@@ -1083,13 +1083,13 @@ func (s *S) TestOnCheckFailureRestartDuringBackoff(c *C) {
 	s.manager.NotifyPlanChanged(checkMgr.PlanChanged)
 
 	// Tell service manager about check failures
-	checkFailed := make(chan int)
+	checkFailed := make(chan struct{})
 	checkMgr.NotifyCheckFailed(func(name string) {
 		// Control when the action should be applied
 		select {
-		case checkFailed <- 1:
+		case checkFailed <- struct{}{}:
 		case <-time.After(10 * time.Second):
-			panic("this test is broken")
+			panic("timed out waiting to send on check-failed channel")
 		}
 		s.manager.CheckFailed(name)
 	})
@@ -1172,13 +1172,13 @@ func (s *S) TestOnCheckFailureIgnore(c *C) {
 	s.manager.NotifyPlanChanged(checkMgr.PlanChanged)
 
 	// Tell service manager about check failures
-	checkFailed := make(chan int)
+	checkFailed := make(chan struct{})
 	checkMgr.NotifyCheckFailed(func(name string) {
 		// Control when the action should be applied
 		select {
-		case checkFailed <- 1:
+		case checkFailed <- struct{}{}:
 		case <-time.After(10 * time.Second):
-			panic("this test is broken")
+			panic("timed out waiting to send on check-failed channel")
 		}
 		s.manager.CheckFailed(name)
 	})
@@ -1248,13 +1248,13 @@ func (s *S) TestOnCheckFailureShutdown(c *C) {
 	s.manager.NotifyPlanChanged(checkMgr.PlanChanged)
 
 	// Tell service manager about check failures
-	checkFailed := make(chan int)
+	checkFailed := make(chan struct{})
 	checkMgr.NotifyCheckFailed(func(name string) {
 		// Control when the action should be applied
 		select {
-		case checkFailed <- 1:
+		case checkFailed <- struct{}{}:
 		case <-time.After(10 * time.Second):
-			panic("this test is broken")
+			panic("timed out waiting to send on check-failed channel")
 		}
 		s.manager.CheckFailed(name)
 	})
