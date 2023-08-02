@@ -1551,12 +1551,6 @@ func (s *S) TestStopRunningNoServices(c *C) {
 	c.Assert(taskSet, IsNil)
 }
 
-type fakeLogManager struct{}
-
-func (f fakeLogManager) ServiceStarted(service *plan.Service, logs *servicelog.RingBuffer) {
-	// no-op
-}
-
 func (s *S) TestNoWorkingDir(c *C) {
 	dir := c.MkDir()
 	err := os.Mkdir(filepath.Join(dir, "layers"), 0755)
@@ -1873,7 +1867,7 @@ func createZombie() error {
 
 type fakeLogManager struct{}
 
-func (f fakeLogManager) ServiceStarted(serviceName string, logs *servicelog.RingBuffer) {
+func (f fakeLogManager) ServiceStarted(service *plan.Service, logs *servicelog.RingBuffer) {
 	// no-op
 }
 
