@@ -110,7 +110,9 @@ func (s *daemonSuite) TestAddCommand(c *C) {
 		GuestOK: true,
 		GET:     getCallback,
 	}
+
 	API = append(API, &command)
+	defer func() { API = API[:len(API)-1] }()
 
 	d := s.newDaemon(c)
 	d.Init()
