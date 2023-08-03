@@ -20,15 +20,24 @@ import (
 	"github.com/canonical/pebble/client"
 )
 
+var cmdPlanSummary = "Show the plan with layers combined"
+var cmdPlanDescription = `
+The plan command prints out the effective configuration of pebble in YAML
+format. Layers are combined according to the override rules defined in them.
+`
+
 type cmdPlan struct {
 	clientMixin
 }
 
-var shortPlanHelp = "Show the plan with layers combined"
-var longPlanHelp = `
-The plan command prints out the effective configuration of pebble in YAML
-format. Layers are combined according to the override rules defined in them.
-`
+func init() {
+	AddCommand(&CmdInfo{
+		Name:        "plan",
+		Summary:     cmdPlanSummary,
+		Description: cmdPlanDescription,
+		Builder:     func() flags.Commander { return &cmdPlan{} },
+	})
+}
 
 func (cmd *cmdPlan) Execute(args []string) error {
 	if len(args) > 0 {
@@ -40,8 +49,4 @@ func (cmd *cmdPlan) Execute(args []string) error {
 	}
 	Stdout.Write(planYAML)
 	return nil
-}
-
-func init() {
-	addCommand("plan", shortPlanHelp, longPlanHelp, func() flags.Commander { return &cmdPlan{} }, nil, nil)
 }

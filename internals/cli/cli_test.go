@@ -11,7 +11,6 @@ import (
 	"testing"
 
 	"golang.org/x/crypto/ssh/terminal"
-
 	. "gopkg.in/check.v1"
 
 	"github.com/canonical/pebble/cmd"

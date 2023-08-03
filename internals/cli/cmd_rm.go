@@ -20,24 +20,30 @@ import (
 	"github.com/canonical/pebble/client"
 )
 
+const cmdRmSummary = "Remove a file or directory"
+const cmdRmDescription = `
+The rm command removes a file or directory.
+`
+
 type cmdRm struct {
 	clientMixin
-
-	Recursive bool `short:"r"`
-
+	Recursive  bool `short:"r"`
 	Positional struct {
 		Path string `positional-arg-name:"<path>"`
 	} `positional-args:"yes" required:"yes"`
 }
 
-var rmDescs = map[string]string{
-	"r": "Remove all files and directories recursively in the specified path",
+func init() {
+	AddCommand(&CmdInfo{
+		Name:        "rm",
+		Summary:     cmdRmSummary,
+		Description: cmdRmDescription,
+		ArgsHelp: map[string]string{
+			"-r": "Remove all files and directories recursively in the specified path",
+		},
+		Builder: func() flags.Commander { return &cmdRm{} },
+	})
 }
-
-var shortRmHelp = "Remove a file or directory."
-var longRmHelp = `
-The rm command removes a file or directory.
-`
 
 func (cmd *cmdRm) Execute(args []string) error {
 	if len(args) > 0 {
@@ -48,8 +54,4 @@ func (cmd *cmdRm) Execute(args []string) error {
 		Path:      cmd.Positional.Path,
 		Recursive: cmd.Recursive,
 	})
-}
-
-func init() {
-	addCommand("rm", shortRmHelp, longRmHelp, func() flags.Commander { return &cmdRm{} }, rmDescs, nil)
 }

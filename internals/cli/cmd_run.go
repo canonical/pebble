@@ -31,8 +31,8 @@ import (
 	"github.com/canonical/pebble/internals/systemd"
 )
 
-var shortRunHelp = "Run the pebble environment"
-var longRunHelp = `
+const cmdRunSummary = "Run the pebble environment"
+const cmdRunDescription = `
 The run command starts pebble and runs the configured environment.
 
 Additional arguments may be provided to the service command with the --args option, which
@@ -51,12 +51,12 @@ type sharedRunEnterOpts struct {
 	Args       [][]string `long:"args" terminator:";"`
 }
 
-var sharedRunEnterOptsHelp = map[string]string{
-	"create-dirs": "Create pebble directory on startup if it doesn't exist",
-	"hold":        "Do not start default services automatically",
-	"http":        `Start HTTP API listening on this address (e.g., ":4000")`,
-	"verbose":     "Log all output from services to stdout",
-	"args":        `Provide additional arguments to a service`,
+var sharedRunEnterArgsHelp = map[string]string{
+	"--create-dirs": "Create pebble directory on startup if it doesn't exist",
+	"--hold":        "Do not start default services automatically",
+	"--http":        `Start HTTP API listening on this address (e.g., ":4000")`,
+	"--verbose":     "Log all output from services to stdout",
+	"--args":        `Provide additional arguments to a service`,
 }
 
 type cmdRun struct {
@@ -65,8 +65,13 @@ type cmdRun struct {
 }
 
 func init() {
-	addCommand("run", shortRunHelp, longRunHelp, func() flags.Commander { return &cmdRun{} },
-		sharedRunEnterOptsHelp, nil)
+	AddCommand(&CmdInfo{
+		Name:        "run",
+		Summary:     cmdRunSummary,
+		Description: cmdRunDescription,
+		ArgsHelp:    sharedRunEnterArgsHelp,
+		Builder:     func() flags.Commander { return &cmdRun{} },
+	})
 }
 
 func (rcmd *cmdRun) Execute(args []string) error {

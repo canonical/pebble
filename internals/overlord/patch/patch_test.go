@@ -24,10 +24,10 @@ import (
 	"sort"
 	"testing"
 
+	. "gopkg.in/check.v1"
+
 	"github.com/canonical/pebble/internals/overlord/patch"
 	"github.com/canonical/pebble/internals/overlord/state"
-
-	. "gopkg.in/check.v1"
 )
 
 func Test(t *testing.T) { TestingT(t) }

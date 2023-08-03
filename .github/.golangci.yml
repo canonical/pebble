@@ -1,0 +1,14 @@
+linters:
+  disable-all: true
+  enable:
+    - gci
+linters-settings:
+  gci:
+    sections:
+      - standard
+      - default
+      - Prefix(github.com/canonical/pebble)
+issues:
+  # these values ensure that all issues will be surfaced
+  max-issues-per-linter: 0
+  max-same-issues: 0

@@ -14,12 +14,12 @@
 
 package cli
 
-type cmdDebug struct{}
-
-var shortDebugHelp = "Run debug commands"
-var longDebugHelp = `
+var cmdDebugSummary = "Run debug commands"
+var cmdDebugDescription = `
 The debug command contains a selection of additional sub-commands.
 
 Debug commands can be removed without notice and may not work on
 non-development systems.
 `
+
+type cmdDebug struct{}
