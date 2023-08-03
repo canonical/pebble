@@ -63,7 +63,7 @@ type pullerGroup struct {
 	// Common context for all pullers. Each puller uses a derived context so we
 	// can easily kill all pullers (if required) during teardown.
 	ctx context.Context
-	// Cancel func for pullersCtx
+	// Cancel func for ctx
 	kill context.CancelFunc
 	// WaitGroup for pullers - we use this during teardown to know when all the
 	// pullers are finished.
