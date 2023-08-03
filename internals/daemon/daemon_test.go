@@ -54,6 +54,7 @@ type daemonSuite struct {
 	err             error
 	notified        []string
 	restoreBackends func()
+	savedAPI        []*Command
 }
 
 var _ = Suite(&daemonSuite{})
@@ -67,9 +68,15 @@ func (s *daemonSuite) SetUpTest(c *C) {
 		s.notified = append(s.notified, notif)
 		return nil
 	}
+	if s.savedAPI == nil {
+		s.savedAPI = make([]*Command, len(API))
+		copy(s.savedAPI, API)
+	}
 }
 
 func (s *daemonSuite) TearDownTest(c *C) {
+	copy(API, s.savedAPI)
+	API = API[:len(s.savedAPI)]
 	systemdSdNotify = systemd.SdNotify
 	s.notified = nil
 	s.authorized = false
@@ -111,9 +118,7 @@ func (s *daemonSuite) TestAddCommand(c *C) {
 		GuestOK: true,
 		GET:     getCallback,
 	}
-
 	API = append(API, &command)
-	defer func() { API = API[:len(API)-1] }()
 
 	d := s.newDaemon(c)
 	d.Init()
