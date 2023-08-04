@@ -22,7 +22,7 @@ import (
 	"github.com/canonical/pebble/internals/overlord/state"
 )
 
-func v1AckWarnings(c *Command, r *http.Request, _ *userState) Response {
+func v1AckWarnings(c *Command, r *http.Request, _ *UserState) Response {
 	defer r.Body.Close()
 	var op struct {
 		Action    string    `json:"action"`
@@ -43,7 +43,7 @@ func v1AckWarnings(c *Command, r *http.Request, _ *userState) Response {
 	return SyncResponse(n)
 }
 
-func v1GetWarnings(c *Command, r *http.Request, _ *userState) Response {
+func v1GetWarnings(c *Command, r *http.Request, _ *UserState) Response {
 	query := r.URL.Query()
 	var all bool
 	sel := query.Get("select")

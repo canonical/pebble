@@ -107,11 +107,14 @@ type Daemon struct {
 	mu sync.Mutex
 }
 
-// XXX Placeholder for now.
-type userState struct{}
+// UserState represents the state of an authenticated API user.
+//
+// The struct is currently empty as the behaviors haven't been implemented
+// yet.
+type UserState struct{}
 
 // A ResponseFunc handles one of the individual verbs for a method
-type ResponseFunc func(*Command, *http.Request, *userState) Response
+type ResponseFunc func(*Command, *http.Request, *UserState) Response
 
 // A Command routes a request to an individual per-verb ResponseFUnc
 type Command struct {
@@ -149,7 +152,7 @@ const (
 // - UserOK: any uid on the local system can access GET
 // - AdminOnly: only the administrator can access this
 // - UntrustedOK: can access this via the untrusted socket
-func (c *Command) canAccess(r *http.Request, user *userState) accessResult {
+func (c *Command) canAccess(r *http.Request, user *UserState) accessResult {
 	if c.AdminOnly && (c.UserOK || c.GuestOK || c.UntrustedOK) {
 		logger.Panicf("internal error: command cannot have AdminOnly together with any *OK flag")
 	}
@@ -210,7 +213,7 @@ func (c *Command) canAccess(r *http.Request, user *userState) accessResult {
 	return accessUnauthorized
 }
 
-func userFromRequest(state interface{}, r *http.Request) (*userState, error) {
+func userFromRequest(state interface{}, r *http.Request) (*UserState, error) {
 	return nil, nil
 }
 
@@ -401,7 +404,7 @@ func (d *Daemon) SetDegradedMode(err error) {
 func (d *Daemon) addRoutes() {
 	d.router = mux.NewRouter()
 
-	for _, c := range api {
+	for _, c := range API {
 		c.d = d
 		if c.PathPrefix == "" {
 			d.router.Handle(c.Path, c).Name(c.Path)

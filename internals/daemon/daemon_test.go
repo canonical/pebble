@@ -99,6 +99,33 @@ func (h *fakeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.lastMethod = r.Method
 }
 
+func (s *daemonSuite) TestAddCommand(c *C) {
+	const endpoint = "/v1/addedendpoint"
+	var handler fakeHandler
+	getCallback := func(c *Command, r *http.Request, s *UserState) Response {
+		handler.cmd = c
+		return &handler
+	}
+	command := Command{
+		Path:    endpoint,
+		GuestOK: true,
+		GET:     getCallback,
+	}
+	API = append(API, &command)
+	defer func() {
+		c.Assert(API[len(API)-1], Equals, &command)
+		API = API[:len(API)-1]
+	}()
+
+	d := s.newDaemon(c)
+	d.Init()
+	d.Start()
+	defer d.Stop(nil)
+
+	result := d.router.Get(endpoint).GetHandler()
+	c.Assert(result, Equals, &command)
+}
+
 func (s *daemonSuite) TestExplicitPaths(c *C) {
 	s.socketPath = filepath.Join(c.MkDir(), "custom.socket")
 
@@ -121,7 +148,7 @@ func (s *daemonSuite) TestCommandMethodDispatch(c *C) {
 
 	cmd := &Command{d: s.newDaemon(c)}
 	handler := &fakeHandler{cmd: cmd}
-	rf := func(innerCmd *Command, req *http.Request, user *userState) Response {
+	rf := func(innerCmd *Command, req *http.Request, user *UserState) Response {
 		c.Assert(cmd, Equals, innerCmd)
 		return handler
 	}
@@ -160,7 +187,7 @@ func (s *daemonSuite) TestCommandRestartingState(c *C) {
 	d := s.newDaemon(c)
 
 	cmd := &Command{d: d}
-	cmd.GET = func(*Command, *http.Request, *userState) Response {
+	cmd.GET = func(*Command, *http.Request, *UserState) Response {
 		return SyncResponse(nil)
 	}
 	req, err := http.NewRequest("GET", "", nil)
@@ -210,7 +237,7 @@ func (s *daemonSuite) TestFillsWarnings(c *C) {
 	d := s.newDaemon(c)
 
 	cmd := &Command{d: d}
-	cmd.GET = func(*Command, *http.Request, *userState) Response {
+	cmd.GET = func(*Command, *http.Request, *UserState) Response {
 		return SyncResponse(nil)
 	}
 	req, err := http.NewRequest("GET", "", nil)
@@ -341,7 +368,7 @@ func (s *daemonSuite) TestUserAccess(c *C) {
 func (s *daemonSuite) TestLoggedInUserAccess(c *C) {
 	d := s.newDaemon(c)
 
-	user := &userState{}
+	user := &UserState{}
 	get := &http.Request{Method: "GET", RemoteAddr: "pid=100;uid=42;socket=;"}
 	put := &http.Request{Method: "PUT", RemoteAddr: "pid=100;uid=42;socket=;"}
 
@@ -399,8 +426,8 @@ func (s *daemonSuite) TestSuperAccess(c *C) {
 func (s *daemonSuite) TestAddRoutes(c *C) {
 	d := s.newDaemon(c)
 
-	expected := make([]string, len(api))
-	for i, v := range api {
+	expected := make([]string, len(API))
+	for i, v := range API {
 		if v.PathPrefix != "" {
 			expected[i] = v.PathPrefix
 			continue
@@ -408,7 +435,7 @@ func (s *daemonSuite) TestAddRoutes(c *C) {
 		expected[i] = v.Path
 	}
 
-	got := make([]string, 0, len(api))
+	got := make([]string, 0, len(API))
 	c.Assert(d.router.Walk(func(route *mux.Route, router *mux.Router, ancestors []*mux.Route) error {
 		got = append(got, route.GetName())
 		return nil
@@ -1028,10 +1055,10 @@ func doTestReq(c *C, cmd *Command, mth string) *httptest.ResponseRecorder {
 func (s *daemonSuite) TestDegradedModeReply(c *C) {
 	d := s.newDaemon(c)
 	cmd := &Command{d: d}
-	cmd.GET = func(*Command, *http.Request, *userState) Response {
+	cmd.GET = func(*Command, *http.Request, *UserState) Response {
 		return SyncResponse(nil)
 	}
-	cmd.POST = func(*Command, *http.Request, *userState) Response {
+	cmd.POST = func(*Command, *http.Request, *UserState) Response {
 		return SyncResponse(nil)
 	}
 
