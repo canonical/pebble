@@ -70,14 +70,13 @@ func Exec(st *state.State, args *ExecArgs) (*state.Task, ExecMetadata, error) {
 		return nil, ExecMetadata{}, errors.New("cannot use interactive mode without a terminal")
 	}
 
-	// Inherit the pebble daemon environment
-	// If the user is being changed, reset the HOME and USER env vars so that they
-	// can be set correctly later on in this method
+	// Inherit the pebble daemon environment.
+	// If the user is being changed, unset the HOME and USER env vars so that they
+	// can be set correctly later on in this method.
 	environment := osutil.Environ()
 	if args.UserID != nil && *args.UserID != os.Getuid() {
-		for _, k := range []string{"HOME", "USER"} {
-			delete(environment, k)
-		}
+		delete(environment, "HOME")
+		delete(environment, "USER")
 	}
 
 	for k, v := range args.Environment {
