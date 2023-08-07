@@ -27,6 +27,7 @@ import (
 // CheckManager starts and manages the health checks.
 type CheckManager struct {
 	mutex           sync.Mutex
+	wg              sync.WaitGroup
 	checks          map[string]*checkData
 	failureHandlers []FailureFunc
 }
@@ -58,6 +59,12 @@ func (m *CheckManager) PlanChanged(p *plan.Plan) {
 	for _, check := range m.checks {
 		check.cancel()
 	}
+	// Wait for all context cancellations to propagate and allow
+	// each goroutine to cleanly exit.
+	m.wg.Wait()
+
+	// Set the size of the next wait group
+	m.wg.Add(len(p.Checks))
 
 	// Then configure and start new checks.
 	checks := make(map[string]*checkData, len(p.Checks))
@@ -65,13 +72,16 @@ func (m *CheckManager) PlanChanged(p *plan.Plan) {
 		ctx, cancel := context.WithCancel(context.Background())
 		check := &checkData{
 			config:  config,
-			checker: newChecker(config),
+			checker: newChecker(config, p),
 			ctx:     ctx,
 			cancel:  cancel,
 			action:  m.callFailureHandlers,
 		}
 		checks[name] = check
-		go check.loop()
+		go func() {
+			defer m.wg.Done()
+			check.loop()
+		}()
 	}
 	m.checks = checks
 }
@@ -83,7 +93,7 @@ func (m *CheckManager) callFailureHandlers(name string) {
 }
 
 // newChecker creates a new checker of the configured type.
-func newChecker(config *plan.Check) checker {
+func newChecker(config *plan.Check, p *plan.Plan) checker {
 	switch {
 	case config.HTTP != nil:
 		return &httpChecker{
@@ -100,15 +110,28 @@ func newChecker(config *plan.Check) checker {
 		}
 
 	case config.Exec != nil:
+		overrides := plan.ContextOptions{
+			Environment: config.Exec.Environment,
+			UserID:      config.Exec.UserID,
+			User:        config.Exec.User,
+			GroupID:     config.Exec.GroupID,
+			Group:       config.Exec.Group,
+			WorkingDir:  config.Exec.WorkingDir,
+		}
+		merged, err := plan.MergeServiceContext(p, config.Exec.ServiceContext, overrides)
+		if err != nil {
+			// Context service name has already been checked when plan was loaded.
+			panic("internal error: " + err.Error())
+		}
 		return &execChecker{
 			name:        config.Name,
 			command:     config.Exec.Command,
-			environment: config.Exec.Environment,
-			userID:      config.Exec.UserID,
-			user:        config.Exec.User,
-			groupID:     config.Exec.GroupID,
-			group:       config.Exec.Group,
-			workingDir:  config.Exec.WorkingDir,
+			environment: merged.Environment,
+			userID:      merged.UserID,
+			user:        merged.User,
+			groupID:     merged.GroupID,
+			group:       merged.Group,
+			workingDir:  merged.WorkingDir,
 		}
 
 	default:

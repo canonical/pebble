@@ -23,7 +23,7 @@ import (
 	"github.com/canonical/pebble/internals/overlord/state"
 )
 
-func v1GetTaskWebsocket(c *Command, req *http.Request, _ *userState) Response {
+func v1GetTaskWebsocket(c *Command, req *http.Request, _ *UserState) Response {
 	vars := muxVars(req)
 	taskID := vars["task-id"]
 	websocketID := vars["websocket-id"]

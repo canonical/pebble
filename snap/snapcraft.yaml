@@ -1,0 +1,61 @@
+name: pebble
+adopt-info: pebble-release-data
+summary: Pebble - take control of your internal daemons!
+description: |
+  Pebble helps you to orchestrate a set of local service processes
+  as an organized set. It resembles well-known tools such as supervisord,
+  runit, or s6, in that it can easily manage non-system processes
+  independently from the system services, but it was designed with unique
+  features that help with more specific use cases.
+
+  **Usage**
+
+  * The Pebble snap's default directory is `$SNAP_USER_DATA` (which translates
+  to `$HOME/snap/pebble/<rev>/`).
+
+  **Documentation**
+
+  To learn more about Pebble please check the project's documentation at
+  https://github.com/canonical/pebble.
+issues: https://github.com/canonical/pebble/issues
+source-code: https://github.com/canonical/pebble
+license: GPL-3.0
+base: bare
+build-base: core22
+confinement: classic
+
+apps:
+  pebble:
+    command: pebble-wrapper
+
+parts:
+  pebble:
+    plugin: go
+    source: .
+    build-snaps:
+      - go/1.20/stable
+    build-environment:
+      - CGO_ENABLED: 0
+      - GOFLAGS: -trimpath -ldflags=-w -ldflags=-s
+    override-build: |
+      go generate ./cmd
+      craftctl default
+
+  pebble-release-data:
+    plugin: nil
+    source: .
+    override-build: |
+      version="$(${CRAFT_STAGE}/bin/pebble version --client)"
+
+      # Set snap version
+      craftctl set version="$version"
+
+      # Pebble releases are semantically versioned and have a "v" prefix
+      [[ "${version}" == *"git"* ]] && grade=devel || grade=stable
+      craftctl set grade="$grade"
+    after: [pebble]
+
+  # Dump the pebble-wrapper into the snap.
+  pebble-wrapper:
+    plugin: dump
+    source: ./snap/local

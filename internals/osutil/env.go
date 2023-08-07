@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2020 Canonical Ltd
+// Copyright (c) 2014-2023 Canonical Ltd
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License version 3 as
@@ -12,27 +12,27 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package cli
+package osutil
 
 import (
-	"time"
-
-	"github.com/canonical/pebble/internals/timeutil"
+	"os"
+	"strings"
 )
 
-var timeutilHuman = timeutil.Human
+var osEnviron = os.Environ
 
-type timeMixin struct {
-	AbsTime bool `long:"abs-time"`
-}
-
-var timeArgsHelp = map[string]string{
-	"--abs-time": "Display absolute times (in RFC 3339 format). Otherwise, display relative times up to 60 days, then YYYY-MM-DD.",
-}
-
-func (mx timeMixin) fmtTime(t time.Time) string {
-	if mx.AbsTime {
-		return t.Format(time.RFC3339)
+// Environ returns a map representing the environment.
+// It converts the slice from os.Environ() into a map.
+func Environ() map[string]string {
+	env := make(map[string]string)
+	for _, kv := range osEnviron() {
+		parts := strings.SplitN(kv, "=", 2)
+		key := parts[0]
+		val := ""
+		if len(parts) == 2 {
+			val = parts[1]
+		}
+		env[key] = val
 	}
-	return timeutilHuman(t)
+	return env
 }

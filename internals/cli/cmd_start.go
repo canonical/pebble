@@ -20,8 +20,8 @@ import (
 	"github.com/canonical/pebble/client"
 )
 
-var shortStartHelp = "Start a service and its dependencies"
-var longStartHelp = `
+const cmdStartSummary = "Start a service and its dependencies"
+const cmdStartDescription = `
 The start command starts the service with the provided name and
 any other services it depends on, in the correct order.
 `
@@ -34,7 +34,13 @@ type cmdStart struct {
 }
 
 func init() {
-	addCommand("start", shortStartHelp, longStartHelp, func() flags.Commander { return &cmdStart{} }, waitDescs, nil)
+	AddCommand(&CmdInfo{
+		Name:        "start",
+		Summary:     cmdStartSummary,
+		Description: cmdStartDescription,
+		ArgsHelp:    waitArgsHelp,
+		Builder:     func() flags.Commander { return &cmdStart{} },
+	})
 }
 
 func (cmd cmdStart) Execute(args []string) error {

@@ -34,9 +34,8 @@ import (
 
 	"github.com/canonical/pebble/internals/osutil"
 	"github.com/canonical/pebble/internals/osutil/squashfs"
-	"github.com/canonical/pebble/internals/testutil"
-
 	"github.com/canonical/pebble/internals/systemd"
+	"github.com/canonical/pebble/internals/testutil"
 )
 
 type testreporter struct {

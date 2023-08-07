@@ -21,9 +21,9 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/canonical/pebble/internals/overlord/state"
-
 	"gopkg.in/check.v1"
+
+	"github.com/canonical/pebble/internals/overlord/state"
 )
 
 func (s *apiSuite) testWarnings(c *check.C, all bool, body io.Reader) (calls string, result interface{}) {

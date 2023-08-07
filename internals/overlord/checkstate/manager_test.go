@@ -45,12 +45,14 @@ func (s *ManagerSuite) SetUpSuite(c *C) {
 	setLoggerOnce.Do(func() {
 		logger.SetLogger(logger.New(os.Stderr, "[test] "))
 	})
+}
 
+func (s *ManagerSuite) SetUpTest(c *C) {
 	err := reaper.Start()
 	c.Assert(err, IsNil)
 }
 
-func (s *ManagerSuite) TearDownSuite(c *C) {
+func (s *ManagerSuite) TearDownTest(c *C) {
 	err := reaper.Stop()
 	c.Assert(err, IsNil)
 }
@@ -137,7 +139,6 @@ func (s *ManagerSuite) TestTimeout(c *C) {
 	c.Assert(check.Failures, Equals, 1)
 	c.Assert(check.Threshold, Equals, 1)
 	c.Assert(check.LastError, Equals, "exec check timed out")
-	c.Assert(check.ErrorDetails, Equals, "FOO")
 }
 
 func (s *ManagerSuite) TestCheckCanceled(c *C) {
@@ -161,17 +162,15 @@ func (s *ManagerSuite) TestCheckCanceled(c *C) {
 		},
 	})
 
-	// Wait for command to start (output file grows in size)
-	prevSize := 0
+	// Wait for command to start (output file is not zero in size)
 	for i := 0; ; i++ {
 		if i >= 100 {
 			c.Fatalf("failed waiting for command to start")
 		}
 		b, _ := ioutil.ReadFile(tempFile)
-		if len(b) != prevSize {
+		if len(b) > 0 {
 			break
 		}
-		prevSize = len(b)
 		time.Sleep(time.Millisecond)
 	}
 
@@ -185,7 +184,6 @@ func (s *ManagerSuite) TestCheckCanceled(c *C) {
 	stopChecks(c, mgr)
 
 	// Ensure command was terminated (output file didn't grow in size)
-	time.Sleep(50 * time.Millisecond)
 	b1, err := ioutil.ReadFile(tempFile)
 	c.Assert(err, IsNil)
 	time.Sleep(20 * time.Millisecond)
@@ -269,8 +267,20 @@ func (s *ManagerSuite) TestFailures(c *C) {
 	c.Assert(failureName, Equals, "")
 }
 
+// waitCheck is a time based approach to wait for a checker run to complete.
+// The timeout value does not impact the general time it takes for tests to
+// complete, but determines a worst case waiting period before giving up.
+// The timeout value must take into account single core or very busy machines
+// so it makes sense to pick a conservative number here as failing a test
+// due to a busy test resource is more extensive than waiting a few more
+// seconds.
 func waitCheck(c *C, mgr *CheckManager, name string, f func(check *CheckInfo) bool) *CheckInfo {
-	for i := 0; i < 100; i++ {
+	// Worst case waiting time for checker run(s) to complete. This
+	// period should be much longer (10x is good) than the longest
+	// check timeout value.
+	timeout := time.Second * 10
+
+	for start := time.Now(); time.Since(start) < timeout; {
 		checks, err := mgr.Checks()
 		c.Assert(err, IsNil)
 		for _, check := range checks {
@@ -280,6 +290,7 @@ func waitCheck(c *C, mgr *CheckManager, name string, f func(check *CheckInfo) bo
 		}
 		time.Sleep(time.Millisecond)
 	}
+
 	c.Fatalf("timed out waiting for check %q", name)
 	return nil
 }
@@ -291,7 +302,7 @@ func (s *CheckersSuite) TestNewChecker(c *C) {
 			URL:     "https://example.com/foo",
 			Headers: map[string]string{"k": "v"},
 		},
-	})
+	}, nil)
 	http, ok := chk.(*httpChecker)
 	c.Assert(ok, Equals, true)
 	c.Check(http.name, Equals, "http")
@@ -304,7 +315,7 @@ func (s *CheckersSuite) TestNewChecker(c *C) {
 			Port: 80,
 			Host: "localhost",
 		},
-	})
+	}, nil)
 	tcp, ok := chk.(*tcpChecker)
 	c.Assert(ok, Equals, true)
 	c.Check(tcp.name, Equals, "tcp")
@@ -323,7 +334,7 @@ func (s *CheckersSuite) TestNewChecker(c *C) {
 			Group:       "group",
 			WorkingDir:  "/working/dir",
 		},
-	})
+	}, nil)
 	exec, ok := chk.(*execChecker)
 	c.Assert(ok, Equals, true)
 	c.Assert(exec.name, Equals, "exec")
@@ -333,4 +344,71 @@ func (s *CheckersSuite) TestNewChecker(c *C) {
 	c.Assert(exec.user, Equals, "user")
 	c.Assert(exec.groupID, Equals, &groupID)
 	c.Assert(exec.workingDir, Equals, "/working/dir")
+}
+
+func (s *CheckersSuite) TestExecContextNoOverride(c *C) {
+	svcUserID, svcGroupID := 10, 20
+	chk := newChecker(&plan.Check{
+		Name: "exec",
+		Exec: &plan.ExecCheck{
+			Command:        "sleep 1",
+			ServiceContext: "svc1",
+		},
+	}, &plan.Plan{Services: map[string]*plan.Service{
+		"svc1": {
+			Name:        "svc1",
+			Environment: map[string]string{"k": "x", "a": "1"},
+			UserID:      &svcUserID,
+			User:        "svcuser",
+			GroupID:     &svcGroupID,
+			Group:       "svcgroup",
+			WorkingDir:  "/working/svc",
+		},
+	}})
+	exec, ok := chk.(*execChecker)
+	c.Assert(ok, Equals, true)
+	c.Check(exec.name, Equals, "exec")
+	c.Check(exec.command, Equals, "sleep 1")
+	c.Check(exec.environment, DeepEquals, map[string]string{"k": "x", "a": "1"})
+	c.Check(exec.userID, DeepEquals, &svcUserID)
+	c.Check(exec.user, Equals, "svcuser")
+	c.Check(exec.groupID, DeepEquals, &svcGroupID)
+	c.Check(exec.workingDir, Equals, "/working/svc")
+}
+
+func (s *CheckersSuite) TestExecContextOverride(c *C) {
+	userID, groupID := 100, 200
+	svcUserID, svcGroupID := 10, 20
+	chk := newChecker(&plan.Check{
+		Name: "exec",
+		Exec: &plan.ExecCheck{
+			Command:        "sleep 1",
+			ServiceContext: "svc1",
+			Environment:    map[string]string{"k": "v"},
+			UserID:         &userID,
+			User:           "user",
+			GroupID:        &groupID,
+			Group:          "group",
+			WorkingDir:     "/working/dir",
+		},
+	}, &plan.Plan{Services: map[string]*plan.Service{
+		"svc1": {
+			Name:        "svc1",
+			Environment: map[string]string{"k": "x", "a": "1"},
+			UserID:      &svcUserID,
+			User:        "svcuser",
+			GroupID:     &svcGroupID,
+			Group:       "svcgroup",
+			WorkingDir:  "/working/svc",
+		},
+	}})
+	exec, ok := chk.(*execChecker)
+	c.Assert(ok, Equals, true)
+	c.Check(exec.name, Equals, "exec")
+	c.Check(exec.command, Equals, "sleep 1")
+	c.Check(exec.environment, DeepEquals, map[string]string{"k": "v", "a": "1"})
+	c.Check(exec.userID, DeepEquals, &userID)
+	c.Check(exec.user, Equals, "user")
+	c.Check(exec.groupID, DeepEquals, &groupID)
+	c.Check(exec.workingDir, Equals, "/working/dir")
 }

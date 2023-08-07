@@ -21,11 +21,23 @@ import (
 	"path/filepath"
 
 	"gopkg.in/check.v1"
+
+	"github.com/canonical/pebble/internals/reaper"
 )
 
 type fakeCommandSuite struct{}
 
 var _ = check.Suite(&fakeCommandSuite{})
+
+func (s *fakeCommandSuite) SetUpSuite(c *check.C) {
+	err := reaper.Start()
+	c.Assert(err, check.IsNil)
+}
+
+func (s *fakeCommandSuite) TearDownSuite(c *check.C) {
+	err := reaper.Stop()
+	c.Assert(err, check.IsNil)
+}
 
 func (s *fakeCommandSuite) TestFakeCommand(c *check.C) {
 	fake := FakeCommand(c, "cmd", "true", false)
@@ -34,10 +46,23 @@ func (s *fakeCommandSuite) TestFakeCommand(c *check.C) {
 	c.Assert(err, check.IsNil)
 	err = exec.Command("cmd", "second-run", "--arg1", "arg2", "a %s").Run()
 	c.Assert(err, check.IsNil)
+	err = exec.Command("cmd", "third-run", "--arg1", "arg2", "").Run()
+	c.Assert(err, check.IsNil)
+	err = exec.Command("cmd", "forth-run", "--arg1", "arg2", "", "a %s").Run()
+	c.Assert(err, check.IsNil)
 	c.Assert(fake.Calls(), check.DeepEquals, [][]string{
 		{"cmd", "first-run", "--arg1", "arg2", "a space"},
 		{"cmd", "second-run", "--arg1", "arg2", "a %s"},
+		{"cmd", "third-run", "--arg1", "arg2", ""},
+		{"cmd", "forth-run", "--arg1", "arg2", "", "a %s"},
 	})
+}
+
+func (s *fakeCommandSuite) TestFakeCommandWithReaper(c *check.C) {
+	fake := FakeCommand(c, "cmd", "true", true)
+	defer fake.Restore()
+	err := exec.Command("cmd", "").Run()
+	c.Assert(err, check.IsNil)
 }
 
 func (s *fakeCommandSuite) TestFakeCommandAlso(c *check.C) {

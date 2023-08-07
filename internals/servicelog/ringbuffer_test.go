@@ -20,8 +20,9 @@ import (
 	"io"
 	"testing"
 
-	"github.com/canonical/pebble/internals/servicelog"
 	. "gopkg.in/check.v1"
+
+	"github.com/canonical/pebble/internals/servicelog"
 )
 
 type ringBufferSuite struct{}

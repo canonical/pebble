@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2020 Canonical Ltd
+// Copyright (c) 2014-2023 Canonical Ltd
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License version 3 as
@@ -12,27 +12,30 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package cli
+package osutil_test
 
 import (
-	"time"
+	. "gopkg.in/check.v1"
 
-	"github.com/canonical/pebble/internals/timeutil"
+	"github.com/canonical/pebble/internals/osutil"
 )
 
-var timeutilHuman = timeutil.Human
+type envSuite struct{}
 
-type timeMixin struct {
-	AbsTime bool `long:"abs-time"`
-}
+var _ = Suite(&envSuite{})
 
-var timeArgsHelp = map[string]string{
-	"--abs-time": "Display absolute times (in RFC 3339 format). Otherwise, display relative times up to 60 days, then YYYY-MM-DD.",
-}
+func (s *envSuite) TestEnviron(c *C) {
+	restore := osutil.FakeEnviron(func() []string {
+		return []string{"FOO=bar", "BAR=", "TEMP"}
+	})
+	defer restore()
 
-func (mx timeMixin) fmtTime(t time.Time) string {
-	if mx.AbsTime {
-		return t.Format(time.RFC3339)
-	}
-	return timeutilHuman(t)
+	env := osutil.Environ()
+
+	c.Assert(len(env), Equals, 3)
+	c.Assert(env, DeepEquals, map[string]string{
+		"FOO":  "bar",
+		"BAR":  "",
+		"TEMP": "",
+	})
 }

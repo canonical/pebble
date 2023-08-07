@@ -42,7 +42,7 @@ type serviceManager interface {
 	ServiceLogs(services []string, last int) (map[string]servicelog.Iterator, error)
 }
 
-func v1GetLogs(c *Command, _ *http.Request, _ *userState) Response {
+func v1GetLogs(c *Command, _ *http.Request, _ *UserState) Response {
 	return logsResponse{
 		svcMgr: overlordServiceManager(c.d.overlord),
 	}
