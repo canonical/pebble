@@ -46,12 +46,12 @@ jobs:
     - name: Test
       run: |
         go test -c ./internals/daemon
-        PEBBLE_TEST_USER=runner PEBBLE_TEST_GROUP=runner sudo -E ./daemon.test -check.v -check.f ^execSuite\.TestUserGroup$
-        PEBBLE_TEST_USER=runner PEBBLE_TEST_GROUP=runner sudo -E ./daemon.test -check.v -check.f ^execSuite\.TestUserIDGroupID$
-        PEBBLE_TEST_USER=runner PEBBLE_TEST_GROUP=runner sudo -E ./daemon.test -check.v -check.f ^filesSuite\.TestWriteUserGroupReal$
-        PEBBLE_TEST_USER=runner PEBBLE_TEST_GROUP=runner sudo -E ./daemon.test -check.v -check.f ^filesSuite\.TestMakeDirsUserGroupReal$
+        PEBBLE_TEST_USER=runner PEBBLE_TEST_GROUP=runner sudo -E -H ./daemon.test -check.v -check.f ^execSuite\.TestUserGroup$
+        PEBBLE_TEST_USER=runner PEBBLE_TEST_GROUP=runner sudo -E -H ./daemon.test -check.v -check.f ^execSuite\.TestUserIDGroupID$
+        PEBBLE_TEST_USER=runner PEBBLE_TEST_GROUP=runner sudo -E -H ./daemon.test -check.v -check.f ^filesSuite\.TestWriteUserGroupReal$
+        PEBBLE_TEST_USER=runner PEBBLE_TEST_GROUP=runner sudo -E -H ./daemon.test -check.v -check.f ^filesSuite\.TestMakeDirsUserGroupReal$
         go test -c ./internals/overlord/servstate/
-        PEBBLE_TEST_USER=runner PEBBLE_TEST_GROUP=runner sudo -E ./servstate.test -check.v -check.f ^S.TestUserGroup$
+        PEBBLE_TEST_USER=runner PEBBLE_TEST_GROUP=runner sudo -E -H ./servstate.test -check.v -check.f ^S.TestUserGroup$
 
   format:
     runs-on: ubuntu-latest
