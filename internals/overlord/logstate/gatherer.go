@@ -216,14 +216,19 @@ func (g *logGatherer) Stop() {
 
 	// Wait up to timeoutPullers for the pullers to pull the final logs from the
 	// iterator and send to the main loop.
-	time.AfterFunc(timeoutPullers, g.pullers.KillAll)
+	time.AfterFunc(timeoutPullers, func() {
+		logger.Debugf("gatherer %q: force killing log pullers", g.targetName)
+		g.pullers.KillAll()
+	})
 
 	// Kill the main loop once either:
 	// - all the pullers are done
 	// - timeoutMainLoop has passed
 	select {
 	case <-g.pullers.Done():
+		logger.Debugf("gatherer %q: pullers have finished", g.targetName)
 	case <-time.After(timeoutMainLoop):
+		logger.Debugf("gatherer %q: force killing main loop", g.targetName)
 	}
 
 	_ = g.tomb.Killf("gatherer stopped")

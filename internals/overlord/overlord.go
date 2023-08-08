@@ -108,13 +108,15 @@ func New(pebbleDir string, restartHandler restart.Handler, serviceOutput io.Writ
 	o.runner.AddOptionalHandler(matchAnyUnknownTask, handleUnknownTask, nil)
 
 	o.logMgr = logstate.NewLogManager()
-	o.addManager(o.logMgr)
 
 	o.serviceMgr, err = servstate.NewManager(s, o.runner, o.pebbleDir, serviceOutput, restartHandler, o.logMgr)
 	if err != nil {
 		return nil, err
 	}
 	o.addManager(o.serviceMgr)
+	// The log manager should be stopped after the service manager, so we can
+	// collect any final logs from the service.
+	o.addManager(o.logMgr)
 
 	o.commandMgr = cmdstate.NewManager(o.runner)
 	o.addManager(o.commandMgr)
