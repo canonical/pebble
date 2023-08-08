@@ -167,8 +167,7 @@ func (g *logGatherer) ServiceStarted(service *plan.Service, buffer *servicelog.R
 // pullers on entryCh, and writes them to the client. It also flushes the
 // client periodically, and exits when the gatherer's tomb is killed.
 func (g *logGatherer) loop() error {
-	ticker := time.NewTicker(g.tickPeriod)
-	defer ticker.Stop()
+	timer := newTimer()
 
 mainLoop:
 	for {
@@ -176,8 +175,9 @@ mainLoop:
 		case <-g.tomb.Dying():
 			break mainLoop
 
-		case <-ticker.C:
-			// Timeout - flush
+		case <-timer.Finished():
+			// Mark timer as unset
+			timer.Stop()
 			err := g.client.Flush(g.clientCtx)
 			if err != nil {
 				logger.Noticef("Error sending logs to target %q: %v", g.targetName, err)
@@ -188,6 +188,8 @@ mainLoop:
 			if err != nil {
 				logger.Noticef("Error writing logs to target %q: %v", g.targetName, err)
 			}
+			// Set timer if not already set
+			timer.EnsureSet(g.tickPeriod)
 		}
 	}
 
@@ -239,6 +241,43 @@ func (g *logGatherer) Stop() {
 	if err != nil {
 		logger.Noticef("Error shutting down gatherer: %v", err)
 	}
+}
+
+// timer wraps time.Timer and provides a better API.
+type timer struct {
+	timer *time.Timer
+	set   bool
+}
+
+func newTimer() timer {
+	t := timer{
+		timer: time.NewTimer(1 * time.Hour),
+	}
+	t.Stop()
+	return t
+}
+
+func (t *timer) Finished() <-chan time.Time {
+	return t.timer.C
+}
+
+func (t *timer) Stop() {
+	t.timer.Stop()
+	t.set = false
+	// Drain timer channel
+	select {
+	case <-t.timer.C:
+	default:
+	}
+}
+
+func (t *timer) EnsureSet(timeout time.Duration) {
+	if t.set {
+		return
+	}
+
+	t.timer.Reset(timeout)
+	t.set = true
 }
 
 // logClient handles requests to a specific type of log target. It encodes

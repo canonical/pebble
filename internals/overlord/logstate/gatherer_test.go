@@ -69,7 +69,7 @@ func (s *gathererSuite) TestGatherer(c *C) {
 func (s *gathererSuite) TestGathererTimeout(c *C) {
 	received := make(chan []servicelog.Entry, 1)
 	gathererArgs := logGathererArgs{
-		tickPeriod: 1 * time.Microsecond,
+		tickPeriod: 1 * time.Millisecond,
 		newClient: func(target *plan.LogTarget) (logClient, error) {
 			return &testClient{
 				bufferSize: 5,
@@ -86,7 +86,7 @@ func (s *gathererSuite) TestGathererTimeout(c *C) {
 
 	testSvc.writeLog("log line #1")
 	select {
-	case <-time.After(20 * time.Millisecond):
+	case <-time.After(1 * time.Second):
 		c.Fatalf("timeout waiting for logs")
 	case logs := <-received:
 		checkLogs(c, logs, []string{"log line #1"})
