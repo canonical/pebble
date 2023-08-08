@@ -25,7 +25,7 @@ import (
 // main control loop.
 type logPuller struct {
 	iterator servicelog.Iterator
-	entryCh  chan servicelog.Entry
+	entryCh  chan<- servicelog.Entry
 
 	ctx  context.Context
 	kill context.CancelFunc
@@ -86,7 +86,7 @@ func newPullerGroup(targetName string) *pullerGroup {
 	return pg
 }
 
-func (pg *pullerGroup) Add(serviceName string, buffer *servicelog.RingBuffer, entryCh chan servicelog.Entry) {
+func (pg *pullerGroup) Add(serviceName string, buffer *servicelog.RingBuffer, entryCh chan<- servicelog.Entry) {
 	lp := &logPuller{
 		iterator: buffer.TailIterator(),
 		entryCh:  entryCh,
@@ -138,7 +138,7 @@ func (pg *pullerGroup) KillAll() {
 }
 
 // Done returns a channel which can be waited on until all pullers have finished.
-func (pg *pullerGroup) Done() chan struct{} {
+func (pg *pullerGroup) Done() <-chan struct{} {
 	done := make(chan struct{})
 	go func() {
 		pg.wg.Wait()
