@@ -191,6 +191,7 @@ mainLoop:
 	}
 
 	// Final flush to send any remaining logs buffered in the client
+	// We need to create a new context, as the previous one may have been cancelled.
 	ctx, cancel := context.WithTimeout(context.Background(), g.timeoutFinalFlush)
 	defer cancel()
 	err := g.client.Flush(ctx)

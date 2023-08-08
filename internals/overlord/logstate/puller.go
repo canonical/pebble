@@ -28,8 +28,8 @@ type logPuller struct {
 	iterator servicelog.Iterator
 	entryCh  chan<- servicelog.Entry
 
-	ctx  context.Context
-	kill context.CancelFunc
+	ctx    context.Context
+	cancel context.CancelFunc
 }
 
 // loop pulls logs off the iterator and sends them on the entryCh.
@@ -97,7 +97,7 @@ func (pg *pullerGroup) Add(serviceName string, buffer *servicelog.RingBuffer, en
 		iterator: buffer.TailIterator(),
 		entryCh:  entryCh,
 	}
-	lp.ctx, lp.kill = context.WithCancel(pg.ctx)
+	lp.ctx, lp.cancel = context.WithCancel(pg.ctx)
 
 	pg.wg.Add(1) // this will be marked as done once loop finishes
 	go func() {
@@ -111,7 +111,7 @@ func (pg *pullerGroup) Add(serviceName string, buffer *servicelog.RingBuffer, en
 	if puller, ok := pg.pullers[serviceName]; ok {
 		// This should never happen, but just in case, shut down the old puller.
 		logger.Debugf("puller for service %q already exists, shutting down old puller", serviceName)
-		puller.kill()
+		puller.cancel()
 	}
 	pg.pullers[serviceName] = lp
 }
@@ -134,7 +134,7 @@ func (pg *pullerGroup) Remove(serviceName string) {
 	defer pg.mu.Unlock()
 
 	if puller, ok := pg.pullers[serviceName]; ok {
-		puller.kill()
+		puller.cancel()
 		delete(pg.pullers, serviceName)
 	}
 
