@@ -18,7 +18,6 @@ import (
 	"context"
 	"sync"
 
-	"github.com/canonical/pebble/internals/plan"
 	"github.com/canonical/pebble/internals/servicelog"
 )
 
@@ -90,6 +89,7 @@ func (pg *pullerGroup) Add(serviceName string, buffer *servicelog.RingBuffer, en
 	go func() {
 		lp.loop()
 		pg.wg.Done()
+		// TODO: remove puller from map ?
 	}()
 
 	pg.mu.Lock()
@@ -101,28 +101,28 @@ func (pg *pullerGroup) Add(serviceName string, buffer *servicelog.RingBuffer, en
 	pg.pullers[serviceName] = lp
 }
 
-func (pg *pullerGroup) RemoveOld(pl *plan.Plan) {
+// List returns a list of all service names for which we have a currently
+// active puller.
+func (pg *pullerGroup) List() []string {
+	pg.mu.RLock()
+	defer pg.mu.RUnlock()
+
+	var svcs []string
+	for svc := range pg.pullers {
+		svcs = append(svcs, svc)
+	}
+	return svcs
+}
+
+func (pg *pullerGroup) Remove(serviceName string) {
 	pg.mu.Lock()
 	defer pg.mu.Unlock()
 
-	for svcName := range pg.pullers {
-		svc, svcExists := pl.Services[svcName]
-		if !svcExists {
-			pg.remove(svcName)
-			continue
-		}
-
-		tgt := pl.LogTargets[pg.targetName]
-		if !svc.LogsTo(tgt) {
-			pg.remove(svcName)
-		}
+	if puller, ok := pg.pullers[serviceName]; ok {
+		puller.kill()
+		delete(pg.pullers, serviceName)
 	}
-}
 
-// not thread safe, lock mu before calling
-func (pg *pullerGroup) remove(serviceName string) {
-	pg.pullers[serviceName].kill()
-	delete(pg.pullers, serviceName)
 }
 
 func (pg *pullerGroup) KillAll() {
