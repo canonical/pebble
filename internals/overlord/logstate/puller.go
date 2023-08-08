@@ -40,6 +40,14 @@ func (p *logPuller) loop() {
 			if err := parser.Err(); err != nil {
 				return
 			}
+
+			// Check if our context has been cancelled
+			select {
+			case <-p.ctx.Done():
+				return
+			default:
+			}
+
 			select {
 			case p.entryCh <- parser.Entry():
 			case <-p.ctx.Done():
