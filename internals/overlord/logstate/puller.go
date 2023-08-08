@@ -18,6 +18,7 @@ import (
 	"context"
 	"sync"
 
+	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/servicelog"
 )
 
@@ -31,6 +32,11 @@ type logPuller struct {
 	kill context.CancelFunc
 }
 
+// loop pulls logs off the iterator and sends them on the entryCh.
+// The loop will terminate:
+//   - if the puller's context is cancelled
+//   - once the ringbuffer is closed and the iterator finishes reading all
+//     remaining logs.
 func (p *logPuller) loop() {
 	defer func() { _ = p.iterator.Close() }()
 
@@ -104,6 +110,7 @@ func (pg *pullerGroup) Add(serviceName string, buffer *servicelog.RingBuffer, en
 	defer pg.mu.Unlock()
 	if puller, ok := pg.pullers[serviceName]; ok {
 		// This should never happen, but just in case, shut down the old puller.
+		logger.Debugf("puller for service %q already exists, shutting down old puller", serviceName)
 		puller.kill()
 	}
 	pg.pullers[serviceName] = lp
