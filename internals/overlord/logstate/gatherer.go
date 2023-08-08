@@ -231,9 +231,12 @@ func (g *logGatherer) Stop() {
 		logger.Debugf("gatherer %q: force killing main loop", g.targetName)
 	}
 
-	_ = g.tomb.Killf("gatherer stopped")
+	g.tomb.Kill(nil)
 	// Wait for final flush in the main loop
-	_ = g.tomb.Wait()
+	err := g.tomb.Wait()
+	if err != nil {
+		logger.Noticef("Error shutting down gatherer: %v", err)
+	}
 }
 
 // logClient handles requests to a specific type of log target. It encodes
