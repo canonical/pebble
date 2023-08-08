@@ -40,7 +40,7 @@ func NewLogManager() *LogManager {
 }
 
 // PlanChanged is called by the service manager when the plan changes.
-// Based on the new plan, we will stop old gatherers and start new ones.
+// Based on the new plan, we will Stop old gatherers and start new ones.
 func (m *LogManager) PlanChanged(pl *plan.Plan) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -68,12 +68,12 @@ func (m *LogManager) PlanChanged(pl *plan.Plan) {
 		}
 
 		// Update iterators for gatherer
-		gatherer.planChanged(pl, m.buffers)
+		gatherer.PlanChanged(pl, m.buffers)
 	}
 
 	// Old gatherers for now-removed targets need to be shut down.
 	for _, gatherer := range m.gatherers {
-		go gatherer.stop()
+		go gatherer.Stop()
 	}
 	m.gatherers = newGatherers
 
@@ -105,7 +105,7 @@ func (m *LogManager) ServiceStarted(service *plan.Service, buffer *servicelog.Ri
 		if !service.LogsTo(target) {
 			continue
 		}
-		gatherer.serviceStarted(service, buffer)
+		gatherer.ServiceStarted(service, buffer)
 	}
 }
 
@@ -123,7 +123,7 @@ func (m *LogManager) Stop() {
 	for _, gatherer := range m.gatherers {
 		wg.Add(1)
 		go func(gatherer *logGatherer) {
-			gatherer.stop()
+			gatherer.Stop()
 			wg.Done()
 		}(gatherer)
 	}

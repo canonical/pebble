@@ -45,7 +45,7 @@ func (s *gathererSuite) TestGatherer(c *C) {
 	c.Assert(err, IsNil)
 
 	testSvc := newTestService("svc1")
-	g.serviceStarted(testSvc.config, testSvc.ringBuffer)
+	g.ServiceStarted(testSvc.config, testSvc.ringBuffer)
 
 	testSvc.writeLog("log line #1")
 	testSvc.writeLog("log line #2")
@@ -82,7 +82,7 @@ func (s *gathererSuite) TestGathererTimeout(c *C) {
 	c.Assert(err, IsNil)
 
 	testSvc := newTestService("svc1")
-	g.serviceStarted(testSvc.config, testSvc.ringBuffer)
+	g.ServiceStarted(testSvc.config, testSvc.ringBuffer)
 
 	testSvc.writeLog("log line #1")
 	select {
@@ -109,7 +109,7 @@ func (s *gathererSuite) TestGathererShutdown(c *C) {
 	c.Assert(err, IsNil)
 
 	testSvc := newTestService("svc1")
-	g.serviceStarted(testSvc.config, testSvc.ringBuffer)
+	g.ServiceStarted(testSvc.config, testSvc.ringBuffer)
 
 	testSvc.writeLog("log line #1")
 	err = testSvc.stop()
@@ -117,7 +117,7 @@ func (s *gathererSuite) TestGathererShutdown(c *C) {
 
 	hasShutdown := make(chan struct{})
 	go func() {
-		g.stop()
+		g.Stop()
 		close(hasShutdown)
 	}()
 

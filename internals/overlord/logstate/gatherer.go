@@ -35,7 +35,7 @@ const (
 	timeoutPullers      = 2 * time.Second
 	timeoutMainLoop     = 3 * time.Second
 	// timeoutFinalFlush is measured from when the gatherer's main loop finishes,
-	// NOT from when stop() is called like the other constants.
+	// NOT from when Stop() is called like the other constants.
 	timeoutFinalFlush = 2 * time.Second
 )
 
@@ -52,8 +52,8 @@ const (
 //
 // The client may also flush itself when its internal buffer reaches a certain
 // size.
-// Calling the stop() method will tear down the logGatherer and all of its
-// associated logPullers. stop() can be called from an outside goroutine.
+// Calling the Stop() method will tear down the logGatherer and all of its
+// associated logPullers. Stop() can be called from an outside goroutine.
 type logGatherer struct {
 	logGathererArgs
 
@@ -122,8 +122,8 @@ func fillDefaultArgs(args logGathererArgs) logGathererArgs {
 	return args
 }
 
-// planChanged is called by the LogManager when the plan is changed.
-func (g *logGatherer) planChanged(pl *plan.Plan, buffers map[string]*servicelog.RingBuffer) {
+// PlanChanged is called by the LogManager when the plan is changed.
+func (g *logGatherer) PlanChanged(pl *plan.Plan, buffers map[string]*servicelog.RingBuffer) {
 	// Remove old pullers
 	for _, svcName := range g.pullers.List() {
 		svc, svcExists := pl.Services[svcName]
@@ -148,7 +148,7 @@ func (g *logGatherer) planChanged(pl *plan.Plan, buffers map[string]*servicelog.
 		buffer, bufferExists := buffers[service.Name]
 		if !bufferExists {
 			// We don't yet have a reference to the service's ring buffer
-			// Need to wait until serviceStarted
+			// Need to wait until ServiceStarted
 			continue
 		}
 
@@ -156,9 +156,9 @@ func (g *logGatherer) planChanged(pl *plan.Plan, buffers map[string]*servicelog.
 	}
 }
 
-// serviceStarted is called by the LogManager on the start of a service which
+// ServiceStarted is called by the LogManager on the start of a service which
 // logs to this gatherer's target.
-func (g *logGatherer) serviceStarted(service *plan.Service, buffer *servicelog.RingBuffer) {
+func (g *logGatherer) ServiceStarted(service *plan.Service, buffer *servicelog.RingBuffer) {
 	g.pullers.Add(service.Name, buffer, g.entryCh)
 }
 
@@ -200,17 +200,17 @@ mainLoop:
 	return nil
 }
 
-// stop tears down the gatherer and associated resources (pullers, client).
+// Stop tears down the gatherer and associated resources (pullers, client).
 // This method will block until gatherer teardown is complete.
 //
 // The teardown process has several steps:
-//   - If the main loop is in the middle of a flush when we call stop, this
+//   - If the main loop is in the middle of a flush when we call Stop, this
 //     will block the pullers from sending logs to the gatherer. Hence, wait
 //     for the current flush to complete.
 //   - Wait for the pullers to pull the final logs from the iterator.
 //   - Kill the main loop.
 //   - Flush out any final logs buffered in the client.
-func (g *logGatherer) stop() {
+func (g *logGatherer) Stop() {
 	// Wait up to timeoutCurrentFlush for the current flush to complete (if any)
 	time.AfterFunc(timeoutCurrentFlush, g.clientCancel)
 
