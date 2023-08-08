@@ -93,7 +93,7 @@ func newLogGathererInternal(target *plan.LogTarget, args logGathererArgs) (*logG
 	args = fillDefaultArgs(args)
 	client, err := args.newClient(target)
 	if err != nil {
-		return nil, fmt.Errorf("could not create log client: %w", err)
+		return nil, fmt.Errorf("cannot create log client: %w", err)
 	}
 
 	g := &logGatherer{
@@ -179,13 +179,13 @@ mainLoop:
 			// Timeout - flush
 			err := g.client.Flush(g.clientCtx)
 			if err != nil {
-				logger.Noticef("sending logs to target %q: %v", g.targetName, err)
+				logger.Noticef("Error sending logs to target %q: %v", g.targetName, err)
 			}
 
 		case entry := <-g.entryCh:
 			err := g.client.Write(g.clientCtx, entry)
 			if err != nil {
-				logger.Noticef("writing logs to target %q: %v", g.targetName, err)
+				logger.Noticef("Error writing logs to target %q: %v", g.targetName, err)
 			}
 		}
 	}
@@ -195,7 +195,7 @@ mainLoop:
 	defer cancel()
 	err := g.client.Flush(ctx)
 	if err != nil {
-		logger.Noticef("sending logs to target %q: %v", g.targetName, err)
+		logger.Noticef("Error sending logs to target %q: %v", g.targetName, err)
 	}
 	return nil
 }
