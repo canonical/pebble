@@ -217,6 +217,10 @@ func userFromRequest(state interface{}, r *http.Request) (*UserState, error) {
 	return nil, nil
 }
 
+func (d *Daemon) Overlord() *overlord.Overlord {
+	return d.overlord
+}
+
 func (c *Command) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	st := c.d.state
 	st.Lock()

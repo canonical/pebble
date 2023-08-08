@@ -56,8 +56,24 @@ type StateEngine struct {
 	state   *state.State
 	stopped bool
 	// managers in use
-	mgrLock  sync.Mutex
-	managers []StateManager
+	mgrLock    sync.Mutex
+	managers   []StateManager
+	taskRunner StateManager
+}
+
+// orderedManagers returns all the managers added to this engine.
+//
+// The managers are ordered by their precedence when executing Ensure, Stop
+// and Wait: the task runner is the last item in the result.
+func (se *StateEngine) orderedManagers() []StateManager {
+	result := make([]StateManager, 0, len(se.managers)+1)
+	for _, m := range se.managers {
+		result = append(result, m)
+	}
+	if se.taskRunner != nil {
+		result = append(result, se.taskRunner)
+	}
+	return result
 }
 
 // NewStateEngine returns a new state engine.
@@ -95,7 +111,7 @@ func (se *StateEngine) Ensure() error {
 		return fmt.Errorf("state engine already stopped")
 	}
 	var errs []error
-	for _, m := range se.managers {
+	for _, m := range se.orderedManagers() {
 		err := m.Ensure()
 		if err != nil {
 			logger.Noticef("state ensure error: %v", err)
@@ -115,6 +131,12 @@ func (se *StateEngine) AddManager(m StateManager) {
 	se.managers = append(se.managers, m)
 }
 
+func (se *StateEngine) SetTaskRunner(taskRunner StateManager) {
+	se.mgrLock.Lock()
+	defer se.mgrLock.Unlock()
+	se.taskRunner = taskRunner
+}
+
 // Wait waits for all managers current activities.
 func (se *StateEngine) Wait() {
 	se.mgrLock.Lock()
@@ -122,7 +144,7 @@ func (se *StateEngine) Wait() {
 	if se.stopped {
 		return
 	}
-	for _, m := range se.managers {
+	for _, m := range se.orderedManagers() {
 		if waiter, ok := m.(StateWaiter); ok {
 			waiter.Wait()
 		}
@@ -136,7 +158,7 @@ func (se *StateEngine) Stop() {
 	if se.stopped {
 		return
 	}
-	for _, m := range se.managers {
+	for _, m := range se.orderedManagers() {
 		if stopper, ok := m.(StateStopper); ok {
 			stopper.Stop()
 		}
