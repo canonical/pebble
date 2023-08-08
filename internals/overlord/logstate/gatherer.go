@@ -122,7 +122,8 @@ func fillDefaultArgs(args logGathererArgs) logGathererArgs {
 	return args
 }
 
-// PlanChanged is called by the LogManager when the plan is changed.
+// PlanChanged is called by the LogManager when the plan is changed, if this
+// gatherer's target exists in the new plan.
 func (g *logGatherer) PlanChanged(pl *plan.Plan, buffers map[string]*servicelog.RingBuffer) {
 	// Remove old pullers
 	for _, svcName := range g.pullers.List() {
