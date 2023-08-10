@@ -1180,7 +1180,7 @@ services:
 
 type rebootSuite struct{}
 
-var _ = check.Suite(&rebootSuite{})
+var _ = Suite(&rebootSuite{})
 
 func mockSyncSyscall(f func()) (restore func()) {
 	old := syncSyscall
