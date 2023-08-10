@@ -28,7 +28,7 @@ type healthInfo struct {
 	Healthy bool `json:"healthy"`
 }
 
-func v1Health(c *Command, r *http.Request, _ *userState) Response {
+func v1Health(c *Command, r *http.Request, _ *UserState) Response {
 	query := r.URL.Query()
 	level := plan.CheckLevel(query.Get("level"))
 	switch level {

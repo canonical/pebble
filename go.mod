@@ -1,6 +1,6 @@
 module github.com/canonical/pebble
 
-go 1.14
+go 1.20
 
 require (
 	github.com/canonical/go-flags v0.0.0-20230403090104-105d09a091b8
@@ -9,9 +9,16 @@ require (
 	github.com/gorilla/websocket v1.4.2
 	github.com/pkg/term v1.1.0
 	golang.org/x/crypto v0.0.0-20220314234659-1baeb1ce4c0b
-	golang.org/x/net v0.0.0-20220906165146-f3363e06e74c // indirect
 	golang.org/x/sys v0.0.0-20220728004956-3c1f35247d10
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c
 	gopkg.in/tomb.v2 v2.0.0-20161208151619-d5d1b5820637
 	gopkg.in/yaml.v3 v3.0.1
+)
+
+require (
+	github.com/kr/pretty v0.2.1 // indirect
+	github.com/kr/text v0.2.0 // indirect
+	golang.org/x/net v0.0.0-20220906165146-f3363e06e74c // indirect
+	golang.org/x/term v0.0.0-20210927222741-03fcf44c2211 // indirect
+	gopkg.in/yaml.v2 v2.4.0 // indirect
 )

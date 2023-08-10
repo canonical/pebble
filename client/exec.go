@@ -30,21 +30,27 @@ type ExecOptions struct {
 	// Required: command and arguments (first element is the executable).
 	Command []string
 
+	// Optional: run the command in the context of this service. Specifically,
+	// inherit its environment variables, user/group settings, and working
+	// and working directory. The other options in this struct will override
+	// the service context; Environment will be merged on top of the service's.
+	ServiceContext string
+
 	// Optional environment variables.
 	Environment map[string]string
 
 	// Optional working directory (default is $HOME or "/" if $HOME not set).
 	WorkingDir string
 
-	// Optional timeout for the command execution, after which the process
-	// will be terminated. If zero, no timeout applies.
-	Timeout time.Duration
-
 	// Optional user ID and group ID for the process to run as.
 	UserID  *int
 	User    string
 	GroupID *int
 	Group   string
+
+	// Optional timeout for the command execution, after which the process
+	// will be terminated. If zero, no timeout applies.
+	Timeout time.Duration
 
 	// True to ask the server to set up a pseudo-terminal (PTY) for stdout
 	// (this also allows window resizing). The default is no PTY, and just
@@ -74,19 +80,20 @@ type ExecOptions struct {
 }
 
 type execPayload struct {
-	Command     []string          `json:"command"`
-	Environment map[string]string `json:"environment,omitempty"`
-	WorkingDir  string            `json:"working-dir,omitempty"`
-	Timeout     string            `json:"timeout,omitempty"`
-	UserID      *int              `json:"user-id,omitempty"`
-	User        string            `json:"user,omitempty"`
-	GroupID     *int              `json:"group-id,omitempty"`
-	Group       string            `json:"group,omitempty"`
-	Terminal    bool              `json:"terminal,omitempty"`
-	Interactive bool              `json:"interactive,omitempty"`
-	SplitStderr bool              `json:"split-stderr,omitempty"`
-	Width       int               `json:"width,omitempty"`
-	Height      int               `json:"height,omitempty"`
+	Command        []string          `json:"command"`
+	ServiceContext string            `json:"service-context,omitempty"`
+	Environment    map[string]string `json:"environment,omitempty"`
+	WorkingDir     string            `json:"working-dir,omitempty"`
+	Timeout        string            `json:"timeout,omitempty"`
+	UserID         *int              `json:"user-id,omitempty"`
+	User           string            `json:"user,omitempty"`
+	GroupID        *int              `json:"group-id,omitempty"`
+	Group          string            `json:"group,omitempty"`
+	Terminal       bool              `json:"terminal,omitempty"`
+	Interactive    bool              `json:"interactive,omitempty"`
+	SplitStderr    bool              `json:"split-stderr,omitempty"`
+	Width          int               `json:"width,omitempty"`
+	Height         int               `json:"height,omitempty"`
 }
 
 type execResult struct {
@@ -122,19 +129,20 @@ func (client *Client) Exec(opts *ExecOptions) (*ExecProcess, error) {
 		timeoutStr = opts.Timeout.String()
 	}
 	payload := execPayload{
-		Command:     opts.Command,
-		Environment: opts.Environment,
-		WorkingDir:  opts.WorkingDir,
-		Timeout:     timeoutStr,
-		UserID:      opts.UserID,
-		User:        opts.User,
-		GroupID:     opts.GroupID,
-		Group:       opts.Group,
-		Terminal:    opts.Terminal,
-		Interactive: opts.Interactive,
-		SplitStderr: opts.Stderr != nil,
-		Width:       opts.Width,
-		Height:      opts.Height,
+		Command:        opts.Command,
+		ServiceContext: opts.ServiceContext,
+		Environment:    opts.Environment,
+		WorkingDir:     opts.WorkingDir,
+		Timeout:        timeoutStr,
+		UserID:         opts.UserID,
+		User:           opts.User,
+		GroupID:        opts.GroupID,
+		Group:          opts.Group,
+		Terminal:       opts.Terminal,
+		Interactive:    opts.Interactive,
+		SplitStderr:    opts.Stderr != nil,
+		Width:          opts.Width,
+		Height:         opts.Height,
 	}
 	var body bytes.Buffer
 	err := json.NewEncoder(&body).Encode(&payload)

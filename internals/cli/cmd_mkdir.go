@@ -24,6 +24,11 @@ import (
 	"github.com/canonical/pebble/client"
 )
 
+const cmdMkdirSummary = "Create a directory"
+const cmdMkdirDescription = `
+The mkdir command creates the specified directory.
+`
+
 type cmdMkdir struct {
 	clientMixin
 
@@ -39,19 +44,22 @@ type cmdMkdir struct {
 	} `positional-args:"yes" required:"yes"`
 }
 
-var mkdirDescs = map[string]string{
-	"p":     "Create parent directories as needed",
-	"m":     "Set permissions (e.g. 0644)",
-	"uid":   "Use specified user ID",
-	"user":  "Use specified username",
-	"gid":   "Use specified group ID",
-	"group": "Use specified group name",
+func init() {
+	AddCommand(&CmdInfo{
+		Name:        "mkdir",
+		Summary:     cmdMkdirSummary,
+		Description: cmdMkdirDescription,
+		Builder:     func() flags.Commander { return &cmdMkdir{} },
+		ArgsHelp: map[string]string{
+			"-p":      "Create parent directories as needed",
+			"-m":      "Set permissions (e.g. 0644)",
+			"--uid":   "Use specified user ID",
+			"--user":  "Use specified username",
+			"--gid":   "Use specified group ID",
+			"--group": "Use specified group name",
+		},
+	})
 }
-
-var shortMkdirHelp = "Create a directory"
-var longMkdirHelp = `
-The mkdir command creates the specified directory.
-`
 
 func (cmd *cmdMkdir) Execute(args []string) error {
 	if len(args) > 0 {
@@ -76,8 +84,4 @@ func (cmd *cmdMkdir) Execute(args []string) error {
 	}
 
 	return cmd.client.MakeDir(&opts)
-}
-
-func init() {
-	addCommand("mkdir", shortMkdirHelp, longMkdirHelp, func() flags.Commander { return &cmdMkdir{} }, mkdirDescs, nil)
 }

@@ -105,12 +105,10 @@ func (s *Service) Copy() *Service {
 		}
 	}
 	if s.UserID != nil {
-		userID := *s.UserID
-		copied.UserID = &userID
+		copied.UserID = copyIntPtr(s.UserID)
 	}
 	if s.GroupID != nil {
-		groupID := *s.GroupID
-		copied.GroupID = &groupID
+		copied.GroupID = copyIntPtr(s.GroupID)
 	}
 	if s.OnCheckFailure != nil {
 		copied.OnCheckFailure = make(map[string]ServiceAction)
@@ -139,15 +137,13 @@ func (s *Service) Merge(other *Service) {
 		s.KillDelay = other.KillDelay
 	}
 	if other.UserID != nil {
-		userID := *other.UserID
-		s.UserID = &userID
+		s.UserID = copyIntPtr(other.UserID)
 	}
 	if other.User != "" {
 		s.User = other.User
 	}
 	if other.GroupID != nil {
-		groupID := *other.GroupID
-		s.GroupID = &groupID
+		s.GroupID = copyIntPtr(other.GroupID)
 	}
 	if other.Group != "" {
 		s.Group = other.Group
@@ -431,13 +427,14 @@ func (c *TCPCheck) Merge(other *TCPCheck) {
 
 // ExecCheck holds the configuration for an exec health check.
 type ExecCheck struct {
-	Command     string            `yaml:"command,omitempty"`
-	Environment map[string]string `yaml:"environment,omitempty"`
-	UserID      *int              `yaml:"user-id,omitempty"`
-	User        string            `yaml:"user,omitempty"`
-	GroupID     *int              `yaml:"group-id,omitempty"`
-	Group       string            `yaml:"group,omitempty"`
-	WorkingDir  string            `yaml:"working-dir,omitempty"`
+	Command        string            `yaml:"command,omitempty"`
+	ServiceContext string            `yaml:"service-context,omitempty"`
+	Environment    map[string]string `yaml:"environment,omitempty"`
+	UserID         *int              `yaml:"user-id,omitempty"`
+	User           string            `yaml:"user,omitempty"`
+	GroupID        *int              `yaml:"group-id,omitempty"`
+	Group          string            `yaml:"group,omitempty"`
+	WorkingDir     string            `yaml:"working-dir,omitempty"`
 }
 
 // Copy returns a deep copy of the exec check configuration.
@@ -450,12 +447,10 @@ func (c *ExecCheck) Copy() *ExecCheck {
 		}
 	}
 	if c.UserID != nil {
-		userID := *c.UserID
-		copied.UserID = &userID
+		copied.UserID = copyIntPtr(c.UserID)
 	}
 	if c.GroupID != nil {
-		groupID := *c.GroupID
-		copied.GroupID = &groupID
+		copied.GroupID = copyIntPtr(c.GroupID)
 	}
 	return &copied
 }
@@ -465,6 +460,9 @@ func (c *ExecCheck) Merge(other *ExecCheck) {
 	if other.Command != "" {
 		c.Command = other.Command
 	}
+	if other.ServiceContext != "" {
+		c.ServiceContext = other.ServiceContext
+	}
 	for k, v := range other.Environment {
 		if c.Environment == nil {
 			c.Environment = make(map[string]string)
@@ -472,15 +470,13 @@ func (c *ExecCheck) Merge(other *ExecCheck) {
 		c.Environment[k] = v
 	}
 	if other.UserID != nil {
-		userID := *other.UserID
-		c.UserID = &userID
+		c.UserID = copyIntPtr(other.UserID)
 	}
 	if other.User != "" {
 		c.User = other.User
 	}
 	if other.GroupID != nil {
-		groupID := *other.GroupID
-		c.GroupID = &groupID
+		c.GroupID = copyIntPtr(other.GroupID)
 	}
 	if other.Group != "" {
 		c.Group = other.Group
@@ -731,6 +727,13 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 			if err != nil {
 				return nil, &FormatError{
 					Message: fmt.Sprintf("plan check %q command invalid: %v", name, err),
+				}
+			}
+			_, contextExists := combined.Services[check.Exec.ServiceContext]
+			if check.Exec.ServiceContext != "" && !contextExists {
+				return nil, &FormatError{
+					Message: fmt.Sprintf("plan check %q service context specifies non-existent service %q",
+						name, check.Exec.ServiceContext),
 				}
 			}
 			_, _, err = osutil.NormalizeUidGid(check.Exec.UserID, check.Exec.GroupID, check.Exec.User, check.Exec.Group)
@@ -1074,4 +1077,80 @@ func ReadDir(dir string) (*Plan, error) {
 		LogTargets: combined.LogTargets,
 	}
 	return plan, err
+}
+
+// MergeServiceContext merges the overrides on top of the service context
+// specified by serviceName, returning a new ContextOptions value. If
+// serviceName is "" (context not specified), return overrides directly.
+func MergeServiceContext(p *Plan, serviceName string, overrides ContextOptions) (ContextOptions, error) {
+	if serviceName == "" {
+		return overrides, nil
+	}
+	var service *Service
+	for _, s := range p.Services {
+		if s.Name == serviceName {
+			service = s
+			break
+		}
+	}
+	if service == nil {
+		return ContextOptions{}, fmt.Errorf("context service %q not found", serviceName)
+	}
+
+	// Start with the config values from the context service.
+	merged := ContextOptions{
+		Environment: make(map[string]string),
+	}
+	for k, v := range service.Environment {
+		merged.Environment[k] = v
+	}
+	if service.UserID != nil {
+		merged.UserID = copyIntPtr(service.UserID)
+	}
+	merged.User = service.User
+	if service.GroupID != nil {
+		merged.GroupID = copyIntPtr(service.GroupID)
+	}
+	merged.Group = service.Group
+	merged.WorkingDir = service.WorkingDir
+
+	// Merge in fields from the overrides, if set.
+	for k, v := range overrides.Environment {
+		merged.Environment[k] = v
+	}
+	if overrides.UserID != nil {
+		merged.UserID = copyIntPtr(overrides.UserID)
+	}
+	if overrides.User != "" {
+		merged.User = overrides.User
+	}
+	if overrides.GroupID != nil {
+		merged.GroupID = copyIntPtr(overrides.GroupID)
+	}
+	if overrides.Group != "" {
+		merged.Group = overrides.Group
+	}
+	if overrides.WorkingDir != "" {
+		merged.WorkingDir = overrides.WorkingDir
+	}
+
+	return merged, nil
+}
+
+// ContextOptions holds service context config fields.
+type ContextOptions struct {
+	Environment map[string]string
+	UserID      *int
+	User        string
+	GroupID     *int
+	Group       string
+	WorkingDir  string
+}
+
+func copyIntPtr(p *int) *int {
+	if p == nil {
+		return nil
+	}
+	copied := *p
+	return &copied
 }

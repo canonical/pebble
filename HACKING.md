@@ -83,6 +83,39 @@ $ curl --unix-socket ~/pebble/.pebble.socket 'http://localhost/v1/services?names
 ```
 
 
+## Code style
+
+Pebble imports should be arranged in three groups:
+- standard library imports
+- third-party / non-Pebble imports
+- Pebble imports (i.e. those prefixed with `github.com/canonical/pebble`)
+
+Imports should be sorted alphabetically within each group.
+
+We use the [`gopkg.in/check.v1`](https://pkg.go.dev/gopkg.in/check.v1) package for testing. Inside a test file, import this as follows:
+```go
+. "gopkg.in/check.v1"
+```
+so that identifiers from that package will be added to the local namespace.
+
+
+Here is an example of correctly arranged imports:
+
+```go
+import (
+	"fmt"
+	"net"
+	"os"
+
+	"github.com/gorilla/mux"
+	. "gopkg.in/check.v1"
+
+	"github.com/canonical/pebble/internals/systemd"
+	"github.com/canonical/pebble/internals/testutil"
+)
+```
+
+
 ## Running the tests
 
 Pebble has a suite of Go unit tests, which you can run using the regular `go test` command. To test all packages in the Pebble repository:

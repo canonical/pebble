@@ -27,9 +27,11 @@ import (
 	"github.com/canonical/pebble/client"
 )
 
-const (
-	logTimeFormat = "2006-01-02T15:04:05.000Z07:00"
-)
+const cmdLogsSummary = "Fetch service logs"
+const cmdLogsDescription = `
+The logs command fetches buffered logs from the given services (or all services
+if none are specified) and displays them in chronological order.
+`
 
 type cmdLogs struct {
 	clientMixin
@@ -41,17 +43,23 @@ type cmdLogs struct {
 	} `positional-args:"yes"`
 }
 
-var logsDescs = map[string]string{
-	"follow": "Follow (tail) logs for given services until Ctrl-C is\npressed. If no services are specified, show logs from\nall services running when the command starts.",
-	"format": "Output format: \"text\" (default) or \"json\" (JSON lines).",
-	"n":      "Number of logs to show (before following); defaults to 30.\nIf 'all', show all buffered logs.",
+func init() {
+	AddCommand(&CmdInfo{
+		Name:        "logs",
+		Summary:     cmdLogsSummary,
+		Description: cmdLogsDescription,
+		ArgsHelp: map[string]string{
+			"--follow": "Follow (tail) logs for given services until Ctrl-C is\npressed. If no services are specified, show logs from\nall services running when the command starts.",
+			"--format": "Output format: \"text\" (default) or \"json\" (JSON lines).",
+			"-n":       "Number of logs to show (before following); defaults to 30.\nIf 'all', show all buffered logs.",
+		},
+		Builder: func() flags.Commander { return &cmdLogs{} },
+	})
 }
 
-var shortLogsHelp = "Fetch service logs"
-var longLogsHelp = `
-The logs command fetches buffered logs from the given services (or all services
-if none are specified) and displays them in chronological order.
-`
+const (
+	logTimeFormat = "2006-01-02T15:04:05.000Z07:00"
+)
 
 func (cmd *cmdLogs) Execute(args []string) error {
 	var n int
@@ -118,8 +126,4 @@ func notifyContext(parent context.Context, signals ...os.Signal) context.Context
 		cancel()
 	}()
 	return ctx
-}
-
-func init() {
-	addCommand("logs", shortLogsHelp, longLogsHelp, func() flags.Commander { return &cmdLogs{} }, logsDescs, nil)
 }

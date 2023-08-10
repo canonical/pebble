@@ -20,8 +20,8 @@ import (
 	"github.com/canonical/pebble/client"
 )
 
-var shortReplanHelp = "Ensure running services match the current plan"
-var longReplanHelp = `
+const cmdReplanSummary = "Ensure running services match the current plan"
+const cmdReplanDescription = `
 The replan command starts, stops, or restarts services that have changed,
 so that running services exactly match the desired configuration in the
 current plan.
@@ -32,7 +32,13 @@ type cmdReplan struct {
 }
 
 func init() {
-	addCommand("replan", shortReplanHelp, longReplanHelp, func() flags.Commander { return &cmdReplan{} }, waitDescs, nil)
+	AddCommand(&CmdInfo{
+		Name:        "replan",
+		Summary:     cmdReplanSummary,
+		Description: cmdReplanDescription,
+		ArgsHelp:    waitArgsHelp,
+		Builder:     func() flags.Commander { return &cmdReplan{} },
+	})
 }
 
 func (cmd cmdReplan) Execute(args []string) error {

@@ -35,7 +35,7 @@ type serviceInfo struct {
 	CurrentSince *time.Time `json:"current-since,omitempty"` // pointer as omitempty doesn't work with time.Time directly
 }
 
-func v1GetServices(c *Command, r *http.Request, _ *userState) Response {
+func v1GetServices(c *Command, r *http.Request, _ *UserState) Response {
 	names := strutil.MultiCommaSeparatedList(r.URL.Query()["names"])
 
 	servmgr := overlordServiceManager(c.d.overlord)
@@ -59,7 +59,7 @@ func v1GetServices(c *Command, r *http.Request, _ *userState) Response {
 	return SyncResponse(infos)
 }
 
-func v1PostServices(c *Command, r *http.Request, _ *userState) Response {
+func v1PostServices(c *Command, r *http.Request, _ *UserState) Response {
 	var payload struct {
 		Action   string   `json:"action"`
 		Services []string `json:"services"`
@@ -212,11 +212,11 @@ func v1PostServices(c *Command, r *http.Request, _ *userState) Response {
 	return AsyncResponse(nil, change.ID())
 }
 
-func v1GetService(c *Command, r *http.Request, _ *userState) Response {
+func v1GetService(c *Command, r *http.Request, _ *UserState) Response {
 	return statusBadRequest("not implemented")
 }
 
-func v1PostService(c *Command, r *http.Request, _ *userState) Response {
+func v1PostService(c *Command, r *http.Request, _ *UserState) Response {
 	return statusBadRequest("not implemented")
 }
 

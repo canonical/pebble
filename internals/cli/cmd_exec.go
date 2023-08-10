@@ -30,40 +30,8 @@ import (
 	"github.com/canonical/pebble/internals/ptyutil"
 )
 
-type cmdExec struct {
-	clientMixin
-	WorkingDir     string        `short:"w"`
-	Env            []string      `long:"env"`
-	UserID         *int          `long:"uid"`
-	User           string        `long:"user"`
-	GroupID        *int          `long:"gid"`
-	Group          string        `long:"group"`
-	Timeout        time.Duration `long:"timeout"`
-	Terminal       bool          `short:"t"`
-	NoTerminal     bool          `short:"T"`
-	Interactive    bool          `short:"i"`
-	NonInteractive bool          `short:"I"`
-	Positional     struct {
-		Command string `positional-arg-name:"<command>" required:"1"`
-	} `positional-args:"yes"`
-}
-
-var execDescs = map[string]string{
-	"w":       "Working directory to run command in",
-	"env":     "Environment variable to set (in 'FOO=bar' format)",
-	"uid":     "User ID to run command as",
-	"user":    "Username to run command as (user's UID must match uid if both present)",
-	"gid":     "Group ID to run command as",
-	"group":   "Group name to run command as (group's GID must match gid if both present)",
-	"timeout": "Timeout after which to terminate command",
-	"t":       "Allocate remote pseudo-terminal and connect stdout to it (default if stdout is a TTY)",
-	"T":       "Disable remote pseudo-terminal allocation",
-	"i":       "Interactive mode: connect stdin to the pseudo-terminal (default if stdin and stdout are TTYs)",
-	"I":       "Disable interactive mode and use a pipe for stdin",
-}
-
-var shortExecHelp = "Execute a remote command and wait for it to finish"
-var longExecHelp = `
+const cmdExecSummary = "Execute a remote command and wait for it to finish"
+const cmdExecDescription = `
 The exec command runs a remote command and waits for it to finish. The local
 stdin is sent as the input to the remote process, while the remote stdout and
 stderr are output locally.
@@ -73,6 +41,49 @@ arguments using "--", for example:
 
 pebble exec --timeout 10s -- echo -n foo bar
 `
+
+type cmdExec struct {
+	clientMixin
+	WorkingDir     string        `short:"w"`
+	Env            []string      `long:"env"`
+	UserID         *int          `long:"uid"`
+	User           string        `long:"user"`
+	GroupID        *int          `long:"gid"`
+	Group          string        `long:"group"`
+	Timeout        time.Duration `long:"timeout"`
+	Context        string        `long:"context"`
+	Terminal       bool          `short:"t"`
+	NoTerminal     bool          `short:"T"`
+	Interactive    bool          `short:"i"`
+	NonInteractive bool          `short:"I"`
+	Positional     struct {
+		Command string `positional-arg-name:"<command>" required:"1"`
+	} `positional-args:"yes"`
+}
+
+func init() {
+	AddCommand(&CmdInfo{
+		Name:        "exec",
+		Summary:     cmdExecSummary,
+		Description: cmdExecDescription,
+		ArgsHelp: map[string]string{
+			"-w":        "Working directory to run command in",
+			"--env":     "Environment variable to set (in 'FOO=bar' format)",
+			"--uid":     "User ID to run command as",
+			"--user":    "Username to run command as (user's UID must match uid if both present)",
+			"--gid":     "Group ID to run command as",
+			"--group":   "Group name to run command as (group's GID must match gid if both present)",
+			"--timeout": "Timeout after which to terminate command",
+			"--context": "Inherit the context of the named service (overridden by -w, --env, --uid/user, --gid/group)",
+			"-t":        "Allocate remote pseudo-terminal and connect stdout to it (default if stdout is a TTY)",
+			"-T":        "Disable remote pseudo-terminal allocation",
+			"-i":        "Interactive mode: connect stdin to the pseudo-terminal (default if stdin and stdout are TTYs)",
+			"-I":        "Disable interactive mode and use a pipe for stdin",
+		},
+		PassAfterNonOption: true,
+		Builder:            func() flags.Commander { return &cmdExec{} },
+	})
+}
 
 func (cmd *cmdExec) Execute(args []string) error {
 	if cmd.Terminal && cmd.NoTerminal {
@@ -143,21 +154,22 @@ func (cmd *cmdExec) Execute(args []string) error {
 	}
 
 	opts := &client.ExecOptions{
-		Command:     command,
-		Environment: env,
-		WorkingDir:  cmd.WorkingDir,
-		Timeout:     cmd.Timeout,
-		UserID:      cmd.UserID,
-		User:        cmd.User,
-		GroupID:     cmd.GroupID,
-		Group:       cmd.Group,
-		Terminal:    terminal,
-		Interactive: interactive,
-		Width:       width,
-		Height:      height,
-		Stdin:       Stdin,
-		Stdout:      Stdout,
-		Stderr:      Stderr,
+		Command:        command,
+		ServiceContext: cmd.Context,
+		Environment:    env,
+		WorkingDir:     cmd.WorkingDir,
+		Timeout:        cmd.Timeout,
+		UserID:         cmd.UserID,
+		User:           cmd.User,
+		GroupID:        cmd.GroupID,
+		Group:          cmd.Group,
+		Terminal:       terminal,
+		Interactive:    interactive,
+		Width:          width,
+		Height:         height,
+		Stdin:          Stdin,
+		Stdout:         Stdout,
+		Stderr:         Stderr,
 	}
 
 	// If stdout and stderr both refer to the same file or device (e.g.,
@@ -260,12 +272,5 @@ func execControlHandler(process *client.ExecProcess, terminal bool, stop <-chan 
 				break
 			}
 		}
-	}
-}
-
-func init() {
-	info := addCommand("exec", shortExecHelp, longExecHelp, func() flags.Commander { return &cmdExec{} }, execDescs, nil)
-	info.extra = func(cmd *flags.Command) {
-		cmd.PassAfterNonOption = true
 	}
 }

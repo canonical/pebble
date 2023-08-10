@@ -24,7 +24,7 @@ import (
 	"github.com/canonical/pebble/internals/overlord/state"
 )
 
-var api = []*Command{{
+var API = []*Command{{
 	// See daemon.go:canAccess for details how the access is controlled.
 	Path:    "/v1/system-info",
 	GuestOK: true,
@@ -107,7 +107,7 @@ var (
 	muxVars = mux.Vars
 )
 
-func v1SystemInfo(c *Command, r *http.Request, _ *userState) Response {
+func v1SystemInfo(c *Command, r *http.Request, _ *UserState) Response {
 	state := c.d.overlord.State()
 	state.Lock()
 	defer state.Unlock()
