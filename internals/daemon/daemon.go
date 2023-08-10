@@ -712,16 +712,30 @@ func (d *Daemon) doReboot(sigCh chan<- os.Signal, waitTimeout time.Duration) err
 
 const rebootMsg = "reboot scheduled to update the system"
 
-var rebootHandler = commandReboot
+var rebootHandler = systemdModeReboot
 
-// SetSyscallReboot replaces the default command-based reboot
-// with a direct Linux kernel syscall based implementation.
-func SetSyscallReboot() {
-	rebootHandler = syscallReboot
+type RebootMode int
+
+const (
+	SystemdMode RebootMode = iota + 1
+	SyscallMode
+)
+
+// SetRebootMode can set how the system should issue a reboot.
+// The default reboot handler mode is SystemdMode.
+func SetRebootMode(mode RebootMode) {
+	switch mode {
+	case SystemdMode:
+		rebootHandler = systemdModeReboot
+	case SyscallMode:
+		rebootHandler = syscallModeReboot
+	default:
+		panic(fmt.Sprintf("unsupported reboot mode %v", mode))
+	}
 }
 
-// commandReboot assumes a userspace shutdown command exists.
-func commandReboot(rebootDelay time.Duration) error {
+// systemdModeReboot assumes a userspace shutdown command exists.
+func systemdModeReboot(rebootDelay time.Duration) error {
 	if rebootDelay < 0 {
 		rebootDelay = 0
 	}
@@ -734,29 +748,35 @@ func commandReboot(rebootDelay time.Duration) error {
 }
 
 var (
-	syncSyscall   = syscall.Sync
-	rebootSyscall = syscall.Reboot
+	syscallSync   = syscall.Sync
+	syscallReboot = syscall.Reboot
 )
 
-// syscallReboot performs a delayed async reboot using direct Linux
-// kernel syscalls.
+// syscallModeReboot performs a non-blocking delayed reboot using direct Linux
+// kernel syscalls. If the delay is negative or zero, the reboot is issued
+// immediately.
 //
 // Note: Reboot message not currently supported.
-func syscallReboot(rebootDelay time.Duration) error {
-	if rebootDelay < 0 {
-		rebootDelay = 0
-	}
-	// This has to be non-blocking, and scheduled for a future
-	// point in time to mimic shutdown.
-	time.AfterFunc(rebootDelay, func() {
+func syscallModeReboot(rebootDelay time.Duration) error {
+	safeReboot := func() {
 		// As per the requirements of the reboot syscall, we
 		// have to first call sync.
-		syncSyscall()
-		err := rebootSyscall(syscall.LINUX_REBOOT_CMD_RESTART)
+		syscallSync()
+		err := syscallReboot(syscall.LINUX_REBOOT_CMD_RESTART)
 		if err != nil {
 			logger.Noticef("Failed on reboot syscall: %v", err)
 		}
-	})
+	}
+
+	if rebootDelay <= 0 {
+		// Synchronous reboot right now.
+		safeReboot()
+	} else {
+		// Asynchronous non-blocking reboot scheduled
+		time.AfterFunc(rebootDelay, func() {
+			safeReboot()
+		})
+	}
 	return nil
 }
 

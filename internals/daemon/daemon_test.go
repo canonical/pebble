@@ -694,7 +694,7 @@ func (s *daemonSuite) TestRestartSystemWiring(c *C) {
 	oldRebootNoticeWait := rebootNoticeWait
 	oldRebootWaitTimeout := rebootWaitTimeout
 	defer func() {
-		rebootHandler = commandReboot
+		rebootHandler = systemdModeReboot
 		rebootNoticeWait = oldRebootNoticeWait
 		rebootWaitTimeout = oldRebootWaitTimeout
 	}()
@@ -1182,26 +1182,10 @@ type rebootSuite struct{}
 
 var _ = Suite(&rebootSuite{})
 
-func mockSyncSyscall(f func()) (restore func()) {
-	old := syncSyscall
-	syncSyscall = f
-	return func() {
-		syncSyscall = old
-	}
-}
-
-func mockRebootSyscall(f func(cmd int) error) (restore func()) {
-	old := rebootSyscall
-	rebootSyscall = f
-	return func() {
-		rebootSyscall = old
-	}
-}
-
 func (s *rebootSuite) TestSyscallPosRebootDelay(c *C) {
 	wait := make(chan int)
-	defer mockSyncSyscall(func() {})()
-	defer mockRebootSyscall(func(cmd int) error {
+	defer FakeSyscallSync(func() {})()
+	defer FakeSyscallReboot(func(cmd int) error {
 		if cmd == syscall.LINUX_REBOOT_CMD_RESTART {
 			wait <- 1
 		}
@@ -1209,7 +1193,7 @@ func (s *rebootSuite) TestSyscallPosRebootDelay(c *C) {
 	})()
 
 	period := 25 * time.Millisecond
-	syscallReboot(period)
+	syscallModeReboot(period)
 	start := time.Now()
 	select {
 	case <-wait:
@@ -1222,8 +1206,8 @@ func (s *rebootSuite) TestSyscallPosRebootDelay(c *C) {
 
 func (s *rebootSuite) TestSyscallNegRebootDelay(c *C) {
 	wait := make(chan int)
-	defer mockSyncSyscall(func() {})()
-	defer mockRebootSyscall(func(cmd int) error {
+	defer FakeSyscallSync(func() {})()
+	defer FakeSyscallReboot(func(cmd int) error {
 		if cmd == syscall.LINUX_REBOOT_CMD_RESTART {
 			wait <- 1
 		}
@@ -1235,7 +1219,10 @@ func (s *rebootSuite) TestSyscallNegRebootDelay(c *C) {
 	// effectively a race, but given the huge timeout, it is not going
 	// to be a problem (c).
 	period := 10 * time.Second
-	syscallReboot(-period)
+	go func() {
+		// We need a different thread for the unbuffered wait.
+		syscallModeReboot(-period)
+	}()
 	start := time.Now()
 	select {
 	case <-wait:
@@ -1248,28 +1235,30 @@ func (s *rebootSuite) TestSyscallNegRebootDelay(c *C) {
 
 func (s *rebootSuite) TestSetSyscall(c *C) {
 	wait := make(chan int)
-	defer mockSyncSyscall(func() {})()
-	defer mockRebootSyscall(func(cmd int) error {
+	defer FakeSyscallSync(func() {})()
+	defer FakeSyscallReboot(func(cmd int) error {
 		if cmd == syscall.LINUX_REBOOT_CMD_RESTART {
 			wait <- 1
 		}
 		return nil
 	})()
 
-	// We know the default is commandReboot otherwise the unit tests
+	// We know the default is systemdReboot otherwise the unit tests
 	// above will fail. We need to check the switch works.
-	SetSyscallReboot()
-	defer func() {
-		rebootHandler = commandReboot
-	}()
+	SetRebootMode(SyscallMode)
+	defer SetRebootMode(SystemdMode)
 
-	err := rebootHandler(0)
-	c.Assert(err, IsNil)
+	var err error
+	go func() {
+		// We need a different thread for the unbuffered wait.
+		err = rebootHandler(0)
+	}()
 	select {
 	case <-wait:
 	case <-time.After(10 * time.Second):
 		c.Fatal("syscall did not take place and we timed out")
 	}
+	c.Assert(err, IsNil)
 }
 
 type fakeLogger struct {
@@ -1285,28 +1274,31 @@ func (f *fakeLogger) Notice(msg string) {
 func (f *fakeLogger) Debug(msg string) {}
 
 func (s *rebootSuite) TestSyscallRebootError(c *C) {
-	defer mockSyncSyscall(func() {})()
-	defer mockRebootSyscall(func(cmd int) error {
+	defer FakeSyscallSync(func() {})()
+	defer FakeSyscallReboot(func(cmd int) error {
 		return fmt.Errorf("-EPERM")
 	})()
 
-	// We know the default is commandReboot otherwise the unit tests
+	// We know the default is systemdReboot otherwise the unit tests
 	// above will fail. We need to check the switch works.
-	SetSyscallReboot()
-	defer func() {
-		rebootHandler = commandReboot
-	}()
+	SetRebootMode(SyscallMode)
+	defer SetRebootMode(SystemdMode)
+
 	complete := make(chan int)
 	l := fakeLogger{noticeCh: complete}
 	old := logger.SetLogger(&l)
 	defer logger.SetLogger(old)
 
-	err := rebootHandler(0)
-	c.Assert(err, IsNil)
+	var err error
+	go func() {
+		// We need a different thread for the unbuffered wait.
+		err = rebootHandler(0)
+	}()
 	select {
 	case <-complete:
 	case <-time.After(10 * time.Second):
 		c.Fatal("syscall did not take place and we timed out")
 	}
+	c.Assert(err, IsNil)
 	c.Assert(l.msg, Matches, "*-EPERM")
 }
