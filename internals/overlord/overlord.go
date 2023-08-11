@@ -114,8 +114,9 @@ func New(pebbleDir string, restartHandler restart.Handler, serviceOutput io.Writ
 		return nil, err
 	}
 	o.addManager(o.serviceMgr)
-	// The log manager should be stopped after the service manager, so we can
-	// collect any final logs from the service.
+	// The log manager should be stopped after the service manager, because
+	// ServiceManager.Stop closes the service ring buffers, which signals to the
+	// log manager that it's okay to stop log forwarding.
 	o.addManager(o.logMgr)
 
 	o.commandMgr = cmdstate.NewManager(o.runner)
