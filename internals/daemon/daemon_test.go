@@ -1183,11 +1183,11 @@ type rebootSuite struct{}
 var _ = Suite(&rebootSuite{})
 
 func (s *rebootSuite) TestSyscallPosRebootDelay(c *C) {
-	wait := make(chan int)
+	wait := make(chan struct{})
 	defer FakeSyscallSync(func() {})()
 	defer FakeSyscallReboot(func(cmd int) error {
 		if cmd == syscall.LINUX_REBOOT_CMD_RESTART {
-			wait <- 1
+			close(wait)
 		}
 		return nil
 	})()
@@ -1205,11 +1205,11 @@ func (s *rebootSuite) TestSyscallPosRebootDelay(c *C) {
 }
 
 func (s *rebootSuite) TestSyscallNegRebootDelay(c *C) {
-	wait := make(chan int)
+	wait := make(chan struct{})
 	defer FakeSyscallSync(func() {})()
 	defer FakeSyscallReboot(func(cmd int) error {
 		if cmd == syscall.LINUX_REBOOT_CMD_RESTART {
-			wait <- 1
+			close(wait)
 		}
 		return nil
 	})()
@@ -1234,11 +1234,11 @@ func (s *rebootSuite) TestSyscallNegRebootDelay(c *C) {
 }
 
 func (s *rebootSuite) TestSetSyscall(c *C) {
-	wait := make(chan int)
+	wait := make(chan struct{})
 	defer FakeSyscallSync(func() {})()
 	defer FakeSyscallReboot(func(cmd int) error {
 		if cmd == syscall.LINUX_REBOOT_CMD_RESTART {
-			wait <- 1
+			close(wait)
 		}
 		return nil
 	})()
@@ -1248,17 +1248,18 @@ func (s *rebootSuite) TestSetSyscall(c *C) {
 	SetRebootMode(SyscallMode)
 	defer SetRebootMode(SystemdMode)
 
-	var err error
+	err := make(chan error)
 	go func() {
 		// We need a different thread for the unbuffered wait.
-		err = rebootHandler(0)
+		err <- rebootHandler(0)
 	}()
+
 	select {
 	case <-wait:
 	case <-time.After(10 * time.Second):
 		c.Fatal("syscall did not take place and we timed out")
 	}
-	c.Assert(err, IsNil)
+	c.Assert(<-err, IsNil)
 }
 
 type fakeLogger struct {
@@ -1289,16 +1290,16 @@ func (s *rebootSuite) TestSyscallRebootError(c *C) {
 	old := logger.SetLogger(&l)
 	defer logger.SetLogger(old)
 
-	var err error
+	err := make(chan error)
 	go func() {
 		// We need a different thread for the unbuffered wait.
-		err = rebootHandler(0)
+		err <- rebootHandler(0)
 	}()
 	select {
 	case <-complete:
 	case <-time.After(10 * time.Second):
 		c.Fatal("syscall did not take place and we timed out")
 	}
-	c.Assert(err, IsNil)
 	c.Assert(l.msg, Matches, "*-EPERM")
+	c.Assert(<-err, IsNil)
 }
