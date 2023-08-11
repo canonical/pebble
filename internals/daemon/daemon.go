@@ -517,7 +517,7 @@ func (d *Daemon) HandleRestart(t restart.RestartType) {
 	case restart.RestartSystem:
 		// try to schedule a fallback slow reboot already here
 		// in case we get stuck shutting down
-		if err := reboot(rebootWaitTimeout); err != nil {
+		if err := rebootHandler(rebootWaitTimeout); err != nil {
 			logger.Noticef("%s", err)
 		}
 
@@ -693,11 +693,11 @@ func (d *Daemon) doReboot(sigCh chan<- os.Signal, waitTimeout time.Duration) err
 	}
 	// ask for shutdown and wait for it to happen.
 	// if we exit, pebble will be restarted by systemd
-	if err := reboot(rebootDelay); err != nil {
+	if err := rebootHandler(rebootDelay); err != nil {
 		return err
 	}
 	// wait for reboot to happen
-	logger.Noticef("Waiting for system reboot")
+	logger.Noticef("Waiting for system reboot...")
 	if sigCh != nil {
 		signal.Stop(sigCh)
 		if len(sigCh) > 0 {
@@ -710,21 +710,78 @@ func (d *Daemon) doReboot(sigCh chan<- os.Signal, waitTimeout time.Duration) err
 	return fmt.Errorf("expected reboot did not happen")
 }
 
-var shutdownMsg = "reboot scheduled to update the system"
+const rebootMsg = "reboot scheduled to update the system"
 
-func rebootImpl(rebootDelay time.Duration) error {
+var rebootHandler = systemdModeReboot
+
+type RebootMode int
+
+const (
+	// Reboot uses systemd
+	SystemdMode RebootMode = iota + 1
+	// Reboot uses direct kernel syscalls
+	SyscallMode
+)
+
+// SetRebootMode configures how the system issues a reboot. The default
+// reboot handler mode is SystemdMode, which relies on systemd
+// (or similar) provided functionality to reboot.
+func SetRebootMode(mode RebootMode) {
+	switch mode {
+	case SystemdMode:
+		rebootHandler = systemdModeReboot
+	case SyscallMode:
+		rebootHandler = syscallModeReboot
+	default:
+		panic(fmt.Sprintf("unsupported reboot mode %v", mode))
+	}
+}
+
+// systemdModeReboot assumes a userspace shutdown command exists.
+func systemdModeReboot(rebootDelay time.Duration) error {
 	if rebootDelay < 0 {
 		rebootDelay = 0
 	}
 	mins := int64(rebootDelay / time.Minute)
-	cmd := exec.Command("shutdown", "-r", fmt.Sprintf("+%d", mins), shutdownMsg)
+	cmd := exec.Command("shutdown", "-r", fmt.Sprintf("+%d", mins), rebootMsg)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return osutil.OutputErr(out, err)
 	}
 	return nil
 }
 
-var reboot = rebootImpl
+var (
+	syscallSync   = syscall.Sync
+	syscallReboot = syscall.Reboot
+)
+
+// syscallModeReboot performs a non-blocking delayed reboot using direct Linux
+// kernel syscalls. If the delay is negative or zero, the reboot is issued
+// immediately.
+//
+// Note: Reboot message not currently supported.
+func syscallModeReboot(rebootDelay time.Duration) error {
+	safeReboot := func() {
+		// As per the requirements of the reboot syscall, we
+		// have to first call sync.
+		syscallSync()
+		err := syscallReboot(syscall.LINUX_REBOOT_CMD_RESTART)
+		if err != nil {
+			logger.Noticef("Failed on reboot syscall: %v", err)
+		}
+	}
+
+	if rebootDelay <= 0 {
+		// Synchronous reboot right now.
+		safeReboot()
+	} else {
+		// Asynchronous non-blocking reboot scheduled
+		time.AfterFunc(rebootDelay, func() {
+			safeReboot()
+		})
+	}
+	return nil
+}
 
 func (d *Daemon) Dying() <-chan struct{} {
 	return d.tomb.Dying()
