@@ -88,6 +88,9 @@ func (m *ServiceManager) Stop() {
 	if err != nil {
 		logger.Noticef("Cannot stop child process reaper: %v", err)
 	}
+	for name := range m.services {
+		m.removeService(name)
+	}
 }
 
 // NotifyPlanChanged adds f to the list of functions that are called whenever

@@ -223,9 +223,6 @@ func (m *ServiceManager) doStop(task *state.Task, tomb *tomb.Tomb) error {
 	if service == nil {
 		return nil
 	}
-	// Close the ringbuffer to signal to consumers (e.g. log forwarding) that
-	// there are no more logs coming.
-	defer service.logs.Close()
 
 	// Stop service: send SIGTERM, and if that doesn't stop the process in a
 	// short time, send SIGKILL.
@@ -283,6 +280,17 @@ func (m *ServiceManager) serviceForStop(task *state.Task, name string) *serviceD
 func (m *ServiceManager) removeService(name string) {
 	m.servicesLock.Lock()
 	defer m.servicesLock.Unlock()
+
+	svc, svcExists := m.services[name]
+	if !svcExists {
+		return
+	}
+	if svc.logs != nil {
+		err := svc.logs.Close()
+		if err != nil {
+			logger.Noticef("Error closing service %q ring buffer: %v", name, err)
+		}
+	}
 
 	delete(m.services, name)
 }
