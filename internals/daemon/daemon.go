@@ -717,12 +717,15 @@ var rebootHandler = systemdModeReboot
 type RebootMode int
 
 const (
+	// Reboot uses systemd
 	SystemdMode RebootMode = iota + 1
+	// Reboot uses direct kernel syscalls
 	SyscallMode
 )
 
-// SetRebootMode can set how the system should issue a reboot.
-// The default reboot handler mode is SystemdMode.
+// SetRebootMode configures how the system issues a reboot. The default
+// reboot handler mode is SystemdMode, which relies on systemd
+// (or similar) provided functionality to reboot.
 func SetRebootMode(mode RebootMode) {
 	switch mode {
 	case SystemdMode:
