@@ -17,9 +17,10 @@ package logstate
 import (
 	"sync"
 
+	"gopkg.in/tomb.v2"
+
 	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/servicelog"
-	"gopkg.in/tomb.v2"
 )
 
 // logPuller handles pulling logs from a single iterator and sending to the
