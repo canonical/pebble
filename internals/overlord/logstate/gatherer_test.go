@@ -69,7 +69,7 @@ func (s *gathererSuite) TestGatherer(c *C) {
 func (s *gathererSuite) TestGathererTimeout(c *C) {
 	received := make(chan []servicelog.Entry, 1)
 	gathererArgs := logGathererArgs{
-		tickPeriod: 1 * time.Millisecond,
+		bufferTimeout: 1 * time.Millisecond,
 		newClient: func(target *plan.LogTarget) (logClient, error) {
 			return &testClient{
 				bufferSize: 5,
@@ -96,7 +96,7 @@ func (s *gathererSuite) TestGathererTimeout(c *C) {
 func (s *gathererSuite) TestGathererShutdown(c *C) {
 	received := make(chan []servicelog.Entry, 1)
 	gathererArgs := logGathererArgs{
-		tickPeriod: 1 * time.Microsecond,
+		bufferTimeout: 1 * time.Microsecond,
 		newClient: func(target *plan.LogTarget) (logClient, error) {
 			return &testClient{
 				bufferSize: 5,

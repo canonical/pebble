@@ -27,8 +27,8 @@ import (
 )
 
 const (
-	parserSize = 4 * 1024
-	tickPeriod = 1 * time.Second
+	parserSize    = 4 * 1024
+	bufferTimeout = 1 * time.Second
 
 	// These constants control the maximum time allowed for each teardown step.
 	timeoutCurrentFlush = 1 * time.Second
@@ -76,7 +76,7 @@ type logGatherer struct {
 // logGathererArgs allows overriding the newLogClient method and time values
 // in testing.
 type logGathererArgs struct {
-	tickPeriod        time.Duration
+	bufferTimeout     time.Duration
 	timeoutFinalFlush time.Duration
 	// method to get a new client
 	newClient func(*plan.LogTarget) (logClient, error)
@@ -112,8 +112,8 @@ func newLogGathererInternal(target *plan.LogTarget, args logGathererArgs) (*logG
 }
 
 func fillDefaultArgs(args logGathererArgs) logGathererArgs {
-	if args.tickPeriod == 0 {
-		args.tickPeriod = tickPeriod
+	if args.bufferTimeout == 0 {
+		args.bufferTimeout = bufferTimeout
 	}
 	if args.timeoutFinalFlush == 0 {
 		args.timeoutFinalFlush = timeoutFinalFlush
@@ -191,7 +191,7 @@ mainLoop:
 				logger.Noticef("Error writing logs to target %q: %v", g.targetName, err)
 			}
 			// Set timer if not already set
-			timer.EnsureSet(g.tickPeriod)
+			timer.EnsureSet(g.bufferTimeout)
 		}
 	}
 
