@@ -230,6 +230,7 @@ func (g *logGatherer) Stop() {
 	// Kill the main loop once either:
 	// - all the pullers are done
 	// - timeoutMainLoop has passed
+	g.pullers.tomb.Kill(nil)
 	select {
 	case <-g.pullers.Done():
 		logger.Debugf("gatherer %q: pullers have finished", g.targetName)

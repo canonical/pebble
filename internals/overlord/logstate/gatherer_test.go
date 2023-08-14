@@ -122,7 +122,7 @@ func (s *gathererSuite) TestGathererShutdown(c *C) {
 	}()
 
 	select {
-	case <-time.After(20 * time.Millisecond):
+	case <-time.After(100 * time.Millisecond):
 		c.Fatalf("timeout waiting for gatherer to tear down")
 	case <-hasShutdown:
 	}

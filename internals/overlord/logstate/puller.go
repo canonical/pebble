@@ -76,6 +76,10 @@ func newPullerGroup(targetName string) *pullerGroup {
 		targetName: targetName,
 		pullers:    map[string]*logPuller{},
 	}
+	pg.tomb.Go(func() error {
+		<-pg.tomb.Dying()
+		return nil
+	})
 	return pg
 }
 
