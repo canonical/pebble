@@ -106,6 +106,8 @@ func newLogGathererInternal(target *plan.LogTarget, args logGathererArgs) (*logG
 	}
 	g.clientCtx, g.clientCancel = context.WithCancel(context.Background())
 	g.tomb.Go(g.loop)
+	g.tomb.Go(g.pullers.tomb.Wait)
+
 	return g, nil
 }
 
@@ -239,7 +241,7 @@ func (g *logGatherer) Stop() {
 	// Wait for final flush in the main loop
 	err := g.tomb.Wait()
 	if err != nil {
-		logger.Noticef("Error shutting down gatherer: %v", err)
+		logger.Noticef("Internal error: cannot shut down gatherer: %v", err)
 	}
 }
 

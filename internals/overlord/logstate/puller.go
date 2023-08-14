@@ -67,6 +67,8 @@ type pullerGroup struct {
 	pullers map[string]*logPuller
 	// Mutex for pullers map
 	mu sync.RWMutex
+
+	tomb tomb.Tomb
 }
 
 func newPullerGroup(targetName string) *pullerGroup {
@@ -78,23 +80,20 @@ func newPullerGroup(targetName string) *pullerGroup {
 }
 
 func (pg *pullerGroup) Add(serviceName string, buffer *servicelog.RingBuffer, entryCh chan<- servicelog.Entry) {
+	pg.mu.Lock()
+	defer pg.mu.Unlock()
+
+	// There shouldn't already be a puller for this service, but if there is,
+	// shut it down first and wait for it to die.
+	pg.remove(serviceName)
+
 	lp := &logPuller{
 		iterator: buffer.TailIterator(),
 		entryCh:  entryCh,
 	}
-	lp.tomb.Go(func() error {
-		err := lp.loop()
-		// Once the puller exits, we should remove it from the group.
-		//pg.Remove(serviceName) - this seems to cause deadlock though
-		return err
-	})
+	lp.tomb.Go(lp.loop)
+	pg.tomb.Go(lp.tomb.Wait)
 
-	// There shouldn't already be a puller for this service, but if there is,
-	// shut it down first and wait for it to die.
-	pg.Remove(serviceName)
-
-	pg.mu.Lock()
-	defer pg.mu.Unlock()
 	pg.pullers[serviceName] = lp
 }
 
@@ -112,23 +111,24 @@ func (pg *pullerGroup) List() []string {
 }
 
 func (pg *pullerGroup) Remove(serviceName string) {
-	pg.mu.RLock()
-	puller, pullerExists := pg.pullers[serviceName]
-	pg.mu.RUnlock()
+	pg.mu.Lock()
+	defer pg.mu.Unlock()
+	pg.remove(serviceName)
+}
 
+func (pg *pullerGroup) remove(serviceName string) {
+	puller, pullerExists := pg.pullers[serviceName]
 	if !pullerExists {
 		return
 	}
 
 	puller.tomb.Kill(nil)
+	delete(pg.pullers, serviceName)
+
 	err := puller.tomb.Wait()
 	if err != nil {
 		logger.Noticef("Error from log puller: %v", err)
 	}
-
-	pg.mu.Lock()
-	defer pg.mu.Unlock()
-	delete(pg.pullers, serviceName)
 }
 
 func (pg *pullerGroup) KillAll() {
@@ -138,26 +138,12 @@ func (pg *pullerGroup) KillAll() {
 	for _, puller := range pg.pullers {
 		puller.tomb.Kill(nil)
 	}
+	pg.tomb.Kill(nil)
 }
 
 // Done returns a channel which can be waited on until all pullers have finished.
 func (pg *pullerGroup) Done() <-chan struct{} {
-	pg.mu.RLock()
-	pullers := pg.pullers
-	pg.mu.RUnlock()
-
-	done := make(chan struct{})
-	go func() {
-		for _, puller := range pullers {
-			err := puller.tomb.Wait()
-			if err != nil {
-				logger.Noticef("Error from log puller: %v", err)
-			}
-		}
-		close(done)
-	}()
-
-	return done
+	return pg.tomb.Dead()
 }
 
 func (pg *pullerGroup) Contains(serviceName string) bool {
