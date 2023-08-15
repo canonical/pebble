@@ -76,10 +76,15 @@ func newPullerGroup(targetName string) *pullerGroup {
 		targetName: targetName,
 		pullers:    map[string]*logPuller{},
 	}
+	// This goroutine lives for the lifetime of the pullerGroup. This is so that,
+	// if needed, we can safely remove all pullers and then add more, without
+	// causing a panic (tombs can't be reused once all the tracked goroutines
+	// have finished).
 	pg.tomb.Go(func() error {
 		<-pg.tomb.Dying()
 		return nil
 	})
+
 	return pg
 }
 
