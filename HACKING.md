@@ -120,7 +120,7 @@ import (
 
 ### Log and error messages
 
-**Log messages** (i.e. those passed to `logger.Noticef`) should begin with a capital letter, and use "Cannot X" rather than "Error Xing":
+**Log messages** (that is, those passed to `logger.Noticef` or `logger.Debugf`) should begin with a capital letter, and use "Cannot X" rather than "Error Xing":
 ```go
 logger.Noticef("Cannot marshal logs to JSON: %v", err)
 ```
