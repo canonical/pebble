@@ -47,7 +47,7 @@ const (
 // logs from. Each logPuller will run in a separate goroutine, and send logs to
 // the logGatherer via a shared channel.
 // The logGatherer will "flush" the client:
-//   - on a regular cadence (e.g. every 1 second)
+//   - after a timeout (1s) has passed since the first log was written;
 //   - when it is told to shut down.
 //
 // The client may also flush itself when its internal buffer reaches a certain
@@ -128,7 +128,7 @@ func fillDefaultArgs(args logGathererArgs) logGathererArgs {
 // gatherer's target exists in the new plan.
 func (g *logGatherer) PlanChanged(pl *plan.Plan, buffers map[string]*servicelog.RingBuffer) {
 	// Remove old pullers
-	for _, svcName := range g.pullers.List() {
+	for _, svcName := range g.pullers.Services() {
 		svc, svcExists := pl.Services[svcName]
 		if !svcExists {
 			g.pullers.Remove(svcName)
@@ -170,6 +170,7 @@ func (g *logGatherer) ServiceStarted(service *plan.Service, buffer *servicelog.R
 // client periodically, and exits when the gatherer's tomb is killed.
 func (g *logGatherer) loop() error {
 	timer := newTimer()
+	defer timer.Stop()
 
 mainLoop:
 	for {
@@ -177,20 +178,19 @@ mainLoop:
 		case <-g.tomb.Dying():
 			break mainLoop
 
-		case <-timer.Finished():
+		case <-timer.Expired():
 			// Mark timer as unset
 			timer.Stop()
 			err := g.client.Flush(g.clientCtx)
 			if err != nil {
-				logger.Noticef("Error sending logs to target %q: %v", g.targetName, err)
+				logger.Noticef("Cannot flush logs to target %q: %v", g.targetName, err)
 			}
 
 		case entry := <-g.entryCh:
 			err := g.client.Write(g.clientCtx, entry)
 			if err != nil {
-				logger.Noticef("Error writing logs to target %q: %v", g.targetName, err)
+				logger.Noticef("Cannot write logs to target %q: %v", g.targetName, err)
 			}
-			// Set timer if not already set
 			timer.EnsureSet(g.bufferTimeout)
 		}
 	}
@@ -201,7 +201,7 @@ mainLoop:
 	defer cancel()
 	err := g.client.Flush(ctx)
 	if err != nil {
-		logger.Noticef("Error sending logs to target %q: %v", g.targetName, err)
+		logger.Noticef("Cannot flush logs to target %q: %v", g.targetName, err)
 	}
 	return nil
 }
@@ -260,7 +260,7 @@ func newTimer() timer {
 	return t
 }
 
-func (t *timer) Finished() <-chan time.Time {
+func (t *timer) Expired() <-chan time.Time {
 	return t.timer.C
 }
 

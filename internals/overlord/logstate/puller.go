@@ -101,13 +101,13 @@ func (pg *pullerGroup) Add(serviceName string, buffer *servicelog.RingBuffer, en
 	pg.pullers[serviceName] = lp
 }
 
-// List returns a list of all service names for which we have a currently
-// active puller.
-func (pg *pullerGroup) List() []string {
+// Services returns a list containing the name of each service for which we
+// have a puller in this group.
+func (pg *pullerGroup) Services() []string {
 	pg.mu.RLock()
 	defer pg.mu.RUnlock()
 
-	var svcs []string
+	svcs := make([]string, 0, len(pg.pullers))
 	for svc := range pg.pullers {
 		svcs = append(svcs, svc)
 	}
