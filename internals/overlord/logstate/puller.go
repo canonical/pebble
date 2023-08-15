@@ -150,14 +150,16 @@ func (pg *pullerGroup) Done() <-chan struct{} {
 	return pg.tomb.Dead()
 }
 
-func (pg *pullerGroup) Contains(serviceName string) bool {
+// contains is used for testing.
+func (pg *pullerGroup) contains(serviceName string) bool {
 	pg.mu.RLock()
 	defer pg.mu.RUnlock()
 	_, ok := pg.pullers[serviceName]
 	return ok
 }
 
-func (pg *pullerGroup) Len() int {
+// len is used for testing.
+func (pg *pullerGroup) len() int {
 	pg.mu.RLock()
 	defer pg.mu.RUnlock()
 	return len(pg.pullers)

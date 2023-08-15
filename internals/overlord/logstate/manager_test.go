@@ -100,9 +100,9 @@ func checkGatherers(c *C, gatherers map[string]*logGatherer, expected map[string
 		g, ok := gatherers[tgtName]
 		c.Assert(ok, Equals, true)
 
-		c.Assert(g.pullers.Len(), Equals, len(svcs))
+		c.Assert(g.pullers.len(), Equals, len(svcs))
 		for _, svc := range svcs {
-			c.Check(g.pullers.Contains(svc), Equals, true)
+			c.Check(g.pullers.contains(svc), Equals, true)
 		}
 	}
 }
