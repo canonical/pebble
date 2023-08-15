@@ -168,7 +168,7 @@ func (c *Command) canAccess(r *http.Request, user *UserState) accessResult {
 	if err == nil {
 		isUser = true
 	} else if err != errNoID {
-		logger.Noticef("Unexpected error when attempting to get UID: %s", err)
+		logger.Noticef("Cannot parse UID from remote address %q: %s", r.RemoteAddr, err)
 		return accessForbidden
 	}
 
