@@ -3,6 +3,7 @@
 - [Running the daemon](#running-the-daemon)
 - [Using the CLI client](#using-the-cli-client)
 - [Using Curl to hit the API](#using-curl-to-hit-the-api)
+- [Code style](#code-style)
 - [Running the tests](#running-the-tests)
 - [Creating a release](#creating-a-release)
 
@@ -85,6 +86,8 @@ $ curl --unix-socket ~/pebble/.pebble.socket 'http://localhost/v1/services?names
 
 ## Code style
 
+### Imports
+
 Pebble imports should be arranged in three groups:
 - standard library imports
 - third-party / non-Pebble imports
@@ -113,6 +116,18 @@ import (
 	"github.com/canonical/pebble/internals/systemd"
 	"github.com/canonical/pebble/internals/testutil"
 )
+```
+
+### Log and error messages
+
+**Log messages** (i.e. those passed to `logger.Noticef`) should begin with a capital letter, and use "Cannot X" rather than "Error Xing":
+```go
+logger.Noticef("Cannot marshal logs to JSON: %v", err)
+```
+
+**Error messages** should be lowercase, and again use "cannot ..." instead of "error ...":
+```go
+fmt.Errorf("cannot create log client: %w", err)
 ```
 
 
