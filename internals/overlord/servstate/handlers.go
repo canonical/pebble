@@ -400,6 +400,18 @@ func (s *serviceData) startInternal() error {
 	s.cmd.Stdout = logWriter
 	s.cmd.Stderr = logWriter
 
+	// Add WaitDelay to ensure cmd.Wait() returns in a reasonable timeframe if
+	// the goroutines that cmd.Start() uses to copy Stdin/Stdout/Stderr are
+	// blocked when copying due to a sub-subprocess holding onto them. Read
+	// more details in these issues:
+	//
+	// - https://github.com/golang/go/issues/23019
+	// - https://github.com/golang/go/issues/50436
+	//
+	// This isn't the original intent of kill-delay, but it seems reasonable
+	// to reuse it in this context.
+	s.cmd.WaitDelay = s.killDelay()
+
 	// Start the process!
 	logger.Noticef("Service %q starting: %s", serviceName, s.config.Command)
 	err = reaper.StartCommand(s.cmd)
@@ -616,9 +628,9 @@ func (s *serviceData) sendSignal(signal string) error {
 }
 
 // killDelay reports the duration that this service should be given when being
-// asked to shutdown gracefully before being force terminated. The value
-// returned will either be the services pre configured value or the default
-// kill delay for pebble.
+// asked to shut down gracefully before being force-terminated. The value
+// returned will either be the service's pre-configured value, or the default
+// kill delay if that is not set.
 func (s *serviceData) killDelay() time.Duration {
 	if s.config.KillDelay.IsSet {
 		return s.config.KillDelay.Value
