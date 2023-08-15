@@ -280,7 +280,11 @@ func (m *ServiceManager) serviceForStop(task *state.Task, name string) *serviceD
 func (m *ServiceManager) removeService(name string) {
 	m.servicesLock.Lock()
 	defer m.servicesLock.Unlock()
+	m.removeServiceInternal(name)
+}
 
+// not concurrency-safe, please lock m.servicesLock before calling
+func (m *ServiceManager) removeServiceInternal(name string) {
 	svc, svcExists := m.services[name]
 	if !svcExists {
 		return

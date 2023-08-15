@@ -88,8 +88,12 @@ func (m *ServiceManager) Stop() {
 	if err != nil {
 		logger.Noticef("Cannot stop child process reaper: %v", err)
 	}
+
+	// Close all the service ringbuffers
+	m.servicesLock.Lock()
+	defer m.servicesLock.Unlock()
 	for name := range m.services {
-		m.removeService(name)
+		m.removeServiceInternal(name)
 	}
 }
 
