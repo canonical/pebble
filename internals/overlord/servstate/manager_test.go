@@ -53,7 +53,7 @@ const (
 )
 
 func TestMain(m *testing.M) {
-	// See TestReaper
+	// Used by TestReapZombies
 	if os.Getenv("PEBBLE_TEST_CREATE_ZOMBIE") == "1" {
 		err := createZombie()
 		if err != nil {
@@ -62,6 +62,21 @@ func TestMain(m *testing.M) {
 		}
 		return
 	} else if os.Getenv("PEBBLE_TEST_ZOMBIE_CHILD") == "1" {
+		return
+	}
+
+	// Used by TestWaitDelay
+	if os.Getenv("PEBBLE_TEST_WAITDELAY") == "1" {
+		// To get WaitDelay to kick in, we need to start a new process with
+		// setsid (to ensure it has a new process group ID) and passing
+		// os.Stdout down to the (grand)child process.
+		cmd := exec.Command("sleep", "10")
+		cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+		cmd.Stdout = os.Stdout
+		err := cmd.Run()
+		if err != nil {
+			panic(err)
+		}
 		return
 	}
 
@@ -378,18 +393,14 @@ func (s *S) TestStartBadCommand(c *C) {
 }
 
 func (s *S) TestCurrentUserGroup(c *C) {
-	dir := c.MkDir()
-	err := os.Mkdir(filepath.Join(dir, "layers"), 0755)
-	c.Assert(err, IsNil)
-	s.manager, err = servstate.NewManager(s.st, s.runner, dir, nil, nil, fakeLogManager{})
-	c.Assert(err, IsNil)
+	s.setupEmptyServiceManager(c)
 
 	current, err := user.Current()
 	c.Assert(err, IsNil)
 	group, err := user.LookupGroupId(current.Gid)
 	c.Assert(err, IsNil)
 
-	outputPath := filepath.Join(dir, "output")
+	outputPath := filepath.Join(c.MkDir(), "output")
 	layer := parseLayer(c, 0, "layer", fmt.Sprintf(`
 services:
     usrtest:
@@ -540,11 +551,7 @@ services:
 }
 
 func (s *S) TestAppendLayer(c *C) {
-	dir := c.MkDir()
-	err := os.Mkdir(filepath.Join(dir, "layers"), 0755)
-	c.Assert(err, IsNil)
-	s.manager, err = servstate.NewManager(s.st, s.runner, dir, nil, nil, fakeLogManager{})
-	c.Assert(err, IsNil)
+	s.setupEmptyServiceManager(c)
 
 	// Append a layer when there are no layers.
 	layer := parseLayer(c, 0, "label1", `
@@ -553,7 +560,7 @@ services:
         override: replace
         command: /bin/sh
 `)
-	err = s.manager.AppendLayer(layer)
+	err := s.manager.AppendLayer(layer)
 	c.Assert(err, IsNil)
 	c.Assert(layer.Order, Equals, 1)
 	c.Assert(planYAML(c, s.manager), Equals, `
@@ -622,11 +629,7 @@ services:
 }
 
 func (s *S) TestCombineLayer(c *C) {
-	dir := c.MkDir()
-	err := os.Mkdir(filepath.Join(dir, "layers"), 0755)
-	c.Assert(err, IsNil)
-	s.manager, err = servstate.NewManager(s.st, s.runner, dir, nil, nil, fakeLogManager{})
-	c.Assert(err, IsNil)
+	s.setupEmptyServiceManager(c)
 
 	// "Combine" layer with no layers should just append.
 	layer := parseLayer(c, 0, "label1", `
@@ -635,7 +638,7 @@ services:
         override: replace
         command: /bin/sh
 `)
-	err = s.manager.CombineLayer(layer)
+	err := s.manager.CombineLayer(layer)
 	c.Assert(err, IsNil)
 	c.Assert(layer.Order, Equals, 1)
 	c.Assert(planYAML(c, s.manager), Equals, `
@@ -735,11 +738,7 @@ services:
 }
 
 func (s *S) TestSetServiceArgs(c *C) {
-	dir := c.MkDir()
-	err := os.Mkdir(filepath.Join(dir, "layers"), 0755)
-	c.Assert(err, IsNil)
-	s.manager, err = servstate.NewManager(s.st, s.runner, dir, nil, nil, fakeLogManager{})
-	c.Assert(err, IsNil)
+	s.setupEmptyServiceManager(c)
 
 	// Append a layer with a few services having default args.
 	layer := parseLayer(c, 0, "base-layer", `
@@ -754,7 +753,7 @@ services:
         override: replace
         command: foo
 `)
-	err = s.manager.AppendLayer(layer)
+	err := s.manager.AppendLayer(layer)
 	c.Assert(err, IsNil)
 	c.Assert(layer.Order, Equals, 1)
 	s.planLayersHasLen(c, s.manager, 1)
@@ -1601,20 +1600,16 @@ func (s *S) TestStopRunningNoServices(c *C) {
 }
 
 func (s *S) TestNoWorkingDir(c *C) {
-	dir := c.MkDir()
-	err := os.Mkdir(filepath.Join(dir, "layers"), 0755)
-	c.Assert(err, IsNil)
-	s.manager, err = servstate.NewManager(s.st, s.runner, dir, nil, nil, fakeLogManager{})
-	c.Assert(err, IsNil)
+	s.setupEmptyServiceManager(c)
 
-	outputPath := filepath.Join(dir, "output")
+	outputPath := filepath.Join(c.MkDir(), "output")
 	layer := parseLayer(c, 0, "layer", fmt.Sprintf(`
 services:
     nowrkdir:
         override: replace
         command: /bin/sh -c "pwd >%s; %s; sleep %g"
 `, outputPath, s.insertDoneCheck(c, "nowrkdir"), shortOkayDelay.Seconds()+0.01))
-	err = s.manager.AppendLayer(layer)
+	err := s.manager.AppendLayer(layer)
 	c.Assert(err, IsNil)
 
 	// Service command should run in current directory (package directory)
@@ -1632,12 +1627,9 @@ services:
 }
 
 func (s *S) TestWorkingDir(c *C) {
-	dir := c.MkDir()
-	err := os.Mkdir(filepath.Join(dir, "layers"), 0755)
-	c.Assert(err, IsNil)
-	s.manager, err = servstate.NewManager(s.st, s.runner, dir, nil, nil, fakeLogManager{})
-	c.Assert(err, IsNil)
+	s.setupEmptyServiceManager(c)
 
+	dir := c.MkDir()
 	outputPath := filepath.Join(dir, "output")
 	layer := parseLayer(c, 0, "layer", fmt.Sprintf(`
 services:
@@ -1646,7 +1638,7 @@ services:
         command: /bin/sh -c "pwd >%s; %s; sleep %g"
         working-dir: %s
 `, outputPath, s.insertDoneCheck(c, "wrkdir"), shortOkayDelay.Seconds()+0.01, dir))
-	err = s.manager.AppendLayer(layer)
+	err := s.manager.AppendLayer(layer)
 	c.Assert(err, IsNil)
 
 	chg := s.startServices(c, []string{"wrkdir"}, 1)
@@ -1659,6 +1651,44 @@ services:
 	output, err := ioutil.ReadFile(outputPath)
 	c.Assert(err, IsNil)
 	c.Check(string(output), Equals, dir+"\n")
+}
+
+func (s *S) TestWaitDelay(c *C) {
+	s.setupEmptyServiceManager(c)
+
+	// Run the test binary with PEBBLE_TEST_WAITDELAY=1 (see TestMain).
+	testExecutable, err := os.Executable()
+	c.Assert(err, IsNil)
+	layer := parseLayer(c, 0, "layer", fmt.Sprintf(`
+services:
+    waitdelay:
+        override: replace
+        command: %s
+        environment:
+            PEBBLE_TEST_WAITDELAY: 1
+        kill-delay: 200ms
+`, testExecutable))
+	err = s.manager.AppendLayer(layer)
+	c.Assert(err, IsNil)
+
+	// Start service and wait for it to be started
+	chg := s.startServices(c, []string{"waitdelay"}, 1)
+	s.st.Lock()
+	c.Assert(chg.Err(), IsNil)
+	s.st.Unlock()
+	s.waitUntilService(c, "waitdelay", func(svc *servstate.ServiceInfo) bool {
+		return svc.Current == servstate.StatusActive
+	})
+
+	// Try to stop the service; it will only stop if WaitDelay logic is working,
+	// otherwise the goroutine waiting for the child's stdout will never finish.
+	chg = s.stopServices(c, []string{"waitdelay"}, 1)
+	s.st.Lock()
+	c.Assert(chg.Err(), IsNil)
+	s.st.Unlock()
+	s.waitUntilService(c, "waitdelay", func(svc *servstate.ServiceInfo) bool {
+		return svc.Current == servstate.StatusInactive
+	})
 }
 
 // setupDefaultServiceManager provides a basic setup that can be used by many
@@ -1674,6 +1704,16 @@ func (s *S) setupDefaultServiceManager(c *C) {
 	c.Assert(err, IsNil)
 
 	s.manager, err = servstate.NewManager(s.st, s.runner, s.dir, s.logOutput, testRestarter{s.stopDaemon}, fakeLogManager{})
+	c.Assert(err, IsNil)
+}
+
+// setupEmptyServiceManager sets up a service manager with no layers for tests
+// that want to customize them.
+func (s *S) setupEmptyServiceManager(c *C) {
+	dir := c.MkDir()
+	err := os.Mkdir(filepath.Join(dir, "layers"), 0755)
+	c.Assert(err, IsNil)
+	s.manager, err = servstate.NewManager(s.st, s.runner, dir, nil, nil, fakeLogManager{})
 	c.Assert(err, IsNil)
 }
 
@@ -1898,6 +1938,7 @@ func getChildSubreaper() (bool, error) {
 }
 
 func createZombie() error {
+	// Run the test binary with PEBBLE_TEST_ZOMBIE_CHILD=1 (see TestMain)
 	testExecutable, err := os.Executable()
 	if err != nil {
 		return err
