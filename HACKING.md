@@ -86,6 +86,25 @@ $ curl --unix-socket ~/pebble/.pebble.socket 'http://localhost/v1/services?names
 
 ## Code style
 
+### Commits
+
+Please format your commits following the [conventional commit](https://www.conventionalcommits.org/en/v1.0.0/#summary) style.
+
+Optionally, use the brackets to scope to a particular component where applicable.
+
+See below for some examples of commit headings:
+
+```
+feat: checks inherit context from services
+test: increase unit test stability
+feat(daemon): foo the bar correctly in the baz
+test(daemon): ensure the foo bars correctly in the baz
+ci(snap): upload the snap artefacts to Github
+chore(deps): update go.mod dependencies
+```
+
+Recommended prefixes are: `fix:`, `feat:`, `build:`, `chore:`, `ci:`, `docs:`, `style:`, `refactor:`,`perf:` and `test:`
+
 ### Imports
 
 Pebble imports should be arranged in three groups:
