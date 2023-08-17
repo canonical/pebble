@@ -409,8 +409,10 @@ func (s *serviceData) startInternal() error {
 	// - https://github.com/golang/go/issues/50436
 	//
 	// This isn't the original intent of kill-delay, but it seems reasonable
-	// to reuse it in this context.
-	s.cmd.WaitDelay = s.killDelay()
+	// to reuse it in this context. Use a value slightly less than the kill
+	// delay (90% of it) to avoid racing with trying to send SIGKILL (to a
+	// process that has already exited).
+	s.cmd.WaitDelay = time.Duration(s.killDelay().Seconds() * 0.9 * float64(time.Second))
 
 	// Start the process!
 	logger.Noticef("Service %q starting: %s", serviceName, s.config.Command)
