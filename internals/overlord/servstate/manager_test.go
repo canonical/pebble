@@ -1666,7 +1666,7 @@ services:
         command: %s
         environment:
             PEBBLE_TEST_WAITDELAY: 1
-        kill-delay: 10ms
+        kill-delay: 50ms
 `, testExecutable))
 	err = s.manager.AppendLayer(layer)
 	c.Assert(err, IsNil)
