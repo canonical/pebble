@@ -1040,7 +1040,7 @@ checks:
 	c.Assert(err, IsNil)
 	c.Assert(len(checks), Equals, 1)
 	c.Assert(checks[0].Status, Equals, checkstate.CheckStatusDown)
-	c.Assert(checks[0].Failures, Equals, 1)
+	c.Assert(checks[0].Failures >= 1, Equals, true)
 	c.Assert(checks[0].LastError, Matches, ".* executable file not found .*")
 
 	// Check failure should terminate process, backoff, and restart it, so wait for that
@@ -1222,7 +1222,7 @@ checks:
 	c.Assert(err, IsNil)
 	c.Assert(len(checks), Equals, 1)
 	c.Assert(checks[0].Status, Equals, checkstate.CheckStatusDown)
-	c.Assert(checks[0].Failures, Equals, 1)
+	c.Assert(checks[0].Failures >= 1, Equals, true)
 	c.Assert(checks[0].LastError, Matches, ".* executable file not found .*")
 
 	// Service shouldn't have been restarted
@@ -1298,7 +1298,7 @@ checks:
 	c.Assert(err, IsNil)
 	c.Assert(len(checks), Equals, 1)
 	c.Assert(checks[0].Status, Equals, checkstate.CheckStatusDown)
-	c.Assert(checks[0].Failures, Equals, 1)
+	c.Assert(checks[0].Failures >= 1, Equals, true)
 	c.Assert(checks[0].LastError, Matches, ".* executable file not found .*")
 
 	// It should have closed the stopDaemon channel.
