@@ -88,6 +88,8 @@ func newPullerGroup(targetName string) *pullerGroup {
 	return pg
 }
 
+// Add adds a new puller to the group. This puller will read from the given
+// buffer, and send parsed logs on the provided channel.
 func (pg *pullerGroup) Add(serviceName string, buffer *servicelog.RingBuffer, entryCh chan<- servicelog.Entry) {
 	pg.mu.Lock()
 	defer pg.mu.Unlock()
@@ -119,12 +121,15 @@ func (pg *pullerGroup) Services() []string {
 	return svcs
 }
 
+// Remove removes the puller for the named service.
 func (pg *pullerGroup) Remove(serviceName string) {
 	pg.mu.Lock()
 	defer pg.mu.Unlock()
 	pg.remove(serviceName)
 }
 
+// remove removes the puller for the named service.
+// This method is not concurrency-safe - please lock pg.mu before calling.
 func (pg *pullerGroup) remove(serviceName string) {
 	puller, pullerExists := pg.pullers[serviceName]
 	if !pullerExists {
@@ -140,6 +145,7 @@ func (pg *pullerGroup) remove(serviceName string) {
 	}
 }
 
+// KillAll kills all pullers in this group.
 func (pg *pullerGroup) KillAll() {
 	pg.mu.RLock()
 	defer pg.mu.RUnlock()
