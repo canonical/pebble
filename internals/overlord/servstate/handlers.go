@@ -402,8 +402,9 @@ func (s *serviceData) startInternal() error {
 
 	// Add WaitDelay to ensure cmd.Wait() returns in a reasonable timeframe if
 	// the goroutines that cmd.Start() uses to copy Stdin/Stdout/Stderr are
-	// blocked when copying due to a sub-subprocess holding onto them. Read
-	// more details in these issues:
+	// blocked when copying due to a sub-subprocess holding onto them. This
+	// only happens if the sub-subprocess uses setsid or setpgid to change
+	// the process group. Read more details in these issues:
 	//
 	// - https://github.com/golang/go/issues/23019
 	// - https://github.com/golang/go/issues/50436
