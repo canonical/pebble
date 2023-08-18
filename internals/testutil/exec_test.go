@@ -87,6 +87,8 @@ func (s *fakeCommandSuite) TestFakeCommandConflictEcho(c *check.C) {
 }
 
 func (s *fakeCommandSuite) TestFakeShellchecksWhenAvailable(c *check.C) {
+	shellchecked = make(map[string]bool) // reset checked cache
+
 	tmpDir := c.MkDir()
 	fakeShellcheck := FakeCommand(c, "shellcheck", fmt.Sprintf(`cat > %s/input`, tmpDir), false)
 	defer fakeShellcheck.Restore()
