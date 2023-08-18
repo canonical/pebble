@@ -29,16 +29,6 @@ type fakeCommandSuite struct{}
 
 var _ = check.Suite(&fakeCommandSuite{})
 
-func (s *fakeCommandSuite) SetUpSuite(c *check.C) {
-	err := reaper.Start()
-	c.Assert(err, check.IsNil)
-}
-
-func (s *fakeCommandSuite) TearDownSuite(c *check.C) {
-	err := reaper.Stop()
-	c.Assert(err, check.IsNil)
-}
-
 func (s *fakeCommandSuite) TestFakeCommand(c *check.C) {
 	fake := FakeCommand(c, "cmd", "true", false)
 	defer fake.Restore()
@@ -59,10 +49,20 @@ func (s *fakeCommandSuite) TestFakeCommand(c *check.C) {
 }
 
 func (s *fakeCommandSuite) TestFakeCommandWithReaper(c *check.C) {
+	err := reaper.Start()
+	c.Assert(err, check.IsNil)
+	defer func() {
+		err := reaper.Stop()
+		c.Assert(err, check.IsNil)
+	}()
+
 	fake := FakeCommand(c, "cmd", "true", true)
 	defer fake.Restore()
-	err := exec.Command("cmd", "").Run()
+
+	cmd := exec.Command("cmd", "")
+	out, err := reaper.CommandCombinedOutput(cmd)
 	c.Assert(err, check.IsNil)
+	c.Assert(string(out), check.Equals, "")
 }
 
 func (s *fakeCommandSuite) TestFakeCommandAlso(c *check.C) {
