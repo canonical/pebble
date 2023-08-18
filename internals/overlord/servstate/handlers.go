@@ -413,7 +413,7 @@ func (s *serviceData) startInternal() error {
 	// to reuse it in this context. Use a value slightly less than the kill
 	// delay (90% of it) to avoid racing with trying to send SIGKILL (to a
 	// process that has already exited).
-	s.cmd.WaitDelay = time.Duration(s.killDelay().Seconds() * 0.9 * float64(time.Second))
+	s.cmd.WaitDelay = s.killDelay() * 9 / 10 // will only overflow if kill-delay is 32 years!
 
 	// Start the process!
 	logger.Noticef("Service %q starting: %s", serviceName, s.config.Command)
