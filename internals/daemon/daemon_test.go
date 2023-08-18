@@ -38,7 +38,6 @@ import (
 	"github.com/canonical/pebble/internals/overlord/restart"
 	"github.com/canonical/pebble/internals/overlord/standby"
 	"github.com/canonical/pebble/internals/overlord/state"
-	"github.com/canonical/pebble/internals/reaper"
 	"github.com/canonical/pebble/internals/systemd"
 	"github.com/canonical/pebble/internals/testutil"
 )
@@ -60,8 +59,6 @@ type daemonSuite struct {
 var _ = Suite(&daemonSuite{})
 
 func (s *daemonSuite) SetUpTest(c *C) {
-	err := reaper.Start()
-	c.Assert(err, IsNil)
 	s.pebbleDir = c.MkDir()
 	s.statePath = filepath.Join(s.pebbleDir, ".pebble.state")
 	systemdSdNotify = func(notif string) error {
@@ -75,8 +72,6 @@ func (s *daemonSuite) TearDownTest(c *C) {
 	s.notified = nil
 	s.authorized = false
 	s.err = nil
-	err := reaper.Stop()
-	c.Assert(err, IsNil)
 }
 
 func (s *daemonSuite) newDaemon(c *C) *Daemon {
@@ -804,7 +799,7 @@ func (s *daemonSuite) TestRestartShutdownWithSigtermInBetween(c *C) {
 	}()
 	rebootNoticeWait = 150 * time.Millisecond
 
-	cmd := testutil.FakeCommand(c, "shutdown", "", true)
+	cmd := testutil.FakeCommand(c, "shutdown", "", false)
 	defer cmd.Restore()
 
 	d := s.newDaemon(c)
@@ -836,7 +831,7 @@ func (s *daemonSuite) TestRestartShutdown(c *C) {
 	rebootWaitTimeout = 100 * time.Millisecond
 	rebootNoticeWait = 150 * time.Millisecond
 
-	cmd := testutil.FakeCommand(c, "shutdown", "", true)
+	cmd := testutil.FakeCommand(c, "shutdown", "", false)
 	defer cmd.Restore()
 
 	d := s.newDaemon(c)
