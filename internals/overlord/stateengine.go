@@ -98,7 +98,7 @@ func (se *StateEngine) Ensure() error {
 	for _, m := range se.managers {
 		err := m.Ensure()
 		if err != nil {
-			logger.Noticef("state ensure error: %v", err)
+			logger.Noticef("State ensure error: %v", err)
 			errs = append(errs, err)
 		}
 	}

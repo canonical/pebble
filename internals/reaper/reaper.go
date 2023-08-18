@@ -173,7 +173,7 @@ func StartCommand(cmd *exec.Cmd) error {
 			case ch <- -1:
 			default:
 			}
-			logger.Noticef("internal error: new PID %d observed while still being tracked", cmd.Process.Pid)
+			logger.Noticef("Internal error: new PID %d observed while still being tracked", cmd.Process.Pid)
 		}
 		// Channel is 1-buffered so the send in reapOnce never blocks, if for
 		// some reason someone forgets to call WaitCommand.

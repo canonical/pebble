@@ -93,7 +93,7 @@ func (r *resp) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
 	status := r.Status
 	bs, err := r.MarshalJSON()
 	if err != nil {
-		logger.Noticef("cannot marshal %#v to JSON: %v", *r, err)
+		logger.Noticef("Cannot marshal %#v to JSON: %v", *r, err)
 		bs = nil
 		status = 500
 	}

@@ -168,7 +168,7 @@ func (c *Command) canAccess(r *http.Request, user *UserState) accessResult {
 	if err == nil {
 		isUser = true
 	} else if err != errNoID {
-		logger.Noticef("unexpected error when attempting to get UID: %s", err)
+		logger.Noticef("Cannot parse UID from remote address %q: %s", r.RemoteAddr, err)
 		return accessForbidden
 	}
 
@@ -530,7 +530,7 @@ func (d *Daemon) HandleRestart(t restart.RestartType) {
 		defer d.mu.Unlock()
 		d.restartSocket = true
 	default:
-		logger.Noticef("internal error: restart handler called with unknown restart type: %v", t)
+		logger.Noticef("Internal error: restart handler called with unknown restart type: %v", t)
 	}
 	d.tomb.Kill(nil)
 }
@@ -817,12 +817,12 @@ func (d *Daemon) RebootIsMissing(st *state.State) error {
 		// might get rolled back!!
 		restart.ClearReboot(st)
 		clearReboot(st)
-		logger.Noticef("pebble was restarted while a system restart was expected, pebble retried to schedule and waited again for a system restart %d times and is giving up", rebootMaxTentatives)
+		logger.Noticef("Pebble was restarted while a system restart was expected, pebble retried to schedule and waited again for a system restart %d times and is giving up", rebootMaxTentatives)
 		return nil
 	}
 	st.Set("daemon-system-restart-tentative", nTentative)
 	d.state = st
-	logger.Noticef("pebble was restarted while a system restart was expected, pebble will try to schedule and wait for a system restart again (tenative %d/%d)", nTentative, rebootMaxTentatives)
+	logger.Noticef("Pebble was restarted while a system restart was expected, pebble will try to schedule and wait for a system restart again (tenative %d/%d)", nTentative, rebootMaxTentatives)
 	return errExpectedReboot
 }
 
