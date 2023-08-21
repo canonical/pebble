@@ -31,7 +31,7 @@ import (
 	"github.com/canonical/pebble/internals/systemd"
 )
 
-const cmdRunSummary = "Run the <display anem> environment"
+const cmdRunSummary = "Run the <display name> environment"
 const cmdRunDescription = `
 The run command starts pebble and runs the configured environment.
 
