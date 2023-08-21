@@ -64,6 +64,7 @@ type Overlord struct {
 	pruneTicker *time.Ticker
 
 	// managers
+	inited     bool
 	runner     *state.TaskRunner
 	serviceMgr *servstate.ServiceManager
 	commandMgr *cmdstate.CommandManager
@@ -77,6 +78,7 @@ func New(pebbleDir string, restartHandler restart.Handler, serviceOutput io.Writ
 	o := &Overlord{
 		pebbleDir: pebbleDir,
 		loopTomb:  new(tomb.Tomb),
+		inited:    true,
 	}
 
 	if !filepath.IsAbs(pebbleDir) {
@@ -424,6 +426,7 @@ func Fake() *Overlord {
 func FakeWithState(handleRestart func(restart.RestartType)) *Overlord {
 	o := &Overlord{
 		loopTomb: new(tomb.Tomb),
+		inited:   false,
 	}
 	s := state.New(fakeBackend{o: o})
 	o.stateEng = NewStateEngine(s)
@@ -431,7 +434,12 @@ func FakeWithState(handleRestart func(restart.RestartType)) *Overlord {
 	return o
 }
 
+// AddManager adds a manager to a fake overlord. It cannot be used for
+// a normally initialized overlord those are already fully populated.
 func (o *Overlord) AddManager(mgr StateManager) {
+	if o.inited {
+		panic("internal error: cannot add managers to a fully initialized Overlord")
+	}
 	o.addManager(mgr)
 }
 
