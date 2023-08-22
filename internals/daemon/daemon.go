@@ -71,6 +71,11 @@ type Options struct {
 	// ServiceOuput is an optional io.Writer for the service log output, if set, all services
 	// log output will be written to the writer.
 	ServiceOutput io.Writer
+
+	// ManagerGenerators is an optional slice of ManagerGenerator which will
+	// be passed to the overlord.New to create custom managers at overlord
+	// creation.
+	ManagerGenerators []overlord.ManagerGenerator
 }
 
 // A Daemon listens for requests and routes them to the right command
@@ -787,7 +792,7 @@ func New(opts *Options) (*Daemon, error) {
 		httpAddress:         opts.HTTPAddress,
 	}
 
-	ovld, err := overlord.New(opts.Dir, d, opts.ServiceOutput)
+	ovld, err := overlord.New(opts.Dir, d, opts.ServiceOutput, opts.ManagerGenerators)
 	if err == errExpectedReboot {
 		// we proceed without overlord until we reach Stop
 		// where we will schedule and wait again for a system restart.

@@ -42,7 +42,7 @@ func (s *mgrsSuite) SetUpTest(c *C) {
 
 	s.dir = c.MkDir()
 
-	o, err := overlord.New(s.dir, nil, nil)
+	o, err := overlord.New(s.dir, nil, nil, nil)
 	c.Assert(err, IsNil)
 	s.o = o
 }

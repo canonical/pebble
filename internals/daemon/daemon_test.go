@@ -33,6 +33,7 @@ import (
 	. "gopkg.in/check.v1"
 
 	"github.com/canonical/pebble/internals/osutil"
+	"github.com/canonical/pebble/internals/overlord"
 	"github.com/canonical/pebble/internals/overlord/patch"
 	"github.com/canonical/pebble/internals/overlord/restart"
 	"github.com/canonical/pebble/internals/overlord/standby"
@@ -97,6 +98,41 @@ type fakeHandler struct {
 
 func (h *fakeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.lastMethod = r.Method
+}
+
+type fakeManager struct {
+	id          string
+	ensureCalls int
+}
+
+func (m *fakeManager) Ensure() error {
+	m.ensureCalls++
+	return nil
+}
+
+func (s *daemonSuite) TestExternalManager(c *C) {
+	generators := []overlord.ManagerGenerator{
+		func(o overlord.ManagerProvider) (any, overlord.StateManager) {
+			return fakeManager{}, &fakeManager{id: "expected"}
+		},
+	}
+
+	d, err := New(&Options{
+		Dir:               s.pebbleDir,
+		SocketPath:        s.socketPath,
+		HTTPAddress:       s.httpAddress,
+		ManagerGenerators: generators,
+	})
+	c.Assert(err, IsNil)
+
+	err = d.overlord.StateEngine().Ensure()
+	c.Assert(err, IsNil)
+	managerItf := d.overlord.GetExternalManager(fakeManager{})
+	c.Assert(managerItf, NotNil)
+	concrete, ok := managerItf.(*fakeManager)
+	c.Assert(ok, Equals, true)
+	c.Assert(concrete.id, Equals, "expected")
+	c.Assert(concrete.ensureCalls, Equals, 1)
 }
 
 func (s *daemonSuite) TestAddCommand(c *C) {

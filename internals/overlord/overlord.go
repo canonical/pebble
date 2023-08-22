@@ -64,21 +64,42 @@ type Overlord struct {
 	pruneTicker *time.Ticker
 
 	// managers
-	inited     bool
-	runner     *state.TaskRunner
-	serviceMgr *servstate.ServiceManager
-	commandMgr *cmdstate.CommandManager
-	checkMgr   *checkstate.CheckManager
-	logMgr     *logstate.LogManager
+	inited           bool
+	runner           *state.TaskRunner
+	serviceMgr       *servstate.ServiceManager
+	commandMgr       *cmdstate.CommandManager
+	checkMgr         *checkstate.CheckManager
+	logMgr           *logstate.LogManager
+	externalManagers map[any]StateManager
 }
 
-// New creates a new Overlord with all its state managers.
+// ManagerProvider is the interface that ManagerGenerator depends on
+//
+// Overlord implements ManagerProvider as it provides the necessary
+// handles to hook an external manager into the overlord's environment.
+type ManagerProvider interface {
+	State() *state.State
+	TaskRunner() *state.TaskRunner
+}
+
+// ManagerGenerator is passed to Overlord to create a manager
+// The return value is a key, value pair where the key has to be a unique
+// identifier for the manager being created.
+type ManagerGenerator func(ManagerProvider) (key any, manager StateManager)
+
+// New creates a  Overlord with all its state managers.
 // It can be provided with an optional restart.Handler.
-func New(pebbleDir string, restartHandler restart.Handler, serviceOutput io.Writer) (*Overlord, error) {
+func New(
+	pebbleDir string,
+	restartHandler restart.Handler,
+	serviceOutput io.Writer,
+	generators []ManagerGenerator) (*Overlord, error) {
+
 	o := &Overlord{
-		pebbleDir: pebbleDir,
-		loopTomb:  new(tomb.Tomb),
-		inited:    true,
+		pebbleDir:        pebbleDir,
+		loopTomb:         new(tomb.Tomb),
+		inited:           true,
+		externalManagers: make(map[any]StateManager, len(generators)),
 	}
 
 	if !filepath.IsAbs(pebbleDir) {
@@ -130,9 +151,26 @@ func New(pebbleDir string, restartHandler restart.Handler, serviceOutput io.Writ
 	// Tell service manager about check failures.
 	o.checkMgr.NotifyCheckFailed(o.serviceMgr.CheckFailed)
 
-	o.stateEng.SetTaskRunner(o.runner)
+	for _, gen := range generators {
+		tag, manager := gen(o)
+		o.tagManager(tag, manager)
+	}
+
+	// TaskRunner must be the last manager added to the StateEngine,
+	// because TaskRunner runs all the tasks required by the managers that ran
+	// before it.
+	o.stateEng.AddManager(o.runner)
 
 	return o, nil
+}
+
+func (o *Overlord) tagManager(tag any, mgr StateManager) {
+	o.externalManagers[tag] = mgr
+	o.addManager(mgr)
+}
+
+func (o *Overlord) GetExternalManager(tag any) StateManager {
+	return o.externalManagers[tag]
 }
 
 func (o *Overlord) addManager(mgr StateManager) {
