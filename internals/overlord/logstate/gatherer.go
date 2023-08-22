@@ -242,7 +242,7 @@ func (g *logGatherer) Stop() {
 	// Wait for final flush in the main loop
 	err := g.tomb.Wait()
 	if err != nil {
-		logger.Noticef("Internal error: cannot shut down gatherer: %v", err)
+		logger.Noticef("Cannot shut down gatherer: %v", err)
 	}
 }
 
