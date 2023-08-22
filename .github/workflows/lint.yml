@@ -17,7 +17,7 @@ jobs:
         id: lint
         with:
           version: latest
-          args: '-c .github/.golangci.yml --out-format=colored-line-number --timeout 2m0s'
+          args: '-c .github/.golangci.yml --out-format=colored-line-number'
           skip-cache: true
 
       - name: Print error message
