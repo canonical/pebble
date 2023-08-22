@@ -93,6 +93,8 @@ type State struct {
 	changes  map[string]*Change
 	tasks    map[string]*Task
 	warnings map[string]*Warning
+	notices  map[string]*Notice
+	noticeId int
 
 	modified bool
 
@@ -107,6 +109,7 @@ func New(backend Backend) *State {
 		changes:  make(map[string]*Change),
 		tasks:    make(map[string]*Task),
 		warnings: make(map[string]*Warning),
+		notices:  make(map[string]*Notice),
 		modified: true,
 		cache:    make(map[interface{}]interface{}),
 	}
@@ -146,6 +149,7 @@ type marshalledState struct {
 	Changes  map[string]*Change          `json:"changes"`
 	Tasks    map[string]*Task            `json:"tasks"`
 	Warnings []*Warning                  `json:"warnings,omitempty"`
+	Notices  []*Notice                   `json:"notices,omitempty"`
 
 	LastChangeId int `json:"last-change-id"`
 	LastTaskId   int `json:"last-task-id"`
@@ -160,6 +164,7 @@ func (s *State) MarshalJSON() ([]byte, error) {
 		Changes:  s.changes,
 		Tasks:    s.tasks,
 		Warnings: s.flattenWarnings(),
+		Notices:  s.flattenNotices(),
 
 		LastTaskId:   s.lastTaskId,
 		LastChangeId: s.lastChangeId,
@@ -179,6 +184,7 @@ func (s *State) UnmarshalJSON(data []byte) error {
 	s.changes = unmarshalled.Changes
 	s.tasks = unmarshalled.Tasks
 	s.unflattenWarnings(unmarshalled.Warnings)
+	s.unflattenNotices(unmarshalled.Notices)
 	s.lastChangeId = unmarshalled.LastChangeId
 	s.lastTaskId = unmarshalled.LastTaskId
 	s.lastLaneId = unmarshalled.LastLaneId
@@ -390,6 +396,14 @@ func (s *State) Prune(pruneWait, abortWait time.Duration, maxReadyChanges int) {
 		if w.ExpiredBefore(now) {
 			delete(s.warnings, k)
 		}
+	}
+
+	// TODO: delete expired notices
+	for k, w := range s.notices {
+		_, _ = k, w
+		//if w.ExpiredBefore(now) {
+		//	delete(s.warnings, k)
+		//}
 	}
 
 	for _, chg := range changes {
