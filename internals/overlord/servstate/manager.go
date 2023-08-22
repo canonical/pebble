@@ -39,7 +39,7 @@ type ServiceManager struct {
 }
 
 type LogManager interface {
-	ServiceStarted(serviceName string, logs *servicelog.RingBuffer)
+	ServiceStarted(service *plan.Service, logs *servicelog.RingBuffer)
 }
 
 // PlanFunc is the type of function used by NotifyPlanChanged.
@@ -87,6 +87,13 @@ func (m *ServiceManager) Stop() {
 	err := reaper.Stop()
 	if err != nil {
 		logger.Noticef("Cannot stop child process reaper: %v", err)
+	}
+
+	// Close all the service ringbuffers
+	m.servicesLock.Lock()
+	defer m.servicesLock.Unlock()
+	for name := range m.services {
+		m.removeServiceInternal(name)
 	}
 }
 

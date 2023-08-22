@@ -280,6 +280,21 @@ func (m *ServiceManager) serviceForStop(task *state.Task, name string) *serviceD
 func (m *ServiceManager) removeService(name string) {
 	m.servicesLock.Lock()
 	defer m.servicesLock.Unlock()
+	m.removeServiceInternal(name)
+}
+
+// not concurrency-safe, please lock m.servicesLock before calling
+func (m *ServiceManager) removeServiceInternal(name string) {
+	svc, svcExists := m.services[name]
+	if !svcExists {
+		return
+	}
+	if svc.logs != nil {
+		err := svc.logs.Close()
+		if err != nil {
+			logger.Noticef("Error closing service %q ring buffer: %v", name, err)
+		}
+	}
 
 	delete(m.services, name)
 }
@@ -459,7 +474,7 @@ func (s *serviceData) startInternal() error {
 	}
 
 	// Pass buffer reference to logMgr to start log forwarding
-	s.manager.logMgr.ServiceStarted(serviceName, s.logs)
+	s.manager.logMgr.ServiceStarted(s.config, s.logs)
 
 	return nil
 }
