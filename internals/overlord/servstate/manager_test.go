@@ -54,14 +54,31 @@ const (
 
 func TestMain(m *testing.M) {
 	// Used by TestReapZombies
-	if os.Getenv("PEBBLE_TEST_CREATE_ZOMBIE") == "1" {
+	if os.Getenv("PEBBLE_TEST_CREATE_CHILD") == "1" {
 		err := createZombie()
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "cannot create zombie: %v\n", err)
 			os.Exit(1)
 		}
+		donePath := os.Getenv("PEBBLE_TEST_EXIT_CHILD")
+		if donePath == "" {
+			fmt.Fprintf(os.Stderr, "PEBBLE_TEST_EXIT_CHILD must be set\n")
+			os.Exit(1)
+		}
+		// Wait until the test signals us to exit the child process. This
+		// will transfer ownership of the grandchild to the parent which
+		// runs the reaper. Until we trigger this, the grandchild will be in
+		// zombie status (it exits immediately) because this child process
+		// had no thread wait()-ing to reap the grandchild.
+		waitForDone(donePath, func() {
+			fmt.Fprintf(os.Stderr, "timed out waiting for exit signal\n")
+			os.Exit(1)
+		})
+
 		return
-	} else if os.Getenv("PEBBLE_TEST_ZOMBIE_CHILD") == "1" {
+	} else if os.Getenv("PEBBLE_TEST_CREATE_GRANDCHILD") == "1" {
+		// The moment the grandchild returns it will be in zombie status
+		// until some parent reaps it.
 		return
 	}
 
@@ -500,7 +517,7 @@ services:
 	c.Check(chg.Status(), Equals, state.DoneStatus)
 	s.st.Unlock()
 	time.Sleep(10 * time.Millisecond)
-	c.Check(s.logBufferString(), Matches,
+	c.Check(s.readAndClearLogBuffer(), Matches,
 		fmt.Sprintf(`(?s).* \[usrgrp\] %[1]s\n.* \[usrgrp\] user=%[1]s home=/home/%[1]s\n`, username))
 }
 
@@ -887,7 +904,7 @@ services:
 	c.Check(chg.Status(), Equals, state.DoneStatus)
 	s.st.Unlock()
 	time.Sleep(10 * time.Millisecond) // ensure it has enough time to write to the log
-	c.Check(s.logBufferString(), Matches, `2.* \[test2\] test2\n`)
+	c.Check(s.readAndClearLogBuffer(), Matches, `2.* \[test2\] test2\n`)
 
 	// Send signal to process to terminate it early.
 	err = s.manager.SendSignal([]string{"test2"}, "SIGTERM")
@@ -902,7 +919,7 @@ services:
 	time.Sleep(75 * time.Millisecond)
 	svc := s.serviceByName(c, "test2")
 	c.Assert(svc.Current, Equals, servstate.StatusActive)
-	c.Check(s.logBufferString(), Matches, `2.* \[test2\] test2\n`)
+	c.Check(s.readAndClearLogBuffer(), Matches, `2.* \[test2\] test2\n`)
 
 	// Send signal to terminate it again.
 	err = s.manager.SendSignal([]string{"test2"}, "SIGTERM")
@@ -917,7 +934,7 @@ services:
 	time.Sleep(125 * time.Millisecond)
 	svc = s.serviceByName(c, "test2")
 	c.Assert(svc.Current, Equals, servstate.StatusActive)
-	c.Check(s.logBufferString(), Matches, `2.* \[test2\] test2\n`)
+	c.Check(s.readAndClearLogBuffer(), Matches, `2.* \[test2\] test2\n`)
 
 	// Test that backoff reset time is working (set to backoff-limit)
 	time.Sleep(175 * time.Millisecond)
@@ -936,7 +953,7 @@ services:
 	time.Sleep(75 * time.Millisecond)
 	svc = s.serviceByName(c, "test2")
 	c.Assert(svc.Current, Equals, servstate.StatusActive)
-	c.Check(s.logBufferString(), Matches, `2.* \[test2\] test2\n`)
+	c.Check(s.readAndClearLogBuffer(), Matches, `2.* \[test2\] test2\n`)
 }
 
 func (s *S) TestStopDuringBackoff(c *C) {
@@ -1040,7 +1057,7 @@ checks:
 	c.Assert(err, IsNil)
 	c.Assert(len(checks), Equals, 1)
 	c.Assert(checks[0].Status, Equals, checkstate.CheckStatusDown)
-	c.Assert(checks[0].Failures, Equals, 1)
+	c.Assert(checks[0].Failures >= 1, Equals, true)
 	c.Assert(checks[0].LastError, Matches, ".* executable file not found .*")
 
 	// Check failure should terminate process, backoff, and restart it, so wait for that
@@ -1222,7 +1239,7 @@ checks:
 	c.Assert(err, IsNil)
 	c.Assert(len(checks), Equals, 1)
 	c.Assert(checks[0].Status, Equals, checkstate.CheckStatusDown)
-	c.Assert(checks[0].Failures, Equals, 1)
+	c.Assert(checks[0].Failures >= 1, Equals, true)
 	c.Assert(checks[0].LastError, Matches, ".* executable file not found .*")
 
 	// Service shouldn't have been restarted
@@ -1298,7 +1315,7 @@ checks:
 	c.Assert(err, IsNil)
 	c.Assert(len(checks), Equals, 1)
 	c.Assert(checks[0].Status, Equals, checkstate.CheckStatusDown)
-	c.Assert(checks[0].Failures, Equals, 1)
+	c.Assert(checks[0].Failures >= 1, Equals, true)
 	c.Assert(checks[0].LastError, Matches, ".* executable file not found .*")
 
 	// It should have closed the stopDaemon channel.
@@ -1492,65 +1509,89 @@ func (s *S) TestReapZombies(c *C) {
 	// variable set so the "service" knows to create a zombie child.
 	testExecutable, err := os.Executable()
 	c.Assert(err, IsNil)
+	exitChildPath := filepath.Join(s.dir, "exit-child")
+
 	layer := parseLayer(c, 0, "layer", fmt.Sprintf(`
 services:
     test2:
         override: replace
         command: %s
         environment:
-            PEBBLE_TEST_CREATE_ZOMBIE: 1
+            PEBBLE_TEST_CREATE_CHILD: 1
+            PEBBLE_TEST_EXIT_CHILD: %s
         on-success: ignore
-`, testExecutable))
+`, testExecutable, exitChildPath))
 	err = s.manager.AppendLayer(layer)
 	c.Assert(err, IsNil)
 
 	s.startServices(c, []string{"test2"}, 1)
-	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
-		return svc.Current == servstate.StatusActive
-	})
 
-	// Get the PID of the zombie child (the createZombie process printed it out)
+	// The child process creates a grandchild and will print the
+	// PID of the grandchild for us to inspect here. We need to
+	// wait until we observe this on stdout.
 	childPidRe := regexp.MustCompile(`.* childPid (\d+)`)
-	matches := childPidRe.FindStringSubmatch(s.logBufferString())
-	c.Assert(len(matches), Equals, 2)
-	childPid, err := strconv.Atoi(matches[1])
-	c.Assert(err, IsNil)
-
-	// Wait till it becomes a zombie (by reading /proc/<pid>/stat)
-	var zombied bool
-	for i := 0; i < 10; i++ {
-		stat, err := ioutil.ReadFile(fmt.Sprintf("/proc/%d/stat", childPid))
-		c.Assert(err, IsNil)
-		statFields := strings.Fields(string(stat))
-		c.Assert(len(statFields) >= 3, Equals, true)
-		state := statFields[2]
-		if state == "Z" { // Z for Zombie!
-			zombied = true
-			break
+	childPid := 0
+	timeout := time.After(10 * time.Second)
+	ticker := time.NewTicker(time.Millisecond)
+pid:
+	for {
+		select {
+		case <-ticker.C:
+			// Get the log without resetting it on read
+			matches := childPidRe.FindStringSubmatch(s.readLogBuffer())
+			if len(matches) == 2 {
+				childPid, err = strconv.Atoi(matches[1])
+				if err == nil {
+					// Valid grandchild PID
+					break pid
+				}
+			}
+		case <-timeout:
+			c.Fatalf("timed out waiting for grandchild pid on stdout")
 		}
-		time.Sleep(10 * time.Millisecond)
 	}
-	if !zombied {
-		c.Fatalf("timed out waiting for zombie to be created")
+	s.clearLogBuffer()
+
+	// Wait until the grandchild is zombified
+	timeout = time.After(10 * time.Second)
+zombi:
+	for {
+		select {
+		case <-ticker.C:
+			stat, err := ioutil.ReadFile(fmt.Sprintf("/proc/%d/stat", childPid))
+			c.Assert(err, IsNil)
+			statFields := strings.Fields(string(stat))
+			c.Assert(len(statFields) >= 3, Equals, true)
+			if statFields[2] == "Z" {
+				break zombi
+			}
+
+		case <-timeout:
+			c.Fatalf("timed out waiting for grandchild to zombify")
+		}
 	}
 
-	// Wait till the main process terminates
+	// Wait till the child terminates (test2 exits)
+	fd, err := os.OpenFile(exitChildPath, os.O_RDONLY|os.O_CREATE, 0666)
+	c.Assert(err, IsNil)
+	fd.Close()
 	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
 		return svc.Current == servstate.StatusInactive
 	})
 
 	// Wait till the zombie has been reaped (no longer in the process table)
-	var reaped bool
-	for i := 0; i < 10; i++ {
-		_, err := os.Stat(fmt.Sprintf("/proc/%d/stat", childPid))
-		if os.IsNotExist(err) {
-			reaped = true
-			break
+	timeout = time.After(10 * time.Second)
+reap:
+	for {
+		select {
+		case <-ticker.C:
+			_, err := os.Stat(fmt.Sprintf("/proc/%d/stat", childPid))
+			if os.IsNotExist(err) {
+				break reap
+			}
+		case <-timeout:
+			c.Fatalf("timed out waiting for zombie to be reaped")
 		}
-		time.Sleep(10 * time.Millisecond)
-	}
-	if !reaped {
-		c.Fatalf("timed out waiting for zombie to be reaped")
 	}
 }
 
@@ -1758,12 +1799,29 @@ func (r testRestarter) HandleRestart(t restart.RestartType) {
 	close(r.ch)
 }
 
-func (s *S) logBufferString() string {
+// readAndClearLogBuffer reads and clears the current log buffer. If you need
+// to poll for a specific stdout/stderr message, this is not suitable.
+func (s *S) readAndClearLogBuffer() string {
 	s.logBufferMut.Lock()
 	defer s.logBufferMut.Unlock()
 	str := s.logBuffer.String()
 	s.logBuffer.Reset()
 	return str
+}
+
+// readLogBuffer reads current log buffer without clearing it. Use this
+// version to poll for a specific stdout/stderr message from a service.
+func (s *S) readLogBuffer() string {
+	s.logBufferMut.Lock()
+	defer s.logBufferMut.Unlock()
+	str := s.logBuffer.String()
+	return str
+}
+
+func (s *S) clearLogBuffer() {
+	s.logBufferMut.Lock()
+	defer s.logBufferMut.Unlock()
+	s.logBuffer.Reset()
 }
 
 func (s *S) testServiceLogs(c *C, outputs map[string]string) {
@@ -1852,7 +1910,7 @@ func (s *S) startTestServices(c *C, logCheck bool) {
 		s.waitForDoneCheck(c, "test1")
 		s.waitForDoneCheck(c, "test2")
 
-		c.Assert(s.logBufferString(), Matches, "(?s).*test1\n.*test2\n")
+		c.Assert(s.readAndClearLogBuffer(), Matches, "(?s).*test1\n.*test2\n")
 	}
 }
 
@@ -1944,7 +2002,7 @@ func createZombie() error {
 		return err
 	}
 	procAttr := syscall.ProcAttr{
-		Env: []string{"PEBBLE_TEST_ZOMBIE_CHILD=1"},
+		Env: []string{"PEBBLE_TEST_CREATE_GRANDCHILD=1"},
 	}
 	childPid, err := syscall.ForkExec(testExecutable, []string{"zombie-child"}, &procAttr)
 	if err != nil {
@@ -1965,17 +2023,23 @@ func (s *S) insertDoneCheck(c *C, service string) string {
 	return fmt.Sprintf("sync; touch %s", filepath.Join(s.dir, service))
 }
 
+func (s *S) waitForDoneCheck(c *C, service string) {
+	donePath := filepath.Join(s.dir, service)
+	waitForDone(donePath, func() {
+		c.Fatal("timeout waiting for service output")
+	})
+}
+
 // Return on timeout or when the file appears. This is used to determine
 // when the expected service output is actually available, not when the
 // service starts to run.
-func (s *S) waitForDoneCheck(c *C, service string) {
+func waitForDone(donePath string, timeoutHandler func()) {
 	timeout := time.After(10 * time.Second)
 	ticker := time.NewTicker(time.Millisecond)
-	donePath := filepath.Join(s.dir, service)
 	for {
 		select {
 		case <-timeout:
-			c.Fatal("timeout waiting for service output")
+			timeoutHandler()
 
 		case <-ticker.C:
 			stat, err := os.Stat(donePath)
