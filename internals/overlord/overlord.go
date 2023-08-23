@@ -85,7 +85,7 @@ type ManagerProvider interface {
 // ManagerGenerator is passed to Overlord to create a manager
 // The return value is a key, value pair where the key has to be a unique
 // identifier for the manager being created.
-type ManagerGenerator func(ManagerProvider) (key any, manager StateManager)
+type ManagerGenerator func(ManagerProvider) (key any, manager StateManager, err error)
 
 // New creates a  Overlord with all its state managers.
 // It can be provided with an optional restart.Handler.
@@ -152,7 +152,10 @@ func New(
 	o.checkMgr.NotifyCheckFailed(o.serviceMgr.CheckFailed)
 
 	for _, gen := range generators {
-		tag, manager := gen(o)
+		tag, manager, err := gen(o)
+		if err != nil {
+			return nil, err
+		}
 		o.externalManagers[tag] = manager
 		o.addManager(manager)
 	}
