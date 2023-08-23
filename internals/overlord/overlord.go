@@ -73,19 +73,19 @@ type Overlord struct {
 	externalManagers map[any]StateManager
 }
 
-// ManagerProvider is the interface that ManagerGenerator depends on
+// ManagerEnvironment is the interface that NewManagerFunc depends on
 //
-// Overlord implements ManagerProvider as it provides the necessary
+// Overlord implements ManagerEnvironment as it provides the necessary
 // handles to hook an external manager into the overlord's environment.
-type ManagerProvider interface {
+type ManagerEnvironment interface {
 	State() *state.State
 	TaskRunner() *state.TaskRunner
 }
 
-// ManagerGenerator is passed to Overlord to create a manager
+// NewManagerFunc is passed to Overlord to create a manager
 // The return value is a key, value pair where the key has to be a unique
 // identifier for the manager being created.
-type ManagerGenerator func(ManagerProvider) (key any, manager StateManager, err error)
+type NewManagerFunc func(ManagerEnvironment) (key any, manager StateManager, err error)
 
 // New creates a  Overlord with all its state managers.
 // It can be provided with an optional restart.Handler.
@@ -93,7 +93,7 @@ func New(
 	pebbleDir string,
 	restartHandler restart.Handler,
 	serviceOutput io.Writer,
-	generators []ManagerGenerator) (*Overlord, error) {
+	generators []NewManagerFunc) (*Overlord, error) {
 
 	o := &Overlord{
 		pebbleDir:        pebbleDir,
@@ -168,7 +168,7 @@ func New(
 	return o, nil
 }
 
-func (o *Overlord) GetExternalManager(tag any) StateManager {
+func (o *Overlord) ExternalManager(tag any) StateManager {
 	result, ok := o.externalManagers[tag]
 	if !ok {
 		panic("Manager tag not found")

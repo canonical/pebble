@@ -111,23 +111,23 @@ func (m *fakeManager) Ensure() error {
 }
 
 func (s *daemonSuite) TestExternalManager(c *C) {
-	generators := []overlord.ManagerGenerator{
-		func(o overlord.ManagerProvider) (any, overlord.StateManager, error) {
+	generators := []overlord.NewManagerFunc{
+		func(o overlord.ManagerEnvironment) (any, overlord.StateManager, error) {
 			return fakeManager{}, &fakeManager{id: "expected"}, nil
 		},
 	}
 
 	d, err := New(&Options{
-		Dir:               s.pebbleDir,
-		SocketPath:        s.socketPath,
-		HTTPAddress:       s.httpAddress,
-		ManagerGenerators: generators,
+		Dir:             s.pebbleDir,
+		SocketPath:      s.socketPath,
+		HTTPAddress:     s.httpAddress,
+		NewManagerFuncs: generators,
 	})
 	c.Assert(err, IsNil)
 
 	err = d.overlord.StateEngine().Ensure()
 	c.Assert(err, IsNil)
-	managerItf := d.overlord.GetExternalManager(fakeManager{})
+	managerItf := d.overlord.ExternalManager(fakeManager{})
 	c.Assert(managerItf, NotNil)
 	concrete, ok := managerItf.(*fakeManager)
 	c.Assert(ok, Equals, true)
