@@ -153,7 +153,8 @@ func New(
 
 	for _, gen := range generators {
 		tag, manager := gen(o)
-		o.tagManager(tag, manager)
+		o.externalManagers[tag] = manager
+		o.addManager(manager)
 	}
 
 	// TaskRunner must be the last manager added to the StateEngine,
@@ -164,13 +165,12 @@ func New(
 	return o, nil
 }
 
-func (o *Overlord) tagManager(tag any, mgr StateManager) {
-	o.externalManagers[tag] = mgr
-	o.addManager(mgr)
-}
-
 func (o *Overlord) GetExternalManager(tag any) StateManager {
-	return o.externalManagers[tag]
+	result, ok := o.externalManagers[tag]
+	if !ok {
+		panic("Manager tag not found")
+	}
+	return result
 }
 
 func (o *Overlord) addManager(mgr StateManager) {
