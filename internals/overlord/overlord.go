@@ -151,7 +151,7 @@ func New(
 			return nil, err
 		}
 		for _, manager := range extraManagers {
-			o.addManager(manager)
+			o.stateEng.AddManager(manager)
 		}
 	}
 
