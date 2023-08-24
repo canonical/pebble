@@ -52,7 +52,7 @@ const defaultPebbleDir = "/var/lib/pebble/default"
 // ErrExtraArgs is returned  if extra arguments to a command are found
 var ErrExtraArgs = fmt.Errorf("too many arguments for command")
 
-// CmdOptions contains state that's required during each command execution.
+// CmdOptions exposes state made accessible during command execution.
 type CmdOptions struct {
 	// Client is the Pebble client instance
 	Client *client.Client
