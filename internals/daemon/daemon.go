@@ -72,10 +72,9 @@ type Options struct {
 	// log output will be written to the writer.
 	ServiceOutput io.Writer
 
-	// NewManagerFuncs is an optional slice of NewManagerFunc which will
-	// be passed to the overlord.New to create custom managers at overlord
-	// creation.
-	NewManagerFuncs []overlord.NewManagerFunc
+	// OverlordExtension is an optional struct used to extend the capabilities
+	// of the Overlord.
+	OverlordExtension overlord.Extension
 }
 
 // A Daemon listens for requests and routes them to the right command
@@ -792,7 +791,7 @@ func New(opts *Options) (*Daemon, error) {
 		httpAddress:         opts.HTTPAddress,
 	}
 
-	ovld, err := overlord.New(opts.Dir, d, opts.ServiceOutput, opts.NewManagerFuncs)
+	ovld, err := overlord.New(opts.Dir, d, opts.ServiceOutput, opts.OverlordExtension)
 	if err == errExpectedReboot {
 		// we proceed without overlord until we reach Stop
 		// where we will schedule and wait again for a system restart.

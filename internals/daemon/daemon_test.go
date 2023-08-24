@@ -110,29 +110,33 @@ func (m *fakeManager) Ensure() error {
 	return nil
 }
 
-func (s *daemonSuite) TestExternalManager(c *C) {
-	generators := []overlord.NewManagerFunc{
-		func(o overlord.ManagerEnvironment) (any, overlord.StateManager, error) {
-			return fakeManager{}, &fakeManager{id: "expected"}, nil
-		},
-	}
+type fakeExtension struct {
+	mgr fakeManager
+}
 
+func (f *fakeExtension) ExtraManagers(o *overlord.Overlord) ([]overlord.StateManager, error) {
+	f.mgr = fakeManager{id: "expected", ensureCalls: 0}
+	result := []overlord.StateManager{&f.mgr}
+	return result, nil
+}
+
+func (s *daemonSuite) TestExternalManager(c *C) {
 	d, err := New(&Options{
-		Dir:             s.pebbleDir,
-		SocketPath:      s.socketPath,
-		HTTPAddress:     s.httpAddress,
-		NewManagerFuncs: generators,
+		Dir:               s.pebbleDir,
+		SocketPath:        s.socketPath,
+		HTTPAddress:       s.httpAddress,
+		OverlordExtension: &fakeExtension{},
 	})
 	c.Assert(err, IsNil)
 
 	err = d.overlord.StateEngine().Ensure()
 	c.Assert(err, IsNil)
-	managerItf := d.overlord.ExternalManager(fakeManager{})
-	c.Assert(managerItf, NotNil)
-	concrete, ok := managerItf.(*fakeManager)
+	extension, ok := d.overlord.Extension().(*fakeExtension)
 	c.Assert(ok, Equals, true)
-	c.Assert(concrete.id, Equals, "expected")
-	c.Assert(concrete.ensureCalls, Equals, 1)
+	c.Assert(extension, NotNil)
+	manager := extension.mgr
+	c.Assert(manager.id, Equals, "expected")
+	c.Assert(manager.ensureCalls, Equals, 1)
 }
 
 func (s *daemonSuite) TestAddCommand(c *C) {

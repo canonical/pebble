@@ -49,6 +49,12 @@ var (
 	defaultCachedDownloads = 5
 )
 
+// Extension represents an extension of the Overlord
+type Extension interface {
+	// ExtraManagers is called when building an Overlord
+	ExtraManagers(o *Overlord) ([]StateManager, error)
+}
+
 // Overlord is the central manager of the system, keeping track
 // of all available state managers and related helpers.
 type Overlord struct {
@@ -64,13 +70,15 @@ type Overlord struct {
 	pruneTicker *time.Ticker
 
 	// managers
-	inited           bool
-	runner           *state.TaskRunner
-	serviceMgr       *servstate.ServiceManager
-	commandMgr       *cmdstate.CommandManager
-	checkMgr         *checkstate.CheckManager
-	logMgr           *logstate.LogManager
-	externalManagers map[any]StateManager
+	inited     bool
+	runner     *state.TaskRunner
+	serviceMgr *servstate.ServiceManager
+	commandMgr *cmdstate.CommandManager
+	checkMgr   *checkstate.CheckManager
+	logMgr     *logstate.LogManager
+
+	// Overlord extension
+	extension Extension
 }
 
 // ManagerEnvironment is the interface that NewManagerFunc depends on
@@ -93,13 +101,13 @@ func New(
 	pebbleDir string,
 	restartHandler restart.Handler,
 	serviceOutput io.Writer,
-	generators []NewManagerFunc) (*Overlord, error) {
+	extension Extension) (*Overlord, error) {
 
 	o := &Overlord{
-		pebbleDir:        pebbleDir,
-		loopTomb:         new(tomb.Tomb),
-		inited:           true,
-		externalManagers: make(map[any]StateManager, len(generators)),
+		pebbleDir: pebbleDir,
+		loopTomb:  new(tomb.Tomb),
+		inited:    true,
+		extension: extension,
 	}
 
 	if !filepath.IsAbs(pebbleDir) {
@@ -151,13 +159,14 @@ func New(
 	// Tell service manager about check failures.
 	o.checkMgr.NotifyCheckFailed(o.serviceMgr.CheckFailed)
 
-	for _, gen := range generators {
-		tag, manager, err := gen(o)
+	if extension != nil {
+		extraManagers, err := o.extension.ExtraManagers(o)
 		if err != nil {
 			return nil, err
 		}
-		o.externalManagers[tag] = manager
-		o.addManager(manager)
+		for _, manager := range extraManagers {
+			o.addManager(manager)
+		}
 	}
 
 	// TaskRunner must be the last manager added to the StateEngine,
@@ -168,12 +177,8 @@ func New(
 	return o, nil
 }
 
-func (o *Overlord) ExternalManager(tag any) StateManager {
-	result, ok := o.externalManagers[tag]
-	if !ok {
-		panic("Manager tag not found")
-	}
-	return result
+func (o *Overlord) Extension() Extension {
+	return o.extension
 }
 
 func (o *Overlord) addManager(mgr StateManager) {
