@@ -43,11 +43,11 @@ Warnings expire automatically, and once expired they are forgotten.
 `
 
 type cmdWarnings struct {
-	clientMixin
 	timeMixin
 	unicodeMixin
 	All     bool `long:"all"`
 	Verbose bool `long:"verbose"`
+	client  *client.Client
 }
 
 const cmdOkaySummary = "Acknowledge warnings"
@@ -58,7 +58,9 @@ Once acknowledged, a warning won't appear again unless it reoccurs and
 sufficient time has passed.
 `
 
-type cmdOkay struct{ clientMixin }
+type cmdOkay struct {
+	client *client.Client
+}
 
 func init() {
 	AddCommand(&CmdInfo{
@@ -69,13 +71,17 @@ func init() {
 			"--all":     "Show all warnings",
 			"--verbose": "Show more information",
 		}),
-		Builder: func() flags.Commander { return &cmdWarnings{} },
+		New: func(opts *CmdOptions) flags.Commander {
+			return &cmdWarnings{client: opts.Client}
+		},
 	})
 	AddCommand(&CmdInfo{
 		Name:        "okay",
 		Summary:     cmdOkaySummary,
 		Description: cmdOkayDescription,
-		Builder:     func() flags.Commander { return &cmdOkay{} },
+		New: func(opts *CmdOptions) flags.Commander {
+			return &cmdOkay{client: opts.Client}
+		},
 	})
 }
 

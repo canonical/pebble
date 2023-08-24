@@ -38,8 +38,12 @@ func init() {
 		Name:        "stop",
 		Summary:     cmdStopSummary,
 		Description: cmdStopDescription,
-		Builder:     func() flags.Commander { return &cmdStop{} },
 		ArgsHelp:    waitArgsHelp,
+		New: func(opts *CmdOptions) flags.Commander {
+			return &cmdStop{
+				waitMixin: waitMixin{client: opts.Client},
+			}
+		},
 	})
 }
 

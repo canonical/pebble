@@ -39,7 +39,11 @@ func init() {
 		Summary:     cmdStartSummary,
 		Description: cmdStartDescription,
 		ArgsHelp:    waitArgsHelp,
-		Builder:     func() flags.Commander { return &cmdStart{} },
+		New: func(opts *CmdOptions) flags.Commander {
+			return &cmdStart{
+				waitMixin: waitMixin{client: opts.Client},
+			}
+		},
 	})
 }
 

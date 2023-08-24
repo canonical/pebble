@@ -34,13 +34,14 @@ if none are specified) and displays them in chronological order.
 `
 
 type cmdLogs struct {
-	clientMixin
 	Follow     bool   `short:"f" long:"follow"`
 	Format     string `long:"format"`
 	N          string `short:"n"`
 	Positional struct {
 		Services []string `positional-arg-name:"<service>"`
 	} `positional-args:"yes"`
+
+	client *client.Client
 }
 
 func init() {
@@ -53,7 +54,9 @@ func init() {
 			"--format": "Output format: \"text\" (default) or \"json\" (JSON lines).",
 			"-n":       "Number of logs to show (before following); defaults to 30.\nIf 'all', show all buffered logs.",
 		},
-		Builder: func() flags.Commander { return &cmdLogs{} },
+		New: func(opts *CmdOptions) flags.Commander {
+			return &cmdLogs{client: opts.Client}
+		},
 	})
 }
 

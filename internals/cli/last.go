@@ -22,11 +22,11 @@ import (
 )
 
 type changeIDMixin struct {
-	clientMixin
 	LastChangeType string `long:"last"`
 	Positional     struct {
 		ChangeID string `positional-arg-name:"<change-id>"`
 	} `positional-args:"yes"`
+	client *client.Client
 }
 
 var changeIDMixinArgsHelp = map[string]string{

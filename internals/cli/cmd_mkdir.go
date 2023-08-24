@@ -20,7 +20,6 @@ import (
 	"strconv"
 
 	"github.com/canonical/go-flags"
-
 	"github.com/canonical/pebble/client"
 )
 
@@ -30,8 +29,6 @@ The mkdir command creates the specified directory.
 `
 
 type cmdMkdir struct {
-	clientMixin
-
 	MakeParents bool   `short:"p"`
 	Permissions string `short:"m"`
 	UserID      *int   `long:"uid"`
@@ -42,6 +39,8 @@ type cmdMkdir struct {
 	Positional struct {
 		Path string `positional-arg-name:"<path>"`
 	} `positional-args:"yes" required:"yes"`
+
+	client *client.Client
 }
 
 func init() {
@@ -49,7 +48,6 @@ func init() {
 		Name:        "mkdir",
 		Summary:     cmdMkdirSummary,
 		Description: cmdMkdirDescription,
-		Builder:     func() flags.Commander { return &cmdMkdir{} },
 		ArgsHelp: map[string]string{
 			"-p":      "Create parent directories as needed",
 			"-m":      "Set permissions (e.g. 0644)",
@@ -57,6 +55,9 @@ func init() {
 			"--user":  "Use specified username",
 			"--gid":   "Use specified group ID",
 			"--group": "Use specified group name",
+		},
+		New: func(opts *CmdOptions) flags.Commander {
+			return &cmdMkdir{client: opts.Client}
 		},
 	})
 }

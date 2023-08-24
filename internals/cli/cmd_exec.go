@@ -43,7 +43,6 @@ pebble exec --timeout 10s -- echo -n foo bar
 `
 
 type cmdExec struct {
-	clientMixin
 	WorkingDir     string        `short:"w"`
 	Env            []string      `long:"env"`
 	UserID         *int          `long:"uid"`
@@ -59,6 +58,8 @@ type cmdExec struct {
 	Positional     struct {
 		Command string `positional-arg-name:"<command>" required:"1"`
 	} `positional-args:"yes"`
+
+	client *client.Client
 }
 
 func init() {
@@ -81,7 +82,9 @@ func init() {
 			"-I":        "Disable interactive mode and use a pipe for stdin",
 		},
 		PassAfterNonOption: true,
-		Builder:            func() flags.Commander { return &cmdExec{} },
+		New: func(opts *CmdOptions) flags.Commander {
+			return &cmdExec{client: opts.Client}
+		},
 	})
 }
 

@@ -37,7 +37,11 @@ func init() {
 		Summary:     cmdReplanSummary,
 		Description: cmdReplanDescription,
 		ArgsHelp:    waitArgsHelp,
-		Builder:     func() flags.Commander { return &cmdReplan{} },
+		New: func(opts *CmdOptions) flags.Commander {
+			return &cmdReplan{
+				waitMixin: waitMixin{client: opts.Client},
+			}
+		},
 	})
 }
 

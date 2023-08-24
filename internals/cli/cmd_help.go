@@ -48,7 +48,9 @@ func init() {
 			"--all": "Show a short summary of all commands",
 			"--man": "Generate the manpage",
 		},
-		Builder: func() flags.Commander { return &cmdHelp{} },
+		New: func(opts *CmdOptions) flags.Commander {
+			return &cmdHelp{parser: opts.Parser}
+		},
 	})
 }
 

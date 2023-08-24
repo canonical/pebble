@@ -38,7 +38,11 @@ func init() {
 		Summary:     cmdRestartSummary,
 		Description: cmdRestartDescription,
 		ArgsHelp:    waitArgsHelp,
-		Builder:     func() flags.Commander { return &cmdRestart{} },
+		New: func(opts *CmdOptions) flags.Commander {
+			return &cmdRestart{
+				waitMixin: waitMixin{client: opts.Client},
+			}
+		},
 	})
 }
 

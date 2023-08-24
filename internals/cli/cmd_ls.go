@@ -33,7 +33,6 @@ may be specified for the last path element.
 `
 
 type cmdLs struct {
-	clientMixin
 	timeMixin
 
 	Directory  bool `short:"d"`
@@ -42,6 +41,8 @@ type cmdLs struct {
 	Positional struct {
 		Path string `positional-arg-name:"<path>"`
 	} `positional-args:"yes" required:"yes"`
+
+	client *client.Client
 }
 
 func init() {
@@ -53,7 +54,9 @@ func init() {
 			"-d": "List matching entries themselves, not directory contents",
 			"-l": "Use a long listing format",
 		}),
-		Builder: func() flags.Commander { return &cmdLs{} },
+		New: func(opts *CmdOptions) flags.Commander {
+			return &cmdLs{client: opts.Client}
+		},
 	})
 }
 

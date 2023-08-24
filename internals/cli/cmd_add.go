@@ -32,12 +32,13 @@ label (or append if the label is not found).
 `
 
 type cmdAdd struct {
-	clientMixin
 	Combine    bool `long:"combine"`
 	Positional struct {
 		Label     string `positional-arg-name:"<label>" required:"1"`
 		LayerPath string `positional-arg-name:"<layer-path>" required:"1"`
 	} `positional-args:"yes"`
+
+	client *client.Client
 }
 
 func init() {
@@ -48,7 +49,9 @@ func init() {
 		ArgsHelp: map[string]string{
 			"--combine": "Combine the new layer with an existing layer that has the given label (default is to append)",
 		},
-		Builder: func() flags.Commander { return &cmdAdd{} },
+		New: func(opts *CmdOptions) flags.Commander {
+			return &cmdAdd{client: opts.Client}
+		},
 	})
 }
 

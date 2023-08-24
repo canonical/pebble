@@ -30,11 +30,12 @@ arguments.
 `
 
 type cmdChecks struct {
-	clientMixin
 	Level      string `long:"level"`
 	Positional struct {
 		Checks []string `positional-arg-name:"<check>"`
 	} `positional-args:"yes"`
+
+	client *client.Client
 }
 
 func init() {
@@ -45,7 +46,9 @@ func init() {
 		ArgsHelp: map[string]string{
 			"--level": `Check level to filter for ("alive" or "ready")`,
 		},
-		Builder: func() flags.Commander { return &cmdChecks{} },
+		New: func(opts *CmdOptions) flags.Commander {
+			return &cmdChecks{client: opts.Client}
+		},
 	})
 }
 

@@ -31,9 +31,9 @@ var (
 )
 
 type waitMixin struct {
-	clientMixin
 	NoWait    bool `long:"no-wait"`
 	skipAbort bool
+	client    *client.Client
 }
 
 var waitArgsHelp = map[string]string{
