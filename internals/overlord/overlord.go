@@ -81,20 +81,6 @@ type Overlord struct {
 	extension Extension
 }
 
-// ManagerEnvironment is the interface that NewManagerFunc depends on
-//
-// Overlord implements ManagerEnvironment as it provides the necessary
-// handles to hook an external manager into the overlord's environment.
-type ManagerEnvironment interface {
-	State() *state.State
-	TaskRunner() *state.TaskRunner
-}
-
-// NewManagerFunc is passed to Overlord to create a manager
-// The return value is a key, value pair where the key has to be a unique
-// identifier for the manager being created.
-type NewManagerFunc func(ManagerEnvironment) (key any, manager StateManager, err error)
-
 // New creates a  Overlord with all its state managers.
 // It can be provided with an optional restart.Handler.
 func New(
