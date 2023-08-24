@@ -49,10 +49,23 @@ var (
 	defaultCachedDownloads = 5
 )
 
-// Extension represents an extension of the Overlord
+// Extension represents an extension of the Overlord.
 type Extension interface {
-	// ExtraManagers is called when building an Overlord
+	// ExtraManagers is called when building an Overlord.
 	ExtraManagers(o *Overlord) ([]StateManager, error)
+}
+
+// Options is the arguments passed to construct an Overlord.
+type Options struct {
+	// PebbleDir is the path to the pebble directory. It must be provided.
+	PebbleDir string
+	// RestartHandler is an optional structure to handle restart requests.
+	RestartHandler restart.Handler
+	// ServiceOutput is an optional output for the logging manager.
+	ServiceOutput io.Writer
+	// Extension is an optional struct defining additional components to add to
+	// the overlord.
+	Extension Extension
 }
 
 // Overlord is the central manager of the system, keeping track
@@ -81,33 +94,28 @@ type Overlord struct {
 }
 
 // New creates an Overlord with all its state managers.
-// It can be provided with an optional restart.Handler.
-func New(
-	pebbleDir string,
-	restartHandler restart.Handler,
-	serviceOutput io.Writer,
-	extension Extension) (*Overlord, error) {
+func New(opts Options) (*Overlord, error) {
 
 	o := &Overlord{
-		pebbleDir: pebbleDir,
+		pebbleDir: opts.PebbleDir,
 		loopTomb:  new(tomb.Tomb),
 		inited:    true,
-		extension: extension,
+		extension: opts.Extension,
 	}
 
-	if !filepath.IsAbs(pebbleDir) {
-		return nil, fmt.Errorf("directory %q must be absolute", pebbleDir)
+	if !filepath.IsAbs(o.pebbleDir) {
+		return nil, fmt.Errorf("directory %q must be absolute", o.pebbleDir)
 	}
-	if !osutil.IsDir(pebbleDir) {
-		return nil, fmt.Errorf("directory %q does not exist", pebbleDir)
+	if !osutil.IsDir(o.pebbleDir) {
+		return nil, fmt.Errorf("directory %q does not exist", o.pebbleDir)
 	}
-	statePath := filepath.Join(pebbleDir, ".pebble.state")
+	statePath := filepath.Join(o.pebbleDir, ".pebble.state")
 
 	backend := &overlordStateBackend{
 		path:         statePath,
 		ensureBefore: o.ensureBefore,
 	}
-	s, err := loadState(statePath, restartHandler, backend)
+	s, err := loadState(statePath, opts.RestartHandler, backend)
 	if err != nil {
 		return nil, err
 	}
@@ -124,7 +132,13 @@ func New(
 	o.logMgr = logstate.NewLogManager()
 	o.addManager(o.logMgr)
 
-	o.serviceMgr, err = servstate.NewManager(s, o.runner, o.pebbleDir, serviceOutput, restartHandler, o.logMgr)
+	o.serviceMgr, err = servstate.NewManager(
+		s,
+		o.runner,
+		o.pebbleDir,
+		opts.ServiceOutput,
+		opts.RestartHandler,
+		o.logMgr)
 	if err != nil {
 		return nil, err
 	}
@@ -144,7 +158,7 @@ func New(
 	// Tell service manager about check failures.
 	o.checkMgr.NotifyCheckFailed(o.serviceMgr.CheckFailed)
 
-	if extension != nil {
+	if o.extension != nil {
 		extraManagers, err := o.extension.ExtraManagers(o)
 		if err != nil {
 			return nil, err

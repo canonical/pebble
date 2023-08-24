@@ -791,7 +791,14 @@ func New(opts *Options) (*Daemon, error) {
 		httpAddress:         opts.HTTPAddress,
 	}
 
-	ovld, err := overlord.New(opts.Dir, d, opts.ServiceOutput, opts.OverlordExtension)
+	ovldOptions := overlord.Options{
+		PebbleDir:      opts.Dir,
+		RestartHandler: d,
+		ServiceOutput:  opts.ServiceOutput,
+		Extension:      opts.OverlordExtension,
+	}
+
+	ovld, err := overlord.New(ovldOptions)
 	if err == errExpectedReboot {
 		// we proceed without overlord until we reach Stop
 		// where we will schedule and wait again for a system restart.
