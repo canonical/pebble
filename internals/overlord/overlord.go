@@ -77,11 +77,10 @@ type Overlord struct {
 	checkMgr   *checkstate.CheckManager
 	logMgr     *logstate.LogManager
 
-	// Overlord extension
 	extension Extension
 }
 
-// New creates a  Overlord with all its state managers.
+// New creates an Overlord with all its state managers.
 // It can be provided with an optional restart.Handler.
 func New(
 	pebbleDir string,

@@ -72,7 +72,7 @@ type Options struct {
 	// log output will be written to the writer.
 	ServiceOutput io.Writer
 
-	// OverlordExtension is an optional struct used to extend the capabilities
+	// OverlordExtension is an optional interface used to extend the capabilities
 	// of the Overlord.
 	OverlordExtension overlord.Extension
 }
