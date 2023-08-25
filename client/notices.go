@@ -31,7 +31,7 @@ type NotifyOptions struct {
 	Data map[string]string
 }
 
-// Notify adds a "client" notice occurrence with the specified options.
+// Notify records an occurrence of a "client" notice with the specified options.
 func (client *Client) Notify(opts *NotifyOptions) error {
 	var payload = struct {
 		Action      string            `json:"action"`
