@@ -89,8 +89,10 @@ type changeAndData struct {
 // Change fetches information about a Change given its ID.
 func (client *Client) Change(id string) (*Change, error) {
 	var chgd changeAndData
-	_, err := client.doSync("GET", "/v1/changes/"+id, nil, nil, nil, &chgd)
-	if err != nil {
+	if _, err := client.DoSync(&RequestInfo{
+		Method: "GET",
+		Path:   "/v1/changes/" + id,
+	}, &chgd); err != nil {
 		return nil, err
 	}
 
@@ -111,7 +113,11 @@ func (client *Client) Abort(id string) (*Change, error) {
 	}
 
 	var chg Change
-	if _, err := client.doSync("POST", "/v1/changes/"+id, nil, nil, &body, &chg); err != nil {
+	if _, err := client.DoSync(&RequestInfo{
+		Method: "POST",
+		Path:   "/v1/changes/" + id,
+		Body:   &body,
+	}, &chg); err != nil {
 		return nil, err
 	}
 
@@ -158,7 +164,11 @@ func (client *Client) Changes(opts *ChangesOptions) ([]*Change, error) {
 	}
 
 	var chgds []changeAndData
-	_, err := client.doSync("GET", "/v1/changes", query, nil, nil, &chgds)
+	_, err := client.DoSync(&RequestInfo{
+		Method: "GET",
+		Path:   "/v1/changes",
+		Query:  query,
+	}, &chgds)
 	if err != nil {
 		return nil, err
 	}
@@ -190,7 +200,11 @@ func (client *Client) WaitChange(id string, opts *WaitChangeOptions) (*Change, e
 		query.Set("timeout", opts.Timeout.String())
 	}
 
-	_, err := client.doSync("GET", "/v1/changes/"+id+"/wait", query, nil, nil, &chgd)
+	_, err := client.DoSync(&RequestInfo{
+		Method: "GET",
+		Path:   "/v1/changes/" + id + "/wait",
+		Query:  query,
+	}, &chgd)
 	if err != nil {
 		return nil, err
 	}

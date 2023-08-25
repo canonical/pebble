@@ -52,7 +52,11 @@ func (client *Client) AddLayer(opts *AddLayerOptions) error {
 	if err := json.NewEncoder(&body).Encode(&payload); err != nil {
 		return err
 	}
-	_, err := client.doSync("POST", "/v1/layers", nil, nil, &body, nil)
+	_, err := client.DoSync(&RequestInfo{
+		Method: "POST",
+		Path:   "/v1/layers",
+		Body:   &body,
+	}, nil)
 	return err
 }
 
@@ -64,7 +68,11 @@ func (client *Client) PlanBytes(_ *PlanOptions) (data []byte, err error) {
 		"format": []string{"yaml"},
 	}
 	var dataStr string
-	_, err = client.doSync("GET", "/v1/plan", query, nil, nil, &dataStr)
+	_, err = client.DoSync(&RequestInfo{
+		Method: "GET",
+		Path:   "/v1/plan",
+		Query:  query,
+	}, &dataStr)
 	if err != nil {
 		return nil, err
 	}

@@ -77,7 +77,12 @@ func (client *Client) doMultiServiceAction(actionName string, services []string)
 	headers := map[string]string{
 		"Content-Type": "application/json",
 	}
-	return client.doAsyncFull("POST", "/v1/services", nil, headers, bytes.NewBuffer(data))
+	return client.DoAsyncFull(&RequestInfo{
+		Method:  "POST",
+		Path:    "/v1/services",
+		Headers: headers,
+		Body:    bytes.NewBuffer(data),
+	})
 }
 
 type ServicesOptions struct {
@@ -119,7 +124,11 @@ func (client *Client) Services(opts *ServicesOptions) ([]*ServiceInfo, error) {
 		"names": []string{strings.Join(opts.Names, ",")},
 	}
 	var services []*ServiceInfo
-	_, err := client.doSync("GET", "/v1/services", query, nil, nil, &services)
+	_, err := client.DoSync(&RequestInfo{
+		Method: "GET",
+		Path:   "/v1/services",
+		Query:  query,
+	}, &services)
 	if err != nil {
 		return nil, err
 	}

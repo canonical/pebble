@@ -34,7 +34,10 @@ func (client *Client) Do(method, path string, query url.Values, body io.Reader, 
 }
 
 func (client *Client) FakeAsyncRequest() (changeId string, err error) {
-	changeId, err = client.doAsync("GET", "/v1/async-test", nil, nil, nil)
+	changeId, err = client.DoAsync(&RequestInfo{
+		Method: "GET",
+		Path:   "/v1/async-test",
+	})
 	if err != nil {
 		return "", fmt.Errorf("cannot do async test: %v", err)
 	}
