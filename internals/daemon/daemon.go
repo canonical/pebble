@@ -798,7 +798,7 @@ func New(opts *Options) (*Daemon, error) {
 		Extension:      opts.OverlordExtension,
 	}
 
-	ovld, err := overlord.New(ovldOptions)
+	ovld, err := overlord.New(&ovldOptions)
 	if err == errExpectedReboot {
 		// we proceed without overlord until we reach Stop
 		// where we will schedule and wait again for a system restart.

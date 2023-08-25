@@ -94,7 +94,7 @@ type Overlord struct {
 }
 
 // New creates an Overlord with all its state managers.
-func New(opts Options) (*Overlord, error) {
+func New(opts *Options) (*Overlord, error) {
 
 	o := &Overlord{
 		pebbleDir: opts.PebbleDir,
