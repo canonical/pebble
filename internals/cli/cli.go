@@ -54,9 +54,7 @@ var ErrExtraArgs = fmt.Errorf("too many arguments for command")
 
 // CmdOptions exposes state made accessible during command execution.
 type CmdOptions struct {
-	// Client is the Pebble client instance
 	Client *client.Client
-	// Parser is the instance of the flags.Parser that processed the command.
 	Parser *flags.Parser
 }
 
@@ -153,11 +151,11 @@ type defaultOptions struct {
 // Parser creates and populates a fresh parser.
 // Since commands have local state a fresh parser is required to isolate tests
 // from each other.
-func Parser(c *client.Client) *flags.Parser {
+func Parser(cli *client.Client) *flags.Parser {
 	// Implement --version by default on every command
 	defaultOpts := defaultOptions{
 		Version: func() {
-			printVersions(c)
+			printVersions(cli)
 			panic(&exitStatus{0})
 		},
 	}
@@ -182,55 +180,55 @@ func Parser(c *client.Client) *flags.Parser {
 	}
 
 	// Add all commands
-	for _, cmdInfo := range commands {
-		obj := cmdInfo.New(&CmdOptions{Client: c, Parser: parser})
+	for _, c := range commands {
+		obj := c.New(&CmdOptions{Client: cli, Parser: parser})
 
 		var target *flags.Command
-		if cmdInfo.Debug {
+		if c.Debug {
 			target = debugCmd
 		} else {
 			target = parser.Command
 		}
-		cmd, err := target.AddCommand(cmdInfo.Name, cmdInfo.Summary, strings.TrimSpace(cmdInfo.Description), obj)
+		cmd, err := target.AddCommand(c.Name, c.Summary, strings.TrimSpace(c.Description), obj)
 		if err != nil {
-			logger.Panicf("internal error: cannot add command %q: %v", cmdInfo.Name, err)
+			logger.Panicf("internal error: cannot add command %q: %v", c.Name, err)
 		}
-		cmd.PassAfterNonOption = cmdInfo.PassAfterNonOption
+		cmd.PassAfterNonOption = c.PassAfterNonOption
 
 		// Extract help for flags and positional arguments from ArgsHelp
 		flagHelp := map[string]string{}
 		positionalHelp := map[string]string{}
-		for specifier, help := range cmdInfo.ArgsHelp {
+		for specifier, help := range c.ArgsHelp {
 			if flagRegexp.MatchString(specifier) {
 				flagHelp[specifier] = help
 			} else if positionalRegexp.MatchString(specifier) {
 				positionalHelp[specifier] = help
 			} else {
-				logger.Panicf("internal error: invalid help specifier from %q: %q", cmdInfo.Name, specifier)
+				logger.Panicf("internal error: invalid help specifier from %q: %q", c.Name, specifier)
 			}
 		}
 
 		// Make sure all argument descriptions are set
 		opts := cmd.Options()
 		if len(opts) != len(flagHelp) {
-			logger.Panicf("internal error: wrong number of flag descriptions for %q: expected %d, got %d", cmdInfo.Name, len(opts), len(flagHelp))
+			logger.Panicf("internal error: wrong number of flag descriptions for %q: expected %d, got %d", c.Name, len(opts), len(flagHelp))
 		}
 		for _, opt := range opts {
 			if description, ok := flagHelp["--"+opt.LongName]; ok {
-				lintDesc(cmdInfo.Name, opt.LongName, description, opt.Description)
+				lintDesc(c.Name, opt.LongName, description, opt.Description)
 				opt.Description = description
 			} else if description, ok := flagHelp["-"+string(opt.ShortName)]; ok {
-				lintDesc(cmdInfo.Name, string(opt.ShortName), description, opt.Description)
+				lintDesc(c.Name, string(opt.ShortName), description, opt.Description)
 				opt.Description = description
 			} else if !opt.Hidden {
-				logger.Panicf("internal error: %q missing description for %q", cmdInfo.Name, opt)
+				logger.Panicf("internal error: %q missing description for %q", c.Name, opt)
 			}
 		}
 
 		args := cmd.Args()
 		for _, arg := range args {
 			if description, ok := positionalHelp[arg.Name]; ok {
-				lintArg(cmdInfo.Name, arg.Name, description, arg.Description)
+				lintArg(c.Name, arg.Name, description, arg.Description)
 				arg.Name = fixupArg(arg.Name)
 				arg.Description = description
 			}
