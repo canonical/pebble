@@ -30,7 +30,7 @@ The mkdir command creates the specified directory.
 `
 
 type cmdMkdir struct {
-	clientMixin
+	client *client.Client
 
 	MakeParents bool   `short:"p"`
 	Permissions string `short:"m"`
@@ -38,8 +38,7 @@ type cmdMkdir struct {
 	User        string `long:"user"`
 	GroupID     *int   `long:"gid"`
 	Group       string `long:"group"`
-
-	Positional struct {
+	Positional  struct {
 		Path string `positional-arg-name:"<path>"`
 	} `positional-args:"yes" required:"yes"`
 }
@@ -49,7 +48,6 @@ func init() {
 		Name:        "mkdir",
 		Summary:     cmdMkdirSummary,
 		Description: cmdMkdirDescription,
-		Builder:     func() flags.Commander { return &cmdMkdir{} },
 		ArgsHelp: map[string]string{
 			"-p":      "Create parent directories as needed",
 			"-m":      "Set permissions (e.g. 0644)",
@@ -57,6 +55,9 @@ func init() {
 			"--user":  "Use specified username",
 			"--gid":   "Use specified group ID",
 			"--group": "Use specified group name",
+		},
+		New: func(opts *CmdOptions) flags.Commander {
+			return &cmdMkdir{client: opts.Client}
 		},
 	})
 }

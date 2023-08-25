@@ -32,7 +32,8 @@ pebble signal HUP mysql nginx
 `
 
 type cmdSignal struct {
-	clientMixin
+	client *client.Client
+
 	Positional struct {
 		Signal   string   `positional-arg-name:"<SIGNAL>"`
 		Services []string `positional-arg-name:"<service>"`
@@ -44,7 +45,9 @@ func init() {
 		Name:        "signal",
 		Summary:     cmdSignalSummary,
 		Description: cmdSignalDescription,
-		Builder:     func() flags.Commander { return &cmdSignal{} },
+		New: func(opts *CmdOptions) flags.Commander {
+			return &cmdSignal{client: opts.Client}
+		},
 	})
 }
 
