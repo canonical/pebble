@@ -51,8 +51,7 @@ var (
 
 // Extension represents an extension of the Overlord.
 type Extension interface {
-	// ExtraManagers is called when building an Overlord, it allows additional
-	// managers to be added to the Overlord.
+	// ExtraManagers  allows additional managers to be used.
 	ExtraManagers(o *Overlord) ([]StateManager, error)
 }
 
@@ -64,7 +63,7 @@ type Options struct {
 	RestartHandler restart.Handler
 	// ServiceOutput is an optional output for the logging manager.
 	ServiceOutput io.Writer
-	// Extension, if set, defines additional components to add to the overlord.
+	// Extension allows extending the overlord with externally defined features.
 	Extension Extension
 }
 
