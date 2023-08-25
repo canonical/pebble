@@ -164,7 +164,7 @@ func (s *State) MarshalJSON() ([]byte, error) {
 		Changes:  s.changes,
 		Tasks:    s.tasks,
 		Warnings: s.flattenWarnings(),
-		Notices:  s.flattenNotices(),
+		Notices:  s.flattenNotices(NoticeFilters{}),
 
 		LastTaskId:   s.lastTaskId,
 		LastChangeId: s.lastChangeId,
