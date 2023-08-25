@@ -130,7 +130,7 @@ func New(opts Options) (*Overlord, error) {
 	o.runner.AddOptionalHandler(matchAnyUnknownTask, handleUnknownTask, nil)
 
 	o.logMgr = logstate.NewLogManager()
-	o.addManager(o.logMgr)
+	o.stateEng.AddManager(o.logMgr)
 
 	o.serviceMgr, err = servstate.NewManager(
 		s,
@@ -142,10 +142,10 @@ func New(opts Options) (*Overlord, error) {
 	if err != nil {
 		return nil, err
 	}
-	o.addManager(o.serviceMgr)
+	o.stateEng.AddManager(o.serviceMgr)
 
 	o.commandMgr = cmdstate.NewManager(o.runner)
-	o.addManager(o.commandMgr)
+	o.stateEng.AddManager(o.commandMgr)
 
 	o.checkMgr = checkstate.NewManager()
 
@@ -178,10 +178,6 @@ func New(opts Options) (*Overlord, error) {
 
 func (o *Overlord) Extension() Extension {
 	return o.extension
-}
-
-func (o *Overlord) addManager(mgr StateManager) {
-	o.stateEng.AddManager(mgr)
 }
 
 func loadState(statePath string, restartHandler restart.Handler, backend state.Backend) (*state.State, error) {
@@ -485,7 +481,7 @@ func (o *Overlord) AddManager(mgr StateManager) {
 	if o.inited {
 		panic("internal error: cannot add managers to a fully initialized Overlord")
 	}
-	o.addManager(mgr)
+	o.stateEng.AddManager(mgr)
 }
 
 type fakeBackend struct {
