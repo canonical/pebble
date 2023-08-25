@@ -32,13 +32,13 @@ label (or append if the label is not found).
 `
 
 type cmdAdd struct {
+	client *client.Client
+
 	Combine    bool `long:"combine"`
 	Positional struct {
 		Label     string `positional-arg-name:"<label>" required:"1"`
 		LayerPath string `positional-arg-name:"<layer-path>" required:"1"`
 	} `positional-args:"yes"`
-
-	client *client.Client
 }
 
 func init() {

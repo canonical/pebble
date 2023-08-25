@@ -27,8 +27,9 @@ to start by default.
 `
 
 type cmdAutoStart struct {
-	waitMixin
 	client *client.Client
+
+	waitMixin
 }
 
 func init() {

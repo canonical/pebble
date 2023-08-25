@@ -27,11 +27,12 @@ any other service that depends on it, in the correct order.
 `
 
 type cmdStop struct {
+	client *client.Client
+
 	waitMixin
 	Positional struct {
 		Services []string `positional-arg-name:"<service>" required:"1"`
 	} `positional-args:"yes"`
-	client *client.Client
 }
 
 func init() {

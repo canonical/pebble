@@ -29,11 +29,12 @@ about all services if none are specified.
 `
 
 type cmdServices struct {
+	client *client.Client
+
 	timeMixin
 	Positional struct {
 		Services []string `positional-arg-name:"<service>"`
 	} `positional-args:"yes"`
-	client *client.Client
 }
 
 func init() {

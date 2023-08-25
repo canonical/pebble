@@ -28,8 +28,9 @@ current plan.
 `
 
 type cmdReplan struct {
-	waitMixin
 	client *client.Client
+
+	waitMixin
 }
 
 func init() {

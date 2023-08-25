@@ -34,14 +34,14 @@ if none are specified) and displays them in chronological order.
 `
 
 type cmdLogs struct {
+	client *client.Client
+
 	Follow     bool   `short:"f" long:"follow"`
 	Format     string `long:"format"`
 	N          string `short:"n"`
 	Positional struct {
 		Services []string `positional-arg-name:"<service>"`
 	} `positional-args:"yes"`
-
-	client *client.Client
 }
 
 func init() {

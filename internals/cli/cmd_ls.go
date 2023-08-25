@@ -33,16 +33,14 @@ may be specified for the last path element.
 `
 
 type cmdLs struct {
-	timeMixin
+	client *client.Client
 
+	timeMixin
 	Directory  bool `short:"d"`
 	LongFormat bool `short:"l"`
-
 	Positional struct {
 		Path string `positional-arg-name:"<path>"`
 	} `positional-args:"yes" required:"yes"`
-
-	client *client.Client
 }
 
 func init() {

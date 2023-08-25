@@ -43,6 +43,8 @@ pebble exec --timeout 10s -- echo -n foo bar
 `
 
 type cmdExec struct {
+	client *client.Client
+
 	WorkingDir     string        `short:"w"`
 	Env            []string      `long:"env"`
 	UserID         *int          `long:"uid"`
@@ -58,8 +60,6 @@ type cmdExec struct {
 	Positional     struct {
 		Command string `positional-arg-name:"<command>" required:"1"`
 	} `positional-args:"yes"`
-
-	client *client.Client
 }
 
 func init() {

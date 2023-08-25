@@ -31,12 +31,13 @@ The help command displays information about commands.
 `
 
 type cmdHelp struct {
+	parser *flags.Parser
+
 	All        bool `long:"all"`
 	Manpage    bool `long:"man" hidden:"true"`
 	Positional struct {
 		Subs []string `positional-arg-name:"<command>"`
 	} `positional-args:"yes"`
-	parser *flags.Parser
 }
 
 func init() {

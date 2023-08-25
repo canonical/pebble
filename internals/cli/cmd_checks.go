@@ -30,12 +30,12 @@ arguments.
 `
 
 type cmdChecks struct {
+	client *client.Client
+
 	Level      string `long:"level"`
 	Positional struct {
 		Checks []string `positional-arg-name:"<check>"`
 	} `positional-args:"yes"`
-
-	client *client.Client
 }
 
 func init() {

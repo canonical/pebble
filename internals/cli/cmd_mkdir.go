@@ -30,18 +30,17 @@ The mkdir command creates the specified directory.
 `
 
 type cmdMkdir struct {
+	client *client.Client
+
 	MakeParents bool   `short:"p"`
 	Permissions string `short:"m"`
 	UserID      *int   `long:"uid"`
 	User        string `long:"user"`
 	GroupID     *int   `long:"gid"`
 	Group       string `long:"group"`
-
-	Positional struct {
+	Positional  struct {
 		Path string `positional-arg-name:"<path>"`
 	} `positional-args:"yes" required:"yes"`
-
-	client *client.Client
 }
 
 func init() {

@@ -43,11 +43,12 @@ Warnings expire automatically, and once expired they are forgotten.
 `
 
 type cmdWarnings struct {
+	client *client.Client
+
 	timeMixin
 	unicodeMixin
 	All     bool `long:"all"`
 	Verbose bool `long:"verbose"`
-	client  *client.Client
 }
 
 const cmdOkaySummary = "Acknowledge warnings"

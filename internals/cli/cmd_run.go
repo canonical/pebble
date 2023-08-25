@@ -60,8 +60,9 @@ var sharedRunEnterArgsHelp = map[string]string{
 }
 
 type cmdRun struct {
-	sharedRunEnterOpts
 	client *client.Client
+
+	sharedRunEnterOpts
 }
 
 func init() {

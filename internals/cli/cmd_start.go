@@ -27,11 +27,12 @@ any other services it depends on, in the correct order.
 `
 
 type cmdStart struct {
+	client *client.Client
+
 	waitMixin
 	Positional struct {
 		Services []string `positional-arg-name:"<service>" required:"1"`
 	} `positional-args:"yes"`
-	client *client.Client
 }
 
 func init() {

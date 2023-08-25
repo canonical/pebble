@@ -47,14 +47,14 @@ These subcommands are currently supported:
 `
 
 type cmdEnter struct {
+	client *client.Client
+	parser *flags.Parser
+
 	sharedRunEnterOpts
 	Run        bool `long:"run"`
 	Positional struct {
 		Cmd []string `positional-arg-name:"<subcommand>"`
 	} `positional-args:"yes"`
-
-	client *client.Client
-	parser *flags.Parser
 }
 
 func init() {
