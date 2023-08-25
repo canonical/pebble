@@ -41,7 +41,7 @@ var waitArgsHelp = map[string]string{
 
 var noWait = errors.New("no wait for op")
 
-func (wmx waitMixin) wait(c *client.Client, id string) (*client.Change, error) {
+func (wmx waitMixin) wait(cli *client.Client, id string) (*client.Change, error) {
 	if wmx.NoWait {
 		fmt.Fprintf(Stdout, "%s\n", id)
 		return nil, noWait
@@ -56,7 +56,7 @@ func (wmx waitMixin) wait(c *client.Client, id string) (*client.Change, error) {
 		if sig == nil || wmx.skipAbort {
 			return
 		}
-		_, err := c.Abort(id)
+		_, err := cli.Abort(id)
 		if err != nil {
 			fmt.Fprintf(Stderr, err.Error()+"\n")
 		}
@@ -77,7 +77,7 @@ func (wmx waitMixin) wait(c *client.Client, id string) (*client.Change, error) {
 	lastLog := map[string]string{}
 	for {
 		var rebootingErr error
-		chg, err := c.Change(id)
+		chg, err := cli.Change(id)
 		if err != nil {
 			// A client.Error means we were able to communicate with
 			// the server (got an answer).
@@ -99,7 +99,7 @@ func (wmx waitMixin) wait(c *client.Client, id string) (*client.Change, error) {
 			time.Sleep(pollTime)
 			continue
 		}
-		if maintErr, ok := c.Maintenance().(*client.Error); ok && maintErr.Kind == client.ErrorKindSystemRestart {
+		if maintErr, ok := cli.Maintenance().(*client.Error); ok && maintErr.Kind == client.ErrorKindSystemRestart {
 			rebootingErr = maintErr
 		}
 		if !tMax.IsZero() {
