@@ -51,7 +51,7 @@ var (
 
 // Extension represents an extension of the Overlord.
 type Extension interface {
-	// ExtraManagers  allows additional managers to be used.
+	// ExtraManagers allows additional StateManagers to be used.
 	ExtraManagers(o *Overlord) ([]StateManager, error)
 }
 
