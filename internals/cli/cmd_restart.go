@@ -30,6 +30,7 @@ type cmdRestart struct {
 	Positional struct {
 		Services []string `positional-arg-name:"<service>" required:"1"`
 	} `positional-args:"yes"`
+	client *client.Client
 }
 
 func init() {
@@ -39,9 +40,7 @@ func init() {
 		Description: cmdRestartDescription,
 		ArgsHelp:    waitArgsHelp,
 		New: func(opts *CmdOptions) flags.Commander {
-			return &cmdRestart{
-				waitMixin: waitMixin{client: opts.Client},
-			}
+			return &cmdRestart{client: opts.Client}
 		},
 	})
 }
@@ -59,7 +58,7 @@ func (cmd cmdRestart) Execute(args []string) error {
 		return err
 	}
 
-	if _, err := cmd.wait(changeID); err != nil {
+	if _, err := cmd.wait(cmd.client, changeID); err != nil {
 		if err == noWait {
 			return nil
 		}

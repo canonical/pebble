@@ -31,6 +31,7 @@ type cmdStop struct {
 	Positional struct {
 		Services []string `positional-arg-name:"<service>" required:"1"`
 	} `positional-args:"yes"`
+	client *client.Client
 }
 
 func init() {
@@ -40,9 +41,7 @@ func init() {
 		Description: cmdStopDescription,
 		ArgsHelp:    waitArgsHelp,
 		New: func(opts *CmdOptions) flags.Commander {
-			return &cmdStop{
-				waitMixin: waitMixin{client: opts.Client},
-			}
+			return &cmdStop{client: opts.Client}
 		},
 	})
 }
@@ -60,7 +59,7 @@ func (cmd cmdStop) Execute(args []string) error {
 		return err
 	}
 
-	if _, err := cmd.wait(changeID); err != nil {
+	if _, err := cmd.wait(cmd.client, changeID); err != nil {
 		if err == noWait {
 			return nil
 		}
