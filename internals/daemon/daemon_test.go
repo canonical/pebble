@@ -34,6 +34,7 @@ import (
 
 	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/osutil"
+	"github.com/canonical/pebble/internals/overlord"
 	"github.com/canonical/pebble/internals/overlord/patch"
 	"github.com/canonical/pebble/internals/overlord/restart"
 	"github.com/canonical/pebble/internals/overlord/standby"
@@ -93,6 +94,75 @@ type fakeHandler struct {
 
 func (h *fakeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.lastMethod = r.Method
+}
+
+type fakeManager struct {
+	id          string
+	ensureCalls int
+}
+
+func (m *fakeManager) Ensure() error {
+	m.ensureCalls++
+	return nil
+}
+
+type fakeExtension struct {
+	mgr fakeManager
+}
+
+func (f *fakeExtension) ExtraManagers(o *overlord.Overlord) ([]overlord.StateManager, error) {
+	f.mgr = fakeManager{id: "expected", ensureCalls: 0}
+	result := []overlord.StateManager{&f.mgr}
+	return result, nil
+}
+
+type otherFakeExtension struct{}
+
+func (otherFakeExtension) ExtraManagers(o *overlord.Overlord) ([]overlord.StateManager, error) {
+	return nil, nil
+}
+
+func (s *daemonSuite) TestExternalManager(c *C) {
+	d, err := New(&Options{
+		Dir:               s.pebbleDir,
+		SocketPath:        s.socketPath,
+		HTTPAddress:       s.httpAddress,
+		OverlordExtension: &fakeExtension{},
+	})
+	c.Assert(err, IsNil)
+
+	err = d.overlord.StateEngine().Ensure()
+	c.Assert(err, IsNil)
+	extension, ok := d.overlord.Extension().(*fakeExtension)
+	c.Assert(ok, Equals, true)
+	manager := extension.mgr
+	c.Assert(manager.id, Equals, "expected")
+	c.Assert(manager.ensureCalls, Equals, 1)
+}
+
+func (s *daemonSuite) TestNoExtension(c *C) {
+	d, err := New(&Options{
+		Dir:         s.pebbleDir,
+		SocketPath:  s.socketPath,
+		HTTPAddress: s.httpAddress,
+	})
+	c.Assert(err, IsNil)
+
+	extension := d.overlord.Extension()
+	c.Assert(extension, IsNil)
+}
+
+func (s *daemonSuite) TestWrongExtension(c *C) {
+	d, err := New(&Options{
+		Dir:               s.pebbleDir,
+		SocketPath:        s.socketPath,
+		HTTPAddress:       s.httpAddress,
+		OverlordExtension: &fakeExtension{},
+	})
+	c.Assert(err, IsNil)
+
+	_, ok := d.overlord.Extension().(*otherFakeExtension)
+	c.Assert(ok, Equals, false)
 }
 
 func (s *daemonSuite) TestAddCommand(c *C) {

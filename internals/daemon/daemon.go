@@ -71,6 +71,10 @@ type Options struct {
 	// ServiceOuput is an optional io.Writer for the service log output, if set, all services
 	// log output will be written to the writer.
 	ServiceOutput io.Writer
+
+	// OverlordExtension is an optional interface used to extend the capabilities
+	// of the Overlord.
+	OverlordExtension overlord.Extension
 }
 
 // A Daemon listens for requests and routes them to the right command
@@ -215,6 +219,10 @@ func (c *Command) canAccess(r *http.Request, user *UserState) accessResult {
 
 func userFromRequest(state interface{}, r *http.Request) (*UserState, error) {
 	return nil, nil
+}
+
+func (d *Daemon) Overlord() *overlord.Overlord {
+	return d.overlord
 }
 
 func (c *Command) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -840,7 +848,14 @@ func New(opts *Options) (*Daemon, error) {
 		httpAddress:         opts.HTTPAddress,
 	}
 
-	ovld, err := overlord.New(opts.Dir, d, opts.ServiceOutput)
+	ovldOptions := overlord.Options{
+		PebbleDir:      opts.Dir,
+		RestartHandler: d,
+		ServiceOutput:  opts.ServiceOutput,
+		Extension:      opts.OverlordExtension,
+	}
+
+	ovld, err := overlord.New(&ovldOptions)
 	if err == errExpectedReboot {
 		// we proceed without overlord until we reach Stop
 		// where we will schedule and wait again for a system restart.
