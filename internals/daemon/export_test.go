@@ -46,3 +46,19 @@ func FakeGetChecks(f func(o *overlord.Overlord) ([]*checkstate.CheckInfo, error)
 		getChecks = old
 	}
 }
+
+func FakeSyscallSync(f func()) (restore func()) {
+	old := syscallSync
+	syscallSync = f
+	return func() {
+		syscallSync = old
+	}
+}
+
+func FakeSyscallReboot(f func(cmd int) error) (restore func()) {
+	old := syscallReboot
+	syscallReboot = f
+	return func() {
+		syscallReboot = old
+	}
+}

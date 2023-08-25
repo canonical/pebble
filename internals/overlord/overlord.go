@@ -130,7 +130,6 @@ func New(opts *Options) (*Overlord, error) {
 	o.runner.AddOptionalHandler(matchAnyUnknownTask, handleUnknownTask, nil)
 
 	o.logMgr = logstate.NewLogManager()
-	o.stateEng.AddManager(o.logMgr)
 
 	o.serviceMgr, err = servstate.NewManager(
 		s,
@@ -143,6 +142,10 @@ func New(opts *Options) (*Overlord, error) {
 		return nil, err
 	}
 	o.stateEng.AddManager(o.serviceMgr)
+	// The log manager should be stopped after the service manager, because
+	// ServiceManager.Stop closes the service ring buffers, which signals to the
+	// log manager that it's okay to stop log forwarding.
+	o.stateEng.AddManager(o.logMgr)
 
 	o.commandMgr = cmdstate.NewManager(o.runner)
 	o.stateEng.AddManager(o.commandMgr)
