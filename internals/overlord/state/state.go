@@ -398,12 +398,10 @@ func (s *State) Prune(pruneWait, abortWait time.Duration, maxReadyChanges int) {
 		}
 	}
 
-	// TODO: delete expired notices
 	for k, w := range s.notices {
-		_, _ = k, w
-		//if w.ExpiredBefore(now) {
-		//	delete(s.warnings, k)
-		//}
+		if w.expired(now) {
+			delete(s.notices, k)
+		}
 	}
 
 	for _, chg := range changes {
