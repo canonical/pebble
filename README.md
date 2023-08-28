@@ -250,7 +250,7 @@ For example, if service `nginx` requires `logger`, `pebble start nginx` will sta
 
 When multiple services need to be started together, they're started in order according to the `before` and `after` configuration, waiting 1 second for each to ensure the command doesn't exit too quickly. The `before` option is a list of services that must be started before this one (it may or may not `require` them). Or if it's easier to specify this ordering the other way around, `after` is a list of services that must be started after this one.
 
-Note that currently, `before` and `after` are of limited usefulness, because Pebble only waits 1 second before moving on to start the next service, with no additional checks that the previous service is operating correctly. In future, health checks may be used for this, but right now the logic is simplistic.
+Note that currently, `before` and `after` are of limited usefulness, because Pebble only waits 1 second before moving on to start the next service, with no additional checks that the previous service is operating correctly.
 
 If the configuration of `requires`, `before`, and `after` for a service results in a cycle or "loop", an error will be returned when attempting to start or stop the service.
 
