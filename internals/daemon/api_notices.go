@@ -23,6 +23,8 @@ import (
 	"github.com/canonical/pebble/internals/overlord/state"
 )
 
+const maxKeyLength = 255
+
 // A very loose regex to ensure client keys are in the form "domain.com/key"
 var clientKeyRegexp = regexp.MustCompile(`([a-z0-9-_]+\.)+[a-z0-9-_]+/.+`)
 
@@ -95,6 +97,9 @@ func v1PostNotices(c *Command, r *http.Request, _ *UserState) Response {
 	}
 	if !clientKeyRegexp.MatchString(payload.Key) {
 		return statusBadRequest(`invalid key %q (must be in "domain.com/key" format)`, payload.Key)
+	}
+	if len(payload.Key) > state.MaxNoticeKeyLength {
+		return statusBadRequest(`key too long (must be %d bytes or less)`, state.MaxNoticeKeyLength)
 	}
 
 	var repeatAfter time.Duration

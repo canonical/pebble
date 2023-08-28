@@ -16,12 +16,15 @@ package state
 
 import (
 	"encoding/json"
+	"fmt"
 	"sort"
 	"strconv"
 	"time"
 
 	"github.com/canonical/pebble/internals/logger"
 )
+
+const MaxNoticeKeyLength = 255
 
 // Notice represents an aggregated notice. The combination of Type and Key is unique.
 type Notice struct {
@@ -69,9 +72,9 @@ func (n *Notice) expired(now time.Time) bool {
 	return n.lastOccurred.Add(n.expireAfter).Before(now)
 }
 
-// jsonNotice exists so we can control how a Notice is JSON-marshalled. It
+// jsonNotice exists so we can control how a Notice is marshalled to JSON. It
 // needs to live in this package (rather than the API) because we save state
-// to disk.
+// to disk as JSON.
 type jsonNotice struct {
 	ID            string            `json:"id"`
 	Type          string            `json:"type"`
@@ -122,13 +125,13 @@ func (n *Notice) UnmarshalJSON(data []byte) error {
 	if jn.RepeatAfter != "" {
 		n.repeatAfter, err = time.ParseDuration(jn.RepeatAfter)
 		if err != nil {
-			return err
+			return fmt.Errorf("invalid repeat-after duration: %w", err)
 		}
 	}
 	if jn.ExpireAfter != "" {
 		n.expireAfter, err = time.ParseDuration(jn.ExpireAfter)
 		if err != nil {
-			return err
+			return fmt.Errorf("invalid expire-after duration: %w", err)
 		}
 	}
 	return nil
@@ -166,7 +169,7 @@ func NoticeTypeFromString(s string) NoticeType {
 // AddNotice adds an occurrence of a notice with the specified type and key
 // and key-value data.
 func (s *State) AddNotice(noticeType NoticeType, key string, data map[string]string, repeatAfter time.Duration) {
-	if noticeType == "" || key == "" {
+	if noticeType == "" || key == "" || len(key) > MaxNoticeKeyLength {
 		// Programming error
 		logger.Panicf("Internal error, please report: attempted to add invalid notice (type %q, key %q)",
 			noticeType, key)
