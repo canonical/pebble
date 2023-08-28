@@ -100,7 +100,10 @@ func (cs *clientSuite) TestNewBaseURLError(c *C) {
 
 func (cs *clientSuite) TestClientDoReportsErrors(c *C) {
 	cs.err = errors.New("ouchie")
-	err := cs.cli.Do("GET", "/", nil, nil, nil)
+	err := cs.cli.Do(&client.RequestInfo{
+		Method: "GET",
+		Path:   "/",
+	}, nil)
 	c.Check(err, ErrorMatches, "cannot communicate with server: ouchie")
 	if cs.doCalls < 2 {
 		c.Fatalf("do did not retry")
@@ -111,7 +114,11 @@ func (cs *clientSuite) TestClientWorks(c *C) {
 	var v []int
 	cs.rsp = `[1,2]`
 	reqBody := ioutil.NopCloser(strings.NewReader(""))
-	err := cs.cli.Do("GET", "/this", nil, reqBody, &v)
+	err := cs.cli.Do(&client.RequestInfo{
+		Method: "GET",
+		Path:   "/this",
+		Body:   reqBody,
+	}, &v)
 	c.Check(err, IsNil)
 	c.Check(v, DeepEquals, []int{1, 2})
 	c.Assert(cs.req, NotNil)
@@ -123,7 +130,10 @@ func (cs *clientSuite) TestClientWorks(c *C) {
 
 func (cs *clientSuite) TestClientDefaultsToNoAuthorization(c *C) {
 	var v string
-	_ = cs.cli.Do("GET", "/this", nil, nil, &v)
+	_ = cs.cli.Do(&client.RequestInfo{
+		Method: "GET",
+		Path:   "/this",
+	}, &v)
 	c.Assert(cs.req, NotNil)
 	authorization := cs.req.Header.Get("Authorization")
 	c.Check(authorization, Equals, "")
@@ -273,7 +283,10 @@ func (cs *clientSuite) TestUserAgent(c *C) {
 	cli.SetDoer(cs)
 
 	var v string
-	_ = cli.Do("GET", "/", nil, nil, &v)
+	_ = cli.Do(&client.RequestInfo{
+		Method: "GET",
+		Path:   "/",
+	}, &v)
 	c.Assert(cs.req, NotNil)
 	c.Check(cs.req.Header.Get("User-Agent"), Equals, "some-agent/9.87")
 }

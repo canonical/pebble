@@ -152,7 +152,7 @@ func (client *Client) Exec(opts *ExecOptions) (*ExecProcess, error) {
 	headers := map[string]string{
 		"Content-Type": "application/json",
 	}
-	resultBytes, changeID, err := client.DoAsyncFull(&RequestInfo{
+	resultBytes, changeID, err := client.DoAsync(&RequestInfo{
 		Method:  "POST",
 		Path:    "/v1/exec",
 		Headers: headers,

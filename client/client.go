@@ -281,15 +281,15 @@ func (client *Client) Hijack(f func(*http.Request) (*http.Response, error)) {
 // do performs a request and decodes the resulting json into the given
 // value. It's low-level, for testing/experimenting only; you should
 // usually use a higher level interface that builds on this.
-func (client *Client) do(method, path string, query url.Values, headers map[string]string, body io.Reader, v interface{}) error {
+func (client *Client) do(req *RequestInfo, v interface{}) error {
 	retry := time.NewTicker(doRetry)
 	defer retry.Stop()
 	timeout := time.After(doTimeout)
 	var rsp *http.Response
 	var err error
 	for {
-		rsp, err = client.raw(context.Background(), method, path, query, headers, body)
-		if err == nil || method != "GET" {
+		rsp, err = client.raw(context.Background(), req.Method, req.Path, req.Query, req.Headers, req.Body)
+		if err == nil || req.Method != "GET" {
 			break
 		}
 		select {
@@ -344,9 +344,9 @@ type ResultInfo struct{}
 // It expects a "sync" response from the API and on success decodes the JSON
 // response payload into the given value using the "UseNumber" json decoding
 // which produces json.Numbers instead of float64 types for numbers.
-func (client *Client) DoSync(req *RequestInfo, v interface{}) (*ResultInfo, error) {
+func (client *Client) DoSync(req *RequestInfo, output interface{}) (*ResultInfo, error) {
 	var rsp response
-	if err := client.do(req.Method, req.Path, req.Query, req.Headers, req.Body, &rsp); err != nil {
+	if err := client.do(req, &rsp); err != nil {
 		return nil, err
 	}
 	if err := rsp.err(client); err != nil {
@@ -356,8 +356,8 @@ func (client *Client) DoSync(req *RequestInfo, v interface{}) (*ResultInfo, erro
 		return nil, fmt.Errorf("expected sync response, got %q", rsp.Type)
 	}
 
-	if v != nil {
-		if err := decodeWithNumber(bytes.NewReader(rsp.Result), v); err != nil {
+	if output != nil {
+		if err := decodeWithNumber(bytes.NewReader(rsp.Result), output); err != nil {
 			return nil, fmt.Errorf("cannot unmarshal: %w", err)
 		}
 	}
@@ -368,21 +368,13 @@ func (client *Client) DoSync(req *RequestInfo, v interface{}) (*ResultInfo, erro
 	return &rsp.ResultInfo, nil
 }
 
-// DoAsync performs a request to the given path using the specified HTTP method.
-// It expects an "async" response from the API and on success returns the
-// change ID.
-func (client *Client) DoAsync(req *RequestInfo) (changeID string, err error) {
-	_, changeID, err = client.DoAsyncFull(req)
-	return
-}
-
-// DoAsync performs a request to the given path using the specified HTTP method.
+// DoAsync performs a request to the given path using the specified HTTP method
 // It expects an "async" response from the API and on success returns the raw
 // JSON response from the daemon alongside the change ID.
-func (client *Client) DoAsyncFull(req *RequestInfo) (result json.RawMessage, changeID string, err error) {
+func (client *Client) DoAsync(req *RequestInfo) (result json.RawMessage, changeID string, err error) {
 	var rsp response
 
-	if err := client.do(req.Method, req.Path, req.Query, req.Headers, req.Body, &rsp); err != nil {
+	if err := client.do(req, &rsp); err != nil {
 		return nil, "", err
 	}
 	if err := rsp.err(client); err != nil {
@@ -490,11 +482,11 @@ type SysInfo struct {
 // SysInfo gets system information from the remote API.
 func (client *Client) SysInfo() (*SysInfo, error) {
 	var sysInfo SysInfo
-
-	if _, err := client.DoSync(&RequestInfo{
+	_, err := client.DoSync(&RequestInfo{
 		Method: "GET",
 		Path:   "/v1/system-info",
-	}, &sysInfo); err != nil {
+	}, &sysInfo)
+	if err != nil {
 		return nil, fmt.Errorf("cannot obtain system details: %w", err)
 	}
 

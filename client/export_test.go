@@ -16,8 +16,6 @@ package client
 
 import (
 	"fmt"
-	"io"
-	"net/url"
 )
 
 var (
@@ -29,12 +27,12 @@ func (client *Client) SetDoer(d doer) {
 	client.doer = d
 }
 
-func (client *Client) Do(method, path string, query url.Values, body io.Reader, v interface{}) error {
-	return client.do(method, path, query, nil, body, v)
+func (client *Client) Do(req *RequestInfo, output interface{}) error {
+	return client.do(req, output)
 }
 
 func (client *Client) FakeAsyncRequest() (changeId string, err error) {
-	changeId, err = client.DoAsync(&RequestInfo{
+	_, changeId, err = client.DoAsync(&RequestInfo{
 		Method: "GET",
 		Path:   "/v1/async-test",
 	})

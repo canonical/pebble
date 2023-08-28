@@ -77,7 +77,7 @@ func (client *Client) doMultiServiceAction(actionName string, services []string)
 	headers := map[string]string{
 		"Content-Type": "application/json",
 	}
-	return client.DoAsyncFull(&RequestInfo{
+	return client.DoAsync(&RequestInfo{
 		Method:  "POST",
 		Path:    "/v1/services",
 		Headers: headers,

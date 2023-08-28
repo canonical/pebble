@@ -89,10 +89,11 @@ type changeAndData struct {
 // Change fetches information about a Change given its ID.
 func (client *Client) Change(id string) (*Change, error) {
 	var chgd changeAndData
-	if _, err := client.DoSync(&RequestInfo{
+	_, err := client.DoSync(&RequestInfo{
 		Method: "GET",
 		Path:   "/v1/changes/" + id,
-	}, &chgd); err != nil {
+	}, &chgd)
+	if err != nil {
 		return nil, err
 	}
 
@@ -113,11 +114,12 @@ func (client *Client) Abort(id string) (*Change, error) {
 	}
 
 	var chg Change
-	if _, err := client.DoSync(&RequestInfo{
+	_, err := client.DoSync(&RequestInfo{
 		Method: "POST",
 		Path:   "/v1/changes/" + id,
 		Body:   &body,
-	}, &chg); err != nil {
+	}, &chg)
+	if err != nil {
 		return nil, err
 	}
 
