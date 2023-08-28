@@ -221,7 +221,7 @@ func (*suite) TestTooManyRequests(c *C) {
 	c.Assert(err, IsNil)
 
 	err = client.Flush(context.Background())
-	backoff := &clienterr.Backoff{}
+	var backoff *clienterr.Backoff
 	c.Assert(errors.As(err, &backoff), Equals, true)
 
 	expectedTime := time.Date(2023, 8, 15, 8, 49, 37, 0, time.UTC)

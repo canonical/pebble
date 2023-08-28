@@ -207,7 +207,7 @@ func (g *logGatherer) handleClientErr(err error) {
 		return
 	}
 
-	backoff := &clienterr.Backoff{}
+	var backoff *clienterr.Backoff
 	if errors.As(err, &backoff) {
 		logger.Noticef("Target %q: %v", g.targetName, err)
 		g.timer.retryAfter = backoff.RetryAfter

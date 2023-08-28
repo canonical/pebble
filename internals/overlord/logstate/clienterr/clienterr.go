@@ -20,7 +20,7 @@ to communicate with the gatherer.
 Errors in this package should be pattern-matched using errors.As:
 
 		err := client.Flush(ctx)
-		backoff := &clienterr.Backoff{}
+		var backoff *clienterr.Backoff
 		if errors.As(err, &backoff) {
 	      ...
 		}
@@ -51,6 +51,8 @@ func (e *Backoff) Error() string {
 
 // ErrorResponse represents an HTTP error response from the server
 // (4xx or 5xx).
+// This is a generic, catch-all error type - clients should use a more refined
+// type when appropriate (e.g. Backoff for a 429 response).
 type ErrorResponse struct {
 	StatusCode int
 	Body       bytes.Buffer
