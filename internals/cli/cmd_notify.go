@@ -31,7 +31,8 @@ data fields.
 `
 
 type cmdNotify struct {
-	clientMixin
+	client *client.Client
+
 	RepeatAfter time.Duration `long:"repeat-after"`
 	Positional  struct {
 		Key  string   `positional-arg-name:"<key>" required:"1"`
@@ -47,7 +48,9 @@ func init() {
 		ArgsHelp: map[string]string{
 			"--repeat-after": "If set, allow the notice to repeat after this duration",
 		},
-		Builder: func() flags.Commander { return &cmdNotify{} },
+		New: func(opts *CmdOptions) flags.Commander {
+			return &cmdNotify{client: opts.Client}
+		},
 	})
 }
 
