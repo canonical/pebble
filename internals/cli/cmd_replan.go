@@ -28,6 +28,8 @@ current plan.
 `
 
 type cmdReplan struct {
+	client *client.Client
+
 	waitMixin
 }
 
@@ -37,7 +39,9 @@ func init() {
 		Summary:     cmdReplanSummary,
 		Description: cmdReplanDescription,
 		ArgsHelp:    waitArgsHelp,
-		Builder:     func() flags.Commander { return &cmdReplan{} },
+		New: func(opts *CmdOptions) flags.Commander {
+			return &cmdReplan{client: opts.Client}
+		},
 	})
 }
 
@@ -52,7 +56,7 @@ func (cmd cmdReplan) Execute(args []string) error {
 		return err
 	}
 
-	if _, err := cmd.wait(changeID); err != nil {
+	if _, err := cmd.wait(cmd.client, changeID); err != nil {
 		if err == noWait {
 			return nil
 		}

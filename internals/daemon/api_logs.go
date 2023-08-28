@@ -126,7 +126,7 @@ func (r logsResponse) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			err = encoder.Encode(newJSONLog(<-fifo))
 		}
 		if err != nil {
-			logger.Noticef("error writing logs: %v", err)
+			logger.Noticef("Cannot write logs: %v", err)
 			return false
 		}
 		flushWriter(w)
@@ -186,7 +186,7 @@ func (r logsResponse) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			// Otherwise encode and output log directly.
 			err := encoder.Encode(newJSONLog(log))
 			if err != nil {
-				logger.Noticef("error writing logs: %v", err)
+				logger.Noticef("Cannot write logs: %v", err)
 				return
 			}
 			if follow {

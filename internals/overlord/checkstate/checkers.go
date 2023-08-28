@@ -26,6 +26,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/canonical/x-go/strutil/shlex"
 
@@ -38,6 +39,7 @@ import (
 const (
 	maxErrorBytes = 10 * 1024
 	maxErrorLines = 20
+	execWaitDelay = time.Second
 )
 
 // httpChecker is a checker that ensures an HTTP GET at a specified URL returns 20x.
@@ -167,6 +169,7 @@ func (c *execChecker) check(ctx context.Context) error {
 	defer ringBuffer.Close()
 	cmd.Stdout = ringBuffer
 	cmd.Stderr = ringBuffer
+	cmd.WaitDelay = execWaitDelay
 	err = reaper.StartCommand(cmd)
 	if err != nil {
 		return err

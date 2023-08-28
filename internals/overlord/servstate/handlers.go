@@ -280,6 +280,21 @@ func (m *ServiceManager) serviceForStop(task *state.Task, name string) *serviceD
 func (m *ServiceManager) removeService(name string) {
 	m.servicesLock.Lock()
 	defer m.servicesLock.Unlock()
+	m.removeServiceInternal(name)
+}
+
+// not concurrency-safe, please lock m.servicesLock before calling
+func (m *ServiceManager) removeServiceInternal(name string) {
+	svc, svcExists := m.services[name]
+	if !svcExists {
+		return
+	}
+	if svc.logs != nil {
+		err := svc.logs.Close()
+		if err != nil {
+			logger.Noticef("Error closing service %q ring buffer: %v", name, err)
+		}
+	}
 
 	delete(m.services, name)
 }
@@ -400,6 +415,21 @@ func (s *serviceData) startInternal() error {
 	s.cmd.Stdout = logWriter
 	s.cmd.Stderr = logWriter
 
+	// Add WaitDelay to ensure cmd.Wait() returns in a reasonable timeframe if
+	// the goroutines that cmd.Start() uses to copy Stdin/Stdout/Stderr are
+	// blocked when copying due to a sub-subprocess holding onto them. This
+	// only happens if the sub-subprocess uses setsid or setpgid to change
+	// the process group. Read more details in these issues:
+	//
+	// - https://github.com/golang/go/issues/23019
+	// - https://github.com/golang/go/issues/50436
+	//
+	// This isn't the original intent of kill-delay, but it seems reasonable
+	// to reuse it in this context. Use a value slightly less than the kill
+	// delay (90% of it) to avoid racing with trying to send SIGKILL (to a
+	// process that has already exited).
+	s.cmd.WaitDelay = s.killDelay() * 9 / 10 // will only overflow if kill-delay is 32 years!
+
 	// Start the process!
 	logger.Noticef("Service %q starting: %s", serviceName, s.config.Command)
 	err = reaper.StartCommand(s.cmd)
@@ -444,7 +474,7 @@ func (s *serviceData) startInternal() error {
 	}
 
 	// Pass buffer reference to logMgr to start log forwarding
-	s.manager.logMgr.ServiceStarted(serviceName, s.logs)
+	s.manager.logMgr.ServiceStarted(s.config, s.logs)
 
 	return nil
 }
@@ -616,9 +646,9 @@ func (s *serviceData) sendSignal(signal string) error {
 }
 
 // killDelay reports the duration that this service should be given when being
-// asked to shutdown gracefully before being force terminated. The value
-// returned will either be the services pre configured value or the default
-// kill delay for pebble.
+// asked to shut down gracefully before being force-terminated. The value
+// returned will either be the service's pre-configured value, or the default
+// kill delay if that is not set.
 func (s *serviceData) killDelay() time.Duration {
 	if s.config.KillDelay.IsSet {
 		return s.config.KillDelay.Value

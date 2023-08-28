@@ -71,6 +71,10 @@ type Options struct {
 	// ServiceOuput is an optional io.Writer for the service log output, if set, all services
 	// log output will be written to the writer.
 	ServiceOutput io.Writer
+
+	// OverlordExtension is an optional interface used to extend the capabilities
+	// of the Overlord.
+	OverlordExtension overlord.Extension
 }
 
 // A Daemon listens for requests and routes them to the right command
@@ -168,7 +172,7 @@ func (c *Command) canAccess(r *http.Request, user *UserState) accessResult {
 	if err == nil {
 		isUser = true
 	} else if err != errNoID {
-		logger.Noticef("unexpected error when attempting to get UID: %s", err)
+		logger.Noticef("Cannot parse UID from remote address %q: %s", r.RemoteAddr, err)
 		return accessForbidden
 	}
 
@@ -215,6 +219,10 @@ func (c *Command) canAccess(r *http.Request, user *UserState) accessResult {
 
 func userFromRequest(state interface{}, r *http.Request) (*UserState, error) {
 	return nil, nil
+}
+
+func (d *Daemon) Overlord() *overlord.Overlord {
+	return d.overlord
 }
 
 func (c *Command) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -530,7 +538,7 @@ func (d *Daemon) HandleRestart(t restart.RestartType) {
 		defer d.mu.Unlock()
 		d.restartSocket = true
 	default:
-		logger.Noticef("internal error: restart handler called with unknown restart type: %v", t)
+		logger.Noticef("Internal error: restart handler called with unknown restart type: %v", t)
 	}
 	d.tomb.Kill(nil)
 }
@@ -817,12 +825,12 @@ func (d *Daemon) RebootIsMissing(st *state.State) error {
 		// might get rolled back!!
 		restart.ClearReboot(st)
 		clearReboot(st)
-		logger.Noticef("pebble was restarted while a system restart was expected, pebble retried to schedule and waited again for a system restart %d times and is giving up", rebootMaxTentatives)
+		logger.Noticef("Pebble was restarted while a system restart was expected, pebble retried to schedule and waited again for a system restart %d times and is giving up", rebootMaxTentatives)
 		return nil
 	}
 	st.Set("daemon-system-restart-tentative", nTentative)
 	d.state = st
-	logger.Noticef("pebble was restarted while a system restart was expected, pebble will try to schedule and wait for a system restart again (tenative %d/%d)", nTentative, rebootMaxTentatives)
+	logger.Noticef("Pebble was restarted while a system restart was expected, pebble will try to schedule and wait for a system restart again (tenative %d/%d)", nTentative, rebootMaxTentatives)
 	return errExpectedReboot
 }
 
@@ -840,7 +848,14 @@ func New(opts *Options) (*Daemon, error) {
 		httpAddress:         opts.HTTPAddress,
 	}
 
-	ovld, err := overlord.New(opts.Dir, d, opts.ServiceOutput)
+	ovldOptions := overlord.Options{
+		PebbleDir:      opts.Dir,
+		RestartHandler: d,
+		ServiceOutput:  opts.ServiceOutput,
+		Extension:      opts.OverlordExtension,
+	}
+
+	ovld, err := overlord.New(&ovldOptions)
 	if err == errExpectedReboot {
 		// we proceed without overlord until we reach Stop
 		// where we will schedule and wait again for a system restart.

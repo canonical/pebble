@@ -60,7 +60,8 @@ var sharedRunEnterArgsHelp = map[string]string{
 }
 
 type cmdRun struct {
-	clientMixin
+	client *client.Client
+
 	sharedRunEnterOpts
 }
 
@@ -70,7 +71,9 @@ func init() {
 		Summary:     cmdRunSummary,
 		Description: cmdRunDescription,
 		ArgsHelp:    sharedRunEnterArgsHelp,
-		Builder:     func() flags.Commander { return &cmdRun{} },
+		New: func(opts *CmdOptions) flags.Commander {
+			return &cmdRun{client: opts.Client}
+		},
 	})
 }
 
