@@ -53,7 +53,7 @@ type cmdWarnings struct {
 
 const cmdOkaySummary = "Acknowledge warnings"
 const cmdOkayDescription = `
-The okay command acknowledges the warnings listed with '<program name> warnings'.
+The okay command acknowledges the warnings listed with '{{.ProgramName}} warnings'.
 
 Once acknowledged, a warning won't appear again unless it reoccurs and
 sufficient time has passed.
@@ -223,7 +223,7 @@ func lastWarningTimestamp() (time.Time, error) {
 	f, err := os.Open(warnFilename(user.HomeDir))
 	if err != nil {
 		if os.IsNotExist(err) {
-			return time.Time{}, fmt.Errorf("you must have looked at the warnings before acknowledging them. Try '%s warnings'.", cmd.Personality.ProgramName)
+			return time.Time{}, fmt.Errorf("you must have looked at the warnings before acknowledging them. Try '%s warnings'.", cmd.ProgramName)
 		}
 		return time.Time{}, fmt.Errorf("cannot open timestamp file: %v", err)
 	}
@@ -251,5 +251,5 @@ func maybePresentWarnings(count int, timestamp time.Time) {
 	if count == 1 {
 		format = "WARNING: There is %d new warning. See '%s warnings'.\n"
 	}
-	fmt.Fprintf(Stderr, format, count, cmd.Personality.ProgramName)
+	fmt.Fprintf(Stderr, format, count, cmd.ProgramName)
 }

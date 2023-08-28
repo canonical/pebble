@@ -25,16 +25,8 @@ func MockVersion(version string) (restore func()) {
 	return func() { Version = old }
 }
 
-// PersonalityInfo contains information about the application identity.
-// These values will be used across the CLI.
-type PersonalityInfo struct {
-	// ProgramName represents the name of the application binary (i.e. pebble)
-	ProgramName string
-	// DisplayName represents the user-facing name of the application (i.e. Pebble)
-	DisplayName string
-}
+// ProgramName represents the name of the application binary (i.e. pebble)
+var ProgramName string = "pebble"
 
-var Personality PersonalityInfo = PersonalityInfo{
-	ProgramName: "pebble",
-	DisplayName: "Pebble",
-}
+// DisplayName represents the user-facing name of the application (i.e. Pebble)
+var DisplayName string = "Pebble"

@@ -25,7 +25,7 @@ import (
 
 const cmdEnterSummary = "Run subcommand under a container environment"
 const cmdEnterDescription = `
-The enter command facilitates the use of <display name> as an entrypoint for containers.
+The enter command facilitates the use of {{.DisplayName}} as an entrypoint for containers.
 When used without a subcommand it mimics the behavior of the run command
 alone, while if used with a subcommand it runs that subcommand in the most
 appropriate environment taking into account its purpose.
@@ -175,7 +175,7 @@ func (c *cmdEnter) Execute(args []string) error {
 	case runStop = <-runReadyCh:
 	case runPanic := <-runResultCh:
 		if runPanic == nil {
-			panic(fmt.Sprintf("internal error: %s daemon stopped early", cmd.Personality.ProgramName))
+			panic(fmt.Sprintf("internal error: %s daemon stopped early", cmd.ProgramName))
 		}
 		panic(runPanic)
 	}

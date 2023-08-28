@@ -22,7 +22,7 @@ import (
 
 var cmdPlanSummary = "Show the plan with layers combined"
 var cmdPlanDescription = `
-The plan command prints out the effective configuration of <display name> in YAML
+The plan command prints out the effective configuration of {{.DisplayName}} in YAML
 format. Layers are combined according to the override rules defined in them.
 `
 

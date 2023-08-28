@@ -24,7 +24,7 @@ import (
 
 	"github.com/canonical/go-flags"
 
-	"github.com/canonical/pebble/cmd"
+	cmdpkg "github.com/canonical/pebble/cmd"
 )
 
 const cmdHelpSummary = "Show help about a command"
@@ -102,19 +102,20 @@ func (cmd *cmdHelp) setParser(parser *flags.Parser) {
 // - duplicated TP lines that break older groff (e.g. 14.04), lp:1814767
 type manfixer struct {
 	bytes.Buffer
-	done bool
+	done        bool
+	programName string
 }
 
 func (w *manfixer) Write(buf []byte) (int, error) {
 	if !w.done {
 		w.done = true
-		if bytes.HasPrefix(buf, []byte(".TH")) {
-			// buf is of the form:
-			//   .TH pebble 1 "4 July 2023"
-			// We want to locate the `1` byte and substitute it by `8`
-			if i := bytes.Index(buf, []byte("1")); i != -1 {
-				buf[i] = '8'
-			}
+		prefix := ".TH " + w.programName + " "
+		if bytes.HasPrefix(buf, []byte(prefix)) {
+			// io.Writer.Write must not modify the buffer, even temporarily
+			n, _ := w.Buffer.Write(buf[:len(prefix)])
+			w.Buffer.Write([]byte{'8'})
+			m, err := w.Buffer.Write(buf[1+len(prefix):])
+			return n + m + 1, err
 		}
 	}
 	return w.Buffer.Write(buf)
@@ -127,40 +128,40 @@ func (w *manfixer) flush() {
 	io.Copy(Stdout, strings.NewReader(str))
 }
 
-func (rcmd cmdHelp) Execute(args []string) error {
+func (cmd cmdHelp) Execute(args []string) error {
 	if len(args) > 0 {
 		return ErrExtraArgs
 	}
-	if rcmd.Manpage {
+	if cmd.Manpage {
 		// you shouldn't try to to combine --man with --all nor a
 		// subcommand, but --man is hidden so no real need to check.
-		out := &manfixer{}
-		rcmd.parser.WriteManPage(out)
+		out := &manfixer{programName: cmd.parser.Name}
+		cmd.parser.WriteManPage(out)
 		out.flush()
 		return nil
 	}
-	if rcmd.All {
-		if len(rcmd.Positional.Subs) > 0 {
+	if cmd.All {
+		if len(cmd.Positional.Subs) > 0 {
 			return fmt.Errorf("help accepts a command, or '--all', but not both.")
 		}
-		printLongHelp(rcmd.parser)
+		printLongHelp(cmd.parser)
 		return nil
 	}
 
-	var subcmd = rcmd.parser.Command
-	for _, subname := range rcmd.Positional.Subs {
+	var subcmd = cmd.parser.Command
+	for _, subname := range cmd.Positional.Subs {
 		subcmd = subcmd.Find(subname)
 		if subcmd == nil {
-			sug := cmd.Personality.ProgramName + " help"
-			if x := rcmd.parser.Command.Active; x != nil && x.Name != "help" {
-				sug = cmd.Personality.ProgramName + " help " + x.Name
+			sug := cmdpkg.ProgramName + " help"
+			if x := cmd.parser.Command.Active; x != nil && x.Name != "help" {
+				sug = cmdpkg.ProgramName + " help " + x.Name
 			}
 			return fmt.Errorf("unknown command %q, see '%s'.", subname, sug)
 		}
 		// this makes "pebble help foo" work the same as "pebble foo --help"
-		rcmd.parser.Command.Active = subcmd
+		cmd.parser.Command.Active = subcmd
 	}
-	if subcmd != rcmd.parser.Command {
+	if subcmd != cmd.parser.Command {
 		return &flags.Error{Type: flags.ErrHelp}
 	}
 	return &flags.Error{Type: flags.ErrCommandRequired}
@@ -175,7 +176,7 @@ type HelpCategory struct {
 // HelpCategories helps us by grouping commands
 var HelpCategories = []HelpCategory{{
 	Label:       "Run",
-	Description: "run <display name>",
+	Description: "run {{.DisplayName}}",
 	Commands:    []string{"run", "help", "version"},
 }, {
 	Label:       "Plan",
@@ -199,35 +200,37 @@ var HelpCategories = []HelpCategory{{
 	Commands:    []string{"warnings", "okay"},
 }}
 
-func longPebbleDescription() string {
-	return fmt.Sprintf(strings.TrimSpace(`
-%s lets you control services and perform management actions on the
-system that is running them
-	`), cmd.Personality.DisplayName)
-}
+var (
+	longPebbleDescription = strings.TrimSpace(`
+{{.DisplayName}} lets you control services and perform management actions on
+the system that is running them.
+`)
+	pebbleUsage               = "Usage: {{.ProgramName}} <command> [<options>...]"
+	pebbleHelpCategoriesIntro = "Commands can be classified as follows:"
+	pebbleHelpAllFooter       = "Set the PEBBLE environment variable to override the configuration directory \n" +
+		"(which defaults to " + defaultPebbleDir + "). Set PEBBLE_SOCKET to override \n" +
+		"the unix socket used for the API (defaults to $PEBBLE/.pebble.socket).\n" +
+		"\n" +
+		"For more information about a command, run '{{.ProgramName}} help <command>'."
+	pebbleHelpFooter = "For a short summary of all commands, run '{{.ProgramName}} help --all'."
+)
 
 func printHelpHeader() {
-	fmt.Fprintln(Stdout, longPebbleDescription())
+	fmt.Fprintln(Stdout, applyPersonality(longPebbleDescription))
 	fmt.Fprintln(Stdout)
-	fmt.Fprintf(Stdout, "Usage: %s <command> [<options>...]\n", cmd.Personality.ProgramName)
+	fmt.Fprintln(Stdout, applyPersonality(pebbleUsage))
 	fmt.Fprintln(Stdout)
-	fmt.Fprintln(Stdout, "Commands can be classified as follows:")
+	fmt.Fprintln(Stdout, applyPersonality(pebbleHelpCategoriesIntro))
 }
 
 func printHelpAllFooter() {
 	fmt.Fprintln(Stdout)
-	fmt.Fprintf(Stdout, strings.TrimSpace(`
-Set the PEBBLE environment variable to override the configuration directory
-(which defaults to %s). Set PEBBLE_SOCKET to override
-the unix socket used for the API (defaults to $PEBBLE/.pebble.socket).
-
-For more information about a command, run '%s help <command>'.
-	`)+"\n", defaultPebbleDir, cmd.Personality.ProgramName)
+	fmt.Fprintln(Stdout, applyPersonality(pebbleHelpAllFooter))
 }
 
 func printHelpFooter() {
 	printHelpAllFooter()
-	fmt.Fprintf(Stdout, "For a short summary of all commands, run '%s help --all'.\n", cmd.Personality.ProgramName)
+	fmt.Fprintln(Stdout, applyPersonality(pebbleHelpFooter))
 }
 
 // this is called when the Execute returns a flags.Error with ErrCommandRequired

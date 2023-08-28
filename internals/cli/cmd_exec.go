@@ -39,7 +39,7 @@ stderr are output locally.
 To avoid confusion, exec options may be separated from the command and its
 arguments using "--", for example:
 
-	<program name> exec --timeout 10s -- echo -n foo bar
+{{.ProgramName}} exec --timeout 10s -- echo -n foo bar
 `
 
 type cmdExec struct {

@@ -175,7 +175,7 @@ func Parser(cli *client.Client) *flags.Parser {
 	flagOpts := flags.Options(flags.PassDoubleDash)
 	parser := flags.NewParser(&defaultOpts, flagOpts)
 	parser.ShortDescription = "System and service manager"
-	parser.LongDescription = longPebbleDescription()
+	parser.LongDescription = applyPersonality(longPebbleDescription)
 
 	// Add --help like what go-flags would do for us, but hidden
 	addHelp(parser)
@@ -256,7 +256,7 @@ func Parser(cli *client.Client) *flags.Parser {
 }
 
 func applyPersonality(s string) string {
-	r := strings.NewReplacer("<program name>", cmd.Personality.ProgramName, "<display name>", cmd.Personality.DisplayName)
+	r := strings.NewReplacer("{{.ProgramName}}", cmd.ProgramName, "{{.DisplayName}}", cmd.DisplayName)
 	return r.Replace(s)
 }
 
@@ -291,7 +291,7 @@ func Run() error {
 		}
 	}()
 
-	logger.SetLogger(logger.New(os.Stderr, fmt.Sprintf("[%s] ", cmd.Personality.ProgramName)))
+	logger.SetLogger(logger.New(os.Stderr, fmt.Sprintf("[%s] ", cmd.ProgramName)))
 
 	_, clientConfig.Socket = getEnvPaths()
 
@@ -313,11 +313,11 @@ func Run() error {
 				return nil
 			case flags.ErrUnknownCommand:
 				sub := os.Args[1]
-				sug := cmd.Personality.ProgramName + " help"
+				sug := cmd.ProgramName + " help"
 				if len(xtra) > 0 {
 					sub = xtra[0]
 					if x := parser.Command.Active; x != nil && x.Name != "help" {
-						sug = cmd.Personality.ProgramName + " help " + x.Name
+						sug = cmd.ProgramName + " help " + x.Name
 					}
 				}
 				return fmt.Errorf("unknown command %q, see '%s'", sub, sug)
@@ -361,7 +361,7 @@ func errorToMessage(e error) (normalMessage string, err error) {
 		}
 	case client.ErrorKindSystemRestart:
 		isError = false
-		msg = fmt.Sprintf("%s is about to reboot the system", cmd.Personality.ProgramName)
+		msg = fmt.Sprintf("%s is about to reboot the system", cmd.ProgramName)
 	case client.ErrorKindNoDefaultServices:
 		msg = "no default services"
 	default:
