@@ -403,30 +403,26 @@ $ pebble run --verbose
 ...
 ```
 
-<!--
-TODO: uncomment this section once log forwarding is fully implemented
-TODO: add log targets to the Pebble layer spec below
-
 #### Log forwarding
 
-Pebble supports forwarding its services' logs to a remote Loki server or syslog receiver (via UDP/TCP). In the `log-targets` section of the plan, you can specify destinations for log forwarding, for example:
+Pebble supports forwarding its services' logs to a remote Loki server. In the `log-targets` section of the plan, you can specify destinations for log forwarding, for example:
 ```yaml
 log-targets:
-    loki-example:
+    example1:
         override: merge
         type: loki
         location: http://10.1.77.205:3100/loki/api/v1/push
         services: [all]
-    syslog-example:
+    example2:
         override: merge
-        type: syslog
-        location: tcp://192.168.10.241:1514
+        type: loki
+        location: http://my.loki.server.com/loki/api/v1/push
         services: [svc1, svc2]
 ```
 
-For each log target, use the `services` key to specify a list of services to collect logs from. In the above example, the `syslog-example` target will collect logs from `svc1` and `svc2`.
+For each log target, use the `services` key to specify a list of services to collect logs from. In the above example, the `example2` target will collect logs from `svc1` and `svc2`.
 
-Use the special keyword `all` to match all services, including services that might be added in future layers. In the above example, `loki-example` will collect logs from all services.
+Use the special keyword `all` to match all services, including services that might be added in future layers. In the above example, `example1` will collect logs from all services.
 
 To remove a service from a log target when merging, prefix the service name with a minus `-`. For example, if we have a base layer with
 ```yaml
@@ -455,7 +451,6 @@ my-target:
 ```
 would remove all services and then add `svc1`, so `my-target` would receive logs from only `svc1`.
 
--->
 
 ## Container usage
 
@@ -721,6 +716,37 @@ checks:
             # (Optional) Working directory to run command in. By default, the
             # command is run in the service manager's current directory.
             working-dir: <directory>
+
+# (Optional) A list of remote log receivers, to which service logs can be sent.
+log-targets:
+
+  <log target name>:
+
+    # (Required) Control how this log target definition is combined with
+    # other pre-existing definitions with the same name in the Pebble plan.
+    #
+    # The value 'merge' will ensure that values in this layer specification
+    # are merged over existing definitions, whereas 'replace' will entirely
+    # override the existing target spec in the plan with the same name.
+    override: merge | replace
+
+    # (Required) The type of log target, which determines the format in
+    # which logs will be sent. Currently, the only supported type is 'loki',
+    # but more protocols may be added in the future.
+    type: loki
+
+    # (Required) The URL of the remote log target.
+    # For Loki, this needs to be the fully-qualified URL of the push API,
+    # including the API endpoint, e.g.
+    #     http://<ip-address>:3100/loki/api/v1/push
+    location: <url>
+
+    # (Optional) A list of services whose logs will be sent to this target.
+    # Use the special keyword 'all' to match all services in the plan.
+    # When merging log targets, the 'services' lists are appended. Prefix a
+    # service name with a minus (e.g. '-svc1') to remove a previously added
+    # service. '-all' will remove all services.
+    services: [<service names>]
 ```
 
 ## API and clients
@@ -753,7 +779,8 @@ Here are some of the things coming soon:
   - [x] Automatically restart services that fail
   - [x] Support for custom health checks (HTTP, TCP, command)
   - [x] Terminate all services before exiting run command
-  - [ ] Log forwarding (syslog and Loki)
+  - [x] Log forwarding to Loki
+  - [ ] Log forwarding to syslog
   - [ ] [Other in-progress PRs](https://github.com/canonical/pebble/pulls)
   - [ ] [Other requested features](https://github.com/canonical/pebble/issues)
 
