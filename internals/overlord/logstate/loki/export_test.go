@@ -16,7 +16,7 @@ package loki
 
 import "time"
 
-func SetRequestTimeout(new time.Duration) (restore func()) {
+func FakeRequestTimeout(new time.Duration) (restore func()) {
 	oldRequestTimeout := requestTimeout
 	requestTimeout = new
 	return func() {

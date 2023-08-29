@@ -183,7 +183,7 @@ func (*suite) TestFlushCancelContext(c *C) {
 }
 
 func (*suite) TestServerTimeout(c *C) {
-	restore := loki.SetRequestTimeout(1 * time.Microsecond)
+	restore := loki.FakeRequestTimeout(1 * time.Microsecond)
 	defer restore()
 
 	stopRequest := make(chan struct{})
