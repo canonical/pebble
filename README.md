@@ -408,21 +408,21 @@ $ pebble run --verbose
 Pebble supports forwarding its services' logs to a remote Loki server. In the `log-targets` section of the plan, you can specify destinations for log forwarding, for example:
 ```yaml
 log-targets:
-    example1:
+    staging-logs:
         override: merge
         type: loki
         location: http://10.1.77.205:3100/loki/api/v1/push
         services: [all]
-    example2:
+    production-logs:
         override: merge
         type: loki
         location: http://my.loki.server.com/loki/api/v1/push
         services: [svc1, svc2]
 ```
 
-For each log target, use the `services` key to specify a list of services to collect logs from. In the above example, the `example2` target will collect logs from `svc1` and `svc2`.
+For each log target, use the `services` key to specify a list of services to collect logs from. In the above example, the `production-logs` target will collect logs from `svc1` and `svc2`.
 
-Use the special keyword `all` to match all services, including services that might be added in future layers. In the above example, `example1` will collect logs from all services.
+Use the special keyword `all` to match all services, including services that might be added in future layers. In the above example, `staging-logs` will collect logs from all services.
 
 To remove a service from a log target when merging, prefix the service name with a minus `-`. For example, if we have a base layer with
 ```yaml
