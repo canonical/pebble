@@ -170,8 +170,8 @@ func (g *logGatherer) ServiceStarted(service *plan.Service, buffer *servicelog.R
 // pullers on entryCh, and writes them to the client. It also flushes the
 // client periodically, and exits when the gatherer's tomb is killed.
 func (g *logGatherer) loop() error {
-	timer := newTimer()
-	defer timer.Stop()
+	flushTimer := newTimer()
+	defer flushTimer.Stop()
 
 mainLoop:
 	for {
@@ -179,9 +179,9 @@ mainLoop:
 		case <-g.tomb.Dying():
 			break mainLoop
 
-		case <-timer.Expired():
+		case <-flushTimer.Expired():
 			// Mark timer as unset
-			timer.Stop()
+			flushTimer.Stop()
 			err := g.client.Flush(g.clientCtx)
 			if err != nil {
 				logger.Noticef("Cannot flush logs to target %q: %v", g.targetName, err)
@@ -192,7 +192,7 @@ mainLoop:
 			if err != nil {
 				logger.Noticef("Cannot write logs to target %q: %v", g.targetName, err)
 			}
-			timer.EnsureSet(g.bufferTimeout)
+			flushTimer.EnsureSet(g.bufferTimeout)
 		}
 	}
 
