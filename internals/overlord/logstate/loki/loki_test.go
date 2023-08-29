@@ -186,10 +186,12 @@ func (*suite) TestServerTimeout(c *C) {
 	restore := loki.SetRequestTimeout(1 * time.Microsecond)
 	defer restore()
 
+	stopRequest := make(chan struct{})
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		time.Sleep(2 * time.Microsecond)
+		<-stopRequest
 	}))
 	defer server.Close()
+	defer close(stopRequest)
 
 	client := loki.NewClient(&plan.LogTarget{Location: server.URL})
 	err := client.Write(context.Background(), servicelog.Entry{

@@ -47,7 +47,6 @@ type Client struct {
 	numEntries int
 
 	httpClient *http.Client
-	retryAfter *time.Time
 }
 
 func NewClient(target *plan.LogTarget) *Client {
@@ -64,13 +63,6 @@ func (c *Client) Write(ctx context.Context, entry servicelog.Entry) error {
 	c.numEntries++
 
 	if c.numEntries >= maxRequestEntries {
-		if c.retryAfter != nil {
-			if time.Now().Before(*c.retryAfter) {
-				// Retry-After deadline hasn't passed yet, so we shouldn't flush
-				return nil
-			}
-			c.retryAfter = nil
-		}
 		return c.Flush(ctx)
 	}
 	return nil
