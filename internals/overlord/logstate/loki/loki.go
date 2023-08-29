@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -27,7 +28,6 @@ import (
 	"time"
 
 	"github.com/canonical/pebble/cmd"
-	"github.com/canonical/pebble/internals/overlord/logstate/clienterr"
 	"github.com/canonical/pebble/internals/plan"
 	"github.com/canonical/pebble/internals/servicelog"
 )
@@ -157,45 +157,23 @@ func (c *Client) handleServerResponse(resp *http.Response) error {
 		_ = resp.Body.Close()
 	}()
 
-	code := resp.StatusCode
-	switch {
-	case code == http.StatusTooManyRequests:
-		err := &clienterr.Backoff{}
-		retryAfter, ok := getRetryAfter(resp)
-		if ok {
-			err.RetryAfter = &retryAfter
-			c.retryAfter = &retryAfter
-		}
-		return err
-
-	case code >= 400:
+	if code := resp.StatusCode; code >= 400 {
 		// Request to Loki failed
-		return clienterr.ErrorFromResponse(resp)
+		errStr := fmt.Sprintf("server returned HTTP %d\n", code)
+
+		// Read response body to get more context
+		body := make([]byte, 0, 1024)
+		_, err := resp.Body.Read(body)
+		if err == nil {
+			errStr += fmt.Sprintf(`response body:
+%s
+`, body)
+		} else {
+			errStr += "cannot read response body: " + err.Error()
+		}
+
+		return errors.New(errStr)
 	}
 
 	return nil
-}
-
-// Gets the parsed value of Retry-After from HTTP response headers.
-func getRetryAfter(resp *http.Response) (time.Time, bool) {
-	retryAfterRaw := resp.Header.Get("Retry-After")
-	if retryAfterRaw == "" {
-		// Header unset
-		return time.Time{}, false
-	}
-
-	// The Retry-After value can be a date-time
-	t, err := http.ParseTime(retryAfterRaw)
-	if err == nil {
-		return t, true
-	}
-
-	// It can also be an integer number of seconds
-	n, err := strconv.Atoi(retryAfterRaw)
-	if err == nil && n > 0 {
-		t := time.Now().Add(time.Duration(n) * time.Second)
-		return t, true
-	}
-
-	return time.Time{}, false
 }

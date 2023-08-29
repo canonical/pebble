@@ -16,14 +16,12 @@ package logstate
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
 	"gopkg.in/tomb.v2"
 
 	"github.com/canonical/pebble/internals/logger"
-	"github.com/canonical/pebble/internals/overlord/logstate/clienterr"
 	"github.com/canonical/pebble/internals/overlord/logstate/loki"
 	"github.com/canonical/pebble/internals/plan"
 	"github.com/canonical/pebble/internals/servicelog"
@@ -74,8 +72,6 @@ type logGatherer struct {
 	pullers *pullerGroup
 	// All pullers send logs on this channel, received by main loop
 	entryCh chan servicelog.Entry
-
-	timer timer
 }
 
 // logGathererArgs allows overriding the newLogClient method and time values
@@ -108,7 +104,6 @@ func newLogGathererInternal(target *plan.LogTarget, args logGathererArgs) (*logG
 		client:     client,
 		entryCh:    make(chan servicelog.Entry),
 		pullers:    newPullerGroup(target.Name),
-		timer:      newTimer(),
 	}
 	g.clientCtx, g.clientCancel = context.WithCancel(context.Background())
 	g.tomb.Go(g.loop)
@@ -175,7 +170,8 @@ func (g *logGatherer) ServiceStarted(service *plan.Service, buffer *servicelog.R
 // pullers on entryCh, and writes them to the client. It also flushes the
 // client periodically, and exits when the gatherer's tomb is killed.
 func (g *logGatherer) loop() error {
-	defer g.timer.Stop()
+	timer := newTimer()
+	defer timer.Stop()
 
 mainLoop:
 	for {
@@ -183,14 +179,20 @@ mainLoop:
 		case <-g.tomb.Dying():
 			break mainLoop
 
-		case <-g.timer.Expired():
+		case <-timer.Expired():
 			// Mark timer as unset
-			g.timer.Stop()
-			g.handleClientErr(g.client.Flush(g.clientCtx))
+			timer.Stop()
+			err := g.client.Flush(g.clientCtx)
+			if err != nil {
+				logger.Noticef("Cannot flush logs to target %q: %v", g.targetName, err)
+			}
 
 		case entry := <-g.entryCh:
-			g.handleClientErr(g.client.Write(g.clientCtx, entry))
-			g.timer.EnsureSet(g.bufferTimeout)
+			err := g.client.Write(g.clientCtx, entry)
+			if err != nil {
+				logger.Noticef("Cannot write logs to target %q: %v", g.targetName, err)
+			}
+			timer.EnsureSet(g.bufferTimeout)
 		}
 	}
 
@@ -198,23 +200,11 @@ mainLoop:
 	// We need to create a new context, as the previous one may have been cancelled.
 	ctx, cancel := context.WithTimeout(context.Background(), g.timeoutFinalFlush)
 	defer cancel()
-	g.handleClientErr(g.client.Flush(ctx))
+	err := g.client.Flush(ctx)
+	if err != nil {
+		logger.Noticef("Cannot flush logs to target %q: %v", g.targetName, err)
+	}
 	return nil
-}
-
-func (g *logGatherer) handleClientErr(err error) {
-	if err == nil {
-		return
-	}
-
-	var backoff *clienterr.Backoff
-	if errors.As(err, &backoff) {
-		logger.Noticef("Target %q: %v", g.targetName, err)
-		g.timer.retryAfter = backoff.RetryAfter
-		return
-	}
-
-	logger.Noticef("Cannot flush logs to target %q: %v", g.targetName, err)
 }
 
 // Stop tears down the gatherer and associated resources (pullers, client).
@@ -261,8 +251,6 @@ func (g *logGatherer) Stop() {
 type timer struct {
 	timer *time.Timer
 	set   bool
-	// If non-nil, the timer won't expire until after this time
-	retryAfter *time.Time
 }
 
 func newTimer() timer {
@@ -290,15 +278,6 @@ func (t *timer) Stop() {
 func (t *timer) EnsureSet(timeout time.Duration) {
 	if t.set {
 		return
-	}
-
-	if t.retryAfter != nil {
-		// We've been told to wait before retrying
-		retryTime := time.Until(*t.retryAfter)
-		if retryTime > timeout {
-			timeout = retryTime
-		}
-		t.retryAfter = nil
 	}
 
 	t.timer.Reset(timeout)

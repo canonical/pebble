@@ -17,7 +17,6 @@ package loki_test
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -26,7 +25,6 @@ import (
 
 	. "gopkg.in/check.v1"
 
-	"github.com/canonical/pebble/internals/overlord/logstate/clienterr"
 	"github.com/canonical/pebble/internals/overlord/logstate/loki"
 	"github.com/canonical/pebble/internals/plan"
 	"github.com/canonical/pebble/internals/servicelog"
@@ -203,29 +201,6 @@ func (*suite) TestServerTimeout(c *C) {
 
 	err = client.Flush(context.Background())
 	c.Assert(err, ErrorMatches, ".*context deadline exceeded.*")
-}
-
-func (*suite) TestTooManyRequests(c *C) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Add("Retry-After", "Tue, 15 Aug 2023 08:49:37 GMT")
-		w.WriteHeader(http.StatusTooManyRequests)
-	}))
-	defer server.Close()
-
-	client := loki.NewClient(&plan.LogTarget{Location: server.URL})
-	err := client.Write(context.Background(), servicelog.Entry{
-		Time:    time.Now(),
-		Service: "svc1",
-		Message: "this is a log line\n",
-	})
-	c.Assert(err, IsNil)
-
-	err = client.Flush(context.Background())
-	var backoff *clienterr.Backoff
-	c.Assert(errors.As(err, &backoff), Equals, true)
-
-	expectedTime := time.Date(2023, 8, 15, 8, 49, 37, 0, time.UTC)
-	c.Check(backoff.RetryAfter, DeepEquals, &expectedTime)
 }
 
 // Strips all extraneous whitespace from JSON
