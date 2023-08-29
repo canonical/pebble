@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/canonical/pebble/cmd"
+	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/plan"
 	"github.com/canonical/pebble/internals/servicelog"
 )
@@ -37,7 +38,8 @@ const maxRequestEntries = 1000
 var requestTimeout = 10 * time.Second
 
 type Client struct {
-	remoteURL string
+	targetName string
+	remoteURL  string
 	// buffered entries are "sharded" by service name
 	entries map[string][]lokiEntry
 	// Keep track of the number of buffered entries, to avoid having to iterate
@@ -50,6 +52,7 @@ type Client struct {
 
 func NewClient(target *plan.LogTarget) *Client {
 	return &Client{
+		targetName: target.Name,
 		remoteURL:  target.Location,
 		entries:    map[string][]lokiEntry{},
 		httpClient: &http.Client{Timeout: requestTimeout},
@@ -84,7 +87,6 @@ func (c *Client) Flush(ctx context.Context) error {
 	if c.numEntries == 0 {
 		return nil // no-op
 	}
-	defer c.emptyBuffer()
 
 	req := c.buildRequest()
 	jsonReq, err := json.Marshal(req)
@@ -103,7 +105,16 @@ func (c *Client) Flush(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	return c.handleServerResponse(resp)
+
+	err, emptyBuffer := c.handleServerResponse(resp)
+	if emptyBuffer {
+		if err != nil {
+			logger.Noticef("Target %q: request failed, dropping %d logs",
+				c.targetName, c.numEntries)
+		}
+		c.emptyBuffer()
+	}
+	return err
 }
 
 func (c *Client) emptyBuffer() {
@@ -149,7 +160,11 @@ type stream struct {
 
 type lokiEntry [2]string
 
-func (c *Client) handleServerResponse(resp *http.Response) error {
+// handleServerResponse determines what to do based on the response from the
+// Loki server. 4xx and 5xx responses indicate errors, so in this case, we will
+// bubble up and error to the caller. The returned boolean indicates whether
+// the buffer should be emptied.
+func (c *Client) handleServerResponse(resp *http.Response) (err error, emptyBuffer bool) {
 	defer func() {
 		// Drain request body to allow connection reuse
 		// see https://pkg.go.dev/net/http#Response.Body
@@ -157,23 +172,40 @@ func (c *Client) handleServerResponse(resp *http.Response) error {
 		_ = resp.Body.Close()
 	}()
 
-	if code := resp.StatusCode; code >= 400 {
-		// Request to Loki failed
-		errStr := fmt.Sprintf("server returned HTTP %d\n", code)
+	code := resp.StatusCode
+	switch {
+	case code == http.StatusTooManyRequests:
+		// For 429, don't drop logs - just retry later
+		return errFromResponse(resp), false
 
-		// Read response body to get more context
-		body := make([]byte, 0, 1024)
-		_, err := resp.Body.Read(body)
-		if err == nil {
-			errStr += fmt.Sprintf(`response body:
-%s
-`, body)
-		} else {
-			errStr += "cannot read response body: " + err.Error()
-		}
+	case code >= 500:
+		// 5xx indicates a problem with the server, so don't drop logs
+		return errFromResponse(resp), false
 
-		return errors.New(errStr)
+	case code >= 400:
+		// 4xx indicates a client problem, so drop the logs
+		return errFromResponse(resp), true
 	}
 
-	return nil
+	return nil, true
+}
+
+// errFromResponse generates an error from a failed *http.Response.
+// NB: this function reads the response body.
+func errFromResponse(resp *http.Response) error {
+	// Request to Loki failed
+	errStr := fmt.Sprintf("server returned HTTP %d\n", resp.StatusCode)
+
+	// Read response body to get more context
+	body := make([]byte, 0, 1024)
+	_, err := resp.Body.Read(body)
+	if err == nil {
+		errStr += fmt.Sprintf(`response body:
+%s
+`, body)
+	} else {
+		errStr += "cannot read response body: " + err.Error()
+	}
+
+	return errors.New(errStr)
 }
