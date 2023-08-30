@@ -15,6 +15,7 @@
 package daemon
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"regexp"
@@ -22,8 +23,6 @@ import (
 
 	"github.com/canonical/pebble/internals/overlord/state"
 )
-
-const maxKeyLength = 255
 
 // A very loose regex to ensure client keys are in the form "domain.com/key"
 var clientKeyRegexp = regexp.MustCompile(`([a-z0-9-_]+\.)+[a-z0-9-_]+/.+`)
@@ -49,27 +48,37 @@ func v1GetNotices(c *Command, r *http.Request, _ *UserState) Response {
 		}
 	}
 
-	// TODO: hmmm, need a way to communicate/sync with notice changes
-	//timeoutStr := query.Get("timeout")
-	//var timeout time.Duration
-	//if timeoutStr != "" {
-	//	var err error
-	//	timeout, err = time.ParseDuration(timeoutStr)
-	//	if err != nil {
-	//		return statusBadRequest("invalid timeout %q: %v", timeoutStr, err)
-	//	}
-	//}
-
-	st := c.d.overlord.State()
-	st.Lock()
-	defer st.Unlock()
-
 	filters := state.NoticeFilters{
 		Type:  noticeType,
 		Key:   key,
 		After: after,
 	}
-	notices := st.Notices(filters)
+	var notices []*state.Notice
+
+	st := c.d.overlord.State()
+	st.Lock()
+	defer st.Unlock()
+
+	timeoutStr := query.Get("timeout")
+	if timeoutStr != "" {
+		// Wait up to timeout for notices matching given filters to occur
+		timeout, err := time.ParseDuration(timeoutStr)
+		if err != nil {
+			return statusBadRequest("invalid timeout %q: %v", timeoutStr, err)
+		}
+
+		ctx, cancel := context.WithTimeout(r.Context(), timeout)
+		defer cancel()
+
+		notices, err = st.WaitNotices(ctx, filters)
+		if err != nil {
+			return statusInternalError("cannot wait for notices: %s", err)
+		}
+	} else {
+		// No timeout given, fetch currently-available notices
+		notices = st.Notices(filters)
+	}
+
 	if len(notices) == 0 {
 		notices = []*state.Notice{} // avoid null result
 	}

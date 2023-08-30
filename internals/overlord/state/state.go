@@ -93,8 +93,12 @@ type State struct {
 	changes  map[string]*Change
 	tasks    map[string]*Task
 	warnings map[string]*Warning
-	notices  map[string]*Notice
-	noticeId int
+
+	notices         map[string]*Notice
+	noticeId        int
+	noticeWaiters   map[int]noticeWaiter
+	noticeWaiterId  int
+	noticeWaitersMu sync.Mutex
 
 	modified bool
 
@@ -104,14 +108,15 @@ type State struct {
 // New returns a new empty state.
 func New(backend Backend) *State {
 	return &State{
-		backend:  backend,
-		data:     make(customData),
-		changes:  make(map[string]*Change),
-		tasks:    make(map[string]*Task),
-		warnings: make(map[string]*Warning),
-		notices:  make(map[string]*Notice),
-		modified: true,
-		cache:    make(map[interface{}]interface{}),
+		backend:       backend,
+		data:          make(customData),
+		changes:       make(map[string]*Change),
+		tasks:         make(map[string]*Task),
+		warnings:      make(map[string]*Warning),
+		notices:       make(map[string]*Notice),
+		noticeWaiters: make(map[int]noticeWaiter),
+		modified:      true,
+		cache:         make(map[interface{}]interface{}),
 	}
 }
 
@@ -449,5 +454,6 @@ func ReadState(backend Backend, r io.Reader) (*State, error) {
 	s.backend = backend
 	s.modified = false
 	s.cache = make(map[interface{}]interface{})
+	s.noticeWaiters = make(map[int]noticeWaiter)
 	return s, err
 }

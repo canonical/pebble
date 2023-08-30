@@ -15,6 +15,7 @@
 package state
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"sort"
@@ -180,6 +181,7 @@ func (s *State) AddNotice(noticeType NoticeType, key string, data map[string]str
 	now := time.Now().UTC()
 	uniqueKey := uniqueNoticeKey(noticeType, key)
 	notice, ok := s.notices[uniqueKey]
+	newOrRepeated := false
 	if !ok {
 		s.noticeId++
 		notice = &Notice{
@@ -190,18 +192,25 @@ func (s *State) AddNotice(noticeType NoticeType, key string, data map[string]str
 			lastRepeated:  now,
 			repeatAfter:   repeatAfter,
 			expireAfter:   7 * 24 * time.Hour, // one week
+			occurrences:   1,
 		}
 		s.notices[uniqueKey] = notice
+		newOrRepeated = true
 	} else {
+		notice.occurrences++
 		if repeatAfter != 0 && now.After(notice.lastRepeated.Add(repeatAfter)) {
 			// Update last repeated time if repeat-after time has elapsed
 			notice.lastRepeated = now
+			newOrRepeated = true
 		}
 	}
 	notice.lastOccurred = now
-	notice.occurrences++
 	notice.lastData = data
 	notice.repeatAfter = repeatAfter
+
+	if newOrRepeated {
+		s.processNoticeWaiters()
+	}
 }
 
 func uniqueNoticeKey(noticeType NoticeType, key string) string {
@@ -276,4 +285,71 @@ func (s *State) unflattenNotices(flat []*Notice) {
 		}
 	}
 	s.noticeId = maxNoticeId
+}
+
+// WaitNotices waits for new notices that match the filters to occur or be
+// repeated, returning the list of matching notices ordered by the
+// last-repeated time. It waits till there is at least one matching notice or
+// the context times out or is cancelled.
+func (s *State) WaitNotices(ctx context.Context, filters NoticeFilters) ([]*Notice, error) {
+	ch, waiterId := s.addNoticeWaiter(filters, ctx.Done())
+	defer s.removeNoticeWaiter(waiterId)
+
+	// Unlock state while waiting
+	s.Unlock()
+	defer s.Lock()
+
+	for {
+		select {
+		case notices := <-ch:
+			return notices, nil
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
+}
+
+type noticeWaiter struct {
+	filters NoticeFilters
+	ch      chan []*Notice
+	done    <-chan struct{}
+}
+
+func (s *State) addNoticeWaiter(filters NoticeFilters, done <-chan struct{}) (ch chan []*Notice, waiterId int) {
+	s.noticeWaitersMu.Lock()
+	defer s.noticeWaitersMu.Unlock()
+
+	s.noticeWaiterId++
+	waiterId = s.noticeWaiterId
+	waiter := noticeWaiter{
+		filters: filters,
+		ch:      make(chan []*Notice),
+		done:    done,
+	}
+	s.noticeWaiters[waiterId] = waiter
+	return waiter.ch, waiterId
+}
+
+func (s *State) removeNoticeWaiter(waiterId int) {
+	s.noticeWaitersMu.Lock()
+	defer s.noticeWaitersMu.Unlock()
+
+	delete(s.noticeWaiters, waiterId)
+}
+
+func (s *State) processNoticeWaiters() {
+	s.noticeWaitersMu.Lock()
+	defer s.noticeWaitersMu.Unlock()
+
+	for _, waiter := range s.noticeWaiters {
+		notices := s.Notices(waiter.filters)
+		if len(notices) > 0 {
+			select {
+			case waiter.ch <- notices:
+				// Got matching notices, send them to related WaitNotices
+			case <-waiter.done:
+				// Will happen if WaitNotices times out
+			}
+		}
+	}
 }
