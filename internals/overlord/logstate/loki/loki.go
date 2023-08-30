@@ -161,11 +161,11 @@ func (c *Client) handleServerResponse(resp *http.Response) error {
 		return errFromResponse(resp)
 
 	case code >= 500:
-		// 5xx indicates a problem with the server, so don't drop logs
+		// 5xx indicates a problem with the server, so don't drop logs (retry later)
 		return errFromResponse(resp)
 
 	case code >= 400:
-		// 4xx indicates a client problem, so drop the logs
+		// 4xx indicates a client problem, so drop the logs (retrying won't help)
 		logger.Noticef("Target %q: request failed with status %d, dropping %d logs",
 			c.targetName, code, c.numEntries)
 		c.emptyBuffer()
