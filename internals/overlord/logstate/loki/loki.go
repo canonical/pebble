@@ -18,7 +18,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -180,19 +179,10 @@ func (c *Client) handleServerResponse(resp *http.Response) error {
 // errFromResponse generates an error from a failed *http.Response.
 // NB: this function reads the response body.
 func errFromResponse(resp *http.Response) error {
-	// Request to Loki failed
-	errStr := fmt.Sprintf("server returned HTTP %d\n", resp.StatusCode)
-
 	// Read response body to get more context
-	body := make([]byte, 0, 1024)
-	_, err := resp.Body.Read(body)
-	if err == nil {
-		errStr += fmt.Sprintf(`response body:
-%s
-`, body)
-	} else {
-		errStr += "cannot read response body: " + err.Error()
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 1024))
+	if err != nil {
+		return fmt.Errorf("HTTP %d error, but cannot read response: %v", resp.StatusCode, err)
 	}
-
-	return errors.New(errStr)
+	return fmt.Errorf("HTTP %d error, response %q", resp.StatusCode, body)
 }
