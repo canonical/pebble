@@ -98,15 +98,7 @@ func (c *Client) Flush(ctx context.Context) error {
 		return err
 	}
 
-	err, emptyBuffer := c.handleServerResponse(resp)
-	if emptyBuffer {
-		if err != nil {
-			logger.Noticef("Target %q: request failed, dropping %d logs",
-				c.targetName, c.numEntries)
-		}
-		c.emptyBuffer()
-	}
-	return err
+	return c.handleServerResponse(resp)
 }
 
 func (c *Client) emptyBuffer() {
@@ -154,9 +146,8 @@ type lokiEntry [2]string
 
 // handleServerResponse determines what to do based on the response from the
 // Loki server. 4xx and 5xx responses indicate errors, so in this case, we will
-// bubble up and error to the caller. The returned boolean indicates whether
-// the buffer should be emptied.
-func (c *Client) handleServerResponse(resp *http.Response) (err error, emptyBuffer bool) {
+// bubble up the error to the caller.
+func (c *Client) handleServerResponse(resp *http.Response) error {
 	defer func() {
 		// Drain request body to allow connection reuse
 		// see https://pkg.go.dev/net/http#Response.Body
@@ -168,18 +159,22 @@ func (c *Client) handleServerResponse(resp *http.Response) (err error, emptyBuff
 	switch {
 	case code == http.StatusTooManyRequests:
 		// For 429, don't drop logs - just retry later
-		return errFromResponse(resp), false
+		return errFromResponse(resp)
 
 	case code >= 500:
 		// 5xx indicates a problem with the server, so don't drop logs
-		return errFromResponse(resp), false
+		return errFromResponse(resp)
 
 	case code >= 400:
 		// 4xx indicates a client problem, so drop the logs
-		return errFromResponse(resp), true
+		logger.Noticef("Target %q: request failed with status %d, dropping %d logs",
+			c.targetName, code, c.numEntries)
+		c.emptyBuffer()
+		return errFromResponse(resp)
 	}
 
-	return nil, true
+	c.emptyBuffer()
+	return nil
 }
 
 // errFromResponse generates an error from a failed *http.Response.
