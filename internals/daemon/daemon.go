@@ -225,6 +225,10 @@ func (d *Daemon) Overlord() *overlord.Overlord {
 	return d.overlord
 }
 
+func (c *Command) Daemon() *Daemon {
+	return c.d
+}
+
 func (c *Command) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	st := c.d.state
 	st.Lock()
