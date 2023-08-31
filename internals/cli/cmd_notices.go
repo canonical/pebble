@@ -25,6 +25,17 @@ import (
 	"github.com/canonical/pebble/client"
 )
 
+/* TODO from spec:
+This command wouldn't have an "after" parameter, because that happens automatically:
+the first time the CLI queries it'd show all notices (no "after"), and subsequent
+queries it would set after to the last acknowledged notice time.
+
+Add support for tracking the latest timestamp in notices.json (like is done with
+warnings.json now).
+
+Also remove the "timeout" parameter.
+*/
+
 const cmdNoticesSummary = "List notices"
 const cmdNoticesDescription = `
 The notices command lists the notices that have occurred, ordered by the
