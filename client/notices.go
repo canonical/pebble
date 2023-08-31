@@ -89,7 +89,8 @@ type jsonNotice struct {
 	ExpireAfter string `json:"expire-after,omitempty"`
 }
 
-// Notices returns a list of notices that match the filters given in opts.
+// Notices returns a list of notices that match the filters given in opts,
+// ordered by the last-repeated time.
 func (client *Client) Notices(opts *NoticesOptions) ([]*Notice, error) {
 	query := makeNoticesQuery(opts)
 	var jns []*jsonNotice
@@ -98,7 +99,7 @@ func (client *Client) Notices(opts *NoticesOptions) ([]*Notice, error) {
 }
 
 // WaitNotices returns a list of notices that match the filters given in opts,
-// waiting up to the given timeout.
+// waiting up to the given timeout. They are ordered by the last-repeated time.
 func (client *Client) WaitNotices(ctx context.Context, opts *NoticesOptions, timeout time.Duration) ([]*Notice, error) {
 	query := makeNoticesQuery(opts)
 	query.Set("timeout", timeout.String())
