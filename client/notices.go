@@ -16,7 +16,10 @@ package client
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"net/http"
+	"net/url"
 	"time"
 )
 
@@ -54,4 +57,92 @@ func (client *Client) Notify(opts *NotifyOptions) error {
 	}
 	_, err := client.doSync("POST", "/v1/notices", nil, nil, &body, nil)
 	return err
+}
+
+type NoticesOptions struct {
+	// Type, if set, includes only notices of this type.
+	Type string
+	// Key, if set, includes only notices with this key.
+	Key string
+	// After, if set, includes only notices that were last repeated after this time.
+	After time.Time
+}
+
+// Notice is a notification whose identity is the combination of Type and Key
+// that has occurred Occurrences number of times.
+type Notice struct {
+	ID            string            `json:"id"`
+	Type          string            `json:"type"`
+	Key           string            `json:"key"`
+	FirstOccurred time.Time         `json:"first-occurred"`
+	LastOccurred  time.Time         `json:"last-occurred"`
+	LastRepeated  time.Time         `json:"last-repeated"`
+	Occurrences   int               `json:"occurrences"`
+	LastData      map[string]string `json:"last-data,omitempty"`
+	RepeatAfter   time.Duration     `json:"repeat-after,omitempty"`
+	ExpireAfter   time.Duration     `json:"expire-after,omitempty"`
+}
+
+type jsonNotice struct {
+	Notice
+	RepeatAfter string `json:"repeat-after,omitempty"`
+	ExpireAfter string `json:"expire-after,omitempty"`
+}
+
+// Notices returns a list of notices that match the filters given in opts.
+func (client *Client) Notices(opts *NoticesOptions) ([]*Notice, error) {
+	query := makeNoticesQuery(opts)
+	var jns []*jsonNotice
+	_, err := client.doSync("GET", "/v1/notices", query, nil, nil, &jns)
+	return jsonNoticesToNotices(jns), err
+}
+
+// WaitNotices returns a list of notices that match the filters given in opts,
+// waiting up to the given timeout.
+func (client *Client) WaitNotices(ctx context.Context, opts *NoticesOptions, timeout time.Duration) ([]*Notice, error) {
+	query := makeNoticesQuery(opts)
+	query.Set("timeout", timeout.String())
+
+	res, err := client.raw(ctx, "GET", "/v1/notices", query, nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode == http.StatusGatewayTimeout {
+		return nil, nil
+	}
+
+	var rsp response
+	err = decodeInto(res.Body, &rsp)
+	if err != nil {
+		return nil, err
+	}
+	var jns []*jsonNotice
+	_, err = client.finishSync(rsp, &jns)
+	return jsonNoticesToNotices(jns), err
+}
+
+func makeNoticesQuery(opts *NoticesOptions) url.Values {
+	query := make(url.Values)
+	if opts.Type != "" {
+		query.Set("type", opts.Type)
+	}
+	if opts.Key != "" {
+		query.Set("key", opts.Key)
+	}
+	if !opts.After.IsZero() {
+		query.Set("after", opts.After.Format(time.RFC3339))
+	}
+	return query
+}
+
+func jsonNoticesToNotices(jns []*jsonNotice) []*Notice {
+	ns := make([]*Notice, len(jns))
+	for i, jn := range jns {
+		ns[i] = &jn.Notice
+		ns[i].ExpireAfter, _ = time.ParseDuration(jn.ExpireAfter)
+		ns[i].RepeatAfter, _ = time.ParseDuration(jn.RepeatAfter)
+	}
+	return ns
 }

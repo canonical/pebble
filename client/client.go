@@ -338,6 +338,10 @@ func (client *Client) doSync(method, path string, query url.Values, headers map[
 	if err := rsp.err(client); err != nil {
 		return nil, err
 	}
+	return client.finishSync(rsp, v)
+}
+
+func (client *Client) finishSync(rsp response, v interface{}) (*ResultInfo, error) {
 	if rsp.Type != "sync" {
 		return nil, fmt.Errorf("expected sync response, got %q", rsp.Type)
 	}
