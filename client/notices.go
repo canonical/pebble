@@ -89,6 +89,16 @@ type jsonNotice struct {
 	ExpireAfter string `json:"expire-after,omitempty"`
 }
 
+// Notice fetches a single notice by ID.
+func (client *Client) Notice(id string) (*Notice, error) {
+	var jn *jsonNotice
+	_, err := client.doSync("GET", "/v1/notices/"+id, nil, nil, nil, &jn)
+	if err != nil {
+		return nil, err
+	}
+	return jsonNoticeToNotice(jn), nil
+}
+
 // Notices returns a list of notices that match the filters given in opts,
 // ordered by the last-repeated time.
 func (client *Client) Notices(opts *NoticesOptions) ([]*Notice, error) {
@@ -141,9 +151,14 @@ func makeNoticesQuery(opts *NoticesOptions) url.Values {
 func jsonNoticesToNotices(jns []*jsonNotice) []*Notice {
 	ns := make([]*Notice, len(jns))
 	for i, jn := range jns {
-		ns[i] = &jn.Notice
-		ns[i].ExpireAfter, _ = time.ParseDuration(jn.ExpireAfter)
-		ns[i].RepeatAfter, _ = time.ParseDuration(jn.RepeatAfter)
+		ns[i] = jsonNoticeToNotice(jn)
 	}
 	return ns
+}
+
+func jsonNoticeToNotice(jn *jsonNotice) *Notice {
+	n := &jn.Notice
+	n.ExpireAfter, _ = time.ParseDuration(jn.ExpireAfter)
+	n.RepeatAfter, _ = time.ParseDuration(jn.RepeatAfter)
+	return n
 }

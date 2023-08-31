@@ -132,3 +132,15 @@ func v1PostNotices(c *Command, r *http.Request, _ *UserState) Response {
 
 	return SyncResponse(true)
 }
+
+func v1GetNotice(c *Command, r *http.Request, _ *UserState) Response {
+	noticeID := muxVars(r)["id"]
+	st := c.d.overlord.State()
+	st.Lock()
+	defer st.Unlock()
+	notice := st.Notice(noticeID)
+	if notice == nil {
+		return statusNotFound("cannot find notice with id %q", noticeID)
+	}
+	return SyncResponse(notice)
+}

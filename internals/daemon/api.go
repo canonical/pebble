@@ -99,6 +99,10 @@ var API = []*Command{{
 	UserOK: true,
 	GET:    v1GetNotices,
 	POST:   v1PostNotices,
+}, {
+	Path:   "/v1/notices/{id}",
+	UserOK: true,
+	GET:    v1GetNotice,
 }}
 
 var (

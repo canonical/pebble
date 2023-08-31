@@ -253,6 +253,21 @@ func (s *State) Notices(filters NoticeFilters) []*Notice {
 	return notices
 }
 
+// Notice return a single notice by ID, or nil if not found.
+func (s *State) Notice(id string) *Notice {
+	s.reading()
+
+	// Could use another map for lookup, but the number of notices will likely
+	// be small, and this function is probably only used rarely by the CLI, so
+	// performance is unlikely to matter.
+	for _, notice := range s.notices {
+		if notice.id == id {
+			return notice
+		}
+	}
+	return nil
+}
+
 func (s *State) flattenNotices(filters NoticeFilters) []*Notice {
 	now := time.Now()
 	var notices []*Notice
