@@ -17,6 +17,7 @@ package daemon
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"regexp"
 	"time"
@@ -71,6 +72,9 @@ func v1GetNotices(c *Command, r *http.Request, _ *UserState) Response {
 		defer cancel()
 
 		notices, err = st.WaitNotices(ctx, filters)
+		if errors.Is(err, context.DeadlineExceeded) {
+			return statusGatewayTimeout("timed out after %s", timeout)
+		}
 		if err != nil {
 			return statusInternalError("cannot wait for notices: %s", err)
 		}

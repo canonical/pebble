@@ -93,12 +93,11 @@ type State struct {
 	changes  map[string]*Change
 	tasks    map[string]*Task
 	warnings map[string]*Warning
+	notices  map[string]*Notice
+	noticeId int
 
-	notices         map[string]*Notice
-	noticeId        int
-	noticeWaiters   map[int]noticeWaiter
-	noticeWaiterId  int
-	noticeWaitersMu sync.Mutex
+	noticeWaiters  map[int]noticeWaiter
+	noticeWaiterId int
 
 	modified bool
 

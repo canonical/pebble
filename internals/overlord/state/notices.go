@@ -227,7 +227,8 @@ type NoticeFilters struct {
 	After time.Time
 }
 
-func (f *NoticeFilters) matches(n *Notice) bool {
+// matches reports whether the notice n matches these filters
+func (f NoticeFilters) matches(n *Notice) bool {
 	if f.Type != "" && f.Type != n.noticeType {
 		return false
 	}
@@ -287,69 +288,76 @@ func (s *State) unflattenNotices(flat []*Notice) {
 	s.noticeId = maxNoticeId
 }
 
-// WaitNotices waits for new notices that match the filters to occur or be
-// repeated, returning the list of matching notices ordered by the
-// last-repeated time. It waits till there is at least one matching notice or
-// the context times out or is cancelled.
+// WaitNotices waits for notices that match the filters to exist or occur,
+// returning the list of matching notices ordered by the last-repeated time.
+//
+// It waits till there is at least one matching notice or the context times
+// out or is cancelled. If there are existing notices that match the
+// filters, WaitNotices will return them immediately.
 func (s *State) WaitNotices(ctx context.Context, filters NoticeFilters) ([]*Notice, error) {
-	ch, waiterId := s.addNoticeWaiter(filters, ctx.Done())
-	defer s.removeNoticeWaiter(waiterId)
+	// State is already locked here by the caller, so notices won't be being
+	// added concurrently.
+	notices := s.Notices(filters)
+	if len(notices) > 0 {
+		return notices, nil // if there are existing notices, return them right away
+	}
 
-	// Unlock state while waiting
+	// Add a waiter channel for AddNotice to send to when matching notices arrive.
+	ch, waiterId := s.addNoticeWaiter(filters, ctx.Done())
+	defer s.removeNoticeWaiter(waiterId) // state will be re-locked when this is called
+
+	// Unlock state while waiting, to allow new notices to arrive (all state
+	// methods expect the caller to have locked the state before the call).
 	s.Unlock()
 	defer s.Lock()
 
-	for {
-		select {
-		case notices := <-ch:
-			return notices, nil
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		}
+	select {
+	case notices = <-ch:
+		// One or more new notices arrived
+		return notices, nil
+	case <-ctx.Done(): // sender (processNoticeWaiters) also waits on this done channel
+		return nil, ctx.Err()
 	}
 }
 
+// noticeWaiter tracks a single WaitNotices call.
 type noticeWaiter struct {
 	filters NoticeFilters
 	ch      chan []*Notice
 	done    <-chan struct{}
 }
 
+// addNoticeWaiter adds a notice-waiter with the given filters. Processing
+// notices for this waiter stops when the done channel is closed.
 func (s *State) addNoticeWaiter(filters NoticeFilters, done <-chan struct{}) (ch chan []*Notice, waiterId int) {
-	s.noticeWaitersMu.Lock()
-	defer s.noticeWaitersMu.Unlock()
-
 	s.noticeWaiterId++
-	waiterId = s.noticeWaiterId
 	waiter := noticeWaiter{
 		filters: filters,
 		ch:      make(chan []*Notice),
 		done:    done,
 	}
-	s.noticeWaiters[waiterId] = waiter
-	return waiter.ch, waiterId
+	s.noticeWaiters[s.noticeWaiterId] = waiter
+	return waiter.ch, s.noticeWaiterId
 }
 
+// removeNoticeWaiter removes the notice-waiter with the given ID.
 func (s *State) removeNoticeWaiter(waiterId int) {
-	s.noticeWaitersMu.Lock()
-	defer s.noticeWaitersMu.Unlock()
-
 	delete(s.noticeWaiters, waiterId)
 }
 
+// processNoticeWaiters loops through the list of notice-waiters, and wakes up
+// and sends to any that match the filters.
 func (s *State) processNoticeWaiters() {
-	s.noticeWaitersMu.Lock()
-	defer s.noticeWaitersMu.Unlock()
-
 	for _, waiter := range s.noticeWaiters {
 		notices := s.Notices(waiter.filters)
-		if len(notices) > 0 {
-			select {
-			case waiter.ch <- notices:
-				// Got matching notices, send them to related WaitNotices
-			case <-waiter.done:
-				// Will happen if WaitNotices times out
-			}
+		if len(notices) == 0 {
+			continue // no notices with these filters
+		}
+		select {
+		case waiter.ch <- notices:
+			// Got matching notices, send them to related WaitNotices
+		case <-waiter.done:
+			// Will happen if WaitNotices times out (it also waits on this done channel)
 		}
 	}
 }
