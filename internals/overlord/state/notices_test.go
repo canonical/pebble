@@ -122,6 +122,7 @@ func (s *noticesSuite) TestOccurrences(c *C) {
 	c.Assert(n["occurrences"], Equals, 1.0)
 }
 
+// TODO: this is racy -- probably should do AddNoticeWithTime and set a fake time
 func (s *noticesSuite) TestRepeatAfter(c *C) {
 	const repeatAfter = 50 * time.Millisecond
 
