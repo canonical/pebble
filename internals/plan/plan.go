@@ -733,10 +733,12 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 			}
 			errorMessages = append(errorMessages, fmt.Sprintf(`log target %q specifies unknown service %q`,
 				target.Name, serviceName))
+
 		}
 
 		if target.Location == "" {
 			errorMessages = append(errorMessages, fmt.Sprintf(`plan must define "location" for log target %q`, name))
+
 		}
 	}
 
