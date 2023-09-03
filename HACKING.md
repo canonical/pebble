@@ -3,6 +3,7 @@
 - [Running the daemon](#running-the-daemon)
 - [Using the CLI client](#using-the-cli-client)
 - [Using Curl to hit the API](#using-curl-to-hit-the-api)
+- [Code style](#code-style)
 - [Running the tests](#running-the-tests)
 - [Creating a release](#creating-a-release)
 
@@ -85,6 +86,27 @@ $ curl --unix-socket ~/pebble/.pebble.socket 'http://localhost/v1/services?names
 
 ## Code style
 
+### Commits
+
+Please format your commits following the [conventional commit](https://www.conventionalcommits.org/en/v1.0.0/#summary) style.
+
+Optionally, use the brackets to scope to a particular component where applicable.
+
+See below for some examples of commit headings:
+
+```
+feat: checks inherit context from services
+test: increase unit test stability
+feat(daemon): foo the bar correctly in the baz
+test(daemon): ensure the foo bars correctly in the baz
+ci(snap): upload the snap artefacts to Github
+chore(deps): update go.mod dependencies
+```
+
+Recommended prefixes are: `fix:`, `feat:`, `build:`, `chore:`, `ci:`, `docs:`, `style:`, `refactor:`,`perf:` and `test:`
+
+### Imports
+
 Pebble imports should be arranged in three groups:
 - standard library imports
 - third-party / non-Pebble imports
@@ -113,6 +135,18 @@ import (
 	"github.com/canonical/pebble/internals/systemd"
 	"github.com/canonical/pebble/internals/testutil"
 )
+```
+
+### Log and error messages
+
+**Log messages** (that is, those passed to `logger.Noticef` or `logger.Debugf`) should begin with a capital letter, and use "Cannot X" rather than "Error Xing":
+```go
+logger.Noticef("Cannot marshal logs to JSON: %v", err)
+```
+
+**Error messages** should be lowercase, and again use "cannot ..." instead of "error ...":
+```go
+fmt.Errorf("cannot create log client: %w", err)
 ```
 
 

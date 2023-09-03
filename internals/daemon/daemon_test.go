@@ -32,12 +32,13 @@ import (
 	"github.com/gorilla/mux"
 	. "gopkg.in/check.v1"
 
+	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/osutil"
+	"github.com/canonical/pebble/internals/overlord"
 	"github.com/canonical/pebble/internals/overlord/patch"
 	"github.com/canonical/pebble/internals/overlord/restart"
 	"github.com/canonical/pebble/internals/overlord/standby"
 	"github.com/canonical/pebble/internals/overlord/state"
-	"github.com/canonical/pebble/internals/reaper"
 	"github.com/canonical/pebble/internals/systemd"
 	"github.com/canonical/pebble/internals/testutil"
 )
@@ -59,8 +60,6 @@ type daemonSuite struct {
 var _ = Suite(&daemonSuite{})
 
 func (s *daemonSuite) SetUpTest(c *C) {
-	err := reaper.Start()
-	c.Assert(err, IsNil)
 	s.pebbleDir = c.MkDir()
 	s.statePath = filepath.Join(s.pebbleDir, ".pebble.state")
 	systemdSdNotify = func(notif string) error {
@@ -74,8 +73,6 @@ func (s *daemonSuite) TearDownTest(c *C) {
 	s.notified = nil
 	s.authorized = false
 	s.err = nil
-	err := reaper.Stop()
-	c.Assert(err, IsNil)
 }
 
 func (s *daemonSuite) newDaemon(c *C) *Daemon {
@@ -97,6 +94,75 @@ type fakeHandler struct {
 
 func (h *fakeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.lastMethod = r.Method
+}
+
+type fakeManager struct {
+	id          string
+	ensureCalls int
+}
+
+func (m *fakeManager) Ensure() error {
+	m.ensureCalls++
+	return nil
+}
+
+type fakeExtension struct {
+	mgr fakeManager
+}
+
+func (f *fakeExtension) ExtraManagers(o *overlord.Overlord) ([]overlord.StateManager, error) {
+	f.mgr = fakeManager{id: "expected", ensureCalls: 0}
+	result := []overlord.StateManager{&f.mgr}
+	return result, nil
+}
+
+type otherFakeExtension struct{}
+
+func (otherFakeExtension) ExtraManagers(o *overlord.Overlord) ([]overlord.StateManager, error) {
+	return nil, nil
+}
+
+func (s *daemonSuite) TestExternalManager(c *C) {
+	d, err := New(&Options{
+		Dir:               s.pebbleDir,
+		SocketPath:        s.socketPath,
+		HTTPAddress:       s.httpAddress,
+		OverlordExtension: &fakeExtension{},
+	})
+	c.Assert(err, IsNil)
+
+	err = d.overlord.StateEngine().Ensure()
+	c.Assert(err, IsNil)
+	extension, ok := d.overlord.Extension().(*fakeExtension)
+	c.Assert(ok, Equals, true)
+	manager := extension.mgr
+	c.Assert(manager.id, Equals, "expected")
+	c.Assert(manager.ensureCalls, Equals, 1)
+}
+
+func (s *daemonSuite) TestNoExtension(c *C) {
+	d, err := New(&Options{
+		Dir:         s.pebbleDir,
+		SocketPath:  s.socketPath,
+		HTTPAddress: s.httpAddress,
+	})
+	c.Assert(err, IsNil)
+
+	extension := d.overlord.Extension()
+	c.Assert(extension, IsNil)
+}
+
+func (s *daemonSuite) TestWrongExtension(c *C) {
+	d, err := New(&Options{
+		Dir:               s.pebbleDir,
+		SocketPath:        s.socketPath,
+		HTTPAddress:       s.httpAddress,
+		OverlordExtension: &fakeExtension{},
+	})
+	c.Assert(err, IsNil)
+
+	_, ok := d.overlord.Extension().(*otherFakeExtension)
+	c.Assert(ok, Equals, false)
 }
 
 func (s *daemonSuite) TestAddCommand(c *C) {
@@ -693,7 +759,7 @@ func (s *daemonSuite) TestRestartSystemWiring(c *C) {
 	oldRebootNoticeWait := rebootNoticeWait
 	oldRebootWaitTimeout := rebootWaitTimeout
 	defer func() {
-		reboot = rebootImpl
+		rebootHandler = systemdModeReboot
 		rebootNoticeWait = oldRebootNoticeWait
 		rebootWaitTimeout = oldRebootWaitTimeout
 	}()
@@ -701,7 +767,7 @@ func (s *daemonSuite) TestRestartSystemWiring(c *C) {
 	rebootNoticeWait = 150 * time.Millisecond
 
 	var delays []time.Duration
-	reboot = func(d time.Duration) error {
+	rebootHandler = func(d time.Duration) error {
 		delays = append(delays, d)
 		return nil
 	}
@@ -768,7 +834,7 @@ func (s *daemonSuite) TestRebootHelper(c *C) {
 	}
 
 	for _, t := range tests {
-		err := reboot(t.delay)
+		err := rebootHandler(t.delay)
 		c.Assert(err, IsNil)
 		c.Check(cmd.Calls(), DeepEquals, [][]string{
 			{"shutdown", "-r", t.delayArg, "reboot scheduled to update the system"},
@@ -803,7 +869,7 @@ func (s *daemonSuite) TestRestartShutdownWithSigtermInBetween(c *C) {
 	}()
 	rebootNoticeWait = 150 * time.Millisecond
 
-	cmd := testutil.FakeCommand(c, "shutdown", "", true)
+	cmd := testutil.FakeCommand(c, "shutdown", "", false)
 	defer cmd.Restore()
 
 	d := s.newDaemon(c)
@@ -835,7 +901,7 @@ func (s *daemonSuite) TestRestartShutdown(c *C) {
 	rebootWaitTimeout = 100 * time.Millisecond
 	rebootNoticeWait = 150 * time.Millisecond
 
-	cmd := testutil.FakeCommand(c, "shutdown", "", true)
+	cmd := testutil.FakeCommand(c, "shutdown", "", false)
 	defer cmd.Restore()
 
 	d := s.newDaemon(c)
@@ -1175,4 +1241,130 @@ services:
 	tasks := change.Tasks()
 	c.Assert(tasks, HasLen, 1)
 	c.Check(tasks[0].Kind(), Equals, "stop")
+}
+
+type rebootSuite struct{}
+
+var _ = Suite(&rebootSuite{})
+
+func (s *rebootSuite) TestSyscallPosRebootDelay(c *C) {
+	wait := make(chan struct{})
+	defer FakeSyscallSync(func() {})()
+	defer FakeSyscallReboot(func(cmd int) error {
+		if cmd == syscall.LINUX_REBOOT_CMD_RESTART {
+			close(wait)
+		}
+		return nil
+	})()
+
+	period := 25 * time.Millisecond
+	syscallModeReboot(period)
+	start := time.Now()
+	select {
+	case <-wait:
+	case <-time.After(10 * time.Second):
+		c.Fatal("syscall did not take place and we timed out")
+	}
+	elapsed := time.Now().Sub(start)
+	c.Assert(elapsed >= period, Equals, true)
+}
+
+func (s *rebootSuite) TestSyscallNegRebootDelay(c *C) {
+	wait := make(chan struct{})
+	defer FakeSyscallSync(func() {})()
+	defer FakeSyscallReboot(func(cmd int) error {
+		if cmd == syscall.LINUX_REBOOT_CMD_RESTART {
+			close(wait)
+		}
+		return nil
+	})()
+
+	// Negative periods will be zeroed, so do not fear the huge negative.
+	// We do supply a rather big value here because this test is
+	// effectively a race, but given the huge timeout, it is not going
+	// to be a problem (c).
+	period := 10 * time.Second
+	go func() {
+		// We need a different thread for the unbuffered wait.
+		syscallModeReboot(-period)
+	}()
+	start := time.Now()
+	select {
+	case <-wait:
+	case <-time.After(10 * time.Second):
+		c.Fatal("syscall did not take place and we timed out")
+	}
+	elapsed := time.Now().Sub(start)
+	c.Assert(elapsed < period, Equals, true)
+}
+
+func (s *rebootSuite) TestSetSyscall(c *C) {
+	wait := make(chan struct{})
+	defer FakeSyscallSync(func() {})()
+	defer FakeSyscallReboot(func(cmd int) error {
+		if cmd == syscall.LINUX_REBOOT_CMD_RESTART {
+			close(wait)
+		}
+		return nil
+	})()
+
+	// We know the default is systemdReboot otherwise the unit tests
+	// above will fail. We need to check the switch works.
+	SetRebootMode(SyscallMode)
+	defer SetRebootMode(SystemdMode)
+
+	err := make(chan error)
+	go func() {
+		// We need a different thread for the unbuffered wait.
+		err <- rebootHandler(0)
+	}()
+
+	select {
+	case <-wait:
+	case <-time.After(10 * time.Second):
+		c.Fatal("syscall did not take place and we timed out")
+	}
+	c.Assert(<-err, IsNil)
+}
+
+type fakeLogger struct {
+	msg      string
+	noticeCh chan int
+}
+
+func (f *fakeLogger) Notice(msg string) {
+	f.msg = msg
+	f.noticeCh <- 1
+}
+
+func (f *fakeLogger) Debug(msg string) {}
+
+func (s *rebootSuite) TestSyscallRebootError(c *C) {
+	defer FakeSyscallSync(func() {})()
+	defer FakeSyscallReboot(func(cmd int) error {
+		return fmt.Errorf("-EPERM")
+	})()
+
+	// We know the default is systemdReboot otherwise the unit tests
+	// above will fail. We need to check the switch works.
+	SetRebootMode(SyscallMode)
+	defer SetRebootMode(SystemdMode)
+
+	complete := make(chan int)
+	l := fakeLogger{noticeCh: complete}
+	old := logger.SetLogger(&l)
+	defer logger.SetLogger(old)
+
+	err := make(chan error)
+	go func() {
+		// We need a different thread for the unbuffered wait.
+		err <- rebootHandler(0)
+	}()
+	select {
+	case <-complete:
+	case <-time.After(10 * time.Second):
+		c.Fatal("syscall did not take place and we timed out")
+	}
+	c.Assert(l.msg, Matches, "*-EPERM")
+	c.Assert(<-err, IsNil)
 }

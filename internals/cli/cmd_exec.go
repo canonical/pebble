@@ -43,7 +43,8 @@ arguments using "--", for example:
 `
 
 type cmdExec struct {
-	clientMixin
+	client *client.Client
+
 	WorkingDir     string        `short:"w"`
 	Env            []string      `long:"env"`
 	UserID         *int          `long:"uid"`
@@ -81,7 +82,9 @@ func init() {
 			"-I":        "Disable interactive mode and use a pipe for stdin",
 		},
 		PassAfterNonOption: true,
-		Builder:            func() flags.Commander { return &cmdExec{} },
+		New: func(opts *CmdOptions) flags.Commander {
+			return &cmdExec{client: opts.Client}
+		},
 	})
 }
 
