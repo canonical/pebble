@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"sync"
 	"time"
 
@@ -334,49 +335,88 @@ func (s *noticesSuite) TestWaitNoticesNew(c *C) {
 	c.Assert(n["key"].(string), Equals, "example.com/y")
 }
 
-// TODO: add test of WaitNotices timing out (the different cases)
-
-// TODO: do this in a loop with concurrency 100 or so and short time.Sleep()s between each
-func (s *noticesSuite) TestWaitNoticesMultipleWaiters(c *C) {
+func (s *noticesSuite) TestWaitNoticesTimeout(c *C) {
 	st := state.New(nil)
-	var wg sync.WaitGroup
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		st.Lock()
-		defer st.Unlock()
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-		defer cancel()
-		notices, err := st.WaitNotices(ctx, state.NoticeFilters{Key: "example.com/x"})
-		c.Assert(err, IsNil)
-		c.Assert(notices, HasLen, 1)
-		n := noticeToMap(c, notices[0])
-		c.Assert(n["key"].(string), Equals, "example.com/x")
-	}()
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		st.Lock()
-		defer st.Unlock()
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-		defer cancel()
-		notices, err := st.WaitNotices(ctx, state.NoticeFilters{Key: "example.com/y"})
-		c.Assert(err, IsNil)
-		c.Assert(notices, HasLen, 1)
-		n := noticeToMap(c, notices[0])
-		c.Assert(n["key"].(string), Equals, "example.com/y")
-	}()
-
-	time.Sleep(10 * time.Millisecond)
 	st.Lock()
-	st.AddNotice(state.NoticeClient, "example.com/x", nil, 0)
-	st.AddNotice(state.NoticeClient, "example.com/y", nil, 0)
-	st.Unlock()
+	defer st.Unlock()
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
+	defer cancel()
+	notices, err := st.WaitNotices(ctx, state.NoticeFilters{})
+	c.Assert(err, ErrorMatches, "context deadline exceeded")
+	c.Assert(notices, HasLen, 0)
+}
+
+func (s *noticesSuite) TestWaitNoticesLongPoll(c *C) {
+	st := state.New(nil)
+	st.Lock()
+	defer st.Unlock()
+
+	go func() {
+		for i := 0; i < 10; i++ {
+			st.Lock()
+			st.AddNotice(state.NoticeClient, fmt.Sprintf("a.b/%d", i), nil, 0)
+			st.Unlock()
+			time.Sleep(time.Millisecond)
+		}
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	var after time.Time
+	for total := 0; total < 10; {
+		notices, err := st.WaitNotices(ctx, state.NoticeFilters{After: after})
+		c.Assert(err, IsNil)
+		c.Assert(len(notices) > 0, Equals, true)
+		total += len(notices)
+		n := noticeToMap(c, notices[len(notices)-1])
+		lastRepeated, err := time.Parse(time.RFC3339, n["last-repeated"].(string))
+		c.Assert(err, IsNil)
+		after = lastRepeated
+	}
+}
+
+func (s *noticesSuite) TestWaitNoticesConcurrent(c *C) {
+	const numWaiters = 100
+
+	st := state.New(nil)
+
+	var wg sync.WaitGroup
+	for i := 0; i < numWaiters; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			st.Lock()
+			defer st.Unlock()
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+			key := fmt.Sprintf("a.b/%d", i)
+			notices, err := st.WaitNotices(ctx, state.NoticeFilters{Key: key})
+			c.Assert(err, IsNil)
+			c.Assert(notices, HasLen, 1)
+			n := noticeToMap(c, notices[0])
+			c.Assert(n["key"].(string), Equals, key)
+		}(i)
+	}
+
+	for i := 0; i < numWaiters; i++ {
+		st.Lock()
+		st.AddNotice(state.NoticeClient, fmt.Sprintf("a.b/%d", i), nil, 0)
+		st.Unlock()
+		time.Sleep(time.Microsecond)
+	}
 
 	// Wait for WaitNotice goroutines to finish
-	wg.Wait()
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		done <- struct{}{}
+	}()
+	select {
+	case <-time.After(time.Second):
+		c.Fatalf("timed out waiting for WaitNotice goroutines to finish")
+	case <-done:
+	}
 }
 
 // noticeToMap converts a Notice to a map using a JSON marshal-unmarshal round trip.
