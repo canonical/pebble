@@ -371,14 +371,17 @@ func (s *State) removeNoticeWaiter(waiterId int) {
 // processNoticeWaiters loops through the list of notice-waiters, and wakes up
 // and sends to any that match the filters.
 func (s *State) processNoticeWaiters() {
-	for _, waiter := range s.noticeWaiters {
+	for waiterId, waiter := range s.noticeWaiters {
 		notices := s.Notices(waiter.filters)
 		if len(notices) == 0 {
 			continue // no notices with these filters
 		}
 		select {
 		case waiter.ch <- notices:
-			// Got matching notices, send them to related WaitNotices
+			// Got matching notices, send them to related WaitNotices.
+			// And remove the waiter so we don't try to send to its channel again
+			// if another notice comes in.
+			s.removeNoticeWaiter(waiterId)
 		case <-waiter.done:
 			// Will happen if WaitNotices times out (it also waits on this done channel)
 		}
