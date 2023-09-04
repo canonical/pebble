@@ -25,9 +25,13 @@ import (
 	"github.com/canonical/pebble/internals/logger"
 )
 
-const MaxNoticeKeyLength = 255
+const (
+	MaxNoticeKeyLength = 255
 
-// Notice represents an aggregated notice. The combination of Type and Key is unique.
+	noticeExpireAfter = 7 * 24 * time.Hour
+)
+
+// Notice represents an aggregated notice. The combination of type and key is unique.
 type Notice struct {
 	// Server-generated unique ID for this notice (a surrogate key). Users
 	// shouldn't rely on this, but this will be a monotonically increasing
@@ -45,7 +49,7 @@ type Notice struct {
 	// to add a notice with a longer key).
 	key string
 
-	// The first time one of these notices (Type and Key combination) occurred.
+	// The first time one of these notices (type and key combination) occurred.
 	firstOccurred time.Time
 
 	// The last time one of these notices occurred.
@@ -58,7 +62,7 @@ type Notice struct {
 	// The number of times one of these notices has occurred.
 	occurrences int
 
-	// Additional data for the last occurrence of this Type and Key combination.
+	// Additional data for the last occurrence of this type and key combination.
 	lastData map[string]string
 
 	// How much time after one of these last occurred should we allow it to repeat.
@@ -179,7 +183,7 @@ func (s *State) AddNotice(noticeType NoticeType, key string, data map[string]str
 
 func (s *State) addNoticeWithTime(now time.Time, noticeType NoticeType, key string, data map[string]string, repeatAfter time.Duration) {
 	if noticeType == "" || key == "" || len(key) > MaxNoticeKeyLength {
-		// Programming error
+		// Programming error (max key length has already been checked by API)
 		logger.Panicf("Internal error, please report: attempted to add invalid notice (type %q, key %q)",
 			noticeType, key)
 	}
@@ -187,10 +191,11 @@ func (s *State) addNoticeWithTime(now time.Time, noticeType NoticeType, key stri
 	s.writing()
 
 	now = now.UTC()
+	newOrRepeated := false
 	uniqueKey := uniqueNoticeKey(noticeType, key)
 	notice, ok := s.notices[uniqueKey]
-	newOrRepeated := false
 	if !ok {
+		// First occurrence of this notice type+key
 		s.noticeId++
 		notice = &Notice{
 			id:            strconv.Itoa(s.noticeId),
@@ -199,12 +204,13 @@ func (s *State) addNoticeWithTime(now time.Time, noticeType NoticeType, key stri
 			firstOccurred: now,
 			lastRepeated:  now,
 			repeatAfter:   repeatAfter,
-			expireAfter:   7 * 24 * time.Hour, // one week
+			expireAfter:   noticeExpireAfter,
 			occurrences:   1,
 		}
 		s.notices[uniqueKey] = notice
 		newOrRepeated = true
 	} else {
+		// Additional occurrence, update existing notice
 		notice.occurrences++
 		if repeatAfter != 0 && now.After(notice.lastRepeated.Add(repeatAfter)) {
 			// Update last repeated time if repeat-after time has elapsed
@@ -225,7 +231,7 @@ func uniqueNoticeKey(noticeType NoticeType, key string) string {
 	return string(noticeType) + ":" + key
 }
 
-// NoticeFilters allows callers to filter Notices() by various fields.
+// NoticeFilters allows filter notices by various fields.
 type NoticeFilters struct {
 	// Type, if set, includes only notices of this type.
 	Type NoticeType
