@@ -68,6 +68,10 @@ type Notice struct {
 	expireAfter time.Duration
 }
 
+func (n *Notice) String() string {
+	return fmt.Sprintf("Notice %s (%s:%s)", n.id, n.noticeType, n.key)
+}
+
 // expired reports whether this notice has expired (relative to the given "now").
 func (n *Notice) expired(now time.Time) bool {
 	return n.lastOccurred.Add(n.expireAfter).Before(now)

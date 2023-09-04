@@ -77,3 +77,8 @@ var (
 func (s *State) AddNoticeWithTime(now time.Time, noticeType NoticeType, key string, data map[string]string, repeatAfter time.Duration) {
 	s.addNoticeWithTime(now, noticeType, key, data, repeatAfter)
 }
+
+// Return total number of notices, including expired ones that haven't yet been pruned.
+func (s *State) NumNotices() int {
+	return len(s.notices)
+}

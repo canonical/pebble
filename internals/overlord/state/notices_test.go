@@ -15,6 +15,7 @@
 package state_test
 
 import (
+	"bytes"
 	"encoding/json"
 	"time"
 
@@ -153,6 +154,141 @@ func (s *noticesSuite) TestRepeatAfter(c *C) {
 	newLastRepeated, err := time.Parse(time.RFC3339, n["last-repeated"].(string))
 	c.Assert(err, IsNil)
 	c.Assert(newLastRepeated.After(lastRepeated), Equals, true)
+}
+
+func (s *noticesSuite) TestNoticesFilterType(c *C) {
+	st := state.New(nil)
+	st.Lock()
+	defer st.Unlock()
+
+	st.AddNotice(state.NoticeClient, "foo.com/bar", nil, 0)
+	st.AddNotice(state.NoticeChangeUpdate, "123", nil, 0)
+	st.AddNotice(state.NoticeWarning, "Warning 1!", nil, 0)
+	time.Sleep(time.Microsecond)
+	st.AddNotice(state.NoticeWarning, "Warning 2!", nil, 0)
+
+	notices := st.Notices(state.NoticeFilters{Type: state.NoticeWarning})
+	c.Assert(notices, HasLen, 2)
+	n := noticeToMap(c, notices[0])
+	c.Assert(n["type"].(string), Equals, "warning")
+	c.Assert(n["key"].(string), Equals, "Warning 1!")
+	n = noticeToMap(c, notices[1])
+	c.Assert(n["type"].(string), Equals, "warning")
+	c.Assert(n["key"].(string), Equals, "Warning 2!")
+}
+
+func (s *noticesSuite) TestNoticesFilterKey(c *C) {
+	st := state.New(nil)
+	st.Lock()
+	defer st.Unlock()
+
+	st.AddNotice(state.NoticeClient, "foo.com/bar", nil, 0)
+	st.AddNotice(state.NoticeClient, "example.com/x", nil, 0)
+	st.AddNotice(state.NoticeClient, "foo.com/baz", nil, 0)
+
+	notices := st.Notices(state.NoticeFilters{Key: "example.com/x"})
+	c.Assert(notices, HasLen, 1)
+	n := noticeToMap(c, notices[0])
+	c.Assert(n["type"].(string), Equals, "client")
+	c.Assert(n["key"].(string), Equals, "example.com/x")
+}
+
+func (s *noticesSuite) TestNoticesFilterAfter(c *C) {
+	st := state.New(nil)
+	st.Lock()
+	defer st.Unlock()
+
+	st.AddNotice(state.NoticeClient, "foo.com/x", nil, 0)
+	notices := st.Notices(state.NoticeFilters{})
+	c.Assert(notices, HasLen, 1)
+	n := noticeToMap(c, notices[0])
+	lastRepeated, err := time.Parse(time.RFC3339, n["last-repeated"].(string))
+	c.Assert(err, IsNil)
+
+	time.Sleep(time.Microsecond) // ensure there's time between the occurrences
+	st.AddNotice(state.NoticeClient, "foo.com/y", nil, 0)
+
+	notices = st.Notices(state.NoticeFilters{After: lastRepeated})
+	c.Assert(notices, HasLen, 1)
+	n = noticeToMap(c, notices[0])
+	c.Assert(n["type"].(string), Equals, "client")
+	c.Assert(n["key"].(string), Equals, "foo.com/y")
+}
+
+func (s *noticesSuite) TestNotice(c *C) {
+	st := state.New(nil)
+	st.Lock()
+	defer st.Unlock()
+
+	st.AddNotice(state.NoticeClient, "foo.com/x", nil, 0)
+	time.Sleep(time.Microsecond) // ensure there's time between the occurrences
+	st.AddNotice(state.NoticeClient, "foo.com/y", nil, 0)
+	time.Sleep(time.Microsecond) // ensure there's time between the occurrences
+	st.AddNotice(state.NoticeClient, "foo.com/z", nil, 0)
+
+	notices := st.Notices(state.NoticeFilters{})
+	c.Assert(notices, HasLen, 3)
+	n := noticeToMap(c, notices[1])
+	noticeId := n["id"].(string)
+
+	notice := st.Notice(noticeId)
+	c.Assert(notice, NotNil)
+	n = noticeToMap(c, notice)
+	c.Assert(n["type"].(string), Equals, "client")
+	c.Assert(n["key"].(string), Equals, "foo.com/y")
+}
+
+func (s *noticesSuite) TestEmptyState(c *C) {
+	st := state.New(nil)
+	st.Lock()
+	defer st.Unlock()
+
+	notices := st.Notices(state.NoticeFilters{})
+	c.Check(notices, HasLen, 0)
+}
+
+func (s *noticesSuite) TestCheckpoint(c *C) {
+	backend := &fakeStateBackend{}
+	st := state.New(backend)
+	st.Lock()
+	st.AddNotice(state.NoticeClient, "foo.com/bar", nil, 0)
+	st.Unlock()
+	c.Assert(backend.checkpoints, HasLen, 1)
+
+	st2, err := state.ReadState(nil, bytes.NewReader(backend.checkpoints[0]))
+	c.Assert(err, IsNil)
+	st2.Lock()
+	defer st2.Unlock()
+
+	notices := st2.Notices(state.NoticeFilters{})
+	c.Assert(notices, HasLen, 1)
+	n := noticeToMap(c, notices[0])
+	c.Assert(n["type"], Equals, "client")
+	c.Assert(n["key"], Equals, "foo.com/bar")
+}
+
+func (s *noticesSuite) TestDeleteExpired(c *C) {
+	st := state.New(nil)
+	st.Lock()
+	defer st.Unlock()
+
+	old := time.Now().Add(-8 * 24 * time.Hour)
+	st.AddNoticeWithTime(old, state.NoticeClient, "foo.com/w", nil, 0)
+	st.AddNoticeWithTime(old, state.NoticeClient, "foo.com/x", nil, 0)
+	st.AddNotice(state.NoticeClient, "foo.com/y", nil, 0)
+	time.Sleep(time.Microsecond) // ensure there's time between the occurrences
+	st.AddNotice(state.NoticeClient, "foo.com/z", nil, 0)
+
+	c.Assert(st.NumNotices(), Equals, 4)
+	st.Prune(0, 0, 0)
+	c.Assert(st.NumNotices(), Equals, 2)
+
+	notices := st.Notices(state.NoticeFilters{})
+	c.Assert(notices, HasLen, 2)
+	n := noticeToMap(c, notices[0])
+	c.Assert(n["key"], Equals, "foo.com/y")
+	n = noticeToMap(c, notices[1])
+	c.Assert(n["key"], Equals, "foo.com/z")
 }
 
 // noticeToMap converts a Notice to a map using a JSON marshal-unmarshal round trip.

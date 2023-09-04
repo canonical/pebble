@@ -374,7 +374,7 @@ func (s *State) tasksIn(tids []string) []*Task {
 //   - it removes tasks unlinked to changes after pruneWait. When there are more
 //     changes than the limit set via "maxReadyChanges" those changes in ready
 //     state will also removed even if they are below the pruneWait duration.
-//   - it removes expired warnings.
+//   - it removes expired warnings and notices
 func (s *State) Prune(pruneWait, abortWait time.Duration, maxReadyChanges int) {
 	now := time.Now()
 	pruneLimit := now.Add(-pruneWait)
