@@ -334,6 +334,8 @@ func (s *noticesSuite) TestWaitNoticesNew(c *C) {
 	c.Assert(n["key"].(string), Equals, "example.com/y")
 }
 
+// TODO: add test of WaitNotices timing out (the different cases)
+
 // TODO: do this in a loop with concurrency 100 or so and short time.Sleep()s between each
 func (s *noticesSuite) TestWaitNoticesMultipleWaiters(c *C) {
 	st := state.New(nil)
