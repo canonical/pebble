@@ -16,7 +16,9 @@ package state_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"sync"
 	"time"
 
 	. "gopkg.in/check.v1"
@@ -289,6 +291,90 @@ func (s *noticesSuite) TestDeleteExpired(c *C) {
 	c.Assert(n["key"], Equals, "foo.com/y")
 	n = noticeToMap(c, notices[1])
 	c.Assert(n["key"], Equals, "foo.com/z")
+}
+
+func (s *noticesSuite) TestWaitNoticesExisting(c *C) {
+	st := state.New(nil)
+	st.Lock()
+	defer st.Unlock()
+
+	st.AddNotice(state.NoticeClient, "foo.com/bar", nil, 0)
+	st.AddNotice(state.NoticeClient, "example.com/x", nil, 0)
+	st.AddNotice(state.NoticeClient, "foo.com/baz", nil, 0)
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	notices, err := st.WaitNotices(ctx, state.NoticeFilters{Key: "example.com/x"})
+	c.Assert(err, IsNil)
+	c.Assert(notices, HasLen, 1)
+	n := noticeToMap(c, notices[0])
+	c.Assert(n["type"].(string), Equals, "client")
+	c.Assert(n["key"].(string), Equals, "example.com/x")
+}
+
+func (s *noticesSuite) TestWaitNoticesNew(c *C) {
+	st := state.New(nil)
+
+	go func() {
+		time.Sleep(10 * time.Millisecond)
+		st.Lock()
+		defer st.Unlock()
+		st.AddNotice(state.NoticeClient, "example.com/x", nil, 0)
+		st.AddNotice(state.NoticeClient, "example.com/y", nil, 0)
+	}()
+
+	st.Lock()
+	defer st.Unlock()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	notices, err := st.WaitNotices(ctx, state.NoticeFilters{Key: "example.com/y"})
+	c.Assert(err, IsNil)
+	c.Assert(notices, HasLen, 1)
+	n := noticeToMap(c, notices[0])
+	c.Assert(n["key"].(string), Equals, "example.com/y")
+}
+
+// TODO: do this in a loop with concurrency 100 or so and short time.Sleep()s between each
+func (s *noticesSuite) TestWaitNoticesMultipleWaiters(c *C) {
+	st := state.New(nil)
+	var wg sync.WaitGroup
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		st.Lock()
+		defer st.Unlock()
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		notices, err := st.WaitNotices(ctx, state.NoticeFilters{Key: "example.com/x"})
+		c.Assert(err, IsNil)
+		c.Assert(notices, HasLen, 1)
+		n := noticeToMap(c, notices[0])
+		c.Assert(n["key"].(string), Equals, "example.com/x")
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		st.Lock()
+		defer st.Unlock()
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		notices, err := st.WaitNotices(ctx, state.NoticeFilters{Key: "example.com/y"})
+		c.Assert(err, IsNil)
+		c.Assert(notices, HasLen, 1)
+		n := noticeToMap(c, notices[0])
+		c.Assert(n["key"].(string), Equals, "example.com/y")
+	}()
+
+	time.Sleep(10 * time.Millisecond)
+	st.Lock()
+	st.AddNotice(state.NoticeClient, "example.com/x", nil, 0)
+	st.AddNotice(state.NoticeClient, "example.com/y", nil, 0)
+	st.Unlock()
+
+	// Wait for WaitNotice goroutines to finish
+	wg.Wait()
 }
 
 // noticeToMap converts a Notice to a map using a JSON marshal-unmarshal round trip.
