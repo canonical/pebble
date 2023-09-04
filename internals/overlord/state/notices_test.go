@@ -122,17 +122,15 @@ func (s *noticesSuite) TestOccurrences(c *C) {
 	c.Assert(n["occurrences"], Equals, 1.0)
 }
 
-// TODO: this is racy -- probably should do AddNoticeWithTime and set a fake time
 func (s *noticesSuite) TestRepeatAfter(c *C) {
-	const repeatAfter = 50 * time.Millisecond
+	const repeatAfter = 10 * time.Second
 
 	st := state.New(nil)
 	st.Lock()
 	defer st.Unlock()
 
-	start := time.Now()
 	st.AddNotice(state.NoticeClient, "foo.com/bar", nil, repeatAfter)
-	time.Sleep(time.Microsecond)
+	time.Sleep(time.Microsecond) // ensure there's time between the occurrences
 	st.AddNotice(state.NoticeClient, "foo.com/bar", nil, repeatAfter)
 
 	notices := st.Notices(state.NoticeFilters{})
@@ -143,25 +141,18 @@ func (s *noticesSuite) TestRepeatAfter(c *C) {
 	lastRepeated, err := time.Parse(time.RFC3339, n["last-repeated"].(string))
 	c.Assert(err, IsNil)
 
-	// LastRepeated won't yet be updated as we only waited 1us (repeat-after is 50ms)
+	// LastRepeated won't yet be updated as we only waited 1us (repeat-after is long)
 	c.Assert(lastRepeated.Equal(firstOccurred), Equals, true)
 
-	// Wait till last-repeated updates (should only be a few iterations)
-	for {
-		time.Sleep(10 * time.Millisecond)
-		st.AddNotice(state.NoticeClient, "foo.com/bar", nil, repeatAfter)
-		notices = st.Notices(state.NoticeFilters{})
-		c.Assert(notices, HasLen, 1)
-		n = noticeToMap(c, notices[0])
-		newLastRepeated, err := time.Parse(time.RFC3339, n["last-repeated"].(string))
-		c.Assert(err, IsNil)
-		if newLastRepeated.After(lastRepeated) {
-			break
-		}
-		if time.Since(start) > time.Second {
-			c.Fatalf("timed out waiting for notice to repeat")
-		}
-	}
+	// Add a notice (with faked time) after a long time and ensure it has repeated
+	future := time.Now().Add(repeatAfter)
+	st.AddNoticeWithTime(future, state.NoticeClient, "foo.com/bar", nil, repeatAfter)
+	notices = st.Notices(state.NoticeFilters{})
+	c.Assert(notices, HasLen, 1)
+	n = noticeToMap(c, notices[0])
+	newLastRepeated, err := time.Parse(time.RFC3339, n["last-repeated"].(string))
+	c.Assert(err, IsNil)
+	c.Assert(newLastRepeated.After(lastRepeated), Equals, true)
 }
 
 // noticeToMap converts a Notice to a map using a JSON marshal-unmarshal round trip.

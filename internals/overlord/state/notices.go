@@ -170,6 +170,10 @@ func NoticeTypeFromString(s string) NoticeType {
 // AddNotice adds an occurrence of a notice with the specified type and key
 // and key-value data.
 func (s *State) AddNotice(noticeType NoticeType, key string, data map[string]string, repeatAfter time.Duration) {
+	s.addNoticeWithTime(time.Now(), noticeType, key, data, repeatAfter)
+}
+
+func (s *State) addNoticeWithTime(now time.Time, noticeType NoticeType, key string, data map[string]string, repeatAfter time.Duration) {
 	if noticeType == "" || key == "" || len(key) > MaxNoticeKeyLength {
 		// Programming error
 		logger.Panicf("Internal error, please report: attempted to add invalid notice (type %q, key %q)",
@@ -178,7 +182,7 @@ func (s *State) AddNotice(noticeType NoticeType, key string, data map[string]str
 
 	s.writing()
 
-	now := time.Now().UTC()
+	now = now.UTC()
 	uniqueKey := uniqueNoticeKey(noticeType, key)
 	notice, ok := s.notices[uniqueKey]
 	newOrRepeated := false

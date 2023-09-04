@@ -73,3 +73,7 @@ var (
 	ErrNoWarningExpireAfter = errNoWarningExpireAfter
 	ErrNoWarningRepeatAfter = errNoWarningRepeatAfter
 )
+
+func (s *State) AddNoticeWithTime(now time.Time, noticeType NoticeType, key string, data map[string]string, repeatAfter time.Duration) {
+	s.addNoticeWithTime(now, noticeType, key, data, repeatAfter)
+}
