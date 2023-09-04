@@ -93,6 +93,11 @@ type State struct {
 	changes  map[string]*Change
 	tasks    map[string]*Task
 	warnings map[string]*Warning
+	notices  map[string]*Notice
+	noticeId int
+
+	noticeWaiters  map[int]noticeWaiter
+	noticeWaiterId int
 
 	modified bool
 
@@ -102,13 +107,15 @@ type State struct {
 // New returns a new empty state.
 func New(backend Backend) *State {
 	return &State{
-		backend:  backend,
-		data:     make(customData),
-		changes:  make(map[string]*Change),
-		tasks:    make(map[string]*Task),
-		warnings: make(map[string]*Warning),
-		modified: true,
-		cache:    make(map[interface{}]interface{}),
+		backend:       backend,
+		data:          make(customData),
+		changes:       make(map[string]*Change),
+		tasks:         make(map[string]*Task),
+		warnings:      make(map[string]*Warning),
+		notices:       make(map[string]*Notice),
+		noticeWaiters: make(map[int]noticeWaiter),
+		modified:      true,
+		cache:         make(map[interface{}]interface{}),
 	}
 }
 
@@ -146,6 +153,7 @@ type marshalledState struct {
 	Changes  map[string]*Change          `json:"changes"`
 	Tasks    map[string]*Task            `json:"tasks"`
 	Warnings []*Warning                  `json:"warnings,omitempty"`
+	Notices  []*Notice                   `json:"notices,omitempty"`
 
 	LastChangeId int `json:"last-change-id"`
 	LastTaskId   int `json:"last-task-id"`
@@ -160,6 +168,7 @@ func (s *State) MarshalJSON() ([]byte, error) {
 		Changes:  s.changes,
 		Tasks:    s.tasks,
 		Warnings: s.flattenWarnings(),
+		Notices:  s.flattenNotices(NoticeFilters{}),
 
 		LastTaskId:   s.lastTaskId,
 		LastChangeId: s.lastChangeId,
@@ -179,6 +188,7 @@ func (s *State) UnmarshalJSON(data []byte) error {
 	s.changes = unmarshalled.Changes
 	s.tasks = unmarshalled.Tasks
 	s.unflattenWarnings(unmarshalled.Warnings)
+	s.unflattenNotices(unmarshalled.Notices)
 	s.lastChangeId = unmarshalled.LastChangeId
 	s.lastTaskId = unmarshalled.LastTaskId
 	s.lastLaneId = unmarshalled.LastLaneId
@@ -364,7 +374,7 @@ func (s *State) tasksIn(tids []string) []*Task {
 //   - it removes tasks unlinked to changes after pruneWait. When there are more
 //     changes than the limit set via "maxReadyChanges" those changes in ready
 //     state will also removed even if they are below the pruneWait duration.
-//   - it removes expired warnings.
+//   - it removes expired warnings and notices
 func (s *State) Prune(pruneWait, abortWait time.Duration, maxReadyChanges int) {
 	now := time.Now()
 	pruneLimit := now.Add(-pruneWait)
@@ -389,6 +399,12 @@ func (s *State) Prune(pruneWait, abortWait time.Duration, maxReadyChanges int) {
 	for k, w := range s.warnings {
 		if w.ExpiredBefore(now) {
 			delete(s.warnings, k)
+		}
+	}
+
+	for k, n := range s.notices {
+		if n.expired(now) {
+			delete(s.notices, k)
 		}
 	}
 
@@ -437,5 +453,6 @@ func ReadState(backend Backend, r io.Reader) (*State, error) {
 	s.backend = backend
 	s.modified = false
 	s.cache = make(map[interface{}]interface{})
+	s.noticeWaiters = make(map[int]noticeWaiter)
 	return s, err
 }
