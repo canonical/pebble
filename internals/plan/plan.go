@@ -527,6 +527,12 @@ func (t *LogTarget) Merge(other *LogTarget) {
 type FormatError struct {
 	Message string
 }
+type ConfigError struct {
+	Message         string
+	OverrideError   bool
+	ChecksError     bool
+	LogTargetsError bool
+}
 
 func (e *FormatError) Error() string {
 	return e.Message
@@ -535,7 +541,7 @@ func (e *FormatError) Error() string {
 // CombineLayers combines the given layers into a single layer, with the later
 // layers overriding earlier ones.
 func CombineLayers(layers ...*Layer) (*Layer, error) {
-	var errorMessages []string // To collect multiple errors
+	serviceErrors := make(map[string]ConfigError) //  a set to hold the names of services with error
 	combined := &Layer{
 		Services:   make(map[string]*Service),
 		Checks:     make(map[string]*Check),
@@ -561,15 +567,27 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 			case ReplaceOverride:
 				combined.Services[name] = service.Copy()
 			case UnknownOverride:
-				errorMessages = append(errorMessages, fmt.Sprintf(`layer %q must define "override" for service %q`,
-					layer.Label, service.Name))
+				serviceErrors[name] = ConfigError{
+					Message: fmt.Sprintf(`layer %q must define "override" for service %q`,
+						layer.Label, service.Name),
+					OverrideError: true,
+				}
+				continue // Skip to the next service in the loop
 			default:
-				errorMessages = append(errorMessages, fmt.Sprintf(`layer %q has invalid "override" value for service %q`,
-					layer.Label, service.Name))
+				serviceErrors[name] = ConfigError{
+					Message: fmt.Sprintf(`layer %q has invalid "override" value for service %q`,
+						layer.Label, service.Name),
+					OverrideError: true,
+				}
+				continue
+
 			}
 		}
-
 		for name, check := range layer.Checks {
+
+			if serviceErrors[name].OverrideError {
+				continue
+			}
 			switch check.Override {
 			case MergeOverride:
 				if old, ok := combined.Checks[name]; ok {
@@ -582,16 +600,29 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 			case ReplaceOverride:
 				combined.Checks[name] = check.Copy()
 			case UnknownOverride:
-				errorMessages = append(errorMessages, fmt.Sprintf(`layer %q must define "override" for check %q`,
-					layer.Label, check.Name))
+				serviceErrors[name] = ConfigError{
+					Message: fmt.Sprintf(`layer %q must define "override" for check %q`,
+						layer.Label, check.Name),
+					ChecksError: true,
+				}
+
+				continue // Skip to the next service in the loop
+
 			default:
-				errorMessages = append(errorMessages, fmt.Sprintf(`layer %q has invalid "override" value for check %q`,
-					layer.Label, check.Name))
+				serviceErrors[name] = ConfigError{
+					Message: fmt.Sprintf(`layer %q has invalid "override" value for check %q`,
+						layer.Label, check.Name),
+					ChecksError: true,
+				}
+				continue // Skip to the next service in the loop
 
 			}
 		}
-
 		for name, target := range layer.LogTargets {
+			// Skip this service if it already has an override error
+			if serviceErrors[name].OverrideError {
+				continue
+			}
 			switch target.Override {
 			case MergeOverride:
 				if old, ok := combined.LogTargets[name]; ok {
@@ -600,39 +631,70 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 					combined.LogTargets[name] = copied
 					break
 				}
+
 				fallthrough
 			case ReplaceOverride:
 				combined.LogTargets[name] = target.Copy()
 			case UnknownOverride:
-				errorMessages = append(errorMessages, fmt.Sprintf(`layer %q must define "override" for log target %q`,
-					layer.Label, target.Name))
+				serviceErrors[name] = ConfigError{
+					Message: fmt.Sprintf(`layer %q must define "override" for log target %q`,
+						layer.Label, target.Name),
+					LogTargetsError: true,
+				}
+				continue
 
 			default:
-				errorMessages = append(errorMessages, fmt.Sprintf(`layer %q has invalid "override" value for log target %q`,
-					layer.Label, target.Name))
+				serviceErrors[name] = ConfigError{
+					Message: fmt.Sprintf(`layer %q has invalid "override" value for log target %q`,
+						layer.Label, target.Name),
+					LogTargetsError: true,
+				}
+
+				continue
 			}
 		}
 	}
 
 	// Ensure fields in combined layers validate correctly (and set defaults).
 	for name, service := range combined.Services {
+		if serviceErrors[name].OverrideError {
+			continue
+
+		}
 		if service.Command == "" {
-			errorMessages = append(errorMessages, fmt.Sprintf(`plan must define "command" for service %q`, name))
+			serviceErrors[name] = ConfigError{
+				Message: fmt.Sprintf(`plan must define "command" for service %q`, name),
+			}
+			continue
+
 		}
 		_, _, err := service.ParseCommand()
 		if err != nil {
-			errorMessages = append(errorMessages, fmt.Sprintf("plan service %q command invalid: %v", name, err))
-		}
-		if !validServiceAction(service.OnSuccess) {
-			errorMessages = append(errorMessages, fmt.Sprintf("plan service %q on-success action %q invalid", name, service.OnSuccess))
+			serviceErrors[name] = ConfigError{
+				Message: fmt.Sprintf("plan service %q command invalid: %v", name, err),
+			}
+			continue
 
 		}
+		if !validServiceAction(service.OnSuccess) {
+			serviceErrors[name] = ConfigError{
+				Message: fmt.Sprintf("plan service %q on-success action %q invalid", name, service.OnSuccess),
+			}
+			continue
+		}
 		if !validServiceAction(service.OnFailure) {
-			errorMessages = append(errorMessages, fmt.Sprintf("plan service %q on-failure action %q invalid", name, service.OnFailure))
+			serviceErrors[name] = ConfigError{
+				Message: fmt.Sprintf("plan service %q on-failure action %q invalid", name, service.OnFailure),
+			}
+			continue
 		}
 		for _, action := range service.OnCheckFailure {
 			if !validServiceAction(action) {
-				errorMessages = append(errorMessages, fmt.Sprintf("plan service %q on-check-failure action %q invalid", name, action))
+				serviceErrors[name] = ConfigError{
+					Message: fmt.Sprintf("plan service %q on-check-failure action %q invalid", name, action),
+				}
+
+				continue
 			}
 		}
 		if !service.BackoffDelay.IsSet {
@@ -641,7 +703,11 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 		if !service.BackoffFactor.IsSet {
 			service.BackoffFactor.Value = defaultBackoffFactor
 		} else if service.BackoffFactor.Value < 1 {
-			errorMessages = append(errorMessages, fmt.Sprintf("plan service %q backoff-factor must be 1.0 or greater, not %g", name, service.BackoffFactor.Value))
+			serviceErrors[name] = ConfigError{
+				Message: fmt.Sprintf("plan service %q backoff-factor must be 1.0 or greater, not %g", name, service.BackoffFactor.Value),
+			}
+
+			continue
 		}
 		if !service.BackoffLimit.IsSet {
 			service.BackoffLimit.Value = defaultBackoffLimit
@@ -650,20 +716,38 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 	}
 
 	for name, check := range combined.Checks {
+		if serviceErrors[name].ChecksError {
+			continue
+
+		}
 		if check.Level != UnsetLevel && check.Level != AliveLevel && check.Level != ReadyLevel {
-			errorMessages = append(errorMessages, fmt.Sprintf(`plan check %q level must be "alive" or "ready"`, name))
+
+			serviceErrors[name] = ConfigError{
+				Message: fmt.Sprintf(`plan check %q level must be "alive" or "ready"`, name),
+			}
+			continue
 		}
 		if !check.Period.IsSet {
 			check.Period.Value = defaultCheckPeriod
 		} else if check.Period.Value == 0 {
-			errorMessages = append(errorMessages, fmt.Sprintf("plan check %q period must not be zero", name))
+			serviceErrors[name] = ConfigError{
+				Message: fmt.Sprintf("plan check %q period must not be zero", name),
+			}
+			continue
 		}
 		if !check.Timeout.IsSet {
 			check.Timeout.Value = defaultCheckTimeout
 		} else if check.Timeout.Value == 0 {
-			errorMessages = append(errorMessages, fmt.Sprintf("plan check %q timeout must not be zero", name))
+			serviceErrors[name] = ConfigError{
+				Message: fmt.Sprintf("plan check %q timeout must not be zero", name),
+			}
+			continue
+
 		} else if check.Timeout.Value >= check.Period.Value {
-			errorMessages = append(errorMessages, fmt.Sprintf("plan check %q timeout must be less than period", name))
+			serviceErrors[name] = ConfigError{
+				Message: fmt.Sprintf("plan check %q timeout must be less than period", name),
+			}
+			continue
 		}
 		if check.Threshold == 0 {
 			// Default number of failures in a row before check triggers
@@ -675,50 +759,81 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 		numTypes := 0
 		if check.HTTP != nil {
 			if check.HTTP.URL == "" {
-				errorMessages = append(errorMessages, fmt.Sprintf(`plan must set "url" for http check %q`, name))
+				serviceErrors[name] = ConfigError{
+					Message: fmt.Sprintf(`plan must set "url" for http check %q`, name),
+				}
+				continue
 			}
 			numTypes++
 		}
 		if check.TCP != nil {
 			if check.TCP.Port == 0 {
-				errorMessages = append(errorMessages, fmt.Sprintf(`plan must set "port" for tcp check %q`, name))
+				serviceErrors[name] = ConfigError{
+					Message: fmt.Sprintf(`plan must set "port" for tcp check %q`, name),
+				}
+				continue
 			}
 			numTypes++
 		}
 		if check.Exec != nil {
 			if check.Exec.Command == "" {
-				errorMessages = append(errorMessages, fmt.Sprintf(`plan must set "command" for exec check %q`, name))
+				serviceErrors[name] = ConfigError{
+					Message: fmt.Sprintf(`plan must set "command" for exec check %q`, name),
+				}
+				continue
 			}
 			_, err := shlex.Split(check.Exec.Command)
 			if err != nil {
-				errorMessages = append(errorMessages, fmt.Sprintf("plan check %q command invalid: %v", name, err))
+				serviceErrors[name] = ConfigError{
+					Message: fmt.Sprintf("plan check %q command invalid: %v", name, err),
+				}
+				continue
 			}
 			_, contextExists := combined.Services[check.Exec.ServiceContext]
 			if check.Exec.ServiceContext != "" && !contextExists {
-				errorMessages = append(errorMessages, fmt.Sprintf("plan check %q service context specifies non-existent service %q",
-					name, check.Exec.ServiceContext))
+				serviceErrors[name] = ConfigError{
+					Message: fmt.Sprintf("plan check %q service context specifies non-existent service %q",
+						name, check.Exec.ServiceContext),
+				}
+				continue
 			}
 			_, _, err = osutil.NormalizeUidGid(check.Exec.UserID, check.Exec.GroupID, check.Exec.User, check.Exec.Group)
 			if err != nil {
-				errorMessages = append(errorMessages, fmt.Sprintf("plan check %q has invalid user/group: %v", name, err))
+				serviceErrors[name] = ConfigError{
+					Message: fmt.Sprintf("plan check %q has invalid user/group: %v", name, err),
+				}
+				continue
 			}
 			numTypes++
 		}
 		if numTypes != 1 {
-			errorMessages = append(errorMessages, fmt.Sprintf(`plan must specify one of "http", "tcp", or "exec" for check %q`, name))
+			serviceErrors[name] = ConfigError{
+				Message: fmt.Sprintf(`plan must specify one of "http", "tcp", or "exec" for check %q`, name),
+			}
+
 		}
 	}
 
 	for name, target := range combined.LogTargets {
+		if serviceErrors[name].LogTargetsError {
+			continue
+
+		}
 		switch target.Type {
 		case LokiTarget, SyslogTarget:
 			// valid, continue
 		case UnsetLogTarget:
-			errorMessages = append(errorMessages, fmt.Sprintf(`plan must define "type" (%q or %q) for log target %q`,
-				LokiTarget, SyslogTarget, name))
+			serviceErrors[name] = ConfigError{
+				Message: fmt.Sprintf(`plan must define "type" (%q or %q) for log target %q`,
+					LokiTarget, SyslogTarget, name),
+			}
+			continue
 		default:
-			errorMessages = append(errorMessages, fmt.Sprintf(`log target %q has unsupported type %q, must be %q or %q`,
-				name, target.Type, LokiTarget, SyslogTarget))
+			serviceErrors[name] = ConfigError{
+				Message: fmt.Sprintf(`log target %q has unsupported type %q, must be %q or %q`,
+					name, target.Type, LokiTarget, SyslogTarget),
+			}
+
 		}
 
 		// Validate service names specified in log target
@@ -730,30 +845,38 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 			if _, ok := combined.Services[serviceName]; ok {
 				continue
 			}
-			errorMessages = append(errorMessages, fmt.Sprintf(`log target %q specifies unknown service %q`,
-				target.Name, serviceName))
-
+			serviceErrors[name] = ConfigError{
+				Message: fmt.Sprintf(`log target %q specifies unknown service %q`,
+					target.Name, serviceName),
+			}
+			continue
 		}
 
 		if target.Location == "" {
-			errorMessages = append(errorMessages, fmt.Sprintf(`plan must define "location" for log target %q`, name))
+			serviceErrors[name] = ConfigError{
+				Message: fmt.Sprintf(`plan must define "location" for log target %q`, name),
+			}
 
-		}
-	}
-
-	// Ensure combined layers don't have errors
-	if len(errorMessages) > 0 {
-		fullErrorMessage := "\ninvalid plan:\n- " + strings.Join(errorMessages, "\n- ")
-		return nil, &FormatError{
-			Message: fullErrorMessage,
 		}
 
 	}
-
 	// Ensure combined layers don't have cycles.
 	err := combined.checkCycles()
 	if err != nil {
 		return nil, err
+	}
+	errorMessages := []string{}
+	for _, er := range serviceErrors {
+		if len(serviceErrors) == 1 {
+			return nil, &FormatError{Message: er.Message}
+		}
+		errorMessages = append(errorMessages, er.Message)
+
+	}
+
+	if len(errorMessages) > 0 {
+		message := "multiple errors validating plan:\n- " + strings.Join(errorMessages, "\n- ")
+		return nil, &FormatError{Message: message}
 	}
 
 	return combined, nil
