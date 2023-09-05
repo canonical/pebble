@@ -566,7 +566,6 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 			default:
 				errorMessages = append(errorMessages, fmt.Sprintf(`layer %q has invalid "override" value for service %q`,
 					layer.Label, service.Name))
-
 			}
 		}
 
