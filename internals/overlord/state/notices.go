@@ -326,8 +326,8 @@ func (s *State) unflattenNotices(flat []*Notice) {
 // out or is cancelled. If there are existing notices that match the
 // filters, WaitNotices will return them immediately.
 func (s *State) WaitNotices(ctx context.Context, filters NoticeFilters) ([]*Notice, error) {
-	// State is already locked here by the caller, so notices won't be being
-	// added concurrently.
+	// State is already locked here by the caller, so notices won't be added
+	// concurrently.
 	notices := s.Notices(filters)
 	if len(notices) > 0 {
 		return notices, nil // if there are existing notices, return them right away
