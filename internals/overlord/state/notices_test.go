@@ -119,11 +119,11 @@ func (s *noticesSuite) TestOccurrences(c *C) {
 	notices := st.Notices(state.NoticeFilters{})
 	c.Assert(notices, HasLen, 2)
 	n := noticeToMap(c, notices[0])
-	c.Assert(n["id"], Equals, "1")
-	c.Assert(n["occurrences"], Equals, 3.0)
+	c.Check(n["id"], Equals, "1")
+	c.Check(n["occurrences"], Equals, 3.0)
 	n = noticeToMap(c, notices[1])
-	c.Assert(n["id"], Equals, "2")
-	c.Assert(n["occurrences"], Equals, 1.0)
+	c.Check(n["id"], Equals, "2")
+	c.Check(n["occurrences"], Equals, 1.0)
 }
 
 func (s *noticesSuite) TestRepeatAfter(c *C) {
@@ -173,11 +173,11 @@ func (s *noticesSuite) TestNoticesFilterType(c *C) {
 	notices := st.Notices(state.NoticeFilters{Type: state.NoticeWarning})
 	c.Assert(notices, HasLen, 2)
 	n := noticeToMap(c, notices[0])
-	c.Assert(n["type"].(string), Equals, "warning")
-	c.Assert(n["key"].(string), Equals, "Warning 1!")
+	c.Check(n["type"], Equals, "warning")
+	c.Check(n["key"], Equals, "Warning 1!")
 	n = noticeToMap(c, notices[1])
-	c.Assert(n["type"].(string), Equals, "warning")
-	c.Assert(n["key"].(string), Equals, "Warning 2!")
+	c.Check(n["type"], Equals, "warning")
+	c.Check(n["key"], Equals, "Warning 2!")
 }
 
 func (s *noticesSuite) TestNoticesFilterKey(c *C) {
@@ -192,8 +192,8 @@ func (s *noticesSuite) TestNoticesFilterKey(c *C) {
 	notices := st.Notices(state.NoticeFilters{Key: "example.com/x"})
 	c.Assert(notices, HasLen, 1)
 	n := noticeToMap(c, notices[0])
-	c.Assert(n["type"].(string), Equals, "client")
-	c.Assert(n["key"].(string), Equals, "example.com/x")
+	c.Check(n["type"], Equals, "client")
+	c.Check(n["key"], Equals, "example.com/x")
 }
 
 func (s *noticesSuite) TestNoticesFilterAfter(c *C) {
@@ -214,8 +214,8 @@ func (s *noticesSuite) TestNoticesFilterAfter(c *C) {
 	notices = st.Notices(state.NoticeFilters{After: lastRepeated})
 	c.Assert(notices, HasLen, 1)
 	n = noticeToMap(c, notices[0])
-	c.Assert(n["type"].(string), Equals, "client")
-	c.Assert(n["key"].(string), Equals, "foo.com/y")
+	c.Check(n["type"], Equals, "client")
+	c.Check(n["key"], Equals, "foo.com/y")
 }
 
 func (s *noticesSuite) TestNotice(c *C) {
@@ -232,13 +232,14 @@ func (s *noticesSuite) TestNotice(c *C) {
 	notices := st.Notices(state.NoticeFilters{})
 	c.Assert(notices, HasLen, 3)
 	n := noticeToMap(c, notices[1])
-	noticeId := n["id"].(string)
+	noticeId, ok := n["id"].(string)
+	c.Assert(ok, Equals, true)
 
 	notice := st.Notice(noticeId)
 	c.Assert(notice, NotNil)
 	n = noticeToMap(c, notice)
-	c.Assert(n["type"].(string), Equals, "client")
-	c.Assert(n["key"].(string), Equals, "foo.com/y")
+	c.Check(n["type"], Equals, "client")
+	c.Check(n["key"], Equals, "foo.com/y")
 }
 
 func (s *noticesSuite) TestEmptyState(c *C) {
@@ -266,8 +267,8 @@ func (s *noticesSuite) TestCheckpoint(c *C) {
 	notices := st2.Notices(state.NoticeFilters{})
 	c.Assert(notices, HasLen, 1)
 	n := noticeToMap(c, notices[0])
-	c.Assert(n["type"], Equals, "client")
-	c.Assert(n["key"], Equals, "foo.com/bar")
+	c.Check(n["type"], Equals, "client")
+	c.Check(n["key"], Equals, "foo.com/bar")
 }
 
 func (s *noticesSuite) TestDeleteExpired(c *C) {
@@ -309,8 +310,8 @@ func (s *noticesSuite) TestWaitNoticesExisting(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(notices, HasLen, 1)
 	n := noticeToMap(c, notices[0])
-	c.Assert(n["type"].(string), Equals, "client")
-	c.Assert(n["key"].(string), Equals, "example.com/x")
+	c.Check(n["type"], Equals, "client")
+	c.Check(n["key"], Equals, "example.com/x")
 }
 
 func (s *noticesSuite) TestWaitNoticesNew(c *C) {
@@ -332,7 +333,7 @@ func (s *noticesSuite) TestWaitNoticesNew(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(notices, HasLen, 1)
 	n := noticeToMap(c, notices[0])
-	c.Assert(n["key"].(string), Equals, "example.com/y")
+	c.Assert(n["key"], Equals, "example.com/y")
 }
 
 func (s *noticesSuite) TestWaitNoticesTimeout(c *C) {
@@ -395,7 +396,7 @@ func (s *noticesSuite) TestWaitNoticesConcurrent(c *C) {
 			c.Assert(err, IsNil)
 			c.Assert(notices, HasLen, 1)
 			n := noticeToMap(c, notices[0])
-			c.Assert(n["key"].(string), Equals, key)
+			c.Assert(n["key"], Equals, key)
 		}(i)
 	}
 
