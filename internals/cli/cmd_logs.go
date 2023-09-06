@@ -116,6 +116,7 @@ func (cmd *cmdLogs) Execute(args []string) error {
 }
 
 // Needed because signal.NotifyContext is Go 1.16+
+// TODO(benhoyt): this can go away now that we're on Go 1.20
 func notifyContext(parent context.Context, signals ...os.Signal) context.Context {
 	ctx, cancel := context.WithCancel(parent)
 	// Need a buffered channel in case the signal arrives between the
