@@ -39,7 +39,7 @@ const (
 const cmdNoticesSummary = "List notices"
 const cmdNoticesDescription = `
 The notices command lists the notices that have occurred, ordered by the
-oldest "Repeated" time first.
+Repeated time (oldest first).
 
 If --timeout is given and matching notices aren't yet available, wait up to
 the given duration for matching notices to arrive.
@@ -113,12 +113,6 @@ func (cmd *cmdNotices) Execute(args []string) error {
 		return nil
 	}
 
-	state.LastListed = notices[len(notices)-1].LastRepeated
-	err = saveNoticesState(state)
-	if err != nil {
-		return fmt.Errorf("cannot save notices state: %w", err)
-	}
-
 	writer := tabWriter()
 	defer writer.Flush()
 
@@ -138,6 +132,12 @@ func (cmd *cmdNotices) Execute(args []string) error {
 			cmd.fmtTime(notice.LastOccurred),
 			cmd.fmtTime(notice.LastRepeated),
 			notice.Occurrences)
+	}
+
+	state.LastListed = notices[len(notices)-1].LastRepeated
+	err = saveNoticesState(state)
+	if err != nil {
+		return fmt.Errorf("cannot save notices state: %w", err)
 	}
 	return nil
 }

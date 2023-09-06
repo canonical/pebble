@@ -43,8 +43,8 @@ func (s *PebbleSuite) TestNotifyBasic(c *C) {
 
 		fmt.Fprint(w, `{
 			"type": "sync",
-    		"status-code": 200,
-    		"result": {"id": "123"}
+			"status-code": 200,
+			"result": {"id": "123"}
 		}`)
 	})
 
@@ -78,8 +78,8 @@ func (s *PebbleSuite) TestNotifyData(c *C) {
 
 		fmt.Fprint(w, `{
 			"type": "sync",
-    		"status-code": 200,
-    		"result": {"id": "42"}
+			"status-code": 200,
+			"result": {"id": "42"}
 		}`)
 	})
 

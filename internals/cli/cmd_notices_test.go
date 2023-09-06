@@ -37,8 +37,8 @@ func (s *PebbleSuite) TestNotices(c *C) {
 
 		fmt.Fprint(w, `{
 			"type": "sync",
-    		"status-code": 200,
-    		"result": [{
+			"status-code": 200,
+			"result": [{
 				"id": "1",
 				"type": "client",
 				"key": "a.b/c",
@@ -97,8 +97,8 @@ func (s *PebbleSuite) TestNoticesFilters(c *C) {
 
 		fmt.Fprint(w, `{
 			"type": "sync",
-    		"status-code": 200,
-    		"result": [{
+			"status-code": 200,
+			"result": [{
 				"id": "1",
 				"type": "client",
 				"key": "a.b/c",
@@ -148,8 +148,8 @@ func (s *PebbleSuite) TestNoticesAfter(c *C) {
 
 		fmt.Fprint(w, `{
 			"type": "sync",
-    		"status-code": 200,
-    		"result": [{
+			"status-code": 200,
+			"result": [{
 				"id": "1",
 				"type": "client",
 				"key": "a.b/c",
@@ -199,8 +199,8 @@ func (s *PebbleSuite) TestNoticesNoNotices(c *C) {
 		c.Check(r.URL.Query(), DeepEquals, url.Values{})
 		fmt.Fprint(w, `{
 			"type": "sync",
-    		"status-code": 200,
-    		"result": []}`)
+			"status-code": 200,
+			"result": []}`)
 	})
 
 	oldFilename := os.Getenv("PEBBLE_NOTICES_FILENAME")
@@ -228,8 +228,8 @@ func (s *PebbleSuite) TestNoticesTimeout(c *C) {
 
 		fmt.Fprint(w, `{
 			"type": "sync",
-    		"status-code": 200,
-    		"result": [{
+			"status-code": 200,
+			"result": [{
 				"id": "1",
 				"type": "client",
 				"key": "a.b/c",
@@ -276,8 +276,8 @@ func (s *PebbleSuite) TestNoticesNoNoticesTimeout(c *C) {
 		c.Check(r.URL.Query(), DeepEquals, url.Values{"timeout": {"1s"}})
 		fmt.Fprint(w, `{
 			"type": "sync",
-    		"status-code": 200,
-    		"result": []}`)
+			"status-code": 200,
+			"result": []}`)
 	})
 
 	oldFilename := os.Getenv("PEBBLE_NOTICES_FILENAME")

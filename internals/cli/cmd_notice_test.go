@@ -31,8 +31,8 @@ func (s *PebbleSuite) TestNoticeID(c *C) {
 
 		fmt.Fprint(w, `{
 			"type": "sync",
-    		"status-code": 200,
-    		"result": {
+			"status-code": 200,
+			"result": {
 				"id": "123",
 				"type": "client",
 				"key": "a.b/c",
@@ -73,8 +73,8 @@ func (s *PebbleSuite) TestNoticeIDNotFound(c *C) {
 
 		fmt.Fprint(w, `{
 			"type": "error",
-    		"status-code": 404,
-    		"result": {
+			"status-code": 404,
+			"result": {
 				"message": "cannot find notice with ID \"123\""
 			}
 		}`)
@@ -97,8 +97,8 @@ func (s *PebbleSuite) TestNoticeTypeKey(c *C) {
 
 		fmt.Fprint(w, `{
 			"type": "sync",
-    		"status-code": 200,
-    		"result": [{
+			"status-code": 200,
+			"result": [{
 				"id": "123",
 				"type": "client",
 				"key": "a.b/c",
@@ -136,8 +136,8 @@ func (s *PebbleSuite) TestNoticeTypeKeyNotFound(c *C) {
 
 		fmt.Fprint(w, `{
 			"type": "sync",
-    		"status-code": 200,
-    		"result": []}`)
+			"status-code": 200,
+			"result": []}`)
 	})
 
 	_, err := cli.Parser(cli.Client()).ParseArgs([]string{"notice", "client", "a.b/c"})
