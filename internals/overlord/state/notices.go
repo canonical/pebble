@@ -196,9 +196,9 @@ func (s *State) addNoticeWithTime(now time.Time, noticeType NoticeType, key stri
 	notice, ok := s.notices[uniqueKey]
 	if !ok {
 		// First occurrence of this notice type+key
-		s.noticeId++
+		s.lastNoticeId++
 		notice = &Notice{
-			id:            strconv.Itoa(s.noticeId),
+			id:            strconv.Itoa(s.lastNoticeId),
 			noticeType:    noticeType,
 			key:           key,
 			firstOccurred: now,
@@ -299,24 +299,13 @@ func (s *State) flattenNotices(filters NoticeFilters) []*Notice {
 func (s *State) unflattenNotices(flat []*Notice) {
 	now := time.Now()
 	s.notices = make(map[string]*Notice)
-	maxNoticeId := 0
 	for _, n := range flat {
 		if n.expired(now) {
 			continue
 		}
 		uniqueKey := uniqueNoticeKey(n.noticeType, n.key)
 		s.notices[uniqueKey] = n
-
-		// Evaluate the highest ID and start noticeId state from there.
-		noticeId, err := strconv.Atoi(n.id)
-		if err != nil {
-			logger.Panicf("Internal error: invalid notice ID %q: %v", n.id, err)
-		}
-		if noticeId > maxNoticeId {
-			maxNoticeId = noticeId
-		}
 	}
-	s.noticeId = maxNoticeId
 }
 
 // WaitNotices waits for notices that match the filters to exist or occur,
