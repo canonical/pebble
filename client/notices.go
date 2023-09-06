@@ -168,7 +168,7 @@ func makeNoticesQuery(opts *NoticesOptions) url.Values {
 		query.Set("key", opts.Key)
 	}
 	if !opts.After.IsZero() {
-		query.Set("after", opts.After.Format(time.RFC3339))
+		query.Set("after", opts.After.Format(time.RFC3339Nano))
 	}
 	return query
 }
