@@ -184,7 +184,7 @@ var HelpCategories = []HelpCategory{{
 }, {
 	Label:       "Services",
 	Description: "manage services",
-	Commands:    []string{"services", "logs", "checks", "start", "restart", "signal", "stop", "replan"},
+	Commands:    []string{"services", "logs", "checks", "health", "start", "restart", "signal", "stop", "replan"},
 }, {
 	Label:       "Files",
 	Description: "work with files and execute commands",
