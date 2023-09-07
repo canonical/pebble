@@ -196,7 +196,6 @@ func (s *apiSuite) TestLayersCombineFormatError(c *C) {
 	c.Assert(rsp.Status, Equals, http.StatusBadRequest)
 	c.Assert(rsp.Type, Equals, ResponseTypeError)
 	result := rsp.Result.(*errorResult)
-
-	c.Assert(result.Message, Matches, `(?s)\s*invalid plan:\n- layer "base" must define "override" for service "dynamic"`)
+	c.Assert(result.Message, Matches, `layer "base" must define "override" for service "dynamic"`)
 
 }
