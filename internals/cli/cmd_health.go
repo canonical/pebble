@@ -23,12 +23,12 @@ import (
 	"github.com/canonical/pebble/client"
 )
 
-const cmdHealthSummary = "Query health of checks."
+const cmdHealthSummary = "Query health of checks"
 const cmdHealthDescription = `
-The health command queries the health of configured Pebble checks.
+The health command queries the health of configured checks.
 
-It returns an exit code 0 if all the requested Pebble checks are healthy, or
-an exit code 1 if at least one of the requested Pebble checks are unhealthy.
+It returns an exit code 0 if all the requested checks are healthy, or
+an exit code 1 if at least one of the requested checks are unhealthy.
 `
 
 type cmdHealth struct {
@@ -42,8 +42,8 @@ type cmdHealth struct {
 }
 
 var cmdHealthArgsHelp = map[string]string{
-	"--format": `Output format`,
-	"--level":  `Check level to filter for`,
+	"--format": "Output format",
+	"--level":  "Check level to filter for",
 }
 
 func init() {
@@ -78,17 +78,19 @@ func (cmd *cmdHealth) Execute(args []string) error {
 		if health.Healthy {
 			status = "healthy"
 		}
-		fmt.Fprintf(Stdout, "%s\n", status)
+		fmt.Fprintln(Stdout, status)
 	case "json":
 		encoder := json.NewEncoder(Stdout)
-		encoder.SetEscapeHTML(false)
-		encoder.Encode(&health)
+		err := encoder.Encode(&health)
+		if err != nil {
+			return err
+		}
 	default:
-		return fmt.Errorf(`invalid output format (expected "json" or "text", not %q)`, cmd.Format)
+		panic(fmt.Sprintf("internal error: invalid output format %q", cmd.Format)) // already checked by go-flags
 	}
 
 	if !health.Healthy {
-		return fmt.Errorf("check(s) are unhealthy")
+		panic(&exitStatus{1})
 	}
 
 	return nil

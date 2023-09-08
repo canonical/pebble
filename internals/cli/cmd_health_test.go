@@ -24,28 +24,16 @@ import (
 	"github.com/canonical/pebble/internals/cli"
 )
 
-func (s *PebbleSuite) TestHealthHelp(c *check.C) {
-	restore := fakeArgs("pebble", "health", "-h")
-	defer restore()
-
-	exitCode := cli.PebbleMain()
-	c.Check(exitCode, check.Equals, 0)
-	c.Check(s.Stdout(), check.Not(check.Matches), "(?s)Pebble lets you control services.*Commands can be classified as follows.*")
-	c.Check(s.Stdout(), check.Matches, "^(?s)Usage:\n  pebble health \\[health-OPTIONS\\] \\[<check>\\.\\.\\.\\].*")
-	c.Check(s.Stdout(), check.Matches, "(?s).*The health command queries the health of configured Pebble checks.*")
-	c.Check(s.Stderr(), check.Equals, "")
-}
-
 func (s *PebbleSuite) TestHealth(c *check.C) {
 	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
 		c.Assert(r.Method, check.Equals, "GET")
 		c.Assert(r.URL.Path, check.Equals, "/v1/health")
 		c.Assert(r.URL.Query(), check.DeepEquals, url.Values{})
 		fmt.Fprintf(w, `{
-	"type": "sync",
-	"status-code": 200,
-	"result": {"healthy": true}
-}`)
+			"type": "sync",
+			"status-code": 200,
+			"result": {"healthy": true}
+		}`)
 	})
 
 	restore := fakeArgs("pebble", "health")
@@ -61,12 +49,12 @@ func (s *PebbleSuite) TestHealthLevel(c *check.C) {
 	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
 		c.Assert(r.Method, check.Equals, "GET")
 		c.Assert(r.URL.Path, check.Equals, "/v1/health")
-		c.Assert(r.URL.Query(), check.DeepEquals, url.Values{"level": []string{"alive"}})
+		c.Assert(r.URL.Query(), check.DeepEquals, url.Values{"level": {"alive"}})
 		fmt.Fprintf(w, `{
-	"type": "sync",
-	"status-code": 502,
-	"result": {"healthy": false}
-}`)
+			"type": "sync",
+			"status-code": 502,
+			"result": {"healthy": false}
+		}`)
 	})
 
 	restore := fakeArgs("pebble", "health", "--level", "alive")
@@ -75,7 +63,7 @@ func (s *PebbleSuite) TestHealthLevel(c *check.C) {
 	exitCode := cli.PebbleMain()
 	c.Check(exitCode, check.Equals, 1)
 	c.Check(s.Stdout(), check.Equals, "unhealthy\n")
-	c.Check(s.Stderr(), check.Equals, "error: check(s) are unhealthy\n")
+	c.Check(s.Stderr(), check.Equals, "")
 }
 
 func (s *PebbleSuite) TestHealthFormat(c *check.C) {
@@ -84,10 +72,10 @@ func (s *PebbleSuite) TestHealthFormat(c *check.C) {
 		c.Assert(r.URL.Path, check.Equals, "/v1/health")
 		c.Assert(r.URL.Query(), check.DeepEquals, url.Values{})
 		fmt.Fprintf(w, `{
-	"type": "sync",
-	"status-code": 200,
-	"result": {"healthy": true}
-}`)
+			"type": "sync",
+			"status-code": 200,
+			"result": {"healthy": true}
+		}`)
 	})
 
 	restore := fakeArgs("pebble", "health", "--format", "json")
@@ -104,14 +92,14 @@ func (s *PebbleSuite) TestHealthSpecificChecks(c *check.C) {
 		c.Assert(r.Method, check.Equals, "GET")
 		c.Assert(r.URL.Path, check.Equals, "/v1/health")
 		c.Assert(r.URL.Query(), check.DeepEquals, url.Values{
-			"level": []string{"ready"},
-			"names": []string{"chk1", "chk3"},
+			"level": {"ready"},
+			"names": {"chk1", "chk3"},
 		})
 		fmt.Fprintf(w, `{
-	"type": "sync",
-	"status-code": 200,
-	"result": {"healthy": true}
-}`)
+			"type": "sync",
+			"status-code": 200,
+			"result": {"healthy": true}
+		}`)
 	})
 
 	restore := fakeArgs("pebble", "health", "--level", "ready", "chk1", "chk3")

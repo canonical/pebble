@@ -48,3 +48,23 @@ func (cs *clientSuite) TestHealthGet(c *check.C) {
 		"names": {"chk1", "chk3"},
 	})
 }
+
+func (cs *clientSuite) TestHealthDefaultOptions(c *check.C) {
+	cs.rsp = `{
+		"type": "sync",
+		"status-code": 502,
+		"status": "Bad Gateway",
+		"result": {
+			"healthy": false
+		}
+	}`
+
+	health, err := cs.cli.Health(&client.HealthOptions{})
+	c.Assert(err, check.IsNil)
+	c.Assert(health, check.DeepEquals, &client.HealthInfo{
+		Healthy: false,
+	})
+	c.Assert(cs.req.Method, check.Equals, "GET")
+	c.Assert(cs.req.URL.Path, check.Equals, "/v1/health")
+	c.Assert(cs.req.URL.Query(), check.DeepEquals, url.Values{})
+}

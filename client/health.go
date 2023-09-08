@@ -16,11 +16,27 @@ package client
 
 import "net/url"
 
-type HealthOptions ChecksOptions
+// HealthOptions holds query options to pass to a Health call.
+type HealthOptions struct {
+	// Level is the check level to filter for. A check is included in the
+	// healthiness determination if this field is not set, or if it is
+	// equal to the check's level.
+	Level CheckLevel
 
-// HealthInfo holds health information for a single health check.
+	// Names is the list of check names to filter for. A check is included in
+	// the healthiness determination if this field is nil or empty slice, or
+	// if one of the values in the slice is equal to the check's name.
+	Names []string
+}
+
+// HealthInfo holds the result of a Health call.
 type HealthInfo struct {
-	// Healthy is the status of health.
+	// Healthy is the status of health. A set of checks are deemed "healthy"
+	// if all of them of are up, and "unhealthy" otherwise. When queried
+	// using level, if the queried level equals to "alive", only the alive
+	// checks are selected. However, "ready" implies alive. Thus, if the
+	// queried level is "ready", both the alive and ready leveled checks are
+	// considered.
 	Healthy bool `json:"healthy"`
 }
 
