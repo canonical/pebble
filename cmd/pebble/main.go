@@ -18,11 +18,14 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/canonical/pebble/client"
 	"github.com/canonical/pebble/internals/cli"
 )
 
 func main() {
-	if err := cli.Run(); err != nil {
+	clientConfig := &client.Config{}
+	_, clientConfig.Socket = cli.GetEnvPaths()
+	if err := cli.Run(clientConfig); err != nil {
 		fmt.Fprintf(cli.Stderr, "error: %v\n", err)
 		os.Exit(1)
 	}

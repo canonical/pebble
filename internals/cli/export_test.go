@@ -20,9 +20,7 @@ import (
 	"github.com/canonical/pebble/client"
 )
 
-var RunMain = Run
-
-var ClientConfig = &clientConfig
+var ClientConfig *client.Config = &client.Config{}
 
 func Client() *client.Client {
 	cli, err := client.New(ClientConfig)
@@ -41,8 +39,6 @@ var (
 
 	WriteWarningTimestamp = writeWarningTimestamp
 	MaybePresentWarnings  = maybePresentWarnings
-
-	GetEnvPaths = getEnvPaths
 )
 
 func FakeIsStdoutTTY(t bool) (restore func()) {
@@ -76,7 +72,9 @@ func PebbleMain() (exitCode int) {
 			}
 		}
 	}()
-	if err := Run(); err != nil {
+	clientConfig := &client.Config{}
+	_, clientConfig.Socket = GetEnvPaths()
+	if err := Run(clientConfig); err != nil {
 		fmt.Fprintf(Stderr, "error: %v\n", err)
 		osExit(1)
 	}
