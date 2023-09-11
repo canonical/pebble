@@ -33,9 +33,9 @@ type HealthOptions struct {
 type HealthInfo struct {
 	// Healthy is the status of health. A set of checks are deemed "healthy"
 	// if all of them of are up, and "unhealthy" otherwise. When queried
-	// using level, if the queried level equals to "alive", only the alive
+	// using level, if the queried level equals "alive", only the alive
 	// checks are selected. However, "ready" implies alive. Thus, if the
-	// queried level is "ready", both the alive and ready leveled checks are
+	// queried level is "ready", both the alive and ready checks are
 	// considered.
 	Healthy bool `json:"healthy"`
 }
