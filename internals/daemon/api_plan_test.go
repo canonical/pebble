@@ -54,7 +54,7 @@ func (s *apiSuite) TestGetPlanErrors(c *C) {
 		c.Assert(rec.Code, Equals, test.status)
 		c.Assert(rsp.Status, Equals, test.status)
 		c.Assert(rsp.Type, Equals, ResponseTypeError)
-		c.Assert(rsp.Result.(*errorResult).Message, Matches, test.message)
+		c.Assert(rsp.Result.(*ErrorResult).Message, Matches, test.message)
 	}
 }
 
@@ -123,7 +123,7 @@ func (s *apiSuite) TestLayersErrors(c *C) {
 		c.Assert(rec.Code, Equals, test.status)
 		c.Assert(rsp.Status, Equals, test.status)
 		c.Assert(rsp.Type, Equals, ResponseTypeError)
-		c.Assert(rsp.Result.(*errorResult).Message, Matches, test.message)
+		c.Assert(rsp.Result.(*ErrorResult).Message, Matches, test.message)
 	}
 }
 
@@ -195,6 +195,6 @@ func (s *apiSuite) TestLayersCombineFormatError(c *C) {
 	c.Assert(rec.Code, Equals, http.StatusBadRequest)
 	c.Assert(rsp.Status, Equals, http.StatusBadRequest)
 	c.Assert(rsp.Type, Equals, ResponseTypeError)
-	result := rsp.Result.(*errorResult)
+	result := rsp.Result.(*ErrorResult)
 	c.Assert(result.Message, Matches, `layer "base" must define "override" for service "dynamic"`)
 }

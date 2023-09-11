@@ -130,7 +130,7 @@ func v1GetChanges(c *Command, r *http.Request, _ *UserState) Response {
 	case "ready":
 		filter = func(chg *state.Change) bool { return chg.Status().Ready() }
 	default:
-		return statusBadRequest("select should be one of: all,in-progress,ready")
+		return StatusBadRequest("select should be one of: all,in-progress,ready")
 	}
 
 	if wantedName := query.Get("for"); wantedName != "" {
@@ -177,7 +177,7 @@ func v1GetChange(c *Command, r *http.Request, _ *UserState) Response {
 	defer st.Unlock()
 	chg := st.Change(changeID)
 	if chg == nil {
-		return statusNotFound("cannot find change with id %q", changeID)
+		return StatusNotFound("cannot find change with id %q", changeID)
 	}
 
 	return SyncResponse(change2changeInfo(chg))
@@ -190,7 +190,7 @@ func v1GetChangeWait(c *Command, r *http.Request, _ *UserState) Response {
 	change := st.Change(changeID)
 	st.Unlock()
 	if change == nil {
-		return statusNotFound("cannot find change with id %q", changeID)
+		return StatusNotFound("cannot find change with id %q", changeID)
 	}
 
 	timeoutStr := r.URL.Query().Get("timeout")
@@ -199,23 +199,23 @@ func v1GetChangeWait(c *Command, r *http.Request, _ *UserState) Response {
 		// whichever is first.
 		timeout, err := time.ParseDuration(timeoutStr)
 		if err != nil {
-			return statusBadRequest("invalid timeout %q: %v", timeoutStr, err)
+			return StatusBadRequest("invalid timeout %q: %v", timeoutStr, err)
 		}
 		timer := time.NewTimer(timeout)
 		select {
 		case <-change.Ready():
 			timer.Stop() // change ready, release timer resources
 		case <-timer.C:
-			return statusGatewayTimeout("timed out waiting for change after %s", timeout)
+			return StatusGatewayTimeout("timed out waiting for change after %s", timeout)
 		case <-r.Context().Done():
-			return statusInternalError("request cancelled")
+			return StatusInternalError("request cancelled")
 		}
 	} else {
 		// No timeout, wait indefinitely for change to be ready.
 		select {
 		case <-change.Ready():
 		case <-r.Context().Done():
-			return statusInternalError("request cancelled")
+			return StatusInternalError("request cancelled")
 		}
 	}
 
@@ -231,7 +231,7 @@ func v1PostChange(c *Command, r *http.Request, _ *UserState) Response {
 	defer state.Unlock()
 	chg := state.Change(chID)
 	if chg == nil {
-		return statusNotFound("cannot find change with id %q", chID)
+		return StatusNotFound("cannot find change with id %q", chID)
 	}
 
 	var reqData struct {
@@ -240,15 +240,15 @@ func v1PostChange(c *Command, r *http.Request, _ *UserState) Response {
 
 	decoder := json.NewDecoder(r.Body)
 	if err := decoder.Decode(&reqData); err != nil {
-		return statusBadRequest("cannot decode data from request body: %v", err)
+		return StatusBadRequest("cannot decode data from request body: %v", err)
 	}
 
 	if reqData.Action != "abort" {
-		return statusBadRequest("change action %q is unsupported", reqData.Action)
+		return StatusBadRequest("change action %q is unsupported", reqData.Action)
 	}
 
 	if chg.Status().Ready() {
-		return statusBadRequest("cannot abort change %s with nothing pending", chID)
+		return StatusBadRequest("cannot abort change %s with nothing pending", chID)
 	}
 
 	// flag the change

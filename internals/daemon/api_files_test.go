@@ -268,9 +268,9 @@ func (s *filesSuite) TestReadErrorOnRead(c *C) {
 	})
 }
 
-func checkFileResult(c *C, r testFileResult, path, errorKind, errorMsg string) {
+func checkFileResult(c *C, r testFileResult, path, ErrorKind, errorMsg string) {
 	c.Check(r.Path, Equals, path)
-	c.Check(r.Error.Kind, Equals, errorKind)
+	c.Check(r.Error.Kind, Equals, ErrorKind)
 	c.Check(r.Error.Message, Matches, errorMsg)
 }
 

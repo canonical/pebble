@@ -44,7 +44,7 @@ type resp struct {
 	Result           interface{}  `json:"result,omitempty"`
 	WarningTimestamp *time.Time   `json:"warning-timestamp,omitempty"`
 	WarningCount     int          `json:"warning-count,omitempty"`
-	Maintenance      *errorResult `json:"maintenance,omitempty"`
+	Maintenance      *ErrorResult `json:"maintenance,omitempty"`
 }
 
 type respJSON struct {
@@ -55,11 +55,11 @@ type respJSON struct {
 	Result           interface{}  `json:"result,omitempty"`
 	WarningTimestamp *time.Time   `json:"warning-timestamp,omitempty"`
 	WarningCount     int          `json:"warning-count,omitempty"`
-	Maintenance      *errorResult `json:"maintenance,omitempty"`
+	Maintenance      *ErrorResult `json:"maintenance,omitempty"`
 }
 
-func (r *resp) transmitMaintenance(kind errorKind, message string) {
-	r.Maintenance = &errorResult{
+func (r *resp) transmitMaintenance(kind ErrorKind, message string) {
+	r.Maintenance = &ErrorResult{
 		Kind:    kind,
 		Message: message,
 	}
@@ -114,29 +114,29 @@ func (r *resp) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
 	w.Write(bs)
 }
 
-type errorKind string
+type ErrorKind string
 
 const (
-	errorKindLoginRequired     = errorKind("login-required")
-	errorKindDaemonRestart     = errorKind("daemon-restart")
-	errorKindSystemRestart     = errorKind("system-restart")
-	errorKindNoDefaultServices = errorKind("no-default-services")
-	errorKindNotFound          = errorKind("not-found")
-	errorKindPermissionDenied  = errorKind("permission-denied")
-	errorKindGenericFileError  = errorKind("generic-file-error")
+	ErrorKindLoginRequired     = ErrorKind("login-required")
+	ErrorKindDaemonRestart     = ErrorKind("daemon-restart")
+	ErrorKindSystemRestart     = ErrorKind("system-restart")
+	ErrorKindNoDefaultServices = ErrorKind("no-default-services")
+	ErrorKindNotFound          = ErrorKind("not-found")
+	ErrorKindPermissionDenied  = ErrorKind("permission-denied")
+	ErrorKindGenericFileError  = ErrorKind("generic-file-error")
 )
 
-type errorValue interface{}
+type ErrorValue interface{}
 
-type errorResult struct {
+type ErrorResult struct {
 	Message string     `json:"message"` // note no omitempty
-	Kind    errorKind  `json:"kind,omitempty"`
-	Value   errorValue `json:"value,omitempty"`
+	Kind    ErrorKind  `json:"kind,omitempty"`
+	Value   ErrorValue `json:"value,omitempty"`
 }
 
 func SyncResponse(result interface{}) Response {
 	if err, ok := result.(error); ok {
-		return statusInternalError("internal error: %v", err)
+		return StatusInternalError("internal error: %v", err)
 	}
 
 	if rsp, ok := result.(Response); ok {
@@ -171,14 +171,14 @@ func (f fileResponse) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func makeErrorResponder(status int) errorResponder {
 	return func(format string, v ...interface{}) Response {
-		res := &errorResult{}
+		res := &ErrorResult{}
 		if len(v) == 0 {
 			res.Message = format
 		} else {
 			res.Message = fmt.Sprintf(format, v...)
 		}
 		if status == 401 {
-			res.Kind = errorKindLoginRequired
+			res.Kind = ErrorKindLoginRequired
 		}
 		return &resp{
 			Type:   ResponseTypeError,
@@ -194,11 +194,11 @@ type errorResponder func(string, ...interface{}) Response
 
 // Standard error responses.
 var (
-	statusBadRequest       = makeErrorResponder(400)
-	statusUnauthorized     = makeErrorResponder(401)
-	statusForbidden        = makeErrorResponder(403)
-	statusNotFound         = makeErrorResponder(404)
-	statusMethodNotAllowed = makeErrorResponder(405)
-	statusInternalError    = makeErrorResponder(500)
-	statusGatewayTimeout   = makeErrorResponder(504)
+	StatusBadRequest       = makeErrorResponder(400)
+	StatusUnauthorized     = makeErrorResponder(401)
+	StatusForbidden        = makeErrorResponder(403)
+	StatusNotFound         = makeErrorResponder(404)
+	StatusMethodNotAllowed = makeErrorResponder(405)
+	StatusInternalError    = makeErrorResponder(500)
+	StatusGatewayTimeout   = makeErrorResponder(504)
 )

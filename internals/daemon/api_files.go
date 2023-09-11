@@ -44,31 +44,31 @@ func v1GetFiles(_ *Command, req *http.Request, _ *UserState) Response {
 	case "read":
 		paths := query["path"]
 		if len(paths) == 0 {
-			return statusBadRequest("must specify one or more paths")
+			return StatusBadRequest("must specify one or more paths")
 		}
 		if req.Header.Get("Accept") != "multipart/form-data" {
-			return statusBadRequest(`must accept multipart/form-data`)
+			return StatusBadRequest(`must accept multipart/form-data`)
 		}
 		return readFilesResponse{paths: paths}
 	case "list":
 		path := query.Get("path")
 		if path == "" {
-			return statusBadRequest("must specify path")
+			return StatusBadRequest("must specify path")
 		}
 		pattern := query.Get("pattern")
 		itself := query.Get("itself")
 		if itself != "true" && itself != "false" && itself != "" {
-			return statusBadRequest(`itself parameter must be "true" or "false"`)
+			return StatusBadRequest(`itself parameter must be "true" or "false"`)
 		}
 		return listFilesResponse(path, pattern, itself == "true")
 	default:
-		return statusBadRequest("invalid action %q", action)
+		return StatusBadRequest("invalid action %q", action)
 	}
 }
 
 type fileResult struct {
 	Path  string       `json:"path"`
-	Error *errorResult `json:"error,omitempty"`
+	Error *ErrorResult `json:"error,omitempty"`
 }
 
 // Reading files
@@ -160,20 +160,20 @@ func readFile(path string, mw *multipart.Writer) error {
 	return nil
 }
 
-func fileErrorToResult(err error) *errorResult {
+func fileErrorToResult(err error) *ErrorResult {
 	if err == nil {
 		return nil
 	}
-	var kind errorKind
+	var kind ErrorKind
 	switch {
 	case errors.Is(err, os.ErrPermission):
-		kind = errorKindPermissionDenied
+		kind = ErrorKindPermissionDenied
 	case errors.Is(err, os.ErrNotExist):
-		kind = errorKindNotFound
+		kind = ErrorKindNotFound
 	default:
-		kind = errorKindGenericFileError
+		kind = ErrorKindGenericFileError
 	}
-	return &errorResult{
+	return &ErrorResult{
 		Kind:    kind,
 		Message: err.Error(),
 	}
@@ -283,7 +283,7 @@ func fileInfoToResult(fullPath string, info os.FileInfo, userCache, groupCache m
 
 func listFilesResponse(path, pattern string, itself bool) Response {
 	if !pathpkg.IsAbs(path) {
-		return statusBadRequest("path must be absolute, got %q", path)
+		return StatusBadRequest("path must be absolute, got %q", path)
 	}
 	result, err := listFiles(path, pattern, itself)
 	if err != nil {
@@ -341,14 +341,14 @@ func v1PostFiles(_ *Command, req *http.Request, _ *UserState) Response {
 	contentType := req.Header.Get("Content-Type")
 	mediaType, params, err := mime.ParseMediaType(contentType)
 	if err != nil {
-		return statusBadRequest("invalid Content-Type %q", contentType)
+		return StatusBadRequest("invalid Content-Type %q", contentType)
 	}
 
 	switch mediaType {
 	case "multipart/form-data":
 		boundary := params["boundary"]
 		if len(boundary) < minBoundaryLength {
-			return statusBadRequest("invalid boundary %q", boundary)
+			return StatusBadRequest("invalid boundary %q", boundary)
 		}
 		return writeFiles(req.Body, boundary)
 	case "application/json":
@@ -359,7 +359,7 @@ func v1PostFiles(_ *Command, req *http.Request, _ *UserState) Response {
 		}
 		decoder := json.NewDecoder(req.Body)
 		if err := decoder.Decode(&payload); err != nil {
-			return statusBadRequest("cannot decode request body: %v", err)
+			return StatusBadRequest("cannot decode request body: %v", err)
 		}
 		switch payload.Action {
 		case "make-dirs":
@@ -367,12 +367,12 @@ func v1PostFiles(_ *Command, req *http.Request, _ *UserState) Response {
 		case "remove":
 			return removePaths(payload.Paths)
 		case "write":
-			return statusBadRequest(`must use multipart with "write" action`)
+			return StatusBadRequest(`must use multipart with "write" action`)
 		default:
-			return statusBadRequest("invalid action %q", payload.Action)
+			return StatusBadRequest("invalid action %q", payload.Action)
 		}
 	default:
-		return statusBadRequest("invalid media type %q", mediaType)
+		return StatusBadRequest("invalid media type %q", mediaType)
 	}
 }
 
@@ -393,10 +393,10 @@ func writeFiles(body io.Reader, boundary string) Response {
 	mr := multipart.NewReader(body, boundary)
 	part, err := mr.NextPart()
 	if err != nil {
-		return statusBadRequest("cannot read request metadata: %v", err)
+		return StatusBadRequest("cannot read request metadata: %v", err)
 	}
 	if part.FormName() != "request" {
-		return statusBadRequest(`metadata field name must be "request", got %q`, part.FormName())
+		return StatusBadRequest(`metadata field name must be "request", got %q`, part.FormName())
 	}
 
 	// Decode metadata about files to write.
@@ -406,13 +406,13 @@ func writeFiles(body io.Reader, boundary string) Response {
 	}
 	decoder := json.NewDecoder(part)
 	if err := decoder.Decode(&payload); err != nil {
-		return statusBadRequest("cannot decode request metadata: %v", err)
+		return StatusBadRequest("cannot decode request metadata: %v", err)
 	}
 	if payload.Action != "write" {
-		return statusBadRequest(`multipart action must be "write", got %q`, payload.Action)
+		return StatusBadRequest(`multipart action must be "write", got %q`, payload.Action)
 	}
 	if len(payload.Files) == 0 {
-		return statusBadRequest("must specify one or more files")
+		return StatusBadRequest("must specify one or more files")
 	}
 	infos := make(map[string]writeFilesItem)
 	for _, file := range payload.Files {
@@ -426,15 +426,15 @@ func writeFiles(body io.Reader, boundary string) Response {
 			break
 		}
 		if err != nil {
-			return statusBadRequest("cannot read file part %d: %v", i, err)
+			return StatusBadRequest("cannot read file part %d: %v", i, err)
 		}
 		if part.FormName() != "files" {
-			return statusBadRequest(`field name must be "files", got %q`, part.FormName())
+			return StatusBadRequest(`field name must be "files", got %q`, part.FormName())
 		}
 		path := multipartFilename(part)
 		info, ok := infos[path]
 		if !ok {
-			return statusBadRequest("no metadata for path %q", path)
+			return StatusBadRequest("no metadata for path %q", path)
 		}
 		errors[path] = writeFile(info, part)
 		part.Close()

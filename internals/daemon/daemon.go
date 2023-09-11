@@ -234,14 +234,14 @@ func (c *Command) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	st.Lock()
 	user, err := userFromRequest(st, r)
 	if err != nil {
-		statusForbidden("forbidden").ServeHTTP(w, r)
+		StatusForbidden("forbidden").ServeHTTP(w, r)
 		return
 	}
 	st.Unlock()
 
 	// check if we are in degradedMode
 	if c.d.degradedErr != nil && r.Method != "GET" {
-		statusInternalError(c.d.degradedErr.Error()).ServeHTTP(w, r)
+		StatusInternalError(c.d.degradedErr.Error()).ServeHTTP(w, r)
 		return
 	}
 
@@ -249,15 +249,15 @@ func (c *Command) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case accessOK:
 		// nothing
 	case accessUnauthorized:
-		statusUnauthorized("access denied").ServeHTTP(w, r)
+		StatusUnauthorized("access denied").ServeHTTP(w, r)
 		return
 	case accessForbidden:
-		statusForbidden("forbidden").ServeHTTP(w, r)
+		StatusForbidden("forbidden").ServeHTTP(w, r)
 		return
 	}
 
 	var rspf ResponseFunc
-	var rsp = statusMethodNotAllowed("method %q not allowed", r.Method)
+	var rsp = StatusMethodNotAllowed("method %q not allowed", r.Method)
 
 	switch r.Method {
 	case "GET":
@@ -280,11 +280,11 @@ func (c *Command) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		st.Unlock()
 		switch rst {
 		case restart.RestartSystem:
-			rsp.transmitMaintenance(errorKindSystemRestart, "system is restarting")
+			rsp.transmitMaintenance(ErrorKindSystemRestart, "system is restarting")
 		case restart.RestartDaemon:
-			rsp.transmitMaintenance(errorKindDaemonRestart, "daemon is restarting")
+			rsp.transmitMaintenance(ErrorKindDaemonRestart, "daemon is restarting")
 		case restart.RestartSocket:
-			rsp.transmitMaintenance(errorKindDaemonRestart, "daemon is stopping to wait for socket activation")
+			rsp.transmitMaintenance(ErrorKindDaemonRestart, "daemon is stopping to wait for socket activation")
 		}
 		if rsp.Type != ResponseTypeError {
 			st.Lock()
@@ -427,7 +427,7 @@ func (d *Daemon) addRoutes() {
 
 	// also maybe add a /favicon.ico handler...
 
-	d.router.NotFoundHandler = statusNotFound("invalid API endpoint requested")
+	d.router.NotFoundHandler = StatusNotFound("invalid API endpoint requested")
 }
 
 type connTracker struct {

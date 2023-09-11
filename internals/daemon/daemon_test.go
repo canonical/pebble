@@ -264,7 +264,7 @@ func (s *daemonSuite) TestCommandRestartingState(c *C) {
 	cmd.ServeHTTP(rec, req)
 	c.Check(rec.Code, Equals, 200)
 	var rst struct {
-		Maintenance *errorResult `json:"maintenance"`
+		Maintenance *ErrorResult `json:"maintenance"`
 	}
 	err = json.Unmarshal(rec.Body.Bytes(), &rst)
 	c.Assert(err, IsNil)
@@ -280,8 +280,8 @@ func (s *daemonSuite) TestCommandRestartingState(c *C) {
 	c.Check(rec.Code, Equals, 200)
 	err = json.Unmarshal(rec.Body.Bytes(), &rst)
 	c.Assert(err, IsNil)
-	c.Check(rst.Maintenance, DeepEquals, &errorResult{
-		Kind:    errorKindSystemRestart,
+	c.Check(rst.Maintenance, DeepEquals, &ErrorResult{
+		Kind:    ErrorKindSystemRestart,
 		Message: "system is restarting",
 	})
 
@@ -293,8 +293,8 @@ func (s *daemonSuite) TestCommandRestartingState(c *C) {
 	c.Check(rec.Code, Equals, 200)
 	err = json.Unmarshal(rec.Body.Bytes(), &rst)
 	c.Assert(err, IsNil)
-	c.Check(rst.Maintenance, DeepEquals, &errorResult{
-		Kind:    errorKindDaemonRestart,
+	c.Check(rst.Maintenance, DeepEquals, &ErrorResult{
+		Kind:    ErrorKindDaemonRestart,
 		Message: "daemon is restarting",
 	})
 }
@@ -1138,7 +1138,7 @@ func (s *daemonSuite) TestDegradedModeReply(c *C) {
 	rec = doTestReq(c, cmd, "POST")
 	c.Check(rec.Code, Equals, 500)
 	// verify we get the error
-	var v struct{ Result errorResult }
+	var v struct{ Result ErrorResult }
 	c.Assert(json.NewDecoder(rec.Body).Decode(&v), IsNil)
 	c.Check(v.Result.Message, Equals, "foo error")
 

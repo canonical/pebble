@@ -48,10 +48,10 @@ func v1PostExec(c *Command, req *http.Request, _ *UserState) Response {
 	var payload execPayload
 	decoder := json.NewDecoder(req.Body)
 	if err := decoder.Decode(&payload); err != nil {
-		return statusBadRequest("cannot decode request body: %v", err)
+		return StatusBadRequest("cannot decode request body: %v", err)
 	}
 	if len(payload.Command) < 1 {
-		return statusBadRequest("must specify command")
+		return StatusBadRequest("must specify command")
 	}
 
 	var timeout time.Duration
@@ -59,14 +59,14 @@ func v1PostExec(c *Command, req *http.Request, _ *UserState) Response {
 		var err error
 		timeout, err = time.ParseDuration(payload.Timeout)
 		if err != nil {
-			return statusBadRequest("invalid timeout: %v", err)
+			return StatusBadRequest("invalid timeout: %v", err)
 		}
 	}
 
 	// Check up-front that the executable exists.
 	_, err := exec.LookPath(payload.Command[0])
 	if err != nil {
-		return statusBadRequest("cannot find executable %q", payload.Command[0])
+		return StatusBadRequest("cannot find executable %q", payload.Command[0])
 	}
 
 	// Also check that the working directory exists, to avoid a confusing
@@ -78,13 +78,13 @@ func v1PostExec(c *Command, req *http.Request, _ *UserState) Response {
 	// correct to use it as a working directory, but this is a good start.
 	if payload.WorkingDir != "" {
 		if !osutil.IsDir(payload.WorkingDir) {
-			return statusBadRequest("cannot find working directory %q", payload.WorkingDir)
+			return StatusBadRequest("cannot find working directory %q", payload.WorkingDir)
 		}
 	}
 
 	p, err := c.d.overlord.ServiceManager().Plan()
 	if err != nil {
-		return statusBadRequest("%v", err)
+		return StatusBadRequest("%v", err)
 	}
 	overrides := plan.ContextOptions{
 		Environment: payload.Environment,
@@ -96,13 +96,13 @@ func v1PostExec(c *Command, req *http.Request, _ *UserState) Response {
 	}
 	merged, err := plan.MergeServiceContext(p, payload.ServiceContext, overrides)
 	if err != nil {
-		return statusBadRequest("%v", err)
+		return StatusBadRequest("%v", err)
 	}
 
 	// Convert User/UserID and Group/GroupID combinations into raw uid/gid.
 	uid, gid, err := osutil.NormalizeUidGid(merged.UserID, merged.GroupID, merged.User, merged.Group)
 	if err != nil {
-		return statusBadRequest("%v", err)
+		return StatusBadRequest("%v", err)
 	}
 
 	st := c.d.overlord.State()
@@ -124,7 +124,7 @@ func v1PostExec(c *Command, req *http.Request, _ *UserState) Response {
 	}
 	task, metadata, err := cmdstate.Exec(st, args)
 	if err != nil {
-		return statusInternalError("cannot call exec: %v", err)
+		return StatusInternalError("cannot call exec: %v", err)
 	}
 
 	change := st.NewChange("exec", fmt.Sprintf("Execute command %q", args.Command[0]))
