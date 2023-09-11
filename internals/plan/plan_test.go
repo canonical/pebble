@@ -20,6 +20,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -81,9 +82,10 @@ type planTest struct {
 	stop    map[string][]string
 }
 
-var planTests = []planTest{{
-	summary: "Relatively simple layer with override on top",
-	input: []string{`
+var planTests = []planTest{
+	{
+		summary: "Relatively simple layer with override on top",
+		input: []string{`
 		summary: Simple layer
 		description: A simple layer.
 		services:
@@ -155,199 +157,199 @@ var planTests = []planTest{{
 				on-check-failure:
 					chk1: restart
 	`},
-	layers: []*plan.Layer{{
-		Order:       0,
-		Label:       "layer-0",
-		Summary:     "Simple layer",
-		Description: "A simple layer.",
-		Services: map[string]*plan.Service{
-			"srv1": {
-				Name:      "srv1",
-				Summary:   "Service summary",
-				Override:  "replace",
-				Command:   `cmd arg1 "arg2 arg3"`,
-				KillDelay: plan.OptionalDuration{Value: time.Second * 10, IsSet: true},
-				Startup:   plan.StartupEnabled,
-				Before:    []string{"srv3"},
-				After:     []string{"srv2"},
-				Requires:  []string{"srv2", "srv3"},
-				Environment: map[string]string{
-					"var1": "val1",
-					"var0": "val0",
-					"var2": "val2",
+		layers: []*plan.Layer{{
+			Order:       0,
+			Label:       "layer-0",
+			Summary:     "Simple layer",
+			Description: "A simple layer.",
+			Services: map[string]*plan.Service{
+				"srv1": {
+					Name:      "srv1",
+					Summary:   "Service summary",
+					Override:  "replace",
+					Command:   `cmd arg1 "arg2 arg3"`,
+					KillDelay: plan.OptionalDuration{Value: time.Second * 10, IsSet: true},
+					Startup:   plan.StartupEnabled,
+					Before:    []string{"srv3"},
+					After:     []string{"srv2"},
+					Requires:  []string{"srv2", "srv3"},
+					Environment: map[string]string{
+						"var1": "val1",
+						"var0": "val0",
+						"var2": "val2",
+					},
+					WorkingDir:    "/workdir/srv1",
+					BackoffDelay:  plan.OptionalDuration{Value: time.Second, IsSet: true},
+					BackoffFactor: plan.OptionalFloat{Value: 1.5, IsSet: true},
+					BackoffLimit:  plan.OptionalDuration{Value: 10 * time.Second, IsSet: true},
 				},
-				WorkingDir:    "/workdir/srv1",
-				BackoffDelay:  plan.OptionalDuration{Value: time.Second, IsSet: true},
-				BackoffFactor: plan.OptionalFloat{Value: 1.5, IsSet: true},
-				BackoffLimit:  plan.OptionalDuration{Value: 10 * time.Second, IsSet: true},
+				"srv2": {
+					Name:       "srv2",
+					Override:   "replace",
+					Command:    "cmd",
+					WorkingDir: "/workdir/srv2",
+					Startup:    plan.StartupEnabled,
+					Before:     []string{"srv3"},
+				},
+				"srv3": {
+					Name:     "srv3",
+					Override: "replace",
+					Command:  "cmd",
+					Startup:  plan.StartupUnknown,
+				},
+				"srv6": {
+					Name:     "srv6",
+					Override: "replace",
+					Command:  "cmd6a",
+					Startup:  plan.StartupUnknown,
+				},
 			},
-			"srv2": {
-				Name:       "srv2",
-				Override:   "replace",
-				Command:    "cmd",
-				WorkingDir: "/workdir/srv2",
-				Startup:    plan.StartupEnabled,
-				Before:     []string{"srv3"},
+			Checks:     map[string]*plan.Check{},
+			LogTargets: map[string]*plan.LogTarget{},
+		}, {
+			Order:       1,
+			Label:       "layer-1",
+			Summary:     "Simple override layer.",
+			Description: "The second layer.",
+			Services: map[string]*plan.Service{
+				"srv1": {
+					Name:     "srv1",
+					Override: "merge",
+					Before:   []string{"srv5"},
+					After:    []string{"srv4"},
+					Environment: map[string]string{
+						"var3": "val3",
+					},
+					WorkingDir: "/workdir/srv1/override",
+				},
+				"srv2": {
+					Name:     "srv2",
+					Summary:  "Replaced service",
+					Override: "replace",
+					Command:  "cmd",
+					Startup:  plan.StartupDisabled,
+				},
+				"srv4": {
+					Name:     "srv4",
+					Override: "replace",
+					Command:  "cmd",
+					Startup:  plan.StartupEnabled,
+				},
+				"srv5": {
+					Name:     "srv5",
+					Override: "replace",
+					Command:  "cmd",
+				},
+				"srv6": {
+					Name:     "srv6",
+					Override: "merge",
+					Command:  "cmd6b",
+					Startup:  plan.StartupUnknown,
+					Environment: map[string]string{
+						"foo": "bar",
+						"baz": "buz",
+					},
+					OnCheckFailure: map[string]plan.ServiceAction{
+						"chk1": plan.ActionRestart,
+					},
+				},
 			},
-			"srv3": {
-				Name:     "srv3",
-				Override: "replace",
-				Command:  "cmd",
-				Startup:  plan.StartupUnknown,
+			Checks:     map[string]*plan.Check{},
+			LogTargets: map[string]*plan.LogTarget{},
+		}},
+		result: &plan.Layer{
+			Summary:     "Simple override layer.",
+			Description: "The second layer.",
+			Services: map[string]*plan.Service{
+				"srv1": {
+					Name:      "srv1",
+					Summary:   "Service summary",
+					Override:  "replace",
+					Command:   `cmd arg1 "arg2 arg3"`,
+					KillDelay: plan.OptionalDuration{Value: time.Second * 10, IsSet: true},
+					Startup:   plan.StartupEnabled,
+					After:     []string{"srv2", "srv4"},
+					Before:    []string{"srv3", "srv5"},
+					Requires:  []string{"srv2", "srv3"},
+					Environment: map[string]string{
+						"var1": "val1",
+						"var0": "val0",
+						"var2": "val2",
+						"var3": "val3",
+					},
+					WorkingDir:    "/workdir/srv1/override",
+					BackoffDelay:  plan.OptionalDuration{Value: time.Second, IsSet: true},
+					BackoffFactor: plan.OptionalFloat{Value: 1.5, IsSet: true},
+					BackoffLimit:  plan.OptionalDuration{Value: 10 * time.Second, IsSet: true},
+				},
+				"srv2": {
+					Name:          "srv2",
+					Summary:       "Replaced service",
+					Override:      "replace",
+					Command:       "cmd",
+					Startup:       plan.StartupDisabled,
+					BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
+					BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
+					BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
+				},
+				"srv3": {
+					Name:          "srv3",
+					Override:      "replace",
+					Command:       "cmd",
+					BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
+					BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
+					BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
+				},
+				"srv4": {
+					Name:          "srv4",
+					Override:      "replace",
+					Command:       "cmd",
+					Startup:       plan.StartupEnabled,
+					BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
+					BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
+					BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
+				},
+				"srv5": {
+					Name:          "srv5",
+					Override:      "replace",
+					Command:       "cmd",
+					BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
+					BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
+					BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
+				},
+				"srv6": {
+					Name:     "srv6",
+					Override: "replace",
+					Command:  "cmd6b",
+					Environment: map[string]string{
+						"foo": "bar",
+						"baz": "buz",
+					},
+					OnCheckFailure: map[string]plan.ServiceAction{
+						"chk1": plan.ActionRestart,
+					},
+					BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
+					BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
+					BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
+				},
 			},
-			"srv6": {
-				Name:     "srv6",
-				Override: "replace",
-				Command:  "cmd6a",
-				Startup:  plan.StartupUnknown,
-			},
+			Checks:     map[string]*plan.Check{},
+			LogTargets: map[string]*plan.LogTarget{},
 		},
-		Checks:     map[string]*plan.Check{},
-		LogTargets: map[string]*plan.LogTarget{},
+		start: map[string][]string{
+			"srv1": {"srv2", "srv1", "srv3"},
+			"srv2": {"srv2"},
+			"srv3": {"srv3"},
+		},
+		stop: map[string][]string{
+			"srv1": {"srv1"},
+			"srv2": {"srv1", "srv2"},
+			"srv3": {"srv3", "srv1"},
+		},
 	}, {
-		Order:       1,
-		Label:       "layer-1",
-		Summary:     "Simple override layer.",
-		Description: "The second layer.",
-		Services: map[string]*plan.Service{
-			"srv1": {
-				Name:     "srv1",
-				Override: "merge",
-				Before:   []string{"srv5"},
-				After:    []string{"srv4"},
-				Environment: map[string]string{
-					"var3": "val3",
-				},
-				WorkingDir: "/workdir/srv1/override",
-			},
-			"srv2": {
-				Name:     "srv2",
-				Summary:  "Replaced service",
-				Override: "replace",
-				Command:  "cmd",
-				Startup:  plan.StartupDisabled,
-			},
-			"srv4": {
-				Name:     "srv4",
-				Override: "replace",
-				Command:  "cmd",
-				Startup:  plan.StartupEnabled,
-			},
-			"srv5": {
-				Name:     "srv5",
-				Override: "replace",
-				Command:  "cmd",
-			},
-			"srv6": {
-				Name:     "srv6",
-				Override: "merge",
-				Command:  "cmd6b",
-				Startup:  plan.StartupUnknown,
-				Environment: map[string]string{
-					"foo": "bar",
-					"baz": "buz",
-				},
-				OnCheckFailure: map[string]plan.ServiceAction{
-					"chk1": plan.ActionRestart,
-				},
-			},
-		},
-		Checks:     map[string]*plan.Check{},
-		LogTargets: map[string]*plan.LogTarget{},
-	}},
-	result: &plan.Layer{
-		Summary:     "Simple override layer.",
-		Description: "The second layer.",
-		Services: map[string]*plan.Service{
-			"srv1": {
-				Name:      "srv1",
-				Summary:   "Service summary",
-				Override:  "replace",
-				Command:   `cmd arg1 "arg2 arg3"`,
-				KillDelay: plan.OptionalDuration{Value: time.Second * 10, IsSet: true},
-				Startup:   plan.StartupEnabled,
-				After:     []string{"srv2", "srv4"},
-				Before:    []string{"srv3", "srv5"},
-				Requires:  []string{"srv2", "srv3"},
-				Environment: map[string]string{
-					"var1": "val1",
-					"var0": "val0",
-					"var2": "val2",
-					"var3": "val3",
-				},
-				WorkingDir:    "/workdir/srv1/override",
-				BackoffDelay:  plan.OptionalDuration{Value: time.Second, IsSet: true},
-				BackoffFactor: plan.OptionalFloat{Value: 1.5, IsSet: true},
-				BackoffLimit:  plan.OptionalDuration{Value: 10 * time.Second, IsSet: true},
-			},
-			"srv2": {
-				Name:          "srv2",
-				Summary:       "Replaced service",
-				Override:      "replace",
-				Command:       "cmd",
-				Startup:       plan.StartupDisabled,
-				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
-				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
-				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
-			},
-			"srv3": {
-				Name:          "srv3",
-				Override:      "replace",
-				Command:       "cmd",
-				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
-				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
-				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
-			},
-			"srv4": {
-				Name:          "srv4",
-				Override:      "replace",
-				Command:       "cmd",
-				Startup:       plan.StartupEnabled,
-				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
-				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
-				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
-			},
-			"srv5": {
-				Name:          "srv5",
-				Override:      "replace",
-				Command:       "cmd",
-				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
-				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
-				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
-			},
-			"srv6": {
-				Name:     "srv6",
-				Override: "replace",
-				Command:  "cmd6b",
-				Environment: map[string]string{
-					"foo": "bar",
-					"baz": "buz",
-				},
-				OnCheckFailure: map[string]plan.ServiceAction{
-					"chk1": plan.ActionRestart,
-				},
-				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
-				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
-				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
-			},
-		},
-		Checks:     map[string]*plan.Check{},
-		LogTargets: map[string]*plan.LogTarget{},
-	},
-	start: map[string][]string{
-		"srv1": {"srv2", "srv1", "srv3"},
-		"srv2": {"srv2"},
-		"srv3": {"srv3"},
-	},
-	stop: map[string][]string{
-		"srv1": {"srv1"},
-		"srv2": {"srv1", "srv2"},
-		"srv3": {"srv3", "srv1"},
-	},
-}, {
-	summary: "Order loop on before/after",
-	error:   "services in before/after loop: srv1, srv2, srv3",
-	input: []string{`
+		summary: "Order loop on before/after",
+		error:   "services in before/after loop: srv1, srv2, srv3",
+		input: []string{`
 		summary: Order loop
 		services:
 			srv1:
@@ -366,9 +368,9 @@ var planTests = []planTest{{
 				override: replace
 				command: cmd
 	`},
-}, {
-	summary: "Handling of nulls and typed values in environment",
-	input: []string{`
+	}, {
+		summary: "Handling of nulls and typed values in environment",
+		input: []string{`
 		services:
 			srv1:
 				override: replace
@@ -378,168 +380,168 @@ var planTests = []planTest{{
 					b: 1.1
 					c:
 	`},
-	layers: []*plan.Layer{{
-		Order: 0,
-		Label: "layer-0",
-		Services: map[string]*plan.Service{
-			"srv1": {
-				Name:     "srv1",
-				Override: "replace",
-				Command:  "cmd",
-				Environment: map[string]string{
-					"a": "true",
-					"b": "1.1",
-					"c": "",
+		layers: []*plan.Layer{{
+			Order: 0,
+			Label: "layer-0",
+			Services: map[string]*plan.Service{
+				"srv1": {
+					Name:     "srv1",
+					Override: "replace",
+					Command:  "cmd",
+					Environment: map[string]string{
+						"a": "true",
+						"b": "1.1",
+						"c": "",
+					},
 				},
 			},
-		},
-		Checks:     map[string]*plan.Check{},
-		LogTargets: map[string]*plan.LogTarget{},
-	}},
-}, {
-	summary: "Unknown keys are not accepted",
-	error:   "(?s).*field future not found.*",
-	input: []string{`
+			Checks:     map[string]*plan.Check{},
+			LogTargets: map[string]*plan.LogTarget{},
+		}},
+	}, {
+		summary: "Unknown keys are not accepted",
+		error:   "(?s).*field future not found.*",
+		input: []string{`
 		services:
 			srv1:
 				future: true
 				override: replace
 				command: cmd
 	`},
-}, {
-	summary: `Cannot use service name "pebble"`,
-	error:   `cannot use reserved service name "pebble"`,
-	input: []string{`
+	}, {
+		summary: `Cannot use service name "pebble"`,
+		error:   `cannot use reserved service name "pebble"`,
+		input: []string{`
 		services:
 			pebble:
 				command: cmd
 	`},
-}, {
-	summary: `Cannot have null service definition`,
-	error:   `service object cannot be null for service "svc1"`,
-	input: []string{`
+	}, {
+		summary: `Cannot have null service definition`,
+		error:   `service object cannot be null for service "svc1"`,
+		input: []string{`
 		services:
 			svc1: ~
 	`},
-}, {
-	summary: `Cannot use empty string as service name`,
-	error:   "cannot use empty string as service name",
-	input: []string{`
+	}, {
+		summary: `Cannot use empty string as service name`,
+		error:   "cannot use empty string as service name",
+		input: []string{`
 		services:
 			"":
 				override: replace
 				command: cmd
 	`},
-}, {
-	summary: `Invalid action`,
-	error:   `plan service "svc1" on-success action "foo" invalid`,
-	input: []string{`
+	}, {
+		summary: `Invalid action`,
+		error:   `plan service "svc1" on-success action "foo" invalid`,
+		input: []string{`
 		services:
 			"svc1":
 				override: replace
 				command: cmd
 				on-success: foo
 	`},
-}, {
-	summary: `Invalid backoff-delay duration`,
-	error:   `cannot parse layer "layer-0": invalid duration "foo"`,
-	input: []string{`
+	}, {
+		summary: `Invalid backoff-delay duration`,
+		error:   `cannot parse layer "layer-0": invalid duration "foo"`,
+		input: []string{`
 		services:
 			"svc1":
 				override: replace
 				command: cmd
 				backoff-delay: foo
 	`},
-}, {
-	summary: `Zero backoff-factor`,
-	error:   `plan service "svc1" backoff-factor must be 1.0 or greater, not 0`,
-	input: []string{`
+	}, {
+		summary: `Zero backoff-factor`,
+		error:   `plan service "svc1" backoff-factor must be 1.0 or greater, not 0`,
+		input: []string{`
 		services:
 			"svc1":
 				override: replace
 				command: cmd
 				backoff-factor: 0
 	`},
-}, {
-	summary: `Too small backoff-factor`,
-	error:   `plan service "svc1" backoff-factor must be 1.0 or greater, not 0.5`,
-	input: []string{`
+	}, {
+		summary: `Too small backoff-factor`,
+		error:   `plan service "svc1" backoff-factor must be 1.0 or greater, not 0.5`,
+		input: []string{`
 		services:
 			"svc1":
 				override: replace
 				command: cmd
 				backoff-factor: 0.5
 	`},
-}, {
-	summary: `Invalid backoff-factor`,
-	error:   `cannot parse layer "layer-0": invalid floating-point number "foo"`,
-	input: []string{`
+	}, {
+		summary: `Invalid backoff-factor`,
+		error:   `cannot parse layer "layer-0": invalid floating-point number "foo"`,
+		input: []string{`
 		services:
 			"svc1":
 				override: replace
 				command: cmd
 				backoff-factor: foo
 	`},
-}, {
-	summary: `Invalid service command`,
-	error:   `plan service "svc1" command invalid: cannot parse service "svc1" command: EOF found when expecting closing quote`,
-	input: []string{`
+	}, {
+		summary: `Invalid service command`,
+		error:   `plan service "svc1" command invalid: cannot parse service "svc1" command: EOF found when expecting closing quote`,
+		input: []string{`
 		services:
 			svc1:
 				override: replace
 				command: foo '
 	`},
-}, {
-	summary: `Optional/overridable arguments in service command`,
-	input: []string{`
+	}, {
+		summary: `Optional/overridable arguments in service command`,
+		input: []string{`
 		services:
 			"svc1":
 				override: replace
 				command: cmd -v [ --foo bar -e "x [ y ] z" ]
 	`},
-	layers: []*plan.Layer{{
-		Order: 0,
-		Label: "layer-0",
-		Services: map[string]*plan.Service{
-			"svc1": {
-				Name:     "svc1",
-				Override: "replace",
-				Command:  `cmd -v [ --foo bar -e "x [ y ] z" ]`,
+		layers: []*plan.Layer{{
+			Order: 0,
+			Label: "layer-0",
+			Services: map[string]*plan.Service{
+				"svc1": {
+					Name:     "svc1",
+					Override: "replace",
+					Command:  `cmd -v [ --foo bar -e "x [ y ] z" ]`,
+				},
 			},
-		},
-		Checks:     map[string]*plan.Check{},
-		LogTargets: map[string]*plan.LogTarget{},
-	}},
-}, {
-	summary: `Invalid service command: cannot have any arguments after [ ... ] group`,
-	error:   `plan service "svc1" command invalid: cannot parse service "svc1" command: cannot have any arguments after \[ ... \] group`,
-	input: []string{`
+			Checks:     map[string]*plan.Check{},
+			LogTargets: map[string]*plan.LogTarget{},
+		}},
+	}, {
+		summary: `Invalid service command: cannot have any arguments after [ ... ] group`,
+		error:   `plan service "svc1" command invalid: cannot parse service "svc1" command: cannot have any arguments after \[ ... \] group`,
+		input: []string{`
 		services:
 			"svc1":
 				override: replace
 				command: cmd -v [ --foo ] bar
 	`},
-}, {
-	summary: `Invalid service command: cannot have ] outside of [ ... ] group`,
-	error:   `plan service "svc1" command invalid: cannot parse service "svc1" command: cannot have \] outside of \[ ... \] group`,
-	input: []string{`
+	}, {
+		summary: `Invalid service command: cannot have ] outside of [ ... ] group`,
+		error:   `plan service "svc1" command invalid: cannot parse service "svc1" command: cannot have \] outside of \[ ... \] group`,
+		input: []string{`
 		services:
 			"svc1":
 				override: replace
 				command: cmd -v ] foo
 	`},
-}, {
-	summary: `Invalid service command: cannot nest [ ... ] groups`,
-	error:   `plan service "svc1" command invalid: cannot parse service "svc1" command: cannot nest \[ ... \] groups`,
-	input: []string{`
+	}, {
+		summary: `Invalid service command: cannot nest [ ... ] groups`,
+		error:   `plan service "svc1" command invalid: cannot parse service "svc1" command: cannot nest \[ ... \] groups`,
+		input: []string{`
 		services:
 			"svc1":
 				override: replace
 				command: cmd -v [ foo [ --bar ] ]
 	`},
-}, {
-	summary: "Checks fields parse correctly and defaults are correct",
-	input: []string{`
+	}, {
+		summary: "Checks fields parse correctly and defaults are correct",
+		input: []string{`
 		checks:
 			chk-http:
 				override: replace
@@ -552,14 +554,14 @@ var planTests = []planTest{{
 					headers:
 						Foo: bar
 						Authorization: Basic password
-		
+
 			chk-tcp:
 				override: merge
 				level: ready
 				tcp:
 					port: 7777
 					host: somehost
-		
+
 			chk-exec:
 				override: replace
 				exec:
@@ -569,58 +571,58 @@ var planTests = []planTest{{
 						BAZ: buzz
 					working-dir: /root
 `},
-	result: &plan.Layer{
-		Services: map[string]*plan.Service{},
-		Checks: map[string]*plan.Check{
-			"chk-http": {
-				Name:      "chk-http",
-				Override:  plan.ReplaceOverride,
-				Level:     plan.AliveLevel,
-				Period:    plan.OptionalDuration{Value: 20 * time.Second, IsSet: true},
-				Timeout:   plan.OptionalDuration{Value: 500 * time.Millisecond, IsSet: true},
-				Threshold: 7,
-				HTTP: &plan.HTTPCheck{
-					URL: "https://example.com/foo",
-					Headers: map[string]string{
-						"Foo":           "bar",
-						"Authorization": "Basic password",
+		result: &plan.Layer{
+			Services: map[string]*plan.Service{},
+			Checks: map[string]*plan.Check{
+				"chk-http": {
+					Name:      "chk-http",
+					Override:  plan.ReplaceOverride,
+					Level:     plan.AliveLevel,
+					Period:    plan.OptionalDuration{Value: 20 * time.Second, IsSet: true},
+					Timeout:   plan.OptionalDuration{Value: 500 * time.Millisecond, IsSet: true},
+					Threshold: 7,
+					HTTP: &plan.HTTPCheck{
+						URL: "https://example.com/foo",
+						Headers: map[string]string{
+							"Foo":           "bar",
+							"Authorization": "Basic password",
+						},
+					},
+				},
+				"chk-tcp": {
+					Name:      "chk-tcp",
+					Override:  plan.MergeOverride,
+					Level:     plan.ReadyLevel,
+					Period:    plan.OptionalDuration{Value: defaultCheckPeriod},
+					Timeout:   plan.OptionalDuration{Value: defaultCheckTimeout},
+					Threshold: defaultCheckThreshold,
+					TCP: &plan.TCPCheck{
+						Port: 7777,
+						Host: "somehost",
+					},
+				},
+				"chk-exec": {
+					Name:      "chk-exec",
+					Override:  plan.ReplaceOverride,
+					Level:     plan.UnsetLevel,
+					Period:    plan.OptionalDuration{Value: defaultCheckPeriod},
+					Timeout:   plan.OptionalDuration{Value: defaultCheckTimeout},
+					Threshold: defaultCheckThreshold,
+					Exec: &plan.ExecCheck{
+						Command: "sleep 1",
+						Environment: map[string]string{
+							"FOO": "bar",
+							"BAZ": "buzz",
+						},
+						WorkingDir: "/root",
 					},
 				},
 			},
-			"chk-tcp": {
-				Name:      "chk-tcp",
-				Override:  plan.MergeOverride,
-				Level:     plan.ReadyLevel,
-				Period:    plan.OptionalDuration{Value: defaultCheckPeriod},
-				Timeout:   plan.OptionalDuration{Value: defaultCheckTimeout},
-				Threshold: defaultCheckThreshold,
-				TCP: &plan.TCPCheck{
-					Port: 7777,
-					Host: "somehost",
-				},
-			},
-			"chk-exec": {
-				Name:      "chk-exec",
-				Override:  plan.ReplaceOverride,
-				Level:     plan.UnsetLevel,
-				Period:    plan.OptionalDuration{Value: defaultCheckPeriod},
-				Timeout:   plan.OptionalDuration{Value: defaultCheckTimeout},
-				Threshold: defaultCheckThreshold,
-				Exec: &plan.ExecCheck{
-					Command: "sleep 1",
-					Environment: map[string]string{
-						"FOO": "bar",
-						"BAZ": "buzz",
-					},
-					WorkingDir: "/root",
-				},
-			},
+			LogTargets: map[string]*plan.LogTarget{},
 		},
-		LogTargets: map[string]*plan.LogTarget{},
-	},
-}, {
-	summary: "Checks override replace works correctly",
-	input: []string{`
+	}, {
+		summary: "Checks override replace works correctly",
+		input: []string{`
 		checks:
 			chk-http:
 				override: replace
@@ -629,14 +631,14 @@ var planTests = []planTest{{
 					url: https://example.com/foo
 					headers:
 						Foo: bar
-		
+
 			chk-tcp:
 				override: replace
 				level: ready
 				tcp:
 					port: 7777
 					host: somehost
-		
+
 			chk-exec:
 				override: replace
 				exec:
@@ -648,67 +650,67 @@ var planTests = []planTest{{
 				override: replace
 				http:
 					url: https://example.com/bar
-		
+
 			chk-tcp:
 				override: replace
 				tcp:
 					port: 8888
-		
+
 			chk-exec:
 				override: replace
 				exec:
 					command: sleep 2
 `},
-	result: &plan.Layer{
-		Services: map[string]*plan.Service{},
-		Checks: map[string]*plan.Check{
-			"chk-http": {
-				Name:      "chk-http",
-				Override:  plan.ReplaceOverride,
-				Period:    plan.OptionalDuration{Value: defaultCheckPeriod},
-				Timeout:   plan.OptionalDuration{Value: defaultCheckTimeout},
-				Threshold: defaultCheckThreshold,
-				HTTP: &plan.HTTPCheck{
-					URL: "https://example.com/bar",
+		result: &plan.Layer{
+			Services: map[string]*plan.Service{},
+			Checks: map[string]*plan.Check{
+				"chk-http": {
+					Name:      "chk-http",
+					Override:  plan.ReplaceOverride,
+					Period:    plan.OptionalDuration{Value: defaultCheckPeriod},
+					Timeout:   plan.OptionalDuration{Value: defaultCheckTimeout},
+					Threshold: defaultCheckThreshold,
+					HTTP: &plan.HTTPCheck{
+						URL: "https://example.com/bar",
+					},
+				},
+				"chk-tcp": {
+					Name:      "chk-tcp",
+					Override:  plan.ReplaceOverride,
+					Period:    plan.OptionalDuration{Value: defaultCheckPeriod},
+					Timeout:   plan.OptionalDuration{Value: defaultCheckTimeout},
+					Threshold: defaultCheckThreshold,
+					TCP: &plan.TCPCheck{
+						Port: 8888,
+					},
+				},
+				"chk-exec": {
+					Name:      "chk-exec",
+					Override:  plan.ReplaceOverride,
+					Period:    plan.OptionalDuration{Value: defaultCheckPeriod},
+					Timeout:   plan.OptionalDuration{Value: defaultCheckTimeout},
+					Threshold: defaultCheckThreshold,
+					Exec: &plan.ExecCheck{
+						Command: "sleep 2",
+					},
 				},
 			},
-			"chk-tcp": {
-				Name:      "chk-tcp",
-				Override:  plan.ReplaceOverride,
-				Period:    plan.OptionalDuration{Value: defaultCheckPeriod},
-				Timeout:   plan.OptionalDuration{Value: defaultCheckTimeout},
-				Threshold: defaultCheckThreshold,
-				TCP: &plan.TCPCheck{
-					Port: 8888,
-				},
-			},
-			"chk-exec": {
-				Name:      "chk-exec",
-				Override:  plan.ReplaceOverride,
-				Period:    plan.OptionalDuration{Value: defaultCheckPeriod},
-				Timeout:   plan.OptionalDuration{Value: defaultCheckTimeout},
-				Threshold: defaultCheckThreshold,
-				Exec: &plan.ExecCheck{
-					Command: "sleep 2",
-				},
-			},
+			LogTargets: map[string]*plan.LogTarget{},
 		},
-		LogTargets: map[string]*plan.LogTarget{},
-	},
-}, {
-	summary: "Checks override merge works correctly",
-	input: []string{`
+	}, {
+		summary: "Checks override merge works correctly",
+		input: []string{`
 		checks:
 			chk-http:
 				override: merge
 				period: 1s
-		
+
 			chk-tcp:
 				override: merge
 				timeout: 300ms
 				tcp:
 					host: foobar
-		
+
 			chk-exec:
 				override: merge
 				threshold: 5
@@ -722,12 +724,12 @@ var planTests = []planTest{{
 					url: https://example.com/bar
 					headers:
 						Foo: bar
-		
+
 			chk-tcp:
 				override: merge
 				tcp:
 					port: 80
-		
+
 			chk-exec:
 				override: merge
 				timeout: 7s
@@ -736,97 +738,97 @@ var planTests = []planTest{{
 					environment:
 						FOO: bar
 `},
-	result: &plan.Layer{
-		Services: map[string]*plan.Service{},
-		Checks: map[string]*plan.Check{
-			"chk-http": {
-				Name:      "chk-http",
-				Override:  plan.MergeOverride,
-				Period:    plan.OptionalDuration{Value: time.Second, IsSet: true},
-				Timeout:   plan.OptionalDuration{Value: defaultCheckTimeout},
-				Threshold: defaultCheckThreshold,
-				HTTP: &plan.HTTPCheck{
-					URL:     "https://example.com/bar",
-					Headers: map[string]string{"Foo": "bar"},
+		result: &plan.Layer{
+			Services: map[string]*plan.Service{},
+			Checks: map[string]*plan.Check{
+				"chk-http": {
+					Name:      "chk-http",
+					Override:  plan.MergeOverride,
+					Period:    plan.OptionalDuration{Value: time.Second, IsSet: true},
+					Timeout:   plan.OptionalDuration{Value: defaultCheckTimeout},
+					Threshold: defaultCheckThreshold,
+					HTTP: &plan.HTTPCheck{
+						URL:     "https://example.com/bar",
+						Headers: map[string]string{"Foo": "bar"},
+					},
 				},
-			},
-			"chk-tcp": {
-				Name:      "chk-tcp",
-				Override:  plan.MergeOverride,
-				Period:    plan.OptionalDuration{Value: defaultCheckPeriod},
-				Timeout:   plan.OptionalDuration{Value: 300 * time.Millisecond, IsSet: true},
-				Threshold: defaultCheckThreshold,
-				TCP: &plan.TCPCheck{
-					Port: 80,
-					Host: "foobar",
+				"chk-tcp": {
+					Name:      "chk-tcp",
+					Override:  plan.MergeOverride,
+					Period:    plan.OptionalDuration{Value: defaultCheckPeriod},
+					Timeout:   plan.OptionalDuration{Value: 300 * time.Millisecond, IsSet: true},
+					Threshold: defaultCheckThreshold,
+					TCP: &plan.TCPCheck{
+						Port: 80,
+						Host: "foobar",
+					},
 				},
-			},
-			"chk-exec": {
-				Name:      "chk-exec",
-				Override:  plan.MergeOverride,
-				Period:    plan.OptionalDuration{Value: defaultCheckPeriod},
-				Timeout:   plan.OptionalDuration{Value: 7 * time.Second, IsSet: true},
-				Threshold: 5,
-				Exec: &plan.ExecCheck{
-					Command:    "sleep 2",
-					WorkingDir: "/root",
-					Environment: map[string]string{
-						"FOO": "bar",
+				"chk-exec": {
+					Name:      "chk-exec",
+					Override:  plan.MergeOverride,
+					Period:    plan.OptionalDuration{Value: defaultCheckPeriod},
+					Timeout:   plan.OptionalDuration{Value: 7 * time.Second, IsSet: true},
+					Threshold: 5,
+					Exec: &plan.ExecCheck{
+						Command:    "sleep 2",
+						WorkingDir: "/root",
+						Environment: map[string]string{
+							"FOO": "bar",
+						},
 					},
 				},
 			},
+			LogTargets: map[string]*plan.LogTarget{},
 		},
-		LogTargets: map[string]*plan.LogTarget{},
-	},
-}, {
-	summary: "One of http, tcp, or exec must be present for check",
-	error:   `plan must specify one of "http", "tcp", or "exec" for check "chk1"`,
-	input: []string{`
+	}, {
+		summary: "One of http, tcp, or exec must be present for check",
+		error:   `plan must specify one of "http", "tcp", or "exec" for check "chk1"`,
+		input: []string{`
 		checks:
 			chk1:
 				override: replace
 `},
-}, {
-	summary: "HTTP check requires url field",
-	error:   `plan must set "url" for http check "chk1"`,
-	input: []string{`
+	}, {
+		summary: "HTTP check requires url field",
+		error:   `plan must set "url" for http check "chk1"`,
+		input: []string{`
 		checks:
 			chk1:
 				override: replace
 				http: {}
 `},
-}, {
-	summary: "TCP check requires port field",
-	error:   `plan must set "port" for tcp check "chk2"`,
-	input: []string{`
+	}, {
+		summary: "TCP check requires port field",
+		error:   `plan must set "port" for tcp check "chk2"`,
+		input: []string{`
 		checks:
 			chk2:
 				override: replace
 				tcp: {}
 `},
-}, {
-	summary: "Exec check requires command field",
-	error:   `plan must set "command" for exec check "chk3"`,
-	input: []string{`
+	}, {
+		summary: "Exec check requires command field",
+		error:   `plan must set "command" for exec check "chk3"`,
+		input: []string{`
 		checks:
 			chk3:
 				override: replace
 				exec: {}
 `},
-}, {
-	summary: `Invalid exec check command`,
-	error:   `plan check "chk1" command invalid: EOF found when expecting closing quote`,
-	input: []string{`
+	}, {
+		summary: `Invalid exec check command`,
+		error:   `plan check "chk1" command invalid: EOF found when expecting closing quote`,
+		input: []string{`
 		checks:
 			chk1:
 				override: replace
 				exec:
 					command: foo '
 	`},
-}, {
-	summary: `Invalid exec check service context`,
-	error:   `plan check "chk1" service context specifies non-existent service "nosvc"`,
-	input: []string{`
+	}, {
+		summary: `Invalid exec check service context`,
+		error:   `plan check "chk1" service context specifies non-existent service "nosvc"`,
+		input: []string{`
 		checks:
 			chk1:
 				override: replace
@@ -834,9 +836,9 @@ var planTests = []planTest{{
 					command: foo
 					service-context: nosvc
 	`},
-}, {
-	summary: "Simple layer with log targets",
-	input: []string{`
+	}, {
+		summary: "Simple layer with log targets",
+		input: []string{`
 		services:
 			svc1:
 				command: foo
@@ -846,7 +848,7 @@ var planTests = []planTest{{
 				command: bar
 				override: merge
 				startup: enabled
-		
+
 		log-targets:
 			tgt1:
 				type: loki
@@ -859,48 +861,48 @@ var planTests = []planTest{{
 				services: [svc2]
 				override: merge
 `},
-	result: &plan.Layer{
-		Services: map[string]*plan.Service{
-			"svc1": {
-				Name:          "svc1",
-				Command:       "foo",
-				Override:      plan.MergeOverride,
-				Startup:       plan.StartupEnabled,
-				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
-				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
-				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
+		result: &plan.Layer{
+			Services: map[string]*plan.Service{
+				"svc1": {
+					Name:          "svc1",
+					Command:       "foo",
+					Override:      plan.MergeOverride,
+					Startup:       plan.StartupEnabled,
+					BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
+					BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
+					BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
+				},
+				"svc2": {
+					Name:          "svc2",
+					Command:       "bar",
+					Override:      plan.MergeOverride,
+					Startup:       plan.StartupEnabled,
+					BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
+					BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
+					BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
+				},
 			},
-			"svc2": {
-				Name:          "svc2",
-				Command:       "bar",
-				Override:      plan.MergeOverride,
-				Startup:       plan.StartupEnabled,
-				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
-				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
-				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
+			Checks: map[string]*plan.Check{},
+			LogTargets: map[string]*plan.LogTarget{
+				"tgt1": {
+					Name:     "tgt1",
+					Type:     plan.LokiTarget,
+					Location: "http://10.1.77.196:3100/loki/api/v1/push",
+					Services: []string{"all"},
+					Override: plan.MergeOverride,
+				},
+				"tgt2": {
+					Name:     "tgt2",
+					Type:     plan.SyslogTarget,
+					Location: "udp://0.0.0.0:514",
+					Services: []string{"svc2"},
+					Override: plan.MergeOverride,
+				},
 			},
 		},
-		Checks: map[string]*plan.Check{},
-		LogTargets: map[string]*plan.LogTarget{
-			"tgt1": {
-				Name:     "tgt1",
-				Type:     plan.LokiTarget,
-				Location: "http://10.1.77.196:3100/loki/api/v1/push",
-				Services: []string{"all"},
-				Override: plan.MergeOverride,
-			},
-			"tgt2": {
-				Name:     "tgt2",
-				Type:     plan.SyslogTarget,
-				Location: "udp://0.0.0.0:514",
-				Services: []string{"svc2"},
-				Override: plan.MergeOverride,
-			},
-		},
-	},
-}, {
-	summary: "Overriding log targets",
-	input: []string{`
+	}, {
+		summary: "Overriding log targets",
+		input: []string{`
 		services:
 			svc1:
 				command: foo
@@ -910,7 +912,7 @@ var planTests = []planTest{{
 				command: bar
 				override: merge
 				startup: enabled
-		
+
 		log-targets:
 			tgt1:
 				type: loki
@@ -936,7 +938,7 @@ var planTests = []planTest{{
 				command: bar
 				override: replace
 				startup: enabled
-		
+
 		log-targets:
 			tgt1:
 				services: [-all, svc1]
@@ -952,163 +954,163 @@ var planTests = []planTest{{
 				services: [-svc1]
 				override: merge
 `},
-	layers: []*plan.Layer{{
-		Label: "layer-0",
-		Order: 0,
-		Services: map[string]*plan.Service{
-			"svc1": {
-				Name:     "svc1",
-				Command:  "foo",
-				Override: plan.MergeOverride,
-				Startup:  plan.StartupEnabled,
+		layers: []*plan.Layer{{
+			Label: "layer-0",
+			Order: 0,
+			Services: map[string]*plan.Service{
+				"svc1": {
+					Name:     "svc1",
+					Command:  "foo",
+					Override: plan.MergeOverride,
+					Startup:  plan.StartupEnabled,
+				},
+				"svc2": {
+					Name:     "svc2",
+					Command:  "bar",
+					Override: plan.MergeOverride,
+					Startup:  plan.StartupEnabled,
+				},
 			},
-			"svc2": {
-				Name:     "svc2",
-				Command:  "bar",
-				Override: plan.MergeOverride,
-				Startup:  plan.StartupEnabled,
+			Checks: map[string]*plan.Check{},
+			LogTargets: map[string]*plan.LogTarget{
+				"tgt1": {
+					Name:     "tgt1",
+					Type:     plan.LokiTarget,
+					Location: "http://10.1.77.196:3100/loki/api/v1/push",
+					Services: []string{"all"},
+					Override: plan.MergeOverride,
+				},
+				"tgt2": {
+					Name:     "tgt2",
+					Type:     plan.SyslogTarget,
+					Location: "udp://0.0.0.0:514",
+					Services: []string{"svc2"},
+					Override: plan.MergeOverride,
+				},
+				"tgt3": {
+					Name:     "tgt3",
+					Type:     plan.LokiTarget,
+					Location: "http://10.1.77.206:3100/loki/api/v1/push",
+					Services: []string{"all"},
+					Override: plan.MergeOverride,
+				},
 			},
-		},
-		Checks: map[string]*plan.Check{},
-		LogTargets: map[string]*plan.LogTarget{
-			"tgt1": {
-				Name:     "tgt1",
-				Type:     plan.LokiTarget,
-				Location: "http://10.1.77.196:3100/loki/api/v1/push",
-				Services: []string{"all"},
-				Override: plan.MergeOverride,
+		}, {
+			Label: "layer-1",
+			Order: 1,
+			Services: map[string]*plan.Service{
+				"svc1": {
+					Name:     "svc1",
+					Command:  "foo",
+					Override: plan.MergeOverride,
+				},
+				"svc2": {
+					Name:     "svc2",
+					Command:  "bar",
+					Override: plan.ReplaceOverride,
+					Startup:  plan.StartupEnabled,
+				},
 			},
-			"tgt2": {
-				Name:     "tgt2",
-				Type:     plan.SyslogTarget,
-				Location: "udp://0.0.0.0:514",
-				Services: []string{"svc2"},
-				Override: plan.MergeOverride,
+			Checks: map[string]*plan.Check{},
+			LogTargets: map[string]*plan.LogTarget{
+				"tgt1": {
+					Name:     "tgt1",
+					Services: []string{"-all", "svc1"},
+					Override: plan.MergeOverride,
+				},
+				"tgt2": {
+					Name:     "tgt2",
+					Type:     plan.SyslogTarget,
+					Location: "udp://1.2.3.4:514",
+					Services: []string{},
+					Override: plan.ReplaceOverride,
+				},
+				"tgt3": {
+					Name:     "tgt3",
+					Type:     plan.SyslogTarget,
+					Location: "udp://0.0.0.0:514",
+					Services: []string{"-svc1"},
+					Override: plan.MergeOverride,
+				},
 			},
-			"tgt3": {
-				Name:     "tgt3",
-				Type:     plan.LokiTarget,
-				Location: "http://10.1.77.206:3100/loki/api/v1/push",
-				Services: []string{"all"},
-				Override: plan.MergeOverride,
+		}},
+		result: &plan.Layer{
+			Services: map[string]*plan.Service{
+				"svc1": {
+					Name:          "svc1",
+					Command:       "foo",
+					Override:      plan.MergeOverride,
+					Startup:       plan.StartupEnabled,
+					BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
+					BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
+					BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
+				},
+				"svc2": {
+					Name:          "svc2",
+					Command:       "bar",
+					Override:      plan.ReplaceOverride,
+					Startup:       plan.StartupEnabled,
+					BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
+					BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
+					BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
+				},
+			},
+			Checks: map[string]*plan.Check{},
+			LogTargets: map[string]*plan.LogTarget{
+				"tgt1": {
+					Name:     "tgt1",
+					Type:     plan.LokiTarget,
+					Location: "http://10.1.77.196:3100/loki/api/v1/push",
+					Services: []string{"all", "-all", "svc1"},
+					Override: plan.MergeOverride,
+				},
+				"tgt2": {
+					Name:     "tgt2",
+					Type:     plan.SyslogTarget,
+					Location: "udp://1.2.3.4:514",
+					Override: plan.ReplaceOverride,
+				},
+				"tgt3": {
+					Name:     "tgt3",
+					Type:     plan.SyslogTarget,
+					Location: "udp://0.0.0.0:514",
+					Services: []string{"all", "-svc1"},
+					Override: plan.MergeOverride,
+				},
 			},
 		},
 	}, {
-		Label: "layer-1",
-		Order: 1,
-		Services: map[string]*plan.Service{
-			"svc1": {
-				Name:     "svc1",
-				Command:  "foo",
-				Override: plan.MergeOverride,
-			},
-			"svc2": {
-				Name:     "svc2",
-				Command:  "bar",
-				Override: plan.ReplaceOverride,
-				Startup:  plan.StartupEnabled,
-			},
-		},
-		Checks: map[string]*plan.Check{},
-		LogTargets: map[string]*plan.LogTarget{
-			"tgt1": {
-				Name:     "tgt1",
-				Services: []string{"-all", "svc1"},
-				Override: plan.MergeOverride,
-			},
-			"tgt2": {
-				Name:     "tgt2",
-				Type:     plan.SyslogTarget,
-				Location: "udp://1.2.3.4:514",
-				Services: []string{},
-				Override: plan.ReplaceOverride,
-			},
-			"tgt3": {
-				Name:     "tgt3",
-				Type:     plan.SyslogTarget,
-				Location: "udp://0.0.0.0:514",
-				Services: []string{"-svc1"},
-				Override: plan.MergeOverride,
-			},
-		},
-	}},
-	result: &plan.Layer{
-		Services: map[string]*plan.Service{
-			"svc1": {
-				Name:          "svc1",
-				Command:       "foo",
-				Override:      plan.MergeOverride,
-				Startup:       plan.StartupEnabled,
-				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
-				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
-				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
-			},
-			"svc2": {
-				Name:          "svc2",
-				Command:       "bar",
-				Override:      plan.ReplaceOverride,
-				Startup:       plan.StartupEnabled,
-				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
-				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
-				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
-			},
-		},
-		Checks: map[string]*plan.Check{},
-		LogTargets: map[string]*plan.LogTarget{
-			"tgt1": {
-				Name:     "tgt1",
-				Type:     plan.LokiTarget,
-				Location: "http://10.1.77.196:3100/loki/api/v1/push",
-				Services: []string{"all", "-all", "svc1"},
-				Override: plan.MergeOverride,
-			},
-			"tgt2": {
-				Name:     "tgt2",
-				Type:     plan.SyslogTarget,
-				Location: "udp://1.2.3.4:514",
-				Override: plan.ReplaceOverride,
-			},
-			"tgt3": {
-				Name:     "tgt3",
-				Type:     plan.SyslogTarget,
-				Location: "udp://0.0.0.0:514",
-				Services: []string{"all", "-svc1"},
-				Override: plan.MergeOverride,
-			},
-		},
-	},
-}, {
-	summary: "Log target requires type field",
-	error:   `plan must define "type" \("loki" or "syslog"\) for log target "tgt1"`,
-	input: []string{`
+		summary: "Log target requires type field",
+		error:   `plan must define "type" \("loki" or "syslog"\) for log target "tgt1"`,
+		input: []string{`
 		log-targets:
 			tgt1:
 				location: http://10.1.77.196:3100/loki/api/v1/push
 				override: merge
 `},
-}, {
-	summary: "Log target location must be specified",
-	error:   `plan must define "location" for log target "tgt1"`,
-	input: []string{`
+	}, {
+		summary: "Log target location must be specified",
+		error:   `plan must define "location" for log target "tgt1"`,
+		input: []string{`
 		log-targets:
 			tgt1:
 				type: loki
 				services: [all]
 				override: merge
 `}}, {
-	summary: "Unsupported log target type",
-	error:   `log target "tgt1" has unsupported type "foobar", must be "loki" or "syslog"`,
-	input: []string{`
+		summary: "Unsupported log target type",
+		error:   `log target "tgt1" has unsupported type "foobar", must be "loki" or "syslog"`,
+		input: []string{`
 		log-targets:
 			tgt1:
 				type: foobar
 				location: http://10.1.77.196:3100/loki/api/v1/push
 				override: merge
 `},
-}, {
-	summary: "Log target specifies invalid service",
-	error:   `log target "tgt1" specifies unknown service "nonexistent"`,
-	input: []string{`
+	}, {
+		summary: "Log target specifies invalid service",
+		error:   `log target "tgt1" specifies unknown service "nonexistent"`,
+		input: []string{`
 		log-targets:
 			tgt1:
 				type: loki
@@ -1116,16 +1118,16 @@ var planTests = []planTest{{
 				services: [nonexistent]
 				override: merge
 `},
-}, {
-	summary: `Service name can't start with "-"`,
-	error:   `cannot use service name "-svc1": starting with "-" not allowed`,
-	input: []string{`
+	}, {
+		summary: `Service name can't start with "-"`,
+		error:   `cannot use service name "-svc1": starting with "-" not allowed`,
+		input: []string{`
 		services:
 			-svc1:
 				command: foo
 				override: merge
 `},
-}}
+	}}
 
 func (s *S) TestParseLayer(c *C) {
 	for _, test := range planTests {
@@ -1630,4 +1632,166 @@ func (s *S) TestMergeServiceContextOverrides(c *C) {
 		Group:       "grp",
 		WorkingDir:  "/working/dir",
 	})
+}
+
+func (s *S) TestLayersCombineEmptyLayers(c *C) {
+	combined, err := plan.CombineLayers()
+	c.Assert(err, IsNil) // Assert that there is no error
+	// Additional assertions to check that the returned *Layer is not nil and its fields are empty
+	c.Assert(combined, Not(IsNil))
+	c.Assert(len(combined.Services), Equals, 0)
+	c.Assert(len(combined.Checks), Equals, 0)
+	c.Assert(len(combined.LogTargets), Equals, 0)
+
+}
+
+func (s *S) TestLayersCombineServicesMultiErrors(c *C) {
+	layer1, err := plan.ParseLayer(2, "label1", []byte(`services:
+  svc1:
+    override: replace
+    command: ""
+    on-success: invalid
+    on-failure: invalid
+    on-check-failure:
+      svc1: foo
+    backoff-factor: 0
+  svc2:
+    override: replace
+    command: invalidCommand
+    on-success: invalid
+    on-failure: invalid
+    on-check-failure:
+      svc1: foo
+    backoff-factor: 0
+  svc3:
+    override: foo
+    command: ""
+    on-success: invalid
+    on-failure: invalid
+    on-check-failure:
+      svc3: foo
+    backoff-factor: 0
+  svc4:
+    command: cmd
+    on-success: invalid
+    on-failure: invalid
+    on-check-failure:
+      svc4: foo
+    backoff-factor: 0
+`))
+
+	expectedErrors := `multiple errors validating plan:
+- layer "label1" has invalid "override" value for service "svc3"
+- layer "label1" must define "override" for service "svc4"
+- plan must define "command" for service "svc1"
+- plan service "svc1" on-success action "invalid" invalid
+- plan service "svc1" on-failure action "invalid" invalid
+- plan service "svc1" on-check-failure action "foo" invalid
+- plan service "svc1" backoff-factor must be 1.0 or greater, not 0
+- plan service "svc2" on-success action "invalid" invalid
+- plan service "svc2" on-failure action "invalid" invalid
+- plan service "svc2" on-check-failure action "foo" invalid
+- plan service "svc2" backoff-factor must be 1.0 or greater, not 0`
+
+	c.Assert(err, IsNil)                        // If you expect no errors from ParseLayer
+	combined, err := plan.CombineLayers(layer1) // Declare combined and err here
+	c.Assert(combined, IsNil)
+	c.Check(sortErrors(err.Error()), DeepEquals, sortErrors(expectedErrors))
+
+}
+
+func (s *S) TestLayersCombineChecksMultiErrors(c *C) {
+	layer1, err := plan.ParseLayer(1, "label1", []byte(`checks:
+  svc1:
+    override: replace
+    level: foo
+    period: 0
+    timeout: 0
+    http:
+      url: ""
+    tcp:
+      port: 0
+    exec:
+      command: ""
+      service-context: foo
+      user-id: 0
+  svc2:
+    override: replace
+    level: alive
+    period: 10s
+    timeout: 10s
+    exec:
+      command: invalid
+  svc3:
+    override: foo
+    level: alive
+    exec:
+      command: ""
+  svc4:
+    level: alive
+    exec:
+      command: cmd
+  svc5:
+    override: replace
+    level: alive
+
+`))
+	expectedErrors := `multiple errors validating plan:
+- layer "label1" has invalid "override" value for check "svc3"
+- layer "label1" must define "override" for check "svc4"
+- plan check "svc1" level must be "alive" or "ready"
+- plan check "svc1" period must not be zero
+- plan check "svc1" timeout must not be zero
+- plan must set "url" for http check "svc1"
+- plan must set "port" for tcp check "svc1"
+- plan must set "command" for exec check "svc1"
+- plan check "svc1" service context specifies non-existent service "foo"
+- plan check "svc1" has invalid user/group: must specify group, not just UID
+- plan check "svc2" timeout must be less than period
+- plan must specify one of "http", "tcp", or "exec" for check "svc5"`
+
+	c.Assert(err, IsNil)                        // If you expect no errors from ParseLayer
+	combined, err := plan.CombineLayers(layer1) // Declare combined and err here
+	c.Assert(combined, IsNil)
+	c.Check(sortErrors(err.Error()), DeepEquals, sortErrors(expectedErrors))
+
+}
+
+func (s *S) TestLayersCombineLogTargetMultiErrors(c *C) {
+	layer1, err := plan.ParseLayer(1, "label1", []byte(`log-targets:
+  svc1:
+    override: replace
+    type: foo
+  svc2:
+    override: replace
+    type: ""
+    services: ["foo"]
+  svc3:
+    override: foo
+    type: ""
+  svc4:
+    type: loki
+    services: ["foo"]
+`))
+
+	expectedErrors := `multiple errors validating plan:
+- layer "label1" has invalid "override" value for log target "svc3"
+- layer "label1" must define "override" for log target "svc4"
+- plan must define "type" ("loki" or "syslog") for log target "svc2"
+- log target "svc2" specifies unknown service "foo"
+- plan must define "location" for log target "svc2"
+- log target "svc1" has unsupported type "foo", must be "loki" or "syslog"
+- plan must define "location" for log target "svc1"`
+
+	c.Assert(err, IsNil)                        // If you expect no errors from ParseLayer
+	combined, err := plan.CombineLayers(layer1) // Declare combined and err here
+	c.Assert(combined, IsNil)
+	c.Check(sortErrors(err.Error()), DeepEquals, sortErrors(expectedErrors))
+
+}
+
+func sortErrors(errMsg string) []string {
+	errLines := strings.Split(errMsg, "\n")
+	sort.Strings(errLines)
+	return errLines
 }

@@ -700,7 +700,7 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 			}
 			numTypes++
 		}
-		if numTypes != 1 {
+		if numTypes == 0 {
 			addErrorf(`plan must specify one of "http", "tcp", or "exec" for check %q`, name)
 		}
 	}
