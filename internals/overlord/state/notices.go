@@ -76,11 +76,10 @@ type Notice struct {
 	// Additional data captured from the last occurrence of one of these notices.
 	lastData map[string]string
 
-	// How much time after one of these was last repeated should we allow it
-	// to repeat.
+	// How long after one of these was last repeated should we allow it to repeat.
 	repeatAfter time.Duration
 
-	// How much time since one of these last occurred should we drop the notice.
+	// How long since one of these last occurred until we should drop the notice.
 	expireAfter time.Duration
 }
 
