@@ -36,7 +36,7 @@ func (s *PebbleSuite) TestGetPlan(c *check.C) {
 }`)
 	})
 
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"plan"})
+	rest, err := cli.Parser(cli.Client(), cli.Transport()).ParseArgs([]string{"plan"})
 	c.Assert(err, check.IsNil)
 	c.Assert(rest, check.HasLen, 0)
 	c.Assert(s.Stdout(), check.Equals, `
@@ -59,7 +59,7 @@ func (s *PebbleSuite) TestGetPlanFails(c *check.C) {
 }`)
 	})
 
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"plan"})
+	rest, err := cli.Parser(cli.Client(), cli.Transport()).ParseArgs([]string{"plan"})
 	c.Assert(err.Error(), check.Equals, "could not do the thing")
 	c.Assert(rest, check.HasLen, 1)
 	c.Assert(s.Stdout(), check.Equals, ``)
@@ -67,7 +67,7 @@ func (s *PebbleSuite) TestGetPlanFails(c *check.C) {
 }
 
 func (s *PebbleSuite) TestPlanExtraArgs(c *check.C) {
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"plan", "extra", "args"})
+	rest, err := cli.Parser(cli.Client(), cli.Transport()).ParseArgs([]string{"plan", "extra", "args"})
 	c.Assert(err, check.Equals, cli.ErrExtraArgs)
 	c.Check(rest, check.HasLen, 1)
 }

@@ -27,6 +27,7 @@ import (
 	. "gopkg.in/check.v1"
 
 	"github.com/canonical/pebble/client"
+	"github.com/canonical/pebble/internals/clientutil"
 )
 
 type execSuite struct {
@@ -46,7 +47,7 @@ func (s *execSuite) SetUpTest(c *C) {
 	s.stdioWs = &testWebsocket{}
 	s.controlWs = &testWebsocket{}
 	s.stderrWs = &testWebsocket{}
-	s.cli.SetGetWebsocket(func(url string) (client.ClientWebsocket, error) {
+	s.cli.SetGetWebsocket(func(url string) (clientutil.Websocket, error) {
 		matches := websocketRegexp.FindStringSubmatch(url)
 		if matches == nil {
 			return nil, fmt.Errorf("invalid websocket URL %q", url)

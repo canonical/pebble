@@ -16,44 +16,15 @@ package client
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
-	"net"
 	"net/http"
 	"net/url"
-	"os"
-	"path"
 	"time"
 
-	"github.com/gorilla/websocket"
-
-	"github.com/canonical/pebble/internals/wsutil"
+	"github.com/canonical/pebble/internals/clientutil"
 )
-
-// SocketNotFoundError is the error type returned when the client fails
-// to find a unix socket at the specified path.
-type SocketNotFoundError struct {
-	// Err is the wrapped error.
-	Err error
-
-	// Path is the path of the non-existent socket.
-	Path string
-}
-
-func (s SocketNotFoundError) Error() string {
-	if s.Path == "" && s.Err != nil {
-		return s.Err.Error()
-	}
-	return fmt.Sprintf("socket %q not found", s.Path)
-}
-
-func (s SocketNotFoundError) Unwrap() error {
-	return s.Err
-}
 
 // decodeWithNumber decodes input data using json.Decoder, ensuring numbers are preserved
 // via json.Number data type. It errors out on invalid json or any excess input.
@@ -67,24 +38,6 @@ func decodeWithNumber(r io.Reader, value interface{}) error {
 		return fmt.Errorf("cannot parse json value")
 	}
 	return nil
-}
-
-func unixDialer(socketPath string) func(string, string) (net.Conn, error) {
-	return func(_, _ string) (net.Conn, error) {
-		_, err := os.Stat(socketPath)
-		if errors.Is(err, os.ErrNotExist) {
-			return nil, &SocketNotFoundError{Err: err, Path: socketPath}
-		}
-		if err != nil {
-			return nil, fmt.Errorf("cannot stat %q: %w", socketPath, err)
-		}
-
-		return net.Dial("unix", socketPath)
-	}
-}
-
-type doer interface {
-	Do(*http.Request) (*http.Response, error)
 }
 
 // Config allows the user to customize client behavior.
@@ -106,9 +59,7 @@ type Config struct {
 
 // A Client knows how to talk to the Pebble daemon.
 type Client struct {
-	baseURL   url.URL
-	doer      doer
-	userAgent string
+	transport *clientutil.Transport
 
 	maintenance error
 
@@ -118,212 +69,57 @@ type Client struct {
 	getWebsocket getWebsocketFunc
 }
 
-type getWebsocketFunc func(url string) (clientWebsocket, error)
+type getWebsocketFunc func(url string) (clientutil.Websocket, error)
 
-type clientWebsocket interface {
-	wsutil.MessageReader
-	wsutil.MessageWriter
-	io.Closer
-	jsonWriter
-}
-
-type jsonWriter interface {
-	WriteJSON(v interface{}) error
-}
-
-func New(config *Config) (*Client, error) {
+func New(config *Config) (client *Client, err error) {
 	if config == nil {
 		config = &Config{}
 	}
 
-	var client *Client
-	var transport *http.Transport
-
+	var transport *clientutil.Transport
 	if config.BaseURL == "" {
-		// By default talk over a unix socket.
-		transport = &http.Transport{Dial: unixDialer(config.Socket), DisableKeepAlives: config.DisableKeepAlive}
-		baseURL := url.URL{Scheme: "http", Host: "localhost"}
-		client = &Client{baseURL: baseURL}
+		// A Unix socket was specified.
+		transport, err = clientutil.NewTransport(config.Socket, config.UserAgent)
 	} else {
-		// Otherwise talk regular HTTP-over-TCP.
-		baseURL, err := url.Parse(config.BaseURL)
-		if err != nil {
-			return nil, fmt.Errorf("cannot parse base URL: %v", err)
-		}
-		transport = &http.Transport{DisableKeepAlives: config.DisableKeepAlive}
-		client = &Client{baseURL: *baseURL}
+		// A URL was specified.
+		transport, err = clientutil.NewTransport(config.BaseURL, config.UserAgent)
+	}
+	if err != nil {
+		return
 	}
 
-	client.doer = &http.Client{Transport: transport}
-	client.userAgent = config.UserAgent
-	client.getWebsocket = func(url string) (clientWebsocket, error) {
-		return getWebsocket(transport, url)
-	}
-
-	return client, nil
+	return &Client{
+		transport: transport,
+		getWebsocket: func(url string) (clientutil.Websocket, error) {
+			return transport.GetWebsocket(url)
+		},
+	}, nil
 }
 
-func (client *Client) getTaskWebsocket(taskID, websocketID string) (clientWebsocket, error) {
+func NewFromTransport(transport *clientutil.Transport) *Client {
+	return &Client{transport: transport}
+}
+
+func (c *Client) getTaskWebsocket(taskID, websocketID string) (clientutil.Websocket, error) {
 	url := fmt.Sprintf("ws://localhost/v1/tasks/%s/websocket/%s", taskID, websocketID)
-	return client.getWebsocket(url)
-}
-
-func getWebsocket(transport *http.Transport, url string) (clientWebsocket, error) {
-	dialer := websocket.Dialer{
-		NetDial:          transport.Dial,
-		Proxy:            transport.Proxy,
-		TLSClientConfig:  transport.TLSClientConfig,
-		HandshakeTimeout: 5 * time.Second,
-	}
-	conn, _, err := dialer.Dial(url, nil)
-	return conn, err
+	return c.getWebsocket(url)
 }
 
 // CloseIdleConnections closes any API connections that are currently unused.
-func (client *Client) CloseIdleConnections() {
-	c, ok := client.doer.(*http.Client)
-	if ok {
-		c.CloseIdleConnections()
-	}
+func (c *Client) CloseIdleConnections() {
+	c.transport.CloseIdleConnections()
 }
 
 // Maintenance returns an error reflecting the daemon maintenance status or nil.
-func (client *Client) Maintenance() error {
-	return client.maintenance
+func (c *Client) Maintenance() error {
+	return c.maintenance
 }
 
 // WarningsSummary returns the number of warnings that are ready to be shown to
 // the user, and the timestamp of the most recently added warning (useful for
 // silencing the warning alerts, and OKing the returned warnings).
-func (client *Client) WarningsSummary() (count int, timestamp time.Time) {
-	return client.warningCount, client.warningTimestamp
-}
-
-// RequestError is returned when there's an error processing the request.
-type RequestError struct{ error }
-
-func (e RequestError) Error() string {
-	return fmt.Sprintf("cannot build request: %v", e.error)
-}
-
-// ConnectionError represents a connection or communication error.
-type ConnectionError struct {
-	error
-}
-
-func (e ConnectionError) Error() string {
-	return fmt.Sprintf("cannot communicate with server: %v", e.error)
-}
-
-func (e ConnectionError) Unwrap() error {
-	return e.error
-}
-
-// raw performs a request and returns the resulting http.Response and
-// error you usually only need to call this directly if you expect the
-// response to not be JSON, otherwise you'd call Do(...) instead.
-func (client *Client) raw(ctx context.Context, method, urlpath string, query url.Values, headers map[string]string, body io.Reader) (*http.Response, error) {
-	// fake a url to keep http.Client happy
-	u := client.baseURL
-	u.Path = path.Join(client.baseURL.Path, urlpath)
-	u.RawQuery = query.Encode()
-	req, err := http.NewRequestWithContext(ctx, method, u.String(), body)
-	if err != nil {
-		return nil, RequestError{err}
-	}
-	if client.userAgent != "" {
-		req.Header.Set("User-Agent", client.userAgent)
-	}
-
-	for key, value := range headers {
-		req.Header.Set(key, value)
-	}
-
-	rsp, err := client.doer.Do(req)
-	if err != nil {
-		return nil, ConnectionError{err}
-	}
-
-	return rsp, nil
-}
-
-var (
-	doRetry   = 250 * time.Millisecond
-	doTimeout = 5 * time.Second
-)
-
-// FakeDoRetry fakes the delays used by the do retry loop (intended for
-// testing). Calling restore will revert the changes.
-func FakeDoRetry(retry, timeout time.Duration) (restore func()) {
-	oldRetry := doRetry
-	oldTimeout := doTimeout
-	doRetry = retry
-	doTimeout = timeout
-	return func() {
-		doRetry = oldRetry
-		doTimeout = oldTimeout
-	}
-}
-
-type hijacked struct {
-	do func(*http.Request) (*http.Response, error)
-}
-
-func (h hijacked) Do(req *http.Request) (*http.Response, error) {
-	return h.do(req)
-}
-
-// Hijack lets the caller take over the raw HTTP request.
-func (client *Client) Hijack(f func(*http.Request) (*http.Response, error)) {
-	client.doer = hijacked{f}
-}
-
-// do performs a request and decodes the resulting json into the given
-// value. It's low-level, for testing/experimenting only; you should
-// usually use a higher level interface that builds on this.
-func (client *Client) do(method, path string, query url.Values, headers map[string]string, body io.Reader, v interface{}) error {
-	retry := time.NewTicker(doRetry)
-	defer retry.Stop()
-	timeout := time.After(doTimeout)
-	var rsp *http.Response
-	var err error
-	for {
-		rsp, err = client.raw(context.Background(), method, path, query, headers, body)
-		if err == nil || method != "GET" {
-			break
-		}
-		select {
-		case <-retry.C:
-			continue
-		case <-timeout:
-		}
-		break
-	}
-	if err != nil {
-		return err
-	}
-	defer rsp.Body.Close()
-
-	if v != nil {
-		if err := decodeInto(rsp.Body, v); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func decodeInto(reader io.Reader, v interface{}) error {
-	dec := json.NewDecoder(reader)
-	if err := dec.Decode(v); err != nil {
-		r := dec.Buffered()
-		buf, err1 := ioutil.ReadAll(r)
-		if err1 != nil {
-			buf = []byte(fmt.Sprintf("error reading buffered response body: %s", err1))
-		}
-		return fmt.Errorf("cannot decode %q: %w", buf, err)
-	}
-	return nil
+func (c *Client) WarningsSummary() (count int, timestamp time.Time) {
+	return c.warningCount, c.warningTimestamp
 }
 
 // doSync performs a request to the given path using the specified HTTP method.
@@ -332,7 +128,7 @@ func decodeInto(reader io.Reader, v interface{}) error {
 // which produces json.Numbers instead of float64 types for numbers.
 func (client *Client) doSync(method, path string, query url.Values, headers map[string]string, body io.Reader, v interface{}) (*ResultInfo, error) {
 	var rsp response
-	if err := client.do(method, path, query, headers, body, &rsp); err != nil {
+	if err := client.transport.Do(method, path, query, headers, body, &rsp); err != nil {
 		return nil, err
 	}
 	if err := rsp.err(client); err != nil {
@@ -362,7 +158,7 @@ func (client *Client) doAsync(method, path string, query url.Values, headers map
 func (client *Client) doAsyncFull(method, path string, query url.Values, headers map[string]string, body io.Reader) (result json.RawMessage, changeID string, err error) {
 	var rsp response
 
-	if err := client.do(method, path, query, headers, body, &rsp); err != nil {
+	if err := client.transport.Do(method, path, query, headers, body, &rsp); err != nil {
 		return nil, "", err
 	}
 	if err := rsp.err(client); err != nil {

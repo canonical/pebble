@@ -23,6 +23,7 @@ import (
 	"io/ioutil"
 	"time"
 
+	"github.com/canonical/pebble/internals/clientutil"
 	"github.com/canonical/pebble/internals/wsutil"
 )
 
@@ -106,7 +107,7 @@ type ExecProcess struct {
 	client      *Client
 	timeout     time.Duration
 	writesDone  chan struct{}
-	controlConn jsonWriter
+	controlConn clientutil.JSONWriter
 	stdinDone   chan bool // only used by tests
 }
 
@@ -178,7 +179,7 @@ func (client *Client) Exec(opts *ExecOptions) (*ExecProcess, error) {
 	stdoutDone := wsutil.WebsocketRecvStream(stdout, ioConn)
 
 	// Handle stderr separately if needed.
-	var stderrConn clientWebsocket
+	var stderrConn clientutil.Websocket
 	var stderrDone chan bool
 	if opts.Stderr != nil {
 		stderrConn, err = client.getTaskWebsocket(taskID, "stderr")

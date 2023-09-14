@@ -39,7 +39,7 @@ func (s *PebbleSuite) TestChecks(c *check.C) {
 	]
 }`)
 	})
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"checks"})
+	rest, err := cli.Parser(cli.Client(), cli.Transport()).ParseArgs([]string{"checks"})
 	c.Assert(err, check.IsNil)
 	c.Assert(rest, check.HasLen, 0)
 	c.Check(s.Stdout(), check.Equals, `
@@ -62,7 +62,7 @@ func (s *PebbleSuite) TestPlanNoChecks(c *check.C) {
     "result": []
 }`)
 	})
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"checks"})
+	rest, err := cli.Parser(cli.Client(), cli.Transport()).ParseArgs([]string{"checks"})
 	c.Assert(err, check.IsNil)
 	c.Assert(rest, check.HasLen, 0)
 	c.Check(s.Stdout(), check.Equals, "")
@@ -80,7 +80,7 @@ func (s *PebbleSuite) TestNoMatchingChecks(c *check.C) {
     "result": []
 }`)
 	})
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"checks", "--level=alive", "chk1", "chk3"})
+	rest, err := cli.Parser(cli.Client(), cli.Transport()).ParseArgs([]string{"checks", "--level=alive", "chk1", "chk3"})
 	c.Assert(err, check.IsNil)
 	c.Assert(rest, check.HasLen, 0)
 	c.Check(s.Stdout(), check.Equals, "")
@@ -101,7 +101,7 @@ func (s *PebbleSuite) TestChecksFiltering(c *check.C) {
 	]
 }`)
 	})
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"checks", "--level=alive", "chk1", "chk3"})
+	rest, err := cli.Parser(cli.Client(), cli.Transport()).ParseArgs([]string{"checks", "--level=alive", "chk1", "chk3"})
 	c.Assert(err, check.IsNil)
 	c.Assert(rest, check.HasLen, 0)
 	c.Check(s.Stdout(), check.Equals, `
@@ -122,7 +122,7 @@ func (s *PebbleSuite) TestChecksFails(c *check.C) {
     "result": {"message": "could not bar"}
 }`)
 	})
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"checks"})
+	rest, err := cli.Parser(cli.Client(), cli.Transport()).ParseArgs([]string{"checks"})
 	c.Assert(err, check.ErrorMatches, "could not bar")
 	c.Assert(rest, check.HasLen, 1)
 	c.Check(s.Stdout(), check.Equals, "")

@@ -24,7 +24,7 @@ import (
 )
 
 func (s *PebbleSuite) TestReplanExtraArgs(c *check.C) {
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"replan", "extra", "args"})
+	rest, err := cli.Parser(cli.Client(), cli.Transport()).ParseArgs([]string{"replan", "extra", "args"})
 	c.Assert(err, check.Equals, cli.ErrExtraArgs)
 	c.Assert(rest, check.HasLen, 1)
 	c.Check(s.Stdout(), check.Equals, "")
@@ -67,7 +67,7 @@ func (s *PebbleSuite) TestReplan(c *check.C) {
 }`)
 	})
 
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"replan"})
+	rest, err := cli.Parser(cli.Client(), cli.Transport()).ParseArgs([]string{"replan"})
 	c.Assert(err, check.IsNil)
 	c.Assert(rest, check.HasLen, 0)
 	c.Check(s.Stdout(), check.Equals, "")
@@ -91,7 +91,7 @@ func (s *PebbleSuite) TestReplanFailsNoDefaultServices(c *check.C) {
 }`)
 	})
 
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"replan"})
+	rest, err := cli.Parser(cli.Client(), cli.Transport()).ParseArgs([]string{"replan"})
 	c.Assert(err, check.ErrorMatches, "no default services")
 	c.Assert(rest, check.HasLen, 1)
 	c.Check(s.Stdout(), check.Equals, "")
@@ -117,7 +117,7 @@ func (s *PebbleSuite) TestReplanNoWait(c *check.C) {
 }`)
 	})
 
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"replan", "--no-wait"})
+	rest, err := cli.Parser(cli.Client(), cli.Transport()).ParseArgs([]string{"replan", "--no-wait"})
 	c.Assert(err, check.IsNil)
 	c.Assert(rest, check.HasLen, 0)
 	c.Check(s.Stdout(), check.Equals, "43\n")
@@ -148,7 +148,7 @@ func (s *PebbleSuite) TestReplanFailsGetChange(c *check.C) {
 }`)
 	})
 
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"replan"})
+	rest, err := cli.Parser(cli.Client(), cli.Transport()).ParseArgs([]string{"replan"})
 	c.Assert(err, check.ErrorMatches, "could not foo")
 	c.Assert(rest, check.HasLen, 1)
 	c.Check(s.Stdout(), check.Equals, "")

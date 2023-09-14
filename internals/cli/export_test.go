@@ -18,18 +18,21 @@ import (
 	"fmt"
 
 	"github.com/canonical/pebble/client"
+	"github.com/canonical/pebble/internals/clientutil"
 )
-
-var RunMain = Run
 
 var ClientConfig = &clientConfig
 
 func Client() *client.Client {
-	cli, err := client.New(ClientConfig)
+	return client.NewFromTransport(Transport())
+}
+
+func Transport() *clientutil.Transport {
+	t, err := clientutil.NewTransport(ClientConfig.Socket, ClientConfig.UserAgent)
 	if err != nil {
-		panic("cannot create client:" + err.Error())
+		panic("cannot create transport: " + err.Error())
 	}
-	return cli
+	return t
 }
 
 var (

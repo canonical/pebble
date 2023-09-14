@@ -30,6 +30,7 @@ import (
 	"golang.org/x/crypto/ssh/terminal"
 
 	"github.com/canonical/pebble/client"
+	"github.com/canonical/pebble/internals/clientutil"
 	"github.com/canonical/pebble/internals/logger"
 )
 
@@ -54,8 +55,9 @@ var ErrExtraArgs = fmt.Errorf("too many arguments for command")
 
 // CmdOptions exposes state made accessible during command execution.
 type CmdOptions struct {
-	Client *client.Client
-	Parser *flags.Parser
+	Client    *client.Client
+	Transport *clientutil.Transport
+	Parser    *flags.Parser
 }
 
 // CmdInfo holds information needed by the CLI to execute commands and
@@ -151,7 +153,7 @@ type defaultOptions struct {
 // Parser creates and populates a fresh parser.
 // Since commands have local state a fresh parser is required to isolate tests
 // from each other.
-func Parser(cli *client.Client) *flags.Parser {
+func Parser(cli *client.Client, t *clientutil.Transport) *flags.Parser {
 	// Implement --version by default on every command
 	defaultOpts := defaultOptions{
 		Version: func() {
@@ -181,7 +183,7 @@ func Parser(cli *client.Client) *flags.Parser {
 
 	// Add all commands
 	for _, c := range commands {
-		obj := c.New(&CmdOptions{Client: cli, Parser: parser})
+		obj := c.New(&CmdOptions{Client: cli, Transport: t, Parser: parser})
 
 		var target *flags.Command
 		if c.Debug {
@@ -270,14 +272,15 @@ func Run() error {
 
 	logger.SetLogger(logger.New(os.Stderr, "[pebble] "))
 
-	_, clientConfig.Socket = getEnvPaths()
-
-	cli, err := client.New(&clientConfig)
+	_, socketPath := getEnvPaths()
+	t, err := clientutil.NewTransport(socketPath, "")
 	if err != nil {
-		return fmt.Errorf("cannot create client: %v", err)
+		return fmt.Errorf("cannot create transport: %w", err)
 	}
 
-	parser := Parser(cli)
+	cli := client.NewFromTransport(t)
+
+	parser := Parser(cli, t)
 	xtra, err := parser.Parse()
 	if err != nil {
 		if e, ok := err.(*flags.Error); ok {

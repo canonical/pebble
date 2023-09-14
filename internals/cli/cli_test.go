@@ -136,7 +136,7 @@ func (s *PebbleSuite) TestErrorResult(c *C) {
 	restore := fakeArgs("pebble", "warnings")
 	defer restore()
 
-	err := cli.RunMain()
+	err := cli.Run()
 	c.Assert(err, ErrorMatches, `cannot do something`)
 }
 

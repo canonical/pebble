@@ -25,7 +25,7 @@ import (
 )
 
 func (s *PebbleSuite) TestLsExtraArgs(c *C) {
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"ls", "extra", "args"})
+	rest, err := cli.Parser(cli.Client(), cli.Transport()).ParseArgs([]string{"ls", "extra", "args"})
 	c.Assert(err, Equals, cli.ErrExtraArgs)
 	c.Assert(rest, HasLen, 1)
 	c.Check(s.Stdout(), Equals, "")
@@ -53,7 +53,7 @@ func (s *PebbleSuite) TestLsDirectory(c *C) {
 }`)
 	})
 
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"ls", "-d", "/"})
+	rest, err := cli.Parser(cli.Client(), cli.Transport()).ParseArgs([]string{"ls", "-d", "/"})
 	c.Assert(err, IsNil)
 	c.Assert(rest, HasLen, 0)
 
@@ -96,7 +96,7 @@ func (s *PebbleSuite) TestLsLongFormat(c *C) {
 }`)
 	})
 
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"ls", "-l", "/"})
+	rest, err := cli.Parser(cli.Client(), cli.Transport()).ParseArgs([]string{"ls", "-l", "/"})
 	c.Assert(err, IsNil)
 	c.Assert(rest, HasLen, 0)
 
@@ -113,7 +113,7 @@ func (s *PebbleSuite) TestLsFails(c *C) {
 		c.Assert(r.URL.Query(), DeepEquals, url.Values{"path": {"/"}, "action": {"list"}, "itself": {"true"}})
 		fmt.Fprintln(w, `{"type":"error","result":{"message":"could not foo"}}`)
 	})
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"ls", "-d", "/"})
+	rest, err := cli.Parser(cli.Client(), cli.Transport()).ParseArgs([]string{"ls", "-d", "/"})
 	c.Assert(err, ErrorMatches, "could not foo")
 	c.Assert(rest, HasLen, 1)
 	c.Check(s.Stdout(), Equals, "")
@@ -128,7 +128,7 @@ func (s *PebbleSuite) TestLsPattern(c *C) {
 		fmt.Fprintln(w, `{"type":"sync","result":[]}`)
 	})
 
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"ls", "/foo/bar.*"})
+	rest, err := cli.Parser(cli.Client(), cli.Transport()).ParseArgs([]string{"ls", "/foo/bar.*"})
 	c.Assert(err, IsNil)
 	c.Assert(rest, HasLen, 0)
 	c.Check(s.Stdout(), Equals, "")
@@ -136,7 +136,7 @@ func (s *PebbleSuite) TestLsPattern(c *C) {
 }
 
 func (s *PebbleSuite) TestLsInvalidPattern(c *C) {
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"ls", "/foo/ba[rz]/fail"})
+	rest, err := cli.Parser(cli.Client(), cli.Transport()).ParseArgs([]string{"ls", "/foo/ba[rz]/fail"})
 	c.Assert(err, ErrorMatches, "can only use globs on the last path element")
 	c.Assert(rest, HasLen, 1)
 	c.Check(s.Stdout(), Equals, "")

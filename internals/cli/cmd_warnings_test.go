@@ -85,7 +85,7 @@ func mkWarningsFakeHandler(c *check.C, body string) func(w http.ResponseWriter, 
 func (s *warningSuite) TestNoWarningsEver(c *check.C) {
 	s.RedirectClientToTestServer(mkWarningsFakeHandler(c, `{"type": "sync", "status-code": 200, "result": []}`))
 
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"warnings", "--abs-time"})
+	rest, err := cli.Parser(cli.Client(), cli.Transport()).ParseArgs([]string{"warnings", "--abs-time"})
 	c.Assert(err, check.IsNil)
 	c.Check(rest, check.HasLen, 0)
 	c.Check(s.Stderr(), check.Equals, "")
@@ -97,7 +97,7 @@ func (s *warningSuite) TestNoFurtherWarnings(c *check.C) {
 
 	s.RedirectClientToTestServer(mkWarningsFakeHandler(c, `{"type": "sync", "status-code": 200, "result": []}`))
 
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"warnings", "--abs-time"})
+	rest, err := cli.Parser(cli.Client(), cli.Transport()).ParseArgs([]string{"warnings", "--abs-time"})
 	c.Assert(err, check.IsNil)
 	c.Check(rest, check.HasLen, 0)
 	c.Check(s.Stderr(), check.Equals, "")
@@ -107,7 +107,7 @@ func (s *warningSuite) TestNoFurtherWarnings(c *check.C) {
 func (s *warningSuite) TestWarnings(c *check.C) {
 	s.RedirectClientToTestServer(mkWarningsFakeHandler(c, twoWarnings))
 
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"warnings", "--abs-time", "--unicode=never"})
+	rest, err := cli.Parser(cli.Client(), cli.Transport()).ParseArgs([]string{"warnings", "--abs-time", "--unicode=never"})
 	c.Assert(err, check.IsNil)
 	c.Check(rest, check.HasLen, 0)
 	c.Check(s.Stderr(), check.Equals, "")
@@ -129,7 +129,7 @@ warning: |
 func (s *warningSuite) TestVerboseWarnings(c *check.C) {
 	s.RedirectClientToTestServer(mkWarningsFakeHandler(c, twoWarnings))
 
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"warnings", "--abs-time", "--verbose", "--unicode=never"})
+	rest, err := cli.Parser(cli.Client(), cli.Transport()).ParseArgs([]string{"warnings", "--abs-time", "--verbose", "--unicode=never"})
 	c.Assert(err, check.IsNil)
 	c.Check(rest, check.HasLen, 0)
 	c.Check(s.Stderr(), check.Equals, "")
@@ -182,7 +182,7 @@ func (s *warningSuite) TestOkay(c *check.C) {
 		}`)
 	})
 
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"okay"})
+	rest, err := cli.Parser(cli.Client(), cli.Transport()).ParseArgs([]string{"okay"})
 	c.Assert(err, check.IsNil)
 	c.Check(rest, check.HasLen, 0)
 	c.Check(s.Stderr(), check.Equals, "")
@@ -190,7 +190,7 @@ func (s *warningSuite) TestOkay(c *check.C) {
 }
 
 func (s *warningSuite) TestOkayBeforeWarnings(c *check.C) {
-	_, err := cli.Parser(cli.Client()).ParseArgs([]string{"okay"})
+	_, err := cli.Parser(cli.Client(), cli.Transport()).ParseArgs([]string{"okay"})
 	c.Assert(err, check.ErrorMatches, "you must have looked at the warnings before acknowledging them. Try 'pebble warnings'.")
 	c.Check(s.Stderr(), check.Equals, "")
 	c.Check(s.Stdout(), check.Equals, "")
@@ -222,6 +222,7 @@ func (s *warningSuite) TestCommandWithWarnings(c *check.C) {
 	})
 
 	client := cli.Client()
+	transport := cli.Transport()
 	expectedWarnings := map[int]string{
 		0: "",
 		1: "WARNING: There is 1 new warning. See 'pebble warnings'.\n",
@@ -231,7 +232,7 @@ func (s *warningSuite) TestCommandWithWarnings(c *check.C) {
 	responseTimestamp = time.Date(2018, 9, 19, 12, 44, 19, 680362867, time.UTC)
 	for warningCount, expectedWarning := range expectedWarnings {
 		responseWarningCount = warningCount
-		rest, err := cli.Parser(client).ParseArgs([]string{"version"})
+		rest, err := cli.Parser(client, transport).ParseArgs([]string{"version"})
 		c.Assert(err, check.IsNil)
 
 		count, stamp := client.WarningsSummary()
@@ -250,11 +251,11 @@ func (s *warningSuite) TestCommandWithWarnings(c *check.C) {
 }
 
 func (s *warningSuite) TestExtraArgs(c *check.C) {
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"warnings", "extra", "args"})
+	rest, err := cli.Parser(cli.Client(), cli.Transport()).ParseArgs([]string{"warnings", "extra", "args"})
 	c.Assert(err, check.Equals, cli.ErrExtraArgs)
 	c.Check(rest, check.HasLen, 1)
 
-	rest, err = cli.Parser(cli.Client()).ParseArgs([]string{"okay", "extra", "invalid arg"})
+	rest, err = cli.Parser(cli.Client(), cli.Transport()).ParseArgs([]string{"okay", "extra", "invalid arg"})
 	c.Assert(err, check.Equals, cli.ErrExtraArgs)
 	c.Check(rest, check.HasLen, 1)
 }
@@ -271,7 +272,7 @@ func (s *warningSuite) TestLastWarningTimestamp(c *check.C) {
 	err := ioutil.WriteFile(newWarnPath, []byte("invalid JSON"), 0755)
 	c.Assert(err, check.IsNil)
 
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"okay"})
+	rest, err := cli.Parser(cli.Client(), cli.Transport()).ParseArgs([]string{"okay"})
 	c.Assert(err.Error(), check.Equals, "cannot decode timestamp file: invalid character 'i' looking for beginning of value")
 	c.Check(rest, check.HasLen, 1)
 
@@ -279,7 +280,7 @@ func (s *warningSuite) TestLastWarningTimestamp(c *check.C) {
 	err = ioutil.WriteFile(newWarnPath, []byte("{}extra"), 0755)
 	c.Assert(err, check.IsNil)
 
-	rest, err = cli.Parser(cli.Client()).ParseArgs([]string{"okay"})
+	rest, err = cli.Parser(cli.Client(), cli.Transport()).ParseArgs([]string{"okay"})
 	c.Assert(err.Error(), check.Equals, "spurious extra data in timestamp file")
 	c.Check(rest, check.HasLen, 1)
 
@@ -287,7 +288,7 @@ func (s *warningSuite) TestLastWarningTimestamp(c *check.C) {
 	err = os.Chmod(newWarnPath, 0055)
 	c.Assert(err, check.IsNil)
 
-	rest, err = cli.Parser(cli.Client()).ParseArgs([]string{"okay"})
+	rest, err = cli.Parser(cli.Client(), cli.Transport()).ParseArgs([]string{"okay"})
 	c.Assert(err.Error(), check.Equals, fmt.Sprintf("cannot open timestamp file: open %s: permission denied", newWarnPath))
 	c.Check(rest, check.HasLen, 1)
 }

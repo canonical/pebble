@@ -73,7 +73,7 @@ func (client *Client) logs(ctx context.Context, opts *LogsOptions, follow bool) 
 	if follow {
 		query.Set("follow", "true")
 	}
-	res, err := client.raw(ctx, "GET", "/v1/logs", query, nil, nil)
+	res, err := client.transport.Raw(ctx, "GET", "/v1/logs", query, nil, nil)
 	if err != nil {
 		return err
 	}

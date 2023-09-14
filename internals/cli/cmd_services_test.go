@@ -39,7 +39,7 @@ func (s *PebbleSuite) TestServices(c *check.C) {
 	]
 }`)
 	})
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"services"})
+	rest, err := cli.Parser(cli.Client(), cli.Transport()).ParseArgs([]string{"services"})
 	c.Assert(err, check.IsNil)
 	c.Assert(rest, check.HasLen, 0)
 	c.Check(s.Stdout(), check.Equals, `
@@ -62,7 +62,7 @@ func (s *PebbleSuite) TestPlanNoServices(c *check.C) {
     "result": []
 }`)
 	})
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"services"})
+	rest, err := cli.Parser(cli.Client(), cli.Transport()).ParseArgs([]string{"services"})
 	c.Assert(err, check.IsNil)
 	c.Assert(rest, check.HasLen, 0)
 	c.Check(s.Stdout(), check.Equals, "")
@@ -80,7 +80,7 @@ func (s *PebbleSuite) TestNoMatchingServices(c *check.C) {
     "result": []
 }`)
 	})
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"services", "foo", "bar"})
+	rest, err := cli.Parser(cli.Client(), cli.Transport()).ParseArgs([]string{"services", "foo", "bar"})
 	c.Assert(err, check.IsNil)
 	c.Assert(rest, check.HasLen, 0)
 	c.Check(s.Stdout(), check.Equals, "")
@@ -101,7 +101,7 @@ func (s *PebbleSuite) TestServicesNames(c *check.C) {
 	]
 }`)
 	})
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"services", "foo", "bar", "--abs-time"})
+	rest, err := cli.Parser(cli.Client(), cli.Transport()).ParseArgs([]string{"services", "foo", "bar", "--abs-time"})
 	c.Assert(err, check.IsNil)
 	c.Assert(rest, check.HasLen, 0)
 	c.Check(s.Stdout(), check.Equals, `
@@ -122,7 +122,7 @@ func (s *PebbleSuite) TestServicesFail(c *check.C) {
     "result": {"message": "could not foo"}
 }`)
 	})
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"services"})
+	rest, err := cli.Parser(cli.Client(), cli.Transport()).ParseArgs([]string{"services"})
 	c.Assert(err, check.ErrorMatches, "could not foo")
 	c.Assert(rest, check.HasLen, 1)
 	c.Check(s.Stdout(), check.Equals, "")

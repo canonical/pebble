@@ -18,6 +18,8 @@ import (
 	"fmt"
 	"io"
 	"net/url"
+
+	"github.com/canonical/pebble/internals/clientutil"
 )
 
 var (
@@ -25,12 +27,12 @@ var (
 	CalculateFileMode = calculateFileMode
 )
 
-func (client *Client) SetDoer(d doer) {
-	client.doer = d
+func (client *Client) SetDoer(d clientutil.Doer) {
+	client.transport.Doer = d
 }
 
 func (client *Client) Do(method, path string, query url.Values, body io.Reader, v interface{}) error {
-	return client.do(method, path, query, nil, body, v)
+	return client.transport.Do(method, path, query, nil, body, v)
 }
 
 func (client *Client) FakeAsyncRequest() (changeId string, err error) {
@@ -50,5 +52,3 @@ func (client *Client) SetGetWebsocket(f getWebsocketFunc) {
 func (p *ExecProcess) WaitStdinDone() {
 	<-p.stdinDone
 }
-
-type ClientWebsocket = clientWebsocket

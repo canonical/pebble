@@ -30,6 +30,7 @@ import (
 	. "gopkg.in/check.v1"
 
 	"github.com/canonical/pebble/client"
+	"github.com/canonical/pebble/internals/clientutil"
 )
 
 // Hook up check.v1 into the "go test" runner
@@ -70,7 +71,7 @@ func (cs *clientSuite) SetUpTest(c *C) {
 	cs.tmpDir = c.MkDir()
 	cs.socketPath = filepath.Join(cs.tmpDir, "pebble.socket")
 
-	cs.restore = client.FakeDoRetry(time.Millisecond, 10*time.Millisecond)
+	cs.restore = clientutil.FakeDoRetry(time.Millisecond, 10*time.Millisecond)
 }
 
 func (cs *clientSuite) TearDownTest(c *C) {
@@ -318,7 +319,7 @@ func (cs *clientSuite) TestNonExistentSocketErrors(c *C) {
 
 	_, err = cli.SysInfo()
 	c.Check(err, NotNil)
-	var notFoundErr *client.SocketNotFoundError
+	var notFoundErr *clientutil.SocketNotFoundError
 	c.Check(errors.As(err, &notFoundErr), Equals, true)
 
 	c.Check(notFoundErr.Path, Equals, "/tmp/not-the-droids-you-are-looking-for")

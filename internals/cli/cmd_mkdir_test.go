@@ -26,7 +26,7 @@ import (
 )
 
 func (s *PebbleSuite) TestMkdirExtraArgs(c *C) {
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"mkdir", "/foo", "extra", "args"})
+	rest, err := cli.Parser(cli.Client(), cli.Transport()).ParseArgs([]string{"mkdir", "/foo", "extra", "args"})
 	c.Assert(err, Equals, cli.ErrExtraArgs)
 	c.Assert(rest, HasLen, 1)
 	c.Check(s.Stdout(), Equals, "")
@@ -57,7 +57,7 @@ func (s *PebbleSuite) TestMkdir(c *C) {
 		fmt.Fprintln(w, `{"type": "sync", "result": [{"path": "/foo"}]}`)
 	})
 
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"mkdir", "/foo"})
+	rest, err := cli.Parser(cli.Client(), cli.Transport()).ParseArgs([]string{"mkdir", "/foo"})
 	c.Assert(err, IsNil)
 	c.Assert(rest, HasLen, 0)
 	c.Check(s.Stdout(), Equals, "")
@@ -65,7 +65,7 @@ func (s *PebbleSuite) TestMkdir(c *C) {
 }
 
 func (s *PebbleSuite) TestMkdirFailsParsingPermissions(c *C) {
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"mkdir", "-m", "foobar", "/foo"})
+	rest, err := cli.Parser(cli.Client(), cli.Transport()).ParseArgs([]string{"mkdir", "-m", "foobar", "/foo"})
 	c.Assert(err, ErrorMatches, `invalid mode for directory: "foobar"`)
 	c.Assert(rest, HasLen, 1)
 	c.Check(s.Stdout(), Equals, "")
@@ -96,7 +96,7 @@ func (s *PebbleSuite) TestMkdirMakeParents(c *C) {
 		fmt.Fprintln(w, `{"type": "sync", "result": [{"path": "/foo/bar"}]}`)
 	})
 
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"mkdir", "-p", "/foo/bar"})
+	rest, err := cli.Parser(cli.Client(), cli.Transport()).ParseArgs([]string{"mkdir", "-p", "/foo/bar"})
 	c.Assert(err, IsNil)
 	c.Assert(rest, HasLen, 0)
 	c.Check(s.Stdout(), Equals, "")
@@ -127,7 +127,7 @@ func (s *PebbleSuite) TestMkdirPermissions(c *C) {
 		fmt.Fprintln(w, `{"type": "sync", "result": [{"path": "/foo/bar"}]}`)
 	})
 
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"mkdir", "-m", "755", "/foo/bar"})
+	rest, err := cli.Parser(cli.Client(), cli.Transport()).ParseArgs([]string{"mkdir", "-m", "755", "/foo/bar"})
 	c.Assert(err, IsNil)
 	c.Assert(rest, HasLen, 0)
 	c.Check(s.Stdout(), Equals, "")
@@ -158,7 +158,7 @@ func (s *PebbleSuite) TestMkdirOwnerIDs(c *C) {
 		fmt.Fprintln(w, `{"type": "sync", "result": [{"path": "/foo/bar"}]}`)
 	})
 
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"mkdir", "--uid", "1000", "--gid", "1000", "/foo/bar"})
+	rest, err := cli.Parser(cli.Client(), cli.Transport()).ParseArgs([]string{"mkdir", "--uid", "1000", "--gid", "1000", "/foo/bar"})
 	c.Assert(err, IsNil)
 	c.Assert(rest, HasLen, 0)
 	c.Check(s.Stdout(), Equals, "")
@@ -189,7 +189,7 @@ func (s *PebbleSuite) TestMkdirOwnerNames(c *C) {
 		fmt.Fprintln(w, `{"type": "sync", "result": [{"path": "/foo/bar"}]}`)
 	})
 
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"mkdir", "--user", "root", "--group", "wheel", "/foo/bar"})
+	rest, err := cli.Parser(cli.Client(), cli.Transport()).ParseArgs([]string{"mkdir", "--user", "root", "--group", "wheel", "/foo/bar"})
 	c.Assert(err, IsNil)
 	c.Assert(rest, HasLen, 0)
 	c.Check(s.Stdout(), Equals, "")
@@ -220,7 +220,7 @@ func (s *PebbleSuite) TestMkdirFails(c *C) {
 		fmt.Fprintln(w, `{"type": "error", "result": {"message": "could not foo"}}`)
 	})
 
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"mkdir", "/foo"})
+	rest, err := cli.Parser(cli.Client(), cli.Transport()).ParseArgs([]string{"mkdir", "/foo"})
 	c.Assert(err, ErrorMatches, "could not foo")
 	c.Assert(rest, HasLen, 1)
 	c.Check(s.Stdout(), Equals, "")
@@ -261,7 +261,7 @@ func (s *PebbleSuite) TestMkdirFailsOnDirectory(c *C) {
 		}`)
 	})
 
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"mkdir", "/foobar"})
+	rest, err := cli.Parser(cli.Client(), cli.Transport()).ParseArgs([]string{"mkdir", "/foobar"})
 
 	clientErr, ok := err.(*client.Error)
 	c.Assert(ok, Equals, true)
