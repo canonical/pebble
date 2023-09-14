@@ -26,46 +26,58 @@ import (
 )
 
 const (
+	// MaxNoticeKeyLength is the maximum key length for notices, in bytes.
 	MaxNoticeKeyLength = 255
 
+	// Expiry time for notices. Note that the expiry time for snapd warnings
+	// is 28 days, but a shorter time for Pebble notices seems appropriate.
 	noticeExpireAfter = 7 * 24 * time.Hour
 )
 
 // Notice represents an aggregated notice. The combination of type and key is unique.
 type Notice struct {
-	// Server-generated unique ID for this notice (a surrogate key). Users
-	// shouldn't rely on this, but this will be a monotonically increasing
-	// number (like change ID).
+	// Server-generated unique ID for this notice (a surrogate key).
+	//
+	// Users shouldn't rely on this, but this will be a monotonically
+	// increasing number (like change ID).
 	id string
 
-	// The notice's type.
+	// The notice type represents a group of notices originating from a common
+	// source. For example, notices originating from the CLI client have type
+	// "client".
 	noticeType NoticeType
 
-	// The notice key: a string that must be unique for this notice type.
-	// For example, for the "change-update" notice, the key is the change ID.
-	// For a warning, the key would be the warning message.
+	// The notice key is a string that differentiates notices of this type.
+	// Notices recorded with the type and key of an existing notice count as
+	// an occurrence of that notice.
 	//
-	// This is limited to a maximum of 255 bytes when added (it's an error
-	// to add a notice with a longer key).
+	// This is limited to a maximum of MaxNoticeKeyLength bytes when added
+	// (it's an error to add a notice with a longer key).
 	key string
 
-	// The first time one of these notices (type and key combination) occurred.
+	// The first time one of these notices (type and key combination) occurs.
 	firstOccurred time.Time
 
-	// The last time one of these notices occurred.
+	// The last time one of these notices occurred. This is updated every time
+	// one of these notices occurs.
 	lastOccurred time.Time
 
-	// Same as lastOccurred when the notice was last repeated. Only updated
-	// once lastOccurred > lastRepeated + repeatAfter.
+	// The time this notice was last "repeated". This is set when one of these
+	// notices first occurs, and updated when it reoccurs at least
+	// repeatAfter after the previous lastRepeated time.
+	//
+	// Notices and WaitNotices return notices ordered by lastRepeated time, so
+	// repeated notices will appear at the end of the returned list.
 	lastRepeated time.Time
 
 	// The number of times one of these notices has occurred.
 	occurrences int
 
-	// Additional data for the last occurrence of this type and key combination.
+	// Additional data captured from the last occurrence of one of these notices.
 	lastData map[string]string
 
-	// How much time after one of these last occurred should we allow it to repeat.
+	// How much time after one of these was last repeated should we allow it
+	// to repeat.
 	repeatAfter time.Duration
 
 	// How much time since one of these last occurred should we drop the notice.
@@ -150,7 +162,7 @@ type NoticeType string
 
 const (
 	// Recorded whenever a change is updated: when it is first spawned or its
-	// status was updated.
+	// status was updated. The key for change-update notices is the change ID.
 	NoticeChangeUpdate NoticeType = "change-update"
 
 	// A client notice reported via the Pebble client API or "pebble notify".
@@ -175,8 +187,12 @@ func NoticeTypeFromString(s string) NoticeType {
 	}
 }
 
-// AddNotice adds an occurrence of a notice with the specified type and key
+// AddNotice records an occurrence of a notice with the specified type and key
 // and key-value data, returning the notice ID.
+//
+// The notice's repeatAfter time is set on the first occurrence; a value of
+// zero means "never repeat". It is only updated on subsequent occurrences if
+// the repeatAfter argument is nonzero.
 func (s *State) AddNotice(noticeType NoticeType, key string, data map[string]string, repeatAfter time.Duration) string {
 	return s.addNoticeWithTime(time.Now(), noticeType, key, data, repeatAfter)
 }
@@ -212,7 +228,10 @@ func (s *State) addNoticeWithTime(now time.Time, noticeType NoticeType, key stri
 	} else {
 		// Additional occurrence, update existing notice
 		notice.occurrences++
-		if repeatAfter != 0 && now.After(notice.lastRepeated.Add(repeatAfter)) {
+		if repeatAfter != 0 {
+			notice.repeatAfter = repeatAfter
+		}
+		if notice.repeatAfter != 0 && now.After(notice.lastRepeated.Add(notice.repeatAfter)) {
 			// Update last repeated time if repeat-after time has elapsed
 			notice.lastRepeated = now
 			newOrRepeated = true
@@ -220,7 +239,6 @@ func (s *State) addNoticeWithTime(now time.Time, noticeType NoticeType, key stri
 	}
 	notice.lastOccurred = now
 	notice.lastData = data
-	notice.repeatAfter = repeatAfter
 
 	if newOrRepeated {
 		s.processNoticeWaiters()
