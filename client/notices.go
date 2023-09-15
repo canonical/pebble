@@ -93,8 +93,8 @@ type Notice struct {
 type NoticeType string
 
 const (
-	// Recorded whenever a change is updated: when it is first spawned or its
-	// status was updated.
+	// Recorded whenever a change is updated: when the change is first spawned
+	// or its status is updated.
 	NoticeChangeUpdate NoticeType = "change-update"
 
 	// A client notice reported via the Pebble client API or "pebble notify".
