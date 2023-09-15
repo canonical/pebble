@@ -42,7 +42,7 @@ The notices command lists the notices that have occurred, ordered by the
 Repeated time (oldest first).
 
 If --timeout is given and matching notices aren't yet available, wait up to
-the given duration for matching notices to arrive.
+the given duration for matching notices to arrive, then return them.
 
 By default, this lists all notices. If 'pebble ack' has been executed, this
 will only list the notices that have occurred (or been repeated) since the
