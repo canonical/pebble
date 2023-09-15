@@ -18,7 +18,6 @@ import (
 	"context"
 	"encoding/json"
 	"io"
-	"net/http"
 	"net/url"
 	"time"
 
@@ -194,8 +193,7 @@ func (cs *clientSuite) TestWaitNotices(c *C) {
 }
 
 func (cs *clientSuite) TestWaitNoticesTimeout(c *C) {
-	cs.status = http.StatusGatewayTimeout
-	cs.rsp = `{"type": "error"}`
+	cs.rsp = `{"type": "sync", "result": []}`
 	notices, err := cs.cli.WaitNotices(context.Background(), &client.NoticesOptions{}, time.Second)
 	c.Assert(err, IsNil)
 	c.Assert(notices, HasLen, 0)
