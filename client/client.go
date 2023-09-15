@@ -26,7 +26,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"path"
+	pathpkg "path"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -106,6 +106,8 @@ type Config struct {
 
 // A Client knows how to talk to the Pebble daemon.
 type Client struct {
+	Requester Requester
+
 	baseURL   url.URL
 	doer      doer
 	userAgent string
@@ -159,8 +161,127 @@ func New(config *Config) (*Client, error) {
 	client.getWebsocket = func(url string) (clientWebsocket, error) {
 		return getWebsocket(transport, url)
 	}
-
+	client.Requester = &requester{
+		baseURL:   &client.baseURL,
+		userAgent: config.UserAgent,
+		client:    &http.Client{Transport: transport},
+		maintenanceHandler: func(err error) {
+			client.maintenance = err
+		},
+		warningHandler: func(count int, timestamp time.Time) {
+			client.warningCount = count
+			client.warningTimestamp = timestamp
+		},
+	}
 	return client, nil
+}
+
+type RequestOptions struct {
+	QueryString url.Values
+	Headers     map[string]string
+	Body        io.Reader
+	Output      interface{}
+}
+
+type ResponseInfo struct {
+	Type     string
+	ChangeID string
+	Result   json.RawMessage
+}
+
+type Requester interface {
+	Request(ctx context.Context, verb, path string, opts *RequestOptions) (*ResponseInfo, error)
+}
+
+type requester struct {
+	baseURL            *url.URL
+	userAgent          string
+	client             *http.Client
+	maintenanceHandler func(error)
+	warningHandler     func(count int, timestamp time.Time)
+}
+
+func (r *requester) Request(ctx context.Context, verb, path string, opts *RequestOptions) (*ResponseInfo, error) {
+	url := *r.baseURL
+	url.Path = pathpkg.Join(url.Path, path)
+	url.RawQuery = opts.QueryString.Encode()
+
+	req, err := http.NewRequestWithContext(ctx, verb, url.String(), opts.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	if r.userAgent != "" {
+		req.Header.Set("User-Agent", r.userAgent)
+	}
+	for h, v := range opts.Headers {
+		req.Header.Set(h, v)
+	}
+
+	retry := time.NewTicker(doRetry)
+	defer retry.Stop()
+	timeout := time.After(doTimeout)
+
+	var res *http.Response
+	for {
+		res, err = r.client.Do(req)
+		if err == nil || verb != "GET" {
+			break
+		}
+		select {
+		case <-retry.C:
+			continue
+		case <-timeout:
+		}
+		break
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	defer res.Body.Close()
+
+	var rsp response
+	d := json.NewDecoder(res.Body)
+	if decodeErr := d.Decode(&rsp); decodeErr != nil {
+		if buf, ioErr := ioutil.ReadAll(d.Buffered()); ioErr != nil {
+			return nil, fmt.Errorf("cannot read buffered response body: %w", ioErr)
+		} else {
+			return nil, fmt.Errorf("cannot decode %q: %w", buf, decodeErr)
+		}
+	}
+	if r.maintenanceHandler != nil {
+		r.maintenanceHandler(rsp.Maintenance)
+	}
+	if err := rsp.err(nil); err != nil {
+		return nil, err
+	}
+
+	if rsp.Type == "sync" {
+		if opts.Output != nil {
+			if err := decodeWithNumber(bytes.NewReader(rsp.Result), opts.Output); err != nil {
+				return nil, fmt.Errorf("cannot unmarshal: %w", err)
+			}
+		}
+		if r.warningHandler != nil {
+			r.warningHandler(rsp.WarningCount, rsp.WarningTimestamp)
+		}
+	} else if rsp.Type == "async" {
+		if rsp.StatusCode != 202 {
+			return nil, fmt.Errorf("operation not accepted")
+		}
+		if rsp.Change == "" {
+			return nil, fmt.Errorf("async response without change reference")
+		}
+	} else {
+		return nil, fmt.Errorf("expected sync or async response, got %q", rsp.Type)
+	}
+
+	return &ResponseInfo{
+		Type:     rsp.Type,
+		ChangeID: rsp.Change,
+		Result:   rsp.Result,
+	}, nil
 }
 
 func (client *Client) getTaskWebsocket(taskID, websocketID string) (clientWebsocket, error) {
@@ -225,7 +346,7 @@ func (e ConnectionError) Unwrap() error {
 func (client *Client) raw(ctx context.Context, method, urlpath string, query url.Values, headers map[string]string, body io.Reader) (*http.Response, error) {
 	// fake a url to keep http.Client happy
 	u := client.baseURL
-	u.Path = path.Join(client.baseURL.Path, urlpath)
+	u.Path = pathpkg.Join(client.baseURL.Path, urlpath)
 	u.RawQuery = query.Encode()
 	req, err := http.NewRequestWithContext(ctx, method, u.String(), body)
 	if err != nil {
