@@ -26,7 +26,7 @@ import (
 )
 
 // A very loose regex to ensure client keys are in the form "domain.com/key"
-var clientKeyRegexp = regexp.MustCompile(`([a-z0-9-_]+\.)+[a-z0-9-_]+/.+`)
+var clientKeyRegexp = regexp.MustCompile(`^([a-z0-9-]+\.)+[a-z0-9-]+/[A-Za-z0-9./-]+$`)
 
 func v1GetNotices(c *Command, r *http.Request, _ *UserState) Response {
 	query := r.URL.Query()
