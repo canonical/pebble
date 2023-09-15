@@ -18,7 +18,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"net/http"
 	"net/url"
 	"time"
 )
@@ -27,11 +26,11 @@ type NotifyOptions struct {
 	// Key is the client notice's key. Must be in "domain.com/key" format.
 	Key string
 
-	// RepeatAfter, if provided, allows the notice to repeat after this duration.
-	RepeatAfter time.Duration
-
 	// Data are optional key=value pairs for this occurrence of the notice.
 	Data map[string]string
+
+	// RepeatAfter, if provided, allows the notice to repeat after this duration.
+	RepeatAfter time.Duration
 }
 
 // Notify records an occurrence of a "client" notice with the specified options,
@@ -135,19 +134,20 @@ func (client *Client) Notices(opts *NoticesOptions) ([]*Notice, error) {
 
 // WaitNotices returns a list of notices that match the filters given in opts,
 // waiting up to the given timeout. They are ordered by the last-repeated time.
+//
+// If the timeout elapses before any matching notices arrive, it's not
+// considered an error: WaitNotices returns a nil slice and a nil error.
 func (client *Client) WaitNotices(ctx context.Context, opts *NoticesOptions, timeout time.Duration) ([]*Notice, error) {
 	query := makeNoticesQuery(opts)
 	query.Set("timeout", timeout.String())
 
+	// We need to use client.raw() here to pass the context through (and we
+	// don't want retries).
 	res, err := client.raw(ctx, "GET", "/v1/notices", query, nil, nil)
 	if err != nil {
 		return nil, err
 	}
 	defer res.Body.Close()
-
-	if res.StatusCode == http.StatusGatewayTimeout {
-		return nil, nil
-	}
 
 	var rsp response
 	err = decodeInto(res.Body, &rsp)
@@ -168,7 +168,7 @@ func makeNoticesQuery(opts *NoticesOptions) url.Values {
 		query.Set("key", opts.Key)
 	}
 	if !opts.After.IsZero() {
-		query.Set("after", opts.After.Format(time.RFC3339))
+		query.Set("after", opts.After.Format(time.RFC3339Nano))
 	}
 	return query
 }

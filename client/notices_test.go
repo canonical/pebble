@@ -18,7 +18,6 @@ import (
 	"context"
 	"encoding/json"
 	"io"
-	"net/http"
 	"net/url"
 	"time"
 
@@ -108,14 +107,14 @@ func (cs *clientSuite) TestNoticesFilters(c *C) {
 	notices, err := cs.cli.Notices(&client.NoticesOptions{
 		Type:  client.NoticeClient,
 		Key:   "foo.com/bar",
-		After: time.Date(2023, 9, 5, 16, 43, 0, 0, time.UTC),
+		After: time.Date(2023, 9, 5, 16, 43, 32, 123_456_789, time.UTC),
 	})
 	c.Assert(err, IsNil)
 	c.Assert(cs.req.URL.Path, Equals, "/v1/notices")
 	c.Assert(cs.req.URL.Query(), DeepEquals, url.Values{
 		"type":  {"client"},
 		"key":   {"foo.com/bar"},
-		"after": {"2023-09-05T16:43:00Z"},
+		"after": {"2023-09-05T16:43:32.123456789Z"},
 	})
 	c.Assert(notices, DeepEquals, []*client.Notice{})
 }
@@ -194,8 +193,7 @@ func (cs *clientSuite) TestWaitNotices(c *C) {
 }
 
 func (cs *clientSuite) TestWaitNoticesTimeout(c *C) {
-	cs.status = http.StatusGatewayTimeout
-	cs.rsp = `{"type": "error"}`
+	cs.rsp = `{"type": "sync", "result": []}`
 	notices, err := cs.cli.WaitNotices(context.Background(), &client.NoticesOptions{}, time.Second)
 	c.Assert(err, IsNil)
 	c.Assert(notices, HasLen, 0)

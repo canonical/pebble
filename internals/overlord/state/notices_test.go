@@ -126,16 +126,25 @@ func (s *noticesSuite) TestOccurrences(c *C) {
 	c.Check(n["occurrences"], Equals, 1.0)
 }
 
-func (s *noticesSuite) TestRepeatAfter(c *C) {
-	const repeatAfter = 10 * time.Second
+func (s *noticesSuite) TestRepeatAfterFirst(c *C) {
+	s.testRepeatAfter(c, 10*time.Second, 0, 10*time.Second)
+}
 
+func (s *noticesSuite) TestRepeatAfterSecond(c *C) {
+	s.testRepeatAfter(c, 0, 10*time.Second, 10*time.Second)
+}
+
+func (s *noticesSuite) TestRepeatAfterBoth(c *C) {
+	s.testRepeatAfter(c, 10*time.Second, 10*time.Second, 10*time.Second)
+}
+
+func (s *noticesSuite) testRepeatAfter(c *C, first, second, delay time.Duration) {
 	st := state.New(nil)
 	st.Lock()
 	defer st.Unlock()
 
-	st.AddNotice(state.NoticeClient, "foo.com/bar", nil, repeatAfter)
+	st.AddNotice(state.NoticeClient, "foo.com/bar", nil, first)
 	time.Sleep(time.Microsecond) // ensure there's time between the occurrences
-	st.AddNotice(state.NoticeClient, "foo.com/bar", nil, repeatAfter)
 
 	notices := st.Notices(state.NoticeFilters{})
 	c.Assert(notices, HasLen, 1)
@@ -149,8 +158,8 @@ func (s *noticesSuite) TestRepeatAfter(c *C) {
 	c.Assert(lastRepeated.Equal(firstOccurred), Equals, true)
 
 	// Add a notice (with faked time) after a long time and ensure it has repeated
-	future := time.Now().Add(repeatAfter)
-	st.AddNoticeWithTime(future, state.NoticeClient, "foo.com/bar", nil, repeatAfter)
+	future := time.Now().Add(delay)
+	st.AddNoticeWithTime(future, state.NoticeClient, "foo.com/bar", nil, second)
 	notices = st.Notices(state.NoticeFilters{})
 	c.Assert(notices, HasLen, 1)
 	n = noticeToMap(c, notices[0])

@@ -75,7 +75,7 @@ func (s *apiSuite) testNoticesFilter(c *C, makeQuery func(after time.Time) url.V
 	c.Assert(ok, Equals, true)
 
 	c.Check(rsp.Type, Equals, ResponseTypeSync)
-	c.Check(rsp.Status, Equals, 200)
+	c.Check(rsp.Status, Equals, http.StatusOK)
 	notices, ok := rsp.Result.([]*state.Notice)
 	c.Assert(ok, Equals, true)
 	c.Assert(notices, HasLen, 1)
@@ -122,7 +122,7 @@ func (s *apiSuite) TestNoticesWait(c *C) {
 	c.Assert(ok, Equals, true)
 
 	c.Check(rsp.Type, Equals, ResponseTypeSync)
-	c.Check(rsp.Status, Equals, 200)
+	c.Check(rsp.Status, Equals, http.StatusOK)
 	notices, ok := rsp.Result.([]*state.Notice)
 	c.Assert(ok, Equals, true)
 	c.Assert(notices, HasLen, 1)
@@ -140,8 +140,11 @@ func (s *apiSuite) TestNoticesTimeout(c *C) {
 	rsp, ok := noticesCmd.GET(noticesCmd, req, nil).(*resp)
 	c.Assert(ok, Equals, true)
 
-	c.Check(rsp.Type, Equals, ResponseTypeError)
-	c.Check(rsp.Status, Equals, http.StatusGatewayTimeout)
+	c.Check(rsp.Type, Equals, ResponseTypeSync)
+	c.Check(rsp.Status, Equals, http.StatusOK)
+	notices, ok := rsp.Result.([]*state.Notice)
+	c.Assert(ok, Equals, true)
+	c.Assert(notices, HasLen, 0)
 }
 
 func (s *apiSuite) TestNoticesRequestCancelled(c *C) {
@@ -163,6 +166,9 @@ func (s *apiSuite) TestNoticesRequestCancelled(c *C) {
 
 	c.Check(rsp.Type, Equals, ResponseTypeError)
 	c.Check(rsp.Status, Equals, http.StatusBadRequest)
+	result, ok := rsp.Result.(*errorResult)
+	c.Assert(ok, Equals, true)
+	c.Check(result.Message, Matches, "request canceled")
 
 	elapsed := time.Since(start)
 	c.Check(elapsed > 10*time.Millisecond, Equals, true)
@@ -216,7 +222,7 @@ func (s *apiSuite) TestAddNotice(c *C) {
 	c.Assert(ok, Equals, true)
 
 	c.Check(rsp.Type, Equals, ResponseTypeSync)
-	c.Check(rsp.Status, Equals, 200)
+	c.Check(rsp.Status, Equals, http.StatusOK)
 	resultBytes, err := json.Marshal(rsp.Result)
 	c.Assert(err, IsNil)
 
@@ -313,7 +319,7 @@ func (s *apiSuite) TestNotice(c *C) {
 	c.Assert(ok, Equals, true)
 
 	c.Check(rsp.Type, Equals, ResponseTypeSync)
-	c.Check(rsp.Status, Equals, 200)
+	c.Check(rsp.Status, Equals, http.StatusOK)
 	notice, ok := rsp.Result.(*state.Notice)
 	c.Assert(ok, Equals, true)
 	n := noticeToMap(c, notice)
