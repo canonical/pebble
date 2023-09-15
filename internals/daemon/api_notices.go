@@ -72,13 +72,12 @@ func v1GetNotices(c *Command, r *http.Request, _ *UserState) Response {
 		defer cancel()
 
 		notices, err = st.WaitNotices(ctx, filters)
-		if errors.Is(err, context.DeadlineExceeded) {
-			return statusGatewayTimeout("timed out after %s", timeout)
-		}
 		if errors.Is(err, context.Canceled) {
 			return statusBadRequest("request canceled")
 		}
-		if err != nil {
+		// DeadlineExceeded will occur if timeout elapses; in that case return
+		// an empty list of notices, not an error.
+		if err != nil && !errors.Is(err, context.DeadlineExceeded) {
 			return statusInternalError("cannot wait for notices: %s", err)
 		}
 	} else {
