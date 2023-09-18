@@ -66,27 +66,6 @@ func (s *PebbleSuite) TestHealthLevel(c *check.C) {
 	c.Check(s.Stderr(), check.Equals, "")
 }
 
-func (s *PebbleSuite) TestHealthFormat(c *check.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		c.Assert(r.Method, check.Equals, "GET")
-		c.Assert(r.URL.Path, check.Equals, "/v1/health")
-		c.Assert(r.URL.Query(), check.DeepEquals, url.Values{})
-		fmt.Fprintf(w, `{
-			"type": "sync",
-			"status-code": 200,
-			"result": {"healthy": true}
-		}`)
-	})
-
-	restore := fakeArgs("pebble", "health", "--format", "json")
-	defer restore()
-
-	exitCode := cli.PebbleMain()
-	c.Check(exitCode, check.Equals, 0)
-	c.Check(s.Stdout(), check.Equals, "{\"healthy\":true}\n")
-	c.Check(s.Stderr(), check.Equals, "")
-}
-
 func (s *PebbleSuite) TestHealthSpecificChecks(c *check.C) {
 	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
 		c.Assert(r.Method, check.Equals, "GET")
@@ -119,14 +98,4 @@ func (s *PebbleSuite) TestHealthBadLevel(c *check.C) {
 	c.Check(exitCode, check.Equals, 1)
 	c.Check(s.Stdout(), check.Equals, "")
 	c.Check(s.Stderr(), check.Matches, "error: Invalid value .* Allowed values are: alive or ready\n")
-}
-
-func (s *PebbleSuite) TestHealthBadFormat(c *check.C) {
-	restore := fakeArgs("pebble", "health", "--format", "foo")
-	defer restore()
-
-	exitCode := cli.PebbleMain()
-	c.Check(exitCode, check.Equals, 1)
-	c.Check(s.Stdout(), check.Equals, "")
-	c.Check(s.Stderr(), check.Matches, "error: Invalid value .* Allowed values are: text or json\n")
 }

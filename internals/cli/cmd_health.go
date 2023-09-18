@@ -15,7 +15,6 @@
 package cli
 
 import (
-	"encoding/json"
 	"fmt"
 
 	"github.com/canonical/go-flags"
@@ -34,7 +33,6 @@ an exit code 1 if at least one of the requested checks are unhealthy.
 type cmdHealth struct {
 	client *client.Client
 
-	Format     string `long:"format" choice:"text" choice:"json" default:"text"`
 	Level      string `long:"level" choice:"alive" choice:"ready"`
 	Positional struct {
 		Checks []string `positional-arg-name:"<check>"`
@@ -42,8 +40,7 @@ type cmdHealth struct {
 }
 
 var cmdHealthArgsHelp = map[string]string{
-	"--format": "Output format",
-	"--level":  "Check level to filter for",
+	"--level": "Check level to filter for",
 }
 
 func init() {
@@ -72,24 +69,13 @@ func (cmd *cmdHealth) Execute(args []string) error {
 		return err
 	}
 
-	switch cmd.Format {
-	case "", "text":
-		status := "unhealthy"
-		if health.Healthy {
-			status = "healthy"
-		}
-		fmt.Fprintln(Stdout, status)
-	case "json":
-		encoder := json.NewEncoder(Stdout)
-		err := encoder.Encode(&health)
-		if err != nil {
-			return err
-		}
-	default:
-		panic(fmt.Sprintf("internal error: invalid output format %q", cmd.Format)) // already checked by go-flags
+	status := "unhealthy"
+	if health {
+		status = "healthy"
 	}
+	fmt.Fprintln(Stdout, status)
 
-	if !health.Healthy {
+	if !health {
 		panic(&exitStatus{1})
 	}
 

@@ -38,9 +38,7 @@ func (cs *clientSuite) TestHealthGet(c *check.C) {
 	}
 	health, err := cs.cli.Health(&opts)
 	c.Assert(err, check.IsNil)
-	c.Assert(health, check.DeepEquals, &client.HealthInfo{
-		Healthy: true,
-	})
+	c.Assert(health, check.Equals, true)
 	c.Assert(cs.req.Method, check.Equals, "GET")
 	c.Assert(cs.req.URL.Path, check.Equals, "/v1/health")
 	c.Assert(cs.req.URL.Query(), check.DeepEquals, url.Values{
@@ -61,9 +59,7 @@ func (cs *clientSuite) TestHealthDefaultOptions(c *check.C) {
 
 	health, err := cs.cli.Health(&client.HealthOptions{})
 	c.Assert(err, check.IsNil)
-	c.Assert(health, check.DeepEquals, &client.HealthInfo{
-		Healthy: false,
-	})
+	c.Assert(health, check.Equals, false)
 	c.Assert(cs.req.Method, check.Equals, "GET")
 	c.Assert(cs.req.URL.Path, check.Equals, "/v1/health")
 	c.Assert(cs.req.URL.Query(), check.DeepEquals, url.Values{})

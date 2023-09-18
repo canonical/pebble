@@ -18,30 +18,22 @@ import "net/url"
 
 // HealthOptions holds query options to pass to a Health call.
 type HealthOptions struct {
-	// Level is the check level to filter for. A check is included in the
-	// healthiness determination if this field is not set, or if it is
-	// equal to the check's level.
+	// Level may be set to CheckAlive, to query whether alive checks are up, and
+	// CheckReady, to query whether both alive and ready checks are up.
+	// Defaults to CheckReady if unset.
 	Level CheckLevel
 
-	// Names is the list of check names to filter for. A check is included in
-	// the healthiness determination if this field is nil or empty slice, or
-	// if one of the values in the slice is equal to the check's name.
+	// Names defines which checks should be considered for the query. Defaults to all.
 	Names []string
 }
 
-// HealthInfo holds the result of a Health call.
-type HealthInfo struct {
-	// Healthy is the status of health. A set of checks are deemed "healthy"
-	// if all of them of are up, and "unhealthy" otherwise. When queried
-	// using level, if the queried level equals "alive", only the alive
-	// checks are selected. However, "ready" implies alive. Thus, if the
-	// queried level is "ready", both the alive and ready checks are
-	// considered.
+// healthInfo holds the result of a Health call.
+type healthInfo struct {
 	Healthy bool `json:"healthy"`
 }
 
 // Health fetches healthy status of specified checks.
-func (client *Client) Health(opts *HealthOptions) (*HealthInfo, error) {
+func (client *Client) Health(opts *HealthOptions) (health bool, err error) {
 	query := make(url.Values)
 	if opts.Level != UnsetLevel {
 		query.Set("level", string(opts.Level))
@@ -50,10 +42,10 @@ func (client *Client) Health(opts *HealthOptions) (*HealthInfo, error) {
 		query["names"] = opts.Names
 	}
 
-	var health HealthInfo
-	_, err := client.doSync("GET", "/v1/health", query, nil, nil, &health)
+	var info healthInfo
+	_, err = client.doSync("GET", "/v1/health", query, nil, nil, &info)
 	if err != nil {
-		return nil, err
+		return false, err
 	}
-	return &health, nil
+	return info.Healthy, nil
 }
