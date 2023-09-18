@@ -120,6 +120,23 @@ type Client struct {
 	getWebsocket getWebsocketFunc
 }
 
+type WarningHandler interface {
+	SetWarnings(count int, timestamp time.Time)
+}
+
+type MaintenanceHandler interface {
+	SetMaintenance(error)
+}
+
+func (c *Client) SetWarnings(count int, timestamp time.Time) {
+	c.warningCount = count
+	c.warningTimestamp = timestamp
+}
+
+func (c *Client) SetMaintenance(err error) {
+	c.maintenance = err
+}
+
 type getWebsocketFunc func(url string) (clientWebsocket, error)
 
 type clientWebsocket interface {
@@ -162,49 +179,47 @@ func New(config *Config) (*Client, error) {
 		return getWebsocket(transport, url)
 	}
 	client.Requester = &requester{
-		baseURL:   &client.baseURL,
-		userAgent: config.UserAgent,
-		client:    &http.Client{Transport: transport},
-		maintenanceHandler: func(err error) {
-			client.maintenance = err
-		},
-		warningHandler: func(count int, timestamp time.Time) {
-			client.warningCount = count
-			client.warningTimestamp = timestamp
-		},
+		baseURL:            &client.baseURL,
+		userAgent:          config.UserAgent,
+		client:             &http.Client{Transport: transport},
+		warningHandler:     client,
+		maintenanceHandler: client,
 	}
 	return client, nil
 }
 
 type RequestOptions struct {
-	QueryString url.Values
-	Headers     map[string]string
-	Body        io.Reader
-	Output      interface{}
+	Query   url.Values
+	Headers map[string]string
+	Body    io.Reader
+	Output  interface{}
 }
 
-type ResponseInfo struct {
-	Type     string
+type SyncResponseInfo struct {
+	Result json.RawMessage
+}
+
+type AsyncResponseInfo struct {
 	ChangeID string
 	Result   json.RawMessage
 }
 
 type Requester interface {
-	Request(ctx context.Context, verb, path string, opts *RequestOptions) (*ResponseInfo, error)
+	RequestSync(ctx context.Context, verb, path string, opts *RequestOptions) (*SyncResponseInfo, error)
+	RequestAsync(ctx context.Context, verb, path string, opts *RequestOptions) (*AsyncResponseInfo, error)
 }
 
 type requester struct {
 	baseURL            *url.URL
 	userAgent          string
 	client             *http.Client
-	maintenanceHandler func(error)
-	warningHandler     func(count int, timestamp time.Time)
+	maintenanceHandler MaintenanceHandler
+	warningHandler     WarningHandler
 }
 
-func (r *requester) Request(ctx context.Context, verb, path string, opts *RequestOptions) (*ResponseInfo, error) {
-	url := *r.baseURL
-	url.Path = pathpkg.Join(url.Path, path)
-	url.RawQuery = opts.QueryString.Encode()
+func (r *requester) request(ctx context.Context, verb, path string, opts *RequestOptions) (*response, error) {
+	url := r.baseURL.JoinPath(path)
+	url.RawQuery = opts.Query.Encode()
 
 	req, err := http.NewRequestWithContext(ctx, verb, url.String(), opts.Body)
 	if err != nil {
@@ -251,37 +266,53 @@ func (r *requester) Request(ctx context.Context, verb, path string, opts *Reques
 		}
 	}
 	if r.maintenanceHandler != nil {
-		r.maintenanceHandler(rsp.Maintenance)
+		r.maintenanceHandler.SetMaintenance(rsp.Maintenance)
+	}
+	if r.warningHandler != nil {
+		r.warningHandler.SetWarnings(rsp.WarningCount, rsp.WarningTimestamp)
 	}
 	if err := rsp.err(nil); err != nil {
 		return nil, err
 	}
 
-	if rsp.Type == "sync" {
-		if opts.Output != nil {
-			if err := decodeWithNumber(bytes.NewReader(rsp.Result), opts.Output); err != nil {
-				return nil, fmt.Errorf("cannot unmarshal: %w", err)
-			}
-		}
-		if r.warningHandler != nil {
-			r.warningHandler(rsp.WarningCount, rsp.WarningTimestamp)
-		}
-	} else if rsp.Type == "async" {
-		if rsp.StatusCode != 202 {
-			return nil, fmt.Errorf("operation not accepted")
-		}
-		if rsp.Change == "" {
-			return nil, fmt.Errorf("async response without change reference")
-		}
-	} else {
-		return nil, fmt.Errorf("expected sync or async response, got %q", rsp.Type)
+	return &rsp, nil
+}
+
+func (r *requester) RequestSync(ctx context.Context, verb, path string, opts *RequestOptions) (*SyncResponseInfo, error) {
+	rsp, err := r.request(ctx, verb, path, opts)
+	if err != nil {
+		return nil, err
 	}
 
-	return &ResponseInfo{
-		Type:     rsp.Type,
-		ChangeID: rsp.Change,
-		Result:   rsp.Result,
-	}, nil
+	if rsp.Type != "sync" {
+		return nil, fmt.Errorf("expected sync response, got %q", rsp.Type)
+	}
+	if opts.Output != nil {
+		if err := decodeWithNumber(bytes.NewReader(rsp.Result), opts.Output); err != nil {
+			return nil, fmt.Errorf("cannot unmarshal: %w", err)
+		}
+	}
+
+	return &SyncResponseInfo{Result: rsp.Result}, nil
+}
+
+func (r *requester) RequestAsync(ctx context.Context, verb, path string, opts *RequestOptions) (*AsyncResponseInfo, error) {
+	rsp, err := r.request(ctx, verb, path, opts)
+	if err != nil {
+		return nil, err
+	}
+
+	if rsp.Type != "async" {
+		return nil, fmt.Errorf("expected async response, got %q", rsp.Type)
+	}
+	if rsp.StatusCode != 202 {
+		return nil, fmt.Errorf("operation not accepted")
+	}
+	if rsp.Change == "" {
+		return nil, fmt.Errorf("async response without change reference")
+	}
+
+	return &AsyncResponseInfo{ChangeID: rsp.Change, Result: rsp.Result}, nil
 }
 
 func (client *Client) getTaskWebsocket(taskID, websocketID string) (clientWebsocket, error) {
