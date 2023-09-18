@@ -258,7 +258,7 @@ func (e *exitStatus) Error() string {
 	return fmt.Sprintf("internal error: exitStatus{%d} being handled as normal error", e.code)
 }
 
-func Run() error {
+func RunWithClient(c *client.Client) error {
 	defer func() {
 		if v := recover(); v != nil {
 			if e, ok := v.(*exitStatus); ok {
@@ -270,14 +270,7 @@ func Run() error {
 
 	logger.SetLogger(logger.New(os.Stderr, "[pebble] "))
 
-	_, clientConfig.Socket = getEnvPaths()
-
-	cli, err := client.New(&clientConfig)
-	if err != nil {
-		return fmt.Errorf("cannot create client: %v", err)
-	}
-
-	parser := Parser(cli)
+	parser := Parser(c)
 	xtra, err := parser.Parse()
 	if err != nil {
 		if e, ok := err.(*flags.Error); ok {
@@ -310,9 +303,17 @@ func Run() error {
 		return nil
 	}
 
-	maybePresentWarnings(cli.WarningsSummary())
-
+	maybePresentWarnings(c.WarningsSummary())
 	return nil
+}
+
+func Run() error {
+	_, clientConfig.Socket = getEnvPaths()
+	c, err := client.New(&clientConfig)
+	if err != nil {
+		return fmt.Errorf("cannot create client: %v", err)
+	}
+	return RunWithClient(c)
 }
 
 var errorPrefix = "error: "

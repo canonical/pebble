@@ -150,7 +150,7 @@ type jsonWriter interface {
 	WriteJSON(v interface{}) error
 }
 
-func New(config *Config) (*Client, error) {
+func NewWithDecoder(config *Config, decoderGenerator func(*Client) DecoderFunc) (*Client, error) {
 	if config == nil {
 		config = &Config{}
 	}
@@ -179,49 +179,67 @@ func New(config *Config) (*Client, error) {
 		return getWebsocket(transport, url)
 	}
 	client.Requester = &requester{
-		baseURL:            &client.baseURL,
-		userAgent:          config.UserAgent,
-		client:             &http.Client{Transport: transport},
-		warningHandler:     client,
-		maintenanceHandler: client,
+		baseURL:   &client.baseURL,
+		userAgent: config.UserAgent,
+		client:    &http.Client{Transport: transport},
+		decoder:   decoderGenerator(client),
 	}
 	return client, nil
 }
 
+func New(config *Config) (*Client, error) {
+	return NewWithDecoder(config, func(c *Client) DecoderFunc {
+		return func(ctx context.Context, opts *RequestOptions, res *http.Response) (*RequestResponse, error) {
+			var rsp RequestResponse
+			d := json.NewDecoder(res.Body)
+			if decodeErr := d.Decode(&rsp); decodeErr != nil {
+				if buf, ioErr := io.ReadAll(d.Buffered()); ioErr != nil {
+					return nil, fmt.Errorf("cannot read buffered response body: %w", ioErr)
+				} else {
+					return nil, fmt.Errorf("cannot decode %q: %w", buf, decodeErr)
+				}
+			}
+			if err := rsp.err(c); err != nil {
+				return nil, err
+			}
+
+			c.warningCount = rsp.WarningCount
+			c.warningTimestamp = rsp.WarningTimestamp
+
+			return &rsp, nil
+		}
+	})
+}
+
 type RequestOptions struct {
+	Method  string
+	Path    string
 	Query   url.Values
 	Headers map[string]string
 	Body    io.Reader
 	Output  interface{}
 }
 
-type SyncResponseInfo struct {
-	Result json.RawMessage
-}
-
-type AsyncResponseInfo struct {
-	ChangeID string
-	Result   json.RawMessage
-}
+type DecoderFunc func(ctx context.Context, opts *RequestOptions, res *http.Response) (*RequestResponse, error)
 
 type Requester interface {
-	RequestSync(ctx context.Context, verb, path string, opts *RequestOptions) (*SyncResponseInfo, error)
-	RequestAsync(ctx context.Context, verb, path string, opts *RequestOptions) (*AsyncResponseInfo, error)
+	DoSync(ctx context.Context, opts *RequestOptions) (*RequestResponse, error)
+	DoAsync(ctx context.Context, opts *RequestOptions) (*RequestResponse, error)
+	SetDecoder(DecoderFunc)
 }
 
 type requester struct {
-	baseURL            *url.URL
-	userAgent          string
-	client             *http.Client
-	maintenanceHandler MaintenanceHandler
-	warningHandler     WarningHandler
+	baseURL   *url.URL
+	userAgent string
+	client    *http.Client
+	decoder   DecoderFunc
 }
 
-func (r *requester) request(ctx context.Context, verb, path string, opts *RequestOptions) (*response, error) {
-	url := r.baseURL.JoinPath(path)
+func (r *requester) do(ctx context.Context, opts *RequestOptions) (*RequestResponse, error) {
+	url := r.baseURL.JoinPath(opts.Path)
 	url.RawQuery = opts.Query.Encode()
 
-	req, err := http.NewRequestWithContext(ctx, verb, url.String(), opts.Body)
+	req, err := http.NewRequestWithContext(ctx, opts.Method, url.String(), opts.Body)
 	if err != nil {
 		return nil, err
 	}
@@ -240,7 +258,7 @@ func (r *requester) request(ctx context.Context, verb, path string, opts *Reques
 	var res *http.Response
 	for {
 		res, err = r.client.Do(req)
-		if err == nil || verb != "GET" {
+		if err == nil || opts.Method != "GET" {
 			break
 		}
 		select {
@@ -253,33 +271,17 @@ func (r *requester) request(ctx context.Context, verb, path string, opts *Reques
 	if err != nil {
 		return nil, err
 	}
-
 	defer res.Body.Close()
 
-	var rsp response
-	d := json.NewDecoder(res.Body)
-	if decodeErr := d.Decode(&rsp); decodeErr != nil {
-		if buf, ioErr := ioutil.ReadAll(d.Buffered()); ioErr != nil {
-			return nil, fmt.Errorf("cannot read buffered response body: %w", ioErr)
-		} else {
-			return nil, fmt.Errorf("cannot decode %q: %w", buf, decodeErr)
-		}
-	}
-	if r.maintenanceHandler != nil {
-		r.maintenanceHandler.SetMaintenance(rsp.Maintenance)
-	}
-	if r.warningHandler != nil {
-		r.warningHandler.SetWarnings(rsp.WarningCount, rsp.WarningTimestamp)
-	}
-	if err := rsp.err(nil); err != nil {
-		return nil, err
-	}
-
-	return &rsp, nil
+	return r.decoder(ctx, opts, res)
 }
 
-func (r *requester) RequestSync(ctx context.Context, verb, path string, opts *RequestOptions) (*SyncResponseInfo, error) {
-	rsp, err := r.request(ctx, verb, path, opts)
+func (r *requester) SetDecoder(decoder DecoderFunc) {
+	r.decoder = decoder
+}
+
+func (r *requester) DoSync(ctx context.Context, opts *RequestOptions) (*RequestResponse, error) {
+	rsp, err := r.do(ctx, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -293,11 +295,11 @@ func (r *requester) RequestSync(ctx context.Context, verb, path string, opts *Re
 		}
 	}
 
-	return &SyncResponseInfo{Result: rsp.Result}, nil
+	return rsp, nil
 }
 
-func (r *requester) RequestAsync(ctx context.Context, verb, path string, opts *RequestOptions) (*AsyncResponseInfo, error) {
-	rsp, err := r.request(ctx, verb, path, opts)
+func (r *requester) DoAsync(ctx context.Context, opts *RequestOptions) (*RequestResponse, error) {
+	rsp, err := r.do(ctx, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -312,7 +314,7 @@ func (r *requester) RequestAsync(ctx context.Context, verb, path string, opts *R
 		return nil, fmt.Errorf("async response without change reference")
 	}
 
-	return &AsyncResponseInfo{ChangeID: rsp.Change, Result: rsp.Result}, nil
+	return rsp, nil
 }
 
 func (client *Client) getTaskWebsocket(taskID, websocketID string) (clientWebsocket, error) {
@@ -482,8 +484,8 @@ func decodeInto(reader io.Reader, v interface{}) error {
 // It expects a "sync" response from the API and on success decodes the JSON
 // response payload into the given value using the "UseNumber" json decoding
 // which produces json.Numbers instead of float64 types for numbers.
-func (client *Client) doSync(method, path string, query url.Values, headers map[string]string, body io.Reader, v interface{}) (*ResultInfo, error) {
-	var rsp response
+func (client *Client) doSync(method, path string, query url.Values, headers map[string]string, body io.Reader, v interface{}) (interface{}, error) {
+	var rsp RequestResponse
 	if err := client.do(method, path, query, headers, body, &rsp); err != nil {
 		return nil, err
 	}
@@ -503,7 +505,7 @@ func (client *Client) doSync(method, path string, query url.Values, headers map[
 	client.warningCount = rsp.WarningCount
 	client.warningTimestamp = rsp.WarningTimestamp
 
-	return &rsp.ResultInfo, nil
+	return nil, nil
 }
 
 func (client *Client) doAsync(method, path string, query url.Values, headers map[string]string, body io.Reader) (changeID string, err error) {
@@ -512,7 +514,7 @@ func (client *Client) doAsync(method, path string, query url.Values, headers map
 }
 
 func (client *Client) doAsyncFull(method, path string, query url.Values, headers map[string]string, body io.Reader) (result json.RawMessage, changeID string, err error) {
-	var rsp response
+	var rsp RequestResponse
 
 	if err := client.do(method, path, query, headers, body, &rsp); err != nil {
 		return nil, "", err
@@ -533,14 +535,9 @@ func (client *Client) doAsyncFull(method, path string, query url.Values, headers
 	return rsp.Result, rsp.Change, nil
 }
 
-// ResultInfo is empty for now, but this is the mechanism that conveys
-// general information that makes sense to requests at a more general
-// level, and might be disconnected from the specific request at hand.
-type ResultInfo struct{}
-
-// A response produced by the REST API will usually fit in this
+// A RequestResponse produced by the REST API will usually fit in this
 // (exceptions are the icons/ endpoints obvs)
-type response struct {
+type RequestResponse struct {
 	Result     json.RawMessage `json:"result"`
 	Status     string          `json:"status"`
 	StatusCode int             `json:"status-code"`
@@ -549,10 +546,7 @@ type response struct {
 
 	WarningCount     int       `json:"warning-count"`
 	WarningTimestamp time.Time `json:"warning-timestamp"`
-
-	ResultInfo
-
-	Maintenance *Error `json:"maintenance"`
+	Maintenance      *Error    `json:"maintenance"`
 }
 
 // Error is the real value of response.Result when an error occurs.
@@ -575,7 +569,7 @@ const (
 	ErrorKindNoDefaultServices = "no-default-services"
 )
 
-func (rsp *response) err(cli *Client) error {
+func (rsp *RequestResponse) err(cli *Client) error {
 	if cli != nil {
 		maintErr := rsp.Maintenance
 		// avoid setting to (*client.Error)(nil)
@@ -599,7 +593,7 @@ func (rsp *response) err(cli *Client) error {
 }
 
 func parseError(r *http.Response) error {
-	var rsp response
+	var rsp RequestResponse
 	if r.Header.Get("Content-Type") != "application/json" {
 		return fmt.Errorf("server error: %q", r.Status)
 	}
