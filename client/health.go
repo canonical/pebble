@@ -27,7 +27,6 @@ type HealthOptions struct {
 	Names []string
 }
 
-// healthInfo holds the result of a Health call.
 type healthInfo struct {
 	Healthy bool `json:"healthy"`
 }
