@@ -187,10 +187,11 @@ func (c *Client) handleServerResponse(resp *http.Response) error {
 func errFromResponse(resp *http.Response) error {
 	// Read response body to get more context
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 1024))
-	if err != nil {
+	if err == nil {
+		logger.Debugf("HTTP %d error, response %q", resp.StatusCode, body)
+	} else {
 		logger.Debugf("HTTP %d error, but cannot read response: %v", resp.StatusCode, err)
 	}
-	logger.Debugf("HTTP %d error, response %q", resp.StatusCode, body)
 
 	return fmt.Errorf("server returned HTTP %v", resp.Status)
 }
