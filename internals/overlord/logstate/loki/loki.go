@@ -156,24 +156,30 @@ func (c *Client) handleServerResponse(resp *http.Response) error {
 
 	code := resp.StatusCode
 	switch {
+	case 200 <= code && code < 300:
+		// 2xx is a success - safe to drop logs
+		c.resetBuffer()
+		return nil
+
 	case code == http.StatusTooManyRequests:
 		// For 429, don't drop logs - just retry later
 		return errFromResponse(resp)
 
-	case code >= 500:
-		// 5xx indicates a problem with the server, so don't drop logs (retry later)
-		return errFromResponse(resp)
-
-	case code >= 400:
+	case 400 <= code && code < 500:
 		// 4xx indicates a client problem, so drop the logs (retrying won't help)
 		logger.Noticef("Target %q: request failed with status %d, dropping %d logs",
 			c.targetName, code, c.numEntries)
 		c.resetBuffer()
 		return errFromResponse(resp)
-	}
 
-	c.resetBuffer()
-	return nil
+	case 500 <= code && code < 600:
+		// 5xx indicates a problem with the server, so don't drop logs (retry later)
+		return errFromResponse(resp)
+
+	default:
+		// Unexpected response
+		return fmt.Errorf("unexpected response from server: %v", resp.Status)
+	}
 }
 
 // errFromResponse generates an error from a failed *http.Response.
@@ -182,7 +188,9 @@ func errFromResponse(resp *http.Response) error {
 	// Read response body to get more context
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 1024))
 	if err != nil {
-		return fmt.Errorf("HTTP %d error, but cannot read response: %v", resp.StatusCode, err)
+		logger.Debugf("HTTP %d error, but cannot read response: %v", resp.StatusCode, err)
 	}
-	return fmt.Errorf("HTTP %d error, response %q", resp.StatusCode, body)
+	logger.Debugf("HTTP %d error, response %q", resp.StatusCode, body)
+
+	return fmt.Errorf("server returned HTTP %v", resp.Status)
 }
