@@ -246,6 +246,16 @@ func (s *execSuite) TestUserGroup(c *C) {
 	c.Assert(waitErr, IsNil)
 	c.Check(stdout, Equals, username+"\n"+group+"\n")
 	c.Check(stderr, Equals, "")
+
+	stdout, stderr, waitErr = s.exec(c, "", &client.ExecOptions{
+		Command:     []string{"pwd"},
+		Environment: map[string]string{"HOME": "/non/existent"},
+		User:        username,
+		Group:       group,
+	})
+	c.Assert(waitErr, IsNil)
+	c.Check(stdout, Equals, "/\n")
+	c.Check(stderr, Equals, "")
 }
 
 // See .github/workflows/tests.yml for how to run this test as root.

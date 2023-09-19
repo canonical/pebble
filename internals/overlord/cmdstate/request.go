@@ -117,11 +117,14 @@ func Exec(st *state.State, args *ExecArgs) (*state.Task, ExecMetadata, error) {
 		environment["LANG"] = "C.UTF-8"
 	}
 
-	// Set default working directory to $HOME, or / if $HOME not set.
+	// Set default working directory to $HOME, or / if $HOME not set or doesn't exist.
 	workingDir := args.WorkingDir
 	if workingDir == "" {
 		workingDir = environment["HOME"]
 		if workingDir == "" {
+			workingDir = "/"
+		} else if !osutil.IsDir(workingDir) {
+			logger.Debugf("HOME dir %q does not exist, using /", workingDir)
 			workingDir = "/"
 		}
 	}
