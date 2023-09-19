@@ -100,14 +100,14 @@ func (c *Client) Flush(ctx context.Context) error {
 	return c.handleServerResponse(resp)
 }
 
-func (c *Client) emptyBuffer() {
+func (c *Client) resetBuffer() {
 	for svc := range c.entries {
 		c.entries[svc] = c.entries[svc][:0]
 	}
 	c.numEntries = 0
 }
 
-func (c *Client) buildRequest() request {
+func (c *Client) buildRequest() lokiRequest {
 	// Sort keys to guarantee deterministic output
 	services := make([]string, 0, len(c.entries))
 	for svc, entries := range c.entries {
@@ -118,10 +118,10 @@ func (c *Client) buildRequest() request {
 	}
 	sort.Strings(services)
 
-	var req request
+	var req lokiRequest
 	for _, service := range services {
 		entries := c.entries[service]
-		stream := stream{
+		stream := lokiStream{
 			Labels: map[string]string{
 				"pebble_service": service,
 			},
@@ -132,11 +132,11 @@ func (c *Client) buildRequest() request {
 	return req
 }
 
-type request struct {
-	Streams []stream `json:"streams"`
+type lokiRequest struct {
+	Streams []lokiStream `json:"streams"`
 }
 
-type stream struct {
+type lokiStream struct {
 	Labels  map[string]string `json:"stream"`
 	Entries []lokiEntry       `json:"values"`
 }
@@ -168,11 +168,11 @@ func (c *Client) handleServerResponse(resp *http.Response) error {
 		// 4xx indicates a client problem, so drop the logs (retrying won't help)
 		logger.Noticef("Target %q: request failed with status %d, dropping %d logs",
 			c.targetName, code, c.numEntries)
-		c.emptyBuffer()
+		c.resetBuffer()
 		return errFromResponse(resp)
 	}
 
-	c.emptyBuffer()
+	c.resetBuffer()
 	return nil
 }
 

@@ -78,48 +78,32 @@ func (*suite) TestRequest(c *C) {
 	}}
 
 	expected := `
-{
-  "streams": [
-    {
-      "stream": {
-        "pebble_service": "svc1"
-      },
-      "values": [
-          [ "1704026090000000000", "log line #1" ],
-          [ "1704026092000000000", "log line #3" ],
-          [ "1704026094000000000", "log line #5" ],
-          [ "1704026097000000000", "log line #8" ]
-      ]
-    },
-    {
-      "stream": {
-        "pebble_service": "svc2"
-      },
-      "values": [
-          [ "1704026091000000000", "log line #2" ],
-          [ "1704026096000000000", "log line #7" ]
-      ]
-    },
-    {
-      "stream": {
-        "pebble_service": "svc3"
-      },
-      "values": [
-          [ "1704026093000000000", "log line #4" ],
-          [ "1704026095000000000", "log line #6" ]
-      ]
-    },
-    {
-      "stream": {
-        "pebble_service": "svc4"
-      },
-      "values": [
-          [ "1704026098000000000", "log line #9" ]
-      ]
-    }
+{"streams": [{
+	"stream": {"pebble_service": "svc1"},
+  "values": [
+      [ "1704026090000000000", "log line #1" ],
+      [ "1704026092000000000", "log line #3" ],
+      [ "1704026094000000000", "log line #5" ],
+      [ "1704026097000000000", "log line #8" ]
   ]
-}
-`
+}, {
+  "stream": {"pebble_service": "svc2"},
+  "values": [
+      [ "1704026091000000000", "log line #2" ],
+      [ "1704026096000000000", "log line #7" ]
+  ]
+}, {
+  "stream": {"pebble_service": "svc3"},
+  "values": [
+      [ "1704026093000000000", "log line #4" ],
+      [ "1704026095000000000", "log line #6" ]
+  ]
+}, {
+  "stream": {"pebble_service": "svc4"},
+  "values": [
+      [ "1704026098000000000", "log line #9" ]
+  ]
+}]}`
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		c.Assert(r.Method, Equals, http.MethodPost)
