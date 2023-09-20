@@ -33,6 +33,7 @@ var _ = Suite(&gathererSuite{})
 func (s *gathererSuite) TestGatherer(c *C) {
 	received := make(chan []servicelog.Entry, 1)
 	gathererArgs := logGathererArgs{
+		maxBufferedEntries: 5,
 		newClient: func(target *plan.LogTarget) (logClient, error) {
 			return &testClient{
 				bufferSize: 5,
@@ -151,12 +152,13 @@ type testClient struct {
 	sendCh     chan []servicelog.Entry
 }
 
-func (c *testClient) Write(ctx context.Context, entry servicelog.Entry) error {
+func (c *testClient) AddLog(entry servicelog.Entry) error {
 	c.buffered = append(c.buffered, entry)
-	if len(c.buffered) >= c.bufferSize {
-		return c.Flush(ctx)
-	}
 	return nil
+}
+
+func (c *testClient) NumBuffered() int {
+	return len(c.buffered)
 }
 
 func (c *testClient) Flush(ctx context.Context) (err error) {

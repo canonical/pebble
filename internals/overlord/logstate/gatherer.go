@@ -78,8 +78,9 @@ type logGatherer struct {
 // logGathererArgs allows overriding the newLogClient method and time values
 // in testing.
 type logGathererArgs struct {
-	bufferTimeout     time.Duration
-	timeoutFinalFlush time.Duration
+	bufferTimeout      time.Duration
+	maxBufferedEntries int
+	timeoutFinalFlush  time.Duration
 	// method to get a new client
 	newClient func(*plan.LogTarget) (logClient, error)
 }
@@ -116,6 +117,9 @@ func newLogGathererInternal(target *plan.LogTarget, args logGathererArgs) (*logG
 func fillDefaultArgs(args logGathererArgs) logGathererArgs {
 	if args.bufferTimeout == 0 {
 		args.bufferTimeout = bufferTimeout
+	}
+	if args.maxBufferedEntries == 0 {
+		args.maxBufferedEntries = maxBufferedEntries
 	}
 	if args.timeoutFinalFlush == 0 {
 		args.timeoutFinalFlush = timeoutFinalFlush
@@ -199,7 +203,7 @@ mainLoop:
 				continue
 			}
 			// Check if buffer is full
-			if g.client.NumBuffered() > maxBufferedEntries {
+			if g.client.NumBuffered() >= g.maxBufferedEntries {
 				flushClient(g.clientCtx)
 			}
 			// Otherwise, set the timeout

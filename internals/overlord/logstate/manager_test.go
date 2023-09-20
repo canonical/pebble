@@ -171,9 +171,13 @@ type slowFlushingClient struct {
 	flushTime time.Duration
 }
 
-func (c *slowFlushingClient) Write(_ context.Context, _ servicelog.Entry) error {
+func (c *slowFlushingClient) AddLog(_ servicelog.Entry) error {
 	// no-op
 	return nil
+}
+
+func (c *slowFlushingClient) NumBuffered() int {
+	return 0
 }
 
 func (c *slowFlushingClient) Flush(ctx context.Context) error {
