@@ -156,8 +156,8 @@ func (c *Client) handleServerResponse(resp *http.Response) error {
 
 	code := resp.StatusCode
 	switch {
-	case 200 <= code && code < 300:
-		// 2xx is a success - safe to drop logs
+	case code == 200 || code == 204:
+		// Success - safe to drop logs
 		c.resetBuffer()
 		return nil
 
