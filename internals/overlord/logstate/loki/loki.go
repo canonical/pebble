@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -39,11 +38,7 @@ var requestTimeout = 10 * time.Second
 type Client struct {
 	targetName string
 	remoteURL  string
-	// buffered entries are "sharded" by service name
-	entries map[string][]lokiEntry
-	// Keep track of the number of buffered entries, to avoid having to iterate
-	// the entries map to get the total number.
-	numEntries int
+	entries    []lokiEntryWithService
 
 	httpClient *http.Client
 }
@@ -52,13 +47,16 @@ func NewClient(target *plan.LogTarget) *Client {
 	return &Client{
 		targetName: target.Name,
 		remoteURL:  target.Location,
-		entries:    map[string][]lokiEntry{},
 		httpClient: &http.Client{Timeout: requestTimeout},
 	}
 }
 
 func (c *Client) AddLog(entry servicelog.Entry) error {
-	c.entries[entry.Service] = append(c.entries[entry.Service], encodeEntry(entry))
+	c.entries = append(c.entries, lokiEntryWithService{
+		entry:   encodeEntry(entry),
+		service: entry.Service,
+	})
+	c.truncateBuffer()
 	return nil
 }
 
@@ -70,11 +68,11 @@ func encodeEntry(entry servicelog.Entry) lokiEntry {
 }
 
 func (c *Client) NumBuffered() int {
-	return c.numEntries
+	return len(c.entries)
 }
 
 func (c *Client) Flush(ctx context.Context) error {
-	if c.numEntries == 0 {
+	if c.NumBuffered() == 0 {
 		return nil // no-op
 	}
 
@@ -99,27 +97,30 @@ func (c *Client) Flush(ctx context.Context) error {
 	return c.handleServerResponse(resp)
 }
 
+// resetBuffer drops all buffered logs (in the case of a successful send, or an
+// unrecoverable error).
 func (c *Client) resetBuffer() {
-	for svc := range c.entries {
-		c.entries[svc] = c.entries[svc][:0]
+	c.entries = c.entries[:0]
+}
+
+// truncateBuffer truncates the buffer to maxRequestEntries, removing the
+// oldest logs first.
+func (c *Client) truncateBuffer() {
+	l := len(c.entries)
+	if l > maxRequestEntries {
+		c.entries = c.entries[(l - maxRequestEntries):]
 	}
-	c.numEntries = 0
 }
 
 func (c *Client) buildRequest() lokiRequest {
-	// Sort keys to guarantee deterministic output
-	services := make([]string, 0, len(c.entries))
-	for svc, entries := range c.entries {
-		if len(entries) == 0 {
-			continue
-		}
-		services = append(services, svc)
+	// Put entries into service "buckets"
+	bucketedEntries := map[string][]lokiEntry{}
+	for _, data := range c.entries {
+		bucketedEntries[data.service] = append(bucketedEntries[data.service], data.entry)
 	}
-	sort.Strings(services)
 
 	var req lokiRequest
-	for _, service := range services {
-		entries := c.entries[service]
+	for service, entries := range bucketedEntries {
 		stream := lokiStream{
 			Labels: map[string]string{
 				"pebble_service": service,
@@ -141,6 +142,11 @@ type lokiStream struct {
 }
 
 type lokiEntry [2]string
+
+type lokiEntryWithService struct {
+	entry   lokiEntry
+	service string
+}
 
 // handleServerResponse determines what to do based on the response from the
 // Loki server. 4xx and 5xx responses indicate errors, so in this case, we will
@@ -167,7 +173,7 @@ func (c *Client) handleServerResponse(resp *http.Response) error {
 	case 400 <= code && code < 500:
 		// 4xx indicates a client problem, so drop the logs (retrying won't help)
 		logger.Noticef("Target %q: request failed with status %d, dropping %d logs",
-			c.targetName, code, c.numEntries)
+			c.targetName, code, c.NumBuffered())
 		c.resetBuffer()
 		return errFromResponse(resp)
 
@@ -176,7 +182,7 @@ func (c *Client) handleServerResponse(resp *http.Response) error {
 		return errFromResponse(resp)
 
 	default:
-		// Unexpected response
+		// Unexpected response - don't drop logs to be safe
 		return fmt.Errorf("unexpected response from server: %v", resp.Status)
 	}
 }
