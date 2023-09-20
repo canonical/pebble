@@ -205,6 +205,7 @@ mainLoop:
 			// Check if buffer is full
 			if g.client.NumBuffered() >= g.maxBufferedEntries {
 				flushClient(g.clientCtx)
+				continue
 			}
 			// Otherwise, set the timeout
 			flushTimer.EnsureSet(g.bufferTimeout)

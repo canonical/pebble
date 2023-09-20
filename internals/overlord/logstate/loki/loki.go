@@ -106,9 +106,9 @@ func (c *Client) resetBuffer() {
 // truncateBuffer truncates the buffer to maxRequestEntries, removing the
 // oldest logs first.
 func (c *Client) truncateBuffer() {
-	l := len(c.entries)
-	if l > maxRequestEntries {
-		c.entries = c.entries[(l - maxRequestEntries):]
+	numEntries := len(c.entries)
+	if numEntries > maxRequestEntries {
+		c.entries = c.entries[(numEntries - maxRequestEntries):]
 	}
 }
 
@@ -161,7 +161,7 @@ func (c *Client) handleServerResponse(resp *http.Response) error {
 
 	code := resp.StatusCode
 	switch {
-	case code == 200 || code == 204:
+	case code == http.StatusOK || code == http.StatusNoContent:
 		// Success - safe to drop logs
 		c.resetBuffer()
 		return nil
@@ -188,7 +188,7 @@ func (c *Client) handleServerResponse(resp *http.Response) error {
 }
 
 // errFromResponse generates an error from a failed *http.Response.
-// NB: this function reads the response body.
+// Note: this function reads the response body.
 func errFromResponse(resp *http.Response) error {
 	// Read response body to get more context
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 1024))
