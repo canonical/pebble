@@ -15,6 +15,7 @@
 package client
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/url"
@@ -26,23 +27,38 @@ var (
 )
 
 func (client *Client) SetDoer(d doer) {
-	client.doer = d
+	client.Requester.(*DefaultRequester).doer = d
 }
 
 func (client *Client) Do(method, path string, query url.Values, body io.Reader, v interface{}) error {
-	return client.do(method, path, query, nil, body, v)
+	var r BodyReader
+	_, err := client.Requester.Do(context.Background(), &RequestOptions{
+		Method:  method,
+		Path:    path,
+		Query:   query,
+		Headers: nil,
+		Body:    body,
+	}, &r)
+	if err != nil {
+		return err
+	}
+	err = decodeInto(r, v)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func (client *Client) FakeAsyncRequest() (changeId string, err error) {
-	changeId, err = client.doAsync("GET", "/v1/async-test", nil, nil, nil)
+	reqResponse, err := client.doAsync("GET", "/v1/async-test", nil, nil, nil, nil)
 	if err != nil {
 		return "", fmt.Errorf("cannot do async test: %v", err)
 	}
-	return changeId, nil
+	return reqResponse.ChangeID, nil
 }
 
 func (client *Client) SetGetWebsocket(f getWebsocketFunc) {
-	client.getWebsocket = f
+	client.Requester.(*DefaultRequester).getWebsocket = f
 }
 
 // WaitStdinDone waits for WebsocketSendStream to be finished calling
@@ -50,5 +66,3 @@ func (client *Client) SetGetWebsocket(f getWebsocketFunc) {
 func (p *ExecProcess) WaitStdinDone() {
 	<-p.stdinDone
 }
-
-type ClientWebsocket = clientWebsocket

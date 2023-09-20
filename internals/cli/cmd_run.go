@@ -239,9 +239,6 @@ out:
 		}
 	}
 
-	// Close our own self-connection, otherwise it prevents fast and clean termination.
-	rcmd.client.CloseIdleConnections()
-
 	return d.Stop(ch)
 }
 

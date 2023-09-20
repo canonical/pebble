@@ -152,14 +152,10 @@ func (client *Client) Exec(opts *ExecOptions) (*ExecProcess, error) {
 	headers := map[string]string{
 		"Content-Type": "application/json",
 	}
-	resultBytes, changeID, err := client.doAsyncFull("POST", "/v1/exec", nil, headers, &body)
+	var result execResult
+	reqResponse, err := client.doAsync("POST", "/v1/exec", nil, headers, &body, &result)
 	if err != nil {
 		return nil, err
-	}
-	var result execResult
-	err = json.Unmarshal(resultBytes, &result)
-	if err != nil {
-		return nil, fmt.Errorf("cannot unmarshal JSON response: %w", err)
 	}
 
 	// Connect to the "control" websocket.
@@ -178,7 +174,7 @@ func (client *Client) Exec(opts *ExecOptions) (*ExecProcess, error) {
 	stdoutDone := wsutil.WebsocketRecvStream(stdout, ioConn)
 
 	// Handle stderr separately if needed.
-	var stderrConn clientWebsocket
+	var stderrConn Websocket
 	var stderrDone chan bool
 	if opts.Stderr != nil {
 		stderrConn, err = client.getTaskWebsocket(taskID, "stderr")
@@ -211,7 +207,7 @@ func (client *Client) Exec(opts *ExecOptions) (*ExecProcess, error) {
 	}()
 
 	process := &ExecProcess{
-		changeID:    changeID,
+		changeID:    reqResponse.ChangeID,
 		client:      client,
 		timeout:     opts.Timeout,
 		writesDone:  writesDone,
