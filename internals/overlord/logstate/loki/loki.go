@@ -32,7 +32,7 @@ import (
 	"github.com/canonical/pebble/internals/servicelog"
 )
 
-const maxRequestEntries = 1000
+const maxRequestEntries = 100
 
 var requestTimeout = 10 * time.Second
 
@@ -57,13 +57,8 @@ func NewClient(target *plan.LogTarget) *Client {
 	}
 }
 
-func (c *Client) Write(ctx context.Context, entry servicelog.Entry) error {
+func (c *Client) AddLog(entry servicelog.Entry) error {
 	c.entries[entry.Service] = append(c.entries[entry.Service], encodeEntry(entry))
-	c.numEntries++
-
-	if c.numEntries >= maxRequestEntries {
-		return c.Flush(ctx)
-	}
 	return nil
 }
 
@@ -72,6 +67,10 @@ func encodeEntry(entry servicelog.Entry) lokiEntry {
 		strconv.FormatInt(entry.Time.UnixNano(), 10),
 		strings.TrimSuffix(entry.Message, "\n"),
 	}
+}
+
+func (c *Client) NumBuffered() int {
+	return c.numEntries
 }
 
 func (c *Client) Flush(ctx context.Context) error {

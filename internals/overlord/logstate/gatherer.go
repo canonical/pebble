@@ -28,8 +28,9 @@ import (
 )
 
 const (
-	parserSize    = 4 * 1024
-	bufferTimeout = 1 * time.Second
+	parserSize         = 4 * 1024
+	bufferTimeout      = 1 * time.Second
+	maxBufferedEntries = 100
 
 	// These constants control the maximum time allowed for each teardown step.
 	timeoutCurrentFlush = 1 * time.Second
@@ -173,6 +174,15 @@ func (g *logGatherer) loop() error {
 	flushTimer := newTimer()
 	defer flushTimer.Stop()
 
+	flushClient := func(ctx context.Context) {
+		// Mark timer as unset
+		flushTimer.Stop()
+		err := g.client.Flush(ctx)
+		if err != nil {
+			logger.Noticef("Cannot flush logs to target %q: %v", g.targetName, err)
+		}
+	}
+
 mainLoop:
 	for {
 		select {
@@ -180,18 +190,19 @@ mainLoop:
 			break mainLoop
 
 		case <-flushTimer.Expired():
-			// Mark timer as unset
-			flushTimer.Stop()
-			err := g.client.Flush(g.clientCtx)
-			if err != nil {
-				logger.Noticef("Cannot flush logs to target %q: %v", g.targetName, err)
-			}
+			flushClient(g.clientCtx)
 
 		case entry := <-g.entryCh:
-			err := g.client.Write(g.clientCtx, entry)
+			err := g.client.AddLog(entry)
 			if err != nil {
 				logger.Noticef("Cannot write logs to target %q: %v", g.targetName, err)
+				continue
 			}
+			// Check if buffer is full
+			if g.client.NumBuffered() > maxBufferedEntries {
+				flushClient(g.clientCtx)
+			}
+			// Otherwise, set the timeout
 			flushTimer.EnsureSet(g.bufferTimeout)
 		}
 	}
@@ -200,10 +211,7 @@ mainLoop:
 	// We need to create a new context, as the previous one may have been cancelled.
 	ctx, cancel := context.WithTimeout(context.Background(), g.timeoutFinalFlush)
 	defer cancel()
-	err := g.client.Flush(ctx)
-	if err != nil {
-		logger.Noticef("Cannot flush logs to target %q: %v", g.targetName, err)
-	}
+	flushClient(ctx)
 	return nil
 }
 
@@ -289,24 +297,15 @@ func (t *timer) EnsureSet(timeout time.Duration) {
 // protocol required by that log target.
 // For example, a logClient for Loki would encode the log messages in the
 // JSON format expected by Loki, and send them over HTTP(S).
-//
-// logClient implementations have some freedom about the semantics of these
-// methods. For a buffering client (e.g. HTTP):
-//   - Write could add the log to the client's internal buffer, calling Flush
-//     when this buffer reaches capacity.
-//   - Flush would prepare and send a request with the buffered logs.
-//
-// For a non-buffering client (e.g. TCP), Write could serialise the log
-// directly to the open connection, while Flush would be a no-op.
 type logClient interface {
-	// Write adds the given log entry to the client. Depending on the
-	// implementation of the client, this may send the log to the remote target,
-	// or simply add the log to an internal buffer, flushing that buffer when
-	// required.
-	Write(context.Context, servicelog.Entry) error
+	// AddLog adds the given log entry to the client's buffer.
+	AddLog(servicelog.Entry) error
 
-	// Flush sends buffered logs (if any) to the remote target. For clients which
-	// don't buffer logs, Flush should be a no-op.
+	// NumBuffered returns the number of log entries currently buffered in the
+	// client.
+	NumBuffered() int
+
+	// Flush sends buffered logs (if any) to the remote target.
 	Flush(context.Context) error
 }
 
