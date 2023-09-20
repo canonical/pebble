@@ -177,6 +177,8 @@ func (g *logGatherer) ServiceStarted(service *plan.Service, buffer *servicelog.R
 func (g *logGatherer) loop() error {
 	flushTimer := newTimer()
 	defer flushTimer.Stop()
+	// Keep track of number of logs written since last flush
+	numWritten := 0
 
 	flushClient := func(ctx context.Context) {
 		// Mark timer as unset
@@ -185,6 +187,7 @@ func (g *logGatherer) loop() error {
 		if err != nil {
 			logger.Noticef("Cannot flush logs to target %q: %v", g.targetName, err)
 		}
+		numWritten = 0
 	}
 
 mainLoop:
@@ -202,8 +205,9 @@ mainLoop:
 				logger.Noticef("Cannot write logs to target %q: %v", g.targetName, err)
 				continue
 			}
+			numWritten++
 			// Check if buffer is full
-			if g.client.NumBuffered() >= g.maxBufferedEntries {
+			if numWritten >= g.maxBufferedEntries {
 				flushClient(g.clientCtx)
 				continue
 			}
@@ -305,10 +309,6 @@ func (t *timer) EnsureSet(timeout time.Duration) {
 type logClient interface {
 	// Add adds the given log entry to the client's buffer.
 	Add(servicelog.Entry) error
-
-	// NumBuffered returns the number of log entries currently buffered in the
-	// client.
-	NumBuffered() int
 
 	// Flush sends buffered logs (if any) to the remote target.
 	Flush(context.Context) error

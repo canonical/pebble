@@ -157,10 +157,6 @@ func (c *testClient) Add(entry servicelog.Entry) error {
 	return nil
 }
 
-func (c *testClient) NumBuffered() int {
-	return len(c.buffered)
-}
-
 func (c *testClient) Flush(ctx context.Context) (err error) {
 	if len(c.buffered) == 0 {
 		return

@@ -67,12 +67,8 @@ func encodeEntry(entry servicelog.Entry) lokiEntry {
 	}
 }
 
-func (c *Client) NumBuffered() int {
-	return len(c.entries)
-}
-
 func (c *Client) Flush(ctx context.Context) error {
-	if c.NumBuffered() == 0 {
+	if len(c.entries) == 0 {
 		return nil // no-op
 	}
 
@@ -173,7 +169,7 @@ func (c *Client) handleServerResponse(resp *http.Response) error {
 	case 400 <= code && code < 500:
 		// 4xx indicates a client problem, so drop the logs (retrying won't help)
 		logger.Noticef("Target %q: request failed with status %d, dropping %d logs",
-			c.targetName, code, c.NumBuffered())
+			c.targetName, code, len(c.entries))
 		c.resetBuffer()
 		return errFromResponse(resp)
 

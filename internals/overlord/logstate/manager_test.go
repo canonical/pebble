@@ -176,10 +176,6 @@ func (c *slowFlushingClient) Add(_ servicelog.Entry) error {
 	return nil
 }
 
-func (c *slowFlushingClient) NumBuffered() int {
-	return 0
-}
-
 func (c *slowFlushingClient) Flush(ctx context.Context) error {
 	select {
 	case <-ctx.Done():
