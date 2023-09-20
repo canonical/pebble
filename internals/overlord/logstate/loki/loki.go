@@ -31,7 +31,13 @@ import (
 	"github.com/canonical/pebble/internals/servicelog"
 )
 
-const maxRequestEntries = 100
+const (
+	// maxRequestEntries is the size of the sliding window of entries in the buffer.
+	maxRequestEntries = 100
+
+	// reallocBufferThreshold is the size of the buffer's memory.
+	reallocBufferThreshold = maxRequestEntries * 2
+)
 
 var requestTimeout = 10 * time.Second
 
@@ -52,11 +58,19 @@ func NewClient(target *plan.LogTarget) *Client {
 }
 
 func (c *Client) Add(entry servicelog.Entry) error {
+	if N := len(c.entries); N >= maxRequestEntries {
+		// make room for 1 entry
+		c.entries = c.entries[(N - maxRequestEntries + 1):]
+	}
+	if cap(c.entries)-len(c.entries) == 0 {
+		// There is no room left in the slice
+		// Reallocate the entire buffer to avoid memory leaking over time
+		c.entries = append(make([]lokiEntryWithService, 0, reallocBufferThreshold), c.entries...)
+	}
 	c.entries = append(c.entries, lokiEntryWithService{
 		entry:   encodeEntry(entry),
 		service: entry.Service,
 	})
-	c.truncateBuffer()
 	return nil
 }
 
@@ -97,15 +111,6 @@ func (c *Client) Flush(ctx context.Context) error {
 // unrecoverable error).
 func (c *Client) resetBuffer() {
 	c.entries = c.entries[:0]
-}
-
-// truncateBuffer truncates the buffer to maxRequestEntries, removing the
-// oldest logs first.
-func (c *Client) truncateBuffer() {
-	numEntries := len(c.entries)
-	if numEntries > maxRequestEntries {
-		c.entries = c.entries[(numEntries - maxRequestEntries):]
-	}
 }
 
 func (c *Client) buildRequest() lokiRequest {
