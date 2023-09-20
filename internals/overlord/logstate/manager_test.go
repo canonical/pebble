@@ -171,7 +171,7 @@ type slowFlushingClient struct {
 	flushTime time.Duration
 }
 
-func (c *slowFlushingClient) AddLog(_ servicelog.Entry) error {
+func (c *slowFlushingClient) Add(_ servicelog.Entry) error {
 	// no-op
 	return nil
 }

@@ -197,7 +197,7 @@ mainLoop:
 			flushClient(g.clientCtx)
 
 		case entry := <-g.entryCh:
-			err := g.client.AddLog(entry)
+			err := g.client.Add(entry)
 			if err != nil {
 				logger.Noticef("Cannot write logs to target %q: %v", g.targetName, err)
 				continue
@@ -302,8 +302,8 @@ func (t *timer) EnsureSet(timeout time.Duration) {
 // For example, a logClient for Loki would encode the log messages in the
 // JSON format expected by Loki, and send them over HTTP(S).
 type logClient interface {
-	// AddLog adds the given log entry to the client's buffer.
-	AddLog(servicelog.Entry) error
+	// Add adds the given log entry to the client's buffer.
+	Add(servicelog.Entry) error
 
 	// NumBuffered returns the number of log entries currently buffered in the
 	// client.

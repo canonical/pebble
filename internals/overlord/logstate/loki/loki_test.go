@@ -119,7 +119,7 @@ func (*suite) TestRequest(c *C) {
 
 	client := loki.NewClient(&plan.LogTarget{Location: server.URL})
 	for _, entry := range input {
-		err := client.AddLog(entry)
+		err := client.Add(entry)
 		c.Assert(err, IsNil)
 	}
 
@@ -140,7 +140,7 @@ func (*suite) TestFlushCancelContext(c *C) {
 	defer killServer()
 
 	client := loki.NewClient(&plan.LogTarget{Location: server.URL})
-	err := client.AddLog(servicelog.Entry{
+	err := client.Add(servicelog.Entry{
 		Time:    time.Now(),
 		Service: "svc1",
 		Message: "this is a log line\n",
@@ -178,7 +178,7 @@ func (*suite) TestServerTimeout(c *C) {
 	defer close(stopRequest)
 
 	client := loki.NewClient(&plan.LogTarget{Location: server.URL})
-	err := client.AddLog(servicelog.Entry{
+	err := client.Add(servicelog.Entry{
 		Time:    time.Now(),
 		Service: "svc1",
 		Message: "this is a log line\n",

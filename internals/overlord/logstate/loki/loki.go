@@ -51,7 +51,7 @@ func NewClient(target *plan.LogTarget) *Client {
 	}
 }
 
-func (c *Client) AddLog(entry servicelog.Entry) error {
+func (c *Client) Add(entry servicelog.Entry) error {
 	c.entries = append(c.entries, lokiEntryWithService{
 		entry:   encodeEntry(entry),
 		service: entry.Service,

@@ -152,7 +152,7 @@ type testClient struct {
 	sendCh     chan []servicelog.Entry
 }
 
-func (c *testClient) AddLog(entry servicelog.Entry) error {
+func (c *testClient) Add(entry servicelog.Entry) error {
 	c.buffered = append(c.buffered, entry)
 	return nil
 }
