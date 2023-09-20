@@ -18,6 +18,8 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/http"
+	"net/http/httptest"
 	"time"
 
 	. "gopkg.in/check.v1"
@@ -135,6 +137,86 @@ func (s *gathererSuite) TestGathererShutdown(c *C) {
 	default:
 		c.Fatalf(`no logs were received
 logs in client buffer: %v`, len(g.client.(*testClient).buffered))
+	}
+}
+
+func (s *gathererSuite) TestRetryLoki(c *C) {
+	var handler *func(http.ResponseWriter, *http.Request)
+	patchHandler := func(f func(http.ResponseWriter, *http.Request)) {
+		handler = &f
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		(*handler)(w, r)
+	}))
+	defer server.Close()
+
+	g, err := newLogGathererInternal(
+		&plan.LogTarget{
+			Name:     "tgt1",
+			Type:     plan.LokiTarget,
+			Location: server.URL,
+		},
+		logGathererArgs{
+			bufferTimeout:      1 * time.Millisecond,
+			maxBufferedEntries: 5,
+		},
+	)
+	c.Assert(err, IsNil)
+
+	testSvc := newTestService("svc1")
+	g.ServiceStarted(testSvc.config, testSvc.ringBuffer)
+
+	reqReceived := make(chan struct{})
+	// First attempt: server should return a retryable error
+	patchHandler(func(w http.ResponseWriter, _ *http.Request) {
+		close(reqReceived)
+		w.WriteHeader(http.StatusTooManyRequests)
+	})
+
+	testSvc.writeLog("log line #1")
+	testSvc.writeLog("log line #2")
+	testSvc.writeLog("log line #3")
+	testSvc.writeLog("log line #4")
+	testSvc.writeLog("log line #5")
+
+	// Check that request was received
+	select {
+	case <-reqReceived:
+	case <-time.After(1 * time.Millisecond):
+		c.Fatalf("timed out waiting for request")
+	}
+
+	reqReceived = make(chan struct{})
+	// Second attempt: check that logs were held over from last time
+	patchHandler(func(w http.ResponseWriter, r *http.Request) {
+		close(reqReceived)
+		reqBody, err := io.ReadAll(r.Body)
+		c.Assert(err, IsNil)
+		fmt.Println(string(reqBody))
+
+		expected := `{"streams":\[{"stream":{"pebble_service":"svc1"},"values":\[` +
+			//`\["\d+","log line #1"\],` +
+			//`\["\d+","log line #2"\],` +
+			`\["\d+","log line #3"\],` +
+			`\["\d+","log line #4"\],` +
+			`\["\d+","log line #5"\],` +
+			`\["\d+","log line #6"\],` +
+			`\["\d+","log line #7"\]` +
+			`\]}\]}`
+		c.Assert(string(reqBody), Matches, expected)
+		// TODO: lower loki.maxRequestEntries and check truncation
+	})
+
+	testSvc.writeLog("log line #6")
+	testSvc.writeLog("log line #7")
+	// Wait for flush timeout to elapse
+
+	// Check that request was received
+	select {
+	case <-reqReceived:
+	case <-time.After(5 * time.Millisecond):
+		c.Fatalf("timed out waiting for request")
 	}
 }
 

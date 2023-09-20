@@ -31,15 +31,16 @@ import (
 	"github.com/canonical/pebble/internals/servicelog"
 )
 
-const (
+// These should be consts, but we need to patch them for testing.
+var (
+	requestTimeout = 10 * time.Second
+
 	// maxRequestEntries is the size of the sliding window of entries in the buffer.
 	maxRequestEntries = 100
 
 	// reallocBufferThreshold is the size of the buffer's memory.
 	reallocBufferThreshold = maxRequestEntries * 2
 )
-
-var requestTimeout = 10 * time.Second
 
 type Client struct {
 	targetName string

@@ -23,3 +23,11 @@ func FakeRequestTimeout(new time.Duration) (restore func()) {
 		requestTimeout = oldRequestTimeout
 	}
 }
+
+func FakeMaxRequestEntries(new int) (restore func()) {
+	oldMaxRequestEntries := maxRequestEntries
+	maxRequestEntries = new
+	return func() {
+		maxRequestEntries = oldMaxRequestEntries
+	}
+}
