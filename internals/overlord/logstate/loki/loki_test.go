@@ -15,8 +15,10 @@
 package loki_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -77,7 +79,7 @@ func (*suite) TestRequest(c *C) {
 		Message: "log line #9\n",
 	}}
 
-	expected := `
+	expected := compactJSON(`
 {"streams": [{
 	"stream": {"pebble_service": "svc1"},
   "values": [
@@ -103,7 +105,7 @@ func (*suite) TestRequest(c *C) {
   "values": [
       [ "1704026098000000000", "log line #9" ]
   ]
-}]}`
+}]}`)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		c.Assert(r.Method, Equals, http.MethodPost)
@@ -111,9 +113,7 @@ func (*suite) TestRequest(c *C) {
 
 		reqBody, err := io.ReadAll(r.Body)
 		c.Assert(err, IsNil)
-		expFlattened, err := flattenJSON(expected)
-		c.Assert(err, IsNil)
-		c.Assert(string(reqBody), Equals, expFlattened)
+		c.Assert(reqBody, DeepEquals, expected)
 	}))
 	defer server.Close()
 
@@ -192,13 +192,11 @@ func (*suite) TestServerTimeout(c *C) {
 }
 
 // Strips all extraneous whitespace from JSON
-func flattenJSON(s string) (string, error) {
-	var v any
-	err := json.Unmarshal([]byte(s), &v)
+func compactJSON(s string) []byte {
+	var buf bytes.Buffer
+	err := json.Compact(&buf, []byte(s))
 	if err != nil {
-		return "", err
+		panic(fmt.Sprintf("error compacting JSON: %v", err))
 	}
-
-	b, err := json.Marshal(v)
-	return string(b), err
+	return buf.Bytes()
 }
