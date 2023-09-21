@@ -33,9 +33,7 @@ import (
 )
 
 const (
-	requestTimeout = 10 * time.Second
-
-	// maxRequestEntries is the size of the sliding window of entries in the buffer.
+	requestTimeout    = 10 * time.Second
 	maxRequestEntries = 100
 )
 
