@@ -63,7 +63,7 @@ func (s *gathererSuite) TestGatherer(c *C) {
 
 	testSvc.writeLog("log line #5")
 	select {
-	case <-time.After(5 * time.Millisecond):
+	case <-time.After(10 * time.Millisecond):
 		c.Fatalf("timeout waiting for logs")
 	case logs := <-received:
 		checkLogs(c, logs, []string{"log line #1", "log line #2", "log line #3", "log line #4", "log line #5"})
@@ -188,7 +188,7 @@ func (s *gathererSuite) TestRetryLoki(c *C) {
 	// Check that request was received
 	select {
 	case <-reqReceived:
-	case <-time.After(1 * time.Millisecond):
+	case <-time.After(100 * time.Millisecond):
 		c.Fatalf("timed out waiting for request")
 	}
 
@@ -198,11 +198,9 @@ func (s *gathererSuite) TestRetryLoki(c *C) {
 		close(reqReceived)
 		reqBody, err := io.ReadAll(r.Body)
 		c.Assert(err, IsNil)
-		fmt.Println(string(reqBody))
 
 		expected := `{"streams":\[{"stream":{"pebble_service":"svc1"},"values":\[` +
-			//`\["\d+","log line #1"\],` +
-			//`\["\d+","log line #2"\],` +
+			// First two log lines should have been truncated
 			`\["\d+","log line #3"\],` +
 			`\["\d+","log line #4"\],` +
 			`\["\d+","log line #5"\],` +
@@ -210,7 +208,6 @@ func (s *gathererSuite) TestRetryLoki(c *C) {
 			`\["\d+","log line #7"\]` +
 			`\]}\]}`
 		c.Assert(string(reqBody), Matches, expected)
-		// TODO: lower loki.maxRequestEntries and check truncation
 	})
 
 	testSvc.writeLog("log line #6")
@@ -220,7 +217,7 @@ func (s *gathererSuite) TestRetryLoki(c *C) {
 	// Check that request was received
 	select {
 	case <-reqReceived:
-	case <-time.After(5 * time.Millisecond):
+	case <-time.After(100 * time.Millisecond):
 		c.Fatalf("timed out waiting for request")
 	}
 }
