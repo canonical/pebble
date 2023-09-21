@@ -167,9 +167,6 @@ func (*suite) TestFlushCancelContext(c *C) {
 }
 
 func (*suite) TestServerTimeout(c *C) {
-	restore := loki.FakeRequestTimeout(1 * time.Microsecond)
-	defer restore()
-
 	stopRequest := make(chan struct{})
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		<-stopRequest
@@ -177,7 +174,12 @@ func (*suite) TestServerTimeout(c *C) {
 	defer server.Close()
 	defer close(stopRequest)
 
-	client := loki.NewClient(&plan.LogTarget{Location: server.URL})
+	client := loki.NewClientWithArgs(
+		&plan.LogTarget{Location: server.URL},
+		loki.ClientArgs{
+			RequestTimeout: 1 * time.Microsecond,
+		},
+	)
 	err := client.Add(servicelog.Entry{
 		Time:    time.Now(),
 		Service: "svc1",

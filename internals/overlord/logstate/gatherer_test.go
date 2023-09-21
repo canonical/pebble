@@ -22,6 +22,7 @@ import (
 	"net/http/httptest"
 	"time"
 
+	"github.com/canonical/pebble/internals/overlord/logstate/loki"
 	. "gopkg.in/check.v1"
 
 	"github.com/canonical/pebble/internals/plan"
@@ -154,12 +155,16 @@ func (s *gathererSuite) TestRetryLoki(c *C) {
 	g, err := newLogGathererInternal(
 		&plan.LogTarget{
 			Name:     "tgt1",
-			Type:     plan.LokiTarget,
 			Location: server.URL,
 		},
 		logGathererArgs{
 			bufferTimeout:      1 * time.Millisecond,
 			maxBufferedEntries: 5,
+			newClient: func(target *plan.LogTarget) (logClient, error) {
+				return loki.NewClientWithArgs(target, loki.ClientArgs{
+					MaxRequestEntries: 5,
+				}), nil
+			},
 		},
 	)
 	c.Assert(err, IsNil)

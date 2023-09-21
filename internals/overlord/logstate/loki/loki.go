@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -31,18 +32,16 @@ import (
 	"github.com/canonical/pebble/internals/servicelog"
 )
 
-// These should be consts, but we need to patch them for testing.
-var (
+const (
 	requestTimeout = 10 * time.Second
 
 	// maxRequestEntries is the size of the sliding window of entries in the buffer.
 	maxRequestEntries = 100
-
-	// reallocBufferThreshold is the size of the buffer's memory.
-	reallocBufferThreshold = maxRequestEntries * 2
 )
 
 type Client struct {
+	ClientArgs
+
 	targetName string
 	remoteURL  string
 	entries    []lokiEntryWithService
@@ -51,22 +50,39 @@ type Client struct {
 }
 
 func NewClient(target *plan.LogTarget) *Client {
+	return NewClientWithArgs(target, ClientArgs{})
+}
+
+// ClientArgs allows overriding default parameters (e.g. for testing)
+type ClientArgs struct {
+	RequestTimeout    time.Duration
+	MaxRequestEntries int
+}
+
+func NewClientWithArgs(target *plan.LogTarget, args ClientArgs) *Client {
+	args = fillDefaultArgs(args)
 	return &Client{
+		ClientArgs: args,
 		targetName: target.Name,
 		remoteURL:  target.Location,
-		httpClient: &http.Client{Timeout: requestTimeout},
+		httpClient: &http.Client{Timeout: args.RequestTimeout},
 	}
 }
 
-func (c *Client) Add(entry servicelog.Entry) error {
-	if N := len(c.entries); N >= maxRequestEntries {
-		// make room for 1 entry
-		c.entries = c.entries[(N - maxRequestEntries + 1):]
+func fillDefaultArgs(args ClientArgs) ClientArgs {
+	if args.RequestTimeout == 0 {
+		args.RequestTimeout = requestTimeout
 	}
-	if cap(c.entries)-len(c.entries) == 0 {
-		// There is no room left in the slice
-		// Reallocate the entire buffer to avoid memory leaking over time
-		c.entries = append(make([]lokiEntryWithService, 0, reallocBufferThreshold), c.entries...)
+	if args.MaxRequestEntries == 0 {
+		args.MaxRequestEntries = maxRequestEntries
+	}
+	return args
+}
+
+func (c *Client) Add(entry servicelog.Entry) error {
+	if N := len(c.entries); N >= c.MaxRequestEntries {
+		// make room for 1 entry
+		c.entries = c.entries[(N - c.MaxRequestEntries + 1):]
 	}
 	c.entries = append(c.entries, lokiEntryWithService{
 		entry:   encodeEntry(entry),
@@ -121,8 +137,16 @@ func (c *Client) buildRequest() lokiRequest {
 		bucketedEntries[data.service] = append(bucketedEntries[data.service], data.entry)
 	}
 
+	// Sort service names to guarantee deterministic output
+	var services []string
+	for service := range bucketedEntries {
+		services = append(services, service)
+	}
+	sort.Strings(services)
+
 	var req lokiRequest
-	for service, entries := range bucketedEntries {
+	for _, service := range services {
+		entries := bucketedEntries[service]
 		stream := lokiStream{
 			Labels: map[string]string{
 				"pebble_service": service,
