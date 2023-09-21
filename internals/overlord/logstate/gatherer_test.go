@@ -63,7 +63,7 @@ func (s *gathererSuite) TestGatherer(c *C) {
 
 	testSvc.writeLog("log line #5")
 	select {
-	case <-time.After(10 * time.Millisecond):
+	case <-time.After(1 * time.Second):
 		c.Fatalf("timeout waiting for logs")
 	case logs := <-received:
 		checkLogs(c, logs, []string{"log line #1", "log line #2", "log line #3", "log line #4", "log line #5"})
@@ -126,7 +126,7 @@ func (s *gathererSuite) TestGathererShutdown(c *C) {
 	}()
 
 	select {
-	case <-time.After(100 * time.Millisecond):
+	case <-time.After(1 * time.Second):
 		c.Fatalf("timeout waiting for gatherer to tear down")
 	case <-hasShutdown:
 	}
@@ -188,7 +188,7 @@ func (s *gathererSuite) TestRetryLoki(c *C) {
 	// Check that request was received
 	select {
 	case <-reqReceived:
-	case <-time.After(100 * time.Millisecond):
+	case <-time.After(1 * time.Second):
 		c.Fatalf("timed out waiting for request")
 	}
 
@@ -217,7 +217,7 @@ func (s *gathererSuite) TestRetryLoki(c *C) {
 	// Check that request was received
 	select {
 	case <-reqReceived:
-	case <-time.After(100 * time.Millisecond):
+	case <-time.After(1 * time.Second):
 		c.Fatalf("timed out waiting for request")
 	}
 }

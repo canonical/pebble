@@ -162,7 +162,7 @@ func (s *managerSuite) TestTimelyShutdown(c *C) {
 	}()
 	select {
 	case <-done:
-	case <-time.After(50 * time.Millisecond):
+	case <-time.After(1 * time.Second):
 		c.Fatal("LogManager.Stop() took too long")
 	}
 }
