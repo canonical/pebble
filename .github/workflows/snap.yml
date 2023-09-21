@@ -11,7 +11,7 @@ env:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, X64, large, jammy]
     outputs:
       pebble-snap: ${{ steps.build-pebble-snap.outputs.snap }}
 
@@ -32,7 +32,7 @@ jobs:
           path: ${{ steps.build-pebble-snap.outputs.snap }}
 
   test:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, X64, large, jammy]
     needs: [build]
     outputs:
       pebble-version: ${{ steps.install-pebble.outputs.version }}
@@ -57,7 +57,7 @@ jobs:
 
   promote:
     if: ${{ github.event_name == 'release' }}
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, X64, large, jammy]
     needs: [test]
     strategy:
       fail-fast: false

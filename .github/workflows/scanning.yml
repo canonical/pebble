@@ -9,7 +9,7 @@ on:
 jobs:
   scan:
     name: Scan for known vulnerabilities
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, X64, large, jammy]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2

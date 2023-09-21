@@ -8,7 +8,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, X64, large, jammy]
 
     strategy:
       fail-fast: false
@@ -30,7 +30,7 @@ jobs:
         go build ./cmd/pebble
 
   root-tests:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, X64, large, jammy]
 
     name: Root Tests
     steps:
@@ -52,7 +52,7 @@ jobs:
         PEBBLE_TEST_USER=runner PEBBLE_TEST_GROUP=runner sudo -E -H ./servstate.test -check.v -check.f ^S.TestUserGroup$
 
   format:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, X64, large, jammy]
 
     name: Format check
     steps:
