@@ -142,13 +142,9 @@ logs in client buffer: %v`, len(g.client.(*testClient).buffered))
 }
 
 func (s *gathererSuite) TestRetryLoki(c *C) {
-	var handler *func(http.ResponseWriter, *http.Request)
-	patchHandler := func(f func(http.ResponseWriter, *http.Request)) {
-		handler = &f
-	}
-
+	var handler func(http.ResponseWriter, *http.Request)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		(*handler)(w, r)
+		handler(w, r)
 	}))
 	defer server.Close()
 
@@ -174,10 +170,10 @@ func (s *gathererSuite) TestRetryLoki(c *C) {
 
 	reqReceived := make(chan struct{})
 	// First attempt: server should return a retryable error
-	patchHandler(func(w http.ResponseWriter, _ *http.Request) {
+	handler = func(w http.ResponseWriter, _ *http.Request) {
 		close(reqReceived)
 		w.WriteHeader(http.StatusTooManyRequests)
-	})
+	}
 
 	testSvc.writeLog("log line #1")
 	testSvc.writeLog("log line #2")
@@ -194,7 +190,7 @@ func (s *gathererSuite) TestRetryLoki(c *C) {
 
 	reqReceived = make(chan struct{})
 	// Second attempt: check that logs were held over from last time
-	patchHandler(func(w http.ResponseWriter, r *http.Request) {
+	handler = func(w http.ResponseWriter, r *http.Request) {
 		close(reqReceived)
 		reqBody, err := io.ReadAll(r.Body)
 		c.Assert(err, IsNil)
@@ -208,7 +204,7 @@ func (s *gathererSuite) TestRetryLoki(c *C) {
 			`\["\d+","log line #7"\]` +
 			`\]}\]}`
 		c.Assert(string(reqBody), Matches, expected)
-	})
+	}
 
 	testSvc.writeLog("log line #6")
 	testSvc.writeLog("log line #7")
