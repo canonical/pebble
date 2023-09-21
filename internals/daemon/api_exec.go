@@ -69,19 +69,6 @@ func v1PostExec(c *Command, req *http.Request, _ *UserState) Response {
 		return statusBadRequest("cannot find executable %q", payload.Command[0])
 	}
 
-	// Also check that the working directory exists, to avoid a confusing
-	// error message later that implies the command doesn't exist:
-	//
-	//  fork/exec /usr/local/bin/realcommand: no such file or directory
-	//
-	// Note that this check still doesn't check that the permissions are
-	// correct to use it as a working directory, but this is a good start.
-	if payload.WorkingDir != "" {
-		if !osutil.IsDir(payload.WorkingDir) {
-			return statusBadRequest("cannot find working directory %q", payload.WorkingDir)
-		}
-	}
-
 	p, err := c.d.overlord.ServiceManager().Plan()
 	if err != nil {
 		return statusBadRequest("%v", err)
