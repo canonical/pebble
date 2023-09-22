@@ -96,7 +96,7 @@ func (cmd *cmdNotices) Execute(args []string) error {
 	var notices []*client.Notice
 	if cmd.Timeout != 0 {
 		ctx := notifyContext(context.Background(), os.Interrupt)
-		notices, err = cmd.client.WaitNotices(ctx, &options, cmd.Timeout)
+		notices, err = cmd.client.WaitNotices(ctx, cmd.Timeout, &options)
 	} else {
 		notices, err = cmd.client.Notices(&options)
 	}
