@@ -202,7 +202,7 @@ func (c *Client) handleServerResponse(resp *http.Response) error {
 		return errFromResponse(resp)
 
 	case 400 <= code && code < 500:
-		// 4xx indicates a client problem, so drop the logs (retrying won't help)
+		// Other 4xx codes indicate a client problem, so drop the logs (retrying won't help)
 		logger.Noticef("Target %q: request failed with status %d, dropping %d logs",
 			c.targetName, code, len(c.entries))
 		c.resetBuffer()
