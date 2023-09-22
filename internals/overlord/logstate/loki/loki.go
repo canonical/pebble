@@ -79,8 +79,10 @@ func fillDefaultOptions(options *ClientOptions) *ClientOptions {
 
 func (c *Client) Add(entry servicelog.Entry) error {
 	if n := len(c.entries); n >= c.options.MaxRequestEntries {
-		// make room for 1 entry
-		c.entries = c.entries[(n - c.options.MaxRequestEntries + 1):]
+		// Buffer full - remove the first element to make room
+		// Zero the removed element to allow garbage collection
+		c.entries[0] = lokiEntryWithService{}
+		c.entries = c.entries[1:]
 	}
 	if cap(c.entries)-len(c.entries) == 0 {
 		// Allocate a new slice with capacity equal to double the buffer size, and
