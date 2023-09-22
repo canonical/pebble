@@ -34,6 +34,7 @@ import (
 	"github.com/gorilla/mux"
 	"gopkg.in/tomb.v2"
 
+	"github.com/canonical/pebble/client"
 	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/osutil"
 	"github.com/canonical/pebble/internals/osutil/sys"
@@ -234,14 +235,14 @@ func (c *Command) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	st.Lock()
 	user, err := userFromRequest(st, r)
 	if err != nil {
-		StatusForbidden("forbidden").ServeHTTP(w, r)
+		statusForbidden("forbidden").ServeHTTP(w, r)
 		return
 	}
 	st.Unlock()
 
 	// check if we are in degradedMode
 	if c.d.degradedErr != nil && r.Method != "GET" {
-		StatusInternalError(c.d.degradedErr.Error()).ServeHTTP(w, r)
+		statusInternalError(c.d.degradedErr.Error()).ServeHTTP(w, r)
 		return
 	}
 
@@ -249,15 +250,15 @@ func (c *Command) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case accessOK:
 		// nothing
 	case accessUnauthorized:
-		StatusUnauthorized("access denied").ServeHTTP(w, r)
+		statusUnauthorized("access denied").ServeHTTP(w, r)
 		return
 	case accessForbidden:
-		StatusForbidden("forbidden").ServeHTTP(w, r)
+		statusForbidden("forbidden").ServeHTTP(w, r)
 		return
 	}
 
 	var rspf ResponseFunc
-	var rsp = StatusMethodNotAllowed("method %q not allowed", r.Method)
+	var rsp = statusMethodNotAllowed("method %q not allowed", r.Method)
 
 	switch r.Method {
 	case "GET":
@@ -280,11 +281,11 @@ func (c *Command) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		st.Unlock()
 		switch rst {
 		case restart.RestartSystem:
-			rsp.transmitMaintenance(ErrorKindSystemRestart, "system is restarting")
+			rsp.transmitMaintenance(client.ErrorKindSystemRestart, "system is restarting")
 		case restart.RestartDaemon:
-			rsp.transmitMaintenance(ErrorKindDaemonRestart, "daemon is restarting")
+			rsp.transmitMaintenance(client.ErrorKindDaemonRestart, "daemon is restarting")
 		case restart.RestartSocket:
-			rsp.transmitMaintenance(ErrorKindDaemonRestart, "daemon is stopping to wait for socket activation")
+			rsp.transmitMaintenance(client.ErrorKindDaemonRestart, "daemon is stopping to wait for socket activation")
 		}
 		if rsp.Type != ResponseTypeError {
 			st.Lock()
@@ -427,7 +428,7 @@ func (d *Daemon) addRoutes() {
 
 	// also maybe add a /favicon.ico handler...
 
-	d.router.NotFoundHandler = StatusNotFound("invalid API endpoint requested")
+	d.router.NotFoundHandler = statusNotFound("invalid API endpoint requested")
 }
 
 type connTracker struct {

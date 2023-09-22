@@ -24,6 +24,8 @@ import (
 	"path/filepath"
 
 	"gopkg.in/check.v1"
+
+	"github.com/canonical/pebble/client"
 )
 
 type responseSuite struct{}
@@ -112,7 +114,7 @@ func (s *responseSuite) TestErrorResponderPrintfsWithArgs(c *check.C) {
 	c.Assert(err, check.IsNil)
 	rsp.ServeHTTP(rec, req)
 
-	var v struct{ Result ErrorResult }
+	var v struct{ Result client.Error }
 	c.Assert(json.NewDecoder(rec.Body).Decode(&v), check.IsNil)
 
 	c.Check(v.Result.Message, check.Equals, "system memory below 1%.")
@@ -127,7 +129,7 @@ func (s *responseSuite) TestErrorResponderDoesNotPrintfAlways(c *check.C) {
 	c.Assert(err, check.IsNil)
 	rsp.ServeHTTP(rec, req)
 
-	var v struct{ Result ErrorResult }
+	var v struct{ Result client.Error }
 	c.Assert(json.NewDecoder(rec.Body).Decode(&v), check.IsNil)
 
 	c.Check(v.Result.Message, check.Equals, "system memory below 1%.")

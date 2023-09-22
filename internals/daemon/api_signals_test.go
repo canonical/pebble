@@ -22,6 +22,7 @@ import (
 
 	. "gopkg.in/check.v1"
 
+	"github.com/canonical/pebble/client"
 	"github.com/canonical/pebble/internals/overlord/servstate"
 )
 
@@ -66,7 +67,7 @@ services:
 	rec = httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)
 	c.Check(rec.Result().StatusCode, Equals, 500)
-	errResult, ok := rsp.Result.(*ErrorResult)
+	errResult, ok := rsp.Result.(*client.Error)
 	c.Assert(ok, Equals, true)
 	c.Assert(errResult.Message, Matches, `cannot send signal to "test1": invalid signal name "FOOBAR"`)
 
@@ -102,7 +103,7 @@ func (s *apiSuite) TestSignalsBadBody(c *C) {
 	rec := httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)
 	c.Check(rec.Result().StatusCode, Equals, 400)
-	errResult, ok := rsp.Result.(*ErrorResult)
+	errResult, ok := rsp.Result.(*client.Error)
 	c.Assert(ok, Equals, true)
 	c.Assert(errResult.Message, Matches, "cannot decode request body: .*")
 }
@@ -115,7 +116,7 @@ func (s *apiSuite) TestSignalsNoServices(c *C) {
 	rec := httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)
 	c.Check(rec.Result().StatusCode, Equals, 400)
-	errResult, ok := rsp.Result.(*ErrorResult)
+	errResult, ok := rsp.Result.(*client.Error)
 	c.Assert(ok, Equals, true)
 	c.Assert(errResult.Message, Equals, "must specify one or more services")
 }
@@ -129,7 +130,7 @@ func (s *apiSuite) TestSignalsServiceNotRunning(c *C) {
 	rec := httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)
 	c.Check(rec.Result().StatusCode, Equals, 500)
-	errResult, ok := rsp.Result.(*ErrorResult)
+	errResult, ok := rsp.Result.(*client.Error)
 	c.Assert(ok, Equals, true)
 	c.Assert(errResult.Message, Matches, `cannot send signal to "test1": service is not running`)
 }

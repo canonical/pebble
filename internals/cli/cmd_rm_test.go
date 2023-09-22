@@ -144,7 +144,7 @@ func (s *PebbleSuite) TestRmFailsOnPath(c *C) {
 	clientErr, ok := err.(*client.Error)
 	c.Assert(ok, Equals, true)
 	c.Assert(clientErr.Message, Equals, "could not baz")
-	c.Assert(clientErr.Kind, Equals, "permission-denied")
+	c.Assert(clientErr.Kind, Equals, client.ErrorKindPermissionDenied)
 	c.Check(s.Stdout(), Equals, "")
 	c.Check(s.Stderr(), Equals, "")
 

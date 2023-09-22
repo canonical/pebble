@@ -403,26 +403,6 @@ type response struct {
 	Maintenance *Error `json:"maintenance"`
 }
 
-// Error is the real value of response.Result when an error occurs.
-type Error struct {
-	Kind    string      `json:"kind"`
-	Value   interface{} `json:"value"`
-	Message string      `json:"message"`
-
-	StatusCode int
-}
-
-func (e *Error) Error() string {
-	return e.Message
-}
-
-const (
-	ErrorKindLoginRequired     = "login-required"
-	ErrorKindSystemRestart     = "system-restart"
-	ErrorKindDaemonRestart     = "daemon-restart"
-	ErrorKindNoDefaultServices = "no-default-services"
-)
-
 func (rsp *response) err(cli *Client) error {
 	if cli != nil {
 		maintErr := rsp.Maintenance
@@ -441,7 +421,6 @@ func (rsp *response) err(cli *Client) error {
 	if err != nil || resultErr.Message == "" {
 		return fmt.Errorf("server error: %q", rsp.Status)
 	}
-	resultErr.StatusCode = rsp.StatusCode
 
 	return &resultErr
 }

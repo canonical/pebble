@@ -24,6 +24,7 @@ import (
 
 	"github.com/canonical/x-go/strutil"
 
+	"github.com/canonical/pebble/client"
 	"github.com/canonical/pebble/internals/overlord/servstate"
 	"github.com/canonical/pebble/internals/overlord/state"
 )
@@ -41,7 +42,7 @@ func v1GetServices(c *Command, r *http.Request, _ *UserState) Response {
 	servmgr := overlordServiceManager(c.d.overlord)
 	services, err := servmgr.Services(names)
 	if err != nil {
-		return StatusInternalError("%v", err)
+		return statusInternalError("%v", err)
 	}
 
 	infos := make([]serviceInfo, 0, len(services))
@@ -67,7 +68,7 @@ func v1PostServices(c *Command, r *http.Request, _ *UserState) Response {
 
 	decoder := json.NewDecoder(r.Body)
 	if err := decoder.Decode(&payload); err != nil {
-		return StatusBadRequest("cannot decode data from request body: %v", err)
+		return statusBadRequest("cannot decode data from request body: %v", err)
 	}
 
 	var err error
@@ -75,27 +76,27 @@ func v1PostServices(c *Command, r *http.Request, _ *UserState) Response {
 	switch payload.Action {
 	case "replan":
 		if len(payload.Services) != 0 {
-			return StatusBadRequest("%s accepts no service names", payload.Action)
+			return statusBadRequest("%s accepts no service names", payload.Action)
 		}
 	case "autostart":
 		if len(payload.Services) != 0 {
-			return StatusBadRequest("%s accepts no service names", payload.Action)
+			return statusBadRequest("%s accepts no service names", payload.Action)
 		}
 		services, err := servmgr.DefaultServiceNames()
 		if err != nil {
-			return StatusInternalError("%v", err)
+			return statusInternalError("%v", err)
 		}
 		if len(services) == 0 {
 			return SyncResponse(&resp{
 				Type:   ResponseTypeError,
-				Result: &ErrorResult{Kind: ErrorKindNoDefaultServices, Message: "no default services"},
+				Result: &client.Error{Kind: client.ErrorKindNoDefaultServices, Message: "no default services"},
 				Status: 400,
 			})
 		}
 		payload.Services = services
 	default:
 		if len(payload.Services) == 0 {
-			return StatusBadRequest("no services to %s provided", payload.Action)
+			return statusBadRequest("no services to %s provided", payload.Action)
 		}
 	}
 
@@ -177,10 +178,10 @@ func v1PostServices(c *Command, r *http.Request, _ *UserState) Response {
 		sort.Strings(services)
 		payload.Services = services
 	default:
-		return StatusBadRequest("action %q is unsupported", payload.Action)
+		return statusBadRequest("action %q is unsupported", payload.Action)
 	}
 	if err != nil {
-		return StatusBadRequest("cannot %s services: %v", payload.Action, err)
+		return statusBadRequest("cannot %s services: %v", payload.Action, err)
 	}
 
 	// Use the original requested service name for the summary, not the
@@ -213,11 +214,11 @@ func v1PostServices(c *Command, r *http.Request, _ *UserState) Response {
 }
 
 func v1GetService(c *Command, r *http.Request, _ *UserState) Response {
-	return StatusBadRequest("not implemented")
+	return statusBadRequest("not implemented")
 }
 
 func v1PostService(c *Command, r *http.Request, _ *UserState) Response {
-	return StatusBadRequest("not implemented")
+	return statusBadRequest("not implemented")
 }
 
 // intersectOrdered returns the intersection of left and right where

@@ -36,7 +36,7 @@ func v1GetChecks(c *Command, r *http.Request, _ *UserState) Response {
 	switch level {
 	case plan.UnsetLevel, plan.AliveLevel, plan.ReadyLevel:
 	default:
-		return StatusBadRequest(`level must be "alive" or "ready"`)
+		return statusBadRequest(`level must be "alive" or "ready"`)
 	}
 
 	names := strutil.MultiCommaSeparatedList(query["names"])
@@ -44,7 +44,7 @@ func v1GetChecks(c *Command, r *http.Request, _ *UserState) Response {
 	checkMgr := c.d.overlord.CheckManager()
 	checks, err := checkMgr.Checks()
 	if err != nil {
-		return StatusInternalError("%v", err)
+		return statusInternalError("%v", err)
 	}
 
 	infos := []checkInfo{} // if no checks, return [] instead of null
