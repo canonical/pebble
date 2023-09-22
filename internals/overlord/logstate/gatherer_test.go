@@ -35,7 +35,7 @@ var _ = Suite(&gathererSuite{})
 
 func (s *gathererSuite) TestGatherer(c *C) {
 	received := make(chan []servicelog.Entry, 1)
-	gathererArgs := logGathererArgs{
+	gathererOptions := logGathererOptions{
 		maxBufferedEntries: 5,
 		newClient: func(target *plan.LogTarget) (logClient, error) {
 			return &testClient{
@@ -45,7 +45,7 @@ func (s *gathererSuite) TestGatherer(c *C) {
 		},
 	}
 
-	g, err := newLogGathererInternal(&plan.LogTarget{Name: "tgt1"}, gathererArgs)
+	g, err := newLogGathererInternal(&plan.LogTarget{Name: "tgt1"}, &gathererOptions)
 	c.Assert(err, IsNil)
 
 	testSvc := newTestService("svc1")
@@ -72,7 +72,7 @@ func (s *gathererSuite) TestGatherer(c *C) {
 
 func (s *gathererSuite) TestGathererTimeout(c *C) {
 	received := make(chan []servicelog.Entry, 1)
-	gathererArgs := logGathererArgs{
+	gathererOptions := logGathererOptions{
 		bufferTimeout: 1 * time.Millisecond,
 		newClient: func(target *plan.LogTarget) (logClient, error) {
 			return &testClient{
@@ -82,7 +82,7 @@ func (s *gathererSuite) TestGathererTimeout(c *C) {
 		},
 	}
 
-	g, err := newLogGathererInternal(&plan.LogTarget{Name: "tgt1"}, gathererArgs)
+	g, err := newLogGathererInternal(&plan.LogTarget{Name: "tgt1"}, &gathererOptions)
 	c.Assert(err, IsNil)
 
 	testSvc := newTestService("svc1")
@@ -99,7 +99,7 @@ func (s *gathererSuite) TestGathererTimeout(c *C) {
 
 func (s *gathererSuite) TestGathererShutdown(c *C) {
 	received := make(chan []servicelog.Entry, 1)
-	gathererArgs := logGathererArgs{
+	gathererOptions := logGathererOptions{
 		bufferTimeout: 1 * time.Microsecond,
 		newClient: func(target *plan.LogTarget) (logClient, error) {
 			return &testClient{
@@ -109,7 +109,7 @@ func (s *gathererSuite) TestGathererShutdown(c *C) {
 		},
 	}
 
-	g, err := newLogGathererInternal(&plan.LogTarget{Name: "tgt1"}, gathererArgs)
+	g, err := newLogGathererInternal(&plan.LogTarget{Name: "tgt1"}, &gathererOptions)
 	c.Assert(err, IsNil)
 
 	testSvc := newTestService("svc1")
@@ -153,11 +153,11 @@ func (s *gathererSuite) TestRetryLoki(c *C) {
 			Name:     "tgt1",
 			Location: server.URL,
 		},
-		logGathererArgs{
+		&logGathererOptions{
 			bufferTimeout:      1 * time.Millisecond,
 			maxBufferedEntries: 5,
 			newClient: func(target *plan.LogTarget) (logClient, error) {
-				return loki.NewClientWithArgs(target, loki.ClientArgs{
+				return loki.NewClientWithOptions(target, &loki.ClientOptions{
 					MaxRequestEntries: 5,
 				}), nil
 			},

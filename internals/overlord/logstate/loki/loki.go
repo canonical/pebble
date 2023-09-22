@@ -48,7 +48,7 @@ type Client struct {
 }
 
 func NewClient(target *plan.LogTarget) *Client {
-	return NewClientWithArgs(target, &ClientOptions{})
+	return NewClientWithOptions(target, &ClientOptions{})
 }
 
 // ClientOptions allows overriding default parameters (e.g. for testing)
@@ -57,7 +57,7 @@ type ClientOptions struct {
 	MaxRequestEntries int
 }
 
-func NewClientWithArgs(target *plan.LogTarget, options *ClientOptions) *Client {
+func NewClientWithOptions(target *plan.LogTarget, options *ClientOptions) *Client {
 	options = fillDefaultOptions(options)
 	return &Client{
 		options:    options,

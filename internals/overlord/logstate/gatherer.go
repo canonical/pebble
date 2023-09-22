@@ -57,7 +57,7 @@ const (
 // Calling the Stop() method will tear down the logGatherer and all of its
 // associated logPullers. Stop() can be called from an outside goroutine.
 type logGatherer struct {
-	logGathererArgs
+	*logGathererOptions
 
 	targetName string
 	// tomb for the main loop
@@ -75,9 +75,9 @@ type logGatherer struct {
 	entryCh chan servicelog.Entry
 }
 
-// logGathererArgs allows overriding the newLogClient method and time values
+// logGathererOptions allows overriding the newLogClient method and time values
 // in testing.
-type logGathererArgs struct {
+type logGathererOptions struct {
 	bufferTimeout      time.Duration
 	maxBufferedEntries int
 	timeoutFinalFlush  time.Duration
@@ -86,21 +86,21 @@ type logGathererArgs struct {
 }
 
 func newLogGatherer(target *plan.LogTarget) (*logGatherer, error) {
-	return newLogGathererInternal(target, logGathererArgs{})
+	return newLogGathererInternal(target, &logGathererOptions{})
 }
 
 // newLogGathererInternal contains the actual creation code for a logGatherer.
 // This function is used in the real implementation, but also allows overriding
 // certain configuration values for testing.
-func newLogGathererInternal(target *plan.LogTarget, args logGathererArgs) (*logGatherer, error) {
-	args = fillDefaultArgs(args)
-	client, err := args.newClient(target)
+func newLogGathererInternal(target *plan.LogTarget, options *logGathererOptions) (*logGatherer, error) {
+	options = fillDefaultOptions(options)
+	client, err := options.newClient(target)
 	if err != nil {
 		return nil, fmt.Errorf("cannot create log client: %w", err)
 	}
 
 	g := &logGatherer{
-		logGathererArgs: args,
+		logGathererOptions: options,
 
 		targetName: target.Name,
 		client:     client,
@@ -114,20 +114,20 @@ func newLogGathererInternal(target *plan.LogTarget, args logGathererArgs) (*logG
 	return g, nil
 }
 
-func fillDefaultArgs(args logGathererArgs) logGathererArgs {
-	if args.bufferTimeout == 0 {
-		args.bufferTimeout = bufferTimeout
+func fillDefaultOptions(options *logGathererOptions) *logGathererOptions {
+	if options.bufferTimeout == 0 {
+		options.bufferTimeout = bufferTimeout
 	}
-	if args.maxBufferedEntries == 0 {
-		args.maxBufferedEntries = maxBufferedEntries
+	if options.maxBufferedEntries == 0 {
+		options.maxBufferedEntries = maxBufferedEntries
 	}
-	if args.timeoutFinalFlush == 0 {
-		args.timeoutFinalFlush = timeoutFinalFlush
+	if options.timeoutFinalFlush == 0 {
+		options.timeoutFinalFlush = timeoutFinalFlush
 	}
-	if args.newClient == nil {
-		args.newClient = newLogClient
+	if options.newClient == nil {
+		options.newClient = newLogClient
 	}
-	return args
+	return options
 }
 
 // PlanChanged is called by the LogManager when the plan is changed, if this

@@ -174,9 +174,9 @@ func (*suite) TestServerTimeout(c *C) {
 	defer server.Close()
 	defer close(stopRequest)
 
-	client := loki.NewClientWithArgs(
+	client := loki.NewClientWithOptions(
 		&plan.LogTarget{Location: server.URL},
-		loki.ClientArgs{
+		&loki.ClientOptions{
 			RequestTimeout: 1 * time.Microsecond,
 		},
 	)

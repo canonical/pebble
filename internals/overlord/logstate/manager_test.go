@@ -30,14 +30,14 @@ type managerSuite struct{}
 var _ = Suite(&managerSuite{})
 
 func (s *managerSuite) TestPlanChange(c *C) {
-	gathererArgs := logGathererArgs{
+	gathererOptions := logGathererOptions{
 		newClient: func(target *plan.LogTarget) (logClient, error) {
 			return &testClient{}, nil
 		},
 	}
 	m := NewLogManager()
 	m.newGatherer = func(t *plan.LogTarget) (*logGatherer, error) {
-		return newLogGathererInternal(t, gathererArgs)
+		return newLogGathererInternal(t, &gathererOptions)
 	}
 
 	svc1 := newTestService("svc1")
@@ -116,7 +116,7 @@ func checkBuffers(c *C, buffers map[string]*servicelog.RingBuffer, expected []st
 }
 
 func (s *managerSuite) TestTimelyShutdown(c *C) {
-	gathererArgs := logGathererArgs{
+	gathererOptions := logGathererOptions{
 		timeoutFinalFlush: 5 * time.Millisecond,
 		newClient: func(target *plan.LogTarget) (logClient, error) {
 			return &slowFlushingClient{
@@ -127,7 +127,7 @@ func (s *managerSuite) TestTimelyShutdown(c *C) {
 
 	m := NewLogManager()
 	m.newGatherer = func(t *plan.LogTarget) (*logGatherer, error) {
-		return newLogGathererInternal(t, gathererArgs)
+		return newLogGathererInternal(t, &gathererOptions)
 	}
 
 	svc1 := newTestService("svc1")
