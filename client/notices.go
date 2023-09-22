@@ -133,13 +133,14 @@ func (client *Client) Notices(opts *NoticesOptions) ([]*Notice, error) {
 }
 
 // WaitNotices returns a list of notices that match the filters given in opts,
-// waiting up to the given timeout. They are ordered by the last-repeated time.
+// telling the server to wait up to the given timeout. They are ordered by the
+// last-repeated time.
 //
 // If the timeout elapses before any matching notices arrive, it's not
 // considered an error: WaitNotices returns a nil slice and a nil error.
-func (client *Client) WaitNotices(ctx context.Context, opts *NoticesOptions, timeout time.Duration) ([]*Notice, error) {
+func (client *Client) WaitNotices(ctx context.Context, serverTimeout time.Duration, opts *NoticesOptions) ([]*Notice, error) {
 	query := makeNoticesQuery(opts)
-	query.Set("timeout", timeout.String())
+	query.Set("timeout", serverTimeout.String())
 
 	// We need to use client.raw() here to pass the context through (and we
 	// don't want retries).
@@ -161,6 +162,9 @@ func (client *Client) WaitNotices(ctx context.Context, opts *NoticesOptions, tim
 
 func makeNoticesQuery(opts *NoticesOptions) url.Values {
 	query := make(url.Values)
+	if opts == nil {
+		return query
+	}
 	if opts.Type != "" {
 		query.Set("type", string(opts.Type))
 	}

@@ -175,7 +175,7 @@ func (cs *clientSuite) TestWaitNotices(c *C) {
 		"last-repeated": "2023-09-06T16:43:00Z",
 		"occurrences": 1
 	}]}`
-	notices, err := cs.cli.WaitNotices(context.Background(), &client.NoticesOptions{}, 10*time.Second)
+	notices, err := cs.cli.WaitNotices(context.Background(), 10*time.Second, nil)
 	c.Assert(err, IsNil)
 	c.Assert(cs.req.URL.Path, Equals, "/v1/notices")
 	c.Assert(cs.req.URL.Query(), DeepEquals, url.Values{
@@ -194,7 +194,7 @@ func (cs *clientSuite) TestWaitNotices(c *C) {
 
 func (cs *clientSuite) TestWaitNoticesTimeout(c *C) {
 	cs.rsp = `{"type": "sync", "result": []}`
-	notices, err := cs.cli.WaitNotices(context.Background(), &client.NoticesOptions{}, time.Second)
+	notices, err := cs.cli.WaitNotices(context.Background(), time.Second, nil)
 	c.Assert(err, IsNil)
 	c.Assert(notices, HasLen, 0)
 }
