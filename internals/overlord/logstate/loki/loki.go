@@ -38,7 +38,7 @@ const (
 )
 
 type Client struct {
-	ClientArgs
+	options *ClientOptions
 
 	targetName string
 	remoteURL  string
@@ -48,39 +48,46 @@ type Client struct {
 }
 
 func NewClient(target *plan.LogTarget) *Client {
-	return NewClientWithArgs(target, ClientArgs{})
+	return NewClientWithArgs(target, &ClientOptions{})
 }
 
-// ClientArgs allows overriding default parameters (e.g. for testing)
-type ClientArgs struct {
+// ClientOptions allows overriding default parameters (e.g. for testing)
+type ClientOptions struct {
 	RequestTimeout    time.Duration
 	MaxRequestEntries int
 }
 
-func NewClientWithArgs(target *plan.LogTarget, args ClientArgs) *Client {
-	args = fillDefaultArgs(args)
+func NewClientWithArgs(target *plan.LogTarget, options *ClientOptions) *Client {
+	options = fillDefaultOptions(options)
 	return &Client{
-		ClientArgs: args,
+		options:    options,
 		targetName: target.Name,
 		remoteURL:  target.Location,
-		httpClient: &http.Client{Timeout: args.RequestTimeout},
+		httpClient: &http.Client{Timeout: options.RequestTimeout},
 	}
 }
 
-func fillDefaultArgs(args ClientArgs) ClientArgs {
-	if args.RequestTimeout == 0 {
-		args.RequestTimeout = requestTimeout
+func fillDefaultOptions(options *ClientOptions) *ClientOptions {
+	if options.RequestTimeout == 0 {
+		options.RequestTimeout = requestTimeout
 	}
-	if args.MaxRequestEntries == 0 {
-		args.MaxRequestEntries = maxRequestEntries
+	if options.MaxRequestEntries == 0 {
+		options.MaxRequestEntries = maxRequestEntries
 	}
-	return args
+	return options
 }
 
 func (c *Client) Add(entry servicelog.Entry) error {
-	if N := len(c.entries); N >= c.MaxRequestEntries {
+	if n := len(c.entries); n >= c.options.MaxRequestEntries {
 		// make room for 1 entry
-		c.entries = c.entries[(N - c.MaxRequestEntries + 1):]
+		c.entries = c.entries[(n - c.options.MaxRequestEntries + 1):]
+	}
+	if cap(c.entries)-len(c.entries) == 0 {
+		// Allocate a new slice with capacity equal to double the buffer size, and
+		// copy over the currently buffered logs
+		c.entries = append(
+			make([]lokiEntryWithService, 0, 2*c.options.MaxRequestEntries),
+			c.entries...)
 	}
 	c.entries = append(c.entries, lokiEntryWithService{
 		entry:   encodeEntry(entry),
