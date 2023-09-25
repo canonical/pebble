@@ -202,12 +202,30 @@ func (*suite) TestBufferFull(c *C) {
 		},
 	)
 
-	checkBuffer := func(expected []any) {
-		checkBuffer(c, client, expected)
-	}
 	addEntry := func(s string) {
 		err := client.Add(servicelog.Entry{Message: s})
 		c.Assert(err, IsNil)
+	}
+
+	// Check that the client's buffer is as expected
+	buffer := loki.GetBuffer(client)
+	checkBuffer := func(expected []any) {
+		if len(buffer) != len(expected) {
+			c.Fatalf("buffer length is %v, expected %v", len(buffer), len(expected))
+		}
+
+		for i := range expected {
+			// 'nil' means c.buffer[i] should be zero
+			if expected[i] == nil {
+				c.Assert(buffer[i], DeepEquals, loki.LokiEntryWithService{},
+					Commentf("buffer[%d] should be zero, obtained %v", i, buffer[i]))
+				continue
+			}
+
+			// Otherwise, check buffer message matches string
+			msg := expected[i].(string)
+			c.Assert(loki.GetMessage(buffer[i]), Equals, msg)
+		}
 	}
 
 	checkBuffer([]any{nil, nil, nil, nil, nil, nil})
@@ -225,29 +243,6 @@ func (*suite) TestBufferFull(c *C) {
 	checkBuffer([]any{nil, nil, nil, "4", "5", "6"})
 	addEntry("7")
 	checkBuffer([]any{"5", "6", "7", nil, nil, nil})
-}
-
-// Check if the client's buffer is as expected
-func checkBuffer(c *C, client *loki.Client, expected []any) {
-	buffer := loki.GetBuffer(client)
-	if len(buffer) != len(expected) {
-		c.Fatalf("buffer length is %v, expected %v", len(buffer), len(expected))
-	}
-
-	for i := range expected {
-		// 'nil' means c.buffer[i] should be zero
-		if expected[i] == nil {
-			c.Assert(buffer[i], DeepEquals, loki.LokiEntryWithService{},
-				Commentf("buffer[%d] should be zero, obtained %v", i, buffer[i]))
-
-		} else if msg, ok := expected[i].(string); ok {
-			// Check buffer message matches
-			c.Assert(loki.GetMessage(buffer[i]), Equals, msg)
-
-		} else {
-			c.Fatalf("invalid value expected[%d] = %v %T", i, expected[i], expected[i])
-		}
-	}
 }
 
 // Strips all extraneous whitespace from JSON
