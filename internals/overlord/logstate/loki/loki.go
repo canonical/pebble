@@ -42,9 +42,12 @@ type Client struct {
 
 	targetName string
 	remoteURL  string
-	entries    []lokiEntryWithService
-
 	httpClient *http.Client
+
+	// To store log entries, keep a buffer of size 2*MaxRequestEntries with a
+	// sliding window 'entries' of size MaxRequestEntries
+	buffer  []lokiEntryWithService
+	entries []lokiEntryWithService
 }
 
 func NewClient(target *plan.LogTarget) *Client {
@@ -59,12 +62,16 @@ type ClientOptions struct {
 
 func NewClientWithOptions(target *plan.LogTarget, options *ClientOptions) *Client {
 	options = fillDefaultOptions(options)
-	return &Client{
+	c := &Client{
 		options:    options,
 		targetName: target.Name,
 		remoteURL:  target.Location,
 		httpClient: &http.Client{Timeout: options.RequestTimeout},
+		buffer:     make([]lokiEntryWithService, 2*options.MaxRequestEntries),
 	}
+	// c.entries should be backed by the same array as c.buffer
+	c.entries = c.buffer[0:0:len(c.buffer)]
+	return c
 }
 
 func fillDefaultOptions(options *ClientOptions) *ClientOptions {
@@ -79,18 +86,25 @@ func fillDefaultOptions(options *ClientOptions) *ClientOptions {
 
 func (c *Client) Add(entry servicelog.Entry) error {
 	if n := len(c.entries); n >= c.options.MaxRequestEntries {
-		// Buffer full - remove the first element to make room
+		// 'entries' is full - remove the first element to make room
 		// Zero the removed element to allow garbage collection
 		c.entries[0] = lokiEntryWithService{}
 		c.entries = c.entries[1:]
 	}
-	if cap(c.entries)-len(c.entries) == 0 {
-		// Allocate a new slice with capacity equal to double the buffer size, and
-		// copy over the currently buffered logs
-		c.entries = append(
-			make([]lokiEntryWithService, 0, 2*c.options.MaxRequestEntries),
-			c.entries...)
+
+	if len(c.entries) >= cap(c.entries) {
+		// Copy all the elements to the start of the buffer
+		copy(c.buffer, c.entries)
+
+		// Reset the view into the buffer
+		c.entries = c.buffer[0:len(c.entries):len(c.buffer)]
+
+		// Zero removed elements to allow garbage collection
+		for i := len(c.entries); i < len(c.buffer); i++ {
+			c.buffer[i] = lokiEntryWithService{}
+		}
 	}
+
 	c.entries = append(c.entries, lokiEntryWithService{
 		entry:   encodeEntry(entry),
 		service: entry.Service,
