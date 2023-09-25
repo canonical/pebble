@@ -22,13 +22,15 @@ import (
 	"gopkg.in/tomb.v2"
 
 	"github.com/canonical/pebble/internals/logger"
+	"github.com/canonical/pebble/internals/overlord/logstate/loki"
 	"github.com/canonical/pebble/internals/plan"
 	"github.com/canonical/pebble/internals/servicelog"
 )
 
 const (
-	parserSize    = 4 * 1024
-	bufferTimeout = 1 * time.Second
+	parserSize         = 4 * 1024
+	bufferTimeout      = 1 * time.Second
+	maxBufferedEntries = 100
 
 	// These constants control the maximum time allowed for each teardown step.
 	timeoutCurrentFlush = 1 * time.Second
@@ -55,7 +57,7 @@ const (
 // Calling the Stop() method will tear down the logGatherer and all of its
 // associated logPullers. Stop() can be called from an outside goroutine.
 type logGatherer struct {
-	logGathererArgs
+	*logGathererOptions
 
 	targetName string
 	// tomb for the main loop
@@ -73,31 +75,32 @@ type logGatherer struct {
 	entryCh chan servicelog.Entry
 }
 
-// logGathererArgs allows overriding the newLogClient method and time values
+// logGathererOptions allows overriding the newLogClient method and time values
 // in testing.
-type logGathererArgs struct {
-	bufferTimeout     time.Duration
-	timeoutFinalFlush time.Duration
+type logGathererOptions struct {
+	bufferTimeout      time.Duration
+	maxBufferedEntries int
+	timeoutFinalFlush  time.Duration
 	// method to get a new client
 	newClient func(*plan.LogTarget) (logClient, error)
 }
 
 func newLogGatherer(target *plan.LogTarget) (*logGatherer, error) {
-	return newLogGathererInternal(target, logGathererArgs{})
+	return newLogGathererInternal(target, &logGathererOptions{})
 }
 
 // newLogGathererInternal contains the actual creation code for a logGatherer.
 // This function is used in the real implementation, but also allows overriding
 // certain configuration values for testing.
-func newLogGathererInternal(target *plan.LogTarget, args logGathererArgs) (*logGatherer, error) {
-	args = fillDefaultArgs(args)
-	client, err := args.newClient(target)
+func newLogGathererInternal(target *plan.LogTarget, options *logGathererOptions) (*logGatherer, error) {
+	options = fillDefaultOptions(options)
+	client, err := options.newClient(target)
 	if err != nil {
 		return nil, fmt.Errorf("cannot create log client: %w", err)
 	}
 
 	g := &logGatherer{
-		logGathererArgs: args,
+		logGathererOptions: options,
 
 		targetName: target.Name,
 		client:     client,
@@ -111,17 +114,20 @@ func newLogGathererInternal(target *plan.LogTarget, args logGathererArgs) (*logG
 	return g, nil
 }
 
-func fillDefaultArgs(args logGathererArgs) logGathererArgs {
-	if args.bufferTimeout == 0 {
-		args.bufferTimeout = bufferTimeout
+func fillDefaultOptions(options *logGathererOptions) *logGathererOptions {
+	if options.bufferTimeout == 0 {
+		options.bufferTimeout = bufferTimeout
 	}
-	if args.timeoutFinalFlush == 0 {
-		args.timeoutFinalFlush = timeoutFinalFlush
+	if options.maxBufferedEntries == 0 {
+		options.maxBufferedEntries = maxBufferedEntries
 	}
-	if args.newClient == nil {
-		args.newClient = newLogClient
+	if options.timeoutFinalFlush == 0 {
+		options.timeoutFinalFlush = timeoutFinalFlush
 	}
-	return args
+	if options.newClient == nil {
+		options.newClient = newLogClient
+	}
+	return options
 }
 
 // PlanChanged is called by the LogManager when the plan is changed, if this
@@ -169,8 +175,20 @@ func (g *logGatherer) ServiceStarted(service *plan.Service, buffer *servicelog.R
 // pullers on entryCh, and writes them to the client. It also flushes the
 // client periodically, and exits when the gatherer's tomb is killed.
 func (g *logGatherer) loop() error {
-	timer := newTimer()
-	defer timer.Stop()
+	flushTimer := newTimer()
+	defer flushTimer.Stop()
+	// Keep track of number of logs written since last flush
+	numWritten := 0
+
+	flushClient := func(ctx context.Context) {
+		// Mark timer as unset
+		flushTimer.Stop()
+		err := g.client.Flush(ctx)
+		if err != nil {
+			logger.Noticef("Cannot flush logs to target %q: %v", g.targetName, err)
+		}
+		numWritten = 0
+	}
 
 mainLoop:
 	for {
@@ -178,20 +196,23 @@ mainLoop:
 		case <-g.tomb.Dying():
 			break mainLoop
 
-		case <-timer.Expired():
-			// Mark timer as unset
-			timer.Stop()
-			err := g.client.Flush(g.clientCtx)
-			if err != nil {
-				logger.Noticef("Cannot flush logs to target %q: %v", g.targetName, err)
-			}
+		case <-flushTimer.Expired():
+			flushClient(g.clientCtx)
 
 		case entry := <-g.entryCh:
-			err := g.client.Write(g.clientCtx, entry)
+			err := g.client.Add(entry)
 			if err != nil {
 				logger.Noticef("Cannot write logs to target %q: %v", g.targetName, err)
+				continue
 			}
-			timer.EnsureSet(g.bufferTimeout)
+			numWritten++
+			// Check if buffer is full
+			if numWritten >= g.maxBufferedEntries {
+				flushClient(g.clientCtx)
+				continue
+			}
+			// Otherwise, set the timeout
+			flushTimer.EnsureSet(g.bufferTimeout)
 		}
 	}
 
@@ -199,10 +220,7 @@ mainLoop:
 	// We need to create a new context, as the previous one may have been cancelled.
 	ctx, cancel := context.WithTimeout(context.Background(), g.timeoutFinalFlush)
 	defer cancel()
-	err := g.client.Flush(ctx)
-	if err != nil {
-		logger.Noticef("Cannot flush logs to target %q: %v", g.targetName, err)
-	}
+	flushClient(ctx)
 	return nil
 }
 
@@ -288,30 +306,18 @@ func (t *timer) EnsureSet(timeout time.Duration) {
 // protocol required by that log target.
 // For example, a logClient for Loki would encode the log messages in the
 // JSON format expected by Loki, and send them over HTTP(S).
-//
-// logClient implementations have some freedom about the semantics of these
-// methods. For a buffering client (e.g. HTTP):
-//   - Write could add the log to the client's internal buffer, calling Flush
-//     when this buffer reaches capacity.
-//   - Flush would prepare and send a request with the buffered logs.
-//
-// For a non-buffering client (e.g. TCP), Write could serialise the log
-// directly to the open connection, while Flush would be a no-op.
 type logClient interface {
-	// Write adds the given log entry to the client. Depending on the
-	// implementation of the client, this may send the log to the remote target,
-	// or simply add the log to an internal buffer, flushing that buffer when
-	// required.
-	Write(context.Context, servicelog.Entry) error
+	// Add adds the given log entry to the client's buffer.
+	Add(servicelog.Entry) error
 
-	// Flush sends buffered logs (if any) to the remote target. For clients which
-	// don't buffer logs, Flush should be a no-op.
+	// Flush sends buffered logs (if any) to the remote target.
 	Flush(context.Context) error
 }
 
 func newLogClient(target *plan.LogTarget) (logClient, error) {
 	switch target.Type {
-	//case plan.LokiTarget: TODO
+	case plan.LokiTarget:
+		return loki.NewClient(target), nil
 	//case plan.SyslogTarget: TODO
 	default:
 		return nil, fmt.Errorf("unknown type %q for log target %q", target.Type, target.Name)
