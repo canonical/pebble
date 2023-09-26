@@ -148,7 +148,11 @@ func (c *Client) Flush(ctx context.Context) error {
 // resetBuffer drops all buffered logs (in the case of a successful send, or an
 // unrecoverable error).
 func (c *Client) resetBuffer() {
-	c.entries = c.entries[:0]
+	// Zero removed elements to allow garbage collection
+	for i := 0; i < len(c.entries); i++ {
+		c.entries[i] = lokiEntryWithService{}
+	}
+	c.entries = c.buffer[0:0:len(c.buffer)]
 }
 
 func (c *Client) buildRequest() lokiRequest {
