@@ -360,7 +360,7 @@ func (cs *clientSuite) TestMakeDirFailsOnDirectory(c *C) {
 	clientErr, ok := err.(*client.Error)
 	c.Assert(ok, Equals, true)
 	c.Assert(clientErr.Message, Equals, "could not bar")
-	c.Assert(clientErr.Kind, Equals, client.ErrorKindPermissionDenied)
+	c.Assert(clientErr.Kind, Equals, client.ErrorPermissionDenied)
 
 	c.Assert(cs.req.URL.Path, Equals, "/v1/files")
 	c.Assert(cs.req.Method, Equals, "POST")
@@ -517,7 +517,7 @@ func (cs *clientSuite) TestRemovePathFailsOnPath(c *C) {
 	clientErr, ok := err.(*client.Error)
 	c.Assert(ok, Equals, true)
 	c.Assert(clientErr.Message, Equals, "could not bar")
-	c.Assert(clientErr.Kind, Equals, client.ErrorKindPermissionDenied)
+	c.Assert(clientErr.Kind, Equals, client.ErrorPermissionDenied)
 
 	c.Assert(cs.req.URL.Path, Equals, "/v1/files")
 	c.Assert(cs.req.Method, Equals, "POST")

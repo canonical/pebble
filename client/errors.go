@@ -29,15 +29,15 @@ type ErrorKind string
 
 // Error kinds for use as a response result.
 const (
-	ErrorKindLoginRequired     = ErrorKind("login-required")
-	ErrorKindNoDefaultServices = ErrorKind("no-default-services")
-	ErrorKindNotFound          = ErrorKind("not-found")
-	ErrorKindPermissionDenied  = ErrorKind("permission-denied")
-	ErrorKindGenericFileError  = ErrorKind("generic-file-error")
+	ErrorLoginRequired     = ErrorKind("login-required")
+	ErrorNoDefaultServices = ErrorKind("no-default-services")
+	ErrorNotFound          = ErrorKind("not-found")
+	ErrorPermissionDenied  = ErrorKind("permission-denied")
+	ErrorGenericFileError  = ErrorKind("generic-file-error")
 )
 
 // Maintenance error kinds for use only inside the maintenance field of responses.
 const (
-	ErrorKindSystemRestart = ErrorKind("system-restart")
-	ErrorKindDaemonRestart = ErrorKind("daemon-restart")
+	ErrorSystemRestart = ErrorKind("system-restart")
+	ErrorDaemonRestart = ErrorKind("daemon-restart")
 )

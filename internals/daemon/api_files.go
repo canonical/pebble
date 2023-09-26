@@ -168,11 +168,11 @@ func fileErrorToResult(err error) *client.Error {
 	var kind client.ErrorKind
 	switch {
 	case errors.Is(err, os.ErrPermission):
-		kind = client.ErrorKindPermissionDenied
+		kind = client.ErrorPermissionDenied
 	case errors.Is(err, os.ErrNotExist):
-		kind = client.ErrorKindNotFound
+		kind = client.ErrorNotFound
 	default:
-		kind = client.ErrorKindGenericFileError
+		kind = client.ErrorGenericFileError
 	}
 	return &client.Error{
 		Kind:    kind,

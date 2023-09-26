@@ -282,7 +282,7 @@ func (s *daemonSuite) TestCommandRestartingState(c *C) {
 	err = json.Unmarshal(rec.Body.Bytes(), &rst)
 	c.Assert(err, IsNil)
 	c.Check(rst.Maintenance, DeepEquals, &client.Error{
-		Kind:    client.ErrorKindSystemRestart,
+		Kind:    client.ErrorSystemRestart,
 		Message: "system is restarting",
 	})
 
@@ -295,7 +295,7 @@ func (s *daemonSuite) TestCommandRestartingState(c *C) {
 	err = json.Unmarshal(rec.Body.Bytes(), &rst)
 	c.Assert(err, IsNil)
 	c.Check(rst.Maintenance, DeepEquals, &client.Error{
-		Kind:    client.ErrorKindDaemonRestart,
+		Kind:    client.ErrorDaemonRestart,
 		Message: "daemon is restarting",
 	})
 }

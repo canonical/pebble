@@ -89,7 +89,7 @@ func v1PostServices(c *Command, r *http.Request, _ *UserState) Response {
 		if len(services) == 0 {
 			return SyncResponse(&resp{
 				Type:   ResponseTypeError,
-				Result: &client.Error{Kind: client.ErrorKindNoDefaultServices, Message: "no default services"},
+				Result: &client.Error{Kind: client.ErrorNoDefaultServices, Message: "no default services"},
 				Status: 400,
 			})
 		}

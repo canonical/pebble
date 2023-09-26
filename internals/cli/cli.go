@@ -329,17 +329,17 @@ func errorToMessage(e error) (normalMessage string, err error) {
 
 	var msg string
 	switch cerr.Kind {
-	case client.ErrorKindLoginRequired:
+	case client.ErrorLoginRequired:
 		u, _ := user.Current()
 		if u != nil && u.Username == "root" {
 			msg = cerr.Message
 		} else {
 			msg = fmt.Sprintf(`%s (try with sudo)`, cerr.Message)
 		}
-	case client.ErrorKindSystemRestart:
+	case client.ErrorSystemRestart:
 		isError = false
 		msg = "pebble is about to reboot the system"
-	case client.ErrorKindNoDefaultServices:
+	case client.ErrorNoDefaultServices:
 		msg = "no default services"
 	default:
 		msg = cerr.Message

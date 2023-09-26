@@ -281,11 +281,11 @@ func (c *Command) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		st.Unlock()
 		switch rst {
 		case restart.RestartSystem:
-			rsp.transmitMaintenance(client.ErrorKindSystemRestart, "system is restarting")
+			rsp.transmitMaintenance(client.ErrorSystemRestart, "system is restarting")
 		case restart.RestartDaemon:
-			rsp.transmitMaintenance(client.ErrorKindDaemonRestart, "daemon is restarting")
+			rsp.transmitMaintenance(client.ErrorDaemonRestart, "daemon is restarting")
 		case restart.RestartSocket:
-			rsp.transmitMaintenance(client.ErrorKindDaemonRestart, "daemon is stopping to wait for socket activation")
+			rsp.transmitMaintenance(client.ErrorDaemonRestart, "daemon is stopping to wait for socket activation")
 		}
 		if rsp.Type != ResponseTypeError {
 			st.Lock()

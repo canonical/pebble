@@ -96,11 +96,11 @@ func (r *resp) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
 	if err != nil {
 		logger.Noticef("Cannot marshal %#v to JSON: %v", *r, err)
 		bs = nil
-		status = 500
+		status = http.StatusInternalServerError
 	}
 
 	hdr := w.Header()
-	if r.Status == 202 || r.Status == 201 {
+	if r.Status == http.StatusAccepted || r.Status == http.StatusCreated {
 		if m, ok := r.Result.(map[string]interface{}); ok {
 			if location, ok := m["resource"]; ok {
 				if location, ok := location.(string); ok && location != "" {
@@ -126,7 +126,7 @@ func SyncResponse(result interface{}) Response {
 
 	return &resp{
 		Type:   ResponseTypeSync,
-		Status: 200,
+		Status: http.StatusOK,
 		Result: result,
 	}
 }
@@ -134,7 +134,7 @@ func SyncResponse(result interface{}) Response {
 func AsyncResponse(result map[string]interface{}, change string) Response {
 	return &resp{
 		Type:   ResponseTypeAsync,
-		Status: 202,
+		Status: http.StatusAccepted,
 		Result: result,
 		Change: change,
 	}
@@ -150,6 +150,11 @@ func (f fileResponse) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, string(f))
 }
 
+// Reponsef behaves similar to the other printf style functions as long as additional
+// arguments beyond the format string are provided.
+//
+// Note: If no arguments are provided, formatting is disabled, and the format string
+// is used as is and not interpreted in any way.
 func Reponsef(status int, format string, v ...interface{}) Response {
 	res := &client.Error{}
 	if len(v) == 0 {
@@ -157,8 +162,8 @@ func Reponsef(status int, format string, v ...interface{}) Response {
 	} else {
 		res.Message = fmt.Sprintf(format, v...)
 	}
-	if status == 401 {
-		res.Kind = client.ErrorKindLoginRequired
+	if status == http.StatusUnauthorized {
+		res.Kind = client.ErrorLoginRequired
 	}
 	return &resp{
 		Type:   ResponseTypeError,
@@ -179,11 +184,11 @@ type errorResponder func(string, ...interface{}) Response
 
 // Standard error responses.
 var (
-	statusBadRequest       = makeErrorResponder(400)
-	statusUnauthorized     = makeErrorResponder(401)
-	statusForbidden        = makeErrorResponder(403)
-	statusNotFound         = makeErrorResponder(404)
-	statusMethodNotAllowed = makeErrorResponder(405)
-	statusInternalError    = makeErrorResponder(500)
-	statusGatewayTimeout   = makeErrorResponder(504)
+	statusBadRequest       = makeErrorResponder(http.StatusBadRequest)
+	statusUnauthorized     = makeErrorResponder(http.StatusUnauthorized)
+	statusForbidden        = makeErrorResponder(http.StatusForbidden)
+	statusNotFound         = makeErrorResponder(http.StatusNotFound)
+	statusMethodNotAllowed = makeErrorResponder(http.StatusMethodNotAllowed)
+	statusInternalError    = makeErrorResponder(http.StatusInternalServerError)
+	statusGatewayTimeout   = makeErrorResponder(http.StatusGatewayTimeout)
 )
