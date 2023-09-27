@@ -30,13 +30,13 @@ import (
 
 func (s *apiSuite) TestNoticesFilterType(c *C) {
 	s.testNoticesFilter(c, func(after time.Time) url.Values {
-		return url.Values{"type": {"client"}}
+		return url.Values{"types": {"custom"}}
 	})
 }
 
 func (s *apiSuite) TestNoticesFilterKey(c *C) {
 	s.testNoticesFilter(c, func(after time.Time) url.Values {
-		return url.Values{"key": {"a.b/2"}}
+		return url.Values{"keys": {"a.b/2"}}
 	})
 }
 
@@ -49,8 +49,8 @@ func (s *apiSuite) TestNoticesFilterAfter(c *C) {
 func (s *apiSuite) TestNoticesFilterAll(c *C) {
 	s.testNoticesFilter(c, func(after time.Time) url.Values {
 		return url.Values{
-			"type":  {"client"},
-			"key":   {"a.b/2"},
+			"types": {"custom"},
+			"keys":  {"a.b/2"},
 			"after": {after.UTC().Format(time.RFC3339Nano)},
 		}
 	})
@@ -64,7 +64,7 @@ func (s *apiSuite) testNoticesFilter(c *C, makeQuery func(after time.Time) url.V
 	st.AddNotice(state.NoticeWarning, "warning", nil, 0)
 	after := time.Now()
 	time.Sleep(time.Microsecond)
-	noticeId := st.AddNotice(state.NoticeClient, "a.b/2", map[string]string{"k": "v"}, 0)
+	noticeId := st.AddNotice(state.NoticeCustom, "a.b/2", map[string]string{"k": "v"}, 0)
 	st.Unlock()
 
 	query := makeQuery(after)
@@ -96,12 +96,70 @@ func (s *apiSuite) testNoticesFilter(c *C, makeQuery func(after time.Time) url.V
 	delete(n, "last-repeated")
 	c.Assert(n, DeepEquals, map[string]any{
 		"id":           noticeId,
-		"type":         "client",
+		"type":         "custom",
 		"key":          "a.b/2",
 		"occurrences":  1.0,
 		"last-data":    map[string]any{"k": "v"},
 		"expire-after": "168h0m0s",
 	})
+}
+
+func (s *apiSuite) TestNoticesFilterMultipleTypes(c *C) {
+	s.daemon(c)
+
+	st := s.d.overlord.State()
+	st.Lock()
+	st.AddNotice(state.NoticeChangeUpdate, "123", nil, 0)
+	time.Sleep(time.Microsecond)
+	st.AddNotice(state.NoticeCustom, "a.b/x", nil, 0)
+	time.Sleep(time.Microsecond)
+	st.AddNotice(state.NoticeWarning, "danger", nil, 0)
+	st.Unlock()
+
+	req, err := http.NewRequest("GET", "/v1/notices?types=change-update&types=warning", nil)
+	c.Assert(err, IsNil)
+	noticesCmd := apiCmd("/v1/notices")
+	rsp, ok := noticesCmd.GET(noticesCmd, req, nil).(*resp)
+	c.Assert(ok, Equals, true)
+
+	c.Check(rsp.Type, Equals, ResponseTypeSync)
+	c.Check(rsp.Status, Equals, http.StatusOK)
+	notices, ok := rsp.Result.([]*state.Notice)
+	c.Assert(ok, Equals, true)
+	c.Assert(notices, HasLen, 2)
+	n := noticeToMap(c, notices[0])
+	c.Assert(n["type"], Equals, "change-update")
+	n = noticeToMap(c, notices[1])
+	c.Assert(n["type"], Equals, "warning")
+}
+
+func (s *apiSuite) TestNoticesFilterMultipleKeys(c *C) {
+	s.daemon(c)
+
+	st := s.d.overlord.State()
+	st.Lock()
+	st.AddNotice(state.NoticeChangeUpdate, "123", nil, 0)
+	time.Sleep(time.Microsecond)
+	st.AddNotice(state.NoticeCustom, "a.b/x", nil, 0)
+	time.Sleep(time.Microsecond)
+	st.AddNotice(state.NoticeWarning, "danger", nil, 0)
+	st.Unlock()
+
+	req, err := http.NewRequest("GET", "/v1/notices?keys=a.b/x&keys=danger", nil)
+	c.Assert(err, IsNil)
+	noticesCmd := apiCmd("/v1/notices")
+	rsp, ok := noticesCmd.GET(noticesCmd, req, nil).(*resp)
+	c.Assert(ok, Equals, true)
+
+	c.Check(rsp.Type, Equals, ResponseTypeSync)
+	c.Check(rsp.Status, Equals, http.StatusOK)
+	notices, ok := rsp.Result.([]*state.Notice)
+	c.Assert(ok, Equals, true)
+	c.Assert(notices, HasLen, 2)
+	n := noticeToMap(c, notices[0])
+	c.Assert(n["key"], Equals, "a.b/x")
+	n = noticeToMap(c, notices[1])
+	c.Assert(n["key"], Equals, "danger")
 }
 
 func (s *apiSuite) TestNoticesWait(c *C) {
@@ -111,7 +169,7 @@ func (s *apiSuite) TestNoticesWait(c *C) {
 	go func() {
 		time.Sleep(10 * time.Millisecond)
 		st.Lock()
-		st.AddNotice(state.NoticeClient, "a.b/1", nil, 0)
+		st.AddNotice(state.NoticeCustom, "a.b/1", nil, 0)
 		st.Unlock()
 	}()
 
@@ -127,7 +185,7 @@ func (s *apiSuite) TestNoticesWait(c *C) {
 	c.Assert(ok, Equals, true)
 	c.Assert(notices, HasLen, 1)
 	n := noticeToMap(c, notices[0])
-	c.Check(n["type"], Equals, "client")
+	c.Check(n["type"], Equals, "custom")
 	c.Check(n["key"], Equals, "a.b/1")
 }
 
@@ -176,7 +234,7 @@ func (s *apiSuite) TestNoticesRequestCancelled(c *C) {
 }
 
 func (s *apiSuite) TestNoticesInvalidType(c *C) {
-	s.testNoticesBadRequest(c, "type=foo", "invalid notice type.*")
+	s.testNoticesBadRequest(c, "types=foo", "invalid notice type.*")
 }
 
 func (s *apiSuite) TestNoticesInvalidAfter(c *C) {
@@ -210,7 +268,7 @@ func (s *apiSuite) TestAddNotice(c *C) {
 	start := time.Now()
 	body := []byte(`{
 		"action": "add",
-		"type": "client",
+		"type": "custom",
 		"key": "a.b/1",
 		"repeat-after": "1h",
 		"data": {"k": "v"}
@@ -251,7 +309,7 @@ func (s *apiSuite) TestAddNotice(c *C) {
 	delete(n, "last-repeated")
 	c.Assert(n, DeepEquals, map[string]any{
 		"id":           noticeId,
-		"type":         "client",
+		"type":         "custom",
 		"key":          "a.b/1",
 		"occurrences":  1.0,
 		"last-data":    map[string]any{"k": "v"},
@@ -269,18 +327,36 @@ func (s *apiSuite) TestAddNoticeInvalidType(c *C) {
 }
 
 func (s *apiSuite) TestAddNoticeInvalidKey(c *C) {
-	s.testAddNoticeBadRequest(c, `{"action": "add", "type": "client", "key": "bad"}`,
+	s.testAddNoticeBadRequest(c, `{"action": "add", "type": "custom", "key": "bad"}`,
 		"invalid key.*")
 }
 
 func (s *apiSuite) TestAddNoticeKeyTooLong(c *C) {
-	key := "a.b/" + strings.Repeat("x", 1000)
-	s.testAddNoticeBadRequest(c, `{"action": "add", "type": "client", "key": "`+key+`"}`,
-		"key too long.*")
+	request, err := json.Marshal(map[string]any{
+		"action": "add",
+		"type":   "custom",
+		"key":    "a.b/" + strings.Repeat("x", 257-4),
+	})
+	c.Assert(err, IsNil)
+	s.testAddNoticeBadRequest(c, string(request), "key must be 256 bytes or less")
+}
+
+func (s *apiSuite) TestAddNoticeDataTooLarge(c *C) {
+	request, err := json.Marshal(map[string]any{
+		"action": "add",
+		"type":   "custom",
+		"key":    "a.b/c",
+		"data": map[string]string{
+			"a": strings.Repeat("x", 2047),
+			"b": strings.Repeat("y", 2048),
+		},
+	})
+	c.Assert(err, IsNil)
+	s.testAddNoticeBadRequest(c, string(request), "total size of data .* must be 4096 bytes or less")
 }
 
 func (s *apiSuite) TestInvalidRepeatAfter(c *C) {
-	s.testAddNoticeBadRequest(c, `{"action": "add", "type": "client", "key": "a.b/1", "repeat-after": "bad"}`,
+	s.testAddNoticeBadRequest(c, `{"action": "add", "type": "custom", "key": "a.b/1", "repeat-after": "bad"}`,
 		"invalid repeat-after.*")
 }
 
@@ -306,9 +382,9 @@ func (s *apiSuite) TestNotice(c *C) {
 
 	st := s.d.overlord.State()
 	st.Lock()
-	st.AddNotice(state.NoticeClient, "a.b/1", nil, 0)
-	noticeId := st.AddNotice(state.NoticeClient, "a.b/2", nil, 0)
-	st.AddNotice(state.NoticeClient, "a.b/3", nil, 0)
+	st.AddNotice(state.NoticeCustom, "a.b/1", nil, 0)
+	noticeId := st.AddNotice(state.NoticeCustom, "a.b/2", nil, 0)
+	st.AddNotice(state.NoticeCustom, "a.b/3", nil, 0)
 	st.Unlock()
 
 	req, err := http.NewRequest("GET", "/v1/notices/"+noticeId, nil)
@@ -323,7 +399,7 @@ func (s *apiSuite) TestNotice(c *C) {
 	notice, ok := rsp.Result.(*state.Notice)
 	c.Assert(ok, Equals, true)
 	n := noticeToMap(c, notice)
-	c.Check(n["type"], Equals, "client")
+	c.Check(n["type"], Equals, "custom")
 	c.Check(n["key"], Equals, "a.b/2")
 }
 
