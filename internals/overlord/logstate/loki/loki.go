@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -48,6 +49,10 @@ type Client struct {
 	// sliding window 'entries' of size MaxRequestEntries
 	buffer  []lokiEntryWithService
 	entries []lokiEntryWithService
+
+	labels map[string]string
+	// store the environment variables for each service
+	envs map[string]map[string]string
 }
 
 func NewClient(target *plan.LogTarget) *Client {
@@ -68,6 +73,8 @@ func NewClientWithOptions(target *plan.LogTarget, options *ClientOptions) *Clien
 		remoteURL:  target.Location,
 		httpClient: &http.Client{Timeout: options.RequestTimeout},
 		buffer:     make([]lokiEntryWithService, 2*options.MaxRequestEntries),
+		labels:     target.Labels,
+		envs:       make(map[string]map[string]string),
 	}
 	// c.entries should be backed by the same array as c.buffer
 	c.entries = c.buffer[0:0:len(c.buffer)]
@@ -82,6 +89,10 @@ func fillDefaultOptions(options *ClientOptions) *ClientOptions {
 		options.MaxRequestEntries = maxRequestEntries
 	}
 	return options
+}
+
+func (c *Client) AddEnv(serviceName string, env map[string]string) {
+	c.envs[serviceName] = env
 }
 
 func (c *Client) Add(entry servicelog.Entry) error {
@@ -173,9 +184,7 @@ func (c *Client) buildRequest() lokiRequest {
 	for _, service := range services {
 		entries := bucketedEntries[service]
 		stream := lokiStream{
-			Labels: map[string]string{
-				"pebble_service": service,
-			},
+			Labels:  c.getLabels(service),
 			Entries: entries,
 		}
 		req.Streams = append(req.Streams, stream)
@@ -197,6 +206,29 @@ type lokiEntry [2]string
 type lokiEntryWithService struct {
 	entry   lokiEntry
 	service string
+}
+
+// Generate labels for the current service, based on the service's environment
+// and the labels specified in the plan.
+func (c *Client) getLabels(serviceName string) map[string]string {
+	labels := make(map[string]string)
+
+	// Add Loki-specific default labels
+	labels["pebble_service"] = serviceName
+
+	// Add the labels defined in the plan, substituting any $env_vars with the
+	// corresponding value in the service's environment
+	serviceEnv, ok := c.envs[serviceName]
+	if !ok {
+		logger.Noticef("Target %q: env for service %q not found, labels may be incorrect",
+			c.targetName, serviceName)
+	}
+	substitute := func(s string) string { return serviceEnv[s] }
+	for key, rawLabel := range c.labels {
+		labels[key] = os.Expand(rawLabel, substitute)
+	}
+
+	return labels
 }
 
 // handleServerResponse determines what to do based on the response from the

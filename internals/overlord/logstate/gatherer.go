@@ -169,6 +169,8 @@ func (g *logGatherer) PlanChanged(pl *plan.Plan, buffers map[string]*servicelog.
 // logs to this gatherer's target.
 func (g *logGatherer) ServiceStarted(service *plan.Service, buffer *servicelog.RingBuffer) {
 	g.pullers.Add(service.Name, buffer, g.entryCh)
+	// Add service env to client so it can interpret labels correctly
+	g.client.AddEnv(service.Name, service.Environment)
 }
 
 // The main control loop for the logGatherer. loop receives logs from the
@@ -312,6 +314,10 @@ type logClient interface {
 
 	// Flush sends buffered logs (if any) to the remote target.
 	Flush(context.Context) error
+
+	// AddEnv adds a service's environment to the client, so it can correctly
+	// evaluate the labels defined in the plan.
+	AddEnv(serviceName string, env map[string]string)
 }
 
 func newLogClient(target *plan.LogTarget) (logClient, error) {

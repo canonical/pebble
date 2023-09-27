@@ -171,6 +171,10 @@ type slowFlushingClient struct {
 	flushTime time.Duration
 }
 
+func (c *slowFlushingClient) AddEnv(serviceName string, env map[string]string) {
+	// no-op
+}
+
 func (c *slowFlushingClient) Add(_ servicelog.Entry) error {
 	// no-op
 	return nil

@@ -488,11 +488,12 @@ func (c *ExecCheck) Merge(other *ExecCheck) {
 
 // LogTarget specifies a remote server to forward logs to.
 type LogTarget struct {
-	Name     string        `yaml:"-"`
-	Type     LogTargetType `yaml:"type"`
-	Location string        `yaml:"location"`
-	Services []string      `yaml:"services"`
-	Override Override      `yaml:"override,omitempty"`
+	Name     string            `yaml:"-"`
+	Type     LogTargetType     `yaml:"type"`
+	Location string            `yaml:"location"`
+	Services []string          `yaml:"services"`
+	Override Override          `yaml:"override,omitempty"`
+	Labels   map[string]string `yaml:"labels,omitempty"`
 }
 
 // LogTargetType defines the protocol to use to forward logs.
