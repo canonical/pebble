@@ -37,7 +37,7 @@ func (s *PebbleSuite) TestNotifyBasic(c *C) {
 		c.Assert(err, IsNil)
 		c.Check(m, DeepEquals, map[string]any{
 			"action": "add",
-			"type":   "client",
+			"type":   "custom",
 			"key":    "a.b/c",
 		})
 
@@ -67,7 +67,7 @@ func (s *PebbleSuite) TestNotifyData(c *C) {
 		c.Assert(err, IsNil)
 		c.Check(m, DeepEquals, map[string]any{
 			"action": "add",
-			"type":   "client",
+			"type":   "custom",
 			"key":    "a.b/c",
 			"data": map[string]any{
 				"k":   "v",

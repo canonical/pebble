@@ -57,9 +57,9 @@ type cmdNotices struct {
 	client *client.Client
 
 	timeMixin
-	Type    string        `long:"type"`
-	Key     string        `long:"key"`
-	Timeout time.Duration `long:"timeout"`
+	Type    []client.NoticeType `long:"type"`
+	Key     []string            `long:"key"`
+	Timeout time.Duration       `long:"timeout"`
 }
 
 func init() {
@@ -68,8 +68,8 @@ func init() {
 		Summary:     cmdNoticesSummary,
 		Description: cmdNoticesDescription,
 		ArgsHelp: merge(timeArgsHelp, map[string]string{
-			"--type":    "Only list notices of this type",
-			"--key":     "Only list notices with this key",
+			"--type":    "Only list notices of this type (multiple allowed)",
+			"--key":     "Only list notices with this key (multiple allowed)",
 			"--timeout": "Wait up to this duration for matching notices to arrive",
 		}),
 		New: func(opts *CmdOptions) flags.Commander {
@@ -88,8 +88,8 @@ func (cmd *cmdNotices) Execute(args []string) error {
 		return fmt.Errorf("cannot load notices state: %w", err)
 	}
 	options := client.NoticesOptions{
-		Type:  client.NoticeType(cmd.Type),
-		Key:   cmd.Key,
+		Types: cmd.Type,
+		Keys:  cmd.Key,
 		After: state.LastAcked,
 	}
 

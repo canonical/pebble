@@ -34,7 +34,7 @@ func (s *PebbleSuite) TestNoticeID(c *C) {
 			"status-code": 200,
 			"result": {
 				"id": "123",
-				"type": "client",
+				"type": "custom",
 				"key": "a.b/c",
 				"first-occurred": "2023-09-05T17:18:00Z",
 				"last-occurred": "2023-09-05T19:18:00Z",
@@ -52,7 +52,7 @@ func (s *PebbleSuite) TestNoticeID(c *C) {
 	c.Check(rest, HasLen, 0)
 	c.Check(s.Stdout(), Equals, `
 id: "123"
-type: client
+type: custom
 key: a.b/c
 first-occurred: 2023-09-05T17:18:00Z
 last-occurred: 2023-09-05T19:18:00Z
@@ -91,8 +91,8 @@ func (s *PebbleSuite) TestNoticeTypeKey(c *C) {
 		c.Check(r.Method, Equals, "GET")
 		c.Check(r.URL.Path, Equals, "/v1/notices")
 		c.Check(r.URL.Query(), DeepEquals, url.Values{
-			"type": {"client"},
-			"key":  {"a.b/c"},
+			"types": {"custom"},
+			"keys":  {"a.b/c"},
 		})
 
 		fmt.Fprint(w, `{
@@ -100,7 +100,7 @@ func (s *PebbleSuite) TestNoticeTypeKey(c *C) {
 			"status-code": 200,
 			"result": [{
 				"id": "123",
-				"type": "client",
+				"type": "custom",
 				"key": "a.b/c",
 				"first-occurred": "2023-09-05T17:18:00Z",
 				"last-occurred": "2023-09-05T19:18:00Z",
@@ -110,12 +110,12 @@ func (s *PebbleSuite) TestNoticeTypeKey(c *C) {
 		]}`)
 	})
 
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"notice", "client", "a.b/c"})
+	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"notice", "custom", "a.b/c"})
 	c.Assert(err, IsNil)
 	c.Check(rest, HasLen, 0)
 	c.Check(s.Stdout(), Equals, `
 id: "123"
-type: client
+type: custom
 key: a.b/c
 first-occurred: 2023-09-05T17:18:00Z
 last-occurred: 2023-09-05T19:18:00Z
@@ -130,8 +130,8 @@ func (s *PebbleSuite) TestNoticeTypeKeyNotFound(c *C) {
 		c.Check(r.Method, Equals, "GET")
 		c.Check(r.URL.Path, Equals, "/v1/notices")
 		c.Check(r.URL.Query(), DeepEquals, url.Values{
-			"type": {"client"},
-			"key":  {"a.b/c"},
+			"types": {"custom"},
+			"keys":  {"a.b/c"},
 		})
 
 		fmt.Fprint(w, `{
@@ -140,8 +140,8 @@ func (s *PebbleSuite) TestNoticeTypeKeyNotFound(c *C) {
 			"result": []}`)
 	})
 
-	_, err := cli.Parser(cli.Client()).ParseArgs([]string{"notice", "client", "a.b/c"})
-	c.Assert(err, ErrorMatches, `cannot find client notice with key "a.b/c"`)
+	_, err := cli.Parser(cli.Client()).ParseArgs([]string{"notice", "custom", "a.b/c"})
+	c.Assert(err, ErrorMatches, `cannot find custom notice with key "a.b/c"`)
 	c.Check(s.Stdout(), Equals, "")
 	c.Check(s.Stderr(), Equals, "")
 }

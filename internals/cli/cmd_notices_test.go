@@ -40,7 +40,7 @@ func (s *PebbleSuite) TestNotices(c *C) {
 			"status-code": 200,
 			"result": [{
 				"id": "1",
-				"type": "client",
+				"type": "custom",
 				"key": "a.b/c",
 				"first-occurred": "2023-09-05T17:18:00Z",
 				"last-occurred": "2023-09-05T19:18:00Z",
@@ -69,7 +69,7 @@ func (s *PebbleSuite) TestNotices(c *C) {
 	c.Check(rest, HasLen, 0)
 	c.Check(s.Stdout(), Equals, `
 ID   Type     Key    First                 Last                  Repeated              Occurrences
-1    client   a.b/c  2023-09-05T17:18:00Z  2023-09-05T19:18:00Z  2023-09-05T18:18:00Z  3
+1    custom   a.b/c  2023-09-05T17:18:00Z  2023-09-05T19:18:00Z  2023-09-05T18:18:00Z  3
 2    warning  Ware!  2023-09-06T17:18:00Z  2023-09-06T19:18:00Z  2023-09-06T18:18:00Z  1
 `[1:])
 	c.Check(s.Stderr(), Equals, "")
@@ -91,8 +91,8 @@ func (s *PebbleSuite) TestNoticesFilters(c *C) {
 		c.Check(r.Method, Equals, "GET")
 		c.Check(r.URL.Path, Equals, "/v1/notices")
 		c.Check(r.URL.Query(), DeepEquals, url.Values{
-			"type": {"client"},
-			"key":  {"a.b/c"},
+			"types": {"custom", "warning"},
+			"keys":  {"a.b/c"},
 		})
 
 		fmt.Fprint(w, `{
@@ -100,7 +100,7 @@ func (s *PebbleSuite) TestNoticesFilters(c *C) {
 			"status-code": 200,
 			"result": [{
 				"id": "1",
-				"type": "client",
+				"type": "custom",
 				"key": "a.b/c",
 				"first-occurred": "2023-09-05T17:18:00Z",
 				"last-occurred": "2023-09-05T19:18:00Z",
@@ -117,12 +117,12 @@ func (s *PebbleSuite) TestNoticesFilters(c *C) {
 	os.Setenv("PEBBLE_NOTICES_FILENAME", filename)
 
 	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{
-		"notices", "--abs-time", "--type", "client", "--key", "a.b/c"})
+		"notices", "--abs-time", "--type", "custom", "--key", "a.b/c", "--type", "warning"})
 	c.Assert(err, IsNil)
 	c.Check(rest, HasLen, 0)
 	c.Check(s.Stdout(), Equals, `
 ID   Type    Key    First                 Last                  Repeated              Occurrences
-1    client  a.b/c  2023-09-05T17:18:00Z  2023-09-05T19:18:00Z  2023-09-05T18:18:00Z  3
+1    custom  a.b/c  2023-09-05T17:18:00Z  2023-09-05T19:18:00Z  2023-09-05T18:18:00Z  3
 `[1:])
 	c.Check(s.Stderr(), Equals, "")
 
@@ -151,7 +151,7 @@ func (s *PebbleSuite) TestNoticesAfter(c *C) {
 			"status-code": 200,
 			"result": [{
 				"id": "1",
-				"type": "client",
+				"type": "custom",
 				"key": "a.b/c",
 				"first-occurred": "2023-09-05T17:18:00Z",
 				"last-occurred": "2023-09-05T19:18:00Z",
@@ -176,7 +176,7 @@ func (s *PebbleSuite) TestNoticesAfter(c *C) {
 	c.Check(rest, HasLen, 0)
 	c.Check(s.Stdout(), Equals, `
 ID   Type    Key    First                 Last                  Repeated              Occurrences
-1    client  a.b/c  2023-09-05T17:18:00Z  2023-09-05T19:18:00Z  2023-09-07T18:18:00Z  3
+1    custom  a.b/c  2023-09-05T17:18:00Z  2023-09-05T19:18:00Z  2023-09-07T18:18:00Z  3
 `[1:])
 	c.Check(s.Stderr(), Equals, "")
 
@@ -231,7 +231,7 @@ func (s *PebbleSuite) TestNoticesTimeout(c *C) {
 			"status-code": 200,
 			"result": [{
 				"id": "1",
-				"type": "client",
+				"type": "custom",
 				"key": "a.b/c",
 				"first-occurred": "2023-09-05T17:18:00Z",
 				"last-occurred": "2023-09-05T19:18:00Z",
@@ -253,7 +253,7 @@ func (s *PebbleSuite) TestNoticesTimeout(c *C) {
 	c.Check(rest, HasLen, 0)
 	c.Check(s.Stdout(), Equals, `
 ID   Type    Key    First                 Last                  Repeated              Occurrences
-1    client  a.b/c  2023-09-05T17:18:00Z  2023-09-05T19:18:00Z  2023-09-05T18:18:00Z  3
+1    custom  a.b/c  2023-09-05T17:18:00Z  2023-09-05T19:18:00Z  2023-09-05T18:18:00Z  3
 `[1:])
 	c.Check(s.Stderr(), Equals, "")
 

@@ -59,8 +59,8 @@ func (cmd *cmdNotice) Execute(args []string) error {
 	var notice *client.Notice
 	if cmd.Positional.Key != "" {
 		notices, err := cmd.client.Notices(&client.NoticesOptions{
-			Type: client.NoticeType(cmd.Positional.IDOrType),
-			Key:  cmd.Positional.Key,
+			Types: []client.NoticeType{client.NoticeType(cmd.Positional.IDOrType)},
+			Keys:  []string{cmd.Positional.Key},
 		})
 		if err != nil {
 			return err

@@ -24,9 +24,9 @@ import (
 	"github.com/canonical/pebble/client"
 )
 
-const cmdNotifySummary = "Record a client notice"
+const cmdNotifySummary = "Record a custom notice"
 const cmdNotifyDescription = `
-The notify command records a client notice with the specified key and optional
+The notify command records a custom notice with the specified key and optional
 data fields.
 `
 
@@ -46,7 +46,7 @@ func init() {
 		Summary:     cmdNotifySummary,
 		Description: cmdNotifyDescription,
 		ArgsHelp: map[string]string{
-			"--repeat-after": "If set, allow the notice to repeat after this duration",
+			"--repeat-after": "Allow notice to repeat after this duration (default is to always repeat)",
 		},
 		New: func(opts *CmdOptions) flags.Commander {
 			return &cmdNotify{client: opts.Client}
