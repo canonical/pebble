@@ -131,12 +131,10 @@ const (
 	errorKindDaemonRestart = errorKind("daemon-restart")
 )
 
-type errorValue interface{}
-
 type errorResult struct {
-	Message string     `json:"message"` // note no omitempty
-	Kind    errorKind  `json:"kind,omitempty"`
-	Value   errorValue `json:"value,omitempty"`
+	Message string      `json:"message"` // note no omitempty
+	Kind    errorKind   `json:"kind,omitempty"`
+	Value   interface{} `json:"value,omitempty"`
 }
 
 func SyncResponse(result interface{}) Response {
@@ -174,8 +172,7 @@ func (f fileResponse) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, string(f))
 }
 
-// Responsef behaves similar to the other printf style functions as long as additional
-// arguments beyond the format string are provided.
+// Responsef builds an error Response that returns the status and formatted message.
 //
 // Note: If no arguments are provided, formatting is disabled, and the format string
 // is used as is and not interpreted in any way.
