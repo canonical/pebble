@@ -26,9 +26,6 @@ import (
 )
 
 const (
-	// MaxNoticeKeyLength is the maximum key length for notices, in bytes.
-	MaxNoticeKeyLength = 255
-
 	// NoticeExpireAfter is the expiry time for notices.
 	//
 	// Note that the expiry time for snapd warnings is 28 days, but a shorter
@@ -200,8 +197,8 @@ func (s *State) AddNotice(noticeType NoticeType, key string, data map[string]str
 }
 
 func (s *State) addNoticeWithTime(now time.Time, noticeType NoticeType, key string, data map[string]string, repeatAfter time.Duration) string {
-	if noticeType == "" || key == "" || len(key) > MaxNoticeKeyLength {
-		// Programming error (max key length has already been checked by API)
+	if noticeType == "" || key == "" {
+		// Programming error
 		logger.Panicf("Internal error, please report: attempted to add invalid notice (type %q, key %q)",
 			noticeType, key)
 	}
