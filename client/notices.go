@@ -29,11 +29,12 @@ type NotifyOptions struct {
 	// Data are optional key=value pairs for this occurrence of the notice.
 	Data map[string]string
 
-	// RepeatAfter, if provided, allows the notice to repeat after this duration.
+	// RepeatAfter allows the notice to repeat after this duration. If this is
+	// zero (the default), the notice will always repeat.
 	RepeatAfter time.Duration
 }
 
-// Notify records an occurrence of a "client" notice with the specified options,
+// Notify records an occurrence of a "custom" notice with the specified options,
 // returning the notice ID.
 func (client *Client) Notify(opts *NotifyOptions) (string, error) {
 	var payload = struct {
@@ -44,7 +45,7 @@ func (client *Client) Notify(opts *NotifyOptions) (string, error) {
 		Data        map[string]string `json:"data,omitempty"`
 	}{
 		Action: "add",
-		Type:   "client",
+		Type:   "custom",
 		Key:    opts.Key,
 		Data:   opts.Data,
 	}
@@ -67,10 +68,12 @@ func (client *Client) Notify(opts *NotifyOptions) (string, error) {
 }
 
 type NoticesOptions struct {
-	// Type, if set, includes only notices of this type.
-	Type NoticeType
-	// Key, if set, includes only notices with this key.
-	Key string
+	// Types, if not empty, includes only notices whose type is one of these.
+	Types []NoticeType
+
+	// Keys, if not empty, includes only notices whose key is one of these.
+	Keys []string
+
 	// After, if set, includes only notices that were last repeated after this time.
 	After time.Time
 }
@@ -97,10 +100,10 @@ const (
 	// or its status is updated.
 	NoticeChangeUpdate NoticeType = "change-update"
 
-	// A client notice reported via the Pebble client API or "pebble notify".
+	// A custom notice reported via the Pebble client API or "pebble notify".
 	// The key and data fields are provided by the user. The key must be in
 	// the format "mydomain.io/mykey" to ensure well-namespaced notice keys.
-	NoticeClient NoticeType = "client"
+	NoticeCustom NoticeType = "custom"
 
 	// Warnings are a subset of notices where the key is a human-readable
 	// warning message.
@@ -165,11 +168,15 @@ func makeNoticesQuery(opts *NoticesOptions) url.Values {
 	if opts == nil {
 		return query
 	}
-	if opts.Type != "" {
-		query.Set("type", string(opts.Type))
+	if len(opts.Types) > 0 {
+		typeStrs := make([]string, 0, len(opts.Types))
+		for _, t := range opts.Types {
+			typeStrs = append(typeStrs, string(t))
+		}
+		query["types"] = typeStrs
 	}
-	if opts.Key != "" {
-		query.Set("key", opts.Key)
+	if len(opts.Keys) > 0 {
+		query["keys"] = opts.Keys
 	}
 	if !opts.After.IsZero() {
 		query.Set("after", opts.After.Format(time.RFC3339Nano))
