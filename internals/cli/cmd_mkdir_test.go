@@ -266,7 +266,7 @@ func (s *PebbleSuite) TestMkdirFailsOnDirectory(c *C) {
 	clientErr, ok := err.(*client.Error)
 	c.Assert(ok, Equals, true)
 	c.Assert(clientErr.Message, Equals, "could not bar")
-	c.Assert(clientErr.Kind, Equals, client.ErrorPermissionDenied)
+	c.Assert(clientErr.Kind, Equals, "permission-denied")
 
 	c.Assert(rest, HasLen, 1)
 	c.Check(s.Stdout(), Equals, "")

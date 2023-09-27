@@ -32,7 +32,6 @@ import (
 	"github.com/gorilla/mux"
 	. "gopkg.in/check.v1"
 
-	"github.com/canonical/pebble/client"
 	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/osutil"
 	"github.com/canonical/pebble/internals/overlord"
@@ -265,7 +264,7 @@ func (s *daemonSuite) TestCommandRestartingState(c *C) {
 	cmd.ServeHTTP(rec, req)
 	c.Check(rec.Code, Equals, 200)
 	var rst struct {
-		Maintenance *client.Error `json:"maintenance"`
+		Maintenance *errorResult `json:"maintenance"`
 	}
 	err = json.Unmarshal(rec.Body.Bytes(), &rst)
 	c.Assert(err, IsNil)
@@ -281,8 +280,8 @@ func (s *daemonSuite) TestCommandRestartingState(c *C) {
 	c.Check(rec.Code, Equals, 200)
 	err = json.Unmarshal(rec.Body.Bytes(), &rst)
 	c.Assert(err, IsNil)
-	c.Check(rst.Maintenance, DeepEquals, &client.Error{
-		Kind:    client.ErrorSystemRestart,
+	c.Check(rst.Maintenance, DeepEquals, &errorResult{
+		Kind:    errorKindSystemRestart,
 		Message: "system is restarting",
 	})
 
@@ -294,8 +293,8 @@ func (s *daemonSuite) TestCommandRestartingState(c *C) {
 	c.Check(rec.Code, Equals, 200)
 	err = json.Unmarshal(rec.Body.Bytes(), &rst)
 	c.Assert(err, IsNil)
-	c.Check(rst.Maintenance, DeepEquals, &client.Error{
-		Kind:    client.ErrorDaemonRestart,
+	c.Check(rst.Maintenance, DeepEquals, &errorResult{
+		Kind:    errorKindDaemonRestart,
 		Message: "daemon is restarting",
 	})
 }
@@ -1139,7 +1138,7 @@ func (s *daemonSuite) TestDegradedModeReply(c *C) {
 	rec = doTestReq(c, cmd, "POST")
 	c.Check(rec.Code, Equals, 500)
 	// verify we get the error
-	var v struct{ Result client.Error }
+	var v struct{ Result errorResult }
 	c.Assert(json.NewDecoder(rec.Body).Decode(&v), IsNil)
 	c.Check(v.Result.Message, Equals, "foo error")
 

@@ -25,7 +25,6 @@ import (
 
 	"gopkg.in/check.v1"
 
-	"github.com/canonical/pebble/client"
 	"github.com/canonical/pebble/internals/overlord/state"
 )
 
@@ -385,7 +384,7 @@ func (s *apiSuite) TestWaitChangeInvalidTimeout(c *check.C) {
 	c.Check(rec.Code, check.Equals, 400)
 	c.Check(rsp.Status, check.Equals, 400)
 	c.Check(rsp.Type, check.Equals, ResponseTypeError)
-	result := rsp.Result.(*client.Error)
+	result := rsp.Result.(*errorResult)
 	c.Check(result.Message, check.Matches, "invalid timeout .*")
 }
 
@@ -420,7 +419,7 @@ func (s *apiSuite) TestWaitChangeCancel(c *check.C) {
 	c.Check(rec.Code, check.Equals, 500)
 	c.Check(rsp.Status, check.Equals, 500)
 	c.Check(rsp.Type, check.Equals, ResponseTypeError)
-	result := rsp.Result.(*client.Error)
+	result := rsp.Result.(*errorResult)
 	c.Check(result.Message, check.Equals, "request cancelled")
 }
 
@@ -429,7 +428,7 @@ func (s *apiSuite) TestWaitChangeTimeout(c *check.C) {
 	c.Check(rec.Code, check.Equals, 504)
 	c.Check(rsp.Status, check.Equals, 504)
 	c.Check(rsp.Type, check.Equals, ResponseTypeError)
-	result := rsp.Result.(*client.Error)
+	result := rsp.Result.(*errorResult)
 	c.Check(result.Message, check.Matches, "timed out waiting for change .*")
 }
 
@@ -441,7 +440,7 @@ func (s *apiSuite) TestWaitChangeTimeoutCancel(c *check.C) {
 	c.Check(rec.Code, check.Equals, 500)
 	c.Check(rsp.Status, check.Equals, 500)
 	c.Check(rsp.Type, check.Equals, ResponseTypeError)
-	result := rsp.Result.(*client.Error)
+	result := rsp.Result.(*errorResult)
 	c.Check(result.Message, check.Equals, "request cancelled")
 }
 

@@ -21,7 +21,6 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/canonical/pebble/client"
 	"github.com/canonical/pebble/internals/logger"
 )
 
@@ -39,28 +38,28 @@ type Response interface {
 }
 
 type resp struct {
-	Status           int           `json:"status-code"`
-	Type             ResponseType  `json:"type"`
-	Change           string        `json:"change,omitempty"`
-	Result           interface{}   `json:"result,omitempty"`
-	WarningTimestamp *time.Time    `json:"warning-timestamp,omitempty"`
-	WarningCount     int           `json:"warning-count,omitempty"`
-	Maintenance      *client.Error `json:"maintenance,omitempty"`
+	Status           int          `json:"status-code"`
+	Type             ResponseType `json:"type"`
+	Change           string       `json:"change,omitempty"`
+	Result           interface{}  `json:"result,omitempty"`
+	WarningTimestamp *time.Time   `json:"warning-timestamp,omitempty"`
+	WarningCount     int          `json:"warning-count,omitempty"`
+	Maintenance      *errorResult `json:"maintenance,omitempty"`
 }
 
 type respJSON struct {
-	Type             ResponseType  `json:"type"`
-	Status           int           `json:"status-code"`
-	StatusText       string        `json:"status,omitempty"`
-	Change           string        `json:"change,omitempty"`
-	Result           interface{}   `json:"result,omitempty"`
-	WarningTimestamp *time.Time    `json:"warning-timestamp,omitempty"`
-	WarningCount     int           `json:"warning-count,omitempty"`
-	Maintenance      *client.Error `json:"maintenance,omitempty"`
+	Type             ResponseType `json:"type"`
+	Status           int          `json:"status-code"`
+	StatusText       string       `json:"status,omitempty"`
+	Change           string       `json:"change,omitempty"`
+	Result           interface{}  `json:"result,omitempty"`
+	WarningTimestamp *time.Time   `json:"warning-timestamp,omitempty"`
+	WarningCount     int          `json:"warning-count,omitempty"`
+	Maintenance      *errorResult `json:"maintenance,omitempty"`
 }
 
-func (r *resp) transmitMaintenance(kind client.ErrorKind, message string) {
-	r.Maintenance = &client.Error{
+func (r *resp) transmitMaintenance(kind errorKind, message string) {
+	r.Maintenance = &errorResult{
 		Kind:    kind,
 		Message: message,
 	}
@@ -115,6 +114,31 @@ func (r *resp) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
 	w.Write(bs)
 }
 
+type errorKind string
+
+// Error kinds for use as a response result.
+const (
+	errorKindLoginRequired     = errorKind("login-required")
+	errorKindNoDefaultServices = errorKind("no-default-services")
+	errorKindNotFound          = errorKind("not-found")
+	errorKindPermissionDenied  = errorKind("permission-denied")
+	errorKindGenericFileError  = errorKind("generic-file-error")
+)
+
+// Maintenance error kinds for use only inside the maintenance field of responses.
+const (
+	errorKindSystemRestart = errorKind("system-restart")
+	errorKindDaemonRestart = errorKind("daemon-restart")
+)
+
+type errorValue interface{}
+
+type errorResult struct {
+	Message string     `json:"message"` // note no omitempty
+	Kind    errorKind  `json:"kind,omitempty"`
+	Value   errorValue `json:"value,omitempty"`
+}
+
 func SyncResponse(result interface{}) Response {
 	if err, ok := result.(error); ok {
 		return statusInternalError("internal error: %v", err)
@@ -150,20 +174,20 @@ func (f fileResponse) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, string(f))
 }
 
-// Reponsef behaves similar to the other printf style functions as long as additional
+// Responsef behaves similar to the other printf style functions as long as additional
 // arguments beyond the format string are provided.
 //
 // Note: If no arguments are provided, formatting is disabled, and the format string
 // is used as is and not interpreted in any way.
-func Reponsef(status int, format string, v ...interface{}) Response {
-	res := &client.Error{}
+func Responsef(status int, format string, v ...interface{}) Response {
+	res := &errorResult{}
 	if len(v) == 0 {
 		res.Message = format
 	} else {
 		res.Message = fmt.Sprintf(format, v...)
 	}
 	if status == http.StatusUnauthorized {
-		res.Kind = client.ErrorLoginRequired
+		res.Kind = errorKindLoginRequired
 	}
 	return &resp{
 		Type:   ResponseTypeError,
@@ -174,7 +198,7 @@ func Reponsef(status int, format string, v ...interface{}) Response {
 
 func makeErrorResponder(status int) errorResponder {
 	return func(format string, v ...interface{}) Response {
-		return Reponsef(status, format, v...)
+		return Responsef(status, format, v...)
 	}
 }
 

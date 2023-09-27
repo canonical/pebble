@@ -31,7 +31,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/canonical/pebble/client"
 	"github.com/canonical/pebble/internals/osutil"
 	"github.com/canonical/pebble/internals/osutil/sys"
 )
@@ -68,8 +67,8 @@ func v1GetFiles(_ *Command, req *http.Request, _ *UserState) Response {
 }
 
 type fileResult struct {
-	Path  string        `json:"path"`
-	Error *client.Error `json:"error,omitempty"`
+	Path  string       `json:"path"`
+	Error *errorResult `json:"error,omitempty"`
 }
 
 // Reading files
@@ -161,20 +160,20 @@ func readFile(path string, mw *multipart.Writer) error {
 	return nil
 }
 
-func fileErrorToResult(err error) *client.Error {
+func fileErrorToResult(err error) *errorResult {
 	if err == nil {
 		return nil
 	}
-	var kind client.ErrorKind
+	var kind errorKind
 	switch {
 	case errors.Is(err, os.ErrPermission):
-		kind = client.ErrorPermissionDenied
+		kind = errorKindPermissionDenied
 	case errors.Is(err, os.ErrNotExist):
-		kind = client.ErrorNotFound
+		kind = errorKindNotFound
 	default:
-		kind = client.ErrorGenericFileError
+		kind = errorKindGenericFileError
 	}
-	return &client.Error{
+	return &errorResult{
 		Kind:    kind,
 		Message: err.Error(),
 	}

@@ -210,7 +210,7 @@ func (cs *clientSuite) TestClientMaintenance(c *C) {
 	_, err := cs.cli.SysInfo()
 	c.Assert(err, IsNil)
 	c.Check(cs.cli.Maintenance().(*client.Error), DeepEquals, &client.Error{
-		Kind:    client.ErrorSystemRestart,
+		Kind:    client.ErrorKindSystemRestart,
 		Message: "system is restarting",
 	})
 
@@ -225,7 +225,7 @@ func (cs *clientSuite) TestClientAsyncOpMaintenance(c *C) {
 	_, err := cs.cli.FakeAsyncRequest()
 	c.Assert(err, IsNil)
 	c.Check(cs.cli.Maintenance().(*client.Error), DeepEquals, &client.Error{
-		Kind:    client.ErrorSystemRestart,
+		Kind:    client.ErrorKindSystemRestart,
 		Message: "system is restarting",
 	})
 

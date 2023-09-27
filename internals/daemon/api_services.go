@@ -24,7 +24,6 @@ import (
 
 	"github.com/canonical/x-go/strutil"
 
-	"github.com/canonical/pebble/client"
 	"github.com/canonical/pebble/internals/overlord/servstate"
 	"github.com/canonical/pebble/internals/overlord/state"
 )
@@ -89,7 +88,7 @@ func v1PostServices(c *Command, r *http.Request, _ *UserState) Response {
 		if len(services) == 0 {
 			return SyncResponse(&resp{
 				Type:   ResponseTypeError,
-				Result: &client.Error{Kind: client.ErrorNoDefaultServices, Message: "no default services"},
+				Result: &errorResult{Kind: errorKindNoDefaultServices, Message: "no default services"},
 				Status: 400,
 			})
 		}

@@ -21,8 +21,6 @@ import (
 
 	. "gopkg.in/check.v1"
 	"gopkg.in/yaml.v3"
-
-	"github.com/canonical/pebble/client"
 )
 
 var planLayer = `
@@ -56,7 +54,7 @@ func (s *apiSuite) TestGetPlanErrors(c *C) {
 		c.Assert(rec.Code, Equals, test.status)
 		c.Assert(rsp.Status, Equals, test.status)
 		c.Assert(rsp.Type, Equals, ResponseTypeError)
-		c.Assert(rsp.Result.(*client.Error).Message, Matches, test.message)
+		c.Assert(rsp.Result.(*errorResult).Message, Matches, test.message)
 	}
 }
 
@@ -125,7 +123,7 @@ func (s *apiSuite) TestLayersErrors(c *C) {
 		c.Assert(rec.Code, Equals, test.status)
 		c.Assert(rsp.Status, Equals, test.status)
 		c.Assert(rsp.Type, Equals, ResponseTypeError)
-		c.Assert(rsp.Result.(*client.Error).Message, Matches, test.message)
+		c.Assert(rsp.Result.(*errorResult).Message, Matches, test.message)
 	}
 }
 
@@ -197,6 +195,6 @@ func (s *apiSuite) TestLayersCombineFormatError(c *C) {
 	c.Assert(rec.Code, Equals, http.StatusBadRequest)
 	c.Assert(rsp.Status, Equals, http.StatusBadRequest)
 	c.Assert(rsp.Type, Equals, ResponseTypeError)
-	result := rsp.Result.(*client.Error)
+	result := rsp.Result.(*errorResult)
 	c.Assert(result.Message, Matches, `layer "base" must define "override" for service "dynamic"`)
 }

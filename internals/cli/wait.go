@@ -99,7 +99,7 @@ func (wmx waitMixin) wait(cli *client.Client, id string) (*client.Change, error)
 			time.Sleep(pollTime)
 			continue
 		}
-		if maintErr, ok := cli.Maintenance().(*client.Error); ok && maintErr.Kind == client.ErrorSystemRestart {
+		if maintErr, ok := cli.Maintenance().(*client.Error); ok && maintErr.Kind == client.ErrorKindSystemRestart {
 			rebootingErr = maintErr
 		}
 		if !tMax.IsZero() {

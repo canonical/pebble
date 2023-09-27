@@ -34,7 +34,6 @@ import (
 	"github.com/gorilla/mux"
 	"gopkg.in/tomb.v2"
 
-	"github.com/canonical/pebble/client"
 	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/osutil"
 	"github.com/canonical/pebble/internals/osutil/sys"
@@ -281,11 +280,11 @@ func (c *Command) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		st.Unlock()
 		switch rst {
 		case restart.RestartSystem:
-			rsp.transmitMaintenance(client.ErrorSystemRestart, "system is restarting")
+			rsp.transmitMaintenance(errorKindSystemRestart, "system is restarting")
 		case restart.RestartDaemon:
-			rsp.transmitMaintenance(client.ErrorDaemonRestart, "daemon is restarting")
+			rsp.transmitMaintenance(errorKindDaemonRestart, "daemon is restarting")
 		case restart.RestartSocket:
-			rsp.transmitMaintenance(client.ErrorDaemonRestart, "daemon is stopping to wait for socket activation")
+			rsp.transmitMaintenance(errorKindDaemonRestart, "daemon is stopping to wait for socket activation")
 		}
 		if rsp.Type != ResponseTypeError {
 			st.Lock()
