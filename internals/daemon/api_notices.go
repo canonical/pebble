@@ -22,22 +22,33 @@ import (
 	"regexp"
 	"time"
 
+	"github.com/canonical/x-go/strutil"
+
 	"github.com/canonical/pebble/internals/overlord/state"
 )
 
-// A very loose regex to ensure client keys are in the form "domain.com/key"
-var clientKeyRegexp = regexp.MustCompile(`^([a-z0-9-]+\.)+[a-z0-9-]+/[A-Za-z0-9./-]+$`)
+// A very loose regex to ensure custom keys are in the form "domain.com/key"
+var customKeyRegexp = regexp.MustCompile(`^([a-z0-9-]+\.)+[a-z0-9-]+/[A-Za-z0-9./-]+$`)
+
+const (
+	maxNoticeKeyLength = 256
+	maxNoticeDataSize  = 4 * 1024
+)
 
 func v1GetNotices(c *Command, r *http.Request, _ *UserState) Response {
 	query := r.URL.Query()
 
-	typeStr := query.Get("type")
-	noticeType := state.NoticeTypeFromString(typeStr)
-	if typeStr != "" && noticeType == "" {
-		return statusBadRequest("invalid notice type %q", typeStr)
+	typeStrs := strutil.MultiCommaSeparatedList(query["types"])
+	types := make([]state.NoticeType, 0, len(typeStrs))
+	for _, typeStr := range typeStrs {
+		noticeType := state.NoticeTypeFromString(typeStr)
+		if noticeType == "" {
+			return statusBadRequest("invalid notice type %q", typeStr)
+		}
+		types = append(types, noticeType)
 	}
 
-	key := query.Get("key")
+	keys := strutil.MultiCommaSeparatedList(query["keys"])
 
 	afterStr := query.Get("after")
 	var after time.Time
@@ -50,8 +61,8 @@ func v1GetNotices(c *Command, r *http.Request, _ *UserState) Response {
 	}
 
 	filters := state.NoticeFilters{
-		Type:  noticeType,
-		Key:   key,
+		Types: types,
+		Keys:  keys,
 		After: after,
 	}
 	var notices []*state.Notice
@@ -107,14 +118,14 @@ func v1PostNotices(c *Command, r *http.Request, _ *UserState) Response {
 	if payload.Action != "add" {
 		return statusBadRequest("invalid action %q", payload.Action)
 	}
-	if payload.Type != "client" {
-		return statusBadRequest(`invalid type %q (can only add "client" notices)`, payload.Type)
+	if payload.Type != "custom" {
+		return statusBadRequest(`invalid type %q (can only add "custom" notices)`, payload.Type)
 	}
-	if !clientKeyRegexp.MatchString(payload.Key) {
+	if !customKeyRegexp.MatchString(payload.Key) {
 		return statusBadRequest(`invalid key %q (must be in "domain.com/key" format)`, payload.Key)
 	}
-	if len(payload.Key) > state.MaxNoticeKeyLength {
-		return statusBadRequest(`key too long (must be %d bytes or less)`, state.MaxNoticeKeyLength)
+	if len(payload.Key) > maxNoticeKeyLength {
+		return statusBadRequest("key must be %d bytes or less", maxNoticeKeyLength)
 	}
 
 	var repeatAfter time.Duration
@@ -126,11 +137,19 @@ func v1PostNotices(c *Command, r *http.Request, _ *UserState) Response {
 		}
 	}
 
+	dataSize := 0
+	for k, v := range payload.Data {
+		dataSize += len(k) + len(v)
+	}
+	if dataSize > maxNoticeDataSize {
+		return statusBadRequest("total size of data (keys and values) must be %d bytes or less", maxNoticeDataSize)
+	}
+
 	st := c.d.overlord.State()
 	st.Lock()
 	defer st.Unlock()
 
-	noticeId := st.AddNotice(state.NoticeClient, payload.Key, payload.Data, repeatAfter)
+	noticeId := st.AddNotice(state.NoticeCustom, payload.Key, payload.Data, repeatAfter)
 
 	result := struct {
 		ID string `json:"id"`

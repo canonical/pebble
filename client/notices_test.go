@@ -29,7 +29,7 @@ import (
 func (cs *clientSuite) TestNotice(c *C) {
 	cs.rsp = `{"type": "sync", "result": {
 		"id":   "123",
-  		"type": "client",
+  		"type": "custom",
 		"key": "a.b/c",
 		"first-occurred": "2023-09-05T15:43:00.123Z",
 		"last-occurred": "2023-09-05T17:43:00.567Z",
@@ -43,7 +43,7 @@ func (cs *clientSuite) TestNotice(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(notice, DeepEquals, &client.Notice{
 		ID:            "123",
-		Type:          client.NoticeClient,
+		Type:          client.NoticeCustom,
 		Key:           "a.b/c",
 		FirstOccurred: time.Date(2023, 9, 5, 15, 43, 0, 123_000_000, time.UTC),
 		LastOccurred:  time.Date(2023, 9, 5, 17, 43, 0, 567_000_000, time.UTC),
@@ -58,7 +58,7 @@ func (cs *clientSuite) TestNotice(c *C) {
 func (cs *clientSuite) TestNotices(c *C) {
 	cs.rsp = `{"type": "sync", "result": [{
 		"id":   "1",
-  		"type": "client",
+  		"type": "custom",
 		"key": "a.b/c",
 		"first-occurred": "2023-09-05T15:43:00.123Z",
 		"last-occurred": "2023-09-05T17:43:00.567Z",
@@ -82,7 +82,7 @@ func (cs *clientSuite) TestNotices(c *C) {
 	c.Assert(cs.req.URL.Query(), DeepEquals, url.Values{})
 	c.Assert(notices, DeepEquals, []*client.Notice{{
 		ID:            "1",
-		Type:          "client",
+		Type:          "custom",
 		Key:           "a.b/c",
 		FirstOccurred: time.Date(2023, 9, 5, 15, 43, 0, 123_000_000, time.UTC),
 		LastOccurred:  time.Date(2023, 9, 5, 17, 43, 0, 567_000_000, time.UTC),
@@ -105,15 +105,15 @@ func (cs *clientSuite) TestNotices(c *C) {
 func (cs *clientSuite) TestNoticesFilters(c *C) {
 	cs.rsp = `{"type": "sync", "result": []}`
 	notices, err := cs.cli.Notices(&client.NoticesOptions{
-		Type:  client.NoticeClient,
-		Key:   "foo.com/bar",
+		Types: []client.NoticeType{client.NoticeCustom, client.NoticeWarning},
+		Keys:  []string{"foo.com/bar", "example.com/x"},
 		After: time.Date(2023, 9, 5, 16, 43, 32, 123_456_789, time.UTC),
 	})
 	c.Assert(err, IsNil)
 	c.Assert(cs.req.URL.Path, Equals, "/v1/notices")
 	c.Assert(cs.req.URL.Query(), DeepEquals, url.Values{
-		"type":  {"client"},
-		"key":   {"foo.com/bar"},
+		"types": {"custom", "warning"},
+		"keys":  {"foo.com/bar", "example.com/x"},
 		"after": {"2023-09-05T16:43:32.123456789Z"},
 	})
 	c.Assert(notices, DeepEquals, []*client.Notice{})
@@ -137,7 +137,7 @@ func (cs *clientSuite) TestNotify(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(m, DeepEquals, map[string]any{
 		"action":       "add",
-		"type":         "client",
+		"type":         "custom",
 		"key":          "foo.com/bar",
 		"data":         map[string]any{"k": "9"},
 		"repeat-after": "1h0m0s",
@@ -160,7 +160,7 @@ func (cs *clientSuite) TestNotifyMinimal(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(m, DeepEquals, map[string]any{
 		"action": "add",
-		"type":   "client",
+		"type":   "custom",
 		"key":    "a.b/c",
 	})
 }

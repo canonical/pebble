@@ -26,12 +26,12 @@ import (
 )
 
 const (
-	// MaxNoticeKeyLength is the maximum key length for notices, in bytes.
-	MaxNoticeKeyLength = 255
-
-	// Expiry time for notices. Note that the expiry time for snapd warnings
-	// is 28 days, but a shorter time for Pebble notices seems appropriate.
-	noticeExpireAfter = 7 * 24 * time.Hour
+	// NoticeExpireAfter is the expiry time for notices.
+	//
+	// Note that the expiry time for snapd warnings is 28 days, but a shorter
+	// time for Pebble notices seems appropriate, as they're intended more for
+	// machine consumption.
+	NoticeExpireAfter = 7 * 24 * time.Hour
 )
 
 // Notice represents an aggregated notice. The combination of type and key is unique.
@@ -44,7 +44,7 @@ type Notice struct {
 
 	// The notice type represents a group of notices originating from a common
 	// source. For example, notices originating from the CLI client have type
-	// "client".
+	// "custom".
 	noticeType NoticeType
 
 	// The notice key is a string that differentiates notices of this type.
@@ -80,6 +80,9 @@ type Notice struct {
 	repeatAfter time.Duration
 
 	// How long since one of these last occurred until we should drop the notice.
+	//
+	// The repeatAfter duration must be less than this, because the notice
+	// won't be tracked after it expires.
 	expireAfter time.Duration
 }
 
@@ -164,10 +167,10 @@ const (
 	// status was updated. The key for change-update notices is the change ID.
 	NoticeChangeUpdate NoticeType = "change-update"
 
-	// A client notice reported via the Pebble client API or "pebble notify".
+	// A custom notice reported via the Pebble client API or "pebble notify".
 	// The key and data fields are provided by the user. The key must be in
 	// the format "mydomain.io/mykey" to ensure well-namespaced notice keys.
-	NoticeClient NoticeType = "client"
+	NoticeCustom NoticeType = "custom"
 
 	// Warnings are a subset of notices where the key is a human-readable
 	// warning message.
@@ -179,7 +182,7 @@ const (
 func NoticeTypeFromString(s string) NoticeType {
 	noticeType := NoticeType(s)
 	switch noticeType {
-	case NoticeChangeUpdate, NoticeClient, NoticeWarning:
+	case NoticeChangeUpdate, NoticeCustom, NoticeWarning:
 		return noticeType
 	default:
 		return ""
@@ -187,18 +190,15 @@ func NoticeTypeFromString(s string) NoticeType {
 }
 
 // AddNotice records an occurrence of a notice with the specified type and key
-// and key-value data, returning the notice ID.
-//
-// The notice's repeatAfter time is set on the first occurrence; a value of
-// zero means "never repeat". It is only updated on subsequent occurrences if
-// the repeatAfter argument is nonzero.
+// and key-value data, returning the notice ID. A repeatAfter time of zero
+// means "always repeat".
 func (s *State) AddNotice(noticeType NoticeType, key string, data map[string]string, repeatAfter time.Duration) string {
 	return s.addNoticeWithTime(time.Now(), noticeType, key, data, repeatAfter)
 }
 
 func (s *State) addNoticeWithTime(now time.Time, noticeType NoticeType, key string, data map[string]string, repeatAfter time.Duration) string {
-	if noticeType == "" || key == "" || len(key) > MaxNoticeKeyLength {
-		// Programming error (max key length has already been checked by API)
+	if noticeType == "" || key == "" {
+		// Programming error
 		logger.Panicf("Internal error, please report: attempted to add invalid notice (type %q, key %q)",
 			noticeType, key)
 	}
@@ -218,8 +218,7 @@ func (s *State) addNoticeWithTime(now time.Time, noticeType NoticeType, key stri
 			key:           key,
 			firstOccurred: now,
 			lastRepeated:  now,
-			repeatAfter:   repeatAfter,
-			expireAfter:   noticeExpireAfter,
+			expireAfter:   NoticeExpireAfter,
 			occurrences:   1,
 		}
 		s.notices[uniqueKey] = notice
@@ -227,17 +226,15 @@ func (s *State) addNoticeWithTime(now time.Time, noticeType NoticeType, key stri
 	} else {
 		// Additional occurrence, update existing notice
 		notice.occurrences++
-		if repeatAfter != 0 {
-			notice.repeatAfter = repeatAfter
-		}
-		if notice.repeatAfter != 0 && now.After(notice.lastRepeated.Add(notice.repeatAfter)) {
-			// Update last repeated time if repeat-after time has elapsed
+		if repeatAfter == 0 || now.After(notice.lastRepeated.Add(repeatAfter)) {
+			// Update last repeated time if repeat-after time has elapsed (or is zero)
 			notice.lastRepeated = now
 			newOrRepeated = true
 		}
 	}
 	notice.lastOccurred = now
 	notice.lastData = data
+	notice.repeatAfter = repeatAfter
 
 	if newOrRepeated {
 		s.processNoticeWaiters()
@@ -250,28 +247,40 @@ func uniqueNoticeKey(noticeType NoticeType, key string) string {
 	return string(noticeType) + ":" + key
 }
 
-// NoticeFilters allows filter notices by various fields.
+// NoticeFilters allows filtering notices by various fields.
 type NoticeFilters struct {
-	// Type, if set, includes only notices of this type.
-	Type NoticeType
-	// Key, if set, includes only notices with this key.
-	Key string
+	// Types, if not empty, includes only notices whose type is one of these.
+	Types []NoticeType
+
+	// Keys, if not empty, includes only notices whose key is one of these.
+	Keys []string
+
 	// After, if set, includes only notices that were last repeated after this time.
 	After time.Time
 }
 
 // matches reports whether the notice n matches these filters
 func (f NoticeFilters) matches(n *Notice) bool {
-	if f.Type != "" && f.Type != n.noticeType {
+	// Can't use strutil.ListContains as Types is []NoticeType, not []string
+	if len(f.Types) > 0 && !sliceContains(f.Types, n.noticeType) {
 		return false
 	}
-	if f.Key != "" && f.Key != n.key {
+	if len(f.Keys) > 0 && !sliceContains(f.Keys, n.key) {
 		return false
 	}
 	if !f.After.IsZero() && !n.lastRepeated.After(f.After) {
 		return false
 	}
 	return true
+}
+
+func sliceContains[T comparable](haystack []T, needle T) bool {
+	for _, v := range haystack {
+		if v == needle {
+			return true
+		}
+	}
+	return false
 }
 
 // Notices returns the list of notices that match the filters (if any),
