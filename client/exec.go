@@ -174,7 +174,7 @@ func (client *Client) Exec(opts *ExecOptions) (*ExecProcess, error) {
 	stdoutDone := wsutil.WebsocketRecvStream(stdout, ioConn)
 
 	// Handle stderr separately if needed.
-	var stderrConn Websocket
+	var stderrConn clientWebsocket
 	var stderrDone chan bool
 	if opts.Stderr != nil {
 		stderrConn, err = client.getTaskWebsocket(taskID, "stderr")

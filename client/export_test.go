@@ -31,18 +31,18 @@ func (client *Client) SetDoer(d doer) {
 }
 
 func (client *Client) Do(method, path string, query url.Values, body io.Reader, v interface{}) error {
-	var r BodyReader
-	_, err := client.Requester.Do(context.Background(), &RequestOptions{
-		Method:  method,
-		Path:    path,
-		Query:   query,
-		Headers: nil,
-		Body:    body,
-	}, &r)
+	resp, err := client.Requester.Do(context.Background(), &RequestOptions{
+		Method:     method,
+		Path:       path,
+		Query:      query,
+		Headers:    nil,
+		Body:       body,
+		ReturnBody: true,
+	}, nil)
 	if err != nil {
 		return err
 	}
-	err = decodeInto(r, v)
+	err = decodeInto(resp.Body, v)
 	if err != nil {
 		return err
 	}
@@ -58,7 +58,7 @@ func (client *Client) FakeAsyncRequest() (changeId string, err error) {
 }
 
 func (client *Client) SetGetWebsocket(f getWebsocketFunc) {
-	client.Requester.(*DefaultRequester).getWebsocket = f
+	client.getWebsocket = f
 }
 
 // WaitStdinDone waits for WebsocketSendStream to be finished calling
@@ -66,3 +66,5 @@ func (client *Client) SetGetWebsocket(f getWebsocketFunc) {
 func (p *ExecProcess) WaitStdinDone() {
 	<-p.stdinDone
 }
+
+type ClientWebsocket = clientWebsocket

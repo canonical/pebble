@@ -39,33 +39,9 @@ import (
 type DecoderFunc func(ctx context.Context, res *http.Response, opts *RequestOptions, result interface{}) (*RequestResponse, error)
 
 type Requester interface {
-	// Do must support the following cases:
-	//
-	// 1. Sync request:
-	// ctx: Supply a context instance
-	// RequestOptions: Async must be false
-	// result: Takes a custom JSON struct
-	// RequestResponse: Unused
-	//
-	// 2. Async request:
-	// ctx: Supply a context instance
-	// RequestOptions: Async must be true
-	// result: Takes a custom JSON struct
-	// RequestResponse: Returns a ChangeID
-	//
-	// 3. Websocket creation request
-	// ctx: Supply a context instance
-	// RequestOptions: Path takes the complete websocket path
-	// result: Takes the address of a Websocket interface
-	// RequestResponse: Unused
-	//
-	// 4. Raw HTTP body request
-	// ctx: Supply a context instance
-	// RequestOptions: Async unused
-	// result: Takes the address of a BodyReader interface
-	// RequestResponse: Unused
-	//
-	// See the default implementation for further details.
+	// Allows for sync, async requests as well as direct access to the
+	// HTTP response body. See the default implementation for further
+	// details.
 	Do(ctx context.Context, opts *RequestOptions, result interface{}) (*RequestResponse, error)
 
 	// SetDecoder allows for client specific processing to be hooked into
@@ -73,22 +49,27 @@ type Requester interface {
 	// responsible for unmarshalling the result, and populating the
 	// RequestReponse.
 	SetDecoder(decoder DecoderFunc)
+
+	// Provide direct access to transport for specialist operations.
+	Transport() http.RoundTripper
 }
 
 // RequestOptions allows setting up a specific request.
 type RequestOptions struct {
-	Method  string
-	Path    string
-	Query   url.Values
-	Headers map[string]string
-	Body    io.Reader
-	Async   bool
+	Method     string
+	Path       string
+	Query      url.Values
+	Headers    map[string]string
+	Body       io.Reader
+	Async      bool
+	ReturnBody bool
 }
 
 // RequestResponse defines a common response associated with requests.
 type RequestResponse struct {
 	StatusCode int
 	ChangeID   string
+	Body       io.ReadCloser
 }
 
 // SocketNotFoundError is the error type returned when the client fails
@@ -168,19 +149,13 @@ type Client struct {
 	maintenance      error
 	warningCount     int
 	warningTimestamp time.Time
+
+	getWebsocket getWebsocketFunc
 }
 
-type getWebsocketFunc func(ctx context.Context, url string) (Websocket, error)
+type getWebsocketFunc func(url string) (clientWebsocket, error)
 
-// BodyReader defines a minimal compliant interface which the requester must
-// intepret as a request to stream the body content.
-type BodyReader interface {
-	io.ReadCloser
-}
-
-// websocket defines a minimal compliant interface which the requester must
-// interpret as a websocket creation request.
-type Websocket interface {
+type clientWebsocket interface {
 	wsutil.MessageReader
 	wsutil.MessageWriter
 	io.Closer
@@ -210,46 +185,44 @@ func New(config *Config) (*Client, error) {
 func NewWithRequester(requester Requester) (*Client, error) {
 	client := &Client{Requester: requester}
 	client.Requester.SetDecoder(client.decoder)
+	client.getWebsocket = func(url string) (clientWebsocket, error) {
+		return getWebsocket(requester.Transport(), url)
+	}
 	return client, nil
 }
 
-func (client *Client) getTaskWebsocket(taskID, websocketID string) (Websocket, error) {
+func (client *Client) getTaskWebsocket(taskID, websocketID string) (clientWebsocket, error) {
 	url := fmt.Sprintf("ws://localhost/v1/tasks/%s/websocket/%s", taskID, websocketID)
-	var ws Websocket
-	_, err := client.Requester.Do(context.Background(), &RequestOptions{Path: url}, &ws)
-	if err != nil {
-		return nil, err
-	}
-	return ws, nil
+	return client.getWebsocket(url)
 }
 
-func getWebsocket(ctx context.Context, transport *http.Transport, url string) (Websocket, error) {
+func getWebsocket(transport http.RoundTripper, url string) (clientWebsocket, error) {
+	httpTransport, ok := transport.(*http.Transport)
+	if !ok {
+		return nil, fmt.Errorf("cannot create websocket: transport not compatible")
+	}
+
 	dialer := websocket.Dialer{
-		NetDial:          transport.Dial,
-		Proxy:            transport.Proxy,
-		TLSClientConfig:  transport.TLSClientConfig,
+		NetDial:          httpTransport.Dial,
+		Proxy:            httpTransport.Proxy,
+		TLSClientConfig:  httpTransport.TLSClientConfig,
 		HandshakeTimeout: 5 * time.Second,
 	}
-	conn, _, err := dialer.DialContext(ctx, url, nil)
+	conn, _, err := dialer.Dial(url, nil)
 	return conn, err
 }
 
 // CloseIdleConnections closes any API connections that are currently unused.
 func (client *Client) CloseIdleConnections() {
-	// CloseIdleConnections is a public API we have to honor. We only support
-	// this in the default requester so existing dependencies on Client keeps on
-	// working.
-	//
-	// See: https://forum.golangbridge.org/t/when-should-i-use-client-closeidleconnections/19254
-	//
-	// Note: This is only needed in cases where the transport connection pool
-	// builds up idle connections really fast, and we do not want to wait for
-	// the garbage collector to release them after the idle timeout.
-	if requester, ok := client.Requester.(*DefaultRequester); ok {
-		c, ok := requester.doer.(*http.Client)
-		if ok {
-			c.CloseIdleConnections()
-		}
+	transport := client.Requester.Transport()
+	// The following is taken from net/http/client.go because
+	// we are directly going to try and close idle connections and
+	// we must make sure the transport supports this.
+	type closeIdler interface {
+		CloseIdleConnections()
+	}
+	if tr, ok := transport.(closeIdler); ok {
+		tr.CloseIdleConnections()
 	}
 }
 
@@ -375,34 +348,22 @@ func (br *DefaultRequester) rawWithRetry(ctx context.Context, method, urlpath st
 	return rsp, nil
 }
 
-// Do implements all the required functionality as defined by the Requester interface. The combination
-// of RequestOptions and the result argument type selects the Do behaviour. In case of a successful
-// response, the result argument get a request specific result. The RequestResponse return struct will
-// include some common attributes, but when it is set is determined by the specific request.
-//
-// For example see doSync, doAsync, getTaskWebsocket for some examples.
-//
-// Please see the Requester interface for further details.
+// Do implements all the required functionality as defined by the Requester interface. RequestOptions
+// selects the Do behaviour. In case of a successful response, the result argument get a
+// request specific result. The RequestResponse struct will include common attributes
+// (not all will be set of all request types).
 func (br *DefaultRequester) Do(ctx context.Context, opts *RequestOptions, result interface{}) (*RequestResponse, error) {
-	// Is the result expecting a websocket?
-	if ws, ok := result.(*Websocket); ok {
-		conn, err := br.getWebsocket(ctx, opts.Path)
-		if err != nil {
-			return nil, err
-		}
-		*ws = conn
-		return nil, nil
-	}
 
 	httpResp, err := br.rawWithRetry(ctx, opts.Method, opts.Path, opts.Query, opts.Headers, opts.Body)
 	if err != nil {
 		return nil, err
 	}
 
-	// Is the result expecting a caller-managed body reader?
-	if bodyReader, ok := result.(*BodyReader); ok {
-		*bodyReader = httpResp.Body
-		return nil, nil
+	// Is the result expecting a caller-managed raw body?
+	if opts.ReturnBody {
+		return &RequestResponse{
+			Body: httpResp.Body,
+		}, nil
 	}
 
 	// If we get here, this is a normal sync or async server request so
@@ -413,16 +374,6 @@ func (br *DefaultRequester) Do(ctx context.Context, opts *RequestOptions, result
 	reqResp, err := br.decoder(ctx, httpResp, opts, result)
 	if err != nil {
 		return nil, err
-	}
-
-	// Sanity check sync and async requests
-	if opts.Async == true {
-		if reqResp.StatusCode != http.StatusAccepted {
-			return nil, fmt.Errorf("operation not accepted")
-		}
-		if reqResp.ChangeID == "" {
-			return nil, fmt.Errorf("async response without change reference")
-		}
 	}
 
 	return reqResp, nil
@@ -601,8 +552,8 @@ func (client *Client) decoder(ctx context.Context, rsp *http.Response, opts *Req
 	// At this point only sync and async type requests may exist so lets
 	// make sure this is the case.
 	//
-	// Note: tests depend on the order or checks, so this cannot simply
-	// be moved.
+	// Tests depend on the order or checks, so lets keep the order unchanged
+	// and deal with these before decode.
 	if opts.Async == false {
 		if serverResp.Type != "sync" {
 			return nil, fmt.Errorf("expected sync response, got %q", serverResp.Type)
@@ -610,6 +561,12 @@ func (client *Client) decoder(ctx context.Context, rsp *http.Response, opts *Req
 	} else {
 		if serverResp.Type != "async" {
 			return nil, fmt.Errorf("expected async response for %q on %q, got %q", opts.Method, opts.Path, serverResp.Type)
+		}
+		if serverResp.StatusCode != http.StatusAccepted {
+			return nil, fmt.Errorf("operation not accepted")
+		}
+		if serverResp.Change == "" {
+			return nil, fmt.Errorf("async response without change reference")
 		}
 	}
 
@@ -648,12 +605,11 @@ type DefaultRequesterConfig struct {
 }
 
 type DefaultRequester struct {
-	baseURL      url.URL
-	doer         doer
-	userAgent    string
-	transport    *http.Transport
-	decoder      DecoderFunc
-	getWebsocket getWebsocketFunc
+	baseURL   url.URL
+	doer      doer
+	userAgent string
+	transport http.RoundTripper
+	decoder   DecoderFunc
 }
 
 func NewDefaultRequester(opts *DefaultRequesterConfig) (*DefaultRequester, error) {
@@ -680,13 +636,14 @@ func NewDefaultRequester(opts *DefaultRequesterConfig) (*DefaultRequester, error
 
 	requester.doer = &http.Client{Transport: requester.transport}
 	requester.userAgent = opts.UserAgent
-	requester.getWebsocket = func(ctx context.Context, url string) (Websocket, error) {
-		return getWebsocket(ctx, requester.transport, url)
-	}
 
 	return requester, nil
 }
 
 func (br *DefaultRequester) SetDecoder(decoder DecoderFunc) {
 	br.decoder = decoder
+}
+
+func (br *DefaultRequester) Transport() http.RoundTripper {
+	return br.transport
 }

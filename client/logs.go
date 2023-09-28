@@ -73,18 +73,18 @@ func (client *Client) logs(ctx context.Context, opts *LogsOptions, follow bool) 
 	if follow {
 		query.Set("follow", "true")
 	}
-	var body BodyReader
-	_, err := client.Requester.Do(ctx, &RequestOptions{
-		Method: "GET",
-		Path:   "/v1/logs",
-		Query:  query,
-	}, &body)
+	resp, err := client.Requester.Do(ctx, &RequestOptions{
+		Method:     "GET",
+		Path:       "/v1/logs",
+		Query:      query,
+		ReturnBody: true,
+	}, nil)
 	if err != nil {
 		return err
 	}
-	defer body.Close()
+	defer resp.Body.Close()
 
-	reader := bufio.NewReaderSize(body, logReaderSize)
+	reader := bufio.NewReaderSize(resp.Body, logReaderSize)
 	for {
 		err = decodeLog(reader, opts.WriteLog)
 		if errors.Is(err, io.EOF) || errors.Is(err, context.Canceled) {
