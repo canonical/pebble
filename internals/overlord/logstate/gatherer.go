@@ -167,10 +167,10 @@ func (g *logGatherer) PlanChanged(pl *plan.Plan, buffers map[string]*servicelog.
 
 // ServiceStarted is called by the LogManager on the start of a service which
 // logs to this gatherer's target.
-func (g *logGatherer) ServiceStarted(service *plan.Service, buffer *servicelog.RingBuffer) {
+func (g *logGatherer) ServiceStarted(service *plan.Service, buffer *servicelog.RingBuffer, env []string) {
 	g.pullers.Add(service.Name, buffer, g.entryCh)
 	// Add service env to client so it can interpret labels correctly
-	g.client.AddEnv(service.Name, service.Environment)
+	g.client.AddEnv(service.Name, env)
 }
 
 // The main control loop for the logGatherer. loop receives logs from the
@@ -317,7 +317,7 @@ type logClient interface {
 
 	// AddEnv adds a service's environment to the client, so it can correctly
 	// evaluate the labels defined in the plan.
-	AddEnv(serviceName string, env map[string]string)
+	AddEnv(serviceName string, env []string)
 }
 
 func newLogClient(target *plan.LogTarget) (logClient, error) {

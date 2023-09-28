@@ -39,7 +39,7 @@ type ServiceManager struct {
 }
 
 type LogManager interface {
-	ServiceStarted(service *plan.Service, logs *servicelog.RingBuffer)
+	ServiceStarted(service *plan.Service, logs *servicelog.RingBuffer, env []string)
 }
 
 // PlanFunc is the type of function used by NotifyPlanChanged.

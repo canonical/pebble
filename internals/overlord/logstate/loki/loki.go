@@ -91,8 +91,20 @@ func fillDefaultOptions(options *ClientOptions) *ClientOptions {
 	return options
 }
 
-func (c *Client) AddEnv(serviceName string, env map[string]string) {
-	c.envs[serviceName] = env
+func (c *Client) AddEnv(serviceName string, env []string) {
+	// Parse environment into a map
+	envMap := make(map[string]string, len(env))
+	for _, keyVal := range env {
+		split := strings.SplitN(keyVal, "=", 2)
+		if len(split) < 2 {
+			continue
+		}
+		key := split[0]
+		val := split[1]
+		envMap[key] = val
+	}
+
+	c.envs[serviceName] = envMap
 }
 
 func (c *Client) Add(entry servicelog.Entry) error {

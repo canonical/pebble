@@ -2015,7 +2015,7 @@ func createZombie() error {
 
 type fakeLogManager struct{}
 
-func (f fakeLogManager) ServiceStarted(service *plan.Service, logs *servicelog.RingBuffer) {
+func (f fakeLogManager) ServiceStarted(service *plan.Service, logs *servicelog.RingBuffer, env []string) {
 	// no-op
 }
 

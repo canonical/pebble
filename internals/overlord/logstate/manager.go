@@ -89,8 +89,8 @@ func (m *LogManager) PlanChanged(pl *plan.Plan) {
 }
 
 // ServiceStarted notifies the log manager that the named service has started,
-// and provides a reference to the service's log buffer.
-func (m *LogManager) ServiceStarted(service *plan.Service, buffer *servicelog.RingBuffer) {
+// and provides a reference to the service's log buffer and environment.
+func (m *LogManager) ServiceStarted(service *plan.Service, buffer *servicelog.RingBuffer, env []string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -105,7 +105,7 @@ func (m *LogManager) ServiceStarted(service *plan.Service, buffer *servicelog.Ri
 		if !service.LogsTo(target) {
 			continue
 		}
-		gatherer.ServiceStarted(service, buffer)
+		gatherer.ServiceStarted(service, buffer, env)
 	}
 }
 
