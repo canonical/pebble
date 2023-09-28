@@ -116,19 +116,15 @@ func (r *resp) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
 
 type errorKind string
 
-// Error kinds for use as a response result.
+// Error kinds for use as a response or maintenance result
 const (
 	errorKindLoginRequired     = errorKind("login-required")
 	errorKindNoDefaultServices = errorKind("no-default-services")
 	errorKindNotFound          = errorKind("not-found")
 	errorKindPermissionDenied  = errorKind("permission-denied")
 	errorKindGenericFileError  = errorKind("generic-file-error")
-)
-
-// Maintenance error kinds for use only inside the maintenance field of responses.
-const (
-	errorKindSystemRestart = errorKind("system-restart")
-	errorKindDaemonRestart = errorKind("daemon-restart")
+	errorKindSystemRestart     = errorKind("system-restart")
+	errorKindDaemonRestart     = errorKind("daemon-restart")
 )
 
 type errorResult struct {
@@ -174,9 +170,9 @@ func (f fileResponse) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // Responsef builds an error Response that returns the status and formatted message.
 //
-// Note: If no arguments are provided, formatting is disabled, and the format string
+// If no arguments are provided, formatting is disabled, and the format string
 // is used as is and not interpreted in any way.
-func Responsef(status int, format string, v ...interface{}) Response {
+func ErrorResponse(status int, format string, v ...interface{}) Response {
 	res := &errorResult{}
 	if len(v) == 0 {
 		res.Message = format
@@ -195,7 +191,7 @@ func Responsef(status int, format string, v ...interface{}) Response {
 
 func makeErrorResponder(status int) errorResponder {
 	return func(format string, v ...interface{}) Response {
-		return Responsef(status, format, v...)
+		return ErrorResponse(status, format, v...)
 	}
 }
 

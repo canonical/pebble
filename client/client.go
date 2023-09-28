@@ -416,19 +416,15 @@ func (e *Error) Error() string {
 	return e.Message
 }
 
-// Error kinds for use as a response result.
+// Error kinds for use as a response or maintenance result
 const (
 	ErrorKindLoginRequired     = "login-required"
 	ErrorKindNoDefaultServices = "no-default-services"
 	ErrorKindNotFound          = "not-found"
 	ErrorKindPermissionDenied  = "permission-denied"
 	ErrorKindGenericFileError  = "generic-file-error"
-)
-
-// Maintenance error kinds for use only inside the maintenance field of responses.
-const (
-	ErrorKindSystemRestart = "system-restart"
-	ErrorKindDaemonRestart = "daemon-restart"
+	ErrorKindSystemRestart     = "system-restart"
+	ErrorKindDaemonRestart     = "daemon-restart"
 )
 
 func (rsp *response) err(cli *Client) error {
