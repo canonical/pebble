@@ -47,7 +47,7 @@ type Requester interface {
 	// SetDecoder allows for client specific processing to be hooked into
 	// the sync and async response decoding process. The decoder is also
 	// responsible for unmarshalling the result, and populating the
-	// RequestReponse.
+	// RequestResponse.
 	SetDecoder(decoder DecoderFunc)
 
 	// Provide direct access to transport for specialist operations.
@@ -353,7 +353,6 @@ func (br *DefaultRequester) rawWithRetry(ctx context.Context, method, urlpath st
 // request specific result. The RequestResponse struct will include common attributes
 // (not all will be set of all request types).
 func (br *DefaultRequester) Do(ctx context.Context, opts *RequestOptions, result interface{}) (*RequestResponse, error) {
-
 	httpResp, err := br.rawWithRetry(ctx, opts.Method, opts.Path, opts.Query, opts.Headers, opts.Body)
 	if err != nil {
 		return nil, err

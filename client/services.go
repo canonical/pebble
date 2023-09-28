@@ -78,11 +78,11 @@ func (client *Client) doMultiServiceAction(actionName string, services []string)
 		"Content-Type": "application/json",
 	}
 
-	reqReponse, err := client.doAsync("POST", "/v1/services", nil, headers, bytes.NewBuffer(data), nil)
+	reqResponse, err := client.doAsync("POST", "/v1/services", nil, headers, bytes.NewBuffer(data), nil)
 	if err != nil {
 		return "", err
 	}
-	return reqReponse.ChangeID, nil
+	return reqResponse.ChangeID, nil
 }
 
 type ServicesOptions struct {
