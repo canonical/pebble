@@ -175,6 +175,10 @@ func (c *slowFlushingClient) AddEnv(serviceName string, env []string) {
 	// no-op
 }
 
+func (c *slowFlushingClient) RemoveEnv(serviceName string) {
+	// no-op
+}
+
 func (c *slowFlushingClient) Add(_ servicelog.Entry) error {
 	// no-op
 	return nil

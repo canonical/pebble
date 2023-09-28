@@ -236,6 +236,10 @@ func (c *testClient) AddEnv(serviceName string, env []string) {
 	// no-op
 }
 
+func (c *testClient) RemoveEnv(serviceName string) {
+	// no-op
+}
+
 func (c *testClient) Add(entry servicelog.Entry) error {
 	c.buffered = append(c.buffered, entry)
 	return nil

@@ -138,12 +138,14 @@ func (g *logGatherer) PlanChanged(pl *plan.Plan, buffers map[string]*servicelog.
 		svc, svcExists := pl.Services[svcName]
 		if !svcExists {
 			g.pullers.Remove(svcName)
+			g.client.RemoveEnv(svcName)
 			continue
 		}
 
 		tgt := pl.LogTargets[g.targetName]
 		if !svc.LogsTo(tgt) {
 			g.pullers.Remove(svcName)
+			g.client.RemoveEnv(svcName)
 		}
 	}
 
@@ -318,6 +320,9 @@ type logClient interface {
 	// AddEnv adds a service's environment to the client, so it can correctly
 	// evaluate the labels defined in the plan.
 	AddEnv(serviceName string, env []string)
+
+	// RemoveEnv removes the saved environment for the named service.
+	RemoveEnv(serviceName string)
 }
 
 func newLogClient(target *plan.LogTarget) (logClient, error) {

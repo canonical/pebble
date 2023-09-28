@@ -107,6 +107,10 @@ func (c *Client) AddEnv(serviceName string, env []string) {
 	c.envs[serviceName] = envMap
 }
 
+func (c *Client) RemoveEnv(serviceName string) {
+	delete(c.envs, serviceName)
+}
+
 func (c *Client) Add(entry servicelog.Entry) error {
 	if n := len(c.entries); n >= c.options.MaxRequestEntries {
 		// 'entries' is full - remove the first element to make room
