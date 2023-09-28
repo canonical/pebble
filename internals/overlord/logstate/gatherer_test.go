@@ -49,7 +49,7 @@ func (s *gathererSuite) TestGatherer(c *C) {
 	c.Assert(err, IsNil)
 
 	testSvc := newTestService("svc1")
-	g.ServiceStarted(testSvc.config, testSvc.ringBuffer)
+	g.ServiceStarted(testSvc.config, testSvc.ringBuffer, nil)
 
 	testSvc.writeLog("log line #1")
 	testSvc.writeLog("log line #2")
@@ -86,7 +86,7 @@ func (s *gathererSuite) TestGathererTimeout(c *C) {
 	c.Assert(err, IsNil)
 
 	testSvc := newTestService("svc1")
-	g.ServiceStarted(testSvc.config, testSvc.ringBuffer)
+	g.ServiceStarted(testSvc.config, testSvc.ringBuffer, nil)
 
 	testSvc.writeLog("log line #1")
 	select {
@@ -113,7 +113,7 @@ func (s *gathererSuite) TestGathererShutdown(c *C) {
 	c.Assert(err, IsNil)
 
 	testSvc := newTestService("svc1")
-	g.ServiceStarted(testSvc.config, testSvc.ringBuffer)
+	g.ServiceStarted(testSvc.config, testSvc.ringBuffer, nil)
 
 	testSvc.writeLog("log line #1")
 	err = testSvc.stop()
@@ -166,7 +166,7 @@ func (s *gathererSuite) TestRetryLoki(c *C) {
 	c.Assert(err, IsNil)
 
 	testSvc := newTestService("svc1")
-	g.ServiceStarted(testSvc.config, testSvc.ringBuffer)
+	g.ServiceStarted(testSvc.config, testSvc.ringBuffer, nil)
 
 	reqReceived := make(chan struct{})
 	// First attempt: server should return a retryable error
@@ -232,7 +232,7 @@ type testClient struct {
 	sendCh     chan []servicelog.Entry
 }
 
-func (c *testClient) AddEnv(serviceName string, env map[string]string) {
+func (c *testClient) AddEnv(serviceName string, env []string) {
 	// no-op
 }
 

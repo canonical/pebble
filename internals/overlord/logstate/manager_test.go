@@ -56,9 +56,9 @@ func (s *managerSuite) TestPlanChange(c *C) {
 			"tgt3": {Name: "tgt3", Services: []string{"all"}},
 		},
 	})
-	m.ServiceStarted(svc1.config, svc1.ringBuffer)
-	m.ServiceStarted(svc2.config, svc2.ringBuffer)
-	m.ServiceStarted(svc3.config, svc3.ringBuffer)
+	m.ServiceStarted(svc1.config, svc1.ringBuffer, nil)
+	m.ServiceStarted(svc2.config, svc2.ringBuffer, nil)
+	m.ServiceStarted(svc3.config, svc3.ringBuffer, nil)
 
 	checkGatherers(c, m.gatherers, map[string][]string{
 		"tgt1": {"svc1", "svc2"},
@@ -81,9 +81,9 @@ func (s *managerSuite) TestPlanChange(c *C) {
 			"tgt4": {Name: "tgt4", Services: []string{"all", "-svc2"}},
 		},
 	})
-	m.ServiceStarted(svc4.config, svc4.ringBuffer)
+	m.ServiceStarted(svc4.config, svc4.ringBuffer, nil)
 	// simulate service restart for svc2
-	m.ServiceStarted(svc2.config, svc2.ringBuffer)
+	m.ServiceStarted(svc2.config, svc2.ringBuffer, nil)
 
 	checkGatherers(c, m.gatherers, map[string][]string{
 		"tgt1": {"svc1"},
@@ -147,7 +147,7 @@ func (s *managerSuite) TestTimelyShutdown(c *C) {
 		},
 		LogTargets: logTargets,
 	})
-	m.ServiceStarted(svc1.config, svc1.ringBuffer)
+	m.ServiceStarted(svc1.config, svc1.ringBuffer, nil)
 
 	c.Assert(m.gatherers, HasLen, 10)
 
@@ -171,7 +171,7 @@ type slowFlushingClient struct {
 	flushTime time.Duration
 }
 
-func (c *slowFlushingClient) AddEnv(serviceName string, env map[string]string) {
+func (c *slowFlushingClient) AddEnv(serviceName string, env []string) {
 	// no-op
 }
 
