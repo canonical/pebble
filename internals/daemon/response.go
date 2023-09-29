@@ -168,7 +168,7 @@ func (f fileResponse) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, string(f))
 }
 
-// Responsef builds an error Response that returns the status and formatted message.
+// ErrorResponse builds an error Response that returns the status and formatted message.
 //
 // If no arguments are provided, formatting is disabled, and the format string
 // is used as is and not interpreted in any way.
