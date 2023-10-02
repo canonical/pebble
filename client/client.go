@@ -39,7 +39,7 @@ import (
 type DecoderFunc func(ctx context.Context, res *http.Response, opts *RequestOptions, result interface{}) (*RequestResponse, error)
 
 type Requester interface {
-	// Allows for sync, async requests as well as direct access to the
+	// Do allows for sync, async requests as well as direct access to the
 	// HTTP response body. See the default implementation for further
 	// details.
 	Do(ctx context.Context, opts *RequestOptions, result interface{}) (*RequestResponse, error)
@@ -144,7 +144,7 @@ type Config struct {
 
 // A Client knows how to talk to the Pebble daemon.
 type Client struct {
-	Requester Requester
+	requester Requester
 
 	maintenance      error
 	warningCount     int
@@ -179,16 +179,17 @@ func New(config *Config) (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	return NewWithRequester(requester)
-}
 
-func NewWithRequester(requester Requester) (*Client, error) {
-	client := &Client{Requester: requester}
-	client.Requester.SetDecoder(client.decoder)
+	client := &Client{requester: requester}
+	requester.SetDecoder(client.decoder)
 	client.getWebsocket = func(url string) (clientWebsocket, error) {
 		return getWebsocket(requester.Transport(), url)
 	}
 	return client, nil
+}
+
+func (client *Client) Requester() Requester {
+	return client.requester
 }
 
 func (client *Client) getTaskWebsocket(taskID, websocketID string) (clientWebsocket, error) {
@@ -214,7 +215,7 @@ func getWebsocket(transport http.RoundTripper, url string) (clientWebsocket, err
 
 // CloseIdleConnections closes any API connections that are currently unused.
 func (client *Client) CloseIdleConnections() {
-	transport := client.Requester.Transport()
+	transport := client.Requester().Transport()
 	// The following is taken from net/http/client.go because
 	// we are directly going to try and close idle connections and
 	// we must make sure the transport supports this.
@@ -303,26 +304,6 @@ func FakeDoRetry(retry, timeout time.Duration) (restore func()) {
 	}
 }
 
-type hijacked struct {
-	do func(*http.Request) (*http.Response, error)
-}
-
-func (h hijacked) Do(req *http.Request) (*http.Response, error) {
-	return h.do(req)
-}
-
-// Hijack lets the caller take over the raw HTTP request.
-func (client *Client) Hijack(f func(*http.Request) (*http.Response, error)) {
-	// Hijack is a public API we have to honor. We only support this in the
-	// default requester so existing dependencies on Client keeps on
-	// working. Anyone supplying their own requester will immediately see
-	// that this will fail to work. The Requester interface itself provides
-	// a much better way to customize the doer.
-	if requester, ok := client.Requester.(*DefaultRequester); ok {
-		requester.doer = hijacked{f}
-	}
-}
-
 // rawWithRetry builds in a retry mechanism for GET failures (body-less request)
 func (br *DefaultRequester) rawWithRetry(ctx context.Context, method, urlpath string, query url.Values, headers map[string]string, body io.Reader) (*http.Response, error) {
 	retry := time.NewTicker(rawRetry)
@@ -351,7 +332,7 @@ func (br *DefaultRequester) rawWithRetry(ctx context.Context, method, urlpath st
 // Do implements all the required functionality as defined by the Requester interface. RequestOptions
 // selects the Do behaviour. In case of a successful response, the result argument get a
 // request specific result. The RequestResponse struct will include common attributes
-// (not all will be set of all request types).
+// (not all will be set for all request types).
 func (br *DefaultRequester) Do(ctx context.Context, opts *RequestOptions, result interface{}) (*RequestResponse, error) {
 	httpResp, err := br.rawWithRetry(ctx, opts.Method, opts.Path, opts.Query, opts.Headers, opts.Body)
 	if err != nil {
@@ -392,7 +373,7 @@ func decodeInto(reader io.Reader, v interface{}) error {
 }
 
 func (client *Client) doSync(method, path string, query url.Values, headers map[string]string, body io.Reader, v interface{}) (*RequestResponse, error) {
-	return client.Requester.Do(context.Background(), &RequestOptions{
+	return client.Requester().Do(context.Background(), &RequestOptions{
 		Method:  method,
 		Path:    path,
 		Query:   query,
@@ -402,7 +383,7 @@ func (client *Client) doSync(method, path string, query url.Values, headers map[
 }
 
 func (client *Client) doAsync(method, path string, query url.Values, headers map[string]string, body io.Reader, v interface{}) (*RequestResponse, error) {
-	return client.Requester.Do(context.Background(), &RequestOptions{
+	return client.Requester().Do(context.Background(), &RequestOptions{
 		Method:  method,
 		Path:    path,
 		Query:   query,

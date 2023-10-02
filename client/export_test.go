@@ -27,11 +27,11 @@ var (
 )
 
 func (client *Client) SetDoer(d doer) {
-	client.Requester.(*DefaultRequester).doer = d
+	client.Requester().(*DefaultRequester).doer = d
 }
 
 func (client *Client) Do(method, path string, query url.Values, body io.Reader, v interface{}) error {
-	resp, err := client.Requester.Do(context.Background(), &RequestOptions{
+	resp, err := client.Requester().Do(context.Background(), &RequestOptions{
 		Method:     method,
 		Path:       path,
 		Query:      query,
