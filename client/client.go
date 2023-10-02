@@ -50,7 +50,8 @@ type Requester interface {
 	// RequestResponse.
 	SetDecoder(decoder DecoderFunc)
 
-	// Provide direct access to transport for specialist operations.
+	// Transport provides direct access to the transport instance for
+	// specialist operations.
 	Transport() http.RoundTripper
 }
 
