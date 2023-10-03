@@ -247,10 +247,13 @@ func (*suite) TestBufferFull(c *C) {
 
 func (*suite) TestLabels(c *C) {
 	var expected []byte
+
+	received := make(chan struct{})
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		reqBody, err := io.ReadAll(r.Body)
 		c.Assert(err, IsNil)
 		c.Assert(string(reqBody), Equals, string(expected))
+		close(received)
 	}))
 	defer server.Close()
 
@@ -287,6 +290,11 @@ func (*suite) TestLabels(c *C) {
 
 	err = client.Flush(context.Background())
 	c.Assert(err, IsNil)
+	select {
+	case <-received:
+	case <-time.After(1 * time.Second):
+		c.Fatal("timed out waiting for request")
+	}
 }
 
 // Strips all extraneous whitespace from JSON

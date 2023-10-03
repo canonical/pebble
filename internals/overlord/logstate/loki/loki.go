@@ -86,11 +86,6 @@ func fillDefaultOptions(options *ClientOptions) *ClientOptions {
 }
 
 func (c *Client) SetLabels(serviceName string, labels map[string]string) {
-	if labels == nil {
-		delete(c.labels, serviceName)
-		return
-	}
-
 	c.labels[serviceName] = labels
 }
 
