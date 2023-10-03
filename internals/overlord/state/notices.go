@@ -21,25 +21,19 @@ import (
 	"sort"
 	"strconv"
 	"time"
-
-	"github.com/canonical/pebble/internals/logger"
 )
 
 const (
-	// NoticeExpireAfter is the expiry time for notices.
-	//
-	// Note that the expiry time for snapd warnings is 28 days, but a shorter
-	// time for Pebble notices seems appropriate, as they're intended more for
-	// machine consumption.
-	NoticeExpireAfter = 7 * 24 * time.Hour
+	// defaultNoticeExpireAfter is the default expiry time for notices.
+	defaultNoticeExpireAfter = 7 * 24 * time.Hour
 )
 
 // Notice represents an aggregated notice. The combination of type and key is unique.
 type Notice struct {
 	// Server-generated unique ID for this notice (a surrogate key).
 	//
-	// Users shouldn't rely on this, but this will be a monotonically
-	// increasing number (like change ID).
+	// Currently this is a monotonically increasing number, but that may well
+	// change in future. If your code relies on it being a number, it will break.
 	id string
 
 	// The notice type represents a group of notices originating from a common
@@ -165,49 +159,59 @@ type NoticeType string
 const (
 	// Recorded whenever a change is updated: when it is first spawned or its
 	// status was updated. The key for change-update notices is the change ID.
-	NoticeChangeUpdate NoticeType = "change-update"
+	ChangeUpdateNotice NoticeType = "change-update"
 
 	// A custom notice reported via the Pebble client API or "pebble notify".
 	// The key and data fields are provided by the user. The key must be in
 	// the format "mydomain.io/mykey" to ensure well-namespaced notice keys.
-	NoticeCustom NoticeType = "custom"
+	CustomNotice NoticeType = "custom"
 
 	// Warnings are a subset of notices where the key is a human-readable
 	// warning message.
-	NoticeWarning NoticeType = "warning"
+	WarningNotice NoticeType = "warning"
 )
 
-// NoticeTypeFromString validates the given string and returns the NoticeType,
-// or empty string if it's not valid.
-func NoticeTypeFromString(s string) NoticeType {
-	noticeType := NoticeType(s)
-	switch noticeType {
-	case NoticeChangeUpdate, NoticeCustom, NoticeWarning:
-		return noticeType
-	default:
-		return ""
+func (t NoticeType) Valid() bool {
+	switch t {
+	case ChangeUpdateNotice, CustomNotice, WarningNotice:
+		return true
 	}
+	return false
+}
+
+// AddNoticeOptions holds optional parameters for an AddNotice call.
+type AddNoticeOptions struct {
+	// Data is the optional key-value data for this occurrence.
+	Data map[string]string
+
+	// RepeatAfter defines how long after this notice was last repeated we
+	// should allow it to repeat. Zero means always repeat.
+	RepeatAfter time.Duration
+
+	// Time, if set, overrides time.Now() as the notice occurrence time.
+	Time time.Time
 }
 
 // AddNotice records an occurrence of a notice with the specified type and key
-// and key-value data, returning the notice ID. A repeatAfter time of zero
-// means "always repeat".
-func (s *State) AddNotice(noticeType NoticeType, key string, data map[string]string, repeatAfter time.Duration) string {
-	return s.addNoticeWithTime(time.Now(), noticeType, key, data, repeatAfter)
-}
-
-func (s *State) addNoticeWithTime(now time.Time, noticeType NoticeType, key string, data map[string]string, repeatAfter time.Duration) string {
-	if noticeType == "" || key == "" {
-		// Programming error
-		logger.Panicf("Internal error, please report: attempted to add invalid notice (type %q, key %q)",
-			noticeType, key)
+// and options.
+func (s *State) AddNotice(noticeType NoticeType, key string, options *AddNoticeOptions) (string, error) {
+	if options == nil {
+		options = &AddNoticeOptions{}
+	}
+	err := validateNotice(noticeType, key, options)
+	if err != nil {
+		return "", err
 	}
 
 	s.writing()
 
+	now := options.Time
+	if now.IsZero() {
+		now = time.Now()
+	}
 	now = now.UTC()
 	newOrRepeated := false
-	uniqueKey := uniqueNoticeKey(noticeType, key)
+	uniqueKey := noticeKey{noticeType, key}
 	notice, ok := s.notices[uniqueKey]
 	if !ok {
 		// First occurrence of this notice type+key
@@ -218,7 +222,7 @@ func (s *State) addNoticeWithTime(now time.Time, noticeType NoticeType, key stri
 			key:           key,
 			firstOccurred: now,
 			lastRepeated:  now,
-			expireAfter:   NoticeExpireAfter,
+			expireAfter:   defaultNoticeExpireAfter,
 			occurrences:   1,
 		}
 		s.notices[uniqueKey] = notice
@@ -226,29 +230,40 @@ func (s *State) addNoticeWithTime(now time.Time, noticeType NoticeType, key stri
 	} else {
 		// Additional occurrence, update existing notice
 		notice.occurrences++
-		if repeatAfter == 0 || now.After(notice.lastRepeated.Add(repeatAfter)) {
+		if options.RepeatAfter == 0 || now.After(notice.lastRepeated.Add(options.RepeatAfter)) {
 			// Update last repeated time if repeat-after time has elapsed (or is zero)
 			notice.lastRepeated = now
 			newOrRepeated = true
 		}
 	}
 	notice.lastOccurred = now
-	notice.lastData = data
-	notice.repeatAfter = repeatAfter
+	notice.lastData = options.Data
+	notice.repeatAfter = options.RepeatAfter
 
 	if newOrRepeated {
 		s.processNoticeWaiters()
 	}
 
-	return notice.id
+	return notice.id, nil
 }
 
-func uniqueNoticeKey(noticeType NoticeType, key string) string {
-	return string(noticeType) + ":" + key
+func validateNotice(noticeType NoticeType, key string, options *AddNoticeOptions) error {
+	if !noticeType.Valid() {
+		return fmt.Errorf("internal error: attempted to add notice with invalid type %q", noticeType)
+	}
+	if key == "" {
+		return fmt.Errorf("internal error: attempted to add %s notice with invalid key %q", noticeType, key)
+	}
+	return nil
 }
 
-// NoticeFilters allows filtering notices by various fields.
-type NoticeFilters struct {
+type noticeKey struct {
+	noticeType NoticeType
+	key        string
+}
+
+// NoticeFilter allows filtering notices by various fields.
+type NoticeFilter struct {
 	// Types, if not empty, includes only notices whose type is one of these.
 	Types []NoticeType
 
@@ -259,8 +274,11 @@ type NoticeFilters struct {
 	After time.Time
 }
 
-// matches reports whether the notice n matches these filters
-func (f NoticeFilters) matches(n *Notice) bool {
+// matches reports whether the notice n matches this filter
+func (f *NoticeFilter) matches(n *Notice) bool {
+	if f == nil {
+		return true
+	}
 	// Can't use strutil.ListContains as Types is []NoticeType, not []string
 	if len(f.Types) > 0 && !sliceContains(f.Types, n.noticeType) {
 		return false
@@ -283,12 +301,12 @@ func sliceContains[T comparable](haystack []T, needle T) bool {
 	return false
 }
 
-// Notices returns the list of notices that match the filters (if any),
+// Notices returns the list of notices that match the filter (if any),
 // ordered by the last-repeated time.
-func (s *State) Notices(filters NoticeFilters) []*Notice {
+func (s *State) Notices(filter *NoticeFilter) []*Notice {
 	s.reading()
 
-	notices := s.flattenNotices(filters)
+	notices := s.flattenNotices(filter)
 	sort.Slice(notices, func(i, j int) bool {
 		return notices[i].lastRepeated.Before(notices[j].lastRepeated)
 	})
@@ -310,11 +328,11 @@ func (s *State) Notice(id string) *Notice {
 	return nil
 }
 
-func (s *State) flattenNotices(filters NoticeFilters) []*Notice {
+func (s *State) flattenNotices(filter *NoticeFilter) []*Notice {
 	now := time.Now()
 	var notices []*Notice
 	for _, n := range s.notices {
-		if n.expired(now) || !filters.matches(n) {
+		if n.expired(now) || !filter.matches(n) {
 			continue
 		}
 		notices = append(notices, n)
@@ -324,32 +342,37 @@ func (s *State) flattenNotices(filters NoticeFilters) []*Notice {
 
 func (s *State) unflattenNotices(flat []*Notice) {
 	now := time.Now()
-	s.notices = make(map[string]*Notice)
+	s.notices = make(map[noticeKey]*Notice)
 	for _, n := range flat {
 		if n.expired(now) {
 			continue
 		}
-		uniqueKey := uniqueNoticeKey(n.noticeType, n.key)
+		uniqueKey := noticeKey{n.noticeType, n.key}
 		s.notices[uniqueKey] = n
 	}
 }
 
-// WaitNotices waits for notices that match the filters to exist or occur,
+// WaitNotices waits for notices that match the filter to exist or occur,
 // returning the list of matching notices ordered by the last-repeated time.
 //
-// It waits till there is at least one matching notice or the context times
-// out or is cancelled. If there are existing notices that match the
-// filters, WaitNotices will return them immediately.
-func (s *State) WaitNotices(ctx context.Context, filters NoticeFilters) ([]*Notice, error) {
+// It waits till there is at least one matching notice or the context is
+// cancelled. If there are existing notices that match the filter,
+// WaitNotices will return them immediately.
+func (s *State) WaitNotices(ctx context.Context, filter *NoticeFilter) ([]*Notice, error) {
+	// This is s.reading() instead of s.writing() because addNoticeWaiter only
+	// changes the waiter data structures, not persistent state, so s.modified
+	// should not be set.
+	s.reading()
+
 	// State is already locked here by the caller, so notices won't be added
 	// concurrently.
-	notices := s.Notices(filters)
+	notices := s.Notices(filter)
 	if len(notices) > 0 {
 		return notices, nil // if there are existing notices, return them right away
 	}
 
 	// Add a waiter channel for AddNotice to send to when matching notices arrive.
-	ch, waiterId := s.addNoticeWaiter(filters, ctx.Done())
+	ch, waiterId := s.addNoticeWaiter(filter, ctx.Done())
 	defer s.removeNoticeWaiter(waiterId) // state will be re-locked when this is called
 
 	// Unlock state while waiting, to allow new notices to arrive (all state
@@ -368,19 +391,19 @@ func (s *State) WaitNotices(ctx context.Context, filters NoticeFilters) ([]*Noti
 
 // noticeWaiter tracks a single WaitNotices call.
 type noticeWaiter struct {
-	filters NoticeFilters
-	ch      chan []*Notice
-	done    <-chan struct{}
+	filter *NoticeFilter
+	ch     chan []*Notice
+	done   <-chan struct{}
 }
 
-// addNoticeWaiter adds a notice-waiter with the given filters. Processing
+// addNoticeWaiter adds a notice-waiter with the given filter. Processing
 // notices for this waiter stops when the done channel is closed.
-func (s *State) addNoticeWaiter(filters NoticeFilters, done <-chan struct{}) (ch chan []*Notice, waiterId int) {
+func (s *State) addNoticeWaiter(filter *NoticeFilter, done <-chan struct{}) (ch chan []*Notice, waiterId int) {
 	s.noticeWaiterId++
 	waiter := noticeWaiter{
-		filters: filters,
-		ch:      make(chan []*Notice),
-		done:    done,
+		filter: filter,
+		ch:     make(chan []*Notice),
+		done:   done,
 	}
 	s.noticeWaiters[s.noticeWaiterId] = waiter
 	return waiter.ch, s.noticeWaiterId
@@ -392,12 +415,12 @@ func (s *State) removeNoticeWaiter(waiterId int) {
 }
 
 // processNoticeWaiters loops through the list of notice-waiters, and wakes up
-// and sends to any that match the filters.
+// and sends to any that match the filter.
 func (s *State) processNoticeWaiters() {
 	for waiterId, waiter := range s.noticeWaiters {
-		notices := s.Notices(waiter.filters)
+		notices := s.Notices(waiter.filter)
 		if len(notices) == 0 {
-			continue // no notices with these filters
+			continue // no notices with this filtering
 		}
 		select {
 		case waiter.ch <- notices:

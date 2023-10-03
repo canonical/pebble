@@ -94,7 +94,7 @@ type State struct {
 	changes  map[string]*Change
 	tasks    map[string]*Task
 	warnings map[string]*Warning
-	notices  map[string]*Notice
+	notices  map[noticeKey]*Notice
 
 	noticeWaiters  map[int]noticeWaiter
 	noticeWaiterId int
@@ -112,7 +112,7 @@ func New(backend Backend) *State {
 		changes:       make(map[string]*Change),
 		tasks:         make(map[string]*Task),
 		warnings:      make(map[string]*Warning),
-		notices:       make(map[string]*Notice),
+		notices:       make(map[noticeKey]*Notice),
 		noticeWaiters: make(map[int]noticeWaiter),
 		modified:      true,
 		cache:         make(map[interface{}]interface{}),
@@ -169,7 +169,7 @@ func (s *State) MarshalJSON() ([]byte, error) {
 		Changes:  s.changes,
 		Tasks:    s.tasks,
 		Warnings: s.flattenWarnings(),
-		Notices:  s.flattenNotices(NoticeFilters{}),
+		Notices:  s.flattenNotices(nil),
 
 		LastTaskId:   s.lastTaskId,
 		LastChangeId: s.lastChangeId,
