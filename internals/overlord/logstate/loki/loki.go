@@ -39,10 +39,8 @@ const (
 )
 
 type Client struct {
-	options *ClientOptions
-
-	targetName string
-	remoteURL  string
+	options    *ClientOptions
+	target     *plan.LogTarget
 	httpClient *http.Client
 
 	// To store log entries, keep a buffer of size 2*MaxRequestEntries with a
@@ -50,7 +48,6 @@ type Client struct {
 	buffer  []lokiEntryWithService
 	entries []lokiEntryWithService
 
-	labels map[string]string
 	// store the environment variables for each service
 	envs map[string]map[string]string
 }
@@ -69,11 +66,9 @@ func NewClientWithOptions(target *plan.LogTarget, options *ClientOptions) *Clien
 	options = fillDefaultOptions(options)
 	c := &Client{
 		options:    options,
-		targetName: target.Name,
-		remoteURL:  target.Location,
+		target:     target,
 		httpClient: &http.Client{Timeout: options.RequestTimeout},
 		buffer:     make([]lokiEntryWithService, 2*options.MaxRequestEntries),
-		labels:     target.Labels,
 		envs:       make(map[string]map[string]string),
 	}
 	// c.entries should be backed by the same array as c.buffer
@@ -157,7 +152,7 @@ func (c *Client) Flush(ctx context.Context) error {
 		return fmt.Errorf("encoding request to JSON: %v", err)
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.remoteURL, bytes.NewReader(jsonReq))
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.target.Location, bytes.NewReader(jsonReq))
 	if err != nil {
 		return fmt.Errorf("creating HTTP request: %v", err)
 	}
@@ -237,10 +232,10 @@ func (c *Client) getLabels(serviceName string) map[string]string {
 	serviceEnv, ok := c.envs[serviceName]
 	if !ok {
 		logger.Noticef("Target %q: env for service %q not found, labels may be incorrect",
-			c.targetName, serviceName)
+			c.target.Name, serviceName)
 	}
 	substitute := func(s string) string { return serviceEnv[s] }
-	for key, rawLabel := range c.labels {
+	for key, rawLabel := range c.target.Labels {
 		labels[key] = os.Expand(rawLabel, substitute)
 	}
 
@@ -272,7 +267,7 @@ func (c *Client) handleServerResponse(resp *http.Response) error {
 	case 400 <= code && code < 500:
 		// Other 4xx codes indicate a client problem, so drop the logs (retrying won't help)
 		logger.Noticef("Target %q: request failed with status %d, dropping %d logs",
-			c.targetName, code, len(c.entries))
+			c.target.Name, code, len(c.entries))
 		c.resetBuffer()
 		return errFromResponse(resp)
 
