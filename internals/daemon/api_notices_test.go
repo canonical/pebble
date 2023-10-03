@@ -61,10 +61,13 @@ func (s *apiSuite) testNoticesFilter(c *C, makeQuery func(after time.Time) url.V
 
 	st := s.d.overlord.State()
 	st.Lock()
-	st.AddNotice(state.NoticeWarning, "warning", nil, 0)
+	addNotice(c, st, state.WarningNotice, "warning", nil)
 	after := time.Now()
 	time.Sleep(time.Microsecond)
-	noticeId := st.AddNotice(state.NoticeCustom, "a.b/2", map[string]string{"k": "v"}, 0)
+	noticeId, err := st.AddNotice(state.CustomNotice, "a.b/2", &state.AddNoticeOptions{
+		Data: map[string]string{"k": "v"},
+	})
+	c.Assert(err, IsNil)
 	st.Unlock()
 
 	query := makeQuery(after)
@@ -109,11 +112,11 @@ func (s *apiSuite) TestNoticesFilterMultipleTypes(c *C) {
 
 	st := s.d.overlord.State()
 	st.Lock()
-	st.AddNotice(state.NoticeChangeUpdate, "123", nil, 0)
+	addNotice(c, st, state.ChangeUpdateNotice, "123", nil)
 	time.Sleep(time.Microsecond)
-	st.AddNotice(state.NoticeCustom, "a.b/x", nil, 0)
+	addNotice(c, st, state.CustomNotice, "a.b/x", nil)
 	time.Sleep(time.Microsecond)
-	st.AddNotice(state.NoticeWarning, "danger", nil, 0)
+	addNotice(c, st, state.WarningNotice, "danger", nil)
 	st.Unlock()
 
 	req, err := http.NewRequest("GET", "/v1/notices?types=change-update&types=warning", nil)
@@ -138,11 +141,11 @@ func (s *apiSuite) TestNoticesFilterMultipleKeys(c *C) {
 
 	st := s.d.overlord.State()
 	st.Lock()
-	st.AddNotice(state.NoticeChangeUpdate, "123", nil, 0)
+	addNotice(c, st, state.ChangeUpdateNotice, "123", nil)
 	time.Sleep(time.Microsecond)
-	st.AddNotice(state.NoticeCustom, "a.b/x", nil, 0)
+	addNotice(c, st, state.CustomNotice, "a.b/x", nil)
 	time.Sleep(time.Microsecond)
-	st.AddNotice(state.NoticeWarning, "danger", nil, 0)
+	addNotice(c, st, state.WarningNotice, "danger", nil)
 	st.Unlock()
 
 	req, err := http.NewRequest("GET", "/v1/notices?keys=a.b/x&keys=danger", nil)
@@ -169,7 +172,7 @@ func (s *apiSuite) TestNoticesWait(c *C) {
 	go func() {
 		time.Sleep(10 * time.Millisecond)
 		st.Lock()
-		st.AddNotice(state.NoticeCustom, "a.b/1", nil, 0)
+		addNotice(c, st, state.CustomNotice, "a.b/1", nil)
 		st.Unlock()
 	}()
 
@@ -286,7 +289,7 @@ func (s *apiSuite) TestAddNotice(c *C) {
 
 	st := s.d.overlord.State()
 	st.Lock()
-	notices := st.Notices(state.NoticeFilters{})
+	notices := st.Notices(nil)
 	st.Unlock()
 	c.Assert(notices, HasLen, 1)
 	n := noticeToMap(c, notices[0])
@@ -382,9 +385,10 @@ func (s *apiSuite) TestNotice(c *C) {
 
 	st := s.d.overlord.State()
 	st.Lock()
-	st.AddNotice(state.NoticeCustom, "a.b/1", nil, 0)
-	noticeId := st.AddNotice(state.NoticeCustom, "a.b/2", nil, 0)
-	st.AddNotice(state.NoticeCustom, "a.b/3", nil, 0)
+	addNotice(c, st, state.CustomNotice, "a.b/1", nil)
+	noticeId, err := st.AddNotice(state.CustomNotice, "a.b/2", nil)
+	c.Assert(err, IsNil)
+	addNotice(c, st, state.CustomNotice, "a.b/3", nil)
 	st.Unlock()
 
 	req, err := http.NewRequest("GET", "/v1/notices/"+noticeId, nil)
@@ -424,4 +428,9 @@ func noticeToMap(c *C, notice *state.Notice) map[string]any {
 	err = json.Unmarshal(buf, &n)
 	c.Assert(err, IsNil)
 	return n
+}
+
+func addNotice(c *C, st *state.State, noticeType state.NoticeType, key string, options *state.AddNoticeOptions) {
+	_, err := st.AddNotice(noticeType, key, options)
+	c.Assert(err, IsNil)
 }

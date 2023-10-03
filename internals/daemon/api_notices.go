@@ -41,8 +41,8 @@ func v1GetNotices(c *Command, r *http.Request, _ *UserState) Response {
 	typeStrs := strutil.MultiCommaSeparatedList(query["types"])
 	types := make([]state.NoticeType, 0, len(typeStrs))
 	for _, typeStr := range typeStrs {
-		noticeType := state.NoticeTypeFromString(typeStr)
-		if noticeType == "" {
+		noticeType := state.NoticeType(typeStr)
+		if !noticeType.Valid() {
 			return statusBadRequest("invalid notice type %q", typeStr)
 		}
 		types = append(types, noticeType)
@@ -60,7 +60,7 @@ func v1GetNotices(c *Command, r *http.Request, _ *UserState) Response {
 		}
 	}
 
-	filters := state.NoticeFilters{
+	filter := &state.NoticeFilter{
 		Types: types,
 		Keys:  keys,
 		After: after,
@@ -73,7 +73,7 @@ func v1GetNotices(c *Command, r *http.Request, _ *UserState) Response {
 
 	timeoutStr := query.Get("timeout")
 	if timeoutStr != "" {
-		// Wait up to timeout for notices matching given filters to occur
+		// Wait up to timeout for notices matching given filter to occur
 		timeout, err := time.ParseDuration(timeoutStr)
 		if err != nil {
 			return statusBadRequest("invalid timeout %q: %v", timeoutStr, err)
@@ -82,7 +82,7 @@ func v1GetNotices(c *Command, r *http.Request, _ *UserState) Response {
 		ctx, cancel := context.WithTimeout(r.Context(), timeout)
 		defer cancel()
 
-		notices, err = st.WaitNotices(ctx, filters)
+		notices, err = st.WaitNotices(ctx, filter)
 		if errors.Is(err, context.Canceled) {
 			return statusBadRequest("request canceled")
 		}
@@ -93,7 +93,7 @@ func v1GetNotices(c *Command, r *http.Request, _ *UserState) Response {
 		}
 	} else {
 		// No timeout given, fetch currently-available notices
-		notices = st.Notices(filters)
+		notices = st.Notices(filter)
 	}
 
 	if len(notices) == 0 {
@@ -149,7 +149,13 @@ func v1PostNotices(c *Command, r *http.Request, _ *UserState) Response {
 	st.Lock()
 	defer st.Unlock()
 
-	noticeId := st.AddNotice(state.NoticeCustom, payload.Key, payload.Data, repeatAfter)
+	noticeId, err := st.AddNotice(state.CustomNotice, payload.Key, &state.AddNoticeOptions{
+		Data:        payload.Data,
+		RepeatAfter: repeatAfter,
+	})
+	if err != nil {
+		return statusInternalError("%v", err)
+	}
 
 	result := struct {
 		ID string `json:"id"`
