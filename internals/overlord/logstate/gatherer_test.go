@@ -232,11 +232,7 @@ type testClient struct {
 	sendCh     chan []servicelog.Entry
 }
 
-func (c *testClient) AddEnv(serviceName string, env []string) {
-	// no-op
-}
-
-func (c *testClient) RemoveEnv(serviceName string) {
+func (c *testClient) SetLabels(serviceName string, labels map[string]string) {
 	// no-op
 }
 

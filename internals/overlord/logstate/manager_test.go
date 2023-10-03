@@ -171,11 +171,7 @@ type slowFlushingClient struct {
 	flushTime time.Duration
 }
 
-func (c *slowFlushingClient) AddEnv(serviceName string, env []string) {
-	// no-op
-}
-
-func (c *slowFlushingClient) RemoveEnv(serviceName string) {
+func (c *slowFlushingClient) SetLabels(serviceName string, labels map[string]string) {
 	// no-op
 }
 

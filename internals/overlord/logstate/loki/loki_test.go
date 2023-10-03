@@ -113,7 +113,7 @@ func (*suite) TestRequest(c *C) {
 
 		reqBody, err := io.ReadAll(r.Body)
 		c.Assert(err, IsNil)
-		c.Assert(reqBody, DeepEquals, expected)
+		c.Assert(string(reqBody), DeepEquals, string(expected))
 	}))
 	defer server.Close()
 
@@ -257,22 +257,13 @@ func (*suite) TestLabels(c *C) {
 	client := loki.NewClientWithOptions(
 		&plan.LogTarget{
 			Location: server.URL,
-			Labels: map[string]string{
-				"owner":   "user-$OWNER",
-				"address": "http://${IP}:${PORT}",
-			},
 		},
 		&loki.ClientOptions{},
 	)
 
-	client.AddEnv("svc1", []string{
-		"OWNER=alice",
-		"IP=103.2.51.6",
-		"PORT=3456",
-	})
-	client.AddEnv("svc2", []string{
-		"IP=103.2.52.88",
-		"PORT=9090",
+	client.SetLabels("svc1", map[string]string{
+		"label1": "val1",
+		"label2": "val2",
 	})
 
 	err := client.Add(servicelog.Entry{
@@ -282,31 +273,15 @@ func (*suite) TestLabels(c *C) {
 	})
 	c.Assert(err, IsNil)
 
-	err = client.Add(servicelog.Entry{
-		Service: "svc2",
-		Time:    time.Date(2023, 10, 3, 4, 20, 34, 0, time.UTC),
-		Message: "goodbye",
-	})
-	c.Assert(err, IsNil)
-
 	expected = compactJSON(`
 {"streams": [{
 	"stream": {
-		"address": "http://103.2.51.6:3456",
-		"owner": "user-alice",
+		"label1": "val1",
+		"label2": "val2",
 		"pebble_service": "svc1"
 	},
 	"values": [
 		[ "1696306833000000000", "hello" ]
-	]
-}, {
-	"stream": {
-		"address": "http://103.2.52.88:9090",
-		"owner": "user-", ` + // undefined env vars -> empty string
-		`"pebble_service": "svc2"
-	},
-	"values": [
-		[ "1696306834000000000", "goodbye" ]
 	]
 }]}`)
 
