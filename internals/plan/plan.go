@@ -509,6 +509,12 @@ const (
 func (t *LogTarget) Copy() *LogTarget {
 	copied := *t
 	copied.Services = append([]string(nil), t.Services...)
+	if t.Labels != nil {
+		copied.Labels = make(map[string]string)
+		for k, v := range t.Labels {
+			copied.Labels[k] = v
+		}
+	}
 	return &copied
 }
 
@@ -521,6 +527,12 @@ func (t *LogTarget) Merge(other *LogTarget) {
 		t.Location = other.Location
 	}
 	t.Services = append(t.Services, other.Services...)
+	for k, v := range other.Labels {
+		if t.Labels == nil {
+			t.Labels = make(map[string]string)
+		}
+		t.Labels[k] = v
+	}
 }
 
 // FormatError is the error returned when a layer has a format error, such as
