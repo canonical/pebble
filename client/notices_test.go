@@ -43,7 +43,7 @@ func (cs *clientSuite) TestNotice(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(notice, DeepEquals, &client.Notice{
 		ID:            "123",
-		Type:          client.NoticeCustom,
+		Type:          client.CustomNotice,
 		Key:           "a.b/c",
 		FirstOccurred: time.Date(2023, 9, 5, 15, 43, 0, 123_000_000, time.UTC),
 		LastOccurred:  time.Date(2023, 9, 5, 17, 43, 0, 567_000_000, time.UTC),
@@ -105,7 +105,7 @@ func (cs *clientSuite) TestNotices(c *C) {
 func (cs *clientSuite) TestNoticesFilters(c *C) {
 	cs.rsp = `{"type": "sync", "result": []}`
 	notices, err := cs.cli.Notices(&client.NoticesOptions{
-		Types: []client.NoticeType{client.NoticeCustom, client.NoticeWarning},
+		Types: []client.NoticeType{client.CustomNotice, client.WarningNotice},
 		Keys:  []string{"foo.com/bar", "example.com/x"},
 		After: time.Date(2023, 9, 5, 16, 43, 32, 123_456_789, time.UTC),
 	})

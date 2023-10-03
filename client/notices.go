@@ -23,7 +23,7 @@ import (
 )
 
 type NotifyOptions struct {
-	// Key is the client notice's key. Must be in "domain.com/key" format.
+	// Key is the custom notice's key. Must be in "domain.com/key" format.
 	Key string
 
 	// Data are optional key=value pairs for this occurrence of the notice.
@@ -98,16 +98,16 @@ type NoticeType string
 const (
 	// Recorded whenever a change is updated: when the change is first spawned
 	// or its status is updated.
-	NoticeChangeUpdate NoticeType = "change-update"
+	ChangeUpdateNotice NoticeType = "change-update"
 
 	// A custom notice reported via the Pebble client API or "pebble notify".
 	// The key and data fields are provided by the user. The key must be in
 	// the format "mydomain.io/mykey" to ensure well-namespaced notice keys.
-	NoticeCustom NoticeType = "custom"
+	CustomNotice NoticeType = "custom"
 
 	// Warnings are a subset of notices where the key is a human-readable
 	// warning message.
-	NoticeWarning NoticeType = "warning"
+	WarningNotice NoticeType = "warning"
 )
 
 type jsonNotice struct {
