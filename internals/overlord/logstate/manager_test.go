@@ -17,10 +17,12 @@ package logstate
 import (
 	"context"
 	"fmt"
+	"os"
 	"time"
 
 	. "gopkg.in/check.v1"
 
+	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/plan"
 	"github.com/canonical/pebble/internals/servicelog"
 )
@@ -29,7 +31,13 @@ type managerSuite struct{}
 
 var _ = Suite(&managerSuite{})
 
-func (s *managerSuite) TestPlanChange(c *C) {
+func (*managerSuite) SetUpSuite(c *C) {
+	// Send logs to stderr, so we can see them when debugging
+	l := logger.New(os.Stderr, "[test] ")
+	logger.SetLogger(l)
+}
+
+func (*managerSuite) TestPlanChange(c *C) {
 	gathererOptions := logGathererOptions{
 		newClient: func(target *plan.LogTarget) (logClient, error) {
 			return &testClient{}, nil
@@ -187,4 +195,76 @@ func (c *slowFlushingClient) Flush(ctx context.Context) error {
 	case <-time.After(c.flushTime):
 		return nil
 	}
+}
+
+func (s *managerSuite) TestLabels(c *C) {
+	fakeClient := &labelStore{
+		labels: map[string]map[string]string{},
+	}
+
+	m := NewLogManager()
+	m.newGatherer = func(t *plan.LogTarget) (*logGatherer, error) {
+		return newLogGathererInternal(t, &logGathererOptions{
+			newClient: func(_ *plan.LogTarget) (logClient, error) { return fakeClient, nil },
+		})
+	}
+
+	svc1 := newTestService("svc1")
+	svc2 := newTestService("svc2")
+
+	m.PlanChanged(&plan.Plan{
+		Services: map[string]*plan.Service{
+			"svc1": svc1.config,
+			"svc2": svc2.config,
+		},
+		LogTargets: map[string]*plan.LogTarget{
+			"tgt1": {
+				Name:     "tgt1",
+				Type:     plan.LokiTarget,
+				Services: []string{"all"},
+				Labels: map[string]string{
+					"owner":   "user-$OWNER",
+					"address": "http://${IP}:${PORT}",
+				},
+			},
+		},
+	})
+	checkGatherers(c, m.gatherers, map[string][]string{
+		"tgt1": nil,
+	})
+
+	m.ServiceStarted(svc1.config, svc1.ringBuffer, []string{
+		"OWNER=alice", "IP=103.2.51.6", "PORT=3456",
+	})
+	m.ServiceStarted(svc2.config, svc2.ringBuffer, []string{
+		"IP=103.2.52.88", "PORT=9090",
+	})
+
+	c.Assert(fakeClient.labels, DeepEquals, map[string]map[string]string{
+		"svc1": {
+			"owner":   "user-alice",
+			"address": "http://103.2.51.6:3456",
+		},
+		"svc2": {
+			"owner":   "user-", // undefined env vars -> empty string
+			"address": "http://103.2.52.88:9090",
+		},
+	})
+}
+
+// Fake logClient implementation which just stores the passed-in labels
+type labelStore struct {
+	labels map[string]map[string]string
+}
+
+func (c *labelStore) Add(_ servicelog.Entry) error {
+	return nil // no-op
+}
+
+func (c *labelStore) Flush(_ context.Context) error {
+	return nil // no-op
+}
+
+func (c *labelStore) SetLabels(serviceName string, labels map[string]string) {
+	c.labels[serviceName] = labels
 }
