@@ -74,10 +74,6 @@ var (
 	ErrNoWarningRepeatAfter = errNoWarningRepeatAfter
 )
 
-func (s *State) AddNoticeWithTime(now time.Time, noticeType NoticeType, key string, data map[string]string, repeatAfter time.Duration) string {
-	return s.addNoticeWithTime(now, noticeType, key, data, repeatAfter)
-}
-
 // NumNotices returns the total number of notices, including expired ones that
 // haven't yet been pruned.
 func (s *State) NumNotices() int {
