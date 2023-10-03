@@ -1125,6 +1125,119 @@ var planTests = []planTest{{
 				command: foo
 				override: merge
 `},
+}, {
+	summary: "Log forwarding labels override",
+	input: []string{`
+		log-targets:
+			tgt1:
+				override: merge
+				type: loki
+				location: fake
+				labels:
+					label1: foo
+					label2: foo
+			tgt2:
+				override: merge
+				type: loki
+				location: fake
+				labels:
+					label1: foo
+					label2: foo
+`, `
+		log-targets:
+			tgt1:
+				override: merge
+				labels:
+					label2: bar
+					label3: bar
+			tgt2:
+				override: replace
+				type: loki
+				location: replaced
+				labels:
+					label2: bar
+					label3: bar
+`},
+	layers: []*plan.Layer{{
+		Order:    0,
+		Label:    "layer-0",
+		Services: map[string]*plan.Service{},
+		Checks:   map[string]*plan.Check{},
+		LogTargets: map[string]*plan.LogTarget{
+			"tgt1": {
+				Name:     "tgt1",
+				Override: plan.MergeOverride,
+				Type:     plan.LokiTarget,
+				Location: "fake",
+				Labels: map[string]string{
+					"label1": "foo",
+					"label2": "foo",
+				},
+			},
+			"tgt2": {
+				Name:     "tgt2",
+				Override: plan.MergeOverride,
+				Type:     plan.LokiTarget,
+				Location: "fake",
+				Labels: map[string]string{
+					"label1": "foo",
+					"label2": "foo",
+				},
+			},
+		},
+	}, {
+		Order:    1,
+		Label:    "layer-1",
+		Services: map[string]*plan.Service{},
+		Checks:   map[string]*plan.Check{},
+		LogTargets: map[string]*plan.LogTarget{
+			"tgt1": {
+				Name:     "tgt1",
+				Override: plan.MergeOverride,
+				Labels: map[string]string{
+					"label2": "bar",
+					"label3": "bar",
+				},
+			},
+			"tgt2": {
+				Name:     "tgt2",
+				Override: plan.ReplaceOverride,
+				Type:     plan.LokiTarget,
+				Location: "replaced",
+				Labels: map[string]string{
+					"label2": "bar",
+					"label3": "bar",
+				},
+			},
+		},
+	}},
+	result: &plan.Layer{
+		Services: map[string]*plan.Service{},
+		Checks:   map[string]*plan.Check{},
+		LogTargets: map[string]*plan.LogTarget{
+			"tgt1": {
+				Name:     "tgt1",
+				Override: plan.MergeOverride,
+				Type:     plan.LokiTarget,
+				Location: "fake",
+				Labels: map[string]string{
+					"label1": "foo",
+					"label2": "bar",
+					"label3": "bar",
+				},
+			},
+			"tgt2": {
+				Name:     "tgt2",
+				Override: plan.ReplaceOverride,
+				Type:     plan.LokiTarget,
+				Location: "replaced",
+				Labels: map[string]string{
+					"label2": "bar",
+					"label3": "bar",
+				},
+			},
+		},
+	},
 }}
 
 func (s *S) TestParseLayer(c *C) {
