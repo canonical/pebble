@@ -139,7 +139,14 @@ func parseEnv(env []string) map[string]string {
 // evaluateLabels interprets the labels defined in the plan, substituting any
 // $env_vars with the corresponding value in the service's environment.
 func evaluateLabels(rawLabels, env map[string]string) map[string]string {
-	substitute := func(s string) string { return env[s] }
+	substitute := func(k string) string {
+		if v, ok := env[k]; ok {
+			return v
+		}
+		logger.Debugf("variable $%s undefined in service environment", k)
+		// undefined variables default to "", just like Bash
+		return ""
+	}
 
 	labels := make(map[string]string, len(rawLabels))
 	for key, rawLabel := range rawLabels {
