@@ -24,18 +24,18 @@ import (
 	"github.com/canonical/pebble/internals/cli"
 )
 
-func (s *PebbleSuite) TestAck(c *C) {
+func (s *PebbleSuite) TestOkay(c *C) {
 	oldFilename := os.Getenv("PEBBLE_NOTICES_FILENAME")
 	defer os.Setenv("PEBBLE_NOTICES_FILENAME", oldFilename)
 
 	filename := filepath.Join(c.MkDir(), "notices.json")
 	os.Setenv("PEBBLE_NOTICES_FILENAME", filename)
 
-	data := []byte(`{"last-listed": "2023-09-06T15:06:00Z", "last-acked": "0001-01-01T00:00:00Z"}`)
+	data := []byte(`{"last-listed": "2023-09-06T15:06:00Z", "last-okayed": "0001-01-01T00:00:00Z"}`)
 	err := os.WriteFile(filename, data, 0600)
 	c.Assert(err, IsNil)
 
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"ack"})
+	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"okay"})
 	c.Assert(err, IsNil)
 	c.Check(rest, HasLen, 0)
 	c.Check(s.Stdout(), Equals, "")
@@ -48,19 +48,19 @@ func (s *PebbleSuite) TestAck(c *C) {
 	c.Assert(err, IsNil)
 	c.Check(m, DeepEquals, map[string]any{
 		"last-listed": "2023-09-06T15:06:00Z",
-		"last-acked":  "2023-09-06T15:06:00Z",
+		"last-okayed": "2023-09-06T15:06:00Z",
 	})
 }
 
-func (s *PebbleSuite) TestAckNoNotices(c *C) {
+func (s *PebbleSuite) TestOkayNoNotices(c *C) {
 	oldFilename := os.Getenv("PEBBLE_NOTICES_FILENAME")
 	defer os.Setenv("PEBBLE_NOTICES_FILENAME", oldFilename)
 
 	filename := filepath.Join(c.MkDir(), "notexist")
 	os.Setenv("PEBBLE_NOTICES_FILENAME", filename)
 
-	_, err := cli.Parser(cli.Client()).ParseArgs([]string{"ack"})
-	c.Assert(err, ErrorMatches, "no notices have been listed.*")
+	_, err := cli.Parser(cli.Client()).ParseArgs([]string{"okay"})
+	c.Assert(err, ErrorMatches, "no notices.* have been listed.*")
 	c.Check(s.Stdout(), Equals, "")
 	c.Check(s.Stderr(), Equals, "")
 }

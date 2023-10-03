@@ -195,12 +195,8 @@ var HelpCategories = []HelpCategory{{
 	Commands:    []string{"changes", "tasks"},
 }, {
 	Label:       "Notices",
-	Description: "manage notices",
-	Commands:    []string{"notices", "ack", "notice", "notify"},
-}, {
-	Label:       "Warnings",
-	Description: "manage warnings",
-	Commands:    []string{"warnings", "okay"},
+	Description: "manage notices and warnings",
+	Commands:    []string{"notices", "warnings", "okay", "notice", "notify"},
 }}
 
 var (

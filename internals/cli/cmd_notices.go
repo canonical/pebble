@@ -31,10 +31,7 @@ import (
 	"github.com/canonical/pebble/internals/osutil"
 )
 
-const (
-	noticesFilenameEnvKey  = "PEBBLE_NOTICES_FILENAME"
-	noticesFilenameDefault = "~/.pebble/notices_<socket-path>.json"
-)
+const noticesFilenameEnvKey = "PEBBLE_NOTICES_FILENAME"
 
 const cmdNoticesSummary = "List notices"
 const cmdNoticesDescription = `
@@ -44,13 +41,9 @@ Repeated time (oldest first).
 If --timeout is given and matching notices aren't yet available, wait up to
 the given duration for matching notices to arrive, then return them.
 
-By default, this lists all notices. If 'pebble ack' has been executed, this
+By default, this lists all notices. If 'pebble okay' has been executed, this
 will only list the notices that have occurred (or been repeated) since the
-last one listed before the 'pebble ack'.
-
-Timestamps are saved in a JSON file at $` + noticesFilenameEnvKey + `, which
-defaults to "` + noticesFilenameDefault + `", where <socket-path> is the
-unix socket used for the API, with '/' replaced by '-'.
+last 'pebble okay'.
 `
 
 type cmdNotices struct {
@@ -90,7 +83,7 @@ func (cmd *cmdNotices) Execute(args []string) error {
 	options := client.NoticesOptions{
 		Types: cmd.Type,
 		Keys:  cmd.Key,
-		After: state.LastAcked,
+		After: state.LastOkayed,
 	}
 
 	var notices []*client.Notice
@@ -144,7 +137,7 @@ func (cmd *cmdNotices) Execute(args []string) error {
 
 type noticesState struct {
 	LastListed time.Time `json:"last-listed"`
-	LastAcked  time.Time `json:"last-acked"`
+	LastOkayed time.Time `json:"last-okayed"`
 }
 
 func loadNoticesState() (*noticesState, error) {
@@ -212,9 +205,8 @@ func noticesFilename() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	filename := strings.ReplaceAll(noticesFilenameDefault, "~", user.HomeDir)
 	_, socketPath := getEnvPaths()
 	socketPath = strings.ReplaceAll(socketPath, "/", "-")
-	filename = strings.ReplaceAll(filename, "<socket-path>", socketPath)
+	filename := filepath.Join(user.HomeDir, ".pebble", "notices_"+socketPath+".json")
 	return filename, nil
 }

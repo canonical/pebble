@@ -1,0 +1,97 @@
+// Copyright (c) 2023 Canonical Ltd
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License version 3 as
+// published by the Free Software Foundation.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+package cli
+
+import (
+	"fmt"
+
+	"github.com/canonical/go-flags"
+
+	"github.com/canonical/pebble/client"
+)
+
+const cmdOkaySummary = "Acknowledge notices and warnings"
+const cmdOkayDescription = `
+The okay command acknowledges notices up to most recent notice listed with
+'pebble notices'. After executing okay, 'pebble notices' will only list the
+notices that have occurred (or been repeated) more recently.
+
+The okay command also acknowledges warnings up to the most recent warning
+listed with 'pebble warnings'.
+`
+
+type cmdOkay struct {
+	client *client.Client
+
+	Warnings bool `long:"warnings"`
+}
+
+func init() {
+	AddCommand(&CmdInfo{
+		Name:        "okay",
+		Summary:     cmdOkaySummary,
+		Description: cmdOkayDescription,
+		New: func(opts *CmdOptions) flags.Commander {
+			return &cmdOkay{client: opts.Client}
+		},
+		ArgsHelp: map[string]string{
+			"--warnings": "Only acknowledge warnings, not other notices",
+		},
+	})
+}
+
+func (cmd *cmdOkay) Execute(args []string) error {
+	if len(args) > 0 {
+		return ErrExtraArgs
+	}
+
+	okayedNotices := false
+	if !cmd.Warnings {
+		state, err := loadNoticesState()
+		if err != nil {
+			return fmt.Errorf("cannot load notices state: %w", err)
+		}
+		if !state.LastListed.IsZero() {
+			okayedNotices = true
+			state.LastOkayed = state.LastListed
+			err = saveNoticesState(state)
+			if err != nil {
+				return fmt.Errorf("cannot save notices state: %w", err)
+			}
+		}
+	}
+
+	last, err := lastWarningTimestamp()
+	if err != nil {
+		return err
+	}
+	okayedWarnings := false
+	if !last.IsZero() {
+		okayedWarnings = true
+		err := cmd.client.Okay(last)
+		if err != nil {
+			return fmt.Errorf("cannot acknowledge warnings: %w", err)
+		}
+	}
+
+	if cmd.Warnings && !okayedWarnings {
+		return fmt.Errorf("no warnings have been listed; try 'pebble warnings'")
+	}
+	if !cmd.Warnings && !okayedNotices && !okayedWarnings {
+		return fmt.Errorf("no notices or warnings have been listed; try 'pebble notices' or 'pebble warnings'")
+	}
+
+	return nil
+}

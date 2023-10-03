@@ -82,7 +82,7 @@ ID   Type     Key    First                 Last                  Repeated       
 	c.Assert(err, IsNil)
 	c.Check(m, DeepEquals, map[string]any{
 		"last-listed": "2023-09-06T18:18:00Z",
-		"last-acked":  "0001-01-01T00:00:00Z",
+		"last-okayed": "0001-01-01T00:00:00Z",
 	})
 }
 
@@ -134,7 +134,7 @@ ID   Type    Key    First                 Last                  Repeated        
 	c.Assert(err, IsNil)
 	c.Check(m, DeepEquals, map[string]any{
 		"last-listed": "2023-09-05T18:18:00Z",
-		"last-acked":  "0001-01-01T00:00:00Z",
+		"last-okayed": "0001-01-01T00:00:00Z",
 	})
 }
 
@@ -143,7 +143,7 @@ func (s *PebbleSuite) TestNoticesAfter(c *C) {
 		c.Check(r.Method, Equals, "GET")
 		c.Check(r.URL.Path, Equals, "/v1/notices")
 		c.Check(r.URL.Query(), DeepEquals, url.Values{
-			"after": {"2023-08-04T01:02:03Z"}, // from "last-acked" in notices.json
+			"after": {"2023-08-04T01:02:03Z"}, // from "last-okayed" in notices.json
 		})
 
 		fmt.Fprint(w, `{
@@ -167,7 +167,7 @@ func (s *PebbleSuite) TestNoticesAfter(c *C) {
 	filename := filepath.Join(c.MkDir(), "notices.json")
 	os.Setenv("PEBBLE_NOTICES_FILENAME", filename)
 
-	data := []byte(`{"last-listed": "2023-09-06T15:06:00Z", "last-acked": "2023-08-04T01:02:03Z"}`)
+	data := []byte(`{"last-listed": "2023-09-06T15:06:00Z", "last-okayed": "2023-08-04T01:02:03Z"}`)
 	err := os.WriteFile(filename, data, 0600)
 	c.Assert(err, IsNil)
 
@@ -188,7 +188,7 @@ ID   Type    Key    First                 Last                  Repeated        
 	c.Assert(err, IsNil)
 	c.Check(m, DeepEquals, map[string]any{
 		"last-listed": "2023-09-07T18:18:00Z",
-		"last-acked":  "2023-08-04T01:02:03Z",
+		"last-okayed": "2023-08-04T01:02:03Z",
 	})
 }
 
@@ -265,7 +265,7 @@ ID   Type    Key    First                 Last                  Repeated        
 	c.Assert(err, IsNil)
 	c.Check(m, DeepEquals, map[string]any{
 		"last-listed": "2023-09-05T18:18:00Z",
-		"last-acked":  "0001-01-01T00:00:00Z",
+		"last-okayed": "0001-01-01T00:00:00Z",
 	})
 }
 

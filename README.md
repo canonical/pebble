@@ -501,7 +501,7 @@ ID   Type    Key              First                Last                 Repeated
 2    client  other.com/bar    today at 16:16 NZST  today at 16:16 NZST  today at 16:16 NZST  1
 ```
 
-By default, this lists all notices. If the user runs `pebble ack` (acknowledge notices), subsequent executions of `pebble notices` will only list notices that have occurred (or been repeated) since the last one listed before the acknowledgement.
+By default, this lists all notices. If the user runs `pebble okay` (acknowledge notices), subsequent executions of `pebble notices` will only list notices that have occurred (or been repeated) since the last one listed before the acknowledgement.
 
 To fetch details about a single notice, use `pebble notice`, which displays the output in YAML format. You can fetch a notice either by ID or by type/key combination:
 
