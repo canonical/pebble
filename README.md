@@ -422,6 +422,8 @@ log-targets:
         services: [svc1, svc2]
 ```
 
+##### Specifying services
+
 For each log target, use the `services` key to specify a list of services to collect logs from. In the above example, the `production-logs` target will collect logs from `svc1` and `svc2`.
 
 Use the special keyword `all` to match all services, including services that might be added in future layers. In the above example, `staging-logs` will collect logs from all services.
@@ -452,6 +454,38 @@ my-target:
     override: merge
 ```
 would remove all services and then add `svc1`, so `my-target` would receive logs from only `svc1`.
+
+##### Labels
+
+In the `labels` section, you can specify custom labels to be added to any outgoing logs. These labels may contain `$ENVIRONMENT_VARIABLES` - these will be interpreted in the environment of the corresponding service. Pebble also adds its own default labels (depending on the protocol). For example, given the following plan:
+```yaml
+services:
+  svc1:
+    environment:
+      OWNER: 'alice'
+  svc2:
+    environment:
+      OWNER: 'bob'
+
+log-targets:
+  tgt1:
+    type: loki
+    labels:
+      product: 'juju'
+      owner: 'user-$OWNER'
+```
+the logs from `svc1` will be sent with the following labels:
+```yaml
+product: juju
+owner: user-alice     # env var $OWNER substituted
+pebble_service: svc1  # default label
+```
+and for svc2, the labels will be
+```yaml
+product: juju
+owner: user-bob       # env var $OWNER substituted
+pebble_service: svc2  # default label
+```
 
 
 ## Container usage
@@ -749,6 +783,15 @@ log-targets:
     # service name with a minus (e.g. '-svc1') to remove a previously added
     # service. '-all' will remove all services.
     services: [<service names>]
+
+    # (Optional) A list of key/value pairs defining labels which should be set
+    # on the outgoing logs. These labels are added to (protocol-dependent)
+    # default labels (e.g. 'pebble_service' for Loki).
+    # The label values may contain $ENVIRONMENT_VARIABLES, which will be
+    # substituted 'dynamically' in the environment for the corresponding
+    # service.
+    labels:
+      <label name>: <label value>
 ```
 
 ## API and clients
