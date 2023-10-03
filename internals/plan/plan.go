@@ -982,6 +982,14 @@ func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 				Message: fmt.Sprintf("log target object cannot be null for log target %q", name),
 			}
 		}
+		for labelName := range target.Labels {
+			// 'pebble_*' labels are reserved
+			if strings.HasPrefix(labelName, "pebble_") {
+				return nil, &FormatError{
+					Message: fmt.Sprintf("target %q defines illegal label %q", name, labelName),
+				}
+			}
+		}
 		target.Name = name
 	}
 

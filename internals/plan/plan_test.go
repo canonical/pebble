@@ -1238,6 +1238,18 @@ var planTests = []planTest{{
 			},
 		},
 	},
+}, {
+	summary: "Reserved log target labels",
+	input: []string{`
+		log-targets:
+			tgt1:
+				override: merge
+				type: loki
+				location: fake
+				labels:
+					pebble_service: illegal
+`},
+	error: `target "tgt1" defines illegal label "pebble_service"`,
 }}
 
 func (s *S) TestParseLayer(c *C) {
