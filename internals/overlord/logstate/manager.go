@@ -15,6 +15,8 @@
 package logstate
 
 import (
+	"os"
+	"strings"
 	"sync"
 
 	"github.com/canonical/pebble/internals/logger"
@@ -100,13 +102,50 @@ func (m *LogManager) ServiceStarted(service *plan.Service, buffer *servicelog.Ri
 	}
 
 	m.buffers[service.Name] = buffer
+	var envMap map[string]string
+
 	for _, gatherer := range m.gatherers {
 		target := m.plan.LogTargets[gatherer.targetName]
 		if !service.LogsTo(target) {
 			continue
 		}
-		gatherer.ServiceStarted(service, buffer, env)
+
+		if envMap == nil {
+			envMap = parseEnv(env)
+		}
+		labels := evaluateLabels(target.Labels, envMap)
+		gatherer.ServiceStarted(service, buffer, labels)
 	}
+}
+
+// parseEnv parses a list of key=value pairs into a map, to allow efficient
+// evaluation of environment variables.
+func parseEnv(env []string) map[string]string {
+	// Parse environment into a map
+	envMap := make(map[string]string, len(env))
+	for _, keyVal := range env {
+		split := strings.SplitN(keyVal, "=", 2)
+		if len(split) < 2 {
+			continue
+		}
+		key := split[0]
+		val := split[1]
+		envMap[key] = val
+	}
+
+	return envMap
+}
+
+// evaluateLabels interprets the labels defined in the plan, substituting any
+// $env_vars with the corresponding value in the service's environment.
+func evaluateLabels(rawLabels, env map[string]string) map[string]string {
+	substitute := func(s string) string { return env[s] }
+
+	labels := make(map[string]string, len(rawLabels))
+	for key, rawLabel := range rawLabels {
+		labels[key] = os.Expand(rawLabel, substitute)
+	}
+	return labels
 }
 
 // Ensure implements overlord.StateManager.

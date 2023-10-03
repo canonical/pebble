@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -48,8 +47,8 @@ type Client struct {
 	buffer  []lokiEntryWithService
 	entries []lokiEntryWithService
 
-	// store the environment variables for each service
-	envs map[string]map[string]string
+	// store the labels for each service
+	labels map[string]map[string]string
 }
 
 func NewClient(target *plan.LogTarget) *Client {
@@ -69,7 +68,7 @@ func NewClientWithOptions(target *plan.LogTarget, options *ClientOptions) *Clien
 		target:     target,
 		httpClient: &http.Client{Timeout: options.RequestTimeout},
 		buffer:     make([]lokiEntryWithService, 2*options.MaxRequestEntries),
-		envs:       make(map[string]map[string]string),
+		labels:     make(map[string]map[string]string),
 	}
 	// c.entries should be backed by the same array as c.buffer
 	c.entries = c.buffer[0:0:len(c.buffer)]
@@ -86,24 +85,15 @@ func fillDefaultOptions(options *ClientOptions) *ClientOptions {
 	return options
 }
 
-func (c *Client) AddEnv(serviceName string, env []string) {
-	// Parse environment into a map
-	envMap := make(map[string]string, len(env))
-	for _, keyVal := range env {
-		split := strings.SplitN(keyVal, "=", 2)
-		if len(split) < 2 {
-			continue
-		}
-		key := split[0]
-		val := split[1]
-		envMap[key] = val
+func (c *Client) SetLabels(serviceName string, labels map[string]string) {
+	if labels == nil {
+		delete(c.labels, serviceName)
+		return
 	}
 
-	c.envs[serviceName] = envMap
-}
-
-func (c *Client) RemoveEnv(serviceName string) {
-	delete(c.envs, serviceName)
+	// Add Loki-specific default labels
+	labels["pebble_service"] = serviceName
+	c.labels[serviceName] = labels
 }
 
 func (c *Client) Add(entry servicelog.Entry) error {
@@ -195,7 +185,7 @@ func (c *Client) buildRequest() lokiRequest {
 	for _, service := range services {
 		entries := bucketedEntries[service]
 		stream := lokiStream{
-			Labels:  c.getLabels(service),
+			Labels:  c.labels[service],
 			Entries: entries,
 		}
 		req.Streams = append(req.Streams, stream)
@@ -217,29 +207,6 @@ type lokiEntry [2]string
 type lokiEntryWithService struct {
 	entry   lokiEntry
 	service string
-}
-
-// Generate labels for the current service, based on the service's environment
-// and the labels specified in the plan.
-func (c *Client) getLabels(serviceName string) map[string]string {
-	labels := make(map[string]string)
-
-	// Add Loki-specific default labels
-	labels["pebble_service"] = serviceName
-
-	// Add the labels defined in the plan, substituting any $env_vars with the
-	// corresponding value in the service's environment
-	serviceEnv, ok := c.envs[serviceName]
-	if !ok {
-		logger.Noticef("Target %q: env for service %q not found, labels may be incorrect",
-			c.target.Name, serviceName)
-	}
-	substitute := func(s string) string { return serviceEnv[s] }
-	for key, rawLabel := range c.target.Labels {
-		labels[key] = os.Expand(rawLabel, substitute)
-	}
-
-	return labels
 }
 
 // handleServerResponse determines what to do based on the response from the

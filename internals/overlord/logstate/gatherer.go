@@ -133,19 +133,23 @@ func fillDefaultOptions(options *logGathererOptions) *logGathererOptions {
 // PlanChanged is called by the LogManager when the plan is changed, if this
 // gatherer's target exists in the new plan.
 func (g *logGatherer) PlanChanged(pl *plan.Plan, buffers map[string]*servicelog.RingBuffer) {
+	// TODO: we should flush the client here because the labels may have changed.
+	// But this is done in a separate goroutine to the main loop - is that going
+	// to be a problem?
+
 	// Remove old pullers
 	for _, svcName := range g.pullers.Services() {
 		svc, svcExists := pl.Services[svcName]
 		if !svcExists {
 			g.pullers.Remove(svcName)
-			g.client.RemoveEnv(svcName)
+			g.client.SetLabels(svcName, nil)
 			continue
 		}
 
 		tgt := pl.LogTargets[g.targetName]
 		if !svc.LogsTo(tgt) {
 			g.pullers.Remove(svcName)
-			g.client.RemoveEnv(svcName)
+			g.client.SetLabels(svcName, nil)
 		}
 	}
 
@@ -169,10 +173,10 @@ func (g *logGatherer) PlanChanged(pl *plan.Plan, buffers map[string]*servicelog.
 
 // ServiceStarted is called by the LogManager on the start of a service which
 // logs to this gatherer's target.
-func (g *logGatherer) ServiceStarted(service *plan.Service, buffer *servicelog.RingBuffer, env []string) {
+func (g *logGatherer) ServiceStarted(service *plan.Service, buffer *servicelog.RingBuffer, labels map[string]string) {
 	g.pullers.Add(service.Name, buffer, g.entryCh)
-	// Add service env to client so it can interpret labels correctly
-	g.client.AddEnv(service.Name, env)
+	// Add this service's custom labels to the client
+	g.client.SetLabels(service.Name, labels)
 }
 
 // The main control loop for the logGatherer. loop receives logs from the
@@ -317,12 +321,10 @@ type logClient interface {
 	// Flush sends buffered logs (if any) to the remote target.
 	Flush(context.Context) error
 
-	// AddEnv adds a service's environment to the client, so it can correctly
-	// evaluate the labels defined in the plan.
-	AddEnv(serviceName string, env []string)
-
-	// RemoveEnv removes the saved environment for the named service.
-	RemoveEnv(serviceName string)
+	// SetLabels sets the log labels for the given service.
+	// When a service is removed, you should call SetLabels(service, nil) to
+	// release the memory in the client.
+	SetLabels(serviceName string, labels map[string]string)
 }
 
 func newLogClient(target *plan.LogTarget) (logClient, error) {
