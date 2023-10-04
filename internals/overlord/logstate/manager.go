@@ -102,7 +102,7 @@ func (m *LogManager) ServiceStarted(service *plan.Service, buffer *servicelog.Ri
 	}
 
 	m.buffers[service.Name] = buffer
-	var envMap map[string]string
+	envMap := parseEnv(env)
 
 	for _, gatherer := range m.gatherers {
 		target := m.plan.LogTargets[gatherer.targetName]
@@ -110,9 +110,6 @@ func (m *LogManager) ServiceStarted(service *plan.Service, buffer *servicelog.Ri
 			continue
 		}
 
-		if envMap == nil {
-			envMap = parseEnv(env)
-		}
 		labels := evaluateLabels(target.Labels, envMap)
 		gatherer.ServiceStarted(service, buffer, labels)
 	}
