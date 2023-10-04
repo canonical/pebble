@@ -124,12 +124,10 @@ func parseEnv(env []string) map[string]string {
 	// Parse environment into a map
 	envMap := make(map[string]string, len(env))
 	for _, keyVal := range env {
-		split := strings.SplitN(keyVal, "=", 2)
-		if len(split) < 2 {
+		key, val, ok := strings.Cut(keyVal, "=")
+		if !ok {
 			continue
 		}
-		key := split[0]
-		val := split[1]
 		envMap[key] = val
 	}
 
