@@ -20,6 +20,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"time"
 
 	. "gopkg.in/check.v1"
@@ -216,6 +217,85 @@ func (s *gathererSuite) TestRetryLoki(c *C) {
 	case <-time.After(1 * time.Second):
 		c.Fatalf("timed out waiting for request")
 	}
+}
+
+// Test to catch race conditions in gatherer
+func (s *gathererSuite) TestRace(c *C) {
+	target := &plan.LogTarget{
+		Name:     "tgt1",
+		Type:     plan.LokiTarget,
+		Services: []string{"all"},
+	}
+
+	g, err := newLogGathererInternal(target, &logGathererOptions{
+		maxBufferedEntries: 2,
+	})
+	c.Assert(err, IsNil)
+
+	svc1 := newTestService("svc1")
+	svc2 := newTestService("svc2")
+	buffers := map[string]*servicelog.RingBuffer{
+		svc1.name: svc1.ringBuffer,
+		svc2.name: svc2.ringBuffer,
+	}
+	fakeLabels := map[string]string{"foo": "bar", "baz": "foo"}
+
+	wg := sync.WaitGroup{}
+	doAsync := func(f func()) {
+		wg.Add(1)
+		go func() {
+			f()
+			wg.Done()
+		}()
+	}
+
+	doAsync(func() {
+		g.PlanChanged(&plan.Plan{
+			Services: map[string]*plan.Service{
+				svc1.name: svc1.config,
+			},
+			LogTargets: map[string]*plan.LogTarget{
+				target.Name: target,
+			},
+		}, buffers)
+	})
+
+	doAsync(func() { g.ServiceStarted(svc1.config, svc1.ringBuffer, fakeLabels) })
+
+	doAsync(func() {
+		svc1.writeLog("hello")
+		svc1.writeLog("goodbye")
+	})
+
+	// Simulate a service restart
+	doAsync(func() { g.ServiceStarted(svc1.config, svc1.ringBuffer, fakeLabels) })
+
+	doAsync(func() {
+		g.PlanChanged(&plan.Plan{
+			Services: map[string]*plan.Service{
+				svc2.name: svc2.config,
+			},
+			LogTargets: map[string]*plan.LogTarget{
+				target.Name: target,
+			},
+		}, buffers)
+	})
+
+	doAsync(func() { g.ServiceStarted(svc2.config, svc2.ringBuffer, fakeLabels) })
+
+	doAsync(func() {
+		svc2.writeLog("hello")
+		go svc2.writeLog("goodbye")
+	})
+
+	// Wait for everything to finish before calling Stop
+	wg.Wait()
+
+	err = svc1.stop()
+	c.Assert(err, IsNil)
+	err = svc2.stop()
+	c.Assert(err, IsNil)
+	g.Stop()
 }
 
 func checkLogs(c *C, received []servicelog.Entry, expected []string) {
