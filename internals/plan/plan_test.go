@@ -1249,7 +1249,7 @@ var planTests = []planTest{{
 				labels:
 					pebble_service: illegal
 `},
-	error: `target "tgt1" defines illegal label "pebble_service"`,
+	error: `log target "tgt1": label "pebble_service" uses reserved prefix "pebble_"`,
 }}
 
 func (s *S) TestParseLayer(c *C) {

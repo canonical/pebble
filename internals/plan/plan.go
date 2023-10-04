@@ -986,7 +986,7 @@ func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 			// 'pebble_*' labels are reserved
 			if strings.HasPrefix(labelName, "pebble_") {
 				return nil, &FormatError{
-					Message: fmt.Sprintf("target %q defines illegal label %q", name, labelName),
+					Message: fmt.Sprintf(`log target %q: label %q uses reserved prefix "pebble_"`, name, labelName),
 				}
 			}
 		}
