@@ -86,6 +86,14 @@ func fillDefaultOptions(options *ClientOptions) *ClientOptions {
 }
 
 func (c *Client) SetLabels(serviceName string, labels map[string]string) {
+	if labels == nil {
+		delete(c.labels, serviceName)
+		return
+	}
+
+	// Add Loki-specific default labels
+	labels["pebble_service"] = serviceName
+
 	c.labels[serviceName] = labels
 }
 
@@ -178,25 +186,12 @@ func (c *Client) buildRequest() lokiRequest {
 	for _, service := range services {
 		entries := bucketedEntries[service]
 		stream := lokiStream{
-			Labels:  c.getLabels(service),
+			Labels:  c.labels[service],
 			Entries: entries,
 		}
 		req.Streams = append(req.Streams, stream)
 	}
 	return req
-}
-
-func (c *Client) getLabels(serviceName string) map[string]string {
-	labels := make(map[string]string, len(c.labels[serviceName])+1)
-
-	// Add Loki-specific default labels
-	labels["pebble_service"] = serviceName
-
-	// Add custom labels as defined in plan
-	for k, v := range c.labels[serviceName] {
-		labels[k] = v
-	}
-	return labels
 }
 
 type lokiRequest struct {

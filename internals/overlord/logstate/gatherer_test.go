@@ -166,7 +166,7 @@ func (s *gathererSuite) TestRetryLoki(c *C) {
 	c.Assert(err, IsNil)
 
 	testSvc := newTestService("svc1")
-	g.ServiceStarted(testSvc.config, testSvc.ringBuffer, nil)
+	g.ServiceStarted(testSvc.config, testSvc.ringBuffer, map[string]string{})
 
 	reqReceived := make(chan struct{})
 	// First attempt: server should return a retryable error

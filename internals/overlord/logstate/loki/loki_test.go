@@ -118,6 +118,10 @@ func (*suite) TestRequest(c *C) {
 	defer server.Close()
 
 	client := loki.NewClient(&plan.LogTarget{Location: server.URL})
+	client.SetLabels("svc1", map[string]string{})
+	client.SetLabels("svc2", map[string]string{})
+	client.SetLabels("svc3", map[string]string{})
+	client.SetLabels("svc4", map[string]string{})
 	for _, entry := range input {
 		err := client.Add(entry)
 		c.Assert(err, IsNil)
