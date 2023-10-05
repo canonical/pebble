@@ -124,12 +124,14 @@ func checkBuffers(c *C, buffers map[string]*servicelog.RingBuffer, expected []st
 }
 
 func (s *managerSuite) TestTimelyShutdown(c *C) {
+	client := &slowFlushingClient{
+		flushTime: 1 * time.Microsecond,
+	}
+
 	gathererOptions := logGathererOptions{
 		timeoutFinalFlush: 5 * time.Millisecond,
-		newClient: func(target *plan.LogTarget) (logClient, error) {
-			return &slowFlushingClient{
-				flushTime: 10 * time.Second,
-			}, nil
+		newClient: func(_ *plan.LogTarget) (logClient, error) {
+			return client, nil
 		},
 	}
 
@@ -162,6 +164,7 @@ func (s *managerSuite) TestTimelyShutdown(c *C) {
 	err := svc1.stop()
 	c.Assert(err, IsNil)
 
+	client.flushTime = 10 * time.Second
 	// Stop all gatherers and check this happens quickly
 	done := make(chan struct{})
 	go func() {
