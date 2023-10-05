@@ -215,7 +215,7 @@ func (s *managerSuite) TestLabels(c *C) {
 	svc1 := newTestService("svc1")
 	svc2 := newTestService("svc2")
 
-	m.PlanChanged(&plan.Plan{
+	pl := &plan.Plan{
 		Services: map[string]*plan.Service{
 			"svc1": svc1.config,
 			"svc2": svc2.config,
@@ -231,7 +231,9 @@ func (s *managerSuite) TestLabels(c *C) {
 				},
 			},
 		},
-	})
+	}
+
+	m.PlanChanged(pl)
 	checkGatherers(c, m.gatherers, map[string][]string{
 		"tgt1": nil,
 	})
@@ -251,6 +253,24 @@ func (s *managerSuite) TestLabels(c *C) {
 		"svc2": {
 			"owner":   "user-", // undefined env vars -> empty string
 			"address": "http://103.2.52.88:9090",
+		},
+	})
+
+	// If we change only the target's labels (with no change to the services),
+	// we still need to recalculate the client's labels.
+	pl.LogTargets["tgt1"].Labels["foo"] = "bar"
+	m.PlanChanged(pl)
+
+	c.Assert(fakeClient.labels, DeepEquals, map[string]map[string]string{
+		"svc1": {
+			"owner":   "user-alice",
+			"address": "http://103.2.51.6:3456",
+			"foo":     "bar",
+		},
+		"svc2": {
+			"owner":   "user-",
+			"address": "http://103.2.52.88:9090",
+			"foo":     "bar",
 		},
 	})
 }

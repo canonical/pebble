@@ -109,6 +109,7 @@ func newLogGathererInternal(target *plan.LogTarget, options *logGathererOptions)
 
 		targetName: target.Name,
 		client:     client,
+		flushCh:    make(chan struct{}),
 		entryCh:    make(chan servicelog.Entry),
 		pullers:    newPullerGroup(target.Name),
 	}
@@ -175,6 +176,9 @@ func (g *logGatherer) PlanChanged(pl *plan.Plan, buffers map[string]*servicelog.
 
 		g.pullers.Add(service.Name, buffer, g.entryCh)
 	}
+
+	// TODO: if the plan changes and the log target labels have changed, we
+	// need to recalculate the labels here.
 }
 
 // ServiceStarted is called by the LogManager on the start of a service which
