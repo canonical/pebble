@@ -17,7 +17,6 @@ package logstate
 import (
 	"context"
 	"fmt"
-	"sync"
 	"time"
 
 	"gopkg.in/tomb.v2"
@@ -64,8 +63,7 @@ type logGatherer struct {
 	// tomb for the main loop
 	tomb tomb.Tomb
 
-	client     logClient
-	clientLock sync.Mutex
+	client logClient
 	// Context to pass to client methods
 	clientCtx context.Context
 	// cancel func for clientCtx - can be used during teardown if required, to
