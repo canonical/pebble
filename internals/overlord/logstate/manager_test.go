@@ -204,7 +204,8 @@ func (c *slowFlushingClient) Flush(ctx context.Context) error {
 
 func (s *managerSuite) TestLabels(c *C) {
 	fakeClient := &labelStore{
-		labels: map[string]map[string]string{},
+		labels:    map[string]map[string]string{},
+		labelsSet: make(chan struct{}, 2),
 	}
 
 	m := NewLogManager()
@@ -256,6 +257,8 @@ func (s *managerSuite) TestLabels(c *C) {
 		},
 	})
 
+	fakeClient.wait(c, 1*time.Second)
+	fakeClient.wait(c, 1*time.Second)
 	c.Assert(fakeClient.labels, DeepEquals, map[string]map[string]string{
 		"svc1": {
 			"owner":   "user-alice",
@@ -272,7 +275,9 @@ func (s *managerSuite) TestLabels(c *C) {
 	pl.LogTargets["tgt1"].Labels["foo"] = "bar"
 	m.PlanChanged(pl)
 
-	// TODO: race condition here - we need to wait for the labels to be set
+	// Wait for labels to be set
+	fakeClient.wait(c, 1*time.Second)
+	fakeClient.wait(c, 1*time.Second)
 	c.Assert(fakeClient.labels, DeepEquals, map[string]map[string]string{
 		"svc1": {
 			"owner":   "user-alice",
@@ -290,6 +295,8 @@ func (s *managerSuite) TestLabels(c *C) {
 // Fake logClient implementation which just stores the passed-in labels
 type labelStore struct {
 	labels map[string]map[string]string
+	// synchronise on this channel to avoid data races
+	labelsSet chan struct{}
 }
 
 func (c *labelStore) Add(_ servicelog.Entry) error {
@@ -302,4 +309,14 @@ func (c *labelStore) Flush(_ context.Context) error {
 
 func (c *labelStore) SetLabels(serviceName string, labels map[string]string) {
 	c.labels[serviceName] = labels
+	c.labelsSet <- struct{}{}
+}
+
+// wait for labels to be set
+func (l *labelStore) wait(c *C, timeout time.Duration) {
+	select {
+	case <-l.labelsSet:
+	case <-time.After(timeout):
+		c.Fatal("timed out waiting for labels to be set")
+	}
 }
