@@ -7,9 +7,11 @@ import (
 	"os/exec"
 	"os/user"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
+	"github.com/canonical/pebble/internals/overlord/logstate"
 	"golang.org/x/sys/unix"
 	"gopkg.in/tomb.v2"
 
@@ -474,9 +476,28 @@ func (s *serviceData) startInternal() error {
 	}
 
 	// Pass buffer reference to logMgr to start log forwarding
-	s.manager.logMgr.ServiceStarted(s.config, s.logs, s.cmd.Environ())
+	s.manager.logMgr.ServiceStarted(s.config, &logstate.ServiceData{
+		Buffer: s.logs,
+		Env:    parseEnv(s.cmd.Environ()),
+	})
 
 	return nil
+}
+
+// parseEnv parses a list of key=value pairs into a map, to allow efficient
+// evaluation of environment variables.
+func parseEnv(env []string) map[string]string {
+	// Parse environment into a map
+	envMap := make(map[string]string, len(env))
+	for _, keyVal := range env {
+		key, val, ok := strings.Cut(keyVal, "=")
+		if !ok {
+			continue
+		}
+		envMap[key] = val
+	}
+
+	return envMap
 }
 
 // okayWaitElapsed is called when the okay-wait timer has elapsed (and the

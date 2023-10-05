@@ -16,7 +16,7 @@ package logstate
 
 import (
 	"os"
-	"strings"
+	"reflect"
 	"sync"
 
 	"github.com/canonical/pebble/internals/logger"
@@ -27,7 +27,7 @@ import (
 type LogManager struct {
 	mu        sync.Mutex
 	gatherers map[string]*logGatherer
-	buffers   map[string]*servicelog.RingBuffer
+	services  map[string]*ServiceData
 	plan      *plan.Plan
 
 	newGatherer func(*plan.LogTarget) (*logGatherer, error)
@@ -36,7 +36,7 @@ type LogManager struct {
 func NewLogManager() *LogManager {
 	return &LogManager{
 		gatherers:   map[string]*logGatherer{},
-		buffers:     map[string]*servicelog.RingBuffer{},
+		services:    map[string]*ServiceData{},
 		newGatherer: newLogGatherer,
 	}
 }
@@ -69,8 +69,20 @@ func (m *LogManager) PlanChanged(pl *plan.Plan) {
 			delete(m.gatherers, target.Name)
 		}
 
-		// Update iterators for gatherer
-		gatherer.PlanChanged(pl, m.buffers)
+		// Evaluate labels
+		labels := make(map[string]map[string]string, len(pl.Services))
+		for svcName := range pl.Services {
+			svcData, ok := m.services[svcName]
+			if !ok {
+				// Service not yet started
+				continue
+			}
+
+			labels[svcName] = evaluateLabels(target.Labels, svcData.Env)
+		}
+
+		// Update gatherer
+		gatherer.PlanChanged(pl, m.services, labels)
 	}
 
 	// Old gatherers for now-removed targets need to be shut down.
@@ -79,11 +91,11 @@ func (m *LogManager) PlanChanged(pl *plan.Plan) {
 	}
 	m.gatherers = newGatherers
 
-	// Remove old buffers
-	for svc := range m.buffers {
+	// Remove old service data
+	for svc := range m.services {
 		if _, ok := pl.Services[svc]; !ok {
 			// Service has been removed
-			delete(m.buffers, svc)
+			delete(m.services, svc)
 		}
 	}
 
@@ -92,43 +104,26 @@ func (m *LogManager) PlanChanged(pl *plan.Plan) {
 
 // ServiceStarted notifies the log manager that the named service has started,
 // and provides a reference to the service's log buffer and environment.
-func (m *LogManager) ServiceStarted(service *plan.Service, buffer *servicelog.RingBuffer, env []string) {
+func (m *LogManager) ServiceStarted(service *plan.Service, data *ServiceData) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if m.buffers[service.Name] == buffer {
-		// Service restarted with same buffer. Don't need to update anything
+	if m.services[service.Name].Equal(data) {
+		// Service restarted, but nothing about it has changed. So we don't need
+		// to do anything
 		return
 	}
 
-	m.buffers[service.Name] = buffer
-	envMap := parseEnv(env)
-
+	m.services[service.Name] = data
 	for _, gatherer := range m.gatherers {
 		target := m.plan.LogTargets[gatherer.targetName]
 		if !service.LogsTo(target) {
 			continue
 		}
 
-		labels := evaluateLabels(target.Labels, envMap)
-		gatherer.ServiceStarted(service, buffer, labels)
+		labels := evaluateLabels(target.Labels, data.Env)
+		gatherer.ServiceStarted(service, data.Buffer, labels)
 	}
-}
-
-// parseEnv parses a list of key=value pairs into a map, to allow efficient
-// evaluation of environment variables.
-func parseEnv(env []string) map[string]string {
-	// Parse environment into a map
-	envMap := make(map[string]string, len(env))
-	for _, keyVal := range env {
-		key, val, ok := strings.Cut(keyVal, "=")
-		if !ok {
-			continue
-		}
-		envMap[key] = val
-	}
-
-	return envMap
 }
 
 // evaluateLabels interprets the labels defined in the plan, substituting any
@@ -169,4 +164,15 @@ func (m *LogManager) Stop() {
 		}(gatherer)
 	}
 	wg.Wait()
+}
+
+// ServiceData holds the data for each service that the log manager needs to
+// keep track of.
+type ServiceData struct {
+	Buffer *servicelog.RingBuffer
+	Env    map[string]string
+}
+
+func (d *ServiceData) Equal(other *ServiceData) bool {
+	return d.Buffer == other.Buffer && reflect.DeepEqual(d.Env, other.Env)
 }

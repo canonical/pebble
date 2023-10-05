@@ -72,8 +72,9 @@ type logGatherer struct {
 	// ensure the client is not blocking subsequent teardown steps.
 	clientCancel context.CancelFunc
 
-	// used to notify the main loop of a plan change
-	flushCh chan struct{}
+	// Channels used to notify the main loop to update the client
+	flushCh   chan struct{}
+	setLabels chan svcWithLabels
 
 	pullers *pullerGroup
 	// All pullers send logs on this channel, received by main loop
@@ -110,6 +111,7 @@ func newLogGathererInternal(target *plan.LogTarget, options *logGathererOptions)
 		targetName: target.Name,
 		client:     client,
 		flushCh:    make(chan struct{}),
+		setLabels:  make(chan svcWithLabels),
 		entryCh:    make(chan servicelog.Entry),
 		pullers:    newPullerGroup(target.Name),
 	}
@@ -138,7 +140,7 @@ func fillDefaultOptions(options *logGathererOptions) *logGathererOptions {
 
 // PlanChanged is called by the LogManager when the plan is changed, if this
 // gatherer's target exists in the new plan.
-func (g *logGatherer) PlanChanged(pl *plan.Plan, buffers map[string]*servicelog.RingBuffer) {
+func (g *logGatherer) PlanChanged(pl *plan.Plan, serviceData map[string]*ServiceData, labels map[string]map[string]string) {
 	// New plan - the labels may have changed. We should tell the main loop to
 	// flush the client now so that we don't later get out of sync, and send old
 	// logs with the new labels.
@@ -149,14 +151,14 @@ func (g *logGatherer) PlanChanged(pl *plan.Plan, buffers map[string]*servicelog.
 		svc, svcExists := pl.Services[svcName]
 		if !svcExists {
 			g.pullers.Remove(svcName)
-			g.setClientLabels(svcName, nil)
+			g.setLabels <- svcWithLabels{svcName, nil}
 			continue
 		}
 
 		tgt := pl.LogTargets[g.targetName]
 		if !svc.LogsTo(tgt) {
 			g.pullers.Remove(svcName)
-			g.setClientLabels(svcName, nil)
+			g.setLabels <- svcWithLabels{svcName, nil}
 		}
 	}
 
@@ -167,18 +169,17 @@ func (g *logGatherer) PlanChanged(pl *plan.Plan, buffers map[string]*servicelog.
 			continue
 		}
 
-		buffer, bufferExists := buffers[service.Name]
-		if !bufferExists {
+		svcData, svcStarted := serviceData[service.Name]
+		if !svcStarted {
 			// We don't yet have a reference to the service's ring buffer
 			// Need to wait until ServiceStarted
 			continue
 		}
 
-		g.pullers.Add(service.Name, buffer, g.entryCh)
+		g.pullers.Add(service.Name, svcData.Buffer, g.entryCh)
+		// update labels
+		g.setLabels <- svcWithLabels{service.Name, labels[service.Name]}
 	}
-
-	// TODO: if the plan changes and the log target labels have changed, we
-	// need to recalculate the labels here.
 }
 
 // ServiceStarted is called by the LogManager on the start of a service which
@@ -187,13 +188,7 @@ func (g *logGatherer) ServiceStarted(service *plan.Service, buffer *servicelog.R
 	g.pullers.Add(service.Name, buffer, g.entryCh)
 
 	// Add this service's custom labels to the client
-	g.setClientLabels(service.Name, labels)
-}
-
-func (g *logGatherer) setClientLabels(serviceName string, labels map[string]string) {
-	g.clientLock.Lock()
-	defer g.clientLock.Unlock()
-	g.client.SetLabels(serviceName, labels)
+	g.setLabels <- svcWithLabels{service.Name, labels}
 }
 
 // The main control loop for the logGatherer. loop receives logs from the
@@ -226,6 +221,9 @@ mainLoop:
 
 		case <-g.flushCh:
 			flushClient(g.clientCtx)
+
+		case args := <-g.setLabels:
+			g.client.SetLabels(args.service, args.labels)
 
 		case entry := <-g.entryCh:
 			err := g.client.Add(entry)
@@ -290,6 +288,11 @@ func (g *logGatherer) Stop() {
 	if err != nil {
 		logger.Noticef("Cannot shut down gatherer: %v", err)
 	}
+}
+
+type svcWithLabels struct {
+	service string
+	labels  map[string]string
 }
 
 // timer wraps time.Timer and provides a better API.

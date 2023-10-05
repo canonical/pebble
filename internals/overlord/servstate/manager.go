@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/canonical/pebble/internals/logger"
+	"github.com/canonical/pebble/internals/overlord/logstate"
 	"github.com/canonical/pebble/internals/overlord/restart"
 	"github.com/canonical/pebble/internals/overlord/state"
 	"github.com/canonical/pebble/internals/plan"
@@ -39,7 +40,7 @@ type ServiceManager struct {
 }
 
 type LogManager interface {
-	ServiceStarted(service *plan.Service, logs *servicelog.RingBuffer, env []string)
+	ServiceStarted(service *plan.Service, data *logstate.ServiceData)
 }
 
 // PlanFunc is the type of function used by NotifyPlanChanged.
