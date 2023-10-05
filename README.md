@@ -788,8 +788,7 @@ log-targets:
     # on the outgoing logs. These labels are added to (protocol-dependent)
     # default labels (e.g. 'pebble_service' for Loki).
     # The label values may contain $ENVIRONMENT_VARIABLES, which will be
-    # substituted 'dynamically' in the environment for the corresponding
-    # service.
+    # substituted using the environment for the corresponding service.
     labels:
       <label name>: <label value>
 ```
