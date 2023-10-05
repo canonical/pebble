@@ -174,5 +174,5 @@ type ServiceData struct {
 }
 
 func (d *ServiceData) Equal(other *ServiceData) bool {
-	return d.Buffer == other.Buffer && reflect.DeepEqual(d.Env, other.Env)
+	return reflect.DeepEqual(d, other)
 }

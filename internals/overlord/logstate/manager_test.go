@@ -64,16 +64,16 @@ func (*managerSuite) TestPlanChange(c *C) {
 			"tgt3": {Name: "tgt3", Services: []string{"all"}},
 		},
 	})
-	m.ServiceStarted(svc1.config, svc1.ringBuffer, nil)
-	m.ServiceStarted(svc2.config, svc2.ringBuffer, nil)
-	m.ServiceStarted(svc3.config, svc3.ringBuffer, nil)
+	m.ServiceStarted(svc1.config, &ServiceData{Buffer: svc1.ringBuffer})
+	m.ServiceStarted(svc2.config, &ServiceData{Buffer: svc2.ringBuffer})
+	m.ServiceStarted(svc3.config, &ServiceData{Buffer: svc3.ringBuffer})
 
 	checkGatherers(c, m.gatherers, map[string][]string{
 		"tgt1": {"svc1", "svc2"},
 		"tgt2": {},
 		"tgt3": {"svc1", "svc2", "svc3"},
 	})
-	checkBuffers(c, m.buffers, []string{"svc1", "svc2", "svc3"})
+	checkBuffers(c, m.services, []string{"svc1", "svc2", "svc3"})
 
 	svc4 := newTestService("svc4")
 
@@ -89,9 +89,9 @@ func (*managerSuite) TestPlanChange(c *C) {
 			"tgt4": {Name: "tgt4", Services: []string{"all", "-svc2"}},
 		},
 	})
-	m.ServiceStarted(svc4.config, svc4.ringBuffer, nil)
+	m.ServiceStarted(svc4.config, &ServiceData{Buffer: svc4.ringBuffer})
 	// simulate service restart for svc2
-	m.ServiceStarted(svc2.config, svc2.ringBuffer, nil)
+	m.ServiceStarted(svc2.config, &ServiceData{Buffer: svc2.ringBuffer})
 
 	checkGatherers(c, m.gatherers, map[string][]string{
 		"tgt1": {"svc1"},
@@ -99,7 +99,7 @@ func (*managerSuite) TestPlanChange(c *C) {
 		"tgt4": {"svc1", "svc4"},
 	})
 	// svc3 no longer exists so we should have dropped the reference to its buffer
-	checkBuffers(c, m.buffers, []string{"svc1", "svc2", "svc4"})
+	checkBuffers(c, m.services, []string{"svc1", "svc2", "svc4"})
 }
 
 func checkGatherers(c *C, gatherers map[string]*logGatherer, expected map[string][]string) {
@@ -115,11 +115,13 @@ func checkGatherers(c *C, gatherers map[string]*logGatherer, expected map[string
 	}
 }
 
-func checkBuffers(c *C, buffers map[string]*servicelog.RingBuffer, expected []string) {
-	c.Assert(buffers, HasLen, len(expected))
+func checkBuffers(c *C, serviceData map[string]*ServiceData, expected []string) {
+	c.Assert(serviceData, HasLen, len(expected))
 	for _, svcName := range expected {
-		_, ok := buffers[svcName]
+		svcData, ok := serviceData[svcName]
 		c.Check(ok, Equals, true)
+		c.Check(svcData, NotNil)
+		c.Check(svcData.Buffer, NotNil)
 	}
 }
 
@@ -157,7 +159,7 @@ func (s *managerSuite) TestTimelyShutdown(c *C) {
 		},
 		LogTargets: logTargets,
 	})
-	m.ServiceStarted(svc1.config, svc1.ringBuffer, nil)
+	m.ServiceStarted(svc1.config, &ServiceData{Buffer: svc1.ringBuffer})
 
 	c.Assert(m.gatherers, HasLen, 10)
 
@@ -238,11 +240,20 @@ func (s *managerSuite) TestLabels(c *C) {
 		"tgt1": nil,
 	})
 
-	m.ServiceStarted(svc1.config, svc1.ringBuffer, []string{
-		"OWNER=alice", "IP=103.2.51.6", "PORT=3456",
+	m.ServiceStarted(svc1.config, &ServiceData{
+		Buffer: svc1.ringBuffer,
+		Env: map[string]string{
+			"OWNER": "alice",
+			"IP":    "103.2.51.6",
+			"PORT":  "3456",
+		},
 	})
-	m.ServiceStarted(svc2.config, svc2.ringBuffer, []string{
-		"IP=103.2.52.88", "PORT=9090",
+	m.ServiceStarted(svc2.config, &ServiceData{
+		Buffer: svc2.ringBuffer,
+		Env: map[string]string{
+			"IP":   "103.2.52.88",
+			"PORT": "9090",
+		},
 	})
 
 	c.Assert(fakeClient.labels, DeepEquals, map[string]map[string]string{
@@ -261,6 +272,7 @@ func (s *managerSuite) TestLabels(c *C) {
 	pl.LogTargets["tgt1"].Labels["foo"] = "bar"
 	m.PlanChanged(pl)
 
+	// TODO: race condition here - we need to wait for the labels to be set
 	c.Assert(fakeClient.labels, DeepEquals, map[string]map[string]string{
 		"svc1": {
 			"owner":   "user-alice",

@@ -234,11 +234,15 @@ func (s *gathererSuite) TestRace(c *C) {
 
 	svc1 := newTestService("svc1")
 	svc2 := newTestService("svc2")
-	buffers := map[string]*servicelog.RingBuffer{
-		svc1.name: svc1.ringBuffer,
-		svc2.name: svc2.ringBuffer,
+	serviceData := map[string]*ServiceData{
+		svc1.name: {Buffer: svc1.ringBuffer},
+		svc2.name: {Buffer: svc2.ringBuffer},
 	}
 	fakeLabels := map[string]string{"foo": "bar", "baz": "foo"}
+	allLabels := map[string]map[string]string{
+		svc1.name: fakeLabels,
+		svc2.name: fakeLabels,
+	}
 
 	wg := sync.WaitGroup{}
 	doAsync := func(f func()) {
@@ -257,7 +261,7 @@ func (s *gathererSuite) TestRace(c *C) {
 			LogTargets: map[string]*plan.LogTarget{
 				target.Name: target,
 			},
-		}, buffers)
+		}, serviceData, allLabels)
 	})
 
 	doAsync(func() { g.ServiceStarted(svc1.config, svc1.ringBuffer, fakeLabels) })
@@ -278,7 +282,7 @@ func (s *gathererSuite) TestRace(c *C) {
 			LogTargets: map[string]*plan.LogTarget{
 				target.Name: target,
 			},
-		}, buffers)
+		}, serviceData, allLabels)
 	})
 
 	doAsync(func() { g.ServiceStarted(svc2.config, svc2.ringBuffer, fakeLabels) })
