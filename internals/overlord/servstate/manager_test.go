@@ -32,13 +32,13 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/canonical/pebble/internals/overlord/logstate"
 	"golang.org/x/sys/unix"
 	. "gopkg.in/check.v1"
 	"gopkg.in/yaml.v3"
 
 	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/overlord/checkstate"
+	"github.com/canonical/pebble/internals/overlord/logstate"
 	"github.com/canonical/pebble/internals/overlord/restart"
 	"github.com/canonical/pebble/internals/overlord/servstate"
 	"github.com/canonical/pebble/internals/overlord/state"
