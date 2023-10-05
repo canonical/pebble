@@ -11,12 +11,12 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/canonical/pebble/internals/overlord/logstate"
 	"golang.org/x/sys/unix"
 	"gopkg.in/tomb.v2"
 
 	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/osutil"
+	"github.com/canonical/pebble/internals/overlord/logstate"
 	"github.com/canonical/pebble/internals/overlord/restart"
 	"github.com/canonical/pebble/internals/overlord/state"
 	"github.com/canonical/pebble/internals/plan"
