@@ -64,17 +64,16 @@ type logGatherer struct {
 	// tomb for the main loop
 	tomb tomb.Tomb
 
-	client logClient
+	client     logClient
+	clientLock sync.Mutex
 	// Context to pass to client methods
 	clientCtx context.Context
 	// cancel func for clientCtx - can be used during teardown if required, to
 	// ensure the client is not blocking subsequent teardown steps.
 	clientCancel context.CancelFunc
 
-	clientLock sync.Mutex
-	flushTimer timer
-	// track number of logs written since last flush
-	numWritten int
+	// used to notify the main loop of a plan change
+	flushCh chan struct{}
 
 	pullers *pullerGroup
 	// All pullers send logs on this channel, received by main loop
@@ -110,7 +109,6 @@ func newLogGathererInternal(target *plan.LogTarget, options *logGathererOptions)
 
 		targetName: target.Name,
 		client:     client,
-		flushTimer: newTimer(),
 		entryCh:    make(chan servicelog.Entry),
 		pullers:    newPullerGroup(target.Name),
 	}
@@ -140,8 +138,10 @@ func fillDefaultOptions(options *logGathererOptions) *logGathererOptions {
 // PlanChanged is called by the LogManager when the plan is changed, if this
 // gatherer's target exists in the new plan.
 func (g *logGatherer) PlanChanged(pl *plan.Plan, buffers map[string]*servicelog.RingBuffer) {
-	// Flush the client here, because the labels may have changed.
-	g.flushClient(g.clientCtx)
+	// New plan - the labels may have changed. We should tell the main loop to
+	// flush the client now so that we don't later get out of sync, and send old
+	// logs with the new labels.
+	g.flushCh <- struct{}{}
 
 	// Remove old pullers
 	for _, svcName := range g.pullers.Services() {
@@ -196,7 +196,20 @@ func (g *logGatherer) setClientLabels(serviceName string, labels map[string]stri
 // pullers on entryCh, and writes them to the client. It also flushes the
 // client periodically, and exits when the gatherer's tomb is killed.
 func (g *logGatherer) loop() error {
-	defer g.flushTimer.Stop()
+	flushTimer := newTimer()
+	defer flushTimer.Stop()
+	// Keep track of number of logs written since last flush
+	numWritten := 0
+
+	flushClient := func(ctx context.Context) {
+		// Mark timer as unset
+		flushTimer.Stop()
+		err := g.client.Flush(ctx)
+		if err != nil {
+			logger.Noticef("Cannot flush logs to target %q: %v", g.targetName, err)
+		}
+		numWritten = 0
+	}
 
 mainLoop:
 	for {
@@ -204,25 +217,26 @@ mainLoop:
 		case <-g.tomb.Dying():
 			break mainLoop
 
-		case <-g.flushTimer.Expired():
-			g.flushClient(g.clientCtx)
+		case <-flushTimer.Expired():
+			flushClient(g.clientCtx)
+
+		case <-g.flushCh:
+			flushClient(g.clientCtx)
 
 		case entry := <-g.entryCh:
-			g.clientLock.Lock()
 			err := g.client.Add(entry)
-			g.clientLock.Unlock()
 			if err != nil {
 				logger.Noticef("Cannot write logs to target %q: %v", g.targetName, err)
 				continue
 			}
-			g.numWritten++
+			numWritten++
 			// Check if buffer is full
-			if g.numWritten >= g.maxBufferedEntries {
-				g.flushClient(g.clientCtx)
+			if numWritten >= g.maxBufferedEntries {
+				flushClient(g.clientCtx)
 				continue
 			}
 			// Otherwise, set the timeout
-			g.flushTimer.EnsureSet(g.bufferTimeout)
+			flushTimer.EnsureSet(g.bufferTimeout)
 		}
 	}
 
@@ -230,21 +244,8 @@ mainLoop:
 	// We need to create a new context, as the previous one may have been cancelled.
 	ctx, cancel := context.WithTimeout(context.Background(), g.timeoutFinalFlush)
 	defer cancel()
-	g.flushClient(ctx)
+	flushClient(ctx)
 	return nil
-}
-
-func (g *logGatherer) flushClient(ctx context.Context) {
-	g.clientLock.Lock()
-	defer g.clientLock.Unlock()
-
-	// Mark timer as unset
-	g.flushTimer.Stop()
-	err := g.client.Flush(ctx)
-	if err != nil {
-		logger.Noticef("Cannot flush logs to target %q: %v", g.targetName, err)
-	}
-	g.numWritten = 0
 }
 
 // Stop tears down the gatherer and associated resources (pullers, client).
