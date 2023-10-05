@@ -32,6 +32,7 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/canonical/pebble/internals/overlord/logstate"
 	"golang.org/x/sys/unix"
 	. "gopkg.in/check.v1"
 	"gopkg.in/yaml.v3"
@@ -42,7 +43,6 @@ import (
 	"github.com/canonical/pebble/internals/overlord/servstate"
 	"github.com/canonical/pebble/internals/overlord/state"
 	"github.com/canonical/pebble/internals/plan"
-	"github.com/canonical/pebble/internals/servicelog"
 	"github.com/canonical/pebble/internals/testutil"
 )
 
@@ -2015,7 +2015,7 @@ func createZombie() error {
 
 type fakeLogManager struct{}
 
-func (f fakeLogManager) ServiceStarted(service *plan.Service, logs *servicelog.RingBuffer, env []string) {
+func (f fakeLogManager) ServiceStarted(service *plan.Service, data *logstate.ServiceData) {
 	// no-op
 }
 
