@@ -320,3 +320,80 @@ func (l *labelStore) wait(c *C, timeout time.Duration) {
 		c.Fatal("timed out waiting for labels to be set")
 	}
 }
+
+func (s *managerSuite) TestServiceDataUnchanged(c *C) {
+	rb1 := servicelog.NewRingBuffer(0)
+	rb2 := servicelog.NewRingBuffer(0)
+
+	tests := []struct {
+		summary   string
+		sd1, sd2  *ServiceData
+		unchanged bool
+	}{{
+		summary:   "nil == nil",
+		sd1:       nil,
+		sd2:       nil,
+		unchanged: true,
+	}, {
+		summary:   "nil != not nil",
+		sd1:       nil,
+		sd2:       &ServiceData{},
+		unchanged: false,
+	}, {
+		summary:   "not nil != nil",
+		sd1:       &ServiceData{},
+		sd2:       nil,
+		unchanged: false,
+	}, {
+		summary: "different Buffers",
+		sd1: &ServiceData{
+			Buffer: rb1,
+			Env: map[string]string{
+				"foo": "bar",
+			},
+		},
+		sd2: &ServiceData{
+			Buffer: rb2,
+			Env: map[string]string{
+				"foo": "bar",
+			},
+		},
+		unchanged: false,
+	}, {
+		summary: "different Envs",
+		sd1: &ServiceData{
+			Buffer: rb1,
+			Env: map[string]string{
+				"foo": "bar",
+			},
+		},
+		sd2: &ServiceData{
+			Buffer: rb1,
+			Env: map[string]string{
+				"foo": "baz",
+			},
+		},
+		unchanged: false,
+	}, {
+		summary: "unchanged",
+		sd1: &ServiceData{
+			Buffer: rb1,
+			Env: map[string]string{
+				"foo": "bar",
+			},
+		},
+		sd2: &ServiceData{
+			Buffer: rb1,
+			Env: map[string]string{
+				"foo": "bar",
+			},
+		},
+		unchanged: true,
+	}}
+
+	for _, test := range tests {
+		fmt.Println(test.summary)
+		obtained := (*ServiceData).unchanged(test.sd1, test.sd2)
+		c.Check(obtained, Equals, test.unchanged)
+	}
+}
