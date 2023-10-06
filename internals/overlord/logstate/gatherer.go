@@ -142,7 +142,13 @@ func (g *logGatherer) PlanChanged(pl *plan.Plan, serviceData map[string]*Service
 	// New plan - the labels may have changed. We should tell the main loop to
 	// flush the client now so that we don't later get out of sync, and send old
 	// logs with the new labels.
-	g.flushCh <- struct{}{}
+	select {
+	// Check just in case the gatherer has already been stopped, so we don't get
+	// deadlocked here.
+	case <-g.tomb.Dying():
+		return
+	case g.flushCh <- struct{}{}:
+	}
 
 	// Remove old pullers
 	for _, svcName := range g.pullers.Services() {
