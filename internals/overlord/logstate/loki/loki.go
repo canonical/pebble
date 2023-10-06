@@ -91,10 +91,16 @@ func (c *Client) SetLabels(serviceName string, labels map[string]string) {
 		return
 	}
 
-	// Add Loki-specific default labels
-	labels["pebble_service"] = serviceName
+	// Make a copy to avoid altering the original map
+	newLabels := make(map[string]string, len(labels)+1)
+	for k, v := range labels {
+		newLabels[k] = v
+	}
 
-	c.labels[serviceName] = labels
+	// Add Loki-specific default labels
+	newLabels["pebble_service"] = serviceName
+
+	c.labels[serviceName] = newLabels
 }
 
 func (c *Client) Add(entry servicelog.Entry) error {
