@@ -69,7 +69,7 @@ func (m *LogManager) PlanChanged(pl *plan.Plan) {
 			delete(m.gatherers, target.Name)
 		}
 
-		// Evaluate labels
+		// Evaluate labels using the service's environment variables.
 		labels := make(map[string]map[string]string, len(pl.Services))
 		for svcName := range pl.Services {
 			svcData, ok := m.services[svcName]
@@ -108,7 +108,7 @@ func (m *LogManager) ServiceStarted(service *plan.Service, data *ServiceData) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if m.services[service.Name].Equal(data) {
+	if m.services[service.Name].unchanged(data) {
 		// Service restarted, but nothing about it has changed. So we don't need
 		// to do anything
 		return
@@ -173,6 +173,19 @@ type ServiceData struct {
 	Env    map[string]string
 }
 
-func (d *ServiceData) Equal(other *ServiceData) bool {
-	return reflect.DeepEqual(d, other)
+// unchanged checks if d pertains to the same running service as other.
+func (d *ServiceData) unchanged(other *ServiceData) bool {
+	if d == nil {
+		return other == nil
+	}
+	if other == nil {
+		return false
+	}
+	if d.Buffer != other.Buffer {
+		return false
+	}
+	if !reflect.DeepEqual(d.Env, other.Env) {
+		return false
+	}
+	return true
 }
