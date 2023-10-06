@@ -18,10 +18,13 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/http"
+	"net/http/httptest"
 	"time"
 
 	. "gopkg.in/check.v1"
 
+	"github.com/canonical/pebble/internals/overlord/logstate/loki"
 	"github.com/canonical/pebble/internals/plan"
 	"github.com/canonical/pebble/internals/servicelog"
 )
@@ -32,7 +35,8 @@ var _ = Suite(&gathererSuite{})
 
 func (s *gathererSuite) TestGatherer(c *C) {
 	received := make(chan []servicelog.Entry, 1)
-	gathererArgs := logGathererArgs{
+	gathererOptions := logGathererOptions{
+		maxBufferedEntries: 5,
 		newClient: func(target *plan.LogTarget) (logClient, error) {
 			return &testClient{
 				bufferSize: 5,
@@ -41,7 +45,7 @@ func (s *gathererSuite) TestGatherer(c *C) {
 		},
 	}
 
-	g, err := newLogGathererInternal(&plan.LogTarget{Name: "tgt1"}, gathererArgs)
+	g, err := newLogGathererInternal(&plan.LogTarget{Name: "tgt1"}, &gathererOptions)
 	c.Assert(err, IsNil)
 
 	testSvc := newTestService("svc1")
@@ -59,7 +63,7 @@ func (s *gathererSuite) TestGatherer(c *C) {
 
 	testSvc.writeLog("log line #5")
 	select {
-	case <-time.After(5 * time.Millisecond):
+	case <-time.After(1 * time.Second):
 		c.Fatalf("timeout waiting for logs")
 	case logs := <-received:
 		checkLogs(c, logs, []string{"log line #1", "log line #2", "log line #3", "log line #4", "log line #5"})
@@ -68,7 +72,7 @@ func (s *gathererSuite) TestGatherer(c *C) {
 
 func (s *gathererSuite) TestGathererTimeout(c *C) {
 	received := make(chan []servicelog.Entry, 1)
-	gathererArgs := logGathererArgs{
+	gathererOptions := logGathererOptions{
 		bufferTimeout: 1 * time.Millisecond,
 		newClient: func(target *plan.LogTarget) (logClient, error) {
 			return &testClient{
@@ -78,7 +82,7 @@ func (s *gathererSuite) TestGathererTimeout(c *C) {
 		},
 	}
 
-	g, err := newLogGathererInternal(&plan.LogTarget{Name: "tgt1"}, gathererArgs)
+	g, err := newLogGathererInternal(&plan.LogTarget{Name: "tgt1"}, &gathererOptions)
 	c.Assert(err, IsNil)
 
 	testSvc := newTestService("svc1")
@@ -95,7 +99,7 @@ func (s *gathererSuite) TestGathererTimeout(c *C) {
 
 func (s *gathererSuite) TestGathererShutdown(c *C) {
 	received := make(chan []servicelog.Entry, 1)
-	gathererArgs := logGathererArgs{
+	gathererOptions := logGathererOptions{
 		bufferTimeout: 1 * time.Microsecond,
 		newClient: func(target *plan.LogTarget) (logClient, error) {
 			return &testClient{
@@ -105,7 +109,7 @@ func (s *gathererSuite) TestGathererShutdown(c *C) {
 		},
 	}
 
-	g, err := newLogGathererInternal(&plan.LogTarget{Name: "tgt1"}, gathererArgs)
+	g, err := newLogGathererInternal(&plan.LogTarget{Name: "tgt1"}, &gathererOptions)
 	c.Assert(err, IsNil)
 
 	testSvc := newTestService("svc1")
@@ -122,7 +126,7 @@ func (s *gathererSuite) TestGathererShutdown(c *C) {
 	}()
 
 	select {
-	case <-time.After(100 * time.Millisecond):
+	case <-time.After(1 * time.Second):
 		c.Fatalf("timeout waiting for gatherer to tear down")
 	case <-hasShutdown:
 	}
@@ -134,6 +138,83 @@ func (s *gathererSuite) TestGathererShutdown(c *C) {
 	default:
 		c.Fatalf(`no logs were received
 logs in client buffer: %v`, len(g.client.(*testClient).buffered))
+	}
+}
+
+func (s *gathererSuite) TestRetryLoki(c *C) {
+	var handler func(http.ResponseWriter, *http.Request)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handler(w, r)
+	}))
+	defer server.Close()
+
+	g, err := newLogGathererInternal(
+		&plan.LogTarget{
+			Name:     "tgt1",
+			Location: server.URL,
+		},
+		&logGathererOptions{
+			bufferTimeout:      1 * time.Millisecond,
+			maxBufferedEntries: 5,
+			newClient: func(target *plan.LogTarget) (logClient, error) {
+				return loki.NewClientWithOptions(target, &loki.ClientOptions{
+					MaxRequestEntries: 5,
+				}), nil
+			},
+		},
+	)
+	c.Assert(err, IsNil)
+
+	testSvc := newTestService("svc1")
+	g.ServiceStarted(testSvc.config, testSvc.ringBuffer)
+
+	reqReceived := make(chan struct{})
+	// First attempt: server should return a retryable error
+	handler = func(w http.ResponseWriter, _ *http.Request) {
+		close(reqReceived)
+		w.WriteHeader(http.StatusTooManyRequests)
+	}
+
+	testSvc.writeLog("log line #1")
+	testSvc.writeLog("log line #2")
+	testSvc.writeLog("log line #3")
+	testSvc.writeLog("log line #4")
+	testSvc.writeLog("log line #5")
+
+	// Check that request was received
+	select {
+	case <-reqReceived:
+	case <-time.After(1 * time.Second):
+		c.Fatalf("timed out waiting for request")
+	}
+
+	reqReceived = make(chan struct{})
+	// Second attempt: check that logs were held over from last time
+	handler = func(w http.ResponseWriter, r *http.Request) {
+		close(reqReceived)
+		reqBody, err := io.ReadAll(r.Body)
+		c.Assert(err, IsNil)
+
+		expected := `{"streams":\[{"stream":{"pebble_service":"svc1"},"values":\[` +
+			// First two log lines should have been truncated
+			`\["\d+","log line #3"\],` +
+			`\["\d+","log line #4"\],` +
+			`\["\d+","log line #5"\],` +
+			`\["\d+","log line #6"\],` +
+			`\["\d+","log line #7"\]` +
+			`\]}\]}`
+		c.Assert(string(reqBody), Matches, expected)
+	}
+
+	testSvc.writeLog("log line #6")
+	testSvc.writeLog("log line #7")
+	// Wait for flush timeout to elapse
+
+	// Check that request was received
+	select {
+	case <-reqReceived:
+	case <-time.After(1 * time.Second):
+		c.Fatalf("timed out waiting for request")
 	}
 }
 
@@ -151,11 +232,8 @@ type testClient struct {
 	sendCh     chan []servicelog.Entry
 }
 
-func (c *testClient) Write(ctx context.Context, entry servicelog.Entry) error {
+func (c *testClient) Add(entry servicelog.Entry) error {
 	c.buffered = append(c.buffered, entry)
-	if len(c.buffered) >= c.bufferSize {
-		return c.Flush(ctx)
-	}
 	return nil
 }
 

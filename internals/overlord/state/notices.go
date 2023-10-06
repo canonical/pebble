@@ -241,7 +241,7 @@ func (s *State) AddNotice(noticeType NoticeType, key string, options *AddNoticeO
 	notice.repeatAfter = options.RepeatAfter
 
 	if newOrRepeated {
-		s.processNoticeWaiters()
+		s.noticeCond.Broadcast()
 	}
 
 	return notice.id, nil
@@ -359,77 +359,65 @@ func (s *State) unflattenNotices(flat []*Notice) {
 // cancelled. If there are existing notices that match the filter,
 // WaitNotices will return them immediately.
 func (s *State) WaitNotices(ctx context.Context, filter *NoticeFilter) ([]*Notice, error) {
-	// This is s.reading() instead of s.writing() because addNoticeWaiter only
-	// changes the waiter data structures, not persistent state, so s.modified
-	// should not be set.
 	s.reading()
 
+	// If there are existing notices, return them right away.
+	//
 	// State is already locked here by the caller, so notices won't be added
 	// concurrently.
 	notices := s.Notices(filter)
 	if len(notices) > 0 {
-		return notices, nil // if there are existing notices, return them right away
-	}
-
-	// Add a waiter channel for AddNotice to send to when matching notices arrive.
-	ch, waiterId := s.addNoticeWaiter(filter, ctx.Done())
-	defer s.removeNoticeWaiter(waiterId) // state will be re-locked when this is called
-
-	// Unlock state while waiting, to allow new notices to arrive (all state
-	// methods expect the caller to have locked the state before the call).
-	s.Unlock()
-	defer s.Lock()
-
-	select {
-	case notices = <-ch:
-		// One or more new notices arrived
 		return notices, nil
-	case <-ctx.Done(): // sender (processNoticeWaiters) also waits on this done channel
-		return nil, ctx.Err()
 	}
-}
 
-// noticeWaiter tracks a single WaitNotices call.
-type noticeWaiter struct {
-	filter *NoticeFilter
-	ch     chan []*Notice
-	done   <-chan struct{}
-}
+	// When the context is done/cancelled, wake up the waiters so that they
+	// can check their ctx.Err() and return if they're cancelled.
+	//
+	// TODO: replace this with context.AfterFunc once we're on Go 1.21.
+	stop := contextAfterFunc(ctx, func() {
+		// We need to acquire the cond lock here to be sure that the Broadcast
+		// below won't occur before the call to Wait, which would result in a
+		// missed signal (and deadlock).
+		s.noticeCond.L.Lock()
+		defer s.noticeCond.L.Unlock()
 
-// addNoticeWaiter adds a notice-waiter with the given filter. Processing
-// notices for this waiter stops when the done channel is closed.
-func (s *State) addNoticeWaiter(filter *NoticeFilter, done <-chan struct{}) (ch chan []*Notice, waiterId int) {
-	s.noticeWaiterId++
-	waiter := noticeWaiter{
-		filter: filter,
-		ch:     make(chan []*Notice),
-		done:   done,
-	}
-	s.noticeWaiters[s.noticeWaiterId] = waiter
-	return waiter.ch, s.noticeWaiterId
-}
+		s.noticeCond.Broadcast()
+	})
+	defer stop()
 
-// removeNoticeWaiter removes the notice-waiter with the given ID.
-func (s *State) removeNoticeWaiter(waiterId int) {
-	delete(s.noticeWaiters, waiterId)
-}
+	for {
+		// Wait till a new notice occurs or a context is cancelled.
+		s.noticeCond.Wait()
 
-// processNoticeWaiters loops through the list of notice-waiters, and wakes up
-// and sends to any that match the filter.
-func (s *State) processNoticeWaiters() {
-	for waiterId, waiter := range s.noticeWaiters {
-		notices := s.Notices(waiter.filter)
-		if len(notices) == 0 {
-			continue // no notices with this filtering
+		// If this context is cancelled, return the error.
+		ctxErr := ctx.Err()
+		if ctxErr != nil {
+			return nil, ctxErr
 		}
+
+		// Otherwise check if there are now matching notices.
+		notices = s.Notices(filter)
+		if len(notices) > 0 {
+			return notices, nil
+		}
+	}
+}
+
+// Remove this and just use context.AfterFunc once we're on Go 1.21.
+func contextAfterFunc(ctx context.Context, f func()) func() {
+	stopCh := make(chan struct{}, 1)
+	go func() {
 		select {
-		case waiter.ch <- notices:
-			// Got matching notices, send them to related WaitNotices.
-			// And remove the waiter so we don't try to send to its channel again
-			// if another notice comes in.
-			s.removeNoticeWaiter(waiterId)
-		case <-waiter.done:
-			// Will happen if WaitNotices times out (it also waits on this done channel)
+		case <-ctx.Done():
+			f()
+		case <-stopCh:
+		}
+	}()
+	stop := func() {
+		select {
+		case stopCh <- struct{}{}:
+		default:
 		}
 	}
+	return stop
 }
