@@ -34,43 +34,51 @@ import (
 	"github.com/canonical/pebble/internals/wsutil"
 )
 
-// DecoderFunc allows the client access to the HTTP response. See the SetDecoder
-// description for more details.
-type DecoderFunc func(ctx context.Context, res *http.Response, opts *RequestOptions, result interface{}) (*RequestResponse, error)
-
 type Requester interface {
-	// Do allows for sync, async requests as well as direct access to the
-	// HTTP response body. See the default implementation for further
-	// details.
-	Do(ctx context.Context, opts *RequestOptions, result interface{}) (*RequestResponse, error)
+	// Do performs the HTTP transaction using the provided options.
+	Do(ctx context.Context, opts *RequestOptions) (*RequestResponse, error)
 
-	// SetDecoder allows for client specific processing to be hooked into
-	// the sync and async response decoding process. The decoder is also
-	// responsible for unmarshalling the result, and populating the
-	// RequestResponse.
-	SetDecoder(decoder DecoderFunc)
-
-	// Transport provides direct access to the transport instance for
-	// specialist operations.
+	// Transport returns the HTTP transport in use by the underlying HTTP client.
 	Transport() *http.Transport
 }
 
+type RequestType int
+
+const (
+	SyncRequest RequestType = iota
+	AsyncRequest
+	RawRequest
+)
+
 // RequestOptions allows setting up a specific request.
 type RequestOptions struct {
-	Method     string
-	Path       string
-	Query      url.Values
-	Headers    map[string]string
-	Body       io.Reader
-	Async      bool
-	ReturnBody bool
+	Type    RequestType
+	Method  string
+	Path    string
+	Query   url.Values
+	Headers map[string]string
+	Body    io.Reader
 }
 
 // RequestResponse defines a common response associated with requests.
 type RequestResponse struct {
 	StatusCode int
 	ChangeID   string
-	Body       io.ReadCloser
+	Result     []byte
+
+	// Only set for RawRequest and must be completely read and closed.
+	Body io.ReadCloser
+}
+
+// DecodeResult can be used to decode a SyncRequest or AsyncRequest.
+func (resp *RequestResponse) DecodeResult(result interface{}) error {
+	if result != nil {
+		if err := decodeWithNumber(bytes.NewReader(resp.Result), result); err != nil {
+			return fmt.Errorf("cannot unmarshal: %w", err)
+		}
+	}
+
+	return nil
 }
 
 // SocketNotFoundError is the error type returned when the client fails
@@ -171,7 +179,9 @@ func New(config *Config) (*Client, error) {
 	if config == nil {
 		config = &Config{}
 	}
-	requester, err := NewDefaultRequester(&DefaultRequesterConfig{
+
+	client := &Client{}
+	requester, err := NewDefaultRequester(client, &DefaultRequesterConfig{
 		Socket:           config.Socket,
 		BaseURL:          config.BaseURL,
 		DisableKeepAlive: config.DisableKeepAlive,
@@ -181,11 +191,11 @@ func New(config *Config) (*Client, error) {
 		return nil, err
 	}
 
-	client := &Client{requester: requester}
-	requester.SetDecoder(client.decoder)
+	client.requester = requester
 	client.getWebsocket = func(url string) (clientWebsocket, error) {
 		return getWebsocket(requester.Transport(), url)
 	}
+
 	return client, nil
 }
 
@@ -320,14 +330,14 @@ func (br *DefaultRequester) rawWithRetry(ctx context.Context, method, urlpath st
 // selects the Do behaviour. In case of a successful response, the result argument get a
 // request specific result. The RequestResponse struct will include common attributes
 // (not all will be set for all request types).
-func (br *DefaultRequester) Do(ctx context.Context, opts *RequestOptions, result interface{}) (*RequestResponse, error) {
+func (br *DefaultRequester) Do(ctx context.Context, opts *RequestOptions) (*RequestResponse, error) {
 	httpResp, err := br.rawWithRetry(ctx, opts.Method, opts.Path, opts.Query, opts.Headers, opts.Body)
 	if err != nil {
 		return nil, err
 	}
 
 	// Is the result expecting a caller-managed raw body?
-	if opts.ReturnBody {
+	if opts.Type == RawRequest {
 		return &RequestResponse{
 			Body: httpResp.Body,
 		}, nil
@@ -337,13 +347,53 @@ func (br *DefaultRequester) Do(ctx context.Context, opts *RequestOptions, result
 	// we have to close the body.
 	defer httpResp.Body.Close()
 
-	// Get the client decoder to extract what it needs before we proceed
-	reqResp, err := br.decoder(ctx, httpResp, opts, result)
-	if err != nil {
+	var serverResp response
+	if err := decodeInto(httpResp.Body, &serverResp); err != nil {
 		return nil, err
 	}
 
-	return reqResp, nil
+	// Update the maintenance error state
+	if serverResp.Maintenance != nil {
+		br.client.maintenance = serverResp.Maintenance
+	} else {
+		br.client.maintenance = nil
+	}
+
+	// Deal with error type response
+	if err := serverResp.err(); err != nil {
+		return nil, err
+	}
+
+	// At this point only sync and async type requests may exist so lets
+	// make sure this is the case.
+	if opts.Type == SyncRequest {
+		if serverResp.Type != "sync" {
+			return nil, fmt.Errorf("expected sync response, got %q", serverResp.Type)
+		}
+	} else if opts.Type == AsyncRequest {
+		if serverResp.Type != "async" {
+			return nil, fmt.Errorf("expected async response for %q on %q, got %q", opts.Method, opts.Path, serverResp.Type)
+		}
+		if serverResp.StatusCode != http.StatusAccepted {
+			return nil, fmt.Errorf("operation not accepted")
+		}
+		if serverResp.Change == "" {
+			return nil, fmt.Errorf("async response without change reference")
+		}
+	} else {
+		return nil, fmt.Errorf("cannot process unknown request type")
+	}
+
+	// Warnings are only included if not an error type response
+	br.client.warningCount = serverResp.WarningCount
+	br.client.warningTimestamp = serverResp.WarningTimestamp
+
+	// Common response
+	return &RequestResponse{
+		StatusCode: serverResp.StatusCode,
+		ChangeID:   serverResp.Change,
+		Result:     serverResp.Result,
+	}, nil
 }
 
 func decodeInto(reader io.Reader, v interface{}) error {
@@ -360,24 +410,41 @@ func decodeInto(reader io.Reader, v interface{}) error {
 }
 
 func (client *Client) doSync(method, path string, query url.Values, headers map[string]string, body io.Reader, v interface{}) (*RequestResponse, error) {
-	return client.Requester().Do(context.Background(), &RequestOptions{
+	resp, err := client.Requester().Do(context.Background(), &RequestOptions{
+		Type:    SyncRequest,
 		Method:  method,
 		Path:    path,
 		Query:   query,
 		Headers: headers,
 		Body:    body,
-	}, v)
+	})
+	if err != nil {
+		return nil, err
+	}
+	err = resp.DecodeResult(v)
+	if err != nil {
+		return nil, err
+	}
+	return resp, nil
 }
 
 func (client *Client) doAsync(method, path string, query url.Values, headers map[string]string, body io.Reader, v interface{}) (*RequestResponse, error) {
-	return client.Requester().Do(context.Background(), &RequestOptions{
+	resp, err := client.Requester().Do(context.Background(), &RequestOptions{
+		Type:    AsyncRequest,
 		Method:  method,
 		Path:    path,
 		Query:   query,
 		Headers: headers,
 		Body:    body,
-		Async:   true,
-	}, v)
+	})
+	if err != nil {
+		return nil, err
+	}
+	err = resp.DecodeResult(v)
+	if err != nil {
+		return nil, err
+	}
+	return resp, nil
 }
 
 // A response produced by the REST API will usually fit in this
@@ -496,65 +563,6 @@ func (client *Client) DebugGet(action string, result interface{}, params map[str
 	return err
 }
 
-// decoder receives a raw HTTP response and performs internal client
-// processing, as well as unmarshalling the custom result.
-func (client *Client) decoder(ctx context.Context, rsp *http.Response, opts *RequestOptions, result interface{}) (*RequestResponse, error) {
-	var serverResp response
-	if err := decodeInto(rsp.Body, &serverResp); err != nil {
-		return nil, err
-	}
-
-	// Update the maintenance error state
-	if serverResp.Maintenance != nil {
-		client.maintenance = serverResp.Maintenance
-	} else {
-		client.maintenance = nil
-	}
-
-	// Deal with error type response
-	if err := serverResp.err(); err != nil {
-		return nil, err
-	}
-
-	// At this point only sync and async type requests may exist so lets
-	// make sure this is the case.
-	//
-	// Tests depend on the order or checks, so lets keep the order unchanged
-	// and deal with these before decode.
-	if opts.Async == false {
-		if serverResp.Type != "sync" {
-			return nil, fmt.Errorf("expected sync response, got %q", serverResp.Type)
-		}
-	} else {
-		if serverResp.Type != "async" {
-			return nil, fmt.Errorf("expected async response for %q on %q, got %q", opts.Method, opts.Path, serverResp.Type)
-		}
-		if serverResp.StatusCode != http.StatusAccepted {
-			return nil, fmt.Errorf("operation not accepted")
-		}
-		if serverResp.Change == "" {
-			return nil, fmt.Errorf("async response without change reference")
-		}
-	}
-
-	// Warnings are only included if not an error type response
-	client.warningCount = serverResp.WarningCount
-	client.warningTimestamp = serverResp.WarningTimestamp
-
-	// Decode the supplied result type
-	if result != nil {
-		if err := decodeWithNumber(bytes.NewReader(serverResp.Result), result); err != nil {
-			return nil, fmt.Errorf("cannot unmarshal: %w", err)
-		}
-	}
-
-	// Common response
-	return &RequestResponse{
-		StatusCode: serverResp.StatusCode,
-		ChangeID:   serverResp.Change,
-	}, nil
-}
-
 type DefaultRequesterConfig struct {
 	// BaseURL contains the base URL where the Pebble daemon is expected to be.
 	// It can be empty for a default behavior of talking over a unix socket.
@@ -576,10 +584,10 @@ type DefaultRequester struct {
 	doer      doer
 	userAgent string
 	transport *http.Transport
-	decoder   DecoderFunc
+	client    *Client
 }
 
-func NewDefaultRequester(opts *DefaultRequesterConfig) (*DefaultRequester, error) {
+func NewDefaultRequester(client *Client, opts *DefaultRequesterConfig) (*DefaultRequester, error) {
 	if opts == nil {
 		opts = &DefaultRequesterConfig{}
 	}
@@ -603,12 +611,9 @@ func NewDefaultRequester(opts *DefaultRequesterConfig) (*DefaultRequester, error
 
 	requester.doer = &http.Client{Transport: requester.transport}
 	requester.userAgent = opts.UserAgent
+	requester.client = client
 
 	return requester, nil
-}
-
-func (br *DefaultRequester) SetDecoder(decoder DecoderFunc) {
-	br.decoder = decoder
 }
 
 func (br *DefaultRequester) Transport() *http.Transport {

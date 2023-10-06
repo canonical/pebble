@@ -74,11 +74,11 @@ func (client *Client) logs(ctx context.Context, opts *LogsOptions, follow bool) 
 		query.Set("follow", "true")
 	}
 	resp, err := client.Requester().Do(ctx, &RequestOptions{
-		Method:     "GET",
-		Path:       "/v1/logs",
-		Query:      query,
-		ReturnBody: true,
-	}, nil)
+		Type:   RawRequest,
+		Method: "GET",
+		Path:   "/v1/logs",
+		Query:  query,
+	})
 	if err != nil {
 		return err
 	}

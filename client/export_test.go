@@ -32,13 +32,13 @@ func (client *Client) SetDoer(d doer) {
 
 func (client *Client) Do(method, path string, query url.Values, body io.Reader, v interface{}) error {
 	resp, err := client.Requester().Do(context.Background(), &RequestOptions{
-		Method:     method,
-		Path:       path,
-		Query:      query,
-		Headers:    nil,
-		Body:       body,
-		ReturnBody: true,
-	}, nil)
+		Type:    RawRequest,
+		Method:  method,
+		Path:    path,
+		Query:   query,
+		Headers: nil,
+		Body:    body,
+	})
 	if err != nil {
 		return err
 	}
