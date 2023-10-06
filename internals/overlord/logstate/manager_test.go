@@ -204,8 +204,8 @@ func (c *slowFlushingClient) Flush(ctx context.Context) error {
 
 func (s *managerSuite) TestLabels(c *C) {
 	fakeClient := &labelStore{
-		labels:    map[string]map[string]string{},
-		labelsSet: make(chan struct{}, 2),
+		labels:          map[string]map[string]string{},
+		notifySetLabels: make(chan struct{}, 2),
 	}
 
 	m := NewLogManager()
@@ -296,7 +296,7 @@ func (s *managerSuite) TestLabels(c *C) {
 type labelStore struct {
 	labels map[string]map[string]string
 	// synchronise on this channel to avoid data races
-	labelsSet chan struct{}
+	notifySetLabels chan struct{}
 }
 
 func (c *labelStore) Add(_ servicelog.Entry) error {
@@ -309,13 +309,13 @@ func (c *labelStore) Flush(_ context.Context) error {
 
 func (c *labelStore) SetLabels(serviceName string, labels map[string]string) {
 	c.labels[serviceName] = labels
-	c.labelsSet <- struct{}{}
+	c.notifySetLabels <- struct{}{}
 }
 
 // wait for labels to be set
 func (l *labelStore) wait(c *C, timeout time.Duration) {
 	select {
-	case <-l.labelsSet:
+	case <-l.notifySetLabels:
 	case <-time.After(timeout):
 		c.Fatal("timed out waiting for labels to be set")
 	}
