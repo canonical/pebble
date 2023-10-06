@@ -24,6 +24,7 @@ import (
 
 var CalculateNextBackoff = calculateNextBackoff
 var GetAction = getAction
+var ParseEnv = parseEnv
 
 func (m *ServiceManager) RunningCmds() map[string]*exec.Cmd {
 	m.servicesLock.Lock()
