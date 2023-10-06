@@ -48,6 +48,7 @@ type Client struct {
 	entries []lokiEntryWithService
 
 	// store the custom labels for each service
+	// example usage: labelValue := labels[serviceName][labelKey]
 	labels map[string]map[string]string
 }
 

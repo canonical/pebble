@@ -138,6 +138,7 @@ func fillDefaultOptions(options *logGathererOptions) *logGathererOptions {
 
 // PlanChanged is called by the LogManager when the plan is changed, if this
 // gatherer's target exists in the new plan.
+// The labels map should not be modified while this method is running.
 func (g *logGatherer) PlanChanged(pl *plan.Plan, serviceData map[string]*ServiceData, labels map[string]map[string]string) {
 	// New plan - the labels may have changed. We should tell the main loop to
 	// flush the client now so that we don't later get out of sync, and send old
@@ -155,14 +156,18 @@ func (g *logGatherer) PlanChanged(pl *plan.Plan, serviceData map[string]*Service
 		svc, svcExists := pl.Services[svcName]
 		if !svcExists {
 			g.pullers.Remove(svcName)
-			g.setLabels <- svcWithLabels{svcName, nil}
+			if dying := g.setClientLabels(svcName, nil); dying {
+				return
+			}
 			continue
 		}
 
 		tgt := pl.LogTargets[g.targetName]
 		if !svc.LogsTo(tgt) {
 			g.pullers.Remove(svcName)
-			g.setLabels <- svcWithLabels{svcName, nil}
+			if dying := g.setClientLabels(svcName, nil); dying {
+				return
+			}
 		}
 	}
 
@@ -182,17 +187,37 @@ func (g *logGatherer) PlanChanged(pl *plan.Plan, serviceData map[string]*Service
 
 		g.pullers.Add(service.Name, svcData.Buffer, g.entryCh)
 		// update labels
-		g.setLabels <- svcWithLabels{service.Name, labels[service.Name]}
+		if dying := g.setClientLabels(service.Name, labels[service.Name]); dying {
+			return
+		}
 	}
 }
 
 // ServiceStarted is called by the LogManager on the start of a service which
 // logs to this gatherer's target.
+// The labels map should not be modified while this method is running.
 func (g *logGatherer) ServiceStarted(service *plan.Service, buffer *servicelog.RingBuffer, labels map[string]string) {
 	g.pullers.Add(service.Name, buffer, g.entryCh)
 
 	// Add this service's custom labels to the client
-	g.setLabels <- svcWithLabels{service.Name, labels}
+	if dying := g.setClientLabels(service.Name, labels); dying {
+		return
+	}
+}
+
+// setClientLabels tells the main loop to set the labels on the client. This
+// method is safe to use concurrently.
+// It also checks if the gatherer is dying - in which case, it will return
+// dying == true to signal to the caller that they should return.
+func (g *logGatherer) setClientLabels(serviceName string, labels map[string]string) (dying bool) {
+	select {
+	// Check just in case the gatherer has already been stopped, so we don't get
+	// deadlocked here.
+	case <-g.tomb.Dying():
+		return true
+	case g.setLabels <- svcWithLabels{serviceName, labels}:
+		return false
+	}
 }
 
 // The main control loop for the logGatherer. loop receives logs from the
