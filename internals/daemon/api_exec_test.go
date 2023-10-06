@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"os"
 	"os/user"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -141,6 +142,25 @@ func (s *execSuite) TestWorkingDir(c *C) {
 	c.Check(stderr, Equals, "")
 }
 
+func (s *execSuite) TestWorkingDirDoesNotExist(c *C) {
+	_, err := s.client.Exec(&client.ExecOptions{
+		Command:    []string{"pwd"},
+		WorkingDir: "/non/existent",
+	})
+	c.Check(err, ErrorMatches, `.*working directory.*does not exist`)
+}
+
+func (s *execSuite) TestWorkingDirNotADirectory(c *C) {
+	path := filepath.Join(c.MkDir(), "test")
+	err := os.WriteFile(path, nil, 0o777)
+	c.Assert(err, IsNil)
+	_, err = s.client.Exec(&client.ExecOptions{
+		Command:    []string{"pwd"},
+		WorkingDir: path,
+	})
+	c.Check(err, ErrorMatches, `.*working directory.*not a directory`)
+}
+
 func (s *execSuite) TestExitError(c *C) {
 	stdout, stderr, waitErr := s.exec(c, "", &client.ExecOptions{
 		Command: []string{"/bin/sh", "-c", "echo OUT; echo ERR >&2; exit 42"},
@@ -246,6 +266,14 @@ func (s *execSuite) TestUserGroup(c *C) {
 	c.Assert(waitErr, IsNil)
 	c.Check(stdout, Equals, username+"\n"+group+"\n")
 	c.Check(stderr, Equals, "")
+
+	_, err := s.client.Exec(&client.ExecOptions{
+		Command:     []string{"pwd"},
+		Environment: map[string]string{"HOME": "/non/existent"},
+		User:        username,
+		Group:       group,
+	})
+	c.Assert(err, ErrorMatches, `.*home directory.*does not exist`)
 }
 
 // See .github/workflows/tests.yml for how to run this test as root.
