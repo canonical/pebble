@@ -10,6 +10,7 @@ designed with unique features that help with more specific use cases.
   - [General model](#general-model)
   - [Layer configuration examples](#layer-configuration-examples)
   - [Using Pebble](#using-pebble)
+    - [Log forwarding](#log-forwarding)
   - [Container usage](#container-usage)
   - [Layer specification](#layer-specification)
   - [API and clients](#api-and-clients)
@@ -405,7 +406,7 @@ $ pebble run --verbose
 ...
 ```
 
-#### Log forwarding
+### Log forwarding
 
 Pebble supports forwarding its services' logs to a remote Loki server. In the `log-targets` section of the plan, you can specify destinations for log forwarding, for example:
 ```yaml
@@ -422,7 +423,7 @@ log-targets:
         services: [svc1, svc2]
 ```
 
-##### Specifying services
+#### Specifying services
 
 For each log target, use the `services` key to specify a list of services to collect logs from. In the above example, the `production-logs` target will collect logs from `svc1` and `svc2`.
 
@@ -455,7 +456,7 @@ my-target:
 ```
 would remove all services and then add `svc1`, so `my-target` would receive logs from only `svc1`.
 
-##### Labels
+#### Labels
 
 In the `labels` section, you can specify custom labels to be added to any outgoing logs. These labels may contain `$ENVIRONMENT_VARIABLES` - these will be interpreted in the environment of the corresponding service. Pebble also adds its own default labels (depending on the protocol). For example, given the following plan:
 ```yaml
