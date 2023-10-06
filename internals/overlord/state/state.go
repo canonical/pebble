@@ -96,8 +96,7 @@ type State struct {
 	warnings map[string]*Warning
 	notices  map[noticeKey]*Notice
 
-	noticeWaiters  map[int]noticeWaiter
-	noticeWaiterId int
+	noticeCond *sync.Cond
 
 	modified bool
 
@@ -106,17 +105,18 @@ type State struct {
 
 // New returns a new empty state.
 func New(backend Backend) *State {
-	return &State{
-		backend:       backend,
-		data:          make(customData),
-		changes:       make(map[string]*Change),
-		tasks:         make(map[string]*Task),
-		warnings:      make(map[string]*Warning),
-		notices:       make(map[noticeKey]*Notice),
-		noticeWaiters: make(map[int]noticeWaiter),
-		modified:      true,
-		cache:         make(map[interface{}]interface{}),
+	st := &State{
+		backend:  backend,
+		data:     make(customData),
+		changes:  make(map[string]*Change),
+		tasks:    make(map[string]*Task),
+		warnings: make(map[string]*Warning),
+		notices:  make(map[noticeKey]*Notice),
+		modified: true,
+		cache:    make(map[interface{}]interface{}),
 	}
+	st.noticeCond = sync.NewCond(st) // use State.Lock and State.Unlock
+	return st
 }
 
 // Modified returns whether the state was modified since the last checkpoint.
@@ -456,6 +456,5 @@ func ReadState(backend Backend, r io.Reader) (*State, error) {
 	s.backend = backend
 	s.modified = false
 	s.cache = make(map[interface{}]interface{})
-	s.noticeWaiters = make(map[int]noticeWaiter)
 	return s, err
 }
