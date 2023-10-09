@@ -153,7 +153,7 @@ func (client *Client) Exec(opts *ExecOptions) (*ExecProcess, error) {
 		"Content-Type": "application/json",
 	}
 	var result execResult
-	reqResponse, err := client.doAsync("POST", "/v1/exec", nil, headers, &body, &result)
+	resp, err := client.doAsync("POST", "/v1/exec", nil, headers, &body, &result)
 	if err != nil {
 		return nil, err
 	}
@@ -207,7 +207,7 @@ func (client *Client) Exec(opts *ExecOptions) (*ExecProcess, error) {
 	}()
 
 	process := &ExecProcess{
-		changeID:    reqResponse.ChangeID,
+		changeID:    resp.ChangeID,
 		client:      client,
 		timeout:     opts.Timeout,
 		writesDone:  writesDone,
