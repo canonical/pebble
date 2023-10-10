@@ -35,6 +35,10 @@ const (
 	maxNoticeDataSize  = 4 * 1024
 )
 
+type addedNotice struct {
+	ID string `json:"id"`
+}
+
 func v1GetNotices(c *Command, r *http.Request, _ *UserState) Response {
 	query := r.URL.Query()
 
@@ -99,11 +103,11 @@ func v1GetNotices(c *Command, r *http.Request, _ *UserState) Response {
 
 func v1PostNotices(c *Command, r *http.Request, _ *UserState) Response {
 	var payload struct {
-		Action      string            `json:"action"`
-		Type        string            `json:"type"`
-		Key         string            `json:"key"`
-		RepeatAfter string            `json:"repeat-after"`
-		Data        map[string]string `json:"data"`
+		Action      string          `json:"action"`
+		Type        string          `json:"type"`
+		Key         string          `json:"key"`
+		RepeatAfter string          `json:"repeat-after"`
+		DataJSON    json.RawMessage `json:"data"`
 	}
 	decoder := json.NewDecoder(r.Body)
 	if err := decoder.Decode(&payload); err != nil {
@@ -128,12 +132,13 @@ func v1PostNotices(c *Command, r *http.Request, _ *UserState) Response {
 		return statusBadRequest("invalid repeat-after: %v", err)
 	}
 
-	dataSize := 0
-	for k, v := range payload.Data {
-		dataSize += len(k) + len(v)
+	if len(payload.DataJSON) > maxNoticeDataSize {
+		return statusBadRequest("total size of data must be %d bytes or less", maxNoticeDataSize)
 	}
-	if dataSize > maxNoticeDataSize {
-		return statusBadRequest("total size of data (keys and values) must be %d bytes or less", maxNoticeDataSize)
+	var data map[string]string
+	err = json.Unmarshal(payload.DataJSON, &data)
+	if err != nil {
+		return statusBadRequest("cannot decode notice data: %v", err)
 	}
 
 	st := c.d.overlord.State()
@@ -141,19 +146,14 @@ func v1PostNotices(c *Command, r *http.Request, _ *UserState) Response {
 	defer st.Unlock()
 
 	noticeId, err := st.AddNotice(state.CustomNotice, payload.Key, &state.AddNoticeOptions{
-		Data:        payload.Data,
+		Data:        data,
 		RepeatAfter: repeatAfter,
 	})
 	if err != nil {
 		return statusInternalError("%v", err)
 	}
 
-	result := struct {
-		ID string `json:"id"`
-	}{
-		ID: noticeId,
-	}
-	return SyncResponse(result)
+	return SyncResponse(addedNotice{ID: noticeId})
 }
 
 func v1GetNotice(c *Command, r *http.Request, _ *UserState) Response {
