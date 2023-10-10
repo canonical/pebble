@@ -87,12 +87,16 @@ type State struct {
 	lastTaskId   int
 	lastChangeId int
 	lastLaneId   int
+	lastNoticeId int
 
 	backend  Backend
 	data     customData
 	changes  map[string]*Change
 	tasks    map[string]*Task
 	warnings map[string]*Warning
+	notices  map[noticeKey]*Notice
+
+	noticeCond *sync.Cond
 
 	modified bool
 
@@ -101,15 +105,18 @@ type State struct {
 
 // New returns a new empty state.
 func New(backend Backend) *State {
-	return &State{
+	st := &State{
 		backend:  backend,
 		data:     make(customData),
 		changes:  make(map[string]*Change),
 		tasks:    make(map[string]*Task),
 		warnings: make(map[string]*Warning),
+		notices:  make(map[noticeKey]*Notice),
 		modified: true,
 		cache:    make(map[interface{}]interface{}),
 	}
+	st.noticeCond = sync.NewCond(st) // use State.Lock and State.Unlock
+	return st
 }
 
 // Modified returns whether the state was modified since the last checkpoint.
@@ -146,10 +153,12 @@ type marshalledState struct {
 	Changes  map[string]*Change          `json:"changes"`
 	Tasks    map[string]*Task            `json:"tasks"`
 	Warnings []*Warning                  `json:"warnings,omitempty"`
+	Notices  []*Notice                   `json:"notices,omitempty"`
 
 	LastChangeId int `json:"last-change-id"`
 	LastTaskId   int `json:"last-task-id"`
 	LastLaneId   int `json:"last-lane-id"`
+	LastNoticeId int `json:"last-notice-id"`
 }
 
 // MarshalJSON makes State a json.Marshaller
@@ -160,10 +169,12 @@ func (s *State) MarshalJSON() ([]byte, error) {
 		Changes:  s.changes,
 		Tasks:    s.tasks,
 		Warnings: s.flattenWarnings(),
+		Notices:  s.flattenNotices(nil),
 
 		LastTaskId:   s.lastTaskId,
 		LastChangeId: s.lastChangeId,
 		LastLaneId:   s.lastLaneId,
+		LastNoticeId: s.lastNoticeId,
 	})
 }
 
@@ -179,9 +190,11 @@ func (s *State) UnmarshalJSON(data []byte) error {
 	s.changes = unmarshalled.Changes
 	s.tasks = unmarshalled.Tasks
 	s.unflattenWarnings(unmarshalled.Warnings)
+	s.unflattenNotices(unmarshalled.Notices)
 	s.lastChangeId = unmarshalled.LastChangeId
 	s.lastTaskId = unmarshalled.LastTaskId
 	s.lastLaneId = unmarshalled.LastLaneId
+	s.lastNoticeId = unmarshalled.LastNoticeId
 	// backlink state again
 	for _, t := range s.tasks {
 		t.state = s
@@ -364,7 +377,7 @@ func (s *State) tasksIn(tids []string) []*Task {
 //   - it removes tasks unlinked to changes after pruneWait. When there are more
 //     changes than the limit set via "maxReadyChanges" those changes in ready
 //     state will also removed even if they are below the pruneWait duration.
-//   - it removes expired warnings.
+//   - it removes expired warnings and notices
 func (s *State) Prune(pruneWait, abortWait time.Duration, maxReadyChanges int) {
 	now := time.Now()
 	pruneLimit := now.Add(-pruneWait)
@@ -389,6 +402,12 @@ func (s *State) Prune(pruneWait, abortWait time.Duration, maxReadyChanges int) {
 	for k, w := range s.warnings {
 		if w.ExpiredBefore(now) {
 			delete(s.warnings, k)
+		}
+	}
+
+	for k, n := range s.notices {
+		if n.expired(now) {
+			delete(s.notices, k)
 		}
 	}
 

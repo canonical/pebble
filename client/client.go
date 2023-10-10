@@ -470,11 +470,15 @@ func (e *Error) Error() string {
 	return e.Message
 }
 
+// Error kinds for use as a response or maintenance result
 const (
 	ErrorKindLoginRequired     = "login-required"
+	ErrorKindNoDefaultServices = "no-default-services"
+	ErrorKindNotFound          = "not-found"
+	ErrorKindPermissionDenied  = "permission-denied"
+	ErrorKindGenericFileError  = "generic-file-error"
 	ErrorKindSystemRestart     = "system-restart"
 	ErrorKindDaemonRestart     = "daemon-restart"
-	ErrorKindNoDefaultServices = "no-default-services"
 )
 
 // err extracts the error in case of an error type response
