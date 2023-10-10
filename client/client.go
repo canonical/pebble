@@ -75,8 +75,14 @@ type RequestResponse struct {
 // sync and async request responses. The decoding is performed with the standard JSON
 // package, so the usual field tags should be used to prepare the type for decoding.
 func (resp *RequestResponse) DecodeResult(result interface{}) error {
-	if err := decodeWithNumber(bytes.NewReader(resp.Result), result); err != nil {
+	reader := bytes.NewReader(resp.Result)
+	dec := json.NewDecoder(reader)
+	dec.UseNumber()
+	if err := dec.Decode(&result); err != nil {
 		return fmt.Errorf("cannot unmarshal: %w", err)
+	}
+	if dec.More() {
+		return fmt.Errorf("cannot unmarshal: cannot parse json value")
 	}
 	return nil
 }
@@ -100,20 +106,6 @@ func (s SocketNotFoundError) Error() string {
 
 func (s SocketNotFoundError) Unwrap() error {
 	return s.Err
-}
-
-// decodeWithNumber decodes input data using json.Decoder, ensuring numbers are preserved
-// via json.Number data type. It errors out on invalid json or any excess input.
-func decodeWithNumber(r io.Reader, value interface{}) error {
-	dec := json.NewDecoder(r)
-	dec.UseNumber()
-	if err := dec.Decode(&value); err != nil {
-		return err
-	}
-	if dec.More() {
-		return fmt.Errorf("cannot parse json value")
-	}
-	return nil
 }
 
 func unixDialer(socketPath string) func(string, string) (net.Conn, error) {
