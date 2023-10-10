@@ -61,10 +61,13 @@ type RequestOptions struct {
 
 type RequestResponse struct {
 	StatusCode int
-	ChangeID   string
-	Result     []byte
-
-	// Only set for RawRequest.
+	// ChangeID is typically set when an AsyncRequest type is performed. The
+	// change id allows for introspection and progress tracking of the request.
+	ChangeID string
+	// Result can contain request specific JSON data. The result can be
+	// unmarshalled into the expected type using the DecodeResult method.
+	Result []byte
+	// Body is only set for request type RawRequest.
 	Body io.ReadCloser
 }
 
@@ -339,6 +342,10 @@ func (rq *defaultRequester) Do(ctx context.Context, opts *RequestOptions) (*Requ
 	if serverResp.Maintenance != nil {
 		rq.client.maintenance = serverResp.Maintenance
 	} else {
+		// We cannot assign a nil pointer of type *Error to an
+		// interface here because the interface is only nil if
+		// both the type and value is nil.
+		// https://go.dev/doc/faq#nil_error
 		rq.client.maintenance = nil
 	}
 
@@ -349,11 +356,12 @@ func (rq *defaultRequester) Do(ctx context.Context, opts *RequestOptions) (*Requ
 
 	// At this point only sync and async type requests may exist so lets
 	// make sure this is the case.
-	if opts.Type == SyncRequest {
+	switch opts.Type {
+	case SyncRequest:
 		if serverResp.Type != "sync" {
 			return nil, fmt.Errorf("expected sync response, got %q", serverResp.Type)
 		}
-	} else if opts.Type == AsyncRequest {
+	case AsyncRequest:
 		if serverResp.Type != "async" {
 			return nil, fmt.Errorf("expected async response for %q on %q, got %q", opts.Method, opts.Path, serverResp.Type)
 		}
@@ -363,7 +371,7 @@ func (rq *defaultRequester) Do(ctx context.Context, opts *RequestOptions) (*Requ
 		if serverResp.Change == "" {
 			return nil, fmt.Errorf("async response without change reference")
 		}
-	} else {
+	default:
 		return nil, fmt.Errorf("cannot process unknown request type")
 	}
 
@@ -469,7 +477,7 @@ const (
 	ErrorKindNoDefaultServices = "no-default-services"
 )
 
-// err extract the error in case of an error type response
+// err extracts the error in case of an error type response
 func (rsp *response) err() error {
 	if rsp.Type != "error" {
 		return nil
@@ -574,7 +582,7 @@ func newDefaultRequester(client *Client, opts *Config) (*defaultRequester, error
 		// Otherwise talk regular HTTP-over-TCP.
 		baseURL, err := url.Parse(opts.BaseURL)
 		if err != nil {
-			return nil, fmt.Errorf("cannot parse base URL: %v", err)
+			return nil, fmt.Errorf("cannot parse base URL: %w", err)
 		}
 		transport := &http.Transport{DisableKeepAlives: opts.DisableKeepAlive}
 		requester = &defaultRequester{baseURL: *baseURL, transport: transport}
