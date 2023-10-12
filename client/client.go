@@ -367,7 +367,8 @@ func (rq *defaultRequester) Do(ctx context.Context, opts *RequestOptions) (*Requ
 		return nil, fmt.Errorf("cannot process unknown request type")
 	}
 
-	// Warnings are only included if not an error type response
+	// Warnings are only included if not an error type response, so we don't
+	// replace valid local warnings with an empty state that comes from a failure.
 	rq.client.warningCount = serverResp.WarningCount
 	rq.client.warningTimestamp = serverResp.WarningTimestamp
 
