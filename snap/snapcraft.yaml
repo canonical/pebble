@@ -42,7 +42,7 @@ parts:
     plugin: nil
     source: .
     override-build: |
-      version="$(${CRAFT_PART_INSTALL}/bin/pebble version --client)"
+      version="$(${CRAFT_STAGE}/bin/pebble version --client)"
 
       # Set snap version
       craftctl set version="$version"
