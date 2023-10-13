@@ -8,6 +8,11 @@ on:
   release:
     types: [published]
 
+# We don't want this workflow to have multiple runs in parallel because
+# what could happen is that a slow-running and older execution will upload
+# an older snap to `edge`, after the newer and latest snap has already been released.
+concurrency: ${{ github.workflow }}
+
 env:
   SNAP_NAME: pebble
   DEFAULT_TRACK: latest
