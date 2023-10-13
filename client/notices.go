@@ -18,23 +18,31 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/url"
+	"regexp"
 	"time"
 )
 
 type NotifyOptions struct {
-	// Key is the custom notice's key. Must be in "domain.com/key" format.
+	// Type is the notice's type. Currently only notices of type CustomNotice
+	// can be added.
+	Type NoticeType
+
+	// Key is the notice's key. For "custom" notices, this must be in
+	// "domain.com/key" format.
 	Key string
 
 	// Data are optional key=value pairs for this occurrence of the notice.
 	Data map[string]string
 
-	// RepeatAfter allows the notice to repeat after this duration. If this is
-	// zero (the default), the notice will always repeat.
+	// RepeatAfter, if not zero, prevents this notice from being observed if a
+	// notification with the same Type and Key has been made recently within
+	// the provided duration.
 	RepeatAfter time.Duration
 }
 
-// Notify records an occurrence of a "custom" notice with the specified options,
+// Notify records an occurrence of a notice with the specified options,
 // returning the notice ID.
 func (client *Client) Notify(opts *NotifyOptions) (string, error) {
 	var payload = struct {
@@ -45,7 +53,7 @@ func (client *Client) Notify(opts *NotifyOptions) (string, error) {
 		Data        map[string]string `json:"data,omitempty"`
 	}{
 		Action: "add",
-		Type:   "custom",
+		Type:   string(opts.Type),
 		Key:    opts.Key,
 		Data:   opts.Data,
 	}
@@ -78,8 +86,12 @@ type NoticesOptions struct {
 	After time.Time
 }
 
-// Notice is a notification whose identity is the combination of Type and Key
-// that has occurred Occurrences number of times.
+// Notice holds details of an event that was observed and reported either
+// inside the server itself or externally via the API. Besides the ID field
+// itself, the Type and Key fields together also uniquely identify a
+// particular notice, and when a new notification is made with matching Type
+// and Key, the previous notice is updated appropriately instead of a new one
+// being created.
 type Notice struct {
 	ID            string            `json:"id"`
 	Type          NoticeType        `json:"type"`
@@ -96,18 +108,10 @@ type Notice struct {
 type NoticeType string
 
 const (
-	// Recorded whenever a change is updated: when the change is first spawned
-	// or its status is updated.
-	ChangeUpdateNotice NoticeType = "change-update"
-
 	// A custom notice reported via the Pebble client API or "pebble notify".
 	// The key and data fields are provided by the user. The key must be in
 	// the format "mydomain.io/mykey" to ensure well-namespaced notice keys.
 	CustomNotice NoticeType = "custom"
-
-	// Warnings are a subset of notices where the key is a human-readable
-	// warning message.
-	WarningNotice NoticeType = "warning"
 )
 
 type jsonNotice struct {
@@ -116,8 +120,17 @@ type jsonNotice struct {
 	ExpireAfter string `json:"expire-after,omitempty"`
 }
 
+// This is used to ensure we send a well-formed notice ID in the URL path.
+// It's a little more permissive than the currently-valid notice IDs (which
+// are always integers), but it will allow older clients to talk to newer
+// servers which might start allowing letters too (for example).
+var noticeIDRegexp = regexp.MustCompile(`^[a-z0-9]+$`)
+
 // Notice fetches a single notice by ID.
 func (client *Client) Notice(id string) (*Notice, error) {
+	if !noticeIDRegexp.MatchString(id) {
+		return nil, fmt.Errorf("invalid notice ID %q", id)
+	}
 	var jn *jsonNotice
 	_, err := client.doSync("GET", "/v1/notices/"+id, nil, nil, nil, &jn)
 	if err != nil {
@@ -145,8 +158,6 @@ func (client *Client) WaitNotices(ctx context.Context, serverTimeout time.Durati
 	query := makeNoticesQuery(opts)
 	query.Set("timeout", serverTimeout.String())
 
-	// We need to use client.raw() here to pass the context through (and we
-	// don't want retries).
 	resp, err := client.Requester().Do(ctx, &RequestOptions{
 		Type:   SyncRequest,
 		Method: "GET",
@@ -156,6 +167,7 @@ func (client *Client) WaitNotices(ctx context.Context, serverTimeout time.Durati
 	if err != nil {
 		return nil, err
 	}
+
 	var jns []*jsonNotice
 	err = resp.DecodeResult(&jns)
 	if err != nil {
