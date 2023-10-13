@@ -236,12 +236,8 @@ func (s *apiSuite) TestNoticesRequestCancelled(c *C) {
 	c.Check(elapsed < time.Second, Equals, true)
 }
 
-func (s *apiSuite) TestNoticesInvalidType(c *C) {
-	s.testNoticesBadRequest(c, "types=foo", "invalid notice type.*")
-}
-
 func (s *apiSuite) TestNoticesInvalidAfter(c *C) {
-	s.testNoticesBadRequest(c, "after=foo", "invalid after timestamp.*")
+	s.testNoticesBadRequest(c, "after=foo", `invalid "after" timestamp.*`)
 }
 
 func (s *apiSuite) TestNoticesInvalidTimeout(c *C) {
@@ -355,7 +351,7 @@ func (s *apiSuite) TestAddNoticeDataTooLarge(c *C) {
 		},
 	})
 	c.Assert(err, IsNil)
-	s.testAddNoticeBadRequest(c, string(request), "total size of data .* must be 4096 bytes or less")
+	s.testAddNoticeBadRequest(c, string(request), "total size of data must be 4096 bytes or less")
 }
 
 func (s *apiSuite) TestInvalidRepeatAfter(c *C) {

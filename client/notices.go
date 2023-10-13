@@ -147,19 +147,20 @@ func (client *Client) WaitNotices(ctx context.Context, serverTimeout time.Durati
 
 	// We need to use client.raw() here to pass the context through (and we
 	// don't want retries).
-	res, err := client.raw(ctx, "GET", "/v1/notices", query, nil, nil)
-	if err != nil {
-		return nil, err
-	}
-	defer res.Body.Close()
-
-	var rsp response
-	err = decodeInto(res.Body, &rsp)
+	resp, err := client.Requester().Do(ctx, &RequestOptions{
+		Type:   SyncRequest,
+		Method: "GET",
+		Path:   "/v1/notices",
+		Query:  query,
+	})
 	if err != nil {
 		return nil, err
 	}
 	var jns []*jsonNotice
-	_, err = client.finishSync(rsp, &jns)
+	err = resp.DecodeResult(&jns)
+	if err != nil {
+		return nil, err
+	}
 	return jsonNoticesToNotices(jns), err
 }
 
