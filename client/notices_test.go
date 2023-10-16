@@ -55,6 +55,11 @@ func (cs *clientSuite) TestNotice(c *C) {
 	})
 }
 
+func (cs *clientSuite) TestNoticeInvalidID(c *C) {
+	_, err := cs.cli.Notice("<boo>")
+	c.Assert(err, ErrorMatches, "invalid notice ID.*")
+}
+
 func (cs *clientSuite) TestNotices(c *C) {
 	cs.rsp = `{"type": "sync", "result": [{
 		"id":   "1",
@@ -105,14 +110,14 @@ func (cs *clientSuite) TestNotices(c *C) {
 func (cs *clientSuite) TestNoticesFilters(c *C) {
 	cs.rsp = `{"type": "sync", "result": []}`
 	notices, err := cs.cli.Notices(&client.NoticesOptions{
-		Types: []client.NoticeType{client.CustomNotice, client.WarningNotice},
+		Types: []client.NoticeType{client.CustomNotice},
 		Keys:  []string{"foo.com/bar", "example.com/x"},
 		After: time.Date(2023, 9, 5, 16, 43, 32, 123_456_789, time.UTC),
 	})
 	c.Assert(err, IsNil)
 	c.Assert(cs.req.URL.Path, Equals, "/v1/notices")
 	c.Assert(cs.req.URL.Query(), DeepEquals, url.Values{
-		"types": {"custom", "warning"},
+		"types": {"custom"},
 		"keys":  {"foo.com/bar", "example.com/x"},
 		"after": {"2023-09-05T16:43:32.123456789Z"},
 	})
@@ -121,13 +126,14 @@ func (cs *clientSuite) TestNoticesFilters(c *C) {
 
 func (cs *clientSuite) TestNotify(c *C) {
 	cs.rsp = `{"type": "sync", "result": {"id": "7"}}`
-	noticeId, err := cs.cli.Notify(&client.NotifyOptions{
+	noticeID, err := cs.cli.Notify(&client.NotifyOptions{
+		Type:        client.CustomNotice,
 		Key:         "foo.com/bar",
 		RepeatAfter: time.Hour,
 		Data:        map[string]string{"k": "9"},
 	})
 	c.Assert(err, IsNil)
-	c.Check(noticeId, Equals, "7")
+	c.Check(noticeID, Equals, "7")
 	c.Assert(cs.req.URL.Path, Equals, "/v1/notices")
 
 	body, err := io.ReadAll(cs.req.Body)
@@ -146,11 +152,12 @@ func (cs *clientSuite) TestNotify(c *C) {
 
 func (cs *clientSuite) TestNotifyMinimal(c *C) {
 	cs.rsp = `{"type": "sync", "result": {"id": "1"}}`
-	noticeId, err := cs.cli.Notify(&client.NotifyOptions{
-		Key: "a.b/c",
+	noticeID, err := cs.cli.Notify(&client.NotifyOptions{
+		Type: client.CustomNotice,
+		Key:  "a.b/c",
 	})
 	c.Assert(err, IsNil)
-	c.Check(noticeId, Equals, "1")
+	c.Check(noticeID, Equals, "1")
 	c.Assert(cs.req.URL.Path, Equals, "/v1/notices")
 
 	body, err := io.ReadAll(cs.req.Body)

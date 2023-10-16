@@ -239,7 +239,9 @@ out:
 		}
 	}
 
-	// Close our own self-connection, otherwise it prevents fast and clean termination.
+	// Close the client idle connection to the server (self connection) before we
+	// start with the HTTP shutdown process. This will speed up the server shutdown,
+	// and allow the Pebble process to exit faster.
 	rcmd.client.CloseIdleConnections()
 
 	return d.Stop(ch)

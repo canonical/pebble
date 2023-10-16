@@ -313,7 +313,7 @@ func (s *State) Notices(filter *NoticeFilter) []*Notice {
 	return notices
 }
 
-// Notice return a single notice by ID, or nil if not found.
+// Notice returns a single notice by ID, or nil if not found.
 func (s *State) Notice(id string) *Notice {
 	s.reading()
 
@@ -405,7 +405,7 @@ func (s *State) WaitNotices(ctx context.Context, filter *NoticeFilter) ([]*Notic
 
 // Remove this and just use context.AfterFunc once we're on Go 1.21.
 func contextAfterFunc(ctx context.Context, f func()) func() {
-	stopCh := make(chan struct{}, 1)
+	stopCh := make(chan struct{})
 	go func() {
 		select {
 		case <-ctx.Done():
@@ -414,10 +414,7 @@ func contextAfterFunc(ctx context.Context, f func()) func() {
 		}
 	}()
 	stop := func() {
-		select {
-		case stopCh <- struct{}{}:
-		default:
-		}
+		close(stopCh)
 	}
 	return stop
 }
