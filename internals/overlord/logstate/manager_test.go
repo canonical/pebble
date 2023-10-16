@@ -257,8 +257,8 @@ func (s *managerSuite) TestLabels(c *C) {
 		},
 	})
 
-	fakeClient.wait(c, 1*time.Second)
-	fakeClient.wait(c, 1*time.Second)
+	fakeClient.waitLabels(c)
+	fakeClient.waitLabels(c)
 	c.Assert(fakeClient.labels, DeepEquals, map[string]map[string]string{
 		"svc1": {
 			"owner":   "user-alice",
@@ -276,8 +276,8 @@ func (s *managerSuite) TestLabels(c *C) {
 	m.PlanChanged(pl)
 
 	// Wait for labels to be set
-	fakeClient.wait(c, 1*time.Second)
-	fakeClient.wait(c, 1*time.Second)
+	fakeClient.waitLabels(c)
+	fakeClient.waitLabels(c)
 	c.Assert(fakeClient.labels, DeepEquals, map[string]map[string]string{
 		"svc1": {
 			"owner":   "user-alice",
@@ -313,10 +313,10 @@ func (c *labelStore) SetLabels(serviceName string, labels map[string]string) {
 }
 
 // wait for labels to be set
-func (l *labelStore) wait(c *C, timeout time.Duration) {
+func (l *labelStore) waitLabels(c *C) {
 	select {
 	case <-l.notifySetLabels:
-	case <-time.After(timeout):
+	case <-time.After(1 * time.Second):
 		c.Fatal("timed out waiting for labels to be set")
 	}
 }

@@ -156,8 +156,10 @@ func (g *logGatherer) PlanChanged(pl *plan.Plan, serviceData map[string]*Service
 		svc, svcExists := pl.Services[svcName]
 		if !svcExists {
 			g.pullers.Remove(svcName)
-			if dying := g.setClientLabels(svcName, nil); dying {
+			select {
+			case <-g.tomb.Dying():
 				return
+			case g.setLabels <- svcWithLabels{svcName, nil}:
 			}
 			continue
 		}
@@ -165,8 +167,10 @@ func (g *logGatherer) PlanChanged(pl *plan.Plan, serviceData map[string]*Service
 		tgt := pl.LogTargets[g.targetName]
 		if !svc.LogsTo(tgt) {
 			g.pullers.Remove(svcName)
-			if dying := g.setClientLabels(svcName, nil); dying {
+			select {
+			case <-g.tomb.Dying():
 				return
+			case g.setLabels <- svcWithLabels{svcName, nil}:
 			}
 		}
 	}
@@ -187,8 +191,10 @@ func (g *logGatherer) PlanChanged(pl *plan.Plan, serviceData map[string]*Service
 
 		g.pullers.Add(service.Name, svcData.Buffer, g.entryCh)
 		// update labels
-		if dying := g.setClientLabels(service.Name, labels[service.Name]); dying {
+		select {
+		case <-g.tomb.Dying():
 			return
+		case g.setLabels <- svcWithLabels{service.Name, labels[service.Name]}:
 		}
 	}
 }
@@ -200,23 +206,10 @@ func (g *logGatherer) ServiceStarted(service *plan.Service, buffer *servicelog.R
 	g.pullers.Add(service.Name, buffer, g.entryCh)
 
 	// Add this service's custom labels to the client
-	if dying := g.setClientLabels(service.Name, labels); dying {
-		return
-	}
-}
-
-// setClientLabels tells the main loop to set the labels on the client. This
-// method is safe to use concurrently.
-// It also checks if the gatherer is dying - in which case, it will return
-// dying == true to signal to the caller that they should return.
-func (g *logGatherer) setClientLabels(serviceName string, labels map[string]string) (dying bool) {
 	select {
-	// Check just in case the gatherer has already been stopped, so we don't get
-	// deadlocked here.
 	case <-g.tomb.Dying():
-		return true
-	case g.setLabels <- svcWithLabels{serviceName, labels}:
-		return false
+		return
+	case g.setLabels <- svcWithLabels{service.Name, labels}:
 	}
 }
 
