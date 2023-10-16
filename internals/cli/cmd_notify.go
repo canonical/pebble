@@ -46,7 +46,7 @@ func init() {
 		Summary:     cmdNotifySummary,
 		Description: cmdNotifyDescription,
 		ArgsHelp: map[string]string{
-			"--repeat-after": "Allow notice to repeat after this duration (default is to always repeat)",
+			"--repeat-after": "Prevent notice with same type and key from reoccurring within this duration",
 		},
 		New: func(opts *CmdOptions) flags.Commander {
 			return &cmdNotify{client: opts.Client}
@@ -68,6 +68,7 @@ func (cmd *cmdNotify) Execute(args []string) error {
 		data[key] = value
 	}
 	options := client.NotifyOptions{
+		Type:        client.CustomNotice,
 		Key:         cmd.Positional.Key,
 		RepeatAfter: cmd.RepeatAfter,
 		Data:        data,
