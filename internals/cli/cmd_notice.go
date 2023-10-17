@@ -77,18 +77,9 @@ func (cmd *cmdNotice) Execute(args []string) error {
 		}
 	}
 
-	yn := yamlNotice{
-		ID:            notice.ID,
-		Type:          string(notice.Type),
-		Key:           notice.Key,
-		FirstOccurred: notice.FirstOccurred,
-		LastOccurred:  notice.LastOccurred,
-		LastRepeated:  notice.LastRepeated,
-		Occurrences:   notice.Occurrences,
-		LastData:      notice.LastData,
-		RepeatAfter:   notice.RepeatAfter,
-		ExpireAfter:   notice.ExpireAfter,
-	}
+	// Notice can be assigned directly to yamlNotice as only the tags are different.
+	yn := yamlNotice(*notice)
+
 	b, err := yaml.Marshal(yn)
 	if err != nil {
 		return err
@@ -100,7 +91,7 @@ func (cmd *cmdNotice) Execute(args []string) error {
 // yamlNotice exists to add "yaml" tags to the Notice fields.
 type yamlNotice struct {
 	ID            string            `yaml:"id"`
-	Type          string            `yaml:"type"`
+	Type          client.NoticeType `yaml:"type"`
 	Key           string            `yaml:"key"`
 	FirstOccurred time.Time         `yaml:"first-occurred"`
 	LastOccurred  time.Time         `yaml:"last-occurred"`
