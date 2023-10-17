@@ -458,23 +458,25 @@ would remove all services and then add `svc1`, so `my-target` would receive logs
 
 Pebble includes a subsystem called *notices*, which allows the user to introspect various events that occur in the Pebble server, as well as record custom client events. The server saves notices to disk, so they persist across restarts.
 
-Each notice has a *type* and a *key*, and the notice's count of occurences is incremented every time a notice with a given type and key combination occurs.
+Each notice is uniquely identified by its *type* and *key* combination, and the notice's count of occurences is incremented every time a notice with that type and key combination occurs.
 
 Each notice records the time it first occurred, the time it last occurred, and the time it last repeated.
 
-A *repeat* happens when the notice has a "repeat after" duration and the notice reoccurs after this duration elapses (since the previous last-repeated time). This allows notices to resurface in the `pebble notices` list after some time.
+A *repeat* happens when either the notice has no "repeat after" duration (the default), or when a "repeat after" duration is given and the notice reoccurs after this duration elapses (since the previous last-repeated time). Specifying "repeat after" allows the user reporting the notice to prevent the notice resurfacing in the `pebble notices` list for a time.
 
-In addition, a notice records optional *data* (key-value pairs) from the last occurrence.
+In addition, a notice records optional *data* (string key-value pairs) from the last occurrence.
 
 These notice types are currently available:
 
-* `change-update`: recorded whenever a change is first spawned or its status is updated. The key for this type of notice is the change ID, and the notice's data includes the change `kind`. (TODO: not implemented yet)
-* `client`: a client notice reported via `pebble notify`. The key and data fields are provided by the user. The key must be in the format `mydomain.io/mykey` to ensure well-namespaced notice keys.
-* `warning`: Pebble warnings are implemented in terms of notices. The key for this type of notice is the human-readable warning message. (TODO: not implemented yet)
+<!-- TODO: * `change-update`: recorded whenever a change is first spawned or its status is updated. The key for this type of notice is the change ID, and the notice's data includes the change `kind`. -->
 
-Notices expire and are deleted after a certain amount of time -- currently 7 days.
+* `custom`: a custom client notice reported via `pebble notify`. The key and any data is provided by the user. The key must be in the format `mydomain.io/mykey` to ensure well-namespaced notice keys.
 
-To record notices (custom notices of type `client`), use `pebble notify`:
+<!-- TODO: * `warning`: Pebble warnings are implemented in terms of notices. The key for this type of notice is the human-readable warning message. -->
+
+Notices expire and are deleted after a certain amount of time: currently 7 days.
+
+To record client notices (of type `custom`), use `pebble notify`:
 
 ```
 $ pebble notify example.com/foo
@@ -492,11 +494,11 @@ To show the list of active notices, run `pebble notices` (add the `--abs-time` f
 ```
 $ pebble notices
 ID   Type    Key              First                Last                 Repeated             Occurrences
-1    client  example.com/foo  today at 16:16 NZST  today at 16:16 NZST  today at 16:16 NZST  3
-2    client  other.com/bar    today at 16:16 NZST  today at 16:16 NZST  today at 16:16 NZST  1
+1    custom  example.com/foo  today at 16:16 NZST  today at 16:16 NZST  today at 16:16 NZST  3
+2    custom  other.com/bar    today at 16:16 NZST  today at 16:16 NZST  today at 16:16 NZST  1
 ```
 
-By default, this lists all notices. If the user runs `pebble okay` (acknowledge notices), subsequent executions of `pebble notices` will only list notices that have occurred (or been repeated) since the last one listed before the acknowledgement.
+By default, this lists all notices. The `pebble okay` command acknowledge notices: subsequent executions of `pebble notices` will only list notices that have occurred (or been repeated) since the last one listed before the acknowledgement.
 
 To fetch details about a single notice, use `pebble notice`, which displays the output in YAML format. You can fetch a notice either by ID or by type/key combination:
 
@@ -504,7 +506,7 @@ To fetch details about a single notice, use `pebble notice`, which displays the 
 # Fetch notice with ID 1
 $ pebble notice 1
 id: "1"
-type: client
+type: custom
 key: example.com/foo
 first-occurred: 2023-09-15T04:16:09.179395298Z
 last-occurred: 2023-09-15T04:16:19.487035209Z
@@ -512,10 +514,10 @@ last-repeated: 2023-09-15T04:16:09.179395298Z
 occurrences: 3
 expire-after: 168h0m0s
 
-# Fetch notice with type "client" and key "other.com/bar"
-$ pebble notice client other.com/bar
+# Fetch notice with type "custom" and key "other.com/bar"
+$ pebble notice custom other.com/bar
 id: "2"
-type: client
+type: custom
 key: other.com/bar
 first-occurred: 2023-09-15T04:16:17.180049768Z
 last-occurred: 2023-09-15T04:16:17.180049768Z
