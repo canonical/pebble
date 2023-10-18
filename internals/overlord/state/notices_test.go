@@ -408,6 +408,28 @@ func (s *noticesSuite) TestWaitNoticesTimeout(c *C) {
 	c.Assert(notices, HasLen, 0)
 }
 
+func (s *noticesSuite) TestReadStateWaitNotices(c *C) {
+	st := state.New(nil)
+	st.Lock()
+	defer st.Unlock()
+
+	marshalled, err := st.MarshalJSON()
+	c.Assert(err, IsNil)
+
+	buf := bytes.NewBuffer(marshalled)
+
+	st2, err := state.ReadState(nil, buf)
+	c.Assert(err, IsNil)
+	st2.Lock()
+	defer st2.Unlock()
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
+	defer cancel()
+	notices, err := st2.WaitNotices(ctx, nil)
+	c.Assert(err, ErrorMatches, "context deadline exceeded")
+	c.Assert(notices, HasLen, 0)
+}
+
 func (s *noticesSuite) TestWaitNoticesLongPoll(c *C) {
 	st := state.New(nil)
 	st.Lock()
