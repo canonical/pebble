@@ -190,6 +190,12 @@ func (client *Client) Requester() Requester {
 	return client.requester
 }
 
+// SetRequester allows derived projects that extend the client to test the
+// extended client code by supplying a fake requester interface.
+func (client *Client) SetRequester(rq Requester) {
+	client.requester = rq
+}
+
 func (client *Client) getTaskWebsocket(taskID, websocketID string) (clientWebsocket, error) {
 	url := fmt.Sprintf("ws://localhost/v1/tasks/%s/websocket/%s", taskID, websocketID)
 	return client.getWebsocket(url)
