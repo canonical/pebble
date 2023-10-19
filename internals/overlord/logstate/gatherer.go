@@ -144,7 +144,7 @@ func (g *logGatherer) PlanChanged(pl *plan.Plan, serviceData map[string]*Service
 	// flush the client now so that we don't later get out of sync, and send old
 	// logs with the new labels.
 	select {
-	// Check just in case the gatherer has already been stopped, so we don't get
+	// Check just in case the gatherer is already stopping, so we don't get
 	// deadlocked here.
 	case <-g.tomb.Dying():
 		return
@@ -154,24 +154,21 @@ func (g *logGatherer) PlanChanged(pl *plan.Plan, serviceData map[string]*Service
 	// Remove old pullers
 	for _, svcName := range g.pullers.Services() {
 		svc, svcExists := pl.Services[svcName]
-		if !svcExists {
-			g.pullers.Remove(svcName)
-			select {
-			case <-g.tomb.Dying():
-				return
-			case g.setLabels <- svcWithLabels{svcName, nil}:
+		if svcExists {
+			tgt := pl.LogTargets[g.targetName]
+			if svc.LogsTo(tgt) {
+				// We're still collecting logs from this service, so don't remove it.
+				continue
 			}
-			continue
 		}
 
-		tgt := pl.LogTargets[g.targetName]
-		if !svc.LogsTo(tgt) {
-			g.pullers.Remove(svcName)
-			select {
-			case <-g.tomb.Dying():
-				return
-			case g.setLabels <- svcWithLabels{svcName, nil}:
-			}
+		// Service no longer forwarding to this log target (or it was removed from
+		// the plan). Remove it from the gatherer.
+		g.pullers.Remove(svcName)
+		select {
+		case <-g.tomb.Dying():
+			return
+		case g.setLabels <- svcWithLabels{svcName, nil}:
 		}
 	}
 
@@ -366,9 +363,8 @@ type logClient interface {
 	// Flush sends buffered logs (if any) to the remote target.
 	Flush(context.Context) error
 
-	// SetLabels sets the log labels for the given service.
-	// When a service is removed, you should call SetLabels(service, nil) to
-	// release the memory in the client.
+	// SetLabels sets the log labels for the given services, or releases
+	// previously allocated label resources if the labels parameter is nil.
 	SetLabels(serviceName string, labels map[string]string)
 }
 

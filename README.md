@@ -10,7 +10,6 @@ designed with unique features that help with more specific use cases.
   - [General model](#general-model)
   - [Layer configuration examples](#layer-configuration-examples)
   - [Using Pebble](#using-pebble)
-    - [Log forwarding](#log-forwarding)
   - [Container usage](#container-usage)
   - [Layer specification](#layer-specification)
   - [API and clients](#api-and-clients)
