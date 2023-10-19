@@ -317,6 +317,47 @@ func (s *apiSuite) TestAddNotice(c *C) {
 	})
 }
 
+func (s *apiSuite) TestAddNoticeMinimal(c *C) {
+	s.daemon(c)
+
+	body := []byte(`{
+		"action": "add",
+		"type": "custom",
+		"key": "a.b/1"
+	}`)
+	req, err := http.NewRequest("POST", "/v1/notices", bytes.NewReader(body))
+	c.Assert(err, IsNil)
+	noticesCmd := apiCmd("/v1/notices")
+	rsp, ok := noticesCmd.POST(noticesCmd, req, nil).(*resp)
+	c.Assert(ok, Equals, true)
+
+	c.Check(rsp.Type, Equals, ResponseTypeSync)
+	c.Check(rsp.Status, Equals, http.StatusOK)
+	resultBytes, err := json.Marshal(rsp.Result)
+	c.Assert(err, IsNil)
+
+	st := s.d.overlord.State()
+	st.Lock()
+	notices := st.Notices(nil)
+	st.Unlock()
+	c.Assert(notices, HasLen, 1)
+	n := noticeToMap(c, notices[0])
+	noticeId, ok := n["id"].(string)
+	c.Assert(ok, Equals, true)
+	c.Assert(string(resultBytes), Equals, `{"id":"`+noticeId+`"}`)
+
+	delete(n, "first-occurred")
+	delete(n, "last-occurred")
+	delete(n, "last-repeated")
+	c.Assert(n, DeepEquals, map[string]any{
+		"id":           noticeId,
+		"type":         "custom",
+		"key":          "a.b/1",
+		"occurrences":  1.0,
+		"expire-after": "168h0m0s",
+	})
+}
+
 func (s *apiSuite) TestAddNoticeInvalidAction(c *C) {
 	s.testAddNoticeBadRequest(c, `{"action": "bad"}`, "invalid action.*")
 }

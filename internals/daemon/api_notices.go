@@ -136,9 +136,11 @@ func v1PostNotices(c *Command, r *http.Request, _ *UserState) Response {
 		return statusBadRequest("total size of data must be %d bytes or less", maxNoticeDataSize)
 	}
 	var data map[string]string
-	err = json.Unmarshal(payload.DataJSON, &data)
-	if err != nil {
-		return statusBadRequest("cannot decode notice data: %v", err)
+	if len(payload.DataJSON) > 0 {
+		err = json.Unmarshal(payload.DataJSON, &data)
+		if err != nil {
+			return statusBadRequest("cannot decode notice data: %v", err)
+		}
 	}
 
 	st := c.d.overlord.State()
