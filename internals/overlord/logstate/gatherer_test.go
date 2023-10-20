@@ -50,7 +50,7 @@ func (s *gathererSuite) TestGatherer(c *C) {
 	c.Assert(err, IsNil)
 
 	testSvc := newTestService("svc1")
-	g.ServiceStarted(testSvc.config, testSvc.ringBuffer, nil)
+	g.ServiceStarted(testSvc.config, &ServiceData{Buffer: testSvc.ringBuffer})
 
 	testSvc.writeLog("log line #1")
 	testSvc.writeLog("log line #2")
@@ -87,7 +87,7 @@ func (s *gathererSuite) TestGathererTimeout(c *C) {
 	c.Assert(err, IsNil)
 
 	testSvc := newTestService("svc1")
-	g.ServiceStarted(testSvc.config, testSvc.ringBuffer, nil)
+	g.ServiceStarted(testSvc.config, &ServiceData{Buffer: testSvc.ringBuffer})
 
 	testSvc.writeLog("log line #1")
 	select {
@@ -114,7 +114,7 @@ func (s *gathererSuite) TestGathererShutdown(c *C) {
 	c.Assert(err, IsNil)
 
 	testSvc := newTestService("svc1")
-	g.ServiceStarted(testSvc.config, testSvc.ringBuffer, nil)
+	g.ServiceStarted(testSvc.config, &ServiceData{Buffer: testSvc.ringBuffer})
 
 	testSvc.writeLog("log line #1")
 	err = testSvc.stop()
@@ -167,7 +167,7 @@ func (s *gathererSuite) TestRetryLoki(c *C) {
 	c.Assert(err, IsNil)
 
 	testSvc := newTestService("svc1")
-	g.ServiceStarted(testSvc.config, testSvc.ringBuffer, map[string]string{})
+	g.ServiceStarted(testSvc.config, &ServiceData{Buffer: testSvc.ringBuffer})
 
 	reqReceived := make(chan struct{})
 	// First attempt: server should return a retryable error
@@ -225,6 +225,7 @@ func (s *gathererSuite) TestRace(c *C) {
 		Name:     "tgt1",
 		Type:     plan.LokiTarget,
 		Services: []string{"all"},
+		Labels:   map[string]string{"foo": "bar", "baz": "foo"},
 	}
 
 	g, err := newLogGathererInternal(target, &logGathererOptions{
@@ -237,11 +238,6 @@ func (s *gathererSuite) TestRace(c *C) {
 	serviceData := map[string]*ServiceData{
 		svc1.name: {Buffer: svc1.ringBuffer},
 		svc2.name: {Buffer: svc2.ringBuffer},
-	}
-	fakeLabels := map[string]string{"foo": "bar", "baz": "foo"}
-	allLabels := map[string]map[string]string{
-		svc1.name: fakeLabels,
-		svc2.name: fakeLabels,
 	}
 
 	wg := sync.WaitGroup{}
@@ -261,10 +257,10 @@ func (s *gathererSuite) TestRace(c *C) {
 			LogTargets: map[string]*plan.LogTarget{
 				target.Name: target,
 			},
-		}, serviceData, allLabels)
+		}, serviceData)
 	})
 
-	doAsync(func() { g.ServiceStarted(svc1.config, svc1.ringBuffer, fakeLabels) })
+	doAsync(func() { g.ServiceStarted(svc1.config, serviceData[svc1.name]) })
 
 	doAsync(func() {
 		svc1.writeLog("hello")
@@ -272,7 +268,7 @@ func (s *gathererSuite) TestRace(c *C) {
 	})
 
 	// Simulate a service restart
-	doAsync(func() { g.ServiceStarted(svc1.config, svc1.ringBuffer, fakeLabels) })
+	doAsync(func() { g.ServiceStarted(svc1.config, serviceData[svc1.name]) })
 
 	doAsync(func() {
 		g.PlanChanged(&plan.Plan{
@@ -282,10 +278,10 @@ func (s *gathererSuite) TestRace(c *C) {
 			LogTargets: map[string]*plan.LogTarget{
 				target.Name: target,
 			},
-		}, serviceData, allLabels)
+		}, serviceData)
 	})
 
-	doAsync(func() { g.ServiceStarted(svc2.config, svc2.ringBuffer, fakeLabels) })
+	doAsync(func() { g.ServiceStarted(svc2.config, serviceData[svc2.name]) })
 
 	doAsync(func() {
 		svc2.writeLog("hello")

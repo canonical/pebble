@@ -17,6 +17,7 @@ package logstate
 import (
 	"context"
 	"fmt"
+	"os"
 	"time"
 
 	"gopkg.in/tomb.v2"
@@ -59,7 +60,7 @@ const (
 type logGatherer struct {
 	*logGathererOptions
 
-	targetName string
+	target *plan.LogTarget
 	// tomb for the main loop
 	tomb tomb.Tomb
 
@@ -105,11 +106,11 @@ func newLogGathererInternal(target *plan.LogTarget, options *logGathererOptions)
 	g := &logGatherer{
 		logGathererOptions: options,
 
-		targetName: target.Name,
-		client:     client,
-		setLabels:  make(chan svcWithLabels),
-		entryCh:    make(chan servicelog.Entry),
-		pullers:    newPullerGroup(target.Name),
+		target:    target,
+		client:    client,
+		setLabels: make(chan svcWithLabels),
+		entryCh:   make(chan servicelog.Entry),
+		pullers:   newPullerGroup(target.Name),
 	}
 	g.clientCtx, g.clientCancel = context.WithCancel(context.Background())
 	g.tomb.Go(g.loop)
@@ -137,12 +138,12 @@ func fillDefaultOptions(options *logGathererOptions) *logGathererOptions {
 // PlanChanged is called by the LogManager when the plan is changed, if this
 // gatherer's target exists in the new plan.
 // The labels map should not be modified while this method is running.
-func (g *logGatherer) PlanChanged(pl *plan.Plan, serviceData map[string]*ServiceData, labels map[string]map[string]string) {
+func (g *logGatherer) PlanChanged(pl *plan.Plan, serviceData map[string]*ServiceData) {
 	// Remove old pullers
 	for _, svcName := range g.pullers.Services() {
 		svc, svcExists := pl.Services[svcName]
 		if svcExists {
-			tgt := pl.LogTargets[g.targetName]
+			tgt := pl.LogTargets[g.target.Name]
 			if svc.LogsTo(tgt) {
 				// We're still collecting logs from this service, so don't remove it.
 				continue
@@ -161,7 +162,7 @@ func (g *logGatherer) PlanChanged(pl *plan.Plan, serviceData map[string]*Service
 
 	// Add new pullers
 	for _, service := range pl.Services {
-		target := pl.LogTargets[g.targetName]
+		target := pl.LogTargets[g.target.Name]
 		if !service.LogsTo(target) {
 			continue
 		}
@@ -175,8 +176,9 @@ func (g *logGatherer) PlanChanged(pl *plan.Plan, serviceData map[string]*Service
 
 		g.pullers.Add(service.Name, svcData.Buffer, g.entryCh)
 		// update labels
+		labels := evaluateLabels(g.target.Labels, serviceData[service.Name].Env)
 		select {
-		case g.setLabels <- svcWithLabels{service.Name, labels[service.Name]}:
+		case g.setLabels <- svcWithLabels{service.Name, labels}:
 		case <-g.tomb.Dying():
 			return
 		}
@@ -186,15 +188,34 @@ func (g *logGatherer) PlanChanged(pl *plan.Plan, serviceData map[string]*Service
 // ServiceStarted is called by the LogManager on the start of a service which
 // logs to this gatherer's target.
 // The labels map should not be modified while this method is running.
-func (g *logGatherer) ServiceStarted(service *plan.Service, buffer *servicelog.RingBuffer, labels map[string]string) {
-	g.pullers.Add(service.Name, buffer, g.entryCh)
+func (g *logGatherer) ServiceStarted(service *plan.Service, data *ServiceData) {
+	g.pullers.Add(service.Name, data.Buffer, g.entryCh)
 
 	// Add this service's custom labels to the client
+	labels := evaluateLabels(g.target.Labels, data.Env)
 	select {
 	case g.setLabels <- svcWithLabels{service.Name, labels}:
 	case <-g.tomb.Dying():
 		return
 	}
+}
+
+// evaluateLabels interprets the labels defined in the plan, substituting any
+// $env_vars with the corresponding value in the service's environment.
+func evaluateLabels(rawLabels, env map[string]string) map[string]string {
+	substitute := func(k string) string {
+		if v, ok := env[k]; ok {
+			return v
+		}
+		// Undefined variables default to "", just like Bash
+		return ""
+	}
+
+	labels := make(map[string]string, len(rawLabels))
+	for key, rawLabel := range rawLabels {
+		labels[key] = os.Expand(rawLabel, substitute)
+	}
+	return labels
 }
 
 // The main control loop for the logGatherer. loop receives logs from the
@@ -211,7 +232,7 @@ func (g *logGatherer) loop() error {
 		flushTimer.Stop()
 		err := g.client.Flush(ctx)
 		if err != nil {
-			logger.Noticef("Cannot flush logs to target %q: %v", g.targetName, err)
+			logger.Noticef("Cannot flush logs to target %q: %v", g.target.Name, err)
 		}
 		numWritten = 0
 	}
@@ -234,7 +255,7 @@ mainLoop:
 		case entry := <-g.entryCh:
 			err := g.client.Add(entry)
 			if err != nil {
-				logger.Noticef("Cannot write logs to target %q: %v", g.targetName, err)
+				logger.Noticef("Cannot write logs to target %q: %v", g.target.Name, err)
 				continue
 			}
 			numWritten++
@@ -273,7 +294,7 @@ func (g *logGatherer) Stop() {
 	// Wait up to timeoutPullers for the pullers to pull the final logs from the
 	// iterator and send to the main loop.
 	time.AfterFunc(timeoutPullers, func() {
-		logger.Debugf("gatherer %q: force killing log pullers", g.targetName)
+		logger.Debugf("gatherer %q: force killing log pullers", g.target.Name)
 		g.pullers.KillAll()
 	})
 
@@ -283,9 +304,9 @@ func (g *logGatherer) Stop() {
 	g.pullers.tomb.Kill(nil)
 	select {
 	case <-g.pullers.Done():
-		logger.Debugf("gatherer %q: pullers have finished", g.targetName)
+		logger.Debugf("gatherer %q: pullers have finished", g.target.Name)
 	case <-time.After(timeoutMainLoop):
-		logger.Debugf("gatherer %q: force killing main loop", g.targetName)
+		logger.Debugf("gatherer %q: force killing main loop", g.target.Name)
 	}
 
 	g.tomb.Kill(nil)
