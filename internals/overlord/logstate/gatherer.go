@@ -153,9 +153,9 @@ func (g *logGatherer) PlanChanged(pl *plan.Plan, serviceData map[string]*Service
 		// the plan). Remove it from the gatherer.
 		g.pullers.Remove(svcName)
 		select {
+		case g.setLabels <- svcWithLabels{svcName, nil}:
 		case <-g.tomb.Dying():
 			return
-		case g.setLabels <- svcWithLabels{svcName, nil}:
 		}
 	}
 
@@ -176,9 +176,9 @@ func (g *logGatherer) PlanChanged(pl *plan.Plan, serviceData map[string]*Service
 		g.pullers.Add(service.Name, svcData.Buffer, g.entryCh)
 		// update labels
 		select {
+		case g.setLabels <- svcWithLabels{service.Name, labels[service.Name]}:
 		case <-g.tomb.Dying():
 			return
-		case g.setLabels <- svcWithLabels{service.Name, labels[service.Name]}:
 		}
 	}
 }
@@ -191,9 +191,9 @@ func (g *logGatherer) ServiceStarted(service *plan.Service, buffer *servicelog.R
 
 	// Add this service's custom labels to the client
 	select {
+	case g.setLabels <- svcWithLabels{service.Name, labels}:
 	case <-g.tomb.Dying():
 		return
-	case g.setLabels <- svcWithLabels{service.Name, labels}:
 	}
 }
 
