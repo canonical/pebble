@@ -48,8 +48,7 @@ type Client struct {
 	entries []lokiEntryWithService
 
 	// store the custom labels for each service
-	// example usage: labelValue := labels[serviceName][labelKey]
-	labels map[string]map[string]string
+	labels map[string]json.RawMessage
 }
 
 func NewClient(target *plan.LogTarget) *Client {
@@ -69,10 +68,10 @@ func NewClientWithOptions(target *plan.LogTarget, options *ClientOptions) *Clien
 		target:     target,
 		httpClient: &http.Client{Timeout: options.RequestTimeout},
 		buffer:     make([]lokiEntryWithService, 2*options.MaxRequestEntries),
-		labels:     make(map[string]map[string]string),
+		labels:     make(map[string]json.RawMessage),
 	}
 	// c.entries should be backed by the same array as c.buffer
-	c.entries = c.buffer[0:0:len(c.buffer)]
+	c.entries = c.buffer[0:0]
 	return c
 }
 
@@ -101,7 +100,12 @@ func (c *Client) SetLabels(serviceName string, labels map[string]string) {
 	// Add Loki-specific default labels
 	newLabels["pebble_service"] = serviceName
 
-	c.labels[serviceName] = newLabels
+	// Encode labels now to save time later
+	marshalledLabels, err := json.Marshal(newLabels)
+	if err != nil {
+		logger.Panicf("Loki client for %q: cannot marshal labels: %v", c.target.Name, err)
+	}
+	c.labels[serviceName] = marshalledLabels
 }
 
 func (c *Client) Add(entry servicelog.Entry) error {
@@ -172,7 +176,7 @@ func (c *Client) resetBuffer() {
 	for i := 0; i < len(c.entries); i++ {
 		c.entries[i] = lokiEntryWithService{}
 	}
-	c.entries = c.buffer[0:0:len(c.buffer)]
+	c.entries = c.buffer[0:0]
 }
 
 func (c *Client) buildRequest() lokiRequest {
@@ -206,8 +210,8 @@ type lokiRequest struct {
 }
 
 type lokiStream struct {
-	Labels  map[string]string `json:"stream"`
-	Entries []lokiEntry       `json:"values"`
+	Labels  json.RawMessage `json:"stream"`
+	Entries []lokiEntry     `json:"values"`
 }
 
 type lokiEntry [2]string
