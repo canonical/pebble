@@ -133,8 +133,7 @@ func evaluateLabels(rawLabels, env map[string]string) map[string]string {
 		if v, ok := env[k]; ok {
 			return v
 		}
-		logger.Debugf("variable $%s undefined in service environment", k)
-		// undefined variables default to "", just like Bash
+		// Undefined variables default to "", just like Bash
 		return ""
 	}
 
