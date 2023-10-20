@@ -71,7 +71,6 @@ type logGatherer struct {
 	clientCancel context.CancelFunc
 
 	// Channels used to notify the main loop to update the client
-	flushCh   chan struct{}
 	setLabels chan svcWithLabels
 
 	pullers *pullerGroup
@@ -108,7 +107,6 @@ func newLogGathererInternal(target *plan.LogTarget, options *logGathererOptions)
 
 		targetName: target.Name,
 		client:     client,
-		flushCh:    make(chan struct{}),
 		setLabels:  make(chan svcWithLabels),
 		entryCh:    make(chan servicelog.Entry),
 		pullers:    newPullerGroup(target.Name),
@@ -140,17 +138,6 @@ func fillDefaultOptions(options *logGathererOptions) *logGathererOptions {
 // gatherer's target exists in the new plan.
 // The labels map should not be modified while this method is running.
 func (g *logGatherer) PlanChanged(pl *plan.Plan, serviceData map[string]*ServiceData, labels map[string]map[string]string) {
-	// New plan - the labels may have changed. We should tell the main loop to
-	// flush the client now so that we don't later get out of sync, and send old
-	// logs with the new labels.
-	select {
-	// Check just in case the gatherer is already stopping, so we don't get
-	// deadlocked here.
-	case <-g.tomb.Dying():
-		return
-	case g.flushCh <- struct{}{}:
-	}
-
 	// Remove old pullers
 	for _, svcName := range g.pullers.Services() {
 		svc, svcExists := pl.Services[svcName]
@@ -238,10 +225,10 @@ mainLoop:
 		case <-flushTimer.Expired():
 			flushClient(g.clientCtx)
 
-		case <-g.flushCh:
-			flushClient(g.clientCtx)
-
 		case args := <-g.setLabels:
+			// Before we change the labels, flush out any old logs, so they are sent
+			// with the old labels.
+			flushClient(g.clientCtx)
 			g.client.SetLabels(args.service, args.labels)
 
 		case entry := <-g.entryCh:
