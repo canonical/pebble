@@ -90,7 +90,7 @@ func (m *LogManager) PlanChanged(pl *plan.Plan) {
 }
 
 // ServiceStarted notifies the log manager that the named service has started,
-// and provides a reference to the service's log buffer and environment.
+// and provides a reference to the service's data.
 func (m *LogManager) ServiceStarted(service *plan.Service, data *ServiceData) {
 	m.mu.Lock()
 	defer m.mu.Unlock()

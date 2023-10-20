@@ -174,14 +174,14 @@ func (g *logGatherer) PlanChanged(pl *plan.Plan, serviceData map[string]*Service
 			continue
 		}
 
-		g.pullers.Add(service.Name, svcData.Buffer, g.entryCh)
-		// update labels
 		labels := evaluateLabels(g.target.Labels, serviceData[service.Name].Env)
 		select {
 		case g.setLabels <- svcWithLabels{service.Name, labels}:
 		case <-g.tomb.Dying():
 			return
 		}
+
+		g.pullers.Add(service.Name, svcData.Buffer, g.entryCh)
 	}
 }
 
