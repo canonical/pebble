@@ -95,20 +95,20 @@ func (m *LogManager) ServiceStarted(service *plan.Service, data *ServiceData) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if m.services[service.Name].unchanged(data) {
-		// Service restarted, but nothing about it has changed. So we don't need
-		// to do anything
-		return
-	}
-
+	oldData := m.services[service.Name]
 	m.services[service.Name] = data
+
 	for _, gatherer := range m.gatherers {
 		target := m.plan.LogTargets[gatherer.target.Name]
 		if !service.LogsTo(target) {
 			continue
 		}
-
-		gatherer.ServiceStarted(service, data)
+		if !reflect.DeepEqual(data.Env, oldData.Env) {
+			gatherer.EnvChanged(service.Name, data.Env)
+		}
+		if data.Buffer != oldData.Buffer {
+			gatherer.BufferChanged(service.Name, data.Buffer)
+		}
 	}
 }
 
@@ -138,21 +138,4 @@ func (m *LogManager) Stop() {
 type ServiceData struct {
 	Buffer *servicelog.RingBuffer
 	Env    map[string]string
-}
-
-// unchanged checks if d pertains to the same running service as other.
-func (d *ServiceData) unchanged(other *ServiceData) bool {
-	if d == nil {
-		return other == nil
-	}
-	if other == nil {
-		return false
-	}
-	if d.Buffer != other.Buffer {
-		return false
-	}
-	if !reflect.DeepEqual(d.Env, other.Env) {
-		return false
-	}
-	return true
 }

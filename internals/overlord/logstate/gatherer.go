@@ -185,19 +185,20 @@ func (g *logGatherer) PlanChanged(pl *plan.Plan, serviceData map[string]*Service
 	}
 }
 
-// ServiceStarted is called by the LogManager on the start of a service which
-// logs to this gatherer's target.
-// The labels map should not be modified while this method is running.
-func (g *logGatherer) ServiceStarted(service *plan.Service, data *ServiceData) {
-	g.pullers.Add(service.Name, data.Buffer, g.entryCh)
-
-	// Add this service's custom labels to the client
-	labels := evaluateLabels(g.target.Labels, data.Env)
+// EnvChanged is called when a service is (re)started and its environment has
+// changed.
+func (g *logGatherer) EnvChanged(serviceName string, env map[string]string) {
+	labels := evaluateLabels(g.target.Labels, env)
 	select {
-	case g.setLabels <- svcWithLabels{service.Name, labels}:
+	case g.setLabels <- svcWithLabels{serviceName, labels}:
 	case <-g.tomb.Dying():
 		return
 	}
+}
+
+// BufferChanged is called when a service is (re)started with a new ringbuffer.
+func (g *logGatherer) BufferChanged(serviceName string, buffer *servicelog.RingBuffer) {
+	g.pullers.Add(serviceName, buffer, g.entryCh)
 }
 
 // evaluateLabels interprets the labels defined in the plan, substituting any
