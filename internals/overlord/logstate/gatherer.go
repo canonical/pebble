@@ -71,7 +71,7 @@ type logGatherer struct {
 	// ensure the client is not blocking subsequent teardown steps.
 	clientCancel context.CancelFunc
 
-	// Channels used to notify the main loop to update the client
+	// Channel used to notify the main loop to set labels on the client
 	setLabels chan svcWithLabels
 
 	pullers *pullerGroup

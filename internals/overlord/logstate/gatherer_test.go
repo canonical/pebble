@@ -50,7 +50,7 @@ func (s *gathererSuite) TestGatherer(c *C) {
 	c.Assert(err, IsNil)
 
 	testSvc := newTestService("svc1")
-	g.ServiceStarted(testSvc.config, &ServiceData{Buffer: testSvc.ringBuffer})
+	g.BufferChanged(testSvc.name, testSvc.ringBuffer)
 
 	testSvc.writeLog("log line #1")
 	testSvc.writeLog("log line #2")
@@ -87,7 +87,7 @@ func (s *gathererSuite) TestGathererTimeout(c *C) {
 	c.Assert(err, IsNil)
 
 	testSvc := newTestService("svc1")
-	g.ServiceStarted(testSvc.config, &ServiceData{Buffer: testSvc.ringBuffer})
+	g.BufferChanged(testSvc.name, testSvc.ringBuffer)
 
 	testSvc.writeLog("log line #1")
 	select {
@@ -114,7 +114,7 @@ func (s *gathererSuite) TestGathererShutdown(c *C) {
 	c.Assert(err, IsNil)
 
 	testSvc := newTestService("svc1")
-	g.ServiceStarted(testSvc.config, &ServiceData{Buffer: testSvc.ringBuffer})
+	g.BufferChanged(testSvc.name, testSvc.ringBuffer)
 
 	testSvc.writeLog("log line #1")
 	err = testSvc.stop()
@@ -167,7 +167,7 @@ func (s *gathererSuite) TestRetryLoki(c *C) {
 	c.Assert(err, IsNil)
 
 	testSvc := newTestService("svc1")
-	g.ServiceStarted(testSvc.config, &ServiceData{Buffer: testSvc.ringBuffer})
+	g.BufferChanged(testSvc.name, testSvc.ringBuffer)
 
 	reqReceived := make(chan struct{})
 	// First attempt: server should return a retryable error
@@ -225,7 +225,7 @@ func (s *gathererSuite) TestRace(c *C) {
 		Name:     "tgt1",
 		Type:     plan.LokiTarget,
 		Services: []string{"all"},
-		Labels:   map[string]string{"foo": "bar", "baz": "foo"},
+		Labels:   map[string]string{"foo": "bar-$SECRET-$SECRET2", "baz": "foo"},
 	}
 
 	g, err := newLogGathererInternal(target, &logGathererOptions{
@@ -235,9 +235,16 @@ func (s *gathererSuite) TestRace(c *C) {
 
 	svc1 := newTestService("svc1")
 	svc2 := newTestService("svc2")
+	fakeEnv := map[string]string{
+		"SECRET":  "pie",
+		"SECRET2": "pizza",
+	}
+	svc1.env = fakeEnv
+	svc2.env = fakeEnv
+
 	serviceData := map[string]*ServiceData{
-		svc1.name: {Buffer: svc1.ringBuffer},
-		svc2.name: {Buffer: svc2.ringBuffer},
+		svc1.name: svc1.data(),
+		svc2.name: svc2.data(),
 	}
 
 	wg := sync.WaitGroup{}
@@ -260,7 +267,10 @@ func (s *gathererSuite) TestRace(c *C) {
 		}, serviceData)
 	})
 
-	doAsync(func() { g.ServiceStarted(svc1.config, serviceData[svc1.name]) })
+	doAsync(func() {
+		g.EnvChanged(svc1.name, svc1.env)
+		g.BufferChanged(svc1.name, svc1.ringBuffer)
+	})
 
 	doAsync(func() {
 		svc1.writeLog("hello")
@@ -268,7 +278,10 @@ func (s *gathererSuite) TestRace(c *C) {
 	})
 
 	// Simulate a service restart
-	doAsync(func() { g.ServiceStarted(svc1.config, serviceData[svc1.name]) })
+	doAsync(func() {
+		g.EnvChanged(svc1.name, svc1.env)
+		g.BufferChanged(svc1.name, svc1.ringBuffer)
+	})
 
 	doAsync(func() {
 		g.PlanChanged(&plan.Plan{
@@ -281,7 +294,10 @@ func (s *gathererSuite) TestRace(c *C) {
 		}, serviceData)
 	})
 
-	doAsync(func() { g.ServiceStarted(svc2.config, serviceData[svc2.name]) })
+	doAsync(func() {
+		g.EnvChanged(svc2.name, svc2.env)
+		g.BufferChanged(svc2.name, svc2.ringBuffer)
+	})
 
 	doAsync(func() {
 		svc2.writeLog("hello")
@@ -342,6 +358,7 @@ type testService struct {
 	config     *plan.Service
 	ringBuffer *servicelog.RingBuffer
 	writer     io.Writer
+	env        map[string]string
 }
 
 func newTestService(name string) *testService {
@@ -362,4 +379,11 @@ func (s *testService) writeLog(log string) {
 
 func (s *testService) stop() error {
 	return s.ringBuffer.Close()
+}
+
+func (s *testService) data() *ServiceData {
+	return &ServiceData{
+		Buffer: s.ringBuffer,
+		Env:    s.env,
+	}
 }
