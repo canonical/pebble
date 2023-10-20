@@ -167,6 +167,7 @@ func (s *gathererSuite) TestRetryLoki(c *C) {
 	c.Assert(err, IsNil)
 
 	testSvc := newTestService("svc1")
+	g.EnvChanged(testSvc.name, map[string]string{})
 	g.BufferChanged(testSvc.name, testSvc.ringBuffer)
 
 	reqReceived := make(chan struct{})

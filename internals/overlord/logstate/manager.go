@@ -103,10 +103,10 @@ func (m *LogManager) ServiceStarted(service *plan.Service, data *ServiceData) {
 		if !service.LogsTo(target) {
 			continue
 		}
-		if !reflect.DeepEqual(data.Env, oldData.Env) {
+		if oldData == nil || !reflect.DeepEqual(data.Env, oldData.Env) {
 			gatherer.EnvChanged(service.Name, data.Env)
 		}
-		if data.Buffer != oldData.Buffer {
+		if oldData == nil || data.Buffer != oldData.Buffer {
 			gatherer.BufferChanged(service.Name, data.Buffer)
 		}
 	}
