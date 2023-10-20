@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sync"
 	"time"
 
 	. "gopkg.in/check.v1"
@@ -166,7 +167,7 @@ func (s *managerSuite) TestTimelyShutdown(c *C) {
 	err := svc1.stop()
 	c.Assert(err, IsNil)
 
-	client.flushTime = 10 * time.Second
+	client.SetFlushTime(10 * time.Second)
 	// Stop all gatherers and check this happens quickly
 	done := make(chan struct{})
 	go func() {
@@ -182,6 +183,7 @@ func (s *managerSuite) TestTimelyShutdown(c *C) {
 
 type slowFlushingClient struct {
 	flushTime time.Duration
+	mu        sync.Mutex
 }
 
 func (c *slowFlushingClient) SetLabels(serviceName string, labels map[string]string) {
@@ -194,12 +196,21 @@ func (c *slowFlushingClient) Add(_ servicelog.Entry) error {
 }
 
 func (c *slowFlushingClient) Flush(ctx context.Context) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	select {
 	case <-ctx.Done():
 		return fmt.Errorf("flush timed out")
 	case <-time.After(c.flushTime):
 		return nil
 	}
+}
+
+func (c *slowFlushingClient) SetFlushTime(timeout time.Duration) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.flushTime = timeout
 }
 
 func (s *managerSuite) TestLabels(c *C) {
