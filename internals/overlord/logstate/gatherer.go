@@ -72,7 +72,6 @@ type logGatherer struct {
 	clientCancel context.CancelFunc
 
 	// Channels used to notify the main loop to update the client
-	flushCh   chan struct{}
 	setLabels chan svcWithLabels
 
 	pullers *pullerGroup
@@ -83,9 +82,10 @@ type logGatherer struct {
 // logGathererOptions allows overriding the newLogClient method and time values
 // in testing.
 type logGathererOptions struct {
-	bufferTimeout      time.Duration
-	maxBufferedEntries int
-	timeoutFinalFlush  time.Duration
+	bufferTimeout       time.Duration
+	maxBufferedEntries  int
+	timeoutCurrentFlush time.Duration
+	timeoutFinalFlush   time.Duration
 	// method to get a new client
 	newClient func(*plan.LogTarget) (logClient, error)
 }
@@ -109,7 +109,6 @@ func newLogGathererInternal(target *plan.LogTarget, options *logGathererOptions)
 
 		target:    target,
 		client:    client,
-		flushCh:   make(chan struct{}),
 		setLabels: make(chan svcWithLabels),
 		entryCh:   make(chan servicelog.Entry),
 		pullers:   newPullerGroup(target.Name),
@@ -128,6 +127,9 @@ func fillDefaultOptions(options *logGathererOptions) *logGathererOptions {
 	if options.maxBufferedEntries == 0 {
 		options.maxBufferedEntries = maxBufferedEntries
 	}
+	if options.timeoutCurrentFlush == 0 {
+		options.timeoutCurrentFlush = timeoutCurrentFlush
+	}
 	if options.timeoutFinalFlush == 0 {
 		options.timeoutFinalFlush = timeoutFinalFlush
 	}
@@ -141,17 +143,6 @@ func fillDefaultOptions(options *logGathererOptions) *logGathererOptions {
 // gatherer's target exists in the new plan.
 // The labels map should not be modified while this method is running.
 func (g *logGatherer) PlanChanged(pl *plan.Plan, serviceData map[string]*ServiceData) {
-	// New plan - the labels may have changed. We should tell the main loop to
-	// flush the client now so that we don't later get out of sync, and send old
-	// logs with the new labels.
-	select {
-	case g.flushCh <- struct{}{}:
-	// Check just in case the gatherer is already stopping, so we don't get
-	// deadlocked here.
-	case <-g.tomb.Dying():
-		return
-	}
-
 	// Remove old pullers
 	for _, svcName := range g.pullers.Services() {
 		svc, svcExists := pl.Services[svcName]
@@ -260,10 +251,8 @@ mainLoop:
 		case <-flushTimer.Expired():
 			flushClient(g.clientCtx)
 
-		case <-g.flushCh:
-			flushClient(g.clientCtx)
-
 		case args := <-g.setLabels:
+			flushClient(g.clientCtx)
 			g.client.SetLabels(args.service, args.labels)
 
 		case entry := <-g.entryCh:
@@ -303,7 +292,7 @@ mainLoop:
 //   - Flush out any final logs buffered in the client.
 func (g *logGatherer) Stop() {
 	// Wait up to timeoutCurrentFlush for the current flush to complete (if any)
-	time.AfterFunc(timeoutCurrentFlush, g.clientCancel)
+	time.AfterFunc(g.timeoutCurrentFlush, g.clientCancel)
 
 	// Wait up to timeoutPullers for the pullers to pull the final logs from the
 	// iterator and send to the main loop.
