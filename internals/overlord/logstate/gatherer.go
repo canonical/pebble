@@ -71,7 +71,7 @@ type logGatherer struct {
 	// ensure the client is not blocking subsequent teardown steps.
 	clientCancel context.CancelFunc
 
-	// Channels used to notify the main loop to update the client
+	// Channel used to notify the main loop to set the client's labels
 	setLabels chan svcWithLabels
 
 	pullers *pullerGroup
@@ -252,6 +252,8 @@ mainLoop:
 			flushClient(g.clientCtx)
 
 		case args := <-g.setLabels:
+			// Before we change the labels, flush any logs currently in the buffer,
+			// so that these logs are sent with the correct (old) labels.
 			flushClient(g.clientCtx)
 			g.client.SetLabels(args.service, args.labels)
 
