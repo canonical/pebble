@@ -28,13 +28,21 @@ const (
 	defaultNoticeExpireAfter = 7 * 24 * time.Hour
 )
 
-// Notice represents an aggregated notice. The combination of type and key is unique.
+// Notice represents an aggregated notice. The combination of user, type, and key is unique.
 type Notice struct {
 	// Server-generated unique ID for this notice (a surrogate key).
 	//
 	// Currently this is a monotonically increasing number, but that may well
 	// change in future. If your code relies on it being a number, it will break.
 	id string
+
+	// The UID of the intended recipient of this notice.
+	//
+	// A value of -1 indicates that the notice may be read by any user. A
+	// value of 0 indicates the notice may only be read by the root user.
+	// For all other values >0, the notice may be read by the user with the
+	// matching UID, as well as by root.
+	user int64
 
 	// The notice type represents a group of notices originating from a common
 	// source. For example, notices originating from the CLI client have type
@@ -84,6 +92,10 @@ func (n *Notice) String() string {
 	return fmt.Sprintf("Notice %s (%s:%s)", n.id, n.noticeType, n.key)
 }
 
+func (n *Notice) User() int64 {
+	return n.user
+}
+
 // expired reports whether this notice has expired (relative to the given "now").
 func (n *Notice) expired(now time.Time) bool {
 	return n.lastOccurred.Add(n.expireAfter).Before(now)
@@ -94,6 +106,7 @@ func (n *Notice) expired(now time.Time) bool {
 // to disk as JSON.
 type jsonNotice struct {
 	ID            string            `json:"id"`
+	User          int64             `json:"user"`
 	Type          string            `json:"type"`
 	Key           string            `json:"key"`
 	FirstOccurred time.Time         `json:"first-occurred"`
@@ -108,6 +121,7 @@ type jsonNotice struct {
 func (n *Notice) MarshalJSON() ([]byte, error) {
 	jn := jsonNotice{
 		ID:            n.id,
+		User:          n.user,
 		Type:          string(n.noticeType),
 		Key:           n.key,
 		FirstOccurred: n.firstOccurred,
@@ -132,6 +146,7 @@ func (n *Notice) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	n.id = jn.ID
+	n.user = jn.User
 	n.noticeType = NoticeType(jn.Type)
 	n.key = jn.Key
 	n.firstOccurred = jn.FirstOccurred
@@ -194,11 +209,11 @@ type AddNoticeOptions struct {
 
 // AddNotice records an occurrence of a notice with the specified type and key
 // and options.
-func (s *State) AddNotice(noticeType NoticeType, key string, options *AddNoticeOptions) (string, error) {
+func (s *State) AddNotice(user int64, noticeType NoticeType, key string, options *AddNoticeOptions) (string, error) {
 	if options == nil {
 		options = &AddNoticeOptions{}
 	}
-	err := validateNotice(noticeType, key, options)
+	err := validateNotice(user, noticeType, key, options)
 	if err != nil {
 		return "", err
 	}
@@ -211,13 +226,14 @@ func (s *State) AddNotice(noticeType NoticeType, key string, options *AddNoticeO
 	}
 	now = now.UTC()
 	newOrRepeated := false
-	uniqueKey := noticeKey{noticeType, key}
+	uniqueKey := noticeKey{user, noticeType, key}
 	notice, ok := s.notices[uniqueKey]
 	if !ok {
-		// First occurrence of this notice type+key
+		// First occurrence of this notice user+type+key
 		s.lastNoticeId++
 		notice = &Notice{
 			id:            strconv.Itoa(s.lastNoticeId),
+			user:          user,
 			noticeType:    noticeType,
 			key:           key,
 			firstOccurred: now,
@@ -247,7 +263,10 @@ func (s *State) AddNotice(noticeType NoticeType, key string, options *AddNoticeO
 	return notice.id, nil
 }
 
-func validateNotice(noticeType NoticeType, key string, options *AddNoticeOptions) error {
+func validateNotice(user int64, noticeType NoticeType, key string, options *AddNoticeOptions) error {
+	if user < -1 || user > 0xFFFFFFFF { // max uint32
+		return fmt.Errorf("internal error: attempt to add notice with invalid user %q", user)
+	}
 	if !noticeType.Valid() {
 		return fmt.Errorf("internal error: attempted to add notice with invalid type %q", noticeType)
 	}
@@ -258,12 +277,16 @@ func validateNotice(noticeType NoticeType, key string, options *AddNoticeOptions
 }
 
 type noticeKey struct {
+	user       int64
 	noticeType NoticeType
 	key        string
 }
 
 // NoticeFilter allows filtering notices by various fields.
 type NoticeFilter struct {
+	// Users, if not empty, includes only notices whose user is one of these.
+	Users []int64
+
 	// Types, if not empty, includes only notices whose type is one of these.
 	Types []NoticeType
 
@@ -278,6 +301,9 @@ type NoticeFilter struct {
 func (f *NoticeFilter) matches(n *Notice) bool {
 	if f == nil {
 		return true
+	}
+	if len(f.Users) > 0 && !sliceContains(f.Users, n.user) {
+		return false
 	}
 	// Can't use strutil.ListContains as Types is []NoticeType, not []string
 	if len(f.Types) > 0 && !sliceContains(f.Types, n.noticeType) {
@@ -347,7 +373,7 @@ func (s *State) unflattenNotices(flat []*Notice) {
 		if n.expired(now) {
 			continue
 		}
-		uniqueKey := noticeKey{n.noticeType, n.key}
+		uniqueKey := noticeKey{n.user, n.noticeType, n.key}
 		s.notices[uniqueKey] = n
 	}
 }

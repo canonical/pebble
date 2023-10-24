@@ -29,7 +29,8 @@ import (
 func (cs *clientSuite) TestNotice(c *C) {
 	cs.rsp = `{"type": "sync", "result": {
 		"id":   "123",
-  		"type": "custom",
+		"user": 1000,
+		"type": "custom",
 		"key": "a.b/c",
 		"first-occurred": "2023-09-05T15:43:00.123Z",
 		"last-occurred": "2023-09-05T17:43:00.567Z",
@@ -43,6 +44,7 @@ func (cs *clientSuite) TestNotice(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(notice, DeepEquals, &client.Notice{
 		ID:            "123",
+		User:          1000,
 		Type:          client.CustomNotice,
 		Key:           "a.b/c",
 		FirstOccurred: time.Date(2023, 9, 5, 15, 43, 0, 123_000_000, time.UTC),
@@ -63,7 +65,8 @@ func (cs *clientSuite) TestNoticeInvalidID(c *C) {
 func (cs *clientSuite) TestNotices(c *C) {
 	cs.rsp = `{"type": "sync", "result": [{
 		"id":   "1",
-  		"type": "custom",
+		"user": 1000,
+		"type": "custom",
 		"key": "a.b/c",
 		"first-occurred": "2023-09-05T15:43:00.123Z",
 		"last-occurred": "2023-09-05T17:43:00.567Z",
@@ -74,7 +77,8 @@ func (cs *clientSuite) TestNotices(c *C) {
 		"expire-after": "168h"
 	}, {
 		"id":   "2",
-  		"type": "warning",
+		"user": 1000,
+		"type": "warning",
 		"key": "be careful!",
 		"first-occurred": "2023-09-06T15:43:00.123Z",
 		"last-occurred": "2023-09-06T17:43:00.567Z",
@@ -87,6 +91,7 @@ func (cs *clientSuite) TestNotices(c *C) {
 	c.Assert(cs.req.URL.Query(), DeepEquals, url.Values{})
 	c.Assert(notices, DeepEquals, []*client.Notice{{
 		ID:            "1",
+		User:          1000,
 		Type:          "custom",
 		Key:           "a.b/c",
 		FirstOccurred: time.Date(2023, 9, 5, 15, 43, 0, 123_000_000, time.UTC),
@@ -98,6 +103,7 @@ func (cs *clientSuite) TestNotices(c *C) {
 		ExpireAfter:   7 * 24 * time.Hour,
 	}, {
 		ID:            "2",
+		User:          1000,
 		Type:          "warning",
 		Key:           "be careful!",
 		FirstOccurred: time.Date(2023, 9, 6, 15, 43, 0, 123_000_000, time.UTC),
@@ -110,6 +116,7 @@ func (cs *clientSuite) TestNotices(c *C) {
 func (cs *clientSuite) TestNoticesFilters(c *C) {
 	cs.rsp = `{"type": "sync", "result": []}`
 	notices, err := cs.cli.Notices(&client.NoticesOptions{
+		Users: []int64{1000, -1},
 		Types: []client.NoticeType{client.CustomNotice},
 		Keys:  []string{"foo.com/bar", "example.com/x"},
 		After: time.Date(2023, 9, 5, 16, 43, 32, 123_456_789, time.UTC),
@@ -117,6 +124,7 @@ func (cs *clientSuite) TestNoticesFilters(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(cs.req.URL.Path, Equals, "/v1/notices")
 	c.Assert(cs.req.URL.Query(), DeepEquals, url.Values{
+		"users": {"1000", "-1"},
 		"types": {"custom"},
 		"keys":  {"foo.com/bar", "example.com/x"},
 		"after": {"2023-09-05T16:43:32.123456789Z"},
@@ -127,6 +135,7 @@ func (cs *clientSuite) TestNoticesFilters(c *C) {
 func (cs *clientSuite) TestNotify(c *C) {
 	cs.rsp = `{"type": "sync", "result": {"id": "7"}}`
 	noticeID, err := cs.cli.Notify(&client.NotifyOptions{
+		User:        1000,
 		Type:        client.CustomNotice,
 		Key:         "foo.com/bar",
 		RepeatAfter: time.Hour,
@@ -143,6 +152,7 @@ func (cs *clientSuite) TestNotify(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(m, DeepEquals, map[string]any{
 		"action":       "add",
+		"user":         1000.0,
 		"type":         "custom",
 		"key":          "foo.com/bar",
 		"data":         map[string]any{"k": "9"},
@@ -153,6 +163,7 @@ func (cs *clientSuite) TestNotify(c *C) {
 func (cs *clientSuite) TestNotifyMinimal(c *C) {
 	cs.rsp = `{"type": "sync", "result": {"id": "1"}}`
 	noticeID, err := cs.cli.Notify(&client.NotifyOptions{
+		User: 1000,
 		Type: client.CustomNotice,
 		Key:  "a.b/c",
 	})
@@ -167,6 +178,7 @@ func (cs *clientSuite) TestNotifyMinimal(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(m, DeepEquals, map[string]any{
 		"action": "add",
+		"user":   1000.0,
 		"type":   "custom",
 		"key":    "a.b/c",
 	})
@@ -175,7 +187,8 @@ func (cs *clientSuite) TestNotifyMinimal(c *C) {
 func (cs *clientSuite) TestWaitNotices(c *C) {
 	cs.rsp = `{"type": "sync", "result": [{
 		"id":   "1",
-  		"type": "warning",
+		"user": 1000,
+		"type": "warning",
 		"key": "be careful!",
 		"first-occurred": "2023-09-06T15:43:00.123Z",
 		"last-occurred": "2023-09-06T17:43:00.567Z",
@@ -190,6 +203,7 @@ func (cs *clientSuite) TestWaitNotices(c *C) {
 	})
 	c.Assert(notices, DeepEquals, []*client.Notice{{
 		ID:            "1",
+		User:          1000,
 		Type:          "warning",
 		Key:           "be careful!",
 		FirstOccurred: time.Date(2023, 9, 6, 15, 43, 0, 123_000_000, time.UTC),

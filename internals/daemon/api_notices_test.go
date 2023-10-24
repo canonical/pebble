@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
@@ -27,6 +28,12 @@ import (
 
 	"github.com/canonical/pebble/internals/overlord/state"
 )
+
+func (s *apiSuite) TestNoticesFilterUser(c *C) {
+	s.testNoticesFilter(c, func(after time.Time) url.Values {
+		return url.Values{"users": {"-1"}}
+	})
+}
 
 func (s *apiSuite) TestNoticesFilterType(c *C) {
 	s.testNoticesFilter(c, func(after time.Time) url.Values {
@@ -49,6 +56,7 @@ func (s *apiSuite) TestNoticesFilterAfter(c *C) {
 func (s *apiSuite) TestNoticesFilterAll(c *C) {
 	s.testNoticesFilter(c, func(after time.Time) url.Values {
 		return url.Values{
+			"users": {"-1"},
 			"types": {"custom"},
 			"keys":  {"a.b/2"},
 			"after": {after.UTC().Format(time.RFC3339Nano)},
@@ -61,10 +69,10 @@ func (s *apiSuite) testNoticesFilter(c *C, makeQuery func(after time.Time) url.V
 
 	st := s.d.overlord.State()
 	st.Lock()
-	addNotice(c, st, state.WarningNotice, "warning", nil)
+	addNotice(c, st, 42, state.WarningNotice, "warning", nil)
 	after := time.Now()
 	time.Sleep(time.Microsecond)
-	noticeId, err := st.AddNotice(state.CustomNotice, "a.b/2", &state.AddNoticeOptions{
+	noticeId, err := st.AddNotice(-1, state.CustomNotice, "a.b/2", &state.AddNoticeOptions{
 		Data: map[string]string{"k": "v"},
 	})
 	c.Assert(err, IsNil)
@@ -99,6 +107,7 @@ func (s *apiSuite) testNoticesFilter(c *C, makeQuery func(after time.Time) url.V
 	delete(n, "last-repeated")
 	c.Assert(n, DeepEquals, map[string]any{
 		"id":           noticeId,
+		"user":         -1.0,
 		"type":         "custom",
 		"key":          "a.b/2",
 		"occurrences":  1.0,
@@ -107,20 +116,124 @@ func (s *apiSuite) testNoticesFilter(c *C, makeQuery func(after time.Time) url.V
 	})
 }
 
+func (s *apiSuite) TestNoticesFilterMultipleUsers(c *C) {
+	s.daemon(c)
+
+	st := s.d.overlord.State()
+	st.Lock()
+	addNotice(c, st, 0, state.ChangeUpdateNotice, "123", nil)
+	time.Sleep(time.Microsecond)
+	addNotice(c, st, 1000, state.CustomNotice, "a.b/x", nil)
+	time.Sleep(time.Microsecond)
+	addNotice(c, st, -1, state.WarningNotice, "danger", nil)
+	st.Unlock()
+
+	noticesCmd := apiCmd("/v1/notices")
+
+	// Test that root user may see all notices, and may filter on any user.
+	userRemoteAddr := "pid=100;uid=0;socket=;"
+	req, err := http.NewRequest("GET", "/v1/notices", nil)
+	c.Assert(err, IsNil)
+	req.RemoteAddr = userRemoteAddr
+	rsp, ok := noticesCmd.GET(noticesCmd, req, nil).(*resp)
+	c.Assert(ok, Equals, true)
+
+	c.Check(rsp.Type, Equals, ResponseTypeSync)
+	c.Check(rsp.Status, Equals, http.StatusOK)
+	notices, ok := rsp.Result.([]*state.Notice)
+	c.Assert(ok, Equals, true)
+	c.Assert(notices, HasLen, 3)
+	n := noticeToMap(c, notices[0])
+	c.Assert(n["user"], Equals, 0.0)
+	n = noticeToMap(c, notices[1])
+	c.Assert(n["user"], Equals, 1000.0)
+	n = noticeToMap(c, notices[2])
+	c.Assert(n["user"], Equals, -1.0)
+
+	for _, users := range [][]int64{{0, 1000, -1}, {0, 1000}, {0, -1}, {1000, -1}, {0}, {1000}, {-1}} {
+		usersStrings := make([]string, 0, len(users))
+		for _, uid := range users {
+			usersStrings = append(usersStrings, fmt.Sprintf("users=%d", uid))
+		}
+		reqUrl := fmt.Sprintf("/v1/notices?%s", strings.Join(usersStrings, "&"))
+		req, err := http.NewRequest("GET", reqUrl, nil)
+		c.Assert(err, IsNil)
+		req.RemoteAddr = userRemoteAddr
+		rsp, ok := noticesCmd.GET(noticesCmd, req, nil).(*resp)
+		c.Assert(ok, Equals, true)
+
+		c.Check(rsp.Type, Equals, ResponseTypeSync)
+		c.Check(rsp.Status, Equals, http.StatusOK)
+		notices, ok := rsp.Result.([]*state.Notice)
+		c.Assert(ok, Equals, true)
+		c.Assert(notices, HasLen, len(users))
+		for i, uid := range users {
+			n := noticeToMap(c, notices[i])
+			c.Assert(n["user"], Equals, float64(uid))
+		}
+	}
+
+	// Test that non-root user by default only sees their notices and notices
+	// for all users (represented by UID of -1).
+	rootRemoteAddr := "pid=100;uid=1000;socket=;"
+	req, err = http.NewRequest("GET", "/v1/notices", nil)
+	c.Assert(err, IsNil)
+	req.RemoteAddr = rootRemoteAddr
+	rsp, ok = noticesCmd.GET(noticesCmd, req, nil).(*resp)
+	c.Assert(ok, Equals, true)
+
+	c.Check(rsp.Type, Equals, ResponseTypeSync)
+	c.Check(rsp.Status, Equals, http.StatusOK)
+	notices, ok = rsp.Result.([]*state.Notice)
+	c.Assert(ok, Equals, true)
+	c.Assert(notices, HasLen, 2)
+	n = noticeToMap(c, notices[0])
+	c.Assert(n["user"], Equals, 1000.0)
+	n = noticeToMap(c, notices[1])
+	c.Assert(n["user"], Equals, -1.0)
+
+	// Test filtering for non-root user
+	for _, users := range [][]int64{{0, 1000, -1}, {0, 1000}, {0, -1}, {0}} {
+		usersStrings := make([]string, 0, len(users))
+		for _, uid := range users {
+			usersStrings = append(usersStrings, fmt.Sprintf("users=%d", uid))
+		}
+		reqUrl := fmt.Sprintf("/v1/notices?%s", strings.Join(usersStrings, "&"))
+		req, err := http.NewRequest("GET", reqUrl, nil)
+		c.Assert(err, IsNil)
+		req.RemoteAddr = rootRemoteAddr
+		rsp, ok := noticesCmd.GET(noticesCmd, req, nil).(*resp)
+		c.Assert(ok, Equals, true)
+
+		c.Check(rsp.Type, Equals, ResponseTypeSync)
+		c.Check(rsp.Status, Equals, http.StatusOK)
+		notices, ok = rsp.Result.([]*state.Notice)
+		c.Assert(ok, Equals, true)
+		// Non-root filtering on UID other than -1 or their own UID yields no
+		// notices for that UID.
+		c.Assert(notices, HasLen, len(users)-1)
+		for i, uid := range users[1:] {
+			n = noticeToMap(c, notices[i])
+			c.Assert(n["user"], Equals, float64(uid))
+		}
+	}
+}
+
 func (s *apiSuite) TestNoticesFilterMultipleTypes(c *C) {
 	s.daemon(c)
 
 	st := s.d.overlord.State()
 	st.Lock()
-	addNotice(c, st, state.ChangeUpdateNotice, "123", nil)
+	addNotice(c, st, 0, state.ChangeUpdateNotice, "123", nil)
 	time.Sleep(time.Microsecond)
-	addNotice(c, st, state.CustomNotice, "a.b/x", nil)
+	addNotice(c, st, 1000, state.CustomNotice, "a.b/x", nil)
 	time.Sleep(time.Microsecond)
-	addNotice(c, st, state.WarningNotice, "danger", nil)
+	addNotice(c, st, -1, state.WarningNotice, "danger", nil)
 	st.Unlock()
 
 	req, err := http.NewRequest("GET", "/v1/notices?types=change-update&types=warning", nil)
 	c.Assert(err, IsNil)
+	req.RemoteAddr = "pid=100;uid=0;socket=;"
 	noticesCmd := apiCmd("/v1/notices")
 	rsp, ok := noticesCmd.GET(noticesCmd, req, nil).(*resp)
 	c.Assert(ok, Equals, true)
@@ -141,14 +254,15 @@ func (s *apiSuite) TestNoticesFilterMultipleKeys(c *C) {
 
 	st := s.d.overlord.State()
 	st.Lock()
-	addNotice(c, st, state.ChangeUpdateNotice, "123", nil)
+	addNotice(c, st, 0, state.ChangeUpdateNotice, "123", nil)
 	time.Sleep(time.Microsecond)
-	addNotice(c, st, state.CustomNotice, "a.b/x", nil)
+	addNotice(c, st, 1000, state.CustomNotice, "a.b/x", nil)
 	time.Sleep(time.Microsecond)
-	addNotice(c, st, state.WarningNotice, "danger", nil)
+	addNotice(c, st, -1, state.WarningNotice, "danger", nil)
 	st.Unlock()
 
 	req, err := http.NewRequest("GET", "/v1/notices?keys=a.b/x&keys=danger", nil)
+	req.RemoteAddr = "pid=100;uid=0;socket=;"
 	c.Assert(err, IsNil)
 	noticesCmd := apiCmd("/v1/notices")
 	rsp, ok := noticesCmd.GET(noticesCmd, req, nil).(*resp)
@@ -172,7 +286,7 @@ func (s *apiSuite) TestNoticesWait(c *C) {
 	go func() {
 		time.Sleep(10 * time.Millisecond)
 		st.Lock()
-		addNotice(c, st, state.CustomNotice, "a.b/1", nil)
+		addNotice(c, st, -1, state.CustomNotice, "a.b/1", nil)
 		st.Unlock()
 	}()
 
@@ -188,6 +302,7 @@ func (s *apiSuite) TestNoticesWait(c *C) {
 	c.Assert(ok, Equals, true)
 	c.Assert(notices, HasLen, 1)
 	n := noticeToMap(c, notices[0])
+	c.Check(n["user"], Equals, -1.0)
 	c.Check(n["type"], Equals, "custom")
 	c.Check(n["key"], Equals, "a.b/1")
 }
@@ -267,6 +382,7 @@ func (s *apiSuite) TestAddNotice(c *C) {
 	start := time.Now()
 	body := []byte(`{
 		"action": "add",
+		"user": -1,
 		"type": "custom",
 		"key": "a.b/1",
 		"repeat-after": "1h",
@@ -308,6 +424,7 @@ func (s *apiSuite) TestAddNotice(c *C) {
 	delete(n, "last-repeated")
 	c.Assert(n, DeepEquals, map[string]any{
 		"id":           noticeId,
+		"user":         -1.0,
 		"type":         "custom",
 		"key":          "a.b/1",
 		"occurrences":  1.0,
@@ -322,6 +439,7 @@ func (s *apiSuite) TestAddNoticeMinimal(c *C) {
 
 	body := []byte(`{
 		"action": "add",
+		"user": 1000,
 		"type": "custom",
 		"key": "a.b/1"
 	}`)
@@ -351,6 +469,7 @@ func (s *apiSuite) TestAddNoticeMinimal(c *C) {
 	delete(n, "last-repeated")
 	c.Assert(n, DeepEquals, map[string]any{
 		"id":           noticeId,
+		"user":         1000.0,
 		"type":         "custom",
 		"key":          "a.b/1",
 		"occurrences":  1.0,
@@ -362,18 +481,27 @@ func (s *apiSuite) TestAddNoticeInvalidAction(c *C) {
 	s.testAddNoticeBadRequest(c, `{"action": "bad"}`, "invalid action.*")
 }
 
+func (s *apiSuite) TestAddNoticeInvalidUserLow(c *C) {
+	s.testAddNoticeBadRequest(c, `{"action": "add", "user": -2}`, "invalid user.*")
+}
+
+func (s *apiSuite) TestAddNoticeInvalidUserHigh(c *C) {
+	s.testAddNoticeBadRequest(c, `{"action": "add", "user": 4294967296}`, "invalid user.*")
+}
+
 func (s *apiSuite) TestAddNoticeInvalidType(c *C) {
-	s.testAddNoticeBadRequest(c, `{"action": "add", "type": "foo"}`, "invalid type.*")
+	s.testAddNoticeBadRequest(c, `{"action": "add", "user": -1, "type": "foo"}`, "invalid type.*")
 }
 
 func (s *apiSuite) TestAddNoticeInvalidKey(c *C) {
-	s.testAddNoticeBadRequest(c, `{"action": "add", "type": "custom", "key": "bad"}`,
+	s.testAddNoticeBadRequest(c, `{"action": "add", "user": -1, "type": "custom", "key": "bad"}`,
 		"invalid key.*")
 }
 
 func (s *apiSuite) TestAddNoticeKeyTooLong(c *C) {
 	request, err := json.Marshal(map[string]any{
 		"action": "add",
+		"user":   -1,
 		"type":   "custom",
 		"key":    "a.b/" + strings.Repeat("x", 257-4),
 	})
@@ -384,6 +512,7 @@ func (s *apiSuite) TestAddNoticeKeyTooLong(c *C) {
 func (s *apiSuite) TestAddNoticeDataTooLarge(c *C) {
 	request, err := json.Marshal(map[string]any{
 		"action": "add",
+		"user":   -1,
 		"type":   "custom",
 		"key":    "a.b/c",
 		"data": map[string]string{
@@ -396,7 +525,7 @@ func (s *apiSuite) TestAddNoticeDataTooLarge(c *C) {
 }
 
 func (s *apiSuite) TestInvalidRepeatAfter(c *C) {
-	s.testAddNoticeBadRequest(c, `{"action": "add", "type": "custom", "key": "a.b/1", "repeat-after": "bad"}`,
+	s.testAddNoticeBadRequest(c, `{"action": "add", "user": -1, "type": "custom", "key": "a.b/1", "repeat-after": "bad"}`,
 		"invalid repeat-after.*")
 }
 
@@ -422,14 +551,15 @@ func (s *apiSuite) TestNotice(c *C) {
 
 	st := s.d.overlord.State()
 	st.Lock()
-	addNotice(c, st, state.CustomNotice, "a.b/1", nil)
-	noticeId, err := st.AddNotice(state.CustomNotice, "a.b/2", nil)
+	addNotice(c, st, -1, state.CustomNotice, "a.b/1", nil)
+	noticeId, err := st.AddNotice(1000, state.CustomNotice, "a.b/2", nil)
 	c.Assert(err, IsNil)
-	addNotice(c, st, state.CustomNotice, "a.b/3", nil)
+	addNotice(c, st, -1, state.CustomNotice, "a.b/3", nil)
 	st.Unlock()
 
 	req, err := http.NewRequest("GET", "/v1/notices/"+noticeId, nil)
 	c.Assert(err, IsNil)
+	req.RemoteAddr = "pid=100;uid=1000;socket=;"
 	noticesCmd := apiCmd("/v1/notices/{id}")
 	s.vars = map[string]string{"id": noticeId}
 	rsp, ok := noticesCmd.GET(noticesCmd, req, nil).(*resp)
@@ -440,8 +570,18 @@ func (s *apiSuite) TestNotice(c *C) {
 	notice, ok := rsp.Result.(*state.Notice)
 	c.Assert(ok, Equals, true)
 	n := noticeToMap(c, notice)
+	c.Check(n["user"], Equals, 1000.0)
 	c.Check(n["type"], Equals, "custom")
 	c.Check(n["key"], Equals, "a.b/2")
+
+	req.RemoteAddr = "pid=100;uid=1001;socket=;"
+	rsp, ok = noticesCmd.GET(noticesCmd, req, nil).(*resp)
+	c.Assert(ok, Equals, true)
+	c.Check(rsp.Type, Equals, ResponseTypeError)
+	c.Check(rsp.Status, Equals, http.StatusNotFound)
+	result, ok := rsp.Result.(*errorResult)
+	c.Assert(ok, Equals, true)
+	c.Check(result.Message, Matches, fmt.Sprintf("cannot find notice with id %q", noticeId))
 }
 
 func (s *apiSuite) TestNoticeNotFound(c *C) {
@@ -467,7 +607,7 @@ func noticeToMap(c *C, notice *state.Notice) map[string]any {
 	return n
 }
 
-func addNotice(c *C, st *state.State, noticeType state.NoticeType, key string, options *state.AddNoticeOptions) {
-	_, err := st.AddNotice(noticeType, key, options)
+func addNotice(c *C, st *state.State, user int64, noticeType state.NoticeType, key string, options *state.AddNoticeOptions) {
+	_, err := st.AddNotice(user, noticeType, key, options)
 	c.Assert(err, IsNil)
 }

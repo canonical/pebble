@@ -21,10 +21,15 @@ import (
 	"fmt"
 	"net/url"
 	"regexp"
+	"strconv"
 	"time"
 )
 
 type NotifyOptions struct {
+	// User is the UID of the notice's intended recipient. A UID of -1 means
+	// the notice may be received by any user.
+	User int64
+
 	// Type is the notice's type. Currently only notices of type CustomNotice
 	// can be added.
 	Type NoticeType
@@ -37,8 +42,8 @@ type NotifyOptions struct {
 	Data map[string]string
 
 	// RepeatAfter, if not zero, prevents this notice from being observed if a
-	// notification with the same Type and Key has been made recently within
-	// the provided duration.
+	// notification with the same User, Type, and Key has been made recently
+	// within the provided duration.
 	RepeatAfter time.Duration
 }
 
@@ -47,12 +52,14 @@ type NotifyOptions struct {
 func (client *Client) Notify(opts *NotifyOptions) (string, error) {
 	var payload = struct {
 		Action      string            `json:"action"`
+		User        int64             `json:"user"`
 		Type        string            `json:"type"`
 		Key         string            `json:"key"`
 		RepeatAfter string            `json:"repeat-after,omitempty"`
 		Data        map[string]string `json:"data,omitempty"`
 	}{
 		Action: "add",
+		User:   opts.User,
 		Type:   string(opts.Type),
 		Key:    opts.Key,
 		Data:   opts.Data,
@@ -76,6 +83,9 @@ func (client *Client) Notify(opts *NotifyOptions) (string, error) {
 }
 
 type NoticesOptions struct {
+	// Users, if not empty, includes only notices whose user is one of these.
+	Users []int64
+
 	// Types, if not empty, includes only notices whose type is one of these.
 	Types []NoticeType
 
@@ -88,12 +98,13 @@ type NoticesOptions struct {
 
 // Notice holds details of an event that was observed and reported either
 // inside the server itself or externally via the API. Besides the ID field
-// itself, the Type and Key fields together also uniquely identify a
-// particular notice, and when a new notification is made with matching Type
-// and Key, the previous notice is updated appropriately instead of a new one
-// being created.
+// itself, the User, Type, and Key fields together also uniquely identify a
+// particular notice, and when a new notification is made with matching User,
+// Type, and Key, the previous notice is updated appropriately instead of a new
+// one being created.
 type Notice struct {
 	ID            string            `json:"id"`
+	User          int64             `json:"user"`
 	Type          NoticeType        `json:"type"`
 	Key           string            `json:"key"`
 	FirstOccurred time.Time         `json:"first-occurred"`
@@ -180,6 +191,13 @@ func makeNoticesQuery(opts *NoticesOptions) url.Values {
 	query := make(url.Values)
 	if opts == nil {
 		return query
+	}
+	if len(opts.Users) > 0 {
+		userStrs := make([]string, 0, len(opts.Users))
+		for _, u := range opts.Users {
+			userStrs = append(userStrs, strconv.FormatInt(u, 10))
+		}
+		query["users"] = userStrs
 	}
 	if len(opts.Types) > 0 {
 		typeStrs := make([]string, 0, len(opts.Types))
