@@ -141,8 +141,7 @@ func fillDefaultOptions(options *logGathererOptions) *logGathererOptions {
 
 // PlanChanged is called by the LogManager when the plan is changed, if this
 // gatherer's target exists in the new plan.
-// The labels map should not be modified while this method is running.
-func (g *logGatherer) PlanChanged(pl *plan.Plan, serviceData map[string]*ServiceData) {
+func (g *logGatherer) PlanChanged(pl *plan.Plan, buffers map[string]*servicelog.RingBuffer) {
 	// Remove old pullers
 	for _, svcName := range g.pullers.Services() {
 		svc, svcExists := pl.Services[svcName]
@@ -171,38 +170,35 @@ func (g *logGatherer) PlanChanged(pl *plan.Plan, serviceData map[string]*Service
 			continue
 		}
 
-		svcData, svcStarted := serviceData[service.Name]
+		buffer, svcStarted := buffers[service.Name]
 		if !svcStarted {
 			// We don't yet have a reference to the service's ring buffer
 			// Need to wait until ServiceStarted
 			continue
 		}
 
-		labels := evaluateLabels(g.target.Labels, serviceData[service.Name].Env)
+		labels := evaluateLabels(g.target.Labels, service.Environment)
 		select {
 		case g.setLabels <- svcWithLabels{service.Name, labels}:
 		case <-g.tomb.Dying():
 			return
 		}
 
-		g.pullers.Add(service.Name, svcData.Buffer, g.entryCh)
+		g.pullers.Add(service.Name, buffer, g.entryCh)
 	}
 }
 
-// EnvChanged is called when a service is (re)started and its environment has
-// changed.
-func (g *logGatherer) EnvChanged(serviceName string, env map[string]string) {
-	labels := evaluateLabels(g.target.Labels, env)
+// ServiceStarted is called by the LogManager on the start of a service which
+// logs to this gatherer's target.
+func (g *logGatherer) ServiceStarted(service *plan.Service, buffer *servicelog.RingBuffer) {
+	labels := evaluateLabels(g.target.Labels, service.Environment)
 	select {
-	case g.setLabels <- svcWithLabels{serviceName, labels}:
+	case g.setLabels <- svcWithLabels{service.Name, labels}:
 	case <-g.tomb.Dying():
 		return
 	}
-}
 
-// BufferChanged is called when a service is (re)started with a new ringbuffer.
-func (g *logGatherer) BufferChanged(serviceName string, buffer *servicelog.RingBuffer) {
-	g.pullers.Add(serviceName, buffer, g.entryCh)
+	g.pullers.Add(service.Name, buffer, g.entryCh)
 }
 
 // evaluateLabels interprets the labels defined in the plan, substituting any

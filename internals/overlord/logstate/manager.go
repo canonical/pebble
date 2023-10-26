@@ -15,7 +15,6 @@
 package logstate
 
 import (
-	"reflect"
 	"sync"
 
 	"github.com/canonical/pebble/internals/logger"
@@ -26,7 +25,7 @@ import (
 type LogManager struct {
 	mu        sync.Mutex
 	gatherers map[string]*logGatherer
-	services  map[string]*ServiceData
+	buffers   map[string]*servicelog.RingBuffer
 	plan      *plan.Plan
 
 	newGatherer func(*plan.LogTarget) (*logGatherer, error)
@@ -35,7 +34,7 @@ type LogManager struct {
 func NewLogManager() *LogManager {
 	return &LogManager{
 		gatherers:   map[string]*logGatherer{},
-		services:    map[string]*ServiceData{},
+		buffers:     map[string]*servicelog.RingBuffer{},
 		newGatherer: newLogGatherer,
 	}
 }
@@ -68,8 +67,8 @@ func (m *LogManager) PlanChanged(pl *plan.Plan) {
 			delete(m.gatherers, target.Name)
 		}
 
-		// Update gatherer
-		gatherer.PlanChanged(pl, m.services)
+		// Update iterators for gatherer
+		gatherer.PlanChanged(pl, m.buffers)
 	}
 
 	// Old gatherers for now-removed targets need to be shut down.
@@ -78,11 +77,11 @@ func (m *LogManager) PlanChanged(pl *plan.Plan) {
 	}
 	m.gatherers = newGatherers
 
-	// Remove old service data
-	for svc := range m.services {
+	// Remove old buffers
+	for svc := range m.buffers {
 		if _, ok := pl.Services[svc]; !ok {
 			// Service has been removed
-			delete(m.services, svc)
+			delete(m.buffers, svc)
 		}
 	}
 
@@ -90,25 +89,23 @@ func (m *LogManager) PlanChanged(pl *plan.Plan) {
 }
 
 // ServiceStarted notifies the log manager that the named service has started,
-// and provides a reference to the service's data.
-func (m *LogManager) ServiceStarted(service *plan.Service, data *ServiceData) {
+// and provides a reference to the service's log buffer.
+func (m *LogManager) ServiceStarted(service *plan.Service, buffer *servicelog.RingBuffer) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	oldData := m.services[service.Name]
-	m.services[service.Name] = data
+	if m.buffers[service.Name] == buffer {
+		// Service restarted with same buffer. Don't need to update anything
+		return
+	}
 
+	m.buffers[service.Name] = buffer
 	for _, gatherer := range m.gatherers {
 		target := m.plan.LogTargets[gatherer.target.Name]
 		if !service.LogsTo(target) {
 			continue
 		}
-		if oldData == nil || !reflect.DeepEqual(data.Env, oldData.Env) {
-			gatherer.EnvChanged(service.Name, data.Env)
-		}
-		if oldData == nil || data.Buffer != oldData.Buffer {
-			gatherer.BufferChanged(service.Name, data.Buffer)
-		}
+		gatherer.ServiceStarted(service, buffer)
 	}
 }
 
@@ -131,11 +128,4 @@ func (m *LogManager) Stop() {
 		}(gatherer)
 	}
 	wg.Wait()
-}
-
-// ServiceData holds the data for each service that the log manager needs to
-// keep track of.
-type ServiceData struct {
-	Buffer *servicelog.RingBuffer
-	Env    map[string]string
 }

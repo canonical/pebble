@@ -38,11 +38,11 @@ import (
 
 	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/overlord/checkstate"
-	"github.com/canonical/pebble/internals/overlord/logstate"
 	"github.com/canonical/pebble/internals/overlord/restart"
 	"github.com/canonical/pebble/internals/overlord/servstate"
 	"github.com/canonical/pebble/internals/overlord/state"
 	"github.com/canonical/pebble/internals/plan"
+	"github.com/canonical/pebble/internals/servicelog"
 	"github.com/canonical/pebble/internals/testutil"
 )
 
@@ -1732,40 +1732,6 @@ services:
 	})
 }
 
-func (s *S) TestParseEnv(c *C) {
-	tests := []struct {
-		summary  string
-		input    []string
-		expected map[string]string
-	}{{
-		summary: "basic env parsing",
-		input:   []string{"FOO=bar", "BAZ=far"},
-		expected: map[string]string{
-			"FOO": "bar",
-			"BAZ": "far",
-		},
-	}, {
-		summary: "duplicate keys are overwritten",
-		input:   []string{"FOO=bar", "FOO=baz"},
-		expected: map[string]string{
-			"FOO": "baz",
-		},
-	}, {
-		summary: "invalid lines ignored",
-		input:   []string{"FOO=bar", "invalid"},
-		expected: map[string]string{
-			"FOO": "bar",
-		},
-	}}
-
-	for _, test := range tests {
-		fmt.Println(test.summary)
-		envMap := servstate.ParseEnv(test.input)
-		c.Check(envMap, DeepEquals, test.expected)
-	}
-
-}
-
 // setupDefaultServiceManager provides a basic setup that can be used by many
 // of the unit tests without having to create a custom setup.
 func (s *S) setupDefaultServiceManager(c *C) {
@@ -2049,7 +2015,7 @@ func createZombie() error {
 
 type fakeLogManager struct{}
 
-func (f fakeLogManager) ServiceStarted(service *plan.Service, data *logstate.ServiceData) {
+func (f fakeLogManager) ServiceStarted(service *plan.Service, logs *servicelog.RingBuffer) {
 	// no-op
 }
 
