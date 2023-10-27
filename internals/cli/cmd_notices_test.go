@@ -58,11 +58,12 @@ func (s *PebbleSuite) TestNotices(c *C) {
 		]}`)
 	})
 
-	oldFilename := os.Getenv("PEBBLE_NOTICES_FILENAME")
-	defer os.Setenv("PEBBLE_NOTICES_FILENAME", oldFilename)
+	oldPebbleDir := os.Getenv("PEBBLE")
+	defer os.Setenv("PEBBLE", oldPebbleDir)
 
-	filename := filepath.Join(c.MkDir(), "notices.json")
-	os.Setenv("PEBBLE_NOTICES_FILENAME", filename)
+	tempDir := c.MkDir()
+	filename := filepath.Join(tempDir, "notices.json")
+	os.Setenv("PEBBLE", tempDir)
 
 	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"notices", "--abs-time"})
 	c.Assert(err, IsNil)
@@ -110,11 +111,12 @@ func (s *PebbleSuite) TestNoticesFilters(c *C) {
 		]}`)
 	})
 
-	oldFilename := os.Getenv("PEBBLE_NOTICES_FILENAME")
-	defer os.Setenv("PEBBLE_NOTICES_FILENAME", oldFilename)
+	oldPebbleDir := os.Getenv("PEBBLE")
+	defer os.Setenv("PEBBLE", oldPebbleDir)
 
-	filename := filepath.Join(c.MkDir(), "notices.json")
-	os.Setenv("PEBBLE_NOTICES_FILENAME", filename)
+	tempDir := c.MkDir()
+	filename := filepath.Join(tempDir, "notices.json")
+	os.Setenv("PEBBLE", tempDir)
 
 	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{
 		"notices", "--abs-time", "--type", "custom", "--key", "a.b/c", "--type", "warning"})
@@ -161,11 +163,12 @@ func (s *PebbleSuite) TestNoticesAfter(c *C) {
 		]}`)
 	})
 
-	oldFilename := os.Getenv("PEBBLE_NOTICES_FILENAME")
-	defer os.Setenv("PEBBLE_NOTICES_FILENAME", oldFilename)
+	oldPebbleDir := os.Getenv("PEBBLE")
+	defer os.Setenv("PEBBLE", oldPebbleDir)
 
-	filename := filepath.Join(c.MkDir(), "notices.json")
-	os.Setenv("PEBBLE_NOTICES_FILENAME", filename)
+	tempDir := c.MkDir()
+	filename := filepath.Join(tempDir, "notices.json")
+	os.Setenv("PEBBLE", tempDir)
 
 	data := []byte(`{"last-listed": "2023-09-06T15:06:00Z", "last-okayed": "2023-08-04T01:02:03Z"}`)
 	err := os.WriteFile(filename, data, 0600)
@@ -203,11 +206,12 @@ func (s *PebbleSuite) TestNoticesNoNotices(c *C) {
 			"result": []}`)
 	})
 
-	oldFilename := os.Getenv("PEBBLE_NOTICES_FILENAME")
-	defer os.Setenv("PEBBLE_NOTICES_FILENAME", oldFilename)
+	oldPebbleDir := os.Getenv("PEBBLE")
+	defer os.Setenv("PEBBLE", oldPebbleDir)
 
-	filename := filepath.Join(c.MkDir(), "notices.json")
-	os.Setenv("PEBBLE_NOTICES_FILENAME", filename)
+	tempDir := c.MkDir()
+	filename := filepath.Join(tempDir, "notices.json")
+	os.Setenv("PEBBLE", tempDir)
 
 	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"notices"})
 	c.Assert(err, IsNil)
@@ -241,11 +245,12 @@ func (s *PebbleSuite) TestNoticesTimeout(c *C) {
 		]}`)
 	})
 
-	oldFilename := os.Getenv("PEBBLE_NOTICES_FILENAME")
-	defer os.Setenv("PEBBLE_NOTICES_FILENAME", oldFilename)
+	oldPebbleDir := os.Getenv("PEBBLE")
+	defer os.Setenv("PEBBLE", oldPebbleDir)
 
-	filename := filepath.Join(c.MkDir(), "notices.json")
-	os.Setenv("PEBBLE_NOTICES_FILENAME", filename)
+	tempDir := c.MkDir()
+	filename := filepath.Join(tempDir, "notices.json")
+	os.Setenv("PEBBLE", tempDir)
 
 	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{
 		"notices", "--abs-time", "--timeout", "1s"})
@@ -280,11 +285,12 @@ func (s *PebbleSuite) TestNoticesNoNoticesTimeout(c *C) {
 			"result": []}`)
 	})
 
-	oldFilename := os.Getenv("PEBBLE_NOTICES_FILENAME")
-	defer os.Setenv("PEBBLE_NOTICES_FILENAME", oldFilename)
+	oldPebbleDir := os.Getenv("PEBBLE")
+	defer os.Setenv("PEBBLE", oldPebbleDir)
 
-	filename := filepath.Join(c.MkDir(), "notices.json")
-	os.Setenv("PEBBLE_NOTICES_FILENAME", filename)
+	tempDir := c.MkDir()
+	filename := filepath.Join(tempDir, "notices.json")
+	os.Setenv("PEBBLE", tempDir)
 
 	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"notices", "--timeout", "1s"})
 	c.Assert(err, IsNil)

@@ -25,11 +25,12 @@ import (
 )
 
 func (s *PebbleSuite) TestOkay(c *C) {
-	oldFilename := os.Getenv("PEBBLE_NOTICES_FILENAME")
-	defer os.Setenv("PEBBLE_NOTICES_FILENAME", oldFilename)
+	oldPebbleDir := os.Getenv("PEBBLE")
+	defer os.Setenv("PEBBLE", oldPebbleDir)
 
-	filename := filepath.Join(c.MkDir(), "notices.json")
-	os.Setenv("PEBBLE_NOTICES_FILENAME", filename)
+	tempDir := c.MkDir()
+	filename := filepath.Join(tempDir, "notices.json")
+	os.Setenv("PEBBLE", tempDir)
 
 	data := []byte(`{"last-listed": "2023-09-06T15:06:00Z", "last-okayed": "0001-01-01T00:00:00Z"}`)
 	err := os.WriteFile(filename, data, 0600)
@@ -53,11 +54,10 @@ func (s *PebbleSuite) TestOkay(c *C) {
 }
 
 func (s *PebbleSuite) TestOkayNoNotices(c *C) {
-	oldFilename := os.Getenv("PEBBLE_NOTICES_FILENAME")
-	defer os.Setenv("PEBBLE_NOTICES_FILENAME", oldFilename)
+	oldPebbleDir := os.Getenv("PEBBLE")
+	defer os.Setenv("PEBBLE", oldPebbleDir)
 
-	filename := filepath.Join(c.MkDir(), "notexist")
-	os.Setenv("PEBBLE_NOTICES_FILENAME", filename)
+	os.Setenv("PEBBLE", c.MkDir())
 
 	_, err := cli.Parser(cli.Client()).ParseArgs([]string{"okay"})
 	c.Assert(err, ErrorMatches, "no notices.* have been listed.*")

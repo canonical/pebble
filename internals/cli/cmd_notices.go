@@ -22,7 +22,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/canonical/go-flags"
@@ -30,8 +29,6 @@ import (
 	"github.com/canonical/pebble/client"
 	"github.com/canonical/pebble/internals/osutil"
 )
-
-const noticesFilenameEnvKey = "PEBBLE_NOTICES_FILENAME"
 
 const cmdNoticesSummary = "List notices"
 const cmdNoticesDescription = `
@@ -135,10 +132,7 @@ type noticesState struct {
 }
 
 func loadNoticesState() (*noticesState, error) {
-	filename, err := noticesFilename()
-	if err != nil {
-		return nil, fmt.Errorf("cannot determine notices filename: %w", err)
-	}
+	filename := noticesFilename()
 	data, err := os.ReadFile(filename)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
@@ -155,10 +149,7 @@ func loadNoticesState() (*noticesState, error) {
 }
 
 func saveNoticesState(state *noticesState) error {
-	filename, err := noticesFilename()
-	if err != nil {
-		return fmt.Errorf("cannot determine notices filename: %w", err)
-	}
+	filename := noticesFilename()
 	data, err := json.Marshal(state)
 	if err != nil {
 		return err
@@ -191,16 +182,7 @@ func saveNoticesState(state *noticesState) error {
 	return af.Commit()
 }
 
-func noticesFilename() (string, error) {
-	if filename := os.Getenv(noticesFilenameEnvKey); filename != "" {
-		return filename, nil
-	}
-	user, err := osutil.RealUser()
-	if err != nil {
-		return "", err
-	}
-	_, socketPath := getEnvPaths()
-	socketPath = strings.ReplaceAll(socketPath, "/", "-")
-	filename := filepath.Join(user.HomeDir, ".pebble", "notices_"+socketPath+".json")
-	return filename, nil
+func noticesFilename() string {
+	pebbleDir, _ := getEnvPaths()
+	return filepath.Join(pebbleDir, "notices.json")
 }
