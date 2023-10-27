@@ -68,9 +68,9 @@ func (s *PebbleSuite) TestNotices(c *C) {
 	c.Assert(err, IsNil)
 	c.Check(rest, HasLen, 0)
 	c.Check(s.Stdout(), Equals, `
-ID   Type     Key    First                 Last                  Repeated              Occurrences
-1    custom   a.b/c  2023-09-05T17:18:00Z  2023-09-05T19:18:00Z  2023-09-05T18:18:00Z  3
-2    warning  Ware!  2023-09-06T17:18:00Z  2023-09-06T19:18:00Z  2023-09-06T18:18:00Z  1
+ID   Type     Key    First                 Repeated              Occ
+1    custom   a.b/c  2023-09-05T17:18:00Z  2023-09-05T18:18:00Z  3
+2    warning  Ware!  2023-09-06T17:18:00Z  2023-09-06T18:18:00Z  1
 `[1:])
 	c.Check(s.Stderr(), Equals, "")
 
@@ -121,8 +121,8 @@ func (s *PebbleSuite) TestNoticesFilters(c *C) {
 	c.Assert(err, IsNil)
 	c.Check(rest, HasLen, 0)
 	c.Check(s.Stdout(), Equals, `
-ID   Type    Key    First                 Last                  Repeated              Occurrences
-1    custom  a.b/c  2023-09-05T17:18:00Z  2023-09-05T19:18:00Z  2023-09-05T18:18:00Z  3
+ID   Type    Key    First                 Repeated              Occ
+1    custom  a.b/c  2023-09-05T17:18:00Z  2023-09-05T18:18:00Z  3
 `[1:])
 	c.Check(s.Stderr(), Equals, "")
 
@@ -175,8 +175,8 @@ func (s *PebbleSuite) TestNoticesAfter(c *C) {
 	c.Assert(err, IsNil)
 	c.Check(rest, HasLen, 0)
 	c.Check(s.Stdout(), Equals, `
-ID   Type    Key    First                 Last                  Repeated              Occurrences
-1    custom  a.b/c  2023-09-05T17:18:00Z  2023-09-05T19:18:00Z  2023-09-07T18:18:00Z  3
+ID   Type    Key    First                 Repeated              Occ
+1    custom  a.b/c  2023-09-05T17:18:00Z  2023-09-07T18:18:00Z  3
 `[1:])
 	c.Check(s.Stderr(), Equals, "")
 
@@ -252,8 +252,8 @@ func (s *PebbleSuite) TestNoticesTimeout(c *C) {
 	c.Assert(err, IsNil)
 	c.Check(rest, HasLen, 0)
 	c.Check(s.Stdout(), Equals, `
-ID   Type    Key    First                 Last                  Repeated              Occurrences
-1    custom  a.b/c  2023-09-05T17:18:00Z  2023-09-05T19:18:00Z  2023-09-05T18:18:00Z  3
+ID   Type    Key    First                 Repeated              Occ
+1    custom  a.b/c  2023-09-05T17:18:00Z  2023-09-05T18:18:00Z  3
 `[1:])
 	c.Check(s.Stderr(), Equals, "")
 

@@ -24,12 +24,10 @@ import (
 
 const cmdOkaySummary = "Acknowledge notices and warnings"
 const cmdOkayDescription = `
-The okay command acknowledges notices up to most recent notice listed with
-'pebble notices'. After executing okay, 'pebble notices' will only list the
-notices that have occurred (or been repeated) more recently.
-
-The okay command also acknowledges warnings up to the most recent warning
-listed with 'pebble warnings'.
+The okay command acknowledges warnings and notices that have been previously
+listed using 'pebble warnings' or 'pebble notices', so that they are omitted
+from future runs of either command. When a notice or warning is repeated, it
+will again show up until the next 'pebble okay'.
 `
 
 type cmdOkay struct {

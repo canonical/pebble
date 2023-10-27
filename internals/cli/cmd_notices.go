@@ -35,15 +35,10 @@ const noticesFilenameEnvKey = "PEBBLE_NOTICES_FILENAME"
 
 const cmdNoticesSummary = "List notices"
 const cmdNoticesDescription = `
-The notices command lists the notices that have occurred, ordered by the
-Repeated time (oldest first).
-
-If --timeout is given and matching notices aren't yet available, wait up to
-the given duration for matching notices to arrive, then return them.
-
-By default, this lists all notices. If 'pebble okay' has been executed, this
-will only list the notices that have occurred (or been repeated) since the
-last 'pebble okay'.
+The notices command lists notices not yet acknowledged, ordered by the
+last-repeated time (oldest first). After it runs, the notices that were shown
+may then be acknowledged by running 'pebble okay'. When a notice repeats, it
+needs to be acknowledged again.
 `
 
 type cmdNotices struct {
@@ -109,7 +104,7 @@ func (cmd *cmdNotices) Execute(args []string) error {
 	writer := tabWriter()
 	defer writer.Flush()
 
-	fmt.Fprintln(writer, "ID\tType\tKey\tFirst\tLast\tRepeated\tOccurrences")
+	fmt.Fprintln(writer, "ID\tType\tKey\tFirst\tRepeated\tOcc")
 
 	for _, notice := range notices {
 		key := notice.Key
@@ -117,12 +112,11 @@ func (cmd *cmdNotices) Execute(args []string) error {
 			// Truncate to 32 bytes with ellipsis in the middle
 			key = key[:14] + "..." + key[len(key)-15:]
 		}
-		fmt.Fprintf(writer, "%s\t%s\t%s\t%s\t%s\t%s\t%d\n",
+		fmt.Fprintf(writer, "%s\t%s\t%s\t%s\t%s\t%d\n",
 			notice.ID,
 			notice.Type,
 			key,
 			cmd.fmtTime(notice.FirstOccurred),
-			cmd.fmtTime(notice.LastOccurred),
 			cmd.fmtTime(notice.LastRepeated),
 			notice.Occurrences)
 	}
