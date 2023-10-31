@@ -15,14 +15,17 @@
 package cli
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"os/user"
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 	"unicode"
 	"unicode/utf8"
 
@@ -363,4 +366,83 @@ func getEnvPaths() (pebbleDir string, socketPath string) {
 		socketPath = filepath.Join(pebbleDir, ".pebble.socket")
 	}
 	return pebbleDir, socketPath
+}
+
+type cliState struct {
+	LastListed time.Time `json:"last-listed"`
+	LastOkayed time.Time `json:"last-okayed"`
+}
+
+type fullCLIState struct {
+	// Map of socket path to individual cliState instance.
+	Pebble map[string]*cliState `json:"pebble"`
+}
+
+// TODO(benhoyt): add file locking to properly handle multi-user access
+func loadCLIState() (*cliState, error) {
+	fullState, err := loadFullCLIState()
+	if err != nil {
+		return nil, err
+	}
+	_, socketPath := getEnvPaths()
+	st, ok := fullState.Pebble[socketPath]
+	if !ok {
+		return &cliState{}, nil
+	}
+	return st, nil
+}
+
+func loadFullCLIState() (*fullCLIState, error) {
+	path := cliStatePath()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			st := &fullCLIState{
+				Pebble: make(map[string]*cliState),
+			}
+			return st, nil
+		}
+		return nil, err
+	}
+
+	var fullState fullCLIState
+	err = json.Unmarshal(data, &fullState)
+	if err != nil {
+		return nil, err
+	}
+	return &fullState, nil
+}
+
+func saveCLIState(state *cliState) error {
+	fullState, err := loadFullCLIState()
+	if err != nil {
+		return err
+	}
+
+	_, socketPath := getEnvPaths()
+	fullState.Pebble[socketPath] = state
+
+	data, err := json.Marshal(fullState)
+	if err != nil {
+		return err
+	}
+
+	path := cliStatePath()
+	err = os.MkdirAll(filepath.Dir(path), 0o700)
+	if err != nil {
+		return err
+	}
+	err = os.WriteFile(path, data, 0o600)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func cliStatePath() string {
+	configDir := os.Getenv("XDG_CONFIG_HOME")
+	if configDir == "" {
+		configDir = os.ExpandEnv("$HOME/.config")
+	}
+	return filepath.Join(configDir, "pebble", "cli.json")
 }

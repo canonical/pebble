@@ -16,18 +16,13 @@ package cli
 
 import (
 	"context"
-	"encoding/json"
-	"errors"
 	"fmt"
-	"io/fs"
 	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/canonical/go-flags"
 
 	"github.com/canonical/pebble/client"
-	"github.com/canonical/pebble/internals/osutil"
 )
 
 const cmdNoticesSummary = "List notices"
@@ -68,9 +63,9 @@ func (cmd *cmdNotices) Execute(args []string) error {
 		return ErrExtraArgs
 	}
 
-	state, err := loadNoticesState()
+	state, err := loadCLIState()
 	if err != nil {
-		return fmt.Errorf("cannot load notices state: %w", err)
+		return fmt.Errorf("cannot load CLI state: %w", err)
 	}
 	options := client.NoticesOptions{
 		Types: cmd.Type,
@@ -119,70 +114,9 @@ func (cmd *cmdNotices) Execute(args []string) error {
 	}
 
 	state.LastListed = notices[len(notices)-1].LastRepeated
-	err = saveNoticesState(state)
+	err = saveCLIState(state)
 	if err != nil {
-		return fmt.Errorf("cannot save notices state: %w", err)
+		return fmt.Errorf("cannot save CLI state: %w", err)
 	}
 	return nil
-}
-
-type noticesState struct {
-	LastListed time.Time `json:"last-listed"`
-	LastOkayed time.Time `json:"last-okayed"`
-}
-
-func loadNoticesState() (*noticesState, error) {
-	filename := noticesFilename()
-	data, err := os.ReadFile(filename)
-	if err != nil {
-		if errors.Is(err, fs.ErrNotExist) {
-			return &noticesState{}, nil
-		}
-		return nil, err
-	}
-	var state noticesState
-	err = json.Unmarshal(data, &state)
-	if err != nil {
-		return nil, err
-	}
-	return &state, nil
-}
-
-func saveNoticesState(state *noticesState) error {
-	filename := noticesFilename()
-	data, err := json.Marshal(state)
-	if err != nil {
-		return err
-	}
-
-	// Ensure parent dir exists
-	user, err := osutil.RealUser()
-	if err != nil {
-		return err
-	}
-	uid, gid, err := osutil.UidGid(user)
-	if err != nil {
-		return err
-	}
-	err = osutil.MkdirAllChown(filepath.Dir(filename), 0700, uid, gid)
-	if err != nil {
-		return err
-	}
-
-	// Try to write the data atomically
-	af, err := osutil.NewAtomicFile(filename, 0600, 0, uid, gid)
-	if err != nil {
-		return err
-	}
-	defer af.Cancel() // Cancel after Commit is a no-op
-	_, err = af.Write(data)
-	if err != nil {
-		return err
-	}
-	return af.Commit()
-}
-
-func noticesFilename() string {
-	pebbleDir, _ := getEnvPaths()
-	return filepath.Join(pebbleDir, "notices.json")
 }

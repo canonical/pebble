@@ -15,9 +15,7 @@
 package cli_test
 
 import (
-	"encoding/json"
-	"os"
-	"path/filepath"
+	"time"
 
 	. "gopkg.in/check.v1"
 
@@ -25,16 +23,10 @@ import (
 )
 
 func (s *PebbleSuite) TestOkay(c *C) {
-	oldPebbleDir := os.Getenv("PEBBLE")
-	defer os.Setenv("PEBBLE", oldPebbleDir)
-
-	tempDir := c.MkDir()
-	filename := filepath.Join(tempDir, "notices.json")
-	os.Setenv("PEBBLE", tempDir)
-
-	data := []byte(`{"last-listed": "2023-09-06T15:06:00Z", "last-okayed": "0001-01-01T00:00:00Z"}`)
-	err := os.WriteFile(filename, data, 0600)
-	c.Assert(err, IsNil)
+	s.writeCLIState(c, map[string]any{
+		"last-listed": time.Date(2023, 9, 6, 15, 6, 0, 0, time.UTC),
+		"last-okayed": time.Time{},
+	})
 
 	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"okay"})
 	c.Assert(err, IsNil)
@@ -42,23 +34,14 @@ func (s *PebbleSuite) TestOkay(c *C) {
 	c.Check(s.Stdout(), Equals, "")
 	c.Check(s.Stderr(), Equals, "")
 
-	data, err = os.ReadFile(filename)
-	c.Assert(err, IsNil)
-	var m map[string]any
-	err = json.Unmarshal(data, &m)
-	c.Assert(err, IsNil)
-	c.Check(m, DeepEquals, map[string]any{
+	cliState := s.readCLIState(c)
+	c.Check(cliState, DeepEquals, map[string]any{
 		"last-listed": "2023-09-06T15:06:00Z",
 		"last-okayed": "2023-09-06T15:06:00Z",
 	})
 }
 
 func (s *PebbleSuite) TestOkayNoNotices(c *C) {
-	oldPebbleDir := os.Getenv("PEBBLE")
-	defer os.Setenv("PEBBLE", oldPebbleDir)
-
-	os.Setenv("PEBBLE", c.MkDir())
-
 	_, err := cli.Parser(cli.Client()).ParseArgs([]string{"okay"})
 	c.Assert(err, ErrorMatches, "no notices.* have been listed.*")
 	c.Check(s.Stdout(), Equals, "")

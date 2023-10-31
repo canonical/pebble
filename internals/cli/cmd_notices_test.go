@@ -15,14 +15,13 @@
 package cli_test
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
 	"net/http"
 	"net/url"
 	"os"
-	"path/filepath"
+	"time"
 
 	. "gopkg.in/check.v1"
 
@@ -58,13 +57,6 @@ func (s *PebbleSuite) TestNotices(c *C) {
 		]}`)
 	})
 
-	oldPebbleDir := os.Getenv("PEBBLE")
-	defer os.Setenv("PEBBLE", oldPebbleDir)
-
-	tempDir := c.MkDir()
-	filename := filepath.Join(tempDir, "notices.json")
-	os.Setenv("PEBBLE", tempDir)
-
 	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"notices", "--abs-time"})
 	c.Assert(err, IsNil)
 	c.Check(rest, HasLen, 0)
@@ -75,13 +67,8 @@ ID   Type     Key    First                 Repeated              Occ
 `[1:])
 	c.Check(s.Stderr(), Equals, "")
 
-	// Ensure that "last-listed" in notices.json is updated
-	data, err := os.ReadFile(filename)
-	c.Assert(err, IsNil)
-	var m map[string]any
-	err = json.Unmarshal(data, &m)
-	c.Assert(err, IsNil)
-	c.Check(m, DeepEquals, map[string]any{
+	cliState := s.readCLIState(c)
+	c.Check(cliState, DeepEquals, map[string]any{
 		"last-listed": "2023-09-06T18:18:00Z",
 		"last-okayed": "0001-01-01T00:00:00Z",
 	})
@@ -111,13 +98,6 @@ func (s *PebbleSuite) TestNoticesFilters(c *C) {
 		]}`)
 	})
 
-	oldPebbleDir := os.Getenv("PEBBLE")
-	defer os.Setenv("PEBBLE", oldPebbleDir)
-
-	tempDir := c.MkDir()
-	filename := filepath.Join(tempDir, "notices.json")
-	os.Setenv("PEBBLE", tempDir)
-
 	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{
 		"notices", "--abs-time", "--type", "custom", "--key", "a.b/c", "--type", "warning"})
 	c.Assert(err, IsNil)
@@ -128,13 +108,8 @@ ID   Type    Key    First                 Repeated              Occ
 `[1:])
 	c.Check(s.Stderr(), Equals, "")
 
-	// Ensure that "last-listed" in notices.json is updated
-	data, err := os.ReadFile(filename)
-	c.Assert(err, IsNil)
-	var m map[string]any
-	err = json.Unmarshal(data, &m)
-	c.Assert(err, IsNil)
-	c.Check(m, DeepEquals, map[string]any{
+	cliState := s.readCLIState(c)
+	c.Check(cliState, DeepEquals, map[string]any{
 		"last-listed": "2023-09-05T18:18:00Z",
 		"last-okayed": "0001-01-01T00:00:00Z",
 	})
@@ -163,16 +138,10 @@ func (s *PebbleSuite) TestNoticesAfter(c *C) {
 		]}`)
 	})
 
-	oldPebbleDir := os.Getenv("PEBBLE")
-	defer os.Setenv("PEBBLE", oldPebbleDir)
-
-	tempDir := c.MkDir()
-	filename := filepath.Join(tempDir, "notices.json")
-	os.Setenv("PEBBLE", tempDir)
-
-	data := []byte(`{"last-listed": "2023-09-06T15:06:00Z", "last-okayed": "2023-08-04T01:02:03Z"}`)
-	err := os.WriteFile(filename, data, 0600)
-	c.Assert(err, IsNil)
+	s.writeCLIState(c, map[string]any{
+		"last-listed": time.Date(2023, 9, 6, 15, 6, 0, 0, time.UTC),
+		"last-okayed": time.Date(2023, 8, 4, 1, 2, 3, 0, time.UTC),
+	})
 
 	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"notices", "--abs-time"})
 	c.Assert(err, IsNil)
@@ -183,13 +152,8 @@ ID   Type    Key    First                 Repeated              Occ
 `[1:])
 	c.Check(s.Stderr(), Equals, "")
 
-	// Ensure that "last-listed" in notices.json is updated
-	data, err = os.ReadFile(filename)
-	c.Assert(err, IsNil)
-	var m map[string]any
-	err = json.Unmarshal(data, &m)
-	c.Assert(err, IsNil)
-	c.Check(m, DeepEquals, map[string]any{
+	cliState := s.readCLIState(c)
+	c.Check(cliState, DeepEquals, map[string]any{
 		"last-listed": "2023-09-07T18:18:00Z",
 		"last-okayed": "2023-08-04T01:02:03Z",
 	})
@@ -206,21 +170,14 @@ func (s *PebbleSuite) TestNoticesNoNotices(c *C) {
 			"result": []}`)
 	})
 
-	oldPebbleDir := os.Getenv("PEBBLE")
-	defer os.Setenv("PEBBLE", oldPebbleDir)
-
-	tempDir := c.MkDir()
-	filename := filepath.Join(tempDir, "notices.json")
-	os.Setenv("PEBBLE", tempDir)
-
 	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"notices"})
 	c.Assert(err, IsNil)
 	c.Check(rest, HasLen, 0)
 	c.Check(s.Stdout(), Equals, "")
 	c.Check(s.Stderr(), Equals, "No matching notices.\n")
 
-	// Shouldn't have updated notices.json
-	_, err = os.Stat(filename)
+	// Shouldn't have updated cli.json
+	_, err = os.Stat(s.cliStatePath)
 	c.Assert(errors.Is(err, fs.ErrNotExist), Equals, true)
 }
 
@@ -245,13 +202,6 @@ func (s *PebbleSuite) TestNoticesTimeout(c *C) {
 		]}`)
 	})
 
-	oldPebbleDir := os.Getenv("PEBBLE")
-	defer os.Setenv("PEBBLE", oldPebbleDir)
-
-	tempDir := c.MkDir()
-	filename := filepath.Join(tempDir, "notices.json")
-	os.Setenv("PEBBLE", tempDir)
-
 	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{
 		"notices", "--abs-time", "--timeout", "1s"})
 	c.Assert(err, IsNil)
@@ -262,13 +212,8 @@ ID   Type    Key    First                 Repeated              Occ
 `[1:])
 	c.Check(s.Stderr(), Equals, "")
 
-	// Ensure that "last-listed" in notices.json is updated
-	data, err := os.ReadFile(filename)
-	c.Assert(err, IsNil)
-	var m map[string]any
-	err = json.Unmarshal(data, &m)
-	c.Assert(err, IsNil)
-	c.Check(m, DeepEquals, map[string]any{
+	cliState := s.readCLIState(c)
+	c.Check(cliState, DeepEquals, map[string]any{
 		"last-listed": "2023-09-05T18:18:00Z",
 		"last-okayed": "0001-01-01T00:00:00Z",
 	})
@@ -285,20 +230,13 @@ func (s *PebbleSuite) TestNoticesNoNoticesTimeout(c *C) {
 			"result": []}`)
 	})
 
-	oldPebbleDir := os.Getenv("PEBBLE")
-	defer os.Setenv("PEBBLE", oldPebbleDir)
-
-	tempDir := c.MkDir()
-	filename := filepath.Join(tempDir, "notices.json")
-	os.Setenv("PEBBLE", tempDir)
-
 	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"notices", "--timeout", "1s"})
 	c.Assert(err, IsNil)
 	c.Check(rest, HasLen, 0)
 	c.Check(s.Stdout(), Equals, "")
 	c.Check(s.Stderr(), Equals, "No matching notices after waiting 1s.\n")
 
-	// Shouldn't have updated notices.json
-	_, err = os.Stat(filename)
+	// Shouldn't have updated cli.json
+	_, err = os.Stat(s.cliStatePath)
 	c.Assert(errors.Is(err, fs.ErrNotExist), Equals, true)
 }
