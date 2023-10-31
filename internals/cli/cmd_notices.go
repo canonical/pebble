@@ -96,7 +96,7 @@ func (cmd *cmdNotices) Execute(args []string) error {
 	writer := tabWriter()
 	defer writer.Flush()
 
-	fmt.Fprintln(writer, "ID\tType\tKey\tFirst\tRepeated\tOcc")
+	fmt.Fprintln(writer, "ID\tType\tKey\tFirst\tRepeated\tOccurences")
 
 	for _, notice := range notices {
 		key := notice.Key
