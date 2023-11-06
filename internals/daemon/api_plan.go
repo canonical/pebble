@@ -24,7 +24,7 @@ import (
 	"github.com/canonical/pebble/internals/plan"
 )
 
-func v1GetPlan(c *Command, r *http.Request, _ *userState) Response {
+func v1GetPlan(c *Command, r *http.Request, _ *UserState) Response {
 	format := r.URL.Query().Get("format")
 	if format != "yaml" {
 		return statusBadRequest("invalid format %q", format)
@@ -42,7 +42,7 @@ func v1GetPlan(c *Command, r *http.Request, _ *userState) Response {
 	return SyncResponse(string(planYAML))
 }
 
-func v1PostLayers(c *Command, r *http.Request, _ *userState) Response {
+func v1PostLayers(c *Command, r *http.Request, _ *UserState) Response {
 	var payload struct {
 		Action  string `json:"action"`
 		Combine bool   `json:"combine"`

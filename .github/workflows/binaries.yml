@@ -27,7 +27,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v4
       with:
-        go-version: stable  # latest stable version of Go
+        go-version-file: "go.mod"
 
     - name: Build binary and create archive
       id: build
@@ -49,7 +49,7 @@ jobs:
         echo Creating archive $ARCHIVE_FILE
         cp COPYING dist/build
         cp README.md dist/build
-        tar -czf dist/$ARCHIVE_FILE -C dist/build .
+        tar -czf dist/$ARCHIVE_FILE -C dist/build $(ls -A dist/build)
 
         # Share variables with subsequent steps
         echo "ARCHIVE_FILE=${ARCHIVE_FILE}" >>$GITHUB_OUTPUT

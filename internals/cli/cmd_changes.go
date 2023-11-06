@@ -30,7 +30,8 @@ The changes command displays a summary of system changes performed recently.
 `
 
 type cmdChanges struct {
-	clientMixin
+	client *client.Client
+
 	timeMixin
 	Positional struct {
 		Service string `positional-arg-name:"<service>"`
@@ -44,6 +45,8 @@ change that happened recently.
 `
 
 type cmdTasks struct {
+	client *client.Client
+
 	timeMixin
 	changeIDMixin
 }
@@ -54,14 +57,18 @@ func init() {
 		Summary:     cmdChangesSummary,
 		Description: cmdChangesDescription,
 		ArgsHelp:    timeArgsHelp,
-		Builder:     func() flags.Commander { return &cmdChanges{} },
+		New: func(opts *CmdOptions) flags.Commander {
+			return &cmdChanges{client: opts.Client}
+		},
 	})
 	AddCommand(&CmdInfo{
 		Name:        "tasks",
 		Summary:     cmdTasksSummary,
 		Description: cmdTasksDescription,
 		ArgsHelp:    merge(changeIDMixinArgsHelp, timeArgsHelp),
-		Builder:     func() flags.Commander { return &cmdTasks{} },
+		New: func(opts *CmdOptions) flags.Commander {
+			return &cmdTasks{client: opts.Client}
+		},
 	})
 }
 
@@ -133,7 +140,7 @@ func (c *cmdChanges) Execute(args []string) error {
 }
 
 func (c *cmdTasks) Execute([]string) error {
-	chid, err := c.GetChangeID()
+	chid, err := c.GetChangeID(c.client)
 	if err != nil {
 		if err == noChangeFoundOK {
 			return nil

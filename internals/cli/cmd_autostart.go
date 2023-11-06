@@ -27,6 +27,8 @@ to start by default.
 `
 
 type cmdAutoStart struct {
+	client *client.Client
+
 	waitMixin
 }
 
@@ -36,7 +38,9 @@ func init() {
 		Summary:     cmdAutoStartSummary,
 		Description: cmdAutoStartDescription,
 		ArgsHelp:    waitArgsHelp,
-		Builder:     func() flags.Commander { return &cmdAutoStart{} },
+		New: func(opts *CmdOptions) flags.Commander {
+			return &cmdAutoStart{client: opts.Client}
+		},
 	})
 }
 
@@ -51,7 +55,7 @@ func (cmd cmdAutoStart) Execute(args []string) error {
 		return err
 	}
 
-	if _, err := cmd.wait(changeID); err != nil {
+	if _, err := cmd.wait(cmd.client, changeID); err != nil {
 		if err == noWait {
 			return nil
 		}

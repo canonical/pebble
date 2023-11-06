@@ -34,7 +34,7 @@ func (s *responseSuite) TestRespSetsLocationIfAccepted(c *check.C) {
 	rec := httptest.NewRecorder()
 
 	rsp := &resp{
-		Status: 202,
+		Status: http.StatusAccepted,
 		Result: map[string]interface{}{
 			"resource": "foo/bar",
 		},
@@ -49,7 +49,7 @@ func (s *responseSuite) TestRespSetsLocationIfCreated(c *check.C) {
 	rec := httptest.NewRecorder()
 
 	rsp := &resp{
-		Status: 201,
+		Status: http.StatusCreated,
 		Result: map[string]interface{}{
 			"resource": "foo/bar",
 		},
@@ -64,7 +64,7 @@ func (s *responseSuite) TestRespDoesNotSetLocationIfOther(c *check.C) {
 	rec := httptest.NewRecorder()
 
 	rsp := &resp{
-		Status: 418, // I'm a teapot
+		Status: http.StatusTeapot, // I'm a teapot
 		Result: map[string]interface{}{
 			"resource": "foo/bar",
 		},
@@ -104,7 +104,7 @@ func (s *responseSuite) TestRespJSONWithNullResult(c *check.C) {
 }
 
 func (s *responseSuite) TestErrorResponderPrintfsWithArgs(c *check.C) {
-	teapot := makeErrorResponder(418)
+	teapot := makeErrorResponder(http.StatusTeapot)
 
 	rec := httptest.NewRecorder()
 	rsp := teapot("system memory below %d%%.", 1)
@@ -119,7 +119,7 @@ func (s *responseSuite) TestErrorResponderPrintfsWithArgs(c *check.C) {
 }
 
 func (s *responseSuite) TestErrorResponderDoesNotPrintfAlways(c *check.C) {
-	teapot := makeErrorResponder(418)
+	teapot := makeErrorResponder(http.StatusTeapot)
 
 	rec := httptest.NewRecorder()
 	rsp := teapot("system memory below 1%.")
