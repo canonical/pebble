@@ -52,7 +52,7 @@ func init() {
 		Description: cmdPushDescription,
 		ArgsHelp: map[string]string{
 			"-p":      "Create parent directories for the file",
-			"-m":      "Set permissions (e.g. 0644)",
+			"-m":      "Override permissions (3-digit octal)",
 			"--uid":   "Use specified user ID",
 			"--user":  "Use specified username",
 			"--gid":   "Use specified group ID",

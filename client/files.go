@@ -432,9 +432,26 @@ func escapeQuotes(s string) string {
 
 // Push writes content to a path on the remote system.
 func (client *Client) Push(opts *PushOptions) error {
-	// Buffer for multipart header/footer
-	var b bytes.Buffer
-	mw := multipart.NewWriter(&b)
+	var permissions string
+	if opts.Permissions != 0 {
+		permissions = fmt.Sprintf("%03o", opts.Permissions)
+	}
+
+	payload := writeFilesPayload{
+		Action: "write",
+		Files: []writeFilesItem{{
+			Path:        opts.Path,
+			MakeDirs:    opts.MakeDirs,
+			Permissions: permissions,
+			UserID:      opts.UserID,
+			User:        opts.User,
+			GroupID:     opts.GroupID,
+			Group:       opts.Group,
+		}},
+	}
+
+	var body bytes.Buffer
+	mw := multipart.NewWriter(&body)
 
 	// Encode metadata part of the header
 	part, err := mw.CreatePart(textproto.MIMEHeader{
@@ -445,19 +462,8 @@ func (client *Client) Push(opts *PushOptions) error {
 		return fmt.Errorf("cannot encode metadata in request payload: %w", err)
 	}
 
-	payload := writeFilesPayload{
-		Action: "write",
-		Files: []writeFilesItem{{
-			Path:        opts.Path,
-			MakeDirs:    opts.MakeDirs,
-			Permissions: fmt.Sprintf("%03o", opts.Permissions),
-			UserID:      opts.UserID,
-			User:        opts.User,
-			GroupID:     opts.GroupID,
-			Group:       opts.Group,
-		}},
-	}
-	if err = json.NewEncoder(part).Encode(&payload); err != nil {
+	// Buffer for multipart header/footer
+	if err := json.NewEncoder(part).Encode(&payload); err != nil {
 		return err
 	}
 
@@ -471,12 +477,12 @@ func (client *Client) Push(opts *PushOptions) error {
 		return fmt.Errorf("cannot encode file in request payload: %w", err)
 	}
 
-	header := b.String()
+	header := body.String()
 
 	// Encode multipart footer
-	b.Reset()
+	body.Reset()
 	mw.Close()
-	footer := b.String()
+	footer := body.String()
 
 	resp, err := client.Requester().Do(context.Background(), &RequestOptions{
 		Type:    SyncRequest,
