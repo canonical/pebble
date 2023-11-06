@@ -488,7 +488,6 @@ func (client *Client) Push(opts *PushOptions) error {
 		Type:    SyncRequest,
 		Method:  "POST",
 		Path:    "/v1/files",
-		Query:   nil,
 		Headers: map[string]string{"Content-Type": mw.FormDataContentType()},
 		Body:    io.MultiReader(strings.NewReader(header), opts.Source, strings.NewReader(footer)),
 	})

@@ -74,29 +74,27 @@ func (cmd *cmdPush) Execute(args []string) error {
 	}
 	defer f.Close()
 
-	st, err := f.Stat()
-	if err != nil {
-		return err
-	}
-
-	opts := client.PushOptions{
-		Source:      f,
-		Path:        cmd.Positional.RemotePath,
-		MakeDirs:    cmd.MakeDirs,
-		Permissions: st.Mode().Perm(),
-		UserID:      cmd.UserID,
-		User:        cmd.User,
-		GroupID:     cmd.GroupID,
-		Group:       cmd.Group,
-	}
-
+	var permissions os.FileMode
 	if cmd.Permissions != "" {
 		p, err := strconv.ParseUint(cmd.Permissions, 8, 32)
 		if err != nil {
 			return fmt.Errorf("invalid mode for directory: %q", cmd.Permissions)
 		}
-		opts.Permissions = os.FileMode(p)
+		permissions = os.FileMode(p)
+	} else if st, err := f.Stat(); err == nil {
+		permissions = st.Mode().Perm()
+	} else {
+		return err
 	}
 
-	return cmd.client.Push(&opts)
+	return cmd.client.Push(&client.PushOptions{
+		Source:      f,
+		Path:        cmd.Positional.RemotePath,
+		MakeDirs:    cmd.MakeDirs,
+		Permissions: permissions,
+		UserID:      cmd.UserID,
+		User:        cmd.User,
+		GroupID:     cmd.GroupID,
+		Group:       cmd.Group,
+	})
 }
