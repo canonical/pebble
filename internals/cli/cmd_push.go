@@ -81,10 +81,12 @@ func (cmd *cmdPush) Execute(args []string) error {
 			return fmt.Errorf("invalid mode for directory: %q", cmd.Permissions)
 		}
 		permissions = os.FileMode(p)
-	} else if st, err := f.Stat(); err == nil {
-		permissions = st.Mode().Perm()
 	} else {
-		return err
+		st, err := f.Stat()
+		if err != nil {
+			return err
+		}
+		permissions = st.Mode().Perm()
 	}
 
 	return cmd.client.Push(&client.PushOptions{
