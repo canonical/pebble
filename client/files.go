@@ -16,6 +16,7 @@ package client
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -369,7 +370,6 @@ func (client *Client) RemovePath(opts *RemovePathOptions) error {
 	return nil
 }
 
-// PushOptions contains the options for a call to Push.
 type PushOptions struct {
 	// Source is the source of data to write (required).
 	Source io.Reader
@@ -379,33 +379,33 @@ type PushOptions struct {
 	Path string
 
 	// MakeDirs, if true, will create any non-existing directories in the path
-	// to the remote file. If false, the default, the call to Push will
-	// fail if any non-existing directory is found on the remote path.
+	// to the remote file. If false (the default) the call to Push will
+	// fail if any of the parent directories of path do not exist.
 	MakeDirs bool
 
-	// Permissions indicates the mode of the file in the destination machine.
-	// Defaults to 0644. Note that, when used together with MakeDirs, the
-	// directories that might be created will not use this mode, but 0755.
-	Permissions string
+	// Permissions indicates the mode of the file on the destination machine.
+	// If 0 or unset, defaults to 0644. Note that, when used together with MakeDirs,
+	// the directories that are created will not use this mode, but 0755.
+	Permissions os.FileMode
 
-	// UserID indicates the user ID of the owner for the file in the destination
-	// machine. When used together with MakeDirs, the directories that might be
+	// UserID indicates the user ID of the owner for the file on the destination
+	// machine. When used together with MakeDirs, the directories that are
 	// created will also be owned by this user.
 	UserID *int
 
-	// User indicates the name of the owner user for the file in the destination
-	// machine. When used together with MakeDirs, the directories that might be
+	// User indicates the name of the owner user for the file on the destination
+	// machine. When used together with MakeDirs, the directories that are
 	// created will also be owned by this user.
 	User string
 
-	// GroupID indicates the ID of the owner group for the file in the
-	// destination machine. When used together with MakeDirs, the directories
-	// that might be created will also be owned by this group.
+	// GroupID indicates the ID of the owner group for the file on the destination
+	// machine. When used together with MakeDirs, the directories that are
+	// created will also be owned by this user.
 	GroupID *int
 
-	// Group indicates the name of the owner group for the file in the
-	// destination machine. When used together with MakeDirs, the directories
-	// that might be created will also be owned by this group.
+	// Group indicates the name of the owner group for the file on the
+	// machine. When used together with MakeDirs, the directories that are
+	// created will also be owned by this user.
 	Group string
 }
 
@@ -450,7 +450,7 @@ func (client *Client) Push(opts *PushOptions) error {
 		Files: []writeFilesItem{{
 			Path:        opts.Path,
 			MakeDirs:    opts.MakeDirs,
-			Permissions: opts.Permissions,
+			Permissions: fmt.Sprintf("%03o", opts.Permissions),
 			UserID:      opts.UserID,
 			User:        opts.User,
 			GroupID:     opts.GroupID,
@@ -478,15 +478,22 @@ func (client *Client) Push(opts *PushOptions) error {
 	mw.Close()
 	footer := b.String()
 
-	var result []fileResult
-	body := io.MultiReader(strings.NewReader(header), opts.Source, strings.NewReader(footer))
-	headers := map[string]string{
-		"Content-Type": mw.FormDataContentType(),
-	}
-	if _, err := client.doSync("POST", "/v1/files", nil, headers, body, &result); err != nil {
+	resp, err := client.Requester().Do(context.Background(), &RequestOptions{
+		Type:    SyncRequest,
+		Method:  "POST",
+		Path:    "/v1/files",
+		Query:   nil,
+		Headers: map[string]string{"Content-Type": mw.FormDataContentType()},
+		Body:    io.MultiReader(strings.NewReader(header), opts.Source, strings.NewReader(footer)),
+	})
+	if err != nil {
 		return err
 	}
 
+	var result []fileResult
+	if err = resp.DecodeResult(&result); err != nil {
+		return err
+	}
 	if len(result) != 1 {
 		return fmt.Errorf("expected exactly one result from API, got %d", len(result))
 	}

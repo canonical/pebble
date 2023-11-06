@@ -625,7 +625,8 @@ func (cs *clientSuite) TestPush(c *C) {
 	c.Assert(payload, DeepEquals, writeFilesPayload{
 		Action: "write",
 		Files: []writeFilesItem{{
-			Path: "/file.dat",
+			Path:        "/file.dat",
+			Permissions: "000",
 		}},
 	})
 

@@ -17,6 +17,7 @@ package cli
 import (
 	"fmt"
 	"os"
+	"strconv"
 
 	"github.com/canonical/go-flags"
 
@@ -29,7 +30,7 @@ The push command transfers a file to the remote system.
 `
 
 type cmdPush struct {
-	clientMixin
+	client *client.Client
 
 	MakeDirs    bool   `short:"p"`
 	Permissions string `short:"m"`
@@ -51,13 +52,15 @@ func init() {
 		Description: cmdPushDescription,
 		ArgsHelp: map[string]string{
 			"-p":      "Create parent directories for the file",
-			"-m":      "Set permissions for the file (e.g. 0644)",
+			"-m":      "Set permissions (e.g. 0644)",
 			"--uid":   "Use specified user ID",
 			"--user":  "Use specified username",
 			"--gid":   "Use specified group ID",
 			"--group": "Use specified group name",
 		},
-		Builder: func() flags.Commander { return &cmdPush{} },
+		New: func(opts *CmdOptions) flags.Commander {
+			return &cmdPush{client: opts.Client}
+		},
 	})
 }
 func (cmd *cmdPush) Execute(args []string) error {
@@ -76,21 +79,24 @@ func (cmd *cmdPush) Execute(args []string) error {
 		return err
 	}
 
-	var permissions string
-	if cmd.Permissions != "" {
-		permissions = cmd.Permissions
-	} else {
-		permissions = fmt.Sprintf("%03o", st.Mode().Perm())
-	}
-
-	return cmd.client.Push(&client.PushOptions{
+	opts := client.PushOptions{
 		Source:      f,
 		Path:        cmd.Positional.RemotePath,
 		MakeDirs:    cmd.MakeDirs,
-		Permissions: permissions,
+		Permissions: st.Mode().Perm(),
 		UserID:      cmd.UserID,
 		User:        cmd.User,
 		GroupID:     cmd.GroupID,
 		Group:       cmd.Group,
-	})
+	}
+
+	if cmd.Permissions != "" {
+		p, err := strconv.ParseUint(cmd.Permissions, 8, 32)
+		if err != nil {
+			return fmt.Errorf("invalid mode for directory: %q", cmd.Permissions)
+		}
+		opts.Permissions = os.FileMode(p)
+	}
+
+	return cmd.client.Push(&opts)
 }
