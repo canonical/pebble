@@ -52,6 +52,12 @@ const defaultPebbleDir = "/var/lib/pebble/default"
 // ErrExtraArgs is returned  if extra arguments to a command are found
 var ErrExtraArgs = fmt.Errorf("too many arguments for command")
 
+// CmdOptions exposes state made accessible during command execution.
+type CmdOptions struct {
+	Client *client.Client
+	Parser *flags.Parser
+}
+
 // CmdInfo holds information needed by the CLI to execute commands and
 // populate entries in the help manual.
 type CmdInfo struct {
@@ -67,9 +73,8 @@ type CmdInfo struct {
 	// command, and in the Pebble man page.
 	Description string
 
-	// Builder is a function that creates a new instance of the command
-	// struct containing an Execute(args []string) implementation.
-	Builder func() flags.Commander
+	// New is a function that creates a new instance of the command.
+	New func(*CmdOptions) flags.Commander
 
 	// ArgsHelp (optional) contains help about the command-line arguments
 	// (including options) supported by the command.
@@ -139,22 +144,6 @@ func fixupArg(optName string) string {
 	return optName
 }
 
-type clientSetter interface {
-	setClient(*client.Client)
-}
-
-type clientMixin struct {
-	client *client.Client
-}
-
-func (ch *clientMixin) setClient(cli *client.Client) {
-	ch.client = cli
-}
-
-type parserSetter interface {
-	setParser(*flags.Parser)
-}
-
 type defaultOptions struct {
 	Version func() `long:"version" hidden:"yes" description:"Print the version and exit"`
 }
@@ -192,13 +181,7 @@ func Parser(cli *client.Client) *flags.Parser {
 
 	// Add all commands
 	for _, c := range commands {
-		obj := c.Builder()
-		if x, ok := obj.(clientSetter); ok {
-			x.setClient(cli)
-		}
-		if x, ok := obj.(parserSetter); ok {
-			x.setParser(parser)
-		}
+		obj := c.New(&CmdOptions{Client: cli, Parser: parser})
 
 		var target *flags.Command
 		if c.Debug {

@@ -37,7 +37,7 @@ import (
 
 const minBoundaryLength = 32
 
-func v1GetFiles(_ *Command, req *http.Request, _ *userState) Response {
+func v1GetFiles(_ *Command, req *http.Request, _ *UserState) Response {
 	query := req.URL.Query()
 	action := query.Get("action")
 	switch action {
@@ -337,7 +337,7 @@ func listFiles(path, pattern string, itself bool) ([]fileInfoResult, error) {
 	return result, nil
 }
 
-func v1PostFiles(_ *Command, req *http.Request, _ *userState) Response {
+func v1PostFiles(_ *Command, req *http.Request, _ *UserState) Response {
 	contentType := req.Header.Get("Content-Type")
 	mediaType, params, err := mime.ParseMediaType(contentType)
 	if err != nil {

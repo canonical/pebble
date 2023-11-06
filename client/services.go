@@ -30,33 +30,33 @@ type ServiceOptions struct {
 // AutoStart starts the services makes as "startup: enabled". opts.Names must
 // be empty for this call.
 func (client *Client) AutoStart(opts *ServiceOptions) (changeID string, err error) {
-	_, changeID, err = client.doMultiServiceAction("autostart", opts.Names)
+	changeID, err = client.doMultiServiceAction("autostart", opts.Names)
 	return changeID, err
 }
 
 // Start starts the services named in opts.Names in dependency order.
 func (client *Client) Start(opts *ServiceOptions) (changeID string, err error) {
-	_, changeID, err = client.doMultiServiceAction("start", opts.Names)
+	changeID, err = client.doMultiServiceAction("start", opts.Names)
 	return changeID, err
 }
 
 // Stop stops the services named in opts.Names in dependency order.
 func (client *Client) Stop(opts *ServiceOptions) (changeID string, err error) {
-	_, changeID, err = client.doMultiServiceAction("stop", opts.Names)
+	changeID, err = client.doMultiServiceAction("stop", opts.Names)
 	return changeID, err
 }
 
 // Restart stops and then starts the services named in opts.Names in
 // dependency order.
 func (client *Client) Restart(opts *ServiceOptions) (changeID string, err error) {
-	_, changeID, err = client.doMultiServiceAction("restart", opts.Names)
+	changeID, err = client.doMultiServiceAction("restart", opts.Names)
 	return changeID, err
 }
 
 // Replan stops and (re)starts the services whose configuration has changed
 // since they were started. opts.Names must be empty for this call.
 func (client *Client) Replan(opts *ServiceOptions) (changeID string, err error) {
-	_, changeID, err = client.doMultiServiceAction("replan", opts.Names)
+	changeID, err = client.doMultiServiceAction("replan", opts.Names)
 	return changeID, err
 }
 
@@ -65,19 +65,24 @@ type multiActionData struct {
 	Services []string `json:"services"`
 }
 
-func (client *Client) doMultiServiceAction(actionName string, services []string) (result json.RawMessage, changeID string, err error) {
+func (client *Client) doMultiServiceAction(actionName string, services []string) (changeID string, err error) {
 	action := multiActionData{
 		Action:   actionName,
 		Services: services,
 	}
 	data, err := json.Marshal(&action)
 	if err != nil {
-		return nil, "", fmt.Errorf("cannot marshal multi-service action: %w", err)
+		return "", fmt.Errorf("cannot marshal multi-service action: %w", err)
 	}
 	headers := map[string]string{
 		"Content-Type": "application/json",
 	}
-	return client.doAsyncFull("POST", "/v1/services", nil, headers, bytes.NewBuffer(data))
+
+	resp, err := client.doAsync("POST", "/v1/services", nil, headers, bytes.NewBuffer(data), nil)
+	if err != nil {
+		return "", err
+	}
+	return resp.ChangeID, nil
 }
 
 type ServicesOptions struct {

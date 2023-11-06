@@ -152,14 +152,10 @@ func (client *Client) Exec(opts *ExecOptions) (*ExecProcess, error) {
 	headers := map[string]string{
 		"Content-Type": "application/json",
 	}
-	resultBytes, changeID, err := client.doAsyncFull("POST", "/v1/exec", nil, headers, &body)
+	var result execResult
+	resp, err := client.doAsync("POST", "/v1/exec", nil, headers, &body, &result)
 	if err != nil {
 		return nil, err
-	}
-	var result execResult
-	err = json.Unmarshal(resultBytes, &result)
-	if err != nil {
-		return nil, fmt.Errorf("cannot unmarshal JSON response: %w", err)
 	}
 
 	// Connect to the "control" websocket.
@@ -211,7 +207,7 @@ func (client *Client) Exec(opts *ExecOptions) (*ExecProcess, error) {
 	}()
 
 	process := &ExecProcess{
-		changeID:    changeID,
+		changeID:    resp.ChangeID,
 		client:      client,
 		timeout:     opts.Timeout,
 		writesDone:  writesDone,

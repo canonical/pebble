@@ -13,15 +13,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        go: ['1.19', '1.18', '1.17', '1.16', '1.15', '1.14']
+        go: ['1.20']
 
     name: Go ${{ matrix.go }}
-
     steps:
     - uses: actions/checkout@v3
 
     - name: Set up Go
-      uses: actions/setup-go@v3
+      uses: actions/setup-go@v4
       with:
         go-version: ${{ matrix.go }}
 
@@ -34,35 +33,33 @@ jobs:
     runs-on: ubuntu-latest
 
     name: Root Tests
-
     steps:
     - uses: actions/checkout@v3
 
     - name: Set up Go
-      uses: actions/setup-go@v3
+      uses: actions/setup-go@v4
       with:
-        go-version-file: 'go.mod'
+        go-version: ${{ matrix.go }}
 
     - name: Test
       run: |
         go test -c ./internals/daemon
-        PEBBLE_TEST_USER=runner PEBBLE_TEST_GROUP=runner sudo -E ./daemon.test -check.v -check.f ^execSuite\.TestUserGroup$
-        PEBBLE_TEST_USER=runner PEBBLE_TEST_GROUP=runner sudo -E ./daemon.test -check.v -check.f ^execSuite\.TestUserIDGroupID$
-        PEBBLE_TEST_USER=runner PEBBLE_TEST_GROUP=runner sudo -E ./daemon.test -check.v -check.f ^filesSuite\.TestWriteUserGroupReal$
-        PEBBLE_TEST_USER=runner PEBBLE_TEST_GROUP=runner sudo -E ./daemon.test -check.v -check.f ^filesSuite\.TestMakeDirsUserGroupReal$
+        PEBBLE_TEST_USER=runner PEBBLE_TEST_GROUP=runner sudo -E -H ./daemon.test -check.v -check.f ^execSuite\.TestUserGroup$
+        PEBBLE_TEST_USER=runner PEBBLE_TEST_GROUP=runner sudo -E -H ./daemon.test -check.v -check.f ^execSuite\.TestUserIDGroupID$
+        PEBBLE_TEST_USER=runner PEBBLE_TEST_GROUP=runner sudo -E -H ./daemon.test -check.v -check.f ^filesSuite\.TestWriteUserGroupReal$
+        PEBBLE_TEST_USER=runner PEBBLE_TEST_GROUP=runner sudo -E -H ./daemon.test -check.v -check.f ^filesSuite\.TestMakeDirsUserGroupReal$
         go test -c ./internals/overlord/servstate/
-        PEBBLE_TEST_USER=runner PEBBLE_TEST_GROUP=runner sudo -E ./servstate.test -check.v -check.f ^S.TestUserGroup$
+        PEBBLE_TEST_USER=runner PEBBLE_TEST_GROUP=runner sudo -E -H ./servstate.test -check.v -check.f ^S.TestUserGroup$
 
   format:
     runs-on: ubuntu-latest
 
     name: Format check
-
     steps:
     - uses: actions/checkout@v3
 
     - name: Set up Go
-      uses: actions/setup-go@v3
+      uses: actions/setup-go@v4
       with:
         go-version-file: 'go.mod'
 

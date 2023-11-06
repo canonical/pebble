@@ -1,6 +1,6 @@
 # Create SVG with the following graphviz command:
 #
-# dot -Tsvg internal/overlord/servstate/state-diagram.dot -o ./internal/overlord/servstate/state-diagram.svg
+# dot -Tsvg internals/overlord/servstate/state-diagram.dot -o ./internals/overlord/servstate/state-diagram.svg
 
 digraph service_state_machine {
     node [penwidth=3 shape=box fontsize=24] initial

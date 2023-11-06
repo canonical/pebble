@@ -42,6 +42,7 @@ import (
 const (
 	connectTimeout   = 5 * time.Second
 	handshakeTimeout = 5 * time.Second
+	waitDelay        = time.Second
 
 	wsControl = "control"
 	wsStdio   = "stdio"
@@ -343,6 +344,7 @@ func (e *execution) do(ctx context.Context, task *state.Task) error {
 	cmd.Stdin = stdin
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
+	cmd.WaitDelay = waitDelay
 
 	cmd.SysProcAttr = &syscall.SysProcAttr{}
 	if e.userID != nil && e.groupID != nil {

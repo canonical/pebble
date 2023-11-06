@@ -33,13 +33,10 @@ parts:
     plugin: go
     source: .
     build-snaps:
-      - go
-    build-environment:
-      - CGO_ENABLED: 0
-      - GOFLAGS: -trimpath -ldflags=-w -ldflags=-s
+      - go/1.20/stable
     override-build: |
       go generate ./cmd
-      craftctl default
+      CGO_ENABLED=0 go build -trimpath -ldflags=-w -ldflags=-s -o $CRAFT_PART_INSTALL/bin/pebble ./cmd/pebble
 
   pebble-release-data:
     plugin: nil
