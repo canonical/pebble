@@ -61,6 +61,7 @@ type RequestOptions struct {
 
 type RequestResponse struct {
 	StatusCode int
+	Headers    map[string]string
 	// ChangeID is typically set when an AsyncRequest type is performed. The
 	// change id allows for introspection and progress tracking of the request.
 	ChangeID string
@@ -321,7 +322,11 @@ func (rq *defaultRequester) Do(ctx context.Context, opts *RequestOptions) (*Requ
 
 	// Is the result expecting a caller-managed raw body?
 	if opts.Type == RawRequest {
-		return &RequestResponse{Body: httpResp.Body}, nil
+		return &RequestResponse{
+			StatusCode: httpResp.StatusCode,
+			Headers:    headerToMap(httpResp.Header),
+			Body:       httpResp.Body,
+		}, nil
 	}
 
 	defer httpResp.Body.Close()
@@ -375,9 +380,18 @@ func (rq *defaultRequester) Do(ctx context.Context, opts *RequestOptions) (*Requ
 	// Common response
 	return &RequestResponse{
 		StatusCode: serverResp.StatusCode,
+		Headers:    headerToMap(httpResp.Header),
 		ChangeID:   serverResp.Change,
 		Result:     serverResp.Result,
 	}, nil
+}
+
+func headerToMap(h http.Header) map[string]string {
+	m := make(map[string]string)
+	for k, v := range h {
+		m[k] = v[len(v)-1]
+	}
+	return m
 }
 
 func decodeInto(reader io.Reader, v interface{}) error {

@@ -737,7 +737,7 @@ func (cs *clientSuite) TestPullFailsWithInvalidJSON(c *C) {
 		Path:   "/foo/bar.dat",
 		Target: &targetBuf,
 	})
-	c.Assert(err, ErrorMatches, "cannot decode response: .*")
+	c.Assert(err, ErrorMatches, "cannot decode .*: .*")
 }
 
 func (cs *clientSuite) TestPullFailsWithMetadataError(c *C) {

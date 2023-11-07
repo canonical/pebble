@@ -29,7 +29,7 @@ The pull command retrieves a file from the remote system.
 `
 
 type cmdPull struct {
-	clientMixin
+	client *client.Client
 
 	Positional struct {
 		RemotePath string `positional-arg-name:"<remote-path>" required:"1"`
@@ -42,7 +42,9 @@ func init() {
 		Name:        "pull",
 		Summary:     cmdPullSummary,
 		Description: cmdPullDescription,
-		Builder:     func() flags.Commander { return &cmdPull{} },
+		New: func(opts *CmdOptions) flags.Commander {
+			return &cmdPull{client: opts.Client}
+		},
 	})
 }
 
