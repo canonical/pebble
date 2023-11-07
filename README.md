@@ -457,7 +457,7 @@ would remove all services and then add `svc1`, so `my-target` would receive logs
 
 #### Labels
 
-In the `labels` section, you can specify custom labels to be added to any outgoing logs. These labels may contain `$ENVIRONMENT_VARIABLES` - these will be interpreted in the environment of the corresponding service. Pebble also adds its own default labels (depending on the protocol). For example, given the following plan:
+In the `labels` section, you can specify custom labels to be added to any outgoing logs. These labels may contain `$ENVIRONMENT_VARIABLES` - these will be interpreted in the environment of the corresponding service. Pebble may also add its own default labels (depending on the protocol). For example, given the following plan:
 ```yaml
 services:
   svc1:
@@ -478,13 +478,13 @@ the logs from `svc1` will be sent with the following labels:
 ```yaml
 product: juju
 owner: user-alice     # env var $OWNER substituted
-pebble_service: svc1  # default label
+pebble_service: svc1  # default label for Loki
 ```
 and for svc2, the labels will be
 ```yaml
 product: juju
 owner: user-bob       # env var $OWNER substituted
-pebble_service: svc2  # default label
+pebble_service: svc2  # default label for Loki
 ```
 
 
@@ -767,8 +767,10 @@ log-targets:
     override: merge | replace
 
     # (Required) The type of log target, which determines the format in
-    # which logs will be sent. Currently, the only supported type is 'loki',
-    # but more protocols may be added in the future.
+    # which logs will be sent. The supported types are:
+    #
+    # - loki: Use the Grafana Loki protocol. A "pebble_service" label is
+    #   added automatically, with the name of the Pebble service as its value.
     type: loki
 
     # (Required) The URL of the remote log target.
@@ -785,8 +787,7 @@ log-targets:
     services: [<service names>]
 
     # (Optional) A list of key/value pairs defining labels which should be set
-    # on the outgoing logs. These labels are added to (protocol-dependent)
-    # default labels (e.g. 'pebble_service' for Loki).
+    # on the outgoing logs.
     # The label values may contain $ENVIRONMENT_VARIABLES, which will be
     # substituted using the environment for the corresponding service.
     labels:
