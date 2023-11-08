@@ -258,62 +258,70 @@ func (s *gathererSuite) TestRace(c *C) {
 		svc2.name: svc2.ringBuffer,
 	}
 
-	wg := sync.WaitGroup{}
-	doAsync := func(f func()) {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			f()
-		}()
+	// Run a bunch of operations concurrently
+	doConcurrently := func(ops ...func()) {
+		wg := sync.WaitGroup{}
+		wg.Add(len(ops))
+		for _, f := range ops {
+			go func(f func()) {
+				defer wg.Done()
+				f()
+			}(f)
+		}
+		wg.Wait()
 	}
 
-	doAsync(func() {
-		g.PlanChanged(&plan.Plan{
-			Services: map[string]*plan.Service{
-				svc1.name: svc1.config,
-			},
-			LogTargets: map[string]*plan.LogTarget{
-				target.Name: target,
-			},
-		}, buffers)
-	})
+	doConcurrently(
+		// Change plan
+		func() {
+			g.PlanChanged(&plan.Plan{
+				Services: map[string]*plan.Service{
+					svc1.name: svc1.config,
+				},
+				LogTargets: map[string]*plan.LogTarget{
+					target.Name: target,
+				},
+			}, buffers)
+		},
+		// Start new service
+		func() { g.ServiceStarted(svc1.config, svc1.ringBuffer) },
+		// Write some logs
+		func() {
+			svc1.writeLog("hello")
+			svc1.writeLog("goodbye")
+		},
+	)
 
-	doAsync(func() {
-		g.ServiceStarted(svc1.config, svc1.ringBuffer)
-	})
+	doConcurrently(
+		// Write some more logs
+		func() {
+			svc1.writeLog("hello again")
+			svc1.writeLog("goodbye again")
+		},
+		// Simulate a service restart
+		func() { g.ServiceStarted(svc1.config, svc1.ringBuffer) },
+	)
 
-	doAsync(func() {
-		svc1.writeLog("hello")
-		svc1.writeLog("goodbye")
-	})
-
-	// Simulate a service restart
-	doAsync(func() {
-		g.ServiceStarted(svc1.config, svc1.ringBuffer)
-	})
-
-	doAsync(func() {
-		g.PlanChanged(&plan.Plan{
-			Services: map[string]*plan.Service{
-				svc2.name: svc2.config,
-			},
-			LogTargets: map[string]*plan.LogTarget{
-				target.Name: target,
-			},
-		}, buffers)
-	})
-
-	doAsync(func() {
-		g.ServiceStarted(svc2.config, svc2.ringBuffer)
-	})
-
-	doAsync(func() {
-		svc2.writeLog("hello")
-		go svc2.writeLog("goodbye")
-	})
-
-	// Wait for everything to finish before calling Stop
-	wg.Wait()
+	doConcurrently(
+		// Change plan
+		func() {
+			g.PlanChanged(&plan.Plan{
+				Services: map[string]*plan.Service{
+					svc2.name: svc2.config,
+				},
+				LogTargets: map[string]*plan.LogTarget{
+					target.Name: target,
+				},
+			}, buffers)
+		},
+		// Start new service
+		func() { g.ServiceStarted(svc2.config, svc2.ringBuffer) },
+		// Write some logs
+		func() {
+			svc2.writeLog("hello")
+			go svc2.writeLog("goodbye")
+		},
+	)
 
 	err = svc1.stop()
 	c.Assert(err, IsNil)

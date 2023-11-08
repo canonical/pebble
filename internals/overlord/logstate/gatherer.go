@@ -60,7 +60,8 @@ const (
 type logGatherer struct {
 	*logGathererOptions
 
-	target *plan.LogTarget
+	targetName string // needs to be constant to avoid race conditions
+	target     *plan.LogTarget
 	// tomb for the main loop
 	tomb tomb.Tomb
 
@@ -107,11 +108,12 @@ func newLogGathererInternal(target *plan.LogTarget, options *logGathererOptions)
 	g := &logGatherer{
 		logGathererOptions: options,
 
-		target:    target,
-		client:    client,
-		setLabels: make(chan svcWithLabels),
-		entryCh:   make(chan servicelog.Entry),
-		pullers:   newPullerGroup(target.Name),
+		targetName: target.Name,
+		target:     target,
+		client:     client,
+		setLabels:  make(chan svcWithLabels),
+		entryCh:    make(chan servicelog.Entry),
+		pullers:    newPullerGroup(target.Name),
 	}
 	g.clientCtx, g.clientCancel = context.WithCancel(context.Background())
 	g.tomb.Go(g.loop)
@@ -143,7 +145,7 @@ func fillDefaultOptions(options *logGathererOptions) *logGathererOptions {
 // gatherer's target exists in the new plan.
 func (g *logGatherer) PlanChanged(pl *plan.Plan, buffers map[string]*servicelog.RingBuffer) {
 	// Update target config
-	g.target = pl.LogTargets[g.target.Name]
+	g.target = pl.LogTargets[g.targetName]
 
 	// Remove old pullers
 	for _, svcName := range g.pullers.Services() {
@@ -221,7 +223,7 @@ func (g *logGatherer) loop() error {
 		flushTimer.Stop()
 		err := g.client.Flush(ctx)
 		if err != nil {
-			logger.Noticef("Cannot flush logs to target %q: %v", g.target.Name, err)
+			logger.Noticef("Cannot flush logs to target %q: %v", g.targetName, err)
 		}
 		numWritten = 0
 	}
@@ -244,7 +246,7 @@ mainLoop:
 		case entry := <-g.entryCh:
 			err := g.client.Add(entry)
 			if err != nil {
-				logger.Noticef("Cannot write logs to target %q: %v", g.target.Name, err)
+				logger.Noticef("Cannot write logs to target %q: %v", g.targetName, err)
 				continue
 			}
 			numWritten++
@@ -283,7 +285,7 @@ func (g *logGatherer) Stop() {
 	// Wait up to timeoutPullers for the pullers to pull the final logs from the
 	// iterator and send to the main loop.
 	time.AfterFunc(timeoutPullers, func() {
-		logger.Debugf("gatherer %q: force killing log pullers", g.target.Name)
+		logger.Debugf("gatherer %q: force killing log pullers", g.targetName)
 		g.pullers.KillAll()
 	})
 
@@ -293,9 +295,9 @@ func (g *logGatherer) Stop() {
 	g.pullers.tomb.Kill(nil)
 	select {
 	case <-g.pullers.Done():
-		logger.Debugf("gatherer %q: pullers have finished", g.target.Name)
+		logger.Debugf("gatherer %q: pullers have finished", g.targetName)
 	case <-time.After(timeoutMainLoop):
-		logger.Debugf("gatherer %q: force killing main loop", g.target.Name)
+		logger.Debugf("gatherer %q: force killing main loop", g.targetName)
 	}
 
 	g.tomb.Kill(nil)
