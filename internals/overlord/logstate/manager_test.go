@@ -196,12 +196,13 @@ func (c *slowFlushingClient) Add(_ servicelog.Entry) error {
 
 func (c *slowFlushingClient) Flush(ctx context.Context) error {
 	c.mu.Lock()
-	defer c.mu.Unlock()
+	flushTime := c.flushTime
+	c.mu.Unlock()
 
 	select {
 	case <-ctx.Done():
 		return fmt.Errorf("flush timed out")
-	case <-time.After(c.flushTime):
+	case <-time.After(flushTime):
 		return nil
 	}
 }
@@ -316,7 +317,11 @@ func (c *labelStore) Flush(_ context.Context) error {
 
 func (c *labelStore) SetLabels(serviceName string, labels map[string]string) {
 	c.labels[serviceName] = labels
-	c.notifySetLabels <- struct{}{}
+	select {
+	case c.notifySetLabels <- struct{}{}:
+	case <-time.After(1 * time.Second):
+		panic("timeout waiting for notify for SetLabels")
+	}
 }
 
 // wait for labels to be set

@@ -251,8 +251,8 @@ func (s *gathererSuite) TestRace(c *C) {
 	doAsync := func(f func()) {
 		wg.Add(1)
 		go func() {
+			defer wg.Done()
 			f()
-			wg.Done()
 		}()
 	}
 
@@ -267,7 +267,9 @@ func (s *gathererSuite) TestRace(c *C) {
 		}, buffers)
 	})
 
-	doAsync(func() { g.ServiceStarted(svc1.config, svc1.ringBuffer) })
+	doAsync(func() {
+		g.ServiceStarted(svc1.config, svc1.ringBuffer)
+	})
 
 	doAsync(func() {
 		svc1.writeLog("hello")
@@ -275,7 +277,9 @@ func (s *gathererSuite) TestRace(c *C) {
 	})
 
 	// Simulate a service restart
-	doAsync(func() { g.ServiceStarted(svc1.config, svc1.ringBuffer) })
+	doAsync(func() {
+		g.ServiceStarted(svc1.config, svc1.ringBuffer)
+	})
 
 	doAsync(func() {
 		g.PlanChanged(&plan.Plan{
@@ -288,7 +292,9 @@ func (s *gathererSuite) TestRace(c *C) {
 		}, buffers)
 	})
 
-	doAsync(func() { g.ServiceStarted(svc2.config, svc2.ringBuffer) })
+	doAsync(func() {
+		g.ServiceStarted(svc2.config, svc2.ringBuffer)
+	})
 
 	doAsync(func() {
 		svc2.writeLog("hello")
