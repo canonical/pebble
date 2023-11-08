@@ -71,7 +71,7 @@ func NewClientWithOptions(target *plan.LogTarget, options *ClientOptions) *Clien
 		labels:     make(map[string]json.RawMessage),
 	}
 	// c.entries should be backed by the same array as c.buffer
-	c.entries = c.buffer[0:0]
+	c.entries = c.buffer[:0]
 	return c
 }
 
@@ -103,6 +103,7 @@ func (c *Client) SetLabels(serviceName string, labels map[string]string) {
 	// Encode labels now to save time later
 	marshalledLabels, err := json.Marshal(newLabels)
 	if err != nil {
+		// Can't happen as map[string]string will always be marshallable
 		logger.Panicf("Loki client for %q: cannot marshal labels: %v", c.target.Name, err)
 	}
 	c.labels[serviceName] = marshalledLabels
@@ -121,7 +122,7 @@ func (c *Client) Add(entry servicelog.Entry) error {
 		copy(c.buffer, c.entries)
 
 		// Reset the view into the buffer
-		c.entries = c.buffer[0:len(c.entries):len(c.buffer)]
+		c.entries = c.buffer[:len(c.entries):len(c.buffer)]
 
 		// Zero removed elements to allow garbage collection
 		for i := len(c.entries); i < len(c.buffer); i++ {
@@ -176,7 +177,7 @@ func (c *Client) resetBuffer() {
 	for i := 0; i < len(c.entries); i++ {
 		c.entries[i] = lokiEntryWithService{}
 	}
-	c.entries = c.buffer[0:0]
+	c.entries = c.buffer[:0]
 }
 
 func (c *Client) buildRequest() lokiRequest {

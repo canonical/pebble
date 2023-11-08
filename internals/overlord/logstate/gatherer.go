@@ -148,11 +148,9 @@ func (g *logGatherer) PlanChanged(pl *plan.Plan, buffers map[string]*servicelog.
 	// Remove old pullers
 	for _, svcName := range g.pullers.Services() {
 		svc, svcExists := pl.Services[svcName]
-		if svcExists {
-			if svc.LogsTo(g.target) {
-				// We're still collecting logs from this service, so don't remove it.
-				continue
-			}
+		if svcExists && svc.LogsTo(g.target) {
+			// We're still collecting logs from this service, so don't remove it.
+			continue
 		}
 
 		// Service no longer forwarding to this log target (or it was removed from
@@ -206,11 +204,8 @@ func (g *logGatherer) ServiceStarted(service *plan.Service, buffer *servicelog.R
 // $env_vars with the corresponding value in the service's environment.
 func evaluateLabels(rawLabels, env map[string]string) map[string]string {
 	substitute := func(k string) string {
-		if v, ok := env[k]; ok {
-			return v
-		}
 		// Undefined variables default to "", just like Bash
-		return ""
+		return env[k]
 	}
 
 	labels := make(map[string]string, len(rawLabels))
@@ -373,7 +368,7 @@ type logClient interface {
 	// Flush sends buffered logs (if any) to the remote target.
 	Flush(context.Context) error
 
-	// SetLabels sets the log labels for the given services, or releases
+	// SetLabels sets the log labels for the given service, or releases
 	// previously allocated label resources if the labels parameter is nil.
 	SetLabels(serviceName string, labels map[string]string)
 }

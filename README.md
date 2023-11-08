@@ -787,9 +787,8 @@ log-targets:
     services: [<service names>]
 
     # (Optional) A list of key/value pairs defining labels which should be set
-    # on the outgoing logs.
-    # The label values may contain $ENVIRONMENT_VARIABLES, which will be
-    # substituted using the environment for the corresponding service.
+    # on the outgoing logs. The label values may contain $ENV_VARS, which will
+    # be substituted using the environment for the corresponding service.
     labels:
       <label name>: <label value>
 ```
