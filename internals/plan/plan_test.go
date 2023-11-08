@@ -1132,31 +1132,31 @@ var planTests = []planTest{{
 			tgt1:
 				override: merge
 				type: loki
-				location: fake
+				location: https://my.loki.server/loki/api/v1/push
 				labels:
-					label1: foo
-					label2: foo
+					label1: foo11
+					label2: foo12
 			tgt2:
 				override: merge
 				type: loki
-				location: fake
+				location: https://my.loki.server/loki/api/v1/push
 				labels:
-					label1: foo
-					label2: foo
+					label1: foo21
+					label2: foo22
 `, `
 		log-targets:
 			tgt1:
 				override: merge
 				labels:
-					label2: bar
-					label3: bar
+					label2: bar12
+					label3: bar13
 			tgt2:
 				override: replace
 				type: loki
-				location: replaced
+				location: https://new.loki.server/loki/api/v1/push
 				labels:
-					label2: bar
-					label3: bar
+					label2: bar22
+					label3: bar23
 `},
 	layers: []*plan.Layer{{
 		Order:    0,
@@ -1168,20 +1168,20 @@ var planTests = []planTest{{
 				Name:     "tgt1",
 				Override: plan.MergeOverride,
 				Type:     plan.LokiTarget,
-				Location: "fake",
+				Location: "https://my.loki.server/loki/api/v1/push",
 				Labels: map[string]string{
-					"label1": "foo",
-					"label2": "foo",
+					"label1": "foo11",
+					"label2": "foo12",
 				},
 			},
 			"tgt2": {
 				Name:     "tgt2",
 				Override: plan.MergeOverride,
 				Type:     plan.LokiTarget,
-				Location: "fake",
+				Location: "https://my.loki.server/loki/api/v1/push",
 				Labels: map[string]string{
-					"label1": "foo",
-					"label2": "foo",
+					"label1": "foo21",
+					"label2": "foo22",
 				},
 			},
 		},
@@ -1195,18 +1195,18 @@ var planTests = []planTest{{
 				Name:     "tgt1",
 				Override: plan.MergeOverride,
 				Labels: map[string]string{
-					"label2": "bar",
-					"label3": "bar",
+					"label2": "bar12",
+					"label3": "bar13",
 				},
 			},
 			"tgt2": {
 				Name:     "tgt2",
 				Override: plan.ReplaceOverride,
 				Type:     plan.LokiTarget,
-				Location: "replaced",
+				Location: "https://new.loki.server/loki/api/v1/push",
 				Labels: map[string]string{
-					"label2": "bar",
-					"label3": "bar",
+					"label2": "bar22",
+					"label3": "bar23",
 				},
 			},
 		},
@@ -1219,21 +1219,21 @@ var planTests = []planTest{{
 				Name:     "tgt1",
 				Override: plan.MergeOverride,
 				Type:     plan.LokiTarget,
-				Location: "fake",
+				Location: "https://my.loki.server/loki/api/v1/push",
 				Labels: map[string]string{
-					"label1": "foo",
-					"label2": "bar",
-					"label3": "bar",
+					"label1": "foo11",
+					"label2": "bar12",
+					"label3": "bar13",
 				},
 			},
 			"tgt2": {
 				Name:     "tgt2",
 				Override: plan.ReplaceOverride,
 				Type:     plan.LokiTarget,
-				Location: "replaced",
+				Location: "https://new.loki.server/loki/api/v1/push",
 				Labels: map[string]string{
-					"label2": "bar",
-					"label3": "bar",
+					"label2": "bar22",
+					"label3": "bar23",
 				},
 			},
 		},
@@ -1245,7 +1245,7 @@ var planTests = []planTest{{
 			tgt1:
 				override: merge
 				type: loki
-				location: fake
+				location: https://my.loki.server/loki/api/v1/push
 				labels:
 					pebble_service: illegal
 `},
