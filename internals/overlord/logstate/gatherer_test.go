@@ -149,11 +149,14 @@ func (s *gathererSuite) TestRetryLoki(c *C) {
 	}))
 	defer server.Close()
 
+	logTarget := &plan.LogTarget{
+		Name:     "tgt1",
+		Location: server.URL,
+		Services: []string{"all"},
+	}
+
 	g, err := newLogGathererInternal(
-		&plan.LogTarget{
-			Name:     "tgt1",
-			Location: server.URL,
-		},
+		logTarget,
 		&logGathererOptions{
 			bufferTimeout:      1 * time.Millisecond,
 			maxBufferedEntries: 5,
@@ -167,6 +170,14 @@ func (s *gathererSuite) TestRetryLoki(c *C) {
 	c.Assert(err, IsNil)
 
 	testSvc := newTestService("svc1")
+	g.PlanChanged(&plan.Plan{
+		Services: map[string]*plan.Service{
+			"svc1": testSvc.config,
+		},
+		LogTargets: map[string]*plan.LogTarget{
+			"tgt1": logTarget,
+		},
+	}, nil)
 	g.ServiceStarted(testSvc.config, testSvc.ringBuffer)
 
 	reqReceived := make(chan struct{})

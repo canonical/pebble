@@ -169,13 +169,6 @@ func (g *logGatherer) PlanChanged(pl *plan.Plan, buffers map[string]*servicelog.
 			continue
 		}
 
-		buffer, svcStarted := buffers[service.Name]
-		if !svcStarted {
-			// We don't yet have a reference to the service's ring buffer
-			// Need to wait until ServiceStarted
-			continue
-		}
-
 		labels := evaluateLabels(g.target.Labels, service.Environment)
 		select {
 		case g.setLabels <- svcWithLabels{service.Name, labels}:
@@ -183,20 +176,19 @@ func (g *logGatherer) PlanChanged(pl *plan.Plan, buffers map[string]*servicelog.
 			return
 		}
 
-		g.pullers.Add(service.Name, buffer, g.entryCh)
+		// If the service was just added, it may not be started yet. In this case,
+		// we need to wait until the buffer is created, and then we can update the
+		// pullers inside ServiceStarted.
+		buffer, svcStarted := buffers[service.Name]
+		if svcStarted {
+			g.pullers.Add(service.Name, buffer, g.entryCh)
+		}
 	}
 }
 
 // ServiceStarted is called by the LogManager on the start of a service which
 // logs to this gatherer's target.
 func (g *logGatherer) ServiceStarted(service *plan.Service, buffer *servicelog.RingBuffer) {
-	labels := evaluateLabels(g.target.Labels, service.Environment)
-	select {
-	case g.setLabels <- svcWithLabels{service.Name, labels}:
-	case <-g.tomb.Dying():
-		return
-	}
-
 	g.pullers.Add(service.Name, buffer, g.entryCh)
 }
 
