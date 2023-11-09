@@ -193,14 +193,13 @@ func v1GetChangeWait(c *Command, r *http.Request, _ *UserState) Response {
 		return statusNotFound("cannot find change with id %q", changeID)
 	}
 
-	timeoutStr := r.URL.Query().Get("timeout")
-	if timeoutStr != "" {
+	timeout, err := parseOptionalDuration(r.URL.Query().Get("timeout"))
+	if err != nil {
+		return statusBadRequest("invalid timeout: %v", err)
+	}
+	if timeout != 0 {
 		// Timeout specified, wait till change is ready or timeout occurs,
 		// whichever is first.
-		timeout, err := time.ParseDuration(timeoutStr)
-		if err != nil {
-			return statusBadRequest("invalid timeout %q: %v", timeoutStr, err)
-		}
 		timer := time.NewTimer(timeout)
 		select {
 		case <-change.Ready():

@@ -24,32 +24,34 @@ import (
 	"github.com/canonical/pebble/client"
 )
 
-const cmdMkdirSummary = "Create a directory"
-const cmdMkdirDescription = `
-The mkdir command creates the specified directory.
+const cmdPushSummary = "Transfer a file to the remote system"
+const cmdPushDescription = `
+The push command transfers a file to the remote system.
 `
 
-type cmdMkdir struct {
+type cmdPush struct {
 	client *client.Client
 
-	Parents    bool   `short:"p"`
-	Mode       string `short:"m"`
-	UserID     *int   `long:"uid"`
-	User       string `long:"user"`
-	GroupID    *int   `long:"gid"`
-	Group      string `long:"group"`
+	Parents bool   `short:"p"`
+	Mode    string `short:"m"`
+	UserID  *int   `long:"uid"`
+	User    string `long:"user"`
+	GroupID *int   `long:"gid"`
+	Group   string `long:"group"`
+
 	Positional struct {
-		Path string `positional-arg-name:"<path>"`
-	} `positional-args:"yes" required:"yes"`
+		LocalPath  string `positional-arg-name:"<local-path>" required:"1"`
+		RemotePath string `positional-arg-name:"<remote-path>" required:"1"`
+	} `positional-args:"yes"`
 }
 
 func init() {
 	AddCommand(&CmdInfo{
-		Name:        "mkdir",
-		Summary:     cmdMkdirSummary,
-		Description: cmdMkdirDescription,
+		Name:        "push",
+		Summary:     cmdPushSummary,
+		Description: cmdPushDescription,
 		ArgsHelp: map[string]string{
-			"-p":      "Create parent directories as needed",
+			"-p":      "Create parent directories for the file",
 			"-m":      "Override mode bits (3-digit octal)",
 			"--uid":   "Use specified user ID",
 			"--user":  "Use specified username",
@@ -57,32 +59,44 @@ func init() {
 			"--group": "Use specified group name",
 		},
 		New: func(opts *CmdOptions) flags.Commander {
-			return &cmdMkdir{client: opts.Client}
+			return &cmdPush{client: opts.Client}
 		},
 	})
 }
-
-func (cmd *cmdMkdir) Execute(args []string) error {
+func (cmd *cmdPush) Execute(args []string) error {
 	if len(args) > 0 {
 		return ErrExtraArgs
 	}
 
-	opts := client.MakeDirOptions{
-		Path:        cmd.Positional.Path,
-		MakeParents: cmd.Parents,
-		UserID:      cmd.UserID,
-		User:        cmd.User,
-		GroupID:     cmd.GroupID,
-		Group:       cmd.Group,
+	f, err := os.Open(cmd.Positional.LocalPath)
+	if err != nil {
+		return err
 	}
+	defer f.Close()
 
+	var permissions os.FileMode
 	if cmd.Mode != "" {
 		p, err := strconv.ParseUint(cmd.Mode, 8, 32)
 		if err != nil {
 			return fmt.Errorf("invalid mode for directory: %q", cmd.Mode)
 		}
-		opts.Permissions = os.FileMode(p)
+		permissions = os.FileMode(p)
+	} else {
+		st, err := f.Stat()
+		if err != nil {
+			return err
+		}
+		permissions = st.Mode().Perm()
 	}
 
-	return cmd.client.MakeDir(&opts)
+	return cmd.client.Push(&client.PushOptions{
+		Source:      f,
+		Path:        cmd.Positional.RemotePath,
+		MakeDirs:    cmd.Parents,
+		Permissions: permissions,
+		UserID:      cmd.UserID,
+		User:        cmd.User,
+		GroupID:     cmd.GroupID,
+		Group:       cmd.Group,
+	})
 }
