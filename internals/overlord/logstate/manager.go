@@ -101,7 +101,7 @@ func (m *LogManager) ServiceStarted(service *plan.Service, buffer *servicelog.Ri
 
 	m.buffers[service.Name] = buffer
 	for _, gatherer := range m.gatherers {
-		target := m.plan.LogTargets[gatherer.target.Name]
+		target := m.plan.LogTargets[gatherer.targetName]
 		if !service.LogsTo(target) {
 			continue
 		}
