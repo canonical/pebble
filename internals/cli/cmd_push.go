@@ -32,12 +32,12 @@ The push command transfers a file to the remote system.
 type cmdPush struct {
 	client *client.Client
 
-	MakeDirs    bool   `short:"p"`
-	Permissions string `short:"m"`
-	UserID      *int   `long:"uid"`
-	User        string `long:"user"`
-	GroupID     *int   `long:"gid"`
-	Group       string `long:"group"`
+	Parents bool   `short:"p"`
+	Mode    string `short:"m"`
+	UserID  *int   `long:"uid"`
+	User    string `long:"user"`
+	GroupID *int   `long:"gid"`
+	Group   string `long:"group"`
 
 	Positional struct {
 		LocalPath  string `positional-arg-name:"<local-path>" required:"1"`
@@ -52,7 +52,7 @@ func init() {
 		Description: cmdPushDescription,
 		ArgsHelp: map[string]string{
 			"-p":      "Create parent directories for the file",
-			"-m":      "Override permissions (3-digit octal)",
+			"-m":      "Override mode bits (3-digit octal)",
 			"--uid":   "Use specified user ID",
 			"--user":  "Use specified username",
 			"--gid":   "Use specified group ID",
@@ -75,10 +75,10 @@ func (cmd *cmdPush) Execute(args []string) error {
 	defer f.Close()
 
 	var permissions os.FileMode
-	if cmd.Permissions != "" {
-		p, err := strconv.ParseUint(cmd.Permissions, 8, 32)
+	if cmd.Mode != "" {
+		p, err := strconv.ParseUint(cmd.Mode, 8, 32)
 		if err != nil {
-			return fmt.Errorf("invalid mode for directory: %q", cmd.Permissions)
+			return fmt.Errorf("invalid mode for directory: %q", cmd.Mode)
 		}
 		permissions = os.FileMode(p)
 	} else {
@@ -92,7 +92,7 @@ func (cmd *cmdPush) Execute(args []string) error {
 	return cmd.client.Push(&client.PushOptions{
 		Source:      f,
 		Path:        cmd.Positional.RemotePath,
-		MakeDirs:    cmd.MakeDirs,
+		MakeDirs:    cmd.Parents,
 		Permissions: permissions,
 		UserID:      cmd.UserID,
 		User:        cmd.User,
