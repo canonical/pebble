@@ -231,7 +231,7 @@ func (s *gathererSuite) TestRetryLoki(c *C) {
 }
 
 // Test to catch race conditions in gatherer
-func (s *gathererSuite) TestRace(c *C) {
+func (s *gathererSuite) TestConcurrency(c *C) {
 	target := &plan.LogTarget{
 		Name:     "tgt1",
 		Type:     plan.LokiTarget,

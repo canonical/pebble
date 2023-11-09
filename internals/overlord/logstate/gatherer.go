@@ -60,8 +60,7 @@ const (
 type logGatherer struct {
 	*logGathererOptions
 
-	targetName string // needs to be constant to avoid race conditions
-	target     *plan.LogTarget
+	targetName string
 	// tomb for the main loop
 	tomb tomb.Tomb
 
@@ -109,7 +108,6 @@ func newLogGathererInternal(target *plan.LogTarget, options *logGathererOptions)
 		logGathererOptions: options,
 
 		targetName: target.Name,
-		target:     target,
 		client:     client,
 		setLabels:  make(chan svcWithLabels),
 		entryCh:    make(chan servicelog.Entry),
@@ -144,13 +142,12 @@ func fillDefaultOptions(options *logGathererOptions) *logGathererOptions {
 // PlanChanged is called by the LogManager when the plan is changed, if this
 // gatherer's target exists in the new plan.
 func (g *logGatherer) PlanChanged(pl *plan.Plan, buffers map[string]*servicelog.RingBuffer) {
-	// Update target config
-	g.target = pl.LogTargets[g.targetName]
+	target := pl.LogTargets[g.targetName]
 
 	// Remove old pullers
 	for _, svcName := range g.pullers.Services() {
 		svc, svcExists := pl.Services[svcName]
-		if svcExists && svc.LogsTo(g.target) {
+		if svcExists && svc.LogsTo(target) {
 			// We're still collecting logs from this service, so don't remove it.
 			continue
 		}
@@ -167,11 +164,11 @@ func (g *logGatherer) PlanChanged(pl *plan.Plan, buffers map[string]*servicelog.
 
 	// Add new pullers
 	for _, service := range pl.Services {
-		if !service.LogsTo(g.target) {
+		if !service.LogsTo(target) {
 			continue
 		}
 
-		labels := evaluateLabels(g.target.Labels, service.Environment)
+		labels := evaluateLabels(target.Labels, service.Environment)
 		select {
 		case g.setLabels <- svcWithLabels{service.Name, labels}:
 		case <-g.tomb.Dying():
