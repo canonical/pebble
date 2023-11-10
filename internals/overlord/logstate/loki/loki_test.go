@@ -154,11 +154,11 @@ func (*suite) TestFlushCancelContext(c *C) {
 	flushReturned := make(chan struct{})
 	go func() {
 		// Cancel the Flush context quickly
-		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Microsecond)
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 		defer cancel()
 
 		err := client.Flush(ctx)
-		c.Assert(err, ErrorMatches, ".*context deadline exceeded.*")
+		c.Check(err, ErrorMatches, ".*context deadline exceeded.*")
 		close(flushReturned)
 	}()
 
