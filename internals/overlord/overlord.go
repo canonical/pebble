@@ -16,6 +16,7 @@
 package overlord
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -83,6 +84,7 @@ type Overlord struct {
 
 	// managers
 	inited     bool
+	startedUp  bool
 	runner     *state.TaskRunner
 	serviceMgr *servstate.ServiceManager
 	commandMgr *cmdstate.CommandManager
@@ -252,6 +254,15 @@ func initRestart(s *state.State, curBootID string, restartHandler restart.Handle
 	return restart.Init(s, curBootID, restartHandler)
 }
 
+// StartUp proceeds to run any expensive Overlord or managers initialization. After this is done once it is a noop.
+func (o *Overlord) StartUp() error {
+	if o.startedUp {
+		return nil
+	}
+	o.startedUp = true
+	return o.stateEng.StartUp()
+}
+
 func (o *Overlord) ensureTimerSetup() {
 	o.ensureLock.Lock()
 	defer o.ensureLock.Unlock()
@@ -358,17 +369,16 @@ func (o *Overlord) settle(timeout time.Duration, beforeCleanups func()) error {
 	var errs []error
 	for !done {
 		if timeout > 0 && time.Since(t0) > timeout {
-			err := fmt.Errorf("Settle is not converging")
 			if len(errs) != 0 {
-				return &ensureError{append(errs, err)}
+				return newMultiError("settle is not converging", errs)
 			}
-			return err
+			return errors.New("settle is not converging")
 		}
 		next := o.ensureTimerReset()
 		err := o.stateEng.Ensure()
 		switch ee := err.(type) {
 		case nil:
-		case *ensureError:
+		case *multiError:
 			errs = append(errs, ee.errs...)
 		default:
 			errs = append(errs, err)
@@ -395,7 +405,7 @@ func (o *Overlord) settle(timeout time.Duration, beforeCleanups func()) error {
 		}
 	}
 	if len(errs) != 0 {
-		return &ensureError{errs}
+		return newMultiError("state ensure errors", errs)
 	}
 	return nil
 }

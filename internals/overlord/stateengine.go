@@ -15,7 +15,9 @@
 package overlord
 
 import (
+	"bytes"
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/canonical/pebble/internals/logger"
@@ -28,6 +30,13 @@ type StateManager interface {
 	// Ensure forces a complete evaluation of the current state.
 	// See StateEngine.Ensure for more details.
 	Ensure() error
+}
+
+// StateStarterUp is optionally implemented by StateManager that have expensive
+// initialization to perform before the main Overlord loop.
+type StateStarterUp interface {
+	// StartUp asks manager to perform any expensive initialization.
+	StartUp() error
 }
 
 // StateWaiter is optionally implemented by StateManagers that have running
@@ -53,8 +62,9 @@ type StateStopper interface {
 // cope with Ensure calls in any order, coordinating among themselves
 // solely via the state.
 type StateEngine struct {
-	state   *state.State
-	stopped bool
+	state     *state.State
+	stopped   bool
+	startedUp bool
 	// managers in use
 	mgrLock  sync.Mutex
 	managers []StateManager
@@ -72,12 +82,67 @@ func (se *StateEngine) State() *state.State {
 	return se.state
 }
 
-type ensureError struct {
-	errs []error
+// multiError collects multiple errors that affected an operation.
+type multiError struct {
+	header string
+	errs   []error
 }
 
-func (e *ensureError) Error() string {
-	return fmt.Sprintf("state ensure errors: %v", e.errs)
+// newMultiError returns a new multiError struct initialized with
+// the given format string that explains what operation potentially
+// went wrong. multiError can be nested and will render correctly
+// in these cases.
+func newMultiError(header string, errs []error) error {
+	return &multiError{header: header, errs: errs}
+}
+
+// Error formats the error string.
+func (me *multiError) Error() string {
+	return me.nestedError(0)
+}
+
+// helper to ensure formating of nested multiErrors works.
+func (me *multiError) nestedError(level int) string {
+	indent := strings.Repeat(" ", level)
+	buf := bytes.NewBufferString(fmt.Sprintf("%s:\n", me.header))
+	if level > 8 {
+		return "circular or too deep error nesting (max 8)?!"
+	}
+	for i, err := range me.errs {
+		switch v := err.(type) {
+		case *multiError:
+			fmt.Fprintf(buf, "%s- %v", indent, v.nestedError(level+1))
+		default:
+			fmt.Fprintf(buf, "%s- %v", indent, err)
+		}
+		if i < len(me.errs)-1 {
+			fmt.Fprintf(buf, "\n")
+		}
+	}
+	return buf.String()
+}
+
+// StartUp asks all managers to perform any expensive initialization. It is a noop after the first invocation.
+func (se *StateEngine) StartUp() error {
+	se.mgrLock.Lock()
+	defer se.mgrLock.Unlock()
+	if se.startedUp {
+		return nil
+	}
+	se.startedUp = true
+	var errs []error
+	for _, m := range se.managers {
+		if starterUp, ok := m.(StateStarterUp); ok {
+			err := starterUp.StartUp()
+			if err != nil {
+				errs = append(errs, err)
+			}
+		}
+	}
+	if len(errs) != 0 {
+		return newMultiError("state startup errors", errs)
+	}
+	return nil
 }
 
 // Ensure asks every manager to ensure that they are doing the necessary
@@ -103,7 +168,7 @@ func (se *StateEngine) Ensure() error {
 		}
 	}
 	if len(errs) != 0 {
-		return &ensureError{errs}
+		return newMultiError("state ensure errors", errs)
 	}
 	return nil
 }
