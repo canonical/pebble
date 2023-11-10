@@ -113,11 +113,15 @@ func (*suite) TestRequest(c *C) {
 
 		reqBody, err := io.ReadAll(r.Body)
 		c.Assert(err, IsNil)
-		c.Assert(reqBody, DeepEquals, expected)
+		c.Assert(string(reqBody), DeepEquals, string(expected))
 	}))
 	defer server.Close()
 
 	client := loki.NewClient(&plan.LogTarget{Location: server.URL})
+	client.SetLabels("svc1", map[string]string{})
+	client.SetLabels("svc2", map[string]string{})
+	client.SetLabels("svc3", map[string]string{})
+	client.SetLabels("svc4", map[string]string{})
 	for _, entry := range input {
 		err := client.Add(entry)
 		c.Assert(err, IsNil)
@@ -150,11 +154,11 @@ func (*suite) TestFlushCancelContext(c *C) {
 	flushReturned := make(chan struct{})
 	go func() {
 		// Cancel the Flush context quickly
-		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Microsecond)
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 		defer cancel()
 
 		err := client.Flush(ctx)
-		c.Assert(err, ErrorMatches, ".*context deadline exceeded.*")
+		c.Check(err, ErrorMatches, ".*context deadline exceeded.*")
 		close(flushReturned)
 	}()
 
@@ -243,6 +247,58 @@ func (*suite) TestBufferFull(c *C) {
 	checkBuffer([]any{nil, nil, nil, "4", "5", "6"})
 	addEntry("7")
 	checkBuffer([]any{"5", "6", "7", nil, nil, nil})
+}
+
+func (*suite) TestLabels(c *C) {
+	var expected []byte
+
+	received := make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		reqBody, err := io.ReadAll(r.Body)
+		c.Assert(err, IsNil)
+		c.Assert(string(reqBody), Equals, string(expected))
+		close(received)
+	}))
+	defer server.Close()
+
+	client := loki.NewClientWithOptions(
+		&plan.LogTarget{
+			Location: server.URL,
+		},
+		&loki.ClientOptions{},
+	)
+
+	client.SetLabels("svc1", map[string]string{
+		"label1": "val1",
+		"label2": "val2",
+	})
+
+	err := client.Add(servicelog.Entry{
+		Service: "svc1",
+		Time:    time.Date(2023, 10, 3, 4, 20, 33, 0, time.UTC),
+		Message: "hello",
+	})
+	c.Assert(err, IsNil)
+
+	expected = compactJSON(`
+{"streams": [{
+	"stream": {
+		"label1": "val1",
+		"label2": "val2",
+		"pebble_service": "svc1"
+	},
+	"values": [
+		[ "1696306833000000000", "hello" ]
+	]
+}]}`)
+
+	err = client.Flush(context.Background())
+	c.Assert(err, IsNil)
+	select {
+	case <-received:
+	case <-time.After(1 * time.Second):
+		c.Fatal("timed out waiting for request")
+	}
 }
 
 // Strips all extraneous whitespace from JSON
