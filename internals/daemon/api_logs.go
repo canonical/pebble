@@ -42,7 +42,7 @@ type serviceManager interface {
 	ServiceLogs(services []string, last int) (map[string]servicelog.Iterator, error)
 }
 
-func v1GetLogs(c *Command, _ *http.Request, _ *userState) Response {
+func v1GetLogs(c *Command, _ *http.Request, _ *UserState) Response {
 	return logsResponse{
 		svcMgr: overlordServiceManager(c.d.overlord),
 	}
@@ -126,7 +126,7 @@ func (r logsResponse) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			err = encoder.Encode(newJSONLog(<-fifo))
 		}
 		if err != nil {
-			logger.Noticef("error writing logs: %v", err)
+			logger.Noticef("Cannot write logs: %v", err)
 			return false
 		}
 		flushWriter(w)
@@ -186,7 +186,7 @@ func (r logsResponse) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			// Otherwise encode and output log directly.
 			err := encoder.Encode(newJSONLog(log))
 			if err != nil {
-				logger.Noticef("error writing logs: %v", err)
+				logger.Noticef("Cannot write logs: %v", err)
 				return
 			}
 			if follow {

@@ -50,6 +50,24 @@ var (
 	defaultCachedDownloads = 5
 )
 
+// Extension represents an extension of the Overlord.
+type Extension interface {
+	// ExtraManagers allows additional StateManagers to be used.
+	ExtraManagers(o *Overlord) ([]StateManager, error)
+}
+
+// Options is the arguments passed to construct an Overlord.
+type Options struct {
+	// PebbleDir is the path to the pebble directory. It must be provided.
+	PebbleDir string
+	// RestartHandler is an optional structure to handle restart requests.
+	RestartHandler restart.Handler
+	// ServiceOutput is an optional output for the logging manager.
+	ServiceOutput io.Writer
+	// Extension allows extending the overlord with externally defined features.
+	Extension Extension
+}
+
 // Overlord is the central manager of the system, keeping track
 // of all available state managers and related helpers.
 type Overlord struct {
@@ -71,31 +89,32 @@ type Overlord struct {
 	commandMgr *cmdstate.CommandManager
 	checkMgr   *checkstate.CheckManager
 	logMgr     *logstate.LogManager
+
+	extension Extension
 }
 
-// New creates a new Overlord with all its state managers.
-// It can be provided with an optional restart.Handler.
-func New(pebbleDir string, restartHandler restart.Handler, serviceOutput io.Writer, dry bool) (*Overlord, error) {
+// New creates an Overlord with all its state managers.
+func New(opts *Options) (*Overlord, error) {
 	o := &Overlord{
-		pebbleDir: pebbleDir,
+		pebbleDir: opts.PebbleDir,
 		loopTomb:  new(tomb.Tomb),
 		inited:    true,
+		extension: opts.Extension,
 	}
 
-	if !filepath.IsAbs(pebbleDir) {
-		return nil, fmt.Errorf("directory %q must be absolute", pebbleDir)
+	if !filepath.IsAbs(o.pebbleDir) {
+		return nil, fmt.Errorf("directory %q must be absolute", o.pebbleDir)
 	}
-	if !osutil.IsDir(pebbleDir) {
-		return nil, fmt.Errorf("directory %q does not exist", pebbleDir)
+	if !osutil.IsDir(o.pebbleDir) {
+		return nil, fmt.Errorf("directory %q does not exist", o.pebbleDir)
 	}
-	statePath := filepath.Join(pebbleDir, ".pebble.state")
+	statePath := filepath.Join(o.pebbleDir, ".pebble.state")
 
 	backend := &overlordStateBackend{
 		path:         statePath,
 		ensureBefore: o.ensureBefore,
 	}
-
-	s, err := loadState(statePath, restartHandler, backend)
+	s, err := loadState(statePath, opts.RestartHandler, backend)
 	if err != nil {
 		return nil, err
 	}
@@ -110,13 +129,22 @@ func New(pebbleDir string, restartHandler restart.Handler, serviceOutput io.Writ
 	o.runner.AddOptionalHandler(matchAnyUnknownTask, handleUnknownTask, nil)
 
 	o.logMgr = logstate.NewLogManager()
-	o.stateEng.AddManager(o.logMgr)
 
-	o.serviceMgr, err = servstate.NewManager(s, o.runner, o.pebbleDir, serviceOutput, restartHandler, o.logMgr)
+	o.serviceMgr, err = servstate.NewManager(
+		s,
+		o.runner,
+		o.pebbleDir,
+		opts.ServiceOutput,
+		opts.RestartHandler,
+		o.logMgr)
 	if err != nil {
 		return nil, err
 	}
 	o.stateEng.AddManager(o.serviceMgr)
+	// The log manager should be stopped after the service manager, because
+	// ServiceManager.Stop closes the service ring buffers, which signals to the
+	// log manager that it's okay to stop log forwarding.
+	o.stateEng.AddManager(o.logMgr)
 
 	o.commandMgr = cmdstate.NewManager(o.runner)
 	o.stateEng.AddManager(o.commandMgr)
@@ -132,15 +160,30 @@ func New(pebbleDir string, restartHandler restart.Handler, serviceOutput io.Writ
 	// Tell service manager about check failures.
 	o.checkMgr.NotifyCheckFailed(o.serviceMgr.CheckFailed)
 
-	// the shared task runner should be added last!
+	if o.extension != nil {
+		extraManagers, err := o.extension.ExtraManagers(o)
+		if err != nil {
+			return nil, err
+		}
+		for _, manager := range extraManagers {
+			o.stateEng.AddManager(manager)
+		}
+	}
+
+	// TaskRunner must be the last manager added to the StateEngine,
+	// because TaskRunner runs all the tasks required by the managers that ran
+	// before it.
 	o.stateEng.AddManager(o.runner)
 
 	// Dry start all managers.
 	if err := o.stateEng.DryStart(); err != nil {
 		return nil, err
 	}
-
 	return o, nil
+}
+
+func (o *Overlord) Extension() Extension {
+	return o.extension
 }
 
 func loadState(statePath string, restartHandler restart.Handler, backend state.Backend) (*state.State, error) {

@@ -51,17 +51,6 @@ func (ux unicodeMixin) getEscapes() *escapes {
 	return esc
 }
 
-type colorMixin struct {
-	Color string `long:"color" default:"auto" choice:"auto" choice:"never" choice:"always"`
-	unicodeMixin
-}
-
-func (mx colorMixin) getEscapes() *escapes {
-	esc := colorTable(mx.Color)
-	mx.addUnicodeChars(&esc)
-	return &esc
-}
-
 func canUnicode(mode string) bool {
 	switch mode {
 	case "always":
@@ -111,13 +100,8 @@ func colorTable(mode string) escapes {
 	return color
 }
 
-var colorDescs = map[string]string{
-	"color":   "Use a little bit of color to highlight some things.",
-	"unicode": unicodeDescs["unicode"],
-}
-
-var unicodeDescs = map[string]string{
-	"unicode": "Use a little bit of Unicode to improve legibility.",
+var unicodeArgsHelp = map[string]string{
+	"--unicode": "Use a little bit of Unicode to improve legibility.",
 }
 
 func merge(maps ...map[string]string) map[string]string {
@@ -250,12 +234,6 @@ func wrapLine(out io.Writer, text []rune, pad string, termWidth int) error {
 		indent = pad + "  "
 	}
 	return wrapGeneric(out, text, indent, indent, termWidth)
-}
-
-// wrapFlow wraps the text using yaml's flow style, allowing indent
-// characters for the first line.
-func wrapFlow(out io.Writer, text []rune, indent string, termWidth int) error {
-	return wrapGeneric(out, text, indent, "  ", termWidth)
 }
 
 // wrapGeneric wraps the given text to the given width, prefixing the

@@ -31,9 +31,8 @@ import (
 	"syscall"
 	"time"
 
-	"gopkg.in/tomb.v2"
-
 	"github.com/gorilla/mux"
+	"gopkg.in/tomb.v2"
 
 	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/osutil"
@@ -73,8 +72,9 @@ type Options struct {
 	// log output will be written to the writer.
 	ServiceOutput io.Writer
 
-	// Dry will only perform initialization tasks that don't have unwanted side effects.
-	Dry bool
+	// OverlordExtension is an optional interface used to extend the capabilities
+	// of the Overlord.
+	OverlordExtension overlord.Extension
 }
 
 // A Daemon listens for requests and routes them to the right command
@@ -111,11 +111,14 @@ type Daemon struct {
 	mu sync.Mutex
 }
 
-// XXX Placeholder for now.
-type userState struct{}
+// UserState represents the state of an authenticated API user.
+//
+// The struct is currently empty as the behaviors haven't been implemented
+// yet.
+type UserState struct{}
 
 // A ResponseFunc handles one of the individual verbs for a method
-type ResponseFunc func(*Command, *http.Request, *userState) Response
+type ResponseFunc func(*Command, *http.Request, *UserState) Response
 
 // A Command routes a request to an individual per-verb ResponseFUnc
 type Command struct {
@@ -153,7 +156,7 @@ const (
 // - UserOK: any uid on the local system can access GET
 // - AdminOnly: only the administrator can access this
 // - UntrustedOK: can access this via the untrusted socket
-func (c *Command) canAccess(r *http.Request, user *userState) accessResult {
+func (c *Command) canAccess(r *http.Request, user *UserState) accessResult {
 	if c.AdminOnly && (c.UserOK || c.GuestOK || c.UntrustedOK) {
 		logger.Panicf("internal error: command cannot have AdminOnly together with any *OK flag")
 	}
@@ -169,7 +172,7 @@ func (c *Command) canAccess(r *http.Request, user *userState) accessResult {
 	if err == nil {
 		isUser = true
 	} else if err != errNoID {
-		logger.Noticef("unexpected error when attempting to get UID: %s", err)
+		logger.Noticef("Cannot parse UID from remote address %q: %s", r.RemoteAddr, err)
 		return accessForbidden
 	}
 
@@ -214,8 +217,16 @@ func (c *Command) canAccess(r *http.Request, user *userState) accessResult {
 	return accessUnauthorized
 }
 
-func userFromRequest(state interface{}, r *http.Request) (*userState, error) {
+func userFromRequest(state interface{}, r *http.Request) (*UserState, error) {
 	return nil, nil
+}
+
+func (d *Daemon) Overlord() *overlord.Overlord {
+	return d.overlord
+}
+
+func (c *Command) Daemon() *Daemon {
+	return c.d
 }
 
 func (c *Command) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -405,7 +416,7 @@ func (d *Daemon) SetDegradedMode(err error) {
 func (d *Daemon) addRoutes() {
 	d.router = mux.NewRouter()
 
-	for _, c := range api {
+	for _, c := range API {
 		c.d = d
 		if c.PathPrefix == "" {
 			d.router.Handle(c.Path, c).Name(c.Path)
@@ -518,7 +529,7 @@ func (d *Daemon) HandleRestart(t restart.RestartType) {
 	case restart.RestartSystem:
 		// try to schedule a fallback slow reboot already here
 		// in case we get stuck shutting down
-		if err := reboot(rebootWaitTimeout); err != nil {
+		if err := rebootHandler(rebootWaitTimeout); err != nil {
 			logger.Noticef("%s", err)
 		}
 
@@ -531,7 +542,7 @@ func (d *Daemon) HandleRestart(t restart.RestartType) {
 		defer d.mu.Unlock()
 		d.restartSocket = true
 	default:
-		logger.Noticef("internal error: restart handler called with unknown restart type: %v", t)
+		logger.Noticef("Internal error: restart handler called with unknown restart type: %v", t)
 	}
 	d.tomb.Kill(nil)
 }
@@ -571,16 +582,7 @@ func (d *Daemon) Stop(sigCh chan<- os.Signal) error {
 	restartSocket := d.restartSocket
 	d.mu.Unlock()
 
-	d.generalListener.Close()
 	d.standbyOpinions.Stop()
-
-	if d.untrustedListener != nil {
-		d.untrustedListener.Close()
-	}
-
-	if d.httpListener != nil {
-		d.httpListener.Close()
-	}
 
 	if restartSystem {
 		// give time to polling clients to notice restart
@@ -703,11 +705,11 @@ func (d *Daemon) doReboot(sigCh chan<- os.Signal, waitTimeout time.Duration) err
 	}
 	// ask for shutdown and wait for it to happen.
 	// if we exit, pebble will be restarted by systemd
-	if err := reboot(rebootDelay); err != nil {
+	if err := rebootHandler(rebootDelay); err != nil {
 		return err
 	}
 	// wait for reboot to happen
-	logger.Noticef("Waiting for system reboot")
+	logger.Noticef("Waiting for system reboot...")
 	if sigCh != nil {
 		signal.Stop(sigCh)
 		if len(sigCh) > 0 {
@@ -720,21 +722,78 @@ func (d *Daemon) doReboot(sigCh chan<- os.Signal, waitTimeout time.Duration) err
 	return fmt.Errorf("expected reboot did not happen")
 }
 
-var shutdownMsg = "reboot scheduled to update the system"
+const rebootMsg = "reboot scheduled to update the system"
 
-func rebootImpl(rebootDelay time.Duration) error {
+var rebootHandler = systemdModeReboot
+
+type RebootMode int
+
+const (
+	// Reboot uses systemd
+	SystemdMode RebootMode = iota + 1
+	// Reboot uses direct kernel syscalls
+	SyscallMode
+)
+
+// SetRebootMode configures how the system issues a reboot. The default
+// reboot handler mode is SystemdMode, which relies on systemd
+// (or similar) provided functionality to reboot.
+func SetRebootMode(mode RebootMode) {
+	switch mode {
+	case SystemdMode:
+		rebootHandler = systemdModeReboot
+	case SyscallMode:
+		rebootHandler = syscallModeReboot
+	default:
+		panic(fmt.Sprintf("unsupported reboot mode %v", mode))
+	}
+}
+
+// systemdModeReboot assumes a userspace shutdown command exists.
+func systemdModeReboot(rebootDelay time.Duration) error {
 	if rebootDelay < 0 {
 		rebootDelay = 0
 	}
 	mins := int64(rebootDelay / time.Minute)
-	cmd := exec.Command("shutdown", "-r", fmt.Sprintf("+%d", mins), shutdownMsg)
+	cmd := exec.Command("shutdown", "-r", fmt.Sprintf("+%d", mins), rebootMsg)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return osutil.OutputErr(out, err)
 	}
 	return nil
 }
 
-var reboot = rebootImpl
+var (
+	syscallSync   = syscall.Sync
+	syscallReboot = syscall.Reboot
+)
+
+// syscallModeReboot performs a non-blocking delayed reboot using direct Linux
+// kernel syscalls. If the delay is negative or zero, the reboot is issued
+// immediately.
+//
+// Note: Reboot message not currently supported.
+func syscallModeReboot(rebootDelay time.Duration) error {
+	safeReboot := func() {
+		// As per the requirements of the reboot syscall, we
+		// have to first call sync.
+		syscallSync()
+		err := syscallReboot(syscall.LINUX_REBOOT_CMD_RESTART)
+		if err != nil {
+			logger.Noticef("Failed on reboot syscall: %v", err)
+		}
+	}
+
+	if rebootDelay <= 0 {
+		// Synchronous reboot right now.
+		safeReboot()
+	} else {
+		// Asynchronous non-blocking reboot scheduled
+		time.AfterFunc(rebootDelay, func() {
+			safeReboot()
+		})
+	}
+	return nil
+}
 
 func (d *Daemon) Dying() <-chan struct{} {
 	return d.tomb.Dying()
@@ -770,12 +829,12 @@ func (d *Daemon) RebootIsMissing(st *state.State) error {
 		// might get rolled back!!
 		restart.ClearReboot(st)
 		clearReboot(st)
-		logger.Noticef("pebble was restarted while a system restart was expected, pebble retried to schedule and waited again for a system restart %d times and is giving up", rebootMaxTentatives)
+		logger.Noticef("Pebble was restarted while a system restart was expected, pebble retried to schedule and waited again for a system restart %d times and is giving up", rebootMaxTentatives)
 		return nil
 	}
 	st.Set("daemon-system-restart-tentative", nTentative)
 	d.state = st
-	logger.Noticef("pebble was restarted while a system restart was expected, pebble will try to schedule and wait for a system restart again (tenative %d/%d)", nTentative, rebootMaxTentatives)
+	logger.Noticef("Pebble was restarted while a system restart was expected, pebble will try to schedule and wait for a system restart again (tenative %d/%d)", nTentative, rebootMaxTentatives)
 	return errExpectedReboot
 }
 
@@ -793,7 +852,14 @@ func New(opts *Options) (*Daemon, error) {
 		httpAddress:         opts.HTTPAddress,
 	}
 
-	ovld, err := overlord.New(opts.Dir, d, opts.ServiceOutput, opts.Dry)
+	ovldOptions := overlord.Options{
+		PebbleDir:      opts.Dir,
+		RestartHandler: d,
+		ServiceOutput:  opts.ServiceOutput,
+		Extension:      opts.OverlordExtension,
+	}
+
+	ovld, err := overlord.New(&ovldOptions)
 	if err == errExpectedReboot {
 		// we proceed without overlord until we reach Stop
 		// where we will schedule and wait again for a system restart.

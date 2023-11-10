@@ -21,6 +21,8 @@ import (
 	"path/filepath"
 
 	"gopkg.in/check.v1"
+
+	"github.com/canonical/pebble/internals/reaper"
 )
 
 type fakeCommandSuite struct{}
@@ -34,10 +36,33 @@ func (s *fakeCommandSuite) TestFakeCommand(c *check.C) {
 	c.Assert(err, check.IsNil)
 	err = exec.Command("cmd", "second-run", "--arg1", "arg2", "a %s").Run()
 	c.Assert(err, check.IsNil)
+	err = exec.Command("cmd", "third-run", "--arg1", "arg2", "").Run()
+	c.Assert(err, check.IsNil)
+	err = exec.Command("cmd", "forth-run", "--arg1", "arg2", "", "a %s").Run()
+	c.Assert(err, check.IsNil)
 	c.Assert(fake.Calls(), check.DeepEquals, [][]string{
 		{"cmd", "first-run", "--arg1", "arg2", "a space"},
 		{"cmd", "second-run", "--arg1", "arg2", "a %s"},
+		{"cmd", "third-run", "--arg1", "arg2", ""},
+		{"cmd", "forth-run", "--arg1", "arg2", "", "a %s"},
 	})
+}
+
+func (s *fakeCommandSuite) TestFakeCommandWithReaper(c *check.C) {
+	err := reaper.Start()
+	c.Assert(err, check.IsNil)
+	defer func() {
+		err := reaper.Stop()
+		c.Assert(err, check.IsNil)
+	}()
+
+	fake := FakeCommand(c, "cmd", "true", true)
+	defer fake.Restore()
+
+	cmd := exec.Command("cmd", "")
+	out, err := reaper.CommandCombinedOutput(cmd)
+	c.Assert(err, check.IsNil)
+	c.Assert(string(out), check.Equals, "")
 }
 
 func (s *fakeCommandSuite) TestFakeCommandAlso(c *check.C) {
@@ -62,6 +87,8 @@ func (s *fakeCommandSuite) TestFakeCommandConflictEcho(c *check.C) {
 }
 
 func (s *fakeCommandSuite) TestFakeShellchecksWhenAvailable(c *check.C) {
+	shellchecked = make(map[string]bool) // reset checked cache
+
 	tmpDir := c.MkDir()
 	fakeShellcheck := FakeCommand(c, "shellcheck", fmt.Sprintf(`cat > %s/input`, tmpDir), false)
 	defer fakeShellcheck.Restore()

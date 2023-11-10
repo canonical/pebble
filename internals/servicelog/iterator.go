@@ -20,27 +20,29 @@ import (
 )
 
 type Iterator interface {
-	// Close closes the iterator so that buffers can be used for future writes.
-	// If Close is not called, the iterator will block buffer recycling causing
-	// write failures.
+	// Close removes this iterator from the ring buffer. After calling Close,
+	// any future calls to Next will return false.
 	Close() error
-	// Next moves the ring buffer read mark forward, making its tail available for reuse
-	// without truncation. If the ring buffer writer produces data faster than the iterator
-	// can read it, the iterator will eventually be truncated and restarted. The truncation
-	// will be identified in the iterator output with the text specified when the iterator was
-	// created.
-	// Next returns true if there is more data to read from the RingBuffer.
-	// If a non-nil cancel channel is passed in, Next will wait for more data to
-	// become available. Sending on this channel, or closing it, will cause Next to
-	// return immediately.
+
+	// Next returns true if there is more data to read. If a non-nil cancel
+	// channel is passed in, Next will wait for more data to become available.
+	// Sending on this channel, or closing it, will cause Next to return
+	// immediately.
+	// If the ring buffer writer produces data faster than the iterator can read
+	// it, the iterator will eventually be truncated and restarted. The
+	// truncation will be identified in the iterator output with the text
+	// specified when the iterator was created.
 	Next(cancel <-chan struct{}) bool
 
-	// Notify sets the notification channel. When more data is available, the channel
-	// passed in to Notify will have true sent on it. If the channel is not receiving (unbuffered)
-	// or full (buffered), the notification will be dropped.
+	// Notify sets the notification channel. When more data is available, the
+	// channel passed in to Notify will have true sent on it. If the channel is
+	// not receiving (unbuffered) or full (buffered), the notification will be
+	// dropped.
 	Notify(ch chan bool)
 
+	// Buffered returns the approximate number of bytes available to read.
 	Buffered() int
+
 	io.Reader
 	io.WriterTo
 }

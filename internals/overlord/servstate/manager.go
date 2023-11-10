@@ -39,7 +39,7 @@ type ServiceManager struct {
 }
 
 type LogManager interface {
-	ServiceStarted(serviceName string, logs *servicelog.RingBuffer)
+	ServiceStarted(service *plan.Service, logs *servicelog.RingBuffer)
 }
 
 // PlanFunc is the type of function used by NotifyPlanChanged.
@@ -87,6 +87,13 @@ func (m *ServiceManager) Stop() {
 	err := reaper.Stop()
 	if err != nil {
 		logger.Noticef("Cannot stop child process reaper: %v", err)
+	}
+
+	// Close all the service ringbuffers
+	m.servicesLock.Lock()
+	defer m.servicesLock.Unlock()
+	for name := range m.services {
+		m.removeServiceInternal(name)
 	}
 }
 
@@ -554,7 +561,14 @@ func (m *ServiceManager) SetServiceArgs(serviceArgs map[string][]string) error {
 	return m.appendLayer(newLayer)
 }
 
-// servicesToStop returns a slice of service names to stop, in dependency order.
+// servicesToStop is used during service manager shutdown to cleanly terminate
+// all running services. Running services include both services in the
+// stateRunning and stateBackoff, since a service in backoff state can start
+// running once the timeout expires, which creates a race on service manager
+// exit. If it starts just before, it would continue to run after the service
+// manager is terminated. If it starts just after (before the main process
+// exits), it would generate a runtime error as the reaper would already be dead.
+// This function returns a slice of service names to stop, in dependency order.
 func servicesToStop(m *ServiceManager) ([]string, error) {
 	releasePlan, err := m.acquirePlan()
 	if err != nil {
@@ -574,15 +588,15 @@ func servicesToStop(m *ServiceManager) ([]string, error) {
 		return nil, err
 	}
 
-	// Filter down to only those that are running.
+	// Filter down to only those that are running or in backoff
 	m.servicesLock.Lock()
 	defer m.servicesLock.Unlock()
-	var running []string
+	var notStopped []string
 	for _, name := range stop {
 		s := m.services[name]
-		if s != nil && s.state == stateRunning {
-			running = append(running, name)
+		if s != nil && (s.state == stateRunning || s.state == stateBackoff) {
+			notStopped = append(notStopped, name)
 		}
 	}
-	return running, nil
+	return notStopped, nil
 }

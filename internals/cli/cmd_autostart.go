@@ -20,18 +20,28 @@ import (
 	"github.com/canonical/pebble/client"
 )
 
-var shortAutoStartHelp = "Start services set to start by default"
-var longAutoStartHelp = `
+const cmdAutoStartSummary = "Start services set to start by default"
+const cmdAutoStartDescription = `
 The autostart command starts the services that were configured
 to start by default.
 `
 
 type cmdAutoStart struct {
+	client *client.Client
+
 	waitMixin
 }
 
 func init() {
-	addCommand("autostart", shortAutoStartHelp, longAutoStartHelp, func() flags.Commander { return &cmdAutoStart{} }, waitDescs, nil)
+	AddCommand(&CmdInfo{
+		Name:        "autostart",
+		Summary:     cmdAutoStartSummary,
+		Description: cmdAutoStartDescription,
+		ArgsHelp:    waitArgsHelp,
+		New: func(opts *CmdOptions) flags.Commander {
+			return &cmdAutoStart{client: opts.Client}
+		},
+	})
 }
 
 func (cmd cmdAutoStart) Execute(args []string) error {
@@ -45,7 +55,7 @@ func (cmd cmdAutoStart) Execute(args []string) error {
 		return err
 	}
 
-	if _, err := cmd.wait(changeID); err != nil {
+	if _, err := cmd.wait(cmd.client, changeID); err != nil {
 		if err == noWait {
 			return nil
 		}

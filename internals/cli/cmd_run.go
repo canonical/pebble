@@ -31,8 +31,8 @@ import (
 	"github.com/canonical/pebble/internals/systemd"
 )
 
-var shortRunHelp = "Run the pebble environment"
-var longRunHelp = `
+const cmdRunSummary = "Run the pebble environment"
+const cmdRunDescription = `
 The run command starts pebble and runs the configured environment.
 
 Additional arguments may be provided to the service command with the --args option, which
@@ -52,23 +52,31 @@ type sharedRunEnterOpts struct {
 	Args       [][]string `long:"args" terminator:";"`
 }
 
-var sharedRunEnterOptsHelp = map[string]string{
-	"create-dirs": "Create pebble directory on startup if it doesn't exist",
-	"hold":        "Do not start default services automatically",
-	"http":        `Start HTTP API listening on this address (e.g., ":4000")`,
-	"verbose":     "Log all output from services to stdout",
-	"dry":         `Attempt to run without actually running`,
-	"args":        `Provide additional arguments to a service`,
+var sharedRunEnterArgsHelp = map[string]string{
+	"--create-dirs": "Create pebble directory on startup if it doesn't exist",
+	"--hold":        "Do not start default services automatically",
+	"--http":        `Start HTTP API listening on this address (e.g., ":4000")`,
+	"--verbose":     "Log all output from services to stdout",
+	"--dry":         "Attempt to run without actually running",
+	"--args":        `Provide additional arguments to a service`,
 }
 
 type cmdRun struct {
-	clientMixin
+	client *client.Client
+
 	sharedRunEnterOpts
 }
 
 func init() {
-	addCommand("run", shortRunHelp, longRunHelp, func() flags.Commander { return &cmdRun{} },
-		sharedRunEnterOptsHelp, nil)
+	AddCommand(&CmdInfo{
+		Name:        "run",
+		Summary:     cmdRunSummary,
+		Description: cmdRunDescription,
+		ArgsHelp:    sharedRunEnterArgsHelp,
+		New: func(opts *CmdOptions) flags.Commander {
+			return &cmdRun{client: opts.Client}
+		},
+	})
 }
 
 func (rcmd *cmdRun) Execute(args []string) error {
@@ -146,7 +154,6 @@ func runDaemon(rcmd *cmdRun, ch chan os.Signal, ready chan<- func()) error {
 	dopts := daemon.Options{
 		Dir:        pebbleDir,
 		SocketPath: socketPath,
-		Dry:        rcmd.Dry,
 	}
 	if rcmd.Verbose {
 		dopts.ServiceOutput = os.Stdout
@@ -237,7 +244,9 @@ out:
 		}
 	}
 
-	// Close our own self-connection, otherwise it prevents fast and clean termination.
+	// Close the client idle connection to the server (self connection) before we
+	// start with the HTTP shutdown process. This will speed up the server shutdown,
+	// and allow the Pebble process to exit faster.
 	rcmd.client.CloseIdleConnections()
 
 	return d.Stop(ch)

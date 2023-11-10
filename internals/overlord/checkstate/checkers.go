@@ -26,6 +26,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/canonical/x-go/strutil/shlex"
 
@@ -38,6 +39,7 @@ import (
 const (
 	maxErrorBytes = 10 * 1024
 	maxErrorLines = 20
+	execWaitDelay = time.Second
 )
 
 // httpChecker is a checker that ensures an HTTP GET at a specified URL returns 20x.
@@ -128,9 +130,16 @@ func (c *execChecker) check(ctx context.Context) error {
 		return fmt.Errorf("cannot parse check command: %v", err)
 	}
 
-	cmd := exec.CommandContext(ctx, args[0], args[1:]...)
-	cmd.Env = make([]string, 0, len(c.environment)) // avoid nil to ensure we don't inherit parent env
+	// Similar to services and exec, inherit the daemon's environment.
+	environment := osutil.Environ()
 	for k, v := range c.environment {
+		// Requested environment takes precedence.
+		environment[k] = v
+	}
+
+	cmd := exec.CommandContext(ctx, args[0], args[1:]...)
+	cmd.Env = make([]string, 0, len(environment)) // avoid additional allocations
+	for k, v := range environment {
 		cmd.Env = append(cmd.Env, k+"="+v)
 	}
 	cmd.Dir = c.workingDir
@@ -141,9 +150,16 @@ func (c *execChecker) check(ctx context.Context) error {
 		return err
 	}
 	if uid != nil && gid != nil {
-		cmd.SysProcAttr.Credential = &syscall.Credential{
-			Uid: uint32(*uid),
-			Gid: uint32(*gid),
+		isCurrent, err := osutil.IsCurrent(*uid, *gid)
+		if err != nil {
+			logger.Debugf("Cannot determine if uid %d gid %d is current user", *uid, *gid)
+		}
+		if !isCurrent {
+			cmd.SysProcAttr = &syscall.SysProcAttr{}
+			cmd.SysProcAttr.Credential = &syscall.Credential{
+				Uid: uint32(*uid),
+				Gid: uint32(*gid),
+			}
 		}
 	}
 
@@ -153,6 +169,7 @@ func (c *execChecker) check(ctx context.Context) error {
 	defer ringBuffer.Close()
 	cmd.Stdout = ringBuffer
 	cmd.Stderr = ringBuffer
+	cmd.WaitDelay = execWaitDelay
 	err = reaper.StartCommand(cmd)
 	if err != nil {
 		return err

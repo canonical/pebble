@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"os"
 	"os/user"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -31,6 +32,7 @@ import (
 
 	"github.com/canonical/pebble/client"
 	"github.com/canonical/pebble/internals/logger"
+	"github.com/canonical/pebble/internals/plan"
 )
 
 var _ = Suite(&execSuite{})
@@ -108,6 +110,27 @@ func (s *execSuite) TestEnvironment(c *C) {
 	c.Check(stderr, Equals, "")
 }
 
+func (s *execSuite) TestEnvironmentInheritedFromDaemon(c *C) {
+	restore := fakeEnv("FOO", "bar")
+	defer restore()
+
+	stdout, stderr, waitErr := s.exec(c, "", &client.ExecOptions{
+		Command: []string{"/bin/sh", "-c", "echo FOO=$FOO"},
+	})
+	c.Check(waitErr, IsNil)
+	c.Check(stdout, Equals, "FOO=bar\n")
+	c.Check(stderr, Equals, "")
+
+	// Check that requested environment takes precedence.
+	stdout, stderr, waitErr = s.exec(c, "", &client.ExecOptions{
+		Command:     []string{"/bin/sh", "-c", "echo FOO=$FOO"},
+		Environment: map[string]string{"FOO": "foo"},
+	})
+	c.Check(waitErr, IsNil)
+	c.Check(stdout, Equals, "FOO=foo\n")
+	c.Check(stderr, Equals, "")
+}
+
 func (s *execSuite) TestWorkingDir(c *C) {
 	workingDir := c.MkDir()
 	stdout, stderr, waitErr := s.exec(c, "", &client.ExecOptions{
@@ -117,6 +140,25 @@ func (s *execSuite) TestWorkingDir(c *C) {
 	c.Check(waitErr, IsNil)
 	c.Check(stdout, Equals, workingDir+"\n")
 	c.Check(stderr, Equals, "")
+}
+
+func (s *execSuite) TestWorkingDirDoesNotExist(c *C) {
+	_, err := s.client.Exec(&client.ExecOptions{
+		Command:    []string{"pwd"},
+		WorkingDir: "/non/existent",
+	})
+	c.Check(err, ErrorMatches, `.*working directory.*does not exist`)
+}
+
+func (s *execSuite) TestWorkingDirNotADirectory(c *C) {
+	path := filepath.Join(c.MkDir(), "test")
+	err := os.WriteFile(path, nil, 0o777)
+	c.Assert(err, IsNil)
+	_, err = s.client.Exec(&client.ExecOptions{
+		Command:    []string{"pwd"},
+		WorkingDir: path,
+	})
+	c.Check(err, ErrorMatches, `.*working directory.*not a directory`)
 }
 
 func (s *execSuite) TestExitError(c *C) {
@@ -143,6 +185,69 @@ func (s *execSuite) TestTimeout(c *C) {
 	c.Check(stderr, Equals, "")
 }
 
+func (s *execSuite) TestContextNoOverrides(c *C) {
+	dir := c.MkDir()
+	err := s.daemon.overlord.ServiceManager().AppendLayer(&plan.Layer{
+		Label: "layer1",
+		Services: map[string]*plan.Service{"svc1": {
+			Name:        "svc1",
+			Override:    "replace",
+			Command:     "dummy",
+			Environment: map[string]string{"FOO": "foo", "BAR": "bar"},
+			WorkingDir:  dir,
+		}},
+	})
+	c.Assert(err, IsNil)
+
+	stdout, stderr, err := s.exec(c, "", &client.ExecOptions{
+		Command:        []string{"/bin/sh", "-c", "echo FOO=$FOO BAR=$BAR; pwd"},
+		ServiceContext: "svc1",
+	})
+	c.Assert(err, IsNil)
+	c.Check(stdout, Equals, "FOO=foo BAR=bar\n"+dir+"\n")
+	c.Check(stderr, Equals, "")
+}
+
+func (s *execSuite) TestContextOverrides(c *C) {
+	err := s.daemon.overlord.ServiceManager().AppendLayer(&plan.Layer{
+		Label: "layer1",
+		Services: map[string]*plan.Service{"svc1": {
+			Name:        "svc1",
+			Override:    "replace",
+			Command:     "dummy",
+			Environment: map[string]string{"FOO": "foo", "BAR": "bar"},
+			WorkingDir:  c.MkDir(),
+		}},
+	})
+	c.Assert(err, IsNil)
+
+	overrideDir := c.MkDir()
+	stdout, stderr, err := s.exec(c, "", &client.ExecOptions{
+		Command:        []string{"/bin/sh", "-c", "echo FOO=$FOO BAR=$BAR; pwd"},
+		ServiceContext: "svc1",
+		Environment:    map[string]string{"FOO": "oof"},
+		WorkingDir:     overrideDir,
+	})
+	c.Assert(err, IsNil)
+	c.Check(stdout, Equals, "FOO=oof BAR=bar\n"+overrideDir+"\n")
+	c.Check(stderr, Equals, "")
+}
+
+func (s *execSuite) TestCurrentUserGroup(c *C) {
+	current, err := user.Current()
+	c.Assert(err, IsNil)
+	group, err := user.LookupGroupId(current.Gid)
+	c.Assert(err, IsNil)
+	stdout, stderr, waitErr := s.exec(c, "", &client.ExecOptions{
+		Command: []string{"/bin/sh", "-c", "id -n -u && id -n -g"},
+		User:    current.Username,
+		Group:   group.Name,
+	})
+	c.Assert(waitErr, IsNil)
+	c.Check(stdout, Equals, current.Username+"\n"+group.Name+"\n")
+	c.Check(stderr, Equals, "")
+}
+
 // See .github/workflows/tests.yml for how to run this test as root.
 func (s *execSuite) TestUserGroup(c *C) {
 	if os.Getuid() != 0 {
@@ -161,6 +266,14 @@ func (s *execSuite) TestUserGroup(c *C) {
 	c.Assert(waitErr, IsNil)
 	c.Check(stdout, Equals, username+"\n"+group+"\n")
 	c.Check(stderr, Equals, "")
+
+	_, err := s.client.Exec(&client.ExecOptions{
+		Command:     []string{"pwd"},
+		Environment: map[string]string{"HOME": "/non/existent"},
+		User:        username,
+		Group:       group,
+	})
+	c.Assert(err, ErrorMatches, `.*home directory.*does not exist`)
 }
 
 // See .github/workflows/tests.yml for how to run this test as root.
@@ -300,7 +413,7 @@ func (s *execSuite) TestCommandNotFound(c *C) {
 	c.Check(httpResp.StatusCode, Equals, http.StatusBadRequest)
 	c.Check(execResp.StatusCode, Equals, http.StatusBadRequest)
 	c.Check(execResp.Type, Equals, "error")
-	c.Check(execResp.Result["message"], Matches, ".*executable file not found.*")
+	c.Check(execResp.Result["message"], Matches, "cannot find executable .*")
 }
 
 func (s *execSuite) TestUserGroupError(c *C) {

@@ -17,12 +17,14 @@ package cmdstate
 import (
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/user"
 	"strconv"
 	"time"
 
 	"github.com/canonical/pebble/internals/logger"
+	"github.com/canonical/pebble/internals/osutil"
 	"github.com/canonical/pebble/internals/overlord/state"
 )
 
@@ -69,8 +71,17 @@ func Exec(st *state.State, args *ExecArgs) (*state.Task, ExecMetadata, error) {
 		return nil, ExecMetadata{}, errors.New("cannot use interactive mode without a terminal")
 	}
 
-	environment := map[string]string{}
+	// Inherit the pebble daemon environment.
+	// If the user is being changed, unset the HOME and USER env vars so that they
+	// can be set correctly later on in this method.
+	environment := osutil.Environ()
+	if args.UserID != nil && *args.UserID != os.Getuid() {
+		delete(environment, "HOME")
+		delete(environment, "USER")
+	}
+
 	for k, v := range args.Environment {
+		// Requested environment takes precedence.
 		environment[k] = v
 	}
 
@@ -107,13 +118,9 @@ func Exec(st *state.State, args *ExecArgs) (*state.Task, ExecMetadata, error) {
 		environment["LANG"] = "C.UTF-8"
 	}
 
-	// Set default working directory to $HOME, or / if $HOME not set.
-	workingDir := args.WorkingDir
-	if workingDir == "" {
-		workingDir = environment["HOME"]
-		if workingDir == "" {
-			workingDir = "/"
-		}
+	workingDir, err := getWorkingDir(args.WorkingDir, environment["HOME"])
+	if err != nil {
+		return nil, ExecMetadata{}, err
 	}
 
 	// Create a task for this execution (though it's not started here).
@@ -140,4 +147,31 @@ func Exec(st *state.State, args *ExecArgs) (*state.Task, ExecMetadata, error) {
 	}
 
 	return task, metadata, nil
+}
+
+// getWorkingDir calculates the working directory using the working-dir
+// argument, or $HOME if that's not set, or "/" if $HOME is not set.
+func getWorkingDir(workingDir, homeDir string) (string, error) {
+	dirName := "working directory"
+	if workingDir == "" {
+		if homeDir == "" {
+			return "/", nil
+		}
+		workingDir = homeDir
+		dirName = "home directory"
+	}
+	// Check that the working directory exists, to avoid a confusing error
+	// message later that implies the command doesn't exist, for example:
+	//
+	//  fork/exec /usr/local/bin/realcommand: no such file or directory
+	st, err := os.Stat(workingDir)
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
+		return "", fmt.Errorf("%s %q does not exist", dirName, workingDir)
+	case err != nil:
+		return "", fmt.Errorf("cannot stat %s %q: %w", dirName, workingDir, err)
+	case !st.IsDir():
+		return "", fmt.Errorf("%s %q not a directory", dirName, workingDir)
+	}
+	return workingDir, nil
 }

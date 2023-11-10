@@ -31,23 +31,21 @@ var (
 )
 
 type waitMixin struct {
-	clientMixin
 	NoWait    bool `long:"no-wait"`
 	skipAbort bool
 }
 
-var waitDescs = map[string]string{
-	"no-wait": "Do not wait for the operation to finish but just print the change id.",
+var waitArgsHelp = map[string]string{
+	"--no-wait": "Do not wait for the operation to finish but just print the change id.",
 }
 
 var noWait = errors.New("no wait for op")
 
-func (wmx waitMixin) wait(id string) (*client.Change, error) {
+func (wmx waitMixin) wait(cli *client.Client, id string) (*client.Change, error) {
 	if wmx.NoWait {
 		fmt.Fprintf(Stdout, "%s\n", id)
 		return nil, noWait
 	}
-	cli := wmx.client
 
 	// Intercept sigint
 	sigs := make(chan os.Signal, 2)
@@ -58,7 +56,7 @@ func (wmx waitMixin) wait(id string) (*client.Change, error) {
 		if sig == nil || wmx.skipAbort {
 			return
 		}
-		_, err := wmx.client.Abort(id)
+		_, err := cli.Abort(id)
 		if err != nil {
 			fmt.Fprintf(Stderr, err.Error()+"\n")
 		}

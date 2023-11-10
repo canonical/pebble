@@ -20,13 +20,15 @@ import (
 	"github.com/canonical/pebble/client"
 )
 
-var shortStopHelp = "Stop a service and its dependents"
-var longStopHelp = `
+const cmdStopSummary = "Stop a service and its dependents"
+const cmdStopDescription = `
 The stop command stops the service with the provided name and
 any other service that depends on it, in the correct order.
 `
 
 type cmdStop struct {
+	client *client.Client
+
 	waitMixin
 	Positional struct {
 		Services []string `positional-arg-name:"<service>" required:"1"`
@@ -34,7 +36,15 @@ type cmdStop struct {
 }
 
 func init() {
-	addCommand("stop", shortStopHelp, longStopHelp, func() flags.Commander { return &cmdStop{} }, waitDescs, nil)
+	AddCommand(&CmdInfo{
+		Name:        "stop",
+		Summary:     cmdStopSummary,
+		Description: cmdStopDescription,
+		ArgsHelp:    waitArgsHelp,
+		New: func(opts *CmdOptions) flags.Commander {
+			return &cmdStop{client: opts.Client}
+		},
+	})
 }
 
 func (cmd cmdStop) Execute(args []string) error {
@@ -50,7 +60,7 @@ func (cmd cmdStop) Execute(args []string) error {
 		return err
 	}
 
-	if _, err := cmd.wait(changeID); err != nil {
+	if _, err := cmd.wait(cmd.client, changeID); err != nil {
 		if err == noWait {
 			return nil
 		}

@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 
 	"gopkg.in/check.v1"
 
@@ -63,7 +64,7 @@ func (s *apiSuite) daemon(c *check.C) *Daemon {
 }
 
 func apiCmd(path string) *Command {
-	for _, cmd := range api {
+	for _, cmd := range API {
 		if cmd.Path == path {
 			return cmd
 		}
@@ -100,4 +101,23 @@ func (s *apiSuite) TestSysInfo(c *check.C) {
 	c.Check(rsp.Status, check.Equals, 200)
 	c.Check(rsp.Type, check.Equals, ResponseTypeSync)
 	c.Check(rsp.Result, check.DeepEquals, expected)
+}
+
+func fakeEnv(key, value string) (restore func()) {
+	oldEnv, envWasSet := os.LookupEnv(key)
+	err := os.Setenv(key, value)
+	if err != nil {
+		panic(err)
+	}
+	return func() {
+		var err error
+		if envWasSet {
+			err = os.Setenv(key, oldEnv)
+		} else {
+			err = os.Unsetenv(key)
+		}
+		if err != nil {
+			panic(err)
+		}
+	}
 }

@@ -32,9 +32,10 @@ import (
 	"syscall"
 	"time"
 
+	. "gopkg.in/check.v1"
+
 	"github.com/canonical/pebble/internals/osutil"
 	"github.com/canonical/pebble/internals/osutil/sys"
-	. "gopkg.in/check.v1"
 )
 
 var _ = Suite(&filesSuite{})
@@ -69,6 +70,9 @@ func (s *filesSuite) TestListFilesNonAbsPath(c *C) {
 }
 
 func (s *filesSuite) TestListFilesPermissionDenied(c *C) {
+	if os.Getuid() == 0 {
+		c.Skip("cannot run test as root")
+	}
 	tmpDir := c.MkDir()
 	noAccessDir := filepath.Join(tmpDir, "noaccess")
 	c.Assert(os.Mkdir(noAccessDir, 0o775), IsNil)
@@ -301,6 +305,10 @@ func (s *filesSuite) TestReadMultiple(c *C) {
 }
 
 func (s *filesSuite) TestReadErrors(c *C) {
+	if os.Getuid() == 0 {
+		c.Skip("cannot run test as root")
+	}
+
 	tmpDir := createTestFiles(c)
 	writeTempFile(c, tmpDir, "no-access", "x", 0)
 
@@ -1121,6 +1129,10 @@ nested user group
 }
 
 func (s *filesSuite) TestWriteErrors(c *C) {
+	if os.Getuid() == 0 {
+		c.Skip("cannot run test as root")
+	}
+
 	tmpDir := c.MkDir()
 	c.Assert(os.Mkdir(tmpDir+"/permission-denied", 0), IsNil)
 	pathNoContent := tmpDir + "/no-content"

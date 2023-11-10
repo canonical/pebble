@@ -24,36 +24,52 @@ import (
 	"github.com/canonical/pebble/client"
 )
 
-var shortChangesHelp = "List system changes"
-var shortTasksHelp = "List a change's tasks"
-var longChangesHelp = `
+const cmdChangesSummary = "List system changes"
+const cmdChangesDescription = `
 The changes command displays a summary of system changes performed recently.
-`
-var longTasksHelp = `
-The tasks command displays a summary of tasks associated with an individual
-change that happened recently.
 `
 
 type cmdChanges struct {
-	clientMixin
+	client *client.Client
+
 	timeMixin
 	Positional struct {
 		Service string `positional-arg-name:"<service>"`
 	} `positional-args:"yes"`
 }
 
+const cmdTasksSummary = "List a change's tasks"
+const cmdTasksDescription = `
+The tasks command displays a summary of tasks associated with an individual
+change that happened recently.
+`
+
 type cmdTasks struct {
+	client *client.Client
+
 	timeMixin
 	changeIDMixin
 }
 
 func init() {
-	addCommand("changes", shortChangesHelp, longChangesHelp,
-		func() flags.Commander { return &cmdChanges{} }, timeDescs, nil)
-	addCommand("tasks", shortTasksHelp, longTasksHelp,
-		func() flags.Commander { return &cmdTasks{} },
-		merge(changeIDMixinOptDesc, timeDescs),
-		changeIDMixinArgDesc)
+	AddCommand(&CmdInfo{
+		Name:        "changes",
+		Summary:     cmdChangesSummary,
+		Description: cmdChangesDescription,
+		ArgsHelp:    timeArgsHelp,
+		New: func(opts *CmdOptions) flags.Commander {
+			return &cmdChanges{client: opts.Client}
+		},
+	})
+	AddCommand(&CmdInfo{
+		Name:        "tasks",
+		Summary:     cmdTasksSummary,
+		Description: cmdTasksDescription,
+		ArgsHelp:    merge(changeIDMixinArgsHelp, timeArgsHelp),
+		New: func(opts *CmdOptions) flags.Commander {
+			return &cmdTasks{client: opts.Client}
+		},
+	})
 }
 
 type changesByTime []*client.Change
@@ -124,7 +140,7 @@ func (c *cmdChanges) Execute(args []string) error {
 }
 
 func (c *cmdTasks) Execute([]string) error {
-	chid, err := c.GetChangeID()
+	chid, err := c.GetChangeID(c.client)
 	if err != nil {
 		if err == noChangeFoundOK {
 			return nil

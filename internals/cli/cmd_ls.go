@@ -26,28 +26,37 @@ import (
 	"github.com/canonical/pebble/client"
 )
 
-type cmdLs struct {
-	clientMixin
-	timeMixin
+const cmdLsSummary = "List path contents"
+const cmdLsDescription = `
+The ls command lists entries in the filesystem at the specified path. A glob pattern
+may be specified for the last path element.
+`
 
+type cmdLs struct {
+	client *client.Client
+
+	timeMixin
 	Directory  bool `short:"d"`
 	LongFormat bool `short:"l"`
-
 	Positional struct {
 		Path string `positional-arg-name:"<path>"`
 	} `positional-args:"yes" required:"yes"`
 }
 
-var lsDescs = map[string]string{
-	"d": `List matching entries themselves, not directory contents`,
-	"l": `Use a long listing format`,
+func init() {
+	AddCommand(&CmdInfo{
+		Name:        "ls",
+		Summary:     cmdLsSummary,
+		Description: cmdLsDescription,
+		ArgsHelp: merge(timeArgsHelp, map[string]string{
+			"-d": "List matching entries themselves, not directory contents",
+			"-l": "Use a long listing format",
+		}),
+		New: func(opts *CmdOptions) flags.Commander {
+			return &cmdLs{client: opts.Client}
+		},
+	})
 }
-
-var shortLsHelp = "List path contents"
-var longLsHelp = `
-The ls command lists entries in the filesystem at the specified path. A glob pattern
-may be specified for the last path element.
-`
 
 func (cmd *cmdLs) Execute(args []string) error {
 	if len(args) > 0 {
@@ -100,8 +109,4 @@ func parseGlob(path string) (parsedPath, parsedPattern string, err error) {
 	}
 
 	return path, "", nil
-}
-
-func init() {
-	addCommand("ls", shortLsHelp, longLsHelp, func() flags.Commander { return &cmdLs{} }, merge(lsDescs, timeDescs), nil)
 }

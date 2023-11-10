@@ -244,11 +244,13 @@ If you want to force a service to restart even if its service configuration hasn
 
 ### Service dependencies
 
-Pebble takes service dependencies into account when starting and stopping services. Before the service manager starts a service, Pebble first starts the services that service depends on (configured with `required`). Conversely, before stopping a service, Pebble first stops services that depend on that service.
+Pebble takes service dependencies into account when starting and stopping services. When Pebble starts a service, it also starts the services which that service depends on (configured with `required`). Conversely, when stopping a service, Pebble also stops services which depend on that service.
 
-For example, if service `nginx` requires `logger`, `pebble start nginx` will start `logger` and then start `nginx`. Running `pebble stop logger` will stop `nginx` and then `logger`; however, running `pebble stop nginx` will only stop `nginx` (`nginx` depends on `logger`, not the other way around).
+For example, if service `nginx` requires `logger`, `pebble start nginx` will start both `nginx` and `logger` (in an undefined order). Running `pebble stop logger` will stop both `nginx` and `logger`; however, running `pebble stop nginx` will only stop `nginx` (`nginx` depends on `logger`, not the other way around).
 
-If multiple dependencies need to be started at once, they're started in order according to the `before` and `after` configuration: `before` is a list of services that must be started before this one (but it doesn't `require` them). Or if it's easier to specify the other way around, `after` is a list of services that must be started after this one.
+When multiple services need to be started together, they're started in order according to the `before` and `after` configuration, waiting 1 second for each to ensure the command doesn't exit too quickly. The `before` option is a list of services that this service must start before (it may or may not `require` them). Or if it's easier to specify this ordering the other way around, `after` is a list of services that this service must start after.
+
+Note that currently, `before` and `after` are of limited usefulness, because Pebble only waits 1 second before moving on to start the next service, with no additional checks that the previous service is operating correctly.
 
 If the configuration of `requires`, `before`, and `after` for a service results in a cycle or "loop", an error will be returned when attempting to start or stop the service.
 
@@ -403,6 +405,55 @@ $ pebble run --verbose
 ...
 ```
 
+#### Log forwarding
+
+Pebble supports forwarding its services' logs to a remote Loki server. In the `log-targets` section of the plan, you can specify destinations for log forwarding, for example:
+```yaml
+log-targets:
+    staging-logs:
+        override: merge
+        type: loki
+        location: http://10.1.77.205:3100/loki/api/v1/push
+        services: [all]
+    production-logs:
+        override: merge
+        type: loki
+        location: http://my.loki.server.com/loki/api/v1/push
+        services: [svc1, svc2]
+```
+
+For each log target, use the `services` key to specify a list of services to collect logs from. In the above example, the `production-logs` target will collect logs from `svc1` and `svc2`.
+
+Use the special keyword `all` to match all services, including services that might be added in future layers. In the above example, `staging-logs` will collect logs from all services.
+
+To remove a service from a log target when merging, prefix the service name with a minus `-`. For example, if we have a base layer with
+```yaml
+my-target:
+    services: [svc1, svc2]
+```
+and override layer with
+```yaml
+my-target:
+    services: [-svc1]
+    override: merge
+```
+then in the merged layer, the `services` list will be merged to `[svc1, svc2, -svc1]`, which evaluates left to right as simply `[svc2]`. So `my-target` will collect logs from only `svc2`.
+
+You can also use `-all` to remove all services from the list. For example, adding an override layer with
+```yaml
+my-target:
+    services: [-all]
+    override: merge
+```
+would remove all services from `my-target`, effectively disabling `my-target`. Meanwhile, adding an override layer with
+```yaml
+my-target:
+    services: [-all, svc1]
+    override: merge
+```
+would remove all services and then add `svc1`, so `my-target` would receive logs from only `svc1`.
+
+
 ## Container usage
 
 Pebble works well as a local service manager, but if running Pebble in a separate container, you can use the exec and file management APIs to coordinate with the remote system over the shared unix socket.
@@ -523,6 +574,10 @@ services:
         # group and group-id are specified, the group's GID must match group-id.
         group-id: <gid>
 
+        # (Optional) Working directory to run command in. By default, the
+        # command is run in the service manager's current directory.
+        working-dir: <directory>
+
         # (Optional) Defines what happens when the service exits with a zero
         # exit code. Possible values are: "restart" (default) which restarts
         # the service after the backoff delay, "shutdown" which shuts down and
@@ -630,6 +685,13 @@ checks:
             # directly, not interpreted by a shell.
             command: <commmand>
 
+            # (Optional) Run the command in the context of this service.
+            # Specifically, inherit its environment variables, user/group
+            # settings, and working directory. The check's context (the
+            # settings below) will override the service's; the check's
+            # environment map will be merged on top of the service's.
+            service-context: <service-name>
+
             # (Optional) A list of key/value pairs defining environment
             # variables that should be set when running the command.
             environment:
@@ -653,21 +715,53 @@ checks:
             # match group-id.
             group-id: <gid>
 
-            # (Optional) Working directory to run command in.
+            # (Optional) Working directory to run command in. By default, the
+            # command is run in the service manager's current directory.
             working-dir: <directory>
+
+# (Optional) A list of remote log receivers, to which service logs can be sent.
+log-targets:
+
+  <log target name>:
+
+    # (Required) Control how this log target definition is combined with
+    # other pre-existing definitions with the same name in the Pebble plan.
+    #
+    # The value 'merge' will ensure that values in this layer specification
+    # are merged over existing definitions, whereas 'replace' will entirely
+    # override the existing target spec in the plan with the same name.
+    override: merge | replace
+
+    # (Required) The type of log target, which determines the format in
+    # which logs will be sent. Currently, the only supported type is 'loki',
+    # but more protocols may be added in the future.
+    type: loki
+
+    # (Required) The URL of the remote log target.
+    # For Loki, this needs to be the fully-qualified URL of the push API,
+    # including the API endpoint, e.g.
+    #     http://<ip-address>:3100/loki/api/v1/push
+    location: <url>
+
+    # (Optional) A list of services whose logs will be sent to this target.
+    # Use the special keyword 'all' to match all services in the plan.
+    # When merging log targets, the 'services' lists are appended. Prefix a
+    # service name with a minus (e.g. '-svc1') to remove a previously added
+    # service. '-all' will remove all services.
+    services: [<service names>]
 ```
 
 ## API and clients
 
 The Pebble daemon exposes an API (HTTP over a unix socket) to allow remote clients to interact with the daemon. It can start and stop services, add configuration layers the plan, and so on.
 
-There is currently no official documentation for the API at the HTTP level (apart from the [code itself](https://github.com/canonical/pebble/blob/master/internal/daemon/api.go)!); most users will interact with it via the Pebble command line interface or by using the Go or Python clients.
+There is currently no official documentation for the API at the HTTP level (apart from the [code itself](https://github.com/canonical/pebble/blob/master/internals/daemon/api.go)!); most users will interact with it via the Pebble command line interface or by using the Go or Python clients.
 
 The Go client is used primarily by the CLI, but is importable and can be used by other tools too. See the [reference documentation and examples](https://pkg.go.dev/github.com/canonical/pebble/client) at pkg.go.dev.
 
 We try to never change the underlying HTTP API in a backwards-incompatible way, however, in rare cases we may change the Go client in a backwards-incompatible way.
 
-In addition to the Go client, there's also a [Python client](https://github.com/canonical/operator/blob/master/ops/pebble.py) for the Pebble API that's part of the Python Operator Framework used by Juju charms ([documentation here](https://juju.is/docs/sdk/interact-with-pebble)).
+In addition to the Go client, there's also a [Python client](https://github.com/canonical/operator/blob/master/ops/pebble.py) for the Pebble API that's part of the [`ops` library](https://github.com/canonical/operator) used by Juju charms ([documentation here](https://juju.is/docs/sdk/interact-with-pebble)).
 
 ## Roadmap / TODO
 
@@ -687,7 +781,8 @@ Here are some of the things coming soon:
   - [x] Automatically restart services that fail
   - [x] Support for custom health checks (HTTP, TCP, command)
   - [x] Terminate all services before exiting run command
-  - [ ] Log forwarding (syslog and Loki)
+  - [x] Log forwarding to Loki
+  - [ ] Log forwarding to syslog
   - [ ] [Other in-progress PRs](https://github.com/canonical/pebble/pulls)
   - [ ] [Other requested features](https://github.com/canonical/pebble/issues)
 

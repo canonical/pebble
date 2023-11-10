@@ -115,6 +115,9 @@ func (s *healthSuite) TestLevel(c *C) {
 				if test.readyCheck != "" {
 					checks = append(checks, &checkstate.CheckInfo{Name: "r", Level: plan.ReadyLevel, Status: checkstate.CheckStatus(test.readyCheck)})
 				}
+				// Add a check which is down with level unset, to ensure that
+				// the level-unset checks do not impact the outcomes of level-queries.
+				checks = append(checks, &checkstate.CheckInfo{Name: "u", Level: plan.UnsetLevel, Status: checkstate.CheckStatusDown})
 				return checks, nil
 			})
 			defer restore()

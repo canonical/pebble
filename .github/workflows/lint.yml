@@ -1,0 +1,30 @@
+name: Lint
+on: [push, pull_request]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: actions/setup-go@v4
+        with:
+          go-mod-file: 'go.mod'
+          cache: false
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v3
+        id: lint
+        with:
+          version: latest
+          args: '-c .github/.golangci.yml --out-format=colored-line-number'
+          skip-cache: true
+
+      - name: Print error message
+        if: always() && steps.lint.outcome == 'failure'
+        run: |
+          echo '
+          Linting failed. On your local machine, please run
+              golangci-lint run -c .github/.golangci.yml --fix
+          and check in the changes.'
+          exit 1

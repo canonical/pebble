@@ -18,9 +18,6 @@ import (
 	"os"
 	"runtime"
 
-	// "fmt"
-	// "net/http"
-
 	"gopkg.in/check.v1"
 
 	"github.com/canonical/pebble/internals/cli"

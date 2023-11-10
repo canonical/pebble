@@ -32,6 +32,7 @@ import (
 	"gopkg.in/tomb.v2"
 
 	"github.com/canonical/pebble/internals/logger"
+	"github.com/canonical/pebble/internals/osutil"
 	"github.com/canonical/pebble/internals/overlord/state"
 	"github.com/canonical/pebble/internals/ptyutil"
 	"github.com/canonical/pebble/internals/reaper"
@@ -41,6 +42,7 @@ import (
 const (
 	connectTimeout   = 5 * time.Second
 	handshakeTimeout = 5 * time.Second
+	waitDelay        = time.Second
 
 	wsControl = "control"
 	wsStdio   = "stdio"
@@ -342,12 +344,19 @@ func (e *execution) do(ctx context.Context, task *state.Task) error {
 	cmd.Stdin = stdin
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
+	cmd.WaitDelay = waitDelay
 
 	cmd.SysProcAttr = &syscall.SysProcAttr{}
 	if e.userID != nil && e.groupID != nil {
-		cmd.SysProcAttr.Credential = &syscall.Credential{
-			Uid: uint32(*e.userID),
-			Gid: uint32(*e.groupID),
+		isCurrent, err := osutil.IsCurrent(*e.userID, *e.groupID)
+		if err != nil {
+			logger.Debugf("Cannot determine if uid %d gid %d is current user", *e.userID, *e.groupID)
+		}
+		if !isCurrent {
+			cmd.SysProcAttr.Credential = &syscall.Credential{
+				Uid: uint32(*e.userID),
+				Gid: uint32(*e.groupID),
+			}
 		}
 	}
 
