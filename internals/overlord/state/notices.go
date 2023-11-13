@@ -17,7 +17,9 @@ package state
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"math"
 	"sort"
 	"strconv"
 	"time"
@@ -26,23 +28,20 @@ import (
 const (
 	// defaultNoticeExpireAfter is the default expiry time for notices.
 	defaultNoticeExpireAfter = 7 * 24 * time.Hour
+
+	// defaultNoticeRecipientUserID is the UID of the default user with whom
+	// notices will be associated. A UID of -1 means the notice should be
+	// readable by any user.
+	defaultNoticeRecipientUserID = -1
 )
 
-// Notice represents an aggregated notice. The combination of user, type, and key is unique.
+// Notice represents an aggregated notice. The combination of type and key is unique.
 type Notice struct {
 	// Server-generated unique ID for this notice (a surrogate key).
 	//
 	// Currently this is a monotonically increasing number, but that may well
 	// change in future. If your code relies on it being a number, it will break.
 	id string
-
-	// The UID of the intended recipient of this notice.
-	//
-	// A value of -1 indicates that the notice may be read by any user. A
-	// value of 0 indicates the notice may only be read by the root user.
-	// For all other values >0, the notice may be read by the user with the
-	// matching UID, as well as by root.
-	user int64
 
 	// The notice type represents a group of notices originating from a common
 	// source. For example, notices originating from the CLI client have type
@@ -56,6 +55,20 @@ type Notice struct {
 	// This is limited to a maximum of MaxNoticeKeyLength bytes when added
 	// (it's an error to add a notice with a longer key).
 	key string
+
+	// The UID of the intended recipient of this notice.
+	//
+	// A value of -1 indicates that the notice may be read by any user. A
+	// value of 0 indicates the notice may only be read by the root user.
+	// For all other values >0, the notice may be read by the user with the
+	// matching UID, as well as by root. If userID is nil, the UserID method
+	// returns the default notice recipient UID.
+	//
+	// Once a notice with a particular key/value combination is created, the
+	// user ID associated with that notice cannot be changed. Issuing a notice
+	// with a different user ID than another notice with the same key and value
+	// will cause an error.
+	userID *int
 
 	// The first time one of these notices (type and key combination) occurs.
 	firstOccurred time.Time
@@ -92,8 +105,11 @@ func (n *Notice) String() string {
 	return fmt.Sprintf("Notice %s (%s:%s)", n.id, n.noticeType, n.key)
 }
 
-func (n *Notice) User() int64 {
-	return n.user
+func (n *Notice) UserID() int {
+	if n.userID == nil {
+		return defaultNoticeRecipientUserID
+	}
+	return *n.userID
 }
 
 // expired reports whether this notice has expired (relative to the given "now").
@@ -106,9 +122,9 @@ func (n *Notice) expired(now time.Time) bool {
 // to disk as JSON.
 type jsonNotice struct {
 	ID            string            `json:"id"`
-	User          int64             `json:"user"`
 	Type          string            `json:"type"`
 	Key           string            `json:"key"`
+	UserID        *int              `json:"user-id,omitempty"`
 	FirstOccurred time.Time         `json:"first-occurred"`
 	LastOccurred  time.Time         `json:"last-occurred"`
 	LastRepeated  time.Time         `json:"last-repeated"`
@@ -121,9 +137,9 @@ type jsonNotice struct {
 func (n *Notice) MarshalJSON() ([]byte, error) {
 	jn := jsonNotice{
 		ID:            n.id,
-		User:          n.user,
 		Type:          string(n.noticeType),
 		Key:           n.key,
+		UserID:        n.userID,
 		FirstOccurred: n.firstOccurred,
 		LastOccurred:  n.lastOccurred,
 		LastRepeated:  n.lastRepeated,
@@ -146,9 +162,9 @@ func (n *Notice) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	n.id = jn.ID
-	n.user = jn.User
 	n.noticeType = NoticeType(jn.Type)
 	n.key = jn.Key
+	n.userID = jn.UserID
 	n.firstOccurred = jn.FirstOccurred
 	n.lastOccurred = jn.LastOccurred
 	n.lastRepeated = jn.LastRepeated
@@ -196,6 +212,11 @@ func (t NoticeType) Valid() bool {
 
 // AddNoticeOptions holds optional parameters for an AddNotice call.
 type AddNoticeOptions struct {
+	// UserID is the UID of the intended recipient of the notice. If the UserID
+	// is not explicitly specified here, the notice will be accessible as if
+	// its userID were defaultNoticeRecipientUserID.
+	UserID *int
+
 	// Data is the optional key-value data for this occurrence.
 	Data map[string]string
 
@@ -207,13 +228,20 @@ type AddNoticeOptions struct {
 	Time time.Time
 }
 
+func optionIntToString(maybeInt *int) string {
+	if maybeInt == nil {
+		return `"null"`
+	}
+	return fmt.Sprintf("%d", *maybeInt)
+}
+
 // AddNotice records an occurrence of a notice with the specified type and key
 // and options.
-func (s *State) AddNotice(user int64, noticeType NoticeType, key string, options *AddNoticeOptions) (string, error) {
+func (s *State) AddNotice(noticeType NoticeType, key string, options *AddNoticeOptions) (string, error) {
 	if options == nil {
 		options = &AddNoticeOptions{}
 	}
-	err := validateNotice(user, noticeType, key, options)
+	err := validateNotice(noticeType, key, options)
 	if err != nil {
 		return "", err
 	}
@@ -226,16 +254,16 @@ func (s *State) AddNotice(user int64, noticeType NoticeType, key string, options
 	}
 	now = now.UTC()
 	newOrRepeated := false
-	uniqueKey := noticeKey{user, noticeType, key}
+	uniqueKey := noticeKey{noticeType, key}
 	notice, ok := s.notices[uniqueKey]
 	if !ok {
-		// First occurrence of this notice user+type+key
+		// First occurrence of this notice type+key
 		s.lastNoticeId++
 		notice = &Notice{
 			id:            strconv.Itoa(s.lastNoticeId),
-			user:          user,
 			noticeType:    noticeType,
 			key:           key,
+			userID:        options.UserID,
 			firstOccurred: now,
 			lastRepeated:  now,
 			expireAfter:   defaultNoticeExpireAfter,
@@ -245,6 +273,9 @@ func (s *State) AddNotice(user int64, noticeType NoticeType, key string, options
 		newOrRepeated = true
 	} else {
 		// Additional occurrence, update existing notice
+		if !userIDsEqual(options.UserID, notice.userID) {
+			return "", fmt.Errorf("existing notice user ID %s does not match that of new notice with the same type and key: %s", optionIntToString(notice.userID), optionIntToString(options.UserID))
+		}
 		notice.occurrences++
 		if options.RepeatAfter == 0 || now.After(notice.lastRepeated.Add(options.RepeatAfter)) {
 			// Update last repeated time if repeat-after time has elapsed (or is zero)
@@ -263,29 +294,48 @@ func (s *State) AddNotice(user int64, noticeType NoticeType, key string, options
 	return notice.id, nil
 }
 
-func validateNotice(user int64, noticeType NoticeType, key string, options *AddNoticeOptions) error {
-	if user < -1 || user > 0xFFFFFFFF { // max uint32
-		return fmt.Errorf("internal error: attempt to add notice with invalid user %q", user)
-	}
+func validateNotice(noticeType NoticeType, key string, options *AddNoticeOptions) error {
 	if !noticeType.Valid() {
 		return fmt.Errorf("internal error: attempted to add notice with invalid type %q", noticeType)
 	}
 	if key == "" {
 		return fmt.Errorf("internal error: attempted to add %s notice with invalid key %q", noticeType, key)
 	}
+	if err := ValidateUserID(options.UserID); err != nil {
+		return fmt.Errorf("internal error: attempted to add notice with invalid user ID %s", optionIntToString(options.UserID))
+	}
 	return nil
 }
 
+func ValidateUserID(userID *int) error {
+	if userID == nil {
+		return nil
+	}
+	if *userID < -1 || *userID > math.MaxUint32 {
+		return errors.New("user ID must be a valid uint32 or -1")
+	}
+	return nil
+}
+
+func userIDsEqual(userID1 *int, userID2 *int) bool {
+	if userID1 == nil {
+		return userID2 == nil
+	}
+	if userID2 == nil {
+		return false
+	}
+	return *userID1 == *userID2
+}
+
 type noticeKey struct {
-	user       int64
 	noticeType NoticeType
 	key        string
 }
 
 // NoticeFilter allows filtering notices by various fields.
 type NoticeFilter struct {
-	// Users, if not empty, includes only notices whose user is one of these.
-	Users []int64
+	// UserIDs, if not empty, includes only notices whose user ID is one of these.
+	UserIDs []int
 
 	// Types, if not empty, includes only notices whose type is one of these.
 	Types []NoticeType
@@ -302,7 +352,7 @@ func (f *NoticeFilter) matches(n *Notice) bool {
 	if f == nil {
 		return true
 	}
-	if len(f.Users) > 0 && !sliceContains(f.Users, n.user) {
+	if len(f.UserIDs) > 0 && !sliceContains(f.UserIDs, n.UserID()) {
 		return false
 	}
 	// Can't use strutil.ListContains as Types is []NoticeType, not []string
@@ -373,7 +423,7 @@ func (s *State) unflattenNotices(flat []*Notice) {
 		if n.expired(now) {
 			continue
 		}
-		uniqueKey := noticeKey{n.user, n.noticeType, n.key}
+		uniqueKey := noticeKey{n.noticeType, n.key}
 		s.notices[uniqueKey] = n
 	}
 }

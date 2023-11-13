@@ -20,7 +20,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"net/url"
 	"regexp"
 	"strconv"
 
@@ -43,64 +42,57 @@ type addedNotice struct {
 }
 
 var (
-	ErrInvalidUid          = errors.New("user must be a valid uint32 or -1")
-	ErrUserFilterNoNotices = errors.New("no notices possible with users filter for given request")
+	errUserIDFilterNoNotices = errors.New("no notices possible with user IDs filter for given request")
 )
 
 // Get the UID of the request. If the UID is not known, return -1, indicating
 // that the connection may only receive notices intended for any recipient.
-func extractRequestUid(r *http.Request) int64 {
+func extractRequestUid(r *http.Request) int {
 	_, uid, _, err := ucrednetGet(r.RemoteAddr)
 	if err != nil {
 		// If there's an error parsing the request credentials, let the
 		// connection only receive notices intended for any user.
 		return -1
 	}
-	return int64(uid)
+	return int(uid)
 }
 
-func validateUid(uid int64) error {
-	if uid < -1 || uid > 0xFFFFFFFF {
-		return ErrInvalidUid
-	}
-	return nil
-}
-
-func sanitizeUsersFilter(reqUid int64, query url.Values) ([]int64, error) {
-	userStrs := strutil.MultiCommaSeparatedList(query["users"])
-	users := make([]int64, 0, len(userStrs))
-	for _, userStr := range userStrs {
-		uid, err := strconv.ParseInt(userStr, 10, 64)
+func sanitizeUserIDsFilter(reqUid int, queryUserIDs []string) ([]int, error) {
+	userIDStrs := strutil.MultiCommaSeparatedList(queryUserIDs)
+	userIDs := make([]int, 0, len(userIDStrs))
+	for _, userIDStr := range userIDStrs {
+		uid, err := strconv.ParseInt(userIDStr, 10, 64)
 		if err != nil {
 			return nil, err
 		}
-		if err := validateUid(uid); err != nil {
-			return nil, fmt.Errorf(`invalid user "%d": %v`, uid, err)
+		userID := int(uid)
+		if err := state.ValidateUserID(&userID); err != nil {
+			return nil, fmt.Errorf(`invalid user ID "%d": %v`, userID, err)
 		}
-		users = append(users, uid)
+		userIDs = append(userIDs, userID)
 	}
 	if reqUid == 0 {
-		// Request from root, allow filtering by user without restriction.
-		return users, nil
+		// Request from root, allow filtering by user ID without restriction.
+		return userIDs, nil
 	}
 	// Only allow non-root users to see notices with matching UID or UID of -1.
-	if len(users) == 0 {
-		return []int64{-1, reqUid}, nil
+	if len(userIDs) == 0 {
+		return []int{-1, reqUid}, nil
 	}
-	// If a non-root request has users filter, only permit the intersection of
-	// {-1, reqUid} and the requested users.
-	sanitizedUsers := make([]int64, 0, 2)
-	for _, uid := range users {
+	// If a non-root request has user IDs filter, only permit the intersection
+	// of {-1, reqUid} and the requested user IDs.
+	sanitized := make([]int, 0, 2)
+	for _, uid := range userIDs {
 		if uid == reqUid || uid == -1 {
-			sanitizedUsers = append(sanitizedUsers, uid)
+			sanitized = append(sanitized, uid)
 		}
 	}
-	if len(sanitizedUsers) == 0 {
-		// Requested notices to only users for which the request UID does not
-		// have access.
-		return nil, ErrUserFilterNoNotices
+	if len(sanitized) == 0 {
+		// Requested notices to only user IDs for which the UID
+		// associated with the request does not have access.
+		return nil, errUserIDFilterNoNotices
 	}
-	return sanitizedUsers, nil
+	return sanitized, nil
 }
 
 func v1GetNotices(c *Command, r *http.Request, _ *UserState) Response {
@@ -108,13 +100,12 @@ func v1GetNotices(c *Command, r *http.Request, _ *UserState) Response {
 
 	reqUid := extractRequestUid(r)
 
-	users, err := sanitizeUsersFilter(reqUid, query)
-	if err == ErrUserFilterNoNotices {
-		// Users filter precluded any possible notices, so return empty list.
+	userIDs, err := sanitizeUserIDsFilter(reqUid, query["user-ids"])
+	if err == errUserIDFilterNoNotices {
+		// User IDs filter precluded any possible notices, so return empty list.
 		return SyncResponse([]*state.Notice{})
-	}
-	if err != nil {
-		return statusBadRequest(`invalid "users" filter: %v`, err)
+	} else if err != nil {
+		return statusBadRequest(`invalid "user-ids" filter: %v`, err)
 	}
 
 	typeStrs := strutil.MultiCommaSeparatedList(query["types"])
@@ -137,10 +128,10 @@ func v1GetNotices(c *Command, r *http.Request, _ *UserState) Response {
 	}
 
 	filter := &state.NoticeFilter{
-		Users: users,
-		Types: types,
-		Keys:  keys,
-		After: after,
+		Types:   types,
+		Keys:    keys,
+		UserIDs: userIDs,
+		After:   after,
 	}
 	var notices []*state.Notice
 
@@ -180,9 +171,9 @@ func v1GetNotices(c *Command, r *http.Request, _ *UserState) Response {
 func v1PostNotices(c *Command, r *http.Request, _ *UserState) Response {
 	var payload struct {
 		Action      string          `json:"action"`
-		User        int64           `json:"user"`
 		Type        string          `json:"type"`
 		Key         string          `json:"key"`
+		UserID      *int            `json:"user-id"`
 		RepeatAfter string          `json:"repeat-after"`
 		DataJSON    json.RawMessage `json:"data"`
 	}
@@ -194,8 +185,8 @@ func v1PostNotices(c *Command, r *http.Request, _ *UserState) Response {
 	if payload.Action != "add" {
 		return statusBadRequest("invalid action %q", payload.Action)
 	}
-	if err := validateUid(payload.User); err != nil {
-		return statusBadRequest(`invalid user "%d": %v`, payload.User, err)
+	if err := state.ValidateUserID(payload.UserID); err != nil {
+		return statusBadRequest(`invalid user ID %d: %v`, *payload.UserID, err)
 	}
 	if payload.Type != "custom" {
 		return statusBadRequest(`invalid type %q (can only add "custom" notices)`, payload.Type)
@@ -227,7 +218,8 @@ func v1PostNotices(c *Command, r *http.Request, _ *UserState) Response {
 	st.Lock()
 	defer st.Unlock()
 
-	noticeId, err := st.AddNotice(payload.User, state.CustomNotice, payload.Key, &state.AddNoticeOptions{
+	noticeId, err := st.AddNotice(state.CustomNotice, payload.Key, &state.AddNoticeOptions{
+		UserID:      payload.UserID,
 		Data:        data,
 		RepeatAfter: repeatAfter,
 	})
@@ -248,7 +240,7 @@ func v1GetNotice(c *Command, r *http.Request, _ *UserState) Response {
 		return statusNotFound("cannot find notice with id %q", noticeID)
 	}
 	reqUid := extractRequestUid(r)
-	noticeUid := notice.User()
+	noticeUid := notice.UserID()
 	if reqUid != 0 && reqUid != noticeUid && noticeUid != -1 {
 		// Requests from non-root users may only receive notices with matching
 		// UID or UID of -1. Don't leak information about whether notice exists
