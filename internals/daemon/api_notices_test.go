@@ -592,6 +592,33 @@ func (s *apiSuite) TestNoticeNotFound(c *C) {
 	c.Check(rsp.Status, Equals, 404)
 }
 
+func (s *apiSuite) TestNoticeNotAllowed(c *C) {
+	s.daemon(c)
+
+	st := s.d.overlord.State()
+	st.Lock()
+	userID := 1000
+	noticeId, err := st.AddNotice(state.CustomNotice, "a.b/1", &state.AddNoticeOptions{
+		UserID: &userID,
+	})
+	c.Assert(err, IsNil)
+	st.Unlock()
+
+	req, err := http.NewRequest("GET", "/v1/notices/"+noticeId, nil)
+	c.Assert(err, IsNil)
+	req.RemoteAddr = "pid=100;uid=1001;socket=;"
+	noticesCmd := apiCmd("/v1/notices/{id}")
+	s.vars = map[string]string{"id": noticeId}
+	rsp, ok := noticesCmd.GET(noticesCmd, req, nil).(*resp)
+	c.Assert(ok, Equals, true)
+
+	c.Check(rsp.Type, Equals, ResponseTypeError)
+	c.Check(rsp.Status, Equals, http.StatusForbidden)
+	notice, ok := rsp.Result.(*state.Notice)
+	c.Assert(ok, Equals, false)
+	c.Assert(notice, IsNil)
+}
+
 func noticeToMap(c *C, notice *state.Notice) map[string]any {
 	buf, err := json.Marshal(notice)
 	c.Assert(err, IsNil)

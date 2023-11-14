@@ -243,9 +243,8 @@ func v1GetNotice(c *Command, r *http.Request, _ *UserState) Response {
 	noticeUid := notice.UserID()
 	if reqUid != 0 && reqUid != noticeUid && noticeUid != -1 {
 		// Requests from non-root users may only receive notices with matching
-		// UID or UID of -1. Don't leak information about whether notice exists
-		// if user is not allowed to receive it.
-		return statusNotFound("cannot find notice with id %q", noticeID)
+		// UID or UID of -1.
+		return statusForbidden("not allowed to access notice with id %q", noticeID)
 	}
 	return SyncResponse(notice)
 }
