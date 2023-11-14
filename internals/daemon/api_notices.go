@@ -45,60 +45,10 @@ var (
 	errUserIDFilterNoNotices = errors.New("no notices possible with user IDs filter for given request")
 )
 
-// Get the UID of the request. If the UID is not known, return -1, indicating
-// that the connection may only receive notices intended for any recipient.
-func extractRequestUid(r *http.Request) int {
-	_, uid, _, err := ucrednetGet(r.RemoteAddr)
-	if err != nil {
-		// If there's an error parsing the request credentials, let the
-		// connection only receive notices intended for any user.
-		return -1
-	}
-	return int(uid)
-}
-
-func sanitizeUserIDsFilter(reqUid int, queryUserIDs []string) ([]int, error) {
-	userIDStrs := strutil.MultiCommaSeparatedList(queryUserIDs)
-	userIDs := make([]int, 0, len(userIDStrs))
-	for _, userIDStr := range userIDStrs {
-		uid, err := strconv.ParseInt(userIDStr, 10, 64)
-		if err != nil {
-			return nil, err
-		}
-		userID := int(uid)
-		if err := state.ValidateUserID(&userID); err != nil {
-			return nil, fmt.Errorf(`invalid user ID "%d": %v`, userID, err)
-		}
-		userIDs = append(userIDs, userID)
-	}
-	if reqUid == 0 {
-		// Request from root, allow filtering by user ID without restriction.
-		return userIDs, nil
-	}
-	// Only allow non-root users to see notices with matching UID or UID of -1.
-	if len(userIDs) == 0 {
-		return []int{-1, reqUid}, nil
-	}
-	// If a non-root request has user IDs filter, only permit the intersection
-	// of {-1, reqUid} and the requested user IDs.
-	sanitized := make([]int, 0, 2)
-	for _, uid := range userIDs {
-		if uid == reqUid || uid == -1 {
-			sanitized = append(sanitized, uid)
-		}
-	}
-	if len(sanitized) == 0 {
-		// Requested notices to only user IDs for which the UID
-		// associated with the request does not have access.
-		return nil, errUserIDFilterNoNotices
-	}
-	return sanitized, nil
-}
-
 func v1GetNotices(c *Command, r *http.Request, _ *UserState) Response {
 	query := r.URL.Query()
 
-	reqUid := extractRequestUid(r)
+	reqUid := uidFromRequest(r)
 
 	userIDs, err := sanitizeUserIDsFilter(reqUid, query["user-ids"])
 	if err == errUserIDFilterNoNotices {
@@ -166,6 +116,57 @@ func v1GetNotices(c *Command, r *http.Request, _ *UserState) Response {
 		notices = []*state.Notice{} // avoid null result
 	}
 	return SyncResponse(notices)
+}
+
+// Get the UID of the request. If the UID is not known, return -1, indicating
+// that the connection may only receive notices intended for any recipient.
+func uidFromRequest(r *http.Request) int {
+	_, uid, _, err := ucrednetGet(r.RemoteAddr)
+	if err != nil {
+		return -1
+	}
+	return int(uid)
+}
+
+// Construct the user IDs filter which will be passed into the notices state.
+// Importantly, ensure that non-root users cannot filter on user IDs other than
+// their own and -1.
+func sanitizeUserIDsFilter(reqUid int, queryUserIDs []string) ([]int, error) {
+	userIDStrs := strutil.MultiCommaSeparatedList(queryUserIDs)
+	userIDs := make([]int, 0, len(userIDStrs))
+	for _, userIDStr := range userIDStrs {
+		uid, err := strconv.ParseInt(userIDStr, 10, 64)
+		if err != nil {
+			return nil, err
+		}
+		userID := int(uid)
+		if err := state.ValidateUserID(&userID); err != nil {
+			return nil, fmt.Errorf(`invalid user ID "%d": %v`, userID, err)
+		}
+		userIDs = append(userIDs, userID)
+	}
+	if reqUid == 0 {
+		// Request from root, allow filtering by user ID without restriction.
+		return userIDs, nil
+	}
+	// Only allow non-root users to see notices with matching UID or UID of -1.
+	if len(userIDs) == 0 {
+		return []int{-1, reqUid}, nil
+	}
+	// If a non-root request has user IDs filter, only permit the intersection
+	// of {-1, reqUid} and the requested user IDs.
+	sanitized := make([]int, 0, 2)
+	for _, uid := range userIDs {
+		if uid == reqUid || uid == -1 {
+			sanitized = append(sanitized, uid)
+		}
+	}
+	if len(sanitized) == 0 {
+		// Requested notices to only user IDs for which the UID
+		// associated with the request does not have access.
+		return nil, errUserIDFilterNoNotices
+	}
+	return sanitized, nil
 }
 
 func v1PostNotices(c *Command, r *http.Request, _ *UserState) Response {
@@ -239,9 +240,10 @@ func v1GetNotice(c *Command, r *http.Request, _ *UserState) Response {
 	if notice == nil {
 		return statusNotFound("cannot find notice with id %q", noticeID)
 	}
-	reqUid := extractRequestUid(r)
+	reqUid := uidFromRequest(r)
 	noticeUid := notice.UserID()
-	if reqUid != 0 && reqUid != noticeUid && noticeUid != -1 {
+	viewable := reqUid == 0 || reqUid == noticeUid || noticeUid == -1
+	if !viewable {
 		// Requests from non-root users may only receive notices with matching
 		// UID or UID of -1.
 		return statusForbidden("not allowed to access notice with id %q", noticeID)

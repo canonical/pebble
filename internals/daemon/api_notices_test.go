@@ -119,118 +119,6 @@ func (s *apiSuite) testNoticesFilter(c *C, makeQuery func(after time.Time) url.V
 	})
 }
 
-func (s *apiSuite) TestNoticesFilterMultipleUserIDs(c *C) {
-	s.daemon(c)
-
-	st := s.d.overlord.State()
-	st.Lock()
-	zero := 0
-	addNotice(c, st, state.ChangeUpdateNotice, "123", &state.AddNoticeOptions{
-		UserID: &zero,
-	})
-	time.Sleep(time.Microsecond)
-	thousand := 1000
-	addNotice(c, st, state.CustomNotice, "a.b/x", &state.AddNoticeOptions{
-		UserID: &thousand,
-	})
-	time.Sleep(time.Microsecond)
-	negOne := -1
-	addNotice(c, st, state.WarningNotice, "danger", &state.AddNoticeOptions{
-		UserID: &negOne,
-	})
-	st.Unlock()
-
-	noticesCmd := apiCmd("/v1/notices")
-
-	// Test that root user may see all notices, and may filter on any user ID.
-	userRemoteAddr := "pid=100;uid=0;socket=;"
-	req, err := http.NewRequest("GET", "/v1/notices", nil)
-	c.Assert(err, IsNil)
-	req.RemoteAddr = userRemoteAddr
-	rsp, ok := noticesCmd.GET(noticesCmd, req, nil).(*resp)
-	c.Assert(ok, Equals, true)
-
-	c.Check(rsp.Type, Equals, ResponseTypeSync)
-	c.Check(rsp.Status, Equals, http.StatusOK)
-	notices, ok := rsp.Result.([]*state.Notice)
-	c.Assert(ok, Equals, true)
-	c.Assert(notices, HasLen, 3)
-	n := noticeToMap(c, notices[0])
-	c.Assert(n["user-id"], Equals, 0.0)
-	n = noticeToMap(c, notices[1])
-	c.Assert(n["user-id"], Equals, 1000.0)
-	n = noticeToMap(c, notices[2])
-	c.Assert(n["user-id"], Equals, -1.0)
-
-	for _, userIDs := range [][]int{{0, 1000, -1}, {0, 1000}, {0, -1}, {1000, -1}, {0}, {1000}, {-1}} {
-		userIDsStrings := make([]string, 0, len(userIDs))
-		for _, uid := range userIDs {
-			userIDsStrings = append(userIDsStrings, fmt.Sprintf("user-ids=%d", uid))
-		}
-		reqUrl := fmt.Sprintf("/v1/notices?%s", strings.Join(userIDsStrings, "&"))
-		req, err := http.NewRequest("GET", reqUrl, nil)
-		c.Assert(err, IsNil)
-		req.RemoteAddr = userRemoteAddr
-		rsp, ok := noticesCmd.GET(noticesCmd, req, nil).(*resp)
-		c.Assert(ok, Equals, true)
-
-		c.Check(rsp.Type, Equals, ResponseTypeSync)
-		c.Check(rsp.Status, Equals, http.StatusOK)
-		notices, ok := rsp.Result.([]*state.Notice)
-		c.Assert(ok, Equals, true)
-		c.Assert(notices, HasLen, len(userIDs))
-		for i, uid := range userIDs {
-			n := noticeToMap(c, notices[i])
-			c.Assert(n["user-id"], Equals, float64(uid))
-		}
-	}
-
-	// Test that non-root user by default only sees their notices and notices
-	// intended for all user IDs (represented by UID of -1).
-	rootRemoteAddr := "pid=100;uid=1000;socket=;"
-	req, err = http.NewRequest("GET", "/v1/notices", nil)
-	c.Assert(err, IsNil)
-	req.RemoteAddr = rootRemoteAddr
-	rsp, ok = noticesCmd.GET(noticesCmd, req, nil).(*resp)
-	c.Assert(ok, Equals, true)
-
-	c.Check(rsp.Type, Equals, ResponseTypeSync)
-	c.Check(rsp.Status, Equals, http.StatusOK)
-	notices, ok = rsp.Result.([]*state.Notice)
-	c.Assert(ok, Equals, true)
-	c.Assert(notices, HasLen, 2)
-	n = noticeToMap(c, notices[0])
-	c.Assert(n["user-id"], Equals, 1000.0)
-	n = noticeToMap(c, notices[1])
-	c.Assert(n["user-id"], Equals, -1.0)
-
-	// Test filtering for non-root user
-	for _, userIDs := range [][]int{{0, 1000, -1}, {0, 1000}, {0, -1}, {0}} {
-		userIDsStrings := make([]string, 0, len(userIDs))
-		for _, uid := range userIDs {
-			userIDsStrings = append(userIDsStrings, fmt.Sprintf("user-ids=%d", uid))
-		}
-		reqUrl := fmt.Sprintf("/v1/notices?%s", strings.Join(userIDsStrings, "&"))
-		req, err := http.NewRequest("GET", reqUrl, nil)
-		c.Assert(err, IsNil)
-		req.RemoteAddr = rootRemoteAddr
-		rsp, ok := noticesCmd.GET(noticesCmd, req, nil).(*resp)
-		c.Assert(ok, Equals, true)
-
-		c.Check(rsp.Type, Equals, ResponseTypeSync)
-		c.Check(rsp.Status, Equals, http.StatusOK)
-		notices, ok = rsp.Result.([]*state.Notice)
-		c.Assert(ok, Equals, true)
-		// Non-root filtering on UID other than -1 or their own UID yields no
-		// notices for that UID.
-		c.Assert(notices, HasLen, len(userIDs)-1)
-		for i, userID := range userIDs[1:] {
-			n = noticeToMap(c, notices[i])
-			c.Assert(n["user-id"], Equals, float64(userID))
-		}
-	}
-}
-
 func (s *apiSuite) TestNoticesFilterMultipleTypes(c *C) {
 	s.daemon(c)
 
@@ -287,6 +175,191 @@ func (s *apiSuite) TestNoticesFilterMultipleKeys(c *C) {
 	c.Assert(n["key"], Equals, "a.b/x")
 	n = noticeToMap(c, notices[1])
 	c.Assert(n["key"], Equals, "danger")
+}
+
+func (s *apiSuite) TestNoticesUserIDsRootDefault(c *C) {
+	s.daemon(c)
+
+	st := s.d.overlord.State()
+	st.Lock()
+	zero := 0
+	addNotice(c, st, state.ChangeUpdateNotice, "123", &state.AddNoticeOptions{
+		UserID: &zero,
+	})
+	time.Sleep(time.Microsecond)
+	thousand := 1000
+	addNotice(c, st, state.CustomNotice, "a.b/x", &state.AddNoticeOptions{
+		UserID: &thousand,
+	})
+	time.Sleep(time.Microsecond)
+	negOne := -1
+	addNotice(c, st, state.WarningNotice, "danger", &state.AddNoticeOptions{
+		UserID: &negOne,
+	})
+	st.Unlock()
+
+	noticesCmd := apiCmd("/v1/notices")
+
+	// Test that root user sees all notices if no filter is specified
+	req, err := http.NewRequest("GET", "/v1/notices", nil)
+	c.Assert(err, IsNil)
+	req.RemoteAddr = "pid=100;uid=0;socket=;"
+	rsp, ok := noticesCmd.GET(noticesCmd, req, nil).(*resp)
+	c.Assert(ok, Equals, true)
+
+	c.Check(rsp.Type, Equals, ResponseTypeSync)
+	c.Check(rsp.Status, Equals, http.StatusOK)
+	notices, ok := rsp.Result.([]*state.Notice)
+	c.Assert(ok, Equals, true)
+	c.Assert(notices, HasLen, 3)
+	n := noticeToMap(c, notices[0])
+	c.Assert(n["user-id"], Equals, 0.0)
+	n = noticeToMap(c, notices[1])
+	c.Assert(n["user-id"], Equals, 1000.0)
+	n = noticeToMap(c, notices[2])
+	c.Assert(n["user-id"], Equals, -1.0)
+}
+
+func (s *apiSuite) TestNoticesUserIDsRootFilter(c *C) {
+	s.daemon(c)
+
+	st := s.d.overlord.State()
+	st.Lock()
+	zero := 0
+	addNotice(c, st, state.ChangeUpdateNotice, "123", &state.AddNoticeOptions{
+		UserID: &zero,
+	})
+	time.Sleep(time.Microsecond)
+	thousand := 1000
+	addNotice(c, st, state.CustomNotice, "a.b/x", &state.AddNoticeOptions{
+		UserID: &thousand,
+	})
+	time.Sleep(time.Microsecond)
+	negOne := -1
+	addNotice(c, st, state.WarningNotice, "danger", &state.AddNoticeOptions{
+		UserID: &negOne,
+	})
+	st.Unlock()
+
+	noticesCmd := apiCmd("/v1/notices")
+
+	// Test that root can filter on any user IDs
+	for _, userIDs := range [][]int{{0, 1000, -1}, {0, 1000}, {0, -1}, {1000, -1}, {0}, {1000}, {-1}} {
+		userIDsValues := url.Values{}
+		for _, uid := range userIDs {
+			userIDsValues.Add("user-ids", fmt.Sprintf("%d", uid))
+		}
+		reqUrl := fmt.Sprintf("/v1/notices?%s", userIDsValues.Encode())
+		req, err := http.NewRequest("GET", reqUrl, nil)
+		c.Assert(err, IsNil)
+		req.RemoteAddr = "pid=100;uid=0;socket=;"
+		rsp, ok := noticesCmd.GET(noticesCmd, req, nil).(*resp)
+		c.Assert(ok, Equals, true)
+
+		c.Check(rsp.Type, Equals, ResponseTypeSync)
+		c.Check(rsp.Status, Equals, http.StatusOK)
+		notices, ok := rsp.Result.([]*state.Notice)
+		c.Assert(ok, Equals, true)
+		c.Assert(notices, HasLen, len(userIDs))
+		for i, uid := range userIDs {
+			n := noticeToMap(c, notices[i])
+			c.Assert(n["user-id"], Equals, float64(uid))
+		}
+	}
+}
+
+func (s *apiSuite) TestNoticesUserIDsNonRootDefault(c *C) {
+	s.daemon(c)
+
+	st := s.d.overlord.State()
+	st.Lock()
+	zero := 0
+	addNotice(c, st, state.ChangeUpdateNotice, "123", &state.AddNoticeOptions{
+		UserID: &zero,
+	})
+	time.Sleep(time.Microsecond)
+	thousand := 1000
+	addNotice(c, st, state.CustomNotice, "a.b/x", &state.AddNoticeOptions{
+		UserID: &thousand,
+	})
+	time.Sleep(time.Microsecond)
+	negOne := -1
+	addNotice(c, st, state.WarningNotice, "danger", &state.AddNoticeOptions{
+		UserID: &negOne,
+	})
+	st.Unlock()
+
+	noticesCmd := apiCmd("/v1/notices")
+
+	// Test that non-root user by default only sees their notices and notices
+	// intended for all user IDs (represented by UID of -1).
+	req, err := http.NewRequest("GET", "/v1/notices", nil)
+	c.Assert(err, IsNil)
+	req.RemoteAddr = "pid=100;uid=1000;socket=;"
+	rsp, ok := noticesCmd.GET(noticesCmd, req, nil).(*resp)
+	c.Assert(ok, Equals, true)
+
+	c.Check(rsp.Type, Equals, ResponseTypeSync)
+	c.Check(rsp.Status, Equals, http.StatusOK)
+	notices, ok := rsp.Result.([]*state.Notice)
+	c.Assert(ok, Equals, true)
+	c.Assert(notices, HasLen, 2)
+	n := noticeToMap(c, notices[0])
+	c.Assert(n["user-id"], Equals, 1000.0)
+	n = noticeToMap(c, notices[1])
+	c.Assert(n["user-id"], Equals, -1.0)
+}
+
+func (s *apiSuite) TestNoticesUserIDsNonRootFilter(c *C) {
+	s.daemon(c)
+
+	st := s.d.overlord.State()
+	st.Lock()
+	zero := 0
+	addNotice(c, st, state.ChangeUpdateNotice, "123", &state.AddNoticeOptions{
+		UserID: &zero,
+	})
+	time.Sleep(time.Microsecond)
+	thousand := 1000
+	addNotice(c, st, state.CustomNotice, "a.b/x", &state.AddNoticeOptions{
+		UserID: &thousand,
+	})
+	time.Sleep(time.Microsecond)
+	negOne := -1
+	addNotice(c, st, state.WarningNotice, "danger", &state.AddNoticeOptions{
+		UserID: &negOne,
+	})
+	st.Unlock()
+
+	noticesCmd := apiCmd("/v1/notices")
+
+	// Test that non-root user can only filter on their user ID and UID -1.
+	// For the UID lists below, UID 0 must be first, so it is easy to check
+	// that it was excluded.
+	for _, userIDs := range [][]int{{0, 1000, -1}, {0, 1000}, {0, -1}, {0}} {
+		userIDsValues := url.Values{}
+		for _, uid := range userIDs {
+			userIDsValues.Add("user-ids", fmt.Sprintf("%d", uid))
+		}
+		reqUrl := fmt.Sprintf("/v1/notices?%s", userIDsValues.Encode())
+		req, err := http.NewRequest("GET", reqUrl, nil)
+		c.Assert(err, IsNil)
+		req.RemoteAddr = "pid=100;uid=1000;socket=;"
+		rsp, ok := noticesCmd.GET(noticesCmd, req, nil).(*resp)
+		c.Assert(ok, Equals, true)
+
+		c.Check(rsp.Type, Equals, ResponseTypeSync)
+		c.Check(rsp.Status, Equals, http.StatusOK)
+		notices, ok := rsp.Result.([]*state.Notice)
+		c.Assert(ok, Equals, true)
+		// Non-root filtering on UID other than -1 or their own UID yields no
+		// notices for that UID.
+		c.Assert(notices, HasLen, len(userIDs)-1)
+		for i, userID := range userIDs[1:] {
+			n := noticeToMap(c, notices[i])
+			c.Assert(n["user-id"], Equals, float64(userID))
+		}
+	}
 }
 
 func (s *apiSuite) TestNoticesWait(c *C) {
