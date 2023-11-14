@@ -393,7 +393,6 @@ func (client *Client) Pull(opts *PullOptions) error {
 		Headers: map[string]string{
 			"Accept": "multipart/form-data",
 		},
-		Body: nil,
 	})
 	if err != nil {
 		return err
@@ -402,9 +401,9 @@ func (client *Client) Pull(opts *PullOptions) error {
 
 	// Obtain Content-Type to check for a multipart payload and parse its value
 	// in order to obtain the multipart boundary.
-	mediaType, params, err := mime.ParseMediaType(resp.Headers["Content-Type"])
+	mediaType, params, err := mime.ParseMediaType(resp.Header.Get("Content-Type"))
 	if err != nil {
-		return fmt.Errorf("invalid Content-Type: %w", err)
+		return fmt.Errorf("cannot parse Content-Type: %w", err)
 	}
 	if mediaType != "multipart/form-data" {
 		// Not an error response after all.
@@ -422,7 +421,7 @@ func (client *Client) Pull(opts *PullOptions) error {
 		return fmt.Errorf(`expected first field name to be "files", got %q`, filesPart.FormName())
 	}
 	if _, err := io.Copy(opts.Target, filesPart); err != nil {
-		return fmt.Errorf("cannot write: %w", err)
+		return fmt.Errorf("cannot write to target: %w", err)
 	}
 
 	responsePart, err := mr.NextPart()
@@ -434,7 +433,7 @@ func (client *Client) Pull(opts *PullOptions) error {
 		return fmt.Errorf(`expected second field name to be "response", got %q`, responsePart.FormName())
 	}
 
-	// Process response metadata (see defaultRequester.Do() in client package)
+	// Process response metadata (see defaultRequester.Do)
 	var multipartResp response
 	if err := decodeInto(responsePart, &multipartResp); err != nil {
 		return err

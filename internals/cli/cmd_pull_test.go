@@ -17,7 +17,6 @@ package cli_test
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"mime/multipart"
 	"net/http"
 	"net/textproto"
@@ -77,9 +76,7 @@ func (s *PebbleSuite) TestPull(c *C) {
 	c.Check(s.Stdout(), Equals, "")
 	c.Check(s.Stderr(), Equals, "")
 
-	f, err := os.Open(filePath)
-	c.Assert(err, IsNil)
-	b, err := ioutil.ReadAll(f)
+	b, err := os.ReadFile(filePath)
 	c.Assert(err, IsNil)
 	c.Check(b, DeepEquals, []byte("Hello, world!"))
 }

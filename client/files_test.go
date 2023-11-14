@@ -627,7 +627,7 @@ func (cs *clientSuite) TestPullFailsWithNoContentType(c *C) {
 		Path:   "/foo/bar.dat",
 		Target: &targetBuf,
 	})
-	c.Assert(err, ErrorMatches, "invalid Content-Type: .*")
+	c.Assert(err, ErrorMatches, "cannot parse Content-Type: .*")
 }
 
 func (cs *clientSuite) TestPullFailsWithNonMultipartResponse(c *C) {
@@ -658,9 +658,9 @@ func (cs *clientSuite) TestPullFailsWithInvalidMultipartResponse(c *C) {
 	c.Assert(err, ErrorMatches, "cannot decode multipart payload: .*")
 }
 
-type defectiveWriter struct{}
+type errWriter struct{}
 
-func (dw *defectiveWriter) Write(p []byte) (n int, err error) {
+func (dw *errWriter) Write(p []byte) (n int, err error) {
 	return 0, errors.New("I always fail!")
 }
 
@@ -694,12 +694,12 @@ func (cs *clientSuite) TestPullFailsOnWrite(c *C) {
 	cs.rsp = srcBuf.String()
 
 	// Check response
-	var dest defectiveWriter
+	var dest errWriter
 	err = cs.cli.Pull(&client.PullOptions{
 		Path:   "/foo/bar.dat",
 		Target: &dest,
 	})
-	c.Assert(err, ErrorMatches, "cannot write: I always fail!")
+	c.Assert(err, ErrorMatches, "cannot write to target: I always fail!")
 }
 
 func (cs *clientSuite) TestPullFailsWithInvalidJSON(c *C) {
