@@ -19,10 +19,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"mime/multipart"
 	"net/http"
 	"net/textproto"
 	"os"
+	"path"
+	"strings"
 	"time"
 
 	. "gopkg.in/check.v1"
@@ -579,6 +582,133 @@ func (cs *clientSuite) TestRemovePathFailsWithMultipleAPIResults(c *C) {
 			Path: "/foobar",
 		}},
 	})
+}
+
+type writeFilesPayload struct {
+	Action string           `json:"action"`
+	Files  []writeFilesItem `json:"files"`
+}
+
+type writeFilesItem struct {
+	Path        string `json:"path"`
+	MakeDirs    bool   `json:"make-dirs"`
+	Permissions string `json:"permissions"`
+	UserID      *int   `json:"user-id"`
+	User        string `json:"user"`
+	GroupID     *int   `json:"group-id"`
+	Group       string `json:"group"`
+}
+
+func (cs *clientSuite) TestPush(c *C) {
+	cs.rsp = `{"type": "sync", "result": [{"path": "/file.dat"}]}`
+
+	err := cs.cli.Push(&client.PushOptions{
+		Path:   "/file.dat",
+		Source: strings.NewReader("Hello, world!"),
+	})
+	c.Assert(err, IsNil)
+	mr, err := cs.req.MultipartReader()
+	c.Assert(err, IsNil)
+
+	c.Assert(cs.req.URL.Path, Equals, "/v1/files")
+	c.Assert(cs.req.Method, Equals, "POST")
+
+	// Check metadata part
+	metadata, err := mr.NextPart()
+	c.Assert(err, IsNil)
+	c.Assert(metadata.Header.Get("Content-Type"), Equals, "application/json")
+	c.Assert(metadata.FormName(), Equals, "request")
+
+	buf := bytes.NewBuffer(make([]byte, 0))
+	_, err = buf.ReadFrom(metadata)
+	c.Assert(err, IsNil)
+
+	// Decode metadata
+	var payload writeFilesPayload
+	err = json.NewDecoder(buf).Decode(&payload)
+	c.Assert(err, IsNil)
+	c.Assert(payload, DeepEquals, writeFilesPayload{
+		Action: "write",
+		Files: []writeFilesItem{{
+			Path: "/file.dat",
+		}},
+	})
+
+	// Check file part
+	file, err := mr.NextPart()
+	c.Assert(err, IsNil)
+	c.Assert(file.Header.Get("Content-Type"), Equals, "application/octet-stream")
+	c.Assert(file.FormName(), Equals, "files")
+	c.Assert(path.Base(file.FileName()), Equals, "file.dat")
+
+	buf.Reset()
+	_, err = buf.ReadFrom(file)
+	c.Assert(err, IsNil)
+	c.Assert(buf.String(), Equals, "Hello, world!")
+
+	// Check end of multipart request
+	_, err = mr.NextPart()
+	c.Assert(err, Equals, io.EOF)
+}
+
+func (cs *clientSuite) TestPushFails(c *C) {
+	cs.rsp = `{"type": "error", "result": {"message": "could not foo"}}`
+
+	err := cs.cli.Push(&client.PushOptions{
+		Path:   "/file.dat",
+		Source: strings.NewReader("Hello, world!"),
+	})
+	c.Assert(err, ErrorMatches, "could not foo")
+}
+
+func (cs *clientSuite) TestPushFailsOnFile(c *C) {
+	cs.rsp = `{
+		"type": "sync",
+		"result": [{
+			"path": "/file.dat",
+			"error": {
+				"message": "could not bar",
+				"kind": "permission-denied",
+				"value": 42
+			}
+		}]
+	}`
+
+	err := cs.cli.Push(&client.PushOptions{
+		Path:   "/file.dat",
+		Source: strings.NewReader("Hello, world!"),
+	})
+	clientErr, ok := err.(*client.Error)
+	c.Assert(ok, Equals, true)
+	c.Assert(clientErr.Message, Equals, "could not bar")
+	c.Assert(clientErr.Kind, Equals, "permission-denied")
+}
+
+func (cs *clientSuite) TestPushFailsWithMultipleAPIResults(c *C) {
+	cs.rsp = `{
+		"type": "sync",
+		"result": [{
+			"path": "/file.dat",
+			"error": {
+				"message": "could not bar",
+				"kind": "permission-denied",
+				"value": 42
+			}
+		}, {
+			"path": "/file.dat",
+			"error": {
+				"message": "could not baz",
+				"kind": "generic-file-error",
+				"value": 41
+			}
+		}]
+	}`
+
+	err := cs.cli.Push(&client.PushOptions{
+		Path:   "/file.dat",
+		Source: strings.NewReader("Hello, world!"),
+	})
+	c.Assert(err, ErrorMatches, "expected exactly one result from API, got 2")
 }
 
 func (cs *clientSuite) TestPull(c *C) {
