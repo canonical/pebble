@@ -1125,6 +1125,131 @@ var planTests = []planTest{{
 				command: foo
 				override: merge
 `},
+}, {
+	summary: "Log forwarding labels override",
+	input: []string{`
+		log-targets:
+			tgt1:
+				override: merge
+				type: loki
+				location: https://my.loki.server/loki/api/v1/push
+				labels:
+					label1: foo11
+					label2: foo12
+			tgt2:
+				override: merge
+				type: loki
+				location: https://my.loki.server/loki/api/v1/push
+				labels:
+					label1: foo21
+					label2: foo22
+`, `
+		log-targets:
+			tgt1:
+				override: merge
+				labels:
+					label2: bar12
+					label3: bar13
+			tgt2:
+				override: replace
+				type: loki
+				location: https://new.loki.server/loki/api/v1/push
+				labels:
+					label2: bar22
+					label3: bar23
+`},
+	layers: []*plan.Layer{{
+		Order:    0,
+		Label:    "layer-0",
+		Services: map[string]*plan.Service{},
+		Checks:   map[string]*plan.Check{},
+		LogTargets: map[string]*plan.LogTarget{
+			"tgt1": {
+				Name:     "tgt1",
+				Override: plan.MergeOverride,
+				Type:     plan.LokiTarget,
+				Location: "https://my.loki.server/loki/api/v1/push",
+				Labels: map[string]string{
+					"label1": "foo11",
+					"label2": "foo12",
+				},
+			},
+			"tgt2": {
+				Name:     "tgt2",
+				Override: plan.MergeOverride,
+				Type:     plan.LokiTarget,
+				Location: "https://my.loki.server/loki/api/v1/push",
+				Labels: map[string]string{
+					"label1": "foo21",
+					"label2": "foo22",
+				},
+			},
+		},
+	}, {
+		Order:    1,
+		Label:    "layer-1",
+		Services: map[string]*plan.Service{},
+		Checks:   map[string]*plan.Check{},
+		LogTargets: map[string]*plan.LogTarget{
+			"tgt1": {
+				Name:     "tgt1",
+				Override: plan.MergeOverride,
+				Labels: map[string]string{
+					"label2": "bar12",
+					"label3": "bar13",
+				},
+			},
+			"tgt2": {
+				Name:     "tgt2",
+				Override: plan.ReplaceOverride,
+				Type:     plan.LokiTarget,
+				Location: "https://new.loki.server/loki/api/v1/push",
+				Labels: map[string]string{
+					"label2": "bar22",
+					"label3": "bar23",
+				},
+			},
+		},
+	}},
+	result: &plan.Layer{
+		Services: map[string]*plan.Service{},
+		Checks:   map[string]*plan.Check{},
+		LogTargets: map[string]*plan.LogTarget{
+			"tgt1": {
+				Name:     "tgt1",
+				Override: plan.MergeOverride,
+				Type:     plan.LokiTarget,
+				Location: "https://my.loki.server/loki/api/v1/push",
+				Labels: map[string]string{
+					"label1": "foo11",
+					"label2": "bar12",
+					"label3": "bar13",
+				},
+			},
+			"tgt2": {
+				Name:     "tgt2",
+				Override: plan.ReplaceOverride,
+				Type:     plan.LokiTarget,
+				Location: "https://new.loki.server/loki/api/v1/push",
+				Labels: map[string]string{
+					"label2": "bar22",
+					"label3": "bar23",
+				},
+			},
+		},
+	},
+}, {
+	summary: "Reserved log target labels",
+	input: []string{`
+		log-targets:
+			tgt1:
+				override: merge
+				type: loki
+				location: https://my.loki.server/loki/api/v1/push
+				labels:
+					pebble_service: illegal
+`},
+	error: `log target "tgt1": label "pebble_service" uses reserved prefix "pebble_"`,
 }}
 
 func (s *S) TestParseLayer(c *C) {

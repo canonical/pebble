@@ -38,16 +38,17 @@ const (
 )
 
 type Client struct {
-	options *ClientOptions
-
-	targetName string
-	remoteURL  string
+	options    *ClientOptions
+	target     *plan.LogTarget
 	httpClient *http.Client
 
 	// To store log entries, keep a buffer of size 2*MaxRequestEntries with a
 	// sliding window 'entries' of size MaxRequestEntries
 	buffer  []lokiEntryWithService
 	entries []lokiEntryWithService
+
+	// store the custom labels for each service
+	labels map[string]json.RawMessage
 }
 
 func NewClient(target *plan.LogTarget) *Client {
@@ -64,13 +65,13 @@ func NewClientWithOptions(target *plan.LogTarget, options *ClientOptions) *Clien
 	options = fillDefaultOptions(options)
 	c := &Client{
 		options:    options,
-		targetName: target.Name,
-		remoteURL:  target.Location,
+		target:     target,
 		httpClient: &http.Client{Timeout: options.RequestTimeout},
 		buffer:     make([]lokiEntryWithService, 2*options.MaxRequestEntries),
+		labels:     make(map[string]json.RawMessage),
 	}
 	// c.entries should be backed by the same array as c.buffer
-	c.entries = c.buffer[0:0:len(c.buffer)]
+	c.entries = c.buffer[:0]
 	return c
 }
 
@@ -82,6 +83,30 @@ func fillDefaultOptions(options *ClientOptions) *ClientOptions {
 		options.MaxRequestEntries = maxRequestEntries
 	}
 	return options
+}
+
+func (c *Client) SetLabels(serviceName string, labels map[string]string) {
+	if labels == nil {
+		delete(c.labels, serviceName)
+		return
+	}
+
+	// Make a copy to avoid altering the original map
+	newLabels := make(map[string]string, len(labels)+1)
+	for k, v := range labels {
+		newLabels[k] = v
+	}
+
+	// Add Loki-specific default labels
+	newLabels["pebble_service"] = serviceName
+
+	// Encode labels now to save time later
+	marshalledLabels, err := json.Marshal(newLabels)
+	if err != nil {
+		// Can't happen as map[string]string will always be marshallable
+		logger.Panicf("Loki client for %q: cannot marshal labels: %v", c.target.Name, err)
+	}
+	c.labels[serviceName] = marshalledLabels
 }
 
 func (c *Client) Add(entry servicelog.Entry) error {
@@ -97,7 +122,7 @@ func (c *Client) Add(entry servicelog.Entry) error {
 		copy(c.buffer, c.entries)
 
 		// Reset the view into the buffer
-		c.entries = c.buffer[0:len(c.entries):len(c.buffer)]
+		c.entries = c.buffer[:len(c.entries):len(c.buffer)]
 
 		// Zero removed elements to allow garbage collection
 		for i := len(c.entries); i < len(c.buffer); i++ {
@@ -130,7 +155,7 @@ func (c *Client) Flush(ctx context.Context) error {
 		return fmt.Errorf("encoding request to JSON: %v", err)
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.remoteURL, bytes.NewReader(jsonReq))
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.target.Location, bytes.NewReader(jsonReq))
 	if err != nil {
 		return fmt.Errorf("creating HTTP request: %v", err)
 	}
@@ -148,7 +173,11 @@ func (c *Client) Flush(ctx context.Context) error {
 // resetBuffer drops all buffered logs (in the case of a successful send, or an
 // unrecoverable error).
 func (c *Client) resetBuffer() {
-	c.entries = c.entries[:0]
+	// Zero removed elements to allow garbage collection
+	for i := 0; i < len(c.entries); i++ {
+		c.entries[i] = lokiEntryWithService{}
+	}
+	c.entries = c.buffer[:0]
 }
 
 func (c *Client) buildRequest() lokiRequest {
@@ -169,9 +198,7 @@ func (c *Client) buildRequest() lokiRequest {
 	for _, service := range services {
 		entries := bucketedEntries[service]
 		stream := lokiStream{
-			Labels: map[string]string{
-				"pebble_service": service,
-			},
+			Labels:  c.labels[service],
 			Entries: entries,
 		}
 		req.Streams = append(req.Streams, stream)
@@ -184,8 +211,8 @@ type lokiRequest struct {
 }
 
 type lokiStream struct {
-	Labels  map[string]string `json:"stream"`
-	Entries []lokiEntry       `json:"values"`
+	Labels  json.RawMessage `json:"stream"`
+	Entries []lokiEntry     `json:"values"`
 }
 
 type lokiEntry [2]string
@@ -220,7 +247,7 @@ func (c *Client) handleServerResponse(resp *http.Response) error {
 	case 400 <= code && code < 500:
 		// Other 4xx codes indicate a client problem, so drop the logs (retrying won't help)
 		logger.Noticef("Target %q: request failed with status %d, dropping %d logs",
-			c.targetName, code, len(c.entries))
+			c.target.Name, code, len(c.entries))
 		c.resetBuffer()
 		return errFromResponse(resp)
 

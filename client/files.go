@@ -16,11 +16,16 @@ package client
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"mime/multipart"
+	"net/textproto"
 	"net/url"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -351,6 +356,149 @@ func (client *Client) RemovePath(opts *RemovePathOptions) error {
 		return err
 	}
 
+	if len(result) != 1 {
+		return fmt.Errorf("expected exactly one result from API, got %d", len(result))
+	}
+	if result[0].Error != nil {
+		return &Error{
+			Kind:    result[0].Error.Kind,
+			Value:   result[0].Error.Value,
+			Message: result[0].Error.Message,
+		}
+	}
+
+	return nil
+}
+
+type PushOptions struct {
+	// Source is the source of data to write (required).
+	Source io.Reader
+
+	// Path indicates the absolute path of the file in the destination
+	// machine (required).
+	Path string
+
+	// MakeDirs, if true, will create any non-existing directories in the path
+	// to the remote file. If false (the default) the call to Push will
+	// fail if any of the parent directories of path do not exist.
+	MakeDirs bool
+
+	// Permissions indicates the mode of the file on the destination machine.
+	// If 0 or unset, defaults to 0644. Note that, when used together with MakeDirs,
+	// the directories that are created will not use this mode, but 0755.
+	Permissions os.FileMode
+
+	// UserID indicates the user ID of the owner for the file on the destination
+	// machine. When used together with MakeDirs, the directories that are
+	// created will also be owned by this user.
+	UserID *int
+
+	// User indicates the name of the owner user for the file on the destination
+	// machine. When used together with MakeDirs, the directories that are
+	// created will also be owned by this user.
+	User string
+
+	// GroupID indicates the ID of the owner group for the file on the destination
+	// machine. When used together with MakeDirs, the directories that are
+	// created will also be owned by this user.
+	GroupID *int
+
+	// Group indicates the name of the owner group for the file on the
+	// machine. When used together with MakeDirs, the directories that are
+	// created will also be owned by this user.
+	Group string
+}
+
+type writeFilesPayload struct {
+	Action string           `json:"action"`
+	Files  []writeFilesItem `json:"files"`
+}
+
+type writeFilesItem struct {
+	Path        string `json:"path"`
+	MakeDirs    bool   `json:"make-dirs"`
+	Permissions string `json:"permissions"`
+	UserID      *int   `json:"user-id"`
+	User        string `json:"user"`
+	GroupID     *int   `json:"group-id"`
+	Group       string `json:"group"`
+}
+
+var quoteEscaper = strings.NewReplacer("\\", "\\\\", `"`, "\\\"")
+
+func escapeQuotes(s string) string {
+	return quoteEscaper.Replace(s)
+}
+
+// Push writes content to a path on the remote system.
+func (client *Client) Push(opts *PushOptions) error {
+	var permissions string
+	if opts.Permissions != 0 {
+		permissions = fmt.Sprintf("%03o", opts.Permissions)
+	}
+
+	payload := writeFilesPayload{
+		Action: "write",
+		Files: []writeFilesItem{{
+			Path:        opts.Path,
+			MakeDirs:    opts.MakeDirs,
+			Permissions: permissions,
+			UserID:      opts.UserID,
+			User:        opts.User,
+			GroupID:     opts.GroupID,
+			Group:       opts.Group,
+		}},
+	}
+
+	var body bytes.Buffer
+	mw := multipart.NewWriter(&body)
+
+	// Encode metadata part of the header
+	part, err := mw.CreatePart(textproto.MIMEHeader{
+		"Content-Type":        {"application/json"},
+		"Content-Disposition": {`form-data; name="request"`},
+	})
+	if err != nil {
+		return fmt.Errorf("cannot encode metadata in request payload: %w", err)
+	}
+
+	// Buffer for multipart header/footer
+	if err := json.NewEncoder(part).Encode(&payload); err != nil {
+		return err
+	}
+
+	// Encode file part of the header
+	escapedPath := escapeQuotes(opts.Path)
+	_, err = mw.CreatePart(textproto.MIMEHeader{
+		"Content-Type":        {"application/octet-stream"},
+		"Content-Disposition": {fmt.Sprintf(`form-data; name="files"; filename="%s"`, escapedPath)},
+	})
+	if err != nil {
+		return fmt.Errorf("cannot encode file in request payload: %w", err)
+	}
+
+	header := body.String()
+
+	// Encode multipart footer
+	body.Reset()
+	mw.Close()
+	footer := body.String()
+
+	resp, err := client.Requester().Do(context.Background(), &RequestOptions{
+		Type:    SyncRequest,
+		Method:  "POST",
+		Path:    "/v1/files",
+		Headers: map[string]string{"Content-Type": mw.FormDataContentType()},
+		Body:    io.MultiReader(strings.NewReader(header), opts.Source, strings.NewReader(footer)),
+	})
+	if err != nil {
+		return err
+	}
+
+	var result []fileResult
+	if err = resp.DecodeResult(&result); err != nil {
+		return err
+	}
 	if len(result) != 1 {
 		return fmt.Errorf("expected exactly one result from API, got %d", len(result))
 	}

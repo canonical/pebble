@@ -20,6 +20,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"time"
 
 	. "gopkg.in/check.v1"
@@ -148,11 +149,14 @@ func (s *gathererSuite) TestRetryLoki(c *C) {
 	}))
 	defer server.Close()
 
+	logTarget := &plan.LogTarget{
+		Name:     "tgt1",
+		Location: server.URL,
+		Services: []string{"all"},
+	}
+
 	g, err := newLogGathererInternal(
-		&plan.LogTarget{
-			Name:     "tgt1",
-			Location: server.URL,
-		},
+		logTarget,
 		&logGathererOptions{
 			bufferTimeout:      1 * time.Millisecond,
 			maxBufferedEntries: 5,
@@ -166,6 +170,14 @@ func (s *gathererSuite) TestRetryLoki(c *C) {
 	c.Assert(err, IsNil)
 
 	testSvc := newTestService("svc1")
+	g.PlanChanged(&plan.Plan{
+		Services: map[string]*plan.Service{
+			"svc1": testSvc.config,
+		},
+		LogTargets: map[string]*plan.LogTarget{
+			"tgt1": logTarget,
+		},
+	}, nil)
 	g.ServiceStarted(testSvc.config, testSvc.ringBuffer)
 
 	reqReceived := make(chan struct{})
@@ -218,6 +230,106 @@ func (s *gathererSuite) TestRetryLoki(c *C) {
 	}
 }
 
+// Test to catch race conditions in gatherer
+func (s *gathererSuite) TestConcurrency(c *C) {
+	target := &plan.LogTarget{
+		Name:     "tgt1",
+		Type:     plan.LokiTarget,
+		Services: []string{"all"},
+		Labels:   map[string]string{"foo": "bar-$SECRET-$SECRET2", "baz": "foo"},
+	}
+
+	g, err := newLogGathererInternal(target, &logGathererOptions{
+		maxBufferedEntries: 2,
+	})
+	c.Assert(err, IsNil)
+
+	svc1 := newTestService("svc1")
+	svc2 := newTestService("svc2")
+	fakeEnv := map[string]string{
+		"SECRET":  "pie",
+		"SECRET2": "pizza",
+	}
+	svc1.config.Environment = fakeEnv
+	svc2.config.Environment = fakeEnv
+
+	buffers := map[string]*servicelog.RingBuffer{
+		svc1.name: svc1.ringBuffer,
+		svc2.name: svc2.ringBuffer,
+	}
+
+	// Run a bunch of operations concurrently
+	doConcurrently := func(ops ...func()) {
+		wg := sync.WaitGroup{}
+		wg.Add(len(ops))
+		for _, f := range ops {
+			go func(f func()) {
+				defer wg.Done()
+				f()
+			}(f)
+		}
+		wg.Wait()
+	}
+
+	doConcurrently(
+		// Change plan
+		func() {
+			g.PlanChanged(&plan.Plan{
+				Services: map[string]*plan.Service{
+					svc1.name: svc1.config,
+				},
+				LogTargets: map[string]*plan.LogTarget{
+					target.Name: target,
+				},
+			}, buffers)
+		},
+		// Start new service
+		func() { g.ServiceStarted(svc1.config, svc1.ringBuffer) },
+		// Write some logs
+		func() {
+			svc1.writeLog("hello")
+			svc1.writeLog("goodbye")
+		},
+	)
+
+	doConcurrently(
+		// Write some more logs
+		func() {
+			svc1.writeLog("hello again")
+			svc1.writeLog("goodbye again")
+		},
+		// Simulate a service restart
+		func() { g.ServiceStarted(svc1.config, svc1.ringBuffer) },
+	)
+
+	doConcurrently(
+		// Change plan
+		func() {
+			g.PlanChanged(&plan.Plan{
+				Services: map[string]*plan.Service{
+					svc2.name: svc2.config,
+				},
+				LogTargets: map[string]*plan.LogTarget{
+					target.Name: target,
+				},
+			}, buffers)
+		},
+		// Start new service
+		func() { g.ServiceStarted(svc2.config, svc2.ringBuffer) },
+		// Write some logs
+		func() {
+			svc2.writeLog("hello")
+			go svc2.writeLog("goodbye")
+		},
+	)
+
+	err = svc1.stop()
+	c.Assert(err, IsNil)
+	err = svc2.stop()
+	c.Assert(err, IsNil)
+	g.Stop()
+}
+
 func checkLogs(c *C, received []servicelog.Entry, expected []string) {
 	c.Assert(received, HasLen, len(expected))
 	for i, entry := range received {
@@ -230,6 +342,10 @@ type testClient struct {
 	bufferSize int
 	buffered   []servicelog.Entry
 	sendCh     chan []servicelog.Entry
+}
+
+func (c *testClient) SetLabels(serviceName string, labels map[string]string) {
+	// no-op
 }
 
 func (c *testClient) Add(entry servicelog.Entry) error {
