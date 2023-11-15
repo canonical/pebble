@@ -1,5 +1,7 @@
 # The Pebble service manager
 
+[![pebble](https://snapcraft.io/pebble/badge.svg)](https://snapcraft.io/pebble)
+
 _Take control of your internal daemons!_
 
 **Pebble** helps you to orchestrate a set of local service processes as an organized set.
