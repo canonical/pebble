@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime"
 	"mime/multipart"
 	"net/textproto"
 	"net/url"
@@ -510,5 +511,96 @@ func (client *Client) Push(opts *PushOptions) error {
 		}
 	}
 
+	return nil
+}
+
+type PullOptions struct {
+	// Path indicates the absolute path of the file in the remote system
+	// (required).
+	Path string
+
+	// Target is the destination io.Writer that will receive the data (required).
+	// During a call to Pull, Target may be written to even if an error is returned.
+	Target io.Writer
+}
+
+// Pull retrieves a file from the remote system.
+func (client *Client) Pull(opts *PullOptions) error {
+	resp, err := client.Requester().Do(context.Background(), &RequestOptions{
+		Type:   RawRequest,
+		Method: "GET",
+		Path:   "/v1/files",
+		Query: map[string][]string{
+			"action": {"read"},
+			"path":   {opts.Path},
+		},
+		Headers: map[string]string{
+			"Accept": "multipart/form-data",
+		},
+	})
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	// Obtain Content-Type to check for a multipart payload and parse its value
+	// in order to obtain the multipart boundary.
+	mediaType, params, err := mime.ParseMediaType(resp.Headers.Get("Content-Type"))
+	if err != nil {
+		return fmt.Errorf("cannot parse Content-Type: %w", err)
+	}
+	if mediaType != "multipart/form-data" {
+		// Not an error response after all.
+		return fmt.Errorf("expected a multipart response, got %q", mediaType)
+	}
+
+	mr := multipart.NewReader(resp.Body, params["boundary"])
+	filesPart, err := mr.NextPart()
+	if err != nil {
+		return fmt.Errorf("cannot decode multipart payload: %w", err)
+	}
+	defer filesPart.Close()
+
+	if filesPart.FormName() != "files" {
+		return fmt.Errorf(`expected first field name to be "files", got %q`, filesPart.FormName())
+	}
+	if _, err := io.Copy(opts.Target, filesPart); err != nil {
+		return fmt.Errorf("cannot write to target: %w", err)
+	}
+
+	responsePart, err := mr.NextPart()
+	if err != nil {
+		return fmt.Errorf("cannot decode multipart payload: %w", err)
+	}
+	defer responsePart.Close()
+	if responsePart.FormName() != "response" {
+		return fmt.Errorf(`expected second field name to be "response", got %q`, responsePart.FormName())
+	}
+
+	// Process response metadata (see defaultRequester.Do)
+	var multipartResp response
+	if err := decodeInto(responsePart, &multipartResp); err != nil {
+		return err
+	}
+	if err := multipartResp.err(); err != nil {
+		return err
+	}
+	if multipartResp.Type != "sync" {
+		return fmt.Errorf("expected sync response, got %q", multipartResp.Type)
+	}
+
+	requestResponse := &RequestResponse{Result: multipartResp.Result}
+
+	// Decode response result.
+	var fr []fileResult
+	if err := requestResponse.DecodeResult(&fr); err != nil {
+		return fmt.Errorf("cannot unmarshal result: %w", err)
+	}
+	if len(fr) != 1 {
+		return fmt.Errorf("expected exactly one result from API, got %d", len(fr))
+	}
+	if fr[0].Error != nil {
+		return fr[0].Error
+	}
 	return nil
 }

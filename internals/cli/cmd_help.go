@@ -192,7 +192,7 @@ var HelpCategories = []HelpCategory{{
 }, {
 	Label:       "Files",
 	Description: "work with files and execute commands",
-	Commands:    []string{"push", "ls", "mkdir", "rm", "exec"},
+	Commands:    []string{"push", "pull", "ls", "mkdir", "rm", "exec"},
 }, {
 	Label:       "Changes",
 	Description: "manage changes and their tasks",
