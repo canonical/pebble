@@ -401,7 +401,7 @@ func (client *Client) Pull(opts *PullOptions) error {
 
 	// Obtain Content-Type to check for a multipart payload and parse its value
 	// in order to obtain the multipart boundary.
-	mediaType, params, err := mime.ParseMediaType(resp.Header.Get("Content-Type"))
+	mediaType, params, err := mime.ParseMediaType(resp.Headers.Get("Content-Type"))
 	if err != nil {
 		return fmt.Errorf("cannot parse Content-Type: %w", err)
 	}
