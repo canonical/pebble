@@ -29,10 +29,10 @@ const (
 	// defaultNoticeExpireAfter is the default expiry time for notices.
 	defaultNoticeExpireAfter = 7 * 24 * time.Hour
 
-	// defaultNoticeRecipientUserID is the UID of the default user with whom
-	// notices will be associated. A UID of -1 means the notice should be
-	// readable by any user.
-	defaultNoticeRecipientUserID = -1
+	// defaultNoticeUserID is the UID of the default user with whom notices
+	// will be associated. A UID of -1 means the notice should be readable
+	// by any user.
+	defaultNoticeUserID = -1
 )
 
 // Notice represents an aggregated notice. The combination of type and key is unique.
@@ -57,12 +57,6 @@ type Notice struct {
 	key string
 
 	// The UID of the intended recipient of this notice.
-	//
-	// A value of -1 indicates that the notice may be read by any user. A
-	// value of 0 indicates the notice may only be read by the root user.
-	// For all other values >0, the notice may be read by the user with the
-	// matching UID, as well as by root. If userID is nil, the UserID method
-	// returns the default notice recipient UID.
 	//
 	// Once a notice with a particular key/value combination is created, the
 	// user ID associated with that notice cannot be changed. Issuing a notice
@@ -107,7 +101,7 @@ func (n *Notice) String() string {
 
 func (n *Notice) UserID() int {
 	if n.userID == nil {
-		return defaultNoticeRecipientUserID
+		return defaultNoticeUserID
 	}
 	return *n.userID
 }
@@ -214,7 +208,7 @@ func (t NoticeType) Valid() bool {
 type AddNoticeOptions struct {
 	// UserID is the UID of the intended recipient of the notice. If the UserID
 	// is not explicitly specified here, the notice will be accessible as if
-	// its userID were defaultNoticeRecipientUserID.
+	// its userID were defaultNoticeUserID.
 	UserID *int
 
 	// Data is the optional key-value data for this occurrence.
@@ -226,13 +220,6 @@ type AddNoticeOptions struct {
 
 	// Time, if set, overrides time.Now() as the notice occurrence time.
 	Time time.Time
-}
-
-func optionIntToString(maybeInt *int) string {
-	if maybeInt == nil {
-		return `"null"`
-	}
-	return fmt.Sprintf("%d", *maybeInt)
 }
 
 // AddNotice records an occurrence of a notice with the specified type and key
@@ -274,7 +261,7 @@ func (s *State) AddNotice(noticeType NoticeType, key string, options *AddNoticeO
 	} else {
 		// Additional occurrence, update existing notice
 		if !userIDsEqual(options.UserID, notice.userID) {
-			return "", fmt.Errorf("existing notice user ID %s does not match that of new notice with the same type and key: %s", optionIntToString(notice.userID), optionIntToString(options.UserID))
+			return "", fmt.Errorf("user ID %s does not match existing notice's (%s)", intPtrToString(options.UserID), intPtrToString(notice.userID))
 		}
 		notice.occurrences++
 		if options.RepeatAfter == 0 || now.After(notice.lastRepeated.Add(options.RepeatAfter)) {
@@ -302,7 +289,7 @@ func validateNotice(noticeType NoticeType, key string, options *AddNoticeOptions
 		return fmt.Errorf("internal error: attempted to add %s notice with invalid key %q", noticeType, key)
 	}
 	if err := ValidateUserID(options.UserID); err != nil {
-		return fmt.Errorf("internal error: attempted to add notice with invalid user ID %s", optionIntToString(options.UserID))
+		return fmt.Errorf("internal error: attempted to add notice with invalid user ID %s", intPtrToString(options.UserID))
 	}
 	return nil
 }
@@ -325,6 +312,13 @@ func userIDsEqual(userID1 *int, userID2 *int) bool {
 		return false
 	}
 	return *userID1 == *userID2
+}
+
+func intPtrToString(intPtr *int) string {
+	if intPtr == nil {
+		return "<nil>"
+	}
+	return strconv.Itoa(*intPtr)
 }
 
 type noticeKey struct {

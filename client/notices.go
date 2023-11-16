@@ -35,8 +35,8 @@ type NotifyOptions struct {
 	Key string
 
 	// UserID is the UID of the notice's intended recipient. A UID of -1 means
-	// the notice may be received by any user. If nil, uses the default notice
-	// recipient UID.
+	// the notice may be received by any user (this is also the default
+	// behavior if UserID is nil).
 	UserID *int
 
 	// Data are optional key=value pairs for this occurrence of the notice.
@@ -107,7 +107,7 @@ type Notice struct {
 	ID            string            `json:"id"`
 	Type          NoticeType        `json:"type"`
 	Key           string            `json:"key"`
-	UserID        *int              `json:"user-id"`
+	UserID        *int              `json:"user-id,omitempty"`
 	FirstOccurred time.Time         `json:"first-occurred"`
 	LastOccurred  time.Time         `json:"last-occurred"`
 	LastRepeated  time.Time         `json:"last-repeated"`
@@ -193,13 +193,6 @@ func makeNoticesQuery(opts *NoticesOptions) url.Values {
 	if opts == nil {
 		return query
 	}
-	if len(opts.UserIDs) > 0 {
-		userIDStrs := make([]string, 0, len(opts.UserIDs))
-		for _, u := range opts.UserIDs {
-			userIDStrs = append(userIDStrs, strconv.FormatInt(int64(u), 10))
-		}
-		query["user-ids"] = userIDStrs
-	}
 	if len(opts.Types) > 0 {
 		typeStrs := make([]string, 0, len(opts.Types))
 		for _, t := range opts.Types {
@@ -209,6 +202,13 @@ func makeNoticesQuery(opts *NoticesOptions) url.Values {
 	}
 	if len(opts.Keys) > 0 {
 		query["keys"] = opts.Keys
+	}
+	if len(opts.UserIDs) > 0 {
+		userIDStrs := make([]string, 0, len(opts.UserIDs))
+		for _, u := range opts.UserIDs {
+			userIDStrs = append(userIDStrs, strconv.Itoa(u))
+		}
+		query["user-ids"] = userIDStrs
 	}
 	if !opts.After.IsZero() {
 		query.Set("after", opts.After.Format(time.RFC3339Nano))

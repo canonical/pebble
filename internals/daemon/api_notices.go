@@ -51,7 +51,7 @@ func v1GetNotices(c *Command, r *http.Request, _ *UserState) Response {
 	reqUid := uidFromRequest(r)
 
 	userIDs, err := sanitizeUserIDsFilter(reqUid, query["user-ids"])
-	if err == errUserIDFilterNoNotices {
+	if errors.Is(err, errUserIDFilterNoNotices) {
 		// User IDs filter precluded any possible notices, so return empty list.
 		return SyncResponse([]*state.Notice{})
 	} else if err != nil {
@@ -141,7 +141,7 @@ func sanitizeUserIDsFilter(reqUid int, queryUserIDs []string) ([]int, error) {
 		}
 		userID := int(uid)
 		if err := state.ValidateUserID(&userID); err != nil {
-			return nil, fmt.Errorf(`invalid user ID "%d": %v`, userID, err)
+			return nil, fmt.Errorf("invalid user ID %d: %v", userID, err)
 		}
 		userIDs = append(userIDs, userID)
 	}

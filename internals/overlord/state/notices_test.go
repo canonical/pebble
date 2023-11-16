@@ -574,7 +574,7 @@ func (s *noticesSuite) TestAddNoticeMismatchedUserID(c *C) {
 	_, err := st.AddNotice(state.WarningNotice, "u-to-s", &state.AddNoticeOptions{
 		UserID: &thousand,
 	})
-	c.Assert(err, ErrorMatches, `existing notice user ID "null" does not match that of new notice with the same type and key: 1000`)
+	c.Assert(err, ErrorMatches, `user ID 1000 does not match existing notice's \(<nil>\)`)
 
 	// Test that specified to unspecified user ID results in error
 	addNotice(c, st, state.WarningNotice, "s-to-u", &state.AddNoticeOptions{
@@ -587,7 +587,7 @@ func (s *noticesSuite) TestAddNoticeMismatchedUserID(c *C) {
 	})
 	time.Sleep(time.Microsecond)
 	_, err = st.AddNotice(state.WarningNotice, "s-to-u", nil)
-	c.Assert(err, ErrorMatches, `existing notice user ID 1000 does not match that of new notice with the same type and key: "null"`)
+	c.Assert(err, ErrorMatches, `user ID <nil> does not match existing notice's \(1000\)`)
 
 	oldUid := 123
 	identicalUid := 123
@@ -604,7 +604,7 @@ func (s *noticesSuite) TestAddNoticeMismatchedUserID(c *C) {
 	_, err = st.AddNotice(state.WarningNotice, "s-to-s", &state.AddNoticeOptions{
 		UserID: &newUid,
 	})
-	c.Assert(err, ErrorMatches, `existing notice user ID 123 does not match that of new notice with the same type and key: 456`)
+	c.Assert(err, ErrorMatches, `user ID 456 does not match existing notice's \(123\)`)
 }
 
 // noticeToMap converts a Notice to a map using a JSON marshal-unmarshal round trip.
