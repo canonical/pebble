@@ -70,7 +70,7 @@ func (cmd *cmdNotices) Execute(args []string) error {
 	options := client.NoticesOptions{
 		Types: cmd.Type,
 		Keys:  cmd.Key,
-		After: state.LastOkayed,
+		After: state.NoticesLastOkayed,
 	}
 
 	var notices []*client.Notice
@@ -113,7 +113,7 @@ func (cmd *cmdNotices) Execute(args []string) error {
 			notice.Occurrences)
 	}
 
-	state.LastListed = notices[len(notices)-1].LastRepeated
+	state.NoticesLastListed = notices[len(notices)-1].LastRepeated
 	err = saveCLIState(state)
 	if err != nil {
 		return fmt.Errorf("cannot save CLI state: %w", err)

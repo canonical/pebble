@@ -24,8 +24,8 @@ import (
 
 func (s *PebbleSuite) TestOkay(c *C) {
 	s.writeCLIState(c, map[string]any{
-		"last-listed": time.Date(2023, 9, 6, 15, 6, 0, 0, time.UTC),
-		"last-okayed": time.Time{},
+		"notices-last-listed": time.Date(2023, 9, 6, 15, 6, 0, 0, time.UTC),
+		"notices-last-okayed": time.Time{},
 	})
 
 	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"okay"})
@@ -36,8 +36,8 @@ func (s *PebbleSuite) TestOkay(c *C) {
 
 	cliState := s.readCLIState(c)
 	c.Check(cliState, DeepEquals, map[string]any{
-		"last-listed": "2023-09-06T15:06:00Z",
-		"last-okayed": "2023-09-06T15:06:00Z",
+		"notices-last-listed": "2023-09-06T15:06:00Z",
+		"notices-last-okayed": "2023-09-06T15:06:00Z",
 	})
 }
 

@@ -369,8 +369,8 @@ func getEnvPaths() (pebbleDir string, socketPath string) {
 }
 
 type cliState struct {
-	LastListed time.Time `json:"last-listed"`
-	LastOkayed time.Time `json:"last-okayed"`
+	NoticesLastListed time.Time `json:"notices-last-listed"`
+	NoticesLastOkayed time.Time `json:"notices-last-okayed"`
 }
 
 type fullCLIState struct {

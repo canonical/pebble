@@ -69,8 +69,8 @@ ID   Type     Key    First                 Repeated              Occurences
 
 	cliState := s.readCLIState(c)
 	c.Check(cliState, DeepEquals, map[string]any{
-		"last-listed": "2023-09-06T18:18:00Z",
-		"last-okayed": "0001-01-01T00:00:00Z",
+		"notices-last-listed": "2023-09-06T18:18:00Z",
+		"notices-last-okayed": "0001-01-01T00:00:00Z",
 	})
 }
 
@@ -110,8 +110,8 @@ ID   Type    Key    First                 Repeated              Occurences
 
 	cliState := s.readCLIState(c)
 	c.Check(cliState, DeepEquals, map[string]any{
-		"last-listed": "2023-09-05T18:18:00Z",
-		"last-okayed": "0001-01-01T00:00:00Z",
+		"notices-last-listed": "2023-09-05T18:18:00Z",
+		"notices-last-okayed": "0001-01-01T00:00:00Z",
 	})
 }
 
@@ -120,7 +120,7 @@ func (s *PebbleSuite) TestNoticesAfter(c *C) {
 		c.Check(r.Method, Equals, "GET")
 		c.Check(r.URL.Path, Equals, "/v1/notices")
 		c.Check(r.URL.Query(), DeepEquals, url.Values{
-			"after": {"2023-08-04T01:02:03Z"}, // from "last-okayed" in notices.json
+			"after": {"2023-08-04T01:02:03Z"}, // from "notices-last-okayed" in notices.json
 		})
 
 		fmt.Fprint(w, `{
@@ -139,8 +139,8 @@ func (s *PebbleSuite) TestNoticesAfter(c *C) {
 	})
 
 	s.writeCLIState(c, map[string]any{
-		"last-listed": time.Date(2023, 9, 6, 15, 6, 0, 0, time.UTC),
-		"last-okayed": time.Date(2023, 8, 4, 1, 2, 3, 0, time.UTC),
+		"notices-last-listed": time.Date(2023, 9, 6, 15, 6, 0, 0, time.UTC),
+		"notices-last-okayed": time.Date(2023, 8, 4, 1, 2, 3, 0, time.UTC),
 	})
 
 	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"notices", "--abs-time"})
@@ -154,8 +154,8 @@ ID   Type    Key    First                 Repeated              Occurences
 
 	cliState := s.readCLIState(c)
 	c.Check(cliState, DeepEquals, map[string]any{
-		"last-listed": "2023-09-07T18:18:00Z",
-		"last-okayed": "2023-08-04T01:02:03Z",
+		"notices-last-listed": "2023-09-07T18:18:00Z",
+		"notices-last-okayed": "2023-08-04T01:02:03Z",
 	})
 }
 
@@ -214,8 +214,8 @@ ID   Type    Key    First                 Repeated              Occurences
 
 	cliState := s.readCLIState(c)
 	c.Check(cliState, DeepEquals, map[string]any{
-		"last-listed": "2023-09-05T18:18:00Z",
-		"last-okayed": "0001-01-01T00:00:00Z",
+		"notices-last-listed": "2023-09-05T18:18:00Z",
+		"notices-last-okayed": "0001-01-01T00:00:00Z",
 	})
 }
 

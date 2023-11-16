@@ -61,9 +61,9 @@ func (cmd *cmdOkay) Execute(args []string) error {
 		if err != nil {
 			return fmt.Errorf("cannot load CLI state: %w", err)
 		}
-		if !state.LastListed.IsZero() {
+		if !state.NoticesLastListed.IsZero() {
 			okayedNotices = true
-			state.LastOkayed = state.LastListed
+			state.NoticesLastOkayed = state.NoticesLastListed
 			err = saveCLIState(state)
 			if err != nil {
 				return fmt.Errorf("cannot save CLI state: %w", err)
