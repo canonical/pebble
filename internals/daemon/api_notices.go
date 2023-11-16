@@ -53,6 +53,11 @@ func v1GetNotices(c *Command, r *http.Request, _ *UserState) Response {
 		}
 		types = append(types, noticeType)
 	}
+	if len(types) == 0 && len(typeStrs) > 0 {
+		// Only requested invalid notice types. Return no notices, rather than
+		// all, the latter of which would occur if the types filter was empty.
+		return SyncResponse([]*state.Notice{})
+	}
 
 	keys := strutil.MultiCommaSeparatedList(query["keys"])
 
