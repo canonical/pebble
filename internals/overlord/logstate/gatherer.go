@@ -17,6 +17,7 @@ package logstate
 import (
 	"context"
 	"fmt"
+	"os"
 	"time"
 
 	"gopkg.in/tomb.v2"
@@ -70,6 +71,9 @@ type logGatherer struct {
 	// ensure the client is not blocking subsequent teardown steps.
 	clientCancel context.CancelFunc
 
+	// Channel used to notify the main loop to set the client's labels
+	setLabels chan svcWithLabels
+
 	pullers *pullerGroup
 	// All pullers send logs on this channel, received by main loop
 	entryCh chan servicelog.Entry
@@ -78,9 +82,10 @@ type logGatherer struct {
 // logGathererOptions allows overriding the newLogClient method and time values
 // in testing.
 type logGathererOptions struct {
-	bufferTimeout      time.Duration
-	maxBufferedEntries int
-	timeoutFinalFlush  time.Duration
+	bufferTimeout       time.Duration
+	maxBufferedEntries  int
+	timeoutCurrentFlush time.Duration
+	timeoutFinalFlush   time.Duration
 	// method to get a new client
 	newClient func(*plan.LogTarget) (logClient, error)
 }
@@ -104,6 +109,7 @@ func newLogGathererInternal(target *plan.LogTarget, options *logGathererOptions)
 
 		targetName: target.Name,
 		client:     client,
+		setLabels:  make(chan svcWithLabels),
 		entryCh:    make(chan servicelog.Entry),
 		pullers:    newPullerGroup(target.Name),
 	}
@@ -121,6 +127,9 @@ func fillDefaultOptions(options *logGathererOptions) *logGathererOptions {
 	if options.maxBufferedEntries == 0 {
 		options.maxBufferedEntries = maxBufferedEntries
 	}
+	if options.timeoutCurrentFlush == 0 {
+		options.timeoutCurrentFlush = timeoutCurrentFlush
+	}
 	if options.timeoutFinalFlush == 0 {
 		options.timeoutFinalFlush = timeoutFinalFlush
 	}
@@ -133,35 +142,46 @@ func fillDefaultOptions(options *logGathererOptions) *logGathererOptions {
 // PlanChanged is called by the LogManager when the plan is changed, if this
 // gatherer's target exists in the new plan.
 func (g *logGatherer) PlanChanged(pl *plan.Plan, buffers map[string]*servicelog.RingBuffer) {
+	target := pl.LogTargets[g.targetName]
+
 	// Remove old pullers
 	for _, svcName := range g.pullers.Services() {
 		svc, svcExists := pl.Services[svcName]
-		if !svcExists {
-			g.pullers.Remove(svcName)
+		if svcExists && svc.LogsTo(target) {
+			// We're still collecting logs from this service, so don't remove it.
 			continue
 		}
 
-		tgt := pl.LogTargets[g.targetName]
-		if !svc.LogsTo(tgt) {
-			g.pullers.Remove(svcName)
+		// Service no longer forwarding to this log target (or it was removed from
+		// the plan). Remove it from the gatherer.
+		g.pullers.Remove(svcName)
+		select {
+		case g.setLabels <- svcWithLabels{svcName, nil}:
+		case <-g.tomb.Dying():
+			return
 		}
 	}
 
 	// Add new pullers
 	for _, service := range pl.Services {
-		target := pl.LogTargets[g.targetName]
 		if !service.LogsTo(target) {
 			continue
 		}
 
-		buffer, bufferExists := buffers[service.Name]
-		if !bufferExists {
-			// We don't yet have a reference to the service's ring buffer
-			// Need to wait until ServiceStarted
-			continue
+		labels := evaluateLabels(target.Labels, service.Environment)
+		select {
+		case g.setLabels <- svcWithLabels{service.Name, labels}:
+		case <-g.tomb.Dying():
+			return
 		}
 
-		g.pullers.Add(service.Name, buffer, g.entryCh)
+		// If the service was just added, it may not be started yet. In this case,
+		// we need to wait until the buffer is created, and then we can update the
+		// pullers inside ServiceStarted.
+		buffer, svcStarted := buffers[service.Name]
+		if svcStarted {
+			g.pullers.Add(service.Name, buffer, g.entryCh)
+		}
 	}
 }
 
@@ -169,6 +189,21 @@ func (g *logGatherer) PlanChanged(pl *plan.Plan, buffers map[string]*servicelog.
 // logs to this gatherer's target.
 func (g *logGatherer) ServiceStarted(service *plan.Service, buffer *servicelog.RingBuffer) {
 	g.pullers.Add(service.Name, buffer, g.entryCh)
+}
+
+// evaluateLabels interprets the labels defined in the plan, substituting any
+// $env_vars with the corresponding value in the service's environment.
+func evaluateLabels(rawLabels, env map[string]string) map[string]string {
+	substitute := func(k string) string {
+		// Undefined variables default to "", just like Bash
+		return env[k]
+	}
+
+	labels := make(map[string]string, len(rawLabels))
+	for key, rawLabel := range rawLabels {
+		labels[key] = os.Expand(rawLabel, substitute)
+	}
+	return labels
 }
 
 // The main control loop for the logGatherer. loop receives logs from the
@@ -198,6 +233,12 @@ mainLoop:
 
 		case <-flushTimer.Expired():
 			flushClient(g.clientCtx)
+
+		case args := <-g.setLabels:
+			// Before we change the labels, flush any logs currently in the buffer,
+			// so that these logs are sent with the correct (old) labels.
+			flushClient(g.clientCtx)
+			g.client.SetLabels(args.service, args.labels)
 
 		case entry := <-g.entryCh:
 			err := g.client.Add(entry)
@@ -236,7 +277,7 @@ mainLoop:
 //   - Flush out any final logs buffered in the client.
 func (g *logGatherer) Stop() {
 	// Wait up to timeoutCurrentFlush for the current flush to complete (if any)
-	time.AfterFunc(timeoutCurrentFlush, g.clientCancel)
+	time.AfterFunc(g.timeoutCurrentFlush, g.clientCancel)
 
 	// Wait up to timeoutPullers for the pullers to pull the final logs from the
 	// iterator and send to the main loop.
@@ -262,6 +303,11 @@ func (g *logGatherer) Stop() {
 	if err != nil {
 		logger.Noticef("Cannot shut down gatherer: %v", err)
 	}
+}
+
+type svcWithLabels struct {
+	service string
+	labels  map[string]string
 }
 
 // timer wraps time.Timer and provides a better API.
@@ -312,6 +358,10 @@ type logClient interface {
 
 	// Flush sends buffered logs (if any) to the remote target.
 	Flush(context.Context) error
+
+	// SetLabels sets the log labels for the given service, or releases
+	// previously allocated label resources if the labels parameter is nil.
+	SetLabels(serviceName string, labels map[string]string)
 }
 
 func newLogClient(target *plan.LogTarget) (logClient, error) {

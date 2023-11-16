@@ -405,7 +405,7 @@ $ pebble run --verbose
 ...
 ```
 
-#### Log forwarding
+### Log forwarding
 
 Pebble supports forwarding its services' logs to a remote Loki server. In the `log-targets` section of the plan, you can specify destinations for log forwarding, for example:
 ```yaml
@@ -421,6 +421,8 @@ log-targets:
         location: http://my.loki.server.com/loki/api/v1/push
         services: [svc1, svc2]
 ```
+
+#### Specifying services
 
 For each log target, use the `services` key to specify a list of services to collect logs from. In the above example, the `production-logs` target will collect logs from `svc1` and `svc2`.
 
@@ -452,6 +454,38 @@ my-target:
     override: merge
 ```
 would remove all services and then add `svc1`, so `my-target` would receive logs from only `svc1`.
+
+#### Labels
+
+In the `labels` section, you can specify custom labels to be added to any outgoing logs. These labels may contain `$ENVIRONMENT_VARIABLES` - these will be interpreted in the environment of the corresponding service. Pebble may also add its own default labels (depending on the protocol). For example, given the following plan:
+```yaml
+services:
+  svc1:
+    environment:
+      OWNER: 'alice'
+  svc2:
+    environment:
+      OWNER: 'bob'
+
+log-targets:
+  tgt1:
+    type: loki
+    labels:
+      product: 'juju'
+      owner: 'user-$OWNER'
+```
+the logs from `svc1` will be sent with the following labels:
+```yaml
+product: juju
+owner: user-alice     # env var $OWNER substituted
+pebble_service: svc1  # default label for Loki
+```
+and for svc2, the labels will be
+```yaml
+product: juju
+owner: user-bob       # env var $OWNER substituted
+pebble_service: svc2  # default label for Loki
+```
 
 
 ### Notices
@@ -809,8 +843,10 @@ log-targets:
     override: merge | replace
 
     # (Required) The type of log target, which determines the format in
-    # which logs will be sent. Currently, the only supported type is 'loki',
-    # but more protocols may be added in the future.
+    # which logs will be sent. The supported types are:
+    #
+    # - loki: Use the Grafana Loki protocol. A "pebble_service" label is
+    #   added automatically, with the name of the Pebble service as its value.
     type: loki
 
     # (Required) The URL of the remote log target.
@@ -825,6 +861,12 @@ log-targets:
     # service name with a minus (e.g. '-svc1') to remove a previously added
     # service. '-all' will remove all services.
     services: [<service names>]
+
+    # (Optional) A list of key/value pairs defining labels which should be set
+    # on the outgoing logs. The label values may contain $ENV_VARS, which will
+    # be substituted using the environment for the corresponding service.
+    labels:
+      <label name>: <label value>
 ```
 
 ## API and clients

@@ -488,11 +488,12 @@ func (c *ExecCheck) Merge(other *ExecCheck) {
 
 // LogTarget specifies a remote server to forward logs to.
 type LogTarget struct {
-	Name     string        `yaml:"-"`
-	Type     LogTargetType `yaml:"type"`
-	Location string        `yaml:"location"`
-	Services []string      `yaml:"services"`
-	Override Override      `yaml:"override,omitempty"`
+	Name     string            `yaml:"-"`
+	Type     LogTargetType     `yaml:"type"`
+	Location string            `yaml:"location"`
+	Services []string          `yaml:"services"`
+	Override Override          `yaml:"override,omitempty"`
+	Labels   map[string]string `yaml:"labels,omitempty"`
 }
 
 // LogTargetType defines the protocol to use to forward logs.
@@ -508,6 +509,12 @@ const (
 func (t *LogTarget) Copy() *LogTarget {
 	copied := *t
 	copied.Services = append([]string(nil), t.Services...)
+	if t.Labels != nil {
+		copied.Labels = make(map[string]string)
+		for k, v := range t.Labels {
+			copied.Labels[k] = v
+		}
+	}
 	return &copied
 }
 
@@ -520,6 +527,12 @@ func (t *LogTarget) Merge(other *LogTarget) {
 		t.Location = other.Location
 	}
 	t.Services = append(t.Services, other.Services...)
+	for k, v := range other.Labels {
+		if t.Labels == nil {
+			t.Labels = make(map[string]string)
+		}
+		t.Labels[k] = v
+	}
 }
 
 // FormatError is the error returned when a layer has a format error, such as
@@ -967,6 +980,14 @@ func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 		if target == nil {
 			return nil, &FormatError{
 				Message: fmt.Sprintf("log target object cannot be null for log target %q", name),
+			}
+		}
+		for labelName := range target.Labels {
+			// 'pebble_*' labels are reserved
+			if strings.HasPrefix(labelName, "pebble_") {
+				return nil, &FormatError{
+					Message: fmt.Sprintf(`log target %q: label %q uses reserved prefix "pebble_"`, name, labelName),
+				}
 			}
 		}
 		target.Name = name
