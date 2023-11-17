@@ -130,7 +130,8 @@ func (s *daemonSuite) TestExternalManager(c *C) {
 		OverlordExtension: &fakeExtension{},
 	})
 	c.Assert(err, IsNil)
-
+	err = d.overlord.StartUp()
+	c.Assert(err, IsNil)
 	err = d.overlord.StateEngine().Ensure()
 	c.Assert(err, IsNil)
 	extension, ok := d.overlord.Extension().(*fakeExtension)
@@ -185,7 +186,7 @@ func (s *daemonSuite) TestAddCommand(c *C) {
 
 	d := s.newDaemon(c)
 	d.Init()
-	d.Start()
+	c.Assert(d.Start(), IsNil)
 	defer d.Stop(nil)
 
 	result := d.router.Get(endpoint).GetHandler()
@@ -197,7 +198,7 @@ func (s *daemonSuite) TestExplicitPaths(c *C) {
 
 	d := s.newDaemon(c)
 	d.Init()
-	d.Start()
+	c.Assert(d.Start(), IsNil)
 	defer d.Stop(nil)
 
 	info, err := os.Stat(s.socketPath)
@@ -553,7 +554,7 @@ func (s *daemonSuite) TestStartStop(c *C) {
 	untrustedAccept := make(chan struct{})
 	d.untrustedListener = &witnessAcceptListener{Listener: l2, accept: untrustedAccept}
 
-	d.Start()
+	c.Assert(d.Start(), IsNil)
 
 	generalDone := make(chan struct{})
 	go func() {
@@ -594,7 +595,7 @@ func (s *daemonSuite) TestRestartWiring(c *C) {
 	untrustedAccept := make(chan struct{})
 	d.untrustedListener = &witnessAcceptListener{Listener: l, accept: untrustedAccept}
 
-	d.Start()
+	c.Assert(d.Start(), IsNil)
 	defer d.Stop(nil)
 
 	generalDone := make(chan struct{})
@@ -661,7 +662,7 @@ func (s *daemonSuite) TestGracefulStop(c *C) {
 	untrustedAccept := make(chan struct{})
 	d.untrustedListener = &witnessAcceptListener{Listener: untrustedL, accept: untrustedAccept}
 
-	d.Start()
+	c.Assert(d.Start(), IsNil)
 
 	generalAccepting := make(chan struct{})
 	go func() {
@@ -728,7 +729,7 @@ func (s *daemonSuite) TestRestartSystemWiring(c *C) {
 	untrustedAccept := make(chan struct{})
 	d.untrustedListener = &witnessAcceptListener{Listener: l, accept: untrustedAccept}
 
-	d.Start()
+	c.Assert(d.Start(), IsNil)
 	defer d.Stop(nil)
 
 	st := d.overlord.State()
@@ -875,7 +876,7 @@ func (s *daemonSuite) TestRestartShutdownWithSigtermInBetween(c *C) {
 	d := s.newDaemon(c)
 	makeDaemonListeners(c, d)
 
-	d.Start()
+	c.Assert(d.Start(), IsNil)
 	st := d.overlord.State()
 
 	st.Lock()
@@ -907,7 +908,7 @@ func (s *daemonSuite) TestRestartShutdown(c *C) {
 	d := s.newDaemon(c)
 	makeDaemonListeners(c, d)
 
-	d.Start()
+	c.Assert(d.Start(), IsNil)
 	st := d.overlord.State()
 
 	st.Lock()
@@ -954,7 +955,7 @@ func (s *daemonSuite) TestRestartExpectedRebootIsMissing(c *C) {
 	c.Check(err, IsNil)
 	c.Check(n, Equals, 1)
 
-	d.Start()
+	c.Assert(d.Start(), IsNil)
 
 	c.Check(s.notified, DeepEquals, []string{"READY=1"})
 
@@ -1030,11 +1031,11 @@ func (s *daemonSuite) TestRestartIntoSocketModeNoNewChanges(c *C) {
 	d := s.newDaemon(c)
 	makeDaemonListeners(c, d)
 
-	d.Start()
+	c.Assert(d.Start(), IsNil)
 
 	// pretend some ensure happened
 	for i := 0; i < 5; i++ {
-		d.overlord.StateEngine().Ensure()
+		c.Check(d.overlord.StateEngine().Ensure(), IsNil)
 		time.Sleep(5 * time.Millisecond)
 	}
 
@@ -1066,10 +1067,10 @@ func (s *daemonSuite) TestRestartIntoSocketModePendingChanges(c *C) {
 
 	st := d.overlord.State()
 
-	d.Start()
+	c.Assert(d.Start(), IsNil)
 	// pretend some ensure happened
 	for i := 0; i < 5; i++ {
-		d.overlord.StateEngine().Ensure()
+		c.Check(d.overlord.StateEngine().Ensure(), IsNil)
 		time.Sleep(5 * time.Millisecond)
 	}
 
@@ -1152,7 +1153,7 @@ func (s *daemonSuite) TestHTTPAPI(c *C) {
 	s.httpAddress = ":0" // Go will choose port (use listener.Addr() to find it)
 	d := s.newDaemon(c)
 	d.Init()
-	d.Start()
+	c.Assert(d.Start(), IsNil)
 	port := d.httpListener.Addr().(*net.TCPAddr).Port
 
 	request, err := http.NewRequest("GET", fmt.Sprintf("http://localhost:%d/v1/health", port), nil)
@@ -1195,7 +1196,7 @@ services:
 	d := s.newDaemon(c)
 	err := d.Init()
 	c.Assert(err, IsNil)
-	d.Start()
+	c.Assert(d.Start(), IsNil)
 
 	// Start the test service.
 	payload := bytes.NewBufferString(`{"action": "start", "services": ["test1"]}`)
