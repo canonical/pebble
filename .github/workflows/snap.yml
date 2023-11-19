@@ -19,12 +19,43 @@ env:
   DEFAULT_RISK: edge
 
 jobs:
-  snaps:
+  local-build:
     runs-on: ubuntu-latest
+    # PRS usually come from forks, which are not allowed to access repo secrets.
+    # So this job builds the snap locally, and not via LP.
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Checkout Pebble repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Build ${{ env.SNAP_NAME }} Snap
+        id: build-snap
+        uses: snapcore/action-build@v1.1.3
+
+      - uses: actions/upload-artifact@v3
+        if: failure()
+        with:
+          name: snapcraft-logs
+          path: |
+            ~/.cache/snapcraft/log/
+            ~/.local/state/snapcraft/log/
+            ${{ env.SNAP_NAME }}_*.txt
+
+      - name: Attach ${{ steps.build-snap.outputs.snap }} to GH workflow execution
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ steps.build-snap.outputs.snap }}
+          path: ${{ steps.build-snap.outputs.snap }}
+
+  remote-build:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
-        arch: [amd64, arm64, ppc64el, armhf, s390x]
+        arch: ["amd64","arm64","ppc64el","armhf","s390x"]
     steps:
       - name: Checkout Pebble repo
         uses: actions/checkout@v4
@@ -32,15 +63,12 @@ jobs:
           fetch-depth: 0
 
       - name: Set LP credentials for remote build
-        id: set-local-paths
         run: |
           lp_creds_path="$HOME/.local/share/snapcraft/provider/launchpad"
           mkdir -p $lp_creds_path
           echo '${{ secrets.LP_CREDENTIALS }}' > ${lp_creds_path}/credentials
           git config --global user.email "${{ secrets.PEBBLE_DEV_MAILING_LIST}}"
           git config --global user.name "pebble-dev"
-
-          echo "home=$HOME" >> $GITHUB_OUTPUT
 
       - name: Build ${{ env.SNAP_NAME }} Snap for ${{ matrix.arch }}
         id: build-snap
@@ -53,16 +81,42 @@ jobs:
         with:
           name: snapcraft-logs
           path: |
-            ${{ steps.set-local-paths.outputs.home }}/.cache/snapcraft/log/
-            ${{ steps.set-local-paths.outputs.home }}/.local/state/snapcraft/log/
+            ~/.cache/snapcraft/log/
+            ~/.local/state/snapcraft/log/
             ${{ env.SNAP_NAME }}_*.txt
 
-      - name: Install and test ${{ steps.build-snap.outputs.snap }}
-        # NOTE: this line can be adjusted if we start supporting multi-arch runners
-        if: ${{ matrix.arch	== 'amd64' }} 
+      - name: Attach ${{ steps.build-snap.outputs.snap }} to GH workflow execution
+        uses: actions/upload-artifact@v3
+        if: steps.build-snap.outcome == 'success'
+        with:
+          name: ${{ steps.build-snap.outputs.snap }}
+          path: ${{ steps.build-snap.outputs.snap }}
+
+  test:
+    runs-on: ubuntu-latest
+    needs: [local-build, remote-build]
+    env:
+      # Testing is only enabled on amd64. We can add arm64 once we have such runners.
+      TEST_ON: amd64
+    if: |
+      always() &&
+      (needs.local-build.result == 'success' || needs.local-build.result == 'skipped') &&
+      (needs.remote-build.result == 'success' || needs.remote-build.result == 'skipped')
+    steps:
+      - name: Download ${{ env.SNAP_NAME }} snap for ${{ env.TEST_ON }}
+        id: download-snap
+        uses: dawidd6/action-download-artifact@v2
+        with:
+          name: "${{ env.SNAP_NAME }}.*${{ env.TEST_ON }}.*snap"
+          name_is_regexp: true
+
+      - id: get-snap
+        run: echo "filename=$(find ${{ env.SNAP_NAME }}*${{ env.TEST_ON }}*snap/*)" >> $GITHUB_OUTPUT
+
+      - name: Install and test ${{ steps.get-snap.outputs.filename }}
         run: |
           set -ex
-          sudo snap install --dangerous --classic ${{ steps.build-snap.outputs.snap }}
+          sudo snap install --dangerous --classic ${{ steps.get-snap.outputs.filename }}
 
           # Make sure it is installed
           pebble version --client
@@ -70,25 +124,36 @@ jobs:
           # Run smoke test
           pebble enter --create-dirs exec echo Hello | grep Hello
 
-      - name: Attach ${{ steps.build-snap.outputs.snap }} to GH workflow execution
-        uses: actions/upload-artifact@v2
+  release:
+    runs-on: ubuntu-latest
+    needs: [test]
+    if: github.event_name == 'push'
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: ["amd64","arm64","ppc64el","armhf","s390x"]
+    steps:
+      - name: Download ${{ env.SNAP_NAME }} snap for ${{ matrix.arch }}
+        id: download-snap
+        uses: dawidd6/action-download-artifact@v2
         with:
-          name: ${{ steps.build-snap.outputs.snap }}
-          path: ${{ steps.build-snap.outputs.snap }}
+          name: "${{ env.SNAP_NAME }}.*${{ matrix.arch }}.*snap"
+          name_is_regexp: true
+      
+      - id: get-snap
+        run: echo "filename=$(find ${{ env.SNAP_NAME }}*${{ matrix.arch }}*snap/*)" >> $GITHUB_OUTPUT
 
-      - name: Release ${{ steps.build-snap.outputs.snap }} to ${{ env.DEFAULT_TRACK }}/${{ env.DEFAULT_RISK }}  
-        if: ${{ github.event_name != 'pull_request' }}
+      - name: Release ${{ steps.get-snap.outputs.filename }} to ${{ env.DEFAULT_TRACK }}/${{ env.DEFAULT_RISK }}  
         uses: snapcore/action-publish@v1
         env:
           SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
         with:
-          snap: ${{ steps.build-snap.outputs.snap }}
+          snap: ${{ steps.get-snap.outputs.filename }}
           release: ${{ env.DEFAULT_TRACK }}/${{ env.DEFAULT_RISK }}
 
   promote:
     if: ${{ github.event_name == 'release' }}
     runs-on: ubuntu-latest
-    needs: [snaps]
     strategy:
       fail-fast: false
       matrix:
