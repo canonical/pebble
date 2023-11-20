@@ -1,6 +1,9 @@
 # The Pebble service manager
 
 [![pebble](https://snapcraft.io/pebble/badge.svg)](https://snapcraft.io/pebble)
+[![snap](https://github.com/canonical/pebble/actions/workflows/snap.yml/badge.svg)](https://github.com/canonical/pebble/actions/workflows/snap.yml)
+[![binaries](https://github.com/canonical/pebble/actions/workflows/binaries.yml/badge.svg)](https://github.com/canonical/pebble/actions/workflows/binaries.yml)
+[![tests](https://github.com/canonical/pebble/actions/workflows/tests.yml/badge.svg)](https://github.com/canonical/pebble/actions/workflows/tests.yml)
 
 _Take control of your internal daemons!_
 
