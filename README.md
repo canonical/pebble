@@ -601,8 +601,6 @@ Pebble provides various API calls and commands to manage files and directories o
 ```
 $ pebble ls <path>              # list file information (like "ls")
 $ pebble mkdir <path>           # create a directory (like "mkdir")
-
-# TODO -- the following commands are coming soon
 $ pebble rm <path>              # remove a file or directory (like "rm")
 $ pebble push <local> <remote>  # copy file to server (like "cp")
 $ pebble pull <remote> <local>  # copy file from server (like "cp")
