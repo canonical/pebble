@@ -52,18 +52,6 @@ type cmdWarnings struct {
 	Verbose bool `long:"verbose"`
 }
 
-const cmdOkaySummary = "Acknowledge warnings"
-const cmdOkayDescription = `
-The okay command acknowledges the warnings listed with '{{.ProgramName}} warnings'.
-
-Once acknowledged, a warning won't appear again unless it reoccurs and
-sufficient time has passed.
-`
-
-type cmdOkay struct {
-	client *client.Client
-}
-
 func init() {
 	AddCommand(&CmdInfo{
 		Name:        "warnings",
@@ -75,14 +63,6 @@ func init() {
 		}),
 		New: func(opts *CmdOptions) flags.Commander {
 			return &cmdWarnings{client: opts.Client}
-		},
-	})
-	AddCommand(&CmdInfo{
-		Name:        "okay",
-		Summary:     cmdOkaySummary,
-		Description: cmdOkayDescription,
-		New: func(opts *CmdOptions) flags.Commander {
-			return &cmdOkay{client: opts.Client}
 		},
 	})
 }
@@ -162,19 +142,6 @@ func writeWarning(w io.Writer, descr string, termWidth int) error {
 	return err
 }
 
-func (cmd *cmdOkay) Execute(args []string) error {
-	if len(args) > 0 {
-		return ErrExtraArgs
-	}
-
-	last, err := lastWarningTimestamp()
-	if err != nil {
-		return err
-	}
-
-	return cmd.client.Okay(last)
-}
-
 const warnFileEnvKey = "PEBBLE_LAST_WARNING_TIMESTAMP_FILENAME"
 
 func warnFilename(homedir string) string {
@@ -230,7 +197,7 @@ func lastWarningTimestamp() (time.Time, error) {
 	f, err := os.Open(warnFilename(user.HomeDir))
 	if err != nil {
 		if os.IsNotExist(err) {
-			return time.Time{}, fmt.Errorf("you must have looked at the warnings before acknowledging them. Try '%s warnings'.", cmd.ProgramName)
+			return time.Time{}, fmt.Errorf("you must have looked at the warnings before acknowledging them. Try 'pebble warnings'.")
 		}
 		return time.Time{}, fmt.Errorf("cannot open timestamp file: %v", err)
 	}

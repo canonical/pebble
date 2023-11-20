@@ -79,7 +79,15 @@ func (ovs *overlordSuite) TestNew(c *C) {
 }
 
 func (ovs *overlordSuite) TestNewWithGoodState(c *C) {
-	fakeState := []byte(fmt.Sprintf(`{"data":{"patch-level":%d,"patch-sublevel":%d,"patch-sublevel-last-version":%q,"some":"data"},"changes":null,"tasks":null,"last-change-id":0,"last-task-id":0,"last-lane-id":0}`, patch.Level, patch.Sublevel, cmd.Version))
+	fakeState := []byte(fmt.Sprintf(`{
+		"data": {"patch-level": %d, "patch-sublevel": %d, "patch-sublevel-last-version": %q, "some": "data"},
+		"changes": null,
+		"tasks": null,
+		"last-change-id": 0,
+		"last-task-id": 0,
+		"last-lane-id": 0,
+		"last-notice-id": 0
+	}`, patch.Level, patch.Sublevel, cmd.Version))
 	err := ioutil.WriteFile(ovs.statePath, fakeState, 0600)
 	c.Assert(err, IsNil)
 

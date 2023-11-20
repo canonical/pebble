@@ -32,13 +32,13 @@ The mkdir command creates the specified directory.
 type cmdMkdir struct {
 	client *client.Client
 
-	MakeParents bool   `short:"p"`
-	Permissions string `short:"m"`
-	UserID      *int   `long:"uid"`
-	User        string `long:"user"`
-	GroupID     *int   `long:"gid"`
-	Group       string `long:"group"`
-	Positional  struct {
+	Parents    bool   `short:"p"`
+	Mode       string `short:"m"`
+	UserID     *int   `long:"uid"`
+	User       string `long:"user"`
+	GroupID    *int   `long:"gid"`
+	Group      string `long:"group"`
+	Positional struct {
 		Path string `positional-arg-name:"<path>"`
 	} `positional-args:"yes" required:"yes"`
 }
@@ -50,7 +50,7 @@ func init() {
 		Description: cmdMkdirDescription,
 		ArgsHelp: map[string]string{
 			"-p":      "Create parent directories as needed",
-			"-m":      "Set permissions (e.g. 0644)",
+			"-m":      "Override mode bits (3-digit octal)",
 			"--uid":   "Use specified user ID",
 			"--user":  "Use specified username",
 			"--gid":   "Use specified group ID",
@@ -69,17 +69,17 @@ func (cmd *cmdMkdir) Execute(args []string) error {
 
 	opts := client.MakeDirOptions{
 		Path:        cmd.Positional.Path,
-		MakeParents: cmd.MakeParents,
+		MakeParents: cmd.Parents,
 		UserID:      cmd.UserID,
 		User:        cmd.User,
 		GroupID:     cmd.GroupID,
 		Group:       cmd.Group,
 	}
 
-	if cmd.Permissions != "" {
-		p, err := strconv.ParseUint(cmd.Permissions, 8, 32)
+	if cmd.Mode != "" {
+		p, err := strconv.ParseUint(cmd.Mode, 8, 32)
 		if err != nil {
-			return fmt.Errorf("invalid mode for directory: %q", cmd.Permissions)
+			return fmt.Errorf("invalid mode for directory: %q", cmd.Mode)
 		}
 		opts.Permissions = os.FileMode(p)
 	}

@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"net/http"
 	"os/exec"
-	"time"
 
 	"github.com/canonical/pebble/internals/osutil"
 	"github.com/canonical/pebble/internals/overlord/cmdstate"
@@ -54,32 +53,15 @@ func v1PostExec(c *Command, req *http.Request, _ *UserState) Response {
 		return statusBadRequest("must specify command")
 	}
 
-	var timeout time.Duration
-	if payload.Timeout != "" {
-		var err error
-		timeout, err = time.ParseDuration(payload.Timeout)
-		if err != nil {
-			return statusBadRequest("invalid timeout: %v", err)
-		}
+	timeout, err := parseOptionalDuration(payload.Timeout)
+	if err != nil {
+		return statusBadRequest("invalid timeout: %v", err)
 	}
 
 	// Check up-front that the executable exists.
-	_, err := exec.LookPath(payload.Command[0])
+	_, err = exec.LookPath(payload.Command[0])
 	if err != nil {
 		return statusBadRequest("cannot find executable %q", payload.Command[0])
-	}
-
-	// Also check that the working directory exists, to avoid a confusing
-	// error message later that implies the command doesn't exist:
-	//
-	//  fork/exec /usr/local/bin/realcommand: no such file or directory
-	//
-	// Note that this check still doesn't check that the permissions are
-	// correct to use it as a working directory, but this is a good start.
-	if payload.WorkingDir != "" {
-		if !osutil.IsDir(payload.WorkingDir) {
-			return statusBadRequest("cannot find working directory %q", payload.WorkingDir)
-		}
 	}
 
 	p, err := c.d.overlord.ServiceManager().Plan()

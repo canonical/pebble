@@ -17,10 +17,13 @@ package logstate
 import (
 	"context"
 	"fmt"
+	"os"
+	"sync"
 	"time"
 
 	. "gopkg.in/check.v1"
 
+	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/plan"
 	"github.com/canonical/pebble/internals/servicelog"
 )
@@ -29,15 +32,21 @@ type managerSuite struct{}
 
 var _ = Suite(&managerSuite{})
 
-func (s *managerSuite) TestPlanChange(c *C) {
-	gathererArgs := logGathererArgs{
+func (*managerSuite) SetUpSuite(c *C) {
+	// Send logs to stderr, so we can see them when debugging
+	l := logger.New(os.Stderr, "[test] ")
+	logger.SetLogger(l)
+}
+
+func (*managerSuite) TestPlanChange(c *C) {
+	gathererOptions := logGathererOptions{
 		newClient: func(target *plan.LogTarget) (logClient, error) {
 			return &testClient{}, nil
 		},
 	}
 	m := NewLogManager()
 	m.newGatherer = func(t *plan.LogTarget) (*logGatherer, error) {
-		return newLogGathererInternal(t, gathererArgs)
+		return newLogGathererInternal(t, &gathererOptions)
 	}
 
 	svc1 := newTestService("svc1")
@@ -116,18 +125,21 @@ func checkBuffers(c *C, buffers map[string]*servicelog.RingBuffer, expected []st
 }
 
 func (s *managerSuite) TestTimelyShutdown(c *C) {
-	gathererArgs := logGathererArgs{
-		timeoutFinalFlush: 5 * time.Millisecond,
-		newClient: func(target *plan.LogTarget) (logClient, error) {
-			return &slowFlushingClient{
-				flushTime: 10 * time.Second,
-			}, nil
+	client := &slowFlushingClient{
+		flushTime: 1 * time.Microsecond,
+	}
+
+	gathererOptions := logGathererOptions{
+		timeoutCurrentFlush: 5 * time.Millisecond,
+		timeoutFinalFlush:   5 * time.Millisecond,
+		newClient: func(_ *plan.LogTarget) (logClient, error) {
+			return client, nil
 		},
 	}
 
 	m := NewLogManager()
 	m.newGatherer = func(t *plan.LogTarget) (*logGatherer, error) {
-		return newLogGathererInternal(t, gathererArgs)
+		return newLogGathererInternal(t, &gathererOptions)
 	}
 
 	svc1 := newTestService("svc1")
@@ -154,6 +166,7 @@ func (s *managerSuite) TestTimelyShutdown(c *C) {
 	err := svc1.stop()
 	c.Assert(err, IsNil)
 
+	client.SetFlushTime(10 * time.Second)
 	// Stop all gatherers and check this happens quickly
 	done := make(chan struct{})
 	go func() {
@@ -162,25 +175,160 @@ func (s *managerSuite) TestTimelyShutdown(c *C) {
 	}()
 	select {
 	case <-done:
-	case <-time.After(50 * time.Millisecond):
+	case <-time.After(1 * time.Second):
 		c.Fatal("LogManager.Stop() took too long")
 	}
 }
 
 type slowFlushingClient struct {
 	flushTime time.Duration
+	mu        sync.Mutex
 }
 
-func (c *slowFlushingClient) Write(_ context.Context, _ servicelog.Entry) error {
+func (c *slowFlushingClient) SetLabels(serviceName string, labels map[string]string) {
+	// no-op
+}
+
+func (c *slowFlushingClient) Add(_ servicelog.Entry) error {
 	// no-op
 	return nil
 }
 
 func (c *slowFlushingClient) Flush(ctx context.Context) error {
+	c.mu.Lock()
+	flushTime := c.flushTime
+	c.mu.Unlock()
+
 	select {
 	case <-ctx.Done():
 		return fmt.Errorf("flush timed out")
-	case <-time.After(c.flushTime):
+	case <-time.After(flushTime):
 		return nil
+	}
+}
+
+func (c *slowFlushingClient) SetFlushTime(timeout time.Duration) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.flushTime = timeout
+}
+
+func (s *managerSuite) TestLabels(c *C) {
+	fakeClient := &labelStore{
+		labels:          map[string]map[string]string{},
+		notifySetLabels: make(chan struct{}, 2),
+	}
+
+	m := NewLogManager()
+	m.newGatherer = func(t *plan.LogTarget) (*logGatherer, error) {
+		return newLogGathererInternal(t, &logGathererOptions{
+			newClient: func(_ *plan.LogTarget) (logClient, error) { return fakeClient, nil },
+		})
+	}
+
+	svc1 := newTestService("svc1")
+	svc1.config.Environment = map[string]string{
+		"OWNER": "alice",
+		"IP":    "103.2.51.6",
+		"PORT":  "3456",
+	}
+
+	svc2 := newTestService("svc2")
+	svc2.config.Environment = map[string]string{
+		"IP":   "103.2.52.88",
+		"PORT": "9090",
+	}
+
+	pl := &plan.Plan{
+		Services: map[string]*plan.Service{
+			"svc1": svc1.config,
+			"svc2": svc2.config,
+		},
+		LogTargets: map[string]*plan.LogTarget{
+			"tgt1": {
+				Name:     "tgt1",
+				Type:     plan.LokiTarget,
+				Services: []string{"all"},
+				Labels: map[string]string{
+					"owner":   "user-$OWNER",
+					"address": "http://${IP}:${PORT}",
+				},
+			},
+		},
+	}
+
+	m.PlanChanged(pl)
+	checkGatherers(c, m.gatherers, map[string][]string{
+		"tgt1": nil,
+	})
+
+	m.ServiceStarted(svc1.config, svc1.ringBuffer)
+	m.ServiceStarted(svc2.config, svc2.ringBuffer)
+
+	fakeClient.waitLabels(c)
+	fakeClient.waitLabels(c)
+	c.Assert(fakeClient.labels, DeepEquals, map[string]map[string]string{
+		"svc1": {
+			"owner":   "user-alice",
+			"address": "http://103.2.51.6:3456",
+		},
+		"svc2": {
+			"owner":   "user-", // undefined env vars -> empty string
+			"address": "http://103.2.52.88:9090",
+		},
+	})
+
+	// If we change only the target's labels (with no change to the services),
+	// we still need to recalculate the client's labels.
+	pl.LogTargets["tgt1"].Labels["foo"] = "bar"
+	m.PlanChanged(pl)
+
+	// Wait for labels to be set
+	fakeClient.waitLabels(c)
+	fakeClient.waitLabels(c)
+	c.Assert(fakeClient.labels, DeepEquals, map[string]map[string]string{
+		"svc1": {
+			"owner":   "user-alice",
+			"address": "http://103.2.51.6:3456",
+			"foo":     "bar",
+		},
+		"svc2": {
+			"owner":   "user-",
+			"address": "http://103.2.52.88:9090",
+			"foo":     "bar",
+		},
+	})
+}
+
+// Fake logClient implementation which just stores the passed-in labels
+type labelStore struct {
+	labels map[string]map[string]string
+	// synchronise on this channel to avoid data races
+	notifySetLabels chan struct{}
+}
+
+func (c *labelStore) Add(_ servicelog.Entry) error {
+	return nil // no-op
+}
+
+func (c *labelStore) Flush(_ context.Context) error {
+	return nil // no-op
+}
+
+func (c *labelStore) SetLabels(serviceName string, labels map[string]string) {
+	c.labels[serviceName] = labels
+	select {
+	case c.notifySetLabels <- struct{}{}:
+	case <-time.After(1 * time.Second):
+		panic("timeout waiting for notify for SetLabels")
+	}
+}
+
+// wait for labels to be set
+func (l *labelStore) waitLabels(c *C) {
+	select {
+	case <-l.notifySetLabels:
+	case <-time.After(1 * time.Second):
+		c.Fatal("timed out waiting for labels to be set")
 	}
 }

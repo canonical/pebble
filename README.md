@@ -1,5 +1,7 @@
 # The Pebble service manager
 
+[![pebble](https://snapcraft.io/pebble/badge.svg)](https://snapcraft.io/pebble)
+
 _Take control of your internal daemons!_
 
 **Pebble** helps you to orchestrate a set of local service processes as an organized set.
@@ -405,30 +407,28 @@ $ pebble run --verbose
 ...
 ```
 
-<!--
-TODO: uncomment this section once log forwarding is fully implemented
-TODO: add log targets to the Pebble layer spec below
+### Log forwarding
 
-#### Log forwarding
-
-Pebble supports forwarding its services' logs to a remote Loki server or syslog receiver (via UDP/TCP). In the `log-targets` section of the plan, you can specify destinations for log forwarding, for example:
+Pebble supports forwarding its services' logs to a remote Loki server. In the `log-targets` section of the plan, you can specify destinations for log forwarding, for example:
 ```yaml
 log-targets:
-    loki-example:
+    staging-logs:
         override: merge
         type: loki
         location: http://10.1.77.205:3100/loki/api/v1/push
         services: [all]
-    syslog-example:
+    production-logs:
         override: merge
-        type: syslog
-        location: tcp://192.168.10.241:1514
+        type: loki
+        location: http://my.loki.server.com/loki/api/v1/push
         services: [svc1, svc2]
 ```
 
-For each log target, use the `services` key to specify a list of services to collect logs from. In the above example, the `syslog-example` target will collect logs from `svc1` and `svc2`.
+#### Specifying services
 
-Use the special keyword `all` to match all services, including services that might be added in future layers. In the above example, `loki-example` will collect logs from all services.
+For each log target, use the `services` key to specify a list of services to collect logs from. In the above example, the `production-logs` target will collect logs from `svc1` and `svc2`.
+
+Use the special keyword `all` to match all services, including services that might be added in future layers. In the above example, `staging-logs` will collect logs from all services.
 
 To remove a service from a log target when merging, prefix the service name with a minus `-`. For example, if we have a base layer with
 ```yaml
@@ -457,7 +457,114 @@ my-target:
 ```
 would remove all services and then add `svc1`, so `my-target` would receive logs from only `svc1`.
 
--->
+#### Labels
+
+In the `labels` section, you can specify custom labels to be added to any outgoing logs. These labels may contain `$ENVIRONMENT_VARIABLES` - these will be interpreted in the environment of the corresponding service. Pebble may also add its own default labels (depending on the protocol). For example, given the following plan:
+```yaml
+services:
+  svc1:
+    environment:
+      OWNER: 'alice'
+  svc2:
+    environment:
+      OWNER: 'bob'
+
+log-targets:
+  tgt1:
+    type: loki
+    labels:
+      product: 'juju'
+      owner: 'user-$OWNER'
+```
+the logs from `svc1` will be sent with the following labels:
+```yaml
+product: juju
+owner: user-alice     # env var $OWNER substituted
+pebble_service: svc1  # default label for Loki
+```
+and for svc2, the labels will be
+```yaml
+product: juju
+owner: user-bob       # env var $OWNER substituted
+pebble_service: svc2  # default label for Loki
+```
+
+
+### Notices
+
+Pebble includes a subsystem called *notices*, which allows the user to introspect various events that occur in the Pebble server, as well as record custom client events. The server saves notices to disk, so they persist across restarts, and expire after a notice-defined interval.
+
+Each notice is uniquely identified by its *type* and *key* combination, and the notice's count of occurences is incremented every time a notice with that type and key combination occurs.
+
+Each notice records the time it first occurred, the time it last occurred, and the time it last repeated.
+
+A *repeat* happens when a notice occurs with the same type and key as a prior notice, and either the notice has no "repeat after" duration (the default), or the notice happens after the provided "repeat after" interval (since the prior notice). Thus, specifying "repeat after" prevents a notice from appearing again if it happens more frequently than desired.
+
+In addition, a notice records optional *data* (string key-value pairs) from the last occurrence.
+
+These notice types are currently available:
+
+<!-- TODO: * `change-update`: recorded whenever a change is first spawned or its status is updated. The key for this type of notice is the change ID, and the notice's data includes the change `kind`. -->
+
+* `custom`: a custom client notice reported via `pebble notify`. The key and any data is provided by the user. The key must be in the format `mydomain.io/mykey` to ensure well-namespaced notice keys.
+
+<!-- TODO: * `warning`: Pebble warnings are implemented in terms of notices. The key for this type of notice is the human-readable warning message. -->
+
+To record `custom` notices, use `pebble notify`:
+
+```
+$ pebble notify example.com/foo
+Recorded notice 1
+$ pebble notify example.com/foo
+Recorded notice 1
+$ pebble notify other.com/bar name=value email=john@smith.com  # two data fields
+Recorded notice 2
+$ pebble notify example.com/foo
+Recorded notice 1
+```
+
+The `pebble notices` command lists notices not yet acknowledged, ordered by the last-repeated time (oldest first). After it runs, the notices that were shown may then be acknowledged by running `pebble okay`. When a notice repeats (see above), it needs to be acknowledged again.
+
+```
+$ pebble notices
+ID   Type    Key              First                Repeated             Occ
+1    custom  example.com/foo  today at 16:16 NZST  today at 16:16 NZST  3
+2    custom  other.com/bar    today at 16:16 NZST  today at 16:16 NZST  1
+```
+
+To fetch details about a single notice, use `pebble notice`, which displays the output in YAML format. You can fetch a notice either by ID or by type/key combination.
+
+To fetch the notice with ID "1":
+
+```
+$ pebble notice 1
+id: "1"
+type: custom
+key: example.com/foo
+first-occurred: 2023-09-15T04:16:09.179395298Z
+last-occurred: 2023-09-15T04:16:19.487035209Z
+last-repeated: 2023-09-15T04:16:09.179395298Z
+occurrences: 3
+expire-after: 168h0m0s
+```
+
+To fetch the notice with type "custom" and key "other.com/bar":
+
+```
+$ pebble notice custom other.com/bar
+id: "2"
+type: custom
+key: other.com/bar
+first-occurred: 2023-09-15T04:16:17.180049768Z
+last-occurred: 2023-09-15T04:16:17.180049768Z
+last-repeated: 2023-09-15T04:16:17.180049768Z
+occurrences: 1
+last-data:
+    name: value
+    email: john@smith.com
+expire-after: 168h0m0s
+```
+
 
 ## Container usage
 
@@ -723,13 +830,52 @@ checks:
             # (Optional) Working directory to run command in. By default, the
             # command is run in the service manager's current directory.
             working-dir: <directory>
+
+# (Optional) A list of remote log receivers, to which service logs can be sent.
+log-targets:
+
+  <log target name>:
+
+    # (Required) Control how this log target definition is combined with
+    # other pre-existing definitions with the same name in the Pebble plan.
+    #
+    # The value 'merge' will ensure that values in this layer specification
+    # are merged over existing definitions, whereas 'replace' will entirely
+    # override the existing target spec in the plan with the same name.
+    override: merge | replace
+
+    # (Required) The type of log target, which determines the format in
+    # which logs will be sent. The supported types are:
+    #
+    # - loki: Use the Grafana Loki protocol. A "pebble_service" label is
+    #   added automatically, with the name of the Pebble service as its value.
+    type: loki
+
+    # (Required) The URL of the remote log target.
+    # For Loki, this needs to be the fully-qualified URL of the push API,
+    # including the API endpoint, e.g.
+    #     http://<ip-address>:3100/loki/api/v1/push
+    location: <url>
+
+    # (Optional) A list of services whose logs will be sent to this target.
+    # Use the special keyword 'all' to match all services in the plan.
+    # When merging log targets, the 'services' lists are appended. Prefix a
+    # service name with a minus (e.g. '-svc1') to remove a previously added
+    # service. '-all' will remove all services.
+    services: [<service names>]
+
+    # (Optional) A list of key/value pairs defining labels which should be set
+    # on the outgoing logs. The label values may contain $ENV_VARS, which will
+    # be substituted using the environment for the corresponding service.
+    labels:
+      <label name>: <label value>
 ```
 
 ## API and clients
 
 The Pebble daemon exposes an API (HTTP over a unix socket) to allow remote clients to interact with the daemon. It can start and stop services, add configuration layers the plan, and so on.
 
-There is currently no official documentation for the API at the HTTP level (apart from the [code itself](https://github.com/canonical/pebble/blob/master/internal/daemon/api.go)!); most users will interact with it via the Pebble command line interface or by using the Go or Python clients.
+There is currently no official documentation for the API at the HTTP level (apart from the [code itself](https://github.com/canonical/pebble/blob/master/internals/daemon/api.go)!); most users will interact with it via the Pebble command line interface or by using the Go or Python clients.
 
 The Go client is used primarily by the CLI, but is importable and can be used by other tools too. See the [reference documentation and examples](https://pkg.go.dev/github.com/canonical/pebble/client) at pkg.go.dev.
 
@@ -755,7 +901,8 @@ Here are some of the things coming soon:
   - [x] Automatically restart services that fail
   - [x] Support for custom health checks (HTTP, TCP, command)
   - [x] Terminate all services before exiting run command
-  - [ ] Log forwarding (syslog and Loki)
+  - [x] Log forwarding to Loki
+  - [ ] Log forwarding to syslog
   - [ ] [Other in-progress PRs](https://github.com/canonical/pebble/pulls)
   - [ ] [Other requested features](https://github.com/canonical/pebble/issues)
 

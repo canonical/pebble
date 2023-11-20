@@ -385,7 +385,7 @@ func (s *apiSuite) TestWaitChangeInvalidTimeout(c *check.C) {
 	c.Check(rsp.Status, check.Equals, 400)
 	c.Check(rsp.Type, check.Equals, ResponseTypeError)
 	result := rsp.Result.(*errorResult)
-	c.Check(result.Message, check.Matches, "invalid timeout .*")
+	c.Check(result.Message, check.Matches, "invalid timeout.*")
 }
 
 func (s *apiSuite) TestWaitChangeSuccess(c *check.C) {

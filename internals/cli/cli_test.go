@@ -23,11 +23,12 @@ func Test(t *testing.T) { TestingT(t) }
 
 type BasePebbleSuite struct {
 	testutil.BaseTest
-	stdin     *bytes.Buffer
-	stdout    *bytes.Buffer
-	stderr    *bytes.Buffer
-	password  string
-	pebbleDir string
+	stdin        *bytes.Buffer
+	stdout       *bytes.Buffer
+	stderr       *bytes.Buffer
+	password     string
+	pebbleDir    string
+	cliStatePath string
 
 	AuthFile string
 }
@@ -56,6 +57,14 @@ func (s *BasePebbleSuite) SetUpTest(c *C) {
 	s.AddCleanup(cli.FakeIsStdinTTY(false))
 
 	os.Setenv("PEBBLE_LAST_WARNING_TIMESTAMP_FILENAME", filepath.Join(c.MkDir(), "warnings.json"))
+
+	oldConfigHome := os.Getenv("XDG_CONFIG_HOME")
+	s.AddCleanup(func() {
+		os.Setenv("XDG_CONFIG_HOME", oldConfigHome)
+	})
+	configHome := c.MkDir()
+	os.Setenv("XDG_CONFIG_HOME", configHome)
+	s.cliStatePath = filepath.Join(configHome, "pebble", "cli.json")
 }
 
 func (s *BasePebbleSuite) TearDownTest(c *C) {
@@ -157,4 +166,39 @@ func (s *PebbleSuite) TestGetEnvPaths(c *C) {
 	pebbleDir, socketPath = cli.GetEnvPaths()
 	c.Assert(pebbleDir, Equals, "/bar")
 	c.Assert(socketPath, Equals, "/path/to/socket")
+}
+
+func (s *PebbleSuite) readCLIState(c *C) map[string]any {
+	data, err := os.ReadFile(s.cliStatePath)
+	c.Assert(err, IsNil)
+	var fullState map[string]any
+	err = json.Unmarshal(data, &fullState)
+	c.Assert(err, IsNil)
+
+	socketMap, ok := fullState["pebble"].(map[string]any)
+	if !ok {
+		c.Fatalf("expected socket map, got %#v", fullState["pebble"])
+	}
+
+	_, socketPath := cli.GetEnvPaths()
+	v, ok := socketMap[socketPath]
+	if !ok {
+		c.Fatalf("expected state map, got %#v", socketMap[socketPath])
+	}
+	return v.(map[string]any)
+}
+
+func (s *PebbleSuite) writeCLIState(c *C, st map[string]any) {
+	_, socketPath := cli.GetEnvPaths()
+	fullState := map[string]any{
+		"pebble": map[string]any{
+			socketPath: st,
+		},
+	}
+	err := os.MkdirAll(filepath.Dir(s.cliStatePath), 0o700)
+	c.Assert(err, IsNil)
+	data, err := json.Marshal(fullState)
+	c.Assert(err, IsNil)
+	err = os.WriteFile(s.cliStatePath, data, 0o600)
+	c.Assert(err, IsNil)
 }

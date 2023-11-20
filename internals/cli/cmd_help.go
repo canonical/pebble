@@ -188,19 +188,23 @@ var HelpCategories = []HelpCategory{{
 }, {
 	Label:       "Services",
 	Description: "manage services",
-	Commands:    []string{"services", "logs", "checks", "start", "restart", "signal", "stop", "replan"},
+	Commands:    []string{"services", "logs", "start", "restart", "signal", "stop", "replan"},
+}, {
+	Label:       "Checks",
+	Description: "manage health checks",
+	Commands:    []string{"checks", "health"},
 }, {
 	Label:       "Files",
 	Description: "work with files and execute commands",
-	Commands:    []string{"ls", "mkdir", "rm", "exec"},
+	Commands:    []string{"push", "pull", "ls", "mkdir", "rm", "exec"},
 }, {
 	Label:       "Changes",
 	Description: "manage changes and their tasks",
 	Commands:    []string{"changes", "tasks"},
 }, {
-	Label:       "Warnings",
-	Description: "manage warnings",
-	Commands:    []string{"warnings", "okay"},
+	Label:       "Notices",
+	Description: "manage notices and warnings",
+	Commands:    []string{"warnings", "okay", "notices", "notice", "notify"},
 }}
 
 var (
