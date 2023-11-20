@@ -93,6 +93,7 @@ type yamlNotice struct {
 	ID            string            `yaml:"id"`
 	Type          client.NoticeType `yaml:"type"`
 	Key           string            `yaml:"key"`
+	UserID        *int              `yaml:"user-id,omitempty"`
 	FirstOccurred time.Time         `yaml:"first-occurred"`
 	LastOccurred  time.Time         `yaml:"last-occurred"`
 	LastRepeated  time.Time         `yaml:"last-repeated"`

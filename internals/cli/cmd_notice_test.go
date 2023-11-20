@@ -36,6 +36,7 @@ func (s *PebbleSuite) TestNoticeID(c *C) {
 				"id": "123",
 				"type": "custom",
 				"key": "a.b/c",
+				"user-id": 1000,
 				"first-occurred": "2023-09-05T17:18:00Z",
 				"last-occurred": "2023-09-05T19:18:00Z",
 				"last-repeated": "2023-09-05T18:18:00Z",
@@ -54,6 +55,7 @@ func (s *PebbleSuite) TestNoticeID(c *C) {
 id: "123"
 type: custom
 key: a.b/c
+user-id: 1000
 first-occurred: 2023-09-05T17:18:00Z
 last-occurred: 2023-09-05T19:18:00Z
 last-repeated: 2023-09-05T18:18:00Z
