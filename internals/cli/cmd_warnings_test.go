@@ -191,7 +191,7 @@ func (s *warningSuite) TestOkay(c *check.C) {
 
 func (s *warningSuite) TestOkayBeforeWarnings(c *check.C) {
 	_, err := cli.Parser(cli.Client()).ParseArgs([]string{"okay"})
-	c.Assert(err, check.ErrorMatches, "you must have looked at the warnings before acknowledging them. Try 'pebble warnings'.")
+	c.Assert(err, check.ErrorMatches, "no notices or warnings have been listed.*")
 	c.Check(s.Stderr(), check.Equals, "")
 	c.Check(s.Stdout(), check.Equals, "")
 }

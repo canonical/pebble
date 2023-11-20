@@ -238,7 +238,7 @@ func v1GetNotice(c *Command, r *http.Request, _ *UserState) Response {
 	defer st.Unlock()
 	notice := st.Notice(noticeID)
 	if notice == nil {
-		return statusNotFound("cannot find notice with id %q", noticeID)
+		return statusNotFound("cannot find notice with ID %q", noticeID)
 	}
 	reqUid := uidFromRequest(r)
 	noticeUid := notice.UserID()
