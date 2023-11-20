@@ -171,7 +171,6 @@ func (s *apiSuite) TestNoticesFilterInvalidTypes(c *C) {
 	st := s.d.Overlord().State()
 	st.Lock()
 	addNotice(c, st, state.ChangeUpdateNotice, "123", nil)
-	time.Sleep(time.Microsecond)
 	addNotice(c, st, state.WarningNotice, "danger", nil)
 	st.Unlock()
 
