@@ -25,8 +25,8 @@ func MockVersion(version string) (restore func()) {
 	return func() { Version = old }
 }
 
-// ProgramName represents the name of the application binary (i.e. pebble)
+// ProgramName represents the name of the application binary.
 var ProgramName string = "pebble"
 
-// DisplayName represents the user-facing name of the application (i.e. Pebble)
+// DisplayName represents the user-facing name of the application.
 var DisplayName string = "Pebble"

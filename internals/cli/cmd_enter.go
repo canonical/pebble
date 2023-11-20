@@ -20,7 +20,6 @@ import (
 	"github.com/canonical/go-flags"
 
 	"github.com/canonical/pebble/client"
-	cmdpkg "github.com/canonical/pebble/cmd"
 	"github.com/canonical/pebble/internals/logger"
 )
 
@@ -179,7 +178,7 @@ func (cmd *cmdEnter) Execute(args []string) error {
 	case runStop = <-runReadyCh:
 	case runPanic := <-runResultCh:
 		if runPanic == nil {
-			panic(fmt.Sprintf("internal error: %s daemon stopped early", cmdpkg.ProgramName))
+			panic("internal error: daemon stopped early")
 		}
 		panic(runPanic)
 	}

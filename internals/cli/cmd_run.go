@@ -31,7 +31,7 @@ import (
 	"github.com/canonical/pebble/internals/systemd"
 )
 
-const cmdRunSummary = "Run the {{.DisplayName}} environment"
+const cmdRunSummary = "Run the service manager environment"
 const cmdRunDescription = `
 The run command starts pebble and runs the configured environment.
 
@@ -98,7 +98,7 @@ func (rcmd *cmdRun) run(ready chan<- func()) {
 			// This exit code must be in system'd SuccessExitStatus.
 			panic(&exitStatus{42})
 		}
-		fmt.Fprintf(os.Stderr, "cannot run %s: %v\n", cmd.ProgramName, err)
+		fmt.Fprintf(os.Stderr, "cannot run daemon: %v\n", err)
 		panic(&exitStatus{1})
 	}
 }

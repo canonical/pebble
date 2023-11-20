@@ -1,0 +1,183 @@
+#!/bin/bash
+
+#----------------------------------------------------#
+# PRINTING ROUTINES                                  #
+#----------------------------------------------------#
+
+P_RESET="\e[0m"
+P_RED="\e[31m"
+P_GREEN="\e[32m"
+
+print_newline() {
+	echo -e "$P_RESET"
+}
+
+print_normal() {
+	echo -e "$P_RESET$*"
+}
+
+print_red() {
+	echo -e "$P_RED$*$P_RESET"
+}
+
+print_green() {
+	echo -e "$P_GREEN$*$P_RESET"
+}
+
+print_special() {
+	echo -ne "$P_RESET$*"
+}
+
+#----------------------------------------------------#
+# SETUP / TEST VERBOSITY CONTROL                     #
+#----------------------------------------------------#
+
+# If started with:
+# VERBOSE=1 ./run-checks
+# Verbose print everything, not only failures
+VERBOSE=${VERBOSE:-0}
+
+# Number of tests that failed
+FAILED=0
+
+# Print the final test results and exit wit non-zero
+# return code if anything failed.
+#
+print_results() {
+	if [ $FAILED -eq 0 ]; then
+		print_newline
+		print_green "Good news everyone ... all checks passed!"
+		print_newline
+		exit 0
+	else
+		print_newline
+		print_red "Bad news everyone ... $FAILED checks failed!"
+		print_newline
+		exit 1
+	fi
+}
+
+# Print the pass message, and if VERBOSE=1 then
+# add the command output.
+#
+print_test_pass() {
+	print_green "Pass"
+	if [ "$VERBOSE" = "1" ]; then
+		print_newline
+		print_normal "Command: ${CMD#*--}"
+		print_newline
+		cat "$OUTPUT"
+		print_newline
+	fi
+}
+
+# Print the fail message which includes the command
+# output.
+#
+print_test_fail() {
+	print_red "Fail"
+	print_newline
+	print_red "Command: ${CMD#*--}"
+	print_newline
+	cat "$OUTPUT"
+	print_newline
+}
+
+# Run a test and fail based on the check type
+#
+# Verbose print the failure case unless VERBOSE=1, in
+# which case verbose print everything (useful for CI
+# logs).
+#
+# Argument $1: Check Type ("zero-exit", "zero-output")
+# Argument $2: Test string description
+# Argument $3..$n: Test command line
+#
+test_check() {
+	print_special "=> $2"
+	OUTPUT=$(mktemp)
+	CMD=$(exec 2>&1 && set -x && set -- "${@:3}")
+
+	set +e
+	"${@:3}" > "$OUTPUT" 2>&1
+	RET=$?
+	set -e
+
+	# Check type
+	if [ "zero-output" = "$1" ]; then
+		
+		CHECK="$(wc -l < "$OUTPUT")"
+	else
+		CHECK="$RET"
+	fi
+
+	# Print result
+	if [ "$CHECK" -ne 0 ]; then
+		print_test_fail
+                FAILED=$((FAILED + 1))
+	else
+		print_test_pass
+	fi
+
+	rm -f "$OUTPUT"
+}
+
+#----------------------------------------------------#
+# TEST DEPENDENCIES                                  #
+#----------------------------------------------------#
+
+# Allow commands to be normally quiet while output
+# will be enabled if VERBOSE=1 is set.
+#
+run() {
+        if [ "$VERBOSE" = "1" ]; then
+                CMD=$(exec 2>&1 && set -x && set -- "$@")
+		print_newline
+                print_normal "Command: ${CMD#*--}"
+		print_newline
+                "$@"
+		print_newline
+        else
+                "$@" >/dev/null 2>&1
+        fi
+}
+
+# Install staticcheck from the correct source so that it
+# will compile and install for the Go version on the host.
+#
+# shellcheck disable=SC2317
+# Disable "command appears to be unreachable" warnings. This function
+# is indirectly called through run(), which confuses shellcheck.
+#
+install_staticcheck() {
+    # We build from source to make this architecture independent.
+    # However, staticcheck releases are dependent on specific Go
+    # versions, so we cannot simply build the latest.
+    PKG="honnef.co/go/tools/cmd/staticcheck"
+    GO_VERSION="$(go version | cut -d' ' -f3 | cut -d'.' -f1-2 | sed 's/go//' | sed 's/\.//')"
+
+    # This list will be updated as x-go moves to later Go versions.
+    if [ "$GO_VERSION" -ge "120" ]; then
+        # Go v1.20
+        go install "${PKG}@2023.1.3"
+    else
+        # Not supported
+        print_red "Staticcheck v2023.1.3 requires Go version v1.20 or later."
+    fi
+}
+
+GOBIN=$(go env GOPATH)/bin
+export PATH=$PATH:$GOBIN
+#run install_staticcheck
+
+#----------------------------------------------------#
+# TESTS                                              #
+#----------------------------------------------------#
+
+test_check "zero-exit" "Build ... " go build ./...
+test_check "zero-exit" "Vet ... " go vet ./...
+test_check "zero-exit" "Unit Tests ... " go test ./...
+#test_check "zero-exit" "Static-check ... " staticcheck ./...
+test_check "zero-output" "Formatting ... " gofmt -d .
+
+print_results

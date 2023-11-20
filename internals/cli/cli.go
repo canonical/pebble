@@ -344,7 +344,7 @@ func errorToMessage(e error) (normalMessage string, err error) {
 		}
 	case client.ErrorKindSystemRestart:
 		isError = false
-		msg = fmt.Sprintf("%s is about to reboot the system", cmd.ProgramName)
+		msg = fmt.Sprintf("%s is about to reboot the system", cmd.DisplayName)
 	case client.ErrorKindNoDefaultServices:
 		msg = "no default services"
 	default:
