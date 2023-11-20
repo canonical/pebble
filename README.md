@@ -15,7 +15,6 @@ designed with unique features that help with more specific use cases.
   - [Container usage](#container-usage)
   - [Layer specification](#layer-specification)
   - [API and clients](#api-and-clients)
-  - [Roadmap/TODO](#roadmap--todo)
   - [Hacking / Development](#hacking--development)
   - [Contributing](#contributing)
 
@@ -880,29 +879,6 @@ The Go client is used primarily by the CLI, but is importable and can be used by
 We try to never change the underlying HTTP API in a backwards-incompatible way, however, in rare cases we may change the Go client in a backwards-incompatible way.
 
 In addition to the Go client, there's also a [Python client](https://github.com/canonical/operator/blob/master/ops/pebble.py) for the Pebble API that's part of the [`ops` library](https://github.com/canonical/operator) used by Juju charms ([documentation here](https://juju.is/docs/sdk/interact-with-pebble)).
-
-## Roadmap / TODO
-
-This is a preview of what Pebble is becoming. Please keep that in mind while you
-explore.
-
-Here are some of the things coming soon:
-
-  - [x] Support `$PEBBLE_SOCKET` and default `$PEBBLE` to `/var/lib/pebble/default`
-  - [x] Define and enforce convention for layer names
-  - [x] Dynamic layer support over the API
-  - [x] Configuration retrieval commands to investigate current settings
-  - [x] Status command that displays active services and their current status
-  - [x] General system modification commands (writing configuration files, etc)
-  - [x] Better log caching and retrieval support
-  - [x] Consider showing unified log as output of `pebble run` (use `-v`)
-  - [x] Automatically restart services that fail
-  - [x] Support for custom health checks (HTTP, TCP, command)
-  - [x] Terminate all services before exiting run command
-  - [x] Log forwarding to Loki
-  - [ ] Log forwarding to syslog
-  - [ ] [Other in-progress PRs](https://github.com/canonical/pebble/pulls)
-  - [ ] [Other requested features](https://github.com/canonical/pebble/issues)
 
 ## Hacking / Development
 
