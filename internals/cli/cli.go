@@ -166,6 +166,7 @@ func Parser(cli *client.Client) *flags.Parser {
 
 	flagOpts := flags.Options(flags.PassDoubleDash)
 	parser := flags.NewParser(&defaultOpts, flagOpts)
+	parser.Command.Name = cmd.ProgramName
 	parser.ShortDescription = "System and service manager"
 	parser.LongDescription = applyPersonality(longPebbleDescription)
 

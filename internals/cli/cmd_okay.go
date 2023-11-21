@@ -20,6 +20,7 @@ import (
 	"github.com/canonical/go-flags"
 
 	"github.com/canonical/pebble/client"
+	cmdpkg "github.com/canonical/pebble/cmd"
 )
 
 const cmdOkaySummary = "Acknowledge notices and warnings"
@@ -85,10 +86,10 @@ func (cmd *cmdOkay) Execute(args []string) error {
 	}
 
 	if cmd.Warnings && !okayedWarnings {
-		return fmt.Errorf("no warnings have been listed; try 'pebble warnings'")
+		return fmt.Errorf("no warnings have been listed; try '%s warnings'", cmdpkg.ProgramName)
 	}
 	if !cmd.Warnings && !okayedNotices && !okayedWarnings {
-		return fmt.Errorf("no notices or warnings have been listed; try 'pebble notices' or 'pebble warnings'")
+		return fmt.Errorf("no notices or warnings have been listed; try '%s notices' or '%s warnings'", cmdpkg.ProgramName, cmdpkg.ProgramName)
 	}
 
 	return nil

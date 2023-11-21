@@ -197,7 +197,7 @@ func lastWarningTimestamp() (time.Time, error) {
 	f, err := os.Open(warnFilename(user.HomeDir))
 	if err != nil {
 		if os.IsNotExist(err) {
-			return time.Time{}, fmt.Errorf("you must have looked at the warnings before acknowledging them. Try 'pebble warnings'.")
+			return time.Time{}, fmt.Errorf("you must have looked at the warnings before acknowledging them. Try '%s warnings'.", cmd.ProgramName)
 		}
 		return time.Time{}, fmt.Errorf("cannot open timestamp file: %v", err)
 	}

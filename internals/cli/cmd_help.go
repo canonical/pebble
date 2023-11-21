@@ -112,11 +112,16 @@ type manfixer struct {
 func (w *manfixer) Write(buf []byte) (int, error) {
 	if !w.done {
 		w.done = true
+		// Find the .TH <program name> prefix.
 		prefix := ".TH " + w.programName + " "
 		if bytes.HasPrefix(buf, []byte(prefix)) {
-			// io.Writer.Write must not modify the buffer, even temporarily
+			// io.Writer.Write must not modify the buffer, even temporarily.
+			// Write all characters up to the prefix.
 			n, _ := w.Buffer.Write(buf[:len(prefix)])
+			// Do not write the character after the prefix (originally, '1'),
+			// and write an '8' instead, for fixing up the man section.
 			w.Buffer.Write([]byte{'8'})
+			// Write everything after the original '1' character.
 			m, err := w.Buffer.Write(buf[1+len(prefix):])
 			return n + m + 1, err
 		}
