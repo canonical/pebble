@@ -22,6 +22,7 @@ import (
 	"github.com/canonical/go-flags"
 
 	"github.com/canonical/pebble/client"
+	"github.com/canonical/pebble/cmd"
 )
 
 const cmdChangesSummary = "List system changes"
@@ -97,7 +98,7 @@ func (c *cmdChanges) Execute(args []string) error {
 	}
 
 	if allDigits(c.Positional.Service) {
-		return fmt.Errorf(`'pebble changes' command expects a service name, try 'pebble tasks %s'`, c.Positional.Service)
+		return fmt.Errorf(`'%s changes' command expects a service name, try '%s tasks %s'`, cmd.ProgramName, cmd.ProgramName, c.Positional.Service)
 	}
 
 	if c.Positional.Service == "everything" {

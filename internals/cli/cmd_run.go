@@ -31,16 +31,16 @@ import (
 	"github.com/canonical/pebble/internals/systemd"
 )
 
-const cmdRunSummary = "Run the pebble environment"
+const cmdRunSummary = "Run the service manager environment"
 const cmdRunDescription = `
-The run command starts pebble and runs the configured environment.
+The run command starts {{.DisplayName}} and runs the configured environment.
 
 Additional arguments may be provided to the service command with the --args option, which
-must be terminated with ";" unless there are no further Pebble options.  These arguments
+must be terminated with ";" unless there are no further program options.  These arguments
 are appended to the end of the service command, and replace any default arguments defined
 in the service plan. For example:
 
-    $ pebble run --args myservice --port 8080 \; --hold
+{{.ProgramName}} run --args myservice --port 8080 \; --hold
 `
 
 type sharedRunEnterOpts struct {
@@ -52,7 +52,7 @@ type sharedRunEnterOpts struct {
 }
 
 var sharedRunEnterArgsHelp = map[string]string{
-	"--create-dirs": "Create pebble directory on startup if it doesn't exist",
+	"--create-dirs": "Create {{.DisplayName}} directory on startup if it doesn't exist",
 	"--hold":        "Do not start default services automatically",
 	"--http":        `Start HTTP API listening on this address (e.g., ":4000")`,
 	"--verbose":     "Log all output from services to stdout",
@@ -98,7 +98,7 @@ func (rcmd *cmdRun) run(ready chan<- func()) {
 			// This exit code must be in system'd SuccessExitStatus.
 			panic(&exitStatus{42})
 		}
-		fmt.Fprintf(os.Stderr, "cannot run pebble: %v\n", err)
+		fmt.Fprintf(os.Stderr, "cannot run daemon: %v\n", err)
 		panic(&exitStatus{1})
 	}
 }

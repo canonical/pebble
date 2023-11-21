@@ -28,6 +28,7 @@ import (
 	"github.com/canonical/x-go/strutil/quantity"
 
 	"github.com/canonical/pebble/client"
+	"github.com/canonical/pebble/cmd"
 	"github.com/canonical/pebble/internals/osutil"
 )
 
@@ -35,7 +36,7 @@ const cmdWarningsSummary = "List warnings"
 const cmdWarningsDescription = `
 The warnings command lists the warnings that have been reported to the system.
 
-Once warnings have been listed with 'pebble warnings', 'pebble okay' may be used to
+Once warnings have been listed with '{{.ProgramName}} warnings', '{{.ProgramName}} okay' may be used to
 silence them. A warning that's been silenced in this way will not be listed
 again unless it happens again, _and_ a cooldown time has passed.
 
@@ -220,9 +221,9 @@ func maybePresentWarnings(count int, timestamp time.Time) {
 		return
 	}
 
-	format := "WARNING: There are %d new warnings. See 'pebble warnings'.\n"
+	format := "WARNING: There are %d new warnings. See '%s warnings'.\n"
 	if count == 1 {
-		format = "WARNING: There is %d new warning. See 'pebble warnings'.\n"
+		format = "WARNING: There is %d new warning. See '%s warnings'.\n"
 	}
-	fmt.Fprintf(Stderr, format, count)
+	fmt.Fprintf(Stderr, format, count, cmd.ProgramName)
 }

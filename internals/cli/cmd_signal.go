@@ -28,7 +28,7 @@ const cmdSignalDescription = `
 The signal command sends a signal to one or more running services. The signal
 name must be uppercase, for example:
 
-pebble signal HUP mysql nginx
+{{.ProgramName}} signal HUP mysql nginx
 `
 
 type cmdSignal struct {

@@ -20,14 +20,15 @@ import (
 	"github.com/canonical/go-flags"
 
 	"github.com/canonical/pebble/client"
+	cmdpkg "github.com/canonical/pebble/cmd"
 )
 
 const cmdOkaySummary = "Acknowledge notices and warnings"
 const cmdOkayDescription = `
 The okay command acknowledges warnings and notices that have been previously
-listed using 'pebble warnings' or 'pebble notices', so that they are omitted
+listed using '{{.ProgramName}} warnings' or '{{.ProgramName}} notices', so that they are omitted
 from future runs of either command. When a notice or warning is repeated, it
-will again show up until the next 'pebble okay'.
+will again show up until the next '{{.ProgramName}} okay'.
 `
 
 type cmdOkay struct {
@@ -85,10 +86,10 @@ func (cmd *cmdOkay) Execute(args []string) error {
 	}
 
 	if cmd.Warnings && !okayedWarnings {
-		return fmt.Errorf("no warnings have been listed; try 'pebble warnings'")
+		return fmt.Errorf("no warnings have been listed; try '%s warnings'", cmdpkg.ProgramName)
 	}
 	if !cmd.Warnings && !okayedNotices && !okayedWarnings {
-		return fmt.Errorf("no notices or warnings have been listed; try 'pebble notices' or 'pebble warnings'")
+		return fmt.Errorf("no notices or warnings have been listed; try '%s notices' or '%s warnings'", cmdpkg.ProgramName, cmdpkg.ProgramName)
 	}
 
 	return nil
