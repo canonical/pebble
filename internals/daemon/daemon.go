@@ -466,16 +466,21 @@ func (d *Daemon) initStandbyHandling() {
 	d.standbyOpinions.Start()
 }
 
-func (d *Daemon) Start() {
+func (d *Daemon) Start() error {
 	if d.rebootIsMissing {
 		// we need to schedule and wait for a system restart
 		d.tomb.Kill(nil)
 		// avoid systemd killing us again while we wait
 		systemdSdNotify("READY=1")
-		return
+		return nil
 	}
 	if d.overlord == nil {
 		panic("internal error: no Overlord")
+	}
+
+	// now perform expensive overlord/manages initialisation
+	if err := d.overlord.StartUp(); err != nil {
+		return err
 	}
 
 	d.StartTime = time.Now()
@@ -519,6 +524,7 @@ func (d *Daemon) Start() {
 
 	// notify systemd that we are ready
 	systemdSdNotify("READY=1")
+	return nil
 }
 
 // HandleRestart implements overlord.RestartBehavior.
