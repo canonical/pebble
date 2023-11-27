@@ -779,7 +779,7 @@ func (s *daemonSuite) TestRestartSystemWiring(c *C) {
 
 	defer func() {
 		d.mu.Lock()
-		d.restartSystem = false
+		d.restartType = restart.RestartUnset
 		d.mu.Unlock()
 	}()
 
@@ -790,10 +790,10 @@ func (s *daemonSuite) TestRestartSystemWiring(c *C) {
 	}
 
 	d.mu.Lock()
-	rs := d.restartSystem
+	restartType := d.restartType
 	d.mu.Unlock()
 
-	c.Check(rs, Equals, true)
+	c.Check(restartType, Equals, restart.RestartSystem)
 
 	c.Check(delays, HasLen, 1)
 	c.Check(delays[0], DeepEquals, rebootWaitTimeout)
@@ -1052,7 +1052,7 @@ func (s *daemonSuite) TestRestartIntoSocketModeNoNewChanges(c *C) {
 	}
 	err := d.Stop(nil)
 	c.Check(err, Equals, ErrRestartSocket)
-	c.Check(d.restartSocket, Equals, true)
+	c.Check(d.restartType, Equals, restart.RestartSocket)
 }
 
 func (s *daemonSuite) TestRestartIntoSocketModePendingChanges(c *C) {
@@ -1095,7 +1095,55 @@ func (s *daemonSuite) TestRestartIntoSocketModePendingChanges(c *C) {
 	// when the daemon got a pending change it just restarts
 	err := d.Stop(nil)
 	c.Check(err, IsNil)
-	c.Check(d.restartSocket, Equals, false)
+	c.Check(d.restartType, Equals, restart.RestartUnset)
+}
+
+func (s *daemonSuite) TestRestartServiceFailure(c *C) {
+	writeTestLayer(s.pebbleDir, `
+services:
+    test1:
+        override: replace
+        command: /bin/sh -c 'sleep 1.5; exit 1'
+        on-failure: shutdown
+`)
+	d := s.newDaemon(c)
+	err := d.Init()
+	c.Assert(err, IsNil)
+	c.Assert(d.Start(), IsNil)
+
+	// Start the test service.
+	payload := bytes.NewBufferString(`{"action": "start", "services": ["test1"]}`)
+	req, err := http.NewRequest("POST", "/v1/services", payload)
+	c.Assert(err, IsNil)
+	rsp := v1PostServices(apiCmd("/v1/services"), req, nil).(*resp)
+	rec := httptest.NewRecorder()
+	rsp.ServeHTTP(rec, req)
+	c.Check(rec.Result().StatusCode, Equals, 202)
+
+	// We have to wait for it be in running state.
+	for i := 0; ; i++ {
+		if i >= 25 {
+			c.Fatalf("timed out waiting or service to start")
+		}
+		d.state.Lock()
+		change := d.state.Change(rsp.Change)
+		d.state.Unlock()
+		if change != nil && change.IsReady() {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+
+	// Wait for daemon to be shut down by the failed service.
+	select {
+	case <-d.Dying():
+	case <-time.After(2 * time.Second):
+		c.Fatalf("timed out waiting for ")
+	}
+
+	// Ensure it returned a service-failure error.
+	err = d.Stop(nil)
+	c.Assert(err, Equals, ErrRestartServiceFailure)
 }
 
 func (s *daemonSuite) TestConnTrackerCanShutdown(c *C) {

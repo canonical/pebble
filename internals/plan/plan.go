@@ -294,6 +294,9 @@ const (
 	ActionRestart  ServiceAction = "restart"
 	ActionShutdown ServiceAction = "shutdown"
 	ActionIgnore   ServiceAction = "ignore"
+
+	ActionFailureShutdown ServiceAction = "failure-shutdown"
+	ActionSuccessShutdown ServiceAction = "success-shutdown"
 )
 
 // Check specifies configuration for a single health check.
@@ -649,12 +652,12 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 				Message: fmt.Sprintf("plan service %q command invalid: %v", name, err),
 			}
 		}
-		if !validServiceAction(service.OnSuccess) {
+		if !(validServiceAction(service.OnSuccess) || service.OnSuccess == ActionFailureShutdown) {
 			return nil, &FormatError{
 				Message: fmt.Sprintf("plan service %q on-success action %q invalid", name, service.OnSuccess),
 			}
 		}
-		if !validServiceAction(service.OnFailure) {
+		if !(validServiceAction(service.OnFailure) || service.OnFailure == ActionSuccessShutdown) {
 			return nil, &FormatError{
 				Message: fmt.Sprintf("plan service %q on-failure action %q invalid", name, service.OnFailure),
 			}

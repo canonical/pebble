@@ -441,6 +441,26 @@ var planTests = []planTest{{
 				on-success: foo
 	`},
 }, {
+	summary: `Invalid success-shutdown`,
+	error:   `plan service "svc1" on-success action "success-shutdown" invalid`,
+	input: []string{`
+		services:
+			"svc1":
+				override: replace
+				command: cmd
+				on-success: success-shutdown
+	`},
+}, {
+	summary: `Invalid failure-shutdown`,
+	error:   `plan service "svc1" on-failure action "failure-shutdown" invalid`,
+	input: []string{`
+		services:
+			"svc1":
+				override: replace
+				command: cmd
+				on-failure: failure-shutdown
+	`},
+}, {
 	summary: `Invalid backoff-delay duration`,
 	error:   `cannot parse layer "layer-0": invalid duration "foo"`,
 	input: []string{`

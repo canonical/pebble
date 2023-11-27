@@ -15,6 +15,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/signal"
@@ -92,11 +93,15 @@ func (rcmd *cmdRun) run(ready chan<- func()) {
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 
 	if err := runDaemon(rcmd, sigs, ready); err != nil {
-		if err == daemon.ErrRestartSocket {
+		switch {
+		case errors.Is(err, daemon.ErrRestartSocket):
 			// No "error: " prefix as this isn't an error.
 			fmt.Fprintf(os.Stdout, "%v\n", err)
 			// This exit code must be in system'd SuccessExitStatus.
 			panic(&exitStatus{42})
+		case errors.Is(err, daemon.ErrRestartServiceFailure):
+			// Daemon returns this exit code for service-failure shutdown.
+			panic(&exitStatus{10})
 		}
 		fmt.Fprintf(os.Stderr, "cannot run daemon: %v\n", err)
 		panic(&exitStatus{1})

@@ -116,7 +116,7 @@ type S struct {
 
 	manager    *servstate.ServiceManager
 	runner     *state.TaskRunner
-	stopDaemon chan struct{}
+	stopDaemon chan restart.RestartType
 
 	donePath string
 }
@@ -196,7 +196,7 @@ func (s *S) SetUpTest(c *C) {
 	})
 
 	s.runner = state.NewTaskRunner(s.st)
-	s.stopDaemon = make(chan struct{})
+	s.stopDaemon = make(chan restart.RestartType, 1)
 
 	restore := servstate.FakeOkayWait(shortOkayDelay)
 	s.AddCleanup(restore)
@@ -1320,13 +1320,14 @@ checks:
 
 	// It should have closed the stopDaemon channel.
 	select {
-	case <-s.stopDaemon:
+	case restartType := <-s.stopDaemon:
+		c.Assert(restartType, Equals, restart.RestartDaemon)
 	case <-time.After(time.Second):
 		c.Fatalf("timed out waiting for stop-daemon channel")
 	}
 }
 
-func (s *S) TestActionShutdown(c *C) {
+func (s *S) TestOnSuccessShutdown(c *C) {
 	s.setupDefaultServiceManager(c)
 	layer := parseLayer(c, 0, "layer", `
 services:
@@ -1351,7 +1352,104 @@ services:
 
 	// It should have closed the stopDaemon channel.
 	select {
-	case <-s.stopDaemon:
+	case restartType := <-s.stopDaemon:
+		c.Assert(restartType, Equals, restart.RestartDaemon)
+	case <-time.After(time.Second):
+		c.Fatalf("timed out waiting for stop-daemon channel")
+	}
+}
+
+func (s *S) TestOnFailureShutdown(c *C) {
+	s.setupDefaultServiceManager(c)
+	layer := parseLayer(c, 0, "layer", `
+services:
+    test2:
+        override: replace
+        command: /bin/sh -c 'sleep 0.15; exit 7'
+        on-failure: shutdown
+`)
+	err := s.manager.AppendLayer(layer)
+	c.Assert(err, IsNil)
+
+	// Start service and wait till it starts up the first time.
+	s.startServices(c, []string{"test2"}, 1)
+	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
+		return svc.Current == servstate.StatusActive
+	})
+
+	// Wait till it terminates.
+	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
+		return svc.Current == servstate.StatusError
+	})
+
+	// It should have closed the stopDaemon channel.
+	select {
+	case restartType := <-s.stopDaemon:
+		c.Assert(restartType, Equals, restart.RestartServiceFailure)
+	case <-time.After(time.Second):
+		c.Fatalf("timed out waiting for stop-daemon channel")
+	}
+}
+
+func (s *S) TestOnSuccessFailureShutdown(c *C) {
+	s.setupDefaultServiceManager(c)
+	layer := parseLayer(c, 0, "layer", `
+services:
+    test2:
+        override: replace
+        command: sleep 0.15
+        on-success: failure-shutdown
+`)
+	err := s.manager.AppendLayer(layer)
+	c.Assert(err, IsNil)
+
+	// Start service and wait till it starts up the first time.
+	s.startServices(c, []string{"test2"}, 1)
+	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
+		return svc.Current == servstate.StatusActive
+	})
+
+	// Wait till it terminates.
+	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
+		return svc.Current == servstate.StatusError
+	})
+
+	// It should have closed the stopDaemon channel.
+	select {
+	case restartType := <-s.stopDaemon:
+		c.Assert(restartType, Equals, restart.RestartServiceFailure)
+	case <-time.After(time.Second):
+		c.Fatalf("timed out waiting for stop-daemon channel")
+	}
+}
+
+func (s *S) TestOnFailureSuccessShutdown(c *C) {
+	s.setupDefaultServiceManager(c)
+	layer := parseLayer(c, 0, "layer", `
+services:
+    test2:
+        override: replace
+        command: /bin/sh -c 'sleep 0.15; exit 7'
+        on-failure: success-shutdown
+`)
+	err := s.manager.AppendLayer(layer)
+	c.Assert(err, IsNil)
+
+	// Start service and wait till it starts up the first time.
+	s.startServices(c, []string{"test2"}, 1)
+	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
+		return svc.Current == servstate.StatusActive
+	})
+
+	// Wait till it terminates.
+	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
+		return svc.Current == servstate.StatusError
+	})
+
+	// It should have closed the stopDaemon channel.
+	select {
+	case restartType := <-s.stopDaemon:
+		c.Assert(restartType, Equals, restart.RestartDaemon)
 	case <-time.After(time.Second):
 		c.Fatalf("timed out waiting for stop-daemon channel")
 	}
@@ -1792,11 +1890,11 @@ func (s *S) stopRunningServices(c *C) {
 }
 
 type testRestarter struct {
-	ch chan struct{}
+	ch chan restart.RestartType
 }
 
 func (r testRestarter) HandleRestart(t restart.RestartType) {
-	close(r.ch)
+	r.ch <- t
 }
 
 // readAndClearLogBuffer reads and clears the current log buffer. If you need
