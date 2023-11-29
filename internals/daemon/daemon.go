@@ -97,7 +97,8 @@ type Daemon struct {
 	router              *mux.Router
 	standbyOpinions     *standby.StandbyOpinions
 
-	restartType restart.RestartType
+	// set to what kind of restart was requested (if any)
+	requestedRestart restart.RestartType
 
 	// degradedErr is set when the daemon is in degraded mode
 	degradedErr error
@@ -526,21 +527,23 @@ func (d *Daemon) Start() error {
 // HandleRestart implements overlord.RestartBehavior.
 func (d *Daemon) HandleRestart(t restart.RestartType) {
 	d.mu.Lock()
-	d.restartType = t
-	d.mu.Unlock()
+	defer d.mu.Unlock()
 
 	// die when asked to restart (systemd should get us back up!) etc
 	switch t {
 	case restart.RestartDaemon, restart.RestartServiceFailure, restart.RestartSocket:
+		d.requestedRestart = t
 	case restart.RestartSystem:
-		// try to schedule a fallback slow reboot already here
+		// try to schedule a fallback slow reboot already here,
 		// in case we get stuck shutting down
 		if err := rebootHandler(rebootWaitTimeout); err != nil {
 			logger.Noticef("%s", err)
 		}
+		d.requestedRestart = t
 	default:
 		logger.Noticef("Internal error: restart handler called with unknown restart type: %v", t)
 	}
+
 	d.tomb.Kill(nil)
 }
 
@@ -575,12 +578,12 @@ func (d *Daemon) Stop(sigCh chan<- os.Signal) error {
 	d.tomb.Kill(nil)
 
 	d.mu.Lock()
-	restartType := d.restartType
+	requestedRestart := d.requestedRestart
 	d.mu.Unlock()
 
 	d.standbyOpinions.Stop()
 
-	if restartType == restart.RestartSystem {
+	if requestedRestart == restart.RestartSystem {
 		// give time to polling clients to notice restart
 		time.Sleep(rebootNoticeWait)
 	}
@@ -592,12 +595,12 @@ func (d *Daemon) Stop(sigCh chan<- os.Signal) error {
 	d.tomb.Kill(d.serve.Shutdown(ctx))
 	cancel()
 
-	if restartType != restart.RestartSystem {
+	if requestedRestart != restart.RestartSystem {
 		// tell systemd that we are stopping
 		systemdSdNotify("STOPPING=1")
 	}
 
-	if restartType == restart.RestartSocket {
+	if requestedRestart == restart.RestartSocket {
 		// At this point we processed all open requests (and
 		// stopped accepting new requests) - before going into
 		// socket activated mode we need to check if any of
@@ -607,7 +610,8 @@ func (d *Daemon) Stop(sigCh chan<- os.Signal) error {
 		// If this is the case we do a "normal" pebble restart
 		// to process the new changes.
 		if !d.standbyOpinions.CanStandby() {
-			d.restartType = restart.RestartUnset
+			requestedRestart = restart.RestartDaemon
+			d.requestedRestart = requestedRestart
 		}
 	}
 	d.overlord.Stop()
@@ -618,18 +622,18 @@ func (d *Daemon) Stop(sigCh chan<- os.Signal) error {
 		// because we already scheduled a slow shutdown and
 		// exiting here will just restart pebble (via systemd)
 		// which will lead to confusing results.
-		if restartType == restart.RestartSystem {
+		if requestedRestart == restart.RestartSystem {
 			logger.Noticef("WARNING: cannot stop daemon: %v", err)
 		} else {
 			return err
 		}
 	}
 
-	if restartType == restart.RestartSystem {
+	if requestedRestart == restart.RestartSystem {
 		return d.doReboot(sigCh, rebootWaitTimeout)
 	}
 
-	switch d.restartType {
+	switch requestedRestart {
 	case restart.RestartSocket:
 		return ErrRestartSocket
 	case restart.RestartServiceFailure:

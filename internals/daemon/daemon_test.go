@@ -779,7 +779,7 @@ func (s *daemonSuite) TestRestartSystemWiring(c *C) {
 
 	defer func() {
 		d.mu.Lock()
-		d.restartType = restart.RestartUnset
+		d.requestedRestart = restart.RestartUnset
 		d.mu.Unlock()
 	}()
 
@@ -790,7 +790,7 @@ func (s *daemonSuite) TestRestartSystemWiring(c *C) {
 	}
 
 	d.mu.Lock()
-	restartType := d.restartType
+	restartType := d.requestedRestart
 	d.mu.Unlock()
 
 	c.Check(restartType, Equals, restart.RestartSystem)
@@ -1052,7 +1052,7 @@ func (s *daemonSuite) TestRestartIntoSocketModeNoNewChanges(c *C) {
 	}
 	err := d.Stop(nil)
 	c.Check(err, Equals, ErrRestartSocket)
-	c.Check(d.restartType, Equals, restart.RestartSocket)
+	c.Check(d.requestedRestart, Equals, restart.RestartSocket)
 }
 
 func (s *daemonSuite) TestRestartIntoSocketModePendingChanges(c *C) {
@@ -1095,7 +1095,7 @@ func (s *daemonSuite) TestRestartIntoSocketModePendingChanges(c *C) {
 	// when the daemon got a pending change it just restarts
 	err := d.Stop(nil)
 	c.Check(err, IsNil)
-	c.Check(d.restartType, Equals, restart.RestartUnset)
+	c.Check(d.requestedRestart, Equals, restart.RestartDaemon)
 }
 
 func (s *daemonSuite) TestRestartServiceFailure(c *C) {
