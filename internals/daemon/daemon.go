@@ -49,6 +49,7 @@ import (
 var (
 	ErrRestartSocket         = fmt.Errorf("daemon stop requested to wait for socket activation")
 	ErrRestartServiceFailure = fmt.Errorf("daemon stop requested due to service failure")
+	ErrRestartCheckFailure   = fmt.Errorf("daemon stop requested due to check failure")
 
 	systemdSdNotify = systemd.SdNotify
 	sysGetuid       = sys.Getuid
@@ -531,7 +532,8 @@ func (d *Daemon) HandleRestart(t restart.RestartType) {
 
 	// die when asked to restart (systemd should get us back up!) etc
 	switch t {
-	case restart.RestartDaemon, restart.RestartServiceFailure, restart.RestartSocket:
+	case restart.RestartDaemon, restart.RestartSocket,
+		restart.RestartServiceFailure, restart.RestartCheckFailure:
 		d.requestedRestart = t
 	case restart.RestartSystem:
 		// try to schedule a fallback slow reboot already here,
@@ -638,6 +640,8 @@ func (d *Daemon) Stop(sigCh chan<- os.Signal) error {
 		return ErrRestartSocket
 	case restart.RestartServiceFailure:
 		return ErrRestartServiceFailure
+	case restart.RestartCheckFailure:
+		return ErrRestartCheckFailure
 	}
 
 	return nil

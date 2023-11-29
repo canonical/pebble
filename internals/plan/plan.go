@@ -665,7 +665,7 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 			}
 		}
 		for _, action := range service.OnCheckFailure {
-			if !validServiceAction(action) {
+			if !validServiceAction(action, ActionSuccessShutdown) {
 				return nil, &FormatError{
 					Message: fmt.Sprintf("plan service %q on-check-failure action %q invalid", name, action),
 				}

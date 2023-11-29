@@ -1257,6 +1257,14 @@ checks:
 }
 
 func (s *S) TestOnCheckFailureShutdown(c *C) {
+	s.testOnCheckFailureShutdown(c, "shutdown", restart.RestartCheckFailure)
+}
+
+func (s *S) TestOnCheckFailureSuccessShutdown(c *C) {
+	s.testOnCheckFailureShutdown(c, "success-shutdown", restart.RestartDaemon)
+}
+
+func (s *S) testOnCheckFailureShutdown(c *C, action string, restartType restart.RestartType) {
 	s.setupDefaultServiceManager(c)
 	// Create check manager and tell it about plan updates
 	checkMgr := checkstate.NewManager()
@@ -1283,7 +1291,7 @@ services:
         override: replace
         command: /bin/sh -c 'echo x >>%s; %s; sleep 10'
         on-check-failure:
-            chk1: shutdown
+            chk1: %s
 
 checks:
     chk1:
@@ -1292,7 +1300,7 @@ checks:
          threshold: 1
          exec:
              command: will-fail
-`, tempFile, s.insertDoneCheck(c, "test2")))
+`, tempFile, s.insertDoneCheck(c, "test2"), action))
 	err := s.manager.AppendLayer(layer)
 	c.Assert(err, IsNil)
 
@@ -1320,8 +1328,8 @@ checks:
 
 	// It should have closed the stopDaemon channel.
 	select {
-	case restartType := <-s.stopDaemon:
-		c.Assert(restartType, Equals, restart.RestartDaemon)
+	case t := <-s.stopDaemon:
+		c.Assert(t, Equals, restartType)
 	case <-time.After(time.Second):
 		c.Fatalf("timed out waiting for stop-daemon channel")
 	}

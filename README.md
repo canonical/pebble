@@ -317,7 +317,8 @@ services:
     server:
         override: merge
         on-check-failure:
-            test: restart   # can also be "shutdown" or "ignore" (the default)
+            # can also be "shutdown", "success-shutdown", or "ignore" (the default)
+            test: restart
 ```
 
 You can view check status using the `pebble checks` command. This reports the checks along with their status (`up` or `down`) and number of failures. For example:
@@ -714,10 +715,11 @@ services:
         # fail. Possible values are:
         #
         # - restart (default): restart the service once
-        # - shutdown: shut down and exit the Pebble daemon
+        # - shutdown: shut down and exit the Pebble daemon (with exit code 11)
+        # - success-shutdown: shut down and exit Pebble, ensuring exit code 0
         # - ignore: do nothing further
         on-check-failure:
-            <check name>: restart | shutdown | ignore
+            <check name>: restart | shutdown | success-shutdown | ignore
 
         # (Optional) Initial backoff delay for the "restart" exit action.
         # Default is half a second ("500ms").

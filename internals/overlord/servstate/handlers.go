@@ -801,7 +801,11 @@ func (s *serviceData) checkFailed(action plan.ServiceAction) {
 			logger.Debugf("Service %q %s action is %q, remaining in current state", s.config.Name, onType, action)
 
 		case plan.ActionShutdown:
-			logger.Noticef("Service %q %s action is %q, triggering server exit", s.config.Name, onType, action)
+			logger.Noticef("Service %q %s action is %q, triggering failure shutdown", s.config.Name, onType, action)
+			s.manager.restarter.HandleRestart(restart.RestartCheckFailure)
+
+		case plan.ActionSuccessShutdown:
+			logger.Noticef("Service %q %s action is %q, triggering success shutdown", s.config.Name, onType, action)
 			s.manager.restarter.HandleRestart(restart.RestartDaemon)
 
 		case plan.ActionRestart:

@@ -100,8 +100,11 @@ func (rcmd *cmdRun) run(ready chan<- func()) {
 			// This exit code must be in system'd SuccessExitStatus.
 			panic(&exitStatus{42})
 		case errors.Is(err, daemon.ErrRestartServiceFailure):
-			// Daemon returns this exit code for service-failure shutdown.
+			// Daemon returns distinct code for service-failure shutdown.
 			panic(&exitStatus{10})
+		case errors.Is(err, daemon.ErrRestartCheckFailure):
+			// Daemon returns distinct code for check-failure shutdown.
+			panic(&exitStatus{11})
 		}
 		fmt.Fprintf(os.Stderr, "cannot run daemon: %v\n", err)
 		panic(&exitStatus{1})

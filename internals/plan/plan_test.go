@@ -441,7 +441,7 @@ var planTests = []planTest{{
 				on-success: foo
 	`},
 }, {
-	summary: `Invalid success-shutdown`,
+	summary: `Invalid on-success success-shutdown`,
 	error:   `plan service "svc1" on-success action "success-shutdown" invalid`,
 	input: []string{`
 		services:
@@ -451,7 +451,7 @@ var planTests = []planTest{{
 				on-success: success-shutdown
 	`},
 }, {
-	summary: `Invalid failure-shutdown`,
+	summary: `Invalid on-failure failure-shutdown`,
 	error:   `plan service "svc1" on-failure action "failure-shutdown" invalid`,
 	input: []string{`
 		services:
@@ -459,6 +459,22 @@ var planTests = []planTest{{
 				override: replace
 				command: cmd
 				on-failure: failure-shutdown
+	`},
+}, {
+	summary: `Invalid on-check-failure failure-shutdown`,
+	error:   `plan service "svc1" on-check-failure action "failure-shutdown" invalid`,
+	input: []string{`
+		services:
+			"svc1":
+				override: replace
+				command: cmd
+				on-check-failure:
+					test: failure-shutdown
+		checks:
+			test:
+				override: replace
+				http:
+					url: https://example.com/foo
 	`},
 }, {
 	summary: `Invalid backoff-delay duration`,
