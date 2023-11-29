@@ -527,25 +527,25 @@ func (d *Daemon) Start() error {
 
 // HandleRestart implements overlord.RestartBehavior.
 func (d *Daemon) HandleRestart(t restart.RestartType) {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-
 	// die when asked to restart (systemd should get us back up!) etc
 	switch t {
 	case restart.RestartDaemon, restart.RestartSocket,
 		restart.RestartServiceFailure, restart.RestartCheckFailure:
+		d.mu.Lock()
 		d.requestedRestart = t
+		d.mu.Unlock()
 	case restart.RestartSystem:
 		// try to schedule a fallback slow reboot already here,
 		// in case we get stuck shutting down
 		if err := rebootHandler(rebootWaitTimeout); err != nil {
 			logger.Noticef("%s", err)
 		}
+		d.mu.Lock()
 		d.requestedRestart = t
+		d.mu.Unlock()
 	default:
 		logger.Noticef("Internal error: restart handler called with unknown restart type: %v", t)
 	}
-
 	d.tomb.Kill(nil)
 }
 
