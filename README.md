@@ -264,8 +264,8 @@ Pebble's service manager automatically restarts services that exit unexpectedly.
 
 * `restart`: restart the service and enter a restart-backoff loop (the default behaviour).
 * `shutdown`: shut down and exit the Pebble daemon (with exit code 0 if the service exits successfully, exit code 10 otherwise)
-  - `success-shutdown`: shut down, ensuring exit code 0 (valid only for `on-failure`)
-  - `failure-shutdown`: shut down, ensuring exit code 10 (valid only for `on-success`)
+  - `success-shutdown`: shut down with exit code 0 (valid only for `on-failure`)
+  - `failure-shutdown`: shut down with exit code 10 (valid only for `on-success`)
 * `ignore`: ignore the service exiting and do nothing further
 
 In `restart` mode, the first time a service exits, Pebble waits the `backoff-delay`, which defaults to half a second. If the service exits again, Pebble calculates the next backoff delay by multiplying the current delay by `backoff-factor`, which defaults to 2.0 (doubling). The increasing delay is capped at `backoff-limit`, which defaults to 30 seconds.
@@ -698,7 +698,7 @@ services:
         #
         # - restart (default): restart the service after the backoff delay
         # - shutdown: shut down and exit the Pebble daemon (with exit code 0)
-        # - failure-shutdown: shut down and exit Pebble, ensuring exit code 10
+        # - failure-shutdown: shut down and exit Pebble with exit code 10
         # - ignore: do nothing further
         on-success: restart | shutdown | failure-shutdown | ignore
 
@@ -707,7 +707,7 @@ services:
         #
         # - restart (default): restart the service after the backoff delay
         # - shutdown: shut down and exit the Pebble daemon (with exit code 10)
-        # - success-shutdown: shut down and exit Pebble, ensuring exit code 0
+        # - success-shutdown: shut down and exit Pebble with exit code 0
         # - ignore: do nothing further
         on-failure: restart | shutdown | success-shutdown | ignore
 
@@ -716,7 +716,7 @@ services:
         #
         # - restart (default): restart the service once
         # - shutdown: shut down and exit the Pebble daemon (with exit code 11)
-        # - success-shutdown: shut down and exit Pebble, ensuring exit code 0
+        # - success-shutdown: shut down and exit Pebble with exit code 0
         # - ignore: do nothing further
         on-check-failure:
             <check name>: restart | shutdown | success-shutdown | ignore
