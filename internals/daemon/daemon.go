@@ -527,6 +527,11 @@ func (d *Daemon) Start() error {
 
 // HandleRestart implements overlord.RestartBehavior.
 func (d *Daemon) HandleRestart(t restart.RestartType) {
+	if !d.tomb.Alive() {
+		// Already shutting down, do nothing.
+		return
+	}
+
 	// die when asked to restart (systemd should get us back up!) etc
 	switch t {
 	case restart.RestartDaemon, restart.RestartSocket,
