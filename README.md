@@ -263,7 +263,9 @@ If the configuration of `requires`, `before`, and `after` for a service results 
 Pebble's service manager automatically restarts services that exit unexpectedly. By default, this is done whether the exit code is zero or non-zero, but you can change this using the `on-success` and `on-failure` fields in a configuration layer. The possible values for these fields are:
 
 * `restart`: restart the service and enter a restart-backoff loop (the default behaviour).
-* `shutdown`: shut down and exit the Pebble daemon
+* `shutdown`: shut down and exit the Pebble daemon (with exit code 0 if the service exits successfully, exit code 10 otherwise)
+  - `success-shutdown`: shut down with exit code 0 (valid only for `on-failure`)
+  - `failure-shutdown`: shut down with exit code 10 (valid only for `on-success`)
 * `ignore`: ignore the service exiting and do nothing further
 
 In `restart` mode, the first time a service exits, Pebble waits the `backoff-delay`, which defaults to half a second. If the service exits again, Pebble calculates the next backoff delay by multiplying the current delay by `backoff-factor`, which defaults to 2.0 (doubling). The increasing delay is capped at `backoff-limit`, which defaults to 30 seconds.
@@ -315,7 +317,8 @@ services:
     server:
         override: merge
         on-check-failure:
-            test: restart   # can also be "shutdown" or "ignore" (the default)
+            # can also be "shutdown", "success-shutdown", or "ignore" (the default)
+            test: restart
 ```
 
 You can view check status using the `pebble checks` command. This reports the checks along with their status (`up` or `down`) and number of failures. For example:
@@ -691,23 +694,32 @@ services:
         working-dir: <directory>
 
         # (Optional) Defines what happens when the service exits with a zero
-        # exit code. Possible values are: "restart" (default) which restarts
-        # the service after the backoff delay, "shutdown" which shuts down and
-        # exits the Pebble server, and "ignore" which does nothing further.
-        on-success: restart | shutdown | ignore
+        # exit code. Possible values are:
+        #
+        # - restart (default): restart the service after the backoff delay
+        # - shutdown: shut down and exit the Pebble daemon (with exit code 0)
+        # - failure-shutdown: shut down and exit Pebble with exit code 10
+        # - ignore: do nothing further
+        on-success: restart | shutdown | failure-shutdown | ignore
 
         # (Optional) Defines what happens when the service exits with a nonzero
-        # exit code. Possible values are: "restart" (default) which restarts
-        # the service after the backoff delay, "shutdown" which shuts down and
-        # exits the Pebble server, and "ignore" which does nothing further.
-        on-failure: restart | shutdown | ignore
+        # exit code. Possible values are:
+        #
+        # - restart (default): restart the service after the backoff delay
+        # - shutdown: shut down and exit the Pebble daemon (with exit code 10)
+        # - success-shutdown: shut down and exit Pebble with exit code 0
+        # - ignore: do nothing further
+        on-failure: restart | shutdown | success-shutdown | ignore
 
         # (Optional) Defines what happens when each of the named health checks
-        # fail. Possible values are: "restart" (default) which restarts
-        # the service once, "shutdown" which shuts down and exits the Pebble
-        # server, and "ignore" which does nothing further.
+        # fail. Possible values are:
+        #
+        # - restart (default): restart the service once
+        # - shutdown: shut down and exit the Pebble daemon (with exit code 11)
+        # - success-shutdown: shut down and exit Pebble with exit code 0
+        # - ignore: do nothing further
         on-check-failure:
-            <check name>: restart | shutdown | ignore
+            <check name>: restart | shutdown | success-shutdown | ignore
 
         # (Optional) Initial backoff delay for the "restart" exit action.
         # Default is half a second ("500ms").
