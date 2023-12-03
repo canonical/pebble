@@ -136,7 +136,7 @@ const (
 	PrivateNotice NoticeVisibility = "private"
 
 	// A public notice is viewable by all users.
-	PublicNotice  NoticeVisibility = "public"
+	PublicNotice NoticeVisibility = "public"
 )
 
 type jsonNotice struct {

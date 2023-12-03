@@ -212,7 +212,7 @@ const (
 	PrivateNotice NoticeVisibility = "private"
 
 	// Notice is viewable by all users.
-	PublicNotice  NoticeVisibility = "public"
+	PublicNotice NoticeVisibility = "public"
 )
 
 func (v NoticeVisibility) Valid() bool {

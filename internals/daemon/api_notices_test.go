@@ -852,9 +852,9 @@ func (s *apiSuite) TestAddNoticeMismatchedVisibility(c *C) {
 	defer restore()
 
 	requestMap := map[string]any{
-		"action": "add",
-		"type": "custom",
-		"key": "a.b/1",
+		"action":     "add",
+		"type":       "custom",
+		"key":        "a.b/1",
 		"visibility": "public",
 	}
 

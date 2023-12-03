@@ -41,7 +41,7 @@ func (s *noticesSuite) TestMarshal(c *C) {
 	addNotice(c, st, 1000, state.CustomNotice, "foo.com/bar", nil)
 	time.Sleep(time.Microsecond) // ensure there's time between the occurrences
 	addNotice(c, st, 1000, state.CustomNotice, "foo.com/bar", &state.AddNoticeOptions{
-		Data:   map[string]string{"k": "v"},
+		Data: map[string]string{"k": "v"},
 	})
 
 	notices := st.Notices(nil)
