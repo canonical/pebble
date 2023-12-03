@@ -83,6 +83,7 @@ type Overlord struct {
 
 	// managers
 	inited     bool
+	startedUp  bool
 	runner     *state.TaskRunner
 	serviceMgr *servstate.ServiceManager
 	commandMgr *cmdstate.CommandManager
@@ -252,6 +253,14 @@ func initRestart(s *state.State, curBootID string, restartHandler restart.Handle
 	return restart.Init(s, curBootID, restartHandler)
 }
 
+func (o *Overlord) StartUp() error {
+	if o.startedUp {
+		return nil
+	}
+	o.startedUp = true
+	return o.stateEng.StartUp()
+}
+
 func (o *Overlord) ensureTimerSetup() {
 	o.ensureLock.Lock()
 	defer o.ensureLock.Unlock()
@@ -337,6 +346,10 @@ func (o *Overlord) Stop() error {
 }
 
 func (o *Overlord) settle(timeout time.Duration, beforeCleanups func()) error {
+	if err := o.StartUp(); err != nil {
+		return err
+	}
+
 	func() {
 		o.ensureLock.Lock()
 		defer o.ensureLock.Unlock()
@@ -406,7 +419,7 @@ func (o *Overlord) settle(timeout time.Duration, beforeCleanups func()) error {
 // is scheduled. It then waits similarly for all ready changes to
 // reach the clean state. Chiefly for tests. Cannot be used in
 // conjunction with Loop. If timeout is non-zero and settling takes
-// longer than timeout, returns an error.
+// longer than timeout, returns an error. Calls StartUp as well.
 func (o *Overlord) Settle(timeout time.Duration) error {
 	return o.settle(timeout, nil)
 }
@@ -418,7 +431,7 @@ func (o *Overlord) Settle(timeout time.Duration) error {
 // changes to reach the clean state, but calls once the provided
 // callback before doing that. Chiefly for tests. Cannot be used in
 // conjunction with Loop. If timeout is non-zero and settling takes
-// longer than timeout, returns an error.
+// longer than timeout, returns an error. Calls StartUp as well.
 func (o *Overlord) SettleObserveBeforeCleanups(timeout time.Duration, beforeCleanups func()) error {
 	return o.settle(timeout, beforeCleanups)
 }

@@ -215,6 +215,49 @@ func (s *apiSuite) TestNoticesFilterMultipleKeys(c *C) {
 	c.Assert(n["key"], Equals, "danger")
 }
 
+func (s *apiSuite) TestNoticesFilterInvalidTypes(c *C) {
+	s.daemon(c)
+	restore := mockSysGetuid(0)
+	defer restore()
+
+	st := s.d.Overlord().State()
+	st.Lock()
+	addNotice(c, st, 1000, state.ChangeUpdateNotice, "123", nil)
+	addNotice(c, st, 1000, state.WarningNotice, "danger", nil)
+	st.Unlock()
+
+	// Check that invalid types are discarded, and notices with remaining
+	// types are requested as expected, without error.
+	req, err := http.NewRequest("GET", "/v1/notices?types=foo&types=warning&types=bar,baz", nil)
+	req.RemoteAddr = "pid=100;uid=1000;socket=;"
+	c.Assert(err, IsNil)
+	noticesCmd := apiCmd("/v1/notices")
+	rsp, ok := noticesCmd.GET(noticesCmd, req, nil).(*resp)
+	c.Assert(ok, Equals, true)
+
+	c.Check(rsp.Type, Equals, ResponseTypeSync)
+	c.Check(rsp.Status, Equals, http.StatusOK)
+	notices, ok := rsp.Result.([]*state.Notice)
+	c.Assert(ok, Equals, true)
+	c.Assert(notices, HasLen, 1)
+	n := noticeToMap(c, notices[0])
+	c.Assert(n["type"], Equals, "warning")
+
+	// Check that if all types are invalid, no notices are returned, and there
+	// is no error.
+	req, err = http.NewRequest("GET", "/v1/notices?types=foo&types=bar,baz", nil)
+	c.Assert(err, IsNil)
+	noticesCmd = apiCmd("/v1/notices")
+	rsp, ok = noticesCmd.GET(noticesCmd, req, nil).(*resp)
+	c.Assert(ok, Equals, true)
+
+	c.Check(rsp.Type, Equals, ResponseTypeSync)
+	c.Check(rsp.Status, Equals, http.StatusOK)
+	notices, ok = rsp.Result.([]*state.Notice)
+	c.Assert(ok, Equals, true)
+	c.Assert(notices, HasLen, 0)
+}
+
 func (s *apiSuite) TestNoticesUserIDsRootDefault(c *C) {
 	s.daemon(c)
 	restore := mockSysGetuid(0)

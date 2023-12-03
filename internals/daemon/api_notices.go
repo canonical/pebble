@@ -62,16 +62,11 @@ func v1GetNotices(c *Command, r *http.Request, _ *UserState) Response {
 		return statusBadRequest(`invalid "user-ids" filter: %v`, err)
 	}
 
-	typeStrs := strutil.MultiCommaSeparatedList(query["types"])
-	types := make([]state.NoticeType, 0, len(typeStrs))
-	for _, typeStr := range typeStrs {
-		noticeType := state.NoticeType(typeStr)
-		if !noticeType.Valid() {
-			// Ignore invalid notice types (so requests from newer clients
-			// with unknown types succeed).
-			continue
-		}
-		types = append(types, noticeType)
+	types, err := sanitizeTypesFilter(query["types"])
+	if err != nil {
+		// Caller did provide a types filter, but they're all invalid notice types.
+		// Return no notices, rather than the default of all notices.
+		return SyncResponse([]*state.Notice{})
 	}
 
 	keys := strutil.MultiCommaSeparatedList(query["keys"])
@@ -97,16 +92,18 @@ func v1GetNotices(c *Command, r *http.Request, _ *UserState) Response {
 		Visibilities: visibilities,
 		After:        after,
 	}
-	var notices []*state.Notice
-
-	st := c.d.overlord.State()
-	st.Lock()
-	defer st.Unlock()
 
 	timeout, err := parseOptionalDuration(query.Get("timeout"))
 	if err != nil {
 		return statusBadRequest("invalid timeout: %v", err)
 	}
+
+	st := c.d.overlord.State()
+	st.Lock()
+	defer st.Unlock()
+
+	var notices []*state.Notice
+
 	if timeout != 0 {
 		// Wait up to timeout for notices matching given filter to occur
 		ctx, cancel := context.WithTimeout(r.Context(), timeout)
@@ -167,6 +164,25 @@ func sanitizeUserIDsFilter(reqUid uint32, queryUserIDs []string) ([]uint32, erro
 		userIDs = append(userIDs, uint32(userID))
 	}
 	return userIDs, nil
+}
+
+// Construct the types filter which will be passed into the notices state.
+func sanitizeTypesFilter(queryTypes []string) ([]state.NoticeType, error) {
+	typeStrs := strutil.MultiCommaSeparatedList(queryTypes)
+	types := make([]state.NoticeType, 0, len(typeStrs))
+	for _, typeStr := range typeStrs {
+		noticeType := state.NoticeType(typeStr)
+		if !noticeType.Valid() {
+			// Ignore invalid notice types (so requests from newer clients
+			// with unknown types succeed).
+			continue
+		}
+		types = append(types, noticeType)
+	}
+	if len(types) == 0 && len(typeStrs) > 0 {
+		return nil, errors.New("all requested notice types invalid")
+	}
+	return types, nil
 }
 
 // Construct the visibilities filter which will be passed into the notices state.

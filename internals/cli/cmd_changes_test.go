@@ -177,7 +177,7 @@ func (s *PebbleSuite) TestChangeSimpleRebooting(c *check.C) {
 
 	_, err := cli.Parser(cli.Client()).ParseArgs([]string{"tasks", "42"})
 	c.Assert(err, check.IsNil)
-	c.Check(s.Stderr(), check.Equals, "WARNING: pebble is about to reboot the system\n")
+	c.Check(s.Stderr(), check.Equals, "WARNING: Pebble is about to reboot the system\n")
 }
 
 func (s *PebbleSuite) TestChangeSimpleUnknownMaintenance(c *check.C) {

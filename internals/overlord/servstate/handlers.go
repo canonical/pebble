@@ -525,8 +525,25 @@ func (s *serviceData) exited(exitCode int) error {
 			s.transition(stateExited)
 
 		case plan.ActionShutdown:
-			logger.Noticef("Service %q %s action is %q, triggering server exit", s.config.Name, onType, action)
+			shutdownStr := "success"
+			restartType := restart.RestartDaemon
+			if exitCode != 0 {
+				shutdownStr = "failure"
+				restartType = restart.RestartServiceFailure
+			}
+			logger.Noticef("Service %q %s action is %q, triggering %s shutdown",
+				s.config.Name, onType, action, shutdownStr)
+			s.manager.restarter.HandleRestart(restartType)
+			s.transition(stateExited)
+
+		case plan.ActionSuccessShutdown:
+			logger.Noticef("Service %q %s action is %q, triggering success shutdown", s.config.Name, onType, action)
 			s.manager.restarter.HandleRestart(restart.RestartDaemon)
+			s.transition(stateExited)
+
+		case plan.ActionFailureShutdown:
+			logger.Noticef("Service %q %s action is %q, triggering failure shutdown", s.config.Name, onType, action)
+			s.manager.restarter.HandleRestart(restart.RestartServiceFailure)
 			s.transition(stateExited)
 
 		case plan.ActionRestart:
@@ -784,7 +801,11 @@ func (s *serviceData) checkFailed(action plan.ServiceAction) {
 			logger.Debugf("Service %q %s action is %q, remaining in current state", s.config.Name, onType, action)
 
 		case plan.ActionShutdown:
-			logger.Noticef("Service %q %s action is %q, triggering server exit", s.config.Name, onType, action)
+			logger.Noticef("Service %q %s action is %q, triggering failure shutdown", s.config.Name, onType, action)
+			s.manager.restarter.HandleRestart(restart.RestartCheckFailure)
+
+		case plan.ActionSuccessShutdown:
+			logger.Noticef("Service %q %s action is %q, triggering success shutdown", s.config.Name, onType, action)
 			s.manager.restarter.HandleRestart(restart.RestartDaemon)
 
 		case plan.ActionRestart:

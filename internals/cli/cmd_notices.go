@@ -29,7 +29,7 @@ const cmdNoticesSummary = "List notices"
 const cmdNoticesDescription = `
 The notices command lists notices not yet acknowledged, ordered by the
 last-repeated time (oldest first). After it runs, the notices that were shown
-may then be acknowledged by running 'pebble okay'. When a notice repeats, it
+may then be acknowledged by running '{{.ProgramName}} okay'. When a notice repeats, it
 needs to be acknowledged again.
 `
 

@@ -33,6 +33,7 @@ import (
 	"golang.org/x/crypto/ssh/terminal"
 
 	"github.com/canonical/pebble/client"
+	"github.com/canonical/pebble/cmd"
 	"github.com/canonical/pebble/internals/logger"
 )
 
@@ -165,8 +166,9 @@ func Parser(cli *client.Client) *flags.Parser {
 
 	flagOpts := flags.Options(flags.PassDoubleDash)
 	parser := flags.NewParser(&defaultOpts, flagOpts)
-	parser.ShortDescription = "Tool to interact with pebble"
-	parser.LongDescription = longPebbleDescription
+	parser.Command.Name = cmd.ProgramName
+	parser.ShortDescription = "System and service manager"
+	parser.LongDescription = applyPersonality(longPebbleDescription)
 
 	// Add --help like what go-flags would do for us, but hidden
 	addHelp(parser)
@@ -192,7 +194,7 @@ func Parser(cli *client.Client) *flags.Parser {
 		} else {
 			target = parser.Command
 		}
-		cmd, err := target.AddCommand(c.Name, c.Summary, strings.TrimSpace(c.Description), obj)
+		cmd, err := target.AddCommand(c.Name, applyPersonality(c.Summary), applyPersonality(strings.TrimSpace(c.Description)), obj)
 		if err != nil {
 			logger.Panicf("internal error: cannot add command %q: %v", c.Name, err)
 		}
@@ -203,9 +205,9 @@ func Parser(cli *client.Client) *flags.Parser {
 		positionalHelp := map[string]string{}
 		for specifier, help := range c.ArgsHelp {
 			if flagRegexp.MatchString(specifier) {
-				flagHelp[specifier] = help
+				flagHelp[specifier] = applyPersonality(help)
 			} else if positionalRegexp.MatchString(specifier) {
-				positionalHelp[specifier] = help
+				positionalHelp[specifier] = applyPersonality(help)
 			} else {
 				logger.Panicf("internal error: invalid help specifier from %q: %q", c.Name, specifier)
 			}
@@ -219,10 +221,10 @@ func Parser(cli *client.Client) *flags.Parser {
 		for _, opt := range opts {
 			if description, ok := flagHelp["--"+opt.LongName]; ok {
 				lintDesc(c.Name, opt.LongName, description, opt.Description)
-				opt.Description = description
+				opt.Description = applyPersonality(description)
 			} else if description, ok := flagHelp["-"+string(opt.ShortName)]; ok {
 				lintDesc(c.Name, string(opt.ShortName), description, opt.Description)
-				opt.Description = description
+				opt.Description = applyPersonality(description)
 			} else if !opt.Hidden {
 				logger.Panicf("internal error: %q missing description for %q", c.Name, opt)
 			}
@@ -238,6 +240,11 @@ func Parser(cli *client.Client) *flags.Parser {
 		}
 	}
 	return parser
+}
+
+func applyPersonality(s string) string {
+	r := strings.NewReplacer("{{.ProgramName}}", cmd.ProgramName, "{{.DisplayName}}", cmd.DisplayName)
+	return r.Replace(s)
 }
 
 var (
@@ -271,7 +278,7 @@ func Run() error {
 		}
 	}()
 
-	logger.SetLogger(logger.New(os.Stderr, "[pebble] "))
+	logger.SetLogger(logger.New(os.Stderr, fmt.Sprintf("[%s] ", cmd.ProgramName)))
 
 	_, clientConfig.Socket = getEnvPaths()
 
@@ -293,11 +300,11 @@ func Run() error {
 				return nil
 			case flags.ErrUnknownCommand:
 				sub := os.Args[1]
-				sug := "pebble help"
+				sug := cmd.ProgramName + " help"
 				if len(xtra) > 0 {
 					sub = xtra[0]
 					if x := parser.Command.Active; x != nil && x.Name != "help" {
-						sug = "pebble help " + x.Name
+						sug = cmd.ProgramName + " help " + x.Name
 					}
 				}
 				return fmt.Errorf("unknown command %q, see '%s'", sub, sug)
@@ -341,7 +348,7 @@ func errorToMessage(e error) (normalMessage string, err error) {
 		}
 	case client.ErrorKindSystemRestart:
 		isError = false
-		msg = "pebble is about to reboot the system"
+		msg = fmt.Sprintf("%s is about to reboot the system", cmd.DisplayName)
 	case client.ErrorKindNoDefaultServices:
 		msg = "no default services"
 	default:

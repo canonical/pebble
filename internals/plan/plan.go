@@ -290,10 +290,15 @@ const (
 type ServiceAction string
 
 const (
+	// Actions allowed in all contexts
 	ActionUnset    ServiceAction = ""
 	ActionRestart  ServiceAction = "restart"
 	ActionShutdown ServiceAction = "shutdown"
 	ActionIgnore   ServiceAction = "ignore"
+
+	// Actions only allowed in specific contexts
+	ActionFailureShutdown ServiceAction = "failure-shutdown"
+	ActionSuccessShutdown ServiceAction = "success-shutdown"
 )
 
 // Check specifies configuration for a single health check.
@@ -649,18 +654,18 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 				Message: fmt.Sprintf("plan service %q command invalid: %v", name, err),
 			}
 		}
-		if !validServiceAction(service.OnSuccess) {
+		if !validServiceAction(service.OnSuccess, ActionFailureShutdown) {
 			return nil, &FormatError{
 				Message: fmt.Sprintf("plan service %q on-success action %q invalid", name, service.OnSuccess),
 			}
 		}
-		if !validServiceAction(service.OnFailure) {
+		if !validServiceAction(service.OnFailure, ActionSuccessShutdown) {
 			return nil, &FormatError{
 				Message: fmt.Sprintf("plan service %q on-failure action %q invalid", name, service.OnFailure),
 			}
 		}
 		for _, action := range service.OnCheckFailure {
-			if !validServiceAction(action) {
+			if !validServiceAction(action, ActionSuccessShutdown) {
 				return nil, &FormatError{
 					Message: fmt.Sprintf("plan service %q on-check-failure action %q invalid", name, action),
 				}
@@ -1000,7 +1005,12 @@ func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 	return &layer, err
 }
 
-func validServiceAction(action ServiceAction) bool {
+func validServiceAction(action ServiceAction, additionalValid ...ServiceAction) bool {
+	for _, v := range additionalValid {
+		if action == v {
+			return true
+		}
+	}
 	switch action {
 	case ActionUnset, ActionRestart, ActionShutdown, ActionIgnore:
 		return true

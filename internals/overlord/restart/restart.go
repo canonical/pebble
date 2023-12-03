@@ -36,6 +36,8 @@ const (
 	RestartSystemHaltNow
 	// RestartSystemPoweroffNow will shutdown --poweroff the system asap
 	RestartSystemPoweroffNow
+	RestartServiceFailure
+	RestartCheckFailure
 )
 
 // Handler can handle restart requests and whether expected reboots happen.

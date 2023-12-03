@@ -1,6 +1,9 @@
 # The Pebble service manager
 
 [![pebble](https://snapcraft.io/pebble/badge.svg)](https://snapcraft.io/pebble)
+[![snap](https://github.com/canonical/pebble/actions/workflows/snap.yml/badge.svg)](https://github.com/canonical/pebble/actions/workflows/snap.yml)
+[![binaries](https://github.com/canonical/pebble/actions/workflows/binaries.yml/badge.svg)](https://github.com/canonical/pebble/actions/workflows/binaries.yml)
+[![tests](https://github.com/canonical/pebble/actions/workflows/tests.yml/badge.svg)](https://github.com/canonical/pebble/actions/workflows/tests.yml)
 
 _Take control of your internal daemons!_
 
@@ -15,7 +18,6 @@ designed with unique features that help with more specific use cases.
   - [Container usage](#container-usage)
   - [Layer specification](#layer-specification)
   - [API and clients](#api-and-clients)
-  - [Roadmap/TODO](#roadmap--todo)
   - [Hacking / Development](#hacking--development)
   - [Contributing](#contributing)
 
@@ -261,7 +263,9 @@ If the configuration of `requires`, `before`, and `after` for a service results 
 Pebble's service manager automatically restarts services that exit unexpectedly. By default, this is done whether the exit code is zero or non-zero, but you can change this using the `on-success` and `on-failure` fields in a configuration layer. The possible values for these fields are:
 
 * `restart`: restart the service and enter a restart-backoff loop (the default behaviour).
-* `shutdown`: shut down and exit the Pebble daemon
+* `shutdown`: shut down and exit the Pebble daemon (with exit code 0 if the service exits successfully, exit code 10 otherwise)
+  - `success-shutdown`: shut down with exit code 0 (valid only for `on-failure`)
+  - `failure-shutdown`: shut down with exit code 10 (valid only for `on-success`)
 * `ignore`: ignore the service exiting and do nothing further
 
 In `restart` mode, the first time a service exits, Pebble waits the `backoff-delay`, which defaults to half a second. If the service exits again, Pebble calculates the next backoff delay by multiplying the current delay by `backoff-factor`, which defaults to 2.0 (doubling). The increasing delay is capped at `backoff-limit`, which defaults to 30 seconds.
@@ -313,7 +317,8 @@ services:
     server:
         override: merge
         on-check-failure:
-            test: restart   # can also be "shutdown" or "ignore" (the default)
+            # can also be "shutdown", "success-shutdown", or "ignore" (the default)
+            test: restart
 ```
 
 You can view check status using the `pebble checks` command. This reports the checks along with their status (`up` or `down`) and number of failures. For example:
@@ -601,8 +606,6 @@ Pebble provides various API calls and commands to manage files and directories o
 ```
 $ pebble ls <path>              # list file information (like "ls")
 $ pebble mkdir <path>           # create a directory (like "mkdir")
-
-# TODO -- the following commands are coming soon
 $ pebble rm <path>              # remove a file or directory (like "rm")
 $ pebble push <local> <remote>  # copy file to server (like "cp")
 $ pebble pull <remote> <local>  # copy file from server (like "cp")
@@ -691,23 +694,32 @@ services:
         working-dir: <directory>
 
         # (Optional) Defines what happens when the service exits with a zero
-        # exit code. Possible values are: "restart" (default) which restarts
-        # the service after the backoff delay, "shutdown" which shuts down and
-        # exits the Pebble server, and "ignore" which does nothing further.
-        on-success: restart | shutdown | ignore
+        # exit code. Possible values are:
+        #
+        # - restart (default): restart the service after the backoff delay
+        # - shutdown: shut down and exit the Pebble daemon (with exit code 0)
+        # - failure-shutdown: shut down and exit Pebble with exit code 10
+        # - ignore: do nothing further
+        on-success: restart | shutdown | failure-shutdown | ignore
 
         # (Optional) Defines what happens when the service exits with a nonzero
-        # exit code. Possible values are: "restart" (default) which restarts
-        # the service after the backoff delay, "shutdown" which shuts down and
-        # exits the Pebble server, and "ignore" which does nothing further.
-        on-failure: restart | shutdown | ignore
+        # exit code. Possible values are:
+        #
+        # - restart (default): restart the service after the backoff delay
+        # - shutdown: shut down and exit the Pebble daemon (with exit code 10)
+        # - success-shutdown: shut down and exit Pebble with exit code 0
+        # - ignore: do nothing further
+        on-failure: restart | shutdown | success-shutdown | ignore
 
         # (Optional) Defines what happens when each of the named health checks
-        # fail. Possible values are: "restart" (default) which restarts
-        # the service once, "shutdown" which shuts down and exits the Pebble
-        # server, and "ignore" which does nothing further.
+        # fail. Possible values are:
+        #
+        # - restart (default): restart the service once
+        # - shutdown: shut down and exit the Pebble daemon (with exit code 11)
+        # - success-shutdown: shut down and exit Pebble with exit code 0
+        # - ignore: do nothing further
         on-check-failure:
-            <check name>: restart | shutdown | ignore
+            <check name>: restart | shutdown | success-shutdown | ignore
 
         # (Optional) Initial backoff delay for the "restart" exit action.
         # Default is half a second ("500ms").
@@ -882,29 +894,6 @@ The Go client is used primarily by the CLI, but is importable and can be used by
 We try to never change the underlying HTTP API in a backwards-incompatible way, however, in rare cases we may change the Go client in a backwards-incompatible way.
 
 In addition to the Go client, there's also a [Python client](https://github.com/canonical/operator/blob/master/ops/pebble.py) for the Pebble API that's part of the [`ops` library](https://github.com/canonical/operator) used by Juju charms ([documentation here](https://juju.is/docs/sdk/interact-with-pebble)).
-
-## Roadmap / TODO
-
-This is a preview of what Pebble is becoming. Please keep that in mind while you
-explore.
-
-Here are some of the things coming soon:
-
-  - [x] Support `$PEBBLE_SOCKET` and default `$PEBBLE` to `/var/lib/pebble/default`
-  - [x] Define and enforce convention for layer names
-  - [x] Dynamic layer support over the API
-  - [x] Configuration retrieval commands to investigate current settings
-  - [x] Status command that displays active services and their current status
-  - [x] General system modification commands (writing configuration files, etc)
-  - [x] Better log caching and retrieval support
-  - [x] Consider showing unified log as output of `pebble run` (use `-v`)
-  - [x] Automatically restart services that fail
-  - [x] Support for custom health checks (HTTP, TCP, command)
-  - [x] Terminate all services before exiting run command
-  - [x] Log forwarding to Loki
-  - [ ] Log forwarding to syslog
-  - [ ] [Other in-progress PRs](https://github.com/canonical/pebble/pulls)
-  - [ ] [Other requested features](https://github.com/canonical/pebble/issues)
 
 ## Hacking / Development
 

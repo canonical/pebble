@@ -55,7 +55,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        arch: ["amd64","arm64","ppc64el","armhf","s390x"]
+        arch: ["amd64", "arm64", "ppc64el", "armhf", "s390x"]
     steps:
       - name: Checkout Pebble repo
         uses: actions/checkout@v4
@@ -103,12 +103,7 @@ jobs:
       (needs.local-build.result == 'success' || needs.local-build.result == 'skipped') &&
       (needs.remote-build.result == 'success' || needs.remote-build.result == 'skipped')
     steps:
-      - name: Download ${{ env.SNAP_NAME }} snap for ${{ env.TEST_ON }}
-        id: download-snap
-        uses: dawidd6/action-download-artifact@v2
-        with:
-          name: "${{ env.SNAP_NAME }}.*${{ env.TEST_ON }}.*snap"
-          name_is_regexp: true
+      - uses: actions/download-artifact@v3
 
       - id: get-snap
         run: echo "filename=$(find ${{ env.SNAP_NAME }}*${{ env.TEST_ON }}*snap/*)" >> $GITHUB_OUTPUT
@@ -120,30 +115,25 @@ jobs:
 
           # Make sure it is installed
           pebble version --client
-          
+
           # Run smoke test
           pebble enter --create-dirs exec echo Hello | grep Hello
 
   release:
     runs-on: ubuntu-latest
     needs: [test]
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' && needs.test.result == 'success' && always()
     strategy:
       fail-fast: false
       matrix:
-        arch: ["amd64","arm64","ppc64el","armhf","s390x"]
+        arch: ["amd64", "arm64", "ppc64el", "armhf", "s390x"]
     steps:
-      - name: Download ${{ env.SNAP_NAME }} snap for ${{ matrix.arch }}
-        id: download-snap
-        uses: dawidd6/action-download-artifact@v2
-        with:
-          name: "${{ env.SNAP_NAME }}.*${{ matrix.arch }}.*snap"
-          name_is_regexp: true
-      
+      - uses: actions/download-artifact@v3
+
       - id: get-snap
         run: echo "filename=$(find ${{ env.SNAP_NAME }}*${{ matrix.arch }}*snap/*)" >> $GITHUB_OUTPUT
 
-      - name: Release ${{ steps.get-snap.outputs.filename }} to ${{ env.DEFAULT_TRACK }}/${{ env.DEFAULT_RISK }}  
+      - name: Release ${{ steps.get-snap.outputs.filename }} to ${{ env.DEFAULT_TRACK }}/${{ env.DEFAULT_RISK }}
         uses: snapcore/action-publish@v1
         env:
           SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
@@ -177,7 +167,7 @@ jobs:
           echo "revision=$revision" >> $GITHUB_OUTPUT
 
       # It would be easier to use `snapcraft promote`, but there's an error when trying
-      # to avoid the prompt with the "--yes" option: 
+      # to avoid the prompt with the "--yes" option:
       # > 'latest/edge' is not a valid set value for --from-channel when using --yes.
       - name: Promote ${{ env.SNAP_NAME }} snap rev${{ steps.get-snap.outputs.revision }} to ${{ env.TO_TRACK }}/${{ env.TO_RISK }}
         env:
