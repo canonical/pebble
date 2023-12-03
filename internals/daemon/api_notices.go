@@ -19,12 +19,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"regexp"
 	"strconv"
 
 	"github.com/canonical/x-go/strutil"
 
+	"github.com/canonical/pebble/internals/osutil/sys"
 	"github.com/canonical/pebble/internals/overlord/state"
 )
 
@@ -37,24 +39,26 @@ const (
 	maxNoticeDataSize  = 4 * 1024
 )
 
+var (
+	errVisibilitiesFilterNoNotices = errors.New("all requested visibilities invalid")
+)
+
 type addedNotice struct {
 	ID string `json:"id"`
 }
 
-var (
-	errUserIDFilterNoNotices = errors.New("no notices possible with user IDs filter for given request")
-)
-
 func v1GetNotices(c *Command, r *http.Request, _ *UserState) Response {
 	query := r.URL.Query()
 
-	reqUid := uidFromRequest(r)
+	publicOnly := false
+	reqUid, err := uidFromRequest(r)
+	if err != nil {
+		// Only allow connection to receive public notices
+		publicOnly = true
+	}
 
 	userIDs, err := sanitizeUserIDsFilter(reqUid, query["user-ids"])
-	if errors.Is(err, errUserIDFilterNoNotices) {
-		// User IDs filter precluded any possible notices, so return empty list.
-		return SyncResponse([]*state.Notice{})
-	} else if err != nil {
+	if err != nil {
 		return statusBadRequest(`invalid "user-ids" filter: %v`, err)
 	}
 
@@ -72,16 +76,26 @@ func v1GetNotices(c *Command, r *http.Request, _ *UserState) Response {
 
 	keys := strutil.MultiCommaSeparatedList(query["keys"])
 
+	visibilities, err := sanitizeVisibilitiesFilter(query["visibilities"])
+	if errors.Is(err, errVisibilitiesFilterNoNotices) {
+		// Visibilities filter precludes any possible notices, so return an
+		// empty list, rather than locking the state and checking all notices.
+		return SyncResponse([]*state.Notice{})
+	} else if err != nil {
+		return statusBadRequest(`invalid "visibilities" filter: %v`, err)
+	}
+
 	after, err := parseOptionalTime(query.Get("after"))
 	if err != nil {
 		return statusBadRequest(`invalid "after" timestamp: %v`, err)
 	}
 
 	filter := &state.NoticeFilter{
-		Types:   types,
-		Keys:    keys,
-		UserIDs: userIDs,
-		After:   after,
+		UserIDs:      userIDs,
+		Types:        types,
+		Keys:         keys,
+		Visibilities: visibilities,
+		After:        after,
 	}
 	var notices []*state.Notice
 
@@ -115,68 +129,96 @@ func v1GetNotices(c *Command, r *http.Request, _ *UserState) Response {
 	if notices == nil {
 		notices = []*state.Notice{} // avoid null result
 	}
-	return SyncResponse(notices)
+	var viewableNotices []*state.Notice
+	for _, n := range notices {
+		if noticeViewableByUser(n, reqUid, publicOnly) {
+			viewableNotices = append(viewableNotices, n)
+		}
+	}
+	return SyncResponse(viewableNotices)
 }
 
-// Get the UID of the request. If the UID is not known, return -1, indicating
-// that the connection may only receive notices intended for any recipient.
-func uidFromRequest(r *http.Request) int {
+// Get the UID of the request. If the UID is not known, return an error.
+func uidFromRequest(r *http.Request) (uint32, error) {
 	_, uid, _, err := ucrednetGet(r.RemoteAddr)
 	if err != nil {
-		return -1
+		return 0, fmt.Errorf("could not parse request UID")
 	}
-	return int(uid)
+	return uid, nil
 }
 
 // Construct the user IDs filter which will be passed into the notices state.
-// Importantly, ensure that non-root users cannot filter on user IDs other than
-// their own and -1.
-func sanitizeUserIDsFilter(reqUid int, queryUserIDs []string) ([]int, error) {
+// The userID value of "self" means the requester UID.
+func sanitizeUserIDsFilter(reqUid uint32, queryUserIDs []string) ([]uint32, error) {
 	userIDStrs := strutil.MultiCommaSeparatedList(queryUserIDs)
-	userIDs := make([]int, 0, len(userIDStrs))
+	userIDs := make([]uint32, 0, len(userIDStrs))
 	for _, userIDStr := range userIDStrs {
-		uid, err := strconv.ParseInt(userIDStr, 10, 64)
+		if userIDStr == "self" {
+			userIDs = append(userIDs, reqUid)
+			continue
+		}
+		userID, err := strconv.ParseInt(userIDStr, 10, 64)
 		if err != nil {
 			return nil, err
 		}
-		userID := int(uid)
-		if err := state.ValidateUserID(&userID); err != nil {
-			return nil, fmt.Errorf("invalid user ID %d: %v", userID, err)
+		if userID < 0 || userID > math.MaxUint32 {
+			return nil, fmt.Errorf("user ID is not a valid uint32: %d", userID)
 		}
-		userIDs = append(userIDs, userID)
+		userIDs = append(userIDs, uint32(userID))
 	}
-	if reqUid == 0 {
-		// Request from root, allow filtering by user ID without restriction.
-		return userIDs, nil
-	}
-	// Only allow non-root users to see notices with matching UID or UID of -1.
-	if len(userIDs) == 0 {
-		return []int{-1, reqUid}, nil
-	}
-	// If a non-root request has user IDs filter, only permit the intersection
-	// of {-1, reqUid} and the requested user IDs.
-	sanitized := make([]int, 0, 2)
-	for _, uid := range userIDs {
-		if uid == reqUid || uid == -1 {
-			sanitized = append(sanitized, uid)
+	return userIDs, nil
+}
+
+// Construct the visibilities filter which will be passed into the notices state.
+func sanitizeVisibilitiesFilter(queryVisibilities []string) ([]state.NoticeVisibility, error) {
+	visibilityStrs := strutil.MultiCommaSeparatedList(queryVisibilities)
+	visibilities := make([]state.NoticeVisibility, 0, len(visibilityStrs))
+	for _, v := range visibilityStrs {
+		visibility := state.NoticeVisibility(v)
+		if visibility.Valid() {
+			visibilities = append(visibilities, visibility)
 		}
 	}
-	if len(sanitized) == 0 {
-		// Requested notices to only user IDs for which the UID
-		// associated with the request does not have access.
-		return nil, errUserIDFilterNoNotices
+	if len(visibilities) == 0 && len(visibilityStrs) > 0 {
+		return nil, errVisibilitiesFilterNoNotices
 	}
-	return sanitized, nil
+	return visibilities, nil
+}
+
+func noticeViewableByUser(notice *state.Notice, userID uint32, publicOnly bool) bool {
+	if notice.Visibility() == state.PublicNotice {
+		return true
+	}
+	if publicOnly {
+		return false
+	}
+	if isAdmin(userID) {
+		return true
+	}
+	if notice.UserID() == userID {
+		return true
+	}
+	return false
+}
+
+func isAdmin(userID uint32) bool {
+	return userID == 0 || sys.UserID(userID) == sysGetuid()
 }
 
 func v1PostNotices(c *Command, r *http.Request, _ *UserState) Response {
+	reqUid, err := uidFromRequest(r)
+	if err != nil {
+		// Connection UID cannot be parsed, so do not allow notice creation
+		return statusBadRequest("cannot determine UID of request, so cannot create notice")
+	}
+
 	var payload struct {
-		Action      string          `json:"action"`
-		Type        string          `json:"type"`
-		Key         string          `json:"key"`
-		UserID      *int            `json:"user-id"`
-		RepeatAfter string          `json:"repeat-after"`
-		DataJSON    json.RawMessage `json:"data"`
+		Action      string                 `json:"action"`
+		Type        string                 `json:"type"`
+		Key         string                 `json:"key"`
+		Visibility  state.NoticeVisibility `json:"visibility"`
+		RepeatAfter string                 `json:"repeat-after"`
+		DataJSON    json.RawMessage        `json:"data"`
 	}
 	decoder := json.NewDecoder(r.Body)
 	if err := decoder.Decode(&payload); err != nil {
@@ -186,9 +228,6 @@ func v1PostNotices(c *Command, r *http.Request, _ *UserState) Response {
 	if payload.Action != "add" {
 		return statusBadRequest("invalid action %q", payload.Action)
 	}
-	if err := state.ValidateUserID(payload.UserID); err != nil {
-		return statusBadRequest(`invalid user ID %d: %v`, *payload.UserID, err)
-	}
 	if payload.Type != "custom" {
 		return statusBadRequest(`invalid type %q (can only add "custom" notices)`, payload.Type)
 	}
@@ -197,6 +236,10 @@ func v1PostNotices(c *Command, r *http.Request, _ *UserState) Response {
 	}
 	if len(payload.Key) > maxNoticeKeyLength {
 		return statusBadRequest("key must be %d bytes or less", maxNoticeKeyLength)
+	}
+
+	if err := validateVisibilityByUser(payload.Visibility, reqUid); err != nil {
+		return statusBadRequest(`invalid visibility %q: %v`, payload.Visibility, err)
 	}
 
 	repeatAfter, err := parseOptionalDuration(payload.RepeatAfter)
@@ -219,8 +262,8 @@ func v1PostNotices(c *Command, r *http.Request, _ *UserState) Response {
 	st.Lock()
 	defer st.Unlock()
 
-	noticeId, err := st.AddNotice(state.CustomNotice, payload.Key, &state.AddNoticeOptions{
-		UserID:      payload.UserID,
+	noticeId, err := st.AddNotice(reqUid, state.CustomNotice, payload.Key, &state.AddNoticeOptions{
+		Visibility:  payload.Visibility,
 		Data:        data,
 		RepeatAfter: repeatAfter,
 	})
@@ -229,6 +272,19 @@ func v1PostNotices(c *Command, r *http.Request, _ *UserState) Response {
 	}
 
 	return SyncResponse(addedNotice{ID: noticeId})
+}
+
+func validateVisibilityByUser(visibility state.NoticeVisibility, userID uint32) error {
+	if visibility == state.NoticeVisibility("") {
+		return nil
+	}
+	if !visibility.Valid() {
+		return fmt.Errorf("must be %q or %q", state.PrivateNotice, state.PublicNotice)
+	}
+	if !isAdmin(userID) && visibility == state.PublicNotice {
+		return fmt.Errorf("only admin may create notices with visibility %q", state.PublicNotice)
+	}
+	return nil
 }
 
 func v1GetNotice(c *Command, r *http.Request, _ *UserState) Response {
@@ -240,12 +296,13 @@ func v1GetNotice(c *Command, r *http.Request, _ *UserState) Response {
 	if notice == nil {
 		return statusNotFound("cannot find notice with ID %q", noticeID)
 	}
-	reqUid := uidFromRequest(r)
-	noticeUid := notice.UserID()
-	viewable := reqUid == 0 || reqUid == noticeUid || noticeUid == -1
-	if !viewable {
-		// Requests from non-root users may only receive notices with matching
-		// UID or UID of -1.
+	onlyPublic := false
+	reqUid, err := uidFromRequest(r)
+	if err != nil {
+		// Only allow connection to receive public notices
+		onlyPublic = true
+	}
+	if !noticeViewableByUser(notice, reqUid, onlyPublic) {
 		return statusForbidden("not allowed to access notice with id %q", noticeID)
 	}
 	return SyncResponse(notice)

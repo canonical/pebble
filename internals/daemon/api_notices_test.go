@@ -21,45 +21,77 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
 	. "gopkg.in/check.v1"
 
+	"github.com/canonical/pebble/internals/osutil/sys"
 	"github.com/canonical/pebble/internals/overlord/state"
 )
 
+func mockSysGetuid(fakeUid uint32) (restore func()) {
+	old := sysGetuid
+	sysGetuid = func() sys.UserID {
+		return sys.UserID(fakeUid)
+	}
+	restore = func() {
+		sysGetuid = old
+	}
+	return restore
+}
+
+func (s *apiSuite) TestNoticesFilterUserID(c *C) {
+	restore := mockSysGetuid(0)
+	defer restore()
+	s.testNoticesFilter(c, func(after time.Time) url.Values {
+		return url.Values{"user-ids": {"1000"}}
+	})
+}
+
 func (s *apiSuite) TestNoticesFilterType(c *C) {
+	restore := mockSysGetuid(0)
+	defer restore()
 	s.testNoticesFilter(c, func(after time.Time) url.Values {
 		return url.Values{"types": {"custom"}}
 	})
 }
 
 func (s *apiSuite) TestNoticesFilterKey(c *C) {
+	restore := mockSysGetuid(0)
+	defer restore()
 	s.testNoticesFilter(c, func(after time.Time) url.Values {
 		return url.Values{"keys": {"a.b/2"}}
 	})
 }
 
-func (s *apiSuite) TestNoticesFilterUserID(c *C) {
+func (s *apiSuite) TestNoticesFilterVisibility(c *C) {
+	restore := mockSysGetuid(0)
+	defer restore()
 	s.testNoticesFilter(c, func(after time.Time) url.Values {
-		return url.Values{"user-ids": {"0"}}
+		return url.Values{"visibilities": {"public"}}
 	})
 }
 
 func (s *apiSuite) TestNoticesFilterAfter(c *C) {
+	restore := mockSysGetuid(0)
+	defer restore()
 	s.testNoticesFilter(c, func(after time.Time) url.Values {
 		return url.Values{"after": {after.UTC().Format(time.RFC3339Nano)}}
 	})
 }
 
 func (s *apiSuite) TestNoticesFilterAll(c *C) {
+	restore := mockSysGetuid(0)
+	defer restore()
 	s.testNoticesFilter(c, func(after time.Time) url.Values {
 		return url.Values{
-			"types":    {"custom"},
-			"keys":     {"a.b/2"},
-			"user-ids": {"0"},
-			"after":    {after.UTC().Format(time.RFC3339Nano)},
+			"user-ids":     {"1000"},
+			"types":        {"custom"},
+			"keys":         {"a.b/2"},
+			"visibilities": {"public"},
+			"after":        {after.UTC().Format(time.RFC3339Nano)},
 		}
 	})
 }
@@ -69,13 +101,12 @@ func (s *apiSuite) testNoticesFilter(c *C, makeQuery func(after time.Time) url.V
 
 	st := s.d.overlord.State()
 	st.Lock()
-	addNotice(c, st, state.WarningNotice, "warning", nil)
+	addNotice(c, st, 0, state.WarningNotice, "warning", nil)
 	after := time.Now()
 	time.Sleep(time.Microsecond)
-	zero := 0
-	noticeId, err := st.AddNotice(state.CustomNotice, "a.b/2", &state.AddNoticeOptions{
-		UserID: &zero,
-		Data:   map[string]string{"k": "v"},
+	noticeId, err := st.AddNotice(1000, state.CustomNotice, "a.b/2", &state.AddNoticeOptions{
+		Visibility: state.PublicNotice,
+		Data:       map[string]string{"k": "v"},
 	})
 	c.Assert(err, IsNil)
 	st.Unlock()
@@ -110,9 +141,10 @@ func (s *apiSuite) testNoticesFilter(c *C, makeQuery func(after time.Time) url.V
 	delete(n, "last-repeated")
 	c.Assert(n, DeepEquals, map[string]any{
 		"id":           noticeId,
+		"user-id":      1000.0,
 		"type":         "custom",
 		"key":          "a.b/2",
-		"user-id":      0.0,
+		"visibility":   "public",
 		"occurrences":  1.0,
 		"last-data":    map[string]any{"k": "v"},
 		"expire-after": "168h0m0s",
@@ -121,17 +153,20 @@ func (s *apiSuite) testNoticesFilter(c *C, makeQuery func(after time.Time) url.V
 
 func (s *apiSuite) TestNoticesFilterMultipleTypes(c *C) {
 	s.daemon(c)
+	restore := mockSysGetuid(0)
+	defer restore()
 
 	st := s.d.overlord.State()
 	st.Lock()
-	addNotice(c, st, state.ChangeUpdateNotice, "123", nil)
+	addNotice(c, st, 1000, state.ChangeUpdateNotice, "123", nil)
 	time.Sleep(time.Microsecond)
-	addNotice(c, st, state.CustomNotice, "a.b/x", nil)
+	addNotice(c, st, 1000, state.CustomNotice, "a.b/x", nil)
 	time.Sleep(time.Microsecond)
-	addNotice(c, st, state.WarningNotice, "danger", nil)
+	addNotice(c, st, 1000, state.WarningNotice, "danger", nil)
 	st.Unlock()
 
 	req, err := http.NewRequest("GET", "/v1/notices?types=change-update&types=warning", nil)
+	req.RemoteAddr = "pid=100;uid=1000;socket=;"
 	c.Assert(err, IsNil)
 	noticesCmd := apiCmd("/v1/notices")
 	rsp, ok := noticesCmd.GET(noticesCmd, req, nil).(*resp)
@@ -150,17 +185,20 @@ func (s *apiSuite) TestNoticesFilterMultipleTypes(c *C) {
 
 func (s *apiSuite) TestNoticesFilterMultipleKeys(c *C) {
 	s.daemon(c)
+	restore := mockSysGetuid(0)
+	defer restore()
 
 	st := s.d.overlord.State()
 	st.Lock()
-	addNotice(c, st, state.ChangeUpdateNotice, "123", nil)
+	addNotice(c, st, 1000, state.ChangeUpdateNotice, "123", nil)
 	time.Sleep(time.Microsecond)
-	addNotice(c, st, state.CustomNotice, "a.b/x", nil)
+	addNotice(c, st, 1000, state.CustomNotice, "a.b/x", nil)
 	time.Sleep(time.Microsecond)
-	addNotice(c, st, state.WarningNotice, "danger", nil)
+	addNotice(c, st, 1000, state.WarningNotice, "danger", nil)
 	st.Unlock()
 
 	req, err := http.NewRequest("GET", "/v1/notices?keys=a.b/x&keys=danger", nil)
+	req.RemoteAddr = "pid=100;uid=1000;socket=;"
 	c.Assert(err, IsNil)
 	noticesCmd := apiCmd("/v1/notices")
 	rsp, ok := noticesCmd.GET(noticesCmd, req, nil).(*resp)
@@ -179,22 +217,25 @@ func (s *apiSuite) TestNoticesFilterMultipleKeys(c *C) {
 
 func (s *apiSuite) TestNoticesUserIDsRootDefault(c *C) {
 	s.daemon(c)
+	restore := mockSysGetuid(0)
+	defer restore()
 
 	st := s.d.overlord.State()
 	st.Lock()
-	zero := 0
-	addNotice(c, st, state.ChangeUpdateNotice, "123", &state.AddNoticeOptions{
-		UserID: &zero,
-	})
+	addNotice(c, st, 0, state.ChangeUpdateNotice, "123", nil)
 	time.Sleep(time.Microsecond)
-	thousand := 1000
-	addNotice(c, st, state.CustomNotice, "a.b/x", &state.AddNoticeOptions{
-		UserID: &thousand,
-	})
+	addNotice(c, st, 1000, state.CustomNotice, "a.b/x", nil)
 	time.Sleep(time.Microsecond)
-	negOne := -1
-	addNotice(c, st, state.WarningNotice, "danger", &state.AddNoticeOptions{
-		UserID: &negOne,
+	addNotice(c, st, 123, state.CustomNotice, "a.b/y", nil)
+	time.Sleep(time.Microsecond)
+	addNotice(c, st, 0, state.WarningNotice, "danger", &state.AddNoticeOptions{
+		Visibility: state.PublicNotice,
+	})
+	addNotice(c, st, 1000, state.ChangeUpdateNotice, "456", &state.AddNoticeOptions{
+		Visibility: state.PublicNotice,
+	})
+	addNotice(c, st, 123, state.ChangeUpdateNotice, "789", &state.AddNoticeOptions{
+		Visibility: state.PublicNotice,
 	})
 	st.Unlock()
 
@@ -211,43 +252,84 @@ func (s *apiSuite) TestNoticesUserIDsRootDefault(c *C) {
 	c.Check(rsp.Status, Equals, http.StatusOK)
 	notices, ok := rsp.Result.([]*state.Notice)
 	c.Assert(ok, Equals, true)
-	c.Assert(notices, HasLen, 3)
+	c.Assert(notices, HasLen, 6)
 	n := noticeToMap(c, notices[0])
 	c.Assert(n["user-id"], Equals, 0.0)
 	n = noticeToMap(c, notices[1])
 	c.Assert(n["user-id"], Equals, 1000.0)
 	n = noticeToMap(c, notices[2])
-	c.Assert(n["user-id"], Equals, -1.0)
+	c.Assert(n["user-id"], Equals, 123.0)
+	n = noticeToMap(c, notices[3])
+	c.Assert(n["user-id"], Equals, 0.0)
+	n = noticeToMap(c, notices[4])
+	c.Assert(n["user-id"], Equals, 1000.0)
+	n = noticeToMap(c, notices[5])
+	c.Assert(n["user-id"], Equals, 123.0)
 }
 
 func (s *apiSuite) TestNoticesUserIDsRootFilter(c *C) {
 	s.daemon(c)
+	restore := mockSysGetuid(0)
+	defer restore()
 
 	st := s.d.overlord.State()
 	st.Lock()
-	zero := 0
-	addNotice(c, st, state.ChangeUpdateNotice, "123", &state.AddNoticeOptions{
-		UserID: &zero,
-	})
+	addNotice(c, st, 0, state.ChangeUpdateNotice, "123", nil)
 	time.Sleep(time.Microsecond)
-	thousand := 1000
-	addNotice(c, st, state.CustomNotice, "a.b/x", &state.AddNoticeOptions{
-		UserID: &thousand,
-	})
+	addNotice(c, st, 1000, state.CustomNotice, "a.b/x", nil)
 	time.Sleep(time.Microsecond)
-	negOne := -1
-	addNotice(c, st, state.WarningNotice, "danger", &state.AddNoticeOptions{
-		UserID: &negOne,
+	addNotice(c, st, 123, state.CustomNotice, "a.b/y", nil)
+	time.Sleep(time.Microsecond)
+	addNotice(c, st, 0, state.WarningNotice, "danger", &state.AddNoticeOptions{
+		Visibility: state.PublicNotice,
+	})
+	addNotice(c, st, 1000, state.ChangeUpdateNotice, "456", &state.AddNoticeOptions{
+		Visibility: state.PublicNotice,
+	})
+	addNotice(c, st, 123, state.ChangeUpdateNotice, "789", &state.AddNoticeOptions{
+		Visibility: state.PublicNotice,
 	})
 	st.Unlock()
 
 	noticesCmd := apiCmd("/v1/notices")
 
 	// Test that root can filter on any user IDs
-	for _, userIDs := range [][]int{{0, 1000, -1}, {0, 1000}, {0, -1}, {1000, -1}, {0}, {1000}, {-1}} {
+	for _, testCase := range []struct {
+		filterUserIDs   []uint32
+		expectedUserIDs []float64
+	}{
+		{
+			[]uint32{0},
+			[]float64{0.0, 0.0},
+		},
+		{
+			[]uint32{1000},
+			[]float64{1000.0, 1000.0},
+		},
+		{
+			[]uint32{123},
+			[]float64{123.0, 123.0},
+		},
+		{
+			[]uint32{0, 1000},
+			[]float64{0.0, 1000.0, 0.0, 1000.0},
+		},
+		{
+			[]uint32{0, 123},
+			[]float64{0.0, 123.0, 0.0, 123.0},
+		},
+		{
+			[]uint32{1000, 123},
+			[]float64{1000.0, 123.0, 1000.0, 123.0},
+		},
+		{
+			[]uint32{0, 1000, 123},
+			[]float64{0.0, 1000.0, 123.0, 0.0, 1000.0, 123.0},
+		},
+	} {
 		userIDsValues := url.Values{}
-		for _, uid := range userIDs {
-			userIDsValues.Add("user-ids", fmt.Sprintf("%d", uid))
+		for _, uid := range testCase.filterUserIDs {
+			userIDsValues.Add("user-ids", strconv.FormatUint(uint64(uid), 10))
 		}
 		reqUrl := fmt.Sprintf("/v1/notices?%s", userIDsValues.Encode())
 		req, err := http.NewRequest("GET", reqUrl, nil)
@@ -260,32 +342,35 @@ func (s *apiSuite) TestNoticesUserIDsRootFilter(c *C) {
 		c.Check(rsp.Status, Equals, http.StatusOK)
 		notices, ok := rsp.Result.([]*state.Notice)
 		c.Assert(ok, Equals, true)
-		c.Assert(notices, HasLen, len(userIDs))
-		for i, uid := range userIDs {
+		c.Assert(notices, HasLen, len(testCase.expectedUserIDs))
+		for i, uid := range testCase.expectedUserIDs {
 			n := noticeToMap(c, notices[i])
-			c.Assert(n["user-id"], Equals, float64(uid))
+			c.Assert(n["user-id"], Equals, uid)
 		}
 	}
 }
 
 func (s *apiSuite) TestNoticesUserIDsNonRootDefault(c *C) {
 	s.daemon(c)
+	restore := mockSysGetuid(0)
+	defer restore()
 
 	st := s.d.overlord.State()
 	st.Lock()
-	zero := 0
-	addNotice(c, st, state.ChangeUpdateNotice, "123", &state.AddNoticeOptions{
-		UserID: &zero,
-	})
+	addNotice(c, st, 0, state.ChangeUpdateNotice, "123", nil)
 	time.Sleep(time.Microsecond)
-	thousand := 1000
-	addNotice(c, st, state.CustomNotice, "a.b/x", &state.AddNoticeOptions{
-		UserID: &thousand,
-	})
+	addNotice(c, st, 1000, state.CustomNotice, "a.b/x", nil)
 	time.Sleep(time.Microsecond)
-	negOne := -1
-	addNotice(c, st, state.WarningNotice, "danger", &state.AddNoticeOptions{
-		UserID: &negOne,
+	addNotice(c, st, 123, state.CustomNotice, "a.b/y", nil)
+	time.Sleep(time.Microsecond)
+	addNotice(c, st, 0, state.WarningNotice, "danger", &state.AddNoticeOptions{
+		Visibility: state.PublicNotice,
+	})
+	addNotice(c, st, 1000, state.ChangeUpdateNotice, "456", &state.AddNoticeOptions{
+		Visibility: state.PublicNotice,
+	})
+	addNotice(c, st, 123, state.ChangeUpdateNotice, "789", &state.AddNoticeOptions{
+		Visibility: state.PublicNotice,
 	})
 	st.Unlock()
 
@@ -303,43 +388,80 @@ func (s *apiSuite) TestNoticesUserIDsNonRootDefault(c *C) {
 	c.Check(rsp.Status, Equals, http.StatusOK)
 	notices, ok := rsp.Result.([]*state.Notice)
 	c.Assert(ok, Equals, true)
-	c.Assert(notices, HasLen, 2)
+	c.Assert(notices, HasLen, 4)
 	n := noticeToMap(c, notices[0])
 	c.Assert(n["user-id"], Equals, 1000.0)
 	n = noticeToMap(c, notices[1])
-	c.Assert(n["user-id"], Equals, -1.0)
+	c.Assert(n["user-id"], Equals, 0.0)
+	n = noticeToMap(c, notices[2])
+	c.Assert(n["user-id"], Equals, 1000.0)
+	n = noticeToMap(c, notices[3])
+	c.Assert(n["user-id"], Equals, 123.0)
 }
 
 func (s *apiSuite) TestNoticesUserIDsNonRootFilter(c *C) {
 	s.daemon(c)
+	restore := mockSysGetuid(0)
+	defer restore()
 
 	st := s.d.overlord.State()
 	st.Lock()
-	zero := 0
-	addNotice(c, st, state.ChangeUpdateNotice, "123", &state.AddNoticeOptions{
-		UserID: &zero,
-	})
+	addNotice(c, st, 0, state.ChangeUpdateNotice, "123", nil)
 	time.Sleep(time.Microsecond)
-	thousand := 1000
-	addNotice(c, st, state.CustomNotice, "a.b/x", &state.AddNoticeOptions{
-		UserID: &thousand,
-	})
+	addNotice(c, st, 1000, state.CustomNotice, "a.b/x", nil)
 	time.Sleep(time.Microsecond)
-	negOne := -1
-	addNotice(c, st, state.WarningNotice, "danger", &state.AddNoticeOptions{
-		UserID: &negOne,
+	addNotice(c, st, 123, state.CustomNotice, "a.b/y", nil)
+	time.Sleep(time.Microsecond)
+	addNotice(c, st, 0, state.WarningNotice, "danger", &state.AddNoticeOptions{
+		Visibility: state.PublicNotice,
+	})
+	addNotice(c, st, 1000, state.ChangeUpdateNotice, "456", &state.AddNoticeOptions{
+		Visibility: state.PublicNotice,
+	})
+	addNotice(c, st, 123, state.ChangeUpdateNotice, "789", &state.AddNoticeOptions{
+		Visibility: state.PublicNotice,
 	})
 	st.Unlock()
 
 	noticesCmd := apiCmd("/v1/notices")
 
 	// Test that non-root user can only filter on their user ID and UID -1.
-	// For the UID lists below, UID 0 must be first, so it is easy to check
-	// that it was excluded.
-	for _, userIDs := range [][]int{{0, 1000, -1}, {0, 1000}, {0, -1}, {0}} {
+	for _, testCase := range []struct {
+		filterUserIDs   []uint32
+		expectedUserIDs []float64
+	}{
+		{
+			[]uint32{0},
+			[]float64{0.0},
+		},
+		{
+			[]uint32{1000},
+			[]float64{1000.0, 1000.0},
+		},
+		{
+			[]uint32{123},
+			[]float64{123.0},
+		},
+		{
+			[]uint32{0, 1000},
+			[]float64{1000.0, 0.0, 1000.0},
+		},
+		{
+			[]uint32{0, 123},
+			[]float64{0.0, 123.0},
+		},
+		{
+			[]uint32{1000, 123},
+			[]float64{1000.0, 1000.0, 123.0},
+		},
+		{
+			[]uint32{0, 1000, 123},
+			[]float64{1000.0, 0.0, 1000.0, 123.0},
+		},
+	} {
 		userIDsValues := url.Values{}
-		for _, uid := range userIDs {
-			userIDsValues.Add("user-ids", fmt.Sprintf("%d", uid))
+		for _, uid := range testCase.filterUserIDs {
+			userIDsValues.Add("user-ids", strconv.FormatUint(uint64(uid), 10))
 		}
 		reqUrl := fmt.Sprintf("/v1/notices?%s", userIDsValues.Encode())
 		req, err := http.NewRequest("GET", reqUrl, nil)
@@ -352,28 +474,132 @@ func (s *apiSuite) TestNoticesUserIDsNonRootFilter(c *C) {
 		c.Check(rsp.Status, Equals, http.StatusOK)
 		notices, ok := rsp.Result.([]*state.Notice)
 		c.Assert(ok, Equals, true)
-		// Non-root filtering on UID other than -1 or their own UID yields no
-		// notices for that UID.
-		c.Assert(notices, HasLen, len(userIDs)-1)
-		for i, userID := range userIDs[1:] {
+		// Non-root filtering on UID other than or their own UID yields only
+		// public notices for that UID.
+		c.Assert(notices, HasLen, len(testCase.expectedUserIDs))
+		for i, uid := range testCase.expectedUserIDs {
 			n := noticeToMap(c, notices[i])
-			c.Assert(n["user-id"], Equals, float64(userID))
+			c.Assert(n["user-id"], Equals, uid)
+		}
+	}
+}
+
+func (s *apiSuite) TestNoticesUnknownReqUid(c *C) {
+	s.daemon(c)
+	restore := mockSysGetuid(0)
+	defer restore()
+
+	st := s.d.overlord.State()
+	st.Lock()
+	addNotice(c, st, 0, state.ChangeUpdateNotice, "123", nil)
+	time.Sleep(time.Microsecond)
+	addNotice(c, st, 1000, state.CustomNotice, "a.b/x", nil)
+	time.Sleep(time.Microsecond)
+	addNotice(c, st, 123, state.CustomNotice, "a.b/y", nil)
+	time.Sleep(time.Microsecond)
+	addNotice(c, st, 0, state.WarningNotice, "danger", &state.AddNoticeOptions{
+		Visibility: state.PublicNotice,
+	})
+	addNotice(c, st, 1000, state.ChangeUpdateNotice, "456", &state.AddNoticeOptions{
+		Visibility: state.PublicNotice,
+	})
+	addNotice(c, st, 123, state.ChangeUpdateNotice, "789", &state.AddNoticeOptions{
+		Visibility: state.PublicNotice,
+	})
+	st.Unlock()
+
+	noticesCmd := apiCmd("/v1/notices")
+
+	// Test that a connection with unknown UID only receives public notices.
+	req, err := http.NewRequest("GET", "/v1/notices", nil)
+	c.Assert(err, IsNil)
+	req.RemoteAddr = "pid=100;uid=;socket=;"
+	rsp, ok := noticesCmd.GET(noticesCmd, req, nil).(*resp)
+	c.Assert(ok, Equals, true)
+
+	c.Check(rsp.Type, Equals, ResponseTypeSync)
+	c.Check(rsp.Status, Equals, http.StatusOK)
+	notices, ok := rsp.Result.([]*state.Notice)
+	c.Assert(ok, Equals, true)
+	c.Assert(notices, HasLen, 3)
+	n := noticeToMap(c, notices[0])
+	c.Assert(n["user-id"], Equals, 0.0)
+	c.Assert(n["visibility"], Equals, "public")
+	n = noticeToMap(c, notices[1])
+	c.Assert(n["user-id"], Equals, 1000.0)
+	c.Assert(n["visibility"], Equals, "public")
+	n = noticeToMap(c, notices[2])
+	c.Assert(n["user-id"], Equals, 123.0)
+	c.Assert(n["visibility"], Equals, "public")
+}
+
+func (s *apiSuite) TestNoticesFilterMultipleVisibilities(c *C) {
+	s.daemon(c)
+	restore := mockSysGetuid(0)
+	defer restore()
+
+	st := s.d.overlord.State()
+	st.Lock()
+	addNotice(c, st, 1000, state.ChangeUpdateNotice, "123", nil)
+	addNotice(c, st, 1000, state.CustomNotice, "a.b/x", &state.AddNoticeOptions{
+		Visibility: state.PublicNotice,
+	})
+	addNotice(c, st, 1000, state.WarningNotice, "danger", &state.AddNoticeOptions{
+		Visibility: state.PrivateNotice,
+	})
+	st.Unlock()
+
+	for _, testCase := range []struct {
+		visibilitiesFilter   string
+		expectedVisibilities []string
+	}{
+		{
+			"visibilities=private",
+			[]string{"private", "private"},
+		},
+		{
+			"visibilities=public",
+			[]string{"public"},
+		},
+		{
+			"visibilities=private&visibilities=public",
+			[]string{"private", "public", "private"},
+		},
+	} {
+		req, err := http.NewRequest("GET", fmt.Sprintf("/v1/notices?%s", testCase.visibilitiesFilter), nil)
+		req.RemoteAddr = "pid=100;uid=1000;socket=;"
+		c.Assert(err, IsNil)
+		noticesCmd := apiCmd("/v1/notices")
+		rsp, ok := noticesCmd.GET(noticesCmd, req, nil).(*resp)
+		c.Assert(ok, Equals, true)
+
+		c.Check(rsp.Type, Equals, ResponseTypeSync)
+		c.Check(rsp.Status, Equals, http.StatusOK)
+		notices, ok := rsp.Result.([]*state.Notice)
+		c.Assert(ok, Equals, true)
+		c.Assert(notices, HasLen, len(testCase.expectedVisibilities))
+		for i, visibility := range testCase.expectedVisibilities {
+			n := noticeToMap(c, notices[i])
+			c.Assert(n["visibility"], Equals, visibility)
 		}
 	}
 }
 
 func (s *apiSuite) TestNoticesWait(c *C) {
 	s.daemon(c)
+	restore := mockSysGetuid(0)
+	defer restore()
 
 	st := s.d.overlord.State()
 	go func() {
 		time.Sleep(10 * time.Millisecond)
 		st.Lock()
-		addNotice(c, st, state.CustomNotice, "a.b/1", nil)
+		addNotice(c, st, 1000, state.CustomNotice, "a.b/1", nil)
 		st.Unlock()
 	}()
 
 	req, err := http.NewRequest("GET", "/v1/notices?timeout=1s", nil)
+	req.RemoteAddr = "pid=100;uid=1000;socket=;"
 	c.Assert(err, IsNil)
 	noticesCmd := apiCmd("/v1/notices")
 	rsp, ok := noticesCmd.GET(noticesCmd, req, nil).(*resp)
@@ -385,12 +611,16 @@ func (s *apiSuite) TestNoticesWait(c *C) {
 	c.Assert(ok, Equals, true)
 	c.Assert(notices, HasLen, 1)
 	n := noticeToMap(c, notices[0])
+	c.Check(n["user-id"], Equals, 1000.0)
 	c.Check(n["type"], Equals, "custom")
 	c.Check(n["key"], Equals, "a.b/1")
+	c.Check(n["visibility"], Equals, "private")
 }
 
 func (s *apiSuite) TestNoticesTimeout(c *C) {
 	s.daemon(c)
+	restore := mockSysGetuid(0)
+	defer restore()
 
 	req, err := http.NewRequest("GET", "/v1/notices?timeout=1ms", nil)
 	c.Assert(err, IsNil)
@@ -407,6 +637,8 @@ func (s *apiSuite) TestNoticesTimeout(c *C) {
 
 func (s *apiSuite) TestNoticesRequestCancelled(c *C) {
 	s.daemon(c)
+	restore := mockSysGetuid(0)
+	defer restore()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -434,10 +666,14 @@ func (s *apiSuite) TestNoticesRequestCancelled(c *C) {
 }
 
 func (s *apiSuite) TestNoticesInvalidAfter(c *C) {
+	restore := mockSysGetuid(0)
+	defer restore()
 	s.testNoticesBadRequest(c, "after=foo", `invalid "after" timestamp.*`)
 }
 
 func (s *apiSuite) TestNoticesInvalidTimeout(c *C) {
+	restore := mockSysGetuid(0)
+	defer restore()
 	s.testNoticesBadRequest(c, "timeout=foo", "invalid timeout.*")
 }
 
@@ -445,6 +681,7 @@ func (s *apiSuite) testNoticesBadRequest(c *C, query, errorMatch string) {
 	s.daemon(c)
 
 	req, err := http.NewRequest("GET", "/v1/notices?"+query, nil)
+	req.RemoteAddr = "pid=100;uid=1000;socket=;"
 	c.Assert(err, IsNil)
 	noticesCmd := apiCmd("/v1/notices")
 	rsp, ok := noticesCmd.GET(noticesCmd, req, nil).(*resp)
@@ -460,17 +697,20 @@ func (s *apiSuite) testNoticesBadRequest(c *C, query, errorMatch string) {
 
 func (s *apiSuite) TestAddNotice(c *C) {
 	s.daemon(c)
+	restore := mockSysGetuid(0)
+	defer restore()
 
 	start := time.Now()
 	body := []byte(`{
 		"action": "add",
 		"type": "custom",
 		"key": "a.b/1",
-		"user-id": -1,
+		"visibility": "public",
 		"repeat-after": "1h",
 		"data": {"k": "v"}
 	}`)
 	req, err := http.NewRequest("POST", "/v1/notices", bytes.NewReader(body))
+	req.RemoteAddr = "pid=100;uid=0;socket=;"
 	c.Assert(err, IsNil)
 	noticesCmd := apiCmd("/v1/notices")
 	rsp, ok := noticesCmd.POST(noticesCmd, req, nil).(*resp)
@@ -506,9 +746,10 @@ func (s *apiSuite) TestAddNotice(c *C) {
 	delete(n, "last-repeated")
 	c.Assert(n, DeepEquals, map[string]any{
 		"id":           noticeId,
-		"user-id":      -1.0,
+		"user-id":      0.0,
 		"type":         "custom",
 		"key":          "a.b/1",
+		"visibility":   "public",
 		"occurrences":  1.0,
 		"last-data":    map[string]any{"k": "v"},
 		"expire-after": "168h0m0s",
@@ -518,6 +759,8 @@ func (s *apiSuite) TestAddNotice(c *C) {
 
 func (s *apiSuite) TestAddNoticeMinimal(c *C) {
 	s.daemon(c)
+	restore := mockSysGetuid(0)
+	defer restore()
 
 	body := []byte(`{
 		"action": "add",
@@ -525,6 +768,7 @@ func (s *apiSuite) TestAddNoticeMinimal(c *C) {
 		"key": "a.b/1"
 	}`)
 	req, err := http.NewRequest("POST", "/v1/notices", bytes.NewReader(body))
+	req.RemoteAddr = "pid=100;uid=1000;socket=;"
 	c.Assert(err, IsNil)
 	noticesCmd := apiCmd("/v1/notices")
 	rsp, ok := noticesCmd.POST(noticesCmd, req, nil).(*resp)
@@ -550,35 +794,104 @@ func (s *apiSuite) TestAddNoticeMinimal(c *C) {
 	delete(n, "last-repeated")
 	c.Assert(n, DeepEquals, map[string]any{
 		"id":           noticeId,
+		"user-id":      1000.0,
 		"type":         "custom",
 		"key":          "a.b/1",
+		"visibility":   "private",
 		"occurrences":  1.0,
 		"expire-after": "168h0m0s",
 	})
 }
 
+func (s *apiSuite) TestAddNoticeMismatchedVisibility(c *C) {
+	s.daemon(c)
+	restore := mockSysGetuid(0)
+	defer restore()
+
+	requestMap := map[string]any{
+		"action": "add",
+		"type": "custom",
+		"key": "a.b/1",
+		"visibility": "public",
+	}
+
+	// Test that a notice can be added as public, then private, then public
+	// without returning an error.
+	for _, visibility := range []string{"public", "private", "public"} {
+		requestMap["visibility"] = visibility
+		requestBody, err := json.Marshal(requestMap)
+		c.Assert(err, IsNil)
+		req, err := http.NewRequest("POST", "/v1/notices", bytes.NewReader(requestBody))
+		req.RemoteAddr = "pid=100;uid=0;socket=;"
+		c.Assert(err, IsNil)
+		noticesCmd := apiCmd("/v1/notices")
+		rsp, ok := noticesCmd.POST(noticesCmd, req, nil).(*resp)
+		c.Assert(ok, Equals, true)
+		c.Check(rsp.Type, Equals, ResponseTypeSync)
+		c.Check(rsp.Status, Equals, http.StatusOK)
+		resultBytes, err := json.Marshal(rsp.Result)
+		c.Assert(err, IsNil)
+
+		st := s.d.overlord.State()
+		st.Lock()
+		notices := st.Notices(nil)
+		st.Unlock()
+		c.Assert(notices, HasLen, 1)
+		n := noticeToMap(c, notices[0])
+		noticeId, ok := n["id"].(string)
+		c.Assert(ok, Equals, true)
+		c.Assert(string(resultBytes), Equals, `{"id":"`+noticeId+`"}`)
+		c.Assert(n["visibility"], Equals, visibility)
+	}
+}
+
+func (s *apiSuite) TestAddNoticeInvalidRequestUid(c *C) {
+	s.daemon(c)
+	restore := mockSysGetuid(0)
+	defer restore()
+
+	body := []byte(`{
+		"action": "add",
+		"type": "custom",
+		"key": "a.b/1"
+	}`)
+	req, err := http.NewRequest("POST", "/v1/notices", bytes.NewReader(body))
+	req.RemoteAddr = "pid=100;uid=;socket=;"
+	c.Assert(err, IsNil)
+	noticesCmd := apiCmd("/v1/notices")
+	rsp, ok := noticesCmd.POST(noticesCmd, req, nil).(*resp)
+	c.Assert(ok, Equals, true)
+
+	c.Check(rsp.Type, Equals, ResponseTypeError)
+	c.Check(rsp.Status, Equals, http.StatusBadRequest)
+
+	result, ok := rsp.Result.(*errorResult)
+	c.Assert(ok, Equals, true)
+	c.Assert(result.Message, Matches, "cannot determine UID of request.*")
+}
+
 func (s *apiSuite) TestAddNoticeInvalidAction(c *C) {
+	restore := mockSysGetuid(0)
+	defer restore()
 	s.testAddNoticeBadRequest(c, `{"action": "bad"}`, "invalid action.*")
 }
 
-func (s *apiSuite) TestAddNoticeInvalidUserIDLow(c *C) {
-	s.testAddNoticeBadRequest(c, `{"action": "add", "user-id": -2}`, "invalid user ID.*")
-}
-
-func (s *apiSuite) TestAddNoticeInvalidUserIDHigh(c *C) {
-	s.testAddNoticeBadRequest(c, `{"action": "add", "user-id": 4294967296}`, "invalid user ID.*")
-}
-
 func (s *apiSuite) TestAddNoticeInvalidType(c *C) {
+	restore := mockSysGetuid(0)
+	defer restore()
 	s.testAddNoticeBadRequest(c, `{"action": "add", "type": "foo"}`, "invalid type.*")
 }
 
 func (s *apiSuite) TestAddNoticeInvalidKey(c *C) {
+	restore := mockSysGetuid(0)
+	defer restore()
 	s.testAddNoticeBadRequest(c, `{"action": "add", "type": "custom", "key": "bad"}`,
 		"invalid key.*")
 }
 
 func (s *apiSuite) TestAddNoticeKeyTooLong(c *C) {
+	restore := mockSysGetuid(0)
+	defer restore()
 	request, err := json.Marshal(map[string]any{
 		"action": "add",
 		"type":   "custom",
@@ -588,7 +901,41 @@ func (s *apiSuite) TestAddNoticeKeyTooLong(c *C) {
 	s.testAddNoticeBadRequest(c, string(request), "key must be 256 bytes or less")
 }
 
+func (s *apiSuite) TestAddNoticeInvalidVisibility(c *C) {
+	// Only root (or admin if not run as root) may create public notices
+	restore := mockSysGetuid(0)
+	defer restore()
+	request, err := json.Marshal(map[string]any{
+		"action":     "add",
+		"type":       "custom",
+		"key":        "a.b/c",
+		"visibility": "public",
+	})
+	c.Assert(err, IsNil)
+	s.testAddNoticeBadRequest(c, string(request), "invalid visibility.*")
+
+	// Now try with connection as admin
+	restore2 := mockSysGetuid(123)
+	defer restore2()
+	body := []byte(`{
+		"action":     "add",
+		"type":       "custom",
+		"key":        "a.b/c",
+		"visibility": "public"
+	}`)
+	req, err := http.NewRequest("POST", "/v1/notices", bytes.NewReader(body))
+	req.RemoteAddr = "pid=100;uid=123;socket=;"
+	c.Assert(err, IsNil)
+	noticesCmd := apiCmd("/v1/notices")
+	rsp, ok := noticesCmd.POST(noticesCmd, req, nil).(*resp)
+	c.Assert(ok, Equals, true)
+	c.Check(rsp.Type, Equals, ResponseTypeSync)
+	c.Check(rsp.Status, Equals, http.StatusOK)
+}
+
 func (s *apiSuite) TestAddNoticeDataTooLarge(c *C) {
+	restore := mockSysGetuid(0)
+	defer restore()
 	request, err := json.Marshal(map[string]any{
 		"action": "add",
 		"type":   "custom",
@@ -602,7 +949,9 @@ func (s *apiSuite) TestAddNoticeDataTooLarge(c *C) {
 	s.testAddNoticeBadRequest(c, string(request), "total size of data must be 4096 bytes or less")
 }
 
-func (s *apiSuite) TestInvalidRepeatAfter(c *C) {
+func (s *apiSuite) TestAddNoticeInvalidRepeatAfter(c *C) {
+	restore := mockSysGetuid(0)
+	defer restore()
 	s.testAddNoticeBadRequest(c, `{"action": "add", "type": "custom", "key": "a.b/1", "repeat-after": "bad"}`,
 		"invalid repeat-after.*")
 }
@@ -611,6 +960,7 @@ func (s *apiSuite) testAddNoticeBadRequest(c *C, body, errorMatch string) {
 	s.daemon(c)
 
 	req, err := http.NewRequest("POST", "/v1/notices", strings.NewReader(body))
+	req.RemoteAddr = "pid=100;uid=1000;socket=;"
 	c.Assert(err, IsNil)
 	noticesCmd := apiCmd("/v1/notices")
 	rsp, ok := noticesCmd.POST(noticesCmd, req, nil).(*resp)
@@ -626,16 +976,19 @@ func (s *apiSuite) testAddNoticeBadRequest(c *C, body, errorMatch string) {
 
 func (s *apiSuite) TestNotice(c *C) {
 	s.daemon(c)
+	restore := mockSysGetuid(0)
+	defer restore()
 
 	st := s.d.overlord.State()
 	st.Lock()
-	addNotice(c, st, state.CustomNotice, "a.b/1", nil)
-	noticeId, err := st.AddNotice(state.CustomNotice, "a.b/2", nil)
+	addNotice(c, st, 1000, state.CustomNotice, "a.b/1", nil)
+	noticeId, err := st.AddNotice(1000, state.CustomNotice, "a.b/2", nil)
 	c.Assert(err, IsNil)
-	addNotice(c, st, state.CustomNotice, "a.b/3", nil)
+	addNotice(c, st, 1000, state.CustomNotice, "a.b/3", nil)
 	st.Unlock()
 
 	req, err := http.NewRequest("GET", "/v1/notices/"+noticeId, nil)
+	req.RemoteAddr = "pid=100;uid=1000;socket=;"
 	c.Assert(err, IsNil)
 	noticesCmd := apiCmd("/v1/notices/{id}")
 	s.vars = map[string]string{"id": noticeId}
@@ -653,8 +1006,11 @@ func (s *apiSuite) TestNotice(c *C) {
 
 func (s *apiSuite) TestNoticeNotFound(c *C) {
 	s.daemon(c)
+	restore := mockSysGetuid(0)
+	defer restore()
 
 	req, err := http.NewRequest("GET", "/v1/notices/1234", nil)
+	req.RemoteAddr = "pid=100;uid=1000;socket=;"
 	c.Assert(err, IsNil)
 	noticesCmd := apiCmd("/v1/notices/{id}")
 	s.vars = map[string]string{"id": "1234"}
@@ -667,13 +1023,12 @@ func (s *apiSuite) TestNoticeNotFound(c *C) {
 
 func (s *apiSuite) TestNoticeNotAllowed(c *C) {
 	s.daemon(c)
+	restore := mockSysGetuid(0)
+	defer restore()
 
 	st := s.d.overlord.State()
 	st.Lock()
-	userID := 1000
-	noticeId, err := st.AddNotice(state.CustomNotice, "a.b/1", &state.AddNoticeOptions{
-		UserID: &userID,
-	})
+	noticeId, err := st.AddNotice(1000, state.CustomNotice, "a.b/1", nil)
 	c.Assert(err, IsNil)
 	st.Unlock()
 
@@ -701,7 +1056,7 @@ func noticeToMap(c *C, notice *state.Notice) map[string]any {
 	return n
 }
 
-func addNotice(c *C, st *state.State, noticeType state.NoticeType, key string, options *state.AddNoticeOptions) {
-	_, err := st.AddNotice(noticeType, key, options)
+func addNotice(c *C, st *state.State, userID uint32, noticeType state.NoticeType, key string, options *state.AddNoticeOptions) {
+	_, err := st.AddNotice(userID, noticeType, key, options)
 	c.Assert(err, IsNil)
 }

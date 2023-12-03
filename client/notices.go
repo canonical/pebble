@@ -34,10 +34,9 @@ type NotifyOptions struct {
 	// "domain.com/key" format.
 	Key string
 
-	// UserID is the UID of the notice's intended recipient. A UID of -1 means
-	// the notice may be received by any user (this is also the default
-	// behavior if UserID is nil).
-	UserID *int
+	// Visibility indicates whether the notice is public (viewable by all users)
+	// or private (viewable only by the user with the same user ID as the notice).
+	Visibility NoticeVisibility
 
 	// Data are optional key=value pairs for this occurrence of the notice.
 	Data map[string]string
@@ -55,15 +54,15 @@ func (client *Client) Notify(opts *NotifyOptions) (string, error) {
 		Action      string            `json:"action"`
 		Type        string            `json:"type"`
 		Key         string            `json:"key"`
-		UserID      *int              `json:"user-id,omitempty"`
+		Visibility  NoticeVisibility  `json:"visibility,omitempty"`
 		RepeatAfter string            `json:"repeat-after,omitempty"`
 		Data        map[string]string `json:"data,omitempty"`
 	}{
-		Action: "add",
-		Type:   string(opts.Type),
-		Key:    opts.Key,
-		UserID: opts.UserID,
-		Data:   opts.Data,
+		Action:     "add",
+		Type:       string(opts.Type),
+		Key:        opts.Key,
+		Visibility: opts.Visibility,
+		Data:       opts.Data,
 	}
 	if opts.RepeatAfter != 0 {
 		payload.RepeatAfter = opts.RepeatAfter.String()
@@ -84,14 +83,17 @@ func (client *Client) Notify(opts *NotifyOptions) (string, error) {
 }
 
 type NoticesOptions struct {
+	// UserIDs, if not empty, includes only notices whose user ID is one of these.
+	UserIDs []uint32
+
 	// Types, if not empty, includes only notices whose type is one of these.
 	Types []NoticeType
 
 	// Keys, if not empty, includes only notices whose key is one of these.
 	Keys []string
 
-	// UserIDs, if not empty, includes only notices whose user ID is one of these.
-	UserIDs []int
+	// Visibilities, if not empty, includes only notices whose visibility is one of these.
+	Visibilities []NoticeVisibility
 
 	// After, if set, includes only notices that were last repeated after this time.
 	After time.Time
@@ -105,9 +107,10 @@ type NoticesOptions struct {
 // being created.
 type Notice struct {
 	ID            string            `json:"id"`
+	UserID        uint32            `json:"user-id"`
 	Type          NoticeType        `json:"type"`
 	Key           string            `json:"key"`
-	UserID        *int              `json:"user-id,omitempty"`
+	Visibility    NoticeVisibility  `json:"visibility"`
 	FirstOccurred time.Time         `json:"first-occurred"`
 	LastOccurred  time.Time         `json:"last-occurred"`
 	LastRepeated  time.Time         `json:"last-repeated"`
@@ -124,6 +127,16 @@ const (
 	// The key and data fields are provided by the user. The key must be in
 	// the format "mydomain.io/mykey" to ensure well-namespaced notice keys.
 	CustomNotice NoticeType = "custom"
+)
+
+type NoticeVisibility string
+
+const (
+	// A private notice is only viewable by the user with a matching user ID.
+	PrivateNotice NoticeVisibility = "private"
+
+	// A public notice is viewable by all users.
+	PublicNotice  NoticeVisibility = "public"
 )
 
 type jsonNotice struct {
@@ -193,22 +206,23 @@ func makeNoticesQuery(opts *NoticesOptions) url.Values {
 	if opts == nil {
 		return query
 	}
-	if len(opts.Types) > 0 {
-		typeStrs := make([]string, 0, len(opts.Types))
-		for _, t := range opts.Types {
-			typeStrs = append(typeStrs, string(t))
+	if len(opts.UserIDs) > 0 {
+		for _, uid := range opts.UserIDs {
+			query.Add("user-ids", strconv.FormatUint(uint64(uid), 10))
 		}
-		query["types"] = typeStrs
+	}
+	if len(opts.Types) > 0 {
+		for _, t := range opts.Types {
+			query.Add("types", string(t))
+		}
 	}
 	if len(opts.Keys) > 0 {
 		query["keys"] = opts.Keys
 	}
-	if len(opts.UserIDs) > 0 {
-		userIDStrs := make([]string, 0, len(opts.UserIDs))
-		for _, u := range opts.UserIDs {
-			userIDStrs = append(userIDStrs, strconv.Itoa(u))
+	if len(opts.Visibilities) > 0 {
+		for _, v := range opts.Visibilities {
+			query.Add("visibilities", string(v))
 		}
-		query["user-ids"] = userIDStrs
 	}
 	if !opts.After.IsZero() {
 		query.Set("after", opts.After.Format(time.RFC3339Nano))
