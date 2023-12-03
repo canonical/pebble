@@ -34,9 +34,10 @@ func (s *PebbleSuite) TestNoticeID(c *C) {
 			"status-code": 200,
 			"result": {
 				"id": "123",
+				"user-id": 1000,
 				"type": "custom",
 				"key": "a.b/c",
-				"user-id": 1000,
+				"visibility": "private",
 				"first-occurred": "2023-09-05T17:18:00Z",
 				"last-occurred": "2023-09-05T19:18:00Z",
 				"last-repeated": "2023-09-05T18:18:00Z",
@@ -53,9 +54,10 @@ func (s *PebbleSuite) TestNoticeID(c *C) {
 	c.Check(rest, HasLen, 0)
 	c.Check(s.Stdout(), Equals, `
 id: "123"
+user-id: 1000
 type: custom
 key: a.b/c
-user-id: 1000
+visibility: private
 first-occurred: 2023-09-05T17:18:00Z
 last-occurred: 2023-09-05T19:18:00Z
 last-repeated: 2023-09-05T18:18:00Z
@@ -102,8 +104,10 @@ func (s *PebbleSuite) TestNoticeTypeKey(c *C) {
 			"status-code": 200,
 			"result": [{
 				"id": "123",
+				"user-id": 1000,
 				"type": "custom",
 				"key": "a.b/c",
+				"visibility": public",
 				"first-occurred": "2023-09-05T17:18:00Z",
 				"last-occurred": "2023-09-05T19:18:00Z",
 				"last-repeated": "2023-09-05T18:18:00Z",
@@ -117,8 +121,10 @@ func (s *PebbleSuite) TestNoticeTypeKey(c *C) {
 	c.Check(rest, HasLen, 0)
 	c.Check(s.Stdout(), Equals, `
 id: "123"
+user-id: 1000
 type: custom
 key: a.b/c
+visibility: public
 first-occurred: 2023-09-05T17:18:00Z
 last-occurred: 2023-09-05T19:18:00Z
 last-repeated: 2023-09-05T18:18:00Z

@@ -68,6 +68,7 @@ func (cmd *cmdNotice) Execute(args []string) error {
 		if len(notices) == 0 {
 			return fmt.Errorf("cannot find %s notice with key %q", cmd.Positional.IDOrType, cmd.Positional.Key)
 		}
+		// XXX: what to do about type/key collisions on different user IDs?
 		notice = notices[0]
 	} else {
 		var err error
@@ -90,15 +91,16 @@ func (cmd *cmdNotice) Execute(args []string) error {
 
 // yamlNotice exists to add "yaml" tags to the Notice fields.
 type yamlNotice struct {
-	ID            string            `yaml:"id"`
-	Type          client.NoticeType `yaml:"type"`
-	Key           string            `yaml:"key"`
-	UserID        *int              `yaml:"user-id,omitempty"`
-	FirstOccurred time.Time         `yaml:"first-occurred"`
-	LastOccurred  time.Time         `yaml:"last-occurred"`
-	LastRepeated  time.Time         `yaml:"last-repeated"`
-	Occurrences   int               `yaml:"occurrences"`
-	LastData      map[string]string `yaml:"last-data,omitempty"`
-	RepeatAfter   time.Duration     `yaml:"repeat-after,omitempty"`
-	ExpireAfter   time.Duration     `yaml:"expire-after,omitempty"`
+	ID            string                  `yaml:"id"`
+	UserID        uint32                  `yaml:"user-id"`
+	Type          client.NoticeType       `yaml:"type"`
+	Key           string                  `yaml:"key"`
+	Visibility    client.NoticeVisibility `yaml:"visibility"`
+	FirstOccurred time.Time               `yaml:"first-occurred"`
+	LastOccurred  time.Time               `yaml:"last-occurred"`
+	LastRepeated  time.Time               `yaml:"last-repeated"`
+	Occurrences   int                     `yaml:"occurrences"`
+	LastData      map[string]string       `yaml:"last-data,omitempty"`
+	RepeatAfter   time.Duration           `yaml:"repeat-after,omitempty"`
+	ExpireAfter   time.Duration           `yaml:"expire-after,omitempty"`
 }
