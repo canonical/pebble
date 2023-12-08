@@ -26,6 +26,15 @@ import (
 	"github.com/canonical/pebble/client"
 )
 
+func (cs *clientSuite) TestHandleUIDOption(c *C) {
+	o := client.NoticesOptions{}
+	for _, opt := range []string{"1000", "self", "1234", "all", "0", "self", "123"} {
+		o.HandleUIDOption(opt)
+	}
+	c.Assert(o.SpecialUser, Equals, client.NoticeUserAll)
+	c.Assert(o.UserIDs, DeepEquals, []uint32{1000, 1234, 0, 123})
+}
+
 func (cs *clientSuite) TestNotice(c *C) {
 	cs.rsp = `{"type": "sync", "result": {
 		"id":   "123",
@@ -83,7 +92,7 @@ func (cs *clientSuite) TestNotices(c *C) {
 		"user-id": 0,
 		"type": "warning",
 		"key": "be careful!",
-		"visibility": "public",
+		"visibility": "private",
 		"first-occurred": "2023-09-06T15:43:00.123Z",
 		"last-occurred": "2023-09-06T17:43:00.567Z",
 		"last-repeated": "2023-09-06T16:43:00Z",
@@ -111,7 +120,7 @@ func (cs *clientSuite) TestNotices(c *C) {
 		UserID:        0,
 		Type:          "warning",
 		Key:           "be careful!",
-		Visibility:    "public",
+		Visibility:    "private",
 		FirstOccurred: time.Date(2023, 9, 6, 15, 43, 0, 123_000_000, time.UTC),
 		LastOccurred:  time.Date(2023, 9, 6, 17, 43, 0, 567_000_000, time.UTC),
 		LastRepeated:  time.Date(2023, 9, 6, 16, 43, 0, 0, time.UTC),
@@ -123,6 +132,7 @@ func (cs *clientSuite) TestNoticesFilters(c *C) {
 	cs.rsp = `{"type": "sync", "result": []}`
 	notices, err := cs.cli.Notices(&client.NoticesOptions{
 		UserIDs:      []uint32{1000, 1234},
+		SpecialUser:  client.NoticeUserAll,
 		Types:        []client.NoticeType{client.CustomNotice},
 		Keys:         []string{"foo.com/bar", "example.com/x"},
 		Visibilities: []client.NoticeVisibility{client.PublicNotice},
@@ -131,7 +141,7 @@ func (cs *clientSuite) TestNoticesFilters(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(cs.req.URL.Path, Equals, "/v1/notices")
 	c.Assert(cs.req.URL.Query(), DeepEquals, url.Values{
-		"user-ids":     {"1000", "1234"},
+		"user-ids":     {"1000", "1234", "all"},
 		"types":        {"custom"},
 		"keys":         {"foo.com/bar", "example.com/x"},
 		"visibilities": {"public"},

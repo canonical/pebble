@@ -37,9 +37,11 @@ type cmdNotices struct {
 	client *client.Client
 
 	timeMixin
-	Type    []client.NoticeType `long:"type"`
-	Key     []string            `long:"key"`
-	Timeout time.Duration       `long:"timeout"`
+	UID        []string                  `long:"uid"`
+	Type       []client.NoticeType       `long:"type"`
+	Key        []string                  `long:"key"`
+	Visibility []client.NoticeVisibility `long:"visibility"`
+	Timeout    time.Duration             `long:"timeout"`
 }
 
 func init() {
@@ -48,9 +50,11 @@ func init() {
 		Summary:     cmdNoticesSummary,
 		Description: cmdNoticesDescription,
 		ArgsHelp: merge(timeArgsHelp, map[string]string{
-			"--type":    "Only list notices of this type (multiple allowed)",
-			"--key":     "Only list notices with this key (multiple allowed)",
-			"--timeout": "Wait up to this duration for matching notices to arrive",
+			"--uid":        `Only list notices with this user ID (multiple allowed); "--uid=self" uses the client UID, and "--uid=all" (admin only) includes all notices (public and private) for all users`,
+			"--type":       "Only list notices of this type (multiple allowed)",
+			"--key":        "Only list notices with this key (multiple allowed)",
+			"--visibility": "Only list notices with this visibility (multiple allowed)",
+			"--timeout":    "Wait up to this duration for matching notices to arrive",
 		}),
 		New: func(opts *CmdOptions) flags.Commander {
 			return &cmdNotices{client: opts.Client}
@@ -68,9 +72,16 @@ func (cmd *cmdNotices) Execute(args []string) error {
 		return fmt.Errorf("cannot load CLI state: %w", err)
 	}
 	options := client.NoticesOptions{
-		Types: cmd.Type,
-		Keys:  cmd.Key,
-		After: state.NoticesLastOkayed,
+		Types:        cmd.Type,
+		Keys:         cmd.Key,
+		Visibilities: cmd.Visibility,
+		After:        state.NoticesLastOkayed,
+	}
+	for _, uidOpt := range cmd.UID {
+		err = options.HandleUIDOption(uidOpt)
+		if err != nil {
+			return fmt.Errorf(`failed to parse --uid argument %q: %v`, uidOpt, err)
+		}
 	}
 
 	var notices []*client.Notice
@@ -96,7 +107,7 @@ func (cmd *cmdNotices) Execute(args []string) error {
 	writer := tabWriter()
 	defer writer.Flush()
 
-	fmt.Fprintln(writer, "ID\tType\tKey\tFirst\tRepeated\tOccurences")
+	fmt.Fprintln(writer, "ID\tUser\tType\tKey\tFirst\tRepeated\tCount\tVisibility")
 
 	for _, notice := range notices {
 		key := notice.Key
@@ -104,13 +115,15 @@ func (cmd *cmdNotices) Execute(args []string) error {
 			// Truncate to 32 bytes with ellipsis in the middle
 			key = key[:14] + "..." + key[len(key)-15:]
 		}
-		fmt.Fprintf(writer, "%s\t%s\t%s\t%s\t%s\t%d\n",
+		fmt.Fprintf(writer, "%s\t%d\t%s\t%s\t%s\t%s\t%d\t%s\n",
 			notice.ID,
+			notice.UserID,
 			notice.Type,
 			key,
 			cmd.fmtTime(notice.FirstOccurred),
 			cmd.fmtTime(notice.LastRepeated),
-			notice.Occurrences)
+			notice.Occurrences,
+			notice.Visibility)
 	}
 
 	state.NoticesLastListed = notices[len(notices)-1].LastRepeated

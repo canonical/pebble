@@ -325,11 +325,10 @@ func (s *noticesSuite) TestNoticesFilterVisibility(c *C) {
 		Visibility: state.PublicNotice,
 	})
 	time.Sleep(time.Microsecond)
-	addNotice(c, st, 1000, state.WarningNotice, "Warning 2!", &state.AddNoticeOptions{
-		Visibility: state.PrivateNotice,
-	})
+	addNotice(c, st, 1000, state.WarningNotice, "Warning 2!", nil)
+	// should also be private by default
 
-	// No visibilities
+	// No visibility filter
 	notices := st.Notices(nil)
 	c.Assert(notices, HasLen, 4)
 
@@ -360,7 +359,7 @@ func (s *noticesSuite) TestNoticesFilterVisibility(c *C) {
 	c.Check(n["type"], Equals, "warning")
 	c.Check(n["key"], Equals, "Warning 2!")
 
-	// Multiple user IDs
+	// Multiple visibilities (not very useful in practice, but ensure that it works)
 	notices = st.Notices(&state.NoticeFilter{Visibilities: []state.NoticeVisibility{
 		state.PublicNotice,
 		state.PrivateNotice,

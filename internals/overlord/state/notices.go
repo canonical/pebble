@@ -208,7 +208,8 @@ type NoticeVisibility string
 
 const (
 	// Notice is only viewable by the user with the UID matching the notice's
-	// user ID. This is the default for AddNotice if no visibility is specified.
+	// user ID or by an admin. This is the default for AddNotice if no
+	// visibility is specified.
 	PrivateNotice NoticeVisibility = "private"
 
 	// Notice is viewable by all users.
@@ -225,9 +226,9 @@ func (v NoticeVisibility) Valid() bool {
 
 // AddNoticeOptions holds optional parameters for an AddNotice call.
 type AddNoticeOptions struct {
-	// Visibility indicates whether the notice is private (only visible by user
-	// with a matching userID) or public (visible by all users). If unset, the
-	// notice visibility defaults to private.
+	// Visibility indicates whether the notice will be private (only visible by
+	// admin or by user with a matching userID) or public (visible by all users).
+	// If unset, the notice visibility defaults to private.
 	Visibility NoticeVisibility
 
 	// Data is the optional key-value data for this occurrence.

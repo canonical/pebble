@@ -16,6 +16,7 @@ package cli
 
 import (
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/canonical/go-flags"
@@ -33,6 +34,8 @@ by unique type and key combination (2-arg variant).
 type cmdNotice struct {
 	client *client.Client
 
+	UID string `long:"uid"`
+
 	Positional struct {
 		IDOrType string `positional-arg-name:"<id-or-type>" required:"1"`
 		Key      string `positional-arg-name:"<key>"`
@@ -44,7 +47,9 @@ func init() {
 		Name:        "notice",
 		Summary:     cmdNoticeSummary,
 		Description: cmdNoticeDescription,
-		ArgsHelp:    map[string]string{},
+		ArgsHelp:    map[string]string{
+			"--uid": `Look up notice with given type and key from user with this UID; admin may use "--uid=all" to search all users' notices; ignored if using notice ID, rather than type and key`,
+		},
 		New: func(opts *CmdOptions) flags.Commander {
 			return &cmdNotice{client: opts.Client}
 		},
@@ -58,19 +63,42 @@ func (cmd *cmdNotice) Execute(args []string) error {
 
 	var notice *client.Notice
 	if cmd.Positional.Key != "" {
-		notices, err := cmd.client.Notices(&client.NoticesOptions{
+		options := client.NoticesOptions{
 			Types: []client.NoticeType{client.NoticeType(cmd.Positional.IDOrType)},
 			Keys:  []string{cmd.Positional.Key},
-		})
+		}
+		err := options.HandleUIDOption(cmd.UID)
+		if err != nil {
+			return fmt.Errorf(`failed to parse option "--uid=%s": %v`, cmd.UID, err)
+		}
+		notices, err := cmd.client.Notices(&options)
 		if err != nil {
 			return err
 		}
-		if len(notices) == 0 {
+		switch len(notices) {
+		case 0:
 			return fmt.Errorf("cannot find %s notice with key %q", cmd.Positional.IDOrType, cmd.Positional.Key)
+		case 1:
+			notice = notices[0]
+		default:
+			clientUID := uint32(os.Getuid())
+			notice = notices[0]
+			for _, n := range notices {
+				if n.UserID == clientUID {
+					// If notice user ID matches client UID, choose it
+					notice = n
+					break
+				}
+				if n.LastRepeated.After(notice.LastRepeated) {
+					// Otherwise, choose latest notice
+					notice = n
+				}
+			}
 		}
-		// XXX: what to do about type/key collisions on different user IDs?
-		notice = notices[0]
 	} else {
+		if cmd.UID != "" {
+			return fmt.Errorf("cannot use --uid option when looking up notice by key")
+		}
 		var err error
 		notice, err = cmd.client.Notice(cmd.Positional.IDOrType)
 		if err != nil {

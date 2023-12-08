@@ -39,16 +39,20 @@ func (s *PebbleSuite) TestNotices(c *C) {
 			"status-code": 200,
 			"result": [{
 				"id": "1",
+				"user-id": 1000,
 				"type": "custom",
 				"key": "a.b/c",
+				"visibility": "private",
 				"first-occurred": "2023-09-05T17:18:00Z",
 				"last-occurred": "2023-09-05T19:18:00Z",
 				"last-repeated": "2023-09-05T18:18:00Z",
 				"occurrences": 3
 			}, {
 				"id": "2",
+				"user-id": 0,
 				"type": "warning",
 				"key": "Ware!",
+				"visibility": "public",
 				"first-occurred": "2023-09-06T17:18:00Z",
 				"last-occurred": "2023-09-06T19:18:00Z",
 				"last-repeated": "2023-09-06T18:18:00Z",
@@ -61,9 +65,9 @@ func (s *PebbleSuite) TestNotices(c *C) {
 	c.Assert(err, IsNil)
 	c.Check(rest, HasLen, 0)
 	c.Check(s.Stdout(), Equals, `
-ID   Type     Key    First                 Repeated              Occurences
-1    custom   a.b/c  2023-09-05T17:18:00Z  2023-09-05T18:18:00Z  3
-2    warning  Ware!  2023-09-06T17:18:00Z  2023-09-06T18:18:00Z  1
+ID   User  Type     Key    First                 Repeated              Count  Visibility
+1    1000  custom   a.b/c  2023-09-05T17:18:00Z  2023-09-05T18:18:00Z  3      private
+2    0     warning  Ware!  2023-09-06T17:18:00Z  2023-09-06T18:18:00Z  1      public
 `[1:])
 	c.Check(s.Stderr(), Equals, "")
 
@@ -79,8 +83,10 @@ func (s *PebbleSuite) TestNoticesFilters(c *C) {
 		c.Check(r.Method, Equals, "GET")
 		c.Check(r.URL.Path, Equals, "/v1/notices")
 		c.Check(r.URL.Query(), DeepEquals, url.Values{
-			"types": {"custom", "warning"},
-			"keys":  {"a.b/c"},
+			"user-ids":     {"1000", "self"},
+			"types":        {"custom", "warning"},
+			"keys":         {"a.b/c"},
+			"visibilities": {"private"},
 		})
 
 		fmt.Fprint(w, `{
@@ -88,8 +94,10 @@ func (s *PebbleSuite) TestNoticesFilters(c *C) {
 			"status-code": 200,
 			"result": [{
 				"id": "1",
+				"user-id": 1000,
 				"type": "custom",
 				"key": "a.b/c",
+				"visibility": "private",
 				"first-occurred": "2023-09-05T17:18:00Z",
 				"last-occurred": "2023-09-05T19:18:00Z",
 				"last-repeated": "2023-09-05T18:18:00Z",
@@ -99,12 +107,12 @@ func (s *PebbleSuite) TestNoticesFilters(c *C) {
 	})
 
 	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{
-		"notices", "--abs-time", "--type", "custom", "--key", "a.b/c", "--type", "warning"})
+		"notices", "--abs-time", "--uid", "1000", "--type", "custom", "--key", "a.b/c", "--type", "warning", "--uid", "self", "--visibility", "private"})
 	c.Assert(err, IsNil)
 	c.Check(rest, HasLen, 0)
 	c.Check(s.Stdout(), Equals, `
-ID   Type    Key    First                 Repeated              Occurences
-1    custom  a.b/c  2023-09-05T17:18:00Z  2023-09-05T18:18:00Z  3
+ID   User  Type    Key    First                 Repeated              Count  Visibility
+1    1000  custom  a.b/c  2023-09-05T17:18:00Z  2023-09-05T18:18:00Z  3      private
 `[1:])
 	c.Check(s.Stderr(), Equals, "")
 
@@ -128,8 +136,10 @@ func (s *PebbleSuite) TestNoticesAfter(c *C) {
 			"status-code": 200,
 			"result": [{
 				"id": "1",
+				"user-id": 1000,
 				"type": "custom",
 				"key": "a.b/c",
+				"visibility": "private",
 				"first-occurred": "2023-09-05T17:18:00Z",
 				"last-occurred": "2023-09-05T19:18:00Z",
 				"last-repeated": "2023-09-07T18:18:00Z",
@@ -147,8 +157,8 @@ func (s *PebbleSuite) TestNoticesAfter(c *C) {
 	c.Assert(err, IsNil)
 	c.Check(rest, HasLen, 0)
 	c.Check(s.Stdout(), Equals, `
-ID   Type    Key    First                 Repeated              Occurences
-1    custom  a.b/c  2023-09-05T17:18:00Z  2023-09-07T18:18:00Z  3
+ID   User  Type    Key    First                 Repeated              Count  Visibility
+1    1000  custom  a.b/c  2023-09-05T17:18:00Z  2023-09-07T18:18:00Z  3      private
 `[1:])
 	c.Check(s.Stderr(), Equals, "")
 
@@ -192,8 +202,10 @@ func (s *PebbleSuite) TestNoticesTimeout(c *C) {
 			"status-code": 200,
 			"result": [{
 				"id": "1",
+				"user-id": 1000,
 				"type": "custom",
 				"key": "a.b/c",
+				"visibility": "private",
 				"first-occurred": "2023-09-05T17:18:00Z",
 				"last-occurred": "2023-09-05T19:18:00Z",
 				"last-repeated": "2023-09-05T18:18:00Z",
@@ -207,8 +219,8 @@ func (s *PebbleSuite) TestNoticesTimeout(c *C) {
 	c.Assert(err, IsNil)
 	c.Check(rest, HasLen, 0)
 	c.Check(s.Stdout(), Equals, `
-ID   Type    Key    First                 Repeated              Occurences
-1    custom  a.b/c  2023-09-05T17:18:00Z  2023-09-05T18:18:00Z  3
+ID   User  Type    Key    First                 Repeated              Count  Visibility
+1    1000  custom  a.b/c  2023-09-05T17:18:00Z  2023-09-05T18:18:00Z  3      private
 `[1:])
 	c.Check(s.Stderr(), Equals, "")
 

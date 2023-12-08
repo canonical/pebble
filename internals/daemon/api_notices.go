@@ -26,7 +26,7 @@ import (
 
 	"github.com/canonical/x-go/strutil"
 
-	"github.com/canonical/pebble/internals/osutil/sys"
+	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/overlord/state"
 )
 
@@ -51,13 +51,14 @@ func v1GetNotices(c *Command, r *http.Request, _ *UserState) Response {
 	query := r.URL.Query()
 
 	publicOnly := false
-	reqUid, err := uidFromRequest(r)
+	requestUID, err := uidFromRequest(r)
+	daemonUID := uint32(sysGetuid())
 	if err != nil {
 		// Only allow connection to receive public notices
 		publicOnly = true
 	}
 
-	userIDs, err := sanitizeUserIDsFilter(reqUid, query["user-ids"])
+	userIDs, includeAllPrivate, err := sanitizeUserIDsFilter(requestUID, daemonUID, query["user-ids"])
 	if err != nil {
 		return statusBadRequest(`invalid "user-ids" filter: %v`, err)
 	}
@@ -123,16 +124,13 @@ func v1GetNotices(c *Command, r *http.Request, _ *UserState) Response {
 		notices = st.Notices(filter)
 	}
 
-	if notices == nil {
-		notices = []*state.Notice{} // avoid null result
-	}
-	var viewableNotices []*state.Notice
+	viewable := []*state.Notice{}
 	for _, n := range notices {
-		if noticeViewableByUser(n, reqUid, publicOnly) {
-			viewableNotices = append(viewableNotices, n)
+		if noticeViewableByUser(n, requestUID, daemonUID, publicOnly) && includeNotice(n, requestUID, userIDs, includeAllPrivate) {
+			viewable = append(viewable, n)
 		}
 	}
-	return SyncResponse(viewableNotices)
+	return SyncResponse(viewable)
 }
 
 // Get the UID of the request. If the UID is not known, return an error.
@@ -144,29 +142,45 @@ func uidFromRequest(r *http.Request) (uint32, error) {
 	return uid, nil
 }
 
-// Construct the user IDs filter which will be passed into the notices state.
+// Construct the user IDs filter which will be passed to state.Notices.
 // The userID value of "self" means the requester UID.
-func sanitizeUserIDsFilter(reqUid uint32, queryUserIDs []string) ([]uint32, error) {
+// The userID value of "all" (admin only) means all public and private notices
+// for all users. If "all" is in the query parameters, return true along with
+// the parsed user IDs.
+func sanitizeUserIDsFilter(requestUID, daemonUID uint32, queryUserIDs []string) (userIDs []uint32, includeAllPrivate bool, err error) {
 	userIDStrs := strutil.MultiCommaSeparatedList(queryUserIDs)
-	userIDs := make([]uint32, 0, len(userIDStrs))
+	userIDs = make([]uint32, 0, len(userIDStrs))
 	for _, userIDStr := range userIDStrs {
 		if userIDStr == "self" {
-			userIDs = append(userIDs, reqUid)
+			userIDs = append(userIDs, requestUID)
 			continue
+		}
+		if userIDStr == "all" {
+			if isAdmin(requestUID, daemonUID) {
+				includeAllPrivate = true
+			} else {
+				// Don't return error, but log it, in case client is under the
+				// incorrect assumption that they are admin. Still Return an
+				// empty userIDs filter, so they'll get as many notices as they
+				// have permission to view.
+				logger.Noticef(`notices: non-admin user %d requested user-ids="all"`, requestUID)
+			}
+			// Return an empty userIDs filter, so all notices will be returned.
+			return []uint32{}, includeAllPrivate, nil
 		}
 		userID, err := strconv.ParseInt(userIDStr, 10, 64)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 		if userID < 0 || userID > math.MaxUint32 {
-			return nil, fmt.Errorf("user ID is not a valid uint32: %d", userID)
+			return nil, false, fmt.Errorf("user ID is not a valid uint32: %d", userID)
 		}
 		userIDs = append(userIDs, uint32(userID))
 	}
-	return userIDs, nil
+	return userIDs, includeAllPrivate, nil
 }
 
-// Construct the types filter which will be passed into the notices state.
+// Construct the types filter which will be passed to state.Notices.
 func sanitizeTypesFilter(queryTypes []string) ([]state.NoticeType, error) {
 	typeStrs := strutil.MultiCommaSeparatedList(queryTypes)
 	types := make([]state.NoticeType, 0, len(typeStrs))
@@ -185,7 +199,7 @@ func sanitizeTypesFilter(queryTypes []string) ([]state.NoticeType, error) {
 	return types, nil
 }
 
-// Construct the visibilities filter which will be passed into the notices state.
+// Construct the visibilities filter which will be passed to state.Notices.
 func sanitizeVisibilitiesFilter(queryVisibilities []string) ([]state.NoticeVisibility, error) {
 	visibilityStrs := strutil.MultiCommaSeparatedList(queryVisibilities)
 	visibilities := make([]state.NoticeVisibility, 0, len(visibilityStrs))
@@ -201,28 +215,58 @@ func sanitizeVisibilitiesFilter(queryVisibilities []string) ([]state.NoticeVisib
 	return visibilities, nil
 }
 
-func noticeViewableByUser(notice *state.Notice, userID uint32, publicOnly bool) bool {
+func noticeViewableByUser(notice *state.Notice, requestUID, daemonUID uint32, publicOnly bool) bool {
 	if notice.Visibility() == state.PublicNotice {
 		return true
 	}
 	if publicOnly {
+		// IMPORTANT: must run this check before UID or admin check, as
+		// requests with unknown UIDs get set arbitrarily to UID 0.
 		return false
 	}
-	if isAdmin(userID) {
+	if notice.UserID() == requestUID {
 		return true
 	}
-	if notice.UserID() == userID {
+	if isAdmin(requestUID, daemonUID) {
 		return true
 	}
 	return false
 }
 
-func isAdmin(userID uint32) bool {
-	return userID == 0 || sys.UserID(userID) == sysGetuid()
+func includeNotice(notice *state.Notice, requestUID uint32, userIDs []uint32, includeAllPrivate bool) bool {
+	if notice.Visibility() == state.PublicNotice {
+		return true
+	}
+	if notice.UserID() == requestUID {
+		return true
+	}
+	if len(userIDs) == 0 && includeAllPrivate {
+		// No user IDs filter provided, only include other users' private
+		// notices if includeAllPrivate is true.
+		return true
+	}
+	if sliceContains(userIDs, notice.UserID()) {
+		return true
+	}
+	return false
+}
+
+func isAdmin(userID, daemonUID uint32) bool {
+	return userID == 0 || userID == daemonUID
+}
+
+func sliceContains[T comparable](haystack []T, needle T) bool {
+	for _, v := range haystack {
+		if v == needle {
+			return true
+		}
+	}
+	return false
 }
 
 func v1PostNotices(c *Command, r *http.Request, _ *UserState) Response {
-	reqUid, err := uidFromRequest(r)
+	requestUID, err := uidFromRequest(r)
+	daemonUID := uint32(sysGetuid())
 	if err != nil {
 		// Connection UID cannot be parsed, so do not allow notice creation
 		return statusBadRequest("cannot determine UID of request, so cannot create notice")
@@ -254,7 +298,7 @@ func v1PostNotices(c *Command, r *http.Request, _ *UserState) Response {
 		return statusBadRequest("key must be %d bytes or less", maxNoticeKeyLength)
 	}
 
-	if err := validateVisibilityByUser(payload.Visibility, reqUid); err != nil {
+	if err := validateVisibilityByUser(payload.Visibility, requestUID, daemonUID); err != nil {
 		return statusBadRequest(`invalid visibility %q: %v`, payload.Visibility, err)
 	}
 
@@ -278,7 +322,7 @@ func v1PostNotices(c *Command, r *http.Request, _ *UserState) Response {
 	st.Lock()
 	defer st.Unlock()
 
-	noticeId, err := st.AddNotice(reqUid, state.CustomNotice, payload.Key, &state.AddNoticeOptions{
+	noticeId, err := st.AddNotice(requestUID, state.CustomNotice, payload.Key, &state.AddNoticeOptions{
 		Visibility:  payload.Visibility,
 		Data:        data,
 		RepeatAfter: repeatAfter,
@@ -290,15 +334,15 @@ func v1PostNotices(c *Command, r *http.Request, _ *UserState) Response {
 	return SyncResponse(addedNotice{ID: noticeId})
 }
 
-func validateVisibilityByUser(visibility state.NoticeVisibility, userID uint32) error {
-	if visibility == state.NoticeVisibility("") {
+func validateVisibilityByUser(visibility state.NoticeVisibility, requestUID, daemonUID uint32) error {
+	if visibility == "" {
 		return nil
 	}
 	if !visibility.Valid() {
 		return fmt.Errorf("must be %q or %q", state.PrivateNotice, state.PublicNotice)
 	}
-	if !isAdmin(userID) && visibility == state.PublicNotice {
-		return fmt.Errorf("only admin may create notices with visibility %q", state.PublicNotice)
+	if visibility == state.PublicNotice && !isAdmin(requestUID, daemonUID) {
+		return fmt.Errorf("only admin may create public notices")
 	}
 	return nil
 }
@@ -313,12 +357,13 @@ func v1GetNotice(c *Command, r *http.Request, _ *UserState) Response {
 		return statusNotFound("cannot find notice with ID %q", noticeID)
 	}
 	onlyPublic := false
-	reqUid, err := uidFromRequest(r)
+	requestUID, err := uidFromRequest(r)
 	if err != nil {
 		// Only allow connection to receive public notices
 		onlyPublic = true
 	}
-	if !noticeViewableByUser(notice, reqUid, onlyPublic) {
+	daemonUID := uint32(sysGetuid())
+	if !noticeViewableByUser(notice, requestUID, daemonUID, onlyPublic) {
 		return statusForbidden("not allowed to access notice with id %q", noticeID)
 	}
 	return SyncResponse(notice)

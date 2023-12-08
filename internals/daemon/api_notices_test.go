@@ -31,7 +31,7 @@ import (
 	"github.com/canonical/pebble/internals/overlord/state"
 )
 
-func mockSysGetuid(fakeUid uint32) (restore func()) {
+func fakeSysGetuid(fakeUid uint32) (restore func()) {
 	old := sysGetuid
 	sysGetuid = func() sys.UserID {
 		return sys.UserID(fakeUid)
@@ -43,7 +43,7 @@ func mockSysGetuid(fakeUid uint32) (restore func()) {
 }
 
 func (s *apiSuite) TestNoticesFilterUserID(c *C) {
-	restore := mockSysGetuid(0)
+	restore := fakeSysGetuid(0)
 	defer restore()
 	s.testNoticesFilter(c, func(after time.Time) url.Values {
 		return url.Values{"user-ids": {"1000"}}
@@ -51,7 +51,7 @@ func (s *apiSuite) TestNoticesFilterUserID(c *C) {
 }
 
 func (s *apiSuite) TestNoticesFilterType(c *C) {
-	restore := mockSysGetuid(0)
+	restore := fakeSysGetuid(0)
 	defer restore()
 	s.testNoticesFilter(c, func(after time.Time) url.Values {
 		return url.Values{"types": {"custom"}}
@@ -59,7 +59,7 @@ func (s *apiSuite) TestNoticesFilterType(c *C) {
 }
 
 func (s *apiSuite) TestNoticesFilterKey(c *C) {
-	restore := mockSysGetuid(0)
+	restore := fakeSysGetuid(0)
 	defer restore()
 	s.testNoticesFilter(c, func(after time.Time) url.Values {
 		return url.Values{"keys": {"a.b/2"}}
@@ -67,7 +67,7 @@ func (s *apiSuite) TestNoticesFilterKey(c *C) {
 }
 
 func (s *apiSuite) TestNoticesFilterVisibility(c *C) {
-	restore := mockSysGetuid(0)
+	restore := fakeSysGetuid(0)
 	defer restore()
 	s.testNoticesFilter(c, func(after time.Time) url.Values {
 		return url.Values{"visibilities": {"public"}}
@@ -75,7 +75,7 @@ func (s *apiSuite) TestNoticesFilterVisibility(c *C) {
 }
 
 func (s *apiSuite) TestNoticesFilterAfter(c *C) {
-	restore := mockSysGetuid(0)
+	restore := fakeSysGetuid(0)
 	defer restore()
 	s.testNoticesFilter(c, func(after time.Time) url.Values {
 		return url.Values{"after": {after.UTC().Format(time.RFC3339Nano)}}
@@ -83,7 +83,7 @@ func (s *apiSuite) TestNoticesFilterAfter(c *C) {
 }
 
 func (s *apiSuite) TestNoticesFilterAll(c *C) {
-	restore := mockSysGetuid(0)
+	restore := fakeSysGetuid(0)
 	defer restore()
 	s.testNoticesFilter(c, func(after time.Time) url.Values {
 		return url.Values{
@@ -153,7 +153,7 @@ func (s *apiSuite) testNoticesFilter(c *C, makeQuery func(after time.Time) url.V
 
 func (s *apiSuite) TestNoticesFilterMultipleTypes(c *C) {
 	s.daemon(c)
-	restore := mockSysGetuid(0)
+	restore := fakeSysGetuid(0)
 	defer restore()
 
 	st := s.d.overlord.State()
@@ -185,7 +185,7 @@ func (s *apiSuite) TestNoticesFilterMultipleTypes(c *C) {
 
 func (s *apiSuite) TestNoticesFilterMultipleKeys(c *C) {
 	s.daemon(c)
-	restore := mockSysGetuid(0)
+	restore := fakeSysGetuid(0)
 	defer restore()
 
 	st := s.d.overlord.State()
@@ -217,7 +217,7 @@ func (s *apiSuite) TestNoticesFilterMultipleKeys(c *C) {
 
 func (s *apiSuite) TestNoticesFilterInvalidTypes(c *C) {
 	s.daemon(c)
-	restore := mockSysGetuid(0)
+	restore := fakeSysGetuid(0)
 	defer restore()
 
 	st := s.d.Overlord().State()
@@ -258,9 +258,9 @@ func (s *apiSuite) TestNoticesFilterInvalidTypes(c *C) {
 	c.Assert(notices, HasLen, 0)
 }
 
-func (s *apiSuite) TestNoticesUserIDsRootDefault(c *C) {
+func (s *apiSuite) TestNoticesUserIDsAdminDefault(c *C) {
 	s.daemon(c)
-	restore := mockSysGetuid(0)
+	restore := fakeSysGetuid(0)
 	defer restore()
 
 	st := s.d.overlord.State()
@@ -284,7 +284,7 @@ func (s *apiSuite) TestNoticesUserIDsRootDefault(c *C) {
 
 	noticesCmd := apiCmd("/v1/notices")
 
-	// Test that root user sees all notices if no filter is specified
+	// Test that admin user sees their own private and all public notices if no filter is specified
 	req, err := http.NewRequest("GET", "/v1/notices", nil)
 	c.Assert(err, IsNil)
 	req.RemoteAddr = "pid=100;uid=0;socket=;"
@@ -295,24 +295,24 @@ func (s *apiSuite) TestNoticesUserIDsRootDefault(c *C) {
 	c.Check(rsp.Status, Equals, http.StatusOK)
 	notices, ok := rsp.Result.([]*state.Notice)
 	c.Assert(ok, Equals, true)
-	c.Assert(notices, HasLen, 6)
+	c.Assert(notices, HasLen, 4)
 	n := noticeToMap(c, notices[0])
 	c.Assert(n["user-id"], Equals, 0.0)
+	c.Assert(n["visibility"], Equals, "private")
 	n = noticeToMap(c, notices[1])
-	c.Assert(n["user-id"], Equals, 1000.0)
-	n = noticeToMap(c, notices[2])
-	c.Assert(n["user-id"], Equals, 123.0)
-	n = noticeToMap(c, notices[3])
 	c.Assert(n["user-id"], Equals, 0.0)
-	n = noticeToMap(c, notices[4])
+	c.Assert(n["visibility"], Equals, "public")
+	n = noticeToMap(c, notices[2])
 	c.Assert(n["user-id"], Equals, 1000.0)
-	n = noticeToMap(c, notices[5])
+	c.Assert(n["visibility"], Equals, "public")
+	n = noticeToMap(c, notices[3])
 	c.Assert(n["user-id"], Equals, 123.0)
+	c.Assert(n["visibility"], Equals, "public")
 }
 
-func (s *apiSuite) TestNoticesUserIDsRootFilter(c *C) {
+func (s *apiSuite) TestNoticesUserIDsAdminFilter(c *C) {
 	s.daemon(c)
-	restore := mockSysGetuid(0)
+	restore := fakeSysGetuid(0)
 	defer restore()
 
 	st := s.d.overlord.State()
@@ -336,42 +336,34 @@ func (s *apiSuite) TestNoticesUserIDsRootFilter(c *C) {
 
 	noticesCmd := apiCmd("/v1/notices")
 
-	// Test that root can filter on any user IDs
+	// Test that admin can filter on any user IDs
 	for _, testCase := range []struct {
-		filterUserIDs   []uint32
-		expectedUserIDs []float64
-	}{
-		{
-			[]uint32{0},
-			[]float64{0.0, 0.0},
-		},
-		{
-			[]uint32{1000},
-			[]float64{1000.0, 1000.0},
-		},
-		{
-			[]uint32{123},
-			[]float64{123.0, 123.0},
-		},
-		{
-			[]uint32{0, 1000},
-			[]float64{0.0, 1000.0, 0.0, 1000.0},
-		},
-		{
-			[]uint32{0, 123},
-			[]float64{0.0, 123.0, 0.0, 123.0},
-		},
-		{
-			[]uint32{1000, 123},
-			[]float64{1000.0, 123.0, 1000.0, 123.0},
-		},
-		{
-			[]uint32{0, 1000, 123},
-			[]float64{0.0, 1000.0, 123.0, 0.0, 1000.0, 123.0},
-		},
-	} {
+		filter   []uint32
+		expected []float64
+	}{{
+		filter: []uint32{0},
+		expected: []float64{0.0, 0.0},
+	}, {
+		filter: []uint32{1000},
+		expected: []float64{1000.0, 1000.0},
+	}, {
+		filter: []uint32{123},
+		expected: []float64{123.0, 123.0},
+	}, {
+		filter: []uint32{0, 1000},
+		expected: []float64{0.0, 1000.0, 0.0, 1000.0},
+	}, {
+		filter: []uint32{0, 123},
+		expected: []float64{0.0, 123.0, 0.0, 123.0},
+	}, {
+		filter: []uint32{1000, 123},
+		expected: []float64{1000.0, 123.0, 1000.0, 123.0},
+	}, {
+		filter: []uint32{0, 1000, 123},
+		expected: []float64{0.0, 1000.0, 123.0, 0.0, 1000.0, 123.0},
+	}} {
 		userIDsValues := url.Values{}
-		for _, uid := range testCase.filterUserIDs {
+		for _, uid := range testCase.filter {
 			userIDsValues.Add("user-ids", strconv.FormatUint(uint64(uid), 10))
 		}
 		reqUrl := fmt.Sprintf("/v1/notices?%s", userIDsValues.Encode())
@@ -385,17 +377,17 @@ func (s *apiSuite) TestNoticesUserIDsRootFilter(c *C) {
 		c.Check(rsp.Status, Equals, http.StatusOK)
 		notices, ok := rsp.Result.([]*state.Notice)
 		c.Assert(ok, Equals, true)
-		c.Assert(notices, HasLen, len(testCase.expectedUserIDs))
-		for i, uid := range testCase.expectedUserIDs {
+		c.Assert(notices, HasLen, len(testCase.expected))
+		for i, uid := range testCase.expected {
 			n := noticeToMap(c, notices[i])
 			c.Assert(n["user-id"], Equals, uid)
 		}
 	}
 }
 
-func (s *apiSuite) TestNoticesUserIDsNonRootDefault(c *C) {
+func (s *apiSuite) TestNoticesUserIDsNonAdminDefault(c *C) {
 	s.daemon(c)
-	restore := mockSysGetuid(0)
+	restore := fakeSysGetuid(0)
 	defer restore()
 
 	st := s.d.overlord.State()
@@ -419,8 +411,7 @@ func (s *apiSuite) TestNoticesUserIDsNonRootDefault(c *C) {
 
 	noticesCmd := apiCmd("/v1/notices")
 
-	// Test that non-root user by default only sees their notices and notices
-	// intended for all user IDs (represented by UID of -1).
+	// Test that non-admin user by default only sees their notices and public notices.
 	req, err := http.NewRequest("GET", "/v1/notices", nil)
 	c.Assert(err, IsNil)
 	req.RemoteAddr = "pid=100;uid=1000;socket=;"
@@ -434,17 +425,21 @@ func (s *apiSuite) TestNoticesUserIDsNonRootDefault(c *C) {
 	c.Assert(notices, HasLen, 4)
 	n := noticeToMap(c, notices[0])
 	c.Assert(n["user-id"], Equals, 1000.0)
+	c.Assert(n["visibility"], Equals, "private")
 	n = noticeToMap(c, notices[1])
 	c.Assert(n["user-id"], Equals, 0.0)
+	c.Assert(n["visibility"], Equals, "public")
 	n = noticeToMap(c, notices[2])
 	c.Assert(n["user-id"], Equals, 1000.0)
+	c.Assert(n["visibility"], Equals, "public")
 	n = noticeToMap(c, notices[3])
 	c.Assert(n["user-id"], Equals, 123.0)
+	c.Assert(n["visibility"], Equals, "public")
 }
 
-func (s *apiSuite) TestNoticesUserIDsNonRootFilter(c *C) {
+func (s *apiSuite) TestNoticesUserIDsNonAdminFilter(c *C) {
 	s.daemon(c)
-	restore := mockSysGetuid(0)
+	restore := fakeSysGetuid(0)
 	defer restore()
 
 	st := s.d.overlord.State()
@@ -468,42 +463,34 @@ func (s *apiSuite) TestNoticesUserIDsNonRootFilter(c *C) {
 
 	noticesCmd := apiCmd("/v1/notices")
 
-	// Test that non-root user can only filter on their user ID and UID -1.
+	// Test that non-admin user can only filter on their user ID.
 	for _, testCase := range []struct {
-		filterUserIDs   []uint32
-		expectedUserIDs []float64
-	}{
-		{
-			[]uint32{0},
-			[]float64{0.0},
-		},
-		{
-			[]uint32{1000},
-			[]float64{1000.0, 1000.0},
-		},
-		{
-			[]uint32{123},
-			[]float64{123.0},
-		},
-		{
-			[]uint32{0, 1000},
-			[]float64{1000.0, 0.0, 1000.0},
-		},
-		{
-			[]uint32{0, 123},
-			[]float64{0.0, 123.0},
-		},
-		{
-			[]uint32{1000, 123},
-			[]float64{1000.0, 1000.0, 123.0},
-		},
-		{
-			[]uint32{0, 1000, 123},
-			[]float64{1000.0, 0.0, 1000.0, 123.0},
-		},
-	} {
+		filter   []uint32
+		expected []float64
+	}{{
+		filter: []uint32{0},
+		expected: []float64{0.0},
+	}, {
+		filter: []uint32{1000},
+		expected: []float64{1000.0, 1000.0},
+	}, {
+		filter: []uint32{123},
+		expected: []float64{123.0},
+	}, {
+		filter: []uint32{0, 1000},
+		expected: []float64{1000.0, 0.0, 1000.0},
+	}, {
+		filter: []uint32{0, 123},
+		expected: []float64{0.0, 123.0},
+	}, {
+		filter: []uint32{1000, 123},
+		expected: []float64{1000.0, 1000.0, 123.0},
+	}, {
+		filter: []uint32{0, 1000, 123},
+		expected: []float64{1000.0, 0.0, 1000.0, 123.0},
+	}} {
 		userIDsValues := url.Values{}
-		for _, uid := range testCase.filterUserIDs {
+		for _, uid := range testCase.filter {
 			userIDsValues.Add("user-ids", strconv.FormatUint(uint64(uid), 10))
 		}
 		reqUrl := fmt.Sprintf("/v1/notices?%s", userIDsValues.Encode())
@@ -517,19 +504,19 @@ func (s *apiSuite) TestNoticesUserIDsNonRootFilter(c *C) {
 		c.Check(rsp.Status, Equals, http.StatusOK)
 		notices, ok := rsp.Result.([]*state.Notice)
 		c.Assert(ok, Equals, true)
-		// Non-root filtering on UID other than or their own UID yields only
+		// Non-admin filtering on UID other than or their own UID yields only
 		// public notices for that UID.
-		c.Assert(notices, HasLen, len(testCase.expectedUserIDs))
-		for i, uid := range testCase.expectedUserIDs {
+		c.Assert(notices, HasLen, len(testCase.expected))
+		for i, uid := range testCase.expected {
 			n := noticeToMap(c, notices[i])
 			c.Assert(n["user-id"], Equals, uid)
 		}
 	}
 }
 
-func (s *apiSuite) TestNoticesUnknownReqUid(c *C) {
+func (s *apiSuite) TestNoticesUnknownRequestUID(c *C) {
 	s.daemon(c)
-	restore := mockSysGetuid(0)
+	restore := fakeSysGetuid(0)
 	defer restore()
 
 	st := s.d.overlord.State()
@@ -578,7 +565,7 @@ func (s *apiSuite) TestNoticesUnknownReqUid(c *C) {
 
 func (s *apiSuite) TestNoticesFilterMultipleVisibilities(c *C) {
 	s.daemon(c)
-	restore := mockSysGetuid(0)
+	restore := fakeSysGetuid(0)
 	defer restore()
 
 	st := s.d.overlord.State()
@@ -593,23 +580,19 @@ func (s *apiSuite) TestNoticesFilterMultipleVisibilities(c *C) {
 	st.Unlock()
 
 	for _, testCase := range []struct {
-		visibilitiesFilter   string
-		expectedVisibilities []string
-	}{
-		{
-			"visibilities=private",
-			[]string{"private", "private"},
-		},
-		{
-			"visibilities=public",
-			[]string{"public"},
-		},
-		{
-			"visibilities=private&visibilities=public",
-			[]string{"private", "public", "private"},
-		},
-	} {
-		req, err := http.NewRequest("GET", fmt.Sprintf("/v1/notices?%s", testCase.visibilitiesFilter), nil)
+		filter   string
+		expected []string
+	}{{
+		filter: "visibilities=private",
+		expected: []string{"private", "private"},
+	}, {
+		filter: "visibilities=public",
+		expected: []string{"public"},
+	}, {
+		filter: "visibilities=private&visibilities=public",
+		expected: []string{"private", "public", "private"},
+	}} {
+		req, err := http.NewRequest("GET", fmt.Sprintf("/v1/notices?%s", testCase.filter), nil)
 		req.RemoteAddr = "pid=100;uid=1000;socket=;"
 		c.Assert(err, IsNil)
 		noticesCmd := apiCmd("/v1/notices")
@@ -620,8 +603,8 @@ func (s *apiSuite) TestNoticesFilterMultipleVisibilities(c *C) {
 		c.Check(rsp.Status, Equals, http.StatusOK)
 		notices, ok := rsp.Result.([]*state.Notice)
 		c.Assert(ok, Equals, true)
-		c.Assert(notices, HasLen, len(testCase.expectedVisibilities))
-		for i, visibility := range testCase.expectedVisibilities {
+		c.Assert(notices, HasLen, len(testCase.expected))
+		for i, visibility := range testCase.expected {
 			n := noticeToMap(c, notices[i])
 			c.Assert(n["visibility"], Equals, visibility)
 		}
@@ -630,7 +613,7 @@ func (s *apiSuite) TestNoticesFilterMultipleVisibilities(c *C) {
 
 func (s *apiSuite) TestNoticesWait(c *C) {
 	s.daemon(c)
-	restore := mockSysGetuid(0)
+	restore := fakeSysGetuid(0)
 	defer restore()
 
 	st := s.d.overlord.State()
@@ -662,7 +645,7 @@ func (s *apiSuite) TestNoticesWait(c *C) {
 
 func (s *apiSuite) TestNoticesTimeout(c *C) {
 	s.daemon(c)
-	restore := mockSysGetuid(0)
+	restore := fakeSysGetuid(0)
 	defer restore()
 
 	req, err := http.NewRequest("GET", "/v1/notices?timeout=1ms", nil)
@@ -680,7 +663,7 @@ func (s *apiSuite) TestNoticesTimeout(c *C) {
 
 func (s *apiSuite) TestNoticesRequestCancelled(c *C) {
 	s.daemon(c)
-	restore := mockSysGetuid(0)
+	restore := fakeSysGetuid(0)
 	defer restore()
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -709,13 +692,13 @@ func (s *apiSuite) TestNoticesRequestCancelled(c *C) {
 }
 
 func (s *apiSuite) TestNoticesInvalidAfter(c *C) {
-	restore := mockSysGetuid(0)
+	restore := fakeSysGetuid(0)
 	defer restore()
 	s.testNoticesBadRequest(c, "after=foo", `invalid "after" timestamp.*`)
 }
 
 func (s *apiSuite) TestNoticesInvalidTimeout(c *C) {
-	restore := mockSysGetuid(0)
+	restore := fakeSysGetuid(0)
 	defer restore()
 	s.testNoticesBadRequest(c, "timeout=foo", "invalid timeout.*")
 }
@@ -740,7 +723,7 @@ func (s *apiSuite) testNoticesBadRequest(c *C, query, errorMatch string) {
 
 func (s *apiSuite) TestAddNotice(c *C) {
 	s.daemon(c)
-	restore := mockSysGetuid(0)
+	restore := fakeSysGetuid(0)
 	defer restore()
 
 	start := time.Now()
@@ -802,7 +785,7 @@ func (s *apiSuite) TestAddNotice(c *C) {
 
 func (s *apiSuite) TestAddNoticeMinimal(c *C) {
 	s.daemon(c)
-	restore := mockSysGetuid(0)
+	restore := fakeSysGetuid(0)
 	defer restore()
 
 	body := []byte(`{
@@ -848,7 +831,7 @@ func (s *apiSuite) TestAddNoticeMinimal(c *C) {
 
 func (s *apiSuite) TestAddNoticeMismatchedVisibility(c *C) {
 	s.daemon(c)
-	restore := mockSysGetuid(0)
+	restore := fakeSysGetuid(0)
 	defer restore()
 
 	requestMap := map[string]any{
@@ -890,7 +873,7 @@ func (s *apiSuite) TestAddNoticeMismatchedVisibility(c *C) {
 
 func (s *apiSuite) TestAddNoticeInvalidRequestUid(c *C) {
 	s.daemon(c)
-	restore := mockSysGetuid(0)
+	restore := fakeSysGetuid(0)
 	defer restore()
 
 	body := []byte(`{
@@ -914,26 +897,26 @@ func (s *apiSuite) TestAddNoticeInvalidRequestUid(c *C) {
 }
 
 func (s *apiSuite) TestAddNoticeInvalidAction(c *C) {
-	restore := mockSysGetuid(0)
+	restore := fakeSysGetuid(0)
 	defer restore()
 	s.testAddNoticeBadRequest(c, `{"action": "bad"}`, "invalid action.*")
 }
 
 func (s *apiSuite) TestAddNoticeInvalidType(c *C) {
-	restore := mockSysGetuid(0)
+	restore := fakeSysGetuid(0)
 	defer restore()
 	s.testAddNoticeBadRequest(c, `{"action": "add", "type": "foo"}`, "invalid type.*")
 }
 
 func (s *apiSuite) TestAddNoticeInvalidKey(c *C) {
-	restore := mockSysGetuid(0)
+	restore := fakeSysGetuid(0)
 	defer restore()
 	s.testAddNoticeBadRequest(c, `{"action": "add", "type": "custom", "key": "bad"}`,
 		"invalid key.*")
 }
 
 func (s *apiSuite) TestAddNoticeKeyTooLong(c *C) {
-	restore := mockSysGetuid(0)
+	restore := fakeSysGetuid(0)
 	defer restore()
 	request, err := json.Marshal(map[string]any{
 		"action": "add",
@@ -944,9 +927,9 @@ func (s *apiSuite) TestAddNoticeKeyTooLong(c *C) {
 	s.testAddNoticeBadRequest(c, string(request), "key must be 256 bytes or less")
 }
 
-func (s *apiSuite) TestAddNoticeInvalidVisibility(c *C) {
-	// Only root (or admin if not run as root) may create public notices
-	restore := mockSysGetuid(0)
+func (s *apiSuite) TestAddPublicNotice(c *C) {
+	// Only admin may create public notices
+	restore := fakeSysGetuid(0)
 	defer restore()
 	request, err := json.Marshal(map[string]any{
 		"action":     "add",
@@ -955,10 +938,10 @@ func (s *apiSuite) TestAddNoticeInvalidVisibility(c *C) {
 		"visibility": "public",
 	})
 	c.Assert(err, IsNil)
-	s.testAddNoticeBadRequest(c, string(request), "invalid visibility.*")
+	s.testAddNoticeBadRequest(c, string(request), `invalid visibility "public": only admin may create public notices`)
 
 	// Now try with connection as admin
-	restore2 := mockSysGetuid(123)
+	restore2 := fakeSysGetuid(123)
 	defer restore2()
 	body := []byte(`{
 		"action":     "add",
@@ -977,7 +960,7 @@ func (s *apiSuite) TestAddNoticeInvalidVisibility(c *C) {
 }
 
 func (s *apiSuite) TestAddNoticeDataTooLarge(c *C) {
-	restore := mockSysGetuid(0)
+	restore := fakeSysGetuid(0)
 	defer restore()
 	request, err := json.Marshal(map[string]any{
 		"action": "add",
@@ -993,7 +976,7 @@ func (s *apiSuite) TestAddNoticeDataTooLarge(c *C) {
 }
 
 func (s *apiSuite) TestAddNoticeInvalidRepeatAfter(c *C) {
-	restore := mockSysGetuid(0)
+	restore := fakeSysGetuid(0)
 	defer restore()
 	s.testAddNoticeBadRequest(c, `{"action": "add", "type": "custom", "key": "a.b/1", "repeat-after": "bad"}`,
 		"invalid repeat-after.*")
@@ -1019,7 +1002,7 @@ func (s *apiSuite) testAddNoticeBadRequest(c *C, body, errorMatch string) {
 
 func (s *apiSuite) TestNotice(c *C) {
 	s.daemon(c)
-	restore := mockSysGetuid(0)
+	restore := fakeSysGetuid(0)
 	defer restore()
 
 	st := s.d.overlord.State()
@@ -1049,7 +1032,7 @@ func (s *apiSuite) TestNotice(c *C) {
 
 func (s *apiSuite) TestNoticeNotFound(c *C) {
 	s.daemon(c)
-	restore := mockSysGetuid(0)
+	restore := fakeSysGetuid(0)
 	defer restore()
 
 	req, err := http.NewRequest("GET", "/v1/notices/1234", nil)
@@ -1066,7 +1049,7 @@ func (s *apiSuite) TestNoticeNotFound(c *C) {
 
 func (s *apiSuite) TestNoticeNotAllowed(c *C) {
 	s.daemon(c)
-	restore := mockSysGetuid(0)
+	restore := fakeSysGetuid(0)
 	defer restore()
 
 	st := s.d.overlord.State()

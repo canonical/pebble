@@ -35,7 +35,8 @@ type NotifyOptions struct {
 	Key string
 
 	// Visibility indicates whether the notice is public (viewable by all users)
-	// or private (viewable only by the user with the same user ID as the notice).
+	// or private (viewable only by the user with the same user ID as the notice,
+	// or by admin). If not set, the default is private.
 	Visibility NoticeVisibility
 
 	// Data are optional key=value pairs for this occurrence of the notice.
@@ -86,6 +87,11 @@ type NoticesOptions struct {
 	// UserIDs, if not empty, includes only notices whose user ID is one of these.
 	UserIDs []uint32
 
+	// SpecialUser value "self" adds the client UID to the UserIDs filter in
+	// the API, and "all" (admin only) indicates to include all notices (both
+	// public and private) for all users.
+	SpecialUser NoticeSpecialUser
+
 	// Types, if not empty, includes only notices whose type is one of these.
 	Types []NoticeType
 
@@ -97,6 +103,28 @@ type NoticesOptions struct {
 
 	// After, if set, includes only notices that were last repeated after this time.
 	After time.Time
+}
+
+// Parse a user ID option, which may be "all", "self", or a UID, and adjust the
+// NoticesOptions values accordingly.
+func (o *NoticesOptions) HandleUIDOption(uidOpt string) error {
+	switch uidOpt {
+	case "":
+		// nothing to do
+	case string(NoticeUserAll):
+		o.SpecialUser = NoticeUserAll
+	case string(NoticeUserSelf):
+		if o.SpecialUser != NoticeUserAll {
+			o.SpecialUser = NoticeUserSelf
+		}
+	default:
+		uid, err := strconv.ParseUint(uidOpt, 10, 32)
+		if err != nil {
+			return err
+		}
+		o.UserIDs = append(o.UserIDs, uint32(uid))
+	}
+	return nil
 }
 
 // Notice holds details of an event that was observed and reported either
@@ -129,15 +157,41 @@ const (
 	CustomNotice NoticeType = "custom"
 )
 
+type NoticeSpecialUser string
+
+const (
+	// The "all" special user (admin only) indicates to include all notices for all users.
+	NoticeUserAll NoticeSpecialUser = "all"
+
+	// The "self" special user indicates to include the client UID in the user IDs filter.
+	NoticeUserSelf NoticeSpecialUser = "self"
+)
+
+func (u NoticeSpecialUser) Valid() bool {
+	switch u {
+	case NoticeUserSelf, NoticeUserAll:
+		return true
+	}
+	return false
+}
+
 type NoticeVisibility string
 
 const (
-	// A private notice is only viewable by the user with a matching user ID.
+	// A private notice is only viewable by the user with a matching user ID, or by admin.
 	PrivateNotice NoticeVisibility = "private"
 
 	// A public notice is viewable by all users.
 	PublicNotice NoticeVisibility = "public"
 )
+
+func (v NoticeVisibility) Valid() bool {
+	switch v {
+	case PrivateNotice, PublicNotice:
+		return true
+	}
+	return false
+}
 
 type jsonNotice struct {
 	Notice
@@ -167,9 +221,12 @@ func (client *Client) Notice(id string) (*Notice, error) {
 // Notices returns a list of notices that match the filters given in opts,
 // ordered by the last-repeated time.
 func (client *Client) Notices(opts *NoticesOptions) ([]*Notice, error) {
-	query := makeNoticesQuery(opts)
+	query, err := makeNoticesQuery(opts)
+	if err != nil {
+		return nil, err
+	}
 	var jns []*jsonNotice
-	_, err := client.doSync("GET", "/v1/notices", query, nil, nil, &jns)
+	_, err = client.doSync("GET", "/v1/notices", query, nil, nil, &jns)
 	return jsonNoticesToNotices(jns), err
 }
 
@@ -180,7 +237,10 @@ func (client *Client) Notices(opts *NoticesOptions) ([]*Notice, error) {
 // If the timeout elapses before any matching notices arrive, it's not
 // considered an error: WaitNotices returns a nil slice and a nil error.
 func (client *Client) WaitNotices(ctx context.Context, serverTimeout time.Duration, opts *NoticesOptions) ([]*Notice, error) {
-	query := makeNoticesQuery(opts)
+	query, err := makeNoticesQuery(opts)
+	if err != nil {
+		return nil, err
+	}
 	query.Set("timeout", serverTimeout.String())
 
 	resp, err := client.Requester().Do(ctx, &RequestOptions{
@@ -201,33 +261,36 @@ func (client *Client) WaitNotices(ctx context.Context, serverTimeout time.Durati
 	return jsonNoticesToNotices(jns), err
 }
 
-func makeNoticesQuery(opts *NoticesOptions) url.Values {
+func makeNoticesQuery(opts *NoticesOptions) (url.Values, error) {
 	query := make(url.Values)
 	if opts == nil {
-		return query
+		return query, nil
 	}
-	if len(opts.UserIDs) > 0 {
-		for _, uid := range opts.UserIDs {
-			query.Add("user-ids", strconv.FormatUint(uint64(uid), 10))
-		}
+	for _, uid := range opts.UserIDs {
+		query.Add("user-ids", strconv.FormatUint(uint64(uid), 10))
 	}
-	if len(opts.Types) > 0 {
-		for _, t := range opts.Types {
-			query.Add("types", string(t))
+	if opts.SpecialUser != "" {
+		if !opts.SpecialUser.Valid() {
+			return nil, fmt.Errorf("invalid special user: %q", opts.SpecialUser)
 		}
+		query.Add("user-ids", string(opts.SpecialUser))
+	}
+	for _, t := range opts.Types {
+		query.Add("types", string(t))
 	}
 	if len(opts.Keys) > 0 {
 		query["keys"] = opts.Keys
 	}
-	if len(opts.Visibilities) > 0 {
-		for _, v := range opts.Visibilities {
-			query.Add("visibilities", string(v))
+	for _, v := range opts.Visibilities {
+		if !v.Valid() {
+			return nil, fmt.Errorf("invalid visibility: %q", v)
 		}
+		query.Add("visibilities", string(v))
 	}
 	if !opts.After.IsZero() {
 		query.Set("after", opts.After.Format(time.RFC3339Nano))
 	}
-	return query
+	return query, nil
 }
 
 func jsonNoticesToNotices(jns []*jsonNotice) []*Notice {
