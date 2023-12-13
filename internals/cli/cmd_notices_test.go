@@ -63,9 +63,9 @@ func (s *PebbleSuite) TestNotices(c *C) {
 	c.Assert(err, IsNil)
 	c.Check(rest, HasLen, 0)
 	c.Check(s.Stdout(), Equals, `
-ID   User   Type     Key    First                 Repeated              Occurrences
-1    1000   custom   a.b/c  2023-09-05T17:18:00Z  2023-09-05T18:18:00Z  3
-2    unset  warning  Ware!  2023-09-06T17:18:00Z  2023-09-06T18:18:00Z  1
+ID   User    Type     Key    First                 Repeated              Occurrences
+1    1000    custom   a.b/c  2023-09-05T17:18:00Z  2023-09-05T18:18:00Z  3
+2    public  warning  Ware!  2023-09-06T17:18:00Z  2023-09-06T18:18:00Z  1
 `[1:])
 	c.Check(s.Stderr(), Equals, "")
 

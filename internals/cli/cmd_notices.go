@@ -111,7 +111,7 @@ func (cmd *cmdNotices) Execute(args []string) error {
 			// Truncate to 32 bytes with ellipsis in the middle
 			key = key[:14] + "..." + key[len(key)-15:]
 		}
-		userIDStr := "unset"
+		userIDStr := "public"
 		if notice.UserID != nil {
 			userIDStr = strconv.FormatUint(uint64(*notice.UserID), 10)
 		}
