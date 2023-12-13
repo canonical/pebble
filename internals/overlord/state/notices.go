@@ -312,11 +312,7 @@ func (f *NoticeFilter) matches(n *Notice) bool {
 	if f == nil {
 		return true
 	}
-	// Three cases here:
-	// - if there is no user ID filter, include the notice (whether it's public or private)
-	// - if the notice's user ID is not set, the notice is public, so include it
-	// - if there is a user ID filter and the notice user ID is set, only include it if they match
-	if f.UserID != nil && n.userID != nil && *f.UserID != *n.userID {
+	if f.UserID != nil && !(n.userID == nil || *f.UserID == *n.userID) {
 		return false
 	}
 	// Can't use strutil.ListContains as Types is []NoticeType, not []string
