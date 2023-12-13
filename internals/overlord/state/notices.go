@@ -21,8 +21,6 @@ import (
 	"sort"
 	"strconv"
 	"time"
-
-	"github.com/canonical/pebble/internals/logger"
 )
 
 const (
@@ -39,7 +37,8 @@ type Notice struct {
 	id string
 
 	// The UID of the user who may view this notice (often its creator).
-	userID uint32
+	// A nil userID means that the notice is public (viewable by all users).
+	userID *uint32
 
 	// The notice type represents a group of notices originating from a common
 	// source. For example, notices originating from the CLI client have type
@@ -53,10 +52,6 @@ type Notice struct {
 	// This is limited to a maximum of MaxNoticeKeyLength bytes when added
 	// (it's an error to add a notice with a longer key).
 	key string
-
-	// The notice visibility indicates whether the notice is private (only
-	// visible by user with a matching userID) or public (visible by all users).
-	visibility NoticeVisibility
 
 	// The first time one of these notices (type and key combination) occurs.
 	firstOccurred time.Time
@@ -93,14 +88,18 @@ func (n *Notice) String() string {
 	return fmt.Sprintf("Notice %s (%d:%s:%s)", n.id, n.userID, n.noticeType, n.key)
 }
 
-// UserID returns the UID associated with the notice.
-func (n *Notice) UserID() uint32 {
-	return n.userID
+// UserID returns whether the notice has a user ID, and if so, what the UID is.
+func (n *Notice) UserID() (hasUserID bool, userID uint32) {
+	// Importantly, doesn't expose the address of notice's user ID, so the
+	// value cannot be mutated.
+	return expandUserID(n.userID)
 }
 
-// Visibility returns whether the notice is private or public.
-func (n *Notice) Visibility() NoticeVisibility {
-	return n.visibility
+func expandUserID(userID *uint32) (hasUserID bool, uid uint32) {
+	if userID == nil {
+		return false, 0
+	}
+	return true, *userID
 }
 
 // expired reports whether this notice has expired (relative to the given "now").
@@ -113,10 +112,9 @@ func (n *Notice) expired(now time.Time) bool {
 // to disk as JSON.
 type jsonNotice struct {
 	ID            string            `json:"id"`
-	UserID        uint32            `json:"user-id"`
+	UserID        *uint32           `json:"user-id"`
 	Type          string            `json:"type"`
 	Key           string            `json:"key"`
-	Visibility    NoticeVisibility  `json:"visibility"`
 	FirstOccurred time.Time         `json:"first-occurred"`
 	LastOccurred  time.Time         `json:"last-occurred"`
 	LastRepeated  time.Time         `json:"last-repeated"`
@@ -132,7 +130,6 @@ func (n *Notice) MarshalJSON() ([]byte, error) {
 		UserID:        n.userID,
 		Type:          string(n.noticeType),
 		Key:           n.key,
-		Visibility:    n.visibility,
 		FirstOccurred: n.firstOccurred,
 		LastOccurred:  n.lastOccurred,
 		LastRepeated:  n.lastRepeated,
@@ -158,7 +155,6 @@ func (n *Notice) UnmarshalJSON(data []byte) error {
 	n.userID = jn.UserID
 	n.noticeType = NoticeType(jn.Type)
 	n.key = jn.Key
-	n.visibility = jn.Visibility
 	n.firstOccurred = jn.FirstOccurred
 	n.lastOccurred = jn.LastOccurred
 	n.lastRepeated = jn.LastRepeated
@@ -204,33 +200,8 @@ func (t NoticeType) Valid() bool {
 	return false
 }
 
-type NoticeVisibility string
-
-const (
-	// Notice is only viewable by the user with the UID matching the notice's
-	// user ID or by an admin. This is the default for AddNotice if no
-	// visibility is specified.
-	PrivateNotice NoticeVisibility = "private"
-
-	// Notice is viewable by all users.
-	PublicNotice NoticeVisibility = "public"
-)
-
-func (v NoticeVisibility) Valid() bool {
-	switch v {
-	case PrivateNotice, PublicNotice:
-		return true
-	}
-	return false
-}
-
 // AddNoticeOptions holds optional parameters for an AddNotice call.
 type AddNoticeOptions struct {
-	// Visibility indicates whether the notice will be private (only visible by
-	// admin or by user with a matching userID) or public (visible by all users).
-	// If unset, the notice visibility defaults to private.
-	Visibility NoticeVisibility
-
 	// Data is the optional key-value data for this occurrence.
 	Data map[string]string
 
@@ -244,18 +215,13 @@ type AddNoticeOptions struct {
 
 // AddNotice records an occurrence of a notice with the specified type and key
 // and options.
-func (s *State) AddNotice(userID uint32, noticeType NoticeType, key string, options *AddNoticeOptions) (string, error) {
+func (s *State) AddNotice(userID *uint32, noticeType NoticeType, key string, options *AddNoticeOptions) (string, error) {
 	if options == nil {
 		options = &AddNoticeOptions{}
 	}
 	err := validateNotice(noticeType, key, options)
 	if err != nil {
 		return "", err
-	}
-
-	visibility := options.Visibility
-	if visibility == "" {
-		visibility = PrivateNotice
 	}
 
 	s.writing()
@@ -266,17 +232,17 @@ func (s *State) AddNotice(userID uint32, noticeType NoticeType, key string, opti
 	}
 	now = now.UTC()
 	newOrRepeated := false
-	uniqueKey := noticeKey{userID, noticeType, key}
+	hasUserID, uid := expandUserID(userID)
+	uniqueKey := noticeKey{hasUserID, uid, noticeType, key}
 	notice, ok := s.notices[uniqueKey]
 	if !ok {
-		// First occurrence of this notice type+key
+		// First occurrence of this notice userID+type+key
 		s.lastNoticeId++
 		notice = &Notice{
 			id:            strconv.Itoa(s.lastNoticeId),
 			userID:        userID,
 			noticeType:    noticeType,
 			key:           key,
-			visibility:    visibility,
 			firstOccurred: now,
 			lastRepeated:  now,
 			expireAfter:   defaultNoticeExpireAfter,
@@ -286,10 +252,6 @@ func (s *State) AddNotice(userID uint32, noticeType NoticeType, key string, opti
 		newOrRepeated = true
 	} else {
 		// Additional occurrence, update existing notice
-		if visibility != notice.visibility {
-			logger.Noticef("%v visibility changed from %v to %v", notice, notice.visibility, visibility)
-			notice.visibility = visibility
-		}
 		notice.occurrences++
 		if options.RepeatAfter == 0 || now.After(notice.lastRepeated.Add(options.RepeatAfter)) {
 			// Update last repeated time if repeat-after time has elapsed (or is zero)
@@ -315,13 +277,11 @@ func validateNotice(noticeType NoticeType, key string, options *AddNoticeOptions
 	if key == "" {
 		return fmt.Errorf("internal error: attempted to add %s notice with invalid key %q", noticeType, key)
 	}
-	if options.Visibility != "" && !options.Visibility.Valid() {
-		return fmt.Errorf("internal error: attempted to add notice with invalid visibility %q", options.Visibility)
-	}
 	return nil
 }
 
 type noticeKey struct {
+	hasUserID  bool
 	userID     uint32
 	noticeType NoticeType
 	key        string
@@ -329,17 +289,14 @@ type noticeKey struct {
 
 // NoticeFilter allows filtering notices by various fields.
 type NoticeFilter struct {
-	// UserIDs, if not empty, includes only notices whose user ID is one of these.
-	UserIDs []uint32
+	// UserID includes only notices whose user ID is this, or nil (public).
+	UserID *uint32
 
 	// Types, if not empty, includes only notices whose type is one of these.
 	Types []NoticeType
 
 	// Keys, if not empty, includes only notices whose key is one of these.
 	Keys []string
-
-	// Visibilities, if not empty, includes only notices whose visibility is one of these.
-	Visibilities []NoticeVisibility
 
 	// After, if set, includes only notices that were last repeated after this time.
 	After time.Time
@@ -350,7 +307,7 @@ func (f *NoticeFilter) matches(n *Notice) bool {
 	if f == nil {
 		return true
 	}
-	if len(f.UserIDs) > 0 && !sliceContains(f.UserIDs, n.UserID()) {
+	if f.UserID != nil && n.userID != nil && *f.UserID != *n.userID {
 		return false
 	}
 	// Can't use strutil.ListContains as Types is []NoticeType, not []string
@@ -358,9 +315,6 @@ func (f *NoticeFilter) matches(n *Notice) bool {
 		return false
 	}
 	if len(f.Keys) > 0 && !sliceContains(f.Keys, n.key) {
-		return false
-	}
-	if len(f.Visibilities) > 0 && !sliceContains(f.Visibilities, n.visibility) {
 		return false
 	}
 	if !f.After.IsZero() && !n.lastRepeated.After(f.After) {
@@ -424,7 +378,8 @@ func (s *State) unflattenNotices(flat []*Notice) {
 		if n.expired(now) {
 			continue
 		}
-		uniqueKey := noticeKey{n.userID, n.noticeType, n.key}
+		hasUserID, userID := n.UserID()
+		uniqueKey := noticeKey{hasUserID, userID, n.noticeType, n.key}
 		s.notices[uniqueKey] = n
 	}
 }

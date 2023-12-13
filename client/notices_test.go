@@ -26,22 +26,12 @@ import (
 	"github.com/canonical/pebble/client"
 )
 
-func (cs *clientSuite) TestHandleUIDOption(c *C) {
-	o := client.NoticesOptions{}
-	for _, opt := range []string{"1000", "self", "1234", "all", "0", "self", "123"} {
-		o.HandleUIDOption(opt)
-	}
-	c.Assert(o.SpecialUser, Equals, client.NoticeUserAll)
-	c.Assert(o.UserIDs, DeepEquals, []uint32{1000, 1234, 0, 123})
-}
-
 func (cs *clientSuite) TestNotice(c *C) {
 	cs.rsp = `{"type": "sync", "result": {
 		"id":   "123",
 		"user-id": 1000,
 		"type": "custom",
 		"key": "a.b/c",
-		"visibility": "private",
 		"first-occurred": "2023-09-05T15:43:00.123Z",
 		"last-occurred": "2023-09-05T17:43:00.567Z",
 		"last-repeated": "2023-09-05T16:43:00Z",
@@ -52,12 +42,12 @@ func (cs *clientSuite) TestNotice(c *C) {
 	}}`
 	notice, err := cs.cli.Notice("123")
 	c.Assert(err, IsNil)
+	thousand := uint32(1000)
 	c.Assert(notice, DeepEquals, &client.Notice{
 		ID:            "123",
-		UserID:        1000,
+		UserID:        &thousand,
 		Type:          client.CustomNotice,
 		Key:           "a.b/c",
-		Visibility:    "private",
 		FirstOccurred: time.Date(2023, 9, 5, 15, 43, 0, 123_000_000, time.UTC),
 		LastOccurred:  time.Date(2023, 9, 5, 17, 43, 0, 567_000_000, time.UTC),
 		LastRepeated:  time.Date(2023, 9, 5, 16, 43, 0, 0, time.UTC),
@@ -79,7 +69,6 @@ func (cs *clientSuite) TestNotices(c *C) {
 		"user-id": 1000,
 		"type": "custom",
 		"key": "a.b/c",
-		"visibility": "public",
 		"first-occurred": "2023-09-05T15:43:00.123Z",
 		"last-occurred": "2023-09-05T17:43:00.567Z",
 		"last-repeated": "2023-09-05T16:43:00Z",
@@ -89,10 +78,9 @@ func (cs *clientSuite) TestNotices(c *C) {
 		"expire-after": "168h"
 	}, {
 		"id":   "2",
-		"user-id": 0,
+		"user-id": null,
 		"type": "warning",
 		"key": "be careful!",
-		"visibility": "private",
 		"first-occurred": "2023-09-06T15:43:00.123Z",
 		"last-occurred": "2023-09-06T17:43:00.567Z",
 		"last-repeated": "2023-09-06T16:43:00Z",
@@ -102,12 +90,12 @@ func (cs *clientSuite) TestNotices(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(cs.req.URL.Path, Equals, "/v1/notices")
 	c.Assert(cs.req.URL.Query(), DeepEquals, url.Values{})
+	thousand := uint32(1000)
 	c.Assert(notices, DeepEquals, []*client.Notice{{
 		ID:            "1",
-		UserID:        1000,
+		UserID:        &thousand,
 		Type:          "custom",
 		Key:           "a.b/c",
-		Visibility:    "public",
 		FirstOccurred: time.Date(2023, 9, 5, 15, 43, 0, 123_000_000, time.UTC),
 		LastOccurred:  time.Date(2023, 9, 5, 17, 43, 0, 567_000_000, time.UTC),
 		LastRepeated:  time.Date(2023, 9, 5, 16, 43, 0, 0, time.UTC),
@@ -117,10 +105,9 @@ func (cs *clientSuite) TestNotices(c *C) {
 		ExpireAfter:   7 * 24 * time.Hour,
 	}, {
 		ID:            "2",
-		UserID:        0,
+		UserID:        nil,
 		Type:          "warning",
 		Key:           "be careful!",
-		Visibility:    "private",
 		FirstOccurred: time.Date(2023, 9, 6, 15, 43, 0, 123_000_000, time.UTC),
 		LastOccurred:  time.Date(2023, 9, 6, 17, 43, 0, 567_000_000, time.UTC),
 		LastRepeated:  time.Date(2023, 9, 6, 16, 43, 0, 0, time.UTC),
@@ -130,22 +117,22 @@ func (cs *clientSuite) TestNotices(c *C) {
 
 func (cs *clientSuite) TestNoticesFilters(c *C) {
 	cs.rsp = `{"type": "sync", "result": []}`
+	thousand := uint32(1000)
 	notices, err := cs.cli.Notices(&client.NoticesOptions{
-		UserIDs:      []uint32{1000, 1234},
-		SpecialUser:  client.NoticeUserAll,
-		Types:        []client.NoticeType{client.CustomNotice},
-		Keys:         []string{"foo.com/bar", "example.com/x"},
-		Visibilities: []client.NoticeVisibility{client.PublicNotice},
-		After:        time.Date(2023, 9, 5, 16, 43, 32, 123_456_789, time.UTC),
+		Select: client.NoticesSelectAll,
+		UserID: &thousand,
+		Types:  []client.NoticeType{client.CustomNotice},
+		Keys:   []string{"foo.com/bar", "example.com/x"},
+		After:  time.Date(2023, 9, 5, 16, 43, 32, 123_456_789, time.UTC),
 	})
 	c.Assert(err, IsNil)
 	c.Assert(cs.req.URL.Path, Equals, "/v1/notices")
 	c.Assert(cs.req.URL.Query(), DeepEquals, url.Values{
-		"user-ids":     {"1000", "1234", "all"},
-		"types":        {"custom"},
-		"keys":         {"foo.com/bar", "example.com/x"},
-		"visibilities": {"public"},
-		"after":        {"2023-09-05T16:43:32.123456789Z"},
+		"select":  {"all"},
+		"user-id": {"1000"},
+		"types":   {"custom"},
+		"keys":    {"foo.com/bar", "example.com/x"},
+		"after":   {"2023-09-05T16:43:32.123456789Z"},
 	})
 	c.Assert(notices, DeepEquals, []*client.Notice{})
 }
@@ -155,7 +142,6 @@ func (cs *clientSuite) TestNotify(c *C) {
 	noticeID, err := cs.cli.Notify(&client.NotifyOptions{
 		Type:        client.CustomNotice,
 		Key:         "foo.com/bar",
-		Visibility:  client.PrivateNotice,
 		RepeatAfter: time.Hour,
 		Data:        map[string]string{"k": "9"},
 	})
@@ -172,7 +158,6 @@ func (cs *clientSuite) TestNotify(c *C) {
 		"action":       "add",
 		"type":         "custom",
 		"key":          "foo.com/bar",
-		"visibility":   "private",
 		"data":         map[string]any{"k": "9"},
 		"repeat-after": "1h0m0s",
 	})
@@ -206,7 +191,6 @@ func (cs *clientSuite) TestWaitNotices(c *C) {
 		"user-id": 1000,
 		"type": "warning",
 		"key": "be careful!",
-		"visibility": "private",
 		"first-occurred": "2023-09-06T15:43:00.123Z",
 		"last-occurred": "2023-09-06T17:43:00.567Z",
 		"last-repeated": "2023-09-06T16:43:00Z",
@@ -218,12 +202,12 @@ func (cs *clientSuite) TestWaitNotices(c *C) {
 	c.Assert(cs.req.URL.Query(), DeepEquals, url.Values{
 		"timeout": {"10s"},
 	})
+	thousand := uint32(1000)
 	c.Assert(notices, DeepEquals, []*client.Notice{{
 		ID:            "1",
-		UserID:        1000,
+		UserID:        &thousand,
 		Type:          "warning",
 		Key:           "be careful!",
-		Visibility:    "private",
 		FirstOccurred: time.Date(2023, 9, 6, 15, 43, 0, 123_000_000, time.UTC),
 		LastOccurred:  time.Date(2023, 9, 6, 17, 43, 0, 567_000_000, time.UTC),
 		LastRepeated:  time.Date(2023, 9, 6, 16, 43, 0, 0, time.UTC),

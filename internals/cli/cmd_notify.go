@@ -33,7 +33,6 @@ data fields.
 type cmdNotify struct {
 	client *client.Client
 
-	Public      bool          `long:"public"`
 	RepeatAfter time.Duration `long:"repeat-after"`
 	Positional  struct {
 		Key  string   `positional-arg-name:"<key>" required:"1"`
@@ -48,7 +47,6 @@ func init() {
 		Description: cmdNotifyDescription,
 		ArgsHelp: map[string]string{
 			"--repeat-after": "Prevent notice with same type and key from reoccurring within this duration",
-			"--public":       "(admin only) Make the notice viewable by all users",
 		},
 		New: func(opts *CmdOptions) flags.Commander {
 			return &cmdNotify{client: opts.Client}
@@ -74,9 +72,6 @@ func (cmd *cmdNotify) Execute(args []string) error {
 		Key:         cmd.Positional.Key,
 		RepeatAfter: cmd.RepeatAfter,
 		Data:        data,
-	}
-	if cmd.Public {
-		options.Visibility = client.PublicNotice
 	}
 	noticeId, err := cmd.client.Notify(&options)
 	if err != nil {

@@ -55,37 +55,6 @@ func (s *PebbleSuite) TestNotifyBasic(c *C) {
 	c.Check(s.Stderr(), Equals, "")
 }
 
-func (s *PebbleSuite) TestNotifyPublic(c *C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		c.Check(r.Method, Equals, "POST")
-		c.Check(r.URL.Path, Equals, "/v1/notices")
-
-		body, err := io.ReadAll(r.Body)
-		c.Assert(err, IsNil)
-		var m map[string]any
-		err = json.Unmarshal(body, &m)
-		c.Assert(err, IsNil)
-		c.Check(m, DeepEquals, map[string]any{
-			"action":     "add",
-			"type":       "custom",
-			"key":        "a.b/c",
-			"visibility": "public",
-		})
-
-		fmt.Fprint(w, `{
-			"type": "sync",
-			"status-code": 200,
-			"result": {"id": "1234"}
-		}`)
-	})
-
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"notify", "a.b/c", "--public"})
-	c.Assert(err, IsNil)
-	c.Check(rest, HasLen, 0)
-	c.Check(s.Stdout(), Equals, "Recorded notice 1234\n")
-	c.Check(s.Stderr(), Equals, "")
-}
-
 func (s *PebbleSuite) TestNotifyData(c *C) {
 	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
 		c.Check(r.Method, Equals, "POST")

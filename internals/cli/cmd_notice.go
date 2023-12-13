@@ -16,7 +16,6 @@ package cli
 
 import (
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/canonical/go-flags"
@@ -34,7 +33,7 @@ by unique type and key combination (2-arg variant).
 type cmdNotice struct {
 	client *client.Client
 
-	UID string `long:"uid"`
+	UID *uint32 `long:"uid"`
 
 	Positional struct {
 		IDOrType string `positional-arg-name:"<id-or-type>" required:"1"`
@@ -47,8 +46,9 @@ func init() {
 		Name:        "notice",
 		Summary:     cmdNoticeSummary,
 		Description: cmdNoticeDescription,
-		ArgsHelp:    map[string]string{
-			"--uid": `Look up notice with given type and key from user with this UID; admin may use "--uid=all" to search all users' notices; ignored if using notice ID, rather than type and key`,
+
+		ArgsHelp: map[string]string{
+			"--uid": `Look up notice from user with this UID (admin only)`,
 		},
 		New: func(opts *CmdOptions) flags.Commander {
 			return &cmdNotice{client: opts.Client}
@@ -64,12 +64,9 @@ func (cmd *cmdNotice) Execute(args []string) error {
 	var notice *client.Notice
 	if cmd.Positional.Key != "" {
 		options := client.NoticesOptions{
-			Types: []client.NoticeType{client.NoticeType(cmd.Positional.IDOrType)},
-			Keys:  []string{cmd.Positional.Key},
-		}
-		err := options.HandleUIDOption(cmd.UID)
-		if err != nil {
-			return fmt.Errorf(`failed to parse option "--uid=%s": %v`, cmd.UID, err)
+			UserID: cmd.UID,
+			Types:  []client.NoticeType{client.NoticeType(cmd.Positional.IDOrType)},
+			Keys:   []string{cmd.Positional.Key},
 		}
 		notices, err := cmd.client.Notices(&options)
 		if err != nil {
@@ -81,22 +78,17 @@ func (cmd *cmdNotice) Execute(args []string) error {
 		case 1:
 			notice = notices[0]
 		default:
-			clientUID := uint32(os.Getuid())
 			notice = notices[0]
 			for _, n := range notices {
-				if n.UserID == clientUID {
-					// If notice user ID matches client UID, choose it
+				if n.UserID != nil {
+					// Should only ever be at most one notice retrieved with non-nil userID
 					notice = n
 					break
-				}
-				if n.LastRepeated.After(notice.LastRepeated) {
-					// Otherwise, choose latest notice
-					notice = n
 				}
 			}
 		}
 	} else {
-		if cmd.UID != "" {
+		if cmd.UID != nil {
 			return fmt.Errorf("cannot use --uid option when looking up notice by key")
 		}
 		var err error
@@ -119,16 +111,15 @@ func (cmd *cmdNotice) Execute(args []string) error {
 
 // yamlNotice exists to add "yaml" tags to the Notice fields.
 type yamlNotice struct {
-	ID            string                  `yaml:"id"`
-	UserID        uint32                  `yaml:"user-id"`
-	Type          client.NoticeType       `yaml:"type"`
-	Key           string                  `yaml:"key"`
-	Visibility    client.NoticeVisibility `yaml:"visibility"`
-	FirstOccurred time.Time               `yaml:"first-occurred"`
-	LastOccurred  time.Time               `yaml:"last-occurred"`
-	LastRepeated  time.Time               `yaml:"last-repeated"`
-	Occurrences   int                     `yaml:"occurrences"`
-	LastData      map[string]string       `yaml:"last-data,omitempty"`
-	RepeatAfter   time.Duration           `yaml:"repeat-after,omitempty"`
-	ExpireAfter   time.Duration           `yaml:"expire-after,omitempty"`
+	ID            string            `yaml:"id"`
+	UserID        *uint32           `yaml:"user-id"`
+	Type          client.NoticeType `yaml:"type"`
+	Key           string            `yaml:"key"`
+	FirstOccurred time.Time         `yaml:"first-occurred"`
+	LastOccurred  time.Time         `yaml:"last-occurred"`
+	LastRepeated  time.Time         `yaml:"last-repeated"`
+	Occurrences   int               `yaml:"occurrences"`
+	LastData      map[string]string `yaml:"last-data,omitempty"`
+	RepeatAfter   time.Duration     `yaml:"repeat-after,omitempty"`
+	ExpireAfter   time.Duration     `yaml:"expire-after,omitempty"`
 }
