@@ -79,7 +79,7 @@ func (cmd *cmdNotice) Execute(args []string) error {
 			notice = notices[0]
 		default:
 			notice = notices[0]
-			for _, n := range notices {
+			for _, n := range notices[1:] {
 				if n.UserID != nil {
 					// Should only ever be at most one notice retrieved with non-nil userID
 					notice = n

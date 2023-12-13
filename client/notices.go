@@ -80,7 +80,7 @@ type NoticesOptions struct {
 	// Select allows returning broader sets of notices.
 	Select NoticesSelect
 
-	// UserID includes only notices whose user ID is this, or nil (public).
+	// UserID, if set, includes only notices that have this user ID or are public.
 	UserID *uint32
 
 	// Types, if not empty, includes only notices whose type is one of these.
@@ -156,12 +156,9 @@ func (client *Client) Notice(id string) (*Notice, error) {
 // Notices returns a list of notices that match the filters given in opts,
 // ordered by the last-repeated time.
 func (client *Client) Notices(opts *NoticesOptions) ([]*Notice, error) {
-	query, err := makeNoticesQuery(opts)
-	if err != nil {
-		return nil, err
-	}
+	query := makeNoticesQuery(opts)
 	var jns []*jsonNotice
-	_, err = client.doSync("GET", "/v1/notices", query, nil, nil, &jns)
+	_, err := client.doSync("GET", "/v1/notices", query, nil, nil, &jns)
 	return jsonNoticesToNotices(jns), err
 }
 
@@ -172,10 +169,7 @@ func (client *Client) Notices(opts *NoticesOptions) ([]*Notice, error) {
 // If the timeout elapses before any matching notices arrive, it's not
 // considered an error: WaitNotices returns a nil slice and a nil error.
 func (client *Client) WaitNotices(ctx context.Context, serverTimeout time.Duration, opts *NoticesOptions) ([]*Notice, error) {
-	query, err := makeNoticesQuery(opts)
-	if err != nil {
-		return nil, err
-	}
+	query := makeNoticesQuery(opts)
 	query.Set("timeout", serverTimeout.String())
 
 	resp, err := client.Requester().Do(ctx, &RequestOptions{
@@ -196,10 +190,10 @@ func (client *Client) WaitNotices(ctx context.Context, serverTimeout time.Durati
 	return jsonNoticesToNotices(jns), err
 }
 
-func makeNoticesQuery(opts *NoticesOptions) (url.Values, error) {
+func makeNoticesQuery(opts *NoticesOptions) url.Values {
 	query := make(url.Values)
 	if opts == nil {
-		return query, nil
+		return query
 	}
 	if opts.Select != "" {
 		query.Add("select", string(opts.Select))
@@ -216,7 +210,7 @@ func makeNoticesQuery(opts *NoticesOptions) (url.Values, error) {
 	if !opts.After.IsZero() {
 		query.Set("after", opts.After.Format(time.RFC3339Nano))
 	}
-	return query, nil
+	return query
 }
 
 func jsonNoticesToNotices(jns []*jsonNotice) []*Notice {

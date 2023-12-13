@@ -85,21 +85,26 @@ type Notice struct {
 }
 
 func (n *Notice) String() string {
-	return fmt.Sprintf("Notice %s (%d:%s:%s)", n.id, n.userID, n.noticeType, n.key)
-}
-
-// UserID returns whether the notice has a user ID, and if so, what the UID is.
-func (n *Notice) UserID() (hasUserID bool, userID uint32) {
-	// Importantly, doesn't expose the address of notice's user ID, so the
-	// value cannot be mutated.
-	return expandUserID(n.userID)
-}
-
-func expandUserID(userID *uint32) (hasUserID bool, uid uint32) {
-	if userID == nil {
-		return false, 0
+	userIDStr := "public"
+	if n.userID != nil {
+		userIDStr = strconv.FormatUint(uint64(*n.userID), 10)
 	}
-	return true, *userID
+	return fmt.Sprintf("Notice %s (%s:%s:%s)", n.id, userIDStr, n.noticeType, n.key)
+}
+
+// UserID returns the value of the notice's user ID and whether it is set.
+// If it is nil, then the returned userID is 0, and isSet is false.
+func (n *Notice) UserID() (userID uint32, isSet bool) {
+	// Importantly, doesn't expose the address of notice's user ID, so the
+	// caller cannot mutate the value.
+	return flattenUserID(n.userID)
+}
+
+func flattenUserID(userID *uint32) (uid uint32, isSet bool) {
+	if userID == nil {
+		return 0, false
+	}
+	return *userID, true
 }
 
 // expired reports whether this notice has expired (relative to the given "now").
@@ -232,7 +237,7 @@ func (s *State) AddNotice(userID *uint32, noticeType NoticeType, key string, opt
 	}
 	now = now.UTC()
 	newOrRepeated := false
-	hasUserID, uid := expandUserID(userID)
+	uid, hasUserID := flattenUserID(userID)
 	uniqueKey := noticeKey{hasUserID, uid, noticeType, key}
 	notice, ok := s.notices[uniqueKey]
 	if !ok {
@@ -289,7 +294,7 @@ type noticeKey struct {
 
 // NoticeFilter allows filtering notices by various fields.
 type NoticeFilter struct {
-	// UserID includes only notices whose user ID is this, or nil (public).
+	// UserID, if set, includes only notices that have this user ID or are public.
 	UserID *uint32
 
 	// Types, if not empty, includes only notices whose type is one of these.
@@ -307,6 +312,10 @@ func (f *NoticeFilter) matches(n *Notice) bool {
 	if f == nil {
 		return true
 	}
+	// Three cases here:
+	// - if there is no user ID filter, include the notice (whether it's public or private)
+	// - if the notice's user ID is not set, the notice is public, so include it
+	// - if there is a user ID filter and the notice user ID is set, only include it if they match
 	if f.UserID != nil && n.userID != nil && *f.UserID != *n.userID {
 		return false
 	}
@@ -378,7 +387,7 @@ func (s *State) unflattenNotices(flat []*Notice) {
 		if n.expired(now) {
 			continue
 		}
-		hasUserID, userID := n.UserID()
+		userID, hasUserID := n.UserID()
 		uniqueKey := noticeKey{hasUserID, userID, n.noticeType, n.key}
 		s.notices[uniqueKey] = n
 	}

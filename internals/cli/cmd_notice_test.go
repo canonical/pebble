@@ -102,7 +102,7 @@ func (s *PebbleSuite) TestNoticeTypeKey(c *C) {
 			"status-code": 200,
 			"result": [{
 				"id": "123",
-				"user-id": 1000,
+				"user-id": null,
 				"type": "custom",
 				"key": "a.b/c",
 				"first-occurred": "2023-09-05T17:18:00Z",
@@ -118,7 +118,7 @@ func (s *PebbleSuite) TestNoticeTypeKey(c *C) {
 	c.Check(rest, HasLen, 0)
 	c.Check(s.Stdout(), Equals, `
 id: "123"
-user-id: 1000
+user-id: null
 type: custom
 key: a.b/c
 first-occurred: 2023-09-05T17:18:00Z
@@ -136,7 +136,7 @@ func (s *PebbleSuite) TestNoticeTypeKeyUID(c *C) {
 		c.Check(r.URL.Query(), DeepEquals, url.Values{
 			"types":   {"custom"},
 			"keys":    {"a.b/c"},
-			"user-id": {"1000"},
+			"user-id": {"1001"},
 		})
 
 		fmt.Fprint(w, `{
@@ -144,7 +144,7 @@ func (s *PebbleSuite) TestNoticeTypeKeyUID(c *C) {
 			"status-code": 200,
 			"result": [{
 				"id": "123",
-				"user-id": 1000,
+				"user-id": 1001,
 				"type": "custom",
 				"key": "a.b/c",
 				"first-occurred": "2023-09-05T17:18:00Z",
@@ -155,12 +155,12 @@ func (s *PebbleSuite) TestNoticeTypeKeyUID(c *C) {
 		]}`)
 	})
 
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"notice", "--uid", "1000", "custom", "a.b/c"})
+	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"notice", "--uid", "1001", "custom", "a.b/c"})
 	c.Assert(err, IsNil)
 	c.Check(rest, HasLen, 0)
 	c.Check(s.Stdout(), Equals, `
 id: "123"
-user-id: 1000
+user-id: 1001
 type: custom
 key: a.b/c
 first-occurred: 2023-09-05T17:18:00Z

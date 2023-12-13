@@ -42,10 +42,10 @@ func (cs *clientSuite) TestNotice(c *C) {
 	}}`
 	notice, err := cs.cli.Notice("123")
 	c.Assert(err, IsNil)
-	thousand := uint32(1000)
+	uid := uint32(1000)
 	c.Assert(notice, DeepEquals, &client.Notice{
 		ID:            "123",
-		UserID:        &thousand,
+		UserID:        &uid,
 		Type:          client.CustomNotice,
 		Key:           "a.b/c",
 		FirstOccurred: time.Date(2023, 9, 5, 15, 43, 0, 123_000_000, time.UTC),
@@ -90,10 +90,10 @@ func (cs *clientSuite) TestNotices(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(cs.req.URL.Path, Equals, "/v1/notices")
 	c.Assert(cs.req.URL.Query(), DeepEquals, url.Values{})
-	thousand := uint32(1000)
+	uid := uint32(1000)
 	c.Assert(notices, DeepEquals, []*client.Notice{{
 		ID:            "1",
-		UserID:        &thousand,
+		UserID:        &uid,
 		Type:          "custom",
 		Key:           "a.b/c",
 		FirstOccurred: time.Date(2023, 9, 5, 15, 43, 0, 123_000_000, time.UTC),
@@ -117,10 +117,10 @@ func (cs *clientSuite) TestNotices(c *C) {
 
 func (cs *clientSuite) TestNoticesFilters(c *C) {
 	cs.rsp = `{"type": "sync", "result": []}`
-	thousand := uint32(1000)
+	uid := uint32(1000)
 	notices, err := cs.cli.Notices(&client.NoticesOptions{
 		Select: client.NoticesSelectAll,
-		UserID: &thousand,
+		UserID: &uid,
 		Types:  []client.NoticeType{client.CustomNotice},
 		Keys:   []string{"foo.com/bar", "example.com/x"},
 		After:  time.Date(2023, 9, 5, 16, 43, 32, 123_456_789, time.UTC),
@@ -202,10 +202,10 @@ func (cs *clientSuite) TestWaitNotices(c *C) {
 	c.Assert(cs.req.URL.Query(), DeepEquals, url.Values{
 		"timeout": {"10s"},
 	})
-	thousand := uint32(1000)
+	uid := uint32(1000)
 	c.Assert(notices, DeepEquals, []*client.Notice{{
 		ID:            "1",
-		UserID:        &thousand,
+		UserID:        &uid,
 		Type:          "warning",
 		Key:           "be careful!",
 		FirstOccurred: time.Date(2023, 9, 6, 15, 43, 0, 123_000_000, time.UTC),

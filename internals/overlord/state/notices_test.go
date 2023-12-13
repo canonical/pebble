@@ -38,10 +38,10 @@ func (s *noticesSuite) TestMarshal(c *C) {
 	defer st.Unlock()
 
 	start := time.Now()
-	thousand := uint32(1000)
-	addNotice(c, st, &thousand, state.CustomNotice, "foo.com/bar", nil)
+	uid := uint32(1000)
+	addNotice(c, st, &uid, state.CustomNotice, "foo.com/bar", nil)
 	time.Sleep(time.Microsecond) // ensure there's time between the occurrences
-	addNotice(c, st, &thousand, state.CustomNotice, "foo.com/bar", &state.AddNoticeOptions{
+	addNotice(c, st, &uid, state.CustomNotice, "foo.com/bar", &state.AddNoticeOptions{
 		Data: map[string]string{"k": "v"},
 	})
 
@@ -110,6 +110,45 @@ func (s *noticesSuite) TestUnmarshal(c *C) {
 		"repeat-after":   "1h0m0s",
 		"expire-after":   "168h0m0s",
 	})
+}
+
+func (s *noticesSuite) TestString(c *C) {
+	noticeJSON := []byte(`{
+		"id": "1",
+		"user-id": 1000,
+		"type": "custom",
+		"key": "foo.com/bar",
+		"first-occurred": "2023-09-01T05:23:01Z",
+		"last-occurred": "2023-09-01T07:23:02Z",
+		"last-repeated": "2023-09-01T06:23:03.123456789Z",
+		"occurrences": 2,
+		"last-data": {"k": "v"},
+		"repeat-after": "60m",
+		"expire-after": "168h0m0s"
+	}`)
+	var notice *state.Notice
+	err := json.Unmarshal(noticeJSON, &notice)
+	c.Assert(err, IsNil)
+
+	c.Assert(notice.String(), Equals, "Notice 1 (1000:custom:foo.com/bar)")
+
+	noticeJSON = []byte(`{
+		"id": "2",
+		"user-id": null,
+		"type": "warning",
+		"key": "scary",
+		"first-occurred": "2023-09-01T05:23:01Z",
+		"last-occurred": "2023-09-01T07:23:02Z",
+		"last-repeated": "2023-09-01T06:23:03.123456789Z",
+		"occurrences": 2,
+		"last-data": {"k": "v"},
+		"repeat-after": "60m",
+		"expire-after": "168h0m0s"
+	}`)
+	err = json.Unmarshal(noticeJSON, &notice)
+	c.Assert(err, IsNil)
+
+	c.Assert(notice.String(), Equals, "Notice 2 (public:warning:scary)")
 }
 
 func (s *noticesSuite) TestOccurrences(c *C) {
@@ -185,13 +224,13 @@ func (s *noticesSuite) TestNoticesFilterUserID(c *C) {
 	st.Lock()
 	defer st.Unlock()
 
-	user1 := uint32(1000)
-	user2 := uint32(0)
-	addNotice(c, st, &user1, state.CustomNotice, "foo.com/bar", nil)
+	uid1 := uint32(1000)
+	uid2 := uint32(0)
+	addNotice(c, st, &uid1, state.CustomNotice, "foo.com/bar", nil)
 	time.Sleep(time.Microsecond)
-	addNotice(c, st, &user2, state.ChangeUpdateNotice, "123", nil)
+	addNotice(c, st, &uid2, state.ChangeUpdateNotice, "123", nil)
 	time.Sleep(time.Microsecond)
-	addNotice(c, st, &user2, state.WarningNotice, "Warning 1!", nil)
+	addNotice(c, st, &uid2, state.WarningNotice, "Warning 1!", nil)
 	time.Sleep(time.Microsecond)
 	addNotice(c, st, nil, state.WarningNotice, "Warning 2!", nil)
 
@@ -204,14 +243,14 @@ func (s *noticesSuite) TestNoticesFilterUserID(c *C) {
 	c.Assert(notices, HasLen, 4)
 
 	// One user ID
-	notices = st.Notices(&state.NoticeFilter{UserID: &user2})
+	notices = st.Notices(&state.NoticeFilter{UserID: &uid2})
 	c.Assert(notices, HasLen, 3)
 	n := noticeToMap(c, notices[0])
-	c.Check(n["user-id"], Equals, float64(user2))
+	c.Check(n["user-id"], Equals, float64(uid2))
 	c.Check(n["type"], Equals, "change-update")
 	c.Check(n["key"], Equals, "123")
 	n = noticeToMap(c, notices[1])
-	c.Check(n["user-id"], Equals, float64(user2))
+	c.Check(n["user-id"], Equals, float64(uid2))
 	c.Check(n["type"], Equals, "warning")
 	c.Check(n["key"], Equals, "Warning 1!")
 	n = noticeToMap(c, notices[2])
@@ -332,14 +371,14 @@ func (s *noticesSuite) TestNotice(c *C) {
 	st.Lock()
 	defer st.Unlock()
 
-	user1 := uint32(0)
-	user2 := uint32(123)
-	user3 := uint32(1000)
-	addNotice(c, st, &user1, state.CustomNotice, "foo.com/x", nil)
+	uid1 := uint32(0)
+	uid2 := uint32(123)
+	uid3 := uint32(1000)
+	addNotice(c, st, &uid1, state.CustomNotice, "foo.com/x", nil)
 	time.Sleep(time.Microsecond)
-	addNotice(c, st, &user2, state.CustomNotice, "foo.com/y", nil)
+	addNotice(c, st, &uid2, state.CustomNotice, "foo.com/y", nil)
 	time.Sleep(time.Microsecond)
-	addNotice(c, st, &user3, state.CustomNotice, "foo.com/z", nil)
+	addNotice(c, st, &uid3, state.CustomNotice, "foo.com/z", nil)
 
 	notices := st.Notices(nil)
 	c.Assert(notices, HasLen, 3)

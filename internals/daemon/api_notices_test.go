@@ -52,16 +52,6 @@ func (s *apiSuite) TestNoticesFilterUserID(c *C) {
 	})
 }
 
-/*
-func (s *apiSuite) TestNoticesFilterSelect(c *C) {
-	restore := fakeSysGetuid(0)
-	defer restore()
-	s.testNoticesFilter(c, func(after time.Time) url.Values {
-		return url.Values{"select": {"all"}}
-	})
-}
-*/
-
 func (s *apiSuite) TestNoticesFilterType(c *C) {
 	restore := fakeSysGetuid(0)
 	defer restore()
@@ -104,8 +94,8 @@ func (s *apiSuite) testNoticesFilter(c *C, makeQuery func(after time.Time) url.V
 
 	st := s.d.overlord.State()
 	st.Lock()
-	user1 := uint32(123)
-	addNotice(c, st, &user1, state.WarningNotice, "warning", nil)
+	uid := uint32(123)
+	addNotice(c, st, &uid, state.WarningNotice, "warning", nil)
 	after := time.Now()
 	time.Sleep(time.Microsecond)
 	noticeID, err := st.AddNotice(nil, state.CustomNotice, "a.b/2", &state.AddNoticeOptions{
@@ -776,8 +766,8 @@ func (s *apiSuite) TestNotice(c *C) {
 	addNotice(c, st, nil, state.CustomNotice, "a.b/1", nil)
 	noticeIDPublic, err := st.AddNotice(nil, state.CustomNotice, "a.b/2", nil)
 	c.Assert(err, IsNil)
-	thousand := uint32(1000)
-	noticeIDPrivate, err := st.AddNotice(&thousand, state.CustomNotice, "a.b/3", nil)
+	uid := uint32(1000)
+	noticeIDPrivate, err := st.AddNotice(&uid, state.CustomNotice, "a.b/3", nil)
 	c.Assert(err, IsNil)
 	addNotice(c, st, nil, state.CustomNotice, "a.b/4", nil)
 	st.Unlock()
@@ -861,8 +851,8 @@ func (s *apiSuite) TestNoticeNotAllowed(c *C) {
 
 	st := s.d.overlord.State()
 	st.Lock()
-	thousand := uint32(1000)
-	noticeID, err := st.AddNotice(&thousand, state.CustomNotice, "a.b/1", nil)
+	uid := uint32(1000)
+	noticeID, err := st.AddNotice(&uid, state.CustomNotice, "a.b/1", nil)
 	c.Assert(err, IsNil)
 	st.Unlock()
 
