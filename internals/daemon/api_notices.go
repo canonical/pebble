@@ -18,8 +18,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"math"
 	"net/http"
 	"regexp"
+	"strconv"
 
 	"github.com/canonical/x-go/strutil"
 
@@ -42,6 +45,39 @@ type addedNotice struct {
 func v1GetNotices(c *Command, r *http.Request, _ *UserState) Response {
 	query := r.URL.Query()
 
+	requestUID, err := uidFromRequest(r)
+	if err != nil {
+		return statusForbidden("cannot determine UID of request, so cannot retrieve notices")
+	}
+	daemonUID := uint32(sysGetuid())
+
+	// By default, return notices with the request UID and public notices.
+	userID := &requestUID
+
+	if len(query["user-id"]) > 0 {
+		if !isAdmin(requestUID, daemonUID) {
+			return statusForbidden(`only admins may use the "user-id" filter`)
+		}
+		userID, err = sanitizeUserIDFilter(query["user-id"])
+		if err != nil {
+			return statusBadRequest(`invalid "user-id" filter: %v`, err)
+		}
+	}
+
+	if len(query["select"]) > 0 {
+		if !isAdmin(requestUID, daemonUID) {
+			return statusForbidden(`only admins may use the "select" filter`)
+		}
+		if len(query["user-id"]) > 0 {
+			return statusBadRequest(`cannot use both "select" and "user-id" parameters`)
+		}
+		if query.Get("select") != "all" {
+			return statusBadRequest(`invalid "select" filter: must be "all"`)
+		}
+		// Clear the userID filter so all notices will be returned.
+		userID = nil
+	}
+
 	types, err := sanitizeTypesFilter(query["types"])
 	if err != nil {
 		// Caller did provide a types filter, but they're all invalid notice types.
@@ -57,9 +93,10 @@ func v1GetNotices(c *Command, r *http.Request, _ *UserState) Response {
 	}
 
 	filter := &state.NoticeFilter{
-		Types: types,
-		Keys:  keys,
-		After: after,
+		UserID: userID,
+		Types:  types,
+		Keys:   keys,
+		After:  after,
 	}
 
 	timeout, err := parseOptionalDuration(query.Get("timeout"))
@@ -98,6 +135,34 @@ func v1GetNotices(c *Command, r *http.Request, _ *UserState) Response {
 	return SyncResponse(notices)
 }
 
+// Get the UID of the request. If the UID is not known, return an error.
+func uidFromRequest(r *http.Request) (uint32, error) {
+	_, uid, _, err := ucrednetGet(r.RemoteAddr)
+	if err != nil {
+		return 0, fmt.Errorf("could not parse request UID")
+	}
+	return uid, nil
+}
+
+// Construct the user IDs filter which will be passed to state.Notices.
+// Must only be called if the query user ID argument is set.
+func sanitizeUserIDFilter(queryUserID []string) (*uint32, error) {
+	userIDStrs := strutil.MultiCommaSeparatedList(queryUserID)
+	if len(userIDStrs) != 1 {
+		return nil, fmt.Errorf(`must only include one "user-id"`)
+	}
+	userIDInt, err := strconv.ParseInt(userIDStrs[0], 10, 64)
+	if err != nil {
+		return nil, err
+	}
+	if userIDInt < 0 || userIDInt > math.MaxUint32 {
+		return nil, fmt.Errorf("user ID is not a valid uint32: %d", userIDInt)
+	}
+	userID := uint32(userIDInt)
+	return &userID, nil
+}
+
+// Construct the types filter which will be passed to state.Notices.
 func sanitizeTypesFilter(queryTypes []string) ([]state.NoticeType, error) {
 	typeStrs := strutil.MultiCommaSeparatedList(queryTypes)
 	types := make([]state.NoticeType, 0, len(typeStrs))
@@ -116,7 +181,16 @@ func sanitizeTypesFilter(queryTypes []string) ([]state.NoticeType, error) {
 	return types, nil
 }
 
+func isAdmin(requestUID, daemonUID uint32) bool {
+	return requestUID == 0 || requestUID == daemonUID
+}
+
 func v1PostNotices(c *Command, r *http.Request, _ *UserState) Response {
+	requestUID, err := uidFromRequest(r)
+	if err != nil {
+		return statusForbidden("cannot determine UID of request, so cannot create notice")
+	}
+
 	var payload struct {
 		Action      string          `json:"action"`
 		Type        string          `json:"type"`
@@ -162,7 +236,7 @@ func v1PostNotices(c *Command, r *http.Request, _ *UserState) Response {
 	st.Lock()
 	defer st.Unlock()
 
-	noticeId, err := st.AddNotice(state.CustomNotice, payload.Key, &state.AddNoticeOptions{
+	noticeId, err := st.AddNotice(&requestUID, state.CustomNotice, payload.Key, &state.AddNoticeOptions{
 		Data:        data,
 		RepeatAfter: repeatAfter,
 	})
@@ -174,6 +248,11 @@ func v1PostNotices(c *Command, r *http.Request, _ *UserState) Response {
 }
 
 func v1GetNotice(c *Command, r *http.Request, _ *UserState) Response {
+	requestUID, err := uidFromRequest(r)
+	if err != nil {
+		return statusForbidden("cannot determine UID of request, so cannot retrieve notice")
+	}
+	daemonUID := uint32(sysGetuid())
 	noticeID := muxVars(r)["id"]
 	st := c.d.overlord.State()
 	st.Lock()
@@ -182,5 +261,19 @@ func v1GetNotice(c *Command, r *http.Request, _ *UserState) Response {
 	if notice == nil {
 		return statusNotFound("cannot find notice with ID %q", noticeID)
 	}
+	if !noticeViewableByUser(notice, requestUID, daemonUID) {
+		return statusForbidden("not allowed to access notice with id %q", noticeID)
+	}
 	return SyncResponse(notice)
+}
+
+func noticeViewableByUser(notice *state.Notice, requestUID, daemonUID uint32) bool {
+	userID, isSet := notice.UserID()
+	if !isSet {
+		return true
+	}
+	if isAdmin(requestUID, daemonUID) {
+		return true
+	}
+	return requestUID == userID
 }

@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/canonical/go-flags"
@@ -37,9 +38,11 @@ type cmdNotices struct {
 	client *client.Client
 
 	timeMixin
-	Type    []client.NoticeType `long:"type"`
-	Key     []string            `long:"key"`
-	Timeout time.Duration       `long:"timeout"`
+	Select  client.NoticesSelect `long:"select"`
+	UID     *uint32              `long:"uid"`
+	Type    []client.NoticeType  `long:"type"`
+	Key     []string             `long:"key"`
+	Timeout time.Duration        `long:"timeout"`
 }
 
 func init() {
@@ -48,6 +51,8 @@ func init() {
 		Summary:     cmdNoticesSummary,
 		Description: cmdNoticesDescription,
 		ArgsHelp: merge(timeArgsHelp, map[string]string{
+			"--select":  "Show all notices with any user ID (admin only; cannot be used with --uid)",
+			"--uid":     "Only list notices with this user ID (admin only; cannot be used with --select)",
 			"--type":    "Only list notices of this type (multiple allowed)",
 			"--key":     "Only list notices with this key (multiple allowed)",
 			"--timeout": "Wait up to this duration for matching notices to arrive",
@@ -68,9 +73,11 @@ func (cmd *cmdNotices) Execute(args []string) error {
 		return fmt.Errorf("cannot load CLI state: %w", err)
 	}
 	options := client.NoticesOptions{
-		Types: cmd.Type,
-		Keys:  cmd.Key,
-		After: state.NoticesLastOkayed,
+		Select: cmd.Select,
+		UserID: cmd.UID,
+		Types:  cmd.Type,
+		Keys:   cmd.Key,
+		After:  state.NoticesLastOkayed,
 	}
 
 	var notices []*client.Notice
@@ -96,7 +103,7 @@ func (cmd *cmdNotices) Execute(args []string) error {
 	writer := tabWriter()
 	defer writer.Flush()
 
-	fmt.Fprintln(writer, "ID\tType\tKey\tFirst\tRepeated\tOccurences")
+	fmt.Fprintln(writer, "ID\tUser\tType\tKey\tFirst\tRepeated\tOccurrences")
 
 	for _, notice := range notices {
 		key := notice.Key
@@ -104,8 +111,13 @@ func (cmd *cmdNotices) Execute(args []string) error {
 			// Truncate to 32 bytes with ellipsis in the middle
 			key = key[:14] + "..." + key[len(key)-15:]
 		}
-		fmt.Fprintf(writer, "%s\t%s\t%s\t%s\t%s\t%d\n",
+		userIDStr := "public"
+		if notice.UserID != nil {
+			userIDStr = strconv.FormatUint(uint64(*notice.UserID), 10)
+		}
+		fmt.Fprintf(writer, "%s\t%s\t%s\t%s\t%s\t%s\t%d\n",
 			notice.ID,
+			userIDStr,
 			notice.Type,
 			key,
 			cmd.fmtTime(notice.FirstOccurred),

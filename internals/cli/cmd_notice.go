@@ -33,6 +33,8 @@ by unique type and key combination (2-arg variant).
 type cmdNotice struct {
 	client *client.Client
 
+	UID *uint32 `long:"uid"`
+
 	Positional struct {
 		IDOrType string `positional-arg-name:"<id-or-type>" required:"1"`
 		Key      string `positional-arg-name:"<key>"`
@@ -44,7 +46,10 @@ func init() {
 		Name:        "notice",
 		Summary:     cmdNoticeSummary,
 		Description: cmdNoticeDescription,
-		ArgsHelp:    map[string]string{},
+
+		ArgsHelp: map[string]string{
+			"--uid": `Look up notice from user with this UID (admin only; 2-arg variant only)`,
+		},
 		New: func(opts *CmdOptions) flags.Commander {
 			return &cmdNotice{client: opts.Client}
 		},
@@ -58,18 +63,34 @@ func (cmd *cmdNotice) Execute(args []string) error {
 
 	var notice *client.Notice
 	if cmd.Positional.Key != "" {
-		notices, err := cmd.client.Notices(&client.NoticesOptions{
-			Types: []client.NoticeType{client.NoticeType(cmd.Positional.IDOrType)},
-			Keys:  []string{cmd.Positional.Key},
-		})
+		options := client.NoticesOptions{
+			UserID: cmd.UID,
+			Types:  []client.NoticeType{client.NoticeType(cmd.Positional.IDOrType)},
+			Keys:   []string{cmd.Positional.Key},
+		}
+		notices, err := cmd.client.Notices(&options)
 		if err != nil {
 			return err
 		}
-		if len(notices) == 0 {
+		switch len(notices) {
+		case 0:
 			return fmt.Errorf("cannot find %s notice with key %q", cmd.Positional.IDOrType, cmd.Positional.Key)
+		case 1:
+			notice = notices[0]
+		default:
+			notice = notices[0]
+			for _, n := range notices[1:] {
+				if n.UserID != nil {
+					// Should only ever be at most one notice retrieved with non-nil userID
+					notice = n
+					break
+				}
+			}
 		}
-		notice = notices[0]
 	} else {
+		if cmd.UID != nil {
+			return fmt.Errorf("cannot use --uid option when looking up notice by key")
+		}
 		var err error
 		notice, err = cmd.client.Notice(cmd.Positional.IDOrType)
 		if err != nil {
@@ -91,6 +112,7 @@ func (cmd *cmdNotice) Execute(args []string) error {
 // yamlNotice exists to add "yaml" tags to the Notice fields.
 type yamlNotice struct {
 	ID            string            `yaml:"id"`
+	UserID        *uint32           `yaml:"user-id"`
 	Type          client.NoticeType `yaml:"type"`
 	Key           string            `yaml:"key"`
 	FirstOccurred time.Time         `yaml:"first-occurred"`

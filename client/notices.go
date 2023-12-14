@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net/url"
 	"regexp"
+	"strconv"
 	"time"
 )
 
@@ -76,6 +77,12 @@ func (client *Client) Notify(opts *NotifyOptions) (string, error) {
 }
 
 type NoticesOptions struct {
+	// Select allows returning broader sets of notices.
+	Select NoticesSelect
+
+	// UserID, if set, includes only notices that have this user ID or are public.
+	UserID *uint32
+
 	// Types, if not empty, includes only notices whose type is one of these.
 	Types []NoticeType
 
@@ -86,6 +93,12 @@ type NoticesOptions struct {
 	After time.Time
 }
 
+type NoticesSelect string
+
+const (
+	NoticesSelectAll NoticesSelect = "all"
+)
+
 // Notice holds details of an event that was observed and reported either
 // inside the server itself or externally via the API. Besides the ID field
 // itself, the Type and Key fields together also uniquely identify a
@@ -94,6 +107,7 @@ type NoticesOptions struct {
 // being created.
 type Notice struct {
 	ID            string            `json:"id"`
+	UserID        *uint32           `json:"user-id"`
 	Type          NoticeType        `json:"type"`
 	Key           string            `json:"key"`
 	FirstOccurred time.Time         `json:"first-occurred"`
@@ -181,12 +195,14 @@ func makeNoticesQuery(opts *NoticesOptions) url.Values {
 	if opts == nil {
 		return query
 	}
-	if len(opts.Types) > 0 {
-		typeStrs := make([]string, 0, len(opts.Types))
-		for _, t := range opts.Types {
-			typeStrs = append(typeStrs, string(t))
-		}
-		query["types"] = typeStrs
+	if opts.Select != "" {
+		query.Add("select", string(opts.Select))
+	}
+	if opts.UserID != nil {
+		query.Add("user-id", strconv.FormatUint(uint64(*opts.UserID), 10))
+	}
+	for _, t := range opts.Types {
+		query.Add("types", string(t))
 	}
 	if len(opts.Keys) > 0 {
 		query["keys"] = opts.Keys
