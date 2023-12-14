@@ -121,10 +121,7 @@ func (s *noticesSuite) TestString(c *C) {
 		"first-occurred": "2023-09-01T05:23:01Z",
 		"last-occurred": "2023-09-01T07:23:02Z",
 		"last-repeated": "2023-09-01T06:23:03.123456789Z",
-		"occurrences": 2,
-		"last-data": {"k": "v"},
-		"repeat-after": "60m",
-		"expire-after": "168h0m0s"
+		"occurrences": 2
 	}`)
 	var notice *state.Notice
 	err := json.Unmarshal(noticeJSON, &notice)
@@ -140,10 +137,7 @@ func (s *noticesSuite) TestString(c *C) {
 		"first-occurred": "2023-09-01T05:23:01Z",
 		"last-occurred": "2023-09-01T07:23:02Z",
 		"last-repeated": "2023-09-01T06:23:03.123456789Z",
-		"occurrences": 2,
-		"last-data": {"k": "v"},
-		"repeat-after": "60m",
-		"expire-after": "168h0m0s"
+		"occurrences": 2
 	}`)
 	err = json.Unmarshal(noticeJSON, &notice)
 	c.Assert(err, IsNil)
@@ -234,15 +228,15 @@ func (s *noticesSuite) TestNoticesFilterUserID(c *C) {
 	time.Sleep(time.Microsecond)
 	addNotice(c, st, nil, state.WarningNotice, "Warning 2!", nil)
 
-	// No user IDs
+	// No filter
 	notices := st.Notices(nil)
 	c.Assert(notices, HasLen, 4)
 
-	// User ID nil
+	// User ID unset
 	notices = st.Notices(&state.NoticeFilter{})
 	c.Assert(notices, HasLen, 4)
 
-	// One user ID
+	// User ID set
 	notices = st.Notices(&state.NoticeFilter{UserID: &uid2})
 	c.Assert(notices, HasLen, 3)
 	n := noticeToMap(c, notices[0])
@@ -272,8 +266,12 @@ func (s *noticesSuite) TestNoticesFilterType(c *C) {
 	time.Sleep(time.Microsecond)
 	addNotice(c, st, nil, state.WarningNotice, "Warning 2!", nil)
 
+	// No filter
+	notices := st.Notices(nil)
+	c.Assert(notices, HasLen, 4)
+
 	// No types
-	notices := st.Notices(&state.NoticeFilter{})
+	notices = st.Notices(&state.NoticeFilter{})
 	c.Assert(notices, HasLen, 4)
 
 	// One type
@@ -315,8 +313,12 @@ func (s *noticesSuite) TestNoticesFilterKey(c *C) {
 	time.Sleep(time.Microsecond)
 	addNotice(c, st, nil, state.CustomNotice, "foo.com/baz", nil)
 
+	// No filter
+	notices := st.Notices(nil)
+	c.Assert(notices, HasLen, 3)
+
 	// No keys
-	notices := st.Notices(&state.NoticeFilter{})
+	notices = st.Notices(&state.NoticeFilter{})
 	c.Assert(notices, HasLen, 3)
 
 	// One key
@@ -358,6 +360,11 @@ func (s *noticesSuite) TestNoticesFilterAfter(c *C) {
 	time.Sleep(time.Microsecond)
 	addNotice(c, st, nil, state.CustomNotice, "foo.com/y", nil)
 
+	// After unset
+	notices = st.Notices(nil)
+	c.Assert(notices, HasLen, 2)
+
+	// After set
 	notices = st.Notices(&state.NoticeFilter{After: lastRepeated})
 	c.Assert(notices, HasLen, 1)
 	n = noticeToMap(c, notices[0])
