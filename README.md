@@ -511,11 +511,11 @@ In addition, a notice records optional *data* (string key-value pairs) from the 
 
 These notice types are currently available:
 
-* `change-update`: recorded whenever a change is first spawned or its status is updated. The key for this type of notice is the change ID, and the notice's data includes the change `kind`.
+<!-- TODO: * `change-update`: recorded whenever a change is first spawned or its status is updated. The key for this type of notice is the change ID, and the notice's data includes the change `kind`. -->
 
 * `custom`: a custom client notice reported via `pebble notify`. The key and any data is provided by the user. The key must be in the format `mydomain.io/mykey` to ensure well-namespaced notice keys.
 
-* `warning`: Pebble warnings are implemented in terms of notices. The key for this type of notice is the human-readable warning message.
+<!-- TODO: * `warning`: Pebble warnings are implemented in terms of notices. The key for this type of notice is the human-readable warning message. -->
 
 To record `custom` notices, use `pebble notify`:
 
@@ -534,10 +534,9 @@ The `pebble notices` command lists notices not yet acknowledged, ordered by the 
 
 ```
 $ pebble notices
-ID   User    Type     Key              First                 Repeated              Occurrences
-1    1000    custom   example.com/foo  2023-09-15T04:16:09Z  2023-09-15T04:16:09Z  3
-2    1000    custom   other.com/foo    2023-09-15T04:16:17Z  2023-09-15T04:16:17Z  1
-3    public  warning  Be careful!      2023-09-16T17:18:00Z  2023-09-16T18:18:55Z  1
+ID   User    Type    Key              First                Repeated             Occurrences
+1    1000    custom  example.com/foo  today at 16:16 NZST  today at 16:16 NZST  3
+2    public  custom  other.com/bar    today at 16:16 NZST  today at 16:16 NZST  1
 ```
 
 To fetch details about a single notice, use `pebble notice`, which displays the output in YAML format. You can fetch a notice either by ID or by type/key combination.
@@ -562,6 +561,7 @@ To fetch the notice with type "custom" and key "other.com/bar":
 ```
 $ pebble notice custom other.com/bar
 id: "2"
+user-id: public
 type: custom
 key: other.com/bar
 first-occurred: 2023-09-15T04:16:17.180049768Z
