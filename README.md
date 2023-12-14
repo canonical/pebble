@@ -499,9 +499,9 @@ pebble_service: svc2  # default label for Loki
 
 Pebble includes a subsystem called *notices*, which allows the user to introspect various events that occur in the Pebble server, as well as record custom client events. The server saves notices to disk, so they persist across restarts, and expire after a notice-defined interval.
 
-Each notice is either public or associated with a specific user ID. Public notices may be viewed by any user, while notices associated with a user ID may only be viewed by users with that same user ID, or by admins.
+Each notice is either public or has a specific user ID. Public notices may be viewed by any user, while notices that have a user ID may only be viewed by users with that same user ID, or by an admin (root, or the user the Pebble daemon is running as).
 
-Each notice is uniquely identified by its *user ID*, *type* and *key* combination, and the notice's count of occurences is incremented every time a notice with that type and key combination occurs.
+Each notice is uniquely identified by its *user ID*, *type* and *key* combination, and the notice's count of occurrences is incremented every time a notice with that type and key combination occurs.
 
 Each notice records the time it first occurred, the time it last occurred, and the time it last repeated.
 
