@@ -78,7 +78,7 @@ services:
         command: cmd
 ```
 
-The `override` field (which is required) defines whether this 
+The `override` field (which is required) defines whether this
 entry _overrides_ the previous service of the same name (if any),
 or merges with it. See the [full layer specification](#layer-specification)
 for more details.
@@ -499,7 +499,9 @@ pebble_service: svc2  # default label for Loki
 
 Pebble includes a subsystem called *notices*, which allows the user to introspect various events that occur in the Pebble server, as well as record custom client events. The server saves notices to disk, so they persist across restarts, and expire after a notice-defined interval.
 
-Each notice is uniquely identified by its *type* and *key* combination, and the notice's count of occurences is incremented every time a notice with that type and key combination occurs.
+Each notice is either public or associated with a specific user ID. Public notices may be viewed by any user, while notices associated with a user ID may only be viewed by users with that same user ID, or by admins.
+
+Each notice is uniquely identified by its *user ID*, *type* and *key* combination, and the notice's count of occurences is incremented every time a notice with that type and key combination occurs.
 
 Each notice records the time it first occurred, the time it last occurred, and the time it last repeated.
 
@@ -509,11 +511,11 @@ In addition, a notice records optional *data* (string key-value pairs) from the 
 
 These notice types are currently available:
 
-<!-- TODO: * `change-update`: recorded whenever a change is first spawned or its status is updated. The key for this type of notice is the change ID, and the notice's data includes the change `kind`. -->
+* `change-update`: recorded whenever a change is first spawned or its status is updated. The key for this type of notice is the change ID, and the notice's data includes the change `kind`.
 
 * `custom`: a custom client notice reported via `pebble notify`. The key and any data is provided by the user. The key must be in the format `mydomain.io/mykey` to ensure well-namespaced notice keys.
 
-<!-- TODO: * `warning`: Pebble warnings are implemented in terms of notices. The key for this type of notice is the human-readable warning message. -->
+* `warning`: Pebble warnings are implemented in terms of notices. The key for this type of notice is the human-readable warning message.
 
 To record `custom` notices, use `pebble notify`:
 
@@ -532,9 +534,10 @@ The `pebble notices` command lists notices not yet acknowledged, ordered by the 
 
 ```
 $ pebble notices
-ID   Type    Key              First                Repeated             Occ
-1    custom  example.com/foo  today at 16:16 NZST  today at 16:16 NZST  3
-2    custom  other.com/bar    today at 16:16 NZST  today at 16:16 NZST  1
+ID   User    Type     Key              First                 Repeated              Occurrences
+1    1000    custom   example.com/foo  2023-09-15T04:16:09Z  2023-09-15T04:16:09Z  3
+2    1000    custom   other.com/foo    2023-09-15T04:16:17Z  2023-09-15T04:16:17Z  1
+3    public  warning  Be careful!      2023-09-16T17:18:00Z  2023-09-16T18:18:55Z  1
 ```
 
 To fetch details about a single notice, use `pebble notice`, which displays the output in YAML format. You can fetch a notice either by ID or by type/key combination.
@@ -544,6 +547,7 @@ To fetch the notice with ID "1":
 ```
 $ pebble notice 1
 id: "1"
+user-id: 1000
 type: custom
 key: example.com/foo
 first-occurred: 2023-09-15T04:16:09.179395298Z
