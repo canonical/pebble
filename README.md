@@ -78,7 +78,7 @@ services:
         command: cmd
 ```
 
-The `override` field (which is required) defines whether this 
+The `override` field (which is required) defines whether this
 entry _overrides_ the previous service of the same name (if any),
 or merges with it. See the [full layer specification](#layer-specification)
 for more details.
@@ -499,11 +499,13 @@ pebble_service: svc2  # default label for Loki
 
 Pebble includes a subsystem called *notices*, which allows the user to introspect various events that occur in the Pebble server, as well as record custom client events. The server saves notices to disk, so they persist across restarts, and expire after a notice-defined interval.
 
-Each notice is uniquely identified by its *type* and *key* combination, and the notice's count of occurences is incremented every time a notice with that type and key combination occurs.
+Each notice is either public or has a specific user ID. Public notices may be viewed by any user, while notices that have a user ID may only be viewed by users with that same user ID, or by an admin (root, or the user the Pebble daemon is running as).
+
+Each notice is uniquely identified by its *user ID*, *type* and *key* combination, and the notice's count of occurrences is incremented every time a notice with that type and key combination occurs.
 
 Each notice records the time it first occurred, the time it last occurred, and the time it last repeated.
 
-A *repeat* happens when a notice occurs with the same type and key as a prior notice, and either the notice has no "repeat after" duration (the default), or the notice happens after the provided "repeat after" interval (since the prior notice). Thus, specifying "repeat after" prevents a notice from appearing again if it happens more frequently than desired.
+A *repeat* happens when a notice occurs with the same user ID, type, and key as a prior notice, and either the notice has no "repeat after" duration (the default), or the notice happens after the provided "repeat after" interval (since the prior notice). Thus, specifying "repeat after" prevents a notice from appearing again if it happens more frequently than desired.
 
 In addition, a notice records optional *data* (string key-value pairs) from the last occurrence.
 
@@ -515,7 +517,7 @@ These notice types are currently available:
 
 <!-- TODO: * `warning`: Pebble warnings are implemented in terms of notices. The key for this type of notice is the human-readable warning message. -->
 
-To record `custom` notices, use `pebble notify`:
+To record `custom` notices, use `pebble notify` -- the notice user ID will be set to the client's user ID:
 
 ```
 $ pebble notify example.com/foo
@@ -532,9 +534,9 @@ The `pebble notices` command lists notices not yet acknowledged, ordered by the 
 
 ```
 $ pebble notices
-ID   Type    Key              First                Repeated             Occ
-1    custom  example.com/foo  today at 16:16 NZST  today at 16:16 NZST  3
-2    custom  other.com/bar    today at 16:16 NZST  today at 16:16 NZST  1
+ID   User    Type    Key              First                Repeated             Occurrences
+1    1000    custom  example.com/foo  today at 16:16 NZST  today at 16:16 NZST  3
+2    public  custom  other.com/bar    today at 16:16 NZST  today at 16:16 NZST  1
 ```
 
 To fetch details about a single notice, use `pebble notice`, which displays the output in YAML format. You can fetch a notice either by ID or by type/key combination.
@@ -544,6 +546,7 @@ To fetch the notice with ID "1":
 ```
 $ pebble notice 1
 id: "1"
+user-id: 1000
 type: custom
 key: example.com/foo
 first-occurred: 2023-09-15T04:16:09.179395298Z
@@ -558,6 +561,7 @@ To fetch the notice with type "custom" and key "other.com/bar":
 ```
 $ pebble notice custom other.com/bar
 id: "2"
+user-id: public
 type: custom
 key: other.com/bar
 first-occurred: 2023-09-15T04:16:17.180049768Z
