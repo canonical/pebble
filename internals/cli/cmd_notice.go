@@ -48,7 +48,7 @@ func init() {
 		Description: cmdNoticeDescription,
 
 		ArgsHelp: map[string]string{
-			"--uid": `Look up notice from user with this UID (admin only)`,
+			"--uid": `Look up notice from user with this UID (admin only; 2-arg variant only)`,
 		},
 		New: func(opts *CmdOptions) flags.Commander {
 			return &cmdNotice{client: opts.Client}
