@@ -28,6 +28,8 @@ format. Layers are combined according to the override rules defined in them.
 
 type cmdPlan struct {
 	client *client.Client
+
+	Debug bool `long:"debug"`
 }
 
 func init() {
@@ -35,6 +37,9 @@ func init() {
 		Name:        "plan",
 		Summary:     cmdPlanSummary,
 		Description: cmdPlanDescription,
+		ArgsHelp: map[string]string{
+			"--debug": "Return the plan with debug information",
+		},
 		New: func(opts *CmdOptions) flags.Commander {
 			return &cmdPlan{client: opts.Client}
 		},
@@ -45,7 +50,7 @@ func (cmd *cmdPlan) Execute(args []string) error {
 	if len(args) > 0 {
 		return ErrExtraArgs
 	}
-	planYAML, err := cmd.client.PlanBytes(&client.PlanOptions{})
+	planYAML, err := cmd.client.PlanBytes(&client.PlanOptions{Debug: cmd.Debug})
 	if err != nil {
 		return err
 	}

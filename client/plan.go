@@ -56,12 +56,17 @@ func (client *Client) AddLayer(opts *AddLayerOptions) error {
 	return err
 }
 
-type PlanOptions struct{}
+type PlanOptions struct {
+	Debug bool
+}
 
 // PlanBytes fetches the plan in YAML format.
-func (client *Client) PlanBytes(_ *PlanOptions) (data []byte, err error) {
+func (client *Client) PlanBytes(opts *PlanOptions) (data []byte, err error) {
 	query := url.Values{
 		"format": []string{"yaml"},
+	}
+	if opts.Debug {
+		query.Add("debug", "true")
 	}
 	var dataStr string
 	_, err = client.doSync("GET", "/v1/plan", query, nil, nil, &dataStr)
