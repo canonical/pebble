@@ -1,21 +1,16 @@
-// -*- Mode: Go; indent-tabs-mode: t -*-
-
-/*
- * Copyright (c) 2016 Canonical Ltd
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 3 as
- * published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- *
- */
+// Copyright (c) 2024 Canonical Ltd
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License version 3 as
+// published by the Free Software Foundation.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package state
 
@@ -23,8 +18,11 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
+
+	"github.com/canonical/pebble/internals/logger"
 )
 
 // Status is used for status values for changes and tasks.
@@ -37,7 +35,8 @@ const (
 	// to an aggregation of its tasks' statuses. See Change.Status for details.
 	DefaultStatus Status = 0
 
-	// HoldStatus means the task should not run, perhaps as a consequence of an error on another task.
+	// HoldStatus means the task should not run for the moment, perhaps as a
+	// consequence of an error on another task.
 	HoldStatus Status = 1
 
 	// DoStatus means the change or task is ready to start.
@@ -65,6 +64,10 @@ const (
 	// ErrorStatus means the change or task has errored out while running or being undone.
 	ErrorStatus Status = 9
 
+	// WaitStatus means the task was accomplished successfully but some
+	// external event needs to happen before work can progress further.
+	WaitStatus Status = 10
+
 	nStatuses = iota
 )
 
@@ -88,6 +91,8 @@ func (s Status) String() string {
 		return "Doing"
 	case DoneStatus:
 		return "Done"
+	case WaitStatus:
+		return "Wait"
 	case AbortStatus:
 		return "Abort"
 	case UndoStatus:
@@ -104,6 +109,18 @@ func (s Status) String() string {
 	panic(fmt.Sprintf("internal error: unknown task status code: %d", s))
 }
 
+// taskWaitComputeStatus is used while computing the wait status of a
+// change. It keeps track of whether a task is waiting or not waiting, or the
+// computation for it is still in-progress to detect cyclic dependencies.
+type taskWaitComputeStatus int
+
+const (
+	taskWaitStatusNotComputed taskWaitComputeStatus = iota
+	taskWaitStatusComputing
+	taskWaitStatusNotWaiting
+	taskWaitStatusWaiting
+)
+
 // Change represents a tracked modification to the system state.
 //
 // The Change provides both the justification for individual tasks
@@ -115,16 +132,16 @@ func (s Status) String() string {
 // while the individual Task values would track the running of
 // the hooks themselves.
 type Change struct {
-	state   *State
-	id      string
-	kind    string
-	summary string
-	status  Status
-	clean   bool
-	data    customData
-	taskIDs []string
-	lanes   int
-	ready   chan struct{}
+	state              *State
+	id                 string
+	kind               string
+	summary            string
+	status             Status
+	clean              bool
+	data               customData
+	taskIDs            []string
+	ready              chan struct{}
+	lastObservedStatus Status
 
 	spawnTime time.Time
 	readyTime time.Time
@@ -157,7 +174,6 @@ type marshalledChange struct {
 	Clean   bool                        `json:"clean,omitempty"`
 	Data    map[string]*json.RawMessage `json:"data,omitempty"`
 	TaskIDs []string                    `json:"task-ids,omitempty"`
-	Lanes   int                         `json:"lanes,omitempty"`
 
 	SpawnTime time.Time  `json:"spawn-time"`
 	ReadyTime *time.Time `json:"ready-time,omitempty"`
@@ -178,7 +194,6 @@ func (c *Change) MarshalJSON() ([]byte, error) {
 		Clean:   c.clean,
 		Data:    c.data,
 		TaskIDs: c.taskIDs,
-		Lanes:   c.lanes,
 
 		SpawnTime: c.spawnTime,
 		ReadyTime: readyTime,
@@ -206,7 +221,6 @@ func (c *Change) UnmarshalJSON(data []byte) error {
 	}
 	c.data = custData
 	c.taskIDs = unmarshalled.TaskIDs
-	c.lanes = unmarshalled.Lanes
 	c.ready = make(chan struct{})
 	c.spawnTime = unmarshalled.SpawnTime
 	if unmarshalled.ReadyTime != nil {
@@ -251,12 +265,19 @@ func (c *Change) Get(key string, value interface{}) error {
 	return c.data.get(key, value)
 }
 
+// Has returns whether the provided key has an associated value.
+func (c *Change) Has(key string) bool {
+	c.state.reading()
+	return c.data.has(key)
+}
+
 var statusOrder = []Status{
 	AbortStatus,
 	UndoingStatus,
 	UndoStatus,
 	DoingStatus,
 	DoStatus,
+	WaitStatus,
 	ErrorStatus,
 	UndoneStatus,
 	DoneStatus,
@@ -269,32 +290,138 @@ func init() {
 	}
 }
 
+func (c *Change) isTaskWaiting(visited map[string]taskWaitComputeStatus, t *Task, deps []*Task) bool {
+	taskID := t.ID()
+	// Retrieve the compute status of the wait for the task, if not
+	// computed this defaults to 0 (taskWaitStatusNotComputed).
+	computeStatus := visited[taskID]
+	switch computeStatus {
+	case taskWaitStatusComputing:
+		// Cyclic dependency detected, return false to short-circuit.
+		logger.Noticef("detected cyclic dependencies for task %q in change %q", t.Kind(), t.Change().Kind())
+		// Make sure errors show up in "pebble change <id>" too
+		t.Logf("detected cyclic dependencies for task %q in change %q", t.Kind(), t.Change().Kind())
+		return false
+	case taskWaitStatusWaiting, taskWaitStatusNotWaiting:
+		return computeStatus == taskWaitStatusWaiting
+	}
+	visited[taskID] = taskWaitStatusComputing
+
+	var isWaiting bool
+depscheck:
+	for _, wt := range deps {
+		switch wt.Status() {
+		case WaitStatus:
+			isWaiting = true
+		// States that can be valid when waiting
+		// - Done, Undone, ErrorStatus, HoldStatus
+		case DoneStatus, UndoneStatus, ErrorStatus, HoldStatus:
+			continue
+		// For 'Do' and 'Undo' we have to check whether the task is waiting
+		// for any dependencies. The logic is the same, but the set of tasks
+		// varies.
+		case DoStatus:
+			isWaiting = c.isTaskWaiting(visited, wt, wt.WaitTasks())
+			if !isWaiting {
+				// Cancel early if we detect something is runnable.
+				break depscheck
+			}
+		case UndoStatus:
+			isWaiting = c.isTaskWaiting(visited, wt, wt.HaltTasks())
+			if !isWaiting {
+				// Cancel early if we detect something is runnable.
+				break depscheck
+			}
+		default:
+			// When we determine the change can not be in a wait-state then
+			// break early.
+			isWaiting = false
+			break depscheck
+		}
+	}
+	if isWaiting {
+		visited[taskID] = taskWaitStatusWaiting
+	} else {
+		visited[taskID] = taskWaitStatusNotWaiting
+	}
+	return isWaiting
+}
+
+// isChangeWaiting should only ever return true iff it determines all tasks in Do/Undo
+// are blocked by tasks in either of three states: 'DoneStatus', 'UndoneStatus' or 'WaitStatus',
+// if this fails, we default to the normal status ordering logic.
+func (c *Change) isChangeWaiting() bool {
+	// Since we might visit tasks more than once, we store results to avoid recomputing them.
+	visited := make(map[string]taskWaitComputeStatus)
+	for _, t := range c.Tasks() {
+		switch t.Status() {
+		case WaitStatus, DoneStatus, UndoneStatus, ErrorStatus, HoldStatus:
+			continue
+		case DoStatus:
+			if !c.isTaskWaiting(visited, t, t.WaitTasks()) {
+				return false
+			}
+		case UndoStatus:
+			if !c.isTaskWaiting(visited, t, t.HaltTasks()) {
+				return false
+			}
+		default:
+			return false
+		}
+	}
+	// If we end up here, then return true as we know we
+	// have at least one waiter in this change.
+	return true
+}
+
 // Status returns the current status of the change.
 // If the status was not explicitly set the result is derived from the status
 // of the individual tasks related to the change, according to the following
 // decision sequence:
 //
+//   - With all pending tasks blocked by other tasks in WaitStatus, return WaitStatus
 //   - With at least one task in DoStatus, return DoStatus
 //   - With at least one task in ErrorStatus, return ErrorStatus
 //   - Otherwise, return DoneStatus
 func (c *Change) Status() Status {
 	c.state.reading()
-	if c.status == DefaultStatus {
-		if len(c.taskIDs) == 0 {
-			return HoldStatus
-		}
-		statusStats := make([]int, nStatuses)
-		for _, tid := range c.taskIDs {
-			statusStats[c.state.tasks[tid].Status()]++
-		}
-		for _, s := range statusOrder {
-			if statusStats[s] > 0 {
-				return s
-			}
-		}
-		panic(fmt.Sprintf("internal error: cannot process change status: %v", statusStats))
+	if c.status != DefaultStatus {
+		return c.status
 	}
-	return c.status
+
+	if len(c.taskIDs) == 0 {
+		return HoldStatus
+	}
+
+	statusStats := make([]int, nStatuses)
+	for _, tid := range c.taskIDs {
+		statusStats[c.state.tasks[tid].Status()]++
+	}
+
+	// If the change has any waiters, check for any runnable tasks
+	// or whether it's completely blocked by waiters.
+	if statusStats[WaitStatus] > 0 {
+		// Only if the change has all tasks blocked we return WaitStatus.
+		if c.isChangeWaiting() {
+			return WaitStatus
+		}
+	}
+
+	// Otherwise we return the current status with the highest priority.
+	for _, s := range statusOrder {
+		if statusStats[s] > 0 {
+			return s
+		}
+	}
+	panic(fmt.Sprintf("internal error: cannot process change status: %v", statusStats))
+}
+
+func (c *Change) notifyStatusChange(new Status) {
+	if c.lastObservedStatus == new {
+		return
+	}
+	c.state.notifyChangeStatusChangedHandlers(c, c.lastObservedStatus, new)
+	c.lastObservedStatus = new
 }
 
 // SetStatus sets the change status, overriding the default behavior (see Status method).
@@ -304,6 +431,7 @@ func (c *Change) SetStatus(s Status) {
 	if s.Ready() {
 		c.markReady()
 	}
+	c.notifyStatusChange(c.Status())
 }
 
 func (c *Change) markReady() {
@@ -322,15 +450,10 @@ func (c *Change) Ready() <-chan struct{} {
 	return c.ready
 }
 
-// taskStatusChanged is called by tasks when their status is changed,
-// to give the opportunity for the change to close its ready channel.
-func (c *Change) taskStatusChanged(t *Task, old, new Status) {
-	if old.Ready() == new.Ready() {
-		return
-	}
+func (c *Change) detectChangeReady(excludeTask *Task) {
 	for _, tid := range c.taskIDs {
 		task := c.state.tasks[tid]
-		if task != t && !task.status.Ready() {
+		if task != excludeTask && !task.status.Ready() {
 			return
 		}
 	}
@@ -341,6 +464,21 @@ func (c *Change) taskStatusChanged(t *Task, old, new Status) {
 		panic(fmt.Errorf("change %s unexpectedly became unready (%s)", c.ID(), c.Status()))
 	}
 	c.markReady()
+}
+
+// taskStatusChanged is called by tasks when their status is changed,
+// to give the opportunity for the change to close its ready channel, and
+// notify observers of Change changes.
+func (c *Change) taskStatusChanged(t *Task, old, new Status) {
+	cs := c.Status()
+	// If the task changes from ready => unready or unready => ready,
+	// update the ready status for the change.
+	if old.Ready() == new.Ready() {
+		c.notifyStatusChange(cs)
+		return
+	}
+	c.detectChangeReady(t)
+	c.notifyStatusChange(cs)
 }
 
 // IsClean returns whether all tasks in the change have been cleaned. See SetClean.
@@ -519,6 +657,44 @@ func (c *Change) AbortLanes(lanes []int) {
 	c.abortLanes(lanes, make(map[int]bool), make(map[string]bool))
 }
 
+// AbortUnreadyLanes aborts the tasks from lanes that aren't fully ready, where
+// a ready lane is one in which all tasks are ready.
+func (c *Change) AbortUnreadyLanes() {
+	c.state.writing()
+	c.abortUnreadyLanes()
+}
+
+func (c *Change) abortUnreadyLanes() {
+	lanesWithLiveTasks := map[int]bool{}
+
+	for _, tid := range c.taskIDs {
+		t := c.state.tasks[tid]
+		if !t.Status().Ready() {
+			for _, tlane := range t.Lanes() {
+				lanesWithLiveTasks[tlane] = true
+			}
+		}
+	}
+
+	abortLanes := []int{}
+	for lane := range lanesWithLiveTasks {
+		abortLanes = append(abortLanes, lane)
+	}
+	c.abortLanes(abortLanes, make(map[int]bool), make(map[string]bool))
+}
+
+// taskEffectiveStatus returns the 'effective' status. This means it accounts
+// for tasks being in WaitStatus, and instead of returning the WaitStatus we
+// return the actual status. (The status after the wait).
+func taskEffectiveStatus(t *Task) Status {
+	status := t.Status()
+	if status == WaitStatus {
+		// If the task is waiting, then use the effective status instead.
+		status = t.WaitedStatus()
+	}
+	return status
+}
+
 func (c *Change) abortLanes(lanes []int, abortedLanes map[int]bool, seenTasks map[string]bool) {
 	var hasLive = make(map[int]bool)
 	var hasDead = make(map[int]bool)
@@ -528,7 +704,7 @@ NextChangeTask:
 		t := c.state.tasks[tid]
 
 		var live bool
-		switch t.Status() {
+		switch taskEffectiveStatus(t) {
 		case DoStatus, DoingStatus, DoneStatus:
 			live = true
 		}
@@ -579,7 +755,7 @@ func (c *Change) abortTasks(tasks []*Task, abortedLanes map[int]bool, seenTasks 
 			continue
 		}
 		seenTasks[t.id] = true
-		switch t.Status() {
+		switch taskEffectiveStatus(t) {
 		case DoStatus:
 			// Still pending so don't even start.
 			t.SetStatus(HoldStatus)
@@ -606,4 +782,88 @@ func (c *Change) abortTasks(tasks []*Task, abortedLanes map[int]bool, seenTasks 
 	if len(lanes) > 0 {
 		c.abortLanes(lanes, abortedLanes, seenTasks)
 	}
+}
+
+type TaskDependencyCycleError struct {
+	IDs []string
+	msg string
+}
+
+func (e *TaskDependencyCycleError) Error() string { return e.msg }
+
+func (e *TaskDependencyCycleError) Is(err error) bool {
+	_, ok := err.(*TaskDependencyCycleError)
+	return ok
+}
+
+// CheckTaskDependencies checks the tasks in the change for cyclic dependencies
+// and returns an error in such case.
+func (c *Change) CheckTaskDependencies() error {
+	tasks := c.Tasks()
+	// count how many tasks any given non-independent task waits for
+	predecessors := make(map[string]int, len(tasks))
+
+	taskByID := map[string]*Task{}
+	for _, t := range tasks {
+		taskByID[t.id] = t
+		if l := len(t.waitTasks); l > 0 {
+			// only add an entry if the task is not independent
+			predecessors[t.id] = l
+		}
+	}
+
+	// Kahn topological sort: make our way starting with tasks that are
+	// independent (their predecessors count is 0), then visit their direct
+	// successors (halt tasks), and for each reduce their predecessors
+	// count; once the count drops to 0, all direct dependencies of a given
+	// task have been accounted for and the task becomes independent.
+
+	// queue of tasks to check
+	queue := make([]string, 0, len(tasks))
+	// identify all independent tasks
+	for _, t := range tasks {
+		if predecessors[t.id] == 0 {
+			queue = append(queue, t.id)
+		}
+	}
+
+	for len(queue) > 0 {
+		// take the first independent task
+		id := queue[0]
+		queue = queue[1:]
+		// reduce the incoming edge of its successors
+		for _, successor := range taskByID[id].haltTasks {
+			predecessors[successor]--
+			if predecessors[successor] == 0 {
+				// a task that was a successor has become
+				// independent
+				delete(predecessors, successor)
+				queue = append(queue, successor)
+			}
+		}
+	}
+
+	if len(predecessors) != 0 {
+		// tasks that are left cannot have their dependencies satisfied
+		var unsatisfiedTasks []string
+		for id := range predecessors {
+			unsatisfiedTasks = append(unsatisfiedTasks, id)
+		}
+		sort.Strings(unsatisfiedTasks)
+		msg := strings.Builder{}
+		msg.WriteString("dependency cycle involving tasks [")
+		for i, id := range unsatisfiedTasks {
+			t := taskByID[id]
+			msg.WriteString(fmt.Sprintf("%v:%v", t.id, t.kind))
+			if i < len(unsatisfiedTasks)-1 {
+				msg.WriteRune(' ')
+			}
+		}
+		msg.WriteRune(']')
+		return &TaskDependencyCycleError{
+			IDs: unsatisfiedTasks,
+			msg: msg.String(),
+		}
+	}
+	return nil
 }

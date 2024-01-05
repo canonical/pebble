@@ -1,6 +1,7 @@
 package servstate
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -28,7 +29,7 @@ import (
 func TaskServiceRequest(task *state.Task) (*ServiceRequest, error) {
 	req := &ServiceRequest{}
 	err := task.Get("service-request", req)
-	if err != nil && err != state.ErrNoState {
+	if err != nil && !errors.Is(err, state.ErrNoState) {
 		return nil, err
 	}
 	if err == nil {
