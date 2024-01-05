@@ -15,6 +15,7 @@ import (
 
 	"github.com/canonical/pebble/cmd"
 	"github.com/canonical/pebble/internals/cli"
+	"github.com/canonical/pebble/internals/osutil/sys"
 	"github.com/canonical/pebble/internals/testutil"
 )
 
@@ -166,6 +167,37 @@ func (s *PebbleSuite) TestGetEnvPaths(c *C) {
 	pebbleDir, socketPath = cli.GetEnvPaths()
 	c.Assert(pebbleDir, Equals, "/bar")
 	c.Assert(socketPath, Equals, "/path/to/socket")
+}
+
+func (s *PebbleSuite) TestGetAdditionalAdminUIDs(c *C) {
+	defer os.Unsetenv("PEBBLE_ADMINS")
+
+	os.Setenv("PEBBLE_ADMINS", "")
+	uids, err := cli.GetAdditionalAdminUIDs()
+	c.Assert(err, IsNil)
+	c.Assert(uids, HasLen, 0)
+
+	os.Setenv("PEBBLE_ADMINS", "123")
+	uids, err = cli.GetAdditionalAdminUIDs()
+	c.Assert(err, IsNil)
+	c.Assert(uids, DeepEquals, []sys.UserID{123})
+
+	os.Setenv("PEBBLE_ADMINS", "123,345")
+	uids, err = cli.GetAdditionalAdminUIDs()
+	c.Assert(err, IsNil)
+	c.Assert(uids, DeepEquals, []sys.UserID{123, 345})
+
+	os.Setenv("PEBBLE_ADMINS", "123, 345")
+	_, err = cli.GetAdditionalAdminUIDs()
+	c.Assert(err, ErrorMatches, `cannot parse value " 345" in \$PEBBLE_ADMINS: strconv.ParseUint: parsing " 345": invalid syntax`)
+
+	os.Setenv("PEBBLE_ADMINS", "4294967296")
+	_, err = cli.GetAdditionalAdminUIDs()
+	c.Assert(err, ErrorMatches, `cannot parse value "4294967296" in \$PEBBLE_ADMINS: strconv.ParseUint: parsing "4294967296": value out of range`)
+
+	os.Setenv("PEBBLE_ADMINS", "-1")
+	_, err = cli.GetAdditionalAdminUIDs()
+	c.Assert(err, ErrorMatches, `cannot parse value "-1" in \$PEBBLE_ADMINS: strconv.ParseUint: parsing "-1": invalid syntax`)
 }
 
 func (s *PebbleSuite) readCLIState(c *C) map[string]any {

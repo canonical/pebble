@@ -26,6 +26,7 @@ import (
 
 	"github.com/canonical/x-go/strutil"
 
+	"github.com/canonical/pebble/internals/osutil/sys"
 	"github.com/canonical/pebble/internals/overlord/state"
 )
 
@@ -49,13 +50,12 @@ func v1GetNotices(c *Command, r *http.Request, _ *UserState) Response {
 	if err != nil {
 		return statusForbidden("cannot determine UID of request, so cannot retrieve notices")
 	}
-	daemonUID := uint32(sysGetuid())
 
 	// By default, return notices with the request UID and public notices.
 	userID := &requestUID
 
 	if len(query["user-id"]) > 0 {
-		if !isAdmin(requestUID, daemonUID) {
+		if !isAdmin(requestUID, c.d.admins) {
 			return statusForbidden(`only admins may use the "user-id" filter`)
 		}
 		userID, err = sanitizeUserIDFilter(query["user-id"])
@@ -65,7 +65,7 @@ func v1GetNotices(c *Command, r *http.Request, _ *UserState) Response {
 	}
 
 	if len(query["select"]) > 0 {
-		if !isAdmin(requestUID, daemonUID) {
+		if !isAdmin(requestUID, c.d.admins) {
 			return statusForbidden(`only admins may use the "select" filter`)
 		}
 		if len(query["user-id"]) > 0 {
@@ -181,8 +181,13 @@ func sanitizeTypesFilter(queryTypes []string) ([]state.NoticeType, error) {
 	return types, nil
 }
 
-func isAdmin(requestUID, daemonUID uint32) bool {
-	return requestUID == 0 || requestUID == daemonUID
+func isAdmin(requestUID uint32, admins []sys.UserID) bool {
+	for _, adminUID := range admins {
+		if sys.UserID(requestUID) == adminUID {
+			return true
+		}
+	}
+	return false
 }
 
 func v1PostNotices(c *Command, r *http.Request, _ *UserState) Response {
@@ -252,7 +257,6 @@ func v1GetNotice(c *Command, r *http.Request, _ *UserState) Response {
 	if err != nil {
 		return statusForbidden("cannot determine UID of request, so cannot retrieve notice")
 	}
-	daemonUID := uint32(sysGetuid())
 	noticeID := muxVars(r)["id"]
 	st := c.d.overlord.State()
 	st.Lock()
@@ -261,18 +265,18 @@ func v1GetNotice(c *Command, r *http.Request, _ *UserState) Response {
 	if notice == nil {
 		return statusNotFound("cannot find notice with ID %q", noticeID)
 	}
-	if !noticeViewableByUser(notice, requestUID, daemonUID) {
+	if !noticeViewableByUser(notice, requestUID, c.d.admins) {
 		return statusForbidden("not allowed to access notice with id %q", noticeID)
 	}
 	return SyncResponse(notice)
 }
 
-func noticeViewableByUser(notice *state.Notice, requestUID, daemonUID uint32) bool {
+func noticeViewableByUser(notice *state.Notice, requestUID uint32, admins []sys.UserID) bool {
 	userID, isSet := notice.UserID()
 	if !isSet {
 		return true
 	}
-	if isAdmin(requestUID, daemonUID) {
+	if isAdmin(requestUID, admins) {
 		return true
 	}
 	return requestUID == userID

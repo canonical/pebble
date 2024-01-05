@@ -52,11 +52,15 @@ func (s *apiSuite) muxVars(*http.Request) map[string]string {
 	return s.vars
 }
 
-func (s *apiSuite) daemon(c *check.C) *Daemon {
+func (s *apiSuite) daemon(c *check.C, opts ...daemonOpt) *Daemon {
 	if s.d != nil {
 		panic("called daemon() twice")
 	}
-	d, err := New(&Options{Dir: s.pebbleDir})
+	o := &Options{Dir: s.pebbleDir}
+	for _, opt := range opts {
+		opt(o)
+	}
+	d, err := New(o)
 	c.Assert(err, check.IsNil)
 	d.addRoutes()
 

@@ -42,7 +42,8 @@ var (
 	WriteWarningTimestamp = writeWarningTimestamp
 	MaybePresentWarnings  = maybePresentWarnings
 
-	GetEnvPaths = getEnvPaths
+	GetEnvPaths            = getEnvPaths
+	GetAdditionalAdminUIDs = getAdditionalAdminUIDs
 )
 
 func FakeIsStdoutTTY(t bool) (restore func()) {

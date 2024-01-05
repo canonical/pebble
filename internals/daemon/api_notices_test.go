@@ -293,7 +293,9 @@ func (s *apiSuite) TestNoticesUserIDAdminDefault(c *C) {
 }
 
 func (s *apiSuite) TestNoticesUserIDAdminFilter(c *C) {
-	s.daemon(c)
+	s.daemon(c, func(o *Options) {
+		o.AdditionalAdminUIDs = []sys.UserID{0xbadd00d}
+	})
 	restore := fakeSysGetuid(0)
 	defer restore()
 
@@ -313,26 +315,28 @@ func (s *apiSuite) TestNoticesUserIDAdminFilter(c *C) {
 
 	noticesCmd := apiCmd("/v1/notices")
 
-	// Test that admin can filter on any user IDs, and always gets public notices too
-	for _, uid := range []uint32{0, 1000, 123} {
-		userIDValues := url.Values{}
-		userIDValues.Add("user-id", strconv.FormatUint(uint64(uid), 10))
-		reqUrl := fmt.Sprintf("/v1/notices?%s", userIDValues.Encode())
-		req, err := http.NewRequest("GET", reqUrl, nil)
-		c.Assert(err, IsNil)
-		req.RemoteAddr = "pid=100;uid=0;socket=;"
-		rsp, ok := noticesCmd.GET(noticesCmd, req, nil).(*resp)
-		c.Assert(ok, Equals, true)
+	for _, adminUID := range []uint32{0, 0xbadd00d} {
+		// Test that admin can filter on any user IDs, and always gets public notices too
+		for _, uid := range []uint32{0, 1000, 123} {
+			userIDValues := url.Values{}
+			userIDValues.Add("user-id", strconv.FormatUint(uint64(uid), 10))
+			reqUrl := fmt.Sprintf("/v1/notices?%s", userIDValues.Encode())
+			req, err := http.NewRequest("GET", reqUrl, nil)
+			c.Assert(err, IsNil)
+			req.RemoteAddr = fmt.Sprintf("pid=100;uid=%d;socket=;", adminUID)
+			rsp, ok := noticesCmd.GET(noticesCmd, req, nil).(*resp)
+			c.Assert(ok, Equals, true)
 
-		c.Check(rsp.Type, Equals, ResponseTypeSync)
-		c.Check(rsp.Status, Equals, http.StatusOK)
-		notices, ok := rsp.Result.([]*state.Notice)
-		c.Assert(ok, Equals, true)
-		c.Assert(notices, HasLen, 2)
-		n := noticeToMap(c, notices[0])
-		c.Assert(n["user-id"], Equals, float64(uid))
-		n = noticeToMap(c, notices[1])
-		c.Assert(n["user-id"], Equals, nil)
+			c.Check(rsp.Type, Equals, ResponseTypeSync)
+			c.Check(rsp.Status, Equals, http.StatusOK)
+			notices, ok := rsp.Result.([]*state.Notice)
+			c.Assert(ok, Equals, true)
+			c.Assert(notices, HasLen, 2)
+			n := noticeToMap(c, notices[0])
+			c.Assert(n["user-id"], Equals, float64(uid))
+			n = noticeToMap(c, notices[1])
+			c.Assert(n["user-id"], Equals, nil)
+		}
 	}
 }
 
@@ -378,9 +382,9 @@ func (s *apiSuite) TestNoticesUserIDsNonAdminDefault(c *C) {
 }
 
 func (s *apiSuite) TestNoticesUserIDsNonAdminFilter(c *C) {
-	s.daemon(c)
 	restore := fakeSysGetuid(0)
 	defer restore()
+	s.daemon(c)
 
 	st := s.d.overlord.State()
 	st.Lock()
@@ -405,9 +409,9 @@ func (s *apiSuite) TestNoticesUserIDsNonAdminFilter(c *C) {
 }
 
 func (s *apiSuite) TestNoticesUnknownRequestUID(c *C) {
-	s.daemon(c)
 	restore := fakeSysGetuid(0)
 	defer restore()
+	s.daemon(c)
 
 	st := s.d.overlord.State()
 	st.Lock()
@@ -430,9 +434,9 @@ func (s *apiSuite) TestNoticesUnknownRequestUID(c *C) {
 }
 
 func (s *apiSuite) TestNoticesWait(c *C) {
-	s.daemon(c)
 	restore := fakeSysGetuid(0)
 	defer restore()
+	s.daemon(c)
 
 	st := s.d.overlord.State()
 	go func() {
@@ -461,9 +465,9 @@ func (s *apiSuite) TestNoticesWait(c *C) {
 }
 
 func (s *apiSuite) TestNoticesTimeout(c *C) {
-	s.daemon(c)
 	restore := fakeSysGetuid(0)
 	defer restore()
+	s.daemon(c)
 
 	req, err := http.NewRequest("GET", "/v1/notices?timeout=1ms", nil)
 	c.Assert(err, IsNil)
@@ -480,9 +484,9 @@ func (s *apiSuite) TestNoticesTimeout(c *C) {
 }
 
 func (s *apiSuite) TestNoticesRequestCancelled(c *C) {
-	s.daemon(c)
 	restore := fakeSysGetuid(0)
 	defer restore()
+	s.daemon(c)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -552,9 +556,9 @@ func (s *apiSuite) testNoticesBadRequest(c *C, query, errorMatch string) {
 }
 
 func (s *apiSuite) TestAddNotice(c *C) {
-	s.daemon(c)
 	restore := fakeSysGetuid(0)
 	defer restore()
+	s.daemon(c)
 
 	start := time.Now()
 	body := []byte(`{
@@ -612,9 +616,9 @@ func (s *apiSuite) TestAddNotice(c *C) {
 }
 
 func (s *apiSuite) TestAddNoticeMinimal(c *C) {
-	s.daemon(c)
 	restore := fakeSysGetuid(0)
 	defer restore()
+	s.daemon(c)
 
 	body := []byte(`{
 		"action": "add",
@@ -657,9 +661,9 @@ func (s *apiSuite) TestAddNoticeMinimal(c *C) {
 }
 
 func (s *apiSuite) TestAddNoticeInvalidRequestUid(c *C) {
-	s.daemon(c)
 	restore := fakeSysGetuid(0)
 	defer restore()
+	s.daemon(c)
 
 	body := []byte(`{
 		"action": "add",
@@ -751,9 +755,9 @@ func (s *apiSuite) testAddNoticeBadRequest(c *C, body, errorMatch string) {
 }
 
 func (s *apiSuite) TestNotice(c *C) {
-	s.daemon(c)
 	restore := fakeSysGetuid(0)
 	defer restore()
+	s.daemon(c)
 
 	st := s.d.overlord.State()
 	st.Lock()
@@ -802,9 +806,9 @@ func (s *apiSuite) TestNotice(c *C) {
 }
 
 func (s *apiSuite) TestNoticeNotFound(c *C) {
-	s.daemon(c)
 	restore := fakeSysGetuid(0)
 	defer restore()
+	s.daemon(c)
 
 	req, err := http.NewRequest("GET", "/v1/notices/1234", nil)
 	c.Assert(err, IsNil)
@@ -819,9 +823,9 @@ func (s *apiSuite) TestNoticeNotFound(c *C) {
 }
 
 func (s *apiSuite) TestNoticeUnknownRequestUID(c *C) {
-	s.daemon(c)
 	restore := fakeSysGetuid(0)
 	defer restore()
+	s.daemon(c)
 
 	req, err := http.NewRequest("GET", "/v1/notices/1234", nil)
 	c.Assert(err, IsNil)
@@ -838,9 +842,9 @@ func (s *apiSuite) TestNoticeUnknownRequestUID(c *C) {
 }
 
 func (s *apiSuite) TestNoticeNotAllowed(c *C) {
-	s.daemon(c)
 	restore := fakeSysGetuid(0)
 	defer restore()
+	s.daemon(c)
 
 	st := s.d.overlord.State()
 	st.Lock()

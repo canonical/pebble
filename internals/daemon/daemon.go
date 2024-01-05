@@ -77,6 +77,10 @@ type Options struct {
 	// OverlordExtension is an optional interface used to extend the capabilities
 	// of the Overlord.
 	OverlordExtension overlord.Extension
+
+	// AdditionalAdminUIDs is an optional list of UIDs that can access the API
+	// as an administrator.
+	AdditionalAdminUIDs []sys.UserID
 }
 
 // A Daemon listens for requests and routes them to the right command
@@ -97,6 +101,7 @@ type Daemon struct {
 	tomb                tomb.Tomb
 	router              *mux.Router
 	standbyOpinions     *standby.StandbyOpinions
+	admins              []sys.UserID
 
 	// set to what kind of restart was requested (if any)
 	requestedRestart restart.RestartType
@@ -203,9 +208,11 @@ func (c *Command) canAccess(r *http.Request, user *UserState) accessResult {
 		return accessUnauthorized
 	}
 
-	if uid == 0 || sys.UserID(uid) == sysGetuid() {
-		// Superuser and process owner can do anything.
-		return accessOK
+	// Admins can do anything.
+	for _, adminUID := range c.d.admins {
+		if sys.UserID(uid) == adminUID {
+			return accessOK
+		}
 	}
 
 	if c.AdminOnly {
@@ -863,6 +870,10 @@ func New(opts *Options) (*Daemon, error) {
 		untrustedSocketPath: opts.SocketPath + ".untrusted",
 		httpAddress:         opts.HTTPAddress,
 	}
+
+	// Superuser and process owner can do anything.
+	d.admins = []sys.UserID{0, sysGetuid()}
+	d.admins = append(d.admins, opts.AdditionalAdminUIDs...)
 
 	ovldOptions := overlord.Options{
 		PebbleDir:      opts.Dir,

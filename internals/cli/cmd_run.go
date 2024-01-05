@@ -20,6 +20,7 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -29,6 +30,7 @@ import (
 	"github.com/canonical/pebble/cmd"
 	"github.com/canonical/pebble/internals/daemon"
 	"github.com/canonical/pebble/internals/logger"
+	"github.com/canonical/pebble/internals/osutil/sys"
 	"github.com/canonical/pebble/internals/systemd"
 )
 
@@ -157,9 +159,16 @@ func runDaemon(rcmd *cmdRun, ch chan os.Signal, ready chan<- func()) error {
 			return err
 		}
 	}
+
+	additionalAdminUIDs, err := getAdditionalAdminUIDs()
+	if err != nil {
+		return err
+	}
+
 	dopts := daemon.Options{
-		Dir:        pebbleDir,
-		SocketPath: socketPath,
+		Dir:                 pebbleDir,
+		SocketPath:          socketPath,
+		AdditionalAdminUIDs: additionalAdminUIDs,
 	}
 	if rcmd.Verbose {
 		dopts.ServiceOutput = os.Stdout
@@ -274,4 +283,23 @@ func convertArgs(args [][]string) (map[string][]string, error) {
 	}
 
 	return mappedArgs, nil
+}
+
+// getAdditionalAdminUIDs parses additional admin user ids passed in via the PEBBLE_ADMINS
+// environment variable.
+func getAdditionalAdminUIDs() ([]sys.UserID, error) {
+	envValue := os.Getenv("PEBBLE_ADMINS")
+	if envValue == "" {
+		return nil, nil
+	}
+	uidStrings := strings.Split(envValue, ",")
+	uids := make([]sys.UserID, 0, len(uidStrings))
+	for _, uidStr := range uidStrings {
+		uid64, err := strconv.ParseUint(uidStr, 10, 32)
+		if err != nil {
+			return nil, fmt.Errorf("cannot parse value %q in $PEBBLE_ADMINS: %w", uidStr, err)
+		}
+		uids = append(uids, sys.UserID(uid64))
+	}
+	return uids, nil
 }
