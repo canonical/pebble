@@ -60,6 +60,10 @@ type Options struct {
 	// Dir is the pebble directory where all setup is found. Defaults to /var/lib/pebble/default.
 	Dir string
 
+	// ImportDirs is a list of directories similar to Dir (e.g. /var/lib/pebble/default) which contain
+	// layers to be imported.
+	ImportDirs []string
+
 	// SocketPath is an optional path for the unix socket used for the client
 	// to communicate with the daemon. Defaults to a hidden (dotted) name inside
 	// the pebble directory.
@@ -865,10 +869,11 @@ func New(opts *Options) (*Daemon, error) {
 	}
 
 	ovldOptions := overlord.Options{
-		PebbleDir:      opts.Dir,
-		RestartHandler: d,
-		ServiceOutput:  opts.ServiceOutput,
-		Extension:      opts.OverlordExtension,
+		PebbleDir:        opts.Dir,
+		PebbleImportDirs: opts.ImportDirs,
+		RestartHandler:   d,
+		ServiceOutput:    opts.ServiceOutput,
+		Extension:        opts.OverlordExtension,
 	}
 
 	ovld, err := overlord.New(&ovldOptions)

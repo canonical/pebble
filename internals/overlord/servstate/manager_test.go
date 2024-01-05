@@ -833,6 +833,19 @@ func (s *S) TestServices(c *C) {
 	})
 }
 
+func (s *S) TestImportedServices(c *C) {
+	s.setupMultiImportServiceManager(c)
+	services, err := s.manager.Services(nil)
+	c.Assert(err, IsNil)
+	c.Assert(services, DeepEquals, []*servstate.ServiceInfo{
+		{Name: "test1", Current: servstate.StatusInactive, Startup: servstate.StartupEnabled},
+		{Name: "test2", Current: servstate.StatusInactive, Startup: servstate.StartupDisabled},
+		{Name: "test3", Current: servstate.StatusInactive, Startup: servstate.StartupDisabled},
+		{Name: "test4", Current: servstate.StatusInactive, Startup: servstate.StartupDisabled},
+		{Name: "test5", Current: servstate.StatusInactive, Startup: servstate.StartupDisabled},
+	})
+}
+
 func (s *S) TestEnvironment(c *C) {
 	s.setupDefaultServiceManager(c)
 	// Setup new state and add "envtest" layer
@@ -1850,7 +1863,28 @@ func (s *S) setupDefaultServiceManager(c *C) {
 	err = ioutil.WriteFile(filepath.Join(layers, "002-two.yaml"), []byte(planLayer2), 0644)
 	c.Assert(err, IsNil)
 
-	s.manager, err = servstate.NewManager(s.st, s.runner, s.dir, s.logOutput, testRestarter{s.stopDaemon}, fakeLogManager{})
+	s.manager, err = servstate.NewManager(s.st, s.runner, s.dir, nil, s.logOutput, testRestarter{s.stopDaemon}, fakeLogManager{})
+	c.Assert(err, IsNil)
+}
+
+// setupMultiImportServiceManager is the same as setupDefaultServiceManager, but uses multiple import directories.
+func (s *S) setupMultiImportServiceManager(c *C) {
+	importDir := c.MkDir()
+	importLayers := filepath.Join(importDir, "layers")
+	err := os.Mkdir(importLayers, 0755)
+	c.Assert(err, IsNil)
+
+	data := fmt.Sprintf(planLayer1, s.insertDoneCheck(c, "test1"), s.insertDoneCheck(c, "test2"))
+	err = ioutil.WriteFile(filepath.Join(importLayers, "001-base.yaml"), []byte(data), 0644)
+	c.Assert(err, IsNil)
+
+	layers := filepath.Join(s.dir, "layers")
+	err = os.Mkdir(layers, 0755)
+	c.Assert(err, IsNil)
+	err = ioutil.WriteFile(filepath.Join(layers, "001-two.yaml"), []byte(planLayer2), 0644)
+	c.Assert(err, IsNil)
+
+	s.manager, err = servstate.NewManager(s.st, s.runner, s.dir, []string{importDir}, s.logOutput, testRestarter{s.stopDaemon}, fakeLogManager{})
 	c.Assert(err, IsNil)
 }
 
@@ -1860,7 +1894,7 @@ func (s *S) setupEmptyServiceManager(c *C) {
 	dir := c.MkDir()
 	err := os.Mkdir(filepath.Join(dir, "layers"), 0755)
 	c.Assert(err, IsNil)
-	s.manager, err = servstate.NewManager(s.st, s.runner, dir, nil, nil, fakeLogManager{})
+	s.manager, err = servstate.NewManager(s.st, s.runner, dir, nil, nil, nil, fakeLogManager{})
 	c.Assert(err, IsNil)
 }
 

@@ -18,9 +18,10 @@ import (
 )
 
 type ServiceManager struct {
-	state     *state.State
-	runner    *state.TaskRunner
-	pebbleDir string
+	state            *state.State
+	runner           *state.TaskRunner
+	pebbleDir        string
+	pebbleImportDirs []string
 
 	planLock     sync.Mutex
 	plan         *plan.Plan
@@ -59,16 +60,18 @@ func (e *LabelExists) Error() string {
 	return fmt.Sprintf("layer %q already exists", e.Label)
 }
 
-func NewManager(s *state.State, runner *state.TaskRunner, pebbleDir string, serviceOutput io.Writer, restarter Restarter, logMgr LogManager) (*ServiceManager, error) {
+func NewManager(s *state.State, runner *state.TaskRunner, pebbleDir string, pebbleImportDirs []string,
+	serviceOutput io.Writer, restarter Restarter, logMgr LogManager) (*ServiceManager, error) {
 	manager := &ServiceManager{
-		state:         s,
-		runner:        runner,
-		pebbleDir:     pebbleDir,
-		services:      make(map[string]*serviceData),
-		serviceOutput: serviceOutput,
-		restarter:     restarter,
-		rand:          rand.New(rand.NewSource(time.Now().UnixNano())),
-		logMgr:        logMgr,
+		state:            s,
+		runner:           runner,
+		pebbleDir:        pebbleDir,
+		pebbleImportDirs: pebbleImportDirs,
+		services:         make(map[string]*serviceData),
+		serviceOutput:    serviceOutput,
+		restarter:        restarter,
+		rand:             rand.New(rand.NewSource(time.Now().UnixNano())),
+		logMgr:           logMgr,
 	}
 
 	err := reaper.Start()
@@ -111,7 +114,7 @@ func (m *ServiceManager) updatePlan(p *plan.Plan) {
 }
 
 func (m *ServiceManager) reloadPlan() error {
-	p, err := plan.ReadDir(m.pebbleDir)
+	p, err := plan.Read(m.pebbleDir, m.pebbleImportDirs)
 	if err != nil {
 		return err
 	}

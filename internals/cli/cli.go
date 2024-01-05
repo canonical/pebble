@@ -280,7 +280,7 @@ func Run() error {
 
 	logger.SetLogger(logger.New(os.Stderr, fmt.Sprintf("[%s] ", cmd.ProgramName)))
 
-	_, clientConfig.Socket = getEnvPaths()
+	_, clientConfig.Socket, _ = getEnvPaths()
 
 	cli, err := client.New(&clientConfig)
 	if err != nil {
@@ -363,7 +363,7 @@ func errorToMessage(e error) (normalMessage string, err error) {
 	return msg, nil
 }
 
-func getEnvPaths() (pebbleDir string, socketPath string) {
+func getEnvPaths() (pebbleDir string, socketPath string, pebbleImports []string) {
 	pebbleDir = os.Getenv("PEBBLE")
 	if pebbleDir == "" {
 		pebbleDir = defaultPebbleDir
@@ -372,7 +372,10 @@ func getEnvPaths() (pebbleDir string, socketPath string) {
 	if socketPath == "" {
 		socketPath = filepath.Join(pebbleDir, ".pebble.socket")
 	}
-	return pebbleDir, socketPath
+	if imports := os.Getenv("PEBBLE_IMPORT"); imports != "" {
+		pebbleImports = strings.Split(imports, ":")
+	}
+	return
 }
 
 type cliState struct {
@@ -391,7 +394,7 @@ func loadCLIState() (*cliState, error) {
 	if err != nil {
 		return nil, err
 	}
-	_, socketPath := getEnvPaths()
+	_, socketPath, _ := getEnvPaths()
 	st, ok := fullState.Pebble[socketPath]
 	if !ok {
 		return &cliState{}, nil
@@ -426,7 +429,7 @@ func saveCLIState(state *cliState) error {
 		return err
 	}
 
-	_, socketPath := getEnvPaths()
+	_, socketPath, _ := getEnvPaths()
 	fullState.Pebble[socketPath] = state
 
 	data, err := json.Marshal(fullState)

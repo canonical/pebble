@@ -1410,7 +1410,7 @@ services:
 	c.Assert(combined.Services["srv1"].Command, Equals, "foo --bar")
 }
 
-func (s *S) TestReadDir(c *C) {
+func (s *S) TestPlanRead(c *C) {
 	tempDir := c.MkDir()
 
 	for testIndex, test := range planTests {
@@ -1424,7 +1424,57 @@ func (s *S) TestReadDir(c *C) {
 			err := ioutil.WriteFile(filepath.Join(layersDir, fmt.Sprintf("%03d-layer-%d.yaml", i, i)), reindent(yml), 0644)
 			c.Assert(err, IsNil)
 		}
-		sup, err := plan.ReadDir(pebbleDir)
+		sup, err := plan.Read(pebbleDir, nil)
+		if err == nil {
+			var result *plan.Layer
+			result, err = plan.CombineLayers(sup.Layers...)
+			if err == nil && test.result != nil {
+				c.Assert(result, DeepEquals, test.result)
+			}
+			if err == nil {
+				for name, order := range test.start {
+					p := plan.Plan{Services: result.Services}
+					names, err := p.StartOrder([]string{name})
+					c.Assert(err, IsNil)
+					c.Assert(names, DeepEquals, order)
+				}
+				for name, order := range test.stop {
+					p := plan.Plan{Services: result.Services}
+					names, err := p.StopOrder([]string{name})
+					c.Assert(err, IsNil)
+					c.Assert(names, DeepEquals, order)
+				}
+			}
+		}
+		if err != nil || test.error != "" {
+			if test.error != "" {
+				c.Assert(err, ErrorMatches, test.error)
+			} else {
+				c.Assert(err, IsNil)
+			}
+		}
+	}
+}
+
+func (s *S) TestPlanReadMultiImport(c *C) {
+	tempDir := c.MkDir()
+
+	for testIndex, test := range planTests {
+		c.Logf(test.summary)
+
+		dirs := []string{}
+		for i, yml := range test.input {
+			pebbleDir := filepath.Join(tempDir, fmt.Sprintf("pebble-%03d-%03d", testIndex, i))
+			layersDir := filepath.Join(pebbleDir, "layers")
+			err := os.MkdirAll(layersDir, 0755)
+			c.Assert(err, IsNil)
+
+			err = ioutil.WriteFile(filepath.Join(layersDir, fmt.Sprintf("%03d-layer-%d.yaml", 1, i)), reindent(yml), 0644)
+			c.Assert(err, IsNil)
+
+			dirs = append(dirs, pebbleDir)
+		}
+		sup, err := plan.Read(dirs[len(dirs)-1], dirs[:len(dirs)-1])
 		if err == nil {
 			var result *plan.Layer
 			result, err = plan.CombineLayers(sup.Layers...)
@@ -1466,7 +1516,7 @@ var readDirBadNames = []string{
 	"001-label--label.yaml",
 }
 
-func (s *S) TestReadDirBadNames(c *C) {
+func (s *S) TestPlanReadBadNames(c *C) {
 	pebbleDir := c.MkDir()
 	layersDir := filepath.Join(pebbleDir, "layers")
 	err := os.Mkdir(layersDir, 0755)
@@ -1476,7 +1526,7 @@ func (s *S) TestReadDirBadNames(c *C) {
 		fpath := filepath.Join(layersDir, fname)
 		err := ioutil.WriteFile(fpath, []byte("<ignore>"), 0644)
 		c.Assert(err, IsNil)
-		_, err = plan.ReadDir(pebbleDir)
+		_, err = plan.Read(pebbleDir, nil)
 		c.Assert(err.Error(), Equals, fmt.Sprintf("invalid layer filename: %q (must look like \"123-some-label.yaml\")", fname))
 		err = os.Remove(fpath)
 		c.Assert(err, IsNil)
@@ -1484,11 +1534,11 @@ func (s *S) TestReadDirBadNames(c *C) {
 }
 
 var readDirDupNames = [][]string{
-	{"001-bar.yaml", "001-foo.yaml"},
-	{"001-foo.yaml", "002-foo.yaml"},
+	{"001-bar.yaml", "001-foo.yaml", "order 1"},
+	{"001-foo.yaml", "002-foo.yaml", "label \"foo\""},
 }
 
-func (s *S) TestReadDirDupNames(c *C) {
+func (s *S) TestPlanReadDupNames(c *C) {
 	pebbleDir := c.MkDir()
 	layersDir := filepath.Join(pebbleDir, "layers")
 	err := os.Mkdir(layersDir, 0755)
@@ -1500,14 +1550,40 @@ func (s *S) TestReadDirDupNames(c *C) {
 			err := ioutil.WriteFile(fpath, []byte("summary: ignore"), 0644)
 			c.Assert(err, IsNil)
 		}
-		_, err = plan.ReadDir(pebbleDir)
-		c.Assert(err.Error(), Equals, fmt.Sprintf("invalid layer filename: %q not unique (have %q already)", fnames[1], fnames[0]))
+		_, err = plan.Read(pebbleDir, nil)
+		c.Assert(err.Error(), Equals, fmt.Sprintf("invalid layer filename: %q not unique (have %q already with same %s)", fnames[1], fnames[0], fnames[2]))
 		for _, fname := range fnames {
 			fpath := filepath.Join(layersDir, fname)
 			err = os.Remove(fpath)
 			c.Assert(err, IsNil)
 		}
 	}
+}
+
+func (s *S) TestPlanReadDupLabelsMultiImport(c *C) {
+	importDir := c.MkDir()
+	importLayersDir := filepath.Join(importDir, "layers")
+	err := os.Mkdir(importLayersDir, 0755)
+	c.Assert(err, IsNil)
+	err = ioutil.WriteFile(filepath.Join(importLayersDir, "001-bar.yaml"), []byte("summary: ignore"), 0644)
+	c.Assert(err, IsNil)
+	err = ioutil.WriteFile(filepath.Join(importLayersDir, "002-foo.yaml"), []byte("summary: ignore"), 0644)
+	c.Assert(err, IsNil)
+
+	pebbleDir := c.MkDir()
+	layersDir := filepath.Join(pebbleDir, "layers")
+	err = os.Mkdir(layersDir, 0755)
+	c.Assert(err, IsNil)
+	err = ioutil.WriteFile(filepath.Join(layersDir, "001-baz.yaml"), []byte("summary: ignore"), 0644)
+	c.Assert(err, IsNil)
+	err = ioutil.WriteFile(filepath.Join(layersDir, "002-kool.yaml"), []byte("summary: ignore"), 0644)
+	c.Assert(err, IsNil)
+	err = ioutil.WriteFile(filepath.Join(layersDir, "003-foo.yaml"), []byte("summary: ignore"), 0644)
+	c.Assert(err, IsNil)
+
+	_, err = plan.Read(pebbleDir, []string{importDir})
+	c.Assert(err.Error(), Equals, fmt.Sprintf("invalid layer filename: %q not unique (have %q already with same label \"foo\")",
+		"003-foo.yaml", filepath.Join(importLayersDir, "002-foo.yaml")))
 }
 
 func (s *S) TestMarshalLayer(c *C) {

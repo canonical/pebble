@@ -150,22 +150,40 @@ func (s *PebbleSuite) TestErrorResult(c *C) {
 }
 
 func (s *PebbleSuite) TestGetEnvPaths(c *C) {
+	defer func() {
+		os.Unsetenv("PEBBLE")
+		os.Unsetenv("PEBBLE_SOCKET")
+		os.Unsetenv("PEBBLE_IMPORT")
+	}()
+
 	os.Setenv("PEBBLE", "")
 	os.Setenv("PEBBLE_SOCKET", "")
-	pebbleDir, socketPath := cli.GetEnvPaths()
+	os.Setenv("PEBBLE_IMPORT", "")
+	pebbleDir, socketPath, pebbleImportDirs := cli.GetEnvPaths()
 	c.Assert(pebbleDir, Equals, "/var/lib/pebble/default")
 	c.Assert(socketPath, Equals, "/var/lib/pebble/default/.pebble.socket")
+	c.Assert(pebbleImportDirs, HasLen, 0)
 
 	os.Setenv("PEBBLE", "/foo")
-	pebbleDir, socketPath = cli.GetEnvPaths()
+	pebbleDir, socketPath, pebbleImportDirs = cli.GetEnvPaths()
 	c.Assert(pebbleDir, Equals, "/foo")
 	c.Assert(socketPath, Equals, "/foo/.pebble.socket")
+	c.Assert(pebbleImportDirs, HasLen, 0)
 
 	os.Setenv("PEBBLE", "/bar")
 	os.Setenv("PEBBLE_SOCKET", "/path/to/socket")
-	pebbleDir, socketPath = cli.GetEnvPaths()
+	pebbleDir, socketPath, pebbleImportDirs = cli.GetEnvPaths()
 	c.Assert(pebbleDir, Equals, "/bar")
 	c.Assert(socketPath, Equals, "/path/to/socket")
+	c.Assert(pebbleImportDirs, HasLen, 0)
+
+	os.Setenv("PEBBLE_IMPORT", "/a:/b")
+	_, _, pebbleImportDirs = cli.GetEnvPaths()
+	c.Assert(pebbleImportDirs, DeepEquals, []string{"/a", "/b"})
+
+	os.Setenv("PEBBLE_IMPORT", "/a")
+	_, _, pebbleImportDirs = cli.GetEnvPaths()
+	c.Assert(pebbleImportDirs, DeepEquals, []string{"/a"})
 }
 
 func (s *PebbleSuite) readCLIState(c *C) map[string]any {
@@ -180,7 +198,7 @@ func (s *PebbleSuite) readCLIState(c *C) map[string]any {
 		c.Fatalf("expected socket map, got %#v", fullState["pebble"])
 	}
 
-	_, socketPath := cli.GetEnvPaths()
+	_, socketPath, _ := cli.GetEnvPaths()
 	v, ok := socketMap[socketPath]
 	if !ok {
 		c.Fatalf("expected state map, got %#v", socketMap[socketPath])
@@ -189,7 +207,7 @@ func (s *PebbleSuite) readCLIState(c *C) map[string]any {
 }
 
 func (s *PebbleSuite) writeCLIState(c *C, st map[string]any) {
-	_, socketPath := cli.GetEnvPaths()
+	_, socketPath, _ := cli.GetEnvPaths()
 	fullState := map[string]any{
 		"pebble": map[string]any{
 			socketPath: st,
