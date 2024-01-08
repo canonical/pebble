@@ -1093,15 +1093,13 @@ func (lr *layerReader) ReadDir(dirname string) ([]*Layer, error) {
 }
 
 // ReadAll reads the configuration layers from the "layers" sub-directory in
-// dir, and returns the resulting Plan. If the "layers" sub-directory doesn't
-// exist, it returns a valid Plan with no layers.
-// If importDirs are passed, "layers" sub-directories of each of those
-// importDirs are read before the final dir.
-func ReadAll(dir string, importDirs []string) (*Plan, error) {
+// each directory in dirs, and returns the resulting Plan. If the "layers"
+// sub-directory doesn't exist, no layers are loaded from that directory.
+// Each directory in dirs is loaded in the order they are passed.
+func ReadAll(dirs []string) (*Plan, error) {
 	var layers []*Layer
 
 	lr := &layerReader{}
-	dirs := append(importDirs, dir)
 	for _, dir := range dirs {
 		layersDir := filepath.Join(dir, "layers")
 		_, err := os.Stat(layersDir)
