@@ -1424,7 +1424,7 @@ func (s *S) TestPlanRead(c *C) {
 			err := ioutil.WriteFile(filepath.Join(layersDir, fmt.Sprintf("%03d-layer-%d.yaml", i, i)), reindent(yml), 0644)
 			c.Assert(err, IsNil)
 		}
-		sup, err := plan.Read(pebbleDir, nil)
+		sup, err := plan.ReadAll(pebbleDir, nil)
 		if err == nil {
 			var result *plan.Layer
 			result, err = plan.CombineLayers(sup.Layers...)
@@ -1474,7 +1474,7 @@ func (s *S) TestPlanReadMultiImport(c *C) {
 
 			dirs = append(dirs, pebbleDir)
 		}
-		sup, err := plan.Read(dirs[len(dirs)-1], dirs[:len(dirs)-1])
+		sup, err := plan.ReadAll(dirs[len(dirs)-1], dirs[:len(dirs)-1])
 		if err == nil {
 			var result *plan.Layer
 			result, err = plan.CombineLayers(sup.Layers...)
@@ -1526,8 +1526,8 @@ func (s *S) TestPlanReadBadNames(c *C) {
 		fpath := filepath.Join(layersDir, fname)
 		err := ioutil.WriteFile(fpath, []byte("<ignore>"), 0644)
 		c.Assert(err, IsNil)
-		_, err = plan.Read(pebbleDir, nil)
-		c.Assert(err.Error(), Equals, fmt.Sprintf("invalid layer filename: %q (must look like \"123-some-label.yaml\")", fname))
+		_, err = plan.ReadAll(pebbleDir, nil)
+		c.Assert(err, ErrorMatches, fmt.Sprintf(`invalid layer filename: ".*%s" .must look like "123-some-label.yaml".`, fname))
 		err = os.Remove(fpath)
 		c.Assert(err, IsNil)
 	}
@@ -1550,8 +1550,8 @@ func (s *S) TestPlanReadDupNames(c *C) {
 			err := ioutil.WriteFile(fpath, []byte("summary: ignore"), 0644)
 			c.Assert(err, IsNil)
 		}
-		_, err = plan.Read(pebbleDir, nil)
-		c.Assert(err.Error(), Equals, fmt.Sprintf("invalid layer filename: %q not unique (have %q already with same %s)", fnames[1], fnames[0], fnames[2]))
+		_, err = plan.ReadAll(pebbleDir, nil)
+		c.Assert(err, ErrorMatches, fmt.Sprintf(`invalid layer filename: ".*%s" not unique .have ".*%s" already with same %s.`, fnames[1], fnames[0], fnames[2]))
 		for _, fname := range fnames {
 			fpath := filepath.Join(layersDir, fname)
 			err = os.Remove(fpath)
@@ -1581,7 +1581,7 @@ func (s *S) TestPlanReadDupLabelsMultiImport(c *C) {
 	err = ioutil.WriteFile(filepath.Join(layersDir, "003-foo.yaml"), []byte("summary: ignore"), 0644)
 	c.Assert(err, IsNil)
 
-	_, err = plan.Read(pebbleDir, []string{importDir})
+	_, err = plan.ReadAll(pebbleDir, []string{importDir})
 	c.Assert(err.Error(), Equals, fmt.Sprintf("invalid layer filename: %q not unique (have %q already with same label \"foo\")",
 		"003-foo.yaml", filepath.Join(importLayersDir, "002-foo.yaml")))
 }

@@ -124,7 +124,7 @@ func (m *ServiceManager) updatePlan(p *plan.Plan) {
 }
 
 func (m *ServiceManager) reloadPlan() error {
-	p, err := plan.Read(m.dir, m.importDirs)
+	p, err := plan.ReadAll(m.dir, m.importDirs)
 	if err != nil {
 		return err
 	}

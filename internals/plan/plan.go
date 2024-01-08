@@ -53,7 +53,6 @@ type Plan struct {
 type Layer struct {
 	Order       int                   `yaml:"-"`
 	Label       string                `yaml:"-"`
-	Source      string                `yaml:"-"`
 	Summary     string                `yaml:"summary,omitempty"`
 	Description string                `yaml:"description,omitempty"`
 	Services    map[string]*Service   `yaml:"services,omitempty"`
@@ -1022,12 +1021,12 @@ func validServiceAction(action ServiceAction, additionalValid ...ServiceAction) 
 
 var fnameExp = regexp.MustCompile("^([0-9]{3})-([a-z](?:-?[a-z0-9]){2,}).yaml$")
 
-type LayerReader struct {
+type layerReader struct {
 	labels map[string]string
 	offset int
 }
 
-func (lr *LayerReader) ReadDir(dirname string) ([]*Layer, error) {
+func (lr *layerReader) ReadDir(dirname string) ([]*Layer, error) {
 	if lr.labels == nil {
 		lr.labels = make(map[string]string)
 	}
@@ -1039,12 +1038,6 @@ func (lr *LayerReader) ReadDir(dirname string) ([]*Layer, error) {
 	}
 
 	orders := make(map[int]string)
-	labels := make(map[string]string)
-	// Copy already loaded layer labels with full path to the layer file
-	// as they have come from a different import path.
-	for k, v := range lr.labels {
-		labels[k] = v
-	}
 
 	// Documentation says ReadDir result is already sorted by name.
 	// This is fundamental here so if reading changes make sure the
@@ -1078,12 +1071,11 @@ func (lr *LayerReader) ReadDir(dirname string) ([]*Layer, error) {
 			return nil, fmt.Errorf("invalid layer filename: %q not unique (have %q already with same order %d)",
 				fileName, prevFile, localOrder)
 		}
-		if prevFile, dupLabel := labels[label]; dupLabel {
+		if prevFile, dupLabel := lr.labels[label]; dupLabel {
 			return nil, fmt.Errorf("invalid layer filename: %q not unique (have %q already with same label %q)",
 				fileName, prevFile, label)
 		}
 		orders[localOrder] = fileName
-		labels[label] = fileName
 		lr.labels[label] = filePath
 
 		// globalOrder of the layers must be maintained when using import paths.
@@ -1092,7 +1084,6 @@ func (lr *LayerReader) ReadDir(dirname string) ([]*Layer, error) {
 		if err != nil {
 			return nil, err
 		}
-		layer.Source = filePath
 		layers = append(layers, layer)
 	}
 	if len(layers) > 0 {
@@ -1101,15 +1092,15 @@ func (lr *LayerReader) ReadDir(dirname string) ([]*Layer, error) {
 	return layers, nil
 }
 
-// Read reads the configuration layers from the "layers" sub-directory in
+// ReadAll reads the configuration layers from the "layers" sub-directory in
 // dir, and returns the resulting Plan. If the "layers" sub-directory doesn't
 // exist, it returns a valid Plan with no layers.
 // If importDirs are passed, "layers" sub-directories of each of those
 // importDirs are read before the final dir.
-func Read(dir string, importDirs []string) (*Plan, error) {
+func ReadAll(dir string, importDirs []string) (*Plan, error) {
 	var layers []*Layer
 
-	lr := &LayerReader{}
+	lr := &layerReader{}
 	dirs := append(importDirs, dir)
 	for _, dir := range dirs {
 		layersDir := filepath.Join(dir, "layers")
