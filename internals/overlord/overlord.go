@@ -57,10 +57,10 @@ type Extension interface {
 
 // Options is the arguments passed to construct an Overlord.
 type Options struct {
-	// PebbleDir is the path to the pebble directory. It must be provided.
-	PebbleDir string
-	// PebbleImportDirs is an optional ordered list of directory paths like PebbleDir to import data from.
-	PebbleImportDirs []string
+	// Dir is the path to the pebble directory. It must be provided.
+	Dir string
+	// ImportDirs is an optional ordered list of directory paths like Dir to import data from.
+	ImportDirs []string
 	// RestartHandler is an optional structure to handle restart requests.
 	RestartHandler restart.Handler
 	// ServiceOutput is an optional output for the logging manager.
@@ -72,9 +72,9 @@ type Options struct {
 // Overlord is the central manager of the system, keeping track
 // of all available state managers and related helpers.
 type Overlord struct {
-	pebbleDir        string
-	pebbleImportDirs []string
-	stateEng         *StateEngine
+	dir        string
+	importDirs []string
+	stateEng   *StateEngine
 
 	// ensure loop
 	loopTomb    *tomb.Tomb
@@ -99,20 +99,20 @@ type Overlord struct {
 // New creates an Overlord with all its state managers.
 func New(opts *Options) (*Overlord, error) {
 	o := &Overlord{
-		pebbleDir:        opts.PebbleDir,
-		pebbleImportDirs: opts.PebbleImportDirs,
-		loopTomb:         new(tomb.Tomb),
-		inited:           true,
-		extension:        opts.Extension,
+		dir:        opts.Dir,
+		importDirs: opts.ImportDirs,
+		loopTomb:   new(tomb.Tomb),
+		inited:     true,
+		extension:  opts.Extension,
 	}
 
-	if !filepath.IsAbs(o.pebbleDir) {
-		return nil, fmt.Errorf("directory %q must be absolute", o.pebbleDir)
+	if !filepath.IsAbs(o.dir) {
+		return nil, fmt.Errorf("directory %q must be absolute", o.dir)
 	}
-	if !osutil.IsDir(o.pebbleDir) {
-		return nil, fmt.Errorf("directory %q does not exist", o.pebbleDir)
+	if !osutil.IsDir(o.dir) {
+		return nil, fmt.Errorf("directory %q does not exist", o.dir)
 	}
-	statePath := filepath.Join(o.pebbleDir, ".pebble.state")
+	statePath := filepath.Join(o.dir, ".pebble.state")
 
 	backend := &overlordStateBackend{
 		path:         statePath,
@@ -134,14 +134,15 @@ func New(opts *Options) (*Overlord, error) {
 
 	o.logMgr = logstate.NewLogManager()
 
-	o.serviceMgr, err = servstate.NewManager(
-		s,
-		o.runner,
-		o.pebbleDir,
-		o.pebbleImportDirs,
-		opts.ServiceOutput,
-		opts.RestartHandler,
-		o.logMgr)
+	o.serviceMgr, err = servstate.NewManager(&servstate.Options{
+		Dir:           o.dir,
+		ImportDirs:    o.importDirs,
+		State:         s,
+		Runner:        o.runner,
+		Restarter:     opts.RestartHandler,
+		LogManager:    o.logMgr,
+		ServiceOutput: opts.ServiceOutput,
+	})
 	if err != nil {
 		return nil, err
 	}

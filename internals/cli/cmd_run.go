@@ -150,17 +150,17 @@ func sanityCheck() error {
 func runDaemon(rcmd *cmdRun, ch chan os.Signal, ready chan<- func()) error {
 	t0 := time.Now().Truncate(time.Millisecond)
 
-	pebbleDir, socketPath, pebbleImports := getEnvPaths()
+	paths := getEnvPaths()
 	if rcmd.CreateDirs {
-		err := os.MkdirAll(pebbleDir, 0755)
+		err := os.MkdirAll(paths.PebbleDir, 0755)
 		if err != nil {
 			return err
 		}
 	}
 	dopts := daemon.Options{
-		Dir:        pebbleDir,
-		ImportDirs: pebbleImports,
-		SocketPath: socketPath,
+		Dir:        paths.PebbleDir,
+		ImportDirs: paths.ImportDirs,
+		SocketPath: paths.SocketPath,
 	}
 	if rcmd.Verbose {
 		dopts.ServiceOutput = os.Stdout

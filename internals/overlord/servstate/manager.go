@@ -18,10 +18,10 @@ import (
 )
 
 type ServiceManager struct {
-	state            *state.State
-	runner           *state.TaskRunner
-	pebbleDir        string
-	pebbleImportDirs []string
+	state      *state.State
+	runner     *state.TaskRunner
+	dir        string
+	importDirs []string
 
 	planLock     sync.Mutex
 	plan         *plan.Plan
@@ -60,18 +60,28 @@ func (e *LabelExists) Error() string {
 	return fmt.Sprintf("layer %q already exists", e.Label)
 }
 
-func NewManager(s *state.State, runner *state.TaskRunner, pebbleDir string, pebbleImportDirs []string,
-	serviceOutput io.Writer, restarter Restarter, logMgr LogManager) (*ServiceManager, error) {
+type Options struct {
+	Dir        string
+	ImportDirs []string
+
+	State         *state.State
+	Runner        *state.TaskRunner
+	Restarter     Restarter
+	LogManager    LogManager
+	ServiceOutput io.Writer
+}
+
+func NewManager(opts *Options) (*ServiceManager, error) {
 	manager := &ServiceManager{
-		state:            s,
-		runner:           runner,
-		pebbleDir:        pebbleDir,
-		pebbleImportDirs: pebbleImportDirs,
-		services:         make(map[string]*serviceData),
-		serviceOutput:    serviceOutput,
-		restarter:        restarter,
-		rand:             rand.New(rand.NewSource(time.Now().UnixNano())),
-		logMgr:           logMgr,
+		state:         opts.State,
+		runner:        opts.Runner,
+		dir:           opts.Dir,
+		importDirs:    opts.ImportDirs,
+		services:      make(map[string]*serviceData),
+		serviceOutput: opts.ServiceOutput,
+		restarter:     opts.Restarter,
+		rand:          rand.New(rand.NewSource(time.Now().UnixNano())),
+		logMgr:        opts.LogManager,
 	}
 
 	err := reaper.Start()
@@ -79,8 +89,8 @@ func NewManager(s *state.State, runner *state.TaskRunner, pebbleDir string, pebb
 		return nil, err
 	}
 
-	runner.AddHandler("start", manager.doStart, nil)
-	runner.AddHandler("stop", manager.doStop, nil)
+	opts.Runner.AddHandler("start", manager.doStart, nil)
+	opts.Runner.AddHandler("stop", manager.doStop, nil)
 
 	return manager, nil
 }
@@ -114,7 +124,7 @@ func (m *ServiceManager) updatePlan(p *plan.Plan) {
 }
 
 func (m *ServiceManager) reloadPlan() error {
-	p, err := plan.Read(m.pebbleDir, m.pebbleImportDirs)
+	p, err := plan.Read(m.dir, m.importDirs)
 	if err != nil {
 		return err
 	}

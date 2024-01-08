@@ -159,31 +159,31 @@ func (s *PebbleSuite) TestGetEnvPaths(c *C) {
 	os.Setenv("PEBBLE", "")
 	os.Setenv("PEBBLE_SOCKET", "")
 	os.Setenv("PEBBLE_IMPORT", "")
-	pebbleDir, socketPath, pebbleImportDirs := cli.GetEnvPaths()
-	c.Assert(pebbleDir, Equals, "/var/lib/pebble/default")
-	c.Assert(socketPath, Equals, "/var/lib/pebble/default/.pebble.socket")
-	c.Assert(pebbleImportDirs, HasLen, 0)
+	paths := cli.GetEnvPaths()
+	c.Assert(paths.PebbleDir, Equals, "/var/lib/pebble/default")
+	c.Assert(paths.SocketPath, Equals, "/var/lib/pebble/default/.pebble.socket")
+	c.Assert(paths.ImportDirs, HasLen, 0)
 
 	os.Setenv("PEBBLE", "/foo")
-	pebbleDir, socketPath, pebbleImportDirs = cli.GetEnvPaths()
-	c.Assert(pebbleDir, Equals, "/foo")
-	c.Assert(socketPath, Equals, "/foo/.pebble.socket")
-	c.Assert(pebbleImportDirs, HasLen, 0)
+	paths = cli.GetEnvPaths()
+	c.Assert(paths.PebbleDir, Equals, "/foo")
+	c.Assert(paths.SocketPath, Equals, "/foo/.pebble.socket")
+	c.Assert(paths.ImportDirs, HasLen, 0)
 
 	os.Setenv("PEBBLE", "/bar")
 	os.Setenv("PEBBLE_SOCKET", "/path/to/socket")
-	pebbleDir, socketPath, pebbleImportDirs = cli.GetEnvPaths()
-	c.Assert(pebbleDir, Equals, "/bar")
-	c.Assert(socketPath, Equals, "/path/to/socket")
-	c.Assert(pebbleImportDirs, HasLen, 0)
+	paths = cli.GetEnvPaths()
+	c.Assert(paths.PebbleDir, Equals, "/bar")
+	c.Assert(paths.SocketPath, Equals, "/path/to/socket")
+	c.Assert(paths.ImportDirs, HasLen, 0)
 
 	os.Setenv("PEBBLE_IMPORT", "/a:/b")
-	_, _, pebbleImportDirs = cli.GetEnvPaths()
-	c.Assert(pebbleImportDirs, DeepEquals, []string{"/a", "/b"})
+	paths = cli.GetEnvPaths()
+	c.Assert(paths.ImportDirs, DeepEquals, []string{"/a", "/b"})
 
 	os.Setenv("PEBBLE_IMPORT", "/a")
-	_, _, pebbleImportDirs = cli.GetEnvPaths()
-	c.Assert(pebbleImportDirs, DeepEquals, []string{"/a"})
+	paths = cli.GetEnvPaths()
+	c.Assert(paths.ImportDirs, DeepEquals, []string{"/a"})
 }
 
 func (s *PebbleSuite) readCLIState(c *C) map[string]any {
@@ -198,19 +198,19 @@ func (s *PebbleSuite) readCLIState(c *C) map[string]any {
 		c.Fatalf("expected socket map, got %#v", fullState["pebble"])
 	}
 
-	_, socketPath, _ := cli.GetEnvPaths()
-	v, ok := socketMap[socketPath]
+	paths := cli.GetEnvPaths()
+	v, ok := socketMap[paths.SocketPath]
 	if !ok {
-		c.Fatalf("expected state map, got %#v", socketMap[socketPath])
+		c.Fatalf("expected state map, got %#v", socketMap[paths.SocketPath])
 	}
 	return v.(map[string]any)
 }
 
 func (s *PebbleSuite) writeCLIState(c *C, st map[string]any) {
-	_, socketPath, _ := cli.GetEnvPaths()
+	paths := cli.GetEnvPaths()
 	fullState := map[string]any{
 		"pebble": map[string]any{
-			socketPath: st,
+			paths.SocketPath: st,
 		},
 	}
 	err := os.MkdirAll(filepath.Dir(s.cliStatePath), 0o700)

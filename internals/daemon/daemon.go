@@ -869,11 +869,11 @@ func New(opts *Options) (*Daemon, error) {
 	}
 
 	ovldOptions := overlord.Options{
-		PebbleDir:        opts.Dir,
-		PebbleImportDirs: opts.ImportDirs,
-		RestartHandler:   d,
-		ServiceOutput:    opts.ServiceOutput,
-		Extension:        opts.OverlordExtension,
+		Dir:            opts.Dir,
+		ImportDirs:     opts.ImportDirs,
+		RestartHandler: d,
+		ServiceOutput:  opts.ServiceOutput,
+		Extension:      opts.OverlordExtension,
 	}
 
 	ovld, err := overlord.New(&ovldOptions)

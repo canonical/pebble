@@ -280,7 +280,8 @@ func Run() error {
 
 	logger.SetLogger(logger.New(os.Stderr, fmt.Sprintf("[%s] ", cmd.ProgramName)))
 
-	_, clientConfig.Socket, _ = getEnvPaths()
+	paths := getEnvPaths()
+	clientConfig.Socket = paths.SocketPath
 
 	cli, err := client.New(&clientConfig)
 	if err != nil {
@@ -363,19 +364,30 @@ func errorToMessage(e error) (normalMessage string, err error) {
 	return msg, nil
 }
 
-func getEnvPaths() (pebbleDir string, socketPath string, pebbleImports []string) {
-	pebbleDir = os.Getenv("PEBBLE")
-	if pebbleDir == "" {
-		pebbleDir = defaultPebbleDir
+type envPaths struct {
+	// PebbleDir contains the path to the pebble data directory
+	PebbleDir string
+	// SocketPath contains the path to the pebble unix socket
+	SocketPath string
+	// ImportDirs contains a list of paths to pebble data directories to
+	// import from.
+	ImportDirs []string
+}
+
+func getEnvPaths() envPaths {
+	paths := envPaths{}
+	paths.PebbleDir = os.Getenv("PEBBLE")
+	if paths.PebbleDir == "" {
+		paths.PebbleDir = defaultPebbleDir
 	}
-	socketPath = os.Getenv("PEBBLE_SOCKET")
-	if socketPath == "" {
-		socketPath = filepath.Join(pebbleDir, ".pebble.socket")
+	paths.SocketPath = os.Getenv("PEBBLE_SOCKET")
+	if paths.SocketPath == "" {
+		paths.SocketPath = filepath.Join(paths.PebbleDir, ".pebble.socket")
 	}
 	if imports := os.Getenv("PEBBLE_IMPORT"); imports != "" {
-		pebbleImports = strings.Split(imports, ":")
+		paths.ImportDirs = strings.Split(imports, ":")
 	}
-	return
+	return paths
 }
 
 type cliState struct {
@@ -394,8 +406,8 @@ func loadCLIState() (*cliState, error) {
 	if err != nil {
 		return nil, err
 	}
-	_, socketPath, _ := getEnvPaths()
-	st, ok := fullState.Pebble[socketPath]
+	paths := getEnvPaths()
+	st, ok := fullState.Pebble[paths.SocketPath]
 	if !ok {
 		return &cliState{}, nil
 	}
@@ -429,8 +441,8 @@ func saveCLIState(state *cliState) error {
 		return err
 	}
 
-	_, socketPath, _ := getEnvPaths()
-	fullState.Pebble[socketPath] = state
+	paths := getEnvPaths()
+	fullState.Pebble[paths.SocketPath] = state
 
 	data, err := json.Marshal(fullState)
 	if err != nil {

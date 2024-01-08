@@ -1863,7 +1863,14 @@ func (s *S) setupDefaultServiceManager(c *C) {
 	err = ioutil.WriteFile(filepath.Join(layers, "002-two.yaml"), []byte(planLayer2), 0644)
 	c.Assert(err, IsNil)
 
-	s.manager, err = servstate.NewManager(s.st, s.runner, s.dir, nil, s.logOutput, testRestarter{s.stopDaemon}, fakeLogManager{})
+	s.manager, err = servstate.NewManager(&servstate.Options{
+		Dir:           s.dir,
+		State:         s.st,
+		Runner:        s.runner,
+		Restarter:     testRestarter{s.stopDaemon},
+		LogManager:    fakeLogManager{},
+		ServiceOutput: s.logOutput,
+	})
 	c.Assert(err, IsNil)
 }
 
@@ -1884,7 +1891,15 @@ func (s *S) setupMultiImportServiceManager(c *C) {
 	err = ioutil.WriteFile(filepath.Join(layers, "001-two.yaml"), []byte(planLayer2), 0644)
 	c.Assert(err, IsNil)
 
-	s.manager, err = servstate.NewManager(s.st, s.runner, s.dir, []string{importDir}, s.logOutput, testRestarter{s.stopDaemon}, fakeLogManager{})
+	s.manager, err = servstate.NewManager(&servstate.Options{
+		Dir:           s.dir,
+		ImportDirs:    []string{importDir},
+		State:         s.st,
+		Runner:        s.runner,
+		Restarter:     testRestarter{s.stopDaemon},
+		LogManager:    fakeLogManager{},
+		ServiceOutput: s.logOutput,
+	})
 	c.Assert(err, IsNil)
 }
 
@@ -1894,7 +1909,12 @@ func (s *S) setupEmptyServiceManager(c *C) {
 	dir := c.MkDir()
 	err := os.Mkdir(filepath.Join(dir, "layers"), 0755)
 	c.Assert(err, IsNil)
-	s.manager, err = servstate.NewManager(s.st, s.runner, dir, nil, nil, nil, fakeLogManager{})
+	s.manager, err = servstate.NewManager(&servstate.Options{
+		Dir:        s.dir,
+		State:      s.st,
+		Runner:     s.runner,
+		LogManager: fakeLogManager{},
+	})
 	c.Assert(err, IsNil)
 }
 
