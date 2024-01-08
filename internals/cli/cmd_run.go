@@ -20,11 +20,11 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
-	"strings"
 	"syscall"
 	"time"
 
 	"github.com/canonical/go-flags"
+	"github.com/canonical/x-go/strutil"
 
 	"github.com/canonical/pebble/client"
 	"github.com/canonical/pebble/cmd"
@@ -288,16 +288,12 @@ func convertArgs(args [][]string) (map[string][]string, error) {
 // getAdditionalAdminUIDs parses additional admin user ids passed in via the PEBBLE_ADMINS
 // environment variable.
 func getAdditionalAdminUIDs() ([]sys.UserID, error) {
-	envValue := os.Getenv("PEBBLE_ADMINS")
-	if envValue == "" {
-		return nil, nil
-	}
-	uidStrings := strings.Split(envValue, ",")
+	uidStrings := strutil.CommaSeparatedList(os.Getenv("PEBBLE_ADMINS"))
 	uids := make([]sys.UserID, 0, len(uidStrings))
 	for _, uidStr := range uidStrings {
 		uid64, err := strconv.ParseUint(uidStr, 10, 32)
 		if err != nil {
-			return nil, fmt.Errorf("cannot parse value %q in $PEBBLE_ADMINS: %w", uidStr, err)
+			return nil, fmt.Errorf("cannot parse PEBBLE_ADMINS: %q is not a valid user ID", uidStr)
 		}
 		uids = append(uids, sys.UserID(uid64))
 	}

@@ -293,9 +293,7 @@ func (s *apiSuite) TestNoticesUserIDAdminDefault(c *C) {
 }
 
 func (s *apiSuite) TestNoticesUserIDAdminFilter(c *C) {
-	s.daemon(c, func(o *Options) {
-		o.AdditionalAdminUIDs = []sys.UserID{0xbadd00d}
-	})
+	s.daemon(c)
 	restore := fakeSysGetuid(0)
 	defer restore()
 

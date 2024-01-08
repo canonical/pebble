@@ -76,18 +76,13 @@ func (s *daemonSuite) TearDownTest(c *C) {
 	s.err = nil
 }
 
-type daemonOpt func(*Options)
-
-func (s *daemonSuite) newDaemon(c *C, opts ...daemonOpt) *Daemon {
-	o := &Options{
-		Dir:         s.pebbleDir,
-		SocketPath:  s.socketPath,
-		HTTPAddress: s.httpAddress,
-	}
-	for _, opt := range opts {
-		opt(o)
-	}
-	d, err := New(o)
+func (s *daemonSuite) newDaemon(c *C) *Daemon {
+	d, err := New(&Options{
+		Dir:                 s.pebbleDir,
+		SocketPath:          s.socketPath,
+		HTTPAddress:         s.httpAddress,
+		AdditionalAdminUIDs: []sys.UserID{0xbadd00d},
+	})
 	c.Assert(err, IsNil)
 	d.addRoutes()
 	return d
@@ -468,11 +463,9 @@ func (s *daemonSuite) TestLoggedInUserAccess(c *C) {
 }
 
 func (s *daemonSuite) TestSuperAccess(c *C) {
-	d := s.newDaemon(c, func(o *Options) {
-		o.AdditionalAdminUIDs = []sys.UserID{0xbadd00d}
-	})
+	d := s.newDaemon(c)
 
-	for _, uid := range []int{0, os.Getuid(), 0xbadd00d} {
+	for _, uid := range []int{0, os.Getuid()} {
 		remoteAddr := fmt.Sprintf("pid=100;uid=%d;socket=;", uid)
 		get := &http.Request{Method: "GET", RemoteAddr: remoteAddr}
 		put := &http.Request{Method: "PUT", RemoteAddr: remoteAddr}

@@ -872,7 +872,10 @@ func New(opts *Options) (*Daemon, error) {
 	}
 
 	// Superuser and process owner can do anything.
-	d.admins = []sys.UserID{0, sysGetuid()}
+	d.admins = []sys.UserID{0}
+	if uid := sysGetuid(); uid != 0 {
+		d.admins = append(d.admins, uid)
+	}
 	d.admins = append(d.admins, opts.AdditionalAdminUIDs...)
 
 	ovldOptions := overlord.Options{

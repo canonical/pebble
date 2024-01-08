@@ -189,15 +189,16 @@ func (s *PebbleSuite) TestGetAdditionalAdminUIDs(c *C) {
 
 	os.Setenv("PEBBLE_ADMINS", "123, 345")
 	_, err = cli.GetAdditionalAdminUIDs()
-	c.Assert(err, ErrorMatches, `cannot parse value " 345" in \$PEBBLE_ADMINS: strconv.ParseUint: parsing " 345": invalid syntax`)
+	c.Assert(err, IsNil)
+	c.Assert(uids, DeepEquals, []sys.UserID{123, 345})
 
 	os.Setenv("PEBBLE_ADMINS", "4294967296")
 	_, err = cli.GetAdditionalAdminUIDs()
-	c.Assert(err, ErrorMatches, `cannot parse value "4294967296" in \$PEBBLE_ADMINS: strconv.ParseUint: parsing "4294967296": value out of range`)
+	c.Assert(err, ErrorMatches, `cannot parse PEBBLE_ADMINS: "4294967296" is not a valid user ID`)
 
 	os.Setenv("PEBBLE_ADMINS", "-1")
 	_, err = cli.GetAdditionalAdminUIDs()
-	c.Assert(err, ErrorMatches, `cannot parse value "-1" in \$PEBBLE_ADMINS: strconv.ParseUint: parsing "-1": invalid syntax`)
+	c.Assert(err, ErrorMatches, `cannot parse PEBBLE_ADMINS: "-1" is not a valid user ID`)
 }
 
 func (s *PebbleSuite) readCLIState(c *C) map[string]any {
