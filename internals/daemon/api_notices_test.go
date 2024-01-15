@@ -314,7 +314,7 @@ func (s *apiSuite) TestNoticesUserIDAdminFilter(c *C) {
 	noticesCmd := apiCmd("/v1/notices")
 
 	for _, adminUID := range []uint32{0, 0xbadd00d} {
-		// Test that admin can filter on any user IDs, and always gets public notices too
+		// Test that admin can filter on any user ID, and always gets public notices too
 		for _, uid := range []uint32{0, 1000, 123} {
 			userIDValues := url.Values{}
 			userIDValues.Add("user-id", strconv.FormatUint(uint64(uid), 10))
@@ -338,7 +338,7 @@ func (s *apiSuite) TestNoticesUserIDAdminFilter(c *C) {
 	}
 }
 
-func (s *apiSuite) TestNoticesUserIDsNonAdminDefault(c *C) {
+func (s *apiSuite) TestNoticesUserIDNonAdminDefault(c *C) {
 	s.daemon(c)
 	restore := fakeSysGetuid(0)
 	defer restore()
@@ -379,7 +379,7 @@ func (s *apiSuite) TestNoticesUserIDsNonAdminDefault(c *C) {
 	c.Assert(n["key"], Equals, "danger")
 }
 
-func (s *apiSuite) TestNoticesUserIDsNonAdminFilter(c *C) {
+func (s *apiSuite) TestNoticesUserIDNonAdminFilter(c *C) {
 	restore := fakeSysGetuid(0)
 	defer restore()
 	s.daemon(c)
@@ -396,6 +396,81 @@ func (s *apiSuite) TestNoticesUserIDsNonAdminFilter(c *C) {
 	reqUrl := "/v1/notices?user-id=1000"
 	req, err := http.NewRequest("GET", reqUrl, nil)
 	c.Assert(err, IsNil)
+	req.RemoteAddr = "pid=100;uid=1000;socket=;"
+	rsp, ok := noticesCmd.GET(noticesCmd, req, nil).(*resp)
+	c.Assert(ok, Equals, true)
+
+	c.Check(rsp.Type, Equals, ResponseTypeError)
+	c.Check(rsp.Status, Equals, http.StatusForbidden)
+	_, ok = rsp.Result.(*errorResult)
+	c.Assert(ok, Equals, true)
+}
+
+func (s *apiSuite) TestNoticesSelectAdminFilter(c *C) {
+	s.daemon(c)
+	restore := fakeSysGetuid(0)
+	defer restore()
+
+	st := s.d.overlord.State()
+	st.Lock()
+	admin := uint32(0)
+	nonAdmin := uint32(1000)
+	otherNonAdmin := uint32(123)
+	addNotice(c, st, &admin, state.ChangeUpdateNotice, "123", nil)
+	time.Sleep(time.Microsecond)
+	addNotice(c, st, &nonAdmin, state.CustomNotice, "a.b/x", nil)
+	time.Sleep(time.Microsecond)
+	addNotice(c, st, &otherNonAdmin, state.CustomNotice, "a.b/y", nil)
+	time.Sleep(time.Microsecond)
+	addNotice(c, st, nil, state.WarningNotice, "danger", nil)
+	st.Unlock()
+
+	noticesCmd := apiCmd("/v1/notices")
+
+	// Test that admin user may get all notices with --select=all filter
+	reqUrl := "/v1/notices?select=all"
+	req, err := http.NewRequest("GET", reqUrl, nil)
+	c.Check(err, IsNil)
+	req.RemoteAddr = "pid=100;uid=0;socket=;"
+	rsp, ok := noticesCmd.GET(noticesCmd, req, nil).(*resp)
+	c.Assert(ok, Equals, true)
+
+	c.Check(rsp.Type, Equals, ResponseTypeSync)
+	c.Check(rsp.Status, Equals, http.StatusOK)
+	notices, ok := rsp.Result.([]*state.Notice)
+	c.Assert(ok, Equals, true)
+	c.Assert(notices, HasLen, 4)
+	n := noticeToMap(c, notices[0])
+	c.Assert(n["user-id"], Equals, float64(admin))
+	c.Assert(n["key"], Equals, "123")
+	n = noticeToMap(c, notices[1])
+	c.Assert(n["user-id"], Equals, float64(nonAdmin))
+	c.Assert(n["key"], Equals, "a.b/x")
+	n = noticeToMap(c, notices[2])
+	c.Assert(n["user-id"], Equals, float64(otherNonAdmin))
+	c.Assert(n["key"], Equals, "a.b/y")
+	n = noticeToMap(c, notices[3])
+	c.Assert(n["user-id"], Equals, nil)
+	c.Assert(n["key"], Equals, "danger")
+}
+
+func (s *apiSuite) TestNoticesSelectNonAdminFilter(c *C) {
+	restore := fakeSysGetuid(0)
+	defer restore()
+	s.daemon(c)
+
+	st := s.d.Overlord().State()
+	st.Lock()
+	nonAdmin := uint32(1000)
+	addNotice(c, st, &nonAdmin, state.WarningNotice, "error1", nil)
+	st.Unlock()
+
+	noticesCmd := apiCmd("/v1/notices")
+
+	// Test that non-admin user may not use --select filter
+	reqUrl := "/v2/notices?select=all"
+	req, err := http.NewRequest("GET", reqUrl, nil)
+	c.Check(err, IsNil)
 	req.RemoteAddr = "pid=100;uid=1000;socket=;"
 	rsp, ok := noticesCmd.GET(noticesCmd, req, nil).(*resp)
 	c.Assert(ok, Equals, true)
@@ -518,10 +593,34 @@ func (s *apiSuite) TestNoticesInvalidUserID(c *C) {
 	s.testNoticesBadRequest(c, "user-id=foo", `invalid "user-id" filter:.*`)
 }
 
+func (s *apiSuite) TestNoticesInvalidUserIDMultiple(c *C) {
+	restore := fakeSysGetuid(0)
+	defer restore()
+	s.testNoticesBadRequest(c, "user-id=1000&user-id=1234", `invalid "user-id" filter:.*`)
+}
+
+func (s *apiSuite) TestNoticesInvalidUserIDHigh(c *C) {
+	restore := fakeSysGetuid(0)
+	defer restore()
+	s.testNoticesBadRequest(c, "user-id=4294967296", `invalid "user-id" filter:.*`)
+}
+
+func (s *apiSuite) TestNoticesInvalidUserIDLow(c *C) {
+	restore := fakeSysGetuid(0)
+	defer restore()
+	s.testNoticesBadRequest(c, "user-id=-1", `invalid "user-id" filter:.*`)
+}
+
 func (s *apiSuite) TestNoticesInvalidSelect(c *C) {
 	restore := fakeSysGetuid(0)
 	defer restore()
 	s.testNoticesBadRequest(c, "select=foo", `invalid "select" filter:.*`)
+}
+
+func (s *apiSuite) TestNoticesInvalidUserIDWithSelect(c *C) {
+	restore := fakeSysGetuid(0)
+	defer restore()
+	s.testNoticesBadRequest(c, "user-id=1234&select=all", `cannot use both "select" and "user-id" parameters`)
 }
 
 func (s *apiSuite) TestNoticesInvalidAfter(c *C) {
@@ -817,7 +916,9 @@ func (s *apiSuite) TestNoticeNotFound(c *C) {
 	c.Assert(ok, Equals, true)
 
 	c.Check(rsp.Type, Equals, ResponseTypeError)
-	c.Check(rsp.Status, Equals, 404)
+	c.Check(rsp.Status, Equals, http.StatusNotFound)
+	_, ok = rsp.Result.(*errorResult)
+	c.Assert(ok, Equals, true)
 }
 
 func (s *apiSuite) TestNoticeUnknownRequestUID(c *C) {
@@ -839,7 +940,37 @@ func (s *apiSuite) TestNoticeUnknownRequestUID(c *C) {
 	c.Assert(ok, Equals, true)
 }
 
-func (s *apiSuite) TestNoticeNotAllowed(c *C) {
+func (s *apiSuite) TestNoticeAdminAllowed(c *C) {
+	restore := fakeSysGetuid(0)
+	defer restore()
+	s.daemon(c)
+
+	st := s.d.overlord.State()
+	st.Lock()
+	uid := uint32(1000)
+	noticeID, err := st.AddNotice(&uid, state.CustomNotice, "a.b/1", nil)
+	c.Assert(err, IsNil)
+	st.Unlock()
+
+	req, err := http.NewRequest("GET", "/v1/notices/"+noticeID, nil)
+	c.Assert(err, IsNil)
+	req.RemoteAddr = "pid=100;uid=0;socket=;"
+	noticesCmd := apiCmd("/v1/notices/{id}")
+	s.vars = map[string]string{"id": noticeID}
+	rsp, ok := noticesCmd.GET(noticesCmd, req, nil).(*resp)
+	c.Assert(ok, Equals, true)
+
+	c.Check(rsp.Type, Equals, ResponseTypeSync)
+	c.Check(rsp.Status, Equals, http.StatusOK)
+	notice, ok := rsp.Result.(*state.Notice)
+	c.Assert(ok, Equals, true)
+	n := noticeToMap(c, notice)
+	c.Check(n["user-id"], Equals, 1000.0)
+	c.Check(n["type"], Equals, "custom")
+	c.Check(n["key"], Equals, "a.b/1")
+}
+
+func (s *apiSuite) TestNoticeNonAdminNotAllowed(c *C) {
 	restore := fakeSysGetuid(0)
 	defer restore()
 	s.daemon(c)
