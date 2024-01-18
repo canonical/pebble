@@ -991,8 +991,8 @@ func (s *daemonSuite) TestRestartExpectedRebootOK(c *C) {
 	defer st.Unlock()
 	var v interface{}
 	// these were cleared
-	c.Check(st.Get("daemon-system-restart-at", &v), Equals, state.ErrNoState)
-	c.Check(st.Get("system-restart-from-boot-id", &v), Equals, state.ErrNoState)
+	c.Check(st.Get("daemon-system-restart-at", &v), testutil.ErrorIs, state.ErrNoState)
+	c.Check(st.Get("system-restart-from-boot-id", &v), testutil.ErrorIs, state.ErrNoState)
 }
 
 func (s *daemonSuite) TestRestartExpectedRebootGiveUp(c *C) {
@@ -1015,9 +1015,9 @@ func (s *daemonSuite) TestRestartExpectedRebootGiveUp(c *C) {
 	defer st.Unlock()
 	var v interface{}
 	// these were cleared
-	c.Check(st.Get("daemon-system-restart-at", &v), Equals, state.ErrNoState)
-	c.Check(st.Get("system-restart-from-boot-id", &v), Equals, state.ErrNoState)
-	c.Check(st.Get("daemon-system-restart-tentative", &v), Equals, state.ErrNoState)
+	c.Check(st.Get("daemon-system-restart-at", &v), testutil.ErrorIs, state.ErrNoState)
+	c.Check(st.Get("system-restart-from-boot-id", &v), testutil.ErrorIs, state.ErrNoState)
+	c.Check(st.Get("daemon-system-restart-tentative", &v), testutil.ErrorIs, state.ErrNoState)
 }
 
 func (s *daemonSuite) TestRestartIntoSocketModeNoNewChanges(c *C) {

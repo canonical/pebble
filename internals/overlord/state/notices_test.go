@@ -1,4 +1,4 @@
-// Copyright (c) 2023 Canonical Ltd
+// Copyright (c) 2024 Canonical Ltd
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License version 3 as
@@ -11,7 +11,6 @@
 //
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
 package state_test
 
 import (
@@ -448,7 +447,7 @@ func (s *noticesSuite) TestDeleteExpired(c *C) {
 	addNotice(c, st, nil, state.CustomNotice, "foo.com/z", nil)
 
 	c.Assert(st.NumNotices(), Equals, 4)
-	st.Prune(0, 0, 0)
+	st.Prune(time.Now(), 0, 0, 0)
 	c.Assert(st.NumNotices(), Equals, 2)
 
 	notices := st.Notices(nil)

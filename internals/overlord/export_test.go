@@ -40,6 +40,14 @@ func FakePruneInterval(prunei, prunew, abortw time.Duration) (restore func()) {
 	}
 }
 
+func FakePruneTicker(f func(t *time.Ticker) <-chan time.Time) (restore func()) {
+	old := pruneTickerC
+	pruneTickerC = f
+	return func() {
+		pruneTickerC = old
+	}
+}
+
 // FakeEnsureNext sets o.ensureNext for tests.
 func FakeEnsureNext(o *Overlord, t time.Time) {
 	o.ensureNext = t
@@ -48,4 +56,12 @@ func FakeEnsureNext(o *Overlord, t time.Time) {
 // Engine exposes the state engine in an Overlord for tests.
 func (o *Overlord) Engine() *StateEngine {
 	return o.stateEng
+}
+
+func FakeTimeNow(f func() time.Time) (restore func()) {
+	old := timeNow
+	timeNow = f
+	return func() {
+		timeNow = old
+	}
 }

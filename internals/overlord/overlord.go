@@ -16,6 +16,7 @@
 package overlord
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -49,6 +50,10 @@ var (
 	defaultCachedDownloads = 5
 )
 
+var pruneTickerC = func(t *time.Ticker) <-chan time.Time {
+	return t.C
+}
+
 // Extension represents an extension of the Overlord.
 type Extension interface {
 	// ExtraManagers allows additional StateManagers to be used.
@@ -80,6 +85,8 @@ type Overlord struct {
 	ensureNext  time.Time
 	ensureRun   int32
 	pruneTicker *time.Ticker
+
+	startOfOperationTime time.Time
 
 	// managers
 	inited     bool
@@ -258,6 +265,15 @@ func (o *Overlord) StartUp() error {
 		return nil
 	}
 	o.startedUp = true
+
+	var err error
+	st := o.State()
+	st.Lock()
+	o.startOfOperationTime, err = o.StartOfOperationTime()
+	st.Unlock()
+	if err != nil {
+		return fmt.Errorf("cannot get start of operation time: %s", err)
+	}
 	return o.stateEng.StartUp()
 }
 
@@ -314,14 +330,15 @@ func (o *Overlord) Loop() {
 			// continue to the next Ensure() try for now
 			o.stateEng.Ensure()
 			o.ensureDidRun()
+			pruneC := pruneTickerC(o.pruneTicker)
 			select {
 			case <-o.loopTomb.Dying():
 				return nil
 			case <-o.ensureTimer.C:
-			case <-o.pruneTicker.C:
+			case <-pruneC:
 				st := o.State()
 				st.Lock()
-				st.Prune(pruneWait, abortWait, pruneMaxChanges)
+				st.Prune(o.startOfOperationTime, pruneWait, abortWait, pruneMaxChanges)
 				st.Unlock()
 			}
 		}
@@ -497,6 +514,23 @@ func (o *Overlord) AddManager(mgr StateManager) {
 		panic("internal error: cannot add managers to a fully initialized Overlord")
 	}
 	o.stateEng.AddManager(mgr)
+}
+
+var timeNow = time.Now
+
+func (m *Overlord) StartOfOperationTime() (time.Time, error) {
+	var opTime time.Time
+	err := m.State().Get("start-of-operation-time", &opTime)
+	if err == nil {
+		return opTime, nil
+	}
+	if err != nil && !errors.Is(err, state.ErrNoState) {
+		return opTime, err
+	}
+	opTime = timeNow()
+
+	m.State().Set("start-of-operation-time", opTime)
+	return opTime, nil
 }
 
 type fakeBackend struct {
