@@ -766,7 +766,8 @@ func (d *Daemon) RebootIsMissing(st *state.State) error {
 // SetServiceArgs sets the provided service arguments to their respective services,
 // by passing the arguments to the service manager responsible under daemon overlord.
 func (d *Daemon) SetServiceArgs(serviceArgs map[string][]string) error {
-	return d.overlord.ServiceManager().SetServiceArgs(serviceArgs)
+	serviceArgsCreator := servstate.ServiceArgsLayerCreator(serviceArgs)
+	return d.overlord.PlanManager().AppendLayer(serviceArgsCreator)
 }
 
 func New(opts *Options) (*Daemon, error) {
@@ -792,6 +793,13 @@ func New(opts *Options) (*Daemon, error) {
 		d.rebootIsMissing = true
 		return d, nil
 	}
+	if err != nil {
+		return nil, err
+	}
+	// Propagate a valid plan (empty is also valid) to the subscribed
+	// overlord managers.
+	planMgr := ovld.PlanManager()
+	err = planMgr.Load()
 	if err != nil {
 		return nil, err
 	}

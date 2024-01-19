@@ -822,6 +822,13 @@ func (layer *Layer) Validate() error {
 	return nil
 }
 
+// Layer implements the LayerCreator interface exposed by the plan state
+// manager. In this case it is simply a wrapper to make a already created
+// layer compatible with the interface.
+func (layer *Layer) Layer(planIn *Plan) (*Layer, error) {
+	return layer, nil
+}
+
 // Validate checks that the combined layers form a valid plan.
 // See also Layer.Validate, which checks that the individual layers are valid.
 func (p *Plan) Validate() error {

@@ -20,7 +20,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/canonical/pebble/internals/overlord/servstate"
+	"github.com/canonical/pebble/internals/overlord/planstate"
 	"github.com/canonical/pebble/internals/plan"
 )
 
@@ -30,8 +30,8 @@ func v1GetPlan(c *Command, r *http.Request, _ *UserState) Response {
 		return BadRequest("invalid format %q", format)
 	}
 
-	servmgr := overlordServiceManager(c.d.overlord)
-	plan, err := servmgr.Plan()
+	planMgr := overlordPlanManager(c.d.overlord)
+	plan, err := planMgr.Plan()
 	if err != nil {
 		return InternalError("%v", err)
 	}
@@ -69,14 +69,14 @@ func v1PostLayers(c *Command, r *http.Request, _ *UserState) Response {
 		return BadRequest("cannot parse layer YAML: %v", err)
 	}
 
-	servmgr := overlordServiceManager(c.d.overlord)
+	planMgr := overlordPlanManager(c.d.overlord)
 	if payload.Combine {
-		err = servmgr.CombineLayer(layer)
+		err = planMgr.CombineLayer(layer)
 	} else {
-		err = servmgr.AppendLayer(layer)
+		err = planMgr.AppendLayer(layer)
 	}
 	if err != nil {
-		if _, ok := err.(*servstate.LabelExists); ok {
+		if _, ok := err.(*planstate.LabelExists); ok {
 			return BadRequest("%v", err)
 		}
 		if _, ok := err.(*plan.FormatError); ok {

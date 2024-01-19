@@ -25,6 +25,10 @@ import (
 var CalculateNextBackoff = calculateNextBackoff
 var GetAction = getAction
 
+func (m *ServiceManager) Plan() *plan.Plan {
+	return m.plan()
+}
+
 func (m *ServiceManager) RunningCmds() map[string]*exec.Cmd {
 	m.servicesLock.Lock()
 	defer m.servicesLock.Unlock()

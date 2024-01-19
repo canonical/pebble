@@ -43,8 +43,6 @@ checks:
             command: sleep x
 `)
 	s.daemon(c)
-	_, err := s.d.overlord.ServiceManager().Plan() // ensure plan is loaded
-	c.Assert(err, IsNil)
 
 	// Request with no filters
 	req, err := http.NewRequest("GET", "/v1/checks", nil)
@@ -129,8 +127,6 @@ checks:
 
 func (s *apiSuite) TestChecksGetInvalidLevel(c *C) {
 	s.daemon(c)
-	_, err := s.d.overlord.ServiceManager().Plan() // ensure plan is loaded
-	c.Assert(err, IsNil)
 
 	req, err := http.NewRequest("GET", "/v1/checks?level=foo", nil)
 	c.Assert(err, IsNil)

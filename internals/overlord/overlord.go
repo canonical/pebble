@@ -33,6 +33,7 @@ import (
 	"github.com/canonical/pebble/internals/overlord/cmdstate"
 	"github.com/canonical/pebble/internals/overlord/logstate"
 	"github.com/canonical/pebble/internals/overlord/patch"
+	"github.com/canonical/pebble/internals/overlord/planstate"
 	"github.com/canonical/pebble/internals/overlord/restart"
 	"github.com/canonical/pebble/internals/overlord/servstate"
 	"github.com/canonical/pebble/internals/overlord/state"
@@ -92,6 +93,7 @@ type Overlord struct {
 	inited     bool
 	startedUp  bool
 	runner     *state.TaskRunner
+	planMgr    *planstate.PlanManager
 	serviceMgr *servstate.ServiceManager
 	commandMgr *cmdstate.CommandManager
 	checkMgr   *checkstate.CheckManager
@@ -136,18 +138,27 @@ func New(opts *Options) (*Overlord, error) {
 	}
 	o.runner.AddOptionalHandler(matchAnyUnknownTask, handleUnknownTask, nil)
 
+	o.planMgr, err = planstate.NewManager(s, o.runner, o.pebbleDir)
+	if err != nil {
+		return nil, err
+	}
+	o.stateEng.AddManager(o.planMgr)
+
 	o.logMgr = logstate.NewLogManager()
 
 	o.serviceMgr, err = servstate.NewManager(
 		s,
 		o.runner,
-		o.pebbleDir,
 		opts.ServiceOutput,
 		opts.RestartHandler,
 		o.logMgr)
 	if err != nil {
 		return nil, err
 	}
+
+	// Tell service manager about plan updates.
+	o.planMgr.AddChangeListeners(o.serviceMgr.PlanChanged)
+
 	o.stateEng.AddManager(o.serviceMgr)
 	// The log manager should be stopped after the service manager, because
 	// ServiceManager.Stop closes the service ring buffers, which signals to the
@@ -160,10 +171,10 @@ func New(opts *Options) (*Overlord, error) {
 	o.checkMgr = checkstate.NewManager()
 
 	// Tell check manager about plan updates.
-	o.serviceMgr.NotifyPlanChanged(o.checkMgr.PlanChanged)
+	o.planMgr.AddChangeListeners(o.checkMgr.PlanChanged)
 
 	// Tell log manager about plan updates.
-	o.serviceMgr.NotifyPlanChanged(o.logMgr.PlanChanged)
+	o.planMgr.AddChangeListeners(o.logMgr.PlanChanged)
 
 	// Tell service manager about check failures.
 	o.checkMgr.NotifyCheckFailed(o.serviceMgr.CheckFailed)
@@ -485,6 +496,12 @@ func (o *Overlord) CommandManager() *cmdstate.CommandManager {
 // checks under the overlord.
 func (o *Overlord) CheckManager() *checkstate.CheckManager {
 	return o.checkMgr
+}
+
+// PlanManager returns the plan manager responsible for managing the global
+// system configuration
+func (o *Overlord) PlanManager() *planstate.PlanManager {
+	return o.planMgr
 }
 
 // Fake creates an Overlord without any managers and with a backend

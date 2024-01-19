@@ -16,13 +16,11 @@ import (
 )
 
 type ServiceManager struct {
-	state     *state.State
-	runner    *state.TaskRunner
-	pebbleDir string
+	state  *state.State
+	runner *state.TaskRunner
 
-	planLock     sync.Mutex
-	plan         *plan.Plan
-	planHandlers []PlanFunc
+	planLock   sync.Mutex
+	planUnsafe *plan.Plan
 
 	servicesLock sync.Mutex
 	services     map[string]*serviceData
@@ -40,28 +38,14 @@ type LogManager interface {
 	ServiceStarted(service *plan.Service, logs *servicelog.RingBuffer)
 }
 
-// PlanFunc is the type of function used by NotifyPlanChanged.
-type PlanFunc func(p *plan.Plan)
-
 type Restarter interface {
 	HandleRestart(t restart.RestartType)
 }
 
-// LabelExists is the error returned by AppendLayer when a layer with that
-// label already exists.
-type LabelExists struct {
-	Label string
-}
-
-func (e *LabelExists) Error() string {
-	return fmt.Sprintf("layer %q already exists", e.Label)
-}
-
-func NewManager(s *state.State, runner *state.TaskRunner, pebbleDir string, serviceOutput io.Writer, restarter Restarter, logMgr LogManager) (*ServiceManager, error) {
+func NewManager(s *state.State, runner *state.TaskRunner, serviceOutput io.Writer, restarter Restarter, logMgr LogManager) (*ServiceManager, error) {
 	manager := &ServiceManager{
 		state:         s,
 		runner:        runner,
-		pebbleDir:     pebbleDir,
 		services:      make(map[string]*serviceData),
 		serviceOutput: serviceOutput,
 		restarter:     restarter,
@@ -75,6 +59,69 @@ func NewManager(s *state.State, runner *state.TaskRunner, pebbleDir string, serv
 	return manager, nil
 }
 
+// PlanChanged informs the service manager that the plan has been updated.
+func (m *ServiceManager) PlanChanged(plan *plan.Plan) {
+	m.planLock.Lock()
+	defer m.planLock.Unlock()
+	m.planUnsafe = plan
+}
+
+// Plan safely gets a snapshot of the current plan pointer. Plan consumers do
+// not mutate the snapshot, and only react to updates from the Plan Manager.
+func (m *ServiceManager) plan() *plan.Plan {
+	m.planLock.Lock()
+	defer m.planLock.Unlock()
+	// This should never be possible, but lets make the requirements clear to
+	// catch misuse during development. Managers using the plan must receive
+	// a PlanChanged update before the plan is used. The first update will be
+	// received during stateengine StartUp, after the plan manager loads the
+	// plan layers from storage.
+	if m.planUnsafe == nil {
+		panic("service manager with invalid plan state")
+	}
+	return m.planUnsafe
+}
+
+// ServiceArgsLayerCreator defines a map of services and respective command
+// arguments, as provided by "pebble run --args" CLI command. It
+// implements the LayerCreator interface, allowing the type to be used with
+// plan manager's (planstate) AppendLayer or CombineLayer methods, to apply
+// the changes to the plan.
+type ServiceArgsLayerCreator map[string][]string
+
+// Layer presents the requested service argument changes in Layer form, ready
+// to apply to the plan. The planstate lock will be acquired while this method
+// is called, so no additional locking needed.
+func (serviceArgs ServiceArgsLayerCreator) Layer(planIn *plan.Plan) (*plan.Layer, error) {
+	newLayer := &plan.Layer{
+		// Labels with "pebble-*" prefix are (will be) reserved, see:
+		// https://github.com/canonical/pebble/issues/220
+		Label:    "pebble-service-args",
+		Services: make(map[string]*plan.Service),
+	}
+
+	for name, args := range serviceArgs {
+		service, ok := planIn.Services[name]
+		if !ok {
+			return nil, fmt.Errorf("service %q not found in plan", name)
+		}
+		base, _, err := service.ParseCommand()
+		if err != nil {
+			return nil, err
+		}
+		newLayer.Services[name] = &plan.Service{
+			Override: plan.MergeOverride,
+			Command:  plan.CommandString(base, args),
+		}
+	}
+
+	err := newLayer.Validate()
+	if err != nil {
+		return nil, err
+	}
+	return newLayer, nil
+}
+
 // Stop implements overlord.StateStopper and stops background functions.
 func (m *ServiceManager) Stop() {
 	// Close all the service ringbuffers
@@ -83,157 +130,6 @@ func (m *ServiceManager) Stop() {
 	for name := range m.services {
 		m.removeServiceInternal(name)
 	}
-}
-
-// NotifyPlanChanged adds f to the list of functions that are called whenever
-// the plan is updated.
-func (m *ServiceManager) NotifyPlanChanged(f PlanFunc) {
-	m.planHandlers = append(m.planHandlers, f)
-}
-
-func (m *ServiceManager) updatePlan(p *plan.Plan) {
-	m.plan = p
-	for _, f := range m.planHandlers {
-		f(p)
-	}
-}
-
-func (m *ServiceManager) reloadPlan() error {
-	p, err := plan.ReadDir(m.pebbleDir)
-	if err != nil {
-		return err
-	}
-	m.updatePlan(p)
-	return nil
-}
-
-// Plan returns the configuration plan.
-func (m *ServiceManager) Plan() (*plan.Plan, error) {
-	releasePlan, err := m.acquirePlan()
-	if err != nil {
-		return nil, err
-	}
-	defer releasePlan()
-	return m.plan, nil
-}
-
-// AppendLayer appends the given layer to the plan's layers and updates the
-// layer.Order field to the new order. If a layer with layer.Label already
-// exists, return an error of type *LabelExists.
-func (m *ServiceManager) AppendLayer(layer *plan.Layer) error {
-	releasePlan, err := m.acquirePlan()
-	if err != nil {
-		return err
-	}
-	defer releasePlan()
-
-	index, _ := findLayer(m.plan.Layers, layer.Label)
-	if index >= 0 {
-		return &LabelExists{Label: layer.Label}
-	}
-
-	return m.appendLayer(layer)
-}
-
-func (m *ServiceManager) appendLayer(layer *plan.Layer) error {
-	newOrder := 1
-	if len(m.plan.Layers) > 0 {
-		last := m.plan.Layers[len(m.plan.Layers)-1]
-		newOrder = last.Order + 1
-	}
-
-	newLayers := append(m.plan.Layers, layer)
-	err := m.updatePlanLayers(newLayers)
-	if err != nil {
-		return err
-	}
-	layer.Order = newOrder
-	return nil
-}
-
-func (m *ServiceManager) updatePlanLayers(layers []*plan.Layer) error {
-	combined, err := plan.CombineLayers(layers...)
-	if err != nil {
-		return err
-	}
-	p := &plan.Plan{
-		Layers:     layers,
-		Services:   combined.Services,
-		Checks:     combined.Checks,
-		LogTargets: combined.LogTargets,
-	}
-	err = p.Validate()
-	if err != nil {
-		return err
-	}
-	m.updatePlan(p)
-	return nil
-}
-
-// findLayer returns the index (in layers) of the layer with the given label,
-// or returns -1, nil if there's no layer with that label.
-func findLayer(layers []*plan.Layer, label string) (int, *plan.Layer) {
-	for i, layer := range layers {
-		if layer.Label == label {
-			return i, layer
-		}
-	}
-	return -1, nil
-}
-
-// CombineLayer combines the given layer with an existing layer that has the
-// same label. If no existing layer has the label, append a new one. In either
-// case, update the layer.Order field to the new order.
-func (m *ServiceManager) CombineLayer(layer *plan.Layer) error {
-	releasePlan, err := m.acquirePlan()
-	if err != nil {
-		return err
-	}
-	defer releasePlan()
-
-	index, found := findLayer(m.plan.Layers, layer.Label)
-	if index < 0 {
-		// No layer found with this label, append new one.
-		return m.appendLayer(layer)
-	}
-
-	// Layer found with this label, combine into that one.
-	combined, err := plan.CombineLayers(found, layer)
-	if err != nil {
-		return err
-	}
-	combined.Order = found.Order
-	combined.Label = found.Label
-
-	// Insert combined layer back into plan's layers list.
-	newLayers := make([]*plan.Layer, len(m.plan.Layers))
-	copy(newLayers, m.plan.Layers)
-	newLayers[index] = combined
-	err = m.updatePlanLayers(newLayers)
-	if err != nil {
-		return err
-	}
-	layer.Order = found.Order
-	return nil
-}
-
-func (m *ServiceManager) acquirePlan() (release func(), err error) {
-	m.planLock.Lock()
-	if m.plan == nil {
-		err := m.reloadPlan()
-		if err != nil {
-			m.planLock.Unlock()
-			return nil, err
-		}
-	}
-	released := false
-	release = func() {
-		if !released {
-			released = true
-			m.planLock.Unlock()
-		}
-	}
-	return release, nil
 }
 
 // Ensure implements StateManager.Ensure.
@@ -267,14 +163,10 @@ const (
 // Services returns the list of configured services and their status, sorted
 // by service name. Filter by the specified service names if provided.
 func (m *ServiceManager) Services(names []string) ([]*ServiceInfo, error) {
-	mgrPlan, err := m.Plan()
-	if err != nil {
-		return nil, err
-	}
-
 	m.servicesLock.Lock()
 	defer m.servicesLock.Unlock()
 
+	planSnapshot := m.plan()
 	requested := make(map[string]bool, len(names))
 	for _, name := range names {
 		requested[name] = true
@@ -282,7 +174,7 @@ func (m *ServiceManager) Services(names []string) ([]*ServiceInfo, error) {
 
 	var services []*ServiceInfo
 	matchNames := len(names) > 0
-	for name, config := range mgrPlan.Services {
+	for name, config := range planSnapshot.Services {
 		if matchNames && !requested[name] {
 			continue
 		}
@@ -346,41 +238,29 @@ func stateToStatus(state serviceState) ServiceStatus {
 // DefaultServiceNames returns the name of the services set to start
 // by default.
 func (m *ServiceManager) DefaultServiceNames() ([]string, error) {
-	mgrPlan, err := m.Plan()
-	if err != nil {
-		return nil, err
-	}
-
+	planSnapshot := m.plan()
 	var names []string
-	for name, service := range mgrPlan.Services {
+	for name, service := range planSnapshot.Services {
 		if service.Startup == plan.StartupEnabled {
 			names = append(names, name)
 		}
 	}
 
-	return mgrPlan.StartOrder(names)
+	return planSnapshot.StartOrder(names)
 }
 
 // StartOrder returns the provided services, together with any required
 // dependencies, in the proper order for starting them all up.
 func (m *ServiceManager) StartOrder(services []string) ([]string, error) {
-	mgrPlan, err := m.Plan()
-	if err != nil {
-		return nil, err
-	}
-
-	return mgrPlan.StartOrder(services)
+	planSnapshot := m.plan()
+	return planSnapshot.StartOrder(services)
 }
 
 // StopOrder returns the provided services, together with any dependants,
 // in the proper order for stopping them all.
 func (m *ServiceManager) StopOrder(services []string) ([]string, error) {
-	mgrPlan, err := m.Plan()
-	if err != nil {
-		return nil, err
-	}
-
-	return mgrPlan.StopOrder(services)
+	planSnapshot := m.plan()
+	return planSnapshot.StopOrder(services)
 }
 
 // ServiceLogs returns iterators to the provided services. If last is negative,
@@ -416,18 +296,14 @@ func (m *ServiceManager) ServiceLogs(services []string, last int) (map[string]se
 // Replan returns a list of services to stop and services to start because
 // their plans had changed between when they started and this call.
 func (m *ServiceManager) Replan() ([]string, []string, error) {
-	mgrPlan, err := m.Plan()
-	if err != nil {
-		return nil, nil, err
-	}
-
 	m.servicesLock.Lock()
 	defer m.servicesLock.Unlock()
 
+	planSnapshot := m.plan()
 	needsRestart := make(map[string]bool)
 	var stop []string
 	for name, s := range m.services {
-		if config, ok := mgrPlan.Services[name]; ok {
+		if config, ok := planSnapshot.Services[name]; ok {
 			if config.Equal(s.config) {
 				continue
 			}
@@ -438,13 +314,13 @@ func (m *ServiceManager) Replan() ([]string, []string, error) {
 	}
 
 	var start []string
-	for name, config := range mgrPlan.Services {
+	for name, config := range planSnapshot.Services {
 		if needsRestart[name] || config.Startup == plan.StartupEnabled {
 			start = append(start, name)
 		}
 	}
 
-	stop, err = mgrPlan.StopOrder(stop)
+	stop, err := planSnapshot.StopOrder(stop)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -454,7 +330,7 @@ func (m *ServiceManager) Replan() ([]string, []string, error) {
 		}
 	}
 
-	start, err = mgrPlan.StartOrder(start)
+	start, err = planSnapshot.StartOrder(start)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -501,46 +377,6 @@ func (m *ServiceManager) CheckFailed(name string) {
 	}
 }
 
-// SetServiceArgs sets the service arguments provided by "pebble run --args"
-// to their respective services. It adds a new layer in the plan, the layer
-// consisting of services with commands having their arguments changed.
-func (m *ServiceManager) SetServiceArgs(serviceArgs map[string][]string) error {
-	releasePlan, err := m.acquirePlan()
-	if err != nil {
-		return err
-	}
-	defer releasePlan()
-
-	newLayer := &plan.Layer{
-		// Labels with "pebble-*" prefix are (will be) reserved, see:
-		// https://github.com/canonical/pebble/issues/220
-		Label:    "pebble-service-args",
-		Services: make(map[string]*plan.Service),
-	}
-
-	for name, args := range serviceArgs {
-		service, ok := m.plan.Services[name]
-		if !ok {
-			return fmt.Errorf("service %q not found in plan", name)
-		}
-		base, _, err := service.ParseCommand()
-		if err != nil {
-			return err
-		}
-		newLayer.Services[name] = &plan.Service{
-			Override: plan.MergeOverride,
-			Command:  plan.CommandString(base, args),
-		}
-	}
-
-	err = newLayer.Validate()
-	if err != nil {
-		return err
-	}
-
-	return m.appendLayer(newLayer)
-}
-
 // servicesToStop is used during service manager shutdown to cleanly terminate
 // all running services. Running services include both services in the
 // stateRunning and stateBackoff, since a service in backoff state can start
@@ -550,19 +386,15 @@ func (m *ServiceManager) SetServiceArgs(serviceArgs map[string][]string) error {
 // exits), it would generate a runtime error as the reaper would already be dead.
 // This function returns a slice of service names to stop, in dependency order.
 func servicesToStop(m *ServiceManager) ([]string, error) {
-	mgrPlan, err := m.Plan()
-	if err != nil {
-		return nil, err
-	}
-
+	planSnapshot := m.plan()
 	// Get all service names in plan.
-	services := make([]string, 0, len(mgrPlan.Services))
-	for name := range mgrPlan.Services {
+	var services []string
+	for name := range planSnapshot.Services {
 		services = append(services, name)
 	}
 
 	// Order according to dependency order.
-	stop, err := mgrPlan.StopOrder(services)
+	stop, err := planSnapshot.StopOrder(services)
 	if err != nil {
 		return nil, err
 	}

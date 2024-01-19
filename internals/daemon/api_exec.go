@@ -64,7 +64,7 @@ func v1PostExec(c *Command, req *http.Request, _ *UserState) Response {
 		return BadRequest("cannot find executable %q", payload.Command[0])
 	}
 
-	p, err := c.d.overlord.ServiceManager().Plan()
+	p, err := c.d.overlord.PlanManager().Plan()
 	if err != nil {
 		return BadRequest("%v", err)
 	}
