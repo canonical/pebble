@@ -223,6 +223,22 @@ func (cmd *cmdExec) Execute(args []string) error {
 	}
 }
 
+// willMakeTerminalRaw returns true if the exec command will make the
+// terminal raw during execution.
+func (cmd *cmdExec) willMakeTerminalRaw() bool {
+	stdinIsTerminal := ptyutil.IsTerminal(unix.Stdin)
+	stdoutIsTerminal := ptyutil.IsTerminal(unix.Stdout)
+	var terminal bool
+	if cmd.Terminal {
+		terminal = true
+	} else if cmd.NoTerminal {
+		terminal = false
+	} else {
+		terminal = stdoutIsTerminal
+	}
+	return terminal && stdinIsTerminal
+}
+
 func execControlHandler(process *client.ExecProcess, terminal bool, stop <-chan struct{}, sighup chan<- struct{}) {
 	ch := make(chan os.Signal, 10)
 	signal.Notify(ch,

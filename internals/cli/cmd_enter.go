@@ -139,6 +139,15 @@ func (cmd *cmdEnter) Execute(args []string) error {
 		panic("internal error: expected subcommand (parser.Active == nil)")
 	}
 
+	// The exec command makes terminal raw to run interactive
+	// applications. Ignore --verbose for those cases.
+	if execCmd, ok := commander.(*cmdExec); ok {
+		if execCmd.willMakeTerminalRaw() {
+			cmd.Verbose = false
+			runCmd.Verbose = false
+		}
+	}
+
 	enterFlags, supported := commandEnterFlags(commander)
 
 	if !supported {
