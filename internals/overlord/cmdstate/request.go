@@ -124,7 +124,7 @@ func Exec(st *state.State, args *ExecArgs) (*state.Task, ExecMetadata, error) {
 	}
 
 	// Create a task for this execution (though it's not started here).
-	task := st.NewTask("exec", fmt.Sprintf("exec command %q", args.Command[0]))
+	task := st.NewTask("exec", fmt.Sprintf("Execute command %q", args.Command[0]))
 	setup := execSetup{
 		Command:     args.Command,
 		Environment: environment,
