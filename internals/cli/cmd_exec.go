@@ -117,14 +117,7 @@ func (cmd *cmdExec) Execute(args []string) error {
 
 	// Specify Terminal=true if -t is given, or if stdout is a TTY.
 	stdoutIsTerminal := ptyutil.IsTerminal(unix.Stdout)
-	var terminal bool
-	if cmd.Terminal {
-		terminal = true
-	} else if cmd.NoTerminal {
-		terminal = false
-	} else {
-		terminal = stdoutIsTerminal
-	}
+	terminal := cmd.useTerminal(stdoutIsTerminal)
 
 	// Specify Interactive=true if -i is given, or if stdin and stdout are TTYs.
 	stdinIsTerminal := ptyutil.IsTerminal(unix.Stdin)
@@ -223,20 +216,15 @@ func (cmd *cmdExec) Execute(args []string) error {
 	}
 }
 
-// willMakeTerminalRaw returns true if the exec command will make the
-// terminal raw during execution.
-func (cmd *cmdExec) willMakeTerminalRaw() bool {
-	stdinIsTerminal := ptyutil.IsTerminal(unix.Stdin)
-	stdoutIsTerminal := ptyutil.IsTerminal(unix.Stdout)
-	var terminal bool
+// useTerminal returns true if -t is given, or if stdoutIsTerminal is true.
+func (cmd *cmdExec) useTerminal(stdoutIsTerminal bool) bool {
 	if cmd.Terminal {
-		terminal = true
+		return true
 	} else if cmd.NoTerminal {
-		terminal = false
+		return false
 	} else {
-		terminal = stdoutIsTerminal
+		return stdoutIsTerminal
 	}
-	return terminal && stdinIsTerminal
 }
 
 func execControlHandler(process *client.ExecProcess, terminal bool, stop <-chan struct{}, sighup chan<- struct{}) {

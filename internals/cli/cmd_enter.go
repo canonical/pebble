@@ -18,9 +18,11 @@ import (
 	"fmt"
 
 	"github.com/canonical/go-flags"
+	"golang.org/x/sys/unix"
 
 	"github.com/canonical/pebble/client"
 	"github.com/canonical/pebble/internals/logger"
+	"github.com/canonical/pebble/internals/ptyutil"
 )
 
 const cmdEnterSummary = "Run subcommand under a container environment"
@@ -139,10 +141,13 @@ func (cmd *cmdEnter) Execute(args []string) error {
 		panic("internal error: expected subcommand (parser.Active == nil)")
 	}
 
-	// The exec command makes terminal raw to run interactive
-	// applications. Ignore --verbose for those cases.
+	// The exec command makes the terminal raw to run interactive
+	// applications. Ignore --verbose for those cases, to avoid
+	// log output being sent to the interactive terminal.
 	if execCmd, ok := commander.(*cmdExec); ok {
-		if execCmd.willMakeTerminalRaw() {
+		stdinIsTerminal := ptyutil.IsTerminal(unix.Stdin)
+		stdoutIsTerminal := ptyutil.IsTerminal(unix.Stdout)
+		if stdinIsTerminal && execCmd.useTerminal(stdoutIsTerminal) {
 			cmd.Verbose = false
 			runCmd.Verbose = false
 		}
