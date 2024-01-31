@@ -147,7 +147,8 @@ func (cmd *cmdEnter) Execute(args []string) error {
 	if execCmd, ok := commander.(*cmdExec); ok {
 		stdinIsTerminal := ptyutil.IsTerminal(unix.Stdin)
 		stdoutIsTerminal := ptyutil.IsTerminal(unix.Stdout)
-		if stdinIsTerminal && execCmd.useTerminal(stdoutIsTerminal) {
+		terminal := execCmd.useTerminal(stdoutIsTerminal)
+		if terminal && stdinIsTerminal {
 			cmd.Verbose = false
 			runCmd.Verbose = false
 		}
