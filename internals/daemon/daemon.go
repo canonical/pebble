@@ -363,6 +363,27 @@ func logit(handler http.Handler) http.Handler {
 	})
 }
 
+// panicHandler opts out of the default net/http behaviour of recovering from
+// panics in ServeHTTP goroutines, so that the server isn't left in a bad or
+// deadlocked state (for example, due to a held mutex lock).
+//
+// See: https://github.com/canonical/pebble/issues/314#issuecomment-1926148064
+// Workaround from: https://github.com/golang/go/issues/16542#issuecomment-246549902
+func panicHandler(handler http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			err := recover()
+			if err != nil {
+				buf := make([]byte, 1024*1024)
+				n := runtime.Stack(buf, true)
+				fmt.Fprintf(os.Stderr, "panic: %v\n\n%s", err, buf[:n])
+				os.Exit(1)
+			}
+		}()
+		handler.ServeHTTP(w, r)
+	})
+}
+
 // Init sets up the Daemon's internal workings.
 // Don't call more than once.
 func (d *Daemon) Init() error {
@@ -485,7 +506,7 @@ func (d *Daemon) Start() error {
 
 	d.connTracker = &connTracker{conns: make(map[net.Conn]struct{})}
 	d.serve = &http.Server{
-		Handler:   logit(d.router),
+		Handler:   panicHandler(logit(d.router)),
 		ConnState: d.connTracker.trackConn,
 	}
 
