@@ -145,9 +145,20 @@ func (cmd *cmdEnter) Execute(args []string) error {
 	// applications. Ignore --verbose for those cases, to avoid
 	// log output being sent to the interactive terminal.
 	if execCmd, ok := commander.(*cmdExec); ok {
+		// The following logic is duplicated from cmdExec.Execute()
+		// in internals/cli/cmd_exec.go.
 		stdinIsTerminal := ptyutil.IsTerminal(unix.Stdin)
 		stdoutIsTerminal := ptyutil.IsTerminal(unix.Stdout)
-		terminal := execCmd.useTerminal(stdoutIsTerminal)
+		var terminal bool
+		if execCmd.Terminal {
+			terminal = true
+		} else if execCmd.NoTerminal {
+			terminal = false
+		} else {
+			terminal = stdoutIsTerminal
+		}
+		// Terminal is made RAW in exec if both terminal and
+		// stdIsTerminal are true.
 		if terminal && stdinIsTerminal {
 			cmd.Verbose = false
 			runCmd.Verbose = false

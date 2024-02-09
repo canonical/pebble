@@ -117,7 +117,14 @@ func (cmd *cmdExec) Execute(args []string) error {
 
 	// Specify Terminal=true if -t is given, or if stdout is a TTY.
 	stdoutIsTerminal := ptyutil.IsTerminal(unix.Stdout)
-	terminal := cmd.useTerminal(stdoutIsTerminal)
+	var terminal bool
+	if cmd.Terminal {
+		terminal = true
+	} else if cmd.NoTerminal {
+		terminal = false
+	} else {
+		terminal = stdoutIsTerminal
+	}
 
 	// Specify Interactive=true if -i is given, or if stdin and stdout are TTYs.
 	stdinIsTerminal := ptyutil.IsTerminal(unix.Stdin)
@@ -213,17 +220,6 @@ func (cmd *cmdExec) Execute(args []string) error {
 		fmt.Fprintf(os.Stderr, "SIGHUP received, exiting\r\n")
 		// Exit with exit code 0 in this case (same behaviour as ssh).
 		return nil
-	}
-}
-
-// useTerminal returns true if -t is given, or if stdoutIsTerminal is true.
-func (cmd *cmdExec) useTerminal(stdoutIsTerminal bool) bool {
-	if cmd.Terminal {
-		return true
-	} else if cmd.NoTerminal {
-		return false
-	} else {
-		return stdoutIsTerminal
 	}
 }
 
