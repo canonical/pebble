@@ -228,14 +228,11 @@ func (c *Command) Daemon() *Daemon {
 }
 
 func (c *Command) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	st := c.d.state
-	st.Lock()
-	user, err := userFromRequest(st, r)
+	user, err := userFromRequest(nil, r) // don't pass state as this does nothing right now
 	if err != nil {
 		statusForbidden("forbidden").ServeHTTP(w, r)
 		return
 	}
-	st.Unlock()
 
 	// check if we are in degradedMode
 	if c.d.degradedErr != nil && r.Method != "GET" {
@@ -273,6 +270,7 @@ func (c *Command) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if rsp, ok := rsp.(*resp); ok {
+		st := c.d.state
 		st.Lock()
 		_, rst := restart.Pending(st)
 		st.Unlock()
