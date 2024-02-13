@@ -166,7 +166,7 @@ func (c *Command) canAccess(r *http.Request, user *UserState) accessResult {
 
 	// isUser means we have a UID for the request
 	isUser := false
-	pid, uid, socket, err := ucrednetGet(r.RemoteAddr)
+	ucred, err := ucrednetGet(r.RemoteAddr)
 	if err == nil {
 		isUser = true
 	} else if err != errNoID {
@@ -174,10 +174,7 @@ func (c *Command) canAccess(r *http.Request, user *UserState) accessResult {
 		return accessForbidden
 	}
 
-	isUntrusted := (socket == c.d.untrustedSocketPath)
-
-	_ = pid
-	_ = uid
+	isUntrusted := (ucred != nil && ucred.Socket == c.d.untrustedSocketPath)
 
 	if isUntrusted {
 		if c.UntrustedOK {
@@ -203,7 +200,7 @@ func (c *Command) canAccess(r *http.Request, user *UserState) accessResult {
 		return accessUnauthorized
 	}
 
-	if uid == 0 || sys.UserID(uid) == sysGetuid() {
+	if ucred.Uid == 0 || sys.UserID(ucred.Uid) == sysGetuid() {
 		// Superuser and process owner can do anything.
 		return accessOK
 	}
