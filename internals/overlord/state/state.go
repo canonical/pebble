@@ -96,7 +96,7 @@ type State struct {
 
 	noticeCond *sync.Cond
 
-	modified bool
+	modified atomic.Bool
 
 	cache map[interface{}]interface{}
 
@@ -116,19 +116,19 @@ func New(backend Backend) *State {
 		tasks:               make(map[string]*Task),
 		warnings:            make(map[string]*Warning),
 		notices:             make(map[noticeKey]*Notice),
-		modified:            true,
 		cache:               make(map[interface{}]interface{}),
 		pendingChangeByAttr: make(map[string]func(*Change) bool),
 		taskHandlers:        make(map[int]func(t *Task, old Status, new Status)),
 		changeHandlers:      make(map[int]func(chg *Change, old Status, new Status)),
 	}
+	st.modified.Store(true)
 	st.noticeCond = sync.NewCond(st) // use State.Lock and State.Unlock
 	return st
 }
 
 // Modified returns whether the state was modified since the last checkpoint.
 func (s *State) Modified() bool {
-	return s.modified
+	return s.modified.Load()
 }
 
 // Lock acquires the state lock.
@@ -144,7 +144,7 @@ func (s *State) reading() {
 }
 
 func (s *State) writing() {
-	s.modified = true
+	s.modified.Store(true)
 	if atomic.LoadInt32(&s.muC) != 1 {
 		panic("internal error: accessing state without lock")
 	}
@@ -243,7 +243,14 @@ func (s *State) Unlocker() (unlock func() (relock func())) {
 func (s *State) Unlock() {
 	defer s.unlock()
 
-	if !s.modified || s.backend == nil {
+	if s.backend == nil {
+		return
+	}
+
+	// If state hasn't been modified, do nothing, Otherwise, save state to
+	// disk and clear the flag.
+	modified := s.modified.Swap(false)
+	if !modified {
 		return
 	}
 
@@ -252,7 +259,6 @@ func (s *State) Unlock() {
 	start := time.Now()
 	for time.Since(start) <= unlockCheckpointRetryMaxTime {
 		if err = s.backend.Checkpoint(data); err == nil {
-			s.modified = false
 			return
 		}
 		time.Sleep(unlockCheckpointRetryInterval)
@@ -587,7 +593,7 @@ func ReadState(backend Backend, r io.Reader) (*State, error) {
 	}
 	s.backend = backend
 	s.noticeCond = sync.NewCond(s)
-	s.modified = false
+	s.modified.Store(false)
 	s.cache = make(map[interface{}]interface{})
 	s.pendingChangeByAttr = make(map[string]func(*Change) bool)
 	s.changeHandlers = make(map[int]func(chg *Change, old Status, new Status))

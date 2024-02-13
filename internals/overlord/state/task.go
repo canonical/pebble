@@ -17,6 +17,7 @@ package state
 import (
 	"encoding/json"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/canonical/pebble/internals/logger"
@@ -47,8 +48,13 @@ type Task struct {
 	waitTasks    []string
 	haltTasks    []string
 	lanes        []int
-	log          []string
 	change       string
+
+	// Use a fine-grained lock for the logs to avoid holding the global state
+	// lock when just adding a log -- that easily caused deadlocks. See:
+	// https://github.com/canonical/pebble/issues/314
+	logLock sync.Mutex
+	log     []string
 
 	spawnTime time.Time
 	readyTime time.Time
@@ -121,7 +127,7 @@ func (t *Task) MarshalJSON() ([]byte, error) {
 		WaitTasks:    t.waitTasks,
 		HaltTasks:    t.haltTasks,
 		Lanes:        t.lanes,
-		Log:          t.log,
+		Log:          t.Log(),
 		Change:       t.change,
 
 		SpawnTime: t.spawnTime,
@@ -165,7 +171,11 @@ func (t *Task) UnmarshalJSON(data []byte) error {
 	t.waitTasks = unmarshalled.WaitTasks
 	t.haltTasks = unmarshalled.HaltTasks
 	t.lanes = unmarshalled.Lanes
-	t.log = unmarshalled.Log
+	func() {
+		t.logLock.Lock()
+		defer t.logLock.Unlock()
+		t.log = unmarshalled.Log
+	}()
 	t.change = unmarshalled.Change
 	t.spawnTime = unmarshalled.SpawnTime
 	if unmarshalled.ReadyTime != nil {
@@ -416,18 +426,27 @@ func FakeTime(now time.Time) (restore func()) {
 }
 
 func (t *Task) addLog(kind, format string, args []interface{}) {
-	if len(t.log) > 9 {
-		copy(t.log, t.log[len(t.log)-9:])
-		t.log = t.log[:9]
-	}
+	var msg string
+	func() {
+		t.logLock.Lock()
+		defer t.logLock.Unlock()
 
-	tstr := timeNow().Format(time.RFC3339)
-	msg := tstr + " " + kind + " " + fmt.Sprintf(format, args...)
-	t.log = append(t.log, msg)
+		if len(t.log) > 9 {
+			copy(t.log, t.log[len(t.log)-9:])
+			t.log = t.log[:9]
+		}
+
+		tstr := timeNow().Format(time.RFC3339)
+		msg = tstr + " " + kind + " " + fmt.Sprintf(format, args...)
+		t.log = append(t.log, msg)
+	}()
+
+	t.state.modified.Store(true)
+
 	logger.Debugf(msg)
 }
 
-// Log returns the most recent messages logged into the task.
+// Log returns a copy of the most recent messages logged into the task.
 //
 // Only the most recent entries logged are returned, potentially with
 // different behavior for different task statuses. How many entries
@@ -435,23 +454,28 @@ func (t *Task) addLog(kind, format string, args []interface{}) {
 //
 // Messages are prefixed with one of the known message kinds.
 // See details about LogInfo and LogError.
-//
-// The returned slice should not be read from without the
-// state lock held, and should not be written to.
 func (t *Task) Log() []string {
-	t.state.reading()
-	return t.log
+	t.logLock.Lock()
+	defer t.logLock.Unlock()
+
+	logCopy := make([]string, len(t.log))
+	for i, s := range t.log {
+		logCopy[i] = s
+	}
+	return logCopy
 }
 
 // Logf logs information about the progress of the task.
+//
+// The state lock does not need to be held when calling this method.
 func (t *Task) Logf(format string, args ...interface{}) {
-	t.state.writing()
 	t.addLog(LogInfo, format, args)
 }
 
 // Errorf logs error information about the progress of the task.
+//
+// The state lock does not need to be held when calling this method.
 func (t *Task) Errorf(format string, args ...interface{}) {
-	t.state.writing()
 	t.addLog(LogError, format, args)
 }
 

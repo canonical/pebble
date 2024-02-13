@@ -190,7 +190,7 @@ func (m *ServiceManager) serviceForStart(task *state.Task, config *plan.Service)
 
 	switch service.state {
 	case stateInitial, stateStarting, stateRunning:
-		taskLogf(task, "Service %q already started.", config.Name)
+		task.Logf("Service %q already started.", config.Name)
 		return nil
 	case stateBackoff, stateStopped, stateExited:
 		// Start allowed when service is backing off, was stopped, or has exited.
@@ -202,14 +202,6 @@ func (m *ServiceManager) serviceForStart(task *state.Task, config *plan.Service)
 		// Cannot start service while terminating or killing, handle in start().
 		return service
 	}
-}
-
-func taskLogf(task *state.Task, format string, args ...interface{}) {
-	st := task.State()
-	st.Lock()
-	defer st.Unlock()
-
-	task.Logf(format, args...)
 }
 
 func (m *ServiceManager) doStop(task *state.Task, tomb *tomb.Tomb) error {
@@ -258,19 +250,19 @@ func (m *ServiceManager) serviceForStop(task *state.Task, name string) *serviceD
 
 	service := m.services[name]
 	if service == nil {
-		taskLogf(task, "Service %q has never been started.", name)
+		task.Logf("Service %q has never been started.", name)
 		return nil
 	}
 
 	switch service.state {
 	case stateTerminating, stateKilling:
-		taskLogf(task, "Service %q already stopping.", name)
+		task.Logf("Service %q already stopping.", name)
 		return nil
 	case stateStopped:
-		taskLogf(task, "Service %q already stopped.", name)
+		task.Logf("Service %q already stopped.", name)
 		return nil
 	case stateExited:
-		taskLogf(task, "Service %q had already exited.", name)
+		task.Logf("Service %q had already exited.", name)
 		service.transition(stateStopped)
 		return nil
 	default:
