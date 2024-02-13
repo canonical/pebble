@@ -1,0 +1,60 @@
+// -*- Mode: Go; indent-tabs-mode: t -*-
+
+/*
+ * Copyright (C) 2021 Canonical Ltd
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 3 as
+ * published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
+// Based on: https://github.com/snapcore/snapd/blob/master/daemon/access.go
+
+package daemon
+
+import (
+	"net/http"
+)
+
+// accessChecker checks whether a particular request is allowed.
+//
+// An access checker will either allow a request (returns nil) or deny it.
+type accessChecker interface {
+	CheckAccess(d *Daemon, r *http.Request, ucred *ucrednet, user *UserState) Response
+}
+
+// openAccess allows all requests
+type openAccess struct{}
+
+func (ac openAccess) CheckAccess(d *Daemon, r *http.Request, ucred *ucrednet, user *UserState) Response {
+	return nil
+}
+
+// rootAccess allows requests from the root uid
+type rootAccess struct{}
+
+func (ac rootAccess) CheckAccess(d *Daemon, r *http.Request, ucred *ucrednet, user *UserState) Response {
+	if ucred != nil && ucred.Uid == 0 {
+		return nil
+	}
+	return statusForbidden("access denied")
+}
+
+// userAccess allows requests from any local user
+type userAccess struct{}
+
+func (ac userAccess) CheckAccess(d *Daemon, r *http.Request, ucred *ucrednet, user *UserState) Response {
+	if ucred == nil {
+		return statusForbidden("access denied")
+	}
+	return nil
+}

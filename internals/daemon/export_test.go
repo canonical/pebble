@@ -62,3 +62,16 @@ func FakeSyscallReboot(f func(cmd int) error) (restore func()) {
 		syscallReboot = old
 	}
 }
+
+var (
+	StatusForbidden    = statusForbidden
+	StatusUnauthorized = statusUnauthorized
+)
+
+type (
+	AccessChecker = accessChecker
+	OpenAccess    = openAccess
+	UserAccess    = userAccess
+	RootAccess    = rootAccess
+	Ucrednet      = ucrednet
+)
