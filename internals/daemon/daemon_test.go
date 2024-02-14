@@ -176,7 +176,6 @@ func (s *daemonSuite) TestAddCommand(c *C) {
 	command := Command{
 		Path:        endpoint,
 		ReadAccess:  openAccess{},
-		WriteAccess: openAccess{},
 		GET:         getCallback,
 	}
 	API = append(API, &command)
