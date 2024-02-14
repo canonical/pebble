@@ -19,9 +19,10 @@ import (
 )
 
 // accessChecker checks whether a particular request is allowed.
-//
-// An access checker will either allow a request (returns nil) or deny it.
 type accessChecker interface {
+	// Check if access should be granted or denied. In case of granting access,
+	// return nil. In case access is denied, return a non-nil error response,
+	// such as statusForbidden("access denied").
 	CheckAccess(d *Daemon, r *http.Request, ucred *ucrednet, user *UserState) Response
 }
 
