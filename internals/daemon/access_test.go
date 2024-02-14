@@ -15,6 +15,8 @@
 package daemon_test
 
 import (
+	"os"
+
 	. "gopkg.in/check.v1"
 
 	"github.com/canonical/pebble/internals/daemon"
@@ -61,15 +63,22 @@ func (s *accessSuite) TestUserAccess(c *C) {
 	c.Check(ac.CheckAccess(nil, nil, ucred, nil), IsNil)
 }
 
-func (s *accessSuite) TestRootAccess(c *C) {
-	var ac daemon.AccessChecker = daemon.RootAccess{}
+func (s *accessSuite) TestAdminAccess(c *C) {
+	var ac daemon.AccessChecker = daemon.AdminAccess{}
 
-	// RootAccess denies access without peer credentials.
+	// AdminAccess denies access without peer credentials.
 	c.Check(ac.CheckAccess(nil, nil, nil, nil), DeepEquals, errUnauthorized)
 
-	// Non-root users are forbidden
-	ucred := &daemon.Ucrednet{Uid: 42, Pid: 100, Socket: socketPath}
+	// Current user's UID
+	uid := uint32(os.Getuid())
+
+	// Non-root users that are different from the current user are forbidden
+	ucred := &daemon.Ucrednet{Uid: uid + 1, Pid: 100, Socket: socketPath}
 	c.Check(ac.CheckAccess(nil, nil, ucred, nil), DeepEquals, errUnauthorized)
+
+	// The current user is granted access
+	ucred = &daemon.Ucrednet{Uid: uid, Pid: 100, Socket: socketPath}
+	c.Check(ac.CheckAccess(nil, nil, ucred, nil), IsNil)
 
 	// Root is granted access
 	ucred = &daemon.Ucrednet{Uid: 0, Pid: 100, Socket: socketPath}

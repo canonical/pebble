@@ -16,6 +16,7 @@ package daemon
 
 import (
 	"net/http"
+	"os"
 )
 
 // AccessChecker checks whether a particular request is allowed.
@@ -33,11 +34,11 @@ func (ac OpenAccess) CheckAccess(d *Daemon, r *http.Request, ucred *Ucrednet, us
 	return nil
 }
 
-// RootAccess allows requests from the root uid
-type RootAccess struct{}
+// AdminAccess allows requests from the root uid and the current user's uid
+type AdminAccess struct{}
 
-func (ac RootAccess) CheckAccess(d *Daemon, r *http.Request, ucred *Ucrednet, user *UserState) Response {
-	if ucred != nil && ucred.Uid == 0 {
+func (ac AdminAccess) CheckAccess(d *Daemon, r *http.Request, ucred *Ucrednet, user *UserState) Response {
+	if ucred != nil && (ucred.Uid == 0 || ucred.Uid == uint32(os.Getuid())) {
 		return nil
 	}
 	return Unauthorized("access denied")
