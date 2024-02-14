@@ -128,8 +128,8 @@ type Command struct {
 	POST   ResponseFunc
 
 	// Access control.
-	ReadAccess  accessChecker
-	WriteAccess accessChecker
+	ReadAccess  AccessChecker
+	WriteAccess AccessChecker
 
 	d *Daemon
 }
@@ -171,7 +171,7 @@ func (c *Command) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var rspf ResponseFunc
-	var access accessChecker
+	var access AccessChecker
 	var rsp = statusMethodNotAllowed("method %q not allowed", r.Method)
 
 	switch r.Method {

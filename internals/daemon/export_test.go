@@ -69,7 +69,6 @@ var (
 )
 
 type (
-	AccessChecker = accessChecker
 	OpenAccess    = openAccess
 	UserAccess    = userAccess
 	RootAccess    = rootAccess

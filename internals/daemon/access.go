@@ -18,8 +18,8 @@ import (
 	"net/http"
 )
 
-// accessChecker checks whether a particular request is allowed.
-type accessChecker interface {
+// AccessChecker checks whether a particular request is allowed.
+type AccessChecker interface {
 	// Check if access should be granted or denied. In case of granting access,
 	// return nil. In case access is denied, return a non-nil error response,
 	// such as statusForbidden("access denied").
