@@ -22,7 +22,7 @@ import (
 type AccessChecker interface {
 	// Check if access should be granted or denied. In case of granting access,
 	// return nil. In case access is denied, return a non-nil error response,
-	// such as statusForbidden("access denied").
+	// such as Forbidden("access denied").
 	CheckAccess(d *Daemon, r *http.Request, ucred *Ucrednet, user *UserState) Response
 }
 
@@ -40,7 +40,7 @@ func (ac RootAccess) CheckAccess(d *Daemon, r *http.Request, ucred *Ucrednet, us
 	if ucred != nil && ucred.Uid == 0 {
 		return nil
 	}
-	return statusForbidden("access denied")
+	return Forbidden("access denied")
 }
 
 // UserAccess allows requests from any local user
@@ -48,7 +48,7 @@ type UserAccess struct{}
 
 func (ac UserAccess) CheckAccess(d *Daemon, r *http.Request, ucred *Ucrednet, user *UserState) Response {
 	if ucred == nil {
-		return statusForbidden("access denied")
+		return Forbidden("access denied")
 	}
 	return nil
 }

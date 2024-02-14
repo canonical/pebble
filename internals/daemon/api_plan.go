@@ -27,17 +27,17 @@ import (
 func v1GetPlan(c *Command, r *http.Request, _ *UserState) Response {
 	format := r.URL.Query().Get("format")
 	if format != "yaml" {
-		return statusBadRequest("invalid format %q", format)
+		return BadRequest("invalid format %q", format)
 	}
 
 	servmgr := overlordServiceManager(c.d.overlord)
 	plan, err := servmgr.Plan()
 	if err != nil {
-		return statusInternalError("%v", err)
+		return InternalError("%v", err)
 	}
 	planYAML, err := yaml.Marshal(plan)
 	if err != nil {
-		return statusInternalError("cannot serialize plan: %v", err)
+		return InternalError("cannot serialize plan: %v", err)
 	}
 	return SyncResponse(string(planYAML))
 }
@@ -52,21 +52,21 @@ func v1PostLayers(c *Command, r *http.Request, _ *UserState) Response {
 	}
 	decoder := json.NewDecoder(r.Body)
 	if err := decoder.Decode(&payload); err != nil {
-		return statusBadRequest("cannot decode request body: %v", err)
+		return BadRequest("cannot decode request body: %v", err)
 	}
 
 	if payload.Action != "add" {
-		return statusBadRequest("invalid action %q", payload.Action)
+		return BadRequest("invalid action %q", payload.Action)
 	}
 	if payload.Label == "" {
-		return statusBadRequest("label must be set")
+		return BadRequest("label must be set")
 	}
 	if payload.Format != "yaml" {
-		return statusBadRequest("invalid format %q", payload.Format)
+		return BadRequest("invalid format %q", payload.Format)
 	}
 	layer, err := plan.ParseLayer(0, payload.Label, []byte(payload.Layer))
 	if err != nil {
-		return statusBadRequest("cannot parse layer YAML: %v", err)
+		return BadRequest("cannot parse layer YAML: %v", err)
 	}
 
 	servmgr := overlordServiceManager(c.d.overlord)
@@ -77,12 +77,12 @@ func v1PostLayers(c *Command, r *http.Request, _ *UserState) Response {
 	}
 	if err != nil {
 		if _, ok := err.(*servstate.LabelExists); ok {
-			return statusBadRequest("%v", err)
+			return BadRequest("%v", err)
 		}
 		if _, ok := err.(*plan.FormatError); ok {
-			return statusBadRequest("%v", err)
+			return BadRequest("%v", err)
 		}
-		return statusInternalError("%v", err)
+		return InternalError("%v", err)
 	}
 	return SyncResponse(true)
 }

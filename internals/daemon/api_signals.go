@@ -28,16 +28,16 @@ func v1PostSignals(c *Command, req *http.Request, _ *UserState) Response {
 	var payload signalsPayload
 	decoder := json.NewDecoder(req.Body)
 	if err := decoder.Decode(&payload); err != nil {
-		return statusBadRequest("cannot decode request body: %v", err)
+		return BadRequest("cannot decode request body: %v", err)
 	}
 	if len(payload.Services) == 0 {
-		return statusBadRequest("must specify one or more services")
+		return BadRequest("must specify one or more services")
 	}
 
 	serviceMgr := c.d.overlord.ServiceManager()
 	err := serviceMgr.SendSignal(payload.Services, payload.Signal)
 	if err != nil {
-		return statusInternalError("%s", err)
+		return InternalError("%s", err)
 	}
 	return SyncResponse(true)
 }

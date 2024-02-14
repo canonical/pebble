@@ -159,20 +159,20 @@ func (c *Command) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	st.Lock()
 	user, err := userFromRequest(st, r)
 	if err != nil {
-		statusForbidden("forbidden").ServeHTTP(w, r)
+		Forbidden("forbidden").ServeHTTP(w, r)
 		return
 	}
 	st.Unlock()
 
 	// check if we are in degradedMode
 	if c.d.degradedErr != nil && r.Method != "GET" {
-		statusInternalError(c.d.degradedErr.Error()).ServeHTTP(w, r)
+		InternalError(c.d.degradedErr.Error()).ServeHTTP(w, r)
 		return
 	}
 
 	var rspf ResponseFunc
 	var access AccessChecker
-	var rsp = statusMethodNotAllowed("method %q not allowed", r.Method)
+	var rsp = MethodNotAllowed("method %q not allowed", r.Method)
 
 	switch r.Method {
 	case "GET":
@@ -187,14 +187,14 @@ func (c *Command) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if rspf == nil {
-		statusMethodNotAllowed("method %q not allowed", r.Method).ServeHTTP(w, r)
+		MethodNotAllowed("method %q not allowed", r.Method).ServeHTTP(w, r)
 		return
 	}
 
 	ucred, err := ucrednetGet(r.RemoteAddr)
 	if err != nil && err != errNoID {
 		logger.Noticef("Cannot parse UID from remote address %q: %s", r.RemoteAddr, err)
-		statusInternalError(err.Error()).ServeHTTP(w, r)
+		InternalError(err.Error()).ServeHTTP(w, r)
 		return
 	}
 
@@ -358,7 +358,7 @@ func (d *Daemon) addRoutes() {
 
 	// also maybe add a /favicon.ico handler...
 
-	d.router.NotFoundHandler = statusNotFound("invalid API endpoint requested")
+	d.router.NotFoundHandler = NotFound("invalid API endpoint requested")
 }
 
 type connTracker struct {

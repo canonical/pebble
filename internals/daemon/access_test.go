@@ -26,8 +26,8 @@ type accessSuite struct {
 var _ = Suite(&accessSuite{})
 
 var (
-	errForbidden    = daemon.StatusForbidden("access denied")
-	errUnauthorized = daemon.StatusUnauthorized("access denied")
+	errForbidden    = daemon.Forbidden("access denied")
+	errUnauthorized = daemon.Unauthorized("access denied")
 )
 
 const (
