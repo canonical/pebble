@@ -27,12 +27,10 @@ import (
 var API = []*Command{{
 	Path:        "/v1/system-info",
 	ReadAccess:  openAccess{},
-	WriteAccess: userAccess{},
 	GET:         v1SystemInfo,
 }, {
 	Path:        "/v1/health",
 	ReadAccess:  openAccess{},
-	WriteAccess: userAccess{},
 	GET:         v1Health,
 }, {
 	Path:        "/v1/warnings",
@@ -43,7 +41,6 @@ var API = []*Command{{
 }, {
 	Path:        "/v1/changes",
 	ReadAccess:  userAccess{},
-	WriteAccess: userAccess{},
 	GET:         v1GetChanges,
 }, {
 	Path:        "/v1/changes/{id}",
@@ -54,7 +51,6 @@ var API = []*Command{{
 }, {
 	Path:        "/v1/changes/{id}/wait",
 	ReadAccess:  userAccess{},
-	WriteAccess: userAccess{},
 	GET:         v1GetChangeWait,
 }, {
 	Path:        "/v1/services",
@@ -71,11 +67,9 @@ var API = []*Command{{
 }, {
 	Path:        "/v1/plan",
 	ReadAccess:  userAccess{},
-	WriteAccess: userAccess{},
 	GET:         v1GetPlan,
 }, {
 	Path:        "/v1/layers",
-	ReadAccess:  userAccess{},
 	WriteAccess: userAccess{},
 	POST:        v1PostLayers,
 }, {
@@ -87,27 +81,22 @@ var API = []*Command{{
 }, {
 	Path:        "/v1/logs",
 	ReadAccess:  userAccess{},
-	WriteAccess: userAccess{},
 	GET:         v1GetLogs,
 }, {
 	Path:        "/v1/exec",
-	ReadAccess:  userAccess{},
 	WriteAccess: userAccess{},
 	POST:        v1PostExec,
 }, {
 	Path:        "/v1/tasks/{task-id}/websocket/{websocket-id}",
 	ReadAccess:  userAccess{},
-	WriteAccess: userAccess{},
 	GET:         v1GetTaskWebsocket,
 }, {
 	Path:        "/v1/signals",
-	ReadAccess:  userAccess{},
 	WriteAccess: userAccess{},
 	POST:        v1PostSignals,
 }, {
 	Path:        "/v1/checks",
 	ReadAccess:  userAccess{},
-	WriteAccess: userAccess{},
 	GET:         v1GetChecks,
 }, {
 	Path:        "/v1/notices",
@@ -118,7 +107,6 @@ var API = []*Command{{
 }, {
 	Path:        "/v1/notices/{id}",
 	ReadAccess:  userAccess{},
-	WriteAccess: userAccess{},
 	GET:         v1GetNotice,
 }}
 
