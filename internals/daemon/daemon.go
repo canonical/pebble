@@ -123,9 +123,9 @@ type Command struct {
 	Path       string
 	PathPrefix string
 	//
-	GET    ResponseFunc
-	PUT    ResponseFunc
-	POST   ResponseFunc
+	GET  ResponseFunc
+	PUT  ResponseFunc
+	POST ResponseFunc
 
 	// Access control.
 	ReadAccess  AccessChecker
