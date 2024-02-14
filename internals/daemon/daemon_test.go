@@ -222,6 +222,8 @@ func (s *daemonSuite) TestCommandMethodDispatch(c *C) {
 	cmd.GET = rf
 	cmd.PUT = rf
 	cmd.POST = rf
+	cmd.ReadAccess = UserAccess{}
+	cmd.WriteAccess = UserAccess{}
 
 	for _, method := range []string{"GET", "POST", "PUT"} {
 		req, err := http.NewRequest(method, "", nil)
@@ -252,7 +254,7 @@ func (s *daemonSuite) TestCommandMethodDispatch(c *C) {
 func (s *daemonSuite) TestCommandRestartingState(c *C) {
 	d := s.newDaemon(c)
 
-	cmd := &Command{d: d}
+	cmd := &Command{d: d, ReadAccess: OpenAccess{}}
 	cmd.GET = func(*Command, *http.Request, *UserState) Response {
 		return SyncResponse(nil)
 	}
@@ -302,7 +304,7 @@ func (s *daemonSuite) TestCommandRestartingState(c *C) {
 func (s *daemonSuite) TestFillsWarnings(c *C) {
 	d := s.newDaemon(c)
 
-	cmd := &Command{d: d}
+	cmd := &Command{d: d, ReadAccess: OpenAccess{}}
 	cmd.GET = func(*Command, *http.Request, *UserState) Response {
 		return SyncResponse(nil)
 	}
@@ -1017,7 +1019,7 @@ func doTestReq(c *C, cmd *Command, mth string) *httptest.ResponseRecorder {
 
 func (s *daemonSuite) TestDegradedModeReply(c *C) {
 	d := s.newDaemon(c)
-	cmd := &Command{d: d}
+	cmd := &Command{d: d, ReadAccess: OpenAccess{}, WriteAccess: OpenAccess{}}
 	cmd.GET = func(*Command, *http.Request, *UserState) Response {
 		return SyncResponse(nil)
 	}

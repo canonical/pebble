@@ -25,10 +25,7 @@ type accessSuite struct {
 
 var _ = Suite(&accessSuite{})
 
-var (
-	errForbidden    = daemon.Forbidden("access denied")
-	errUnauthorized = daemon.Unauthorized("access denied")
-)
+var errUnauthorized = daemon.Unauthorized("access denied")
 
 const (
 	socketPath = "/tmp/foo.sock"
@@ -53,7 +50,7 @@ func (s *accessSuite) TestUserAccess(c *C) {
 	var ac daemon.AccessChecker = daemon.UserAccess{}
 
 	// UserAccess denies access without peer credentials.
-	c.Check(ac.CheckAccess(nil, nil, nil, nil), DeepEquals, errForbidden)
+	c.Check(ac.CheckAccess(nil, nil, nil, nil), DeepEquals, errUnauthorized)
 
 	// UserAccess allows access from root user
 	ucred := &daemon.Ucrednet{Uid: 0, Pid: 100, Socket: socketPath}
@@ -68,11 +65,11 @@ func (s *accessSuite) TestRootAccess(c *C) {
 	var ac daemon.AccessChecker = daemon.RootAccess{}
 
 	// RootAccess denies access without peer credentials.
-	c.Check(ac.CheckAccess(nil, nil, nil, nil), DeepEquals, errForbidden)
+	c.Check(ac.CheckAccess(nil, nil, nil, nil), DeepEquals, errUnauthorized)
 
 	// Non-root users are forbidden
 	ucred := &daemon.Ucrednet{Uid: 42, Pid: 100, Socket: socketPath}
-	c.Check(ac.CheckAccess(nil, nil, ucred, nil), DeepEquals, errForbidden)
+	c.Check(ac.CheckAccess(nil, nil, ucred, nil), DeepEquals, errUnauthorized)
 
 	// Root is granted access
 	ucred = &daemon.Ucrednet{Uid: 0, Pid: 100, Socket: socketPath}
