@@ -170,9 +170,15 @@ func (c *Command) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	ucred, err := ucrednetGet(r.RemoteAddr)
+	if err != nil && err != errNoID {
+		logger.Noticef("Cannot parse UID from remote address %q: %s", r.RemoteAddr, err)
+		InternalError(err.Error()).ServeHTTP(w, r)
+		return
+	}
+
 	var rspf ResponseFunc
 	var access AccessChecker
-	var rsp = MethodNotAllowed("method %q not allowed", r.Method)
 
 	switch r.Method {
 	case "GET":
@@ -191,19 +197,12 @@ func (c *Command) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ucred, err := ucrednetGet(r.RemoteAddr)
-	if err != nil && err != errNoID {
-		logger.Noticef("Cannot parse UID from remote address %q: %s", r.RemoteAddr, err)
-		InternalError(err.Error()).ServeHTTP(w, r)
-		return
-	}
-
 	if rspe := access.CheckAccess(c.d, r, ucred, user); rspe != nil {
 		rspe.ServeHTTP(w, r)
 		return
 	}
 
-	rsp = rspf(c, r, user)
+	rsp := rspf(c, r, user)
 
 	if rsp, ok := rsp.(*resp); ok {
 		st.Lock()
