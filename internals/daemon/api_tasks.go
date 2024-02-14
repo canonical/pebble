@@ -38,7 +38,7 @@ func v1GetTaskWebsocket(c *Command, req *http.Request, _ *UserState) Response {
 		// connecting to a websocket they may only see the error
 		// "bad handshake".
 		logger.Noticef("Websocket: cannot find task with id %q", taskID)
-		return statusNotFound("cannot find task with id %q", taskID)
+		return NotFound("cannot find task with id %q", taskID)
 	}
 
 	var connect websocketConnectFunc
@@ -48,7 +48,7 @@ func v1GetTaskWebsocket(c *Command, req *http.Request, _ *UserState) Response {
 		connect = commandMgr.Connect
 	default:
 		logger.Noticef("Websocket %s: %q tasks do not have websockets", task.ID(), task.Kind())
-		return statusBadRequest("%q tasks do not have websockets", task.Kind())
+		return BadRequest("%q tasks do not have websockets", task.Kind())
 	}
 
 	return websocketResponse{
@@ -70,13 +70,13 @@ func (wr websocketResponse) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	err := wr.connect(r, w, wr.task, wr.websocketID)
 	if errors.Is(err, os.ErrNotExist) {
 		logger.Noticef("Websocket %s: cannot find websocket with id %q", wr.task.ID(), wr.websocketID)
-		rsp := statusNotFound("cannot find websocket with id %q", wr.websocketID)
+		rsp := NotFound("cannot find websocket with id %q", wr.websocketID)
 		rsp.ServeHTTP(w, r)
 		return
 	}
 	if err != nil {
 		logger.Noticef("Websocket %s: cannot connect to websocket %q: %v", wr.task.ID(), wr.websocketID, err)
-		rsp := statusInternalError("cannot connect to websocket %q: %v", wr.websocketID, err)
+		rsp := InternalError("cannot connect to websocket %q: %v", wr.websocketID, err)
 		rsp.ServeHTTP(w, r)
 		return
 	}

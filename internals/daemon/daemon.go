@@ -232,14 +232,14 @@ func (c *Command) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	st.Lock()
 	user, err := userFromRequest(st, r)
 	if err != nil {
-		statusForbidden("forbidden").ServeHTTP(w, r)
+		Forbidden("forbidden").ServeHTTP(w, r)
 		return
 	}
 	st.Unlock()
 
 	// check if we are in degradedMode
 	if c.d.degradedErr != nil && r.Method != "GET" {
-		statusInternalError(c.d.degradedErr.Error()).ServeHTTP(w, r)
+		InternalError(c.d.degradedErr.Error()).ServeHTTP(w, r)
 		return
 	}
 
@@ -247,15 +247,15 @@ func (c *Command) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case accessOK:
 		// nothing
 	case accessUnauthorized:
-		statusUnauthorized("access denied").ServeHTTP(w, r)
+		Unauthorized("access denied").ServeHTTP(w, r)
 		return
 	case accessForbidden:
-		statusForbidden("forbidden").ServeHTTP(w, r)
+		Forbidden("forbidden").ServeHTTP(w, r)
 		return
 	}
 
 	var rspf ResponseFunc
-	var rsp = statusMethodNotAllowed("method %q not allowed", r.Method)
+	var rsp = MethodNotAllowed("method %q not allowed", r.Method)
 
 	switch r.Method {
 	case "GET":
@@ -425,7 +425,7 @@ func (d *Daemon) addRoutes() {
 
 	// also maybe add a /favicon.ico handler...
 
-	d.router.NotFoundHandler = statusNotFound("invalid API endpoint requested")
+	d.router.NotFoundHandler = NotFound("invalid API endpoint requested")
 }
 
 type connTracker struct {
