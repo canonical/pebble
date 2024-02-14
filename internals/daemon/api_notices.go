@@ -137,11 +137,11 @@ func v1GetNotices(c *Command, r *http.Request, _ *UserState) Response {
 
 // Get the UID of the request. If the UID is not known, return an error.
 func uidFromRequest(r *http.Request) (uint32, error) {
-	_, uid, _, err := ucrednetGet(r.RemoteAddr)
+	ucred, err := ucrednetGet(r.RemoteAddr)
 	if err != nil {
 		return 0, fmt.Errorf("could not parse request UID")
 	}
-	return uid, nil
+	return ucred.Uid, nil
 }
 
 // Construct the user IDs filter which will be passed to state.Notices.
