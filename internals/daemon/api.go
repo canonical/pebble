@@ -26,87 +26,87 @@ import (
 
 var API = []*Command{{
 	Path:        "/v1/system-info",
-	ReadAccess:  openAccess{},
+	ReadAccess:  OpenAccess{},
 	GET:         v1SystemInfo,
 }, {
 	Path:        "/v1/health",
-	ReadAccess:  openAccess{},
+	ReadAccess:  OpenAccess{},
 	GET:         v1Health,
 }, {
 	Path:        "/v1/warnings",
-	ReadAccess:  userAccess{},
-	WriteAccess: userAccess{},
+	ReadAccess:  UserAccess{},
+	WriteAccess: UserAccess{},
 	GET:         v1GetWarnings,
 	POST:        v1AckWarnings,
 }, {
 	Path:        "/v1/changes",
-	ReadAccess:  userAccess{},
+	ReadAccess:  UserAccess{},
 	GET:         v1GetChanges,
 }, {
 	Path:        "/v1/changes/{id}",
-	ReadAccess:  userAccess{},
-	WriteAccess: userAccess{},
+	ReadAccess:  UserAccess{},
+	WriteAccess: UserAccess{},
 	GET:         v1GetChange,
 	POST:        v1PostChange,
 }, {
 	Path:        "/v1/changes/{id}/wait",
-	ReadAccess:  userAccess{},
+	ReadAccess:  UserAccess{},
 	GET:         v1GetChangeWait,
 }, {
 	Path:        "/v1/services",
-	ReadAccess:  userAccess{},
-	WriteAccess: userAccess{},
+	ReadAccess:  UserAccess{},
+	WriteAccess: UserAccess{},
 	GET:         v1GetServices,
 	POST:        v1PostServices,
 }, {
 	Path:        "/v1/services/{name}",
-	ReadAccess:  userAccess{},
-	WriteAccess: userAccess{},
+	ReadAccess:  UserAccess{},
+	WriteAccess: UserAccess{},
 	GET:         v1GetService,
 	POST:        v1PostService,
 }, {
 	Path:        "/v1/plan",
-	ReadAccess:  userAccess{},
+	ReadAccess:  UserAccess{},
 	GET:         v1GetPlan,
 }, {
 	Path:        "/v1/layers",
-	WriteAccess: userAccess{},
+	WriteAccess: UserAccess{},
 	POST:        v1PostLayers,
 }, {
 	Path:        "/v1/files",
-	ReadAccess:  userAccess{},
-	WriteAccess: userAccess{},
+	ReadAccess:  UserAccess{},
+	WriteAccess: UserAccess{},
 	GET:         v1GetFiles,
 	POST:        v1PostFiles,
 }, {
 	Path:        "/v1/logs",
-	ReadAccess:  userAccess{},
+	ReadAccess:  UserAccess{},
 	GET:         v1GetLogs,
 }, {
 	Path:        "/v1/exec",
-	WriteAccess: userAccess{},
+	WriteAccess: UserAccess{},
 	POST:        v1PostExec,
 }, {
 	Path:        "/v1/tasks/{task-id}/websocket/{websocket-id}",
-	ReadAccess:  userAccess{},
+	ReadAccess:  UserAccess{},
 	GET:         v1GetTaskWebsocket,
 }, {
 	Path:        "/v1/signals",
-	WriteAccess: userAccess{},
+	WriteAccess: UserAccess{},
 	POST:        v1PostSignals,
 }, {
 	Path:        "/v1/checks",
-	ReadAccess:  userAccess{},
+	ReadAccess:  UserAccess{},
 	GET:         v1GetChecks,
 }, {
 	Path:        "/v1/notices",
-	ReadAccess:  userAccess{},
-	WriteAccess: userAccess{},
+	ReadAccess:  UserAccess{},
+	WriteAccess: UserAccess{},
 	GET:         v1GetNotices,
 	POST:        v1PostNotices,
 }, {
 	Path:        "/v1/notices/{id}",
-	ReadAccess:  userAccess{},
+	ReadAccess:  UserAccess{},
 	GET:         v1GetNotice,
 }}
 

@@ -67,9 +67,3 @@ var (
 	StatusForbidden    = statusForbidden
 	StatusUnauthorized = statusUnauthorized
 )
-
-type (
-	OpenAccess    = openAccess
-	UserAccess    = userAccess
-	RootAccess    = rootAccess
-)

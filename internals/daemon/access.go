@@ -26,27 +26,27 @@ type AccessChecker interface {
 	CheckAccess(d *Daemon, r *http.Request, ucred *Ucrednet, user *UserState) Response
 }
 
-// openAccess allows all requests
-type openAccess struct{}
+// OpenAccess allows all requests
+type OpenAccess struct{}
 
-func (ac openAccess) CheckAccess(d *Daemon, r *http.Request, ucred *Ucrednet, user *UserState) Response {
+func (ac OpenAccess) CheckAccess(d *Daemon, r *http.Request, ucred *Ucrednet, user *UserState) Response {
 	return nil
 }
 
-// rootAccess allows requests from the root uid
-type rootAccess struct{}
+// RootAccess allows requests from the root uid
+type RootAccess struct{}
 
-func (ac rootAccess) CheckAccess(d *Daemon, r *http.Request, ucred *Ucrednet, user *UserState) Response {
+func (ac RootAccess) CheckAccess(d *Daemon, r *http.Request, ucred *Ucrednet, user *UserState) Response {
 	if ucred != nil && ucred.Uid == 0 {
 		return nil
 	}
 	return statusForbidden("access denied")
 }
 
-// userAccess allows requests from any local user
-type userAccess struct{}
+// UserAccess allows requests from any local user
+type UserAccess struct{}
 
-func (ac userAccess) CheckAccess(d *Daemon, r *http.Request, ucred *Ucrednet, user *UserState) Response {
+func (ac UserAccess) CheckAccess(d *Daemon, r *http.Request, ucred *Ucrednet, user *UserState) Response {
 	if ucred == nil {
 		return statusForbidden("access denied")
 	}

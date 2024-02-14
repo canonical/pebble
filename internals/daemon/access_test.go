@@ -37,14 +37,14 @@ const (
 func (s *accessSuite) TestOpenAccess(c *C) {
 	var ac daemon.AccessChecker = daemon.OpenAccess{}
 
-	// openAccess allows access without peer credentials.
+	// OpenAccess allows access without peer credentials.
 	c.Check(ac.CheckAccess(nil, nil, nil, nil), IsNil)
 
-	// openAccess allows access from normal user
+	// OpenAccess allows access from normal user
 	ucred := &daemon.Ucrednet{Uid: 42, Pid: 100, Socket: socketPath}
 	c.Check(ac.CheckAccess(nil, nil, ucred, nil), IsNil)
 
-	// openAccess allows access from root user
+	// OpenAccess allows access from root user
 	ucred = &daemon.Ucrednet{Uid: 0, Pid: 100, Socket: socketPath}
 	c.Check(ac.CheckAccess(nil, nil, ucred, nil), IsNil)
 }
@@ -52,14 +52,14 @@ func (s *accessSuite) TestOpenAccess(c *C) {
 func (s *accessSuite) TestUserAccess(c *C) {
 	var ac daemon.AccessChecker = daemon.UserAccess{}
 
-	// userAccess denies access without peer credentials.
+	// UserAccess denies access without peer credentials.
 	c.Check(ac.CheckAccess(nil, nil, nil, nil), DeepEquals, errForbidden)
 
-	// userAccess allows access from root user
+	// UserAccess allows access from root user
 	ucred := &daemon.Ucrednet{Uid: 0, Pid: 100, Socket: socketPath}
 	c.Check(ac.CheckAccess(nil, nil, ucred, nil), IsNil)
 
-	// userAccess allows access form normal user
+	// UserAccess allows access form normal user
 	ucred = &daemon.Ucrednet{Uid: 42, Pid: 100, Socket: socketPath}
 	c.Check(ac.CheckAccess(nil, nil, ucred, nil), IsNil)
 }
@@ -67,7 +67,7 @@ func (s *accessSuite) TestUserAccess(c *C) {
 func (s *accessSuite) TestRootAccess(c *C) {
 	var ac daemon.AccessChecker = daemon.RootAccess{}
 
-	// rootAccess denies access without peer credentials.
+	// RootAccess denies access without peer credentials.
 	c.Check(ac.CheckAccess(nil, nil, nil, nil), DeepEquals, errForbidden)
 
 	// Non-root users are forbidden
