@@ -80,7 +80,6 @@ func (s *apiSuite) TestSysInfo(c *check.C) {
 	c.Assert(sysInfoCmd.GET, check.NotNil)
 	c.Check(sysInfoCmd.PUT, check.IsNil)
 	c.Check(sysInfoCmd.POST, check.IsNil)
-	c.Check(sysInfoCmd.DELETE, check.IsNil)
 
 	rec := httptest.NewRecorder()
 

@@ -222,9 +222,8 @@ func (s *daemonSuite) TestCommandMethodDispatch(c *C) {
 	cmd.GET = rf
 	cmd.PUT = rf
 	cmd.POST = rf
-	cmd.DELETE = rf
 
-	for _, method := range []string{"GET", "POST", "PUT", "DELETE"} {
+	for _, method := range []string{"GET", "POST", "PUT"} {
 		req, err := http.NewRequest(method, "", nil)
 		req.Header.Add("User-Agent", fakeUserAgent)
 		c.Assert(err, IsNil)
