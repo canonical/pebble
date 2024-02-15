@@ -204,10 +204,6 @@ func (s *daemonSuite) TestExplicitPaths(c *C) {
 	info, err := os.Stat(s.socketPath)
 	c.Assert(err, IsNil)
 	c.Assert(info.Mode(), Equals, os.ModeSocket|0666)
-
-	info, err = os.Stat(s.socketPath + ".untrusted")
-	c.Assert(err, IsNil)
-	c.Assert(info.Mode(), Equals, os.ModeSocket|0666)
 }
 
 func (s *daemonSuite) TestCommandMethodDispatch(c *C) {
@@ -370,38 +366,6 @@ func (s *daemonSuite) TestGuestAccess(c *C) {
 	c.Check(cmd.canAccess(del, nil), Equals, accessUnauthorized)
 }
 
-func (s *daemonSuite) TestUntrustedAccessUntrustedOKWithUser(c *C) {
-	d := s.newDaemon(c)
-
-	remoteAddr := "pid=100;uid=1000;socket=" + d.untrustedSocketPath + ";"
-	get := &http.Request{Method: "GET", RemoteAddr: remoteAddr}
-	put := &http.Request{Method: "PUT", RemoteAddr: remoteAddr}
-	pst := &http.Request{Method: "POST", RemoteAddr: remoteAddr}
-	del := &http.Request{Method: "DELETE", RemoteAddr: remoteAddr}
-
-	cmd := &Command{d: d, UntrustedOK: true}
-	c.Check(cmd.canAccess(get, nil), Equals, accessOK)
-	c.Check(cmd.canAccess(put, nil), Equals, accessOK)
-	c.Check(cmd.canAccess(pst, nil), Equals, accessOK)
-	c.Check(cmd.canAccess(del, nil), Equals, accessOK)
-}
-
-func (s *daemonSuite) TestUntrustedAccessUntrustedOKWithRoot(c *C) {
-	d := s.newDaemon(c)
-
-	remoteAddr := "pid=100;uid=0;socket=" + d.untrustedSocketPath + ";"
-	get := &http.Request{Method: "GET", RemoteAddr: remoteAddr}
-	put := &http.Request{Method: "PUT", RemoteAddr: remoteAddr}
-	pst := &http.Request{Method: "POST", RemoteAddr: remoteAddr}
-	del := &http.Request{Method: "DELETE", RemoteAddr: remoteAddr}
-
-	cmd := &Command{d: d, UntrustedOK: true}
-	c.Check(cmd.canAccess(get, nil), Equals, accessOK)
-	c.Check(cmd.canAccess(put, nil), Equals, accessOK)
-	c.Check(cmd.canAccess(pst, nil), Equals, accessOK)
-	c.Check(cmd.canAccess(del, nil), Equals, accessOK)
-}
-
 func (s *daemonSuite) TestUserAccess(c *C) {
 	d := s.newDaemon(c)
 
@@ -422,13 +386,6 @@ func (s *daemonSuite) TestUserAccess(c *C) {
 
 	cmd = &Command{d: d, GuestOK: true}
 	c.Check(cmd.canAccess(get, nil), Equals, accessOK)
-	c.Check(cmd.canAccess(put, nil), Equals, accessUnauthorized)
-
-	// Since this request has a RemoteAddr, it must be coming from the pebble server
-	// socket instead of the pebble one. In that case, UntrustedOK should have no
-	// bearing on the default behavior, which is to deny access.
-	cmd = &Command{d: d, UntrustedOK: true}
-	c.Check(cmd.canAccess(get, nil), Equals, accessUnauthorized)
 	c.Check(cmd.canAccess(put, nil), Equals, accessUnauthorized)
 }
 
@@ -454,10 +411,6 @@ func (s *daemonSuite) TestLoggedInUserAccess(c *C) {
 	cmd = &Command{d: d, GuestOK: true}
 	c.Check(cmd.canAccess(get, user), Equals, accessOK)
 	c.Check(cmd.canAccess(put, user), Equals, accessOK)
-
-	cmd = &Command{d: d, UntrustedOK: true}
-	c.Check(cmd.canAccess(get, user), Equals, accessOK)
-	c.Check(cmd.canAccess(put, user), Equals, accessOK)
 }
 
 func (s *daemonSuite) TestSuperAccess(c *C) {
@@ -481,10 +434,6 @@ func (s *daemonSuite) TestSuperAccess(c *C) {
 		c.Check(cmd.canAccess(put, nil), Equals, accessOK)
 
 		cmd = &Command{d: d, GuestOK: true}
-		c.Check(cmd.canAccess(get, nil), Equals, accessOK)
-		c.Check(cmd.canAccess(put, nil), Equals, accessOK)
-
-		cmd = &Command{d: d, UntrustedOK: true}
 		c.Check(cmd.canAccess(get, nil), Equals, accessOK)
 		c.Check(cmd.canAccess(put, nil), Equals, accessOK)
 	}
@@ -545,14 +494,9 @@ func (s *daemonSuite) TestStartStop(c *C) {
 
 	l1, err := net.Listen("tcp", "127.0.0.1:0")
 	c.Assert(err, IsNil)
-	l2, err := net.Listen("tcp", "127.0.0.1:0")
-	c.Assert(err, IsNil)
 
 	generalAccept := make(chan struct{})
 	d.generalListener = &witnessAcceptListener{Listener: l1, accept: generalAccept}
-
-	untrustedAccept := make(chan struct{})
-	d.untrustedListener = &witnessAcceptListener{Listener: l2, accept: untrustedAccept}
 
 	c.Assert(d.Start(), IsNil)
 
@@ -566,18 +510,7 @@ func (s *daemonSuite) TestStartStop(c *C) {
 		close(generalDone)
 	}()
 
-	untrustedDone := make(chan struct{})
-	go func() {
-		select {
-		case <-untrustedAccept:
-		case <-time.After(2 * time.Second):
-			c.Fatal("untrusted listener accept was not called")
-		}
-		close(untrustedDone)
-	}()
-
 	<-generalDone
-	<-untrustedDone
 
 	err = d.Stop(nil)
 	c.Check(err, IsNil)
@@ -592,9 +525,6 @@ func (s *daemonSuite) TestRestartWiring(c *C) {
 	generalAccept := make(chan struct{})
 	d.generalListener = &witnessAcceptListener{Listener: l, accept: generalAccept}
 
-	untrustedAccept := make(chan struct{})
-	d.untrustedListener = &witnessAcceptListener{Listener: l, accept: untrustedAccept}
-
 	c.Assert(d.Start(), IsNil)
 	defer d.Stop(nil)
 
@@ -608,18 +538,7 @@ func (s *daemonSuite) TestRestartWiring(c *C) {
 		close(generalDone)
 	}()
 
-	untrustedDone := make(chan struct{})
-	go func() {
-		select {
-		case <-untrustedAccept:
-		case <-time.After(2 * time.Second):
-			c.Fatal("untrusted accept was not called")
-		}
-		close(untrustedDone)
-	}()
-
 	<-generalDone
-	<-untrustedDone
 
 	st := d.overlord.State()
 	st.Lock()
@@ -652,15 +571,9 @@ func (s *daemonSuite) TestGracefulStop(c *C) {
 	generalL, err := net.Listen("tcp", "127.0.0.1:0")
 	c.Assert(err, IsNil)
 
-	untrustedL, err := net.Listen("tcp", "127.0.0.1:0")
-	c.Assert(err, IsNil)
-
 	generalAccept := make(chan struct{})
 	generalClosed := make(chan struct{})
 	d.generalListener = &witnessAcceptListener{Listener: generalL, accept: generalAccept, closed: generalClosed}
-
-	untrustedAccept := make(chan struct{})
-	d.untrustedListener = &witnessAcceptListener{Listener: untrustedL, accept: untrustedAccept}
 
 	c.Assert(d.Start(), IsNil)
 
@@ -674,18 +587,7 @@ func (s *daemonSuite) TestGracefulStop(c *C) {
 		close(generalAccepting)
 	}()
 
-	untrustedAccepting := make(chan struct{})
-	go func() {
-		select {
-		case <-untrustedAccept:
-		case <-time.After(2 * time.Second):
-			c.Fatal("general accept was not called")
-		}
-		close(untrustedAccepting)
-	}()
-
 	<-generalAccepting
-	<-untrustedAccepting
 
 	alright := make(chan struct{})
 
@@ -726,9 +628,6 @@ func (s *daemonSuite) TestRestartSystemWiring(c *C) {
 	generalAccept := make(chan struct{})
 	d.generalListener = &witnessAcceptListener{Listener: l, accept: generalAccept}
 
-	untrustedAccept := make(chan struct{})
-	d.untrustedListener = &witnessAcceptListener{Listener: l, accept: untrustedAccept}
-
 	c.Assert(d.Start(), IsNil)
 	defer d.Stop(nil)
 
@@ -744,18 +643,7 @@ func (s *daemonSuite) TestRestartSystemWiring(c *C) {
 		close(generalDone)
 	}()
 
-	untrustedDone := make(chan struct{})
-	go func() {
-		select {
-		case <-untrustedAccept:
-		case <-time.After(2 * time.Second):
-			c.Fatal("untrusted accept was not called")
-		}
-		close(untrustedDone)
-	}()
-
 	<-generalDone
-	<-untrustedDone
 
 	oldRebootNoticeWait := rebootNoticeWait
 	oldRebootWaitTimeout := rebootWaitTimeout
@@ -849,15 +737,9 @@ func makeDaemonListeners(c *C, d *Daemon) {
 	generalL, err := net.Listen("tcp", "127.0.0.1:0")
 	c.Assert(err, IsNil)
 
-	untrustedL, err := net.Listen("tcp", "127.0.0.1:0")
-	c.Assert(err, IsNil)
-
 	generalAccept := make(chan struct{})
 	generalClosed := make(chan struct{})
 	d.generalListener = &witnessAcceptListener{Listener: generalL, accept: generalAccept, closed: generalClosed}
-
-	untrustedAccept := make(chan struct{})
-	d.untrustedListener = &witnessAcceptListener{Listener: untrustedL, accept: untrustedAccept}
 }
 
 // This test tests that when a restart of the system is called
