@@ -16,8 +16,11 @@ package daemon
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
+	"math/rand"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -358,4 +361,110 @@ services:
 	c.Check(chg.Summary(), Equals, "Replan - no services")
 	tasks := chg.Tasks()
 	c.Check(tasks, HasLen, 0)
+}
+
+// Regression test for 3-lock deadlock issue described in
+// https://github.com/canonical/pebble/issues/314
+func (s *apiSuite) TestDeadlock(c *C) {
+	// Set up
+	writeTestLayer(s.pebbleDir, `
+services:
+    test:
+        override: replace
+        command: sleep 10
+`)
+	daemon, err := New(&Options{
+		Dir:        s.pebbleDir,
+		SocketPath: s.pebbleDir + ".pebble.socket",
+	})
+	c.Assert(err, IsNil)
+	err = daemon.Init()
+	c.Assert(err, IsNil)
+	err = daemon.Start()
+	c.Assert(err, IsNil)
+
+	// To try to reproduce the deadlock, call these endpoints in a loop:
+	// - GET /v1/services
+	// - POST /v1/services with action=start
+	// - POST /v1/services with action=stop
+
+	getServices := func(ctx context.Context) {
+		req, err := http.NewRequestWithContext(ctx, "GET", "/v1/services", nil)
+		c.Assert(err, IsNil)
+		rsp := v1GetServices(apiCmd("/v1/services"), req, nil).(*resp)
+		rec := httptest.NewRecorder()
+		rsp.ServeHTTP(rec, req)
+		if rec.Code != 200 {
+			panic(fmt.Sprintf("expected 200, got %d", rec.Code))
+		}
+	}
+
+	serviceAction := func(ctx context.Context, action string) {
+		body := `{"action": "` + action + `", "services": ["test"]}`
+		req, err := http.NewRequestWithContext(ctx, "POST", "/v1/services", strings.NewReader(body))
+		c.Assert(err, IsNil)
+		rsp := v1PostServices(apiCmd("/v1/services"), req, nil).(*resp)
+		rec := httptest.NewRecorder()
+		rsp.ServeHTTP(rec, req)
+		if rec.Code != 202 {
+			panic(fmt.Sprintf("expected 202, got %d", rec.Code))
+		}
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	go func() {
+		for ctx.Err() == nil {
+			getServices(ctx)
+			time.Sleep(time.Duration(rand.Intn(50)) * time.Millisecond)
+		}
+	}()
+
+	go func() {
+		for ctx.Err() == nil {
+			serviceAction(ctx, "start")
+			time.Sleep(time.Duration(rand.Intn(50)) * time.Millisecond)
+		}
+	}()
+
+	go func() {
+		for ctx.Err() == nil {
+			serviceAction(ctx, "stop")
+			time.Sleep(time.Duration(rand.Intn(50)) * time.Millisecond)
+		}
+	}()
+
+	// Wait some time for deadlock to happen (when the bug was present, it
+	// normally happened in well under a second).
+	time.Sleep(time.Second)
+	cancel()
+
+	// Try to hit GET /v1/services once more; if it times out -- deadlock!
+	done := make(chan struct{})
+	go func() {
+		getServices(context.Background())
+		done <- struct{}{}
+	}()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		c.Fatal("timed out waiting for final request -- deadlock!")
+	}
+
+	// Otherwise wait for all changes to be done, then clean up (stop the daemon).
+	var readyChans []<-chan struct{}
+	daemon.state.Lock()
+	for _, change := range daemon.state.Changes() {
+		readyChans = append(readyChans, change.Ready())
+	}
+	daemon.state.Unlock()
+	for _, ch := range readyChans {
+		select {
+		case <-ch:
+		case <-time.After(5 * time.Second):
+			c.Fatal("timed out waiting for ready channel")
+		}
+	}
+	err = daemon.Stop(nil)
+	c.Assert(err, IsNil)
 }
