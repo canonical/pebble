@@ -950,15 +950,6 @@ func order(services map[string]*Service, names []string, stop bool) ([]string, e
 	return order, nil
 }
 
-func (l *Layer) checkCycles() error {
-	var names []string
-	for name := range l.Services {
-		names = append(names, name)
-	}
-	_, err := order(l.Services, names, false)
-	return err
-}
-
 func (p *Plan) checkCycles() error {
 	var names []string
 	for name := range p.Services {
@@ -1051,10 +1042,6 @@ func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 		target.Name = name
 	}
 
-	err = layer.checkCycles()
-	if err != nil {
-		return nil, err
-	}
 	return &layer, err
 }
 
