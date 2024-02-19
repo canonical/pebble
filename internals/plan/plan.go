@@ -641,45 +641,13 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 		}
 	}
 
-	// Ensure fields in combined layers validate correctly (and set defaults).
-	for name, service := range combined.Services {
-		if service.Command == "" {
-			return nil, &FormatError{
-				Message: fmt.Sprintf(`plan must define "command" for service %q`, name),
-			}
-		}
-		_, _, err := service.ParseCommand()
-		if err != nil {
-			return nil, &FormatError{
-				Message: fmt.Sprintf("plan service %q command invalid: %v", name, err),
-			}
-		}
-		if !validServiceAction(service.OnSuccess, ActionFailureShutdown) {
-			return nil, &FormatError{
-				Message: fmt.Sprintf("plan service %q on-success action %q invalid", name, service.OnSuccess),
-			}
-		}
-		if !validServiceAction(service.OnFailure, ActionSuccessShutdown) {
-			return nil, &FormatError{
-				Message: fmt.Sprintf("plan service %q on-failure action %q invalid", name, service.OnFailure),
-			}
-		}
-		for _, action := range service.OnCheckFailure {
-			if !validServiceAction(action, ActionSuccessShutdown) {
-				return nil, &FormatError{
-					Message: fmt.Sprintf("plan service %q on-check-failure action %q invalid", name, action),
-				}
-			}
-		}
+	// Set defaults where required.
+	for _, service := range combined.Services {
 		if !service.BackoffDelay.IsSet {
 			service.BackoffDelay.Value = defaultBackoffDelay
 		}
 		if !service.BackoffFactor.IsSet {
 			service.BackoffFactor.Value = defaultBackoffFactor
-		} else if service.BackoffFactor.Value < 1 {
-			return nil, &FormatError{
-				Message: fmt.Sprintf("plan service %q backoff-factor must be 1.0 or greater, not %g", name, service.BackoffFactor.Value),
-			}
 		}
 		if !service.BackoffLimit.IsSet {
 			service.BackoffLimit.Value = defaultBackoffLimit
@@ -687,29 +655,12 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 
 	}
 
-	for name, check := range combined.Checks {
-		if check.Level != UnsetLevel && check.Level != AliveLevel && check.Level != ReadyLevel {
-			return nil, &FormatError{
-				Message: fmt.Sprintf(`plan check %q level must be "alive" or "ready"`, name),
-			}
-		}
+	for _, check := range combined.Checks {
 		if !check.Period.IsSet {
 			check.Period.Value = defaultCheckPeriod
-		} else if check.Period.Value == 0 {
-			return nil, &FormatError{
-				Message: fmt.Sprintf("plan check %q period must not be zero", name),
-			}
 		}
 		if !check.Timeout.IsSet {
 			check.Timeout.Value = defaultCheckTimeout
-		} else if check.Timeout.Value == 0 {
-			return nil, &FormatError{
-				Message: fmt.Sprintf("plan check %q timeout must not be zero", name),
-			}
-		} else if check.Timeout.Value >= check.Period.Value {
-			return nil, &FormatError{
-				Message: fmt.Sprintf("plan check %q timeout must be less than period", name),
-			}
 		}
 		if check.Threshold == 0 {
 			// Default number of failures in a row before check triggers
@@ -717,11 +668,77 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 			// what it's worth, Kubernetes probes uses a default of 3 too.
 			check.Threshold = defaultCheckThreshold
 		}
+	}
+
+	return combined, nil
+}
+
+// TODO
+// Ensure fields in combined layers validate correctly.
+func (p *Plan) Validate() error {
+	for name, service := range p.Services {
+		if service.Command == "" {
+			return &FormatError{
+				Message: fmt.Sprintf(`plan must define "command" for service %q`, name),
+			}
+		}
+		_, _, err := service.ParseCommand()
+		if err != nil {
+			return &FormatError{
+				Message: fmt.Sprintf("plan service %q command invalid: %v", name, err),
+			}
+		}
+		if !validServiceAction(service.OnSuccess, ActionFailureShutdown) {
+			return &FormatError{
+				Message: fmt.Sprintf("plan service %q on-success action %q invalid", name, service.OnSuccess),
+			}
+		}
+		if !validServiceAction(service.OnFailure, ActionSuccessShutdown) {
+			return &FormatError{
+				Message: fmt.Sprintf("plan service %q on-failure action %q invalid", name, service.OnFailure),
+			}
+		}
+		for _, action := range service.OnCheckFailure {
+			if !validServiceAction(action, ActionSuccessShutdown) {
+				return &FormatError{
+					Message: fmt.Sprintf("plan service %q on-check-failure action %q invalid", name, action),
+				}
+			}
+		}
+		if service.BackoffFactor.Value < 1 {
+			return &FormatError{
+				Message: fmt.Sprintf("plan service %q backoff-factor must be 1.0 or greater, not %g", name, service.BackoffFactor.Value),
+			}
+		}
+	}
+
+	for name, check := range p.Checks {
+		if check.Level != UnsetLevel && check.Level != AliveLevel && check.Level != ReadyLevel {
+			return &FormatError{
+				Message: fmt.Sprintf(`plan check %q level must be "alive" or "ready"`, name),
+			}
+		}
+		if !check.Period.IsSet {
+			check.Period.Value = defaultCheckPeriod
+		} else if check.Period.Value == 0 {
+			return &FormatError{
+				Message: fmt.Sprintf("plan check %q period must not be zero", name),
+			}
+		}
+		if check.Timeout.Value == 0 {
+			return &FormatError{
+				Message: fmt.Sprintf("plan check %q timeout must not be zero", name),
+			}
+		} else if check.Timeout.Value >= check.Period.Value {
+			return &FormatError{
+				Message: fmt.Sprintf("plan check %q timeout must be less than period", name),
+			}
+		}
 
 		numTypes := 0
 		if check.HTTP != nil {
 			if check.HTTP.URL == "" {
-				return nil, &FormatError{
+				return &FormatError{
 					Message: fmt.Sprintf(`plan must set "url" for http check %q`, name),
 				}
 			}
@@ -729,7 +746,7 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 		}
 		if check.TCP != nil {
 			if check.TCP.Port == 0 {
-				return nil, &FormatError{
+				return &FormatError{
 					Message: fmt.Sprintf(`plan must set "port" for tcp check %q`, name),
 				}
 			}
@@ -737,49 +754,49 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 		}
 		if check.Exec != nil {
 			if check.Exec.Command == "" {
-				return nil, &FormatError{
+				return &FormatError{
 					Message: fmt.Sprintf(`plan must set "command" for exec check %q`, name),
 				}
 			}
 			_, err := shlex.Split(check.Exec.Command)
 			if err != nil {
-				return nil, &FormatError{
+				return &FormatError{
 					Message: fmt.Sprintf("plan check %q command invalid: %v", name, err),
 				}
 			}
-			_, contextExists := combined.Services[check.Exec.ServiceContext]
+			_, contextExists := p.Services[check.Exec.ServiceContext]
 			if check.Exec.ServiceContext != "" && !contextExists {
-				return nil, &FormatError{
+				return &FormatError{
 					Message: fmt.Sprintf("plan check %q service context specifies non-existent service %q",
 						name, check.Exec.ServiceContext),
 				}
 			}
 			_, _, err = osutil.NormalizeUidGid(check.Exec.UserID, check.Exec.GroupID, check.Exec.User, check.Exec.Group)
 			if err != nil {
-				return nil, &FormatError{
+				return &FormatError{
 					Message: fmt.Sprintf("plan check %q has invalid user/group: %v", name, err),
 				}
 			}
 			numTypes++
 		}
 		if numTypes != 1 {
-			return nil, &FormatError{
+			return &FormatError{
 				Message: fmt.Sprintf(`plan must specify one of "http", "tcp", or "exec" for check %q`, name),
 			}
 		}
 	}
 
-	for name, target := range combined.LogTargets {
+	for name, target := range p.LogTargets {
 		switch target.Type {
 		case LokiTarget, SyslogTarget:
 			// valid, continue
 		case UnsetLogTarget:
-			return nil, &FormatError{
+			return &FormatError{
 				Message: fmt.Sprintf(`plan must define "type" (%q or %q) for log target %q`,
 					LokiTarget, SyslogTarget, name),
 			}
 		default:
-			return nil, &FormatError{
+			return &FormatError{
 				Message: fmt.Sprintf(`log target %q has unsupported type %q, must be %q or %q`,
 					name, target.Type, LokiTarget, SyslogTarget),
 			}
@@ -791,29 +808,28 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 			if serviceName == "all" {
 				continue
 			}
-			if _, ok := combined.Services[serviceName]; ok {
+			if _, ok := p.Services[serviceName]; ok {
 				continue
 			}
-			return nil, &FormatError{
+			return &FormatError{
 				Message: fmt.Sprintf(`log target %q specifies unknown service %q`,
 					target.Name, serviceName),
 			}
 		}
 
 		if target.Location == "" {
-			return nil, &FormatError{
+			return &FormatError{
 				Message: fmt.Sprintf(`plan must define "location" for log target %q`, name),
 			}
 		}
 	}
 
 	// Ensure combined layers don't have cycles.
-	err := combined.checkCycles()
+	err := p.checkCycles()
 	if err != nil {
-		return nil, err
+		return err
 	}
-
-	return combined, nil
+	return nil
 }
 
 // StartOrder returns the required services that must be started for the named
@@ -912,6 +928,15 @@ func (l *Layer) checkCycles() error {
 		names = append(names, name)
 	}
 	_, err := order(l.Services, names, false)
+	return err
+}
+
+func (p *Plan) checkCycles() error {
+	var names []string
+	for name := range p.Services {
+		names = append(names, name)
+	}
+	_, err := order(p.Services, names, false)
 	return err
 }
 
@@ -1106,6 +1131,10 @@ func ReadDir(dir string) (*Plan, error) {
 		Services:   combined.Services,
 		Checks:     combined.Checks,
 		LogTargets: combined.LogTargets,
+	}
+	err = plan.Validate()
+	if err != nil {
+		return nil, err
 	}
 	return plan, err
 }

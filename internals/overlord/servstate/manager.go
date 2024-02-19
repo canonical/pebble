@@ -174,6 +174,10 @@ func (m *ServiceManager) updatePlanLayers(layers []*plan.Layer) error {
 		Checks:     combined.Checks,
 		LogTargets: combined.LogTargets,
 	}
+	err = p.Validate()
+	if err != nil {
+		return err
+	}
 	m.updatePlan(p)
 	return nil
 }
