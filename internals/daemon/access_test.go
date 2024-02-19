@@ -29,10 +29,6 @@ var _ = Suite(&accessSuite{})
 
 var errUnauthorized = daemon.Unauthorized("access denied")
 
-const (
-	socketPath = "/tmp/foo.sock"
-)
-
 func (s *accessSuite) TestOpenAccess(c *C) {
 	var ac daemon.AccessChecker = daemon.OpenAccess{}
 
@@ -40,11 +36,11 @@ func (s *accessSuite) TestOpenAccess(c *C) {
 	c.Check(ac.CheckAccess(nil, nil, nil, nil), IsNil)
 
 	// OpenAccess allows access from normal user
-	ucred := &daemon.Ucrednet{Uid: 42, Pid: 100, Socket: socketPath}
+	ucred := &daemon.Ucrednet{Uid: 42, Pid: 100}
 	c.Check(ac.CheckAccess(nil, nil, ucred, nil), IsNil)
 
 	// OpenAccess allows access from root user
-	ucred = &daemon.Ucrednet{Uid: 0, Pid: 100, Socket: socketPath}
+	ucred = &daemon.Ucrednet{Uid: 0, Pid: 100}
 	c.Check(ac.CheckAccess(nil, nil, ucred, nil), IsNil)
 }
 
@@ -55,11 +51,11 @@ func (s *accessSuite) TestUserAccess(c *C) {
 	c.Check(ac.CheckAccess(nil, nil, nil, nil), DeepEquals, errUnauthorized)
 
 	// UserAccess allows access from root user
-	ucred := &daemon.Ucrednet{Uid: 0, Pid: 100, Socket: socketPath}
+	ucred := &daemon.Ucrednet{Uid: 0, Pid: 100}
 	c.Check(ac.CheckAccess(nil, nil, ucred, nil), IsNil)
 
 	// UserAccess allows access form normal user
-	ucred = &daemon.Ucrednet{Uid: 42, Pid: 100, Socket: socketPath}
+	ucred = &daemon.Ucrednet{Uid: 42, Pid: 100}
 	c.Check(ac.CheckAccess(nil, nil, ucred, nil), IsNil)
 }
 
@@ -73,14 +69,14 @@ func (s *accessSuite) TestAdminAccess(c *C) {
 	uid := uint32(os.Getuid())
 
 	// Non-root users that are different from the current user are forbidden
-	ucred := &daemon.Ucrednet{Uid: uid + 1, Pid: 100, Socket: socketPath}
+	ucred := &daemon.Ucrednet{Uid: uid + 1, Pid: 100}
 	c.Check(ac.CheckAccess(nil, nil, ucred, nil), DeepEquals, errUnauthorized)
 
 	// The current user is granted access
-	ucred = &daemon.Ucrednet{Uid: uid, Pid: 100, Socket: socketPath}
+	ucred = &daemon.Ucrednet{Uid: uid, Pid: 100}
 	c.Check(ac.CheckAccess(nil, nil, ucred, nil), IsNil)
 
 	// Root is granted access
-	ucred = &daemon.Ucrednet{Uid: 0, Pid: 100, Socket: socketPath}
+	ucred = &daemon.Ucrednet{Uid: 0, Pid: 100}
 	c.Check(ac.CheckAccess(nil, nil, ucred, nil), IsNil)
 }
