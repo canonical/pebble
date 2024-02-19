@@ -81,22 +81,20 @@ type Options struct {
 
 // A Daemon listens for requests and routes them to the right command
 type Daemon struct {
-	Version             string
-	StartTime           time.Time
-	pebbleDir           string
-	normalSocketPath    string
-	untrustedSocketPath string
-	httpAddress         string
-	overlord            *overlord.Overlord
-	state               *state.State
-	generalListener     net.Listener
-	untrustedListener   net.Listener
-	httpListener        net.Listener
-	connTracker         *connTracker
-	serve               *http.Server
-	tomb                tomb.Tomb
-	router              *mux.Router
-	standbyOpinions     *standby.StandbyOpinions
+	Version          string
+	StartTime        time.Time
+	pebbleDir        string
+	normalSocketPath string
+	httpAddress      string
+	overlord         *overlord.Overlord
+	state            *state.State
+	generalListener  net.Listener
+	httpListener     net.Listener
+	connTracker      *connTracker
+	serve            *http.Server
+	tomb             tomb.Tomb
+	router           *mux.Router
+	standbyOpinions  *standby.StandbyOpinions
 
 	// set to what kind of restart was requested (if any)
 	requestedRestart restart.RestartType
@@ -155,14 +153,11 @@ func (c *Command) Daemon() *Daemon {
 }
 
 func (c *Command) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	st := c.d.state
-	st.Lock()
-	user, err := userFromRequest(st, r)
+	user, err := userFromRequest(nil, r) // don't pass state as this does nothing right now
 	if err != nil {
 		Forbidden("forbidden").ServeHTTP(w, r)
 		return
 	}
-	st.Unlock()
 
 	// check if we are in degradedMode
 	if c.d.degradedErr != nil && r.Method != "GET" {
@@ -205,6 +200,7 @@ func (c *Command) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	rsp := rspf(c, r, user)
 
 	if rsp, ok := rsp.(*resp); ok {
+		st := c.d.state
 		st.Lock()
 		_, rst := restart.Pending(st)
 		st.Unlock()
@@ -304,14 +300,6 @@ func (d *Daemon) Init() error {
 		d.generalListener = &ucrednetListener{Listener: listener}
 	} else {
 		return fmt.Errorf("when trying to listen on %s: %v", d.normalSocketPath, err)
-	}
-
-	if listener, err := getListener(d.untrustedSocketPath, listenerMap); err == nil {
-		// This listener may also be nil if that socket wasn't among
-		// the listeners, so check it before using it.
-		d.untrustedListener = &ucrednetListener{Listener: listener}
-	} else {
-		logger.Debugf("cannot get listener for %q: %v", d.untrustedSocketPath, err)
 	}
 
 	d.addRoutes()
@@ -426,14 +414,6 @@ func (d *Daemon) Start() error {
 	d.overlord.Loop()
 
 	d.tomb.Go(func() error {
-		if d.untrustedListener != nil {
-			d.tomb.Go(func() error {
-				if err := d.serve.Serve(d.untrustedListener); err != http.ErrServerClosed && d.tomb.Err() == tomb.ErrStillAlive {
-					return err
-				}
-				return nil
-			})
-		}
 		if err := d.serve.Serve(d.generalListener); err != http.ErrServerClosed && d.tomb.Err() == tomb.ErrStillAlive {
 			return err
 		}
@@ -790,10 +770,9 @@ func (d *Daemon) SetServiceArgs(serviceArgs map[string][]string) error {
 
 func New(opts *Options) (*Daemon, error) {
 	d := &Daemon{
-		pebbleDir:           opts.Dir,
-		normalSocketPath:    opts.SocketPath,
-		untrustedSocketPath: opts.SocketPath + ".untrusted",
-		httpAddress:         opts.HTTPAddress,
+		pebbleDir:        opts.Dir,
+		normalSocketPath: opts.SocketPath,
+		httpAddress:      opts.HTTPAddress,
 	}
 
 	ovldOptions := overlord.Options{

@@ -114,18 +114,20 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 		return err
 	}
 
-	releasePlan, err := m.acquirePlan()
+	mgrPlan, err := m.Plan()
 	if err != nil {
-		return fmt.Errorf("cannot acquire plan lock: %w", err)
+		return fmt.Errorf("cannot fetch plan: %w", err)
 	}
-	config, ok := m.plan.Services[request.Name]
-	releasePlan()
+	config, ok := mgrPlan.Services[request.Name]
 	if !ok {
 		return fmt.Errorf("cannot find service %q in plan", request.Name)
 	}
 
 	// Create the service object (or reuse the existing one by name).
-	service := m.serviceForStart(task, config)
+	service, taskLog := m.serviceForStart(config)
+	if taskLog != "" {
+		addTaskLog(task, taskLog)
+	}
 	if service == nil {
 		return nil
 	}
@@ -166,11 +168,13 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 // creates a new service object if one doesn't exist, returns the existing one
 // if it already exists but is stopped, or returns nil if it already exists
 // and is running.
-func (m *ServiceManager) serviceForStart(task *state.Task, config *plan.Service) *serviceData {
+//
+// It also returns a message to add to the task's log, or empty string if none.
+func (m *ServiceManager) serviceForStart(config *plan.Service) (service *serviceData, taskLog string) {
 	m.servicesLock.Lock()
 	defer m.servicesLock.Unlock()
 
-	service := m.services[config.Name]
+	service = m.services[config.Name]
 	if service == nil {
 		// Not already started, create a new service object.
 		service = &serviceData{
@@ -182,7 +186,7 @@ func (m *ServiceManager) serviceForStart(task *state.Task, config *plan.Service)
 			stopped: make(chan error, 2), // enough for killTimeElapsed to send, and exit if it happens after
 		}
 		m.services[config.Name] = service
-		return service
+		return service, ""
 	}
 
 	// Ensure config is up-to-date from the plan whenever the user starts a service.
@@ -190,26 +194,25 @@ func (m *ServiceManager) serviceForStart(task *state.Task, config *plan.Service)
 
 	switch service.state {
 	case stateInitial, stateStarting, stateRunning:
-		taskLogf(task, "Service %q already started.", config.Name)
-		return nil
+		return nil, fmt.Sprintf("Service %q already started.", config.Name)
 	case stateBackoff, stateStopped, stateExited:
 		// Start allowed when service is backing off, was stopped, or has exited.
 		service.backoffNum = 0
 		service.backoffTime = 0
 		service.transition(stateInitial)
-		return service
+		return service, ""
 	default:
 		// Cannot start service while terminating or killing, handle in start().
-		return service
+		return service, ""
 	}
 }
 
-func taskLogf(task *state.Task, format string, args ...interface{}) {
+func addTaskLog(task *state.Task, message string) {
 	st := task.State()
 	st.Lock()
 	defer st.Unlock()
 
-	task.Logf(format, args...)
+	task.Logf("%s", message)
 }
 
 func (m *ServiceManager) doStop(task *state.Task, tomb *tomb.Tomb) error {
@@ -220,7 +223,10 @@ func (m *ServiceManager) doStop(task *state.Task, tomb *tomb.Tomb) error {
 		return err
 	}
 
-	service := m.serviceForStop(task, request.Name)
+	service, taskLog := m.serviceForStop(request.Name)
+	if taskLog != "" {
+		addTaskLog(task, taskLog)
+	}
 	if service == nil {
 		return nil
 	}
@@ -252,29 +258,27 @@ func (m *ServiceManager) doStop(task *state.Task, tomb *tomb.Tomb) error {
 // serviceForStop looks up the service by name in the services map; it
 // returns the service object if it exists and is running, or nil if it's
 // already stopped or has never been started.
-func (m *ServiceManager) serviceForStop(task *state.Task, name string) *serviceData {
+//
+// It also returns a message to add to the task's log, or empty string if none.
+func (m *ServiceManager) serviceForStop(name string) (service *serviceData, taskLog string) {
 	m.servicesLock.Lock()
 	defer m.servicesLock.Unlock()
 
-	service := m.services[name]
+	service = m.services[name]
 	if service == nil {
-		taskLogf(task, "Service %q has never been started.", name)
-		return nil
+		return nil, fmt.Sprintf("Service %q has never been started.", name)
 	}
 
 	switch service.state {
 	case stateTerminating, stateKilling:
-		taskLogf(task, "Service %q already stopping.", name)
-		return nil
+		return nil, fmt.Sprintf("Service %q already stopping.", name)
 	case stateStopped:
-		taskLogf(task, "Service %q already stopped.", name)
-		return nil
+		return nil, fmt.Sprintf("Service %q already stopped.", name)
 	case stateExited:
-		taskLogf(task, "Service %q had already exited.", name)
 		service.transition(stateStopped)
-		return nil
+		return nil, fmt.Sprintf("Service %q had already exited.", name)
 	default:
-		return service
+		return service, ""
 	}
 }
 
@@ -585,6 +589,7 @@ func addLastLogs(task *state.Task, logBuffer *servicelog.RingBuffer) {
 		task.Logf("Most recent service output:\n%s", logs)
 	}
 }
+
 func (s *serviceData) doBackoff(action plan.ServiceAction, onType string) {
 	s.backoffNum++
 	s.backoffTime = calculateNextBackoff(s.config, s.backoffTime)

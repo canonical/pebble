@@ -204,10 +204,6 @@ func (s *daemonSuite) TestExplicitPaths(c *C) {
 	info, err := os.Stat(s.socketPath)
 	c.Assert(err, IsNil)
 	c.Assert(info.Mode(), Equals, os.ModeSocket|0666)
-
-	info, err = os.Stat(s.socketPath + ".untrusted")
-	c.Assert(err, IsNil)
-	c.Assert(info.Mode(), Equals, os.ModeSocket|0666)
 }
 
 func (s *daemonSuite) TestCommandMethodDispatch(c *C) {
@@ -533,14 +529,9 @@ func (s *daemonSuite) TestStartStop(c *C) {
 
 	l1, err := net.Listen("tcp", "127.0.0.1:0")
 	c.Assert(err, IsNil)
-	l2, err := net.Listen("tcp", "127.0.0.1:0")
-	c.Assert(err, IsNil)
 
 	generalAccept := make(chan struct{})
 	d.generalListener = &witnessAcceptListener{Listener: l1, accept: generalAccept}
-
-	untrustedAccept := make(chan struct{})
-	d.untrustedListener = &witnessAcceptListener{Listener: l2, accept: untrustedAccept}
 
 	c.Assert(d.Start(), IsNil)
 
@@ -554,18 +545,7 @@ func (s *daemonSuite) TestStartStop(c *C) {
 		close(generalDone)
 	}()
 
-	untrustedDone := make(chan struct{})
-	go func() {
-		select {
-		case <-untrustedAccept:
-		case <-time.After(2 * time.Second):
-			c.Fatal("untrusted listener accept was not called")
-		}
-		close(untrustedDone)
-	}()
-
 	<-generalDone
-	<-untrustedDone
 
 	err = d.Stop(nil)
 	c.Check(err, IsNil)
@@ -580,9 +560,6 @@ func (s *daemonSuite) TestRestartWiring(c *C) {
 	generalAccept := make(chan struct{})
 	d.generalListener = &witnessAcceptListener{Listener: l, accept: generalAccept}
 
-	untrustedAccept := make(chan struct{})
-	d.untrustedListener = &witnessAcceptListener{Listener: l, accept: untrustedAccept}
-
 	c.Assert(d.Start(), IsNil)
 	defer d.Stop(nil)
 
@@ -596,18 +573,7 @@ func (s *daemonSuite) TestRestartWiring(c *C) {
 		close(generalDone)
 	}()
 
-	untrustedDone := make(chan struct{})
-	go func() {
-		select {
-		case <-untrustedAccept:
-		case <-time.After(2 * time.Second):
-			c.Fatal("untrusted accept was not called")
-		}
-		close(untrustedDone)
-	}()
-
 	<-generalDone
-	<-untrustedDone
 
 	st := d.overlord.State()
 	st.Lock()
@@ -640,15 +606,9 @@ func (s *daemonSuite) TestGracefulStop(c *C) {
 	generalL, err := net.Listen("tcp", "127.0.0.1:0")
 	c.Assert(err, IsNil)
 
-	untrustedL, err := net.Listen("tcp", "127.0.0.1:0")
-	c.Assert(err, IsNil)
-
 	generalAccept := make(chan struct{})
 	generalClosed := make(chan struct{})
 	d.generalListener = &witnessAcceptListener{Listener: generalL, accept: generalAccept, closed: generalClosed}
-
-	untrustedAccept := make(chan struct{})
-	d.untrustedListener = &witnessAcceptListener{Listener: untrustedL, accept: untrustedAccept}
 
 	c.Assert(d.Start(), IsNil)
 
@@ -662,18 +622,7 @@ func (s *daemonSuite) TestGracefulStop(c *C) {
 		close(generalAccepting)
 	}()
 
-	untrustedAccepting := make(chan struct{})
-	go func() {
-		select {
-		case <-untrustedAccept:
-		case <-time.After(2 * time.Second):
-			c.Fatal("general accept was not called")
-		}
-		close(untrustedAccepting)
-	}()
-
 	<-generalAccepting
-	<-untrustedAccepting
 
 	alright := make(chan struct{})
 
@@ -714,9 +663,6 @@ func (s *daemonSuite) TestRestartSystemWiring(c *C) {
 	generalAccept := make(chan struct{})
 	d.generalListener = &witnessAcceptListener{Listener: l, accept: generalAccept}
 
-	untrustedAccept := make(chan struct{})
-	d.untrustedListener = &witnessAcceptListener{Listener: l, accept: untrustedAccept}
-
 	c.Assert(d.Start(), IsNil)
 	defer d.Stop(nil)
 
@@ -732,18 +678,7 @@ func (s *daemonSuite) TestRestartSystemWiring(c *C) {
 		close(generalDone)
 	}()
 
-	untrustedDone := make(chan struct{})
-	go func() {
-		select {
-		case <-untrustedAccept:
-		case <-time.After(2 * time.Second):
-			c.Fatal("untrusted accept was not called")
-		}
-		close(untrustedDone)
-	}()
-
 	<-generalDone
-	<-untrustedDone
 
 	oldRebootNoticeWait := rebootNoticeWait
 	oldRebootWaitTimeout := rebootWaitTimeout
@@ -837,15 +772,9 @@ func makeDaemonListeners(c *C, d *Daemon) {
 	generalL, err := net.Listen("tcp", "127.0.0.1:0")
 	c.Assert(err, IsNil)
 
-	untrustedL, err := net.Listen("tcp", "127.0.0.1:0")
-	c.Assert(err, IsNil)
-
 	generalAccept := make(chan struct{})
 	generalClosed := make(chan struct{})
 	d.generalListener = &witnessAcceptListener{Listener: generalL, accept: generalAccept, closed: generalClosed}
-
-	untrustedAccept := make(chan struct{})
-	d.untrustedListener = &witnessAcceptListener{Listener: untrustedL, accept: untrustedAccept}
 }
 
 // This test tests that when a restart of the system is called
