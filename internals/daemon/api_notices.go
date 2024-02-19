@@ -47,7 +47,7 @@ func v1GetNotices(c *Command, r *http.Request, _ *UserState) Response {
 
 	requestUID, err := uidFromRequest(r)
 	if err != nil {
-		return statusForbidden("cannot determine UID of request, so cannot retrieve notices")
+		return Forbidden("cannot determine UID of request, so cannot retrieve notices")
 	}
 	daemonUID := uint32(sysGetuid())
 
@@ -56,23 +56,23 @@ func v1GetNotices(c *Command, r *http.Request, _ *UserState) Response {
 
 	if len(query["user-id"]) > 0 {
 		if !isAdmin(requestUID, daemonUID) {
-			return statusForbidden(`only admins may use the "user-id" filter`)
+			return Forbidden(`only admins may use the "user-id" filter`)
 		}
 		userID, err = sanitizeUserIDFilter(query["user-id"])
 		if err != nil {
-			return statusBadRequest(`invalid "user-id" filter: %v`, err)
+			return BadRequest(`invalid "user-id" filter: %v`, err)
 		}
 	}
 
 	if len(query["select"]) > 0 {
 		if !isAdmin(requestUID, daemonUID) {
-			return statusForbidden(`only admins may use the "select" filter`)
+			return Forbidden(`only admins may use the "select" filter`)
 		}
 		if len(query["user-id"]) > 0 {
-			return statusBadRequest(`cannot use both "select" and "user-id" parameters`)
+			return BadRequest(`cannot use both "select" and "user-id" parameters`)
 		}
 		if query.Get("select") != "all" {
-			return statusBadRequest(`invalid "select" filter: must be "all"`)
+			return BadRequest(`invalid "select" filter: must be "all"`)
 		}
 		// Clear the userID filter so all notices will be returned.
 		userID = nil
@@ -89,7 +89,7 @@ func v1GetNotices(c *Command, r *http.Request, _ *UserState) Response {
 
 	after, err := parseOptionalTime(query.Get("after"))
 	if err != nil {
-		return statusBadRequest(`invalid "after" timestamp: %v`, err)
+		return BadRequest(`invalid "after" timestamp: %v`, err)
 	}
 
 	filter := &state.NoticeFilter{
@@ -101,7 +101,7 @@ func v1GetNotices(c *Command, r *http.Request, _ *UserState) Response {
 
 	timeout, err := parseOptionalDuration(query.Get("timeout"))
 	if err != nil {
-		return statusBadRequest("invalid timeout: %v", err)
+		return BadRequest("invalid timeout: %v", err)
 	}
 
 	st := c.d.overlord.State()
@@ -117,12 +117,12 @@ func v1GetNotices(c *Command, r *http.Request, _ *UserState) Response {
 
 		notices, err = st.WaitNotices(ctx, filter)
 		if errors.Is(err, context.Canceled) {
-			return statusBadRequest("request canceled")
+			return BadRequest("request canceled")
 		}
 		// DeadlineExceeded will occur if timeout elapses; in that case return
 		// an empty list of notices, not an error.
 		if err != nil && !errors.Is(err, context.DeadlineExceeded) {
-			return statusInternalError("cannot wait for notices: %s", err)
+			return InternalError("cannot wait for notices: %s", err)
 		}
 	} else {
 		// No timeout given, fetch currently-available notices
@@ -188,7 +188,7 @@ func isAdmin(requestUID, daemonUID uint32) bool {
 func v1PostNotices(c *Command, r *http.Request, _ *UserState) Response {
 	requestUID, err := uidFromRequest(r)
 	if err != nil {
-		return statusForbidden("cannot determine UID of request, so cannot create notice")
+		return Forbidden("cannot determine UID of request, so cannot create notice")
 	}
 
 	var payload struct {
@@ -200,35 +200,35 @@ func v1PostNotices(c *Command, r *http.Request, _ *UserState) Response {
 	}
 	decoder := json.NewDecoder(r.Body)
 	if err := decoder.Decode(&payload); err != nil {
-		return statusBadRequest("cannot decode request body: %v", err)
+		return BadRequest("cannot decode request body: %v", err)
 	}
 
 	if payload.Action != "add" {
-		return statusBadRequest("invalid action %q", payload.Action)
+		return BadRequest("invalid action %q", payload.Action)
 	}
 	if payload.Type != "custom" {
-		return statusBadRequest(`invalid type %q (can only add "custom" notices)`, payload.Type)
+		return BadRequest(`invalid type %q (can only add "custom" notices)`, payload.Type)
 	}
 	if !customKeyRegexp.MatchString(payload.Key) {
-		return statusBadRequest(`invalid key %q (must be in "domain.com/key" format)`, payload.Key)
+		return BadRequest(`invalid key %q (must be in "domain.com/key" format)`, payload.Key)
 	}
 	if len(payload.Key) > maxNoticeKeyLength {
-		return statusBadRequest("key must be %d bytes or less", maxNoticeKeyLength)
+		return BadRequest("key must be %d bytes or less", maxNoticeKeyLength)
 	}
 
 	repeatAfter, err := parseOptionalDuration(payload.RepeatAfter)
 	if err != nil {
-		return statusBadRequest("invalid repeat-after: %v", err)
+		return BadRequest("invalid repeat-after: %v", err)
 	}
 
 	if len(payload.DataJSON) > maxNoticeDataSize {
-		return statusBadRequest("total size of data must be %d bytes or less", maxNoticeDataSize)
+		return BadRequest("total size of data must be %d bytes or less", maxNoticeDataSize)
 	}
 	var data map[string]string
 	if len(payload.DataJSON) > 0 {
 		err = json.Unmarshal(payload.DataJSON, &data)
 		if err != nil {
-			return statusBadRequest("cannot decode notice data: %v", err)
+			return BadRequest("cannot decode notice data: %v", err)
 		}
 	}
 
@@ -241,7 +241,7 @@ func v1PostNotices(c *Command, r *http.Request, _ *UserState) Response {
 		RepeatAfter: repeatAfter,
 	})
 	if err != nil {
-		return statusInternalError("%v", err)
+		return InternalError("%v", err)
 	}
 
 	return SyncResponse(addedNotice{ID: noticeId})
@@ -250,7 +250,7 @@ func v1PostNotices(c *Command, r *http.Request, _ *UserState) Response {
 func v1GetNotice(c *Command, r *http.Request, _ *UserState) Response {
 	requestUID, err := uidFromRequest(r)
 	if err != nil {
-		return statusForbidden("cannot determine UID of request, so cannot retrieve notice")
+		return Forbidden("cannot determine UID of request, so cannot retrieve notice")
 	}
 	daemonUID := uint32(sysGetuid())
 	noticeID := muxVars(r)["id"]
@@ -259,10 +259,10 @@ func v1GetNotice(c *Command, r *http.Request, _ *UserState) Response {
 	defer st.Unlock()
 	notice := st.Notice(noticeID)
 	if notice == nil {
-		return statusNotFound("cannot find notice with ID %q", noticeID)
+		return NotFound("cannot find notice with ID %q", noticeID)
 	}
 	if !noticeViewableByUser(notice, requestUID, daemonUID) {
-		return statusForbidden("not allowed to access notice with id %q", noticeID)
+		return Forbidden("not allowed to access notice with id %q", noticeID)
 	}
 	return SyncResponse(notice)
 }
