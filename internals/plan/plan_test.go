@@ -737,7 +737,7 @@ var planTests = []planTest{{
 		checks:
 			chk-http:
 				override: merge
-				period: 1s
+				period: 4s
 		
 			chk-tcp:
 				override: merge
@@ -778,7 +778,7 @@ var planTests = []planTest{{
 			"chk-http": {
 				Name:      "chk-http",
 				Override:  plan.MergeOverride,
-				Period:    plan.OptionalDuration{Value: time.Second, IsSet: true},
+				Period:    plan.OptionalDuration{Value: 4 * time.Second, IsSet: true},
 				Timeout:   plan.OptionalDuration{Value: defaultCheckTimeout},
 				Threshold: defaultCheckThreshold,
 				HTTP: &plan.HTTPCheck{
@@ -1324,6 +1324,15 @@ func (s *S) TestParseLayer(c *C) {
 					c.Assert(names, DeepEquals, order)
 				}
 			}
+			if err == nil {
+				p := &plan.Plan{
+					Layers:     sup.Layers,
+					Services:   result.Services,
+					Checks:     result.Checks,
+					LogTargets: result.LogTargets,
+				}
+				err = p.Validate()
+			}
 		}
 		if err != nil || test.error != "" {
 			if test.error != "" {
@@ -1355,7 +1364,16 @@ services:
             - srv1
 `))
 	c.Assert(err, IsNil)
-	_, err = plan.CombineLayers(layer1, layer2)
+	combined, err := plan.CombineLayers(layer1, layer2)
+	c.Assert(err, IsNil)
+	layers := []*plan.Layer{layer1, layer2}
+	p := &plan.Plan{
+		Layers:     layers,
+		Services:   combined.Services,
+		Checks:     combined.Checks,
+		LogTargets: combined.LogTargets,
+	}
+	err = p.Validate()
 	c.Assert(err, ErrorMatches, `services in before/after loop: .*`)
 	_, ok := err.(*plan.FormatError)
 	c.Assert(ok, Equals, true, Commentf("error must be *plan.FormatError, not %T", err))
@@ -1386,7 +1404,16 @@ services:
         override: merge
 `))
 	c.Assert(err, IsNil)
-	_, err = plan.CombineLayers(layer1, layer2)
+	combined, err := plan.CombineLayers(layer1, layer2)
+	c.Assert(err, IsNil)
+	layers := []*plan.Layer{layer1, layer2}
+	p := &plan.Plan{
+		Layers:     layers,
+		Services:   combined.Services,
+		Checks:     combined.Checks,
+		LogTargets: combined.LogTargets,
+	}
+	err = p.Validate()
 	c.Check(err, ErrorMatches, `plan must define "command" for service "srv1"`)
 	_, ok := err.(*plan.FormatError)
 	c.Check(ok, Equals, true, Commentf("error must be *plan.FormatError, not %T", err))
@@ -1405,7 +1432,7 @@ services:
         override: merge
 `))
 	c.Assert(err, IsNil)
-	combined, err := plan.CombineLayers(layer1, layer2)
+	combined, err = plan.CombineLayers(layer1, layer2)
 	c.Assert(err, IsNil)
 	c.Assert(combined.Services["srv1"].Command, Equals, "foo --bar")
 }

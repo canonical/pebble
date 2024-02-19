@@ -752,6 +752,18 @@ services:
         command: /bin/b
 `[1:])
 	s.planLayersHasLen(c, s.manager, 3)
+
+	// Make sure that layer validation is happening.
+	layer = parseLayer(c, 0, "label4", `
+checks:
+    bad-check:
+        override: replace
+        level: invalid
+        tcp:
+            port: 8080
+`)
+	err = s.manager.CombineLayer(layer)
+	c.Check(err, ErrorMatches, `(?s).*plan check.*must be "alive" or "ready".*`)
 }
 
 func (s *S) TestSetServiceArgs(c *C) {
@@ -1031,6 +1043,7 @@ checks:
     chk1:
          override: replace
          period: 100ms
+         timeout: 90ms
          threshold: 1
          exec:
              command: will-fail
@@ -1126,6 +1139,7 @@ checks:
     chk1:
          override: replace
          period: 100ms
+         timeout: 90ms
          threshold: 1
          exec:
              command: will-fail
@@ -1213,6 +1227,7 @@ checks:
     chk1:
          override: replace
          period: 100ms
+         timeout: 90ms
          threshold: 1
          exec:
              command: will-fail
@@ -1297,6 +1312,7 @@ checks:
     chk1:
          override: replace
          period: 100ms
+         timeout: 90ms
          threshold: 1
          exec:
              command: will-fail
