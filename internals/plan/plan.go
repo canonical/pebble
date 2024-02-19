@@ -565,6 +565,11 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 	combined.Summary = last.Summary
 	combined.Description = last.Description
 	for _, layer := range layers {
+		err := layer.Validate()
+		if err != nil {
+			return nil, err
+		}
+
 		for name, service := range layer.Services {
 			switch service.Override {
 			case MergeOverride:
@@ -652,7 +657,6 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 		if !service.BackoffLimit.IsSet {
 			service.BackoffLimit.Value = defaultBackoffLimit
 		}
-
 	}
 
 	for _, check := range combined.Checks {
@@ -673,15 +677,11 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 	return combined, nil
 }
 
-// TODO
-// Ensure fields in combined layers validate correctly.
-func (p *Plan) Validate() error {
-	for name, service := range p.Services {
-		if service.Command == "" {
-			return &FormatError{
-				Message: fmt.Sprintf(`plan must define "command" for service %q`, name),
-			}
-		}
+// Validate checks that the layer is valid.
+// See also Plan.Validate, which does additional checks based on the combined
+// layers.
+func (l *Layer) Validate() error {
+	for name, service := range l.Services {
 		_, _, err := service.ParseCommand()
 		if err != nil {
 			return &FormatError{
@@ -705,31 +705,76 @@ func (p *Plan) Validate() error {
 				}
 			}
 		}
-		if service.BackoffFactor.Value < 1 {
+		if service.BackoffFactor.IsSet && service.BackoffFactor.Value < 1 {
 			return &FormatError{
 				Message: fmt.Sprintf("plan service %q backoff-factor must be 1.0 or greater, not %g", name, service.BackoffFactor.Value),
 			}
 		}
 	}
 
-	for name, check := range p.Checks {
+	for name, check := range l.Checks {
 		if check.Level != UnsetLevel && check.Level != AliveLevel && check.Level != ReadyLevel {
 			return &FormatError{
 				Message: fmt.Sprintf(`plan check %q level must be "alive" or "ready"`, name),
 			}
 		}
-		if !check.Period.IsSet {
-			check.Period.Value = defaultCheckPeriod
-		} else if check.Period.Value == 0 {
+		if check.Period.IsSet && check.Period.Value == 0 {
 			return &FormatError{
 				Message: fmt.Sprintf("plan check %q period must not be zero", name),
 			}
 		}
-		if check.Timeout.Value == 0 {
+		if check.Timeout.IsSet && check.Timeout.Value == 0 {
 			return &FormatError{
 				Message: fmt.Sprintf("plan check %q timeout must not be zero", name),
 			}
-		} else if check.Timeout.Value >= check.Period.Value {
+		}
+
+		if check.Exec != nil {
+			_, err := shlex.Split(check.Exec.Command)
+			if err != nil {
+				return &FormatError{
+					Message: fmt.Sprintf("plan check %q command invalid: %v", name, err),
+				}
+			}
+			_, _, err = osutil.NormalizeUidGid(check.Exec.UserID, check.Exec.GroupID, check.Exec.User, check.Exec.Group)
+			if err != nil {
+				return &FormatError{
+					Message: fmt.Sprintf("plan check %q has invalid user/group: %v", name, err),
+				}
+			}
+		}
+	}
+
+	for name, target := range l.LogTargets {
+		switch target.Type {
+		case LokiTarget, SyslogTarget:
+			// valid, continue
+		case UnsetLogTarget:
+			// will be checked when the layers are combined
+		default:
+			return &FormatError{
+				Message: fmt.Sprintf(`log target %q has unsupported type %q, must be %q or %q`,
+					name, target.Type, LokiTarget, SyslogTarget),
+			}
+		}
+	}
+
+	return nil
+}
+
+// Validate checks that the combined layers form a valid plan.
+// See also Plan.Validate, which checks that the individual layers are valid.
+func (p *Plan) Validate() error {
+	for name, service := range p.Services {
+		if service.Command == "" {
+			return &FormatError{
+				Message: fmt.Sprintf(`plan must define "command" for service %q`, name),
+			}
+		}
+	}
+
+	for name, check := range p.Checks {
+		if check.Timeout.Value >= check.Period.Value {
 			return &FormatError{
 				Message: fmt.Sprintf("plan check %q timeout must be less than period", name),
 			}
@@ -758,23 +803,11 @@ func (p *Plan) Validate() error {
 					Message: fmt.Sprintf(`plan must set "command" for exec check %q`, name),
 				}
 			}
-			_, err := shlex.Split(check.Exec.Command)
-			if err != nil {
-				return &FormatError{
-					Message: fmt.Sprintf("plan check %q command invalid: %v", name, err),
-				}
-			}
 			_, contextExists := p.Services[check.Exec.ServiceContext]
 			if check.Exec.ServiceContext != "" && !contextExists {
 				return &FormatError{
 					Message: fmt.Sprintf("plan check %q service context specifies non-existent service %q",
 						name, check.Exec.ServiceContext),
-				}
-			}
-			_, _, err = osutil.NormalizeUidGid(check.Exec.UserID, check.Exec.GroupID, check.Exec.User, check.Exec.Group)
-			if err != nil {
-				return &FormatError{
-					Message: fmt.Sprintf("plan check %q has invalid user/group: %v", name, err),
 				}
 			}
 			numTypes++
@@ -795,14 +828,9 @@ func (p *Plan) Validate() error {
 				Message: fmt.Sprintf(`plan must define "type" (%q or %q) for log target %q`,
 					LokiTarget, SyslogTarget, name),
 			}
-		default:
-			return &FormatError{
-				Message: fmt.Sprintf(`log target %q has unsupported type %q, must be %q or %q`,
-					name, target.Type, LokiTarget, SyslogTarget),
-			}
 		}
 
-		// Validate service names specified in log target
+		// Validate service names specified in log target.
 		for _, serviceName := range target.Services {
 			serviceName = strings.TrimPrefix(serviceName, "-")
 			if serviceName == "all" {
