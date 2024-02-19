@@ -27,14 +27,14 @@ type AccessChecker interface {
 	CheckAccess(d *Daemon, r *http.Request, ucred *Ucrednet, user *UserState) Response
 }
 
-// OpenAccess allows all requests
+// OpenAccess allows all requests, including non-local sockets (e.g. TCP)
 type OpenAccess struct{}
 
 func (ac OpenAccess) CheckAccess(d *Daemon, r *http.Request, ucred *Ucrednet, user *UserState) Response {
 	return nil
 }
 
-// AdminAccess allows requests from the root uid and the current user's uid
+// AdminAccess allows requests over the UNIX domain socket from the root uid and the current user's uid
 type AdminAccess struct{}
 
 func (ac AdminAccess) CheckAccess(d *Daemon, r *http.Request, ucred *Ucrednet, user *UserState) Response {
@@ -44,7 +44,7 @@ func (ac AdminAccess) CheckAccess(d *Daemon, r *http.Request, ucred *Ucrednet, u
 	return Unauthorized("access denied")
 }
 
-// UserAccess allows requests from any local user
+// UserAccess allows requests over the UNIX domain socket from any local user
 type UserAccess struct{}
 
 func (ac UserAccess) CheckAccess(d *Daemon, r *http.Request, ucred *Ucrednet, user *UserState) Response {
