@@ -334,7 +334,12 @@ func (s *daemonSuite) TestFillsWarnings(c *C) {
 	c.Check(rst.WarningTimestamp, NotNil)
 }
 
-func (s *daemonSuite) TestGuestAccess(c *C) {
+type accessCheckerTestCase struct {
+	get, put, post int // expected status for each method
+	read, write    AccessChecker
+}
+
+func (s *daemonSuite) testAccessChecker(c *C, tests []accessCheckerTestCase, remoteAddr string) {
 	d := s.newDaemon(c)
 
 	responseFunc := func(c *Command, r *http.Request, s *UserState) Response {
@@ -342,25 +347,13 @@ func (s *daemonSuite) TestGuestAccess(c *C) {
 	}
 
 	doTestReqFunc := func(cmd *Command, mth string) *httptest.ResponseRecorder {
-		req := &http.Request{Method: mth}
+		req := &http.Request{Method: mth, RemoteAddr: remoteAddr}
 		rec := httptest.NewRecorder()
 		cmd.ServeHTTP(rec, req)
 		return rec
 	}
 
-	for _, t := range []struct {
-		getStatus, putStatus, postStatus int
-		readAccess, writeAccess          AccessChecker
-	}{
-		{http.StatusOK, http.StatusOK, http.StatusOK, OpenAccess{}, OpenAccess{}},
-		{http.StatusOK, http.StatusUnauthorized, http.StatusUnauthorized, OpenAccess{}, UserAccess{}},
-		{http.StatusOK, http.StatusUnauthorized, http.StatusUnauthorized, OpenAccess{}, AdminAccess{}},
-
-		{http.StatusUnauthorized, http.StatusUnauthorized, http.StatusUnauthorized, UserAccess{}, UserAccess{}},
-		{http.StatusUnauthorized, http.StatusUnauthorized, http.StatusUnauthorized, UserAccess{}, AdminAccess{}},
-
-		{http.StatusUnauthorized, http.StatusUnauthorized, http.StatusUnauthorized, AdminAccess{}, AdminAccess{}},
-	} {
+	for _, t := range tests {
 		cmd := &Command{
 			d: d,
 
@@ -368,109 +361,163 @@ func (s *daemonSuite) TestGuestAccess(c *C) {
 			PUT:  responseFunc,
 			POST: responseFunc,
 
-			ReadAccess:  t.readAccess,
-			WriteAccess: t.writeAccess,
+			ReadAccess:  t.read,
+			WriteAccess: t.write,
 		}
 
-		comment := Commentf("readAccess: %T, writeAccess: %T", t.readAccess, t.writeAccess)
+		comment := Commentf("remoteAddr: %v, read: %T, write: %T", remoteAddr, t.read, t.write)
 
-		c.Check(doTestReqFunc(cmd, "GET").Code, Equals, t.getStatus, comment)
-		c.Check(doTestReqFunc(cmd, "PUT").Code, Equals, t.putStatus, comment)
-		c.Check(doTestReqFunc(cmd, "POST").Code, Equals, t.postStatus, comment)
+		c.Check(doTestReqFunc(cmd, "GET").Code, Equals, t.get, comment)
+		c.Check(doTestReqFunc(cmd, "PUT").Code, Equals, t.put, comment)
+		c.Check(doTestReqFunc(cmd, "POST").Code, Equals, t.post, comment)
 	}
+}
+
+func (s *daemonSuite) TestGuestAccess(c *C) {
+	tests := []accessCheckerTestCase{
+		{
+			get:   http.StatusOK,
+			put:   http.StatusOK,
+			post:  http.StatusOK,
+			read:  OpenAccess{},
+			write: OpenAccess{},
+		}, {
+			get:   http.StatusOK,
+			put:   http.StatusUnauthorized,
+			post:  http.StatusUnauthorized,
+			read:  OpenAccess{},
+			write: UserAccess{},
+		},
+		{
+			get:   http.StatusOK,
+			put:   http.StatusUnauthorized,
+			post:  http.StatusUnauthorized,
+			read:  OpenAccess{},
+			write: AdminAccess{},
+		},
+		{
+			get:   http.StatusUnauthorized,
+			put:   http.StatusUnauthorized,
+			post:  http.StatusUnauthorized,
+			read:  UserAccess{},
+			write: UserAccess{},
+		},
+		{
+			get:   http.StatusUnauthorized,
+			put:   http.StatusUnauthorized,
+			post:  http.StatusUnauthorized,
+			read:  UserAccess{},
+			write: AdminAccess{},
+		},
+		{
+			get:   http.StatusUnauthorized,
+			put:   http.StatusUnauthorized,
+			post:  http.StatusUnauthorized,
+			read:  AdminAccess{},
+			write: AdminAccess{},
+		},
+	}
+
+	s.testAccessChecker(c, tests, "")
 }
 
 func (s *daemonSuite) TestUserAccess(c *C) {
-	d := s.newDaemon(c)
-
-	responseFunc := func(c *Command, r *http.Request, s *UserState) Response {
-		return SyncResponse(true)
+	tests := []accessCheckerTestCase{
+		{
+			get:   http.StatusOK,
+			put:   http.StatusOK,
+			post:  http.StatusOK,
+			read:  OpenAccess{},
+			write: OpenAccess{},
+		},
+		{
+			get:   http.StatusOK,
+			put:   http.StatusOK,
+			post:  http.StatusOK,
+			read:  OpenAccess{},
+			write: UserAccess{},
+		},
+		{
+			get:   http.StatusOK,
+			put:   http.StatusUnauthorized,
+			post:  http.StatusUnauthorized,
+			read:  OpenAccess{},
+			write: AdminAccess{},
+		},
+		{
+			get:   http.StatusOK,
+			put:   http.StatusOK,
+			post:  http.StatusOK,
+			read:  UserAccess{},
+			write: UserAccess{},
+		},
+		{
+			get:   http.StatusOK,
+			put:   http.StatusUnauthorized,
+			post:  http.StatusUnauthorized,
+			read:  UserAccess{},
+			write: AdminAccess{},
+		},
+		{
+			get:   http.StatusUnauthorized,
+			put:   http.StatusUnauthorized,
+			post:  http.StatusUnauthorized,
+			read:  AdminAccess{},
+			write: AdminAccess{},
+		},
 	}
 
-	doTestReqFunc := func(cmd *Command, mth string) *httptest.ResponseRecorder {
-		req := &http.Request{Method: mth, RemoteAddr: "pid=100;uid=42;socket=;"}
-		rec := httptest.NewRecorder()
-		cmd.ServeHTTP(rec, req)
-		return rec
-	}
-
-	for _, t := range []struct {
-		getStatus, putStatus, postStatus int
-		readAccess, writeAccess          AccessChecker
-	}{
-		{http.StatusOK, http.StatusOK, http.StatusOK, OpenAccess{}, OpenAccess{}},
-		{http.StatusOK, http.StatusOK, http.StatusOK, OpenAccess{}, UserAccess{}},
-		{http.StatusOK, http.StatusUnauthorized, http.StatusUnauthorized, OpenAccess{}, AdminAccess{}},
-
-		{http.StatusOK, http.StatusOK, http.StatusOK, UserAccess{}, UserAccess{}},
-		{http.StatusOK, http.StatusUnauthorized, http.StatusUnauthorized, UserAccess{}, AdminAccess{}},
-
-		{http.StatusUnauthorized, http.StatusUnauthorized, http.StatusUnauthorized, AdminAccess{}, AdminAccess{}},
-	} {
-		cmd := &Command{
-			d: d,
-
-			GET:  responseFunc,
-			PUT:  responseFunc,
-			POST: responseFunc,
-
-			ReadAccess:  t.readAccess,
-			WriteAccess: t.writeAccess,
-		}
-
-		comment := Commentf("readAccess: %T, writeAccess: %T", t.readAccess, t.writeAccess)
-
-		c.Check(doTestReqFunc(cmd, "GET").Code, Equals, t.getStatus, comment)
-		c.Check(doTestReqFunc(cmd, "PUT").Code, Equals, t.putStatus, comment)
-		c.Check(doTestReqFunc(cmd, "POST").Code, Equals, t.postStatus, comment)
-	}
+	s.testAccessChecker(c, tests, "pid=100;uid=42;socket=;")
 }
 
 func (s *daemonSuite) TestSuperAccess(c *C) {
-	d := s.newDaemon(c)
-
-	responseFunc := func(c *Command, r *http.Request, s *UserState) Response {
-		return SyncResponse(true)
+	tests := []accessCheckerTestCase {
+		{
+			get: http.StatusOK,
+			put: http.StatusOK,
+			post: http.StatusOK,
+			read: OpenAccess{},
+			write: OpenAccess{},
+		},
+		{
+			get: http.StatusOK,
+			put: http.StatusOK,
+			post: http.StatusOK,
+			read: OpenAccess{},
+			write: UserAccess{},
+		},
+		{
+			get: http.StatusOK,
+			put: http.StatusOK,
+			post: http.StatusOK,
+			read: OpenAccess{},
+			write: AdminAccess{},
+		},
+		{
+			get: http.StatusOK,
+			put: http.StatusOK,
+			post: http.StatusOK,
+			read: UserAccess{},
+			write: UserAccess{},
+		},
+		{
+			get: http.StatusOK,
+			put: http.StatusOK,
+			post: http.StatusOK,
+			read: UserAccess{},
+			write: AdminAccess{},
+		},
+		{
+			get: http.StatusOK,
+			put: http.StatusOK,
+			post: http.StatusOK,
+			read: AdminAccess{},
+			write: AdminAccess{},
+		},
 	}
 
 	for _, uid := range []int{0, os.Getuid()} {
-		doTestReqFunc := func(cmd *Command, mth string) *httptest.ResponseRecorder {
-			req := &http.Request{Method: mth, RemoteAddr: fmt.Sprintf("pid=100;uid=%d;socket=;", uid)}
-			rec := httptest.NewRecorder()
-			cmd.ServeHTTP(rec, req)
-			return rec
-		}
-
-		for _, t := range []struct {
-			getStatus, putStatus, postStatus int
-			readAccess, writeAccess          AccessChecker
-		}{
-			{http.StatusOK, http.StatusOK, http.StatusOK, OpenAccess{}, OpenAccess{}},
-			{http.StatusOK, http.StatusOK, http.StatusOK, OpenAccess{}, UserAccess{}},
-			{http.StatusOK, http.StatusOK, http.StatusOK, OpenAccess{}, AdminAccess{}},
-
-			{http.StatusOK, http.StatusOK, http.StatusOK, UserAccess{}, UserAccess{}},
-			{http.StatusOK, http.StatusOK, http.StatusOK, UserAccess{}, AdminAccess{}},
-
-			{http.StatusOK, http.StatusOK, http.StatusOK, AdminAccess{}, AdminAccess{}},
-		} {
-			cmd := &Command{
-				d: d,
-
-				GET:  responseFunc,
-				PUT:  responseFunc,
-				POST: responseFunc,
-
-				ReadAccess:  t.readAccess,
-				WriteAccess: t.writeAccess,
-			}
-
-			comment := Commentf("uid: %d, readAccess: %T, writeAccess: %T", uid, t.readAccess, t.writeAccess)
-
-			c.Check(doTestReqFunc(cmd, "GET").Code, Equals, t.getStatus, comment)
-			c.Check(doTestReqFunc(cmd, "PUT").Code, Equals, t.putStatus, comment)
-			c.Check(doTestReqFunc(cmd, "POST").Code, Equals, t.postStatus, comment)
-		}
+		s.testAccessChecker(c, tests, fmt.Sprintf("pid=100;uid=%d;socket=;", uid))
 	}
 }
 
