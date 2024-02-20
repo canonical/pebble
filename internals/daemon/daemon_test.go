@@ -517,7 +517,8 @@ func (s *daemonSuite) TestSuperAccess(c *C) {
 	}
 
 	for _, uid := range []int{0, os.Getuid()} {
-		s.testAccessChecker(c, tests, fmt.Sprintf("pid=100;uid=%d;socket=;", uid))
+		remoteAddr := fmt.Sprintf("pid=100;uid=%d;socket=;", uid)
+		s.testAccessChecker(c, tests, remoteAddr)
 	}
 }
 
