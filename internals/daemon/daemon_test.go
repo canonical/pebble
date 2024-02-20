@@ -342,7 +342,7 @@ func (s *daemonSuite) TestGuestAccess(c *C) {
 	}
 
 	doTestReqFunc := func(cmd *Command, mth string) *httptest.ResponseRecorder {
-		req := &http.Request{Method: mth, RemoteAddr: ""}
+		req := &http.Request{Method: mth}
 		rec := httptest.NewRecorder()
 		cmd.ServeHTTP(rec, req)
 		return rec
