@@ -681,8 +681,8 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 // an error if there are validation errors.
 // See also Plan.Validate, which does additional checks based on the combined
 // layers.
-func (l *Layer) Validate() error {
-	for name, service := range l.Services {
+func (layer *Layer) Validate() error {
+	for name, service := range layer.Services {
 		_, _, err := service.ParseCommand()
 		if err != nil {
 			return &FormatError{
@@ -713,7 +713,7 @@ func (l *Layer) Validate() error {
 		}
 	}
 
-	for name, check := range l.Checks {
+	for name, check := range layer.Checks {
 		if check.Level != UnsetLevel && check.Level != AliveLevel && check.Level != ReadyLevel {
 			return &FormatError{
 				Message: fmt.Sprintf(`plan check %q level must be "alive" or "ready"`, name),
@@ -746,7 +746,7 @@ func (l *Layer) Validate() error {
 		}
 	}
 
-	for name, target := range l.LogTargets {
+	for name, target := range layer.LogTargets {
 		switch target.Type {
 		case LokiTarget, SyslogTarget:
 			// valid, continue
