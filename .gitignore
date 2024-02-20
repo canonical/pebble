@@ -7,5 +7,6 @@ cmd/VERSION
 .idea
 .vscode
 /pebble
+__debug_bin*
 
 dist/
