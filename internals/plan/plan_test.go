@@ -1286,6 +1286,64 @@ var planTests = []planTest{{
 					pebble_service: illegal
 `},
 	error: `log target "tgt1": label "pebble_service" uses reserved prefix "pebble_"`,
+}, {
+	summary: "Required field two layers deep",
+	input: []string{`
+			services:
+				srv1:
+					override: replace
+					command: sleep 1000
+	`, `
+			services:
+				srv1:
+					override: merge
+					environment:
+						VAR1: foo
+	`, `
+			services:
+				srv1:
+					override: merge
+					environment:
+						VAR2: bar
+	`},
+	result: &plan.Layer{
+		Services: map[string]*plan.Service{
+			"srv1": {
+				Name:          "srv1",
+				Command:       "sleep 1000",
+				Override:      plan.ReplaceOverride,
+				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
+				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
+				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
+				Environment: map[string]string{
+					"VAR1": "foo",
+					"VAR2": "bar",
+				},
+			},
+		},
+		Checks:     map[string]*plan.Check{},
+		LogTargets: map[string]*plan.LogTarget{},
+	},
+}, {
+	summary: "Three layers missing command",
+	input: []string{`
+		services:
+			srv1:
+				override: replace
+`, `
+		services:
+			srv1:
+				override: merge
+				environment:
+					VAR1: foo
+`, `
+		services:
+			srv1:
+				override: merge
+				environment:
+					VAR2: bar
+`},
+	error: `plan must define "command" for service "srv1"`,
 }}
 
 func (s *S) TestParseLayer(c *C) {
