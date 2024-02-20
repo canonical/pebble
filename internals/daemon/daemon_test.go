@@ -341,7 +341,7 @@ func (s *daemonSuite) TestGuestAccess(c *C) {
 		return SyncResponse(true)
 	}
 
-	doTestReqFunc := func(c *C, cmd *Command, mth string) *httptest.ResponseRecorder {
+	doTestReqFunc := func(cmd *Command, mth string) *httptest.ResponseRecorder {
 		req := &http.Request{Method: mth, RemoteAddr: ""}
 		rec := httptest.NewRecorder()
 		cmd.ServeHTTP(rec, req)
@@ -374,9 +374,9 @@ func (s *daemonSuite) TestGuestAccess(c *C) {
 
 		comment := Commentf("readAccess: %T, writeAccess: %T", t.readAccess, t.writeAccess)
 
-		c.Check(doTestReqFunc(c, cmd, "GET").Code, Equals, t.getStatus, comment)
-		c.Check(doTestReqFunc(c, cmd, "PUT").Code, Equals, t.putStatus, comment)
-		c.Check(doTestReqFunc(c, cmd, "POST").Code, Equals, t.postStatus, comment)
+		c.Check(doTestReqFunc(cmd, "GET").Code, Equals, t.getStatus, comment)
+		c.Check(doTestReqFunc(cmd, "PUT").Code, Equals, t.putStatus, comment)
+		c.Check(doTestReqFunc(cmd, "POST").Code, Equals, t.postStatus, comment)
 	}
 }
 
@@ -387,7 +387,7 @@ func (s *daemonSuite) TestUserAccess(c *C) {
 		return SyncResponse(true)
 	}
 
-	doTestReqFunc := func(c *C, cmd *Command, mth string) *httptest.ResponseRecorder {
+	doTestReqFunc := func(cmd *Command, mth string) *httptest.ResponseRecorder {
 		req := &http.Request{Method: mth, RemoteAddr: "pid=100;uid=42;socket=;"}
 		rec := httptest.NewRecorder()
 		cmd.ServeHTTP(rec, req)
@@ -420,9 +420,9 @@ func (s *daemonSuite) TestUserAccess(c *C) {
 
 		comment := Commentf("readAccess: %T, writeAccess: %T", t.readAccess, t.writeAccess)
 
-		c.Check(doTestReqFunc(c, cmd, "GET").Code, Equals, t.getStatus, comment)
-		c.Check(doTestReqFunc(c, cmd, "PUT").Code, Equals, t.putStatus, comment)
-		c.Check(doTestReqFunc(c, cmd, "POST").Code, Equals, t.postStatus, comment)
+		c.Check(doTestReqFunc(cmd, "GET").Code, Equals, t.getStatus, comment)
+		c.Check(doTestReqFunc(cmd, "PUT").Code, Equals, t.putStatus, comment)
+		c.Check(doTestReqFunc(cmd, "POST").Code, Equals, t.postStatus, comment)
 	}
 }
 
@@ -434,7 +434,7 @@ func (s *daemonSuite) TestSuperAccess(c *C) {
 	}
 
 	for _, uid := range []int{0, os.Getuid()} {
-		doTestReqFunc := func(c *C, cmd *Command, mth string) *httptest.ResponseRecorder {
+		doTestReqFunc := func(cmd *Command, mth string) *httptest.ResponseRecorder {
 			req := &http.Request{Method: mth, RemoteAddr: fmt.Sprintf("pid=100;uid=%d;socket=;", uid)}
 			rec := httptest.NewRecorder()
 			cmd.ServeHTTP(rec, req)
@@ -467,9 +467,9 @@ func (s *daemonSuite) TestSuperAccess(c *C) {
 
 			comment := Commentf("uid: %d, readAccess: %T, writeAccess: %T", uid, t.readAccess, t.writeAccess)
 
-			c.Check(doTestReqFunc(c, cmd, "GET").Code, Equals, t.getStatus, comment)
-			c.Check(doTestReqFunc(c, cmd, "PUT").Code, Equals, t.putStatus, comment)
-			c.Check(doTestReqFunc(c, cmd, "POST").Code, Equals, t.postStatus, comment)
+			c.Check(doTestReqFunc(cmd, "GET").Code, Equals, t.getStatus, comment)
+			c.Check(doTestReqFunc(cmd, "PUT").Code, Equals, t.putStatus, comment)
+			c.Check(doTestReqFunc(cmd, "POST").Code, Equals, t.postStatus, comment)
 		}
 	}
 }
