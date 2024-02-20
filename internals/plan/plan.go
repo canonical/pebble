@@ -677,7 +677,8 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 	return combined, nil
 }
 
-// Validate checks that the layer is valid.
+// Validate checks that the layer is valid. It returns nil if all the checks pass, or
+// an error if there are validation errors.
 // See also Plan.Validate, which does additional checks based on the combined
 // layers.
 func (l *Layer) Validate() error {
