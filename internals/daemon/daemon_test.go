@@ -374,147 +374,127 @@ func (s *daemonSuite) testAccessChecker(c *C, tests []accessCheckerTestCase, rem
 }
 
 func (s *daemonSuite) TestGuestAccess(c *C) {
-	tests := []accessCheckerTestCase{
-		{
-			get:   http.StatusOK,
-			put:   http.StatusOK,
-			post:  http.StatusOK,
-			read:  OpenAccess{},
-			write: OpenAccess{},
-		}, {
-			get:   http.StatusOK,
-			put:   http.StatusUnauthorized,
-			post:  http.StatusUnauthorized,
-			read:  OpenAccess{},
-			write: UserAccess{},
-		},
-		{
-			get:   http.StatusOK,
-			put:   http.StatusUnauthorized,
-			post:  http.StatusUnauthorized,
-			read:  OpenAccess{},
-			write: AdminAccess{},
-		},
-		{
-			get:   http.StatusUnauthorized,
-			put:   http.StatusUnauthorized,
-			post:  http.StatusUnauthorized,
-			read:  UserAccess{},
-			write: UserAccess{},
-		},
-		{
-			get:   http.StatusUnauthorized,
-			put:   http.StatusUnauthorized,
-			post:  http.StatusUnauthorized,
-			read:  UserAccess{},
-			write: AdminAccess{},
-		},
-		{
-			get:   http.StatusUnauthorized,
-			put:   http.StatusUnauthorized,
-			post:  http.StatusUnauthorized,
-			read:  AdminAccess{},
-			write: AdminAccess{},
-		},
-	}
+	tests := []accessCheckerTestCase{{
+		get:   http.StatusOK,
+		put:   http.StatusOK,
+		post:  http.StatusOK,
+		read:  OpenAccess{},
+		write: OpenAccess{},
+	}, {
+		get:   http.StatusOK,
+		put:   http.StatusUnauthorized,
+		post:  http.StatusUnauthorized,
+		read:  OpenAccess{},
+		write: UserAccess{},
+	}, {
+		get:   http.StatusOK,
+		put:   http.StatusUnauthorized,
+		post:  http.StatusUnauthorized,
+		read:  OpenAccess{},
+		write: AdminAccess{},
+	}, {
+		get:   http.StatusUnauthorized,
+		put:   http.StatusUnauthorized,
+		post:  http.StatusUnauthorized,
+		read:  UserAccess{},
+		write: UserAccess{},
+	}, {
+		get:   http.StatusUnauthorized,
+		put:   http.StatusUnauthorized,
+		post:  http.StatusUnauthorized,
+		read:  UserAccess{},
+		write: AdminAccess{},
+	}, {
+		get:   http.StatusUnauthorized,
+		put:   http.StatusUnauthorized,
+		post:  http.StatusUnauthorized,
+		read:  AdminAccess{},
+		write: AdminAccess{},
+	}}
 
 	s.testAccessChecker(c, tests, "")
 }
 
 func (s *daemonSuite) TestUserAccess(c *C) {
-	tests := []accessCheckerTestCase{
-		{
-			get:   http.StatusOK,
-			put:   http.StatusOK,
-			post:  http.StatusOK,
-			read:  OpenAccess{},
-			write: OpenAccess{},
-		},
-		{
-			get:   http.StatusOK,
-			put:   http.StatusOK,
-			post:  http.StatusOK,
-			read:  OpenAccess{},
-			write: UserAccess{},
-		},
-		{
-			get:   http.StatusOK,
-			put:   http.StatusUnauthorized,
-			post:  http.StatusUnauthorized,
-			read:  OpenAccess{},
-			write: AdminAccess{},
-		},
-		{
-			get:   http.StatusOK,
-			put:   http.StatusOK,
-			post:  http.StatusOK,
-			read:  UserAccess{},
-			write: UserAccess{},
-		},
-		{
-			get:   http.StatusOK,
-			put:   http.StatusUnauthorized,
-			post:  http.StatusUnauthorized,
-			read:  UserAccess{},
-			write: AdminAccess{},
-		},
-		{
-			get:   http.StatusUnauthorized,
-			put:   http.StatusUnauthorized,
-			post:  http.StatusUnauthorized,
-			read:  AdminAccess{},
-			write: AdminAccess{},
-		},
-	}
+	tests := []accessCheckerTestCase{{
+		get:   http.StatusOK,
+		put:   http.StatusOK,
+		post:  http.StatusOK,
+		read:  OpenAccess{},
+		write: OpenAccess{},
+	}, {
+		get:   http.StatusOK,
+		put:   http.StatusOK,
+		post:  http.StatusOK,
+		read:  OpenAccess{},
+		write: UserAccess{},
+	}, {
+		get:   http.StatusOK,
+		put:   http.StatusUnauthorized,
+		post:  http.StatusUnauthorized,
+		read:  OpenAccess{},
+		write: AdminAccess{},
+	}, {
+		get:   http.StatusOK,
+		put:   http.StatusOK,
+		post:  http.StatusOK,
+		read:  UserAccess{},
+		write: UserAccess{},
+	}, {
+		get:   http.StatusOK,
+		put:   http.StatusUnauthorized,
+		post:  http.StatusUnauthorized,
+		read:  UserAccess{},
+		write: AdminAccess{},
+	}, {
+		get:   http.StatusUnauthorized,
+		put:   http.StatusUnauthorized,
+		post:  http.StatusUnauthorized,
+		read:  AdminAccess{},
+		write: AdminAccess{},
+	}}
 
 	s.testAccessChecker(c, tests, "pid=100;uid=42;socket=;")
 }
 
 func (s *daemonSuite) TestSuperAccess(c *C) {
-	tests := []accessCheckerTestCase{
-		{
-			get:   http.StatusOK,
-			put:   http.StatusOK,
-			post:  http.StatusOK,
-			read:  OpenAccess{},
-			write: OpenAccess{},
-		},
-		{
-			get:   http.StatusOK,
-			put:   http.StatusOK,
-			post:  http.StatusOK,
-			read:  OpenAccess{},
-			write: UserAccess{},
-		},
-		{
-			get:   http.StatusOK,
-			put:   http.StatusOK,
-			post:  http.StatusOK,
-			read:  OpenAccess{},
-			write: AdminAccess{},
-		},
-		{
-			get:   http.StatusOK,
-			put:   http.StatusOK,
-			post:  http.StatusOK,
-			read:  UserAccess{},
-			write: UserAccess{},
-		},
-		{
-			get:   http.StatusOK,
-			put:   http.StatusOK,
-			post:  http.StatusOK,
-			read:  UserAccess{},
-			write: AdminAccess{},
-		},
-		{
-			get:   http.StatusOK,
-			put:   http.StatusOK,
-			post:  http.StatusOK,
-			read:  AdminAccess{},
-			write: AdminAccess{},
-		},
-	}
+	tests := []accessCheckerTestCase{{
+		get:   http.StatusOK,
+		put:   http.StatusOK,
+		post:  http.StatusOK,
+		read:  OpenAccess{},
+		write: OpenAccess{},
+	}, {
+		get:   http.StatusOK,
+		put:   http.StatusOK,
+		post:  http.StatusOK,
+		read:  OpenAccess{},
+		write: UserAccess{},
+	}, {
+		get:   http.StatusOK,
+		put:   http.StatusOK,
+		post:  http.StatusOK,
+		read:  OpenAccess{},
+		write: AdminAccess{},
+	}, {
+		get:   http.StatusOK,
+		put:   http.StatusOK,
+		post:  http.StatusOK,
+		read:  UserAccess{},
+		write: UserAccess{},
+	}, {
+		get:   http.StatusOK,
+		put:   http.StatusOK,
+		post:  http.StatusOK,
+		read:  UserAccess{},
+		write: AdminAccess{},
+	}, {
+		get:   http.StatusOK,
+		put:   http.StatusOK,
+		post:  http.StatusOK,
+		read:  AdminAccess{},
+		write: AdminAccess{},
+	}}
 
 	for _, uid := range []int{0, os.Getuid()} {
 		remoteAddr := fmt.Sprintf("pid=100;uid=%d;socket=;", uid)
