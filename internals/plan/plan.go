@@ -764,7 +764,7 @@ func (layer *Layer) Validate() error {
 }
 
 // Validate checks that the combined layers form a valid plan.
-// See also Plan.Validate, which checks that the individual layers are valid.
+// See also Layer.Validate, which checks that the individual layers are valid.
 func (p *Plan) Validate() error {
 	for name, service := range p.Services {
 		if service.Command == "" {
