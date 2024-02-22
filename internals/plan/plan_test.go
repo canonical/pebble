@@ -737,7 +737,7 @@ var planTests = []planTest{{
 		checks:
 			chk-http:
 				override: merge
-				period: 4s
+				period: 1s
 		
 			chk-tcp:
 				override: merge
@@ -778,8 +778,8 @@ var planTests = []planTest{{
 			"chk-http": {
 				Name:      "chk-http",
 				Override:  plan.MergeOverride,
-				Period:    plan.OptionalDuration{Value: 4 * time.Second, IsSet: true},
-				Timeout:   plan.OptionalDuration{Value: defaultCheckTimeout},
+				Period:    plan.OptionalDuration{Value: time.Second, IsSet: true},
+				Timeout:   plan.OptionalDuration{Value: time.Second},
 				Threshold: defaultCheckThreshold,
 				HTTP: &plan.HTTPCheck{
 					URL:     "https://example.com/bar",
