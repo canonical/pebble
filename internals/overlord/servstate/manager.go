@@ -556,6 +556,11 @@ func (m *ServiceManager) SetServiceArgs(serviceArgs map[string][]string) error {
 		}
 	}
 
+	err = newLayer.Validate()
+	if err != nil {
+		return err
+	}
+
 	return m.appendLayer(newLayer)
 }
 

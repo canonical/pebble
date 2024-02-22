@@ -737,7 +737,7 @@ var planTests = []planTest{{
 		checks:
 			chk-http:
 				override: merge
-				period: 4s
+				period: 1s
 		
 			chk-tcp:
 				override: merge
@@ -778,7 +778,7 @@ var planTests = []planTest{{
 			"chk-http": {
 				Name:      "chk-http",
 				Override:  plan.MergeOverride,
-				Period:    plan.OptionalDuration{Value: 4 * time.Second, IsSet: true},
+				Period:    plan.OptionalDuration{Value: time.Second, IsSet: true},
 				Timeout:   plan.OptionalDuration{Value: defaultCheckTimeout},
 				Threshold: defaultCheckThreshold,
 				HTTP: &plan.HTTPCheck{
@@ -809,6 +809,35 @@ var planTests = []planTest{{
 					Environment: map[string]string{
 						"FOO": "bar",
 					},
+				},
+			},
+		},
+		LogTargets: map[string]*plan.LogTarget{},
+	},
+}, {
+	summary: "Timeout is capped at period",
+	input: []string{`
+		checks:
+			chk1:
+				override: replace
+				period: 100ms
+				timeout: 2s
+				tcp:
+					host: foobar
+					port: 80
+`},
+	result: &plan.Layer{
+		Services: map[string]*plan.Service{},
+		Checks: map[string]*plan.Check{
+			"chk1": {
+				Name:      "chk1",
+				Override:  plan.ReplaceOverride,
+				Period:    plan.OptionalDuration{Value: 100 * time.Millisecond, IsSet: true},
+				Timeout:   plan.OptionalDuration{Value: 100 * time.Millisecond, IsSet: true},
+				Threshold: defaultCheckThreshold,
+				TCP: &plan.TCPCheck{
+					Port: 80,
+					Host: "foobar",
 				},
 			},
 		},

@@ -552,6 +552,9 @@ func (e *FormatError) Error() string {
 
 // CombineLayers combines the given layers into a single layer, with the later
 // layers overriding earlier ones.
+// Neither the individual layers nor the combined layer are validated here - the
+// caller should have validated the individual layers prior to calling, and
+// validate the combined output if required.
 func CombineLayers(layers ...*Layer) (*Layer, error) {
 	combined := &Layer{
 		Services:   make(map[string]*Service),
@@ -565,11 +568,6 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 	combined.Summary = last.Summary
 	combined.Description = last.Description
 	for _, layer := range layers {
-		err := layer.Validate()
-		if err != nil {
-			return nil, err
-		}
-
 		for name, service := range layer.Services {
 			switch service.Override {
 			case MergeOverride:
@@ -665,6 +663,9 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 		}
 		if !check.Timeout.IsSet {
 			check.Timeout.Value = defaultCheckTimeout
+		} else if check.Timeout.Value > check.Period.Value {
+			// The effective timeout will be the period, so make that clear.
+			check.Timeout.Value = check.Period.Value
 		}
 		if check.Threshold == 0 {
 			// Default number of failures in a row before check triggers
@@ -683,6 +684,34 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 // layers.
 func (layer *Layer) Validate() error {
 	for name, service := range layer.Services {
+		if name == "" {
+			return &FormatError{
+				Message: fmt.Sprintf("cannot use empty string as service name"),
+			}
+		}
+		if name == "pebble" {
+			// Disallow service name "pebble" to avoid ambiguity (for example,
+			// in log output).
+			return &FormatError{
+				Message: fmt.Sprintf("cannot use reserved service name %q", name),
+			}
+		}
+		// Deprecated service names
+		if name == "all" || name == "default" || name == "none" {
+			logger.Noticef("Using keyword %q as a service name is deprecated", name)
+		}
+		if strings.HasPrefix(name, "-") {
+			return &FormatError{
+				Message: fmt.Sprintf(`cannot use service name %q: starting with "-" not allowed`, name),
+			}
+		}
+		if service == nil {
+			return &FormatError{
+				Message: fmt.Sprintf("service object cannot be null for service %q", name),
+			}
+		}
+		// ParseCommand needs the name to be set in order to generate a nice error message.
+		service.Name = name
 		_, _, err := service.ParseCommand()
 		if err != nil {
 			return &FormatError{
@@ -714,6 +743,21 @@ func (layer *Layer) Validate() error {
 	}
 
 	for name, check := range layer.Checks {
+		if name == "" {
+			return &FormatError{
+				Message: fmt.Sprintf("cannot use empty string as check name"),
+			}
+		}
+		if check == nil {
+			return &FormatError{
+				Message: fmt.Sprintf("check object cannot be null for check %q", name),
+			}
+		}
+		if name == "" {
+			return &FormatError{
+				Message: fmt.Sprintf("cannot use empty string as log target name"),
+			}
+		}
 		if check.Level != UnsetLevel && check.Level != AliveLevel && check.Level != ReadyLevel {
 			return &FormatError{
 				Message: fmt.Sprintf(`plan check %q level must be "alive" or "ready"`, name),
@@ -747,6 +791,19 @@ func (layer *Layer) Validate() error {
 	}
 
 	for name, target := range layer.LogTargets {
+		if target == nil {
+			return &FormatError{
+				Message: fmt.Sprintf("log target object cannot be null for log target %q", name),
+			}
+		}
+		for labelName := range target.Labels {
+			// 'pebble_*' labels are reserved
+			if strings.HasPrefix(labelName, "pebble_") {
+				return &FormatError{
+					Message: fmt.Sprintf(`log target %q: label %q uses reserved prefix "pebble_"`, name, labelName),
+				}
+			}
+		}
 		switch target.Type {
 		case LokiTarget, SyslogTarget:
 			// valid, continue
@@ -775,12 +832,6 @@ func (p *Plan) Validate() error {
 	}
 
 	for name, check := range p.Checks {
-		if check.Timeout.Value >= check.Period.Value {
-			return &FormatError{
-				Message: fmt.Sprintf("plan check %q timeout must be less than period", name),
-			}
-		}
-
 		numTypes := 0
 		if check.HTTP != nil {
 			if check.HTTP.URL == "" {
@@ -977,69 +1028,18 @@ func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 	layer.Order = order
 	layer.Label = label
 
+	err = layer.Validate()
+	if err != nil {
+		return nil, err
+	}
+
 	for name, service := range layer.Services {
-		if name == "" {
-			return nil, &FormatError{
-				Message: fmt.Sprintf("cannot use empty string as service name"),
-			}
-		}
-		if name == "pebble" {
-			// Disallow service name "pebble" to avoid ambiguity (for example,
-			// in log output).
-			return nil, &FormatError{
-				Message: fmt.Sprintf("cannot use reserved service name %q", name),
-			}
-		}
-		// Deprecated service names
-		if name == "all" || name == "default" || name == "none" {
-			logger.Noticef("Using keyword %q as a service name is deprecated", name)
-		}
-		if strings.HasPrefix(name, "-") {
-			return nil, &FormatError{
-				Message: fmt.Sprintf(`cannot use service name %q: starting with "-" not allowed`, name),
-			}
-		}
-		if service == nil {
-			return nil, &FormatError{
-				Message: fmt.Sprintf("service object cannot be null for service %q", name),
-			}
-		}
 		service.Name = name
 	}
-
 	for name, check := range layer.Checks {
-		if name == "" {
-			return nil, &FormatError{
-				Message: fmt.Sprintf("cannot use empty string as check name"),
-			}
-		}
-		if check == nil {
-			return nil, &FormatError{
-				Message: fmt.Sprintf("check object cannot be null for check %q", name),
-			}
-		}
 		check.Name = name
 	}
-
 	for name, target := range layer.LogTargets {
-		if name == "" {
-			return nil, &FormatError{
-				Message: fmt.Sprintf("cannot use empty string as log target name"),
-			}
-		}
-		if target == nil {
-			return nil, &FormatError{
-				Message: fmt.Sprintf("log target object cannot be null for log target %q", name),
-			}
-		}
-		for labelName := range target.Labels {
-			// 'pebble_*' labels are reserved
-			if strings.HasPrefix(labelName, "pebble_") {
-				return nil, &FormatError{
-					Message: fmt.Sprintf(`log target %q: label %q uses reserved prefix "pebble_"`, name, labelName),
-				}
-			}
-		}
 		target.Name = name
 	}
 
