@@ -663,8 +663,13 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 		}
 		if !check.Timeout.IsSet {
 			check.Timeout.Value = defaultCheckTimeout
-		} else if check.Timeout.Value > check.Period.Value {
+		}
+		if check.Timeout.Value > check.Period.Value {
 			// The effective timeout will be the period, so make that clear.
+			// `.IsSet` remains false so that the capped value does not appear
+			// in the combined plan output - and it's not *user* set - the
+			// effective default timeout is the minimum of (check.Period.Value,
+			// default timeout).
 			check.Timeout.Value = check.Period.Value
 		}
 		if check.Threshold == 0 {
