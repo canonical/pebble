@@ -35,11 +35,11 @@ const (
 
 var raddrRegexp = regexp.MustCompile(`^pid=(\d+);uid=(\d+);socket=([^;]*);$`)
 
-func ucrednetGet(remoteAddr string) (*ucrednet, error) {
+func ucrednetGet(remoteAddr string) (*Ucrednet, error) {
 	// NOTE treat remoteAddr at one point included a user-controlled
 	// string. In case that happens again by accident, treat it as tainted,
 	// and be very suspicious of it.
-	u := &ucrednet{
+	u := &Ucrednet{
 		Pid: ucrednetNoProcess,
 		Uid: ucrednetNobody,
 	}
@@ -60,13 +60,13 @@ func ucrednetGet(remoteAddr string) (*ucrednet, error) {
 	return u, nil
 }
 
-type ucrednet struct {
+type Ucrednet struct {
 	Pid    int32
 	Uid    uint32
 	Socket string
 }
 
-func (un *ucrednet) String() string {
+func (un *Ucrednet) String() string {
 	if un == nil {
 		return "pid=;uid=;socket=;"
 	}
@@ -75,23 +75,23 @@ func (un *ucrednet) String() string {
 
 type ucrednetAddr struct {
 	net.Addr
-	*ucrednet
+	*Ucrednet
 }
 
 func (wa *ucrednetAddr) String() string {
 	// NOTE we drop the original (user-supplied) net.Addr from the
 	// serialization entirely. We carry it this far so it helps debugging
 	// (via %#v logging), but from here on in it's not helpful.
-	return wa.ucrednet.String()
+	return wa.Ucrednet.String()
 }
 
 type ucrednetConn struct {
 	net.Conn
-	*ucrednet
+	*Ucrednet
 }
 
 func (wc *ucrednetConn) RemoteAddr() net.Addr {
-	return &ucrednetAddr{wc.Conn.RemoteAddr(), wc.ucrednet}
+	return &ucrednetAddr{wc.Conn.RemoteAddr(), wc.Ucrednet}
 }
 
 type ucrednetListener struct {
@@ -109,7 +109,7 @@ func (wl *ucrednetListener) Accept() (net.Conn, error) {
 		return nil, err
 	}
 
-	var unet *ucrednet
+	var unet *Ucrednet
 	if ucon, ok := con.(*net.UnixConn); ok {
 		rawConn, err := ucon.SyscallConn()
 		if err != nil {
@@ -128,7 +128,7 @@ func (wl *ucrednetListener) Accept() (net.Conn, error) {
 		if ucredErr != nil {
 			return nil, ucredErr
 		}
-		unet = &ucrednet{
+		unet = &Ucrednet{
 			Pid:    ucred.Pid,
 			Uid:    ucred.Uid,
 			Socket: ucon.LocalAddr().String(),

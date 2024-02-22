@@ -121,13 +121,13 @@ type Command struct {
 	Path       string
 	PathPrefix string
 	//
-	GET       ResponseFunc
-	PUT       ResponseFunc
-	POST      ResponseFunc
-	DELETE    ResponseFunc
-	GuestOK   bool
-	UserOK    bool
-	AdminOnly bool
+	GET  ResponseFunc
+	PUT  ResponseFunc
+	POST ResponseFunc
+
+	// Access control.
+	ReadAccess  AccessChecker
+	WriteAccess AccessChecker
 
 	d *Daemon
 }
@@ -139,65 +139,6 @@ const (
 	accessUnauthorized
 	accessForbidden
 )
-
-// canAccess checks the following properties:
-//
-// - if the user is `root` everything is allowed
-// - if a user is logged in and the command doesn't have AdminOnly, everything is allowed
-// - POST/PUT/DELETE all require the admin, or just login if not AdminOnly
-//
-// Otherwise for GET requests the following parameters are honored:
-// - GuestOK: anyone can access GET
-// - UserOK: any uid on the local system can access GET
-// - AdminOnly: only the administrator can access this
-func (c *Command) canAccess(r *http.Request, user *UserState) accessResult {
-	if c.AdminOnly && (c.UserOK || c.GuestOK) {
-		logger.Panicf("internal error: command cannot have AdminOnly together with any *OK flag")
-	}
-
-	if user != nil && !c.AdminOnly {
-		// Authenticated users do anything not requiring explicit admin.
-		return accessOK
-	}
-
-	// isUser means we have a UID for the request
-	isUser := false
-	ucred, err := ucrednetGet(r.RemoteAddr)
-	if err == nil {
-		isUser = true
-	} else if err != errNoID {
-		logger.Noticef("Cannot parse UID from remote address %q: %s", r.RemoteAddr, err)
-		return accessForbidden
-	}
-
-	// the !AdminOnly check is redundant, but belt-and-suspenders
-	if r.Method == "GET" && !c.AdminOnly {
-		// Guest and user access restricted to GET requests
-		if c.GuestOK {
-			return accessOK
-		}
-
-		if isUser && c.UserOK {
-			return accessOK
-		}
-	}
-
-	// Remaining admin checks rely on identifying peer uid
-	if !isUser {
-		return accessUnauthorized
-	}
-
-	if ucred.Uid == 0 || sys.UserID(ucred.Uid) == sysGetuid() {
-		// Superuser and process owner can do anything.
-		return accessOK
-	}
-
-	if c.AdminOnly {
-		return accessUnauthorized
-	}
-
-	return accessUnauthorized
-}
 
 func userFromRequest(state interface{}, r *http.Request) (*UserState, error) {
 	return nil, nil
@@ -224,34 +165,39 @@ func (c *Command) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	switch c.canAccess(r, user) {
-	case accessOK:
-		// nothing
-	case accessUnauthorized:
-		Unauthorized("access denied").ServeHTTP(w, r)
-		return
-	case accessForbidden:
-		Forbidden("forbidden").ServeHTTP(w, r)
+	ucred, err := ucrednetGet(r.RemoteAddr)
+	if err != nil && err != errNoID {
+		logger.Noticef("Cannot parse UID from remote address %q: %s", r.RemoteAddr, err)
+		InternalError(err.Error()).ServeHTTP(w, r)
 		return
 	}
 
 	var rspf ResponseFunc
-	var rsp = MethodNotAllowed("method %q not allowed", r.Method)
+	var access AccessChecker
 
 	switch r.Method {
 	case "GET":
 		rspf = c.GET
+		access = c.ReadAccess
 	case "PUT":
 		rspf = c.PUT
+		access = c.WriteAccess
 	case "POST":
 		rspf = c.POST
-	case "DELETE":
-		rspf = c.DELETE
+		access = c.WriteAccess
 	}
 
-	if rspf != nil {
-		rsp = rspf(c, r, user)
+	if rspf == nil {
+		MethodNotAllowed("method %q not allowed", r.Method).ServeHTTP(w, r)
+		return
 	}
+
+	if rspe := access.CheckAccess(c.d, r, ucred, user); rspe != nil {
+		rspe.ServeHTTP(w, r)
+		return
+	}
+
+	rsp := rspf(c, r, user)
 
 	if rsp, ok := rsp.(*resp); ok {
 		st := c.d.state
