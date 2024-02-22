@@ -14,6 +14,25 @@
 
 package state
 
+/*
+NOTE: Pebble Notices (added in 2023) was designed as a kind of superset of
+warnings, and we were planning to implement warnings in terms of notices.
+This is still the plan, however, we've put it on hold for now as it's not
+trivial, and warnings aren't actually recorded in Pebble at all right now, so
+it would just be busy work. Here are the reasons it's not trivial:
+
+- Warnings have a single lastShown timestamp (on the server) for when they
+  were last shown to the (single) client, whereas notices aren't marked as
+  "shown" on the server.
+- Each server response includes pending warnings (pending means not shown or
+  having a lastShown earlier than repeatAfter ago).
++ All this assumes a single client; Notices don't assume a single client.
++ One approach is to drop the warnings storage, drop the "pending warnings in
+  every request" functionality, and push ahead with warnings as notices.
++ Or we could fix this by passing the last-seen timestamp from the client to
+  the server on each request.
+*/
+
 import (
 	"encoding/json"
 	"errors"

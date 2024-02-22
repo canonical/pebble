@@ -515,7 +515,10 @@ These notice types are currently available:
 
 * `custom`: a custom client notice reported via `pebble notify`. The key and any data is provided by the user. The key must be in the format `mydomain.io/mykey` to ensure well-namespaced notice keys.
 
-<!-- TODO: * `warning`: Pebble warnings are implemented in terms of notices. The key for this type of notice is the human-readable warning message. -->
+<!-- TODO: * `warning`: Pebble warnings are implemented in terms of notices. The key for this type of notice is the human-readable warning message.
+
+See comment at the top of internals/overlord/state/warning.go for more info.
+-->
 
 To record `custom` notices, use `pebble notify` -- the notice user ID will be set to the client's user ID:
 

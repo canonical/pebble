@@ -194,6 +194,9 @@ const (
 
 	// Warnings are a subset of notices where the key is a human-readable
 	// warning message.
+	//
+	// NOTE: This isn't used yet. See comment at the top of
+	// internals/overlord/state/notices.go for more info.
 	WarningNotice NoticeType = "warning"
 )
 
