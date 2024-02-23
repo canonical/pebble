@@ -86,7 +86,7 @@ func (s *PebbleSuite) TestMaybeCopyPebbleDirNoCopy(c *C) {
 	dstFS := os.DirFS(dst)
 	err = fs.WalkDir(dstFS, ".", func(path string, d fs.DirEntry, err error) error {
 		switch path {
-		case ".", "a", "a/b", "a/b/c":
+		case ".":
 		case "a.yaml":
 			c.Check(got[path], Equals, false)
 			data, err := fs.ReadFile(dstFS, path)
