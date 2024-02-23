@@ -181,6 +181,9 @@ pebble run
 ...
 ```
 
+To initialise the `$PEBBLE` directory with the contents of another, in a one time copy, set the `PEBBLE_COPY_ONCE` environment
+variable to the source directory. This will only copy the contents if the target directory, `$PEBBLE`, is empty.
+
 ### Viewing, starting, and stopping services
 
 You can view the status of one or more services by using `pebble services`:

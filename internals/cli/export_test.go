@@ -43,6 +43,8 @@ var (
 	MaybePresentWarnings  = maybePresentWarnings
 
 	GetEnvPaths = getEnvPaths
+
+	MaybeCopyPebbleDir = maybeCopyPebbleDir
 )
 
 func FakeIsStdoutTTY(t bool) (restore func()) {

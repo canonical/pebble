@@ -157,6 +157,11 @@ func runDaemon(rcmd *cmdRun, ch chan os.Signal, ready chan<- func()) error {
 			return err
 		}
 	}
+	err := maybeCopyPebbleDir(pebbleDir, getCopySource())
+	if err != nil {
+		return err
+	}
+
 	dopts := daemon.Options{
 		Dir:        pebbleDir,
 		SocketPath: socketPath,
@@ -274,4 +279,24 @@ func convertArgs(args [][]string) (map[string][]string, error) {
 	}
 
 	return mappedArgs, nil
+}
+
+func maybeCopyPebbleDir(destDir, srcDir string) error {
+	if srcDir == "" {
+		return nil
+	}
+	entries, err := os.ReadDir(destDir)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	} else if len(entries) != 0 {
+		// Skip non-empty dir.
+		return nil
+	}
+	fsys := os.DirFS(srcDir)
+	// TODO: replace with os.CopyFS when we're using Go 1.23
+	err = copyFS(destDir, fsys)
+	if err != nil {
+		return fmt.Errorf("cannot copy %q to %q: %w", srcDir, destDir, err)
+	}
+	return nil
 }

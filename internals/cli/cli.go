@@ -375,6 +375,10 @@ func getEnvPaths() (pebbleDir string, socketPath string) {
 	return pebbleDir, socketPath
 }
 
+func getCopySource() string {
+	return os.Getenv("PEBBLE_COPY_ONCE")
+}
+
 type cliState struct {
 	NoticesLastListed time.Time `json:"notices-last-listed"`
 	NoticesLastOkayed time.Time `json:"notices-last-okayed"`
