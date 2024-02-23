@@ -174,6 +174,10 @@ func (m *ServiceManager) updatePlanLayers(layers []*plan.Layer) error {
 		Checks:     combined.Checks,
 		LogTargets: combined.LogTargets,
 	}
+	err = p.Validate()
+	if err != nil {
+		return err
+	}
 	m.updatePlan(p)
 	return nil
 }
@@ -539,6 +543,11 @@ func (m *ServiceManager) SetServiceArgs(serviceArgs map[string][]string) error {
 			Override: plan.MergeOverride,
 			Command:  plan.CommandString(base, args),
 		}
+	}
+
+	err = newLayer.Validate()
+	if err != nil {
+		return err
 	}
 
 	return m.appendLayer(newLayer)

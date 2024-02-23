@@ -752,6 +752,17 @@ services:
         command: /bin/b
 `[1:])
 	s.planLayersHasLen(c, s.manager, 3)
+
+	// Make sure that layer validation is happening.
+	layer, err = plan.ParseLayer(0, "label4", []byte(`
+checks:
+    bad-check:
+        override: replace
+        level: invalid
+        tcp:
+            port: 8080
+`))
+	c.Check(err, ErrorMatches, `(?s).*plan check.*must be "alive" or "ready".*`)
 }
 
 func (s *S) TestSetServiceArgs(c *C) {
