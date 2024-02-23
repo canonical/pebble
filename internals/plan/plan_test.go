@@ -779,7 +779,7 @@ var planTests = []planTest{{
 				Name:      "chk-http",
 				Override:  plan.MergeOverride,
 				Period:    plan.OptionalDuration{Value: time.Second, IsSet: true},
-				Timeout:   plan.OptionalDuration{Value: defaultCheckTimeout},
+				Timeout:   plan.OptionalDuration{Value: time.Second},
 				Threshold: defaultCheckThreshold,
 				HTTP: &plan.HTTPCheck{
 					URL:     "https://example.com/bar",
@@ -809,6 +809,63 @@ var planTests = []planTest{{
 					Environment: map[string]string{
 						"FOO": "bar",
 					},
+				},
+			},
+		},
+		LogTargets: map[string]*plan.LogTarget{},
+	},
+}, {
+	summary: "Timeout is capped at period",
+	input: []string{`
+		checks:
+			chk1:
+				override: replace
+				period: 100ms
+				timeout: 2s
+				tcp:
+					host: foobar
+					port: 80
+`},
+	result: &plan.Layer{
+		Services: map[string]*plan.Service{},
+		Checks: map[string]*plan.Check{
+			"chk1": {
+				Name:      "chk1",
+				Override:  plan.ReplaceOverride,
+				Period:    plan.OptionalDuration{Value: 100 * time.Millisecond, IsSet: true},
+				Timeout:   plan.OptionalDuration{Value: 100 * time.Millisecond, IsSet: true},
+				Threshold: defaultCheckThreshold,
+				TCP: &plan.TCPCheck{
+					Port: 80,
+					Host: "foobar",
+				},
+			},
+		},
+		LogTargets: map[string]*plan.LogTarget{},
+	},
+}, {
+	summary: "Unset timeout is capped at period",
+	input: []string{`
+		checks:
+			chk1:
+				override: replace
+				period: 100ms
+				tcp:
+					host: foobar
+					port: 80
+`},
+	result: &plan.Layer{
+		Services: map[string]*plan.Service{},
+		Checks: map[string]*plan.Check{
+			"chk1": {
+				Name:      "chk1",
+				Override:  plan.ReplaceOverride,
+				Period:    plan.OptionalDuration{Value: 100 * time.Millisecond, IsSet: true},
+				Timeout:   plan.OptionalDuration{Value: 100 * time.Millisecond, IsSet: false},
+				Threshold: defaultCheckThreshold,
+				TCP: &plan.TCPCheck{
+					Port: 80,
+					Host: "foobar",
 				},
 			},
 		},
@@ -1286,6 +1343,64 @@ var planTests = []planTest{{
 					pebble_service: illegal
 `},
 	error: `log target "tgt1": label "pebble_service" uses reserved prefix "pebble_"`,
+}, {
+	summary: "Required field two layers deep",
+	input: []string{`
+			services:
+				srv1:
+					override: replace
+					command: sleep 1000
+	`, `
+			services:
+				srv1:
+					override: merge
+					environment:
+						VAR1: foo
+	`, `
+			services:
+				srv1:
+					override: merge
+					environment:
+						VAR2: bar
+	`},
+	result: &plan.Layer{
+		Services: map[string]*plan.Service{
+			"srv1": {
+				Name:          "srv1",
+				Command:       "sleep 1000",
+				Override:      plan.ReplaceOverride,
+				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
+				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
+				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
+				Environment: map[string]string{
+					"VAR1": "foo",
+					"VAR2": "bar",
+				},
+			},
+		},
+		Checks:     map[string]*plan.Check{},
+		LogTargets: map[string]*plan.LogTarget{},
+	},
+}, {
+	summary: "Three layers missing command",
+	input: []string{`
+		services:
+			srv1:
+				override: replace
+`, `
+		services:
+			srv1:
+				override: merge
+				environment:
+					VAR1: foo
+`, `
+		services:
+			srv1:
+				override: merge
+				environment:
+					VAR2: bar
+`},
+	error: `plan must define "command" for service "srv1"`,
 }}
 
 func (s *S) TestParseLayer(c *C) {
@@ -1324,6 +1439,15 @@ func (s *S) TestParseLayer(c *C) {
 					c.Assert(names, DeepEquals, order)
 				}
 			}
+			if err == nil {
+				p := &plan.Plan{
+					Layers:     sup.Layers,
+					Services:   result.Services,
+					Checks:     result.Checks,
+					LogTargets: result.LogTargets,
+				}
+				err = p.Validate()
+			}
 		}
 		if err != nil || test.error != "" {
 			if test.error != "" {
@@ -1355,7 +1479,16 @@ services:
             - srv1
 `))
 	c.Assert(err, IsNil)
-	_, err = plan.CombineLayers(layer1, layer2)
+	combined, err := plan.CombineLayers(layer1, layer2)
+	c.Assert(err, IsNil)
+	layers := []*plan.Layer{layer1, layer2}
+	p := &plan.Plan{
+		Layers:     layers,
+		Services:   combined.Services,
+		Checks:     combined.Checks,
+		LogTargets: combined.LogTargets,
+	}
+	err = p.Validate()
 	c.Assert(err, ErrorMatches, `services in before/after loop: .*`)
 	_, ok := err.(*plan.FormatError)
 	c.Assert(ok, Equals, true, Commentf("error must be *plan.FormatError, not %T", err))
@@ -1386,7 +1519,16 @@ services:
         override: merge
 `))
 	c.Assert(err, IsNil)
-	_, err = plan.CombineLayers(layer1, layer2)
+	combined, err := plan.CombineLayers(layer1, layer2)
+	c.Assert(err, IsNil)
+	layers := []*plan.Layer{layer1, layer2}
+	p := &plan.Plan{
+		Layers:     layers,
+		Services:   combined.Services,
+		Checks:     combined.Checks,
+		LogTargets: combined.LogTargets,
+	}
+	err = p.Validate()
 	c.Check(err, ErrorMatches, `plan must define "command" for service "srv1"`)
 	_, ok := err.(*plan.FormatError)
 	c.Check(ok, Equals, true, Commentf("error must be *plan.FormatError, not %T", err))
@@ -1405,7 +1547,7 @@ services:
         override: merge
 `))
 	c.Assert(err, IsNil)
-	combined, err := plan.CombineLayers(layer1, layer2)
+	combined, err = plan.CombineLayers(layer1, layer2)
 	c.Assert(err, IsNil)
 	c.Assert(combined.Services["srv1"].Command, Equals, "foo --bar")
 }
