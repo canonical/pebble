@@ -715,8 +715,6 @@ func (layer *Layer) Validate() error {
 				Message: fmt.Sprintf("service object cannot be null for service %q", name),
 			}
 		}
-		// ParseCommand needs the name to be set in order to generate a nice error message.
-		service.Name = name
 		_, _, err := service.ParseCommand()
 		if err != nil {
 			return &FormatError{
@@ -1033,19 +1031,28 @@ func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 	layer.Order = order
 	layer.Label = label
 
+	for name, service := range layer.Services {
+		// If service is nil, then the validation below will reject the layer,
+		// but we want the name set so that we can use easily use it in error
+		// messages during validation.
+		if service != nil {
+			service.Name = name
+		}
+	}
+	for name, check := range layer.Checks {
+		if check != nil {
+			check.Name = name
+		}
+	}
+	for name, target := range layer.LogTargets {
+		if target != nil {
+			target.Name = name
+		}
+	}
+
 	err = layer.Validate()
 	if err != nil {
 		return nil, err
-	}
-
-	for name, service := range layer.Services {
-		service.Name = name
-	}
-	for name, check := range layer.Checks {
-		check.Name = name
-	}
-	for name, target := range layer.LogTargets {
-		target.Name = name
 	}
 
 	return &layer, err
