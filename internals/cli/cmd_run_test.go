@@ -37,28 +37,33 @@ func (s *PebbleSuite) TestMaybeCopyPebbleDir(c *C) {
 	err = cli.MaybeCopyPebbleDir(dst, src)
 	c.Assert(err, IsNil)
 
-	ok := 0
+	got := map[string]bool{}
 	dstFS := os.DirFS(dst)
-	err = fs.WalkDir(dstFS, ".", func(p string, d fs.DirEntry, err error) error {
-		switch p {
+	err = fs.WalkDir(dstFS, ".", func(path string, d fs.DirEntry, err error) error {
+		switch path {
 		case ".", "a", "a/b", "a/b/c":
 		case "a.yaml":
-			data, err := fs.ReadFile(dstFS, p)
+			c.Check(got[path], Equals, false)
+			data, err := fs.ReadFile(dstFS, path)
 			c.Check(err, IsNil)
 			c.Check(data, DeepEquals, []byte("# bye\n"))
-			ok++
+			got[path] = true
 		case "a/b/c/a.yaml":
-			data, err := fs.ReadFile(dstFS, p)
+			c.Check(got[path], Equals, false)
+			data, err := fs.ReadFile(dstFS, path)
 			c.Check(err, IsNil)
 			c.Check(data, DeepEquals, []byte("# hi\n"))
-			ok++
+			got[path] = true
 		default:
-			c.Errorf("bad path %s", p)
+			c.Errorf("bad path %s", path)
 		}
-		return nil
+		return err
 	})
 	c.Assert(err, IsNil)
-	c.Assert(ok, Equals, 2)
+	c.Assert(got, DeepEquals, map[string]bool{
+		"a.yaml":       true,
+		"a/b/c/a.yaml": true,
+	})
 }
 
 func (s *PebbleSuite) TestMaybeCopyPebbleDirNoCopy(c *C) {
@@ -77,21 +82,24 @@ func (s *PebbleSuite) TestMaybeCopyPebbleDirNoCopy(c *C) {
 	err = cli.MaybeCopyPebbleDir(dst, src)
 	c.Assert(err, IsNil)
 
-	ok := 0
+	got := map[string]bool{}
 	dstFS := os.DirFS(dst)
-	err = fs.WalkDir(dstFS, ".", func(p string, d fs.DirEntry, err error) error {
-		switch p {
-		case ".":
+	err = fs.WalkDir(dstFS, ".", func(path string, d fs.DirEntry, err error) error {
+		switch path {
+		case ".", "a", "a/b", "a/b/c":
 		case "a.yaml":
-			data, err := fs.ReadFile(dstFS, p)
+			c.Check(got[path], Equals, false)
+			data, err := fs.ReadFile(dstFS, path)
 			c.Check(err, IsNil)
 			c.Check(data, DeepEquals, []byte("# no\n"))
-			ok++
+			got[path] = true
 		default:
-			c.Errorf("bad path %s", p)
+			c.Errorf("bad path %s", path)
 		}
-		return nil
+		return err
 	})
 	c.Assert(err, IsNil)
-	c.Assert(ok, Equals, 1)
+	c.Assert(got, DeepEquals, map[string]bool{
+		"a.yaml": true,
+	})
 }
