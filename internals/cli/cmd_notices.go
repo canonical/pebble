@@ -38,11 +38,11 @@ type cmdNotices struct {
 	client *client.Client
 
 	timeMixin
-	Select  client.NoticesSelect `long:"select"`
-	UID     *uint32              `long:"uid"`
-	Type    []client.NoticeType  `long:"type"`
-	Key     []string             `long:"key"`
-	Timeout time.Duration        `long:"timeout"`
+	Users   client.NoticesUsers `long:"users"`
+	UID     *uint32             `long:"uid"`
+	Type    []client.NoticeType `long:"type"`
+	Key     []string            `long:"key"`
+	Timeout time.Duration       `long:"timeout"`
 }
 
 func init() {
@@ -51,8 +51,8 @@ func init() {
 		Summary:     cmdNoticesSummary,
 		Description: cmdNoticesDescription,
 		ArgsHelp: merge(timeArgsHelp, map[string]string{
-			"--select":  "Show all notices with any user ID (admin only; cannot be used with --uid)",
-			"--uid":     "Only list notices with this user ID (admin only; cannot be used with --select)",
+			"--users":   "Show all notices with any user ID (admin only; cannot be used with --uid)",
+			"--uid":     "Only list notices with this user ID (admin only; cannot be used with --users)",
 			"--type":    "Only list notices of this type (multiple allowed)",
 			"--key":     "Only list notices with this key (multiple allowed)",
 			"--timeout": "Wait up to this duration for matching notices to arrive",
@@ -73,7 +73,7 @@ func (cmd *cmdNotices) Execute(args []string) error {
 		return fmt.Errorf("cannot load CLI state: %w", err)
 	}
 	options := client.NoticesOptions{
-		Select: cmd.Select,
+		Users:  cmd.Users,
 		UserID: cmd.UID,
 		Types:  cmd.Type,
 		Keys:   cmd.Key,

@@ -77,8 +77,8 @@ func (client *Client) Notify(opts *NotifyOptions) (string, error) {
 }
 
 type NoticesOptions struct {
-	// Select allows returning broader sets of notices.
-	Select NoticesSelect
+	// Users allows returning notices for all users.
+	Users NoticesUsers
 
 	// UserID, if set, includes only notices that have this user ID or are public.
 	UserID *uint32
@@ -93,10 +93,10 @@ type NoticesOptions struct {
 	After time.Time
 }
 
-type NoticesSelect string
+type NoticesUsers string
 
 const (
-	NoticesSelectAll NoticesSelect = "all"
+	NoticesUsersAll NoticesUsers = "all"
 )
 
 // Notice holds details of an event that was observed and reported either
@@ -195,8 +195,8 @@ func makeNoticesQuery(opts *NoticesOptions) url.Values {
 	if opts == nil {
 		return query
 	}
-	if opts.Select != "" {
-		query.Add("select", string(opts.Select))
+	if opts.Users != "" {
+		query.Add("users", string(opts.Users))
 	}
 	if opts.UserID != nil {
 		query.Add("user-id", strconv.FormatUint(uint64(*opts.UserID), 10))

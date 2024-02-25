@@ -404,6 +404,81 @@ func (s *apiSuite) TestNoticesUserIDsNonAdminFilter(c *C) {
 	c.Assert(ok, Equals, true)
 }
 
+func (s *apiSuite) TestNoticesUsersAdminFilter(c *C) {
+	s.daemon(c)
+	restore := fakeSysGetuid(0)
+	defer restore()
+
+	st := s.d.overlord.State()
+	st.Lock()
+	admin := uint32(0)
+	nonAdmin := uint32(1000)
+	otherNonAdmin := uint32(123)
+	addNotice(c, st, &admin, state.ChangeUpdateNotice, "123", nil)
+	time.Sleep(time.Microsecond)
+	addNotice(c, st, &nonAdmin, state.CustomNotice, "a.b/x", nil)
+	time.Sleep(time.Microsecond)
+	addNotice(c, st, &otherNonAdmin, state.CustomNotice, "a.b/y", nil)
+	time.Sleep(time.Microsecond)
+	addNotice(c, st, nil, state.WarningNotice, "danger", nil)
+	st.Unlock()
+
+	noticesCmd := apiCmd("/v1/notices")
+
+	// Test that admin user may get all notices with --users=all filter
+	reqUrl := "/v1/notices?users=all"
+	req, err := http.NewRequest("GET", reqUrl, nil)
+	c.Check(err, IsNil)
+	req.RemoteAddr = "pid=100;uid=0;socket=;"
+	rsp, ok := noticesCmd.GET(noticesCmd, req, nil).(*resp)
+	c.Assert(ok, Equals, true)
+
+	c.Check(rsp.Type, Equals, ResponseTypeSync)
+	c.Check(rsp.Status, Equals, http.StatusOK)
+	notices, ok := rsp.Result.([]*state.Notice)
+	c.Assert(ok, Equals, true)
+	c.Assert(notices, HasLen, 4)
+	n := noticeToMap(c, notices[0])
+	c.Assert(n["user-id"], Equals, float64(admin))
+	c.Assert(n["key"], Equals, "123")
+	n = noticeToMap(c, notices[1])
+	c.Assert(n["user-id"], Equals, float64(nonAdmin))
+	c.Assert(n["key"], Equals, "a.b/x")
+	n = noticeToMap(c, notices[2])
+	c.Assert(n["user-id"], Equals, float64(otherNonAdmin))
+	c.Assert(n["key"], Equals, "a.b/y")
+	n = noticeToMap(c, notices[3])
+	c.Assert(n["user-id"], Equals, nil)
+	c.Assert(n["key"], Equals, "danger")
+}
+
+func (s *apiSuite) TestNoticesUsersNonAdminFilter(c *C) {
+	s.daemon(c)
+	restore := fakeSysGetuid(0)
+	defer restore()
+
+	st := s.d.Overlord().State()
+	st.Lock()
+	nonAdmin := uint32(1000)
+	addNotice(c, st, &nonAdmin, state.WarningNotice, "error1", nil)
+	st.Unlock()
+
+	noticesCmd := apiCmd("/v1/notices")
+
+	// Test that non-admin user may not use --users filter
+	reqUrl := "/v2/notices?users=all"
+	req, err := http.NewRequest("GET", reqUrl, nil)
+	c.Check(err, IsNil)
+	req.RemoteAddr = "pid=100;uid=1000;socket=;"
+	rsp, ok := noticesCmd.GET(noticesCmd, req, nil).(*resp)
+	c.Assert(ok, Equals, true)
+
+	c.Check(rsp.Type, Equals, ResponseTypeError)
+	c.Check(rsp.Status, Equals, http.StatusForbidden)
+	_, ok = rsp.Result.(*errorResult)
+	c.Assert(ok, Equals, true)
+}
+
 func (s *apiSuite) TestNoticesUnknownRequestUID(c *C) {
 	s.daemon(c)
 	restore := fakeSysGetuid(0)
@@ -516,10 +591,34 @@ func (s *apiSuite) TestNoticesInvalidUserID(c *C) {
 	s.testNoticesBadRequest(c, "user-id=foo", `invalid "user-id" filter:.*`)
 }
 
-func (s *apiSuite) TestNoticesInvalidSelect(c *C) {
+func (s *apiSuite) TestNoticesInvalidUserIDMultiple(c *C) {
 	restore := fakeSysGetuid(0)
 	defer restore()
-	s.testNoticesBadRequest(c, "select=foo", `invalid "select" filter:.*`)
+	s.testNoticesBadRequest(c, "user-id=1000&user-id=1234", `invalid "user-id" filter:.*`)
+}
+
+func (s *apiSuite) TestNoticesInvalidUserIDHigh(c *C) {
+	restore := fakeSysGetuid(0)
+	defer restore()
+	s.testNoticesBadRequest(c, "user-id=4294967296", `invalid "user-id" filter:.*`)
+}
+
+func (s *apiSuite) TestNoticesInvalidUserIDLow(c *C) {
+	restore := fakeSysGetuid(0)
+	defer restore()
+	s.testNoticesBadRequest(c, "user-id=-1", `invalid "user-id" filter:.*`)
+}
+
+func (s *apiSuite) TestNoticesInvalidUsers(c *C) {
+	restore := fakeSysGetuid(0)
+	defer restore()
+	s.testNoticesBadRequest(c, "users=foo", `invalid "users" filter:.*`)
+}
+
+func (s *apiSuite) TestNoticesInvalidUserIDWithUsers(c *C) {
+	restore := fakeSysGetuid(0)
+	defer restore()
+	s.testNoticesBadRequest(c, "user-id=1234&users=all", `cannot use both "users" and "user-id" parameters`)
 }
 
 func (s *apiSuite) TestNoticesInvalidAfter(c *C) {

@@ -76,14 +76,14 @@ ID   User    Type     Key    First                 Repeated              Occurre
 	})
 }
 
-func (s *PebbleSuite) TestNoticesFiltersSelect(c *C) {
+func (s *PebbleSuite) TestNoticesFiltersUsers(c *C) {
 	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
 		c.Check(r.Method, Equals, "GET")
 		c.Check(r.URL.Path, Equals, "/v1/notices")
 		c.Check(r.URL.Query(), DeepEquals, url.Values{
-			"select": {"all"},
-			"types":  {"custom", "warning"},
-			"keys":   {"a.b/c"},
+			"users": {"all"},
+			"types": {"custom", "warning"},
+			"keys":  {"a.b/c"},
 		})
 
 		fmt.Fprint(w, `{
@@ -103,7 +103,7 @@ func (s *PebbleSuite) TestNoticesFiltersSelect(c *C) {
 	})
 
 	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{
-		"notices", "--abs-time", "--select", "all", "--type", "custom", "--key", "a.b/c", "--type", "warning"})
+		"notices", "--abs-time", "--users", "all", "--type", "custom", "--key", "a.b/c", "--type", "warning"})
 	c.Assert(err, IsNil)
 	c.Check(rest, HasLen, 0)
 	c.Check(s.Stdout(), Equals, `
