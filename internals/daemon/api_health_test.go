@@ -20,9 +20,11 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"time"
 
 	. "gopkg.in/check.v1"
 
+	"github.com/canonical/pebble/client"
 	"github.com/canonical/pebble/internals/overlord"
 	"github.com/canonical/pebble/internals/overlord/checkstate"
 	"github.com/canonical/pebble/internals/plan"
@@ -204,6 +206,55 @@ func (s *healthSuite) TestChecksError(c *C) {
 	c.Assert(response, DeepEquals, map[string]interface{}{
 		"message": "internal server error",
 	})
+}
+
+// Ensure state lock is not held at all for GET /v1/health requests.
+// Regression test for issue described at:
+//
+// - https://github.com/canonical/pebble/issues/366
+// - https://bugs.launchpad.net/juju/+bug/2052517
+func (s *apiSuite) TestStateLockNotHeld(c *C) {
+	daemonOpts := &Options{
+		Dir:        s.pebbleDir,
+		SocketPath: s.pebbleDir + ".pebble.socket",
+	}
+	daemon, err := New(daemonOpts)
+	c.Assert(err, IsNil)
+	c.Assert(daemon.Init(), IsNil)
+	c.Assert(daemon.Start(), IsNil)
+	defer func() {
+		c.Assert(daemon.Stop(nil), IsNil)
+	}()
+
+	// Wait for lock count to stabilise (daemon starts goroutine(s) that use
+	// it on startup). Normally it will stabilise almost instantly.
+	prevCount := daemon.state.LockCount()
+	for i := 0; i < 50; i++ {
+		if i == 49 {
+			c.Fatal("timed out waiting for lock count to stabilise")
+		}
+		time.Sleep(100 * time.Millisecond)
+		newCount := daemon.state.LockCount()
+		if newCount == prevCount {
+			break
+		}
+		prevCount = newCount
+	}
+
+	// Use real HTTP client so we're exercising the full ServeHTTP flow.
+	// Could use daemon.serve.Handler directly, but this seems even better.
+	pebble, err := client.New(&client.Config{
+		Socket: daemonOpts.SocketPath,
+	})
+	c.Assert(err, IsNil)
+
+	// Ensure lock count doesn't change during GET /v1/health request.
+	before := daemon.state.LockCount()
+	healthy, err := pebble.Health(&client.HealthOptions{})
+	c.Assert(err, IsNil)
+	c.Assert(healthy, Equals, true)
+	after := daemon.state.LockCount()
+	c.Assert(after, Equals, before)
 }
 
 func serveHealth(c *C, method, url string, body io.Reader) (int, map[string]interface{}) {
