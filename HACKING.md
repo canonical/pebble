@@ -207,9 +207,12 @@ ok      github.com/canonical/pebble/cmd/pebble  0.165s
 
 To create a new tagged release, go to the [GitHub Releases page](https://github.com/canonical/pebble/releases) and:
 
-- Click "Create a new release"
-- Enter the version tag (eg: `v1.2.3`) and select "Create new tag: on publish"
-- Enter a release title: include the version tag and a short summary of the release
-- Write release notes: describe new features and bug fixes, and include a link to the full list of commits
+- Update `Version` in `cmd/version.go` to the version you're about to publish, for example `v1.9.0`. Push this to master (or open a PR to do so).
+- Click ["Draft a new release"](https://github.com/canonical/pebble/releases/new).
+- Enter the version tag (eg: `v1.9.0`) and select "Create new tag: on publish".
+- Enter a release title: include the version tag and a short summary of the release.
+- Write release notes: describe new features and bug fixes, and include a link to the full list of commits.
+- Click "Publish release".
+- Once the release GitHub Actions have finished, and the new [Snap](https://snapcraft.io/pebble) has been successfully built, update `Version` again to `v1.{next}.0-dev` (for example `v1.10.0-dev`).
 
-Binaries will be created and uploaded automatically to this release by the [binaries.yml](https://github.com/canonical/pebble/blob/master/.github/workflows/binaries.yml) GitHub Actions job.
+Binaries will be created and uploaded automatically to this release by the [binaries.yml](https://github.com/canonical/pebble/blob/master/.github/workflows/binaries.yml) GitHub Actions job. In addition, a new Snap version is built and uploaded to the [Snap Store](https://snapcraft.io/pebble).
