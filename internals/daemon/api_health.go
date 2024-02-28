@@ -15,6 +15,7 @@
 package daemon
 
 import (
+	"encoding/json"
 	"net/http"
 
 	"github.com/canonical/x-go/strutil"
@@ -57,9 +58,34 @@ func v1Health(c *Command, r *http.Request, _ *UserState) Response {
 		}
 	}
 
-	return SyncResponse(&resp{
-		Type:   ResponseTypeSync,
-		Status: status,
-		Result: healthInfo{Healthy: healthy},
+	return SyncResponse(&healthResp{
+		Type:       ResponseTypeSync,
+		Status:     status,
+		StatusText: http.StatusText(status),
+		Result:     healthInfo{Healthy: healthy},
 	})
+}
+
+// Like the resp struct, but without the warning/maintenance fields, so that
+// the health endpoint doesn't have to acquire the state lock (resulting in a
+// slow response on heavily-loaded systems).
+type healthResp struct {
+	Type       ResponseType `json:"type"`
+	Status     int          `json:"status-code"`
+	StatusText string       `json:"status,omitempty"`
+	Result     interface{}  `json:"result,omitempty"`
+}
+
+func (r *healthResp) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
+	status := r.Status
+	bs, err := json.Marshal(r)
+	if err != nil {
+		logger.Noticef("Cannot marshal %#v to JSON: %v", *r, err)
+		bs = nil
+		status = http.StatusInternalServerError
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	w.Write(bs)
 }

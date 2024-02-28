@@ -79,6 +79,8 @@ type State struct {
 	mu  sync.Mutex
 	muC int32
 
+	lockCount int32 // used only for testing
+
 	lastTaskId   int
 	lastChangeId int
 	lastLaneId   int
@@ -135,6 +137,14 @@ func (s *State) Modified() bool {
 func (s *State) Lock() {
 	s.mu.Lock()
 	atomic.AddInt32(&s.muC, 1)
+	atomic.AddInt32(&s.lockCount, 1)
+}
+
+// LockCount returns the number of times the state lock was held.
+//
+// NOTE: This needs to be exported, but should only be used in testing.
+func (s *State) LockCount() int {
+	return int(atomic.LoadInt32(&s.lockCount))
 }
 
 func (s *State) reading() {
