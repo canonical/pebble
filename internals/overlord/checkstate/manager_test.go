@@ -20,6 +20,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -143,10 +144,20 @@ func (s *ManagerSuite) TestTimeout(c *C) {
 
 func (s *ManagerSuite) TestCheckCanceled(c *C) {
 	mgr := NewManager()
+
+	var mutex sync.Mutex
 	failureName := ""
 	mgr.NotifyCheckFailed(func(name string) {
+		mutex.Lock()
+		defer mutex.Unlock()
 		failureName = name
 	})
+	getFailureName := func() string {
+		mutex.Lock()
+		defer mutex.Unlock()
+		return failureName
+	}
+
 	tempDir := c.MkDir()
 	tempFile := filepath.Join(tempDir, "file.txt")
 	command := fmt.Sprintf(`/bin/sh -c "for i in {1..1000}; do echo x >>%s; sleep 0.005; done"`, tempFile)
@@ -192,7 +203,7 @@ func (s *ManagerSuite) TestCheckCanceled(c *C) {
 	c.Assert(len(b1), Equals, len(b2))
 
 	// Ensure it didn't trigger failure action
-	c.Check(failureName, Equals, "")
+	c.Check(getFailureName(), Equals, "")
 
 	// Ensure it didn't update check failure details (white box testing)
 	info := check.info()
@@ -205,10 +216,20 @@ func (s *ManagerSuite) TestCheckCanceled(c *C) {
 
 func (s *ManagerSuite) TestFailures(c *C) {
 	mgr := NewManager()
+
+	var mutex sync.Mutex
 	failureName := ""
 	mgr.NotifyCheckFailed(func(name string) {
+		mutex.Lock()
+		defer mutex.Unlock()
 		failureName = name
 	})
+	getFailureName := func() string {
+		mutex.Lock()
+		defer mutex.Unlock()
+		return failureName
+	}
+
 	testPath := c.MkDir() + "/test"
 	err := ioutil.WriteFile(testPath, nil, 0o644)
 	c.Assert(err, IsNil)
@@ -234,7 +255,7 @@ func (s *ManagerSuite) TestFailures(c *C) {
 	c.Assert(check.Threshold, Equals, 3)
 	c.Assert(check.Status, Equals, CheckStatusUp)
 	c.Assert(check.LastError, Matches, "exit status 1")
-	c.Assert(failureName, Equals, "")
+	c.Assert(getFailureName(), Equals, "")
 
 	// Shouldn't have called failure handler after only 2 failures
 	check = waitCheck(c, mgr, "chk1", func(check *CheckInfo) bool {
@@ -243,7 +264,7 @@ func (s *ManagerSuite) TestFailures(c *C) {
 	c.Assert(check.Threshold, Equals, 3)
 	c.Assert(check.Status, Equals, CheckStatusUp)
 	c.Assert(check.LastError, Matches, "exit status 1")
-	c.Assert(failureName, Equals, "")
+	c.Assert(getFailureName(), Equals, "")
 
 	// Should have called failure handler and be unhealthy after 3 failures (threshold)
 	check = waitCheck(c, mgr, "chk1", func(check *CheckInfo) bool {
@@ -252,10 +273,12 @@ func (s *ManagerSuite) TestFailures(c *C) {
 	c.Assert(check.Threshold, Equals, 3)
 	c.Assert(check.Status, Equals, CheckStatusDown)
 	c.Assert(check.LastError, Matches, "exit status 1")
-	c.Assert(failureName, Equals, "chk1")
+	c.Assert(getFailureName(), Equals, "chk1")
 
 	// Should reset number of failures if command then succeeds
+	mutex.Lock()
 	failureName = ""
+	mutex.Unlock()
 	err = os.Remove(testPath)
 	c.Assert(err, IsNil)
 	check = waitCheck(c, mgr, "chk1", func(check *CheckInfo) bool {
@@ -264,7 +287,35 @@ func (s *ManagerSuite) TestFailures(c *C) {
 	c.Assert(check.Failures, Equals, 0)
 	c.Assert(check.Threshold, Equals, 3)
 	c.Assert(check.LastError, Equals, "")
-	c.Assert(failureName, Equals, "")
+	c.Assert(getFailureName(), Equals, "")
+}
+
+func (s *ManagerSuite) TestActionTriggeredOnce(c *C) {
+	mgr := NewManager()
+	var numFailures atomic.Int32
+	mgr.NotifyCheckFailed(func(name string) {
+		numFailures.Add(1)
+	})
+	mgr.PlanChanged(&plan.Plan{
+		Checks: map[string]*plan.Check{
+			"chk1": {
+				Name:      "chk1",
+				Period:    plan.OptionalDuration{Value: 5 * time.Millisecond},
+				Timeout:   plan.OptionalDuration{Value: 100 * time.Millisecond},
+				Threshold: 3,
+				Exec:      &plan.ExecCheck{Command: "false"},
+			},
+		},
+	})
+	defer stopChecks(c, mgr)
+
+	// Should have called failure handler only once, even after many failures.
+	check := waitCheck(c, mgr, "chk1", func(check *CheckInfo) bool {
+		return check.Failures >= 7
+	})
+	c.Assert(check.Status, Equals, CheckStatusDown)
+	c.Assert(check.LastError, Matches, "exit status 1")
+	c.Assert(numFailures.Load(), Equals, int32(1))
 }
 
 // waitCheck is a time based approach to wait for a checker run to complete.
