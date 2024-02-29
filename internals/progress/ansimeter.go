@@ -22,7 +22,7 @@ import (
 	"unicode"
 
 	"github.com/canonical/x-go/strutil/quantity"
-	"golang.org/x/crypto/ssh/terminal"
+	"golang.org/x/term"
 )
 
 var stdout io.Writer = os.Stdout
@@ -53,7 +53,7 @@ var (
 )
 
 var termWidth = func() int {
-	col, _, _ := terminal.GetSize(0)
+	col, _, _ := term.GetSize(0)
 	if col <= 0 {
 		// give up
 		col = 80

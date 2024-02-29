@@ -19,7 +19,7 @@ import (
 	"os"
 	"strings"
 
-	"golang.org/x/crypto/ssh/terminal"
+	"golang.org/x/term"
 )
 
 // Meter is an interface to show progress to the user
@@ -92,7 +92,7 @@ func MakeProgressBar() Meter {
 	if testMeter != nil {
 		return testMeter
 	}
-	if !inTesting && terminal.IsTerminal(int(os.Stdin.Fd())) {
+	if !inTesting && term.IsTerminal(int(os.Stdin.Fd())) {
 		return &ANSIMeter{}
 	}
 
