@@ -16,7 +16,6 @@ package osutil
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -31,7 +30,7 @@ var _ = Suite(&StatTestSuite{})
 
 func (ts *StatTestSuite) TestCanStat(c *C) {
 	fname := filepath.Join(c.MkDir(), "foo")
-	err := ioutil.WriteFile(fname, []byte(fname), 0644)
+	err := os.WriteFile(fname, []byte(fname), 0644)
 	c.Assert(err, IsNil)
 
 	c.Assert(CanStat(fname), Equals, true)
@@ -40,7 +39,7 @@ func (ts *StatTestSuite) TestCanStat(c *C) {
 
 func (ts *StatTestSuite) TestCanStatOddPerms(c *C) {
 	fname := filepath.Join(c.MkDir(), "foo")
-	err := ioutil.WriteFile(fname, []byte(fname), 0100)
+	err := os.WriteFile(fname, []byte(fname), 0100)
 	c.Assert(err, IsNil)
 
 	c.Assert(CanStat(fname), Equals, true)
@@ -72,7 +71,7 @@ func (ts *StatTestSuite) TestIsExecInPath(c *C) {
 	c.Check(IsExecInPath("xyzzy"), Equals, false)
 
 	fname := filepath.Join(d, "xyzzy")
-	c.Assert(ioutil.WriteFile(fname, []byte{}, 0644), IsNil)
+	c.Assert(os.WriteFile(fname, []byte{}, 0644), IsNil)
 	c.Check(IsExecInPath("xyzzy"), Equals, false)
 
 	c.Assert(os.Chmod(fname, 0755), IsNil)
@@ -103,7 +102,7 @@ func makeTestPathInDir(c *C, dir string, path string, mode os.FileMode) string {
 	} else {
 		// request for a file
 		c.Assert(os.MkdirAll(filepath.Dir(path), 0755), IsNil)
-		c.Assert(ioutil.WriteFile(path, nil, mode), IsNil)
+		c.Assert(os.WriteFile(path, nil, mode), IsNil)
 	}
 
 	return path
@@ -214,7 +213,7 @@ func (s *StatTestSuite) TestIsExec(c *C) {
 		err := os.Remove(p)
 		c.Check(err == nil || os.IsNotExist(err), Equals, true)
 
-		err = ioutil.WriteFile(p, []byte(""), tc.mode)
+		err = os.WriteFile(p, []byte(""), tc.mode)
 		c.Assert(err, IsNil)
 		c.Check(IsExec(p), Equals, tc.is)
 	}

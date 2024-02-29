@@ -15,7 +15,7 @@
 package osutil_test
 
 import (
-	"io/ioutil"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -158,7 +158,7 @@ func (s *mountinfoSuite) TestReadMountInfo2(c *C) {
 // Test that loading mountinfo from a file works as expected.
 func (s *mountinfoSuite) TestLoadMountInfo1(c *C) {
 	fname := filepath.Join(c.MkDir(), "mountinfo")
-	err := ioutil.WriteFile(fname, []byte(mountInfoSample), 0644)
+	err := os.WriteFile(fname, []byte(mountInfoSample), 0644)
 	c.Assert(err, IsNil)
 	entries, err := osutil.LoadMountInfo(fname)
 	c.Assert(err, IsNil)

@@ -15,7 +15,6 @@
 package cli_test
 
 import (
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -147,7 +146,7 @@ func (s *PebbleSuite) TestEnterExecListDir(c *C) {
 	files := []string{"foo", "bar", "baz"}
 	for _, file := range files {
 		path := filepath.Join(s.pebbleDir, file)
-		if err := ioutil.WriteFile(path, []byte{}, 0644); err != nil {
+		if err := os.WriteFile(path, []byte{}, 0644); err != nil {
 			panic(err)
 		}
 	}

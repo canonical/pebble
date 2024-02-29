@@ -21,7 +21,6 @@ package osutil_test
 
 import (
 	"errors"
-	"io/ioutil"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -49,7 +48,7 @@ func (ts *AtomicWriteTestSuite) TestAtomicWriteFile(c *C) {
 	c.Check(p, testutil.FileEquals, "canary")
 
 	// no files left behind!
-	d, err := ioutil.ReadDir(tmpdir)
+	d, err := os.ReadDir(tmpdir)
 	c.Assert(err, IsNil)
 	c.Assert(len(d), Equals, 1)
 }
@@ -69,7 +68,7 @@ func (ts *AtomicWriteTestSuite) TestAtomicWriteFilePermissions(c *C) {
 func (ts *AtomicWriteTestSuite) TestAtomicWriteFileOverwrite(c *C) {
 	tmpdir := c.MkDir()
 	p := filepath.Join(tmpdir, "foo")
-	c.Assert(ioutil.WriteFile(p, []byte("hello"), 0644), IsNil)
+	c.Assert(os.WriteFile(p, []byte("hello"), 0644), IsNil)
 	c.Assert(osutil.AtomicWriteFile(p, []byte("hi"), 0600, 0), IsNil)
 
 	c.Assert(p, testutil.FileEquals, "hi")
@@ -129,7 +128,7 @@ func (ts *AtomicWriteTestSuite) TestAtomicWriteFileOverwriteAbsoluteSymlink(c *C
 	c.Assert(os.Chmod(rodir, 0500), IsNil)
 	defer os.Chmod(rodir, 0700)
 
-	c.Assert(ioutil.WriteFile(s, []byte("hello"), 0644), IsNil)
+	c.Assert(os.WriteFile(s, []byte("hello"), 0644), IsNil)
 	c.Assert(osutil.AtomicWriteFile(p, []byte("hi"), 0600, osutil.AtomicWriteFollow), IsNil)
 
 	c.Assert(p, testutil.FileEquals, "hi")
@@ -160,7 +159,7 @@ func (ts *AtomicWriteTestSuite) TestAtomicWriteFileOverwriteRelativeSymlink(c *C
 	c.Assert(os.Chmod(rodir, 0500), IsNil)
 	defer os.Chmod(rodir, 0700)
 
-	c.Assert(ioutil.WriteFile(s, []byte("hello"), 0644), IsNil)
+	c.Assert(os.WriteFile(s, []byte("hello"), 0644), IsNil)
 	c.Assert(osutil.AtomicWriteFile(p, []byte("hi"), 0600, osutil.AtomicWriteFollow), IsNil)
 
 	c.Assert(p, testutil.FileEquals, "hi")
@@ -175,7 +174,7 @@ func (ts *AtomicWriteTestSuite) TestAtomicWriteFileNoOverwriteTmpExisting(c *C) 
 	rand.Seed(1)
 
 	p := filepath.Join(tmpdir, "foo")
-	err := ioutil.WriteFile(p+"."+expectedRandomness, []byte(""), 0644)
+	err := os.WriteFile(p+"."+expectedRandomness, []byte(""), 0644)
 	c.Assert(err, IsNil)
 
 	err = osutil.AtomicWriteFile(p, []byte(""), 0600, 0)

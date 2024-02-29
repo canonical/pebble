@@ -23,7 +23,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -138,7 +137,7 @@ func (s *SystemdTestSuite) myJctl(svcs []string, n int, follow bool) (io.ReadClo
 		return nil, err
 	}
 
-	return ioutil.NopCloser(bytes.NewReader(out)), err
+	return io.NopCloser(bytes.NewReader(out)), err
 }
 
 func (s *SystemdTestSuite) TestDaemonReload(c *C) {
@@ -453,7 +452,7 @@ func (s *SystemdTestSuite) TestLogs(c *C) {
 
 	reader, err := systemd.New("", systemd.SystemMode, s.rep).LogReader([]string{"foo"}, 24, false)
 	c.Check(err, IsNil)
-	logs, err := ioutil.ReadAll(reader)
+	logs, err := io.ReadAll(reader)
 	c.Assert(err, IsNil)
 	c.Check(string(logs), Equals, expected)
 	c.Check(s.jns, DeepEquals, []string{"24"})
@@ -496,7 +495,7 @@ func (s *SystemdTestSuite) TestMountUnitPath(c *C) {
 func makeFakeFile(c *C, path string) {
 	err := os.MkdirAll(filepath.Dir(path), 0755)
 	c.Assert(err, IsNil)
-	err = ioutil.WriteFile(path, nil, 0644)
+	err = os.WriteFile(path, nil, 0644)
 	c.Assert(err, IsNil)
 }
 
@@ -584,7 +583,7 @@ exit 0
 	fakeSnapPath := filepath.Join(c.MkDir(), "/var/lib/snappy/snaps/foo_1.0.snap")
 	err := os.MkdirAll(filepath.Dir(fakeSnapPath), 0755)
 	c.Assert(err, IsNil)
-	err = ioutil.WriteFile(fakeSnapPath, nil, 0644)
+	err = os.WriteFile(fakeSnapPath, nil, 0644)
 	c.Assert(err, IsNil)
 
 	mountUnitName, err := systemd.New("", systemd.SystemMode, nil).AddMountUnitFile("foo", "x1", fakeSnapPath, "/snap/snapname/123", "squashfs")
@@ -622,7 +621,7 @@ exit 0
 	fakeSnapPath := filepath.Join(c.MkDir(), "/var/lib/snappy/snaps/foo_1.0.snap")
 	err := os.MkdirAll(filepath.Dir(fakeSnapPath), 0755)
 	c.Assert(err, IsNil)
-	err = ioutil.WriteFile(fakeSnapPath, nil, 0644)
+	err = os.WriteFile(fakeSnapPath, nil, 0644)
 	c.Assert(err, IsNil)
 
 	mountUnitName, err := systemd.New("", systemd.SystemMode, nil).AddMountUnitFile("foo", "x1", fakeSnapPath, "/snap/snapname/123", "squashfs")
@@ -699,7 +698,7 @@ func (s *SystemdTestSuite) TestIsActiveErr(c *C) {
 
 func makeFakeMountUnit(c *C, mountDir string) string {
 	mountUnit := systemd.MountUnitPath(mountDir)
-	err := ioutil.WriteFile(mountUnit, nil, 0644)
+	err := os.WriteFile(mountUnit, nil, 0644)
 	c.Assert(err, IsNil)
 	return mountUnit
 }

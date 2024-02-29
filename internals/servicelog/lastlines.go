@@ -15,7 +15,7 @@
 package servicelog
 
 import (
-	"io/ioutil"
+	"io"
 	"regexp"
 	"strings"
 )
@@ -30,7 +30,7 @@ var timestampServiceRegexp = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:
 func LastLines(logBuffer *RingBuffer, n int, indent string, stripPrefix bool) (string, error) {
 	it := logBuffer.HeadIterator(n + 1)
 	defer it.Close()
-	logBytes, err := ioutil.ReadAll(it)
+	logBytes, err := io.ReadAll(it)
 	if err != nil {
 		return "", err
 	}

@@ -17,7 +17,6 @@ package daemon
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -79,7 +78,7 @@ func (s *responseSuite) TestFileResponseSetsContentDisposition(c *check.C) {
 	const filename = "icon.png"
 
 	path := filepath.Join(c.MkDir(), filename)
-	err := ioutil.WriteFile(path, nil, os.ModePerm)
+	err := os.WriteFile(path, nil, os.ModePerm)
 	c.Check(err, check.IsNil)
 
 	rec := httptest.NewRecorder()

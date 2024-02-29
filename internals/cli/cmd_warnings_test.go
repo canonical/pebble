@@ -16,7 +16,7 @@ package cli_test
 
 import (
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -73,7 +73,7 @@ func mkWarningsFakeHandler(c *check.C, body string) func(w http.ResponseWriter, 
 		c.Check(r.URL.Path, check.Equals, "/v1/warnings")
 		c.Check(r.URL.Query(), check.HasLen, 0)
 
-		buf, err := ioutil.ReadAll(r.Body)
+		buf, err := io.ReadAll(r.Body)
 		c.Assert(err, check.IsNil)
 		c.Check(string(buf), check.Equals, "")
 		c.Check(r.Method, check.Equals, "GET")
@@ -206,7 +206,7 @@ func (s *warningSuite) TestCommandWithWarnings(c *check.C) {
 		c.Check(r.URL.Path, check.Equals, "/v1/system-info")
 		c.Check(r.URL.Query(), check.HasLen, 0)
 
-		buf, err := ioutil.ReadAll(r.Body)
+		buf, err := io.ReadAll(r.Body)
 		c.Assert(err, check.IsNil)
 		c.Check(string(buf), check.Equals, "")
 		c.Check(r.Method, check.Equals, "GET")
@@ -268,7 +268,7 @@ func (s *warningSuite) TestLastWarningTimestamp(c *check.C) {
 	defer func() { os.Setenv(warnFileEnvKey, oldWarnPath) }()
 
 	// Insert invalid JSON in warnings file
-	err := ioutil.WriteFile(newWarnPath, []byte("invalid JSON"), 0755)
+	err := os.WriteFile(newWarnPath, []byte("invalid JSON"), 0755)
 	c.Assert(err, check.IsNil)
 
 	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"okay"})
@@ -276,7 +276,7 @@ func (s *warningSuite) TestLastWarningTimestamp(c *check.C) {
 	c.Check(rest, check.HasLen, 1)
 
 	// Insert extra data after JSON
-	err = ioutil.WriteFile(newWarnPath, []byte("{}extra"), 0755)
+	err = os.WriteFile(newWarnPath, []byte("{}extra"), 0755)
 	c.Assert(err, check.IsNil)
 
 	rest, err = cli.Parser(cli.Client()).ParseArgs([]string{"okay"})

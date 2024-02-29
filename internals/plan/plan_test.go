@@ -17,7 +17,6 @@ package plan_test
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -1563,7 +1562,7 @@ func (s *S) TestReadDir(c *C) {
 		c.Assert(err, IsNil)
 
 		for i, yml := range test.input {
-			err := ioutil.WriteFile(filepath.Join(layersDir, fmt.Sprintf("%03d-layer-%d.yaml", i, i)), reindent(yml), 0644)
+			err := os.WriteFile(filepath.Join(layersDir, fmt.Sprintf("%03d-layer-%d.yaml", i, i)), reindent(yml), 0644)
 			c.Assert(err, IsNil)
 		}
 		sup, err := plan.ReadDir(pebbleDir)
@@ -1616,7 +1615,7 @@ func (s *S) TestReadDirBadNames(c *C) {
 
 	for _, fname := range readDirBadNames {
 		fpath := filepath.Join(layersDir, fname)
-		err := ioutil.WriteFile(fpath, []byte("<ignore>"), 0644)
+		err := os.WriteFile(fpath, []byte("<ignore>"), 0644)
 		c.Assert(err, IsNil)
 		_, err = plan.ReadDir(pebbleDir)
 		c.Assert(err.Error(), Equals, fmt.Sprintf("invalid layer filename: %q (must look like \"123-some-label.yaml\")", fname))
@@ -1639,7 +1638,7 @@ func (s *S) TestReadDirDupNames(c *C) {
 	for _, fnames := range readDirDupNames {
 		for _, fname := range fnames {
 			fpath := filepath.Join(layersDir, fname)
-			err := ioutil.WriteFile(fpath, []byte("summary: ignore"), 0644)
+			err := os.WriteFile(fpath, []byte("summary: ignore"), 0644)
 			c.Assert(err, IsNil)
 		}
 		_, err = plan.ReadDir(pebbleDir)

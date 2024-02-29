@@ -17,7 +17,7 @@ package client_test
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -85,7 +85,7 @@ func (cs *clientSuite) Do(req *http.Request) (*http.Response, error) {
 		body = cs.rsps[cs.doCalls]
 	}
 	rsp := &http.Response{
-		Body:       ioutil.NopCloser(strings.NewReader(body)),
+		Body:       io.NopCloser(strings.NewReader(body)),
 		Header:     cs.header,
 		StatusCode: cs.status,
 	}
@@ -110,7 +110,7 @@ func (cs *clientSuite) TestClientDoReportsErrors(c *C) {
 func (cs *clientSuite) TestClientWorks(c *C) {
 	var v []int
 	cs.rsp = `[1,2]`
-	reqBody := ioutil.NopCloser(strings.NewReader(""))
+	reqBody := io.NopCloser(strings.NewReader(""))
 	err := cs.cli.Do("GET", "/this", nil, reqBody, &v)
 	c.Check(err, IsNil)
 	c.Check(v, DeepEquals, []int{1, 2})
@@ -247,7 +247,7 @@ func (cs *clientSuite) TestParseError(c *C) {
 	resp = &http.Response{
 		Status: "400 Bad Request",
 		Header: h,
-		Body: ioutil.NopCloser(strings.NewReader(`{
+		Body: io.NopCloser(strings.NewReader(`{
 			"status-code": 400,
 			"type": "error",
 			"result": {
@@ -261,7 +261,7 @@ func (cs *clientSuite) TestParseError(c *C) {
 	resp = &http.Response{
 		Status: "400 Bad Request",
 		Header: h,
-		Body:   ioutil.NopCloser(strings.NewReader("{}")),
+		Body:   io.NopCloser(strings.NewReader("{}")),
 	}
 	err = client.ParseErrorInTest(resp)
 	c.Check(err, ErrorMatches, `server error: "400 Bad Request"`)
@@ -294,7 +294,7 @@ func (cs *clientSuite) TestDebugPost(c *C) {
 	c.Check(cs.reqs, HasLen, 1)
 	c.Check(cs.reqs[0].Method, Equals, "POST")
 	c.Check(cs.reqs[0].URL.Path, Equals, "/v1/debug")
-	data, err := ioutil.ReadAll(cs.reqs[0].Body)
+	data, err := io.ReadAll(cs.reqs[0].Body)
 	c.Assert(err, IsNil)
 	c.Check(string(data), DeepEquals, `{"action":"do-something","params":["param1","param2"]}`)
 }

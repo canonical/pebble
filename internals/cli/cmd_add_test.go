@@ -16,7 +16,6 @@ package cli_test
 
 import (
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -71,16 +70,16 @@ services:
 
 		tempDir := c.MkDir()
 		layerPath := filepath.Join(tempDir, "layer.yaml")
-		err := ioutil.WriteFile(layerPath, []byte(layerYAML), 0755)
+		err := os.WriteFile(layerPath, []byte(layerYAML), 0755)
 		c.Assert(err, check.IsNil)
 
 		unreadableLayerPath := filepath.Join(tempDir, "unreadable-layer.yaml")
-		err = ioutil.WriteFile(unreadableLayerPath, []byte(layerYAML), 0055)
+		err = os.WriteFile(unreadableLayerPath, []byte(layerYAML), 0055)
 		c.Assert(err, check.IsNil)
 
 		// The trigger layer will trigger an error in the mocked API response
 		triggerLayerPath := filepath.Join(tempDir, "trigger-layer.yaml")
-		err = ioutil.WriteFile(triggerLayerPath, []byte(triggerLayerContent), 0755)
+		err = os.WriteFile(triggerLayerPath, []byte(triggerLayerContent), 0755)
 		c.Assert(err, check.IsNil)
 
 		var args []string
