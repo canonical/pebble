@@ -107,27 +107,11 @@ func (cmd *cmdLogs) Execute(args []string) error {
 	var err error
 	if cmd.Follow {
 		// Stop following when Ctrl-C pressed (SIGINT).
-		ctx := notifyContext(context.Background(), os.Interrupt)
+		ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
+		defer cancel()
 		err = cmd.client.FollowLogs(ctx, &opts)
 	} else {
 		err = cmd.client.Logs(&opts)
 	}
 	return err
-}
-
-// Needed because signal.NotifyContext is Go 1.16+
-// TODO(benhoyt): this can go away now that we're on Go 1.20
-func notifyContext(parent context.Context, signals ...os.Signal) context.Context {
-	ctx, cancel := context.WithCancel(parent)
-	// Need a buffered channel in case the signal arrives between the
-	// signal.Notify call and the goroutine waiting on the channel. In
-	// cmd_run.go Pebble uses a buffer size of 2, so be consistent.
-	ch := make(chan os.Signal, 2)
-	signal.Notify(ch, signals...)
-	go func() {
-		// Wait for signal, then cancel the context.
-		<-ch
-		cancel()
-	}()
-	return ctx
 }
