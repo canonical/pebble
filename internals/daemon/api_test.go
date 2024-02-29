@@ -92,7 +92,7 @@ func (s *apiSuite) TestSysInfo(c *check.C) {
 
 	sysInfoCmd.GET(sysInfoCmd, nil, nil).ServeHTTP(rec, nil)
 	c.Check(rec.Code, check.Equals, 200)
-	c.Check(rec.HeaderMap.Get("Content-Type"), check.Equals, "application/json")
+	c.Check(rec.Result().Header.Get("Content-Type"), check.Equals, "application/json")
 
 	expected := map[string]interface{}{
 		"version": "42b1",
