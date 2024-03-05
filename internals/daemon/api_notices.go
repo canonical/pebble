@@ -115,6 +115,7 @@ func v1GetNotices(c *Command, r *http.Request, _ *UserState) Response {
 		ctx, cancel := context.WithTimeout(r.Context(), timeout)
 		defer cancel()
 
+		// WaitNotices releases the state lock while waiting.
 		notices, err = st.WaitNotices(ctx, filter)
 		if errors.Is(err, context.Canceled) {
 			return BadRequest("request canceled")

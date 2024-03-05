@@ -398,6 +398,8 @@ func (s *State) unflattenNotices(flat []*Notice) {
 // It waits till there is at least one matching notice or the context is
 // cancelled. If there are existing notices that match the filter,
 // WaitNotices will return them immediately.
+//
+// Note that WaitNotices releases the state lock while waiting.
 func (s *State) WaitNotices(ctx context.Context, filter *NoticeFilter) ([]*Notice, error) {
 	s.reading()
 
@@ -426,7 +428,8 @@ func (s *State) WaitNotices(ctx context.Context, filter *NoticeFilter) ([]*Notic
 	defer stop()
 
 	for {
-		// Wait till a new notice occurs or a context is cancelled.
+		// Wait till a new notice occurs or a context is cancelled. Note that
+		// noticeCond wraps the state lock, so this is what unlocks it.
 		s.noticeCond.Wait()
 
 		// If this context is cancelled, return the error.
