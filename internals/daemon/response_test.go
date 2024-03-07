@@ -40,7 +40,7 @@ func (s *responseSuite) TestRespSetsLocationIfAccepted(c *check.C) {
 	}
 
 	rsp.ServeHTTP(rec, nil)
-	hdr := rec.Header()
+	hdr := rec.Result().Header
 	c.Check(hdr.Get("Location"), check.Equals, "foo/bar")
 }
 
@@ -55,7 +55,7 @@ func (s *responseSuite) TestRespSetsLocationIfCreated(c *check.C) {
 	}
 
 	rsp.ServeHTTP(rec, nil)
-	hdr := rec.Header()
+	hdr := rec.Result().Header
 	c.Check(hdr.Get("Location"), check.Equals, "foo/bar")
 }
 
@@ -70,7 +70,7 @@ func (s *responseSuite) TestRespDoesNotSetLocationIfOther(c *check.C) {
 	}
 
 	rsp.ServeHTTP(rec, nil)
-	hdr := rec.Header()
+	hdr := rec.Result().Header
 	c.Check(hdr.Get("Location"), check.Equals, "")
 }
 
@@ -88,7 +88,7 @@ func (s *responseSuite) TestFileResponseSetsContentDisposition(c *check.C) {
 
 	rsp.ServeHTTP(rec, req)
 
-	hdr := rec.Header()
+	hdr := rec.Result().Header
 	c.Check(hdr.Get("Content-Disposition"), check.Equals,
 		fmt.Sprintf("attachment; filename=%s", filename))
 }
