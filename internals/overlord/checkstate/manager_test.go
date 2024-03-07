@@ -16,7 +16,6 @@ package checkstate
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sync"
@@ -167,7 +166,7 @@ func (s *ManagerSuite) TestCheckCanceled(c *C) {
 		if i >= 100 {
 			c.Fatalf("failed waiting for command to start")
 		}
-		b, _ := ioutil.ReadFile(tempFile)
+		b, _ := os.ReadFile(tempFile)
 		if len(b) > 0 {
 			break
 		}
@@ -184,10 +183,10 @@ func (s *ManagerSuite) TestCheckCanceled(c *C) {
 	stopChecks(c, mgr)
 
 	// Ensure command was terminated (output file didn't grow in size)
-	b1, err := ioutil.ReadFile(tempFile)
+	b1, err := os.ReadFile(tempFile)
 	c.Assert(err, IsNil)
 	time.Sleep(20 * time.Millisecond)
-	b2, err := ioutil.ReadFile(tempFile)
+	b2, err := os.ReadFile(tempFile)
 	c.Assert(err, IsNil)
 	c.Assert(len(b1), Equals, len(b2))
 
@@ -210,7 +209,7 @@ func (s *ManagerSuite) TestFailures(c *C) {
 		failureName = name
 	})
 	testPath := c.MkDir() + "/test"
-	err := ioutil.WriteFile(testPath, nil, 0o644)
+	err := os.WriteFile(testPath, nil, 0o644)
 	c.Assert(err, IsNil)
 	mgr.PlanChanged(&plan.Plan{
 		Checks: map[string]*plan.Check{

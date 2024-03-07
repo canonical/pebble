@@ -19,7 +19,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"os/user"
@@ -320,8 +319,8 @@ func (s *execSuite) TestSignal(c *C) {
 	opts := &client.ExecOptions{
 		Command: []string{"sleep", "1"},
 		Stdin:   strings.NewReader(""),
-		Stdout:  ioutil.Discard,
-		Stderr:  ioutil.Discard,
+		Stdout:  io.Discard,
+		Stderr:  io.Discard,
 	}
 	process, err := s.client.Exec(opts)
 	c.Assert(err, IsNil)
@@ -346,7 +345,7 @@ func (s *execSuite) TestStreaming(c *C) {
 		Command: []string{"cat"},
 		Stdin:   channelReader{stdinCh},
 		Stdout:  channelWriter{stdoutCh},
-		Stderr:  ioutil.Discard,
+		Stderr:  io.Discard,
 	}
 	process, err := s.client.Exec(opts)
 	c.Assert(err, IsNil)

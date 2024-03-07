@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/signal"
 	"strconv"
 	"time"
 
@@ -82,7 +83,8 @@ func (cmd *cmdNotices) Execute(args []string) error {
 
 	var notices []*client.Notice
 	if cmd.Timeout != 0 {
-		ctx := notifyContext(context.Background(), os.Interrupt)
+		ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
+		defer cancel()
 		notices, err = cmd.client.WaitNotices(ctx, cmd.Timeout, &options)
 	} else {
 		notices, err = cmd.client.Notices(&options)

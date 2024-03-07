@@ -30,7 +30,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/canonical/go-flags"
-	"golang.org/x/crypto/ssh/terminal"
+	"golang.org/x/term"
 
 	"github.com/canonical/pebble/client"
 	"github.com/canonical/pebble/cmd"
@@ -43,7 +43,7 @@ var (
 	Stdout io.Writer = os.Stdout
 	Stderr io.Writer = os.Stderr
 	// overridden for testing
-	ReadPassword = terminal.ReadPassword
+	ReadPassword = term.ReadPassword
 	// set to logger.Panicf in testing
 	noticef = logger.Noticef
 )
@@ -248,8 +248,8 @@ func applyPersonality(s string) string {
 }
 
 var (
-	isStdinTTY  = terminal.IsTerminal(0)
-	isStdoutTTY = terminal.IsTerminal(1)
+	isStdinTTY  = term.IsTerminal(0)
+	isStdoutTTY = term.IsTerminal(1)
 	osExit      = os.Exit
 )
 

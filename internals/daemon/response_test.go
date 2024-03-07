@@ -17,7 +17,6 @@ package daemon
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -41,7 +40,7 @@ func (s *responseSuite) TestRespSetsLocationIfAccepted(c *check.C) {
 	}
 
 	rsp.ServeHTTP(rec, nil)
-	hdr := rec.Header()
+	hdr := rec.Result().Header
 	c.Check(hdr.Get("Location"), check.Equals, "foo/bar")
 }
 
@@ -56,7 +55,7 @@ func (s *responseSuite) TestRespSetsLocationIfCreated(c *check.C) {
 	}
 
 	rsp.ServeHTTP(rec, nil)
-	hdr := rec.Header()
+	hdr := rec.Result().Header
 	c.Check(hdr.Get("Location"), check.Equals, "foo/bar")
 }
 
@@ -71,7 +70,7 @@ func (s *responseSuite) TestRespDoesNotSetLocationIfOther(c *check.C) {
 	}
 
 	rsp.ServeHTTP(rec, nil)
-	hdr := rec.Header()
+	hdr := rec.Result().Header
 	c.Check(hdr.Get("Location"), check.Equals, "")
 }
 
@@ -79,7 +78,7 @@ func (s *responseSuite) TestFileResponseSetsContentDisposition(c *check.C) {
 	const filename = "icon.png"
 
 	path := filepath.Join(c.MkDir(), filename)
-	err := ioutil.WriteFile(path, nil, os.ModePerm)
+	err := os.WriteFile(path, nil, os.ModePerm)
 	c.Check(err, check.IsNil)
 
 	rec := httptest.NewRecorder()
@@ -89,7 +88,7 @@ func (s *responseSuite) TestFileResponseSetsContentDisposition(c *check.C) {
 
 	rsp.ServeHTTP(rec, req)
 
-	hdr := rec.Header()
+	hdr := rec.Result().Header
 	c.Check(hdr.Get("Content-Disposition"), check.Equals,
 		fmt.Sprintf("attachment; filename=%s", filename))
 }

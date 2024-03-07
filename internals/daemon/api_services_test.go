@@ -19,7 +19,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"math/rand"
 	"net/http"
 	"net/http/httptest"
@@ -62,7 +61,7 @@ services:
 func writeTestLayer(pebbleDir, layerYAML string) {
 	err := os.Mkdir(filepath.Join(pebbleDir, "layers"), 0755)
 	if err == nil {
-		err = ioutil.WriteFile(filepath.Join(pebbleDir, "layers", "001-base.yaml"), []byte(layerYAML), 0644)
+		err = os.WriteFile(filepath.Join(pebbleDir, "layers", "001-base.yaml"), []byte(layerYAML), 0644)
 	}
 	if err != nil {
 		panic(err)

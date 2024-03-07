@@ -494,9 +494,9 @@ func (s *logsSuite) recordResponse(c *C, url string, svcMgr serviceManager) *htt
 	rec := httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)
 	if rec.Code == http.StatusOK {
-		c.Assert(rec.Header().Get("Content-Type"), Equals, "application/x-ndjson")
+		c.Assert(rec.Result().Header.Get("Content-Type"), Equals, "application/x-ndjson")
 	} else {
-		c.Assert(rec.Header().Get("Content-Type"), Equals, "application/json")
+		c.Assert(rec.Result().Header.Get("Content-Type"), Equals, "application/json")
 	}
 	return rec
 }

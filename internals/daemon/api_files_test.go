@@ -19,7 +19,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"mime"
 	"mime/multipart"
 	"net/http"
@@ -1205,7 +1204,7 @@ group not found
 }
 
 func assertFile(c *C, path string, perm os.FileMode, content string) {
-	b, err := ioutil.ReadFile(path)
+	b, err := os.ReadFile(path)
 	c.Assert(err, IsNil)
 	c.Assert(string(b), Equals, content)
 	info, err := os.Stat(path)
@@ -1232,7 +1231,7 @@ func readMultipart(c *C, response *http.Response, body io.Reader, result interfa
 		if part.FormName() != "files" {
 			break
 		}
-		b, err := ioutil.ReadAll(part)
+		b, err := io.ReadAll(part)
 		c.Assert(err, IsNil)
 		files[multipartFilename(part)] = string(b)
 		part.Close()
@@ -1293,7 +1292,7 @@ func createTestFiles(c *C) string {
 }
 
 func writeTempFile(c *C, dir, filename, content string, perm os.FileMode) {
-	err := ioutil.WriteFile(filepath.Join(dir, filename), []byte(content), perm)
+	err := os.WriteFile(filepath.Join(dir, filename), []byte(content), perm)
 	c.Assert(err, IsNil)
 }
 

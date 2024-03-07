@@ -18,7 +18,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
@@ -128,7 +127,7 @@ func FakeCommand(c *check.C, basename, script string, withReaper bool) *FakeCmd 
 		os.Setenv("PATH", binDir+":"+os.Getenv("PATH"))
 	}
 	fmt.Fprintf(&wholeScript, scriptTpl, logFile, script)
-	err := ioutil.WriteFile(exeFile, wholeScript.Bytes(), 0700)
+	err := os.WriteFile(exeFile, wholeScript.Bytes(), 0700)
 	if err != nil {
 		panic(err)
 	}
@@ -142,7 +141,7 @@ func FakeCommand(c *check.C, basename, script string, withReaper bool) *FakeCmd 
 // Useful when you want to check the ordering of things.
 func (cmd *FakeCmd) Also(basename, script string) *FakeCmd {
 	exeFile := path.Join(cmd.binDir, basename)
-	err := ioutil.WriteFile(exeFile, []byte(fmt.Sprintf(scriptTpl, cmd.logFile, script)), 0700)
+	err := os.WriteFile(exeFile, []byte(fmt.Sprintf(scriptTpl, cmd.logFile, script)), 0700)
 	if err != nil {
 		panic(err)
 	}
@@ -169,7 +168,7 @@ func (cmd *FakeCmd) Restore() {
 //	    {"cmd", "arg1", "arg2"}, // second invocation of "cmd"
 //	}
 func (cmd *FakeCmd) Calls() [][]string {
-	raw, err := ioutil.ReadFile(cmd.logFile)
+	raw, err := os.ReadFile(cmd.logFile)
 	if os.IsNotExist(err) {
 		return nil
 	}
