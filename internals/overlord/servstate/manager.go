@@ -39,7 +39,7 @@ type ServiceManager struct {
 }
 
 type LogManager interface {
-	ServiceStarted(serviceName string, logs *servicelog.RingBuffer)
+	ServiceStarted(service *plan.Service, logs *servicelog.RingBuffer)
 }
 
 // PlanFunc is the type of function used by NotifyPlanChanged.
@@ -87,6 +87,13 @@ func (m *ServiceManager) Stop() {
 	err := reaper.Stop()
 	if err != nil {
 		logger.Noticef("Cannot stop child process reaper: %v", err)
+	}
+
+	// Close all the service ringbuffers
+	m.servicesLock.Lock()
+	defer m.servicesLock.Unlock()
+	for name := range m.services {
+		m.removeServiceInternal(name)
 	}
 }
 
@@ -166,6 +173,10 @@ func (m *ServiceManager) updatePlanLayers(layers []*plan.Layer) error {
 		Services:   combined.Services,
 		Checks:     combined.Checks,
 		LogTargets: combined.LogTargets,
+	}
+	err = p.Validate()
+	if err != nil {
+		return err
 	}
 	m.updatePlan(p)
 	return nil
@@ -268,11 +279,10 @@ const (
 // Services returns the list of configured services and their status, sorted
 // by service name. Filter by the specified service names if provided.
 func (m *ServiceManager) Services(names []string) ([]*ServiceInfo, error) {
-	releasePlan, err := m.acquirePlan()
+	mgrPlan, err := m.Plan()
 	if err != nil {
 		return nil, err
 	}
-	defer releasePlan()
 
 	m.servicesLock.Lock()
 	defer m.servicesLock.Unlock()
@@ -284,7 +294,7 @@ func (m *ServiceManager) Services(names []string) ([]*ServiceInfo, error) {
 
 	var services []*ServiceInfo
 	matchNames := len(names) > 0
-	for name, config := range m.plan.Services {
+	for name, config := range mgrPlan.Services {
 		if matchNames && !requested[name] {
 			continue
 		}
@@ -348,56 +358,47 @@ func stateToStatus(state serviceState) ServiceStatus {
 // DefaultServiceNames returns the name of the services set to start
 // by default.
 func (m *ServiceManager) DefaultServiceNames() ([]string, error) {
-	releasePlan, err := m.acquirePlan()
+	mgrPlan, err := m.Plan()
 	if err != nil {
 		return nil, err
 	}
-	defer releasePlan()
 
 	var names []string
-	for name, service := range m.plan.Services {
+	for name, service := range mgrPlan.Services {
 		if service.Startup == plan.StartupEnabled {
 			names = append(names, name)
 		}
 	}
 
-	return m.plan.StartOrder(names)
+	return mgrPlan.StartOrder(names)
 }
 
 // StartOrder returns the provided services, together with any required
 // dependencies, in the proper order for starting them all up.
 func (m *ServiceManager) StartOrder(services []string) ([]string, error) {
-	releasePlan, err := m.acquirePlan()
+	mgrPlan, err := m.Plan()
 	if err != nil {
 		return nil, err
 	}
-	defer releasePlan()
 
-	return m.plan.StartOrder(services)
+	return mgrPlan.StartOrder(services)
 }
 
 // StopOrder returns the provided services, together with any dependants,
 // in the proper order for stopping them all.
 func (m *ServiceManager) StopOrder(services []string) ([]string, error) {
-	releasePlan, err := m.acquirePlan()
+	mgrPlan, err := m.Plan()
 	if err != nil {
 		return nil, err
 	}
-	defer releasePlan()
 
-	return m.plan.StopOrder(services)
+	return mgrPlan.StopOrder(services)
 }
 
 // ServiceLogs returns iterators to the provided services. If last is negative,
 // return tail iterators; if last is zero or positive, return head iterators
 // going back last elements. Each iterator must be closed via the Close method.
 func (m *ServiceManager) ServiceLogs(services []string, last int) (map[string]servicelog.Iterator, error) {
-	releasePlan, err := m.acquirePlan()
-	if err != nil {
-		return nil, err
-	}
-	defer releasePlan()
-
 	requested := make(map[string]bool, len(services))
 	for _, name := range services {
 		requested[name] = true
@@ -427,11 +428,10 @@ func (m *ServiceManager) ServiceLogs(services []string, last int) (map[string]se
 // Replan returns a list of services to stop and services to start because
 // their plans had changed between when they started and this call.
 func (m *ServiceManager) Replan() ([]string, []string, error) {
-	releasePlan, err := m.acquirePlan()
+	mgrPlan, err := m.Plan()
 	if err != nil {
 		return nil, nil, err
 	}
-	defer releasePlan()
 
 	m.servicesLock.Lock()
 	defer m.servicesLock.Unlock()
@@ -439,7 +439,7 @@ func (m *ServiceManager) Replan() ([]string, []string, error) {
 	needsRestart := make(map[string]bool)
 	var stop []string
 	for name, s := range m.services {
-		if config, ok := m.plan.Services[name]; ok {
+		if config, ok := mgrPlan.Services[name]; ok {
 			if config.Equal(s.config) {
 				continue
 			}
@@ -450,13 +450,13 @@ func (m *ServiceManager) Replan() ([]string, []string, error) {
 	}
 
 	var start []string
-	for name, config := range m.plan.Services {
+	for name, config := range mgrPlan.Services {
 		if needsRestart[name] || config.Startup == plan.StartupEnabled {
 			start = append(start, name)
 		}
 	}
 
-	stop, err = m.plan.StopOrder(stop)
+	stop, err = mgrPlan.StopOrder(stop)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -466,7 +466,7 @@ func (m *ServiceManager) Replan() ([]string, []string, error) {
 		}
 	}
 
-	start, err = m.plan.StartOrder(start)
+	start, err = mgrPlan.StartOrder(start)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -524,8 +524,8 @@ func (m *ServiceManager) SetServiceArgs(serviceArgs map[string][]string) error {
 	defer releasePlan()
 
 	newLayer := &plan.Layer{
-		// TODO: Consider making any labels starting with
-		// the "pebble-" prefix reserved.
+		// Labels with "pebble-*" prefix are (will be) reserved, see:
+		// https://github.com/canonical/pebble/issues/220
 		Label:    "pebble-service-args",
 		Services: make(map[string]*plan.Service),
 	}
@@ -545,38 +545,49 @@ func (m *ServiceManager) SetServiceArgs(serviceArgs map[string][]string) error {
 		}
 	}
 
+	err = newLayer.Validate()
+	if err != nil {
+		return err
+	}
+
 	return m.appendLayer(newLayer)
 }
 
-// servicesToStop returns a slice of service names to stop, in dependency order.
+// servicesToStop is used during service manager shutdown to cleanly terminate
+// all running services. Running services include both services in the
+// stateRunning and stateBackoff, since a service in backoff state can start
+// running once the timeout expires, which creates a race on service manager
+// exit. If it starts just before, it would continue to run after the service
+// manager is terminated. If it starts just after (before the main process
+// exits), it would generate a runtime error as the reaper would already be dead.
+// This function returns a slice of service names to stop, in dependency order.
 func servicesToStop(m *ServiceManager) ([]string, error) {
-	releasePlan, err := m.acquirePlan()
+	mgrPlan, err := m.Plan()
 	if err != nil {
 		return nil, err
 	}
-	defer releasePlan()
 
 	// Get all service names in plan.
-	var services []string
-	for name := range m.plan.Services {
+	services := make([]string, 0, len(mgrPlan.Services))
+	for name := range mgrPlan.Services {
 		services = append(services, name)
 	}
 
 	// Order according to dependency order.
-	stop, err := m.plan.StopOrder(services)
+	stop, err := mgrPlan.StopOrder(services)
 	if err != nil {
 		return nil, err
 	}
 
-	// Filter down to only those that are running.
+	// Filter down to only those that are running or in backoff
 	m.servicesLock.Lock()
 	defer m.servicesLock.Unlock()
-	var running []string
+	var notStopped []string
 	for _, name := range stop {
 		s := m.services[name]
-		if s != nil && s.state == stateRunning {
-			running = append(running, name)
+		if s != nil && (s.state == stateRunning || s.state == stateBackoff) {
+			notStopped = append(notStopped, name)
 		}
 	}
-	return running, nil
+	return notStopped, nil
 }

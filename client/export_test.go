@@ -15,6 +15,7 @@
 package client
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/url"
@@ -26,19 +27,37 @@ var (
 )
 
 func (client *Client) SetDoer(d doer) {
-	client.doer = d
+	client.Requester().(*defaultRequester).doer = d
 }
 
+// TODO: Clean up tests to use the new Requester API. Tests do not generate a client.response type
+// reply in the body while SyncRequest or AsyncRequest responses assume the JSON body can be
+// unmarshalled into client.response.
 func (client *Client) Do(method, path string, query url.Values, body io.Reader, v interface{}) error {
-	return client.do(method, path, query, nil, body, v)
+	resp, err := client.Requester().Do(context.Background(), &RequestOptions{
+		Type:    RawRequest,
+		Method:  method,
+		Path:    path,
+		Query:   query,
+		Headers: nil,
+		Body:    body,
+	})
+	if err != nil {
+		return err
+	}
+	err = decodeInto(resp.Body, v)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func (client *Client) FakeAsyncRequest() (changeId string, err error) {
-	changeId, err = client.doAsync("GET", "/v1/async-test", nil, nil, nil)
+	resp, err := client.doAsync("GET", "/v1/async-test", nil, nil, nil, nil)
 	if err != nil {
 		return "", fmt.Errorf("cannot do async test: %v", err)
 	}
-	return changeId, nil
+	return resp.ChangeID, nil
 }
 
 func (client *Client) SetGetWebsocket(f getWebsocketFunc) {

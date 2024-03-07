@@ -59,12 +59,15 @@ func (s *apiSuite) daemon(c *check.C) *Daemon {
 	d, err := New(&Options{Dir: s.pebbleDir})
 	c.Assert(err, check.IsNil)
 	d.addRoutes()
+
+	c.Assert(d.overlord.StartUp(), check.IsNil)
+
 	s.d = d
 	return d
 }
 
 func apiCmd(path string) *Command {
-	for _, cmd := range api {
+	for _, cmd := range API {
 		if cmd.Path == path {
 			return cmd
 		}
@@ -77,7 +80,6 @@ func (s *apiSuite) TestSysInfo(c *check.C) {
 	c.Assert(sysInfoCmd.GET, check.NotNil)
 	c.Check(sysInfoCmd.PUT, check.IsNil)
 	c.Check(sysInfoCmd.POST, check.IsNil)
-	c.Check(sysInfoCmd.DELETE, check.IsNil)
 
 	rec := httptest.NewRecorder()
 

@@ -93,13 +93,13 @@ func (r *resp) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
 	status := r.Status
 	bs, err := r.MarshalJSON()
 	if err != nil {
-		logger.Noticef("cannot marshal %#v to JSON: %v", *r, err)
+		logger.Noticef("Cannot marshal %#v to JSON: %v", *r, err)
 		bs = nil
-		status = 500
+		status = http.StatusInternalServerError
 	}
 
 	hdr := w.Header()
-	if r.Status == 202 || r.Status == 201 {
+	if r.Status == http.StatusAccepted || r.Status == http.StatusCreated {
 		if m, ok := r.Result.(map[string]interface{}); ok {
 			if location, ok := m["resource"]; ok {
 				if location, ok := location.(string); ok && location != "" {
@@ -116,27 +116,26 @@ func (r *resp) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
 
 type errorKind string
 
+// Error kinds for use as a response or maintenance result
 const (
 	errorKindLoginRequired     = errorKind("login-required")
-	errorKindDaemonRestart     = errorKind("daemon-restart")
-	errorKindSystemRestart     = errorKind("system-restart")
 	errorKindNoDefaultServices = errorKind("no-default-services")
 	errorKindNotFound          = errorKind("not-found")
 	errorKindPermissionDenied  = errorKind("permission-denied")
 	errorKindGenericFileError  = errorKind("generic-file-error")
+	errorKindSystemRestart     = errorKind("system-restart")
+	errorKindDaemonRestart     = errorKind("daemon-restart")
 )
 
-type errorValue interface{}
-
 type errorResult struct {
-	Message string     `json:"message"` // note no omitempty
-	Kind    errorKind  `json:"kind,omitempty"`
-	Value   errorValue `json:"value,omitempty"`
+	Message string      `json:"message"` // note no omitempty
+	Kind    errorKind   `json:"kind,omitempty"`
+	Value   interface{} `json:"value,omitempty"`
 }
 
 func SyncResponse(result interface{}) Response {
 	if err, ok := result.(error); ok {
-		return statusInternalError("internal error: %v", err)
+		return InternalError("internal error: %v", err)
 	}
 
 	if rsp, ok := result.(Response); ok {
@@ -145,7 +144,7 @@ func SyncResponse(result interface{}) Response {
 
 	return &resp{
 		Type:   ResponseTypeSync,
-		Status: 200,
+		Status: http.StatusOK,
 		Result: result,
 	}
 }
@@ -153,7 +152,7 @@ func SyncResponse(result interface{}) Response {
 func AsyncResponse(result map[string]interface{}, change string) Response {
 	return &resp{
 		Type:   ResponseTypeAsync,
-		Status: 202,
+		Status: http.StatusAccepted,
 		Result: result,
 		Change: change,
 	}
@@ -169,22 +168,30 @@ func (f fileResponse) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, string(f))
 }
 
+// ErrorResponse builds an error Response that returns the status and formatted message.
+//
+// If no arguments are provided, formatting is disabled, and the format string
+// is used as is and not interpreted in any way.
+func ErrorResponse(status int, format string, v ...interface{}) Response {
+	res := &errorResult{}
+	if len(v) == 0 {
+		res.Message = format
+	} else {
+		res.Message = fmt.Sprintf(format, v...)
+	}
+	if status == http.StatusUnauthorized {
+		res.Kind = errorKindLoginRequired
+	}
+	return &resp{
+		Type:   ResponseTypeError,
+		Result: res,
+		Status: status,
+	}
+}
+
 func makeErrorResponder(status int) errorResponder {
 	return func(format string, v ...interface{}) Response {
-		res := &errorResult{}
-		if len(v) == 0 {
-			res.Message = format
-		} else {
-			res.Message = fmt.Sprintf(format, v...)
-		}
-		if status == 401 {
-			res.Kind = errorKindLoginRequired
-		}
-		return &resp{
-			Type:   ResponseTypeError,
-			Result: res,
-			Status: status,
-		}
+		return ErrorResponse(status, format, v...)
 	}
 }
 
@@ -194,11 +201,11 @@ type errorResponder func(string, ...interface{}) Response
 
 // Standard error responses.
 var (
-	statusBadRequest       = makeErrorResponder(400)
-	statusUnauthorized     = makeErrorResponder(401)
-	statusForbidden        = makeErrorResponder(403)
-	statusNotFound         = makeErrorResponder(404)
-	statusMethodNotAllowed = makeErrorResponder(405)
-	statusInternalError    = makeErrorResponder(500)
-	statusGatewayTimeout   = makeErrorResponder(504)
+	BadRequest       = makeErrorResponder(http.StatusBadRequest)
+	Unauthorized     = makeErrorResponder(http.StatusUnauthorized)
+	Forbidden        = makeErrorResponder(http.StatusForbidden)
+	NotFound         = makeErrorResponder(http.StatusNotFound)
+	MethodNotAllowed = makeErrorResponder(http.StatusMethodNotAllowed)
+	InternalError    = makeErrorResponder(http.StatusInternalServerError)
+	GatewayTimeout   = makeErrorResponder(http.StatusGatewayTimeout)
 )

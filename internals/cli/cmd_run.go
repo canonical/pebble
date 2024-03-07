@@ -15,6 +15,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/signal"
@@ -31,16 +32,16 @@ import (
 	"github.com/canonical/pebble/internals/systemd"
 )
 
-var shortRunHelp = "Run the pebble environment"
-var longRunHelp = `
-The run command starts pebble and runs the configured environment.
+const cmdRunSummary = "Run the service manager environment"
+const cmdRunDescription = `
+The run command starts {{.DisplayName}} and runs the configured environment.
 
 Additional arguments may be provided to the service command with the --args option, which
-must be terminated with ";" unless there are no further Pebble options.  These arguments
+must be terminated with ";" unless there are no further program options.  These arguments
 are appended to the end of the service command, and replace any default arguments defined
 in the service plan. For example:
 
-    $ pebble run --args myservice --port 8080 \; --hold
+{{.ProgramName}} run --args myservice --port 8080 \; --hold
 `
 
 type sharedRunEnterOpts struct {
@@ -51,22 +52,30 @@ type sharedRunEnterOpts struct {
 	Args       [][]string `long:"args" terminator:";"`
 }
 
-var sharedRunEnterOptsHelp = map[string]string{
-	"create-dirs": "Create pebble directory on startup if it doesn't exist",
-	"hold":        "Do not start default services automatically",
-	"http":        `Start HTTP API listening on this address (e.g., ":4000")`,
-	"verbose":     "Log all output from services to stdout",
-	"args":        `Provide additional arguments to a service`,
+var sharedRunEnterArgsHelp = map[string]string{
+	"--create-dirs": "Create {{.DisplayName}} directory on startup if it doesn't exist",
+	"--hold":        "Do not start default services automatically",
+	"--http":        `Start HTTP API listening on this address (e.g., ":4000")`,
+	"--verbose":     "Log all output from services to stdout",
+	"--args":        `Provide additional arguments to a service`,
 }
 
 type cmdRun struct {
-	clientMixin
+	client *client.Client
+
 	sharedRunEnterOpts
 }
 
 func init() {
-	addCommand("run", shortRunHelp, longRunHelp, func() flags.Commander { return &cmdRun{} },
-		sharedRunEnterOptsHelp, nil)
+	AddCommand(&CmdInfo{
+		Name:        "run",
+		Summary:     cmdRunSummary,
+		Description: cmdRunDescription,
+		ArgsHelp:    sharedRunEnterArgsHelp,
+		New: func(opts *CmdOptions) flags.Commander {
+			return &cmdRun{client: opts.Client}
+		},
+	})
 }
 
 func (rcmd *cmdRun) Execute(args []string) error {
@@ -84,13 +93,20 @@ func (rcmd *cmdRun) run(ready chan<- func()) {
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 
 	if err := runDaemon(rcmd, sigs, ready); err != nil {
-		if err == daemon.ErrRestartSocket {
+		switch {
+		case errors.Is(err, daemon.ErrRestartSocket):
 			// No "error: " prefix as this isn't an error.
 			fmt.Fprintf(os.Stdout, "%v\n", err)
 			// This exit code must be in system'd SuccessExitStatus.
 			panic(&exitStatus{42})
+		case errors.Is(err, daemon.ErrRestartServiceFailure):
+			// Daemon returns distinct code for service-failure shutdown.
+			panic(&exitStatus{10})
+		case errors.Is(err, daemon.ErrRestartCheckFailure):
+			// Daemon returns distinct code for check-failure shutdown.
+			panic(&exitStatus{11})
 		}
-		fmt.Fprintf(Stderr, "cannot run pebble: %v\n", err)
+		fmt.Fprintf(os.Stderr, "cannot run daemon: %v\n", err)
 		panic(&exitStatus{1})
 	}
 }
@@ -141,6 +157,11 @@ func runDaemon(rcmd *cmdRun, ch chan os.Signal, ready chan<- func()) error {
 			return err
 		}
 	}
+	err := maybeCopyPebbleDir(pebbleDir, getCopySource())
+	if err != nil {
+		return err
+	}
+
 	dopts := daemon.Options{
 		Dir:        pebbleDir,
 		SocketPath: socketPath,
@@ -182,7 +203,9 @@ func runDaemon(rcmd *cmdRun, ch chan os.Signal, ready chan<- func()) error {
 	}
 
 	d.Version = cmd.Version
-	d.Start()
+	if err := d.Start(); err != nil {
+		return err
+	}
 
 	watchdog, err := runWatchdog(d)
 	if err != nil {
@@ -219,8 +242,7 @@ func runDaemon(rcmd *cmdRun, ch chan os.Signal, ready chan<- func()) error {
 				waitCmd := waitMixin{
 					hideProgress: true,
 				}
-				waitCmd.setClient(rcmd.client)
-				_, err := waitCmd.wait(changeID)
+				_, err := waitCmd.wait(rcmd.client, changeID)
 				autoStartReady <- err
 			}()
 		}
@@ -253,7 +275,9 @@ out:
 		}
 	}
 
-	// Close our own self-connection, otherwise it prevents fast and clean termination.
+	// Close the client idle connection to the server (self connection) before we
+	// start with the HTTP shutdown process. This will speed up the server shutdown,
+	// and allow the Pebble process to exit faster.
 	rcmd.client.CloseIdleConnections()
 
 	return d.Stop(ch)
@@ -276,4 +300,24 @@ func convertArgs(args [][]string) (map[string][]string, error) {
 	}
 
 	return mappedArgs, nil
+}
+
+func maybeCopyPebbleDir(destDir, srcDir string) error {
+	if srcDir == "" {
+		return nil
+	}
+	entries, err := os.ReadDir(destDir)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	} else if len(entries) != 0 {
+		// Skip non-empty dir.
+		return nil
+	}
+	fsys := os.DirFS(srcDir)
+	// TODO: replace with os.CopyFS when we're using Go 1.23
+	err = copyFS(destDir, fsys)
+	if err != nil {
+		return fmt.Errorf("cannot copy %q to %q: %w", srcDir, destDir, err)
+	}
+	return nil
 }

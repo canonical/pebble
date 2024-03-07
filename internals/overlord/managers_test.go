@@ -42,7 +42,9 @@ func (s *mgrsSuite) SetUpTest(c *C) {
 
 	s.dir = c.MkDir()
 
-	o, err := overlord.New(s.dir, nil, nil)
+	o, err := overlord.New(&overlord.Options{PebbleDir: s.dir})
+	c.Assert(err, IsNil)
+	err = o.StartUp()
 	c.Assert(err, IsNil)
 	s.o = o
 }

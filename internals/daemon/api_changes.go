@@ -115,7 +115,7 @@ func change2changeInfo(chg *state.Change) *changeInfo {
 	return chgInfo
 }
 
-func v1GetChanges(c *Command, r *http.Request, _ *userState) Response {
+func v1GetChanges(c *Command, r *http.Request, _ *UserState) Response {
 	query := r.URL.Query()
 	qselect := query.Get("select")
 	if qselect == "" {
@@ -130,7 +130,7 @@ func v1GetChanges(c *Command, r *http.Request, _ *userState) Response {
 	case "ready":
 		filter = func(chg *state.Change) bool { return chg.Status().Ready() }
 	default:
-		return statusBadRequest("select should be one of: all,in-progress,ready")
+		return BadRequest("select should be one of: all,in-progress,ready")
 	}
 
 	if wantedName := query.Get("for"); wantedName != "" {
@@ -170,52 +170,51 @@ func v1GetChanges(c *Command, r *http.Request, _ *userState) Response {
 	return SyncResponse(chgInfos)
 }
 
-func v1GetChange(c *Command, r *http.Request, _ *userState) Response {
+func v1GetChange(c *Command, r *http.Request, _ *UserState) Response {
 	changeID := muxVars(r)["id"]
 	st := c.d.overlord.State()
 	st.Lock()
 	defer st.Unlock()
 	chg := st.Change(changeID)
 	if chg == nil {
-		return statusNotFound("cannot find change with id %q", changeID)
+		return NotFound("cannot find change with id %q", changeID)
 	}
 
 	return SyncResponse(change2changeInfo(chg))
 }
 
-func v1GetChangeWait(c *Command, r *http.Request, _ *userState) Response {
+func v1GetChangeWait(c *Command, r *http.Request, _ *UserState) Response {
 	changeID := muxVars(r)["id"]
 	st := c.d.overlord.State()
 	st.Lock()
 	change := st.Change(changeID)
 	st.Unlock()
 	if change == nil {
-		return statusNotFound("cannot find change with id %q", changeID)
+		return NotFound("cannot find change with id %q", changeID)
 	}
 
-	timeoutStr := r.URL.Query().Get("timeout")
-	if timeoutStr != "" {
+	timeout, err := parseOptionalDuration(r.URL.Query().Get("timeout"))
+	if err != nil {
+		return BadRequest("invalid timeout: %v", err)
+	}
+	if timeout != 0 {
 		// Timeout specified, wait till change is ready or timeout occurs,
 		// whichever is first.
-		timeout, err := time.ParseDuration(timeoutStr)
-		if err != nil {
-			return statusBadRequest("invalid timeout %q: %v", timeoutStr, err)
-		}
 		timer := time.NewTimer(timeout)
 		select {
 		case <-change.Ready():
 			timer.Stop() // change ready, release timer resources
 		case <-timer.C:
-			return statusGatewayTimeout("timed out waiting for change after %s", timeout)
+			return GatewayTimeout("timed out waiting for change after %s", timeout)
 		case <-r.Context().Done():
-			return statusInternalError("request cancelled")
+			return InternalError("request cancelled")
 		}
 	} else {
 		// No timeout, wait indefinitely for change to be ready.
 		select {
 		case <-change.Ready():
 		case <-r.Context().Done():
-			return statusInternalError("request cancelled")
+			return InternalError("request cancelled")
 		}
 	}
 
@@ -224,14 +223,14 @@ func v1GetChangeWait(c *Command, r *http.Request, _ *userState) Response {
 	return SyncResponse(change2changeInfo(change))
 }
 
-func v1PostChange(c *Command, r *http.Request, _ *userState) Response {
+func v1PostChange(c *Command, r *http.Request, _ *UserState) Response {
 	chID := muxVars(r)["id"]
 	state := c.d.overlord.State()
 	state.Lock()
 	defer state.Unlock()
 	chg := state.Change(chID)
 	if chg == nil {
-		return statusNotFound("cannot find change with id %q", chID)
+		return NotFound("cannot find change with id %q", chID)
 	}
 
 	var reqData struct {
@@ -240,15 +239,15 @@ func v1PostChange(c *Command, r *http.Request, _ *userState) Response {
 
 	decoder := json.NewDecoder(r.Body)
 	if err := decoder.Decode(&reqData); err != nil {
-		return statusBadRequest("cannot decode data from request body: %v", err)
+		return BadRequest("cannot decode data from request body: %v", err)
 	}
 
 	if reqData.Action != "abort" {
-		return statusBadRequest("change action %q is unsupported", reqData.Action)
+		return BadRequest("change action %q is unsupported", reqData.Action)
 	}
 
 	if chg.Status().Ready() {
-		return statusBadRequest("cannot abort change %s with nothing pending", chID)
+		return BadRequest("cannot abort change %s with nothing pending", chID)
 	}
 
 	// flag the change

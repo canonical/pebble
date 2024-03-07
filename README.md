@@ -1,5 +1,10 @@
 # The Pebble service manager
 
+[![pebble](https://snapcraft.io/pebble/badge.svg)](https://snapcraft.io/pebble)
+[![snap](https://github.com/canonical/pebble/actions/workflows/snap.yml/badge.svg)](https://github.com/canonical/pebble/actions/workflows/snap.yml)
+[![binaries](https://github.com/canonical/pebble/actions/workflows/binaries.yml/badge.svg)](https://github.com/canonical/pebble/actions/workflows/binaries.yml)
+[![tests](https://github.com/canonical/pebble/actions/workflows/tests.yml/badge.svg)](https://github.com/canonical/pebble/actions/workflows/tests.yml)
+
 _Take control of your internal daemons!_
 
 **Pebble** helps you to orchestrate a set of local service processes as an organized set.
@@ -13,7 +18,6 @@ designed with unique features that help with more specific use cases.
   - [Container usage](#container-usage)
   - [Layer specification](#layer-specification)
   - [API and clients](#api-and-clients)
-  - [Roadmap/TODO](#roadmap--todo)
   - [Hacking / Development](#hacking--development)
   - [Contributing](#contributing)
 
@@ -74,7 +78,7 @@ services:
         command: cmd
 ```
 
-The `override` field (which is required) defines whether this 
+The `override` field (which is required) defines whether this
 entry _overrides_ the previous service of the same name (if any),
 or merges with it. See the [full layer specification](#layer-specification)
 for more details.
@@ -177,6 +181,9 @@ pebble run
 ...
 ```
 
+To initialise the `$PEBBLE` directory with the contents of another, in a one time copy, set the `PEBBLE_COPY_ONCE` environment
+variable to the source directory. This will only copy the contents if the target directory, `$PEBBLE`, is empty.
+
 ### Viewing, starting, and stopping services
 
 You can view the status of one or more services by using `pebble services`:
@@ -244,11 +251,13 @@ If you want to force a service to restart even if its service configuration hasn
 
 ### Service dependencies
 
-Pebble takes service dependencies into account when starting and stopping services. Before the service manager starts a service, Pebble first starts the services that service depends on (configured with `required`). Conversely, before stopping a service, Pebble first stops services that depend on that service.
+Pebble takes service dependencies into account when starting and stopping services. When Pebble starts a service, it also starts the services which that service depends on (configured with `required`). Conversely, when stopping a service, Pebble also stops services which depend on that service.
 
-For example, if service `nginx` requires `logger`, `pebble start nginx` will start `logger` and then start `nginx`. Running `pebble stop logger` will stop `nginx` and then `logger`; however, running `pebble stop nginx` will only stop `nginx` (`nginx` depends on `logger`, not the other way around).
+For example, if service `nginx` requires `logger`, `pebble start nginx` will start both `nginx` and `logger` (in an undefined order). Running `pebble stop logger` will stop both `nginx` and `logger`; however, running `pebble stop nginx` will only stop `nginx` (`nginx` depends on `logger`, not the other way around).
 
-If multiple dependencies need to be started at once, they're started in order according to the `before` and `after` configuration: `before` is a list of services that must be started before this one (but it doesn't `require` them). Or if it's easier to specify the other way around, `after` is a list of services that must be started after this one.
+When multiple services need to be started together, they're started in order according to the `before` and `after` configuration, waiting 1 second for each to ensure the command doesn't exit too quickly. The `before` option is a list of services that this service must start before (it may or may not `require` them). Or if it's easier to specify this ordering the other way around, `after` is a list of services that this service must start after.
+
+Note that currently, `before` and `after` are of limited usefulness, because Pebble only waits 1 second before moving on to start the next service, with no additional checks that the previous service is operating correctly.
 
 If the configuration of `requires`, `before`, and `after` for a service results in a cycle or "loop", an error will be returned when attempting to start or stop the service.
 
@@ -257,7 +266,9 @@ If the configuration of `requires`, `before`, and `after` for a service results 
 Pebble's service manager automatically restarts services that exit unexpectedly. By default, this is done whether the exit code is zero or non-zero, but you can change this using the `on-success` and `on-failure` fields in a configuration layer. The possible values for these fields are:
 
 * `restart`: restart the service and enter a restart-backoff loop (the default behaviour).
-* `shutdown`: shut down and exit the Pebble daemon
+* `shutdown`: shut down and exit the Pebble daemon (with exit code 0 if the service exits successfully, exit code 10 otherwise)
+  - `success-shutdown`: shut down with exit code 0 (valid only for `on-failure`)
+  - `failure-shutdown`: shut down with exit code 10 (valid only for `on-success`)
 * `ignore`: ignore the service exiting and do nothing further
 
 In `restart` mode, the first time a service exits, Pebble waits the `backoff-delay`, which defaults to half a second. If the service exits again, Pebble calculates the next backoff delay by multiplying the current delay by `backoff-factor`, which defaults to 2.0 (doubling). The increasing delay is capped at `backoff-limit`, which defaults to 30 seconds.
@@ -309,7 +320,8 @@ services:
     server:
         override: merge
         on-check-failure:
-            test: restart   # can also be "shutdown" or "ignore" (the default)
+            # can also be "shutdown", "success-shutdown", or "ignore" (the default)
+            test: restart
 ```
 
 You can view check status using the `pebble checks` command. This reports the checks along with their status (`up` or `down`) and number of failures. For example:
@@ -403,30 +415,28 @@ $ pebble run --verbose
 ...
 ```
 
-<!--
-TODO: uncomment this section once log forwarding is fully implemented
-TODO: add log targets to the Pebble layer spec below
+### Log forwarding
 
-#### Log forwarding
-
-Pebble supports forwarding its services' logs to a remote Loki server or syslog receiver (via UDP/TCP). In the `log-targets` section of the plan, you can specify destinations for log forwarding, for example:
+Pebble supports forwarding its services' logs to a remote Loki server. In the `log-targets` section of the plan, you can specify destinations for log forwarding, for example:
 ```yaml
 log-targets:
-    loki-example:
+    staging-logs:
         override: merge
         type: loki
         location: http://10.1.77.205:3100/loki/api/v1/push
         services: [all]
-    syslog-example:
+    production-logs:
         override: merge
-        type: syslog
-        location: tcp://192.168.10.241:1514
+        type: loki
+        location: http://my.loki.server.com/loki/api/v1/push
         services: [svc1, svc2]
 ```
 
-For each log target, use the `services` key to specify a list of services to collect logs from. In the above example, the `syslog-example` target will collect logs from `svc1` and `svc2`.
+#### Specifying services
 
-Use the special keyword `all` to match all services, including services that might be added in future layers. In the above example, `loki-example` will collect logs from all services.
+For each log target, use the `services` key to specify a list of services to collect logs from. In the above example, the `production-logs` target will collect logs from `svc1` and `svc2`.
+
+Use the special keyword `all` to match all services, including services that might be added in future layers. In the above example, `staging-logs` will collect logs from all services.
 
 To remove a service from a log target when merging, prefix the service name with a minus `-`. For example, if we have a base layer with
 ```yaml
@@ -455,7 +465,121 @@ my-target:
 ```
 would remove all services and then add `svc1`, so `my-target` would receive logs from only `svc1`.
 
+#### Labels
+
+In the `labels` section, you can specify custom labels to be added to any outgoing logs. These labels may contain `$ENVIRONMENT_VARIABLES` - these will be interpreted in the environment of the corresponding service. Pebble may also add its own default labels (depending on the protocol). For example, given the following plan:
+```yaml
+services:
+  svc1:
+    environment:
+      OWNER: 'alice'
+  svc2:
+    environment:
+      OWNER: 'bob'
+
+log-targets:
+  tgt1:
+    type: loki
+    labels:
+      product: 'juju'
+      owner: 'user-$OWNER'
+```
+the logs from `svc1` will be sent with the following labels:
+```yaml
+product: juju
+owner: user-alice     # env var $OWNER substituted
+pebble_service: svc1  # default label for Loki
+```
+and for svc2, the labels will be
+```yaml
+product: juju
+owner: user-bob       # env var $OWNER substituted
+pebble_service: svc2  # default label for Loki
+```
+
+
+### Notices
+
+Pebble includes a subsystem called *notices*, which allows the user to introspect various events that occur in the Pebble server, as well as record custom client events. The server saves notices to disk, so they persist across restarts, and expire after a notice-defined interval.
+
+Each notice is either public or has a specific user ID. Public notices may be viewed by any user, while notices that have a user ID may only be viewed by users with that same user ID, or by an admin (root, or the user the Pebble daemon is running as).
+
+Each notice is uniquely identified by its *user ID*, *type* and *key* combination, and the notice's count of occurrences is incremented every time a notice with that type and key combination occurs.
+
+Each notice records the time it first occurred, the time it last occurred, and the time it last repeated.
+
+A *repeat* happens when a notice occurs with the same user ID, type, and key as a prior notice, and either the notice has no "repeat after" duration (the default), or the notice happens after the provided "repeat after" interval (since the prior notice). Thus, specifying "repeat after" prevents a notice from appearing again if it happens more frequently than desired.
+
+In addition, a notice records optional *data* (string key-value pairs) from the last occurrence.
+
+These notice types are currently available:
+
+<!-- TODO: * `change-update`: recorded whenever a change is first spawned or its status is updated. The key for this type of notice is the change ID, and the notice's data includes the change `kind`. -->
+
+* `custom`: a custom client notice reported via `pebble notify`. The key and any data is provided by the user. The key must be in the format `mydomain.io/mykey` to ensure well-namespaced notice keys.
+
+<!-- TODO: * `warning`: Pebble warnings are implemented in terms of notices. The key for this type of notice is the human-readable warning message.
+
+See comment at the top of internals/overlord/state/warning.go for more info.
 -->
+
+To record `custom` notices, use `pebble notify` -- the notice user ID will be set to the client's user ID:
+
+```
+$ pebble notify example.com/foo
+Recorded notice 1
+$ pebble notify example.com/foo
+Recorded notice 1
+$ pebble notify other.com/bar name=value email=john@smith.com  # two data fields
+Recorded notice 2
+$ pebble notify example.com/foo
+Recorded notice 1
+```
+
+The `pebble notices` command lists notices not yet acknowledged, ordered by the last-repeated time (oldest first). After it runs, the notices that were shown may then be acknowledged by running `pebble okay`. When a notice repeats (see above), it needs to be acknowledged again.
+
+```
+$ pebble notices
+ID   User    Type    Key              First                Repeated             Occurrences
+1    1000    custom  example.com/foo  today at 16:16 NZST  today at 16:16 NZST  3
+2    public  custom  other.com/bar    today at 16:16 NZST  today at 16:16 NZST  1
+```
+
+To fetch details about a single notice, use `pebble notice`, which displays the output in YAML format. You can fetch a notice either by ID or by type/key combination.
+
+To fetch the notice with ID "1":
+
+```
+$ pebble notice 1
+id: "1"
+user-id: 1000
+type: custom
+key: example.com/foo
+first-occurred: 2023-09-15T04:16:09.179395298Z
+last-occurred: 2023-09-15T04:16:19.487035209Z
+last-repeated: 2023-09-15T04:16:09.179395298Z
+occurrences: 3
+expire-after: 168h0m0s
+```
+
+To fetch the notice with type "custom" and key "other.com/bar":
+
+```
+$ pebble notice custom other.com/bar
+id: "2"
+user-id: public
+type: custom
+key: other.com/bar
+first-occurred: 2023-09-15T04:16:17.180049768Z
+last-occurred: 2023-09-15T04:16:17.180049768Z
+last-repeated: 2023-09-15T04:16:17.180049768Z
+occurrences: 1
+last-data:
+    name: value
+    email: john@smith.com
+expire-after: 168h0m0s
+```
+
 
 ## Container usage
 
@@ -492,8 +616,6 @@ Pebble provides various API calls and commands to manage files and directories o
 ```
 $ pebble ls <path>              # list file information (like "ls")
 $ pebble mkdir <path>           # create a directory (like "mkdir")
-
-# TODO -- the following commands are coming soon
 $ pebble rm <path>              # remove a file or directory (like "rm")
 $ pebble push <local> <remote>  # copy file to server (like "cp")
 $ pebble pull <remote> <local>  # copy file from server (like "cp")
@@ -582,23 +704,32 @@ services:
         working-dir: <directory>
 
         # (Optional) Defines what happens when the service exits with a zero
-        # exit code. Possible values are: "restart" (default) which restarts
-        # the service after the backoff delay, "shutdown" which shuts down and
-        # exits the Pebble server, and "ignore" which does nothing further.
-        on-success: restart | shutdown | ignore
+        # exit code. Possible values are:
+        #
+        # - restart (default): restart the service after the backoff delay
+        # - shutdown: shut down and exit the Pebble daemon (with exit code 0)
+        # - failure-shutdown: shut down and exit Pebble with exit code 10
+        # - ignore: do nothing further
+        on-success: restart | shutdown | failure-shutdown | ignore
 
         # (Optional) Defines what happens when the service exits with a nonzero
-        # exit code. Possible values are: "restart" (default) which restarts
-        # the service after the backoff delay, "shutdown" which shuts down and
-        # exits the Pebble server, and "ignore" which does nothing further.
-        on-failure: restart | shutdown | ignore
+        # exit code. Possible values are:
+        #
+        # - restart (default): restart the service after the backoff delay
+        # - shutdown: shut down and exit the Pebble daemon (with exit code 10)
+        # - success-shutdown: shut down and exit Pebble with exit code 0
+        # - ignore: do nothing further
+        on-failure: restart | shutdown | success-shutdown | ignore
 
         # (Optional) Defines what happens when each of the named health checks
-        # fail. Possible values are: "restart" (default) which restarts
-        # the service once, "shutdown" which shuts down and exits the Pebble
-        # server, and "ignore" which does nothing further.
+        # fail. Possible values are:
+        #
+        # - restart (default): restart the service once
+        # - shutdown: shut down and exit the Pebble daemon (with exit code 11)
+        # - success-shutdown: shut down and exit Pebble with exit code 0
+        # - ignore: do nothing further
         on-check-failure:
-            <check name>: restart | shutdown | ignore
+            <check name>: restart | shutdown | success-shutdown | ignore
 
         # (Optional) Initial backoff delay for the "restart" exit action.
         # Default is half a second ("500ms").
@@ -688,6 +819,13 @@ checks:
             # directly, not interpreted by a shell.
             command: <commmand>
 
+            # (Optional) Run the command in the context of this service.
+            # Specifically, inherit its environment variables, user/group
+            # settings, and working directory. The check's context (the
+            # settings below) will override the service's; the check's
+            # environment map will be merged on top of the service's.
+            service-context: <service-name>
+
             # (Optional) A list of key/value pairs defining environment
             # variables that should be set when running the command.
             environment:
@@ -714,41 +852,58 @@ checks:
             # (Optional) Working directory to run command in. By default, the
             # command is run in the service manager's current directory.
             working-dir: <directory>
+
+# (Optional) A list of remote log receivers, to which service logs can be sent.
+log-targets:
+
+  <log target name>:
+
+    # (Required) Control how this log target definition is combined with
+    # other pre-existing definitions with the same name in the Pebble plan.
+    #
+    # The value 'merge' will ensure that values in this layer specification
+    # are merged over existing definitions, whereas 'replace' will entirely
+    # override the existing target spec in the plan with the same name.
+    override: merge | replace
+
+    # (Required) The type of log target, which determines the format in
+    # which logs will be sent. The supported types are:
+    #
+    # - loki: Use the Grafana Loki protocol. A "pebble_service" label is
+    #   added automatically, with the name of the Pebble service as its value.
+    type: loki
+
+    # (Required) The URL of the remote log target.
+    # For Loki, this needs to be the fully-qualified URL of the push API,
+    # including the API endpoint, e.g.
+    #     http://<ip-address>:3100/loki/api/v1/push
+    location: <url>
+
+    # (Optional) A list of services whose logs will be sent to this target.
+    # Use the special keyword 'all' to match all services in the plan.
+    # When merging log targets, the 'services' lists are appended. Prefix a
+    # service name with a minus (e.g. '-svc1') to remove a previously added
+    # service. '-all' will remove all services.
+    services: [<service names>]
+
+    # (Optional) A list of key/value pairs defining labels which should be set
+    # on the outgoing logs. The label values may contain $ENV_VARS, which will
+    # be substituted using the environment for the corresponding service.
+    labels:
+      <label name>: <label value>
 ```
 
 ## API and clients
 
 The Pebble daemon exposes an API (HTTP over a unix socket) to allow remote clients to interact with the daemon. It can start and stop services, add configuration layers the plan, and so on.
 
-There is currently no official documentation for the API at the HTTP level (apart from the [code itself](https://github.com/canonical/pebble/blob/master/internal/daemon/api.go)!); most users will interact with it via the Pebble command line interface or by using the Go or Python clients.
+There is currently no official documentation for the API at the HTTP level (apart from the [code itself](https://github.com/canonical/pebble/blob/master/internals/daemon/api.go)!); most users will interact with it via the Pebble command line interface or by using the Go or Python clients.
 
 The Go client is used primarily by the CLI, but is importable and can be used by other tools too. See the [reference documentation and examples](https://pkg.go.dev/github.com/canonical/pebble/client) at pkg.go.dev.
 
 We try to never change the underlying HTTP API in a backwards-incompatible way, however, in rare cases we may change the Go client in a backwards-incompatible way.
 
 In addition to the Go client, there's also a [Python client](https://github.com/canonical/operator/blob/master/ops/pebble.py) for the Pebble API that's part of the [`ops` library](https://github.com/canonical/operator) used by Juju charms ([documentation here](https://juju.is/docs/sdk/interact-with-pebble)).
-
-## Roadmap / TODO
-
-This is a preview of what Pebble is becoming. Please keep that in mind while you
-explore.
-
-Here are some of the things coming soon:
-
-  - [x] Support `$PEBBLE_SOCKET` and default `$PEBBLE` to `/var/lib/pebble/default`
-  - [x] Define and enforce convention for layer names
-  - [x] Dynamic layer support over the API
-  - [x] Configuration retrieval commands to investigate current settings
-  - [x] Status command that displays active services and their current status
-  - [x] General system modification commands (writing configuration files, etc)
-  - [x] Better log caching and retrieval support
-  - [x] Consider showing unified log as output of `pebble run` (use `-v`)
-  - [x] Automatically restart services that fail
-  - [x] Support for custom health checks (HTTP, TCP, command)
-  - [x] Terminate all services before exiting run command
-  - [ ] Log forwarding (syslog and Loki)
-  - [ ] [Other in-progress PRs](https://github.com/canonical/pebble/pulls)
-  - [ ] [Other requested features](https://github.com/canonical/pebble/issues)
 
 ## Hacking / Development
 

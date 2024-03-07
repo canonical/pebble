@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"os"
 	"os/user"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -31,6 +32,7 @@ import (
 
 	"github.com/canonical/pebble/client"
 	"github.com/canonical/pebble/internals/logger"
+	"github.com/canonical/pebble/internals/plan"
 )
 
 var _ = Suite(&execSuite{})
@@ -140,6 +142,25 @@ func (s *execSuite) TestWorkingDir(c *C) {
 	c.Check(stderr, Equals, "")
 }
 
+func (s *execSuite) TestWorkingDirDoesNotExist(c *C) {
+	_, err := s.client.Exec(&client.ExecOptions{
+		Command:    []string{"pwd"},
+		WorkingDir: "/non/existent",
+	})
+	c.Check(err, ErrorMatches, `.*working directory.*does not exist`)
+}
+
+func (s *execSuite) TestWorkingDirNotADirectory(c *C) {
+	path := filepath.Join(c.MkDir(), "test")
+	err := os.WriteFile(path, nil, 0o777)
+	c.Assert(err, IsNil)
+	_, err = s.client.Exec(&client.ExecOptions{
+		Command:    []string{"pwd"},
+		WorkingDir: path,
+	})
+	c.Check(err, ErrorMatches, `.*working directory.*not a directory`)
+}
+
 func (s *execSuite) TestExitError(c *C) {
 	stdout, stderr, waitErr := s.exec(c, "", &client.ExecOptions{
 		Command: []string{"/bin/sh", "-c", "echo OUT; echo ERR >&2; exit 42"},
@@ -161,6 +182,54 @@ func (s *execSuite) TestTimeout(c *C) {
 	})
 	c.Check(waitErr, ErrorMatches, `cannot perform the following tasks:\n.*timed out after 10ms.*`)
 	c.Check(stdout, Equals, "")
+	c.Check(stderr, Equals, "")
+}
+
+func (s *execSuite) TestContextNoOverrides(c *C) {
+	dir := c.MkDir()
+	err := s.daemon.overlord.ServiceManager().AppendLayer(&plan.Layer{
+		Label: "layer1",
+		Services: map[string]*plan.Service{"svc1": {
+			Name:        "svc1",
+			Override:    "replace",
+			Command:     "dummy",
+			Environment: map[string]string{"FOO": "foo", "BAR": "bar"},
+			WorkingDir:  dir,
+		}},
+	})
+	c.Assert(err, IsNil)
+
+	stdout, stderr, err := s.exec(c, "", &client.ExecOptions{
+		Command:        []string{"/bin/sh", "-c", "echo FOO=$FOO BAR=$BAR; pwd"},
+		ServiceContext: "svc1",
+	})
+	c.Assert(err, IsNil)
+	c.Check(stdout, Equals, "FOO=foo BAR=bar\n"+dir+"\n")
+	c.Check(stderr, Equals, "")
+}
+
+func (s *execSuite) TestContextOverrides(c *C) {
+	err := s.daemon.overlord.ServiceManager().AppendLayer(&plan.Layer{
+		Label: "layer1",
+		Services: map[string]*plan.Service{"svc1": {
+			Name:        "svc1",
+			Override:    "replace",
+			Command:     "dummy",
+			Environment: map[string]string{"FOO": "foo", "BAR": "bar"},
+			WorkingDir:  c.MkDir(),
+		}},
+	})
+	c.Assert(err, IsNil)
+
+	overrideDir := c.MkDir()
+	stdout, stderr, err := s.exec(c, "", &client.ExecOptions{
+		Command:        []string{"/bin/sh", "-c", "echo FOO=$FOO BAR=$BAR; pwd"},
+		ServiceContext: "svc1",
+		Environment:    map[string]string{"FOO": "oof"},
+		WorkingDir:     overrideDir,
+	})
+	c.Assert(err, IsNil)
+	c.Check(stdout, Equals, "FOO=oof BAR=bar\n"+overrideDir+"\n")
 	c.Check(stderr, Equals, "")
 }
 
@@ -197,6 +266,14 @@ func (s *execSuite) TestUserGroup(c *C) {
 	c.Assert(waitErr, IsNil)
 	c.Check(stdout, Equals, username+"\n"+group+"\n")
 	c.Check(stderr, Equals, "")
+
+	_, err := s.client.Exec(&client.ExecOptions{
+		Command:     []string{"pwd"},
+		Environment: map[string]string{"HOME": "/non/existent"},
+		User:        username,
+		Group:       group,
+	})
+	c.Assert(err, ErrorMatches, `.*home directory.*does not exist`)
 }
 
 // See .github/workflows/tests.yml for how to run this test as root.

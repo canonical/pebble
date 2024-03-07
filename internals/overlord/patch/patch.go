@@ -20,6 +20,7 @@
 package patch
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/canonical/pebble/internals/logger"
@@ -43,12 +44,12 @@ var patches = make(map[int][]PatchFunc)
 func Init(s *state.State) {
 	s.Lock()
 	defer s.Unlock()
-	if s.Get("patch-level", new(int)) != state.ErrNoState {
+	if err := s.Get("patch-level", new(int)); !errors.Is(err, state.ErrNoState) {
 		panic("internal error: expected empty state, attempting to override patch-level without actual patching")
 	}
 	s.Set("patch-level", Level)
 
-	if s.Get("patch-sublevel", new(int)) != state.ErrNoState {
+	if err := s.Get("patch-sublevel", new(int)); !errors.Is(err, state.ErrNoState) {
 		panic("internal error: expected empty state, attempting to override patch-sublevel without actual patching")
 	}
 	s.Set("patch-sublevel", Sublevel)
@@ -76,12 +77,12 @@ func Apply(s *state.State) error {
 	var stateLevel, stateSublevel int
 	s.Lock()
 	err := s.Get("patch-level", &stateLevel)
-	if err == nil || err == state.ErrNoState {
+	if err == nil || errors.Is(err, state.ErrNoState) {
 		err = s.Get("patch-sublevel", &stateSublevel)
 	}
 	s.Unlock()
 
-	if err != nil && err != state.ErrNoState {
+	if err != nil && !errors.Is(err, state.ErrNoState) {
 		return err
 	}
 

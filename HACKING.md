@@ -3,6 +3,7 @@
 - [Running the daemon](#running-the-daemon)
 - [Using the CLI client](#using-the-cli-client)
 - [Using Curl to hit the API](#using-curl-to-hit-the-api)
+- [Code style](#code-style)
 - [Running the tests](#running-the-tests)
 - [Creating a release](#creating-a-release)
 
@@ -83,6 +84,72 @@ $ curl --unix-socket ~/pebble/.pebble.socket 'http://localhost/v1/services?names
 ```
 
 
+## Code style
+
+### Commits
+
+Please format your commits following the [conventional commit](https://www.conventionalcommits.org/en/v1.0.0/#summary) style.
+
+Optionally, use the brackets to scope to a particular component where applicable.
+
+See below for some examples of commit headings:
+
+```
+feat: checks inherit context from services
+test: increase unit test stability
+feat(daemon): foo the bar correctly in the baz
+test(daemon): ensure the foo bars correctly in the baz
+ci(snap): upload the snap artefacts to Github
+chore(deps): update go.mod dependencies
+```
+
+Recommended prefixes are: `fix:`, `feat:`, `build:`, `chore:`, `ci:`, `docs:`, `style:`, `refactor:`,`perf:` and `test:`
+
+### Imports
+
+Pebble imports should be arranged in three groups:
+- standard library imports
+- third-party / non-Pebble imports
+- Pebble imports (i.e. those prefixed with `github.com/canonical/pebble`)
+
+Imports should be sorted alphabetically within each group.
+
+We use the [`gopkg.in/check.v1`](https://pkg.go.dev/gopkg.in/check.v1) package for testing. Inside a test file, import this as follows:
+```go
+. "gopkg.in/check.v1"
+```
+so that identifiers from that package will be added to the local namespace.
+
+
+Here is an example of correctly arranged imports:
+
+```go
+import (
+	"fmt"
+	"net"
+	"os"
+
+	"github.com/gorilla/mux"
+	. "gopkg.in/check.v1"
+
+	"github.com/canonical/pebble/internals/systemd"
+	"github.com/canonical/pebble/internals/testutil"
+)
+```
+
+### Log and error messages
+
+**Log messages** (that is, those passed to `logger.Noticef` or `logger.Debugf`) should begin with a capital letter, and use "Cannot X" rather than "Error Xing":
+```go
+logger.Noticef("Cannot marshal logs to JSON: %v", err)
+```
+
+**Error messages** should be lowercase, and again use "cannot ..." instead of "error ...":
+```go
+fmt.Errorf("cannot create log client: %w", err)
+```
+
+
 ## Running the tests
 
 Pebble has a suite of Go unit tests, which you can run using the regular `go test` command. To test all packages in the Pebble repository:
@@ -140,9 +207,12 @@ ok      github.com/canonical/pebble/cmd/pebble  0.165s
 
 To create a new tagged release, go to the [GitHub Releases page](https://github.com/canonical/pebble/releases) and:
 
-- Click "Create a new release"
-- Enter the version tag (eg: `v1.2.3`) and select "Create new tag: on publish"
-- Enter a release title: include the version tag and a short summary of the release
-- Write release notes: describe new features and bug fixes, and include a link to the full list of commits
+- Update `Version` in `cmd/version.go` to the version you're about to publish, for example `v1.9.0`. Push this to master (or open a PR to do so).
+- Click ["Draft a new release"](https://github.com/canonical/pebble/releases/new).
+- Enter the version tag (eg: `v1.9.0`) and select "Create new tag: on publish".
+- Enter a release title: include the version tag and a short summary of the release.
+- Write release notes: describe new features and bug fixes, and include a link to the full list of commits.
+- Click "Publish release".
+- Once the release GitHub Actions have finished, and the new [Snap](https://snapcraft.io/pebble) has been successfully built, update `Version` again to `v1.{next}.0-dev` (for example `v1.10.0-dev`).
 
-Binaries will be created and uploaded automatically to this release by the [binaries.yml](https://github.com/canonical/pebble/blob/master/.github/workflows/binaries.yml) GitHub Actions job.
+Binaries will be created and uploaded automatically to this release by the [binaries.yml](https://github.com/canonical/pebble/blob/master/.github/workflows/binaries.yml) GitHub Actions job. In addition, a new Snap version is built and uploaded to the [Snap Store](https://snapcraft.io/pebble).

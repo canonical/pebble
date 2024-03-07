@@ -22,24 +22,35 @@ import (
 	"github.com/canonical/pebble/client"
 )
 
+const cmdChecksSummary = "Query the status of configured health checks"
+const cmdChecksDescription = `
+The checks command lists status information about the configured health
+checks, optionally filtered by level and check names provided as positional
+arguments.
+`
+
 type cmdChecks struct {
-	clientMixin
-	Level      string `long:"level"`
+	client *client.Client
+
+	Level      string `long:"level" choice:"alive" choice:"ready"`
 	Positional struct {
 		Checks []string `positional-arg-name:"<check>"`
 	} `positional-args:"yes"`
 }
 
-var checksDescs = map[string]string{
-	"level": `Check level to filter for ("alive" or "ready")`,
+func init() {
+	AddCommand(&CmdInfo{
+		Name:        "checks",
+		Summary:     cmdChecksSummary,
+		Description: cmdChecksDescription,
+		ArgsHelp: map[string]string{
+			"--level": "Check level to filter for",
+		},
+		New: func(opts *CmdOptions) flags.Commander {
+			return &cmdChecks{client: opts.Client}
+		},
+	})
 }
-
-var shortChecksHelp = "Query the status of configured health checks"
-var longChecksHelp = `
-The checks command lists status information about the configured health
-checks, optionally filtered by level and check names provided as positional
-arguments.
-`
 
 func (cmd *cmdChecks) Execute(args []string) error {
 	if len(args) > 0 {
@@ -76,8 +87,4 @@ func (cmd *cmdChecks) Execute(args []string) error {
 		fmt.Fprintf(w, "%s\t%s\t%s\t%d/%d\n", check.Name, level, check.Status, check.Failures, check.Threshold)
 	}
 	return nil
-}
-
-func init() {
-	addCommand("checks", shortChecksHelp, longChecksHelp, func() flags.Commander { return &cmdChecks{} }, checksDescs, nil)
 }

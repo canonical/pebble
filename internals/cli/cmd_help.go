@@ -23,12 +23,39 @@ import (
 	"unicode/utf8"
 
 	"github.com/canonical/go-flags"
+
+	cmdpkg "github.com/canonical/pebble/cmd"
 )
 
-var shortHelpHelp = "Show help about a command"
-var longHelpHelp = `
+const cmdHelpSummary = "Show help about a command"
+const cmdHelpDescription = `
 The help command displays information about commands.
 `
+
+type cmdHelp struct {
+	parser *flags.Parser
+
+	All        bool `long:"all"`
+	Manpage    bool `long:"man" hidden:"true"`
+	Positional struct {
+		Subs []string `positional-arg-name:"<command>"`
+	} `positional-args:"yes"`
+}
+
+func init() {
+	AddCommand(&CmdInfo{
+		Name:        "help",
+		Summary:     cmdHelpSummary,
+		Description: cmdHelpDescription,
+		ArgsHelp: map[string]string{
+			"--all": "Show a short summary of all commands",
+			"--man": "Generate the manpage",
+		},
+		New: func(opts *CmdOptions) flags.Commander {
+			return &cmdHelp{parser: opts.Parser}
+		},
+	})
+}
 
 // addHelp adds --help like what go-flags would do for us, but hidden
 func addHelp(parser *flags.Parser) error {
@@ -69,23 +96,6 @@ func addHelp(parser *flags.Parser) error {
 	return nil
 }
 
-type cmdHelp struct {
-	All        bool `long:"all"`
-	Manpage    bool `long:"man" hidden:"true"`
-	Positional struct {
-		Subs []string `positional-arg-name:"<command>"`
-	} `positional-args:"yes"`
-	parser *flags.Parser
-}
-
-func init() {
-	addCommand("help", shortHelpHelp, longHelpHelp, func() flags.Commander { return &cmdHelp{} },
-		map[string]string{
-			"all": "Show a short summary of all commands",
-			"man": "Generate the manpage",
-		}, nil)
-}
-
 func (cmd *cmdHelp) setParser(parser *flags.Parser) {
 	cmd.parser = parser
 }
@@ -95,17 +105,24 @@ func (cmd *cmdHelp) setParser(parser *flags.Parser) {
 // - duplicated TP lines that break older groff (e.g. 14.04), lp:1814767
 type manfixer struct {
 	bytes.Buffer
-	done bool
+	done        bool
+	programName string
 }
 
 func (w *manfixer) Write(buf []byte) (int, error) {
 	if !w.done {
 		w.done = true
-		if bytes.HasPrefix(buf, []byte(".TH pebble 1 ")) {
-			// io.Writer.Write must not modify the buffer, even temporarily
-			n, _ := w.Buffer.Write(buf[:9])
+		// Find the .TH <program name> prefix.
+		prefix := ".TH " + w.programName + " "
+		if bytes.HasPrefix(buf, []byte(prefix)) {
+			// io.Writer.Write must not modify the buffer, even temporarily.
+			// Write all characters up to the prefix.
+			n, _ := w.Buffer.Write(buf[:len(prefix)])
+			// Do not write the character after the prefix (originally, '1'),
+			// and write an '8' instead, for fixing up the man section.
 			w.Buffer.Write([]byte{'8'})
-			m, err := w.Buffer.Write(buf[10:])
+			// Write everything after the original '1' character.
+			m, err := w.Buffer.Write(buf[1+len(prefix):])
 			return n + m + 1, err
 		}
 	}
@@ -126,7 +143,7 @@ func (cmd cmdHelp) Execute(args []string) error {
 	if cmd.Manpage {
 		// you shouldn't try to to combine --man with --all nor a
 		// subcommand, but --man is hidden so no real need to check.
-		out := &manfixer{}
+		out := &manfixer{programName: cmd.parser.Name}
 		cmd.parser.WriteManPage(out)
 		out.flush()
 		return nil
@@ -143,9 +160,9 @@ func (cmd cmdHelp) Execute(args []string) error {
 	for _, subname := range cmd.Positional.Subs {
 		subcmd = subcmd.Find(subname)
 		if subcmd == nil {
-			sug := "pebble help"
+			sug := cmdpkg.ProgramName + " help"
 			if x := cmd.parser.Command.Active; x != nil && x.Name != "help" {
-				sug = "pebble help " + x.Name
+				sug = cmdpkg.ProgramName + " help " + x.Name
 			}
 			return fmt.Errorf("unknown command %q, see '%s'.", subname, sug)
 		}
@@ -158,16 +175,16 @@ func (cmd cmdHelp) Execute(args []string) error {
 	return &flags.Error{Type: flags.ErrCommandRequired}
 }
 
-type helpCategory struct {
+type HelpCategory struct {
 	Label       string
 	Description string
 	Commands    []string
 }
 
-// helpCategories helps us by grouping commands
-var helpCategories = []helpCategory{{
+// HelpCategories helps us by grouping commands
+var HelpCategories = []HelpCategory{{
 	Label:       "Run",
-	Description: "run pebble",
+	Description: "run the service manager",
 	Commands:    []string{"run", "help", "version"},
 }, {
 	Label:       "Plan",
@@ -176,52 +193,56 @@ var helpCategories = []helpCategory{{
 }, {
 	Label:       "Services",
 	Description: "manage services",
-	Commands:    []string{"services", "logs", "checks", "start", "restart", "signal", "stop", "replan"},
+	Commands:    []string{"services", "logs", "start", "restart", "signal", "stop", "replan"},
+}, {
+	Label:       "Checks",
+	Description: "manage health checks",
+	Commands:    []string{"checks", "health"},
 }, {
 	Label:       "Files",
 	Description: "work with files and execute commands",
-	Commands:    []string{"ls", "mkdir", "rm", "exec"},
+	Commands:    []string{"push", "pull", "ls", "mkdir", "rm", "exec"},
 }, {
 	Label:       "Changes",
 	Description: "manage changes and their tasks",
 	Commands:    []string{"changes", "tasks"},
 }, {
-	Label:       "Warnings",
-	Description: "manage warnings",
-	Commands:    []string{"warnings", "okay"},
+	Label:       "Notices",
+	Description: "manage notices and warnings",
+	Commands:    []string{"warnings", "okay", "notices", "notice", "notify"},
 }}
 
 var (
 	longPebbleDescription = strings.TrimSpace(`
-Pebble lets you control services and perform management actions on
+{{.DisplayName}} lets you control services and perform management actions on
 the system that is running them.
 `)
-	pebbleUsage               = "Usage: pebble <command> [<options>...]"
+	pebbleUsage               = "Usage: {{.ProgramName}} <command> [<options>...]"
 	pebbleHelpCategoriesIntro = "Commands can be classified as follows:"
 	pebbleHelpAllFooter       = "Set the PEBBLE environment variable to override the configuration directory \n" +
 		"(which defaults to " + defaultPebbleDir + "). Set PEBBLE_SOCKET to override \n" +
 		"the unix socket used for the API (defaults to $PEBBLE/.pebble.socket).\n" +
 		"\n" +
-		"For more information about a command, run 'pebble help <command>'."
-	pebbleHelpFooter = "For a short summary of all commands, run 'pebble help --all'."
+		"For more information about a command, run '{{.ProgramName}} help <command>'."
+	pebbleHelpFooter = "For a short summary of all commands, run '{{.ProgramName}} help --all'."
 )
 
 func printHelpHeader() {
-	fmt.Fprintln(Stdout, longPebbleDescription)
+	fmt.Fprintln(Stdout, applyPersonality(longPebbleDescription))
 	fmt.Fprintln(Stdout)
-	fmt.Fprintln(Stdout, pebbleUsage)
+	fmt.Fprintln(Stdout, applyPersonality(pebbleUsage))
 	fmt.Fprintln(Stdout)
-	fmt.Fprintln(Stdout, pebbleHelpCategoriesIntro)
+	fmt.Fprintln(Stdout, applyPersonality(pebbleHelpCategoriesIntro))
 }
 
 func printHelpAllFooter() {
 	fmt.Fprintln(Stdout)
-	fmt.Fprintln(Stdout, pebbleHelpAllFooter)
+	fmt.Fprintln(Stdout, applyPersonality(pebbleHelpAllFooter))
 }
 
 func printHelpFooter() {
 	printHelpAllFooter()
-	fmt.Fprintln(Stdout, pebbleHelpFooter)
+	fmt.Fprintln(Stdout, applyPersonality(pebbleHelpFooter))
 }
 
 // this is called when the Execute returns a flags.Error with ErrCommandRequired
@@ -229,12 +250,12 @@ func printShortHelp() {
 	printHelpHeader()
 	fmt.Fprintln(Stdout)
 	maxLen := 0
-	for _, categ := range helpCategories {
+	for _, categ := range HelpCategories {
 		if l := utf8.RuneCountInString(categ.Label); l > maxLen {
 			maxLen = l
 		}
 	}
-	for _, categ := range helpCategories {
+	for _, categ := range HelpCategories {
 		fmt.Fprintf(Stdout, "%*s: %s\n", maxLen+2, categ.Label, strings.Join(categ.Commands, ", "))
 	}
 	printHelpFooter()
@@ -244,7 +265,7 @@ func printShortHelp() {
 func printLongHelp(parser *flags.Parser) {
 	printHelpHeader()
 	maxLen := 0
-	for _, categ := range helpCategories {
+	for _, categ := range HelpCategories {
 		for _, command := range categ.Commands {
 			if l := len(command); l > maxLen {
 				maxLen = l
@@ -259,7 +280,7 @@ func printLongHelp(parser *flags.Parser) {
 		cmdLookup[cmd.Name] = cmd
 	}
 
-	for _, categ := range helpCategories {
+	for _, categ := range HelpCategories {
 		fmt.Fprintln(Stdout)
 		fmt.Fprintf(Stdout, "  %s (%s):\n", categ.Label, categ.Description)
 		for _, name := range categ.Commands {

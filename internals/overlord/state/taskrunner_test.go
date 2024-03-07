@@ -1,21 +1,16 @@
-// -*- Mode: Go; indent-tabs-mode: t -*-
-
-/*
- * Copyright (c) 2016 Canonical Ltd
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 3 as
- * published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- *
- */
+// Copyright (c) 2024 Canonical Ltd
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License version 3 as
+// published by the Free Software Foundation.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package state_test
 
@@ -31,11 +26,14 @@ import (
 	. "gopkg.in/check.v1"
 	"gopkg.in/tomb.v2"
 
-	"github.com/canonical/pebble/internals/overlord/restart"
+	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/overlord/state"
+	"github.com/canonical/pebble/internals/testutil"
 )
 
-type taskRunnerSuite struct{}
+type taskRunnerSuite struct {
+	testutil.BaseTest
+}
 
 var _ = Suite(&taskRunnerSuite{})
 
@@ -57,8 +55,6 @@ func (b *stateBackend) EnsureBefore(d time.Duration) {
 		b.ensureBeforeSeen <- true
 	}
 }
-
-func (b *stateBackend) RequestRestart(t restart.RestartType) {}
 
 func ensureChange(c *C, r *state.TaskRunner, sb *stateBackend, chg *state.Change) {
 	for i := 0; i < 20; i++ {
@@ -142,6 +138,10 @@ var sequenceTests = []struct{ setup, result string }{{
 	result: "t31:undo t32:do t32:do-error t21:undo",
 }}
 
+func (ts *taskRunnerSuite) SetUpTest(c *C) {
+	ts.BaseTest.SetUpTest(c)
+}
+
 func (ts *taskRunnerSuite) TestSequenceTests(c *C) {
 	sb := &stateBackend{}
 	st := state.New(sb)
@@ -185,11 +185,12 @@ func (ts *taskRunnerSuite) TestSequenceTests(c *C) {
 	r.AddHandler("do", fn("do"), nil)
 	r.AddHandler("do-undo", fn("do"), fn("undo"))
 
+	past := time.Now().AddDate(-1, 0, 0)
 	for _, test := range sequenceTests {
 		st.Lock()
 
 		// Delete previous changes.
-		st.Prune(1, 1, 1)
+		st.Prune(past, 1, 1, 1)
 
 		chg := st.NewChange("install", "...")
 		tasks := make(map[string]*state.Task)
@@ -342,6 +343,206 @@ func (ts *taskRunnerSuite) TestSequenceTests(c *C) {
 	}
 }
 
+func (ts *taskRunnerSuite) TestAbortAcrossLanesDescendantTask(c *C) {
+
+	// <task>(<lane>)
+	//  t11(1) -> t12(1)                                                  => t15(1)
+	//                   \                                               /
+	//                    => t13(1,2) => t14(1,2) => t23(1,2) => t24(1,2)
+	//                   /                                               \
+	//  t21(2) -> t22(2)                                                  => t25(2)
+	//
+	names := strings.Fields("t11 t12 t13 t14 t15 t21 t22 t23 t24 t25")
+
+	sb := &stateBackend{}
+	st := state.New(sb)
+	r := state.NewTaskRunner(st)
+	defer r.Stop()
+
+	st.Lock()
+	defer st.Unlock()
+
+	c.Assert(len(st.Tasks()), Equals, 0)
+
+	chg := st.NewChange("install", "...")
+	tasks := make(map[string]*state.Task)
+	for _, name := range names {
+		tasks[name] = st.NewTask("do", name)
+		chg.AddTask(tasks[name])
+	}
+	tasks["t12"].WaitFor(tasks["t11"])
+	tasks["t13"].WaitFor(tasks["t12"])
+	tasks["t14"].WaitFor(tasks["t13"])
+	tasks["t15"].WaitFor(tasks["t14"])
+	for lane, names := range map[int][]string{
+		1: {"t11", "t12", "t13", "t14", "t15", "t23", "t24"},
+		2: {"t21", "t22", "t23", "t24", "t25", "t13", "t14"},
+	} {
+		for _, name := range names {
+			tasks[name].JoinLane(lane)
+		}
+	}
+
+	tasks["t22"].WaitFor(tasks["t21"])
+	tasks["t23"].WaitFor(tasks["t22"])
+	tasks["t24"].WaitFor(tasks["t23"])
+	tasks["t25"].WaitFor(tasks["t24"])
+
+	tasks["t13"].WaitFor(tasks["t22"])
+	tasks["t15"].WaitFor(tasks["t24"])
+	tasks["t23"].WaitFor(tasks["t14"])
+
+	ch := make(chan string, 256)
+	do := func(task *state.Task, tomb *tomb.Tomb) error {
+		c.Logf("do %q", task.Summary())
+		label := task.Summary()
+		if label == "t15" {
+			ch <- "t15:error"
+			return fmt.Errorf("mock error")
+		}
+		ch <- fmt.Sprintf("%s:do", label)
+		return nil
+	}
+	undo := func(task *state.Task, tomb *tomb.Tomb) error {
+		c.Logf("undo %q", task.Summary())
+		label := task.Summary()
+		ch <- fmt.Sprintf("%s:undo", label)
+		return nil
+	}
+	r.AddHandler("do", do, undo)
+
+	c.Logf("-----")
+
+	st.Unlock()
+	ensureChange(c, r, sb, chg)
+	st.Lock()
+	close(ch)
+	var sequence []string
+	for event := range ch {
+		sequence = append(sequence, event)
+	}
+	for _, name := range names {
+		task := tasks[name]
+		c.Logf("%5s %5s lanes: %v status: %v", task.ID(), task.Summary(), task.Lanes(), task.Status())
+	}
+	c.Assert(sequence[:4], testutil.DeepUnsortedMatches, []string{
+		"t11:do", "t12:do",
+		"t21:do", "t22:do",
+	})
+	c.Assert(sequence[4:8], DeepEquals, []string{
+		"t13:do", "t14:do", "t23:do", "t24:do",
+	})
+	c.Assert(sequence[8:10], testutil.DeepUnsortedMatches, []string{
+		"t25:do",
+		"t15:error",
+	})
+	c.Assert(sequence[10:11], testutil.DeepUnsortedMatches, []string{
+		"t25:undo",
+	})
+	c.Assert(sequence[11:15], DeepEquals, []string{
+		"t24:undo", "t23:undo", "t14:undo", "t13:undo",
+	})
+	c.Assert(sequence[15:19], testutil.DeepUnsortedMatches, []string{
+		"t21:undo", "t22:undo",
+		"t12:undo", "t11:undo",
+	})
+}
+
+func (ts *taskRunnerSuite) TestAbortAcrossLanesStriclyOrderedTasks(c *C) {
+
+	// <task>(<lane>)
+	//  t11(1) -> t12(1)
+	//                   \
+	//                    => t13(1,2) => t14(1,2) => t23(1,2) => t24(1,2)
+	//                   /
+	//  t21(2) -> t22(2)
+	//
+	names := strings.Fields("t11 t12 t13 t14 t21 t22 t23 t24")
+
+	sb := &stateBackend{}
+	st := state.New(sb)
+	r := state.NewTaskRunner(st)
+	defer r.Stop()
+
+	st.Lock()
+	defer st.Unlock()
+
+	c.Assert(len(st.Tasks()), Equals, 0)
+
+	chg := st.NewChange("install", "...")
+	tasks := make(map[string]*state.Task)
+	for _, name := range names {
+		tasks[name] = st.NewTask("do", name)
+		chg.AddTask(tasks[name])
+	}
+	tasks["t12"].WaitFor(tasks["t11"])
+	tasks["t13"].WaitFor(tasks["t12"])
+	tasks["t14"].WaitFor(tasks["t13"])
+	for lane, names := range map[int][]string{
+		1: {"t11", "t12", "t13", "t14", "t23", "t24"},
+		2: {"t21", "t22", "t23", "t24", "t13", "t14"},
+	} {
+		for _, name := range names {
+			tasks[name].JoinLane(lane)
+		}
+	}
+
+	tasks["t22"].WaitFor(tasks["t21"])
+	tasks["t23"].WaitFor(tasks["t22"])
+	tasks["t24"].WaitFor(tasks["t23"])
+
+	tasks["t13"].WaitFor(tasks["t22"])
+	tasks["t23"].WaitFor(tasks["t14"])
+
+	ch := make(chan string, 256)
+	do := func(task *state.Task, tomb *tomb.Tomb) error {
+		c.Logf("do %q", task.Summary())
+		label := task.Summary()
+		if label == "t24" {
+			ch <- "t24:error"
+			return fmt.Errorf("mock error")
+		}
+		ch <- fmt.Sprintf("%s:do", label)
+		return nil
+	}
+	undo := func(task *state.Task, tomb *tomb.Tomb) error {
+		c.Logf("undo %q", task.Summary())
+		label := task.Summary()
+		ch <- fmt.Sprintf("%s:undo", label)
+		return nil
+	}
+	r.AddHandler("do", do, undo)
+
+	c.Logf("-----")
+
+	st.Unlock()
+	ensureChange(c, r, sb, chg)
+	st.Lock()
+	close(ch)
+	var sequence []string
+	for event := range ch {
+		sequence = append(sequence, event)
+	}
+	for _, name := range names {
+		task := tasks[name]
+		c.Logf("%5s %5s lanes: %v status: %v", task.ID(), task.Summary(), task.Lanes(), task.Status())
+	}
+	c.Assert(sequence[:4], testutil.DeepUnsortedMatches, []string{
+		"t11:do", "t12:do",
+		"t21:do", "t22:do",
+	})
+	c.Assert(sequence[4:8], DeepEquals, []string{
+		"t13:do", "t14:do", "t23:do", "t24:error",
+	})
+	c.Assert(sequence[8:11], DeepEquals, []string{
+		"t23:undo", "t14:undo", "t13:undo",
+	})
+	c.Assert(sequence[11:], testutil.DeepUnsortedMatches, []string{
+		"t21:undo", "t22:undo",
+		"t12:undo", "t11:undo",
+	})
+}
+
 func (ts *taskRunnerSuite) TestExternalAbort(c *C) {
 	sb := &stateBackend{}
 	st := state.New(sb)
@@ -370,6 +571,101 @@ func (ts *taskRunnerSuite) TestExternalAbort(c *C) {
 
 	// The Abort above must make Ensure kill the task, or this will never end.
 	ensureChange(c, r, sb, chg)
+}
+
+func (ts *taskRunnerSuite) TestUndoSingleLane(c *C) {
+	sb := &stateBackend{}
+	st := state.New(sb)
+	r := state.NewTaskRunner(st)
+	defer r.Stop()
+
+	r.AddHandler("noop", func(t *state.Task, tb *tomb.Tomb) error {
+		return nil
+	}, func(t *state.Task, tb *tomb.Tomb) error {
+		return nil
+	})
+
+	r.AddHandler("noop-slow", func(t *state.Task, tb *tomb.Tomb) error {
+		time.Sleep(10 * time.Millisecond)
+		t.State().Lock()
+		defer t.State().Unlock()
+		// critical
+		t.SetStatus(state.DoneStatus)
+		return nil
+	}, func(t *state.Task, tb *tomb.Tomb) error {
+		return nil
+	})
+
+	r.AddHandler("fail", func(t *state.Task, tb *tomb.Tomb) error {
+		return fmt.Errorf("fail")
+	}, nil)
+
+	st.Lock()
+
+	lane := st.NewLane()
+	chg := st.NewChange("install", "...")
+
+	// first taskset
+	var prev *state.Task
+	for i := 0; i < 10; i++ {
+		t := st.NewTask("noop-slow", "...")
+		if prev != nil {
+			t.WaitFor(prev)
+		}
+		chg.AddTask(t)
+		t.JoinLane(lane)
+
+		prev = t
+	}
+
+	// second taskset with a failing task that triggers undo of the change
+	prev = nil
+	for i := 0; i < 10; i++ {
+		t := st.NewTask("noop", "...")
+		if prev != nil {
+			t.WaitFor(prev)
+		}
+		chg.AddTask(t)
+		t.JoinLane(lane)
+		prev = t
+	}
+
+	// error trigger
+	t := st.NewTask("fail", "...")
+	t.WaitFor(prev)
+	chg.AddTask(t)
+	t.JoinLane(lane)
+
+	st.Unlock()
+
+	var done bool
+	for !done {
+		c.Assert(r.Ensure(), Equals, nil)
+		st.Lock()
+		done = chg.IsReady() && chg.IsClean()
+		st.Unlock()
+	}
+
+	st.Lock()
+	defer st.Unlock()
+
+	// make sure all tasks are either undone or on hold (except for "fail" task which
+	// is in error).
+	for _, t := range st.Tasks() {
+		switch t.Kind() {
+		case "fail":
+			c.Assert(t.Status(), Equals, state.ErrorStatus)
+		case "noop", "noop-slow":
+			if t.Status() != state.UndoneStatus && t.Status() != state.HoldStatus {
+				for _, tsk := range st.Tasks() {
+					fmt.Printf("%s -> %s\n", tsk.Kind(), tsk.Status())
+				}
+				c.Fatalf("unexpected status: %s", t.Status())
+			}
+		default:
+			c.Fatalf("unexpected kind: %s", t.Kind())
+		}
+	}
 }
 
 func (ts *taskRunnerSuite) TestStopHandlerJustFinishing(c *C) {
@@ -506,6 +802,55 @@ func (ts *taskRunnerSuite) TestStopAskForRetry(c *C) {
 	defer st.Unlock()
 	c.Check(t.Status(), Equals, state.DoingStatus)
 	c.Check(t.AtTime().IsZero(), Equals, false)
+}
+
+func (ts *taskRunnerSuite) testTaskReturningWait(c *C, waitedStatus, expectedStatus state.Status) {
+	sb := &stateBackend{}
+	st := state.New(sb)
+	r := state.NewTaskRunner(st)
+	defer r.Stop()
+
+	r.AddHandler("ask-for-wait", func(t *state.Task, tb *tomb.Tomb) error {
+		// ask for wait
+		return &state.Wait{WaitedStatus: waitedStatus}
+	}, nil)
+
+	st.Lock()
+	chg := st.NewChange("install", "...")
+	t := st.NewTask("ask-for-wait", "...")
+	chg.AddTask(t)
+	st.Unlock()
+
+	r.Ensure()
+	// wait for handler to finish
+	r.Wait()
+
+	st.Lock()
+	defer st.Unlock()
+	c.Check(t.Status(), Equals, state.WaitStatus)
+	c.Check(t.WaitedStatus(), Equals, expectedStatus)
+	c.Check(chg.Status().Ready(), Equals, false)
+
+	st.Unlock()
+	defer st.Lock()
+	// does nothing
+	r.Ensure()
+
+	// state is unchanged
+	st.Lock()
+	defer st.Unlock()
+	c.Check(t.Status(), Equals, state.WaitStatus)
+	c.Check(chg.Status().Ready(), Equals, false)
+}
+
+func (ts *taskRunnerSuite) TestTaskReturningWaitNormal(c *C) {
+	ts.testTaskReturningWait(c, state.UndoneStatus, state.UndoneStatus)
+}
+
+func (ts *taskRunnerSuite) TestTaskReturningWaitDefaultStatus(c *C) {
+	// If no state was set (DefaultStatus), then it should default to
+	// DoneStatus instead.
+	ts.testTaskReturningWait(c, state.DefaultStatus, state.DoneStatus)
 }
 
 func (ts *taskRunnerSuite) TestRetryAfterDuration(c *C) {
@@ -823,7 +1168,7 @@ func (ts *taskRunnerSuite) TestUndoSequence(c *C) {
 	terr.WaitFor(prev)
 	chg.AddTask(terr)
 
-	c.Check(chg.Tasks(), HasLen, 9) // sanity check
+	c.Check(chg.Tasks(), HasLen, 9) // validity check
 
 	st.Unlock()
 
@@ -909,4 +1254,72 @@ func (ts *taskRunnerSuite) TestCleanup(c *C) {
 	r.Wait()
 	c.Assert(chgIsClean(), Equals, true)
 	c.Assert(called, Equals, 2)
+}
+
+func (ts *taskRunnerSuite) TestErrorCallbackCalledOnError(c *C) {
+	logbuf, restore := logger.MockLogger("TASKRUNNER: ")
+	defer restore()
+
+	sb := &stateBackend{}
+	st := state.New(sb)
+	r := state.NewTaskRunner(st)
+
+	var called bool
+	r.OnTaskError(func(err error) {
+		called = true
+	})
+
+	r.AddHandler("foo", func(t *state.Task, tomb *tomb.Tomb) error {
+		return fmt.Errorf("handler error for %q", t.Kind())
+	}, nil)
+
+	st.Lock()
+	chg := st.NewChange("install", "change summary")
+	t1 := st.NewTask("foo", "task summary")
+	chg.AddTask(t1)
+	st.Unlock()
+
+	// Mark tasks as done.
+	ensureChange(c, r, sb, chg)
+	r.Stop()
+
+	st.Lock()
+	defer st.Unlock()
+
+	c.Check(t1.Status(), Equals, state.ErrorStatus)
+	c.Check(strings.Join(t1.Log(), ""), Matches, `.*handler error for "foo"`)
+	c.Check(called, Equals, true)
+
+	c.Check(logbuf.String(), Matches, `(?m).*: \[change 1 "task summary" task\] failed: handler error for "foo".*`)
+}
+
+func (ts *taskRunnerSuite) TestErrorCallbackNotCalled(c *C) {
+	sb := &stateBackend{}
+	st := state.New(sb)
+	r := state.NewTaskRunner(st)
+
+	var called bool
+	r.OnTaskError(func(err error) {
+		called = true
+	})
+
+	r.AddHandler("foo", func(t *state.Task, tomb *tomb.Tomb) error {
+		return nil
+	}, nil)
+
+	st.Lock()
+	chg := st.NewChange("install", "...")
+	t1 := st.NewTask("foo", "...")
+	chg.AddTask(t1)
+	st.Unlock()
+
+	// Mark tasks as done.
+	ensureChange(c, r, sb, chg)
+	r.Stop()
+
+	st.Lock()
+	defer st.Unlock()
+
+	c.Check(t1.Status(), Equals, state.DoneStatus)
+	c.Check(called, Equals, false)
 }

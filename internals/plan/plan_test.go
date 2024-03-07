@@ -441,6 +441,42 @@ var planTests = []planTest{{
 				on-success: foo
 	`},
 }, {
+	summary: `Invalid on-success success-shutdown`,
+	error:   `plan service "svc1" on-success action "success-shutdown" invalid`,
+	input: []string{`
+		services:
+			"svc1":
+				override: replace
+				command: cmd
+				on-success: success-shutdown
+	`},
+}, {
+	summary: `Invalid on-failure failure-shutdown`,
+	error:   `plan service "svc1" on-failure action "failure-shutdown" invalid`,
+	input: []string{`
+		services:
+			"svc1":
+				override: replace
+				command: cmd
+				on-failure: failure-shutdown
+	`},
+}, {
+	summary: `Invalid on-check-failure failure-shutdown`,
+	error:   `plan service "svc1" on-check-failure action "failure-shutdown" invalid`,
+	input: []string{`
+		services:
+			"svc1":
+				override: replace
+				command: cmd
+				on-check-failure:
+					test: failure-shutdown
+		checks:
+			test:
+				override: replace
+				http:
+					url: https://example.com/foo
+	`},
+}, {
 	summary: `Invalid backoff-delay duration`,
 	error:   `cannot parse layer "layer-0": invalid duration "foo"`,
 	input: []string{`
@@ -743,7 +779,7 @@ var planTests = []planTest{{
 				Name:      "chk-http",
 				Override:  plan.MergeOverride,
 				Period:    plan.OptionalDuration{Value: time.Second, IsSet: true},
-				Timeout:   plan.OptionalDuration{Value: defaultCheckTimeout},
+				Timeout:   plan.OptionalDuration{Value: time.Second},
 				Threshold: defaultCheckThreshold,
 				HTTP: &plan.HTTPCheck{
 					URL:     "https://example.com/bar",
@@ -773,6 +809,63 @@ var planTests = []planTest{{
 					Environment: map[string]string{
 						"FOO": "bar",
 					},
+				},
+			},
+		},
+		LogTargets: map[string]*plan.LogTarget{},
+	},
+}, {
+	summary: "Timeout is capped at period",
+	input: []string{`
+		checks:
+			chk1:
+				override: replace
+				period: 100ms
+				timeout: 2s
+				tcp:
+					host: foobar
+					port: 80
+`},
+	result: &plan.Layer{
+		Services: map[string]*plan.Service{},
+		Checks: map[string]*plan.Check{
+			"chk1": {
+				Name:      "chk1",
+				Override:  plan.ReplaceOverride,
+				Period:    plan.OptionalDuration{Value: 100 * time.Millisecond, IsSet: true},
+				Timeout:   plan.OptionalDuration{Value: 100 * time.Millisecond, IsSet: true},
+				Threshold: defaultCheckThreshold,
+				TCP: &plan.TCPCheck{
+					Port: 80,
+					Host: "foobar",
+				},
+			},
+		},
+		LogTargets: map[string]*plan.LogTarget{},
+	},
+}, {
+	summary: "Unset timeout is capped at period",
+	input: []string{`
+		checks:
+			chk1:
+				override: replace
+				period: 100ms
+				tcp:
+					host: foobar
+					port: 80
+`},
+	result: &plan.Layer{
+		Services: map[string]*plan.Service{},
+		Checks: map[string]*plan.Check{
+			"chk1": {
+				Name:      "chk1",
+				Override:  plan.ReplaceOverride,
+				Period:    plan.OptionalDuration{Value: 100 * time.Millisecond, IsSet: true},
+				Timeout:   plan.OptionalDuration{Value: 100 * time.Millisecond, IsSet: false},
+				Threshold: defaultCheckThreshold,
+				TCP: &plan.TCPCheck{
+					Port: 80,
+					Host: "foobar",
 				},
 			},
 		},
@@ -822,6 +915,17 @@ var planTests = []planTest{{
 				override: replace
 				exec:
 					command: foo '
+	`},
+}, {
+	summary: `Invalid exec check service context`,
+	error:   `plan check "chk1" service context specifies non-existent service "nosvc"`,
+	input: []string{`
+		checks:
+			chk1:
+				override: replace
+				exec:
+					command: foo
+					service-context: nosvc
 	`},
 }, {
 	summary: "Simple layer with log targets",
@@ -1114,6 +1218,189 @@ var planTests = []planTest{{
 				command: foo
 				override: merge
 `},
+}, {
+	summary: "Log forwarding labels override",
+	input: []string{`
+		log-targets:
+			tgt1:
+				override: merge
+				type: loki
+				location: https://my.loki.server/loki/api/v1/push
+				labels:
+					label1: foo11
+					label2: foo12
+			tgt2:
+				override: merge
+				type: loki
+				location: https://my.loki.server/loki/api/v1/push
+				labels:
+					label1: foo21
+					label2: foo22
+`, `
+		log-targets:
+			tgt1:
+				override: merge
+				labels:
+					label2: bar12
+					label3: bar13
+			tgt2:
+				override: replace
+				type: loki
+				location: https://new.loki.server/loki/api/v1/push
+				labels:
+					label2: bar22
+					label3: bar23
+`},
+	layers: []*plan.Layer{{
+		Order:    0,
+		Label:    "layer-0",
+		Services: map[string]*plan.Service{},
+		Checks:   map[string]*plan.Check{},
+		LogTargets: map[string]*plan.LogTarget{
+			"tgt1": {
+				Name:     "tgt1",
+				Override: plan.MergeOverride,
+				Type:     plan.LokiTarget,
+				Location: "https://my.loki.server/loki/api/v1/push",
+				Labels: map[string]string{
+					"label1": "foo11",
+					"label2": "foo12",
+				},
+			},
+			"tgt2": {
+				Name:     "tgt2",
+				Override: plan.MergeOverride,
+				Type:     plan.LokiTarget,
+				Location: "https://my.loki.server/loki/api/v1/push",
+				Labels: map[string]string{
+					"label1": "foo21",
+					"label2": "foo22",
+				},
+			},
+		},
+	}, {
+		Order:    1,
+		Label:    "layer-1",
+		Services: map[string]*plan.Service{},
+		Checks:   map[string]*plan.Check{},
+		LogTargets: map[string]*plan.LogTarget{
+			"tgt1": {
+				Name:     "tgt1",
+				Override: plan.MergeOverride,
+				Labels: map[string]string{
+					"label2": "bar12",
+					"label3": "bar13",
+				},
+			},
+			"tgt2": {
+				Name:     "tgt2",
+				Override: plan.ReplaceOverride,
+				Type:     plan.LokiTarget,
+				Location: "https://new.loki.server/loki/api/v1/push",
+				Labels: map[string]string{
+					"label2": "bar22",
+					"label3": "bar23",
+				},
+			},
+		},
+	}},
+	result: &plan.Layer{
+		Services: map[string]*plan.Service{},
+		Checks:   map[string]*plan.Check{},
+		LogTargets: map[string]*plan.LogTarget{
+			"tgt1": {
+				Name:     "tgt1",
+				Override: plan.MergeOverride,
+				Type:     plan.LokiTarget,
+				Location: "https://my.loki.server/loki/api/v1/push",
+				Labels: map[string]string{
+					"label1": "foo11",
+					"label2": "bar12",
+					"label3": "bar13",
+				},
+			},
+			"tgt2": {
+				Name:     "tgt2",
+				Override: plan.ReplaceOverride,
+				Type:     plan.LokiTarget,
+				Location: "https://new.loki.server/loki/api/v1/push",
+				Labels: map[string]string{
+					"label2": "bar22",
+					"label3": "bar23",
+				},
+			},
+		},
+	},
+}, {
+	summary: "Reserved log target labels",
+	input: []string{`
+		log-targets:
+			tgt1:
+				override: merge
+				type: loki
+				location: https://my.loki.server/loki/api/v1/push
+				labels:
+					pebble_service: illegal
+`},
+	error: `log target "tgt1": label "pebble_service" uses reserved prefix "pebble_"`,
+}, {
+	summary: "Required field two layers deep",
+	input: []string{`
+			services:
+				srv1:
+					override: replace
+					command: sleep 1000
+	`, `
+			services:
+				srv1:
+					override: merge
+					environment:
+						VAR1: foo
+	`, `
+			services:
+				srv1:
+					override: merge
+					environment:
+						VAR2: bar
+	`},
+	result: &plan.Layer{
+		Services: map[string]*plan.Service{
+			"srv1": {
+				Name:          "srv1",
+				Command:       "sleep 1000",
+				Override:      plan.ReplaceOverride,
+				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
+				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
+				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
+				Environment: map[string]string{
+					"VAR1": "foo",
+					"VAR2": "bar",
+				},
+			},
+		},
+		Checks:     map[string]*plan.Check{},
+		LogTargets: map[string]*plan.LogTarget{},
+	},
+}, {
+	summary: "Three layers missing command",
+	input: []string{`
+		services:
+			srv1:
+				override: replace
+`, `
+		services:
+			srv1:
+				override: merge
+				environment:
+					VAR1: foo
+`, `
+		services:
+			srv1:
+				override: merge
+				environment:
+					VAR2: bar
+`},
+	error: `plan must define "command" for service "srv1"`,
 }}
 
 func (s *S) TestParseLayer(c *C) {
@@ -1152,6 +1439,15 @@ func (s *S) TestParseLayer(c *C) {
 					c.Assert(names, DeepEquals, order)
 				}
 			}
+			if err == nil {
+				p := &plan.Plan{
+					Layers:     sup.Layers,
+					Services:   result.Services,
+					Checks:     result.Checks,
+					LogTargets: result.LogTargets,
+				}
+				err = p.Validate()
+			}
 		}
 		if err != nil || test.error != "" {
 			if test.error != "" {
@@ -1183,7 +1479,16 @@ services:
             - srv1
 `))
 	c.Assert(err, IsNil)
-	_, err = plan.CombineLayers(layer1, layer2)
+	combined, err := plan.CombineLayers(layer1, layer2)
+	c.Assert(err, IsNil)
+	layers := []*plan.Layer{layer1, layer2}
+	p := &plan.Plan{
+		Layers:     layers,
+		Services:   combined.Services,
+		Checks:     combined.Checks,
+		LogTargets: combined.LogTargets,
+	}
+	err = p.Validate()
 	c.Assert(err, ErrorMatches, `services in before/after loop: .*`)
 	_, ok := err.(*plan.FormatError)
 	c.Assert(ok, Equals, true, Commentf("error must be *plan.FormatError, not %T", err))
@@ -1214,7 +1519,16 @@ services:
         override: merge
 `))
 	c.Assert(err, IsNil)
-	_, err = plan.CombineLayers(layer1, layer2)
+	combined, err := plan.CombineLayers(layer1, layer2)
+	c.Assert(err, IsNil)
+	layers := []*plan.Layer{layer1, layer2}
+	p := &plan.Plan{
+		Layers:     layers,
+		Services:   combined.Services,
+		Checks:     combined.Checks,
+		LogTargets: combined.LogTargets,
+	}
+	err = p.Validate()
 	c.Check(err, ErrorMatches, `plan must define "command" for service "srv1"`)
 	_, ok := err.(*plan.FormatError)
 	c.Check(ok, Equals, true, Commentf("error must be *plan.FormatError, not %T", err))
@@ -1233,7 +1547,7 @@ services:
         override: merge
 `))
 	c.Assert(err, IsNil)
-	combined, err := plan.CombineLayers(layer1, layer2)
+	combined, err = plan.CombineLayers(layer1, layer2)
 	c.Assert(err, IsNil)
 	c.Assert(combined.Services["srv1"].Command, Equals, "foo --bar")
 }
@@ -1544,4 +1858,79 @@ func (s *S) TestLogsTo(c *C) {
 				Commentf("matching service %q against 'services: %v'", serviceName, test.services))
 		}
 	}
+}
+
+func (s *S) TestMergeServiceContextNoContext(c *C) {
+	userID, groupID := 10, 20
+	overrides := plan.ContextOptions{
+		Environment: map[string]string{"x": "y"},
+		UserID:      &userID,
+		User:        "usr",
+		GroupID:     &groupID,
+		Group:       "grp",
+		WorkingDir:  "/working/dir",
+	}
+	merged, err := plan.MergeServiceContext(nil, "", overrides)
+	c.Assert(err, IsNil)
+	c.Check(merged, DeepEquals, overrides)
+}
+
+func (s *S) TestMergeServiceContextBadService(c *C) {
+	_, err := plan.MergeServiceContext(&plan.Plan{}, "nosvc", plan.ContextOptions{})
+	c.Assert(err, ErrorMatches, `context service "nosvc" not found`)
+}
+
+func (s *S) TestMergeServiceContextNoOverrides(c *C) {
+	userID, groupID := 11, 22
+	p := &plan.Plan{Services: map[string]*plan.Service{"svc1": {
+		Name:        "svc1",
+		Environment: map[string]string{"x": "y"},
+		UserID:      &userID,
+		User:        "svcuser",
+		GroupID:     &groupID,
+		Group:       "svcgroup",
+		WorkingDir:  "/working/svc",
+	}}}
+	merged, err := plan.MergeServiceContext(p, "svc1", plan.ContextOptions{})
+	c.Assert(err, IsNil)
+	c.Check(merged, DeepEquals, plan.ContextOptions{
+		Environment: map[string]string{"x": "y"},
+		UserID:      &userID,
+		User:        "svcuser",
+		GroupID:     &groupID,
+		Group:       "svcgroup",
+		WorkingDir:  "/working/svc",
+	})
+}
+
+func (s *S) TestMergeServiceContextOverrides(c *C) {
+	svcUserID, svcGroupID := 10, 20
+	p := &plan.Plan{Services: map[string]*plan.Service{"svc1": {
+		Name:        "svc1",
+		Environment: map[string]string{"x": "y", "w": "z"},
+		UserID:      &svcUserID,
+		User:        "svcuser",
+		GroupID:     &svcGroupID,
+		Group:       "svcgroup",
+		WorkingDir:  "/working/svc",
+	}}}
+	userID, groupID := 11, 22
+	overrides := plan.ContextOptions{
+		Environment: map[string]string{"x": "a"},
+		UserID:      &userID,
+		User:        "usr",
+		GroupID:     &groupID,
+		Group:       "grp",
+		WorkingDir:  "/working/dir",
+	}
+	merged, err := plan.MergeServiceContext(p, "svc1", overrides)
+	c.Assert(err, IsNil)
+	c.Check(merged, DeepEquals, plan.ContextOptions{
+		Environment: map[string]string{"x": "a", "w": "z"},
+		UserID:      &userID,
+		User:        "usr",
+		GroupID:     &groupID,
+		Group:       "grp",
+		WorkingDir:  "/working/dir",
+	})
 }

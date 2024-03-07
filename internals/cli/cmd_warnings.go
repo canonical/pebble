@@ -28,44 +28,43 @@ import (
 	"github.com/canonical/x-go/strutil/quantity"
 
 	"github.com/canonical/pebble/client"
+	"github.com/canonical/pebble/cmd"
 	"github.com/canonical/pebble/internals/osutil"
 )
 
-type cmdWarnings struct {
-	clientMixin
-	timeMixin
-	unicodeMixin
-	All     bool `long:"all"`
-	Verbose bool `long:"verbose"`
-}
-
-type cmdOkay struct{ clientMixin }
-
-var shortWarningsHelp = "List warnings"
-var longWarningsHelp = `
+const cmdWarningsSummary = "List warnings"
+const cmdWarningsDescription = `
 The warnings command lists the warnings that have been reported to the system.
 
-Once warnings have been listed with 'pebble warnings', 'pebble okay' may be used to
+Once warnings have been listed with '{{.ProgramName}} warnings', '{{.ProgramName}} okay' may be used to
 silence them. A warning that's been silenced in this way will not be listed
 again unless it happens again, _and_ a cooldown time has passed.
 
 Warnings expire automatically, and once expired they are forgotten.
 `
 
-var shortOkayHelp = "Acknowledge warnings"
-var longOkayHelp = `
-The okay command acknowledges the warnings listed with 'pebble warnings'.
+type cmdWarnings struct {
+	client *client.Client
 
-Once acknowledged, a warning won't appear again unless it reoccurs and
-sufficient time has passed.
-`
+	timeMixin
+	unicodeMixin
+	All     bool `long:"all"`
+	Verbose bool `long:"verbose"`
+}
 
 func init() {
-	addCommand("warnings", shortWarningsHelp, longWarningsHelp, func() flags.Commander { return &cmdWarnings{} }, merge(timeDescs, unicodeDescs, map[string]string{
-		"all":     "Show all warnings",
-		"verbose": "Show more information",
-	}), nil)
-	addCommand("okay", shortOkayHelp, longOkayHelp, func() flags.Commander { return &cmdOkay{} }, nil, nil)
+	AddCommand(&CmdInfo{
+		Name:        "warnings",
+		Summary:     cmdWarningsSummary,
+		Description: cmdWarningsDescription,
+		ArgsHelp: merge(timeArgsHelp, unicodeArgsHelp, map[string]string{
+			"--all":     "Show all warnings",
+			"--verbose": "Show more information",
+		}),
+		New: func(opts *CmdOptions) flags.Commander {
+			return &cmdWarnings{client: opts.Client}
+		},
+	})
 }
 
 func (cmd *cmdWarnings) Execute(args []string) error {
@@ -143,19 +142,6 @@ func writeWarning(w io.Writer, descr string, termWidth int) error {
 	return err
 }
 
-func (cmd *cmdOkay) Execute(args []string) error {
-	if len(args) > 0 {
-		return ErrExtraArgs
-	}
-
-	last, err := lastWarningTimestamp()
-	if err != nil {
-		return err
-	}
-
-	return cmd.client.Okay(last)
-}
-
 const warnFileEnvKey = "PEBBLE_LAST_WARNING_TIMESTAMP_FILENAME"
 
 func warnFilename(homedir string) string {
@@ -211,7 +197,7 @@ func lastWarningTimestamp() (time.Time, error) {
 	f, err := os.Open(warnFilename(user.HomeDir))
 	if err != nil {
 		if os.IsNotExist(err) {
-			return time.Time{}, fmt.Errorf("you must have looked at the warnings before acknowledging them. Try 'pebble warnings'.")
+			return time.Time{}, nil
 		}
 		return time.Time{}, fmt.Errorf("cannot open timestamp file: %v", err)
 	}
@@ -235,9 +221,9 @@ func maybePresentWarnings(count int, timestamp time.Time) {
 		return
 	}
 
-	format := "WARNING: There are %d new warnings. See 'pebble warnings'.\n"
+	format := "WARNING: There are %d new warnings. See '%s warnings'.\n"
 	if count == 1 {
-		format = "WARNING: There is %d new warning. See 'pebble warnings'.\n"
+		format = "WARNING: There is %d new warning. See '%s warnings'.\n"
 	}
-	fmt.Fprintf(Stderr, format, count)
+	fmt.Fprintf(Stderr, format, count, cmd.ProgramName)
 }

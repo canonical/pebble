@@ -23,9 +23,9 @@ import (
 	"net/http/httptest"
 	"time"
 
-	"github.com/canonical/pebble/internals/overlord/state"
-
 	"gopkg.in/check.v1"
+
+	"github.com/canonical/pebble/internals/overlord/state"
 )
 
 func setupChanges(st *state.State) []string {
@@ -385,7 +385,7 @@ func (s *apiSuite) TestWaitChangeInvalidTimeout(c *check.C) {
 	c.Check(rsp.Status, check.Equals, 400)
 	c.Check(rsp.Type, check.Equals, ResponseTypeError)
 	result := rsp.Result.(*errorResult)
-	c.Check(result.Message, check.Matches, "invalid timeout .*")
+	c.Check(result.Message, check.Matches, "invalid timeout.*")
 }
 
 func (s *apiSuite) TestWaitChangeSuccess(c *check.C) {

@@ -105,12 +105,10 @@ func (s *Service) Copy() *Service {
 		}
 	}
 	if s.UserID != nil {
-		userID := *s.UserID
-		copied.UserID = &userID
+		copied.UserID = copyIntPtr(s.UserID)
 	}
 	if s.GroupID != nil {
-		groupID := *s.GroupID
-		copied.GroupID = &groupID
+		copied.GroupID = copyIntPtr(s.GroupID)
 	}
 	if s.OnCheckFailure != nil {
 		copied.OnCheckFailure = make(map[string]ServiceAction)
@@ -139,15 +137,13 @@ func (s *Service) Merge(other *Service) {
 		s.KillDelay = other.KillDelay
 	}
 	if other.UserID != nil {
-		userID := *other.UserID
-		s.UserID = &userID
+		s.UserID = copyIntPtr(other.UserID)
 	}
 	if other.User != "" {
 		s.User = other.User
 	}
 	if other.GroupID != nil {
-		groupID := *other.GroupID
-		s.GroupID = &groupID
+		s.GroupID = copyIntPtr(other.GroupID)
 	}
 	if other.Group != "" {
 		s.Group = other.Group
@@ -294,10 +290,15 @@ const (
 type ServiceAction string
 
 const (
+	// Actions allowed in all contexts
 	ActionUnset    ServiceAction = ""
 	ActionRestart  ServiceAction = "restart"
 	ActionShutdown ServiceAction = "shutdown"
 	ActionIgnore   ServiceAction = "ignore"
+
+	// Actions only allowed in specific contexts
+	ActionFailureShutdown ServiceAction = "failure-shutdown"
+	ActionSuccessShutdown ServiceAction = "success-shutdown"
 )
 
 // Check specifies configuration for a single health check.
@@ -431,13 +432,14 @@ func (c *TCPCheck) Merge(other *TCPCheck) {
 
 // ExecCheck holds the configuration for an exec health check.
 type ExecCheck struct {
-	Command     string            `yaml:"command,omitempty"`
-	Environment map[string]string `yaml:"environment,omitempty"`
-	UserID      *int              `yaml:"user-id,omitempty"`
-	User        string            `yaml:"user,omitempty"`
-	GroupID     *int              `yaml:"group-id,omitempty"`
-	Group       string            `yaml:"group,omitempty"`
-	WorkingDir  string            `yaml:"working-dir,omitempty"`
+	Command        string            `yaml:"command,omitempty"`
+	ServiceContext string            `yaml:"service-context,omitempty"`
+	Environment    map[string]string `yaml:"environment,omitempty"`
+	UserID         *int              `yaml:"user-id,omitempty"`
+	User           string            `yaml:"user,omitempty"`
+	GroupID        *int              `yaml:"group-id,omitempty"`
+	Group          string            `yaml:"group,omitempty"`
+	WorkingDir     string            `yaml:"working-dir,omitempty"`
 }
 
 // Copy returns a deep copy of the exec check configuration.
@@ -450,12 +452,10 @@ func (c *ExecCheck) Copy() *ExecCheck {
 		}
 	}
 	if c.UserID != nil {
-		userID := *c.UserID
-		copied.UserID = &userID
+		copied.UserID = copyIntPtr(c.UserID)
 	}
 	if c.GroupID != nil {
-		groupID := *c.GroupID
-		copied.GroupID = &groupID
+		copied.GroupID = copyIntPtr(c.GroupID)
 	}
 	return &copied
 }
@@ -465,6 +465,9 @@ func (c *ExecCheck) Merge(other *ExecCheck) {
 	if other.Command != "" {
 		c.Command = other.Command
 	}
+	if other.ServiceContext != "" {
+		c.ServiceContext = other.ServiceContext
+	}
 	for k, v := range other.Environment {
 		if c.Environment == nil {
 			c.Environment = make(map[string]string)
@@ -472,15 +475,13 @@ func (c *ExecCheck) Merge(other *ExecCheck) {
 		c.Environment[k] = v
 	}
 	if other.UserID != nil {
-		userID := *other.UserID
-		c.UserID = &userID
+		c.UserID = copyIntPtr(other.UserID)
 	}
 	if other.User != "" {
 		c.User = other.User
 	}
 	if other.GroupID != nil {
-		groupID := *other.GroupID
-		c.GroupID = &groupID
+		c.GroupID = copyIntPtr(other.GroupID)
 	}
 	if other.Group != "" {
 		c.Group = other.Group
@@ -492,11 +493,12 @@ func (c *ExecCheck) Merge(other *ExecCheck) {
 
 // LogTarget specifies a remote server to forward logs to.
 type LogTarget struct {
-	Name     string        `yaml:"-"`
-	Type     LogTargetType `yaml:"type"`
-	Location string        `yaml:"location"`
-	Services []string      `yaml:"services"`
-	Override Override      `yaml:"override,omitempty"`
+	Name     string            `yaml:"-"`
+	Type     LogTargetType     `yaml:"type"`
+	Location string            `yaml:"location"`
+	Services []string          `yaml:"services"`
+	Override Override          `yaml:"override,omitempty"`
+	Labels   map[string]string `yaml:"labels,omitempty"`
 }
 
 // LogTargetType defines the protocol to use to forward logs.
@@ -512,6 +514,12 @@ const (
 func (t *LogTarget) Copy() *LogTarget {
 	copied := *t
 	copied.Services = append([]string(nil), t.Services...)
+	if t.Labels != nil {
+		copied.Labels = make(map[string]string)
+		for k, v := range t.Labels {
+			copied.Labels[k] = v
+		}
+	}
 	return &copied
 }
 
@@ -524,6 +532,12 @@ func (t *LogTarget) Merge(other *LogTarget) {
 		t.Location = other.Location
 	}
 	t.Services = append(t.Services, other.Services...)
+	for k, v := range other.Labels {
+		if t.Labels == nil {
+			t.Labels = make(map[string]string)
+		}
+		t.Labels[k] = v
+	}
 }
 
 // FormatError is the error returned when a layer has a format error, such as
@@ -538,6 +552,9 @@ func (e *FormatError) Error() string {
 
 // CombineLayers combines the given layers into a single layer, with the later
 // layers overriding earlier ones.
+// Neither the individual layers nor the combined layer are validated here - the
+// caller should have validated the individual layers prior to calling, and
+// validate the combined output if required.
 func CombineLayers(layers ...*Layer) (*Layer, error) {
 	combined := &Layer{
 		Services:   make(map[string]*Service),
@@ -627,75 +644,33 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 		}
 	}
 
-	// Ensure fields in combined layers validate correctly (and set defaults).
-	for name, service := range combined.Services {
-		if service.Command == "" {
-			return nil, &FormatError{
-				Message: fmt.Sprintf(`plan must define "command" for service %q`, name),
-			}
-		}
-		_, _, err := service.ParseCommand()
-		if err != nil {
-			return nil, &FormatError{
-				Message: fmt.Sprintf("plan service %q command invalid: %v", name, err),
-			}
-		}
-		if !validServiceAction(service.OnSuccess) {
-			return nil, &FormatError{
-				Message: fmt.Sprintf("plan service %q on-success action %q invalid", name, service.OnSuccess),
-			}
-		}
-		if !validServiceAction(service.OnFailure) {
-			return nil, &FormatError{
-				Message: fmt.Sprintf("plan service %q on-failure action %q invalid", name, service.OnFailure),
-			}
-		}
-		for _, action := range service.OnCheckFailure {
-			if !validServiceAction(action) {
-				return nil, &FormatError{
-					Message: fmt.Sprintf("plan service %q on-check-failure action %q invalid", name, action),
-				}
-			}
-		}
+	// Set defaults where required.
+	for _, service := range combined.Services {
 		if !service.BackoffDelay.IsSet {
 			service.BackoffDelay.Value = defaultBackoffDelay
 		}
 		if !service.BackoffFactor.IsSet {
 			service.BackoffFactor.Value = defaultBackoffFactor
-		} else if service.BackoffFactor.Value < 1 {
-			return nil, &FormatError{
-				Message: fmt.Sprintf("plan service %q backoff-factor must be 1.0 or greater, not %g", name, service.BackoffFactor.Value),
-			}
 		}
 		if !service.BackoffLimit.IsSet {
 			service.BackoffLimit.Value = defaultBackoffLimit
 		}
-
 	}
 
-	for name, check := range combined.Checks {
-		if check.Level != UnsetLevel && check.Level != AliveLevel && check.Level != ReadyLevel {
-			return nil, &FormatError{
-				Message: fmt.Sprintf(`plan check %q level must be "alive" or "ready"`, name),
-			}
-		}
+	for _, check := range combined.Checks {
 		if !check.Period.IsSet {
 			check.Period.Value = defaultCheckPeriod
-		} else if check.Period.Value == 0 {
-			return nil, &FormatError{
-				Message: fmt.Sprintf("plan check %q period must not be zero", name),
-			}
 		}
 		if !check.Timeout.IsSet {
 			check.Timeout.Value = defaultCheckTimeout
-		} else if check.Timeout.Value == 0 {
-			return nil, &FormatError{
-				Message: fmt.Sprintf("plan check %q timeout must not be zero", name),
-			}
-		} else if check.Timeout.Value >= check.Period.Value {
-			return nil, &FormatError{
-				Message: fmt.Sprintf("plan check %q timeout must be less than period", name),
-			}
+		}
+		if check.Timeout.Value > check.Period.Value {
+			// The effective timeout will be the period, so make that clear.
+			// `.IsSet` remains false so that the capped value does not appear
+			// in the combined plan output - and it's not *user* set - the
+			// effective default timeout is the minimum of (check.Period.Value,
+			// default timeout).
+			check.Timeout.Value = check.Period.Value
 		}
 		if check.Threshold == 0 {
 			// Default number of failures in a row before check triggers
@@ -703,11 +678,167 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 			// what it's worth, Kubernetes probes uses a default of 3 too.
 			check.Threshold = defaultCheckThreshold
 		}
+	}
 
+	return combined, nil
+}
+
+// Validate checks that the layer is valid. It returns nil if all the checks pass, or
+// an error if there are validation errors.
+// See also Plan.Validate, which does additional checks based on the combined
+// layers.
+func (layer *Layer) Validate() error {
+	for name, service := range layer.Services {
+		if name == "" {
+			return &FormatError{
+				Message: fmt.Sprintf("cannot use empty string as service name"),
+			}
+		}
+		if name == "pebble" {
+			// Disallow service name "pebble" to avoid ambiguity (for example,
+			// in log output).
+			return &FormatError{
+				Message: fmt.Sprintf("cannot use reserved service name %q", name),
+			}
+		}
+		// Deprecated service names
+		if name == "all" || name == "default" || name == "none" {
+			logger.Noticef("Using keyword %q as a service name is deprecated", name)
+		}
+		if strings.HasPrefix(name, "-") {
+			return &FormatError{
+				Message: fmt.Sprintf(`cannot use service name %q: starting with "-" not allowed`, name),
+			}
+		}
+		if service == nil {
+			return &FormatError{
+				Message: fmt.Sprintf("service object cannot be null for service %q", name),
+			}
+		}
+		_, _, err := service.ParseCommand()
+		if err != nil {
+			return &FormatError{
+				Message: fmt.Sprintf("plan service %q command invalid: %v", name, err),
+			}
+		}
+		if !validServiceAction(service.OnSuccess, ActionFailureShutdown) {
+			return &FormatError{
+				Message: fmt.Sprintf("plan service %q on-success action %q invalid", name, service.OnSuccess),
+			}
+		}
+		if !validServiceAction(service.OnFailure, ActionSuccessShutdown) {
+			return &FormatError{
+				Message: fmt.Sprintf("plan service %q on-failure action %q invalid", name, service.OnFailure),
+			}
+		}
+		for _, action := range service.OnCheckFailure {
+			if !validServiceAction(action, ActionSuccessShutdown) {
+				return &FormatError{
+					Message: fmt.Sprintf("plan service %q on-check-failure action %q invalid", name, action),
+				}
+			}
+		}
+		if service.BackoffFactor.IsSet && service.BackoffFactor.Value < 1 {
+			return &FormatError{
+				Message: fmt.Sprintf("plan service %q backoff-factor must be 1.0 or greater, not %g", name, service.BackoffFactor.Value),
+			}
+		}
+	}
+
+	for name, check := range layer.Checks {
+		if name == "" {
+			return &FormatError{
+				Message: fmt.Sprintf("cannot use empty string as check name"),
+			}
+		}
+		if check == nil {
+			return &FormatError{
+				Message: fmt.Sprintf("check object cannot be null for check %q", name),
+			}
+		}
+		if name == "" {
+			return &FormatError{
+				Message: fmt.Sprintf("cannot use empty string as log target name"),
+			}
+		}
+		if check.Level != UnsetLevel && check.Level != AliveLevel && check.Level != ReadyLevel {
+			return &FormatError{
+				Message: fmt.Sprintf(`plan check %q level must be "alive" or "ready"`, name),
+			}
+		}
+		if check.Period.IsSet && check.Period.Value == 0 {
+			return &FormatError{
+				Message: fmt.Sprintf("plan check %q period must not be zero", name),
+			}
+		}
+		if check.Timeout.IsSet && check.Timeout.Value == 0 {
+			return &FormatError{
+				Message: fmt.Sprintf("plan check %q timeout must not be zero", name),
+			}
+		}
+
+		if check.Exec != nil {
+			_, err := shlex.Split(check.Exec.Command)
+			if err != nil {
+				return &FormatError{
+					Message: fmt.Sprintf("plan check %q command invalid: %v", name, err),
+				}
+			}
+			_, _, err = osutil.NormalizeUidGid(check.Exec.UserID, check.Exec.GroupID, check.Exec.User, check.Exec.Group)
+			if err != nil {
+				return &FormatError{
+					Message: fmt.Sprintf("plan check %q has invalid user/group: %v", name, err),
+				}
+			}
+		}
+	}
+
+	for name, target := range layer.LogTargets {
+		if target == nil {
+			return &FormatError{
+				Message: fmt.Sprintf("log target object cannot be null for log target %q", name),
+			}
+		}
+		for labelName := range target.Labels {
+			// 'pebble_*' labels are reserved
+			if strings.HasPrefix(labelName, "pebble_") {
+				return &FormatError{
+					Message: fmt.Sprintf(`log target %q: label %q uses reserved prefix "pebble_"`, name, labelName),
+				}
+			}
+		}
+		switch target.Type {
+		case LokiTarget, SyslogTarget:
+			// valid, continue
+		case UnsetLogTarget:
+			// will be checked when the layers are combined
+		default:
+			return &FormatError{
+				Message: fmt.Sprintf(`log target %q has unsupported type %q, must be %q or %q`,
+					name, target.Type, LokiTarget, SyslogTarget),
+			}
+		}
+	}
+
+	return nil
+}
+
+// Validate checks that the combined layers form a valid plan.
+// See also Layer.Validate, which checks that the individual layers are valid.
+func (p *Plan) Validate() error {
+	for name, service := range p.Services {
+		if service.Command == "" {
+			return &FormatError{
+				Message: fmt.Sprintf(`plan must define "command" for service %q`, name),
+			}
+		}
+	}
+
+	for name, check := range p.Checks {
 		numTypes := 0
 		if check.HTTP != nil {
 			if check.HTTP.URL == "" {
-				return nil, &FormatError{
+				return &FormatError{
 					Message: fmt.Sprintf(`plan must set "url" for http check %q`, name),
 				}
 			}
@@ -715,7 +846,7 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 		}
 		if check.TCP != nil {
 			if check.TCP.Port == 0 {
-				return nil, &FormatError{
+				return &FormatError{
 					Message: fmt.Sprintf(`plan must set "port" for tcp check %q`, name),
 				}
 			}
@@ -723,76 +854,65 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 		}
 		if check.Exec != nil {
 			if check.Exec.Command == "" {
-				return nil, &FormatError{
+				return &FormatError{
 					Message: fmt.Sprintf(`plan must set "command" for exec check %q`, name),
 				}
 			}
-			_, err := shlex.Split(check.Exec.Command)
-			if err != nil {
-				return nil, &FormatError{
-					Message: fmt.Sprintf("plan check %q command invalid: %v", name, err),
-				}
-			}
-			_, _, err = osutil.NormalizeUidGid(check.Exec.UserID, check.Exec.GroupID, check.Exec.User, check.Exec.Group)
-			if err != nil {
-				return nil, &FormatError{
-					Message: fmt.Sprintf("plan check %q has invalid user/group: %v", name, err),
+			_, contextExists := p.Services[check.Exec.ServiceContext]
+			if check.Exec.ServiceContext != "" && !contextExists {
+				return &FormatError{
+					Message: fmt.Sprintf("plan check %q service context specifies non-existent service %q",
+						name, check.Exec.ServiceContext),
 				}
 			}
 			numTypes++
 		}
 		if numTypes != 1 {
-			return nil, &FormatError{
+			return &FormatError{
 				Message: fmt.Sprintf(`plan must specify one of "http", "tcp", or "exec" for check %q`, name),
 			}
 		}
 	}
 
-	for name, target := range combined.LogTargets {
+	for name, target := range p.LogTargets {
 		switch target.Type {
 		case LokiTarget, SyslogTarget:
 			// valid, continue
 		case UnsetLogTarget:
-			return nil, &FormatError{
+			return &FormatError{
 				Message: fmt.Sprintf(`plan must define "type" (%q or %q) for log target %q`,
 					LokiTarget, SyslogTarget, name),
 			}
-		default:
-			return nil, &FormatError{
-				Message: fmt.Sprintf(`log target %q has unsupported type %q, must be %q or %q`,
-					name, target.Type, LokiTarget, SyslogTarget),
-			}
 		}
 
-		// Validate service names specified in log target
+		// Validate service names specified in log target.
 		for _, serviceName := range target.Services {
 			serviceName = strings.TrimPrefix(serviceName, "-")
 			if serviceName == "all" {
 				continue
 			}
-			if _, ok := combined.Services[serviceName]; ok {
+			if _, ok := p.Services[serviceName]; ok {
 				continue
 			}
-			return nil, &FormatError{
+			return &FormatError{
 				Message: fmt.Sprintf(`log target %q specifies unknown service %q`,
 					target.Name, serviceName),
 			}
 		}
 
 		if target.Location == "" {
-			return nil, &FormatError{
+			return &FormatError{
 				Message: fmt.Sprintf(`plan must define "location" for log target %q`, name),
 			}
 		}
 	}
 
 	// Ensure combined layers don't have cycles.
-	err := combined.checkCycles()
+	err := p.checkCycles()
 	if err != nil {
-		return nil, err
+		return err
 	}
-
-	return combined, nil
+	return nil
 }
 
 // StartOrder returns the required services that must be started for the named
@@ -885,12 +1005,12 @@ func order(services map[string]*Service, names []string, stop bool) ([]string, e
 	return order, nil
 }
 
-func (l *Layer) checkCycles() error {
+func (p *Plan) checkCycles() error {
 	var names []string
-	for name := range l.Services {
+	for name := range p.Services {
 		names = append(names, name)
 	}
-	_, err := order(l.Services, names, false)
+	_, err := order(p.Services, names, false)
 	return err
 }
 
@@ -912,71 +1032,38 @@ func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 	layer.Label = label
 
 	for name, service := range layer.Services {
-		if name == "" {
-			return nil, &FormatError{
-				Message: fmt.Sprintf("cannot use empty string as service name"),
-			}
+		// If service is nil, then the validation below will reject the layer,
+		// but we want the name set so that we can use easily use it in error
+		// messages during validation.
+		if service != nil {
+			service.Name = name
 		}
-		if name == "pebble" {
-			// Disallow service name "pebble" to avoid ambiguity (for example,
-			// in log output).
-			return nil, &FormatError{
-				Message: fmt.Sprintf("cannot use reserved service name %q", name),
-			}
-		}
-		// Deprecated service names
-		if name == "all" || name == "default" || name == "none" {
-			logger.Noticef("Using keyword %q as a service name is deprecated", name)
-		}
-		if strings.HasPrefix(name, "-") {
-			return nil, &FormatError{
-				Message: fmt.Sprintf(`cannot use service name %q: starting with "-" not allowed`, name),
-			}
-		}
-		if service == nil {
-			return nil, &FormatError{
-				Message: fmt.Sprintf("service object cannot be null for service %q", name),
-			}
-		}
-		service.Name = name
 	}
-
 	for name, check := range layer.Checks {
-		if name == "" {
-			return nil, &FormatError{
-				Message: fmt.Sprintf("cannot use empty string as check name"),
-			}
+		if check != nil {
+			check.Name = name
 		}
-		if check == nil {
-			return nil, &FormatError{
-				Message: fmt.Sprintf("check object cannot be null for check %q", name),
-			}
-		}
-		check.Name = name
 	}
-
 	for name, target := range layer.LogTargets {
-		if name == "" {
-			return nil, &FormatError{
-				Message: fmt.Sprintf("cannot use empty string as log target name"),
-			}
+		if target != nil {
+			target.Name = name
 		}
-		if target == nil {
-			return nil, &FormatError{
-				Message: fmt.Sprintf("log target object cannot be null for log target %q", name),
-			}
-		}
-		target.Name = name
 	}
 
-	err = layer.checkCycles()
+	err = layer.Validate()
 	if err != nil {
 		return nil, err
 	}
+
 	return &layer, err
 }
 
-func validServiceAction(action ServiceAction) bool {
+func validServiceAction(action ServiceAction, additionalValid ...ServiceAction) bool {
+	for _, v := range additionalValid {
+		if action == v {
+			return true
+		}
+	}
 	switch action {
 	case ActionUnset, ActionRestart, ActionShutdown, ActionIgnore:
 		return true
@@ -1073,5 +1160,85 @@ func ReadDir(dir string) (*Plan, error) {
 		Checks:     combined.Checks,
 		LogTargets: combined.LogTargets,
 	}
+	err = plan.Validate()
+	if err != nil {
+		return nil, err
+	}
 	return plan, err
+}
+
+// MergeServiceContext merges the overrides on top of the service context
+// specified by serviceName, returning a new ContextOptions value. If
+// serviceName is "" (context not specified), return overrides directly.
+func MergeServiceContext(p *Plan, serviceName string, overrides ContextOptions) (ContextOptions, error) {
+	if serviceName == "" {
+		return overrides, nil
+	}
+	var service *Service
+	for _, s := range p.Services {
+		if s.Name == serviceName {
+			service = s
+			break
+		}
+	}
+	if service == nil {
+		return ContextOptions{}, fmt.Errorf("context service %q not found", serviceName)
+	}
+
+	// Start with the config values from the context service.
+	merged := ContextOptions{
+		Environment: make(map[string]string),
+	}
+	for k, v := range service.Environment {
+		merged.Environment[k] = v
+	}
+	if service.UserID != nil {
+		merged.UserID = copyIntPtr(service.UserID)
+	}
+	merged.User = service.User
+	if service.GroupID != nil {
+		merged.GroupID = copyIntPtr(service.GroupID)
+	}
+	merged.Group = service.Group
+	merged.WorkingDir = service.WorkingDir
+
+	// Merge in fields from the overrides, if set.
+	for k, v := range overrides.Environment {
+		merged.Environment[k] = v
+	}
+	if overrides.UserID != nil {
+		merged.UserID = copyIntPtr(overrides.UserID)
+	}
+	if overrides.User != "" {
+		merged.User = overrides.User
+	}
+	if overrides.GroupID != nil {
+		merged.GroupID = copyIntPtr(overrides.GroupID)
+	}
+	if overrides.Group != "" {
+		merged.Group = overrides.Group
+	}
+	if overrides.WorkingDir != "" {
+		merged.WorkingDir = overrides.WorkingDir
+	}
+
+	return merged, nil
+}
+
+// ContextOptions holds service context config fields.
+type ContextOptions struct {
+	Environment map[string]string
+	UserID      *int
+	User        string
+	GroupID     *int
+	Group       string
+	WorkingDir  string
+}
+
+func copyIntPtr(p *int) *int {
+	if p == nil {
+		return nil
+	}
+	copied := *p
+	return &copied
 }

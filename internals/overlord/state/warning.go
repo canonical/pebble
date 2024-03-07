@@ -1,23 +1,37 @@
-// -*- Mode: Go; indent-tabs-mode: t -*-
-
-/*
- * Copyright (c) 2018 Canonical Ltd
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 3 as
- * published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- *
- */
+// Copyright (c) 2024 Canonical Ltd
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License version 3 as
+// published by the Free Software Foundation.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package state
+
+/*
+NOTE: Pebble Notices (added in 2023) was designed as a kind of superset of
+warnings, and we were planning to implement warnings in terms of notices.
+This is still the plan, however, we've put it on hold for now as it's not
+trivial, and warnings aren't actually recorded in Pebble at all right now, so
+it would just be busy work. Here are the reasons it's not trivial:
+
+- Warnings have a single lastShown timestamp (on the server) for when they
+  were last shown to the (single) client, whereas notices aren't marked as
+  "shown" on the server.
+- Each server response includes pending warnings (pending means not shown or
+  having a lastShown earlier than repeatAfter ago).
++ All this assumes a single client; Notices don't assume a single client.
++ One approach is to drop the warnings storage, drop the "pending warnings in
+  every request" functionality, and push ahead with warnings as notices.
++ Or we could fix this by passing the last-seen timestamp from the client to
+  the server on each request.
+*/
 
 import (
 	"encoding/json"

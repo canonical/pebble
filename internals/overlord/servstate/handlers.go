@@ -1,6 +1,7 @@
 package servstate
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -28,7 +29,7 @@ import (
 func TaskServiceRequest(task *state.Task) (*ServiceRequest, error) {
 	req := &ServiceRequest{}
 	err := task.Get("service-request", req)
-	if err != nil && err != state.ErrNoState {
+	if err != nil && !errors.Is(err, state.ErrNoState) {
 		return nil, err
 	}
 	if err == nil {
@@ -113,18 +114,20 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 		return err
 	}
 
-	releasePlan, err := m.acquirePlan()
+	mgrPlan, err := m.Plan()
 	if err != nil {
-		return fmt.Errorf("cannot acquire plan lock: %w", err)
+		return fmt.Errorf("cannot fetch plan: %w", err)
 	}
-	config, ok := m.plan.Services[request.Name]
-	releasePlan()
+	config, ok := mgrPlan.Services[request.Name]
 	if !ok {
 		return fmt.Errorf("cannot find service %q in plan", request.Name)
 	}
 
 	// Create the service object (or reuse the existing one by name).
-	service := m.serviceForStart(task, config)
+	service, taskLog := m.serviceForStart(config)
+	if taskLog != "" {
+		addTaskLog(task, taskLog)
+	}
 	if service == nil {
 		return nil
 	}
@@ -165,11 +168,13 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 // creates a new service object if one doesn't exist, returns the existing one
 // if it already exists but is stopped, or returns nil if it already exists
 // and is running.
-func (m *ServiceManager) serviceForStart(task *state.Task, config *plan.Service) *serviceData {
+//
+// It also returns a message to add to the task's log, or empty string if none.
+func (m *ServiceManager) serviceForStart(config *plan.Service) (service *serviceData, taskLog string) {
 	m.servicesLock.Lock()
 	defer m.servicesLock.Unlock()
 
-	service := m.services[config.Name]
+	service = m.services[config.Name]
 	if service == nil {
 		// Not already started, create a new service object.
 		service = &serviceData{
@@ -181,7 +186,7 @@ func (m *ServiceManager) serviceForStart(task *state.Task, config *plan.Service)
 			stopped: make(chan error, 2), // enough for killTimeElapsed to send, and exit if it happens after
 		}
 		m.services[config.Name] = service
-		return service
+		return service, ""
 	}
 
 	// Ensure config is up-to-date from the plan whenever the user starts a service.
@@ -189,26 +194,25 @@ func (m *ServiceManager) serviceForStart(task *state.Task, config *plan.Service)
 
 	switch service.state {
 	case stateInitial, stateStarting, stateRunning:
-		taskLogf(task, "Service %q already started.", config.Name)
-		return nil
+		return nil, fmt.Sprintf("Service %q already started.", config.Name)
 	case stateBackoff, stateStopped, stateExited:
 		// Start allowed when service is backing off, was stopped, or has exited.
 		service.backoffNum = 0
 		service.backoffTime = 0
 		service.transition(stateInitial)
-		return service
+		return service, ""
 	default:
 		// Cannot start service while terminating or killing, handle in start().
-		return service
+		return service, ""
 	}
 }
 
-func taskLogf(task *state.Task, format string, args ...interface{}) {
+func addTaskLog(task *state.Task, message string) {
 	st := task.State()
 	st.Lock()
 	defer st.Unlock()
 
-	task.Logf(format, args...)
+	task.Logf("%s", message)
 }
 
 func (m *ServiceManager) doStop(task *state.Task, tomb *tomb.Tomb) error {
@@ -219,7 +223,10 @@ func (m *ServiceManager) doStop(task *state.Task, tomb *tomb.Tomb) error {
 		return err
 	}
 
-	service := m.serviceForStop(task, request.Name)
+	service, taskLog := m.serviceForStop(request.Name)
+	if taskLog != "" {
+		addTaskLog(task, taskLog)
+	}
 	if service == nil {
 		return nil
 	}
@@ -251,35 +258,48 @@ func (m *ServiceManager) doStop(task *state.Task, tomb *tomb.Tomb) error {
 // serviceForStop looks up the service by name in the services map; it
 // returns the service object if it exists and is running, or nil if it's
 // already stopped or has never been started.
-func (m *ServiceManager) serviceForStop(task *state.Task, name string) *serviceData {
+//
+// It also returns a message to add to the task's log, or empty string if none.
+func (m *ServiceManager) serviceForStop(name string) (service *serviceData, taskLog string) {
 	m.servicesLock.Lock()
 	defer m.servicesLock.Unlock()
 
-	service := m.services[name]
+	service = m.services[name]
 	if service == nil {
-		taskLogf(task, "Service %q has never been started.", name)
-		return nil
+		return nil, fmt.Sprintf("Service %q has never been started.", name)
 	}
 
 	switch service.state {
 	case stateTerminating, stateKilling:
-		taskLogf(task, "Service %q already stopping.", name)
-		return nil
+		return nil, fmt.Sprintf("Service %q already stopping.", name)
 	case stateStopped:
-		taskLogf(task, "Service %q already stopped.", name)
-		return nil
+		return nil, fmt.Sprintf("Service %q already stopped.", name)
 	case stateExited:
-		taskLogf(task, "Service %q had already exited.", name)
 		service.transition(stateStopped)
-		return nil
+		return nil, fmt.Sprintf("Service %q had already exited.", name)
 	default:
-		return service
+		return service, ""
 	}
 }
 
 func (m *ServiceManager) removeService(name string) {
 	m.servicesLock.Lock()
 	defer m.servicesLock.Unlock()
+	m.removeServiceInternal(name)
+}
+
+// not concurrency-safe, please lock m.servicesLock before calling
+func (m *ServiceManager) removeServiceInternal(name string) {
+	svc, svcExists := m.services[name]
+	if !svcExists {
+		return
+	}
+	if svc.logs != nil {
+		err := svc.logs.Close()
+		if err != nil {
+			logger.Noticef("Error closing service %q ring buffer: %v", name, err)
+		}
+	}
 
 	delete(m.services, name)
 }
@@ -400,6 +420,21 @@ func (s *serviceData) startInternal() error {
 	s.cmd.Stdout = logWriter
 	s.cmd.Stderr = logWriter
 
+	// Add WaitDelay to ensure cmd.Wait() returns in a reasonable timeframe if
+	// the goroutines that cmd.Start() uses to copy Stdin/Stdout/Stderr are
+	// blocked when copying due to a sub-subprocess holding onto them. This
+	// only happens if the sub-subprocess uses setsid or setpgid to change
+	// the process group. Read more details in these issues:
+	//
+	// - https://github.com/golang/go/issues/23019
+	// - https://github.com/golang/go/issues/50436
+	//
+	// This isn't the original intent of kill-delay, but it seems reasonable
+	// to reuse it in this context. Use a value slightly less than the kill
+	// delay (90% of it) to avoid racing with trying to send SIGKILL (to a
+	// process that has already exited).
+	s.cmd.WaitDelay = s.killDelay() * 9 / 10 // will only overflow if kill-delay is 32 years!
+
 	// Start the process!
 	logger.Noticef("Service %q starting: %s", serviceName, s.config.Command)
 	err = reaper.StartCommand(s.cmd)
@@ -444,7 +479,7 @@ func (s *serviceData) startInternal() error {
 	}
 
 	// Pass buffer reference to logMgr to start log forwarding
-	s.manager.logMgr.ServiceStarted(serviceName, s.logs)
+	s.manager.logMgr.ServiceStarted(s.config, s.logs)
 
 	return nil
 }
@@ -495,8 +530,25 @@ func (s *serviceData) exited(exitCode int) error {
 			s.transition(stateExited)
 
 		case plan.ActionShutdown:
-			logger.Noticef("Service %q %s action is %q, triggering server exit", s.config.Name, onType, action)
+			shutdownStr := "success"
+			restartType := restart.RestartDaemon
+			if exitCode != 0 {
+				shutdownStr = "failure"
+				restartType = restart.RestartServiceFailure
+			}
+			logger.Noticef("Service %q %s action is %q, triggering %s shutdown",
+				s.config.Name, onType, action, shutdownStr)
+			s.manager.restarter.HandleRestart(restartType)
+			s.transition(stateExited)
+
+		case plan.ActionSuccessShutdown:
+			logger.Noticef("Service %q %s action is %q, triggering success shutdown", s.config.Name, onType, action)
 			s.manager.restarter.HandleRestart(restart.RestartDaemon)
+			s.transition(stateExited)
+
+		case plan.ActionFailureShutdown:
+			logger.Noticef("Service %q %s action is %q, triggering failure shutdown", s.config.Name, onType, action)
+			s.manager.restarter.HandleRestart(restart.RestartServiceFailure)
 			s.transition(stateExited)
 
 		case plan.ActionRestart:
@@ -537,6 +589,7 @@ func addLastLogs(task *state.Task, logBuffer *servicelog.RingBuffer) {
 		task.Logf("Most recent service output:\n%s", logs)
 	}
 }
+
 func (s *serviceData) doBackoff(action plan.ServiceAction, onType string) {
 	s.backoffNum++
 	s.backoffTime = calculateNextBackoff(s.config, s.backoffTime)
@@ -616,9 +669,9 @@ func (s *serviceData) sendSignal(signal string) error {
 }
 
 // killDelay reports the duration that this service should be given when being
-// asked to shutdown gracefully before being force terminated. The value
-// returned will either be the services pre configured value or the default
-// kill delay for pebble.
+// asked to shut down gracefully before being force-terminated. The value
+// returned will either be the service's pre-configured value, or the default
+// kill delay if that is not set.
 func (s *serviceData) killDelay() time.Duration {
 	if s.config.KillDelay.IsSet {
 		return s.config.KillDelay.Value
@@ -754,7 +807,11 @@ func (s *serviceData) checkFailed(action plan.ServiceAction) {
 			logger.Debugf("Service %q %s action is %q, remaining in current state", s.config.Name, onType, action)
 
 		case plan.ActionShutdown:
-			logger.Noticef("Service %q %s action is %q, triggering server exit", s.config.Name, onType, action)
+			logger.Noticef("Service %q %s action is %q, triggering failure shutdown", s.config.Name, onType, action)
+			s.manager.restarter.HandleRestart(restart.RestartCheckFailure)
+
+		case plan.ActionSuccessShutdown:
+			logger.Noticef("Service %q %s action is %q, triggering success shutdown", s.config.Name, onType, action)
 			s.manager.restarter.HandleRestart(restart.RestartDaemon)
 
 		case plan.ActionRestart:

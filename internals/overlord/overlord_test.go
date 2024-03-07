@@ -46,6 +46,26 @@ type overlordSuite struct {
 
 var _ = Suite(&overlordSuite{})
 
+type ticker struct {
+	tickerChannel chan time.Time
+}
+
+func (w *ticker) tick(n int) {
+	for i := 0; i < n; i++ {
+		w.tickerChannel <- time.Now()
+	}
+}
+
+func fakePruneTicker() (w *ticker, restore func()) {
+	w = &ticker{
+		tickerChannel: make(chan time.Time),
+	}
+	restore = overlord.FakePruneTicker(func(t *time.Ticker) <-chan time.Time {
+		return w.tickerChannel
+	})
+	return w, restore
+}
+
 func (ovs *overlordSuite) SetUpTest(c *C) {
 	ovs.dir = c.MkDir()
 	ovs.statePath = filepath.Join(ovs.dir, ".pebble.state")
@@ -58,7 +78,7 @@ func (ovs *overlordSuite) TestNew(c *C) {
 	restore := patch.Fake(42, 2, nil)
 	defer restore()
 
-	o, err := overlord.New(ovs.dir, nil, nil)
+	o, err := overlord.New(&overlord.Options{PebbleDir: ovs.dir})
 	c.Assert(err, IsNil)
 	c.Check(o, NotNil)
 
@@ -79,11 +99,19 @@ func (ovs *overlordSuite) TestNew(c *C) {
 }
 
 func (ovs *overlordSuite) TestNewWithGoodState(c *C) {
-	fakeState := []byte(fmt.Sprintf(`{"data":{"patch-level":%d,"patch-sublevel":%d,"patch-sublevel-last-version":%q,"some":"data"},"changes":null,"tasks":null,"last-change-id":0,"last-task-id":0,"last-lane-id":0}`, patch.Level, patch.Sublevel, cmd.Version))
+	fakeState := []byte(fmt.Sprintf(`{
+		"data": {"patch-level": %d, "patch-sublevel": %d, "patch-sublevel-last-version": %q, "some": "data"},
+		"changes": null,
+		"tasks": null,
+		"last-change-id": 0,
+		"last-task-id": 0,
+		"last-lane-id": 0,
+		"last-notice-id": 0
+	}`, patch.Level, patch.Sublevel, cmd.Version))
 	err := ioutil.WriteFile(ovs.statePath, fakeState, 0600)
 	c.Assert(err, IsNil)
 
-	o, err := overlord.New(ovs.dir, nil, nil)
+	o, err := overlord.New(&overlord.Options{PebbleDir: ovs.dir})
 	c.Assert(err, IsNil)
 
 	state := o.State()
@@ -111,7 +139,7 @@ func (ovs *overlordSuite) TestNewWithInvalidState(c *C) {
 	err := ioutil.WriteFile(ovs.statePath, fakeState, 0600)
 	c.Assert(err, IsNil)
 
-	_, err = overlord.New(ovs.dir, nil, nil)
+	_, err = overlord.New(&overlord.Options{PebbleDir: ovs.dir})
 	c.Assert(err, ErrorMatches, "cannot read state: EOF")
 }
 
@@ -130,7 +158,7 @@ func (ovs *overlordSuite) TestNewWithPatches(c *C) {
 	err := ioutil.WriteFile(ovs.statePath, fakeState, 0600)
 	c.Assert(err, IsNil)
 
-	o, err := overlord.New(ovs.dir, nil, nil)
+	o, err := overlord.New(&overlord.Options{PebbleDir: ovs.dir})
 	c.Assert(err, IsNil)
 
 	state := o.State()
@@ -161,6 +189,12 @@ type witnessManager struct {
 	expectedEnsure int
 	ensureCalled   chan struct{}
 	ensureCallback func(s *state.State) error
+	startedUp      int
+}
+
+func (wm *witnessManager) StartUp() error {
+	wm.startedUp++
+	return nil
 }
 
 func (wm *witnessManager) Ensure() error {
@@ -175,7 +209,10 @@ func (wm *witnessManager) Ensure() error {
 }
 
 func (ovs *overlordSuite) TestTrivialRunAndStop(c *C) {
-	o, err := overlord.New(ovs.dir, nil, nil)
+	o, err := overlord.New(&overlord.Options{PebbleDir: ovs.dir})
+	c.Assert(err, IsNil)
+
+	err = o.StartUp()
 	c.Assert(err, IsNil)
 
 	o.Loop()
@@ -185,7 +222,7 @@ func (ovs *overlordSuite) TestTrivialRunAndStop(c *C) {
 }
 
 func (ovs *overlordSuite) TestUnknownTasks(c *C) {
-	o, err := overlord.New(ovs.dir, nil, nil)
+	o, err := overlord.New(&overlord.Options{PebbleDir: ovs.dir})
 	c.Assert(err, IsNil)
 
 	// unknown tasks are ignored and succeed
@@ -216,6 +253,9 @@ func (ovs *overlordSuite) TestEnsureLoopRunAndStop(c *C) {
 	}
 	o.AddManager(witness)
 
+	err := o.StartUp()
+	c.Assert(err, IsNil)
+
 	o.Loop()
 	defer o.Stop()
 
@@ -227,8 +267,10 @@ func (ovs *overlordSuite) TestEnsureLoopRunAndStop(c *C) {
 	}
 	c.Check(time.Since(t0) >= 10*time.Millisecond, Equals, true)
 
-	err := o.Stop()
+	err = o.Stop()
 	c.Assert(err, IsNil)
+
+	c.Check(witness.startedUp, Equals, 1)
 }
 
 func (ovs *overlordSuite) TestEnsureLoopMediatedEnsureBeforeImmediate(c *C) {
@@ -248,6 +290,8 @@ func (ovs *overlordSuite) TestEnsureLoopMediatedEnsureBeforeImmediate(c *C) {
 		ensureCallback: ensure,
 	}
 	o.AddManager(witness)
+
+	c.Assert(o.StartUp(), IsNil)
 
 	o.Loop()
 	defer o.Stop()
@@ -276,6 +320,8 @@ func (ovs *overlordSuite) TestEnsureLoopMediatedEnsureBefore(c *C) {
 		ensureCallback: ensure,
 	}
 	o.AddManager(witness)
+
+	c.Assert(o.StartUp(), IsNil)
 
 	o.Loop()
 	defer o.Stop()
@@ -306,6 +352,9 @@ func (ovs *overlordSuite) TestEnsureBeforeSleepy(c *C) {
 	}
 	o.AddManager(witness)
 
+	err := o.StartUp()
+	c.Assert(err, IsNil)
+
 	o.Loop()
 	defer o.Stop()
 
@@ -335,6 +384,8 @@ func (ovs *overlordSuite) TestEnsureBeforeLater(c *C) {
 	}
 	o.AddManager(witness)
 
+	c.Assert(o.StartUp(), IsNil)
+
 	o.Loop()
 	defer o.Stop()
 
@@ -363,6 +414,8 @@ func (ovs *overlordSuite) TestEnsureLoopMediatedEnsureBeforeOutsideEnsure(c *C) 
 		ensureCallback: ensure,
 	}
 	o.AddManager(witness)
+
+	c.Assert(o.StartUp(), IsNil)
 
 	o.Loop()
 	defer o.Stop()
@@ -419,6 +472,8 @@ func (ovs *overlordSuite) TestEnsureLoopPrune(c *C) {
 		ensureCallback: waitForPrune,
 	}
 	o.AddManager(witness)
+
+	c.Assert(o.StartUp(), IsNil)
 
 	o.Loop()
 
@@ -482,11 +537,142 @@ func (ovs *overlordSuite) TestEnsureLoopPruneRunsMultipleTimes(c *C) {
 	c.Assert(err, IsNil)
 }
 
+func (ovs *overlordSuite) TestOverlordStartUpSetsStartOfOperation(c *C) {
+	restoreIntv := overlord.FakePruneInterval(100*time.Millisecond, 1000*time.Millisecond, 1*time.Hour)
+	defer restoreIntv()
+
+	// use real overlord, we need device manager to be there
+	o, err := overlord.New(&overlord.Options{PebbleDir: ovs.dir})
+	c.Assert(err, IsNil)
+
+	st := o.State()
+	st.Lock()
+	defer st.Unlock()
+
+	// validity check, not set
+	var opTime time.Time
+	c.Assert(st.Get("start-of-operation-time", &opTime), testutil.ErrorIs, state.ErrNoState)
+	st.Unlock()
+
+	c.Assert(o.StartUp(), IsNil)
+
+	st.Lock()
+	c.Assert(st.Get("start-of-operation-time", &opTime), IsNil)
+}
+
+func (ovs *overlordSuite) TestEnsureLoopPruneDoesntAbortShortlyAfterStartOfOperation(c *C) {
+	w, restoreTicker := fakePruneTicker()
+	defer restoreTicker()
+
+	// use real overlord, we need device manager to be there
+	o, err := overlord.New(&overlord.Options{PebbleDir: ovs.dir})
+	c.Assert(err, IsNil)
+
+	// avoid immediate transition to Done due to unknown kind
+	o.TaskRunner().AddHandler("bar", func(t *state.Task, _ *tomb.Tomb) error {
+		return &state.Retry{}
+	}, nil)
+
+	st := o.State()
+	st.Lock()
+
+	// start of operation time is 50min ago, this is less then abort limit
+	opTime := time.Now().Add(-50 * time.Minute)
+	st.Set("start-of-operation-time", opTime)
+
+	// spawn time one month ago
+	spawnTime := time.Now().AddDate(0, -1, 0)
+	restoreTimeNow := state.FakeTime(spawnTime)
+
+	t := st.NewTask("bar", "...")
+	chg := st.NewChange("other-change", "...")
+	chg.AddTask(t)
+
+	restoreTimeNow()
+
+	// validity
+	c.Check(st.Changes(), HasLen, 1)
+
+	st.Unlock()
+	c.Assert(o.StartUp(), IsNil)
+
+	// start the loop that runs the prune ticker
+	o.Loop()
+	w.tick(2)
+
+	c.Assert(o.Stop(), IsNil)
+
+	st.Lock()
+	defer st.Unlock()
+	c.Assert(st.Changes(), HasLen, 1)
+	c.Check(chg.Status(), Equals, state.DoingStatus)
+}
+
+func (ovs *overlordSuite) TestEnsureLoopPruneAbortsOld(c *C) {
+	// Ensure interval is not relevant for this test
+	restoreEnsureIntv := overlord.FakeEnsureInterval(10 * time.Hour)
+	defer restoreEnsureIntv()
+
+	w, restoreTicker := fakePruneTicker()
+	defer restoreTicker()
+
+	// use real overlord, we need device manager to be there
+	o, err := overlord.New(&overlord.Options{PebbleDir: ovs.dir})
+	c.Assert(err, IsNil)
+
+	// avoid immediate transition to Done due to having unknown kind
+	o.TaskRunner().AddHandler("bar", func(t *state.Task, _ *tomb.Tomb) error {
+		return &state.Retry{}
+	}, nil)
+
+	st := o.State()
+	st.Lock()
+
+	// start of operation time is a year ago
+	opTime := time.Now().AddDate(-1, 0, 0)
+	st.Set("start-of-operation-time", opTime)
+
+	st.Unlock()
+	c.Assert(o.StartUp(), IsNil)
+	st.Lock()
+
+	// spawn time one month ago
+	spawnTime := time.Now().AddDate(0, -1, 0)
+	restoreTimeNow := state.FakeTime(spawnTime)
+	t := st.NewTask("bar", "...")
+	chg := st.NewChange("other-change", "...")
+	chg.AddTask(t)
+
+	restoreTimeNow()
+
+	// validity
+	c.Check(st.Changes(), HasLen, 1)
+	st.Unlock()
+
+	// start the loop that runs the prune ticker
+	o.Loop()
+	w.tick(2)
+
+	c.Assert(o.Stop(), IsNil)
+
+	st.Lock()
+	defer st.Unlock()
+
+	// validity
+	op, err := o.StartOfOperationTime()
+	c.Assert(err, IsNil)
+	c.Check(op.Equal(opTime), Equals, true)
+
+	c.Assert(st.Changes(), HasLen, 1)
+	// change was aborted
+	c.Check(chg.Status(), Equals, state.HoldStatus)
+}
+
 func (ovs *overlordSuite) TestCheckpoint(c *C) {
 	oldUmask := syscall.Umask(0)
 	defer syscall.Umask(oldUmask)
 
-	o, err := overlord.New(ovs.dir, nil, nil)
+	o, err := overlord.New(&overlord.Options{PebbleDir: ovs.dir})
 	c.Assert(err, IsNil)
 
 	s := o.State()
@@ -727,7 +913,7 @@ func (ovs *overlordSuite) TestSettleExplicitEnsureBefore(c *C) {
 }
 
 func (ovs *overlordSuite) TestRequestRestartNoHandler(c *C) {
-	o, err := overlord.New(ovs.dir, nil, nil)
+	o, err := overlord.New(&overlord.Options{PebbleDir: ovs.dir})
 	c.Assert(err, IsNil)
 
 	st := o.State()
@@ -760,7 +946,7 @@ func (rb *testRestartHandler) RebootIsMissing(_ *state.State) error {
 func (ovs *overlordSuite) TestRequestRestartHandler(c *C) {
 	rb := &testRestartHandler{}
 
-	o, err := overlord.New(ovs.dir, rb, nil)
+	o, err := overlord.New(&overlord.Options{PebbleDir: ovs.dir, RestartHandler: rb})
 	c.Assert(err, IsNil)
 
 	st := o.State()
@@ -779,7 +965,7 @@ func (ovs *overlordSuite) TestVerifyRebootNoPendingReboot(c *C) {
 
 	rb := &testRestartHandler{}
 
-	_, err = overlord.New(ovs.dir, rb, nil)
+	_, err = overlord.New(&overlord.Options{PebbleDir: ovs.dir, RestartHandler: rb})
 	c.Assert(err, IsNil)
 
 	c.Check(rb.rebootState, Equals, "as-expected")
@@ -792,7 +978,7 @@ func (ovs *overlordSuite) TestVerifyRebootOK(c *C) {
 
 	rb := &testRestartHandler{}
 
-	_, err = overlord.New(ovs.dir, rb, nil)
+	_, err = overlord.New(&overlord.Options{PebbleDir: ovs.dir, RestartHandler: rb})
 	c.Assert(err, IsNil)
 
 	c.Check(rb.rebootState, Equals, "as-expected")
@@ -806,7 +992,7 @@ func (ovs *overlordSuite) TestVerifyRebootOKButError(c *C) {
 	e := errors.New("boom")
 	rb := &testRestartHandler{rebootVerifiedErr: e}
 
-	_, err = overlord.New(ovs.dir, rb, nil)
+	_, err = overlord.New(&overlord.Options{PebbleDir: ovs.dir, RestartHandler: rb})
 	c.Assert(err, Equals, e)
 
 	c.Check(rb.rebootState, Equals, "as-expected")
@@ -822,7 +1008,7 @@ func (ovs *overlordSuite) TestVerifyRebootIsMissing(c *C) {
 
 	rb := &testRestartHandler{}
 
-	_, err = overlord.New(ovs.dir, rb, nil)
+	_, err = overlord.New(&overlord.Options{PebbleDir: ovs.dir, RestartHandler: rb})
 	c.Assert(err, IsNil)
 
 	c.Check(rb.rebootState, Equals, "did-not-happen")
@@ -839,7 +1025,7 @@ func (ovs *overlordSuite) TestVerifyRebootIsMissingError(c *C) {
 	e := errors.New("boom")
 	rb := &testRestartHandler{rebootVerifiedErr: e}
 
-	_, err = overlord.New(ovs.dir, rb, nil)
+	_, err = overlord.New(&overlord.Options{PebbleDir: ovs.dir, RestartHandler: rb})
 	c.Assert(err, Equals, e)
 
 	c.Check(rb.rebootState, Equals, "did-not-happen")
@@ -856,6 +1042,8 @@ func (ovs *overlordSuite) TestOverlordCanStandby(c *C) {
 	}
 	o.AddManager(witness)
 
+	c.Assert(o.StartUp(), IsNil)
+
 	// can only standby after loop ran once
 	c.Assert(o.CanStandby(), Equals, false)
 
@@ -869,4 +1057,41 @@ func (ovs *overlordSuite) TestOverlordCanStandby(c *C) {
 	}
 
 	c.Assert(o.CanStandby(), Equals, true)
+}
+
+func (ovs *overlordSuite) TestStartOfOperationTimeAlreadySet(c *C) {
+	o := overlord.Fake()
+	st := o.State()
+	st.Lock()
+	defer st.Unlock()
+
+	op := time.Now().AddDate(0, -1, 0)
+	st.Set("start-of-operation-time", op)
+
+	operationTime, err := o.StartOfOperationTime()
+	c.Assert(err, IsNil)
+	c.Check(operationTime.Equal(op), Equals, true)
+}
+
+func (s *overlordSuite) TestStartOfOperationSetTime(c *C) {
+	o := overlord.Fake()
+	st := o.State()
+	st.Lock()
+	defer st.Unlock()
+
+	now := time.Now().Add(-1 * time.Second)
+	overlord.FakeTimeNow(func() time.Time {
+		return now
+	})
+
+	operationTime, err := o.StartOfOperationTime()
+	c.Assert(err, IsNil)
+	c.Check(operationTime.Equal(now), Equals, true)
+
+	// repeated call returns already set time
+	prev := now
+	now = time.Now().Add(-10 * time.Hour)
+	operationTime, err = o.StartOfOperationTime()
+	c.Assert(err, IsNil)
+	c.Check(operationTime.Equal(prev), Equals, true)
 }

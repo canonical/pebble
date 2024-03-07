@@ -16,6 +16,7 @@
 package overlord
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -49,6 +50,28 @@ var (
 	defaultCachedDownloads = 5
 )
 
+var pruneTickerC = func(t *time.Ticker) <-chan time.Time {
+	return t.C
+}
+
+// Extension represents an extension of the Overlord.
+type Extension interface {
+	// ExtraManagers allows additional StateManagers to be used.
+	ExtraManagers(o *Overlord) ([]StateManager, error)
+}
+
+// Options is the arguments passed to construct an Overlord.
+type Options struct {
+	// PebbleDir is the path to the pebble directory. It must be provided.
+	PebbleDir string
+	// RestartHandler is an optional structure to handle restart requests.
+	RestartHandler restart.Handler
+	// ServiceOutput is an optional output for the logging manager.
+	ServiceOutput io.Writer
+	// Extension allows extending the overlord with externally defined features.
+	Extension Extension
+}
+
 // Overlord is the central manager of the system, keeping track
 // of all available state managers and related helpers.
 type Overlord struct {
@@ -63,37 +86,43 @@ type Overlord struct {
 	ensureRun   int32
 	pruneTicker *time.Ticker
 
+	startOfOperationTime time.Time
+
 	// managers
 	inited     bool
+	startedUp  bool
 	runner     *state.TaskRunner
 	serviceMgr *servstate.ServiceManager
 	commandMgr *cmdstate.CommandManager
 	checkMgr   *checkstate.CheckManager
 	logMgr     *logstate.LogManager
+
+	extension Extension
 }
 
-// New creates a new Overlord with all its state managers.
-// It can be provided with an optional restart.Handler.
-func New(pebbleDir string, restartHandler restart.Handler, serviceOutput io.Writer) (*Overlord, error) {
+// New creates an Overlord with all its state managers.
+func New(opts *Options) (*Overlord, error) {
+
 	o := &Overlord{
-		pebbleDir: pebbleDir,
+		pebbleDir: opts.PebbleDir,
 		loopTomb:  new(tomb.Tomb),
 		inited:    true,
+		extension: opts.Extension,
 	}
 
-	if !filepath.IsAbs(pebbleDir) {
-		return nil, fmt.Errorf("directory %q must be absolute", pebbleDir)
+	if !filepath.IsAbs(o.pebbleDir) {
+		return nil, fmt.Errorf("directory %q must be absolute", o.pebbleDir)
 	}
-	if !osutil.IsDir(pebbleDir) {
-		return nil, fmt.Errorf("directory %q does not exist", pebbleDir)
+	if !osutil.IsDir(o.pebbleDir) {
+		return nil, fmt.Errorf("directory %q does not exist", o.pebbleDir)
 	}
-	statePath := filepath.Join(pebbleDir, ".pebble.state")
+	statePath := filepath.Join(o.pebbleDir, ".pebble.state")
 
 	backend := &overlordStateBackend{
 		path:         statePath,
 		ensureBefore: o.ensureBefore,
 	}
-	s, err := loadState(statePath, restartHandler, backend)
+	s, err := loadState(statePath, opts.RestartHandler, backend)
 	if err != nil {
 		return nil, err
 	}
@@ -108,16 +137,25 @@ func New(pebbleDir string, restartHandler restart.Handler, serviceOutput io.Writ
 	o.runner.AddOptionalHandler(matchAnyUnknownTask, handleUnknownTask, nil)
 
 	o.logMgr = logstate.NewLogManager()
-	o.addManager(o.logMgr)
 
-	o.serviceMgr, err = servstate.NewManager(s, o.runner, o.pebbleDir, serviceOutput, restartHandler, o.logMgr)
+	o.serviceMgr, err = servstate.NewManager(
+		s,
+		o.runner,
+		o.pebbleDir,
+		opts.ServiceOutput,
+		opts.RestartHandler,
+		o.logMgr)
 	if err != nil {
 		return nil, err
 	}
-	o.addManager(o.serviceMgr)
+	o.stateEng.AddManager(o.serviceMgr)
+	// The log manager should be stopped after the service manager, because
+	// ServiceManager.Stop closes the service ring buffers, which signals to the
+	// log manager that it's okay to stop log forwarding.
+	o.stateEng.AddManager(o.logMgr)
 
 	o.commandMgr = cmdstate.NewManager(o.runner)
-	o.addManager(o.commandMgr)
+	o.stateEng.AddManager(o.commandMgr)
 
 	o.checkMgr = checkstate.NewManager()
 
@@ -130,14 +168,26 @@ func New(pebbleDir string, restartHandler restart.Handler, serviceOutput io.Writ
 	// Tell service manager about check failures.
 	o.checkMgr.NotifyCheckFailed(o.serviceMgr.CheckFailed)
 
-	// the shared task runner should be added last!
+	if o.extension != nil {
+		extraManagers, err := o.extension.ExtraManagers(o)
+		if err != nil {
+			return nil, err
+		}
+		for _, manager := range extraManagers {
+			o.stateEng.AddManager(manager)
+		}
+	}
+
+	// TaskRunner must be the last manager added to the StateEngine,
+	// because TaskRunner runs all the tasks required by the managers that ran
+	// before it.
 	o.stateEng.AddManager(o.runner)
 
 	return o, nil
 }
 
-func (o *Overlord) addManager(mgr StateManager) {
-	o.stateEng.AddManager(mgr)
+func (o *Overlord) Extension() Extension {
+	return o.extension
 }
 
 func loadState(statePath string, restartHandler restart.Handler, backend state.Backend) (*state.State, error) {
@@ -210,6 +260,23 @@ func initRestart(s *state.State, curBootID string, restartHandler restart.Handle
 	return restart.Init(s, curBootID, restartHandler)
 }
 
+func (o *Overlord) StartUp() error {
+	if o.startedUp {
+		return nil
+	}
+	o.startedUp = true
+
+	var err error
+	st := o.State()
+	st.Lock()
+	o.startOfOperationTime, err = o.StartOfOperationTime()
+	st.Unlock()
+	if err != nil {
+		return fmt.Errorf("cannot get start of operation time: %s", err)
+	}
+	return o.stateEng.StartUp()
+}
+
 func (o *Overlord) ensureTimerSetup() {
 	o.ensureLock.Lock()
 	defer o.ensureLock.Unlock()
@@ -263,14 +330,15 @@ func (o *Overlord) Loop() {
 			// continue to the next Ensure() try for now
 			o.stateEng.Ensure()
 			o.ensureDidRun()
+			pruneC := pruneTickerC(o.pruneTicker)
 			select {
 			case <-o.loopTomb.Dying():
 				return nil
 			case <-o.ensureTimer.C:
-			case <-o.pruneTicker.C:
+			case <-pruneC:
 				st := o.State()
 				st.Lock()
-				st.Prune(pruneWait, abortWait, pruneMaxChanges)
+				st.Prune(o.startOfOperationTime, pruneWait, abortWait, pruneMaxChanges)
 				st.Unlock()
 			}
 		}
@@ -295,6 +363,10 @@ func (o *Overlord) Stop() error {
 }
 
 func (o *Overlord) settle(timeout time.Duration, beforeCleanups func()) error {
+	if err := o.StartUp(); err != nil {
+		return err
+	}
+
 	func() {
 		o.ensureLock.Lock()
 		defer o.ensureLock.Unlock()
@@ -364,7 +436,7 @@ func (o *Overlord) settle(timeout time.Duration, beforeCleanups func()) error {
 // is scheduled. It then waits similarly for all ready changes to
 // reach the clean state. Chiefly for tests. Cannot be used in
 // conjunction with Loop. If timeout is non-zero and settling takes
-// longer than timeout, returns an error.
+// longer than timeout, returns an error. Calls StartUp as well.
 func (o *Overlord) Settle(timeout time.Duration) error {
 	return o.settle(timeout, nil)
 }
@@ -376,7 +448,7 @@ func (o *Overlord) Settle(timeout time.Duration) error {
 // changes to reach the clean state, but calls once the provided
 // callback before doing that. Chiefly for tests. Cannot be used in
 // conjunction with Loop. If timeout is non-zero and settling takes
-// longer than timeout, returns an error.
+// longer than timeout, returns an error. Calls StartUp as well.
 func (o *Overlord) SettleObserveBeforeCleanups(timeout time.Duration, beforeCleanups func()) error {
 	return o.settle(timeout, beforeCleanups)
 }
@@ -441,7 +513,24 @@ func (o *Overlord) AddManager(mgr StateManager) {
 	if o.inited {
 		panic("internal error: cannot add managers to a fully initialized Overlord")
 	}
-	o.addManager(mgr)
+	o.stateEng.AddManager(mgr)
+}
+
+var timeNow = time.Now
+
+func (m *Overlord) StartOfOperationTime() (time.Time, error) {
+	var opTime time.Time
+	err := m.State().Get("start-of-operation-time", &opTime)
+	if err == nil {
+		return opTime, nil
+	}
+	if err != nil && !errors.Is(err, state.ErrNoState) {
+		return opTime, err
+	}
+	opTime = timeNow()
+
+	m.State().Set("start-of-operation-time", opTime)
+	return opTime, nil
 }
 
 type fakeBackend struct {

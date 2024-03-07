@@ -20,12 +20,14 @@ import (
 	"github.com/canonical/pebble/client"
 )
 
-var shortRestartHelp = "Restart a service"
-var longRestartHelp = `
+const cmdRestartSummary = "Restart a service"
+const cmdRestartDescription = `
 The restart command restarts the named service(s) in the correct order.
 `
 
 type cmdRestart struct {
+	client *client.Client
+
 	waitMixin
 	Positional struct {
 		Services []string `positional-arg-name:"<service>" required:"1"`
@@ -33,7 +35,15 @@ type cmdRestart struct {
 }
 
 func init() {
-	addCommand("restart", shortRestartHelp, longRestartHelp, func() flags.Commander { return &cmdRestart{} }, waitDescs, nil)
+	AddCommand(&CmdInfo{
+		Name:        "restart",
+		Summary:     cmdRestartSummary,
+		Description: cmdRestartDescription,
+		ArgsHelp:    waitArgsHelp,
+		New: func(opts *CmdOptions) flags.Commander {
+			return &cmdRestart{client: opts.Client}
+		},
+	})
 }
 
 func (cmd cmdRestart) Execute(args []string) error {
@@ -49,7 +59,7 @@ func (cmd cmdRestart) Execute(args []string) error {
 		return err
 	}
 
-	if _, err := cmd.wait(changeID); err != nil {
+	if _, err := cmd.wait(cmd.client, changeID); err != nil {
 		if err == noWait {
 			return nil
 		}

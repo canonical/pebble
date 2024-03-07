@@ -21,9 +21,9 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/canonical/pebble/internals/overlord/state"
-
 	"gopkg.in/check.v1"
+
+	"github.com/canonical/pebble/internals/overlord/state"
 )
 
 func (s *apiSuite) testWarnings(c *check.C, all bool, body io.Reader) (calls string, result interface{}) {
@@ -53,7 +53,7 @@ func (s *apiSuite) testWarnings(c *check.C, all bool, body io.Reader) (calls str
 	if all {
 		q.Set("select", "all")
 	}
-	req, err := http.NewRequest(method, "/v2/warnings?"+q.Encode(), body)
+	req, err := http.NewRequest(method, "/v1/warnings?"+q.Encode(), body)
 	c.Assert(err, check.IsNil)
 
 	rsp, ok := f(warningsCmd, req, nil).(*resp)

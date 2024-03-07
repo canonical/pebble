@@ -31,42 +31,57 @@ var (
 )
 
 type waitMixin struct {
-	clientMixin
 	NoWait       bool `long:"no-wait"`
-	skipAbort    bool
 	hideProgress bool
 }
 
-var waitDescs = map[string]string{
-	"no-wait": "Do not wait for the operation to finish but just print the change id.",
+var waitArgsHelp = map[string]string{
+	"--no-wait": "Do not wait for the operation to finish but just print the change id.",
 }
 
 var noWait = errors.New("no wait for op")
 
-func (wmx waitMixin) wait(id string) (*client.Change, error) {
+func (wmx waitMixin) wait(cli *client.Client, id string) (*client.Change, error) {
 	if wmx.NoWait {
 		fmt.Fprintf(Stdout, "%s\n", id)
 		return nil, noWait
 	}
-	cli := wmx.client
 
+	change, err := Wait(cli, id, &WaitOptions{hideProgress: wmx.hideProgress})
+	if err != nil {
+		return nil, err
+	}
+	return change, nil
+}
+
+type WaitOptions struct {
+	// Do not display a progress bar.
+	hideProgress bool
+}
+
+// Wait polls the progress of a change and displays a progress bar.
+//
+// This function blocks until the change is done or fails.
+// If the change has numeric progress information, the information is
+// displayed as a progress bar.
+func Wait(cli *client.Client, changeID string, opts *WaitOptions) (*client.Change, error) {
 	// Intercept sigint
 	sigs := make(chan os.Signal, 2)
 	signal.Notify(sigs, os.Interrupt)
 	go func() {
 		sig := <-sigs
 		// sig is nil if sigs was closed
-		if sig == nil || wmx.skipAbort {
+		if sig == nil {
 			return
 		}
-		_, err := wmx.client.Abort(id)
+		_, err := cli.Abort(changeID)
 		if err != nil {
 			fmt.Fprintf(Stderr, err.Error()+"\n")
 		}
 	}()
 
 	var pb progress.Meter
-	if wmx.hideProgress {
+	if opts.hideProgress {
 		pb = progress.NullMeter{}
 	} else {
 		pb = progress.MakeProgressBar()
@@ -85,7 +100,7 @@ func (wmx waitMixin) wait(id string) (*client.Change, error) {
 	lastLog := map[string]string{}
 	for {
 		var rebootingErr error
-		chg, err := cli.Change(id)
+		chg, err := cli.Change(changeID)
 		if err != nil {
 			// A client.Error means we were able to communicate with
 			// the server (got an answer).

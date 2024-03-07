@@ -24,76 +24,90 @@ import (
 	"github.com/canonical/pebble/internals/overlord/state"
 )
 
-var api = []*Command{{
-	// See daemon.go:canAccess for details how the access is controlled.
-	Path:    "/v1/system-info",
-	GuestOK: true,
-	GET:     v1SystemInfo,
+var API = []*Command{{
+	Path:       "/v1/system-info",
+	ReadAccess: OpenAccess{},
+	GET:        v1SystemInfo,
 }, {
-	Path:    "/v1/health",
-	GuestOK: true,
-	GET:     v1Health,
+	Path:       "/v1/health",
+	ReadAccess: OpenAccess{},
+	GET:        v1Health,
 }, {
-	Path:   "/v1/warnings",
-	UserOK: true,
-	GET:    v1GetWarnings,
-	POST:   v1AckWarnings,
+	Path:        "/v1/warnings",
+	ReadAccess:  UserAccess{},
+	WriteAccess: UserAccess{},
+	GET:         v1GetWarnings,
+	POST:        v1AckWarnings,
 }, {
-	Path:   "/v1/changes",
-	UserOK: true,
-	GET:    v1GetChanges,
+	Path:       "/v1/changes",
+	ReadAccess: UserAccess{},
+	GET:        v1GetChanges,
 }, {
-	Path:   "/v1/changes/{id}",
-	UserOK: true,
-	GET:    v1GetChange,
-	POST:   v1PostChange,
+	Path:        "/v1/changes/{id}",
+	ReadAccess:  UserAccess{},
+	WriteAccess: UserAccess{},
+	GET:         v1GetChange,
+	POST:        v1PostChange,
 }, {
-	Path:   "/v1/changes/{id}/wait",
-	UserOK: true,
-	GET:    v1GetChangeWait,
+	Path:       "/v1/changes/{id}/wait",
+	ReadAccess: UserAccess{},
+	GET:        v1GetChangeWait,
 }, {
-	Path:   "/v1/services",
-	UserOK: true,
-	GET:    v1GetServices,
-	POST:   v1PostServices,
+	Path:        "/v1/services",
+	ReadAccess:  UserAccess{},
+	WriteAccess: UserAccess{},
+	GET:         v1GetServices,
+	POST:        v1PostServices,
 }, {
-	Path:   "/v1/services/{name}",
-	UserOK: true,
-	GET:    v1GetService,
-	POST:   v1PostService,
+	Path:        "/v1/services/{name}",
+	ReadAccess:  UserAccess{},
+	WriteAccess: UserAccess{},
+	GET:         v1GetService,
+	POST:        v1PostService,
 }, {
-	Path:   "/v1/plan",
-	UserOK: true,
-	GET:    v1GetPlan,
+	Path:       "/v1/plan",
+	ReadAccess: UserAccess{},
+	GET:        v1GetPlan,
 }, {
-	Path:   "/v1/layers",
-	UserOK: true,
-	POST:   v1PostLayers,
+	Path:        "/v1/layers",
+	WriteAccess: UserAccess{},
+	POST:        v1PostLayers,
 }, {
-	Path:   "/v1/files",
-	UserOK: true,
-	GET:    v1GetFiles,
-	POST:   v1PostFiles,
+	Path:        "/v1/files",
+	ReadAccess:  UserAccess{},
+	WriteAccess: UserAccess{},
+	GET:         v1GetFiles,
+	POST:        v1PostFiles,
 }, {
-	Path:   "/v1/logs",
-	UserOK: true,
-	GET:    v1GetLogs,
+	Path:       "/v1/logs",
+	ReadAccess: UserAccess{},
+	GET:        v1GetLogs,
 }, {
-	Path:   "/v1/exec",
-	UserOK: true,
-	POST:   v1PostExec,
+	Path:        "/v1/exec",
+	WriteAccess: UserAccess{},
+	POST:        v1PostExec,
 }, {
-	Path:   "/v1/tasks/{task-id}/websocket/{websocket-id}",
-	UserOK: true,
-	GET:    v1GetTaskWebsocket,
+	Path:       "/v1/tasks/{task-id}/websocket/{websocket-id}",
+	ReadAccess: UserAccess{},
+	GET:        v1GetTaskWebsocket,
 }, {
-	Path:   "/v1/signals",
-	UserOK: true,
-	POST:   v1PostSignals,
+	Path:        "/v1/signals",
+	WriteAccess: UserAccess{},
+	POST:        v1PostSignals,
 }, {
-	Path:   "/v1/checks",
-	UserOK: true,
-	GET:    v1GetChecks,
+	Path:       "/v1/checks",
+	ReadAccess: UserAccess{},
+	GET:        v1GetChecks,
+}, {
+	Path:        "/v1/notices",
+	ReadAccess:  UserAccess{},
+	WriteAccess: UserAccess{},
+	GET:         v1GetNotices,
+	POST:        v1PostNotices,
+}, {
+	Path:       "/v1/notices/{id}",
+	ReadAccess: UserAccess{},
+	GET:        v1GetNotice,
 }}
 
 var (
@@ -107,7 +121,7 @@ var (
 	muxVars = mux.Vars
 )
 
-func v1SystemInfo(c *Command, r *http.Request, _ *userState) Response {
+func v1SystemInfo(c *Command, r *http.Request, _ *UserState) Response {
 	state := c.d.overlord.State()
 	state.Lock()
 	defer state.Unlock()

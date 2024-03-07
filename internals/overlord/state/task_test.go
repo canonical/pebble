@@ -1,21 +1,16 @@
-// -*- Mode: Go; indent-tabs-mode: t -*-
-
-/*
- * Copyright (c) 2016 Canonical Ltd
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 3 as
- * published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- *
- */
+// Copyright (c) 2024 Canonical Ltd
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License version 3 as
+// published by the Free Software Foundation.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package state_test
 
@@ -127,7 +122,7 @@ func (ts *taskSuite) TestClear(c *C) {
 
 	t.Clear("a")
 
-	c.Check(t.Get("a", &v), Equals, state.ErrNoState)
+	c.Check(t.Get("a", &v), testutil.ErrorIs, state.ErrNoState)
 }
 
 func (ts *taskSuite) TestStatusAndSetStatus(c *C) {
@@ -142,6 +137,60 @@ func (ts *taskSuite) TestStatusAndSetStatus(c *C) {
 	t.SetStatus(state.DoneStatus)
 
 	c.Check(t.Status(), Equals, state.DoneStatus)
+}
+
+func (ts *taskSuite) TestSetDoneAfterAbortNoop(c *C) {
+	st := state.New(nil)
+	st.Lock()
+	defer st.Unlock()
+
+	t := st.NewTask("download", "1...")
+	t.SetStatus(state.AbortStatus)
+	c.Check(t.Status(), Equals, state.AbortStatus)
+	t.SetStatus(state.DoneStatus)
+	c.Check(t.Status(), Equals, state.AbortStatus)
+}
+
+func (ts *taskSuite) TestSetWaitAfterAbortNoop(c *C) {
+	st := state.New(nil)
+	st.Lock()
+	defer st.Unlock()
+
+	t := st.NewTask("download", "1...")
+	t.SetStatus(state.AbortStatus)
+	c.Check(t.Status(), Equals, state.AbortStatus)
+	t.SetToWait(state.DoneStatus) // noop
+	c.Check(t.Status(), Equals, state.AbortStatus)
+	c.Check(t.WaitedStatus(), Equals, state.DefaultStatus)
+}
+
+func (ts *taskSuite) TestSetWait(c *C) {
+	st := state.New(nil)
+	st.Lock()
+	defer st.Unlock()
+
+	t := st.NewTask("download", "1...")
+	t.SetToWait(state.DoneStatus)
+	c.Check(t.Status(), Equals, state.WaitStatus)
+	c.Check(t.WaitedStatus(), Equals, state.DoneStatus)
+	t.SetToWait(state.UndoStatus)
+	c.Check(t.Status(), Equals, state.WaitStatus)
+	c.Check(t.WaitedStatus(), Equals, state.UndoStatus)
+}
+
+func (ts *taskSuite) TestTaskMarshalsWaitStatus(c *C) {
+	st := state.New(nil)
+	st.Lock()
+	defer st.Unlock()
+
+	t1 := st.NewTask("download", "1...")
+	t1.SetToWait(state.UndoStatus)
+
+	d, err := t1.MarshalJSON()
+	c.Assert(err, IsNil)
+
+	needle := fmt.Sprintf(`"waited-status":%d`, t1.WaitedStatus())
+	c.Assert(string(d), testutil.Contains, needle)
 }
 
 func (ts *taskSuite) TestIsCleanAndSetClean(c *C) {
@@ -561,6 +610,10 @@ func (cs *taskSuite) TestTaskSetEdge(c *C) {
 	// edges are just typed strings
 	edge1 := state.TaskSetEdge("on-edge")
 	edge2 := state.TaskSetEdge("eddie")
+	edge3 := state.TaskSetEdge("not-found")
+
+	// nil task causes panic
+	c.Check(func() { ts.MarkEdge(nil, edge1) }, PanicMatches, `cannot set edge "on-edge" with nil task`)
 
 	// no edge marked yet
 	t, err := ts.Edge(edge1)
@@ -590,6 +643,12 @@ func (cs *taskSuite) TestTaskSetEdge(c *C) {
 	t, err = ts.Edge(edge1)
 	c.Assert(t, Equals, t3)
 	c.Assert(err, IsNil)
+
+	// it is possible to check if edge exists without failing
+	t = ts.MaybeEdge(edge1)
+	c.Assert(t, Equals, t3)
+	t = ts.MaybeEdge(edge3)
+	c.Assert(t, IsNil)
 }
 
 func (cs *taskSuite) TestTaskAddAllWithEdges(c *C) {

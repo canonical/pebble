@@ -1,21 +1,16 @@
-// -*- Mode: Go; indent-tabs-mode: t -*-
-
-/*
- * Copyright (c) 2016 Canonical Ltd
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 3 as
- * published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- *
- */
+// Copyright (c) 2024 Canonical Ltd
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License version 3 as
+// published by the Free Software Foundation.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package state
 
@@ -46,6 +41,23 @@ func (r *Retry) Error() string {
 	return "task should be retried"
 }
 
+// Wait is returned from a handler to signal that the task cannot
+// proceed at the moment maybe because some manual action from the
+// user required at this point or because of errors. The task
+// will be set to WaitStatus, and it's wait complete status will be
+// set to WaitedStatus.
+type Wait struct {
+	Reason string
+	// If not explicitly set, then WaitedStatus will default to
+	// DoneStatus, meaning that the task will be set to DoneStatus
+	// after the wait has resolved.
+	WaitedStatus Status
+}
+
+func (r *Wait) Error() string {
+	return "task set to wait, manual action required"
+}
+
 type blockedFunc func(t *Task, running []*Task) bool
 
 // TaskRunner controls the running of goroutines to execute known task kinds.
@@ -61,6 +73,9 @@ type TaskRunner struct {
 
 	blocked     []blockedFunc
 	someBlocked bool
+
+	// optional callback executed on task errors
+	taskErrorCallback func(err error)
 
 	// go-routines lifecycle
 	tombs map[string]*tomb.Tomb
@@ -83,6 +98,11 @@ func NewTaskRunner(s *State) *TaskRunner {
 		cleanups: make(map[string]HandlerFunc),
 		tombs:    make(map[string]*tomb.Tomb),
 	}
+}
+
+// OnTaskError sets an error callback executed when any task errors out.
+func (r *TaskRunner) OnTaskError(f func(err error)) {
+	r.taskErrorCallback = f
 }
 
 // AddHandler registers the functions to concurrently call for doing and
@@ -214,7 +234,7 @@ func (r *TaskRunner) run(t *Task) {
 		switch err.(type) {
 		case nil:
 			// we are ok
-		case *Retry:
+		case *Retry, *Wait:
 			// preserve
 		default:
 			if r.stopped {
@@ -227,12 +247,23 @@ func (r *TaskRunner) run(t *Task) {
 		switch x := err.(type) {
 		case *Retry:
 			// Handler asked to be called again later.
-			// TODO Allow postponing retries past the next Ensure.
 			if t.Status() == AbortStatus {
 				// Would work without it but might take two ensures.
 				r.tryUndo(t)
 			} else if x.After != 0 {
 				t.At(timeNow().Add(x.After))
+			}
+		case *Wait:
+			if t.Status() == AbortStatus {
+				// Would work without it but might take two ensures.
+				r.tryUndo(t)
+			} else {
+				// Default to DoneStatus if no status is set in Wait
+				waitedStatus := x.WaitedStatus
+				if waitedStatus == DefaultStatus {
+					waitedStatus = DoneStatus
+				}
+				t.SetToWait(waitedStatus)
 			}
 		case nil:
 			var next []*Task
@@ -259,6 +290,11 @@ func (r *TaskRunner) run(t *Task) {
 			r.abortLanes(t.Change(), t.Lanes())
 			t.SetStatus(ErrorStatus)
 			t.Errorf("%s", err)
+			// ensure the error is available in the global log too
+			logger.Noticef("[change %s %q task] failed: %v", t.Change().ID(), t.Summary(), err)
+			if r.taskErrorCallback != nil {
+				r.taskErrorCallback(err)
+			}
 		}
 
 		return nil
@@ -386,6 +422,10 @@ ConsiderTasks:
 			if !t.IsClean() {
 				r.clean(t)
 			}
+			continue
+		}
+		if status == WaitStatus {
+			// nothing more to run
 			continue
 		}
 

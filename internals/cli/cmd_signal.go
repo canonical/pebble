@@ -23,21 +23,33 @@ import (
 	"github.com/canonical/pebble/client"
 )
 
+const cmdSignalSummary = "Send a signal to one or more running services"
+const cmdSignalDescription = `
+The signal command sends a signal to one or more running services. The signal
+name must be uppercase, for example:
+
+{{.ProgramName}} signal HUP mysql nginx
+`
+
 type cmdSignal struct {
-	clientMixin
+	client *client.Client
+
 	Positional struct {
 		Signal   string   `positional-arg-name:"<SIGNAL>"`
 		Services []string `positional-arg-name:"<service>"`
 	} `positional-args:"yes" required:"yes"`
 }
 
-var shortSignalHelp = "Send a signal to one or more running services"
-var longSignalHelp = `
-The signal command sends a signal to one or more running services. The signal
-name must be uppercase, for example:
-
-pebble signal HUP mysql nginx
-`
+func init() {
+	AddCommand(&CmdInfo{
+		Name:        "signal",
+		Summary:     cmdSignalSummary,
+		Description: cmdSignalDescription,
+		New: func(opts *CmdOptions) flags.Commander {
+			return &cmdSignal{client: opts.Client}
+		},
+	})
+}
 
 func (cmd *cmdSignal) Execute(args []string) error {
 	if strings.ToUpper(cmd.Positional.Signal) != cmd.Positional.Signal {
@@ -55,8 +67,4 @@ func (cmd *cmdSignal) Execute(args []string) error {
 		return err
 	}
 	return nil
-}
-
-func init() {
-	addCommand("signal", shortSignalHelp, longSignalHelp, func() flags.Commander { return &cmdSignal{} }, nil, nil)
 }

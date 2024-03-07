@@ -56,7 +56,7 @@ func (s *PebbleSuite) TestHelpMan(c *C) {
 
 	err := cli.RunMain()
 	c.Assert(err, Equals, nil)
-	c.Check(s.Stdout(), Matches, `(?s)\.TH.*\.SH NAME.*pebble \\- Tool to interact with pebble.*`)
+	c.Check(s.Stdout(), Matches, `(?s)\.TH pebble 8.*\.SH NAME.*pebble \\- System and service manager.*`)
 	c.Check(s.Stderr(), Equals, "")
 }
 
@@ -107,5 +107,22 @@ func (s *PebbleSuite) TestCommandWithHelpOption(c *C) {
 	err := cli.RunMain()
 	c.Assert(err, Equals, nil)
 	c.Check(s.Stdout(), Matches, "(?s)Usage.*pebble help.*The help command.*help command options.*")
+	c.Check(s.Stderr(), Equals, "")
+}
+
+func (s *PebbleSuite) TestAddHelpCategory(c *C) {
+	restore := fakeArgs("pebble")
+	defer restore()
+
+	cli.HelpCategories = append(cli.HelpCategories, cli.HelpCategory{
+		Label:       "Test category",
+		Description: "Test description",
+		Commands:    []string{"run", "logs"},
+	})
+
+	err := cli.RunMain()
+	c.Assert(err, Equals, nil)
+
+	c.Check(s.Stdout(), Matches, "(?s).*Test category: run, logs\n.*")
 	c.Check(s.Stderr(), Equals, "")
 }

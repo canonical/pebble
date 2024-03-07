@@ -17,10 +17,16 @@ package cmd
 //go:generate ./mkversion.sh
 
 // Version will be overwritten at build-time via mkversion.sh
-var Version = "unknown"
+var Version = "v1.10.0-dev"
 
 func MockVersion(version string) (restore func()) {
 	old := Version
 	Version = version
 	return func() { Version = old }
 }
+
+// ProgramName represents the name of the application binary.
+var ProgramName string = "pebble"
+
+// DisplayName represents the user-facing name of the application.
+var DisplayName string = "Pebble"

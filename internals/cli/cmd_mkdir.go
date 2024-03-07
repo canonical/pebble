@@ -24,34 +24,43 @@ import (
 	"github.com/canonical/pebble/client"
 )
 
+const cmdMkdirSummary = "Create a directory"
+const cmdMkdirDescription = `
+The mkdir command creates the specified directory.
+`
+
 type cmdMkdir struct {
-	clientMixin
+	client *client.Client
 
-	MakeParents bool   `short:"p"`
-	Permissions string `short:"m"`
-	UserID      *int   `long:"uid"`
-	User        string `long:"user"`
-	GroupID     *int   `long:"gid"`
-	Group       string `long:"group"`
-
+	Parents    bool   `short:"p"`
+	Mode       string `short:"m"`
+	UserID     *int   `long:"uid"`
+	User       string `long:"user"`
+	GroupID    *int   `long:"gid"`
+	Group      string `long:"group"`
 	Positional struct {
 		Path string `positional-arg-name:"<path>"`
 	} `positional-args:"yes" required:"yes"`
 }
 
-var mkdirDescs = map[string]string{
-	"p":     "Create parent directories as needed",
-	"m":     "Set permissions (e.g. 0644)",
-	"uid":   "Use specified user ID",
-	"user":  "Use specified username",
-	"gid":   "Use specified group ID",
-	"group": "Use specified group name",
+func init() {
+	AddCommand(&CmdInfo{
+		Name:        "mkdir",
+		Summary:     cmdMkdirSummary,
+		Description: cmdMkdirDescription,
+		ArgsHelp: map[string]string{
+			"-p":      "Create parent directories as needed",
+			"-m":      "Override mode bits (3-digit octal)",
+			"--uid":   "Use specified user ID",
+			"--user":  "Use specified username",
+			"--gid":   "Use specified group ID",
+			"--group": "Use specified group name",
+		},
+		New: func(opts *CmdOptions) flags.Commander {
+			return &cmdMkdir{client: opts.Client}
+		},
+	})
 }
-
-var shortMkdirHelp = "Create a directory"
-var longMkdirHelp = `
-The mkdir command creates the specified directory.
-`
 
 func (cmd *cmdMkdir) Execute(args []string) error {
 	if len(args) > 0 {
@@ -60,24 +69,20 @@ func (cmd *cmdMkdir) Execute(args []string) error {
 
 	opts := client.MakeDirOptions{
 		Path:        cmd.Positional.Path,
-		MakeParents: cmd.MakeParents,
+		MakeParents: cmd.Parents,
 		UserID:      cmd.UserID,
 		User:        cmd.User,
 		GroupID:     cmd.GroupID,
 		Group:       cmd.Group,
 	}
 
-	if cmd.Permissions != "" {
-		p, err := strconv.ParseUint(cmd.Permissions, 8, 32)
+	if cmd.Mode != "" {
+		p, err := strconv.ParseUint(cmd.Mode, 8, 32)
 		if err != nil {
-			return fmt.Errorf("invalid mode for directory: %q", cmd.Permissions)
+			return fmt.Errorf("invalid mode for directory: %q", cmd.Mode)
 		}
 		opts.Permissions = os.FileMode(p)
 	}
 
 	return cmd.client.MakeDir(&opts)
-}
-
-func init() {
-	addCommand("mkdir", shortMkdirHelp, longMkdirHelp, func() flags.Commander { return &cmdMkdir{} }, mkdirDescs, nil)
 }
