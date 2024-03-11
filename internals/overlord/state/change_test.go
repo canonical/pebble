@@ -1557,7 +1557,7 @@ func (cs *changeSuite) TestChangeStatusUndoRecordsChangeUpdateNotice(c *C) {
 	c.Check(n["occurrences"], Equals, 5.0)
 }
 
-func (cs *changeSuite) TestChangeLastRecordedNoitceStatusPersisted(c *C) {
+func (cs *changeSuite) TestChangeLastRecordedNoticeStatusPersisted(c *C) {
 	st := state.New(nil)
 	st.Lock()
 	defer st.Unlock()
