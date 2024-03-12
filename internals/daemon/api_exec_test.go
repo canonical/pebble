@@ -32,6 +32,7 @@ import (
 	"github.com/canonical/pebble/client"
 	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/plan"
+	"github.com/canonical/pebble/internals/reaper"
 )
 
 var _ = Suite(&execSuite{})
@@ -46,6 +47,11 @@ func (s *execSuite) SetUpSuite(c *C) {
 }
 
 func (s *execSuite) SetUpTest(c *C) {
+	err := reaper.Start()
+	if err != nil {
+		c.Fatalf("cannot start reaper: %v", err)
+	}
+
 	socketPath := c.MkDir() + ".pebble.socket"
 	daemon, err := New(&Options{
 		Dir:        c.MkDir(),
@@ -64,6 +70,11 @@ func (s *execSuite) SetUpTest(c *C) {
 func (s *execSuite) TearDownTest(c *C) {
 	err := s.daemon.Stop(nil)
 	c.Check(err, IsNil)
+
+	err = reaper.Stop()
+	if err != nil {
+		c.Fatalf("cannot stop reaper: %v", err)
+	}
 }
 
 // Some of these tests use the Go client for simplicity.

@@ -39,6 +39,7 @@ import (
 	"github.com/canonical/pebble/internals/overlord/restart"
 	"github.com/canonical/pebble/internals/overlord/standby"
 	"github.com/canonical/pebble/internals/overlord/state"
+	"github.com/canonical/pebble/internals/reaper"
 	"github.com/canonical/pebble/internals/systemd"
 	"github.com/canonical/pebble/internals/testutil"
 )
@@ -60,6 +61,11 @@ type daemonSuite struct {
 var _ = Suite(&daemonSuite{})
 
 func (s *daemonSuite) SetUpTest(c *C) {
+	err := reaper.Start()
+	if err != nil {
+		c.Fatalf("cannot start reaper: %v", err)
+	}
+
 	s.pebbleDir = c.MkDir()
 	s.statePath = filepath.Join(s.pebbleDir, ".pebble.state")
 	systemdSdNotify = func(notif string) error {
@@ -73,6 +79,11 @@ func (s *daemonSuite) TearDownTest(c *C) {
 	s.notified = nil
 	s.authorized = false
 	s.err = nil
+
+	err := reaper.Stop()
+	if err != nil {
+		c.Fatalf("cannot stop reaper: %v", err)
+	}
 }
 
 func (s *daemonSuite) newDaemon(c *C) *Daemon {

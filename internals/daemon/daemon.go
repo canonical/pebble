@@ -43,6 +43,7 @@ import (
 	"github.com/canonical/pebble/internals/overlord/servstate"
 	"github.com/canonical/pebble/internals/overlord/standby"
 	"github.com/canonical/pebble/internals/overlord/state"
+	"github.com/canonical/pebble/internals/reaper"
 	"github.com/canonical/pebble/internals/systemd"
 )
 
@@ -680,7 +681,7 @@ func systemdModeReboot(rebootDelay time.Duration) error {
 	}
 	mins := int64(rebootDelay / time.Minute)
 	cmd := exec.Command("shutdown", "-r", fmt.Sprintf("+%d", mins), rebootMsg)
-	if out, err := cmd.CombinedOutput(); err != nil {
+	if out, err := reaper.CommandCombinedOutput(cmd); err != nil {
 		return osutil.OutputErr(out, err)
 	}
 	return nil

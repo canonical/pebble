@@ -41,6 +41,7 @@ import (
 	"github.com/canonical/pebble/internals/overlord/servstate"
 	"github.com/canonical/pebble/internals/overlord/state"
 	"github.com/canonical/pebble/internals/plan"
+	"github.com/canonical/pebble/internals/reaper"
 	"github.com/canonical/pebble/internals/servicelog"
 	"github.com/canonical/pebble/internals/testutil"
 )
@@ -180,6 +181,11 @@ func (s *S) SetUpSuite(c *C) {
 }
 
 func (s *S) SetUpTest(c *C) {
+	err := reaper.Start()
+	if err != nil {
+		c.Fatalf("cannot start reaper: %v", err)
+	}
+
 	s.BaseTest.SetUpTest(c)
 
 	s.dir = c.MkDir()
@@ -210,6 +216,11 @@ func (s *S) TearDownTest(c *C) {
 	s.manager.Stop()
 	// General test cleanup
 	s.BaseTest.TearDownTest(c)
+
+	err := reaper.Stop()
+	if err != nil {
+		c.Fatalf("cannot stop reaper: %v", err)
+	}
 }
 
 func (s *S) TestDefaultServiceNames(c *C) {
