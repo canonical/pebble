@@ -35,6 +35,7 @@ import (
 
 	"github.com/canonical/pebble/internals/osutil"
 	"github.com/canonical/pebble/internals/osutil/squashfs"
+	"github.com/canonical/pebble/internals/reaper"
 )
 
 var (
@@ -88,7 +89,8 @@ func (m *extMutex) Taken(errMsg string) {
 
 // systemctlCmd calls systemctl with the given args, returning its standard output (and wrapped error)
 var systemctlCmd = func(args ...string) ([]byte, error) {
-	bs, err := exec.Command("systemctl", args...).CombinedOutput()
+	cmd := exec.Command("systemctl", args...)
+	bs, err := reaper.CommandCombinedOutput(cmd)
 	if err != nil {
 		exitCode, _ := osutil.ExitCode(err)
 		return nil, &Error{cmd: args, exitCode: exitCode, msg: bs}
@@ -726,7 +728,8 @@ func (s *systemd) RemoveMountUnitFile(mountedDir string) error {
 		return err
 	}
 	if isMounted {
-		if output, err := exec.Command("umount", "-d", "-l", mountedDir).CombinedOutput(); err != nil {
+		cmd := exec.Command("umount", "-d", "-l", mountedDir)
+		if output, err := reaper.CommandCombinedOutput(cmd); err != nil {
 			return osutil.OutputErr(output, err)
 		}
 
