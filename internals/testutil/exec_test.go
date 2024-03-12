@@ -15,10 +15,7 @@
 package testutil
 
 import (
-	"fmt"
-	"os"
 	"os/exec"
-	"path/filepath"
 
 	"gopkg.in/check.v1"
 
@@ -30,7 +27,7 @@ type fakeCommandSuite struct{}
 var _ = check.Suite(&fakeCommandSuite{})
 
 func (s *fakeCommandSuite) TestFakeCommand(c *check.C) {
-	fake := FakeCommand(c, "cmd", "true", false)
+	fake := FakeCommand(c, "cmd", "true")
 	defer fake.Restore()
 	err := exec.Command("cmd", "first-run", "--arg1", "arg2", "a space").Run()
 	c.Assert(err, check.IsNil)
@@ -56,7 +53,7 @@ func (s *fakeCommandSuite) TestFakeCommandWithReaper(c *check.C) {
 		c.Assert(err, check.IsNil)
 	}()
 
-	fake := FakeCommand(c, "cmd", "true", true)
+	fake := FakeCommand(c, "cmd", "true")
 	defer fake.Restore()
 
 	cmd := exec.Command("cmd", "")
@@ -66,7 +63,7 @@ func (s *fakeCommandSuite) TestFakeCommandWithReaper(c *check.C) {
 }
 
 func (s *fakeCommandSuite) TestFakeCommandAlso(c *check.C) {
-	fake := FakeCommand(c, "fst", "", false)
+	fake := FakeCommand(c, "fst", "")
 	also := fake.Also("snd", "")
 	defer fake.Restore()
 
@@ -77,60 +74,11 @@ func (s *fakeCommandSuite) TestFakeCommandAlso(c *check.C) {
 }
 
 func (s *fakeCommandSuite) TestFakeCommandConflictEcho(c *check.C) {
-	fake := FakeCommand(c, "do-not-swallow-echo-args", "", false)
+	fake := FakeCommand(c, "do-not-swallow-echo-args", "")
 	defer fake.Restore()
 
 	c.Assert(exec.Command("do-not-swallow-echo-args", "-E", "-n", "-e").Run(), check.IsNil)
 	c.Assert(fake.Calls(), check.DeepEquals, [][]string{
 		{"do-not-swallow-echo-args", "-E", "-n", "-e"},
 	})
-}
-
-func (s *fakeCommandSuite) TestFakeShellchecksWhenAvailable(c *check.C) {
-	shellchecked = make(map[string]bool) // reset checked cache
-
-	tmpDir := c.MkDir()
-	fakeShellcheck := FakeCommand(c, "shellcheck", fmt.Sprintf(`cat > %s/input`, tmpDir), false)
-	defer fakeShellcheck.Restore()
-
-	restore := FakeShellcheckPath(fakeShellcheck.Exe())
-	defer restore()
-
-	fake := FakeCommand(c, "some-command", "echo some-command", false)
-
-	c.Assert(exec.Command("some-command").Run(), check.IsNil)
-
-	c.Assert(fake.Calls(), check.DeepEquals, [][]string{
-		{"some-command"},
-	})
-	c.Assert(fakeShellcheck.Calls(), check.DeepEquals, [][]string{
-		{"shellcheck", "-s", "bash", "-"},
-	})
-
-	scriptData, err := os.ReadFile(fake.Exe())
-	c.Assert(err, check.IsNil)
-	c.Assert(string(scriptData), Contains, "\necho some-command\n")
-
-	data, err := os.ReadFile(filepath.Join(tmpDir, "input"))
-	c.Assert(err, check.IsNil)
-	c.Assert(data, check.DeepEquals, scriptData)
-}
-
-func (s *fakeCommandSuite) TestFakeNoShellchecksWhenNotAvailable(c *check.C) {
-	fakeShellcheck := FakeCommand(c, "shellcheck", `echo "i am not called"; exit 1`, false)
-	defer fakeShellcheck.Restore()
-
-	restore := FakeShellcheckPath("")
-	defer restore()
-
-	// This would fail with proper shellcheck due to SC2086: Double quote to
-	// prevent globbing and word splitting.
-	fake := FakeCommand(c, "some-command", "echo $1", false)
-
-	c.Assert(exec.Command("some-command").Run(), check.IsNil)
-
-	c.Assert(fake.Calls(), check.DeepEquals, [][]string{
-		{"some-command"},
-	})
-	c.Assert(fakeShellcheck.Calls(), check.HasLen, 0)
 }
