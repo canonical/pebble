@@ -572,12 +572,12 @@ func (s *SystemdTestSuite) TestFuseInContainer(c *C) {
 	systemdCmd := testutil.FakeCommand(c, "systemd-detect-virt", `
 echo lxc
 exit 0
-	`, false)
+	`)
 	defer systemdCmd.Restore()
 
 	fuseCmd := testutil.FakeCommand(c, "squashfuse", `
 exit 0
-	`, false)
+	`)
 	defer fuseCmd.Restore()
 
 	fakeSnapPath := filepath.Join(c.MkDir(), "/var/lib/snappy/snaps/foo_1.0.snap")
@@ -610,12 +610,12 @@ func (s *SystemdTestSuite) TestFuseOutsideContainer(c *C) {
 	systemdCmd := testutil.FakeCommand(c, "systemd-detect-virt", `
 echo none
 exit 0
-	`, false)
+	`)
 	defer systemdCmd.Restore()
 
 	fuseCmd := testutil.FakeCommand(c, "squashfuse", `
 exit 0
-	`, false)
+	`)
 	defer fuseCmd.Restore()
 
 	fakeSnapPath := filepath.Join(c.MkDir(), "/var/lib/snappy/snaps/foo_1.0.snap")
