@@ -214,7 +214,7 @@ To start specific services, type `pebble start` followed by one or more service 
 $ pebble start srv1 srv2  # start two services (and any dependencies)
 ```
 
-When starting a service, Pebble executes the service's `command`, and waits 1 second to ensure the command doesn't exit too quickly. Assuming the command doesn't exit within that time window, the start is considered successful, otherwise `pebble start` will exit with an error.
+When starting a service, Pebble executes the service's `command`, and waits 1 second to ensure the command doesn't exit too quickly. Assuming the command doesn't exit within that time window, the start is considered successful, otherwise `pebble start` will exit with an error, regardless of the `on-failure` value.
 
 Similarly, to stop specific services, use `pebble stop` followed by one or more service names:
 
@@ -222,7 +222,7 @@ Similarly, to stop specific services, use `pebble stop` followed by one or more 
 $ pebble stop srv1        # stop one service
 ```
 
-When stopping a service, Pebble sends SIGTERM to the service's process group, and waits up to 5 seconds. If the command hasn't exited within that time window, Pebble sends SIGKILL to the service's process group and waits up to 5 more seconds. If the command exits within that 10-second time window, the stop is considered successful, otherwise `pebble stop` will exit with an error.
+When stopping a service, Pebble sends SIGTERM to the service's process group, and waits up to 5 seconds. If the command hasn't exited within that time window, Pebble sends SIGKILL to the service's process group and waits up to 5 more seconds. If the command exits within that 10-second time window, the stop is considered successful, otherwise `pebble stop` will exit with an error, regardless of the `on-failure` value.
 
 ### Updating and restarting services
 
