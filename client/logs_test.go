@@ -20,10 +20,15 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 
 	"gopkg.in/check.v1"
 
 	"github.com/canonical/pebble/client"
+)
+
+const (
+	maxMessageSize = 4 * 1024
 )
 
 func (cs *clientSuite) TestLogsNoOptions(c *check.C) {
@@ -109,6 +114,38 @@ func (cs *clientSuite) TestLogsAll(c *check.C) {
 2021-05-03T03:55:49.360Z [thing] log 1
 2021-05-03T03:55:49.654Z [snappass] log two
 `[1:])
+}
+
+func (cs *clientSuite) TestLogsLong(c *check.C) {
+	shortLog := `{"time":"2021-05-03T03:55:49.360994155Z","service":"thing","message":"log 1\n"}`
+	var longLog strings.Builder
+	longLog.WriteString(`{"time":"2021-05-03T03:55:49.460994155Z","service":"verbose","message":"`)
+	for i := 0; i < maxMessageSize; i++ {
+		longLog.WriteString("a")
+	}
+	longLog.WriteString(`\n"}`)
+	logs := []string{shortLog, longLog.String(), ""}
+	cs.rsp = strings.Join(logs, "\n")
+	out, writeLog := makeLogWriter()
+	err := cs.cli.Logs(&client.LogsOptions{
+		WriteLog: writeLog,
+		N:        -1,
+	})
+	c.Assert(err, check.IsNil)
+	c.Check(cs.req.Method, check.Equals, "GET")
+	c.Check(cs.req.URL.Path, check.Equals, "/v1/logs")
+	c.Check(cs.req.URL.Query(), check.DeepEquals, url.Values{
+		"n": []string{"-1"},
+	})
+	shortExpected := "2021-05-03T03:55:49.360Z [thing] log 1"
+	var longExpected strings.Builder
+	longExpected.WriteString("2021-05-03T03:55:49.460Z [verbose] ")
+	for i := 0; i < maxMessageSize; i++ {
+		longExpected.WriteString("a")
+	}
+	expectedLogs := []string{shortExpected, longExpected.String(), ""}
+	expected := strings.Join(expectedLogs, "\n")
+	c.Check(out.String(), check.Equals, expected)
 }
 
 func (cs *clientSuite) TestFollowLogs(c *check.C) {
