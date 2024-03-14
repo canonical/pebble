@@ -302,6 +302,7 @@ func (rq *defaultRequester) retry(ctx context.Context, method, urlpath string, q
 		case <-retry.C:
 			continue
 		case <-timeout:
+		case <-ctx.Done():
 		}
 		break
 	}
