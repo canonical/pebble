@@ -58,14 +58,14 @@ func (cmd *cmdOkay) Execute(args []string) error {
 
 	okayedNotices := false
 	if !cmd.Warnings {
-		state, err := loadCLIState()
+		state, err := loadCLIState(cmd.client)
 		if err != nil {
 			return fmt.Errorf("cannot load CLI state: %w", err)
 		}
 		if !state.NoticesLastListed.IsZero() {
 			okayedNotices = true
 			state.NoticesLastOkayed = state.NoticesLastListed
-			err = saveCLIState(state)
+			err = saveCLIState(cmd.client, state)
 			if err != nil {
 				return fmt.Errorf("cannot save CLI state: %w", err)
 			}

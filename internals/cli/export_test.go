@@ -21,7 +21,7 @@ import (
 )
 
 func RunMain() error {
-	_, ClientConfig.Socket = getEnvPaths()
+	ClientConfig.PebbleDir, ClientConfig.Socket = getEnvPaths()
 	return Run(&RunOptions{
 		ClientConfig: ClientConfig,
 	})

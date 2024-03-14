@@ -293,7 +293,7 @@ func Run(options *RunOptions) error {
 	config := options.ClientConfig
 	if config == nil {
 		config = &client.Config{}
-		_, config.Socket = getEnvPaths()
+		config.PebbleDir, config.Socket = getEnvPaths()
 	}
 	cli, err := client.New(config)
 	if err != nil {
@@ -403,12 +403,12 @@ type fullCLIState struct {
 }
 
 // TODO(benhoyt): add file locking to properly handle multi-user access
-func loadCLIState() (*cliState, error) {
+func loadCLIState(client *client.Client) (*cliState, error) {
 	fullState, err := loadFullCLIState()
 	if err != nil {
 		return nil, err
 	}
-	_, socketPath := getEnvPaths()
+	socketPath := client.SocketPath()
 	st, ok := fullState.Pebble[socketPath]
 	if !ok {
 		return &cliState{}, nil
@@ -437,13 +437,13 @@ func loadFullCLIState() (*fullCLIState, error) {
 	return &fullState, nil
 }
 
-func saveCLIState(state *cliState) error {
+func saveCLIState(client *client.Client, state *cliState) error {
 	fullState, err := loadFullCLIState()
 	if err != nil {
 		return err
 	}
 
-	_, socketPath := getEnvPaths()
+	socketPath := client.SocketPath()
 	fullState.Pebble[socketPath] = state
 
 	data, err := json.Marshal(fullState)

@@ -162,7 +162,9 @@ func runDaemon(rcmd *cmdRun, ch chan os.Signal, ready chan<- func()) (err error)
 
 	t0 := time.Now().Truncate(time.Millisecond)
 
-	pebbleDir, socketPath := getEnvPaths()
+	pebbleDir := rcmd.client.PebbleDir()
+	socketPath := rcmd.client.SocketPath()
+
 	if rcmd.CreateDirs {
 		err := os.MkdirAll(pebbleDir, 0755)
 		if err != nil {

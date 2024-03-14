@@ -141,6 +141,9 @@ type Config struct {
 
 	// UserAgent is the User-Agent header sent to the Pebble daemon.
 	UserAgent string
+
+	// PebbleDir is the base directory for storing the Pebble daemon's state.
+	PebbleDir string
 }
 
 // A Client knows how to talk to the Pebble daemon.
@@ -152,6 +155,17 @@ type Client struct {
 	warningTimestamp time.Time
 
 	getWebsocket getWebsocketFunc
+
+	pebbleDir  string
+	socketPath string
+}
+
+func (c *Client) PebbleDir() string {
+	return c.pebbleDir
+}
+
+func (c *Client) SocketPath() string {
+	return c.socketPath
 }
 
 type getWebsocketFunc func(url string) (clientWebsocket, error)
@@ -179,6 +193,8 @@ func New(config *Config) (*Client, error) {
 	}
 
 	client.requester = requester
+	client.pebbleDir = config.PebbleDir
+	client.socketPath = config.Socket
 	client.getWebsocket = func(url string) (clientWebsocket, error) {
 		return getWebsocket(requester.Transport(), url)
 	}
