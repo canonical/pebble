@@ -20,9 +20,11 @@ import (
 	"github.com/canonical/pebble/client"
 )
 
-var RunMain = Run
+func RunMain() error {
+	return RunWithConfig(ClientConfig)
+}
 
-var ClientConfig = &clientConfig
+var ClientConfig = &client.Config{}
 
 func Client() *client.Client {
 	cli, err := client.New(ClientConfig)
