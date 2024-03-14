@@ -253,9 +253,6 @@ var (
 	osExit      = os.Exit
 )
 
-// ClientConfig is the configuration of the Client used by all commands.
-var clientConfig client.Config
-
 // exitStatus can be used in panic(&exitStatus{code}) to cause Pebble's main
 // function to exit with a given exit code, for the rare cases when you want
 // to return an exit code other than 0 or 1, or when an error return is not
@@ -269,6 +266,13 @@ func (e *exitStatus) Error() string {
 }
 
 func Run() error {
+	// the configuration of the Client used by all commands.
+	var clientConfig client.Config
+	_, clientConfig.Socket = getEnvPaths()
+	return RunWithConfig(&clientConfig)
+}
+
+func RunWithConfig(config *client.Config) error {
 	defer func() {
 		if v := recover(); v != nil {
 			if e, ok := v.(*exitStatus); ok {
@@ -280,9 +284,7 @@ func Run() error {
 
 	logger.SetLogger(logger.New(os.Stderr, fmt.Sprintf("[%s] ", cmd.ProgramName)))
 
-	_, clientConfig.Socket = getEnvPaths()
-
-	cli, err := client.New(&clientConfig)
+	cli, err := client.New(config)
 	if err != nil {
 		return fmt.Errorf("cannot create client: %v", err)
 	}
