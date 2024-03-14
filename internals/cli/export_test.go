@@ -21,6 +21,7 @@ import (
 )
 
 func RunMain() error {
+	_, ClientConfig.Socket = getEnvPaths()
 	return RunWithConfig(ClientConfig)
 }
 
