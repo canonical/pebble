@@ -26,8 +26,10 @@ import (
 	"time"
 )
 
+// This needs to be the size of daemon.logReaderSize, plus extra to handle the
+// timestamp, service name, and JSON syntax.
 const (
-	logReaderSize = 4 * 1024
+	logReaderSize = 5 * 1024
 )
 
 type LogsOptions struct {
