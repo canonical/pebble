@@ -265,14 +265,19 @@ func (e *exitStatus) Error() string {
 	return fmt.Sprintf("internal error: exitStatus{%d} being handled as normal error", e.code)
 }
 
-func Run() error {
-	// the configuration of the Client used by all commands.
-	var clientConfig client.Config
-	_, clientConfig.Socket = getEnvPaths()
-	return RunWithConfig(&clientConfig)
+type RunOptions struct {
+	ClientConfig *client.Config
+	Logger logger.Logger
 }
 
-func RunWithConfig(config *client.Config) error {
+func Run(options *RunOptions) error {
+	if options == nil {
+		options = &RunOptions{
+			ClientConfig: &client.Config{},
+		}
+		_, options.ClientConfig.Socket = getEnvPaths()
+	}
+
 	defer func() {
 		if v := recover(); v != nil {
 			if e, ok := v.(*exitStatus); ok {
@@ -282,9 +287,13 @@ func RunWithConfig(config *client.Config) error {
 		}
 	}()
 
-	logger.SetLogger(logger.New(os.Stderr, fmt.Sprintf("[%s] ", cmd.ProgramName)))
+	log := options.Logger
+	if log == nil {
+		log = logger.New(os.Stderr, fmt.Sprintf("[%s] ", cmd.ProgramName))
+	}
+	logger.SetLogger(log)
 
-	cli, err := client.New(config)
+	cli, err := client.New(options.ClientConfig)
 	if err != nil {
 		return fmt.Errorf("cannot create client: %v", err)
 	}

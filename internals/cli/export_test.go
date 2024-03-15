@@ -22,7 +22,9 @@ import (
 
 func RunMain() error {
 	_, ClientConfig.Socket = getEnvPaths()
-	return RunWithConfig(ClientConfig)
+	return Run(&RunOptions{
+		ClientConfig: ClientConfig,
+	})
 }
 
 var ClientConfig = &client.Config{}
