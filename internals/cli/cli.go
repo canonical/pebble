@@ -267,7 +267,7 @@ func (e *exitStatus) Error() string {
 
 type RunOptions struct {
 	ClientConfig *client.Config
-	Logger logger.Logger
+	Logger       logger.Logger
 }
 
 func Run(options *RunOptions) error {
