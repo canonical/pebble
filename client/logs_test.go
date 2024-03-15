@@ -27,10 +27,6 @@ import (
 	"github.com/canonical/pebble/client"
 )
 
-const (
-	maxMessageSize = 4 * 1024
-)
-
 func (cs *clientSuite) TestLogsNoOptions(c *check.C) {
 	cs.rsp = `
 {"time":"2021-05-03T03:55:49.36Z","service":"thing","message":"log 1\n"}
@@ -117,15 +113,12 @@ func (cs *clientSuite) TestLogsAll(c *check.C) {
 }
 
 func (cs *clientSuite) TestLogsLong(c *check.C) {
-	shortLog := `{"time":"2021-05-03T03:55:49.360994155Z","service":"thing","message":"log 1\n"}`
-	var longLog strings.Builder
-	longLog.WriteString(`{"time":"2021-05-03T03:55:49.460994155Z","service":"verbose","message":"`)
-	for i := 0; i < maxMessageSize; i++ {
-		longLog.WriteString("a")
-	}
-	longLog.WriteString(`\n"}`)
-	logs := []string{shortLog, longLog.String(), ""}
-	cs.rsp = strings.Join(logs, "\n")
+	const maxMessageSize = 4 * 1024
+	shortLog1 := `{"time":"2021-05-03T03:55:49.360994155Z","service":"thing","message":"log 1\n"}`
+	longLog := (`{"time":"2021-05-03T03:55:49.460994155Z","service":"verbose","message":"` +
+		strings.Repeat("a", maxMessageSize) + `\n"}`)
+	shortLog2 := `{"time":"2021-05-03T03:55:49.654334232Z","service":"snappass","message":"log two\n"}`
+	cs.rsp = shortLog1 + "\n" + longLog + "\n" + shortLog2 + "\n"
 	out, writeLog := makeLogWriter()
 	err := cs.cli.Logs(&client.LogsOptions{
 		WriteLog: writeLog,
@@ -137,14 +130,10 @@ func (cs *clientSuite) TestLogsLong(c *check.C) {
 	c.Check(cs.req.URL.Query(), check.DeepEquals, url.Values{
 		"n": []string{"-1"},
 	})
-	shortExpected := "2021-05-03T03:55:49.360Z [thing] log 1"
-	var longExpected strings.Builder
-	longExpected.WriteString("2021-05-03T03:55:49.460Z [verbose] ")
-	for i := 0; i < maxMessageSize; i++ {
-		longExpected.WriteString("a")
-	}
-	expectedLogs := []string{shortExpected, longExpected.String(), ""}
-	expected := strings.Join(expectedLogs, "\n")
+	shortExpected1 := "2021-05-03T03:55:49.360Z [thing] log 1\n"
+	longExpected := "2021-05-03T03:55:49.460Z [verbose] " + strings.Repeat("a", maxMessageSize) + "\n"
+	shortExpected2 := "2021-05-03T03:55:49.654Z [snappass] log two\n"
+	expected := shortExpected1 + longExpected + shortExpected2
 	c.Check(out.String(), check.Equals, expected)
 }
 

@@ -26,8 +26,8 @@ import (
 	"time"
 )
 
-// This needs to be the size of daemon.api_logs.logReaderSize, plus extra to
-// handle the timestamp, service name, and JSON syntax.
+// This needs to be the size of daemon.logReaderSize, plus extra to handle the
+// timestamp, service name, and JSON syntax.
 const (
 	logReaderSize = 5 * 1024
 )
