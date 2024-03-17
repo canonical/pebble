@@ -15,6 +15,7 @@
 package client_test
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -105,6 +106,21 @@ func (cs *clientSuite) TestClientDoReportsErrors(c *C) {
 	if cs.doCalls < 2 {
 		c.Fatalf("do did not retry")
 	}
+}
+
+func (cs *clientSuite) TestContextCancellation(c *C) {
+	cs.err = errors.New("ouchie")
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // cancel it right away
+	_, err := cs.cli.Requester().Do(ctx, &client.RequestOptions{
+		Type:   client.SyncRequest,
+		Method: "GET",
+		Path:   "/",
+	})
+	c.Check(err, ErrorMatches, "cannot communicate with server: ouchie")
+
+	// This would be 10 if context wasn't respected, due to timeout
+	c.Assert(cs.doCalls, Equals, 1)
 }
 
 func (cs *clientSuite) TestClientWorks(c *C) {
