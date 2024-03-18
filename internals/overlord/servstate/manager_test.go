@@ -1940,11 +1940,6 @@ func (s *S) stopTestServicesAlreadyDead(c *C) {
 	s.st.Unlock()
 }
 
-func (s *S) planLayersHasLen(c *C, manager *servstate.ServiceManager, expectedLen int) {
-	plan := manager.Plan()
-	c.Assert(plan.Layers, HasLen, expectedLen)
-}
-
 type writerFunc func([]byte) (int, error)
 
 func (f writerFunc) Write(p []byte) (int, error) {

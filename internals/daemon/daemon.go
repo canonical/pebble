@@ -763,8 +763,10 @@ func (d *Daemon) RebootIsMissing(st *state.State) error {
 	return errExpectedReboot
 }
 
-// SetServiceArgs sets the provided service arguments to their respective services,
-// by passing the arguments to the service manager responsible under daemon overlord.
+// SetServiceArgs sets the provided service arguments to their respective services
+// by using the service manager ServiceArgsLayerCreator. This layer creator derives
+// a additional layer from the current plan, containing changes to set the
+// requested service arguments.
 func (d *Daemon) SetServiceArgs(serviceArgs map[string][]string) error {
 	serviceArgsCreator := servstate.ServiceArgsLayerCreator(serviceArgs)
 	return d.overlord.PlanManager().AppendLayer(serviceArgsCreator)

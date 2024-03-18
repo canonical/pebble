@@ -25,7 +25,7 @@ type PlanManager struct {
 
 	planLock     sync.Mutex
 	plan         *plan.Plan
-	planHandlers []PlanChangeFunc
+	planHandlers []PlanChangedFunc
 }
 
 func NewManager(s *state.State, runner *state.TaskRunner, pebbleDir string) (*PlanManager, error) {
@@ -33,6 +33,7 @@ func NewManager(s *state.State, runner *state.TaskRunner, pebbleDir string) (*Pl
 		state:     s,
 		runner:    runner,
 		pebbleDir: pebbleDir,
+		plan:      &plan.Plan{},
 	}
 
 	return manager, nil
@@ -51,13 +52,13 @@ func (m *PlanManager) Load() error {
 	return nil
 }
 
-// PlanChangeFunc is the type of function used by AddChangeListeners.
-type PlanChangeFunc func(p *plan.Plan)
+// PlanChangedFunc is the type of function used by AddChangeListener.
+type PlanChangedFunc func(p *plan.Plan)
 
-// AddChangeListeners adds f to the list of functions that are called whenever
+// AddChangeListener adds f to the list of functions that are called whenever
 // the plan has changed. This method may not be called once the overlord state
 // engine has started.
-func (m *PlanManager) AddChangeListeners(f PlanChangeFunc) {
+func (m *PlanManager) AddChangeListener(f PlanChangedFunc) {
 	m.planHandlers = append(m.planHandlers, f)
 }
 
@@ -70,7 +71,8 @@ func (m *PlanManager) planChanged(plan *plan.Plan) {
 
 // Plan returns the configuration plan. Any change made to the plan will
 // result in a new Plan instance, so the current design assumes a returned
-// plan is never mutated by planstate.
+// plan is never mutated by planstate (and may never be mutated by any
+// consumer).
 func (m *PlanManager) Plan() (*plan.Plan, error) {
 	m.planLock.Lock()
 	defer m.planLock.Unlock()

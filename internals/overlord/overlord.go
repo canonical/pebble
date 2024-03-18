@@ -157,7 +157,7 @@ func New(opts *Options) (*Overlord, error) {
 	}
 
 	// Tell service manager about plan updates.
-	o.planMgr.AddChangeListeners(o.serviceMgr.PlanChanged)
+	o.planMgr.AddChangeListener(o.serviceMgr.PlanChanged)
 
 	o.stateEng.AddManager(o.serviceMgr)
 	// The log manager should be stopped after the service manager, because
@@ -171,10 +171,10 @@ func New(opts *Options) (*Overlord, error) {
 	o.checkMgr = checkstate.NewManager()
 
 	// Tell check manager about plan updates.
-	o.planMgr.AddChangeListeners(o.checkMgr.PlanChanged)
+	o.planMgr.AddChangeListener(o.checkMgr.PlanChanged)
 
 	// Tell log manager about plan updates.
-	o.planMgr.AddChangeListeners(o.logMgr.PlanChanged)
+	o.planMgr.AddChangeListener(o.logMgr.PlanChanged)
 
 	// Tell service manager about check failures.
 	o.checkMgr.NotifyCheckFailed(o.serviceMgr.CheckFailed)
