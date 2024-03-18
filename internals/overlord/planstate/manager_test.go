@@ -15,9 +15,8 @@
 package planstate_test
 
 import (
-	"gopkg.in/yaml.v3"
-
 	. "gopkg.in/check.v1"
+	"gopkg.in/yaml.v3"
 
 	"github.com/canonical/pebble/internals/overlord/planstate"
 	"github.com/canonical/pebble/internals/plan"
