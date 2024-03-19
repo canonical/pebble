@@ -20,9 +20,14 @@ import (
 	"github.com/canonical/pebble/client"
 )
 
-var RunMain = Run
+func RunMain() error {
+	_, ClientConfig.Socket = getEnvPaths()
+	return Run(&RunOptions{
+		ClientConfig: ClientConfig,
+	})
+}
 
-var ClientConfig = &clientConfig
+var ClientConfig = &client.Config{}
 
 func Client() *client.Client {
 	cli, err := client.New(ClientConfig)
@@ -78,7 +83,7 @@ func PebbleMain() (exitCode int) {
 			}
 		}
 	}()
-	if err := Run(); err != nil {
+	if err := RunMain(); err != nil {
 		fmt.Fprintf(Stderr, "error: %v\n", err)
 		osExit(1)
 	}
