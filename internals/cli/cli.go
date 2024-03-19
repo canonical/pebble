@@ -272,10 +272,7 @@ type RunOptions struct {
 
 func Run(options *RunOptions) error {
 	if options == nil {
-		options = &RunOptions{
-			ClientConfig: &client.Config{},
-		}
-		_, options.ClientConfig.Socket = getEnvPaths()
+		options = &RunOptions{}
 	}
 
 	defer func() {
@@ -293,7 +290,12 @@ func Run(options *RunOptions) error {
 	}
 	logger.SetLogger(log)
 
-	cli, err := client.New(options.ClientConfig)
+	config := options.ClientConfig
+	if config == nil {
+		config = &client.Config{}
+		_, config.Socket = getEnvPaths()
+	}
+	cli, err := client.New(config)
 	if err != nil {
 		return fmt.Errorf("cannot create client: %v", err)
 	}
