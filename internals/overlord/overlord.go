@@ -194,6 +194,14 @@ func New(opts *Options) (*Overlord, error) {
 	// before it.
 	o.stateEng.AddManager(o.runner)
 
+	// Load the plan from the Pebble layers directory (which may be missing
+	// or have no layers, resulting in an empty plan), and propagate PlanChanged
+	// notifications to all notification subscribers.
+	err = o.planMgr.Load()
+	if err != nil {
+		return nil, err
+	}
+
 	return o, nil
 }
 

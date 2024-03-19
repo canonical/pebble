@@ -795,13 +795,6 @@ func New(opts *Options) (*Daemon, error) {
 	if err != nil {
 		return nil, err
 	}
-	// Propagate a valid plan (empty is also valid) to the subscribed
-	// overlord managers.
-	planMgr := ovld.PlanManager()
-	err = planMgr.Load()
-	if err != nil {
-		return nil, err
-	}
 	d.overlord = ovld
 	d.state = ovld.State()
 	return d, nil
