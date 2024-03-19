@@ -31,8 +31,7 @@ var (
 )
 
 type waitMixin struct {
-	NoWait       bool `long:"no-wait"`
-	hideProgress bool
+	NoWait bool `long:"no-wait"`
 }
 
 var waitArgsHelp = map[string]string{
@@ -47,16 +46,11 @@ func (wmx waitMixin) wait(cli *client.Client, id string) (*client.Change, error)
 		return nil, noWait
 	}
 
-	change, err := Wait(cli, id, &WaitOptions{hideProgress: wmx.hideProgress})
+	change, err := Wait(cli, id)
 	if err != nil {
 		return nil, err
 	}
 	return change, nil
-}
-
-type WaitOptions struct {
-	// Do not display a progress bar.
-	hideProgress bool
 }
 
 // Wait polls the progress of a change and displays a progress bar.
@@ -64,7 +58,7 @@ type WaitOptions struct {
 // This function blocks until the change is done or fails.
 // If the change has numeric progress information, the information is
 // displayed as a progress bar.
-func Wait(cli *client.Client, changeID string, opts *WaitOptions) (*client.Change, error) {
+func Wait(cli *client.Client, changeID string) (*client.Change, error) {
 	// Intercept sigint
 	sigs := make(chan os.Signal, 2)
 	signal.Notify(sigs, os.Interrupt)
@@ -80,12 +74,7 @@ func Wait(cli *client.Client, changeID string, opts *WaitOptions) (*client.Chang
 		}
 	}()
 
-	var pb progress.Meter
-	if opts.hideProgress {
-		pb = progress.NullMeter{}
-	} else {
-		pb = progress.MakeProgressBar()
-	}
+	pb := progress.MakeProgressBar()
 	defer func() {
 		pb.Finished()
 		// Next two are not strictly needed for CLI, but
