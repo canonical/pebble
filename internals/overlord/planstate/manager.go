@@ -40,7 +40,9 @@ func NewManager(s *state.State, runner *state.TaskRunner, pebbleDir string) (*Pl
 }
 
 // Load reads plan layers from the pebble directory, combine and validate the
-// final plan, and finally notifies registered managers up the plan update.
+// final plan, and finally notifies registered managers of the plan update. In
+// the case of a non-exist layers directory, or no layers in the layers
+// directory, an empty plan is announced to change subscribers.
 func (m *PlanManager) Load() error {
 	m.planLock.Lock()
 	defer m.planLock.Unlock()
@@ -52,13 +54,16 @@ func (m *PlanManager) Load() error {
 	return nil
 }
 
-// PlanChangedFunc is the type of function used by AddChangeListener.
+// PlanChangedFunc is the function type used by AddChangeListener.
 type PlanChangedFunc func(p *plan.Plan)
 
 // AddChangeListener adds f to the list of functions that are called whenever
-// the plan has changed. This method may not be called once the overlord state
-// engine has started.
+// a plan change event took place (Load, AppendLayer, CombineLayer). A plan
+// change event does not guarantee that combined plan content has changed.
+// Notification registration must be completed before the plan is loaded.
 func (m *PlanManager) AddChangeListener(f PlanChangedFunc) {
+	m.planLock.Lock()
+	defer m.planLock.Unlock()
 	m.planHandlers = append(m.planHandlers, f)
 }
 
@@ -69,10 +74,10 @@ func (m *PlanManager) planChanged(plan *plan.Plan) {
 	}
 }
 
-// Plan returns the configuration plan. Any change made to the plan will
-// result in a new Plan instance, so the current design assumes a returned
+// Plan returns the combined configuration plan. Any change made to the plan
+// will result in a new Plan instance, so the current design assumes a returned
 // plan is never mutated by planstate (and may never be mutated by any
-// consumer).
+// consuming overlord manager).
 func (m *PlanManager) Plan() (*plan.Plan, error) {
 	m.planLock.Lock()
 	defer m.planLock.Unlock()
