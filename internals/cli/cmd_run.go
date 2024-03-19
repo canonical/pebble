@@ -29,6 +29,7 @@ import (
 	"github.com/canonical/pebble/cmd"
 	"github.com/canonical/pebble/internals/daemon"
 	"github.com/canonical/pebble/internals/logger"
+	"github.com/canonical/pebble/internals/reaper"
 	"github.com/canonical/pebble/internals/systemd"
 )
 
@@ -147,7 +148,18 @@ func sanityCheck() error {
 	return nil
 }
 
-func runDaemon(rcmd *cmdRun, ch chan os.Signal, ready chan<- func()) error {
+func runDaemon(rcmd *cmdRun, ch chan os.Signal, ready chan<- func()) (err error) {
+	err = reaper.Start()
+	if err != nil {
+		return fmt.Errorf("cannot start child process reaper: %w", err)
+	}
+	defer func() {
+		err = reaper.Stop()
+		if err != nil {
+			err = fmt.Errorf("cannot stop child process reaper: %w", err)
+		}
+	}()
+
 	t0 := time.Now().Truncate(time.Millisecond)
 
 	pebbleDir, socketPath := getEnvPaths()
@@ -157,7 +169,7 @@ func runDaemon(rcmd *cmdRun, ch chan os.Signal, ready chan<- func()) error {
 			return err
 		}
 	}
-	err := maybeCopyPebbleDir(pebbleDir, getCopySource())
+	err = maybeCopyPebbleDir(pebbleDir, getCopySource())
 	if err != nil {
 		return err
 	}

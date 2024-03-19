@@ -18,7 +18,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"os/user"
@@ -42,6 +41,7 @@ import (
 	"github.com/canonical/pebble/internals/overlord/servstate"
 	"github.com/canonical/pebble/internals/overlord/state"
 	"github.com/canonical/pebble/internals/plan"
+	"github.com/canonical/pebble/internals/reaper"
 	"github.com/canonical/pebble/internals/servicelog"
 	"github.com/canonical/pebble/internals/testutil"
 )
@@ -181,6 +181,11 @@ func (s *S) SetUpSuite(c *C) {
 }
 
 func (s *S) SetUpTest(c *C) {
+	err := reaper.Start()
+	if err != nil {
+		c.Fatalf("cannot start reaper: %v", err)
+	}
+
 	s.BaseTest.SetUpTest(c)
 
 	s.dir = c.MkDir()
@@ -211,6 +216,11 @@ func (s *S) TearDownTest(c *C) {
 	s.manager.Stop()
 	// General test cleanup
 	s.BaseTest.TearDownTest(c)
+
+	err := reaper.Stop()
+	if err != nil {
+		c.Fatalf("cannot stop reaper: %v", err)
+	}
 }
 
 func (s *S) TestDefaultServiceNames(c *C) {
@@ -436,7 +446,7 @@ services:
 
 	s.waitForDoneCheck(c, "usrtest")
 
-	output, err := ioutil.ReadFile(outputPath)
+	output, err := os.ReadFile(outputPath)
 	c.Assert(err, IsNil)
 	c.Check(string(output), Equals, current.Username+"\n")
 }
@@ -879,7 +889,7 @@ services:
 	s.waitForDoneCheck(c, "envtest")
 
 	// Ensure it read environment variables correctly
-	data, err := ioutil.ReadFile(logPath)
+	data, err := os.ReadFile(logPath)
 	if os.IsNotExist(err) {
 		c.Fatal("'envtest' service did not run")
 	}
@@ -1054,7 +1064,7 @@ checks:
 
 	s.waitForDoneCheck(c, "test2")
 
-	b, err := ioutil.ReadFile(tempFile)
+	b, err := os.ReadFile(tempFile)
 	c.Assert(err, IsNil)
 	c.Assert(string(b), Equals, "x\n")
 
@@ -1078,13 +1088,13 @@ checks:
 
 	s.waitForDoneCheck(c, "test2")
 
-	b, err = ioutil.ReadFile(tempFile)
+	b, err = os.ReadFile(tempFile)
 	c.Assert(err, IsNil)
 	c.Assert(string(b), Equals, "x\nx\n")
 
 	// Shouldn't be restarted again
 	time.Sleep(125 * time.Millisecond)
-	b, err = ioutil.ReadFile(tempFile)
+	b, err = os.ReadFile(tempFile)
 	c.Assert(err, IsNil)
 	c.Assert(string(b), Equals, "x\nx\n")
 	checks, err = checkMgr.Checks()
@@ -1149,7 +1159,7 @@ checks:
 
 	s.waitForDoneCheck(c, "test2")
 
-	b, err := ioutil.ReadFile(tempFile)
+	b, err := os.ReadFile(tempFile)
 	c.Assert(err, IsNil)
 	c.Assert(string(b), Equals, "x\n")
 
@@ -1167,7 +1177,7 @@ checks:
 
 	s.waitForDoneCheck(c, "test2")
 
-	b, err = ioutil.ReadFile(tempFile)
+	b, err = os.ReadFile(tempFile)
 	c.Assert(err, IsNil)
 	c.Assert(string(b), Equals, "x\nx\n")
 
@@ -1177,7 +1187,7 @@ checks:
 
 	// Shouldn't be restarted again
 	time.Sleep(125 * time.Millisecond)
-	b, err = ioutil.ReadFile(tempFile)
+	b, err = os.ReadFile(tempFile)
 	c.Assert(err, IsNil)
 	c.Assert(string(b), Equals, "x\nx\n")
 	checks, err := checkMgr.Checks()
@@ -1236,7 +1246,7 @@ checks:
 
 	s.waitForDoneCheck(c, "test2")
 
-	b, err := ioutil.ReadFile(tempFile)
+	b, err := os.ReadFile(tempFile)
 	c.Assert(err, IsNil)
 	c.Assert(string(b), Equals, "x\n")
 
@@ -1255,7 +1265,7 @@ checks:
 
 	// Service shouldn't have been restarted
 	time.Sleep(125 * time.Millisecond)
-	b, err = ioutil.ReadFile(tempFile)
+	b, err = os.ReadFile(tempFile)
 	c.Assert(err, IsNil)
 	c.Assert(string(b), Equals, "x\n")
 	checks, err = checkMgr.Checks()
@@ -1320,7 +1330,7 @@ checks:
 
 	s.waitForDoneCheck(c, "test2")
 
-	b, err := ioutil.ReadFile(tempFile)
+	b, err := os.ReadFile(tempFile)
 	c.Assert(err, IsNil)
 	c.Assert(string(b), Equals, "x\n")
 
@@ -1675,7 +1685,7 @@ zombi:
 	for {
 		select {
 		case <-ticker.C:
-			stat, err := ioutil.ReadFile(fmt.Sprintf("/proc/%d/stat", childPid))
+			stat, err := os.ReadFile(fmt.Sprintf("/proc/%d/stat", childPid))
 			c.Assert(err, IsNil)
 			statFields := strings.Fields(string(stat))
 			c.Assert(len(statFields) >= 3, Equals, true)
@@ -1779,7 +1789,7 @@ services:
 
 	s.waitForDoneCheck(c, "nowrkdir")
 
-	output, err := ioutil.ReadFile(outputPath)
+	output, err := os.ReadFile(outputPath)
 	c.Assert(err, IsNil)
 	c.Check(string(output), Matches, ".*/overlord/servstate\n")
 }
@@ -1806,7 +1816,7 @@ services:
 
 	s.waitForDoneCheck(c, "wrkdir")
 
-	output, err := ioutil.ReadFile(outputPath)
+	output, err := os.ReadFile(outputPath)
 	c.Assert(err, IsNil)
 	c.Check(string(output), Equals, dir+"\n")
 }
@@ -1856,9 +1866,9 @@ func (s *S) setupDefaultServiceManager(c *C) {
 	err := os.Mkdir(layers, 0755)
 	c.Assert(err, IsNil)
 	data := fmt.Sprintf(planLayer1, s.insertDoneCheck(c, "test1"), s.insertDoneCheck(c, "test2"))
-	err = ioutil.WriteFile(filepath.Join(layers, "001-base.yaml"), []byte(data), 0644)
+	err = os.WriteFile(filepath.Join(layers, "001-base.yaml"), []byte(data), 0644)
 	c.Assert(err, IsNil)
-	err = ioutil.WriteFile(filepath.Join(layers, "002-two.yaml"), []byte(planLayer2), 0644)
+	err = os.WriteFile(filepath.Join(layers, "002-two.yaml"), []byte(planLayer2), 0644)
 	c.Assert(err, IsNil)
 
 	s.manager, err = servstate.NewManager(s.st, s.runner, s.dir, s.logOutput, testRestarter{s.stopDaemon}, fakeLogManager{})

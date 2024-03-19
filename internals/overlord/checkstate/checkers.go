@@ -19,7 +19,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
 	"net/http"
 	"os/exec"
@@ -65,7 +64,7 @@ func (c *httpChecker) check(ctx context.Context) error {
 
 	if response.StatusCode < 200 || response.StatusCode > 299 {
 		// Include first few lines of response body in error details
-		output, err := ioutil.ReadAll(io.LimitReader(response.Body, maxErrorBytes))
+		output, err := io.ReadAll(io.LimitReader(response.Body, maxErrorBytes))
 		details := ""
 		if err != nil {
 			details = fmt.Sprintf("cannot read response body: %v", err)

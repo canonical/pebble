@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"golang.org/x/crypto/ssh/terminal"
+	"golang.org/x/term"
 	. "gopkg.in/check.v1"
 
 	"github.com/canonical/pebble/cmd"
@@ -74,7 +74,7 @@ func (s *BasePebbleSuite) TearDownTest(c *C) {
 	cli.Stdin = os.Stdin
 	cli.Stdout = os.Stdout
 	cli.Stderr = os.Stderr
-	cli.ReadPassword = terminal.ReadPassword
+	cli.ReadPassword = term.ReadPassword
 
 	os.Setenv("PEBBLE_LAST_WARNING_TIMESTAMP_FILENAME", "")
 

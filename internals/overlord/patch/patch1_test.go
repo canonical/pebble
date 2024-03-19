@@ -15,7 +15,6 @@
 package patch_test
 
 import (
-	"io/ioutil"
 	"os"
 	"path/filepath"
 
@@ -44,7 +43,7 @@ var stateBeforePatch1 = []byte(`
 
 func (s *patch1Suite) SetUpTest(c *C) {
 	s.statePath = filepath.Join(c.MkDir(), "state.json")
-	err := ioutil.WriteFile(s.statePath, stateBeforePatch1, 0644)
+	err := os.WriteFile(s.statePath, stateBeforePatch1, 0644)
 	c.Assert(err, IsNil)
 }
 

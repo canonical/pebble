@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
 	"net/http"
 	"net/url"
@@ -303,6 +302,7 @@ func (rq *defaultRequester) retry(ctx context.Context, method, urlpath string, q
 		case <-retry.C:
 			continue
 		case <-timeout:
+		case <-ctx.Done():
 		}
 		break
 	}
@@ -390,7 +390,7 @@ func decodeInto(reader io.Reader, v interface{}) error {
 	dec := json.NewDecoder(reader)
 	if err := dec.Decode(v); err != nil {
 		r := dec.Buffered()
-		buf, err1 := ioutil.ReadAll(r)
+		buf, err1 := io.ReadAll(r)
 		if err1 != nil {
 			buf = []byte(fmt.Sprintf("error reading buffered response body: %s", err1))
 		}

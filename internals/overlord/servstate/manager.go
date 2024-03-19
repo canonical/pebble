@@ -9,11 +9,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/overlord/restart"
 	"github.com/canonical/pebble/internals/overlord/state"
 	"github.com/canonical/pebble/internals/plan"
-	"github.com/canonical/pebble/internals/reaper"
 	"github.com/canonical/pebble/internals/servicelog"
 )
 
@@ -71,11 +69,6 @@ func NewManager(s *state.State, runner *state.TaskRunner, pebbleDir string, serv
 		logMgr:        logMgr,
 	}
 
-	err := reaper.Start()
-	if err != nil {
-		return nil, err
-	}
-
 	runner.AddHandler("start", manager.doStart, nil)
 	runner.AddHandler("stop", manager.doStop, nil)
 
@@ -84,11 +77,6 @@ func NewManager(s *state.State, runner *state.TaskRunner, pebbleDir string, serv
 
 // Stop implements overlord.StateStopper and stops background functions.
 func (m *ServiceManager) Stop() {
-	err := reaper.Stop()
-	if err != nil {
-		logger.Noticef("Cannot stop child process reaper: %v", err)
-	}
-
 	// Close all the service ringbuffers
 	m.servicesLock.Lock()
 	defer m.servicesLock.Unlock()

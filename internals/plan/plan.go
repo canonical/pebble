@@ -17,7 +17,6 @@ package plan
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -1075,7 +1074,7 @@ func validServiceAction(action ServiceAction, additionalValid ...ServiceAction) 
 var fnameExp = regexp.MustCompile("^([0-9]{3})-([a-z](?:-?[a-z0-9]){2,}).yaml$")
 
 func ReadLayersDir(dirname string) ([]*Layer, error) {
-	finfos, err := ioutil.ReadDir(dirname)
+	finfos, err := os.ReadDir(dirname)
 	if err != nil {
 		// Errors from package os generally include the path.
 		return nil, fmt.Errorf("cannot read layers directory: %v", err)
@@ -1099,7 +1098,7 @@ func ReadLayersDir(dirname string) ([]*Layer, error) {
 			return nil, fmt.Errorf("invalid layer filename: %q (must look like \"123-some-label.yaml\")", finfo.Name())
 		}
 
-		data, err := ioutil.ReadFile(filepath.Join(dirname, finfo.Name()))
+		data, err := os.ReadFile(filepath.Join(dirname, finfo.Name()))
 		if err != nil {
 			// Errors from package os generally include the path.
 			return nil, fmt.Errorf("cannot read layer file: %v", err)

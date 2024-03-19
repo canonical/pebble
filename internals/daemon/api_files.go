@@ -19,7 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
+	"io/fs"
 	"mime"
 	"mime/multipart"
 	"net/http"
@@ -302,15 +302,15 @@ func listFiles(path, pattern string, itself bool) ([]fileInfoResult, error) {
 		return nil, err
 	}
 
-	var infos []os.FileInfo
+	var entries []os.DirEntry
 	var dir string
 	if !info.IsDir() || itself {
 		// Info about a single file (or directory entry itself).
-		infos = []os.FileInfo{info}
+		entries = []os.DirEntry{fs.FileInfoToDirEntry(info)}
 		dir = pathpkg.Dir(path)
 	} else {
 		// List an entire directory.
-		infos, err = ioutil.ReadDir(path)
+		entries, err = os.ReadDir(path)
 		if err != nil {
 			return nil, err
 		}
@@ -320,8 +320,8 @@ func listFiles(path, pattern string, itself bool) ([]fileInfoResult, error) {
 	result := make([]fileInfoResult, 0) // want "no results" to be [], not nil
 	userCache := make(map[int]string)
 	groupCache := make(map[int]string)
-	for _, info = range infos {
-		name := info.Name()
+	for _, entry := range entries {
+		name := entry.Name()
 		matched := true
 		if pattern != "" {
 			matched, err = pathpkg.Match(pattern, name)
@@ -331,6 +331,10 @@ func listFiles(path, pattern string, itself bool) ([]fileInfoResult, error) {
 		}
 		if matched {
 			fullPath := pathpkg.Join(dir, name)
+			info, err = entry.Info()
+			if err != nil {
+				return nil, err
+			}
 			result = append(result, fileInfoToResult(fullPath, info, userCache, groupCache))
 		}
 	}

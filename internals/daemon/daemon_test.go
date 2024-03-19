@@ -18,7 +18,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -39,6 +39,7 @@ import (
 	"github.com/canonical/pebble/internals/overlord/restart"
 	"github.com/canonical/pebble/internals/overlord/standby"
 	"github.com/canonical/pebble/internals/overlord/state"
+	"github.com/canonical/pebble/internals/reaper"
 	"github.com/canonical/pebble/internals/systemd"
 	"github.com/canonical/pebble/internals/testutil"
 )
@@ -60,6 +61,11 @@ type daemonSuite struct {
 var _ = Suite(&daemonSuite{})
 
 func (s *daemonSuite) SetUpTest(c *C) {
+	err := reaper.Start()
+	if err != nil {
+		c.Fatalf("cannot start reaper: %v", err)
+	}
+
 	s.pebbleDir = c.MkDir()
 	s.statePath = filepath.Join(s.pebbleDir, ".pebble.state")
 	systemdSdNotify = func(notif string) error {
@@ -73,6 +79,11 @@ func (s *daemonSuite) TearDownTest(c *C) {
 	s.notified = nil
 	s.authorized = false
 	s.err = nil
+
+	err := reaper.Stop()
+	if err != nil {
+		c.Fatalf("cannot stop reaper: %v", err)
+	}
 }
 
 func (s *daemonSuite) newDaemon(c *C) *Daemon {
@@ -658,7 +669,7 @@ func (s *daemonSuite) TestGracefulStop(c *C) {
 		res, err := http.Get(fmt.Sprintf("http://%s/endp", generalL.Addr()))
 		c.Assert(err, IsNil)
 		c.Check(res.StatusCode, Equals, 200)
-		body, err := ioutil.ReadAll(res.Body)
+		body, err := io.ReadAll(res.Body)
 		res.Body.Close()
 		c.Assert(err, IsNil)
 		c.Check(string(body), Equals, "OKOK")
@@ -771,7 +782,7 @@ func (s *daemonSuite) TestRestartSystemWiring(c *C) {
 }
 
 func (s *daemonSuite) TestRebootHelper(c *C) {
-	cmd := testutil.FakeCommand(c, "shutdown", "", true)
+	cmd := testutil.FakeCommand(c, "shutdown", "")
 	defer cmd.Restore()
 
 	tests := []struct {
@@ -815,7 +826,7 @@ func (s *daemonSuite) TestRestartShutdownWithSigtermInBetween(c *C) {
 	}()
 	rebootNoticeWait = 150 * time.Millisecond
 
-	cmd := testutil.FakeCommand(c, "shutdown", "", false)
+	cmd := testutil.FakeCommand(c, "shutdown", "")
 	defer cmd.Restore()
 
 	d := s.newDaemon(c)
@@ -847,7 +858,7 @@ func (s *daemonSuite) TestRestartShutdown(c *C) {
 	rebootWaitTimeout = 100 * time.Millisecond
 	rebootNoticeWait = 150 * time.Millisecond
 
-	cmd := testutil.FakeCommand(c, "shutdown", "", false)
+	cmd := testutil.FakeCommand(c, "shutdown", "")
 	defer cmd.Restore()
 
 	d := s.newDaemon(c)
@@ -874,7 +885,7 @@ func (s *daemonSuite) TestRestartExpectedRebootIsMissing(c *C) {
 	c.Assert(err, IsNil)
 
 	fakeState := []byte(fmt.Sprintf(`{"data":{"patch-level":%d,"patch-sublevel":%d,"some":"data","system-restart-from-boot-id":%q,"daemon-system-restart-at":"%s"},"changes":null,"tasks":null,"last-change-id":0,"last-task-id":0,"last-lane-id":0}`, patch.Level, patch.Sublevel, curBootID, time.Now().UTC().Format(time.RFC3339)))
-	err = ioutil.WriteFile(s.statePath, fakeState, 0600)
+	err = os.WriteFile(s.statePath, fakeState, 0600)
 	c.Assert(err, IsNil)
 
 	oldRebootNoticeWait := rebootNoticeWait
@@ -886,7 +897,7 @@ func (s *daemonSuite) TestRestartExpectedRebootIsMissing(c *C) {
 	rebootRetryWaitTimeout = 100 * time.Millisecond
 	rebootNoticeWait = 150 * time.Millisecond
 
-	cmd := testutil.FakeCommand(c, "shutdown", "", true)
+	cmd := testutil.FakeCommand(c, "shutdown", "")
 	defer cmd.Restore()
 
 	d := s.newDaemon(c)
@@ -922,10 +933,10 @@ func (s *daemonSuite) TestRestartExpectedRebootIsMissing(c *C) {
 
 func (s *daemonSuite) TestRestartExpectedRebootOK(c *C) {
 	fakeState := []byte(fmt.Sprintf(`{"data":{"patch-level":%d,"patch-sublevel":%d,"some":"data","system-restart-from-boot-id":%q,"daemon-system-restart-at":"%s"},"changes":null,"tasks":null,"last-change-id":0,"last-task-id":0,"last-lane-id":0}`, patch.Level, patch.Sublevel, "boot-id-0", time.Now().UTC().Format(time.RFC3339)))
-	err := ioutil.WriteFile(s.statePath, fakeState, 0600)
+	err := os.WriteFile(s.statePath, fakeState, 0600)
 	c.Assert(err, IsNil)
 
-	cmd := testutil.FakeCommand(c, "shutdown", "", true)
+	cmd := testutil.FakeCommand(c, "shutdown", "")
 	defer cmd.Restore()
 
 	d := s.newDaemon(c)
@@ -946,10 +957,10 @@ func (s *daemonSuite) TestRestartExpectedRebootGiveUp(c *C) {
 	c.Assert(err, IsNil)
 
 	fakeState := []byte(fmt.Sprintf(`{"data":{"patch-level":%d,"patch-sublevel":%d,"some":"data","system-restart-from-boot-id":%q,"daemon-system-restart-at":"%s","daemon-system-restart-tentative":3},"changes":null,"tasks":null,"last-change-id":0,"last-task-id":0,"last-lane-id":0}`, patch.Level, patch.Sublevel, curBootID, time.Now().UTC().Format(time.RFC3339)))
-	err = ioutil.WriteFile(s.statePath, fakeState, 0600)
+	err = os.WriteFile(s.statePath, fakeState, 0600)
 	c.Assert(err, IsNil)
 
-	cmd := testutil.FakeCommand(c, "shutdown", "", true)
+	cmd := testutil.FakeCommand(c, "shutdown", "")
 	defer cmd.Restore()
 
 	d := s.newDaemon(c)

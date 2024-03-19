@@ -23,6 +23,7 @@ import (
 	"gopkg.in/check.v1"
 
 	"github.com/canonical/pebble/internals/overlord/restart"
+	"github.com/canonical/pebble/internals/reaper"
 )
 
 var _ = check.Suite(&apiSuite{})
@@ -38,6 +39,11 @@ type apiSuite struct {
 }
 
 func (s *apiSuite) SetUpTest(c *check.C) {
+	err := reaper.Start()
+	if err != nil {
+		c.Fatalf("cannot start reaper: %v", err)
+	}
+
 	s.restoreMuxVars = FakeMuxVars(s.muxVars)
 	s.pebbleDir = c.MkDir()
 }
@@ -46,6 +52,11 @@ func (s *apiSuite) TearDownTest(c *check.C) {
 	s.d = nil
 	s.pebbleDir = ""
 	s.restoreMuxVars()
+
+	err := reaper.Stop()
+	if err != nil {
+		c.Fatalf("cannot stop reaper: %v", err)
+	}
 }
 
 func (s *apiSuite) muxVars(*http.Request) map[string]string {
@@ -92,7 +103,7 @@ func (s *apiSuite) TestSysInfo(c *check.C) {
 
 	sysInfoCmd.GET(sysInfoCmd, nil, nil).ServeHTTP(rec, nil)
 	c.Check(rec.Code, check.Equals, 200)
-	c.Check(rec.HeaderMap.Get("Content-Type"), check.Equals, "application/json")
+	c.Check(rec.Result().Header.Get("Content-Type"), check.Equals, "application/json")
 
 	expected := map[string]interface{}{
 		"version": "42b1",
