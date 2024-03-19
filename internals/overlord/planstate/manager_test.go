@@ -70,16 +70,17 @@ func (ps *planSuite) TestLoadLayers(c *C) {
 	out, err := yaml.Marshal(plan)
 	c.Assert(err, IsNil)
 	c.Assert(len(plan.Layers), Equals, 2)
-	c.Assert(string(out), Equals, string(reindent(`
-	services:
-		svc1:
-			summary: Svc1
-			override: replace
-			command: echo svc1
-		svc2:
-			summary: Svc2
-			override: replace
-			command: echo svc2`)))
+	c.Assert(string(out), Equals, `
+services:
+    svc1:
+        summary: Svc1
+        override: replace
+        command: echo svc1
+    svc2:
+        summary: Svc2
+        override: replace
+        command: echo svc2
+`[1:])
 }
 
 func (ps *planSuite) TestAppendLayers(c *C) {
@@ -282,4 +283,46 @@ checks:
             port: 8080
 `))
 	c.Check(err, ErrorMatches, `(?s).*plan check.*must be "alive" or "ready".*`)
+}
+
+func (ps *planSuite) TestSetServiceArgs(c *C) {
+	var err error
+	ps.planMgr, err = planstate.NewManager(nil, nil, ps.pebbleDir)
+	c.Assert(err, IsNil)
+
+	// This is the original plan
+	layer := ps.parseLayer(c, 0, "label1", `
+services:
+    svc1:
+        override: replace
+        command: foo [ --bar ]
+    svc2:
+        override: replace
+        command: foo
+    svc3:
+        override: replace
+        command: foo
+`)
+	err = ps.planMgr.AppendLayer(layer)
+
+	// Set arguments to services.
+	serviceArgs := map[string][]string{
+		"svc1": {"-abc", "--xyz"},
+		"svc2": {"--bar"},
+	}
+	err = ps.planMgr.SetServiceArgs(serviceArgs)
+	c.Assert(err, IsNil)
+
+	c.Assert(ps.planYAML(c), Equals, `
+services:
+    svc1:
+        override: replace
+        command: foo [ -abc --xyz ]
+    svc2:
+        override: replace
+        command: foo [ --bar ]
+    svc3:
+        override: replace
+        command: foo
+`[1:])
 }

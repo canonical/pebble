@@ -79,25 +79,12 @@ func (m *PlanManager) Plan() (*plan.Plan, error) {
 	return m.plan, nil
 }
 
-// LayerCreator allows an Append or Combine operation on the plan to include
-// layer creation derived from the plan itself, which has to happen while
-// the plan is locked.
-type LayerCreator interface {
-	Layer(planIn *plan.Plan) (*plan.Layer, error)
-}
-
-// AppendLayer takes a LayerCreator interface, which may be an existing plan
-// Layer, and appends it to the plan's layers and updates the layer.Order
-// field to the new order. If a layer with layer.Label already exists, return
-// an error of type *LabelExists.
-func (m *PlanManager) AppendLayer(creator LayerCreator) error {
+// AppendLayer takes a Layer, appends it to the plan's layers and updates the
+// layer.Order field to the new order. If a layer with layer.Label already
+// exists, return an error of type *LabelExists.
+func (m *PlanManager) AppendLayer(layer *plan.Layer) error {
 	m.planLock.Lock()
 	defer m.planLock.Unlock()
-
-	layer, err := creator.Layer(m.plan)
-	if err != nil {
-		return err
-	}
 
 	index, _ := findLayer(m.plan.Layers, layer.Label)
 	if index >= 0 {
@@ -107,18 +94,12 @@ func (m *PlanManager) AppendLayer(creator LayerCreator) error {
 	return m.appendLayer(layer)
 }
 
-// CombineLayer takes a LayerCreator interface, which may be an existing plan
-// Layer, and appends it to an existing layer that has the same label. If no
-// existing layer has the label, append a new one. In either case, update the
-// layer.Order field to the new order.
-func (m *PlanManager) CombineLayer(creator LayerCreator) error {
+// CombineLayer takes a Layer, combines it to an existing layer that has the
+// same label. If no existing layer has the label, append a new one. In either
+// case, update the layer.Order field to the new order.
+func (m *PlanManager) CombineLayer(layer *plan.Layer) error {
 	m.planLock.Lock()
 	defer m.planLock.Unlock()
-
-	layer, err := creator.Layer(m.plan)
-	if err != nil {
-		return err
-	}
 
 	index, found := findLayer(m.plan.Layers, layer.Label)
 	if index < 0 {
@@ -191,4 +172,49 @@ func findLayer(layers []*plan.Layer, label string) (int, *plan.Layer) {
 // Ensure implements StateManager.Ensure.
 func (m *PlanManager) Ensure() error {
 	return nil
+}
+
+// SetServiceArgs sets the service arguments provided by "pebble run --args"
+// to their respective services. It adds a new layer in the plan, the layer
+// consisting of services with commands having their arguments changed.
+//
+// TODO: This functionality must be redesigned (moved out of the plan manager)
+// as the plan manager should not be concerned with schema section details.
+func (m *PlanManager) SetServiceArgs(serviceArgs map[string][]string) error {
+	m.planLock.Lock()
+	defer m.planLock.Unlock()
+
+	newLayer := &plan.Layer{
+		// Labels with "pebble-*" prefix are (will be) reserved, see:
+		// https://github.com/canonical/pebble/issues/220
+		Label:    "pebble-service-args",
+		Services: make(map[string]*plan.Service),
+	}
+
+	for name, args := range serviceArgs {
+		service, ok := m.plan.Services[name]
+		if !ok {
+			return fmt.Errorf("service %q not found in plan", name)
+		}
+		base, _, err := service.ParseCommand()
+		if err != nil {
+			return err
+		}
+		newLayer.Services[name] = &plan.Service{
+			Override: plan.MergeOverride,
+			Command:  plan.CommandString(base, args),
+		}
+	}
+
+	err := newLayer.Validate()
+	if err != nil {
+		return err
+	}
+
+	index, _ := findLayer(m.plan.Layers, newLayer.Label)
+	if index >= 0 {
+		return &LabelExists{Label: newLayer.Label}
+	}
+
+	return m.appendLayer(newLayer)
 }

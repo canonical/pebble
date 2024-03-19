@@ -82,46 +82,6 @@ func (m *ServiceManager) plan() *plan.Plan {
 	return m.planUnsafe
 }
 
-// ServiceArgsLayerCreator defines a map of services and respective command
-// arguments, as provided by "pebble run --args" CLI command. It
-// implements the LayerCreator interface, allowing the type to be used with
-// plan manager's (planstate) AppendLayer or CombineLayer methods, to apply
-// the changes to the plan.
-type ServiceArgsLayerCreator map[string][]string
-
-// Layer presents the requested service argument changes in Layer form, ready
-// to apply to the plan. The planstate lock will be acquired while this method
-// is called, so no additional locking needed.
-func (serviceArgs ServiceArgsLayerCreator) Layer(planIn *plan.Plan) (*plan.Layer, error) {
-	newLayer := &plan.Layer{
-		// Labels with "pebble-*" prefix are (will be) reserved, see:
-		// https://github.com/canonical/pebble/issues/220
-		Label:    "pebble-service-args",
-		Services: make(map[string]*plan.Service),
-	}
-
-	for name, args := range serviceArgs {
-		service, ok := planIn.Services[name]
-		if !ok {
-			return nil, fmt.Errorf("service %q not found in plan", name)
-		}
-		base, _, err := service.ParseCommand()
-		if err != nil {
-			return nil, err
-		}
-		newLayer.Services[name] = &plan.Service{
-			Override: plan.MergeOverride,
-			Command:  plan.CommandString(base, args),
-		}
-	}
-
-	err := newLayer.Validate()
-	if err != nil {
-		return nil, err
-	}
-	return newLayer, nil
-}
-
 // Stop implements overlord.StateStopper and stops background functions.
 func (m *ServiceManager) Stop() {
 	// Close all the service ringbuffers

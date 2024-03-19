@@ -33,7 +33,6 @@ import (
 
 	"golang.org/x/sys/unix"
 	. "gopkg.in/check.v1"
-	"gopkg.in/yaml.v3"
 
 	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/overlord/checkstate"
@@ -598,45 +597,6 @@ func (s *S) TestStartFastExitCommand(c *C) {
 
 	svc := s.serviceByName(c, "test4")
 	c.Assert(svc.Current, Equals, servstate.StatusInactive)
-}
-
-// TestSetServiceArgs does not involve the service manager plan snapshot as
-// the plan management is no longer part of the service manager. However,
-// each manager still needs the ability to provide a way to create a custom
-// layer that can be used to mutate the plan state. This test focusses on
-// testing the mutation logic of the service, and not how the changes are
-// applied to planstate.
-func (s *S) TestSetServiceArgs(c *C) {
-	s.planAddLayer(c, `
-services:
-    svc1:
-        override: replace
-        command: foo [ --bar ]
-    svc2:
-        override: replace
-        command: foo
-    svc3:
-        override: replace
-        command: foo
-`)
-
-	// Set arguments to services.
-	serviceArgs := servstate.ServiceArgsLayerCreator{
-		"svc1": {"-abc", "--xyz"},
-		"svc2": {"--bar"},
-	}
-	layer, err := serviceArgs.Layer(s.plan)
-	c.Assert(err, IsNil)
-	yml, err := yaml.Marshal(layer)
-	c.Assert(string(yml), Equals, `
-services:
-    svc1:
-        override: merge
-        command: foo [ -abc --xyz ]
-    svc2:
-        override: merge
-        command: foo [ --bar ]
-`[1:])
 }
 
 func (s *S) TestServices(c *C) {
