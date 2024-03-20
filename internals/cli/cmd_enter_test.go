@@ -244,20 +244,19 @@ func (s *PebbleSuite) TestEnterHelpCommandHelpArg(c *C) {
 }
 
 // TestEnterSubCommandWaits checks that the subcommand in enter
-// starts **after** the default services have started. It utilizes
-// the modification time of /proc/[PID] directory for checking.
+// starts **after** the default services have started.
 func (s *PebbleSuite) TestEnterSubCommandWaits(c *C) {
 	layerTemplate := dumbDedent(`
 		services:
 		  stat:
 		    override: replace
-		    command: /bin/sh -c 'stat -c "%y" /proc/$$ > $PEBBLE/stat; sleep 1;'
+		    command: /bin/sh -c 'date --rfc-3339=ns > $PEBBLE/enter-wait; sleep 1;'
 		    startup: enabled
 	`)
 	layerPath := filepath.Join(s.pebbleDir, "layers", "001-stat.yaml")
 	writeTemplate(layerPath, layerTemplate, nil)
 
-	cmd := []string{"pebble", "enter", "--run", "exec", "/bin/sh", "-c", "stat -c '%y' /proc/$$"}
+	cmd := []string{"pebble", "enter", "--run", "exec", "date", "--rfc-3339=ns"}
 	restore := fakeArgs(cmd...)
 	defer restore()
 
@@ -268,14 +267,13 @@ func (s *PebbleSuite) TestEnterSubCommandWaits(c *C) {
 	c.Check(s.Stderr(), Equals, "")
 	stdout := s.Stdout()
 
-	layout := "2006-01-02 15:04:05.000000000 -0700"
-	subCmdExecTime, err := time.Parse(layout, strings.TrimSpace(stdout))
+	svcOut, err := os.ReadFile(filepath.Join(s.pebbleDir, "enter-wait"))
 	c.Check(err, IsNil)
 
-	svcOut, err := ioutil.ReadFile(filepath.Join(s.pebbleDir, "stat"))
+	layout := "2006-01-02 15:04:05.000000000-07:00"
+	subCmdExecTime, err := time.Parse(layout, strings.TrimSpace(stdout))
 	c.Check(err, IsNil)
 	svcStartTime, err := time.Parse(layout, strings.TrimSpace(string(svcOut)))
 	c.Check(err, IsNil)
-
 	c.Check(svcStartTime.Before(subCmdExecTime), Equals, true)
 }
