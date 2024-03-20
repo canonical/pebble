@@ -190,14 +190,14 @@ func (s *S) TearDownTest(c *C) {
 // side effect (e.g. stdout or stderr) can be checked. This is required
 // because the service manager can only tell when the service started, not
 // when the expected result has been achieved. The done check barrier is
-// inserted by adding the $NOTIFY_DONE_CHECK environment variable in the
+// inserted by adding the {{.NotifyDoneCheck}} placeholder in the
 // service command sequence, at the point where the expected side effect
 // will be observed by the test result checker.
 var testPlanLayer = `
 services:
     test1:
         override: replace
-        command: /bin/sh -c "echo test1; $NOTIFY_DONE_CHECK; sleep 10"
+        command: /bin/sh -c "echo test1; {{.NotifyDoneCheck}}; sleep 10"
         startup: enabled
         requires:
             - test2
@@ -206,7 +206,7 @@ services:
 
     test2:
         override: replace
-        command: /bin/sh -c "echo test2; $NOTIFY_DONE_CHECK; sleep 10"
+        command: /bin/sh -c "echo test2; {{.NotifyDoneCheck}}; sleep 10"
 
     test3:
         override: replace
@@ -466,7 +466,7 @@ func (s *S) TestCurrentUserGroup(c *C) {
 services:
     usrtest:
         override: replace
-        command: /bin/sh -c "id -n -u >%s; $NOTIFY_DONE_CHECK; sleep %g"
+        command: /bin/sh -c "id -n -u >%s; {{.NotifyDoneCheck}}; sleep %g"
         user: %s
         group: %s
 `
@@ -649,7 +649,7 @@ func (s *S) TestEnvironment(c *C) {
 services:
     envtest:
         override: replace
-        command: /bin/sh -c "env | grep PEBBLE_ENV_TEST | sort > %s; $NOTIFY_DONE_CHECK; sleep 10"
+        command: /bin/sh -c "env | grep PEBBLE_ENV_TEST | sort > %s; {{.NotifyDoneCheck}}; sleep 10"
         environment:
             PEBBLE_ENV_TEST_1: foo
             PEBBLE_ENV_TEST_2: bar bazz
@@ -698,7 +698,7 @@ func (s *S) TestActionRestart(c *C) {
 services:
     test2:
         override: merge
-        command: /bin/sh -c "echo test2; $NOTIFY_DONE_CHECK; sleep 10"
+        command: /bin/sh -c "echo test2; {{.NotifyDoneCheck}}; sleep 10"
         backoff-delay: 1ms
         backoff-limit: 500ms
         backoff-factor: 10
@@ -815,7 +815,7 @@ func (s *S) TestOnCheckFailureRestartWhileRunning(c *C) {
 services:
     test2:
         override: replace
-        command: /bin/sh -c 'echo x >>%s; $NOTIFY_DONE_CHECK; sleep 10'
+        command: /bin/sh -c 'echo x >>%s; {{.NotifyDoneCheck}}; sleep 10'
         backoff-delay: 100ms
         on-check-failure:
             chk1: restart
@@ -914,7 +914,7 @@ func (s *S) TestOnCheckFailureRestartDuringBackoff(c *C) {
 services:
     test2:
         override: replace
-        command: /bin/sh -c 'echo x >>%s; $NOTIFY_DONE_CHECK; sleep 0.1'
+        command: /bin/sh -c 'echo x >>%s; {{.NotifyDoneCheck}}; sleep 0.1'
         backoff-delay: 100ms
         backoff-factor: 100  # ensure it only backoff-restarts once
         on-check-failure:
@@ -1008,7 +1008,7 @@ func (s *S) TestOnCheckFailureIgnore(c *C) {
 services:
     test2:
         override: replace
-        command: /bin/sh -c 'echo x >>%s; $NOTIFY_DONE_CHECK; sleep 10'
+        command: /bin/sh -c 'echo x >>%s; {{.NotifyDoneCheck}}; sleep 10'
         on-check-failure:
             chk1: ignore
 
@@ -1097,7 +1097,7 @@ func (s *S) testOnCheckFailureShutdown(c *C, action string, restartType restart.
 services:
     test2:
         override: replace
-        command: /bin/sh -c 'echo x >>%s; $NOTIFY_DONE_CHECK; sleep 10'
+        command: /bin/sh -c 'echo x >>%s; {{.NotifyDoneCheck}}; sleep 10'
         on-check-failure:
             chk1: %s
 checks:
@@ -1582,7 +1582,7 @@ func (s *S) TestNoWorkingDir(c *C) {
 services:
     nowrkdir:
         override: replace
-        command: /bin/sh -c "pwd >%s; $NOTIFY_DONE_CHECK; sleep %g"
+        command: /bin/sh -c "pwd >%s; {{.NotifyDoneCheck}}; sleep %g"
 `
 	s.planAddLayer(c, fmt.Sprintf(
 		layer,
@@ -1615,7 +1615,7 @@ func (s *S) TestWorkingDir(c *C) {
 services:
     wrkdir:
         override: replace
-        command: /bin/sh -c "pwd >%s; $NOTIFY_DONE_CHECK; sleep %g"
+        command: /bin/sh -c "pwd >%s; {{.NotifyDoneCheck}}; sleep %g"
         working-dir: %s
 `
 	s.planAddLayer(c, fmt.Sprintf(
@@ -1696,7 +1696,7 @@ func (s *S) planAddLayer(c *C, layerYAML string) {
 	cnt := len(s.plan.Layers)
 	layer, err := plan.ParseLayer(cnt, fmt.Sprintf("testPlanLayer%v", cnt), []byte(layerYAML))
 	c.Assert(err, IsNil)
-	// Resolve $NOTIFY_DONE_CHECK
+	// Resolve {{.NotifyDoneCheck}}
 	s.insertDoneChecks(c, layer)
 	layers := append(s.plan.Layers, layer)
 	combined, err := plan.CombineLayers(layers...)
@@ -1951,14 +1951,14 @@ func (f fakeLogManager) ServiceStarted(service *plan.Service, logs *servicelog.R
 }
 
 // insertDoneChecks modifies layer service commands which contains a
-// $NOTIFY_DONE_CHECK barrier placeholder. The placeholder is replaced
+// {{.NotifyDoneCheck}} barrier placeholder. The placeholder is replaced
 // with a command which writes a service specific file to a test
 // directory, allowing waitForDoneCheck to detect service side effect
 // completion.
 func (s *S) insertDoneChecks(c *C, layer *plan.Layer) {
 	for _, service := range layer.Services {
 		doneCheck := fmt.Sprintf("sync; touch %s", filepath.Join(s.dir, service.Name))
-		service.Command = strings.Replace(service.Command, "$NOTIFY_DONE_CHECK", doneCheck, -1)
+		service.Command = strings.Replace(service.Command, "{{.NotifyDoneCheck}}", doneCheck, -1)
 	}
 }
 

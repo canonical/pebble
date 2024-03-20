@@ -19,8 +19,8 @@ type ServiceManager struct {
 	state  *state.State
 	runner *state.TaskRunner
 
-	planLock   sync.Mutex
-	planUnsafe *plan.Plan
+	planLock sync.Mutex
+	plan     *plan.Plan
 
 	servicesLock sync.Mutex
 	services     map[string]*serviceData
@@ -63,12 +63,12 @@ func NewManager(s *state.State, runner *state.TaskRunner, serviceOutput io.Write
 func (m *ServiceManager) PlanChanged(plan *plan.Plan) {
 	m.planLock.Lock()
 	defer m.planLock.Unlock()
-	m.planUnsafe = plan
+	m.plan = plan
 }
 
-// Plan safely gets a snapshot of the current plan pointer. Plan consumers do
-// not mutate the snapshot, and only react to updates from the Plan Manager.
-func (m *ServiceManager) plan() *plan.Plan {
+// getPlan returns the current plan pointer in a concurrency-safe way. The
+// service manager must not mutate the result.
+func (m *ServiceManager) getPlan() *plan.Plan {
 	m.planLock.Lock()
 	defer m.planLock.Unlock()
 	// This should never be possible, but lets make the requirements clear to
@@ -76,10 +76,10 @@ func (m *ServiceManager) plan() *plan.Plan {
 	// a PlanChanged update before the plan is used. The first update will be
 	// received during stateengine StartUp, after the plan manager loads the
 	// plan layers from storage.
-	if m.planUnsafe == nil {
+	if m.plan == nil {
 		panic("service manager with invalid plan state")
 	}
-	return m.planUnsafe
+	return m.plan
 }
 
 // Stop implements overlord.StateStopper and stops background functions.
@@ -123,10 +123,10 @@ const (
 // Services returns the list of configured services and their status, sorted
 // by service name. Filter by the specified service names if provided.
 func (m *ServiceManager) Services(names []string) ([]*ServiceInfo, error) {
+	currentPlan := m.getPlan()
 	m.servicesLock.Lock()
 	defer m.servicesLock.Unlock()
 
-	planSnapshot := m.plan()
 	requested := make(map[string]bool, len(names))
 	for _, name := range names {
 		requested[name] = true
@@ -134,7 +134,7 @@ func (m *ServiceManager) Services(names []string) ([]*ServiceInfo, error) {
 
 	var services []*ServiceInfo
 	matchNames := len(names) > 0
-	for name, config := range planSnapshot.Services {
+	for name, config := range currentPlan.Services {
 		if matchNames && !requested[name] {
 			continue
 		}
@@ -198,29 +198,29 @@ func stateToStatus(state serviceState) ServiceStatus {
 // DefaultServiceNames returns the name of the services set to start
 // by default.
 func (m *ServiceManager) DefaultServiceNames() ([]string, error) {
-	planSnapshot := m.plan()
+	currentPlan := m.getPlan()
 	var names []string
-	for name, service := range planSnapshot.Services {
+	for name, service := range currentPlan.Services {
 		if service.Startup == plan.StartupEnabled {
 			names = append(names, name)
 		}
 	}
 
-	return planSnapshot.StartOrder(names)
+	return currentPlan.StartOrder(names)
 }
 
 // StartOrder returns the provided services, together with any required
 // dependencies, in the proper order for starting them all up.
 func (m *ServiceManager) StartOrder(services []string) ([]string, error) {
-	planSnapshot := m.plan()
-	return planSnapshot.StartOrder(services)
+	currentPlan := m.getPlan()
+	return currentPlan.StartOrder(services)
 }
 
 // StopOrder returns the provided services, together with any dependants,
 // in the proper order for stopping them all.
 func (m *ServiceManager) StopOrder(services []string) ([]string, error) {
-	planSnapshot := m.plan()
-	return planSnapshot.StopOrder(services)
+	currentPlan := m.getPlan()
+	return currentPlan.StopOrder(services)
 }
 
 // ServiceLogs returns iterators to the provided services. If last is negative,
@@ -256,14 +256,14 @@ func (m *ServiceManager) ServiceLogs(services []string, last int) (map[string]se
 // Replan returns a list of services to stop and services to start because
 // their plans had changed between when they started and this call.
 func (m *ServiceManager) Replan() ([]string, []string, error) {
+	currentPlan := m.getPlan()
 	m.servicesLock.Lock()
 	defer m.servicesLock.Unlock()
 
-	planSnapshot := m.plan()
 	needsRestart := make(map[string]bool)
 	var stop []string
 	for name, s := range m.services {
-		if config, ok := planSnapshot.Services[name]; ok {
+		if config, ok := currentPlan.Services[name]; ok {
 			if config.Equal(s.config) {
 				continue
 			}
@@ -274,13 +274,13 @@ func (m *ServiceManager) Replan() ([]string, []string, error) {
 	}
 
 	var start []string
-	for name, config := range planSnapshot.Services {
+	for name, config := range currentPlan.Services {
 		if needsRestart[name] || config.Startup == plan.StartupEnabled {
 			start = append(start, name)
 		}
 	}
 
-	stop, err := planSnapshot.StopOrder(stop)
+	stop, err := currentPlan.StopOrder(stop)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -290,7 +290,7 @@ func (m *ServiceManager) Replan() ([]string, []string, error) {
 		}
 	}
 
-	start, err = planSnapshot.StartOrder(start)
+	start, err = currentPlan.StartOrder(start)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -346,15 +346,15 @@ func (m *ServiceManager) CheckFailed(name string) {
 // exits), it would generate a runtime error as the reaper would already be dead.
 // This function returns a slice of service names to stop, in dependency order.
 func servicesToStop(m *ServiceManager) ([]string, error) {
-	planSnapshot := m.plan()
+	currentPlan := m.getPlan()
 	// Get all service names in plan.
-	var services []string
-	for name := range planSnapshot.Services {
+	services := make([]string, 0, len(currentPlan.Services))
+	for name := range currentPlan.Services {
 		services = append(services, name)
 	}
 
 	// Order according to dependency order.
-	stop, err := planSnapshot.StopOrder(services)
+	stop, err := currentPlan.StopOrder(services)
 	if err != nil {
 		return nil, err
 	}

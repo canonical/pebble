@@ -1,3 +1,17 @@
+// Copyright (c) 2024 Canonical Ltd
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License version 3 as
+// published by the Free Software Foundation.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
 package planstate
 
 import (
@@ -39,9 +53,9 @@ func NewManager(s *state.State, runner *state.TaskRunner, pebbleDir string) (*Pl
 	return manager, nil
 }
 
-// Load reads plan layers from the pebble directory, combine and validate the
+// Load reads plan layers from the pebble directory, combines and validates the
 // final plan, and finally notifies registered managers of the plan update. In
-// the case of a non-exist layers directory, or no layers in the layers
+// the case of a non-existent layers directory, or no layers in the layers
 // directory, an empty plan is announced to change subscribers.
 func (m *PlanManager) Load() error {
 	m.planLock.Lock()
@@ -77,7 +91,7 @@ func (m *PlanManager) planChanged(plan *plan.Plan) {
 // Plan returns the combined configuration plan. Any change made to the plan
 // will result in a new Plan instance, so the current design assumes a returned
 // plan is never mutated by planstate (and may never be mutated by any
-// consuming overlord manager).
+// consumer).
 func (m *PlanManager) Plan() (*plan.Plan, error) {
 	m.planLock.Lock()
 	defer m.planLock.Unlock()
@@ -153,13 +167,17 @@ func (m *PlanManager) updatePlanLayers(layers []*plan.Layer) error {
 	if err != nil {
 		return err
 	}
-	plan := &plan.Plan{
+	p := &plan.Plan{
 		Layers:     layers,
 		Services:   combined.Services,
 		Checks:     combined.Checks,
 		LogTargets: combined.LogTargets,
 	}
-	m.planChanged(plan)
+	p.Validate()
+	if err != nil {
+		return err
+	}
+	m.planChanged(p)
 	return nil
 }
 
@@ -214,11 +232,6 @@ func (m *PlanManager) SetServiceArgs(serviceArgs map[string][]string) error {
 	err := newLayer.Validate()
 	if err != nil {
 		return err
-	}
-
-	index, _ := findLayer(m.plan.Layers, newLayer.Label)
-	if index >= 0 {
-		return &LabelExists{Label: newLayer.Label}
 	}
 
 	return m.appendLayer(newLayer)

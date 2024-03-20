@@ -140,7 +140,7 @@ func New(opts *Options) (*Overlord, error) {
 
 	o.planMgr, err = planstate.NewManager(s, o.runner, o.pebbleDir)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("cannot create plan manager: %w", err)
 	}
 	o.stateEng.AddManager(o.planMgr)
 
@@ -153,7 +153,7 @@ func New(opts *Options) (*Overlord, error) {
 		opts.RestartHandler,
 		o.logMgr)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("cannot create service manager: %w", err)
 	}
 
 	// Tell service manager about plan updates.
@@ -182,7 +182,7 @@ func New(opts *Options) (*Overlord, error) {
 	if o.extension != nil {
 		extraManagers, err := o.extension.ExtraManagers(o)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("cannot add extra managers: %w", err)
 		}
 		for _, manager := range extraManagers {
 			o.stateEng.AddManager(manager)
@@ -199,7 +199,7 @@ func New(opts *Options) (*Overlord, error) {
 	// notifications to all notification subscribers.
 	err = o.planMgr.Load()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("cannot load plan %w", err)
 	}
 
 	return o, nil
