@@ -229,33 +229,35 @@ func runDaemon(rcmd *cmdRun, ch chan os.Signal, ready chan<- func()) (err error)
 
 	logger.Debugf("activation done in %v", time.Now().Truncate(time.Millisecond).Sub(t0))
 
-	var autoStartReady chan error
+	// The "stop" channel is used by the "enter" command to stop the daemon.
 	var stop chan struct{}
-
-	notifyReady := func() {
+	if ready != nil {
 		stop = make(chan struct{}, 1)
+	}
+	notifyReady := func() {
 		ready <- func() { close(stop) }
 		close(ready)
 	}
 
 	if !rcmd.Hold {
+		// Start the default services.
 		servopts := client.ServiceOptions{}
 		changeID, err := rcmd.client.AutoStart(&servopts)
 		if err != nil {
 			logger.Noticef("Cannot start default services: %v", err)
-		} else {
+		} else if ready == nil {
 			logger.Noticef("Started default services with change %s.", changeID)
-		}
-
-		if ready != nil {
-			// wait for the default services to start
-			autoStartReady = make(chan error, 1)
+		} else {
+			// If ready != nil (case for "enter" command), wait for the default
+			// services to start and then notify on ready channel.
 			go func() {
-				waitCmd := waitMixin{
-					hideProgress: true,
+				_, err := rcmd.client.WaitChange(changeID, nil)
+				if err != nil {
+					logger.Noticef("Cannot wait for autostart change %s", changeID)
+				} else {
+					logger.Noticef("Started default services with change %s.", changeID)
 				}
-				_, err := waitCmd.wait(rcmd.client, changeID)
-				autoStartReady <- err
+				notifyReady()
 			}()
 		}
 	} else if ready != nil {
@@ -277,11 +279,6 @@ out:
 				d.SetDegradedMode(nil)
 				tic.Stop()
 			}
-		case chgErr := <-autoStartReady:
-			if chgErr != nil {
-				logger.Noticef("Error starting default services: %v", chgErr)
-			}
-			notifyReady()
 		case <-stop:
 			break out
 		}
