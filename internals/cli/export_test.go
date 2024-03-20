@@ -28,7 +28,7 @@ func RunMain() error {
 
 var clientConfigBaseURL string
 
-func FakeClientConfigBaseURL(baseURL string) (restore func ()) {
+func FakeClientConfigBaseURL(baseURL string) (restore func()) {
 	clientConfigBaseURL = baseURL
 	return func() {
 		clientConfigBaseURL = ""
