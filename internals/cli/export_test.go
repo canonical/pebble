@@ -21,16 +21,28 @@ import (
 )
 
 func RunMain() error {
-	ClientConfig.PebbleDir, ClientConfig.Socket = getEnvPaths()
 	return Run(&RunOptions{
-		ClientConfig: ClientConfig,
+		ClientConfig: newClientConfig(),
 	})
 }
 
-var ClientConfig = &client.Config{}
+var clientConfigBaseURL string
+
+func FakeClientConfigBaseURL(baseURL string) (restore func ()) {
+	clientConfigBaseURL = baseURL
+	return func() {
+		clientConfigBaseURL = ""
+	}
+}
+
+func newClientConfig() *client.Config {
+	config := client.Config{BaseURL: clientConfigBaseURL}
+	config.PebbleDir, config.Socket = getEnvPaths()
+	return &config
+}
 
 func Client() *client.Client {
-	cli, err := client.New(ClientConfig)
+	cli, err := client.New(newClientConfig())
 	if err != nil {
 		panic("cannot create client:" + err.Error())
 	}
