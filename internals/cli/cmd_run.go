@@ -229,21 +229,40 @@ func runDaemon(rcmd *cmdRun, ch chan os.Signal, ready chan<- func()) (err error)
 
 	logger.Debugf("activation done in %v", time.Now().Truncate(time.Millisecond).Sub(t0))
 
+	// The "stop" channel is used by the "enter" command to stop the daemon.
+	var stop chan struct{}
+	if ready != nil {
+		stop = make(chan struct{}, 1)
+	}
+	notifyReady := func() {
+		ready <- func() { close(stop) }
+		close(ready)
+	}
+
 	if !rcmd.Hold {
+		// Start the default services (those configured with startup: enabled).
 		servopts := client.ServiceOptions{}
 		changeID, err := rcmd.client.AutoStart(&servopts)
 		if err != nil {
 			logger.Noticef("Cannot start default services: %v", err)
 		} else {
-			logger.Noticef("Started default services with change %s.", changeID)
+			// Wait for the default services to actually start and then notify
+			// the ready channel (for the "enter" command).
+			go func() {
+				logger.Debugf("Waiting for default services to autostart with change %s.", changeID)
+				_, err := rcmd.client.WaitChange(changeID, nil)
+				if err != nil {
+					logger.Noticef("Cannot wait for autostart change %s: %v", changeID, err)
+				} else {
+					logger.Noticef("Started default services with change %s.", changeID)
+				}
+				if ready != nil {
+					notifyReady()
+				}
+			}()
 		}
-	}
-
-	var stop chan struct{}
-	if ready != nil {
-		stop = make(chan struct{}, 1)
-		ready <- func() { close(stop) }
-		close(ready)
+	} else if ready != nil {
+		notifyReady()
 	}
 
 out:
