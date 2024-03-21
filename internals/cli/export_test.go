@@ -37,7 +37,7 @@ func FakeClientConfigBaseURL(baseURL string) (restore func()) {
 
 func newClientConfig() *client.Config {
 	config := client.Config{BaseURL: clientConfigBaseURL}
-	config.PebbleDir, config.Socket = getEnvPaths()
+	_, config.Socket = getEnvPaths()
 	return &config
 }
 
