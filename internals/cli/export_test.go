@@ -30,7 +30,7 @@ func RunOptionsForTest() *RunOptions {
 	pebbleDir, _ := getEnvPaths()
 	return &RunOptions{
 		ClientConfig: newClientConfig(),
-		PebbleDir: pebbleDir,
+		PebbleDir:    pebbleDir,
 	}
 }
 
