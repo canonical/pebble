@@ -75,10 +75,20 @@ func init() {
 type enterFlags int
 
 const (
+	// If set, disable all logs unless --verbose is passed.
 	enterSilenceLogging enterFlags = 1 << iota
+	// If set, do not allow the usage of --verbose option with subcommand.
+	enterProhibitVerbose
+	// If set, do not run the pebble daemon.
 	enterNoServiceManager
+	// If set, keep the pebble daemon running, even after the subcommand
+	// execution has finished.
 	enterKeepServiceManager
+	// If set, default services (with startup: enabled) must be started before
+	// executing the subcommand.
 	enterRequireServiceAutostart
+	// If set, do not start the default services (with startup: enabled).
+	// Behaviour similar to "--hold".
 	enterProhibitServiceAutostart
 )
 
@@ -86,7 +96,7 @@ func commandEnterFlags(commander flags.Commander) (enterFlags enterFlags, suppor
 	supported = true
 	switch commander.(type) {
 	case *cmdExec:
-		enterFlags = enterSilenceLogging
+		enterFlags = enterSilenceLogging | enterProhibitVerbose
 	case *cmdHelp:
 		enterFlags = enterNoServiceManager
 	case *cmdLs, *cmdPlan, *cmdServices, *cmdVersion:
@@ -151,6 +161,10 @@ func (cmd *cmdEnter) Execute(args []string) error {
 
 	if enterFlags&(enterProhibitServiceAutostart|enterNoServiceManager) != 0 && cmd.Run {
 		return fmt.Errorf("enter: cannot provide --run before %q subcommand", parser.Active.Name)
+	}
+
+	if enterFlags&enterProhibitVerbose != 0 && cmd.Verbose {
+		return fmt.Errorf("enter: cannot provide -v, --verbose before %q subcommand", parser.Active.Name)
 	}
 
 	if enterFlags&enterNoServiceManager != 0 {
