@@ -109,3 +109,7 @@ func PebbleMain() (exitCode int) {
 	}
 	return
 }
+
+func ParserForTest() *flags.Parser {
+	return Parser(Client(), RunOptionsForTest())
+}

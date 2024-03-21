@@ -37,7 +37,7 @@ func (s *PebbleSuite) TestLogsText(c *C) {
 {"time":"2021-05-03T03:55:50.076800988Z","service":"thing","message":"the third"}
 `[1:])
 	})
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"logs"})
+	rest, err := cli.ParserForTest().ParseArgs([]string{"logs"})
 	c.Assert(err, IsNil)
 	c.Assert(rest, HasLen, 0)
 	c.Check(s.Stdout(), Equals, `
@@ -61,7 +61,7 @@ func (s *PebbleSuite) TestLogsJSON(c *C) {
 {"time":"2021-05-03T03:55:50.076800988Z","service":"thing","message":"the third"}
 `[1:])
 	})
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"logs", "--format", "json"})
+	rest, err := cli.ParserForTest().ParseArgs([]string{"logs", "--format", "json"})
 	c.Assert(err, IsNil)
 	c.Assert(rest, HasLen, 0)
 	c.Check(s.Stdout(), Equals, `
@@ -73,7 +73,7 @@ func (s *PebbleSuite) TestLogsJSON(c *C) {
 }
 
 func (s *PebbleSuite) TestLogsInvalidFormat(c *C) {
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"logs", "--format", "invalid"})
+	rest, err := cli.ParserForTest().ParseArgs([]string{"logs", "--format", "invalid"})
 	c.Assert(err.Error(), Equals, `invalid output format (expected "json" or "text", not "invalid")`)
 	c.Assert(rest, HasLen, 1)
 }
@@ -90,7 +90,7 @@ func (s *PebbleSuite) TestLogsN(c *C) {
 {"time":"2021-05-03T03:55:49.654334232Z","service":"snappass","message":"log two"}
 `[1:])
 	})
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"logs", "-n2"})
+	rest, err := cli.ParserForTest().ParseArgs([]string{"logs", "-n2"})
 	c.Assert(err, IsNil)
 	c.Assert(rest, HasLen, 0)
 	c.Check(s.Stdout(), Equals, `
@@ -112,7 +112,7 @@ func (s *PebbleSuite) TestLogsAll(c *C) {
 {"time":"2021-05-03T03:55:49.654334232Z","service":"snappass","message":"log two"}
 `[1:])
 	})
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"logs", "-nall"})
+	rest, err := cli.ParserForTest().ParseArgs([]string{"logs", "-nall"})
 	c.Assert(err, IsNil)
 	c.Assert(rest, HasLen, 0)
 	c.Check(s.Stdout(), Equals, `
@@ -123,7 +123,7 @@ func (s *PebbleSuite) TestLogsAll(c *C) {
 }
 
 func (s *PebbleSuite) TestLogsInvalidNumber(c *C) {
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"logs", "-ninvalid"})
+	rest, err := cli.ParserForTest().ParseArgs([]string{"logs", "-ninvalid"})
 	c.Assert(err.Error(), Equals, `expected n to be a non-negative integer or "all", not "invalid"`)
 	c.Assert(rest, HasLen, 1)
 }
@@ -142,7 +142,7 @@ func (s *PebbleSuite) TestLogsFollow(c *C) {
 {"time":"2021-05-03T03:55:49.360994155Z","service":"thing","message":"log 1"}
 `[1:])
 	})
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"logs", "-f"})
+	rest, err := cli.ParserForTest().ParseArgs([]string{"logs", "-f"})
 	c.Assert(err, IsNil)
 	c.Assert(rest, HasLen, 0)
 	c.Check(s.Stdout(), Equals, `

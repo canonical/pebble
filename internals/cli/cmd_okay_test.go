@@ -28,7 +28,7 @@ func (s *PebbleSuite) TestOkay(c *C) {
 		"notices-last-okayed": time.Time{},
 	})
 
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"okay"})
+	rest, err := cli.ParserForTest().ParseArgs([]string{"okay"})
 	c.Assert(err, IsNil)
 	c.Check(rest, HasLen, 0)
 	c.Check(s.Stdout(), Equals, "")
@@ -42,7 +42,7 @@ func (s *PebbleSuite) TestOkay(c *C) {
 }
 
 func (s *PebbleSuite) TestOkayNoNotices(c *C) {
-	_, err := cli.Parser(cli.Client()).ParseArgs([]string{"okay"})
+	_, err := cli.ParserForTest().ParseArgs([]string{"okay"})
 	c.Assert(err, ErrorMatches, "no notices.* have been listed.*")
 	c.Check(s.Stdout(), Equals, "")
 	c.Check(s.Stderr(), Equals, "")
