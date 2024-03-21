@@ -39,6 +39,9 @@ type Requester interface {
 
 	// Transport returns the HTTP transport in use by the underlying HTTP client.
 	Transport() *http.Transport
+
+	// Host returns the host/host:port of the Pebble daemon (localhost for UNIX domain sockets).
+	Host() string
 }
 
 type RequestType int
@@ -191,7 +194,7 @@ func (client *Client) Requester() Requester {
 }
 
 func (client *Client) getTaskWebsocket(taskID, websocketID string) (clientWebsocket, error) {
-	url := fmt.Sprintf("ws://localhost/v1/tasks/%s/websocket/%s", taskID, websocketID)
+	url := fmt.Sprintf("ws://%s/v1/tasks/%s/websocket/%s", client.requester.Host(), taskID, websocketID)
 	return client.getWebsocket(url)
 }
 
@@ -600,4 +603,8 @@ func newDefaultRequester(client *Client, opts *Config) (*defaultRequester, error
 
 func (rq *defaultRequester) Transport() *http.Transport {
 	return rq.transport
+}
+
+func (rq *defaultRequester) Host() string {
+	return rq.baseURL.Host
 }
