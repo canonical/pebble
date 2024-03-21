@@ -17,13 +17,21 @@ package cli
 import (
 	"fmt"
 
+	"github.com/canonical/go-flags"
+
 	"github.com/canonical/pebble/client"
 )
 
 func RunMain() error {
-	return Run(&RunOptions{
+	return Run(RunOptionsForTest())
+}
+
+func RunOptionsForTest() *RunOptions {
+	pebbleDir, _ := getEnvPaths()
+	return &RunOptions{
 		ClientConfig: newClientConfig(),
-	})
+		PebbleDir: pebbleDir,
+	}
 }
 
 var clientConfigBaseURL string
