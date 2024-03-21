@@ -148,15 +148,15 @@ func sanityCheck() error {
 	return nil
 }
 
-func runDaemon(rcmd *cmdRun, ch chan os.Signal, ready chan<- func()) (err error) {
-	err = reaper.Start()
+func runDaemon(rcmd *cmdRun, ch chan os.Signal, ready chan<- func()) error {
+	err := reaper.Start()
 	if err != nil {
 		return fmt.Errorf("cannot start child process reaper: %w", err)
 	}
 	defer func() {
-		err = reaper.Stop()
+		err := reaper.Stop()
 		if err != nil {
-			err = fmt.Errorf("cannot stop child process reaper: %w", err)
+			logger.Noticef("Cannot stop child process reaper: %v", err)
 		}
 	}()
 
