@@ -240,24 +240,25 @@ func runDaemon(rcmd *cmdRun, ch chan os.Signal, ready chan<- func()) (err error)
 	}
 
 	if !rcmd.Hold {
-		// Start the default services.
+		// Start the default services (those configured with startup: enabled).
 		servopts := client.ServiceOptions{}
 		changeID, err := rcmd.client.AutoStart(&servopts)
 		if err != nil {
 			logger.Noticef("Cannot start default services: %v", err)
-		} else if ready == nil {
-			logger.Noticef("Started default services with change %s.", changeID)
 		} else {
-			// If ready != nil (case for "enter" command), wait for the default
-			// services to start and then notify on ready channel.
+			// Wait for the default services to actually start and then notify
+			// the ready channel (for the "enter" command).
 			go func() {
+				logger.Debugf("Waiting for default services to autostart with change %s.", changeID)
 				_, err := rcmd.client.WaitChange(changeID, nil)
 				if err != nil {
-					logger.Noticef("Cannot wait for autostart change %s", changeID)
+					logger.Noticef("Cannot wait for autostart change %s: %v", changeID, err)
 				} else {
 					logger.Noticef("Started default services with change %s.", changeID)
 				}
-				notifyReady()
+				if ready != nil {
+					notifyReady()
+				}
 			}()
 		}
 	} else if ready != nil {
