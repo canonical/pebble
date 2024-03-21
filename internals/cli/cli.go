@@ -403,12 +403,11 @@ type fullCLIState struct {
 }
 
 // TODO(benhoyt): add file locking to properly handle multi-user access
-func loadCLIState(client *client.Client) (*cliState, error) {
+func loadCLIState(socketPath string) (*cliState, error) {
 	fullState, err := loadFullCLIState()
 	if err != nil {
 		return nil, err
 	}
-	socketPath := client.SocketPath()
 	st, ok := fullState.Pebble[socketPath]
 	if !ok {
 		return &cliState{}, nil
@@ -437,13 +436,12 @@ func loadFullCLIState() (*fullCLIState, error) {
 	return &fullState, nil
 }
 
-func saveCLIState(client *client.Client, state *cliState) error {
+func saveCLIState(socketPath string, state *cliState) error {
 	fullState, err := loadFullCLIState()
 	if err != nil {
 		return err
 	}
 
-	socketPath := client.SocketPath()
 	fullState.Pebble[socketPath] = state
 
 	data, err := json.Marshal(fullState)
