@@ -156,7 +156,7 @@ func runDaemon(rcmd *cmdRun, ch chan os.Signal, ready chan<- func()) error {
 	defer func() {
 		err := reaper.Stop()
 		if err != nil {
-			logger.Noticef("cannot stop child process reaper: %v", err)
+			logger.Noticef("Cannot stop child process reaper: %v", err)
 		}
 	}()
 
