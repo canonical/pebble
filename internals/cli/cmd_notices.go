@@ -38,6 +38,8 @@ needs to be acknowledged again.
 type cmdNotices struct {
 	client *client.Client
 
+	socketPath string
+
 	timeMixin
 	Users   client.NoticesUsers `long:"users"`
 	UID     *uint32             `long:"uid"`
@@ -59,7 +61,10 @@ func init() {
 			"--timeout": "Wait up to this duration for matching notices to arrive",
 		}),
 		New: func(opts *CmdOptions) flags.Commander {
-			return &cmdNotices{client: opts.Client}
+			return &cmdNotices{
+				client:     opts.Client,
+				socketPath: opts.RunOptions.ClientConfig.Socket,
+			}
 		},
 	})
 }
@@ -69,7 +74,7 @@ func (cmd *cmdNotices) Execute(args []string) error {
 		return ErrExtraArgs
 	}
 
-	state, err := loadCLIState(cmd.client.SocketPath())
+	state, err := loadCLIState(cmd.socketPath)
 	if err != nil {
 		return fmt.Errorf("cannot load CLI state: %w", err)
 	}
@@ -128,7 +133,7 @@ func (cmd *cmdNotices) Execute(args []string) error {
 	}
 
 	state.NoticesLastListed = notices[len(notices)-1].LastRepeated
-	err = saveCLIState(cmd.client.SocketPath(), state)
+	err = saveCLIState(cmd.socketPath, state)
 	if err != nil {
 		return fmt.Errorf("cannot save CLI state: %w", err)
 	}

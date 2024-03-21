@@ -50,6 +50,8 @@ type cmdEnter struct {
 	client *client.Client
 	parser *flags.Parser
 
+	runOptions *RunOptions
+
 	sharedRunEnterOpts
 	Run        bool `long:"run"`
 	Positional struct {
@@ -63,7 +65,11 @@ func init() {
 		Summary:     cmdEnterSummary,
 		Description: cmdEnterDescription,
 		New: func(opts *CmdOptions) flags.Commander {
-			return &cmdEnter{client: opts.Client, parser: opts.Parser}
+			return &cmdEnter{
+				client:     opts.Client,
+				parser:     opts.Parser,
+				runOptions: opts.RunOptions,
+			}
 		},
 		ArgsHelp: merge(sharedRunEnterArgsHelp, map[string]string{
 			"--run": "Start default services before executing subcommand",
@@ -123,7 +129,7 @@ func (cmd *cmdEnter) Execute(args []string) error {
 		extraArgs []string
 	)
 
-	parser := Parser(cmd.client)
+	parser := Parser(cmd.client, cmd.runOptions)
 	parser.CommandHandler = func(c flags.Commander, a []string) error {
 		commander = c
 		extraArgs = a

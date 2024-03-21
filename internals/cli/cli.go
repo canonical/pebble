@@ -58,8 +58,9 @@ var ErrExtraArgs = fmt.Errorf("too many arguments for command")
 
 // CmdOptions exposes state made accessible during command execution.
 type CmdOptions struct {
-	Client *client.Client
-	Parser *flags.Parser
+	Client     *client.Client
+	Parser     *flags.Parser
+	RunOptions *RunOptions
 }
 
 // CmdInfo holds information needed by the CLI to execute commands and
@@ -155,7 +156,7 @@ type defaultOptions struct {
 // Parser creates and populates a fresh parser.
 // Since commands have local state a fresh parser is required to isolate tests
 // from each other.
-func Parser(cli *client.Client) *flags.Parser {
+func Parser(cli *client.Client, options *RunOptions) *flags.Parser {
 	// Implement --version by default on every command
 	defaultOpts := defaultOptions{
 		Version: func() {
@@ -186,7 +187,7 @@ func Parser(cli *client.Client) *flags.Parser {
 
 	// Add all commands
 	for _, c := range commands {
-		obj := c.New(&CmdOptions{Client: cli, Parser: parser})
+		obj := c.New(&CmdOptions{Client: cli, Parser: parser, RunOptions: options})
 
 		var target *flags.Command
 		if c.Debug {
@@ -268,6 +269,7 @@ func (e *exitStatus) Error() string {
 type RunOptions struct {
 	ClientConfig *client.Config
 	Logger       logger.Logger
+	PebbleDir    string
 }
 
 func Run(options *RunOptions) error {
@@ -293,14 +295,17 @@ func Run(options *RunOptions) error {
 	config := options.ClientConfig
 	if config == nil {
 		config = &client.Config{}
-		config.PebbleDir, config.Socket = getEnvPaths()
+		_, config.Socket = getEnvPaths()
 	}
 	cli, err := client.New(config)
 	if err != nil {
 		return fmt.Errorf("cannot create client: %v", err)
 	}
 
-	parser := Parser(cli)
+	if options.PebbleDir == "" {
+		options.PebbleDir, _ = getEnvPaths()
+	}
+	parser := Parser(cli, options)
 	xtra, err := parser.Parse()
 	if err != nil {
 		if e, ok := err.(*flags.Error); ok {
