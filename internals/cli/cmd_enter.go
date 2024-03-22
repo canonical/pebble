@@ -115,6 +115,7 @@ func (cmd *cmdEnter) Execute(args []string) error {
 	runCmd := cmdRun{
 		sharedRunEnterOpts: cmd.sharedRunEnterOpts,
 		client:             cmd.client,
+		socketPath:         cmd.runOptions.ClientConfig.Socket,
 		pebbleDir:          cmd.runOptions.PebbleDir,
 	}
 
