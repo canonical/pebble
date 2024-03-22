@@ -57,10 +57,12 @@ func (ps *planSuite) TestLoadLayers(c *C) {
 	var err error
 	ps.planMgr, err = planstate.NewManager(nil, nil, ps.pebbleDir)
 	c.Assert(err, IsNil)
+	ps.planMgr.AddChangeListener(ps.planChanged)
 	// Write layers
 	for _, l := range loadLayers {
 		ps.writeLayer(c, string(reindent(l)))
 	}
+	ps.expectPlanChanged()
 	// Load the plan from the <pebble-dir>/layers directory
 	err = ps.planMgr.Load()
 	c.Assert(err, IsNil)
@@ -68,7 +70,7 @@ func (ps *planSuite) TestLoadLayers(c *C) {
 	out, err := yaml.Marshal(plan)
 	c.Assert(err, IsNil)
 	c.Assert(len(plan.Layers), Equals, 2)
-	c.Assert(string(out), Equals, `
+	yml := `
 services:
     svc1:
         summary: Svc1
@@ -78,13 +80,16 @@ services:
         summary: Svc2
         override: replace
         command: echo svc2
-`[1:])
+`[1:]
+	c.Assert(string(out), Equals, yml)
+	c.Assert(ps.waitPlanChangedYAML(), Equals, yml)
 }
 
 func (ps *planSuite) TestAppendLayers(c *C) {
 	var err error
 	ps.planMgr, err = planstate.NewManager(nil, nil, ps.pebbleDir)
 	c.Assert(err, IsNil)
+	ps.planMgr.AddChangeListener(ps.planChanged)
 
 	// Append a layer when there are no layers.
 	layer := ps.parseLayer(c, 0, "label1", `
@@ -93,15 +98,18 @@ services:
         override: replace
         command: /bin/sh
 `)
+	ps.expectPlanChanged()
 	err = ps.planMgr.AppendLayer(layer)
 	c.Assert(err, IsNil)
 	c.Assert(layer.Order, Equals, 1)
-	c.Assert(ps.planYAML(c), Equals, `
+	yml := `
 services:
     svc1:
         override: replace
         command: /bin/sh
-`[1:])
+`[1:]
+	c.Assert(ps.planYAML(c), Equals, yml)
+	c.Assert(ps.waitPlanChangedYAML(), Equals, yml)
 	ps.planLayersHasLen(c, 1)
 
 	// Try to append a layer when that label already exists.
@@ -113,12 +121,13 @@ services:
 `)
 	err = ps.planMgr.AppendLayer(layer)
 	c.Assert(err.(*planstate.LabelExists).Label, Equals, "label1")
-	c.Assert(ps.planYAML(c), Equals, `
+	yml = `
 services:
     svc1:
         override: replace
         command: /bin/sh
-`[1:])
+`[1:]
+	c.Assert(ps.planYAML(c), Equals, yml)
 	ps.planLayersHasLen(c, 1)
 
 	// Append another layer on top.
@@ -128,15 +137,18 @@ services:
         override: replace
         command: /bin/bash
 `)
+	ps.expectPlanChanged()
 	err = ps.planMgr.AppendLayer(layer)
 	c.Assert(err, IsNil)
 	c.Assert(layer.Order, Equals, 2)
-	c.Assert(ps.planYAML(c), Equals, `
+	yml = `
 services:
     svc1:
         override: replace
         command: /bin/bash
-`[1:])
+`[1:]
+	c.Assert(ps.planYAML(c), Equals, yml)
+	c.Assert(ps.waitPlanChangedYAML(), Equals, yml)
 	ps.planLayersHasLen(c, 2)
 
 	// Append a layer with a different service.
@@ -146,10 +158,11 @@ services:
         override: replace
         command: /bin/foo
 `)
+	ps.expectPlanChanged()
 	err = ps.planMgr.AppendLayer(layer)
 	c.Assert(err, IsNil)
 	c.Assert(layer.Order, Equals, 3)
-	c.Assert(ps.planYAML(c), Equals, `
+	yml = `
 services:
     svc1:
         override: replace
@@ -157,7 +170,9 @@ services:
     svc2:
         override: replace
         command: /bin/foo
-`[1:])
+`[1:]
+	c.Assert(ps.planYAML(c), Equals, yml)
+	c.Assert(ps.waitPlanChangedYAML(), Equals, yml)
 	ps.planLayersHasLen(c, 3)
 }
 
@@ -165,6 +180,7 @@ func (ps *planSuite) TestCombineLayers(c *C) {
 	var err error
 	ps.planMgr, err = planstate.NewManager(nil, nil, ps.pebbleDir)
 	c.Assert(err, IsNil)
+	ps.planMgr.AddChangeListener(ps.planChanged)
 
 	// "Combine" layer with no layers should just append.
 	layer := ps.parseLayer(c, 0, "label1", `
@@ -173,15 +189,18 @@ services:
         override: replace
         command: /bin/sh
 `)
+	ps.expectPlanChanged()
 	err = ps.planMgr.CombineLayer(layer)
 	c.Assert(err, IsNil)
 	c.Assert(layer.Order, Equals, 1)
-	c.Assert(ps.planYAML(c), Equals, `
+	yml := `
 services:
     svc1:
         override: replace
         command: /bin/sh
-`[1:])
+`[1:]
+	c.Assert(ps.planYAML(c), Equals, yml)
+	c.Assert(ps.waitPlanChangedYAML(), Equals, yml)
 	ps.planLayersHasLen(c, 1)
 
 	// Combine layer with different label should just append.
@@ -191,10 +210,11 @@ services:
         override: replace
         command: /bin/foo
 `)
+	ps.expectPlanChanged()
 	err = ps.planMgr.CombineLayer(layer)
 	c.Assert(err, IsNil)
 	c.Assert(layer.Order, Equals, 2)
-	c.Assert(ps.planYAML(c), Equals, `
+	yml = `
 services:
     svc1:
         override: replace
@@ -202,7 +222,9 @@ services:
     svc2:
         override: replace
         command: /bin/foo
-`[1:])
+`[1:]
+	c.Assert(ps.planYAML(c), Equals, yml)
+	c.Assert(ps.waitPlanChangedYAML(), Equals, yml)
 	ps.planLayersHasLen(c, 2)
 
 	// Combine layer with first layer.
@@ -212,10 +234,11 @@ services:
         override: replace
         command: /bin/bash
 `)
+	ps.expectPlanChanged()
 	err = ps.planMgr.CombineLayer(layer)
 	c.Assert(err, IsNil)
 	c.Assert(layer.Order, Equals, 1)
-	c.Assert(ps.planYAML(c), Equals, `
+	yml = `
 services:
     svc1:
         override: replace
@@ -223,7 +246,9 @@ services:
     svc2:
         override: replace
         command: /bin/foo
-`[1:])
+`[1:]
+	c.Assert(ps.planYAML(c), Equals, yml)
+	c.Assert(ps.waitPlanChangedYAML(), Equals, yml)
 	ps.planLayersHasLen(c, 2)
 
 	// Combine layer with second layer.
@@ -233,10 +258,11 @@ services:
         override: replace
         command: /bin/bar
 `)
+	ps.expectPlanChanged()
 	err = ps.planMgr.CombineLayer(layer)
 	c.Assert(err, IsNil)
 	c.Assert(layer.Order, Equals, 2)
-	c.Assert(ps.planYAML(c), Equals, `
+	yml = `
 services:
     svc1:
         override: replace
@@ -244,7 +270,9 @@ services:
     svc2:
         override: replace
         command: /bin/bar
-`[1:])
+`[1:]
+	c.Assert(ps.planYAML(c), Equals, yml)
+	c.Assert(ps.waitPlanChangedYAML(), Equals, yml)
 	ps.planLayersHasLen(c, 2)
 
 	// One last append for good measure.
@@ -257,10 +285,11 @@ services:
         override: replace
         command: /bin/b
 `)
+	ps.expectPlanChanged()
 	err = ps.planMgr.CombineLayer(layer)
 	c.Assert(err, IsNil)
 	c.Assert(layer.Order, Equals, 3)
-	c.Assert(ps.planYAML(c), Equals, `
+	yml = `
 services:
     svc1:
         override: replace
@@ -268,7 +297,9 @@ services:
     svc2:
         override: replace
         command: /bin/b
-`[1:])
+`[1:]
+	c.Assert(ps.planYAML(c), Equals, yml)
+	c.Assert(ps.waitPlanChangedYAML(), Equals, yml)
 	ps.planLayersHasLen(c, 3)
 
 	// Make sure that layer validation is happening.
@@ -287,6 +318,7 @@ func (ps *planSuite) TestSetServiceArgs(c *C) {
 	var err error
 	ps.planMgr, err = planstate.NewManager(nil, nil, ps.pebbleDir)
 	c.Assert(err, IsNil)
+	ps.planMgr.AddChangeListener(ps.planChanged)
 
 	// This is the original plan
 	layer := ps.parseLayer(c, 0, "label1", `
@@ -301,6 +333,7 @@ services:
         override: replace
         command: foo
 `)
+	ps.expectPlanChanged()
 	err = ps.planMgr.AppendLayer(layer)
 
 	// Set arguments to services.
@@ -308,10 +341,11 @@ services:
 		"svc1": {"-abc", "--xyz"},
 		"svc2": {"--bar"},
 	}
+	ps.expectPlanChanged()
 	err = ps.planMgr.SetServiceArgs(serviceArgs)
 	c.Assert(err, IsNil)
 
-	c.Assert(ps.planYAML(c), Equals, `
+	yml := `
 services:
     svc1:
         override: replace
@@ -322,5 +356,7 @@ services:
     svc3:
         override: replace
         command: foo
-`[1:])
+`[1:]
+	c.Assert(ps.planYAML(c), Equals, yml)
+	c.Assert(ps.waitPlanChangedYAML(), Equals, yml)
 }

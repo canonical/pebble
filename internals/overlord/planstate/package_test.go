@@ -20,6 +20,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	. "gopkg.in/check.v1"
@@ -37,6 +38,11 @@ type planSuite struct {
 	pebbleDir string
 
 	writeLayerCounter int
+
+	// Testing of PlanChanged callbacks
+	wg   sync.WaitGroup
+	yaml string
+	err  error
 }
 
 var _ = Suite(&planSuite{})
@@ -75,6 +81,26 @@ func (ps *planSuite) planYAML(c *C) string {
 	yml, err := yaml.Marshal(plan)
 	c.Assert(err, IsNil)
 	return string(yml)
+}
+
+func (ps *planSuite) planChanged(plan *plan.Plan) {
+	var yml []byte
+	yml, ps.err = yaml.Marshal(plan)
+	ps.yaml = string(yml)
+	ps.wg.Done()
+}
+
+func (ps *planSuite) expectPlanChanged() {
+	ps.wg.Add(1)
+	ps.err = nil
+}
+
+func (ps *planSuite) waitPlanChangedYAML() string {
+	ps.wg.Wait()
+	if ps.err != nil {
+		return ""
+	}
+	return ps.yaml
 }
 
 // The YAML on tests passes through this function to deindent and
