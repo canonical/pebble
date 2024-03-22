@@ -689,11 +689,36 @@ PEBBLE_ENV_TEST_PARENT=from-parent
 `[1:])
 }
 
+// TestActionRestart makes sure that the service restart backoff mechanism
+// works as designed, including the reset of backoff once a service runs
+// continuously for at least the backoff limit duration.
+//
+// This unit test is very timing sensitive, as as a result require
+// conservative delay periods to ensure the test does not fail during
+// nondeterministic cpu spikes on the test system.
 func (s *S) TestActionRestart(c *C) {
 	s.newServiceManager(c)
 	s.planAddLayer(c, testPlanLayer)
 
-	// Add custom backoff delay so it auto-restarts quickly.
+	// Add custom backoff attributes so it auto-restarts quickly. The
+	// following backoff pattern will be observed:
+	//
+	// First service exit:
+	//    - Restart after (backoff-delay) = 1ms
+	//
+	// Second service exit:
+	//    - Restart after (1ms X backoff-factor) = 10ms
+	//
+	// Note that while in backoff state, as soon as the service continues
+	// to run successfully for more than backoff-limit (500ms), the
+	// backoff state will reset.
+	//
+	// Note: If the backoff-limit is too short, any test environment related
+	// cpu spike that delays the restart of the service by more than
+	// backoff-limit will prematurely trigger a backoff reset, which will
+	// result in the test failing. Making this less likely requires a more
+	// conservative (longer delay) value for backoff-limit, at the slight
+	// expense of making the test take longer.
 	s.planAddLayer(c, `
 services:
     test2:
@@ -705,9 +730,12 @@ services:
 `)
 	s.planChanged(c)
 
-	// Start service and wait till it starts up the first time.
+	// Start the "test2" service
 	chg := s.startServices(c, []string{"test2"}, 1)
+	// Wait until "test2" service completes the echo command (so that we
+	// know the log buffer contains stdout).
 	s.waitForDoneCheck(c, "test2")
+	// Verify the backoff counter
 	c.Assert(s.manager.BackoffNum("test2"), Equals, 0)
 	s.st.Lock()
 	c.Check(chg.Status(), Equals, state.DoneStatus)
@@ -718,7 +746,8 @@ services:
 	err := s.manager.SendSignal([]string{"test2"}, "SIGTERM")
 	c.Assert(err, IsNil)
 
-	// Then wait for it to auto-restart.
+	// Wait until "test2" service completes the echo command (so that we
+	// know the log buffer contains stdout).
 	s.waitForDoneCheck(c, "test2")
 	c.Assert(s.manager.BackoffNum("test2"), Equals, 1)
 	c.Check(s.readAndClearLogBuffer(), Matches, `2.* \[test2\] test2\n`)
@@ -727,12 +756,14 @@ services:
 	err = s.manager.SendSignal([]string{"test2"}, "SIGTERM")
 	c.Assert(err, IsNil)
 
-	// Then wait for it to auto-restart again.
+	// Wait until "test2" service completes the echo command (so that we
+	// know the log buffer contains stdout).
 	s.waitForDoneCheck(c, "test2")
 	c.Assert(s.manager.BackoffNum("test2"), Equals, 2)
 	c.Check(s.readAndClearLogBuffer(), Matches, `2.* \[test2\] test2\n`)
 
-	// Test that backoff reset time is working (set to backoff-limit)
+	// Test that backoff reset time is working. Run the service without
+	// interruption for slightly longer than backoff-limit.
 	time.Sleep(550 * time.Millisecond)
 	c.Check(s.manager.BackoffNum("test2"), Equals, 0)
 
@@ -740,7 +771,8 @@ services:
 	err = s.manager.SendSignal([]string{"test2"}, "SIGTERM")
 	c.Assert(err, IsNil)
 
-	// Then wait for it to auto-restart.
+	// Wait until "test2" service completes the echo command (so that we
+	// know the log buffer contains stdout).
 	s.waitForDoneCheck(c, "test2")
 	c.Check(s.manager.BackoffNum("test2"), Equals, 1)
 	c.Check(s.readAndClearLogBuffer(), Matches, `2.* \[test2\] test2\n`)

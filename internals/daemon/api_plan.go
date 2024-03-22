@@ -31,10 +31,7 @@ func v1GetPlan(c *Command, r *http.Request, _ *UserState) Response {
 	}
 
 	planMgr := overlordPlanManager(c.d.overlord)
-	plan, err := planMgr.Plan()
-	if err != nil {
-		return InternalError("%v", err)
-	}
+	plan := planMgr.Plan()
 	planYAML, err := yaml.Marshal(plan)
 	if err != nil {
 		return InternalError("cannot serialize plan: %v", err)

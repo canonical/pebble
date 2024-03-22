@@ -92,10 +92,10 @@ func (m *PlanManager) planChanged(plan *plan.Plan) {
 // will result in a new Plan instance, so the current design assumes a returned
 // plan is never mutated by planstate (and may never be mutated by any
 // consumer).
-func (m *PlanManager) Plan() (*plan.Plan, error) {
+func (m *PlanManager) Plan() *plan.Plan {
 	m.planLock.Lock()
 	defer m.planLock.Unlock()
-	return m.plan, nil
+	return m.plan
 }
 
 // AppendLayer takes a Layer, appends it to the plan's layers and updates the
@@ -173,7 +173,7 @@ func (m *PlanManager) updatePlanLayers(layers []*plan.Layer) error {
 		Checks:     combined.Checks,
 		LogTargets: combined.LogTargets,
 	}
-	p.Validate()
+	err = p.Validate()
 	if err != nil {
 		return err
 	}
@@ -201,7 +201,7 @@ func (m *PlanManager) Ensure() error {
 // to their respective services. It adds a new layer in the plan, the layer
 // consisting of services with commands having their arguments changed.
 //
-// TODO: This functionality must be redesigned (moved out of the plan manager)
+// NOTE: This functionality should be redesigned (moved out of the plan manager)
 // as the plan manager should not be concerned with schema section details.
 func (m *PlanManager) SetServiceArgs(serviceArgs map[string][]string) error {
 	m.planLock.Lock()

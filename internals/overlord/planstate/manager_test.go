@@ -29,8 +29,7 @@ func (ps *planSuite) TestLoadInvalidPebbleDir(c *C) {
 	// Load the plan from the <pebble-dir>/layers directory
 	err = ps.planMgr.Load()
 	c.Assert(err, IsNil)
-	plan, err := ps.planMgr.Plan()
-	c.Assert(err, IsNil)
+	plan := ps.planMgr.Plan()
 	out, err := yaml.Marshal(plan)
 	c.Assert(err, IsNil)
 	c.Assert(string(out), Equals, "{}\n")
@@ -65,8 +64,7 @@ func (ps *planSuite) TestLoadLayers(c *C) {
 	// Load the plan from the <pebble-dir>/layers directory
 	err = ps.planMgr.Load()
 	c.Assert(err, IsNil)
-	plan, err := ps.planMgr.Plan()
-	c.Assert(err, IsNil)
+	plan := ps.planMgr.Plan()
 	out, err := yaml.Marshal(plan)
 	c.Assert(err, IsNil)
 	c.Assert(len(plan.Layers), Equals, 2)
