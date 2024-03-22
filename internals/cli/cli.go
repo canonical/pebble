@@ -308,8 +308,8 @@ func Run(options *RunOptions) error {
 	}
 	parser := Parser(cli, &RunOptions{
 		ClientConfig: config,
-		Logger: log,
-		PebbleDir: pebbleDir,
+		Logger:       log,
+		PebbleDir:    pebbleDir,
 	})
 	xtra, err := parser.Parse()
 	if err != nil {
