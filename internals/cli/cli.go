@@ -302,10 +302,15 @@ func Run(options *RunOptions) error {
 		return fmt.Errorf("cannot create client: %v", err)
 	}
 
-	if options.PebbleDir == "" {
-		options.PebbleDir, _ = getEnvPaths()
+	pebbleDir := options.PebbleDir
+	if pebbleDir == "" {
+		pebbleDir, _ = getEnvPaths()
 	}
-	parser := Parser(cli, options)
+	parser := Parser(cli, &RunOptions{
+		ClientConfig: config,
+		Logger: log,
+		PebbleDir: pebbleDir,
+	})
 	xtra, err := parser.Parse()
 	if err != nil {
 		if e, ok := err.(*flags.Error); ok {
