@@ -114,11 +114,8 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 		return err
 	}
 
-	mgrPlan, err := m.Plan()
-	if err != nil {
-		return fmt.Errorf("cannot fetch plan: %w", err)
-	}
-	config, ok := mgrPlan.Services[request.Name]
+	currentPlan := m.getPlan()
+	config, ok := currentPlan.Services[request.Name]
 	if !ok {
 		return fmt.Errorf("cannot find service %q in plan", request.Name)
 	}

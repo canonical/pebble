@@ -83,18 +83,16 @@ services:
 }
 
 func (s *apiSuite) planYAML(c *C) string {
-	manager := s.d.overlord.ServiceManager()
-	plan, err := manager.Plan()
-	c.Assert(err, IsNil)
+	manager := s.d.overlord.PlanManager()
+	plan := manager.Plan()
 	yml, err := yaml.Marshal(plan)
 	c.Assert(err, IsNil)
 	return string(yml)
 }
 
 func (s *apiSuite) planLayersHasLen(c *C, expectedLen int) {
-	manager := s.d.overlord.ServiceManager()
-	plan, err := manager.Plan()
-	c.Assert(err, IsNil)
+	manager := s.d.overlord.PlanManager()
+	plan := manager.Plan()
 	c.Assert(plan.Layers, HasLen, expectedLen)
 }
 

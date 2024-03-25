@@ -197,7 +197,7 @@ func (s *execSuite) TestTimeout(c *C) {
 
 func (s *execSuite) TestContextNoOverrides(c *C) {
 	dir := c.MkDir()
-	err := s.daemon.overlord.ServiceManager().AppendLayer(&plan.Layer{
+	err := s.daemon.overlord.PlanManager().AppendLayer(&plan.Layer{
 		Label: "layer1",
 		Services: map[string]*plan.Service{"svc1": {
 			Name:        "svc1",
@@ -219,7 +219,7 @@ func (s *execSuite) TestContextNoOverrides(c *C) {
 }
 
 func (s *execSuite) TestContextOverrides(c *C) {
-	err := s.daemon.overlord.ServiceManager().AppendLayer(&plan.Layer{
+	err := s.daemon.overlord.PlanManager().AppendLayer(&plan.Layer{
 		Label: "layer1",
 		Services: map[string]*plan.Service{"svc1": {
 			Name:        "svc1",
