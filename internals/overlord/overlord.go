@@ -199,7 +199,7 @@ func New(opts *Options) (*Overlord, error) {
 	// notifications to all notification subscribers.
 	err = o.planMgr.Load()
 	if err != nil {
-		return nil, fmt.Errorf("cannot load plan %w", err)
+		return nil, fmt.Errorf("cannot load plan: %w", err)
 	}
 
 	return o, nil
