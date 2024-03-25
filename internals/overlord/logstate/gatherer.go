@@ -141,12 +141,15 @@ func fillDefaultOptions(options *logGathererOptions) *logGathererOptions {
 
 // PlanChanged is called by the LogManager when the plan is changed, if this
 // gatherer's target exists in the new plan.
-func (g *logGatherer) PlanChanged(pl *plan.Plan, buffers map[string]*servicelog.RingBuffer) {
-	target := pl.LogTargets[g.targetName]
+func (g *logGatherer) PlanChanged(pl *plan.CombinedPlan, buffers map[string]*servicelog.RingBuffer) {
+	currentServices := pl.Services()
+	currentLogTargets := pl.LogTargets()
+
+	target := currentLogTargets[g.targetName]
 
 	// Remove old pullers
 	for _, svcName := range g.pullers.Services() {
-		svc, svcExists := pl.Services[svcName]
+		svc, svcExists := currentServices[svcName]
 		if svcExists && svc.LogsTo(target) {
 			// We're still collecting logs from this service, so don't remove it.
 			continue
@@ -163,7 +166,7 @@ func (g *logGatherer) PlanChanged(pl *plan.Plan, buffers map[string]*servicelog.
 	}
 
 	// Add new pullers
-	for _, service := range pl.Services {
+	for _, service := range currentServices {
 		if !service.LogsTo(target) {
 			continue
 		}

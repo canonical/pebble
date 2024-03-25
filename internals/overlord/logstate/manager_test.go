@@ -53,7 +53,7 @@ func (*managerSuite) TestPlanChange(c *C) {
 	svc2 := newTestService("svc2")
 	svc3 := newTestService("svc3")
 
-	m.PlanChanged(&plan.Plan{
+	m.PlanChanged(plan.NewCombinedPlan(&plan.Layer{
 		Services: map[string]*plan.Service{
 			svc1.name: svc1.config,
 			svc2.name: svc2.config,
@@ -64,7 +64,7 @@ func (*managerSuite) TestPlanChange(c *C) {
 			"tgt2": {Name: "tgt2", Services: []string{}},
 			"tgt3": {Name: "tgt3", Services: []string{"all"}},
 		},
-	})
+	}))
 	m.ServiceStarted(svc1.config, svc1.ringBuffer)
 	m.ServiceStarted(svc2.config, svc2.ringBuffer)
 	m.ServiceStarted(svc3.config, svc3.ringBuffer)
@@ -78,7 +78,7 @@ func (*managerSuite) TestPlanChange(c *C) {
 
 	svc4 := newTestService("svc4")
 
-	m.PlanChanged(&plan.Plan{
+	m.PlanChanged(plan.NewCombinedPlan(&plan.Layer{
 		Services: map[string]*plan.Service{
 			svc1.name: svc1.config,
 			svc2.name: svc2.config,
@@ -89,7 +89,7 @@ func (*managerSuite) TestPlanChange(c *C) {
 			"tgt2": {Name: "tgt2", Services: []string{"svc1", "svc4"}},
 			"tgt4": {Name: "tgt4", Services: []string{"all", "-svc2"}},
 		},
-	})
+	}))
 	m.ServiceStarted(svc4.config, svc4.ringBuffer)
 	// simulate service restart for svc2
 	m.ServiceStarted(svc2.config, svc2.ringBuffer)
@@ -153,12 +153,12 @@ func (s *managerSuite) TestTimelyShutdown(c *C) {
 			Services: []string{"all"},
 		}
 	}
-	m.PlanChanged(&plan.Plan{
+	m.PlanChanged(plan.NewCombinedPlan(&plan.Layer{
 		Services: map[string]*plan.Service{
 			"svc1": svc1.config,
 		},
 		LogTargets: logTargets,
-	})
+	}))
 	m.ServiceStarted(svc1.config, svc1.ringBuffer)
 
 	c.Assert(m.gatherers, HasLen, 10)
@@ -239,7 +239,7 @@ func (s *managerSuite) TestLabels(c *C) {
 		"PORT": "9090",
 	}
 
-	pl := &plan.Plan{
+	pl := plan.NewCombinedPlan(&plan.Layer{
 		Services: map[string]*plan.Service{
 			"svc1": svc1.config,
 			"svc2": svc2.config,
@@ -255,7 +255,7 @@ func (s *managerSuite) TestLabels(c *C) {
 				},
 			},
 		},
-	}
+	})
 
 	m.PlanChanged(pl)
 	checkGatherers(c, m.gatherers, map[string][]string{
@@ -280,7 +280,8 @@ func (s *managerSuite) TestLabels(c *C) {
 
 	// If we change only the target's labels (with no change to the services),
 	// we still need to recalculate the client's labels.
-	pl.LogTargets["tgt1"].Labels["foo"] = "bar"
+	logTargets := pl.LogTargets()
+	logTargets["tgt1"].Labels["foo"] = "bar"
 	m.PlanChanged(pl)
 
 	// Wait for labels to be set

@@ -53,6 +53,13 @@ func NewManager(s *state.State, runner *state.TaskRunner, pebbleDir string) (*Pl
 	return manager, nil
 }
 
+// ParseLayer creates a plan layer from YAML data.
+func (m *PlanManager) ParseLayer(order int, label string, data []byte) (*plan.Layer, error) {
+	m.planLock.Lock()
+	defer m.planLock.Unlock()
+	return m.plan.ParseLayer(order, label, data)
+}
+
 // Load reads plan layers from the pebble directory, combines and validates the
 // final plan, and finally notifies registered managers of the plan update. In
 // the case of a non-existent layers directory, or no layers in the layers
@@ -60,16 +67,16 @@ func NewManager(s *state.State, runner *state.TaskRunner, pebbleDir string) (*Pl
 func (m *PlanManager) Load() error {
 	m.planLock.Lock()
 	defer m.planLock.Unlock()
-	plan, err := plan.ReadDir(m.pebbleDir)
+	err := m.plan.ReadDir(m.pebbleDir)
 	if err != nil {
 		return err
 	}
-	m.planChanged(plan)
+	m.planChanged(m.plan.Combined)
 	return nil
 }
 
 // PlanChangedFunc is the function type used by AddChangeListener.
-type PlanChangedFunc func(p *plan.Plan)
+type PlanChangedFunc func(combinedPlan *plan.CombinedPlan)
 
 // AddChangeListener adds f to the list of functions that are called whenever
 // a plan change event took place (Load, AppendLayer, CombineLayer). A plan
@@ -81,10 +88,10 @@ func (m *PlanManager) AddChangeListener(f PlanChangedFunc) {
 	m.planHandlers = append(m.planHandlers, f)
 }
 
-func (m *PlanManager) planChanged(plan *plan.Plan) {
-	m.plan = plan
+func (m *PlanManager) planChanged(combinedPlan *plan.CombinedPlan) {
+	m.plan.Combined = combinedPlan
 	for _, f := range m.planHandlers {
-		f(plan)
+		f(combinedPlan)
 	}
 }
 
@@ -92,10 +99,10 @@ func (m *PlanManager) planChanged(plan *plan.Plan) {
 // will result in a new Plan instance, so the current design assumes a returned
 // plan is never mutated by planstate (and may never be mutated by any
 // consumer).
-func (m *PlanManager) Plan() *plan.Plan {
+func (m *PlanManager) Plan() *plan.CombinedPlan {
 	m.planLock.Lock()
 	defer m.planLock.Unlock()
-	return m.plan
+	return m.plan.Combined
 }
 
 // AppendLayer takes a Layer, appends it to the plan's layers and updates the
@@ -127,7 +134,7 @@ func (m *PlanManager) CombineLayer(layer *plan.Layer) error {
 	}
 
 	// Layer found with this label, combine into that one.
-	combined, err := plan.CombineLayers(found, layer)
+	combined, err := m.plan.CombineLayers(found, layer)
 	if err != nil {
 		return err
 	}
@@ -163,21 +170,20 @@ func (m *PlanManager) appendLayer(layer *plan.Layer) error {
 }
 
 func (m *PlanManager) updatePlanLayers(layers []*plan.Layer) error {
-	combined, err := plan.CombineLayers(layers...)
+	combinedLayer, err := m.plan.CombineLayers(layers...)
 	if err != nil {
 		return err
 	}
-	p := &plan.Plan{
-		Layers:     layers,
-		Services:   combined.Services,
-		Checks:     combined.Checks,
-		LogTargets: combined.LogTargets,
-	}
-	err = p.Validate()
+
+	combinedPlan := plan.NewCombinedPlan(combinedLayer)
+	err = combinedPlan.Validate(m.plan)
 	if err != nil {
 		return err
 	}
-	m.planChanged(p)
+	m.plan.Layers = layers
+	m.plan.Combined = combinedPlan
+
+	m.planChanged(m.plan.Combined)
 	return nil
 }
 
@@ -214,8 +220,9 @@ func (m *PlanManager) SetServiceArgs(serviceArgs map[string][]string) error {
 		Services: make(map[string]*plan.Service),
 	}
 
+	currentServices := m.plan.Combined.Services()
 	for name, args := range serviceArgs {
-		service, ok := m.plan.Services[name]
+		service, ok := currentServices[name]
 		if !ok {
 			return fmt.Errorf("service %q not found in plan", name)
 		}

@@ -20,7 +20,7 @@ type ServiceManager struct {
 	runner *state.TaskRunner
 
 	planLock sync.Mutex
-	plan     *plan.Plan
+	plan     *plan.CombinedPlan
 
 	servicesLock sync.Mutex
 	services     map[string]*serviceData
@@ -60,7 +60,7 @@ func NewManager(s *state.State, runner *state.TaskRunner, serviceOutput io.Write
 }
 
 // PlanChanged informs the service manager that the plan has been updated.
-func (m *ServiceManager) PlanChanged(plan *plan.Plan) {
+func (m *ServiceManager) PlanChanged(plan *plan.CombinedPlan) {
 	m.planLock.Lock()
 	defer m.planLock.Unlock()
 	m.plan = plan
@@ -68,7 +68,7 @@ func (m *ServiceManager) PlanChanged(plan *plan.Plan) {
 
 // getPlan returns the current plan pointer in a concurrency-safe way. The
 // service manager must not mutate the result.
-func (m *ServiceManager) getPlan() *plan.Plan {
+func (m *ServiceManager) getPlan() *plan.CombinedPlan {
 	m.planLock.Lock()
 	defer m.planLock.Unlock()
 	// This should never be possible, but lets make the requirements clear to
@@ -134,7 +134,7 @@ func (m *ServiceManager) Services(names []string) ([]*ServiceInfo, error) {
 
 	var services []*ServiceInfo
 	matchNames := len(names) > 0
-	for name, config := range currentPlan.Services {
+	for name, config := range currentPlan.Services() {
 		if matchNames && !requested[name] {
 			continue
 		}
@@ -200,7 +200,7 @@ func stateToStatus(state serviceState) ServiceStatus {
 func (m *ServiceManager) DefaultServiceNames() ([]string, error) {
 	currentPlan := m.getPlan()
 	var names []string
-	for name, service := range currentPlan.Services {
+	for name, service := range currentPlan.Services() {
 		if service.Startup == plan.StartupEnabled {
 			names = append(names, name)
 		}
@@ -260,10 +260,11 @@ func (m *ServiceManager) Replan() ([]string, []string, error) {
 	m.servicesLock.Lock()
 	defer m.servicesLock.Unlock()
 
+	currentServices := currentPlan.Services()
 	needsRestart := make(map[string]bool)
 	var stop []string
 	for name, s := range m.services {
-		if config, ok := currentPlan.Services[name]; ok {
+		if config, ok := currentServices[name]; ok {
 			if config.Equal(s.config) {
 				continue
 			}
@@ -274,7 +275,7 @@ func (m *ServiceManager) Replan() ([]string, []string, error) {
 	}
 
 	var start []string
-	for name, config := range currentPlan.Services {
+	for name, config := range currentServices {
 		if needsRestart[name] || config.Startup == plan.StartupEnabled {
 			start = append(start, name)
 		}
@@ -347,9 +348,10 @@ func (m *ServiceManager) CheckFailed(name string) {
 // This function returns a slice of service names to stop, in dependency order.
 func servicesToStop(m *ServiceManager) ([]string, error) {
 	currentPlan := m.getPlan()
+	currentServices := currentPlan.Services()
 	// Get all service names in plan.
-	services := make([]string, 0, len(currentPlan.Services))
-	for name := range currentPlan.Services {
+	services := make([]string, 0, len(currentServices))
+	for name := range currentServices {
 		services = append(services, name)
 	}
 

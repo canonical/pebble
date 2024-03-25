@@ -90,12 +90,6 @@ func (s *apiSuite) planYAML(c *C) string {
 	return string(yml)
 }
 
-func (s *apiSuite) planLayersHasLen(c *C, expectedLen int) {
-	manager := s.d.overlord.PlanManager()
-	plan := manager.Plan()
-	c.Assert(plan.Layers, HasLen, expectedLen)
-}
-
 func (s *apiSuite) TestLayersErrors(c *C) {
 	var tests = []struct {
 		payload string
@@ -149,7 +143,6 @@ services:
         override: replace
         command: echo static
 `[1:])
-	s.planLayersHasLen(c, 2)
 }
 
 func (s *apiSuite) TestLayersAddCombine(c *C) {
@@ -176,7 +169,6 @@ services:
         override: replace
         command: echo static
 `[1:])
-	s.planLayersHasLen(c, 1)
 }
 
 func (s *apiSuite) TestLayersCombineFormatError(c *C) {

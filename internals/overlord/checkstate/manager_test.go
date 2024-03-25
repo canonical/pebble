@@ -58,7 +58,7 @@ func (s *ManagerSuite) TearDownTest(c *C) {
 
 func (s *ManagerSuite) TestChecks(c *C) {
 	mgr := NewManager()
-	mgr.PlanChanged(&plan.Plan{
+	mgr.PlanChanged(plan.NewCombinedPlan(&plan.Layer{
 		Checks: map[string]*plan.Check{
 			"chk1": {
 				Name:      "chk1",
@@ -81,7 +81,7 @@ func (s *ManagerSuite) TestChecks(c *C) {
 				Exec:      &plan.ExecCheck{Command: "echo chk3"},
 			},
 		},
-	})
+	}))
 	defer stopChecks(c, mgr)
 
 	checks, err := mgr.Checks()
@@ -93,7 +93,7 @@ func (s *ManagerSuite) TestChecks(c *C) {
 	})
 
 	// Re-configuring should update checks
-	mgr.PlanChanged(&plan.Plan{
+	mgr.PlanChanged(plan.NewCombinedPlan(&plan.Layer{
 		Checks: map[string]*plan.Check{
 			"chk4": {
 				Name:      "chk4",
@@ -102,7 +102,7 @@ func (s *ManagerSuite) TestChecks(c *C) {
 				Exec:      &plan.ExecCheck{Command: "echo chk4"},
 			},
 		},
-	})
+	}))
 	checks, err = mgr.Checks()
 	c.Assert(err, IsNil)
 	c.Assert(checks, DeepEquals, []*CheckInfo{
@@ -111,7 +111,7 @@ func (s *ManagerSuite) TestChecks(c *C) {
 }
 
 func stopChecks(c *C, mgr *CheckManager) {
-	mgr.PlanChanged(&plan.Plan{})
+	mgr.PlanChanged(plan.NewCombinedPlan(&plan.Layer{}))
 	checks, err := mgr.Checks()
 	c.Assert(err, IsNil)
 	c.Assert(checks, HasLen, 0)
@@ -119,7 +119,7 @@ func stopChecks(c *C, mgr *CheckManager) {
 
 func (s *ManagerSuite) TestTimeout(c *C) {
 	mgr := NewManager()
-	mgr.PlanChanged(&plan.Plan{
+	mgr.PlanChanged(plan.NewCombinedPlan(&plan.Layer{
 		Checks: map[string]*plan.Check{
 			"chk1": {
 				Name:      "chk1",
@@ -129,7 +129,7 @@ func (s *ManagerSuite) TestTimeout(c *C) {
 				Exec:      &plan.ExecCheck{Command: "/bin/sh -c 'echo FOO; sleep 0.05'"},
 			},
 		},
-	})
+	}))
 	defer stopChecks(c, mgr)
 
 	check := waitCheck(c, mgr, "chk1", func(check *CheckInfo) bool {
@@ -149,7 +149,7 @@ func (s *ManagerSuite) TestCheckCanceled(c *C) {
 	tempDir := c.MkDir()
 	tempFile := filepath.Join(tempDir, "file.txt")
 	command := fmt.Sprintf(`/bin/sh -c "for i in {1..1000}; do echo x >>%s; sleep 0.005; done"`, tempFile)
-	mgr.PlanChanged(&plan.Plan{
+	mgr.PlanChanged(plan.NewCombinedPlan(&plan.Layer{
 		Checks: map[string]*plan.Check{
 			"chk1": {
 				Name:      "chk1",
@@ -159,7 +159,7 @@ func (s *ManagerSuite) TestCheckCanceled(c *C) {
 				Exec:      &plan.ExecCheck{Command: command},
 			},
 		},
-	})
+	}))
 
 	// Wait for command to start (output file is not zero in size)
 	for i := 0; ; i++ {
@@ -211,7 +211,7 @@ func (s *ManagerSuite) TestFailures(c *C) {
 	testPath := c.MkDir() + "/test"
 	err := os.WriteFile(testPath, nil, 0o644)
 	c.Assert(err, IsNil)
-	mgr.PlanChanged(&plan.Plan{
+	mgr.PlanChanged(plan.NewCombinedPlan(&plan.Layer{
 		Checks: map[string]*plan.Check{
 			"chk1": {
 				Name:      "chk1",
@@ -223,7 +223,7 @@ func (s *ManagerSuite) TestFailures(c *C) {
 				},
 			},
 		},
-	})
+	}))
 	defer stopChecks(c, mgr)
 
 	// Shouldn't have called failure handler after only 1 failures
@@ -353,7 +353,7 @@ func (s *CheckersSuite) TestExecContextNoOverride(c *C) {
 			Command:        "sleep 1",
 			ServiceContext: "svc1",
 		},
-	}, &plan.Plan{Services: map[string]*plan.Service{
+	}, plan.NewCombinedPlan(&plan.Layer{Services: map[string]*plan.Service{
 		"svc1": {
 			Name:        "svc1",
 			Environment: map[string]string{"k": "x", "a": "1"},
@@ -363,7 +363,7 @@ func (s *CheckersSuite) TestExecContextNoOverride(c *C) {
 			Group:       "svcgroup",
 			WorkingDir:  "/working/svc",
 		},
-	}})
+	}}))
 	exec, ok := chk.(*execChecker)
 	c.Assert(ok, Equals, true)
 	c.Check(exec.name, Equals, "exec")
@@ -390,7 +390,7 @@ func (s *CheckersSuite) TestExecContextOverride(c *C) {
 			Group:          "group",
 			WorkingDir:     "/working/dir",
 		},
-	}, &plan.Plan{Services: map[string]*plan.Service{
+	}, plan.NewCombinedPlan(&plan.Layer{Services: map[string]*plan.Service{
 		"svc1": {
 			Name:        "svc1",
 			Environment: map[string]string{"k": "x", "a": "1"},
@@ -400,7 +400,7 @@ func (s *CheckersSuite) TestExecContextOverride(c *C) {
 			Group:       "svcgroup",
 			WorkingDir:  "/working/svc",
 		},
-	}})
+	}}))
 	exec, ok := chk.(*execChecker)
 	c.Assert(ok, Equals, true)
 	c.Check(exec.name, Equals, "exec")

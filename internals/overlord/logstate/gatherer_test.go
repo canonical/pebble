@@ -170,14 +170,14 @@ func (s *gathererSuite) TestRetryLoki(c *C) {
 	c.Assert(err, IsNil)
 
 	testSvc := newTestService("svc1")
-	g.PlanChanged(&plan.Plan{
+	g.PlanChanged(plan.NewCombinedPlan(&plan.Layer{
 		Services: map[string]*plan.Service{
 			"svc1": testSvc.config,
 		},
 		LogTargets: map[string]*plan.LogTarget{
 			"tgt1": logTarget,
 		},
-	}, nil)
+	}), nil)
 	g.ServiceStarted(testSvc.config, testSvc.ringBuffer)
 
 	reqReceived := make(chan struct{})
@@ -274,14 +274,14 @@ func (s *gathererSuite) TestConcurrency(c *C) {
 	doConcurrently(
 		// Change plan
 		func() {
-			g.PlanChanged(&plan.Plan{
+			g.PlanChanged(plan.NewCombinedPlan(&plan.Layer{
 				Services: map[string]*plan.Service{
 					svc1.name: svc1.config,
 				},
 				LogTargets: map[string]*plan.LogTarget{
 					target.Name: target,
 				},
-			}, buffers)
+			}), buffers)
 		},
 		// Start new service
 		func() { g.ServiceStarted(svc1.config, svc1.ringBuffer) },
@@ -305,14 +305,14 @@ func (s *gathererSuite) TestConcurrency(c *C) {
 	doConcurrently(
 		// Change plan
 		func() {
-			g.PlanChanged(&plan.Plan{
+			g.PlanChanged(plan.NewCombinedPlan(&plan.Layer{
 				Services: map[string]*plan.Service{
 					svc2.name: svc2.config,
 				},
 				LogTargets: map[string]*plan.LogTarget{
 					target.Name: target,
 				},
-			}, buffers)
+			}), buffers)
 		},
 		// Start new service
 		func() { g.ServiceStarted(svc2.config, svc2.ringBuffer) },

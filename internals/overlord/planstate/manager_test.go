@@ -19,7 +19,6 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/canonical/pebble/internals/overlord/planstate"
-	"github.com/canonical/pebble/internals/plan"
 )
 
 func (ps *planSuite) TestLoadInvalidPebbleDir(c *C) {
@@ -64,10 +63,10 @@ func (ps *planSuite) TestLoadLayers(c *C) {
 	// Load the plan from the <pebble-dir>/layers directory
 	err = ps.planMgr.Load()
 	c.Assert(err, IsNil)
-	plan := ps.planMgr.Plan()
-	out, err := yaml.Marshal(plan)
+	c.Assert(len(ps.planMgr.Layers()), Equals, 2)
+	currentPlan := ps.planMgr.Plan()
+	out, err := yaml.Marshal(currentPlan)
 	c.Assert(err, IsNil)
-	c.Assert(len(plan.Layers), Equals, 2)
 	c.Assert(string(out), Equals, `
 services:
     svc1:
@@ -272,7 +271,7 @@ services:
 	ps.planLayersHasLen(c, 3)
 
 	// Make sure that layer validation is happening.
-	layer, err = plan.ParseLayer(0, "label4", []byte(`
+	layer, err = ps.planMgr.ParseLayer(0, "label4", []byte(`
 checks:
     bad-check:
         override: replace

@@ -26,7 +26,7 @@ type LogManager struct {
 	mu        sync.Mutex
 	gatherers map[string]*logGatherer
 	buffers   map[string]*servicelog.RingBuffer
-	plan      *plan.Plan
+	plan      *plan.CombinedPlan
 
 	newGatherer func(*plan.LogTarget) (*logGatherer, error)
 }
@@ -41,15 +41,18 @@ func NewLogManager() *LogManager {
 
 // PlanChanged is called by the service manager when the plan changes.
 // Based on the new plan, we will Stop old gatherers and start new ones.
-func (m *LogManager) PlanChanged(pl *plan.Plan) {
+func (m *LogManager) PlanChanged(pl *plan.CombinedPlan) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	currentLogTargets := pl.LogTargets()
+	currentServices := pl.Services()
+
 	// Create a map to hold gatherers for the new plan.
 	// Old gatherers will be moved over or deleted.
-	newGatherers := make(map[string]*logGatherer, len(pl.LogTargets))
+	newGatherers := make(map[string]*logGatherer, len(currentLogTargets))
 
-	for _, target := range pl.LogTargets {
+	for _, target := range currentLogTargets {
 		gatherer := m.gatherers[target.Name]
 		if gatherer == nil {
 			// Create new gatherer
@@ -79,7 +82,7 @@ func (m *LogManager) PlanChanged(pl *plan.Plan) {
 
 	// Remove old buffers
 	for svc := range m.buffers {
-		if _, ok := pl.Services[svc]; !ok {
+		if _, ok := currentServices[svc]; !ok {
 			// Service has been removed
 			delete(m.buffers, svc)
 		}
@@ -101,7 +104,8 @@ func (m *LogManager) ServiceStarted(service *plan.Service, buffer *servicelog.Ri
 
 	m.buffers[service.Name] = buffer
 	for _, gatherer := range m.gatherers {
-		target := m.plan.LogTargets[gatherer.targetName]
+		currentLogTargets := m.plan.LogTargets()
+		target := currentLogTargets[gatherer.targetName]
 		if !service.LogsTo(target) {
 			continue
 		}

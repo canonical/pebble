@@ -48,12 +48,13 @@ func (m *CheckManager) NotifyCheckFailed(f FailureFunc) {
 
 // PlanChanged handles updates to the plan (server configuration),
 // stopping the previous checks and starting the new ones as required.
-func (m *CheckManager) PlanChanged(p *plan.Plan) {
+func (m *CheckManager) PlanChanged(p *plan.CombinedPlan) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
+	currentChecks := p.Checks()
 	logger.Debugf("Configuring check manager (stopping %d, starting %d)",
-		len(m.checks), len(p.Checks))
+		len(m.checks), len(currentChecks))
 
 	// First stop existing checks.
 	for _, check := range m.checks {
@@ -64,11 +65,11 @@ func (m *CheckManager) PlanChanged(p *plan.Plan) {
 	m.wg.Wait()
 
 	// Set the size of the next wait group
-	m.wg.Add(len(p.Checks))
+	m.wg.Add(len(currentChecks))
 
 	// Then configure and start new checks.
-	checks := make(map[string]*checkData, len(p.Checks))
-	for name, config := range p.Checks {
+	checks := make(map[string]*checkData, len(currentChecks))
+	for name, config := range currentChecks {
 		ctx, cancel := context.WithCancel(context.Background())
 		check := &checkData{
 			config:  config,
@@ -93,7 +94,7 @@ func (m *CheckManager) callFailureHandlers(name string) {
 }
 
 // newChecker creates a new checker of the configured type.
-func newChecker(config *plan.Check, p *plan.Plan) checker {
+func newChecker(config *plan.Check, p *plan.CombinedPlan) checker {
 	switch {
 	case config.HTTP != nil:
 		return &httpChecker{

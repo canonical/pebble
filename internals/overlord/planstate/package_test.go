@@ -60,14 +60,13 @@ func (ps *planSuite) writeLayer(c *C, layer string) {
 }
 
 func (ps *planSuite) parseLayer(c *C, order int, label, layerYAML string) *plan.Layer {
-	layer, err := plan.ParseLayer(order, label, []byte(layerYAML))
+	layer, err := ps.planMgr.ParseLayer(order, label, []byte(layerYAML))
 	c.Assert(err, IsNil)
 	return layer
 }
 
 func (ps *planSuite) planLayersHasLen(c *C, expectedLen int) {
-	plan := ps.planMgr.Plan()
-	c.Assert(plan.Layers, HasLen, expectedLen)
+	c.Assert(ps.planMgr.Layers(), HasLen, expectedLen)
 }
 
 func (ps *planSuite) planYAML(c *C) string {

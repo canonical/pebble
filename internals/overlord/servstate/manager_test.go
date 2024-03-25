@@ -827,7 +827,7 @@ func (s *S) TestOnCheckFailureRestartWhileRunning(c *C) {
 
 	// Create check manager and tell it about plan updates
 	checkMgr := checkstate.NewManager()
-	defer checkMgr.PlanChanged(&plan.Plan{})
+	defer checkMgr.PlanChanged(emptyCombinedPlan())
 
 	// Tell service manager about check failures
 	checkFailed := make(chan struct{})
@@ -865,7 +865,7 @@ checks:
 		tempFile,
 	))
 	s.planChanged(c)
-	checkMgr.PlanChanged(s.plan)
+	checkMgr.PlanChanged(s.plan.Combined)
 
 	// Start service and wait till it starts up
 	s.startServices(c, []string{"test2"}, 1)
@@ -926,7 +926,7 @@ func (s *S) TestOnCheckFailureRestartDuringBackoff(c *C) {
 
 	// Create check manager and tell it about plan updates
 	checkMgr := checkstate.NewManager()
-	defer checkMgr.PlanChanged(&plan.Plan{})
+	defer checkMgr.PlanChanged(emptyCombinedPlan())
 
 	// Tell service manager about check failures
 	checkFailed := make(chan struct{})
@@ -965,7 +965,7 @@ checks:
 		tempFile,
 	))
 	s.planChanged(c)
-	checkMgr.PlanChanged(s.plan)
+	checkMgr.PlanChanged(s.plan.Combined)
 
 	// Start service and wait till it starts up
 	s.startServices(c, []string{"test2"}, 1)
@@ -1020,7 +1020,7 @@ func (s *S) TestOnCheckFailureIgnore(c *C) {
 
 	// Create check manager and tell it about plan updates
 	checkMgr := checkstate.NewManager()
-	defer checkMgr.PlanChanged(&plan.Plan{})
+	defer checkMgr.PlanChanged(emptyCombinedPlan())
 
 	// Tell service manager about check failures
 	checkFailed := make(chan struct{})
@@ -1057,7 +1057,7 @@ checks:
 		tempFile,
 	))
 	s.planChanged(c)
-	checkMgr.PlanChanged(s.plan)
+	checkMgr.PlanChanged(s.plan.Combined)
 
 	// Start service and wait till it starts up (output file is written to)
 	s.startServices(c, []string{"test2"}, 1)
@@ -1109,7 +1109,7 @@ func (s *S) testOnCheckFailureShutdown(c *C, action string, restartType restart.
 
 	// Create check manager and tell it about plan updates
 	checkMgr := checkstate.NewManager()
-	defer checkMgr.PlanChanged(&plan.Plan{})
+	defer checkMgr.PlanChanged(emptyCombinedPlan())
 
 	// Tell service manager about check failures
 	checkFailed := make(chan struct{})
@@ -1146,7 +1146,7 @@ checks:
 		action,
 	))
 	s.planChanged(c)
-	checkMgr.PlanChanged(s.plan)
+	checkMgr.PlanChanged(s.plan.Combined)
 
 	// Start service and wait till it starts up (output file is written to)
 	s.startServices(c, []string{"test2"}, 1)
@@ -1720,25 +1720,28 @@ func (s *S) newServiceManager(c *C) {
 
 func (s *S) planChanged(c *C) {
 	c.Assert(s.plan, NotNil)
-	s.manager.PlanChanged(s.plan)
+	s.manager.PlanChanged(s.plan.Combined)
 	s.planPropagated = true
 }
 
 func (s *S) planAddLayer(c *C, layerYAML string) {
 	cnt := len(s.plan.Layers)
-	layer, err := plan.ParseLayer(cnt, fmt.Sprintf("testPlanLayer%v", cnt), []byte(layerYAML))
+	layer, err := s.plan.ParseLayer(cnt, fmt.Sprintf("testPlanLayer%v", cnt), []byte(layerYAML))
 	c.Assert(err, IsNil)
 	// Resolve {{.NotifyDoneCheck}}
 	s.insertDoneChecks(c, layer)
 	layers := append(s.plan.Layers, layer)
-	combined, err := plan.CombineLayers(layers...)
+	combinedLayer, err := s.plan.CombineLayers(layers...)
 	c.Assert(err, IsNil)
-	s.plan = &plan.Plan{
-		Layers:     layers,
-		Services:   combined.Services,
-		Checks:     combined.Checks,
-		LogTargets: combined.LogTargets,
-	}
+	combinedPlan := plan.NewCombinedPlan(combinedLayer)
+	err = combinedPlan.Validate(s.plan)
+	c.Assert(err, IsNil)
+	s.plan.Layers = layers
+	s.plan.Combined = combinedPlan
+}
+
+func emptyCombinedPlan() *plan.CombinedPlan {
+	return plan.NewCombinedPlan(&plan.Layer{})
 }
 
 // Make sure services are all stopped before the next test starts.
