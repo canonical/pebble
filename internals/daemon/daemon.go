@@ -763,10 +763,10 @@ func (d *Daemon) RebootIsMissing(st *state.State) error {
 	return errExpectedReboot
 }
 
-// SetServiceArgs sets the provided service arguments to their respective services,
-// by passing the arguments to the service manager responsible under daemon overlord.
+// SetServiceArgs updates the specified service commands by replacing
+// existing arguments with the newly specified arguments.
 func (d *Daemon) SetServiceArgs(serviceArgs map[string][]string) error {
-	return d.overlord.ServiceManager().SetServiceArgs(serviceArgs)
+	return d.overlord.PlanManager().SetServiceArgs(serviceArgs)
 }
 
 func New(opts *Options) (*Daemon, error) {
