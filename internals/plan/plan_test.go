@@ -203,6 +203,7 @@ var planTests = []planTest{{
 		},
 		Checks:     map[string]*plan.Check{},
 		LogTargets: map[string]*plan.LogTarget{},
+		Sections:   map[string]plan.LayerSection{},
 	}, {
 		Order:       1,
 		Label:       "layer-1",
@@ -253,6 +254,7 @@ var planTests = []planTest{{
 		},
 		Checks:     map[string]*plan.Check{},
 		LogTargets: map[string]*plan.LogTarget{},
+		Sections:   map[string]plan.LayerSection{},
 	}},
 	result: &plan.Layer{
 		Summary:     "Simple override layer.",
@@ -332,6 +334,7 @@ var planTests = []planTest{{
 		},
 		Checks:     map[string]*plan.Check{},
 		LogTargets: map[string]*plan.LogTarget{},
+		Sections:   map[string]plan.LayerSection{},
 	},
 	start: map[string][]string{
 		"srv1": {"srv2", "srv1", "srv3"},
@@ -394,6 +397,7 @@ var planTests = []planTest{{
 		},
 		Checks:     map[string]*plan.Check{},
 		LogTargets: map[string]*plan.LogTarget{},
+		Sections:   map[string]plan.LayerSection{},
 	}},
 }, {
 	summary: "Unknown keys are not accepted",
@@ -544,6 +548,7 @@ var planTests = []planTest{{
 		},
 		Checks:     map[string]*plan.Check{},
 		LogTargets: map[string]*plan.LogTarget{},
+		Sections:   map[string]plan.LayerSection{},
 	}},
 }, {
 	summary: `Invalid service command: cannot have any arguments after [ ... ] group`,
@@ -652,6 +657,7 @@ var planTests = []planTest{{
 			},
 		},
 		LogTargets: map[string]*plan.LogTarget{},
+		Sections:   map[string]plan.LayerSection{},
 	},
 }, {
 	summary: "Checks override replace works correctly",
@@ -729,6 +735,7 @@ var planTests = []planTest{{
 			},
 		},
 		LogTargets: map[string]*plan.LogTarget{},
+		Sections:   map[string]plan.LayerSection{},
 	},
 }, {
 	summary: "Checks override merge works correctly",
@@ -812,6 +819,7 @@ var planTests = []planTest{{
 			},
 		},
 		LogTargets: map[string]*plan.LogTarget{},
+		Sections:   map[string]plan.LayerSection{},
 	},
 }, {
 	summary: "Timeout is capped at period",
@@ -841,6 +849,7 @@ var planTests = []planTest{{
 			},
 		},
 		LogTargets: map[string]*plan.LogTarget{},
+		Sections:   map[string]plan.LayerSection{},
 	},
 }, {
 	summary: "Unset timeout is capped at period",
@@ -869,6 +878,7 @@ var planTests = []planTest{{
 			},
 		},
 		LogTargets: map[string]*plan.LogTarget{},
+		Sections:   map[string]plan.LayerSection{},
 	},
 }, {
 	summary: "One of http, tcp, or exec must be present for check",
@@ -989,6 +999,7 @@ var planTests = []planTest{{
 				Override: plan.MergeOverride,
 			},
 		},
+		Sections: map[string]plan.LayerSection{},
 	},
 }, {
 	summary: "Overriding log targets",
@@ -1085,6 +1096,7 @@ var planTests = []planTest{{
 				Override: plan.MergeOverride,
 			},
 		},
+		Sections: map[string]plan.LayerSection{},
 	}, {
 		Label: "layer-1",
 		Order: 1,
@@ -1123,6 +1135,7 @@ var planTests = []planTest{{
 				Override: plan.MergeOverride,
 			},
 		},
+		Sections: map[string]plan.LayerSection{},
 	}},
 	result: &plan.Layer{
 		Services: map[string]*plan.Service{
@@ -1168,6 +1181,7 @@ var planTests = []planTest{{
 				Override: plan.MergeOverride,
 			},
 		},
+		Sections: map[string]plan.LayerSection{},
 	},
 }, {
 	summary: "Log target requires type field",
@@ -1277,6 +1291,7 @@ var planTests = []planTest{{
 				},
 			},
 		},
+		Sections: map[string]plan.LayerSection{},
 	}, {
 		Order:    1,
 		Label:    "layer-1",
@@ -1302,6 +1317,7 @@ var planTests = []planTest{{
 				},
 			},
 		},
+		Sections: map[string]plan.LayerSection{},
 	}},
 	result: &plan.Layer{
 		Services: map[string]*plan.Service{},
@@ -1329,6 +1345,7 @@ var planTests = []planTest{{
 				},
 			},
 		},
+		Sections: map[string]plan.LayerSection{},
 	},
 }, {
 	summary: "Reserved log target labels",
@@ -1379,6 +1396,7 @@ var planTests = []planTest{{
 		},
 		Checks:     map[string]*plan.Check{},
 		LogTargets: map[string]*plan.LogTarget{},
+		Sections:   map[string]plan.LayerSection{},
 	},
 }, {
 	summary: "Three layers missing command",
@@ -1405,10 +1423,10 @@ var planTests = []planTest{{
 func (s *S) TestParseLayer(c *C) {
 	for _, test := range planTests {
 		c.Logf(test.summary)
-		var sup plan.Plan
+		p := plan.NewPlan()
 		var err error
 		for i, yml := range test.input {
-			layer, e := plan.ParseLayer(i, fmt.Sprintf("layer-%d", i), reindent(yml))
+			layer, e := p.ParseLayer(i, fmt.Sprintf("layer-%d", i), reindent(yml))
 			if e != nil {
 				err = e
 				break
@@ -1416,36 +1434,32 @@ func (s *S) TestParseLayer(c *C) {
 			if len(test.layers) > 0 && test.layers[i] != nil {
 				c.Assert(layer, DeepEquals, test.layers[i])
 			}
-			sup.Layers = append(sup.Layers, layer)
+			p.Layers = append(p.Layers, layer)
 		}
 		if err == nil {
-			var result *plan.Layer
-			result, err = plan.CombineLayers(sup.Layers...)
+			var combinedLayer *plan.Layer
+			combinedLayer, err = p.CombineLayers(p.Layers...)
 			if err == nil && test.result != nil {
-				c.Assert(result, DeepEquals, test.result)
+				c.Assert(combinedLayer, DeepEquals, test.result)
+			}
+			if err == nil {
+				combinedPlan := plan.NewCombinedPlan(combinedLayer)
+				err = combinedPlan.Validate(p)
+				if err == nil {
+					p.Combined = combinedPlan
+				}
 			}
 			if err == nil {
 				for name, order := range test.start {
-					p := plan.Plan{Services: result.Services}
-					names, err := p.StartOrder([]string{name})
+					names, err := p.Combined.StartOrder([]string{name})
 					c.Assert(err, IsNil)
 					c.Assert(names, DeepEquals, order)
 				}
 				for name, order := range test.stop {
-					p := plan.Plan{Services: result.Services}
-					names, err := p.StopOrder([]string{name})
+					names, err := p.Combined.StopOrder([]string{name})
 					c.Assert(err, IsNil)
 					c.Assert(names, DeepEquals, order)
 				}
-			}
-			if err == nil {
-				p := &plan.Plan{
-					Layers:     sup.Layers,
-					Services:   result.Services,
-					Checks:     result.Checks,
-					LogTargets: result.LogTargets,
-				}
-				err = p.Validate()
 			}
 		}
 		if err != nil || test.error != "" {
@@ -1460,7 +1474,8 @@ func (s *S) TestParseLayer(c *C) {
 
 func (s *S) TestCombineLayersCycle(c *C) {
 	// Even if individual layers don't have cycles, combined layers might.
-	layer1, err := plan.ParseLayer(1, "label1", []byte(`
+	p := plan.NewPlan()
+	layer1, err := p.ParseLayer(1, "label1", []byte(`
 services:
     srv1:
         override: replace
@@ -1469,7 +1484,7 @@ services:
             - srv2
 `))
 	c.Assert(err, IsNil)
-	layer2, err := plan.ParseLayer(2, "label2", []byte(`
+	layer2, err := p.ParseLayer(2, "label2", []byte(`
 services:
     srv2:
         override: replace
@@ -1478,77 +1493,67 @@ services:
             - srv1
 `))
 	c.Assert(err, IsNil)
-	combined, err := plan.CombineLayers(layer1, layer2)
+	combinedLayer, err := p.CombineLayers(layer1, layer2)
 	c.Assert(err, IsNil)
-	layers := []*plan.Layer{layer1, layer2}
-	p := &plan.Plan{
-		Layers:     layers,
-		Services:   combined.Services,
-		Checks:     combined.Checks,
-		LogTargets: combined.LogTargets,
-	}
-	err = p.Validate()
+	combinedPlan := plan.NewCombinedPlan(combinedLayer)
+	err = combinedPlan.Validate(p)
 	c.Assert(err, ErrorMatches, `services in before/after loop: .*`)
 	_, ok := err.(*plan.FormatError)
 	c.Assert(ok, Equals, true, Commentf("error must be *plan.FormatError, not %T", err))
 }
 
 func (s *S) TestMissingOverride(c *C) {
-	layer1, err := plan.ParseLayer(1, "label1", []byte("{}"))
+	p := plan.NewPlan()
+	layer1, err := p.ParseLayer(1, "label1", []byte("{}"))
 	c.Assert(err, IsNil)
-	layer2, err := plan.ParseLayer(2, "label2", []byte(`
+	layer2, err := p.ParseLayer(2, "label2", []byte(`
 services:
     srv1:
         command: cmd
 `))
 	c.Assert(err, IsNil)
-	_, err = plan.CombineLayers(layer1, layer2)
+	_, err = p.CombineLayers(layer1, layer2)
 	c.Check(err, ErrorMatches, `layer "label2" must define \"override\" for service "srv1"`)
 	_, ok := err.(*plan.FormatError)
 	c.Check(ok, Equals, true, Commentf("error must be *plan.FormatError, not %T", err))
 }
 
 func (s *S) TestMissingCommand(c *C) {
+	p := plan.NewPlan()
 	// Combine fails if no command in combined plan
-	layer1, err := plan.ParseLayer(1, "label1", []byte("{}"))
+	layer1, err := p.ParseLayer(1, "label1", []byte("{}"))
 	c.Assert(err, IsNil)
-	layer2, err := plan.ParseLayer(2, "label2", []byte(`
+	layer2, err := p.ParseLayer(2, "label2", []byte(`
 services:
     srv1:
         override: merge
 `))
 	c.Assert(err, IsNil)
-	combined, err := plan.CombineLayers(layer1, layer2)
+	combinedLayer, err := p.CombineLayers(layer1, layer2)
 	c.Assert(err, IsNil)
-	layers := []*plan.Layer{layer1, layer2}
-	p := &plan.Plan{
-		Layers:     layers,
-		Services:   combined.Services,
-		Checks:     combined.Checks,
-		LogTargets: combined.LogTargets,
-	}
-	err = p.Validate()
+	combinedPlan := plan.NewCombinedPlan(combinedLayer)
+	err = combinedPlan.Validate(p)
 	c.Check(err, ErrorMatches, `plan must define "command" for service "srv1"`)
 	_, ok := err.(*plan.FormatError)
 	c.Check(ok, Equals, true, Commentf("error must be *plan.FormatError, not %T", err))
 
 	// Combine succeeds if there is a command in combined plan
-	layer1, err = plan.ParseLayer(1, "label1", []byte(`
+	layer1, err = p.ParseLayer(1, "label1", []byte(`
 services:
     srv1:
         override: merge
         command: foo --bar
 `))
 	c.Assert(err, IsNil)
-	layer2, err = plan.ParseLayer(2, "label2", []byte(`
+	layer2, err = p.ParseLayer(2, "label2", []byte(`
 services:
     srv1:
         override: merge
 `))
 	c.Assert(err, IsNil)
-	combined, err = plan.CombineLayers(layer1, layer2)
+	combinedLayer, err = p.CombineLayers(layer1, layer2)
 	c.Assert(err, IsNil)
-	c.Assert(combined.Services["srv1"].Command, Equals, "foo --bar")
+	c.Assert(combinedLayer.Services["srv1"].Command, Equals, "foo --bar")
 }
 
 func (s *S) TestReadDir(c *C) {
@@ -1565,26 +1570,18 @@ func (s *S) TestReadDir(c *C) {
 			err := os.WriteFile(filepath.Join(layersDir, fmt.Sprintf("%03d-layer-%d.yaml", i, i)), reindent(yml), 0644)
 			c.Assert(err, IsNil)
 		}
-		sup, err := plan.ReadDir(pebbleDir)
+		p := plan.NewPlan()
+		err = p.ReadDir(pebbleDir)
 		if err == nil {
-			var result *plan.Layer
-			result, err = plan.CombineLayers(sup.Layers...)
-			if err == nil && test.result != nil {
-				c.Assert(result, DeepEquals, test.result)
+			for name, order := range test.start {
+				names, err := p.Combined.StartOrder([]string{name})
+				c.Assert(err, IsNil)
+				c.Assert(names, DeepEquals, order)
 			}
-			if err == nil {
-				for name, order := range test.start {
-					p := plan.Plan{Services: result.Services}
-					names, err := p.StartOrder([]string{name})
-					c.Assert(err, IsNil)
-					c.Assert(names, DeepEquals, order)
-				}
-				for name, order := range test.stop {
-					p := plan.Plan{Services: result.Services}
-					names, err := p.StopOrder([]string{name})
-					c.Assert(err, IsNil)
-					c.Assert(names, DeepEquals, order)
-				}
+			for name, order := range test.stop {
+				names, err := p.Combined.StopOrder([]string{name})
+				c.Assert(err, IsNil)
+				c.Assert(names, DeepEquals, order)
 			}
 		}
 		if err != nil || test.error != "" {
@@ -1617,7 +1614,8 @@ func (s *S) TestReadDirBadNames(c *C) {
 		fpath := filepath.Join(layersDir, fname)
 		err := os.WriteFile(fpath, []byte("<ignore>"), 0644)
 		c.Assert(err, IsNil)
-		_, err = plan.ReadDir(pebbleDir)
+		p := plan.NewPlan()
+		err = p.ReadDir(pebbleDir)
 		c.Assert(err.Error(), Equals, fmt.Sprintf("invalid layer filename: %q (must look like \"123-some-label.yaml\")", fname))
 		err = os.Remove(fpath)
 		c.Assert(err, IsNil)
@@ -1641,7 +1639,8 @@ func (s *S) TestReadDirDupNames(c *C) {
 			err := os.WriteFile(fpath, []byte("summary: ignore"), 0644)
 			c.Assert(err, IsNil)
 		}
-		_, err = plan.ReadDir(pebbleDir)
+		p := plan.NewPlan()
+		err = p.ReadDir(pebbleDir)
 		c.Assert(err.Error(), Equals, fmt.Sprintf("invalid layer filename: %q not unique (have %q already)", fnames[1], fnames[0]))
 		for _, fname := range fnames {
 			fpath := filepath.Join(layersDir, fname)
@@ -1681,7 +1680,8 @@ func (s *S) TestMarshalLayer(c *C) {
 			srv3:
 				override: replace
 				command: srv3cmd`)
-	layer, err := plan.ParseLayer(1, "layer1", layerBytes)
+	p := plan.NewPlan()
+	layer, err := p.ParseLayer(1, "layer1", layerBytes)
 	c.Assert(err, IsNil)
 	out, err := yaml.Marshal(layer)
 	c.Assert(err, IsNil)
@@ -1869,19 +1869,23 @@ func (s *S) TestMergeServiceContextNoContext(c *C) {
 		Group:       "grp",
 		WorkingDir:  "/working/dir",
 	}
+	// This test ensures an empty service name results in no lookup, and
+	// simply leaves the provided context unchanged (if the nil CombinedPlan
+	// is consulted, we would receive an error instead).
 	merged, err := plan.MergeServiceContext(nil, "", overrides)
 	c.Assert(err, IsNil)
 	c.Check(merged, DeepEquals, overrides)
 }
 
 func (s *S) TestMergeServiceContextBadService(c *C) {
-	_, err := plan.MergeServiceContext(&plan.Plan{}, "nosvc", plan.ContextOptions{})
+	p := plan.NewPlan()
+	_, err := plan.MergeServiceContext(p.Combined, "nosvc", plan.ContextOptions{})
 	c.Assert(err, ErrorMatches, `context service "nosvc" not found`)
 }
 
 func (s *S) TestMergeServiceContextNoOverrides(c *C) {
 	userID, groupID := 11, 22
-	p := &plan.Plan{Services: map[string]*plan.Service{"svc1": {
+	layer := &plan.Layer{Services: map[string]*plan.Service{"svc1": {
 		Name:        "svc1",
 		Environment: map[string]string{"x": "y"},
 		UserID:      &userID,
@@ -1890,7 +1894,8 @@ func (s *S) TestMergeServiceContextNoOverrides(c *C) {
 		Group:       "svcgroup",
 		WorkingDir:  "/working/svc",
 	}}}
-	merged, err := plan.MergeServiceContext(p, "svc1", plan.ContextOptions{})
+	combinedPlan := plan.NewCombinedPlan(layer)
+	merged, err := plan.MergeServiceContext(combinedPlan, "svc1", plan.ContextOptions{})
 	c.Assert(err, IsNil)
 	c.Check(merged, DeepEquals, plan.ContextOptions{
 		Environment: map[string]string{"x": "y"},
@@ -1904,7 +1909,7 @@ func (s *S) TestMergeServiceContextNoOverrides(c *C) {
 
 func (s *S) TestMergeServiceContextOverrides(c *C) {
 	svcUserID, svcGroupID := 10, 20
-	p := &plan.Plan{Services: map[string]*plan.Service{"svc1": {
+	layer := &plan.Layer{Services: map[string]*plan.Service{"svc1": {
 		Name:        "svc1",
 		Environment: map[string]string{"x": "y", "w": "z"},
 		UserID:      &svcUserID,
@@ -1913,6 +1918,7 @@ func (s *S) TestMergeServiceContextOverrides(c *C) {
 		Group:       "svcgroup",
 		WorkingDir:  "/working/svc",
 	}}}
+	combinedPlan := plan.NewCombinedPlan(layer)
 	userID, groupID := 11, 22
 	overrides := plan.ContextOptions{
 		Environment: map[string]string{"x": "a"},
@@ -1922,7 +1928,7 @@ func (s *S) TestMergeServiceContextOverrides(c *C) {
 		Group:       "grp",
 		WorkingDir:  "/working/dir",
 	}
-	merged, err := plan.MergeServiceContext(p, "svc1", overrides)
+	merged, err := plan.MergeServiceContext(combinedPlan, "svc1", overrides)
 	c.Assert(err, IsNil)
 	c.Check(merged, DeepEquals, plan.ContextOptions{
 		Environment: map[string]string{"x": "a", "w": "z"},
