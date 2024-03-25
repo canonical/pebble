@@ -148,7 +148,7 @@ func (s *PebbleSuite) TestEnterExecNoVerbose(c *C) {
 	defer restore()
 
 	exitCode := cli.PebbleMain()
-	c.Check(s.Stderr(), Equals, "error: enter: cannot provide -v, --verbose before \"exec\" subcommand\n")
+	c.Check(s.Stderr(), Equals, "error: enter: cannot provide -v/--verbose before \"exec\" subcommand\n")
 	c.Check(s.Stdout(), Equals, "")
 	c.Check(exitCode, Equals, 1)
 }

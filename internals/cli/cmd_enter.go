@@ -164,7 +164,7 @@ func (cmd *cmdEnter) Execute(args []string) error {
 	}
 
 	if enterFlags&enterProhibitVerbose != 0 && cmd.Verbose {
-		return fmt.Errorf("enter: cannot provide -v, --verbose before %q subcommand", parser.Active.Name)
+		return fmt.Errorf("enter: cannot provide -v/--verbose before %q subcommand", parser.Active.Name)
 	}
 
 	if enterFlags&enterNoServiceManager != 0 {
