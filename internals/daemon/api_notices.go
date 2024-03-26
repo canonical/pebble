@@ -1,4 +1,4 @@
-// Copyright (c) 2023 Canonical Ltd
+// Copyright (c) 2023-2024 Canonical Ltd
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License version 3 as
@@ -166,6 +166,7 @@ func sanitizeUserIDFilter(queryUserID []string) (*uint32, error) {
 // Construct the types filter which will be passed to state.Notices.
 func sanitizeTypesFilter(queryTypes []string) ([]state.NoticeType, error) {
 	typeStrs := strutil.MultiCommaSeparatedList(queryTypes)
+	alreadySeen := make(map[state.NoticeType]bool, len(typeStrs))
 	types := make([]state.NoticeType, 0, len(typeStrs))
 	for _, typeStr := range typeStrs {
 		noticeType := state.NoticeType(typeStr)
@@ -174,6 +175,10 @@ func sanitizeTypesFilter(queryTypes []string) ([]state.NoticeType, error) {
 			// with unknown types succeed).
 			continue
 		}
+		if alreadySeen[noticeType] {
+			continue
+		}
+		alreadySeen[noticeType] = true
 		types = append(types, noticeType)
 	}
 	if len(types) == 0 && len(typeStrs) > 0 {
