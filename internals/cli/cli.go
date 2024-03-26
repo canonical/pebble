@@ -48,11 +48,6 @@ var (
 	noticef = logger.Noticef
 )
 
-// defaultPebbleDir is the Pebble directory used if $PEBBLE is not set. It is
-// created by the daemon ("pebble run") if it doesn't exist, and also used by
-// the pebble client.
-const defaultPebbleDir = "/var/lib/pebble/default"
-
 // ErrExtraArgs is returned  if extra arguments to a command are found
 var ErrExtraArgs = fmt.Errorf("too many arguments for command")
 
@@ -243,7 +238,11 @@ func Parser(cli *client.Client) *flags.Parser {
 }
 
 func applyPersonality(s string) string {
-	r := strings.NewReplacer("{{.ProgramName}}", cmd.ProgramName, "{{.DisplayName}}", cmd.DisplayName)
+	r := strings.NewReplacer(
+		"{{.ProgramName}}", cmd.ProgramName,
+		"{{.DisplayName}}", cmd.DisplayName,
+		"{{.DefaultDir}}", cmd.DefaultDir,
+	)
 	return r.Replace(s)
 }
 
@@ -379,7 +378,7 @@ func errorToMessage(e error) (normalMessage string, err error) {
 func getEnvPaths() (pebbleDir string, socketPath string) {
 	pebbleDir = os.Getenv("PEBBLE")
 	if pebbleDir == "" {
-		pebbleDir = defaultPebbleDir
+		pebbleDir = cmd.DefaultDir
 	}
 	socketPath = os.Getenv("PEBBLE_SOCKET")
 	if socketPath == "" {

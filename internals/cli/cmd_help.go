@@ -219,12 +219,16 @@ the system that is running them.
 `)
 	pebbleUsage               = "Usage: {{.ProgramName}} <command> [<options>...]"
 	pebbleHelpCategoriesIntro = "Commands can be classified as follows:"
-	pebbleHelpAllFooter       = "Set the PEBBLE environment variable to override the configuration directory \n" +
-		"(which defaults to " + defaultPebbleDir + "). Set PEBBLE_SOCKET to override \n" +
-		"the unix socket used for the API (defaults to $PEBBLE/.pebble.socket).\n" +
-		"\n" +
-		"For more information about a command, run '{{.ProgramName}} help <command>'."
-	pebbleHelpFooter = "For a short summary of all commands, run '{{.ProgramName}} help --all'."
+
+	// can be overridden in derivative projects
+	PebbleHelpAllFooterText  = strings.TrimSpace(`
+Set the PEBBLE environment variable to override the configuration directory
+(which defaults to {{.DefaultDir}}). Set PEBBLE_SOCKET to override
+the unix socket used for the API (defaults to $PEBBLE/.pebble.socket).
+`)
+
+	pebbleHelpAllFooter = "For more information about a command, run '{{.ProgramName}} help <command>'."
+	pebbleHelpFooter    = "For a short summary of all commands, run '{{.ProgramName}} help --all'."
 )
 
 func printHelpHeader() {
@@ -237,7 +241,7 @@ func printHelpHeader() {
 
 func printHelpAllFooter() {
 	fmt.Fprintln(Stdout)
-	fmt.Fprintln(Stdout, applyPersonality(pebbleHelpAllFooter))
+	fmt.Fprintln(Stdout, applyPersonality(PebbleHelpAllFooterText+"\n\n"+pebbleHelpAllFooter))
 }
 
 func printHelpFooter() {

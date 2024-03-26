@@ -30,3 +30,6 @@ var ProgramName string = "pebble"
 
 // DisplayName represents the user-facing name of the application.
 var DisplayName string = "Pebble"
+
+// DefaultDir is the Pebble directory used if $PEBBLE is not set.
+var DefaultDir string = "/var/lib/pebble/default"
