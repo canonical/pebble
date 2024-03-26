@@ -322,6 +322,13 @@ func maybeCopyPebbleDir(destDir, srcDir string) error {
 	if srcDir == "" {
 		return nil
 	}
+	_, err := os.Stat(srcDir)
+	if errors.Is(err, os.ErrNotExist) {
+		// Skip missing source directory.
+		return nil
+	} else if err != nil {
+		return err
+	}
 	entries, err := os.ReadDir(destDir)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err

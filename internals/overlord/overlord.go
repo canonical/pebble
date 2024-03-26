@@ -33,6 +33,7 @@ import (
 	"github.com/canonical/pebble/internals/overlord/cmdstate"
 	"github.com/canonical/pebble/internals/overlord/logstate"
 	"github.com/canonical/pebble/internals/overlord/patch"
+	"github.com/canonical/pebble/internals/overlord/planstate"
 	"github.com/canonical/pebble/internals/overlord/restart"
 	"github.com/canonical/pebble/internals/overlord/servstate"
 	"github.com/canonical/pebble/internals/overlord/state"
@@ -92,6 +93,7 @@ type Overlord struct {
 	inited     bool
 	startedUp  bool
 	runner     *state.TaskRunner
+	planMgr    *planstate.PlanManager
 	serviceMgr *servstate.ServiceManager
 	commandMgr *cmdstate.CommandManager
 	checkMgr   *checkstate.CheckManager
@@ -136,18 +138,27 @@ func New(opts *Options) (*Overlord, error) {
 	}
 	o.runner.AddOptionalHandler(matchAnyUnknownTask, handleUnknownTask, nil)
 
+	o.planMgr, err = planstate.NewManager(s, o.runner, o.pebbleDir)
+	if err != nil {
+		return nil, fmt.Errorf("cannot create plan manager: %w", err)
+	}
+	o.stateEng.AddManager(o.planMgr)
+
 	o.logMgr = logstate.NewLogManager()
 
 	o.serviceMgr, err = servstate.NewManager(
 		s,
 		o.runner,
-		o.pebbleDir,
 		opts.ServiceOutput,
 		opts.RestartHandler,
 		o.logMgr)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("cannot create service manager: %w", err)
 	}
+
+	// Tell service manager about plan updates.
+	o.planMgr.AddChangeListener(o.serviceMgr.PlanChanged)
+
 	o.stateEng.AddManager(o.serviceMgr)
 	// The log manager should be stopped after the service manager, because
 	// ServiceManager.Stop closes the service ring buffers, which signals to the
@@ -160,10 +171,10 @@ func New(opts *Options) (*Overlord, error) {
 	o.checkMgr = checkstate.NewManager()
 
 	// Tell check manager about plan updates.
-	o.serviceMgr.NotifyPlanChanged(o.checkMgr.PlanChanged)
+	o.planMgr.AddChangeListener(o.checkMgr.PlanChanged)
 
 	// Tell log manager about plan updates.
-	o.serviceMgr.NotifyPlanChanged(o.logMgr.PlanChanged)
+	o.planMgr.AddChangeListener(o.logMgr.PlanChanged)
 
 	// Tell service manager about check failures.
 	o.checkMgr.NotifyCheckFailed(o.serviceMgr.CheckFailed)
@@ -171,7 +182,7 @@ func New(opts *Options) (*Overlord, error) {
 	if o.extension != nil {
 		extraManagers, err := o.extension.ExtraManagers(o)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("cannot add extra managers: %w", err)
 		}
 		for _, manager := range extraManagers {
 			o.stateEng.AddManager(manager)
@@ -182,6 +193,14 @@ func New(opts *Options) (*Overlord, error) {
 	// because TaskRunner runs all the tasks required by the managers that ran
 	// before it.
 	o.stateEng.AddManager(o.runner)
+
+	// Load the plan from the Pebble layers directory (which may be missing
+	// or have no layers, resulting in an empty plan), and propagate PlanChanged
+	// notifications to all notification subscribers.
+	err = o.planMgr.Load()
+	if err != nil {
+		return nil, fmt.Errorf("cannot load plan: %w", err)
+	}
 
 	return o, nil
 }
@@ -485,6 +504,12 @@ func (o *Overlord) CommandManager() *cmdstate.CommandManager {
 // checks under the overlord.
 func (o *Overlord) CheckManager() *checkstate.CheckManager {
 	return o.checkMgr
+}
+
+// PlanManager returns the plan manager responsible for managing the global
+// system configuration
+func (o *Overlord) PlanManager() *planstate.PlanManager {
+	return o.planMgr
 }
 
 // Fake creates an Overlord without any managers and with a backend
