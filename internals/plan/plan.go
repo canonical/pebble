@@ -1020,7 +1020,6 @@ func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 		LogTargets: map[string]*LogTarget{},
 	}
 	dec := yaml.NewDecoder(bytes.NewBuffer(data))
-	dec.KnownFields(true)
 	err := dec.Decode(&layer)
 	if err != nil {
 		return nil, &FormatError{
