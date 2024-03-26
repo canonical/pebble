@@ -43,7 +43,7 @@ func init() {
 			"-r": "Remove all files and directories recursively in the specified path",
 		},
 		New: func(opts *CmdOptions) flags.Commander {
-			return &cmdRm{client: opts.ParserOptions.Client}
+			return &cmdRm{client: opts.Client}
 		},
 	})
 }

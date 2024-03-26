@@ -55,7 +55,7 @@ func init() {
 			"-n":       "Number of logs to show (before following); defaults to 30.\nIf 'all', show all buffered logs.",
 		},
 		New: func(opts *CmdOptions) flags.Commander {
-			return &cmdLogs{client: opts.ParserOptions.Client}
+			return &cmdLogs{client: opts.Client}
 		},
 	})
 }

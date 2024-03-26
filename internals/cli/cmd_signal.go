@@ -46,7 +46,7 @@ func init() {
 		Summary:     cmdSignalSummary,
 		Description: cmdSignalDescription,
 		New: func(opts *CmdOptions) flags.Commander {
-			return &cmdSignal{client: opts.ParserOptions.Client}
+			return &cmdSignal{client: opts.Client}
 		},
 	})
 }

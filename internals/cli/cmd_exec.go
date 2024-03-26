@@ -83,7 +83,7 @@ func init() {
 		},
 		PassAfterNonOption: true,
 		New: func(opts *CmdOptions) flags.Commander {
-			return &cmdExec{client: opts.ParserOptions.Client}
+			return &cmdExec{client: opts.Client}
 		},
 	})
 }

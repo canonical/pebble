@@ -36,7 +36,7 @@ func init() {
 		Summary:     cmdPlanSummary,
 		Description: cmdPlanDescription,
 		New: func(opts *CmdOptions) flags.Commander {
-			return &cmdPlan{client: opts.ParserOptions.Client}
+			return &cmdPlan{client: opts.Client}
 		},
 	})
 }

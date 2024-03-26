@@ -50,7 +50,7 @@ func init() {
 		Description: cmdHealthDescription,
 		ArgsHelp:    cmdHealthArgsHelp,
 		New: func(opts *CmdOptions) flags.Commander {
-			return &cmdHealth{client: opts.ParserOptions.Client}
+			return &cmdHealth{client: opts.Client}
 		},
 	})
 }

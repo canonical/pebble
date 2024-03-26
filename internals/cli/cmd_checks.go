@@ -47,7 +47,7 @@ func init() {
 			"--level": "Check level to filter for",
 		},
 		New: func(opts *CmdOptions) flags.Commander {
-			return &cmdChecks{client: opts.ParserOptions.Client}
+			return &cmdChecks{client: opts.Client}
 		},
 	})
 }

@@ -62,7 +62,7 @@ func init() {
 			"--verbose": "Show more information",
 		}),
 		New: func(opts *CmdOptions) flags.Commander {
-			return &cmdWarnings{client: opts.ParserOptions.Client}
+			return &cmdWarnings{client: opts.Client}
 		},
 	})
 }

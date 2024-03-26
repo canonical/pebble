@@ -43,7 +43,7 @@ func init() {
 		Summary:     cmdPullSummary,
 		Description: cmdPullDescription,
 		New: func(opts *CmdOptions) flags.Commander {
-			return &cmdPull{client: opts.ParserOptions.Client}
+			return &cmdPull{client: opts.Client}
 		},
 	})
 }

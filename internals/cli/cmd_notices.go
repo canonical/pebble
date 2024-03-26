@@ -62,8 +62,8 @@ func init() {
 		}),
 		New: func(opts *CmdOptions) flags.Commander {
 			return &cmdNotices{
-				client:     opts.ParserOptions.Client,
-				socketPath: opts.ParserOptions.SocketPath,
+				client:     opts.Client,
+				socketPath: opts.SocketPath,
 			}
 		},
 	})

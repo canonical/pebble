@@ -50,7 +50,7 @@ func init() {
 			"--combine": "Combine the new layer with an existing layer that has the given label (default is to append)",
 		},
 		New: func(opts *CmdOptions) flags.Commander {
-			return &cmdAdd{client: opts.ParserOptions.Client}
+			return &cmdAdd{client: opts.Client}
 		},
 	})
 }
