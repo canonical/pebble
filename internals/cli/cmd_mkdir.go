@@ -57,7 +57,7 @@ func init() {
 			"--group": "Use specified group name",
 		},
 		New: func(opts *CmdOptions) flags.Commander {
-			return &cmdMkdir{client: opts.Client}
+			return &cmdMkdir{client: opts.ParserOptions.Client}
 		},
 	})
 }

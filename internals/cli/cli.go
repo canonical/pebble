@@ -58,9 +58,8 @@ var ErrExtraArgs = fmt.Errorf("too many arguments for command")
 
 // CmdOptions exposes state made accessible during command execution.
 type CmdOptions struct {
-	Client     *client.Client
-	Parser     *flags.Parser
-	RunOptions *RunOptions
+	*ParserOptions
+	Parser *flags.Parser
 }
 
 // CmdInfo holds information needed by the CLI to execute commands and
@@ -153,14 +152,20 @@ type defaultOptions struct {
 	Version func() `long:"version" hidden:"yes" description:"Print the version and exit"`
 }
 
+type ParserOptions struct {
+	Client     *client.Client
+	PebbleDir  string
+	SocketPath string
+}
+
 // Parser creates and populates a fresh parser.
 // Since commands have local state a fresh parser is required to isolate tests
 // from each other.
-func Parser(cli *client.Client, options *RunOptions) *flags.Parser {
+func Parser(opts *ParserOptions) *flags.Parser {
 	// Implement --version by default on every command
 	defaultOpts := defaultOptions{
 		Version: func() {
-			printVersions(cli)
+			printVersions(opts.Client)
 			panic(&exitStatus{0})
 		},
 	}
@@ -187,7 +192,7 @@ func Parser(cli *client.Client, options *RunOptions) *flags.Parser {
 
 	// Add all commands
 	for _, c := range commands {
-		obj := c.New(&CmdOptions{Client: cli, Parser: parser, RunOptions: options})
+		obj := c.New(&CmdOptions{Parser: parser, ParserOptions: opts})
 
 		var target *flags.Command
 		if c.Debug {
@@ -306,10 +311,10 @@ func Run(options *RunOptions) error {
 	if pebbleDir == "" {
 		pebbleDir, _ = getEnvPaths()
 	}
-	parser := Parser(cli, &RunOptions{
-		ClientConfig: config,
-		Logger:       log,
-		PebbleDir:    pebbleDir,
+	parser := Parser(&ParserOptions{
+		Client:     cli,
+		PebbleDir:  pebbleDir,
+		SocketPath: config.Socket,
 	})
 	xtra, err := parser.Parse()
 	if err != nil {

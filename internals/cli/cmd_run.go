@@ -78,9 +78,9 @@ func init() {
 		ArgsHelp:    sharedRunEnterArgsHelp,
 		New: func(opts *CmdOptions) flags.Commander {
 			return &cmdRun{
-				client:     opts.Client,
-				socketPath: opts.RunOptions.ClientConfig.Socket,
-				pebbleDir:  opts.RunOptions.PebbleDir,
+				client:     opts.ParserOptions.Client,
+				socketPath: opts.ParserOptions.SocketPath,
+				pebbleDir:  opts.ParserOptions.PebbleDir,
 			}
 		},
 	})

@@ -46,8 +46,8 @@ func init() {
 		Description: cmdOkayDescription,
 		New: func(opts *CmdOptions) flags.Commander {
 			return &cmdOkay{
-				client:     opts.Client,
-				socketPath: opts.RunOptions.ClientConfig.Socket,
+				client:     opts.ParserOptions.Client,
+				socketPath: opts.ParserOptions.SocketPath,
 			}
 		},
 		ArgsHelp: map[string]string{

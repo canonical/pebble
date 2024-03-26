@@ -19,7 +19,6 @@ import (
 
 	"github.com/canonical/go-flags"
 
-	"github.com/canonical/pebble/client"
 	"github.com/canonical/pebble/internals/logger"
 )
 
@@ -47,10 +46,9 @@ These subcommands are currently supported:
 `
 
 type cmdEnter struct {
-	client *client.Client
 	parser *flags.Parser
 
-	runOptions *RunOptions
+	parserOptions *ParserOptions
 
 	sharedRunEnterOpts
 	Run        bool `long:"run"`
@@ -66,9 +64,8 @@ func init() {
 		Description: cmdEnterDescription,
 		New: func(opts *CmdOptions) flags.Commander {
 			return &cmdEnter{
-				client:     opts.Client,
-				parser:     opts.Parser,
-				runOptions: opts.RunOptions,
+				parser:        opts.Parser,
+				parserOptions: opts.ParserOptions,
 			}
 		},
 		ArgsHelp: merge(sharedRunEnterArgsHelp, map[string]string{
@@ -114,9 +111,9 @@ func (cmd *cmdEnter) Execute(args []string) error {
 
 	runCmd := cmdRun{
 		sharedRunEnterOpts: cmd.sharedRunEnterOpts,
-		client:             cmd.client,
-		socketPath:         cmd.runOptions.ClientConfig.Socket,
-		pebbleDir:          cmd.runOptions.PebbleDir,
+		client:             cmd.parserOptions.Client,
+		socketPath:         cmd.parserOptions.SocketPath,
+		pebbleDir:          cmd.parserOptions.PebbleDir,
 	}
 
 	if len(cmd.Positional.Cmd) == 0 {
@@ -131,7 +128,7 @@ func (cmd *cmdEnter) Execute(args []string) error {
 		extraArgs []string
 	)
 
-	parser := Parser(cmd.client, cmd.runOptions)
+	parser := Parser(cmd.parserOptions)
 	parser.CommandHandler = func(c flags.Commander, a []string) error {
 		commander = c
 		extraArgs = a

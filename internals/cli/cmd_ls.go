@@ -53,7 +53,7 @@ func init() {
 			"-l": "Use a long listing format",
 		}),
 		New: func(opts *CmdOptions) flags.Commander {
-			return &cmdLs{client: opts.Client}
+			return &cmdLs{client: opts.ParserOptions.Client}
 		},
 	})
 }

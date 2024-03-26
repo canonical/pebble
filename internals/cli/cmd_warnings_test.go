@@ -231,7 +231,12 @@ func (s *warningSuite) TestCommandWithWarnings(c *check.C) {
 	responseTimestamp = time.Date(2018, 9, 19, 12, 44, 19, 680362867, time.UTC)
 	for warningCount, expectedWarning := range expectedWarnings {
 		responseWarningCount = warningCount
-		rest, err := cli.Parser(client, cli.RunOptionsForTest()).ParseArgs([]string{"version"})
+		runOpts := cli.RunOptionsForTest()
+		rest, err := cli.Parser(&cli.ParserOptions{
+			Client:     client,
+			SocketPath: runOpts.ClientConfig.Socket,
+			PebbleDir:  runOpts.PebbleDir,
+		}).ParseArgs([]string{"version"})
 		c.Assert(err, check.IsNil)
 
 		count, stamp := client.WarningsSummary()

@@ -49,7 +49,7 @@ func init() {
 			"--repeat-after": "Prevent notice with same type and key from reoccurring within this duration",
 		},
 		New: func(opts *CmdOptions) flags.Commander {
-			return &cmdNotify{client: opts.Client}
+			return &cmdNotify{client: opts.ParserOptions.Client}
 		},
 	})
 }

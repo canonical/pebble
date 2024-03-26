@@ -111,5 +111,11 @@ func PebbleMain() (exitCode int) {
 }
 
 func ParserForTest() *flags.Parser {
-	return Parser(Client(), RunOptionsForTest())
+	runOpts := RunOptionsForTest()
+
+	return Parser(&ParserOptions{
+		Client:     Client(),
+		SocketPath: runOpts.ClientConfig.Socket,
+		PebbleDir:  runOpts.PebbleDir,
+	})
 }

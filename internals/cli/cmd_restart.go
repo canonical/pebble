@@ -41,7 +41,7 @@ func init() {
 		Description: cmdRestartDescription,
 		ArgsHelp:    waitArgsHelp,
 		New: func(opts *CmdOptions) flags.Commander {
-			return &cmdRestart{client: opts.Client}
+			return &cmdRestart{client: opts.ParserOptions.Client}
 		},
 	})
 }

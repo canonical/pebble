@@ -44,7 +44,7 @@ func init() {
 		Description: cmdServicesDescription,
 		ArgsHelp:    timeArgsHelp,
 		New: func(opts *CmdOptions) flags.Commander {
-			return &cmdServices{client: opts.Client}
+			return &cmdServices{client: opts.ParserOptions.Client}
 		},
 	})
 }

@@ -59,7 +59,7 @@ func init() {
 		Description: cmdChangesDescription,
 		ArgsHelp:    timeArgsHelp,
 		New: func(opts *CmdOptions) flags.Commander {
-			return &cmdChanges{client: opts.Client}
+			return &cmdChanges{client: opts.ParserOptions.Client}
 		},
 	})
 	AddCommand(&CmdInfo{
@@ -68,7 +68,7 @@ func init() {
 		Description: cmdTasksDescription,
 		ArgsHelp:    merge(changeIDMixinArgsHelp, timeArgsHelp),
 		New: func(opts *CmdOptions) flags.Commander {
-			return &cmdTasks{client: opts.Client}
+			return &cmdTasks{client: opts.ParserOptions.Client}
 		},
 	})
 }

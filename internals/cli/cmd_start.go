@@ -42,7 +42,7 @@ func init() {
 		Description: cmdStartDescription,
 		ArgsHelp:    waitArgsHelp,
 		New: func(opts *CmdOptions) flags.Commander {
-			return &cmdStart{client: opts.Client}
+			return &cmdStart{client: opts.ParserOptions.Client}
 		},
 	})
 }

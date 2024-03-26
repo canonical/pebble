@@ -40,7 +40,7 @@ func init() {
 		Description: cmdReplanDescription,
 		ArgsHelp:    waitArgsHelp,
 		New: func(opts *CmdOptions) flags.Commander {
-			return &cmdReplan{client: opts.Client}
+			return &cmdReplan{client: opts.ParserOptions.Client}
 		},
 	})
 }

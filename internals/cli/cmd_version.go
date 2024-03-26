@@ -43,7 +43,7 @@ func init() {
 			"--client": "Only display the client version",
 		},
 		New: func(opts *CmdOptions) flags.Commander {
-			return &cmdVersion{client: opts.Client}
+			return &cmdVersion{client: opts.ParserOptions.Client}
 		},
 	})
 }
