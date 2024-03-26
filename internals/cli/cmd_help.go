@@ -221,7 +221,7 @@ the system that is running them.
 	pebbleHelpCategoriesIntro = "Commands can be classified as follows:"
 
 	// can be overridden in derivative projects
-	PebbleHelpAllFooterText  = strings.TrimSpace(`
+	PebbleHelpAllFooterText = strings.TrimSpace(`
 Set the PEBBLE environment variable to override the configuration directory
 (which defaults to {{.DefaultDir}}). Set PEBBLE_SOCKET to override
 the unix socket used for the API (defaults to $PEBBLE/.pebble.socket).
