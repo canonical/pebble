@@ -217,22 +217,25 @@ var HelpCategories = []HelpCategory{{
 }}
 
 var (
-	longPebbleDescription = strings.TrimSpace(`
+	HelpHeader = strings.TrimSpace(`
 {{.DisplayName}} lets you control services and perform management actions on
 the system that is running them.
 `)
 	pebbleUsage               = "Usage: {{.ProgramName}} <command> [<options>...]"
 	pebbleHelpCategoriesIntro = "Commands can be classified as follows:"
-	pebbleHelpAllFooter       = "Set the PEBBLE environment variable to override the configuration directory \n" +
-		"(which defaults to " + defaultPebbleDir + "). Set PEBBLE_SOCKET to override \n" +
-		"the unix socket used for the API (defaults to $PEBBLE/.pebble.socket).\n" +
-		"\n" +
-		"For more information about a command, run '{{.ProgramName}} help <command>'."
-	pebbleHelpFooter = "For a short summary of all commands, run '{{.ProgramName}} help --all'."
+
+	HelpFooter = strings.TrimSpace(`
+Set the PEBBLE environment variable to override the configuration directory
+(which defaults to {{.DefaultDir}}). Set PEBBLE_SOCKET to override
+the unix socket used for the API (defaults to $PEBBLE/.pebble.socket).
+`)
+
+	pebbleHelpAllFooter = "For more information about a command, run '{{.ProgramName}} help <command>'."
+	pebbleHelpFooter    = "For a short summary of all commands, run '{{.ProgramName}} help --all'."
 )
 
 func printHelpHeader() {
-	fmt.Fprintln(Stdout, applyPersonality(longPebbleDescription))
+	fmt.Fprintln(Stdout, applyPersonality(HelpHeader))
 	fmt.Fprintln(Stdout)
 	fmt.Fprintln(Stdout, applyPersonality(pebbleUsage))
 	fmt.Fprintln(Stdout)
@@ -240,6 +243,8 @@ func printHelpHeader() {
 }
 
 func printHelpAllFooter() {
+	fmt.Fprintln(Stdout)
+	fmt.Fprintln(Stdout, applyPersonality(HelpFooter))
 	fmt.Fprintln(Stdout)
 	fmt.Fprintln(Stdout, applyPersonality(pebbleHelpAllFooter))
 }
