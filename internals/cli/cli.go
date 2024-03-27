@@ -58,8 +58,10 @@ var ErrExtraArgs = fmt.Errorf("too many arguments for command")
 
 // CmdOptions exposes state made accessible during command execution.
 type CmdOptions struct {
-	*ParserOptions
-	Parser *flags.Parser
+	Client     *client.Client
+	Parser     *flags.Parser
+	PebbleDir  string
+	SocketPath string
 }
 
 // CmdInfo holds information needed by the CLI to execute commands and
@@ -192,7 +194,12 @@ func Parser(opts *ParserOptions) *flags.Parser {
 
 	// Add all commands
 	for _, c := range commands {
-		obj := c.New(&CmdOptions{Parser: parser, ParserOptions: opts})
+		obj := c.New(&CmdOptions{
+			Client:     opts.Client,
+			Parser:     parser,
+			PebbleDir:  opts.PebbleDir,
+			SocketPath: opts.SocketPath,
+		})
 
 		var target *flags.Command
 		if c.Debug {
