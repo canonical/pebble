@@ -14,10 +14,6 @@
 
 package cmd
 
-import (
-	"strings"
-)
-
 // ProgramName represents the name of the application binary.
 var ProgramName string = "pebble"
 
@@ -26,12 +22,3 @@ var DisplayName string = "Pebble"
 
 // DefaultDir is the Pebble directory used if $PEBBLE is not set.
 var DefaultDir string = "/var/lib/pebble/default"
-
-func ApplyPersonality(s string) string {
-	r := strings.NewReplacer(
-		"{{.ProgramName}}", ProgramName,
-		"{{.DisplayName}}", DisplayName,
-		"{{.DefaultDir}}", DefaultDir,
-	)
-	return r.Replace(s)
-}

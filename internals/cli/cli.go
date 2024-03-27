@@ -33,7 +33,7 @@ import (
 	"golang.org/x/term"
 
 	"github.com/canonical/pebble/client"
-	cmdpkg "github.com/canonical/pebble/cmd"
+	"github.com/canonical/pebble/cmd"
 	"github.com/canonical/pebble/internals/logger"
 )
 
@@ -161,9 +161,9 @@ func Parser(cli *client.Client) *flags.Parser {
 
 	flagOpts := flags.Options(flags.PassDoubleDash)
 	parser := flags.NewParser(&defaultOpts, flagOpts)
-	parser.Command.Name = cmdpkg.ProgramName
+	parser.Command.Name = cmd.ProgramName
 	parser.ShortDescription = "System and service manager"
-	parser.LongDescription = cmdpkg.ApplyPersonality(HelpHeader)
+	parser.LongDescription = applyPersonality(HelpHeader)
 
 	// Add --help like what go-flags would do for us, but hidden
 	addHelp(parser)
@@ -189,7 +189,7 @@ func Parser(cli *client.Client) *flags.Parser {
 		} else {
 			target = parser.Command
 		}
-		cmd, err := target.AddCommand(c.Name, cmdpkg.ApplyPersonality(c.Summary), cmdpkg.ApplyPersonality(strings.TrimSpace(c.Description)), obj)
+		cmd, err := target.AddCommand(c.Name, applyPersonality(c.Summary), applyPersonality(strings.TrimSpace(c.Description)), obj)
 		if err != nil {
 			logger.Panicf("internal error: cannot add command %q: %v", c.Name, err)
 		}
@@ -200,9 +200,9 @@ func Parser(cli *client.Client) *flags.Parser {
 		positionalHelp := map[string]string{}
 		for specifier, help := range c.ArgsHelp {
 			if flagRegexp.MatchString(specifier) {
-				flagHelp[specifier] = cmdpkg.ApplyPersonality(help)
+				flagHelp[specifier] = applyPersonality(help)
 			} else if positionalRegexp.MatchString(specifier) {
-				positionalHelp[specifier] = cmdpkg.ApplyPersonality(help)
+				positionalHelp[specifier] = applyPersonality(help)
 			} else {
 				logger.Panicf("internal error: invalid help specifier from %q: %q", c.Name, specifier)
 			}
@@ -216,10 +216,10 @@ func Parser(cli *client.Client) *flags.Parser {
 		for _, opt := range opts {
 			if description, ok := flagHelp["--"+opt.LongName]; ok {
 				lintDesc(c.Name, opt.LongName, description, opt.Description)
-				opt.Description = cmdpkg.ApplyPersonality(description)
+				opt.Description = applyPersonality(description)
 			} else if description, ok := flagHelp["-"+string(opt.ShortName)]; ok {
 				lintDesc(c.Name, string(opt.ShortName), description, opt.Description)
-				opt.Description = cmdpkg.ApplyPersonality(description)
+				opt.Description = applyPersonality(description)
 			} else if !opt.Hidden {
 				logger.Panicf("internal error: %q missing description for %q", c.Name, opt)
 			}
@@ -235,6 +235,15 @@ func Parser(cli *client.Client) *flags.Parser {
 		}
 	}
 	return parser
+}
+
+func applyPersonality(s string) string {
+	r := strings.NewReplacer(
+		"{{.ProgramName}}", cmd.ProgramName,
+		"{{.DisplayName}}", cmd.DisplayName,
+		"{{.DefaultDir}}", cmd.DefaultDir,
+	)
+	return r.Replace(s)
 }
 
 var (
@@ -276,7 +285,7 @@ func Run(options *RunOptions) error {
 
 	log := options.Logger
 	if log == nil {
-		log = logger.New(os.Stderr, fmt.Sprintf("[%s] ", cmdpkg.ProgramName))
+		log = logger.New(os.Stderr, fmt.Sprintf("[%s] ", cmd.ProgramName))
 	}
 	logger.SetLogger(log)
 
@@ -303,11 +312,11 @@ func Run(options *RunOptions) error {
 				return nil
 			case flags.ErrUnknownCommand:
 				sub := os.Args[1]
-				sug := cmdpkg.ProgramName + " help"
+				sug := cmd.ProgramName + " help"
 				if len(xtra) > 0 {
 					sub = xtra[0]
 					if x := parser.Command.Active; x != nil && x.Name != "help" {
-						sug = cmdpkg.ProgramName + " help " + x.Name
+						sug = cmd.ProgramName + " help " + x.Name
 					}
 				}
 				return fmt.Errorf("unknown command %q, see '%s'", sub, sug)
@@ -351,7 +360,7 @@ func errorToMessage(e error) (normalMessage string, err error) {
 		}
 	case client.ErrorKindSystemRestart:
 		isError = false
-		msg = fmt.Sprintf("%s is about to reboot the system", cmdpkg.DisplayName)
+		msg = fmt.Sprintf("%s is about to reboot the system", cmd.DisplayName)
 	case client.ErrorKindNoDefaultServices:
 		msg = "no default services"
 	default:
@@ -369,7 +378,7 @@ func errorToMessage(e error) (normalMessage string, err error) {
 func getEnvPaths() (pebbleDir string, socketPath string) {
 	pebbleDir = os.Getenv("PEBBLE")
 	if pebbleDir == "" {
-		pebbleDir = cmdpkg.DefaultDir
+		pebbleDir = cmd.DefaultDir
 	}
 	socketPath = os.Getenv("PEBBLE_SOCKET")
 	if socketPath == "" {
