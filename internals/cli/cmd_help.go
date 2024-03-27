@@ -240,7 +240,9 @@ func printHelpHeader() {
 
 func printHelpAllFooter() {
 	fmt.Fprintln(Stdout)
-	fmt.Fprintln(Stdout, applyPersonality(HelpFooter+"\n\n"+pebbleHelpAllFooter))
+	fmt.Fprintln(Stdout, applyPersonality(HelpFooter))
+	fmt.Fprintln(Stdout)
+	fmt.Fprintln(Stdout, applyPersonality(pebbleHelpAllFooter))
 }
 
 func printHelpFooter() {
