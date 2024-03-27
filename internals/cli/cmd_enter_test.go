@@ -143,6 +143,16 @@ func (s *PebbleSuite) TestEnterServicesNoRun(c *C) {
 	c.Check(exitCode, Equals, 1)
 }
 
+func (s *PebbleSuite) TestEnterExecNoVerbose(c *C) {
+	restore := fakeArgs("pebble", "enter", "--verbose", "exec", "date")
+	defer restore()
+
+	exitCode := cli.PebbleMain()
+	c.Check(s.Stderr(), Equals, "error: enter: cannot provide -v/--verbose before \"exec\" subcommand\n")
+	c.Check(s.Stdout(), Equals, "")
+	c.Check(exitCode, Equals, 1)
+}
+
 func (s *PebbleSuite) TestEnterExecListDir(c *C) {
 	files := []string{"foo", "bar", "baz"}
 	for _, file := range files {
