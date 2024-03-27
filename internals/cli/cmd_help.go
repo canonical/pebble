@@ -185,7 +185,11 @@ type HelpCategory struct {
 var HelpCategories = []HelpCategory{{
 	Label:       "Run",
 	Description: "run the service manager",
-	Commands:    []string{"run", "help", "version"},
+	Commands:    []string{"run"},
+}, {
+	Label:       "Info",
+	Description: "help and version information",
+	Commands:    []string{"help", "version"},
 }, {
 	Label:       "Plan",
 	Description: "view and change configuration",
