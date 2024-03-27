@@ -163,7 +163,7 @@ func Parser(cli *client.Client) *flags.Parser {
 	parser := flags.NewParser(&defaultOpts, flagOpts)
 	parser.Command.Name = cmd.ProgramName
 	parser.ShortDescription = "System and service manager"
-	parser.LongDescription = applyPersonality(longPebbleDescription)
+	parser.LongDescription = applyPersonality(HelpHeader)
 
 	// Add --help like what go-flags would do for us, but hidden
 	addHelp(parser)

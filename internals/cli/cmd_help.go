@@ -213,15 +213,14 @@ var HelpCategories = []HelpCategory{{
 }}
 
 var (
-	longPebbleDescription = strings.TrimSpace(`
+	HelpHeader = strings.TrimSpace(`
 {{.DisplayName}} lets you control services and perform management actions on
 the system that is running them.
 `)
 	pebbleUsage               = "Usage: {{.ProgramName}} <command> [<options>...]"
 	pebbleHelpCategoriesIntro = "Commands can be classified as follows:"
 
-	// can be overridden in derivative projects
-	FooterHelp = strings.TrimSpace(`
+	HelpFooter = strings.TrimSpace(`
 Set the PEBBLE environment variable to override the configuration directory
 (which defaults to {{.DefaultDir}}). Set PEBBLE_SOCKET to override
 the unix socket used for the API (defaults to $PEBBLE/.pebble.socket).
@@ -232,7 +231,7 @@ the unix socket used for the API (defaults to $PEBBLE/.pebble.socket).
 )
 
 func printHelpHeader() {
-	fmt.Fprintln(Stdout, applyPersonality(longPebbleDescription))
+	fmt.Fprintln(Stdout, applyPersonality(HelpHeader))
 	fmt.Fprintln(Stdout)
 	fmt.Fprintln(Stdout, applyPersonality(pebbleUsage))
 	fmt.Fprintln(Stdout)
@@ -241,7 +240,7 @@ func printHelpHeader() {
 
 func printHelpAllFooter() {
 	fmt.Fprintln(Stdout)
-	fmt.Fprintln(Stdout, applyPersonality(FooterHelp+"\n\n"+pebbleHelpAllFooter))
+	fmt.Fprintln(Stdout, applyPersonality(HelpFooter+"\n\n"+pebbleHelpAllFooter))
 }
 
 func printHelpFooter() {
