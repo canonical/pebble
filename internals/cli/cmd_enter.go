@@ -117,8 +117,8 @@ func (cmd *cmdEnter) Execute(args []string) error {
 	runCmd := cmdRun{
 		sharedRunEnterOpts: cmd.sharedRunEnterOpts,
 		client:             cmd.client,
-		socketPath:         cmd.socketPath,
 		pebbleDir:          cmd.pebbleDir,
+		socketPath:         cmd.socketPath,
 	}
 
 	if len(cmd.Positional.Cmd) == 0 {
