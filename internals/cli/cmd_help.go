@@ -231,23 +231,23 @@ the unix socket used for the API (defaults to $PEBBLE/.pebble.socket).
 )
 
 func printHelpHeader() {
-	fmt.Fprintln(Stdout, applyPersonality(HelpHeader))
+	fmt.Fprintln(Stdout, cmdpkg.ApplyPersonality(HelpHeader))
 	fmt.Fprintln(Stdout)
-	fmt.Fprintln(Stdout, applyPersonality(pebbleUsage))
+	fmt.Fprintln(Stdout, cmdpkg.ApplyPersonality(pebbleUsage))
 	fmt.Fprintln(Stdout)
-	fmt.Fprintln(Stdout, applyPersonality(pebbleHelpCategoriesIntro))
+	fmt.Fprintln(Stdout, cmdpkg.ApplyPersonality(pebbleHelpCategoriesIntro))
 }
 
 func printHelpAllFooter() {
 	fmt.Fprintln(Stdout)
-	fmt.Fprintln(Stdout, applyPersonality(HelpFooter))
+	fmt.Fprintln(Stdout, cmdpkg.ApplyPersonality(HelpFooter))
 	fmt.Fprintln(Stdout)
-	fmt.Fprintln(Stdout, applyPersonality(pebbleHelpAllFooter))
+	fmt.Fprintln(Stdout, cmdpkg.ApplyPersonality(pebbleHelpAllFooter))
 }
 
 func printHelpFooter() {
 	printHelpAllFooter()
-	fmt.Fprintln(Stdout, applyPersonality(pebbleHelpFooter))
+	fmt.Fprintln(Stdout, cmdpkg.ApplyPersonality(pebbleHelpFooter))
 }
 
 // this is called when the Execute returns a flags.Error with ErrCommandRequired
