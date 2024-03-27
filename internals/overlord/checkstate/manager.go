@@ -219,27 +219,40 @@ func (c *checkData) runCheck() {
 	// Run the check with a timeout.
 	ctx, cancel := context.WithTimeout(c.ctx, c.config.Timeout.Value)
 	defer cancel()
-	err := c.checker.check(ctx)
 
-	// Lock while we update state, as the manager may access these too.
+	err := c.checker.check(ctx)
+	if err != nil {
+		if ctx.Err() == context.Canceled {
+			// Check was stopped, don't trigger failure action.
+			logger.Debugf("Check %q canceled in flight", c.config.Name)
+			return
+		}
+		// Track failure, run failure action if "failures" threshold was hit.
+		if c.recordFailure(err) {
+			c.action(c.config.Name)
+		}
+		return
+	}
+
+	c.recordSuccess()
+}
+
+// recordSuccess records a check succeeding and reset the failure count.
+func (c *checkData) recordSuccess() {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
-	if err == nil {
-		// Successful check
-		c.lastErr = nil
-		c.failures = 0
-		c.actionRan = false
-		return
-	}
+	c.lastErr = nil
+	c.failures = 0
+	c.actionRan = false
+}
 
-	if ctx.Err() == context.Canceled {
-		// Check was stopped, don't trigger failure action.
-		logger.Debugf("Check %q canceled in flight", c.config.Name)
-		return
-	}
+// recordFailure records a check failure and reports whether the check-failure
+// action should be triggered.
+func (c *checkData) recordFailure(err error) bool {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
 
-	// Track failure, run failure action if "failures" threshold was hit.
 	c.lastErr = err
 	c.failures++
 	logger.Noticef("Check %q failure %d (threshold %d): %v",
@@ -247,9 +260,10 @@ func (c *checkData) runCheck() {
 	if !c.actionRan && c.failures >= c.config.Threshold {
 		logger.Noticef("Check %q failure threshold %d hit, triggering action",
 			c.config.Name, c.config.Threshold)
-		c.action(c.config.Name)
 		c.actionRan = true
+		return true
 	}
+	return false
 }
 
 // info returns user-facing check information for use in Checks (and tests).
