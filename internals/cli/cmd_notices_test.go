@@ -59,7 +59,7 @@ func (s *PebbleSuite) TestNotices(c *C) {
 		]}`)
 	})
 
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"notices", "--abs-time"})
+	rest, err := cli.ParserForTest().ParseArgs([]string{"notices", "--abs-time"})
 	c.Assert(err, IsNil)
 	c.Check(rest, HasLen, 0)
 	c.Check(s.Stdout(), Equals, `
@@ -102,7 +102,7 @@ func (s *PebbleSuite) TestNoticesFiltersUsers(c *C) {
 		]}`)
 	})
 
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{
+	rest, err := cli.ParserForTest().ParseArgs([]string{
 		"notices", "--abs-time", "--users", "all", "--type", "custom", "--key", "a.b/c", "--type", "warning"})
 	c.Assert(err, IsNil)
 	c.Check(rest, HasLen, 0)
@@ -145,7 +145,7 @@ func (s *PebbleSuite) TestNoticesFiltersUID(c *C) {
 		]}`)
 	})
 
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{
+	rest, err := cli.ParserForTest().ParseArgs([]string{
 		"notices", "--abs-time", "--uid", "1000", "--type", "custom", "--key", "a.b/c", "--type", "warning"})
 	c.Assert(err, IsNil)
 	c.Check(rest, HasLen, 0)
@@ -191,7 +191,7 @@ func (s *PebbleSuite) TestNoticesAfter(c *C) {
 		"notices-last-okayed": time.Date(2023, 8, 4, 1, 2, 3, 0, time.UTC),
 	})
 
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"notices", "--abs-time"})
+	rest, err := cli.ParserForTest().ParseArgs([]string{"notices", "--abs-time"})
 	c.Assert(err, IsNil)
 	c.Check(rest, HasLen, 0)
 	c.Check(s.Stdout(), Equals, `
@@ -218,7 +218,7 @@ func (s *PebbleSuite) TestNoticesNoNotices(c *C) {
 			"result": []}`)
 	})
 
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"notices"})
+	rest, err := cli.ParserForTest().ParseArgs([]string{"notices"})
 	c.Assert(err, IsNil)
 	c.Check(rest, HasLen, 0)
 	c.Check(s.Stdout(), Equals, "")
@@ -251,7 +251,7 @@ func (s *PebbleSuite) TestNoticesTimeout(c *C) {
 		]}`)
 	})
 
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{
+	rest, err := cli.ParserForTest().ParseArgs([]string{
 		"notices", "--abs-time", "--timeout", "1s"})
 	c.Assert(err, IsNil)
 	c.Check(rest, HasLen, 0)
@@ -279,7 +279,7 @@ func (s *PebbleSuite) TestNoticesNoNoticesTimeout(c *C) {
 			"result": []}`)
 	})
 
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"notices", "--timeout", "1s"})
+	rest, err := cli.ParserForTest().ParseArgs([]string{"notices", "--timeout", "1s"})
 	c.Assert(err, IsNil)
 	c.Check(rest, HasLen, 0)
 	c.Check(s.Stdout(), Equals, "")

@@ -59,7 +59,7 @@ func (s *PebbleSuite) TestStop(c *check.C) {
  }`)
 	})
 
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"stop", "srv1", "srv2"})
+	rest, err := cli.ParserForTest().ParseArgs([]string{"stop", "srv1", "srv2"})
 	c.Assert(err, check.IsNil)
 	c.Assert(rest, check.HasLen, 0)
 	c.Check(s.Stdout(), check.Equals, "")
@@ -80,7 +80,7 @@ func (s *PebbleSuite) TestStopFails(c *check.C) {
 		fmt.Fprintf(w, `{"type": "error", "result": {"message": "could not foo"}}`)
 	})
 
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"stop", "srv1", "srv3"})
+	rest, err := cli.ParserForTest().ParseArgs([]string{"stop", "srv1", "srv3"})
 	c.Assert(err, check.ErrorMatches, "could not foo")
 	c.Assert(rest, check.HasLen, 1)
 	c.Check(s.Stdout(), check.Equals, "")
@@ -106,7 +106,7 @@ func (s *PebbleSuite) TestStopNoWait(c *check.C) {
  }`)
 	})
 
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"stop", "srv1", "srv2", "--no-wait"})
+	rest, err := cli.ParserForTest().ParseArgs([]string{"stop", "srv1", "srv2", "--no-wait"})
 	c.Assert(err, check.IsNil)
 	c.Assert(rest, check.HasLen, 0)
 	c.Check(s.Stdout(), check.Equals, "46\n")
@@ -137,7 +137,7 @@ func (s *PebbleSuite) TestStopFailsGetChange(c *check.C) {
  }`)
 	})
 
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"stop", "srv1", "srv2"})
+	rest, err := cli.ParserForTest().ParseArgs([]string{"stop", "srv1", "srv2"})
 	c.Assert(err, check.ErrorMatches, "could not bar")
 	c.Assert(rest, check.HasLen, 1)
 	c.Check(s.Stdout(), check.Equals, "")

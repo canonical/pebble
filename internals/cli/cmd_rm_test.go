@@ -25,7 +25,7 @@ import (
 )
 
 func (s *PebbleSuite) TestRmExtraArgs(c *C) {
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"rm", "extra", "args"})
+	rest, err := cli.ParserForTest().ParseArgs([]string{"rm", "extra", "args"})
 	c.Assert(err, Equals, cli.ErrExtraArgs)
 	c.Assert(rest, HasLen, 1)
 	c.Check(s.Stdout(), Equals, "")
@@ -51,7 +51,7 @@ func (s *PebbleSuite) TestRm(c *C) {
 		fmt.Fprintln(w, `{"type": "sync", "result": [{"path": "/foo/bar.baz"}]}`)
 	})
 
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"rm", "/foo/bar.baz"})
+	rest, err := cli.ParserForTest().ParseArgs([]string{"rm", "/foo/bar.baz"})
 	c.Assert(err, IsNil)
 	c.Assert(rest, HasLen, 0)
 	c.Check(s.Stdout(), Equals, "")
@@ -77,7 +77,7 @@ func (s *PebbleSuite) TestRmRecursive(c *C) {
 		fmt.Fprintln(w, `{"type": "sync", "result": [{"path": "/foo/bar"}]}`)
 	})
 
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"rm", "-r", "/foo/bar"})
+	rest, err := cli.ParserForTest().ParseArgs([]string{"rm", "-r", "/foo/bar"})
 	c.Assert(err, IsNil)
 	c.Assert(rest, HasLen, 0)
 	c.Check(s.Stdout(), Equals, "")
@@ -103,7 +103,7 @@ func (s *PebbleSuite) TestRmFails(c *C) {
 		fmt.Fprintln(w, `{"type": "error", "result": {"message": "could not foo"}}`)
 	})
 
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"rm", "/foo/bar.baz"})
+	rest, err := cli.ParserForTest().ParseArgs([]string{"rm", "/foo/bar.baz"})
 	c.Assert(err, ErrorMatches, "could not foo")
 	c.Assert(rest, HasLen, 1)
 	c.Check(s.Stdout(), Equals, "")
@@ -139,7 +139,7 @@ func (s *PebbleSuite) TestRmFailsOnPath(c *C) {
 		}`)
 	})
 
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"rm", "-r", "/foo/bar"})
+	rest, err := cli.ParserForTest().ParseArgs([]string{"rm", "-r", "/foo/bar"})
 
 	clientErr, ok := err.(*client.Error)
 	c.Assert(ok, Equals, true)

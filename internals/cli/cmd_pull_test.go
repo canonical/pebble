@@ -70,7 +70,7 @@ func (s *PebbleSuite) TestPull(c *C) {
 	filePath := filepath.Join(tempDir, "file.dat")
 
 	args := []string{"pull", "/foo/bar.dat", filePath}
-	rest, err := cli.Parser(cli.Client()).ParseArgs(args)
+	rest, err := cli.ParserForTest().ParseArgs(args)
 	c.Assert(err, IsNil)
 	c.Assert(rest, HasLen, 0)
 	c.Check(s.Stdout(), Equals, "")
@@ -83,7 +83,7 @@ func (s *PebbleSuite) TestPull(c *C) {
 
 func (s *PebbleSuite) TestPullFailsExtraArgs(c *C) {
 	args := []string{"pull", "/foo/bar.dat", "extra", "args"}
-	rest, err := cli.Parser(cli.Client()).ParseArgs(args)
+	rest, err := cli.ParserForTest().ParseArgs(args)
 	c.Assert(err, Equals, cli.ErrExtraArgs)
 	c.Assert(rest, HasLen, 1)
 	c.Check(s.Stdout(), Equals, "")
@@ -135,7 +135,7 @@ func (s *PebbleSuite) TestPullFailsAPI(c *C) {
 	filePath := filepath.Join(tempDir, "file.dat")
 
 	args := []string{"pull", "/foo/bar.dat", filePath}
-	rest, err := cli.Parser(cli.Client()).ParseArgs(args)
+	rest, err := cli.ParserForTest().ParseArgs(args)
 
 	clientErr, ok := err.(*client.Error)
 	c.Assert(ok, Equals, true)
@@ -193,7 +193,7 @@ func (s *PebbleSuite) TestPullFailsCreateFile(c *C) {
 	})
 
 	args := []string{"pull", "/foo/bar.dat", ""}
-	rest, err := cli.Parser(cli.Client()).ParseArgs(args)
+	rest, err := cli.ParserForTest().ParseArgs(args)
 	isErrNotExist := errors.Is(err, os.ErrNotExist)
 	c.Assert(isErrNotExist, Equals, true)
 

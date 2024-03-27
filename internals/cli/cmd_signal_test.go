@@ -39,7 +39,7 @@ func (s *PebbleSuite) TestSignalShortName(c *check.C) {
 }`)
 	})
 
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"signal", "HUP", "s1"})
+	rest, err := cli.ParserForTest().ParseArgs([]string{"signal", "HUP", "s1"})
 	c.Assert(err, check.IsNil)
 	c.Assert(rest, check.HasLen, 0)
 }
@@ -60,7 +60,7 @@ func (s *PebbleSuite) TestSignalFullName(c *check.C) {
 }`)
 	})
 
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"signal", "SIGHUP", "s2"})
+	rest, err := cli.ParserForTest().ParseArgs([]string{"signal", "SIGHUP", "s2"})
 	c.Assert(err, check.IsNil)
 	c.Assert(rest, check.HasLen, 0)
 }
@@ -81,13 +81,13 @@ func (s *PebbleSuite) TestSignalMultipleServices(c *check.C) {
 }`)
 	})
 
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"signal", "SIGHUP", "s1", "s2"})
+	rest, err := cli.ParserForTest().ParseArgs([]string{"signal", "SIGHUP", "s1", "s2"})
 	c.Assert(err, check.IsNil)
 	c.Assert(rest, check.HasLen, 0)
 }
 
 func (s *PebbleSuite) TestSignalErrorLowercase(c *check.C) {
-	_, err := cli.Parser(cli.Client()).ParseArgs([]string{"signal", "hup", "s1"})
+	_, err := cli.ParserForTest().ParseArgs([]string{"signal", "hup", "s1"})
 	c.Assert(err, check.ErrorMatches, "signal name must be uppercase, for example HUP")
 }
 
@@ -108,6 +108,6 @@ func (s *PebbleSuite) TestSignalServerError(c *check.C) {
 		}`)
 	})
 
-	_, err := cli.Parser(cli.Client()).ParseArgs([]string{"signal", "HUP", "s1"})
+	_, err := cli.ParserForTest().ParseArgs([]string{"signal", "HUP", "s1"})
 	c.Assert(err, check.ErrorMatches, `invalid signal name "SIGFOO"`)
 }

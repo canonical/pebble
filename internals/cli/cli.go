@@ -58,8 +58,10 @@ var ErrExtraArgs = fmt.Errorf("too many arguments for command")
 
 // CmdOptions exposes state made accessible during command execution.
 type CmdOptions struct {
-	Client *client.Client
-	Parser *flags.Parser
+	Client     *client.Client
+	Parser     *flags.Parser
+	PebbleDir  string
+	SocketPath string
 }
 
 // CmdInfo holds information needed by the CLI to execute commands and
@@ -152,14 +154,20 @@ type defaultOptions struct {
 	Version func() `long:"version" hidden:"yes" description:"Print the version and exit"`
 }
 
+type ParserOptions struct {
+	Client     *client.Client
+	PebbleDir  string
+	SocketPath string
+}
+
 // Parser creates and populates a fresh parser.
 // Since commands have local state a fresh parser is required to isolate tests
 // from each other.
-func Parser(cli *client.Client) *flags.Parser {
+func Parser(opts *ParserOptions) *flags.Parser {
 	// Implement --version by default on every command
 	defaultOpts := defaultOptions{
 		Version: func() {
-			printVersions(cli)
+			printVersions(opts.Client)
 			panic(&exitStatus{0})
 		},
 	}
@@ -186,7 +194,12 @@ func Parser(cli *client.Client) *flags.Parser {
 
 	// Add all commands
 	for _, c := range commands {
-		obj := c.New(&CmdOptions{Client: cli, Parser: parser})
+		obj := c.New(&CmdOptions{
+			Client:     opts.Client,
+			Parser:     parser,
+			PebbleDir:  opts.PebbleDir,
+			SocketPath: opts.SocketPath,
+		})
 
 		var target *flags.Command
 		if c.Debug {
@@ -266,8 +279,11 @@ func (e *exitStatus) Error() string {
 }
 
 type RunOptions struct {
+	// when starting a daemon ("pebble run"), the ClientConfig.Socket value
+	// is also used as the Unix domain socket path for the listening socket
 	ClientConfig *client.Config
 	Logger       logger.Logger
+	PebbleDir    string
 }
 
 func Run(options *RunOptions) error {
@@ -300,7 +316,15 @@ func Run(options *RunOptions) error {
 		return fmt.Errorf("cannot create client: %v", err)
 	}
 
-	parser := Parser(cli)
+	pebbleDir := options.PebbleDir
+	if pebbleDir == "" {
+		pebbleDir, _ = getEnvPaths()
+	}
+	parser := Parser(&ParserOptions{
+		Client:     cli,
+		PebbleDir:  pebbleDir,
+		SocketPath: config.Socket,
+	})
 	xtra, err := parser.Parse()
 	if err != nil {
 		if e, ok := err.(*flags.Error); ok {
@@ -403,12 +427,11 @@ type fullCLIState struct {
 }
 
 // TODO(benhoyt): add file locking to properly handle multi-user access
-func loadCLIState() (*cliState, error) {
+func loadCLIState(socketPath string) (*cliState, error) {
 	fullState, err := loadFullCLIState()
 	if err != nil {
 		return nil, err
 	}
-	_, socketPath := getEnvPaths()
 	st, ok := fullState.Pebble[socketPath]
 	if !ok {
 		return &cliState{}, nil
@@ -437,13 +460,12 @@ func loadFullCLIState() (*fullCLIState, error) {
 	return &fullState, nil
 }
 
-func saveCLIState(state *cliState) error {
+func saveCLIState(socketPath string, state *cliState) error {
 	fullState, err := loadFullCLIState()
 	if err != nil {
 		return err
 	}
 
-	_, socketPath := getEnvPaths()
 	fullState.Pebble[socketPath] = state
 
 	data, err := json.Marshal(fullState)

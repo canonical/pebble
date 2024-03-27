@@ -17,20 +17,40 @@ package cli
 import (
 	"fmt"
 
+	"github.com/canonical/go-flags"
+
 	"github.com/canonical/pebble/client"
 )
 
 func RunMain() error {
-	_, ClientConfig.Socket = getEnvPaths()
-	return Run(&RunOptions{
-		ClientConfig: ClientConfig,
-	})
+	return Run(RunOptionsForTest())
 }
 
-var ClientConfig = &client.Config{}
+func RunOptionsForTest() *RunOptions {
+	pebbleDir, _ := getEnvPaths()
+	return &RunOptions{
+		ClientConfig: newClientConfig(),
+		PebbleDir:    pebbleDir,
+	}
+}
+
+var clientConfigBaseURL string
+
+func FakeClientConfigBaseURL(baseURL string) (restore func()) {
+	clientConfigBaseURL = baseURL
+	return func() {
+		clientConfigBaseURL = ""
+	}
+}
+
+func newClientConfig() *client.Config {
+	config := client.Config{BaseURL: clientConfigBaseURL}
+	_, config.Socket = getEnvPaths()
+	return &config
+}
 
 func Client() *client.Client {
-	cli, err := client.New(ClientConfig)
+	cli, err := client.New(newClientConfig())
 	if err != nil {
 		panic("cannot create client:" + err.Error())
 	}
@@ -88,4 +108,14 @@ func PebbleMain() (exitCode int) {
 		osExit(1)
 	}
 	return
+}
+
+func ParserForTest() *flags.Parser {
+	runOpts := RunOptionsForTest()
+
+	return Parser(&ParserOptions{
+		Client:     Client(),
+		SocketPath: runOpts.ClientConfig.Socket,
+		PebbleDir:  runOpts.PebbleDir,
+	})
 }

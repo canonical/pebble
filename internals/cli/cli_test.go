@@ -98,8 +98,7 @@ func (s *BasePebbleSuite) ResetStdStreams() {
 func (s *BasePebbleSuite) RedirectClientToTestServer(handler func(http.ResponseWriter, *http.Request)) {
 	server := httptest.NewServer(http.HandlerFunc(handler))
 	s.BaseTest.AddCleanup(func() { server.Close() })
-	cli.ClientConfig.BaseURL = server.URL
-	s.BaseTest.AddCleanup(func() { cli.ClientConfig.BaseURL = "" })
+	s.BaseTest.AddCleanup(cli.FakeClientConfigBaseURL(server.URL))
 }
 
 // DecodedRequestBody returns the JSON-decoded body of the request.

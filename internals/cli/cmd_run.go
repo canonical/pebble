@@ -64,6 +64,9 @@ var sharedRunEnterArgsHelp = map[string]string{
 type cmdRun struct {
 	client *client.Client
 
+	socketPath string
+	pebbleDir  string
+
 	sharedRunEnterOpts
 }
 
@@ -74,7 +77,11 @@ func init() {
 		Description: cmdRunDescription,
 		ArgsHelp:    sharedRunEnterArgsHelp,
 		New: func(opts *CmdOptions) flags.Commander {
-			return &cmdRun{client: opts.Client}
+			return &cmdRun{
+				client:     opts.Client,
+				socketPath: opts.SocketPath,
+				pebbleDir:  opts.PebbleDir,
+			}
 		},
 	})
 }
@@ -162,21 +169,20 @@ func runDaemon(rcmd *cmdRun, ch chan os.Signal, ready chan<- func()) error {
 
 	t0 := time.Now().Truncate(time.Millisecond)
 
-	pebbleDir, socketPath := getEnvPaths()
 	if rcmd.CreateDirs {
-		err := os.MkdirAll(pebbleDir, 0755)
+		err := os.MkdirAll(rcmd.pebbleDir, 0755)
 		if err != nil {
 			return err
 		}
 	}
-	err = maybeCopyPebbleDir(pebbleDir, getCopySource())
+	err = maybeCopyPebbleDir(rcmd.pebbleDir, getCopySource())
 	if err != nil {
 		return err
 	}
 
 	dopts := daemon.Options{
-		Dir:        pebbleDir,
-		SocketPath: socketPath,
+		Dir:        rcmd.pebbleDir,
+		SocketPath: rcmd.socketPath,
 	}
 	if rcmd.Verbose {
 		dopts.ServiceOutput = os.Stdout

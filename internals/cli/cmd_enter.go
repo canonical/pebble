@@ -50,6 +50,9 @@ type cmdEnter struct {
 	client *client.Client
 	parser *flags.Parser
 
+	pebbleDir  string
+	socketPath string
+
 	sharedRunEnterOpts
 	Run        bool `long:"run"`
 	Positional struct {
@@ -63,7 +66,12 @@ func init() {
 		Summary:     cmdEnterSummary,
 		Description: cmdEnterDescription,
 		New: func(opts *CmdOptions) flags.Commander {
-			return &cmdEnter{client: opts.Client, parser: opts.Parser}
+			return &cmdEnter{
+				client:     opts.Client,
+				parser:     opts.Parser,
+				pebbleDir:  opts.PebbleDir,
+				socketPath: opts.SocketPath,
+			}
 		},
 		ArgsHelp: merge(sharedRunEnterArgsHelp, map[string]string{
 			"--run": "Start default services before executing subcommand",
@@ -109,6 +117,8 @@ func (cmd *cmdEnter) Execute(args []string) error {
 	runCmd := cmdRun{
 		sharedRunEnterOpts: cmd.sharedRunEnterOpts,
 		client:             cmd.client,
+		pebbleDir:          cmd.pebbleDir,
+		socketPath:         cmd.socketPath,
 	}
 
 	if len(cmd.Positional.Cmd) == 0 {
@@ -123,7 +133,11 @@ func (cmd *cmdEnter) Execute(args []string) error {
 		extraArgs []string
 	)
 
-	parser := Parser(cmd.client)
+	parser := Parser(&ParserOptions{
+		Client:     cmd.client,
+		PebbleDir:  cmd.pebbleDir,
+		SocketPath: cmd.socketPath,
+	})
 	parser.CommandHandler = func(c flags.Commander, a []string) error {
 		commander = c
 		extraArgs = a
