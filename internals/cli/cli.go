@@ -280,7 +280,7 @@ func (e *exitStatus) Error() string {
 
 type RunOptions struct {
 	// when starting a daemon ("pebble run"), the ClientConfig.Socket value
-	// is also used as the Unix domain socket path for the Pebble socket
+	// is also used as the Unix domain socket path for the listening socket
 	ClientConfig *client.Config
 	Logger       logger.Logger
 	PebbleDir    string
