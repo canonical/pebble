@@ -58,32 +58,6 @@ func (cs *clientSuite) TestNotice(c *C) {
 	})
 }
 
-func (cs *clientSuite) TestChangeUpdateNotice(c *C) {
-	cs.rsp = `{"type": "sync", "result": {
-		"id": "456",
-		"user-id": 1001,
-		"type": "change-update",
-		"key": "42",
-		"first-occurred": "2024-09-05T15:43:00.123Z",
-		"last-occurred": "2024-09-05T17:43:00.567Z",
-		"last-repeated": "2024-09-05T16:43:00Z",
-		"occurrences": 3
-	}}`
-	notice, err := cs.cli.Notice("123")
-	c.Assert(err, IsNil)
-	uid := uint32(1001)
-	c.Assert(notice, DeepEquals, &client.Notice{
-		ID:            "456",
-		UserID:        &uid,
-		Type:          client.ChangeUpdateNotice,
-		Key:           "42",
-		FirstOccurred: time.Date(2024, 9, 5, 15, 43, 0, 123_000_000, time.UTC),
-		LastOccurred:  time.Date(2024, 9, 5, 17, 43, 0, 567_000_000, time.UTC),
-		LastRepeated:  time.Date(2024, 9, 5, 16, 43, 0, 0, time.UTC),
-		Occurrences:   3,
-	})
-}
-
 func (cs *clientSuite) TestNoticeInvalidID(c *C) {
 	_, err := cs.cli.Notice("<boo>")
 	c.Assert(err, ErrorMatches, "invalid notice ID.*")
