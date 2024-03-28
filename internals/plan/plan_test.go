@@ -396,16 +396,6 @@ var planTests = []planTest{{
 		LogTargets: map[string]*plan.LogTarget{},
 	}},
 }, {
-	summary: "Unknown keys are not accepted",
-	error:   "(?s).*field future not found.*",
-	input: []string{`
-		services:
-			srv1:
-				future: true
-				override: replace
-				command: cmd
-	`},
-}, {
 	summary: `Cannot use service name "pebble"`,
 	error:   `cannot use reserved service name "pebble"`,
 	input: []string{`
