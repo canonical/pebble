@@ -17,6 +17,7 @@ package daemon
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -213,7 +214,15 @@ func (s *healthSuite) TestChecksError(c *C) {
 //
 // - https://github.com/canonical/pebble/issues/366
 // - https://bugs.launchpad.net/juju/+bug/2052517
-func (s *apiSuite) TestStateLockNotHeld(c *C) {
+func (s *apiSuite) TestHealthStateLockNotHeldSuccess(c *C) {
+	s.testHealthStateLockNotHeld(c, "", false)
+}
+
+func (s *apiSuite) TestHealthStateLockNotHeldError(c *C) {
+	s.testHealthStateLockNotHeld(c, "badlevel", true)
+}
+
+func (s *apiSuite) testHealthStateLockNotHeld(c *C, level string, expectErr bool) {
 	daemonOpts := &Options{
 		Dir:        s.pebbleDir,
 		SocketPath: s.pebbleDir + ".pebble.socket",
@@ -226,35 +235,45 @@ func (s *apiSuite) TestStateLockNotHeld(c *C) {
 		c.Assert(daemon.Stop(nil), IsNil)
 	}()
 
-	// Wait for lock count to stabilise (daemon starts goroutine(s) that use
-	// it on startup). Normally it will stabilise almost instantly.
-	prevCount := daemon.state.LockCount()
-	for i := 0; i < 50; i++ {
-		if i == 49 {
-			c.Fatal("timed out waiting for lock count to stabilise")
+	// Acquire state lock so that the health endpoint can't.
+	daemon.state.Lock()
+	defer daemon.state.Unlock()
+
+	// Call health check endpoint in a goroutine so we can have a timeout.
+	errCh := make(chan error)
+	go func() (err error) {
+		defer func() {
+			errCh <- err
+		}()
+
+		// Use real HTTP client so we're exercising the full ServeHTTP flow.
+		// Could use daemon.serve.Handler directly, but this seems even better.
+		pebble, err := client.New(&client.Config{Socket: daemonOpts.SocketPath})
+		if err != nil {
+			return err
 		}
-		time.Sleep(100 * time.Millisecond)
-		newCount := daemon.state.LockCount()
-		if newCount == prevCount {
-			break
+		healthy, err := pebble.Health(&client.HealthOptions{
+			Level: client.CheckLevel(level),
+		})
+		if err != nil {
+			return err
 		}
-		prevCount = newCount
+		if !healthy {
+			return fmt.Errorf("/v1/health returned false")
+		}
+		return nil
+	}()
+
+	select {
+	case healthErr := <-errCh:
+		if expectErr {
+			c.Assert(healthErr, NotNil)
+		} else {
+			c.Assert(healthErr, IsNil)
+		}
+	case <-time.After(5 * time.Second):
+		c.Fatalf("timed out waiting for /v1/health - it must be trying to acquire the state lock")
 	}
-
-	// Use real HTTP client so we're exercising the full ServeHTTP flow.
-	// Could use daemon.serve.Handler directly, but this seems even better.
-	pebble, err := client.New(&client.Config{
-		Socket: daemonOpts.SocketPath,
-	})
-	c.Assert(err, IsNil)
-
-	// Ensure lock count doesn't change during GET /v1/health request.
-	before := daemon.state.LockCount()
-	healthy, err := pebble.Health(&client.HealthOptions{})
-	c.Assert(err, IsNil)
-	c.Assert(healthy, Equals, true)
-	after := daemon.state.LockCount()
-	c.Assert(after, Equals, before)
 }
 
 func serveHealth(c *C, method, url string, body io.Reader) (int, map[string]interface{}) {
