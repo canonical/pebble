@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"os/user"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -350,21 +351,11 @@ func logError(err error) {
 // command. It assumes the caller has ensures the service is in a valid state,
 // and it sets s.cmd and other relevant fields.
 func (s *serviceData) startInternal() error {
-	base, extra, err := s.config.ParseCommand()
-	if err != nil {
-		return err
-	}
-	args := append(base, extra...)
-	s.cmd = exec.Command(args[0], args[1:]...)
-	s.cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-
 	// Copy environment to avoid updating original.
-	environment := make(map[string]string)
+	serviceEnvironment := make(map[string]string)
 	for k, v := range s.config.Environment {
-		environment[k] = v
+		serviceEnvironment[k] = v
 	}
-
-	s.cmd.Dir = s.config.WorkingDir
 
 	// Start as another user if specified in plan.
 	uid, gid, err := osutil.NormalizeUidGid(s.config.UserID, s.config.GroupID, s.config.User, s.config.Group)
@@ -384,26 +375,70 @@ func (s *serviceData) startInternal() error {
 		}
 
 		// Also set HOME and USER if not explicitly specified in config.
-		if environment["HOME"] == "" || environment["USER"] == "" {
+		if serviceEnvironment["HOME"] == "" || serviceEnvironment["USER"] == "" {
 			u, err := user.LookupId(strconv.Itoa(*uid))
 			if err != nil {
 				logger.Noticef("Cannot look up user %d: %v", *uid, err)
 			} else {
-				if environment["HOME"] == "" {
-					environment["HOME"] = u.HomeDir
+				if serviceEnvironment["HOME"] == "" {
+					serviceEnvironment["HOME"] = u.HomeDir
 				}
-				if environment["USER"] == "" {
-					environment["USER"] = u.Username
+				if serviceEnvironment["USER"] == "" {
+					serviceEnvironment["USER"] = u.Username
 				}
 			}
 		}
 	}
 
-	// Pass service description's environment variables to child process.
-	s.cmd.Env = os.Environ()
-	for k, v := range environment {
-		s.cmd.Env = append(s.cmd.Env, k+"="+v)
+	// Get system environment variables for command expansion
+	getEnvironment := func(data []string, getkeyval func(item string) (key, val string)) map[string]string {
+		items := make(map[string]string)
+		for _, item := range data {
+			key, val := getkeyval(item)
+			items[key] = val
+		}
+		return items
 	}
+	environment := getEnvironment(os.Environ(), func(item string) (key, val string) {
+		splits := strings.Split(item, "=")
+		key = splits[0]
+		val = splits[1]
+		return
+	})
+
+	// Merge service description's environment variables to system environment variables.
+	for k, v := range serviceEnvironment {
+		environment[k] = v
+	}
+
+	// Assemble the overall environment variables.
+	var env []string
+	for k, v := range environment {
+		env = append(env, k+"="+v)
+	}
+
+	// Parse and obtain command tokens
+	base, extra, err := s.config.ParseCommand()
+	if err != nil {
+		return err
+	}
+	args := append(base, extra...)
+
+	// Replace environment variables in the command with its actual value
+	for i, v := range args {
+		if strings.HasPrefix(v, "$") {
+			s := strings.TrimLeft(v, "$")
+			s = strings.TrimLeft(s, "{")
+			s = strings.TrimRight(s, "}")
+			args[i] = environment[s]
+		}
+	}
+
+	// Execute command with expanded environment variables
+	s.cmd = exec.Command(args[0], args[1:]...)
+	s.cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	s.cmd.Dir = s.config.WorkingDir
+	s.cmd.Env = env
 
 	// Set up stdout and stderr to write to log ring buffer.
 	var outputIterator servicelog.Iterator
