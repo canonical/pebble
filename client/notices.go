@@ -122,6 +122,10 @@ type Notice struct {
 type NoticeType string
 
 const (
+	// Recorded whenever a change is updated: when it is first spawned or its
+	// status was updated. The key for change-update notices is the change ID.
+	ChangeUpdateNotice NoticeType = "change-update"
+
 	// A custom notice reported via the Pebble client API or "pebble notify".
 	// The key and data fields are provided by the user. The key must be in
 	// the format "mydomain.io/mykey" to ensure well-namespaced notice keys.
