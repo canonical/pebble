@@ -28,7 +28,7 @@ import (
 
 func (cs *clientSuite) TestNotice(c *C) {
 	cs.rsp = `{"type": "sync", "result": {
-		"id":   "123",
+		"id": "123",
 		"user-id": 1000,
 		"type": "custom",
 		"key": "a.b/c",
