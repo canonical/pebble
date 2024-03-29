@@ -357,24 +357,15 @@ func (s *serviceData) startInternal() error {
 		serviceEnvironment[k] = v
 	}
 
-	// Start as another user if specified in plan.
+	// Get uid and gid to set user/group later.
 	uid, gid, err := osutil.NormalizeUidGid(s.config.UserID, s.config.GroupID, s.config.User, s.config.Group)
 	if err != nil {
 		return err
 	}
-	if uid != nil && gid != nil {
-		isCurrent, err := osutil.IsCurrent(*uid, *gid)
-		if err != nil {
-			logger.Debugf("Cannot determine if uid %d gid %d is current user", *uid, *gid)
-		}
-		if !isCurrent {
-			setCmdCredential(s.cmd, &syscall.Credential{
-				Uid: uint32(*uid),
-				Gid: uint32(*gid),
-			})
-		}
+	idsNotNil := (uid != nil && gid != nil)
 
-		// Also set HOME and USER if not explicitly specified in config.
+	// Also set HOME and USER if not explicitly specified in config.
+	if idsNotNil {
 		if serviceEnvironment["HOME"] == "" || serviceEnvironment["USER"] == "" {
 			u, err := user.LookupId(strconv.Itoa(*uid))
 			if err != nil {
@@ -390,7 +381,7 @@ func (s *serviceData) startInternal() error {
 		}
 	}
 
-	// Get system environment variables for command expansion
+	// Get system environment variables for command expansion.
 	getEnvironment := func(data []string, getkeyval func(item string) (key, val string)) map[string]string {
 		items := make(map[string]string)
 		for _, item := range data {
@@ -417,14 +408,14 @@ func (s *serviceData) startInternal() error {
 		env = append(env, k+"="+v)
 	}
 
-	// Parse and obtain command tokens
+	// Parse and obtain command tokens.
 	base, extra, err := s.config.ParseCommand()
 	if err != nil {
 		return err
 	}
 	args := append(base, extra...)
 
-	// Replace environment variables in the command with its actual value
+	// Expand environment variables in the command with its actual value.
 	for i, v := range args {
 		if strings.HasPrefix(v, "$") {
 			s := strings.TrimLeft(v, "$")
@@ -434,11 +425,25 @@ func (s *serviceData) startInternal() error {
 		}
 	}
 
-	// Execute command with expanded environment variables
+	// Execute command with expanded environment variables.
 	s.cmd = exec.Command(args[0], args[1:]...)
 	s.cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	s.cmd.Dir = s.config.WorkingDir
 	s.cmd.Env = env
+
+	// Start as another user if specified in plan.
+	if idsNotNil {
+		isCurrent, err := osutil.IsCurrent(*uid, *gid)
+		if err != nil {
+			logger.Debugf("Cannot determine if uid %d gid %d is current user", *uid, *gid)
+		}
+		if !isCurrent {
+			setCmdCredential(s.cmd, &syscall.Credential{
+				Uid: uint32(*uid),
+				Gid: uint32(*gid),
+			})
+		}
+	}
 
 	// Set up stdout and stderr to write to log ring buffer.
 	var outputIterator servicelog.Iterator
