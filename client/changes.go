@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"regexp"
 	"time"
 )
 
@@ -86,8 +87,26 @@ type changeAndData struct {
 	Data map[string]*json.RawMessage `json:"data"`
 }
 
+func validateChangeID(id string) error {
+	// This is used to ensure we send a well-formed change ID in the URL path.
+	// It's a little more permissive than the currently-valid change IDs (which
+	// are always integers), but it will allow older clients to talk to newer
+	// servers which might start allowing letters too (for example).
+	var changeIDRegexp = regexp.MustCompile(`^[a-z0-9]+$`)
+
+	if changeIDRegexp.MatchString(id) {
+		return nil
+	} else {
+		return fmt.Errorf("invalid change ID %q", id)
+	}
+}
+
 // Change fetches information about a Change given its ID.
 func (client *Client) Change(id string) (*Change, error) {
+	if err := validateChangeID(id); err != nil {
+		return nil, err
+	}
+
 	var chgd changeAndData
 	_, err := client.doSync("GET", "/v1/changes/"+id, nil, nil, nil, &chgd)
 	if err != nil {
@@ -100,6 +119,10 @@ func (client *Client) Change(id string) (*Change, error) {
 
 // Abort attempts to abort a change that is not yet ready.
 func (client *Client) Abort(id string) (*Change, error) {
+	if err := validateChangeID(id); err != nil {
+		return nil, err
+	}
+
 	var postData struct {
 		Action string `json:"action"`
 	}
@@ -183,6 +206,10 @@ type WaitChangeOptions struct {
 // succeeds, the returned Change.Err string will be non-empty if the change
 // itself had an error.
 func (client *Client) WaitChange(id string, opts *WaitChangeOptions) (*Change, error) {
+	if err := validateChangeID(id); err != nil {
+		return nil, err
+	}
+
 	var chgd changeAndData
 
 	query := url.Values{}
