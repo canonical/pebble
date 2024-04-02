@@ -70,10 +70,10 @@ var api = []*Command{{
 	UserOK: true,
 	POST:   v1PostLayers,
 }, {
-	Path:   "/v1/files",
-	UserOK: true,
-	GET:    v1GetFiles,
-	POST:   v1PostFiles,
+	Path:      "/v1/files",
+	AdminOnly: true,
+	GET:       v1GetFiles,
+	POST:      v1PostFiles,
 }, {
 	Path:   "/v1/logs",
 	UserOK: true,
@@ -83,9 +83,9 @@ var api = []*Command{{
 	UserOK: true,
 	POST:   v1PostExec,
 }, {
-	Path:   "/v1/tasks/{task-id}/websocket/{websocket-id}",
-	UserOK: true,
-	GET:    v1GetTaskWebsocket,
+	Path:      "/v1/tasks/{task-id}/websocket/{websocket-id}",
+	AdminOnly: true,
+	GET:       v1GetTaskWebsocket,
 }, {
 	Path:   "/v1/signals",
 	UserOK: true,
