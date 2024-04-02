@@ -35,7 +35,7 @@ var API = []*Command{{
 }, {
 	Path:        "/v1/warnings",
 	ReadAccess:  UserAccess{},
-	WriteAccess: UserAccess{},
+	WriteAccess: AdminAccess{},
 	GET:         v1GetWarnings,
 	POST:        v1AckWarnings,
 }, {
@@ -45,7 +45,7 @@ var API = []*Command{{
 }, {
 	Path:        "/v1/changes/{id}",
 	ReadAccess:  UserAccess{},
-	WriteAccess: UserAccess{},
+	WriteAccess: AdminAccess{},
 	GET:         v1GetChange,
 	POST:        v1PostChange,
 }, {
@@ -55,13 +55,13 @@ var API = []*Command{{
 }, {
 	Path:        "/v1/services",
 	ReadAccess:  UserAccess{},
-	WriteAccess: UserAccess{},
+	WriteAccess: AdminAccess{},
 	GET:         v1GetServices,
 	POST:        v1PostServices,
 }, {
 	Path:        "/v1/services/{name}",
 	ReadAccess:  UserAccess{},
-	WriteAccess: UserAccess{},
+	WriteAccess: AdminAccess{},
 	GET:         v1GetService,
 	POST:        v1PostService,
 }, {
@@ -70,12 +70,12 @@ var API = []*Command{{
 	GET:        v1GetPlan,
 }, {
 	Path:        "/v1/layers",
-	WriteAccess: UserAccess{},
+	WriteAccess: AdminAccess{},
 	POST:        v1PostLayers,
 }, {
 	Path:        "/v1/files",
-	ReadAccess:  UserAccess{},
-	WriteAccess: UserAccess{},
+	ReadAccess:  AdminAccess{}, // some files are sensitive, so require admin
+	WriteAccess: AdminAccess{},
 	GET:         v1GetFiles,
 	POST:        v1PostFiles,
 }, {
@@ -84,15 +84,15 @@ var API = []*Command{{
 	GET:        v1GetLogs,
 }, {
 	Path:        "/v1/exec",
-	WriteAccess: UserAccess{},
+	WriteAccess: AdminAccess{},
 	POST:        v1PostExec,
 }, {
 	Path:       "/v1/tasks/{task-id}/websocket/{websocket-id}",
-	ReadAccess: UserAccess{},
+	ReadAccess: AdminAccess{}, // used by exec, so require admin
 	GET:        v1GetTaskWebsocket,
 }, {
 	Path:        "/v1/signals",
-	WriteAccess: UserAccess{},
+	WriteAccess: AdminAccess{},
 	POST:        v1PostSignals,
 }, {
 	Path:       "/v1/checks",
@@ -101,7 +101,7 @@ var API = []*Command{{
 }, {
 	Path:        "/v1/notices",
 	ReadAccess:  UserAccess{},
-	WriteAccess: UserAccess{},
+	WriteAccess: AdminAccess{},
 	GET:         v1GetNotices,
 	POST:        v1PostNotices,
 }, {
