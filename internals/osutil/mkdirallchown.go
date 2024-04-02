@@ -31,16 +31,23 @@ var mu sync.Mutex
 
 // MkdirAllChown is like os.MkdirAll but it calls os.Chown on any
 // directories it creates.
-func MkdirAllChown(path string, perm os.FileMode, uid sys.UserID, gid sys.GroupID) error {
+func MkdirAllChown(path string, perm os.FileMode, flags AtomicWriteFlags, uid sys.UserID, gid sys.GroupID) error {
 	mu.Lock()
 	defer mu.Unlock()
 	if uid == NoChown && gid == NoChown {
-		return os.MkdirAll(path, perm)
+		err := os.MkdirAll(path, perm)
+		if err != nil {
+			return err
+		}
+		if flags&AtomicWriteChmod != 0 {
+			return os.Chmod(path, perm)
+		}
+		return nil
 	}
-	return mkdirAllChown(filepath.Clean(path), perm, uid, gid)
+	return mkdirAllChown(filepath.Clean(path), perm, flags, uid, gid)
 }
 
-func mkdirAllChown(path string, perm os.FileMode, uid sys.UserID, gid sys.GroupID) error {
+func mkdirAllChown(path string, perm os.FileMode, flags AtomicWriteFlags, uid sys.UserID, gid sys.GroupID) error {
 	// split out so filepath.Clean isn't called twice for each inner path
 	if s, err := os.Stat(path); err == nil {
 		if s.IsDir() {
@@ -57,15 +64,15 @@ func mkdirAllChown(path string, perm os.FileMode, uid sys.UserID, gid sys.GroupI
 
 	dir := filepath.Dir(path)
 	if dir != "/" {
-		if err := mkdirAllChown(dir, perm, uid, gid); err != nil {
+		if err := mkdirAllChown(dir, perm, flags, uid, gid); err != nil {
 			return err
 		}
 	}
 
-	return mkdirChown(path, perm, uid, gid)
+	return mkdirChown(path, perm, flags, uid, gid)
 }
 
-func mkdirChown(path string, perm os.FileMode, uid sys.UserID, gid sys.GroupID) error {
+func mkdirChown(path string, perm os.FileMode, flags AtomicWriteFlags, uid sys.UserID, gid sys.GroupID) error {
 	cand := path + ".mkdir-new"
 
 	if err := os.Mkdir(cand, perm); err != nil && !os.IsExist(err) {
@@ -84,6 +91,11 @@ func mkdirChown(path string, perm os.FileMode, uid sys.UserID, gid sys.GroupID) 
 	if err != nil {
 		return err
 	}
+	if flags&AtomicWriteChmod != 0 {
+		if err := fd.Chmod(perm); err != nil {
+			return err
+		}
+	}
 	defer fd.Close()
 
 	return fd.Sync()
@@ -91,11 +103,18 @@ func mkdirChown(path string, perm os.FileMode, uid sys.UserID, gid sys.GroupID) 
 
 // MkdirChown is like os.Mkdir but it also calls os.Chown on the directory it
 // creates.
-func MkdirChown(path string, perm os.FileMode, uid sys.UserID, gid sys.GroupID) error {
+func MkdirChown(path string, perm os.FileMode, flags AtomicWriteFlags, uid sys.UserID, gid sys.GroupID) error {
 	mu.Lock()
 	defer mu.Unlock()
 	if uid == NoChown && gid == NoChown {
-		return os.Mkdir(path, perm)
+		err := os.Mkdir(path, perm)
+		if err != nil {
+			return err
+		}
+		if flags&AtomicWriteChmod != 0 {
+			return os.Chmod(path, perm)
+		}
+		return nil
 	}
-	return mkdirChown(filepath.Clean(path), perm, uid, gid)
+	return mkdirChown(filepath.Clean(path), perm, flags, uid, gid)
 }

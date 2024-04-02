@@ -481,7 +481,7 @@ func writeFile(item writeFilesItem, source io.Reader) error {
 
 	// Create parent directory if needed.
 	if item.MakeDirs {
-		err := mkdirAllUserGroup(pathpkg.Dir(item.Path), 0o755, uid, gid)
+		err := mkdirAllUserGroup(pathpkg.Dir(item.Path), 0o755, osutil.AtomicWriteChmod, uid, gid)
 		if err != nil {
 			return fmt.Errorf("cannot create directory: %w", err)
 		}
@@ -499,19 +499,19 @@ func writeFile(item writeFilesItem, source io.Reader) error {
 	return atomicWriteChown(item.Path, source, perm, osutil.AtomicWriteChmod, sysUid, sysGid)
 }
 
-func mkdirAllUserGroup(path string, perm os.FileMode, uid, gid *int) error {
+func mkdirAllUserGroup(path string, perm os.FileMode, flags osutil.AtomicWriteFlags, uid, gid *int) error {
 	if uid != nil && gid != nil {
-		return mkdirAllChown(path, perm, sys.UserID(*uid), sys.GroupID(*gid))
+		return mkdirAllChown(path, perm, flags, sys.UserID(*uid), sys.GroupID(*gid))
 	} else {
-		return mkdirAllChown(path, perm, osutil.NoChown, osutil.NoChown)
+		return mkdirAllChown(path, perm, flags, osutil.NoChown, osutil.NoChown)
 	}
 }
 
-func mkdirUserGroup(path string, perm os.FileMode, uid, gid *int) error {
+func mkdirUserGroup(path string, perm os.FileMode, flags osutil.AtomicWriteFlags, uid, gid *int) error {
 	if uid != nil && gid != nil {
-		return mkdirChown(path, perm, sys.UserID(*uid), sys.GroupID(*gid))
+		return mkdirChown(path, perm, flags, sys.UserID(*uid), sys.GroupID(*gid))
 	} else {
-		return mkdirChown(path, perm, osutil.NoChown, osutil.NoChown)
+		return mkdirChown(path, perm, flags, osutil.NoChown, osutil.NoChown)
 	}
 }
 
@@ -563,9 +563,9 @@ func makeDir(dir makeDirsItem) error {
 		return fmt.Errorf("cannot look up user and group: %w", err)
 	}
 	if dir.MakeParents {
-		err = mkdirAllUserGroup(dir.Path, perm, uid, gid)
+		err = mkdirAllUserGroup(dir.Path, perm, osutil.AtomicWriteChmod, uid, gid)
 	} else {
-		err = mkdirUserGroup(dir.Path, perm, uid, gid)
+		err = mkdirUserGroup(dir.Path, perm, osutil.AtomicWriteChmod, uid, gid)
 	}
 	if err != nil {
 		return err

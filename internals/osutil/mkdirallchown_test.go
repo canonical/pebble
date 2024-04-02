@@ -36,7 +36,7 @@ func (mkdacSuite) TestSlashySlashy(c *check.C) {
 		d := c.MkDir()
 		// just in case
 		c.Assert(strings.HasSuffix(d, "/"), check.Equals, false)
-		err := osutil.MkdirAllChown(d+dir, 0755, osutil.NoChown, osutil.NoChown)
+		err := osutil.MkdirAllChown(d+dir, 0755, osutil.AtomicWriteChmod, osutil.NoChown, osutil.NoChown)
 		c.Assert(err, check.IsNil, check.Commentf("%q", dir))
 	}
 }
@@ -46,22 +46,22 @@ func (mkdacSuite) TestSlashySlashy(c *check.C) {
 func (mkdacSuite) TestMkdirAllChown(c *check.C) {
 	tmpDir := c.MkDir()
 
-	err := osutil.MkdirAllChown(tmpDir+"/foo/bar", 0o755, osutil.NoChown, osutil.NoChown)
+	err := osutil.MkdirAllChown(tmpDir+"/foo/bar", 0o755, osutil.AtomicWriteChmod, osutil.NoChown, osutil.NoChown)
 	c.Assert(err, check.IsNil)
 	c.Assert(osutil.IsDir(tmpDir+"/foo"), check.Equals, true)
 	c.Assert(osutil.IsDir(tmpDir+"/foo/bar"), check.Equals, true)
 
-	err = osutil.MkdirChown(tmpDir+"/foo/bar", 0o755, osutil.NoChown, osutil.NoChown)
+	err = osutil.MkdirChown(tmpDir+"/foo/bar", 0o755, osutil.AtomicWriteChmod, osutil.NoChown, osutil.NoChown)
 	c.Assert(err, check.ErrorMatches, `.*: file exists`)
 }
 
 func (mkdacSuite) TestMkdirChown(c *check.C) {
 	tmpDir := c.MkDir()
 
-	err := osutil.MkdirChown(tmpDir+"/foo", 0o755, osutil.NoChown, osutil.NoChown)
+	err := osutil.MkdirChown(tmpDir+"/foo", 0o755, osutil.AtomicWriteChmod, osutil.NoChown, osutil.NoChown)
 	c.Assert(err, check.IsNil)
 	c.Assert(osutil.IsDir(tmpDir+"/foo"), check.Equals, true)
 
-	err = osutil.MkdirChown(tmpDir+"/foo", 0o755, osutil.NoChown, osutil.NoChown)
+	err = osutil.MkdirChown(tmpDir+"/foo", 0o755, osutil.AtomicWriteChmod, osutil.NoChown, osutil.NoChown)
 	c.Assert(err, check.ErrorMatches, `.*: file exists`)
 }

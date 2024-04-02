@@ -168,7 +168,7 @@ func writeWarningTimestamp(t time.Time) error {
 
 	// FIXME Keep track of this data on a per-user+per-pebble socket basis.
 	filename := warnFilename(user.HomeDir)
-	if err := osutil.MkdirAllChown(filepath.Dir(filename), 0700, uid, gid); err != nil {
+	if err := osutil.MkdirAllChown(filepath.Dir(filename), 0700, 0, uid, gid); err != nil {
 		return err
 	}
 
