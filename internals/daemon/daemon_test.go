@@ -1252,6 +1252,10 @@ services:
 
 func (s *daemonSuite) TestWritesRequireAdminAccess(c *C) {
 	for _, cmd := range API {
+		if cmd.Path == "/v1/notices" {
+			// Any user is allowed to add a notice with their own uid.
+			continue
+		}
 		switch cmd.WriteAccess.(type) {
 		case OpenAccess, UserAccess:
 			c.Errorf("%s WriteAccess should be AdminAccess, not %T", cmd.Path, cmd.WriteAccess)
@@ -1336,7 +1340,7 @@ func (s *daemonSuite) TestAPIAccessLevels(c *C) {
 		{"GET", "/v1/notices", ``, 42, http.StatusOK},
 		{"GET", "/v1/notices", ``, 0, http.StatusOK},
 		{"POST", "/v1/notices", `{}`, -1, http.StatusUnauthorized},
-		{"POST", "/v1/notices", `{}`, 42, http.StatusUnauthorized},
+		{"POST", "/v1/notices", `{}`, 42, http.StatusBadRequest},
 		{"POST", "/v1/notices", `{}`, 0, http.StatusBadRequest},
 	}
 

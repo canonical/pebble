@@ -101,7 +101,7 @@ var API = []*Command{{
 }, {
 	Path:        "/v1/notices",
 	ReadAccess:  UserAccess{},
-	WriteAccess: AdminAccess{},
+	WriteAccess: UserAccess{}, // any user is allowed to add a notice with their own uid
 	GET:         v1GetNotices,
 	POST:        v1PostNotices,
 }, {
