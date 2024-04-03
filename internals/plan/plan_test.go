@@ -1934,16 +1934,6 @@ func (s *S) TestMergeServiceContextOverrides(c *C) {
 	})
 }
 
-func (s *S) TestValidateLayerReservedLabel(c *C) {
-	newLayer := &plan.Layer{
-		// Labels with "pebble-*" prefix are reserved,
-		Label:    "pebble-service-args",
-		Services: make(map[string]*plan.Service),
-	}
-	err := newLayer.Validate()
-	c.Check(err, ErrorMatches, `cannot use reserved layer label "pebble-service-args"`)
-}
-
 func (s *S) TestParseLayerReservedLabel(c *C) {
 	// Validate fails if layer label has the reserved prefix "pebble-"
 	_, err := plan.ParseLayer(0, "pebble-service-args", []byte("{}"))
