@@ -229,14 +229,8 @@ func (m *PlanManager) SetServiceArgs(serviceArgs map[string][]string) error {
 		}
 	}
 
-	err := newLayer.Validate()
-	if err != nil {
-		if _, ok := err.(*plan.ReservedLabelError); ok {
-			// Labels with "pebble-*" prefix are reserved.
-		} else {
-			return err
-		}
-	}
+	// We have added validation for layer labels (pebble-* prefix is reserved),
+	// so after creating the Layer directly, we don't validate it any more.
 
 	return m.appendLayer(newLayer)
 }

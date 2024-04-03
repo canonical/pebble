@@ -549,16 +549,6 @@ func (e *FormatError) Error() string {
 	return e.Message
 }
 
-// ReservedLabelError is the error returned when a layer label has the reserved
-// prefix "pebble-", such as "pebble-foo-bar".
-type ReservedLabelError struct {
-	Message string
-}
-
-func (e *ReservedLabelError) Error() string {
-	return e.Message
-}
-
 // CombineLayers combines the given layers into a single layer, with the later
 // layers overriding earlier ones.
 // Neither the individual layers nor the combined layer are validated here - the
@@ -830,7 +820,7 @@ func (layer *Layer) Validate() error {
 	}
 
 	if strings.HasPrefix(layer.Label, "pebble-") {
-		return &ReservedLabelError{
+		return &FormatError{
 			Message: fmt.Sprintf("cannot use reserved layer label %q", layer.Label),
 		}
 	}
