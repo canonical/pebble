@@ -1937,5 +1937,5 @@ func (s *S) TestMergeServiceContextOverrides(c *C) {
 func (s *S) TestPebbleLabelPrefixReserved(c *C) {
 	// Validate fails if layer label has the reserved prefix "pebble-"
 	_, err := plan.ParseLayer(0, "pebble-foo", []byte("{}"))
-	c.Check(err, ErrorMatches, `cannot use reserved layer label "pebble-foo"`)
+	c.Check(err, ErrorMatches, `cannot use reserved label prefix "pebble-"`)
 }
