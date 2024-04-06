@@ -687,6 +687,12 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 // See also Plan.Validate, which does additional checks based on the combined
 // layers.
 func (layer *Layer) Validate() error {
+	if strings.HasPrefix(layer.Label, "pebble-") {
+		return &FormatError{
+			Message: `cannot use reserved label prefix "pebble-"`,
+		}
+	}
+
 	for name, service := range layer.Services {
 		if name == "" {
 			return &FormatError{
@@ -816,12 +822,6 @@ func (layer *Layer) Validate() error {
 				Message: fmt.Sprintf(`log target %q has unsupported type %q, must be %q or %q`,
 					name, target.Type, LokiTarget, SyslogTarget),
 			}
-		}
-	}
-
-	if strings.HasPrefix(layer.Label, "pebble-") {
-		return &FormatError{
-			Message: fmt.Sprintf("cannot use reserved layer label %q", layer.Label),
 		}
 	}
 
