@@ -208,10 +208,9 @@ func (m *PlanManager) SetServiceArgs(serviceArgs map[string][]string) error {
 	defer m.planLock.Unlock()
 
 	newLayer := &plan.Layer{
-		// Labels with "pebble-*" prefix are reserved, see:
-		// https://github.com/canonical/pebble/issues/220
-		// Validation for layer labels has been added, so after so after creating the
-		// Layer directly (not parsing from raw data), it won't need to be validated.
+		// Labels with "pebble-*" prefix are reserved for use by Pebble.
+		// Layer.Validate() ensures this, so skip calling that because we're creating the
+		// Layer directly, not parsing from user input.
 		Label:    "pebble-service-args",
 		Services: make(map[string]*plan.Service),
 	}
