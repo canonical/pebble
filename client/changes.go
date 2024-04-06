@@ -87,24 +87,16 @@ type changeAndData struct {
 	Data map[string]*json.RawMessage `json:"data"`
 }
 
-func validateChangeID(id string) error {
-	// This is used to ensure we send a well-formed change ID in the URL path.
-	// It's a little more permissive than the currently-valid change IDs (which
-	// are always integers), but it will allow older clients to talk to newer
-	// servers which might start allowing letters too (for example).
-	var changeIDRegexp = regexp.MustCompile(`^[a-z0-9]+$`)
-
-	if changeIDRegexp.MatchString(id) {
-		return nil
-	} else {
-		return fmt.Errorf("invalid change ID %q", id)
-	}
-}
+// This is used to ensure we send a well-formed change ID in the URL path.
+// It's a little more permissive than the currently-valid change IDs (which
+// are always integers), but it will allow older clients to talk to newer
+// servers which might start allowing letters too (for example).
+var changeIDRegexp = regexp.MustCompile(`^[a-z0-9]+$`)
 
 // Change fetches information about a Change given its ID.
 func (client *Client) Change(id string) (*Change, error) {
-	if err := validateChangeID(id); err != nil {
-		return nil, err
+	if !changeIDRegexp.MatchString(id) {
+		return nil, fmt.Errorf("invalid change ID %q", id)
 	}
 
 	var chgd changeAndData
@@ -119,8 +111,8 @@ func (client *Client) Change(id string) (*Change, error) {
 
 // Abort attempts to abort a change that is not yet ready.
 func (client *Client) Abort(id string) (*Change, error) {
-	if err := validateChangeID(id); err != nil {
-		return nil, err
+	if !changeIDRegexp.MatchString(id) {
+		return nil, fmt.Errorf("invalid change ID %q", id)
 	}
 
 	var postData struct {
