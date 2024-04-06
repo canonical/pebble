@@ -198,8 +198,8 @@ type WaitChangeOptions struct {
 // succeeds, the returned Change.Err string will be non-empty if the change
 // itself had an error.
 func (client *Client) WaitChange(id string, opts *WaitChangeOptions) (*Change, error) {
-	if err := validateChangeID(id); err != nil {
-		return nil, err
+	if !changeIDRegexp.MatchString(id) {
+		return nil, fmt.Errorf("invalid change ID %q", id)
 	}
 
 	var chgd changeAndData
