@@ -448,12 +448,12 @@ func (s *filesSuite) TestMakeDirsUserGroupMocked(c *C) {
 	type args struct {
 		path  string
 		perm  os.FileMode
-		flags osutil.AtomicWriteFlags
+		flags osutil.MkdirFlags
 		uid   sys.UserID
 		gid   sys.GroupID
 	}
 	var mkdirChownCalls []args
-	mkdirChown = func(path string, perm os.FileMode, flags osutil.AtomicWriteFlags, uid sys.UserID, gid sys.GroupID) error {
+	mkdirChown = func(path string, perm os.FileMode, flags osutil.MkdirFlags, uid sys.UserID, gid sys.GroupID) error {
 		mkdirChownCalls = append(mkdirChownCalls, args{path, perm, flags, uid, gid})
 		return os.Mkdir(path, perm)
 	}
@@ -472,7 +472,7 @@ func (s *filesSuite) TestMakeDirsUserGroupMocked(c *C) {
 	}
 
 	var mkdirAllChownCalls []args
-	mkdirAllChown = func(path string, perm os.FileMode, flags osutil.AtomicWriteFlags, uid sys.UserID, gid sys.GroupID) error {
+	mkdirAllChown = func(path string, perm os.FileMode, flags osutil.MkdirFlags, uid sys.UserID, gid sys.GroupID) error {
 		mkdirAllChownCalls = append(mkdirAllChownCalls, args{path, perm, flags, uid, gid})
 		return os.MkdirAll(path, perm)
 	}
@@ -486,13 +486,13 @@ func (s *filesSuite) TestMakeDirsUserGroupMocked(c *C) {
 	tmpDir := s.testMakeDirsUserGroup(c, 12, 34, "USER", "GROUP")
 
 	c.Assert(mkdirChownCalls, HasLen, 3)
-	c.Check(mkdirChownCalls[0], Equals, args{tmpDir + "/normal", 0o755, osutil.AtomicWriteChmod, osutil.NoChown, osutil.NoChown})
-	c.Check(mkdirChownCalls[1], Equals, args{tmpDir + "/uid-gid", 0o755, osutil.AtomicWriteChmod, 12, 34})
-	c.Check(mkdirChownCalls[2], Equals, args{tmpDir + "/user-group", 0o755, osutil.AtomicWriteChmod, 56, 78})
+	c.Check(mkdirChownCalls[0], Equals, args{tmpDir + "/normal", 0o755, osutil.MkdirChmod, osutil.NoChown, osutil.NoChown})
+	c.Check(mkdirChownCalls[1], Equals, args{tmpDir + "/uid-gid", 0o755, osutil.MkdirChmod, 12, 34})
+	c.Check(mkdirChownCalls[2], Equals, args{tmpDir + "/user-group", 0o755, osutil.MkdirChmod, 56, 78})
 
 	c.Assert(mkdirAllChownCalls, HasLen, 2)
-	c.Check(mkdirAllChownCalls[0], Equals, args{tmpDir + "/nested1/normal", 0o755, osutil.AtomicWriteChmod, osutil.NoChown, osutil.NoChown})
-	c.Check(mkdirAllChownCalls[1], Equals, args{tmpDir + "/nested2/user-group", 0o755, osutil.AtomicWriteChmod, 56, 78})
+	c.Check(mkdirAllChownCalls[0], Equals, args{tmpDir + "/nested1/normal", 0o755, osutil.MkdirChmod, osutil.NoChown, osutil.NoChown})
+	c.Check(mkdirAllChownCalls[1], Equals, args{tmpDir + "/nested2/user-group", 0o755, osutil.MkdirChmod, 56, 78})
 }
 
 func (s *filesSuite) testMakeDirsUserGroup(c *C, uid, gid int, user, group string) string {
@@ -966,7 +966,7 @@ func (s *filesSuite) TestWriteUserGroupMocked(c *C) {
 	}
 
 	var mkdirAllChownCalls []args
-	mkdirAllChown = func(path string, perm os.FileMode, flags osutil.AtomicWriteFlags, uid sys.UserID, gid sys.GroupID) error {
+	mkdirAllChown = func(path string, perm os.FileMode, flags osutil.MkdirFlags, uid sys.UserID, gid sys.GroupID) error {
 		mkdirAllChownCalls = append(mkdirAllChownCalls, args{path, perm, uid, gid})
 		return os.MkdirAll(path, perm)
 	}

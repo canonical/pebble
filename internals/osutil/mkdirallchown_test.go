@@ -15,7 +15,9 @@
 package osutil_test
 
 import (
+	"os"
 	"strings"
+	"syscall"
 
 	"gopkg.in/check.v1"
 
@@ -36,7 +38,7 @@ func (mkdacSuite) TestSlashySlashy(c *check.C) {
 		d := c.MkDir()
 		// just in case
 		c.Assert(strings.HasSuffix(d, "/"), check.Equals, false)
-		err := osutil.MkdirAllChown(d+dir, 0755, osutil.AtomicWriteChmod, osutil.NoChown, osutil.NoChown)
+		err := osutil.MkdirAllChown(d+dir, 0755, 0, osutil.NoChown, osutil.NoChown)
 		c.Assert(err, check.IsNil, check.Commentf("%q", dir))
 	}
 }
@@ -46,22 +48,127 @@ func (mkdacSuite) TestSlashySlashy(c *check.C) {
 func (mkdacSuite) TestMkdirAllChown(c *check.C) {
 	tmpDir := c.MkDir()
 
-	err := osutil.MkdirAllChown(tmpDir+"/foo/bar", 0o755, osutil.AtomicWriteChmod, osutil.NoChown, osutil.NoChown)
+	err := osutil.MkdirAllChown(tmpDir+"/foo/bar", 0o755, 0, osutil.NoChown, osutil.NoChown)
 	c.Assert(err, check.IsNil)
 	c.Assert(osutil.IsDir(tmpDir+"/foo"), check.Equals, true)
 	c.Assert(osutil.IsDir(tmpDir+"/foo/bar"), check.Equals, true)
 
-	err = osutil.MkdirChown(tmpDir+"/foo/bar", 0o755, osutil.AtomicWriteChmod, osutil.NoChown, osutil.NoChown)
+	err = osutil.MkdirChown(tmpDir+"/foo/bar", 0o755, 0, osutil.NoChown, osutil.NoChown)
 	c.Assert(err, check.ErrorMatches, `.*: file exists`)
 }
 
 func (mkdacSuite) TestMkdirChown(c *check.C) {
 	tmpDir := c.MkDir()
 
-	err := osutil.MkdirChown(tmpDir+"/foo", 0o755, osutil.AtomicWriteChmod, osutil.NoChown, osutil.NoChown)
+	err := osutil.MkdirChown(tmpDir+"/foo", 0o755, 0, osutil.NoChown, osutil.NoChown)
 	c.Assert(err, check.IsNil)
 	c.Assert(osutil.IsDir(tmpDir+"/foo"), check.Equals, true)
 
-	err = osutil.MkdirChown(tmpDir+"/foo", 0o755, osutil.AtomicWriteChmod, osutil.NoChown, osutil.NoChown)
+	err = osutil.MkdirChown(tmpDir+"/foo", 0o755, 0, osutil.NoChown, osutil.NoChown)
 	c.Assert(err, check.ErrorMatches, `.*: file exists`)
+}
+
+func (mkdacSuite) TestMkdirChownWithoutMkdirFlags(c *check.C) {
+	oldmask := syscall.Umask(0022)
+	defer syscall.Umask(oldmask)
+
+	tmpDir := c.MkDir()
+
+	err := osutil.MkdirChown(tmpDir+"/foo", 0o777, 0, osutil.NoChown, osutil.NoChown)
+	c.Assert(err, check.IsNil)
+	c.Assert(osutil.IsDir(tmpDir+"/foo"), check.Equals, true)
+
+	info, err := os.Stat(tmpDir + "/foo")
+	c.Assert(err, check.IsNil)
+	c.Assert(info.Mode().Perm(), check.Equals, os.FileMode(0o755))
+}
+
+func (mkdacSuite) TestMkdirChownWithMkdirFlags(c *check.C) {
+	tmpDir := c.MkDir()
+
+	err := osutil.MkdirChown(tmpDir+"/foo", 0o777, osutil.MkdirChmod, osutil.NoChown, osutil.NoChown)
+	c.Assert(err, check.IsNil)
+	c.Assert(osutil.IsDir(tmpDir+"/foo"), check.Equals, true)
+
+	info, err := os.Stat(tmpDir + "/foo")
+	c.Assert(err, check.IsNil)
+	c.Assert(info.Mode().Perm(), check.Equals, os.FileMode(0o777))
+}
+
+func (mkdacSuite) TestMkdirChownWithMkdirFlagsAndChown(c *check.C) {
+	tmpDir := c.MkDir()
+
+	err := osutil.MkdirChown(tmpDir+"/foo", 0o777, osutil.MkdirChmod, 1000, 1000)
+	c.Assert(err, check.IsNil)
+	c.Assert(osutil.IsDir(tmpDir+"/foo"), check.Equals, true)
+
+	info, err := os.Stat(tmpDir + "/foo")
+	c.Assert(err, check.IsNil)
+	if stat, ok := info.Sys().(*syscall.Stat_t); ok {
+		c.Assert(int(stat.Uid), check.Equals, 1000)
+		c.Assert(int(stat.Gid), check.Equals, 1000)
+	}
+	c.Assert(info.Mode().Perm(), check.Equals, os.FileMode(0o777))
+}
+
+func (mkdacSuite) TestMkdirAllChownWithoutMkdirFlags(c *check.C) {
+	oldmask := syscall.Umask(0022)
+	defer syscall.Umask(oldmask)
+
+	tmpDir := c.MkDir()
+
+	err := osutil.MkdirAllChown(tmpDir+"/foo/bar", 0o777, 0, osutil.NoChown, osutil.NoChown)
+	c.Assert(err, check.IsNil)
+	c.Assert(osutil.IsDir(tmpDir+"/foo"), check.Equals, true)
+	c.Assert(osutil.IsDir(tmpDir+"/foo/bar"), check.Equals, true)
+
+	info, err := os.Stat(tmpDir + "/foo")
+	c.Assert(err, check.IsNil)
+	c.Assert(info.Mode().Perm(), check.Equals, os.FileMode(0o755))
+
+	info, err = os.Stat(tmpDir + "/foo/bar")
+	c.Assert(err, check.IsNil)
+	c.Assert(info.Mode().Perm(), check.Equals, os.FileMode(0o755))
+}
+
+func (mkdacSuite) TestMkdirAllChownWithMkdirFlags(c *check.C) {
+	tmpDir := c.MkDir()
+
+	err := osutil.MkdirAllChown(tmpDir+"/foo/bar", 0o777, osutil.MkdirChmod, osutil.NoChown, osutil.NoChown)
+	c.Assert(err, check.IsNil)
+	c.Assert(osutil.IsDir(tmpDir+"/foo"), check.Equals, true)
+	c.Assert(osutil.IsDir(tmpDir+"/foo/bar"), check.Equals, true)
+
+	info, err := os.Stat(tmpDir + "/foo")
+	c.Assert(err, check.IsNil)
+	c.Assert(info.Mode().Perm(), check.Equals, os.FileMode(0o777))
+
+	info, err = os.Stat(tmpDir + "/foo/bar")
+	c.Assert(err, check.IsNil)
+	c.Assert(info.Mode().Perm(), check.Equals, os.FileMode(0o777))
+}
+
+func (mkdacSuite) TestMkdirAllChownWithMkdirFlagsAndChown(c *check.C) {
+	tmpDir := c.MkDir()
+
+	err := osutil.MkdirAllChown(tmpDir+"/foo/bar", 0o777, osutil.MkdirChmod, 1000, 1000)
+	c.Assert(err, check.IsNil)
+	c.Assert(osutil.IsDir(tmpDir+"/foo"), check.Equals, true)
+	c.Assert(osutil.IsDir(tmpDir+"/foo/bar"), check.Equals, true)
+
+	info, err := os.Stat(tmpDir + "/foo")
+	c.Assert(err, check.IsNil)
+	c.Assert(info.Mode().Perm(), check.Equals, os.FileMode(0o777))
+	if stat, ok := info.Sys().(*syscall.Stat_t); ok {
+		c.Assert(int(stat.Uid), check.Equals, 1000)
+		c.Assert(int(stat.Gid), check.Equals, 1000)
+	}
+
+	info, err = os.Stat(tmpDir + "/foo/bar")
+	c.Assert(err, check.IsNil)
+	c.Assert(info.Mode().Perm(), check.Equals, os.FileMode(0o777))
+	if stat, ok := info.Sys().(*syscall.Stat_t); ok {
+		c.Assert(int(stat.Uid), check.Equals, 1000)
+		c.Assert(int(stat.Gid), check.Equals, 1000)
+	}
 }
