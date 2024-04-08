@@ -23,7 +23,7 @@ import (
 	"github.com/canonical/pebble/internals/osutil/sys"
 )
 
-// MkdirFlags are a bitfield of flags for MakeDirs
+// MkdirFlags are a bitfield of flags for the Mkdir* functions.
 type MkdirFlags uint
 
 const (
@@ -54,19 +54,27 @@ func MkdirAllChown(path string, perm os.FileMode, flags MkdirFlags, uid sys.User
 }
 
 func mkdirAllChmod(path string, perm os.FileMode) error {
-	if _, err := os.Stat(path); err == nil {
-		return nil
+	if s, err := os.Stat(path); err == nil {
+		if s.IsDir() {
+			return nil
+		}
+
+		// emulate os.MkdirAll
+		return &os.PathError{
+			Op:   "mkdir",
+			Path: path,
+			Err:  syscall.ENOTDIR,
+		}
 	}
 
 	parent := filepath.Dir(path)
-	if err := mkdirAllChmod(parent, perm); err != nil {
-		return err
+	if parent != "/" {
+		if err := mkdirAllChmod(parent, perm); err != nil {
+			return err
+		}
 	}
 
-	if err := os.Mkdir(path, perm); err != nil {
-		return err
-	}
-	return os.Chmod(path, perm)
+	return mkdirChown(path, perm, MkdirChmod, NoChown, NoChown)
 }
 
 func mkdirAllChown(path string, perm os.FileMode, flags MkdirFlags, uid sys.UserID, gid sys.GroupID) error {
