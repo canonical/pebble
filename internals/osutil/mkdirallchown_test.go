@@ -16,12 +16,15 @@ package osutil_test
 
 import (
 	"os"
+	"os/user"
+	"strconv"
 	"strings"
 	"syscall"
 
 	"gopkg.in/check.v1"
 
 	"github.com/canonical/pebble/internals/osutil"
+	"github.com/canonical/pebble/internals/osutil/sys"
 )
 
 type mkdacSuite struct{}
@@ -95,23 +98,40 @@ func (mkdacSuite) TestMkdirChownWithMkdirFlags(c *check.C) {
 	c.Assert(info.Mode().Perm(), check.Equals, os.FileMode(0o777))
 }
 
-// The following test is commented out because it would fail in GitHub Actions, but it would be nice
-// to run them locally to test the other if/else branch of the function MkdirChown.
-// func (mkdacSuite) TestMkdirChownWithMkdirFlagsAndChown(c *check.C) {
-// 	tmpDir := c.MkDir()
+// See .github/workflows/tests.yml for how to run this test as root.
+func (mkdacSuite) TestMkdirChownWithMkdirFlagsAndChown(c *check.C) {
+	if os.Getuid() != 0 {
+		c.Skip("requires running as root")
+	}
 
-// 	err := osutil.MkdirChown(tmpDir+"/foo", 0o777, osutil.MkdirChmod, 1000, 1000)
-// 	c.Assert(err, check.IsNil)
-// 	c.Assert(osutil.IsDir(tmpDir+"/foo"), check.Equals, true)
+	username := os.Getenv("PEBBLE_TEST_USER")
+	group := os.Getenv("PEBBLE_TEST_GROUP")
+	if username == "" || group == "" {
+		c.Fatalf("must set PEBBLE_TEST_USER and PEBBLE_TEST_GROUP")
+	}
+	u, err := user.Lookup(username)
+	c.Assert(err, check.IsNil)
+	g, err := user.LookupGroup(group)
+	c.Assert(err, check.IsNil)
+	uid, err := strconv.Atoi(u.Uid)
+	c.Assert(err, check.IsNil)
+	gid, err := strconv.Atoi(g.Gid)
+	c.Assert(err, check.IsNil)
 
-// 	info, err := os.Stat(tmpDir + "/foo")
-// 	c.Assert(err, check.IsNil)
-// 	if stat, ok := info.Sys().(*syscall.Stat_t); ok {
-// 		c.Assert(int(stat.Uid), check.Equals, 1000)
-// 		c.Assert(int(stat.Gid), check.Equals, 1000)
-// 	}
-// 	c.Assert(info.Mode().Perm(), check.Equals, os.FileMode(0o777))
-// }
+	tmpDir := c.MkDir()
+
+	err = osutil.MkdirChown(tmpDir+"/foo", 0o777, osutil.MkdirChmod, sys.UserID(uid), sys.GroupID(gid))
+	c.Assert(err, check.IsNil)
+	c.Assert(osutil.IsDir(tmpDir+"/foo"), check.Equals, true)
+
+	info, err := os.Stat(tmpDir + "/foo")
+	c.Assert(err, check.IsNil)
+	if stat, ok := info.Sys().(*syscall.Stat_t); ok {
+		c.Assert(int(stat.Uid), check.Equals, uid)
+		c.Assert(int(stat.Gid), check.Equals, gid)
+	}
+	c.Assert(info.Mode().Perm(), check.Equals, os.FileMode(0o777))
+}
 
 func (mkdacSuite) TestMkdirAllChownWithoutMkdirFlags(c *check.C) {
 	oldmask := syscall.Umask(0022)
@@ -150,29 +170,45 @@ func (mkdacSuite) TestMkdirAllChownWithMkdirFlags(c *check.C) {
 	c.Assert(info.Mode().Perm(), check.Equals, os.FileMode(0o777))
 }
 
-// The following test is commented out because it would fail in GitHub Actions, but it would be nice
-// to run them locally to test the other if/else branch of the function MkdirAllChown.
-// func (mkdacSuite) TestMkdirAllChownWithMkdirFlagsAndChown(c *check.C) {
-// 	tmpDir := c.MkDir()
+// See .github/workflows/tests.yml for how to run this test as root.
+func (mkdacSuite) TestMkdirAllChownWithMkdirFlagsAndChown(c *check.C) {
+	if os.Getuid() != 0 {
+		c.Skip("requires running as root")
+	}
 
-// 	err := osutil.MkdirAllChown(tmpDir+"/foo/bar", 0o777, osutil.MkdirChmod, 1000, 1000)
-// 	c.Assert(err, check.IsNil)
-// 	c.Assert(osutil.IsDir(tmpDir+"/foo"), check.Equals, true)
-// 	c.Assert(osutil.IsDir(tmpDir+"/foo/bar"), check.Equals, true)
+	username := os.Getenv("PEBBLE_TEST_USER")
+	group := os.Getenv("PEBBLE_TEST_GROUP")
+	if username == "" || group == "" {
+		c.Fatalf("must set PEBBLE_TEST_USER and PEBBLE_TEST_GROUP")
+	}
+	u, err := user.Lookup(username)
+	c.Assert(err, check.IsNil)
+	g, err := user.LookupGroup(group)
+	c.Assert(err, check.IsNil)
+	uid, err := strconv.Atoi(u.Uid)
+	c.Assert(err, check.IsNil)
+	gid, err := strconv.Atoi(g.Gid)
+	c.Assert(err, check.IsNil)
+	tmpDir := c.MkDir()
 
-// 	info, err := os.Stat(tmpDir + "/foo")
-// 	c.Assert(err, check.IsNil)
-// 	c.Assert(info.Mode().Perm(), check.Equals, os.FileMode(0o777))
-// 	if stat, ok := info.Sys().(*syscall.Stat_t); ok {
-// 		c.Assert(int(stat.Uid), check.Equals, 1000)
-// 		c.Assert(int(stat.Gid), check.Equals, 1000)
-// 	}
+	err = osutil.MkdirAllChown(tmpDir+"/foo/bar", 0o777, osutil.MkdirChmod, sys.UserID(uid), sys.GroupID(gid))
+	c.Assert(err, check.IsNil)
+	c.Assert(osutil.IsDir(tmpDir+"/foo"), check.Equals, true)
+	c.Assert(osutil.IsDir(tmpDir+"/foo/bar"), check.Equals, true)
 
-// 	info, err = os.Stat(tmpDir + "/foo/bar")
-// 	c.Assert(err, check.IsNil)
-// 	c.Assert(info.Mode().Perm(), check.Equals, os.FileMode(0o777))
-// 	if stat, ok := info.Sys().(*syscall.Stat_t); ok {
-// 		c.Assert(int(stat.Uid), check.Equals, 1000)
-// 		c.Assert(int(stat.Gid), check.Equals, 1000)
-// 	}
-// }
+	info, err := os.Stat(tmpDir + "/foo")
+	c.Assert(err, check.IsNil)
+	c.Assert(info.Mode().Perm(), check.Equals, os.FileMode(0o777))
+	if stat, ok := info.Sys().(*syscall.Stat_t); ok {
+		c.Assert(int(stat.Uid), check.Equals, uid)
+		c.Assert(int(stat.Gid), check.Equals, gid)
+	}
+
+	info, err = os.Stat(tmpDir + "/foo/bar")
+	c.Assert(err, check.IsNil)
+	c.Assert(info.Mode().Perm(), check.Equals, os.FileMode(0o777))
+	if stat, ok := info.Sys().(*syscall.Stat_t); ok {
+		c.Assert(int(stat.Uid), check.Equals, uid)
+		c.Assert(int(stat.Gid), check.Equals, gid)
+	}
+}

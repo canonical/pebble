@@ -50,6 +50,9 @@ jobs:
         PEBBLE_TEST_USER=runner PEBBLE_TEST_GROUP=runner sudo -E -H ./daemon.test -check.v -check.f ^filesSuite\.TestMakeDirsUserGroupReal$
         go test -c ./internals/overlord/servstate/
         PEBBLE_TEST_USER=runner PEBBLE_TEST_GROUP=runner sudo -E -H ./servstate.test -check.v -check.f ^S.TestUserGroup$
+        go test -c ./internals/osutil
+        PEBBLE_TEST_USER=runner PEBBLE_TEST_GROUP=runner sudo -E -H ./osutil.test -check.v -check.f ^mkdacSuite\.TestMkdirChownWithMkdirFlagsAndChown$
+        PEBBLE_TEST_USER=runner PEBBLE_TEST_GROUP=runner sudo -E -H ./osutil.test -check.v -check.f ^mkdacSuite\.TestMkdirAllChownWithMkdirFlagsAndChown$
 
   format:
     runs-on: ubuntu-latest
