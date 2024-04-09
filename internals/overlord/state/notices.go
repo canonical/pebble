@@ -189,7 +189,7 @@ const (
 
 	// A custom notice reported via the Pebble client API or "pebble notify".
 	// The key and data fields are provided by the user. The key must be in
-	// the format "mydomain.io/mykey" to ensure well-namespaced notice keys.
+	// the format "example.com/path" to ensure well-namespaced notice keys.
 	CustomNotice NoticeType = "custom"
 
 	// Warnings are a subset of notices where the key is a human-readable

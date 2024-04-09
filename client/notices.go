@@ -31,7 +31,7 @@ type NotifyOptions struct {
 	Type NoticeType
 
 	// Key is the notice's key. For "custom" notices, this must be in
-	// "domain.com/key" format.
+	// "example.com/path" format.
 	Key string
 
 	// Data are optional key=value pairs for this occurrence of the notice.
@@ -128,7 +128,7 @@ const (
 
 	// A custom notice reported via the Pebble client API or "pebble notify".
 	// The key and data fields are provided by the user. The key must be in
-	// the format "mydomain.io/mykey" to ensure well-namespaced notice keys.
+	// the format "example.com/path" to ensure well-namespaced notice keys.
 	CustomNotice NoticeType = "custom"
 )
 

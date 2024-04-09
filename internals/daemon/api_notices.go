@@ -29,7 +29,7 @@ import (
 	"github.com/canonical/pebble/internals/overlord/state"
 )
 
-// Ensure custom keys are in the form "domain.com/key" (but somewhat more restrictive).
+// Ensure custom keys are in the form "example.com/path" (but somewhat more restrictive).
 var customKeyRegexp = regexp.MustCompile(
 	`^[a-z0-9]+(-[a-z0-9]+)*(\.[a-z0-9]+(-[a-z0-9]+)*)+(/[a-z0-9]+(-[a-z0-9]+)*)+$`)
 
@@ -216,7 +216,7 @@ func v1PostNotices(c *Command, r *http.Request, _ *UserState) Response {
 		return BadRequest(`invalid type %q (can only add "custom" notices)`, payload.Type)
 	}
 	if !customKeyRegexp.MatchString(payload.Key) {
-		return BadRequest(`invalid key %q (must be in "domain.com/key" format)`, payload.Key)
+		return BadRequest(`invalid key %q (must be in "example.com/path" format)`, payload.Key)
 	}
 	if len(payload.Key) > maxNoticeKeyLength {
 		return BadRequest("key must be %d bytes or less", maxNoticeKeyLength)
