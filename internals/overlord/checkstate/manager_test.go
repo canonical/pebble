@@ -59,6 +59,7 @@ func (s *ManagerSuite) SetUpTest(c *C) {
 
 	s.overlord = overlord.Fake()
 	s.manager = checkstate.NewManager(s.overlord.State(), s.overlord.TaskRunner())
+	s.overlord.AddManager(s.manager)
 	s.overlord.AddManager(s.overlord.TaskRunner())
 	err = s.overlord.StartUp()
 	c.Assert(err, IsNil)
@@ -136,7 +137,9 @@ func (s *ManagerSuite) TestTimeout(c *C) {
 		},
 	})
 
-	check := waitCheck(c, s.manager, "chk1", nil)
+	check := waitCheck(c, s.manager, "chk1", func(check *checkstate.CheckInfo) bool {
+		return check.ChangeID != ""
+	})
 	originalChangeID := check.ChangeID
 
 	check = waitCheck(c, s.manager, "chk1", func(check *checkstate.CheckInfo) bool {
@@ -237,7 +240,9 @@ func (s *ManagerSuite) TestFailures(c *C) {
 		},
 	})
 
-	check := waitCheck(c, s.manager, "chk1", nil)
+	check := waitCheck(c, s.manager, "chk1", func(check *checkstate.CheckInfo) bool {
+		return check.ChangeID != ""
+	})
 	originalChangeID := check.ChangeID
 
 	// Shouldn't have called failure handler after only 1 failure
@@ -316,7 +321,7 @@ func waitCheck(c *C, mgr *checkstate.CheckManager, name string, f func(check *ch
 		checks, err := mgr.Checks()
 		c.Assert(err, IsNil)
 		for _, check := range checks {
-			if check.Name == name && (f == nil || f(check)) {
+			if check.Name == name && f(check) {
 				return check
 			}
 		}

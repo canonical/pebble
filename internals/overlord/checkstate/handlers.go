@@ -49,13 +49,12 @@ func (m *CheckManager) doPerformCheck(task *state.Task, tomb *tomb.Tomb) error {
 	m.checksLock.Lock()
 	data := m.checks[config.Name]
 	if data == nil {
-		data = &checkData{
-			config:   config,
-			cancel:   func() { tomb.Kill(nil) },
-			changeID: changeID,
-		}
+		data = &checkData{}
 		m.checks[config.Name] = data
 	}
+	data.config = config
+	data.cancel = func() { tomb.Kill(nil) }
+	data.changeID = changeID
 	m.checksLock.Unlock()
 
 	logger.Debugf("Performing check %q with period %v", details.Name, config.Period.Value)
@@ -136,14 +135,13 @@ func (m *CheckManager) doRecoverCheck(task *state.Task, tomb *tomb.Tomb) error {
 	m.checksLock.Lock()
 	data := m.checks[config.Name]
 	if data == nil {
-		data = &checkData{
-			config:   config,
-			cancel:   func() { tomb.Kill(nil) },
-			failures: 1,
-			changeID: changeID,
-		}
+		data = &checkData{}
 		m.checks[config.Name] = data
 	}
+	data.config = config
+	data.cancel = func() { tomb.Kill(nil) }
+	data.failures = 1
+	data.changeID = changeID
 	m.checksLock.Unlock()
 
 	logger.Debugf("Recovering check %q with period %v", details.Name, config.Period.Value)

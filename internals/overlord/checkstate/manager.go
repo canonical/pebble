@@ -18,6 +18,7 @@ import (
 	"context"
 	"sort"
 	"sync"
+	"sync/atomic"
 
 	"github.com/canonical/pebble/internals/overlord/state"
 	"github.com/canonical/pebble/internals/plan"
@@ -25,7 +26,8 @@ import (
 
 // CheckManager starts and manages the health checks.
 type CheckManager struct {
-	state *state.State
+	state      *state.State
+	ensureDone atomic.Bool
 
 	checksLock sync.Mutex
 	checks     map[string]*checkData
@@ -51,6 +53,7 @@ func NewManager(s *state.State, runner *state.TaskRunner) *CheckManager {
 }
 
 func (m *CheckManager) Ensure() error {
+	m.ensureDone.Store(true)
 	return nil
 }
 
@@ -69,7 +72,9 @@ func (m *CheckManager) PlanChanged(newPlan *plan.Plan) {
 	// First cancel tasks of currently-running checks.
 	m.checksLock.Lock()
 	for name, data := range m.checks {
-		data.cancel()
+		if data.cancel != nil {
+			data.cancel()
+		}
 		delete(m.checks, name)
 	}
 	m.checksLock.Unlock()
@@ -84,6 +89,11 @@ func (m *CheckManager) PlanChanged(newPlan *plan.Plan) {
 	defer m.state.Unlock()
 	for _, config := range newPlan.Checks {
 		m.performCheckChange(config)
+	}
+	if !m.ensureDone.Load() {
+		// Can't call EnsureBefore before Overlord.Loop is running (which will
+		// call m.Ensure for the first time).
+		return
 	}
 	m.state.EnsureBefore(0) // start new tasks right away
 }
