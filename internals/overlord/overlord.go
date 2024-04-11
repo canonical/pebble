@@ -43,12 +43,14 @@ import (
 var (
 	ensureInterval = 5 * time.Minute
 	pruneInterval  = 10 * time.Minute
-	pruneWait      = 24 * time.Hour * 1
-	abortWait      = 24 * time.Hour * 7
+
+	// In snapd this is 24h, but that's too short in the context of Pebble.
+	pruneWait = 24 * time.Hour * 7
+
+	// In snapd this is 7d, but also increase that in the context of Pebble.
+	abortWait = 24 * time.Hour * 14
 
 	pruneMaxChanges = 500
-
-	defaultCachedDownloads = 5
 )
 
 var pruneTickerC = func(t *time.Ticker) <-chan time.Time {
