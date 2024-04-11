@@ -16,7 +16,7 @@ import (
 )
 
 type ServiceManager struct {
-	state  *state.State
+	state *state.State
 
 	planLock sync.Mutex
 	plan     *plan.Plan
