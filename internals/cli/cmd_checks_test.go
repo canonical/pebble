@@ -37,32 +37,33 @@ func (s *PebbleSuite) TestChecks(c *check.C) {
     "result": [
 		{"name": "chk1", "status": "up", "threshold": 3, "change-id": "1"},
 		{"name": "chk2", "status": "down", "failures": 1, "threshold": 1, "change-id": "2"},
-		{"name": "chk3", "level": "alive", "status": "down", "failures": 42, "threshold": 3, "change-id": "3"}
+		{"name": "chk3", "level": "alive", "status": "down", "failures": 42, "threshold": 3, "change-id": "3"},
+		{"name": "chk4", "status": "down", "failures": 6, "threshold": 2, "change-id": "4"}
 	]
 }`)
-		case "/v1/changes/1":
+		case "/v1/changes/2":
 			fmt.Fprint(w, `
 {
 	"type": "sync",
 	"result": {
-		"id":   "1",
+		"id": "2",
 		"kind": "recover-check",
 		"status": "Doing",
 		"tasks": [{"kind": "recover-check", "status": "Doing", "log": ["first error", "second error"]}]
 	}
 }`)
-		case "/v1/changes/2":
+		case "/v1/changes/3":
 			fmt.Fprint(w, `
 {
 	"type": "error",
-	"result": {"message": "cannot get change 1"}
+	"result": {"message": "cannot get change 3"}
 }`)
-		case "/v1/changes/3":
+		case "/v1/changes/4":
 			fmt.Fprint(w, `
 {
 	"type": "sync",
 	"result": {
-		"id":   "1",
+		"id": "4",
 		"kind": "perform-check",
 		"status": "Doing",
 		"tasks": [{"kind": "recover-check", "status": "Doing", "log": ["this is a long error message that will surely get truncated"]}]
@@ -77,9 +78,10 @@ func (s *PebbleSuite) TestChecks(c *check.C) {
 	c.Assert(rest, check.HasLen, 0)
 	c.Check(s.Stdout(), check.Equals, `
 Check  Level  Status  Failures  Change
-chk1   -      up      0/3       1 (second error)
-chk2   -      down    1/1       2 (ERROR: cannot get change 1)
-chk3   alive  down    42/3      3 (this is a long error me...ill surely get truncated)
+chk1   -      up      0/3       1
+chk2   -      down    1/1       2 (second error)
+chk3   alive  down    42/3      3 (ERROR: cannot get change 3)
+chk4   -      down    6/2       4 (this is a long error me...ill surely get truncated)
 `[1:])
 	c.Check(s.Stderr(), check.Equals, "")
 }

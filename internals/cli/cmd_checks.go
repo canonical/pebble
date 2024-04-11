@@ -84,27 +84,36 @@ func (cmd *cmdChecks) Execute(args []string) error {
 		if level == client.UnsetLevel {
 			level = "-"
 		}
-		change := "-"
-		if check.ChangeID != "" {
-			change = check.ChangeID
-			log, err := cmd.getLastTaskLog(check.ChangeID)
-			if err != nil {
-				change += " (ERROR: " + err.Error() + ")"
-			} else if log != "" {
-				// Truncate to 50 bytes with ellipsis in the middle
-				if len(log) > 50 {
-					log = log[:23] + "..." + log[len(log)-24:]
-				}
-				change += " (" + log + ")"
-			}
-		}
 		fmt.Fprintf(w, "%s\t%s\t%s\t%d/%d\t%s\n",
-			check.Name, level, check.Status, check.Failures, check.Threshold, change)
+			check.Name, level, check.Status, check.Failures,
+			check.Threshold, cmd.changeInfo(check))
 	}
 	return nil
 }
 
-func (cmd *cmdChecks) getLastTaskLog(changeID string) (string, error) {
+func (cmd *cmdChecks) changeInfo(check *client.CheckInfo) string {
+	if check.ChangeID == "" {
+		return "-"
+	}
+	// Only include last task log if check is down.
+	if check.Status != client.CheckStatusDown {
+		return check.ChangeID
+	}
+	log, err := cmd.lastTaskLog(check.ChangeID)
+	if err != nil {
+		return fmt.Sprintf("%s (ERROR: %v)", check.ChangeID, err)
+	}
+	if log == "" {
+		return check.ChangeID
+	}
+	// Truncate to 50 bytes with ellipsis in the middle.
+	if len(log) > 50 {
+		log = log[:23] + "..." + log[len(log)-24:]
+	}
+	return fmt.Sprintf("%s (%s)", check.ChangeID, log)
+}
+
+func (cmd *cmdChecks) lastTaskLog(changeID string) (string, error) {
 	change, err := cmd.client.Change(changeID)
 	if err != nil {
 		return "", err
