@@ -14,6 +14,8 @@
 
 package checkstate
 
+// TODO: should it only go to recover-check when it hits the threshold?
+
 import (
 	"context"
 	"sort"
@@ -22,6 +24,10 @@ import (
 
 	"github.com/canonical/pebble/internals/overlord/state"
 	"github.com/canonical/pebble/internals/plan"
+)
+
+const (
+	noPruneAttr = "checkstate-no-prune"
 )
 
 // CheckManager starts and manages the health checks.
@@ -47,6 +53,10 @@ func NewManager(s *state.State, runner *state.TaskRunner) *CheckManager {
 		state:  s,
 		checks: make(map[string]*checkData),
 	}
+	// Health check changes can be long-running; ensure they don't get pruned.
+	s.RegisterPendingChangeByAttr(noPruneAttr, func(change *state.Change) bool {
+		return true
+	})
 	runner.AddHandler("perform-check", manager.doPerformCheck, nil)
 	runner.AddHandler("recover-check", manager.doRecoverCheck, nil)
 	return manager
@@ -101,6 +111,7 @@ func (m *CheckManager) PlanChanged(newPlan *plan.Plan) {
 func (m *CheckManager) performCheckChange(config *plan.Check) (changeID string) {
 	task := performCheck(m.state, config.Name, checkType(config))
 	change := m.state.NewChange("perform-check", task.Summary())
+	change.Set(noPruneAttr, true)
 	change.AddTask(task)
 	return change.ID()
 }
@@ -108,6 +119,7 @@ func (m *CheckManager) performCheckChange(config *plan.Check) (changeID string) 
 func (m *CheckManager) recoverCheckChange(config *plan.Check) (changeID string) {
 	task := recoverCheck(m.state, config.Name, checkType(config))
 	change := m.state.NewChange("recover-check", task.Summary())
+	change.Set(noPruneAttr, true)
 	change.AddTask(task)
 	return change.ID()
 }
