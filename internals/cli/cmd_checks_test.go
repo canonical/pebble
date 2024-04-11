@@ -27,26 +27,59 @@ import (
 func (s *PebbleSuite) TestChecks(c *check.C) {
 	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
 		c.Assert(r.Method, check.Equals, "GET")
-		c.Assert(r.URL.Path, check.Equals, "/v1/checks")
 		c.Assert(r.URL.Query(), check.DeepEquals, url.Values{})
-		fmt.Fprint(w, `{
+		switch r.URL.Path {
+		case "/v1/checks":
+			fmt.Fprint(w, `
+{
     "type": "sync",
     "status-code": 200,
     "result": [
-		{"name": "chk1", "status": "up", "threshold": 3},
-		{"name": "chk2", "status": "down", "failures": 1, "threshold": 1},
-		{"name": "chk3", "level": "alive", "status": "down", "failures": 42, "threshold": 3}
+		{"name": "chk1", "status": "up", "threshold": 3, "change-id": "1"},
+		{"name": "chk2", "status": "down", "failures": 1, "threshold": 1, "change-id": "2"},
+		{"name": "chk3", "level": "alive", "status": "down", "failures": 42, "threshold": 3, "change-id": "3"}
 	]
 }`)
+		case "/v1/changes/1":
+			fmt.Fprint(w, `
+{
+	"type": "sync",
+	"result": {
+		"id":   "1",
+		"kind": "recover-check",
+		"status": "Doing",
+		"tasks": [{"kind": "recover-check", "status": "Doing", "log": ["first error", "second error"]}]
+	}
+}`)
+		case "/v1/changes/2":
+			fmt.Fprint(w, `
+{
+	"type": "error",
+	"result": {"message": "cannot get change 1"}
+}`)
+		case "/v1/changes/3":
+			fmt.Fprint(w, `
+{
+	"type": "sync",
+	"result": {
+		"id":   "1",
+		"kind": "perform-check",
+		"status": "Doing",
+		"tasks": [{"kind": "recover-check", "status": "Doing", "log": ["this is a long error message that will surely get truncated"]}]
+	}
+}`)
+		default:
+			c.Fatalf("unexpected path %q", r.URL.Path)
+		}
 	})
 	rest, err := cli.ParserForTest().ParseArgs([]string{"checks"})
 	c.Assert(err, check.IsNil)
 	c.Assert(rest, check.HasLen, 0)
 	c.Check(s.Stdout(), check.Equals, `
-Check  Level  Status  Failures
-chk1   -      up      0/3
-chk2   -      down    1/1
-chk3   alive  down    42/3
+Check  Level  Status  Failures  Change
+chk1   -      up      0/3       1 (second error)
+chk2   -      down    1/1       2 (ERROR: cannot get change 1)
+chk3   alive  down    42/3      3 (this is a long error me...ill surely get truncated)
 `[1:])
 	c.Check(s.Stderr(), check.Equals, "")
 }
@@ -105,9 +138,9 @@ func (s *PebbleSuite) TestChecksFiltering(c *check.C) {
 	c.Assert(err, check.IsNil)
 	c.Assert(rest, check.HasLen, 0)
 	c.Check(s.Stdout(), check.Equals, `
-Check  Level  Status  Failures
-chk1   -      up      0/3
-chk3   alive  down    42/3
+Check  Level  Status  Failures  Change
+chk1   -      up      0/3       -
+chk3   alive  down    42/3      -
 `[1:])
 	c.Check(s.Stderr(), check.Equals, "")
 }

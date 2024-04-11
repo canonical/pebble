@@ -16,6 +16,7 @@ package daemon
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -52,20 +53,22 @@ checks:
 	for {
 		// Health checks are started asynchronously as changes, so wait for
 		// them to appear.
-		if time.Since(start) > 10*time.Second {
-			c.Fatalf("timed out waiting for checks to settle")
-		}
 		rsp, body := s.getChecks(c, "")
 		c.Check(rsp.Status, Equals, 200)
 		c.Check(rsp.Type, Equals, ResponseTypeSync)
 		expected := []interface{}{
-			map[string]interface{}{"name": "chk1", "status": "up", "level": "ready", "threshold": 3.0},
-			map[string]interface{}{"name": "chk2", "status": "up", "level": "alive", "threshold": 3.0},
-			map[string]interface{}{"name": "chk3", "status": "up", "threshold": 3.0},
+			map[string]interface{}{"name": "chk1", "status": "up", "level": "ready", "threshold": 3.0, "change-id": "C0"},
+			map[string]interface{}{"name": "chk2", "status": "up", "level": "alive", "threshold": 3.0, "change-id": "C1"},
+			map[string]interface{}{"name": "chk3", "status": "up", "threshold": 3.0, "change-id": "C2"},
 		}
 		if reflect.DeepEqual(body["result"], expected) {
 			break
 		}
+		if time.Since(start) > time.Second {
+			c.Fatalf("timed out waiting for checks to settle\nobtained = #%v\nexpected = %#v",
+				body["result"], expected)
+		}
+		time.Sleep(time.Millisecond)
 	}
 
 	// Request with names filter
@@ -73,8 +76,8 @@ checks:
 	c.Check(rsp.Status, Equals, 200)
 	c.Check(rsp.Type, Equals, ResponseTypeSync)
 	c.Check(body["result"], DeepEquals, []interface{}{
-		map[string]interface{}{"name": "chk1", "status": "up", "level": "ready", "threshold": 3.0},
-		map[string]interface{}{"name": "chk3", "status": "up", "threshold": 3.0},
+		map[string]interface{}{"name": "chk1", "status": "up", "level": "ready", "threshold": 3.0, "change-id": "C0"},
+		map[string]interface{}{"name": "chk3", "status": "up", "threshold": 3.0, "change-id": "C1"},
 	})
 
 	// Request with names filter (comma-separated values)
@@ -82,8 +85,8 @@ checks:
 	c.Check(rsp.Status, Equals, 200)
 	c.Check(rsp.Type, Equals, ResponseTypeSync)
 	c.Check(body["result"], DeepEquals, []interface{}{
-		map[string]interface{}{"name": "chk1", "status": "up", "level": "ready", "threshold": 3.0},
-		map[string]interface{}{"name": "chk3", "status": "up", "threshold": 3.0},
+		map[string]interface{}{"name": "chk1", "status": "up", "level": "ready", "threshold": 3.0, "change-id": "C0"},
+		map[string]interface{}{"name": "chk3", "status": "up", "threshold": 3.0, "change-id": "C1"},
 	})
 
 	// Request with level filter
@@ -91,7 +94,7 @@ checks:
 	c.Check(rsp.Status, Equals, 200)
 	c.Check(rsp.Type, Equals, ResponseTypeSync)
 	c.Check(body["result"], DeepEquals, []interface{}{
-		map[string]interface{}{"name": "chk2", "status": "up", "level": "alive", "threshold": 3.0},
+		map[string]interface{}{"name": "chk2", "status": "up", "level": "alive", "threshold": 3.0, "change-id": "C0"},
 	})
 
 	// Request with names and level filters
@@ -99,7 +102,7 @@ checks:
 	c.Check(rsp.Status, Equals, 200)
 	c.Check(rsp.Type, Equals, ResponseTypeSync)
 	c.Check(body["result"], DeepEquals, []interface{}{
-		map[string]interface{}{"name": "chk1", "status": "up", "level": "ready", "threshold": 3.0},
+		map[string]interface{}{"name": "chk1", "status": "up", "level": "ready", "threshold": 3.0, "change-id": "C0"},
 	})
 }
 
@@ -136,5 +139,15 @@ func (s *apiSuite) getChecks(c *C, query string) (*resp, map[string]interface{})
 	var body map[string]interface{}
 	err = json.Unmarshal(rec.Body.Bytes(), &body)
 	c.Check(err, IsNil)
+
+	// Standardise the change-id fields before comparison as these can vary.
+	if results, ok := body["result"].([]interface{}); ok {
+		for i, result := range results {
+			resultMap := result.(map[string]interface{})
+			c.Check(resultMap["change-id"].(string), Not(Equals), "")
+			resultMap["change-id"] = fmt.Sprintf("C%d", i)
+		}
+	}
+
 	return rsp, body
 }

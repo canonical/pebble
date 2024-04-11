@@ -28,6 +28,7 @@ type checkInfo struct {
 	Status    string `json:"status"`
 	Failures  int    `json:"failures,omitempty"`
 	Threshold int    `json:"threshold"`
+	ChangeID  string `json:"change-id,omitempty"`
 }
 
 func v1GetChecks(c *Command, r *http.Request, _ *UserState) Response {
@@ -58,6 +59,7 @@ func v1GetChecks(c *Command, r *http.Request, _ *UserState) Response {
 				Status:    string(check.Status),
 				Failures:  check.Failures,
 				Threshold: check.Threshold,
+				ChangeID:  check.ChangeID,
 			}
 			infos = append(infos, info)
 		}

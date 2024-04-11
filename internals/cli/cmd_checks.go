@@ -77,14 +77,44 @@ func (cmd *cmdChecks) Execute(args []string) error {
 	w := tabWriter()
 	defer w.Flush()
 
-	fmt.Fprintln(w, "Check\tLevel\tStatus\tFailures")
+	fmt.Fprintln(w, "Check\tLevel\tStatus\tFailures\tChange")
 
 	for _, check := range checks {
 		level := check.Level
 		if level == client.UnsetLevel {
 			level = "-"
 		}
-		fmt.Fprintf(w, "%s\t%s\t%s\t%d/%d\n", check.Name, level, check.Status, check.Failures, check.Threshold)
+		change := "-"
+		if check.ChangeID != "" {
+			change = check.ChangeID
+			log, err := cmd.getLastTaskLog(check.ChangeID)
+			if err != nil {
+				change += " (ERROR: " + err.Error() + ")"
+			} else if log != "" {
+				// Truncate to 50 bytes with ellipsis in the middle
+				if len(log) > 50 {
+					log = log[:23] + "..." + log[len(log)-24:]
+				}
+				change += " (" + log + ")"
+			}
+		}
+		fmt.Fprintf(w, "%s\t%s\t%s\t%d/%d\t%s\n",
+			check.Name, level, check.Status, check.Failures, check.Threshold, change)
 	}
 	return nil
+}
+
+func (cmd *cmdChecks) getLastTaskLog(changeID string) (string, error) {
+	change, err := cmd.client.Change(changeID)
+	if err != nil {
+		return "", err
+	}
+	if len(change.Tasks) < 1 {
+		return "", nil
+	}
+	logs := change.Tasks[0].Log
+	if len(logs) < 1 {
+		return "", nil
+	}
+	return logs[len(logs)-1], nil
 }

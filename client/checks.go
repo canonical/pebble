@@ -66,6 +66,11 @@ type CheckInfo struct {
 	// Threshold is this check's failure threshold, from the layer
 	// configuration.
 	Threshold int `json:"threshold"`
+
+	// ChangeID is the ID of the change corresponding to this check operation.
+	// The change will be of kind "perform-check" if the check is succeeding,
+	// or "recover-check" if it's failing.
+	ChangeID string `json:"change-id"`
 }
 
 // Checks fetches information about specific health checks (or all of them),

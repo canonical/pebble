@@ -203,7 +203,7 @@ type CheckInfo struct {
 	Status    CheckStatus
 	Failures  int
 	Threshold int
-	ChangeID  string // TODO: wire this up in API and CLI too
+	ChangeID  string
 }
 
 type CheckStatus string
