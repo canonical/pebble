@@ -89,7 +89,7 @@ services:
 				args = append(args, "--combine")
 			}
 			args = append(args, "foo", path)
-			rest, err := cli.Parser(cli.Client()).ParseArgs(args)
+			rest, err := cli.ParserForTest().ParseArgs(args)
 
 			if path == layerPath {
 				c.Assert(err, check.IsNil)
@@ -105,7 +105,7 @@ services:
 		}
 
 		args = append(args, "extra", "arguments", "invalid")
-		_, err = cli.Parser(cli.Client()).ParseArgs(args)
+		_, err = cli.ParserForTest().ParseArgs(args)
 		c.Assert(err, check.Equals, cli.ErrExtraArgs)
 	}
 }

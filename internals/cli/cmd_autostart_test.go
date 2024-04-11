@@ -24,7 +24,7 @@ import (
 )
 
 func (s *PebbleSuite) TestAutostartExtraArgs(c *check.C) {
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"autostart", "extra", "args"})
+	rest, err := cli.ParserForTest().ParseArgs([]string{"autostart", "extra", "args"})
 	c.Assert(err, check.Equals, cli.ErrExtraArgs)
 	c.Assert(rest, check.HasLen, 1)
 	c.Check(s.Stdout(), check.Equals, "")
@@ -67,7 +67,7 @@ func (s *PebbleSuite) TestAutostart(c *check.C) {
 }`)
 	})
 
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"autostart"})
+	rest, err := cli.ParserForTest().ParseArgs([]string{"autostart"})
 	c.Assert(err, check.IsNil)
 	c.Assert(rest, check.HasLen, 0)
 	c.Check(s.Stdout(), check.Equals, "")
@@ -91,7 +91,7 @@ func (s *PebbleSuite) TestAutostartFailsNoDefaultServices(c *check.C) {
 }`)
 	})
 
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"autostart"})
+	rest, err := cli.ParserForTest().ParseArgs([]string{"autostart"})
 	c.Assert(err, check.ErrorMatches, "no default services")
 	c.Assert(rest, check.HasLen, 1)
 	c.Check(s.Stdout(), check.Equals, "")
@@ -117,7 +117,7 @@ func (s *PebbleSuite) TestAutostartNoWait(c *check.C) {
 }`)
 	})
 
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"autostart", "--no-wait"})
+	rest, err := cli.ParserForTest().ParseArgs([]string{"autostart", "--no-wait"})
 	c.Assert(err, check.IsNil)
 	c.Assert(rest, check.HasLen, 0)
 	c.Check(s.Stdout(), check.Equals, "42\n")
@@ -148,7 +148,7 @@ func (s *PebbleSuite) TestAutostartFailsGetChange(c *check.C) {
 }`)
 	})
 
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"autostart"})
+	rest, err := cli.ParserForTest().ParseArgs([]string{"autostart"})
 	c.Assert(err, check.ErrorMatches, "could not foo")
 	c.Assert(rest, check.HasLen, 1)
 	c.Check(s.Stdout(), check.Equals, "")

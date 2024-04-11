@@ -48,18 +48,15 @@ var (
 	noticef = logger.Noticef
 )
 
-// defaultPebbleDir is the Pebble directory used if $PEBBLE is not set. It is
-// created by the daemon ("pebble run") if it doesn't exist, and also used by
-// the pebble client.
-const defaultPebbleDir = "/var/lib/pebble/default"
-
 // ErrExtraArgs is returned  if extra arguments to a command are found
 var ErrExtraArgs = fmt.Errorf("too many arguments for command")
 
 // CmdOptions exposes state made accessible during command execution.
 type CmdOptions struct {
-	Client *client.Client
-	Parser *flags.Parser
+	Client     *client.Client
+	Parser     *flags.Parser
+	PebbleDir  string
+	SocketPath string
 }
 
 // CmdInfo holds information needed by the CLI to execute commands and
@@ -152,14 +149,20 @@ type defaultOptions struct {
 	Version func() `long:"version" hidden:"yes" description:"Print the version and exit"`
 }
 
+type ParserOptions struct {
+	Client     *client.Client
+	PebbleDir  string
+	SocketPath string
+}
+
 // Parser creates and populates a fresh parser.
 // Since commands have local state a fresh parser is required to isolate tests
 // from each other.
-func Parser(cli *client.Client) *flags.Parser {
+func Parser(opts *ParserOptions) *flags.Parser {
 	// Implement --version by default on every command
 	defaultOpts := defaultOptions{
 		Version: func() {
-			printVersions(cli)
+			printVersions(opts.Client)
 			panic(&exitStatus{0})
 		},
 	}
@@ -168,7 +171,7 @@ func Parser(cli *client.Client) *flags.Parser {
 	parser := flags.NewParser(&defaultOpts, flagOpts)
 	parser.Command.Name = cmd.ProgramName
 	parser.ShortDescription = "System and service manager"
-	parser.LongDescription = applyPersonality(longPebbleDescription)
+	parser.LongDescription = applyPersonality(HelpHeader)
 
 	// Add --help like what go-flags would do for us, but hidden
 	addHelp(parser)
@@ -186,7 +189,12 @@ func Parser(cli *client.Client) *flags.Parser {
 
 	// Add all commands
 	for _, c := range commands {
-		obj := c.New(&CmdOptions{Client: cli, Parser: parser})
+		obj := c.New(&CmdOptions{
+			Client:     opts.Client,
+			Parser:     parser,
+			PebbleDir:  opts.PebbleDir,
+			SocketPath: opts.SocketPath,
+		})
 
 		var target *flags.Command
 		if c.Debug {
@@ -243,7 +251,11 @@ func Parser(cli *client.Client) *flags.Parser {
 }
 
 func applyPersonality(s string) string {
-	r := strings.NewReplacer("{{.ProgramName}}", cmd.ProgramName, "{{.DisplayName}}", cmd.DisplayName)
+	r := strings.NewReplacer(
+		"{{.ProgramName}}", cmd.ProgramName,
+		"{{.DisplayName}}", cmd.DisplayName,
+		"{{.DefaultDir}}", cmd.DefaultDir,
+	)
 	return r.Replace(s)
 }
 
@@ -252,9 +264,6 @@ var (
 	isStdoutTTY = term.IsTerminal(1)
 	osExit      = os.Exit
 )
-
-// ClientConfig is the configuration of the Client used by all commands.
-var clientConfig client.Config
 
 // exitStatus can be used in panic(&exitStatus{code}) to cause Pebble's main
 // function to exit with a given exit code, for the rare cases when you want
@@ -268,7 +277,19 @@ func (e *exitStatus) Error() string {
 	return fmt.Sprintf("internal error: exitStatus{%d} being handled as normal error", e.code)
 }
 
-func Run() error {
+type RunOptions struct {
+	// when starting a daemon ("pebble run"), the ClientConfig.Socket value
+	// is also used as the Unix domain socket path for the listening socket
+	ClientConfig *client.Config
+	Logger       logger.Logger
+	PebbleDir    string
+}
+
+func Run(options *RunOptions) error {
+	if options == nil {
+		options = &RunOptions{}
+	}
+
 	defer func() {
 		if v := recover(); v != nil {
 			if e, ok := v.(*exitStatus); ok {
@@ -278,16 +299,31 @@ func Run() error {
 		}
 	}()
 
-	logger.SetLogger(logger.New(os.Stderr, fmt.Sprintf("[%s] ", cmd.ProgramName)))
+	log := options.Logger
+	if log == nil {
+		log = logger.New(os.Stderr, fmt.Sprintf("[%s] ", cmd.ProgramName))
+	}
+	logger.SetLogger(log)
 
-	_, clientConfig.Socket = getEnvPaths()
-
-	cli, err := client.New(&clientConfig)
+	config := options.ClientConfig
+	if config == nil {
+		config = &client.Config{}
+		_, config.Socket = getEnvPaths()
+	}
+	cli, err := client.New(config)
 	if err != nil {
 		return fmt.Errorf("cannot create client: %v", err)
 	}
 
-	parser := Parser(cli)
+	pebbleDir := options.PebbleDir
+	if pebbleDir == "" {
+		pebbleDir, _ = getEnvPaths()
+	}
+	parser := Parser(&ParserOptions{
+		Client:     cli,
+		PebbleDir:  pebbleDir,
+		SocketPath: config.Socket,
+	})
 	xtra, err := parser.Parse()
 	if err != nil {
 		if e, ok := err.(*flags.Error); ok {
@@ -366,7 +402,7 @@ func errorToMessage(e error) (normalMessage string, err error) {
 func getEnvPaths() (pebbleDir string, socketPath string) {
 	pebbleDir = os.Getenv("PEBBLE")
 	if pebbleDir == "" {
-		pebbleDir = defaultPebbleDir
+		pebbleDir = cmd.DefaultDir
 	}
 	socketPath = os.Getenv("PEBBLE_SOCKET")
 	if socketPath == "" {
@@ -390,12 +426,11 @@ type fullCLIState struct {
 }
 
 // TODO(benhoyt): add file locking to properly handle multi-user access
-func loadCLIState() (*cliState, error) {
+func loadCLIState(socketPath string) (*cliState, error) {
 	fullState, err := loadFullCLIState()
 	if err != nil {
 		return nil, err
 	}
-	_, socketPath := getEnvPaths()
 	st, ok := fullState.Pebble[socketPath]
 	if !ok {
 		return &cliState{}, nil
@@ -424,13 +459,12 @@ func loadFullCLIState() (*fullCLIState, error) {
 	return &fullState, nil
 }
 
-func saveCLIState(state *cliState) error {
+func saveCLIState(socketPath string, state *cliState) error {
 	fullState, err := loadFullCLIState()
 	if err != nil {
 		return err
 	}
 
-	_, socketPath := getEnvPaths()
 	fullState.Pebble[socketPath] = state
 
 	data, err := json.Marshal(fullState)

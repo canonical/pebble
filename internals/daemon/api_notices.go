@@ -1,4 +1,4 @@
-// Copyright (c) 2023 Canonical Ltd
+// Copyright (c) 2023-2024 Canonical Ltd
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License version 3 as
@@ -29,7 +29,7 @@ import (
 	"github.com/canonical/pebble/internals/overlord/state"
 )
 
-// Ensure custom keys are in the form "domain.com/key" (but somewhat more restrictive).
+// Ensure custom keys are in the form "example.com/path" (but somewhat more restrictive).
 var customKeyRegexp = regexp.MustCompile(
 	`^[a-z0-9]+(-[a-z0-9]+)*(\.[a-z0-9]+(-[a-z0-9]+)*)+(/[a-z0-9]+(-[a-z0-9]+)*)+$`)
 
@@ -166,6 +166,7 @@ func sanitizeUserIDFilter(queryUserID []string) (*uint32, error) {
 // Construct the types filter which will be passed to state.Notices.
 func sanitizeTypesFilter(queryTypes []string) ([]state.NoticeType, error) {
 	typeStrs := strutil.MultiCommaSeparatedList(queryTypes)
+	alreadySeen := make(map[state.NoticeType]bool, len(typeStrs))
 	types := make([]state.NoticeType, 0, len(typeStrs))
 	for _, typeStr := range typeStrs {
 		noticeType := state.NoticeType(typeStr)
@@ -174,6 +175,10 @@ func sanitizeTypesFilter(queryTypes []string) ([]state.NoticeType, error) {
 			// with unknown types succeed).
 			continue
 		}
+		if alreadySeen[noticeType] {
+			continue
+		}
+		alreadySeen[noticeType] = true
 		types = append(types, noticeType)
 	}
 	if len(types) == 0 && len(typeStrs) > 0 {
@@ -211,7 +216,7 @@ func v1PostNotices(c *Command, r *http.Request, _ *UserState) Response {
 		return BadRequest(`invalid type %q (can only add "custom" notices)`, payload.Type)
 	}
 	if !customKeyRegexp.MatchString(payload.Key) {
-		return BadRequest(`invalid key %q (must be in "domain.com/key" format)`, payload.Key)
+		return BadRequest(`invalid key %q (must be in "example.com/path" format)`, payload.Key)
 	}
 	if len(payload.Key) > maxNoticeKeyLength {
 		return BadRequest("key must be %d bytes or less", maxNoticeKeyLength)

@@ -1,4 +1,4 @@
-// Copyright (c) 2023 Canonical Ltd
+// Copyright (c) 2023-2024 Canonical Ltd
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License version 3 as
@@ -157,7 +157,7 @@ func (s *apiSuite) TestNoticesFilterMultipleTypes(c *C) {
 	addNotice(c, st, nil, state.WarningNotice, "danger", nil)
 	st.Unlock()
 
-	req, err := http.NewRequest("GET", "/v1/notices?types=change-update&types=warning", nil)
+	req, err := http.NewRequest("GET", "/v1/notices?types=change-update&types=warning,warning", nil)
 	c.Assert(err, IsNil)
 	req.RemoteAddr = "pid=100;uid=1000;socket=;"
 	noticesCmd := apiCmd("/v1/notices")

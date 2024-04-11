@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2020 Canonical Ltd
+// Copyright (c) 2014-2024 Canonical Ltd
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License version 3 as
@@ -14,13 +14,11 @@
 
 package cmd
 
-//go:generate ./mkversion.sh
+// ProgramName represents the name of the application binary.
+var ProgramName string = "pebble"
 
-// Version will be overwritten at build-time via mkversion.sh
-var Version = "v1.11.0-dev"
+// DisplayName represents the user-facing name of the application.
+var DisplayName string = "Pebble"
 
-func MockVersion(version string) (restore func()) {
-	old := Version
-	Version = version
-	return func() { Version = old }
-}
+// DefaultDir is the Pebble directory used if $PEBBLE is not set.
+var DefaultDir string = "/var/lib/pebble/default"

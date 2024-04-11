@@ -296,7 +296,7 @@ func (r *TaskRunner) run(t *Task) {
 			t.SetStatus(ErrorStatus)
 			t.Errorf("%s", err)
 			// ensure the error is available in the global log too
-			logger.Noticef("[change %s %q task] failed: %v", t.Change().ID(), t.Summary(), err)
+			logger.Noticef("Change %s task (%s) failed: %v", t.Change().ID(), t.Summary(), err)
 			if r.taskErrorCallback != nil {
 				r.taskErrorCallback(err)
 			}

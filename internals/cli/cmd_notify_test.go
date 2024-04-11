@@ -48,7 +48,7 @@ func (s *PebbleSuite) TestNotifyBasic(c *C) {
 		}`)
 	})
 
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"notify", "a.b/c"})
+	rest, err := cli.ParserForTest().ParseArgs([]string{"notify", "a.b/c"})
 	c.Assert(err, IsNil)
 	c.Check(rest, HasLen, 0)
 	c.Check(s.Stdout(), Equals, "Recorded notice 123\n")
@@ -83,7 +83,7 @@ func (s *PebbleSuite) TestNotifyData(c *C) {
 		}`)
 	})
 
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{
+	rest, err := cli.ParserForTest().ParseArgs([]string{
 		"notify", "--repeat-after=1h", "a.b/c", "k=v", "foo=bar bazz"})
 	c.Assert(err, IsNil)
 	c.Check(rest, HasLen, 0)
@@ -92,6 +92,6 @@ func (s *PebbleSuite) TestNotifyData(c *C) {
 }
 
 func (s *PebbleSuite) TestNotifyInvalidData(c *C) {
-	_, err := cli.Parser(cli.Client()).ParseArgs([]string{"notify", "a.b/c", "bad"})
+	_, err := cli.ParserForTest().ParseArgs([]string{"notify", "a.b/c", "bad"})
 	c.Assert(err, ErrorMatches, "data args.*")
 }

@@ -271,3 +271,18 @@ func (cs *clientSuite) TestClientAbort(c *check.C) {
 
 	c.Assert(string(body), check.Equals, "{\"action\":\"abort\"}\n")
 }
+
+func (cs *clientSuite) TestChangeInvalidID(c *check.C) {
+	_, err := cs.cli.Change("select * from users;")
+	c.Assert(err, check.ErrorMatches, "invalid change ID.*")
+}
+
+func (cs *clientSuite) TestAbortInvalidID(c *check.C) {
+	_, err := cs.cli.Abort("<foo>")
+	c.Assert(err, check.ErrorMatches, "invalid change ID.*")
+}
+
+func (cs *clientSuite) TestWaitChangeInvalidID(c *check.C) {
+	_, err := cs.cli.WaitChange("$bar", nil)
+	c.Assert(err, check.ErrorMatches, "invalid change ID.*")
+}

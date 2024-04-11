@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 
 	"gopkg.in/check.v1"
 
@@ -109,6 +110,31 @@ func (cs *clientSuite) TestLogsAll(c *check.C) {
 2021-05-03T03:55:49.360Z [thing] log 1
 2021-05-03T03:55:49.654Z [snappass] log two
 `[1:])
+}
+
+func (cs *clientSuite) TestLogsLong(c *check.C) {
+	const maxMessageSize = 4 * 1024
+	shortLog1 := `{"time":"2021-05-03T03:55:49.360994155Z","service":"thing","message":"log 1\n"}`
+	longLog := (`{"time":"2021-05-03T03:55:49.460994155Z","service":"verbose","message":"` +
+		strings.Repeat("a", maxMessageSize) + `\n"}`)
+	shortLog2 := `{"time":"2021-05-03T03:55:49.654334232Z","service":"snappass","message":"log two\n"}`
+	cs.rsp = shortLog1 + "\n" + longLog + "\n" + shortLog2 + "\n"
+	out, writeLog := makeLogWriter()
+	err := cs.cli.Logs(&client.LogsOptions{
+		WriteLog: writeLog,
+		N:        -1,
+	})
+	c.Assert(err, check.IsNil)
+	c.Check(cs.req.Method, check.Equals, "GET")
+	c.Check(cs.req.URL.Path, check.Equals, "/v1/logs")
+	c.Check(cs.req.URL.Query(), check.DeepEquals, url.Values{
+		"n": []string{"-1"},
+	})
+	shortExpected1 := "2021-05-03T03:55:49.360Z [thing] log 1\n"
+	longExpected := "2021-05-03T03:55:49.460Z [verbose] " + strings.Repeat("a", maxMessageSize) + "\n"
+	shortExpected2 := "2021-05-03T03:55:49.654Z [snappass] log two\n"
+	expected := shortExpected1 + longExpected + shortExpected2
+	c.Check(out.String(), check.Equals, expected)
 }
 
 func (cs *clientSuite) TestFollowLogs(c *check.C) {

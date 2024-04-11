@@ -35,7 +35,7 @@ func v1Health(c *Command, r *http.Request, _ *UserState) Response {
 	switch level {
 	case plan.UnsetLevel, plan.AliveLevel, plan.ReadyLevel:
 	default:
-		return BadRequest(`level must be "alive" or "ready"`)
+		return healthError(http.StatusBadRequest, `level must be "alive" or "ready"`)
 	}
 
 	names := strutil.MultiCommaSeparatedList(query["names"])
@@ -43,7 +43,7 @@ func v1Health(c *Command, r *http.Request, _ *UserState) Response {
 	checks, err := getChecks(c.d.overlord)
 	if err != nil {
 		logger.Noticef("Cannot fetch checks: %v", err.Error())
-		return InternalError("internal server error")
+		return healthError(http.StatusInternalServerError, "internal server error")
 	}
 
 	healthy := true
@@ -88,4 +88,13 @@ func (r *healthResp) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	w.Write(bs)
+}
+
+func healthError(status int, message string) *healthResp {
+	return &healthResp{
+		Type:       ResponseTypeError,
+		Status:     status,
+		StatusText: http.StatusText(status),
+		Result:     &errorResult{Message: message},
+	}
 }
