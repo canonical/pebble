@@ -95,8 +95,8 @@ func (cmd *cmdChecks) changeInfo(check *client.CheckInfo) string {
 	if check.ChangeID == "" {
 		return "-"
 	}
-	// Only include last task log if check is down.
-	if check.Status != client.CheckStatusDown {
+	// Only include last task log if check is failing.
+	if check.Failures == 0 {
 		return check.ChangeID
 	}
 	log, err := cmd.lastTaskLog(check.ChangeID)
