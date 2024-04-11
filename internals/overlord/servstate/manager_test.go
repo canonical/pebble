@@ -280,7 +280,7 @@ services:
 	c.Assert(err, IsNil)
 	_, _, err = s.manager.Replan()
 	c.Assert(err, IsNil)
-	s.startServices(c, []string{"test9"}, 1)
+	s.startServices(c, []string{"test9"})
 	s.waitUntilService(c, "test9", func(service *servstate.ServiceInfo) bool {
 		return service.Current == servstate.StatusActive
 	})
@@ -295,13 +295,13 @@ func (s *S) TestKillDelayIsUsed(c *C) {
 	_, _, err = s.manager.Replan()
 	c.Assert(err, IsNil)
 
-	s.startServices(c, []string{"test6"}, 1)
+	s.startServices(c, []string{"test6"})
 	s.waitUntilService(c, "test6", func(service *servstate.ServiceInfo) bool {
 		return service.Current == servstate.StatusActive
 	})
 
 	startTime := time.Now()
-	chg := s.stopServices(c, []string{"test6"}, 1)
+	chg := s.stopServices(c, []string{"test6"})
 	s.st.Lock()
 	c.Check(chg.Status(), Equals, state.DoneStatus, Commentf("Error: %v", chg.Err()))
 	s.st.Unlock()
@@ -408,7 +408,7 @@ func (s *S) TestServiceLogs(c *C) {
 
 func (s *S) TestStartBadCommand(c *C) {
 	s.setupDefaultServiceManager(c)
-	chg := s.startServices(c, []string{"test3"}, 1)
+	chg := s.startServices(c, []string{"test3"})
 
 	s.st.Lock()
 	c.Check(chg.Status(), Equals, state.ErrorStatus)
@@ -439,7 +439,7 @@ services:
 	err = s.manager.AppendLayer(layer)
 	c.Assert(err, IsNil)
 
-	chg := s.startServices(c, []string{"usrtest"}, 1)
+	chg := s.startServices(c, []string{"usrtest"})
 	s.st.Lock()
 	c.Assert(chg.Err(), IsNil)
 	s.st.Unlock()
@@ -468,7 +468,7 @@ func (s *S) TestUserGroupFails(c *C) {
 	})
 	defer restore()
 
-	chg := s.startServices(c, []string{"test5"}, 1)
+	chg := s.startServices(c, []string{"test5"})
 
 	s.st.Lock()
 	c.Check(chg.Status(), Equals, state.ErrorStatus)
@@ -518,7 +518,7 @@ services:
 	os.Setenv("USER", "y")
 
 	// Start service and ensure it has enough time to write to log.
-	chg := s.startServices(c, []string{"usrgrp"}, 1)
+	chg := s.startServices(c, []string{"usrgrp"})
 	s.waitUntilService(c, "usrgrp", func(svc *servstate.ServiceInfo) bool {
 		return svc.Current == servstate.StatusActive
 	})
@@ -533,7 +533,7 @@ services:
 
 func (s *S) TestStartFastExitCommand(c *C) {
 	s.setupDefaultServiceManager(c)
-	chg := s.startServices(c, []string{"test4"}, 1)
+	chg := s.startServices(c, []string{"test4"})
 
 	s.st.Lock()
 	c.Check(chg.Status(), Equals, state.ErrorStatus)
@@ -839,7 +839,7 @@ func (s *S) TestServices(c *C) {
 	})
 
 	// Start a service and ensure it's marked active
-	s.startServices(c, []string{"test2"}, 1)
+	s.startServices(c, []string{"test2"})
 
 	services, err = s.manager.Services(nil)
 	c.Assert(err, IsNil)
@@ -881,7 +881,7 @@ services:
 	c.Assert(err, IsNil)
 
 	// Start "envtest" service
-	chg := s.startServices(c, []string{"envtest"}, 1)
+	chg := s.startServices(c, []string{"envtest"})
 	s.st.Lock()
 	c.Check(chg.Status(), Equals, state.DoneStatus, Commentf("Error: %v", chg.Err()))
 	s.st.Unlock()
@@ -916,7 +916,7 @@ services:
 	c.Assert(err, IsNil)
 
 	// Start service and wait till it starts up the first time.
-	chg := s.startServices(c, []string{"test2"}, 1)
+	chg := s.startServices(c, []string{"test2"})
 	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
 		return svc.Current == servstate.StatusActive
 	})
@@ -989,7 +989,7 @@ services:
 	c.Assert(err, IsNil)
 
 	// Start service and wait till it starts up the first time.
-	chg := s.startServices(c, []string{"test2"}, 1)
+	chg := s.startServices(c, []string{"test2"})
 	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
 		return svc.Current == servstate.StatusActive
 	})
@@ -1004,7 +1004,7 @@ services:
 	})
 
 	// Ensure it can be stopped successfully.
-	chg = s.stopServices(c, []string{"test2"}, 1)
+	chg = s.stopServices(c, []string{"test2"})
 	s.st.Lock()
 	c.Check(chg.Status(), Equals, state.DoneStatus, Commentf("Error: %v", chg.Err()))
 	s.st.Unlock()
@@ -1021,7 +1021,7 @@ services:
 func (s *S) TestOnCheckFailureRestartWhileRunning(c *C) {
 	s.setupDefaultServiceManager(c)
 	// Create check manager and tell it about plan updates
-	checkMgr := checkstate.NewManager()
+	checkMgr := checkstate.NewManager(s.st, s.runner)
 	defer checkMgr.PlanChanged(&plan.Plan{})
 	s.manager.NotifyPlanChanged(checkMgr.PlanChanged)
 
@@ -1060,7 +1060,7 @@ checks:
 	c.Assert(err, IsNil)
 
 	// Start service and wait till it starts up
-	s.startServices(c, []string{"test2"}, 1)
+	s.startServices(c, []string{"test2"})
 
 	s.waitForDoneCheck(c, "test2")
 
@@ -1079,7 +1079,6 @@ checks:
 	c.Assert(len(checks), Equals, 1)
 	c.Assert(checks[0].Status, Equals, checkstate.CheckStatusDown)
 	c.Assert(checks[0].Failures >= 1, Equals, true)
-	c.Assert(checks[0].LastError, Matches, ".* executable file not found .*")
 
 	// Check failure should terminate process, backoff, and restart it, so wait for that
 	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
@@ -1101,7 +1100,6 @@ checks:
 	c.Assert(err, IsNil)
 	c.Assert(len(checks), Equals, 1)
 	c.Assert(checks[0].Status, Equals, checkstate.CheckStatusDown)
-	c.Assert(checks[0].LastError, Matches, ".* executable file not found .*")
 	svc := s.serviceByName(c, "test2")
 	c.Assert(svc.Current, Equals, servstate.StatusActive)
 	c.Assert(s.manager.BackoffNum("test2"), Equals, 1)
@@ -1115,7 +1113,7 @@ checks:
 func (s *S) TestOnCheckFailureRestartDuringBackoff(c *C) {
 	s.setupDefaultServiceManager(c)
 	// Create check manager and tell it about plan updates
-	checkMgr := checkstate.NewManager()
+	checkMgr := checkstate.NewManager(s.st, s.runner)
 	defer checkMgr.PlanChanged(&plan.Plan{})
 	s.manager.NotifyPlanChanged(checkMgr.PlanChanged)
 
@@ -1155,7 +1153,7 @@ checks:
 	c.Assert(err, IsNil)
 
 	// Start service and wait till it starts up
-	s.startServices(c, []string{"test2"}, 1)
+	s.startServices(c, []string{"test2"})
 
 	s.waitForDoneCheck(c, "test2")
 
@@ -1194,17 +1192,16 @@ checks:
 	c.Assert(err, IsNil)
 	c.Assert(len(checks), Equals, 1)
 	c.Assert(checks[0].Status, Equals, checkstate.CheckStatusDown)
-	c.Assert(checks[0].LastError, Matches, ".* executable file not found .*")
 }
 
 // The aim of this test is to make sure that the actioned check
 // failure is ignored, and as a result the service keeps on
-// running. Since the check always fail, it should only ever
+// running. Since the check always fails, it should only ever
 // send an action once.
 func (s *S) TestOnCheckFailureIgnore(c *C) {
 	s.setupDefaultServiceManager(c)
 	// Create check manager and tell it about plan updates
-	checkMgr := checkstate.NewManager()
+	checkMgr := checkstate.NewManager(s.st, s.runner)
 	defer checkMgr.PlanChanged(&plan.Plan{})
 	s.manager.NotifyPlanChanged(checkMgr.PlanChanged)
 
@@ -1242,7 +1239,7 @@ checks:
 	c.Assert(err, IsNil)
 
 	// Start service and wait till it starts up (output file is written to)
-	s.startServices(c, []string{"test2"}, 1)
+	s.startServices(c, []string{"test2"})
 
 	s.waitForDoneCheck(c, "test2")
 
@@ -1261,7 +1258,6 @@ checks:
 	c.Assert(len(checks), Equals, 1)
 	c.Assert(checks[0].Status, Equals, checkstate.CheckStatusDown)
 	c.Assert(checks[0].Failures >= 1, Equals, true)
-	c.Assert(checks[0].LastError, Matches, ".* executable file not found .*")
 
 	// Service shouldn't have been restarted
 	time.Sleep(125 * time.Millisecond)
@@ -1272,7 +1268,6 @@ checks:
 	c.Assert(err, IsNil)
 	c.Assert(len(checks), Equals, 1)
 	c.Assert(checks[0].Status, Equals, checkstate.CheckStatusDown)
-	c.Assert(checks[0].LastError, Matches, ".* executable file not found .*")
 	svc := s.serviceByName(c, "test2")
 	c.Assert(svc.Current, Equals, servstate.StatusActive)
 }
@@ -1288,7 +1283,7 @@ func (s *S) TestOnCheckFailureSuccessShutdown(c *C) {
 func (s *S) testOnCheckFailureShutdown(c *C, action string, restartType restart.RestartType) {
 	s.setupDefaultServiceManager(c)
 	// Create check manager and tell it about plan updates
-	checkMgr := checkstate.NewManager()
+	checkMgr := checkstate.NewManager(s.st, s.runner)
 	defer checkMgr.PlanChanged(&plan.Plan{})
 	s.manager.NotifyPlanChanged(checkMgr.PlanChanged)
 
@@ -1326,7 +1321,7 @@ checks:
 	c.Assert(err, IsNil)
 
 	// Start service and wait till it starts up (output file is written to)
-	s.startServices(c, []string{"test2"}, 1)
+	s.startServices(c, []string{"test2"})
 
 	s.waitForDoneCheck(c, "test2")
 
@@ -1345,7 +1340,6 @@ checks:
 	c.Assert(len(checks), Equals, 1)
 	c.Assert(checks[0].Status, Equals, checkstate.CheckStatusDown)
 	c.Assert(checks[0].Failures >= 1, Equals, true)
-	c.Assert(checks[0].LastError, Matches, ".* executable file not found .*")
 
 	// It should have closed the stopDaemon channel.
 	select {
@@ -1369,7 +1363,7 @@ services:
 	c.Assert(err, IsNil)
 
 	// Start service and wait till it starts up the first time.
-	s.startServices(c, []string{"test2"}, 1)
+	s.startServices(c, []string{"test2"})
 	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
 		return svc.Current == servstate.StatusActive
 	})
@@ -1401,7 +1395,7 @@ services:
 	c.Assert(err, IsNil)
 
 	// Start service and wait till it starts up the first time.
-	s.startServices(c, []string{"test2"}, 1)
+	s.startServices(c, []string{"test2"})
 	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
 		return svc.Current == servstate.StatusActive
 	})
@@ -1433,7 +1427,7 @@ services:
 	c.Assert(err, IsNil)
 
 	// Start service and wait till it starts up the first time.
-	s.startServices(c, []string{"test2"}, 1)
+	s.startServices(c, []string{"test2"})
 	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
 		return svc.Current == servstate.StatusActive
 	})
@@ -1465,7 +1459,7 @@ services:
 	c.Assert(err, IsNil)
 
 	// Start service and wait till it starts up the first time.
-	s.startServices(c, []string{"test2"}, 1)
+	s.startServices(c, []string{"test2"})
 	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
 		return svc.Current == servstate.StatusActive
 	})
@@ -1497,7 +1491,7 @@ services:
 	c.Assert(err, IsNil)
 
 	// Start service and wait till it starts up the first time.
-	s.startServices(c, []string{"test2"}, 1)
+	s.startServices(c, []string{"test2"})
 	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
 		return svc.Current == servstate.StatusActive
 	})
@@ -1651,7 +1645,7 @@ services:
 	err = s.manager.AppendLayer(layer)
 	c.Assert(err, IsNil)
 
-	s.startServices(c, []string{"test2"}, 1)
+	s.startServices(c, []string{"test2"})
 
 	// The child process creates a grandchild and will print the
 	// PID of the grandchild for us to inspect here. We need to
@@ -1724,7 +1718,7 @@ reap:
 
 func (s *S) TestStopRunning(c *C) {
 	s.setupDefaultServiceManager(c)
-	s.startServices(c, []string{"test2"}, 1)
+	s.startServices(c, []string{"test2"})
 	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
 		return svc.Current == servstate.StatusActive
 	})
@@ -1736,15 +1730,9 @@ func (s *S) TestStopRunning(c *C) {
 	change := s.st.NewChange("stop", "Stop all running services")
 	change.AddAll(taskSet)
 	s.st.Unlock()
-	err = s.runner.Ensure()
-	c.Assert(err, IsNil)
 
 	// Wait for it to complete.
-	select {
-	case <-change.Ready():
-	case <-time.After(time.Second):
-		c.Fatalf("timed out waiting for services to stop")
-	}
+	waitChangeReady(c, s.runner, change, "services to stop")
 
 	// Ensure that the service has actually been stopped.
 	svc := s.serviceByName(c, "test2")
@@ -1782,7 +1770,7 @@ services:
 
 	// Service command should run in current directory (package directory)
 	// if "working-dir" config option not set.
-	chg := s.startServices(c, []string{"nowrkdir"}, 1)
+	chg := s.startServices(c, []string{"nowrkdir"})
 	s.st.Lock()
 	c.Assert(chg.Err(), IsNil)
 	s.st.Unlock()
@@ -1809,7 +1797,7 @@ services:
 	err := s.manager.AppendLayer(layer)
 	c.Assert(err, IsNil)
 
-	chg := s.startServices(c, []string{"wrkdir"}, 1)
+	chg := s.startServices(c, []string{"wrkdir"})
 	s.st.Lock()
 	c.Assert(chg.Err(), IsNil)
 	s.st.Unlock()
@@ -1840,7 +1828,7 @@ services:
 	c.Assert(err, IsNil)
 
 	// Start service and wait for it to be started
-	chg := s.startServices(c, []string{"waitdelay"}, 1)
+	chg := s.startServices(c, []string{"waitdelay"})
 	s.st.Lock()
 	c.Assert(chg.Err(), IsNil)
 	s.st.Unlock()
@@ -1850,7 +1838,7 @@ services:
 
 	// Try to stop the service; it will only stop if WaitDelay logic is working,
 	// otherwise the goroutine waiting for the child's stdout will never finish.
-	chg = s.stopServices(c, []string{"waitdelay"}, 1)
+	chg = s.stopServices(c, []string{"waitdelay"})
 	s.st.Lock()
 	c.Assert(chg.Err(), IsNil)
 	s.st.Unlock()
@@ -1902,18 +1890,20 @@ func (s *S) stopRunningServices(c *C) {
 	s.st.Unlock()
 
 	// Wait for a limited amount of time for them to stop.
+	waitChangeReady(c, s.runner, chg, "services to stop")
+}
+
+func waitChangeReady(c *C, runner *state.TaskRunner, change *state.Change, message string) {
 	timeout := time.After(10 * time.Second)
 	for {
-		s.runner.Ensure()
-		s.runner.Wait()
-
-		// Exit loop if change is complete
+		runner.Ensure()
 		select {
-		case <-chg.Ready():
+		case <-change.Ready():
 			return
 		case <-timeout:
-			c.Fatal("timeout waiting for services to stop")
+			c.Fatalf("timeout waiting for %s", message)
 		default:
+			time.Sleep(time.Millisecond)
 		}
 	}
 }
@@ -1978,38 +1968,25 @@ func (s *S) testServiceLogs(c *C, outputs map[string]string) {
 	s.stopTestServices(c)
 }
 
-func (s *S) ensure(c *C, n int) {
-	for i := 0; i < n; i++ {
-		s.runner.Ensure()
-		s.runner.Wait()
-	}
-}
-
-func (s *S) startServices(c *C, services []string, nEnsure int) *state.Change {
+func (s *S) startServices(c *C, services []string) *state.Change {
 	s.st.Lock()
 	ts, err := servstate.Start(s.st, services)
 	c.Check(err, IsNil)
 	chg := s.st.NewChange("test", "Start test")
 	chg.AddAll(ts)
 	s.st.Unlock()
-
-	// Num to ensure may be more than one due to the cross-task dependencies.
-	s.ensure(c, nEnsure)
-
+	waitChangeReady(c, s.runner, chg, "services to start")
 	return chg
 }
 
-func (s *S) stopServices(c *C, services []string, nEnsure int) *state.Change {
+func (s *S) stopServices(c *C, services []string) *state.Change {
 	s.st.Lock()
 	ts, err := servstate.Stop(s.st, services)
 	c.Check(err, IsNil)
 	chg := s.st.NewChange("test", "Stop test")
 	chg.AddAll(ts)
 	s.st.Unlock()
-
-	// Num to ensure may be more than one due to the cross-task dependencies.
-	s.ensure(c, nEnsure)
-
+	waitChangeReady(c, s.runner, chg, "services to stop")
 	return chg
 }
 
@@ -2021,7 +1998,7 @@ func (s *S) serviceByName(c *C, name string) *servstate.ServiceInfo {
 }
 
 func (s *S) startTestServices(c *C, logCheck bool) {
-	chg := s.startServices(c, []string{"test1", "test2"}, 2)
+	chg := s.startServices(c, []string{"test1", "test2"})
 	s.st.Lock()
 	c.Check(chg.Status(), Equals, state.DoneStatus, Commentf("Error: %v", chg.Err()))
 	s.st.Unlock()
@@ -2045,7 +2022,7 @@ func (s *S) stopTestServices(c *C) {
 	cmds := s.manager.RunningCmds()
 	c.Check(cmds, HasLen, 2)
 
-	chg := s.stopServices(c, []string{"test1", "test2"}, 2)
+	chg := s.stopServices(c, []string{"test1", "test2"})
 
 	// Ensure processes are gone indeed.
 	c.Assert(cmds, HasLen, 2)
@@ -2067,7 +2044,7 @@ func (s *S) stopTestServicesAlreadyDead(c *C) {
 	cmds := s.manager.RunningCmds()
 	c.Check(cmds, HasLen, 0)
 
-	chg := s.stopServices(c, []string{"test1", "test2"}, 2)
+	chg := s.stopServices(c, []string{"test1", "test2"})
 
 	c.Assert(cmds, HasLen, 0)
 

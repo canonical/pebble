@@ -157,7 +157,8 @@ func New(opts *Options) (*Overlord, error) {
 	o.commandMgr = cmdstate.NewManager(o.runner)
 	o.stateEng.AddManager(o.commandMgr)
 
-	o.checkMgr = checkstate.NewManager()
+	o.checkMgr = checkstate.NewManager(s, o.runner)
+	o.stateEng.AddManager(o.checkMgr)
 
 	// Tell check manager about plan updates.
 	o.serviceMgr.NotifyPlanChanged(o.checkMgr.PlanChanged)

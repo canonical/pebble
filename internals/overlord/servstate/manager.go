@@ -17,7 +17,6 @@ import (
 
 type ServiceManager struct {
 	state     *state.State
-	runner    *state.TaskRunner
 	pebbleDir string
 
 	planLock     sync.Mutex
@@ -60,7 +59,6 @@ func (e *LabelExists) Error() string {
 func NewManager(s *state.State, runner *state.TaskRunner, pebbleDir string, serviceOutput io.Writer, restarter Restarter, logMgr LogManager) (*ServiceManager, error) {
 	manager := &ServiceManager{
 		state:         s,
-		runner:        runner,
 		pebbleDir:     pebbleDir,
 		services:      make(map[string]*serviceData),
 		serviceOutput: serviceOutput,

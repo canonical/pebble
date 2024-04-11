@@ -18,26 +18,40 @@ import (
 	"context"
 	"sort"
 	"sync"
-	"time"
 
-	"github.com/canonical/pebble/internals/logger"
+	"github.com/canonical/pebble/internals/overlord/state"
 	"github.com/canonical/pebble/internals/plan"
 )
 
 // CheckManager starts and manages the health checks.
 type CheckManager struct {
-	mutex           sync.Mutex
-	wg              sync.WaitGroup
-	checks          map[string]*checkData
+	state *state.State
+
+	checksLock sync.Mutex
+	checks     map[string]*checkData
+
 	failureHandlers []FailureFunc
+
+	planLock sync.Mutex
+	plan     *plan.Plan
 }
 
 // FailureFunc is the type of function called when a failure action is triggered.
 type FailureFunc func(name string)
 
 // NewManager creates a new check manager.
-func NewManager() *CheckManager {
-	return &CheckManager{}
+func NewManager(s *state.State, runner *state.TaskRunner) *CheckManager {
+	manager := &CheckManager{
+		state:  s,
+		checks: make(map[string]*checkData),
+	}
+	runner.AddHandler("perform-check", manager.doPerformCheck, nil)
+	runner.AddHandler("recover-check", manager.doRecoverCheck, nil)
+	return manager
+}
+
+func (m *CheckManager) Ensure() error {
+	return nil
 }
 
 // NotifyCheckFailed adds f to the list of functions that are called whenever
@@ -48,47 +62,63 @@ func (m *CheckManager) NotifyCheckFailed(f FailureFunc) {
 
 // PlanChanged handles updates to the plan (server configuration),
 // stopping the previous checks and starting the new ones as required.
-func (m *CheckManager) PlanChanged(p *plan.Plan) {
-	m.mutex.Lock()
-	defer m.mutex.Unlock()
+func (m *CheckManager) PlanChanged(newPlan *plan.Plan) {
+	// TODO: should figure out how to not stop/restart checks that haven't changed
+	//       so that unnecessary changes/tasks aren't created
 
-	logger.Debugf("Configuring check manager (stopping %d, starting %d)",
-		len(m.checks), len(p.Checks))
-
-	// First stop existing checks.
-	for _, check := range m.checks {
-		check.cancel()
+	// First cancel tasks of currently-running checks.
+	m.checksLock.Lock()
+	for name, data := range m.checks {
+		data.cancel()
+		delete(m.checks, name)
 	}
-	// Wait for all context cancellations to propagate and allow
-	// each goroutine to cleanly exit.
-	m.wg.Wait()
+	m.checksLock.Unlock()
 
-	// Set the size of the next wait group
-	m.wg.Add(len(p.Checks))
+	// Update local reference to plan.
+	m.planLock.Lock()
+	m.plan = newPlan
+	m.planLock.Unlock()
 
-	// Then configure and start new checks.
-	checks := make(map[string]*checkData, len(p.Checks))
-	for name, config := range p.Checks {
-		ctx, cancel := context.WithCancel(context.Background())
-		check := &checkData{
-			config:  config,
-			checker: newChecker(config, p),
-			ctx:     ctx,
-			cancel:  cancel,
-			action:  m.callFailureHandlers,
-		}
-		checks[name] = check
-		go func() {
-			defer m.wg.Done()
-			check.loop()
-		}()
+	// Start updated checks.
+	m.state.Lock()
+	defer m.state.Unlock()
+	for _, config := range newPlan.Checks {
+		m.performCheckChange(config)
 	}
-	m.checks = checks
+	m.state.EnsureBefore(0) // start new tasks right away
+}
+
+func (m *CheckManager) performCheckChange(config *plan.Check) (changeID string) {
+	task := performCheck(m.state, config.Name, checkType(config))
+	change := m.state.NewChange("perform-check", task.Summary())
+	change.AddTask(task)
+	return change.ID()
+}
+
+func (m *CheckManager) recoverCheckChange(config *plan.Check) (changeID string) {
+	task := recoverCheck(m.state, config.Name, checkType(config))
+	change := m.state.NewChange("recover-check", task.Summary())
+	change.AddTask(task)
+	return change.ID()
 }
 
 func (m *CheckManager) callFailureHandlers(name string) {
 	for _, f := range m.failureHandlers {
 		f(name)
+	}
+}
+
+// checkType returns a human-readable string representing the check type.
+func checkType(config *plan.Check) string {
+	switch {
+	case config.HTTP != nil:
+		return "HTTP"
+	case config.TCP != nil:
+		return "TCP"
+	case config.Exec != nil:
+		return "exec"
+	default:
+		return "<unknown>"
 	}
 }
 
@@ -143,13 +173,12 @@ func newChecker(config *plan.Check, p *plan.Plan) checker {
 // Checks returns the list of currently-configured checks and their status,
 // ordered by name.
 func (m *CheckManager) Checks() ([]*CheckInfo, error) {
-	m.mutex.Lock()
-	defer m.mutex.Unlock()
-
+	m.checksLock.Lock()
 	infos := make([]*CheckInfo, 0, len(m.checks))
 	for _, check := range m.checks {
 		infos = append(infos, check.info())
 	}
+	m.checksLock.Unlock()
 
 	sort.Slice(infos, func(i, j int) bool {
 		return infos[i].Name < infos[j].Name
@@ -159,13 +188,12 @@ func (m *CheckManager) Checks() ([]*CheckInfo, error) {
 
 // CheckInfo provides status information about a single check.
 type CheckInfo struct {
-	Name         string
-	Level        plan.CheckLevel
-	Status       CheckStatus
-	Failures     int
-	Threshold    int
-	LastError    string
-	ErrorDetails string
+	Name      string
+	Level     plan.CheckLevel
+	Status    CheckStatus
+	Failures  int
+	Threshold int
+	ChangeID  string // TODO: wire this up in API and CLI too
 }
 
 type CheckStatus string
@@ -177,101 +205,29 @@ const (
 
 // checkData holds state for an active health check.
 type checkData struct {
-	config  *plan.Check
-	checker checker
-	ctx     context.Context
-	cancel  context.CancelFunc
-	action  FailureFunc
-
-	mutex     sync.Mutex
+	config    *plan.Check
+	cancel    func()
 	failures  int
 	actionRan bool
-	lastErr   error
+	changeID  string
 }
 
 type checker interface {
 	check(ctx context.Context) error
 }
 
-func (c *checkData) loop() {
-	logger.Debugf("Check %q starting with period %v", c.config.Name, c.config.Period.Value)
-
-	ticker := time.NewTicker(c.config.Period.Value)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ticker.C:
-			c.runCheck()
-			if c.ctx.Err() != nil {
-				// Don't re-run check in edge case where period is short and
-				// in-flight check was cancelled.
-				return
-			}
-		case <-c.ctx.Done():
-			logger.Debugf("Check %q stopped: %v", c.config.Name, c.ctx.Err())
-			return
-		}
-	}
-}
-
-func (c *checkData) runCheck() {
-	// Run the check with a timeout.
-	ctx, cancel := context.WithTimeout(c.ctx, c.config.Timeout.Value)
-	defer cancel()
-	err := c.checker.check(ctx)
-
-	// Lock while we update state, as the manager may access these too.
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
-
-	if err == nil {
-		// Successful check
-		c.lastErr = nil
-		c.failures = 0
-		c.actionRan = false
-		return
-	}
-
-	if ctx.Err() == context.Canceled {
-		// Check was stopped, don't trigger failure action.
-		logger.Debugf("Check %q canceled in flight", c.config.Name)
-		return
-	}
-
-	// Track failure, run failure action if "failures" threshold was hit.
-	c.lastErr = err
-	c.failures++
-	logger.Noticef("Check %q failure %d (threshold %d): %v",
-		c.config.Name, c.failures, c.config.Threshold, err)
-	if !c.actionRan && c.failures >= c.config.Threshold {
-		logger.Noticef("Check %q failure threshold %d hit, triggering action",
-			c.config.Name, c.config.Threshold)
-		c.action(c.config.Name)
-		c.actionRan = true
-	}
-}
-
 // info returns user-facing check information for use in Checks (and tests).
 func (c *checkData) info() *CheckInfo {
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
-
 	info := &CheckInfo{
 		Name:      c.config.Name,
 		Level:     c.config.Level,
 		Status:    CheckStatusUp,
 		Failures:  c.failures,
 		Threshold: c.config.Threshold,
+		ChangeID:  c.changeID,
 	}
 	if c.failures >= c.config.Threshold {
 		info.Status = CheckStatusDown
-	}
-	if c.lastErr != nil {
-		info.LastError = c.lastErr.Error()
-		if d, ok := c.lastErr.(interface{ Details() string }); ok {
-			info.ErrorDetails = d.Details()
-		}
 	}
 	return info
 }
