@@ -819,7 +819,7 @@ services:
 // The aim of this test is to make sure that the actioned check
 // failure terminates the service, after which it will first go
 // to back-off state and then finally starts again (only once).
-// Since the check always fail, it should only ever send an action
+// Since the check always fails, it should only ever send an action
 // once.
 func (s *S) TestOnCheckFailureRestartWhileRunning(c *C) {
 	s.newServiceManager(c)
@@ -882,10 +882,9 @@ checks:
 	case <-time.After(10 * time.Second):
 		c.Fatalf("timed out waiting for check failure to arrive")
 	}
-	checks, err := checkMgr.Checks()
-	c.Assert(err, IsNil)
-	c.Assert(len(checks), Equals, 1)
-	c.Assert(checks[0].Status, Equals, checkstate.CheckStatusDown)
+	checks := waitChecks(c, checkMgr, func(checks []*checkstate.CheckInfo) bool {
+		return len(checks) == 1 && checks[0].Status == checkstate.CheckStatusDown
+	})
 	c.Assert(checks[0].Failures >= 1, Equals, true)
 
 	// Check failure should terminate process, backoff, and restart it, so wait for that
@@ -904,10 +903,9 @@ checks:
 	b, err = os.ReadFile(tempFile)
 	c.Assert(err, IsNil)
 	c.Assert(string(b), Equals, "x\nx\n")
-	checks, err = checkMgr.Checks()
-	c.Assert(err, IsNil)
-	c.Assert(len(checks), Equals, 1)
-	c.Assert(checks[0].Status, Equals, checkstate.CheckStatusDown)
+	checks = waitChecks(c, checkMgr, func(checks []*checkstate.CheckInfo) bool {
+		return len(checks) == 1 && checks[0].Status == checkstate.CheckStatusDown
+	})
 	svc := s.serviceByName(c, "test2")
 	c.Assert(svc.Current, Equals, servstate.StatusActive)
 	c.Assert(s.manager.BackoffNum("test2"), Equals, 1)
@@ -916,7 +914,7 @@ checks:
 // The aim of this test is to make sure that the actioned check
 // failure occurring during service back-off has no effect on
 // on that service. The service is expected to restart by itself
-// (due to back-off). Since the check always fail, it should only
+// (due to back-off). Since the check always fails, it should only
 // ever send an action once.
 func (s *S) TestOnCheckFailureRestartDuringBackoff(c *C) {
 	s.newServiceManager(c)
@@ -1001,10 +999,9 @@ checks:
 	b, err = os.ReadFile(tempFile)
 	c.Assert(err, IsNil)
 	c.Assert(string(b), Equals, "x\nx\n")
-	checks, err := checkMgr.Checks()
-	c.Assert(err, IsNil)
-	c.Assert(len(checks), Equals, 1)
-	c.Assert(checks[0].Status, Equals, checkstate.CheckStatusDown)
+	waitChecks(c, checkMgr, func(checks []*checkstate.CheckInfo) bool {
+		return len(checks) == 1 && checks[0].Status == checkstate.CheckStatusDown
+	})
 }
 
 // The aim of this test is to make sure that the actioned check
@@ -1071,10 +1068,9 @@ checks:
 	case <-time.After(10 * time.Second):
 		c.Fatalf("timed out waiting for check failure to arrive")
 	}
-	checks, err := checkMgr.Checks()
-	c.Assert(err, IsNil)
-	c.Assert(len(checks), Equals, 1)
-	c.Assert(checks[0].Status, Equals, checkstate.CheckStatusDown)
+	checks := waitChecks(c, checkMgr, func(checks []*checkstate.CheckInfo) bool {
+		return len(checks) == 1 && checks[0].Status == checkstate.CheckStatusDown
+	})
 	c.Assert(checks[0].Failures >= 1, Equals, true)
 
 	// Service shouldn't have been restarted
@@ -1082,10 +1078,9 @@ checks:
 	b, err = os.ReadFile(tempFile)
 	c.Assert(err, IsNil)
 	c.Assert(string(b), Equals, "x\n")
-	checks, err = checkMgr.Checks()
-	c.Assert(err, IsNil)
-	c.Assert(len(checks), Equals, 1)
-	c.Assert(checks[0].Status, Equals, checkstate.CheckStatusDown)
+	checks = waitChecks(c, checkMgr, func(checks []*checkstate.CheckInfo) bool {
+		return len(checks) == 1 && checks[0].Status == checkstate.CheckStatusDown
+	})
 	svc := s.serviceByName(c, "test2")
 	c.Assert(svc.Current, Equals, servstate.StatusActive)
 }
@@ -1158,10 +1153,9 @@ checks:
 	case <-time.After(10 * time.Second):
 		c.Fatalf("timed out waiting for check failure to arrive")
 	}
-	checks, err := checkMgr.Checks()
-	c.Assert(err, IsNil)
-	c.Assert(len(checks), Equals, 1)
-	c.Assert(checks[0].Status, Equals, checkstate.CheckStatusDown)
+	checks := waitChecks(c, checkMgr, func(checks []*checkstate.CheckInfo) bool {
+		return len(checks) == 1 && checks[0].Status == checkstate.CheckStatusDown
+	})
 	c.Assert(checks[0].Failures >= 1, Equals, true)
 
 	// It should have closed the stopDaemon channel.
@@ -2003,4 +1997,17 @@ func waitForDone(donePath string, timeoutHandler func()) {
 			}
 		}
 	}
+}
+
+func waitChecks(c *C, checkMgr *checkstate.CheckManager, f func(checks []*checkstate.CheckInfo) bool) []*checkstate.CheckInfo {
+	for start := time.Now(); time.Since(start) < 10*time.Second; {
+		checks, err := checkMgr.Checks()
+		c.Assert(err, IsNil)
+		if f(checks) {
+			return checks
+		}
+		time.Sleep(time.Millisecond)
+	}
+	c.Fatal("timed out waiting for checks to settle")
+	return nil
 }
