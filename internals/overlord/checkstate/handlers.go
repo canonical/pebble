@@ -92,8 +92,13 @@ func (m *CheckManager) doPerformCheck(task *state.Task, tomb *tomb.Tomb) error {
 			}
 
 		case <-tomb.Dying():
-			logger.Debugf("Check %q stopped during perform-check: %v", config.Name, tomb.Err())
-			return tomb.Err()
+			err := tomb.Err()
+			reasonStr := " (no error)"
+			if err != nil {
+				reasonStr = ": " + err.Error()
+			}
+			logger.Debugf("Check %q stopped during perform-check%s", config.Name, reasonStr)
+			return err
 		}
 	}
 }
@@ -183,8 +188,13 @@ func (m *CheckManager) doRecoverCheck(task *state.Task, tomb *tomb.Tomb) error {
 			return nil
 
 		case <-tomb.Dying():
-			logger.Debugf("Check %q stopped during recover-check: %v", config.Name, tomb.Err())
-			return tomb.Err()
+			err := tomb.Err()
+			reasonStr := " (no error)"
+			if err != nil {
+				reasonStr = ": " + err.Error()
+			}
+			logger.Debugf("Check %q stopped during recover-check%s", config.Name, reasonStr)
+			return err
 		}
 	}
 }
