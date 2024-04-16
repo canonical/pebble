@@ -67,6 +67,10 @@ func (m *CheckManager) Ensure() error {
 	return nil
 }
 
+func (c *CheckManager) Stop() {
+	// TODO: stop/cancel running checks
+}
+
 // NotifyCheckFailed adds f to the list of functions that are called whenever
 // a check hits its failure threshold.
 func (m *CheckManager) NotifyCheckFailed(f FailureFunc) {
