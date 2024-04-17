@@ -21,7 +21,6 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/overlord/state"
 	"github.com/canonical/pebble/internals/plan"
 )
@@ -131,12 +130,7 @@ func (m *CheckManager) changeStatusChanged(chg *state.Change, old, new state.Sta
 	shouldEnsure := false
 	switch {
 	case chg.Kind() == performCheckKind && new == state.ErrorStatus:
-		details, err := getCheckDetails(chg)
-		if err != nil {
-			logger.Noticef("Internal error: cannot get check details for %s change %s: %v",
-				chg.Kind(), chg.ID(), err)
-			break
-		}
+		details := mustGetCheckDetails(chg)
 		config, inPlan := plan.Checks[details.Name]
 		if details.Proceed && inPlan {
 			recoverCheckChange(m.state, config, details.Failures)
@@ -144,12 +138,7 @@ func (m *CheckManager) changeStatusChanged(chg *state.Change, old, new state.Sta
 		}
 
 	case chg.Kind() == recoverCheckKind && new == state.DoneStatus:
-		details, err := getCheckDetails(chg)
-		if err != nil {
-			logger.Noticef("Internal error: cannot get check details for %s change %s: %v",
-				chg.Kind(), chg.ID(), err)
-			break
-		}
+		details := mustGetCheckDetails(chg)
 		config, inPlan := plan.Checks[details.Name]
 		if details.Proceed && inPlan {
 			performCheckChange(m.state, config)
@@ -162,17 +151,17 @@ func (m *CheckManager) changeStatusChanged(chg *state.Change, old, new state.Sta
 	}
 }
 
-func getCheckDetails(change *state.Change) (checkDetails, error) {
+func mustGetCheckDetails(change *state.Change) checkDetails {
 	tasks := change.Tasks()
 	if len(tasks) != 1 {
-		return checkDetails{}, fmt.Errorf("change should have one task")
+		panic(fmt.Sprintf("internal error: %s change %s should have one task", change.Kind(), change.ID()))
 	}
 	var details checkDetails
 	err := tasks[0].Get(checkDetailsAttr, &details)
 	if err != nil {
-		return checkDetails{}, err
+		panic(fmt.Sprintf("internal error: cannot get %s change %s check details: %v", change.Kind(), change.ID(), err))
 	}
-	return details, nil
+	return details
 }
 
 func (m *CheckManager) callFailureHandlers(name string) {
@@ -258,12 +247,7 @@ func (m *CheckManager) Checks() ([]*CheckInfo, error) {
 				// Skip check changes that have finished already.
 				continue
 			}
-			details, err := getCheckDetails(change)
-			if err != nil {
-				logger.Noticef("Internal error: cannot get check details for %s change %s: %v",
-					change.Kind(), change.ID(), err)
-				continue
-			}
+			details := mustGetCheckDetails(change)
 			infos = append(infos, &CheckInfo{
 				Name:     details.Name,
 				Failures: details.Failures,
