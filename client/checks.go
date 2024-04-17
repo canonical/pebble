@@ -68,8 +68,8 @@ type CheckInfo struct {
 	Threshold int `json:"threshold"`
 
 	// ChangeID is the ID of the change corresponding to this check operation.
-	// The change will be of kind "perform-check" if the check is succeeding,
-	// or "recover-check" if it's failing.
+	// The change will be of kind "perform-check" if the check is up, or
+	// "recover-check" if it's down.
 	ChangeID string `json:"change-id"`
 }
 
