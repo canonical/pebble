@@ -79,9 +79,9 @@ func (m *CheckManager) doPerformCheck(task *state.Task, tomb *tombpkg.Tomb) erro
 					return err
 				}
 			} else {
-				// TODO: need a test for this -- this block wasn't here before, and tests passed!
-				details.Failures = 0
 				m.state.Lock()
+				task.Logf("succeeded after %s", pluralise(details.Failures, "failure", "failures"))
+				details.Failures = 0
 				task.Set(checkDetailsAttr, &details)
 				m.state.Unlock()
 			}
@@ -179,4 +179,11 @@ func errReason(err error) string {
 		return " (no error)"
 	}
 	return ": " + err.Error()
+}
+
+func pluralise(n int, singular, plural string) string {
+	if n == 1 {
+		return fmt.Sprintf("%d %s", n, singular)
+	}
+	return fmt.Sprintf("%d %s", n, plural)
 }

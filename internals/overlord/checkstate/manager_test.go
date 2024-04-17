@@ -236,7 +236,7 @@ func (s *ManagerSuite) TestFailures(c *C) {
 	originalChangeID := check.ChangeID
 	c.Assert(check.Threshold, Equals, 3)
 	c.Assert(check.Status, Equals, checkstate.CheckStatusUp)
-	c.Assert(lastTaskLog(s.overlord.State(), check.ChangeID), Matches, ".* exit status 1")
+	c.Assert(lastTaskLog(s.overlord.State(), check.ChangeID), Matches, ".* ERROR exit status 1")
 	c.Assert(notifies.Load(), Equals, int32(0))
 
 	// Shouldn't have called failure handler after only 2 failures
@@ -245,7 +245,7 @@ func (s *ManagerSuite) TestFailures(c *C) {
 	})
 	c.Assert(check.Threshold, Equals, 3)
 	c.Assert(check.Status, Equals, checkstate.CheckStatusUp)
-	c.Assert(lastTaskLog(s.overlord.State(), check.ChangeID), Matches, ".* exit status 1")
+	c.Assert(lastTaskLog(s.overlord.State(), check.ChangeID), Matches, ".* ERROR exit status 1")
 	c.Assert(notifies.Load(), Equals, int32(0))
 	c.Assert(check.ChangeID, Equals, originalChangeID)
 
@@ -265,7 +265,7 @@ func (s *ManagerSuite) TestFailures(c *C) {
 	c.Assert(check.Threshold, Equals, 3)
 	c.Assert(check.Status, Equals, checkstate.CheckStatusDown)
 	c.Assert(notifies.Load(), Equals, int32(1))
-	c.Assert(lastTaskLog(s.overlord.State(), check.ChangeID), Matches, ".* exit status 1")
+	c.Assert(lastTaskLog(s.overlord.State(), check.ChangeID), Matches, ".* ERROR exit status 1")
 	c.Assert(check.ChangeID, Equals, recoverChangeID)
 
 	// Should reset number of failures if command then succeeds
@@ -278,6 +278,41 @@ func (s *ManagerSuite) TestFailures(c *C) {
 	c.Assert(check.Threshold, Equals, 3)
 	c.Assert(notifies.Load(), Equals, int32(1))
 	c.Assert(lastTaskLog(s.overlord.State(), check.ChangeID), Equals, "")
+}
+
+func (s *ManagerSuite) TestFailuresBelowThreshold(c *C) {
+	testPath := c.MkDir() + "/test"
+	err := os.WriteFile(testPath, nil, 0o644)
+	c.Assert(err, IsNil)
+	s.manager.PlanChanged(&plan.Plan{
+		Checks: map[string]*plan.Check{
+			"chk1": {
+				Name:      "chk1",
+				Period:    plan.OptionalDuration{Value: 20 * time.Millisecond},
+				Timeout:   plan.OptionalDuration{Value: 100 * time.Millisecond},
+				Threshold: 3,
+				Exec: &plan.ExecCheck{
+					Command: fmt.Sprintf(`/bin/sh -c '[ ! -f %s ]'`, testPath),
+				},
+			},
+		},
+	})
+
+	// Wait for 1 failure (below the threshold)
+	check := waitCheck(c, s.manager, "chk1", func(check *checkstate.CheckInfo) bool {
+		return check.Failures == 1
+	})
+	c.Assert(check.Status, Equals, checkstate.CheckStatusUp)
+	c.Assert(lastTaskLog(s.overlord.State(), check.ChangeID), Matches, ".* ERROR exit status 1")
+
+	// Should reset number of failures if command then succeeds
+	err = os.Remove(testPath)
+	c.Assert(err, IsNil)
+	check = waitCheck(c, s.manager, "chk1", func(check *checkstate.CheckInfo) bool {
+		return check.Failures == 0
+	})
+	c.Assert(check.Status, Equals, checkstate.CheckStatusUp)
+	c.Assert(lastTaskLog(s.overlord.State(), check.ChangeID), Matches, ".* INFO succeeded after 1 failure")
 }
 
 // waitCheck is a time based approach to wait for a checker run to complete.
