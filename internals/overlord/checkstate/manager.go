@@ -43,6 +43,9 @@ type CheckManager struct {
 
 	planLock sync.Mutex
 	plan     *plan.Plan
+
+	healthLock sync.Mutex
+	health     map[string]HealthInfo
 }
 
 // FailureFunc is the type of function called when a failure action is triggered.
@@ -50,7 +53,10 @@ type FailureFunc func(name string)
 
 // NewManager creates a new check manager.
 func NewManager(s *state.State, runner *state.TaskRunner) *CheckManager {
-	manager := &CheckManager{state: s}
+	manager := &CheckManager{
+		state:  s,
+		health: make(map[string]HealthInfo),
+	}
 
 	// Health check changes can be long-running; ensure they don't get pruned.
 	s.RegisterPendingChangeByAttr(noPruneAttr, func(change *state.Change) bool {
@@ -71,11 +77,6 @@ func NewManager(s *state.State, runner *state.TaskRunner) *CheckManager {
 func (m *CheckManager) Ensure() error {
 	m.ensureDone.Store(true)
 	return nil
-}
-
-func (m *CheckManager) Stop() {
-	// TODO: stop/cancel running checks
-	//       this is already done by TaskRunner.Stop, but ensure they persist in expected state
 }
 
 // NotifyCheckFailed adds f to the list of functions that are called whenever
@@ -122,6 +123,7 @@ func (m *CheckManager) PlanChanged(newPlan *plan.Plan) {
 				newOrModified[details.Name] = true
 			}
 			change.Abort()
+			m.deleteHealthInfo(details.Name)
 			shouldEnsure = true
 		}
 	}
@@ -137,6 +139,7 @@ func (m *CheckManager) PlanChanged(newPlan *plan.Plan) {
 	for _, config := range newPlan.Checks {
 		if newOrModified[config.Name] {
 			performCheckChange(m.state, config)
+			m.updateHealthInfo(config, 0)
 			shouldEnsure = true
 		}
 	}

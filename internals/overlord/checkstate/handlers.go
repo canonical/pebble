@@ -57,6 +57,8 @@ func (m *CheckManager) doPerformCheck(task *state.Task, tomb *tombpkg.Tomb) erro
 				// Record check failure and perform any action if the threshold
 				// is reached (for example, restarting a service).
 				details.Failures++
+				m.updateHealthInfo(config, details.Failures)
+
 				m.state.Lock()
 				atThreshold := details.Failures >= config.Threshold
 				if atThreshold {
@@ -79,6 +81,8 @@ func (m *CheckManager) doPerformCheck(task *state.Task, tomb *tombpkg.Tomb) erro
 					return err
 				}
 			} else {
+				m.updateHealthInfo(config, 0)
+
 				m.state.Lock()
 				task.Logf("succeeded after %s", pluralise(details.Failures, "failure", "failures"))
 				details.Failures = 0
@@ -144,6 +148,8 @@ func (m *CheckManager) doRecoverCheck(task *state.Task, tomb *tombpkg.Tomb) erro
 			err := runCheck(tomb.Context(nil), chk, config.Timeout.Value)
 			if err != nil {
 				details.Failures++
+				m.updateHealthInfo(config, details.Failures)
+
 				m.state.Lock()
 				task.Set(checkDetailsAttr, &details)
 				task.Errorf("%v", err) // add error to task log
@@ -154,6 +160,7 @@ func (m *CheckManager) doRecoverCheck(task *state.Task, tomb *tombpkg.Tomb) erro
 			}
 
 			// Check succeeded, switch to performing a succeeding check.
+			m.updateHealthInfo(config, 0)
 			details.Proceed = true
 			m.state.Lock()
 			task.Set(checkDetailsAttr, &details)

@@ -835,6 +835,6 @@ func getListener(socketPath string, listenerMap map[string]net.Listener) (net.Li
 	return listener, nil
 }
 
-var getChecks = func(o *overlord.Overlord) ([]*checkstate.CheckInfo, error) {
-	return o.CheckManager().Checks()
+var getHealth = func(o *overlord.Overlord) ([]*checkstate.HealthInfo, error) {
+	return o.CheckManager().Health()
 }
