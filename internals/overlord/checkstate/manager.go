@@ -14,10 +14,9 @@
 
 package checkstate
 
-// TODO: should it only go to recover-check when it hits the threshold?
-
 import (
 	"context"
+	"fmt"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -27,16 +26,17 @@ import (
 )
 
 const (
-	noPruneAttr = "checkstate-no-prune"
+	performCheckKind = "perform-check"
+	recoverCheckKind = "recover-check"
+
+	noPruneAttr      = "check-no-prune"
+	checkDetailsAttr = "check-details"
 )
 
 // CheckManager starts and manages the health checks.
 type CheckManager struct {
 	state      *state.State
 	ensureDone atomic.Bool
-
-	checksLock sync.Mutex
-	checks     map[string]*checkData
 
 	failureHandlers []FailureFunc
 
@@ -49,16 +49,21 @@ type FailureFunc func(name string)
 
 // NewManager creates a new check manager.
 func NewManager(s *state.State, runner *state.TaskRunner) *CheckManager {
-	manager := &CheckManager{
-		state:  s,
-		checks: make(map[string]*checkData),
-	}
+	manager := &CheckManager{state: s}
+
 	// Health check changes can be long-running; ensure they don't get pruned.
 	s.RegisterPendingChangeByAttr(noPruneAttr, func(change *state.Change) bool {
 		return true
 	})
-	runner.AddHandler("perform-check", manager.doPerformCheck, nil)
-	runner.AddHandler("recover-check", manager.doRecoverCheck, nil)
+
+	runner.AddHandler(performCheckKind, manager.doPerformCheck, nil)
+	runner.AddHandler(recoverCheckKind, manager.doRecoverCheck, nil)
+
+	// Monitor perform-check and recover-check changes for status updates.
+	s.Lock()
+	s.AddChangeStatusChangedHandler(manager.changeStatusChanged)
+	s.Unlock()
+
 	return manager
 }
 
@@ -67,8 +72,9 @@ func (m *CheckManager) Ensure() error {
 	return nil
 }
 
-func (c *CheckManager) Stop() {
+func (m *CheckManager) Stop() {
 	// TODO: stop/cancel running checks
+	//       this is already done by TaskRunner.Stop, but ensure they persist in expected state
 }
 
 // NotifyCheckFailed adds f to the list of functions that are called whenever
@@ -82,27 +88,29 @@ func (m *CheckManager) NotifyCheckFailed(f FailureFunc) {
 func (m *CheckManager) PlanChanged(newPlan *plan.Plan) {
 	// TODO: should figure out how to not stop/restart checks that haven't changed
 	//       so that unnecessary changes/tasks aren't created
-
-	// First cancel tasks of currently-running checks.
-	m.checksLock.Lock()
-	for name, data := range m.checks {
-		if data.cancel != nil {
-			data.cancel()
-		}
-		delete(m.checks, name)
-	}
-	m.checksLock.Unlock()
+	m.state.Lock()
+	defer m.state.Unlock()
 
 	// Update local reference to plan.
-	m.planLock.Lock()
+	m.planLock.Lock() // always acquire locks in same order (state lock, then plan lock)
 	m.plan = newPlan
 	m.planLock.Unlock()
 
+	// Abort all currently-running checks.
+	for _, change := range m.state.Changes() {
+		switch change.Kind() {
+		case performCheckKind, recoverCheckKind:
+			if change.IsReady() {
+				// Skip check changes that have finished already.
+				continue
+			}
+			change.Abort()
+		}
+	}
+
 	// Start updated checks.
-	m.state.Lock()
-	defer m.state.Unlock()
 	for _, config := range newPlan.Checks {
-		m.performCheckChange(config)
+		performCheckChange(m.state, config)
 	}
 	if !m.ensureDone.Load() {
 		// Can't call EnsureBefore before Overlord.Loop is running (which will
@@ -112,20 +120,48 @@ func (m *CheckManager) PlanChanged(newPlan *plan.Plan) {
 	m.state.EnsureBefore(0) // start new tasks right away
 }
 
-func (m *CheckManager) performCheckChange(config *plan.Check) (changeID string) {
-	task := performCheck(m.state, config.Name, checkType(config))
-	change := m.state.NewChange("perform-check", task.Summary())
-	change.Set(noPruneAttr, true)
-	change.AddTask(task)
-	return change.ID()
+func (m *CheckManager) changeStatusChanged(chg *state.Change, old, new state.Status) {
+	// Always acquire locks in same order (state lock, then plan lock).
+	// The state engine has already acquired the state lock at this point.
+	m.planLock.Lock()
+	plan := m.plan
+	m.planLock.Unlock()
+
+	shouldEnsure := false
+	switch {
+	case chg.Kind() == performCheckKind && new == state.ErrorStatus:
+		details := mustGetCheckDetails(chg)
+		config, inPlan := plan.Checks[details.Name]
+		if details.Proceed && inPlan {
+			recoverCheckChange(m.state, config, details.Failures)
+			shouldEnsure = true
+		}
+
+	case chg.Kind() == recoverCheckKind && new == state.DoneStatus:
+		details := mustGetCheckDetails(chg)
+		config, inPlan := plan.Checks[details.Name]
+		if details.Proceed && inPlan {
+			performCheckChange(m.state, config)
+			shouldEnsure = true
+		}
+	}
+
+	if shouldEnsure {
+		m.state.EnsureBefore(0) // start new tasks right away
+	}
 }
 
-func (m *CheckManager) recoverCheckChange(config *plan.Check) (changeID string) {
-	task := recoverCheck(m.state, config.Name, checkType(config))
-	change := m.state.NewChange("recover-check", task.Summary())
-	change.Set(noPruneAttr, true)
-	change.AddTask(task)
-	return change.ID()
+func mustGetCheckDetails(change *state.Change) checkDetails {
+	tasks := change.Tasks()
+	if len(tasks) != 1 {
+		panic(fmt.Sprintf("internal error: %s change %s should have one task", change.Kind(), change.ID()))
+	}
+	var details checkDetails
+	err := tasks[0].Get(checkDetailsAttr, &details)
+	if err != nil {
+		panic(fmt.Sprintf("internal error: cannot get %s change %s check details: %v", change.Kind(), change.ID(), err))
+	}
+	return details
 }
 
 func (m *CheckManager) callFailureHandlers(name string) {
@@ -199,12 +235,43 @@ func newChecker(config *plan.Check, p *plan.Plan) checker {
 // Checks returns the list of currently-configured checks and their status,
 // ordered by name.
 func (m *CheckManager) Checks() ([]*CheckInfo, error) {
-	m.checksLock.Lock()
-	infos := make([]*CheckInfo, 0, len(m.checks))
-	for _, check := range m.checks {
-		infos = append(infos, check.info())
+	m.state.Lock()
+	defer m.state.Unlock()
+
+	// Populate name, number of failures, and change ID from state.
+	var infos []*CheckInfo
+	for _, change := range m.state.Changes() {
+		switch change.Kind() {
+		case performCheckKind, recoverCheckKind:
+			if change.IsReady() {
+				// Skip check changes that have finished already.
+				continue
+			}
+			details := mustGetCheckDetails(change)
+			infos = append(infos, &CheckInfo{
+				Name:     details.Name,
+				Failures: details.Failures,
+				ChangeID: change.ID(),
+			})
+		}
 	}
-	m.checksLock.Unlock()
+
+	// Populate other details from plan.
+	m.planLock.Lock() // always acquire locks in same order (state lock, then plan lock)
+	plan := m.plan
+	m.planLock.Unlock()
+	for _, info := range infos {
+		config, ok := plan.Checks[info.Name]
+		if !ok {
+			continue
+		}
+		info.Status = CheckStatusUp
+		info.Threshold = config.Threshold
+		info.Level = config.Level
+		if info.Failures >= info.Threshold {
+			info.Status = CheckStatusDown
+		}
+	}
 
 	sort.Slice(infos, func(i, j int) bool {
 		return infos[i].Name < infos[j].Name
@@ -229,31 +296,6 @@ const (
 	CheckStatusDown CheckStatus = "down"
 )
 
-// checkData holds state for an active health check.
-type checkData struct {
-	config    *plan.Check
-	cancel    func()
-	failures  int
-	actionRan bool
-	changeID  string
-}
-
 type checker interface {
 	check(ctx context.Context) error
-}
-
-// info returns user-facing check information for use in Checks (and tests).
-func (c *checkData) info() *CheckInfo {
-	info := &CheckInfo{
-		Name:      c.config.Name,
-		Level:     c.config.Level,
-		Status:    CheckStatusUp,
-		Failures:  c.failures,
-		Threshold: c.config.Threshold,
-		ChangeID:  c.changeID,
-	}
-	if c.failures >= c.config.Threshold {
-		info.Status = CheckStatusDown
-	}
-	return info
 }

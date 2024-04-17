@@ -18,20 +18,37 @@ import (
 	"fmt"
 
 	"github.com/canonical/pebble/internals/overlord/state"
+	"github.com/canonical/pebble/internals/plan"
 )
 
 type checkDetails struct {
-	Name string
+	Name     string // name of check
+	Failures int    // failure count
+	Proceed  bool   // whether to proceed to next check type when change is ready
 }
 
 func performCheck(st *state.State, checkName, checkType string) *state.Task {
-	task := st.NewTask("perform-check", fmt.Sprintf("Perform %s check %q", checkType, checkName))
-	task.Set("check-details", &checkDetails{Name: checkName})
+	task := st.NewTask(performCheckKind, fmt.Sprintf("Perform %s check %q", checkType, checkName))
+	task.Set(checkDetailsAttr, &checkDetails{Name: checkName})
 	return task
 }
 
-func recoverCheck(st *state.State, checkName, checkType string) *state.Task {
-	task := st.NewTask("recover-check", fmt.Sprintf("Recover %s check %q", checkType, checkName))
-	task.Set("check-details", &checkDetails{Name: checkName})
+func performCheckChange(st *state.State, config *plan.Check) {
+	task := performCheck(st, config.Name, checkType(config))
+	change := st.NewChange(performCheckKind, task.Summary())
+	change.Set(noPruneAttr, true)
+	change.AddTask(task)
+}
+
+func recoverCheck(st *state.State, checkName, checkType string, failures int) *state.Task {
+	task := st.NewTask(recoverCheckKind, fmt.Sprintf("Recover %s check %q", checkType, checkName))
+	task.Set(checkDetailsAttr, &checkDetails{Name: checkName, Failures: failures})
 	return task
+}
+
+func recoverCheckChange(st *state.State, config *plan.Check, failures int) {
+	task := recoverCheck(st, config.Name, checkType(config), failures)
+	change := st.NewChange(recoverCheckKind, task.Summary())
+	change.Set(noPruneAttr, true)
+	change.AddTask(task)
 }

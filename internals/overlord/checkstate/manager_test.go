@@ -20,6 +20,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -138,34 +139,24 @@ func (s *ManagerSuite) TestTimeout(c *C) {
 	})
 
 	check := waitCheck(c, s.manager, "chk1", func(check *checkstate.CheckInfo) bool {
-		return check.ChangeID != ""
+		return true
 	})
-	originalChangeID := check.ChangeID
+	performChangeID := check.ChangeID
 
 	check = waitCheck(c, s.manager, "chk1", func(check *checkstate.CheckInfo) bool {
-		return check.Status == checkstate.CheckStatusDown
+		return check.Status == checkstate.CheckStatusDown && check.ChangeID != performChangeID
 	})
 	c.Assert(check.Failures, Equals, 1)
 	c.Assert(check.Threshold, Equals, 1)
-	c.Assert(check.ChangeID, Not(Equals), originalChangeID)
 
-	// Ensure that the original perform-check task logs an error.
-	// We need to wait for perform-check change to be ready (Error status)
-	// so we can read the log without a race.
+	// Ensure that the original perform-check task logged an error.
 	st := s.overlord.State()
 	st.Lock()
-	change := st.Change(originalChangeID)
-	st.Unlock()
-	select {
-	case <-change.Ready():
-	case <-time.After(time.Second):
-		c.Fatalf("timed out waiting for change %s", originalChangeID)
-	}
-	st.Lock()
+	change := st.Change(performChangeID)
 	status := change.Status()
 	st.Unlock()
 	c.Assert(status, Equals, state.ErrorStatus)
-	c.Assert(lastTaskLog(st, originalChangeID), Matches, ".* ERROR exec check timed out")
+	c.Assert(lastTaskLog(st, performChangeID), Matches, ".* ERROR exec check timed out")
 }
 
 func (s *ManagerSuite) TestCheckCanceled(c *C) {
@@ -202,9 +193,7 @@ func (s *ManagerSuite) TestCheckCanceled(c *C) {
 
 	// Cancel the check in-flight
 	s.manager.PlanChanged(&plan.Plan{})
-	checks, err := s.manager.Checks()
-	c.Assert(err, IsNil)
-	c.Assert(checks, HasLen, 0)
+	waitChecks(c, s.manager, nil)
 
 	// Ensure command was terminated (output file didn't grow in size)
 	b1, err := os.ReadFile(tempFile)
@@ -219,9 +208,9 @@ func (s *ManagerSuite) TestCheckCanceled(c *C) {
 }
 
 func (s *ManagerSuite) TestFailures(c *C) {
-	failureName := ""
+	var notifies atomic.Int32
 	s.manager.NotifyCheckFailed(func(name string) {
-		failureName = name
+		notifies.Add(1)
 	})
 	testPath := c.MkDir() + "/test"
 	err := os.WriteFile(testPath, nil, 0o644)
@@ -240,35 +229,15 @@ func (s *ManagerSuite) TestFailures(c *C) {
 		},
 	})
 
-	check := waitCheck(c, s.manager, "chk1", func(check *checkstate.CheckInfo) bool {
-		return check.ChangeID != ""
-	})
-	originalChangeID := check.ChangeID
-
 	// Shouldn't have called failure handler after only 1 failure
-	check = waitCheck(c, s.manager, "chk1", func(check *checkstate.CheckInfo) bool {
+	check := waitCheck(c, s.manager, "chk1", func(check *checkstate.CheckInfo) bool {
 		return check.Failures == 1
 	})
+	originalChangeID := check.ChangeID
 	c.Assert(check.Threshold, Equals, 3)
 	c.Assert(check.Status, Equals, checkstate.CheckStatusUp)
-	c.Assert(failureName, Equals, "")
-
-	// Ensure that the original perform-check task logs an error.
-	// We need to wait for perform-check change to be ready (Error status)
-	// so we can read the log without a race.
-	st := s.overlord.State()
-	st.Lock()
-	change := st.Change(originalChangeID)
-	st.Unlock()
-	select {
-	case <-change.Ready():
-	case <-time.After(10 * time.Second):
-		c.Fatalf("timed out waiting for change %s", originalChangeID)
-	}
-	c.Assert(lastTaskLog(s.overlord.State(), originalChangeID), Matches, ".* exit status 1")
-
-	recoverChangeID := check.ChangeID
-	c.Assert(recoverChangeID, Not(Equals), originalChangeID)
+	c.Assert(lastTaskLog(s.overlord.State(), check.ChangeID), Matches, ".* exit status 1")
+	c.Assert(notifies.Load(), Equals, int32(0))
 
 	// Shouldn't have called failure handler after only 2 failures
 	check = waitCheck(c, s.manager, "chk1", func(check *checkstate.CheckInfo) bool {
@@ -277,31 +246,38 @@ func (s *ManagerSuite) TestFailures(c *C) {
 	c.Assert(check.Threshold, Equals, 3)
 	c.Assert(check.Status, Equals, checkstate.CheckStatusUp)
 	c.Assert(lastTaskLog(s.overlord.State(), check.ChangeID), Matches, ".* exit status 1")
-	c.Assert(failureName, Equals, "")
+	c.Assert(notifies.Load(), Equals, int32(0))
+	c.Assert(check.ChangeID, Equals, originalChangeID)
 
 	// Should have called failure handler and be unhealthy after 3 failures (threshold)
 	check = waitCheck(c, s.manager, "chk1", func(check *checkstate.CheckInfo) bool {
-		return check.Failures == 3
+		return check.Failures == 3 && check.ChangeID != originalChangeID
 	})
 	c.Assert(check.Threshold, Equals, 3)
 	c.Assert(check.Status, Equals, checkstate.CheckStatusDown)
+	c.Assert(notifies.Load(), Equals, int32(1))
+	recoverChangeID := check.ChangeID
+
+	// Should log failures in recover-check mode
+	check = waitCheck(c, s.manager, "chk1", func(check *checkstate.CheckInfo) bool {
+		return check.Failures == 4
+	})
+	c.Assert(check.Threshold, Equals, 3)
+	c.Assert(check.Status, Equals, checkstate.CheckStatusDown)
+	c.Assert(notifies.Load(), Equals, int32(1))
 	c.Assert(lastTaskLog(s.overlord.State(), check.ChangeID), Matches, ".* exit status 1")
-	c.Assert(failureName, Equals, "chk1")
+	c.Assert(check.ChangeID, Equals, recoverChangeID)
 
 	// Should reset number of failures if command then succeeds
-	failureName = ""
 	err = os.Remove(testPath)
 	c.Assert(err, IsNil)
 	check = waitCheck(c, s.manager, "chk1", func(check *checkstate.CheckInfo) bool {
-		return check.Status == checkstate.CheckStatusUp
+		return check.Status == checkstate.CheckStatusUp && check.ChangeID != recoverChangeID
 	})
 	c.Assert(check.Failures, Equals, 0)
 	c.Assert(check.Threshold, Equals, 3)
+	c.Assert(notifies.Load(), Equals, int32(1))
 	c.Assert(lastTaskLog(s.overlord.State(), check.ChangeID), Equals, "")
-	c.Assert(failureName, Equals, "")
-
-	newPerformChangeID := check.ChangeID
-	c.Assert(newPerformChangeID, Not(Equals), recoverChangeID)
 }
 
 // waitCheck is a time based approach to wait for a checker run to complete.
@@ -333,8 +309,10 @@ func waitCheck(c *C, mgr *checkstate.CheckManager, name string, f func(check *ch
 }
 
 func waitChecks(c *C, mgr *checkstate.CheckManager, expected []*checkstate.CheckInfo) []*checkstate.CheckInfo {
+	var checks []*checkstate.CheckInfo
 	for start := time.Now(); time.Since(start) < 10*time.Second; {
-		checks, err := mgr.Checks()
+		var err error
+		checks, err = mgr.Checks()
 		c.Assert(err, IsNil)
 		for _, check := range checks {
 			check.ChangeID = "" // clear change ID to avoid comparing it
@@ -344,7 +322,10 @@ func waitChecks(c *C, mgr *checkstate.CheckManager, expected []*checkstate.Check
 		}
 		time.Sleep(time.Millisecond)
 	}
-	c.Fatalf("timed out waiting for checks to settle to %#v", expected)
+	for i, check := range checks {
+		c.Logf("check %d: %#v", i, *check)
+	}
+	c.Fatal("timed out waiting for checks to settle")
 	return nil
 }
 

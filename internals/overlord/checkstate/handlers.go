@@ -20,42 +20,29 @@ import (
 	"fmt"
 	"time"
 
-	"gopkg.in/tomb.v2"
+	tombpkg "gopkg.in/tomb.v2"
 
 	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/overlord/state"
-	"github.com/canonical/pebble/internals/plan"
 )
 
-func (m *CheckManager) doPerformCheck(task *state.Task, tomb *tomb.Tomb) error {
+func (m *CheckManager) doPerformCheck(task *state.Task, tomb *tombpkg.Tomb) error {
 	var details checkDetails
-	m.state.Lock()
-	changeID := task.Change().ID()
-	err := task.Get("check-details", &details)
-	m.state.Unlock()
-	if err != nil {
-		return fmt.Errorf("cannot get check details for task %q: %v", task.ID(), err)
-	}
 
+	m.state.Lock() // always acquire locks in same order (state lock, then plan lock)
 	m.planLock.Lock()
 	plan := m.plan
 	m.planLock.Unlock()
+	err := task.Get(checkDetailsAttr, &details)
+	m.state.Unlock()
+	if err != nil {
+		return fmt.Errorf("cannot get check details for perform-check task %q: %v", task.ID(), err)
+	}
 	config, ok := plan.Checks[details.Name]
 	if !ok {
-		logger.Debugf("Check %q no longer exists in plan.", details.Name)
+		// Check no longer exists in plan.
 		return nil
 	}
-
-	m.checksLock.Lock()
-	data := m.checks[config.Name]
-	if data == nil {
-		data = &checkData{}
-		m.checks[config.Name] = data
-	}
-	data.config = config
-	data.cancel = func() { tomb.Kill(nil) }
-	data.changeID = changeID
-	m.checksLock.Unlock()
 
 	logger.Debugf("Performing check %q with period %v", details.Name, config.Period.Value)
 	ticker := time.NewTicker(config.Period.Value)
@@ -65,52 +52,62 @@ func (m *CheckManager) doPerformCheck(task *state.Task, tomb *tomb.Tomb) error {
 	for {
 		select {
 		case <-ticker.C:
-			err := runCheck(tomb.Context(nil), config, chk, config.Timeout.Value)
+			err := runCheck(tomb.Context(nil), chk, config.Timeout.Value)
 			if err != nil {
-				// Check failed, switch to recovering a failing check.
-				failures, actionRan := m.handleCheckFailure(config, err)
-
-				// Hold checksLock while updating state so that if someone
-				// calls Checks() they always see the latest state. We must
-				// always acquire checksLock and then state lock in that order.
-
-				m.checksLock.Lock()
-
+				// Record check failure and perform any action if the threshold
+				// is reached (for example, restarting a service).
+				details.Failures++
 				m.state.Lock()
-				newChangeID := m.recoverCheckChange(config)
-				m.state.EnsureBefore(0)
+				atThreshold := details.Failures >= config.Threshold
+				if atThreshold {
+					details.Proceed = true
+				} else {
+					// Add error to task log, but only if we haven't reached the
+					// threshold. When we hit the threshold, the "return err"
+					// below will cause the error to be logged.
+					task.Errorf("%v", err)
+				}
+				task.Set(checkDetailsAttr, &details)
 				m.state.Unlock()
 
-				data.failures = failures
-				data.actionRan = actionRan
-				data.changeID = newChangeID
-				m.checksLock.Unlock()
-
-				// Returning the error means perform-check goes to Error status
-				// and logs the error to the task log.
-				return err
+				logger.Noticef("Check %q failure %d/%d: %v", config.Name, details.Failures, config.Threshold, err)
+				if atThreshold {
+					logger.Noticef("Check %q threshold %d hit, triggering action and recovering", config.Name, config.Threshold)
+					m.callFailureHandlers(config.Name)
+					// Returning the error means perform-check goes to Error status
+					// and logs the error to the task log.
+					return err
+				}
+			} else {
+				// TODO: need a test for this -- this block wasn't here before, and tests passed!
+				details.Failures = 0
+				m.state.Lock()
+				task.Set(checkDetailsAttr, &details)
+				m.state.Unlock()
 			}
 
 		case <-tomb.Dying():
-			err := tomb.Err()
-			reasonStr := " (no error)"
-			if err != nil {
-				reasonStr = ": " + err.Error()
-			}
-			logger.Debugf("Check %q stopped during perform-check%s", config.Name, reasonStr)
-			return err
+			break
+		}
+
+		// Do this check here so that select doesn't sometimes pick up another
+		// ticker.C tick after the tomb has been killed.
+		tombErr := tomb.Err()
+		if tombErr != tombpkg.ErrStillAlive {
+			logger.Debugf("Check %q stopped during perform-check%s", config.Name, errReason(tombErr))
+			return tombErr
 		}
 	}
 }
 
-func runCheck(ctx context.Context, config *plan.Check, chk checker, timeout time.Duration) error {
+func runCheck(ctx context.Context, chk checker, timeout time.Duration) error {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	err := chk.check(ctx)
 	if err != nil {
 		if errors.Is(ctx.Err(), context.Canceled) {
-			// Check was stopped, don't trigger failure action.
-			logger.Debugf("Check %q canceled in flight", config.Name)
+			// Check was stopped, don't trigger failure action (tomb.Err check
+			// in caller will return from the handler).
 			return nil
 		}
 		return err
@@ -118,36 +115,23 @@ func runCheck(ctx context.Context, config *plan.Check, chk checker, timeout time
 	return nil
 }
 
-func (m *CheckManager) doRecoverCheck(task *state.Task, tomb *tomb.Tomb) error {
+func (m *CheckManager) doRecoverCheck(task *state.Task, tomb *tombpkg.Tomb) error {
 	var details checkDetails
-	m.state.Lock()
-	changeID := task.Change().ID()
-	err := task.Get("check-details", &details)
-	m.state.Unlock()
-	if err != nil {
-		return fmt.Errorf("cannot get check details for task %q: %v", task.ID(), err)
-	}
 
+	m.state.Lock() // always acquire locks in same order (state lock, then plan lock)
 	m.planLock.Lock()
 	plan := m.plan
 	m.planLock.Unlock()
+	err := task.Get(checkDetailsAttr, &details)
+	m.state.Unlock()
+	if err != nil {
+		return fmt.Errorf("cannot get check details for recover-check task %q: %v", task.ID(), err)
+	}
 	config, ok := plan.Checks[details.Name]
 	if !ok {
-		logger.Debugf("Check %q no longer exists in plan.", details.Name)
+		// Check no longer exists in plan.
 		return nil
 	}
-
-	m.checksLock.Lock()
-	data := m.checks[config.Name]
-	if data == nil {
-		data = &checkData{}
-		m.checks[config.Name] = data
-	}
-	data.config = config
-	data.cancel = func() { tomb.Kill(nil) }
-	data.failures = 1
-	data.changeID = changeID
-	m.checksLock.Unlock()
 
 	logger.Debugf("Recovering check %q with period %v", details.Name, config.Period.Value)
 	ticker := time.NewTicker(config.Period.Value)
@@ -157,61 +141,42 @@ func (m *CheckManager) doRecoverCheck(task *state.Task, tomb *tomb.Tomb) error {
 	for {
 		select {
 		case <-ticker.C:
-			err := runCheck(tomb.Context(nil), config, chk, config.Timeout.Value)
+			err := runCheck(tomb.Context(nil), chk, config.Timeout.Value)
 			if err != nil {
-				failures, actionRan := m.handleCheckFailure(config, err)
-
-				m.checksLock.Lock()
-
+				details.Failures++
 				m.state.Lock()
+				task.Set(checkDetailsAttr, &details)
 				task.Errorf("%v", err) // add error to task log
 				m.state.Unlock()
 
-				data.failures = failures
-				data.actionRan = actionRan
-				m.checksLock.Unlock()
+				logger.Noticef("Check %q failure %d/%d: %v", config.Name, details.Failures, config.Threshold, err)
 				break
 			}
 
 			// Check succeeded, switch to performing a succeeding check.
-			m.checksLock.Lock()
-
+			details.Proceed = true
 			m.state.Lock()
-			newChangeID := m.performCheckChange(config)
-			m.state.EnsureBefore(0)
+			task.Set(checkDetailsAttr, &details)
 			m.state.Unlock()
-
-			data.failures = 0
-			data.actionRan = false
-			data.changeID = newChangeID
-			m.checksLock.Unlock()
 			return nil
 
 		case <-tomb.Dying():
-			err := tomb.Err()
-			reasonStr := " (no error)"
-			if err != nil {
-				reasonStr = ": " + err.Error()
-			}
-			logger.Debugf("Check %q stopped during recover-check%s", config.Name, reasonStr)
-			return err
+			break
+		}
+
+		// Do this check here so that select doesn't sometimes pick up another
+		// ticker.C tick after the tomb has been killed.
+		tombErr := tomb.Err()
+		if tombErr != tombpkg.ErrStillAlive {
+			logger.Debugf("Check %q stopped during recover-check%s", config.Name, errReason(tombErr))
+			return tombErr
 		}
 	}
 }
 
-func (m *CheckManager) handleCheckFailure(config *plan.Check, err error) (failures int, actionRan bool) {
-	m.checksLock.Lock()
-	data := m.checks[config.Name]
-	failures = data.failures
-	actionRan = data.actionRan
-	m.checksLock.Unlock()
-
-	failures++
-	logger.Noticef("Check %q failure %d/%d: %v", config.Name, failures, config.Threshold, err)
-	if !actionRan && failures >= config.Threshold {
-		logger.Noticef("Check %q threshold %d hit, triggering action", config.Name, config.Threshold)
-		m.callFailureHandlers(config.Name)
-		actionRan = true
+func errReason(err error) string {
+	if err == nil {
+		return " (no error)"
 	}
-	return failures, actionRan
+	return ": " + err.Error()
 }
