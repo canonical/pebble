@@ -315,6 +315,79 @@ func (s *ManagerSuite) TestFailuresBelowThreshold(c *C) {
 	c.Assert(lastTaskLog(s.overlord.State(), check.ChangeID), Matches, ".* INFO succeeded after 1 failure")
 }
 
+func (s *ManagerSuite) TestPlanChangedSmarts(c *C) {
+	s.manager.PlanChanged(&plan.Plan{
+		Checks: map[string]*plan.Check{
+			"chk1": {
+				Name:      "chk1",
+				Period:    plan.OptionalDuration{Value: time.Second},
+				Threshold: 3,
+				Exec:      &plan.ExecCheck{Command: "echo chk1"},
+			},
+			"chk2": {
+				Name:      "chk2",
+				Period:    plan.OptionalDuration{Value: time.Second},
+				Threshold: 3,
+				Exec:      &plan.ExecCheck{Command: "echo chk2"},
+			},
+			"chk3": {
+				Name:      "chk3",
+				Period:    plan.OptionalDuration{Value: time.Second},
+				Threshold: 3,
+				Exec:      &plan.ExecCheck{Command: "echo chk3"},
+			},
+		},
+	})
+
+	waitChecks(c, s.manager, []*checkstate.CheckInfo{
+		{Name: "chk1", Status: "up", Threshold: 3},
+		{Name: "chk2", Status: "up", Threshold: 3},
+		{Name: "chk3", Status: "up", Threshold: 3},
+	})
+	checks, err := s.manager.Checks()
+	c.Assert(err, IsNil)
+	c.Assert(checks, HasLen, 3)
+	var changeIDs []string
+	for _, check := range checks {
+		changeIDs = append(changeIDs, check.ChangeID)
+		check.ChangeID = ""
+	}
+
+	// Modify plan: chk1 unchanged, chk2 modified, chk3 deleted.
+	s.manager.PlanChanged(&plan.Plan{
+		Checks: map[string]*plan.Check{
+			"chk1": {
+				Name:      "chk1",
+				Period:    plan.OptionalDuration{Value: time.Second},
+				Threshold: 3,
+				Exec:      &plan.ExecCheck{Command: "echo chk1"},
+			},
+			"chk2": {
+				Name:      "chk2",
+				Period:    plan.OptionalDuration{Value: time.Second},
+				Threshold: 6,
+				Exec:      &plan.ExecCheck{Command: "echo chk2 modified"},
+			},
+		},
+	})
+
+	waitChecks(c, s.manager, []*checkstate.CheckInfo{
+		{Name: "chk1", Status: "up", Threshold: 3},
+		{Name: "chk2", Status: "up", Threshold: 6},
+	})
+	checks, err = s.manager.Checks()
+	c.Assert(err, IsNil)
+	c.Assert(checks, HasLen, 2)
+	var newChangeIDs []string
+	for _, check := range checks {
+		newChangeIDs = append(newChangeIDs, check.ChangeID)
+		check.ChangeID = ""
+	}
+	c.Assert(changeIDs[0], Equals, newChangeIDs[0])
+	c.Assert(changeIDs[1], Not(Equals), newChangeIDs[1])
+	c.Assert(newChangeIDs[0], Not(Equals), newChangeIDs[1])
+}
+
 // waitCheck is a time based approach to wait for a checker run to complete.
 // The timeout value does not impact the general time it takes for tests to
 // complete, but determines a worst case waiting period before giving up.
@@ -343,7 +416,7 @@ func waitCheck(c *C, mgr *checkstate.CheckManager, name string, f func(check *ch
 	return nil
 }
 
-func waitChecks(c *C, mgr *checkstate.CheckManager, expected []*checkstate.CheckInfo) []*checkstate.CheckInfo {
+func waitChecks(c *C, mgr *checkstate.CheckManager, expected []*checkstate.CheckInfo) {
 	var checks []*checkstate.CheckInfo
 	for start := time.Now(); time.Since(start) < 10*time.Second; {
 		var err error
@@ -353,7 +426,7 @@ func waitChecks(c *C, mgr *checkstate.CheckManager, expected []*checkstate.Check
 			check.ChangeID = "" // clear change ID to avoid comparing it
 		}
 		if reflect.DeepEqual(checks, expected) {
-			return checks
+			return
 		}
 		time.Sleep(time.Millisecond)
 	}
@@ -361,7 +434,7 @@ func waitChecks(c *C, mgr *checkstate.CheckManager, expected []*checkstate.Check
 		c.Logf("check %d: %#v", i, *check)
 	}
 	c.Fatal("timed out waiting for checks to settle")
-	return nil
+	return
 }
 
 func lastTaskLog(st *state.State, changeID string) string {

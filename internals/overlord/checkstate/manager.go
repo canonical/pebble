@@ -17,6 +17,7 @@ package checkstate
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -86,15 +87,20 @@ func (m *CheckManager) NotifyCheckFailed(f FailureFunc) {
 // PlanChanged handles updates to the plan (server configuration),
 // stopping the previous checks and starting the new ones as required.
 func (m *CheckManager) PlanChanged(newPlan *plan.Plan) {
-	// TODO: should figure out how to not stop/restart checks that haven't changed
-	//       so that unnecessary changes/tasks aren't created
 	m.state.Lock()
 	defer m.state.Unlock()
 
 	// Update local reference to plan.
 	m.planLock.Lock() // always acquire locks in same order (state lock, then plan lock)
+	oldPlan := m.plan
 	m.plan = newPlan
 	m.planLock.Unlock()
+
+	if oldPlan == nil {
+		oldPlan = &plan.Plan{}
+	}
+	shouldEnsure := false
+	newOrModified := make(map[string]bool, len(newPlan.Checks))
 
 	// Abort all currently-running checks.
 	for _, change := range m.state.Changes() {
@@ -104,20 +110,44 @@ func (m *CheckManager) PlanChanged(newPlan *plan.Plan) {
 				// Skip check changes that have finished already.
 				continue
 			}
+			details := mustGetCheckDetails(change)
+			oldConfig, inOld := oldPlan.Checks[details.Name]
+			newConfig, inNew := newPlan.Checks[details.Name]
+			if inOld && inNew {
+				if reflect.DeepEqual(oldConfig, newConfig) {
+					// Don't restart check if its configuration hasn't changed.
+					continue
+				}
+				// Check is in old and new plans and has been modified.
+				newOrModified[details.Name] = true
+			}
 			change.Abort()
+			shouldEnsure = true
 		}
 	}
 
-	// Start updated checks.
+	// Also find checks that are new (in new plan but not in old one).
 	for _, config := range newPlan.Checks {
-		performCheckChange(m.state, config)
+		if oldPlan.Checks[config.Name] == nil {
+			newOrModified[config.Name] = true
+		}
+	}
+
+	// Start new or modified checks.
+	for _, config := range newPlan.Checks {
+		if newOrModified[config.Name] {
+			performCheckChange(m.state, config)
+			shouldEnsure = true
+		}
 	}
 	if !m.ensureDone.Load() {
 		// Can't call EnsureBefore before Overlord.Loop is running (which will
 		// call m.Ensure for the first time).
 		return
 	}
-	m.state.EnsureBefore(0) // start new tasks right away
+	if shouldEnsure {
+		m.state.EnsureBefore(0) // start new tasks right away
+	}
 }
 
 func (m *CheckManager) changeStatusChanged(chg *state.Change, old, new state.Status) {
