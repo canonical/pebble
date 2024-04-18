@@ -38,7 +38,8 @@ func (s *PebbleSuite) TestChecks(c *check.C) {
 		{"name": "chk1", "status": "up", "threshold": 3, "change-id": "1"},
 		{"name": "chk2", "status": "down", "failures": 1, "threshold": 1, "change-id": "2"},
 		{"name": "chk3", "level": "alive", "status": "down", "failures": 42, "threshold": 3, "change-id": "3"},
-		{"name": "chk4", "status": "down", "failures": 6, "threshold": 2, "change-id": "4"}
+		{"name": "chk4", "status": "down", "failures": 6, "threshold": 2, "change-id": "4"},
+		{"name": "chk5", "status": "down", "failures": 3, "threshold": 2, "change-id": "5"}
 	]
 }`)
 		case "/v1/changes/2":
@@ -64,9 +65,20 @@ func (s *PebbleSuite) TestChecks(c *check.C) {
 	"type": "sync",
 	"result": {
 		"id": "4",
-		"kind": "perform-check",
+		"kind": "recover-check",
 		"status": "Doing",
 		"tasks": [{"kind": "recover-check", "status": "Doing", "log": ["2024-04-18T12:16:57+12:00 ERROR Get \"http://localhost:8000/\": dial tcp 127.0.0.1:8000: connect: connection refused"]}]
+	}
+}`)
+		case "/v1/changes/5":
+			fmt.Fprint(w, `
+{
+	"type": "sync",
+	"result": {
+		"id": "5",
+		"kind": "perform-check",
+		"status": "Doing",
+		"tasks": [{"kind": "recover-check", "status": "Doing", "log": ["2024-04-18T12:16:57+12:00 ERROR error with some\\nline breaks\\nin it\\n"]}]
 	}
 }`)
 		default:
@@ -79,9 +91,10 @@ func (s *PebbleSuite) TestChecks(c *check.C) {
 	c.Check(s.Stdout(), check.Equals, `
 Check  Level  Status  Failures  Change
 chk1   -      up      0/3       1
-chk2   -      down    1/1       2 (ERROR second)
+chk2   -      down    1/1       2 (second)
 chk3   alive  down    42/3      3 (cannot get change 3)
-chk4   -      down    6/2       4 (ERROR Get "http://local...nect: connection refused)
+chk4   -      down    6/2       4 (Get "http://localhost:8000/": dial tc... run "pebble tasks 4" for more)
+chk5   -      down    3/2       5 (error with some\nline breaks\nin it\n)
 `[1:])
 	c.Check(s.Stderr(), check.Equals, "")
 }

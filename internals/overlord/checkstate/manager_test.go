@@ -223,7 +223,7 @@ func (s *ManagerSuite) TestFailures(c *C) {
 				Timeout:   plan.OptionalDuration{Value: 100 * time.Millisecond},
 				Threshold: 3,
 				Exec: &plan.ExecCheck{
-					Command: fmt.Sprintf(`/bin/sh -c '[ ! -f %s ]'`, testPath),
+					Command: fmt.Sprintf(`/bin/sh -c 'echo details >/dev/stderr; [ ! -f %s ]'`, testPath),
 				},
 			},
 		},
@@ -236,7 +236,7 @@ func (s *ManagerSuite) TestFailures(c *C) {
 	originalChangeID := check.ChangeID
 	c.Assert(check.Threshold, Equals, 3)
 	c.Assert(check.Status, Equals, checkstate.CheckStatusUp)
-	c.Assert(lastTaskLog(s.overlord.State(), check.ChangeID), Matches, ".* ERROR exit status 1")
+	c.Assert(lastTaskLog(s.overlord.State(), check.ChangeID), Matches, ".* ERROR exit status 1; details")
 	c.Assert(notifies.Load(), Equals, int32(0))
 
 	// Shouldn't have called failure handler after only 2 failures
@@ -245,7 +245,7 @@ func (s *ManagerSuite) TestFailures(c *C) {
 	})
 	c.Assert(check.Threshold, Equals, 3)
 	c.Assert(check.Status, Equals, checkstate.CheckStatusUp)
-	c.Assert(lastTaskLog(s.overlord.State(), check.ChangeID), Matches, ".* ERROR exit status 1")
+	c.Assert(lastTaskLog(s.overlord.State(), check.ChangeID), Matches, ".* ERROR exit status 1; details")
 	c.Assert(notifies.Load(), Equals, int32(0))
 	c.Assert(check.ChangeID, Equals, originalChangeID)
 
@@ -265,7 +265,7 @@ func (s *ManagerSuite) TestFailures(c *C) {
 	c.Assert(check.Threshold, Equals, 3)
 	c.Assert(check.Status, Equals, checkstate.CheckStatusDown)
 	c.Assert(notifies.Load(), Equals, int32(1))
-	c.Assert(lastTaskLog(s.overlord.State(), check.ChangeID), Matches, ".* ERROR exit status 1")
+	c.Assert(lastTaskLog(s.overlord.State(), check.ChangeID), Matches, ".* ERROR exit status 1; details")
 	c.Assert(check.ChangeID, Equals, recoverChangeID)
 
 	// Should reset number of failures if command then succeeds

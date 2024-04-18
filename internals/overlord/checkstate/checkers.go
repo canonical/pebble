@@ -36,8 +36,8 @@ import (
 )
 
 const (
-	maxErrorBytes = 10 * 1024
-	maxErrorLines = 20
+	maxErrorBytes = 512
+	maxErrorLines = 5
 	execWaitDelay = time.Second
 )
 

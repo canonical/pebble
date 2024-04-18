@@ -67,7 +67,7 @@ func (m *CheckManager) doPerformCheck(task *state.Task, tomb *tombpkg.Tomb) erro
 					// Add error to task log, but only if we haven't reached the
 					// threshold. When we hit the threshold, the "return err"
 					// below will cause the error to be logged.
-					task.Errorf("%v", err)
+					logTaskError(task, err)
 				}
 				task.Set(checkDetailsAttr, &details)
 				m.state.Unlock()
@@ -153,7 +153,7 @@ func (m *CheckManager) doRecoverCheck(task *state.Task, tomb *tombpkg.Tomb) erro
 
 				m.state.Lock()
 				task.Set(checkDetailsAttr, &details)
-				task.Errorf("%v", err) // add error to task log
+				logTaskError(task, err)
 				m.state.Unlock()
 
 				logger.Noticef("Check %q failure %d/%d: %v", config.Name, details.Failures, config.Threshold, err)
@@ -180,6 +180,15 @@ func (m *CheckManager) doRecoverCheck(task *state.Task, tomb *tombpkg.Tomb) erro
 			return tombErr
 		}
 	}
+}
+
+func logTaskError(task *state.Task, err error) {
+	message := err.Error()
+	var detailsErr *detailsError
+	if errors.As(err, &detailsErr) && detailsErr.Details() != "" {
+		message += "; " + detailsErr.Details()
+	}
+	task.Errorf("%s", message)
 }
 
 func errReason(err error) string {

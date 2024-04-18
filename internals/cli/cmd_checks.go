@@ -107,9 +107,11 @@ func (cmd *cmdChecks) changeInfo(check *client.CheckInfo) string {
 	if log == "" {
 		return check.ChangeID
 	}
-	// Truncate to 50 bytes with ellipsis in the middle.
-	if len(log) > 50 {
-		log = log[:23] + "..." + log[len(log)-24:]
+	// Truncate to limited number of bytes with ellipsis and "for more" text.
+	const maxError = 70
+	if len(log) > maxError {
+		forMore := fmt.Sprintf(`... run "pebble tasks %s" for more`, check.ChangeID)
+		log = log[:maxError-len(forMore)] + forMore
 	}
 	return fmt.Sprintf("%s (%s)", check.ChangeID, log)
 }
@@ -126,10 +128,12 @@ func (cmd *cmdChecks) lastTaskLog(changeID string) (string, error) {
 	if len(logs) < 1 {
 		return "", nil
 	}
-	// Strip initial timestamp from log.
+	// Strip initial "<timestamp> ERROR" text from log.
 	lastLog := logs[len(logs)-1]
-	if _, after, found := strings.Cut(lastLog, " "); found {
-		lastLog = after
+	fields := strings.SplitN(lastLog, " ", 3)
+	if len(fields) > 2 && fields[1] == "ERROR" {
+		lastLog = fields[2]
 	}
+	lastLog = strings.ReplaceAll(lastLog, "\n", "\\n")
 	return lastLog, nil
 }
