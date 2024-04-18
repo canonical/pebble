@@ -59,6 +59,7 @@ func NewManager(s *state.State, runner *state.TaskRunner) *CheckManager {
 	}
 
 	// Health check changes can be long-running; ensure they don't get pruned.
+	// TODO: need test of this.
 	s.RegisterPendingChangeByAttr(noPruneAttr, func(change *state.Change) bool {
 		return true
 	})
