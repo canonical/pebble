@@ -81,7 +81,6 @@ func (m *CheckManager) doPerformCheck(task *state.Task, tomb *tombpkg.Tomb) erro
 					return err
 				}
 			} else if details.Failures > 0 {
-				// TODO: should add test of the details.Failures > 0 bit
 				m.updateHealthInfo(config, 0)
 
 				m.state.Lock()

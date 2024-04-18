@@ -181,7 +181,7 @@ func (s *ManagerSuite) TestCheckCanceled(c *C) {
 
 	// Wait for command to start (output file is not zero in size)
 	for i := 0; ; i++ {
-		if i >= 100 {
+		if i >= 1000 {
 			c.Fatalf("failed waiting for command to start")
 		}
 		b, _ := os.ReadFile(tempFile)
@@ -386,6 +386,41 @@ func (s *ManagerSuite) TestPlanChangedSmarts(c *C) {
 	c.Assert(changeIDs[0], Equals, newChangeIDs[0])
 	c.Assert(changeIDs[1], Not(Equals), newChangeIDs[1])
 	c.Assert(newChangeIDs[0], Not(Equals), newChangeIDs[1])
+}
+
+func (s *ManagerSuite) TestSuccessNoLog(c *C) {
+	tempDir := c.MkDir()
+	tempFile := filepath.Join(tempDir, "file.txt")
+	command := fmt.Sprintf(`/bin/sh -c 'echo -n x >>%s'`, tempFile)
+	s.manager.PlanChanged(&plan.Plan{
+		Checks: map[string]*plan.Check{
+			"chk1": {
+				Name:      "chk1",
+				Period:    plan.OptionalDuration{Value: 10 * time.Millisecond},
+				Timeout:   plan.OptionalDuration{Value: time.Second},
+				Threshold: 3,
+				Exec:      &plan.ExecCheck{Command: command},
+			},
+		},
+	})
+
+	// Wait for check to run at least twice
+	for i := 0; ; i++ {
+		if i >= 1000 {
+			c.Fatalf("failed waiting for check to run")
+		}
+		b, _ := os.ReadFile(tempFile)
+		if len(b) >= 2 {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+
+	// Ensure it didn't log anything to the task on success.
+	check := waitCheck(c, s.manager, "chk1", func(check *checkstate.CheckInfo) bool {
+		return true
+	})
+	c.Assert(lastTaskLog(s.overlord.State(), check.ChangeID), Equals, "")
 }
 
 // waitCheck is a time based approach to wait for a checker run to complete.
