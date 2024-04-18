@@ -49,7 +49,7 @@ func (s *PebbleSuite) TestChecks(c *check.C) {
 		"id": "2",
 		"kind": "recover-check",
 		"status": "Doing",
-		"tasks": [{"kind": "recover-check", "status": "Doing", "log": ["first error", "second error"]}]
+		"tasks": [{"kind": "recover-check", "status": "Doing", "log": ["first", "2024-04-18T12:16:57Z ERROR second"]}]
 	}
 }`)
 		case "/v1/changes/3":
@@ -66,7 +66,7 @@ func (s *PebbleSuite) TestChecks(c *check.C) {
 		"id": "4",
 		"kind": "perform-check",
 		"status": "Doing",
-		"tasks": [{"kind": "recover-check", "status": "Doing", "log": ["this is a long error message that will surely get truncated"]}]
+		"tasks": [{"kind": "recover-check", "status": "Doing", "log": ["2024-04-18T12:16:57+12:00 ERROR Get \"http://localhost:8000/\": dial tcp 127.0.0.1:8000: connect: connection refused"]}]
 	}
 }`)
 		default:
@@ -79,9 +79,9 @@ func (s *PebbleSuite) TestChecks(c *check.C) {
 	c.Check(s.Stdout(), check.Equals, `
 Check  Level  Status  Failures  Change
 chk1   -      up      0/3       1
-chk2   -      down    1/1       2 (second error)
-chk3   alive  down    42/3      3 (ERROR: cannot get change 3)
-chk4   -      down    6/2       4 (this is a long error me...ill surely get truncated)
+chk2   -      down    1/1       2 (ERROR second)
+chk3   alive  down    42/3      3 (cannot get change 3)
+chk4   -      down    6/2       4 (ERROR Get "http://local...nect: connection refused)
 `[1:])
 	c.Check(s.Stderr(), check.Equals, "")
 }

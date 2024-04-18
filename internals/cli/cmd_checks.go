@@ -16,6 +16,7 @@ package cli
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/canonical/go-flags"
 
@@ -101,7 +102,7 @@ func (cmd *cmdChecks) changeInfo(check *client.CheckInfo) string {
 	}
 	log, err := cmd.lastTaskLog(check.ChangeID)
 	if err != nil {
-		return fmt.Sprintf("%s (ERROR: %v)", check.ChangeID, err)
+		return fmt.Sprintf("%s (%v)", check.ChangeID, err)
 	}
 	if log == "" {
 		return check.ChangeID
@@ -125,5 +126,10 @@ func (cmd *cmdChecks) lastTaskLog(changeID string) (string, error) {
 	if len(logs) < 1 {
 		return "", nil
 	}
-	return logs[len(logs)-1], nil
+	// Strip initial timestamp from log.
+	lastLog := logs[len(logs)-1]
+	if _, after, found := strings.Cut(lastLog, " "); found {
+		lastLog = after
+	}
+	return lastLog, nil
 }
