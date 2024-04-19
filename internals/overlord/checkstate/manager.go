@@ -103,7 +103,7 @@ func (m *CheckManager) PlanChanged(newPlan *plan.Plan) {
 	shouldEnsure := false
 	newOrModified := make(map[string]bool, len(newPlan.Checks))
 
-	// Abort all currently-running checks.
+	// Abort all currently-running checks that have been removed or modified.
 	for _, change := range m.state.Changes() {
 		switch change.Kind() {
 		case performCheckKind, recoverCheckKind:
