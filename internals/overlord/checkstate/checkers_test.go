@@ -261,7 +261,7 @@ func (s *CheckersSuite) TestNewChecker(c *C) {
 			URL:     "https://example.com/foo",
 			Headers: map[string]string{"k": "v"},
 		},
-	}, nil)
+	})
 	http, ok := chk.(*httpChecker)
 	c.Assert(ok, Equals, true)
 	c.Check(http.name, Equals, "http")
@@ -274,7 +274,7 @@ func (s *CheckersSuite) TestNewChecker(c *C) {
 			Port: 80,
 			Host: "localhost",
 		},
-	}, nil)
+	})
 	tcp, ok := chk.(*tcpChecker)
 	c.Assert(ok, Equals, true)
 	c.Check(tcp.name, Equals, "tcp")
@@ -293,7 +293,7 @@ func (s *CheckersSuite) TestNewChecker(c *C) {
 			Group:       "group",
 			WorkingDir:  "/working/dir",
 		},
-	}, nil)
+	})
 	exec, ok := chk.(*execChecker)
 	c.Assert(ok, Equals, true)
 	c.Assert(exec.name, Equals, "exec")
@@ -307,13 +307,7 @@ func (s *CheckersSuite) TestNewChecker(c *C) {
 
 func (s *CheckersSuite) TestExecContextNoOverride(c *C) {
 	svcUserID, svcGroupID := 10, 20
-	chk := newChecker(&plan.Check{
-		Name: "exec",
-		Exec: &plan.ExecCheck{
-			Command:        "sleep 1",
-			ServiceContext: "svc1",
-		},
-	}, &plan.Plan{Services: map[string]*plan.Service{
+	config := mergeServiceContext(&plan.Plan{Services: map[string]*plan.Service{
 		"svc1": {
 			Name:        "svc1",
 			Environment: map[string]string{"k": "x", "a": "1"},
@@ -323,7 +317,14 @@ func (s *CheckersSuite) TestExecContextNoOverride(c *C) {
 			Group:       "svcgroup",
 			WorkingDir:  "/working/svc",
 		},
-	}})
+	}}, &plan.Check{
+		Name: "exec",
+		Exec: &plan.ExecCheck{
+			Command:        "sleep 1",
+			ServiceContext: "svc1",
+		},
+	})
+	chk := newChecker(config)
 	exec, ok := chk.(*execChecker)
 	c.Assert(ok, Equals, true)
 	c.Check(exec.name, Equals, "exec")
@@ -338,7 +339,17 @@ func (s *CheckersSuite) TestExecContextNoOverride(c *C) {
 func (s *CheckersSuite) TestExecContextOverride(c *C) {
 	userID, groupID := 100, 200
 	svcUserID, svcGroupID := 10, 20
-	chk := newChecker(&plan.Check{
+	config := mergeServiceContext(&plan.Plan{Services: map[string]*plan.Service{
+		"svc1": {
+			Name:        "svc1",
+			Environment: map[string]string{"k": "x", "a": "1"},
+			UserID:      &svcUserID,
+			User:        "svcuser",
+			GroupID:     &svcGroupID,
+			Group:       "svcgroup",
+			WorkingDir:  "/working/svc",
+		},
+	}}, &plan.Check{
 		Name: "exec",
 		Exec: &plan.ExecCheck{
 			Command:        "sleep 1",
@@ -350,17 +361,8 @@ func (s *CheckersSuite) TestExecContextOverride(c *C) {
 			Group:          "group",
 			WorkingDir:     "/working/dir",
 		},
-	}, &plan.Plan{Services: map[string]*plan.Service{
-		"svc1": {
-			Name:        "svc1",
-			Environment: map[string]string{"k": "x", "a": "1"},
-			UserID:      &svcUserID,
-			User:        "svcuser",
-			GroupID:     &svcGroupID,
-			Group:       "svcgroup",
-			WorkingDir:  "/working/svc",
-		},
-	}})
+	})
+	chk := newChecker(config)
 	exec, ok := chk.(*execChecker)
 	c.Assert(ok, Equals, true)
 	c.Check(exec.name, Equals, "exec")

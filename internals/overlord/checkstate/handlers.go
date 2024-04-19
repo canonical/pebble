@@ -24,32 +24,25 @@ import (
 
 	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/overlord/state"
+	"github.com/canonical/pebble/internals/plan"
 )
 
 func (m *CheckManager) doPerformCheck(task *state.Task, tomb *tombpkg.Tomb) error {
-	var details checkDetails
-
-	m.state.Lock() // always acquire locks in same order (state lock, then plan lock)
-	m.planLock.Lock()
-	plan := m.plan
-	m.planLock.Unlock()
+	m.state.Lock()
 	changeID := task.Change().ID()
+	var details checkDetails
 	err := task.Get(checkDetailsAttr, &details)
+	config := m.state.Cached(performConfigKey{changeID}).(*plan.Check)
 	m.state.Unlock()
 	if err != nil {
 		return fmt.Errorf("cannot get check details for perform-check task %q: %v", task.ID(), err)
-	}
-	config, ok := plan.Checks[details.Name]
-	if !ok {
-		// Check no longer exists in plan.
-		return nil
 	}
 
 	logger.Debugf("Performing check %q with period %v", details.Name, config.Period.Value)
 	ticker := time.NewTicker(config.Period.Value)
 	defer ticker.Stop()
 
-	chk := newChecker(config, plan)
+	chk := newChecker(config)
 	for {
 		select {
 		case <-ticker.C:
@@ -126,29 +119,21 @@ func runCheck(ctx context.Context, chk checker, timeout time.Duration) error {
 }
 
 func (m *CheckManager) doRecoverCheck(task *state.Task, tomb *tombpkg.Tomb) error {
-	var details checkDetails
-
-	m.state.Lock() // always acquire locks in same order (state lock, then plan lock)
-	m.planLock.Lock()
-	plan := m.plan
-	m.planLock.Unlock()
+	m.state.Lock()
 	changeID := task.Change().ID()
+	var details checkDetails
 	err := task.Get(checkDetailsAttr, &details)
+	config := m.state.Cached(recoverConfigKey{changeID}).(*plan.Check)
 	m.state.Unlock()
 	if err != nil {
 		return fmt.Errorf("cannot get check details for recover-check task %q: %v", task.ID(), err)
-	}
-	config, ok := plan.Checks[details.Name]
-	if !ok {
-		// Check no longer exists in plan.
-		return nil
 	}
 
 	logger.Debugf("Recovering check %q with period %v", details.Name, config.Period.Value)
 	ticker := time.NewTicker(config.Period.Value)
 	defer ticker.Stop()
 
-	chk := newChecker(config, plan)
+	chk := newChecker(config)
 	for {
 		select {
 		case <-ticker.C:

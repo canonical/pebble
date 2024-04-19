@@ -22,35 +22,44 @@ import (
 )
 
 type checkDetails struct {
-	Name     string // name of check
-	Failures int    // failure count
-	Proceed  bool   // whether to proceed to next check type when change is ready
+	Name     string `json:"name"`
+	Failures int    `json:"failures"`
+	// Whether to proceed to next check type when change is ready
+	Proceed bool `json:"proceed,omitempty"`
 }
 
-func performCheck(st *state.State, checkName, checkType string) *state.Task {
-	task := st.NewTask(performCheckKind, fmt.Sprintf("Perform %s check %q", checkType, checkName))
-	task.Set(checkDetailsAttr, &checkDetails{Name: checkName})
-	return task
+type performConfigKey struct {
+	changeID string
 }
 
-func performCheckChange(st *state.State, config *plan.Check) string {
-	task := performCheck(st, config.Name, checkType(config))
+func performCheckChange(st *state.State, config *plan.Check) (changeID string) {
+	summary := fmt.Sprintf("Perform %s check %q", checkType(config), config.Name)
+	task := st.NewTask(performCheckKind, summary)
+	task.Set(checkDetailsAttr, &checkDetails{Name: config.Name})
+
 	change := st.NewChange(performCheckKind, task.Summary())
 	change.Set(noPruneAttr, true)
 	change.AddTask(task)
+
+	st.Cache(performConfigKey{change.ID()}, config)
+
 	return change.ID()
 }
 
-func recoverCheck(st *state.State, checkName, checkType string, failures int) *state.Task {
-	task := st.NewTask(recoverCheckKind, fmt.Sprintf("Recover %s check %q", checkType, checkName))
-	task.Set(checkDetailsAttr, &checkDetails{Name: checkName, Failures: failures})
-	return task
+type recoverConfigKey struct {
+	changeID string
 }
 
-func recoverCheckChange(st *state.State, config *plan.Check, failures int) string {
-	task := recoverCheck(st, config.Name, checkType(config), failures)
+func recoverCheckChange(st *state.State, config *plan.Check, failures int) (changeID string) {
+	summary := fmt.Sprintf("Recover %s check %q", checkType(config), config.Name)
+	task := st.NewTask(recoverCheckKind, summary)
+	task.Set(checkDetailsAttr, &checkDetails{Name: config.Name, Failures: failures})
+
 	change := st.NewChange(recoverCheckKind, task.Summary())
 	change.Set(noPruneAttr, true)
 	change.AddTask(task)
+
+	st.Cache(recoverConfigKey{change.ID()}, config)
+
 	return change.ID()
 }

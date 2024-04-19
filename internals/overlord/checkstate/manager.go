@@ -22,6 +22,8 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"gopkg.in/tomb.v2"
+
 	"github.com/canonical/pebble/internals/overlord/state"
 	"github.com/canonical/pebble/internals/plan"
 )
@@ -40,9 +42,6 @@ type CheckManager struct {
 	ensureDone atomic.Bool
 
 	failureHandlers []FailureFunc
-
-	planLock sync.Mutex
-	plan     *plan.Plan
 
 	checksLock sync.Mutex
 	checks     map[string]CheckInfo
@@ -65,6 +64,20 @@ func NewManager(s *state.State, runner *state.TaskRunner) *CheckManager {
 
 	runner.AddHandler(performCheckKind, manager.doPerformCheck, nil)
 	runner.AddHandler(recoverCheckKind, manager.doRecoverCheck, nil)
+
+	// TODO: test this is working, at least manually
+	runner.AddCleanup(performCheckKind, func(task *state.Task, tomb *tomb.Tomb) error {
+		s.Lock()
+		defer s.Unlock()
+		s.Cache(performConfigKey{task.Change().ID()}, nil)
+		return nil
+	})
+	runner.AddCleanup(recoverCheckKind, func(task *state.Task, tomb *tomb.Tomb) error {
+		s.Lock()
+		defer s.Unlock()
+		s.Cache(recoverConfigKey{task.Change().ID()}, nil)
+		return nil
+	})
 
 	// Monitor perform-check and recover-check changes for status updates.
 	s.Lock()
@@ -91,17 +104,9 @@ func (m *CheckManager) PlanChanged(newPlan *plan.Plan) {
 	m.state.Lock()
 	defer m.state.Unlock()
 
-	// Update local reference to plan.
-	m.planLock.Lock() // always acquire locks in same order (state lock, then plan lock)
-	oldPlan := m.plan
-	m.plan = newPlan
-	m.planLock.Unlock()
-
-	if oldPlan == nil {
-		oldPlan = &plan.Plan{}
-	}
 	shouldEnsure := false
-	newOrModified := make(map[string]bool, len(newPlan.Checks))
+	newOrModified := make(map[string]bool)
+	existingChecks := make(map[string]bool)
 
 	// Abort all currently-running checks that have been removed or modified.
 	for _, change := range m.state.Changes() {
@@ -112,10 +117,19 @@ func (m *CheckManager) PlanChanged(newPlan *plan.Plan) {
 				continue
 			}
 			details := mustGetCheckDetails(change)
-			oldConfig, inOld := oldPlan.Checks[details.Name]
+			var oldConfig *plan.Check
+			if change.Kind() == performCheckKind {
+				oldConfig = m.state.Cached(performConfigKey{change.ID()}).(*plan.Check)
+			} else {
+				oldConfig = m.state.Cached(recoverConfigKey{change.ID()}).(*plan.Check)
+			}
+			existingChecks[oldConfig.Name] = true
+
 			newConfig, inNew := newPlan.Checks[details.Name]
-			if inOld && inNew {
-				if reflect.DeepEqual(oldConfig, newConfig) {
+			if inNew {
+				// TODO: add test of service context changing
+				merged := mergeServiceContext(newPlan, newConfig)
+				if reflect.DeepEqual(oldConfig, merged) {
 					// Don't restart check if its configuration hasn't changed.
 					continue
 				}
@@ -130,7 +144,7 @@ func (m *CheckManager) PlanChanged(newPlan *plan.Plan) {
 
 	// Also find checks that are new (in new plan but not in old one).
 	for _, config := range newPlan.Checks {
-		if oldPlan.Checks[config.Name] == nil {
+		if !existingChecks[config.Name] {
 			newOrModified[config.Name] = true
 		}
 	}
@@ -138,7 +152,8 @@ func (m *CheckManager) PlanChanged(newPlan *plan.Plan) {
 	// Start new or modified checks.
 	for _, config := range newPlan.Checks {
 		if newOrModified[config.Name] {
-			changeID := performCheckChange(m.state, config)
+			merged := mergeServiceContext(newPlan, config)
+			changeID := performCheckChange(m.state, merged)
 			m.updateCheckInfo(config, changeID, 0)
 			shouldEnsure = true
 		}
@@ -153,28 +168,22 @@ func (m *CheckManager) PlanChanged(newPlan *plan.Plan) {
 	}
 }
 
-func (m *CheckManager) changeStatusChanged(chg *state.Change, old, new state.Status) {
-	// Always acquire locks in same order (state lock, then plan lock).
-	// The state engine has already acquired the state lock at this point.
-	m.planLock.Lock()
-	plan := m.plan
-	m.planLock.Unlock()
-
+func (m *CheckManager) changeStatusChanged(change *state.Change, old, new state.Status) {
 	shouldEnsure := false
 	switch {
-	case chg.Kind() == performCheckKind && new == state.ErrorStatus:
-		details := mustGetCheckDetails(chg)
-		config, inPlan := plan.Checks[details.Name]
-		if details.Proceed && inPlan {
+	case change.Kind() == performCheckKind && new == state.ErrorStatus:
+		details := mustGetCheckDetails(change)
+		if details.Proceed {
+			config := m.state.Cached(performConfigKey{change.ID()}).(*plan.Check)
 			changeID := recoverCheckChange(m.state, config, details.Failures)
 			m.updateCheckInfo(config, changeID, details.Failures)
 			shouldEnsure = true
 		}
 
-	case chg.Kind() == recoverCheckKind && new == state.DoneStatus:
-		details := mustGetCheckDetails(chg)
-		config, inPlan := plan.Checks[details.Name]
-		if details.Proceed && inPlan {
+	case change.Kind() == recoverCheckKind && new == state.DoneStatus:
+		details := mustGetCheckDetails(change)
+		if details.Proceed {
+			config := m.state.Cached(recoverConfigKey{change.ID()}).(*plan.Check)
 			changeID := performCheckChange(m.state, config)
 			m.updateCheckInfo(config, changeID, 0)
 			shouldEnsure = true
@@ -183,6 +192,12 @@ func (m *CheckManager) changeStatusChanged(chg *state.Change, old, new state.Sta
 
 	if shouldEnsure {
 		m.state.EnsureBefore(0) // start new tasks right away
+	}
+}
+
+func (m *CheckManager) callFailureHandlers(name string) {
+	for _, f := range m.failureHandlers {
+		f(name)
 	}
 }
 
@@ -199,12 +214,6 @@ func mustGetCheckDetails(change *state.Change) checkDetails {
 	return details
 }
 
-func (m *CheckManager) callFailureHandlers(name string) {
-	for _, f := range m.failureHandlers {
-		f(name)
-	}
-}
-
 // checkType returns a human-readable string representing the check type.
 func checkType(config *plan.Check) string {
 	switch {
@@ -219,8 +228,9 @@ func checkType(config *plan.Check) string {
 	}
 }
 
-// newChecker creates a new checker of the configured type.
-func newChecker(config *plan.Check, p *plan.Plan) checker {
+// newChecker creates a new checker of the configured type. Assumes
+// mergeServiceContext has already been called.
+func newChecker(config *plan.Check) checker {
 	switch {
 	case config.HTTP != nil:
 		return &httpChecker{
@@ -237,34 +247,51 @@ func newChecker(config *plan.Check, p *plan.Plan) checker {
 		}
 
 	case config.Exec != nil:
-		overrides := plan.ContextOptions{
-			Environment: config.Exec.Environment,
-			UserID:      config.Exec.UserID,
-			User:        config.Exec.User,
-			GroupID:     config.Exec.GroupID,
-			Group:       config.Exec.Group,
-			WorkingDir:  config.Exec.WorkingDir,
-		}
-		merged, err := plan.MergeServiceContext(p, config.Exec.ServiceContext, overrides)
-		if err != nil {
-			// Context service name has already been checked when plan was loaded.
-			panic("internal error: " + err.Error())
-		}
 		return &execChecker{
 			name:        config.Name,
 			command:     config.Exec.Command,
-			environment: merged.Environment,
-			userID:      merged.UserID,
-			user:        merged.User,
-			groupID:     merged.GroupID,
-			group:       merged.Group,
-			workingDir:  merged.WorkingDir,
+			environment: config.Exec.Environment,
+			userID:      config.Exec.UserID,
+			user:        config.Exec.User,
+			groupID:     config.Exec.GroupID,
+			group:       config.Exec.Group,
+			workingDir:  config.Exec.WorkingDir,
 		}
 
 	default:
 		// This has already been checked when parsing the config.
 		panic("internal error: invalid check config")
 	}
+}
+
+// mergeServiceContext returns the final check configuration with service
+// context merged (for exec checks). The original config is copied if needed,
+// not modified.
+func mergeServiceContext(p *plan.Plan, config *plan.Check) *plan.Check {
+	if config.Exec == nil || config.Exec.ServiceContext == "" {
+		return config
+	}
+	overrides := plan.ContextOptions{
+		Environment: config.Exec.Environment,
+		UserID:      config.Exec.UserID,
+		User:        config.Exec.User,
+		GroupID:     config.Exec.GroupID,
+		Group:       config.Exec.Group,
+		WorkingDir:  config.Exec.WorkingDir,
+	}
+	merged, err := plan.MergeServiceContext(p, config.Exec.ServiceContext, overrides)
+	if err != nil {
+		// Context service name has already been checked when plan was loaded.
+		panic("internal error: " + err.Error())
+	}
+	cpy := config.Copy()
+	cpy.Exec.Environment = merged.Environment
+	cpy.Exec.UserID = merged.UserID
+	cpy.Exec.User = merged.User
+	cpy.Exec.Group = merged.Group
+	cpy.Exec.GroupID = merged.GroupID
+	cpy.Exec.WorkingDir = merged.WorkingDir
+	return cpy
 }
 
 // Checks returns the list of currently-configured checks and their status,
