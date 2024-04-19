@@ -36,7 +36,7 @@ var _ = Suite(&healthSuite{})
 type healthSuite struct{}
 
 func (s *healthSuite) TestNoChecks(c *C) {
-	restore := FakeGetHealth(func(o *overlord.Overlord) ([]*checkstate.HealthInfo, error) {
+	restore := FakeGetHealth(func(o *overlord.Overlord) ([]*checkstate.CheckInfo, error) {
 		return nil, nil
 	})
 	defer restore()
@@ -50,8 +50,8 @@ func (s *healthSuite) TestNoChecks(c *C) {
 }
 
 func (s *healthSuite) TestHealthy(c *C) {
-	restore := FakeGetHealth(func(o *overlord.Overlord) ([]*checkstate.HealthInfo, error) {
-		return []*checkstate.HealthInfo{
+	restore := FakeGetHealth(func(o *overlord.Overlord) ([]*checkstate.CheckInfo, error) {
+		return []*checkstate.CheckInfo{
 			{Name: "chk1", Status: checkstate.CheckStatusUp},
 			{Name: "chk2", Status: checkstate.CheckStatusUp},
 		}, nil
@@ -67,8 +67,8 @@ func (s *healthSuite) TestHealthy(c *C) {
 }
 
 func (s *healthSuite) TestUnhealthy(c *C) {
-	restore := FakeGetHealth(func(o *overlord.Overlord) ([]*checkstate.HealthInfo, error) {
-		return []*checkstate.HealthInfo{
+	restore := FakeGetHealth(func(o *overlord.Overlord) ([]*checkstate.CheckInfo, error) {
+		return []*checkstate.CheckInfo{
 			{Name: "chk1", Status: checkstate.CheckStatusUp},
 			{Name: "chk2", Status: checkstate.CheckStatusDown},
 			{Name: "chk3", Status: checkstate.CheckStatusUp},
@@ -110,17 +110,17 @@ func (s *healthSuite) TestLevel(c *C) {
 			c.Logf("TestHealthLevels check alive=%q ready=%q, healthy alive=%t ready=%t",
 				test.aliveCheck, test.readyCheck, test.aliveHealthy, test.readyHealthy)
 
-			restore := FakeGetHealth(func(o *overlord.Overlord) ([]*checkstate.HealthInfo, error) {
-				var checks []*checkstate.HealthInfo
+			restore := FakeGetHealth(func(o *overlord.Overlord) ([]*checkstate.CheckInfo, error) {
+				var checks []*checkstate.CheckInfo
 				if test.aliveCheck != "" {
-					checks = append(checks, &checkstate.HealthInfo{Name: "a", Level: plan.AliveLevel, Status: checkstate.CheckStatus(test.aliveCheck)})
+					checks = append(checks, &checkstate.CheckInfo{Name: "a", Level: plan.AliveLevel, Status: checkstate.CheckStatus(test.aliveCheck)})
 				}
 				if test.readyCheck != "" {
-					checks = append(checks, &checkstate.HealthInfo{Name: "r", Level: plan.ReadyLevel, Status: checkstate.CheckStatus(test.readyCheck)})
+					checks = append(checks, &checkstate.CheckInfo{Name: "r", Level: plan.ReadyLevel, Status: checkstate.CheckStatus(test.readyCheck)})
 				}
 				// Add a check which is down with level unset, to ensure that
 				// the level-unset checks do not impact the outcomes of level-queries.
-				checks = append(checks, &checkstate.HealthInfo{Name: "u", Level: plan.UnsetLevel, Status: checkstate.CheckStatusDown})
+				checks = append(checks, &checkstate.CheckInfo{Name: "u", Level: plan.UnsetLevel, Status: checkstate.CheckStatusDown})
 				return checks, nil
 			})
 			defer restore()
@@ -147,8 +147,8 @@ func (s *healthSuite) TestLevel(c *C) {
 }
 
 func (s *healthSuite) TestNames(c *C) {
-	restore := FakeGetHealth(func(o *overlord.Overlord) ([]*checkstate.HealthInfo, error) {
-		return []*checkstate.HealthInfo{
+	restore := FakeGetHealth(func(o *overlord.Overlord) ([]*checkstate.CheckInfo, error) {
+		return []*checkstate.CheckInfo{
 			{Name: "chk1", Status: checkstate.CheckStatusDown},
 			{Name: "chk2", Status: checkstate.CheckStatusUp},
 			{Name: "chk3", Status: checkstate.CheckStatusUp},
@@ -182,7 +182,7 @@ func (s *healthSuite) TestNames(c *C) {
 }
 
 func (s *healthSuite) TestBadLevel(c *C) {
-	restore := FakeGetHealth(func(o *overlord.Overlord) ([]*checkstate.HealthInfo, error) {
+	restore := FakeGetHealth(func(o *overlord.Overlord) ([]*checkstate.CheckInfo, error) {
 		return nil, nil
 	})
 	defer restore()
@@ -196,7 +196,7 @@ func (s *healthSuite) TestBadLevel(c *C) {
 }
 
 func (s *healthSuite) TestChecksError(c *C) {
-	restore := FakeGetHealth(func(o *overlord.Overlord) ([]*checkstate.HealthInfo, error) {
+	restore := FakeGetHealth(func(o *overlord.Overlord) ([]*checkstate.CheckInfo, error) {
 		return nil, errors.New("oops!")
 	})
 	defer restore()

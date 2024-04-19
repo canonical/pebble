@@ -436,8 +436,10 @@ func waitCheck(c *C, mgr *checkstate.CheckManager, name string, f func(check *ch
 	// check timeout value.
 	timeout := 10 * time.Second
 
+	var checks []*checkstate.CheckInfo
 	for start := time.Now(); time.Since(start) < timeout; {
-		checks, err := mgr.Checks()
+		var err error
+		checks, err = mgr.Checks()
 		c.Assert(err, IsNil)
 		for _, check := range checks {
 			if check.Name == name && f(check) {
@@ -447,6 +449,9 @@ func waitCheck(c *C, mgr *checkstate.CheckManager, name string, f func(check *ch
 		time.Sleep(time.Millisecond)
 	}
 
+	for i, check := range checks {
+		c.Logf("check %d: %#v", i, *check)
+	}
 	c.Fatalf("timed out waiting for check %q", name)
 	return nil
 }
@@ -460,7 +465,7 @@ func waitChecks(c *C, mgr *checkstate.CheckManager, expected []*checkstate.Check
 		for _, check := range checks {
 			check.ChangeID = "" // clear change ID to avoid comparing it
 		}
-		if reflect.DeepEqual(checks, expected) {
+		if len(checks) == 0 && len(expected) == 0 || reflect.DeepEqual(checks, expected) {
 			return
 		}
 		time.Sleep(time.Millisecond)

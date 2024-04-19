@@ -44,8 +44,8 @@ type CheckManager struct {
 	planLock sync.Mutex
 	plan     *plan.Plan
 
-	healthLock sync.Mutex
-	health     map[string]HealthInfo
+	checksLock sync.Mutex
+	checks     map[string]CheckInfo
 }
 
 // FailureFunc is the type of function called when a failure action is triggered.
@@ -55,7 +55,7 @@ type FailureFunc func(name string)
 func NewManager(s *state.State, runner *state.TaskRunner) *CheckManager {
 	manager := &CheckManager{
 		state:  s,
-		health: make(map[string]HealthInfo),
+		checks: make(map[string]CheckInfo),
 	}
 
 	// Health check changes can be long-running; ensure they don't get pruned.
@@ -123,7 +123,7 @@ func (m *CheckManager) PlanChanged(newPlan *plan.Plan) {
 				newOrModified[details.Name] = true
 			}
 			change.Abort()
-			m.deleteHealthInfo(details.Name)
+			m.deleteCheckInfo(details.Name)
 			shouldEnsure = true
 		}
 	}
@@ -138,8 +138,8 @@ func (m *CheckManager) PlanChanged(newPlan *plan.Plan) {
 	// Start new or modified checks.
 	for _, config := range newPlan.Checks {
 		if newOrModified[config.Name] {
-			performCheckChange(m.state, config)
-			m.updateHealthInfo(config, 0)
+			changeID := performCheckChange(m.state, config)
+			m.updateCheckInfo(config, changeID, 0)
 			shouldEnsure = true
 		}
 	}
@@ -166,7 +166,8 @@ func (m *CheckManager) changeStatusChanged(chg *state.Change, old, new state.Sta
 		details := mustGetCheckDetails(chg)
 		config, inPlan := plan.Checks[details.Name]
 		if details.Proceed && inPlan {
-			recoverCheckChange(m.state, config, details.Failures)
+			changeID := recoverCheckChange(m.state, config, details.Failures)
+			m.updateCheckInfo(config, changeID, details.Failures)
 			shouldEnsure = true
 		}
 
@@ -174,7 +175,8 @@ func (m *CheckManager) changeStatusChanged(chg *state.Change, old, new state.Sta
 		details := mustGetCheckDetails(chg)
 		config, inPlan := plan.Checks[details.Name]
 		if details.Proceed && inPlan {
-			performCheckChange(m.state, config)
+			changeID := performCheckChange(m.state, config)
+			m.updateCheckInfo(config, changeID, 0)
 			shouldEnsure = true
 		}
 	}
@@ -268,48 +270,43 @@ func newChecker(config *plan.Check, p *plan.Plan) checker {
 // Checks returns the list of currently-configured checks and their status,
 // ordered by name.
 func (m *CheckManager) Checks() ([]*CheckInfo, error) {
-	m.state.Lock()
-	defer m.state.Unlock()
+	m.checksLock.Lock()
+	defer m.checksLock.Unlock()
 
-	// Populate name, number of failures, and change ID from state.
-	var infos []*CheckInfo
-	for _, change := range m.state.Changes() {
-		switch change.Kind() {
-		case performCheckKind, recoverCheckKind:
-			if change.IsReady() {
-				// Skip check changes that have finished already.
-				continue
-			}
-			details := mustGetCheckDetails(change)
-			infos = append(infos, &CheckInfo{
-				Name:     details.Name,
-				Failures: details.Failures,
-				ChangeID: change.ID(),
-			})
-		}
+	infos := make([]*CheckInfo, 0, len(m.checks))
+	for _, info := range m.checks {
+		info := info // take the address of a new variable each time
+		infos = append(infos, &info)
 	}
-
-	// Populate other details from plan.
-	m.planLock.Lock() // always acquire locks in same order (state lock, then plan lock)
-	plan := m.plan
-	m.planLock.Unlock()
-	for _, info := range infos {
-		config, ok := plan.Checks[info.Name]
-		if !ok {
-			continue
-		}
-		info.Status = CheckStatusUp
-		info.Threshold = config.Threshold
-		info.Level = config.Level
-		if info.Failures >= info.Threshold {
-			info.Status = CheckStatusDown
-		}
-	}
-
 	sort.Slice(infos, func(i, j int) bool {
 		return infos[i].Name < infos[j].Name
 	})
 	return infos, nil
+}
+
+func (m *CheckManager) updateCheckInfo(config *plan.Check, changeID string, failures int) {
+	m.checksLock.Lock()
+	defer m.checksLock.Unlock()
+
+	status := CheckStatusUp
+	if failures >= config.Threshold {
+		status = CheckStatusDown
+	}
+	m.checks[config.Name] = CheckInfo{
+		Name:      config.Name,
+		Level:     config.Level,
+		Status:    status,
+		Failures:  failures,
+		Threshold: config.Threshold,
+		ChangeID:  changeID,
+	}
+}
+
+func (m *CheckManager) deleteCheckInfo(name string) {
+	m.checksLock.Lock()
+	defer m.checksLock.Unlock()
+
+	delete(m.checks, name)
 }
 
 // CheckInfo provides status information about a single check.

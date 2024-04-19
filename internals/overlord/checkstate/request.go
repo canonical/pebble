@@ -33,11 +33,12 @@ func performCheck(st *state.State, checkName, checkType string) *state.Task {
 	return task
 }
 
-func performCheckChange(st *state.State, config *plan.Check) {
+func performCheckChange(st *state.State, config *plan.Check) string {
 	task := performCheck(st, config.Name, checkType(config))
 	change := st.NewChange(performCheckKind, task.Summary())
 	change.Set(noPruneAttr, true)
 	change.AddTask(task)
+	return change.ID()
 }
 
 func recoverCheck(st *state.State, checkName, checkType string, failures int) *state.Task {
@@ -46,9 +47,10 @@ func recoverCheck(st *state.State, checkName, checkType string, failures int) *s
 	return task
 }
 
-func recoverCheckChange(st *state.State, config *plan.Check, failures int) {
+func recoverCheckChange(st *state.State, config *plan.Check, failures int) string {
 	task := recoverCheck(st, config.Name, checkType(config), failures)
 	change := st.NewChange(recoverCheckKind, task.Summary())
 	change.Set(noPruneAttr, true)
 	change.AddTask(task)
+	return change.ID()
 }

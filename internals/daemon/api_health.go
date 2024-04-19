@@ -40,7 +40,7 @@ func v1Health(c *Command, r *http.Request, _ *UserState) Response {
 
 	names := strutil.MultiCommaSeparatedList(query["names"])
 
-	checks, err := getHealth(c.d.overlord)
+	checks, err := getChecks(c.d.overlord)
 	if err != nil {
 		logger.Noticef("Cannot fetch checks: %v", err.Error())
 		return healthError(http.StatusInternalServerError, "internal server error")
