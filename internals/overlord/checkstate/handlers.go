@@ -47,6 +47,9 @@ func (m *CheckManager) doPerformCheck(task *state.Task, tomb *tombpkg.Tomb) erro
 		select {
 		case <-ticker.C:
 			err := runCheck(tomb.Context(nil), chk, config.Timeout.Value)
+			if errors.Is(err, context.Canceled) && tomb.Err() != tombpkg.ErrStillAlive {
+				return checkStopped(config.Name, task.Kind(), tomb.Err())
+			}
 			if err != nil {
 				// Record check failure and perform any action if the threshold
 				// is reached (for example, restarting a service).
@@ -90,15 +93,7 @@ func (m *CheckManager) doPerformCheck(task *state.Task, tomb *tombpkg.Tomb) erro
 			}
 
 		case <-tomb.Dying():
-			break
-		}
-
-		// Do this check here so that select doesn't sometimes pick up another
-		// ticker.C tick after the tomb has been killed.
-		tombErr := tomb.Err()
-		if tombErr != tombpkg.ErrStillAlive {
-			logger.Debugf("Check %q stopped during perform-check%s", config.Name, errReason(tombErr))
-			return tombErr
+			return checkStopped(config.Name, task.Kind(), tomb.Err())
 		}
 	}
 }
@@ -106,16 +101,12 @@ func (m *CheckManager) doPerformCheck(task *state.Task, tomb *tombpkg.Tomb) erro
 func runCheck(ctx context.Context, chk checker, timeout time.Duration) error {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
+
 	err := chk.check(ctx)
-	if err != nil {
-		if errors.Is(ctx.Err(), context.Canceled) {
-			// Check was stopped, don't trigger failure action (tomb.Err check
-			// in caller will return from the handler).
-			return nil
-		}
-		return err
+	if errors.Is(err, context.DeadlineExceeded) {
+		return fmt.Errorf("check timed out after %v", timeout)
 	}
-	return nil
+	return err
 }
 
 func (m *CheckManager) doRecoverCheck(task *state.Task, tomb *tombpkg.Tomb) error {
@@ -138,6 +129,9 @@ func (m *CheckManager) doRecoverCheck(task *state.Task, tomb *tombpkg.Tomb) erro
 		select {
 		case <-ticker.C:
 			err := runCheck(tomb.Context(nil), chk, config.Timeout.Value)
+			if errors.Is(err, context.Canceled) && tomb.Err() != tombpkg.ErrStillAlive {
+				return checkStopped(config.Name, task.Kind(), tomb.Err())
+			}
 			if err != nil {
 				details.Failures++
 				m.updateCheckInfo(config, changeID, details.Failures)
@@ -161,15 +155,7 @@ func (m *CheckManager) doRecoverCheck(task *state.Task, tomb *tombpkg.Tomb) erro
 			return nil
 
 		case <-tomb.Dying():
-			break
-		}
-
-		// Do this check here so that select doesn't sometimes pick up another
-		// ticker.C tick after the tomb has been killed.
-		tombErr := tomb.Err()
-		if tombErr != tombpkg.ErrStillAlive {
-			logger.Debugf("Check %q stopped during recover-check%s", config.Name, errReason(tombErr))
-			return tombErr
+			return checkStopped(config.Name, task.Kind(), tomb.Err())
 		}
 	}
 }
@@ -183,11 +169,13 @@ func logTaskError(task *state.Task, err error) {
 	task.Errorf("%s", message)
 }
 
-func errReason(err error) string {
-	if err == nil {
-		return " (no error)"
+func checkStopped(checkName, taskKind string, tombErr error) error {
+	reason := " (no error)"
+	if tombErr != nil {
+		reason = ": " + tombErr.Error()
 	}
-	return ": " + err.Error()
+	logger.Debugf("Check %q stopped during %s%s", checkName, taskKind, reason)
+	return tombErr
 }
 
 func pluralise(n int, singular, plural string) string {

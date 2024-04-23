@@ -176,8 +176,10 @@ func (c *execChecker) check(ctx context.Context) error {
 	logger.Debugf("Check %q (exec): running %q (PID %d)", c.name, c.command, cmd.Process.Pid)
 
 	exitCode, err := reaper.WaitCommand(cmd)
-	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-		err = fmt.Errorf("exec check timed out")
+	if errors.Is(ctx.Err(), context.Canceled) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		// If context is cancelled or times out, exitCode will be 137
+		// and err will be nil, so return the ctx.Err() directly.
+		return ctx.Err()
 	}
 	if err == nil && exitCode > 0 {
 		err = fmt.Errorf("exit status %d", exitCode)
@@ -201,4 +203,8 @@ type detailsError struct {
 
 func (e *detailsError) Details() string {
 	return e.details
+}
+
+func (e *detailsError) Unwrap() error {
+	return e.error
 }

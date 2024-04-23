@@ -156,7 +156,7 @@ func (s *ManagerSuite) TestTimeout(c *C) {
 	status := change.Status()
 	st.Unlock()
 	c.Assert(status, Equals, state.ErrorStatus)
-	c.Assert(lastTaskLog(st, performChangeID), Matches, ".* ERROR exec check timed out")
+	c.Assert(lastTaskLog(st, performChangeID), Matches, ".* ERROR check timed out after 25ms")
 }
 
 func (s *ManagerSuite) TestCheckCanceled(c *C) {
@@ -201,7 +201,7 @@ func (s *ManagerSuite) TestCheckCanceled(c *C) {
 	time.Sleep(20 * time.Millisecond)
 	b2, err := os.ReadFile(tempFile)
 	c.Assert(err, IsNil)
-	c.Assert(len(b1), Equals, len(b2))
+	c.Assert(len(b2), Equals, len(b1))
 
 	// Ensure it didn't trigger failure action
 	c.Check(failureName, Equals, "")
