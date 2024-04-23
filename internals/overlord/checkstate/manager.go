@@ -65,7 +65,6 @@ func NewManager(s *state.State, runner *state.TaskRunner) *CheckManager {
 	runner.AddHandler(performCheckKind, manager.doPerformCheck, nil)
 	runner.AddHandler(recoverCheckKind, manager.doRecoverCheck, nil)
 
-	// TODO: test this is working, at least manually
 	runner.AddCleanup(performCheckKind, func(task *state.Task, tomb *tomb.Tomb) error {
 		s.Lock()
 		defer s.Unlock()
@@ -128,7 +127,6 @@ func (m *CheckManager) PlanChanged(newPlan *plan.Plan) {
 
 			newConfig, inNew := newPlan.Checks[details.Name]
 			if inNew {
-				// TODO: add test of service context changing
 				merged := mergeServiceContext(newPlan, newConfig)
 				if reflect.DeepEqual(oldConfig, merged) {
 					// Don't restart check if its configuration hasn't changed.

@@ -350,7 +350,6 @@ func (s *ManagerSuite) TestPlanChangedSmarts(c *C) {
 	var changeIDs []string
 	for _, check := range checks {
 		changeIDs = append(changeIDs, check.ChangeID)
-		check.ChangeID = ""
 	}
 
 	// Modify plan: chk1 unchanged, chk2 modified, chk3 deleted.
@@ -381,7 +380,87 @@ func (s *ManagerSuite) TestPlanChangedSmarts(c *C) {
 	var newChangeIDs []string
 	for _, check := range checks {
 		newChangeIDs = append(newChangeIDs, check.ChangeID)
-		check.ChangeID = ""
+	}
+	c.Assert(changeIDs[0], Equals, newChangeIDs[0])
+	c.Assert(changeIDs[1], Not(Equals), newChangeIDs[1])
+	c.Assert(newChangeIDs[0], Not(Equals), newChangeIDs[1])
+}
+
+func (s *ManagerSuite) TestPlanChangedServiceContext(c *C) {
+	origPlan := &plan.Plan{
+		Services: map[string]*plan.Service{
+			"svc1": {
+				Name:       "svc1",
+				Command:    "dummy1",
+				WorkingDir: "/tmp",
+			},
+			"svc2": {
+				Name:       "svc2",
+				Command:    "dummy2",
+				WorkingDir: "/tmp",
+			},
+		},
+		Checks: map[string]*plan.Check{
+			"chk1": {
+				Name:      "chk1",
+				Period:    plan.OptionalDuration{Value: time.Second},
+				Threshold: 3,
+				Exec: &plan.ExecCheck{
+					Command:        "echo chk1",
+					ServiceContext: "svc1",
+				},
+			},
+			"chk2": {
+				Name:      "chk2",
+				Period:    plan.OptionalDuration{Value: time.Second},
+				Threshold: 3,
+				Exec: &plan.ExecCheck{
+					Command:        "echo chk2",
+					ServiceContext: "svc2",
+				},
+			},
+		},
+	}
+	s.manager.PlanChanged(origPlan)
+
+	waitChecks(c, s.manager, []*checkstate.CheckInfo{
+		{Name: "chk1", Status: "up", Threshold: 3},
+		{Name: "chk2", Status: "up", Threshold: 3},
+	})
+	checks, err := s.manager.Checks()
+	c.Assert(err, IsNil)
+	c.Assert(checks, HasLen, 2)
+	var changeIDs []string
+	for _, check := range checks {
+		changeIDs = append(changeIDs, check.ChangeID)
+	}
+
+	// Modify plan: chk1 service context unchanged, chk2 service context changed.
+	s.manager.PlanChanged(&plan.Plan{
+		Services: map[string]*plan.Service{
+			"svc1": origPlan.Services["svc1"],
+			"svc2": {
+				Name:       "svc2",
+				Command:    "dummy2",
+				WorkingDir: c.MkDir(),
+			},
+		},
+		Checks: map[string]*plan.Check{
+			"chk1": origPlan.Checks["chk1"],
+			"chk2": origPlan.Checks["chk2"],
+		},
+	})
+
+	waitChecks(c, s.manager, []*checkstate.CheckInfo{
+		{Name: "chk1", Status: "up", Threshold: 3},
+		{Name: "chk2", Status: "up", Threshold: 3},
+	})
+	checks, err = s.manager.Checks()
+	c.Assert(err, IsNil)
+	c.Assert(checks, HasLen, 2)
+	var newChangeIDs []string
+	for _, check := range checks {
+		newChangeIDs = append(newChangeIDs, check.ChangeID)
 	}
 	c.Assert(changeIDs[0], Equals, newChangeIDs[0])
 	c.Assert(changeIDs[1], Not(Equals), newChangeIDs[1])
