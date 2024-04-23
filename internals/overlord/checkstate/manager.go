@@ -117,12 +117,13 @@ func (m *CheckManager) PlanChanged(newPlan *plan.Plan) {
 				continue
 			}
 			details := mustGetCheckDetails(change)
-			var oldConfig *plan.Check
+			var configKey interface{}
 			if change.Kind() == performCheckKind {
-				oldConfig = m.state.Cached(performConfigKey{change.ID()}).(*plan.Check)
+				configKey = performConfigKey{change.ID()}
 			} else {
-				oldConfig = m.state.Cached(recoverConfigKey{change.ID()}).(*plan.Check)
+				configKey = recoverConfigKey{change.ID()}
 			}
+			oldConfig := m.state.Cached(configKey).(*plan.Check) // panic if key not present (always should be)
 			existingChecks[oldConfig.Name] = true
 
 			newConfig, inNew := newPlan.Checks[details.Name]
@@ -173,21 +174,23 @@ func (m *CheckManager) changeStatusChanged(change *state.Change, old, new state.
 	switch {
 	case change.Kind() == performCheckKind && new == state.ErrorStatus:
 		details := mustGetCheckDetails(change)
-		if details.Proceed {
-			config := m.state.Cached(performConfigKey{change.ID()}).(*plan.Check)
-			changeID := recoverCheckChange(m.state, config, details.Failures)
-			m.updateCheckInfo(config, changeID, details.Failures)
-			shouldEnsure = true
+		if !details.Proceed {
+			break
 		}
+		config := m.state.Cached(performConfigKey{change.ID()}).(*plan.Check) // panic if key not present (always should be)
+		changeID := recoverCheckChange(m.state, config, details.Failures)
+		m.updateCheckInfo(config, changeID, details.Failures)
+		shouldEnsure = true
 
 	case change.Kind() == recoverCheckKind && new == state.DoneStatus:
 		details := mustGetCheckDetails(change)
-		if details.Proceed {
-			config := m.state.Cached(recoverConfigKey{change.ID()}).(*plan.Check)
-			changeID := performCheckChange(m.state, config)
-			m.updateCheckInfo(config, changeID, 0)
-			shouldEnsure = true
+		if !details.Proceed {
+			break
 		}
+		config := m.state.Cached(recoverConfigKey{change.ID()}).(*plan.Check) // panic if key not present (always should be)
+		changeID := performCheckChange(m.state, config)
+		m.updateCheckInfo(config, changeID, 0)
+		shouldEnsure = true
 	}
 
 	if shouldEnsure {

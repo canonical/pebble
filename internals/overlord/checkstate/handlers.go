@@ -32,7 +32,7 @@ func (m *CheckManager) doPerformCheck(task *state.Task, tomb *tombpkg.Tomb) erro
 	changeID := task.Change().ID()
 	var details checkDetails
 	err := task.Get(checkDetailsAttr, &details)
-	config := m.state.Cached(performConfigKey{changeID}).(*plan.Check)
+	config := m.state.Cached(performConfigKey{changeID}).(*plan.Check) // panic if key not present (always should be)
 	m.state.Unlock()
 	if err != nil {
 		return fmt.Errorf("cannot get check details for perform-check task %q: %v", task.ID(), err)
@@ -123,7 +123,7 @@ func (m *CheckManager) doRecoverCheck(task *state.Task, tomb *tombpkg.Tomb) erro
 	changeID := task.Change().ID()
 	var details checkDetails
 	err := task.Get(checkDetailsAttr, &details)
-	config := m.state.Cached(recoverConfigKey{changeID}).(*plan.Check)
+	config := m.state.Cached(recoverConfigKey{changeID}).(*plan.Check) // panic if key not present (always should be)
 	m.state.Unlock()
 	if err != nil {
 		return fmt.Errorf("cannot get check details for recover-check task %q: %v", task.ID(), err)

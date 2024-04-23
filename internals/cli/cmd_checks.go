@@ -128,10 +128,10 @@ func (cmd *cmdChecks) lastTaskLog(changeID string) (string, error) {
 	if len(logs) < 1 {
 		return "", nil
 	}
-	// Strip initial "<timestamp> ERROR" text from log.
+	// Strip initial "<timestamp> ERROR|INFO" text from log.
 	lastLog := logs[len(logs)-1]
 	fields := strings.SplitN(lastLog, " ", 3)
-	if len(fields) > 2 && fields[1] == "ERROR" {
+	if len(fields) > 2 {
 		lastLog = fields[2]
 	}
 	lastLog = strings.ReplaceAll(lastLog, "\n", "\\n")
