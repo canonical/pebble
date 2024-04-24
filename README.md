@@ -328,13 +328,22 @@ You can view check status using the `pebble checks` command. This reports the ch
 
 ```
 $ pebble checks
-Check   Level  Status  Failures
-up      alive  up      0/1
-online  ready  down    1/3
-test    -      down    42/3
+Check   Level  Status  Failures  Change
+up      alive  up      0/1       10
+online  ready  down    1/3       13 (dial tcp 127.0.0.1:8000: connect: connection refused)
+test    -      down    42/3      14 (Get "http://localhost:8080/": dial t... run "pebble tasks 14" for more)
 ```
 
 The "Failures" column shows the current number of failures since the check started failing, a slash, and the configured threshold.
+
+The "Change" column shows the change ID of the [change](#changes-and-tasks) driving the check, along with a (possibly-truncated) error message from the last error. Running `pebble tasks <change-id>` will show the change's task, including the last 10 error messages in the task log.
+
+Health checks are implemented using two change kinds:
+
+* `perform-check`: drives the check while it's "up". The change finishes when the number of failures hits the threshold, at which point the change switches to Error status and a `recover-check` change is spawned. Each check failure records a task log.
+* `recover-check`: drives the check while it's "down". The change finishes when the check starts succeeding again, at which point the change switches to Done status and a new `perform-check` change is spawned. Again, each check failure records a task log.
+
+#### Health endpoint
 
 If the `--http` option was given when starting `pebble run`, Pebble exposes a `/v1/health` HTTP endpoint that allows a user to query the health of configured checks, optionally filtered by check level with the query string `?level=<level>` This endpoint returns an HTTP 200 status if the checks are healthy, HTTP 502 otherwise.
 
