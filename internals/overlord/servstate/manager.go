@@ -16,8 +16,7 @@ import (
 )
 
 type ServiceManager struct {
-	state  *state.State
-	runner *state.TaskRunner
+	state *state.State
 
 	planLock sync.Mutex
 	plan     *plan.Plan
@@ -45,7 +44,6 @@ type Restarter interface {
 func NewManager(s *state.State, runner *state.TaskRunner, serviceOutput io.Writer, restarter Restarter, logMgr LogManager) (*ServiceManager, error) {
 	manager := &ServiceManager{
 		state:         s,
-		runner:        runner,
 		services:      make(map[string]*serviceData),
 		serviceOutput: serviceOutput,
 		restarter:     restarter,

@@ -36,8 +36,8 @@ import (
 )
 
 const (
-	maxErrorBytes = 10 * 1024
-	maxErrorLines = 20
+	maxErrorBytes = 512
+	maxErrorLines = 5
 	execWaitDelay = time.Second
 )
 
@@ -67,7 +67,7 @@ func (c *httpChecker) check(ctx context.Context) error {
 		output, err := io.ReadAll(io.LimitReader(response.Body, maxErrorBytes))
 		details := ""
 		if err != nil {
-			details = fmt.Sprintf("cannot read response body: %v", err)
+			details = fmt.Sprintf("cannot read response: %v", err)
 		} else {
 			lines := strings.Split(strings.TrimSpace(string(output)), "\n")
 			if len(lines) > maxErrorLines {
@@ -77,7 +77,7 @@ func (c *httpChecker) check(ctx context.Context) error {
 			details = strings.Join(lines, "\n")
 		}
 		return &detailsError{
-			error:   fmt.Errorf("received non-20x status code %d", response.StatusCode),
+			error:   fmt.Errorf("non-20x status code %d", response.StatusCode),
 			details: details,
 		}
 	}
@@ -126,7 +126,7 @@ type execChecker struct {
 func (c *execChecker) check(ctx context.Context) error {
 	args, err := shlex.Split(c.command)
 	if err != nil {
-		return fmt.Errorf("cannot parse check command: %v", err)
+		return fmt.Errorf("cannot parse command: %v", err)
 	}
 
 	// Similar to services and exec, inherit the daemon's environment.
@@ -176,8 +176,10 @@ func (c *execChecker) check(ctx context.Context) error {
 	logger.Debugf("Check %q (exec): running %q (PID %d)", c.name, c.command, cmd.Process.Pid)
 
 	exitCode, err := reaper.WaitCommand(cmd)
-	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-		err = fmt.Errorf("exec check timed out")
+	if errors.Is(ctx.Err(), context.Canceled) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		// If context is cancelled or times out, exitCode will be 137
+		// and err will be nil, so return the ctx.Err() directly.
+		return ctx.Err()
 	}
 	if err == nil && exitCode > 0 {
 		err = fmt.Errorf("exit status %d", exitCode)
@@ -187,7 +189,7 @@ func (c *execChecker) check(ctx context.Context) error {
 		var details string
 		details, linesErr := servicelog.LastLines(ringBuffer, maxErrorLines, "", false)
 		if linesErr != nil {
-			details = fmt.Sprintf("cannot read output buffer: %v", linesErr)
+			details = fmt.Sprintf("cannot read output: %v", linesErr)
 		}
 		return &detailsError{error: err, details: details}
 	}
@@ -201,4 +203,8 @@ type detailsError struct {
 
 func (e *detailsError) Details() string {
 	return e.details
+}
+
+func (e *detailsError) Unwrap() error {
+	return e.error
 }

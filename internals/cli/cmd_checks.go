@@ -16,6 +16,7 @@ package cli
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/canonical/go-flags"
 
@@ -77,14 +78,62 @@ func (cmd *cmdChecks) Execute(args []string) error {
 	w := tabWriter()
 	defer w.Flush()
 
-	fmt.Fprintln(w, "Check\tLevel\tStatus\tFailures")
+	fmt.Fprintln(w, "Check\tLevel\tStatus\tFailures\tChange")
 
 	for _, check := range checks {
 		level := check.Level
 		if level == client.UnsetLevel {
 			level = "-"
 		}
-		fmt.Fprintf(w, "%s\t%s\t%s\t%d/%d\n", check.Name, level, check.Status, check.Failures, check.Threshold)
+		fmt.Fprintf(w, "%s\t%s\t%s\t%d/%d\t%s\n",
+			check.Name, level, check.Status, check.Failures,
+			check.Threshold, cmd.changeInfo(check))
 	}
 	return nil
+}
+
+func (cmd *cmdChecks) changeInfo(check *client.CheckInfo) string {
+	if check.ChangeID == "" {
+		return "-"
+	}
+	// Only include last task log if check is failing.
+	if check.Failures == 0 {
+		return check.ChangeID
+	}
+	log, err := cmd.lastTaskLog(check.ChangeID)
+	if err != nil {
+		return fmt.Sprintf("%s (%v)", check.ChangeID, err)
+	}
+	if log == "" {
+		return check.ChangeID
+	}
+	// Truncate to limited number of bytes with ellipsis and "for more" text.
+	const maxError = 70
+	if len(log) > maxError {
+		forMore := fmt.Sprintf(`... run "pebble tasks %s" for more`, check.ChangeID)
+		log = log[:maxError-len(forMore)] + forMore
+	}
+	return fmt.Sprintf("%s (%s)", check.ChangeID, log)
+}
+
+func (cmd *cmdChecks) lastTaskLog(changeID string) (string, error) {
+	change, err := cmd.client.Change(changeID)
+	if err != nil {
+		return "", err
+	}
+	if len(change.Tasks) < 1 {
+		return "", nil
+	}
+	logs := change.Tasks[0].Log
+	if len(logs) < 1 {
+		return "", nil
+	}
+	// Strip initial "<timestamp> ERROR|INFO" text from log.
+	lastLog := logs[len(logs)-1]
+	fields := strings.SplitN(lastLog, " ", 3)
+	if len(fields) > 2 {
+		lastLog = fields[2]
+	}
+	lastLog = strings.ReplaceAll(lastLog, "\n", "\\n")
+	return lastLog, nil
 }

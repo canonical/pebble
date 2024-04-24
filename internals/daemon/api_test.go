@@ -35,7 +35,8 @@ type apiSuite struct {
 
 	vars map[string]string
 
-	restoreMuxVars func()
+	restoreMuxVars  func()
+	overlordStarted bool
 }
 
 func (s *apiSuite) SetUpTest(c *check.C) {
@@ -49,6 +50,10 @@ func (s *apiSuite) SetUpTest(c *check.C) {
 }
 
 func (s *apiSuite) TearDownTest(c *check.C) {
+	if s.overlordStarted {
+		s.d.Overlord().Stop()
+		s.overlordStarted = false
+	}
 	s.d = nil
 	s.pebbleDir = ""
 	s.restoreMuxVars()
@@ -75,6 +80,11 @@ func (s *apiSuite) daemon(c *check.C) *Daemon {
 
 	s.d = d
 	return d
+}
+
+func (s *apiSuite) startOverlord() {
+	s.overlordStarted = true
+	s.d.overlord.Loop()
 }
 
 func apiCmd(path string) *Command {
