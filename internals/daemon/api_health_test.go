@@ -36,7 +36,7 @@ var _ = Suite(&healthSuite{})
 type healthSuite struct{}
 
 func (s *healthSuite) TestNoChecks(c *C) {
-	restore := FakeGetHealth(func(o *overlord.Overlord) ([]*checkstate.CheckInfo, error) {
+	restore := FakeGetChecks(func(o *overlord.Overlord) ([]*checkstate.CheckInfo, error) {
 		return nil, nil
 	})
 	defer restore()
@@ -50,7 +50,7 @@ func (s *healthSuite) TestNoChecks(c *C) {
 }
 
 func (s *healthSuite) TestHealthy(c *C) {
-	restore := FakeGetHealth(func(o *overlord.Overlord) ([]*checkstate.CheckInfo, error) {
+	restore := FakeGetChecks(func(o *overlord.Overlord) ([]*checkstate.CheckInfo, error) {
 		return []*checkstate.CheckInfo{
 			{Name: "chk1", Status: checkstate.CheckStatusUp},
 			{Name: "chk2", Status: checkstate.CheckStatusUp},
@@ -67,7 +67,7 @@ func (s *healthSuite) TestHealthy(c *C) {
 }
 
 func (s *healthSuite) TestUnhealthy(c *C) {
-	restore := FakeGetHealth(func(o *overlord.Overlord) ([]*checkstate.CheckInfo, error) {
+	restore := FakeGetChecks(func(o *overlord.Overlord) ([]*checkstate.CheckInfo, error) {
 		return []*checkstate.CheckInfo{
 			{Name: "chk1", Status: checkstate.CheckStatusUp},
 			{Name: "chk2", Status: checkstate.CheckStatusDown},
@@ -110,7 +110,7 @@ func (s *healthSuite) TestLevel(c *C) {
 			c.Logf("TestHealthLevels check alive=%q ready=%q, healthy alive=%t ready=%t",
 				test.aliveCheck, test.readyCheck, test.aliveHealthy, test.readyHealthy)
 
-			restore := FakeGetHealth(func(o *overlord.Overlord) ([]*checkstate.CheckInfo, error) {
+			restore := FakeGetChecks(func(o *overlord.Overlord) ([]*checkstate.CheckInfo, error) {
 				var checks []*checkstate.CheckInfo
 				if test.aliveCheck != "" {
 					checks = append(checks, &checkstate.CheckInfo{Name: "a", Level: plan.AliveLevel, Status: checkstate.CheckStatus(test.aliveCheck)})
@@ -147,7 +147,7 @@ func (s *healthSuite) TestLevel(c *C) {
 }
 
 func (s *healthSuite) TestNames(c *C) {
-	restore := FakeGetHealth(func(o *overlord.Overlord) ([]*checkstate.CheckInfo, error) {
+	restore := FakeGetChecks(func(o *overlord.Overlord) ([]*checkstate.CheckInfo, error) {
 		return []*checkstate.CheckInfo{
 			{Name: "chk1", Status: checkstate.CheckStatusDown},
 			{Name: "chk2", Status: checkstate.CheckStatusUp},
@@ -182,7 +182,7 @@ func (s *healthSuite) TestNames(c *C) {
 }
 
 func (s *healthSuite) TestBadLevel(c *C) {
-	restore := FakeGetHealth(func(o *overlord.Overlord) ([]*checkstate.CheckInfo, error) {
+	restore := FakeGetChecks(func(o *overlord.Overlord) ([]*checkstate.CheckInfo, error) {
 		return nil, nil
 	})
 	defer restore()
@@ -196,7 +196,7 @@ func (s *healthSuite) TestBadLevel(c *C) {
 }
 
 func (s *healthSuite) TestChecksError(c *C) {
-	restore := FakeGetHealth(func(o *overlord.Overlord) ([]*checkstate.CheckInfo, error) {
+	restore := FakeGetChecks(func(o *overlord.Overlord) ([]*checkstate.CheckInfo, error) {
 		return nil, errors.New("oops!")
 	})
 	defer restore()

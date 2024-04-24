@@ -39,7 +39,7 @@ func FakeStateEnsureBefore(f func(st *state.State, d time.Duration)) (restore fu
 	}
 }
 
-func FakeGetHealth(f func(o *overlord.Overlord) ([]*checkstate.CheckInfo, error)) (restore func()) {
+func FakeGetChecks(f func(o *overlord.Overlord) ([]*checkstate.CheckInfo, error)) (restore func()) {
 	old := getChecks
 	getChecks = f
 	return func() {
