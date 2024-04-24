@@ -47,7 +47,7 @@ func (m *CheckManager) doPerformCheck(task *state.Task, tomb *tombpkg.Tomb) erro
 		select {
 		case <-ticker.C:
 			err := runCheck(tomb.Context(nil), chk, config.Timeout.Value)
-			if errors.Is(err, context.Canceled) && tomb.Err() != tombpkg.ErrStillAlive {
+			if !tomb.Alive() {
 				return checkStopped(config.Name, task.Kind(), tomb.Err())
 			}
 			if err != nil {
@@ -129,7 +129,7 @@ func (m *CheckManager) doRecoverCheck(task *state.Task, tomb *tombpkg.Tomb) erro
 		select {
 		case <-ticker.C:
 			err := runCheck(tomb.Context(nil), chk, config.Timeout.Value)
-			if errors.Is(err, context.Canceled) && tomb.Err() != tombpkg.ErrStillAlive {
+			if !tomb.Alive() {
 				return checkStopped(config.Name, task.Kind(), tomb.Err())
 			}
 			if err != nil {
