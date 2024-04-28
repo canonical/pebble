@@ -122,7 +122,14 @@ func (m *CheckManager) PlanChanged(newPlan *plan.Plan) {
 			} else {
 				configKey = recoverConfigKey{change.ID()}
 			}
-			oldConfig := m.state.Cached(configKey).(*plan.Check) // panic if key not present (always should be)
+			v := m.state.Cached(configKey)
+			if v == nil {
+				// Pebble restarted, and this change is a carryover.
+				change.Abort()
+				shouldEnsure = true
+				continue
+			}
+			oldConfig := v.(*plan.Check)
 			existingChecks[oldConfig.Name] = true
 
 			newConfig, inNew := newPlan.Checks[details.Name]
