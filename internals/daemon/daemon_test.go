@@ -34,6 +34,7 @@ import (
 	"github.com/gorilla/mux"
 	. "gopkg.in/check.v1"
 
+	"github.com/canonical/pebble/cmd"
 	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/osutil"
 	"github.com/canonical/pebble/internals/overlord"
@@ -44,7 +45,6 @@ import (
 	"github.com/canonical/pebble/internals/reaper"
 	"github.com/canonical/pebble/internals/systemd"
 	"github.com/canonical/pebble/internals/testutil"
-	"github.com/canonical/pebble/cmd"
 )
 
 // Hook up check.v1 into the "go test" runner
