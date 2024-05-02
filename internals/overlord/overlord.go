@@ -38,6 +38,7 @@ import (
 	"github.com/canonical/pebble/internals/overlord/servstate"
 	"github.com/canonical/pebble/internals/overlord/state"
 	"github.com/canonical/pebble/internals/timing"
+	"github.com/canonical/pebble/cmd"
 )
 
 var (
@@ -120,7 +121,7 @@ func New(opts *Options) (*Overlord, error) {
 	if !osutil.IsDir(o.pebbleDir) {
 		return nil, fmt.Errorf("directory %q does not exist", o.pebbleDir)
 	}
-	statePath := filepath.Join(o.pebbleDir, ".pebble.state")
+	statePath := filepath.Join(o.pebbleDir, cmd.StateFile)
 
 	backend := &overlordStateBackend{
 		path:         statePath,

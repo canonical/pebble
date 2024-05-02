@@ -44,6 +44,7 @@ import (
 	"github.com/canonical/pebble/internals/reaper"
 	"github.com/canonical/pebble/internals/systemd"
 	"github.com/canonical/pebble/internals/testutil"
+	"github.com/canonical/pebble/cmd"
 )
 
 // Hook up check.v1 into the "go test" runner
@@ -69,7 +70,7 @@ func (s *daemonSuite) SetUpTest(c *C) {
 	}
 
 	s.pebbleDir = c.MkDir()
-	s.statePath = filepath.Join(s.pebbleDir, ".pebble.state")
+	s.statePath = filepath.Join(s.pebbleDir, cmd.StateFile)
 	systemdSdNotify = func(notif string) error {
 		s.notified = append(s.notified, notif)
 		return nil

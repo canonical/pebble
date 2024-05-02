@@ -22,3 +22,6 @@ var DisplayName string = "Pebble"
 
 // DefaultDir is the Pebble directory used if $PEBBLE is not set.
 var DefaultDir string = "/var/lib/pebble/default"
+
+// StateFile is the file name of the state file in pebble dir.
+var StateFile string = ".pebble.state"
