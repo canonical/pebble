@@ -12,7 +12,7 @@ build:
     python: "3.11"
   jobs:
     post_checkout:
-      - python3 .sphinx/build_requirements.py
+      - python3 docs/.sphinx/build_requirements.py
   apt_packages:
     - distro-info
 
@@ -29,4 +29,4 @@ formats:
 # Optionally declare the Python requirements required to build your docs
 python:
    install:
-   - requirements: .sphinx/requirements.txt
+   - requirements: docs/.sphinx/requirements.txt
