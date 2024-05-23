@@ -190,7 +190,7 @@ html_js_files.extend(custom_html_js_files)
 def get_contributors_for_file(github_url, github_folder, pagename, page_source_suffix, display_contributors_since=None):
     filename = f"{pagename}{page_source_suffix}"
     paths=html_context['github_folder'][1:] + filename
-    repo = Repo(".")
+    repo = Repo("../")
     since = display_contributors_since if display_contributors_since and display_contributors_since.strip() else None
 
     commits = repo.iter_commits(paths=paths, since=since)
