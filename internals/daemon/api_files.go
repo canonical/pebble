@@ -501,30 +501,53 @@ func writeFile(item writeFilesItem, source io.Reader) error {
 
 func mkdirAllUserGroup(path string, perm os.FileMode, uid, gid *int) error {
 	if uid != nil && gid != nil {
-		return mkdir(path, perm, &osutil.MkdirOptions{
-			MakeParents: true,
-			ExistOK:     true,
-			Chown:       true,
-			Chmod:       true,
-			UserID:      sys.UserID(*uid),
-			GroupID:     sys.GroupID(*gid),
-		})
+		return mkdir(
+			path,
+			perm,
+			&osutil.MkdirOptions{
+				MakeParents: true,
+				ExistOK:     true,
+				Chown:       true,
+				Chmod:       true,
+				UserID:      sys.UserID(*uid),
+				GroupID:     sys.GroupID(*gid),
+			},
+		)
 	} else {
-		return mkdir(path, perm, &osutil.MkdirOptions{MakeParents: true, ExistOK: true, Chmod: true})
+		return mkdir(
+			path,
+			perm,
+			&osutil.MkdirOptions{
+				MakeParents: true,
+				ExistOK:     true,
+				Chmod:       true,
+			},
+		)
 	}
 }
 
 func mkdirUserGroup(path string, perm os.FileMode, uid, gid *int) error {
 	if uid != nil && gid != nil {
-		return mkdir(path, perm, &osutil.MkdirOptions{
-			ExistOK: true,
-			Chown:   true,
-			Chmod:   true,
-			UserID:  sys.UserID(*uid),
-			GroupID: sys.GroupID(*gid),
-		})
+		return mkdir(
+			path,
+			perm,
+			&osutil.MkdirOptions{
+				ExistOK: true,
+				Chown:   true,
+				Chmod:   true,
+				UserID:  sys.UserID(*uid),
+				GroupID: sys.GroupID(*gid),
+			},
+		)
 	} else {
-		return mkdir(path, perm, &osutil.MkdirOptions{ExistOK: true, Chmod: true})
+		return mkdir(
+			path,
+			perm,
+			&osutil.MkdirOptions{
+				ExistOK: true,
+				Chmod:   true,
+			},
+		)
 	}
 }
 

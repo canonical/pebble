@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2020 Canonical Ltd
+// Copyright (c) 2014-2024 Canonical Ltd
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License version 3 as
@@ -32,7 +32,7 @@ var _ = check.Suite(&mkdacSuite{})
 
 // Chown requires root, so it's not tested, only test MakeParents, ExistOK, Chmod,
 // and the combination of them.
-func (mkdacSuite) TestMkdir(c *check.C) {
+func (mkdacSuite) TestSimpleDir(c *check.C) {
 	tmpDir := c.MkDir()
 
 	err := osutil.Mkdir(tmpDir+"/foo", 0o755, nil)
@@ -40,18 +40,7 @@ func (mkdacSuite) TestMkdir(c *check.C) {
 	c.Assert(osutil.IsDir(tmpDir+"/foo"), check.Equals, true)
 }
 
-func (mkdacSuite) TestMkdirExistNotOK(c *check.C) {
-	tmpDir := c.MkDir()
-
-	err := osutil.Mkdir(tmpDir+"/foo", 0o755, nil)
-	c.Assert(err, check.IsNil)
-	c.Assert(osutil.IsDir(tmpDir+"/foo"), check.Equals, true)
-
-	err = osutil.Mkdir(tmpDir+"/foo", 0o755, nil)
-	c.Assert(err, check.ErrorMatches, `.*: file exists`)
-}
-
-func (mkdacSuite) TestMkdirExistOK(c *check.C) {
+func (mkdacSuite) TestExistOK(c *check.C) {
 	tmpDir := c.MkDir()
 
 	err := osutil.Mkdir(tmpDir+"/foo", 0o755, nil)
@@ -62,7 +51,18 @@ func (mkdacSuite) TestMkdirExistOK(c *check.C) {
 	c.Assert(err, check.IsNil)
 }
 
-func (mkdacSuite) TestMkdirEndWithSlash(c *check.C) {
+func (mkdacSuite) TestExistNotOK(c *check.C) {
+	tmpDir := c.MkDir()
+
+	err := osutil.Mkdir(tmpDir+"/foo", 0o755, nil)
+	c.Assert(err, check.IsNil)
+	c.Assert(osutil.IsDir(tmpDir+"/foo"), check.Equals, true)
+
+	err = osutil.Mkdir(tmpDir+"/foo", 0o755, nil)
+	c.Assert(err, check.ErrorMatches, `.*: file exists`)
+}
+
+func (mkdacSuite) TestDirEndWithSlash(c *check.C) {
 	tmpDir := c.MkDir()
 
 	err := osutil.Mkdir(
@@ -76,7 +76,7 @@ func (mkdacSuite) TestMkdirEndWithSlash(c *check.C) {
 	c.Assert(err, check.IsNil)
 }
 
-func (mkdacSuite) TestMkdirMakeParents(c *check.C) {
+func (mkdacSuite) TestMakeParents(c *check.C) {
 	tmpDir := c.MkDir()
 
 	err := osutil.Mkdir(
@@ -89,23 +89,7 @@ func (mkdacSuite) TestMkdirMakeParents(c *check.C) {
 	c.Assert(osutil.IsDir(tmpDir+"/foo/bar"), check.Equals, true)
 }
 
-func (mkdacSuite) TestMkdirMakeParentsExistNotOK(c *check.C) {
-	tmpDir := c.MkDir()
-
-	err := osutil.Mkdir(
-		tmpDir+"/foo/bar",
-		0o755,
-		&osutil.MkdirOptions{MakeParents: true},
-	)
-	c.Assert(err, check.IsNil)
-	c.Assert(osutil.IsDir(tmpDir+"/foo"), check.Equals, true)
-	c.Assert(osutil.IsDir(tmpDir+"/foo/bar"), check.Equals, true)
-
-	err = osutil.Mkdir(tmpDir+"/foo/bar", 0o755, nil)
-	c.Assert(err, check.ErrorMatches, `.*: file exists`)
-}
-
-func (mkdacSuite) TestMkdirMakeParentsExistOK(c *check.C) {
+func (mkdacSuite) TestMakeParentsAndExistOK(c *check.C) {
 	tmpDir := c.MkDir()
 
 	err := osutil.Mkdir(
@@ -121,7 +105,23 @@ func (mkdacSuite) TestMkdirMakeParentsExistOK(c *check.C) {
 	c.Assert(err, check.IsNil)
 }
 
-func (mkdacSuite) TestMkdirChmod(c *check.C) {
+func (mkdacSuite) TestMakeParentsAndExistNotOK(c *check.C) {
+	tmpDir := c.MkDir()
+
+	err := osutil.Mkdir(
+		tmpDir+"/foo/bar",
+		0o755,
+		&osutil.MkdirOptions{MakeParents: true},
+	)
+	c.Assert(err, check.IsNil)
+	c.Assert(osutil.IsDir(tmpDir+"/foo"), check.Equals, true)
+	c.Assert(osutil.IsDir(tmpDir+"/foo/bar"), check.Equals, true)
+
+	err = osutil.Mkdir(tmpDir+"/foo/bar", 0o755, nil)
+	c.Assert(err, check.ErrorMatches, `.*: file exists`)
+}
+
+func (mkdacSuite) TestChmod(c *check.C) {
 	oldmask := syscall.Umask(0022)
 	defer syscall.Umask(oldmask)
 
@@ -136,7 +136,7 @@ func (mkdacSuite) TestMkdirChmod(c *check.C) {
 	c.Assert(info.Mode().Perm(), check.Equals, os.FileMode(0o777))
 }
 
-func (mkdacSuite) TestMkdirNoChmod(c *check.C) {
+func (mkdacSuite) TestNoChmod(c *check.C) {
 	oldmask := syscall.Umask(0022)
 	defer syscall.Umask(oldmask)
 
@@ -151,7 +151,7 @@ func (mkdacSuite) TestMkdirNoChmod(c *check.C) {
 	c.Assert(info.Mode().Perm(), check.Equals, os.FileMode(0o755))
 }
 
-func (mkdacSuite) TestMkdirMakePatentsChmod(c *check.C) {
+func (mkdacSuite) TestMakePatentsAndChmod(c *check.C) {
 	tmpDir := c.MkDir()
 
 	err := osutil.Mkdir(tmpDir+"/foo/bar", 0o777, &osutil.MkdirOptions{MakeParents: true, Chmod: true})
@@ -168,7 +168,7 @@ func (mkdacSuite) TestMkdirMakePatentsChmod(c *check.C) {
 	c.Assert(info.Mode().Perm(), check.Equals, os.FileMode(0o777))
 }
 
-func (mkdacSuite) TestMkdirMakeParentsNoChmod(c *check.C) {
+func (mkdacSuite) TestMakeParentsAndNoChmod(c *check.C) {
 	oldmask := syscall.Umask(0022)
 	defer syscall.Umask(oldmask)
 
@@ -189,7 +189,7 @@ func (mkdacSuite) TestMkdirMakeParentsNoChmod(c *check.C) {
 }
 
 // See .github/workflows/tests.yml for how to run this test as root.
-func (mkdacSuite) TestMkdirChownAndChmod(c *check.C) {
+func (mkdacSuite) TestChownAndChmod(c *check.C) {
 	if os.Getuid() != 0 {
 		c.Skip("requires running as root")
 	}
@@ -234,7 +234,7 @@ func (mkdacSuite) TestMkdirChownAndChmod(c *check.C) {
 }
 
 // See .github/workflows/tests.yml for how to run this test as root.
-func (mkdacSuite) TestMkdirMakeParentsChownAndChown(c *check.C) {
+func (mkdacSuite) TestMakeParentsChownAndChown(c *check.C) {
 	if os.Getuid() != 0 {
 		c.Skip("requires running as root")
 	}
