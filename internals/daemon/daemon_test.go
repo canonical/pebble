@@ -34,6 +34,7 @@ import (
 	"github.com/gorilla/mux"
 	. "gopkg.in/check.v1"
 
+	"github.com/canonical/pebble/cmd"
 	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/osutil"
 	"github.com/canonical/pebble/internals/overlord"
@@ -69,7 +70,7 @@ func (s *daemonSuite) SetUpTest(c *C) {
 	}
 
 	s.pebbleDir = c.MkDir()
-	s.statePath = filepath.Join(s.pebbleDir, ".pebble.state")
+	s.statePath = filepath.Join(s.pebbleDir, cmd.StateFile)
 	systemdSdNotify = func(notif string) error {
 		s.notified = append(s.notified, notif)
 		return nil
