@@ -504,7 +504,6 @@ func mkdirAllUserGroup(path string, perm os.FileMode, uid, gid *int) error {
 		return mkdir(path, perm, &osutil.MkdirOptions{
 			MakeParents: true,
 			ExistOK:     true,
-			Chmod:       true,
 			Chown:       true,
 			UserID:      sys.UserID(*uid),
 			GroupID:     sys.GroupID(*gid),
@@ -513,7 +512,6 @@ func mkdirAllUserGroup(path string, perm os.FileMode, uid, gid *int) error {
 		return mkdir(path, perm, &osutil.MkdirOptions{
 			MakeParents: true,
 			ExistOK:     true,
-			Chmod:       true,
 		})
 	}
 }
@@ -522,15 +520,12 @@ func mkdirUserGroup(path string, perm os.FileMode, uid, gid *int) error {
 	if uid != nil && gid != nil {
 		return mkdir(path, perm, &osutil.MkdirOptions{
 			ExistOK: true,
-			Chmod:   true,
 			Chown:   true,
 			UserID:  sys.UserID(*uid),
 			GroupID: sys.GroupID(*gid),
 		})
 	} else {
-		return mkdir(path, perm, &osutil.MkdirOptions{
-			Chmod: true,
-		})
+		return mkdir(path, perm, nil)
 	}
 }
 

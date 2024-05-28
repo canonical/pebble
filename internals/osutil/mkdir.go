@@ -41,12 +41,6 @@ type MkdirOptions struct {
 	// it's not a directory).
 	ExistOK bool
 
-	// If false (the default), no explicit chmod is performed. In this case, the permission
-	// of the created directories will be affected by umask settings.
-	//
-	// If true, perform an explicit chmod on any directories created.
-	Chmod bool
-
 	// If false (the default), no explicit chown is performed.
 	// If true, perform an explicit chown on any directories created, using the UserID
 	// and GroupID provided.
@@ -127,7 +121,7 @@ func mkdirAll(path string, perm os.FileMode, options *MkdirOptions) error {
 	return mkdir(path, perm, options)
 }
 
-// Create a single directory and perform chmod/chown operations according to options.
+// Create a single directory and perform chown operations according to options.
 func mkdir(path string, perm os.FileMode, options *MkdirOptions) error {
 	cand := path + ".mkdir-new"
 
@@ -141,12 +135,6 @@ func mkdir(path string, perm os.FileMode, options *MkdirOptions) error {
 
 	if options.Chown {
 		if err := sys.ChownPath(cand, options.UserID, options.GroupID); err != nil {
-			return err
-		}
-	}
-
-	if options.Chmod {
-		if err := os.Chmod(path, perm); err != nil {
 			return err
 		}
 	}

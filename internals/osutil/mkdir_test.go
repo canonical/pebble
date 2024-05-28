@@ -30,7 +30,7 @@ type mkdirSuite struct{}
 
 var _ = check.Suite(&mkdirSuite{})
 
-// Chown requires root, so it's not tested, only test MakeParents, ExistOK, Chmod,
+// Chown requires root, so it's not tested, only test MakeParents, ExistOK,
 // and the combination of them.
 func (mkdirSuite) TestSimpleDir(c *check.C) {
 	tmpDir := c.MkDir()
@@ -112,82 +112,8 @@ func (mkdirSuite) TestMakeParentsAndExistNotOK(c *check.C) {
 	c.Assert(err, check.ErrorMatches, `.*: file exists`)
 }
 
-func (mkdirSuite) TestChmod(c *check.C) {
-	oldmask := syscall.Umask(0022)
-	defer syscall.Umask(oldmask)
-
-	tmpDir := c.MkDir()
-
-	err := osutil.Mkdir(tmpDir+"/foo", 0o777, &osutil.MkdirOptions{
-		Chmod: true,
-	})
-	c.Assert(err, check.IsNil)
-	c.Assert(osutil.IsDir(tmpDir+"/foo"), check.Equals, true)
-
-	info, err := os.Stat(tmpDir + "/foo")
-	c.Assert(err, check.IsNil)
-	c.Assert(info.Mode().Perm(), check.Equals, os.FileMode(0o777))
-}
-
-func (mkdirSuite) TestNoChmod(c *check.C) {
-	oldmask := syscall.Umask(0022)
-	defer syscall.Umask(oldmask)
-
-	tmpDir := c.MkDir()
-
-	err := osutil.Mkdir(tmpDir+"/foo", 0o777, nil)
-	c.Assert(err, check.IsNil)
-	c.Assert(osutil.IsDir(tmpDir+"/foo"), check.Equals, true)
-
-	info, err := os.Stat(tmpDir + "/foo")
-	c.Assert(err, check.IsNil)
-	c.Assert(info.Mode().Perm(), check.Equals, os.FileMode(0o755))
-}
-
-func (mkdirSuite) TestMakeParentsAndChmod(c *check.C) {
-	tmpDir := c.MkDir()
-
-	err := osutil.Mkdir(tmpDir+"/foo/bar", 0o777, &osutil.MkdirOptions{
-		MakeParents: true,
-		Chmod:       true,
-	})
-	c.Assert(err, check.IsNil)
-	c.Assert(osutil.IsDir(tmpDir+"/foo"), check.Equals, true)
-	c.Assert(osutil.IsDir(tmpDir+"/foo/bar"), check.Equals, true)
-
-	info, err := os.Stat(tmpDir + "/foo")
-	c.Assert(err, check.IsNil)
-	c.Assert(info.Mode().Perm(), check.Equals, os.FileMode(0o777))
-
-	info, err = os.Stat(tmpDir + "/foo/bar")
-	c.Assert(err, check.IsNil)
-	c.Assert(info.Mode().Perm(), check.Equals, os.FileMode(0o777))
-}
-
-func (mkdirSuite) TestMakeParentsAndNoChmod(c *check.C) {
-	oldmask := syscall.Umask(0022)
-	defer syscall.Umask(oldmask)
-
-	tmpDir := c.MkDir()
-
-	err := osutil.Mkdir(tmpDir+"/foo/bar", 0o777, &osutil.MkdirOptions{
-		MakeParents: true,
-	})
-	c.Assert(err, check.IsNil)
-	c.Assert(osutil.IsDir(tmpDir+"/foo"), check.Equals, true)
-	c.Assert(osutil.IsDir(tmpDir+"/foo/bar"), check.Equals, true)
-
-	info, err := os.Stat(tmpDir + "/foo")
-	c.Assert(err, check.IsNil)
-	c.Assert(info.Mode().Perm(), check.Equals, os.FileMode(0o755))
-
-	info, err = os.Stat(tmpDir + "/foo/bar")
-	c.Assert(err, check.IsNil)
-	c.Assert(info.Mode().Perm(), check.Equals, os.FileMode(0o755))
-}
-
 // See .github/workflows/tests.yml for how to run this test as root.
-func (mkdirSuite) TestMakeParentsChmodAndChown(c *check.C) {
+func (mkdirSuite) TestMakeParentsAndChown(c *check.C) {
 	if os.Getuid() != 0 {
 		c.Skip("requires running as root")
 	}
@@ -210,7 +136,6 @@ func (mkdirSuite) TestMakeParentsChmodAndChown(c *check.C) {
 
 	err = osutil.Mkdir(tmpDir+"/foo/bar", 0o777, &osutil.MkdirOptions{
 		MakeParents: true,
-		Chmod:       true,
 		Chown:       true,
 		UserID:      sys.UserID(uid),
 		GroupID:     sys.GroupID(gid),
@@ -221,7 +146,6 @@ func (mkdirSuite) TestMakeParentsChmodAndChown(c *check.C) {
 
 	info, err := os.Stat(tmpDir + "/foo")
 	c.Assert(err, check.IsNil)
-	c.Assert(info.Mode().Perm(), check.Equals, os.FileMode(0o777))
 	stat, ok := info.Sys().(*syscall.Stat_t)
 	c.Assert(ok, check.Equals, true)
 	c.Assert(int(stat.Uid), check.Equals, uid)
@@ -229,7 +153,6 @@ func (mkdirSuite) TestMakeParentsChmodAndChown(c *check.C) {
 
 	info, err = os.Stat(tmpDir + "/foo/bar")
 	c.Assert(err, check.IsNil)
-	c.Assert(info.Mode().Perm(), check.Equals, os.FileMode(0o777))
 	stat, ok = info.Sys().(*syscall.Stat_t)
 	c.Assert(ok, check.Equals, true)
 	c.Assert(int(stat.Uid), check.Equals, uid)
