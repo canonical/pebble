@@ -1,12 +1,17 @@
-# Starter pack
+# Pebble
 
-This starter pack contains the files you need to quickly set up your Sphinx documentation.
+_Take control of your internal daemons!_
 
-Before you start, see the information about `Read the Docs at Canonical`_ and the instructions for `How to publish documentation on Read the Docs`_.
+**Pebble** helps you to orchestrate a set of local service processes as an organized set. It resembles well known tools such as _supervisord_, _runit_, or _s6_, in that it can easily manage non-system processes independently from the system services, but it was designed with unique features that help with more specific use cases.
 
-Then, to start setting up your docs, check the :doc:`ReadMe <readme>` for instructions.
-The `Example product documentation`_ shows how to set up a Diátaxis structure in Sphinx.
+## Table of Content
 
-For quick help on reST or MyST syntax, see the :file:`doc-cheat-sheet.rst.txt` or :file:`doc-cheat-sheet-myst.md.txt` files in the repository.
-(Open the files in your text editor; the rendered output is not very useful.)
+```{filtered-toctree}
+:titlesonly:
 
+:diataxis:self
+:diataxis:Tutorial <tutorial/getting-started>
+:diataxis:how-to-guides/index
+:diataxis:explanation/index
+:diataxis:reference/index
+```
