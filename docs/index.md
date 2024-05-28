@@ -1,12 +1,59 @@
-# Starter pack
+---
+relatedlinks: "[Diátaxis](https://diataxis.fr/)"
+---
 
-This starter pack contains the files you need to quickly set up your Sphinx documentation.
+```{filtered-toctree}
+:hidden:
+:titlesonly:
 
-Before you start, see the information about `Read the Docs at Canonical`_ and the instructions for `How to publish documentation on Read the Docs`_.
+tutorials/index
+how-to/index
+explanation/index
+reference/index
+```
 
-Then, to start setting up your docs, check the :doc:`ReadMe <readme>` for instructions.
-The `Example product documentation`_ shows how to set up a Diátaxis structure in Sphinx.
+# Pebble
 
-For quick help on reST or MyST syntax, see the :file:`doc-cheat-sheet.rst.txt` or :file:`doc-cheat-sheet-myst.md.txt` files in the repository.
-(Open the files in your text editor; the rendered output is not very useful.)
+An overview of Pebble...
 
+## In this documentation
+
+````{grid} 1 1 2 2
+
+```{grid-item-card} [Tutorials](tutorials/index)
+
+**Start here**: a hands-on introduction to Pebble for new users
+```
+
+```{grid-item-card} [How-to guides](how-to/index)
+
+**Step-by-step guides** covering key operations and common tasks
+```
+
+````
+
+````{grid} 1 1 2 2
+:reverse:
+
+```{grid-item-card} [Reference](reference/index)
+
+**Technical information** - specifications, APIs, architecture
+```
+
+```{grid-item-card} [Explanation](explanation/index)
+
+**Discussion and clarification** of key topics
+```
+
+````
+
+## Project and community
+
+Pebble is free software and released under
+[AGPL-3.0-only](https://www.gnu.org/licenses/agpl-3.0.en.html)...
+
+The Pebble project is sponsored by [Canonical Ltd](https://www.canonical.com).
+
+- [Code of Conduct](https://ubuntu.com/community/ethos/code-of-conduct)
+
+...

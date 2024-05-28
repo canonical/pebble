@@ -19,7 +19,7 @@ import datetime
 ############################################################
 
 # Product name
-project = 'Documentation starter pack'
+project = 'Pebble'
 author = 'Canonical Group Ltd'
 
 # The title you want to display for the documentation in the sidebar.
@@ -89,14 +89,14 @@ html_context = {
 
     # Change to the GitHub URL for your project
     # This is used, for example, to link to the source files and allow creating GitHub issues directly from the documentation.
-    'github_url': 'https://github.com/canonical/sphinx-docs-starter-pack',
+    'github_url': 'https://github.com/canonical/pebble',
 
     # Change to the branch for this version of the documentation
     'github_version': 'main',
 
     # Change to the folder that contains the documentation
     # (usually "/" or "/docs/")
-    'github_folder': '/',
+    'github_folder': '/docs/',
 
     # Change to an empty value if your GitHub repo doesn't have issues enabled.
     # This will disable the feedback button and the issue link in the footer.
@@ -104,7 +104,7 @@ html_context = {
 
     # Controls the existence of Previous / Next buttons at the bottom of pages
     # Valid options: none, prev, next, both
-    'sequential_nav': "none", 
+    'sequential_nav': "both", 
     
     # Controls if to display the contributors of a file or not
     "display_contributors": True,
@@ -115,7 +115,7 @@ html_context = {
 
 # If your project is on documentation.ubuntu.com, specify the project
 # slug (for example, "lxd") here.
-slug = ""
+slug = "pebble"
 
 ############################################################
 ### Redirects
@@ -165,7 +165,8 @@ custom_extensions = [
     'canonical.related-links',
     'canonical.custom-rst-roles',
     'canonical.terminal-output',
-    'notfound.extension'
+    'notfound.extension',
+    'canonical.filtered-toc'
     ]
 
 # Add custom required Python modules that must be added to the

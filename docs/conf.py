@@ -2,7 +2,7 @@ import sys
 import os
 import requests
 from urllib.parse import urlparse
-from git import Repo
+from git import Repo, InvalidGitRepositoryError
 import subprocess
 import time
 
@@ -112,7 +112,7 @@ if 'custom_rst_epilog' in locals():
 if 'custom_manpages_url' in locals():
     manpages_url = custom_manpages_url
 else:
-    manpages_distribution = subprocess.check_output("distro-info --stable", 
+    manpages_distribution = subprocess.check_output("distro-info --stable",
                                                 text=True, shell=True).strip()
     manpages_url = ("https://manpages.ubuntu.com/manpages/"
                     f"{manpages_distribution}/en/"
@@ -190,7 +190,18 @@ html_js_files.extend(custom_html_js_files)
 def get_contributors_for_file(github_url, github_folder, pagename, page_source_suffix, display_contributors_since=None):
     filename = f"{pagename}{page_source_suffix}"
     paths=html_context['github_folder'][1:] + filename
-    repo = Repo("../")
+
+    try:
+        repo = Repo(".")
+    except InvalidGitRepositoryError:
+        cwd = os.getcwd()
+        ghfolder = html_context['github_folder'][:-1]
+        if ghfolder and cwd.endswith(ghfolder):
+            repo = Repo(cwd.rpartition(ghfolder)[0])
+        else:
+            print("The local Git repository could not be found.")
+            return
+
     since = display_contributors_since if display_contributors_since and display_contributors_since.strip() else None
 
     commits = repo.iter_commits(paths=paths, since=since)
