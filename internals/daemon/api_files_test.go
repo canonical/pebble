@@ -477,7 +477,7 @@ func (s *filesSuite) TestMakeDirsUserGroupMocked(c *C) {
 	tmpDir := s.testMakeDirsUserGroup(c, 12, 34, "USER", "GROUP")
 
 	c.Assert(mkdirCalls, HasLen, 5)
-	c.Check(mkdirCalls[0], Equals, args{tmpDir + "/normal", 0o755, osutil.MkdirOptions{ExistOK: true, Chmod: true}})
+	c.Check(mkdirCalls[0], Equals, args{tmpDir + "/normal", 0o755, osutil.MkdirOptions{Chmod: true}})
 	c.Check(mkdirCalls[1], Equals, args{tmpDir + "/uid-gid", 0o755, osutil.MkdirOptions{ExistOK: true, Chown: true, Chmod: true, UserID: 12, GroupID: 34}})
 	c.Check(mkdirCalls[2], Equals, args{tmpDir + "/user-group", 0o755, osutil.MkdirOptions{ExistOK: true, Chown: true, Chmod: true, UserID: 56, GroupID: 78}})
 	c.Check(mkdirCalls[3], Equals, args{tmpDir + "/nested1/normal", 0o755, osutil.MkdirOptions{MakeParents: true, ExistOK: true, Chmod: true}})

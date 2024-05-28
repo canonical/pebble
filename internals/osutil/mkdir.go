@@ -29,27 +29,25 @@ import (
 // to make /foo and then have one fail.
 var mu sync.Mutex
 
-// MkdirOptions is a struct of options used for Mkdir().
+// MkdirOptions holds the options for a call to Mkdir.
 type MkdirOptions struct {
-	// If false (default), a missing parent raises an error.
-	// If true, any missing parents of this path are created as needed.
+	// If false (the default), return an error if the parent directory is missing.
+	// If true, any missing parent directories of the given path are created
+	// (with the same permissions and owner/group as the leaf directory).
 	MakeParents bool
 
-	// If false (default), an error is raised if the target directory already exists.
-	// In case MakeParents is true but ExistOK is false, an error won't be raised if
-	// the parent directory already exists but the target directory doesn't.
-	//
-	// If true, an error won't be raised unless the given path already exists in the
-	// file system and isn't a directory (same behaviour as the POSIX mkdir -p command).
+	// If false (the default), return an error if the target directory already exists.
+	// If true, don't return an error if the target directory already exists (unless
+	// it's not a directory).
 	ExistOK bool
 
-	// If false (default), no explicit chmod is performed. In this case, the permission
+	// If false (the default), no explicit chmod is performed. In this case, the permission
 	// of the created directories will be affected by umask settings.
 	//
 	// If true, perform an explicit chmod on any directories created.
 	Chmod bool
 
-	// If false (default), no explicit chown is performed.
+	// If false (the default), no explicit chown is performed.
 	// If true, perform an explicit chown on any directories created, using the UserID
 	// and GroupID provided.
 	Chown bool
@@ -59,20 +57,19 @@ type MkdirOptions struct {
 	GroupID sys.GroupID
 }
 
-// Mkdir creates directories; depending on MkdirOptions.MakeParents, it is like os.Mkdir
-// or os.MkdirAll. You can set the option MkdirOptions.Chmod to perform an explicit
-// chmod on directories it creates so that the permissions won't be affected by umask
-// settings. You can also set the option MkdirOptions.Chmod (and together with UserID,
-// GroupId) to perform an explicit chown on newly created directories.
+// Mkdir creates a directory at path with the permissions perm and the options provided.
+// If options is nil, it is treated as &MkdirOptions{}.
 func Mkdir(path string, perm os.FileMode, options *MkdirOptions) error {
+	if options == nil {
+		options = &MkdirOptions{}
+	}
 	mu.Lock()
 	defer mu.Unlock()
 
 	path = filepath.Clean(path)
 
-	// if path already exists
 	if s, err := os.Stat(path); err == nil {
-		// If path exists but not as a directory, raise a "not a directory" error.
+		// If path exists but not as a directory, return a "not a directory" error.
 		if !s.IsDir() {
 			return &os.PathError{
 				Op:   "mkdir",
@@ -81,12 +78,12 @@ func Mkdir(path string, perm os.FileMode, options *MkdirOptions) error {
 			}
 		}
 
-		// If path exists as a directory, and ExistOK is set in options, return.
-		if options != nil && options.ExistOK {
+		// If path exists as a directory, and ExistOK option is set, do nothing.
+		if options.ExistOK {
 			return nil
 		}
 
-		// If path exists but ExistOK isn't set in options, raise a "file exists" error.
+		// If path exists but ExistOK option isn't set, return a "file exists" error.
 		return &os.PathError{
 			Op:   "mkdir",
 			Path: path,
@@ -106,7 +103,7 @@ func mkdirAll(path string, perm os.FileMode, options *MkdirOptions) error {
 			return nil
 		}
 
-		// If path exists but not as a directory, raise a "not a directory" error.
+		// If path exists but not as a directory, return a "not a directory" error.
 		return &os.PathError{
 			Op:   "mkdir",
 			Path: path,
@@ -116,7 +113,7 @@ func mkdirAll(path string, perm os.FileMode, options *MkdirOptions) error {
 
 	// If path doesn't exist, and MakeParents is specified in options,
 	// create all directories recursively.
-	if options != nil && options.MakeParents {
+	if options.MakeParents {
 		parent := filepath.Dir(path)
 		if parent != "/" {
 			if err := mkdirAll(parent, perm, options); err != nil {
@@ -138,17 +135,17 @@ func mkdir(path string, perm os.FileMode, options *MkdirOptions) error {
 		return err
 	}
 
-	if options != nil && options.Chown {
+	if err := os.Rename(cand, path); err != nil {
+		return err
+	}
+
+	if options.Chown {
 		if err := sys.ChownPath(cand, options.UserID, options.GroupID); err != nil {
 			return err
 		}
 	}
 
-	if err := os.Rename(cand, path); err != nil {
-		return err
-	}
-
-	if options != nil && options.Chmod {
+	if options.Chmod {
 		if err := os.Chmod(path, perm); err != nil {
 			return err
 		}

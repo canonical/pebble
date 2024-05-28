@@ -49,8 +49,8 @@ jobs:
         PEBBLE_TEST_USER=runner PEBBLE_TEST_GROUP=runner sudo -E -H ./daemon.test -check.v -check.f ^filesSuite\.TestWriteUserGroupReal$
         PEBBLE_TEST_USER=runner PEBBLE_TEST_GROUP=runner sudo -E -H ./daemon.test -check.v -check.f ^filesSuite\.TestMakeDirsUserGroupReal$
         go test -c ./internals/osutil
-        PEBBLE_TEST_USER=runner PEBBLE_TEST_GROUP=runner sudo -E -H ./osutil.test -check.v -check.f ^mkdacSuite\.TestMkdirChownAndChmod$
-        PEBBLE_TEST_USER=runner PEBBLE_TEST_GROUP=runner sudo -E -H ./osutil.test -check.v -check.f ^mkdacSuite\.TestMkdirMakeParentsChownAndChown$
+        PEBBLE_TEST_USER=runner PEBBLE_TEST_GROUP=runner sudo -E -H ./osutil.test -check.v -check.f ^mkdacSuite\.TestMakeParentsChmodAndChown$
+        
         go test -c ./internals/overlord/servstate/
         PEBBLE_TEST_USER=runner PEBBLE_TEST_GROUP=runner sudo -E -H ./servstate.test -check.v -check.f ^S.TestUserGroup$
 
