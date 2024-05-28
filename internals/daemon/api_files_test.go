@@ -1076,8 +1076,8 @@ Content-Disposition: form-data; name="request"
 		{"path": "%[1]s"},
 		{"path": "%[2]s", "user-id": %[3]d, "group-id": %[4]d},
 		{"path": "%[5]s", "user": "%[6]s", "group": "%[7]s"},
-		{"path": "%[8]s", "make-dirs": true, "make-parents": true},
-		{"path": "%[9]s", "user": "%[10]s", "group": "%[11]s", "make-dirs": true, "make-parents": true}
+		{"path": "%[8]s", "make-dirs": true},
+		{"path": "%[9]s", "user": "%[10]s", "group": "%[11]s", "make-dirs": true}
 	]
 }
 --01234567890123456789012345678901
