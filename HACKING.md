@@ -202,6 +202,22 @@ ok      github.com/canonical/pebble/cmd/pebble  0.165s
 ...
 ```
 
+## Docs
+
+We use [`sphinx`](https://www.sphinx-doc.org/en/master/) to build the docs with styles preconfigured by the [Canonical Documentation Starter Pack](https://github.com/canonical/sphinx-docs-starter-pack).
+
+### Building the Docs
+
+To build the docs, run `tox` under the `docs/` folder.
+
+### Pulling in the Latest Style Changes and Dependencies
+
+To pull in the latest style and dependencies from the starter pack, clone the [Canonical Documentation Starter Pack repository](https://github.com/canonical/sphinx-docs-starter-pack), and follow the README there. TL;DR:
+
+- Copy the content into the `docs/` folder.
+- Remove unnecessary files (like Makefile, cheat sheets, etc.)
+- Under the `docs/` folder, run `python3 build_requirements.py`. This generates the latest `requirements.txt` under the `.sphinx/` folder.
+- Under the `docs/` folder, run `tox -e docs-dep` to compile a pinned requirements file for tox environments.
 
 ## Creating a release
 
