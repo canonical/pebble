@@ -1,4 +1,4 @@
-# General Model
+# General model
 
 Pebble is organized as a single binary that works as a daemon and also as a client to itself. When the daemon runs it loads its own configuration from the `$PEBBLE` directory, as defined in the environment, and also records in that same directory its state and unix sockets for communication. If that variable is not defined, Pebble will attempt to look for its configuration from a default system-level setup at `/var/lib/pebble/default`. Using that directory is encouraged for whole-system setup such as when using Pebble to control services in a container.
 

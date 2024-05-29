@@ -1,4 +1,4 @@
-# How to Config Layers
+# Configure layers
 
 Below is an example of the current configuration format. For full details of all fields, see the [complete layer specification](../reference/layer-specification).
 
@@ -40,9 +40,7 @@ services:
 
 The `override` field (which is required) defines whether this entry _overrides_ the previous service of the same name (if any), or merges with it. See the [full layer specification](../reference/layer-specification) for more details.
 
----
-
-## Layer Override Example
+## Layer override example
 
 Any of the fields can be replaced individually in a merged service configuration. To illustrate, here is a sample override layer that might sit on top of the one above:
 

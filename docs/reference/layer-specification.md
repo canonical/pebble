@@ -1,4 +1,4 @@
-# Layer Specification
+# Layer specification
 
 Below is the full specification for a Pebble configuration layer. Layers are added statically using a file in `$PEBBLE/layers`, or dynamically via the layers API or `pebble add`.
 

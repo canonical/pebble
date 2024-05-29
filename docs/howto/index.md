@@ -1,4 +1,4 @@
-# Reference
+# How-To Guides
 
 ## Table of content
 
@@ -6,5 +6,6 @@
 :titlesonly:
 :maxdepth: 1
 
-layer-specification
+configure-layers
+use-pebble-in-containers.md
 ```

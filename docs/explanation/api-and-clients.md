@@ -1,4 +1,4 @@
-# API and Clients
+# API and clients
 
 The Pebble daemon exposes an API (HTTP over a unix socket) to allow remote clients to interact with the daemon. It can start and stop services, add configuration layers the plan, and so on.
 

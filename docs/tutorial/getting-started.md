@@ -1,4 +1,4 @@
-# Getting Started
+# Getting started
 
 To install the latest version of Pebble, run the following command (we don't currently ship binaries, so you must first [install Go](https://go.dev/doc/install)):
 
@@ -14,9 +14,7 @@ Pebble is invoked using `pebble <command>`. To get more information:
 
 A few of the commands that need more explanation are detailed below.
 
----
-
-## Running the Daemon (Server)
+## Running the daemon (server)
 
 If Pebble is installed and the `$PEBBLE` directory is set up, running the daemon is easy:
 
@@ -58,9 +56,7 @@ pebble run
 
 To initialise the `$PEBBLE` directory with the contents of another, in a one time copy, set the `PEBBLE_COPY_ONCE` environment variable to the source directory. This will only copy the contents if the target directory, `$PEBBLE`, is empty.
 
----
-
-## Viewing, Starting, and Stopping services
+## Viewing, starting, and stopping services
 
 You can view the status of one or more services by using `pebble services`:
 
@@ -100,9 +96,7 @@ $ pebble stop srv1        # stop one service
 
 When stopping a service, Pebble sends SIGTERM to the service's process group, and waits up to 5 seconds. If the command hasn't exited within that time window, Pebble sends SIGKILL to the service's process group and waits up to 5 more seconds. If the command exits within that 10-second time window, the stop is considered successful, otherwise `pebble stop` will exit with an error, regardless of the `on-failure` value.
 
----
-
-## Updating and Restarting Services
+## Updating and restarting services
 
 When you update service configuration (by adding a layer), the services changed won't be automatically restarted. To restart them and bring the service state in sync with the new configuration, use `pebble replan`.
 
@@ -127,9 +121,7 @@ Start service "srv2"
 
 If you want to force a service to restart even if its service configuration hasn't changed, use `pebble restart <service>`.
 
----
-
-## Service Dependencies
+## Service dependencies
 
 Pebble takes service dependencies into account when starting and stopping services. When Pebble starts a service, it also starts the services which that service depends on (configured with `required`). Conversely, when stopping a service, Pebble also stops services which depend on that service.
 
@@ -141,10 +133,8 @@ Note that currently, `before` and `after` are of limited usefulness, because Peb
 
 If the configuration of `requires`, `before`, and `after` for a service results in a cycle or "loop", an error will be returned when attempting to start or stop the service.
 
----
-
 (service-auto-restart)=
-## Service Auto-Restart
+## Service auto-restart
 
 Pebble's service manager automatically restarts services that exit unexpectedly. By default, this is done whether the exit code is zero or non-zero, but you can change this using the `on-success` and `on-failure` fields in a configuration layer. The possible values for these fields are:
 
@@ -158,9 +148,7 @@ In `restart` mode, the first time a service exits, Pebble waits the `backoff-del
 
 The `backoff-limit` value is also used as a "backoff reset" time. If the service stays running after a restart for `backoff-limit` seconds, the backoff process is reset and the delay reverts to `backoff-delay`.
 
----
-
-## Health Checks
+## Health checks
 
 Separate from the service manager, Pebble implements custom "health checks" that can be configured to restart services when they fail.
 
@@ -228,7 +216,7 @@ Health checks are implemented using two change kinds:
 * `perform-check`: drives the check while it's "up". The change finishes when the number of failures hits the threshold, at which point the change switches to Error status and a `recover-check` change is spawned. Each check failure records a task log.
 * `recover-check`: drives the check while it's "down". The change finishes when the check starts succeeding again, at which point the change switches to Done status and a new `perform-check` change is spawned. Again, each check failure records a task log.
 
-### Health Endpoint
+### Health endpoint
 
 If the `--http` option was given when starting `pebble run`, Pebble exposes a `/v1/health` HTTP endpoint that allows a user to query the health of configured checks, optionally filtered by check level with the query string `?level=<level>` This endpoint returns an HTTP 200 status if the checks are healthy, HTTP 502 otherwise.
 
@@ -240,10 +228,8 @@ Ready implies alive, and not-alive implies not-ready. If you've configured an "a
 
 If there are no checks configured, the `/v1/health` endpoint returns HTTP 200 so the liveness and readiness probes are successful by default. To use this feature, you must explicitly create checks with `level: alive` or `level: ready` in the layer configuration.
 
----
-
 (changes-and-tasks)=
-## Changes and Tasks
+## Changes and tasks
 
 When Pebble performs a (potentially invasive or long-running) operation such as starting or stopping a service, it records a "change" object with one or more "tasks" in it. The daemon records this state in a JSON file on disk at `$PEBBLE/.pebble.state`.
 
@@ -265,8 +251,6 @@ Status  Spawn                Ready                Summary
 Done    today at 15:26 NZDT  today at 15:26 NZDT  Stop service "srv1"
 Done    today at 15:26 NZDT  today at 15:26 NZDT  Stop service "srv2"
 ```
-
----
 
 ## Logs
 
@@ -314,9 +298,7 @@ $ pebble run --verbose
 ...
 ```
 
----
-
-## Log Forwarding
+## Log forwarding
 
 Pebble supports forwarding its services' logs to a remote Loki server. In the `log-targets` section of the plan, you can specify destinations for log forwarding, for example:
 ```yaml
@@ -333,9 +315,7 @@ log-targets:
         services: [svc1, svc2]
 ```
 
----
-
-### Specifying Services
+### Specifying services
 
 For each log target, use the `services` key to specify a list of services to collect logs from. In the above example, the `production-logs` target will collect logs from `svc1` and `svc2`.
 
@@ -368,8 +348,6 @@ my-target:
 ```
 would remove all services and then add `svc1`, so `my-target` would receive logs from only `svc1`.
 
----
-
 ### Labels
 
 In the `labels` section, you can specify custom labels to be added to any outgoing logs. These labels may contain `$ENVIRONMENT_VARIABLES` - these will be interpreted in the environment of the corresponding service. Pebble may also add its own default labels (depending on the protocol). For example, given the following plan:
@@ -401,8 +379,6 @@ product: juju
 owner: user-bob       # env var $OWNER substituted
 pebble_service: svc2  # default label for Loki
 ```
-
----
 
 ## Notices
 

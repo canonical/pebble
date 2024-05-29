@@ -1,10 +1,8 @@
-# How to Use Pebble in Containers
+# Use pebble in containers
 
 Pebble works well as a local service manager, but if running Pebble in a separate container, you can use the exec and file management APIs to coordinate with the remote system over the shared unix socket.
 
----
-
-## Exec (One-Shot Commands)
+## Exec (one-shot commands)
 
 Pebble's "exec" feature allows you to run arbitrary commands on the server. This is intended for short-running programs; the processes started with exec don't use the service manager.
 
@@ -28,9 +26,7 @@ error: cannot perform the following tasks:
 - exec command "sleep" (timed out after 1s: context deadline exceeded)
 ```
 
----
-
-## File Management
+## File management
 
 Pebble provides various API calls and commands to manage files and directories on the server. The simplest way to use these is with the commands below, several of which should be familiar:
 
