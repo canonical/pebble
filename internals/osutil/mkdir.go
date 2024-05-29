@@ -129,14 +129,14 @@ func mkdir(path string, perm os.FileMode, options *MkdirOptions) error {
 		return err
 	}
 
-	if err := os.Rename(cand, path); err != nil {
-		return err
-	}
-
 	if options.Chown {
 		if err := sys.ChownPath(cand, options.UserID, options.GroupID); err != nil {
 			return err
 		}
+	}
+
+	if err := os.Rename(cand, path); err != nil {
+		return err
 	}
 
 	fd, err := os.Open(filepath.Dir(path))
