@@ -6,6 +6,6 @@
 :titlesonly:
 :maxdepth: 1
 
-general-model
-api-and-clients
+General model <general-model>
+API and clients <api-and-clients>
 ```

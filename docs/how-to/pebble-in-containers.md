@@ -1,4 +1,4 @@
-# Use pebble in containers
+# How to use Pebble in containers
 
 Pebble works well as a local service manager, but if running Pebble in a separate container, you can use the exec and file management APIs to coordinate with the remote system over the shared unix socket.
 

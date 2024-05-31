@@ -6,5 +6,5 @@
 :titlesonly:
 :maxdepth: 1
 
-layer-specification
+Layer specification <layer-specification>
 ```

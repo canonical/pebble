@@ -11,7 +11,7 @@ _Take control of your internal daemons!_
 **Start here**: a hands-on getting started introduction to Pebble for new users.
 ```
 
-```{grid-item-card} [How-to guides](howto/index)
+```{grid-item-card} [How-to guides](how-to/index)
 **Step-by-step guides** covering key operations and common tasks.
 ```
 ````
@@ -42,7 +42,7 @@ The Pebble project is sponsored by [Canonical Ltd](https://www.canonical.com).
 
 :diataxis:self
 :diataxis:Tutorial <tutorial/getting-started>
-:diataxis:howto/index
+:diataxis:how-to/index
 :diataxis:explanation/index
 :diataxis:reference/index
 ```

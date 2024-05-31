@@ -1,4 +1,4 @@
-# Configure layers
+# How to configure layers
 
 Below is an example of the current configuration format. For full details of all fields, see the [complete layer specification](../reference/layer-specification).
 
