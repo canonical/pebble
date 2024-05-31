@@ -2,7 +2,7 @@
 
 _Take control of your internal daemons!_
 
-**Pebble** helps you to orchestrate a set of local service processes as an organized set. It resembles well known tools such as _supervisord_, _runit_, or _s6_, in that it can easily manage non-system processes independently from the system services, but it was designed with unique features that help with more specific use cases.
+**Pebble** helps you to orchestrate a set of local service processes as an organised set. It resembles well known tools such as _supervisord_, _runit_, or _s6_, in that it can easily manage non-system processes independently from the system services, but it was designed with unique features that help with more specific use cases.
 
 ## In this documentation
 
@@ -32,8 +32,8 @@ Pebble is free software and released under [GPL-3.0](https://www.gnu.org/license
 
 The Pebble project is sponsored by [Canonical Ltd](https://www.canonical.com).
 
-- [Code of Conduct](https://ubuntu.com/community/ethos/code-of-conduct).
-- [Contribute to the Project](https://github.com/canonical/pebble?tab=readme-ov-file#contributing)
+- [Code of conduct](https://ubuntu.com/community/ethos/code-of-conduct).
+- [Contribute to the project](https://github.com/canonical/pebble?tab=readme-ov-file#contributing)
 - [Development](https://github.com/canonical/pebble/blob/master/HACKING.md): information on how to run and hack on the Pebble codebase during development.
 
 ```{filtered-toctree}

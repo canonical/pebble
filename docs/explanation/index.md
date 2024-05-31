@@ -1,6 +1,6 @@
 # Explanation
 
-## Table of Content
+## Table of content
 
 ```{toctree}
 :titlesonly:
