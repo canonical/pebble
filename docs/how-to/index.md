@@ -1,8 +1,7 @@
-# How-To Guides
-
-## Table of content
+# How-to guides
 
 ```{toctree}
+:hidden:
 :titlesonly:
 :maxdepth: 1
 

@@ -1,8 +1,7 @@
 # Explanation
 
-## Table of content
-
 ```{toctree}
+:hidden:
 :titlesonly:
 :maxdepth: 1
 
