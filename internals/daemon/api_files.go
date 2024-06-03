@@ -519,7 +519,6 @@ func mkdirAllUserGroup(path string, perm os.FileMode, uid, gid *int) error {
 func mkdirUserGroup(path string, perm os.FileMode, uid, gid *int) error {
 	if uid != nil && gid != nil {
 		return mkdir(path, perm, &osutil.MkdirOptions{
-			ExistOK: true,
 			Chown:   true,
 			UserID:  sys.UserID(*uid),
 			GroupID: sys.GroupID(*gid),

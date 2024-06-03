@@ -44,10 +44,8 @@ type MkdirOptions struct {
 	// If false (the default), no explicit chown is performed.
 	// If true, perform an explicit chown on any directories created, using the UserID
 	// and GroupID provided.
-	Chown bool
-
-	UserID sys.UserID
-
+	Chown   bool
+	UserID  sys.UserID
 	GroupID sys.GroupID
 }
 
