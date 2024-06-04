@@ -163,14 +163,14 @@ services:
         summary: demo http server 2
         command: python3 -m http.server 8081
         startup: enabled
-""" > $PEBBLE/layers/002-http-server.yaml
+""" > $PEBBLE/layers/002-another-server.yaml
 ```
 
 This creates another layer containing only one service running an HTTP server listening on a different port 8081. Then let's add this layer to a plan:
 
 ```bash
-$ pebble add layer1 $PEBBLE/layers/002-http-server.yaml
-Layer "layer1" added successfully from "/home/ubuntu/PEBBLE_HOME/layers/002-http-server.yaml"
+$ pebble add layer1 $PEBBLE/layers/002-another-server.yaml
+Layer "layer1" added successfully from "/home/ubuntu/PEBBLE_HOME/layers/002-another-server.yaml"
 ```
 
 When we update the service configuration by adding a layer, the services changed won't be automatically restarted. If we check the services:
