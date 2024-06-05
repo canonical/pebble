@@ -1,7 +1,5 @@
 # Getting started
 
-In this tutorial, we will install and configure Pebble, then use Pebble to manage some HTTP servers to demonstrate the basic capabilities of Pebble.
-
 ## 1 Prerequisites
 
 - A Linux machine.
