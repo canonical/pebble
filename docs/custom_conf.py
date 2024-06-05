@@ -19,7 +19,7 @@ import datetime
 ############################################################
 
 # Product name
-project = 'Documentation starter pack'
+project = 'Pebble'
 author = 'Canonical Group Ltd'
 
 # The title you want to display for the documentation in the sidebar.
@@ -67,7 +67,7 @@ html_context = {
     # For example: "ubuntu.com/lxd" or "microcloud.is"
     # If there is no product website, edit the header template to remove the
     # link (see the readme for instructions).
-    'product_page': 'documentation.ubuntu.com',
+    'product_page': 'github.com/canonical/pebble',
 
     # Add your product tag (the orange part of your logo, will be used in the
     # header) to ".sphinx/_static" and change the path here (start with "_static")
@@ -77,26 +77,26 @@ html_context = {
     # Change to the discourse instance you want to be able to link to
     # using the :discourse: metadata at the top of a file
     # (use an empty value if you don't want to link)
-    'discourse': 'https://discourse.ubuntu.com',
+    'discourse': 'https://discourse.charmhub.io',
 
     # Change to the Mattermost channel you want to link to
     # (use an empty value if you don't want to link)
-    'mattermost': 'https://chat.canonical.com/canonical/channels/documentation',
+    'mattermost': '',
 
     # Change to the Matrix channel you want to link to
     # (use an empty value if you don't want to link)
-    'matrix': 'https://matrix.to/#/#documentation:ubuntu.com',
+    'matrix': 'https://matrix.to/#/#charmhub-charmdev:ubuntu.com',
 
     # Change to the GitHub URL for your project
     # This is used, for example, to link to the source files and allow creating GitHub issues directly from the documentation.
-    'github_url': 'https://github.com/canonical/sphinx-docs-starter-pack',
+    'github_url': 'https://github.com/canonical/pebble',
 
     # Change to the branch for this version of the documentation
-    'github_version': 'main',
+    'github_version': 'master',
 
     # Change to the folder that contains the documentation
     # (usually "/" or "/docs/")
-    'github_folder': '/',
+    'github_folder': '/docs/',
 
     # Change to an empty value if your GitHub repo doesn't have issues enabled.
     # This will disable the feedback button and the issue link in the footer.
@@ -104,7 +104,7 @@ html_context = {
 
     # Controls the existence of Previous / Next buttons at the bottom of pages
     # Valid options: none, prev, next, both
-    'sequential_nav': "none", 
+    'sequential_nav': "both", 
     
     # Controls if to display the contributors of a file or not
     "display_contributors": True,
@@ -165,7 +165,8 @@ custom_extensions = [
     'canonical.related-links',
     'canonical.custom-rst-roles',
     'canonical.terminal-output',
-    'notfound.extension'
+    'notfound.extension',
+    'canonical.filtered-toc'
     ]
 
 # Add custom required Python modules that must be added to the
