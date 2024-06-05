@@ -501,17 +501,30 @@ func writeFile(item writeFilesItem, source io.Reader) error {
 
 func mkdirAllUserGroup(path string, perm os.FileMode, uid, gid *int) error {
 	if uid != nil && gid != nil {
-		return mkdirAllChown(path, perm, sys.UserID(*uid), sys.GroupID(*gid))
+		return mkdir(path, perm, &osutil.MkdirOptions{
+			MakeParents: true,
+			ExistOK:     true,
+			Chown:       true,
+			UserID:      sys.UserID(*uid),
+			GroupID:     sys.GroupID(*gid),
+		})
 	} else {
-		return mkdirAllChown(path, perm, osutil.NoChown, osutil.NoChown)
+		return mkdir(path, perm, &osutil.MkdirOptions{
+			MakeParents: true,
+			ExistOK:     true,
+		})
 	}
 }
 
 func mkdirUserGroup(path string, perm os.FileMode, uid, gid *int) error {
 	if uid != nil && gid != nil {
-		return mkdirChown(path, perm, sys.UserID(*uid), sys.GroupID(*gid))
+		return mkdir(path, perm, &osutil.MkdirOptions{
+			Chown:   true,
+			UserID:  sys.UserID(*uid),
+			GroupID: sys.GroupID(*gid),
+		})
 	} else {
-		return mkdirChown(path, perm, osutil.NoChown, osutil.NoChown)
+		return mkdir(path, perm, nil)
 	}
 }
 
@@ -577,8 +590,7 @@ func makeDir(dir makeDirsItem) error {
 var (
 	atomicWriteChown = osutil.AtomicWriteChown
 	normalizeUidGid  = osutil.NormalizeUidGid
-	mkdirChown       = osutil.MkdirChown
-	mkdirAllChown    = osutil.MkdirAllChown
+	mkdir            = osutil.Mkdir
 )
 
 // Removing paths
