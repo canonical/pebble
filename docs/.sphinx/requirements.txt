@@ -1,0 +1,21 @@
+# DO NOT MODIFY THIS FILE DIRECTLY!
+#
+# This file is generated automatically.
+# Add custom requirements to the custom_required_modules
+# array in the custom_conf.py file and run:
+# python3 .sphinx/build_requirements.py
+GitPython
+canonical-sphinx-extensions
+furo
+linkify-it-py
+myst-parser
+pyspelling
+sphinx
+sphinx-autobuild
+sphinx-copybutton
+sphinx-design
+sphinx-notfound-page
+sphinx-tabs
+sphinxcontrib-jquery
+sphinxext-opengraph
+watchfiles

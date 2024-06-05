@@ -67,7 +67,7 @@ func fakePruneTicker() (w *ticker, restore func()) {
 
 func (ovs *overlordSuite) SetUpTest(c *C) {
 	ovs.dir = c.MkDir()
-	ovs.statePath = filepath.Join(ovs.dir, ".pebble.state")
+	ovs.statePath = filepath.Join(ovs.dir, cmd.StateFile)
 }
 
 func (ovs *overlordSuite) TearDownTest(c *C) {

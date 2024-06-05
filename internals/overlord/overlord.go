@@ -28,6 +28,7 @@ import (
 	"github.com/canonical/x-go/randutil"
 	"gopkg.in/tomb.v2"
 
+	"github.com/canonical/pebble/cmd"
 	"github.com/canonical/pebble/internals/osutil"
 	"github.com/canonical/pebble/internals/overlord/checkstate"
 	"github.com/canonical/pebble/internals/overlord/cmdstate"
@@ -120,7 +121,7 @@ func New(opts *Options) (*Overlord, error) {
 	if !osutil.IsDir(o.pebbleDir) {
 		return nil, fmt.Errorf("directory %q does not exist", o.pebbleDir)
 	}
-	statePath := filepath.Join(o.pebbleDir, ".pebble.state")
+	statePath := filepath.Join(o.pebbleDir, cmd.StateFile)
 
 	backend := &overlordStateBackend{
 		path:         statePath,
