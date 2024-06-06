@@ -140,7 +140,7 @@ func mkdir(path string, perm os.FileMode, options *MkdirOptions) error {
 	}
 
 	if options.Chmod {
-		if err := os.Chmod(path, perm); err != nil {
+		if err := os.Chmod(cand, perm); err != nil {
 			return err
 		}
 	}
