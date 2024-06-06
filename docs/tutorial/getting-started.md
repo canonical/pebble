@@ -8,26 +8,23 @@
 
 ### 2.1 Download and install the latest release
 
-1. Go to the [release page](https://github.com/canonical/pebble/releases) of Pebble and download the latest release according to your architecture.
-2. Unzip it. In the unzipped folder, move the `pebble` binary to `/usr/local/bin/` (or any directory that is in your `$PATH`).
+Find the latest tag on the [latest release page](https://github.com/canonical/pebble/releases/latest), then run the following commands to download, extract, and install the latest release (replace `v1.11.0` with the latest tag and `amd64` with your architecture):
 
-> Alternatively, you can find the latest tag on the [latest release page](https://github.com/canonical/pebble/releases/latest), then run the following command to download, unzip and install the latest release (suppose `v0.11.0` is the latest tag and your architecture is `amd64`; replace the tags and arch accordingly):
-> 
-> ```bash
-> $ wget -q https://github.com/canonical/pebble/releases/download/v1.11.0/pebble_v1.11.0_linux_amd64.tar.gz
-> $ tar zxvf pebble_v1.11.0_linux_amd64.tar.gz
-> $ sudo mv pebble /usr/local/bin/
-> ```
+```bash
+$ wget https://github.com/canonical/pebble/releases/download/v1.11.0/pebble_v1.11.0_linux_amd64.tar.gz
+$ tar zxvf pebble_v1.11.0_linux_amd64.tar.gz
+$ sudo mv pebble /usr/local/bin/ # make sure it's in your $PATH
+```
 
 ### 2.2 Install from source
 
-If you want, you can build and install Pebble from source:
+Alternatively, you can build and install Pebble from source:
 
 1. Follow the official Go documentation [here](https://go.dev/doc/install) to download and install Go.
-2. After installing, you will want to add the `$GOBIN` directory to your `$PATH` so you can use installed tools. For more information, refer to the [official documentation here](https://go.dev/doc/install/source#environment).
+2. After installing, you will want to add the `$GOBIN` directory to your `$PATH` so you can use the installed tools. For more information, refer to the [official documentation](https://go.dev/doc/install/source#environment).
 3. Run `go install github.com/canonical/pebble/cmd/pebble@latest` to build and install Pebble.
 
-### 2.3 Sanity check
+### 2.3 Check that it's working
 
 After installation, if you run `pebble`, you should see some output equivalent to the following:
 
@@ -38,29 +35,14 @@ the system that is running them.
 
 Usage: pebble <command> [<options>...]
 
-Commands can be classified as follows:
-
-       Run: run, help, version
-      Plan: add, plan
-  Services: services, logs, start, restart, signal, stop, replan
-    Checks: checks, health
-     Files: push, pull, ls, mkdir, rm, exec
-   Changes: changes, tasks
-   Notices: warnings, okay, notices, notice, notify
-
-Set the PEBBLE environment variable to override the configuration directory
-(which defaults to /var/lib/pebble/default). Set PEBBLE_SOCKET to override
-the unix socket used for the API (defaults to $PEBBLE/.pebble.socket).
-
-For more information about a command, run 'pebble help <command>'.
-For a short summary of all commands, run 'pebble help --all'.
+...
 ```
 
 Pebble is invoked using `pebble <command>`. To get more information:
 
 - To see a help summary, type `pebble -h`.
 - To see a short description of all commands, type `pebble help --all`.
-- To see details for one command, type `pebble help <command>` or `pebble <command> -h`.
+- To see details for one command, type `pebble help <command>`.
 
 ## 3 Configure Pebble
 
@@ -104,6 +86,8 @@ $ pebble run
 
 This starts the Pebble daemon, and as you can see from the log, our HTTP server is already started, which can be verified by running `curl localhost:8080` in another terminal tab.
 
+To exit the Pebble daemon, press Ctrl-C (which sends an "interrupt" signal to the process).
+
 ## 5 View, start, and stop services
 
 You can view the status of services by running `pebble services`. Open another terminal tab, and run:
@@ -114,7 +98,7 @@ Service      Startup  Current  Since
 http-server  enabled  active   today at 11:30 UTC
 ```
 
-Use `pebble stop SERVICE_NAME1 SERVICE_NAME2 ...` to stop one or more services. Run:
+Use `pebble stop <service1> <service2> ...` to stop one or more services. Run:
 
 ```bash
 $ pebble stop http-server
@@ -136,13 +120,7 @@ To start it again, run:
 $ pebble start http-server
 ```
 
-And it's started now:
-
-```bash
-$ pebble services
-Service      Startup  Current  Since
-http-server  enabled  active   today at 11:34 UTC
-```
+And it's started now.
 
 ## 6 Add a new layer
 
@@ -198,13 +176,12 @@ http-server    enabled  active   today at 11:34 UTC
 http-server-2  enabled  active   today at 11:40 UTC
 ```
 
-We can see that the new HTTP server defined in the newly added layer is brought up as well.
+We can see that the new HTTP server defined in the newly added layer has been started as well.
 
 ## 7 Where to go from here
 
-- To know more about running the Pebble daemon, see [How to run the daemon (server)](../how-to/run-the-daemon.md).
-- To know more about viewing, starting and stopping services, see [How to view, start, and stop services](../how-to/view-start-stop-services.md).
-- To know more about updating and restarting services, see [How to update and restart services](../how-to/update-restart-services.md).
-- To know more about configuring layers, see [How to configure layers](../how-to/configure-layers.md).
-- To know more about the specification of layers, read the [Layer specification](../reference/layer-specification.md).
-- Read other [how-to articles](../how-to/index.md), [explanations](../explanation/index.md) and [references](../reference/index.md).
+- To learn more about running the Pebble daemon, see [How to run the daemon (server)](../how-to/run-the-daemon.md).
+- To learn more about viewing, starting and stopping services, see [How to view, start, and stop services](../how-to/view-start-stop-services.md).
+- To learn more about updating and restarting services, see [How to update and restart services](../how-to/update-restart-services.md).
+- To learn more about configuring layers, see [How to configure layers](../how-to/configure-layers.md).
+- To learn more about layer configuration options, read the [Layer specification](../reference/layer-specification.md).
