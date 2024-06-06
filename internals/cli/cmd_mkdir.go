@@ -49,7 +49,7 @@ func init() {
 		Summary:     cmdMkdirSummary,
 		Description: cmdMkdirDescription,
 		ArgsHelp: map[string]string{
-			"-p":      "Create parent directories as needed",
+			"-p":      "Create parent directories as needed, and don't fail if path already exists",
 			"-m":      "Override mode bits (3-digit octal)",
 			"--uid":   "Use specified user ID",
 			"--user":  "Use specified username",
