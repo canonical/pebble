@@ -64,9 +64,9 @@ jobs:
 
       - name: Set LP credentials for remote build
         run: |
-          lp_creds_path="$HOME/.local/share/snapcraft/provider/launchpad"
+          lp_creds_path="$HOME/.local/share/snapcraft/"
           mkdir -p $lp_creds_path
-          echo '${{ secrets.LP_CREDENTIALS }}' > ${lp_creds_path}/credentials
+          echo '${{ secrets.LP_CREDENTIALS }}' > ${lp_creds_path}/launchpad-credentials
           git config --global user.email "${{ secrets.PEBBLE_DEV_MAILING_LIST}}"
           git config --global user.name "pebble-dev"
 
