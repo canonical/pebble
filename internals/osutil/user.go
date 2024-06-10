@@ -19,6 +19,7 @@ import (
 	"os"
 	"os/user"
 	"strconv"
+	"strings"
 
 	"github.com/canonical/pebble/internals/osutil/sys"
 )
@@ -56,6 +57,12 @@ func RealUser() (*user.User, error) {
 	if _, ok := err.(user.UnknownUserError); ok {
 		return cur, nil
 	}
+	// Workaround for https://github.com/golang/go/issues/67912, until our
+	// minimum Go version has a fix for that. In short, user.Lookup sometimes
+	// doesn't return UnknownUserError when it should.
+	if err != nil && strings.Contains(err.Error(), "no such file or directory") {
+		return cur, nil
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -90,6 +97,10 @@ func NormalizeUidGid(uid, gid *int, username, group string) (*int, *int, error) 
 	if username != "" {
 		u, err := userLookup(username)
 		if err != nil {
+			if strings.Contains(err.Error(), "no such file or directory") {
+				// Better error message to work around https://github.com/golang/go/issues/67912
+				return nil, nil, user.UnknownUserError(username)
+			}
 			return nil, nil, err
 		}
 		n, _ := strconv.Atoi(u.Uid)
@@ -107,6 +118,10 @@ func NormalizeUidGid(uid, gid *int, username, group string) (*int, *int, error) 
 	if group != "" {
 		g, err := userLookupGroup(group)
 		if err != nil {
+			if strings.Contains(err.Error(), "no such file or directory") {
+				// Better error message to work around https://github.com/golang/go/issues/67912
+				return nil, nil, user.UnknownGroupError(group)
+			}
 			return nil, nil, err
 		}
 		n, _ := strconv.Atoi(g.Gid)
