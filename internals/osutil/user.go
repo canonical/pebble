@@ -20,6 +20,7 @@ import (
 	"os/user"
 	"strconv"
 	"strings"
+	"syscall"
 
 	"github.com/canonical/pebble/internals/osutil/sys"
 )
@@ -28,6 +29,8 @@ var (
 	userCurrent     = user.Current
 	userLookup      = user.Lookup
 	userLookupGroup = user.LookupGroup
+
+	enoentMessage = syscall.ENOENT.Error()
 )
 
 // RealUser finds the user behind a sudo invocation when root, if applicable
@@ -60,7 +63,7 @@ func RealUser() (*user.User, error) {
 	// Workaround for https://github.com/golang/go/issues/67912, until our
 	// minimum Go version has a fix for that. In short, user.Lookup sometimes
 	// doesn't return UnknownUserError when it should.
-	if err != nil && strings.Contains(err.Error(), "no such file or directory") {
+	if err != nil && strings.Contains(err.Error(), enoentMessage) {
 		return cur, nil
 	}
 	if err != nil {
@@ -97,7 +100,7 @@ func NormalizeUidGid(uid, gid *int, username, group string) (*int, *int, error) 
 	if username != "" {
 		u, err := userLookup(username)
 		if err != nil {
-			if strings.Contains(err.Error(), "no such file or directory") {
+			if strings.Contains(err.Error(), enoentMessage) {
 				// Better error message to work around https://github.com/golang/go/issues/67912
 				return nil, nil, user.UnknownUserError(username)
 			}
@@ -118,7 +121,7 @@ func NormalizeUidGid(uid, gid *int, username, group string) (*int, *int, error) 
 	if group != "" {
 		g, err := userLookupGroup(group)
 		if err != nil {
-			if strings.Contains(err.Error(), "no such file or directory") {
+			if strings.Contains(err.Error(), enoentMessage) {
 				// Better error message to work around https://github.com/golang/go/issues/67912
 				return nil, nil, user.UnknownGroupError(group)
 			}
