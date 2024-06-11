@@ -39,12 +39,6 @@ Usage: pebble <command> [<options>...]
 ...
 ```
 
-Pebble is invoked using `pebble <command>`. To get more information:
-
-- To see a help summary, type `pebble -h`.
-- To see a short description of all commands, type `pebble help --all`.
-- To see details for one command, type `pebble help <command>`.
-
 ## Configure Pebble
 
 First, create a directory for Pebble configuration:
@@ -76,6 +70,8 @@ services:
 This creates a simple layer containing only one service (which runs a basic HTTP server using Python's `http` module, listening on port 8080).
 
 ## Run the Pebble daemon
+
+Pebble is invoked using `pebble <command>`. (To get more information, run `pebble -h`.)
 
 ```bash
 pebble run
