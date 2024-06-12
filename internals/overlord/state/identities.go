@@ -1,0 +1,229 @@
+// Copyright (c) 2024 Canonical Ltd
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License version 3 as
+// published by the Free Software Foundation.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+package state
+
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"sort"
+	"strings"
+)
+
+// TODO: disallow multiple users with same "local: user-id" value?
+
+// Identity holds the configuration of a single identity.
+type Identity struct {
+	Name   string
+	Access IdentityAccess
+
+	// One or more of the following type-specific configuration fields must be
+	// non-nil (currently the only type is "local").
+	Local *LocalIdentity
+}
+
+// IdentityAccess defines the access level for an identity.
+type IdentityAccess string
+
+const (
+	AdminAccess     IdentityAccess = "admin"
+	ReadAccess      IdentityAccess = "read"
+	UntrustedAccess IdentityAccess = "untrusted"
+)
+
+// LocalIdentity holds identity configuration specific to the "local" type
+// (for ucrednet/UID authentication).
+type LocalIdentity struct {
+	UserID uint32
+}
+
+// validate checks that identity d is valid, returning an error if not.
+func (d *Identity) validate() error {
+	if d == nil {
+		return errors.New("identity must not be nil")
+	}
+
+	switch d.Access {
+	case AdminAccess, ReadAccess, UntrustedAccess:
+	default:
+		return fmt.Errorf("invalid access %q, must be %q, %q, or %q",
+			d.Access, AdminAccess, ReadAccess, UntrustedAccess)
+	}
+
+	switch {
+	case d.Local != nil:
+		if d.Local.UserID == 0 {
+			return errors.New("local identity must have nonzero user ID")
+		}
+	default:
+		return errors.New(`identity must have at least one type ("local")`)
+	}
+
+	return nil
+}
+
+// apiIdentity exists so the default JSON marshalling of an Identity (used
+// for API responses) excludes secrets. The marshalledIdentity type is used
+// for saving secrets in state.
+type apiIdentity struct {
+	Access string            `json:"access"`
+	Local  *apiLocalIdentity `json:"local,omitempty"`
+}
+
+type apiLocalIdentity struct {
+	UserID uint32 `json:"user-id"`
+}
+
+// IMPORTANT NOTE: be sure to exclude secrets when adding to this!
+func (d *Identity) MarshalJSON() ([]byte, error) {
+	ai := apiIdentity{
+		Access: string(d.Access),
+		Local:  &apiLocalIdentity{UserID: d.Local.UserID},
+	}
+	return json.Marshal(ai)
+}
+
+func (d *Identity) UnmarshalJSON(data []byte) error {
+	var ai apiIdentity
+	err := json.Unmarshal(data, &ai)
+	if err != nil {
+		return err
+	}
+	d.Access = IdentityAccess(ai.Access)
+	switch {
+	case ai.Local != nil:
+		d.Local = &LocalIdentity{UserID: ai.Local.UserID}
+	default:
+		return errors.New(`identity must have at least one type ("local")`)
+	}
+	return nil
+}
+
+// AddIdentities adds the given identities to the system. It's an error if any
+// of the named identities already exist.
+func (s *State) AddIdentities(identities map[string]*Identity) error {
+	s.writing()
+
+	// If any of the named identities already exist, return an error.
+	var existing []string
+	for name, identity := range identities {
+		if _, ok := s.identities[name]; ok {
+			existing = append(existing, name)
+		}
+		err := identity.validate()
+		if err != nil {
+			return fmt.Errorf("identity %q invalid: %w", name, err)
+		}
+	}
+	if len(existing) > 0 {
+		sort.Strings(existing)
+		return fmt.Errorf("identities already exist: %s", strings.Join(existing, ", "))
+	}
+
+	for name, identity := range identities {
+		identity.Name = name
+		s.identities[name] = identity
+	}
+	return nil
+}
+
+// UpdateIdentities updates the given identities in the system. It's an error
+// if any of the named identities do not exist.
+func (s *State) UpdateIdentities(identities map[string]*Identity) error {
+	s.writing()
+
+	// If any of the named identities don't exist, return an error.
+	var missing []string
+	for name, identity := range identities {
+		if _, ok := s.identities[name]; !ok {
+			missing = append(missing, name)
+		}
+		err := identity.validate()
+		if err != nil {
+			return fmt.Errorf("identity %q invalid: %w", name, err)
+		}
+	}
+	if len(missing) > 0 {
+		sort.Strings(missing)
+		return fmt.Errorf("identities missing: %s", strings.Join(missing, ", "))
+	}
+
+	for name, identity := range identities {
+		identity.Name = name
+		s.identities[name] = identity
+	}
+	return nil
+}
+
+// ReplaceIdentities replaces the named identities in the system with the
+// given identities (adding those that don't exist), or removes them if the
+// map value is nil.
+func (s *State) ReplaceIdentities(identities map[string]*Identity) error {
+	s.writing()
+
+	for name, identity := range identities {
+		if identity != nil {
+			err := identity.validate()
+			if err != nil {
+				return fmt.Errorf("identity %q invalid: %w", name, err)
+			}
+		}
+	}
+
+	for name, identity := range identities {
+		if identity == nil {
+			delete(s.identities, name)
+		} else {
+			identity.Name = name
+			s.identities[name] = identity
+		}
+	}
+	return nil
+}
+
+// RemoveIdentities removes the named identities from the system. It's an
+// error if any of the named identities do not exist.
+func (s *State) RemoveIdentities(identities map[string]struct{}) error {
+	s.writing()
+
+	// If any of the named identities don't exist, return an error.
+	var missing []string
+	for name := range identities {
+		if _, ok := s.identities[name]; !ok {
+			missing = append(missing, name)
+		}
+	}
+	if len(missing) > 0 {
+		sort.Strings(missing)
+		return fmt.Errorf("identities missing: %s", strings.Join(missing, ", "))
+	}
+
+	for name := range identities {
+		delete(s.identities, name)
+	}
+	return nil
+}
+
+// Identities returns all the identities in the system. The returned map is a
+// shallow clone, so map mutations won't affect state.
+func (s *State) Identities() map[string]*Identity {
+	s.reading()
+
+	result := make(map[string]*Identity, len(s.identities))
+	for name, identity := range s.identities {
+		result[name] = identity
+	}
+	return result
+}
