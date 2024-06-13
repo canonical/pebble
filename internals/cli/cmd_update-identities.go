@@ -22,17 +22,22 @@ import (
 	"github.com/canonical/pebble/client"
 )
 
-const cmdUpdateIdentitiesSummary = "Update existing identities"
+const cmdUpdateIdentitiesSummary = "Update or replace identities"
 const cmdUpdateIdentitiesDescription = `
-The update-identities command updates one or more existing identities.
+The update-identities command updates or replaces one or more identities.
 
-The named identities must already exist.
+By default, the named identities must already exist and are updated.
+
+If --replace is specified, update-identities operates differently: if a named
+identity exists, it will be updated. If it does not exist, it will be added.
+If a named identity is null in the YAML input, that identity will be removed.
 `
 
 type cmdUpdateIdentities struct {
 	client *client.Client
 
-	From string `long:"from" required:"1"`
+	From    string `long:"from" required:"1"`
+	Replace bool   `long:"replace"`
 }
 
 func init() {
@@ -41,7 +46,8 @@ func init() {
 		Summary:     cmdUpdateIdentitiesSummary,
 		Description: cmdUpdateIdentitiesDescription,
 		ArgsHelp: map[string]string{
-			"--from": "Path of YAML file to read identities from (required)",
+			"--from":    "Path of YAML file to read identities from (required)",
+			"--replace": "Replace (add or update) identities; remove null identities",
 		},
 		New: func(opts *CmdOptions) flags.Commander {
 			return &cmdUpdateIdentities{client: opts.Client}
@@ -58,11 +64,20 @@ func (cmd *cmdUpdateIdentities) Execute(args []string) error {
 	if err != nil {
 		return err
 	}
-	err = cmd.client.UpdateIdentities(identities)
-	if err != nil {
-		return err
+
+	if cmd.Replace {
+		err = cmd.client.ReplaceIdentities(identities)
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(Stdout, "Replaced %s\n", numItems(len(identities), "identity", "identities"))
+	} else {
+		err = cmd.client.UpdateIdentities(identities)
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(Stdout, "Updated %s\n", numItems(len(identities), "identity", "identities"))
 	}
 
-	fmt.Fprintf(Stdout, "Updated %s\n", numItems(len(identities), "identity", "identities"))
 	return nil
 }
