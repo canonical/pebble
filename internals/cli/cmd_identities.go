@@ -20,9 +20,9 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/canonical/go-flags"
 	"gopkg.in/yaml.v3"
 
-	"github.com/canonical/go-flags"
 	"github.com/canonical/pebble/client"
 )
 
