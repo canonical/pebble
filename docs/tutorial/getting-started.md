@@ -1,9 +1,8 @@
 # Getting started
 
-In this tutorial, we will download and install Pebble, configure layers, run the Pebble daemon, and work with layers and services. After this tutorial, you will have a basic understanding of what Pebble is, how to install it, and how to use it to orchestrate services. It takes about 15 minutes to complete.
+In this tutorial, we will download and install Pebble, configure layers, run the Pebble daemon, and work with layers and services. This tutorial takes about 15 minutes to complete.
 
-
-After that, you can continue exploring more advanced features and use cases (links at the end).
+After this tutorial, you will have a basic understanding of what Pebble is and how to use it to orchestrate services, and you can continue exploring more advanced features and use cases (see [Next steps](<link-to-next-steps)).
 
 ## Prerequisites
 
@@ -11,13 +10,15 @@ After that, you can continue exploring more advanced features and use cases (lin
 
 ## Download and install Pebble
 
-Find the latest tag on the [latest release page](https://github.com/canonical/pebble/releases/latest), then run the following commands to download, extract, and install the latest release (replace `v1.11.0` with the latest tag and `amd64` with your architecture):
+Find the latest tag on the [latest release page](https://github.com/canonical/pebble/releases/latest), then run the following commands to download, extract, and install the latest release (replace `v1.12.0` with the latest tag and `amd64` with your architecture):
 
 ```bash
-wget https://github.com/canonical/pebble/releases/download/v1.11.0/pebble_v1.11.0_linux_amd64.tar.gz
-tar zxvf pebble_v1.11.0_linux_amd64.tar.gz
-sudo mv pebble /usr/local/bin/ # make sure it's in your $PATH
+wget https://github.com/canonical/pebble/releases/download/v1.12.0/pebble_v1.12.0_linux_amd64.tar.gz
+tar zxvf pebble_v1.12.0_linux_amd64.tar.gz
+sudo mv pebble /usr/local/bin/
 ```
+
+Also, make sure `/usr/local/bin/` is in your `$PATH`.
 
 ## Verify Pebble installation
 
@@ -29,7 +30,7 @@ pebble
 
 This should produce output similar to the following:
 
-```bash
+```console
 Pebble lets you control services and perform management actions on
 the system that is running them.
 
@@ -42,12 +43,12 @@ Usage: pebble <command> [<options>...]
 
 Now that Pebble has been installed, we can set up a basic configuration.
 
-First, let's create a directory for Pebble configuration:
+First, let's create a directory for Pebble configuration and add the `PEBBLE` environment variable to `~/.bashrc`. 
 
 ```bash
 mkdir -p ~/PEBBLE/layers
 export PEBBLE=$HOME/PEBBLE
-echo "export PEBBLE=$HOME/PEBBLE" >> ~/.bashrc # add $PEBBLE to your bashrc
+echo "export PEBBLE=$HOME/PEBBLE" >> ~/.bashrc
 ```
 
 Next, create a layer by running:
@@ -68,13 +69,13 @@ services:
 """ > $PEBBLE/layers/001-http-server.yaml
 ```
 
-This creates a simple layer containing only one service (which runs a basic HTTP server using Python's `http` module, listening on port 8080).
+This creates a simple layer containing only one service (named "http-server", which runs a basic HTTP server using Python's `http` module, listening on port 8080).
 
 ## Start the Pebble daemon
 
 Now we are ready to run the Pebble daemon.
 
-Pebble is invoked using `pebble <command>`. (To get more information, run `pebble -h`.)
+> Pebble is invoked using `pebble <command>`. (To get more information, run `pebble -h`.)
 
 To start the daemon, run:
 
@@ -84,7 +85,7 @@ pebble run
 
 This starts the Pebble daemon itself, as well as all the services that are marked as `startup: enabled` (in our simple layer created above, the `http-server` service is marked as `startup: enabled`). You should get some output similar to the following:
 
-```bash
+```console
 2024-06-02T11:30:02.925Z [pebble] Started daemon.
 2024-06-02T11:30:02.936Z [pebble] POST /v1/services 10.751704ms 202
 2024-06-02T11:30:02.936Z [pebble] Started default services with change 77.
@@ -106,7 +107,7 @@ pebble services
 
 You should see output similar to the following:
 
-```bash
+```console
 Service      Startup  Current  Since
 http-server  enabled  active   today at 11:30 UTC
 ```
@@ -119,7 +120,7 @@ pebble stop http-server
 
 You should get output similar to the following:
 
-```bash
+```console
 Service      Startup  Current   Since
 http-server  enabled  inactive  today at 11:33 UTC
 ```
@@ -163,7 +164,7 @@ pebble add layer1 $PEBBLE/layers/002-another-http-server.yaml
 
 If the layer is added successfully, the above command should produce the following output:
 
-```bash
+```console
 Layer "layer1" added successfully from "/home/ubuntu/PEBBLE_HOME/layers/002-another-http-server.yaml"
 ```
 
@@ -174,7 +175,7 @@ pebble services
 ```
 We can see that although the new service `http-server-2` has been added, it's still "inactive":
 
-```bash
+```console
 Service        Startup  Current   Since
 http-server    enabled  active    today at 11:41 UTC
 http-server-2  enabled  inactive  -
@@ -186,9 +187,9 @@ To bring the service state in sync with the new configuration, run `pebble repla
 pebble replan
 ```
 
-And you get output similar to:
+And you should get output similar to:
 
-```bash
+```console
 2024-06-02T11:40:39Z INFO Service "http-server" already started.
 ```
 
@@ -200,7 +201,7 @@ pebble services
 
 We can see that the new HTTP server `http-server-2` defined in the newly added layer should have been started and be shown as "active":
 
-```bash
+```console
 Service        Startup  Current  Since
 http-server    enabled  active   today at 11:34 UTC
 http-server-2  enabled  active   today at 11:40 UTC
