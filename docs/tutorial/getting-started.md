@@ -107,7 +107,9 @@ This starts the Pebble daemon itself, as well as all the services that are marke
 
 As you can see from the log, our HTTP server has been started too, which can be verified by running `curl localhost:8080` in another terminal tab.
 
-> Note: To exit the Pebble daemon, press Ctrl-C (which sends an "interrupt" signal to the process).
+```{note}
+To exit the Pebble daemon, press Ctrl-C (which sends an "interrupt" signal to the process).
+```
 
 ## View, start and stop services
 
