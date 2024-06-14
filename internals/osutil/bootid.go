@@ -15,7 +15,7 @@
 package osutil
 
 import (
-	"io/ioutil"
+	"io"
 	"os"
 	"strings"
 )
@@ -27,7 +27,7 @@ func BootID() (string, error) {
 		return "", err
 	}
 	defer file.Close()
-	bytes, err := ioutil.ReadAll(file)
+	bytes, err := io.ReadAll(file)
 	if err != nil {
 		return "", err
 	}

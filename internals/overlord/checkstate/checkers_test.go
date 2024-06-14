@@ -27,6 +27,7 @@ import (
 
 	. "gopkg.in/check.v1"
 
+	"github.com/canonical/pebble/internals/plan"
 	"github.com/canonical/pebble/internals/reaper"
 )
 
@@ -74,30 +75,30 @@ func (s *CheckersSuite) TestHTTP(c *C) {
 	// Non-20x status code returns error
 	chk = &httpChecker{url: server.URL + "/404"}
 	err = chk.check(context.Background())
-	c.Assert(err, ErrorMatches, "received non-20x status code 404")
+	c.Assert(err, ErrorMatches, "non-20x status code 404")
 	c.Assert(path, Equals, "/404")
 
 	// In case of non-20x status, short response body is fully included in error details
 	response = "error details"
 	chk = &httpChecker{url: server.URL + "/500"}
 	err = chk.check(context.Background())
-	c.Assert(err, ErrorMatches, "received non-20x status code 500")
+	c.Assert(err, ErrorMatches, "non-20x status code 500")
 	detailsErr, ok := err.(*detailsError)
 	c.Assert(ok, Equals, true)
 	c.Assert(detailsErr.Details(), Equals, "error details")
 
-	// But only first 20 lines of long response body are included in error details
+	// But only first 5 lines of long response body are included in error details
 	var output bytes.Buffer
-	for i := 1; i <= 30; i++ {
+	for i := 1; i <= 7; i++ {
 		fmt.Fprintf(&output, "line %d\n", i)
 	}
 	response = output.String()
 	chk = &httpChecker{url: server.URL + "/500"}
 	err = chk.check(context.Background())
-	c.Assert(err, ErrorMatches, "received non-20x status code 500")
+	c.Assert(err, ErrorMatches, "non-20x status code 500")
 	detailsErr, ok = err.(*detailsError)
 	c.Assert(ok, Equals, true)
-	c.Assert(detailsErr.Details(), Matches, `(?s)line 1\n.*line 20\n\(\.\.\.\)`)
+	c.Assert(detailsErr.Details(), Matches, `(?s)line 1\n.*line 5\n\(\.\.\.\)`)
 
 	// Cancelled context returns error
 	ctx, cancel := context.WithCancel(context.Background())
@@ -161,7 +162,7 @@ func (s *CheckersSuite) TestExec(c *C) {
 	// Un-parseable command fails
 	chk = &execChecker{command: "'"}
 	err = chk.check(context.Background())
-	c.Assert(err, ErrorMatches, "cannot parse check command: .*")
+	c.Assert(err, ErrorMatches, "cannot parse command: .*")
 
 	// Non-zero exit status fails
 	chk = &execChecker{command: "sleep x"}
@@ -171,9 +172,9 @@ func (s *CheckersSuite) TestExec(c *C) {
 	c.Assert(ok, Equals, true)
 	c.Assert(detailsErr.Details(), Matches, `(?s)sleep: invalid time interval.*`)
 
-	// Long output on failure provides last 20 lines of output
+	// Long output on failure provides last 5 lines of output
 	var output bytes.Buffer
-	for i := 1; i <= 30; i++ {
+	for i := 1; i <= 7; i++ {
 		fmt.Fprintf(&output, "echo line %d\n", i)
 	}
 	chk = &execChecker{command: "/bin/sh -c '" + output.String() + "\nexit 1'"}
@@ -181,7 +182,7 @@ func (s *CheckersSuite) TestExec(c *C) {
 	c.Assert(err, ErrorMatches, "exit status 1")
 	detailsErr, ok = err.(*detailsError)
 	c.Assert(ok, Equals, true)
-	c.Assert(detailsErr.Details(), Matches, `(?s)\(\.\.\.\)\nline 11\n.*line 30`)
+	c.Assert(detailsErr.Details(), Matches, `(?s)\(\.\.\.\)\nline 3\n.*line 7`)
 
 	// Environment variables are passed through
 	chk = &execChecker{
@@ -251,4 +252,124 @@ func (s *CheckersSuite) TestExec(c *C) {
 	detailsErr, ok = err.(*detailsError)
 	c.Assert(ok, Equals, true)
 	c.Assert(detailsErr.Details(), Equals, currentUser.Username)
+}
+
+func (s *CheckersSuite) TestNewChecker(c *C) {
+	chk := newChecker(&plan.Check{
+		Name: "http",
+		HTTP: &plan.HTTPCheck{
+			URL:     "https://example.com/foo",
+			Headers: map[string]string{"k": "v"},
+		},
+	})
+	http, ok := chk.(*httpChecker)
+	c.Assert(ok, Equals, true)
+	c.Check(http.name, Equals, "http")
+	c.Check(http.url, Equals, "https://example.com/foo")
+	c.Check(http.headers, DeepEquals, map[string]string{"k": "v"})
+
+	chk = newChecker(&plan.Check{
+		Name: "tcp",
+		TCP: &plan.TCPCheck{
+			Port: 80,
+			Host: "localhost",
+		},
+	})
+	tcp, ok := chk.(*tcpChecker)
+	c.Assert(ok, Equals, true)
+	c.Check(tcp.name, Equals, "tcp")
+	c.Check(tcp.port, Equals, 80)
+	c.Check(tcp.host, Equals, "localhost")
+
+	userID, groupID := 100, 200
+	chk = newChecker(&plan.Check{
+		Name: "exec",
+		Exec: &plan.ExecCheck{
+			Command:     "sleep 1",
+			Environment: map[string]string{"k": "v"},
+			UserID:      &userID,
+			User:        "user",
+			GroupID:     &groupID,
+			Group:       "group",
+			WorkingDir:  "/working/dir",
+		},
+	})
+	exec, ok := chk.(*execChecker)
+	c.Assert(ok, Equals, true)
+	c.Assert(exec.name, Equals, "exec")
+	c.Assert(exec.command, Equals, "sleep 1")
+	c.Assert(exec.environment, DeepEquals, map[string]string{"k": "v"})
+	c.Assert(exec.userID, Equals, &userID)
+	c.Assert(exec.user, Equals, "user")
+	c.Assert(exec.groupID, Equals, &groupID)
+	c.Assert(exec.workingDir, Equals, "/working/dir")
+}
+
+func (s *CheckersSuite) TestExecContextNoOverride(c *C) {
+	svcUserID, svcGroupID := 10, 20
+	config := mergeServiceContext(&plan.Plan{Services: map[string]*plan.Service{
+		"svc1": {
+			Name:        "svc1",
+			Environment: map[string]string{"k": "x", "a": "1"},
+			UserID:      &svcUserID,
+			User:        "svcuser",
+			GroupID:     &svcGroupID,
+			Group:       "svcgroup",
+			WorkingDir:  "/working/svc",
+		},
+	}}, &plan.Check{
+		Name: "exec",
+		Exec: &plan.ExecCheck{
+			Command:        "sleep 1",
+			ServiceContext: "svc1",
+		},
+	})
+	chk := newChecker(config)
+	exec, ok := chk.(*execChecker)
+	c.Assert(ok, Equals, true)
+	c.Check(exec.name, Equals, "exec")
+	c.Check(exec.command, Equals, "sleep 1")
+	c.Check(exec.environment, DeepEquals, map[string]string{"k": "x", "a": "1"})
+	c.Check(exec.userID, DeepEquals, &svcUserID)
+	c.Check(exec.user, Equals, "svcuser")
+	c.Check(exec.groupID, DeepEquals, &svcGroupID)
+	c.Check(exec.workingDir, Equals, "/working/svc")
+}
+
+func (s *CheckersSuite) TestExecContextOverride(c *C) {
+	userID, groupID := 100, 200
+	svcUserID, svcGroupID := 10, 20
+	config := mergeServiceContext(&plan.Plan{Services: map[string]*plan.Service{
+		"svc1": {
+			Name:        "svc1",
+			Environment: map[string]string{"k": "x", "a": "1"},
+			UserID:      &svcUserID,
+			User:        "svcuser",
+			GroupID:     &svcGroupID,
+			Group:       "svcgroup",
+			WorkingDir:  "/working/svc",
+		},
+	}}, &plan.Check{
+		Name: "exec",
+		Exec: &plan.ExecCheck{
+			Command:        "sleep 1",
+			ServiceContext: "svc1",
+			Environment:    map[string]string{"k": "v"},
+			UserID:         &userID,
+			User:           "user",
+			GroupID:        &groupID,
+			Group:          "group",
+			WorkingDir:     "/working/dir",
+		},
+	})
+	chk := newChecker(config)
+	exec, ok := chk.(*execChecker)
+	c.Assert(ok, Equals, true)
+	c.Check(exec.name, Equals, "exec")
+	c.Check(exec.command, Equals, "sleep 1")
+	c.Check(exec.environment, DeepEquals, map[string]string{"k": "v", "a": "1"})
+	c.Check(exec.userID, DeepEquals, &userID)
+	c.Check(exec.user, Equals, "user")
+	c.Check(exec.groupID, DeepEquals, &groupID)
+	c.Check(exec.workingDir, Equals, "/working/dir")
 }

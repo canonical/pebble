@@ -189,11 +189,14 @@ const (
 
 	// A custom notice reported via the Pebble client API or "pebble notify".
 	// The key and data fields are provided by the user. The key must be in
-	// the format "mydomain.io/mykey" to ensure well-namespaced notice keys.
+	// the format "example.com/path" to ensure well-namespaced notice keys.
 	CustomNotice NoticeType = "custom"
 
 	// Warnings are a subset of notices where the key is a human-readable
 	// warning message.
+	//
+	// NOTE: This isn't used yet. See comment at the top of
+	// internals/overlord/state/notices.go for more info.
 	WarningNotice NoticeType = "warning"
 )
 
@@ -395,6 +398,8 @@ func (s *State) unflattenNotices(flat []*Notice) {
 // It waits till there is at least one matching notice or the context is
 // cancelled. If there are existing notices that match the filter,
 // WaitNotices will return them immediately.
+//
+// Note that WaitNotices releases the state lock while waiting.
 func (s *State) WaitNotices(ctx context.Context, filter *NoticeFilter) ([]*Notice, error) {
 	s.reading()
 
@@ -423,7 +428,8 @@ func (s *State) WaitNotices(ctx context.Context, filter *NoticeFilter) ([]*Notic
 	defer stop()
 
 	for {
-		// Wait till a new notice occurs or a context is cancelled.
+		// Wait till a new notice occurs or a context is cancelled. Note that
+		// noticeCond wraps the state lock, so this is what unlocks it.
 		s.noticeCond.Wait()
 
 		// If this context is cancelled, return the error.

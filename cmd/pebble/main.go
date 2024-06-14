@@ -22,7 +22,7 @@ import (
 )
 
 func main() {
-	if err := cli.Run(); err != nil {
+	if err := cli.Run(nil); err != nil {
 		fmt.Fprintf(cli.Stderr, "error: %v\n", err)
 		os.Exit(1)
 	}

@@ -19,6 +19,8 @@ import (
 	"os"
 	"os/user"
 	"strconv"
+	"strings"
+	"syscall"
 
 	"github.com/canonical/pebble/internals/osutil/sys"
 )
@@ -27,6 +29,8 @@ var (
 	userCurrent     = user.Current
 	userLookup      = user.Lookup
 	userLookupGroup = user.LookupGroup
+
+	enoentMessage = syscall.ENOENT.Error()
 )
 
 // RealUser finds the user behind a sudo invocation when root, if applicable
@@ -54,6 +58,12 @@ func RealUser() (*user.User, error) {
 	real, err := user.Lookup(realName)
 	// can happen when sudo is used to enter a chroot (e.g. pbuilder)
 	if _, ok := err.(user.UnknownUserError); ok {
+		return cur, nil
+	}
+	// Workaround for https://github.com/golang/go/issues/67912, until our
+	// minimum Go version has a fix for that. In short, user.Lookup sometimes
+	// doesn't return UnknownUserError when it should.
+	if err != nil && strings.Contains(err.Error(), enoentMessage) {
 		return cur, nil
 	}
 	if err != nil {
@@ -90,6 +100,10 @@ func NormalizeUidGid(uid, gid *int, username, group string) (*int, *int, error) 
 	if username != "" {
 		u, err := userLookup(username)
 		if err != nil {
+			if strings.Contains(err.Error(), enoentMessage) {
+				// Better error message to work around https://github.com/golang/go/issues/67912
+				return nil, nil, user.UnknownUserError(username)
+			}
 			return nil, nil, err
 		}
 		n, _ := strconv.Atoi(u.Uid)
@@ -107,6 +121,10 @@ func NormalizeUidGid(uid, gid *int, username, group string) (*int, *int, error) 
 	if group != "" {
 		g, err := userLookupGroup(group)
 		if err != nil {
+			if strings.Contains(err.Error(), enoentMessage) {
+				// Better error message to work around https://github.com/golang/go/issues/67912
+				return nil, nil, user.UnknownGroupError(group)
+			}
 			return nil, nil, err
 		}
 		n, _ := strconv.Atoi(g.Gid)

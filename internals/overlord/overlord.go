@@ -28,11 +28,13 @@ import (
 	"github.com/canonical/x-go/randutil"
 	"gopkg.in/tomb.v2"
 
+	"github.com/canonical/pebble/cmd"
 	"github.com/canonical/pebble/internals/osutil"
 	"github.com/canonical/pebble/internals/overlord/checkstate"
 	"github.com/canonical/pebble/internals/overlord/cmdstate"
 	"github.com/canonical/pebble/internals/overlord/logstate"
 	"github.com/canonical/pebble/internals/overlord/patch"
+	"github.com/canonical/pebble/internals/overlord/planstate"
 	"github.com/canonical/pebble/internals/overlord/restart"
 	"github.com/canonical/pebble/internals/overlord/servstate"
 	"github.com/canonical/pebble/internals/overlord/state"
@@ -42,12 +44,14 @@ import (
 var (
 	ensureInterval = 5 * time.Minute
 	pruneInterval  = 10 * time.Minute
-	pruneWait      = 24 * time.Hour * 1
-	abortWait      = 24 * time.Hour * 7
+
+	// In snapd this is 24h, but that's too short in the context of Pebble.
+	pruneWait = 24 * time.Hour * 7
+
+	// In snapd this is 7d, but also increase that in the context of Pebble.
+	abortWait = 24 * time.Hour * 14
 
 	pruneMaxChanges = 500
-
-	defaultCachedDownloads = 5
 )
 
 var pruneTickerC = func(t *time.Ticker) <-chan time.Time {
@@ -92,6 +96,7 @@ type Overlord struct {
 	inited     bool
 	startedUp  bool
 	runner     *state.TaskRunner
+	planMgr    *planstate.PlanManager
 	serviceMgr *servstate.ServiceManager
 	commandMgr *cmdstate.CommandManager
 	checkMgr   *checkstate.CheckManager
@@ -116,7 +121,7 @@ func New(opts *Options) (*Overlord, error) {
 	if !osutil.IsDir(o.pebbleDir) {
 		return nil, fmt.Errorf("directory %q does not exist", o.pebbleDir)
 	}
-	statePath := filepath.Join(o.pebbleDir, ".pebble.state")
+	statePath := filepath.Join(o.pebbleDir, cmd.StateFile)
 
 	backend := &overlordStateBackend{
 		path:         statePath,
@@ -136,18 +141,27 @@ func New(opts *Options) (*Overlord, error) {
 	}
 	o.runner.AddOptionalHandler(matchAnyUnknownTask, handleUnknownTask, nil)
 
+	o.planMgr, err = planstate.NewManager(s, o.runner, o.pebbleDir)
+	if err != nil {
+		return nil, fmt.Errorf("cannot create plan manager: %w", err)
+	}
+	o.stateEng.AddManager(o.planMgr)
+
 	o.logMgr = logstate.NewLogManager()
 
 	o.serviceMgr, err = servstate.NewManager(
 		s,
 		o.runner,
-		o.pebbleDir,
 		opts.ServiceOutput,
 		opts.RestartHandler,
 		o.logMgr)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("cannot create service manager: %w", err)
 	}
+
+	// Tell service manager about plan updates.
+	o.planMgr.AddChangeListener(o.serviceMgr.PlanChanged)
+
 	o.stateEng.AddManager(o.serviceMgr)
 	// The log manager should be stopped after the service manager, because
 	// ServiceManager.Stop closes the service ring buffers, which signals to the
@@ -157,13 +171,14 @@ func New(opts *Options) (*Overlord, error) {
 	o.commandMgr = cmdstate.NewManager(o.runner)
 	o.stateEng.AddManager(o.commandMgr)
 
-	o.checkMgr = checkstate.NewManager()
+	o.checkMgr = checkstate.NewManager(s, o.runner)
+	o.stateEng.AddManager(o.checkMgr)
 
 	// Tell check manager about plan updates.
-	o.serviceMgr.NotifyPlanChanged(o.checkMgr.PlanChanged)
+	o.planMgr.AddChangeListener(o.checkMgr.PlanChanged)
 
 	// Tell log manager about plan updates.
-	o.serviceMgr.NotifyPlanChanged(o.logMgr.PlanChanged)
+	o.planMgr.AddChangeListener(o.logMgr.PlanChanged)
 
 	// Tell service manager about check failures.
 	o.checkMgr.NotifyCheckFailed(o.serviceMgr.CheckFailed)
@@ -171,7 +186,7 @@ func New(opts *Options) (*Overlord, error) {
 	if o.extension != nil {
 		extraManagers, err := o.extension.ExtraManagers(o)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("cannot add extra managers: %w", err)
 		}
 		for _, manager := range extraManagers {
 			o.stateEng.AddManager(manager)
@@ -182,6 +197,14 @@ func New(opts *Options) (*Overlord, error) {
 	// because TaskRunner runs all the tasks required by the managers that ran
 	// before it.
 	o.stateEng.AddManager(o.runner)
+
+	// Load the plan from the Pebble layers directory (which may be missing
+	// or have no layers, resulting in an empty plan), and propagate PlanChanged
+	// notifications to all notification subscribers.
+	err = o.planMgr.Load()
+	if err != nil {
+		return nil, fmt.Errorf("cannot load plan: %w", err)
+	}
 
 	return o, nil
 }
@@ -485,6 +508,12 @@ func (o *Overlord) CommandManager() *cmdstate.CommandManager {
 // checks under the overlord.
 func (o *Overlord) CheckManager() *checkstate.CheckManager {
 	return o.checkMgr
+}
+
+// PlanManager returns the plan manager responsible for managing the global
+// system configuration
+func (o *Overlord) PlanManager() *planstate.PlanManager {
+	return o.planMgr
 }
 
 // Fake creates an Overlord without any managers and with a backend

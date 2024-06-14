@@ -19,7 +19,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"os/user"
@@ -33,6 +32,7 @@ import (
 	"github.com/canonical/pebble/client"
 	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/plan"
+	"github.com/canonical/pebble/internals/reaper"
 )
 
 var _ = Suite(&execSuite{})
@@ -47,6 +47,11 @@ func (s *execSuite) SetUpSuite(c *C) {
 }
 
 func (s *execSuite) SetUpTest(c *C) {
+	err := reaper.Start()
+	if err != nil {
+		c.Fatalf("cannot start reaper: %v", err)
+	}
+
 	socketPath := c.MkDir() + ".pebble.socket"
 	daemon, err := New(&Options{
 		Dir:        c.MkDir(),
@@ -65,6 +70,11 @@ func (s *execSuite) SetUpTest(c *C) {
 func (s *execSuite) TearDownTest(c *C) {
 	err := s.daemon.Stop(nil)
 	c.Check(err, IsNil)
+
+	err = reaper.Stop()
+	if err != nil {
+		c.Fatalf("cannot stop reaper: %v", err)
+	}
 }
 
 // Some of these tests use the Go client for simplicity.
@@ -187,7 +197,7 @@ func (s *execSuite) TestTimeout(c *C) {
 
 func (s *execSuite) TestContextNoOverrides(c *C) {
 	dir := c.MkDir()
-	err := s.daemon.overlord.ServiceManager().AppendLayer(&plan.Layer{
+	err := s.daemon.overlord.PlanManager().AppendLayer(&plan.Layer{
 		Label: "layer1",
 		Services: map[string]*plan.Service{"svc1": {
 			Name:        "svc1",
@@ -209,7 +219,7 @@ func (s *execSuite) TestContextNoOverrides(c *C) {
 }
 
 func (s *execSuite) TestContextOverrides(c *C) {
-	err := s.daemon.overlord.ServiceManager().AppendLayer(&plan.Layer{
+	err := s.daemon.overlord.PlanManager().AppendLayer(&plan.Layer{
 		Label: "layer1",
 		Services: map[string]*plan.Service{"svc1": {
 			Name:        "svc1",
@@ -320,8 +330,8 @@ func (s *execSuite) TestSignal(c *C) {
 	opts := &client.ExecOptions{
 		Command: []string{"sleep", "1"},
 		Stdin:   strings.NewReader(""),
-		Stdout:  ioutil.Discard,
-		Stderr:  ioutil.Discard,
+		Stdout:  io.Discard,
+		Stderr:  io.Discard,
 	}
 	process, err := s.client.Exec(opts)
 	c.Assert(err, IsNil)
@@ -346,7 +356,7 @@ func (s *execSuite) TestStreaming(c *C) {
 		Command: []string{"cat"},
 		Stdin:   channelReader{stdinCh},
 		Stdout:  channelWriter{stdoutCh},
-		Stderr:  ioutil.Discard,
+		Stderr:  io.Discard,
 	}
 	process, err := s.client.Exec(opts)
 	c.Assert(err, IsNil)

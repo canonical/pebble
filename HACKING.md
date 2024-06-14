@@ -202,14 +202,33 @@ ok      github.com/canonical/pebble/cmd/pebble  0.165s
 ...
 ```
 
+## Docs
+
+We use [`sphinx`](https://www.sphinx-doc.org/en/master/) to build the docs with styles preconfigured by the [Canonical Documentation Starter Pack](https://github.com/canonical/sphinx-docs-starter-pack).
+
+### Building the Docs
+
+To build the docs, run `tox` under the `docs/` folder.
+
+### Pulling in the Latest Style Changes and Dependencies
+
+To pull in the latest style and dependencies from the starter pack, clone the [Canonical Documentation Starter Pack repository](https://github.com/canonical/sphinx-docs-starter-pack), and follow the README there. TL;DR:
+
+- Copy the content into the `docs/` folder.
+- Remove unnecessary files (like Makefile, cheat sheets, etc.)
+- Under the `docs/` folder, run `python3 build_requirements.py`. This generates the latest `requirements.txt` under the `.sphinx/` folder.
+- Under the `docs/` folder, run `tox -e docs-dep` to compile a pinned requirements file for tox environments.
 
 ## Creating a release
 
 To create a new tagged release, go to the [GitHub Releases page](https://github.com/canonical/pebble/releases) and:
 
-- Click "Create a new release"
-- Enter the version tag (eg: `v1.2.3`) and select "Create new tag: on publish"
-- Enter a release title: include the version tag and a short summary of the release
-- Write release notes: describe new features and bug fixes, and include a link to the full list of commits
+- Update `Version` in `cmd/version.go` to the version you're about to publish, for example `v1.9.0`. Push this to master (or open a PR to do so).
+- Click ["Draft a new release"](https://github.com/canonical/pebble/releases/new).
+- Enter the version tag (eg: `v1.9.0`) and select "Create new tag: on publish".
+- Enter a release title: include the version tag and a short summary of the release.
+- Write release notes: describe new features and bug fixes, and include a link to the full list of commits.
+- Click "Publish release".
+- Once the release GitHub Actions have finished, and the new [Snap](https://snapcraft.io/pebble) has been successfully built, update `Version` again to `v1.{next}.0-dev` (for example `v1.10.0-dev`).
 
-Binaries will be created and uploaded automatically to this release by the [binaries.yml](https://github.com/canonical/pebble/blob/master/.github/workflows/binaries.yml) GitHub Actions job.
+Binaries will be created and uploaded automatically to this release by the [binaries.yml](https://github.com/canonical/pebble/blob/master/.github/workflows/binaries.yml) GitHub Actions job. In addition, a new Snap version is built and uploaded to the [Snap Store](https://snapcraft.io/pebble).

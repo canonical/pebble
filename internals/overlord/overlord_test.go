@@ -18,7 +18,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"syscall"
@@ -68,7 +67,7 @@ func fakePruneTicker() (w *ticker, restore func()) {
 
 func (ovs *overlordSuite) SetUpTest(c *C) {
 	ovs.dir = c.MkDir()
-	ovs.statePath = filepath.Join(ovs.dir, ".pebble.state")
+	ovs.statePath = filepath.Join(ovs.dir, cmd.StateFile)
 }
 
 func (ovs *overlordSuite) TearDownTest(c *C) {
@@ -108,7 +107,7 @@ func (ovs *overlordSuite) TestNewWithGoodState(c *C) {
 		"last-lane-id": 0,
 		"last-notice-id": 0
 	}`, patch.Level, patch.Sublevel, cmd.Version))
-	err := ioutil.WriteFile(ovs.statePath, fakeState, 0600)
+	err := os.WriteFile(ovs.statePath, fakeState, 0600)
 	c.Assert(err, IsNil)
 
 	o, err := overlord.New(&overlord.Options{PebbleDir: ovs.dir})
@@ -136,7 +135,7 @@ func (ovs *overlordSuite) TestNewWithGoodState(c *C) {
 
 func (ovs *overlordSuite) TestNewWithInvalidState(c *C) {
 	fakeState := []byte(``)
-	err := ioutil.WriteFile(ovs.statePath, fakeState, 0600)
+	err := os.WriteFile(ovs.statePath, fakeState, 0600)
 	c.Assert(err, IsNil)
 
 	_, err = overlord.New(&overlord.Options{PebbleDir: ovs.dir})
@@ -155,7 +154,7 @@ func (ovs *overlordSuite) TestNewWithPatches(c *C) {
 	patch.Fake(1, 1, map[int][]patch.PatchFunc{1: {p, sp}})
 
 	fakeState := []byte(fmt.Sprintf(`{"data":{"patch-level":0, "patch-sublevel":0}}`))
-	err := ioutil.WriteFile(ovs.statePath, fakeState, 0600)
+	err := os.WriteFile(ovs.statePath, fakeState, 0600)
 	c.Assert(err, IsNil)
 
 	o, err := overlord.New(&overlord.Options{PebbleDir: ovs.dir})
@@ -960,7 +959,7 @@ func (ovs *overlordSuite) TestRequestRestartHandler(c *C) {
 
 func (ovs *overlordSuite) TestVerifyRebootNoPendingReboot(c *C) {
 	fakeState := []byte(fmt.Sprintf(`{"data":{"patch-level":%d,"patch-sublevel":%d,"some":"data","refresh-privacy-key":"0123456789ABCDEF"},"changes":null,"tasks":null,"last-change-id":0,"last-task-id":0,"last-lane-id":0}`, patch.Level, patch.Sublevel))
-	err := ioutil.WriteFile(ovs.statePath, fakeState, 0600)
+	err := os.WriteFile(ovs.statePath, fakeState, 0600)
 	c.Assert(err, IsNil)
 
 	rb := &testRestartHandler{}
@@ -973,7 +972,7 @@ func (ovs *overlordSuite) TestVerifyRebootNoPendingReboot(c *C) {
 
 func (ovs *overlordSuite) TestVerifyRebootOK(c *C) {
 	fakeState := []byte(fmt.Sprintf(`{"data":{"patch-level":%d,"patch-sublevel":%d,"some":"data","refresh-privacy-key":"0123456789ABCDEF","system-restart-from-boot-id":%q},"changes":null,"tasks":null,"last-change-id":0,"last-task-id":0,"last-lane-id":0}`, patch.Level, patch.Sublevel, "boot-id-prev"))
-	err := ioutil.WriteFile(ovs.statePath, fakeState, 0600)
+	err := os.WriteFile(ovs.statePath, fakeState, 0600)
 	c.Assert(err, IsNil)
 
 	rb := &testRestartHandler{}
@@ -986,7 +985,7 @@ func (ovs *overlordSuite) TestVerifyRebootOK(c *C) {
 
 func (ovs *overlordSuite) TestVerifyRebootOKButError(c *C) {
 	fakeState := []byte(fmt.Sprintf(`{"data":{"patch-level":%d,"patch-sublevel":%d,"some":"data","refresh-privacy-key":"0123456789ABCDEF","system-restart-from-boot-id":%q},"changes":null,"tasks":null,"last-change-id":0,"last-task-id":0,"last-lane-id":0}`, patch.Level, patch.Sublevel, "boot-id-prev"))
-	err := ioutil.WriteFile(ovs.statePath, fakeState, 0600)
+	err := os.WriteFile(ovs.statePath, fakeState, 0600)
 	c.Assert(err, IsNil)
 
 	e := errors.New("boom")
@@ -1003,7 +1002,7 @@ func (ovs *overlordSuite) TestVerifyRebootIsMissing(c *C) {
 	c.Assert(err, IsNil)
 
 	fakeState := []byte(fmt.Sprintf(`{"data":{"patch-level":%d,"patch-sublevel":%d,"some":"data","refresh-privacy-key":"0123456789ABCDEF","system-restart-from-boot-id":%q},"changes":null,"tasks":null,"last-change-id":0,"last-task-id":0,"last-lane-id":0}`, patch.Level, patch.Sublevel, curBootID))
-	err = ioutil.WriteFile(ovs.statePath, fakeState, 0600)
+	err = os.WriteFile(ovs.statePath, fakeState, 0600)
 	c.Assert(err, IsNil)
 
 	rb := &testRestartHandler{}
@@ -1019,7 +1018,7 @@ func (ovs *overlordSuite) TestVerifyRebootIsMissingError(c *C) {
 	c.Assert(err, IsNil)
 
 	fakeState := []byte(fmt.Sprintf(`{"data":{"patch-level":%d,"patch-sublevel":%d,"some":"data","refresh-privacy-key":"0123456789ABCDEF","system-restart-from-boot-id":%q},"changes":null,"tasks":null,"last-change-id":0,"last-task-id":0,"last-lane-id":0}`, patch.Level, patch.Sublevel, curBootID))
-	err = ioutil.WriteFile(ovs.statePath, fakeState, 0600)
+	err = os.WriteFile(ovs.statePath, fakeState, 0600)
 	c.Assert(err, IsNil)
 
 	e := errors.New("boom")

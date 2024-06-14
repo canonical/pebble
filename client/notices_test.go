@@ -28,7 +28,7 @@ import (
 
 func (cs *clientSuite) TestNotice(c *C) {
 	cs.rsp = `{"type": "sync", "result": {
-		"id":   "123",
+		"id": "123",
 		"user-id": 1000,
 		"type": "custom",
 		"key": "a.b/c",
@@ -119,7 +119,7 @@ func (cs *clientSuite) TestNoticesFilters(c *C) {
 	cs.rsp = `{"type": "sync", "result": []}`
 	uid := uint32(1000)
 	notices, err := cs.cli.Notices(&client.NoticesOptions{
-		Select: client.NoticesSelectAll,
+		Users:  client.NoticesUsersAll,
 		UserID: &uid,
 		Types:  []client.NoticeType{client.CustomNotice},
 		Keys:   []string{"foo.com/bar", "example.com/x"},
@@ -128,7 +128,7 @@ func (cs *clientSuite) TestNoticesFilters(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(cs.req.URL.Path, Equals, "/v1/notices")
 	c.Assert(cs.req.URL.Query(), DeepEquals, url.Values{
-		"select":  {"all"},
+		"users":   {"all"},
 		"user-id": {"1000"},
 		"types":   {"custom"},
 		"keys":    {"foo.com/bar", "example.com/x"},

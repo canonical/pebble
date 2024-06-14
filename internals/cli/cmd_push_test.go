@@ -19,7 +19,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"path"
@@ -99,11 +98,11 @@ func (s *PebbleSuite) TestPush(c *C) {
 	// Create temporary file
 	tempDir := c.MkDir()
 	filePath := filepath.Join(tempDir, "file.dat")
-	err := ioutil.WriteFile(filePath, []byte("Hello, world!"), 0755)
+	err := os.WriteFile(filePath, []byte("Hello, world!"), 0755)
 	c.Assert(err, IsNil)
 
 	args := []string{"push", filePath, "/tmp/file.bin"}
-	rest, err := cli.Parser(cli.Client()).ParseArgs(args)
+	rest, err := cli.ParserForTest().ParseArgs(args)
 	c.Assert(err, IsNil)
 	c.Assert(rest, HasLen, 0)
 	c.Check(s.Stdout(), Equals, "")
@@ -112,7 +111,7 @@ func (s *PebbleSuite) TestPush(c *C) {
 
 func (s *PebbleSuite) TestPushExtraArgs(c *C) {
 	args := []string{"push", "file.dat", "/tmp/file.bin", "extra", "args"}
-	_, err := cli.Parser(cli.Client()).ParseArgs(args)
+	_, err := cli.ParserForTest().ParseArgs(args)
 	c.Assert(err, Equals, cli.ErrExtraArgs)
 	c.Check(s.Stdout(), Equals, "")
 	c.Check(s.Stderr(), Equals, "")
@@ -120,7 +119,7 @@ func (s *PebbleSuite) TestPushExtraArgs(c *C) {
 
 func (s *PebbleSuite) TestPushFailsToOpen(c *C) {
 	args := []string{"push", "/non/existing/path", "/tmp/file.bin"}
-	_, err := cli.Parser(cli.Client()).ParseArgs(args)
+	_, err := cli.ParserForTest().ParseArgs(args)
 	c.Assert(err, Not(IsNil))
 	e, ok := err.(*os.PathError)
 	c.Assert(ok, Equals, true)
@@ -192,11 +191,11 @@ func (s *PebbleSuite) TestPushAPIFails(c *C) {
 	// Create temporary file
 	tempDir := c.MkDir()
 	filePath := filepath.Join(tempDir, "file.dat")
-	err := ioutil.WriteFile(filePath, []byte("Hello, world!"), 0755)
+	err := os.WriteFile(filePath, []byte("Hello, world!"), 0755)
 	c.Assert(err, IsNil)
 
 	args := []string{"push", "-m", "600", filePath, "/tmp/file.bin"}
-	rest, err := cli.Parser(cli.Client()).ParseArgs(args)
+	rest, err := cli.ParserForTest().ParseArgs(args)
 
 	clientErr, ok := err.(*client.Error)
 	c.Assert(ok, Equals, true)

@@ -17,15 +17,40 @@ package cli
 import (
 	"fmt"
 
+	"github.com/canonical/go-flags"
+
 	"github.com/canonical/pebble/client"
 )
 
-var RunMain = Run
+func RunMain() error {
+	return Run(RunOptionsForTest())
+}
 
-var ClientConfig = &clientConfig
+func RunOptionsForTest() *RunOptions {
+	pebbleDir, _ := getEnvPaths()
+	return &RunOptions{
+		ClientConfig: newClientConfig(),
+		PebbleDir:    pebbleDir,
+	}
+}
+
+var clientConfigBaseURL string
+
+func FakeClientConfigBaseURL(baseURL string) (restore func()) {
+	clientConfigBaseURL = baseURL
+	return func() {
+		clientConfigBaseURL = ""
+	}
+}
+
+func newClientConfig() *client.Config {
+	config := client.Config{BaseURL: clientConfigBaseURL}
+	_, config.Socket = getEnvPaths()
+	return &config
+}
 
 func Client() *client.Client {
-	cli, err := client.New(ClientConfig)
+	cli, err := client.New(newClientConfig())
 	if err != nil {
 		panic("cannot create client:" + err.Error())
 	}
@@ -43,6 +68,8 @@ var (
 	MaybePresentWarnings  = maybePresentWarnings
 
 	GetEnvPaths = getEnvPaths
+
+	MaybeCopyPebbleDir = maybeCopyPebbleDir
 )
 
 func FakeIsStdoutTTY(t bool) (restore func()) {
@@ -76,9 +103,19 @@ func PebbleMain() (exitCode int) {
 			}
 		}
 	}()
-	if err := Run(); err != nil {
+	if err := RunMain(); err != nil {
 		fmt.Fprintf(Stderr, "error: %v\n", err)
 		osExit(1)
 	}
 	return
+}
+
+func ParserForTest() *flags.Parser {
+	runOpts := RunOptionsForTest()
+
+	return Parser(&ParserOptions{
+		Client:     Client(),
+		SocketPath: runOpts.ClientConfig.Socket,
+		PebbleDir:  runOpts.PebbleDir,
+	})
 }

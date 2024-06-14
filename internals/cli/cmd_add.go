@@ -16,7 +16,7 @@ package cli
 
 import (
 	"fmt"
-	"io/ioutil"
+	"os"
 
 	"github.com/canonical/go-flags"
 
@@ -59,7 +59,7 @@ func (cmd *cmdAdd) Execute(args []string) error {
 	if len(args) > 0 {
 		return ErrExtraArgs
 	}
-	data, err := ioutil.ReadFile(cmd.Positional.LayerPath)
+	data, err := os.ReadFile(cmd.Positional.LayerPath)
 	if err != nil {
 		return err
 	}

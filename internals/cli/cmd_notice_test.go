@@ -48,7 +48,7 @@ func (s *PebbleSuite) TestNoticeID(c *C) {
 		}`)
 	})
 
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"notice", "123"})
+	rest, err := cli.ParserForTest().ParseArgs([]string{"notice", "123"})
 	c.Assert(err, IsNil)
 	c.Check(rest, HasLen, 0)
 	c.Check(s.Stdout(), Equals, `
@@ -82,7 +82,7 @@ func (s *PebbleSuite) TestNoticeIDNotFound(c *C) {
 		}`)
 	})
 
-	_, err := cli.Parser(cli.Client()).ParseArgs([]string{"notice", "123"})
+	_, err := cli.ParserForTest().ParseArgs([]string{"notice", "123"})
 	c.Assert(err, ErrorMatches, `cannot find notice with ID "123"`)
 	c.Check(s.Stdout(), Equals, "")
 	c.Check(s.Stderr(), Equals, "")
@@ -113,7 +113,7 @@ func (s *PebbleSuite) TestNoticeTypeKey(c *C) {
 		]}`)
 	})
 
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"notice", "custom", "a.b/c"})
+	rest, err := cli.ParserForTest().ParseArgs([]string{"notice", "custom", "a.b/c"})
 	c.Assert(err, IsNil)
 	c.Check(rest, HasLen, 0)
 	c.Check(s.Stdout(), Equals, `
@@ -155,7 +155,7 @@ func (s *PebbleSuite) TestNoticeTypeKeyUID(c *C) {
 		]}`)
 	})
 
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"notice", "--uid", "1001", "custom", "a.b/c"})
+	rest, err := cli.ParserForTest().ParseArgs([]string{"notice", "--uid", "1001", "custom", "a.b/c"})
 	c.Assert(err, IsNil)
 	c.Check(rest, HasLen, 0)
 	c.Check(s.Stdout(), Equals, `
@@ -186,7 +186,7 @@ func (s *PebbleSuite) TestNoticeTypeKeyNotFound(c *C) {
 			"result": []}`)
 	})
 
-	_, err := cli.Parser(cli.Client()).ParseArgs([]string{"notice", "custom", "a.b/c"})
+	_, err := cli.ParserForTest().ParseArgs([]string{"notice", "custom", "a.b/c"})
 	c.Assert(err, ErrorMatches, `cannot find custom notice with key "a.b/c"`)
 	c.Check(s.Stdout(), Equals, "")
 	c.Check(s.Stderr(), Equals, "")

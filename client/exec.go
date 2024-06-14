@@ -20,7 +20,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"time"
 
 	"github.com/canonical/pebble/internals/wsutil"
@@ -120,7 +119,7 @@ func (client *Client) Exec(opts *ExecOptions) (*ExecProcess, error) {
 	}
 	stdout := opts.Stdout
 	if stdout == nil {
-		stdout = ioutil.Discard
+		stdout = io.Discard
 	}
 
 	// Call the /v1/exec endpoint to start the command.

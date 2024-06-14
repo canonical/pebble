@@ -31,7 +31,7 @@ type NotifyOptions struct {
 	Type NoticeType
 
 	// Key is the notice's key. For "custom" notices, this must be in
-	// "domain.com/key" format.
+	// "example.com/path" format.
 	Key string
 
 	// Data are optional key=value pairs for this occurrence of the notice.
@@ -77,8 +77,8 @@ func (client *Client) Notify(opts *NotifyOptions) (string, error) {
 }
 
 type NoticesOptions struct {
-	// Select allows returning broader sets of notices.
-	Select NoticesSelect
+	// Users allows returning notices for all users.
+	Users NoticesUsers
 
 	// UserID, if set, includes only notices that have this user ID or are public.
 	UserID *uint32
@@ -93,10 +93,10 @@ type NoticesOptions struct {
 	After time.Time
 }
 
-type NoticesSelect string
+type NoticesUsers string
 
 const (
-	NoticesSelectAll NoticesSelect = "all"
+	NoticesUsersAll NoticesUsers = "all"
 )
 
 // Notice holds details of an event that was observed and reported either
@@ -122,9 +122,13 @@ type Notice struct {
 type NoticeType string
 
 const (
+	// Recorded whenever a change is updated: when it is first spawned or its
+	// status was updated. The key for change-update notices is the change ID.
+	ChangeUpdateNotice NoticeType = "change-update"
+
 	// A custom notice reported via the Pebble client API or "pebble notify".
 	// The key and data fields are provided by the user. The key must be in
-	// the format "mydomain.io/mykey" to ensure well-namespaced notice keys.
+	// the format "example.com/path" to ensure well-namespaced notice keys.
 	CustomNotice NoticeType = "custom"
 )
 
@@ -195,8 +199,8 @@ func makeNoticesQuery(opts *NoticesOptions) url.Values {
 	if opts == nil {
 		return query
 	}
-	if opts.Select != "" {
-		query.Add("select", string(opts.Select))
+	if opts.Users != "" {
+		query.Add("users", string(opts.Users))
 	}
 	if opts.UserID != nil {
 		query.Add("user-id", strconv.FormatUint(uint64(*opts.UserID), 10))

@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
 	"net/http"
 	"net/url"
@@ -153,6 +152,8 @@ type Client struct {
 	warningTimestamp time.Time
 
 	getWebsocket getWebsocketFunc
+
+	host string
 }
 
 type getWebsocketFunc func(url string) (clientWebsocket, error)
@@ -183,6 +184,7 @@ func New(config *Config) (*Client, error) {
 	client.getWebsocket = func(url string) (clientWebsocket, error) {
 		return getWebsocket(requester.Transport(), url)
 	}
+	client.host = requester.baseURL.Host
 
 	return client, nil
 }
@@ -192,7 +194,7 @@ func (client *Client) Requester() Requester {
 }
 
 func (client *Client) getTaskWebsocket(taskID, websocketID string) (clientWebsocket, error) {
-	url := fmt.Sprintf("ws://localhost/v1/tasks/%s/websocket/%s", taskID, websocketID)
+	url := fmt.Sprintf("ws://%s/v1/tasks/%s/websocket/%s", client.host, taskID, websocketID)
 	return client.getWebsocket(url)
 }
 
@@ -303,6 +305,7 @@ func (rq *defaultRequester) retry(ctx context.Context, method, urlpath string, q
 		case <-retry.C:
 			continue
 		case <-timeout:
+		case <-ctx.Done():
 		}
 		break
 	}
@@ -390,7 +393,7 @@ func decodeInto(reader io.Reader, v interface{}) error {
 	dec := json.NewDecoder(reader)
 	if err := dec.Decode(v); err != nil {
 		r := dec.Buffered()
-		buf, err1 := ioutil.ReadAll(r)
+		buf, err1 := io.ReadAll(r)
 		if err1 != nil {
 			buf = []byte(fmt.Sprintf("error reading buffered response body: %s", err1))
 		}

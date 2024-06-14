@@ -19,7 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
+	"io/fs"
 	"mime"
 	"mime/multipart"
 	"net/http"
@@ -44,25 +44,25 @@ func v1GetFiles(_ *Command, req *http.Request, _ *UserState) Response {
 	case "read":
 		paths := query["path"]
 		if len(paths) == 0 {
-			return statusBadRequest("must specify one or more paths")
+			return BadRequest("must specify one or more paths")
 		}
 		if req.Header.Get("Accept") != "multipart/form-data" {
-			return statusBadRequest(`must accept multipart/form-data`)
+			return BadRequest(`must accept multipart/form-data`)
 		}
 		return readFilesResponse{paths: paths}
 	case "list":
 		path := query.Get("path")
 		if path == "" {
-			return statusBadRequest("must specify path")
+			return BadRequest("must specify path")
 		}
 		pattern := query.Get("pattern")
 		itself := query.Get("itself")
 		if itself != "true" && itself != "false" && itself != "" {
-			return statusBadRequest(`itself parameter must be "true" or "false"`)
+			return BadRequest(`itself parameter must be "true" or "false"`)
 		}
 		return listFilesResponse(path, pattern, itself == "true")
 	default:
-		return statusBadRequest("invalid action %q", action)
+		return BadRequest("invalid action %q", action)
 	}
 }
 
@@ -283,7 +283,7 @@ func fileInfoToResult(fullPath string, info os.FileInfo, userCache, groupCache m
 
 func listFilesResponse(path, pattern string, itself bool) Response {
 	if !pathpkg.IsAbs(path) {
-		return statusBadRequest("path must be absolute, got %q", path)
+		return BadRequest("path must be absolute, got %q", path)
 	}
 	result, err := listFiles(path, pattern, itself)
 	if err != nil {
@@ -302,15 +302,15 @@ func listFiles(path, pattern string, itself bool) ([]fileInfoResult, error) {
 		return nil, err
 	}
 
-	var infos []os.FileInfo
+	var entries []os.DirEntry
 	var dir string
 	if !info.IsDir() || itself {
 		// Info about a single file (or directory entry itself).
-		infos = []os.FileInfo{info}
+		entries = []os.DirEntry{fs.FileInfoToDirEntry(info)}
 		dir = pathpkg.Dir(path)
 	} else {
 		// List an entire directory.
-		infos, err = ioutil.ReadDir(path)
+		entries, err = os.ReadDir(path)
 		if err != nil {
 			return nil, err
 		}
@@ -320,8 +320,8 @@ func listFiles(path, pattern string, itself bool) ([]fileInfoResult, error) {
 	result := make([]fileInfoResult, 0) // want "no results" to be [], not nil
 	userCache := make(map[int]string)
 	groupCache := make(map[int]string)
-	for _, info = range infos {
-		name := info.Name()
+	for _, entry := range entries {
+		name := entry.Name()
 		matched := true
 		if pattern != "" {
 			matched, err = pathpkg.Match(pattern, name)
@@ -331,6 +331,10 @@ func listFiles(path, pattern string, itself bool) ([]fileInfoResult, error) {
 		}
 		if matched {
 			fullPath := pathpkg.Join(dir, name)
+			info, err = entry.Info()
+			if err != nil {
+				return nil, err
+			}
 			result = append(result, fileInfoToResult(fullPath, info, userCache, groupCache))
 		}
 	}
@@ -341,14 +345,14 @@ func v1PostFiles(_ *Command, req *http.Request, _ *UserState) Response {
 	contentType := req.Header.Get("Content-Type")
 	mediaType, params, err := mime.ParseMediaType(contentType)
 	if err != nil {
-		return statusBadRequest("invalid Content-Type %q", contentType)
+		return BadRequest("invalid Content-Type %q", contentType)
 	}
 
 	switch mediaType {
 	case "multipart/form-data":
 		boundary := params["boundary"]
 		if len(boundary) < minBoundaryLength {
-			return statusBadRequest("invalid boundary %q", boundary)
+			return BadRequest("invalid boundary %q", boundary)
 		}
 		return writeFiles(req.Body, boundary)
 	case "application/json":
@@ -359,7 +363,7 @@ func v1PostFiles(_ *Command, req *http.Request, _ *UserState) Response {
 		}
 		decoder := json.NewDecoder(req.Body)
 		if err := decoder.Decode(&payload); err != nil {
-			return statusBadRequest("cannot decode request body: %v", err)
+			return BadRequest("cannot decode request body: %v", err)
 		}
 		switch payload.Action {
 		case "make-dirs":
@@ -367,12 +371,12 @@ func v1PostFiles(_ *Command, req *http.Request, _ *UserState) Response {
 		case "remove":
 			return removePaths(payload.Paths)
 		case "write":
-			return statusBadRequest(`must use multipart with "write" action`)
+			return BadRequest(`must use multipart with "write" action`)
 		default:
-			return statusBadRequest("invalid action %q", payload.Action)
+			return BadRequest("invalid action %q", payload.Action)
 		}
 	default:
-		return statusBadRequest("invalid media type %q", mediaType)
+		return BadRequest("invalid media type %q", mediaType)
 	}
 }
 
@@ -393,10 +397,10 @@ func writeFiles(body io.Reader, boundary string) Response {
 	mr := multipart.NewReader(body, boundary)
 	part, err := mr.NextPart()
 	if err != nil {
-		return statusBadRequest("cannot read request metadata: %v", err)
+		return BadRequest("cannot read request metadata: %v", err)
 	}
 	if part.FormName() != "request" {
-		return statusBadRequest(`metadata field name must be "request", got %q`, part.FormName())
+		return BadRequest(`metadata field name must be "request", got %q`, part.FormName())
 	}
 
 	// Decode metadata about files to write.
@@ -406,13 +410,13 @@ func writeFiles(body io.Reader, boundary string) Response {
 	}
 	decoder := json.NewDecoder(part)
 	if err := decoder.Decode(&payload); err != nil {
-		return statusBadRequest("cannot decode request metadata: %v", err)
+		return BadRequest("cannot decode request metadata: %v", err)
 	}
 	if payload.Action != "write" {
-		return statusBadRequest(`multipart action must be "write", got %q`, payload.Action)
+		return BadRequest(`multipart action must be "write", got %q`, payload.Action)
 	}
 	if len(payload.Files) == 0 {
-		return statusBadRequest("must specify one or more files")
+		return BadRequest("must specify one or more files")
 	}
 	infos := make(map[string]writeFilesItem)
 	for _, file := range payload.Files {
@@ -426,15 +430,15 @@ func writeFiles(body io.Reader, boundary string) Response {
 			break
 		}
 		if err != nil {
-			return statusBadRequest("cannot read file part %d: %v", i, err)
+			return BadRequest("cannot read file part %d: %v", i, err)
 		}
 		if part.FormName() != "files" {
-			return statusBadRequest(`field name must be "files", got %q`, part.FormName())
+			return BadRequest(`field name must be "files", got %q`, part.FormName())
 		}
 		path := multipartFilename(part)
 		info, ok := infos[path]
 		if !ok {
-			return statusBadRequest("no metadata for path %q", path)
+			return BadRequest("no metadata for path %q", path)
 		}
 		errors[path] = writeFile(info, part)
 		part.Close()
@@ -497,17 +501,35 @@ func writeFile(item writeFilesItem, source io.Reader) error {
 
 func mkdirAllUserGroup(path string, perm os.FileMode, uid, gid *int) error {
 	if uid != nil && gid != nil {
-		return mkdirAllChown(path, perm, sys.UserID(*uid), sys.GroupID(*gid))
+		return mkdir(path, perm, &osutil.MkdirOptions{
+			MakeParents: true,
+			ExistOK:     true,
+			Chmod:       true,
+			Chown:       true,
+			UserID:      sys.UserID(*uid),
+			GroupID:     sys.GroupID(*gid),
+		})
 	} else {
-		return mkdirAllChown(path, perm, osutil.NoChown, osutil.NoChown)
+		return mkdir(path, perm, &osutil.MkdirOptions{
+			MakeParents: true,
+			ExistOK:     true,
+			Chmod:       true,
+		})
 	}
 }
 
 func mkdirUserGroup(path string, perm os.FileMode, uid, gid *int) error {
 	if uid != nil && gid != nil {
-		return mkdirChown(path, perm, sys.UserID(*uid), sys.GroupID(*gid))
+		return mkdir(path, perm, &osutil.MkdirOptions{
+			Chmod:   true,
+			Chown:   true,
+			UserID:  sys.UserID(*uid),
+			GroupID: sys.GroupID(*gid),
+		})
 	} else {
-		return mkdirChown(path, perm, osutil.NoChown, osutil.NoChown)
+		return mkdir(path, perm, &osutil.MkdirOptions{
+			Chmod: true,
+		})
 	}
 }
 
@@ -573,8 +595,7 @@ func makeDir(dir makeDirsItem) error {
 var (
 	atomicWriteChown = osutil.AtomicWriteChown
 	normalizeUidGid  = osutil.NormalizeUidGid
-	mkdirChown       = osutil.MkdirChown
-	mkdirAllChown    = osutil.MkdirAllChown
+	mkdir            = osutil.Mkdir
 )
 
 // Removing paths

@@ -162,7 +162,9 @@ func (r *TaskRunner) AddCleanup(kind string, cleanup HandlerFunc) {
 	r.cleanups[kind] = cleanup
 }
 
-// SetBlocked sets a predicate function to decide whether to block a task from running based on the current running tasks. It can be used to control task serialisation.
+// SetBlocked sets a predicate function to decide whether to block a task from
+// running based on the current running tasks. It can be used to control task
+// serialisation.
 func (r *TaskRunner) SetBlocked(pred func(t *Task, running []*Task) bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -170,7 +172,10 @@ func (r *TaskRunner) SetBlocked(pred func(t *Task, running []*Task) bool) {
 	r.blocked = []blockedFunc{pred}
 }
 
-// AddBlocked adds a predicate function to decide whether to block a task from running based on the current running tasks. It can be used to control task serialisation. All added predicates are considered in turn until one returns true, or none.
+// AddBlocked adds a predicate function to decide whether to block a task from
+// running based on the current running tasks. It can be used to control task
+// serialisation. All added predicates are considered in turn until one
+// returns true, or none.
 func (r *TaskRunner) AddBlocked(pred func(t *Task, running []*Task) bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -291,7 +296,7 @@ func (r *TaskRunner) run(t *Task) {
 			t.SetStatus(ErrorStatus)
 			t.Errorf("%s", err)
 			// ensure the error is available in the global log too
-			logger.Noticef("[change %s %q task] failed: %v", t.Change().ID(), t.Summary(), err)
+			logger.Noticef("Change %s task (%s) failed: %v", t.Change().ID(), t.Summary(), err)
 			if r.taskErrorCallback != nil {
 				r.taskErrorCallback(err)
 			}

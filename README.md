@@ -181,6 +181,9 @@ pebble run
 ...
 ```
 
+To initialise the `$PEBBLE` directory with the contents of another, in a one time copy, set the `PEBBLE_COPY_ONCE` environment
+variable to the source directory. This will only copy the contents if the target directory, `$PEBBLE`, is empty.
+
 ### Viewing, starting, and stopping services
 
 You can view the status of one or more services by using `pebble services`:
@@ -211,7 +214,7 @@ To start specific services, type `pebble start` followed by one or more service 
 $ pebble start srv1 srv2  # start two services (and any dependencies)
 ```
 
-When starting a service, Pebble executes the service's `command`, and waits 1 second to ensure the command doesn't exit too quickly. Assuming the command doesn't exit within that time window, the start is considered successful, otherwise `pebble start` will exit with an error.
+When starting a service, Pebble executes the service's `command`, and waits 1 second to ensure the command doesn't exit too quickly. Assuming the command doesn't exit within that time window, the start is considered successful, otherwise `pebble start` will exit with an error, regardless of the `on-failure` value.
 
 Similarly, to stop specific services, use `pebble stop` followed by one or more service names:
 
@@ -219,7 +222,7 @@ Similarly, to stop specific services, use `pebble stop` followed by one or more 
 $ pebble stop srv1        # stop one service
 ```
 
-When stopping a service, Pebble sends SIGTERM to the service's process group, and waits up to 5 seconds. If the command hasn't exited within that time window, Pebble sends SIGKILL to the service's process group and waits up to 5 more seconds. If the command exits within that 10-second time window, the stop is considered successful, otherwise `pebble stop` will exit with an error.
+When stopping a service, Pebble sends SIGTERM to the service's process group, and waits up to 5 seconds. If the command hasn't exited within that time window, Pebble sends SIGKILL to the service's process group and waits up to 5 more seconds. If the command exits within that 10-second time window, the stop is considered successful, otherwise `pebble stop` will exit with an error, regardless of the `on-failure` value.
 
 ### Updating and restarting services
 
@@ -325,13 +328,22 @@ You can view check status using the `pebble checks` command. This reports the ch
 
 ```
 $ pebble checks
-Check   Level  Status  Failures
-up      alive  up      0/1
-online  ready  down    1/3
-test    -      down    42/3
+Check   Level  Status  Failures  Change
+up      alive  up      0/1       10
+online  ready  down    1/3       13 (dial tcp 127.0.0.1:8000: connect: connection refused)
+test    -      down    42/3      14 (Get "http://localhost:8080/": dial t... run "pebble tasks 14" for more)
 ```
 
 The "Failures" column shows the current number of failures since the check started failing, a slash, and the configured threshold.
+
+The "Change" column shows the change ID of the [change](#changes-and-tasks) driving the check, along with a (possibly-truncated) error message from the last error. Running `pebble tasks <change-id>` will show the change's task, including the last 10 error messages in the task log.
+
+Health checks are implemented using two change kinds:
+
+* `perform-check`: drives the check while it's "up". The change finishes when the number of failures hits the threshold, at which point the change switches to Error status and a `recover-check` change is spawned. Each check failure records a task log.
+* `recover-check`: drives the check while it's "down". The change finishes when the check starts succeeding again, at which point the change switches to Done status and a new `perform-check` change is spawned. Again, each check failure records a task log.
+
+#### Health endpoint
 
 If the `--http` option was given when starting `pebble run`, Pebble exposes a `/v1/health` HTTP endpoint that allows a user to query the health of configured checks, optionally filtered by check level with the query string `?level=<level>` This endpoint returns an HTTP 200 status if the checks are healthy, HTTP 502 otherwise.
 
@@ -513,9 +525,12 @@ These notice types are currently available:
 
 <!-- TODO: * `change-update`: recorded whenever a change is first spawned or its status is updated. The key for this type of notice is the change ID, and the notice's data includes the change `kind`. -->
 
-* `custom`: a custom client notice reported via `pebble notify`. The key and any data is provided by the user. The key must be in the format `mydomain.io/mykey` to ensure well-namespaced notice keys.
+* `custom`: a custom client notice reported via `pebble notify`. The key and any data is provided by the user. The key must be in the format `example.com/path` to ensure well-namespaced notice keys.
 
-<!-- TODO: * `warning`: Pebble warnings are implemented in terms of notices. The key for this type of notice is the human-readable warning message. -->
+<!-- TODO: * `warning`: Pebble warnings are implemented in terms of notices. The key for this type of notice is the human-readable warning message.
+
+See comment at the top of internals/overlord/state/warning.go for more info.
+-->
 
 To record `custom` notices, use `pebble notify` -- the notice user ID will be set to the client's user ID:
 

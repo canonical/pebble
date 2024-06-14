@@ -61,7 +61,7 @@ func (r logsResponse) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 	followStr := query.Get("follow")
 	if followStr != "" && followStr != "true" && followStr != "false" {
-		response := statusBadRequest(`follow parameter must be "true" or "false"`)
+		response := BadRequest(`follow parameter must be "true" or "false"`)
 		response.ServeHTTP(w, req)
 		return
 	}
@@ -72,7 +72,7 @@ func (r logsResponse) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	if nStr != "" {
 		n, err := strconv.Atoi(nStr)
 		if err != nil || n < -1 {
-			response := statusBadRequest("n must be -1, 0, or a positive integer")
+			response := BadRequest("n must be -1, 0, or a positive integer")
 			response.ServeHTTP(w, req)
 			return
 		}
@@ -87,7 +87,7 @@ func (r logsResponse) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	if len(services) == 0 {
 		infos, err := r.svcMgr.Services(nil)
 		if err != nil {
-			response := statusInternalError("cannot fetch services: %v", err)
+			response := InternalError("cannot fetch services: %v", err)
 			response.ServeHTTP(w, req)
 			return
 		}
@@ -99,7 +99,7 @@ func (r logsResponse) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 	itsByName, err := r.svcMgr.ServiceLogs(services, numLogs)
 	if err != nil {
-		response := statusInternalError("cannot fetch log iterators: %v", err)
+		response := InternalError("cannot fetch log iterators: %v", err)
 		response.ServeHTTP(w, req)
 		return
 	}

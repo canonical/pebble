@@ -1,4 +1,4 @@
-// Copyright (c) 2023 Canonical Ltd
+// Copyright (c) 2023-2024 Canonical Ltd
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License version 3 as
@@ -157,7 +157,7 @@ func (s *apiSuite) TestNoticesFilterMultipleTypes(c *C) {
 	addNotice(c, st, nil, state.WarningNotice, "danger", nil)
 	st.Unlock()
 
-	req, err := http.NewRequest("GET", "/v1/notices?types=change-update&types=warning", nil)
+	req, err := http.NewRequest("GET", "/v1/notices?types=change-update&types=warning,warning", nil)
 	c.Assert(err, IsNil)
 	req.RemoteAddr = "pid=100;uid=1000;socket=;"
 	noticesCmd := apiCmd("/v1/notices")
@@ -404,7 +404,7 @@ func (s *apiSuite) TestNoticesUserIDNonAdminFilter(c *C) {
 	c.Assert(ok, Equals, true)
 }
 
-func (s *apiSuite) TestNoticesSelectAdminFilter(c *C) {
+func (s *apiSuite) TestNoticesUsersAdminFilter(c *C) {
 	s.daemon(c)
 	restore := fakeSysGetuid(0)
 	defer restore()
@@ -425,8 +425,8 @@ func (s *apiSuite) TestNoticesSelectAdminFilter(c *C) {
 
 	noticesCmd := apiCmd("/v1/notices")
 
-	// Test that admin user may get all notices with --select=all filter
-	reqUrl := "/v1/notices?select=all"
+	// Test that admin user may get all notices with --users=all filter
+	reqUrl := "/v1/notices?users=all"
 	req, err := http.NewRequest("GET", reqUrl, nil)
 	c.Check(err, IsNil)
 	req.RemoteAddr = "pid=100;uid=0;socket=;"
@@ -452,7 +452,7 @@ func (s *apiSuite) TestNoticesSelectAdminFilter(c *C) {
 	c.Assert(n["key"], Equals, "danger")
 }
 
-func (s *apiSuite) TestNoticesSelectNonAdminFilter(c *C) {
+func (s *apiSuite) TestNoticesUsersNonAdminFilter(c *C) {
 	s.daemon(c)
 	restore := fakeSysGetuid(0)
 	defer restore()
@@ -465,8 +465,8 @@ func (s *apiSuite) TestNoticesSelectNonAdminFilter(c *C) {
 
 	noticesCmd := apiCmd("/v1/notices")
 
-	// Test that non-admin user may not use --select filter
-	reqUrl := "/v2/notices?select=all"
+	// Test that non-admin user may not use --users filter
+	reqUrl := "/v2/notices?users=all"
 	req, err := http.NewRequest("GET", reqUrl, nil)
 	c.Check(err, IsNil)
 	req.RemoteAddr = "pid=100;uid=1000;socket=;"
@@ -609,16 +609,16 @@ func (s *apiSuite) TestNoticesInvalidUserIDLow(c *C) {
 	s.testNoticesBadRequest(c, "user-id=-1", `invalid "user-id" filter:.*`)
 }
 
-func (s *apiSuite) TestNoticesInvalidSelect(c *C) {
+func (s *apiSuite) TestNoticesInvalidUsers(c *C) {
 	restore := fakeSysGetuid(0)
 	defer restore()
-	s.testNoticesBadRequest(c, "select=foo", `invalid "select" filter:.*`)
+	s.testNoticesBadRequest(c, "users=foo", `invalid "users" filter:.*`)
 }
 
-func (s *apiSuite) TestNoticesInvalidUserIDWithSelect(c *C) {
+func (s *apiSuite) TestNoticesInvalidUserIDWithUsers(c *C) {
 	restore := fakeSysGetuid(0)
 	defer restore()
-	s.testNoticesBadRequest(c, "user-id=1234&select=all", `cannot use both "select" and "user-id" parameters`)
+	s.testNoticesBadRequest(c, "user-id=1234&users=all", `cannot use both "users" and "user-id" parameters`)
 }
 
 func (s *apiSuite) TestNoticesInvalidAfter(c *C) {

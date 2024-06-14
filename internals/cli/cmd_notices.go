@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/signal"
 	"strconv"
 	"time"
 
@@ -37,12 +38,14 @@ needs to be acknowledged again.
 type cmdNotices struct {
 	client *client.Client
 
+	socketPath string
+
 	timeMixin
-	Select  client.NoticesSelect `long:"select"`
-	UID     *uint32              `long:"uid"`
-	Type    []client.NoticeType  `long:"type"`
-	Key     []string             `long:"key"`
-	Timeout time.Duration        `long:"timeout"`
+	Users   client.NoticesUsers `long:"users"`
+	UID     *uint32             `long:"uid"`
+	Type    []client.NoticeType `long:"type"`
+	Key     []string            `long:"key"`
+	Timeout time.Duration       `long:"timeout"`
 }
 
 func init() {
@@ -51,14 +54,17 @@ func init() {
 		Summary:     cmdNoticesSummary,
 		Description: cmdNoticesDescription,
 		ArgsHelp: merge(timeArgsHelp, map[string]string{
-			"--select":  "Show all notices with any user ID (admin only; cannot be used with --uid)",
-			"--uid":     "Only list notices with this user ID (admin only; cannot be used with --select)",
+			"--users":   "Show all notices with any user ID (admin only; cannot be used with --uid)",
+			"--uid":     "Only list notices with this user ID (admin only; cannot be used with --users)",
 			"--type":    "Only list notices of this type (multiple allowed)",
 			"--key":     "Only list notices with this key (multiple allowed)",
 			"--timeout": "Wait up to this duration for matching notices to arrive",
 		}),
 		New: func(opts *CmdOptions) flags.Commander {
-			return &cmdNotices{client: opts.Client}
+			return &cmdNotices{
+				client:     opts.Client,
+				socketPath: opts.SocketPath,
+			}
 		},
 	})
 }
@@ -68,12 +74,12 @@ func (cmd *cmdNotices) Execute(args []string) error {
 		return ErrExtraArgs
 	}
 
-	state, err := loadCLIState()
+	state, err := loadCLIState(cmd.socketPath)
 	if err != nil {
 		return fmt.Errorf("cannot load CLI state: %w", err)
 	}
 	options := client.NoticesOptions{
-		Select: cmd.Select,
+		Users:  cmd.Users,
 		UserID: cmd.UID,
 		Types:  cmd.Type,
 		Keys:   cmd.Key,
@@ -82,7 +88,8 @@ func (cmd *cmdNotices) Execute(args []string) error {
 
 	var notices []*client.Notice
 	if cmd.Timeout != 0 {
-		ctx := notifyContext(context.Background(), os.Interrupt)
+		ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
+		defer cancel()
 		notices, err = cmd.client.WaitNotices(ctx, cmd.Timeout, &options)
 	} else {
 		notices, err = cmd.client.Notices(&options)
@@ -126,7 +133,7 @@ func (cmd *cmdNotices) Execute(args []string) error {
 	}
 
 	state.NoticesLastListed = notices[len(notices)-1].LastRepeated
-	err = saveCLIState(state)
+	err = saveCLIState(cmd.socketPath, state)
 	if err != nil {
 		return fmt.Errorf("cannot save CLI state: %w", err)
 	}

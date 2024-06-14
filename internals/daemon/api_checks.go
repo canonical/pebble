@@ -28,6 +28,7 @@ type checkInfo struct {
 	Status    string `json:"status"`
 	Failures  int    `json:"failures,omitempty"`
 	Threshold int    `json:"threshold"`
+	ChangeID  string `json:"change-id,omitempty"`
 }
 
 func v1GetChecks(c *Command, r *http.Request, _ *UserState) Response {
@@ -36,7 +37,7 @@ func v1GetChecks(c *Command, r *http.Request, _ *UserState) Response {
 	switch level {
 	case plan.UnsetLevel, plan.AliveLevel, plan.ReadyLevel:
 	default:
-		return statusBadRequest(`level must be "alive" or "ready"`)
+		return BadRequest(`level must be "alive" or "ready"`)
 	}
 
 	names := strutil.MultiCommaSeparatedList(query["names"])
@@ -44,7 +45,7 @@ func v1GetChecks(c *Command, r *http.Request, _ *UserState) Response {
 	checkMgr := c.d.overlord.CheckManager()
 	checks, err := checkMgr.Checks()
 	if err != nil {
-		return statusInternalError("%v", err)
+		return InternalError("%v", err)
 	}
 
 	infos := []checkInfo{} // if no checks, return [] instead of null
@@ -58,6 +59,7 @@ func v1GetChecks(c *Command, r *http.Request, _ *UserState) Response {
 				Status:    string(check.Status),
 				Failures:  check.Failures,
 				Threshold: check.Threshold,
+				ChangeID:  check.ChangeID,
 			}
 			infos = append(infos, info)
 		}

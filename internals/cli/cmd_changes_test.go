@@ -31,7 +31,7 @@ import (
 )
 
 func (s *PebbleSuite) TestChangesExtraArgs(c *check.C) {
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"changes", "extra", "args"})
+	rest, err := cli.ParserForTest().ParseArgs([]string{"changes", "extra", "args"})
 	c.Assert(err, check.Equals, cli.ErrExtraArgs)
 	c.Check(rest, check.HasLen, 1)
 	c.Check(s.Stdout(), check.Equals, "")
@@ -39,7 +39,7 @@ func (s *PebbleSuite) TestChangesExtraArgs(c *check.C) {
 }
 
 func (s *PebbleSuite) TestChangesAllDigitsSuggestion(c *check.C) {
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"changes", "42"})
+	rest, err := cli.ParserForTest().ParseArgs([]string{"changes", "42"})
 	c.Assert(err, check.ErrorMatches, `'pebble changes' command expects a service name, try 'pebble tasks 42'`)
 	c.Check(rest, check.HasLen, 1)
 	c.Check(s.Stdout(), check.Equals, "")
@@ -54,7 +54,7 @@ func (s *PebbleSuite) TestNoChanges(c *check.C) {
 		fmt.Fprintln(w, `{"type":"sync", "result": []}"`)
 	})
 
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"changes", "svc1"})
+	rest, err := cli.ParserForTest().ParseArgs([]string{"changes", "svc1"})
 	c.Assert(err, check.ErrorMatches, "no changes found")
 	c.Check(rest, check.HasLen, 1)
 	c.Check(s.Stdout(), check.Equals, "")
@@ -69,7 +69,7 @@ func (s *PebbleSuite) TestGetChangesFails(c *check.C) {
 		fmt.Fprintln(w, `{"type":"error", "result": {"message": "could not foo"}}"`)
 	})
 
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"changes", "svc1"})
+	rest, err := cli.ParserForTest().ParseArgs([]string{"changes", "svc1"})
 	c.Assert(err, check.ErrorMatches, "could not foo")
 	c.Check(rest, check.HasLen, 1)
 	c.Check(s.Stdout(), check.Equals, "")
@@ -91,7 +91,7 @@ one +Do +2016-03-21 +2016-03-21 +...
 two +Do +2016-04-21 +2016-04-21 +...
 `
 
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"changes"})
+	rest, err := cli.ParserForTest().ParseArgs([]string{"changes"})
 	c.Assert(err, check.IsNil)
 	c.Check(rest, check.HasLen, 0)
 	c.Check(s.Stdout(), check.Matches, expectedChanges)
@@ -107,7 +107,7 @@ func (s *PebbleSuite) TestChangesUnknownMaintenance(c *check.C) {
 		fmt.Fprintln(w, json)
 	})
 
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"changes"})
+	rest, err := cli.ParserForTest().ParseArgs([]string{"changes"})
 	c.Assert(err, check.ErrorMatches, "unknown maintenance reason")
 	c.Check(rest, check.HasLen, 1)
 	c.Check(s.Stdout(), check.Matches, "")
@@ -140,7 +140,7 @@ func (s *PebbleSuite) TestChangeSimple(c *check.C) {
 	expectedChange := `(?ms)Status +Spawn +Ready +Summary
 Do +2016-04-21T01:02:03Z +- +some summary
 `
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"tasks", "--abs-time", "42"})
+	rest, err := cli.ParserForTest().ParseArgs([]string{"tasks", "--abs-time", "42"})
 	c.Assert(err, check.IsNil)
 	c.Assert(rest, check.HasLen, 0)
 	c.Check(s.Stdout(), check.Matches, expectedChange)
@@ -154,7 +154,7 @@ func (s *PebbleSuite) TestChangeSimpleFails(c *check.C) {
 		fmt.Fprintln(w, `{"type": "error", "result": {"message": "could not bar"}}`)
 	})
 
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"tasks", "--abs-time", "42"})
+	rest, err := cli.ParserForTest().ParseArgs([]string{"tasks", "--abs-time", "42"})
 	c.Assert(err, check.ErrorMatches, "could not bar")
 	c.Assert(rest, check.HasLen, 1)
 	c.Check(s.Stdout(), check.Matches, "")
@@ -175,7 +175,7 @@ func (s *PebbleSuite) TestChangeSimpleRebooting(c *check.C) {
 		n++
 	})
 
-	_, err := cli.Parser(cli.Client()).ParseArgs([]string{"tasks", "42"})
+	_, err := cli.ParserForTest().ParseArgs([]string{"tasks", "42"})
 	c.Assert(err, check.IsNil)
 	c.Check(s.Stderr(), check.Equals, "WARNING: Pebble is about to reboot the system\n")
 }
@@ -187,7 +187,7 @@ func (s *PebbleSuite) TestChangeSimpleUnknownMaintenance(c *check.C) {
 		fmt.Fprintln(w, strings.Replace(fakeChangeJSON, `"type": "sync"`, `"type": "sync", "maintenance": {"kind": "dachshund", "message": "unknown maintenance reason"}`, 1))
 	})
 
-	_, err := cli.Parser(cli.Client()).ParseArgs([]string{"tasks", "42"})
+	_, err := cli.ParserForTest().ParseArgs([]string{"tasks", "42"})
 	c.Assert(err, check.ErrorMatches, "unknown maintenance reason")
 	c.Check(s.Stderr(), check.Equals, "")
 }
@@ -247,13 +247,13 @@ func (s *PebbleSuite) TestTasksLast(c *check.C) {
 	expectedChange := `(?ms)Status +Spawn +Ready +Summary
 Do +2016-04-21T01:02:03Z +- +some summary
 `
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"tasks", "--abs-time", "--last=install"})
+	rest, err := cli.ParserForTest().ParseArgs([]string{"tasks", "--abs-time", "--last=install"})
 	c.Assert(err, check.IsNil)
 	c.Assert(rest, check.DeepEquals, []string{})
 	c.Check(s.Stdout(), check.Matches, expectedChange)
 	c.Check(s.Stderr(), check.Equals, "")
 
-	_, err = cli.Parser(cli.Client()).ParseArgs([]string{"tasks", "--abs-time", "--last=foobar"})
+	_, err = cli.ParserForTest().ParseArgs([]string{"tasks", "--abs-time", "--last=foobar"})
 	c.Assert(err, check.NotNil)
 	c.Assert(err, check.ErrorMatches, `no changes of type "foobar" found`)
 }
@@ -274,13 +274,13 @@ func (s *PebbleSuite) TestTasksLastQuestionmark(c *check.C) {
 		}
 	})
 	for i := 0; i < 2; i++ {
-		rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"tasks", "--last=foobar?"})
+		rest, err := cli.ParserForTest().ParseArgs([]string{"tasks", "--last=foobar?"})
 		c.Assert(err, check.IsNil)
 		c.Assert(rest, check.DeepEquals, []string{})
 		c.Check(s.Stdout(), check.Matches, "")
 		c.Check(s.Stderr(), check.Equals, "")
 
-		_, err = cli.Parser(cli.Client()).ParseArgs([]string{"tasks", "--last=foobar"})
+		_, err = cli.ParserForTest().ParseArgs([]string{"tasks", "--last=foobar"})
 		if i == 0 {
 			c.Assert(err, check.ErrorMatches, `no changes found`)
 		} else {
@@ -292,11 +292,11 @@ func (s *PebbleSuite) TestTasksLastQuestionmark(c *check.C) {
 }
 
 func (s *PebbleSuite) TestTasksSyntaxError(c *check.C) {
-	_, err := cli.Parser(cli.Client()).ParseArgs([]string{"tasks", "--abs-time", "--last=install", "42"})
+	_, err := cli.ParserForTest().ParseArgs([]string{"tasks", "--abs-time", "--last=install", "42"})
 	c.Assert(err, check.NotNil)
 	c.Assert(err, check.ErrorMatches, `cannot use change ID and type together`)
 
-	_, err = cli.Parser(cli.Client()).ParseArgs([]string{"tasks"})
+	_, err = cli.ParserForTest().ParseArgs([]string{"tasks"})
 	c.Assert(err, check.NotNil)
 	c.Assert(err, check.ErrorMatches, `please provide change ID or type with --last=<type>`)
 }
@@ -326,7 +326,7 @@ func (s *PebbleSuite) TestChangeProgress(c *check.C) {
 
 		n++
 	})
-	rest, err := cli.Parser(cli.Client()).ParseArgs([]string{"tasks", "--abs-time", "42"})
+	rest, err := cli.ParserForTest().ParseArgs([]string{"tasks", "--abs-time", "42"})
 	c.Assert(err, check.IsNil)
 	c.Assert(rest, check.DeepEquals, []string{})
 	c.Check(s.Stdout(), check.Matches, `(?ms)Status +Spawn +Ready +Summary

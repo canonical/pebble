@@ -31,8 +31,7 @@ var (
 )
 
 type waitMixin struct {
-	NoWait    bool `long:"no-wait"`
-	skipAbort bool
+	NoWait bool `long:"no-wait"`
 }
 
 var waitArgsHelp = map[string]string{
@@ -47,16 +46,29 @@ func (wmx waitMixin) wait(cli *client.Client, id string) (*client.Change, error)
 		return nil, noWait
 	}
 
+	change, err := Wait(cli, id)
+	if err != nil {
+		return nil, err
+	}
+	return change, nil
+}
+
+// Wait polls the progress of a change and displays a progress bar.
+//
+// This function blocks until the change is done or fails.
+// If the change has numeric progress information, the information is
+// displayed as a progress bar.
+func Wait(cli *client.Client, changeID string) (*client.Change, error) {
 	// Intercept sigint
 	sigs := make(chan os.Signal, 2)
 	signal.Notify(sigs, os.Interrupt)
 	go func() {
 		sig := <-sigs
 		// sig is nil if sigs was closed
-		if sig == nil || wmx.skipAbort {
+		if sig == nil {
 			return
 		}
-		_, err := cli.Abort(id)
+		_, err := cli.Abort(changeID)
 		if err != nil {
 			fmt.Fprintf(Stderr, err.Error()+"\n")
 		}
@@ -77,7 +89,7 @@ func (wmx waitMixin) wait(cli *client.Client, id string) (*client.Change, error)
 	lastLog := map[string]string{}
 	for {
 		var rebootingErr error
-		chg, err := cli.Change(id)
+		chg, err := cli.Change(changeID)
 		if err != nil {
 			// A client.Error means we were able to communicate with
 			// the server (got an answer).

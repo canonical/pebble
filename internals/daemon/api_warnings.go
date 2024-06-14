@@ -30,10 +30,10 @@ func v1AckWarnings(c *Command, r *http.Request, _ *UserState) Response {
 	}
 	decoder := json.NewDecoder(r.Body)
 	if err := decoder.Decode(&op); err != nil {
-		return statusBadRequest("cannot decode request body into warnings operation: %v", err)
+		return BadRequest("cannot decode request body into warnings operation: %v", err)
 	}
 	if op.Action != "okay" {
-		return statusBadRequest("unknown warning action %q", op.Action)
+		return BadRequest("unknown warning action %q", op.Action)
 	}
 	st := c.d.overlord.State()
 	st.Lock()
@@ -53,7 +53,7 @@ func v1GetWarnings(c *Command, r *http.Request, _ *UserState) Response {
 	case "pending", "":
 		all = false
 	default:
-		return statusBadRequest("invalid select parameter: %q", sel)
+		return BadRequest("invalid select parameter: %q", sel)
 	}
 
 	st := c.d.overlord.State()

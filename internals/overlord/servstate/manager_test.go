@@ -18,7 +18,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"os/user"
@@ -34,7 +33,6 @@ import (
 
 	"golang.org/x/sys/unix"
 	. "gopkg.in/check.v1"
-	"gopkg.in/yaml.v3"
 
 	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/overlord/checkstate"
@@ -42,6 +40,7 @@ import (
 	"github.com/canonical/pebble/internals/overlord/servstate"
 	"github.com/canonical/pebble/internals/overlord/state"
 	"github.com/canonical/pebble/internals/plan"
+	"github.com/canonical/pebble/internals/reaper"
 	"github.com/canonical/pebble/internals/servicelog"
 	"github.com/canonical/pebble/internals/testutil"
 )
@@ -118,58 +117,12 @@ type S struct {
 	runner     *state.TaskRunner
 	stopDaemon chan restart.RestartType
 
-	donePath string
+	donePath       string
+	plan           *plan.Plan
+	planPropagated bool
 }
 
 var _ = Suite(&S{})
-
-var planLayer1 = `
-services:
-    test1:
-        override: replace
-        command: /bin/sh -c "echo test1; %s; sleep 10"
-        startup: enabled
-        requires:
-            - test2
-        before:
-            - test2
-
-    test2:
-        override: replace
-        command: /bin/sh -c "echo test2; %s; sleep 10"
-`
-
-var planLayer2 = `
-services:
-    test3:
-        override: replace
-        command: some-bad-command
-
-    test4:
-        override: replace
-        command: echo -e 'too-fast\nsecond line'
-
-    test5:
-        override: replace
-        command: /bin/sh -c "sleep 10"
-        user: nobody
-        group: nogroup
-`
-
-var planLayer3 = `
-services:
-    test2:
-        override: merge
-        command: /bin/sh -c "echo test2b; sleep 10"
-`
-
-var planLayer4 = `
-services:
-    test6:
-        override: merge
-        command: /bin/bash -c "trap 'sleep 10' SIGTERM; sleep 20;"
-        kill-delay: 300ms
-`
 
 var setLoggerOnce sync.Once
 
@@ -181,6 +134,11 @@ func (s *S) SetUpSuite(c *C) {
 }
 
 func (s *S) SetUpTest(c *C) {
+	err := reaper.Start()
+	if err != nil {
+		c.Fatalf("cannot start reaper: %v", err)
+	}
+
 	s.BaseTest.SetUpTest(c)
 
 	s.dir = c.MkDir()
@@ -202,26 +160,84 @@ func (s *S) SetUpTest(c *C) {
 	s.AddCleanup(restore)
 	restore = servstate.FakeKillFailDelay(shortKillDelay, shortFailDelay)
 	s.AddCleanup(restore)
+
+	s.plan = &plan.Plan{}
+	s.planPropagated = false
+	s.manager = nil
 }
 
 func (s *S) TearDownTest(c *C) {
-	// Make sure all services are stopped
-	s.stopRunningServices(c)
-	// Kill the reaper
-	s.manager.Stop()
+	// Not all tests starts a service manager
+	if s.manager != nil {
+		if s.planPropagated {
+			// Only stop if PlanChanged was ever called on the
+			// service manager.
+			s.stopRunningServices(c)
+		}
+		s.manager.Stop()
+	}
 	// General test cleanup
 	s.BaseTest.TearDownTest(c)
+
+	err := reaper.Stop()
+	if err != nil {
+		c.Fatalf("cannot stop reaper: %v", err)
+	}
 }
 
+// TestPlanLayer and other plan snippets in this test package use the done
+// check mechanism to have a predictable way to know when the expected service
+// side effect (e.g. stdout or stderr) can be checked. This is required
+// because the service manager can only tell when the service started, not
+// when the expected result has been achieved. The done check barrier is
+// inserted by adding the {{.NotifyDoneCheck}} placeholder in the
+// service command sequence, at the point where the expected side effect
+// will be observed by the test result checker.
+var testPlanLayer = `
+services:
+    test1:
+        override: replace
+        command: /bin/sh -c "echo test1; {{.NotifyDoneCheck}}; sleep 10"
+        startup: enabled
+        requires:
+            - test2
+        before:
+            - test2
+
+    test2:
+        override: replace
+        command: /bin/sh -c "echo test2; {{.NotifyDoneCheck}}; sleep 10"
+
+    test3:
+        override: replace
+        command: some-bad-command
+
+    test4:
+        override: replace
+        command: echo -e 'too-fast\nsecond line'
+
+    test5:
+        override: replace
+        command: /bin/sh -c "sleep 10"
+        user: nobody
+        group: nogroup
+`
+
 func (s *S) TestDefaultServiceNames(c *C) {
-	s.setupDefaultServiceManager(c)
+	s.newServiceManager(c)
+	s.planAddLayer(c, testPlanLayer)
+	s.planChanged(c)
+
 	services, err := s.manager.DefaultServiceNames()
 	c.Assert(err, IsNil)
 	c.Assert(services, DeepEquals, []string{"test1", "test2"})
 }
 
 func (s *S) TestStartStopServices(c *C) {
-	s.setupDefaultServiceManager(c)
+	s.newServiceManager(c)
+	s.planAddLayer(c, testPlanLayer)
+	s.planChanged(c)
+
 	s.startTestServices(c, true)
 
 	if c.Failed() {
@@ -232,7 +248,10 @@ func (s *S) TestStartStopServices(c *C) {
 }
 
 func (s *S) TestStartStopServicesIdempotency(c *C) {
-	s.setupDefaultServiceManager(c)
+	s.newServiceManager(c)
+	s.planAddLayer(c, testPlanLayer)
+	s.planChanged(c)
+
 	s.startTestServices(c, true)
 	if c.Failed() {
 		return
@@ -254,8 +273,9 @@ func (s *S) TestStartStopServicesIdempotency(c *C) {
 }
 
 func (s *S) TestStopTimeout(c *C) {
-	s.setupDefaultServiceManager(c)
-	layer := parseLayer(c, 0, "layer99", `
+	s.newServiceManager(c)
+	s.planAddLayer(c, testPlanLayer)
+	s.planAddLayer(c, `
 services:
     test9:
         override: merge
@@ -266,11 +286,11 @@ services:
         command: /bin/bash -c "sleep 20;"
         kill-delay: 2h
 `)
-	err := s.manager.AppendLayer(layer)
+	s.planChanged(c)
+
+	_, _, err := s.manager.Replan()
 	c.Assert(err, IsNil)
-	_, _, err = s.manager.Replan()
-	c.Assert(err, IsNil)
-	s.startServices(c, []string{"test9"}, 1)
+	s.startServices(c, []string{"test9"})
 	s.waitUntilService(c, "test9", func(service *servstate.ServiceInfo) bool {
 		return service.Current == servstate.StatusActive
 	})
@@ -278,20 +298,27 @@ services:
 }
 
 func (s *S) TestKillDelayIsUsed(c *C) {
-	s.setupDefaultServiceManager(c)
-	layer4 := parseLayer(c, 0, "layer4", planLayer4)
-	err := s.manager.AppendLayer(layer4)
-	c.Assert(err, IsNil)
-	_, _, err = s.manager.Replan()
+	s.newServiceManager(c)
+	s.planAddLayer(c, testPlanLayer)
+	s.planAddLayer(c, `
+services:
+    test6:
+        override: merge
+        command: /bin/bash -c "trap 'sleep 10' SIGTERM; sleep 20;"
+        kill-delay: 300ms
+`)
+	s.planChanged(c)
+
+	_, _, err := s.manager.Replan()
 	c.Assert(err, IsNil)
 
-	s.startServices(c, []string{"test6"}, 1)
+	s.startServices(c, []string{"test6"})
 	s.waitUntilService(c, "test6", func(service *servstate.ServiceInfo) bool {
 		return service.Current == servstate.StatusActive
 	})
 
 	startTime := time.Now()
-	chg := s.stopServices(c, []string{"test6"}, 1)
+	chg := s.stopServices(c, []string{"test6"})
 	s.st.Lock()
 	c.Check(chg.Status(), Equals, state.DoneStatus, Commentf("Error: %v", chg.Err()))
 	s.st.Unlock()
@@ -305,16 +332,22 @@ func (s *S) TestKillDelayIsUsed(c *C) {
 }
 
 func (s *S) TestReplanServices(c *C) {
-	s.setupDefaultServiceManager(c)
-	s.startTestServices(c, true)
+	s.newServiceManager(c)
+	s.planAddLayer(c, testPlanLayer)
+	s.planChanged(c)
 
+	s.startTestServices(c, true)
 	if c.Failed() {
 		return
 	}
 
-	layer := parseLayer(c, 0, "layer3", planLayer3)
-	err := s.manager.CombineLayer(layer)
-	c.Assert(err, IsNil)
+	s.planAddLayer(c, `
+services:
+    test2:
+        override: merge
+        command: /bin/sh -c "echo test2b; sleep 10"
+`)
+	s.planChanged(c)
 
 	stops, starts, err := s.manager.Replan()
 	c.Assert(err, IsNil)
@@ -325,7 +358,10 @@ func (s *S) TestReplanServices(c *C) {
 }
 
 func (s *S) TestReplanUpdatesConfig(c *C) {
-	s.setupDefaultServiceManager(c)
+	s.newServiceManager(c)
+	s.planAddLayer(c, testPlanLayer)
+	s.planChanged(c)
+
 	s.startTestServices(c, true)
 	defer s.stopTestServices(c)
 
@@ -337,18 +373,17 @@ func (s *S) TestReplanUpdatesConfig(c *C) {
 	command := config.Command
 
 	// Add a layer and override a couple of values.
-	layer := parseLayer(c, 0, "layer", `
+	s.planAddLayer(c, `
 services:
     test2:
         override: merge
         summary: A summary!
         on-success: ignore
 `)
-	err := s.manager.AppendLayer(layer)
-	c.Assert(err, IsNil)
+	s.planChanged(c)
 
 	// Call Replan and ensure the ServiceManager's config has updated.
-	_, _, err = s.manager.Replan()
+	_, _, err := s.manager.Replan()
 	c.Assert(err, IsNil)
 	config = s.manager.Config("test2")
 	c.Assert(config, NotNil)
@@ -358,20 +393,22 @@ services:
 }
 
 func (s *S) TestStopStartUpdatesConfig(c *C) {
-	s.setupDefaultServiceManager(c)
+	s.newServiceManager(c)
+	s.planAddLayer(c, testPlanLayer)
+	s.planChanged(c)
+
 	s.startTestServices(c, true)
 	defer s.stopTestServices(c)
 
 	// Add a layer and override a couple of values.
-	layer := parseLayer(c, 0, "layer", `
+	s.planAddLayer(c, `
 services:
     test2:
         override: merge
         summary: A summary!
         on-success: ignore
 `)
-	err := s.manager.AppendLayer(layer)
-	c.Assert(err, IsNil)
+	s.planChanged(c)
 
 	// Call Stop and Start and ensure the ServiceManager's config has updated.
 	s.stopTestServices(c)
@@ -383,7 +420,10 @@ services:
 }
 
 func (s *S) TestServiceLogs(c *C) {
-	s.setupDefaultServiceManager(c)
+	s.newServiceManager(c)
+	s.planAddLayer(c, testPlanLayer)
+	s.planChanged(c)
+
 	outputs := map[string]string{
 		"test1": `2.* \[test1\] test1\n`,
 		"test2": `2.* \[test2\] test2\n`,
@@ -397,8 +437,11 @@ func (s *S) TestServiceLogs(c *C) {
 }
 
 func (s *S) TestStartBadCommand(c *C) {
-	s.setupDefaultServiceManager(c)
-	chg := s.startServices(c, []string{"test3"}, 1)
+	s.newServiceManager(c)
+	s.planAddLayer(c, testPlanLayer)
+	s.planChanged(c)
+
+	chg := s.startServices(c, []string{"test3"})
 
 	s.st.Lock()
 	c.Check(chg.Status(), Equals, state.ErrorStatus)
@@ -410,7 +453,8 @@ func (s *S) TestStartBadCommand(c *C) {
 }
 
 func (s *S) TestCurrentUserGroup(c *C) {
-	s.setupEmptyServiceManager(c)
+	s.newServiceManager(c)
+	s.planAddLayer(c, testPlanLayer)
 
 	current, err := user.Current()
 	c.Assert(err, IsNil)
@@ -418,31 +462,40 @@ func (s *S) TestCurrentUserGroup(c *C) {
 	c.Assert(err, IsNil)
 
 	outputPath := filepath.Join(c.MkDir(), "output")
-	layer := parseLayer(c, 0, "layer", fmt.Sprintf(`
+	layer := `
 services:
     usrtest:
         override: replace
-        command: /bin/sh -c "id -n -u >%s; sync; %s; sleep %g"
+        command: /bin/sh -c "id -n -u >%s; {{.NotifyDoneCheck}}; sleep %g"
         user: %s
         group: %s
-`, outputPath, s.insertDoneCheck(c, "usrtest"), shortOkayDelay.Seconds()+0.01, current.Username, group.Name))
-	err = s.manager.AppendLayer(layer)
-	c.Assert(err, IsNil)
+`
+	s.planAddLayer(c, fmt.Sprintf(
+		layer,
+		outputPath,
+		shortOkayDelay.Seconds()+0.01,
+		current.Username,
+		group.Name,
+	))
+	s.planChanged(c)
 
-	chg := s.startServices(c, []string{"usrtest"}, 1)
+	chg := s.startServices(c, []string{"usrtest"})
 	s.st.Lock()
 	c.Assert(chg.Err(), IsNil)
 	s.st.Unlock()
 
 	s.waitForDoneCheck(c, "usrtest")
 
-	output, err := ioutil.ReadFile(outputPath)
+	output, err := os.ReadFile(outputPath)
 	c.Assert(err, IsNil)
 	c.Check(string(output), Equals, current.Username+"\n")
 }
 
 func (s *S) TestUserGroupFails(c *C) {
-	s.setupDefaultServiceManager(c)
+	s.newServiceManager(c)
+	s.planAddLayer(c, testPlanLayer)
+	s.planChanged(c)
+
 	// Test with non-current user and group will fail due to permission issues
 	// (unless running as root)
 	if os.Getuid() == 0 {
@@ -458,7 +511,7 @@ func (s *S) TestUserGroupFails(c *C) {
 	})
 	defer restore()
 
-	chg := s.startServices(c, []string{"test5"}, 1)
+	chg := s.startServices(c, []string{"test5"})
 
 	s.st.Lock()
 	c.Check(chg.Status(), Equals, state.ErrorStatus)
@@ -481,7 +534,9 @@ func (s *S) TestUserGroupFails(c *C) {
 
 // See .github/workflows/tests.yml for how to run this test as root.
 func (s *S) TestUserGroup(c *C) {
-	s.setupDefaultServiceManager(c)
+	s.newServiceManager(c)
+	s.planAddLayer(c, testPlanLayer)
+
 	if os.Getuid() != 0 {
 		c.Skip("requires running as root")
 	}
@@ -492,23 +547,27 @@ func (s *S) TestUserGroup(c *C) {
 	}
 
 	// Add layer with a service that sets user and group.
-	layer := parseLayer(c, 0, "layer", fmt.Sprintf(`
+	layer := `
 services:
     usrgrp:
         override: merge
         command: /bin/sh -c "whoami; echo user=$USER home=$HOME; sleep 10"
         user: %s
         group: %s
-`, username, group))
-	err := s.manager.AppendLayer(layer)
-	c.Assert(err, IsNil)
+`
+	s.planAddLayer(c, fmt.Sprintf(
+		layer,
+		username,
+		group,
+	))
+	s.planChanged(c)
 
 	// Override HOME and USER to ensure service exec updates them.
 	os.Setenv("HOME", "x")
 	os.Setenv("USER", "y")
 
 	// Start service and ensure it has enough time to write to log.
-	chg := s.startServices(c, []string{"usrgrp"}, 1)
+	chg := s.startServices(c, []string{"usrgrp"})
 	s.waitUntilService(c, "usrgrp", func(svc *servstate.ServiceInfo) bool {
 		return svc.Current == servstate.StatusActive
 	})
@@ -522,8 +581,11 @@ services:
 }
 
 func (s *S) TestStartFastExitCommand(c *C) {
-	s.setupDefaultServiceManager(c)
-	chg := s.startServices(c, []string{"test4"}, 1)
+	s.newServiceManager(c)
+	s.planAddLayer(c, testPlanLayer)
+	s.planChanged(c)
+
+	chg := s.startServices(c, []string{"test4"})
 
 	s.st.Lock()
 	c.Check(chg.Status(), Equals, state.ErrorStatus)
@@ -537,268 +599,11 @@ func (s *S) TestStartFastExitCommand(c *C) {
 	c.Assert(svc.Current, Equals, servstate.StatusInactive)
 }
 
-func (s *S) TestPlan(c *C) {
-	s.setupDefaultServiceManager(c)
-	expected := fmt.Sprintf(`
-services:
-    test1:
-        startup: enabled
-        override: replace
-        command: /bin/sh -c "echo test1; %s; sleep 10"
-        before:
-            - test2
-        requires:
-            - test2
-    test2:
-        override: replace
-        command: /bin/sh -c "echo test2; %s; sleep 10"
-    test3:
-        override: replace
-        command: some-bad-command
-    test4:
-        override: replace
-        command: echo -e 'too-fast\nsecond line'
-    test5:
-        override: replace
-        command: /bin/sh -c "sleep 10"
-        user: nobody
-        group: nogroup
-`[1:], s.insertDoneCheck(c, "test1"), s.insertDoneCheck(c, "test2"))
-	c.Assert(planYAML(c, s.manager), Equals, expected)
-}
-
-func (s *S) TestAppendLayer(c *C) {
-	s.setupEmptyServiceManager(c)
-
-	// Append a layer when there are no layers.
-	layer := parseLayer(c, 0, "label1", `
-services:
-    svc1:
-        override: replace
-        command: /bin/sh
-`)
-	err := s.manager.AppendLayer(layer)
-	c.Assert(err, IsNil)
-	c.Assert(layer.Order, Equals, 1)
-	c.Assert(planYAML(c, s.manager), Equals, `
-services:
-    svc1:
-        override: replace
-        command: /bin/sh
-`[1:])
-	s.planLayersHasLen(c, s.manager, 1)
-
-	// Try to append a layer when that label already exists.
-	layer = parseLayer(c, 0, "label1", `
-services:
-    svc1:
-        override: foobar
-        command: /bin/bar
-`)
-	err = s.manager.AppendLayer(layer)
-	c.Assert(err.(*servstate.LabelExists).Label, Equals, "label1")
-	c.Assert(planYAML(c, s.manager), Equals, `
-services:
-    svc1:
-        override: replace
-        command: /bin/sh
-`[1:])
-	s.planLayersHasLen(c, s.manager, 1)
-
-	// Append another layer on top.
-	layer = parseLayer(c, 0, "label2", `
-services:
-    svc1:
-        override: replace
-        command: /bin/bash
-`)
-	err = s.manager.AppendLayer(layer)
-	c.Assert(err, IsNil)
-	c.Assert(layer.Order, Equals, 2)
-	c.Assert(planYAML(c, s.manager), Equals, `
-services:
-    svc1:
-        override: replace
-        command: /bin/bash
-`[1:])
-	s.planLayersHasLen(c, s.manager, 2)
-
-	// Append a layer with a different service.
-	layer = parseLayer(c, 0, "label3", `
-services:
-    svc2:
-        override: replace
-        command: /bin/foo
-`)
-	err = s.manager.AppendLayer(layer)
-	c.Assert(err, IsNil)
-	c.Assert(layer.Order, Equals, 3)
-	c.Assert(planYAML(c, s.manager), Equals, `
-services:
-    svc1:
-        override: replace
-        command: /bin/bash
-    svc2:
-        override: replace
-        command: /bin/foo
-`[1:])
-	s.planLayersHasLen(c, s.manager, 3)
-}
-
-func (s *S) TestCombineLayer(c *C) {
-	s.setupEmptyServiceManager(c)
-
-	// "Combine" layer with no layers should just append.
-	layer := parseLayer(c, 0, "label1", `
-services:
-    svc1:
-        override: replace
-        command: /bin/sh
-`)
-	err := s.manager.CombineLayer(layer)
-	c.Assert(err, IsNil)
-	c.Assert(layer.Order, Equals, 1)
-	c.Assert(planYAML(c, s.manager), Equals, `
-services:
-    svc1:
-        override: replace
-        command: /bin/sh
-`[1:])
-	s.planLayersHasLen(c, s.manager, 1)
-
-	// Combine layer with different label should just append.
-	layer = parseLayer(c, 0, "label2", `
-services:
-    svc2:
-        override: replace
-        command: /bin/foo
-`)
-	err = s.manager.CombineLayer(layer)
-	c.Assert(err, IsNil)
-	c.Assert(layer.Order, Equals, 2)
-	c.Assert(planYAML(c, s.manager), Equals, `
-services:
-    svc1:
-        override: replace
-        command: /bin/sh
-    svc2:
-        override: replace
-        command: /bin/foo
-`[1:])
-	s.planLayersHasLen(c, s.manager, 2)
-
-	// Combine layer with first layer.
-	layer = parseLayer(c, 0, "label1", `
-services:
-    svc1:
-        override: replace
-        command: /bin/bash
-`)
-	err = s.manager.CombineLayer(layer)
-	c.Assert(err, IsNil)
-	c.Assert(layer.Order, Equals, 1)
-	c.Assert(planYAML(c, s.manager), Equals, `
-services:
-    svc1:
-        override: replace
-        command: /bin/bash
-    svc2:
-        override: replace
-        command: /bin/foo
-`[1:])
-	s.planLayersHasLen(c, s.manager, 2)
-
-	// Combine layer with second layer.
-	layer = parseLayer(c, 0, "label2", `
-services:
-    svc2:
-        override: replace
-        command: /bin/bar
-`)
-	err = s.manager.CombineLayer(layer)
-	c.Assert(err, IsNil)
-	c.Assert(layer.Order, Equals, 2)
-	c.Assert(planYAML(c, s.manager), Equals, `
-services:
-    svc1:
-        override: replace
-        command: /bin/bash
-    svc2:
-        override: replace
-        command: /bin/bar
-`[1:])
-	s.planLayersHasLen(c, s.manager, 2)
-
-	// One last append for good measure.
-	layer = parseLayer(c, 0, "label3", `
-services:
-    svc1:
-        override: replace
-        command: /bin/a
-    svc2:
-        override: replace
-        command: /bin/b
-`)
-	err = s.manager.CombineLayer(layer)
-	c.Assert(err, IsNil)
-	c.Assert(layer.Order, Equals, 3)
-	c.Assert(planYAML(c, s.manager), Equals, `
-services:
-    svc1:
-        override: replace
-        command: /bin/a
-    svc2:
-        override: replace
-        command: /bin/b
-`[1:])
-	s.planLayersHasLen(c, s.manager, 3)
-}
-
-func (s *S) TestSetServiceArgs(c *C) {
-	s.setupEmptyServiceManager(c)
-
-	// Append a layer with a few services having default args.
-	layer := parseLayer(c, 0, "base-layer", `
-services:
-    svc1:
-        override: replace
-        command: foo [ --bar ]
-    svc2:
-        override: replace
-        command: foo
-    svc3:
-        override: replace
-        command: foo
-`)
-	err := s.manager.AppendLayer(layer)
-	c.Assert(err, IsNil)
-	c.Assert(layer.Order, Equals, 1)
-	s.planLayersHasLen(c, s.manager, 1)
-
-	// Set arguments to services.
-	serviceArgs := map[string][]string{
-		"svc1": {"-abc", "--xyz"},
-		"svc2": {"--bar"},
-	}
-	err = s.manager.SetServiceArgs(serviceArgs)
-	c.Assert(err, IsNil)
-	c.Assert(planYAML(c, s.manager), Equals, `
-services:
-    svc1:
-        override: replace
-        command: foo [ -abc --xyz ]
-    svc2:
-        override: replace
-        command: foo [ --bar ]
-    svc3:
-        override: replace
-        command: foo
-`[1:])
-	s.planLayersHasLen(c, s.manager, 2)
-}
-
 func (s *S) TestServices(c *C) {
-	s.setupDefaultServiceManager(c)
+	s.newServiceManager(c)
+	s.planAddLayer(c, testPlanLayer)
+	s.planChanged(c)
+
 	started := time.Now()
 	services, err := s.manager.Services(nil)
 	c.Assert(err, IsNil)
@@ -818,7 +623,7 @@ func (s *S) TestServices(c *C) {
 	})
 
 	// Start a service and ensure it's marked active
-	s.startServices(c, []string{"test2"}, 1)
+	s.startServices(c, []string{"test2"})
 
 	services, err = s.manager.Services(nil)
 	c.Assert(err, IsNil)
@@ -834,33 +639,37 @@ func (s *S) TestServices(c *C) {
 }
 
 func (s *S) TestEnvironment(c *C) {
-	s.setupDefaultServiceManager(c)
+	s.newServiceManager(c)
+	s.planAddLayer(c, testPlanLayer)
+
 	// Setup new state and add "envtest" layer
 	dir := c.MkDir()
 	logPath := filepath.Join(dir, "log.txt")
-	layerYAML := fmt.Sprintf(`
+	layer := `
 services:
     envtest:
         override: replace
-        command: /bin/sh -c "env | grep PEBBLE_ENV_TEST | sort > %s; %s; sleep 10"
+        command: /bin/sh -c "env | grep PEBBLE_ENV_TEST | sort > %s; {{.NotifyDoneCheck}}; sleep 10"
         environment:
             PEBBLE_ENV_TEST_1: foo
             PEBBLE_ENV_TEST_2: bar bazz
-`, logPath, s.insertDoneCheck(c, "envtest"))
-	layer := parseLayer(c, 0, "envlayer", layerYAML)
-	err := s.manager.AppendLayer(layer)
-	c.Assert(err, IsNil)
+`
+	s.planAddLayer(c, fmt.Sprintf(
+		layer,
+		logPath,
+	))
+	s.planChanged(c)
 
 	// Set environment variables in the current process to ensure we're
 	// passing down the parent's environment too, but the layer's config
 	// should override these if also set there.
-	err = os.Setenv("PEBBLE_ENV_TEST_PARENT", "from-parent")
+	err := os.Setenv("PEBBLE_ENV_TEST_PARENT", "from-parent")
 	c.Assert(err, IsNil)
 	err = os.Setenv("PEBBLE_ENV_TEST_1", "should be overridden")
 	c.Assert(err, IsNil)
 
 	// Start "envtest" service
-	chg := s.startServices(c, []string{"envtest"}, 1)
+	chg := s.startServices(c, []string{"envtest"})
 	s.st.Lock()
 	c.Check(chg.Status(), Equals, state.DoneStatus, Commentf("Error: %v", chg.Err()))
 	s.st.Unlock()
@@ -868,7 +677,7 @@ services:
 	s.waitForDoneCheck(c, "envtest")
 
 	// Ensure it read environment variables correctly
-	data, err := ioutil.ReadFile(logPath)
+	data, err := os.ReadFile(logPath)
 	if os.IsNotExist(err) {
 		c.Fatal("'envtest' service did not run")
 	}
@@ -880,95 +689,110 @@ PEBBLE_ENV_TEST_PARENT=from-parent
 `[1:])
 }
 
+// TestActionRestart makes sure that the service restart backoff mechanism
+// works as designed, including the reset of backoff once a service runs
+// continuously for at least the backoff limit duration.
+//
+// This unit test is very timing sensitive, as as a result require
+// conservative delay periods to ensure the test does not fail during
+// nondeterministic cpu spikes on the test system.
 func (s *S) TestActionRestart(c *C) {
-	s.setupDefaultServiceManager(c)
-	// Add custom backoff delay so it auto-restarts quickly.
-	layer := parseLayer(c, 0, "layer", `
+	s.newServiceManager(c)
+	s.planAddLayer(c, testPlanLayer)
+
+	// Add custom backoff attributes so it auto-restarts quickly. The
+	// following backoff pattern will be observed:
+	//
+	// First service exit:
+	//    - Restart after (backoff-delay) = 1ms
+	//
+	// Second service exit:
+	//    - Restart after (1ms X backoff-factor) = 10ms
+	//
+	// Note that while in backoff state, as soon as the service continues
+	// to run successfully for more than backoff-limit (500ms), the
+	// backoff state will reset.
+	//
+	// Note: If the backoff-limit is too short, any test environment related
+	// cpu spike that delays the restart of the service by more than
+	// backoff-limit will prematurely trigger a backoff reset, which will
+	// result in the test failing. Making this less likely requires a more
+	// conservative (longer delay) value for backoff-limit, at the slight
+	// expense of making the test take longer.
+	s.planAddLayer(c, `
 services:
     test2:
         override: merge
-        command: /bin/sh -c "echo test2; exec sleep 10"
-        backoff-delay: 50ms
-        backoff-limit: 150ms
+        command: /bin/sh -c "echo test2; {{.NotifyDoneCheck}}; sleep 10"
+        backoff-delay: 1ms
+        backoff-limit: 500ms
+        backoff-factor: 10
 `)
-	err := s.manager.AppendLayer(layer)
-	c.Assert(err, IsNil)
+	s.planChanged(c)
 
-	// Start service and wait till it starts up the first time.
-	chg := s.startServices(c, []string{"test2"}, 1)
-	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
-		return svc.Current == servstate.StatusActive
-	})
+	// Start the "test2" service
+	chg := s.startServices(c, []string{"test2"})
+	// Wait until "test2" service completes the echo command (so that we
+	// know the log buffer contains stdout).
+	s.waitForDoneCheck(c, "test2")
+	// Verify the backoff counter
 	c.Assert(s.manager.BackoffNum("test2"), Equals, 0)
 	s.st.Lock()
 	c.Check(chg.Status(), Equals, state.DoneStatus)
 	s.st.Unlock()
-	time.Sleep(10 * time.Millisecond) // ensure it has enough time to write to the log
 	c.Check(s.readAndClearLogBuffer(), Matches, `2.* \[test2\] test2\n`)
 
 	// Send signal to process to terminate it early.
-	err = s.manager.SendSignal([]string{"test2"}, "SIGTERM")
+	err := s.manager.SendSignal([]string{"test2"}, "SIGTERM")
 	c.Assert(err, IsNil)
 
-	// Wait for it to go into backoff state.
-	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
-		return svc.Current == servstate.StatusBackoff && s.manager.BackoffNum("test2") == 1
-	})
-
-	// Then wait for it to auto-restart (backoff time plus a bit).
-	time.Sleep(75 * time.Millisecond)
-	svc := s.serviceByName(c, "test2")
-	c.Assert(svc.Current, Equals, servstate.StatusActive)
+	// Wait until "test2" service completes the echo command (so that we
+	// know the log buffer contains stdout).
+	s.waitForDoneCheck(c, "test2")
+	c.Assert(s.manager.BackoffNum("test2"), Equals, 1)
 	c.Check(s.readAndClearLogBuffer(), Matches, `2.* \[test2\] test2\n`)
 
 	// Send signal to terminate it again.
 	err = s.manager.SendSignal([]string{"test2"}, "SIGTERM")
 	c.Assert(err, IsNil)
 
-	// Wait for it to go into backoff state.
-	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
-		return svc.Current == servstate.StatusBackoff && s.manager.BackoffNum("test2") == 2
-	})
-
-	// Then wait for it to auto-restart (backoff time plus a bit).
-	time.Sleep(125 * time.Millisecond)
-	svc = s.serviceByName(c, "test2")
-	c.Assert(svc.Current, Equals, servstate.StatusActive)
+	// Wait until "test2" service completes the echo command (so that we
+	// know the log buffer contains stdout).
+	s.waitForDoneCheck(c, "test2")
+	c.Assert(s.manager.BackoffNum("test2"), Equals, 2)
 	c.Check(s.readAndClearLogBuffer(), Matches, `2.* \[test2\] test2\n`)
 
-	// Test that backoff reset time is working (set to backoff-limit)
-	time.Sleep(175 * time.Millisecond)
+	// Test that backoff reset time is working. Run the service without
+	// interruption for slightly longer than backoff-limit.
+	time.Sleep(550 * time.Millisecond)
 	c.Check(s.manager.BackoffNum("test2"), Equals, 0)
 
 	// Send signal to process to terminate it early.
 	err = s.manager.SendSignal([]string{"test2"}, "SIGTERM")
 	c.Assert(err, IsNil)
 
-	// Wait for it to go into backoff state (back to backoff 1 again).
-	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
-		return svc.Current == servstate.StatusBackoff && s.manager.BackoffNum("test2") == 1
-	})
-
-	// Then wait for it to auto-restart (backoff time plus a bit).
-	time.Sleep(75 * time.Millisecond)
-	svc = s.serviceByName(c, "test2")
-	c.Assert(svc.Current, Equals, servstate.StatusActive)
+	// Wait until "test2" service completes the echo command (so that we
+	// know the log buffer contains stdout).
+	s.waitForDoneCheck(c, "test2")
+	c.Check(s.manager.BackoffNum("test2"), Equals, 1)
 	c.Check(s.readAndClearLogBuffer(), Matches, `2.* \[test2\] test2\n`)
 }
 
 func (s *S) TestStopDuringBackoff(c *C) {
-	s.setupDefaultServiceManager(c)
-	layer := parseLayer(c, 0, "layer", `
+	s.newServiceManager(c)
+	s.planAddLayer(c, testPlanLayer)
+
+	// Add custom backoff delay so it auto-restarts quickly.
+	s.planAddLayer(c, `
 services:
     test2:
         override: merge
         command: sleep 0.1
 `)
-	err := s.manager.AppendLayer(layer)
-	c.Assert(err, IsNil)
+	s.planChanged(c)
 
 	// Start service and wait till it starts up the first time.
-	chg := s.startServices(c, []string{"test2"}, 1)
+	chg := s.startServices(c, []string{"test2"})
 	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
 		return svc.Current == servstate.StatusActive
 	})
@@ -983,7 +807,7 @@ services:
 	})
 
 	// Ensure it can be stopped successfully.
-	chg = s.stopServices(c, []string{"test2"}, 1)
+	chg = s.stopServices(c, []string{"test2"})
 	s.st.Lock()
 	c.Check(chg.Status(), Equals, state.DoneStatus, Commentf("Error: %v", chg.Err()))
 	s.st.Unlock()
@@ -995,14 +819,15 @@ services:
 // The aim of this test is to make sure that the actioned check
 // failure terminates the service, after which it will first go
 // to back-off state and then finally starts again (only once).
-// Since the check always fail, it should only ever send an action
+// Since the check always fails, it should only ever send an action
 // once.
 func (s *S) TestOnCheckFailureRestartWhileRunning(c *C) {
-	s.setupDefaultServiceManager(c)
+	s.newServiceManager(c)
+	s.planAddLayer(c, testPlanLayer)
+
 	// Create check manager and tell it about plan updates
-	checkMgr := checkstate.NewManager()
+	checkMgr := checkstate.NewManager(s.st, s.runner)
 	defer checkMgr.PlanChanged(&plan.Plan{})
-	s.manager.NotifyPlanChanged(checkMgr.PlanChanged)
 
 	// Tell service manager about check failures
 	checkFailed := make(chan struct{})
@@ -1018,11 +843,11 @@ func (s *S) TestOnCheckFailureRestartWhileRunning(c *C) {
 
 	tempDir := c.MkDir()
 	tempFile := filepath.Join(tempDir, "out")
-	layer := parseLayer(c, 0, "layer", fmt.Sprintf(`
+	layer := `
 services:
     test2:
         override: replace
-        command: /bin/sh -c 'echo x >>%s; %s; sleep 10'
+        command: /bin/sh -c 'echo x >>%s; {{.NotifyDoneCheck}}; sleep 10'
         backoff-delay: 100ms
         on-check-failure:
             chk1: restart
@@ -1034,16 +859,20 @@ checks:
          threshold: 1
          exec:
              command: will-fail
-`, tempFile, s.insertDoneCheck(c, "test2")))
-	err := s.manager.AppendLayer(layer)
-	c.Assert(err, IsNil)
+`
+	s.planAddLayer(c, fmt.Sprintf(
+		layer,
+		tempFile,
+	))
+	s.planChanged(c)
+	checkMgr.PlanChanged(s.plan)
 
 	// Start service and wait till it starts up
-	s.startServices(c, []string{"test2"}, 1)
+	s.startServices(c, []string{"test2"})
 
 	s.waitForDoneCheck(c, "test2")
 
-	b, err := ioutil.ReadFile(tempFile)
+	b, err := os.ReadFile(tempFile)
 	c.Assert(err, IsNil)
 	c.Assert(string(b), Equals, "x\n")
 
@@ -1053,12 +882,10 @@ checks:
 	case <-time.After(10 * time.Second):
 		c.Fatalf("timed out waiting for check failure to arrive")
 	}
-	checks, err := checkMgr.Checks()
-	c.Assert(err, IsNil)
-	c.Assert(len(checks), Equals, 1)
-	c.Assert(checks[0].Status, Equals, checkstate.CheckStatusDown)
+	checks := waitChecks(c, checkMgr, func(checks []*checkstate.CheckInfo) bool {
+		return len(checks) == 1 && checks[0].Status == checkstate.CheckStatusDown
+	})
 	c.Assert(checks[0].Failures >= 1, Equals, true)
-	c.Assert(checks[0].LastError, Matches, ".* executable file not found .*")
 
 	// Check failure should terminate process, backoff, and restart it, so wait for that
 	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
@@ -1067,20 +894,18 @@ checks:
 
 	s.waitForDoneCheck(c, "test2")
 
-	b, err = ioutil.ReadFile(tempFile)
+	b, err = os.ReadFile(tempFile)
 	c.Assert(err, IsNil)
 	c.Assert(string(b), Equals, "x\nx\n")
 
 	// Shouldn't be restarted again
 	time.Sleep(125 * time.Millisecond)
-	b, err = ioutil.ReadFile(tempFile)
+	b, err = os.ReadFile(tempFile)
 	c.Assert(err, IsNil)
 	c.Assert(string(b), Equals, "x\nx\n")
-	checks, err = checkMgr.Checks()
-	c.Assert(err, IsNil)
-	c.Assert(len(checks), Equals, 1)
-	c.Assert(checks[0].Status, Equals, checkstate.CheckStatusDown)
-	c.Assert(checks[0].LastError, Matches, ".* executable file not found .*")
+	checks = waitChecks(c, checkMgr, func(checks []*checkstate.CheckInfo) bool {
+		return len(checks) == 1 && checks[0].Status == checkstate.CheckStatusDown
+	})
 	svc := s.serviceByName(c, "test2")
 	c.Assert(svc.Current, Equals, servstate.StatusActive)
 	c.Assert(s.manager.BackoffNum("test2"), Equals, 1)
@@ -1089,14 +914,15 @@ checks:
 // The aim of this test is to make sure that the actioned check
 // failure occurring during service back-off has no effect on
 // on that service. The service is expected to restart by itself
-// (due to back-off). Since the check always fail, it should only
+// (due to back-off). Since the check always fails, it should only
 // ever send an action once.
 func (s *S) TestOnCheckFailureRestartDuringBackoff(c *C) {
-	s.setupDefaultServiceManager(c)
+	s.newServiceManager(c)
+	s.planAddLayer(c, testPlanLayer)
+
 	// Create check manager and tell it about plan updates
-	checkMgr := checkstate.NewManager()
+	checkMgr := checkstate.NewManager(s.st, s.runner)
 	defer checkMgr.PlanChanged(&plan.Plan{})
-	s.manager.NotifyPlanChanged(checkMgr.PlanChanged)
 
 	// Tell service manager about check failures
 	checkFailed := make(chan struct{})
@@ -1112,11 +938,11 @@ func (s *S) TestOnCheckFailureRestartDuringBackoff(c *C) {
 
 	tempDir := c.MkDir()
 	tempFile := filepath.Join(tempDir, "out")
-	layer := parseLayer(c, 0, "layer", fmt.Sprintf(`
+	layer := `
 services:
     test2:
         override: replace
-        command: /bin/sh -c 'echo x >>%s; %s; sleep 0.1'
+        command: /bin/sh -c 'echo x >>%s; {{.NotifyDoneCheck}}; sleep 0.1'
         backoff-delay: 100ms
         backoff-factor: 100  # ensure it only backoff-restarts once
         on-check-failure:
@@ -1129,16 +955,20 @@ checks:
          threshold: 1
          exec:
              command: will-fail
-`, tempFile, s.insertDoneCheck(c, "test2")))
-	err := s.manager.AppendLayer(layer)
-	c.Assert(err, IsNil)
+`
+	s.planAddLayer(c, fmt.Sprintf(
+		layer,
+		tempFile,
+	))
+	s.planChanged(c)
+	checkMgr.PlanChanged(s.plan)
 
 	// Start service and wait till it starts up
-	s.startServices(c, []string{"test2"}, 1)
+	s.startServices(c, []string{"test2"})
 
 	s.waitForDoneCheck(c, "test2")
 
-	b, err := ioutil.ReadFile(tempFile)
+	b, err := os.ReadFile(tempFile)
 	c.Assert(err, IsNil)
 	c.Assert(string(b), Equals, "x\n")
 
@@ -1156,7 +986,7 @@ checks:
 
 	s.waitForDoneCheck(c, "test2")
 
-	b, err = ioutil.ReadFile(tempFile)
+	b, err = os.ReadFile(tempFile)
 	c.Assert(err, IsNil)
 	c.Assert(string(b), Equals, "x\nx\n")
 
@@ -1166,26 +996,25 @@ checks:
 
 	// Shouldn't be restarted again
 	time.Sleep(125 * time.Millisecond)
-	b, err = ioutil.ReadFile(tempFile)
+	b, err = os.ReadFile(tempFile)
 	c.Assert(err, IsNil)
 	c.Assert(string(b), Equals, "x\nx\n")
-	checks, err := checkMgr.Checks()
-	c.Assert(err, IsNil)
-	c.Assert(len(checks), Equals, 1)
-	c.Assert(checks[0].Status, Equals, checkstate.CheckStatusDown)
-	c.Assert(checks[0].LastError, Matches, ".* executable file not found .*")
+	waitChecks(c, checkMgr, func(checks []*checkstate.CheckInfo) bool {
+		return len(checks) == 1 && checks[0].Status == checkstate.CheckStatusDown
+	})
 }
 
 // The aim of this test is to make sure that the actioned check
 // failure is ignored, and as a result the service keeps on
-// running. Since the check always fail, it should only ever
+// running. Since the check always fails, it should only ever
 // send an action once.
 func (s *S) TestOnCheckFailureIgnore(c *C) {
-	s.setupDefaultServiceManager(c)
+	s.newServiceManager(c)
+	s.planAddLayer(c, testPlanLayer)
+
 	// Create check manager and tell it about plan updates
-	checkMgr := checkstate.NewManager()
+	checkMgr := checkstate.NewManager(s.st, s.runner)
 	defer checkMgr.PlanChanged(&plan.Plan{})
-	s.manager.NotifyPlanChanged(checkMgr.PlanChanged)
 
 	// Tell service manager about check failures
 	checkFailed := make(chan struct{})
@@ -1201,11 +1030,11 @@ func (s *S) TestOnCheckFailureIgnore(c *C) {
 
 	tempDir := c.MkDir()
 	tempFile := filepath.Join(tempDir, "out")
-	layer := parseLayer(c, 0, "layer", fmt.Sprintf(`
+	layer := `
 services:
     test2:
         override: replace
-        command: /bin/sh -c 'echo x >>%s; %s; sleep 10'
+        command: /bin/sh -c 'echo x >>%s; {{.NotifyDoneCheck}}; sleep 10'
         on-check-failure:
             chk1: ignore
 
@@ -1216,16 +1045,20 @@ checks:
          threshold: 1
          exec:
              command: will-fail
-`, tempFile, s.insertDoneCheck(c, "test2")))
-	err := s.manager.AppendLayer(layer)
-	c.Assert(err, IsNil)
+`
+	s.planAddLayer(c, fmt.Sprintf(
+		layer,
+		tempFile,
+	))
+	s.planChanged(c)
+	checkMgr.PlanChanged(s.plan)
 
 	// Start service and wait till it starts up (output file is written to)
-	s.startServices(c, []string{"test2"}, 1)
+	s.startServices(c, []string{"test2"})
 
 	s.waitForDoneCheck(c, "test2")
 
-	b, err := ioutil.ReadFile(tempFile)
+	b, err := os.ReadFile(tempFile)
 	c.Assert(err, IsNil)
 	c.Assert(string(b), Equals, "x\n")
 
@@ -1235,23 +1068,19 @@ checks:
 	case <-time.After(10 * time.Second):
 		c.Fatalf("timed out waiting for check failure to arrive")
 	}
-	checks, err := checkMgr.Checks()
-	c.Assert(err, IsNil)
-	c.Assert(len(checks), Equals, 1)
-	c.Assert(checks[0].Status, Equals, checkstate.CheckStatusDown)
+	checks := waitChecks(c, checkMgr, func(checks []*checkstate.CheckInfo) bool {
+		return len(checks) == 1 && checks[0].Status == checkstate.CheckStatusDown
+	})
 	c.Assert(checks[0].Failures >= 1, Equals, true)
-	c.Assert(checks[0].LastError, Matches, ".* executable file not found .*")
 
 	// Service shouldn't have been restarted
 	time.Sleep(125 * time.Millisecond)
-	b, err = ioutil.ReadFile(tempFile)
+	b, err = os.ReadFile(tempFile)
 	c.Assert(err, IsNil)
 	c.Assert(string(b), Equals, "x\n")
-	checks, err = checkMgr.Checks()
-	c.Assert(err, IsNil)
-	c.Assert(len(checks), Equals, 1)
-	c.Assert(checks[0].Status, Equals, checkstate.CheckStatusDown)
-	c.Assert(checks[0].LastError, Matches, ".* executable file not found .*")
+	checks = waitChecks(c, checkMgr, func(checks []*checkstate.CheckInfo) bool {
+		return len(checks) == 1 && checks[0].Status == checkstate.CheckStatusDown
+	})
 	svc := s.serviceByName(c, "test2")
 	c.Assert(svc.Current, Equals, servstate.StatusActive)
 }
@@ -1265,11 +1094,12 @@ func (s *S) TestOnCheckFailureSuccessShutdown(c *C) {
 }
 
 func (s *S) testOnCheckFailureShutdown(c *C, action string, restartType restart.RestartType) {
-	s.setupDefaultServiceManager(c)
+	s.newServiceManager(c)
+	s.planAddLayer(c, testPlanLayer)
+
 	// Create check manager and tell it about plan updates
-	checkMgr := checkstate.NewManager()
+	checkMgr := checkstate.NewManager(s.st, s.runner)
 	defer checkMgr.PlanChanged(&plan.Plan{})
-	s.manager.NotifyPlanChanged(checkMgr.PlanChanged)
 
 	// Tell service manager about check failures
 	checkFailed := make(chan struct{})
@@ -1285,14 +1115,13 @@ func (s *S) testOnCheckFailureShutdown(c *C, action string, restartType restart.
 
 	tempDir := c.MkDir()
 	tempFile := filepath.Join(tempDir, "out")
-	layer := parseLayer(c, 0, "layer", fmt.Sprintf(`
+	layer := `
 services:
     test2:
         override: replace
-        command: /bin/sh -c 'echo x >>%s; %s; sleep 10'
+        command: /bin/sh -c 'echo x >>%s; {{.NotifyDoneCheck}}; sleep 10'
         on-check-failure:
             chk1: %s
-
 checks:
     chk1:
          override: replace
@@ -1300,16 +1129,21 @@ checks:
          threshold: 1
          exec:
              command: will-fail
-`, tempFile, s.insertDoneCheck(c, "test2"), action))
-	err := s.manager.AppendLayer(layer)
-	c.Assert(err, IsNil)
+`
+	s.planAddLayer(c, fmt.Sprintf(
+		layer,
+		tempFile,
+		action,
+	))
+	s.planChanged(c)
+	checkMgr.PlanChanged(s.plan)
 
 	// Start service and wait till it starts up (output file is written to)
-	s.startServices(c, []string{"test2"}, 1)
+	s.startServices(c, []string{"test2"})
 
 	s.waitForDoneCheck(c, "test2")
 
-	b, err := ioutil.ReadFile(tempFile)
+	b, err := os.ReadFile(tempFile)
 	c.Assert(err, IsNil)
 	c.Assert(string(b), Equals, "x\n")
 
@@ -1319,12 +1153,10 @@ checks:
 	case <-time.After(10 * time.Second):
 		c.Fatalf("timed out waiting for check failure to arrive")
 	}
-	checks, err := checkMgr.Checks()
-	c.Assert(err, IsNil)
-	c.Assert(len(checks), Equals, 1)
-	c.Assert(checks[0].Status, Equals, checkstate.CheckStatusDown)
+	checks := waitChecks(c, checkMgr, func(checks []*checkstate.CheckInfo) bool {
+		return len(checks) == 1 && checks[0].Status == checkstate.CheckStatusDown
+	})
 	c.Assert(checks[0].Failures >= 1, Equals, true)
-	c.Assert(checks[0].LastError, Matches, ".* executable file not found .*")
 
 	// It should have closed the stopDaemon channel.
 	select {
@@ -1336,19 +1168,18 @@ checks:
 }
 
 func (s *S) TestOnSuccessShutdown(c *C) {
-	s.setupDefaultServiceManager(c)
-	layer := parseLayer(c, 0, "layer", `
+	s.newServiceManager(c)
+	s.planAddLayer(c, `
 services:
     test2:
         override: replace
         command: sleep 0.15
         on-success: shutdown
 `)
-	err := s.manager.AppendLayer(layer)
-	c.Assert(err, IsNil)
+	s.planChanged(c)
 
 	// Start service and wait till it starts up the first time.
-	s.startServices(c, []string{"test2"}, 1)
+	s.startServices(c, []string{"test2"})
 	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
 		return svc.Current == servstate.StatusActive
 	})
@@ -1368,19 +1199,18 @@ services:
 }
 
 func (s *S) TestOnFailureShutdown(c *C) {
-	s.setupDefaultServiceManager(c)
-	layer := parseLayer(c, 0, "layer", `
+	s.newServiceManager(c)
+	s.planAddLayer(c, `
 services:
     test2:
         override: replace
         command: /bin/sh -c 'sleep 0.15; exit 7'
         on-failure: shutdown
 `)
-	err := s.manager.AppendLayer(layer)
-	c.Assert(err, IsNil)
+	s.planChanged(c)
 
 	// Start service and wait till it starts up the first time.
-	s.startServices(c, []string{"test2"}, 1)
+	s.startServices(c, []string{"test2"})
 	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
 		return svc.Current == servstate.StatusActive
 	})
@@ -1400,19 +1230,18 @@ services:
 }
 
 func (s *S) TestOnSuccessFailureShutdown(c *C) {
-	s.setupDefaultServiceManager(c)
-	layer := parseLayer(c, 0, "layer", `
+	s.newServiceManager(c)
+	s.planAddLayer(c, `
 services:
     test2:
         override: replace
         command: sleep 0.15
         on-success: failure-shutdown
 `)
-	err := s.manager.AppendLayer(layer)
-	c.Assert(err, IsNil)
+	s.planChanged(c)
 
 	// Start service and wait till it starts up the first time.
-	s.startServices(c, []string{"test2"}, 1)
+	s.startServices(c, []string{"test2"})
 	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
 		return svc.Current == servstate.StatusActive
 	})
@@ -1432,19 +1261,18 @@ services:
 }
 
 func (s *S) TestOnFailureSuccessShutdown(c *C) {
-	s.setupDefaultServiceManager(c)
-	layer := parseLayer(c, 0, "layer", `
+	s.newServiceManager(c)
+	s.planAddLayer(c, `
 services:
     test2:
         override: replace
         command: /bin/sh -c 'sleep 0.15; exit 7'
         on-failure: success-shutdown
 `)
-	err := s.manager.AppendLayer(layer)
-	c.Assert(err, IsNil)
+	s.planChanged(c)
 
 	// Start service and wait till it starts up the first time.
-	s.startServices(c, []string{"test2"}, 1)
+	s.startServices(c, []string{"test2"})
 	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
 		return svc.Current == servstate.StatusActive
 	})
@@ -1464,19 +1292,18 @@ services:
 }
 
 func (s *S) TestActionIgnore(c *C) {
-	s.setupDefaultServiceManager(c)
-	layer := parseLayer(c, 0, "layer", `
+	s.newServiceManager(c)
+	s.planAddLayer(c, `
 services:
     test2:
         override: replace
         command: sleep 0.15
         on-success: ignore
 `)
-	err := s.manager.AppendLayer(layer)
-	c.Assert(err, IsNil)
+	s.planChanged(c)
 
 	// Start service and wait till it starts up the first time.
-	s.startServices(c, []string{"test2"}, 1)
+	s.startServices(c, []string{"test2"})
 	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
 		return svc.Current == servstate.StatusActive
 	})
@@ -1488,7 +1315,10 @@ services:
 }
 
 func (s *S) TestGetAction(c *C) {
-	s.setupDefaultServiceManager(c)
+	s.newServiceManager(c)
+	s.planAddLayer(c, testPlanLayer)
+	s.planChanged(c)
+
 	tests := []struct {
 		onSuccess plan.ServiceAction
 		onFailure plan.ServiceAction
@@ -1543,7 +1373,10 @@ func (s *S) TestGetAction(c *C) {
 }
 
 func (s *S) TestGetJitter(c *C) {
-	s.setupDefaultServiceManager(c)
+	s.newServiceManager(c)
+	s.planAddLayer(c, testPlanLayer)
+	s.planChanged(c)
+
 	// It's tricky to test a function that generates randomness, but ensure all
 	// the values are in range, and that the number of values distributed across
 	// each of 3 buckets is reasonable.
@@ -1570,7 +1403,10 @@ func (s *S) TestGetJitter(c *C) {
 }
 
 func (s *S) TestCalculateNextBackoff(c *C) {
-	s.setupDefaultServiceManager(c)
+	s.newServiceManager(c)
+	s.planAddLayer(c, testPlanLayer)
+	s.planChanged(c)
+
 	tests := []struct {
 		delay   time.Duration
 		factor  float64
@@ -1605,7 +1441,9 @@ func (s *S) TestCalculateNextBackoff(c *C) {
 }
 
 func (s *S) TestReapZombies(c *C) {
-	s.setupDefaultServiceManager(c)
+	s.newServiceManager(c)
+	s.planAddLayer(c, testPlanLayer)
+
 	// Ensure we've been set as a child subreaper
 	isSubreaper, err := getChildSubreaper()
 	c.Assert(err, IsNil)
@@ -1616,8 +1454,7 @@ func (s *S) TestReapZombies(c *C) {
 	testExecutable, err := os.Executable()
 	c.Assert(err, IsNil)
 	exitChildPath := filepath.Join(s.dir, "exit-child")
-
-	layer := parseLayer(c, 0, "layer", fmt.Sprintf(`
+	layer := `
 services:
     test2:
         override: replace
@@ -1626,11 +1463,15 @@ services:
             PEBBLE_TEST_CREATE_CHILD: 1
             PEBBLE_TEST_EXIT_CHILD: %s
         on-success: ignore
-`, testExecutable, exitChildPath))
-	err = s.manager.AppendLayer(layer)
-	c.Assert(err, IsNil)
+`
+	s.planAddLayer(c, fmt.Sprintf(
+		layer,
+		testExecutable,
+		exitChildPath,
+	))
+	s.planChanged(c)
 
-	s.startServices(c, []string{"test2"}, 1)
+	s.startServices(c, []string{"test2"})
 
 	// The child process creates a grandchild and will print the
 	// PID of the grandchild for us to inspect here. We need to
@@ -1664,7 +1505,7 @@ zombi:
 	for {
 		select {
 		case <-ticker.C:
-			stat, err := ioutil.ReadFile(fmt.Sprintf("/proc/%d/stat", childPid))
+			stat, err := os.ReadFile(fmt.Sprintf("/proc/%d/stat", childPid))
 			c.Assert(err, IsNil)
 			statFields := strings.Fields(string(stat))
 			c.Assert(len(statFields) >= 3, Equals, true)
@@ -1702,8 +1543,11 @@ reap:
 }
 
 func (s *S) TestStopRunning(c *C) {
-	s.setupDefaultServiceManager(c)
-	s.startServices(c, []string{"test2"}, 1)
+	s.newServiceManager(c)
+	s.planAddLayer(c, testPlanLayer)
+	s.planChanged(c)
+
+	s.startServices(c, []string{"test2"})
 	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
 		return svc.Current == servstate.StatusActive
 	})
@@ -1715,15 +1559,9 @@ func (s *S) TestStopRunning(c *C) {
 	change := s.st.NewChange("stop", "Stop all running services")
 	change.AddAll(taskSet)
 	s.st.Unlock()
-	err = s.runner.Ensure()
-	c.Assert(err, IsNil)
 
 	// Wait for it to complete.
-	select {
-	case <-change.Ready():
-	case <-time.After(time.Second):
-		c.Fatalf("timed out waiting for services to stop")
-	}
+	waitChangeReady(c, s.runner, change, "services to stop")
 
 	// Ensure that the service has actually been stopped.
 	svc := s.serviceByName(c, "test2")
@@ -1740,73 +1578,88 @@ func (s *S) TestStopRunning(c *C) {
 }
 
 func (s *S) TestStopRunningNoServices(c *C) {
-	s.setupDefaultServiceManager(c)
+	s.newServiceManager(c)
+	s.planAddLayer(c, testPlanLayer)
+	s.planChanged(c)
+
 	taskSet, err := servstate.StopRunning(s.st, s.manager)
 	c.Assert(err, IsNil)
 	c.Assert(taskSet, IsNil)
 }
 
 func (s *S) TestNoWorkingDir(c *C) {
-	s.setupEmptyServiceManager(c)
+	s.newServiceManager(c)
+	s.planAddLayer(c, testPlanLayer)
 
 	outputPath := filepath.Join(c.MkDir(), "output")
-	layer := parseLayer(c, 0, "layer", fmt.Sprintf(`
+	layer := `
 services:
     nowrkdir:
         override: replace
-        command: /bin/sh -c "pwd >%s; %s; sleep %g"
-`, outputPath, s.insertDoneCheck(c, "nowrkdir"), shortOkayDelay.Seconds()+0.01))
-	err := s.manager.AppendLayer(layer)
-	c.Assert(err, IsNil)
+        command: /bin/sh -c "pwd >%s; {{.NotifyDoneCheck}}; sleep %g"
+`
+	s.planAddLayer(c, fmt.Sprintf(
+		layer,
+		outputPath,
+		shortOkayDelay.Seconds()+0.01,
+	))
+	s.planChanged(c)
 
 	// Service command should run in current directory (package directory)
 	// if "working-dir" config option not set.
-	chg := s.startServices(c, []string{"nowrkdir"}, 1)
+	chg := s.startServices(c, []string{"nowrkdir"})
 	s.st.Lock()
 	c.Assert(chg.Err(), IsNil)
 	s.st.Unlock()
 
 	s.waitForDoneCheck(c, "nowrkdir")
 
-	output, err := ioutil.ReadFile(outputPath)
+	output, err := os.ReadFile(outputPath)
 	c.Assert(err, IsNil)
 	c.Check(string(output), Matches, ".*/overlord/servstate\n")
 }
 
 func (s *S) TestWorkingDir(c *C) {
-	s.setupEmptyServiceManager(c)
+	s.newServiceManager(c)
+	s.planAddLayer(c, testPlanLayer)
 
 	dir := c.MkDir()
 	outputPath := filepath.Join(dir, "output")
-	layer := parseLayer(c, 0, "layer", fmt.Sprintf(`
+	layer := `
 services:
     wrkdir:
         override: replace
-        command: /bin/sh -c "pwd >%s; %s; sleep %g"
+        command: /bin/sh -c "pwd >%s; {{.NotifyDoneCheck}}; sleep %g"
         working-dir: %s
-`, outputPath, s.insertDoneCheck(c, "wrkdir"), shortOkayDelay.Seconds()+0.01, dir))
-	err := s.manager.AppendLayer(layer)
-	c.Assert(err, IsNil)
+`
+	s.planAddLayer(c, fmt.Sprintf(
+		layer,
+		outputPath,
+		shortOkayDelay.Seconds()+0.01,
+		dir,
+	))
+	s.planChanged(c)
 
-	chg := s.startServices(c, []string{"wrkdir"}, 1)
+	chg := s.startServices(c, []string{"wrkdir"})
 	s.st.Lock()
 	c.Assert(chg.Err(), IsNil)
 	s.st.Unlock()
 
 	s.waitForDoneCheck(c, "wrkdir")
 
-	output, err := ioutil.ReadFile(outputPath)
+	output, err := os.ReadFile(outputPath)
 	c.Assert(err, IsNil)
 	c.Check(string(output), Equals, dir+"\n")
 }
 
 func (s *S) TestWaitDelay(c *C) {
-	s.setupEmptyServiceManager(c)
+	s.newServiceManager(c)
+	s.planAddLayer(c, testPlanLayer)
 
 	// Run the test binary with PEBBLE_TEST_WAITDELAY=1 (see TestMain).
 	testExecutable, err := os.Executable()
 	c.Assert(err, IsNil)
-	layer := parseLayer(c, 0, "layer", fmt.Sprintf(`
+	layer := `
 services:
     waitdelay:
         override: replace
@@ -1814,12 +1667,15 @@ services:
         environment:
             PEBBLE_TEST_WAITDELAY: 1
         kill-delay: 50ms
-`, testExecutable))
-	err = s.manager.AppendLayer(layer)
-	c.Assert(err, IsNil)
+`
+	s.planAddLayer(c, fmt.Sprintf(
+		layer,
+		testExecutable,
+	))
+	s.planChanged(c)
 
 	// Start service and wait for it to be started
-	chg := s.startServices(c, []string{"waitdelay"}, 1)
+	chg := s.startServices(c, []string{"waitdelay"})
 	s.st.Lock()
 	c.Assert(chg.Err(), IsNil)
 	s.st.Unlock()
@@ -1829,7 +1685,7 @@ services:
 
 	// Try to stop the service; it will only stop if WaitDelay logic is working,
 	// otherwise the goroutine waiting for the child's stdout will never finish.
-	chg = s.stopServices(c, []string{"waitdelay"}, 1)
+	chg = s.stopServices(c, []string{"waitdelay"})
 	s.st.Lock()
 	c.Assert(chg.Err(), IsNil)
 	s.st.Unlock()
@@ -1838,30 +1694,33 @@ services:
 	})
 }
 
-// setupDefaultServiceManager provides a basic setup that can be used by many
-// of the unit tests without having to create a custom setup.
-func (s *S) setupDefaultServiceManager(c *C) {
-	layers := filepath.Join(s.dir, "layers")
-	err := os.Mkdir(layers, 0755)
-	c.Assert(err, IsNil)
-	data := fmt.Sprintf(planLayer1, s.insertDoneCheck(c, "test1"), s.insertDoneCheck(c, "test2"))
-	err = ioutil.WriteFile(filepath.Join(layers, "001-base.yaml"), []byte(data), 0644)
-	c.Assert(err, IsNil)
-	err = ioutil.WriteFile(filepath.Join(layers, "002-two.yaml"), []byte(planLayer2), 0644)
-	c.Assert(err, IsNil)
-
-	s.manager, err = servstate.NewManager(s.st, s.runner, s.dir, s.logOutput, testRestarter{s.stopDaemon}, fakeLogManager{})
+func (s *S) newServiceManager(c *C) {
+	var err error
+	s.manager, err = servstate.NewManager(s.st, s.runner, s.logOutput, testRestarter{s.stopDaemon}, fakeLogManager{})
 	c.Assert(err, IsNil)
 }
 
-// setupEmptyServiceManager sets up a service manager with no layers for tests
-// that want to customize them.
-func (s *S) setupEmptyServiceManager(c *C) {
-	dir := c.MkDir()
-	err := os.Mkdir(filepath.Join(dir, "layers"), 0755)
+func (s *S) planChanged(c *C) {
+	c.Assert(s.plan, NotNil)
+	s.manager.PlanChanged(s.plan)
+	s.planPropagated = true
+}
+
+func (s *S) planAddLayer(c *C, layerYAML string) {
+	cnt := len(s.plan.Layers)
+	layer, err := plan.ParseLayer(cnt, fmt.Sprintf("testPlanLayer%v", cnt), []byte(layerYAML))
 	c.Assert(err, IsNil)
-	s.manager, err = servstate.NewManager(s.st, s.runner, dir, nil, nil, fakeLogManager{})
+	// Resolve {{.NotifyDoneCheck}}
+	s.insertDoneChecks(c, layer)
+	layers := append(s.plan.Layers, layer)
+	combined, err := plan.CombineLayers(layers...)
 	c.Assert(err, IsNil)
+	s.plan = &plan.Plan{
+		Layers:     layers,
+		Services:   combined.Services,
+		Checks:     combined.Checks,
+		LogTargets: combined.LogTargets,
+	}
 }
 
 // Make sure services are all stopped before the next test starts.
@@ -1881,18 +1740,20 @@ func (s *S) stopRunningServices(c *C) {
 	s.st.Unlock()
 
 	// Wait for a limited amount of time for them to stop.
+	waitChangeReady(c, s.runner, chg, "services to stop")
+}
+
+func waitChangeReady(c *C, runner *state.TaskRunner, change *state.Change, message string) {
 	timeout := time.After(10 * time.Second)
 	for {
-		s.runner.Ensure()
-		s.runner.Wait()
-
-		// Exit loop if change is complete
+		runner.Ensure()
 		select {
-		case <-chg.Ready():
+		case <-change.Ready():
 			return
 		case <-timeout:
-			c.Fatal("timeout waiting for services to stop")
+			c.Fatalf("timeout waiting for %s", message)
 		default:
+			time.Sleep(time.Millisecond)
 		}
 	}
 }
@@ -1957,38 +1818,25 @@ func (s *S) testServiceLogs(c *C, outputs map[string]string) {
 	s.stopTestServices(c)
 }
 
-func (s *S) ensure(c *C, n int) {
-	for i := 0; i < n; i++ {
-		s.runner.Ensure()
-		s.runner.Wait()
-	}
-}
-
-func (s *S) startServices(c *C, services []string, nEnsure int) *state.Change {
+func (s *S) startServices(c *C, services []string) *state.Change {
 	s.st.Lock()
 	ts, err := servstate.Start(s.st, services)
 	c.Check(err, IsNil)
 	chg := s.st.NewChange("test", "Start test")
 	chg.AddAll(ts)
 	s.st.Unlock()
-
-	// Num to ensure may be more than one due to the cross-task dependencies.
-	s.ensure(c, nEnsure)
-
+	waitChangeReady(c, s.runner, chg, "services to start")
 	return chg
 }
 
-func (s *S) stopServices(c *C, services []string, nEnsure int) *state.Change {
+func (s *S) stopServices(c *C, services []string) *state.Change {
 	s.st.Lock()
 	ts, err := servstate.Stop(s.st, services)
 	c.Check(err, IsNil)
 	chg := s.st.NewChange("test", "Stop test")
 	chg.AddAll(ts)
 	s.st.Unlock()
-
-	// Num to ensure may be more than one due to the cross-task dependencies.
-	s.ensure(c, nEnsure)
-
+	waitChangeReady(c, s.runner, chg, "services to stop")
 	return chg
 }
 
@@ -2000,7 +1848,7 @@ func (s *S) serviceByName(c *C, name string) *servstate.ServiceInfo {
 }
 
 func (s *S) startTestServices(c *C, logCheck bool) {
-	chg := s.startServices(c, []string{"test1", "test2"}, 2)
+	chg := s.startServices(c, []string{"test1", "test2"})
 	s.st.Lock()
 	c.Check(chg.Status(), Equals, state.DoneStatus, Commentf("Error: %v", chg.Err()))
 	s.st.Unlock()
@@ -2024,7 +1872,7 @@ func (s *S) stopTestServices(c *C) {
 	cmds := s.manager.RunningCmds()
 	c.Check(cmds, HasLen, 2)
 
-	chg := s.stopServices(c, []string{"test1", "test2"}, 2)
+	chg := s.stopServices(c, []string{"test1", "test2"})
 
 	// Ensure processes are gone indeed.
 	c.Assert(cmds, HasLen, 2)
@@ -2046,33 +1894,13 @@ func (s *S) stopTestServicesAlreadyDead(c *C) {
 	cmds := s.manager.RunningCmds()
 	c.Check(cmds, HasLen, 0)
 
-	chg := s.stopServices(c, []string{"test1", "test2"}, 2)
+	chg := s.stopServices(c, []string{"test1", "test2"})
 
 	c.Assert(cmds, HasLen, 0)
 
 	s.st.Lock()
 	c.Check(chg.Status(), Equals, state.DoneStatus, Commentf("Error: %v", chg.Err()))
 	s.st.Unlock()
-}
-
-func planYAML(c *C, manager *servstate.ServiceManager) string {
-	plan, err := manager.Plan()
-	c.Assert(err, IsNil)
-	yml, err := yaml.Marshal(plan)
-	c.Assert(err, IsNil)
-	return string(yml)
-}
-
-func parseLayer(c *C, order int, label, layerYAML string) *plan.Layer {
-	layer, err := plan.ParseLayer(order, label, []byte(layerYAML))
-	c.Assert(err, IsNil)
-	return layer
-}
-
-func (s *S) planLayersHasLen(c *C, manager *servstate.ServiceManager, expectedLen int) {
-	plan, err := manager.Plan()
-	c.Assert(err, IsNil)
-	c.Assert(plan.Layers, HasLen, expectedLen)
 }
 
 type writerFunc func([]byte) (int, error)
@@ -2125,10 +1953,21 @@ func (f fakeLogManager) ServiceStarted(service *plan.Service, logs *servicelog.R
 	// no-op
 }
 
-func (s *S) insertDoneCheck(c *C, service string) string {
-	return fmt.Sprintf("sync; touch %s", filepath.Join(s.dir, service))
+// insertDoneChecks modifies layer service commands which contains a
+// {{.NotifyDoneCheck}} barrier placeholder. The placeholder is replaced
+// with a command which writes a service specific file to a test
+// directory, allowing waitForDoneCheck to detect service side effect
+// completion.
+func (s *S) insertDoneChecks(c *C, layer *plan.Layer) {
+	for _, service := range layer.Services {
+		doneCheck := fmt.Sprintf("sync; touch %s", filepath.Join(s.dir, service.Name))
+		service.Command = strings.Replace(service.Command, "{{.NotifyDoneCheck}}", doneCheck, -1)
+	}
 }
 
+// waitForDoneCheck waits until the done checks mechanism indicated
+// that the service test side effect is complete, and the test can
+// continue to evaluate the expected result.
 func (s *S) waitForDoneCheck(c *C, service string) {
 	donePath := filepath.Join(s.dir, service)
 	waitForDone(donePath, func() {
@@ -2158,4 +1997,17 @@ func waitForDone(donePath string, timeoutHandler func()) {
 			}
 		}
 	}
+}
+
+func waitChecks(c *C, checkMgr *checkstate.CheckManager, f func(checks []*checkstate.CheckInfo) bool) []*checkstate.CheckInfo {
+	for start := time.Now(); time.Since(start) < 10*time.Second; {
+		checks, err := checkMgr.Checks()
+		c.Assert(err, IsNil)
+		if f(checks) {
+			return checks
+		}
+		time.Sleep(time.Millisecond)
+	}
+	c.Fatal("timed out waiting for checks to settle")
+	return nil
 }

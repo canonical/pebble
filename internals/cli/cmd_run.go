@@ -29,6 +29,7 @@ import (
 	"github.com/canonical/pebble/cmd"
 	"github.com/canonical/pebble/internals/daemon"
 	"github.com/canonical/pebble/internals/logger"
+	"github.com/canonical/pebble/internals/reaper"
 	"github.com/canonical/pebble/internals/systemd"
 )
 
@@ -63,6 +64,9 @@ var sharedRunEnterArgsHelp = map[string]string{
 type cmdRun struct {
 	client *client.Client
 
+	socketPath string
+	pebbleDir  string
+
 	sharedRunEnterOpts
 }
 
@@ -73,7 +77,11 @@ func init() {
 		Description: cmdRunDescription,
 		ArgsHelp:    sharedRunEnterArgsHelp,
 		New: func(opts *CmdOptions) flags.Commander {
-			return &cmdRun{client: opts.Client}
+			return &cmdRun{
+				client:     opts.Client,
+				socketPath: opts.SocketPath,
+				pebbleDir:  opts.PebbleDir,
+			}
 		},
 	})
 }
@@ -148,18 +156,33 @@ func sanityCheck() error {
 }
 
 func runDaemon(rcmd *cmdRun, ch chan os.Signal, ready chan<- func()) error {
+	err := reaper.Start()
+	if err != nil {
+		return fmt.Errorf("cannot start child process reaper: %w", err)
+	}
+	defer func() {
+		err := reaper.Stop()
+		if err != nil {
+			logger.Noticef("Cannot stop child process reaper: %v", err)
+		}
+	}()
+
 	t0 := time.Now().Truncate(time.Millisecond)
 
-	pebbleDir, socketPath := getEnvPaths()
 	if rcmd.CreateDirs {
-		err := os.MkdirAll(pebbleDir, 0755)
+		err := os.MkdirAll(rcmd.pebbleDir, 0755)
 		if err != nil {
 			return err
 		}
 	}
+	err = maybeCopyPebbleDir(rcmd.pebbleDir, getCopySource())
+	if err != nil {
+		return err
+	}
+
 	dopts := daemon.Options{
-		Dir:        pebbleDir,
-		SocketPath: socketPath,
+		Dir:        rcmd.pebbleDir,
+		SocketPath: rcmd.socketPath,
 	}
 	if rcmd.Verbose {
 		dopts.ServiceOutput = os.Stdout
@@ -212,21 +235,40 @@ func runDaemon(rcmd *cmdRun, ch chan os.Signal, ready chan<- func()) error {
 
 	logger.Debugf("activation done in %v", time.Now().Truncate(time.Millisecond).Sub(t0))
 
+	// The "stop" channel is used by the "enter" command to stop the daemon.
+	var stop chan struct{}
+	if ready != nil {
+		stop = make(chan struct{}, 1)
+	}
+	notifyReady := func() {
+		ready <- func() { close(stop) }
+		close(ready)
+	}
+
 	if !rcmd.Hold {
+		// Start the default services (those configured with startup: enabled).
 		servopts := client.ServiceOptions{}
 		changeID, err := rcmd.client.AutoStart(&servopts)
 		if err != nil {
 			logger.Noticef("Cannot start default services: %v", err)
 		} else {
-			logger.Noticef("Started default services with change %s.", changeID)
+			// Wait for the default services to actually start and then notify
+			// the ready channel (for the "enter" command).
+			go func() {
+				logger.Debugf("Waiting for default services to autostart with change %s.", changeID)
+				_, err := rcmd.client.WaitChange(changeID, nil)
+				if err != nil {
+					logger.Noticef("Cannot wait for autostart change %s: %v", changeID, err)
+				} else {
+					logger.Noticef("Started default services with change %s.", changeID)
+				}
+				if ready != nil {
+					notifyReady()
+				}
+			}()
 		}
-	}
-
-	var stop chan struct{}
-	if ready != nil {
-		stop = make(chan struct{}, 1)
-		ready <- func() { close(stop) }
-		close(ready)
+	} else if ready != nil {
+		notifyReady()
 	}
 
 out:
@@ -274,4 +316,31 @@ func convertArgs(args [][]string) (map[string][]string, error) {
 	}
 
 	return mappedArgs, nil
+}
+
+func maybeCopyPebbleDir(destDir, srcDir string) error {
+	if srcDir == "" {
+		return nil
+	}
+	_, err := os.Stat(srcDir)
+	if errors.Is(err, os.ErrNotExist) {
+		// Skip missing source directory.
+		return nil
+	} else if err != nil {
+		return err
+	}
+	entries, err := os.ReadDir(destDir)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	} else if len(entries) != 0 {
+		// Skip non-empty dir.
+		return nil
+	}
+	fsys := os.DirFS(srcDir)
+	// TODO: replace with os.CopyFS when we're using Go 1.23
+	err = copyFS(destDir, fsys)
+	if err != nil {
+		return fmt.Errorf("cannot copy %q to %q: %w", srcDir, destDir, err)
+	}
+	return nil
 }
