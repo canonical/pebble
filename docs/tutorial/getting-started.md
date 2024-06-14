@@ -2,7 +2,7 @@
 
 In this tutorial, we will download and install Pebble, configure layers, run the Pebble daemon, and work with layers and services. This tutorial takes about 15 minutes to complete.
 
-After this tutorial, you will have a basic understanding of what Pebble is and how to use it to orchestrate services, and you can continue exploring more advanced features and use cases (see [Next steps](#next-steps).
+After this tutorial, you will have a basic understanding of what Pebble is and how to use it to orchestrate services, and you can continue exploring more advanced features and use cases (see {ref}`next_steps`).
 
 ## Prerequisites
 
@@ -249,6 +249,7 @@ http-server    enabled  active   today at 11:34 UTC
 http-server-2  enabled  active   today at 11:40 UTC
 ```
 
+(next_steps)=
 ## Next steps
 
 - To learn more about running the Pebble daemon, see [How to run the daemon (server)](../how-to/run-the-daemon.md).
