@@ -72,6 +72,11 @@ func (cmd *cmdIdentities) Execute(args []string) error {
 	if err != nil {
 		return err
 	}
+	if len(identities) == 0 {
+		fmt.Fprintln(Stderr, "No identities.")
+		return nil
+	}
+
 	err = writeOutput(identities)
 	if err != nil {
 		return err
