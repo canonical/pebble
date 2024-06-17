@@ -227,3 +227,19 @@ func (s *State) Identities() map[string]*Identity {
 	}
 	return result
 }
+
+// IdentityFromInputs returns an identity with the given inputs, or nil
+// if there is none.
+func (s *State) IdentityFromInputs(userID *uint32) *Identity {
+	s.reading()
+
+	for _, identity := range s.identities {
+		switch {
+		case identity.Local != nil && userID != nil:
+			if identity.Local.UserID == *userID {
+				return identity
+			}
+		}
+	}
+	return nil
+}

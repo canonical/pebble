@@ -17,6 +17,8 @@ package daemon
 import (
 	"net/http"
 	"os"
+
+	"github.com/canonical/pebble/internals/overlord/state"
 )
 
 // AccessChecker checks whether a particular request is allowed.
@@ -38,6 +40,11 @@ func (ac OpenAccess) CheckAccess(d *Daemon, r *http.Request, ucred *Ucrednet, us
 type AdminAccess struct{}
 
 func (ac AdminAccess) CheckAccess(d *Daemon, r *http.Request, ucred *Ucrednet, user *UserState) Response {
+	// If there is a validated user and they're allowed admin access, let them in.
+	if user != nil && user.Access == state.AdminAccess {
+		return nil
+	}
+	// Otherwise they need to be UID 0 (root) or the UID Pebble is running as.
 	if ucred != nil && (ucred.Uid == 0 || ucred.Uid == uint32(os.Getuid())) {
 		return nil
 	}
@@ -48,8 +55,13 @@ func (ac AdminAccess) CheckAccess(d *Daemon, r *http.Request, ucred *Ucrednet, u
 type UserAccess struct{}
 
 func (ac UserAccess) CheckAccess(d *Daemon, r *http.Request, ucred *Ucrednet, user *UserState) Response {
-	if ucred == nil {
-		return Unauthorized("access denied")
+	// If there is a validated user and they're allowed read or admin access, let them in.
+	if user != nil && (user.Access == state.ReadAccess || user.Access == state.AdminAccess) {
+		return nil
 	}
-	return nil
+	// Otherwise if it's any local UID user, let them in.
+	if ucred != nil {
+		return nil
+	}
+	return Unauthorized("access denied")
 }
