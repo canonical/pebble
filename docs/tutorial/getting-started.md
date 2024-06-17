@@ -24,8 +24,6 @@ The easiest way to install the latest Pebble release is by downloading the binar
    :end-before: End: Verify Pebble installation
 ```
 
-For more information, see {ref}`reference_pebble_help_command`.
-
 ## Configure Pebble
 
 Now that Pebble has been installed, we can set up a basic configuration.

@@ -41,4 +41,6 @@ Usage: pebble <command> [<options>...]
 ...
 ```
 
+For more information, see {ref}`reference_pebble_help_command`.
+
 End: Verify Pebble installation

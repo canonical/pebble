@@ -19,7 +19,7 @@ To install the binary for the latest version of Pebble:
 (install_pebble_from_source)=
 ## Install from source
 
-To install the latest version of Pebble from source:
+Alternatively, you can install the latest version of Pebble from source:
 
 1. Follow the official Go documentation [here](https://go.dev/doc/install) to download and install Go.
 2. After installing, you will want to add the `$GOBIN` directory to your `$PATH` so you can use the installed tools. For more information, refer to the [official documentation](https://go.dev/doc/install/source#environment).
