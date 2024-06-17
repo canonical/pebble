@@ -10,38 +10,21 @@ After this tutorial, you will have a basic understanding of what Pebble is and h
 
 ## Download and install Pebble
 
-Get the latest tag on the [latest release page](https://github.com/canonical/pebble/releases/latest), then run the following commands to download, extract, and install the latest release (replace `v1.12.0` with the latest tag and `amd64` with your architecture):
+The easiest way to install the latest Pebble release is by downloading the binary. If you prefer a different installation method, see {ref}`how_to_install_pebble`.
 
-```bash
-wget https://github.com/canonical/pebble/releases/download/v1.12.0/pebble_v1.12.0_linux_amd64.tar.gz
-tar zxvf pebble_v1.12.0_linux_amd64.tar.gz
-sudo mv pebble /usr/local/bin/
+```{include} /reuse/common-blocks.md
+   :start-after: Start: Install Pebble binary
+   :end-before: End: Install Pebble binary
 ```
-
-Also, make sure `/usr/local/bin` is in your `$PATH`.
 
 ## Verify Pebble installation
 
-Once the installation is complete, verify that `pebble` has been installed correctly by running:
-
-```bash
-pebble
+```{include} /reuse/common-blocks.md
+   :start-after: Start: Verify Pebble installation
+   :end-before: End: Verify Pebble installation
 ```
 
-This should produce output similar to the following:
-
-```{terminal}
-   :input: pebble
-   :user: user
-   :host: host
-   :dir: ~
-Pebble lets you control services and perform management actions on
-the system that is running them.
-
-Usage: pebble <command> [<options>...]
-
-...
-```
+For more information, see {ref}`reference_pebble_help_command`.
 
 ## Configure Pebble
 
