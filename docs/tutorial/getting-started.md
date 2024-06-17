@@ -18,7 +18,7 @@ tar zxvf pebble_v1.12.0_linux_amd64.tar.gz
 sudo mv pebble /usr/local/bin/
 ```
 
-Also, make sure `/usr/local/bin/` is in your `$PATH`.
+Also, make sure `/usr/local/bin` is in your `$PATH`.
 
 ## Verify Pebble installation
 
