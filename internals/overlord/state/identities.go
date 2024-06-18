@@ -22,8 +22,6 @@ import (
 	"strings"
 )
 
-// TODO: disallow multiple users with same "local: user-id" value?
-
 // Identity holds the configuration of a single identity.
 type Identity struct {
 	Name   string
@@ -64,14 +62,10 @@ func (d *Identity) validate() error {
 
 	switch {
 	case d.Local != nil:
-		if d.Local.UserID == 0 {
-			return errors.New("local identity must have nonzero user ID")
-		}
+		return nil
 	default:
 		return errors.New(`identity must have at least one type ("local")`)
 	}
-
-	return nil
 }
 
 // apiIdentity exists so the default JSON marshalling of an Identity (used
@@ -83,14 +77,14 @@ type apiIdentity struct {
 }
 
 type apiLocalIdentity struct {
-	UserID uint32 `json:"user-id"`
+	UserID *uint32 `json:"user-id"`
 }
 
 // IMPORTANT NOTE: be sure to exclude secrets when adding to this!
 func (d *Identity) MarshalJSON() ([]byte, error) {
 	ai := apiIdentity{
 		Access: string(d.Access),
-		Local:  &apiLocalIdentity{UserID: d.Local.UserID},
+		Local:  &apiLocalIdentity{UserID: &d.Local.UserID},
 	}
 	return json.Marshal(ai)
 }
@@ -104,7 +98,10 @@ func (d *Identity) UnmarshalJSON(data []byte) error {
 	d.Access = IdentityAccess(ai.Access)
 	switch {
 	case ai.Local != nil:
-		d.Local = &LocalIdentity{UserID: ai.Local.UserID}
+		if ai.Local.UserID == nil {
+			return errors.New("local identity must specify user-id")
+		}
+		d.Local = &LocalIdentity{UserID: *ai.Local.UserID}
 	default:
 		return errors.New(`identity must have at least one type ("local")`)
 	}
@@ -130,6 +127,10 @@ func (s *State) AddIdentities(identities map[string]*Identity) error {
 	if len(existing) > 0 {
 		sort.Strings(existing)
 		return fmt.Errorf("identities already exist: %s", strings.Join(existing, ", "))
+	}
+	err := verifyUniqueUserIDs(s.identities, identities)
+	if err != nil {
+		return nil
 	}
 
 	for name, identity := range identities {
@@ -159,6 +160,10 @@ func (s *State) UpdateIdentities(identities map[string]*Identity) error {
 		sort.Strings(missing)
 		return fmt.Errorf("identities missing: %s", strings.Join(missing, ", "))
 	}
+	err := verifyUniqueUserIDs(s.identities, identities)
+	if err != nil {
+		return nil
+	}
 
 	for name, identity := range identities {
 		identity.Name = name
@@ -180,6 +185,10 @@ func (s *State) ReplaceIdentities(identities map[string]*Identity) error {
 				return fmt.Errorf("identity %q invalid: %w", name, err)
 			}
 		}
+	}
+	err := verifyUniqueUserIDs(s.identities, identities)
+	if err != nil {
+		return nil
 	}
 
 	for name, identity := range identities {
@@ -226,6 +235,31 @@ func (s *State) Identities() map[string]*Identity {
 		result[name] = identity
 	}
 	return result
+}
+
+func verifyUniqueUserIDs(existing map[string]*Identity, new map[string]*Identity) error {
+	existingNamesByUserID := make(map[uint32]string)
+	for name, identity := range existing {
+		switch {
+		case identity.Local != nil:
+			existingNamesByUserID[identity.Local.UserID] = name
+		}
+	}
+	for name, identity := range new {
+		if identity == nil {
+			continue // removing identity (for ReplaceIdentities only)
+		}
+		switch {
+		case identity.Local != nil:
+			existingName, ok := existingNamesByUserID[identity.Local.UserID]
+			if ok && name != existingName {
+				return fmt.Errorf("identity %q and %q cannot both have user ID %d",
+					name, existingName, identity.Local.UserID)
+			}
+			existingNamesByUserID[identity.Local.UserID] = name
+		}
+	}
+	return nil
 }
 
 // IdentityFromInputs returns an identity with the given inputs, or nil
