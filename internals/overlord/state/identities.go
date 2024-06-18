@@ -64,14 +64,10 @@ func (d *Identity) validate() error {
 
 	switch {
 	case d.Local != nil:
-		if d.Local.UserID == 0 {
-			return errors.New("local identity must have nonzero user ID")
-		}
+		return nil
 	default:
 		return errors.New(`identity must have at least one type ("local")`)
 	}
-
-	return nil
 }
 
 // apiIdentity exists so the default JSON marshalling of an Identity (used
@@ -83,14 +79,14 @@ type apiIdentity struct {
 }
 
 type apiLocalIdentity struct {
-	UserID uint32 `json:"user-id"`
+	UserID *uint32 `json:"user-id"`
 }
 
 // IMPORTANT NOTE: be sure to exclude secrets when adding to this!
 func (d *Identity) MarshalJSON() ([]byte, error) {
 	ai := apiIdentity{
 		Access: string(d.Access),
-		Local:  &apiLocalIdentity{UserID: d.Local.UserID},
+		Local:  &apiLocalIdentity{UserID: &d.Local.UserID},
 	}
 	return json.Marshal(ai)
 }
@@ -104,7 +100,10 @@ func (d *Identity) UnmarshalJSON(data []byte) error {
 	d.Access = IdentityAccess(ai.Access)
 	switch {
 	case ai.Local != nil:
-		d.Local = &LocalIdentity{UserID: ai.Local.UserID}
+		if ai.Local.UserID == nil {
+			return errors.New("local identity must specify user-id")
+		}
+		d.Local = &LocalIdentity{UserID: *ai.Local.UserID}
 	default:
 		return errors.New(`identity must have at least one type ("local")`)
 	}
