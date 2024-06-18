@@ -22,8 +22,6 @@ import (
 	"strings"
 )
 
-// TODO: disallow multiple users with same "local: user-id" value?
-
 // Identity holds the configuration of a single identity.
 type Identity struct {
 	Name   string
@@ -130,6 +128,10 @@ func (s *State) AddIdentities(identities map[string]*Identity) error {
 		sort.Strings(existing)
 		return fmt.Errorf("identities already exist: %s", strings.Join(existing, ", "))
 	}
+	err := verifyUniqueUserIDs(s.identities, identities)
+	if err != nil {
+		return nil
+	}
 
 	for name, identity := range identities {
 		identity.Name = name
@@ -158,6 +160,10 @@ func (s *State) UpdateIdentities(identities map[string]*Identity) error {
 		sort.Strings(missing)
 		return fmt.Errorf("identities missing: %s", strings.Join(missing, ", "))
 	}
+	err := verifyUniqueUserIDs(s.identities, identities)
+	if err != nil {
+		return nil
+	}
 
 	for name, identity := range identities {
 		identity.Name = name
@@ -179,6 +185,10 @@ func (s *State) ReplaceIdentities(identities map[string]*Identity) error {
 				return fmt.Errorf("identity %q invalid: %w", name, err)
 			}
 		}
+	}
+	err := verifyUniqueUserIDs(s.identities, identities)
+	if err != nil {
+		return nil
 	}
 
 	for name, identity := range identities {
@@ -225,4 +235,29 @@ func (s *State) Identities() map[string]*Identity {
 		result[name] = identity
 	}
 	return result
+}
+
+func verifyUniqueUserIDs(existing map[string]*Identity, new map[string]*Identity) error {
+	existingNamesByUserID := make(map[uint32]string)
+	for name, identity := range existing {
+		switch {
+		case identity.Local != nil:
+			existingNamesByUserID[identity.Local.UserID] = name
+		}
+	}
+	for name, identity := range new {
+		if identity == nil {
+			continue // removing identity (for ReplaceIdentities only)
+		}
+		switch {
+		case identity.Local != nil:
+			existingName, ok := existingNamesByUserID[identity.Local.UserID]
+			if ok && name != existingName {
+				return fmt.Errorf("identity %q and %q cannot both have user ID %d",
+					name, existingName, identity.Local.UserID)
+			}
+			existingNamesByUserID[identity.Local.UserID] = name
+		}
+	}
+	return nil
 }
