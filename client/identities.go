@@ -42,7 +42,9 @@ const (
 // LocalIdentity holds identity configuration specific to the "local" type
 // (for ucrednet/UID authentication).
 type LocalIdentity struct {
-	UserID uint32 `json:"user-id" yaml:"user-id"`
+	// This is a pointer so we can distinguish between not set and 0 (a valid
+	// user-id meaning root).
+	UserID *uint32 `json:"user-id" yaml:"user-id"`
 }
 
 // For future extension.
