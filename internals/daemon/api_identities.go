@@ -56,7 +56,7 @@ func v1PostIdentities(c *Command, r *http.Request, _ *UserState) Response {
 		identities := make(map[string]struct{})
 		for name, identity := range payload.Identities {
 			if identity != nil {
-				return BadRequest(`identity %q value must be null for "remove" action`, name)
+				return BadRequest(`identity value for %q must be null when removing`, name)
 			}
 			identities[name] = struct{}{}
 		}
