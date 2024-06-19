@@ -95,16 +95,24 @@ func (d *Identity) UnmarshalJSON(data []byte) error {
 	if err != nil {
 		return err
 	}
-	d.Access = IdentityAccess(ai.Access)
+
+	identity := Identity{
+		Access: IdentityAccess(ai.Access),
+	}
 	switch {
 	case ai.Local != nil:
 		if ai.Local.UserID == nil {
 			return errors.New("local identity must specify user-id")
 		}
-		d.Local = &LocalIdentity{UserID: *ai.Local.UserID}
-	default:
-		return errors.New(`identity must have at least one type ("local")`)
+		identity.Local = &LocalIdentity{UserID: *ai.Local.UserID}
 	}
+	// Perform additional validation using the local Identity type.
+	err = identity.validate()
+	if err != nil {
+		return err
+	}
+
+	*d = identity
 	return nil
 }
 
@@ -128,15 +136,19 @@ func (s *State) AddIdentities(identities map[string]*Identity) error {
 		sort.Strings(existing)
 		return fmt.Errorf("identities already exist: %s", strings.Join(existing, ", "))
 	}
-	err := verifyUniqueUserIDs(s.identities, identities)
-	if err != nil {
-		return nil
-	}
 
+	newIdentities := s.cloneIdentities()
 	for name, identity := range identities {
 		identity.Name = name
-		s.identities[name] = identity
+		newIdentities[name] = identity
 	}
+
+	err := verifyUniqueUserIDs(newIdentities)
+	if err != nil {
+		return err
+	}
+
+	s.identities = newIdentities
 	return nil
 }
 
@@ -158,17 +170,21 @@ func (s *State) UpdateIdentities(identities map[string]*Identity) error {
 	}
 	if len(missing) > 0 {
 		sort.Strings(missing)
-		return fmt.Errorf("identities missing: %s", strings.Join(missing, ", "))
-	}
-	err := verifyUniqueUserIDs(s.identities, identities)
-	if err != nil {
-		return nil
+		return fmt.Errorf("identities do not exist: %s", strings.Join(missing, ", "))
 	}
 
+	newIdentities := s.cloneIdentities()
 	for name, identity := range identities {
 		identity.Name = name
-		s.identities[name] = identity
+		newIdentities[name] = identity
 	}
+
+	err := verifyUniqueUserIDs(newIdentities)
+	if err != nil {
+		return err
+	}
+
+	s.identities = newIdentities
 	return nil
 }
 
@@ -186,19 +202,23 @@ func (s *State) ReplaceIdentities(identities map[string]*Identity) error {
 			}
 		}
 	}
-	err := verifyUniqueUserIDs(s.identities, identities)
-	if err != nil {
-		return nil
-	}
 
+	newIdentities := s.cloneIdentities()
 	for name, identity := range identities {
 		if identity == nil {
-			delete(s.identities, name)
+			delete(newIdentities, name)
 		} else {
 			identity.Name = name
-			s.identities[name] = identity
+			newIdentities[name] = identity
 		}
 	}
+
+	err := verifyUniqueUserIDs(newIdentities)
+	if err != nil {
+		return err
+	}
+
+	s.identities = newIdentities
 	return nil
 }
 
@@ -216,7 +236,7 @@ func (s *State) RemoveIdentities(identities map[string]struct{}) error {
 	}
 	if len(missing) > 0 {
 		sort.Strings(missing)
-		return fmt.Errorf("identities missing: %s", strings.Join(missing, ", "))
+		return fmt.Errorf("identities do not exist: %s", strings.Join(missing, ", "))
 	}
 
 	for name := range identities {
@@ -237,26 +257,28 @@ func (s *State) Identities() map[string]*Identity {
 	return result
 }
 
-func verifyUniqueUserIDs(existing map[string]*Identity, new map[string]*Identity) error {
-	existingNamesByUserID := make(map[uint32]string)
-	for name, identity := range existing {
-		switch {
-		case identity.Local != nil:
-			existingNamesByUserID[identity.Local.UserID] = name
-		}
+func (s *State) cloneIdentities() map[string]*Identity {
+	newIdentities := make(map[string]*Identity, len(s.identities))
+	for name, identity := range s.identities {
+		newIdentities[name] = identity
 	}
-	for name, identity := range new {
-		if identity == nil {
-			continue // removing identity (for ReplaceIdentities only)
-		}
+	return newIdentities
+}
+
+func verifyUniqueUserIDs(identities map[string]*Identity) error {
+	userIDs := make(map[uint32]string) // maps user IDs to identity name
+	for name, identity := range identities {
 		switch {
 		case identity.Local != nil:
-			existingName, ok := existingNamesByUserID[identity.Local.UserID]
-			if ok && name != existingName {
-				return fmt.Errorf("identity %q and %q cannot both have user ID %d",
+			existingName, ok := userIDs[identity.Local.UserID]
+			if ok {
+				if name > existingName { // ensure error message is stable
+					name, existingName = existingName, name
+				}
+				return fmt.Errorf("identities %q and %q cannot both have user ID %d",
 					name, existingName, identity.Local.UserID)
 			}
-			existingNamesByUserID[identity.Local.UserID] = name
+			userIDs[identity.Local.UserID] = name
 		}
 	}
 	return nil

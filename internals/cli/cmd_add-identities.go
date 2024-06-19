@@ -67,7 +67,7 @@ func (cmd *cmdAddIdentities) Execute(args []string) error {
 		return err
 	}
 
-	fmt.Fprintf(Stdout, "Added %s\n", numItems(len(identities), "new identity", "new identities"))
+	fmt.Fprintf(Stdout, "Added %s.\n", numItems(len(identities), "new identity", "new identities"))
 	return nil
 }
 

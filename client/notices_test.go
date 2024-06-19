@@ -42,6 +42,8 @@ func (cs *clientSuite) TestNotice(c *C) {
 	}}`
 	notice, err := cs.cli.Notice("123")
 	c.Assert(err, IsNil)
+	c.Assert(cs.req.Method, Equals, "GET")
+	c.Assert(cs.req.URL.Path, Equals, "/v1/notices/123")
 	uid := uint32(1000)
 	c.Assert(notice, DeepEquals, &client.Notice{
 		ID:            "123",
@@ -88,6 +90,7 @@ func (cs *clientSuite) TestNotices(c *C) {
 	}]}`
 	notices, err := cs.cli.Notices(&client.NoticesOptions{})
 	c.Assert(err, IsNil)
+	c.Assert(cs.req.Method, Equals, "GET")
 	c.Assert(cs.req.URL.Path, Equals, "/v1/notices")
 	c.Assert(cs.req.URL.Query(), DeepEquals, url.Values{})
 	uid := uint32(1000)
@@ -126,6 +129,7 @@ func (cs *clientSuite) TestNoticesFilters(c *C) {
 		After:  time.Date(2023, 9, 5, 16, 43, 32, 123_456_789, time.UTC),
 	})
 	c.Assert(err, IsNil)
+	c.Assert(cs.req.Method, Equals, "GET")
 	c.Assert(cs.req.URL.Path, Equals, "/v1/notices")
 	c.Assert(cs.req.URL.Query(), DeepEquals, url.Values{
 		"users":   {"all"},
@@ -147,6 +151,7 @@ func (cs *clientSuite) TestNotify(c *C) {
 	})
 	c.Assert(err, IsNil)
 	c.Check(noticeID, Equals, "7")
+	c.Assert(cs.req.Method, Equals, "POST")
 	c.Assert(cs.req.URL.Path, Equals, "/v1/notices")
 
 	body, err := io.ReadAll(cs.req.Body)
@@ -171,6 +176,7 @@ func (cs *clientSuite) TestNotifyMinimal(c *C) {
 	})
 	c.Assert(err, IsNil)
 	c.Check(noticeID, Equals, "1")
+	c.Assert(cs.req.Method, Equals, "POST")
 	c.Assert(cs.req.URL.Path, Equals, "/v1/notices")
 
 	body, err := io.ReadAll(cs.req.Body)
@@ -198,6 +204,7 @@ func (cs *clientSuite) TestWaitNotices(c *C) {
 	}]}`
 	notices, err := cs.cli.WaitNotices(context.Background(), 10*time.Second, nil)
 	c.Assert(err, IsNil)
+	c.Assert(cs.req.Method, Equals, "GET")
 	c.Assert(cs.req.URL.Path, Equals, "/v1/notices")
 	c.Assert(cs.req.URL.Query(), DeepEquals, url.Values{
 		"timeout": {"10s"},
