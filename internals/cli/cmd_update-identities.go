@@ -70,13 +70,13 @@ func (cmd *cmdUpdateIdentities) Execute(args []string) error {
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(Stdout, "Replaced %s\n", numItems(len(identities), "identity", "identities"))
+		fmt.Fprintf(Stdout, "Replaced %s.\n", numItems(len(identities), "identity", "identities"))
 	} else {
 		err = cmd.client.UpdateIdentities(identities)
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(Stdout, "Updated %s\n", numItems(len(identities), "identity", "identities"))
+		fmt.Fprintf(Stdout, "Updated %s.\n", numItems(len(identities), "identity", "identities"))
 	}
 
 	return nil

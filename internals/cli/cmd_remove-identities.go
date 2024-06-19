@@ -62,7 +62,7 @@ func (cmd *cmdRemoveIdentities) Execute(args []string) error {
 	identityNames := make(map[string]struct{}, len(identities))
 	for name, identity := range identities {
 		if identity != nil {
-			return fmt.Errorf("identity %q value must be null when removing", name)
+			return fmt.Errorf("identity %q must be null when removing", name)
 		}
 		identityNames[name] = struct{}{}
 	}
@@ -71,6 +71,6 @@ func (cmd *cmdRemoveIdentities) Execute(args []string) error {
 		return err
 	}
 
-	fmt.Fprintf(Stdout, "Removed %s\n", numItems(len(identities), "identity", "identities"))
+	fmt.Fprintf(Stdout, "Removed %s.\n", numItems(len(identities), "identity", "identities"))
 	return nil
 }
