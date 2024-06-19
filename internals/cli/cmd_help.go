@@ -214,10 +214,10 @@ var HelpCategories = []HelpCategory{{
 	Label:       "Notices",
 	Description: "manage notices and warnings",
 	Commands:    []string{"warnings", "okay", "notices", "notice", "notify"},
-	//}, {
-	//	Label:       "Identities",
-	//	Description: "manage user identities",
-	//	Commands:    []string{"identities --help"}, // TODO: error during "pebble help --all"
+}, {
+	Label:       "Identities",
+	Description: "manage user identities",
+	Commands:    []string{"identities", "identity", "add-identities", "update-identities", "remove-identities"},
 }}
 
 var (
