@@ -257,6 +257,22 @@ func (s *State) Identities() map[string]*Identity {
 	return result
 }
 
+// IdentityFromInputs returns an identity with the given inputs, or nil
+// if there is none.
+func (s *State) IdentityFromInputs(userID *uint32) *Identity {
+	s.reading()
+
+	for _, identity := range s.identities {
+		switch {
+		case identity.Local != nil && userID != nil:
+			if identity.Local.UserID == *userID {
+				return identity
+			}
+		}
+	}
+	return nil
+}
+
 func (s *State) cloneIdentities() map[string]*Identity {
 	newIdentities := make(map[string]*Identity, len(s.identities))
 	for name, identity := range s.identities {
@@ -279,22 +295,6 @@ func verifyUniqueUserIDs(identities map[string]*Identity) error {
 					name, existingName, identity.Local.UserID)
 			}
 			userIDs[identity.Local.UserID] = name
-		}
-	}
-	return nil
-}
-
-// IdentityFromInputs returns an identity with the given inputs, or nil
-// if there is none.
-func (s *State) IdentityFromInputs(userID *uint32) *Identity {
-	s.reading()
-
-	for _, identity := range s.identities {
-		switch {
-		case identity.Local != nil && userID != nil:
-			if identity.Local.UserID == *userID {
-				return identity
-			}
 		}
 	}
 	return nil
