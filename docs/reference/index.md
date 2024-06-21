@@ -5,5 +5,5 @@
 :maxdepth: 1
 
 Layer specification <layer-specification>
-pebble-help
+Help command <pebble-help>
 ```

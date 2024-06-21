@@ -12,16 +12,16 @@ After this tutorial, you will have a basic understanding of what Pebble is and h
 
 The easiest way to install the latest Pebble release is by downloading the binary. If you prefer a different installation method, see {ref}`how_to_install_pebble`.
 
-```{include} /reuse/common-blocks.md
+```{include} /reuse/install.md
    :start-after: Start: Install Pebble binary
    :end-before: End: Install Pebble binary
 ```
 
-## Verify Pebble installation
+## Verify the Pebble installation
 
-```{include} /reuse/common-blocks.md
-   :start-after: Start: Verify Pebble installation
-   :end-before: End: Verify Pebble installation
+```{include} /reuse/verify.md
+   :start-after: Start: Verify the Pebble installation
+   :end-before: End: Verify the Pebble installation
 ```
 
 ## Configure Pebble

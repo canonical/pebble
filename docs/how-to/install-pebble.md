@@ -11,7 +11,7 @@ To install the latest version of Pebble, you can choose any of the following met
 
 To install the binary for the latest version of Pebble:
 
-```{include} /reuse/common-blocks.md
+```{include} /reuse/install.md
    :start-after: Start: Install Pebble binary
    :end-before: End: Install Pebble binary
 ```
@@ -25,11 +25,11 @@ Alternatively, you can install the latest version of Pebble from source:
 2. After installing, you will want to add the `$GOBIN` directory to your `$PATH` so you can use the installed tools. For more information, refer to the [official documentation](https://go.dev/doc/install/source#environment).
 3. Run `go install github.com/canonical/pebble/cmd/pebble@latest` to build and install Pebble.
 
-## Verify Pebble installation
+## Verify the Pebble installation
 
-```{include} /reuse/common-blocks.md
-   :start-after: Start: Verify Pebble installation
-   :end-before: End: Verify Pebble installation
+```{include} /reuse/verify.md
+   :start-after: Start: Verify the Pebble installation
+   :end-before: End: Verify the Pebble installation
 ```
 
 Pebble is invoked using `pebble <command>`. For more information, see {ref}`reference_pebble_help_command`.
