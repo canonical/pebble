@@ -23,8 +23,7 @@ import (
 	"github.com/canonical/pebble/internals/overlord/state"
 )
 
-type accessSuite struct {
-}
+type accessSuite struct{}
 
 var _ = Suite(&accessSuite{})
 
@@ -76,6 +75,8 @@ func (s *accessSuite) TestUserAccess(c *C) {
 	// But not UntrustedAccess
 	user = &daemon.UserState{Access: state.UntrustedAccess}
 	c.Check(ac.CheckAccess(nil, nil, nil, user), DeepEquals, errUnauthorized)
+	ucred = &daemon.Ucrednet{Uid: 42, Pid: 100} // UserState should override this
+	c.Check(ac.CheckAccess(nil, nil, ucred, user), DeepEquals, errUnauthorized)
 }
 
 func (s *accessSuite) TestAdminAccess(c *C) {
@@ -100,7 +101,7 @@ func (s *accessSuite) TestAdminAccess(c *C) {
 	c.Check(ac.CheckAccess(nil, nil, ucred, nil), IsNil)
 
 	// User with "access: admin" is granted access
-	ucred = &daemon.Ucrednet{Uid: uid + 1, Pid: 100} // UserState will override ucred
+	ucred = &daemon.Ucrednet{Uid: uid + 1, Pid: 100} // UserState should override ucred
 	user := &daemon.UserState{Access: state.AdminAccess}
 	c.Check(ac.CheckAccess(nil, nil, ucred, user), IsNil)
 
@@ -108,5 +109,7 @@ func (s *accessSuite) TestAdminAccess(c *C) {
 	user = &daemon.UserState{Access: state.ReadAccess}
 	c.Check(ac.CheckAccess(nil, nil, ucred, user), DeepEquals, errUnauthorized)
 	user = &daemon.UserState{Access: state.UntrustedAccess}
+	c.Check(ac.CheckAccess(nil, nil, ucred, user), DeepEquals, errUnauthorized)
+	ucred = &daemon.Ucrednet{Uid: 0, Pid: 100} // UserState should override ucred
 	c.Check(ac.CheckAccess(nil, nil, ucred, user), DeepEquals, errUnauthorized)
 }
