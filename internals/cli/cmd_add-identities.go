@@ -31,6 +31,14 @@ const cmdAddIdentitiesDescription = `
 The add-identities command adds one or more new identities.
 
 The named identities must not yet exist.
+
+For example, to add a local admin named "bob", use YAML like this:
+
+> identities:
+>     bob:
+>         access: admin
+>         local:
+>             user-id: 42
 `
 
 type cmdAddIdentities struct {

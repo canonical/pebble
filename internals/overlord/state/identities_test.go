@@ -107,7 +107,10 @@ func (s *identitiesSuite) TestUnmarshalAPIErrors(c *C) {
 		error: `local identity must specify user-id`,
 	}, {
 		data:  `{"invalid-access": {"access": "foo", "local": {"user-id": 42}}}`,
-		error: `invalid access "foo", must be "admin", "read", or "untrusted"`,
+		error: `invalid access value "foo", must be "admin", "read", or "untrusted"`,
+	}, {
+		data:  `{"invalid-access": {"local": {"user-id": 42}}}`,
+		error: `access value must be specified \("admin", "read", or "untrusted"\)`,
 	}}
 	for _, test := range tests {
 		c.Logf("Input data: %s", test.data)
@@ -260,7 +263,7 @@ func (s *identitiesSuite) TestAddIdentities(c *C) {
 			Local:  &state.LocalIdentity{UserID: 43},
 		},
 	})
-	c.Assert(err, ErrorMatches, `identity "bill" invalid: invalid access "bar", must be "admin", "read", or "untrusted"`)
+	c.Assert(err, ErrorMatches, `identity "bill" invalid: invalid access value "bar", must be "admin", "read", or "untrusted"`)
 
 	// Must have at least one type.
 	err = st.AddIdentities(map[string]*state.Identity{
