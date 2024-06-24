@@ -55,8 +55,11 @@ func (d *Identity) validate() error {
 
 	switch d.Access {
 	case AdminAccess, ReadAccess, UntrustedAccess:
+	case "":
+		return fmt.Errorf("access value must be specified (%q, %q, or %q)",
+			AdminAccess, ReadAccess, UntrustedAccess)
 	default:
-		return fmt.Errorf("invalid access %q, must be %q, %q, or %q",
+		return fmt.Errorf("invalid access value %q, must be %q, %q, or %q",
 			d.Access, AdminAccess, ReadAccess, UntrustedAccess)
 	}
 
