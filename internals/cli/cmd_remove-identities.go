@@ -27,7 +27,11 @@ const cmdRemoveIdentitiesDescription = `
 The remove-identities command removes one or more identities.
 
 The named identities must exist. The named identity entries must be null in
-the YAML input.
+the YAML input. For example, to remove "alice" and "bob", use this YAML:
+
+> identities:
+>     alice: null
+>     bob: null
 `
 
 type cmdRemoveIdentities struct {
@@ -62,7 +66,7 @@ func (cmd *cmdRemoveIdentities) Execute(args []string) error {
 	identityNames := make(map[string]struct{}, len(identities))
 	for name, identity := range identities {
 		if identity != nil {
-			return fmt.Errorf("identity %q must be null when removing", name)
+			return fmt.Errorf("value of identity %q must be null in YAML when removing", name)
 		}
 		identityNames[name] = struct{}{}
 	}
