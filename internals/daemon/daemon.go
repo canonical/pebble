@@ -57,6 +57,16 @@ var (
 	sysGetuid       = sys.Getuid
 )
 
+const (
+	// Whether to include maintenance info (pending restarts) and warnings
+	// with every API response. These are turned off right now because
+	// restarts and warnings aren't used at all in Pebble now, and it's not
+	// worth locking state twice on every request for features we don't use.
+	// We could rip out the code for these features, but this will do for now.
+	includeMaintenance     = false
+	includeWarningsSummary = false
+)
+
 // Options holds the daemon setup required for the initialization of a new daemon.
 type Options struct {
 	// Dir is the pebble directory where all setup is found. Defaults to /var/lib/pebble/default.
@@ -203,18 +213,20 @@ func (c *Command) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	if rsp, ok := rsp.(*resp); ok {
 		st := c.d.state
-		st.Lock()
-		_, rst := restart.Pending(st)
-		st.Unlock()
-		switch rst {
-		case restart.RestartSystem:
-			rsp.transmitMaintenance(errorKindSystemRestart, "system is restarting")
-		case restart.RestartDaemon:
-			rsp.transmitMaintenance(errorKindDaemonRestart, "daemon is restarting")
-		case restart.RestartSocket:
-			rsp.transmitMaintenance(errorKindDaemonRestart, "daemon is stopping to wait for socket activation")
+		if includeMaintenance {
+			st.Lock()
+			_, rst := restart.Pending(st)
+			st.Unlock()
+			switch rst {
+			case restart.RestartSystem:
+				rsp.transmitMaintenance(errorKindSystemRestart, "system is restarting")
+			case restart.RestartDaemon:
+				rsp.transmitMaintenance(errorKindDaemonRestart, "daemon is restarting")
+			case restart.RestartSocket:
+				rsp.transmitMaintenance(errorKindDaemonRestart, "daemon is stopping to wait for socket activation")
+			}
 		}
-		if rsp.Type != ResponseTypeError {
+		if includeWarningsSummary && rsp.Type != ResponseTypeError {
 			st.Lock()
 			count, stamp := st.WarningsSummary()
 			st.Unlock()
