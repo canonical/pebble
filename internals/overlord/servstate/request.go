@@ -32,7 +32,7 @@ func get_or_create_lane(s *state.State, service *plan.Service, service_lane_mapp
 
 func joinLane(s *state.State, task *state.Task, service *plan.Service, service_lane_mapping map[string]int, lane_tasks_mapping map[int][]*state.Task) {
 	lane := get_or_create_lane(s, service, service_lane_mapping)
-	
+
 	task.JoinLane(lane)
 
 	// map task to lane
