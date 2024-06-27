@@ -41,6 +41,7 @@ func joinLane(s *state.State, task *state.Task, service *plan.Service, service_l
 	}
 	lane_tasks_mapping[lane] = append(lane_tasks_mapping[lane], task)
 
+	// map the service's dependencies to the same lane
 	service_lane_mapping[service.Name] = lane
 	all_dependencies := append(append(service.Requires, service.Before...), service.After...)
 	for _, dependency := range all_dependencies {
@@ -58,7 +59,6 @@ func handleWaitFor(lane_tasks_mapping map[int][]*state.Task) {
 
 // Start creates and returns a task set for starting the given services.
 func Start(s *state.State, names []string, m *ServiceManager) (*state.TaskSet, error) {
-	fmt.Println(names)
 	services := m.getPlan().Services
 	service_lane_mapping := make(map[string]int)
 	lane_tasks_mapping := make(map[int][]*state.Task)
