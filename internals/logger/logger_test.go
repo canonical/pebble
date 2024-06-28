@@ -16,10 +16,12 @@ package logger_test
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"testing"
 
 	. "gopkg.in/check.v1"
+	"gopkg.in/tomb.v2"
 
 	"github.com/canonical/pebble/internals/logger"
 )
@@ -30,7 +32,7 @@ func Test(t *testing.T) { TestingT(t) }
 var _ = Suite(&LogSuite{})
 
 type LogSuite struct {
-	logbuf        *bytes.Buffer
+	logbuf        fmt.Stringer
 	restoreLogger func()
 }
 
@@ -74,4 +76,20 @@ func (s *LogSuite) TestNewline(c *C) {
 func (s *LogSuite) TestPanicf(c *C) {
 	c.Check(func() { logger.Panicf("xyzzy") }, Panics, "xyzzy")
 	c.Check(s.logbuf.String(), Matches, `20\d\d-\d\d-\d\dT\d\d:\d\d:\d\d.\d\d\dZ PREFIX: PANIC xyzzy\n`)
+}
+
+func (s *LogSuite) TestMockLoggerReadWriteThreadsafe(c *C) {
+	var t tomb.Tomb
+	t.Go(func() error {
+		for i := 0; i < 100; i++ {
+			logger.Noticef("foo")
+			logger.Noticef("bar")
+		}
+		return nil
+	})
+	for i := 0; i < 10; i++ {
+		logger.Noticef(s.logbuf.String())
+	}
+	err := t.Wait()
+	c.Check(err, IsNil)
 }

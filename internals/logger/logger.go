@@ -73,10 +73,27 @@ func Debugf(format string, v ...interface{}) {
 	logger.Debug(msg)
 }
 
+type lockedBytesBuffer struct {
+	buffer bytes.Buffer
+	mutex  sync.Mutex
+}
+
+func (b *lockedBytesBuffer) Write(p []byte) (int, error) {
+	b.mutex.Lock()
+	defer b.mutex.Unlock()
+	return b.buffer.Write(p)
+}
+
+func (b *lockedBytesBuffer) String() string {
+	b.mutex.Lock()
+	defer b.mutex.Unlock()
+	return b.buffer.String()
+}
+
 // MockLogger replaces the existing logger with a buffer and returns
-// the log buffer and a restore function.
-func MockLogger(prefix string) (buf *bytes.Buffer, restore func()) {
-	buf = &bytes.Buffer{}
+// a Stringer returning the log buffer content and a restore function.
+func MockLogger(prefix string) (fmt.Stringer, func()) {
+	buf := &lockedBytesBuffer{}
 	oldLogger := SetLogger(New(buf, prefix))
 	return buf, func() {
 		SetLogger(oldLogger)
