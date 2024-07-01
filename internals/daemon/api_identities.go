@@ -40,6 +40,28 @@ func v1PostIdentities(c *Command, r *http.Request, _ *UserState) Response {
 		return BadRequest("cannot decode request body: %v", err)
 	}
 
+	var identityNames map[string]struct{}
+	switch payload.Action {
+	case "add", "update":
+		for name, identity := range payload.Identities {
+			if identity == nil {
+				return BadRequest(`identity value for %q must not be null for %s operation`, name, payload.Action)
+			}
+		}
+	case "replace":
+		break
+	case "remove":
+		identityNames = make(map[string]struct{})
+		for name, identity := range payload.Identities {
+			if identity != nil {
+				return BadRequest(`identity value for %q must be null for %s operation`, name, payload.Action)
+			}
+			identityNames[name] = struct{}{}
+		}
+	default:
+		return BadRequest(`invalid action %q, must be "add", "update", "replace", or "remove"`, payload.Action)
+	}
+
 	st := c.d.overlord.State()
 	st.Lock()
 	defer st.Unlock()
@@ -53,16 +75,7 @@ func v1PostIdentities(c *Command, r *http.Request, _ *UserState) Response {
 	case "replace":
 		err = st.ReplaceIdentities(payload.Identities)
 	case "remove":
-		identities := make(map[string]struct{})
-		for name, identity := range payload.Identities {
-			if identity != nil {
-				return BadRequest(`identity value for %q must be null when removing`, name)
-			}
-			identities[name] = struct{}{}
-		}
-		err = st.RemoveIdentities(identities)
-	default:
-		return BadRequest(`invalid action %q, must be "add", "update", "replace", or "remove"`, payload.Action)
+		err = st.RemoveIdentities(identityNames)
 	}
 	if err != nil {
 		return BadRequest("%v", err)

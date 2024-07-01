@@ -56,6 +56,18 @@ func (cs *clientSuite) TestIdentities(c *C) {
 	})
 }
 
+func (cs *clientSuite) TestIdentitiesNullIdentity(c *C) {
+	cs.rsp = `{"type": "sync", "result": {
+		"bob": null
+	}}`
+	identities, err := cs.cli.Identities(nil)
+	c.Assert(err, ErrorMatches, `server returned null identity "bob"`)
+	c.Assert(cs.req.Method, Equals, "GET")
+	c.Assert(cs.req.URL.Path, Equals, "/v1/identities")
+	c.Assert(cs.req.URL.Query(), DeepEquals, url.Values{})
+	c.Assert(identities, IsNil)
+}
+
 func (cs *clientSuite) TestAddIdentities(c *C) {
 	cs.testPostIdentities(c, "add", cs.cli.AddIdentities)
 }

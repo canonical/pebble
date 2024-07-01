@@ -64,5 +64,5 @@ identities:
 	c.Assert(err, IsNil)
 
 	_, err = cli.ParserForTest().ParseArgs([]string{"remove-identities", "--from", path})
-	c.Assert(err, ErrorMatches, `value of identity "bob" must be null in YAML when removing`)
+	c.Assert(err, ErrorMatches, `identity value for "bob" must be null for remove operation`)
 }

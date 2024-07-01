@@ -47,7 +47,7 @@ type LocalIdentity struct {
 	UserID uint32
 }
 
-// validate checks that identity d is valid, returning an error if not.
+// validate checks that the identity is valid, returning an error if not.
 func (d *Identity) validate() error {
 	if d == nil {
 		return errors.New("identity must not be nil")
@@ -122,7 +122,7 @@ func (d *Identity) UnmarshalJSON(data []byte) error {
 // AddIdentities adds the given identities to the system. It's an error if any
 // of the named identities already exist.
 func (s *State) AddIdentities(identities map[string]*Identity) error {
-	s.writing()
+	s.reading()
 
 	// If any of the named identities already exist, return an error.
 	var existing []string
@@ -151,6 +151,7 @@ func (s *State) AddIdentities(identities map[string]*Identity) error {
 		return err
 	}
 
+	s.writing()
 	s.identities = newIdentities
 	return nil
 }
@@ -158,7 +159,7 @@ func (s *State) AddIdentities(identities map[string]*Identity) error {
 // UpdateIdentities updates the given identities in the system. It's an error
 // if any of the named identities do not exist.
 func (s *State) UpdateIdentities(identities map[string]*Identity) error {
-	s.writing()
+	s.reading()
 
 	// If any of the named identities don't exist, return an error.
 	var missing []string
@@ -187,6 +188,7 @@ func (s *State) UpdateIdentities(identities map[string]*Identity) error {
 		return err
 	}
 
+	s.writing()
 	s.identities = newIdentities
 	return nil
 }
@@ -195,7 +197,7 @@ func (s *State) UpdateIdentities(identities map[string]*Identity) error {
 // given identities (adding those that don't exist), or removes them if the
 // map value is nil.
 func (s *State) ReplaceIdentities(identities map[string]*Identity) error {
-	s.writing()
+	s.reading()
 
 	for name, identity := range identities {
 		if identity != nil {
@@ -221,6 +223,7 @@ func (s *State) ReplaceIdentities(identities map[string]*Identity) error {
 		return err
 	}
 
+	s.writing()
 	s.identities = newIdentities
 	return nil
 }
@@ -228,7 +231,7 @@ func (s *State) ReplaceIdentities(identities map[string]*Identity) error {
 // RemoveIdentities removes the named identities from the system. It's an
 // error if any of the named identities do not exist.
 func (s *State) RemoveIdentities(identities map[string]struct{}) error {
-	s.writing()
+	s.reading()
 
 	// If any of the named identities don't exist, return an error.
 	var missing []string
@@ -242,6 +245,7 @@ func (s *State) RemoveIdentities(identities map[string]struct{}) error {
 		return fmt.Errorf("identities do not exist: %s", strings.Join(missing, ", "))
 	}
 
+	s.writing()
 	for name := range identities {
 		delete(s.identities, name)
 	}
@@ -285,19 +289,19 @@ func (s *State) cloneIdentities() map[string]*Identity {
 }
 
 func verifyUniqueUserIDs(identities map[string]*Identity) error {
-	userIDs := make(map[uint32]string) // maps user IDs to identity name
+	userIDs := make(map[uint32][]string) // maps user ID to identity names
 	for name, identity := range identities {
 		switch {
 		case identity.Local != nil:
-			existingName, ok := userIDs[identity.Local.UserID]
-			if ok {
-				if name > existingName { // ensure error message is stable
-					name, existingName = existingName, name
-				}
-				return fmt.Errorf("identities %q and %q cannot both have user ID %d",
-					name, existingName, identity.Local.UserID)
-			}
-			userIDs[identity.Local.UserID] = name
+			uid := identity.Local.UserID
+			userIDs[uid] = append(userIDs[uid], name)
+		}
+	}
+	for userID, names := range userIDs {
+		if len(names) > 1 {
+			sort.Strings(names) // ensure error message is stable
+			return fmt.Errorf("cannot have multiple identities with user ID %d (%s)",
+				userID, strings.Join(names, ", "))
 		}
 	}
 	return nil
