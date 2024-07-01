@@ -87,12 +87,13 @@ type State struct {
 	// for registering runtime callbacks
 	lastHandlerId int
 
-	backend  Backend
-	data     customData
-	changes  map[string]*Change
-	tasks    map[string]*Task
-	warnings map[string]*Warning
-	notices  map[noticeKey]*Notice
+	backend    Backend
+	data       customData
+	changes    map[string]*Change
+	tasks      map[string]*Task
+	warnings   map[string]*Warning
+	notices    map[noticeKey]*Notice
+	identities map[string]*Identity
 
 	noticeCond *sync.Cond
 
@@ -116,6 +117,7 @@ func New(backend Backend) *State {
 		tasks:               make(map[string]*Task),
 		warnings:            make(map[string]*Warning),
 		notices:             make(map[noticeKey]*Notice),
+		identities:          make(map[string]*Identity),
 		modified:            true,
 		cache:               make(map[interface{}]interface{}),
 		pendingChangeByAttr: make(map[string]func(*Change) bool),
@@ -156,11 +158,12 @@ func (s *State) unlock() {
 }
 
 type marshalledState struct {
-	Data     map[string]*json.RawMessage `json:"data"`
-	Changes  map[string]*Change          `json:"changes"`
-	Tasks    map[string]*Task            `json:"tasks"`
-	Warnings []*Warning                  `json:"warnings,omitempty"`
-	Notices  []*Notice                   `json:"notices,omitempty"`
+	Data       map[string]*json.RawMessage    `json:"data"`
+	Changes    map[string]*Change             `json:"changes"`
+	Tasks      map[string]*Task               `json:"tasks"`
+	Warnings   []*Warning                     `json:"warnings,omitempty"`
+	Notices    []*Notice                      `json:"notices,omitempty"`
+	Identities map[string]*marshalledIdentity `json:"identities,omitempty"`
 
 	LastChangeId int `json:"last-change-id"`
 	LastTaskId   int `json:"last-task-id"`
@@ -168,21 +171,44 @@ type marshalledState struct {
 	LastNoticeId int `json:"last-notice-id"`
 }
 
+// marshalledIdentity is used specifically for marshalling to the state
+// database file. Unlike apiIdentity, it should include secrets.
+type marshalledIdentity struct {
+	Access string                   `json:"access"`
+	Local  *marshalledLocalIdentity `json:"local,omitempty"`
+}
+
+type marshalledLocalIdentity struct {
+	UserID uint32 `json:"user-id"`
+}
+
 // MarshalJSON makes State a json.Marshaller
 func (s *State) MarshalJSON() ([]byte, error) {
 	s.reading()
 	return json.Marshal(marshalledState{
-		Data:     s.data,
-		Changes:  s.changes,
-		Tasks:    s.tasks,
-		Warnings: s.flattenWarnings(),
-		Notices:  s.flattenNotices(nil),
+		Data:       s.data,
+		Changes:    s.changes,
+		Tasks:      s.tasks,
+		Warnings:   s.flattenWarnings(),
+		Notices:    s.flattenNotices(nil),
+		Identities: s.marshalledIdentities(),
 
 		LastTaskId:   s.lastTaskId,
 		LastChangeId: s.lastChangeId,
 		LastLaneId:   s.lastLaneId,
 		LastNoticeId: s.lastNoticeId,
 	})
+}
+
+func (s *State) marshalledIdentities() map[string]*marshalledIdentity {
+	marshalled := make(map[string]*marshalledIdentity, len(s.identities))
+	for name, identity := range s.identities {
+		marshalled[name] = &marshalledIdentity{
+			Access: string(identity.Access),
+			Local:  &marshalledLocalIdentity{UserID: identity.Local.UserID},
+		}
+	}
+	return marshalled
 }
 
 // UnmarshalJSON makes State a json.Unmarshaller
@@ -198,6 +224,7 @@ func (s *State) UnmarshalJSON(data []byte) error {
 	s.tasks = unmarshalled.Tasks
 	s.unflattenWarnings(unmarshalled.Warnings)
 	s.unflattenNotices(unmarshalled.Notices)
+	s.unmarshalIdentities(unmarshalled.Identities)
 	s.lastChangeId = unmarshalled.LastChangeId
 	s.lastTaskId = unmarshalled.LastTaskId
 	s.lastLaneId = unmarshalled.LastLaneId
@@ -211,6 +238,17 @@ func (s *State) UnmarshalJSON(data []byte) error {
 		chg.finishUnmarshal()
 	}
 	return nil
+}
+
+func (s *State) unmarshalIdentities(marshalled map[string]*marshalledIdentity) {
+	s.identities = make(map[string]*Identity, len(marshalled))
+	for name, mi := range marshalled {
+		s.identities[name] = &Identity{
+			Name:   name,
+			Access: IdentityAccess(mi.Access),
+			Local:  &LocalIdentity{UserID: mi.Local.UserID},
+		}
+	}
 }
 
 func (s *State) checkpointData() []byte {
