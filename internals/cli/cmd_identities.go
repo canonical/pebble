@@ -29,6 +29,14 @@ import (
 const cmdIdentitiesSummary = "List identities"
 const cmdIdentitiesDescription = `
 The identities command lists all identities.
+
+Other identity-related subcommands are as follows (use --help with any
+subcommand for details):
+
+{{.ProgramName}} identity           Show a single identity
+{{.ProgramName}} add-identities     Add new identities
+{{.ProgramName}} update-identities  Update or replace identities
+{{.ProgramName}} remove-identities  Remove identities
 `
 
 type cmdIdentities struct {
