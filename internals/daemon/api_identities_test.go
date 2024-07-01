@@ -115,6 +115,24 @@ func (s *apiSuite) TestAddIdentities(c *C) {
 	st.Unlock()
 }
 
+func (s *apiSuite) TestAddIdentitiesNull(c *C) {
+	s.daemon(c)
+
+	body := `
+{
+    "action": "add",
+    "identities": {
+        "mary": null
+    }
+}`
+	rsp := s.postIdentities(c, body)
+	c.Check(rsp.Type, Equals, ResponseTypeError)
+	c.Check(rsp.Status, Equals, http.StatusBadRequest)
+	result, ok := rsp.Result.(*errorResult)
+	c.Assert(ok, Equals, true)
+	c.Assert(result.Message, Matches, `identity value for "mary" must not be null for add operation`)
+}
+
 func (s *apiSuite) TestUpdateIdentities(c *C) {
 	s.daemon(c)
 
@@ -170,6 +188,24 @@ func (s *apiSuite) TestUpdateIdentities(c *C) {
 		},
 	})
 	st.Unlock()
+}
+
+func (s *apiSuite) TestUpdateIdentitiesNull(c *C) {
+	s.daemon(c)
+
+	body := `
+{
+    "action": "update",
+    "identities": {
+        "mary": null
+    }
+}`
+	rsp := s.postIdentities(c, body)
+	c.Check(rsp.Type, Equals, ResponseTypeError)
+	c.Check(rsp.Status, Equals, http.StatusBadRequest)
+	result, ok := rsp.Result.(*errorResult)
+	c.Assert(ok, Equals, true)
+	c.Assert(result.Message, Matches, `identity value for "mary" must not be null for update operation`)
 }
 
 func (s *apiSuite) TestReplaceIdentities(c *C) {
@@ -291,7 +327,7 @@ func (s *apiSuite) TestRemoveIdentitiesNotNull(c *C) {
 	c.Check(rsp.Status, Equals, http.StatusBadRequest)
 	result, ok := rsp.Result.(*errorResult)
 	c.Assert(ok, Equals, true)
-	c.Assert(result.Message, Matches, `identity value for "mary" must be null when removing`)
+	c.Assert(result.Message, Matches, `identity value for "mary" must be null for remove operation`)
 }
 
 func (s *apiSuite) TestPostIdentitiesInvalidAction(c *C) {
