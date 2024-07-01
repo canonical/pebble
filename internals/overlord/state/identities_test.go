@@ -280,9 +280,9 @@ func (s *identitiesSuite) TestAddIdentities(c *C) {
 			Local:  &state.LocalIdentity{UserID: 1000},
 		},
 	})
-	c.Assert(err, ErrorMatches, `identities "bill" and "mary" cannot both have user ID 1000`)
+	c.Assert(err, ErrorMatches, `cannot have multiple identities with user ID 1000 \(bill, mary\)`)
 
-	// Ensure user IDs are unique among the ones being added.
+	// Ensure user IDs are unique among the ones being added (and test >2 with same UID).
 	err = st.AddIdentities(map[string]*state.Identity{
 		"bill": {
 			Access: state.ReadAccess,
@@ -292,8 +292,12 @@ func (s *identitiesSuite) TestAddIdentities(c *C) {
 			Access: state.ReadAccess,
 			Local:  &state.LocalIdentity{UserID: 2000},
 		},
+		"boll": {
+			Access: state.ReadAccess,
+			Local:  &state.LocalIdentity{UserID: 2000},
+		},
 	})
-	c.Assert(err, ErrorMatches, `identities "bale" and "bill" cannot both have user ID 2000`)
+	c.Assert(err, ErrorMatches, `cannot have multiple identities with user ID 2000 \(bale, bill, boll\)`)
 }
 
 func (s *identitiesSuite) TestUpdateIdentities(c *C) {
@@ -371,7 +375,7 @@ func (s *identitiesSuite) TestUpdateIdentities(c *C) {
 			Local:  &state.LocalIdentity{UserID: 42},
 		},
 	})
-	c.Assert(err, ErrorMatches, `identities "bob" and "mary" cannot both have user ID 42`)
+	c.Assert(err, ErrorMatches, `cannot have multiple identities with user ID 42 \(bob, mary\)`)
 }
 
 func (s *identitiesSuite) TestReplaceIdentities(c *C) {
@@ -435,7 +439,7 @@ func (s *identitiesSuite) TestReplaceIdentities(c *C) {
 			Local:  &state.LocalIdentity{UserID: 43},
 		},
 	})
-	c.Assert(err, ErrorMatches, `identities "bob" and "mary" cannot both have user ID 43`)
+	c.Assert(err, ErrorMatches, `cannot have multiple identities with user ID 43 \(bob, mary\)`)
 }
 
 func (s *identitiesSuite) TestRemoveIdentities(c *C) {

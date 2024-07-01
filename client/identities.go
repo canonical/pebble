@@ -70,6 +70,11 @@ func (client *Client) Identities(opts *IdentitiesOptions) (map[string]*Identity,
 	if err != nil {
 		return nil, err
 	}
+	for name, identity := range identities {
+		if identity == nil {
+			return nil, fmt.Errorf("server returned null identity %q", name)
+		}
+	}
 	return identities, nil
 }
 
