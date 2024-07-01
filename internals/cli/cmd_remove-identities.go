@@ -66,7 +66,7 @@ func (cmd *cmdRemoveIdentities) Execute(args []string) error {
 	identityNames := make(map[string]struct{}, len(identities))
 	for name, identity := range identities {
 		if identity != nil {
-			return fmt.Errorf("value of identity %q must be null in YAML when removing", name)
+			return fmt.Errorf("identity value for %q must be null for remove operation", name)
 		}
 		identityNames[name] = struct{}{}
 	}

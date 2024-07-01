@@ -68,6 +68,7 @@ func (s *PebbleSuite) TestReplaceIdentities(c *C) {
 					"user-id": 42.0,
 				},
 			},
+			"alice": nil,
 		})
 		fmt.Fprint(w, `{
 			"type": "sync",
@@ -82,6 +83,7 @@ identities:
     bob:
         access: admin
         local: {user-id: 42}
+    alice: null
 `
 	err := os.WriteFile(path, []byte(data), 0o666)
 	c.Assert(err, IsNil)
@@ -89,6 +91,6 @@ identities:
 	rest, err := cli.ParserForTest().ParseArgs([]string{"update-identities", "--from", path, "--replace"})
 	c.Assert(err, IsNil)
 	c.Check(rest, HasLen, 0)
-	c.Check(s.Stdout(), Equals, "Replaced 1 identity.\n")
+	c.Check(s.Stdout(), Equals, "Replaced 2 identities.\n")
 	c.Check(s.Stderr(), Equals, "")
 }
