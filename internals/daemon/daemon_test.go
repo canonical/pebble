@@ -262,6 +262,9 @@ func (s *daemonSuite) TestCommandMethodDispatch(c *C) {
 }
 
 func (s *daemonSuite) TestCommandRestartingState(c *C) {
+	if !includeMaintenance {
+		c.Skip("includeMaintenance disabled")
+	}
 	d := s.newDaemon(c)
 
 	cmd := &Command{d: d, ReadAccess: OpenAccess{}}
@@ -312,6 +315,9 @@ func (s *daemonSuite) TestCommandRestartingState(c *C) {
 }
 
 func (s *daemonSuite) TestFillsWarnings(c *C) {
+	if !includeWarningsSummary {
+		c.Skip("includeWarningsSummary disabled")
+	}
 	d := s.newDaemon(c)
 
 	cmd := &Command{d: d, ReadAccess: OpenAccess{}}
