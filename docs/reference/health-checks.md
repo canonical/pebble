@@ -1,6 +1,68 @@
-# How to use health checks
+# Health checks
 
 Separate from the service manager, Pebble implements custom "health checks" that can be configured to restart services when they fail.
+
+## Usage
+
+Checks are configured in the layer configuration using the top-level field `checks`:
+
+```yaml
+# Optional: A list of health checks managed by this configuration layer.
+checks:
+    <check name>:
+        # Required
+        override: merge | replace
+        # Optional
+        level: alive | ready
+        # Optional
+        period: <duration>
+        # Optional
+        timeout: <duration>
+        # Optional
+        threshold: <failure threshold>
+
+        # HTTP check
+        # Only one of "http", "tcp", or "exec" may be specified.
+        http:
+            # Required
+            url: <full URL>
+            # Optional
+            headers:
+                <name>: <value>
+
+        # TCP port
+        # Only one of "http", "tcp", or "exec" may be specified.
+        tcp:
+            # Required
+            port: <port number>
+            # Optional
+            host: <host name>
+
+        # Command execution check
+        # Only one of "http", "tcp", or "exec" may be specified.
+        exec:
+            # Required
+            command: <commmand>
+            # Optional
+            service-context: <service-name>
+            # Optional
+            environment:
+                <name>: <value>
+            # Optional
+            user: <username>
+            # Optional
+            user-id: <uid>
+            # Optional
+            group: <group name>
+            # Optional
+            group-id: <gid>
+            # Optional
+            working-dir: <directory>
+```
+
+Full details are given in the [layer specification](../reference/layer-specification).
+
+## Options
 
 Each check can be one of three types. The types and their success criteria are:
 
@@ -8,7 +70,24 @@ Each check can be one of three types. The types and their success criteria are:
 * `tcp`: opening the given TCP port must be successful
 * `exec`: executing the specified command must yield a zero exit code
 
-Checks are configured in the layer configuration using the top-level field `checks`. Full details are given in the [layer specification](../reference/layer-specification), but below is an example layer showing the three different types of checks:
+Each check is performed with the specified `period` (the default is 10 seconds apart), and is considered an error if a timeout happens before the check responds -- for example, before the HTTP request is complete or before the command finishes executing.
+
+A check is considered healthy until it's had `threshold` errors in a row (the default is 3). At that point, the check is considered "down", and any associated `on-check-failure` actions will be triggered. When the check succeeds again, the failure count is reset to 0.
+
+To enable Pebble auto-restart behavior based on a check, use the `on-check-failure` map in the service configuration (this is what ties together services and checks). For example, to restart the "server" service when the "test" check fails, use the following:
+
+```
+services:
+    server:
+        override: merge
+        on-check-failure:
+            # can also be "shutdown", "success-shutdown", or "ignore" (the default)
+            test: restart
+```
+
+## Examples
+
+Below is an example layer showing the three different types of checks:
 
 ```
 checks:
@@ -32,25 +111,12 @@ checks:
             url: http://localhost:8080/test
 ```
 
-Each check is performed with the specified `period` (the default is 10 seconds apart), and is considered an error if a timeout happens before the check responds -- for example, before the HTTP request is complete or before the command finishes executing.
-
-A check is considered healthy until it's had `threshold` errors in a row (the default is 3). At that point, the check is considered "down", and any associated `on-check-failure` actions will be triggered. When the check succeeds again, the failure count is reset to 0.
-
-To enable Pebble auto-restart behavior based on a check, use the `on-check-failure` map in the service configuration (this is what ties together services and checks). For example, to restart the "server" service when the "test" check fails, use the following:
-
-```
-services:
-    server:
-        override: merge
-        on-check-failure:
-            # can also be "shutdown", "success-shutdown", or "ignore" (the default)
-            test: restart
-```
+## Checks command
 
 You can view check status using the `pebble checks` command. This reports the checks along with their status (`up` or `down`) and number of failures. For example:
 
-```
-$ pebble checks
+```{terminal}
+   :input: pebble checks
 Check   Level  Status  Failures  Change
 up      alive  up      0/1       10
 online  ready  down    1/3       13 (dial tcp 127.0.0.1:8000: connect: connection refused)
@@ -59,7 +125,7 @@ test    -      down    42/3      14 (Get "http://localhost:8080/": dial t... run
 
 The "Failures" column shows the current number of failures since the check started failing, a slash, and the configured threshold.
 
-The "Change" column shows the change ID of the [change](#changes-and-tasks) driving the check, along with a (possibly-truncated) error message from the last error. Running `pebble tasks <change-id>` will show the change's task, including the last 10 error messages in the task log.
+The "Change" column shows the change ID of the [change](changes-and-tasks/changes-and-tasks) driving the check, along with a (possibly-truncated) error message from the last error. Running `pebble tasks <change-id>` will show the change's task, including the last 10 error messages in the task log.
 
 Health checks are implemented using two change kinds:
 
