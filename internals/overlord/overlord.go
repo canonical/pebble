@@ -141,7 +141,7 @@ func New(opts *Options) (*Overlord, error) {
 	}
 	o.runner.AddOptionalHandler(matchAnyUnknownTask, handleUnknownTask, nil)
 
-	o.planMgr, err = planstate.NewManager(s, o.runner, o.pebbleDir)
+	o.planMgr, err = planstate.NewManager(o.pebbleDir)
 	if err != nil {
 		return nil, fmt.Errorf("cannot create plan manager: %w", err)
 	}

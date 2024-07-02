@@ -18,7 +18,6 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/canonical/pebble/internals/overlord/state"
 	"github.com/canonical/pebble/internals/plan"
 )
 
@@ -33,23 +32,19 @@ func (e *LabelExists) Error() string {
 }
 
 type PlanManager struct {
-	state     *state.State
-	runner    *state.TaskRunner
 	pebbleDir string
 
-	planLock     sync.Mutex
-	plan         *plan.Plan
-	planHandlers []PlanChangedFunc
+	planLock sync.Mutex
+	plan     *plan.Plan
+
+	changeListeners []PlanChangedFunc
 }
 
-func NewManager(s *state.State, runner *state.TaskRunner, pebbleDir string) (*PlanManager, error) {
+func NewManager(pebbleDir string) (*PlanManager, error) {
 	manager := &PlanManager{
-		state:     s,
-		runner:    runner,
 		pebbleDir: pebbleDir,
 		plan:      &plan.Plan{},
 	}
-
 	return manager, nil
 }
 
@@ -58,13 +53,16 @@ func NewManager(s *state.State, runner *state.TaskRunner, pebbleDir string) (*Pl
 // the case of a non-existent layers directory, or no layers in the layers
 // directory, an empty plan is announced to change subscribers.
 func (m *PlanManager) Load() error {
-	m.planLock.Lock()
-	defer m.planLock.Unlock()
 	plan, err := plan.ReadDir(m.pebbleDir)
 	if err != nil {
 		return err
 	}
-	m.planChanged(plan)
+
+	m.planLock.Lock()
+	m.plan = plan
+	m.planLock.Unlock()
+
+	m.callChangeListeners(plan)
 	return nil
 }
 
@@ -76,14 +74,16 @@ type PlanChangedFunc func(p *plan.Plan)
 // change event does not guarantee that combined plan content has changed.
 // Notification registration must be completed before the plan is loaded.
 func (m *PlanManager) AddChangeListener(f PlanChangedFunc) {
-	m.planLock.Lock()
-	defer m.planLock.Unlock()
-	m.planHandlers = append(m.planHandlers, f)
+	m.changeListeners = append(m.changeListeners, f)
 }
 
-func (m *PlanManager) planChanged(plan *plan.Plan) {
-	m.plan = plan
-	for _, f := range m.planHandlers {
+func (m *PlanManager) callChangeListeners(plan *plan.Plan) {
+	if plan == nil {
+		// Avoids if statement on every deferred call to this method (we
+		// shouldn't call listeners when the operation fails).
+		return
+	}
+	for _, f := range m.changeListeners {
 		f(plan)
 	}
 }
@@ -102,6 +102,9 @@ func (m *PlanManager) Plan() *plan.Plan {
 // layer.Order field to the new order. If a layer with layer.Label already
 // exists, return an error of type *LabelExists.
 func (m *PlanManager) AppendLayer(layer *plan.Layer) error {
+	var newPlan *plan.Plan
+	defer func() { m.callChangeListeners(newPlan) }()
+
 	m.planLock.Lock()
 	defer m.planLock.Unlock()
 
@@ -110,20 +113,26 @@ func (m *PlanManager) AppendLayer(layer *plan.Layer) error {
 		return &LabelExists{Label: layer.Label}
 	}
 
-	return m.appendLayer(layer)
+	newPlan, err := m.appendLayer(layer)
+	return err
 }
 
 // CombineLayer takes a Layer, combines it to an existing layer that has the
 // same label. If no existing layer has the label, append a new one. In either
 // case, update the layer.Order field to the new order.
 func (m *PlanManager) CombineLayer(layer *plan.Layer) error {
+	var newPlan *plan.Plan
+	defer func() { m.callChangeListeners(newPlan) }()
+
 	m.planLock.Lock()
 	defer m.planLock.Unlock()
 
 	index, found := findLayer(m.plan.Layers, layer.Label)
 	if index < 0 {
 		// No layer found with this label, append new one.
-		return m.appendLayer(layer)
+		var err error
+		newPlan, err = m.appendLayer(layer)
+		return err
 	}
 
 	// Layer found with this label, combine into that one.
@@ -138,7 +147,7 @@ func (m *PlanManager) CombineLayer(layer *plan.Layer) error {
 	newLayers := make([]*plan.Layer, len(m.plan.Layers))
 	copy(newLayers, m.plan.Layers)
 	newLayers[index] = combined
-	err = m.updatePlanLayers(newLayers)
+	newPlan, err = m.updatePlanLayers(newLayers)
 	if err != nil {
 		return err
 	}
@@ -146,7 +155,7 @@ func (m *PlanManager) CombineLayer(layer *plan.Layer) error {
 	return nil
 }
 
-func (m *PlanManager) appendLayer(layer *plan.Layer) error {
+func (m *PlanManager) appendLayer(layer *plan.Layer) (*plan.Plan, error) {
 	newOrder := 1
 	if len(m.plan.Layers) > 0 {
 		last := m.plan.Layers[len(m.plan.Layers)-1]
@@ -154,18 +163,18 @@ func (m *PlanManager) appendLayer(layer *plan.Layer) error {
 	}
 
 	newLayers := append(m.plan.Layers, layer)
-	err := m.updatePlanLayers(newLayers)
+	newPlan, err := m.updatePlanLayers(newLayers)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	layer.Order = newOrder
-	return nil
+	return newPlan, nil
 }
 
-func (m *PlanManager) updatePlanLayers(layers []*plan.Layer) error {
+func (m *PlanManager) updatePlanLayers(layers []*plan.Layer) (*plan.Plan, error) {
 	combined, err := plan.CombineLayers(layers...)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	p := &plan.Plan{
 		Layers:     layers,
@@ -175,10 +184,10 @@ func (m *PlanManager) updatePlanLayers(layers []*plan.Layer) error {
 	}
 	err = p.Validate()
 	if err != nil {
-		return err
+		return nil, err
 	}
-	m.planChanged(p)
-	return nil
+	m.plan = p
+	return p, nil
 }
 
 // findLayer returns the index (in layers) of the layer with the given label,
@@ -204,6 +213,9 @@ func (m *PlanManager) Ensure() error {
 // NOTE: This functionality should be redesigned (moved out of the plan manager)
 // as the plan manager should not be concerned with schema section details.
 func (m *PlanManager) SetServiceArgs(serviceArgs map[string][]string) error {
+	var newPlan *plan.Plan
+	defer func() { m.callChangeListeners(newPlan) }()
+
 	m.planLock.Lock()
 	defer m.planLock.Unlock()
 
@@ -230,5 +242,6 @@ func (m *PlanManager) SetServiceArgs(serviceArgs map[string][]string) error {
 		}
 	}
 
-	return m.appendLayer(newLayer)
+	newPlan, err := m.appendLayer(newLayer)
+	return err
 }
