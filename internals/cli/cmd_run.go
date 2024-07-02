@@ -51,6 +51,7 @@ type sharedRunEnterOpts struct {
 	HTTP       string     `long:"http"`
 	Verbose    bool       `short:"v" long:"verbose"`
 	Args       [][]string `long:"args" terminator:";"`
+	Identities string     `long:"identities"`
 }
 
 var sharedRunEnterArgsHelp = map[string]string{
@@ -58,7 +59,8 @@ var sharedRunEnterArgsHelp = map[string]string{
 	"--hold":        "Do not start default services automatically",
 	"--http":        `Start HTTP API listening on this address (e.g., ":4000")`,
 	"--verbose":     "Log all output from services to stdout",
-	"--args":        `Provide additional arguments to a service`,
+	"--args":        "Provide additional arguments to a service",
+	"--identities":  "Seed identities from file (like update-identities --replace)",
 }
 
 type cmdRun struct {
@@ -234,6 +236,17 @@ func runDaemon(rcmd *cmdRun, ch chan os.Signal, ready chan<- func()) error {
 	}
 
 	logger.Debugf("activation done in %v", time.Now().Truncate(time.Millisecond).Sub(t0))
+
+	if rcmd.Identities != "" {
+		identities, err := readIdentities(rcmd.Identities)
+		if err != nil {
+			return fmt.Errorf("cannot read identities: %w", err)
+		}
+		err = rcmd.client.ReplaceIdentities(identities)
+		if err != nil {
+			return fmt.Errorf("cannot replace identities: %w", err)
+		}
+	}
 
 	// The "stop" channel is used by the "enter" command to stop the daemon.
 	var stop chan struct{}
