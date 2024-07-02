@@ -1820,7 +1820,7 @@ func (s *S) testServiceLogs(c *C, outputs map[string]string) {
 
 func (s *S) startServices(c *C, services []string) *state.Change {
 	s.st.Lock()
-	ts, err := servstate.Start(s.st, services)
+	ts, err := servstate.Start(s.st, services, s.manager)
 	c.Check(err, IsNil)
 	chg := s.st.NewChange("test", "Start test")
 	chg.AddAll(ts)

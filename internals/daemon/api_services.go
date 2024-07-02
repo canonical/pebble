@@ -111,7 +111,7 @@ func v1PostServices(c *Command, r *http.Request, _ *UserState) Response {
 		if err != nil {
 			break
 		}
-		taskSet, err = servstate.Start(st, services)
+		taskSet, err = servstate.Start(st, services, servmgr)
 	case "stop":
 		services, err = servmgr.StopOrder(payload.Services)
 		if err != nil {
@@ -134,7 +134,7 @@ func v1PostServices(c *Command, r *http.Request, _ *UserState) Response {
 			break
 		}
 		var startTasks *state.TaskSet
-		startTasks, err = servstate.Start(st, services)
+		startTasks, err = servstate.Start(st, services, servmgr)
 		if err != nil {
 			break
 		}
@@ -154,7 +154,7 @@ func v1PostServices(c *Command, r *http.Request, _ *UserState) Response {
 			break
 		}
 		var startTasks *state.TaskSet
-		startTasks, err = servstate.Start(st, startNames)
+		startTasks, err = servstate.Start(st, startNames, servmgr)
 		if err != nil {
 			break
 		}

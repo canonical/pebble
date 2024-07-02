@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2020 Canonical Ltd
+// Copyright (c) 2014-2024 Canonical Ltd
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License version 3 as
@@ -18,13 +18,30 @@ import (
 	. "gopkg.in/check.v1"
 
 	"github.com/canonical/pebble/internals/overlord/servstate"
+	. "github.com/canonical/pebble/internals/testutil"
 )
 
 func (s *S) TestStart(c *C) {
+	s.newServiceManager(c)
+	layer := `
+services:
+    one:
+        override: replace
+        command: /bin/sh -c "echo one; sleep 10"
+        startup: enabled
+
+    two:
+        override: replace
+        command: /bin/sh -c "echo two; sleep 10"
+        startup: enabled
+`
+	s.planAddLayer(c, layer)
+	s.planChanged(c)
+
 	s.st.Lock()
 	defer s.st.Unlock()
 
-	tset, err := servstate.Start(s.st, []string{"one", "two"})
+	tset, err := servstate.Start(s.st, []string{"one", "two"}, s.manager)
 	c.Assert(err, IsNil)
 
 	tasks := tset.Tasks()
@@ -39,6 +56,94 @@ func (s *S) TestStart(c *C) {
 	req, err = servstate.TaskServiceRequest(tasks[1])
 	c.Assert(err, IsNil)
 	c.Assert(req.Name, Equals, "two")
+
+	c.Assert(tasks[0].Lanes()[0], IntNotEqual, tasks[1].Lanes()[0])
+}
+
+func (s *S) TestStartInTheSameLaneAfter(c *C) {
+	s.newServiceManager(c)
+	layer := `
+services:
+    one:
+        override: replace
+        command: /bin/sh -c "echo one; sleep 10"
+        startup: enabled
+
+    two:
+        override: replace
+        command: /bin/sh -c "echo two; sleep 10"
+        startup: enabled
+        requires:
+            - one
+        after:
+            - one
+`
+	s.planAddLayer(c, layer)
+	s.planChanged(c)
+
+	s.st.Lock()
+	defer s.st.Unlock()
+
+	tset, err := servstate.Start(s.st, []string{"one", "two"}, s.manager)
+	c.Assert(err, IsNil)
+
+	tasks := tset.Tasks()
+	c.Assert(len(tasks), Equals, 2)
+
+	c.Assert(tasks[0].Kind(), Equals, "start")
+	req, err := servstate.TaskServiceRequest(tasks[0])
+	c.Assert(err, IsNil)
+	c.Assert(req.Name, Equals, "one")
+
+	c.Assert(tasks[1].Kind(), Equals, "start")
+	req, err = servstate.TaskServiceRequest(tasks[1])
+	c.Assert(err, IsNil)
+	c.Assert(req.Name, Equals, "two")
+
+	c.Assert(tasks[0].Lanes()[0], Equals, tasks[1].Lanes()[0])
+}
+
+func (s *S) TestStartInTheSameLaneBefore(c *C) {
+	s.newServiceManager(c)
+	layer := `
+services:
+    one:
+        override: replace
+        command: /bin/sh -c "echo one; sleep 10"
+        startup: enabled
+        requires:
+            - two
+        before:
+            - two
+
+    two:
+        override: replace
+        command: /bin/sh -c "echo two; sleep 10"
+        startup: enabled
+`
+	s.planAddLayer(c, layer)
+	s.planChanged(c)
+
+	s.st.Lock()
+	defer s.st.Unlock()
+
+	tset, err := servstate.Start(s.st, []string{"one", "two"}, s.manager)
+	c.Assert(err, IsNil)
+
+	tasks := tset.Tasks()
+	c.Assert(len(tasks), Equals, 2)
+
+	c.Assert(tasks[0].Kind(), Equals, "start")
+	req, err := servstate.TaskServiceRequest(tasks[0])
+	c.Assert(err, IsNil)
+	c.Assert(req.Name, Equals, "one")
+
+	c.Assert(tasks[1].Kind(), Equals, "start")
+	req, err = servstate.TaskServiceRequest(tasks[1])
+	c.Assert(err, IsNil)
+	c.Assert(req.Name, Equals, "two")
+
+	c.Assert(tasks[0].Lanes()[0], Equals, tasks[1].Lanes()[0])
 }
 
 func (s *S) TestStop(c *C) {
