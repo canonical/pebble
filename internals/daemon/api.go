@@ -108,6 +108,12 @@ var API = []*Command{{
 	Path:       "/v1/notices/{id}",
 	ReadAccess: UserAccess{},
 	GET:        v1GetNotice,
+}, {
+	Path:        "/v1/identities",
+	ReadAccess:  UserAccess{},
+	WriteAccess: AdminAccess{},
+	GET:         v1GetIdentities,
+	POST:        v1PostIdentities,
 }}
 
 var (
