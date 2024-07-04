@@ -17,6 +17,7 @@ package state
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -428,7 +429,16 @@ func (c *Change) addNotice() error {
 	opts := &AddNoticeOptions{
 		Data: map[string]string{"kind": c.Kind()},
 	}
-	_, err := c.state.AddNotice(nil, ChangeUpdateNotice, c.id, opts)
+	var extraData map[string]string
+	err := c.Get("notice-data", &extraData)
+	if err == nil {
+		for k, v := range extraData {
+			opts.Data[k] = v
+		}
+	} else if !errors.Is(err, &NoStateError{Key: "notice-data"}) {
+		return fmt.Errorf("could not get notice data from change %s: %v", c.ID(), err)
+	}
+	_, err = c.state.AddNotice(nil, ChangeUpdateNotice, c.id, opts)
 	return err
 }
 
