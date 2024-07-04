@@ -64,9 +64,6 @@ var (
 	ColorColorTable = color
 	NoEscColorTable = noesc
 
-	WriteWarningTimestamp = writeWarningTimestamp
-	MaybePresentWarnings  = maybePresentWarnings
-
 	GetEnvPaths = getEnvPaths
 
 	MaybeCopyPebbleDir = maybeCopyPebbleDir

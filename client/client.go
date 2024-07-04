@@ -147,9 +147,7 @@ type Config struct {
 type Client struct {
 	requester Requester
 
-	maintenance      error
-	warningCount     int
-	warningTimestamp time.Time
+	maintenance error
 
 	getWebsocket getWebsocketFunc
 
@@ -223,7 +221,9 @@ func (client *Client) Maintenance() error {
 // the user, and the timestamp of the most recently added warning (useful for
 // silencing the warning alerts, and OKing the returned warnings).
 func (client *Client) WarningsSummary() (count int, timestamp time.Time) {
-	return client.warningCount, client.warningTimestamp
+	// Pebble has never produced warnings (and now it can't), so we can just
+	// return hard-coded values here.
+	return 0, time.Time{}
 }
 
 // RequestError is returned when there's an error processing the request.
@@ -375,11 +375,6 @@ func (rq *defaultRequester) Do(ctx context.Context, opts *RequestOptions) (*Requ
 		return nil, fmt.Errorf("cannot process unknown request type")
 	}
 
-	// Warnings are only included if not an error type response, so we don't
-	// replace valid local warnings with an empty state that comes from a failure.
-	rq.client.warningCount = serverResp.WarningCount
-	rq.client.warningTimestamp = serverResp.WarningTimestamp
-
 	// Common response
 	return &RequestResponse{
 		StatusCode: serverResp.StatusCode,
@@ -452,9 +447,6 @@ type response struct {
 	StatusCode int             `json:"status-code"`
 	Type       string          `json:"type"`
 	Change     string          `json:"change"`
-
-	WarningCount     int       `json:"warning-count"`
-	WarningTimestamp time.Time `json:"warning-timestamp"`
 
 	Maintenance *Error `json:"maintenance"`
 }

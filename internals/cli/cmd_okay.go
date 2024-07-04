@@ -23,20 +23,17 @@ import (
 	cmdpkg "github.com/canonical/pebble/cmd"
 )
 
-const cmdOkaySummary = "Acknowledge notices and warnings"
+const cmdOkaySummary = "Acknowledge notices"
 const cmdOkayDescription = `
-The okay command acknowledges warnings and notices that have been previously
-listed using '{{.ProgramName}} warnings' or '{{.ProgramName}} notices', so that they are omitted
-from future runs of either command. When a notice or warning is repeated, it
-will again show up until the next '{{.ProgramName}} okay'.
+The okay command acknowledges notices that have been previously listed using
+'{{.ProgramName}} notices', so that they are omitted from future runs of the command.
+When a notice is repeated, it will show up again until the next '{{.ProgramName}} okay'.
 `
 
 type cmdOkay struct {
 	client *client.Client
 
 	socketPath string
-
-	Warnings bool `long:"warnings"`
 }
 
 func init() {
@@ -50,9 +47,6 @@ func init() {
 				socketPath: opts.SocketPath,
 			}
 		},
-		ArgsHelp: map[string]string{
-			"--warnings": "Only acknowledge warnings, not other notices",
-		},
 	})
 }
 
@@ -61,40 +55,18 @@ func (cmd *cmdOkay) Execute(args []string) error {
 		return ErrExtraArgs
 	}
 
-	okayedNotices := false
-	if !cmd.Warnings {
-		state, err := loadCLIState(cmd.socketPath)
-		if err != nil {
-			return fmt.Errorf("cannot load CLI state: %w", err)
-		}
-		if !state.NoticesLastListed.IsZero() {
-			okayedNotices = true
-			state.NoticesLastOkayed = state.NoticesLastListed
-			err = saveCLIState(cmd.socketPath, state)
-			if err != nil {
-				return fmt.Errorf("cannot save CLI state: %w", err)
-			}
-		}
-	}
-
-	last, err := lastWarningTimestamp()
+	state, err := loadCLIState(cmd.socketPath)
 	if err != nil {
-		return err
+		return fmt.Errorf("cannot load CLI state: %w", err)
 	}
-	okayedWarnings := false
-	if !last.IsZero() {
-		okayedWarnings = true
-		err := cmd.client.Okay(last)
+	if !state.NoticesLastListed.IsZero() {
+		state.NoticesLastOkayed = state.NoticesLastListed
+		err = saveCLIState(cmd.socketPath, state)
 		if err != nil {
-			return fmt.Errorf("cannot acknowledge warnings: %w", err)
+			return fmt.Errorf("cannot save CLI state: %w", err)
 		}
-	}
-
-	if cmd.Warnings && !okayedWarnings {
-		return fmt.Errorf("no warnings have been listed; try '%s warnings'", cmdpkg.ProgramName)
-	}
-	if !cmd.Warnings && !okayedNotices && !okayedWarnings {
-		return fmt.Errorf("no notices or warnings have been listed; try '%s notices' or '%s warnings'", cmdpkg.ProgramName, cmdpkg.ProgramName)
+	} else {
+		return fmt.Errorf("no notices have been listed; try '%s notices'", cmdpkg.ProgramName)
 	}
 
 	return nil

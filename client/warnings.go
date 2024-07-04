@@ -15,9 +15,6 @@
 package client
 
 import (
-	"bytes"
-	"encoding/json"
-	"net/url"
 	"time"
 )
 
@@ -34,12 +31,6 @@ type Warning struct {
 	RepeatAfter time.Duration `json:"repeat-after,omitempty"`
 }
 
-type jsonWarning struct {
-	Warning
-	ExpireAfter string `json:"expire-after,omitempty"`
-	RepeatAfter string `json:"repeat-after,omitempty"`
-}
-
 type WarningsOptions struct {
 	// All means return all warnings, instead of only the un-okayed ones.
 	All bool
@@ -47,36 +38,15 @@ type WarningsOptions struct {
 
 // Warnings returns the list of un-okayed warnings.
 func (client *Client) Warnings(opts WarningsOptions) ([]*Warning, error) {
-	var jws []*jsonWarning
-	q := make(url.Values)
-	if opts.All {
-		q.Add("select", "all")
-	}
-	_, err := client.doSync("GET", "/v1/warnings", q, nil, nil, &jws)
-
-	ws := make([]*Warning, len(jws))
-	for i, jw := range jws {
-		ws[i] = &jw.Warning
-		ws[i].ExpireAfter, _ = time.ParseDuration(jw.ExpireAfter)
-		ws[i].RepeatAfter, _ = time.ParseDuration(jw.RepeatAfter)
-	}
-
-	return ws, err
-}
-
-type warningsAction struct {
-	Action    string    `json:"action"`
-	Timestamp time.Time `json:"timestamp"`
+	// Pebble has never produced warnings (and now it can't), so we can just
+	// return an empty slice here.
+	return []*Warning{}, nil
 }
 
 // Okay asks the server to silence the warnings that would have been returned by
 // Warnings at the given time.
 func (client *Client) Okay(t time.Time) error {
-	var body bytes.Buffer
-	var op = warningsAction{Action: "okay", Timestamp: t}
-	if err := json.NewEncoder(&body).Encode(op); err != nil {
-		return err
-	}
-	_, err := client.doSync("POST", "/v1/warnings", nil, nil, &body, nil)
-	return err
+	// Pebble has never produced warnings (and now it can't), so we can just
+	// do nothing here.
+	return nil
 }

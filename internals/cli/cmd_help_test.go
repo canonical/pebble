@@ -36,7 +36,7 @@ func (s *PebbleSuite) TestHelpAll(c *C) {
 
 	err := cli.RunMain()
 	c.Assert(err, Equals, nil)
-	c.Check(s.Stdout(), Matches, "(?s)Pebble lets you control services.*run.*help.*version.*warnings.*")
+	c.Check(s.Stdout(), Matches, "(?s)Pebble lets you control services.*run.*help.*version.*")
 	c.Check(s.Stderr(), Equals, "")
 }
 

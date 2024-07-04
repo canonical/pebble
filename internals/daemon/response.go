@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"net/http"
 	"path/filepath"
-	"time"
 
 	"github.com/canonical/pebble/internals/logger"
 )
@@ -38,24 +37,20 @@ type Response interface {
 }
 
 type resp struct {
-	Status           int          `json:"status-code"`
-	Type             ResponseType `json:"type"`
-	Change           string       `json:"change,omitempty"`
-	Result           interface{}  `json:"result,omitempty"`
-	WarningTimestamp *time.Time   `json:"warning-timestamp,omitempty"`
-	WarningCount     int          `json:"warning-count,omitempty"`
-	Maintenance      *errorResult `json:"maintenance,omitempty"`
+	Status      int          `json:"status-code"`
+	Type        ResponseType `json:"type"`
+	Change      string       `json:"change,omitempty"`
+	Result      interface{}  `json:"result,omitempty"`
+	Maintenance *errorResult `json:"maintenance,omitempty"`
 }
 
 type respJSON struct {
-	Type             ResponseType `json:"type"`
-	Status           int          `json:"status-code"`
-	StatusText       string       `json:"status,omitempty"`
-	Change           string       `json:"change,omitempty"`
-	Result           interface{}  `json:"result,omitempty"`
-	WarningTimestamp *time.Time   `json:"warning-timestamp,omitempty"`
-	WarningCount     int          `json:"warning-count,omitempty"`
-	Maintenance      *errorResult `json:"maintenance,omitempty"`
+	Type        ResponseType `json:"type"`
+	Status      int          `json:"status-code"`
+	StatusText  string       `json:"status,omitempty"`
+	Change      string       `json:"change,omitempty"`
+	Result      interface{}  `json:"result,omitempty"`
+	Maintenance *errorResult `json:"maintenance,omitempty"`
 }
 
 func (r *resp) transmitMaintenance(kind errorKind, message string) {
@@ -65,27 +60,14 @@ func (r *resp) transmitMaintenance(kind errorKind, message string) {
 	}
 }
 
-func (r *resp) addWarningsToMeta(count int, stamp time.Time) {
-	if r.WarningCount != 0 {
-		return
-	}
-	if count == 0 {
-		return
-	}
-	r.WarningCount = count
-	r.WarningTimestamp = &stamp
-}
-
 func (r *resp) MarshalJSON() ([]byte, error) {
 	return json.Marshal(respJSON{
-		Type:             r.Type,
-		Status:           r.Status,
-		StatusText:       http.StatusText(r.Status),
-		Change:           r.Change,
-		Result:           r.Result,
-		WarningTimestamp: r.WarningTimestamp,
-		WarningCount:     r.WarningCount,
-		Maintenance:      r.Maintenance,
+		Type:        r.Type,
+		Status:      r.Status,
+		StatusText:  http.StatusText(r.Status),
+		Change:      r.Change,
+		Result:      r.Result,
+		Maintenance: r.Maintenance,
 	})
 }
 

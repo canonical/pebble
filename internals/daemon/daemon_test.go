@@ -312,6 +312,9 @@ func (s *daemonSuite) TestCommandRestartingState(c *C) {
 }
 
 func (s *daemonSuite) TestFillsWarnings(c *C) {
+	// Pebble warnings have been removed from state, so just check the
+	// warning-timestamp and warning-count are unset.
+
 	d := s.newDaemon(c)
 
 	cmd := &Command{d: d, ReadAccess: OpenAccess{}}
@@ -333,19 +336,6 @@ func (s *daemonSuite) TestFillsWarnings(c *C) {
 	c.Assert(err, IsNil)
 	c.Check(rst.WarningCount, Equals, 0)
 	c.Check(rst.WarningTimestamp, IsNil)
-
-	st := d.overlord.State()
-	st.Lock()
-	st.Warnf("hello world")
-	st.Unlock()
-
-	rec = httptest.NewRecorder()
-	cmd.ServeHTTP(rec, req)
-	c.Check(rec.Code, Equals, 200)
-	err = json.Unmarshal(rec.Body.Bytes(), &rst)
-	c.Assert(err, IsNil)
-	c.Check(rst.WarningCount, Equals, 1)
-	c.Check(rst.WarningTimestamp, NotNil)
 }
 
 type accessCheckerTestCase struct {
@@ -1525,7 +1515,6 @@ func (s *utilsSuite) TestExitOnPanic(c *C) {
 	panicHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("before"))
 		panic("PANIC!")
-		w.Write([]byte(r.URL.Path))
 	})
 	stderr.Reset()
 	recorder = httptest.NewRecorder()

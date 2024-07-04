@@ -87,12 +87,11 @@ type State struct {
 	// for registering runtime callbacks
 	lastHandlerId int
 
-	backend  Backend
-	data     customData
-	changes  map[string]*Change
-	tasks    map[string]*Task
-	warnings map[string]*Warning
-	notices  map[noticeKey]*Notice
+	backend Backend
+	data    customData
+	changes map[string]*Change
+	tasks   map[string]*Task
+	notices map[noticeKey]*Notice
 
 	noticeCond *sync.Cond
 
@@ -114,7 +113,6 @@ func New(backend Backend) *State {
 		data:                make(customData),
 		changes:             make(map[string]*Change),
 		tasks:               make(map[string]*Task),
-		warnings:            make(map[string]*Warning),
 		notices:             make(map[noticeKey]*Notice),
 		modified:            true,
 		cache:               make(map[interface{}]interface{}),
@@ -156,11 +154,10 @@ func (s *State) unlock() {
 }
 
 type marshalledState struct {
-	Data     map[string]*json.RawMessage `json:"data"`
-	Changes  map[string]*Change          `json:"changes"`
-	Tasks    map[string]*Task            `json:"tasks"`
-	Warnings []*Warning                  `json:"warnings,omitempty"`
-	Notices  []*Notice                   `json:"notices,omitempty"`
+	Data    map[string]*json.RawMessage `json:"data"`
+	Changes map[string]*Change          `json:"changes"`
+	Tasks   map[string]*Task            `json:"tasks"`
+	Notices []*Notice                   `json:"notices,omitempty"`
 
 	LastChangeId int `json:"last-change-id"`
 	LastTaskId   int `json:"last-task-id"`
@@ -172,11 +169,10 @@ type marshalledState struct {
 func (s *State) MarshalJSON() ([]byte, error) {
 	s.reading()
 	return json.Marshal(marshalledState{
-		Data:     s.data,
-		Changes:  s.changes,
-		Tasks:    s.tasks,
-		Warnings: s.flattenWarnings(),
-		Notices:  s.flattenNotices(nil),
+		Data:    s.data,
+		Changes: s.changes,
+		Tasks:   s.tasks,
+		Notices: s.flattenNotices(nil),
 
 		LastTaskId:   s.lastTaskId,
 		LastChangeId: s.lastChangeId,
@@ -196,7 +192,6 @@ func (s *State) UnmarshalJSON(data []byte) error {
 	s.data = unmarshalled.Data
 	s.changes = unmarshalled.Changes
 	s.tasks = unmarshalled.Tasks
-	s.unflattenWarnings(unmarshalled.Warnings)
 	s.unflattenNotices(unmarshalled.Notices)
 	s.lastChangeId = unmarshalled.LastChangeId
 	s.lastTaskId = unmarshalled.LastTaskId
@@ -436,7 +431,7 @@ func (s *State) RegisterPendingChangeByAttr(attr string, f func(*Change) bool) {
 //     changes than the limit set via "maxReadyChanges" those changes in ready
 //     state will also removed even if they are below the pruneWait duration.
 //
-//   - it removes expired warnings and notices.
+//   - it removes expired notices.
 func (s *State) Prune(startOfOperation time.Time, pruneWait, abortWait time.Duration, maxReadyChanges int) {
 	now := time.Now()
 	pruneLimit := now.Add(-pruneWait)
@@ -456,12 +451,6 @@ func (s *State) Prune(startOfOperation time.Time, pruneWait, abortWait time.Dura
 			break
 		}
 		readyChangesCount++
-	}
-
-	for k, w := range s.warnings {
-		if w.ExpiredBefore(now) {
-			delete(s.warnings, k)
-		}
 	}
 
 	for k, n := range s.notices {

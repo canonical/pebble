@@ -40,19 +40,6 @@ func FakeTaskTimes(t *Task, spawnTime, readyTime time.Time) {
 	t.readyTime = readyTime
 }
 
-func (s *State) AddWarning(message string, lastAdded, lastShown time.Time, expireAfter, repeatAfter time.Duration) {
-	s.addWarning(Warning{
-		message:     message,
-		lastShown:   lastShown,
-		expireAfter: expireAfter,
-		repeatAfter: repeatAfter,
-	}, lastAdded)
-}
-
-func (w Warning) LastAdded() time.Time {
-	return w.lastAdded
-}
-
 func (t *Task) AccumulateDoingTime(duration time.Duration) {
 	t.accumulateDoingTime(duration)
 }
@@ -60,14 +47,6 @@ func (t *Task) AccumulateDoingTime(duration time.Duration) {
 func (t *Task) AccumulateUndoingTime(duration time.Duration) {
 	t.accumulateUndoingTime(duration)
 }
-
-var (
-	ErrNoWarningMessage     = errNoWarningMessage
-	ErrBadWarningMessage    = errBadWarningMessage
-	ErrNoWarningFirstAdded  = errNoWarningFirstAdded
-	ErrNoWarningExpireAfter = errNoWarningExpireAfter
-	ErrNoWarningRepeatAfter = errNoWarningRepeatAfter
-)
 
 // NumNotices returns the total number of notices, including expired ones that
 // haven't yet been pruned.

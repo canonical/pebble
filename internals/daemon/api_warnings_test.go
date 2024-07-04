@@ -19,27 +19,12 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"time"
 
 	"gopkg.in/check.v1"
-
-	"github.com/canonical/pebble/internals/overlord/state"
 )
 
-func (s *apiSuite) testWarnings(c *check.C, all bool, body io.Reader) (calls string, result interface{}) {
+func (s *apiSuite) testWarnings(c *check.C, all bool, body io.Reader) interface{} {
 	s.daemon(c)
-
-	oldOK := stateOkayWarnings
-	oldAll := stateAllWarnings
-	oldPending := statePendingWarnings
-	stateOkayWarnings = func(*state.State, time.Time) int { calls += "ok"; return 0 }
-	stateAllWarnings = func(*state.State) []*state.Warning { calls += "all"; return nil }
-	statePendingWarnings = func(*state.State) ([]*state.Warning, time.Time) { calls += "show"; return nil, time.Time{} }
-	defer func() {
-		stateOkayWarnings = oldOK
-		stateAllWarnings = oldAll
-		statePendingWarnings = oldPending
-	}()
 
 	warningsCmd := apiCmd("/v1/warnings")
 
@@ -62,23 +47,20 @@ func (s *apiSuite) testWarnings(c *check.C, all bool, body io.Reader) (calls str
 	c.Check(rsp.Type, check.Equals, ResponseTypeSync)
 	c.Check(rsp.Status, check.Equals, 200)
 	c.Assert(rsp.Result, check.NotNil)
-	return calls, rsp.Result
+	return rsp.Result
 }
 
 func (s *apiSuite) TestAllWarnings(c *check.C) {
-	calls, result := s.testWarnings(c, true, nil)
-	c.Check(calls, check.Equals, "all")
-	c.Check(result, check.DeepEquals, []state.Warning{})
+	result := s.testWarnings(c, true, nil)
+	c.Check(result, check.DeepEquals, []string{})
 }
 
 func (s *apiSuite) TestSomeWarnings(c *check.C) {
-	calls, result := s.testWarnings(c, false, nil)
-	c.Check(calls, check.Equals, "show")
-	c.Check(result, check.DeepEquals, []state.Warning{})
+	result := s.testWarnings(c, false, nil)
+	c.Check(result, check.DeepEquals, []string{})
 }
 
 func (s *apiSuite) TestAckWarnings(c *check.C) {
-	calls, result := s.testWarnings(c, false, bytes.NewReader([]byte(`{"action": "okay", "timestamp": "2006-01-02T15:04:05Z"}`)))
-	c.Check(calls, check.Equals, "ok")
+	result := s.testWarnings(c, false, bytes.NewReader([]byte(`{"action": "okay", "timestamp": "2006-01-02T15:04:05Z"}`)))
 	c.Check(result, check.DeepEquals, 0)
 }

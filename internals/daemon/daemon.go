@@ -214,12 +214,6 @@ func (c *Command) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		case restart.RestartSocket:
 			rsp.transmitMaintenance(errorKindDaemonRestart, "daemon is stopping to wait for socket activation")
 		}
-		if rsp.Type != ResponseTypeError {
-			st.Lock()
-			count, stamp := st.WarningsSummary()
-			st.Unlock()
-			rsp.addWarningsToMeta(count, stamp)
-		}
 	}
 
 	rsp.ServeHTTP(w, r)

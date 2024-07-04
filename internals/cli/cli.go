@@ -356,8 +356,6 @@ func Run(options *RunOptions) error {
 		return nil
 	}
 
-	maybePresentWarnings(cli.WarningsSummary())
-
 	return nil
 }
 
