@@ -250,6 +250,7 @@ func (s *ManagerSuite) TestFailures(c *C) {
 	c.Assert(check.ChangeID, Equals, originalChangeID)
 
 	// Should have called failure handler and be unhealthy after 3 failures (threshold)
+	c.Assert(changeData(c, s.overlord.State(), check.ChangeID), DeepEquals, map[string]string{"check-name": "chk1"})
 	check = waitCheck(c, s.manager, "chk1", func(check *checkstate.CheckInfo) bool {
 		return check.Failures == 3 && check.ChangeID != originalChangeID
 	})
@@ -278,6 +279,7 @@ func (s *ManagerSuite) TestFailures(c *C) {
 	c.Assert(check.Threshold, Equals, 3)
 	c.Assert(notifies.Load(), Equals, int32(1))
 	c.Assert(lastTaskLog(s.overlord.State(), check.ChangeID), Equals, "")
+	c.Assert(changeData(c, s.overlord.State(), check.ChangeID), DeepEquals, map[string]string{"check-name": "chk1"})
 }
 
 func (s *ManagerSuite) TestFailuresBelowThreshold(c *C) {
@@ -570,4 +572,15 @@ func lastTaskLog(st *state.State, changeID string) string {
 		return ""
 	}
 	return logs[len(logs)-1]
+}
+
+func changeData(c *C, st *state.State, changeID string) map[string]string {
+	st.Lock()
+	defer st.Unlock()
+
+	chg := st.Change(changeID)
+	var data map[string]string
+	err := chg.Get("notice-data", &data)
+	c.Assert(err, IsNil)
+	return data
 }
