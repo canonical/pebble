@@ -435,8 +435,8 @@ func (c *Change) addNotice() error {
 		for k, v := range extraData {
 			opts.Data[k] = v
 		}
-	} else if !errors.Is(err, &NoStateError{Key: "notice-data"}) {
-		return fmt.Errorf("could not get notice data from change %s: %v", c.ID(), err)
+	} else if !errors.Is(err, ErrNoState) {
+		return fmt.Errorf("cannot get notice data from change %s: %w", c.ID(), err)
 	}
 	_, err = c.state.AddNotice(nil, ChangeUpdateNotice, c.id, opts)
 	return err
