@@ -336,8 +336,8 @@ func (s *State) NewChange(kind, summary string) *Change {
 	return s.NewChangeWithNoticeData(kind, summary, nil)
 }
 
-// NewChangeWithNoticeData adds a new change to the state, adding in any provided extra data.
-func (s *State) NewChangeWithNoticeData(kind, summary string, extraData map[string]string) *Change {
+// NewChangeWithNoticeData adds a new change to the state, adding in any provided notice data.
+func (s *State) NewChangeWithNoticeData(kind, summary string, noticeData map[string]string) *Change {
 	s.writing()
 	s.lastChangeId++
 	id := strconv.Itoa(s.lastChangeId)
@@ -345,8 +345,8 @@ func (s *State) NewChangeWithNoticeData(kind, summary string, extraData map[stri
 	s.changes[id] = chg
 
 	// Set this before calling addNotice as that needs to use it.
-	if len(extraData) > 0 {
-		chg.Set("notice-data", extraData)
+	if len(noticeData) > 0 {
+		chg.Set("notice-data", noticeData)
 	}
 
 	// Add change-update notice for newly spawned change
