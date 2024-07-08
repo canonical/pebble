@@ -1,7 +1,6 @@
 # Explanation
 
 ```{toctree}
-:hidden:
 :titlesonly:
 :maxdepth: 1
 

@@ -1517,3 +1517,43 @@ func (s *rebootSuite) TestSyscallRebootError(c *C) {
 	c.Assert(l.msg, Matches, "*-EPERM")
 	c.Assert(<-err, IsNil)
 }
+
+type utilsSuite struct{}
+
+var _ = Suite(&utilsSuite{})
+
+func (s *utilsSuite) TestExitOnPanic(c *C) {
+	// Non-panicking handler shouldn't exit
+	normalHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(r.URL.Path))
+	})
+	var stderr bytes.Buffer
+	exited := false
+	exit := func() {
+		exited = true
+	}
+	recorder := httptest.NewRecorder()
+	wrapped := exitOnPanic(normalHandler, &stderr, exit)
+	wrapped.ServeHTTP(recorder, httptest.NewRequest("GET", "/normal", nil))
+	body, err := io.ReadAll(recorder.Result().Body)
+	c.Assert(err, IsNil)
+	c.Check(string(body), Equals, "/normal")
+	c.Check(stderr.String(), Equals, "")
+	c.Check(exited, Equals, false)
+
+	// Panicking handler should exit
+	panicHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("before"))
+		panic("PANIC!")
+		w.Write([]byte(r.URL.Path))
+	})
+	stderr.Reset()
+	recorder = httptest.NewRecorder()
+	wrapped = exitOnPanic(panicHandler, &stderr, exit)
+	wrapped.ServeHTTP(recorder, httptest.NewRequest("GET", "/panic", nil))
+	body, err = io.ReadAll(recorder.Result().Body)
+	c.Assert(err, IsNil)
+	c.Check(string(body), Equals, "before")
+	c.Check(stderr.String(), Matches, "(?s)panic: PANIC!.*goroutine.*")
+	c.Check(exited, Equals, true)
+}
