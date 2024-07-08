@@ -7,7 +7,7 @@ _Take control of your internal daemons!_
 ## In this documentation
 
 ````{grid} 1 1 2 2
-```{grid-item-card} [Tutorials](tutorial/getting-started)
+```{grid-item-card} [Tutorial](tutorial/getting-started)
 **Start here**: a hands-on getting started introduction to Pebble for new users.
 ```
 

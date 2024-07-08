@@ -15,6 +15,8 @@
 package planstate_test
 
 import (
+	"time"
+
 	. "gopkg.in/check.v1"
 	"gopkg.in/yaml.v3"
 
@@ -24,7 +26,7 @@ import (
 
 func (ps *planSuite) TestLoadInvalidPebbleDir(c *C) {
 	var err error
-	ps.planMgr, err = planstate.NewManager(nil, nil, "/invalid/path")
+	ps.planMgr, err = planstate.NewManager("/invalid/path")
 	c.Assert(err, IsNil)
 	// Load the plan from the <pebble-dir>/layers directory
 	err = ps.planMgr.Load()
@@ -55,7 +57,7 @@ var loadLayers = []string{`
 
 func (ps *planSuite) TestLoadLayers(c *C) {
 	var err error
-	ps.planMgr, err = planstate.NewManager(nil, nil, ps.pebbleDir)
+	ps.planMgr, err = planstate.NewManager(ps.pebbleDir)
 	c.Assert(err, IsNil)
 	// Write layers
 	for _, l := range loadLayers {
@@ -83,7 +85,7 @@ services:
 
 func (ps *planSuite) TestAppendLayers(c *C) {
 	var err error
-	ps.planMgr, err = planstate.NewManager(nil, nil, ps.pebbleDir)
+	ps.planMgr, err = planstate.NewManager(ps.pebbleDir)
 	c.Assert(err, IsNil)
 
 	// Append a layer when there are no layers.
@@ -163,7 +165,7 @@ services:
 
 func (ps *planSuite) TestCombineLayers(c *C) {
 	var err error
-	ps.planMgr, err = planstate.NewManager(nil, nil, ps.pebbleDir)
+	ps.planMgr, err = planstate.NewManager(ps.pebbleDir)
 	c.Assert(err, IsNil)
 
 	// "Combine" layer with no layers should just append.
@@ -285,7 +287,7 @@ checks:
 
 func (ps *planSuite) TestSetServiceArgs(c *C) {
 	var err error
-	ps.planMgr, err = planstate.NewManager(nil, nil, ps.pebbleDir)
+	ps.planMgr, err = planstate.NewManager(ps.pebbleDir)
 	c.Assert(err, IsNil)
 
 	// This is the original plan
@@ -323,4 +325,68 @@ services:
         override: replace
         command: foo
 `[1:])
+}
+
+func (ps *planSuite) TestChangeListenerAndLocking(c *C) {
+	manager, err := planstate.NewManager(ps.pebbleDir)
+	c.Assert(err, IsNil)
+
+	calls := 0
+	manager.AddChangeListener(func(p *plan.Plan) {
+		// Plan lock shouldn't be held when calling change listener,
+		// so we should be able to acquire it.
+		planLock := manager.PlanLock()
+		planLock.Lock()
+		planLock.Unlock()
+		calls++
+	})
+
+	// Run operations in goroutine so we can time out the test if it fails.
+	done := make(chan struct{})
+	go func() {
+		ps.writeLayer(c, `
+services:
+    svc1:
+        override: replace
+        command: echo svc1
+`)
+		err = manager.Load()
+		c.Assert(err, IsNil)
+
+		layer1 := ps.parseLayer(c, 0, "label1", `
+services:
+    svc1:
+        override: replace
+        command: /bin/sh
+`)
+		err = manager.AppendLayer(layer1)
+		c.Assert(err, IsNil)
+
+		err = manager.CombineLayer(layer1)
+		c.Assert(err, IsNil)
+
+		layer2 := ps.parseLayer(c, 0, "label2", `
+services:
+    svc1:
+        override: replace
+        command: /bin/sh
+`)
+		err = manager.CombineLayer(layer2)
+		c.Assert(err, IsNil)
+
+		err = manager.SetServiceArgs(map[string][]string{
+			"svc1": {"-abc", "--xyz"},
+		})
+		c.Assert(err, IsNil)
+
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		c.Fatal("timed out - plan operations must be holding the plan lock while calling the change listeners")
+	}
+
+	c.Assert(calls, Equals, 5)
 }
