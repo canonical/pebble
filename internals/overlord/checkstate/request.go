@@ -37,7 +37,9 @@ func performCheckChange(st *state.State, config *plan.Check) (changeID string) {
 	task := st.NewTask(performCheckKind, summary)
 	task.Set(checkDetailsAttr, &checkDetails{Name: config.Name})
 
-	change := st.NewChange(performCheckKind, task.Summary())
+	change := st.NewChangeWithNoticeData(performCheckKind, task.Summary(), map[string]string{
+		"check-name": config.Name,
+	})
 	change.Set(noPruneAttr, true)
 	change.AddTask(task)
 
@@ -55,7 +57,9 @@ func recoverCheckChange(st *state.State, config *plan.Check, failures int) (chan
 	task := st.NewTask(recoverCheckKind, summary)
 	task.Set(checkDetailsAttr, &checkDetails{Name: config.Name, Failures: failures})
 
-	change := st.NewChange(recoverCheckKind, task.Summary())
+	change := st.NewChangeWithNoticeData(recoverCheckKind, task.Summary(), map[string]string{
+		"check-name": config.Name,
+	})
 	change.Set(noPruneAttr, true)
 	change.AddTask(task)
 

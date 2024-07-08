@@ -1,7 +1,6 @@
 # How-to guides
 
 ```{toctree}
-:hidden:
 :titlesonly:
 :maxdepth: 1
 
