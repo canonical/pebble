@@ -51,6 +51,19 @@ func (cs *changeSuite) TestNewChange(c *C) {
 	c.Check(n["occurrences"], Equals, 1.0)
 }
 
+func (cs *changeSuite) TestNewChangeWithExtraNoticeData(c *C) {
+	st := state.New(nil)
+	st.Lock()
+	defer st.Unlock()
+
+	st.NewChangeWithNoticeData("perform-check", "...", map[string]string{"check-name": "c"})
+
+	notices := st.Notices(nil)
+	c.Assert(notices, HasLen, 1)
+	n := noticeToMap(c, notices[0])
+	c.Check(n["last-data"], DeepEquals, map[string]any{"kind": "perform-check", "check-name": "c"})
+}
+
 func (cs *changeSuite) TestReadyTime(c *C) {
 	st := state.New(nil)
 	st.Lock()

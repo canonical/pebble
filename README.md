@@ -251,15 +251,15 @@ If you want to force a service to restart even if its service configuration hasn
 
 ### Service dependencies
 
-Pebble takes service dependencies into account when starting and stopping services. When Pebble starts a service, it also starts the services which that service depends on (configured with `required`). Conversely, when stopping a service, Pebble also stops services which depend on that service.
+Pebble takes service dependencies into account when starting and stopping services. When Pebble starts a service, it also starts the services which that service depends on (configured with `requires`). Conversely, when stopping a service, Pebble also stops services which depend on that service.
 
 For example, if service `nginx` requires `logger`, `pebble start nginx` will start both `nginx` and `logger` (in an undefined order). Running `pebble stop logger` will stop both `nginx` and `logger`; however, running `pebble stop nginx` will only stop `nginx` (`nginx` depends on `logger`, not the other way around).
 
-When multiple services need to be started together, they're started in order according to the `before` and `after` configuration, waiting 1 second for each to ensure the command doesn't exit too quickly. The `before` option is a list of services that this service must start before (it may or may not `require` them). Or if it's easier to specify this ordering the other way around, `after` is a list of services that this service must start after.
+When multiple services need to be started together, they're started in order according to the `before` and `after` configuration, waiting 1 second for each to ensure the command doesn't exit too quickly. The `before` option is a list of services that this service must start before (it may or may not "require" them). Or if it's easier to specify this ordering the other way around, `after` is a list of services that this service must start after.
 
 Note that currently, `before` and `after` are of limited usefulness, because Pebble only waits 1 second before moving on to start the next service, with no additional checks that the previous service is operating correctly.
 
-If the configuration of `requires`, `before`, and `after` for a service results in a cycle or "loop", an error will be returned when attempting to start or stop the service.
+If the configuration of `before` and `after` for the services results in a cycle, an error will be returned when the Pebble daemon starts (and the plan is loaded) or when a layer that causes a cycle is added.
 
 ### Service auto-restart
 
@@ -351,7 +351,9 @@ Each check can specify a `level` of "alive" or "ready". These have semantic mean
 
 The tool running the Pebble server can make use of this, for example, under Kubernetes you could initialize its liveness and readiness probes to hit Pebble's `/v1/health` endpoint with `?level=alive` and `?level=ready` filters, respectively.
 
-Ready implies alive, and not-alive implies not-ready. If you've configured an "alive" check but no "ready" check, and the "alive" check is unhealthy, `/v1/health?level=ready` will report unhealthy as well, and the Kubernetes readiness probe will act on that.
+If only a "ready" check or only an "alive" check is configured, ready implies alive, and not-alive implies not-ready. If you've configured an "alive" check but no "ready" check, and the "alive" check is unhealthy, `/v1/health?level=ready` will report unhealthy as well, and the Kubernetes readiness probe will act on that.
+
+On the other hand, not-ready does not imply not-alive: if you've configured a "ready" check but no "alive" check, and the "ready" check is unhealthy, `/v1/health?level=alive` will still report healthy.
 
 If there are no checks configured, the `/v1/health` endpoint returns HTTP 200 so the liveness and readiness probes are successful by default. To use this feature, you must explicitly create checks with `level: alive` or `level: ready` in the layer configuration.
 
@@ -733,7 +735,7 @@ services:
         # (Optional) Defines what happens when each of the named health checks
         # fail. Possible values are:
         #
-        # - restart (default): restart the service once
+        # - restart: restart the service once
         # - shutdown: shut down and exit the Pebble daemon (with exit code 11)
         # - success-shutdown: shut down and exit Pebble with exit code 0
         # - ignore: do nothing further
@@ -776,9 +778,9 @@ checks:
         # (Optional) Check level, which can be used for filtering checks when
         # calling the checks API or health endpoint.
         #
-        # For the health endpoint, ready implies alive. In other words, if all
-        # the "ready" checks are succeeding and there are no "alive" checks,
-        # the /v1/health API will return success for level=alive.
+        # For the health endpoint, ready implies alive, and not-alive implies
+        # not-ready (but not the other way around). See the "Health endpoint"
+        # section in the docs for details.
         level: alive | ready
 
         # (Optional) Check is run every time this period (time interval)

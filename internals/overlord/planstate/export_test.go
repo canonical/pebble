@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2020 Canonical Ltd
+// Copyright (c) 2024 Canonical Ltd
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License version 3 as
@@ -12,15 +12,10 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package cmd
+package planstate
 
-//go:generate ./mkversion.sh
+import "sync"
 
-// Version will be overwritten at build-time via mkversion.sh
-var Version = "v1.15.0-dev"
-
-func MockVersion(version string) (restore func()) {
-	old := Version
-	Version = version
-	return func() { Version = old }
+func (m *PlanManager) PlanLock() sync.Locker {
+	return &m.planLock
 }
