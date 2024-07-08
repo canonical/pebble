@@ -214,6 +214,10 @@ var HelpCategories = []HelpCategory{{
 	Label:       "Notices",
 	Description: "manage notices and warnings",
 	Commands:    []string{"warnings", "okay", "notices", "notice", "notify"},
+}, {
+	Label:       "Identities", // special-cased in printShortHelp
+	Description: "manage user identities",
+	Commands:    []string{"identities", "identity", "add-identities", "update-identities", "remove-identities"},
 }}
 
 var (
@@ -265,7 +269,12 @@ func printShortHelp() {
 		}
 	}
 	for _, categ := range HelpCategories {
-		fmt.Fprintf(Stdout, "%*s: %s\n", maxLen+2, categ.Label, strings.Join(categ.Commands, ", "))
+		commandsStr := strings.Join(categ.Commands, ", ")
+		if categ.Label == "Identities" {
+			// Special case for identities command to avoid a long list here
+			commandsStr = "identities --help"
+		}
+		fmt.Fprintf(Stdout, "%*s: %s\n", maxLen+2, categ.Label, commandsStr)
 	}
 	printHelpFooter()
 }
