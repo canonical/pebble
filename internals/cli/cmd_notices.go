@@ -54,7 +54,7 @@ func init() {
 		Summary:     cmdNoticesSummary,
 		Description: cmdNoticesDescription,
 		ArgsHelp: merge(timeArgsHelp, map[string]string{
-			"--users":   "Show all notices with any user ID (admin only; cannot be used with --uid)",
+			"--users":   "'all' to list all notices with any user ID (admin only; cannot be used with --uid)",
 			"--uid":     "Only list notices with this user ID (admin only; cannot be used with --users)",
 			"--type":    "Only list notices of this type (multiple allowed)",
 			"--key":     "Only list notices with this key (multiple allowed)",
