@@ -536,6 +536,52 @@ func (s *daemonSuite) TestAdminAccess(c *C) {
 	s.testAccessChecker(c, tests, fmt.Sprintf("pid=100;uid=%d;socket=;", os.Getuid()))
 }
 
+func (s *daemonSuite) TestDefaultUcredUsers(c *C) {
+	d := s.newDaemon(c)
+
+	var user *UserState
+	cmd := &Command{
+		d: d,
+		GET: func(_ *Command, _ *http.Request, u *UserState) Response {
+			user = u
+			return SyncResponse(true)
+		},
+		ReadAccess: UserAccess{},
+	}
+
+	// Admin access for UID 0.
+	req := &http.Request{Method: "GET", RemoteAddr: "pid=100;uid=0;socket=;"}
+	rec := httptest.NewRecorder()
+	cmd.ServeHTTP(rec, req)
+	c.Check(rec.Code, Equals, http.StatusOK)
+	c.Assert(user, NotNil)
+	c.Check(user.Access, Equals, state.AdminAccess)
+	c.Assert(user.UID, NotNil)
+	c.Check(*user.UID, Equals, uint32(0))
+
+	// Admin access for UID == daemon UID.
+	user = nil
+	req = &http.Request{Method: "GET", RemoteAddr: fmt.Sprintf("pid=100;uid=%d;socket=;", os.Getuid())}
+	rec = httptest.NewRecorder()
+	cmd.ServeHTTP(rec, req)
+	c.Check(rec.Code, Equals, http.StatusOK)
+	c.Assert(user, NotNil)
+	c.Check(user.Access, Equals, state.AdminAccess)
+	c.Assert(user.UID, NotNil)
+	c.Check(*user.UID, Equals, uint32(os.Getuid()))
+
+	// Read access for UID not 0 and not daemon UID.
+	user = nil
+	req = &http.Request{Method: "GET", RemoteAddr: fmt.Sprintf("pid=100;uid=%d;socket=;", os.Getuid()+1)}
+	rec = httptest.NewRecorder()
+	cmd.ServeHTTP(rec, req)
+	c.Check(rec.Code, Equals, http.StatusOK)
+	c.Assert(user, NotNil)
+	c.Check(user.Access, Equals, state.ReadAccess)
+	c.Assert(user.UID, NotNil)
+	c.Check(*user.UID, Equals, uint32(os.Getuid()+1))
+}
+
 func (s *daemonSuite) TestAddRoutes(c *C) {
 	d := s.newDaemon(c)
 

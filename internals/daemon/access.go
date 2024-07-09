@@ -16,7 +16,6 @@ package daemon
 
 import (
 	"net/http"
-	"os"
 
 	"github.com/canonical/pebble/internals/overlord/state"
 )
@@ -30,13 +29,13 @@ type AccessChecker interface {
 	// CheckAccess reports whether access should be granted or denied. If
 	// access is granted, return nil. If access is denied, return a non-nil
 	// error such as Unauthorized("access denied").
-	CheckAccess(d *Daemon, r *http.Request, ucred *Ucrednet, user *UserState) Response
+	CheckAccess(d *Daemon, r *http.Request, user *UserState) Response
 }
 
 // OpenAccess allows all requests, including non-local sockets (for example, TCP).
 type OpenAccess struct{}
 
-func (ac OpenAccess) CheckAccess(d *Daemon, r *http.Request, ucred *Ucrednet, user *UserState) Response {
+func (ac OpenAccess) CheckAccess(d *Daemon, r *http.Request, user *UserState) Response {
 	return nil
 }
 
@@ -44,41 +43,28 @@ func (ac OpenAccess) CheckAccess(d *Daemon, r *http.Request, ucred *Ucrednet, us
 // and the current user's UID.
 type AdminAccess struct{}
 
-func (ac AdminAccess) CheckAccess(d *Daemon, r *http.Request, ucred *Ucrednet, user *UserState) Response {
-	// If there is a validated identity and they're allowed admin access, let
-	// them in.
-	if user != nil {
-		if user.Access == state.AdminAccess {
-			return nil
-		}
-		// But an identity explicitly set to "access: read" or
-		// "access: untrusted" isn't allowed.
+func (ac AdminAccess) CheckAccess(d *Daemon, r *http.Request, user *UserState) Response {
+	if user == nil {
 		return Unauthorized(accessDenied)
 	}
-	// Otherwise they need to be UID 0 (root) or the UID Pebble is running as.
-	if ucred != nil && (ucred.Uid == 0 || ucred.Uid == uint32(os.Getuid())) {
+	if user.Access == state.AdminAccess {
 		return nil
 	}
+	// An identity explicitly set to "access: read" or "access: untrusted" isn't allowed.
 	return Unauthorized(accessDenied)
 }
 
 // UserAccess allows requests over the UNIX domain socket from any local user
 type UserAccess struct{}
 
-func (ac UserAccess) CheckAccess(d *Daemon, r *http.Request, ucred *Ucrednet, user *UserState) Response {
-	// If there is a validated user and they're allowed read or admin access,
-	// let them in.
-	if user != nil {
-		switch user.Access {
-		case state.ReadAccess, state.AdminAccess:
-			return nil
-		}
-		// But an identity explicitly set to "access: untrusted" isn't allowed.
+func (ac UserAccess) CheckAccess(d *Daemon, r *http.Request, user *UserState) Response {
+	if user == nil {
 		return Unauthorized(accessDenied)
 	}
-	// Otherwise if it's any local UID user, let them in.
-	if ucred != nil {
+	switch user.Access {
+	case state.ReadAccess, state.AdminAccess:
 		return nil
 	}
+	// An identity explicitly set to "access: untrusted" isn't allowed.
 	return Unauthorized(accessDenied)
 }
