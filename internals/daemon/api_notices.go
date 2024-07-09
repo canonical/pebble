@@ -43,6 +43,8 @@ type addedNotice struct {
 }
 
 func v1GetNotices(c *Command, r *http.Request, user *UserState) Response {
+	// TODO(benhoyt): the design of notices presumes UIDs; if in future when we
+	//                support identities that aren't UID based, we'll need to fix this.
 	if user == nil || user.UID == nil {
 		return Forbidden("cannot determine UID of request, so cannot retrieve notices")
 	}
@@ -258,7 +260,7 @@ func v1GetNotice(c *Command, r *http.Request, user *UserState) Response {
 func noticeViewableByUser(notice *state.Notice, user *UserState) bool {
 	userID, isSet := notice.UserID()
 	if !isSet {
-		// Notice has no UID, so it's viewable by any user.
+		// Notice has no UID, so it's viewable by any user (with a UID).
 		return true
 	}
 	if user.Access == state.AdminAccess {
