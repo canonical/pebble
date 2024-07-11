@@ -180,8 +180,8 @@ func (se *StateEngine) Stop() {
 	}
 	for _, m := range se.managers {
 		if stopper, ok := m.(StateStopper); ok {
-			logger.Debugf("state engine: stopping %T", m)
-			stopper.Stop()
+			defer stopper.Stop()
+			defer logger.Debugf("state engine: stopping %T", m)
 		}
 	}
 	se.stopped = true

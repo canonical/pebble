@@ -167,7 +167,7 @@ func (ses *stateEngineSuite) TestStop(c *C) {
 	calls = []string{}
 
 	se.Stop()
-	c.Check(calls, DeepEquals, []string{"stop:mgr1", "stop:mgr2"})
+	c.Check(calls, DeepEquals, []string{"stop:mgr2", "stop:mgr1"})
 	se.Stop()
 	c.Check(calls, HasLen, 2)
 
