@@ -755,16 +755,16 @@ func clearReboot(st *state.State) {
 	st.Set("daemon-system-restart-tentative", nil)
 }
 
-// RebootIsFine implements part of overlord.RestartBehavior.
-func (d *Daemon) RebootIsFine(st *state.State) error {
+// RebootAsExpected implements part of overlord.RestartBehavior.
+func (d *Daemon) RebootAsExpected(st *state.State) error {
 	clearReboot(st)
 	return nil
 }
 
 var errExpectedReboot = errors.New("expected reboot did not happen")
 
-// RebootIsMissing implements part of overlord.RestartBehavior.
-func (d *Daemon) RebootIsMissing(st *state.State) error {
+// RebootDidNotHappen implements part of overlord.RestartBehavior.
+func (d *Daemon) RebootDidNotHappen(st *state.State) error {
 	var nTentative int
 	err := st.Get("daemon-system-restart-tentative", &nTentative)
 	if err != nil && !errors.Is(err, state.ErrNoState) {

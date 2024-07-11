@@ -83,6 +83,7 @@ func (ovs *overlordSuite) TestNew(c *C) {
 
 	c.Check(o.StateEngine(), NotNil)
 	c.Check(o.TaskRunner(), NotNil)
+	c.Check(o.RestartManager(), NotNil)
 
 	s := o.State()
 	c.Check(s, NotNil)
@@ -112,6 +113,7 @@ func (ovs *overlordSuite) TestNewWithGoodState(c *C) {
 
 	o, err := overlord.New(&overlord.Options{PebbleDir: ovs.dir})
 	c.Assert(err, IsNil)
+	c.Check(o.RestartManager(), NotNil)
 
 	state := o.State()
 	c.Assert(err, IsNil)
@@ -932,12 +934,12 @@ func (rb *testRestartHandler) HandleRestart(t restart.RestartType) {
 	rb.restartRequested = t
 }
 
-func (rb *testRestartHandler) RebootIsFine(_ *state.State) error {
+func (rb *testRestartHandler) RebootAsExpected(_ *state.State) error {
 	rb.rebootState = "as-expected"
 	return rb.rebootVerifiedErr
 }
 
-func (rb *testRestartHandler) RebootIsMissing(_ *state.State) error {
+func (rb *testRestartHandler) RebootDidNotHappen(_ *state.State) error {
 	rb.rebootState = "did-not-happen"
 	return rb.rebootVerifiedErr
 }
