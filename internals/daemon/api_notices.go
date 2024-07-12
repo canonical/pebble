@@ -45,7 +45,7 @@ type addedNotice struct {
 func v1GetNotices(c *Command, r *http.Request, user *UserState) Response {
 	// TODO(benhoyt): the design of notices presumes UIDs; if in future when we
 	//                support identities that aren't UID based, we'll need to fix this.
-	if user == nil || user.UID == nil {
+	if user.UID == nil {
 		return Forbidden("cannot determine UID of request, so cannot retrieve notices")
 	}
 
@@ -179,7 +179,7 @@ func sanitizeTypesFilter(queryTypes []string) ([]state.NoticeType, error) {
 }
 
 func v1PostNotices(c *Command, r *http.Request, user *UserState) Response {
-	if user == nil || user.UID == nil {
+	if user.UID == nil {
 		return Forbidden("cannot determine UID of request, so cannot create notice")
 	}
 
@@ -240,7 +240,7 @@ func v1PostNotices(c *Command, r *http.Request, user *UserState) Response {
 }
 
 func v1GetNotice(c *Command, r *http.Request, user *UserState) Response {
-	if user == nil || user.UID == nil {
+	if user.UID == nil {
 		return Forbidden("cannot determine UID of request, so cannot retrieve notice")
 	}
 	noticeID := muxVars(r)["id"]

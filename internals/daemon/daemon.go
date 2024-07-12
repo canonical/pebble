@@ -144,9 +144,9 @@ const (
 
 func userFromRequest(st *state.State, r *http.Request, ucred *Ucrednet) (*UserState, error) {
 	if ucred == nil {
-		// No ucred details, no UserState. Currently, "local" (ucred-based) is
+		// No ucred details, "untrusted" user. Currently, "local" (ucred-based) is
 		// the only type of identity we support.
-		return nil, nil
+		return &UserState{Access: state.UntrustedAccess}, nil
 	}
 
 	st.Lock()
@@ -154,8 +154,15 @@ func userFromRequest(st *state.State, r *http.Request, ucred *Ucrednet) (*UserSt
 	st.Unlock()
 
 	if identity == nil {
-		// No identity that matches these inputs (for now, just UID).
-		return nil, nil
+		// No identity that matches these inputs (for now, just UID). Fall back
+		// to the "default" user checks.
+		if ucred.Uid == 0 || ucred.Uid == uint32(os.Getuid()) {
+			// Admin if UID is 0 (root) or the UID the daemon is running as.
+			return &UserState{Access: state.AdminAccess, UID: &ucred.Uid}, nil
+		} else {
+			// Regular read access if any other local UID.
+			return &UserState{Access: state.ReadAccess, UID: &ucred.Uid}, nil
+		}
 	}
 	return &UserState{Access: identity.Access, UID: &ucred.Uid}, nil
 }
@@ -206,23 +213,12 @@ func (c *Command) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// lock, in case we don't need to (when endpoint is OpenAccess). This
 	// avoids holding the state lock for /v1/health in particular, which is
 	// not good: https://github.com/canonical/pebble/pull/369
-	var user *UserState
+	user := &UserState{Access: state.UntrustedAccess}
 	if _, isOpen := access.(OpenAccess); !isOpen {
 		user, err = userFromRequest(c.d.state, r, ucred)
 		if err != nil {
 			Forbidden("forbidden").ServeHTTP(w, r)
 			return
-		}
-	}
-
-	// If we don't have a named-identity user, use ucred UID to see if we have a default.
-	if user == nil && ucred != nil {
-		if ucred.Uid == 0 || ucred.Uid == uint32(os.Getuid()) {
-			// Admin if UID is 0 (root) or the UID the daemon is running as.
-			user = &UserState{Access: state.AdminAccess, UID: &ucred.Uid}
-		} else {
-			// Regular read access if any other local UID.
-			user = &UserState{Access: state.ReadAccess, UID: &ucred.Uid}
 		}
 	}
 
