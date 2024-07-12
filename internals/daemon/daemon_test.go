@@ -539,11 +539,11 @@ func (s *daemonSuite) TestAdminAccess(c *C) {
 func (s *daemonSuite) TestDefaultUcredUsers(c *C) {
 	d := s.newDaemon(c)
 
-	var user *UserState
+	var userSeen *UserState
 	cmd := &Command{
 		d: d,
 		GET: func(_ *Command, _ *http.Request, u *UserState) Response {
-			user = u
+			userSeen = u
 			return SyncResponse(true)
 		},
 		ReadAccess: UserAccess{},
@@ -554,32 +554,32 @@ func (s *daemonSuite) TestDefaultUcredUsers(c *C) {
 	rec := httptest.NewRecorder()
 	cmd.ServeHTTP(rec, req)
 	c.Check(rec.Code, Equals, http.StatusOK)
-	c.Assert(user, NotNil)
-	c.Check(user.Access, Equals, state.AdminAccess)
-	c.Assert(user.UID, NotNil)
-	c.Check(*user.UID, Equals, uint32(0))
+	c.Assert(userSeen, NotNil)
+	c.Check(userSeen.Access, Equals, state.AdminAccess)
+	c.Assert(userSeen.UID, NotNil)
+	c.Check(*userSeen.UID, Equals, uint32(0))
 
 	// Admin access for UID == daemon UID.
-	user = nil
+	userSeen = nil
 	req = &http.Request{Method: "GET", RemoteAddr: fmt.Sprintf("pid=100;uid=%d;socket=;", os.Getuid())}
 	rec = httptest.NewRecorder()
 	cmd.ServeHTTP(rec, req)
 	c.Check(rec.Code, Equals, http.StatusOK)
-	c.Assert(user, NotNil)
-	c.Check(user.Access, Equals, state.AdminAccess)
-	c.Assert(user.UID, NotNil)
-	c.Check(*user.UID, Equals, uint32(os.Getuid()))
+	c.Assert(userSeen, NotNil)
+	c.Check(userSeen.Access, Equals, state.AdminAccess)
+	c.Assert(userSeen.UID, NotNil)
+	c.Check(*userSeen.UID, Equals, uint32(os.Getuid()))
 
 	// Read access for UID not 0 and not daemon UID.
-	user = nil
+	userSeen = nil
 	req = &http.Request{Method: "GET", RemoteAddr: fmt.Sprintf("pid=100;uid=%d;socket=;", os.Getuid()+1)}
 	rec = httptest.NewRecorder()
 	cmd.ServeHTTP(rec, req)
 	c.Check(rec.Code, Equals, http.StatusOK)
-	c.Assert(user, NotNil)
-	c.Check(user.Access, Equals, state.ReadAccess)
-	c.Assert(user.UID, NotNil)
-	c.Check(*user.UID, Equals, uint32(os.Getuid()+1))
+	c.Assert(userSeen, NotNil)
+	c.Check(userSeen.Access, Equals, state.ReadAccess)
+	c.Assert(userSeen.UID, NotNil)
+	c.Check(*userSeen.UID, Equals, uint32(os.Getuid()+1))
 }
 
 func (s *daemonSuite) TestAddRoutes(c *C) {
