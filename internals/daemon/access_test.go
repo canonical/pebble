@@ -30,6 +30,9 @@ var errUnauthorized = daemon.Unauthorized("access denied")
 func (s *accessSuite) TestOpenAccess(c *C) {
 	var ac daemon.AccessChecker = daemon.OpenAccess{}
 
+	// OpenAccess allows access without peer credentials.
+	c.Check(ac.CheckAccess(nil, nil, nil), IsNil)
+
 	// User with "access: admin|read|untrusted" is granted access
 	user := &daemon.UserState{Access: state.AdminAccess}
 	c.Check(ac.CheckAccess(nil, nil, user), IsNil)
@@ -37,14 +40,13 @@ func (s *accessSuite) TestOpenAccess(c *C) {
 	c.Check(ac.CheckAccess(nil, nil, user), IsNil)
 	user = &daemon.UserState{Access: state.UntrustedAccess}
 	c.Check(ac.CheckAccess(nil, nil, user), IsNil)
-
-	// Empty UserState is allowed for OpenAccess.
-	user = &daemon.UserState{}
-	c.Check(ac.CheckAccess(nil, nil, user), IsNil)
 }
 
 func (s *accessSuite) TestUserAccess(c *C) {
 	var ac daemon.AccessChecker = daemon.UserAccess{}
+
+	// UserAccess denies access without peer credentials.
+	c.Check(ac.CheckAccess(nil, nil, nil), DeepEquals, errUnauthorized)
 
 	// User with "access: admin|read" is granted access
 	user := &daemon.UserState{Access: state.AdminAccess}
@@ -55,26 +57,17 @@ func (s *accessSuite) TestUserAccess(c *C) {
 	// But not UntrustedAccess
 	user = &daemon.UserState{Access: state.UntrustedAccess}
 	c.Check(ac.CheckAccess(nil, nil, user), DeepEquals, errUnauthorized)
-
-	// And not an empty UserState (for good measure).
-	user = &daemon.UserState{}
-	c.Check(ac.CheckAccess(nil, nil, user), DeepEquals, errUnauthorized)
 }
 
 func (s *accessSuite) TestAdminAccess(c *C) {
 	var ac daemon.AccessChecker = daemon.AdminAccess{}
 
-	// User with "access: admin" is granted access
-	user := &daemon.UserState{Access: state.AdminAccess}
-	c.Check(ac.CheckAccess(nil, nil, user), IsNil)
+	// AdminAccess denies access without peer credentials.
+	c.Check(ac.CheckAccess(nil, nil, nil), DeepEquals, errUnauthorized)
 
 	// But not ReadAccess or UntrustedAccess
-	user = &daemon.UserState{Access: state.ReadAccess}
+	user := &daemon.UserState{Access: state.ReadAccess}
 	c.Check(ac.CheckAccess(nil, nil, user), DeepEquals, errUnauthorized)
 	user = &daemon.UserState{Access: state.UntrustedAccess}
-	c.Check(ac.CheckAccess(nil, nil, user), DeepEquals, errUnauthorized)
-
-	// And not an empty UserState (for good measure).
-	user = &daemon.UserState{}
 	c.Check(ac.CheckAccess(nil, nil, user), DeepEquals, errUnauthorized)
 }

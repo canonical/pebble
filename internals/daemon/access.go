@@ -44,6 +44,9 @@ func (ac OpenAccess) CheckAccess(d *Daemon, r *http.Request, user *UserState) Re
 type AdminAccess struct{}
 
 func (ac AdminAccess) CheckAccess(d *Daemon, r *http.Request, user *UserState) Response {
+	if user == nil {
+		return Unauthorized(accessDenied)
+	}
 	if user.Access == state.AdminAccess {
 		return nil
 	}
@@ -55,6 +58,9 @@ func (ac AdminAccess) CheckAccess(d *Daemon, r *http.Request, user *UserState) R
 type UserAccess struct{}
 
 func (ac UserAccess) CheckAccess(d *Daemon, r *http.Request, user *UserState) Response {
+	if user == nil {
+		return Unauthorized(accessDenied)
+	}
 	switch user.Access {
 	case state.ReadAccess, state.AdminAccess:
 		return nil
