@@ -19,6 +19,7 @@ package restart
 
 import (
 	"errors"
+	"sync/atomic"
 
 	"github.com/canonical/pebble/internals/overlord/state"
 )
@@ -60,7 +61,7 @@ type restartManagerKey struct{}
 // RestartManager takes care of restart-related state.
 type RestartManager struct {
 	state      *state.State
-	restarting RestartType
+	restarting atomic.Int32 // really of type RestartType
 	h          Handler
 	bootID     string
 }
@@ -149,24 +150,20 @@ func Request(st *state.State, t RestartType) {
 	case RestartSystem, RestartSystemNow, RestartSystemHaltNow, RestartSystemPoweroffNow:
 		st.Set("system-restart-from-boot-id", rm.bootID)
 	}
-	rm.restarting = t
+	rm.restarting.Store(int32(t))
 	rm.handleRestart(t)
 }
 
 // Pending returns whether a restart was requested with Request and of which type.
-func Pending(st *state.State) (bool, RestartType) {
-	cached := st.Cached(restartManagerKey{})
-	if cached == nil {
-		return false, RestartUnset
-	}
-	rm := cached.(*RestartManager)
-	return rm.restarting != RestartUnset, rm.restarting
+// NOTE: the state does not need to be locked to fetch this information.
+func (rm *RestartManager) Pending() (bool, RestartType) {
+	restarting := RestartType(rm.restarting.Load())
+	return restarting != RestartUnset, restarting
 }
 
-func FakePending(st *state.State, restarting RestartType) RestartType {
-	rm := restartManager(st, "internal error: cannot mock a restart request before RestartManager initialization")
-	old := rm.restarting
-	rm.restarting = restarting
+func (rm *RestartManager) FakePending(restarting RestartType) RestartType {
+	old := RestartType(rm.restarting.Load())
+	rm.restarting.Store(int32(restarting))
 	return old
 }
 
