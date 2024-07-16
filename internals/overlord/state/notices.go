@@ -414,9 +414,7 @@ func (s *State) WaitNotices(ctx context.Context, filter *NoticeFilter) ([]*Notic
 
 	// When the context is done/cancelled, wake up the waiters so that they
 	// can check their ctx.Err() and return if they're cancelled.
-	//
-	// TODO: replace this with context.AfterFunc once we're on Go 1.21.
-	stop := contextAfterFunc(ctx, func() {
+	stop := context.AfterFunc(ctx, func() {
 		// We need to acquire the cond lock here to be sure that the Broadcast
 		// below won't occur before the call to Wait, which would result in a
 		// missed signal (and deadlock).
@@ -444,20 +442,4 @@ func (s *State) WaitNotices(ctx context.Context, filter *NoticeFilter) ([]*Notic
 			return notices, nil
 		}
 	}
-}
-
-// Remove this and just use context.AfterFunc once we're on Go 1.21.
-func contextAfterFunc(ctx context.Context, f func()) func() {
-	stopCh := make(chan struct{})
-	go func() {
-		select {
-		case <-ctx.Done():
-			f()
-		case <-stopCh:
-		}
-	}()
-	stop := func() {
-		close(stopCh)
-	}
-	return stop
 }
