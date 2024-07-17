@@ -292,7 +292,7 @@ out:
 			break out
 		case <-d.Dying():
 			// something called Stop()
-			logger.Noticef("Server exiting!")
+			logger.Noticef("Server exiting! Reason: %v", d.Err())
 			break out
 		case <-checkTicker:
 			if err := sanityCheck(); err == nil {
