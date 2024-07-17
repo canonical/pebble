@@ -110,10 +110,10 @@ type Daemon struct {
 }
 
 // UserState represents the state of an authenticated API user.
-//
-// The struct is currently empty as the behaviors haven't been implemented
-// yet.
-type UserState struct{}
+type UserState struct {
+	Access state.IdentityAccess
+	UID    *uint32
+}
 
 // A ResponseFunc handles one of the individual verbs for a method
 type ResponseFunc func(*Command, *http.Request, *UserState) Response
@@ -142,8 +142,22 @@ const (
 	accessForbidden
 )
 
-func userFromRequest(state interface{}, r *http.Request) (*UserState, error) {
-	return nil, nil
+func userFromRequest(st *state.State, r *http.Request, ucred *Ucrednet) (*UserState, error) {
+	if ucred == nil {
+		// No ucred details, no UserState. Currently, "local" (ucred-based) is
+		// the only type of identity we support.
+		return nil, nil
+	}
+
+	st.Lock()
+	identity := st.IdentityFromInputs(&ucred.Uid)
+	st.Unlock()
+
+	if identity == nil {
+		// No identity that matches these inputs (for now, just UID).
+		return nil, nil
+	}
+	return &UserState{Access: identity.Access, UID: &ucred.Uid}, nil
 }
 
 func (d *Daemon) Overlord() *overlord.Overlord {
@@ -155,12 +169,6 @@ func (c *Command) Daemon() *Daemon {
 }
 
 func (c *Command) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	user, err := userFromRequest(nil, r) // don't pass state as this does nothing right now
-	if err != nil {
-		Forbidden("forbidden").ServeHTTP(w, r)
-		return
-	}
-
 	// check if we are in degradedMode
 	if c.d.degradedErr != nil && r.Method != "GET" {
 		InternalError(c.d.degradedErr.Error()).ServeHTTP(w, r)
@@ -194,7 +202,31 @@ func (c *Command) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if rspe := access.CheckAccess(c.d, r, ucred, user); rspe != nil {
+	// Optimisation: avoid calling userFromRequest, which acquires the state
+	// lock, in case we don't need to (when endpoint is OpenAccess). This
+	// avoids holding the state lock for /v1/health in particular, which is
+	// not good: https://github.com/canonical/pebble/pull/369
+	var user *UserState
+	if _, isOpen := access.(OpenAccess); !isOpen {
+		user, err = userFromRequest(c.d.state, r, ucred)
+		if err != nil {
+			Forbidden("forbidden").ServeHTTP(w, r)
+			return
+		}
+	}
+
+	// If we don't have a named-identity user, use ucred UID to see if we have a default.
+	if user == nil && ucred != nil {
+		if ucred.Uid == 0 || ucred.Uid == uint32(os.Getuid()) {
+			// Admin if UID is 0 (root) or the UID the daemon is running as.
+			user = &UserState{Access: state.AdminAccess, UID: &ucred.Uid}
+		} else {
+			// Regular read access if any other local UID.
+			user = &UserState{Access: state.ReadAccess, UID: &ucred.Uid}
+		}
+	}
+
+	if rspe := access.CheckAccess(c.d, r, user); rspe != nil {
 		rspe.ServeHTTP(w, r)
 		return
 	}

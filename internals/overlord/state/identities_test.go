@@ -538,3 +538,43 @@ func (s *identitiesSuite) TestIdentities(c *C) {
 	identities["changed"] = &state.Identity{}
 	c.Assert(identities2, DeepEquals, expected)
 }
+
+func (s *identitiesSuite) TestIdentityFromInputs(c *C) {
+	st := state.New(nil)
+	st.Lock()
+	defer st.Unlock()
+
+	original := map[string]*state.Identity{
+		"bob": {
+			Access: state.ReadAccess,
+			Local:  &state.LocalIdentity{UserID: 42},
+		},
+		"mary": {
+			Access: state.AdminAccess,
+			Local:  &state.LocalIdentity{UserID: 1000},
+		},
+	}
+	err := st.AddIdentities(original)
+	c.Assert(err, IsNil)
+
+	identity := st.IdentityFromInputs(nil)
+	c.Assert(identity, IsNil)
+
+	userID := uint32(0)
+	identity = st.IdentityFromInputs(&userID)
+	c.Assert(identity, IsNil)
+
+	userID = 100
+	identity = st.IdentityFromInputs(&userID)
+	c.Assert(identity, IsNil)
+
+	userID = 42
+	identity = st.IdentityFromInputs(&userID)
+	c.Assert(identity, NotNil)
+	c.Check(identity.Name, Equals, "bob")
+
+	userID = 1000
+	identity = st.IdentityFromInputs(&userID)
+	c.Assert(identity, NotNil)
+	c.Check(identity.Name, Equals, "mary")
+}
