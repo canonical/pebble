@@ -234,10 +234,7 @@ func (c *Command) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	rsp := rspf(c, r, user)
 
 	if rsp, ok := rsp.(*resp); ok {
-		st := c.d.state
-		st.Lock()
-		_, rst := restart.Pending(st)
-		st.Unlock()
+		_, rst := c.d.overlord.RestartManager().Pending()
 		switch rst {
 		case restart.RestartSystem:
 			rsp.transmitMaintenance(errorKindSystemRestart, "system is restarting")
@@ -247,6 +244,7 @@ func (c *Command) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			rsp.transmitMaintenance(errorKindDaemonRestart, "daemon is stopping to wait for socket activation")
 		}
 		if rsp.Type != ResponseTypeError {
+			st := c.d.state
 			st.Lock()
 			count, stamp := st.WarningsSummary()
 			st.Unlock()

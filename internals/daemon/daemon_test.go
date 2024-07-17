@@ -285,7 +285,7 @@ func (s *daemonSuite) TestCommandRestartingState(c *C) {
 	state := d.overlord.State()
 
 	state.Lock()
-	restart.FakePending(state, restart.RestartSystem)
+	d.overlord.RestartManager().FakePending(restart.RestartSystem)
 	state.Unlock()
 	rec = httptest.NewRecorder()
 	cmd.ServeHTTP(rec, req)
@@ -298,7 +298,7 @@ func (s *daemonSuite) TestCommandRestartingState(c *C) {
 	})
 
 	state.Lock()
-	restart.FakePending(state, restart.RestartDaemon)
+	d.overlord.RestartManager().FakePending(restart.RestartDaemon)
 	state.Unlock()
 	rec = httptest.NewRecorder()
 	cmd.ServeHTTP(rec, req)
@@ -1591,7 +1591,6 @@ func (s *utilsSuite) TestExitOnPanic(c *C) {
 	panicHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("before"))
 		panic("PANIC!")
-		w.Write([]byte(r.URL.Path))
 	})
 	stderr.Reset()
 	recorder = httptest.NewRecorder()
