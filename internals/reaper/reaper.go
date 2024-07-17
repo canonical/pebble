@@ -16,6 +16,7 @@ package reaper
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -45,12 +46,9 @@ func Start() error {
 		return nil // already started
 	}
 
-	isSubreaper, err := setChildSubreaper()
+	err := setChildSubreaper(1)
 	if err != nil {
-		return fmt.Errorf("cannot set child subreaper: %w", err)
-	}
-	if !isSubreaper {
-		return fmt.Errorf("child subreaping unavailable on this platform")
+		return err
 	}
 
 	started = true
@@ -75,22 +73,28 @@ func Stop() error {
 	started = false
 	mutex.Unlock()
 
+	err := setChildSubreaper(0)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
-// setChildSubreaper sets the current process as a "child subreaper" so we
-// become the parent of dead child processes rather than PID 1. This allows us
-// to wait for processes that are started by a Pebble service but then die, to
-// "reap" them (see https://unix.stackexchange.com/a/250156/73491).
+// setChildSubreaper sets the "child subreaper" attribute of the current
+// process, turning it on if the argument is nonzero, off otherwise.
 //
-// The function returns true if sub-reaping is available (Linux 3.4+) along
-// with an error if it's available but can't be set.
-func setChildSubreaper() (bool, error) {
-	err := unix.Prctl(unix.PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0)
+// If turning it on, we become the parent of dead child processes rather than
+// PID 1. This allows us to wait for processes that are started by a Pebble
+// service but then die, to "reap" them (see
+// https://unix.stackexchange.com/a/250156/73491).
+func setChildSubreaper(set int) error {
+	err := unix.Prctl(unix.PR_SET_CHILD_SUBREAPER, uintptr(set), 0, 0, 0)
 	if err == unix.EINVAL {
-		return false, nil
+		// Not available in kernels before Linux 3.4.
+		return errors.New("child subreaping unavailable on this platform")
 	}
-	return true, err
+	return err
 }
 
 // reapChildren "reaps" (waits for) child processes whose parents didn't
