@@ -550,7 +550,16 @@ func (client *Client) Pull(opts *PullOptions) error {
 		return fmt.Errorf("cannot parse Content-Type: %w", err)
 	}
 	if mediaType != "multipart/form-data" {
-		// Not an error response after all.
+		// If it's not multipart, it's likely an API error, so try parsing it as such.
+		var serverResp response
+		err := decodeInto(resp.Body, &serverResp)
+		if err != nil {
+			return fmt.Errorf("expected a multipart response, got %q", mediaType)
+		}
+		err = serverResp.err()
+		if err != nil {
+			return err
+		}
 		return fmt.Errorf("expected a multipart response, got %q", mediaType)
 	}
 
