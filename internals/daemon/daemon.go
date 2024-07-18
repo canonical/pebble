@@ -776,6 +776,12 @@ func (d *Daemon) Dying() <-chan struct{} {
 	return d.tomb.Dying()
 }
 
+// Err returns the death reason, or ErrStillAlive
+// if the tomb is not in a dying or dead state.
+func (d *Daemon) Err() error {
+	return d.tomb.Err()
+}
+
 func clearReboot(st *state.State) {
 	// FIXME See notes in the state package. This logic should be
 	// centralized in the overlord which is the orchestrator. Right
