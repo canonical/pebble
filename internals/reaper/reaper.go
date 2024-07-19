@@ -65,6 +65,12 @@ func Stop() error {
 	}
 	mutex.Unlock()
 
+	// Disable receiving of SIGCHLD before we stop the loop that handles them.
+	err := setChildSubreaper(0)
+	if err != nil {
+		return err
+	}
+
 	reaperTomb.Kill(nil)
 	reaperTomb.Wait()
 	reaperTomb = tomb.Tomb{}
@@ -72,11 +78,6 @@ func Stop() error {
 	mutex.Lock()
 	started = false
 	mutex.Unlock()
-
-	err := setChildSubreaper(0)
-	if err != nil {
-		return err
-	}
 
 	return nil
 }
