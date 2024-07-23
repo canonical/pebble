@@ -1565,7 +1565,7 @@ func (s *S) TestReadDir(c *C) {
 			err := os.WriteFile(filepath.Join(layersDir, fmt.Sprintf("%03d-layer-%d.yaml", i, i)), reindent(yml), 0644)
 			c.Assert(err, IsNil)
 		}
-		sup, err := plan.ReadDir(pebbleDir)
+		sup, err := plan.ReadDir(layersDir)
 		if err == nil {
 			var result *plan.Layer
 			result, err = plan.CombineLayers(sup.Layers...)
@@ -1617,7 +1617,7 @@ func (s *S) TestReadDirBadNames(c *C) {
 		fpath := filepath.Join(layersDir, fname)
 		err := os.WriteFile(fpath, []byte("<ignore>"), 0644)
 		c.Assert(err, IsNil)
-		_, err = plan.ReadDir(pebbleDir)
+		_, err = plan.ReadDir(layersDir)
 		c.Assert(err.Error(), Equals, fmt.Sprintf("invalid layer filename: %q (must look like \"123-some-label.yaml\")", fname))
 		err = os.Remove(fpath)
 		c.Assert(err, IsNil)
@@ -1641,7 +1641,7 @@ func (s *S) TestReadDirDupNames(c *C) {
 			err := os.WriteFile(fpath, []byte("summary: ignore"), 0644)
 			c.Assert(err, IsNil)
 		}
-		_, err = plan.ReadDir(pebbleDir)
+		_, err = plan.ReadDir(layersDir)
 		c.Assert(err.Error(), Equals, fmt.Sprintf("invalid layer filename: %q not unique (have %q already)", fnames[1], fnames[0]))
 		for _, fname := range fnames {
 			fpath := filepath.Join(layersDir, fname)
