@@ -244,8 +244,8 @@ We can see that since the database failed to start, other services that depend o
 
 ## See more
 
-- [pebble services command](../reference/pebble-services.md)
-- [pebble start command](../reference/pebble-start.md)
-- [pebble stop command](../reference/pebble-stop.md)
+- [pebble services command](../reference/cli-commands/services.md)
+- [pebble start command](../reference/cli-commands/start.md)
+- [pebble stop command](../reference/cli-commands/stop.md)
 - [Changes and tasks](../reference/changes-and-tasks/changes-and-tasks.md)
 - [Layer specification](../reference/layer-specification.md)
