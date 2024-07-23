@@ -1,4 +1,8 @@
-# How to configure layers
+# Layers
+
+The `$PEBBLE` directory must contain a `layers/` subdirectory that holds a stack of configuration files with names similar to `001-base-layer.yaml`, where the digits define the order of the layer and the following label uniquely identifies it.
+
+## Examples
 
 Below is an example of the current configuration format. For full details of all fields, see the [complete layer specification](../reference/layer-specification).
 
@@ -38,9 +42,11 @@ services:
         command: cmd
 ```
 
+## Layer override
+
 The `override` field (which is required) defines whether this entry _overrides_ the previous service of the same name (if any), or merges with it. See the [full layer specification](../reference/layer-specification) for more details.
 
-## Layer override example
+### Examples
 
 Any of the fields can be replaced individually in a merged service configuration. To illustrate, here is a sample override layer that might sit on top of the one above:
 

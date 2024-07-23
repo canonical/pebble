@@ -1,6 +1,8 @@
-# How to configure service auto-restart
+# Service auto-restart
 
-Pebble's service manager automatically restarts services that exit unexpectedly. By default, this is done whether the exit code is zero or non-zero, but you can change this using the `on-success` and `on-failure` fields in a configuration layer. The possible values for these fields are:
+Pebble's service manager automatically restarts services that exit unexpectedly.
+
+By default, this is done whether the exit code is zero or non-zero, but you can change this using the `on-success` and `on-failure` fields in a configuration layer. The possible values for these fields are:
 
 * `restart`: restart the service and enter a restart-backoff loop (the default behaviour).
 * `shutdown`: shut down and exit the Pebble daemon (with exit code 0 if the service exits successfully, exit code 10 otherwise)

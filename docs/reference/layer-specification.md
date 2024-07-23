@@ -268,3 +268,4 @@ log-targets:
     # be substituted using the environment for the corresponding service.
     labels:
       <label name>: <label value>
+```
