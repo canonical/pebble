@@ -235,8 +235,8 @@ http-server-2  enabled  active   today at 11:40 UTC
 (next_steps)=
 ## Next steps
 
-- To learn more about running the Pebble daemon, see [Pebble run command](../reference/pebble-run.md).
-- To learn more about viewing, starting and stopping services, see [Pebble services command](../reference/pebble-services.md), [Pebble start command](../reference/pebble-start.md), and [Pebble stop command](../reference/pebble-stop.md).
-- To learn more about updating and restarting services, see [Pebble replan command](../reference/pebble-replan.md).
+- To learn more about running the Pebble daemon, see [Pebble run command](../reference/cli-commands/run.md).
+- To learn more about viewing, starting and stopping services, see [Pebble services command](../reference/cli-commands/services.md), [Pebble start command](../reference/cli-commands/start.md), and [Pebble stop command](../reference/cli-commands/stop.md).
+- To learn more about updating and restarting services, see [Pebble replan command](../reference/cli-commands/replan.md).
 - To learn more about configuring layers, see [Layers](../reference/layers.md).
 - To learn more about layer configuration options, read the [Layer specification](../reference/layer-specification.md).

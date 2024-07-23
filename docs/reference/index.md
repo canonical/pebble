@@ -4,19 +4,13 @@
 :titlesonly:
 :maxdepth: 1
 
-Run command <pebble-run>
-Layers <layers>
-Services command <pebble-services>
-Start command <pebble-start>
-Stop command <pebble-stop>
-Replan command <pebble-replan>
-Service auto-restart <service-auto-restart>
-Health checks <health-checks>
 Changes and tasks <changes-and-tasks/changes-and-tasks>
-Logs command <logs>
+CLI Commands <cli-commands/cli-commands>
+Health checks <health-checks>
+Layers <layers>
+Layer specification <layer-specification>
 Log forwarding <log-forwarding>
 Notices <notices/notices>
+Service auto-restart <service-auto-restart>
 Use Pebble in containers <pebble-in-containers/pebble-in-containers>
-Help command <pebble-help>
-Layer specification <layer-specification>
 ```

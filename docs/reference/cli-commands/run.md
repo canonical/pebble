@@ -28,7 +28,7 @@ pebble run --args myservice --port 8080 \; --hold
 
 ## How it works
 
-`pebble run` will start the Pebble daemon itself, as well as start all the services that are marked as `startup: enabled` in the layer configuration (if you don't want that, use `--hold`). For more detail on layer configuration, see [Layer specification](../reference/layer-specification.md).
+`pebble run` will start the Pebble daemon itself, as well as start all the services that are marked as `startup: enabled` in the layer configuration (if you don't want that, use `--hold`). For more detail on layer configuration, see [Layer specification](../layer-specification.md).
 
 After the Pebble daemon starts, other Pebble commands may be used to interact with the running daemon, for example, in another terminal window.
 
