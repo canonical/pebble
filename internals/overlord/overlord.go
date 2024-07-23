@@ -68,6 +68,8 @@ type Extension interface {
 type Options struct {
 	// PebbleDir is the path to the pebble directory. It must be provided.
 	PebbleDir string
+	// LayersDir is the path to the layers directory. It defaults to "<PebbleDir>/layers" if empty.
+	LayersDir string
 	// RestartHandler is an optional structure to handle restart requests.
 	RestartHandler restart.Handler
 	// ServiceOutput is an optional output for the logging manager.
@@ -145,7 +147,11 @@ func New(opts *Options) (*Overlord, error) {
 	o.restartMgr = restartMgr
 	o.stateEng.AddManager(restartMgr)
 
-	o.planMgr, err = planstate.NewManager(o.pebbleDir)
+	layersDir := opts.LayersDir
+	if layersDir == "" {
+		layersDir = filepath.Join(opts.PebbleDir, "layers")
+	}
+	o.planMgr, err = planstate.NewManager(layersDir)
 	if err != nil {
 		return nil, fmt.Errorf("cannot create plan manager: %w", err)
 	}

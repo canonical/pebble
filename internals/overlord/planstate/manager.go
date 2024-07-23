@@ -32,7 +32,7 @@ func (e *LabelExists) Error() string {
 }
 
 type PlanManager struct {
-	pebbleDir string
+	layersDir string
 
 	planLock sync.Mutex
 	plan     *plan.Plan
@@ -40,9 +40,9 @@ type PlanManager struct {
 	changeListeners []PlanChangedFunc
 }
 
-func NewManager(pebbleDir string) (*PlanManager, error) {
+func NewManager(layersDir string) (*PlanManager, error) {
 	manager := &PlanManager{
-		pebbleDir: pebbleDir,
+		layersDir: layersDir,
 		plan:      &plan.Plan{},
 	}
 	return manager, nil
@@ -53,7 +53,7 @@ func NewManager(pebbleDir string) (*PlanManager, error) {
 // the case of a non-existent layers directory, or no layers in the layers
 // directory, an empty plan is announced to change subscribers.
 func (m *PlanManager) Load() error {
-	plan, err := plan.ReadDir(m.pebbleDir)
+	plan, err := plan.ReadDir(m.layersDir)
 	if err != nil {
 		return err
 	}
