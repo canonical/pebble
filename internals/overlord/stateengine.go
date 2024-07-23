@@ -178,10 +178,14 @@ func (se *StateEngine) Stop() {
 	if se.stopped {
 		return
 	}
-	for _, m := range se.managers {
+	// Stop managers in reverse order to how they were added. Managers should
+	// not have dependencies on each other, but stopping in reverse order is
+	// least surprising.
+	for i := len(se.managers) - 1; i >= 0; i-- {
+		m := se.managers[i]
 		if stopper, ok := m.(StateStopper); ok {
-			defer stopper.Stop()
-			defer logger.Debugf("state engine: stopping %T", m)
+			logger.Debugf("State engine is stopping %T", m)
+			stopper.Stop()
 		}
 	}
 	se.stopped = true
