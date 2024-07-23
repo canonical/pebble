@@ -35,7 +35,7 @@ See comment at the top of internals/overlord/state/warning.go for more info.
 :titlesonly:
 :maxdepth: 1
 
-Notify command <pebble-notify>
-Noticies command <pebble-notices>
 Notice command <pebble-notice>
+Noticies command <pebble-notices>
+Notify command <pebble-notify>
 ```

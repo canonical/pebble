@@ -44,5 +44,5 @@ The "Current" column shows the current status of the service, and can be one of 
 
 * `active`: starting or running
 * `inactive`: not yet started, being stopped, or stopped
-* `backoff`: in a [backoff-restart loop](#service-auto-restart)
+* `backoff`: in a [backoff-restart loop](../service-auto-restart.md)
 * `error`: in an error state
