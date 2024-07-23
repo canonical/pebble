@@ -774,6 +774,20 @@ func (cs *clientSuite) TestPullFailsWithNonMultipartResponse(c *C) {
 	c.Assert(err, ErrorMatches, `expected a multipart response, got "text/plain"`)
 }
 
+func (cs *clientSuite) TestPullFailsWithErrorResponse(c *C) {
+	cs.header = http.Header{}
+	cs.header.Set("Content-Type", "application/json")
+	cs.rsp = `{"type":"error","status-code":401,"status":"Unauthorized","result":{"message":"access denied","kind":"login-required"}}`
+
+	// Check response
+	var targetBuf bytes.Buffer
+	err := cs.cli.Pull(&client.PullOptions{
+		Path:   "/foo/bar.dat",
+		Target: &targetBuf,
+	})
+	c.Assert(err, ErrorMatches, "access denied")
+}
+
 func (cs *clientSuite) TestPullFailsWithInvalidMultipartResponse(c *C) {
 	cs.header = http.Header{}
 	cs.header.Set("Content-Type", "multipart/form-data")

@@ -127,12 +127,13 @@ func (s *standbySuite) TestStartChecks(c *C) {
 
 	defer standby.FakeStandbyWait(time.Millisecond)()
 	s.state.Lock()
-	restart.Init(s.state, "boot-id-0", servstatetest.FakeRestartHandler(func(t restart.RestartType) {
+	_, err := restart.Manager(s.state, "boot-id-0", servstatetest.FakeRestartHandler(func(t restart.RestartType) {
 		c.Check(t, Equals, restart.RestartSocket)
 		n++
 		<-ch2
 	}))
 	s.state.Unlock()
+	c.Assert(err, IsNil)
 
 	m := standby.New(s.state)
 	m.AddOpinion(opine(func() bool {
@@ -156,10 +157,11 @@ func (s *standbySuite) TestStartChecks(c *C) {
 func (s *standbySuite) TestStopWaits(c *C) {
 	defer standby.FakeStandbyWait(time.Millisecond)()
 	s.state.Lock()
-	restart.Init(s.state, "boot-id-0", servstatetest.FakeRestartHandler(func(t restart.RestartType) {
+	_, err := restart.Manager(s.state, "boot-id-0", servstatetest.FakeRestartHandler(func(t restart.RestartType) {
 		c.Fatal("request restart should have not been called")
 	}))
 	s.state.Unlock()
+	c.Assert(err, IsNil)
 
 	ch := make(chan struct{})
 	opineReady := make(chan struct{})

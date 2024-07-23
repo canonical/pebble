@@ -96,6 +96,7 @@ type Overlord struct {
 	inited     bool
 	startedUp  bool
 	runner     *state.TaskRunner
+	restartMgr *restart.RestartManager
 	planMgr    *planstate.PlanManager
 	serviceMgr *servstate.ServiceManager
 	commandMgr *cmdstate.CommandManager
@@ -127,7 +128,7 @@ func New(opts *Options) (*Overlord, error) {
 		path:         statePath,
 		ensureBefore: o.ensureBefore,
 	}
-	s, err := loadState(statePath, opts.RestartHandler, backend)
+	s, restartMgr, err := loadState(statePath, opts.RestartHandler, backend)
 	if err != nil {
 		return nil, err
 	}
@@ -141,7 +142,10 @@ func New(opts *Options) (*Overlord, error) {
 	}
 	o.runner.AddOptionalHandler(matchAnyUnknownTask, handleUnknownTask, nil)
 
-	o.planMgr, err = planstate.NewManager(s, o.runner, o.pebbleDir)
+	o.restartMgr = restartMgr
+	o.stateEng.AddManager(restartMgr)
+
+	o.planMgr, err = planstate.NewManager(o.pebbleDir)
 	if err != nil {
 		return nil, fmt.Errorf("cannot create plan manager: %w", err)
 	}
@@ -213,12 +217,12 @@ func (o *Overlord) Extension() Extension {
 	return o.extension
 }
 
-func loadState(statePath string, restartHandler restart.Handler, backend state.Backend) (*state.State, error) {
+func loadState(statePath string, restartHandler restart.Handler, backend state.Backend) (*state.State, *restart.RestartManager, error) {
 	timings := timing.Start("", "", map[string]string{"startup": "load-state"})
 
 	curBootID, err := osutil.BootID()
 	if err != nil {
-		return nil, fmt.Errorf("fatal: cannot find current boot ID: %v", err)
+		return nil, nil, fmt.Errorf("fatal: cannot find current boot ID: %v", err)
 	}
 	// If pebble is PID 1 we don't care about /proc/sys/kernel/random/boot_id
 	// as we are most likely running in a container. LXD mounts it's own boot_id
@@ -228,7 +232,7 @@ func loadState(statePath string, restartHandler restart.Handler, backend state.B
 	if os.Getpid() == 1 {
 		curBootID, err = randutil.RandomKernelUUID()
 		if err != nil {
-			return nil, fmt.Errorf("fatal: cannot generate psuedo boot-id: %v", err)
+			return nil, nil, fmt.Errorf("fatal: cannot generate psuedo boot-id: %v", err)
 		}
 	}
 
@@ -236,17 +240,20 @@ func loadState(statePath string, restartHandler restart.Handler, backend state.B
 		// fail fast, mostly interesting for tests, this dir is set up by pebble
 		stateDir := filepath.Dir(statePath)
 		if !osutil.IsDir(stateDir) {
-			return nil, fmt.Errorf("fatal: directory %q must be present", stateDir)
+			return nil, nil, fmt.Errorf("fatal: directory %q must be present", stateDir)
 		}
 		s := state.New(backend)
-		initRestart(s, curBootID, restartHandler)
+		restartMgr, err := initRestart(s, curBootID, restartHandler)
+		if err != nil {
+			return nil, nil, err
+		}
 		patch.Init(s)
-		return s, nil
+		return s, restartMgr, nil
 	}
 
 	r, err := os.Open(statePath)
 	if err != nil {
-		return nil, fmt.Errorf("cannot read the state file: %s", err)
+		return nil, nil, fmt.Errorf("cannot read the state file: %s", err)
 	}
 	defer r.Close()
 
@@ -255,7 +262,7 @@ func loadState(statePath string, restartHandler restart.Handler, backend state.B
 	s, err = state.ReadState(backend, r)
 	span.Stop()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	timings.Stop()
@@ -264,23 +271,23 @@ func loadState(statePath string, restartHandler restart.Handler, backend state.B
 	//perfTimings.Save(s)
 	//s.Unlock()
 
-	err = initRestart(s, curBootID, restartHandler)
+	restartMgr, err := initRestart(s, curBootID, restartHandler)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// one-shot migrations
 	err = patch.Apply(s)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return s, nil
+	return s, restartMgr, nil
 }
 
-func initRestart(s *state.State, curBootID string, restartHandler restart.Handler) error {
+func initRestart(s *state.State, curBootID string, restartHandler restart.Handler) (*restart.RestartManager, error) {
 	s.Lock()
 	defer s.Unlock()
-	return restart.Init(s, curBootID, restartHandler)
+	return restart.Manager(s, curBootID, restartHandler)
 }
 
 func (o *Overlord) StartUp() error {
@@ -490,6 +497,11 @@ func (o *Overlord) StateEngine() *StateEngine {
 // tasks for all managers under the overlord.
 func (o *Overlord) TaskRunner() *state.TaskRunner {
 	return o.runner
+}
+
+// RestartManager returns the manager responsible for restart state.
+func (o *Overlord) RestartManager() *restart.RestartManager {
+	return o.restartMgr
 }
 
 // ServiceManager returns the service manager responsible for services

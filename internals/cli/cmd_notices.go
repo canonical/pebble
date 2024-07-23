@@ -33,6 +33,10 @@ The notices command lists notices not yet acknowledged, ordered by the
 last-repeated time (oldest first). After it runs, the notices that were shown
 may then be acknowledged by running '{{.ProgramName}} okay'. When a notice repeats, it
 needs to be acknowledged again.
+
+By default, list notices with the current user ID or public notices. Admins
+can use --users=all to view notice with any user ID, or --uid=UID to view
+another user's notices.
 `
 
 type cmdNotices struct {
@@ -54,7 +58,7 @@ func init() {
 		Summary:     cmdNoticesSummary,
 		Description: cmdNoticesDescription,
 		ArgsHelp: merge(timeArgsHelp, map[string]string{
-			"--users":   "Show all notices with any user ID (admin only; cannot be used with --uid)",
+			"--users":   "The only valid value is 'all', which lists notices with any user ID (admin only; cannot be used with --uid)",
 			"--uid":     "Only list notices with this user ID (admin only; cannot be used with --users)",
 			"--type":    "Only list notices of this type (multiple allowed)",
 			"--key":     "Only list notices with this key (multiple allowed)",

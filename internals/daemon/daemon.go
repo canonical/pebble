@@ -110,10 +110,10 @@ type Daemon struct {
 }
 
 // UserState represents the state of an authenticated API user.
-//
-// The struct is currently empty as the behaviors haven't been implemented
-// yet.
-type UserState struct{}
+type UserState struct {
+	Access state.IdentityAccess
+	UID    *uint32
+}
 
 // A ResponseFunc handles one of the individual verbs for a method
 type ResponseFunc func(*Command, *http.Request, *UserState) Response
@@ -142,8 +142,22 @@ const (
 	accessForbidden
 )
 
-func userFromRequest(state interface{}, r *http.Request) (*UserState, error) {
-	return nil, nil
+func userFromRequest(st *state.State, r *http.Request, ucred *Ucrednet) (*UserState, error) {
+	if ucred == nil {
+		// No ucred details, no UserState. Currently, "local" (ucred-based) is
+		// the only type of identity we support.
+		return nil, nil
+	}
+
+	st.Lock()
+	identity := st.IdentityFromInputs(&ucred.Uid)
+	st.Unlock()
+
+	if identity == nil {
+		// No identity that matches these inputs (for now, just UID).
+		return nil, nil
+	}
+	return &UserState{Access: identity.Access, UID: &ucred.Uid}, nil
 }
 
 func (d *Daemon) Overlord() *overlord.Overlord {
@@ -155,12 +169,6 @@ func (c *Command) Daemon() *Daemon {
 }
 
 func (c *Command) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	user, err := userFromRequest(nil, r) // don't pass state as this does nothing right now
-	if err != nil {
-		Forbidden("forbidden").ServeHTTP(w, r)
-		return
-	}
-
 	// check if we are in degradedMode
 	if c.d.degradedErr != nil && r.Method != "GET" {
 		InternalError(c.d.degradedErr.Error()).ServeHTTP(w, r)
@@ -194,7 +202,31 @@ func (c *Command) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if rspe := access.CheckAccess(c.d, r, ucred, user); rspe != nil {
+	// Optimisation: avoid calling userFromRequest, which acquires the state
+	// lock, in case we don't need to (when endpoint is OpenAccess). This
+	// avoids holding the state lock for /v1/health in particular, which is
+	// not good: https://github.com/canonical/pebble/pull/369
+	var user *UserState
+	if _, isOpen := access.(OpenAccess); !isOpen {
+		user, err = userFromRequest(c.d.state, r, ucred)
+		if err != nil {
+			Forbidden("forbidden").ServeHTTP(w, r)
+			return
+		}
+	}
+
+	// If we don't have a named-identity user, use ucred UID to see if we have a default.
+	if user == nil && ucred != nil {
+		if ucred.Uid == 0 || ucred.Uid == uint32(os.Getuid()) {
+			// Admin if UID is 0 (root) or the UID the daemon is running as.
+			user = &UserState{Access: state.AdminAccess, UID: &ucred.Uid}
+		} else {
+			// Regular read access if any other local UID.
+			user = &UserState{Access: state.ReadAccess, UID: &ucred.Uid}
+		}
+	}
+
+	if rspe := access.CheckAccess(c.d, r, user); rspe != nil {
 		rspe.ServeHTTP(w, r)
 		return
 	}
@@ -202,10 +234,7 @@ func (c *Command) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	rsp := rspf(c, r, user)
 
 	if rsp, ok := rsp.(*resp); ok {
-		st := c.d.state
-		st.Lock()
-		_, rst := restart.Pending(st)
-		st.Unlock()
+		_, rst := c.d.overlord.RestartManager().Pending()
 		switch rst {
 		case restart.RestartSystem:
 			rsp.transmitMaintenance(errorKindSystemRestart, "system is restarting")
@@ -215,6 +244,7 @@ func (c *Command) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			rsp.transmitMaintenance(errorKindDaemonRestart, "daemon is stopping to wait for socket activation")
 		}
 		if rsp.Type != ResponseTypeError {
+			st := c.d.state
 			st.Lock()
 			count, stamp := st.WarningsSummary()
 			st.Unlock()
@@ -746,6 +776,12 @@ func (d *Daemon) Dying() <-chan struct{} {
 	return d.tomb.Dying()
 }
 
+// Err returns the death reason, or ErrStillAlive
+// if the tomb is not in a dying or dead state.
+func (d *Daemon) Err() error {
+	return d.tomb.Err()
+}
+
 func clearReboot(st *state.State) {
 	// FIXME See notes in the state package. This logic should be
 	// centralized in the overlord which is the orchestrator. Right
@@ -755,16 +791,16 @@ func clearReboot(st *state.State) {
 	st.Set("daemon-system-restart-tentative", nil)
 }
 
-// RebootIsFine implements part of overlord.RestartBehavior.
-func (d *Daemon) RebootIsFine(st *state.State) error {
+// RebootAsExpected implements part of overlord.RestartBehavior.
+func (d *Daemon) RebootAsExpected(st *state.State) error {
 	clearReboot(st)
 	return nil
 }
 
 var errExpectedReboot = errors.New("expected reboot did not happen")
 
-// RebootIsMissing implements part of overlord.RestartBehavior.
-func (d *Daemon) RebootIsMissing(st *state.State) error {
+// RebootDidNotHappen implements part of overlord.RestartBehavior.
+func (d *Daemon) RebootDidNotHappen(st *state.State) error {
 	var nTentative int
 	err := st.Get("daemon-system-restart-tentative", &nTentative)
 	if err != nil && !errors.Is(err, state.ErrNoState) {

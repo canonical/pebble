@@ -354,6 +354,36 @@ func (ss *stateSuite) TestNewChangeAndChanges(c *C) {
 	c.Check(st.Change("no-such-id"), IsNil)
 }
 
+func (ss *stateSuite) TestNewChangeWithNoticeData(c *C) {
+	st := state.New(nil)
+	st.Lock()
+	defer st.Unlock()
+
+	extraData := map[string]string{"foo": "bar"}
+	chg := st.NewChangeWithNoticeData("perform-check", "...", extraData)
+
+	chgs := st.Changes()
+	c.Check(chgs, HasLen, 1)
+
+	var data map[string]string
+	err := chg.Get("notice-data", &data)
+	c.Assert(err, IsNil)
+	c.Check(data, DeepEquals, extraData)
+}
+
+func (ss *stateSuite) TestNewChangeWithNilNoticeData(c *C) {
+	st := state.New(nil)
+	st.Lock()
+	defer st.Unlock()
+
+	st.NewChange("replan", "...")
+	st.NewChangeWithNoticeData("replan", "...", nil)
+
+	for _, chg := range st.Changes() {
+		c.Assert(chg.Has("notice-data"), Equals, false)
+	}
+}
+
 func (ss *stateSuite) TestNewChangeAndCheckpoint(c *C) {
 	b := new(fakeStateBackend)
 	st := state.New(b)
@@ -572,6 +602,7 @@ func (ss *stateSuite) TestEmptyStateDataAndCheckpointReadAndSet(c *C) {
 		"tasks",
 		"warnings",
 		"notices",
+		"identities",
 		"cache",
 		"pendingChangeByAttr",
 		"taskHandlers",

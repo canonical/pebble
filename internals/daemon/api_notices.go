@@ -42,22 +42,22 @@ type addedNotice struct {
 	ID string `json:"id"`
 }
 
-func v1GetNotices(c *Command, r *http.Request, _ *UserState) Response {
-	query := r.URL.Query()
-
-	requestUID, err := uidFromRequest(r)
-	if err != nil {
+func v1GetNotices(c *Command, r *http.Request, user *UserState) Response {
+	// TODO(benhoyt): the design of notices presumes UIDs; if in future when we
+	//                support identities that aren't UID based, we'll need to fix this.
+	if user == nil || user.UID == nil {
 		return Forbidden("cannot determine UID of request, so cannot retrieve notices")
 	}
-	daemonUID := uint32(sysGetuid())
 
 	// By default, return notices with the request UID and public notices.
-	userID := &requestUID
+	userID := user.UID
 
+	query := r.URL.Query()
 	if len(query["user-id"]) > 0 {
-		if !isAdmin(requestUID, daemonUID) {
+		if user.Access != state.AdminAccess {
 			return Forbidden(`only admins may use the "user-id" filter`)
 		}
+		var err error
 		userID, err = sanitizeUserIDFilter(query["user-id"])
 		if err != nil {
 			return BadRequest(`invalid "user-id" filter: %v`, err)
@@ -65,7 +65,7 @@ func v1GetNotices(c *Command, r *http.Request, _ *UserState) Response {
 	}
 
 	if len(query["users"]) > 0 {
-		if !isAdmin(requestUID, daemonUID) {
+		if user.Access != state.AdminAccess {
 			return Forbidden(`only admins may use the "users" filter`)
 		}
 		if len(query["user-id"]) > 0 {
@@ -136,15 +136,6 @@ func v1GetNotices(c *Command, r *http.Request, _ *UserState) Response {
 	return SyncResponse(notices)
 }
 
-// Get the UID of the request. If the UID is not known, return an error.
-func uidFromRequest(r *http.Request) (uint32, error) {
-	ucred, err := ucrednetGet(r.RemoteAddr)
-	if err != nil {
-		return 0, fmt.Errorf("could not parse request UID")
-	}
-	return ucred.Uid, nil
-}
-
 // Construct the user IDs filter which will be passed to state.Notices.
 // Must only be called if the query user ID argument is set.
 func sanitizeUserIDFilter(queryUserID []string) (*uint32, error) {
@@ -187,13 +178,8 @@ func sanitizeTypesFilter(queryTypes []string) ([]state.NoticeType, error) {
 	return types, nil
 }
 
-func isAdmin(requestUID, daemonUID uint32) bool {
-	return requestUID == 0 || requestUID == daemonUID
-}
-
-func v1PostNotices(c *Command, r *http.Request, _ *UserState) Response {
-	requestUID, err := uidFromRequest(r)
-	if err != nil {
+func v1PostNotices(c *Command, r *http.Request, user *UserState) Response {
+	if user == nil || user.UID == nil {
 		return Forbidden("cannot determine UID of request, so cannot create notice")
 	}
 
@@ -242,7 +228,7 @@ func v1PostNotices(c *Command, r *http.Request, _ *UserState) Response {
 	st.Lock()
 	defer st.Unlock()
 
-	noticeId, err := st.AddNotice(&requestUID, state.CustomNotice, payload.Key, &state.AddNoticeOptions{
+	noticeId, err := st.AddNotice(user.UID, state.CustomNotice, payload.Key, &state.AddNoticeOptions{
 		Data:        data,
 		RepeatAfter: repeatAfter,
 	})
@@ -253,12 +239,10 @@ func v1PostNotices(c *Command, r *http.Request, _ *UserState) Response {
 	return SyncResponse(addedNotice{ID: noticeId})
 }
 
-func v1GetNotice(c *Command, r *http.Request, _ *UserState) Response {
-	requestUID, err := uidFromRequest(r)
-	if err != nil {
+func v1GetNotice(c *Command, r *http.Request, user *UserState) Response {
+	if user == nil || user.UID == nil {
 		return Forbidden("cannot determine UID of request, so cannot retrieve notice")
 	}
-	daemonUID := uint32(sysGetuid())
 	noticeID := muxVars(r)["id"]
 	st := c.d.overlord.State()
 	st.Lock()
@@ -267,19 +251,22 @@ func v1GetNotice(c *Command, r *http.Request, _ *UserState) Response {
 	if notice == nil {
 		return NotFound("cannot find notice with ID %q", noticeID)
 	}
-	if !noticeViewableByUser(notice, requestUID, daemonUID) {
+	if !noticeViewableByUser(notice, user) {
 		return Forbidden("not allowed to access notice with id %q", noticeID)
 	}
 	return SyncResponse(notice)
 }
 
-func noticeViewableByUser(notice *state.Notice, requestUID, daemonUID uint32) bool {
+func noticeViewableByUser(notice *state.Notice, user *UserState) bool {
 	userID, isSet := notice.UserID()
 	if !isSet {
+		// Notice has no UID, so it's viewable by any user (with a UID).
 		return true
 	}
-	if isAdmin(requestUID, daemonUID) {
+	if user.Access == state.AdminAccess {
+		// User is admin, they can view anything.
 		return true
 	}
-	return requestUID == userID
+	// Otherwise user's UID must match notice's UID.
+	return *user.UID == userID
 }

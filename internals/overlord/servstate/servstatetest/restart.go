@@ -30,10 +30,10 @@ func (h FakeRestartHandler) HandleRestart(t restart.RestartType) {
 	h(t)
 }
 
-func (h FakeRestartHandler) RebootIsFine(*state.State) error {
+func (h FakeRestartHandler) RebootAsExpected(*state.State) error {
 	return nil
 }
 
-func (h FakeRestartHandler) RebootIsMissing(*state.State) error {
-	panic("internal error: fakeing should not invoke RebootIsMissing")
+func (h FakeRestartHandler) RebootDidNotHappen(*state.State) error {
+	panic("internal error: fakeing should not invoke RebootDidNotHappen")
 }

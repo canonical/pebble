@@ -1,7 +1,5 @@
 # CLI Commands
 
-## Index
-
 ```{toctree}
 :titlesonly:
 :maxdepth: 1

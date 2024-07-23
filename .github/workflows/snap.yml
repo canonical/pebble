@@ -30,6 +30,14 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version-file: "go.mod"
+
+      # Generate the version for the local snap build.
+      - run: go generate ./cmd
+
       - name: Build ${{ env.SNAP_NAME }} Snap
         id: build-snap
         uses: snapcore/action-build@v1.1.3
@@ -69,6 +77,16 @@ jobs:
           echo '${{ secrets.LP_CREDENTIALS }}' > ${lp_creds_path}/launchpad-credentials
           git config --global user.email "${{ secrets.PEBBLE_DEV_MAILING_LIST}}"
           git config --global user.name "pebble-dev"
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version-file: "go.mod"
+
+      # Ensure Snapcraft will ship the generated version files to LP.
+      - run: |
+          go generate ./cmd
+          git add -f ./cmd/VERSION ./cmd/version_generated.go
 
       - name: Build ${{ env.SNAP_NAME }} Snap for ${{ matrix.arch }}
         id: build-snap
