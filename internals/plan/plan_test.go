@@ -1427,15 +1427,23 @@ func (s *S) TestParseLayer(c *C) {
 			if err == nil {
 				for name, order := range test.start {
 					p := plan.Plan{Services: result.Services}
-					names, err := p.StartOrder([]string{name})
+					lanes, err := p.StartOrder([]string{name})
 					c.Assert(err, IsNil)
-					c.Assert(names, DeepEquals, order)
+					for _, names := range lanes {
+						if len(names) > 0 {
+							c.Assert(names, DeepEquals, order)
+						}
+					}
 				}
 				for name, order := range test.stop {
 					p := plan.Plan{Services: result.Services}
-					names, err := p.StopOrder([]string{name})
+					lanes, err := p.StopOrder([]string{name})
 					c.Assert(err, IsNil)
-					c.Assert(names, DeepEquals, order)
+					for _, names := range lanes {
+						if len(names) > 0 {
+							c.Assert(names, DeepEquals, order)
+						}
+					}
 				}
 			}
 			if err == nil {
@@ -1575,15 +1583,23 @@ func (s *S) TestReadDir(c *C) {
 			if err == nil {
 				for name, order := range test.start {
 					p := plan.Plan{Services: result.Services}
-					names, err := p.StartOrder([]string{name})
+					lanes, err := p.StartOrder([]string{name})
 					c.Assert(err, IsNil)
-					c.Assert(names, DeepEquals, order)
+					for _, names := range lanes {
+						if len(names) > 0 {
+							c.Assert(names, DeepEquals, order)
+						}
+					}
 				}
 				for name, order := range test.stop {
 					p := plan.Plan{Services: result.Services}
-					names, err := p.StopOrder([]string{name})
+					lanes, err := p.StopOrder([]string{name})
 					c.Assert(err, IsNil)
-					c.Assert(names, DeepEquals, order)
+					for _, names := range lanes {
+						if len(names) > 0 {
+							c.Assert(names, DeepEquals, order)
+						}
+					}
 				}
 			}
 		}

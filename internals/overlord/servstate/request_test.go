@@ -41,7 +41,7 @@ services:
 	s.st.Lock()
 	defer s.st.Unlock()
 
-	tset, err := servstate.Start(s.st, []string{"one", "two"}, s.manager)
+	tset, err := servstate.Start(s.st, [][]string{{"one"}, {"two"}})
 	c.Assert(err, IsNil)
 
 	tasks := tset.Tasks()
@@ -84,7 +84,7 @@ services:
 	s.st.Lock()
 	defer s.st.Unlock()
 
-	tset, err := servstate.Start(s.st, []string{"one", "two"}, s.manager)
+	tset, err := servstate.Start(s.st, [][]string{{"one", "two"}})
 	c.Assert(err, IsNil)
 
 	tasks := tset.Tasks()
@@ -127,7 +127,7 @@ services:
 	s.st.Lock()
 	defer s.st.Unlock()
 
-	tset, err := servstate.Start(s.st, []string{"one", "two"}, s.manager)
+	tset, err := servstate.Start(s.st, [][]string{{"one", "two"}})
 	c.Assert(err, IsNil)
 
 	tasks := tset.Tasks()
@@ -150,7 +150,7 @@ func (s *S) TestStop(c *C) {
 	s.st.Lock()
 	defer s.st.Unlock()
 
-	tset, err := servstate.Stop(s.st, []string{"one", "two"})
+	tset, err := servstate.Stop(s.st, [][]string{{"one", "two"}})
 	c.Assert(err, IsNil)
 
 	tasks := tset.Tasks()
