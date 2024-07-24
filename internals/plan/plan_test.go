@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Canonical Ltd
+// Copyright (c) 2024 Canonical Ltd
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -1954,4 +1954,94 @@ func (s *S) TestPebbleLabelPrefixReserved(c *C) {
 	// Validate fails if layer label has the reserved prefix "pebble-"
 	_, err := plan.ParseLayer(0, "pebble-foo", []byte("{}"))
 	c.Check(err, ErrorMatches, `cannot use reserved label prefix "pebble-"`)
+}
+
+func (s *S) TestStartStopOrderSingleLane(c *C) {
+	layer := &plan.Layer{
+		Summary:     "services with dependencies in the same lane",
+		Description: "a simple layer",
+		Services: map[string]*plan.Service{
+			"srv1": {
+				Name:     "srv1",
+				Override: "replace",
+				Command:  `cmd`,
+				Requires: []string{"srv2"},
+				Before: []string{"srv2"},
+				Startup:  plan.StartupEnabled,
+			},
+			"srv2": {
+				Name:     "srv2",
+				Override: "replace",
+				Command:  `cmd`,
+				Requires: []string{"srv3"},
+				Before: []string{"srv3"},
+				Startup:  plan.StartupEnabled,
+			},
+			"srv3": {
+				Name:     "srv3",
+				Override: "replace",
+				Command:  `cmd`,
+				Startup:  plan.StartupEnabled,
+			},
+		},
+		Checks:     map[string]*plan.Check{},
+		LogTargets: map[string]*plan.LogTarget{},
+	}
+
+	p := plan.Plan{Services: layer.Services}
+	
+	lanes, err := p.StartOrder([]string{"srv1", "srv2", "srv3"})
+	c.Assert(err, IsNil)
+	c.Assert(len(lanes), Equals, 1)
+	c.Assert(lanes[0], DeepEquals, []string{"srv1", "srv2", "srv3"})
+
+	lanes, err = p.StopOrder([]string{"srv1", "srv2", "srv3"})
+	c.Assert(err, IsNil)
+	c.Assert(len(lanes), Equals, 1)
+	c.Assert(lanes[0], DeepEquals, []string{"srv3", "srv2", "srv1"})
+}
+
+func (s *S) TestStartStopOrderMultipleLanes(c *C) {
+	layer := &plan.Layer{
+		Summary:     "services with no dependencies in different lanes",
+		Description: "a simple layer",
+		Services: map[string]*plan.Service{
+			"srv1": {
+				Name:     "srv1",
+				Override: "replace",
+				Command:  `cmd`,
+				Startup:  plan.StartupEnabled,
+			},
+			"srv2": {
+				Name:     "srv2",
+				Override: "replace",
+				Command:  `cmd`,
+				Startup:  plan.StartupEnabled,
+			},
+			"srv3": {
+				Name:     "srv3",
+				Override: "replace",
+				Command:  `cmd`,
+				Startup:  plan.StartupEnabled,
+			},
+		},
+		Checks:     map[string]*plan.Check{},
+		LogTargets: map[string]*plan.LogTarget{},
+	}
+
+	p := plan.Plan{Services: layer.Services}
+	
+	lanes, err := p.StartOrder([]string{"srv1", "srv2", "srv3"})
+	c.Assert(err, IsNil)
+	c.Assert(len(lanes), Equals, 3)
+	c.Assert(lanes[0], DeepEquals, []string{"srv1"})
+	c.Assert(lanes[1], DeepEquals, []string{"srv2"})
+	c.Assert(lanes[2], DeepEquals, []string{"srv3"})
+
+	lanes, err = p.StopOrder([]string{"srv1", "srv2", "srv3"})
+	c.Assert(err, IsNil)
+	c.Assert(len(lanes), Equals, 3)
+	c.Assert(lanes[0], DeepEquals, []string{"srv1"})
+	c.Assert(lanes[1], DeepEquals, []string{"srv2"})
+	c.Assert(lanes[2], DeepEquals, []string{"srv3"})
 }

@@ -68,13 +68,13 @@ services:
         override: replace
         command: /bin/sh -c "echo one; sleep 10"
         startup: enabled
+        requires:
+            - two
 
     two:
         override: replace
         command: /bin/sh -c "echo two; sleep 10"
         startup: enabled
-        requires:
-            - one
         after:
             - one
 `

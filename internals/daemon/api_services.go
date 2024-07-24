@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2020 Canonical Ltd
+// Copyright (c) 2014-2024 Canonical Ltd
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License version 3 as
@@ -191,8 +191,8 @@ func v1PostServices(c *Command, r *http.Request, _ *UserState) Response {
 	// Use the original requested service name for the summary, not the
 	// resolved one. But do use the resolved set for the count.
 	var summary string
-	for _, names := range lanes {
-		services = append(services, names...)
+	for _, row := range lanes {
+		services = append(services, row...)
 	}
 	switch {
 	case len(taskSet.Tasks()) == 0:
@@ -244,7 +244,9 @@ func intersectOrdered(left []string, orderedRight [][]string) [][]string {
 				intersectRow = append(intersectRow, v)
 			}
 		}
-		out = append(out, intersectRow)
+		if len(intersectRow) > 0 {
+			out = append(out, intersectRow)
+		}
 	}
 	return out
 }

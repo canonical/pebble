@@ -1,4 +1,4 @@
-// Copyright (c) 2021 Canonical Ltd
+// Copyright (c) 2024 Canonical Ltd
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -946,7 +946,7 @@ func (p *Plan) StopOrder(names []string) ([][]string, error) {
 	return createLanes(orderedNames, p.Services)
 }
 
-func getOrCreateLane(current_lane int, service *Service, serviceLaneMapping map[string]int) int {
+func getOrCreateLane(currentLane int, service *Service, serviceLaneMapping map[string]int) int {
 	// if the service has been mapped to a lane
 	if lane, ok := serviceLaneMapping[service.Name]; ok {
 		return lane
@@ -960,7 +960,7 @@ func getOrCreateLane(current_lane int, service *Service, serviceLaneMapping map[
 	}
 
 	// neither the service itself nor any of its dependencies is mapped to an existing lane
-	return current_lane + 1
+	return currentLane + 1
 }
 
 func mapServiceToLane(service *Service, lane int, serviceLaneMapping map[string]int) {
@@ -976,7 +976,7 @@ func createLanes(names []string, services map[string]*Service) ([][]string, erro
 	serviceLaneMapping := make(map[string]int)
 
 	// Map all services into lanes.
-	var lane = 0
+	var lane = -1
 	for _, name := range names {
 		service, ok := services[name]
 		if !ok {

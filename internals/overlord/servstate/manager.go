@@ -260,8 +260,8 @@ func (m *ServiceManager) ServiceLogs(services []string, last int) (map[string]se
 	return iterators, nil
 }
 
-// Replan returns a list of services to stop and services to start because
-// their plans had changed between when they started and this call.
+// Replan returns a list of services in lanes to stop and services to start
+// because their plans had changed between when they started and this call.
 func (m *ServiceManager) Replan() ([][]string, [][]string, error) {
 	currentPlan := m.getPlan()
 	m.servicesLock.Lock()
@@ -352,7 +352,7 @@ func (m *ServiceManager) CheckFailed(name string) {
 // manager is terminated. If it starts just after (before the main process
 // exits), it would generate a runtime error as the reaper would already be dead.
 // This function returns a slice of service names to stop, in dependency order,
-// put in separate lanes.
+// put in lanes.
 func servicesToStop(m *ServiceManager) ([][]string, error) {
 	currentPlan := m.getPlan()
 	// Get all service names in plan.
