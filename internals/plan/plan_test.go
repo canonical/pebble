@@ -1966,7 +1966,7 @@ func (s *S) TestStartStopOrderSingleLane(c *C) {
 				Override: "replace",
 				Command:  `cmd`,
 				Requires: []string{"srv2"},
-				Before: []string{"srv2"},
+				Before:   []string{"srv2"},
 				Startup:  plan.StartupEnabled,
 			},
 			"srv2": {
@@ -1974,7 +1974,7 @@ func (s *S) TestStartStopOrderSingleLane(c *C) {
 				Override: "replace",
 				Command:  `cmd`,
 				Requires: []string{"srv3"},
-				Before: []string{"srv3"},
+				Before:   []string{"srv3"},
 				Startup:  plan.StartupEnabled,
 			},
 			"srv3": {
@@ -1989,7 +1989,7 @@ func (s *S) TestStartStopOrderSingleLane(c *C) {
 	}
 
 	p := plan.Plan{Services: layer.Services}
-	
+
 	lanes, err := p.StartOrder([]string{"srv1", "srv2", "srv3"})
 	c.Assert(err, IsNil)
 	c.Assert(len(lanes), Equals, 1)
@@ -2030,7 +2030,7 @@ func (s *S) TestStartStopOrderMultipleLanes(c *C) {
 	}
 
 	p := plan.Plan{Services: layer.Services}
-	
+
 	lanes, err := p.StartOrder([]string{"srv1", "srv2", "srv3"})
 	c.Assert(err, IsNil)
 	c.Assert(len(lanes), Equals, 3)
