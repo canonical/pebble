@@ -203,6 +203,7 @@ var planTests = []planTest{{
 		},
 		Checks:     map[string]*plan.Check{},
 		LogTargets: map[string]*plan.LogTarget{},
+		Sections:   map[string]plan.LayerSection{},
 	}, {
 		Order:       1,
 		Label:       "layer-1",
@@ -253,6 +254,7 @@ var planTests = []planTest{{
 		},
 		Checks:     map[string]*plan.Check{},
 		LogTargets: map[string]*plan.LogTarget{},
+		Sections:   map[string]plan.LayerSection{},
 	}},
 	result: &plan.Layer{
 		Summary:     "Simple override layer.",
@@ -332,6 +334,7 @@ var planTests = []planTest{{
 		},
 		Checks:     map[string]*plan.Check{},
 		LogTargets: map[string]*plan.LogTarget{},
+		Sections:   map[string]plan.LayerSection{},
 	},
 	start: map[string][]string{
 		"srv1": {"srv2", "srv1", "srv3"},
@@ -394,6 +397,7 @@ var planTests = []planTest{{
 		},
 		Checks:     map[string]*plan.Check{},
 		LogTargets: map[string]*plan.LogTarget{},
+		Sections:   map[string]plan.LayerSection{},
 	}},
 }, {
 	summary: "Unknown keys are not accepted",
@@ -477,7 +481,7 @@ var planTests = []planTest{{
 	`},
 }, {
 	summary: `Invalid backoff-delay duration`,
-	error:   `cannot parse layer "layer-0": invalid duration "foo"`,
+	error:   `cannot parse layer "layer-0" section "services": invalid duration "foo"`,
 	input: []string{`
 		services:
 			"svc1":
@@ -507,7 +511,7 @@ var planTests = []planTest{{
 	`},
 }, {
 	summary: `Invalid backoff-factor`,
-	error:   `cannot parse layer "layer-0": invalid floating-point number "foo"`,
+	error:   `cannot parse layer "layer-0" section "services": invalid floating-point number "foo"`,
 	input: []string{`
 		services:
 			"svc1":
@@ -544,6 +548,7 @@ var planTests = []planTest{{
 		},
 		Checks:     map[string]*plan.Check{},
 		LogTargets: map[string]*plan.LogTarget{},
+		Sections:   map[string]plan.LayerSection{},
 	}},
 }, {
 	summary: `Invalid service command: cannot have any arguments after [ ... ] group`,
@@ -652,6 +657,7 @@ var planTests = []planTest{{
 			},
 		},
 		LogTargets: map[string]*plan.LogTarget{},
+		Sections:   map[string]plan.LayerSection{},
 	},
 }, {
 	summary: "Checks override replace works correctly",
@@ -729,6 +735,7 @@ var planTests = []planTest{{
 			},
 		},
 		LogTargets: map[string]*plan.LogTarget{},
+		Sections:   map[string]plan.LayerSection{},
 	},
 }, {
 	summary: "Checks override merge works correctly",
@@ -812,6 +819,7 @@ var planTests = []planTest{{
 			},
 		},
 		LogTargets: map[string]*plan.LogTarget{},
+		Sections:   map[string]plan.LayerSection{},
 	},
 }, {
 	summary: "Timeout is capped at period",
@@ -841,6 +849,7 @@ var planTests = []planTest{{
 			},
 		},
 		LogTargets: map[string]*plan.LogTarget{},
+		Sections:   map[string]plan.LayerSection{},
 	},
 }, {
 	summary: "Unset timeout is capped at period",
@@ -869,6 +878,7 @@ var planTests = []planTest{{
 			},
 		},
 		LogTargets: map[string]*plan.LogTarget{},
+		Sections:   map[string]plan.LayerSection{},
 	},
 }, {
 	summary: "One of http, tcp, or exec must be present for check",
@@ -989,6 +999,7 @@ var planTests = []planTest{{
 				Override: plan.MergeOverride,
 			},
 		},
+		Sections: map[string]plan.LayerSection{},
 	},
 }, {
 	summary: "Overriding log targets",
@@ -1085,6 +1096,7 @@ var planTests = []planTest{{
 				Override: plan.MergeOverride,
 			},
 		},
+		Sections: map[string]plan.LayerSection{},
 	}, {
 		Label: "layer-1",
 		Order: 1,
@@ -1123,6 +1135,7 @@ var planTests = []planTest{{
 				Override: plan.MergeOverride,
 			},
 		},
+		Sections: map[string]plan.LayerSection{},
 	}},
 	result: &plan.Layer{
 		Services: map[string]*plan.Service{
@@ -1168,6 +1181,7 @@ var planTests = []planTest{{
 				Override: plan.MergeOverride,
 			},
 		},
+		Sections: map[string]plan.LayerSection{},
 	},
 }, {
 	summary: "Log target requires type field",
@@ -1277,6 +1291,7 @@ var planTests = []planTest{{
 				},
 			},
 		},
+		Sections: map[string]plan.LayerSection{},
 	}, {
 		Order:    1,
 		Label:    "layer-1",
@@ -1302,6 +1317,7 @@ var planTests = []planTest{{
 				},
 			},
 		},
+		Sections: map[string]plan.LayerSection{},
 	}},
 	result: &plan.Layer{
 		Services: map[string]*plan.Service{},
@@ -1329,6 +1345,7 @@ var planTests = []planTest{{
 				},
 			},
 		},
+		Sections: map[string]plan.LayerSection{},
 	},
 }, {
 	summary: "Reserved log target labels",
@@ -1379,6 +1396,7 @@ var planTests = []planTest{{
 		},
 		Checks:     map[string]*plan.Check{},
 		LogTargets: map[string]*plan.LogTarget{},
+		Sections:   map[string]plan.LayerSection{},
 	},
 }, {
 	summary: "Three layers missing command",
@@ -1452,6 +1470,7 @@ func (s *S) TestParseLayer(c *C) {
 					Services:   result.Services,
 					Checks:     result.Checks,
 					LogTargets: result.LogTargets,
+					Sections:   result.Sections,
 				}
 				err = p.Validate()
 			}
@@ -1494,6 +1513,7 @@ services:
 		Services:   combined.Services,
 		Checks:     combined.Checks,
 		LogTargets: combined.LogTargets,
+		Sections:   combined.Sections,
 	}
 	err = p.Validate()
 	c.Assert(err, ErrorMatches, `services in before/after loop: .*`)
@@ -1534,6 +1554,7 @@ services:
 		Services:   combined.Services,
 		Checks:     combined.Checks,
 		LogTargets: combined.LogTargets,
+		Sections:   combined.Sections,
 	}
 	err = p.Validate()
 	c.Check(err, ErrorMatches, `plan must define "command" for service "srv1"`)
@@ -1885,6 +1906,8 @@ func (s *S) TestMergeServiceContextNoContext(c *C) {
 		Group:       "grp",
 		WorkingDir:  "/working/dir",
 	}
+	// This test ensures an empty service name results in no lookup, and
+	// simply leaves the provided context unchanged.
 	merged, err := plan.MergeServiceContext(nil, "", overrides)
 	c.Assert(err, IsNil)
 	c.Check(merged, DeepEquals, overrides)
