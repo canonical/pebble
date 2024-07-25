@@ -111,54 +111,66 @@ def git_diff() -> int:
     return p.returncode
 
 
-def main():
-    all_commands = get_all_pebble_commands()
-    for command in all_commands:
-        logger.info("Processing doc for command {}".format(command))
+def create_file_if_not_exist(filepath: str, command: str) -> bool:
+    file_existed = os.path.exists(filepath)
+    if not file_existed:
+        logger.info(
+            "The doc for command {} doesn't exist, "
+            "creating from the template.".format(command)
+        )
+        with open(filepath, "w") as file:
+            file.write(TEMPLATE)
+    return file_existed
 
-        file_path = "reference/cli-commands/{}.md".format(command)
-        file_existed = os.path.exists(file_path)
-        if not file_existed:
-            logger.info(
-                "The doc for command {} doesn't exist, "
-                "creating from the template.".format(command)
-            )
-            with open(file_path, "w") as file:
-                file.write(TEMPLATE)
 
-        with open(file_path, "r") as file:
-            text = file.read()
+def generate_help_command_and_output(command: str) -> typing.Tuple[str, str]:
+    help_cmd = "pebble {} --help".format(command)
 
-        if AUTOMATED_START_MARKER not in text:
-            logger.info(
-                "The marker for automated doc generation is not found in the doc, ignore."
-            )
-            continue
-
-        help_cmd = "pebble {} --help".format(command)
-
-        help_cmd_output = """\
+    help_cmd_output = """\
 <!-- START AUTOMATED OUTPUT -->
 ```{{terminal}}
 :input: {help_cmd}
 {stdout}
 ```
 <!-- END AUTOMATED OUTPUT -->""".format(
-            help_cmd=help_cmd,
-            stdout=get_command_help_output(help_cmd).strip(),
+        help_cmd=help_cmd,
+        stdout=get_command_help_output(help_cmd).strip(),
+    )
+
+    return help_cmd, help_cmd_output
+
+
+def process_command(command):
+    logger.info("Processing doc for command {}".format(command))
+
+    file_path = "reference/cli-commands/{}.md".format(command)
+    file_existed = create_file_if_not_exist(file_path, command)
+
+    with open(file_path, "r") as file:
+        text = file.read()
+
+    if AUTOMATED_START_MARKER not in text:
+        logger.info(
+            "The marker for automated doc generation is not found in the doc, ignore."
         )
+        return
 
-        text = render_code_block_cmd(text, help_cmd)
-        text = render_code_block_output(text, help_cmd_output)
+    help_cmd, help_cmd_output = generate_help_command_and_output(command)
+    text = render_code_block_cmd(text, help_cmd)
+    text = render_code_block_output(text, help_cmd_output)
 
-        if not file_existed:
-            text = render_title(text, command)
-            text = render_description(
-                text, get_description_from_output(help_cmd_output)
-            )
+    if not file_existed:
+        text = render_title(text, command)
+        text = render_description(text, get_description_from_output(help_cmd_output))
 
-        with open(file_path, "w") as file:
-            file.write(text)
+    with open(file_path, "w") as file:
+        file.write(text)
+
+
+def main():
+    all_commands = get_all_pebble_commands()
+    for cmd in all_commands:
+        process_command(cmd)
 
     logger.info("Update toc tree.")
     update_toc(all_commands)
