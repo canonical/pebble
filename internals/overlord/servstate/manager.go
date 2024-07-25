@@ -210,8 +210,8 @@ func (m *ServiceManager) DefaultServiceNames() ([]string, error) {
 	}
 
 	var result []string
-	for _, row := range lanes {
-		result = append(result, row...)
+	for _, lane := range lanes {
+		result = append(result, lane...)
 	}
 	return result, err
 }

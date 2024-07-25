@@ -18,7 +18,6 @@ import (
 	. "gopkg.in/check.v1"
 
 	"github.com/canonical/pebble/internals/overlord/servstate"
-	. "github.com/canonical/pebble/internals/testutil"
 )
 
 func (s *S) TestStart(c *C) {
@@ -57,7 +56,7 @@ services:
 	c.Assert(err, IsNil)
 	c.Assert(req.Name, Equals, "two")
 
-	c.Assert(tasks[0].Lanes()[0], IntNotEqual, tasks[1].Lanes()[0])
+	c.Assert(tasks[0].Lanes()[0], Not(Equals), tasks[1].Lanes()[0])
 }
 
 func (s *S) TestStartInTheSameLaneAfter(c *C) {

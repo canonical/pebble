@@ -351,17 +351,8 @@ services:
 
 	stops, starts, err := s.manager.Replan()
 	c.Assert(err, IsNil)
-	for _, row := range stops {
-		if len(row) > 0 {
-			c.Check(row, DeepEquals, []string{"test2", "test1"})
-		}
-	}
-
-	for _, row := range starts {
-		if len(row) > 0 {
-			c.Check(row, DeepEquals, []string{"test1", "test2"})
-		}
-	}
+	c.Check(stops, DeepEquals, [][]string{{"test2", "test1"}})
+	c.Check(starts, DeepEquals, [][]string{{"test1", "test2"}})
 
 	s.stopTestServices(c)
 }

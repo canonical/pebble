@@ -144,18 +144,18 @@ func v1PostServices(c *Command, r *http.Request, _ *UserState) Response {
 		taskSet.AddAll(stopTasks)
 		taskSet.AddAll(startTasks)
 	case "replan":
-		var stopNames, startNames [][]string
-		stopNames, startNames, err = servmgr.Replan()
+		var stopLanes, startLanes [][]string
+		stopLanes, startLanes, err = servmgr.Replan()
 		if err != nil {
 			break
 		}
 		var stopTasks *state.TaskSet
-		stopTasks, err = servstate.Stop(st, stopNames)
+		stopTasks, err = servstate.Stop(st, stopLanes)
 		if err != nil {
 			break
 		}
 		var startTasks *state.TaskSet
-		startTasks, err = servstate.Start(st, startNames)
+		startTasks, err = servstate.Start(st, startLanes)
 		if err != nil {
 			break
 		}
@@ -166,13 +166,13 @@ func v1PostServices(c *Command, r *http.Request, _ *UserState) Response {
 
 		// Populate a list of services affected by the replan for summary.
 		replanned := make(map[string]bool)
-		for _, row := range stopNames {
-			for _, v := range row {
+		for _, lane := range stopLanes {
+			for _, v := range lane {
 				replanned[v] = true
 			}
 		}
-		for _, row := range startNames {
-			for _, v := range row {
+		for _, lane := range startLanes {
+			for _, v := range lane {
 				replanned[v] = true
 			}
 		}
@@ -237,15 +237,15 @@ func intersectOrdered(left []string, orderedRight [][]string) [][]string {
 	}
 
 	var out [][]string
-	for _, row := range orderedRight {
-		var intersectRow []string
-		for _, v := range row {
+	for _, lane := range orderedRight {
+		var intersectLane []string
+		for _, v := range lane {
 			if m[v] {
-				intersectRow = append(intersectRow, v)
+				intersectLane = append(intersectLane, v)
 			}
 		}
-		if len(intersectRow) > 0 {
-			out = append(out, intersectRow)
+		if len(intersectLane) > 0 {
+			out = append(out, intersectLane)
 		}
 	}
 	return out
