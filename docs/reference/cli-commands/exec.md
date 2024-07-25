@@ -1,3 +1,4 @@
+(reference_pebble_exec_command)=
 # exec command
 
 The exec command runs a remote command and waits for it to finish. The local

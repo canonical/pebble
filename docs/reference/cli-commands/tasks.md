@@ -1,3 +1,4 @@
+(reference_pebble_tasks_command)=
 # tasks command
 
 The tasks command displays a summary of tasks associated with an individual

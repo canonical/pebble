@@ -1,3 +1,4 @@
+(reference_pebble_notify_command)=
 # notify command
 
 The notify command records a custom notice with the specified key and optional

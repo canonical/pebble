@@ -1,3 +1,4 @@
+(reference_pebble_services_command)=
 # services command
 
 The services command lists status information about the services specified, or about all services if none are specified.

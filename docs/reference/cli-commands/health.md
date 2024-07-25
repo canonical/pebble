@@ -1,3 +1,4 @@
+(reference_pebble_health_command)=
 # health command
 
 The health command queries the health of configured checks.

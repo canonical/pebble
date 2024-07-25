@@ -1,3 +1,4 @@
+(reference_pebble_okay_command)=
 # okay command
 
 The okay command acknowledges warnings and notices that have been previously

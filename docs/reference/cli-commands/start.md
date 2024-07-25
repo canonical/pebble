@@ -1,3 +1,4 @@
+(reference_pebble_start_command)=
 # start command
 
 The start command starts the service with the provided name and any other services it depends on, in the correct order.

@@ -1,3 +1,4 @@
+(reference_pebble_cmd_command)=
 # restart command
 
 The restart command restarts the named service(s) in the correct order.

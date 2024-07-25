@@ -1,3 +1,4 @@
+(reference_pebble_replan_command)=
 # replan command
 
 The replan command starts, stops, or restarts services that have changed, so that running services exactly match the desired configuration in the current plan.

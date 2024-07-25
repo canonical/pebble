@@ -1,3 +1,4 @@
+(reference_pebble_pull_command)=
 # pull command
 
 The pull command retrieves a file from the remote system.

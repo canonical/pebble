@@ -1,3 +1,4 @@
+(reference_pebble_checks_command)=
 # checks command
 
 The checks command lists status information about the configured health

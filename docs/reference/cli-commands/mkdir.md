@@ -1,3 +1,4 @@
+(reference_pebble_mkdir_command)=
 # mkdir command
 
 The mkdir command creates the specified directory.

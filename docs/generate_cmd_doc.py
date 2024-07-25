@@ -12,7 +12,8 @@ AUTOMATED_START_MARKER = "<!-- START AUTOMATED OUTPUT -->"
 AUTOMATED_STOP_MARKER = "<!-- END AUTOMATED OUTPUT -->"
 
 TEMPLATE = """\
-# CMD command
+(reference_pebble_cmd_command)=
+# cmd command
 
 Description
 
@@ -53,8 +54,14 @@ def get_description_from_output(text: str) -> str:
 
 
 def render_title(text: str, cmd: str) -> str:
+    text = re.sub(
+        r"\(reference_pebble_cmd_command\)=",
+        f"(reference_pebble_{cmd}_command)=",
+        text,
+        flags=re.MULTILINE,
+    )
     return re.sub(
-        r"^# CMD command$",
+        r"^# cmd command$",
         f"# {cmd} command",
         text,
         flags=re.MULTILINE,

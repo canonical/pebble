@@ -1,3 +1,4 @@
+(reference_pebble_stop_command)=
 # stop command
 
 The stop command stops the service with the provided name and any other service that depends on it, in the correct order.

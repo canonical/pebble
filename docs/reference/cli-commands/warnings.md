@@ -1,4 +1,5 @@
-# Warnings command
+(reference_pebble_warnings_command)=
+# warnings command
 
 The warnings command lists the warnings that have been reported to the system.
 
