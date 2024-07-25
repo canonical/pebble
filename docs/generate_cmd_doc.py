@@ -31,7 +31,7 @@ def get_all_pebble_commands() -> typing.List[str]:
     cmd = "pebble help --all"
     p = subprocess.run(cmd.split(), text=True, capture_output=True)
     if p.returncode != 0:
-        logging.error("Error running {}.".format(cmd))
+        logger.error("Error running {}.".format(cmd))
         exit(1)
     return re.findall(r"\n\s{4}(\w+)", p.stdout)
 
@@ -39,7 +39,7 @@ def get_all_pebble_commands() -> typing.List[str]:
 def get_command_help_output(cmd: str) -> str:
     p = subprocess.run(cmd.split(), text=True, capture_output=True)
     if p.returncode != 0:
-        logging.error("Error running {}.".format(cmd))
+        logger.error("Error running {}.".format(cmd))
         exit(1)
     return p.stdout
 
@@ -103,6 +103,14 @@ def update_toc(all_commands):
         file.write(text)
 
 
+def git_diff() -> int:
+    cmd = "git diff --exit-code"
+    p = subprocess.run(cmd.split())
+    if p.returncode != 0:
+        logger.warning("Docs are updated, please commit them.")
+    return p.returncode
+
+
 def main():
     all_commands = get_all_pebble_commands()
     for command in all_commands:
@@ -155,6 +163,7 @@ def main():
     logger.info("Update toc tree.")
     update_toc(all_commands)
     logger.info("Done!")
+    exit(git_diff())
 
 
 if __name__ == "__main__":
