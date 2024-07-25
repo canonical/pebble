@@ -82,14 +82,14 @@ def render_code_block_output(text: str, output: str) -> str:
     return text[:start_pos] + output + text[end_pos:]
 
 
-def update_toc(all_commands):
+def update_toc(all_cmds: typing.List[str]):
     index_page = "reference/cli-commands/cli-commands.md"
     with open(index_page, "r") as file:
         text = file.read()
 
     start_index = text.find("```{toctree}")
     end_index = text.find("```", start_index + 1) + 3
-    cmd_list = "\n".join(["{cmd} <{cmd}>".format(cmd=cmd) for cmd in all_commands])
+    cmd_list = "\n".join(["{cmd} <{cmd}>".format(cmd=cmd) for cmd in all_cmds])
     toc_tree = """\
 ```{{toctree}}
 :titlesonly:
@@ -111,20 +111,20 @@ def git_diff() -> int:
     return p.returncode
 
 
-def create_file_if_not_exist(filepath: str, command: str) -> bool:
+def create_file_if_not_exist(filepath: str, cmd: str) -> bool:
     file_existed = os.path.exists(filepath)
     if not file_existed:
         logger.info(
             "The doc for command {} doesn't exist, "
-            "creating from the template.".format(command)
+            "creating from the template.".format(cmd)
         )
         with open(filepath, "w") as file:
             file.write(TEMPLATE)
     return file_existed
 
 
-def generate_help_command_and_output(command: str) -> typing.Tuple[str, str]:
-    help_cmd = "pebble {} --help".format(command)
+def generate_help_command_and_output(cmd: str) -> typing.Tuple[str, str]:
+    help_cmd = "pebble {} --help".format(cmd)
 
     help_cmd_output = """\
 <!-- START AUTOMATED OUTPUT -->
@@ -140,11 +140,11 @@ def generate_help_command_and_output(command: str) -> typing.Tuple[str, str]:
     return help_cmd, help_cmd_output
 
 
-def process_command(command):
-    logger.info("Processing doc for command {}".format(command))
+def process_command(cmd: str):
+    logger.info("Processing doc for command {}".format(cmd))
 
-    file_path = "reference/cli-commands/{}.md".format(command)
-    file_existed = create_file_if_not_exist(file_path, command)
+    file_path = "reference/cli-commands/{}.md".format(cmd)
+    file_existed = create_file_if_not_exist(file_path, cmd)
 
     with open(file_path, "r") as file:
         text = file.read()
@@ -155,12 +155,12 @@ def process_command(command):
         )
         return
 
-    help_cmd, help_cmd_output = generate_help_command_and_output(command)
+    help_cmd, help_cmd_output = generate_help_command_and_output(cmd)
     text = render_code_block_cmd(text, help_cmd)
     text = render_code_block_output(text, help_cmd_output)
 
     if not file_existed:
-        text = render_title(text, command)
+        text = render_title(text, cmd)
         text = render_description(text, get_description_from_output(help_cmd_output))
 
     with open(file_path, "w") as file:
@@ -168,12 +168,12 @@ def process_command(command):
 
 
 def main():
-    all_commands = get_all_pebble_commands()
-    for cmd in all_commands:
+    all_cmds = get_all_pebble_commands()
+    for cmd in all_cmds:
         process_command(cmd)
 
     logger.info("Update toc tree.")
-    update_toc(all_commands)
+    update_toc(all_cmds)
     logger.info("Done!")
     exit(git_diff())
 
