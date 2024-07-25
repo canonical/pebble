@@ -6,8 +6,9 @@ The Pebble daemon's service manager stores the most recent stdout and stderr fro
 
 Logs are viewable via the logs API or using `pebble logs`:
 
+<!-- START AUTOMATED OUTPUT -->
 ```{terminal}
-   :input: pebble logs --help
+:input: pebble logs --help
 Usage:
   pebble logs [logs-OPTIONS] [<service>...]
 
@@ -22,6 +23,7 @@ if none are specified) and displays them in chronological order.
       -n=              Number of logs to show (before following); defaults to 30.
                        If 'all', show all buffered logs.
 ```
+<!-- END AUTOMATED OUTPUT -->
 
 ## Examples
 

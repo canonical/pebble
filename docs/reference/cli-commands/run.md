@@ -4,8 +4,9 @@ The `run` command starts Pebble daemon and runs the configured environment.
 
 ## Usage
 
+<!-- START AUTOMATED OUTPUT -->
 ```{terminal}
-   :input: pebble run --help
+:input: pebble run --help
 Usage:
   pebble run [run-OPTIONS]
 
@@ -25,6 +26,7 @@ pebble run --args myservice --port 8080 \; --hold
       -v, --verbose      Log all output from services to stdout
           --args=        Provide additional arguments to a service
 ```
+<!-- END AUTOMATED OUTPUT -->
 
 ## How it works
 

@@ -4,8 +4,9 @@ The stop command stops the service with the provided name and any other service 
 
 ## Usage
 
+<!-- START AUTOMATED OUTPUT -->
 ```{terminal}
-   :input: pebble stop --help
+:input: pebble stop --help
 Usage:
   pebble stop [stop-OPTIONS] <service>...
 
@@ -15,6 +16,7 @@ any other service that depends on it, in the correct order.
 [stop command options]
       --no-wait      Do not wait for the operation to finish but just print the change id.
 ```
+<!-- END AUTOMATED OUTPUT -->
 
 ## How it works
 
