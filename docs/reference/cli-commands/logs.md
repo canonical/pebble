@@ -1,4 +1,4 @@
-# Logs command
+# logs command
 
 The Pebble daemon's service manager stores the most recent stdout and stderr from each service, using a 100KB ring buffer per service. Each log line is prefixed with an RFC-3339 timestamp and the `[service-name]` in square brackets.
 

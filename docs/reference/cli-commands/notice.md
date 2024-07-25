@@ -1,4 +1,4 @@
-# Notice command
+# notice command
 
 The notice command fetches a single notice, either by ID (1-arg variant), or
 

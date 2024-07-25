@@ -1,5 +1,5 @@
 (reference_pebble_help_command)=
-# Pebble help command
+# help command
 
 Use the **help** command (`help` or `-h`) to get a summary or detailed
 information about available `pebble` commands.

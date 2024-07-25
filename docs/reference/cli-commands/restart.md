@@ -1,4 +1,4 @@
-# Restart command
+# restart command
 
 The restart command restarts the named service(s) in the correct order.
 

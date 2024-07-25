@@ -1,4 +1,4 @@
-# Pull command
+# pull command
 
 The pull command retrieves a file from the remote system.
 

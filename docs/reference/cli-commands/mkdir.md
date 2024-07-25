@@ -1,4 +1,4 @@
-# Mkdir command
+# mkdir command
 
 The mkdir command creates the specified directory.
 

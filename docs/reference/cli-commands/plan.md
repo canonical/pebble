@@ -1,4 +1,4 @@
-# Plan command
+# plan command
 
 The plan command prints out the effective configuration of Pebble in YAML
 

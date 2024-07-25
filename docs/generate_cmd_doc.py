@@ -55,7 +55,7 @@ def get_description_from_output(text: str) -> str:
 def render_title(text: str, cmd: str) -> str:
     return re.sub(
         r"^# CMD command$",
-        f"# {cmd.capitalize()} command",
+        f"# {cmd} command",
         text,
         flags=re.MULTILINE,
     )

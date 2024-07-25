@@ -1,4 +1,4 @@
-# Rm command
+# rm command
 
 The rm command removes a file or directory.
 

@@ -1,4 +1,4 @@
-# Pebble run command
+# run command
 
 The `run` command starts Pebble daemon and runs the configured environment.
 

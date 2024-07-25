@@ -1,4 +1,4 @@
-# Tasks command
+# tasks command
 
 The tasks command displays a summary of tasks associated with an individual
 

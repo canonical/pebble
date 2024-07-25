@@ -1,4 +1,4 @@
-# Notices command
+# notices command
 
 The notices command lists notices not yet acknowledged, ordered by the
 

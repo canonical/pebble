@@ -1,4 +1,4 @@
-# Signal command
+# signal command
 
 The signal command sends a signal to one or more running services. The signal
 
