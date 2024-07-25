@@ -1,4 +1,4 @@
-# Add command
+# add command
 
 The add command reads the plan's layer YAML from the path specified and
 

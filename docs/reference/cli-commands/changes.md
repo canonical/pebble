@@ -1,4 +1,4 @@
-# Changes command
+# changes command
 
 The changes command displays a summary of system changes performed recently.
 
