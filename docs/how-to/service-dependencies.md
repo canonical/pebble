@@ -95,7 +95,6 @@ successfully ("active"):
    :input: pebble run
 
 2024-06-28T02:20:03.337Z [pebble] Started daemon.
-[backend database frontend]
 2024-06-28T02:20:03.343Z [pebble] POST /v1/services 2.763792ms 202
 2024-06-28T02:20:03.346Z [pebble] Service "backend" starting: python3 -m http.server 8081
 2024-06-28T02:20:03.346Z [pebble] Service "database" starting: python3 -m http.server 3306
@@ -205,7 +204,6 @@ To verify the start order of services, start the Pebble daemon again:
    :input: pebble run
 
 2024-06-28T03:53:23.307Z [pebble] Started daemon.
-[database backend frontend]
 2024-06-28T03:53:23.313Z [pebble] POST /v1/services 3.103291ms 202
 2024-06-28T03:53:23.317Z [pebble] Service "database" starting: python3 -m http.server 3306
 2024-06-28T03:53:24.324Z [pebble] Service "backend" starting: python3 -m http.server 8081
