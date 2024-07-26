@@ -29,27 +29,21 @@ TEMPLATE = """\
 """
 
 
-def get_all_commands() -> typing.List[str]:
+def get_all_commands() -> typing.List[typing.Tuple[str, str]]:
     process = subprocess.run(
         ["go", "run", "../cmd/pebble", "help", "--all"],
         text=True,
         capture_output=True,
         check=True,
     )
-    return sorted(re.findall(r"\n\s{4}([\w-]+)", process.stdout))
+    pattern = r"^\s{4}(\w+(?:-\w+)?)(?:\s{2,}|$)([\w\s\'\-\.\n]+?)(?=\n\s{4}|$)"
+    matches = re.findall(pattern, process.stdout, re.MULTILINE)
+    cmds = [(match[0], match[1].strip()) for match in matches]
+    return sorted(cmds, key=lambda x: x[0])
 
 
 def get_command_help_output(cmd: typing.List[str]) -> str:
     return subprocess.run(cmd, text=True, capture_output=True, check=True).stdout
-
-
-def get_description_from_output(text: str) -> str:
-    pattern = r"Usage:\n.*?\n\n(.*?\.)\n.*"
-    match = re.search(pattern, text, re.DOTALL)
-    if match:
-        desired_block = match.group(1).strip()
-        return desired_block
-    return ""
 
 
 def render_code_block_cmd(text: str, cmd: str) -> str:
@@ -62,14 +56,14 @@ def render_code_block_output(text: str, output: str) -> str:
     return text[:start_pos] + output + text[end_pos:]
 
 
-def update_toc(all_cmds: typing.List[str]):
+def update_toc(cmds: typing.List[typing.Tuple[str, str]]):
     index_page = "reference/cli-commands/cli-commands.md"
     with open(index_page, "r") as file:
         text = file.read()
 
     start_index = text.find("```{toctree}")
     end_index = text.find("```", start_index + 1) + 3
-    cmd_list = "\n".join(f"{cmd} <{cmd}>" for cmd in all_cmds)
+    cmd_list = "\n".join(f"{cmd[0]} <{cmd[0]}>" for cmd in cmds)
 
     toc_tree = f"""\
 ```{{toctree}}
@@ -111,7 +105,7 @@ def generate_help_command_and_output(cmd: str) -> typing.Tuple[str, str]:
     return help_cmd, output
 
 
-def process_command(cmd: str):
+def process_command(cmd: str, description: str):
     logger.info("Processing doc for command %s.", cmd)
 
     file_path = f"reference/cli-commands/{cmd}.md"
@@ -128,11 +122,10 @@ def process_command(cmd: str):
         return
 
     help_cmd, help_cmd_output = generate_help_command_and_output(cmd)
+    description = f"The `{cmd}` command is used to {description.lower()}."
 
     if not file_existed:
-        text = text.format(
-            command=cmd, description=get_description_from_output(help_cmd_output)
-        )
+        text = text.format(command=cmd, description=description)
 
     text = render_code_block_cmd(text, help_cmd)
     text = render_code_block_output(text, help_cmd_output)
@@ -142,12 +135,12 @@ def process_command(cmd: str):
 
 
 def main():
-    all_cmds = get_all_commands()
-    for cmd in all_cmds:
-        process_command(cmd)
+    cmds = get_all_commands()
+    for cmd, description in cmds:
+        process_command(cmd, description)
 
     logger.info("Update toc tree.")
-    update_toc(all_cmds)
+    update_toc(cmds)
     logger.info("Done!")
 
 
