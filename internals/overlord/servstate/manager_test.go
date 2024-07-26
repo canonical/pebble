@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2020 Canonical Ltd
+// Copyright (c) 2014-2024 Canonical Ltd
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License version 3 as
@@ -290,7 +290,7 @@ services:
 
 	_, _, err := s.manager.Replan()
 	c.Assert(err, IsNil)
-	s.startServices(c, []string{"test9"})
+	s.startServices(c, [][]string{{"test9"}})
 	s.waitUntilService(c, "test9", func(service *servstate.ServiceInfo) bool {
 		return service.Current == servstate.StatusActive
 	})
@@ -312,13 +312,13 @@ services:
 	_, _, err := s.manager.Replan()
 	c.Assert(err, IsNil)
 
-	s.startServices(c, []string{"test6"})
+	s.startServices(c, [][]string{{"test6"}})
 	s.waitUntilService(c, "test6", func(service *servstate.ServiceInfo) bool {
 		return service.Current == servstate.StatusActive
 	})
 
 	startTime := time.Now()
-	chg := s.stopServices(c, []string{"test6"})
+	chg := s.stopServices(c, [][]string{{"test6"}})
 	s.st.Lock()
 	c.Check(chg.Status(), Equals, state.DoneStatus, Commentf("Error: %v", chg.Err()))
 	s.st.Unlock()
@@ -351,8 +351,8 @@ services:
 
 	stops, starts, err := s.manager.Replan()
 	c.Assert(err, IsNil)
-	c.Check(stops, DeepEquals, []string{"test2"})
-	c.Check(starts, DeepEquals, []string{"test1", "test2"})
+	c.Check(stops, DeepEquals, [][]string{{"test2", "test1"}})
+	c.Check(starts, DeepEquals, [][]string{{"test1", "test2"}})
 
 	s.stopTestServices(c)
 }
@@ -441,7 +441,7 @@ func (s *S) TestStartBadCommand(c *C) {
 	s.planAddLayer(c, testPlanLayer)
 	s.planChanged(c)
 
-	chg := s.startServices(c, []string{"test3"})
+	chg := s.startServices(c, [][]string{{"test3"}})
 
 	s.st.Lock()
 	c.Check(chg.Status(), Equals, state.ErrorStatus)
@@ -479,7 +479,7 @@ services:
 	))
 	s.planChanged(c)
 
-	chg := s.startServices(c, []string{"usrtest"})
+	chg := s.startServices(c, [][]string{{"usrtest"}})
 	s.st.Lock()
 	c.Assert(chg.Err(), IsNil)
 	s.st.Unlock()
@@ -511,7 +511,7 @@ func (s *S) TestUserGroupFails(c *C) {
 	})
 	defer restore()
 
-	chg := s.startServices(c, []string{"test5"})
+	chg := s.startServices(c, [][]string{{"test5"}})
 
 	s.st.Lock()
 	c.Check(chg.Status(), Equals, state.ErrorStatus)
@@ -567,7 +567,7 @@ services:
 	os.Setenv("USER", "y")
 
 	// Start service and ensure it has enough time to write to log.
-	chg := s.startServices(c, []string{"usrgrp"})
+	chg := s.startServices(c, [][]string{{"usrgrp"}})
 	s.waitUntilService(c, "usrgrp", func(svc *servstate.ServiceInfo) bool {
 		return svc.Current == servstate.StatusActive
 	})
@@ -585,7 +585,7 @@ func (s *S) TestStartFastExitCommand(c *C) {
 	s.planAddLayer(c, testPlanLayer)
 	s.planChanged(c)
 
-	chg := s.startServices(c, []string{"test4"})
+	chg := s.startServices(c, [][]string{{"test4"}})
 
 	s.st.Lock()
 	c.Check(chg.Status(), Equals, state.ErrorStatus)
@@ -623,7 +623,7 @@ func (s *S) TestServices(c *C) {
 	})
 
 	// Start a service and ensure it's marked active
-	s.startServices(c, []string{"test2"})
+	s.startServices(c, [][]string{{"test2"}})
 
 	services, err = s.manager.Services(nil)
 	c.Assert(err, IsNil)
@@ -669,7 +669,7 @@ services:
 	c.Assert(err, IsNil)
 
 	// Start "envtest" service
-	chg := s.startServices(c, []string{"envtest"})
+	chg := s.startServices(c, [][]string{{"envtest"}})
 	s.st.Lock()
 	c.Check(chg.Status(), Equals, state.DoneStatus, Commentf("Error: %v", chg.Err()))
 	s.st.Unlock()
@@ -731,7 +731,7 @@ services:
 	s.planChanged(c)
 
 	// Start the "test2" service
-	chg := s.startServices(c, []string{"test2"})
+	chg := s.startServices(c, [][]string{{"test2"}})
 	// Wait until "test2" service completes the echo command (so that we
 	// know the log buffer contains stdout).
 	s.waitForDoneCheck(c, "test2")
@@ -792,7 +792,7 @@ services:
 	s.planChanged(c)
 
 	// Start service and wait till it starts up the first time.
-	chg := s.startServices(c, []string{"test2"})
+	chg := s.startServices(c, [][]string{{"test2"}})
 	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
 		return svc.Current == servstate.StatusActive
 	})
@@ -807,7 +807,7 @@ services:
 	})
 
 	// Ensure it can be stopped successfully.
-	chg = s.stopServices(c, []string{"test2"})
+	chg = s.stopServices(c, [][]string{{"test2"}})
 	s.st.Lock()
 	c.Check(chg.Status(), Equals, state.DoneStatus, Commentf("Error: %v", chg.Err()))
 	s.st.Unlock()
@@ -868,7 +868,7 @@ checks:
 	checkMgr.PlanChanged(s.plan)
 
 	// Start service and wait till it starts up
-	s.startServices(c, []string{"test2"})
+	s.startServices(c, [][]string{{"test2"}})
 
 	s.waitForDoneCheck(c, "test2")
 
@@ -964,7 +964,7 @@ checks:
 	checkMgr.PlanChanged(s.plan)
 
 	// Start service and wait till it starts up
-	s.startServices(c, []string{"test2"})
+	s.startServices(c, [][]string{{"test2"}})
 
 	s.waitForDoneCheck(c, "test2")
 
@@ -1054,7 +1054,7 @@ checks:
 	checkMgr.PlanChanged(s.plan)
 
 	// Start service and wait till it starts up (output file is written to)
-	s.startServices(c, []string{"test2"})
+	s.startServices(c, [][]string{{"test2"}})
 
 	s.waitForDoneCheck(c, "test2")
 
@@ -1139,7 +1139,7 @@ checks:
 	checkMgr.PlanChanged(s.plan)
 
 	// Start service and wait till it starts up (output file is written to)
-	s.startServices(c, []string{"test2"})
+	s.startServices(c, [][]string{{"test2"}})
 
 	s.waitForDoneCheck(c, "test2")
 
@@ -1179,7 +1179,7 @@ services:
 	s.planChanged(c)
 
 	// Start service and wait till it starts up the first time.
-	s.startServices(c, []string{"test2"})
+	s.startServices(c, [][]string{{"test2"}})
 	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
 		return svc.Current == servstate.StatusActive
 	})
@@ -1210,7 +1210,7 @@ services:
 	s.planChanged(c)
 
 	// Start service and wait till it starts up the first time.
-	s.startServices(c, []string{"test2"})
+	s.startServices(c, [][]string{{"test2"}})
 	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
 		return svc.Current == servstate.StatusActive
 	})
@@ -1241,7 +1241,7 @@ services:
 	s.planChanged(c)
 
 	// Start service and wait till it starts up the first time.
-	s.startServices(c, []string{"test2"})
+	s.startServices(c, [][]string{{"test2"}})
 	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
 		return svc.Current == servstate.StatusActive
 	})
@@ -1272,7 +1272,7 @@ services:
 	s.planChanged(c)
 
 	// Start service and wait till it starts up the first time.
-	s.startServices(c, []string{"test2"})
+	s.startServices(c, [][]string{{"test2"}})
 	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
 		return svc.Current == servstate.StatusActive
 	})
@@ -1303,7 +1303,7 @@ services:
 	s.planChanged(c)
 
 	// Start service and wait till it starts up the first time.
-	s.startServices(c, []string{"test2"})
+	s.startServices(c, [][]string{{"test2"}})
 	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
 		return svc.Current == servstate.StatusActive
 	})
@@ -1471,7 +1471,7 @@ services:
 	))
 	s.planChanged(c)
 
-	s.startServices(c, []string{"test2"})
+	s.startServices(c, [][]string{{"test2"}})
 
 	// The child process creates a grandchild and will print the
 	// PID of the grandchild for us to inspect here. We need to
@@ -1547,7 +1547,7 @@ func (s *S) TestStopRunning(c *C) {
 	s.planAddLayer(c, testPlanLayer)
 	s.planChanged(c)
 
-	s.startServices(c, []string{"test2"})
+	s.startServices(c, [][]string{{"test2"}})
 	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
 		return svc.Current == servstate.StatusActive
 	})
@@ -1607,7 +1607,7 @@ services:
 
 	// Service command should run in current directory (package directory)
 	// if "working-dir" config option not set.
-	chg := s.startServices(c, []string{"nowrkdir"})
+	chg := s.startServices(c, [][]string{{"nowrkdir"}})
 	s.st.Lock()
 	c.Assert(chg.Err(), IsNil)
 	s.st.Unlock()
@@ -1640,7 +1640,7 @@ services:
 	))
 	s.planChanged(c)
 
-	chg := s.startServices(c, []string{"wrkdir"})
+	chg := s.startServices(c, [][]string{{"wrkdir"}})
 	s.st.Lock()
 	c.Assert(chg.Err(), IsNil)
 	s.st.Unlock()
@@ -1675,7 +1675,7 @@ services:
 	s.planChanged(c)
 
 	// Start service and wait for it to be started
-	chg := s.startServices(c, []string{"waitdelay"})
+	chg := s.startServices(c, [][]string{{"waitdelay"}})
 	s.st.Lock()
 	c.Assert(chg.Err(), IsNil)
 	s.st.Unlock()
@@ -1685,7 +1685,7 @@ services:
 
 	// Try to stop the service; it will only stop if WaitDelay logic is working,
 	// otherwise the goroutine waiting for the child's stdout will never finish.
-	chg = s.stopServices(c, []string{"waitdelay"})
+	chg = s.stopServices(c, [][]string{{"waitdelay"}})
 	s.st.Lock()
 	c.Assert(chg.Err(), IsNil)
 	s.st.Unlock()
@@ -1818,9 +1818,9 @@ func (s *S) testServiceLogs(c *C, outputs map[string]string) {
 	s.stopTestServices(c)
 }
 
-func (s *S) startServices(c *C, services []string) *state.Change {
+func (s *S) startServices(c *C, lanes [][]string) *state.Change {
 	s.st.Lock()
-	ts, err := servstate.Start(s.st, services)
+	ts, err := servstate.Start(s.st, lanes)
 	c.Check(err, IsNil)
 	chg := s.st.NewChange("test", "Start test")
 	chg.AddAll(ts)
@@ -1829,9 +1829,9 @@ func (s *S) startServices(c *C, services []string) *state.Change {
 	return chg
 }
 
-func (s *S) stopServices(c *C, services []string) *state.Change {
+func (s *S) stopServices(c *C, lanes [][]string) *state.Change {
 	s.st.Lock()
-	ts, err := servstate.Stop(s.st, services)
+	ts, err := servstate.Stop(s.st, lanes)
 	c.Check(err, IsNil)
 	chg := s.st.NewChange("test", "Stop test")
 	chg.AddAll(ts)
@@ -1848,7 +1848,7 @@ func (s *S) serviceByName(c *C, name string) *servstate.ServiceInfo {
 }
 
 func (s *S) startTestServices(c *C, logCheck bool) {
-	chg := s.startServices(c, []string{"test1", "test2"})
+	chg := s.startServices(c, [][]string{{"test1", "test2"}})
 	s.st.Lock()
 	c.Check(chg.Status(), Equals, state.DoneStatus, Commentf("Error: %v", chg.Err()))
 	s.st.Unlock()
@@ -1872,7 +1872,7 @@ func (s *S) stopTestServices(c *C) {
 	cmds := s.manager.RunningCmds()
 	c.Check(cmds, HasLen, 2)
 
-	chg := s.stopServices(c, []string{"test1", "test2"})
+	chg := s.stopServices(c, [][]string{{"test1", "test2"}})
 
 	// Ensure processes are gone indeed.
 	c.Assert(cmds, HasLen, 2)
@@ -1894,7 +1894,7 @@ func (s *S) stopTestServicesAlreadyDead(c *C) {
 	cmds := s.manager.RunningCmds()
 	c.Check(cmds, HasLen, 0)
 
-	chg := s.stopServices(c, []string{"test1", "test2"})
+	chg := s.stopServices(c, [][]string{{"test1", "test2"}})
 
 	c.Assert(cmds, HasLen, 0)
 
