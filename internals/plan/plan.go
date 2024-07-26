@@ -949,18 +949,22 @@ func (p *Plan) StopOrder(names []string) ([][]string, error) {
 func getOrCreateLane(currentLane int, service *Service, serviceLaneMapping map[string]int) int {
 	// if the service has been mapped to a lane
 	if lane, ok := serviceLaneMapping[service.Name]; ok {
+		mapServiceToLane(service, lane, serviceLaneMapping)
 		return lane
 	}
 
 	// if any dependency has been mapped to a lane
 	for _, dependency := range service.Requires {
 		if lane, ok := serviceLaneMapping[dependency]; ok {
+			mapServiceToLane(service, lane, serviceLaneMapping)
 			return lane
 		}
 	}
 
 	// neither the service itself nor any of its dependencies is mapped to an existing lane
-	return currentLane + 1
+	lane := currentLane + 1
+	mapServiceToLane(service, lane, serviceLaneMapping)
+	return lane
 }
 
 func mapServiceToLane(service *Service, lane int, serviceLaneMapping map[string]int) {
@@ -986,7 +990,6 @@ func createLanes(names []string, services map[string]*Service) ([][]string, erro
 		}
 
 		lane = getOrCreateLane(lane, service, serviceLaneMapping)
-		mapServiceToLane(service, lane, serviceLaneMapping)
 	}
 
 	// Create lanes
