@@ -1,7 +1,7 @@
 (reference_pebble_update-identities_command)=
 # update-identities command
 
-The update-identities command updates or replaces one or more identities.
+The `update-identities` command is used to update or replace identities.
 
 ## Usage
 

@@ -1,7 +1,7 @@
 (reference_pebble_add_command)=
 # add command
 
-The add command reads the plan's layer YAML from the path specified and
+The `add` command is used to dynamically add a layer to the plan's layers.
 
 ## Usage
 

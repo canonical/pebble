@@ -1,7 +1,7 @@
-(reference_pebble_cmd_command)=
+(reference_pebble_restart_command)=
 # restart command
 
-The restart command restarts the named service(s) in the correct order.
+The `restart` command is used to restart a service.
 
 ## Usage
 

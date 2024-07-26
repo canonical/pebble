@@ -1,7 +1,7 @@
 (reference_pebble_push_command)=
 # push command
 
-The push command transfers a file to the remote system.
+The `push` command is used to transfer a file to the remote system.
 
 ## Usage
 

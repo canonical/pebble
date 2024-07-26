@@ -1,7 +1,7 @@
 (reference_pebble_version_command)=
 # version command
 
-The version command displays the versions of the running client and server.
+The `version` command is used to show version details.
 
 ## Usage
 

@@ -1,7 +1,7 @@
 (reference_pebble_ls_command)=
 # ls command
 
-The ls command lists entries in the filesystem at the specified path. A glob pattern
+The `ls` command is used to list path contents.
 
 ## Usage
 

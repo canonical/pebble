@@ -1,7 +1,7 @@
 (reference_pebble_add-identities_command)=
 # add-identities command
 
-The add-identities command adds one or more new identities.
+The `add-identities` command is used to add new identities.
 
 ## Usage
 

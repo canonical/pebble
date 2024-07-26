@@ -1,7 +1,7 @@
 (reference_pebble_checks_command)=
 # checks command
 
-The checks command lists status information about the configured health
+The `checks` command is used to query the status of configured health checks.
 
 ## Usage
 

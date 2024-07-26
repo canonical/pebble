@@ -1,7 +1,7 @@
 (reference_pebble_changes_command)=
 # changes command
 
-The changes command displays a summary of system changes performed recently.
+The `changes` command is used to list system changes.
 
 ## Usage
 

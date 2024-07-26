@@ -1,7 +1,7 @@
 (reference_pebble_rm_command)=
 # rm command
 
-The rm command removes a file or directory.
+The `rm` command is used to remove a file or directory.
 
 ## Usage
 

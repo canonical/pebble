@@ -1,34 +1,45 @@
 # CLI Commands
 
+Pebble uses subcommands, like some other command-line tools such as go tool or git.
+
+Subcommands are keywords that invoke a new set of options and features, and each Pebble subcommand has its own set of flags.
+
+Here's the list of all Pebble subcommands:
+
 ```{toctree}
 :titlesonly:
 :maxdepth: 1
 
-run <run>
-help <help>
-version <version>
 add <add>
-plan <plan>
-services <services>
-logs <logs>
-start <start>
-restart <restart>
-signal <signal>
-stop <stop>
-replan <replan>
+add-identities <add-identities>
+changes <changes>
 checks <checks>
+exec <exec>
 health <health>
-push <push>
-pull <pull>
+help <help>
+identities <identities>
+identity <identity>
+logs <logs>
 ls <ls>
 mkdir <mkdir>
-rm <rm>
-exec <exec>
-changes <changes>
-tasks <tasks>
-warnings <warnings>
-okay <okay>
-notices <notices>
 notice <notice>
+notices <notices>
 notify <notify>
+okay <okay>
+plan <plan>
+pull <pull>
+push <push>
+remove-identities <remove-identities>
+replan <replan>
+restart <restart>
+rm <rm>
+run <run>
+services <services>
+signal <signal>
+start <start>
+stop <stop>
+tasks <tasks>
+update-identities <update-identities>
+version <version>
+warnings <warnings>
 ```

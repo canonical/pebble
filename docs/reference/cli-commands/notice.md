@@ -1,7 +1,7 @@
 (reference_pebble_notice_command)=
 # notice command
 
-The notice command fetches a single notice, either by ID (1-arg variant), or
+The `notice` command is used to fetch a single notice.
 
 ## Usage
 

@@ -1,7 +1,7 @@
 (reference_pebble_remove-identities_command)=
 # remove-identities command
 
-The remove-identities command removes one or more identities.
+The `remove-identities` command is used to remove identities.
 
 ## Usage
 

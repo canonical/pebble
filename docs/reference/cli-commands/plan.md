@@ -1,7 +1,7 @@
 (reference_pebble_plan_command)=
 # plan command
 
-The plan command prints out the effective configuration of Pebble in YAML
+The `plan` command is used to show the plan with layers combined.
 
 ## Usage
 

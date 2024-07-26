@@ -1,7 +1,7 @@
 (reference_pebble_okay_command)=
 # okay command
 
-The okay command acknowledges warnings and notices that have been previously
+The `okay` command is used to acknowledge notices and warnings.
 
 ## Usage
 

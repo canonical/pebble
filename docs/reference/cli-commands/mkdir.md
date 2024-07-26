@@ -1,7 +1,7 @@
 (reference_pebble_mkdir_command)=
 # mkdir command
 
-The mkdir command creates the specified directory.
+The `mkdir` command is used to create a directory.
 
 ## Usage
 
@@ -14,7 +14,7 @@ Usage:
 The mkdir command creates the specified directory.
 
 [mkdir command options]
-      -p            Create parent directories as needed
+      -p            Create parent directories as needed, and don't fail if path already exists
       -m=           Override mode bits (3-digit octal)
           --uid=    Use specified user ID
           --user=   Use specified username

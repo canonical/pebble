@@ -1,7 +1,7 @@
 (reference_pebble_identity_command)=
 # identity command
 
-The identity command shows details for a single identity in YAML format.
+The `identity` command is used to show a single identity.
 
 ## Usage
 

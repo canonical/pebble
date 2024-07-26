@@ -1,7 +1,7 @@
 (reference_pebble_identities_command)=
 # identities command
 
-The identities command lists all identities.
+The `identities` command is used to list identities.
 
 ## Usage
 
