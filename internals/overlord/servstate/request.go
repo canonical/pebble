@@ -12,37 +12,45 @@ type ServiceRequest struct {
 }
 
 // Start creates and returns a task set for starting the given services.
-func Start(s *state.State, services []string) (*state.TaskSet, error) {
+func Start(s *state.State, lanes [][]string) (*state.TaskSet, error) {
 	var tasks []*state.Task
-	for _, name := range services {
-		task := s.NewTask("start", fmt.Sprintf("Start service %q", name))
-		req := ServiceRequest{
-			Name: name,
+	for _, services := range lanes {
+		lane := s.NewLane()
+		for i, name := range services {
+			task := s.NewTask("start", fmt.Sprintf("Start service %q", name))
+			req := ServiceRequest{
+				Name: name,
+			}
+			task.Set("service-request", &req)
+			task.JoinLane(lane)
+			// Wait for the previous task in the same lane.
+			if i > 0 {
+				task.WaitFor(tasks[len(tasks)-1])
+			}
+			tasks = append(tasks, task)
 		}
-		task.Set("service-request", &req)
-		if len(tasks) > 0 {
-			// TODO Allow non-dependent services to start in parallel.
-			task.WaitFor(tasks[len(tasks)-1])
-		}
-		tasks = append(tasks, task)
 	}
 	return state.NewTaskSet(tasks...), nil
 }
 
 // Stop creates and returns a task set for stopping the given services.
-func Stop(s *state.State, services []string) (*state.TaskSet, error) {
+func Stop(s *state.State, lanes [][]string) (*state.TaskSet, error) {
 	var tasks []*state.Task
-	for _, name := range services {
-		task := s.NewTask("stop", fmt.Sprintf("Stop service %q", name))
-		req := ServiceRequest{
-			Name: name,
+	for _, services := range lanes {
+		lane := s.NewLane()
+		for i, name := range services {
+			task := s.NewTask("stop", fmt.Sprintf("Stop service %q", name))
+			req := ServiceRequest{
+				Name: name,
+			}
+			task.Set("service-request", &req)
+			task.JoinLane(lane)
+			// Wait for the previous task in the same lane.
+			if i > 0 {
+				task.WaitFor(tasks[len(tasks)-1])
+			}
+			tasks = append(tasks, task)
 		}
-		task.Set("service-request", &req)
-		if len(tasks) > 1 {
-			// TODO Allow non-dependent services to stop in parallel.
-			task.WaitFor(tasks[len(tasks)-1])
-		}
-		tasks = append(tasks, task)
 	}
 	return state.NewTaskSet(tasks...), nil
 }
@@ -50,18 +58,18 @@ func Stop(s *state.State, services []string) (*state.TaskSet, error) {
 // StopRunning creates and returns a task set for stopping all running
 // services. It returns a nil *TaskSet if there are no services to stop.
 func StopRunning(s *state.State, m *ServiceManager) (*state.TaskSet, error) {
-	services, err := servicesToStop(m)
+	lanes, err := servicesToStop(m)
 	if err != nil {
 		return nil, err
 	}
-	if len(services) == 0 {
+	if len(lanes) == 0 {
 		return nil, nil
 	}
 
 	// One change to stop them all.
 	s.Lock()
 	defer s.Unlock()
-	taskSet, err := Stop(s, services)
+	taskSet, err := Stop(s, lanes)
 	if err != nil {
 		return nil, err
 	}

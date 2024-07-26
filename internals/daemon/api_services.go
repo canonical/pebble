@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2020 Canonical Ltd
+// Copyright (c) 2014-2024 Canonical Ltd
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License version 3 as
@@ -104,37 +104,38 @@ func v1PostServices(c *Command, r *http.Request, _ *UserState) Response {
 	defer st.Unlock()
 
 	var taskSet *state.TaskSet
+	var lanes [][]string
 	var services []string
 	switch payload.Action {
 	case "start", "autostart":
-		services, err = servmgr.StartOrder(payload.Services)
+		lanes, err = servmgr.StartOrder(payload.Services)
 		if err != nil {
 			break
 		}
-		taskSet, err = servstate.Start(st, services)
+		taskSet, err = servstate.Start(st, lanes)
 	case "stop":
-		services, err = servmgr.StopOrder(payload.Services)
+		lanes, err = servmgr.StopOrder(payload.Services)
 		if err != nil {
 			break
 		}
-		taskSet, err = servstate.Stop(st, services)
+		taskSet, err = servstate.Stop(st, lanes)
 	case "restart":
-		services, err = servmgr.StopOrder(payload.Services)
+		lanes, err = servmgr.StopOrder(payload.Services)
 		if err != nil {
 			break
 		}
-		services = intersectOrdered(payload.Services, services)
+		lanes = intersectOrdered(payload.Services, lanes)
 		var stopTasks *state.TaskSet
-		stopTasks, err = servstate.Stop(st, services)
+		stopTasks, err = servstate.Stop(st, lanes)
 		if err != nil {
 			break
 		}
-		services, err = servmgr.StartOrder(payload.Services)
+		lanes, err = servmgr.StartOrder(payload.Services)
 		if err != nil {
 			break
 		}
 		var startTasks *state.TaskSet
-		startTasks, err = servstate.Start(st, services)
+		startTasks, err = servstate.Start(st, lanes)
 		if err != nil {
 			break
 		}
@@ -143,18 +144,18 @@ func v1PostServices(c *Command, r *http.Request, _ *UserState) Response {
 		taskSet.AddAll(stopTasks)
 		taskSet.AddAll(startTasks)
 	case "replan":
-		var stopNames, startNames []string
-		stopNames, startNames, err = servmgr.Replan()
+		var stopLanes, startLanes [][]string
+		stopLanes, startLanes, err = servmgr.Replan()
 		if err != nil {
 			break
 		}
 		var stopTasks *state.TaskSet
-		stopTasks, err = servstate.Stop(st, stopNames)
+		stopTasks, err = servstate.Stop(st, stopLanes)
 		if err != nil {
 			break
 		}
 		var startTasks *state.TaskSet
-		startTasks, err = servstate.Start(st, startNames)
+		startTasks, err = servstate.Start(st, startLanes)
 		if err != nil {
 			break
 		}
@@ -165,11 +166,15 @@ func v1PostServices(c *Command, r *http.Request, _ *UserState) Response {
 
 		// Populate a list of services affected by the replan for summary.
 		replanned := make(map[string]bool)
-		for _, v := range stopNames {
-			replanned[v] = true
+		for _, lane := range stopLanes {
+			for _, v := range lane {
+				replanned[v] = true
+			}
 		}
-		for _, v := range startNames {
-			replanned[v] = true
+		for _, lane := range startLanes {
+			for _, v := range lane {
+				replanned[v] = true
+			}
 		}
 		for k := range replanned {
 			services = append(services, k)
@@ -186,6 +191,9 @@ func v1PostServices(c *Command, r *http.Request, _ *UserState) Response {
 	// Use the original requested service name for the summary, not the
 	// resolved one. But do use the resolved set for the count.
 	var summary string
+	for _, row := range lanes {
+		services = append(services, row...)
+	}
 	switch {
 	case len(taskSet.Tasks()) == 0:
 		// Can happen with a replan that has no services to stop/start. A
@@ -222,15 +230,22 @@ func v1PostService(c *Command, r *http.Request, _ *UserState) Response {
 
 // intersectOrdered returns the intersection of left and right where
 // the right's ordering is persisted in the resulting set.
-func intersectOrdered(left []string, orderedRight []string) []string {
+func intersectOrdered(left []string, orderedRight [][]string) [][]string {
 	m := map[string]bool{}
 	for _, v := range left {
 		m[v] = true
 	}
-	var out []string
-	for _, v := range orderedRight {
-		if m[v] {
-			out = append(out, v)
+
+	var out [][]string
+	for _, lane := range orderedRight {
+		var intersectLane []string
+		for _, v := range lane {
+			if m[v] {
+				intersectLane = append(intersectLane, v)
+			}
+		}
+		if len(intersectLane) > 0 {
+			out = append(out, intersectLane)
 		}
 	}
 	return out

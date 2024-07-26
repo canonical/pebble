@@ -204,19 +204,28 @@ func (m *ServiceManager) DefaultServiceNames() ([]string, error) {
 		}
 	}
 
-	return currentPlan.StartOrder(names)
+	lanes, err := currentPlan.StartOrder(names)
+	if err != nil {
+		return nil, err
+	}
+
+	var result []string
+	for _, lane := range lanes {
+		result = append(result, lane...)
+	}
+	return result, err
 }
 
 // StartOrder returns the provided services, together with any required
-// dependencies, in the proper order for starting them all up.
-func (m *ServiceManager) StartOrder(services []string) ([]string, error) {
+// dependencies, in the proper order, put in lanes, for starting them all up.
+func (m *ServiceManager) StartOrder(services []string) ([][]string, error) {
 	currentPlan := m.getPlan()
 	return currentPlan.StartOrder(services)
 }
 
 // StopOrder returns the provided services, together with any dependants,
-// in the proper order for stopping them all.
-func (m *ServiceManager) StopOrder(services []string) ([]string, error) {
+// in the proper order, put in lanes, for stopping them all.
+func (m *ServiceManager) StopOrder(services []string) ([][]string, error) {
 	currentPlan := m.getPlan()
 	return currentPlan.StopOrder(services)
 }
@@ -251,9 +260,9 @@ func (m *ServiceManager) ServiceLogs(services []string, last int) (map[string]se
 	return iterators, nil
 }
 
-// Replan returns a list of services to stop and services to start because
-// their plans had changed between when they started and this call.
-func (m *ServiceManager) Replan() ([]string, []string, error) {
+// Replan returns a list of services in lanes to stop and services to start
+// because their plans had changed between when they started and this call.
+func (m *ServiceManager) Replan() ([][]string, [][]string, error) {
 	currentPlan := m.getPlan()
 	m.servicesLock.Lock()
 	defer m.servicesLock.Unlock()
@@ -278,7 +287,7 @@ func (m *ServiceManager) Replan() ([]string, []string, error) {
 		}
 	}
 
-	stop, err := currentPlan.StopOrder(stop)
+	stopLanes, err := currentPlan.StopOrder(stop)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -288,12 +297,12 @@ func (m *ServiceManager) Replan() ([]string, []string, error) {
 		}
 	}
 
-	start, err = currentPlan.StartOrder(start)
+	startLanes, err := currentPlan.StartOrder(start)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	return stop, start, nil
+	return stopLanes, startLanes, nil
 }
 
 func (m *ServiceManager) SendSignal(services []string, signal string) error {
@@ -342,8 +351,9 @@ func (m *ServiceManager) CheckFailed(name string) {
 // exit. If it starts just before, it would continue to run after the service
 // manager is terminated. If it starts just after (before the main process
 // exits), it would generate a runtime error as the reaper would already be dead.
-// This function returns a slice of service names to stop, in dependency order.
-func servicesToStop(m *ServiceManager) ([]string, error) {
+// This function returns a slice of service names to stop, in dependency order,
+// put in lanes.
+func servicesToStop(m *ServiceManager) ([][]string, error) {
 	currentPlan := m.getPlan()
 	// Get all service names in plan.
 	services := make([]string, 0, len(currentPlan.Services))
@@ -360,12 +370,18 @@ func servicesToStop(m *ServiceManager) ([]string, error) {
 	// Filter down to only those that are running or in backoff
 	m.servicesLock.Lock()
 	defer m.servicesLock.Unlock()
-	var notStopped []string
-	for _, name := range stop {
-		s := m.services[name]
-		if s != nil && (s.state == stateRunning || s.state == stateBackoff) {
-			notStopped = append(notStopped, name)
+	var result [][]string
+	for _, services := range stop {
+		var notStopped []string
+		for _, name := range services {
+			s := m.services[name]
+			if s != nil && (s.state == stateRunning || s.state == stateBackoff) {
+				notStopped = append(notStopped, name)
+			}
+		}
+		if len(notStopped) > 0 {
+			result = append(result, notStopped)
 		}
 	}
-	return notStopped, nil
+	return result, nil
 }
