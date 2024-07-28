@@ -1,6 +1,6 @@
 # Getting started with Pebble
 
-In this tutorial, we will download and install Pebble, configure layers, run the Pebble daemon, and work with layers and services. This tutorial takes about 15 minutes to complete.
+In this tutorial, we will download and install Pebble, configure layers, run the Pebble daemon, and work with layers and services to discover some of Pebble's basic service orchestration capabilities. At the end of the tutorial, we should have two running HTTP servers listening on different ports managed by Pebble. This tutorial takes about 15 minutes to complete.
 
 After this tutorial, you will have a basic understanding of what Pebble is and how to use it to orchestrate services, and you can continue exploring more advanced features and use cases (see {ref}`next_steps`).
 
