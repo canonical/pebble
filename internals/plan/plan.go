@@ -549,17 +549,20 @@ func (e *FormatError) Error() string {
 	return e.Message
 }
 
+func makeMapIfNil[K comparable, V any](m map[K]V) map[K]V {
+	if m == nil {
+		m = make(map[K]V)
+	}
+	return m
+}
+
 // CombineLayers combines the given layers into a single layer, with the later
 // layers overriding earlier ones.
 // Neither the individual layers nor the combined layer are validated here - the
 // caller should have validated the individual layers prior to calling, and
 // validate the combined output if required.
 func CombineLayers(layers ...*Layer) (*Layer, error) {
-	combined := &Layer{
-		Services:   make(map[string]*Service),
-		Checks:     make(map[string]*Check),
-		LogTargets: make(map[string]*LogTarget),
-	}
+	combined := &Layer{}
 	if len(layers) == 0 {
 		return combined, nil
 	}
@@ -568,6 +571,7 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 	combined.Description = last.Description
 	for _, layer := range layers {
 		for name, service := range layer.Services {
+			combined.Services = makeMapIfNil(combined.Services)
 			switch service.Override {
 			case MergeOverride:
 				if old, ok := combined.Services[name]; ok {
@@ -593,6 +597,7 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 		}
 
 		for name, check := range layer.Checks {
+			combined.Checks = makeMapIfNil(combined.Checks)
 			switch check.Override {
 			case MergeOverride:
 				if old, ok := combined.Checks[name]; ok {
@@ -618,6 +623,7 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 		}
 
 		for name, target := range layer.LogTargets {
+			combined.LogTargets = makeMapIfNil(combined.LogTargets)
 			switch target.Override {
 			case MergeOverride:
 				if old, ok := combined.LogTargets[name]; ok {
@@ -1085,11 +1091,7 @@ func (p *Plan) checkCycles() error {
 }
 
 func ParseLayer(order int, label string, data []byte) (*Layer, error) {
-	layer := Layer{
-		Services:   map[string]*Service{},
-		Checks:     map[string]*Check{},
-		LogTargets: map[string]*LogTarget{},
-	}
+	layer := Layer{}
 	dec := yaml.NewDecoder(bytes.NewBuffer(data))
 	dec.KnownFields(true)
 	err := dec.Decode(&layer)

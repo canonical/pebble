@@ -201,8 +201,6 @@ var planTests = []planTest{{
 				Startup:  plan.StartupUnknown,
 			},
 		},
-		Checks:     map[string]*plan.Check{},
-		LogTargets: map[string]*plan.LogTarget{},
 	}, {
 		Order:       1,
 		Label:       "layer-1",
@@ -251,8 +249,6 @@ var planTests = []planTest{{
 				},
 			},
 		},
-		Checks:     map[string]*plan.Check{},
-		LogTargets: map[string]*plan.LogTarget{},
 	}},
 	result: &plan.Layer{
 		Summary:     "Simple override layer.",
@@ -330,8 +326,6 @@ var planTests = []planTest{{
 				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
 			},
 		},
-		Checks:     map[string]*plan.Check{},
-		LogTargets: map[string]*plan.LogTarget{},
 	},
 	start: map[string][]string{
 		"srv1": {"srv2", "srv1", "srv3"},
@@ -392,8 +386,6 @@ var planTests = []planTest{{
 				},
 			},
 		},
-		Checks:     map[string]*plan.Check{},
-		LogTargets: map[string]*plan.LogTarget{},
 	}},
 }, {
 	summary: "Unknown keys are not accepted",
@@ -542,8 +534,6 @@ var planTests = []planTest{{
 				Command:  `cmd -v [ --foo bar -e "x [ y ] z" ]`,
 			},
 		},
-		Checks:     map[string]*plan.Check{},
-		LogTargets: map[string]*plan.LogTarget{},
 	}},
 }, {
 	summary: `Invalid service command: cannot have any arguments after [ ... ] group`,
@@ -605,7 +595,6 @@ var planTests = []planTest{{
 					working-dir: /root
 `},
 	result: &plan.Layer{
-		Services: map[string]*plan.Service{},
 		Checks: map[string]*plan.Check{
 			"chk-http": {
 				Name:      "chk-http",
@@ -651,7 +640,6 @@ var planTests = []planTest{{
 				},
 			},
 		},
-		LogTargets: map[string]*plan.LogTarget{},
 	},
 }, {
 	summary: "Checks override replace works correctly",
@@ -695,7 +683,6 @@ var planTests = []planTest{{
 					command: sleep 2
 `},
 	result: &plan.Layer{
-		Services: map[string]*plan.Service{},
 		Checks: map[string]*plan.Check{
 			"chk-http": {
 				Name:      "chk-http",
@@ -728,7 +715,6 @@ var planTests = []planTest{{
 				},
 			},
 		},
-		LogTargets: map[string]*plan.LogTarget{},
 	},
 }, {
 	summary: "Checks override merge works correctly",
@@ -772,7 +758,6 @@ var planTests = []planTest{{
 						FOO: bar
 `},
 	result: &plan.Layer{
-		Services: map[string]*plan.Service{},
 		Checks: map[string]*plan.Check{
 			"chk-http": {
 				Name:      "chk-http",
@@ -811,7 +796,6 @@ var planTests = []planTest{{
 				},
 			},
 		},
-		LogTargets: map[string]*plan.LogTarget{},
 	},
 }, {
 	summary: "Timeout is capped at period",
@@ -826,7 +810,6 @@ var planTests = []planTest{{
 					port: 80
 `},
 	result: &plan.Layer{
-		Services: map[string]*plan.Service{},
 		Checks: map[string]*plan.Check{
 			"chk1": {
 				Name:      "chk1",
@@ -840,7 +823,6 @@ var planTests = []planTest{{
 				},
 			},
 		},
-		LogTargets: map[string]*plan.LogTarget{},
 	},
 }, {
 	summary: "Unset timeout is capped at period",
@@ -854,7 +836,6 @@ var planTests = []planTest{{
 					port: 80
 `},
 	result: &plan.Layer{
-		Services: map[string]*plan.Service{},
 		Checks: map[string]*plan.Check{
 			"chk1": {
 				Name:      "chk1",
@@ -868,7 +849,6 @@ var planTests = []planTest{{
 				},
 			},
 		},
-		LogTargets: map[string]*plan.LogTarget{},
 	},
 }, {
 	summary: "One of http, tcp, or exec must be present for check",
@@ -972,7 +952,6 @@ var planTests = []planTest{{
 				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
 			},
 		},
-		Checks: map[string]*plan.Check{},
 		LogTargets: map[string]*plan.LogTarget{
 			"tgt1": {
 				Name:     "tgt1",
@@ -1061,7 +1040,6 @@ var planTests = []planTest{{
 				Startup:  plan.StartupEnabled,
 			},
 		},
-		Checks: map[string]*plan.Check{},
 		LogTargets: map[string]*plan.LogTarget{
 			"tgt1": {
 				Name:     "tgt1",
@@ -1101,7 +1079,6 @@ var planTests = []planTest{{
 				Startup:  plan.StartupEnabled,
 			},
 		},
-		Checks: map[string]*plan.Check{},
 		LogTargets: map[string]*plan.LogTarget{
 			"tgt1": {
 				Name:     "tgt1",
@@ -1145,7 +1122,6 @@ var planTests = []planTest{{
 				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
 			},
 		},
-		Checks: map[string]*plan.Check{},
 		LogTargets: map[string]*plan.LogTarget{
 			"tgt1": {
 				Name:     "tgt1",
@@ -1251,10 +1227,8 @@ var planTests = []planTest{{
 					label3: bar23
 `},
 	layers: []*plan.Layer{{
-		Order:    0,
-		Label:    "layer-0",
-		Services: map[string]*plan.Service{},
-		Checks:   map[string]*plan.Check{},
+		Order: 0,
+		Label: "layer-0",
 		LogTargets: map[string]*plan.LogTarget{
 			"tgt1": {
 				Name:     "tgt1",
@@ -1278,10 +1252,8 @@ var planTests = []planTest{{
 			},
 		},
 	}, {
-		Order:    1,
-		Label:    "layer-1",
-		Services: map[string]*plan.Service{},
-		Checks:   map[string]*plan.Check{},
+		Order: 1,
+		Label: "layer-1",
 		LogTargets: map[string]*plan.LogTarget{
 			"tgt1": {
 				Name:     "tgt1",
@@ -1304,8 +1276,6 @@ var planTests = []planTest{{
 		},
 	}},
 	result: &plan.Layer{
-		Services: map[string]*plan.Service{},
-		Checks:   map[string]*plan.Check{},
 		LogTargets: map[string]*plan.LogTarget{
 			"tgt1": {
 				Name:     "tgt1",
@@ -1377,8 +1347,6 @@ var planTests = []planTest{{
 				},
 			},
 		},
-		Checks:     map[string]*plan.Check{},
-		LogTargets: map[string]*plan.LogTarget{},
 	},
 }, {
 	summary: "Three layers missing command",
