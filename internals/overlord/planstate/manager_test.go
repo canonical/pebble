@@ -57,7 +57,7 @@ var loadLayers = []string{`
 
 func (ps *planSuite) TestLoadLayers(c *C) {
 	var err error
-	ps.planMgr, err = planstate.NewManager(ps.pebbleDir)
+	ps.planMgr, err = planstate.NewManager(ps.layersDir)
 	c.Assert(err, IsNil)
 	// Write layers
 	for _, l := range loadLayers {
@@ -85,7 +85,7 @@ services:
 
 func (ps *planSuite) TestAppendLayers(c *C) {
 	var err error
-	ps.planMgr, err = planstate.NewManager(ps.pebbleDir)
+	ps.planMgr, err = planstate.NewManager(ps.layersDir)
 	c.Assert(err, IsNil)
 
 	// Append a layer when there are no layers.
@@ -165,7 +165,7 @@ services:
 
 func (ps *planSuite) TestCombineLayers(c *C) {
 	var err error
-	ps.planMgr, err = planstate.NewManager(ps.pebbleDir)
+	ps.planMgr, err = planstate.NewManager(ps.layersDir)
 	c.Assert(err, IsNil)
 
 	// "Combine" layer with no layers should just append.
@@ -287,7 +287,7 @@ checks:
 
 func (ps *planSuite) TestSetServiceArgs(c *C) {
 	var err error
-	ps.planMgr, err = planstate.NewManager(ps.pebbleDir)
+	ps.planMgr, err = planstate.NewManager(ps.layersDir)
 	c.Assert(err, IsNil)
 
 	// This is the original plan
@@ -328,7 +328,7 @@ services:
 }
 
 func (ps *planSuite) TestChangeListenerAndLocking(c *C) {
-	manager, err := planstate.NewManager(ps.pebbleDir)
+	manager, err := planstate.NewManager(ps.layersDir)
 	c.Assert(err, IsNil)
 
 	calls := 0

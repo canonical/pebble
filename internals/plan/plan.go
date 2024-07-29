@@ -1203,11 +1203,10 @@ func ReadLayersDir(dirname string) ([]*Layer, error) {
 	return layers, nil
 }
 
-// ReadDir reads the configuration layers from the "layers" sub-directory in
-// dir, and returns the resulting Plan. If the "layers" sub-directory doesn't
+// ReadDir reads the configuration layers from layersDir,
+// and returns the resulting Plan. If layersDir doesn't
 // exist, it returns a valid Plan with no layers.
-func ReadDir(dir string) (*Plan, error) {
-	layersDir := filepath.Join(dir, "layers")
+func ReadDir(layersDir string) (*Plan, error) {
 	_, err := os.Stat(layersDir)
 	if err != nil {
 		if os.IsNotExist(err) {
