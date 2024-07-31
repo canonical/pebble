@@ -36,7 +36,7 @@ export PEBBLE=$HOME/PEBBLE
 echo "export PEBBLE=$HOME/PEBBLE" >> ~/.bashrc
 ```
 
-Next, create a layer by running:
+Next, create a [configuration layer](../reference/layers.md) by running:
 
 ```{code-block} bash
 :emphasize-lines: 8

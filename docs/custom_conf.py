@@ -25,7 +25,7 @@ author = 'Canonical Group Ltd'
 # The title you want to display for the documentation in the sidebar.
 # You might want to include a version number here.
 # To not display any title, set this option to an empty string.
-html_title = ''
+html_title = project + ' documentation'
 
 # The default value uses the current year as the copyright year.
 #
