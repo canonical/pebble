@@ -91,7 +91,7 @@ def create_file_if_not_exist(filepath: str, cmd: str) -> bool:
 
 
 def generate_help_command_and_output(cmd: str) -> typing.Tuple[str, str]:
-    help_cmd = ["pebble", cmd, "--help"]
+    help_cmd = ["pebble", "help"] if cmd == "help" else ["pebble", cmd, "--help"]
     help_cmd_str = " ".join(help_cmd)
     help_cmd_output = get_command_help_output(help_cmd).strip()
 

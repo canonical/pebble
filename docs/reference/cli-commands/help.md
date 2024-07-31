@@ -8,8 +8,9 @@ information about available `pebble` commands.
 
 To display a summary about Pebble and the available commands, run:
 
+<!-- START AUTOMATED OUTPUT -->
 ```{terminal}
-:input: pebble -h
+:input: pebble help
 Pebble lets you control services and perform management actions on
 the system that is running them.
 
@@ -34,6 +35,7 @@ the unix socket used for the API (defaults to $PEBBLE/.pebble.socket).
 For more information about a command, run 'pebble help <command>'.
 For a short summary of all commands, run 'pebble help --all'.
 ```
+<!-- END AUTOMATED OUTPUT -->
 
 To display a short description of all available `pebble` commands, run:
 
