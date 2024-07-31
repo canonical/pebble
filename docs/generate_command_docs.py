@@ -1,4 +1,4 @@
-"""This module generate reference docs for pebble CLI commands."""
+"""This module generates reference docs for pebble CLI commands."""
 
 import logging
 import os
@@ -36,10 +36,11 @@ def get_all_commands() -> typing.List[typing.Tuple[str, str]]:
         capture_output=True,
         check=True,
     )
-    pattern = r"^\s{4}(\w+(?:-\w+)?)(?:\s{2,}|$)([\w\s\'\-\.\n]+?)(?=\n\s{4}|$)"
-    matches = re.findall(pattern, process.stdout, re.MULTILINE)
-    cmds = [(match[0], match[1].strip()) for match in matches]
-    return sorted(cmds, key=lambda x: x[0])
+    return sorted(
+        line.split(maxsplit=1)
+        for line in process.stdout.splitlines()
+        if line.startswith("    ")
+    )
 
 
 def get_command_help_output(cmd: typing.List[str]) -> str:
