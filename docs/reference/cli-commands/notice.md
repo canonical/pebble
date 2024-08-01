@@ -21,7 +21,9 @@ by unique type and key combination (2-arg variant).
 
 ## Examples
 
-You can fetch a notice either by ID or by type/key combination. To fetch the notice with ID "1":
+You can fetch a notice either by ID or by type/key combination.
+
+ To fetch the notice with ID "1":
 
 ```{terminal}
    :input: pebble notice 1
