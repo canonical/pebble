@@ -1,6 +1,6 @@
 # Layers
 
-The `$PEBBLE` directory must contain a `layers/` subdirectory that holds a stack of configuration files with names similar to `001-base-layer.yaml`, where the digits define the order of the layer and the following label uniquely identifies it.
+The `$PEBBLE` directory must contain a `layers/` subdirectory, representing Pebble configuration split over a stack of configuration files ("layers") with names similar to `001-base-layer.yaml`, where the digits define the order of the layer and the following label uniquely identifies it. Pebble includes layers in alphabetical order so that the last ones can modify a configuration element defined in one of the first ones.
 
 ## Examples
 
