@@ -48,6 +48,12 @@ func NewManager(layersDir string) (*PlanManager, error) {
 	return manager, nil
 }
 
+// RegisterExtension adds a plan extension which extends the plan schema. All
+// extensions must be registered before Load() is called.
+func (m *PlanManager) RegisterExtension(field string, ext plan.LayerSectionExtension) {
+	plan.RegisterExtension(field, ext)
+}
+
 // Load reads plan layers from the pebble directory, combines and validates the
 // final plan, and finally notifies registered managers of the plan update. In
 // the case of a non-existent layers directory, or no layers in the layers
@@ -181,6 +187,7 @@ func (m *PlanManager) updatePlanLayers(layers []*plan.Layer) (*plan.Plan, error)
 		Services:   combined.Services,
 		Checks:     combined.Checks,
 		LogTargets: combined.LogTargets,
+		Sections:   combined.Sections,
 	}
 	err = p.Validate()
 	if err != nil {

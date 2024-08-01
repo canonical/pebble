@@ -83,6 +83,66 @@ services:
 `[1:])
 }
 
+var extLoadLayers = []string{`
+	summary: Layer 1
+	description: Layer 1 desc.
+	services:
+		svc1:
+			summary: Svc1
+			override: replace
+			command: echo svc1
+	test-field:
+		test1:
+			override: merge
+			a: something
+`, `
+	summary: Layer 2
+	description: Layer 2 desc.
+	services:
+		svc2:
+			summary: Svc2
+			override: replace
+			command: echo svc2
+	test-field:
+		test1:
+			override: merge
+			b: something else
+`}
+
+func (ps *planSuite) TestExtLoadLayers(c *C) {
+	var err error
+	ps.planMgr, err = planstate.NewManager(ps.layersDir)
+	c.Assert(err, IsNil)
+	ps.planMgr.RegisterExtension(testField, testExtension{})
+	// Write layers
+	for _, l := range extLoadLayers {
+		ps.writeLayer(c, string(reindent(l)))
+	}
+	// Load the plan from the <pebble-dir>/layers directory
+	err = ps.planMgr.Load()
+	c.Assert(err, IsNil)
+	plan := ps.planMgr.Plan()
+	out, err := yaml.Marshal(plan)
+	c.Assert(err, IsNil)
+	c.Assert(len(plan.Layers), Equals, 2)
+	c.Assert(string(out), Equals, `
+services:
+    svc1:
+        summary: Svc1
+        override: replace
+        command: echo svc1
+    svc2:
+        summary: Svc2
+        override: replace
+        command: echo svc2
+test-field:
+    test1:
+        override: merge
+        a: something
+        b: something else
+`[1:])
+}
+
 func (ps *planSuite) TestAppendLayers(c *C) {
 	var err error
 	ps.planMgr, err = planstate.NewManager(ps.layersDir)
@@ -159,6 +219,122 @@ services:
     svc2:
         override: replace
         command: /bin/foo
+`[1:])
+	ps.planLayersHasLen(c, 3)
+}
+
+func (ps *planSuite) TestExtAppendLayers(c *C) {
+	var err error
+	ps.planMgr, err = planstate.NewManager(ps.layersDir)
+	c.Assert(err, IsNil)
+	ps.planMgr.RegisterExtension(testField, testExtension{})
+
+	// Append a layer when there are no layers.
+	layer := ps.parseLayer(c, 0, "label1", `
+services:
+    svc1:
+        override: replace
+        command: /bin/sh
+test-field:
+    test1:
+        override: replace
+        a: something
+`)
+	err = ps.planMgr.AppendLayer(layer)
+	c.Assert(err, IsNil)
+	c.Assert(layer.Order, Equals, 1)
+	c.Assert(ps.planYAML(c), Equals, `
+services:
+    svc1:
+        override: replace
+        command: /bin/sh
+test-field:
+    test1:
+        override: replace
+        a: something
+`[1:])
+	ps.planLayersHasLen(c, 1)
+
+	// Try to append a layer when that label already exists.
+	layer = ps.parseLayer(c, 0, "label1", `
+services:
+    svc1:
+        override: foobar
+        command: /bin/bar
+test-field:
+    test1:
+        override: foobar
+        a: something else
+`)
+	err = ps.planMgr.AppendLayer(layer)
+	c.Assert(err.(*planstate.LabelExists).Label, Equals, "label1")
+	c.Assert(ps.planYAML(c), Equals, `
+services:
+    svc1:
+        override: replace
+        command: /bin/sh
+test-field:
+    test1:
+        override: replace
+        a: something
+`[1:])
+	ps.planLayersHasLen(c, 1)
+
+	// Append another layer on top.
+	layer = ps.parseLayer(c, 0, "label2", `
+services:
+    svc1:
+        override: replace
+        command: /bin/bash
+test-field:
+    test1:
+        override: replace
+        a: else
+`)
+	err = ps.planMgr.AppendLayer(layer)
+	c.Assert(err, IsNil)
+	c.Assert(layer.Order, Equals, 2)
+	c.Assert(ps.planYAML(c), Equals, `
+services:
+    svc1:
+        override: replace
+        command: /bin/bash
+test-field:
+    test1:
+        override: replace
+        a: else
+`[1:])
+	ps.planLayersHasLen(c, 2)
+
+	// Append a layer with a different service.
+	layer = ps.parseLayer(c, 0, "label3", `
+services:
+    svc2:
+        override: replace
+        command: /bin/foo
+test-field:
+    test2:
+        override: replace
+        a: something
+`)
+	err = ps.planMgr.AppendLayer(layer)
+	c.Assert(err, IsNil)
+	c.Assert(layer.Order, Equals, 3)
+	c.Assert(ps.planYAML(c), Equals, `
+services:
+    svc1:
+        override: replace
+        command: /bin/bash
+    svc2:
+        override: replace
+        command: /bin/foo
+test-field:
+    test1:
+        override: replace
+        a: else
+    test2:
+        override: replace
+        a: something
 `[1:])
 	ps.planLayersHasLen(c, 3)
 }
@@ -283,6 +459,193 @@ checks:
             port: 8080
 `))
 	c.Check(err, ErrorMatches, `(?s).*plan check.*must be "alive" or "ready".*`)
+}
+
+func (ps *planSuite) TestExtCombineLayers(c *C) {
+	var err error
+	ps.planMgr, err = planstate.NewManager(ps.layersDir)
+	c.Assert(err, IsNil)
+	ps.planMgr.RegisterExtension(testField, testExtension{})
+
+	// "Combine" layer with no layers should just append.
+	layer := ps.parseLayer(c, 0, "label1", `
+services:
+    svc1:
+        override: replace
+        command: /bin/sh
+test-field:
+    test1:
+        override: replace
+        a: something
+`)
+	err = ps.planMgr.CombineLayer(layer)
+	c.Assert(err, IsNil)
+	c.Assert(layer.Order, Equals, 1)
+	c.Assert(ps.planYAML(c), Equals, `
+services:
+    svc1:
+        override: replace
+        command: /bin/sh
+test-field:
+    test1:
+        override: replace
+        a: something
+`[1:])
+	ps.planLayersHasLen(c, 1)
+
+	// Combine layer with different label should just append.
+	layer = ps.parseLayer(c, 0, "label2", `
+services:
+    svc2:
+        override: replace
+        command: /bin/foo
+test-field:
+    test2:
+        override: replace
+        a: else
+`)
+	err = ps.planMgr.CombineLayer(layer)
+	c.Assert(err, IsNil)
+	c.Assert(layer.Order, Equals, 2)
+	c.Assert(ps.planYAML(c), Equals, `
+services:
+    svc1:
+        override: replace
+        command: /bin/sh
+    svc2:
+        override: replace
+        command: /bin/foo
+test-field:
+    test1:
+        override: replace
+        a: something
+    test2:
+        override: replace
+        a: else
+`[1:])
+	ps.planLayersHasLen(c, 2)
+
+	// Combine layer with first layer.
+	layer = ps.parseLayer(c, 0, "label1", `
+services:
+    svc1:
+        override: replace
+        command: /bin/bash
+test-field:
+    test1:
+        override: replace
+        a: else
+`)
+	err = ps.planMgr.CombineLayer(layer)
+	c.Assert(err, IsNil)
+	c.Assert(layer.Order, Equals, 1)
+	c.Assert(ps.planYAML(c), Equals, `
+services:
+    svc1:
+        override: replace
+        command: /bin/bash
+    svc2:
+        override: replace
+        command: /bin/foo
+test-field:
+    test1:
+        override: replace
+        a: else
+    test2:
+        override: replace
+        a: else
+`[1:])
+	ps.planLayersHasLen(c, 2)
+
+	// Combine layer with second layer.
+	layer = ps.parseLayer(c, 0, "label2", `
+services:
+    svc2:
+        override: replace
+        command: /bin/bar
+test-field:
+    test2:
+        override: replace
+        a: something
+`)
+	err = ps.planMgr.CombineLayer(layer)
+	c.Assert(err, IsNil)
+	c.Assert(layer.Order, Equals, 2)
+	c.Assert(ps.planYAML(c), Equals, `
+services:
+    svc1:
+        override: replace
+        command: /bin/bash
+    svc2:
+        override: replace
+        command: /bin/bar
+test-field:
+    test1:
+        override: replace
+        a: else
+    test2:
+        override: replace
+        a: something
+`[1:])
+	ps.planLayersHasLen(c, 2)
+
+	// One last append for good measure.
+	layer = ps.parseLayer(c, 0, "label3", `
+services:
+    svc1:
+        override: replace
+        command: /bin/a
+    svc2:
+        override: replace
+        command: /bin/b
+test-field:
+    test1:
+        override: replace
+        a: nothing
+    test2:
+        override: replace
+        a: nothing
+`)
+	err = ps.planMgr.CombineLayer(layer)
+	c.Assert(err, IsNil)
+	c.Assert(layer.Order, Equals, 3)
+	c.Assert(ps.planYAML(c), Equals, `
+services:
+    svc1:
+        override: replace
+        command: /bin/a
+    svc2:
+        override: replace
+        command: /bin/b
+test-field:
+    test1:
+        override: replace
+        a: nothing
+    test2:
+        override: replace
+        a: nothing
+`[1:])
+	ps.planLayersHasLen(c, 3)
+
+	// Make sure that layer validation is happening.
+	layer, err = plan.ParseLayer(0, "label4", []byte(`
+checks:
+    bad-check:
+        override: replace
+        level: invalid
+        tcp:
+            port: 8080
+`))
+	c.Check(err, ErrorMatches, `(?s).*plan check.*must be "alive" or "ready".*`)
+
+	// Make sure that layer validation is happening for extensions.
+	layer, err = plan.ParseLayer(0, "label4", []byte(`
+test-field:
+    my1:
+        override: replace
+        a: nothing
+`))
+	c.Check(err, ErrorMatches, `.*entry names must start with.*`)
 }
 
 func (ps *planSuite) TestSetServiceArgs(c *C) {
