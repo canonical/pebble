@@ -29,3 +29,14 @@ another user's notices.
       --timeout=    Wait up to this duration for matching notices to arrive
 ```
 <!-- END AUTOMATED OUTPUT -->
+
+## Examples
+
+To fetch all notices:
+
+```{terminal}
+   :input: pebble notices
+ID   User    Type    Key              First                Repeated             Occurrences
+1    1000    custom  example.com/foo  today at 16:16 NZST  today at 16:16 NZST  3
+2    public  custom  other.com/bar    today at 16:16 NZST  today at 16:16 NZST  1
+```

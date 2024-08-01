@@ -24,3 +24,14 @@ change that happened recently.
   <change-id>:         Change ID
 ```
 <!-- END AUTOMATED OUTPUT -->
+
+## Examples
+
+To view tasks from change-id 3, run:
+
+```{terminal}
+   :input: pebble tasks 3
+Status  Spawn                Ready                Summary
+Done    today at 15:26 NZDT  today at 15:26 NZDT  Stop service "srv1"
+Done    today at 15:26 NZDT  today at 15:26 NZDT  Stop service "srv2"
+```
