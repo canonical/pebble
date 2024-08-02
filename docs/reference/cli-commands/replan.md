@@ -16,7 +16,8 @@ so that running services exactly match the desired configuration in the
 current plan.
 
 [replan command options]
-      --no-wait    Do not wait for the operation to finish but just print the change id.
+      --no-wait    Do not wait for the operation to finish but just print the
+                   change id.
 ```
 <!-- END AUTOMATED OUTPUT -->
 

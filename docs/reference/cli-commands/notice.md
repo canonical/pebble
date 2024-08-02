@@ -15,7 +15,8 @@ The notice command fetches a single notice, either by ID (1-arg variant), or
 by unique type and key combination (2-arg variant).
 
 [notice command options]
-      --uid=            Look up notice from user with this UID (admin only; 2-arg variant only)
+      --uid=            Look up notice from user with this UID (admin only;
+                        2-arg variant only)
 ```
 <!-- END AUTOMATED OUTPUT -->
 
