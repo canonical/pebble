@@ -36,4 +36,26 @@ pebble exec --timeout 10s -- echo -n foo bar
 ```
 <!-- END AUTOMATED OUTPUT -->
 
+## Examples
+
+For example, you could use `exec` to run `pg_dump` and create a PostgreSQL database backup:
+
+```{terminal}
+   :input: pebble exec pg_dump mydb
+--
+-- PostgreSQL database dump
+--
+...
+```
+
+The exec feature uses WebSockets under the hood, and allows you to stream stdin to the process, as well as stream stdout and stderr back. When running `pebble exec`, you can specify the working directory to run in (`-w`), environment variables to set (`--env`), and the user and group to run as (`--uid`/`--user` and `--gid`/`--group`).
+
+You can also apply a timeout with `--timeout`, for example:
+
+```{terminal}
+   :input: pebble exec --timeout 1s -- sleep 3
+error: cannot perform the following tasks:
+- exec command "sleep" (timed out after 1s: context deadline exceeded)
+```
+
 Read more: [Use Pebble in containers](../pebble-in-containers.md).
