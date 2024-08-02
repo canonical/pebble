@@ -13,8 +13,7 @@ Logs are viewable via the logs API or using `pebble logs`:
 Usage:
   pebble logs [logs-OPTIONS] [<service>...]
 
-The logs command fetches buffered logs from the given services (or all
-services
+The logs command fetches buffered logs from the given services (or all services
 if none are specified) and displays them in chronological order.
 
 [logs command options]

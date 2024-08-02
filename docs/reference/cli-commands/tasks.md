@@ -15,15 +15,14 @@ The tasks command displays a summary of tasks associated with an individual
 change that happened recently.
 
 [tasks command options]
-      --abs-time       Display absolute times (in RFC 3339 format).
-                       Otherwise, display relative times up to 60 days, then
-                       YYYY-MM-DD.
+      --abs-time       Display absolute times (in RFC 3339 format). Otherwise,
+                       display relative times up to 60 days, then YYYY-MM-DD.
       --last=          Select last change of given type (install, refresh,
-                       remove, try, auto-refresh, etc.). A question mark at
-                       the end of the type means to do nothing (instead of
+                       remove, try, auto-refresh, etc.). A question mark at the
+                       end of the type means to do nothing (instead of
                        returning an error) if no change of the given type is
-                       found. Note the question mark could need protecting
-                       from the shell.
+                       found. Note the question mark could need protecting from
+                       the shell.
 
 [tasks command arguments]
   <change-id>:         Change ID

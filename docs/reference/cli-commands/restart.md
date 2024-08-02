@@ -14,7 +14,7 @@ Usage:
 The restart command restarts the named service(s) in the correct order.
 
 [restart command options]
-      --no-wait      Do not wait for the operation to finish but just print
-                     the change id.
+      --no-wait      Do not wait for the operation to finish but just print the
+                     change id.
 ```
 <!-- END AUTOMATED OUTPUT -->

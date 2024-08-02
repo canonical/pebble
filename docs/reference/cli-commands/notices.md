@@ -23,10 +23,10 @@ another user's notices.
 [notices command options]
       --abs-time    Display absolute times (in RFC 3339 format). Otherwise,
                     display relative times up to 60 days, then YYYY-MM-DD.
-      --users=      The only valid value is 'all', which lists notices with
-                    any user ID (admin only; cannot be used with --uid)
-      --uid=        Only list notices with this user ID (admin only; cannot
-                    be used with --users)
+      --users=      The only valid value is 'all', which lists notices with any
+                    user ID (admin only; cannot be used with --uid)
+      --uid=        Only list notices with this user ID (admin only; cannot be
+                    used with --users)
       --type=       Only list notices of this type (multiple allowed)
       --key=        Only list notices with this key (multiple allowed)
       --timeout=    Wait up to this duration for matching notices to arrive

@@ -24,16 +24,16 @@ pebble exec --timeout 10s -- echo -n foo bar
       -w=              Working directory to run command in
           --env=       Environment variable to set (in 'FOO=bar' format)
           --uid=       User ID to run command as
-          --user=      Username to run command as (user's UID must match uid
-                       if both present)
+          --user=      Username to run command as (user's UID must match uid if
+                       both present)
           --gid=       Group ID to run command as
-          --group=     Group name to run command as (group's GID must match
-                       gid if both present)
+          --group=     Group name to run command as (group's GID must match gid
+                       if both present)
           --timeout=   Timeout after which to terminate command
-          --context=   Inherit the context of the named service (overridden
-                       by -w, --env, --uid/user, --gid/group)
-      -t               Allocate remote pseudo-terminal and connect stdout to
-                       it (default if stdout is a TTY)
+          --context=   Inherit the context of the named service (overridden by
+                       -w, --env, --uid/user, --gid/group)
+      -t               Allocate remote pseudo-terminal and connect stdout to it
+                       (default if stdout is a TTY)
       -T               Disable remote pseudo-terminal allocation
       -i               Interactive mode: connect stdin to the pseudo-terminal
                        (default if stdin and stdout are TTYs)
