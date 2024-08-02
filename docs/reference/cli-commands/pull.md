@@ -14,3 +14,5 @@ Usage:
 The pull command retrieves a file from the remote system.
 ```
 <!-- END AUTOMATED OUTPUT -->
+
+Read more: [Use Pebble in containers](../pebble-in-containers.md).

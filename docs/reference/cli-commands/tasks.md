@@ -35,3 +35,5 @@ Status  Spawn                Ready                Summary
 Done    today at 15:26 NZDT  today at 15:26 NZDT  Stop service "srv1"
 Done    today at 15:26 NZDT  today at 15:26 NZDT  Stop service "srv2"
 ```
+
+Read more: [Changes and tasks](../changes-and-tasks.md).

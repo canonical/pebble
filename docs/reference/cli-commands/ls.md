@@ -20,3 +20,5 @@ may be specified for the last path element.
       -l              Use a long listing format
 ```
 <!-- END AUTOMATED OUTPUT -->
+
+Read more: [Use Pebble in containers](../pebble-in-containers.md).

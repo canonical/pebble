@@ -35,3 +35,5 @@ pebble exec --timeout 10s -- echo -n foo bar
       -I               Disable interactive mode and use a pipe for stdin
 ```
 <!-- END AUTOMATED OUTPUT -->
+
+Read more: [Use Pebble in containers](../pebble-in-containers.md).

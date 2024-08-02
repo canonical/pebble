@@ -34,3 +34,5 @@ Notify with two data fields:
    :input: pebble notify other.com/bar name=value email=john@smith.com  
 Recorded notice 2
 ```
+
+Read more: [Notices](../notices.md).

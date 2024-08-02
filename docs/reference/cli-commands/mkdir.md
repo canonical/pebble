@@ -22,3 +22,5 @@ The mkdir command creates the specified directory.
           --group=  Use specified group name
 ```
 <!-- END AUTOMATED OUTPUT -->
+
+Read more: [Use Pebble in containers](../pebble-in-containers.md).

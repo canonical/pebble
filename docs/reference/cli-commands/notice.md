@@ -55,3 +55,5 @@ last-data:
     email: john@smith.com
 expire-after: 168h0m0s
 ```
+
+Read more: [Notices](../notices.md).

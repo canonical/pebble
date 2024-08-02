@@ -40,3 +40,5 @@ ID   User    Type    Key              First                Repeated             
 1    1000    custom  example.com/foo  today at 16:16 NZST  today at 16:16 NZST  3
 2    public  custom  other.com/bar    today at 16:16 NZST  today at 16:16 NZST  1
 ```
+
+Read more: [Notices](../notices.md).

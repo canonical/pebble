@@ -29,3 +29,5 @@ ID  Status  Spawn                Ready                Summary
 2   Done    today at 15:26 NZDT  today at 15:26 NZDT  Start service "srv2"
 3   Done    today at 15:26 NZDT  today at 15:26 NZDT  Stop service "srv1" and 1 more
 ```
+
+Read more: [Changes and tasks](../changes-and-tasks.md).
