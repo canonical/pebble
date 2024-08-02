@@ -27,7 +27,7 @@ change that happened recently.
 
 ## Examples
 
-To view tasks from change-id 3, run:
+To view tasks from the change with ID 3, run:
 
 ```{terminal}
    :input: pebble tasks 3
