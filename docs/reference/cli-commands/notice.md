@@ -39,7 +39,7 @@ occurrences: 3
 expire-after: 168h0m0s
 ```
 
-To fetch the notice with type "custom" and key "other.com<span></span>/bar":
+To fetch the notice with type "custom" and key "example.com<span></span>/bar":
 
 ```{terminal}
    :input: pebble notice custom other.com/bar
