@@ -37,10 +37,10 @@ const cmdRunSummary = "Run the service manager environment"
 const cmdRunDescription = `
 The run command starts {{.DisplayName}} and runs the configured environment.
 
-Additional arguments may be provided to the service command with the --args option, which
-must be terminated with ";" unless there are no further program options.  These arguments
-are appended to the end of the service command, and replace any default arguments defined
-in the service plan. For example:
+Additional arguments may be provided to the service command with the --args
+option, which must be terminated with ";" unless there are no further program
+options. These arguments are appended to the end of the service command, and
+replace any default arguments defined in the service plan. For example:
 
 {{.ProgramName}} run --args myservice --port 8080 \; --hold
 `
