@@ -1345,7 +1345,10 @@ func (s *daemonSuite) TestWritesRequireAdminAccess(c *C) {
 }
 
 func (s *daemonSuite) TestAPIAccessLevels(c *C) {
-	_ = s.newDaemon(c)
+	d := s.newDaemon(c)
+	d.Init()
+	c.Assert(d.Start(), IsNil)
+	defer d.Stop(nil)
 
 	tests := []struct {
 		method string

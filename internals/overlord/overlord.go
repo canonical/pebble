@@ -22,7 +22,6 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/canonical/x-go/randutil"
@@ -89,7 +88,7 @@ type Overlord struct {
 	ensureLock  sync.Mutex
 	ensureTimer *time.Timer
 	ensureNext  time.Time
-	ensureRun   int32
+	ensureRun   chan struct{}
 	pruneTicker *time.Ticker
 
 	startOfOperationTime time.Time
@@ -114,6 +113,7 @@ func New(opts *Options) (*Overlord, error) {
 	o := &Overlord{
 		pebbleDir: opts.PebbleDir,
 		loopTomb:  new(tomb.Tomb),
+		ensureRun: make(chan struct{}),
 		inited:    true,
 		extension: opts.Extension,
 	}
@@ -207,14 +207,6 @@ func New(opts *Options) (*Overlord, error) {
 	// because TaskRunner runs all the tasks required by the managers that ran
 	// before it.
 	o.stateEng.AddManager(o.runner)
-
-	// Load the plan from the Pebble layers directory (which may be missing
-	// or have no layers, resulting in an empty plan), and propagate PlanChanged
-	// notifications to all notification subscribers.
-	err = o.planMgr.Load()
-	if err != nil {
-		return nil, fmt.Errorf("cannot load plan: %w", err)
-	}
 
 	return o, nil
 }
@@ -379,15 +371,34 @@ func (o *Overlord) Loop() {
 			}
 		}
 	})
+	o.ensureWaitRun()
 }
 
 func (o *Overlord) ensureDidRun() {
-	atomic.StoreInt32(&o.ensureRun, 1)
+	select {
+	case <-o.ensureRun:
+		// Already closed. Ensure already ran at least once.
+	default:
+		close(o.ensureRun)
+	}
 }
 
-func (o *Overlord) CanStandby() bool {
-	run := atomic.LoadInt32(&o.ensureRun)
-	return run != 0
+// ensureWaitRun waits until StateEngine.Ensure() was called at least once.
+func (o *Overlord) ensureWaitRun() {
+	select {
+	case <-o.ensureRun:
+	case <-o.loopTomb.Dying():
+	}
+}
+
+func (o *Overlord) CanStandby() (ensured bool) {
+	select {
+	case <-o.ensureRun:
+		// Already closed. Ensure already ran at least once.
+		ensured = true
+	default:
+	}
+	return ensured
 }
 
 // Stop stops the ensure loop and the managers under the StateEngine.
@@ -545,8 +556,9 @@ func Fake() *Overlord {
 // testing.
 func FakeWithState(handleRestart func(restart.RestartType)) *Overlord {
 	o := &Overlord{
-		loopTomb: new(tomb.Tomb),
-		inited:   false,
+		loopTomb:  new(tomb.Tomb),
+		inited:    false,
+		ensureRun: make(chan struct{}),
 	}
 	s := state.New(fakeBackend{o: o})
 	o.stateEng = NewStateEngine(s)

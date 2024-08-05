@@ -73,6 +73,7 @@ func (s *apiSuite) TestServicesStart(c *C) {
 	writeTestLayer(s.pebbleDir, servicesLayer)
 	d := s.daemon(c)
 	st := d.overlord.State()
+	s.startOverlord()
 
 	soon := 0
 	restore := FakeStateEnsureBefore(func(st *state.State, d time.Duration) {
@@ -120,6 +121,7 @@ func (s *apiSuite) TestServicesStop(c *C) {
 	writeTestLayer(s.pebbleDir, servicesLayer)
 	d := s.daemon(c)
 	st := d.overlord.State()
+	s.startOverlord()
 
 	soon := 0
 	restore := FakeStateEnsureBefore(func(st *state.State, d time.Duration) {
@@ -167,6 +169,7 @@ func (s *apiSuite) TestServicesAutoStart(c *C) {
 	writeTestLayer(s.pebbleDir, servicesLayer)
 	d := s.daemon(c)
 	st := d.overlord.State()
+	s.startOverlord()
 
 	soon := 0
 	restore := FakeStateEnsureBefore(func(st *state.State, d time.Duration) {
@@ -209,6 +212,7 @@ func (s *apiSuite) TestServicesGet(c *C) {
 	// Setup
 	writeTestLayer(s.pebbleDir, servicesLayer)
 	s.daemon(c)
+	s.startOverlord()
 
 	// Execute
 	req, err := http.NewRequest("GET", "/v1/services", nil)
@@ -238,6 +242,7 @@ func (s *apiSuite) TestServicesRestart(c *C) {
 	writeTestLayer(s.pebbleDir, servicesLayer)
 	d := s.daemon(c)
 	st := d.overlord.State()
+	s.startOverlord()
 
 	soon := 0
 	restore := FakeStateEnsureBefore(func(st *state.State, d time.Duration) {
@@ -287,6 +292,7 @@ func (s *apiSuite) TestServicesReplan(c *C) {
 	writeTestLayer(s.pebbleDir, servicesLayer)
 	d := s.daemon(c)
 	st := d.overlord.State()
+	s.startOverlord()
 
 	soon := 0
 	restore := FakeStateEnsureBefore(func(st *state.State, d time.Duration) {
@@ -334,6 +340,7 @@ services:
 `)
 	d := s.daemon(c)
 	st := d.overlord.State()
+	s.startOverlord()
 	restore := FakeStateEnsureBefore(func(st *state.State, d time.Duration) {})
 	defer restore()
 

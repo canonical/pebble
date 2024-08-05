@@ -199,16 +199,6 @@ func runDaemon(rcmd *cmdRun, ch chan os.Signal, ready chan<- func()) error {
 		return err
 	}
 
-	if rcmd.Args != nil {
-		mappedArgs, err := convertArgs(rcmd.Args)
-		if err != nil {
-			return err
-		}
-		if err := d.SetServiceArgs(mappedArgs); err != nil {
-			return err
-		}
-	}
-
 	// Run sanity check now, if anything goes wrong with the
 	// check we go into "degraded" mode where we always report
 	// the given error to any client.
@@ -225,6 +215,20 @@ func runDaemon(rcmd *cmdRun, ch chan os.Signal, ready chan<- func()) error {
 	d.Version = cmd.Version
 	if err := d.Start(); err != nil {
 		return err
+	}
+
+	// When we reach this point, we know every overlord manager has received a
+	// state engine StartUp() and at least one Ensure() call. This also guarantees
+	// the plan has been loaded and propagated to every change listener.
+
+	if rcmd.Args != nil {
+		mappedArgs, err := convertArgs(rcmd.Args)
+		if err != nil {
+			return err
+		}
+		if err := d.SetServiceArgs(mappedArgs); err != nil {
+			return err
+		}
 	}
 
 	watchdog, err := runWatchdog(d)

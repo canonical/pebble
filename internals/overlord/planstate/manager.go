@@ -32,7 +32,8 @@ func (e *LabelExists) Error() string {
 }
 
 type PlanManager struct {
-	layersDir string
+	layersDir        string
+	stateEngineReady bool
 
 	planLock sync.Mutex
 	plan     *plan.Plan
@@ -48,21 +49,15 @@ func NewManager(layersDir string) (*PlanManager, error) {
 	return manager, nil
 }
 
-// Load reads plan layers from the pebble directory, combines and validates the
-// final plan, and finally notifies registered managers of the plan update. In
-// the case of a non-existent layers directory, or no layers in the layers
-// directory, an empty plan is announced to change subscribers.
-func (m *PlanManager) Load() error {
-	plan, err := plan.ReadDir(m.layersDir)
+// Load reads plan layers from the layers directory and combines and validates
+// the final plan. In the case of a non-existent layers directory, or no layers
+// in the layers directory, an empty plan is created.
+func (m *PlanManager) load() error {
+	var err error
+	m.plan, err = plan.ReadDir(m.layersDir)
 	if err != nil {
 		return err
 	}
-
-	m.planLock.Lock()
-	m.plan = plan
-	m.planLock.Unlock()
-
-	m.callChangeListeners(plan)
 	return nil
 }
 
@@ -203,7 +198,18 @@ func findLayer(layers []*plan.Layer, label string) (int, *plan.Layer) {
 
 // Ensure implements StateManager.Ensure.
 func (m *PlanManager) Ensure() error {
+	if !m.stateEngineReady {
+		// No public call to this package will happen until the first
+		// Ensure() pass was completed. See overlord.go.
+		m.callChangeListeners(m.plan)
+		m.stateEngineReady = true
+	}
 	return nil
+}
+
+// StartUp implements StateManager.StartUp.
+func (m *PlanManager) StartUp() error {
+	return m.load()
 }
 
 // SetServiceArgs sets the service arguments provided by "pebble run --args"

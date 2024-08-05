@@ -29,7 +29,9 @@ func (ps *planSuite) TestLoadInvalidPebbleDir(c *C) {
 	ps.planMgr, err = planstate.NewManager("/invalid/path")
 	c.Assert(err, IsNil)
 	// Load the plan from the <pebble-dir>/layers directory
-	err = ps.planMgr.Load()
+	err = ps.planMgr.StartUp()
+	c.Assert(err, IsNil)
+	err = ps.planMgr.Ensure()
 	c.Assert(err, IsNil)
 	plan := ps.planMgr.Plan()
 	out, err := yaml.Marshal(plan)
@@ -64,7 +66,9 @@ func (ps *planSuite) TestLoadLayers(c *C) {
 		ps.writeLayer(c, string(reindent(l)))
 	}
 	// Load the plan from the <pebble-dir>/layers directory
-	err = ps.planMgr.Load()
+	err = ps.planMgr.StartUp()
+	c.Assert(err, IsNil)
+	err = ps.planMgr.Ensure()
 	c.Assert(err, IsNil)
 	plan := ps.planMgr.Plan()
 	out, err := yaml.Marshal(plan)
@@ -350,7 +354,9 @@ services:
         override: replace
         command: echo svc1
 `)
-		err = manager.Load()
+		err = manager.StartUp()
+		c.Assert(err, IsNil)
+		err = manager.Ensure()
 		c.Assert(err, IsNil)
 
 		layer1 := ps.parseLayer(c, 0, "label1", `

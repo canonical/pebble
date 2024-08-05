@@ -20,7 +20,6 @@ import (
 	"reflect"
 	"sort"
 	"sync"
-	"sync/atomic"
 
 	"gopkg.in/tomb.v2"
 
@@ -38,8 +37,7 @@ const (
 
 // CheckManager starts and manages the health checks.
 type CheckManager struct {
-	state      *state.State
-	ensureDone atomic.Bool
+	state *state.State
 
 	failureHandlers []FailureFunc
 
@@ -87,7 +85,6 @@ func NewManager(s *state.State, runner *state.TaskRunner) *CheckManager {
 }
 
 func (m *CheckManager) Ensure() error {
-	m.ensureDone.Store(true)
 	return nil
 }
 
@@ -163,11 +160,6 @@ func (m *CheckManager) PlanChanged(newPlan *plan.Plan) {
 			m.updateCheckInfo(config, changeID, 0)
 			shouldEnsure = true
 		}
-	}
-	if !m.ensureDone.Load() {
-		// Can't call EnsureBefore before Overlord.Loop is running (which will
-		// call m.Ensure for the first time).
-		return
 	}
 	if shouldEnsure {
 		m.state.EnsureBefore(0) // start new tasks right away
