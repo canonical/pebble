@@ -101,7 +101,7 @@ services:
         # (Optional) Defines what happens when each of the named health checks
         # fail. Possible values are:
         #
-        # - restart (default): restart the service once
+        # - restart: restart the service once
         # - shutdown: shut down and exit the Pebble daemon (with exit code 11)
         # - success-shutdown: shut down and exit Pebble with exit code 0
         # - ignore: do nothing further
@@ -144,9 +144,9 @@ checks:
         # (Optional) Check level, which can be used for filtering checks when
         # calling the checks API or health endpoint.
         #
-        # For the health endpoint, ready implies alive. In other words, if all
-        # the "ready" checks are succeeding and there are no "alive" checks,
-        # the /v1/health API will return success for level=alive.
+        # For the health endpoint, ready implies alive, and not-alive implies
+        # not-ready (but not the other way around). See the "Health endpoint"
+        # section in the docs for details.
         level: alive | ready
 
         # (Optional) Check is run every time this period (time interval)
