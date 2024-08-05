@@ -36,9 +36,9 @@ const cmdWarningsSummary = "List warnings"
 const cmdWarningsDescription = `
 The warnings command lists the warnings that have been reported to the system.
 
-Once warnings have been listed with '{{.ProgramName}} warnings', '{{.ProgramName}} okay' may be used to
-silence them. A warning that's been silenced in this way will not be listed
-again unless it happens again, _and_ a cooldown time has passed.
+Once warnings have been listed with '{{.ProgramName}} warnings', '{{.ProgramName}} okay' may be
+used to silence them. A warning that's been silenced in this way will not be
+listed again unless it happens again, _and_ a cooldown time has passed.
 
 Warnings expire automatically, and once expired they are forgotten.
 `

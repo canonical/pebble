@@ -17,6 +17,7 @@ is specified, combine the layer with an existing layer that has the given
 label (or append if the label is not found).
 
 [add command options]
-      --combine         Combine the new layer with an existing layer that has the given label (default is to append)
+      --combine         Combine the new layer with an existing layer that has
+                        the given label (default is to append)
 ```
 <!-- END AUTOMATED OUTPUT -->

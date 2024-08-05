@@ -125,7 +125,7 @@ test    -      down    42/3      14 (Get "http://localhost:8080/": dial t... run
 
 The "Failures" column shows the current number of failures since the check started failing, a slash, and the configured threshold.
 
-The "Change" column shows the change ID of the [change](changes-and-tasks/changes-and-tasks) driving the check, along with a (possibly-truncated) error message from the last error. Running `pebble tasks <change-id>` will show the change's task, including the last 10 error messages in the task log.
+The "Change" column shows the change ID of the [change](changes-and-tasks) driving the check, along with a (possibly-truncated) error message from the last error. Running `pebble tasks <change-id>` will show the change's task, including the last 10 error messages in the task log.
 
 Health checks are implemented using two change kinds:
 

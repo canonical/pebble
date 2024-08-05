@@ -15,7 +15,8 @@ The start command starts the service with the provided name and
 any other services it depends on, in the correct order.
 
 [start command options]
-      --no-wait      Do not wait for the operation to finish but just print the change id.
+      --no-wait      Do not wait for the operation to finish but just print the
+                     change id.
 ```
 <!-- END AUTOMATED OUTPUT -->
 

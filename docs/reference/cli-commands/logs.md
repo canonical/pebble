@@ -21,7 +21,8 @@ if none are specified) and displays them in chronological order.
                        pressed. If no services are specified, show logs from
                        all services running when the command starts.
           --format=    Output format: "text" (default) or "json" (JSON lines).
-      -n=              Number of logs to show (before following); defaults to 30.
+      -n=              Number of logs to show (before following); defaults to
+                       30.
                        If 'all', show all buffered logs.
 ```
 <!-- END AUTOMATED OUTPUT -->

@@ -14,6 +14,9 @@ Usage:
 The rm command removes a file or directory.
 
 [rm command options]
-      -r            Remove all files and directories recursively in the specified path
+      -r            Remove all files and directories recursively in the
+                    specified path
 ```
 <!-- END AUTOMATED OUTPUT -->
+
+Read more: [Use Pebble in containers](../pebble-in-containers.md).

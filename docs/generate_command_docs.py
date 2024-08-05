@@ -44,7 +44,16 @@ def get_all_commands() -> typing.List[typing.Tuple[str, str]]:
 
 
 def get_command_help_output(cmd: typing.List[str]) -> str:
-    return subprocess.run(cmd, text=True, capture_output=True, check=True).stdout
+    # Set a fixed terminal line columns so that the output won't be
+    # affected by the actual terminal width.
+    cmd = f"stty cols 80; {cmd}"
+    return subprocess.run(
+        cmd,
+        shell=True,
+        text=True,
+        capture_output=True,
+        check=True,
+    ).stdout
 
 
 def render_code_block_cmd(text: str, cmd: str) -> str:
@@ -93,7 +102,7 @@ def create_file_if_not_exist(filepath: str, cmd: str) -> bool:
 def generate_help_command_and_output(cmd: str) -> typing.Tuple[str, str]:
     help_cmd = ["pebble", "help"] if cmd == "help" else ["pebble", cmd, "--help"]
     help_cmd_str = " ".join(help_cmd)
-    help_cmd_output = get_command_help_output(help_cmd).strip()
+    help_cmd_output = get_command_help_output(help_cmd_str).strip()
 
     output = f"""\
 <!-- START AUTOMATED OUTPUT -->
