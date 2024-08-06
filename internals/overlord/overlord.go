@@ -371,7 +371,7 @@ func (o *Overlord) Loop() {
 			}
 		}
 	})
-	o.ensureWaitRun()
+	o.waitEnsureRun()
 }
 
 func (o *Overlord) ensureDidRun() {
@@ -383,22 +383,22 @@ func (o *Overlord) ensureDidRun() {
 	}
 }
 
-// ensureWaitRun waits until StateEngine.Ensure() was called at least once.
-func (o *Overlord) ensureWaitRun() {
+// waitEnsureRun waits until StateEngine.Ensure() was called at least once.
+func (o *Overlord) waitEnsureRun() {
 	select {
 	case <-o.ensureRun:
 	case <-o.loopTomb.Dying():
 	}
 }
 
-func (o *Overlord) CanStandby() (ensured bool) {
+func (o *Overlord) CanStandby() bool {
 	select {
 	case <-o.ensureRun:
 		// Already closed. Ensure already ran at least once.
-		ensured = true
+		return true
 	default:
+		return false
 	}
-	return ensured
 }
 
 // Stop stops the ensure loop and the managers under the StateEngine.
