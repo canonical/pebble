@@ -4,22 +4,6 @@ _Take control of your internal daemons!_
 
 **Pebble** is a lightweight Linux service manager that helps you orchestrate a set of local processes as an organised set. It resembles well-known tools such as _supervisord_, _runit_, or _s6_, in that it can easily manage non-system processes independently from the system services. However, it was designed with unique features such as layered configuration and an HTTP API that help with more specific use cases.
 
-## Learn the fundamentals
-
-Before harnessing the full potential of Pebble, it is beneficial to grasp the underlying technology that powers Pebble and the ecosystem within which Pebble operates. The following section offers valuable links to deepen your understanding:
-
-- Pebble runs on UNIX-like operating systems:
-  - [An Introduction to Linux Basics](https://www.digitalocean.com/community/tutorials/an-introduction-to-linux-basics)
-  - [Multipass tutorial: Ubuntu VMs on demand for any workstation](https://multipass.run/docs/tutorial)
-  - [How to run an Ubuntu Desktop virtual machine using VirtualBox 7](https://ubuntu.com/tutorials/how-to-run-ubuntu-desktop-on-a-virtual-machine-using-virtualbox#1-overview)
-  - [The Linux command line for beginners](https://ubuntu.com/tutorials/command-line-for-beginners#1-overview)
-- Pebble uses YAML for configuration:
-  - [The Official YAML Web Site](https://yaml.org/)
-  - [YAML Tutorial: Everything You Need to Get Started in Minutes](https://www.cloudbees.com/blog/yaml-tutorial-everything-you-need-get-started)
-- If you are using Pebble with Juju and Charms:
-  - [Juju Documentation](https://juju.is/docs/juju)
-  - [Charm SDK Documentation](https://juju.is/docs/sdk)
-
 ## In this documentation
 
 ````{grid} 1 1 2 2
