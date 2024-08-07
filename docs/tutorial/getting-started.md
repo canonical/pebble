@@ -7,7 +7,7 @@ After this tutorial, you will have a basic understanding of what Pebble is and h
 ## Prerequisites
 
 - A Linux machine.
-- Python3 (used to run basic HTTP servers as sample services managed by Pebble).
+- Python 3.x (used to run basic HTTP servers as sample services managed by Pebble).
 
 ## Download and install Pebble
 
