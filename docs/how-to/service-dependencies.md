@@ -190,10 +190,9 @@ In the updated layer above, the `frontend` service requires the `backend`
 service to be started before it, and the `backend` service requires the
 `database` service to be started before it.
 
-```{note}
-Currently, `before` and `after` are of limited usefulness, because Pebble only waits 1 second before moving on to start the next service, with no additional checks that the previous service is operating correctly.
-
-If the configuration of `requires`, `before`, and `after` for a service results in a cycle or "loop", an error will be returned when attempting to start or stop the service.
+```{include} /reuse/service-start-order.md
+   :start-after: Start: Service start order note
+   :end-before: End: Service start order note
 ```
 
 For more information on `before` and `after`, see [Service start order](../explanation/service-start-order.md).

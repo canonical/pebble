@@ -4,7 +4,7 @@ When multiple services need to be started together, they're started in order acc
 
 The `before` option is a list of services that this service must start before (it may or may not `requires` them, see [Service dependencies](./service-dependencies.md)). Or if it's easier to specify this ordering the other way around, `after` is a list of services that this service must start after.
 
-```{note}
-Currently, `before` and `after` are of limited usefulness, because Pebble only waits 1 second before moving on to start the next service, with no additional checks that the previous service is operating correctly.
-If the configuration of `requires`, `before`, and `after` for a service results in a cycle or "loop", an error will be returned when attempting to start or stop the service.
+```{include} /reuse/service-start-order.md
+   :start-after: Start: Service start order note
+   :end-before: End: Service start order note
 ```
