@@ -70,3 +70,20 @@ jobs:
       run: |
         go fmt ./...
         git diff --exit-code
+
+  docs:
+    runs-on: ubuntu-latest
+
+    name: Format check
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10' 
+
+    - name: Ensure no CLI reference doc changes
+      run: |
+        python3 generate_command_docs.py
+        git diff --exit-code
