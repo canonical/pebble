@@ -153,6 +153,8 @@ In the layer configuration above, the `frontend` service is dependent on the
 `backend` service, and the `backend` service is dependent on the `database`
 service.
 
+For more information on `requires`, see [Service dependencies](../explanation/service-dependencies.md).
+
 ### Specify start order for dependent services
 
 To specify the order in which one or more dependent services must start
@@ -188,13 +190,12 @@ In the updated layer above, the `frontend` service requires the `backend`
 service to be started before it, and the `backend` service requires the
 `database` service to be started before it.
 
-```{note}
-Currently, `before` and `after` are of limited usefulness, because Pebble only waits 1 second before moving on to start the next service, with no additional checks that the previous service is operating correctly.
-
-If the configuration of `before` and `after` for the services results in a cycle, an error will be returned when the Pebble daemon starts (and the plan is loaded) or when a layer that causes a cycle is added.
+```{include} /reuse/service-start-order.md
+   :start-after: Start: Service start order note
+   :end-before: End: Service start order note
 ```
 
-% Does it only check that the status is "Active"? So what does `requires` do?
+For more information on `before` and `after`, see [Service start order](../explanation/service-start-order.md).
 
 ## Verify service dependencies
 
