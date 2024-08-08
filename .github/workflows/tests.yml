@@ -87,3 +87,5 @@ jobs:
       run: |
         python3 generate_command_docs.py
         git diff --exit-code
+      working-directory: ./docs
+
