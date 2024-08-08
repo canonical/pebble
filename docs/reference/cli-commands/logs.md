@@ -1,4 +1,5 @@
-# Logs command
+(reference_pebble_logs_command)=
+# logs command
 
 The Pebble daemon's service manager stores the most recent stdout and stderr from each service, using a 100KB ring buffer per service. Each log line is prefixed with an RFC-3339 timestamp and the `[service-name]` in square brackets.
 
@@ -6,8 +7,9 @@ The Pebble daemon's service manager stores the most recent stdout and stderr fro
 
 Logs are viewable via the logs API or using `pebble logs`:
 
+<!-- START AUTOMATED OUTPUT -->
 ```{terminal}
-   :input: pebble logs --help
+:input: pebble logs --help
 Usage:
   pebble logs [logs-OPTIONS] [<service>...]
 
@@ -19,9 +21,11 @@ if none are specified) and displays them in chronological order.
                        pressed. If no services are specified, show logs from
                        all services running when the command starts.
           --format=    Output format: "text" (default) or "json" (JSON lines).
-      -n=              Number of logs to show (before following); defaults to 30.
+      -n=              Number of logs to show (before following); defaults to
+                       30.
                        If 'all', show all buffered logs.
 ```
+<!-- END AUTOMATED OUTPUT -->
 
 ## Examples
 

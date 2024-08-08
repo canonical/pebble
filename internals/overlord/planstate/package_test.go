@@ -34,7 +34,7 @@ func Test(t *testing.T) { TestingT(t) }
 
 type planSuite struct {
 	planMgr   *planstate.PlanManager
-	pebbleDir string
+	layersDir string
 
 	writeLayerCounter int
 }
@@ -42,10 +42,7 @@ type planSuite struct {
 var _ = Suite(&planSuite{})
 
 func (ps *planSuite) SetUpTest(c *C) {
-	ps.pebbleDir = c.MkDir()
-	planDir := filepath.Join(ps.pebbleDir, "layers")
-	err := os.Mkdir(planDir, 0755)
-	c.Assert(err, IsNil)
+	ps.layersDir = c.MkDir()
 
 	//Reset write layer counter
 	ps.writeLayerCounter = 1
@@ -53,7 +50,7 @@ func (ps *planSuite) SetUpTest(c *C) {
 
 func (ps *planSuite) writeLayer(c *C, layer string) {
 	filename := fmt.Sprintf("%03[1]d-layer-file-%[1]d.yaml", ps.writeLayerCounter)
-	err := os.WriteFile(filepath.Join(ps.pebbleDir, "layers", filename), []byte(layer), 0644)
+	err := os.WriteFile(filepath.Join(ps.layersDir, filename), []byte(layer), 0644)
 	c.Assert(err, IsNil)
 
 	ps.writeLayerCounter++

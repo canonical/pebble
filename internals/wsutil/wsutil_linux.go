@@ -32,7 +32,7 @@ func MirrorToWebsocket(conn MessageWriter, r io.ReadCloser, exited chan struct{}
 	for {
 		buf, ok := <-in
 		if !ok {
-			r.Close()
+			_ = r.Close()
 			logger.Debugf("Sending write barrier")
 			err := conn.WriteMessage(websocket.TextMessage, endCommandJSON)
 			if err != nil {

@@ -1,11 +1,13 @@
-# Pebble exec command (one-shot command)
+(reference_pebble_exec_command)=
+# exec command
 
-Pebble's "exec" feature allows you to run arbitrary commands on the server. This is intended for short-running programs; the processes started with exec don't use the service manager.
+The `exec` command is used to execute a remote command and wait for it to finish.
 
 ## Usage
 
+<!-- START AUTOMATED OUTPUT -->
 ```{terminal}
-   :input: pebble exec --help
+:input: pebble exec --help
 Usage:
   pebble exec [exec-OPTIONS] <command>
 
@@ -22,16 +24,22 @@ pebble exec --timeout 10s -- echo -n foo bar
       -w=              Working directory to run command in
           --env=       Environment variable to set (in 'FOO=bar' format)
           --uid=       User ID to run command as
-          --user=      Username to run command as (user's UID must match uid if both present)
+          --user=      Username to run command as (user's UID must match uid if
+                       both present)
           --gid=       Group ID to run command as
-          --group=     Group name to run command as (group's GID must match gid if both present)
+          --group=     Group name to run command as (group's GID must match gid
+                       if both present)
           --timeout=   Timeout after which to terminate command
-          --context=   Inherit the context of the named service (overridden by -w, --env, --uid/user, --gid/group)
-      -t               Allocate remote pseudo-terminal and connect stdout to it (default if stdout is a TTY)
+          --context=   Inherit the context of the named service (overridden by
+                       -w, --env, --uid/user, --gid/group)
+      -t               Allocate remote pseudo-terminal and connect stdout to it
+                       (default if stdout is a TTY)
       -T               Disable remote pseudo-terminal allocation
-      -i               Interactive mode: connect stdin to the pseudo-terminal (default if stdin and stdout are TTYs)
+      -i               Interactive mode: connect stdin to the pseudo-terminal
+                       (default if stdin and stdout are TTYs)
       -I               Disable interactive mode and use a pipe for stdin
 ```
+<!-- END AUTOMATED OUTPUT -->
 
 ## Examples
 
@@ -54,3 +62,5 @@ You can also apply a timeout with `--timeout`, for example:
 error: cannot perform the following tasks:
 - exec command "sleep" (timed out after 1s: context deadline exceeded)
 ```
+
+Read more: [Use Pebble in containers](../pebble-in-containers.md).

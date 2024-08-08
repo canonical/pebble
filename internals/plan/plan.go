@@ -1,4 +1,4 @@
-// Copyright (c) 2021 Canonical Ltd
+// Copyright (c) 2024 Canonical Ltd
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -924,16 +924,81 @@ func (p *Plan) Validate() error {
 // services to be properly started, in the order that they must be started.
 // An error is returned when a provided service name does not exist, or there
 // is an order cycle involving the provided service or its dependencies.
-func (p *Plan) StartOrder(names []string) ([]string, error) {
-	return order(p.Services, names, false)
+func (p *Plan) StartOrder(names []string) ([][]string, error) {
+	orderedNames, err := order(p.Services, names, false)
+	if err != nil {
+		return nil, err
+	}
+
+	return createLanes(orderedNames, p.Services)
 }
 
 // StopOrder returns the required services that must be stopped for the named
 // services to be properly stopped, in the order that they must be stopped.
 // An error is returned when a provided service name does not exist, or there
 // is an order cycle involving the provided service or its dependencies.
-func (p *Plan) StopOrder(names []string) ([]string, error) {
-	return order(p.Services, names, true)
+func (p *Plan) StopOrder(names []string) ([][]string, error) {
+	orderedNames, err := order(p.Services, names, true)
+	if err != nil {
+		return nil, err
+	}
+
+	return createLanes(orderedNames, p.Services)
+}
+
+func getOrCreateLane(currentLane int, service *Service, serviceLaneMapping map[string]int) int {
+	// if the service has been mapped to a lane
+	if lane, ok := serviceLaneMapping[service.Name]; ok {
+		mapServiceToLane(service, lane, serviceLaneMapping)
+		return lane
+	}
+
+	// if any dependency has been mapped to a lane
+	for _, dependency := range service.Requires {
+		if lane, ok := serviceLaneMapping[dependency]; ok {
+			mapServiceToLane(service, lane, serviceLaneMapping)
+			return lane
+		}
+	}
+
+	// neither the service itself nor any of its dependencies is mapped to an existing lane
+	lane := currentLane + 1
+	mapServiceToLane(service, lane, serviceLaneMapping)
+	return lane
+}
+
+func mapServiceToLane(service *Service, lane int, serviceLaneMapping map[string]int) {
+	serviceLaneMapping[service.Name] = lane
+
+	// map the service's dependencies to the same lane
+	for _, dependency := range service.Requires {
+		serviceLaneMapping[dependency] = lane
+	}
+}
+
+func createLanes(names []string, services map[string]*Service) ([][]string, error) {
+	serviceLaneMapping := make(map[string]int)
+
+	// Map all services into lanes.
+	var lane = -1
+	for _, name := range names {
+		service, ok := services[name]
+		if !ok {
+			return nil, &FormatError{
+				Message: fmt.Sprintf("service %q does not exist", name),
+			}
+		}
+
+		lane = getOrCreateLane(lane, service, serviceLaneMapping)
+	}
+
+	// Create lanes
+	lanes := make([][]string, lane+1)
+	for _, service := range names {
+		lane := serviceLaneMapping[service]
+		lanes[lane] = append(lanes[lane], service)
+	}
+	return lanes, nil
 }
 
 func order(services map[string]*Service, names []string, stop bool) ([]string, error) {
@@ -1138,11 +1203,10 @@ func ReadLayersDir(dirname string) ([]*Layer, error) {
 	return layers, nil
 }
 
-// ReadDir reads the configuration layers from the "layers" sub-directory in
-// dir, and returns the resulting Plan. If the "layers" sub-directory doesn't
+// ReadDir reads the configuration layers from layersDir,
+// and returns the resulting Plan. If layersDir doesn't
 // exist, it returns a valid Plan with no layers.
-func ReadDir(dir string) (*Plan, error) {
-	layersDir := filepath.Join(dir, "layers")
+func ReadDir(layersDir string) (*Plan, error) {
 	_, err := os.Stat(layersDir)
 	if err != nil {
 		if os.IsNotExist(err) {

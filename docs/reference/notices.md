@@ -31,11 +31,6 @@ See comment at the top of internals/overlord/state/warning.go for more info.
 
 ## Commands
 
-```{toctree}
-:titlesonly:
-:maxdepth: 1
-
-Notice command <pebble-notice>
-Notices command <pebble-notices>
-Notify command <pebble-notify>
-```
+- {ref}`reference_pebble_notice_command`
+- {ref}`reference_pebble_notices_command`
+- {ref}`reference_pebble_notify_command`

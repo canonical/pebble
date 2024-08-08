@@ -125,7 +125,7 @@ test    -      down    42/3      14 (Get "http://localhost:8080/": dial t... run
 
 The "Failures" column shows the current number of failures since the check started failing, a slash, and the configured threshold.
 
-The "Change" column shows the change ID of the [change](changes-and-tasks/changes-and-tasks) driving the check, along with a (possibly-truncated) error message from the last error. Running `pebble tasks <change-id>` will show the change's task, including the last 10 error messages in the task log.
+The "Change" column shows the change ID of the [change](changes-and-tasks) driving the check, along with a (possibly-truncated) error message from the last error. Running `pebble tasks <change-id>` will show the change's task, including the last 10 error messages in the task log.
 
 Health checks are implemented using two change kinds:
 
@@ -140,6 +140,8 @@ Each check can specify a `level` of "alive" or "ready". These have semantic mean
 
 The tool running the Pebble server can make use of this, for example, under Kubernetes you could initialize its liveness and readiness probes to hit Pebble's `/v1/health` endpoint with `?level=alive` and `?level=ready` filters, respectively.
 
-Ready implies alive, and not-alive implies not-ready. If you've configured an "alive" check but no "ready" check, and the "alive" check is unhealthy, `/v1/health?level=ready` will report unhealthy as well, and the Kubernetes readiness probe will act on that.
+If only a "ready" check or only an "alive" check is configured, ready implies alive, and not-alive implies not-ready. If you've configured an "alive" check but no "ready" check, and the "alive" check is unhealthy, `/v1/health?level=ready` will report unhealthy as well, and the Kubernetes readiness probe will act on that.
+
+On the other hand, not-ready does not imply not-alive: if you've configured a "ready" check but no "alive" check, and the "ready" check is unhealthy, `/v1/health?level=alive` will still report healthy.
 
 If there are no checks configured, the `/v1/health` endpoint returns HTTP 200 so the liveness and readiness probes are successful by default. To use this feature, you must explicitly create checks with `level: alive` or `level: ready` in the layer configuration.

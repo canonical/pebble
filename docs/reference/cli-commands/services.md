@@ -1,12 +1,13 @@
-# Pebble services command
+(reference_pebble_services_command)=
+# services command
 
 The services command lists status information about the services specified, or about all services if none are specified.
 
 ## Usage
 
+<!-- START AUTOMATED OUTPUT -->
 ```{terminal}
-   :input: pebble services --help
-Usage:
+:input: pebble services --help
 Usage:
   pebble services [services-OPTIONS] [<service>...]
 
@@ -14,8 +15,10 @@ The services command lists status information about the services specified, or
 about all services if none are specified.
 
 [services command options]
-      --abs-time     Display absolute times (in RFC 3339 format). Otherwise, display relative times up to 60 days, then YYYY-MM-DD.
+      --abs-time     Display absolute times (in RFC 3339 format). Otherwise,
+                     display relative times up to 60 days, then YYYY-MM-DD.
 ```
+<!-- END AUTOMATED OUTPUT -->
 
 ## Examples
 

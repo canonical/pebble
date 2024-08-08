@@ -1,11 +1,13 @@
-# Pebble replan command
+(reference_pebble_replan_command)=
+# replan command
 
 The replan command starts, stops, or restarts services that have changed, so that running services exactly match the desired configuration in the current plan.
 
 ## Usage
 
+<!-- START AUTOMATED OUTPUT -->
 ```{terminal}
-   :input: pebble replan --help
+:input: pebble replan --help
 Usage:
   pebble replan [replan-OPTIONS]
 
@@ -14,8 +16,10 @@ so that running services exactly match the desired configuration in the
 current plan.
 
 [replan command options]
-      --no-wait    Do not wait for the operation to finish but just print the change id.
+      --no-wait    Do not wait for the operation to finish but just print the
+                   change id.
 ```
+<!-- END AUTOMATED OUTPUT -->
 
 ## How it works
 

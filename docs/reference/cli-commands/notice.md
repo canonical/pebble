@@ -1,11 +1,13 @@
-# Pebble notice command
+(reference_pebble_notice_command)=
+# notice command
 
-To fetch details about a single notice, use `pebble notice`, which displays the output in YAML format.
+The `notice` command is used to fetch a single notice.
 
 ## Usage
 
+<!-- START AUTOMATED OUTPUT -->
 ```{terminal}
-   :input: pebble notice --help
+:input: pebble notice --help
 Usage:
   pebble notice [notice-OPTIONS] <id-or-type> [<key>]
 
@@ -13,12 +15,16 @@ The notice command fetches a single notice, either by ID (1-arg variant), or
 by unique type and key combination (2-arg variant).
 
 [notice command options]
-      --uid=            Look up notice from user with this UID (admin only; 2-arg variant only)
+      --uid=            Look up notice from user with this UID (admin only;
+                        2-arg variant only)
 ```
+<!-- END AUTOMATED OUTPUT -->
 
 ## Examples
 
-You can fetch a notice either by ID or by type/key combination. To fetch the notice with ID "1":
+You can fetch a notice either by ID or by type/key combination.
+
+ To fetch the notice with ID "1":
 
 ```{terminal}
    :input: pebble notice 1
@@ -33,7 +39,7 @@ occurrences: 3
 expire-after: 168h0m0s
 ```
 
-To fetch the notice with type "custom" and key "other.com/bar":
+To fetch the notice with type "custom" and key "example.com<span></span>/bar":
 
 ```{terminal}
    :input: pebble notice custom other.com/bar
@@ -50,3 +56,5 @@ last-data:
     email: john@smith.com
 expire-after: 168h0m0s
 ```
+
+Read more: [Notices](../notices.md).

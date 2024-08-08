@@ -40,7 +40,6 @@ The Pebble project is sponsored by [Canonical Ltd](https://www.canonical.com).
 :hidden:
 :titlesonly:
 
-:diataxis:self
 :diataxis:Tutorial <tutorial/getting-started>
 :diataxis:how-to/index
 :diataxis:explanation/index

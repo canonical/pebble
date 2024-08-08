@@ -1,12 +1,13 @@
 # Getting started with Pebble
 
-In this tutorial, we will download and install Pebble, configure layers, run the Pebble daemon, and work with layers and services. This tutorial takes about 15 minutes to complete.
+In this tutorial, we will download and install Pebble, configure layers, run the Pebble daemon, and work with layers and services to discover some of Pebble's basic service orchestration capabilities. At the end of the tutorial, we should have two running HTTP servers listening on different ports managed by Pebble. This tutorial takes about 15 minutes to complete.
 
 After this tutorial, you will have a basic understanding of what Pebble is and how to use it to orchestrate services, and you can continue exploring more advanced features and use cases (see {ref}`next_steps`).
 
 ## Prerequisites
 
 - A Linux machine.
+- Python 3.x (used to run basic HTTP servers as sample services managed by Pebble).
 
 ## Download and install Pebble
 
@@ -36,7 +37,7 @@ export PEBBLE=$HOME/PEBBLE
 echo "export PEBBLE=$HOME/PEBBLE" >> ~/.bashrc
 ```
 
-Next, create a layer by running:
+Next, create a [configuration layer](../reference/layers.md) by running:
 
 ```{code-block} bash
 :emphasize-lines: 8
@@ -86,7 +87,7 @@ This starts the Pebble daemon itself, as well as all the services that are marke
 ...
 ```
 
-As you can see from the log, our HTTP server has been started too, which can be verified by running `curl localhost:8080` in another terminal tab.
+As we can see from the log, our HTTP server has been started too, which can be verified by running `curl localhost:8080` in another terminal tab.
 
 ```{note}
 To exit the Pebble daemon, press Ctrl-C (which sends an "interrupt" signal to the process).
@@ -94,7 +95,7 @@ To exit the Pebble daemon, press Ctrl-C (which sends an "interrupt" signal to th
 
 ## View, start and stop services
 
-While the Pebble daemon is running, you can view the status of services by opening another terminal tab and running:
+While the Pebble daemon is running, we can view the status of services by opening another terminal tab and running:
 
 ```bash
 pebble services
@@ -115,7 +116,7 @@ http-server  enabled  active   today at 11:30 UTC
 To stop one or more running services, run `pebble stop <service1> <service2>.`
 ```
 
-You can stop the running `http-server` service by running:
+We can stop the running `http-server` service by running:
 
 ```bash
 pebble stop http-server

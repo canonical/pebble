@@ -4,15 +4,7 @@ Pebble works well as a local service manager, but if running Pebble in a separat
 
 ## Run commands in a container
 
-To run commands in a container, see [Pebble exec command](./pebble-exec.md).
-
-```{toctree}
-:hidden:
-:titlesonly:
-:maxdepth: 1
-
-exec command <pebble-exec>
-```
+To run commands in a container, see {ref}`reference_pebble_exec_command`.
 
 ## File management
 
@@ -20,13 +12,8 @@ Pebble provides various API calls and commands to manage files and directories o
 
 The simplest way to use these is with the commands below, several of which should be familiar:
 
-```{toctree}
-:titlesonly:
-:maxdepth: 1
-
-ls command <pebble-ls>
-mkdir command <pebble-mkdir>
-rm command <pebble-rm>
-push command <pebble-push>
-pull command <pebble-pull>
-```
+- {ref}`reference_pebble_ls_command`
+- {ref}`reference_pebble_mkdir_command`
+- {ref}`reference_pebble_rm_command`
+- {ref}`reference_pebble_push_command`
+- {ref}`reference_pebble_pull_command`

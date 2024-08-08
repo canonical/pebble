@@ -263,7 +263,5 @@ failed run.
 - [pebble services command](../reference/cli-commands/services.md)
 - [pebble start command](../reference/cli-commands/start.md)
 - [pebble stop command](../reference/cli-commands/stop.md)
-- [Changes and tasks](../reference/changes-and-tasks/changes-and-tasks.md)
 - [Layer specification](../reference/layer-specification.md)
-
-[Changes and tasks]: /reference/changes-and-tasks/changes-and-tasks.md
+- [Changes and tasks](/reference/changes-and-tasks.md).

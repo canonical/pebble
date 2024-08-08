@@ -252,7 +252,12 @@ func (e *execution) do(ctx context.Context, task *state.Task) error {
 			// websocket and write to the PTY.
 			go func() {
 				<-wsutil.WebsocketRecvStream(master, ioConn)
-				master.Close()
+				// If the interactive is enforced, it is possible to finish
+				// reading earlier than the mirroring go routine sends all the
+				// output to the client. Thus, closing the master descriptor
+				// here will terminate mirroring prematurely. Instead, we
+				// should send Ctrl-D to the fd to indicate the end of input.
+				master.Write([]byte{byte(unix.VEOF)})
 			}()
 		} else {
 			// Non-interactive: start goroutine to receive stdin from "stdio"

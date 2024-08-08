@@ -8,10 +8,5 @@ The daemon records this state in a JSON file on disk at `$PEBBLE/.pebble.state`.
 
 ## Commands
 
-```{toctree}
-:titlesonly:
-:maxdepth: 1
-
-Changes command <pebble-changes>
-Tasks command <pebble-tasks>
-```
+- {ref}`reference_pebble_changes_command`
+- {ref}`reference_pebble_tasks_command`

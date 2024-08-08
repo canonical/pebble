@@ -1,20 +1,24 @@
-# Pebble start command
+(reference_pebble_start_command)=
+# start command
 
 The start command starts the service with the provided name and any other services it depends on, in the correct order.
 
 ## Usage
 
+<!-- START AUTOMATED OUTPUT -->
 ```{terminal}
-   :input: pebble start --help
+:input: pebble start --help
 Usage:
-  pebble services [services-OPTIONS] [<service>...]
+  pebble start [start-OPTIONS] <service>...
 
-The services command lists status information about the services specified, or
-about all services if none are specified.
+The start command starts the service with the provided name and
+any other services it depends on, in the correct order.
 
-[services command options]
-      --abs-time     Display absolute times (in RFC 3339 format). Otherwise, display relative times up to 60 days, then YYYY-MM-DD.
+[start command options]
+      --no-wait      Do not wait for the operation to finish but just print the
+                     change id.
 ```
+<!-- END AUTOMATED OUTPUT -->
 
 ## How it works
 

@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Canonical Ltd
+// Copyright (c) 2024 Canonical Ltd
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -1427,15 +1427,23 @@ func (s *S) TestParseLayer(c *C) {
 			if err == nil {
 				for name, order := range test.start {
 					p := plan.Plan{Services: result.Services}
-					names, err := p.StartOrder([]string{name})
+					lanes, err := p.StartOrder([]string{name})
 					c.Assert(err, IsNil)
-					c.Assert(names, DeepEquals, order)
+					for _, names := range lanes {
+						if len(names) > 0 {
+							c.Assert(names, DeepEquals, order)
+						}
+					}
 				}
 				for name, order := range test.stop {
 					p := plan.Plan{Services: result.Services}
-					names, err := p.StopOrder([]string{name})
+					lanes, err := p.StopOrder([]string{name})
 					c.Assert(err, IsNil)
-					c.Assert(names, DeepEquals, order)
+					for _, names := range lanes {
+						if len(names) > 0 {
+							c.Assert(names, DeepEquals, order)
+						}
+					}
 				}
 			}
 			if err == nil {
@@ -1565,7 +1573,7 @@ func (s *S) TestReadDir(c *C) {
 			err := os.WriteFile(filepath.Join(layersDir, fmt.Sprintf("%03d-layer-%d.yaml", i, i)), reindent(yml), 0644)
 			c.Assert(err, IsNil)
 		}
-		sup, err := plan.ReadDir(pebbleDir)
+		sup, err := plan.ReadDir(layersDir)
 		if err == nil {
 			var result *plan.Layer
 			result, err = plan.CombineLayers(sup.Layers...)
@@ -1575,15 +1583,23 @@ func (s *S) TestReadDir(c *C) {
 			if err == nil {
 				for name, order := range test.start {
 					p := plan.Plan{Services: result.Services}
-					names, err := p.StartOrder([]string{name})
+					lanes, err := p.StartOrder([]string{name})
 					c.Assert(err, IsNil)
-					c.Assert(names, DeepEquals, order)
+					for _, names := range lanes {
+						if len(names) > 0 {
+							c.Assert(names, DeepEquals, order)
+						}
+					}
 				}
 				for name, order := range test.stop {
 					p := plan.Plan{Services: result.Services}
-					names, err := p.StopOrder([]string{name})
+					lanes, err := p.StopOrder([]string{name})
 					c.Assert(err, IsNil)
-					c.Assert(names, DeepEquals, order)
+					for _, names := range lanes {
+						if len(names) > 0 {
+							c.Assert(names, DeepEquals, order)
+						}
+					}
 				}
 			}
 		}
@@ -1617,7 +1633,7 @@ func (s *S) TestReadDirBadNames(c *C) {
 		fpath := filepath.Join(layersDir, fname)
 		err := os.WriteFile(fpath, []byte("<ignore>"), 0644)
 		c.Assert(err, IsNil)
-		_, err = plan.ReadDir(pebbleDir)
+		_, err = plan.ReadDir(layersDir)
 		c.Assert(err.Error(), Equals, fmt.Sprintf("invalid layer filename: %q (must look like \"123-some-label.yaml\")", fname))
 		err = os.Remove(fpath)
 		c.Assert(err, IsNil)
@@ -1641,7 +1657,7 @@ func (s *S) TestReadDirDupNames(c *C) {
 			err := os.WriteFile(fpath, []byte("summary: ignore"), 0644)
 			c.Assert(err, IsNil)
 		}
-		_, err = plan.ReadDir(pebbleDir)
+		_, err = plan.ReadDir(layersDir)
 		c.Assert(err.Error(), Equals, fmt.Sprintf("invalid layer filename: %q not unique (have %q already)", fnames[1], fnames[0]))
 		for _, fname := range fnames {
 			fpath := filepath.Join(layersDir, fname)
@@ -1938,4 +1954,94 @@ func (s *S) TestPebbleLabelPrefixReserved(c *C) {
 	// Validate fails if layer label has the reserved prefix "pebble-"
 	_, err := plan.ParseLayer(0, "pebble-foo", []byte("{}"))
 	c.Check(err, ErrorMatches, `cannot use reserved label prefix "pebble-"`)
+}
+
+func (s *S) TestStartStopOrderSingleLane(c *C) {
+	layer := &plan.Layer{
+		Summary:     "services with dependencies in the same lane",
+		Description: "a simple layer",
+		Services: map[string]*plan.Service{
+			"srv1": {
+				Name:     "srv1",
+				Override: "replace",
+				Command:  `cmd`,
+				Requires: []string{"srv2"},
+				Before:   []string{"srv2"},
+				Startup:  plan.StartupEnabled,
+			},
+			"srv2": {
+				Name:     "srv2",
+				Override: "replace",
+				Command:  `cmd`,
+				Requires: []string{"srv3"},
+				Before:   []string{"srv3"},
+				Startup:  plan.StartupEnabled,
+			},
+			"srv3": {
+				Name:     "srv3",
+				Override: "replace",
+				Command:  `cmd`,
+				Startup:  plan.StartupEnabled,
+			},
+		},
+		Checks:     map[string]*plan.Check{},
+		LogTargets: map[string]*plan.LogTarget{},
+	}
+
+	p := plan.Plan{Services: layer.Services}
+
+	lanes, err := p.StartOrder([]string{"srv1", "srv2", "srv3"})
+	c.Assert(err, IsNil)
+	c.Assert(len(lanes), Equals, 1)
+	c.Assert(lanes[0], DeepEquals, []string{"srv1", "srv2", "srv3"})
+
+	lanes, err = p.StopOrder([]string{"srv1", "srv2", "srv3"})
+	c.Assert(err, IsNil)
+	c.Assert(len(lanes), Equals, 1)
+	c.Assert(lanes[0], DeepEquals, []string{"srv3", "srv2", "srv1"})
+}
+
+func (s *S) TestStartStopOrderMultipleLanes(c *C) {
+	layer := &plan.Layer{
+		Summary:     "services with no dependencies in different lanes",
+		Description: "a simple layer",
+		Services: map[string]*plan.Service{
+			"srv1": {
+				Name:     "srv1",
+				Override: "replace",
+				Command:  `cmd`,
+				Startup:  plan.StartupEnabled,
+			},
+			"srv2": {
+				Name:     "srv2",
+				Override: "replace",
+				Command:  `cmd`,
+				Startup:  plan.StartupEnabled,
+			},
+			"srv3": {
+				Name:     "srv3",
+				Override: "replace",
+				Command:  `cmd`,
+				Startup:  plan.StartupEnabled,
+			},
+		},
+		Checks:     map[string]*plan.Check{},
+		LogTargets: map[string]*plan.LogTarget{},
+	}
+
+	p := plan.Plan{Services: layer.Services}
+
+	lanes, err := p.StartOrder([]string{"srv1", "srv2", "srv3"})
+	c.Assert(err, IsNil)
+	c.Assert(len(lanes), Equals, 3)
+	c.Assert(lanes[0], DeepEquals, []string{"srv1"})
+	c.Assert(lanes[1], DeepEquals, []string{"srv2"})
+	c.Assert(lanes[2], DeepEquals, []string{"srv3"})
+
+	lanes, err = p.StopOrder([]string{"srv1", "srv2", "srv3"})
+	c.Assert(err, IsNil)
+	c.Assert(len(lanes), Equals, 3)
+	c.Assert(lanes[0], DeepEquals, []string{"srv1"})
+	c.Assert(lanes[1], DeepEquals, []string{"srv2"})
+	c.Assert(lanes[2], DeepEquals, []string{"srv3"})
 }
