@@ -138,7 +138,7 @@ func Exec(st *state.State, args *ExecArgs) (*state.Task, ExecMetadata, error) {
 		GroupID:     args.GroupID,
 		WorkingDir:  workingDir,
 	}
-	task.Set("exec-setup", &setup)
+	st.Cache(execSetupKey{task.ID()}, &setup)
 
 	metadata := ExecMetadata{
 		TaskID:      task.ID(),
