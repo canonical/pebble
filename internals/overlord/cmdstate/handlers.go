@@ -70,13 +70,13 @@ type execution struct {
 }
 
 func (m *CommandManager) doExec(task *state.Task, tomb *tomb.Tomb) error {
-	var setup execSetup
 	st := task.State()
 	st.Lock()
-	err := task.Get("exec-setup", &setup)
+	setupObj := st.Cached(execSetupKey{task.ID()})
 	st.Unlock()
-	if err != nil {
-		return fmt.Errorf("cannot get exec setup object for task %q: %v", task.ID(), err)
+	setup, ok := setupObj.(*execSetup)
+	if !ok || setup == nil {
+		return fmt.Errorf("internal error: cannot get exec setup object for task %q", task.ID())
 	}
 
 	// Set up the object that will track the execution.

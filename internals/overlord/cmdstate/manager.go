@@ -18,6 +18,8 @@ import (
 	"net/http"
 	"sync"
 
+	"gopkg.in/tomb.v2"
+
 	"github.com/canonical/pebble/internals/overlord/state"
 )
 
@@ -34,7 +36,21 @@ func NewManager(runner *state.TaskRunner) *CommandManager {
 		executionsCond: sync.NewCond(&sync.Mutex{}),
 	}
 	runner.AddHandler("exec", manager.doExec, nil)
+
+	// Delete the in-memory execSetup object when the exec is done.
+	runner.AddCleanup("exec", func(task *state.Task, tomb *tomb.Tomb) error {
+		st := task.State()
+		st.Lock()
+		defer st.Unlock()
+		st.Cache(execSetupKey{task.ID()}, nil)
+		return nil
+	})
+
 	return manager
+}
+
+type execSetupKey struct {
+	taskID string
 }
 
 // Ensure is part of the overlord.StateManager interface.
