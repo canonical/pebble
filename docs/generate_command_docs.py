@@ -100,9 +100,9 @@ def create_file_if_not_exist(filepath: str, cmd: str) -> bool:
 
 
 def generate_help_command_and_output(cmd: str) -> typing.Tuple[str, str]:
-    help_cmd = ["pebble", "help"] if cmd == "help" else ["pebble", cmd, "--help"]
-    help_cmd_str = " ".join(help_cmd)
-    go_run_cmd = " ".join(["go", "run", "../cmd/pebble"] + help_cmd[1:])
+    args = ["help"] if cmd == "help" else [cmd, "--help"]
+    help_cmd_str = " ".join(["pebble"] + args)
+    go_run_cmd = " ".join(["go", "run", "../cmd/pebble"] + args)
     help_cmd_output = get_command_help_output(go_run_cmd).strip()
 
     output = f"""\
@@ -113,7 +113,7 @@ def generate_help_command_and_output(cmd: str) -> typing.Tuple[str, str]:
 ```
 <!-- END AUTOMATED OUTPUT -->"""
 
-    return help_cmd, output
+    return help_cmd_str, output
 
 
 def process_command(cmd: str, description: str):

@@ -81,11 +81,13 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
-        python-version: '3.10' 
+        python-version: '3.12' 
+
+    - name: Install tox
+      run: pip install tox~=4.17
 
     - name: Ensure no CLI reference doc changes
       run: |
-        python3 generate_command_docs.py
+        tox -e commands
         git diff --exit-code
       working-directory: ./docs
-
