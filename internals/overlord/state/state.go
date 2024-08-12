@@ -20,10 +20,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
+	"os/signal"
 	"sort"
 	"strconv"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
 
 	"github.com/canonical/pebble/internals/logger"
@@ -280,7 +283,6 @@ func (s *State) Unlocker() (unlock func() (relock func())) {
 // After too many unsuccessful checkpoint attempts, it panics.
 func (s *State) Unlock() {
 	defer s.unlock()
-
 	if !s.modified || s.backend == nil {
 		return
 	}
@@ -293,6 +295,22 @@ func (s *State) Unlock() {
 			s.modified = false
 			return
 		}
+
+		// Let the user know what's going on if the backend writes failed.
+		if _, ok := err.(*os.PathError); ok {
+			logger.Noticef("backend checkpoint failed: %v", err)
+		}
+
+		// Channel to listen for interrupt signals.
+		interrupt := make(chan os.Signal, 1)
+		signal.Notify(interrupt, syscall.SIGINT, syscall.SIGTERM)
+		// Listen for signals in a separate goroutine
+		go func() {
+			<-interrupt
+			logger.Panicf("backend checkpoint failed: %v", err)
+			os.Exit(1)
+		}()
+
 		time.Sleep(unlockCheckpointRetryInterval)
 	}
 	logger.Panicf("cannot checkpoint even after %v of retries every %v: %v", unlockCheckpointRetryMaxTime, unlockCheckpointRetryInterval, err)
