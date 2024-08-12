@@ -4,9 +4,9 @@
 
 It helps you orchestrate a set of local processes as an organised set. It resembles well-known tools such as _supervisord_, _runit_, or _s6_, in that it can easily manage non-system processes independently from the system services. However, it was designed with unique features such as layered configuration and an HTTP API that help with more specific use cases.
 
-Pebble fulfils the need for streamlined, dependable, and secure service management. It empowers you to efficiently operate your services with ease, resolve service interdependencies, configure tailored health checks to automatically restart services upon failure, and gain insightful visibility into Pebble server events for a comprehensive understanding of operational dynamics. Pebble also supports simple identity and access control, ensuring secure usage in shared environments.
+If you need a way to manage one or more services in a container, or as a non-root user on a machine, Pebble might be for you. It handles service logs, service dependencies, and allows you to set up ongoing health checks. Plus, it has an "HTTP over unix socket" API for all operations, with simple UID-based access control.
 
-Pebble caters to a diverse user base managing services both locally and within containerised environments, offering a robust solution for your workload management needs. It is also extensively used alongside [Juju and Charms](https://juju.is/).
+Pebble is useful for developers who are building [Juju charms on Kubernetes](https://juju.is/docs/sdk/from-zero-to-hero-write-your-first-kubernetes-charm), creating [Rocks](https://documentation.ubuntu.com/rockcraft/en/latest/explanation/rocks/) or Docker images, or orchestrating services in the virtual machine.
 
 ## In this documentation
 
