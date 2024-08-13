@@ -125,7 +125,7 @@ func New(opts *Options) (*Overlord, error) {
 		return nil, fmt.Errorf("directory %q does not exist", o.pebbleDir)
 	}
 	if !osutil.IsWritable(o.pebbleDir) {
-		return nil, fmt.Errorf("no write permission in directory %q", o.pebbleDir)
+		return nil, fmt.Errorf("directory %q not writable", o.pebbleDir)
 	}
 
 	statePath := filepath.Join(o.pebbleDir, cmd.StateFile)
