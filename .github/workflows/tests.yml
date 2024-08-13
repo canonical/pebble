@@ -70,3 +70,24 @@ jobs:
       run: |
         go fmt ./...
         git diff --exit-code
+
+  docs:
+    runs-on: ubuntu-latest
+
+    name: Automated docs check
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12' 
+
+    - name: Install tox
+      run: pip install tox~=4.17
+
+    - name: Ensure no CLI reference doc changes
+      run: |
+        tox -e commands
+        git diff --exit-code
+      working-directory: ./docs
