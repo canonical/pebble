@@ -124,6 +124,10 @@ func New(opts *Options) (*Overlord, error) {
 	if !osutil.IsDir(o.pebbleDir) {
 		return nil, fmt.Errorf("directory %q does not exist", o.pebbleDir)
 	}
+	if !osutil.IsWritable(o.pebbleDir) {
+		return nil, fmt.Errorf("directory %q not writable", o.pebbleDir)
+	}
+
 	statePath := filepath.Join(o.pebbleDir, cmd.StateFile)
 
 	backend := &overlordStateBackend{
@@ -256,7 +260,6 @@ func loadState(statePath string, restartHandler restart.Handler, backend state.B
 		patch.Init(s)
 		return s, restartMgr, nil
 	}
-
 	r, err := os.Open(statePath)
 	if err != nil {
 		return nil, nil, fmt.Errorf("cannot read the state file: %s", err)

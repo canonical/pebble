@@ -280,7 +280,6 @@ func (s *State) Unlocker() (unlock func() (relock func())) {
 // After too many unsuccessful checkpoint attempts, it panics.
 func (s *State) Unlock() {
 	defer s.unlock()
-
 	if !s.modified || s.backend == nil {
 		return
 	}
@@ -293,6 +292,9 @@ func (s *State) Unlock() {
 			s.modified = false
 			return
 		}
+
+		logger.Noticef("Cannot write state file, retrying: %v", err)
+
 		time.Sleep(unlockCheckpointRetryInterval)
 	}
 	logger.Panicf("cannot checkpoint even after %v of retries every %v: %v", unlockCheckpointRetryMaxTime, unlockCheckpointRetryInterval, err)
