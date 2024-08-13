@@ -293,7 +293,6 @@ func (s *State) Unlock() {
 			return
 		}
 
-		// Let the user know what's going on if the backend writes failed.
 		logger.Noticef("Cannot write state file, retrying: %v", err)
 
 		time.Sleep(unlockCheckpointRetryInterval)
