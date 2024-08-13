@@ -1,6 +1,6 @@
 # Identities
 
-Pebble has the concept of named "identities", which lets administrators allow additional users to access the [API](../explanation/api-and-clients.md).
+Pebble has the concept of named "identities", which lets administrators manage users' access to the [API](../explanation/api-and-clients.md).
 
 Each identity has a name, an access level, and an authentication type with type-specific configuration. Admins use the identities CLI commands to [manage identities](../how-to/manage-identities.md), and the identity configuration is persisted to disk.
 
@@ -26,7 +26,7 @@ identities:
             user-id: <uid>
 ```
 
-For example, a local identity named "bob" with UID 42 would be defined as follows:
+For example, a local identity named "bob" with UID 42 that is granted `admin` access would be defined as follows:
 
 ```yaml
 identities:
