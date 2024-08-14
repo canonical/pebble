@@ -49,9 +49,9 @@ For a hands-on introduction to Pebble, we recommend going through the [tutorial]
 
 ## Getting help
 
-If you need support, start with the [documentation](https://canonical-pebble.readthedocs-hosted.com/en/latest/).
+To get the most out of Pebble, we recommend starting with the [documentation](https://canonical-pebble.readthedocs-hosted.com/en/latest/).
 
-You can also [create an issue](https://github.com/canonical/pebble/issues/new) and we will help!
+You can [create an issue](https://github.com/canonical/pebble/issues/new) and we will help!
 
 ## Hacking and development
 
