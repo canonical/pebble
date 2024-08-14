@@ -17,15 +17,13 @@ Pebble's key features:
 - [Health checks](https://canonical-pebble.readthedocs-hosted.com/en/latest/reference/health-checks/)
 - [Notices](https://canonical-pebble.readthedocs-hosted.com/en/latest/reference/notices/) (aggregated events)
 - [Identities](https://canonical-pebble.readthedocs-hosted.com/en/latest/how-to/manage-identities/)
-- Can be used in machines and [containers](https://canonical-pebble.readthedocs-hosted.com/en/latest/reference/pebble-in-containers/)
+- Can be used in virtual machines and [containers](https://canonical-pebble.readthedocs-hosted.com/en/latest/reference/pebble-in-containers/)
 - [CLI commands](https://canonical-pebble.readthedocs-hosted.com/en/latest/reference/cli-commands/cli-commands/)
 - [HTTP API](https://canonical-pebble.readthedocs-hosted.com/en/latest/explanation/api-and-clients/) with a [Go client](https://pkg.go.dev/github.com/canonical/pebble/client) and a [Python client](https://github.com/canonical/operator/blob/main/ops/pebble.py)
 
 ## Quick start
 
-Prerequisites:
-
-- A Linux machine.
+At any Linux shell:
 
 ```bash
 go install github.com/canonical/pebble/cmd/pebble@latest
