@@ -45,7 +45,7 @@ pebble run
 
 Read more about Pebble's general model [here](https://canonical-pebble.readthedocs-hosted.com/en/latest/explanation/general-model/).
 
-For a slightly longer introduction, you can also go through the [official tutorial](https://canonical-pebble.readthedocs-hosted.com/en/latest/tutorial/getting-started/)
+For a hands-on introduction to Pebble, we recommend going through the [tutorial](https://canonical-pebble.readthedocs-hosted.com/en/latest/tutorial/getting-started/).
 
 ## Getting help
 
