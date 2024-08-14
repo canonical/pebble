@@ -32,9 +32,9 @@ Now that Pebble has been installed, we can set up a basic configuration.
 First, let's create a directory for Pebble configuration and add the `PEBBLE` environment variable to `~/.bashrc`. 
 
 ```bash
-mkdir -p ~/PEBBLE/layers
-export PEBBLE=$HOME/PEBBLE
-echo "export PEBBLE=$HOME/PEBBLE" >> ~/.bashrc
+mkdir -p ~/.config/pebble/layers
+export PEBBLE=$HOME/.config/pebble
+echo "export PEBBLE=$HOME/.config/pebble" >> ~/.bashrc
 ```
 
 Next, create a [configuration layer](../reference/layers.md) by running:
