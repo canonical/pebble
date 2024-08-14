@@ -10,7 +10,7 @@ By default any UID (user ID) connected to the API socket is a `read` user; UID 0
 
 ## Add new identities
 
-To extend this to additional users, add named identities using the [`add-identities`](../reference/cli-commands/add-identities.md) command with a YAML file configuring the details. For example, to add a new admin "bob" with UID 42 and a new read user "alice" with UID 2000, prepare this file:
+To extend access to Pebble's API to additional users, add named identities using the [`add-identities`](../reference/cli-commands/add-identities.md) command with a YAML file configuring the details. For example, to add a new admin "bob" with UID 42 and a new read user "alice" with UID 2000, prepare this file:
 
 ```yaml
 # idents-add.yaml
