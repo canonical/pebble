@@ -29,8 +29,8 @@ Prerequisites:
 
 ```bash
 go install github.com/canonical/pebble/cmd/pebble@latest
-mkdir -p ~/pebble_home/layers
-export PEBBLE=$HOME/pebble_home
+mkdir -p ~/.config/pebble/layers
+export PEBBLE=$HOME/.config/pebble
 
 echo """\
 services:
