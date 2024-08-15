@@ -11,7 +11,7 @@ Pebble is useful for developers who are building [Juju charms on Kubernetes](htt
 ## In this documentation
 
 ````{grid} 1 1 2 2
-```{grid-item-card} [Tutorials](tutorial/getting-started)
+```{grid-item-card} [Tutorial](tutorial/getting-started)
 **Start here**: a hands-on getting started introduction to Pebble for new users.
 ```
 
