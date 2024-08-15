@@ -11,22 +11,30 @@ Pebble is useful for developers who are building [Juju charms on Kubernetes](htt
 ## In this documentation
 
 ````{grid} 1 1 2 2
-```{grid-item-card} [Tutorial](tutorial/getting-started)
+```{grid-item-card} [Tutorials](tutorial/getting-started)
 **Start here**: a hands-on getting started introduction to Pebble for new users.
 ```
 
 ```{grid-item-card} [How-to guides](how-to/index)
 **Step-by-step guides** covering key operations and common tasks.
+- [Install Pebble](how-to/install-pebble)
+- [Manage service dependencies](how-to/service-dependencies)
+- [Manage identities](how-to/manage-identities)
 ```
 ````
 
 ````{grid} 1 1 2 2
 ```{grid-item-card} [Explanation](explanation/index)
 **Discussion and clarification** of key topics.
+- [General model](explanation/general-model.md)
+- [API and clients](explanation/api-and-clients.md)
 ```
 
 ```{grid-item-card} [Reference](reference/index)
-**Technical information** - specifications, APIs, and architecture.
+**Technical information**
+- [Layer specification](reference/layer-specification)
+- [CLI commands](reference/cli-commands/cli-commands)
+- [Pebble in containers](reference/pebble-in-containers)
 ```
 ````
 
