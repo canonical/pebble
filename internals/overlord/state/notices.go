@@ -26,6 +26,8 @@ import (
 const (
 	// defaultNoticeExpireAfter is the default expiry time for notices.
 	defaultNoticeExpireAfter = 7 * 24 * time.Hour
+
+	warningRepeatAfter = 24 * time.Hour
 )
 
 // Notice represents an aggregated notice. The combination of type and key is unique.
@@ -194,9 +196,6 @@ const (
 
 	// Warnings are a subset of notices where the key is a human-readable
 	// warning message.
-	//
-	// NOTE: This isn't used yet. See comment at the top of
-	// internals/overlord/state/notices.go for more info.
 	WarningNotice NoticeType = "warning"
 )
 
@@ -278,6 +277,24 @@ func (s *State) AddNotice(userID *uint32, noticeType NoticeType, key string, opt
 	return notice.id, nil
 }
 
+// Warnf records a warning: if it's the first Warning with this message it'll
+// be added (with its firstOccurred and lastOccurred set to the current time),
+// otherwise the existing one will have its lastOccurred updated.
+func (s *State) Warnf(template string, args ...interface{}) {
+	var message string
+	if len(args) > 0 {
+		message = fmt.Sprintf(template, args...)
+	} else {
+		message = template
+	}
+	_, err := s.AddNotice(nil, WarningNotice, message, &AddNoticeOptions{
+		RepeatAfter: warningRepeatAfter,
+	})
+	if err != nil {
+		panic(fmt.Sprintf("internal error: error adding warning notice: %v", err))
+	}
+}
+
 func validateNotice(noticeType NoticeType, key string, options *AddNoticeOptions) error {
 	if !noticeType.Valid() {
 		return fmt.Errorf("internal error: attempted to add notice with invalid type %q", noticeType)
@@ -350,6 +367,22 @@ func (s *State) Notices(filter *NoticeFilter) []*Notice {
 		return notices[i].lastRepeated.Before(notices[j].lastRepeated)
 	})
 	return notices
+}
+
+// LatestWarningTime returns the most recent time a warning notice was
+// repeated, or the zero value if there are no warnings.
+func (s *State) LatestWarningTime() time.Time {
+	s.reading()
+
+	// TODO(benhoyt): optimise with an in-memory atomic cache when warnings are added (or pruned),
+	//                to avoid having to acquire the state lock on every request
+	var latest time.Time
+	for _, notice := range s.notices {
+		if notice.noticeType == WarningNotice && notice.lastRepeated.After(latest) {
+			latest = notice.lastRepeated
+		}
+	}
+	return latest
 }
 
 // Notice returns a single notice by ID, or nil if not found.

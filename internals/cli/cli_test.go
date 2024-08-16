@@ -56,8 +56,6 @@ func (s *BasePebbleSuite) SetUpTest(c *C) {
 	s.AddCleanup(cli.FakeIsStdoutTTY(false))
 	s.AddCleanup(cli.FakeIsStdinTTY(false))
 
-	os.Setenv("PEBBLE_LAST_WARNING_TIMESTAMP_FILENAME", filepath.Join(c.MkDir(), "warnings.json"))
-
 	oldConfigHome := os.Getenv("XDG_CONFIG_HOME")
 	s.AddCleanup(func() {
 		os.Setenv("XDG_CONFIG_HOME", oldConfigHome)
@@ -75,8 +73,6 @@ func (s *BasePebbleSuite) TearDownTest(c *C) {
 	cli.Stdout = os.Stdout
 	cli.Stderr = os.Stderr
 	cli.ReadPassword = term.ReadPassword
-
-	os.Setenv("PEBBLE_LAST_WARNING_TIMESTAMP_FILENAME", "")
 
 	s.BaseTest.TearDownTest(c)
 }
@@ -141,7 +137,7 @@ func (s *PebbleSuite) TestErrorResult(c *C) {
 		fmt.Fprintln(w, `{"type": "error", "result": {"message": "cannot do something"}}`)
 	})
 
-	restore := fakeArgs("pebble", "warnings")
+	restore := fakeArgs("pebble", "notices")
 	defer restore()
 
 	err := cli.RunMain()
@@ -167,7 +163,7 @@ func (s *PebbleSuite) TestGetEnvPaths(c *C) {
 	c.Assert(socketPath, Equals, "/path/to/socket")
 }
 
-func (s *PebbleSuite) readCLIState(c *C) map[string]any {
+func (s *BasePebbleSuite) readCLIState(c *C) map[string]any {
 	data, err := os.ReadFile(s.cliStatePath)
 	c.Assert(err, IsNil)
 	var fullState map[string]any
@@ -187,7 +183,7 @@ func (s *PebbleSuite) readCLIState(c *C) map[string]any {
 	return v.(map[string]any)
 }
 
-func (s *PebbleSuite) writeCLIState(c *C, st map[string]any) {
+func (s *BasePebbleSuite) writeCLIState(c *C, st map[string]any) {
 	_, socketPath := cli.GetEnvPaths()
 	fullState := map[string]any{
 		"pebble": map[string]any{

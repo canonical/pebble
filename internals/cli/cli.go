@@ -356,7 +356,11 @@ func Run(options *RunOptions) error {
 		return nil
 	}
 
-	maybePresentWarnings(cli.WarningsSummary())
+	state, err := loadCLIState(config.Socket)
+	if err != nil {
+		return fmt.Errorf("cannot load CLI state: %w", err)
+	}
+	maybePresentWarnings(state.WarningsLastListed, cli.LatestWarningTime())
 
 	return nil
 }
@@ -418,6 +422,9 @@ func getCopySource() string {
 type cliState struct {
 	NoticesLastListed time.Time `json:"notices-last-listed"`
 	NoticesLastOkayed time.Time `json:"notices-last-okayed"`
+
+	WarningsLastListed time.Time `json:"warnings-last-listed"`
+	WarningsLastOkayed time.Time `json:"warnings-last-okayed"`
 }
 
 type fullCLIState struct {

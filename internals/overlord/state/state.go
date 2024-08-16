@@ -91,7 +91,6 @@ type State struct {
 	data       customData
 	changes    map[string]*Change
 	tasks      map[string]*Task
-	warnings   map[string]*Warning
 	notices    map[noticeKey]*Notice
 	identities map[string]*Identity
 
@@ -115,7 +114,6 @@ func New(backend Backend) *State {
 		data:                make(customData),
 		changes:             make(map[string]*Change),
 		tasks:               make(map[string]*Task),
-		warnings:            make(map[string]*Warning),
 		notices:             make(map[noticeKey]*Notice),
 		identities:          make(map[string]*Identity),
 		modified:            true,
@@ -161,7 +159,6 @@ type marshalledState struct {
 	Data       map[string]*json.RawMessage    `json:"data"`
 	Changes    map[string]*Change             `json:"changes"`
 	Tasks      map[string]*Task               `json:"tasks"`
-	Warnings   []*Warning                     `json:"warnings,omitempty"`
 	Notices    []*Notice                      `json:"notices,omitempty"`
 	Identities map[string]*marshalledIdentity `json:"identities,omitempty"`
 
@@ -189,7 +186,6 @@ func (s *State) MarshalJSON() ([]byte, error) {
 		Data:       s.data,
 		Changes:    s.changes,
 		Tasks:      s.tasks,
-		Warnings:   s.flattenWarnings(),
 		Notices:    s.flattenNotices(nil),
 		Identities: s.marshalledIdentities(),
 
@@ -222,7 +218,6 @@ func (s *State) UnmarshalJSON(data []byte) error {
 	s.data = unmarshalled.Data
 	s.changes = unmarshalled.Changes
 	s.tasks = unmarshalled.Tasks
-	s.unflattenWarnings(unmarshalled.Warnings)
 	s.unflattenNotices(unmarshalled.Notices)
 	s.unmarshalIdentities(unmarshalled.Identities)
 	s.lastChangeId = unmarshalled.LastChangeId
@@ -505,12 +500,6 @@ func (s *State) Prune(startOfOperation time.Time, pruneWait, abortWait time.Dura
 			break
 		}
 		readyChangesCount++
-	}
-
-	for k, w := range s.warnings {
-		if w.ExpiredBefore(now) {
-			delete(s.warnings, k)
-		}
 	}
 
 	for k, n := range s.notices {

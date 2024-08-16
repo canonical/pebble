@@ -34,10 +34,33 @@ func (s *PebbleSuite) TestOkay(c *C) {
 	c.Check(s.Stdout(), Equals, "")
 	c.Check(s.Stderr(), Equals, "")
 
-	cliState := s.readCLIState(c)
+	cliState := s.readNoticesCLIState(c)
 	c.Check(cliState, DeepEquals, map[string]any{
 		"notices-last-listed": "2023-09-06T15:06:00Z",
 		"notices-last-okayed": "2023-09-06T15:06:00Z",
+	})
+}
+
+func (s *PebbleSuite) TestOkayWarnings(c *C) {
+	s.writeCLIState(c, map[string]any{
+		"notices-last-listed":  time.Date(2023, 9, 6, 15, 6, 0, 0, time.UTC),
+		"notices-last-okayed":  time.Time{},
+		"warnings-last-listed": time.Date(2024, 9, 6, 15, 6, 0, 0, time.UTC),
+		"warnings-last-okayed": time.Time{},
+	})
+
+	rest, err := cli.ParserForTest().ParseArgs([]string{"okay", "--warnings"})
+	c.Assert(err, IsNil)
+	c.Check(rest, HasLen, 0)
+	c.Check(s.Stdout(), Equals, "")
+	c.Check(s.Stderr(), Equals, "")
+
+	cliState := s.readCLIState(c)
+	c.Check(cliState, DeepEquals, map[string]any{
+		"notices-last-listed":  "2023-09-06T15:06:00Z",
+		"notices-last-okayed":  "0001-01-01T00:00:00Z",
+		"warnings-last-listed": "2024-09-06T15:06:00Z",
+		"warnings-last-okayed": "2024-09-06T15:06:00Z",
 	})
 }
 

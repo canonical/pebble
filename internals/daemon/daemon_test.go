@@ -326,14 +326,13 @@ func (s *daemonSuite) TestFillsWarnings(c *C) {
 	cmd.ServeHTTP(rec, req)
 	c.Check(rec.Code, Equals, 200)
 	var rst struct {
-		WarningTimestamp *time.Time `json:"warning-timestamp,omitempty"`
-		WarningCount     int        `json:"warning-count,omitempty"`
+		LatestWarning *time.Time `json:"latest-warning"`
 	}
 	err = json.Unmarshal(rec.Body.Bytes(), &rst)
 	c.Assert(err, IsNil)
-	c.Check(rst.WarningCount, Equals, 0)
-	c.Check(rst.WarningTimestamp, IsNil)
+	c.Check(rst.LatestWarning, IsNil)
 
+	now := time.Now()
 	st := d.overlord.State()
 	st.Lock()
 	st.Warnf("hello world")
@@ -344,8 +343,8 @@ func (s *daemonSuite) TestFillsWarnings(c *C) {
 	c.Check(rec.Code, Equals, 200)
 	err = json.Unmarshal(rec.Body.Bytes(), &rst)
 	c.Assert(err, IsNil)
-	c.Check(rst.WarningCount, Equals, 1)
-	c.Check(rst.WarningTimestamp, NotNil)
+	c.Assert(rst.LatestWarning, NotNil)
+	c.Check(rst.LatestWarning.Sub(now) < time.Second, Equals, true)
 }
 
 type accessCheckerTestCase struct {
@@ -1357,13 +1356,6 @@ func (s *daemonSuite) TestAPIAccessLevels(c *C) {
 		{"GET", "/v1/system-info", ``, -1, http.StatusOK},
 
 		{"GET", "/v1/health", ``, -1, http.StatusOK},
-
-		{"GET", "/v1/warnings", ``, -1, http.StatusUnauthorized},
-		{"GET", "/v1/warnings", ``, 42, http.StatusOK},
-		{"GET", "/v1/warnings", ``, 0, http.StatusOK},
-		{"POST", "/v1/warnings", ``, -1, http.StatusUnauthorized},
-		{"POST", "/v1/warnings", ``, 42, http.StatusUnauthorized},
-		{"POST", "/v1/warnings", ``, 0, http.StatusBadRequest},
 
 		{"GET", "/v1/changes", ``, -1, http.StatusUnauthorized},
 		{"GET", "/v1/changes", ``, 42, http.StatusOK},
