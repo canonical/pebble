@@ -25,7 +25,8 @@ type checkDetails struct {
 	Name     string `json:"name"`
 	Failures int    `json:"failures"`
 	// Whether to proceed to next check type when change is ready
-	Proceed bool `json:"proceed,omitempty"`
+	Proceed         bool `json:"proceed,omitempty"`
+	HasInitialDelay bool `json:"hasinitialdelay,omitempty"`
 }
 
 type performConfigKey struct {

@@ -38,6 +38,16 @@ func (m *CheckManager) doPerformCheck(task *state.Task, tomb *tombpkg.Tomb) erro
 		return fmt.Errorf("cannot get check details for perform-check task %q: %v", task.ID(), err)
 	}
 
+	if !details.HasInitialDelay && config.Delay.Value > 0 {
+		details.HasInitialDelay = true
+		logger.Debugf("Initial delay for check %q: %v", config.Name, config.Delay.Value)
+		select {
+		case <-time.After(config.Delay.Value):
+		case <-tomb.Dying():
+			return checkStopped(config.Name, task.Kind(), tomb.Err())
+		}
+	}
+
 	logger.Debugf("Performing check %q with period %v", details.Name, config.Period.Value)
 	ticker := time.NewTicker(config.Period.Value)
 	defer ticker.Stop()

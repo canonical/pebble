@@ -40,6 +40,8 @@ const (
 	defaultCheckPeriod    = 10 * time.Second
 	defaultCheckTimeout   = 3 * time.Second
 	defaultCheckThreshold = 3
+
+	defaultDelayTimeout = 0 * time.Second
 )
 
 type Plan struct {
@@ -311,6 +313,7 @@ type Check struct {
 	Period    OptionalDuration `yaml:"period,omitempty"`
 	Timeout   OptionalDuration `yaml:"timeout,omitempty"`
 	Threshold int              `yaml:"threshold,omitempty"`
+	Delay     OptionalDuration `yaml:"delay,omitempty"`
 
 	// Type-specific check settings (only one of these can be set)
 	HTTP *HTTPCheck `yaml:"http,omitempty"`
@@ -346,6 +349,9 @@ func (c *Check) Merge(other *Check) {
 	}
 	if other.Threshold != 0 {
 		c.Threshold = other.Threshold
+	}
+	if other.Delay.IsSet {
+		c.Delay = other.Delay
 	}
 	if other.HTTP != nil {
 		if c.HTTP == nil {
@@ -676,6 +682,9 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 			// action, default is >1 to avoid flapping due to glitches. For
 			// what it's worth, Kubernetes probes uses a default of 3 too.
 			check.Threshold = defaultCheckThreshold
+		}
+		if !check.Delay.IsSet {
+			check.Delay.Value = defaultDelayTimeout
 		}
 	}
 
