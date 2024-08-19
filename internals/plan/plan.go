@@ -95,30 +95,11 @@ type Plan struct {
 	Sections map[string]LayerSection `yaml:",inline"`
 }
 
-// Section retrieves a section from the plan.
-func (p *Plan) Section(field string, out interface{}) error {
-	if _, found := layerExtensions[field]; !found {
-		return fmt.Errorf("cannot find registered extension for field %q", field)
-	}
-
-	outVal := reflect.ValueOf(out)
-	if outVal.Kind() != reflect.Ptr || outVal.IsNil() {
-		return fmt.Errorf("cannot read non pointer to section type %q", outVal.Kind())
-	}
-
-	section, exists := p.Sections[field]
-	if !exists {
-		return fmt.Errorf("internal error: section %q is nil", field)
-	}
-
-	sectionVal := reflect.ValueOf(section)
-	sectionType := sectionVal.Type()
-	outValPtrType := outVal.Elem().Type()
-	if !sectionType.AssignableTo(outValPtrType) {
-		return fmt.Errorf("cannot assign value of type %s to out argument of type %s", sectionType, outValPtrType)
-	}
-	outVal.Elem().Set(sectionVal)
-	return nil
+// Section retrieves a section from the plan. If Section is called
+// before the plan is loaded, or with an unregistered field, this method
+// will return nil.
+func (p *Plan) Section(field string) LayerSection {
+	return p.Sections[field]
 }
 
 // MarshalYAML implements an override for top level omitempty tags handling.

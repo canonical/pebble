@@ -381,7 +381,7 @@ func (s *S) TestPlanExtensions(c *C) {
 			if _, ok := planTest.extensions[xField]; ok {
 				// Verify "x-field" data.
 				var x *xSection
-				err = p.Section(xField, &x)
+				x = p.Section(xField).(*xSection)
 				c.Assert(err, IsNil)
 				c.Assert(x.Entries, DeepEquals, planTest.combinedPlanResult.x.Entries)
 			}
@@ -389,7 +389,7 @@ func (s *S) TestPlanExtensions(c *C) {
 			if _, ok := planTest.extensions[yField]; ok {
 				// Verify "y-field" data.
 				var y *ySection
-				err = p.Section(yField, &y)
+				y = p.Section(yField).(*ySection)
 				c.Assert(err, IsNil)
 				c.Assert(y.Entries, DeepEquals, planTest.combinedPlanResult.y.Entries)
 			}
@@ -451,19 +451,10 @@ func (x xExtension) CombineSections(sections ...plan.LayerSection) (plan.LayerSe
 
 func (x xExtension) ValidatePlan(p *plan.Plan) error {
 	var xs *xSection
-	err := p.Section(xField, &xs)
-	if err != nil {
-		return err
-	}
+	xs = p.Section(xField).(*xSection)
 	if xs != nil {
 		var ys *ySection
-		err = p.Section(yField, &ys)
-		if err != nil {
-			return err
-		}
-		if ys == nil {
-			return fmt.Errorf("cannot validate %v field without %v field", xField, yField)
-		}
+		ys = p.Section(yField).(*ySection)
 
 		// Test dependency: Make sure every Y field in X refer to an existing Y entry.
 		for xEntryField, xEntryValue := range xs.Entries {
