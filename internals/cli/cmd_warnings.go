@@ -73,17 +73,22 @@ func (cmd *cmdWarnings) Execute(args []string) error {
 		return ErrExtraArgs
 	}
 
-	state, err := loadCLIState(cmd.socketPath)
-	if err != nil {
-		return fmt.Errorf("cannot load CLI state: %w", err)
+	options := &client.NoticesOptions{
+		Types: []client.NoticeType{client.WarningNotice},
+	}
+	var state *cliState
+	if !cmd.All {
+		var err error
+		state, err = loadCLIState(cmd.socketPath)
+		if err != nil {
+			return fmt.Errorf("cannot load CLI state: %w", err)
+		}
+		options.After = state.WarningsLastOkayed
 	}
 
-	warnings, err := cmd.client.Notices(&client.NoticesOptions{
-		Types: []client.NoticeType{client.WarningNotice},
-		After: state.WarningsLastOkayed,
-	})
+	warnings, err := cmd.client.Notices(options)
 	if len(warnings) == 0 {
-		if state.WarningsLastOkayed.IsZero() {
+		if cmd.All || state.WarningsLastOkayed.IsZero() {
 			fmt.Fprintln(Stderr, "No warnings.")
 		} else {
 			fmt.Fprintln(Stderr, "No further warnings.")
@@ -117,10 +122,12 @@ func (cmd *cmdWarnings) Execute(args []string) error {
 		w.Flush()
 	}
 
-	state.WarningsLastListed = warnings[len(warnings)-1].LastRepeated
-	err = saveCLIState(cmd.socketPath, state)
-	if err != nil {
-		return fmt.Errorf("cannot save CLI state: %w", err)
+	if !cmd.All {
+		state.WarningsLastListed = warnings[len(warnings)-1].LastRepeated
+		err = saveCLIState(cmd.socketPath, state)
+		if err != nil {
+			return fmt.Errorf("cannot save CLI state: %w", err)
+		}
 	}
 
 	return nil
