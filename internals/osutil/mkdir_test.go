@@ -15,6 +15,7 @@
 package osutil_test
 
 import (
+	"fmt"
 	"os"
 	"os/user"
 	"strconv"
@@ -162,6 +163,32 @@ func (mkdirSuite) TestMakeParentsAndChmod(c *check.C) {
 	info, err = os.Stat(tmpDir + "/foo/bar")
 	c.Assert(err, check.IsNil)
 	c.Assert(info.Mode().Perm(), check.Equals, os.FileMode(0o777))
+}
+
+// Concurrent calls to osutil.Mkdir must not race
+func (mkdirSuite) TestMakeParentsCollideAndChmod(c *check.C) {
+	tmpDir := c.MkDir()
+	results := make(chan error)
+	spread := 2
+	nFiles := 0
+	dirs := make([]string, spread*spread)
+	for pDir := range spread {
+		for cDir := range spread {
+			dir := fmt.Sprintf("%s/foo/%d/%d", tmpDir, pDir, cDir)
+			go func(path string) {
+				results <- osutil.Mkdir(path, 0o777, &osutil.MkdirOptions{MakeParents: true, Chmod: true})
+			}(dir)
+			dirs[nFiles] = dir
+			nFiles++
+		}
+	}
+	for range nFiles {
+		c.Assert(<-results, check.IsNil)
+	}
+	for _, dir := range dirs {
+		fmt.Printf(dir)
+		c.Assert(osutil.IsDir(dir), check.Equals, true)
+	}
 }
 
 func (mkdirSuite) TestMakeParentsAndNoChmod(c *check.C) {
