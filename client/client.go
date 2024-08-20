@@ -147,9 +147,8 @@ type Config struct {
 type Client struct {
 	requester Requester
 
-	maintenance      error
-	warningCount     int
-	warningTimestamp time.Time
+	maintenance   error
+	latestWarning time.Time
 
 	getWebsocket getWebsocketFunc
 
@@ -219,11 +218,10 @@ func (client *Client) Maintenance() error {
 	return client.maintenance
 }
 
-// WarningsSummary returns the number of warnings that are ready to be shown to
-// the user, and the timestamp of the most recently added warning (useful for
-// silencing the warning alerts, and OKing the returned warnings).
-func (client *Client) WarningsSummary() (count int, timestamp time.Time) {
-	return client.warningCount, client.warningTimestamp
+// LatestWarningTime returns the most recent time a warning notice was
+// repeated, or the zero value if there are no warnings.
+func (client *Client) LatestWarningTime() time.Time {
+	return client.latestWarning
 }
 
 // RequestError is returned when there's an error processing the request.
@@ -377,8 +375,7 @@ func (rq *defaultRequester) Do(ctx context.Context, opts *RequestOptions) (*Requ
 
 	// Warnings are only included if not an error type response, so we don't
 	// replace valid local warnings with an empty state that comes from a failure.
-	rq.client.warningCount = serverResp.WarningCount
-	rq.client.warningTimestamp = serverResp.WarningTimestamp
+	rq.client.latestWarning = serverResp.LatestWarning
 
 	// Common response
 	return &RequestResponse{
@@ -447,16 +444,13 @@ func (client *Client) doAsync(method, path string, query url.Values, headers map
 // A response produced by the REST API will usually fit in this
 // (exceptions are the icons/ endpoints obvs)
 type response struct {
-	Result     json.RawMessage `json:"result"`
-	Status     string          `json:"status"`
-	StatusCode int             `json:"status-code"`
-	Type       string          `json:"type"`
-	Change     string          `json:"change"`
-
-	WarningCount     int       `json:"warning-count"`
-	WarningTimestamp time.Time `json:"warning-timestamp"`
-
-	Maintenance *Error `json:"maintenance"`
+	Result        json.RawMessage `json:"result"`
+	Status        string          `json:"status"`
+	StatusCode    int             `json:"status-code"`
+	Type          string          `json:"type"`
+	Change        string          `json:"change"`
+	LatestWarning time.Time       `json:"latest-warning"`
+	Maintenance   *Error          `json:"maintenance"`
 }
 
 // Error is the real value of response.Result when an error occurs.

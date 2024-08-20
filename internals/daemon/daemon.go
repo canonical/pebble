@@ -250,9 +250,9 @@ func (c *Command) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if rsp.Type != ResponseTypeError {
 			st := c.d.state
 			st.Lock()
-			count, stamp := st.WarningsSummary()
+			latest := st.LatestWarningTime()
 			st.Unlock()
-			rsp.addWarningsToMeta(count, stamp)
+			rsp.addWarningsToMeta(latest)
 		}
 	}
 

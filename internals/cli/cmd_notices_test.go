@@ -69,11 +69,20 @@ ID   User    Type     Key    First                 Repeated              Occurre
 `[1:])
 	c.Check(s.Stderr(), Equals, "")
 
-	cliState := s.readCLIState(c)
+	cliState := s.readNoticesCLIState(c)
 	c.Check(cliState, DeepEquals, map[string]any{
 		"notices-last-listed": "2023-09-06T18:18:00Z",
 		"notices-last-okayed": "0001-01-01T00:00:00Z",
 	})
+}
+
+func (s *PebbleSuite) readNoticesCLIState(c *C) map[string]any {
+	fullCLIState := s.readCLIState(c)
+	cliState := map[string]any{
+		"notices-last-listed": fullCLIState["notices-last-listed"],
+		"notices-last-okayed": fullCLIState["notices-last-okayed"],
+	}
+	return cliState
 }
 
 func (s *PebbleSuite) TestNoticesFiltersUsers(c *C) {
@@ -112,7 +121,7 @@ ID   User  Type    Key    First                 Repeated              Occurrence
 `[1:])
 	c.Check(s.Stderr(), Equals, "")
 
-	cliState := s.readCLIState(c)
+	cliState := s.readNoticesCLIState(c)
 	c.Check(cliState, DeepEquals, map[string]any{
 		"notices-last-listed": "2023-09-05T18:18:00Z",
 		"notices-last-okayed": "0001-01-01T00:00:00Z",
@@ -155,7 +164,7 @@ ID   User  Type    Key    First                 Repeated              Occurrence
 `[1:])
 	c.Check(s.Stderr(), Equals, "")
 
-	cliState := s.readCLIState(c)
+	cliState := s.readNoticesCLIState(c)
 	c.Check(cliState, DeepEquals, map[string]any{
 		"notices-last-listed": "2023-09-05T18:18:00Z",
 		"notices-last-okayed": "0001-01-01T00:00:00Z",
@@ -200,7 +209,7 @@ ID   User  Type    Key    First                 Repeated              Occurrence
 `[1:])
 	c.Check(s.Stderr(), Equals, "")
 
-	cliState := s.readCLIState(c)
+	cliState := s.readNoticesCLIState(c)
 	c.Check(cliState, DeepEquals, map[string]any{
 		"notices-last-listed": "2023-09-07T18:18:00Z",
 		"notices-last-okayed": "2023-08-04T01:02:03Z",
@@ -261,7 +270,7 @@ ID   User  Type    Key    First                 Repeated              Occurrence
 `[1:])
 	c.Check(s.Stderr(), Equals, "")
 
-	cliState := s.readCLIState(c)
+	cliState := s.readNoticesCLIState(c)
 	c.Check(cliState, DeepEquals, map[string]any{
 		"notices-last-listed": "2023-09-05T18:18:00Z",
 		"notices-last-okayed": "0001-01-01T00:00:00Z",

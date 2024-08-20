@@ -340,3 +340,29 @@ func (cs *clientSuite) TestNonExistentSocketErrors(c *C) {
 	c.Check(notFoundErr.Path, Equals, "/tmp/not-the-droids-you-are-looking-for")
 	c.Check(notFoundErr.Err, NotNil)
 }
+
+func (cs *clientSuite) TestLatestWarningTime(c *C) {
+	cs.rsp = `{
+		"result": {
+			"version": "1.15.0",
+			"boot-id": "BOOTID"
+		},
+		"status": "OK",
+		"status-code": 200,
+		"type": "sync",
+		"latest-warning": "2018-09-19T12:44:19.680362867Z"
+	}`
+
+	info, err := cs.cli.SysInfo()
+	c.Assert(err, IsNil)
+	c.Check(info, DeepEquals, &client.SysInfo{
+		Version: "1.15.0",
+		BootID:  "BOOTID",
+	})
+	c.Check(cs.req.Method, Equals, "GET")
+	c.Check(cs.req.URL.Path, Equals, "/v1/system-info")
+
+	// this could be done at the end of any sync method
+	latest := cs.cli.LatestWarningTime()
+	c.Check(latest, Equals, time.Date(2018, 9, 19, 12, 44, 19, 680362867, time.UTC))
+}

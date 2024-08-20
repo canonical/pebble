@@ -18,8 +18,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
-	"path/filepath"
 	"time"
 
 	"gopkg.in/check.v1"
@@ -33,35 +31,40 @@ type warningSuite struct {
 
 var _ = check.Suite(&warningSuite{})
 
-const twoWarnings = `{
-			"result": [
-			    {
-				"expire-after": "672h0m0s",
-				"first-added": "2018-09-19T12:41:18.505007495Z",
-				"last-added": "2018-09-19T12:41:18.505007495Z",
-				"message": "hello world number one",
-				"repeat-after": "24h0m0s"
-			    },
-			    {
-				"expire-after": "672h0m0s",
-				"first-added": "2018-09-19T12:44:19.680362867Z",
-				"last-added": "2018-09-19T12:44:19.680362867Z",
-				"message": "hello world number two",
-				"repeat-after": "24h0m0s"
-			    },
-				{
-				"expire-after": "672h0m0s",
-				"first-added": "2018-09-19T12:44:30.680362867Z",
-				"last-added": "2018-09-19T12:44:30.680362867Z",
-				"last-shown": "2018-09-19T12:44:50.680362867Z",
-				"message": "hello world number three",
-				"repeat-after": "24h0m0s"
-			    }
-			],
-			"status": "OK",
-			"status-code": 200,
-			"type": "sync"
-		}`
+const testWarnings = `
+{
+	"result": [{
+		"id": "1",
+        "type": "warning",
+		"key": "hello world number one",
+		"first-occurred": "2018-09-19T12:41:18.505007495Z",
+		"last-occurred": "2018-09-19T12:41:18.505007495Z",
+		"last-repeated": "2018-09-19T12:41:18.505007495Z",
+		"expire-after": "672h0m0s",
+		"repeat-after": "24h0m0s"
+	}, {
+		"id": "2",
+        "type": "warning",
+		"key": "hello world number two",
+		"expire-after": "672h0m0s",
+		"first-occurred": "2018-09-19T12:44:19.680362867Z",
+		"last-occurred": "2018-09-19T12:44:19.680362867Z",
+		"last-repeated": "2018-09-19T12:44:19.680362867Z",
+		"repeat-after": "24h0m0s"
+	}, {
+		"id": "3",
+        "type": "warning",
+		"key": "hello world number three",
+		"expire-after": "672h0m0s",
+		"first-occurred": "2018-09-19T12:44:30.680362867Z",
+		"last-occurred": "2018-09-19T12:44:30.680362867Z",
+		"last-repeated": "2018-09-19T12:44:50.680362867Z",
+		"repeat-after": "24h0m0s"
+	}],
+	"status": "OK",
+	"status-code": 200,
+	"type": "sync"
+}`
 
 func mkWarningsFakeHandler(c *check.C, body string) func(w http.ResponseWriter, r *http.Request) {
 	var called bool
@@ -70,8 +73,9 @@ func mkWarningsFakeHandler(c *check.C, body string) func(w http.ResponseWriter, 
 			c.Fatalf("expected a single request")
 		}
 		called = true
-		c.Check(r.URL.Path, check.Equals, "/v1/warnings")
-		c.Check(r.URL.Query(), check.HasLen, 0)
+		c.Check(r.URL.Path, check.Equals, "/v1/notices")
+		query := r.URL.Query()
+		c.Check(query["types"], check.DeepEquals, []string{"warning"})
 
 		buf, err := io.ReadAll(r.Body)
 		c.Assert(err, check.IsNil)
@@ -85,27 +89,30 @@ func mkWarningsFakeHandler(c *check.C, body string) func(w http.ResponseWriter, 
 func (s *warningSuite) TestNoWarningsEver(c *check.C) {
 	s.RedirectClientToTestServer(mkWarningsFakeHandler(c, `{"type": "sync", "status-code": 200, "result": []}`))
 
-	rest, err := cli.ParserForTest().ParseArgs([]string{"warnings", "--abs-time"})
+	rest, err := cli.ParserForTest().ParseArgs([]string{"warnings"})
 	c.Assert(err, check.IsNil)
 	c.Check(rest, check.HasLen, 0)
-	c.Check(s.Stderr(), check.Equals, "")
-	c.Check(s.Stdout(), check.Equals, "No warnings.\n")
+	c.Check(s.Stderr(), check.Equals, "No warnings.\n")
+	c.Check(s.Stdout(), check.Equals, "")
 }
 
 func (s *warningSuite) TestNoFurtherWarnings(c *check.C) {
-	cli.WriteWarningTimestamp(time.Now())
+	s.writeCLIState(c, map[string]any{
+		"warnings-last-listed": time.Date(2023, 9, 6, 15, 6, 0, 0, time.UTC),
+		"warnings-last-okayed": time.Date(2023, 9, 6, 15, 6, 0, 0, time.UTC),
+	})
 
 	s.RedirectClientToTestServer(mkWarningsFakeHandler(c, `{"type": "sync", "status-code": 200, "result": []}`))
 
-	rest, err := cli.ParserForTest().ParseArgs([]string{"warnings", "--abs-time"})
+	rest, err := cli.ParserForTest().ParseArgs([]string{"warnings"})
 	c.Assert(err, check.IsNil)
 	c.Check(rest, check.HasLen, 0)
-	c.Check(s.Stderr(), check.Equals, "")
-	c.Check(s.Stdout(), check.Equals, "No further warnings.\n")
+	c.Check(s.Stderr(), check.Equals, "No further warnings.\n")
+	c.Check(s.Stdout(), check.Equals, "")
 }
 
 func (s *warningSuite) TestWarnings(c *check.C) {
-	s.RedirectClientToTestServer(mkWarningsFakeHandler(c, twoWarnings))
+	s.RedirectClientToTestServer(mkWarningsFakeHandler(c, testWarnings))
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"warnings", "--abs-time", "--unicode=never"})
 	c.Assert(err, check.IsNil)
@@ -127,7 +134,7 @@ warning: |
 }
 
 func (s *warningSuite) TestVerboseWarnings(c *check.C) {
-	s.RedirectClientToTestServer(mkWarningsFakeHandler(c, twoWarnings))
+	s.RedirectClientToTestServer(mkWarningsFakeHandler(c, testWarnings))
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"warnings", "--abs-time", "--verbose", "--unicode=never"})
 	c.Assert(err, check.IsNil)
@@ -136,7 +143,7 @@ func (s *warningSuite) TestVerboseWarnings(c *check.C) {
 	c.Check(s.Stdout(), check.Equals, `
 first-occurrence:  2018-09-19T12:41:18Z
 last-occurrence:   2018-09-19T12:41:18Z
-acknowledged:      --
+last-repeated:     2018-09-19T12:41:18Z
 repeats-after:     1d00h
 expires-after:     28d0h
 warning: |
@@ -144,7 +151,7 @@ warning: |
 ---
 first-occurrence:  2018-09-19T12:44:19Z
 last-occurrence:   2018-09-19T12:44:19Z
-acknowledged:      --
+last-repeated:     2018-09-19T12:44:19Z
 repeats-after:     1d00h
 expires-after:     28d0h
 warning: |
@@ -152,7 +159,7 @@ warning: |
 ---
 first-occurrence:  2018-09-19T12:44:30Z
 last-occurrence:   2018-09-19T12:44:30Z
-acknowledged:      2018-09-19T12:44:50Z
+last-repeated:     2018-09-19T12:44:50Z
 repeats-after:     1d00h
 expires-after:     28d0h
 warning: |
@@ -160,44 +167,7 @@ warning: |
 `[1:])
 }
 
-func (s *warningSuite) TestOkay(c *check.C) {
-	t0 := time.Now()
-	cli.WriteWarningTimestamp(t0)
-
-	var n int
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		n++
-		if n != 1 {
-			c.Fatalf("expected 1 request, now on %d", n)
-		}
-		c.Check(r.URL.Path, check.Equals, "/v1/warnings")
-		c.Check(r.URL.Query(), check.HasLen, 0)
-		c.Assert(DecodedRequestBody(c, r), check.DeepEquals, map[string]interface{}{"action": "okay", "timestamp": t0.Format(time.RFC3339Nano)})
-		c.Check(r.Method, check.Equals, "POST")
-		w.WriteHeader(200)
-		fmt.Fprintln(w, `{
-			"status": "OK",
-			"status-code": 200,
-			"type": "sync"
-		}`)
-	})
-
-	rest, err := cli.ParserForTest().ParseArgs([]string{"okay"})
-	c.Assert(err, check.IsNil)
-	c.Check(rest, check.HasLen, 0)
-	c.Check(s.Stderr(), check.Equals, "")
-	c.Check(s.Stdout(), check.Equals, "")
-}
-
-func (s *warningSuite) TestOkayBeforeWarnings(c *check.C) {
-	_, err := cli.ParserForTest().ParseArgs([]string{"okay"})
-	c.Assert(err, check.ErrorMatches, "no notices or warnings have been listed.*")
-	c.Check(s.Stderr(), check.Equals, "")
-	c.Check(s.Stdout(), check.Equals, "")
-}
-
 func (s *warningSuite) TestCommandWithWarnings(c *check.C) {
-	var responseWarningCount int
 	var responseTimestamp time.Time
 
 	timesCalled := 0
@@ -211,26 +181,32 @@ func (s *warningSuite) TestCommandWithWarnings(c *check.C) {
 		c.Check(string(buf), check.Equals, "")
 		c.Check(r.Method, check.Equals, "GET")
 		w.WriteHeader(200)
+		latestWarningStr := ""
+		if !responseTimestamp.IsZero() {
+			latestWarningStr = fmt.Sprintf(`, "latest-warning": "%s"`, responseTimestamp.Format(time.RFC3339Nano))
+		}
 		fmt.Fprintf(w, `{
 				"result": {},
 				"status": "OK",
 				"status-code": 200,
-				"type": "sync",
-				"warning-count": %d,
-				"warning-timestamp": "%s"
-			}\n`, responseWarningCount, responseTimestamp.Format(time.RFC3339Nano))
+				"type": "sync"
+                %s
+			}\n`, latestWarningStr)
 	})
 
 	client := cli.Client()
 	expectedWarnings := map[int]string{
 		0: "",
-		1: "WARNING: There is 1 new warning. See 'pebble warnings'.\n",
-		2: "WARNING: There are 2 new warnings. See 'pebble warnings'.\n",
+		1: "WARNING: There are new warnings. See 'pebble warnings'.\n",
+		2: "WARNING: There are new warnings. See 'pebble warnings'.\n",
 	}
 
-	responseTimestamp = time.Date(2018, 9, 19, 12, 44, 19, 680362867, time.UTC)
-	for warningCount, expectedWarning := range expectedWarnings {
-		responseWarningCount = warningCount
+	for expectedCount, expectedWarning := range expectedWarnings {
+		if expectedCount == 0 {
+			responseTimestamp = time.Time{}
+		} else {
+			responseTimestamp = time.Date(2018, 9, 19, 12, 44, 19, 680362867, time.UTC)
+		}
 		runOpts := cli.RunOptionsForTest()
 		rest, err := cli.Parser(&cli.ParserOptions{
 			Client:     client,
@@ -239,11 +215,14 @@ func (s *warningSuite) TestCommandWithWarnings(c *check.C) {
 		}).ParseArgs([]string{"version"})
 		c.Assert(err, check.IsNil)
 
-		count, stamp := client.WarningsSummary()
-		c.Check(count, check.Equals, warningCount)
-		c.Check(stamp, check.Equals, responseTimestamp)
+		latest := client.LatestWarningTime()
+		if expectedCount == 0 {
+			c.Check(latest, check.Equals, time.Time{})
+		} else {
+			c.Check(latest, check.Equals, responseTimestamp)
+		}
 
-		cli.MaybePresentWarnings(count, stamp)
+		cli.MaybePresentWarnings(time.Time{}, latest)
 
 		c.Check(rest, check.HasLen, 0)
 		c.Check(s.Stdout(), check.Matches, `(?s)client.*server.*`)
@@ -262,54 +241,4 @@ func (s *warningSuite) TestExtraArgs(c *check.C) {
 	rest, err = cli.ParserForTest().ParseArgs([]string{"okay", "extra", "invalid arg"})
 	c.Assert(err, check.Equals, cli.ErrExtraArgs)
 	c.Check(rest, check.HasLen, 1)
-}
-
-func (s *warningSuite) TestLastWarningTimestamp(c *check.C) {
-	tempDir := c.MkDir()
-	newWarnPath := filepath.Join(tempDir, "warnings.json")
-	const warnFileEnvKey = "PEBBLE_LAST_WARNING_TIMESTAMP_FILENAME"
-	oldWarnPath := os.Getenv(warnFileEnvKey)
-	os.Setenv(warnFileEnvKey, newWarnPath)
-	defer func() { os.Setenv(warnFileEnvKey, oldWarnPath) }()
-
-	// Insert invalid JSON in warnings file
-	err := os.WriteFile(newWarnPath, []byte("invalid JSON"), 0755)
-	c.Assert(err, check.IsNil)
-
-	rest, err := cli.ParserForTest().ParseArgs([]string{"okay"})
-	c.Assert(err.Error(), check.Equals, "cannot decode timestamp file: invalid character 'i' looking for beginning of value")
-	c.Check(rest, check.HasLen, 1)
-
-	// Insert extra data after JSON
-	err = os.WriteFile(newWarnPath, []byte("{}extra"), 0755)
-	c.Assert(err, check.IsNil)
-
-	rest, err = cli.ParserForTest().ParseArgs([]string{"okay"})
-	c.Assert(err.Error(), check.Equals, "spurious extra data in timestamp file")
-	c.Check(rest, check.HasLen, 1)
-
-	// Make open() fail
-	err = os.Chmod(newWarnPath, 0055)
-	c.Assert(err, check.IsNil)
-
-	rest, err = cli.ParserForTest().ParseArgs([]string{"okay"})
-	c.Assert(err.Error(), check.Equals, fmt.Sprintf("cannot open timestamp file: open %s: permission denied", newWarnPath))
-	c.Check(rest, check.HasLen, 1)
-}
-
-func (s *warningSuite) TestWriteWarningTimestamp(c *check.C) {
-	tempDir := c.MkDir()
-	nonExistingSubdir := filepath.Join(tempDir, "dummy")
-	newWarnPath := filepath.Join(nonExistingSubdir, "warnings.json")
-
-	const warnFileEnvKey = "PEBBLE_LAST_WARNING_TIMESTAMP_FILENAME"
-	oldWarnPath := os.Getenv(warnFileEnvKey)
-	os.Setenv(warnFileEnvKey, newWarnPath)
-	defer func() { os.Setenv(warnFileEnvKey, oldWarnPath) }()
-
-	err := os.Chmod(tempDir, 0600)
-	c.Assert(err, check.IsNil)
-
-	err = cli.WriteWarningTimestamp(time.Now())
-	c.Assert(os.IsPermission(err), check.Equals, true)
 }

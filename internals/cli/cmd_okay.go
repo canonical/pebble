@@ -19,7 +19,6 @@ import (
 
 	"github.com/canonical/go-flags"
 
-	"github.com/canonical/pebble/client"
 	cmdpkg "github.com/canonical/pebble/cmd"
 )
 
@@ -32,8 +31,6 @@ will again show up until the next '{{.ProgramName}} okay'.
 `
 
 type cmdOkay struct {
-	client *client.Client
-
 	socketPath string
 
 	Warnings bool `long:"warnings"`
@@ -46,7 +43,6 @@ func init() {
 		Description: cmdOkayDescription,
 		New: func(opts *CmdOptions) flags.Commander {
 			return &cmdOkay{
-				client:     opts.Client,
 				socketPath: opts.SocketPath,
 			}
 		},
@@ -61,33 +57,28 @@ func (cmd *cmdOkay) Execute(args []string) error {
 		return ErrExtraArgs
 	}
 
+	state, err := loadCLIState(cmd.socketPath)
+	if err != nil {
+		return fmt.Errorf("cannot load CLI state: %w", err)
+	}
+
+	okayedWarnings := false
+	if !state.WarningsLastListed.IsZero() {
+		okayedWarnings = true
+		state.WarningsLastOkayed = state.WarningsLastListed
+	}
+
 	okayedNotices := false
 	if !cmd.Warnings {
-		state, err := loadCLIState(cmd.socketPath)
-		if err != nil {
-			return fmt.Errorf("cannot load CLI state: %w", err)
-		}
 		if !state.NoticesLastListed.IsZero() {
 			okayedNotices = true
 			state.NoticesLastOkayed = state.NoticesLastListed
-			err = saveCLIState(cmd.socketPath, state)
-			if err != nil {
-				return fmt.Errorf("cannot save CLI state: %w", err)
-			}
 		}
 	}
 
-	last, err := lastWarningTimestamp()
+	err = saveCLIState(cmd.socketPath, state)
 	if err != nil {
-		return err
-	}
-	okayedWarnings := false
-	if !last.IsZero() {
-		okayedWarnings = true
-		err := cmd.client.Okay(last)
-		if err != nil {
-			return fmt.Errorf("cannot acknowledge warnings: %w", err)
-		}
+		return fmt.Errorf("cannot save CLI state: %w", err)
 	}
 
 	if cmd.Warnings && !okayedWarnings {
