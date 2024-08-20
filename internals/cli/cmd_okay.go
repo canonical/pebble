@@ -19,7 +19,6 @@ import (
 
 	"github.com/canonical/go-flags"
 
-	"github.com/canonical/pebble/client"
 	cmdpkg "github.com/canonical/pebble/cmd"
 )
 
@@ -32,8 +31,6 @@ will again show up until the next '{{.ProgramName}} okay'.
 `
 
 type cmdOkay struct {
-	client *client.Client
-
 	socketPath string
 
 	Warnings bool `long:"warnings"`
@@ -46,7 +43,6 @@ func init() {
 		Description: cmdOkayDescription,
 		New: func(opts *CmdOptions) flags.Commander {
 			return &cmdOkay{
-				client:     opts.Client,
 				socketPath: opts.SocketPath,
 			}
 		},
