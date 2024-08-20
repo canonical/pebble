@@ -20,14 +20,11 @@ In addition, a notice records optional *data* (string key-value pairs) from the 
 
 These notice types are currently available:
 
-<!-- TODO: * `change-update`: recorded whenever a change is first spawned or its status is updated. The key for this type of notice is the change ID, and the notice's data includes the change `kind`. -->
+* `change-update`: recorded whenever a change is first spawned or its status is updated. The key for this type of notice is the change ID, and the notice's data includes the change `kind`.
 
 * `custom`: a custom client notice reported via `pebble notify`. The key and any data is provided by the user. The key must be in the format `example.com/path` to ensure well-namespaced notice keys.
 
-<!-- TODO: * `warning`: Pebble warnings are implemented in terms of notices. The key for this type of notice is the human-readable warning message.
-
-See comment at the top of internals/overlord/state/warning.go for more info.
--->
+* `warning`: Pebble warnings are implemented in terms of notices. The key for this type of notice is the human-readable warning message.
 
 ## Commands
 
