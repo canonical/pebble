@@ -69,6 +69,7 @@ func (s *daemonSuite) SetUpTest(c *C) {
 		c.Fatalf("cannot start reaper: %v", err)
 	}
 
+	s.socketPath = ""
 	s.pebbleDir = c.MkDir()
 	s.statePath = filepath.Join(s.pebbleDir, cmd.StateFile)
 	systemdSdNotify = func(notif string) error {
