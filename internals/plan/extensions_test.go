@@ -42,16 +42,15 @@ type planResult struct {
 }
 
 var extensionTests = []struct {
-	extensions             map[string]plan.LayerSectionExtension
-	layers                 []*inputLayer
-	errorString            string
-	combinedPlanResult     *planResult
-	combinedPlanResultYaml string
+	extensions map[string]plan.LayerSectionExtension
+	layers     []*inputLayer
+	error      string
+	result     *planResult
+	resultYaml string
 }{
 	// Index 0: No Sections
 	{
-		combinedPlanResultYaml: string(reindent(`
-			{}`)),
+		resultYaml: "{}\n",
 	},
 	// Index 1: Sections with empty YAML
 	{
@@ -59,12 +58,11 @@ var extensionTests = []struct {
 			"x-field": &xExtension{},
 			"y-field": &yExtension{},
 		},
-		combinedPlanResult: &planResult{
+		result: &planResult{
 			x: &xSection{},
 			y: &ySection{},
 		},
-		combinedPlanResultYaml: string(reindent(`
-			{}`)),
+		resultYaml: "{}\n",
 	},
 	// Index 2: Load file layers invalid section
 	{
@@ -73,7 +71,7 @@ var extensionTests = []struct {
 			"y-field": &yExtension{},
 		},
 		layers: []*inputLayer{
-			&inputLayer{
+			{
 				order: 1,
 				label: "layer-xy",
 				yaml: `
@@ -83,7 +81,7 @@ var extensionTests = []struct {
 				`,
 			},
 		},
-		errorString: "cannot parse layer .*: unknown section .*",
+		error: "cannot parse layer .*: unknown section .*",
 	},
 	// Index 3: Load file layers not unique order
 	{
@@ -92,7 +90,7 @@ var extensionTests = []struct {
 			"y-field": &yExtension{},
 		},
 		layers: []*inputLayer{
-			&inputLayer{
+			{
 				order: 1,
 				label: "layer-1",
 				yaml: `
@@ -100,7 +98,7 @@ var extensionTests = []struct {
 					description: desc
 				`,
 			},
-			&inputLayer{
+			{
 				order: 1,
 				label: "layer-2",
 				yaml: `
@@ -109,7 +107,7 @@ var extensionTests = []struct {
 				`,
 			},
 		},
-		errorString: "invalid layer filename: .* not unique .*",
+		error: "invalid layer filename: .* not unique .*",
 	},
 	// Index 4: Load file layers not unique label
 	{
@@ -118,7 +116,7 @@ var extensionTests = []struct {
 			"y-field": &yExtension{},
 		},
 		layers: []*inputLayer{
-			&inputLayer{
+			{
 				order: 1,
 				label: "layer-xy",
 				yaml: `
@@ -126,7 +124,7 @@ var extensionTests = []struct {
 					description: desc
 				`,
 			},
-			&inputLayer{
+			{
 				order: 2,
 				label: "layer-xy",
 				yaml: `
@@ -135,7 +133,7 @@ var extensionTests = []struct {
 				`,
 			},
 		},
-		errorString: "invalid layer filename: .* not unique .*",
+		error: "invalid layer filename: .* not unique .*",
 	},
 	// Index 5: Load file layers with empty section
 	{
@@ -144,7 +142,7 @@ var extensionTests = []struct {
 			"y-field": &yExtension{},
 		},
 		layers: []*inputLayer{
-			&inputLayer{
+			{
 				order: 1,
 				label: "layer-x",
 				yaml: `
@@ -152,7 +150,7 @@ var extensionTests = []struct {
 					description: desc-x
 				`,
 			},
-			&inputLayer{
+			{
 				order: 2,
 				label: "layer-y",
 				yaml: `
@@ -161,11 +159,11 @@ var extensionTests = []struct {
 				`,
 			},
 		},
-		combinedPlanResult: &planResult{
+		result: &planResult{
 			x: &xSection{},
 			y: &ySection{},
 		},
-		combinedPlanResultYaml: string("{}\n"),
+		resultYaml: "{}\n",
 	},
 	// Index 6: Load file layers with section validation failure #1
 	{
@@ -174,7 +172,7 @@ var extensionTests = []struct {
 			"y-field": &yExtension{},
 		},
 		layers: []*inputLayer{
-			&inputLayer{
+			{
 				order: 1,
 				label: "layer-x",
 				yaml: `
@@ -188,7 +186,7 @@ var extensionTests = []struct {
 				`,
 			},
 		},
-		errorString: "cannot validate layer section .* cannot accept entry not starting .*",
+		error: "cannot validate layer section .* cannot accept entry not starting .*",
 	},
 	// Index 7: Load file layers with section validation failure #2
 	{
@@ -197,7 +195,7 @@ var extensionTests = []struct {
 			"y-field": &yExtension{},
 		},
 		layers: []*inputLayer{
-			&inputLayer{
+			{
 				order: 1,
 				label: "layer-x",
 				yaml: `
@@ -208,7 +206,7 @@ var extensionTests = []struct {
 				`,
 			},
 		},
-		errorString: "cannot validate layer section .* cannot have nil entry .*",
+		error: "cannot validate layer section .* cannot have nil entry .*",
 	},
 	// Index 8: Load file layers failed plan validation
 	{
@@ -217,7 +215,7 @@ var extensionTests = []struct {
 			"y-field": &yExtension{},
 		},
 		layers: []*inputLayer{
-			&inputLayer{
+			{
 				order: 1,
 				label: "layer-x",
 				yaml: `
@@ -232,7 +230,7 @@ var extensionTests = []struct {
 							  - y2
 				`,
 			},
-			&inputLayer{
+			{
 				order: 2,
 				label: "layer-y",
 				yaml: `
@@ -246,7 +244,7 @@ var extensionTests = []struct {
 				`,
 			},
 		},
-		errorString: "cannot validate plan section .* cannot find .* as required by .*",
+		error: "cannot validate plan section .* cannot find .* as required by .*",
 	},
 	// Index 9: Check empty section omits entry
 	{
@@ -255,7 +253,7 @@ var extensionTests = []struct {
 			"y-field": &yExtension{},
 		},
 		layers: []*inputLayer{
-			&inputLayer{
+			{
 				order: 1,
 				label: "layer-x",
 				yaml: `
@@ -264,7 +262,7 @@ var extensionTests = []struct {
 					x-field:
 				`,
 			},
-			&inputLayer{
+			{
 				order: 2,
 				label: "layer-y",
 				yaml: `
@@ -274,12 +272,11 @@ var extensionTests = []struct {
 				`,
 			},
 		},
-		combinedPlanResult: &planResult{
+		result: &planResult{
 			x: &xSection{},
 			y: &ySection{},
 		},
-		combinedPlanResultYaml: string(reindent(`
-			{}`)),
+		resultYaml: "{}\n",
 	},
 	// Index 10: Load file layers
 	{
@@ -288,7 +285,7 @@ var extensionTests = []struct {
 			"y-field": &yExtension{},
 		},
 		layers: []*inputLayer{
-			&inputLayer{
+			{
 				order: 1,
 				label: "layer-x",
 				yaml: `
@@ -303,7 +300,7 @@ var extensionTests = []struct {
 							  - y1
 				`,
 			},
-			&inputLayer{
+			{
 				order: 2,
 				label: "layer-y",
 				yaml: `
@@ -317,7 +314,7 @@ var extensionTests = []struct {
 				`,
 			},
 		},
-		combinedPlanResult: &planResult{
+		result: &planResult{
 			x: &xSection{
 				Entries: map[string]*X{
 					"x1": &X{
@@ -342,7 +339,7 @@ var extensionTests = []struct {
 				},
 			},
 		},
-		combinedPlanResultYaml: string(reindent(`
+		resultYaml: string(reindent(`
 			x-field:
 				x1:
 					override: replace
@@ -374,16 +371,16 @@ func (s *S) TestPlanExtensions(c *C) {
 
 		// Load the plan layer from disk (parse, combine and validate).
 		p, err := plan.ReadDir(layersDir)
-		if planTest.errorString != "" || err != nil {
+		if planTest.error != "" || err != nil {
 			// Expected error.
-			c.Assert(err, ErrorMatches, planTest.errorString)
+			c.Assert(err, ErrorMatches, planTest.error)
 		} else {
 			if _, ok := planTest.extensions[xField]; ok {
 				// Verify "x-field" data.
 				var x *xSection
 				x = p.Section(xField).(*xSection)
 				c.Assert(err, IsNil)
-				c.Assert(x.Entries, DeepEquals, planTest.combinedPlanResult.x.Entries)
+				c.Assert(x.Entries, DeepEquals, planTest.result.x.Entries)
 			}
 
 			if _, ok := planTest.extensions[yField]; ok {
@@ -391,13 +388,13 @@ func (s *S) TestPlanExtensions(c *C) {
 				var y *ySection
 				y = p.Section(yField).(*ySection)
 				c.Assert(err, IsNil)
-				c.Assert(y.Entries, DeepEquals, planTest.combinedPlanResult.y.Entries)
+				c.Assert(y.Entries, DeepEquals, planTest.result.y.Entries)
 			}
 
 			// Verify combined plan YAML.
 			planYAML, err := yaml.Marshal(p)
 			c.Assert(err, IsNil)
-			c.Assert(string(planYAML), Equals, planTest.combinedPlanResultYaml)
+			c.Assert(string(planYAML), Equals, planTest.resultYaml)
 		}
 
 		// Unregister test extensions.

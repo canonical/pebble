@@ -50,10 +50,10 @@ type LayerSectionExtension interface {
 }
 
 type LayerSection interface {
-	// Ask the section to validate itself.
+	// Validate checks whether the section is valid, returning an error if not.
 	Validate() error
 
-	// Returns true if the section is empty.
+	// IsZero reports whether the section is empty.
 	IsZero() bool
 }
 
@@ -72,12 +72,11 @@ var layerExtensions = map[string]LayerSectionExtension{}
 
 // RegisterExtension adds a plan schema extension. All registrations must be
 // done before the plan library is used.
-func RegisterExtension(field string, ext LayerSectionExtension) error {
+func RegisterExtension(field string, ext LayerSectionExtension) {
 	if _, ok := layerExtensions[field]; ok {
-		return fmt.Errorf("internal error: extension %q already registered", field)
+		panic(fmt.Sprintf("internal error: extension %q already registered", field))
 	}
 	layerExtensions[field] = ext
-	return nil
 }
 
 // UnregisterExtension removes a plan schema extension. This is only
@@ -106,22 +105,22 @@ func (p *Plan) Section(field string) LayerSection {
 // This is required since Sections are based on an inlined map, for which
 // omitempty and inline together is not currently supported.
 func (p *Plan) MarshalYAML() (interface{}, error) {
-	marshalData := make(map[string]interface{})
+	data := make(map[string]interface{})
 	if len(p.Services) != 0 {
-		marshalData["services"] = p.Services
+		data["services"] = p.Services
 	}
 	if len(p.LogTargets) != 0 {
-		marshalData["log-targets"] = p.LogTargets
+		data["log-targets"] = p.LogTargets
 	}
 	if len(p.Checks) != 0 {
-		marshalData["checks"] = p.Checks
+		data["checks"] = p.Checks
 	}
 	for field, section := range p.Sections {
 		if !section.IsZero() {
-			marshalData[field] = section
+			data[field] = section
 		}
 	}
-	return marshalData, nil
+	return data, nil
 }
 
 type Layer struct {
@@ -654,7 +653,7 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 		combined.Sections[field], err = extension.CombineSections(sections...)
 		if err != nil {
 			return nil, &FormatError{
-				Message: fmt.Sprintf(`cannot combine section %q: %v`, field, err),
+				Message: fmt.Sprintf("cannot combine section %q: %v", field, err),
 			}
 		}
 	}
@@ -1259,20 +1258,21 @@ func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 				}
 			}
 		} else {
-			if extension, ok := layerExtensions[field]; ok {
-				// Section unmarshal rules are defined by the extension itself.
-				layer.Sections[field], err = extension.ParseSection(section)
-				if err != nil {
-					return nil, &FormatError{
-						Message: fmt.Sprintf("cannot parse layer %q section %q: %v", label, field, err),
-					}
-				}
-			} else {
+			extension, ok := layerExtensions[field]
+			if !ok {
 				// At the top level we do not ignore keys we do not understand.
 				// This preserves the current Pebble behaviour of decoding with
 				// KnownFields = true.
 				return nil, &FormatError{
 					Message: fmt.Sprintf("cannot parse layer %q: unknown section %q", label, field),
+				}
+			}
+
+			// Section unmarshal rules are defined by the extension itself.
+			layer.Sections[field], err = extension.ParseSection(section)
+			if err != nil {
+				return nil, &FormatError{
+					Message: fmt.Sprintf("cannot parse layer %q section %q: %v", label, field, err),
 				}
 			}
 		}
