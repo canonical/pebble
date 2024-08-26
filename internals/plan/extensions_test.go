@@ -42,18 +42,24 @@ type planResult struct {
 }
 
 var extensionTests = []struct {
+	summary    string
 	extensions map[string]plan.LayerSectionExtension
 	layers     []*inputLayer
 	error      string
 	result     *planResult
 	resultYaml string
 }{
-	// Index 0: No Sections
 	{
+		summary:    "No Sections",
 		resultYaml: "{}\n",
-	},
-	// Index 1: Sections with empty YAML
-	{
+	}, {
+		summary: "Section using built-in name",
+		extensions: map[string]plan.LayerSectionExtension{
+			"summary": &xExtension{},
+		},
+		error: ".*already used as built-in field.*",
+	}, {
+		summary: "Sections with empty YAML",
 		extensions: map[string]plan.LayerSectionExtension{
 			"x-field": &xExtension{},
 			"y-field": &yExtension{},
@@ -63,9 +69,8 @@ var extensionTests = []struct {
 			y: &ySection{},
 		},
 		resultYaml: "{}\n",
-	},
-	// Index 2: Load file layers invalid section
-	{
+	}, {
+		summary: "Load file layers invalid section",
 		extensions: map[string]plan.LayerSectionExtension{
 			"x-field": &xExtension{},
 			"y-field": &yExtension{},
@@ -82,9 +87,8 @@ var extensionTests = []struct {
 			},
 		},
 		error: "cannot parse layer .*: unknown section .*",
-	},
-	// Index 3: Load file layers not unique order
-	{
+	}, {
+		summary: "Load file layers not unique order",
 		extensions: map[string]plan.LayerSectionExtension{
 			"x-field": &xExtension{},
 			"y-field": &yExtension{},
@@ -108,9 +112,8 @@ var extensionTests = []struct {
 			},
 		},
 		error: "invalid layer filename: .* not unique .*",
-	},
-	// Index 4: Load file layers not unique label
-	{
+	}, {
+		summary: "Load file layers not unique label",
 		extensions: map[string]plan.LayerSectionExtension{
 			"x-field": &xExtension{},
 			"y-field": &yExtension{},
@@ -134,9 +137,8 @@ var extensionTests = []struct {
 			},
 		},
 		error: "invalid layer filename: .* not unique .*",
-	},
-	// Index 5: Load file layers with empty section
-	{
+	}, {
+		summary: "Load file layers with empty section",
 		extensions: map[string]plan.LayerSectionExtension{
 			"x-field": &xExtension{},
 			"y-field": &yExtension{},
@@ -164,9 +166,8 @@ var extensionTests = []struct {
 			y: &ySection{},
 		},
 		resultYaml: "{}\n",
-	},
-	// Index 6: Load file layers with section validation failure #1
-	{
+	}, {
+		summary: "Load file layers with section validation failure #1",
 		extensions: map[string]plan.LayerSectionExtension{
 			"x-field": &xExtension{},
 			"y-field": &yExtension{},
@@ -187,9 +188,8 @@ var extensionTests = []struct {
 			},
 		},
 		error: "cannot validate layer section .* cannot accept entry not starting .*",
-	},
-	// Index 7: Load file layers with section validation failure #2
-	{
+	}, {
+		summary: "Load file layers with section validation failure #2",
 		extensions: map[string]plan.LayerSectionExtension{
 			"x-field": &xExtension{},
 			"y-field": &yExtension{},
@@ -207,9 +207,8 @@ var extensionTests = []struct {
 			},
 		},
 		error: "cannot validate layer section .* cannot have nil entry .*",
-	},
-	// Index 8: Load file layers failed plan validation
-	{
+	}, {
+		summary: "Load file layers failed plan validation",
 		extensions: map[string]plan.LayerSectionExtension{
 			"x-field": &xExtension{},
 			"y-field": &yExtension{},
@@ -245,9 +244,8 @@ var extensionTests = []struct {
 			},
 		},
 		error: "cannot validate plan section .* cannot find .* as required by .*",
-	},
-	// Index 9: Check empty section omits entry
-	{
+	}, {
+		summary: "Check empty section omits entry",
 		extensions: map[string]plan.LayerSectionExtension{
 			"x-field": &xExtension{},
 			"y-field": &yExtension{},
@@ -277,9 +275,8 @@ var extensionTests = []struct {
 			y: &ySection{},
 		},
 		resultYaml: "{}\n",
-	},
-	// Index 10: Load file layers
-	{
+	}, {
+		summary: "Load file layers",
 		extensions: map[string]plan.LayerSectionExtension{
 			"x-field": &xExtension{},
 			"y-field": &yExtension{},
@@ -356,49 +353,62 @@ var extensionTests = []struct {
 }
 
 func (s *S) TestPlanExtensions(c *C) {
-	for testIndex, planTest := range extensionTests {
-		c.Logf("Running TestPlanExtensions with test data index %v", testIndex)
+nexttest:
+	for testIndex, testData := range extensionTests {
+		c.Logf("TestPlanExtensions :: %s (data index %v)", testData.summary, testIndex)
 
 		// Write layers to test directory.
 		layersDir := filepath.Join(c.MkDir(), "layers")
-		s.writeLayerFiles(c, layersDir, planTest.layers)
+		s.writeLayerFiles(c, layersDir, testData.layers)
 		var p *plan.Plan
 
 		// Register test extensions.
-		for field, extension := range planTest.extensions {
-			plan.RegisterExtension(field, extension)
+		for field, extension := range testData.extensions {
+			err := func() (err error) {
+				defer func() {
+					if r := recover(); r != nil {
+						err = fmt.Errorf("%v", r)
+					}
+				}()
+				plan.RegisterExtension(field, extension)
+				return nil
+			}()
+			if err != nil {
+				c.Assert(err, ErrorMatches, testData.error)
+				continue nexttest
+			}
 		}
 
 		// Load the plan layer from disk (parse, combine and validate).
 		p, err := plan.ReadDir(layersDir)
-		if planTest.error != "" || err != nil {
+		if testData.error != "" || err != nil {
 			// Expected error.
-			c.Assert(err, ErrorMatches, planTest.error)
+			c.Assert(err, ErrorMatches, testData.error)
 		} else {
-			if _, ok := planTest.extensions[xField]; ok {
+			if _, ok := testData.extensions[xField]; ok {
 				// Verify "x-field" data.
 				var x *xSection
 				x = p.Section(xField).(*xSection)
 				c.Assert(err, IsNil)
-				c.Assert(x.Entries, DeepEquals, planTest.result.x.Entries)
+				c.Assert(x.Entries, DeepEquals, testData.result.x.Entries)
 			}
 
-			if _, ok := planTest.extensions[yField]; ok {
+			if _, ok := testData.extensions[yField]; ok {
 				// Verify "y-field" data.
 				var y *ySection
 				y = p.Section(yField).(*ySection)
 				c.Assert(err, IsNil)
-				c.Assert(y.Entries, DeepEquals, planTest.result.y.Entries)
+				c.Assert(y.Entries, DeepEquals, testData.result.y.Entries)
 			}
 
 			// Verify combined plan YAML.
 			planYAML, err := yaml.Marshal(p)
 			c.Assert(err, IsNil)
-			c.Assert(string(planYAML), Equals, planTest.resultYaml)
+			c.Assert(string(planYAML), Equals, testData.resultYaml)
 		}
 
 		// Unregister test extensions.
-		for field, _ := range planTest.extensions {
+		for field, _ := range testData.extensions {
 			plan.UnregisterExtension(field)
 		}
 	}

@@ -73,6 +73,10 @@ var layerExtensions = map[string]LayerSectionExtension{}
 // RegisterExtension adds a plan schema extension. All registrations must be
 // done before the plan library is used.
 func RegisterExtension(field string, ext LayerSectionExtension) {
+	switch field {
+	case "summary", "description", "services", "checks", "log-targets":
+		panic(fmt.Sprintf("internal error: extension %q already used as built-in field", field))
+	}
 	if _, ok := layerExtensions[field]; ok {
 		panic(fmt.Sprintf("internal error: extension %q already registered", field))
 	}
