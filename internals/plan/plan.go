@@ -21,6 +21,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -70,11 +71,15 @@ const (
 // layerExtensions keeps a map of registered extensions.
 var layerExtensions = map[string]LayerSectionExtension{}
 
+// layerBuiltins represents all the built-in layer sections. This list is used
+// for identifying built-in fields in this package. It is unit tested to match
+// the YAML fields exposed in the Layer type, to catch inconsistencies.
+var layerBuiltins = []string{"summary", "description", "services", "checks", "log-targets"}
+
 // RegisterExtension adds a plan schema extension. All registrations must be
 // done before the plan library is used.
 func RegisterExtension(field string, ext LayerSectionExtension) {
-	switch field {
-	case "summary", "description", "services", "checks", "log-targets":
+	if slices.Contains(layerBuiltins, field) {
 		panic(fmt.Sprintf("internal error: extension %q already used as built-in field", field))
 	}
 	if _, ok := layerExtensions[field]; ok {
@@ -1226,6 +1231,11 @@ func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 		"checks":      &layer.Checks,
 		"log-targets": &layer.LogTargets,
 	}
+	// Make sure builtinSections contains the exact same fields as expected
+	// in the Layer type.
+	if !mapHasKeys(builtinSections, layerBuiltins) {
+		panic("internal error: parsed fields and layer fields differ")
+	}
 
 	layerSections := make(map[string]yaml.Node)
 	// Deliberately pre-allocate at least an empty yaml.Node for every
@@ -1245,7 +1255,7 @@ func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 	}
 
 	for field, section := range layerSections {
-		if _, builtin := builtinSections[field]; builtin {
+		if slices.Contains(layerBuiltins, field) {
 			// The following issue prevents us from using the yaml.Node decoder
 			// with KnownFields = true behaviour. Once one of the proposals get
 			// merged, we can remove the intermediate Marshal step.
@@ -1310,6 +1320,20 @@ func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 	}
 
 	return layer, err
+}
+
+// mapHasKeys returns true if the key list supplied is an exact match of the
+// keys in the map (ordering is ignored).
+func mapHasKeys[M ~map[K]V, K comparable, V any](inMap M, keyList []K) bool {
+	if len(inMap) != len(keyList) {
+		return false
+	}
+	for _, key := range keyList {
+		if _, ok := inMap[key]; !ok {
+			return false
+		}
+	}
+	return true
 }
 
 func validServiceAction(action ServiceAction, additionalValid ...ServiceAction) bool {

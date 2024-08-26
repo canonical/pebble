@@ -19,8 +19,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
+	"slices"
 	"strings"
 	"time"
+	"unicode"
 
 	. "gopkg.in/check.v1"
 	"gopkg.in/yaml.v3"
@@ -2067,4 +2070,42 @@ func (s *S) TestStartStopOrderMultipleLanes(c *C) {
 	c.Assert(lanes[0], DeepEquals, []string{"srv1"})
 	c.Assert(lanes[1], DeepEquals, []string{"srv2"})
 	c.Assert(lanes[2], DeepEquals, []string{"srv3"})
+}
+
+// TestLayerBuiltinCompatible ensures layerBuiltins used in the plan package
+// reflects the same YAML fields as exposed in the Layer type.
+func (s *S) TestLayerBuiltinCompatible(c *C) {
+	fields := structYamlFields(plan.Layer{})
+	c.Assert(len(fields), Equals, len(plan.LayerBuiltins))
+	for _, field := range structYamlFields(plan.Layer{}) {
+		c.Assert(slices.Contains(plan.LayerBuiltins, field), Equals, true)
+	}
+}
+
+// structYamlFields extracts the YAML fields from a struct. If the YAML tag
+// is omitted, the field name with the first letter lower case will be used.
+func structYamlFields(inStruct any) []string {
+	var fields []string
+	inStructType := reflect.TypeOf(inStruct)
+	for i := range inStructType.NumField() {
+		fieldType := inStructType.Field(i)
+		yamlTag := fieldType.Tag.Get("yaml")
+		if fieldType.IsExported() && yamlTag != "-" && !strings.Contains(yamlTag, ",inline") {
+			tag, _, _ := strings.Cut(fieldType.Tag.Get("yaml"), ",")
+			if tag == "" {
+				tag = firstLetterToLower(fieldType.Name)
+			}
+			fields = append(fields, tag)
+		}
+	}
+	return fields
+}
+
+func firstLetterToLower(s string) string {
+	if len(s) == 0 {
+		return s
+	}
+	r := []rune(s)
+	r[0] = unicode.ToLower(r[0])
+	return string(r)
 }
