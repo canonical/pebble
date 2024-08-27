@@ -795,7 +795,6 @@ func (ss *stateSuite) TestMethodEntrance(c *C) {
 		func() { st.MarshalJSON() },
 		func() { st.Prune(time.Now(), time.Hour, time.Hour, 100) },
 		func() { st.TaskCount() },
-		func() { st.LatestWarningTime() },
 	}
 
 	for i, f := range reads {

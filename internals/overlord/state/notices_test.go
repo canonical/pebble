@@ -436,6 +436,9 @@ func (s *noticesSuite) TestDeleteExpired(c *C) {
 	st.Lock()
 	defer st.Unlock()
 
+	c.Assert(st.NumNotices(), Equals, 0)
+	c.Assert(st.LatestWarningTime().IsZero(), Equals, true)
+
 	old := time.Now().Add(-8 * 24 * time.Hour)
 	addNotice(c, st, nil, state.CustomNotice, "foo.com/w", &state.AddNoticeOptions{
 		Time: old,
@@ -443,13 +446,18 @@ func (s *noticesSuite) TestDeleteExpired(c *C) {
 	addNotice(c, st, nil, state.CustomNotice, "foo.com/x", &state.AddNoticeOptions{
 		Time: old,
 	})
+	addNotice(c, st, nil, state.WarningNotice, "warning!", &state.AddNoticeOptions{
+		Time: old,
+	})
 	addNotice(c, st, nil, state.CustomNotice, "foo.com/y", nil)
 	time.Sleep(time.Microsecond)
 	addNotice(c, st, nil, state.CustomNotice, "foo.com/z", nil)
 
-	c.Assert(st.NumNotices(), Equals, 4)
+	c.Assert(st.NumNotices(), Equals, 5)
+	c.Assert(st.LatestWarningTime().Equal(old), Equals, true)
 	st.Prune(time.Now(), 0, 0, 0)
 	c.Assert(st.NumNotices(), Equals, 2)
+	c.Assert(st.LatestWarningTime().IsZero(), Equals, true)
 
 	notices := st.Notices(nil)
 	c.Assert(notices, HasLen, 2)
