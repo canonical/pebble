@@ -17,8 +17,8 @@ jobs:
       - name: Install dependencies
         run: |
           go install honnef.co/go/tools/cmd/staticcheck@v0.5.1
-          go get github.com/axw/gocov/gocov
-          go get github.com/AlekSi/gocov-xml
+          go install github.com/axw/gocov/gocov@v1.1.0
+          go install github.com/AlekSi/gocov-xml@v1.1.0
 
       # We could store a report from the regular run, but this is cheap to do and keeps this isolated.
       - name: Test and generate coverage report
