@@ -426,8 +426,9 @@ nexttest:
 }
 
 // TestSectionOrderExt ensures built-in and extension section ordering
-// does not change. Extensions are ordered according to the order of
-// registration.
+// rules are maintained. Extensions are ordered according to the order of
+// registration and follows the built-in sections which are ordered
+// the same way they are defined in the Plan struct.
 func (s *S) TestSectionOrderExt(c *C) {
 	plan.RegisterExtension("x-field", &xExtension{})
 	plan.RegisterExtension("y-field", &yExtension{})

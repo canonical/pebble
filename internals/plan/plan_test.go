@@ -2110,7 +2110,8 @@ func firstLetterToLower(s string) string {
 	return string(r)
 }
 
-// TestSectionOrder ensures built-in section order is maintained.
+// TestSectionOrder ensures built-in section order is maintained
+// during Plan marshal operations.
 func (s *S) TestSectionOrder(c *C) {
 	layer, err := plan.ParseLayer(1, "label", reindent(`
 	checks:
