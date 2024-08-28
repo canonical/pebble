@@ -2077,7 +2077,7 @@ func (s *S) TestStartStopOrderMultipleLanes(c *C) {
 func (s *S) TestLayerBuiltinCompatible(c *C) {
 	fields := structYamlFields(plan.Layer{})
 	c.Assert(len(fields), Equals, len(plan.BuiltinSections))
-	for _, field := range structYamlFields(plan.Layer{}) {
+	for _, field := range fields {
 		c.Assert(slices.Contains(plan.BuiltinSections, field), Equals, true)
 	}
 }
