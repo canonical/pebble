@@ -206,7 +206,7 @@ var planTests = []planTest{{
 		},
 		Checks:     map[string]*plan.Check{},
 		LogTargets: map[string]*plan.LogTarget{},
-		Sections:   map[string]plan.LayerSection{},
+		Sections:   map[string]plan.Section{},
 	}, {
 		Order:       1,
 		Label:       "layer-1",
@@ -257,7 +257,7 @@ var planTests = []planTest{{
 		},
 		Checks:     map[string]*plan.Check{},
 		LogTargets: map[string]*plan.LogTarget{},
-		Sections:   map[string]plan.LayerSection{},
+		Sections:   map[string]plan.Section{},
 	}},
 	result: &plan.Layer{
 		Summary:     "Simple override layer.",
@@ -337,7 +337,7 @@ var planTests = []planTest{{
 		},
 		Checks:     map[string]*plan.Check{},
 		LogTargets: map[string]*plan.LogTarget{},
-		Sections:   map[string]plan.LayerSection{},
+		Sections:   map[string]plan.Section{},
 	},
 	start: map[string][]string{
 		"srv1": {"srv2", "srv1", "srv3"},
@@ -400,7 +400,7 @@ var planTests = []planTest{{
 		},
 		Checks:     map[string]*plan.Check{},
 		LogTargets: map[string]*plan.LogTarget{},
-		Sections:   map[string]plan.LayerSection{},
+		Sections:   map[string]plan.Section{},
 	}},
 }, {
 	summary: "Unknown keys are not accepted",
@@ -551,7 +551,7 @@ var planTests = []planTest{{
 		},
 		Checks:     map[string]*plan.Check{},
 		LogTargets: map[string]*plan.LogTarget{},
-		Sections:   map[string]plan.LayerSection{},
+		Sections:   map[string]plan.Section{},
 	}},
 }, {
 	summary: `Invalid service command: cannot have any arguments after [ ... ] group`,
@@ -660,7 +660,7 @@ var planTests = []planTest{{
 			},
 		},
 		LogTargets: map[string]*plan.LogTarget{},
-		Sections:   map[string]plan.LayerSection{},
+		Sections:   map[string]plan.Section{},
 	},
 }, {
 	summary: "Checks override replace works correctly",
@@ -738,7 +738,7 @@ var planTests = []planTest{{
 			},
 		},
 		LogTargets: map[string]*plan.LogTarget{},
-		Sections:   map[string]plan.LayerSection{},
+		Sections:   map[string]plan.Section{},
 	},
 }, {
 	summary: "Checks override merge works correctly",
@@ -822,7 +822,7 @@ var planTests = []planTest{{
 			},
 		},
 		LogTargets: map[string]*plan.LogTarget{},
-		Sections:   map[string]plan.LayerSection{},
+		Sections:   map[string]plan.Section{},
 	},
 }, {
 	summary: "Timeout is capped at period",
@@ -852,7 +852,7 @@ var planTests = []planTest{{
 			},
 		},
 		LogTargets: map[string]*plan.LogTarget{},
-		Sections:   map[string]plan.LayerSection{},
+		Sections:   map[string]plan.Section{},
 	},
 }, {
 	summary: "Unset timeout is capped at period",
@@ -881,7 +881,7 @@ var planTests = []planTest{{
 			},
 		},
 		LogTargets: map[string]*plan.LogTarget{},
-		Sections:   map[string]plan.LayerSection{},
+		Sections:   map[string]plan.Section{},
 	},
 }, {
 	summary: "One of http, tcp, or exec must be present for check",
@@ -1002,7 +1002,7 @@ var planTests = []planTest{{
 				Override: plan.MergeOverride,
 			},
 		},
-		Sections: map[string]plan.LayerSection{},
+		Sections: map[string]plan.Section{},
 	},
 }, {
 	summary: "Overriding log targets",
@@ -1099,7 +1099,7 @@ var planTests = []planTest{{
 				Override: plan.MergeOverride,
 			},
 		},
-		Sections: map[string]plan.LayerSection{},
+		Sections: map[string]plan.Section{},
 	}, {
 		Label: "layer-1",
 		Order: 1,
@@ -1138,7 +1138,7 @@ var planTests = []planTest{{
 				Override: plan.MergeOverride,
 			},
 		},
-		Sections: map[string]plan.LayerSection{},
+		Sections: map[string]plan.Section{},
 	}},
 	result: &plan.Layer{
 		Services: map[string]*plan.Service{
@@ -1184,7 +1184,7 @@ var planTests = []planTest{{
 				Override: plan.MergeOverride,
 			},
 		},
-		Sections: map[string]plan.LayerSection{},
+		Sections: map[string]plan.Section{},
 	},
 }, {
 	summary: "Log target requires type field",
@@ -1294,7 +1294,7 @@ var planTests = []planTest{{
 				},
 			},
 		},
-		Sections: map[string]plan.LayerSection{},
+		Sections: map[string]plan.Section{},
 	}, {
 		Order:    1,
 		Label:    "layer-1",
@@ -1320,7 +1320,7 @@ var planTests = []planTest{{
 				},
 			},
 		},
-		Sections: map[string]plan.LayerSection{},
+		Sections: map[string]plan.Section{},
 	}},
 	result: &plan.Layer{
 		Services: map[string]*plan.Service{},
@@ -1348,7 +1348,7 @@ var planTests = []planTest{{
 				},
 			},
 		},
-		Sections: map[string]plan.LayerSection{},
+		Sections: map[string]plan.Section{},
 	},
 }, {
 	summary: "Reserved log target labels",
@@ -1399,7 +1399,7 @@ var planTests = []planTest{{
 		},
 		Checks:     map[string]*plan.Check{},
 		LogTargets: map[string]*plan.LogTarget{},
-		Sections:   map[string]plan.LayerSection{},
+		Sections:   map[string]plan.Section{},
 	},
 }, {
 	summary: "Three layers missing command",

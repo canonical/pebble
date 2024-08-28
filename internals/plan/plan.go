@@ -33,16 +33,16 @@ import (
 	"github.com/canonical/pebble/internals/osutil"
 )
 
-// LayerSectionExtension allows the plan layer schema to be extended without
+// SectionExtension allows the plan layer schema to be extended without
 // adding centralised schema knowledge to the plan library.
-type LayerSectionExtension interface {
+type SectionExtension interface {
 	// ParseSection returns a newly allocated concrete type containing the
 	// unmarshalled section content.
-	ParseSection(data yaml.Node) (LayerSection, error)
+	ParseSection(data yaml.Node) (Section, error)
 
 	// CombineSections returns a newly allocated concrete type containing the
 	// result of combining the supplied sections in order.
-	CombineSections(sections ...LayerSection) (LayerSection, error)
+	CombineSections(sections ...Section) (Section, error)
 
 	// ValidatePlan takes the complete plan as input, and allows the
 	// extension to validate the plan. This can be used for cross section
@@ -50,7 +50,7 @@ type LayerSectionExtension interface {
 	ValidatePlan(plan *Plan) error
 }
 
-type LayerSection interface {
+type Section interface {
 	// Validate checks whether the section is valid, returning an error if not.
 	Validate() error
 
@@ -70,7 +70,7 @@ const (
 
 var (
 	// layerExtensions keeps a map of registered extensions.
-	layerExtensions = map[string]LayerSectionExtension{}
+	layerExtensions = map[string]SectionExtension{}
 
 	// layerExtensionsOrder records the order in which the extensions were registered.
 	layerExtensionsOrder = []string{}
@@ -85,7 +85,7 @@ var layerBuiltins = []string{"summary", "description", "services", "checks", "lo
 // done before the plan library is used. The order in which extensions are
 // registered determines the order in which the sections are marshalled.
 // Extension sections are marshalled after the built-in sections.
-func RegisterExtension(field string, ext LayerSectionExtension) {
+func RegisterExtension(field string, ext SectionExtension) {
 	if slices.Contains(layerBuiltins, field) {
 		panic(fmt.Sprintf("internal error: extension %q already used as built-in field", field))
 	}
@@ -111,14 +111,7 @@ type Plan struct {
 	Checks     map[string]*Check     `yaml:"checks,omitempty"`
 	LogTargets map[string]*LogTarget `yaml:"log-targets,omitempty"`
 
-	Sections map[string]LayerSection `yaml:",inline"`
-}
-
-// Section retrieves a section from the plan. If Section is called
-// before the plan is loaded, or with an unregistered field, this method
-// will return nil.
-func (p *Plan) Section(field string) LayerSection {
-	return p.Sections[field]
+	Sections map[string]Section `yaml:",inline"`
 }
 
 // MarshalYAML implements an override for top level omitempty tags handling.
@@ -170,7 +163,7 @@ type Layer struct {
 	Checks      map[string]*Check     `yaml:"checks,omitempty"`
 	LogTargets  map[string]*LogTarget `yaml:"log-targets,omitempty"`
 
-	Sections map[string]LayerSection `yaml:",inline"`
+	Sections map[string]Section `yaml:",inline"`
 }
 
 type Service struct {
@@ -673,7 +666,7 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 		Services:   make(map[string]*Service),
 		Checks:     make(map[string]*Check),
 		LogTargets: make(map[string]*LogTarget),
-		Sections:   make(map[string]LayerSection),
+		Sections:   make(map[string]Section),
 	}
 
 	// Combine the same sections from each layer. Note that we do this before
@@ -681,7 +674,7 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 	// a zero value section, even if no layers are supplied (similar to the
 	// allocations taking place above for the built-in types).
 	for field, extension := range layerExtensions {
-		var sections []LayerSection
+		var sections []Section
 		for _, layer := range layers {
 			if section := layer.Sections[field]; section != nil {
 				sections = append(sections, section)
@@ -1241,7 +1234,7 @@ func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 		Services:   make(map[string]*Service),
 		Checks:     make(map[string]*Check),
 		LogTargets: make(map[string]*LogTarget),
-		Sections:   make(map[string]LayerSection),
+		Sections:   make(map[string]Section),
 	}
 
 	// The following manual approach is required because:

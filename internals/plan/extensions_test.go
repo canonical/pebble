@@ -44,7 +44,7 @@ type planResult struct {
 
 type extension struct {
 	field string
-	ext   plan.LayerSectionExtension
+	ext   plan.SectionExtension
 }
 
 var extensionTests = []struct {
@@ -349,16 +349,30 @@ var extensionTests = []struct {
 }}
 
 func (s *S) TestPlanExtensions(c *C) {
+	registeredExtensions := []string{}
+	defer func() {
+		// Remove remaining registered extensions.
+		for _, field := range registeredExtensions {
+			plan.UnregisterExtension(field)
+		}
+	}()
+
 nexttest:
 	for testIndex, testData := range extensionTests {
 		c.Logf("TestPlanExtensions :: %s (data index %v)", testData.summary, testIndex)
+
+		// Unregister extensions from previous test iteraton.
+		for _, field := range registeredExtensions {
+			plan.UnregisterExtension(field)
+		}
+		registeredExtensions = []string{}
 
 		// Write layers to test directory.
 		layersDir := filepath.Join(c.MkDir(), "layers")
 		s.writeLayerFiles(c, layersDir, testData.layers)
 		var p *plan.Plan
 
-		// Register test extensions.
+		// Register extensions for this test iteration.
 		for _, e := range testData.extensions {
 			err := func() (err error) {
 				defer func() {
@@ -367,6 +381,7 @@ nexttest:
 					}
 				}()
 				plan.RegisterExtension(e.field, e.ext)
+				registeredExtensions = append(registeredExtensions, e.field)
 				return nil
 			}()
 			if err != nil {
@@ -380,37 +395,33 @@ nexttest:
 		if testData.error != "" || err != nil {
 			// Expected error.
 			c.Assert(err, ErrorMatches, testData.error)
-		} else {
-			if slices.ContainsFunc(testData.extensions, func(n extension) bool {
-				return n.field == xField
-			}) {
-				// Verify "x-field" data.
-				var x *xSection
-				x = p.Section(xField).(*xSection)
-				c.Assert(err, IsNil)
-				c.Assert(x.Entries, DeepEquals, testData.result.x.Entries)
-			}
+			continue nexttest
+		}
 
-			if slices.ContainsFunc(testData.extensions, func(n extension) bool {
-				return n.field == yField
-			}) {
-				// Verify "y-field" data.
-				var y *ySection
-				y = p.Section(yField).(*ySection)
-				c.Assert(err, IsNil)
-				c.Assert(y.Entries, DeepEquals, testData.result.y.Entries)
-			}
-
-			// Verify combined plan YAML.
-			planYAML, err := yaml.Marshal(p)
+		if slices.ContainsFunc(testData.extensions, func(n extension) bool {
+			return n.field == xField
+		}) {
+			// Verify "x-field" data.
+			var x *xSection
+			x = p.Sections[xField].(*xSection)
 			c.Assert(err, IsNil)
-			c.Assert(string(planYAML), Equals, testData.resultYaml)
+			c.Assert(x.Entries, DeepEquals, testData.result.x.Entries)
 		}
 
-		// Unregister test extensions.
-		for _, e := range testData.extensions {
-			plan.UnregisterExtension(e.field)
+		if slices.ContainsFunc(testData.extensions, func(n extension) bool {
+			return n.field == yField
+		}) {
+			// Verify "y-field" data.
+			var y *ySection
+			y = p.Sections[yField].(*ySection)
+			c.Assert(err, IsNil)
+			c.Assert(y.Entries, DeepEquals, testData.result.y.Entries)
 		}
+
+		// Verify combined plan YAML.
+		planYAML, err := yaml.Marshal(p)
+		c.Assert(err, IsNil)
+		c.Assert(string(planYAML), Equals, testData.resultYaml)
 	}
 }
 
@@ -506,10 +517,10 @@ func (s *S) writeLayerFiles(c *C, layersDir string, inputs []*inputLayer) {
 
 const xField string = "x-field"
 
-// xExtension implements the LayerSectionExtension interface.
+// xExtension implements the SectionExtension interface.
 type xExtension struct{}
 
-func (x xExtension) ParseSection(data yaml.Node) (plan.LayerSection, error) {
+func (x xExtension) ParseSection(data yaml.Node) (plan.Section, error) {
 	xs := &xSection{}
 	err := data.Decode(xs)
 	if err != nil {
@@ -524,7 +535,7 @@ func (x xExtension) ParseSection(data yaml.Node) (plan.LayerSection, error) {
 	return xs, nil
 }
 
-func (x xExtension) CombineSections(sections ...plan.LayerSection) (plan.LayerSection, error) {
+func (x xExtension) CombineSections(sections ...plan.Section) (plan.Section, error) {
 	xs := &xSection{}
 	for _, section := range sections {
 		err := xs.Combine(section)
@@ -537,10 +548,10 @@ func (x xExtension) CombineSections(sections ...plan.LayerSection) (plan.LayerSe
 
 func (x xExtension) ValidatePlan(p *plan.Plan) error {
 	var xs *xSection
-	xs = p.Section(xField).(*xSection)
+	xs = p.Sections[xField].(*xSection)
 	if xs != nil {
 		var ys *ySection
-		ys = p.Section(yField).(*ySection)
+		ys = p.Sections[yField].(*ySection)
 
 		// Test dependency: Make sure every Y field in X refer to an existing Y entry.
 		for xEntryField, xEntryValue := range xs.Entries {
@@ -583,7 +594,7 @@ func (xs *xSection) IsZero() bool {
 	return xs.Entries == nil
 }
 
-func (xs *xSection) Combine(other plan.LayerSection) error {
+func (xs *xSection) Combine(other plan.Section) error {
 	otherxSection, ok := other.(*xSection)
 	if !ok {
 		return fmt.Errorf("cannot combine incompatible section type")
@@ -645,10 +656,10 @@ func (x *X) Merge(other *X) {
 
 const yField string = "y-field"
 
-// yExtension implements the LayerSectionExtension interface.
+// yExtension implements the SectionExtension interface.
 type yExtension struct{}
 
-func (y yExtension) ParseSection(data yaml.Node) (plan.LayerSection, error) {
+func (y yExtension) ParseSection(data yaml.Node) (plan.Section, error) {
 	ys := &ySection{}
 	err := data.Decode(ys)
 	if err != nil {
@@ -663,7 +674,7 @@ func (y yExtension) ParseSection(data yaml.Node) (plan.LayerSection, error) {
 	return ys, nil
 }
 
-func (y yExtension) CombineSections(sections ...plan.LayerSection) (plan.LayerSection, error) {
+func (y yExtension) CombineSections(sections ...plan.Section) (plan.Section, error) {
 	ys := &ySection{}
 	for _, section := range sections {
 		err := ys.Combine(section)
@@ -701,7 +712,7 @@ func (ys *ySection) IsZero() bool {
 	return ys.Entries == nil
 }
 
-func (ys *ySection) Combine(other plan.LayerSection) error {
+func (ys *ySection) Combine(other plan.Section) error {
 	otherySection, ok := other.(*ySection)
 	if !ok {
 		return fmt.Errorf("cannot combine incompatible section type")
