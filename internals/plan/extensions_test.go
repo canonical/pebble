@@ -19,6 +19,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	. "gopkg.in/check.v1"
@@ -41,316 +42,311 @@ type planResult struct {
 	y *ySection
 }
 
+type extension struct {
+	field string
+	ext   plan.LayerSectionExtension
+}
+
 var extensionTests = []struct {
 	summary    string
-	extensions map[string]plan.LayerSectionExtension
+	extensions []extension
 	layers     []*inputLayer
 	error      string
 	result     *planResult
 	resultYaml string
-}{
-	{
-		summary:    "No Sections",
-		resultYaml: "{}\n",
+}{{
+	summary:    "No Sections",
+	resultYaml: "{}\n",
+}, {
+	summary: "Section using built-in name",
+	extensions: []extension{{
+		field: "summary",
+		ext:   &xExtension{},
+	}},
+	error: ".*already used as built-in field.*",
+}, {
+	summary: "Sections with empty YAML",
+	extensions: []extension{{
+		field: "x-field",
+		ext:   &xExtension{},
 	}, {
-		summary: "Section using built-in name",
-		extensions: map[string]plan.LayerSectionExtension{
-			"summary": &xExtension{},
-		},
-		error: ".*already used as built-in field.*",
+		field: "y-field",
+		ext:   &yExtension{},
+	}},
+	result: &planResult{
+		x: &xSection{},
+		y: &ySection{},
+	},
+	resultYaml: "{}\n",
+}, {
+	summary: "Load file layers invalid section",
+	extensions: []extension{{
+		field: "x-field",
+		ext:   &xExtension{},
 	}, {
-		summary: "Sections with empty YAML",
-		extensions: map[string]plan.LayerSectionExtension{
-			"x-field": &xExtension{},
-			"y-field": &yExtension{},
-		},
-		result: &planResult{
-			x: &xSection{},
-			y: &ySection{},
-		},
-		resultYaml: "{}\n",
+		field: "y-field",
+		ext:   &yExtension{},
+	}},
+	layers: []*inputLayer{{
+		order: 1,
+		label: "layer-xy",
+		yaml: `
+			summary: xy
+			description: desc
+			invalid:`,
+	}},
+	error: "cannot parse layer .*: unknown section .*",
+}, {
+	summary: "Load file layers not unique order",
+	extensions: []extension{{
+		field: "x-field",
+		ext:   &xExtension{},
 	}, {
-		summary: "Load file layers invalid section",
-		extensions: map[string]plan.LayerSectionExtension{
-			"x-field": &xExtension{},
-			"y-field": &yExtension{},
-		},
-		layers: []*inputLayer{
-			{
-				order: 1,
-				label: "layer-xy",
-				yaml: `
-					summary: xy
-					description: desc
-					invalid:
-				`,
-			},
-		},
-		error: "cannot parse layer .*: unknown section .*",
+		field: "y-field",
+		ext:   &yExtension{},
+	}},
+	layers: []*inputLayer{{
+		order: 1,
+		label: "layer-1",
+		yaml: `
+			summary: xy
+			description: desc`,
 	}, {
-		summary: "Load file layers not unique order",
-		extensions: map[string]plan.LayerSectionExtension{
-			"x-field": &xExtension{},
-			"y-field": &yExtension{},
-		},
-		layers: []*inputLayer{
-			{
-				order: 1,
-				label: "layer-1",
-				yaml: `
-					summary: xy
-					description: desc
-				`,
-			},
-			{
-				order: 1,
-				label: "layer-2",
-				yaml: `
-					summary: xy
-					description: desc
-				`,
-			},
-		},
-		error: "invalid layer filename: .* not unique .*",
+		order: 1,
+		label: "layer-2",
+		yaml: `
+			summary: xy
+			description: desc`,
+	}},
+	error: "invalid layer filename: .* not unique .*",
+}, {
+	summary: "Load file layers not unique label",
+	extensions: []extension{{
+		field: "x-field",
+		ext:   &xExtension{},
 	}, {
-		summary: "Load file layers not unique label",
-		extensions: map[string]plan.LayerSectionExtension{
-			"x-field": &xExtension{},
-			"y-field": &yExtension{},
-		},
-		layers: []*inputLayer{
-			{
-				order: 1,
-				label: "layer-xy",
-				yaml: `
-					summary: xy
-					description: desc
-				`,
-			},
-			{
-				order: 2,
-				label: "layer-xy",
-				yaml: `
-					summary: xy
-					description: desc
-				`,
-			},
-		},
-		error: "invalid layer filename: .* not unique .*",
+		field: "y-field",
+		ext:   &yExtension{},
+	}},
+	layers: []*inputLayer{{
+		order: 1,
+		label: "layer-xy",
+		yaml: `
+			summary: xy
+			description: desc`,
 	}, {
-		summary: "Load file layers with empty section",
-		extensions: map[string]plan.LayerSectionExtension{
-			"x-field": &xExtension{},
-			"y-field": &yExtension{},
-		},
-		layers: []*inputLayer{
-			{
-				order: 1,
-				label: "layer-x",
-				yaml: `
-					summary: x
-					description: desc-x
-				`,
-			},
-			{
-				order: 2,
-				label: "layer-y",
-				yaml: `
-					summary: y
-					description: desc-y
-				`,
-			},
-		},
-		result: &planResult{
-			x: &xSection{},
-			y: &ySection{},
-		},
-		resultYaml: "{}\n",
+		order: 2,
+		label: "layer-xy",
+		yaml: `
+			summary: xy
+			description: desc`,
+	}},
+	error: "invalid layer filename: .* not unique .*",
+}, {
+	summary: "Load file layers with empty section",
+	extensions: []extension{{
+		field: "x-field",
+		ext:   &xExtension{},
 	}, {
-		summary: "Load file layers with section validation failure #1",
-		extensions: map[string]plan.LayerSectionExtension{
-			"x-field": &xExtension{},
-			"y-field": &yExtension{},
-		},
-		layers: []*inputLayer{
-			{
-				order: 1,
-				label: "layer-x",
-				yaml: `
-					summary: x
-					description: desc-x
-					x-field:
-						z1:
-							override: replace
-							a: a
-							b: b
-				`,
-			},
-		},
-		error: "cannot validate layer section .* cannot accept entry not starting .*",
+		field: "y-field",
+		ext:   &yExtension{},
+	}},
+	layers: []*inputLayer{{
+		order: 1,
+		label: "layer-x",
+		yaml: `
+			summary: x
+			description: desc-x`,
 	}, {
-		summary: "Load file layers with section validation failure #2",
-		extensions: map[string]plan.LayerSectionExtension{
-			"x-field": &xExtension{},
-			"y-field": &yExtension{},
-		},
-		layers: []*inputLayer{
-			{
-				order: 1,
-				label: "layer-x",
-				yaml: `
-					summary: x
-					description: desc-x
-					x-field:
-						x1:
-				`,
-			},
-		},
-		error: "cannot validate layer section .* cannot have nil entry .*",
+		order: 2,
+		label: "layer-y",
+		yaml: `
+			summary: y
+			description: desc-y`,
+	}},
+	result: &planResult{
+		x: &xSection{},
+		y: &ySection{},
+	},
+	resultYaml: "{}\n",
+}, {
+	summary: "Load file layers with section validation failure #1",
+	extensions: []extension{{
+		field: "x-field",
+		ext:   &xExtension{},
 	}, {
-		summary: "Load file layers failed plan validation",
-		extensions: map[string]plan.LayerSectionExtension{
-			"x-field": &xExtension{},
-			"y-field": &yExtension{},
-		},
-		layers: []*inputLayer{
-			{
-				order: 1,
-				label: "layer-x",
-				yaml: `
-					summary: x
-					description: desc-x
-					x-field:
-						x1:
-							override: replace
-							a: a
-							b: b
-							y-field:
-							  - y2
-				`,
-			},
-			{
-				order: 2,
-				label: "layer-y",
-				yaml: `
-					summary: y
-					description: desc-y
-					y-field:
-						y1:
-							override: replace
-							a: a
-							b: b
-				`,
-			},
-		},
-		error: "cannot validate plan section .* cannot find .* as required by .*",
+		field: "y-field",
+		ext:   &yExtension{},
+	}},
+	layers: []*inputLayer{{
+		order: 1,
+		label: "layer-x",
+		yaml: `
+			summary: x
+			description: desc-x
+			x-field:
+				z1:
+					override: replace
+					a: a
+					b: b`,
+	}},
+	error: "cannot validate layer section .* cannot accept entry not starting .*",
+}, {
+	summary: "Load file layers with section validation failure #2",
+	extensions: []extension{{
+		field: "x-field",
+		ext:   &xExtension{},
 	}, {
-		summary: "Check empty section omits entry",
-		extensions: map[string]plan.LayerSectionExtension{
-			"x-field": &xExtension{},
-			"y-field": &yExtension{},
-		},
-		layers: []*inputLayer{
-			{
-				order: 1,
-				label: "layer-x",
-				yaml: `
-					summary: x
-					description: desc-x
-					x-field:
-				`,
-			},
-			{
-				order: 2,
-				label: "layer-y",
-				yaml: `
-					summary: y
-					description: desc-y
-					y-field:
-				`,
-			},
-		},
-		result: &planResult{
-			x: &xSection{},
-			y: &ySection{},
-		},
-		resultYaml: "{}\n",
+		field: "y-field",
+		ext:   &yExtension{},
+	}},
+	layers: []*inputLayer{{
+		order: 1,
+		label: "layer-x",
+		yaml: `
+			summary: x
+			description: desc-x
+			x-field:
+				x1:`,
+	}},
+	error: "cannot validate layer section .* cannot have nil entry .*",
+}, {
+	summary: "Load file layers failed plan validation",
+	extensions: []extension{{
+		field: "x-field",
+		ext:   &xExtension{},
 	}, {
-		summary: "Load file layers",
-		extensions: map[string]plan.LayerSectionExtension{
-			"x-field": &xExtension{},
-			"y-field": &yExtension{},
-		},
-		layers: []*inputLayer{
-			{
-				order: 1,
-				label: "layer-x",
-				yaml: `
-					summary: x
-					description: desc-x
-					x-field:
-						x1:
-							override: replace
-							a: a
-							b: b
-							y-field:
-							  - y1
-				`,
-			},
-			{
-				order: 2,
-				label: "layer-y",
-				yaml: `
-					summary: y
-					description: desc-y
-					y-field:
-						y1:
-							override: replace
-							a: a
-							b: b
-				`,
-			},
-		},
-		result: &planResult{
-			x: &xSection{
-				Entries: map[string]*X{
-					"x1": &X{
-						Name:     "x1",
-						Override: plan.ReplaceOverride,
-						A:        "a",
-						B:        "b",
-						Y: []string{
-							"y1",
-						},
-					},
-				},
-			},
-			y: &ySection{
-				Entries: map[string]*Y{
-					"y1": &Y{
-						Name:     "y1",
-						Override: plan.ReplaceOverride,
-						A:        "a",
-						B:        "b",
-					},
-				},
-			},
-		},
-		resultYaml: string(reindent(`
+		field: "y-field",
+		ext:   &yExtension{},
+	}},
+	layers: []*inputLayer{{
+		order: 1,
+		label: "layer-x",
+		yaml: `
+			summary: x
+			description: desc-x
 			x-field:
 				x1:
 					override: replace
 					a: a
 					b: b
 					y-field:
-						- y1
+					  - y2`,
+	}, {
+		order: 2,
+		label: "layer-y",
+		yaml: `
+			summary: y
+			description: desc-y
 			y-field:
 				y1:
 					override: replace
 					a: a
-					b: b`)),
+					b: b`,
+	}},
+	error: "cannot validate plan section .* cannot find .* as required by .*",
+}, {
+	summary: "Check empty section omits entry",
+	extensions: []extension{{
+		field: "x-field",
+		ext:   &xExtension{},
+	}, {
+		field: "y-field",
+		ext:   &yExtension{},
+	}},
+	layers: []*inputLayer{{
+		order: 1,
+		label: "layer-x",
+		yaml: `
+			summary: x
+			description: desc-x
+			x-field:`,
+	}, {
+		order: 2,
+		label: "layer-y",
+		yaml: `
+			summary: y
+			description: desc-y
+			y-field:`,
+	}},
+	result: &planResult{
+		x: &xSection{},
+		y: &ySection{},
 	},
-}
+	resultYaml: "{}\n",
+}, {
+	summary: "Load file layers",
+	extensions: []extension{{
+		field: "x-field",
+		ext:   &xExtension{},
+	}, {
+		field: "y-field",
+		ext:   &yExtension{},
+	}},
+	layers: []*inputLayer{{
+		order: 1,
+		label: "layer-x",
+		yaml: `
+			summary: x
+			description: desc-x
+			x-field:
+				x1:
+					override: replace
+					a: a
+					b: b
+					y-field:
+					  - y1`,
+	}, {
+		order: 2,
+		label: "layer-y",
+		yaml: `
+			summary: y
+			description: desc-y
+			y-field:
+				y1:
+					override: replace
+					a: a
+					b: b`,
+	}},
+	result: &planResult{
+		x: &xSection{
+			Entries: map[string]*X{
+				"x1": &X{
+					Name:     "x1",
+					Override: plan.ReplaceOverride,
+					A:        "a",
+					B:        "b",
+					Y: []string{
+						"y1",
+					},
+				},
+			},
+		},
+		y: &ySection{
+			Entries: map[string]*Y{
+				"y1": &Y{
+					Name:     "y1",
+					Override: plan.ReplaceOverride,
+					A:        "a",
+					B:        "b",
+				},
+			},
+		},
+	},
+	resultYaml: string(reindent(`
+		x-field:
+			x1:
+				override: replace
+				a: a
+				b: b
+				y-field:
+					- y1
+		y-field:
+			y1:
+				override: replace
+				a: a
+				b: b`)),
+}}
 
 func (s *S) TestPlanExtensions(c *C) {
 nexttest:
@@ -363,14 +359,14 @@ nexttest:
 		var p *plan.Plan
 
 		// Register test extensions.
-		for field, extension := range testData.extensions {
+		for _, e := range testData.extensions {
 			err := func() (err error) {
 				defer func() {
 					if r := recover(); r != nil {
 						err = fmt.Errorf("%v", r)
 					}
 				}()
-				plan.RegisterExtension(field, extension)
+				plan.RegisterExtension(e.field, e.ext)
 				return nil
 			}()
 			if err != nil {
@@ -385,7 +381,9 @@ nexttest:
 			// Expected error.
 			c.Assert(err, ErrorMatches, testData.error)
 		} else {
-			if _, ok := testData.extensions[xField]; ok {
+			if slices.ContainsFunc(testData.extensions, func(n extension) bool {
+				return n.field == xField
+			}) {
 				// Verify "x-field" data.
 				var x *xSection
 				x = p.Section(xField).(*xSection)
@@ -393,7 +391,9 @@ nexttest:
 				c.Assert(x.Entries, DeepEquals, testData.result.x.Entries)
 			}
 
-			if _, ok := testData.extensions[yField]; ok {
+			if slices.ContainsFunc(testData.extensions, func(n extension) bool {
+				return n.field == yField
+			}) {
 				// Verify "y-field" data.
 				var y *ySection
 				y = p.Section(yField).(*ySection)
@@ -408,8 +408,8 @@ nexttest:
 		}
 
 		// Unregister test extensions.
-		for field, _ := range testData.extensions {
-			plan.UnregisterExtension(field)
+		for _, e := range testData.extensions {
+			plan.UnregisterExtension(e.field)
 		}
 	}
 }
@@ -426,32 +426,32 @@ func (s *S) TestSectionOrderExt(c *C) {
 	}()
 
 	layer, err := plan.ParseLayer(1, "label", reindent(`
-	y-field:
-		y1:
-			override: replace
-			a: a
-			b: b
-	checks:
-		chk1:
-			override: replace
-			exec:
-				command: ping 8.8.8.8
-	x-field:
-		x1:
-			override: replace
-			a: a
-			b: b
-			y-field:
-				- y1
-	log-targets:
-		lt1:
-			override: replace
-			type: loki
-			location: http://192.168.1.2:3100/loki/api/v1/push
-	services:
-		srv1:
-			override: replace
-			command: cmd`))
+		y-field:
+			y1:
+				override: replace
+				a: a
+				b: b
+		checks:
+			chk1:
+				override: replace
+				exec:
+					command: ping 8.8.8.8
+		x-field:
+			x1:
+				override: replace
+				a: a
+				b: b
+				y-field:
+					- y1
+		log-targets:
+			lt1:
+				override: replace
+				type: loki
+				location: http://192.168.1.2:3100/loki/api/v1/push
+		services:
+			srv1:
+				override: replace
+				command: cmd`))
 	c.Assert(err, IsNil)
 	combined, err := plan.CombineLayers(layer)
 	c.Assert(err, IsNil)
@@ -463,34 +463,34 @@ func (s *S) TestSectionOrderExt(c *C) {
 	}
 	data, err := yaml.Marshal(plan)
 	c.Assert(string(data), Equals, string(reindent(`
-	services:
-		srv1:
-			override: replace
-			command: cmd
-	checks:
-		chk1:
-			override: replace
-			threshold: 3
-			exec:
-				command: ping 8.8.8.8
-	log-targets:
-		lt1:
-			type: loki
-			location: http://192.168.1.2:3100/loki/api/v1/push
-			services: []
-			override: replace
-	x-field:
-		x1:
-			override: replace
-			a: a
-			b: b
-			y-field:
-				- y1
-	y-field:
-		y1:
-			override: replace
-			a: a
-			b: b`)))
+		services:
+			srv1:
+				override: replace
+				command: cmd
+		checks:
+			chk1:
+				override: replace
+				threshold: 3
+				exec:
+					command: ping 8.8.8.8
+		log-targets:
+			lt1:
+				type: loki
+				location: http://192.168.1.2:3100/loki/api/v1/push
+				services: []
+				override: replace
+		x-field:
+			x1:
+				override: replace
+				a: a
+				b: b
+				y-field:
+					- y1
+		y-field:
+			y1:
+				override: replace
+				a: a
+				b: b`)))
 }
 
 // writeLayerFiles writes layer files of a test to disk.
