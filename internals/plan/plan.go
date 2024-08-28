@@ -68,8 +68,13 @@ const (
 	defaultCheckThreshold = 3
 )
 
-// layerExtensions keeps a map of registered extensions.
-var layerExtensions = map[string]LayerSectionExtension{}
+var (
+	// layerExtensions keeps a map of registered extensions.
+	layerExtensions = map[string]LayerSectionExtension{}
+
+	// layerExtensionsOrder records the order in which the extensions were registered.
+	layerExtensionsOrder = []string{}
+)
 
 // layerBuiltins represents all the built-in layer sections. This list is used
 // for identifying built-in fields in this package. It is unit tested to match
@@ -77,7 +82,9 @@ var layerExtensions = map[string]LayerSectionExtension{}
 var layerBuiltins = []string{"summary", "description", "services", "checks", "log-targets"}
 
 // RegisterExtension adds a plan schema extension. All registrations must be
-// done before the plan library is used.
+// done before the plan library is used. The order in which extensions are
+// registered determines the order in which the sections are marshalled.
+// Extension sections are marshalled after the built-in sections.
 func RegisterExtension(field string, ext LayerSectionExtension) {
 	if slices.Contains(layerBuiltins, field) {
 		panic(fmt.Sprintf("internal error: extension %q already used as built-in field", field))
@@ -86,12 +93,16 @@ func RegisterExtension(field string, ext LayerSectionExtension) {
 		panic(fmt.Sprintf("internal error: extension %q already registered", field))
 	}
 	layerExtensions[field] = ext
+	layerExtensionsOrder = append(layerExtensionsOrder, field)
 }
 
 // UnregisterExtension removes a plan schema extension. This is only
 // intended for use by tests during cleanup.
 func UnregisterExtension(field string) {
 	delete(layerExtensions, field)
+	layerExtensionsOrder = slices.DeleteFunc(layerExtensionsOrder, func(n string) bool {
+		return n == field
+	})
 }
 
 type Plan struct {
@@ -114,22 +125,40 @@ func (p *Plan) Section(field string) LayerSection {
 // This is required since Sections are based on an inlined map, for which
 // omitempty and inline together is not currently supported.
 func (p *Plan) MarshalYAML() (interface{}, error) {
-	data := make(map[string]interface{})
-	if len(p.Services) != 0 {
-		data["services"] = p.Services
+	// Define the content inside a structure so we can control the ordering
+	// of top level sections.
+	ordered := []reflect.StructField{{
+		Name: "Services",
+		Type: reflect.TypeOf(p.Services),
+		Tag:  `yaml:"services,omitempty"`,
+	}, {
+		Name: "Checks",
+		Type: reflect.TypeOf(p.Checks),
+		Tag:  `yaml:"checks,omitempty"`,
+	}, {
+		Name: "LogTargets",
+		Type: reflect.TypeOf(p.LogTargets),
+		Tag:  `yaml:"log-targets,omitempty"`,
+	}}
+	for i, field := range layerExtensionsOrder {
+		section := p.Sections[field]
+		ordered = append(ordered, reflect.StructField{
+			Name: fmt.Sprintf("Dummy%v", i),
+			Type: reflect.TypeOf(section),
+			Tag:  reflect.StructTag(fmt.Sprintf("yaml:\"%s,omitempty\"", field)),
+		})
 	}
-	if len(p.LogTargets) != 0 {
-		data["log-targets"] = p.LogTargets
+	typ := reflect.StructOf(ordered)
+	// Assign the plan data to the structure layout we created.
+	v := reflect.New(typ).Elem()
+	v.Field(0).Set(reflect.ValueOf(p.Services))
+	v.Field(1).Set(reflect.ValueOf(p.Checks))
+	v.Field(2).Set(reflect.ValueOf(p.LogTargets))
+	for i, field := range layerExtensionsOrder {
+		v.Field(3 + i).Set(reflect.ValueOf(p.Sections[field]))
 	}
-	if len(p.Checks) != 0 {
-		data["checks"] = p.Checks
-	}
-	for field, section := range p.Sections {
-		if !section.IsZero() {
-			data[field] = section
-		}
-	}
-	return data, nil
+	plan := v.Addr().Interface()
+	return plan, nil
 }
 
 type Layer struct {

@@ -2109,3 +2109,48 @@ func firstLetterToLower(s string) string {
 	r[0] = unicode.ToLower(r[0])
 	return string(r)
 }
+
+// TestSectionOrder ensures built-in section order is maintained.
+func (s *S) TestSectionOrder(c *C) {
+	layer, err := plan.ParseLayer(1, "label", reindent(`
+	checks:
+		chk1:
+			override: replace
+			exec:
+				command: ping 8.8.8.8
+	log-targets:
+		lt1:
+			override: replace
+			type: loki
+			location: http://192.168.1.2:3100/loki/api/v1/push
+	services:
+		srv1:
+			override: replace
+			command: cmd`))
+	c.Assert(err, IsNil)
+	combined, err := plan.CombineLayers(layer)
+	c.Assert(err, IsNil)
+	plan := plan.Plan{
+		Services:   combined.Services,
+		Checks:     combined.Checks,
+		LogTargets: combined.LogTargets,
+	}
+	data, err := yaml.Marshal(plan)
+	c.Assert(string(data), Equals, string(reindent(`
+	services:
+		srv1:
+			override: replace
+			command: cmd
+	checks:
+		chk1:
+			override: replace
+			threshold: 3
+			exec:
+				command: ping 8.8.8.8
+	log-targets:
+		lt1:
+			type: loki
+			location: http://192.168.1.2:3100/loki/api/v1/push
+			services: []
+			override: replace`)))
+}

@@ -414,6 +414,85 @@ nexttest:
 	}
 }
 
+// TestSectionOrderExt ensures built-in and extension section ordering
+// does not change. Extensions are ordered according to the order of
+// registration.
+func (s *S) TestSectionOrderExt(c *C) {
+	plan.RegisterExtension("x-field", &xExtension{})
+	plan.RegisterExtension("y-field", &yExtension{})
+	defer func() {
+		plan.UnregisterExtension("x-field")
+		plan.UnregisterExtension("y-field")
+	}()
+
+	layer, err := plan.ParseLayer(1, "label", reindent(`
+	y-field:
+		y1:
+			override: replace
+			a: a
+			b: b
+	checks:
+		chk1:
+			override: replace
+			exec:
+				command: ping 8.8.8.8
+	x-field:
+		x1:
+			override: replace
+			a: a
+			b: b
+			y-field:
+				- y1
+	log-targets:
+		lt1:
+			override: replace
+			type: loki
+			location: http://192.168.1.2:3100/loki/api/v1/push
+	services:
+		srv1:
+			override: replace
+			command: cmd`))
+	c.Assert(err, IsNil)
+	combined, err := plan.CombineLayers(layer)
+	c.Assert(err, IsNil)
+	plan := plan.Plan{
+		Services:   combined.Services,
+		Checks:     combined.Checks,
+		LogTargets: combined.LogTargets,
+		Sections:   combined.Sections,
+	}
+	data, err := yaml.Marshal(plan)
+	c.Assert(string(data), Equals, string(reindent(`
+	services:
+		srv1:
+			override: replace
+			command: cmd
+	checks:
+		chk1:
+			override: replace
+			threshold: 3
+			exec:
+				command: ping 8.8.8.8
+	log-targets:
+		lt1:
+			type: loki
+			location: http://192.168.1.2:3100/loki/api/v1/push
+			services: []
+			override: replace
+	x-field:
+		x1:
+			override: replace
+			a: a
+			b: b
+			y-field:
+				- y1
+	y-field:
+		y1:
+			override: replace
+			a: a
+			b: b`)))
+}
+
 // writeLayerFiles writes layer files of a test to disk.
 func (s *S) writeLayerFiles(c *C, layersDir string, inputs []*inputLayer) {
 	err := os.MkdirAll(layersDir, 0755)
