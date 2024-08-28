@@ -1255,7 +1255,7 @@ func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 	}
 	// Make sure builtinSections contains the exact same fields as expected
 	// in the Layer type.
-	if !mapHasKeys(builtinSections, layerBuiltins) {
+	if !mapMatchKeys(builtinSections, layerBuiltins) {
 		panic("internal error: parsed fields and layer fields differ")
 	}
 
@@ -1344,14 +1344,14 @@ func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 	return layer, err
 }
 
-// mapHasKeys returns true if the key list supplied is an exact match of the
+// mapMatchKeys returns true if the key list supplied is an exact match of the
 // keys in the map (ordering is ignored).
-func mapHasKeys[M ~map[K]V, K comparable, V any](inMap M, keyList []K) bool {
+func mapMatchKeys[M ~map[K]V, K comparable, V any](inMap M, keyList []K) bool {
 	if len(inMap) != len(keyList) {
 		return false
 	}
-	for _, key := range keyList {
-		if _, ok := inMap[key]; !ok {
+	for key, _ := range inMap {
+		if !slices.Contains(keyList, key) {
 			return false
 		}
 	}
