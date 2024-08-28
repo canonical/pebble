@@ -683,9 +683,7 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 		var err error
 		combined.Sections[field], err = extension.CombineSections(sections...)
 		if err != nil {
-			return nil, &FormatError{
-				Message: fmt.Sprintf("cannot combine section %q: %v", field, err),
-			}
+			return nil, err
 		}
 	}
 
@@ -1307,9 +1305,7 @@ func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 			// Section unmarshal rules are defined by the extension itself.
 			layer.Sections[field], err = extension.ParseSection(section)
 			if err != nil {
-				return nil, &FormatError{
-					Message: fmt.Sprintf("cannot parse layer %q section %q: %v", label, field, err),
-				}
+				return nil, err
 			}
 		}
 	}
