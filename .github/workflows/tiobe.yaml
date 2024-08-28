@@ -13,7 +13,7 @@ jobs:
 
       - name: Set up Go
         uses: actions/setup-go@v4
-  
+
       - name: Install dependencies
         run: |
           go install honnef.co/go/tools/cmd/staticcheck@v0.5.1
@@ -23,7 +23,7 @@ jobs:
       # We could store a report from the regular run, but this is cheap to do and keeps this isolated.
       - name: Test and generate coverage report
         run: |
-          go test -race -coverprofile=coverage.out ./...
+          go test -coverprofile=coverage.out ./...
           gocov convert coverage.out > coverage.json
           # Annoyingly, the coverage.xml file needs to be in a .coverage folder.
           mkdir .coverage
