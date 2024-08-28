@@ -954,10 +954,10 @@ func (layer *Layer) Validate() error {
 		}
 	}
 
-	for field, section := range layer.Sections {
+	for _, section := range layer.Sections {
 		err := section.Validate()
 		if err != nil {
-			return fmt.Errorf("cannot validate layer section %q: %w", field, err)
+			return err
 		}
 	}
 
@@ -1055,10 +1055,10 @@ func (p *Plan) Validate() error {
 	}
 
 	// Each section extension must validate the combined plan.
-	for field, extension := range sectionExtensions {
+	for _, extension := range sectionExtensions {
 		err = extension.ValidatePlan(p)
 		if err != nil {
-			return fmt.Errorf("cannot validate plan section %q: %w", field, err)
+			return err
 		}
 	}
 

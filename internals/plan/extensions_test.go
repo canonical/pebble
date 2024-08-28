@@ -190,7 +190,7 @@ var extensionTests = []struct {
 					a: a
 					b: b`,
 	}},
-	error: "cannot validate layer section .* cannot accept entry not starting .*",
+	error: ".*cannot accept entry not starting.*",
 }, {
 	summary: "Load file layers with section validation failure #2",
 	extensions: []extension{{
@@ -209,7 +209,7 @@ var extensionTests = []struct {
 			x-field:
 				x1:`,
 	}},
-	error: "cannot validate layer section .* cannot have nil entry .*",
+	error: ".*cannot have nil entry.*",
 }, {
 	summary: "Load file layers failed plan validation",
 	extensions: []extension{{
@@ -244,7 +244,7 @@ var extensionTests = []struct {
 					a: a
 					b: b`,
 	}},
-	error: "cannot validate plan section .* cannot find .* as required by .*",
+	error: ".*cannot find.*",
 }, {
 	summary: "Check empty section omits entry",
 	extensions: []extension{{
