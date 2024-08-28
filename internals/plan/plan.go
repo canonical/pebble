@@ -1253,7 +1253,7 @@ func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 		"checks":      &layer.Checks,
 		"log-targets": &layer.LogTargets,
 	}
-	// Make sure builtinSections contains the exact same fields as expected
+	// Make sure builtins contains the exact same fields as expected
 	// in the Layer type.
 	if !mapMatchKeys(builtins, builtinSections) {
 		panic("internal error: parsed fields and layer fields differ")
