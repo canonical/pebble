@@ -110,10 +110,12 @@ var extLoadLayers = []string{`
 `}
 
 func (ps *planSuite) TestExtLoadLayers(c *C) {
+	plan.RegisterExtension(testField, testExtension{})
+	defer plan.UnregisterExtension(testField)
+
 	var err error
 	ps.planMgr, err = planstate.NewManager(ps.layersDir)
 	c.Assert(err, IsNil)
-	plan.RegisterExtension(testField, testExtension{})
 	// Write layers
 	for _, l := range extLoadLayers {
 		ps.writeLayer(c, string(reindent(l)))
@@ -224,10 +226,12 @@ services:
 }
 
 func (ps *planSuite) TestExtAppendLayers(c *C) {
+	plan.RegisterExtension(testField, testExtension{})
+	defer plan.UnregisterExtension(testField)
+
 	var err error
 	ps.planMgr, err = planstate.NewManager(ps.layersDir)
 	c.Assert(err, IsNil)
-	plan.RegisterExtension(testField, testExtension{})
 
 	// Append a layer when there are no layers.
 	layer := ps.parseLayer(c, 0, "label1", `
@@ -462,10 +466,12 @@ checks:
 }
 
 func (ps *planSuite) TestExtCombineLayers(c *C) {
+	plan.RegisterExtension(testField, testExtension{})
+	defer plan.UnregisterExtension(testField)
+
 	var err error
 	ps.planMgr, err = planstate.NewManager(ps.layersDir)
 	c.Assert(err, IsNil)
-	plan.RegisterExtension(testField, testExtension{})
 
 	// "Combine" layer with no layers should just append.
 	layer := ps.parseLayer(c, 0, "label1", `

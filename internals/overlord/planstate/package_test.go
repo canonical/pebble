@@ -42,8 +42,6 @@ type planSuite struct {
 var _ = Suite(&planSuite{})
 
 func (ps *planSuite) SetUpTest(c *C) {
-	plan.UnregisterExtension(testField)
-
 	ps.layersDir = filepath.Join(c.MkDir(), "layers")
 	err := os.Mkdir(ps.layersDir, 0755)
 	c.Assert(err, IsNil)
@@ -110,7 +108,7 @@ const testField string = "test-field"
 // testExtension implements the LayerSectionExtension interface.
 type testExtension struct{}
 
-func (te testExtension) ParseSection(data yaml.Node) (plan.LayerSection, error) {
+func (te testExtension) ParseSection(data yaml.Node) (plan.Section, error) {
 	ts := &testSection{}
 	err := data.Decode(ts)
 	if err != nil {
@@ -125,7 +123,7 @@ func (te testExtension) ParseSection(data yaml.Node) (plan.LayerSection, error) 
 	return ts, nil
 }
 
-func (te testExtension) CombineSections(sections ...plan.LayerSection) (plan.LayerSection, error) {
+func (te testExtension) CombineSections(sections ...plan.Section) (plan.Section, error) {
 	ts := &testSection{}
 	for _, section := range sections {
 		err := ts.Combine(section)
@@ -161,7 +159,7 @@ func (ts *testSection) IsZero() bool {
 	return ts.Entries == nil
 }
 
-func (ts *testSection) Combine(other plan.LayerSection) error {
+func (ts *testSection) Combine(other plan.Section) error {
 	otherTSection, ok := other.(*testSection)
 	if !ok {
 		return fmt.Errorf("invalid section type")
