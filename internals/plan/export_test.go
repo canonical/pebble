@@ -14,4 +14,4 @@
 
 package plan
 
-var LayerBuiltins = layerBuiltins
+var BuiltinSections = builtinSections

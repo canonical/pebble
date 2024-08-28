@@ -69,38 +69,38 @@ const (
 )
 
 var (
-	// layerExtensions keeps a map of registered extensions.
-	layerExtensions = map[string]SectionExtension{}
+	// sectionExtensions keeps a map of registered extensions.
+	sectionExtensions = map[string]SectionExtension{}
 
-	// layerExtensionsOrder records the order in which the extensions were registered.
-	layerExtensionsOrder = []string{}
+	// sectionExtensionsOrder records the order in which the extensions were registered.
+	sectionExtensionsOrder = []string{}
 )
 
-// layerBuiltins represents all the built-in layer sections. This list is used
+// builtinSections represents all the built-in layer sections. This list is used
 // for identifying built-in fields in this package. It is unit tested to match
 // the YAML fields exposed in the Layer type, to catch inconsistencies.
-var layerBuiltins = []string{"summary", "description", "services", "checks", "log-targets"}
+var builtinSections = []string{"summary", "description", "services", "checks", "log-targets"}
 
 // RegisterExtension adds a plan schema extension. All registrations must be
 // done before the plan library is used. The order in which extensions are
 // registered determines the order in which the sections are marshalled.
 // Extension sections are marshalled after the built-in sections.
 func RegisterExtension(field string, ext SectionExtension) {
-	if slices.Contains(layerBuiltins, field) {
+	if slices.Contains(builtinSections, field) {
 		panic(fmt.Sprintf("internal error: extension %q already used as built-in field", field))
 	}
-	if _, ok := layerExtensions[field]; ok {
+	if _, ok := sectionExtensions[field]; ok {
 		panic(fmt.Sprintf("internal error: extension %q already registered", field))
 	}
-	layerExtensions[field] = ext
-	layerExtensionsOrder = append(layerExtensionsOrder, field)
+	sectionExtensions[field] = ext
+	sectionExtensionsOrder = append(sectionExtensionsOrder, field)
 }
 
 // UnregisterExtension removes a plan schema extension. This is only
 // intended for use by tests during cleanup.
 func UnregisterExtension(field string) {
-	delete(layerExtensions, field)
-	layerExtensionsOrder = slices.DeleteFunc(layerExtensionsOrder, func(n string) bool {
+	delete(sectionExtensions, field)
+	sectionExtensionsOrder = slices.DeleteFunc(sectionExtensionsOrder, func(n string) bool {
 		return n == field
 	})
 }
@@ -133,7 +133,7 @@ func (p *Plan) MarshalYAML() (interface{}, error) {
 		Type: reflect.TypeOf(p.LogTargets),
 		Tag:  `yaml:"log-targets,omitempty"`,
 	}}
-	for i, field := range layerExtensionsOrder {
+	for i, field := range sectionExtensionsOrder {
 		section := p.Sections[field]
 		ordered = append(ordered, reflect.StructField{
 			Name: fmt.Sprintf("Dummy%v", i),
@@ -147,7 +147,7 @@ func (p *Plan) MarshalYAML() (interface{}, error) {
 	v.Field(0).Set(reflect.ValueOf(p.Services))
 	v.Field(1).Set(reflect.ValueOf(p.Checks))
 	v.Field(2).Set(reflect.ValueOf(p.LogTargets))
-	for i, field := range layerExtensionsOrder {
+	for i, field := range sectionExtensionsOrder {
 		v.Field(3 + i).Set(reflect.ValueOf(p.Sections[field]))
 	}
 	plan := v.Addr().Interface()
@@ -673,7 +673,7 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 	// the layers length check because we need the extension to provide us with
 	// a zero value section, even if no layers are supplied (similar to the
 	// allocations taking place above for the built-in types).
-	for field, extension := range layerExtensions {
+	for field, extension := range sectionExtensions {
 		var sections []Section
 		for _, layer := range layers {
 			if section := layer.Sections[field]; section != nil {
@@ -1055,7 +1055,7 @@ func (p *Plan) Validate() error {
 	}
 
 	// Each section extension must validate the combined plan.
-	for field, extension := range layerExtensions {
+	for field, extension := range sectionExtensions {
 		err = extension.ValidatePlan(p)
 		if err != nil {
 			return fmt.Errorf("cannot validate plan section %q: %w", field, err)
@@ -1246,7 +1246,7 @@ func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 	// 2. We honor KnownFields = true behaviour for non extended schema
 	// sections, and at the top field level, which includes Section field
 	// names.
-	builtinSections := map[string]interface{}{
+	builtins := map[string]interface{}{
 		"summary":     &layer.Summary,
 		"description": &layer.Description,
 		"services":    &layer.Services,
@@ -1255,29 +1255,29 @@ func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 	}
 	// Make sure builtinSections contains the exact same fields as expected
 	// in the Layer type.
-	if !mapMatchKeys(builtinSections, layerBuiltins) {
+	if !mapMatchKeys(builtins, builtinSections) {
 		panic("internal error: parsed fields and layer fields differ")
 	}
 
-	layerSections := make(map[string]yaml.Node)
+	sections := make(map[string]yaml.Node)
 	// Deliberately pre-allocate at least an empty yaml.Node for every
 	// extension section. Extension sections that have unmarshalled
 	// will update the respective node, while non-existing sections
 	// will at least have an empty node. This means we can consistently
 	// let the extension allocate and decode the yaml node for all sections,
 	// and in the case where it is zero, we get an empty backing type instance.
-	for field, _ := range layerExtensions {
-		layerSections[field] = yaml.Node{}
+	for field, _ := range sectionExtensions {
+		sections[field] = yaml.Node{}
 	}
-	err := yaml.Unmarshal(data, &layerSections)
+	err := yaml.Unmarshal(data, &sections)
 	if err != nil {
 		return nil, &FormatError{
 			Message: fmt.Sprintf("cannot parse layer %q: %v", label, err),
 		}
 	}
 
-	for field, section := range layerSections {
-		if slices.Contains(layerBuiltins, field) {
+	for field, section := range sections {
+		if slices.Contains(builtinSections, field) {
 			// The following issue prevents us from using the yaml.Node decoder
 			// with KnownFields = true behaviour. Once one of the proposals get
 			// merged, we can remove the intermediate Marshal step.
@@ -1288,13 +1288,13 @@ func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 			}
 			dec := yaml.NewDecoder(bytes.NewReader(data))
 			dec.KnownFields(true)
-			if err = dec.Decode(builtinSections[field]); err != nil {
+			if err = dec.Decode(builtins[field]); err != nil {
 				return nil, &FormatError{
 					Message: fmt.Sprintf("cannot parse layer %q section %q: %v", label, field, err),
 				}
 			}
 		} else {
-			extension, ok := layerExtensions[field]
+			extension, ok := sectionExtensions[field]
 			if !ok {
 				// At the top level we do not ignore keys we do not understand.
 				// This preserves the current Pebble behaviour of decoding with
