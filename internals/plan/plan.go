@@ -1251,11 +1251,6 @@ func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 		"checks":      &layer.Checks,
 		"log-targets": &layer.LogTargets,
 	}
-	// Make sure builtins contains the exact same fields as expected
-	// in the Layer type.
-	if !mapMatchKeys(builtins, builtinSections) {
-		panic("internal error: parsed fields and layer fields differ")
-	}
 
 	sections := make(map[string]yaml.Node)
 	// Deliberately pre-allocate at least an empty yaml.Node for every
@@ -1338,20 +1333,6 @@ func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 	}
 
 	return layer, err
-}
-
-// mapMatchKeys returns true if the key list supplied is an exact match of the
-// keys in the map (ordering is ignored).
-func mapMatchKeys[M ~map[K]V, K comparable, V any](inMap M, keyList []K) bool {
-	if len(inMap) != len(keyList) {
-		return false
-	}
-	for key, _ := range inMap {
-		if !slices.Contains(keyList, key) {
-			return false
-		}
-	}
-	return true
 }
 
 func validServiceAction(action ServiceAction, additionalValid ...ServiceAction) bool {

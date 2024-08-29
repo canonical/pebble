@@ -35,8 +35,8 @@ type inputLayer struct {
 }
 
 // PlanResult represents the final content of a combined plan. Since this
-// package exclusively focuses extensions, all built-in sections are empty
-// and ignored in the test results.
+// test file exclusively focuses on extensions, all built-in sections are
+// empty and ignored in the test results.
 type planResult struct {
 	x *xSection
 	y *ySection

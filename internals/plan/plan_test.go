@@ -20,7 +20,6 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"slices"
 	"strings"
 	"time"
 	"unicode"
@@ -29,6 +28,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/canonical/pebble/internals/plan"
+	"github.com/canonical/pebble/internals/testutil"
 )
 
 const (
@@ -2072,14 +2072,15 @@ func (s *S) TestStartStopOrderMultipleLanes(c *C) {
 	c.Assert(lanes[2], DeepEquals, []string{"srv3"})
 }
 
-// TestLayerBuiltinCompatible ensures layerBuiltins used in the plan package
-// reflects the same YAML fields as exposed in the Layer type.
-func (s *S) TestLayerBuiltinCompatible(c *C) {
-	fields := structYamlFields(plan.Layer{})
-	c.Assert(len(fields), Equals, len(plan.BuiltinSections))
-	for _, field := range fields {
-		c.Assert(slices.Contains(plan.BuiltinSections, field), Equals, true)
-	}
+// TestSectionFieldStability detects changes in plan.Layer and plan.Plan
+// YAML fields, and fails on any change that could break hardcoded section
+// fields in the code. On failure, please carefully inspect and update
+// the plan library where required.
+func (s *S) TestSectionFieldStability(c *C) {
+	layerFields := structYamlFields(plan.Layer{})
+	c.Assert(layerFields, testutil.DeepUnsortedMatches, []string{"summary", "description", "services", "checks", "log-targets", "sections"})
+	planFields := structYamlFields(plan.Plan{})
+	c.Assert(planFields, testutil.DeepUnsortedMatches, []string{"services", "checks", "log-targets", "sections"})
 }
 
 // structYamlFields extracts the YAML fields from a struct. If the YAML tag
@@ -2090,7 +2091,7 @@ func structYamlFields(inStruct any) []string {
 	for i := range inStructType.NumField() {
 		fieldType := inStructType.Field(i)
 		yamlTag := fieldType.Tag.Get("yaml")
-		if fieldType.IsExported() && yamlTag != "-" && !strings.Contains(yamlTag, ",inline") {
+		if fieldType.IsExported() && yamlTag != "-" {
 			tag, _, _ := strings.Cut(fieldType.Tag.Get("yaml"), ",")
 			if tag == "" {
 				tag = firstLetterToLower(fieldType.Name)
