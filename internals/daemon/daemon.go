@@ -248,10 +248,7 @@ func (c *Command) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			rsp.transmitMaintenance(errorKindDaemonRestart, "daemon is stopping to wait for socket activation")
 		}
 		if rsp.Type != ResponseTypeError {
-			st := c.d.state
-			st.Lock()
-			latest := st.LatestWarningTime()
-			st.Unlock()
+			latest := c.d.state.LatestWarningTime()
 			rsp.addWarningsToMeta(latest)
 		}
 	}

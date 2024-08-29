@@ -15,7 +15,6 @@
 package daemon
 
 import (
-	"encoding/json"
 	"net/http"
 
 	"github.com/canonical/x-go/strutil"
@@ -35,7 +34,7 @@ func v1Health(c *Command, r *http.Request, _ *UserState) Response {
 	switch level {
 	case plan.UnsetLevel, plan.AliveLevel, plan.ReadyLevel:
 	default:
-		return healthError(http.StatusBadRequest, `level must be "alive" or "ready"`)
+		return BadRequest(`level must be "alive" or "ready"`)
 	}
 
 	names := strutil.MultiCommaSeparatedList(query["names"])
@@ -43,7 +42,7 @@ func v1Health(c *Command, r *http.Request, _ *UserState) Response {
 	checks, err := getChecks(c.d.overlord)
 	if err != nil {
 		logger.Noticef("Cannot fetch checks: %v", err.Error())
-		return healthError(http.StatusInternalServerError, "internal server error")
+		return InternalError("internal server error")
 	}
 
 	healthy := true
@@ -58,43 +57,9 @@ func v1Health(c *Command, r *http.Request, _ *UserState) Response {
 		}
 	}
 
-	return SyncResponse(&healthResp{
-		Type:       ResponseTypeSync,
-		Status:     status,
-		StatusText: http.StatusText(status),
-		Result:     healthInfo{Healthy: healthy},
+	return SyncResponse(&resp{
+		Type:   ResponseTypeSync,
+		Status: status,
+		Result: healthInfo{Healthy: healthy},
 	})
-}
-
-// Like the resp struct, but without the warning/maintenance fields, so that
-// the health endpoint doesn't have to acquire the state lock (resulting in a
-// slow response on heavily-loaded systems).
-type healthResp struct {
-	Type       ResponseType `json:"type"`
-	Status     int          `json:"status-code"`
-	StatusText string       `json:"status,omitempty"`
-	Result     interface{}  `json:"result,omitempty"`
-}
-
-func (r *healthResp) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
-	status := r.Status
-	bs, err := json.Marshal(r)
-	if err != nil {
-		logger.Noticef("Cannot marshal %#v to JSON: %v", *r, err)
-		bs = nil
-		status = http.StatusInternalServerError
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	w.Write(bs)
-}
-
-func healthError(status int, message string) *healthResp {
-	return &healthResp{
-		Type:       ResponseTypeError,
-		Status:     status,
-		StatusText: http.StatusText(status),
-		Result:     &errorResult{Message: message},
-	}
 }

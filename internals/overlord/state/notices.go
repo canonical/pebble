@@ -270,6 +270,13 @@ func (s *State) AddNotice(userID *uint32, noticeType NoticeType, key string, opt
 	notice.lastData = options.Data
 	notice.repeatAfter = options.RepeatAfter
 
+	// Update the latest warning time cache if needed. There's no need to
+	// actually update atomically here, because the state lock is held.
+	if notice.noticeType == WarningNotice && notice.lastRepeated.After(s.LatestWarningTime()) {
+		latestWarningTime := notice.lastRepeated
+		s.latestWarningTime.Store(&latestWarningTime)
+	}
+
 	if newOrRepeated {
 		s.noticeCond.Broadcast()
 	}
@@ -371,18 +378,14 @@ func (s *State) Notices(filter *NoticeFilter) []*Notice {
 
 // LatestWarningTime returns the most recent time a warning notice was
 // repeated, or the zero value if there are no warnings.
+//
+// The state lock does not need to be held when calling this method.
 func (s *State) LatestWarningTime() time.Time {
-	s.reading()
-
-	// TODO(benhoyt): optimise with an in-memory atomic cache when warnings are added (or pruned),
-	//                to avoid having to acquire the state lock on every request
-	var latest time.Time
-	for _, notice := range s.notices {
-		if notice.noticeType == WarningNotice && notice.lastRepeated.After(latest) {
-			latest = notice.lastRepeated
-		}
+	t := s.latestWarningTime.Load()
+	if t == nil {
+		return time.Time{}
 	}
-	return latest
+	return *t
 }
 
 // Notice returns a single notice by ID, or nil if not found.
@@ -415,6 +418,7 @@ func (s *State) flattenNotices(filter *NoticeFilter) []*Notice {
 func (s *State) unflattenNotices(flat []*Notice) {
 	now := time.Now()
 	s.notices = make(map[noticeKey]*Notice)
+	var latestWarningTime time.Time
 	for _, n := range flat {
 		if n.expired(now) {
 			continue
@@ -422,7 +426,11 @@ func (s *State) unflattenNotices(flat []*Notice) {
 		userID, hasUserID := n.UserID()
 		uniqueKey := noticeKey{hasUserID, userID, n.noticeType, n.key}
 		s.notices[uniqueKey] = n
+		if n.noticeType == WarningNotice && n.lastRepeated.After(latestWarningTime) {
+			latestWarningTime = n.lastRepeated
+		}
 	}
+	s.latestWarningTime.Store(&latestWarningTime)
 }
 
 // WaitNotices waits for notices that match the filter to exist or occur,

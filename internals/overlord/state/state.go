@@ -94,7 +94,8 @@ type State struct {
 	notices    map[noticeKey]*Notice
 	identities map[string]*Identity
 
-	noticeCond *sync.Cond
+	noticeCond        *sync.Cond
+	latestWarningTime atomic.Pointer[time.Time]
 
 	modified bool
 
@@ -504,11 +505,16 @@ func (s *State) Prune(startOfOperation time.Time, pruneWait, abortWait time.Dura
 		readyChangesCount++
 	}
 
+	// Prune expired notices, and update the latest warning time cache.
+	var latestWarningTime time.Time
 	for k, n := range s.notices {
 		if n.expired(now) {
 			delete(s.notices, k)
+		} else if n.noticeType == WarningNotice && n.lastRepeated.After(latestWarningTime) {
+			latestWarningTime = n.lastRepeated
 		}
 	}
+	s.latestWarningTime.Store(&latestWarningTime)
 
 NextChange:
 	for _, chg := range changes {
