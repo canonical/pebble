@@ -418,7 +418,7 @@ func (s *State) flattenNotices(filter *NoticeFilter) []*Notice {
 func (s *State) unflattenNotices(flat []*Notice) {
 	now := time.Now()
 	s.notices = make(map[noticeKey]*Notice)
-	latestWarningTime := time.Time{}
+	var latestWarningTime time.Time
 	for _, n := range flat {
 		if n.expired(now) {
 			continue
