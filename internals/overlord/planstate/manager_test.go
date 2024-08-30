@@ -45,6 +45,10 @@ var loadLayers = []string{`
 			summary: Svc1
 			override: replace
 			command: echo svc1
+	test-field:
+		test1:
+			override: merge
+			a: something
 `, `
 	summary: Layer 2
 	description: Layer 2 desc.
@@ -53,9 +57,15 @@ var loadLayers = []string{`
 			summary: Svc2
 			override: replace
 			command: echo svc2
+	test-field:
+		test1:
+			override: merge
+			b: something else
 `}
 
 func (ps *planSuite) TestLoadLayers(c *C) {
+	plan.RegisterSectionExtension(testField, testExtension{})
+	defer plan.UnregisterSectionExtension(testField)
 	var err error
 	ps.planMgr, err = planstate.NewManager(ps.layersDir)
 	c.Assert(err, IsNil)
@@ -80,10 +90,17 @@ services:
         summary: Svc2
         override: replace
         command: echo svc2
+test-field:
+    test1:
+        override: merge
+        a: something
+        b: something else
 `[1:])
 }
 
 func (ps *planSuite) TestAppendLayers(c *C) {
+	plan.RegisterSectionExtension(testField, testExtension{})
+	defer plan.UnregisterSectionExtension(testField)
 	var err error
 	ps.planMgr, err = planstate.NewManager(ps.layersDir)
 	c.Assert(err, IsNil)
@@ -94,6 +111,10 @@ services:
     svc1:
         override: replace
         command: /bin/sh
+test-field:
+    test1:
+        override: replace
+        a: something
 `)
 	err = ps.planMgr.AppendLayer(layer)
 	c.Assert(err, IsNil)
@@ -103,6 +124,10 @@ services:
     svc1:
         override: replace
         command: /bin/sh
+test-field:
+    test1:
+        override: replace
+        a: something
 `[1:])
 	ps.planLayersHasLen(c, 1)
 
@@ -112,6 +137,10 @@ services:
     svc1:
         override: foobar
         command: /bin/bar
+test-field:
+    test1:
+        override: foobar
+        a: something else
 `)
 	err = ps.planMgr.AppendLayer(layer)
 	c.Assert(err.(*planstate.LabelExists).Label, Equals, "label1")
@@ -120,6 +149,10 @@ services:
     svc1:
         override: replace
         command: /bin/sh
+test-field:
+    test1:
+        override: replace
+        a: something
 `[1:])
 	ps.planLayersHasLen(c, 1)
 
@@ -129,6 +162,10 @@ services:
     svc1:
         override: replace
         command: /bin/bash
+test-field:
+    test1:
+        override: replace
+        a: else
 `)
 	err = ps.planMgr.AppendLayer(layer)
 	c.Assert(err, IsNil)
@@ -138,6 +175,10 @@ services:
     svc1:
         override: replace
         command: /bin/bash
+test-field:
+    test1:
+        override: replace
+        a: else
 `[1:])
 	ps.planLayersHasLen(c, 2)
 
@@ -147,6 +188,10 @@ services:
     svc2:
         override: replace
         command: /bin/foo
+test-field:
+    test2:
+        override: replace
+        a: something
 `)
 	err = ps.planMgr.AppendLayer(layer)
 	c.Assert(err, IsNil)
@@ -159,11 +204,20 @@ services:
     svc2:
         override: replace
         command: /bin/foo
+test-field:
+    test1:
+        override: replace
+        a: else
+    test2:
+        override: replace
+        a: something
 `[1:])
 	ps.planLayersHasLen(c, 3)
 }
 
 func (ps *planSuite) TestCombineLayers(c *C) {
+	plan.RegisterSectionExtension(testField, testExtension{})
+	defer plan.UnregisterSectionExtension(testField)
 	var err error
 	ps.planMgr, err = planstate.NewManager(ps.layersDir)
 	c.Assert(err, IsNil)
@@ -174,6 +228,10 @@ services:
     svc1:
         override: replace
         command: /bin/sh
+test-field:
+    test1:
+        override: replace
+        a: something
 `)
 	err = ps.planMgr.CombineLayer(layer)
 	c.Assert(err, IsNil)
@@ -183,6 +241,10 @@ services:
     svc1:
         override: replace
         command: /bin/sh
+test-field:
+    test1:
+        override: replace
+        a: something
 `[1:])
 	ps.planLayersHasLen(c, 1)
 
@@ -192,6 +254,10 @@ services:
     svc2:
         override: replace
         command: /bin/foo
+test-field:
+    test2:
+        override: replace
+        a: else
 `)
 	err = ps.planMgr.CombineLayer(layer)
 	c.Assert(err, IsNil)
@@ -204,6 +270,13 @@ services:
     svc2:
         override: replace
         command: /bin/foo
+test-field:
+    test1:
+        override: replace
+        a: something
+    test2:
+        override: replace
+        a: else
 `[1:])
 	ps.planLayersHasLen(c, 2)
 
@@ -213,6 +286,10 @@ services:
     svc1:
         override: replace
         command: /bin/bash
+test-field:
+    test1:
+        override: replace
+        a: else
 `)
 	err = ps.planMgr.CombineLayer(layer)
 	c.Assert(err, IsNil)
@@ -225,6 +302,13 @@ services:
     svc2:
         override: replace
         command: /bin/foo
+test-field:
+    test1:
+        override: replace
+        a: else
+    test2:
+        override: replace
+        a: else
 `[1:])
 	ps.planLayersHasLen(c, 2)
 
@@ -234,6 +318,10 @@ services:
     svc2:
         override: replace
         command: /bin/bar
+test-field:
+    test2:
+        override: replace
+        a: something
 `)
 	err = ps.planMgr.CombineLayer(layer)
 	c.Assert(err, IsNil)
@@ -246,6 +334,13 @@ services:
     svc2:
         override: replace
         command: /bin/bar
+test-field:
+    test1:
+        override: replace
+        a: else
+    test2:
+        override: replace
+        a: something
 `[1:])
 	ps.planLayersHasLen(c, 2)
 
@@ -258,6 +353,13 @@ services:
     svc2:
         override: replace
         command: /bin/b
+test-field:
+    test1:
+        override: replace
+        a: nothing
+    test2:
+        override: replace
+        a: nothing
 `)
 	err = ps.planMgr.CombineLayer(layer)
 	c.Assert(err, IsNil)
@@ -270,6 +372,13 @@ services:
     svc2:
         override: replace
         command: /bin/b
+test-field:
+    test1:
+        override: replace
+        a: nothing
+    test2:
+        override: replace
+        a: nothing
 `[1:])
 	ps.planLayersHasLen(c, 3)
 
@@ -283,6 +392,15 @@ checks:
             port: 8080
 `))
 	c.Check(err, ErrorMatches, `(?s).*plan check.*must be "alive" or "ready".*`)
+
+	// Make sure that layer validation is happening for extensions.
+	layer, err = plan.ParseLayer(0, "label4", []byte(`
+test-field:
+    my1:
+        override: replace
+        a: nothing
+`))
+	c.Check(err, ErrorMatches, `.*entry names must start with.*`)
 }
 
 func (ps *planSuite) TestSetServiceArgs(c *C) {

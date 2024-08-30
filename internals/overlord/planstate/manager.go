@@ -181,6 +181,7 @@ func (m *PlanManager) updatePlanLayers(layers []*plan.Layer) (*plan.Plan, error)
 		Services:   combined.Services,
 		Checks:     combined.Checks,
 		LogTargets: combined.LogTargets,
+		Sections:   combined.Sections,
 	}
 	err = p.Validate()
 	if err != nil {

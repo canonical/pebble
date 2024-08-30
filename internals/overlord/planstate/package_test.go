@@ -42,7 +42,9 @@ type planSuite struct {
 var _ = Suite(&planSuite{})
 
 func (ps *planSuite) SetUpTest(c *C) {
-	ps.layersDir = c.MkDir()
+	ps.layersDir = filepath.Join(c.MkDir(), "layers")
+	err := os.Mkdir(ps.layersDir, 0755)
+	c.Assert(err, IsNil)
 
 	//Reset write layer counter
 	ps.writeLayerCounter = 1
@@ -99,4 +101,120 @@ func reindent(in string) []byte {
 		buf.WriteByte('\n')
 	}
 	return buf.Bytes()
+}
+
+const testField string = "test-field"
+
+// testExtension implements the LayerSectionExtension interface.
+type testExtension struct{}
+
+func (te testExtension) ParseSection(data yaml.Node) (plan.Section, error) {
+	ts := &testSection{}
+	err := data.Decode(ts)
+	if err != nil {
+		return nil, err
+	}
+	// Populate Name.
+	for name, entry := range ts.Entries {
+		if entry != nil {
+			ts.Entries[name].Name = name
+		}
+	}
+	return ts, nil
+}
+
+func (te testExtension) CombineSections(sections ...plan.Section) (plan.Section, error) {
+	ts := &testSection{}
+	for _, section := range sections {
+		err := ts.Combine(section)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return ts, nil
+}
+
+func (te testExtension) ValidatePlan(p *plan.Plan) error {
+	// This extension has no dependencies on the Plan to validate.
+	return nil
+}
+
+// testSection is the backing type for testExtension.
+type testSection struct {
+	Entries map[string]*T `yaml:",inline"`
+}
+
+func (ts *testSection) Validate() error {
+	// Fictitious test requirement: fields must start with t
+	prefix := "t"
+	for field, _ := range ts.Entries {
+		if !strings.HasPrefix(field, prefix) {
+			return fmt.Errorf("%q entry names must start with %q", testField, prefix)
+		}
+	}
+	return nil
+}
+
+func (ts *testSection) IsZero() bool {
+	return ts.Entries == nil
+}
+
+func (ts *testSection) Combine(other plan.Section) error {
+	otherTSection, ok := other.(*testSection)
+	if !ok {
+		return fmt.Errorf("invalid section type")
+	}
+
+	for field, entry := range otherTSection.Entries {
+		ts.Entries = makeMapIfNil(ts.Entries)
+		switch entry.Override {
+		case plan.MergeOverride:
+			if old, ok := ts.Entries[field]; ok {
+				copied := old.Copy()
+				copied.Merge(entry)
+				ts.Entries[field] = copied
+				break
+			}
+			fallthrough
+		case plan.ReplaceOverride:
+			ts.Entries[field] = entry.Copy()
+		case plan.UnknownOverride:
+			return &plan.FormatError{
+				Message: fmt.Sprintf(`invalid "override" value for entry %q`, field),
+			}
+		default:
+			return &plan.FormatError{
+				Message: fmt.Sprintf(`unknown "override" value for entry %q`, field),
+			}
+		}
+	}
+	return nil
+}
+
+type T struct {
+	Name     string        `yaml:"-"`
+	Override plan.Override `yaml:"override,omitempty"`
+	A        string        `yaml:"a,omitempty"`
+	B        string        `yaml:"b,omitempty"`
+}
+
+func (t *T) Copy() *T {
+	copied := *t
+	return &copied
+}
+
+func (t *T) Merge(other *T) {
+	if other.A != "" {
+		t.A = other.A
+	}
+	if other.B != "" {
+		t.B = other.B
+	}
+}
+
+func makeMapIfNil[K comparable, V any](m map[K]V) map[K]V {
+	if m == nil {
+		m = make(map[K]V)
+	}
+	return m
 }
