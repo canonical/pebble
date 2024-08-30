@@ -64,8 +64,8 @@ var loadLayers = []string{`
 `}
 
 func (ps *planSuite) TestLoadLayers(c *C) {
-	plan.RegisterExtension(testField, testExtension{})
-	defer plan.UnregisterExtension(testField)
+	plan.RegisterSectionExtension(testField, testExtension{})
+	defer plan.UnregisterSectionExtension(testField)
 	var err error
 	ps.planMgr, err = planstate.NewManager(ps.layersDir)
 	c.Assert(err, IsNil)
@@ -99,8 +99,8 @@ test-field:
 }
 
 func (ps *planSuite) TestAppendLayers(c *C) {
-	plan.RegisterExtension(testField, testExtension{})
-	defer plan.UnregisterExtension(testField)
+	plan.RegisterSectionExtension(testField, testExtension{})
+	defer plan.UnregisterSectionExtension(testField)
 	var err error
 	ps.planMgr, err = planstate.NewManager(ps.layersDir)
 	c.Assert(err, IsNil)
@@ -216,8 +216,8 @@ test-field:
 }
 
 func (ps *planSuite) TestCombineLayers(c *C) {
-	plan.RegisterExtension(testField, testExtension{})
-	defer plan.UnregisterExtension(testField)
+	plan.RegisterSectionExtension(testField, testExtension{})
+	defer plan.UnregisterSectionExtension(testField)
 	var err error
 	ps.planMgr, err = planstate.NewManager(ps.layersDir)
 	c.Assert(err, IsNil)
