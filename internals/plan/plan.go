@@ -21,6 +21,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -32,6 +33,31 @@ import (
 	"github.com/canonical/pebble/internals/osutil"
 )
 
+// SectionExtension allows the plan layer schema to be extended without
+// adding centralised schema knowledge to the plan library.
+type SectionExtension interface {
+	// ParseSection returns a newly allocated concrete type containing the
+	// unmarshalled section content.
+	ParseSection(data yaml.Node) (Section, error)
+
+	// CombineSections returns a newly allocated concrete type containing the
+	// result of combining the supplied sections in order.
+	CombineSections(sections ...Section) (Section, error)
+
+	// ValidatePlan takes the complete plan as input, and allows the
+	// extension to validate the plan. This can be used for cross section
+	// dependency validation.
+	ValidatePlan(plan *Plan) error
+}
+
+type Section interface {
+	// Validate checks whether the section is valid, returning an error if not.
+	Validate() error
+
+	// IsZero reports whether the section is empty.
+	IsZero() bool
+}
+
 const (
 	defaultBackoffDelay  = 500 * time.Millisecond
 	defaultBackoffFactor = 2.0
@@ -42,11 +68,90 @@ const (
 	defaultCheckThreshold = 3
 )
 
+var (
+	// sectionExtensions keeps a map of registered extensions.
+	sectionExtensions = map[string]SectionExtension{}
+
+	// sectionExtensionsOrder records the order in which the extensions were registered.
+	sectionExtensionsOrder = []string{}
+)
+
+// builtinSections represents all the built-in layer sections. This list is used
+// for identifying built-in fields in this package. It is unit tested to match
+// the YAML fields exposed in the Layer type, to catch inconsistencies.
+var builtinSections = []string{"summary", "description", "services", "checks", "log-targets"}
+
+// RegisterSectionExtension adds a plan schema extension. All registrations must be
+// done before the plan library is used. The order in which extensions are
+// registered determines the order in which the sections are marshalled.
+// Extension sections are marshalled after the built-in sections.
+func RegisterSectionExtension(field string, ext SectionExtension) {
+	if slices.Contains(builtinSections, field) {
+		panic(fmt.Sprintf("internal error: extension %q already used as built-in field", field))
+	}
+	if _, ok := sectionExtensions[field]; ok {
+		panic(fmt.Sprintf("internal error: extension %q already registered", field))
+	}
+	sectionExtensions[field] = ext
+	sectionExtensionsOrder = append(sectionExtensionsOrder, field)
+}
+
+// UnregisterSectionExtension removes a plan schema extension. This is only
+// intended for use by tests during cleanup.
+func UnregisterSectionExtension(field string) {
+	delete(sectionExtensions, field)
+	sectionExtensionsOrder = slices.DeleteFunc(sectionExtensionsOrder, func(n string) bool {
+		return n == field
+	})
+}
+
 type Plan struct {
 	Layers     []*Layer              `yaml:"-"`
 	Services   map[string]*Service   `yaml:"services,omitempty"`
 	Checks     map[string]*Check     `yaml:"checks,omitempty"`
 	LogTargets map[string]*LogTarget `yaml:"log-targets,omitempty"`
+
+	Sections map[string]Section `yaml:",inline"`
+}
+
+// MarshalYAML implements an override for top level omitempty tags handling.
+// This is required since Sections are based on an inlined map, for which
+// omitempty and inline together is not currently supported.
+func (p *Plan) MarshalYAML() (interface{}, error) {
+	// Define the content inside a structure so we can control the ordering
+	// of top level sections.
+	ordered := []reflect.StructField{{
+		Name: "Services",
+		Type: reflect.TypeOf(p.Services),
+		Tag:  `yaml:"services,omitempty"`,
+	}, {
+		Name: "Checks",
+		Type: reflect.TypeOf(p.Checks),
+		Tag:  `yaml:"checks,omitempty"`,
+	}, {
+		Name: "LogTargets",
+		Type: reflect.TypeOf(p.LogTargets),
+		Tag:  `yaml:"log-targets,omitempty"`,
+	}}
+	for i, field := range sectionExtensionsOrder {
+		section := p.Sections[field]
+		ordered = append(ordered, reflect.StructField{
+			Name: fmt.Sprintf("Dummy%v", i),
+			Type: reflect.TypeOf(section),
+			Tag:  reflect.StructTag(fmt.Sprintf("yaml:\"%s,omitempty\"", field)),
+		})
+	}
+	typ := reflect.StructOf(ordered)
+	// Assign the plan data to the structure layout we created.
+	v := reflect.New(typ).Elem()
+	v.Field(0).Set(reflect.ValueOf(p.Services))
+	v.Field(1).Set(reflect.ValueOf(p.Checks))
+	v.Field(2).Set(reflect.ValueOf(p.LogTargets))
+	for i, field := range sectionExtensionsOrder {
+		v.Field(3 + i).Set(reflect.ValueOf(p.Sections[field]))
+	}
+	plan := v.Addr().Interface()
+	return plan, nil
 }
 
 type Layer struct {
@@ -57,6 +162,8 @@ type Layer struct {
 	Services    map[string]*Service   `yaml:"services,omitempty"`
 	Checks      map[string]*Check     `yaml:"checks,omitempty"`
 	LogTargets  map[string]*LogTarget `yaml:"log-targets,omitempty"`
+
+	Sections map[string]Section `yaml:",inline"`
 }
 
 type Service struct {
@@ -559,7 +666,27 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 		Services:   make(map[string]*Service),
 		Checks:     make(map[string]*Check),
 		LogTargets: make(map[string]*LogTarget),
+		Sections:   make(map[string]Section),
 	}
+
+	// Combine the same sections from each layer. Note that we do this before
+	// the layers length check because we need the extension to provide us with
+	// a zero value section, even if no layers are supplied (similar to the
+	// allocations taking place above for the built-in types).
+	for field, extension := range sectionExtensions {
+		var sections []Section
+		for _, layer := range layers {
+			if section := layer.Sections[field]; section != nil {
+				sections = append(sections, section)
+			}
+		}
+		var err error
+		combined.Sections[field], err = extension.CombineSections(sections...)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	if len(layers) == 0 {
 		return combined, nil
 	}
@@ -825,11 +952,18 @@ func (layer *Layer) Validate() error {
 		}
 	}
 
+	for _, section := range layer.Sections {
+		err := section.Validate()
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
-// Validate checks that the combined layers form a valid plan.
-// See also Layer.Validate, which checks that the individual layers are valid.
+// Validate checks that the combined layers form a valid plan. See also
+// Layer.Validate, which checks that the individual layers are valid.
 func (p *Plan) Validate() error {
 	for name, service := range p.Services {
 		if service.Command == "" {
@@ -917,6 +1051,15 @@ func (p *Plan) Validate() error {
 	if err != nil {
 		return err
 	}
+
+	// Each section extension must validate the combined plan.
+	for _, extension := range sectionExtensions {
+		err = extension.ValidatePlan(p)
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -1085,19 +1228,83 @@ func (p *Plan) checkCycles() error {
 }
 
 func ParseLayer(order int, label string, data []byte) (*Layer, error) {
-	layer := Layer{
-		Services:   map[string]*Service{},
-		Checks:     map[string]*Check{},
-		LogTargets: map[string]*LogTarget{},
+	layer := &Layer{
+		Services:   make(map[string]*Service),
+		Checks:     make(map[string]*Check),
+		LogTargets: make(map[string]*LogTarget),
+		Sections:   make(map[string]Section),
 	}
-	dec := yaml.NewDecoder(bytes.NewBuffer(data))
-	dec.KnownFields(true)
-	err := dec.Decode(&layer)
+
+	// The following manual approach is required because:
+	//
+	// 1. Extended sections are YAML inlined, and also do not have a
+	// concrete type at this level, we cannot simply unmarshal the layer
+	// in one step.
+	//
+	// 2. We honor KnownFields = true behaviour for non extended schema
+	// sections, and at the top field level, which includes Section field
+	// names.
+	builtins := map[string]interface{}{
+		"summary":     &layer.Summary,
+		"description": &layer.Description,
+		"services":    &layer.Services,
+		"checks":      &layer.Checks,
+		"log-targets": &layer.LogTargets,
+	}
+
+	sections := make(map[string]yaml.Node)
+	// Deliberately pre-allocate at least an empty yaml.Node for every
+	// extension section. Extension sections that have unmarshalled
+	// will update the respective node, while non-existing sections
+	// will at least have an empty node. This means we can consistently
+	// let the extension allocate and decode the yaml node for all sections,
+	// and in the case where it is zero, we get an empty backing type instance.
+	for field, _ := range sectionExtensions {
+		sections[field] = yaml.Node{}
+	}
+	err := yaml.Unmarshal(data, &sections)
 	if err != nil {
 		return nil, &FormatError{
 			Message: fmt.Sprintf("cannot parse layer %q: %v", label, err),
 		}
 	}
+
+	for field, section := range sections {
+		if slices.Contains(builtinSections, field) {
+			// The following issue prevents us from using the yaml.Node decoder
+			// with KnownFields = true behaviour. Once one of the proposals get
+			// merged, we can remove the intermediate Marshal step.
+			// https://github.com/go-yaml/yaml/issues/460
+			data, err := yaml.Marshal(&section)
+			if err != nil {
+				return nil, fmt.Errorf("internal error: cannot marshal %v section: %w", field, err)
+			}
+			dec := yaml.NewDecoder(bytes.NewReader(data))
+			dec.KnownFields(true)
+			if err = dec.Decode(builtins[field]); err != nil {
+				return nil, &FormatError{
+					Message: fmt.Sprintf("cannot parse layer %q section %q: %v", label, field, err),
+				}
+			}
+		} else {
+			extension, ok := sectionExtensions[field]
+			if !ok {
+				// At the top level we do not ignore keys we do not understand.
+				// This preserves the current Pebble behaviour of decoding with
+				// KnownFields = true.
+				return nil, &FormatError{
+					Message: fmt.Sprintf("cannot parse layer %q: unknown section %q", label, field),
+				}
+			}
+
+			// Section unmarshal rules are defined by the extension itself.
+			layer.Sections[field], err = extension.ParseSection(section)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+
 	layer.Order = order
 	layer.Label = label
 
@@ -1125,7 +1332,7 @@ func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 		return nil, err
 	}
 
-	return &layer, err
+	return layer, err
 }
 
 func validServiceAction(action ServiceAction, additionalValid ...ServiceAction) bool {
@@ -1228,6 +1435,7 @@ func ReadDir(layersDir string) (*Plan, error) {
 		Services:   combined.Services,
 		Checks:     combined.Checks,
 		LogTargets: combined.LogTargets,
+		Sections:   combined.Sections,
 	}
 	err = plan.Validate()
 	if err != nil {
