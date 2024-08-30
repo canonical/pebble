@@ -81,11 +81,11 @@ var (
 // the YAML fields exposed in the Layer type, to catch inconsistencies.
 var builtinSections = []string{"summary", "description", "services", "checks", "log-targets"}
 
-// RegisterExtension adds a plan schema extension. All registrations must be
+// RegisterSectionExtension adds a plan schema extension. All registrations must be
 // done before the plan library is used. The order in which extensions are
 // registered determines the order in which the sections are marshalled.
 // Extension sections are marshalled after the built-in sections.
-func RegisterExtension(field string, ext SectionExtension) {
+func RegisterSectionExtension(field string, ext SectionExtension) {
 	if slices.Contains(builtinSections, field) {
 		panic(fmt.Sprintf("internal error: extension %q already used as built-in field", field))
 	}
@@ -96,9 +96,9 @@ func RegisterExtension(field string, ext SectionExtension) {
 	sectionExtensionsOrder = append(sectionExtensionsOrder, field)
 }
 
-// UnregisterExtension removes a plan schema extension. This is only
+// UnregisterSectionExtension removes a plan schema extension. This is only
 // intended for use by tests during cleanup.
-func UnregisterExtension(field string) {
+func UnregisterSectionExtension(field string) {
 	delete(sectionExtensions, field)
 	sectionExtensionsOrder = slices.DeleteFunc(sectionExtensionsOrder, func(n string) bool {
 		return n == field

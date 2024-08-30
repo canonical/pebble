@@ -353,7 +353,7 @@ func (s *S) TestPlanExtensions(c *C) {
 	defer func() {
 		// Remove remaining registered extensions.
 		for _, field := range registeredExtensions {
-			plan.UnregisterExtension(field)
+			plan.UnregisterSectionExtension(field)
 		}
 	}()
 
@@ -363,7 +363,7 @@ nexttest:
 
 		// Unregister extensions from previous test iteraton.
 		for _, field := range registeredExtensions {
-			plan.UnregisterExtension(field)
+			plan.UnregisterSectionExtension(field)
 		}
 		registeredExtensions = []string{}
 
@@ -380,7 +380,7 @@ nexttest:
 						err = fmt.Errorf("%v", r)
 					}
 				}()
-				plan.RegisterExtension(e.field, e.ext)
+				plan.RegisterSectionExtension(e.field, e.ext)
 				registeredExtensions = append(registeredExtensions, e.field)
 				return nil
 			}()
@@ -430,11 +430,11 @@ nexttest:
 // registration and follows the built-in sections which are ordered
 // the same way they are defined in the Plan struct.
 func (s *S) TestSectionOrderExt(c *C) {
-	plan.RegisterExtension("x-field", &xExtension{})
-	plan.RegisterExtension("y-field", &yExtension{})
+	plan.RegisterSectionExtension("x-field", &xExtension{})
+	plan.RegisterSectionExtension("y-field", &yExtension{})
 	defer func() {
-		plan.UnregisterExtension("x-field")
-		plan.UnregisterExtension("y-field")
+		plan.UnregisterSectionExtension("x-field")
+		plan.UnregisterSectionExtension("y-field")
 	}()
 
 	layer, err := plan.ParseLayer(1, "label", reindent(`
