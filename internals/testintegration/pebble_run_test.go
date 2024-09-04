@@ -29,17 +29,23 @@ services:
         override: replace
         command: sleep 1000
         startup: enabled
+    demo-service2:
+        override: replace
+        command: sleep 1000
+        startup: enabled
 `[1:]
 	CreateLayer(t, pebbleDir, "001-simple-layer.yaml", layerYAML)
 
 	logs := PebbleRun(t, pebbleDir)
 
 	expected := []string{
+		"Started daemon",
 		"Service \"demo-service\" starting",
+		"Service \"demo-service2\" starting",
 		"Started default services with change",
 	}
 
-	if foundAll, notFound := AllExpectedKeywordsFoundInLogs(logs, expected); !foundAll {
+	if foundAll, notFound := AllKeywordsFoundInLogs(logs, expected); !foundAll {
 		t.Errorf("Expected keywords not found in logs: %v", notFound)
 	}
 }

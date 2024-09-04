@@ -32,7 +32,7 @@ func getRootDir() string {
 	return filepath.Join(wd, "../../")
 }
 
-func AllExpectedKeywordsFoundInLogs(logs []string, keywords []string) (bool, []string) {
+func AllKeywordsFoundInLogs(logs []string, keywords []string) (bool, []string) {
 	var notFound []string
 
 	for _, keyword := range keywords {
