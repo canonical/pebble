@@ -28,6 +28,7 @@ import (
 	"time"
 )
 
+// CreateLayer creates a layer file in the Pebble dir using the name and content given.
 func CreateLayer(t *testing.T, pebbleDir string, layerFileName string, layerYAML string) {
 	t.Helper()
 
@@ -44,6 +45,7 @@ func CreateLayer(t *testing.T, pebbleDir string, layerFileName string, layerYAML
 	}
 }
 
+// PebbleRun runs the Pebble daemon and returns a channel for logs.
 func PebbleRun(t *testing.T, pebbleDir string) <-chan string {
 	t.Helper()
 
@@ -82,6 +84,7 @@ func PebbleRun(t *testing.T, pebbleDir string) <-chan string {
 	return logsCh
 }
 
+// WaitForLogs reads from the channel (returned by PebbleRun) and checks if all expected logs are found within specified timeout duration.
 func WaitForLogs(logsCh <-chan string, expectedLogs []string, timeout time.Duration) error {
 	receivedLogs := make(map[string]struct{})
 	start := time.Now()

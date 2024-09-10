@@ -26,6 +26,7 @@ import (
 	. "github.com/canonical/pebble/tests"
 )
 
+// TestMain does extra setup before executing tests.
 func TestMain(m *testing.M) {
 	goBuild := exec.Command("go", "build", "-o", "../pebble", "../cmd/pebble")
 	if err := goBuild.Run(); err != nil {
