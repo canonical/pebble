@@ -83,6 +83,10 @@ type Options struct {
 	// OverlordExtension is an optional interface used to extend the capabilities
 	// of the Overlord.
 	OverlordExtension overlord.Extension
+
+	// RebootCleanup runs when a system reboot has been requested, before calling the actual
+	// reboot handler.
+	RebootCleanup func() error
 }
 
 // A Daemon listens for requests and routes them to the right command
@@ -104,6 +108,7 @@ type Daemon struct {
 
 	// set to what kind of restart was requested (if any)
 	requestedRestart restart.RestartType
+	rebootCleanup    func() error
 
 	// degradedErr is set when the daemon is in degraded mode
 	degradedErr error
@@ -681,6 +686,11 @@ func (d *Daemon) doReboot(sigCh chan<- os.Signal, waitTimeout time.Duration) err
 	if err != nil {
 		return err
 	}
+
+	if err := d.rebootCleanup(); err != nil {
+		return err
+	}
+
 	// ask for shutdown and wait for it to happen.
 	// if we exit, pebble will be restarted by systemd
 	if err := rebootHandler(rebootDelay); err != nil {
@@ -833,6 +843,7 @@ func New(opts *Options) (*Daemon, error) {
 		pebbleDir:        opts.Dir,
 		normalSocketPath: opts.SocketPath,
 		httpAddress:      opts.HTTPAddress,
+		rebootCleanup:    opts.RebootCleanup,
 	}
 
 	ovldOptions := overlord.Options{
