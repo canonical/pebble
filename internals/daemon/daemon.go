@@ -687,8 +687,10 @@ func (d *Daemon) doReboot(sigCh chan<- os.Signal, waitTimeout time.Duration) err
 		return err
 	}
 
-	if err := d.rebootCleanup(); err != nil {
-		return err
+	if d.rebootCleanup != nil {
+		if err := d.rebootCleanup(); err != nil {
+			return err
+		}
 	}
 
 	// ask for shutdown and wait for it to happen.
