@@ -10,7 +10,7 @@ go test -count=1 -tags=integration ./tests/
 
 ### Visual Studio Code Settings
 
-For the VSCode Go extention to work properly with files with build tags, add the following:
+For the VSCode Go and gopls extention to work properly with files containing build tags, add the following:
 
 ```json
 {
