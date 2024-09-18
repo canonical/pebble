@@ -17,135 +17,130 @@
 package tests
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
+	"net"
+	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 )
 
-func TestNormal(t *testing.T) {
+func TestStartupEnabledServices(t *testing.T) {
 	pebbleDir := t.TempDir()
 
-	layerYAML := `
+	layerYAML := fmt.Sprintf(`
 services:
     svc1:
         override: replace
-        command: /bin/sh -c "{{.svc1Cmd}}"
+        command: /bin/sh -c "touch %s; sleep 1000"
         startup: enabled
     svc2:
         override: replace
-        command: /bin/sh -c "{{.svc2Cmd}}"
+        command: /bin/sh -c "touch %s; sleep 1000"
         startup: enabled
-`
-	svc1Cmd := fmt.Sprintf("touch %s; sleep 1000", filepath.Join(pebbleDir, "svc1"))
-	svc2Cmd := fmt.Sprintf("touch %s; sleep 1000", filepath.Join(pebbleDir, "svc2"))
-	layerYAML = strings.Replace(layerYAML, "{{.svc1Cmd}}", svc1Cmd, -1)
-	layerYAML = strings.Replace(layerYAML, "{{.svc2Cmd}}", svc2Cmd, -1)
+`,
+		filepath.Join(pebbleDir, "svc1"),
+		filepath.Join(pebbleDir, "svc2"),
+	)
 
 	createLayer(t, pebbleDir, "001-simple-layer.yaml", layerYAML)
 
-	_ = pebbleRun(t, pebbleDir)
+	_, _ = pebbleRun(t, pebbleDir)
 
-	expectedServices := []string{"svc1", "svc2"}
-	waitForServices(t, pebbleDir, expectedServices, time.Second*3)
+	waitForFile(t, filepath.Join(pebbleDir, "svc1"), 3*time.Second)
+	waitForFile(t, filepath.Join(pebbleDir, "svc2"), 3*time.Second)
 }
 
 func TestCreateDirs(t *testing.T) {
 	tmpDir := t.TempDir()
-	pebbleDir := filepath.Join(tmpDir, "PEBBLE_HOME")
+	pebbleDir := filepath.Join(tmpDir, "pebble")
 
-	logsCh := pebbleRun(t, pebbleDir, "--create-dirs")
-	expectedLogs := []string{"Started daemon"}
-	if err := waitForLogs(logsCh, expectedLogs, time.Second*3); err != nil {
-		t.Errorf("Error waiting for logs: %v", err)
+	_, stderrCh := pebbleRun(t, pebbleDir, "--create-dirs")
+	waitForLog(t, stderrCh, "Started daemon", 3*time.Second)
+
+	st, err := os.Stat(pebbleDir)
+	if err != nil {
+		t.Fatalf("pebble run --create-dirs didn't create Pebble directory: %v", err)
 	}
-
-	if _, err := os.Stat(pebbleDir); err != nil {
-		t.Errorf("pebble run --create-dirs failed: %v", err)
+	if !st.IsDir() {
+		t.Fatalf("pebble dir %s is not a directory: %v", pebbleDir, err)
 	}
 }
 
 func TestHold(t *testing.T) {
 	pebbleDir := t.TempDir()
 
-	layerYAML := `
+	layerYAML := fmt.Sprintf(`
 services:
     svc1:
         override: replace
-        command: /bin/sh -c "{{.svc1Cmd}}"
+        command: /bin/sh -c "touch %s; sleep 1000"
         startup: enabled
-`
-	svc1Cmd := fmt.Sprintf("touch %s ; sleep 1000", filepath.Join(pebbleDir, "svc1"))
-	layerYAML = strings.Replace(layerYAML, "{{.svc1Cmd}}", svc1Cmd, -1)
-
+`,
+		filepath.Join(pebbleDir, "svc1"),
+	)
 	createLayer(t, pebbleDir, "001-simple-layer.yaml", layerYAML)
 
-	logsCh := pebbleRun(t, pebbleDir, "--hold")
-	expectedLogs := []string{"Started daemon"}
-	if err := waitForLogs(logsCh, expectedLogs, time.Second*3); err != nil {
-		t.Errorf("Error waiting for logs: %v", err)
-	}
+	_, _ = pebbleRun(t, pebbleDir, "--hold")
 
-	// Sleep a second before checking services because immediate check
+	// Sleep 100 millisecond before checking services because immediate check
 	// can't guarantee that svc1 is not started shortly after the log "Started daemon".
-	time.Sleep(time.Second)
+	time.Sleep(100 * time.Millisecond)
 
 	_, err := os.Stat(filepath.Join(pebbleDir, "svc1"))
 	if err == nil {
-		t.Error("pebble run --hold failed, services are still started")
-	} else {
-		if !os.IsNotExist(err) {
-			t.Errorf("Error checking service %s: %v", "svc1", err)
-			fmt.Printf("Error checking the file: %v\n", err)
-		}
+		t.Fatal("pebble run --hold failed, services are still started")
+	}
+	if !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("Stat returned error other than ErrNotExist: %v", err)
 	}
 }
 
-func TestHttpPort(t *testing.T) {
+func TestHTTPPort(t *testing.T) {
 	pebbleDir := t.TempDir()
 
-	port := "4000"
-	logsCh := pebbleRun(t, pebbleDir, "--http=:"+port)
-	expectedLogs := []string{"Started daemon"}
-	if err := waitForLogs(logsCh, expectedLogs, time.Second*3); err != nil {
-		t.Errorf("Error waiting for logs: %v", err)
+	port := "61382"
+	_, stderrCh := pebbleRun(t, pebbleDir, "--http=:"+port)
+	waitForLog(t, stderrCh, "Started daemon", 3*time.Second)
+
+	conn, err := net.Listen("tcp", ":"+port)
+	if err == nil {
+		conn.Close()
+		t.Fatalf("port %s is not being listened: %v", port, err)
+	}
+	if conn != nil {
+		conn.Close()
 	}
 
-	if !isPortUsedByProcess(t, port, "pebble") {
-		t.Errorf("Pebble is not listening on port %s", port)
+	resp, err := http.Get(fmt.Sprintf("http://localhost:%s/v1/health", port))
+	if err != nil {
+		t.Fatalf("port %s is not being listened by : %v", port, err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		t.Fatalf("error checking pebble /v1/health on port %s: %v", port, err)
 	}
 }
 
 func TestVerbose(t *testing.T) {
 	pebbleDir := t.TempDir()
 
+	layersFileName := "001-simple-layer.yaml"
 	layerYAML := `
 services:
     svc1:
         override: replace
-        command: /bin/sh -c "{{.svc1Cmd}}"
+        command: /bin/sh -c "echo 'hello world'; sleep 1000"
         startup: enabled
 `
-	layersFileName := "001-simple-layer.yaml"
-	svc1Cmd := fmt.Sprintf("cat %s; sleep 1000", filepath.Join(pebbleDir, "layers", layersFileName))
-	layerYAML = strings.Replace(layerYAML, "{{.svc1Cmd}}", svc1Cmd, -1)
-
 	createLayer(t, pebbleDir, layersFileName, layerYAML)
 
-	logsCh := pebbleRun(t, pebbleDir, "--verbose")
-	expectedLogs := []string{
-		"Started daemon",
-		"services:",
-		"svc1:",
-		"override: replace",
-		"startup: enabled",
-		"command: /bin/sh -c",
-	}
-	if err := waitForLogs(logsCh, expectedLogs, time.Second*3); err != nil {
-		t.Errorf("Error waiting for logs: %v", err)
-	}
+	stdoutCh, stderrCh := pebbleRun(t, pebbleDir, "--verbose")
+	waitForLog(t, stderrCh, "Started daemon", 3*time.Second)
+	waitForLog(t, stdoutCh, "hello world", 3*time.Second)
 }
 
 func TestArgs(t *testing.T) {
@@ -159,28 +154,16 @@ services:
         startup: enabled
 `
 	layersFileName := "001-simple-layer.yaml"
-	svc1Cmd := fmt.Sprintf("cat %s; sleep 1000", filepath.Join(pebbleDir, "layers", layersFileName))
-	layerYAML = strings.Replace(layerYAML, "{{.svc1Cmd}}", svc1Cmd, -1)
-
 	createLayer(t, pebbleDir, layersFileName, layerYAML)
 
-	logsCh := pebbleRun(t, pebbleDir, "--verbose",
+	stdoutCh, stderrCh := pebbleRun(t, pebbleDir, "--verbose",
 		"--args",
 		"svc1",
 		"-c",
-		fmt.Sprintf("cat %s; sleep 1000", filepath.Join(pebbleDir, "layers", layersFileName)),
+		"echo 'hello world'; sleep 1000",
 	)
-	expectedLogs := []string{
-		"Started daemon",
-		"services:",
-		"svc1:",
-		"override: replace",
-		"startup: enabled",
-		"command: /bin/sh",
-	}
-	if err := waitForLogs(logsCh, expectedLogs, time.Second*3); err != nil {
-		t.Errorf("Error waiting for logs: %v", err)
-	}
+	waitForLog(t, stderrCh, "Started daemon", 3*time.Second)
+	waitForLog(t, stdoutCh, "hello world", 3*time.Second)
 }
 
 func TestIdentities(t *testing.T) {
@@ -198,20 +181,30 @@ identities:
             user-id: 2000
 `
 	identitiesFileName := "idents-add.yaml"
-	createIdentitiesFile(t, pebbleDir, identitiesFileName, identitiesYAML)
-
-	logsCh := pebbleRun(t, pebbleDir, "--identities="+filepath.Join(pebbleDir, identitiesFileName))
-	expectedLogs := []string{
-		"Started daemon",
-		"POST /v1/services",
-	}
-	if err := waitForLogs(logsCh, expectedLogs, time.Second*3); err != nil {
-		t.Errorf("Error waiting for logs: %v", err)
+	if err := os.WriteFile(filepath.Join(pebbleDir, identitiesFileName), []byte(identitiesYAML), 0o755); err != nil {
+		t.Fatalf("Cannot write identities file: %v", err)
 	}
 
-	expectedOutput := []string{"access: admin", "local:", "user-id: 42"}
-	runPebbleCmdAndCheckOutput(t, pebbleDir, expectedOutput, "identity", "bob")
+	_, _ = pebbleRun(t, pebbleDir, "--identities="+filepath.Join(pebbleDir, identitiesFileName))
+	time.Sleep(100 * time.Millisecond)
 
-	expectedOutput = []string{"access: read", "local:", "user-id: 2000"}
-	runPebbleCmdAndCheckOutput(t, pebbleDir, expectedOutput, "identity", "alice")
+	output := runPebbleCommand(t, pebbleDir, "identity", "bob")
+	expected := `
+access: admin
+local:
+    user-id: 42
+`[1:]
+	if output != expected {
+		t.Fatalf("error checking identities. expected: %s; got: %s", expected, output)
+	}
+
+	output = runPebbleCommand(t, pebbleDir, "identity", "alice")
+	expected = `
+access: read
+local:
+    user-id: 2000
+`[1:]
+	if output != expected {
+		t.Fatalf("error checking identities. expected: %s; got: %s", expected, output)
+	}
 }

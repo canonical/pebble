@@ -17,9 +17,7 @@
 package tests
 
 import (
-	"errors"
 	"fmt"
-	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -42,13 +40,13 @@ func TestMain(m *testing.M) {
 	os.Exit(exitCode)
 }
 
-func createLayer(t *testing.T, pebbleDir string, layerFileName string, layerYAML string) {
+func createLayer(t *testing.T, pebbleDir, layerFileName, layerYAML string) {
 	t.Helper()
 
 	layersDir := filepath.Join(pebbleDir, "layers")
 	err := os.MkdirAll(layersDir, 0o755)
 	if err != nil {
-		t.Fatalf("Cannot create layers directory: pipe: %v", err)
+		t.Fatalf("Cannot create layers directory: %v", err)
 	}
 
 	layerPath := filepath.Join(layersDir, layerFileName)
@@ -58,30 +56,14 @@ func createLayer(t *testing.T, pebbleDir string, layerFileName string, layerYAML
 	}
 }
 
-func createIdentitiesFile(t *testing.T, pebbleDir string, identitiesFileName string, identitiesYAML string) {
+func pebbleRun(t *testing.T, pebbleDir string, args ...string) (<-chan servicelog.Entry, <-chan servicelog.Entry) {
 	t.Helper()
 
-	identitiesPath := filepath.Join(pebbleDir, identitiesFileName)
-	if err := os.WriteFile(identitiesPath, []byte(identitiesYAML), 0o755); err != nil {
-		t.Fatalf("Cannot create layers file: %v", err)
-	}
-}
-
-func pebbleRun(t *testing.T, pebbleDir string, args ...string) <-chan servicelog.Entry {
-	t.Helper()
-
-	logsCh := make(chan servicelog.Entry)
+	stdoutCh := make(chan servicelog.Entry)
+	stderrCh := make(chan servicelog.Entry)
 
 	cmd := exec.Command("../pebble", append([]string{"run"}, args...)...)
 	cmd.Env = append(os.Environ(), "PEBBLE="+pebbleDir)
-
-	t.Cleanup(func() {
-		err := cmd.Process.Signal(os.Interrupt)
-		if err != nil {
-			t.Errorf("Error sending SIGINT/Ctrl+C to pebble: %v", err)
-		}
-		cmd.Wait()
-	})
 
 	stdoutPipe, err := cmd.StdoutPipe()
 	if err != nil {
@@ -97,17 +79,26 @@ func pebbleRun(t *testing.T, pebbleDir string, args ...string) <-chan servicelog
 		t.Fatalf("Error starting 'pebble run': %v", err)
 	}
 
+	t.Cleanup(func() {
+		err := cmd.Process.Signal(os.Interrupt)
+		if err != nil {
+			t.Errorf("Error sending SIGINT/Ctrl+C to pebble: %v", err)
+		}
+		cmd.Wait()
+	})
+
 	done := make(chan struct{})
 	go func() {
-		defer close(logsCh)
+		defer close(stdoutCh)
+		defer close(stderrCh)
 
-		readLogs := func(parser *servicelog.Parser) {
+		readLogs := func(parser *servicelog.Parser, ch chan servicelog.Entry) {
 			for parser.Next() {
 				if err := parser.Err(); err != nil {
 					t.Errorf("Cannot parse Pebble logs: %v", err)
 				}
 				select {
-				case logsCh <- parser.Entry():
+				case ch <- parser.Entry():
 				case <-done:
 					return
 				}
@@ -119,125 +110,59 @@ func pebbleRun(t *testing.T, pebbleDir string, args ...string) <-chan servicelog
 		stderrParser := servicelog.NewParser(stderrPipe, 4*1024)
 		stdoutParser := servicelog.NewParser(stdoutPipe, 4*1024)
 
-		// Channel to signal completion and close logsCh
-		done := make(chan struct{})
-		defer close(done)
-
-		go readLogs(stderrParser)
-		go readLogs(stdoutParser)
+		go readLogs(stdoutParser, stdoutCh)
+		go readLogs(stderrParser, stderrCh)
 
 		// Wait for both parsers to finish
 		<-done
 		<-done
 	}()
 
-	return logsCh
+	return stdoutCh, stderrCh
 }
 
-func waitForLogs(logsCh <-chan servicelog.Entry, expectedLogs []string, timeout time.Duration) error {
-	receivedLogs := make(map[string]struct{})
+func waitForLog(t *testing.T, logsCh <-chan servicelog.Entry, expectedLog string, timeout time.Duration) {
+	t.Helper()
 
 	timeoutCh := time.After(timeout)
 	for {
 		select {
 		case log, ok := <-logsCh:
 			if !ok {
-				return errors.New("channel closed before all expected logs were received")
+				t.Error("channel closed before all expected logs were received")
 			}
 
-			for _, expectedLog := range expectedLogs {
-				if _, ok := receivedLogs[expectedLog]; !ok && containsSubstring(log.Message, expectedLog) {
-					receivedLogs[expectedLog] = struct{}{}
-					break
-				}
-			}
-
-			allLogsReceived := true
-			for _, log := range expectedLogs {
-				if _, ok := receivedLogs[log]; !ok {
-					allLogsReceived = false
-					break
-				}
-			}
-
-			if allLogsReceived {
-				return nil
+			if strings.Contains(log.Message, expectedLog) {
+				return
 			}
 
 		case <-timeoutCh:
-			missingLogs := []string{}
-			for _, log := range expectedLogs {
-				if _, ok := receivedLogs[log]; !ok {
-					missingLogs = append(missingLogs, log)
-				}
-			}
-			return errors.New("timed out waiting for log: " + strings.Join(missingLogs, ", "))
+			t.Fatalf("timed out after %v waiting for log %s", 3*time.Second, expectedLog)
 		}
 	}
 }
 
-func containsSubstring(s, substr string) bool {
-	return strings.Contains(s, substr)
-}
-
-func waitForServices(t *testing.T, pebbleDir string, expectedServices []string, timeout time.Duration) {
+func waitForFile(t *testing.T, file string, timeout time.Duration) {
 	t.Helper()
 
-	for _, service := range expectedServices {
-		waitForService(t, pebbleDir, service, timeout)
-	}
-}
-
-func waitForService(t *testing.T, pebbleDir string, service string, timeout time.Duration) {
-	t.Helper()
-
-	serviceFilePath := filepath.Join(pebbleDir, service)
 	timeoutCh := time.After(timeout)
 	ticker := time.NewTicker(time.Millisecond)
 	for {
 		select {
 		case <-timeoutCh:
-			t.Errorf("timeout waiting for service %s", service)
-			return
+			t.Fatalf("timeout waiting for file %s", file)
 
 		case <-ticker.C:
-			stat, err := os.Stat(serviceFilePath)
+			stat, err := os.Stat(file)
 			if err == nil && stat.Mode().IsRegular() {
-				os.Remove(serviceFilePath)
+				os.Remove(file)
 				return
 			}
 		}
 	}
 }
 
-func isPortUsedByProcess(t *testing.T, port string, processName string) bool {
-	t.Helper()
-
-	conn, err := net.Listen("tcp", ":"+port)
-	if err == nil {
-		conn.Close()
-		return false
-	}
-	if conn != nil {
-		conn.Close()
-	}
-
-	cmd := exec.Command("lsof", "-i", ":"+port)
-	output, err := cmd.Output()
-	if err != nil {
-		t.Errorf("Error running lsof command: %v", err)
-		return false
-	}
-
-	outputStr := string(output)
-	if strings.Contains(outputStr, processName) {
-		return true
-	}
-
-	return false
-}
-
-func runPebbleCmdAndCheckOutput(t *testing.T, pebbleDir string, expectedOutput []string, args ...string) {
+func runPebbleCommand(t *testing.T, pebbleDir string, args ...string) string {
 	t.Helper()
 
 	cmd := exec.Command("../pebble", args...)
@@ -248,11 +173,5 @@ func runPebbleCmdAndCheckOutput(t *testing.T, pebbleDir string, expectedOutput [
 		t.Fatalf("error executing pebble command: %v", err)
 	}
 
-	outputStr := string(output)
-
-	for _, expected := range expectedOutput {
-		if !strings.Contains(outputStr, expected) {
-			t.Errorf("Expected output %s not found in command output", expected)
-		}
-	}
+	return string(output)
 }
