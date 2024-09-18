@@ -1,0 +1,29 @@
+name: Integration Test
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        go: ['1.22']
+
+    name: Go ${{ matrix.go }}
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ matrix.go }}
+
+    - name: Integration test
+      run: go test -count=1 -tags=integration ./tests/
