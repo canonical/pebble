@@ -56,11 +56,11 @@ func createLayer(t *testing.T, pebbleDir, layerFileName, layerYAML string) {
 	}
 }
 
-func pebbleRun(t *testing.T, pebbleDir string, args ...string) (<-chan servicelog.Entry, <-chan servicelog.Entry) {
+func pebbleRun(t *testing.T, pebbleDir string, args ...string) (stdoutCh chan servicelog.Entry, stderrCh chan servicelog.Entry) {
 	t.Helper()
 
-	stdoutCh := make(chan servicelog.Entry)
-	stderrCh := make(chan servicelog.Entry)
+	stdoutCh = make(chan servicelog.Entry)
+	stderrCh = make(chan servicelog.Entry)
 
 	cmd := exec.Command("../pebble", append([]string{"run"}, args...)...)
 	cmd.Env = append(os.Environ(), "PEBBLE="+pebbleDir)
@@ -79,49 +79,44 @@ func pebbleRun(t *testing.T, pebbleDir string, args ...string) (<-chan servicelo
 		t.Fatalf("Error starting 'pebble run': %v", err)
 	}
 
+	stopStdout := make(chan struct{}, 1)
+	stopStderr := make(chan struct{}, 1)
+
 	t.Cleanup(func() {
 		err := cmd.Process.Signal(os.Interrupt)
 		if err != nil {
 			t.Errorf("Error sending SIGINT/Ctrl+C to pebble: %v", err)
 		}
 		cmd.Wait()
+		stopStdout <- struct{}{}
+		stopStderr <- struct{}{}
 	})
 
-	done := make(chan struct{})
-	go func() {
-		defer close(stdoutCh)
-		defer close(stderrCh)
-
-		readLogs := func(parser *servicelog.Parser, ch chan servicelog.Entry) {
-			for parser.Next() {
-				if err := parser.Err(); err != nil {
-					t.Errorf("Cannot parse Pebble logs: %v", err)
-				}
-				select {
-				case ch <- parser.Entry():
-				case <-done:
-					return
-				}
+	readLogs := func(parser *servicelog.Parser, ch chan servicelog.Entry, stop <-chan struct{}) {
+		for parser.Next() {
+			if err := parser.Err(); err != nil {
+				t.Errorf("Cannot parse Pebble logs: %v", err)
+			}
+			select {
+			case ch <- parser.Entry():
+			case <-stop:
+				return
 			}
 		}
+	}
 
-		// Both stderr and stdout are needed, because pebble logs to stderr
-		// while with "--verbose", services otuput to stdout.
-		stderrParser := servicelog.NewParser(stderrPipe, 4*1024)
-		stdoutParser := servicelog.NewParser(stdoutPipe, 4*1024)
+	// Both stderr and stdout are needed, because pebble logs to stderr
+	// while with "--verbose", services output to stdout.
+	stderrParser := servicelog.NewParser(stderrPipe, 4*1024)
+	stdoutParser := servicelog.NewParser(stdoutPipe, 4*1024)
 
-		go readLogs(stdoutParser, stdoutCh)
-		go readLogs(stderrParser, stderrCh)
-
-		// Wait for both parsers to finish
-		<-done
-		<-done
-	}()
+	go readLogs(stdoutParser, stdoutCh, stopStdout)
+	go readLogs(stderrParser, stderrCh, stopStderr)
 
 	return stdoutCh, stderrCh
 }
 
-func waitForLog(t *testing.T, logsCh <-chan servicelog.Entry, expectedLog string, timeout time.Duration) {
+func waitForLog(t *testing.T, logsCh <-chan servicelog.Entry, expectedService, expectedLog string, timeout time.Duration) {
 	t.Helper()
 
 	timeoutCh := time.After(timeout)
@@ -132,7 +127,7 @@ func waitForLog(t *testing.T, logsCh <-chan servicelog.Entry, expectedLog string
 				t.Error("channel closed before all expected logs were received")
 			}
 
-			if strings.Contains(log.Message, expectedLog) {
+			if log.Service == expectedService && strings.Contains(log.Message, expectedLog) {
 				return
 			}
 
@@ -155,7 +150,6 @@ func waitForFile(t *testing.T, file string, timeout time.Duration) {
 		case <-ticker.C:
 			stat, err := os.Stat(file)
 			if err == nil && stat.Mode().IsRegular() {
-				os.Remove(file)
 				return
 			}
 		}

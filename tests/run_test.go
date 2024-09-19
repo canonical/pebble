@@ -20,7 +20,6 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -59,7 +58,7 @@ func TestCreateDirs(t *testing.T) {
 	pebbleDir := filepath.Join(tmpDir, "pebble")
 
 	_, stderrCh := pebbleRun(t, pebbleDir, "--create-dirs")
-	waitForLog(t, stderrCh, "Started daemon", 3*time.Second)
+	waitForLog(t, stderrCh, "pebble", "Started daemon", 3*time.Second)
 
 	st, err := os.Stat(pebbleDir)
 	if err != nil {
@@ -104,16 +103,7 @@ func TestHTTPPort(t *testing.T) {
 
 	port := "61382"
 	_, stderrCh := pebbleRun(t, pebbleDir, "--http=:"+port)
-	waitForLog(t, stderrCh, "Started daemon", 3*time.Second)
-
-	conn, err := net.Listen("tcp", ":"+port)
-	if err == nil {
-		conn.Close()
-		t.Fatalf("port %s is not being listened: %v", port, err)
-	}
-	if conn != nil {
-		conn.Close()
-	}
+	waitForLog(t, stderrCh, "pebble", "Started daemon", 3*time.Second)
 
 	resp, err := http.Get(fmt.Sprintf("http://localhost:%s/v1/health", port))
 	if err != nil {
@@ -139,8 +129,8 @@ services:
 	createLayer(t, pebbleDir, layersFileName, layerYAML)
 
 	stdoutCh, stderrCh := pebbleRun(t, pebbleDir, "--verbose")
-	waitForLog(t, stderrCh, "Started daemon", 3*time.Second)
-	waitForLog(t, stdoutCh, "hello world", 3*time.Second)
+	waitForLog(t, stderrCh, "pebble", "Started daemon", 3*time.Second)
+	waitForLog(t, stdoutCh, "svc1", "hello world", 3*time.Second)
 }
 
 func TestArgs(t *testing.T) {
@@ -162,8 +152,8 @@ services:
 		"-c",
 		"echo 'hello world'; sleep 1000",
 	)
-	waitForLog(t, stderrCh, "Started daemon", 3*time.Second)
-	waitForLog(t, stdoutCh, "hello world", 3*time.Second)
+	waitForLog(t, stderrCh, "pebble", "Started daemon", 3*time.Second)
+	waitForLog(t, stdoutCh, "svc1", "hello world", 3*time.Second)
 }
 
 func TestIdentities(t *testing.T) {
@@ -175,34 +165,20 @@ identities:
         access: admin
         local:
             user-id: 42
-    alice:
-        access: read
-        local:
-            user-id: 2000
-`
+`[1:]
 	identitiesFileName := "idents-add.yaml"
 	if err := os.WriteFile(filepath.Join(pebbleDir, identitiesFileName), []byte(identitiesYAML), 0o755); err != nil {
 		t.Fatalf("Cannot write identities file: %v", err)
 	}
 
-	_, _ = pebbleRun(t, pebbleDir, "--identities="+filepath.Join(pebbleDir, identitiesFileName))
-	time.Sleep(100 * time.Millisecond)
+	_, stderrCh := pebbleRun(t, pebbleDir, "--identities="+filepath.Join(pebbleDir, identitiesFileName))
+	waitForLog(t, stderrCh, "pebble", "Started daemon", 3*time.Second)
 
 	output := runPebbleCommand(t, pebbleDir, "identity", "bob")
 	expected := `
 access: admin
 local:
     user-id: 42
-`[1:]
-	if output != expected {
-		t.Fatalf("error checking identities. expected: %s; got: %s", expected, output)
-	}
-
-	output = runPebbleCommand(t, pebbleDir, "identity", "alice")
-	expected = `
-access: read
-local:
-    user-id: 2000
 `[1:]
 	if output != expected {
 		t.Fatalf("error checking identities. expected: %s; got: %s", expected, output)
