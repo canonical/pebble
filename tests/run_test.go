@@ -172,7 +172,11 @@ identities:
 	}
 
 	_, stderrCh := pebbleRun(t, pebbleDir, "--identities="+filepath.Join(pebbleDir, identitiesFileName))
-	waitForLog(t, stderrCh, "pebble", "Started daemon", 3*time.Second)
+
+	// wait for log "Started daemon" like in other test cases then immediately run `pebble identity` would sometimes
+	// fail because the identities are not fully seeded. Waiting for the next log "POST /v1/services" can guarantee
+	// identities are seeded when running the `pebble identity` command without sleeping for a short period of time.
+	waitForLog(t, stderrCh, "pebble", "POST /v1/services", 3*time.Second)
 
 	output := runPebbleCommand(t, pebbleDir, "identity", "bob")
 	expected := `
