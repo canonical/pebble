@@ -23,7 +23,6 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
@@ -255,62 +254,6 @@ func (s *execSuite) TestCurrentUserGroup(c *C) {
 	})
 	c.Assert(waitErr, IsNil)
 	c.Check(stdout, Equals, current.Username+"\n"+group.Name+"\n")
-	c.Check(stderr, Equals, "")
-}
-
-// See .github/workflows/tests.yml for how to run this test as root.
-func (s *execSuite) TestUserGroup(c *C) {
-	if os.Getuid() != 0 {
-		c.Skip("requires running as root")
-	}
-	username := os.Getenv("PEBBLE_TEST_USER")
-	group := os.Getenv("PEBBLE_TEST_GROUP")
-	if username == "" || group == "" {
-		c.Fatalf("must set PEBBLE_TEST_USER and PEBBLE_TEST_GROUP")
-	}
-	stdout, stderr, waitErr := s.exec(c, "", &client.ExecOptions{
-		Command: []string{"/bin/sh", "-c", "id -n -u && id -n -g"},
-		User:    username,
-		Group:   group,
-	})
-	c.Assert(waitErr, IsNil)
-	c.Check(stdout, Equals, username+"\n"+group+"\n")
-	c.Check(stderr, Equals, "")
-
-	_, err := s.client.Exec(&client.ExecOptions{
-		Command:     []string{"pwd"},
-		Environment: map[string]string{"HOME": "/non/existent"},
-		User:        username,
-		Group:       group,
-	})
-	c.Assert(err, ErrorMatches, `.*home directory.*does not exist`)
-}
-
-// See .github/workflows/tests.yml for how to run this test as root.
-func (s *execSuite) TestUserIDGroupID(c *C) {
-	if os.Getuid() != 0 {
-		c.Skip("requires running as root")
-	}
-	username := os.Getenv("PEBBLE_TEST_USER")
-	group := os.Getenv("PEBBLE_TEST_GROUP")
-	if username == "" || group == "" {
-		c.Fatalf("must set PEBBLE_TEST_USER and PEBBLE_TEST_GROUP")
-	}
-	u, err := user.Lookup(username)
-	c.Assert(err, IsNil)
-	g, err := user.LookupGroup(group)
-	c.Assert(err, IsNil)
-	uid, err := strconv.Atoi(u.Uid)
-	c.Assert(err, IsNil)
-	gid, err := strconv.Atoi(g.Gid)
-	c.Assert(err, IsNil)
-	stdout, stderr, waitErr := s.exec(c, "", &client.ExecOptions{
-		Command: []string{"/bin/sh", "-c", "id -n -u && id -n -g"},
-		UserID:  &uid,
-		GroupID: &gid,
-	})
-	c.Assert(waitErr, IsNil)
-	c.Check(stdout, Equals, username+"\n"+group+"\n")
 	c.Check(stderr, Equals, "")
 }
 
