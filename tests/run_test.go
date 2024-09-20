@@ -27,6 +27,8 @@ import (
 	"time"
 )
 
+// TestStartupEnabledServices tests that Pebble will automatically start
+// services defined with `startup: enabled`.
 func TestStartupEnabledServices(t *testing.T) {
 	pebbleDir := t.TempDir()
 
@@ -53,6 +55,8 @@ services:
 	waitForFile(t, filepath.Join(pebbleDir, "svc2"), 3*time.Second)
 }
 
+// TestCreateDirs tests that Pebble will create the Pebble directory on startup
+// with the `--create-dirs` option.
 func TestCreateDirs(t *testing.T) {
 	tmpDir := t.TempDir()
 	pebbleDir := filepath.Join(tmpDir, "pebble")
@@ -69,6 +73,8 @@ func TestCreateDirs(t *testing.T) {
 	}
 }
 
+// TestHold tests that Pebble will not default services automatically
+// with the `--hold` option.
 func TestHold(t *testing.T) {
 	pebbleDir := t.TempDir()
 
@@ -98,6 +104,8 @@ services:
 	}
 }
 
+// TestHTTPPort tests that Pebble starts HTTP API listening on this port
+// with the `--http` option.
 func TestHTTPPort(t *testing.T) {
 	pebbleDir := t.TempDir()
 
@@ -115,6 +123,8 @@ func TestHTTPPort(t *testing.T) {
 	}
 }
 
+// TestVerbose tests that Pebble logs all output from services to stdout
+// with the `--verbose` option.
 func TestVerbose(t *testing.T) {
 	pebbleDir := t.TempDir()
 
@@ -133,6 +143,8 @@ services:
 	waitForLog(t, stdoutCh, "svc1", "hello world", 3*time.Second)
 }
 
+// TestArgs tests that Pebble provides additional arguments to a service
+// with the `--args` option.
 func TestArgs(t *testing.T) {
 	pebbleDir := t.TempDir()
 
@@ -156,6 +168,8 @@ services:
 	waitForLog(t, stdoutCh, "svc1", "hello world", 3*time.Second)
 }
 
+// TestIdentities tests that Pebble seeds identities from a file
+// with the `--identities` option.
 func TestIdentities(t *testing.T) {
 	pebbleDir := t.TempDir()
 
