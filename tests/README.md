@@ -8,11 +8,19 @@ This directory holds a suite of integration tests for end-to-end tests of things
 go test -count=1 -tags=integration ./tests/
 ```
 
+The above command will build Pebble first, then run tests with it.
+
+To use an existing Pebble binary rather than building one, you can explicitly set the flag `-pebblebin`. For example, the following command will use a pre-built Pebble at `/home/ubuntu/pebble`:
+
+```bash
+go test -v -count=1 -tags=integration ./tests -pebblebin=/home/ubuntu/pebble
+```
+
 ## Developing
 
 ### Visual Studio Code Settings
 
-For the VSCode Go and gopls extention to work properly with files containing build tags, add the following:
+For VSCode Go and the gopls extention to work properly with files containing build tags, add the following:
 
 ```json
 {

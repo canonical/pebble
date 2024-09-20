@@ -17,6 +17,7 @@
 package tests
 
 import (
+	"flag"
 	"fmt"
 	"os"
 	"os/exec"
@@ -28,18 +29,30 @@ import (
 	"github.com/canonical/pebble/internals/servicelog"
 )
 
-// TestMain builds the pebble binary before running the integration tests.
+var pebbleBin = flag.String("pebblebin", "", "Path to the pre-built Pebble binary")
+
+// TestMain builds the pebble binary of `-pebblebin` flag is not set
+// before running the integration tests.
 func TestMain(m *testing.M) {
-	goBuild := exec.Command("go", "build", "-o", "../pebble", "../cmd/pebble")
-	if err := goBuild.Run(); err != nil {
-		fmt.Println("Cannot build pebble binary:", err)
-		os.Exit(1)
+	flag.Parse()
+
+	if *pebbleBin == "" {
+		goBuild := exec.Command("go", "build", "-o", "../pebble", "../cmd/pebble")
+		if err := goBuild.Run(); err != nil {
+			fmt.Println("Cannot build pebble binary:", err)
+			os.Exit(1)
+		}
+		*pebbleBin = "../pebble"
+	} else {
+		// Use the pre-built Pebble binary provided by the pebbleBin flag.
+		fmt.Println("Using pre-built Pebble binary at:", *pebbleBin)
 	}
 
 	exitCode := m.Run()
 	os.Exit(exitCode)
 }
 
+// createLayer creates a layer file with layerYAML under the directory "pebbleDir/layers".
 func createLayer(t *testing.T, pebbleDir, layerFileName, layerYAML string) {
 	t.Helper()
 
@@ -56,13 +69,15 @@ func createLayer(t *testing.T, pebbleDir, layerFileName, layerYAML string) {
 	}
 }
 
+// pebbleRun starts the pebble daemon (`pebble run`) with optional arguments
+// and returns two channels for standard output and standard error.
 func pebbleRun(t *testing.T, pebbleDir string, args ...string) (stdoutCh chan servicelog.Entry, stderrCh chan servicelog.Entry) {
 	t.Helper()
 
 	stdoutCh = make(chan servicelog.Entry)
 	stderrCh = make(chan servicelog.Entry)
 
-	cmd := exec.Command("../pebble", append([]string{"run"}, args...)...)
+	cmd := exec.Command(*pebbleBin, append([]string{"run"}, args...)...)
 	cmd.Env = append(os.Environ(), "PEBBLE="+pebbleDir)
 
 	stdoutPipe, err := cmd.StdoutPipe()
@@ -79,8 +94,8 @@ func pebbleRun(t *testing.T, pebbleDir string, args ...string) (stdoutCh chan se
 		t.Fatalf("Error starting 'pebble run': %v", err)
 	}
 
-	stopStdout := make(chan struct{}, 1)
-	stopStderr := make(chan struct{}, 1)
+	stopStdout := make(chan struct{})
+	stopStderr := make(chan struct{})
 
 	t.Cleanup(func() {
 		err := cmd.Process.Signal(os.Interrupt)
@@ -88,8 +103,8 @@ func pebbleRun(t *testing.T, pebbleDir string, args ...string) (stdoutCh chan se
 			t.Errorf("Error sending SIGINT/Ctrl+C to pebble: %v", err)
 		}
 		cmd.Wait()
-		stopStdout <- struct{}{}
-		stopStderr <- struct{}{}
+		close(stopStdout)
+		close(stopStderr)
 	})
 
 	readLogs := func(parser *servicelog.Parser, ch chan servicelog.Entry, stop <-chan struct{}) {
@@ -116,6 +131,8 @@ func pebbleRun(t *testing.T, pebbleDir string, args ...string) (stdoutCh chan se
 	return stdoutCh, stderrCh
 }
 
+// waitForLog waits until an expectedLog from an expectedService appears in the logs channel, or fails the test after a
+// specified timeout if the expectedLog is still not found.
 func waitForLog(t *testing.T, logsCh <-chan servicelog.Entry, expectedService, expectedLog string, timeout time.Duration) {
 	t.Helper()
 
@@ -137,6 +154,8 @@ func waitForLog(t *testing.T, logsCh <-chan servicelog.Entry, expectedService, e
 	}
 }
 
+// waitForFile waits until a file exists, or fails the test after a specified timeout
+// if the file still doesn't exist.
 func waitForFile(t *testing.T, file string, timeout time.Duration) {
 	t.Helper()
 
@@ -156,10 +175,11 @@ func waitForFile(t *testing.T, file string, timeout time.Duration) {
 	}
 }
 
+// runPebbleCommand runs a pebble command and returns the standard output.
 func runPebbleCommand(t *testing.T, pebbleDir string, args ...string) string {
 	t.Helper()
 
-	cmd := exec.Command("../pebble", args...)
+	cmd := exec.Command(*pebbleBin, args...)
 	cmd.Env = append(os.Environ(), "PEBBLE="+pebbleDir)
 
 	output, err := cmd.CombinedOutput()

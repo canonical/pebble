@@ -34,11 +34,11 @@ func TestStartupEnabledServices(t *testing.T) {
 services:
     svc1:
         override: replace
-        command: /bin/sh -c "touch %s; sleep 1000"
+        command: /bin/sh -c "touch %s; sleep 10"
         startup: enabled
     svc2:
         override: replace
-        command: /bin/sh -c "touch %s; sleep 1000"
+        command: /bin/sh -c "touch %s; sleep 10"
         startup: enabled
 `,
 		filepath.Join(pebbleDir, "svc1"),
@@ -76,7 +76,7 @@ func TestHold(t *testing.T) {
 services:
     svc1:
         override: replace
-        command: /bin/sh -c "touch %s; sleep 1000"
+        command: /bin/sh -c "touch %s; sleep 10"
         startup: enabled
 `,
 		filepath.Join(pebbleDir, "svc1"),
@@ -123,7 +123,7 @@ func TestVerbose(t *testing.T) {
 services:
     svc1:
         override: replace
-        command: /bin/sh -c "echo 'hello world'; sleep 1000"
+        command: /bin/sh -c "echo 'hello world'; sleep 10"
         startup: enabled
 `
 	createLayer(t, pebbleDir, layersFileName, layerYAML)
@@ -150,7 +150,7 @@ services:
 		"--args",
 		"svc1",
 		"-c",
-		"echo 'hello world'; sleep 1000",
+		"echo 'hello world'; sleep 10",
 	)
 	waitForLog(t, stderrCh, "pebble", "Started daemon", 3*time.Second)
 	waitForLog(t, stdoutCh, "svc1", "hello world", 3*time.Second)
