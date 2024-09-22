@@ -109,6 +109,10 @@ func makeTestPathInDir(c *C, dir string, path string, mode os.FileMode) string {
 }
 
 func (s *StatTestSuite) TestIsWritableDir(c *C) {
+	if os.Getuid() == 0 {
+		c.Skip("requires running as non-root users")
+	}
+
 	for _, t := range []struct {
 		path       string
 		mode       os.FileMode
@@ -180,6 +184,9 @@ func (s *StatTestSuite) TestExistsIsDir(c *C) {
 		c.Check(err, IsNil, comm)
 	}
 
+	if os.Getuid() == 0 {
+		c.Skip("requires running as non-root users")
+	}
 	p := makeTestPath(c, "foo/bar", 0)
 	c.Assert(os.Chmod(filepath.Dir(p), 0), IsNil)
 	defer os.Chmod(filepath.Dir(p), 0755)

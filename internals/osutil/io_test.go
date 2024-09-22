@@ -84,6 +84,9 @@ func (ts *AtomicWriteTestSuite) TestAtomicWriteFileSymlinkNoFollow(c *C) {
 	c.Assert(os.Chmod(rodir, 0500), IsNil)
 	defer os.Chmod(rodir, 0700)
 
+	if os.Getuid() == 0 {
+		c.Skip("requires running as non-root users")
+	}
 	err := osutil.AtomicWriteFile(p, []byte("hi"), 0600, 0)
 	c.Assert(err, NotNil)
 }

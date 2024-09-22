@@ -100,6 +100,9 @@ services:
 			} else if path == triggerLayerPath {
 				c.Assert(err, check.ErrorMatches, "triggered")
 			} else if path == unreadableLayerPath {
+				if os.Getuid() == 0 {
+					c.Skip("requires running as non-root users")
+				}
 				c.Assert(os.IsPermission(err), check.Equals, true)
 			}
 		}
