@@ -258,7 +258,6 @@ func (s *execSuite) TestCurrentUserGroup(c *C) {
 	c.Check(stderr, Equals, "")
 }
 
-// See .github/workflows/tests.yml for how to run this test as root.
 func (s *execSuite) TestUserGroup(c *C) {
 	if os.Getuid() != 0 {
 		c.Skip("requires running as root")
@@ -286,7 +285,6 @@ func (s *execSuite) TestUserGroup(c *C) {
 	c.Assert(err, ErrorMatches, `.*home directory.*does not exist`)
 }
 
-// See .github/workflows/tests.yml for how to run this test as root.
 func (s *execSuite) TestUserIDGroupID(c *C) {
 	if os.Getuid() != 0 {
 		c.Skip("requires running as root")

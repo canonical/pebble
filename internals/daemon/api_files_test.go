@@ -531,7 +531,6 @@ func (s *filesSuite) testMakeDirsUserGroup(c *C, uid, gid int, user, group strin
 	return tmpDir
 }
 
-// See .github/workflows/tests.yml for how to run this test as root.
 func (s *filesSuite) TestMakeDirsUserGroupReal(c *C) {
 	if os.Getuid() != 0 {
 		c.Skip("requires running as root")
@@ -988,7 +987,6 @@ func (s *filesSuite) TestWriteUserGroupMocked(c *C) {
 	c.Check(mkdirCalls[1], Equals, mkdirArgs{tmpDir + "/nested2", 0o755, osutil.MkdirOptions{MakeParents: true, ExistOK: true, Chmod: true, Chown: true, UserID: 56, GroupID: 78}})
 }
 
-// See .github/workflows/tests.yml for how to run this test as root.
 func (s *filesSuite) TestWriteUserGroupReal(c *C) {
 	if os.Getuid() != 0 {
 		c.Skip("requires running as root")
