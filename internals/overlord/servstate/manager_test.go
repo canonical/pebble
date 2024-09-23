@@ -532,7 +532,6 @@ func (s *S) TestUserGroupFails(c *C) {
 	c.Check(gotGid, Equals, uint32(gid))
 }
 
-// See .github/workflows/tests.yml for how to run this test as root.
 func (s *S) TestUserGroup(c *C) {
 	s.newServiceManager(c)
 	s.planAddLayer(c, testPlanLayer)
