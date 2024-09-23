@@ -100,12 +100,15 @@ services:
 			} else if path == triggerLayerPath {
 				c.Assert(err, check.ErrorMatches, "triggered")
 			} else if path == unreadableLayerPath {
-				c.Assert(os.IsPermission(err), check.Equals, true)
+				if os.Getuid() != 0 {
+					c.Assert(os.IsPermission(err), check.Equals, true)
+				}
 			}
 		}
 
 		args = append(args, "extra", "arguments", "invalid")
 		_, err = cli.ParserForTest().ParseArgs(args)
 		c.Assert(err, check.Equals, cli.ErrExtraArgs)
+		s.ResetStdStreams()
 	}
 }

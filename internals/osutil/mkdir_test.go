@@ -208,7 +208,6 @@ func (mkdirSuite) TestMakeParentsAndNoChmod(c *check.C) {
 	c.Assert(info.Mode().Perm(), check.Equals, os.FileMode(0o755))
 }
 
-// See .github/workflows/tests.yml for how to run this test as root.
 func (mkdirSuite) TestMakeParentsChmodAndChown(c *check.C) {
 	if os.Getuid() != 0 {
 		c.Skip("requires running as root")
