@@ -109,5 +109,6 @@ services:
 		args = append(args, "extra", "arguments", "invalid")
 		_, err = cli.ParserForTest().ParseArgs(args)
 		c.Assert(err, check.Equals, cli.ErrExtraArgs)
+		s.ResetStdStreams()
 	}
 }
