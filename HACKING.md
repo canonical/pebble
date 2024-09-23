@@ -202,6 +202,13 @@ ok      github.com/canonical/pebble/cmd/pebble  0.165s
 ...
 ```
 
+Pebble also has a suite of integration tests for testing things like `pebble run`. To run them, use the "integration" build constraint:
+
+```
+$ go test -count=1 -tags=integration ./tests/
+ok  	github.com/canonical/pebble/tests	4.774s
+```
+
 ## Docs
 
 We use [`sphinx`](https://www.sphinx-doc.org/en/master/) to build the docs with styles preconfigured by the [Canonical Documentation Starter Pack](https://github.com/canonical/sphinx-docs-starter-pack).
