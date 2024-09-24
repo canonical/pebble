@@ -49,9 +49,7 @@ services:
 
 	createLayer(t, pebbleDir, "001-simple-layer.yaml", layerYAML)
 
-	_, stderrCh := pebbleRun(t, pebbleDir)
-	waitForLog(t, stderrCh, "pebble", "Started default services", 3*time.Second)
-
+	_, _ = pebbleRun(t, pebbleDir)
 	waitForFile(t, filepath.Join(pebbleDir, "svc1"), 3*time.Second)
 	waitForFile(t, filepath.Join(pebbleDir, "svc2"), 3*time.Second)
 }
@@ -142,7 +140,6 @@ services:
 	stdoutCh, stderrCh := pebbleRun(t, pebbleDir, "--verbose")
 	waitForLog(t, stderrCh, "pebble", "Started daemon", 3*time.Second)
 	waitForLog(t, stdoutCh, "svc1", "hello world", 3*time.Second)
-	waitForLog(t, stderrCh, "pebble", "Started default services", 3*time.Second)
 }
 
 // TestArgs tests that Pebble provides additional arguments to a service
@@ -168,7 +165,6 @@ services:
 	)
 	waitForLog(t, stderrCh, "pebble", "Started daemon", 3*time.Second)
 	waitForLog(t, stdoutCh, "svc1", "hello world", 3*time.Second)
-	waitForLog(t, stderrCh, "pebble", "Started default services", 3*time.Second)
 }
 
 // TestIdentities tests that Pebble seeds identities from a file

@@ -512,6 +512,12 @@ func (s *serviceData) exited(exitCode int) error {
 	case stateStarting:
 		s.started <- fmt.Errorf("exited quickly with code %d", exitCode)
 		s.transition(stateExited) // not strictly necessary as doStart will return, but doesn't hurt
+		action, onType := getAction(s.config, exitCode == 0)
+		switch action {
+		case plan.ActionRestart:
+			s.doBackoff(action, onType)
+		default:
+		}
 
 	case stateRunning:
 		logger.Noticef("Service %q stopped unexpectedly with code %d", s.config.Name, exitCode)
@@ -682,6 +688,16 @@ func (s *serviceData) stop() error {
 	defer s.manager.servicesLock.Unlock()
 
 	switch s.state {
+	case stateStarting:
+		s.started <- fmt.Errorf("stopped before the 1 second okay delay")
+		logger.Debugf("Attempting to stop service %q by sending SIGTERM", s.config.Name)
+		err := syscall.Kill(-s.cmd.Process.Pid, syscall.SIGTERM)
+		if err != nil {
+			logger.Noticef("Cannot send SIGTERM to process: %v", err)
+		}
+		s.transition(stateTerminating)
+		time.AfterFunc(s.killDelay(), func() { logError(s.terminateTimeElapsed()) })
+
 	case stateRunning:
 		logger.Debugf("Attempting to stop service %q by sending SIGTERM", s.config.Name)
 		// First send SIGTERM to try to terminate it gracefully.
