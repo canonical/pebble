@@ -7,6 +7,7 @@ digraph service_state_machine {
     node [penwidth=1]
     initial -> starting [label="start"]
     starting -> running [label="okay wait\nelapsed"]
+    starting -> terminating [label="stopped before\nokay wait elapses"]
     running -> terminating [label="stop"]
     running -> terminating [label="check failed\n(action \"restart\")"]
     terminating -> killing [label="terminate time\nelapsed"]
