@@ -683,7 +683,7 @@ func (s *serviceData) stop() error {
 
 	switch s.state {
 	case stateStarting:
-		s.started <- fmt.Errorf("stopped before the 1 second okay delay")
+		s.started <- fmt.Errorf("stopped before the %s okay delay", okayDelay)
 		fallthrough
 
 	case stateRunning:
