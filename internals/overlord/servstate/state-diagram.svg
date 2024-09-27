@@ -51,10 +51,10 @@
 <!-- starting&#45;&gt;terminating -->
 <g id="edge3" class="edge">
 <title>starting&#45;&gt;terminating</title>
-<path fill="none" stroke="black" d="M584.01,-526.28C503.35,-525.68 329.88,-514.88 210.34,-439.5 184.62,-423.28 178.2,-414.26 168.34,-385.5 163.58,-371.63 165.22,-366.83 168.34,-352.5 168.85,-350.15 169.53,-347.78 170.33,-345.42"/>
+<path fill="none" stroke="black" d="M584.04,-520.75C488.74,-509.86 267.82,-480.79 205.84,-439.5 181.52,-423.3 177.07,-413.38 168.34,-385.5 163.95,-371.5 165.22,-366.83 168.34,-352.5 168.85,-350.15 169.53,-347.78 170.33,-345.42"/>
 <polygon fill="black" stroke="black" points="173.55,-346.78 174.09,-336.2 167.07,-344.13 173.55,-346.78"/>
-<text text-anchor="middle" x="258.34" y="-424.7" font-family="Times,serif" font-size="14.00">stopped before</text>
-<text text-anchor="middle" x="258.34" y="-408.2" font-family="Times,serif" font-size="14.00">okay wait elapses</text>
+<text text-anchor="middle" x="256.09" y="-424.7" font-family="Times,serif" font-size="14.00">stop (before</text>
+<text text-anchor="middle" x="256.09" y="-408.2" font-family="Times,serif" font-size="14.00">okay wait elapses)</text>
 </g>
 <!-- exited -->
 <g id="node8" class="node">
