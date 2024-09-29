@@ -1339,7 +1339,7 @@ services:
 	rsp.ServeHTTP(rec, req)
 	c.Check(rec.Result().StatusCode, Equals, 202)
 
-	// Wait for the change to be in doing state.
+	// Wait for the change to be in doing state so that the service is in starting state.
 	for i := 0; ; i++ {
 		if i >= 10 {
 			c.Fatalf("timed out waiting for change")
@@ -1354,12 +1354,11 @@ services:
 		time.Sleep(20 * time.Millisecond)
 	}
 
-	// Stop the daemon within the okayDelay,
-	// which should stop services in running state.
+	// Stop the daemon within the okayDelay, which should stop services in starting state.
 	err = d.Stop(nil)
 	c.Assert(err, IsNil)
 
-	// Ensure the "stop" change was created, along with its "stop" tasks.
+	// Ensure a "stop" change is created, along with its "stop" tasks.
 	d.state.Lock()
 	defer d.state.Unlock()
 	changes := d.state.Changes()

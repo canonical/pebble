@@ -298,12 +298,13 @@ services:
 }
 
 func (s *S) TestStopServiceWithinOkayDelay(c *C) {
-	// A longer okayDelay is used so that the change for starting the services won't
+	// A longer okayDelay is used so that the change for starting the service won't
 	// quickly transition into the running state.
 	fakeOkayDelay := 5 * shortOkayDelay
 	servstate.FakeOkayWait(fakeOkayDelay)
 
 	s.newServiceManager(c)
+	// The service sleeps for fakeOkayDelay second then creates a side effect (a file at donePath).
 	layer := `
 services:
     %s:
@@ -337,7 +338,7 @@ services:
 	s.st.Unlock()
 
 	donePath := filepath.Join(s.dir, serviceName)
-	// DonePath not created means the service is terminated within the okayWait.
+	// If the service is stopped within okayDelay and is indeed terminated, donePath should not exist.
 	if _, err := os.Stat(donePath); err == nil {
 		c.Fatalf("service %s waiting for service output", serviceName)
 	}
