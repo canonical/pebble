@@ -1227,7 +1227,29 @@ func (p *Plan) checkCycles() error {
 	return err
 }
 
+// labelExp represents a match of a valid layer label, which may include a
+// directory prefix (which excludes the '.d' ending, in the same way the
+// file suffix is omitted).
+//
+// ┌─────────┬─────────────────────────────────────┐
+// │ Label   │ Description                         │
+// ├─────────┼─────────────────────────────────────┤
+// │         │                                     │
+// │ abc     │ Label of file in layers root        │
+// │         │                                     │
+// │ foo/bar │ Label of file inside sub-directory  │
+// │         │                                     │
+// └─────────┴─────────────────────────────────────┘
+var labelExp = regexp.MustCompile(`^(([a-z](?:-?[a-z0-9]){2,})/)?([a-z](?:-?[a-z0-9]){2,})$`)
+
 func ParseLayer(order int, label string, data []byte) (*Layer, error) {
+	// This function can be called directly over the daemon API. We
+	// must fail the API request if the label is not valid.
+	match := labelExp.FindStringSubmatch(label)
+	if match == nil {
+		return nil, fmt.Errorf("cannot parse layer: invalid label %q", label)
+	}
+
 	layer := &Layer{
 		Services:   make(map[string]*Service),
 		Checks:     make(map[string]*Check),
@@ -1349,57 +1371,74 @@ func validServiceAction(action ServiceAction, additionalValid ...ServiceAction) 
 	}
 }
 
-var fnameExp = regexp.MustCompile("^([0-9]{3})-([a-z](?:-?[a-z0-9]){2,}).yaml$")
+// configLayerExp represents a match for a valid layer relative path, which
+// typically consists of only the file name ending with '.yaml'. Optionally,
+// it may include a single level subdirectory prefix which ends with '.d'.
+//
+// ┌─────────────────────────────────────────────────────────────┐
+// │ Match Index                                                 │
+// ├────────────────────────┬────────────┬─────┬─────┬─────┬─────┤
+// │ 0 (Supplied Path)      │ 1          │ 2   │ 3   │ 4   │ 5   │
+// ├────────────────────────┼────────────┼─────┼─────┼─────┼─────┤
+// │                        │            │     │     │     │     │
+// │ 001-abc.yaml           │            │     │     │ 001 │ abc │
+// │                        │            │     │     │     │     │
+// │ 002-foo.d/001-bar.yaml │ 002-foo.d/ │ 002 │ foo │ 001 │ bar │
+// │                        │            │     │     │     │     │
+// └────────────────────────┴────────────┴─────┴─────┴─────┴─────┘
+var layerPathExp = regexp.MustCompile(`^(([0-9]{3})-([a-z](?:-?[a-z0-9]){2,})\.d/)?([0-9]{3})-([a-z](?:-?[a-z0-9]){2,}).yaml$`)
 
-func ReadLayersDir(dirname string) ([]*Layer, error) {
-	finfos, err := os.ReadDir(dirname)
+// ReadLayersDir loads the YAML layer files from the first two directory
+// levels starting at layersDir in the order as specified by the order
+// directory and file prefix (see configLayersTwoLevels). Note that the
+// directory and file suffix is dropped for the label.
+//
+// ┌────────────────────────┬──────────────────┬─────────┐
+// │ Layer Path             │ Order            │ Label   │
+// ├────────────────────────┼──────────────────┼─────────┤
+// │                        │                  │         │
+// │ 001-abc.yaml           │ 001-000 => 1000  │ abc     │
+// │                        │                  │         │
+// │ 002-foo.d/001-bar.yaml │ 002-001 => 2001  │ foo/bar │
+// │                        │                  │         │
+// └────────────────────────┴──────────────────┴─────────┘
+func ReadLayersDir(layersDir string) ([]*Layer, error) {
+	orderedConfigLayers, err := configLayersTwoLevels(layersDir)
 	if err != nil {
 		// Errors from package os generally include the path.
-		return nil, fmt.Errorf("cannot read layers directory: %v", err)
+		return nil, err
 	}
 
-	orders := make(map[int]string)
-	labels := make(map[string]int)
-
-	// Documentation says ReadDir result is already sorted by name.
-	// This is fundamental here so if reading changes make sure the
-	// sorting is preserved.
 	var layers []*Layer
-	for _, finfo := range finfos {
-		if finfo.IsDir() || !strings.HasSuffix(finfo.Name(), ".yaml") {
-			continue
-		}
+	for _, configLayerPath := range orderedConfigLayers {
 		// TODO Consider enforcing permissions and ownership here to
 		//      avoid mistakes that could lead to hacks.
-		match := fnameExp.FindStringSubmatch(finfo.Name())
+		match := layerPathExp.FindStringSubmatch(configLayerPath)
 		if match == nil {
-			return nil, fmt.Errorf("invalid layer filename: %q (must look like \"123-some-label.yaml\")", finfo.Name())
+			return nil, fmt.Errorf("internal error: failed to parse layer path %q", configLayerPath)
 		}
 
-		data, err := os.ReadFile(filepath.Join(dirname, finfo.Name()))
-		if err != nil {
-			// Errors from package os generally include the path.
-			return nil, fmt.Errorf("cannot read layer file: %v", err)
+		// Resolve the order and label, which may include additional
+		// information from an optional sub-directory prefix.
+		label := filepath.Join(match[3], match[5])
+		var orderStr string
+		if match[1] == "" {
+			// Config layer is the layers root.
+			orderStr = match[4] + "000"
+		} else {
+			// Config layer is inside a sub-directory.
+			orderStr = match[2] + match[4]
 		}
-		label := match[2]
-		order, err := strconv.Atoi(match[1])
+		order, err := strconv.Atoi(orderStr)
 		if err != nil {
 			panic(fmt.Sprintf("internal error: filename regexp is wrong: %v", err))
 		}
 
-		oldLabel, dupOrder := orders[order]
-		oldOrder, dupLabel := labels[label]
-		if dupOrder {
-			oldOrder = order
-		} else if dupLabel {
-			oldLabel = label
+		data, err := os.ReadFile(filepath.Join(layersDir, configLayerPath))
+		if err != nil {
+			// Errors from package os generally include the path.
+			return nil, fmt.Errorf("cannot read layer file: %v", err)
 		}
-		if dupOrder || dupLabel {
-			return nil, fmt.Errorf("invalid layer filename: %q not unique (have \"%03d-%s.yaml\" already)", finfo.Name(), oldOrder, oldLabel)
-		}
-
-		orders[order] = label
-		labels[label] = order
 
 		layer, err := ParseLayer(order, label, data)
 		if err != nil {
@@ -1408,6 +1447,145 @@ func ReadLayersDir(dirname string) ([]*Layer, error) {
 		layers = append(layers, layer)
 	}
 	return layers, nil
+}
+
+// configLayersTwoLevels locates all layer configuration files in the first
+// two directory levels starting in layersDir. If the first level contains
+// a directory symlink the second level files will be located by following
+// the link. The function returns an ordered list of configuration file names
+// as shown in the example below.
+//
+// ┌────────────────────────────┐
+// │ File (ordered)             │
+// ├────────────────────────────┤
+// │                            │
+// │ 001-foo.yaml               │
+// │                            │
+// │ 002-bar.d/001-aaa.yaml     │
+// │                            │
+// │ 002-bar.d/002-bbb.yaml     │
+// │                            │
+// │ 003-baz.yaml               │
+// │                            │
+// └────────────────────────────┘
+func configLayersTwoLevels(layersDir string) (relPath []string, err error) {
+	// Read the first-level directory
+	l1Entries, err := configLayerEntries(layersDir, true)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, l1Entry := range l1Entries {
+		l1Path := filepath.Join(layersDir, l1Entry)
+
+		// Let's check if the path (including a symlink) is a directory.
+		info, err := os.Stat(l1Path)
+		if err != nil {
+			return nil, err
+		}
+
+		if info.IsDir() {
+			// Read the second-level directory
+			l2Entries, err := configLayerEntries(l1Path, false)
+			if err != nil {
+				return nil, err
+			}
+
+			// Add the config files from the second level
+			for _, l2Entry := range l2Entries {
+				relPath = append(relPath, filepath.Join(l1Entry, l2Entry))
+			}
+		} else {
+			// Add the config files from the first level
+			relPath = append(relPath, l1Entry)
+		}
+	}
+	return relPath, nil
+}
+
+// configEntryExp matches either a valid config layer YAML file name or it
+// matches a valid config layer directory.
+//
+// ┌────────────────────────────────────────────────────────┐
+// │ Match Index                                            │
+// ├────────────────────────┬───────────┬───────────┬───────┤
+// │ 0 (Supplied Name)      │ 1 (order) │ 2 (label) │ 3     │
+// ├────────────────────────┼───────────┼───────────┼───────┤
+// │                        │           │           │       │
+// │ 001-abc.yaml           │ 001       │ abc       │ .yaml │
+// │                        │           │           │       │
+// │ 002-foo.d              │ 002       │ foo       │ .d    │
+// │                        │           │           │       │
+// └────────────────────────┴───────────┴───────────┴───────┘
+var configEntryExp = regexp.MustCompile(`^([0-9]{3})-([a-z](?:-?[a-z0-9]){2,})(.yaml|.d)$`)
+
+// configLayerEntries reads a directory containing config layer files or
+// sub-directories and validates that the naming is valid. If dirOK is
+// set to false it will not permit sub-directories within the supplied
+// configDir path. The returned string slice is ordered alphanumerically
+// (so names are automatically ordered by their 'order').
+func configLayerEntries(configDir string, dirOK bool) (names []string, err error) {
+	entries, err := os.ReadDir(configDir)
+	if err != nil {
+		return nil, fmt.Errorf("cannot read layers directory: %v", err)
+	}
+
+	orders := make(map[int]string)
+	labels := make(map[string]int)
+	for _, entry := range entries {
+		// Let's not fail to start the system up if some unrelated file ended
+		// up in the layers directory by accident.
+		if !strings.HasSuffix(entry.Name(), ".yaml") && !strings.HasSuffix(entry.Name(), ".d") {
+			continue
+		}
+
+		// Let's check if the path (including a symlink) is a directory.
+		info, err := os.Stat(filepath.Join(configDir, entry.Name()))
+		if err != nil {
+			return nil, err
+		}
+
+		// Let's ensure the file or sub-directory name is valid.
+		match := configEntryExp.FindStringSubmatch(entry.Name())
+		if match == nil {
+			if info.IsDir() {
+				return nil, fmt.Errorf("invalid layer sub-directory name: %q (must look like \"123-some-label.d\")", entry.Name())
+			} else {
+				return nil, fmt.Errorf("invalid layer filename: %q (must look like \"123-some-label.yaml\")", entry.Name())
+			}
+		}
+
+		// Only the root layers directory support sub-directories.
+		if info.IsDir() && !dirOK {
+			return nil, fmt.Errorf("cannot have a layers sub-directory at this level")
+		}
+
+		// Extract the order and label from the match.
+		label := match[2]
+		order, err := strconv.Atoi(match[1])
+		if err != nil {
+			panic(fmt.Sprintf("internal error: filename regexp is wrong: %v", err))
+		}
+
+		// Let's make sure no duplicate orders or labels appear.
+		oldLabel, dupOrder := orders[order]
+		oldOrder, dupLabel := labels[label]
+		if dupOrder {
+			oldOrder = order
+		} else if dupLabel {
+			oldLabel = label
+		}
+		if dupOrder || dupLabel {
+			return nil, fmt.Errorf("invalid layer filename: %q not unique (have \"%03d-%s.yaml\" already)", entry.Name(), oldOrder, oldLabel)
+		}
+		orders[order] = label
+		labels[label] = order
+
+		// All is good for this entry.
+		names = append(names, entry.Name())
+	}
+
+	return names, nil
 }
 
 // ReadDir reads the configuration layers from layersDir,

@@ -43,6 +43,7 @@ func v1PostLayers(c *Command, r *http.Request, _ *UserState) Response {
 	var payload struct {
 		Action  string `json:"action"`
 		Combine bool   `json:"combine"`
+		Inner   bool   `json:"inner"`
 		Label   string `json:"label"`
 		Format  string `json:"format"`
 		Layer   string `json:"layer"`
