@@ -1341,7 +1341,7 @@ services:
 
 	// Wait for the change to be in doing state so that the service is in starting state.
 	for i := 0; ; i++ {
-		if i >= 45 {
+		if i >= 18 {
 			c.Fatalf("timed out waiting for change")
 		}
 		d.state.Lock()
@@ -1354,7 +1354,7 @@ services:
 		if status == state.DoingStatus {
 			break
 		}
-		time.Sleep(20 * time.Millisecond)
+		time.Sleep(50 * time.Millisecond)
 	}
 
 	// Stop the daemon within the okayDelay, which should stop services in starting state.
