@@ -22,3 +22,5 @@ jobs:
           trivy-config: .github/trivy.yaml
         env:
           TRIVY_DB_REPOSITORY: public.ecr.aws/aquasecurity/trivy-db
+          # known issue: aquasecurity/trivy-action#389
+          # workaround: https://github.com/orgs/community/discussions/139074#discussioncomment-10808081
