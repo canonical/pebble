@@ -20,3 +20,5 @@ jobs:
           scan-type: 'fs'
           scan-ref: '.'
           trivy-config: .github/trivy.yaml
+        env:
+          TRIVY_DB_REPOSITORY: public.ecr.aws/aquasecurity/trivy-db
