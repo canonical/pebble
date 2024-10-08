@@ -1341,14 +1341,17 @@ services:
 
 	// Wait for the change to be in doing state so that the service is in starting state.
 	for i := 0; ; i++ {
-		if i >= 10 {
+		if i >= 45 {
 			c.Fatalf("timed out waiting for change")
 		}
 		d.state.Lock()
 		change := d.state.Change(rsp.Change)
-		changeStatus := change.Status()
+		var status state.Status
+		if change != nil {
+			status = change.Status()
+		}
 		d.state.Unlock()
-		if change != nil && changeStatus == state.DoingStatus {
+		if status == state.DoingStatus {
 			break
 		}
 		time.Sleep(20 * time.Millisecond)
