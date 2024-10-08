@@ -20,3 +20,7 @@ jobs:
           scan-type: 'fs'
           scan-ref: '.'
           trivy-config: .github/trivy.yaml
+        env:
+          : # known issue: https://github.com/aquasecurity/trivy-action/issues/389
+          : # workaround: https://github.com/orgs/community/discussions/139074#discussioncomment-10808081
+          TRIVY_DB_REPOSITORY: public.ecr.aws/aquasecurity/trivy-db
