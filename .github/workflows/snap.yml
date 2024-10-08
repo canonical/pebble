@@ -40,7 +40,7 @@ jobs:
 
       - name: Build ${{ env.SNAP_NAME }} Snap
         id: build-snap
-        uses: snapcore/action-build@v1.1.3
+        uses: snapcore/action-build@v1.3.0
 
       - uses: actions/upload-artifact@v3
         if: failure()
@@ -90,7 +90,7 @@ jobs:
 
       - name: Build ${{ env.SNAP_NAME }} Snap for ${{ matrix.arch }}
         id: build-snap
-        uses: snapcore/action-build@v1.1.3
+        uses: snapcore/action-build@v1.3.0
         with:
           snapcraft-args: remote-build --build-for=${{ matrix.arch }} --launchpad-accept-public-upload
 
