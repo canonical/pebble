@@ -40,6 +40,7 @@ import (
 	"github.com/canonical/pebble/internals/overlord"
 	"github.com/canonical/pebble/internals/overlord/patch"
 	"github.com/canonical/pebble/internals/overlord/restart"
+	"github.com/canonical/pebble/internals/overlord/servstate"
 	"github.com/canonical/pebble/internals/overlord/standby"
 	"github.com/canonical/pebble/internals/overlord/state"
 	"github.com/canonical/pebble/internals/reaper"
@@ -1339,25 +1340,21 @@ services:
 	rsp.ServeHTTP(rec, req)
 	c.Check(rec.Result().StatusCode, Equals, 202)
 
-	// Wait for the change to be in doing state so that the service is in starting state.
-	for i := 0; ; i++ {
-		if i >= 18 {
-			c.Fatalf("timed out waiting for change")
-		}
-		d.state.Lock()
-		change := d.state.Change(rsp.Change)
-		var status state.Status
-		if change != nil {
-			status = change.Status()
-		}
-		d.state.Unlock()
-		if status == state.DoingStatus {
+	// Waiting for the change to be in doing state cannot guarantee the service is
+	// in the starting state, so here we wait until the service is in the starting
+	// state. We wait up to 25*20=500ms to make sure there is still half a second
+	// left to stop the service before okayDelay.
+	for i := 0; i < 25; i++ {
+		svcInfo, err := d.overlord.ServiceManager().Services([]string{"test1"})
+		c.Assert(err, IsNil)
+		if len(svcInfo) > 0 && svcInfo[0].Current == servstate.StatusActive {
 			break
 		}
-		time.Sleep(50 * time.Millisecond)
+		time.Sleep(20 * time.Millisecond)
 	}
 
-	// Stop the daemon within the okayDelay, which should stop services in starting state.
+	// Stop the daemon, which should stop services in starting state. At this point,
+	// it should still be within the okayDelay.
 	err = d.Stop(nil)
 	c.Assert(err, IsNil)
 
