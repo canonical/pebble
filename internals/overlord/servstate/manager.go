@@ -367,7 +367,7 @@ func servicesToStop(m *ServiceManager) ([][]string, error) {
 		return nil, err
 	}
 
-	// Filter down to only those that are running or in backoff
+	// Filter down to only those that are starting, running or in backoff
 	m.servicesLock.Lock()
 	defer m.servicesLock.Unlock()
 	var result [][]string
@@ -375,7 +375,7 @@ func servicesToStop(m *ServiceManager) ([][]string, error) {
 		var notStopped []string
 		for _, name := range services {
 			s := m.services[name]
-			if s != nil && (s.state == stateRunning || s.state == stateBackoff) {
+			if s != nil && (s.state == stateStarting || s.state == stateRunning || s.state == stateBackoff) {
 				notStopped = append(notStopped, name)
 			}
 		}
