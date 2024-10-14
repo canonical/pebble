@@ -176,7 +176,7 @@ func (m *PlanManager) appendLayer(newLayer *plan.Layer, inner bool) (*plan.Plan,
 		// an order?
 		newSubLabel, _, hasSub := strings.Cut(newLayer.Label, "/")
 		lastIndex := layersCount - 1
-		for i, _ := range m.plan.Layers {
+		for i := range m.plan.Layers {
 			layer := m.plan.Layers[lastIndex-i]
 			layerSubLabel, _, _ := strings.Cut(layer.Label, "/")
 			// If we have a sub-directory match we know it already exists.

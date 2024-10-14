@@ -383,7 +383,7 @@ test-field:
 	ps.planLayersHasLen(c, 3)
 
 	// Make sure that layer validation is happening.
-	layer, err = plan.ParseLayer(0, "label4", []byte(`
+	_, err = plan.ParseLayer(0, "label4", []byte(`
 checks:
     bad-check:
         override: replace
@@ -394,7 +394,7 @@ checks:
 	c.Check(err, ErrorMatches, `(?s).*plan check.*must be "alive" or "ready".*`)
 
 	// Make sure that layer validation is happening for extensions.
-	layer, err = plan.ParseLayer(0, "label4", []byte(`
+	_, err = plan.ParseLayer(0, "label4", []byte(`
 test-field:
     my1:
         override: replace
@@ -422,6 +422,7 @@ services:
         command: foo
 `)
 	err = ps.planMgr.AppendLayer(layer, false)
+	c.Assert(err, IsNil)
 
 	// Set arguments to services.
 	serviceArgs := map[string][]string{
@@ -455,8 +456,8 @@ func (ps *planSuite) TestChangeListenerAndLocking(c *C) {
 		// so we should be able to acquire it.
 		planLock := manager.PlanLock()
 		planLock.Lock()
+		calls++ // calls incremented here to satisfy staticcheck.
 		planLock.Unlock()
-		calls++
 	})
 
 	// Run operations in goroutine so we can time out the test if it fails.
