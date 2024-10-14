@@ -116,9 +116,9 @@ test-field:
         override: replace
         a: something
 `)
-	err = ps.planMgr.AppendLayer(layer)
+	err = ps.planMgr.AppendLayer(layer, false)
 	c.Assert(err, IsNil)
-	c.Assert(layer.Order, Equals, 1)
+	c.Assert(layer.Order, Equals, 1000)
 	c.Assert(ps.planYAML(c), Equals, `
 services:
     svc1:
@@ -142,7 +142,7 @@ test-field:
         override: foobar
         a: something else
 `)
-	err = ps.planMgr.AppendLayer(layer)
+	err = ps.planMgr.AppendLayer(layer, false)
 	c.Assert(err.(*planstate.LabelExists).Label, Equals, "label1")
 	c.Assert(ps.planYAML(c), Equals, `
 services:
@@ -167,9 +167,9 @@ test-field:
         override: replace
         a: else
 `)
-	err = ps.planMgr.AppendLayer(layer)
+	err = ps.planMgr.AppendLayer(layer, false)
 	c.Assert(err, IsNil)
-	c.Assert(layer.Order, Equals, 2)
+	c.Assert(layer.Order, Equals, 2000)
 	c.Assert(ps.planYAML(c), Equals, `
 services:
     svc1:
@@ -193,9 +193,9 @@ test-field:
         override: replace
         a: something
 `)
-	err = ps.planMgr.AppendLayer(layer)
+	err = ps.planMgr.AppendLayer(layer, false)
 	c.Assert(err, IsNil)
-	c.Assert(layer.Order, Equals, 3)
+	c.Assert(layer.Order, Equals, 3000)
 	c.Assert(ps.planYAML(c), Equals, `
 services:
     svc1:
@@ -233,9 +233,9 @@ test-field:
         override: replace
         a: something
 `)
-	err = ps.planMgr.CombineLayer(layer)
+	err = ps.planMgr.CombineLayer(layer, false)
 	c.Assert(err, IsNil)
-	c.Assert(layer.Order, Equals, 1)
+	c.Assert(layer.Order, Equals, 1000)
 	c.Assert(ps.planYAML(c), Equals, `
 services:
     svc1:
@@ -259,9 +259,9 @@ test-field:
         override: replace
         a: else
 `)
-	err = ps.planMgr.CombineLayer(layer)
+	err = ps.planMgr.CombineLayer(layer, false)
 	c.Assert(err, IsNil)
-	c.Assert(layer.Order, Equals, 2)
+	c.Assert(layer.Order, Equals, 2000)
 	c.Assert(ps.planYAML(c), Equals, `
 services:
     svc1:
@@ -291,9 +291,9 @@ test-field:
         override: replace
         a: else
 `)
-	err = ps.planMgr.CombineLayer(layer)
+	err = ps.planMgr.CombineLayer(layer, false)
 	c.Assert(err, IsNil)
-	c.Assert(layer.Order, Equals, 1)
+	c.Assert(layer.Order, Equals, 1000)
 	c.Assert(ps.planYAML(c), Equals, `
 services:
     svc1:
@@ -323,9 +323,9 @@ test-field:
         override: replace
         a: something
 `)
-	err = ps.planMgr.CombineLayer(layer)
+	err = ps.planMgr.CombineLayer(layer, false)
 	c.Assert(err, IsNil)
-	c.Assert(layer.Order, Equals, 2)
+	c.Assert(layer.Order, Equals, 2000)
 	c.Assert(ps.planYAML(c), Equals, `
 services:
     svc1:
@@ -361,9 +361,9 @@ test-field:
         override: replace
         a: nothing
 `)
-	err = ps.planMgr.CombineLayer(layer)
+	err = ps.planMgr.CombineLayer(layer, false)
 	c.Assert(err, IsNil)
-	c.Assert(layer.Order, Equals, 3)
+	c.Assert(layer.Order, Equals, 3000)
 	c.Assert(ps.planYAML(c), Equals, `
 services:
     svc1:
@@ -421,7 +421,7 @@ services:
         override: replace
         command: foo
 `)
-	err = ps.planMgr.AppendLayer(layer)
+	err = ps.planMgr.AppendLayer(layer, false)
 
 	// Set arguments to services.
 	serviceArgs := map[string][]string{
@@ -477,10 +477,10 @@ services:
         override: replace
         command: /bin/sh
 `)
-		err = manager.AppendLayer(layer1)
+		err = manager.AppendLayer(layer1, false)
 		c.Assert(err, IsNil)
 
-		err = manager.CombineLayer(layer1)
+		err = manager.CombineLayer(layer1, false)
 		c.Assert(err, IsNil)
 
 		layer2 := ps.parseLayer(c, 0, "label2", `
@@ -489,7 +489,7 @@ services:
         override: replace
         command: /bin/sh
 `)
-		err = manager.CombineLayer(layer2)
+		err = manager.CombineLayer(layer2, false)
 		c.Assert(err, IsNil)
 
 		err = manager.SetServiceArgs(map[string][]string{
