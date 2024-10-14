@@ -26,7 +26,7 @@ type AddLayerOptions struct {
 	Combine bool
 
 	// Inner true means a new layer append may go into an existing
-	// subdirectory, even through it may not result in appending it
+	// subdirectory, even though it may not result in appending it
 	// to the end of the layers slice (it becomes an insert).
 	Inner bool
 

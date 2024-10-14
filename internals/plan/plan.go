@@ -1371,27 +1371,10 @@ func validServiceAction(action ServiceAction, additionalValid ...ServiceAction) 
 	}
 }
 
-// configLayerExp represents a match for a valid layer relative path, which
-// typically consists of only the file name ending with '.yaml'. Optionally,
-// it may include a single level subdirectory prefix which ends with '.d'.
-//
-// ┌─────────────────────────────────────────────────────────────┐
-// │ Match Index                                                 │
-// ├────────────────────────┬────────────┬─────┬─────┬─────┬─────┤
-// │ 0 (Supplied Path)      │ 1          │ 2   │ 3   │ 4   │ 5   │
-// ├────────────────────────┼────────────┼─────┼─────┼─────┼─────┤
-// │                        │            │     │     │     │     │
-// │ 001-abc.yaml           │            │     │     │ 001 │ abc │
-// │                        │            │     │     │     │     │
-// │ 002-foo.d/001-bar.yaml │ 002-foo.d/ │ 002 │ foo │ 001 │ bar │
-// │                        │            │     │     │     │     │
-// └────────────────────────┴────────────┴─────┴─────┴─────┴─────┘
-var layerPathExp = regexp.MustCompile(`^(([0-9]{3})-([a-z](?:-?[a-z0-9]){2,})\.d/)?([0-9]{3})-([a-z](?:-?[a-z0-9]){2,}).yaml$`)
-
 // ReadLayersDir loads the YAML layer files from the first two directory
 // levels starting at layersDir in the order as specified by the order
-// directory and file prefix (see configLayersTwoLevels). Note that the
-// directory and file suffix is dropped for the label.
+// directory and file prefixes. Note that the directory and file suffix
+// is dropped for the label.
 //
 // ┌────────────────────────┬──────────────────┬─────────┐
 // │ Layer Path             │ Order            │ Label   │
@@ -1403,72 +1386,8 @@ var layerPathExp = regexp.MustCompile(`^(([0-9]{3})-([a-z](?:-?[a-z0-9]){2,})\.d
 // │                        │                  │         │
 // └────────────────────────┴──────────────────┴─────────┘
 func ReadLayersDir(layersDir string) ([]*Layer, error) {
-	orderedConfigLayers, err := configLayersTwoLevels(layersDir)
-	if err != nil {
-		// Errors from package os generally include the path.
-		return nil, err
-	}
-
 	var layers []*Layer
-	for _, configLayerPath := range orderedConfigLayers {
-		// TODO Consider enforcing permissions and ownership here to
-		//      avoid mistakes that could lead to hacks.
-		match := layerPathExp.FindStringSubmatch(configLayerPath)
-		if match == nil {
-			return nil, fmt.Errorf("internal error: failed to parse layer path %q", configLayerPath)
-		}
 
-		// Resolve the order and label, which may include additional
-		// information from an optional sub-directory prefix.
-		label := filepath.Join(match[3], match[5])
-		var orderStr string
-		if match[1] == "" {
-			// Config layer is the layers root.
-			orderStr = match[4] + "000"
-		} else {
-			// Config layer is inside a sub-directory.
-			orderStr = match[2] + match[4]
-		}
-		order, err := strconv.Atoi(orderStr)
-		if err != nil {
-			panic(fmt.Sprintf("internal error: filename regexp is wrong: %v", err))
-		}
-
-		data, err := os.ReadFile(filepath.Join(layersDir, configLayerPath))
-		if err != nil {
-			// Errors from package os generally include the path.
-			return nil, fmt.Errorf("cannot read layer file: %v", err)
-		}
-
-		layer, err := ParseLayer(order, label, data)
-		if err != nil {
-			return nil, err
-		}
-		layers = append(layers, layer)
-	}
-	return layers, nil
-}
-
-// configLayersTwoLevels locates all layer configuration files in the first
-// two directory levels starting in layersDir. If the first level contains
-// a directory symlink the second level files will be located by following
-// the link. The function returns an ordered list of configuration file names
-// as shown in the example below.
-//
-// ┌────────────────────────────┐
-// │ File (ordered)             │
-// ├────────────────────────────┤
-// │                            │
-// │ 001-foo.yaml               │
-// │                            │
-// │ 002-bar.d/001-aaa.yaml     │
-// │                            │
-// │ 002-bar.d/002-bbb.yaml     │
-// │                            │
-// │ 003-baz.yaml               │
-// │                            │
-// └────────────────────────────┘
-func configLayersTwoLevels(layersDir string) (relPath []string, err error) {
 	// Read the first-level directory
 	l1Entries, err := configLayerEntries(layersDir, true)
 	if err != nil {
@@ -1476,7 +1395,7 @@ func configLayersTwoLevels(layersDir string) (relPath []string, err error) {
 	}
 
 	for _, l1Entry := range l1Entries {
-		l1Path := filepath.Join(layersDir, l1Entry)
+		l1Path := filepath.Join(layersDir, l1Entry.name)
 
 		// Let's check if the path (including a symlink) is a directory.
 		info, err := os.Stat(l1Path)
@@ -1493,14 +1412,55 @@ func configLayersTwoLevels(layersDir string) (relPath []string, err error) {
 
 			// Add the config files from the second level
 			for _, l2Entry := range l2Entries {
-				relPath = append(relPath, filepath.Join(l1Entry, l2Entry))
+				layer, err := configLayerLoad(layersDir, l1Entry, l2Entry)
+				if err != nil {
+					return nil, err
+				}
+				layers = append(layers, layer)
 			}
 		} else {
 			// Add the config files from the first level
-			relPath = append(relPath, l1Entry)
+			layer, err := configLayerLoad(layersDir, l1Entry, nil)
+			if err != nil {
+				return nil, err
+			}
+			layers = append(layers, layer)
 		}
 	}
-	return relPath, nil
+
+	return layers, nil
+}
+
+// configLayerLoad loads a layer configuration file and returns a Layer
+// on success. The layer configuration is typically in the Pebble layers
+// root directory, in which case l2Entry must be nil. If the file is
+// inside a sub-directory, l1Entry must supply information on the directory,
+// while l2Entry information on the file name itself.
+func configLayerLoad(layersDir string, l1Entry *configEntry, l2Entry *configEntry) (*Layer, error) {
+	// Resolve the order and label, which may include additional
+	// information from an optional sub-directory prefix.
+	label := l1Entry.label
+	order := 1000 * l1Entry.order
+	path := filepath.Join(layersDir, l1Entry.name)
+	if l2Entry != nil {
+		// Config layer is inside a sub-directory.
+		label = filepath.Join(label, l2Entry.label)
+		order = order + l2Entry.order
+		path = filepath.Join(path, l2Entry.name)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		// Errors from package os generally include the path.
+		return nil, fmt.Errorf("cannot read layer file: %v", err)
+	}
+
+	layer, err := ParseLayer(order, label, data)
+	if err != nil {
+		return nil, err
+	}
+
+	return layer, nil
 }
 
 // configEntryExp matches either a valid config layer YAML file name or it
@@ -1519,12 +1479,18 @@ func configLayersTwoLevels(layersDir string) (relPath []string, err error) {
 // └────────────────────────┴───────────┴───────────┴───────┘
 var configEntryExp = regexp.MustCompile(`^([0-9]{3})-([a-z](?:-?[a-z0-9]){2,})(.yaml|.d)$`)
 
+type configEntry struct {
+	name  string
+	order int
+	label string
+}
+
 // configLayerEntries reads a directory containing config layer files or
 // sub-directories and validates that the naming is valid. If dirOK is
 // set to false it will not permit sub-directories within the supplied
 // configDir path. The returned string slice is ordered alphanumerically
 // (so names are automatically ordered by their 'order').
-func configLayerEntries(configDir string, dirOK bool) (names []string, err error) {
+func configLayerEntries(configDir string, dirOK bool) (configs []*configEntry, err error) {
 	entries, err := os.ReadDir(configDir)
 	if err != nil {
 		return nil, fmt.Errorf("cannot read layers directory: %v", err)
@@ -1582,10 +1548,14 @@ func configLayerEntries(configDir string, dirOK bool) (names []string, err error
 		labels[label] = order
 
 		// All is good for this entry.
-		names = append(names, entry.Name())
+		configs = append(configs, &configEntry{
+			name:  entry.Name(),
+			order: order,
+			label: label,
+		})
 	}
 
-	return names, nil
+	return configs, nil
 }
 
 // ReadDir reads the configuration layers from layersDir,
