@@ -40,7 +40,6 @@ import (
 	"github.com/canonical/pebble/internals/overlord"
 	"github.com/canonical/pebble/internals/overlord/patch"
 	"github.com/canonical/pebble/internals/overlord/restart"
-	"github.com/canonical/pebble/internals/overlord/servstate"
 	"github.com/canonical/pebble/internals/overlord/standby"
 	"github.com/canonical/pebble/internals/overlord/state"
 	"github.com/canonical/pebble/internals/reaper"
@@ -1149,7 +1148,7 @@ services:
 	// We have to wait for it be in running state.
 	for i := 0; ; i++ {
 		if i >= 25 {
-			c.Fatalf("timed out waiting for service to start")
+			c.Fatalf("timed out waiting or service to start")
 		}
 		d.state.Lock()
 		change := d.state.Change(rsp.Change)
@@ -1284,7 +1283,7 @@ services:
 	// We have to wait for it be in running state for StopRunning to stop it.
 	for i := 0; ; i++ {
 		if i >= 25 {
-			c.Fatalf("timed out waiting for service to start")
+			c.Fatalf("timed out waiting or service to start")
 		}
 		d.state.Lock()
 		change := d.state.Change(rsp.Change)
@@ -1300,65 +1299,6 @@ services:
 	c.Assert(err, IsNil)
 
 	// Ensure the "stop" change was created, along with its "stop" tasks.
-	d.state.Lock()
-	defer d.state.Unlock()
-	changes := d.state.Changes()
-	var change *state.Change
-	for _, ch := range changes {
-		if ch.Kind() == "stop" {
-			change = ch
-		}
-	}
-	if change == nil {
-		c.Fatalf("stop change not found")
-	}
-	c.Check(change.Status(), Equals, state.DoneStatus)
-	tasks := change.Tasks()
-	c.Assert(tasks, HasLen, 1)
-	c.Check(tasks[0].Kind(), Equals, "stop")
-}
-
-func (s *daemonSuite) TestStopWithinOkayDelay(c *C) {
-	// Start the daemon.
-	writeTestLayer(s.pebbleDir, `
-services:
-    test1:
-        override: replace
-        command: sleep 10
-`)
-	d := s.newDaemon(c)
-	err := d.Init()
-	c.Assert(err, IsNil)
-	c.Assert(d.Start(), IsNil)
-
-	// Start the test service.
-	payload := bytes.NewBufferString(`{"action": "start", "services": ["test1"]}`)
-	req, err := http.NewRequest("POST", "/v1/services", payload)
-	c.Assert(err, IsNil)
-	rsp := v1PostServices(apiCmd("/v1/services"), req, nil).(*resp)
-	rec := httptest.NewRecorder()
-	rsp.ServeHTTP(rec, req)
-	c.Check(rec.Result().StatusCode, Equals, 202)
-
-	// Waiting for the change to be in doing state cannot guarantee the service is
-	// in the starting state, so here we wait until the service is in the starting
-	// state. We wait up to 25*20=500ms to make sure there is still half a second
-	// left to stop the service before okayDelay.
-	for i := 0; i < 25; i++ {
-		svcInfo, err := d.overlord.ServiceManager().Services([]string{"test1"})
-		c.Assert(err, IsNil)
-		if len(svcInfo) > 0 && svcInfo[0].Current == servstate.StatusActive {
-			break
-		}
-		time.Sleep(20 * time.Millisecond)
-	}
-
-	// Stop the daemon, which should stop services in starting state. At this point,
-	// it should still be within the okayDelay.
-	err = d.Stop(nil)
-	c.Assert(err, IsNil)
-
-	// Ensure a "stop" change is created, along with its "stop" tasks.
 	d.state.Lock()
 	defer d.state.Unlock()
 	changes := d.state.Changes()

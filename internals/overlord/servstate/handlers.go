@@ -682,10 +682,6 @@ func (s *serviceData) stop() error {
 	defer s.manager.servicesLock.Unlock()
 
 	switch s.state {
-	case stateStarting:
-		s.started <- fmt.Errorf("stopped before the %s okay delay", okayDelay)
-		fallthrough
-
 	case stateRunning:
 		logger.Debugf("Attempting to stop service %q by sending SIGTERM", s.config.Name)
 		// First send SIGTERM to try to terminate it gracefully.
