@@ -509,3 +509,82 @@ services:
 
 	c.Assert(calls, Equals, 5)
 }
+
+func (ps *planSuite) TestAppendLayersNoInner(c *C) {
+	plan.RegisterSectionExtension(testField, testExtension{})
+	defer plan.UnregisterSectionExtension(testField)
+	var err error
+	ps.planMgr, err = planstate.NewManager(ps.layersDir)
+	c.Assert(err, IsNil)
+
+	layer := ps.parseLayer(c, 0, "foo/bar", "")
+	err = ps.planMgr.AppendLayer(layer, false)
+	c.Assert(err, IsNil)
+	layer = ps.parseLayer(c, 0, "baz", "")
+	err = ps.planMgr.AppendLayer(layer, false)
+	c.Assert(err, IsNil)
+	layer = ps.parseLayer(c, 0, "foo/baz", "")
+	err = ps.planMgr.AppendLayer(layer, false)
+	c.Assert(err, ErrorMatches, ".*cannot insert sub-directory.*")
+}
+
+func (ps *planSuite) TestAppendLayersOrderAllocation(c *C) {
+	plan.RegisterSectionExtension(testField, testExtension{})
+	defer plan.UnregisterSectionExtension(testField)
+	var err error
+	ps.planMgr, err = planstate.NewManager(ps.layersDir)
+	c.Assert(err, IsNil)
+
+	appendLabels := []string{
+		"foo",
+		"baz/aaa",
+		"something",
+		"baz/bbb",
+		"else",
+		"baz/ccc",
+		"zzz/zzz",
+		"final",
+	}
+
+	for _, label := range appendLabels {
+		layer := ps.parseLayer(c, 0, label, "")
+		err = ps.planMgr.AppendLayer(layer, true)
+		c.Assert(err, IsNil)
+	}
+
+	layersResult := []struct {
+		label string
+		order int
+	}{{
+		label: "foo",
+		order: 1000,
+	}, {
+		label: "baz/aaa",
+		order: 2001,
+	}, {
+		label: "baz/bbb",
+		order: 2002,
+	}, {
+		label: "baz/ccc",
+		order: 2003,
+	}, {
+		label: "something",
+		order: 3000,
+	}, {
+		label: "else",
+		order: 4000,
+	}, {
+		label: "zzz/zzz",
+		order: 5001,
+	}, {
+		label: "final",
+		order: 6000,
+	}}
+
+	plan := ps.planMgr.Plan()
+	// Check the layers order and each layer's order is correct.
+	for i, layer := range layersResult {
+		c.Assert(plan.Layers[i].Order, Equals, layer.order)
+		c.Assert(plan.Layers[i].Label, Equals, layer.label)
+	}
+}

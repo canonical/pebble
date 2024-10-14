@@ -211,6 +211,7 @@ func (m *PlanManager) appendLayer(newLayer *plan.Layer, inner bool) (*plan.Plan,
 			if layerSubLabel == newSubLabel {
 				newOrder = layer.Order + 1
 				newIndex = lastIndex - i + 1
+				break
 			}
 		}
 
