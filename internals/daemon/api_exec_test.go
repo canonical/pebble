@@ -206,7 +206,7 @@ func (s *execSuite) TestContextNoOverrides(c *C) {
 			Environment: map[string]string{"FOO": "foo", "BAR": "bar"},
 			WorkingDir:  dir,
 		}},
-	})
+	}, false)
 	c.Assert(err, IsNil)
 
 	stdout, stderr, err := s.exec(c, "", &client.ExecOptions{
@@ -228,7 +228,7 @@ func (s *execSuite) TestContextOverrides(c *C) {
 			Environment: map[string]string{"FOO": "foo", "BAR": "bar"},
 			WorkingDir:  c.MkDir(),
 		}},
-	})
+	}, false)
 	c.Assert(err, IsNil)
 
 	overrideDir := c.MkDir()

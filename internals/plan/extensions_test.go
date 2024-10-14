@@ -16,7 +16,6 @@ package plan_test
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"slices"
@@ -402,8 +401,7 @@ nexttest:
 			return n.field == xField
 		}) {
 			// Verify "x-field" data.
-			var x *xSection
-			x = p.Sections[xField].(*xSection)
+			x := p.Sections[xField].(*xSection)
 			c.Assert(err, IsNil)
 			c.Assert(x.Entries, DeepEquals, testData.result.x.Entries)
 		}
@@ -412,8 +410,7 @@ nexttest:
 			return n.field == yField
 		}) {
 			// Verify "y-field" data.
-			var y *ySection
-			y = p.Sections[yField].(*ySection)
+			y := p.Sections[yField].(*ySection)
 			c.Assert(err, IsNil)
 			c.Assert(y.Entries, DeepEquals, testData.result.y.Entries)
 		}
@@ -474,6 +471,7 @@ func (s *S) TestSectionOrderExt(c *C) {
 		Sections:   combined.Sections,
 	}
 	data, err := yaml.Marshal(plan)
+	c.Assert(err, IsNil)
 	c.Assert(string(data), Equals, string(reindent(`
 		services:
 			srv1:
@@ -511,7 +509,7 @@ func (s *S) writeLayerFiles(c *C, layersDir string, inputs []*inputLayer) {
 	c.Assert(err, IsNil)
 
 	for _, input := range inputs {
-		err := ioutil.WriteFile(filepath.Join(layersDir, fmt.Sprintf("%03d-%s.yaml", input.order, input.label)), reindent(input.yaml), 0644)
+		err := os.WriteFile(filepath.Join(layersDir, fmt.Sprintf("%03d-%s.yaml", input.order, input.label)), reindent(input.yaml), 0644)
 		c.Assert(err, IsNil)
 	}
 }
@@ -548,17 +546,15 @@ func (x xExtension) CombineSections(sections ...plan.Section) (plan.Section, err
 }
 
 func (x xExtension) ValidatePlan(p *plan.Plan) error {
-	var xs *xSection
-	xs = p.Sections[xField].(*xSection)
+	xs := p.Sections[xField].(*xSection)
 	if xs != nil {
-		var ys *ySection
-		ys = p.Sections[yField].(*ySection)
+		ys := p.Sections[yField].(*ySection)
 
 		// Test dependency: Make sure every Y field in X refer to an existing Y entry.
 		for xEntryField, xEntryValue := range xs.Entries {
 			for _, yReference := range xEntryValue.Y {
 				found := false
-				for yEntryField, _ := range ys.Entries {
+				for yEntryField := range ys.Entries {
 					if yReference == yEntryField {
 						found = true
 						break
