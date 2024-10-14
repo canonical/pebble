@@ -154,6 +154,28 @@ func (p *Plan) MarshalYAML() (interface{}, error) {
 	return plan, nil
 }
 
+// Layer represents an unmarshalled YAML layer configuration file. Layer files
+// are maintained as part of the Plan, ordered by their respective order
+// number. Each layer configuration also has a unique label, used for locating
+// and updating a specific layer configuration.
+//
+// Pebble supports a two level layer configuration directory structure. In the
+// root layers directory, both layer files and layer sub-directories are
+// allowed. Within a sub-directory, only layer files.
+//
+// ┌────────────────────────────┬─────────────────┬─────────┐
+// │ File (inside layersDir)    │ Order           │ Label   │
+// ├────────────────────────────┼─────────────────┼─────────┤
+// │                            │                 │         │
+// │ 001-foo.yaml               │ 001-000 => 1000 │ foo     │
+// │                            │                 │         │
+// │ 002-bar.d/001-aaa.yaml     │ 002-001 => 2001 │ bar/aaa │
+// │                            │                 │         │
+// │ 002-bar.d/002-bbb.yaml     │ 002-002 => 2002 │ bar/bbb │
+// │                            │                 │         │
+// │ 003-baz.yaml               │ 003-000 => 3000 │ baz     │
+// │                            │                 │         │
+// └────────────────────────────┴─────────────────┴─────────┘
 type Layer struct {
 	Order       int                   `yaml:"-"`
 	Label       string                `yaml:"-"`

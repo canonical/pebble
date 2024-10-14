@@ -2157,3 +2157,164 @@ func (s *S) TestSectionOrder(c *C) {
 			services: []
 			override: replace`)))
 }
+
+// createLayerPath combines the base path with a configuration layer
+// filename (which may include a single sub-directory), and creates
+// the missing directories and an empty configuration file.
+func createLayerPath(c *C, base string, name string) {
+	path := filepath.Join(base, name)
+	err := os.MkdirAll(filepath.Dir(path), 0777)
+	c.Assert(err, IsNil)
+	file, err := os.OpenFile(path, os.O_RDONLY|os.O_CREATE, 0644)
+	c.Assert(err, IsNil)
+	err = file.Close()
+	c.Assert(err, IsNil)
+}
+
+var readDirTests = []struct {
+	summary    string
+	layerNames []string
+	orders     []int
+	labels     []string
+	error      string
+}{{
+	summary: "Invalid filename #1",
+	layerNames: []string{
+		"001foo.yaml",
+	},
+	error: ".*invalid layer filename.*",
+}, {
+	summary: "Invalid filename #2",
+	layerNames: []string{
+		"001-foo.d/001foo.yaml",
+	},
+	error: ".*invalid layer filename.*",
+}, {
+	summary: "Invalid sub-directory",
+	layerNames: []string{
+		"001foo.d/001-bar.yaml",
+	},
+	error: ".*invalid layer sub.*",
+}, {
+	summary: "Not unique order #1",
+	layerNames: []string{
+		"001-foo.yaml",
+		"001-bar.yaml",
+	},
+	error: ".*not unique.*",
+}, {
+	summary: "Not unique order #2",
+	layerNames: []string{
+		"002-dir.d/001-foo.yaml",
+		"002-dir.d/001-bar.yaml",
+	},
+	error: ".*not unique.*",
+}, {
+	summary: "Not unique label #1",
+	layerNames: []string{
+		"001-foo.yaml",
+		"002-foo.yaml",
+	},
+	error: ".*not unique.*",
+}, {
+	summary: "Not unique label #2",
+	layerNames: []string{
+		"002-dir.d/001-foo.yaml",
+		"002-dir.d/002-foo.yaml",
+	},
+	error: ".*not unique.*",
+}, {
+	summary: "Valid load",
+	layerNames: []string{
+		"001-aaa.yaml",
+		"010-bbb.yaml",
+		"002-dir.d/100-foo.yaml",
+		"002-dir.d/090-bar.yaml",
+		"008-ccc.yaml",
+		"900-overlay.d/002-something.yaml",
+		"900-overlay.d/001-else.yaml",
+		"003-plans.d/999-final.yaml",
+		"009-baz.d/009-baz.yaml",
+	},
+	orders: []int{
+		1000,
+		2090,
+		2100,
+		3999,
+		8000,
+		9009,
+		10000,
+		900001,
+		900002,
+	},
+	labels: []string{
+		"aaa",
+		"dir/bar",
+		"dir/foo",
+		"plans/final",
+		"ccc",
+		"baz/baz",
+		"bbb",
+		"overlay/else",
+		"overlay/something",
+	},
+}}
+
+func (s *S) TestReadLayersDir(c *C) {
+	for _, test := range readDirTests {
+		c.Logf("Running ReadLayersDir: %s", test.summary)
+
+		tempDir := c.MkDir()
+		for _, layerName := range test.layerNames {
+			createLayerPath(c, tempDir, layerName)
+		}
+
+		layers, err := plan.ReadLayersDir(tempDir)
+		if test.error != "" || err != nil {
+			c.Assert(err, ErrorMatches, test.error)
+		}
+
+		c.Assert(len(layers), Equals, len(test.labels))
+		c.Assert(len(layers), Equals, len(test.orders))
+
+		for i, layer := range layers {
+			c.Assert(layer.Order, Equals, test.orders[i])
+			c.Assert(layer.Label, Equals, test.labels[i])
+		}
+	}
+}
+
+func (s *S) TestParseLayerLabelValidatorOK(c *C) {
+	for _, label := range []string{
+		"f12345",
+		"foo",
+		"f-1-2-3-4",
+		"foo-bar-baz-12345",
+		"f12345/f12345",
+		"foo/foo",
+		"f-1-2-3-4/f-1-2-3-4",
+		"foo-bar-baz-12345/foo-bar-baz-12345",
+	} {
+		_, err := plan.ParseLayer(0, label, []byte(""))
+		c.Assert(err, IsNil)
+	}
+}
+
+func (s *S) TestParseLayerLabelValidatorFail(c *C) {
+	for _, label := range []string{
+		"0foo",
+		"01234",
+		"f",
+		"foo--bar",
+		"fooBar",
+		"foo/0foo",
+		"foo/01234",
+		"foo/f",
+		"foo/foo--bar",
+		"foo/fooBar",
+		"foo/bar/baz",
+	} {
+		_, err := plan.ParseLayer(0, label, []byte(""))
+		c.Assert(err, ErrorMatches, ".*invalid label.*")
+	}
+}
