@@ -823,7 +823,7 @@ func (layer *Layer) Validate() error {
 	for name, service := range layer.Services {
 		if name == "" {
 			return &FormatError{
-				Message: fmt.Sprintf("cannot use empty string as service name"),
+				Message: "cannot use empty string as service name",
 			}
 		}
 		if name == "pebble" {
@@ -880,7 +880,7 @@ func (layer *Layer) Validate() error {
 	for name, check := range layer.Checks {
 		if name == "" {
 			return &FormatError{
-				Message: fmt.Sprintf("cannot use empty string as check name"),
+				Message: "cannot use empty string as check name",
 			}
 		}
 		if check == nil {
@@ -890,7 +890,7 @@ func (layer *Layer) Validate() error {
 		}
 		if name == "" {
 			return &FormatError{
-				Message: fmt.Sprintf("cannot use empty string as log target name"),
+				Message: "cannot use empty string as log target name",
 			}
 		}
 		if check.Level != UnsetLevel && check.Level != AliveLevel && check.Level != ReadyLevel {
@@ -1281,7 +1281,7 @@ func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 	// will at least have an empty node. This means we can consistently
 	// let the extension allocate and decode the yaml node for all sections,
 	// and in the case where it is zero, we get an empty backing type instance.
-	for field, _ := range sectionExtensions {
+	for field := range sectionExtensions {
 		sections[field] = yaml.Node{}
 	}
 	err := yaml.Unmarshal(data, &sections)

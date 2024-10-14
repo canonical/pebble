@@ -2138,6 +2138,7 @@ func (s *S) TestSectionOrder(c *C) {
 		LogTargets: combined.LogTargets,
 	}
 	data, err := yaml.Marshal(plan)
+	c.Assert(err, IsNil)
 	c.Assert(string(data), Equals, string(reindent(`
 	services:
 		srv1:
