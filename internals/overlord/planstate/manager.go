@@ -162,6 +162,32 @@ func (m *PlanManager) CombineLayer(layer *plan.Layer, inner bool) error {
 	return nil
 }
 
+// appendLayer appends (or inserts) a new layer configuration
+// into the layers slice of the current plan. One important
+// task of this method is to determine the new order of the layer.
+//
+// ┌────────────────────────────┬─────────────────┬─────────┐
+// │ Example Layers slice       │ Order           │ Label   │
+// ├────────────────────────────┼─────────────────┼─────────┤
+// │                            │                 │         │
+// │ 001-foo.yaml               │ 001-000 => 1000 │ foo     │
+// │                            │                 │         │
+// │ 002-bar.d/001-aaa.yaml     │ 002-001 => 2001 │ bar/aaa │
+// │                            │                 │         │
+// │ 002-bar.d/002-bbb.yaml     │ 002-002 => 2002 │ bar/bbb │
+// │                            │                 │         │
+// │ 003-baz.yaml               │ 003-000 => 3000 │ baz     │
+// │                            │                 │         │
+// └────────────────────────────┴─────────────────┴─────────┘
+//
+// The new incoming layer only supplies the label, which may include
+// a sub-directory prefix. Normally without a sub-directory prefix,
+// the new layer will always be appended, which means incrementing
+// the root level order (+ 1000). If a sub-directory already exist
+// in the layers slice, its order was already allocated, which means
+// we can at most insert the layer as the last entry in the
+// sub-directory. However, this insert is only allowed if explicitly
+// requested by the user (inner=true).
 func (m *PlanManager) appendLayer(newLayer *plan.Layer, inner bool) (*plan.Plan, error) {
 	// The starting index and order assumes no existing layers.
 	newIndex := 0
