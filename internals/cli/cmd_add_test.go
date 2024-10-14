@@ -58,6 +58,7 @@ services:
 					"label":   "foo",
 					"format":  "yaml",
 					"layer":   layerYAML,
+					"inner":   false,
 				})
 				fmt.Fprint(w, `{
     "type": "sync",

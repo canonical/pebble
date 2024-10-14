@@ -53,6 +53,7 @@ services:
 			"label":   "foo",
 			"format":  "yaml",
 			"layer":   layerYAML,
+			"inner":   false,
 		})
 	}
 }
