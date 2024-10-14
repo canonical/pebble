@@ -222,7 +222,7 @@ func (m *PlanManager) appendLayer(newLayer *plan.Layer, inner bool) (*plan.Plan,
 			newIndex = layersCount
 			newOrder = ((m.plan.Layers[layersCount-1].Order / 1000) + 1) * 1000
 			if hasSub {
-				// The file in the sub-directory needs an order to "001".
+				// The first file in the sub-directory gets an order of "001".
 				newOrder += 1
 			}
 		}
