@@ -92,6 +92,8 @@ func (rb *RingBuffer) Write(p []byte) (written int, err error) {
 	}
 	defer func() {
 		if written > 0 {
+			rb.iteratorMutex.RLock()
+			defer rb.iteratorMutex.RUnlock()
 			rb.signalIterators()
 		}
 	}()
@@ -336,8 +338,6 @@ func (rb *RingBuffer) discard(n int) error {
 }
 
 func (rb *RingBuffer) signalIterators() {
-	rb.iteratorMutex.RLock()
-	defer rb.iteratorMutex.RUnlock()
 	for _, iter := range rb.iteratorList {
 		select {
 		case iter.nextChan <- true:
@@ -365,8 +365,6 @@ func (rb *RingBuffer) releaseIterators() {
 }
 
 func (rb *RingBuffer) removeIterator(iter *iterator) {
-	rb.iteratorMutex.Lock()
-	defer rb.iteratorMutex.Unlock()
 	for i, storedIter := range rb.iteratorList {
 		if iter != storedIter {
 			continue
