@@ -75,10 +75,6 @@ func (rb *RingBuffer) Close() error {
 func (rb *RingBuffer) Closed() bool {
 	rb.rwlock.RLock()
 	defer rb.rwlock.RUnlock()
-	return rb.closed()
-}
-
-func (rb *RingBuffer) closed() bool {
 	return rb.writeClosed
 }
 
@@ -166,10 +162,6 @@ func (rb *RingBuffer) Size() int {
 func (rb *RingBuffer) Positions() (start RingPos, end RingPos) {
 	rb.rwlock.RLock()
 	defer rb.rwlock.RUnlock()
-	return rb.positions()
-}
-
-func (rb *RingBuffer) positions() (start RingPos, end RingPos) {
 	return rb.readIndex, rb.writeIndex
 }
 
@@ -253,14 +245,14 @@ func (rb *RingBuffer) TailIterator() Iterator {
 	defer rb.rwlock.RUnlock()
 	rb.iteratorMutex.Lock()
 	defer rb.iteratorMutex.Unlock()
-	start, _ := rb.positions()
+	start := rb.readIndex
 	iter := &iterator{
 		rb:        rb,
 		index:     start,
 		nextChan:  make(chan bool, 1),
 		closeChan: make(chan struct{}),
 	}
-	if rb.closed() {
+	if rb.writeClosed {
 		close(iter.closeChan)
 	}
 	rb.iteratorList = append(rb.iteratorList, iter)
@@ -271,9 +263,9 @@ func (rb *RingBuffer) TailIterator() Iterator {
 // If lines is greater than zero, the iterator will start that many lines
 // backwards from the head.
 func (rb *RingBuffer) HeadIterator(lines int) Iterator {
-	firstLine := rb.reverseLinePosition(lines)
 	rb.rwlock.RLock()
 	defer rb.rwlock.RUnlock()
+	firstLine := rb.reverseLinePosition(lines)
 	rb.iteratorMutex.Lock()
 	defer rb.iteratorMutex.Unlock()
 	iter := &iterator{
@@ -282,7 +274,7 @@ func (rb *RingBuffer) HeadIterator(lines int) Iterator {
 		nextChan:  make(chan bool, 1),
 		closeChan: make(chan struct{}),
 	}
-	if rb.closed() {
+	if rb.writeClosed {
 		close(iter.closeChan)
 	}
 	rb.iteratorList = append(rb.iteratorList, iter)
@@ -290,8 +282,6 @@ func (rb *RingBuffer) HeadIterator(lines int) Iterator {
 }
 
 func (rb *RingBuffer) reverseLinePosition(n int) RingPos {
-	rb.rwlock.RLock()
-	defer rb.rwlock.RUnlock()
 	if n <= 0 {
 		return rb.writeIndex
 	}
