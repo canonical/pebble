@@ -69,6 +69,8 @@ func (it *iterator) Close() error {
 	if it.rb == nil {
 		return nil
 	}
+	it.rb.iteratorMutex.Lock()
+	defer it.rb.iteratorMutex.Unlock()
 	it.rb.removeIterator(it)
 	close(it.nextChan)
 	it.rb = nil
