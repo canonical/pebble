@@ -35,6 +35,7 @@ type cmdAdd struct {
 	client *client.Client
 
 	Combine    bool `long:"combine"`
+	Inner      bool `long:"inner"`
 	Positional struct {
 		Label     string `positional-arg-name:"<label>" required:"1"`
 		LayerPath string `positional-arg-name:"<layer-path>" required:"1"`
@@ -48,6 +49,7 @@ func init() {
 		Description: cmdAddDescription,
 		ArgsHelp: map[string]string{
 			"--combine": "Combine the new layer with an existing layer that has the given label (default is to append)",
+			"--inner":   "Allow appending a new layer inside an existing subdirectory",
 		},
 		New: func(opts *CmdOptions) flags.Commander {
 			return &cmdAdd{client: opts.Client}
@@ -65,6 +67,7 @@ func (cmd *cmdAdd) Execute(args []string) error {
 	}
 	opts := client.AddLayerOptions{
 		Combine:   cmd.Combine,
+		Inner:     cmd.Inner,
 		Label:     cmd.Positional.Label,
 		LayerData: data,
 	}

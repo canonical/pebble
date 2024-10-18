@@ -147,7 +147,7 @@ type testSection struct {
 func (ts *testSection) Validate() error {
 	// Fictitious test requirement: fields must start with t
 	prefix := "t"
-	for field, _ := range ts.Entries {
+	for field := range ts.Entries {
 		if !strings.HasPrefix(field, prefix) {
 			return fmt.Errorf("%q entry names must start with %q", testField, prefix)
 		}

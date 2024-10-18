@@ -1707,7 +1707,7 @@ func (s *S) planChanged(c *C) {
 
 func (s *S) planAddLayer(c *C, layerYAML string) {
 	cnt := len(s.plan.Layers)
-	layer, err := plan.ParseLayer(cnt, fmt.Sprintf("testPlanLayer%v", cnt), []byte(layerYAML))
+	layer, err := plan.ParseLayer(cnt, fmt.Sprintf("test-plan-layer-%v", cnt), []byte(layerYAML))
 	c.Assert(err, IsNil)
 	// Resolve {{.NotifyDoneCheck}}
 	s.insertDoneChecks(c, layer)
