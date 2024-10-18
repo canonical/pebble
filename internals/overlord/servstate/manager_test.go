@@ -297,6 +297,58 @@ services:
 	c.Assert(s.manager.StopTimeout(), Equals, time.Minute*60+time.Millisecond*200)
 }
 
+func (s *S) TestStopServiceWithinOkayDelay(c *C) {
+	// A longer okayDelay is used so that the change for starting the service won't
+	// quickly transition into the running state.
+	fakeOkayDelay := 20 * shortOkayDelay
+	servstate.FakeOkayWait(fakeOkayDelay)
+
+	s.newServiceManager(c)
+	serviceName := "test-stop-within-okaywait"
+	// The service sleeps for fakeOkayDelay second then creates a side effect (a file at donePath).
+	layer := `
+services:
+    %s:
+        override: replace
+        command: /bin/sh -c "sleep %g; {{.NotifyDoneCheck}}"
+`
+	s.planAddLayer(c, fmt.Sprintf(layer, serviceName, fakeOkayDelay.Seconds()))
+	s.planChanged(c)
+
+	// Start the service without waiting for change ready.
+	s.st.Lock()
+	ts, err := servstate.Start(s.st, [][]string{{serviceName}})
+	c.Check(err, IsNil)
+	chgStart := s.st.NewChange("test", "Start test")
+	chgStart.AddAll(ts)
+	s.st.Unlock()
+	s.runner.Ensure()
+
+	// Wait until the service is in the starting state.
+	s.waitUntilService(c, serviceName, func(service *servstate.ServiceInfo) bool {
+		return service.Current == servstate.StatusActive
+	})
+
+	// Stop the service within okayDelay.
+	chg := s.stopServices(c, [][]string{{serviceName}})
+	s.st.Lock()
+	c.Assert(chg.Err(), IsNil)
+	s.st.Unlock()
+
+	waitChangeReady(c, s.runner, chgStart, "Start test")
+
+	s.st.Lock()
+	c.Check(chgStart.Status(), Equals, state.ErrorStatus)
+	c.Check(chgStart.Err(), ErrorMatches, fmt.Sprintf(`(?s).*stopped before the %s okay delay.*`, fakeOkayDelay))
+	s.st.Unlock()
+
+	donePath := filepath.Join(s.dir, serviceName)
+	// If the service is stopped within okayDelay and is indeed terminated, donePath should not exist.
+	if _, err := os.Stat(donePath); err == nil {
+		c.Fatalf("service %s waiting for service output", serviceName)
+	}
+}
+
 func (s *S) TestKillDelayIsUsed(c *C) {
 	s.newServiceManager(c)
 	s.planAddLayer(c, testPlanLayer)
