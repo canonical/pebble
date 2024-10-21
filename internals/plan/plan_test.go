@@ -20,6 +20,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"time"
 	"unicode"
@@ -2165,7 +2166,15 @@ func createLayerPath(c *C, base string, name string) {
 	path := filepath.Join(base, name)
 	err := os.MkdirAll(filepath.Dir(path), 0777)
 	c.Assert(err, IsNil)
-	file, err := os.OpenFile(path, os.O_RDONLY|os.O_CREATE, 0644)
+	file, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0644)
+	c.Assert(err, IsNil)
+	// Let's mix in the layer name into the command so we can
+	// verify the correct layer has the correct file content.
+	_, err = file.Write(reindent(fmt.Sprintf(`
+	services:
+		srv:
+			override: replace
+			command: %s`, name)))
 	c.Assert(err, IsNil)
 	err = file.Close()
 	c.Assert(err, IsNil)
@@ -2265,6 +2274,7 @@ func (s *S) TestReadLayersDir(c *C) {
 		c.Logf("Running ReadLayersDir: %s", test.summary)
 
 		tempDir := c.MkDir()
+
 		for _, layerName := range test.layerNames {
 			createLayerPath(c, tempDir, layerName)
 		}
@@ -2280,6 +2290,21 @@ func (s *S) TestReadLayersDir(c *C) {
 		for i, layer := range layers {
 			c.Assert(layer.Order, Equals, test.orders[i])
 			c.Assert(layer.Label, Equals, test.labels[i])
+
+			// Let's make sure each file contains the expected
+			// command. This will confirm the content is loaded
+			// from the correct file.
+			ordered := make([]string, 0, len(test.layerNames))
+			ordered = append(ordered, test.layerNames...)
+			slices.Sort(ordered)
+
+			c.Assert(layer.Services, DeepEquals, map[string]*plan.Service{
+				"srv": {
+					Name:     "srv",
+					Override: "replace",
+					Command:  ordered[i],
+				},
+			})
 		}
 	}
 }

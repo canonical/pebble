@@ -159,23 +159,11 @@ func (p *Plan) MarshalYAML() (interface{}, error) {
 // number. Each layer configuration also has a unique label, used for locating
 // and updating a specific layer configuration.
 //
-// Pebble supports a two level layer configuration directory structure. In the
+// Pebble supports a two-level layer configuration directory structure. In the
 // root layers directory, both layer files and layer sub-directories are
-// allowed. Within a sub-directory, only layer files.
+// allowed. Within a sub-directory, only layer files are allowed.
 //
-// ┌────────────────────────────┬─────────────────┬─────────┐
-// │ File (inside layersDir)    │ Order           │ Label   │
-// ├────────────────────────────┼─────────────────┼─────────┤
-// │                            │                 │         │
-// │ 001-foo.yaml               │ 001-000 => 1000 │ foo     │
-// │                            │                 │         │
-// │ 002-bar.d/001-aaa.yaml     │ 002-001 => 2001 │ bar/aaa │
-// │                            │                 │         │
-// │ 002-bar.d/002-bbb.yaml     │ 002-002 => 2002 │ bar/bbb │
-// │                            │                 │         │
-// │ 003-baz.yaml               │ 003-000 => 3000 │ baz     │
-// │                            │                 │         │
-// └────────────────────────────┴─────────────────┴─────────┘
+// Please see ReadLayersDir for more details.
 type Layer struct {
 	Order       int                   `yaml:"-"`
 	Label       string                `yaml:"-"`
@@ -1249,25 +1237,20 @@ func (p *Plan) checkCycles() error {
 	return err
 }
 
-// labelExp represents a match of a valid layer label, which may include a
+// labelRegexp represents a match of a valid layer label, which may include a
 // directory prefix (which excludes the '.d' ending, in the same way the
 // file suffix is omitted).
 //
-// ┌─────────┬─────────────────────────────────────┐
-// │ Label   │ Description                         │
-// ├─────────┼─────────────────────────────────────┤
-// │         │                                     │
-// │ abc     │ Label of file in layers root        │
-// │         │                                     │
-// │ foo/bar │ Label of file inside sub-directory  │
-// │         │                                     │
-// └─────────┴─────────────────────────────────────┘
-var labelExp = regexp.MustCompile(`^(([a-z](?:-?[a-z0-9]){2,})/)?([a-z](?:-?[a-z0-9]){2,})$`)
+//	| Label    | Description                        |
+//	| -------- | ---------------------------------- |
+//	| abc      | Label of file in layers root       |
+//	| foo/bar  | Label of file inside sub-directory |
+var labelRegexp = regexp.MustCompile(`^(([a-z](?:-?[a-z0-9]){2,})/)?([a-z](?:-?[a-z0-9]){2,})$`)
 
 func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 	// This function can be called directly over the daemon API. We
 	// must fail the API request if the label is not valid.
-	match := labelExp.FindStringSubmatch(label)
+	match := labelRegexp.FindStringSubmatch(label)
 	if match == nil {
 		return nil, fmt.Errorf("cannot parse layer: invalid label %q", label)
 	}
@@ -1395,18 +1378,15 @@ func validServiceAction(action ServiceAction, additionalValid ...ServiceAction) 
 
 // ReadLayersDir loads the YAML layer files from the first two directory
 // levels starting at layersDir in the order as specified by the order
-// directory and file prefixes. Note that the directory and file suffix
-// is dropped for the label.
+// directory and file order prefixes. The directory and file suffixes
+// are dropped in the returned labels.
 //
-// ┌────────────────────────┬──────────────────┬─────────┐
-// │ Layer Path             │ Order            │ Label   │
-// ├────────────────────────┼──────────────────┼─────────┤
-// │                        │                  │         │
-// │ 001-abc.yaml           │ 001-000 => 1000  │ abc     │
-// │                        │                  │         │
-// │ 002-foo.d/001-bar.yaml │ 002-001 => 2001  │ foo/bar │
-// │                        │                  │         │
-// └────────────────────────┴──────────────────┴─────────┘
+//	| File (inside layersDir)    | Order           | Label   |
+//	| -------------------------- | --------------- | ------- |
+//	| 001-foo.yaml               | 001-000 => 1000 | foo     |
+//	| 002-bar.d/001-aaa.yaml     | 002-001 => 2001 | bar/aaa |
+//	| 002-bar.d/002-bbb.yaml     | 002-002 => 2002 | bar/bbb |
+//	| 003-baz.yaml               | 003-000 => 3000 | baz     |
 func ReadLayersDir(layersDir string) ([]*Layer, error) {
 	var layers []*Layer
 
@@ -1434,7 +1414,7 @@ func ReadLayersDir(layersDir string) ([]*Layer, error) {
 
 			// Add the config files from the second level
 			for _, l2Entry := range l2Entries {
-				layer, err := configLayerLoad(layersDir, l1Entry, l2Entry)
+				layer, err := loadConfigLayer(layersDir, l1Entry, l2Entry)
 				if err != nil {
 					return nil, err
 				}
@@ -1442,7 +1422,7 @@ func ReadLayersDir(layersDir string) ([]*Layer, error) {
 			}
 		} else {
 			// Add the config files from the first level
-			layer, err := configLayerLoad(layersDir, l1Entry, nil)
+			layer, err := loadConfigLayer(layersDir, l1Entry, nil)
 			if err != nil {
 				return nil, err
 			}
@@ -1453,12 +1433,12 @@ func ReadLayersDir(layersDir string) ([]*Layer, error) {
 	return layers, nil
 }
 
-// configLayerLoad loads a layer configuration file and returns a Layer
+// loadConfigLayer loads a layer configuration file and returns a Layer
 // on success. The layer configuration is typically in the Pebble layers
 // root directory, in which case l2Entry must be nil. If the file is
 // inside a sub-directory, l1Entry must supply information on the directory,
 // while l2Entry information on the file name itself.
-func configLayerLoad(layersDir string, l1Entry *configEntry, l2Entry *configEntry) (*Layer, error) {
+func loadConfigLayer(layersDir string, l1Entry *configEntry, l2Entry *configEntry) (*Layer, error) {
 	// Resolve the order and label, which may include additional
 	// information from an optional sub-directory prefix.
 	label := l1Entry.label
@@ -1466,7 +1446,7 @@ func configLayerLoad(layersDir string, l1Entry *configEntry, l2Entry *configEntr
 	path := filepath.Join(layersDir, l1Entry.name)
 	if l2Entry != nil {
 		// Config layer is inside a sub-directory.
-		label = filepath.Join(label, l2Entry.label)
+		label = label + "/" + l2Entry.label
 		order = order + l2Entry.order
 		path = filepath.Join(path, l2Entry.name)
 	}
@@ -1485,21 +1465,10 @@ func configLayerLoad(layersDir string, l1Entry *configEntry, l2Entry *configEntr
 	return layer, nil
 }
 
-// configEntryExp matches either a valid config layer YAML file name or it
-// matches a valid config layer directory.
-//
-// ┌────────────────────────────────────────────────────────┐
-// │ Match Index                                            │
-// ├────────────────────────┬───────────┬───────────┬───────┤
-// │ 0 (Supplied Name)      │ 1 (order) │ 2 (label) │ 3     │
-// ├────────────────────────┼───────────┼───────────┼───────┤
-// │                        │           │           │       │
-// │ 001-abc.yaml           │ 001       │ abc       │ .yaml │
-// │                        │           │           │       │
-// │ 002-foo.d              │ 002       │ foo       │ .d    │
-// │                        │           │           │       │
-// └────────────────────────┴───────────┴───────────┴───────┘
-var configEntryExp = regexp.MustCompile(`^([0-9]{3})-([a-z](?:-?[a-z0-9]){2,})(.yaml|.d)$`)
+// configEntryRegexp matches either a valid config layer YAML file name or a
+// valid config layer directory. Match[1] is the 3-digit order and match[2]
+// is the label.
+var configEntryRegexp = regexp.MustCompile(`^([0-9]{3})-([a-z](?:-?[a-z0-9]){2,})(.yaml|.d)$`)
 
 type configEntry struct {
 	name  string
@@ -1534,7 +1503,7 @@ func configLayerEntries(configDir string, dirOK bool) (configs []*configEntry, e
 		}
 
 		// Let's ensure the file or sub-directory name is valid.
-		match := configEntryExp.FindStringSubmatch(entry.Name())
+		match := configEntryRegexp.FindStringSubmatch(entry.Name())
 		if match == nil {
 			if info.IsDir() {
 				return nil, fmt.Errorf("invalid layer sub-directory name: %q (must look like \"123-some-label.d\")", entry.Name())
