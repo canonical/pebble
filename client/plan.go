@@ -55,6 +55,14 @@ func (client *Client) AddLayer(opts *AddLayerOptions) error {
 		Format:  "yaml",
 		Layer:   string(opts.LayerData),
 	}
+
+	// Add label validation here once layer persistence is supported over
+	// the API. We cannot do this in the plan library because JUJU already
+	// has labels in production systems that violates the layers file
+	// naming convention (which includes the label). Since JUJU uses its
+	// own client, we can enforce the label naming convention on all other
+	// systems using the Pebble supplied client by validating it here.
+
 	var body bytes.Buffer
 	if err := json.NewEncoder(&body).Encode(&payload); err != nil {
 		return err

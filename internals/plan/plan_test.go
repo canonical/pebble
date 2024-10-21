@@ -2308,38 +2308,3 @@ func (s *S) TestReadLayersDir(c *C) {
 		}
 	}
 }
-
-func (s *S) TestParseLayerLabelValidatorOK(c *C) {
-	for _, label := range []string{
-		"f12345",
-		"foo",
-		"f-1-2-3-4",
-		"foo-bar-baz-12345",
-		"f12345/f12345",
-		"foo/foo",
-		"f-1-2-3-4/f-1-2-3-4",
-		"foo-bar-baz-12345/foo-bar-baz-12345",
-	} {
-		_, err := plan.ParseLayer(0, label, []byte(""))
-		c.Assert(err, IsNil)
-	}
-}
-
-func (s *S) TestParseLayerLabelValidatorFail(c *C) {
-	for _, label := range []string{
-		"0foo",
-		"01234",
-		"f",
-		"foo--bar",
-		"fooBar",
-		"foo/0foo",
-		"foo/01234",
-		"foo/f",
-		"foo/foo--bar",
-		"foo/fooBar",
-		"foo/bar/baz",
-	} {
-		_, err := plan.ParseLayer(0, label, []byte(""))
-		c.Assert(err, ErrorMatches, ".*invalid label.*")
-	}
-}

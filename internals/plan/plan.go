@@ -1237,24 +1237,7 @@ func (p *Plan) checkCycles() error {
 	return err
 }
 
-// labelRegexp represents a match of a valid layer label, which may include a
-// directory prefix (which excludes the '.d' ending, in the same way the
-// file suffix is omitted).
-//
-//	| Label    | Description                        |
-//	| -------- | ---------------------------------- |
-//	| abc      | Label of file in layers root       |
-//	| foo/bar  | Label of file inside sub-directory |
-var labelRegexp = regexp.MustCompile(`^(([a-z](?:-?[a-z0-9]){2,})/)?([a-z](?:-?[a-z0-9]){2,})$`)
-
 func ParseLayer(order int, label string, data []byte) (*Layer, error) {
-	// This function can be called directly over the daemon API. We
-	// must fail the API request if the label is not valid.
-	match := labelRegexp.FindStringSubmatch(label)
-	if match == nil {
-		return nil, fmt.Errorf("cannot parse layer: invalid label %q", label)
-	}
-
 	layer := &Layer{
 		Services:   make(map[string]*Service),
 		Checks:     make(map[string]*Check),
