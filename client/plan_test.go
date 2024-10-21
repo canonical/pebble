@@ -24,7 +24,22 @@ import (
 )
 
 func (cs *clientSuite) TestAddLayer(c *check.C) {
-	for _, combine := range []bool{false, true} {
+	for _, option := range []struct {
+		combine bool
+		inner   bool
+	}{{
+		combine: false,
+		inner:   false,
+	}, {
+		combine: true,
+		inner:   false,
+	}, {
+		combine: false,
+		inner:   true,
+	}, {
+		combine: true,
+		inner:   true,
+	}} {
 		cs.rsp = `{
 		"type": "sync",
 		"status-code": 200,
@@ -37,7 +52,8 @@ services:
         command: cmd
 `[1:]
 		err := cs.cli.AddLayer(&client.AddLayerOptions{
-			Combine:   combine,
+			Combine:   option.combine,
+			Inner:     option.inner,
 			Label:     "foo",
 			LayerData: []byte(layerYAML),
 		})
@@ -49,11 +65,11 @@ services:
 		c.Assert(json.NewDecoder(cs.req.Body).Decode(&body), check.IsNil)
 		c.Assert(body, check.DeepEquals, map[string]interface{}{
 			"action":  "add",
-			"combine": combine,
+			"combine": option.combine,
 			"label":   "foo",
 			"format":  "yaml",
 			"layer":   layerYAML,
-			"inner":   false,
+			"inner":   option.inner,
 		})
 	}
 }

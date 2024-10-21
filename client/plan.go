@@ -25,7 +25,7 @@ type AddLayerOptions struct {
 	// has the given label. False (the default) means append a new layer.
 	Combine bool
 
-	// Inner true means a new layer append may go into an existing
+	// Inner set to true means a new layer append may go into an existing
 	// subdirectory, even though it may not result in appending it
 	// to the end of the layers slice (it becomes an insert).
 	Inner bool
