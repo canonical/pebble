@@ -510,7 +510,7 @@ services:
 	c.Assert(calls, Equals, 5)
 }
 
-func (ps *planSuite) TestAppendLayersNoInner(c *C) {
+func (ps *planSuite) TestAppendLayersWithoutInner(c *C) {
 	plan.RegisterSectionExtension(testField, testExtension{})
 	defer plan.UnregisterSectionExtension(testField)
 	var err error
@@ -528,7 +528,7 @@ func (ps *planSuite) TestAppendLayersNoInner(c *C) {
 	c.Assert(err, ErrorMatches, ".*cannot insert sub-directory.*")
 }
 
-func (ps *planSuite) TestAppendLayersOrderAllocation(c *C) {
+func (ps *planSuite) TestAppendLayersWithInner(c *C) {
 	plan.RegisterSectionExtension(testField, testExtension{})
 	defer plan.UnregisterSectionExtension(testField)
 	var err error

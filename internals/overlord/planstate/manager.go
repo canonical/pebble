@@ -166,24 +166,17 @@ func (m *PlanManager) CombineLayer(layer *plan.Layer, inner bool) error {
 // into the layers slice of the current plan. One important
 // task of this method is to determine the new order of the layer.
 //
-// ┌────────────────────────────┬─────────────────┬─────────┐
-// │ Example Layers slice       │ Order           │ Label   │
-// ├────────────────────────────┼─────────────────┼─────────┤
-// │                            │                 │         │
-// │ 001-foo.yaml               │ 001-000 => 1000 │ foo     │
-// │                            │                 │         │
-// │ 002-bar.d/001-aaa.yaml     │ 002-001 => 2001 │ bar/aaa │
-// │                            │                 │         │
-// │ 002-bar.d/002-bbb.yaml     │ 002-002 => 2002 │ bar/bbb │
-// │                            │                 │         │
-// │ 003-baz.yaml               │ 003-000 => 3000 │ baz     │
-// │                            │                 │         │
-// └────────────────────────────┴─────────────────┴─────────┘
+//	| File (inside layersDir)    | Order           | Label   |
+//	| -------------------------- | --------------- | ------- |
+//	| 001-foo.yaml               | 001-000 => 1000 | foo     |
+//	| 002-bar.d/001-aaa.yaml     | 002-001 => 2001 | bar/aaa |
+//	| 002-bar.d/002-bbb.yaml     | 002-002 => 2002 | bar/bbb |
+//	| 003-baz.yaml               | 003-000 => 3000 | baz     |
 //
 // The new incoming layer only supplies the label, which may include
 // a sub-directory prefix. Normally without a sub-directory prefix,
 // the new layer will always be appended, which means incrementing
-// the root level order (+ 1000). If a sub-directory already exist
+// the root level order (+ 1000). If a sub-directory already exists
 // in the layers slice, its order was already allocated, which means
 // we can at most insert the layer as the last entry in the
 // sub-directory. However, this insert is only allowed if explicitly
@@ -201,16 +194,15 @@ func (m *PlanManager) appendLayer(newLayer *plan.Layer, inner bool) (*plan.Plan,
 		// sub-directory that exists and for which we already allocated
 		// an order?
 		newSubLabel, _, hasSub := strings.Cut(newLayer.Label, "/")
-		lastIndex := layersCount - 1
-		for i := range m.plan.Layers {
-			layer := m.plan.Layers[lastIndex-i]
+		for i := layersCount - 1; i >= 0; i-- {
+			layer := m.plan.Layers[i]
 			layerSubLabel, _, _ := strings.Cut(layer.Label, "/")
 			// If we have a sub-directory match we know it already exists.
 			// Since we searched backwards, we know the order should be the
 			// next integer value.
 			if layerSubLabel == newSubLabel {
 				newOrder = layer.Order + 1
-				newIndex = lastIndex - i + 1
+				newIndex = i + 1
 				break
 			}
 		}
