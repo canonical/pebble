@@ -19,5 +19,7 @@ label (or append if the label is not found).
 [add command options]
       --combine         Combine the new layer with an existing layer that has
                         the given label (default is to append)
+      --inner           Allow appending a new layer inside an existing
+                        subdirectory
 ```
 <!-- END AUTOMATED OUTPUT -->

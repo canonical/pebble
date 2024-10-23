@@ -16,6 +16,8 @@ package planstate
 
 import (
 	"fmt"
+	"slices"
+	"strings"
 	"sync"
 
 	"github.com/canonical/pebble/internals/plan"
@@ -100,8 +102,10 @@ func (m *PlanManager) Plan() *plan.Plan {
 
 // AppendLayer takes a Layer, appends it to the plan's layers and updates the
 // layer.Order field to the new order. If a layer with layer.Label already
-// exists, return an error of type *LabelExists.
-func (m *PlanManager) AppendLayer(layer *plan.Layer) error {
+// exists, return an error of type *LabelExists. Inner must be set to true
+// if the append operation may be demoted to an insert due to the layer
+// configuration being located in a sub-directory.
+func (m *PlanManager) AppendLayer(layer *plan.Layer, inner bool) error {
 	var newPlan *plan.Plan
 	defer func() { m.callChangeListeners(newPlan) }()
 
@@ -113,14 +117,17 @@ func (m *PlanManager) AppendLayer(layer *plan.Layer) error {
 		return &LabelExists{Label: layer.Label}
 	}
 
-	newPlan, err := m.appendLayer(layer)
+	newPlan, err := m.appendLayer(layer, inner)
 	return err
 }
 
 // CombineLayer takes a Layer, combines it to an existing layer that has the
 // same label. If no existing layer has the label, append a new one. In either
-// case, update the layer.Order field to the new order.
-func (m *PlanManager) CombineLayer(layer *plan.Layer) error {
+// case, update the layer.Order field to the new order. Inner must be set to
+// true if a combine operation gets demoted to an append operation (due to the
+// layer not yet existing), and if the configuration layer is located in a
+// sub-directory (see AppendLayer).
+func (m *PlanManager) CombineLayer(layer *plan.Layer, inner bool) error {
 	var newPlan *plan.Plan
 	defer func() { m.callChangeListeners(newPlan) }()
 
@@ -131,7 +138,7 @@ func (m *PlanManager) CombineLayer(layer *plan.Layer) error {
 	if index < 0 {
 		// No layer found with this label, append new one.
 		var err error
-		newPlan, err = m.appendLayer(layer)
+		newPlan, err = m.appendLayer(layer, inner)
 		return err
 	}
 
@@ -155,19 +162,78 @@ func (m *PlanManager) CombineLayer(layer *plan.Layer) error {
 	return nil
 }
 
-func (m *PlanManager) appendLayer(layer *plan.Layer) (*plan.Plan, error) {
-	newOrder := 1
-	if len(m.plan.Layers) > 0 {
-		last := m.plan.Layers[len(m.plan.Layers)-1]
-		newOrder = last.Order + 1
+// appendLayer appends (or inserts) a new layer configuration
+// into the layers slice of the current plan. One important
+// task of this method is to determine the new order of the layer.
+//
+//	| File (inside layersDir)    | Order           | Label   |
+//	| -------------------------- | --------------- | ------- |
+//	| 001-foo.yaml               | 001-000 => 1000 | foo     |
+//	| 002-bar.d/001-aaa.yaml     | 002-001 => 2001 | bar/aaa |
+//	| 002-bar.d/002-bbb.yaml     | 002-002 => 2002 | bar/bbb |
+//	| 003-baz.yaml               | 003-000 => 3000 | baz     |
+//
+// The new incoming layer only supplies the label, which may include
+// a sub-directory prefix. Normally without a sub-directory prefix,
+// the new layer will always be appended, which means incrementing
+// the root level order (+ 1000). If a sub-directory already exists
+// in the layers slice, its order was already allocated, which means
+// we can at most insert the layer as the last entry in the
+// sub-directory. However, this insert is only allowed if explicitly
+// requested by the user (inner=true).
+func (m *PlanManager) appendLayer(newLayer *plan.Layer, inner bool) (*plan.Plan, error) {
+	// The starting index and order assumes no existing layers.
+	newIndex := 0
+	newOrder := 1000
+
+	// If we have existing layers, things get a little bit more complex.
+	layersCount := len(m.plan.Layers)
+	if layersCount > 0 {
+		// We know at this point the complete label does not yet exist.
+		// However, let's see if the first part of the label is a
+		// sub-directory that exists and for which we already allocated
+		// an order?
+		newSubLabel, _, hasSub := strings.Cut(newLayer.Label, "/")
+		for i := layersCount - 1; i >= 0; i-- {
+			layer := m.plan.Layers[i]
+			layerSubLabel, _, _ := strings.Cut(layer.Label, "/")
+			// If we have a sub-directory match we know it already exists.
+			// Since we searched backwards, we know the order should be the
+			// next integer value.
+			if layerSubLabel == newSubLabel {
+				newOrder = layer.Order + 1
+				newIndex = i + 1
+				break
+			}
+		}
+
+		// If we did not match a sub-directory, this is simply an append.
+		// However, we need to know if this a inside a sub-directory or not
+		// as it has an impact on how we allocate the order.
+		if newIndex == 0 {
+			newIndex = layersCount
+			newOrder = ((m.plan.Layers[layersCount-1].Order / 1000) + 1) * 1000
+			if hasSub {
+				// The first file in the sub-directory gets an order of "001".
+				newOrder += 1
+			}
+		}
 	}
 
-	newLayers := append(m.plan.Layers, layer)
+	// If the append operation requires an insert because the layer is added
+	// inside an already existing sub-directory, with higher order items already
+	// allocated beyond it, we allow it only if the request specifically
+	// authorised it (inner=true).
+	if newIndex != layersCount && !inner {
+		return nil, fmt.Errorf("cannot insert sub-directory layer without 'inner' attribute set")
+	}
+
+	newLayers := slices.Insert(m.plan.Layers, newIndex, newLayer)
 	newPlan, err := m.updatePlanLayers(newLayers)
 	if err != nil {
 		return nil, err
 	}
-	layer.Order = newOrder
+	newLayer.Order = newOrder
 	return newPlan, nil
 }
 
@@ -243,6 +309,6 @@ func (m *PlanManager) SetServiceArgs(serviceArgs map[string][]string) error {
 		}
 	}
 
-	newPlan, err := m.appendLayer(newLayer)
+	newPlan, err := m.appendLayer(newLayer, false)
 	return err
 }

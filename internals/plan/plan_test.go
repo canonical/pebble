@@ -20,6 +20,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"time"
 	"unicode"
@@ -2138,6 +2139,7 @@ func (s *S) TestSectionOrder(c *C) {
 		LogTargets: combined.LogTargets,
 	}
 	data, err := yaml.Marshal(plan)
+	c.Assert(err, IsNil)
 	c.Assert(string(data), Equals, string(reindent(`
 	services:
 		srv1:
@@ -2155,4 +2157,154 @@ func (s *S) TestSectionOrder(c *C) {
 			location: http://192.168.1.2:3100/loki/api/v1/push
 			services: []
 			override: replace`)))
+}
+
+// createLayerPath combines the base path with a configuration layer
+// filename (which may include a single sub-directory), and creates
+// the missing directories and an empty configuration file.
+func createLayerPath(c *C, base string, name string) {
+	path := filepath.Join(base, name)
+	err := os.MkdirAll(filepath.Dir(path), 0777)
+	c.Assert(err, IsNil)
+	file, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0644)
+	c.Assert(err, IsNil)
+	// Let's mix in the layer name into the command so we can
+	// verify the correct layer has the correct file content.
+	_, err = file.Write(reindent(fmt.Sprintf(`
+	services:
+		srv:
+			override: replace
+			command: %s`, name)))
+	c.Assert(err, IsNil)
+	err = file.Close()
+	c.Assert(err, IsNil)
+}
+
+var readDirTests = []struct {
+	summary    string
+	layerNames []string
+	orders     []int
+	labels     []string
+	error      string
+}{{
+	summary: "Invalid filename #1",
+	layerNames: []string{
+		"001foo.yaml",
+	},
+	error: ".*invalid layer filename.*",
+}, {
+	summary: "Invalid filename #2",
+	layerNames: []string{
+		"001-foo.d/001foo.yaml",
+	},
+	error: ".*invalid layer filename.*",
+}, {
+	summary: "Invalid sub-directory",
+	layerNames: []string{
+		"001foo.d/001-bar.yaml",
+	},
+	error: ".*invalid layer sub.*",
+}, {
+	summary: "Not unique order #1",
+	layerNames: []string{
+		"001-foo.yaml",
+		"001-bar.yaml",
+	},
+	error: ".*not unique.*",
+}, {
+	summary: "Not unique order #2",
+	layerNames: []string{
+		"002-dir.d/001-foo.yaml",
+		"002-dir.d/001-bar.yaml",
+	},
+	error: ".*not unique.*",
+}, {
+	summary: "Not unique label #1",
+	layerNames: []string{
+		"001-foo.yaml",
+		"002-foo.yaml",
+	},
+	error: ".*not unique.*",
+}, {
+	summary: "Not unique label #2",
+	layerNames: []string{
+		"002-dir.d/001-foo.yaml",
+		"002-dir.d/002-foo.yaml",
+	},
+	error: ".*not unique.*",
+}, {
+	summary: "Valid load",
+	layerNames: []string{
+		"001-aaa.yaml",
+		"010-bbb.yaml",
+		"002-dir.d/100-foo.yaml",
+		"002-dir.d/090-bar.yaml",
+		"008-ccc.yaml",
+		"900-overlay.d/002-something.yaml",
+		"900-overlay.d/001-else.yaml",
+		"003-plans.d/999-final.yaml",
+		"009-baz.d/009-baz.yaml",
+	},
+	orders: []int{
+		1000,
+		2090,
+		2100,
+		3999,
+		8000,
+		9009,
+		10000,
+		900001,
+		900002,
+	},
+	labels: []string{
+		"aaa",
+		"dir/bar",
+		"dir/foo",
+		"plans/final",
+		"ccc",
+		"baz/baz",
+		"bbb",
+		"overlay/else",
+		"overlay/something",
+	},
+}}
+
+func (s *S) TestReadLayersDir(c *C) {
+	for _, test := range readDirTests {
+		c.Logf("Running ReadLayersDir: %s", test.summary)
+
+		tempDir := c.MkDir()
+
+		for _, layerName := range test.layerNames {
+			createLayerPath(c, tempDir, layerName)
+		}
+
+		layers, err := plan.ReadLayersDir(tempDir)
+		if test.error != "" || err != nil {
+			c.Assert(err, ErrorMatches, test.error)
+		}
+
+		c.Assert(len(layers), Equals, len(test.labels))
+		c.Assert(len(layers), Equals, len(test.orders))
+
+		for i, layer := range layers {
+			c.Assert(layer.Order, Equals, test.orders[i])
+			c.Assert(layer.Label, Equals, test.labels[i])
+
+			// Let's make sure each file contains the expected
+			// command. This will confirm the content is loaded
+			// from the correct file.
+			ordered := make([]string, 0, len(test.layerNames))
+			ordered = append(ordered, test.layerNames...)
+			slices.Sort(ordered)
+
+			c.Assert(layer.Services, DeepEquals, map[string]*plan.Service{
+				"srv": {
+					Name:     "srv",
+					Override: "replace",
+					Command:  ordered[i],
+				},
+			})
+		}
+	}
 }

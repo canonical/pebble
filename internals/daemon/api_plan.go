@@ -43,6 +43,7 @@ func v1PostLayers(c *Command, r *http.Request, _ *UserState) Response {
 	var payload struct {
 		Action  string `json:"action"`
 		Combine bool   `json:"combine"`
+		Inner   bool   `json:"inner"`
 		Label   string `json:"label"`
 		Format  string `json:"format"`
 		Layer   string `json:"layer"`
@@ -68,9 +69,9 @@ func v1PostLayers(c *Command, r *http.Request, _ *UserState) Response {
 
 	planMgr := overlordPlanManager(c.d.overlord)
 	if payload.Combine {
-		err = planMgr.CombineLayer(layer)
+		err = planMgr.CombineLayer(layer, payload.Inner)
 	} else {
-		err = planMgr.AppendLayer(layer)
+		err = planMgr.AppendLayer(layer, payload.Inner)
 	}
 	if err != nil {
 		if _, ok := err.(*planstate.LabelExists); ok {

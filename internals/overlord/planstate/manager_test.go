@@ -116,9 +116,9 @@ test-field:
         override: replace
         a: something
 `)
-	err = ps.planMgr.AppendLayer(layer)
+	err = ps.planMgr.AppendLayer(layer, false)
 	c.Assert(err, IsNil)
-	c.Assert(layer.Order, Equals, 1)
+	c.Assert(layer.Order, Equals, 1000)
 	c.Assert(ps.planYAML(c), Equals, `
 services:
     svc1:
@@ -142,7 +142,7 @@ test-field:
         override: foobar
         a: something else
 `)
-	err = ps.planMgr.AppendLayer(layer)
+	err = ps.planMgr.AppendLayer(layer, false)
 	c.Assert(err.(*planstate.LabelExists).Label, Equals, "label1")
 	c.Assert(ps.planYAML(c), Equals, `
 services:
@@ -167,9 +167,9 @@ test-field:
         override: replace
         a: else
 `)
-	err = ps.planMgr.AppendLayer(layer)
+	err = ps.planMgr.AppendLayer(layer, false)
 	c.Assert(err, IsNil)
-	c.Assert(layer.Order, Equals, 2)
+	c.Assert(layer.Order, Equals, 2000)
 	c.Assert(ps.planYAML(c), Equals, `
 services:
     svc1:
@@ -193,9 +193,9 @@ test-field:
         override: replace
         a: something
 `)
-	err = ps.planMgr.AppendLayer(layer)
+	err = ps.planMgr.AppendLayer(layer, false)
 	c.Assert(err, IsNil)
-	c.Assert(layer.Order, Equals, 3)
+	c.Assert(layer.Order, Equals, 3000)
 	c.Assert(ps.planYAML(c), Equals, `
 services:
     svc1:
@@ -233,9 +233,9 @@ test-field:
         override: replace
         a: something
 `)
-	err = ps.planMgr.CombineLayer(layer)
+	err = ps.planMgr.CombineLayer(layer, false)
 	c.Assert(err, IsNil)
-	c.Assert(layer.Order, Equals, 1)
+	c.Assert(layer.Order, Equals, 1000)
 	c.Assert(ps.planYAML(c), Equals, `
 services:
     svc1:
@@ -259,9 +259,9 @@ test-field:
         override: replace
         a: else
 `)
-	err = ps.planMgr.CombineLayer(layer)
+	err = ps.planMgr.CombineLayer(layer, false)
 	c.Assert(err, IsNil)
-	c.Assert(layer.Order, Equals, 2)
+	c.Assert(layer.Order, Equals, 2000)
 	c.Assert(ps.planYAML(c), Equals, `
 services:
     svc1:
@@ -291,9 +291,9 @@ test-field:
         override: replace
         a: else
 `)
-	err = ps.planMgr.CombineLayer(layer)
+	err = ps.planMgr.CombineLayer(layer, false)
 	c.Assert(err, IsNil)
-	c.Assert(layer.Order, Equals, 1)
+	c.Assert(layer.Order, Equals, 1000)
 	c.Assert(ps.planYAML(c), Equals, `
 services:
     svc1:
@@ -323,9 +323,9 @@ test-field:
         override: replace
         a: something
 `)
-	err = ps.planMgr.CombineLayer(layer)
+	err = ps.planMgr.CombineLayer(layer, false)
 	c.Assert(err, IsNil)
-	c.Assert(layer.Order, Equals, 2)
+	c.Assert(layer.Order, Equals, 2000)
 	c.Assert(ps.planYAML(c), Equals, `
 services:
     svc1:
@@ -361,9 +361,9 @@ test-field:
         override: replace
         a: nothing
 `)
-	err = ps.planMgr.CombineLayer(layer)
+	err = ps.planMgr.CombineLayer(layer, false)
 	c.Assert(err, IsNil)
-	c.Assert(layer.Order, Equals, 3)
+	c.Assert(layer.Order, Equals, 3000)
 	c.Assert(ps.planYAML(c), Equals, `
 services:
     svc1:
@@ -383,7 +383,7 @@ test-field:
 	ps.planLayersHasLen(c, 3)
 
 	// Make sure that layer validation is happening.
-	layer, err = plan.ParseLayer(0, "label4", []byte(`
+	_, err = plan.ParseLayer(0, "label4", []byte(`
 checks:
     bad-check:
         override: replace
@@ -394,7 +394,7 @@ checks:
 	c.Check(err, ErrorMatches, `(?s).*plan check.*must be "alive" or "ready".*`)
 
 	// Make sure that layer validation is happening for extensions.
-	layer, err = plan.ParseLayer(0, "label4", []byte(`
+	_, err = plan.ParseLayer(0, "label4", []byte(`
 test-field:
     my1:
         override: replace
@@ -421,7 +421,8 @@ services:
         override: replace
         command: foo
 `)
-	err = ps.planMgr.AppendLayer(layer)
+	err = ps.planMgr.AppendLayer(layer, false)
+	c.Assert(err, IsNil)
 
 	// Set arguments to services.
 	serviceArgs := map[string][]string{
@@ -455,8 +456,8 @@ func (ps *planSuite) TestChangeListenerAndLocking(c *C) {
 		// so we should be able to acquire it.
 		planLock := manager.PlanLock()
 		planLock.Lock()
+		calls++ // calls incremented here to satisfy staticcheck.
 		planLock.Unlock()
-		calls++
 	})
 
 	// Run operations in goroutine so we can time out the test if it fails.
@@ -477,10 +478,10 @@ services:
         override: replace
         command: /bin/sh
 `)
-		err = manager.AppendLayer(layer1)
+		err = manager.AppendLayer(layer1, false)
 		c.Assert(err, IsNil)
 
-		err = manager.CombineLayer(layer1)
+		err = manager.CombineLayer(layer1, false)
 		c.Assert(err, IsNil)
 
 		layer2 := ps.parseLayer(c, 0, "label2", `
@@ -489,7 +490,7 @@ services:
         override: replace
         command: /bin/sh
 `)
-		err = manager.CombineLayer(layer2)
+		err = manager.CombineLayer(layer2, false)
 		c.Assert(err, IsNil)
 
 		err = manager.SetServiceArgs(map[string][]string{
@@ -507,4 +508,83 @@ services:
 	}
 
 	c.Assert(calls, Equals, 5)
+}
+
+func (ps *planSuite) TestAppendLayersWithoutInner(c *C) {
+	plan.RegisterSectionExtension(testField, testExtension{})
+	defer plan.UnregisterSectionExtension(testField)
+	var err error
+	ps.planMgr, err = planstate.NewManager(ps.layersDir)
+	c.Assert(err, IsNil)
+
+	layer := ps.parseLayer(c, 0, "foo/bar", "")
+	err = ps.planMgr.AppendLayer(layer, false)
+	c.Assert(err, IsNil)
+	layer = ps.parseLayer(c, 0, "baz", "")
+	err = ps.planMgr.AppendLayer(layer, false)
+	c.Assert(err, IsNil)
+	layer = ps.parseLayer(c, 0, "foo/baz", "")
+	err = ps.planMgr.AppendLayer(layer, false)
+	c.Assert(err, ErrorMatches, ".*cannot insert sub-directory.*")
+}
+
+func (ps *planSuite) TestAppendLayersWithInner(c *C) {
+	plan.RegisterSectionExtension(testField, testExtension{})
+	defer plan.UnregisterSectionExtension(testField)
+	var err error
+	ps.planMgr, err = planstate.NewManager(ps.layersDir)
+	c.Assert(err, IsNil)
+
+	appendLabels := []string{
+		"foo",
+		"baz/aaa",
+		"something",
+		"baz/bbb",
+		"else",
+		"baz/ccc",
+		"zzz/zzz",
+		"final",
+	}
+
+	for _, label := range appendLabels {
+		layer := ps.parseLayer(c, 0, label, "")
+		err = ps.planMgr.AppendLayer(layer, true)
+		c.Assert(err, IsNil)
+	}
+
+	layersResult := []struct {
+		label string
+		order int
+	}{{
+		label: "foo",
+		order: 1000,
+	}, {
+		label: "baz/aaa",
+		order: 2001,
+	}, {
+		label: "baz/bbb",
+		order: 2002,
+	}, {
+		label: "baz/ccc",
+		order: 2003,
+	}, {
+		label: "something",
+		order: 3000,
+	}, {
+		label: "else",
+		order: 4000,
+	}, {
+		label: "zzz/zzz",
+		order: 5001,
+	}, {
+		label: "final",
+		order: 6000,
+	}}
+
+	plan := ps.planMgr.Plan()
+	// Check the layers order and each layer's order is correct.
+	for i, layer := range layersResult {
+		c.Assert(plan.Layers[i].Order, Equals, layer.order)
+		c.Assert(plan.Layers[i].Label, Equals, layer.label)
+	}
 }

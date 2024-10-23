@@ -25,6 +25,11 @@ type AddLayerOptions struct {
 	// has the given label. False (the default) means append a new layer.
 	Combine bool
 
+	// Inner set to true means a new layer append may go into an existing
+	// subdirectory, even though it may not result in appending it
+	// to the end of the layers slice (it becomes an insert).
+	Inner bool
+
 	// Label is the label for the new layer if appending, and the label of the
 	// layer to combine with if Combine is true.
 	Label string
@@ -38,16 +43,26 @@ func (client *Client) AddLayer(opts *AddLayerOptions) error {
 	var payload = struct {
 		Action  string `json:"action"`
 		Combine bool   `json:"combine"`
+		Inner   bool   `json:"inner"`
 		Label   string `json:"label"`
 		Format  string `json:"format"`
 		Layer   string `json:"layer"`
 	}{
 		Action:  "add",
 		Combine: opts.Combine,
+		Inner:   opts.Inner,
 		Label:   opts.Label,
 		Format:  "yaml",
 		Layer:   string(opts.LayerData),
 	}
+
+	// Add label validation here once layer persistence is supported over
+	// the API. We cannot do this in the plan library because JUJU already
+	// has labels in production systems that violates the layers file
+	// naming convention (which includes the label). Since JUJU uses its
+	// own client, we can enforce the label naming convention on all other
+	// systems using the Pebble supplied client by validating it here.
+
 	var body bytes.Buffer
 	if err := json.NewEncoder(&body).Encode(&payload); err != nil {
 		return err
