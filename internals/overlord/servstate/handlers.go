@@ -510,8 +510,15 @@ func (s *serviceData) exited(exitCode int) error {
 
 	switch s.state {
 	case stateStarting:
-		s.started <- fmt.Errorf("exited quickly with code %d", exitCode)
-		s.transition(stateExited) // not strictly necessary as doStart will return, but doesn't hurt
+		action, onType := getAction(s.config, exitCode == 0)
+		if action == plan.ActionRestart {
+			// Restart services failed within the okay delay period.
+			s.started <- fmt.Errorf("exited quickly with code %d; auto-restart is enabled, Pebble will keep trying to start it", exitCode)
+			s.doBackoff(action, onType)
+		} else {
+			s.started <- fmt.Errorf("exited quickly with code %d", exitCode)
+			s.transition(stateExited) // not strictly necessary as doStart will return, but doesn't hurt
+		}
 
 	case stateRunning:
 		logger.Noticef("Service %q stopped unexpectedly with code %d", s.config.Name, exitCode)
