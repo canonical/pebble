@@ -27,7 +27,7 @@ type ServiceOptions struct {
 	Names []string
 }
 
-// AutoStart starts the services makes as "startup: enabled". opts.Names must
+// AutoStart starts the services marked as "startup: enabled". opts.Names must
 // be empty for this call.
 func (client *Client) AutoStart(opts *ServiceOptions) (changeID string, err error) {
 	changeID, err = client.doMultiServiceAction("autostart", opts.Names)
