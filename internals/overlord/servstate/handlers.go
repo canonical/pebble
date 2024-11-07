@@ -129,8 +129,9 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 		return nil
 	}
 
+	var autoRestart bool = config.Startup == plan.StartupEnabled
 	// Start the service and transition to stateStarting.
-	err = service.start()
+	err = service.start(autoRestart)
 	if err != nil {
 		m.removeService(config.Name)
 		return err
@@ -321,13 +322,15 @@ func (s *serviceData) transitionRestarting(state serviceState, restarting bool) 
 }
 
 // start is called to transition from the initial state and start the service.
-func (s *serviceData) start() error {
+// If autoRestart is true, when the service startup is enabled and the service
+// exits within the okayDelay period, Pebble will try to restart it.
+func (s *serviceData) start(autoRestart bool) error {
 	s.manager.servicesLock.Lock()
 	defer s.manager.servicesLock.Unlock()
 
 	switch s.state {
 	case stateInitial:
-		err := s.startInternal()
+		err := s.startInternal(autoRestart)
 		if err != nil {
 			return err
 		}
@@ -349,7 +352,9 @@ func logError(err error) {
 // startInternal is an internal helper used to actually start (or restart) the
 // command. It assumes the caller has ensures the service is in a valid state,
 // and it sets s.cmd and other relevant fields.
-func (s *serviceData) startInternal() error {
+// If autoRestart is true, when the service startup is enabled and the service
+// exits within the okayDelay period, Pebble will try to restart it.
+func (s *serviceData) startInternal(autoRestart bool) error {
 	base, extra, err := s.config.ParseCommand()
 	if err != nil {
 		return err
@@ -456,7 +461,7 @@ func (s *serviceData) startInternal() error {
 			logger.Debugf("Service %q exited with code %d.", serviceName, exitCode)
 		}
 		close(done)
-		err := s.exited(exitCode)
+		err := s.exited(exitCode, autoRestart)
 		if err != nil {
 			logger.Noticef("Cannot transition state after service exit: %v", err)
 		}
@@ -500,7 +505,9 @@ func (s *serviceData) okayWaitElapsed() error {
 }
 
 // exited is called when the service's process exits.
-func (s *serviceData) exited(exitCode int) error {
+// If autoRestart is true, when the service startup is enabled and the service
+// exits within the okayDelay period, Pebble will try to restart it.
+func (s *serviceData) exited(exitCode int, autoRestart bool) error {
 	s.manager.servicesLock.Lock()
 	defer s.manager.servicesLock.Unlock()
 
@@ -511,6 +518,10 @@ func (s *serviceData) exited(exitCode int) error {
 	switch s.state {
 	case stateStarting:
 		s.started <- fmt.Errorf("exited quickly with code %d", exitCode)
+		action, onType := getAction(s.config, exitCode == 0)
+		if action == plan.ActionRestart && autoRestart {
+			s.doBackoff(action, onType)
+		}
 		s.transition(stateExited) // not strictly necessary as doStart will return, but doesn't hurt
 
 	case stateRunning:
@@ -715,7 +726,7 @@ func (s *serviceData) backoffTimeElapsed() error {
 
 	switch s.state {
 	case stateBackoff:
-		err := s.startInternal()
+		err := s.startInternal(false)
 		if err != nil {
 			return err
 		}
