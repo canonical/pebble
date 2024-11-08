@@ -195,7 +195,7 @@ service to be started before it, and the `backend` service requires the
    :end-before: End: Service start order note
 ```
 
-For more information on `before` and `after`, see [Service start order](../explanation/service-start-order.txt).
+For more information on `before` and `after`, see [Service start order](../explanation/service-start-order.md).
 
 ## Verify service dependencies
 
