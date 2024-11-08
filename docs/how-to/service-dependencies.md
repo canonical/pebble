@@ -190,7 +190,7 @@ In the updated layer above, the `frontend` service requires the `backend`
 service to be started before it, and the `backend` service requires the
 `database` service to be started before it.
 
-```{include} /reuse/service-start-order.txt
+```{include} /reuse/service-start-order.md
    :start-after: Start: Service start order note
    :end-before: End: Service start order note
 ```
