@@ -1,3 +1,7 @@
+---
+nosearch: true
+---
+
 Start: Service start order note
 
 ```{note}

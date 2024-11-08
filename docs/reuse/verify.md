@@ -1,3 +1,7 @@
+---
+nosearch: true
+---
+
 Start: Verify the Pebble installation
 
 Once the installation is complete, verify that `pebble` has been installed correctly by running:
