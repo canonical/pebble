@@ -1,7 +1,3 @@
----
-nosearch: true
----
-
 Start: Install Pebble binary
 
 1. Visit the [latest release page](https://github.com/canonical/pebble/releases/latest) to determine the latest tag, for example, `v1.12.0`.

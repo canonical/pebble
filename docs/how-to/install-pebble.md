@@ -11,7 +11,7 @@ To install the latest version of Pebble, you can choose any of the following met
 
 To install the binary for the latest version of Pebble:
 
-```{include} /reuse/install.md
+```{include} /reuse/install.txt
    :start-after: Start: Install Pebble binary
    :end-before: End: Install Pebble binary
 ```
@@ -27,7 +27,7 @@ Alternatively, you can install the latest version of Pebble from source:
 
 ## Verify the Pebble installation
 
-```{include} /reuse/verify.md
+```{include} /reuse/verify.txt
    :start-after: Start: Verify the Pebble installation
    :end-before: End: Verify the Pebble installation
 ```
