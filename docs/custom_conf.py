@@ -182,6 +182,7 @@ custom_required_modules = []
 custom_excludes = [
     'doc-cheat-sheet*',
     '.tox',
+    "reuse/*",
     ]
 
 # Add CSS files (located in .sphinx/_static/)
