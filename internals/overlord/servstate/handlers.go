@@ -331,8 +331,16 @@ func (s *serviceData) start() error {
 		if err != nil {
 			return err
 		}
-		s.transition(stateStarting)
-		time.AfterFunc(okayDelay, func() { logError(s.okayWaitElapsed()) })
+		if s.config.Startup == plan.StartupEnabled {
+			// If a service is configured with `startup: enabled`, skip the stateStarting/okayDelay
+			// and transition it into the running state, so that even if it fails within okayDelay,
+			// Pebble will still restart it.
+			s.started <- nil
+			s.transition(stateRunning)
+		} else {
+			s.transition(stateStarting)
+			time.AfterFunc(okayDelay, func() { logError(s.okayWaitElapsed()) })
+		}
 
 	default:
 		return fmt.Errorf("cannot start service while %s", s.state)
