@@ -33,6 +33,8 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"gopkg.in/tomb.v2"
 
@@ -397,6 +399,13 @@ func (d *Daemon) Init() error {
 	case <-time.After(1 * time.Second):
 		// No errors received within the timeout.
 	}
+
+	// Use counter metrics to include necessary libs.
+	opsProcessed := promauto.NewCounter(prometheus.CounterOpts{
+		Name: "myapp_processed_ops_total",
+		Help: "The total number of processed events",
+	})
+	opsProcessed.Inc()
 
 	logger.Noticef("Started daemon.")
 	return nil
