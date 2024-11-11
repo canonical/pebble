@@ -33,6 +33,7 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"gopkg.in/tomb.v2"
 
 	"github.com/canonical/pebble/internals/logger"
@@ -343,6 +344,18 @@ func exitOnPanic(handler http.Handler, stderr io.Writer, exit func()) http.Handl
 	})
 }
 
+func prometheusMetricsEndpointBasicAuth(h http.HandlerFunc, username, password string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		user, pass, ok := r.BasicAuth()
+		if !ok || user != username || pass != password {
+			w.Header().Set("WWW-Authenticate", `Basic realm="Restricted"`)
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+		h(w, r)
+	}
+}
+
 // Init sets up the Daemon's internal workings.
 // Don't call more than once.
 func (d *Daemon) Init() error {
@@ -363,6 +376,26 @@ func (d *Daemon) Init() error {
 		}
 		d.httpListener = listener
 		logger.Noticef("HTTP API server listening on %q.", d.httpAddress)
+	}
+
+	// Channel to receive errors from goroutines
+	errChan := make(chan error)
+
+	// Prometheus metrics server
+	go func() {
+		promRouter := mux.NewRouter()
+		promRouter.HandleFunc("/metrics", prometheusMetricsEndpointBasicAuth(promhttp.Handler().ServeHTTP, "username", "password"))
+		logger.Noticef("Prometheus metrics server listening on :2112")
+		errChan <- http.ListenAndServe(":2112", promRouter)
+	}()
+	select {
+	case err := <-errChan:
+		// Check if it's not a graceful shutdown
+		if err != nil && err != http.ErrServerClosed {
+			return fmt.Errorf("Error serving Prometheus metrics: %v", err)
+		}
+	case <-time.After(1 * time.Second):
+		// No errors received within the timeout.
 	}
 
 	logger.Noticef("Started daemon.")
