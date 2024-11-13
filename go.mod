@@ -1,6 +1,8 @@
 module github.com/canonical/pebble
 
-go 1.22
+go 1.22.0
+
+toolchain go1.23.1
 
 require (
 	github.com/canonical/go-flags v0.0.0-20230403090104-105d09a091b8
@@ -8,6 +10,7 @@ require (
 	github.com/gorilla/mux v1.8.1
 	github.com/gorilla/websocket v1.5.1
 	github.com/pkg/term v1.1.0
+	golang.org/x/exp v0.0.0-20241108190413-2d47ceb2692f
 	golang.org/x/sys v0.21.0
 	golang.org/x/term v0.21.0
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c

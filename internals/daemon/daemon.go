@@ -33,9 +33,11 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	"golang.org/x/exp/rand"
 	"gopkg.in/tomb.v2"
 
 	"github.com/canonical/pebble/internals/logger"
+	"github.com/canonical/pebble/internals/metrics"
 	"github.com/canonical/pebble/internals/osutil"
 	"github.com/canonical/pebble/internals/osutil/sys"
 	"github.com/canonical/pebble/internals/overlord"
@@ -366,6 +368,20 @@ func (d *Daemon) Init() error {
 	}
 
 	logger.Noticef("Started daemon.")
+
+	registry := metrics.GetRegistry()
+	registry.NewMetric("my_counter", metrics.MetricTypeCounter, "A simple counter")
+	// Goroutine to update metrics randomly
+	go func() {
+		for {
+			err := registry.IncCounter("my_counter") // Increment by 1
+			if err != nil {
+				fmt.Println("Error incrementing counter:", err)
+			}
+			time.Sleep(time.Duration(rand.Intn(5)+1) * time.Second) // Random sleep between 1 and 5 seconds
+		}
+	}()
+
 	return nil
 }
 
