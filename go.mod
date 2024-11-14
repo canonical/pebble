@@ -2,8 +2,6 @@ module github.com/canonical/pebble
 
 go 1.22.0
 
-toolchain go1.23.1
-
 require (
 	github.com/canonical/go-flags v0.0.0-20230403090104-105d09a091b8
 	github.com/canonical/x-go v0.0.0-20230522092633-7947a7587f5b
