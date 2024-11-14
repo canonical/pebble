@@ -16,12 +16,12 @@ package metrics
 
 import (
 	"fmt"
+	"math/rand"
 	"net/http"
 	"sync"
 	"time"
 
 	"github.com/gorilla/mux"
-	"golang.org/x/exp/rand"
 )
 
 // MetricType models the type of a metric.

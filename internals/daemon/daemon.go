@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/rand"
 	"net"
 	"net/http"
 	"os"
@@ -33,7 +34,6 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
-	"golang.org/x/exp/rand"
 	"gopkg.in/tomb.v2"
 
 	"github.com/canonical/pebble/internals/logger"
