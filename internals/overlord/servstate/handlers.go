@@ -143,7 +143,7 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 		if err != nil {
 			addLastLogs(task, service.logs)
 			m.removeService(config.Name)
-			return fmt.Errorf("cannot start service: %w", err)
+			return fmt.Errorf("service start attempt: %w", err)
 		}
 		// Started successfully (ran for small amount of time without exiting).
 		return nil
@@ -440,7 +440,7 @@ func (s *serviceData) startInternal() error {
 			_ = outputIterator.Close()
 		}
 		_ = s.logs.Close()
-		return fmt.Errorf("cannot start service: %w", err)
+		return fmt.Errorf("service start attempt: %w", err)
 	}
 	logger.Debugf("Service %q started with PID %d", serviceName, s.cmd.Process.Pid)
 	s.resetTimer = time.AfterFunc(s.config.BackoffLimit.Value, func() { logError(s.backoffResetElapsed()) })
@@ -510,8 +510,15 @@ func (s *serviceData) exited(exitCode int) error {
 
 	switch s.state {
 	case stateStarting:
-		s.started <- fmt.Errorf("exited quickly with code %d", exitCode)
-		s.transition(stateExited) // not strictly necessary as doStart will return, but doesn't hurt
+		action, onType := getAction(s.config, exitCode == 0)
+		if action == plan.ActionRestart {
+			// Restart services failed within the okay delay period.
+			s.started <- fmt.Errorf("exited quickly with code %d, will retry", exitCode)
+			s.doBackoff(action, onType)
+		} else {
+			s.started <- fmt.Errorf("exited quickly with code %d, will ignore", exitCode)
+			s.transition(stateExited) // not strictly necessary as doStart will return, but doesn't hurt
+		}
 
 	case stateRunning:
 		logger.Noticef("Service %q stopped unexpectedly with code %d", s.config.Name, exitCode)

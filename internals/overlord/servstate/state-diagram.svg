@@ -5,225 +5,232 @@
  -->
 <!-- Title: service_state_machine Pages: 1 -->
 <svg width="789pt" height="641pt"
- viewBox="0.00 0.00 788.59 641.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+ viewBox="0.00 0.00 788.94 641.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
 <g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 637)">
 <title>service_state_machine</title>
-<polygon fill="white" stroke="none" points="-4,4 -4,-637 784.59,-637 784.59,4 -4,4"/>
+<polygon fill="white" stroke="none" points="-4,4 -4,-637 784.94,-637 784.94,4 -4,4"/>
 <!-- initial -->
 <g id="node1" class="node">
 <title>initial</title>
-<polygon fill="none" stroke="black" stroke-width="3" points="664.46,-633 592.21,-633 592.21,-597 664.46,-597 664.46,-633"/>
-<text text-anchor="middle" x="628.34" y="-605.7" font-family="Times,serif" font-size="24.00">initial</text>
+<polygon fill="none" stroke="black" stroke-width="3" points="321.81,-633 249.56,-633 249.56,-597 321.81,-597 321.81,-633"/>
+<text text-anchor="middle" x="285.69" y="-605.7" font-family="Times,serif" font-size="24.00">initial</text>
 </g>
 <!-- starting -->
 <g id="node2" class="node">
 <title>starting</title>
-<polygon fill="none" stroke="black" points="672.34,-544.5 584.34,-544.5 584.34,-508.5 672.34,-508.5 672.34,-544.5"/>
-<text text-anchor="middle" x="628.34" y="-517.2" font-family="Times,serif" font-size="24.00">starting</text>
+<polygon fill="none" stroke="black" points="329.69,-544.5 241.69,-544.5 241.69,-508.5 329.69,-508.5 329.69,-544.5"/>
+<text text-anchor="middle" x="285.69" y="-517.2" font-family="Times,serif" font-size="24.00">starting</text>
 </g>
 <!-- initial&#45;&gt;starting -->
 <g id="edge1" class="edge">
 <title>initial&#45;&gt;starting</title>
-<path fill="none" stroke="black" d="M628.34,-595.66C628.34,-584.19 628.34,-569.18 628.34,-556.16"/>
-<polygon fill="black" stroke="black" points="631.84,-556.45 628.34,-546.45 624.84,-556.45 631.84,-556.45"/>
-<text text-anchor="middle" x="639.96" y="-565.7" font-family="Times,serif" font-size="14.00">start</text>
+<path fill="none" stroke="black" d="M285.69,-595.66C285.69,-584.19 285.69,-569.18 285.69,-556.16"/>
+<polygon fill="black" stroke="black" points="289.19,-556.45 285.69,-546.45 282.19,-556.45 289.19,-556.45"/>
+<text text-anchor="middle" x="297.31" y="-565.7" font-family="Times,serif" font-size="14.00">start</text>
+</g>
+<!-- backoff -->
+<g id="node3" class="node">
+<title>backoff</title>
+<polygon fill="none" stroke="black" points="490.69,-456 402.69,-456 402.69,-420 490.69,-420 490.69,-456"/>
+<text text-anchor="middle" x="446.69" y="-428.7" font-family="Times,serif" font-size="24.00">backoff</text>
+</g>
+<!-- starting&#45;&gt;backoff -->
+<g id="edge2" class="edge">
+<title>starting&#45;&gt;backoff</title>
+<path fill="none" stroke="black" d="M322.94,-508.02C334.19,-502.57 346.52,-496.44 357.69,-490.5 374.37,-481.63 392.47,-471.3 407.96,-462.22"/>
+<polygon fill="black" stroke="black" points="409.58,-465.33 416.42,-457.24 406.03,-459.3 409.58,-465.33"/>
+<text text-anchor="middle" x="415.89" y="-477.2" font-family="Times,serif" font-size="14.00">autorestart</text>
 </g>
 <!-- running -->
-<g id="node3" class="node">
+<g id="node4" class="node">
 <title>running</title>
-<polygon fill="none" stroke="black" points="405.84,-439.5 314.84,-439.5 314.84,-403.5 405.84,-403.5 405.84,-439.5"/>
-<text text-anchor="middle" x="360.34" y="-412.2" font-family="Times,serif" font-size="24.00">running</text>
+<polygon fill="none" stroke="black" points="416.19,-351 325.19,-351 325.19,-315 416.19,-315 416.19,-351"/>
+<text text-anchor="middle" x="370.69" y="-323.7" font-family="Times,serif" font-size="24.00">running</text>
 </g>
 <!-- starting&#45;&gt;running -->
-<g id="edge2" class="edge">
+<g id="edge3" class="edge">
 <title>starting&#45;&gt;running</title>
-<path fill="none" stroke="black" d="M584.16,-509.73C567.76,-503.8 549.04,-496.94 532.09,-490.5 492.32,-475.4 447.65,-457.69 413.84,-444.13"/>
-<polygon fill="black" stroke="black" points="415.25,-440.93 404.67,-440.45 412.64,-447.42 415.25,-440.93"/>
-<text text-anchor="middle" x="558.71" y="-477.2" font-family="Times,serif" font-size="14.00">okay wait</text>
-<text text-anchor="middle" x="558.71" y="-460.7" font-family="Times,serif" font-size="14.00">elapsed</text>
+<path fill="none" stroke="black" d="M288.6,-508.45C294.28,-478.51 308.78,-415.24 336.69,-369 338.61,-365.81 340.88,-362.68 343.32,-359.69"/>
+<polygon fill="black" stroke="black" points="345.86,-362.09 349.94,-352.32 340.65,-357.41 345.86,-362.09"/>
+<text text-anchor="middle" x="338.96" y="-441.2" font-family="Times,serif" font-size="14.00">okay wait</text>
+<text text-anchor="middle" x="338.96" y="-424.7" font-family="Times,serif" font-size="14.00">elapsed</text>
 </g>
 <!-- terminating -->
-<g id="node4" class="node">
+<g id="node5" class="node">
 <title>terminating</title>
-<polygon fill="none" stroke="black" points="247.84,-334.5 120.84,-334.5 120.84,-298.5 247.84,-298.5 247.84,-334.5"/>
-<text text-anchor="middle" x="184.34" y="-307.2" font-family="Times,serif" font-size="24.00">terminating</text>
+<polygon fill="none" stroke="black" points="564.19,-246 437.19,-246 437.19,-210 564.19,-210 564.19,-246"/>
+<text text-anchor="middle" x="500.69" y="-218.7" font-family="Times,serif" font-size="24.00">terminating</text>
 </g>
 <!-- starting&#45;&gt;terminating -->
-<g id="edge3" class="edge">
+<g id="edge4" class="edge">
 <title>starting&#45;&gt;terminating</title>
-<path fill="none" stroke="black" d="M584.04,-520.75C488.74,-509.86 267.82,-480.79 205.84,-439.5 181.52,-423.3 177.07,-413.38 168.34,-385.5 163.95,-371.5 165.22,-366.83 168.34,-352.5 168.85,-350.15 169.53,-347.78 170.33,-345.42"/>
-<polygon fill="black" stroke="black" points="173.55,-346.78 174.09,-336.2 167.07,-344.13 173.55,-346.78"/>
-<text text-anchor="middle" x="256.09" y="-424.7" font-family="Times,serif" font-size="14.00">stop (before</text>
-<text text-anchor="middle" x="256.09" y="-408.2" font-family="Times,serif" font-size="14.00">okay wait elapses)</text>
+<path fill="none" stroke="black" d="M265.41,-508.23C224.28,-471.09 138.61,-381.58 183.69,-315 195.76,-297.16 211.2,-309.58 228.69,-297 244.3,-285.76 239.85,-273.3 256.69,-264 284.98,-248.36 364.88,-238.99 425.6,-233.94"/>
+<polygon fill="black" stroke="black" points="425.51,-237.46 435.19,-233.17 424.95,-230.48 425.51,-237.46"/>
+<text text-anchor="middle" x="231.18" y="-388.7" font-family="Times,serif" font-size="14.00">stop (before</text>
+<text text-anchor="middle" x="231.18" y="-372.2" font-family="Times,serif" font-size="14.00">okay wait elapses)</text>
 </g>
 <!-- exited -->
 <g id="node8" class="node">
 <title>exited</title>
-<polygon fill="none" stroke="black" points="627.59,-334.5 553.09,-334.5 553.09,-298.5 627.59,-298.5 627.59,-334.5"/>
-<text text-anchor="middle" x="590.34" y="-307.2" font-family="Times,serif" font-size="24.00">exited</text>
+<polygon fill="none" stroke="black" points="138.94,-246 64.44,-246 64.44,-210 138.94,-210 138.94,-246"/>
+<text text-anchor="middle" x="101.69" y="-218.7" font-family="Times,serif" font-size="24.00">exited</text>
 </g>
 <!-- starting&#45;&gt;exited -->
-<g id="edge12" class="edge">
-<title>starting&#45;&gt;exited</title>
-<path fill="none" stroke="black" d="M636.02,-508.01C649.16,-475.25 671.99,-403.38 644.34,-352.5 642.3,-348.75 639.66,-345.33 636.65,-342.24"/>
-<polygon fill="black" stroke="black" points="638.99,-339.64 629.12,-335.78 634.43,-344.95 638.99,-339.64"/>
-<text text-anchor="middle" x="673.9" y="-416.45" font-family="Times,serif" font-size="14.00">exited</text>
-</g>
-<!-- running&#45;&gt;terminating -->
-<g id="edge4" class="edge">
-<title>running&#45;&gt;terminating</title>
-<path fill="none" stroke="black" d="M323.76,-403.15C315.09,-398.12 306.22,-392.17 298.84,-385.5 285.48,-373.43 289.56,-363.53 275.34,-352.5 269.08,-347.65 262.08,-343.41 254.81,-339.71"/>
-<polygon fill="black" stroke="black" points="256.68,-336.72 246.14,-335.64 253.7,-343.05 256.68,-336.72"/>
-<text text-anchor="middle" x="310.09" y="-363.95" font-family="Times,serif" font-size="14.00">stop</text>
-</g>
-<!-- running&#45;&gt;terminating -->
-<g id="edge5" class="edge">
-<title>running&#45;&gt;terminating</title>
-<path fill="none" stroke="black" d="M314.37,-413.08C262.33,-404.45 184.15,-390.73 179.84,-385.5 170.93,-374.7 171.22,-359.35 174.1,-345.97"/>
-<polygon fill="black" stroke="black" points="177.47,-346.91 176.74,-336.34 170.72,-345.06 177.47,-346.91"/>
-<text text-anchor="middle" x="225.59" y="-372.2" font-family="Times,serif" font-size="14.00">check failed</text>
-<text text-anchor="middle" x="225.59" y="-355.7" font-family="Times,serif" font-size="14.00">(action &quot;restart&quot;)</text>
-</g>
-<!-- backoff -->
-<g id="node7" class="node">
-<title>backoff</title>
-<polygon fill="none" stroke="black" points="433.34,-124.5 345.34,-124.5 345.34,-88.5 433.34,-88.5 433.34,-124.5"/>
-<text text-anchor="middle" x="389.34" y="-97.2" font-family="Times,serif" font-size="24.00">backoff</text>
-</g>
-<!-- running&#45;&gt;backoff -->
-<g id="edge18" class="edge">
-<title>running&#45;&gt;backoff</title>
-<path fill="none" stroke="black" d="M362.84,-403.19C365.11,-389.29 368.92,-369.37 374.34,-352.5 385.04,-319.16 399.07,-314.76 406.34,-280.5 411.45,-256.38 415.21,-199.73 403.34,-142.5 402.86,-140.2 402.24,-137.85 401.53,-135.52"/>
-<polygon fill="black" stroke="black" points="404.91,-134.57 398.22,-126.35 398.32,-136.95 404.91,-134.57"/>
-<text text-anchor="middle" x="456.14" y="-267.2" font-family="Times,serif" font-size="14.00">exited</text>
-<text text-anchor="middle" x="456.14" y="-250.7" font-family="Times,serif" font-size="14.00">(action &quot;restart&quot;)</text>
-</g>
-<!-- running&#45;&gt;exited -->
-<g id="edge16" class="edge">
-<title>running&#45;&gt;exited</title>
-<path fill="none" stroke="black" d="M406.26,-417.76C436.39,-414.04 475.41,-405.41 504.34,-385.5 519.01,-375.4 513.89,-364.46 527.09,-352.5 531.91,-348.13 537.38,-344.09 543.03,-340.43"/>
-<polygon fill="black" stroke="black" points="544.58,-343.58 551.34,-335.42 540.97,-337.59 544.58,-343.58"/>
-<text text-anchor="middle" x="573.21" y="-372.2" font-family="Times,serif" font-size="14.00">exited</text>
-<text text-anchor="middle" x="573.21" y="-355.7" font-family="Times,serif" font-size="14.00">(action &quot;ignore&quot;)</text>
-</g>
-<!-- running&#45;&gt;exited -->
-<g id="edge17" class="edge">
-<title>running&#45;&gt;exited</title>
-<path fill="none" stroke="black" d="M365.77,-403.32C371.78,-385.42 381.72,-359.07 390.09,-352.5 413.05,-334.46 490,-325.12 541.55,-320.77"/>
-<polygon fill="black" stroke="black" points="541.58,-324.28 551.27,-319.99 541.02,-317.3 541.58,-324.28"/>
-<text text-anchor="middle" x="445.21" y="-372.2" font-family="Times,serif" font-size="14.00">exited</text>
-<text text-anchor="middle" x="445.21" y="-355.7" font-family="Times,serif" font-size="14.00">(action &quot;shutdown&quot;)</text>
-</g>
-<!-- killing -->
-<g id="node5" class="node">
-<title>killing</title>
-<polygon fill="none" stroke="black" points="139.84,-229.5 60.84,-229.5 60.84,-193.5 139.84,-193.5 139.84,-229.5"/>
-<text text-anchor="middle" x="100.34" y="-202.2" font-family="Times,serif" font-size="24.00">killing</text>
-</g>
-<!-- terminating&#45;&gt;killing -->
-<g id="edge6" class="edge">
-<title>terminating&#45;&gt;killing</title>
-<path fill="none" stroke="black" d="M120.53,-303.32C108.95,-298.18 98.27,-290.88 91.09,-280.5 83.16,-269.06 84.39,-253.91 88.08,-240.81"/>
-<polygon fill="black" stroke="black" points="91.37,-242 91.28,-231.4 84.74,-239.74 91.37,-242"/>
-<text text-anchor="middle" x="131.21" y="-267.2" font-family="Times,serif" font-size="14.00">terminate time</text>
-<text text-anchor="middle" x="131.21" y="-250.7" font-family="Times,serif" font-size="14.00">elapsed</text>
-</g>
-<!-- stopped -->
-<g id="node6" class="node">
-<title>stopped</title>
-<polygon fill="none" stroke="black" points="332.46,-36 242.21,-36 242.21,0 332.46,0 332.46,-36"/>
-<text text-anchor="middle" x="287.34" y="-8.7" font-family="Times,serif" font-size="24.00">stopped</text>
-</g>
-<!-- terminating&#45;&gt;stopped -->
-<g id="edge7" class="edge">
-<title>terminating&#45;&gt;stopped</title>
-<path fill="none" stroke="black" d="M180.19,-298.12C173.4,-266.15 162.54,-196.35 182.34,-142.5 197.1,-102.33 231.38,-66.31 256.77,-43.68"/>
-<polygon fill="black" stroke="black" points="258.93,-46.43 264.19,-37.24 254.35,-41.15 258.93,-46.43"/>
-<text text-anchor="middle" x="222.84" y="-162.2" font-family="Times,serif" font-size="14.00">exited</text>
-<text text-anchor="middle" x="222.84" y="-145.7" font-family="Times,serif" font-size="14.00">(not restarting)</text>
-</g>
-<!-- terminating&#45;&gt;backoff -->
-<g id="edge9" class="edge">
-<title>terminating&#45;&gt;backoff</title>
-<path fill="none" stroke="black" d="M200.01,-298.13C223.39,-272.91 269.56,-225.66 315.34,-193.5 329.65,-183.44 337.69,-187.58 350.34,-175.5 362.14,-164.22 371.44,-148.59 378,-135.15"/>
-<polygon fill="black" stroke="black" points="381.05,-136.9 382.03,-126.35 374.68,-133.98 381.05,-136.9"/>
-<text text-anchor="middle" x="345.34" y="-214.7" font-family="Times,serif" font-size="14.00">exited</text>
-<text text-anchor="middle" x="345.34" y="-198.2" font-family="Times,serif" font-size="14.00">(restarting)</text>
-</g>
-<!-- killing&#45;&gt;stopped -->
-<g id="edge8" class="edge">
-<title>killing&#45;&gt;stopped</title>
-<path fill="none" stroke="black" d="M70.39,-193.14C34.13,-169.84 -19,-126.95 7.34,-88.5 32.37,-51.95 156.53,-32.72 230.85,-24.33"/>
-<polygon fill="black" stroke="black" points="230.82,-27.86 240.38,-23.29 230.06,-20.9 230.82,-27.86"/>
-<text text-anchor="middle" x="47.84" y="-109.7" font-family="Times,serif" font-size="14.00">exited</text>
-<text text-anchor="middle" x="47.84" y="-93.2" font-family="Times,serif" font-size="14.00">(not restarting)</text>
-</g>
-<!-- killing&#45;&gt;stopped -->
-<g id="edge21" class="edge">
-<title>killing&#45;&gt;stopped</title>
-<path fill="none" stroke="black" d="M100.02,-193.31C100.36,-168.31 104,-121.34 124.84,-88.5 147.63,-52.57 193.4,-35.18 230.57,-26.78"/>
-<polygon fill="black" stroke="black" points="231.24,-30.21 240.32,-24.75 229.82,-23.36 231.24,-30.21"/>
-<text text-anchor="middle" x="148.09" y="-109.7" font-family="Times,serif" font-size="14.00">kill time</text>
-<text text-anchor="middle" x="148.09" y="-93.2" font-family="Times,serif" font-size="14.00">elapsed</text>
-</g>
-<!-- killing&#45;&gt;backoff -->
-<g id="edge10" class="edge">
-<title>killing&#45;&gt;backoff</title>
-<path fill="none" stroke="black" d="M140.27,-210.26C176.24,-208.27 229.16,-200.75 267.34,-175.5 282.25,-165.64 276.11,-153.33 290.34,-142.5 303.17,-132.72 318.97,-125.52 334.14,-120.28"/>
-<polygon fill="black" stroke="black" points="335.12,-123.65 343.59,-117.27 333,-116.98 335.12,-123.65"/>
-<text text-anchor="middle" x="320.34" y="-162.2" font-family="Times,serif" font-size="14.00">exited</text>
-<text text-anchor="middle" x="320.34" y="-145.7" font-family="Times,serif" font-size="14.00">(restarting)</text>
-</g>
-<!-- stopped&#45;&gt;starting -->
 <g id="edge13" class="edge">
-<title>stopped&#45;&gt;starting</title>
-<path fill="none" stroke="black" d="M332.83,-22.61C450.78,-32.58 757.34,-62.62 757.34,-105.5 757.34,-422.5 757.34,-422.5 757.34,-422.5 757.34,-462.93 718.16,-490.08 682.99,-506.31"/>
-<polygon fill="black" stroke="black" points="681.88,-502.97 674.12,-510.19 684.68,-509.39 681.88,-502.97"/>
-<text text-anchor="middle" x="768.96" y="-258.95" font-family="Times,serif" font-size="14.00">start</text>
+<title>starting&#45;&gt;exited</title>
+<path fill="none" stroke="black" d="M241.3,-524C180.61,-521.12 75.81,-512.97 45.69,-490.5 0,-456.42 -5.86,-425.01 4.69,-369 13.96,-319.77 13.71,-302.57 45.69,-264 48.94,-260.07 52.76,-256.45 56.85,-253.15"/>
+<polygon fill="black" stroke="black" points="58.84,-256.03 64.88,-247.33 54.73,-250.36 58.84,-256.03"/>
+<text text-anchor="middle" x="21.19" y="-380.45" font-family="Times,serif" font-size="14.00">exited</text>
 </g>
 <!-- backoff&#45;&gt;starting -->
 <g id="edge14" class="edge">
 <title>backoff&#45;&gt;starting</title>
-<path fill="none" stroke="black" d="M433.68,-112.93C484.74,-121.45 568.04,-142.6 618.34,-193.5 676.75,-252.62 720.96,-349.33 694.34,-439.5 687.5,-462.65 670.95,-484.19 656.13,-499.92"/>
-<polygon fill="black" stroke="black" points="653.73,-497.37 649.21,-506.96 658.72,-502.28 653.73,-497.37"/>
-<text text-anchor="middle" x="708.25" y="-311.45" font-family="Times,serif" font-size="14.00">start</text>
+<path fill="none" stroke="black" d="M402.23,-446.25C379.45,-451.44 352.03,-460.04 330.44,-474 320.14,-480.66 310.86,-490.35 303.45,-499.53"/>
+<polygon fill="black" stroke="black" points="300.88,-497.13 297.61,-507.21 306.45,-501.37 300.88,-497.13"/>
+<text text-anchor="middle" x="342.06" y="-477.2" font-family="Times,serif" font-size="14.00">start</text>
 </g>
 <!-- backoff&#45;&gt;running -->
-<g id="edge20" class="edge">
+<g id="edge21" class="edge">
 <title>backoff&#45;&gt;running</title>
-<path fill="none" stroke="black" d="M392.39,-124.83C395.9,-150.42 398.48,-198.62 375.34,-229.5 362.97,-246 343.99,-230.33 332.59,-247.5 324.47,-259.72 331.15,-265.9 332.59,-280.5 336.44,-319.77 346.24,-364.36 353.09,-392.45"/>
-<polygon fill="black" stroke="black" points="349.65,-393.09 355.46,-401.95 356.44,-391.4 349.65,-393.09"/>
-<text text-anchor="middle" x="367.46" y="-267.2" font-family="Times,serif" font-size="14.00">backoff time</text>
-<text text-anchor="middle" x="367.46" y="-250.7" font-family="Times,serif" font-size="14.00">elapsed</text>
+<path fill="none" stroke="black" d="M448.26,-419.79C448.71,-405.01 447.15,-383.82 436.69,-369 433.7,-364.77 430.05,-361.01 426,-357.68"/>
+<polygon fill="black" stroke="black" points="428.05,-354.84 417.86,-351.91 424,-360.55 428.05,-354.84"/>
+<text text-anchor="middle" x="482.52" y="-388.7" font-family="Times,serif" font-size="14.00">backoff time</text>
+<text text-anchor="middle" x="482.52" y="-372.2" font-family="Times,serif" font-size="14.00">elapsed</text>
+</g>
+<!-- stopped -->
+<g id="node7" class="node">
+<title>stopped</title>
+<polygon fill="none" stroke="black" points="632.81,-36 542.56,-36 542.56,0 632.81,0 632.81,-36"/>
+<text text-anchor="middle" x="587.69" y="-8.7" font-family="Times,serif" font-size="24.00">stopped</text>
 </g>
 <!-- backoff&#45;&gt;stopped -->
-<g id="edge19" class="edge">
+<g id="edge20" class="edge">
 <title>backoff&#45;&gt;stopped</title>
-<path fill="none" stroke="black" d="M369.18,-88.41C354.06,-75.58 333.13,-57.83 316.22,-43.49"/>
-<polygon fill="black" stroke="black" points="318.84,-41.13 308.95,-37.33 314.31,-46.47 318.84,-41.13"/>
-<text text-anchor="middle" x="358.72" y="-57.2" font-family="Times,serif" font-size="14.00">stop</text>
+<path fill="none" stroke="black" d="M491.09,-428.9C565.35,-414.07 706.69,-379.82 706.69,-334 706.69,-334 706.69,-334 706.69,-122 706.69,-89.48 702.85,-76.83 679.69,-54 669.7,-44.16 656.66,-37.03 643.55,-31.88"/>
+<polygon fill="black" stroke="black" points="645.11,-28.72 634.51,-28.68 642.77,-35.32 645.11,-28.72"/>
+<text text-anchor="middle" x="717.94" y="-222.95" font-family="Times,serif" font-size="14.00">stop</text>
+</g>
+<!-- running&#45;&gt;backoff -->
+<g id="edge19" class="edge">
+<title>running&#45;&gt;backoff</title>
+<path fill="none" stroke="black" d="M355.54,-351.4C344.85,-365.9 334.21,-386.6 345.19,-402 355.98,-417.15 373.79,-425.8 391.49,-430.73"/>
+<polygon fill="black" stroke="black" points="390.43,-434.07 400.97,-432.98 392.05,-427.26 390.43,-434.07"/>
+<text text-anchor="middle" x="390.94" y="-388.7" font-family="Times,serif" font-size="14.00">exited</text>
+<text text-anchor="middle" x="390.94" y="-372.2" font-family="Times,serif" font-size="14.00">(action &quot;restart&quot;)</text>
+</g>
+<!-- running&#45;&gt;terminating -->
+<g id="edge5" class="edge">
+<title>running&#45;&gt;terminating</title>
+<path fill="none" stroke="black" d="M416.44,-328.33C439.56,-324.15 466.33,-315.35 483.69,-297 493.65,-286.47 498.02,-271.02 499.85,-257.5"/>
+<polygon fill="black" stroke="black" points="503.31,-258.08 500.74,-247.81 496.34,-257.45 503.31,-258.08"/>
+<text text-anchor="middle" x="509.82" y="-275.45" font-family="Times,serif" font-size="14.00">stop</text>
+</g>
+<!-- running&#45;&gt;terminating -->
+<g id="edge6" class="edge">
+<title>running&#45;&gt;terminating</title>
+<path fill="none" stroke="black" d="M370.64,-314.69C371.54,-299.45 375.25,-277.6 388.19,-264 398.41,-253.25 411.87,-245.79 425.91,-240.61"/>
+<polygon fill="black" stroke="black" points="426.86,-243.98 435.28,-237.54 424.69,-237.32 426.86,-243.98"/>
+<text text-anchor="middle" x="433.94" y="-283.7" font-family="Times,serif" font-size="14.00">check failed</text>
+<text text-anchor="middle" x="433.94" y="-267.2" font-family="Times,serif" font-size="14.00">(action &quot;restart&quot;)</text>
+</g>
+<!-- running&#45;&gt;exited -->
+<g id="edge17" class="edge">
+<title>running&#45;&gt;exited</title>
+<path fill="none" stroke="black" d="M324.97,-317.92C309.18,-312.31 291.64,-305.22 276.44,-297 254.7,-285.25 253.95,-274.73 231.69,-264 206.13,-251.68 175.57,-243.17 150.51,-237.63"/>
+<polygon fill="black" stroke="black" points="151.4,-234.24 140.9,-235.61 149.96,-241.09 151.4,-234.24"/>
+<text text-anchor="middle" x="322.56" y="-283.7" font-family="Times,serif" font-size="14.00">exited</text>
+<text text-anchor="middle" x="322.56" y="-267.2" font-family="Times,serif" font-size="14.00">(action &quot;ignore&quot;)</text>
+</g>
+<!-- running&#45;&gt;exited -->
+<g id="edge18" class="edge">
+<title>running&#45;&gt;exited</title>
+<path fill="none" stroke="black" d="M324.83,-317.88C320.41,-316.8 315.98,-315.81 311.69,-315 269.09,-306.96 150.09,-325.51 117.44,-297 106.31,-287.29 102.21,-271.41 100.97,-257.44"/>
+<polygon fill="black" stroke="black" points="104.48,-257.69 100.56,-247.84 97.49,-257.98 104.48,-257.69"/>
+<text text-anchor="middle" x="172.56" y="-283.7" font-family="Times,serif" font-size="14.00">exited</text>
+<text text-anchor="middle" x="172.56" y="-267.2" font-family="Times,serif" font-size="14.00">(action &quot;shutdown&quot;)</text>
+</g>
+<!-- terminating&#45;&gt;backoff -->
+<g id="edge10" class="edge">
+<title>terminating&#45;&gt;backoff</title>
+<path fill="none" stroke="black" d="M515.65,-246.43C519.33,-251.74 522.77,-257.81 524.69,-264 542.85,-322.6 555.38,-350.73 521.69,-402 516.58,-409.77 509.27,-415.85 501.19,-420.59"/>
+<polygon fill="black" stroke="black" points="499.73,-417.41 492.39,-425.06 502.9,-423.65 499.73,-417.41"/>
+<text text-anchor="middle" x="572.79" y="-336.2" font-family="Times,serif" font-size="14.00">exited</text>
+<text text-anchor="middle" x="572.79" y="-319.7" font-family="Times,serif" font-size="14.00">(restarting)</text>
+</g>
+<!-- killing -->
+<g id="node6" class="node">
+<title>killing</title>
+<polygon fill="none" stroke="black" points="674.19,-141 595.19,-141 595.19,-105 674.19,-105 674.19,-141"/>
+<text text-anchor="middle" x="634.69" y="-113.7" font-family="Times,serif" font-size="24.00">killing</text>
+</g>
+<!-- terminating&#45;&gt;killing -->
+<g id="edge7" class="edge">
+<title>terminating&#45;&gt;killing</title>
+<path fill="none" stroke="black" d="M506.08,-209.64C511.65,-194.35 521.77,-172.48 537.44,-159 541.45,-155.55 562.44,-147.83 583.9,-140.53"/>
+<polygon fill="black" stroke="black" points="584.94,-143.87 593.31,-137.36 582.71,-137.24 584.94,-143.87"/>
+<text text-anchor="middle" x="577.56" y="-178.7" font-family="Times,serif" font-size="14.00">terminate time</text>
+<text text-anchor="middle" x="577.56" y="-162.2" font-family="Times,serif" font-size="14.00">elapsed</text>
+</g>
+<!-- terminating&#45;&gt;stopped -->
+<g id="edge8" class="edge">
+<title>terminating&#45;&gt;stopped</title>
+<path fill="none" stroke="black" d="M497.72,-209.53C492.96,-175.2 487.72,-98.4 526.69,-54 530.27,-49.91 534.46,-46.19 538.92,-42.83"/>
+<polygon fill="black" stroke="black" points="540.81,-45.78 547.13,-37.27 536.89,-39.98 540.81,-45.78"/>
+<text text-anchor="middle" x="541.17" y="-126.2" font-family="Times,serif" font-size="14.00">exited</text>
+<text text-anchor="middle" x="541.17" y="-109.7" font-family="Times,serif" font-size="14.00">(not restarting)</text>
+</g>
+<!-- killing&#45;&gt;backoff -->
+<g id="edge11" class="edge">
+<title>killing&#45;&gt;backoff</title>
+<path fill="none" stroke="black" d="M634.2,-141.48C632.66,-188.21 626.67,-314.98 606.69,-351 585.17,-389.78 539.02,-411.9 501.78,-423.97"/>
+<polygon fill="black" stroke="black" points="501.04,-420.54 492.5,-426.81 503.08,-427.23 501.04,-420.54"/>
+<text text-anchor="middle" x="655.65" y="-283.7" font-family="Times,serif" font-size="14.00">exited</text>
+<text text-anchor="middle" x="655.65" y="-267.2" font-family="Times,serif" font-size="14.00">(restarting)</text>
+</g>
+<!-- killing&#45;&gt;stopped -->
+<g id="edge9" class="edge">
+<title>killing&#45;&gt;stopped</title>
+<path fill="none" stroke="black" d="M594.79,-108.92C568.48,-100.1 538.53,-89.62 536.69,-87 528.24,-75.01 529.85,-66.98 536.69,-54 538.63,-50.32 541.15,-46.94 544.03,-43.87"/>
+<polygon fill="black" stroke="black" points="546.1,-46.73 551.23,-37.46 541.44,-41.5 546.1,-46.73"/>
+<text text-anchor="middle" x="577.19" y="-73.7" font-family="Times,serif" font-size="14.00">exited</text>
+<text text-anchor="middle" x="577.19" y="-57.2" font-family="Times,serif" font-size="14.00">(not restarting)</text>
+</g>
+<!-- killing&#45;&gt;stopped -->
+<g id="edge22" class="edge">
+<title>killing&#45;&gt;stopped</title>
+<path fill="none" stroke="black" d="M632.62,-104.73C630.4,-90.5 626.01,-70.11 617.69,-54 616.17,-51.07 614.37,-48.17 612.4,-45.37"/>
+<polygon fill="black" stroke="black" points="615.18,-43.24 606.25,-37.54 609.67,-47.57 615.18,-43.24"/>
+<text text-anchor="middle" x="652.28" y="-73.7" font-family="Times,serif" font-size="14.00">kill time</text>
+<text text-anchor="middle" x="652.28" y="-57.2" font-family="Times,serif" font-size="14.00">elapsed</text>
+</g>
+<!-- stopped&#45;&gt;starting -->
+<g id="edge15" class="edge">
+<title>stopped&#45;&gt;starting</title>
+<path fill="none" stroke="black" d="M633.24,-26.4C683.6,-37.47 757.69,-63.68 757.69,-122 757.69,-439 757.69,-439 757.69,-439 757.69,-480.91 466.08,-510.38 341.28,-521.07"/>
+<polygon fill="black" stroke="black" points="341.27,-517.56 331.6,-521.89 341.86,-524.53 341.27,-517.56"/>
+<text text-anchor="middle" x="769.31" y="-275.45" font-family="Times,serif" font-size="14.00">start</text>
 </g>
 <!-- exited&#45;&gt;starting -->
-<g id="edge15" class="edge">
+<g id="edge16" class="edge">
 <title>exited&#45;&gt;starting</title>
-<path fill="none" stroke="black" d="M608.45,-334.94C612.79,-340.15 616.87,-346.18 619.34,-352.5 624.42,-365.53 626.87,-450.91 627.82,-496.66"/>
-<polygon fill="black" stroke="black" points="624.32,-496.71 628.02,-506.64 631.32,-496.57 624.32,-496.71"/>
-<text text-anchor="middle" x="637.8" y="-416.45" font-family="Times,serif" font-size="14.00">start</text>
-</g>
-<!-- exited&#45;&gt;stopped -->
-<g id="edge11" class="edge">
-<title>exited&#45;&gt;stopped</title>
-<path fill="none" stroke="black" d="M601.62,-298.21C616.2,-273.49 637.54,-227.33 618.34,-193.5 561.01,-92.55 422.42,-47.5 343.95,-29.51"/>
-<polygon fill="black" stroke="black" points="344.83,-26.12 334.31,-27.37 343.32,-32.95 344.83,-26.12"/>
-<text text-anchor="middle" x="617.19" y="-153.95" font-family="Times,serif" font-size="14.00">stop</text>
+<path fill="none" stroke="black" d="M93.21,-246.41C90.95,-251.9 88.83,-258.09 87.69,-264 84.91,-278.4 85.23,-282.54 87.69,-297 89.72,-308.97 152.24,-487.31 155.69,-490.5 175.69,-509.03 204.45,-517.94 229.84,-522.15"/>
+<polygon fill="black" stroke="black" points="229.33,-525.61 239.72,-523.56 230.31,-518.68 229.33,-525.61"/>
+<text text-anchor="middle" x="134.29" y="-380.45" font-family="Times,serif" font-size="14.00">start</text>
 </g>
 <!-- exited&#45;&gt;backoff -->
-<g id="edge22" class="edge">
+<g id="edge23" class="edge">
 <title>exited&#45;&gt;backoff</title>
-<path fill="none" stroke="black" d="M578.06,-298.14C554.31,-265.31 499.37,-192.86 442.34,-142.5 437.95,-138.63 433.11,-134.86 428.19,-131.32"/>
-<polygon fill="black" stroke="black" points="430.2,-128.45 419.98,-125.68 426.24,-134.22 430.2,-128.45"/>
-<text text-anchor="middle" x="568.77" y="-214.7" font-family="Times,serif" font-size="14.00">check failed</text>
-<text text-anchor="middle" x="568.77" y="-198.2" font-family="Times,serif" font-size="14.00">(action &quot;restart&quot;)</text>
+<path fill="none" stroke="black" d="M95.62,-246.42C91.66,-261.13 88.85,-282.11 98.69,-297 145.26,-367.52 197.48,-334.62 274.69,-369 303.2,-381.7 307.92,-389.88 336.69,-402 354.2,-409.38 373.83,-416.09 391.61,-421.62"/>
+<polygon fill="black" stroke="black" points="390.37,-424.9 400.95,-424.46 392.41,-418.2 390.37,-424.9"/>
+<text text-anchor="middle" x="250.84" y="-336.2" font-family="Times,serif" font-size="14.00">check failed</text>
+<text text-anchor="middle" x="250.84" y="-319.7" font-family="Times,serif" font-size="14.00">(action &quot;restart&quot;)</text>
+</g>
+<!-- exited&#45;&gt;stopped -->
+<g id="edge12" class="edge">
+<title>exited&#45;&gt;stopped</title>
+<path fill="none" stroke="black" d="M139.31,-210.64C210.4,-179.76 369.35,-110.89 503.69,-54 513.94,-49.66 524.92,-45.05 535.45,-40.66"/>
+<polygon fill="black" stroke="black" points="536.49,-44.01 544.38,-36.93 533.8,-37.55 536.49,-44.01"/>
+<text text-anchor="middle" x="391.97" y="-117.95" font-family="Times,serif" font-size="14.00">stop</text>
 </g>
 </g>
 </svg>

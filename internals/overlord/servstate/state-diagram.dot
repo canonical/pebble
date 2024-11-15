@@ -6,6 +6,7 @@ digraph service_state_machine {
     node [penwidth=3 shape=box fontsize=24] initial
     node [penwidth=1]
     initial -> starting [label="start"]
+    starting -> backoff [label="autorestart"]
     starting -> running [label="okay wait\nelapsed"]
     starting -> terminating [label="stop (before\nokay wait elapses)"]
     running -> terminating [label="stop"]
