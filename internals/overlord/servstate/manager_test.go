@@ -633,7 +633,16 @@ services:
 
 func (s *S) TestStartFastExitCommand(c *C) {
 	s.newServiceManager(c)
-	s.planAddLayer(c, testPlanLayer)
+	// A longer backoff-delay is used so that the backoff won't happen when reaper is stopped
+	// when detecting race conditions.
+	var layer = `
+services:
+    test4:
+        override: replace
+        command: echo -e 'too-fast\nsecond line'
+        backoff-delay: 2000ms
+`
+	s.planAddLayer(c, layer)
 	s.planChanged(c)
 
 	chg := s.startServices(c, [][]string{{"test4"}})

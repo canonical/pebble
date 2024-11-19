@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"os/user"
 	"strconv"
+	"sync"
 	"syscall"
 	"time"
 
@@ -62,6 +63,8 @@ var (
 	// SIGTERM signals and shutting down cleanly if the service hasn't specified
 	// their own duration.
 	killDelayDefault = 5 * time.Second
+	// Mutex to protect killDelayDefault
+	killDelayMutex sync.Mutex
 
 	// failDelay is the duration given to services for shutting down when Pebble
 	// sends a SIGKILL signal.
@@ -677,6 +680,9 @@ func (s *serviceData) sendSignal(signal string) error {
 // returned will either be the service's pre-configured value, or the default
 // kill delay if that is not set.
 func (s *serviceData) killDelay() time.Duration {
+	killDelayMutex.Lock()
+	defer killDelayMutex.Unlock()
+
 	if s.config.KillDelay.IsSet {
 		return s.config.KillDelay.Value
 	}
