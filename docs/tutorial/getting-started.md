@@ -122,10 +122,16 @@ We can stop the running `http-server` service by running:
 pebble stop http-server
 ```
 
-You should get output similar to the following:
+Now if we check the status of services again:
+
+```bash
+pebble services
+```
+
+We can see that the `http-server` service has been stopped:
 
 ```{terminal}
-   :input: pebble stop http-server
+   :input: pebble services
    :user: user
    :host: host
    :dir: ~
@@ -133,7 +139,7 @@ Service      Startup  Current   Since
 http-server  enabled  inactive  today at 11:33 UTC
 ```
 
-Now the service `http-server` has been stopped. If we run `curl localhost:8080` again, we should get a "connection refused" error, which confirms the service is down.
+If we run `curl localhost:8080` again, we should get a "connection refused" error, which confirms the service is down.
 
 To start it again, run:
 
