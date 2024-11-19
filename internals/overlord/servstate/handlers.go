@@ -382,19 +382,19 @@ func (s *serviceData) startInternal() error {
 				Gid: uint32(*gid),
 			})
 		}
+	}
 
-		// Also set HOME and USER if not explicitly specified in config.
-		if environment["HOME"] == "" || environment["USER"] == "" {
-			u, err := user.LookupId(strconv.Itoa(*uid))
-			if err != nil {
-				logger.Noticef("Cannot look up user %d: %v", *uid, err)
-			} else {
-				if environment["HOME"] == "" {
-					environment["HOME"] = u.HomeDir
-				}
-				if environment["USER"] == "" {
-					environment["USER"] = u.Username
-				}
+	// Also set HOME and USER if not explicitly specified in config.
+	if uid != nil && (environment["HOME"] == "" || environment["USER"] == "") {
+		u, err := user.LookupId(strconv.Itoa(*uid))
+		if err != nil {
+			logger.Noticef("Cannot look up user %d: %v", *uid, err)
+		} else {
+			if environment["HOME"] == "" {
+				environment["HOME"] = u.HomeDir
+			}
+			if environment["USER"] == "" {
+				environment["USER"] = u.Username
 			}
 		}
 	}
