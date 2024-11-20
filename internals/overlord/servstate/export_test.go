@@ -77,7 +77,6 @@ func FakeOkayWait(wait time.Duration) (restore func()) {
 func FakeKillFailDelay(newKillDelay, newFailDelay time.Duration) (restore func()) {
 	old1, old2 := killDelayDefault, failDelay
 	killDelayDefault, failDelay = newKillDelay, newFailDelay
-
 	return func() {
 		killDelayDefault, failDelay = old1, old2
 	}
