@@ -75,15 +75,11 @@ func FakeOkayWait(wait time.Duration) (restore func()) {
 // FakeKillFailDelay changes both the killDelayDefault and failDelay
 // respectively for testing purposes.
 func FakeKillFailDelay(newKillDelay, newFailDelay time.Duration) (restore func()) {
-	killDelayMutex.Lock()
 	old1, old2 := killDelayDefault, failDelay
 	killDelayDefault, failDelay = newKillDelay, newFailDelay
-	killDelayMutex.Unlock()
 
 	return func() {
-		killDelayMutex.Lock()
 		killDelayDefault, failDelay = old1, old2
-		killDelayMutex.Unlock()
 	}
 }
 

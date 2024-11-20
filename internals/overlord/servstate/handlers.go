@@ -8,7 +8,7 @@ import (
 	"os/exec"
 	"os/user"
 	"strconv"
-	"sync"
+	"strings"
 	"syscall"
 	"time"
 
@@ -63,8 +63,6 @@ var (
 	// SIGTERM signals and shutting down cleanly if the service hasn't specified
 	// their own duration.
 	killDelayDefault = 5 * time.Second
-	// Mutex to protect killDelayDefault
-	killDelayMutex sync.Mutex
 
 	// failDelay is the duration given to services for shutting down when Pebble
 	// sends a SIGKILL signal.
@@ -145,7 +143,10 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 	case err := <-service.started:
 		if err != nil {
 			addLastLogs(task, service.logs)
-			m.removeService(config.Name)
+			// Do not remove the service if the error suggests that Pebble will restart it.
+			if !strings.Contains(err.Error(), fmt.Sprintf("will %s", plan.ActionRestart)) {
+				m.removeService(config.Name)
+			}
 			return fmt.Errorf("service start attempt: %w", err)
 		}
 		// Started successfully (ran for small amount of time without exiting).
@@ -443,7 +444,7 @@ func (s *serviceData) startInternal() error {
 			_ = outputIterator.Close()
 		}
 		_ = s.logs.Close()
-		return fmt.Errorf("service start attempt: %w", err)
+		return fmt.Errorf("cannot start service: %w", err)
 	}
 	logger.Debugf("Service %q started with PID %d", serviceName, s.cmd.Process.Pid)
 	s.resetTimer = time.AfterFunc(s.config.BackoffLimit.Value, func() { logError(s.backoffResetElapsed()) })
@@ -513,15 +514,10 @@ func (s *serviceData) exited(exitCode int) error {
 
 	switch s.state {
 	case stateStarting:
-		action, onType := getAction(s.config, exitCode == 0)
-		if action == plan.ActionRestart {
-			// Restart services failed within the okay delay period.
-			s.started <- fmt.Errorf("exited quickly with code %d, will retry", exitCode)
-			s.doBackoff(action, onType)
-		} else {
-			s.started <- fmt.Errorf("exited quickly with code %d, will ignore", exitCode)
-			s.transition(stateExited) // not strictly necessary as doStart will return, but doesn't hurt
-		}
+		// Send error to select waiting in doStart, then fall through to perform action.
+		action, _ := getAction(s.config, exitCode == 0)
+		s.started <- fmt.Errorf("exited quickly with code %d, will %s", exitCode, action)
+		fallthrough
 
 	case stateRunning:
 		logger.Noticef("Service %q stopped unexpectedly with code %d", s.config.Name, exitCode)
@@ -680,9 +676,6 @@ func (s *serviceData) sendSignal(signal string) error {
 // returned will either be the service's pre-configured value, or the default
 // kill delay if that is not set.
 func (s *serviceData) killDelay() time.Duration {
-	killDelayMutex.Lock()
-	defer killDelayMutex.Unlock()
-
 	if s.config.KillDelay.IsSet {
 		return s.config.KillDelay.Value
 	}

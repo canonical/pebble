@@ -497,7 +497,7 @@ func (s *S) TestStartBadCommand(c *C) {
 
 	s.st.Lock()
 	c.Check(chg.Status(), Equals, state.ErrorStatus)
-	c.Check(chg.Err(), ErrorMatches, `(?s).*service start attempt.*"some-bad-command":.*not found.*`)
+	c.Check(chg.Err(), ErrorMatches, `(?s).*cannot start.*"some-bad-command":.*not found.*`)
 	s.st.Unlock()
 
 	svc := s.serviceByName(c, "test3")
@@ -567,7 +567,7 @@ func (s *S) TestUserGroupFails(c *C) {
 
 	s.st.Lock()
 	c.Check(chg.Status(), Equals, state.ErrorStatus)
-	c.Check(chg.Err(), ErrorMatches, `.*\n.*service start attempt: .* operation not permitted.*`)
+	c.Check(chg.Err(), ErrorMatches, `.*\n.*cannot start service: .* operation not permitted.*`)
 	s.st.Unlock()
 
 	svc := s.serviceByName(c, "test5")
@@ -633,14 +633,11 @@ services:
 
 func (s *S) TestStartFastExitCommand(c *C) {
 	s.newServiceManager(c)
-	// A longer backoff-delay is used so that the backoff won't happen when reaper is stopped
-	// when detecting race conditions.
 	var layer = `
 services:
     test4:
         override: replace
         command: echo -e 'too-fast\nsecond line'
-        backoff-delay: 2000ms
 `
 	s.planAddLayer(c, layer)
 	s.planChanged(c)
@@ -649,14 +646,14 @@ services:
 
 	s.st.Lock()
 	c.Check(chg.Status(), Equals, state.ErrorStatus)
-	c.Check(chg.Err(), ErrorMatches, `(?s).*\n- Start service "test4" \(service start attempt: exited quickly with code 0, will retry\)`)
+	c.Check(chg.Err(), ErrorMatches, `(?s).*\n- Start service "test4" \(service start attempt: exited quickly with code 0, will restart\)`)
 	c.Check(chg.Tasks()[0].Log(), HasLen, 2)
 	c.Check(chg.Tasks()[0].Log()[0], Matches, `(?s).* INFO Most recent service output:\n    too-fast\n    second line`)
-	c.Check(chg.Tasks()[0].Log()[1], Matches, `.* ERROR service start attempt: exited quickly with code 0, will retry`)
+	c.Check(chg.Tasks()[0].Log()[1], Matches, `.* ERROR service start attempt: exited quickly with code 0, will restart`)
 	s.st.Unlock()
 
 	svc := s.serviceByName(c, "test4")
-	c.Assert(svc.Current, Equals, servstate.StatusInactive)
+	c.Assert(svc.Current, Equals, servstate.StatusBackoff)
 }
 
 func (s *S) TestStartFastExitCommandOnFailureIgnore(c *C) {

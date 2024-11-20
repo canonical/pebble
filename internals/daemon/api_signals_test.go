@@ -31,6 +31,7 @@ services:
     test1:
         override: replace
         command: sleep 10
+        on-failure: ignore
 `)
 	d := s.daemon(c)
 	d.overlord.Loop()
