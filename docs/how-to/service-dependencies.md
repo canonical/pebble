@@ -99,7 +99,7 @@ successfully ("active"):
 2024-06-28T02:20:03.346Z [pebble] Service "backend" starting: python3 -m http.server 8081
 2024-06-28T02:20:03.346Z [pebble] Service "database" starting: python3 -m http.server 3306
 2024-06-28T02:20:03.347Z [pebble] Service "frontend" starting: python3 -m http.server 8080
-2024-06-28T02:20:03.396Z [pebble] Change 1 task (Start service "database") failed: service start attempt: exited quickly with code 1, will retry
+2024-06-28T02:20:03.396Z [pebble] Change 1 task (Start service "database") failed: service start attempt: exited quickly with code 1, will restart
 2024-06-28T02:20:04.353Z [pebble] Started default services with change 1.
 ```
 
