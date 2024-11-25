@@ -23,14 +23,6 @@ import (
 	"github.com/canonical/pebble/internals/servicelog"
 )
 
-type restartError struct {
-	err error
-}
-
-func (e *restartError) Error() string {
-	return e.err.Error()
-}
-
 // TaskServiceRequest extracts the *ServiceRequest that was associated
 // with the provided task when it was created, reflecting details of
 // the operation requested.
@@ -150,11 +142,8 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 	case err := <-service.started:
 		if err != nil {
 			addLastLogs(task, service.logs)
-			// Do not remove the service if the error suggests that Pebble will restart it.
-			var restartErr *restartError
-			if !errors.As(err, &restartErr) {
-				m.removeService(config.Name)
-			}
+			// Do not remove the service so that Pebble will restart it if the action is restart,
+			// and the logs are still accessible for failed services if the action is ignore.
 			return fmt.Errorf("service start attempt: %w", err)
 		}
 		// Started successfully (ran for small amount of time without exiting).
@@ -524,12 +513,7 @@ func (s *serviceData) exited(exitCode int) error {
 	case stateStarting:
 		// Send error to select waiting in doStart, then fall through to perform action.
 		action, _ := getAction(s.config, exitCode == 0)
-		startingErr := fmt.Errorf("exited quickly with code %d, will %s", exitCode, action)
-		if action == plan.ActionRestart {
-			// So we can detect a restart further up (in doStart).
-			startingErr = &restartError{startingErr}
-		}
-		s.started <- startingErr
+		s.started <- fmt.Errorf("exited quickly with code %d, will %s", exitCode, action)
 		fallthrough
 
 	case stateRunning:

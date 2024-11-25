@@ -679,7 +679,7 @@ services:
 	s.st.Unlock()
 
 	svc := s.serviceByName(c, "test1")
-	c.Assert(svc.Current, Equals, servstate.StatusInactive)
+	c.Assert(svc.Current, Equals, servstate.StatusError)
 }
 
 func (s *S) TestServices(c *C) {
