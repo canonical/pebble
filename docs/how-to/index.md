@@ -1,11 +1,11 @@
 # How-to guides
 
-These guides walk you through the operations lifecycle of Pebble.
+These guides walk you through key operations you can perform with Pebble.
 
 
 ## Installation
 
-Installation follows a broadly similar pattern on all architectures. You can choose to install the pre-built binary or build it from the source by yourself.
+Installation follows a similar pattern on all architectures. You can choose to install the pre-built binary or build it from the source by yourself.
 
 ```{toctree}
 :titlesonly:

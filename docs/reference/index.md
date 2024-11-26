@@ -5,7 +5,7 @@ These guides provide technical information about Pebble.
 
 ## Layers
 
-Your service configuration is defined as a stack of "layers".
+Pebble configuration is defined as a stack of "layers".
 
 ```{toctree}
 :titlesonly:
@@ -30,7 +30,7 @@ CLI Commands <cli-commands/cli-commands>
 
 ## Pebble in containers
 
-When Pebble is configured as a client connected to a remote system (e.g., a separate container), you can use subcommands on the client to manage the remote system.
+When Pebble is configured as a client connected to a remote system (for example, a separate container), you can use subcommands on the client to manage the remote system.
 
 ```{toctree}
 :titlesonly:
