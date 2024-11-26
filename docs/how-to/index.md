@@ -29,7 +29,7 @@ Manage service dependencies <service-dependencies>
 
 ## Identities
 
-Use named identities to allow additional users to access the API.
+Use named "identities" to allow additional users to access the API.
 
 ```{toctree}
 :titlesonly:

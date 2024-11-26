@@ -5,7 +5,7 @@ These guides explain how Pebble works.
 
 ## Fundamentals
 
-Pebble works as a daemon, with state and configuration stored in the `$PEBBLE` directory.
+Pebble works as a daemon and a client, with state and configuration stored in the `$PEBBLE` directory.
 
 ```{toctree}
 :titlesonly:
@@ -15,9 +15,9 @@ General model <general-model>
 ```
 
 
-## Access to the daemon
+## Access to the API
 
-The daemon exposes an API that remote clients can connect to. By default, Pebble restricts access to some API endpoints based on the user that is connecting. You can set up named identities to grant specific access levels to users.
+The daemon exposes an API that clients can connect to. By default, Pebble restricts access to some API endpoints based on the user that is connecting. You can set up named "identities" to grant specific access levels to users.
 
 ```{toctree}
 :titlesonly:
@@ -29,7 +29,7 @@ API and clients <api-and-clients>
 
 ## Service orchestration
 
-Pebble can automatically start and stop services according to dependencies in your service definition.
+Pebble automatically starts and stops services if you specify dependencies between services.
 
 ```{toctree}
 :titlesonly:
