@@ -117,8 +117,9 @@ type Daemon struct {
 
 // UserState represents the state of an authenticated API user.
 type UserState struct {
-	Access state.IdentityAccess
-	UID    *uint32
+	// Access state.IdentityAccess
+	// UID    *uint32
+	Identity *state.Identity
 }
 
 // A ResponseFunc handles one of the individual verbs for a method
@@ -148,22 +149,21 @@ const (
 	accessForbidden
 )
 
-func userFromRequest(st *state.State, r *http.Request, ucred *Ucrednet) (*UserState, error) {
-	if ucred == nil {
-		// No ucred details, no UserState. Currently, "local" (ucred-based) is
-		// the only type of identity we support.
-		return nil, nil
+func userFromRequest(st *state.State, r *http.Request, ucred *Ucrednet, username, password string) (*UserState, error) {
+	var userID *uint32
+	if ucred != nil {
+		userID = &ucred.Uid
 	}
 
 	st.Lock()
-	identity := st.IdentityFromInputs(&ucred.Uid)
+	identity := st.IdentityFromInputs(userID, username, password)
 	st.Unlock()
 
 	if identity == nil {
 		// No identity that matches these inputs (for now, just UID).
 		return nil, nil
 	}
-	return &UserState{Access: identity.Access, UID: &ucred.Uid}, nil
+	return &UserState{Identity: identity}, nil
 }
 
 func (d *Daemon) Overlord() *overlord.Overlord {
@@ -214,7 +214,8 @@ func (c *Command) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// not good: https://github.com/canonical/pebble/pull/369
 	var user *UserState
 	if _, isOpen := access.(OpenAccess); !isOpen {
-		user, err = userFromRequest(c.d.state, r, ucred)
+		basicAuthUsername, basicAuthPassword, _ := r.BasicAuth()
+		user, err = userFromRequest(c.d.state, r, ucred, basicAuthUsername, basicAuthPassword)
 		if err != nil {
 			Forbidden("forbidden").ServeHTTP(w, r)
 			return
@@ -225,10 +226,26 @@ func (c *Command) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if user == nil && ucred != nil {
 		if ucred.Uid == 0 || ucred.Uid == uint32(os.Getuid()) {
 			// Admin if UID is 0 (root) or the UID the daemon is running as.
-			user = &UserState{Access: state.AdminAccess, UID: &ucred.Uid}
+			// user = &UserState{Access: state.AdminAccess, UID: &ucred.Uid}
+			user = &UserState{
+				Identity: &state.Identity{
+					Access: state.AdminAccess,
+					Local: &state.LocalIdentity{
+						UserID: ucred.Uid,
+					},
+				},
+			}
 		} else {
 			// Regular read access if any other local UID.
-			user = &UserState{Access: state.ReadAccess, UID: &ucred.Uid}
+			// user = &UserState{Access: state.ReadAccess, UID: &ucred.Uid}
+			user = &UserState{
+				Identity: &state.Identity{
+					Access: state.ReadAccess,
+					Local: &state.LocalIdentity{
+						UserID: ucred.Uid,
+					},
+				},
+			}
 		}
 	}
 

@@ -31,5 +31,4 @@ func (r metricsResponse) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	registry := metrics.GetRegistry()
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(registry.GatherMetrics()))
-
 }

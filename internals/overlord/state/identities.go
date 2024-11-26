@@ -28,8 +28,9 @@ type Identity struct {
 	Access IdentityAccess
 
 	// One or more of the following type-specific configuration fields must be
-	// non-nil (currently the only type is "local").
-	Local *LocalIdentity
+	// non-nil (currently the only types are "local" and "basicauth").
+	Local     *LocalIdentity
+	BasicAuth *BasicAuthIdentity
 }
 
 // IdentityAccess defines the access level for an identity.
@@ -45,6 +46,13 @@ const (
 // (for ucrednet/UID authentication).
 type LocalIdentity struct {
 	UserID uint32
+}
+
+// BasicAuthIdentity holds identity configuration specific to the "basicauth" type
+// (for username/password authentication).
+type BasicAuthIdentity struct {
+	Username string
+	Password string // Note: In a real application, store a password hash, not the plaintext password.
 }
 
 // validate checks that the identity is valid, returning an error if not.
@@ -66,8 +74,17 @@ func (d *Identity) validate() error {
 	switch {
 	case d.Local != nil:
 		return nil
+	case d.BasicAuth != nil:
+		if d.BasicAuth.Username == "" {
+			return errors.New("basicauth identity must specify username")
+		}
+		if d.BasicAuth.Password == "" {
+			return errors.New("basicauth identity must specify password")
+		}
+
+		return nil
 	default:
-		return errors.New(`identity must have at least one type ("local")`)
+		return errors.New(`identity must have at least one type ("local or "basicauth")`)
 	}
 }
 
@@ -75,19 +92,30 @@ func (d *Identity) validate() error {
 // for API responses) excludes secrets. The marshalledIdentity type is used
 // for saving secrets in state.
 type apiIdentity struct {
-	Access string            `json:"access"`
-	Local  *apiLocalIdentity `json:"local,omitempty"`
+	Access    string                `json:"access"`
+	Local     *apiLocalIdentity     `json:"local,omitempty"`
+	BasicAuth *apiBasicAuthIdentity `json:"basicauth,omitempty"`
 }
 
 type apiLocalIdentity struct {
 	UserID *uint32 `json:"user-id"`
 }
 
+type apiBasicAuthIdentity struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
 // IMPORTANT NOTE: be sure to exclude secrets when adding to this!
 func (d *Identity) MarshalJSON() ([]byte, error) {
 	ai := apiIdentity{
 		Access: string(d.Access),
-		Local:  &apiLocalIdentity{UserID: &d.Local.UserID},
+	}
+	if d.Local != nil {
+		ai.Local = &apiLocalIdentity{UserID: &d.Local.UserID}
+	}
+	if d.BasicAuth != nil {
+		ai.BasicAuth = &apiBasicAuthIdentity{Username: d.BasicAuth.Username, Password: d.BasicAuth.Password}
 	}
 	return json.Marshal(ai)
 }
@@ -108,6 +136,14 @@ func (d *Identity) UnmarshalJSON(data []byte) error {
 			return errors.New("local identity must specify user-id")
 		}
 		identity.Local = &LocalIdentity{UserID: *ai.Local.UserID}
+	case ai.BasicAuth != nil:
+		if ai.BasicAuth.Username == "" {
+			return errors.New("basicauth identity must specify username")
+		}
+		if ai.BasicAuth.Password == "" {
+			return errors.New("basicauth identity must specify password")
+		}
+		identity.BasicAuth = &BasicAuthIdentity{Username: ai.BasicAuth.Username, Password: ai.BasicAuth.Password}
 	}
 	// Perform additional validation using the local Identity type.
 	err = identity.validate()
@@ -266,13 +302,18 @@ func (s *State) Identities() map[string]*Identity {
 
 // IdentityFromInputs returns an identity with the given inputs, or nil
 // if there is none.
-func (s *State) IdentityFromInputs(userID *uint32) *Identity {
+func (s *State) IdentityFromInputs(userID *uint32, username, password string) *Identity {
 	s.reading()
 
 	for _, identity := range s.identities {
 		switch {
 		case identity.Local != nil && userID != nil:
 			if identity.Local.UserID == *userID {
+				return identity
+			}
+		case identity.BasicAuth != nil && username != "" && password != "":
+			// In real code, compare password hashes, not plain text passwords.
+			if identity.BasicAuth.Username == username && identity.BasicAuth.Password == password {
 				return identity
 			}
 		}

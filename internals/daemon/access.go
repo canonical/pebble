@@ -47,7 +47,7 @@ func (ac AdminAccess) CheckAccess(d *Daemon, r *http.Request, user *UserState) R
 	if user == nil {
 		return Unauthorized(accessDenied)
 	}
-	if user.Access == state.AdminAccess {
+	if user.Identity.Access == state.AdminAccess {
 		return nil
 	}
 	// An identity explicitly set to "access: read" or "access: untrusted" isn't allowed.
@@ -61,7 +61,7 @@ func (ac UserAccess) CheckAccess(d *Daemon, r *http.Request, user *UserState) Re
 	if user == nil {
 		return Unauthorized(accessDenied)
 	}
-	switch user.Access {
+	switch user.Identity.Access {
 	case state.ReadAccess, state.AdminAccess:
 		return nil
 	}

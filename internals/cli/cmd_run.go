@@ -248,6 +248,24 @@ func runDaemon(rcmd *cmdRun, ch chan os.Signal, ready chan<- func()) error {
 		}
 	}
 
+	metricsEndpointUsername := os.Getenv("METRICS_ENDPOINT_USERNAME")
+	metricsEndpointPassword := os.Getenv("METRICS_ENDPOINT_PASSWORD")
+	if metricsEndpointUsername != "" && metricsEndpointPassword != "" {
+		identities := map[string]*client.Identity{
+			metricsEndpointUsername: &client.Identity{
+				Access: client.ReadAccess,
+				BasicAuth: &client.BasicAuthIdentity{
+					Username: metricsEndpointUsername,
+					Password: metricsEndpointPassword,
+				},
+			},
+		}
+		err = rcmd.client.ReplaceIdentities(identities)
+		if err != nil {
+			return fmt.Errorf("cannot replace identities: %w", err)
+		}
+	}
+
 	// The "stop" channel is used by the "enter" command to stop the daemon.
 	var stop chan struct{}
 	if ready != nil {
