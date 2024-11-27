@@ -2,100 +2,87 @@
 
 These guides provide technical information about Pebble.
 
+% COMMENT: This toctree is for the navigation sidebar only
+%          Use an alphabetical listing of pages in the toctree
+%          For each page, make sure there's also a link in a section below
+
+```{toctree}
+:hidden:
+:titlesonly:
+:maxdepth: 1
+
+Changes and tasks <changes-and-tasks>
+CLI commands <cli-commands/cli-commands>
+Health checks <health-checks>
+Identities <identities>
+Layers <layers>
+Layer specification <layer-specification>
+Log forwarding <log-forwarding>
+Notices <notices>
+Pebble in containers <pebble-in-containers>
+Service auto-restart <service-auto-restart>
+```
+
+
+% COMMENT: The first few pages are presented in a more logical reading order
+
 
 ## Layers
 
 Pebble configuration is defined as a stack of "layers".
 
-```{toctree}
-:titlesonly:
-:maxdepth: 1
-
-Layers <layers>
-Layer specification <layer-specification>
-```
+* [Layers](layer-specification)
+* [Layer specification](layer-specification)
 
 
 ## Pebble commands
 
 The `pebble` command has several subcommands.
 
-```{toctree}
-:titlesonly:
-:maxdepth: 1
-
-CLI Commands <cli-commands/cli-commands>
-```
+* [CLI commands](cli-commands/cli-commands)
 
 
 ## Pebble in containers
 
 When the Pebble daemon is running inside a remote system (for example, a separate container), you can manage the remote system using subcommands on the Pebble client.
 
-```{toctree}
-:titlesonly:
-:maxdepth: 1
-
-Use Pebble in containers <pebble-in-containers>
-```
-
-
-## Access to the API
-
-You can set up named "identities" to control access to the API.
-
-```{toctree}
-:titlesonly:
-:maxdepth: 1
-
-Identities <identities>
-```
+* [Pebble in containers](pebble-in-containers)
 
 
 ## Service failures
 
 Pebble provides two ways to automatically restart services when they fail. Auto-restart is based on exit codes from services. Health checks are a more sophisticated way to test and report the availability of services.
 
-```{toctree}
-:titlesonly:
-:maxdepth: 1
+* [Service auto-restart](service-auto-restart)
+* [Health checks](health-checks)
 
-Service auto-restart <service-auto-restart>
-Health checks <health-checks>
-```
+
+% COMMENT: After this point, match the alphabetical listing of pages
 
 
 ## Changes and tasks
 
 Pebble tracks system changes as "tasks" grouped into "change" objects.
 
-```{toctree}
-:titlesonly:
-:maxdepth: 1
-
-Changes and tasks <changes-and-tasks>
-```
+* [Changes and tasks](changes-and-tasks)
 
 
-## Notices
+## Identities
 
-Pebble records events as "notices". In addition to the built-in notices, clients can report custom notices.
+You can set up named "identities" to control access to the API.
 
-```{toctree}
-:titlesonly:
-:maxdepth: 1
-
-Notices <notices>
-```
+* [Identities](identities)
 
 
 ## Log forwarding
 
 Pebble can send service logs to a Loki server.
 
-```{toctree}
-:titlesonly:
-:maxdepth: 1
+* [Log forwarding](log-forwarding)
 
-Log forwarding <log-forwarding>
-```
+
+## Notices
+
+Pebble records events as "notices". In addition to the built-in notices, clients can report custom notices.
+
+* [Notices](notices)
