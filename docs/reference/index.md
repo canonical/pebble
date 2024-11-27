@@ -30,7 +30,7 @@ CLI Commands <cli-commands/cli-commands>
 
 ## Pebble in containers
 
-When Pebble is configured as a client connected to a remote system (for example, a separate container), you can use subcommands on the client to manage the remote system.
+When the Pebble daemon is running inside a remote system (for example, a separate container), you can manage the remote system using subcommands on the Pebble client.
 
 ```{toctree}
 :titlesonly:
