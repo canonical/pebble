@@ -1,4 +1,4 @@
-# CLI Commands
+# CLI commands
 
 Pebble uses subcommands, like some other command-line tools such as go tool or git.
 
