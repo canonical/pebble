@@ -132,7 +132,6 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 	// Start the service and transition to stateStarting.
 	err = service.start()
 	if err != nil {
-		m.removeService(config.Name)
 		return err
 	}
 
@@ -151,9 +150,9 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 	case <-tomb.Dying():
 		// User tried to abort the start, sending SIGKILL to process is about
 		// the best we can do.
-		m.removeService(config.Name)
 		m.servicesLock.Lock()
 		defer m.servicesLock.Unlock()
+		service.transition(stateStopped)
 		err := syscall.Kill(-service.cmd.Process.Pid, syscall.SIGKILL)
 		if err != nil {
 			return fmt.Errorf("start aborted, but cannot send SIGKILL to process: %v", err)
@@ -280,28 +279,6 @@ func (m *ServiceManager) serviceForStop(name string) (service *serviceData, task
 	}
 }
 
-func (m *ServiceManager) removeService(name string) {
-	m.servicesLock.Lock()
-	defer m.servicesLock.Unlock()
-	m.removeServiceInternal(name)
-}
-
-// not concurrency-safe, please lock m.servicesLock before calling
-func (m *ServiceManager) removeServiceInternal(name string) {
-	svc, svcExists := m.services[name]
-	if !svcExists {
-		return
-	}
-	if svc.logs != nil {
-		err := svc.logs.Close()
-		if err != nil {
-			logger.Noticef("Error closing service %q ring buffer: %v", name, err)
-		}
-	}
-
-	delete(m.services, name)
-}
-
 // transition changes the service's state machine to the given state.
 func (s *serviceData) transition(state serviceState) {
 	logger.Debugf("Service %q transitioning to state %q", s.config.Name, state)
@@ -330,6 +307,7 @@ func (s *serviceData) start() error {
 	case stateInitial:
 		err := s.startInternal()
 		if err != nil {
+			s.transition(stateStopped)
 			return err
 		}
 		s.transition(stateStarting)
@@ -440,7 +418,6 @@ func (s *serviceData) startInternal() error {
 		if outputIterator != nil {
 			_ = outputIterator.Close()
 		}
-		_ = s.logs.Close()
 		return fmt.Errorf("cannot start service: %w", err)
 	}
 	logger.Debugf("Service %q started with PID %d", serviceName, s.cmd.Process.Pid)

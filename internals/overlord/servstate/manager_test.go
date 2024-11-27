@@ -174,7 +174,6 @@ func (s *S) TearDownTest(c *C) {
 			// service manager.
 			s.stopRunningServices(c)
 		}
-		s.manager.Stop()
 	}
 	// General test cleanup
 	s.BaseTest.TearDownTest(c)
