@@ -18,6 +18,8 @@ import (
 	"fmt"
 	"math/rand"
 	"net/http"
+	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -28,24 +30,31 @@ import (
 type MetricType string
 
 const (
-	MetricTypeCounter   MetricType = "counter"
-	MetricTypeGauge     MetricType = "gauge"
-	MetricTypeHistogram MetricType = "histogram"
+	MetricTypeCounter MetricType = "counter"
+	MetricTypeGauge   MetricType = "gauge"
 )
 
-// Metric represents a single metric.
-type Metric struct {
-	Name  string
-	Type  MetricType
-	Help  string
-	value interface{} // Can be int64 for counter/gauge, or []float64 for histogram.
-	mu    sync.RWMutex
+// MetricVec represents a collection of metrics with the same name and help but different label values.
+type MetricVec struct {
+	Name    string
+	Help    string
+	Type    MetricType
+	metrics map[string]*Metric // Key is the label values string (e.g., "region=foo,service=bar")
+	labels  []string           // Label names (e.g., ["region", "service"])
+	mu      sync.RWMutex
 }
 
-// MetricsRegistry stores and manages metrics.
+// Metric represents a single metric within a MetricVec.
+type Metric struct {
+	LabelValues map[string]string // Label values for this metric
+	value       interface{}       // Can be int64 for counter/gauge, or []float64 for histogram.
+	mu          sync.RWMutex      // Mutex for individual metric
+}
+
+// MetricsRegistry stores and manages metric vectors.
 type MetricsRegistry struct {
-	metrics map[string]*Metric
-	mu      sync.RWMutex
+	metricVecs map[string]*MetricVec
+	mu         sync.RWMutex
 }
 
 // Package-level variable to hold the single registry.
@@ -58,101 +67,140 @@ var once sync.Once
 func GetRegistry() *MetricsRegistry {
 	once.Do(func() {
 		registry = &MetricsRegistry{
-			metrics: make(map[string]*Metric),
+			metricVecs: make(map[string]*MetricVec),
 		}
 	})
 	return registry
 }
 
-// NewMetric registers a new metric.
-func (r *MetricsRegistry) NewMetric(name string, metricType MetricType, help string) error {
+func formatLabelKey(labels []string, labelValues []string) string {
+	labelPairs := make([]string, len(labels))
+	for i := range labels {
+		labelPairs[i] = labels[i] + "=" + labelValues[i]
+	}
+
+	// Sort labels for consistency
+	sort.Strings(labelPairs)
+	return strings.Join(labelPairs, ",")
+}
+
+// NewCounterVec creates a new counter vector.
+func (r *MetricsRegistry) NewCounterVec(name, help string, labels []string) *MetricVec {
+	return r.newMetricVec(name, help, labels, MetricTypeCounter)
+}
+
+// NewGaugeVec creates a new gauge vector.
+func (r *MetricsRegistry) NewGaugeVec(name, help string, labels []string) *MetricVec {
+	return r.newMetricVec(name, help, labels, MetricTypeGauge)
+}
+
+// newMetricVec is a helper function to create a new metric vector of any type.
+func (r *MetricsRegistry) newMetricVec(name, help string, labels []string, metricType MetricType) *MetricVec {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	if _, ok := r.metrics[name]; ok {
-		return fmt.Errorf("metric with name %s already registered", name)
+	if _, ok := r.metricVecs[name]; ok {
+		panic(fmt.Sprintf("metric with name %s already registered", name))
+	}
+	vec := &MetricVec{
+		Name:    name,
+		Help:    help,
+		Type:    metricType,
+		metrics: make(map[string]*Metric),
+		labels:  labels,
+	}
+	r.metricVecs[name] = vec
+	return vec
+}
+
+// WithLabelValues gets or creates a metric with the specified label values.
+func (v *MetricVec) WithLabelValues(labelValues ...string) *Metric {
+	if len(labelValues) != len(v.labels) {
+		panic(fmt.Errorf(
+			"%q has %d variable labels named %q but %d values %q were provided",
+			v,
+			len(v.labels),
+			v.labels,
+			len(labelValues),
+			labelValues,
+		))
 	}
 
-	var value interface{}
-	switch metricType {
-	case MetricTypeCounter, MetricTypeGauge:
-		value = int64(0)
-	case MetricTypeHistogram:
-		value = make([]float64, 0)
-	default:
-		return fmt.Errorf("invalid metric type: %s", metricType)
-	}
+	labelKey := formatLabelKey(v.labels, labelValues)
 
-	r.metrics[name] = &Metric{
-		Name:  name,
-		Type:  metricType,
-		Help:  help,
-		value: value,
-	}
-
-	return nil
-}
-
-// IncCounter increments a counter metric.
-func (r *MetricsRegistry) IncCounter(name string) error {
-	return r.updateMetric(name, MetricTypeCounter, 1)
-}
-
-// SetGauge sets the value of a gauge metric.
-func (r *MetricsRegistry) SetGauge(name string, value int64) error {
-	return r.updateMetric(name, MetricTypeGauge, value)
-}
-
-// ObserveHistogram adds a value to a histogram metric.
-func (r *MetricsRegistry) ObserveHistogram(name string, value float64) error {
-	return r.updateMetric(name, MetricTypeHistogram, value)
-}
-
-// updateMetric updates the value of a metric.
-func (r *MetricsRegistry) updateMetric(name string, metricType MetricType, value interface{}) error {
-	r.mu.RLock()
-	metric, ok := r.metrics[name]
-	r.mu.RUnlock()
+	v.mu.RLock()
+	metric, ok := v.metrics[labelKey]
+	v.mu.RUnlock()
 
 	if !ok {
-		return fmt.Errorf("metric with name %s not found", name)
+		v.mu.Lock()
+		defer v.mu.Unlock()
+		// Double check locking
+		metric, ok = v.metrics[labelKey]
+
+		if !ok {
+			metric = &Metric{
+				LabelValues: make(map[string]string),
+				value:       int64(0),
+			}
+			for i, label := range v.labels {
+				metric.LabelValues[label] = labelValues[i]
+			}
+			v.metrics[labelKey] = metric
+		}
 	}
 
-	if metric.Type != metricType {
-		return fmt.Errorf("mismatched metric type for %s", name)
-	}
-
-	metric.mu.Lock()
-	defer metric.mu.Unlock()
-
-	switch metricType {
-	case MetricTypeCounter:
-		metric.value = metric.value.(int64) + int64(value.(int))
-	case MetricTypeGauge:
-		metric.value = value.(int64)
-	case MetricTypeHistogram:
-		metric.value = append(metric.value.([]float64), value.(float64))
-	}
-
-	return nil
+	return metric
 }
 
-// GatherMetrics gathers all metrics and formats them in Prometheus exposition format.
+// Inc increments the counter.
+func (m *Metric) Inc() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.value = m.value.(int64) + 1
+}
+
+// Add adds the given value to the counter.
+func (m *Metric) Add(value int64) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	switch v := m.value.(type) {
+	case int64:
+		m.value = v + value
+	default:
+		// if the metric is not a counter (e.g., a gauge)
+		panic(fmt.Errorf("add called on a non-counter metric: %T", m.value))
+	}
+}
+
+// Set sets the gauge value.
+func (m *Metric) Set(value float64) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.value = value
+}
+
+// GatherMetrics function (modified slightly)
 func (r *MetricsRegistry) GatherMetrics() string {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
 	var output string
-	for _, metric := range r.metrics {
-		output += fmt.Sprintf("# HELP %s %s\n", metric.Name, metric.Help)
-		output += fmt.Sprintf("# TYPE %s %s\n", metric.Name, metric.Type)
 
-		switch metric.Type {
-		case MetricTypeCounter, MetricTypeGauge:
-			output += fmt.Sprintf("%s %d\n", metric.Name, metric.value.(int64))
-		case MetricTypeHistogram:
-			for _, v := range metric.value.([]float64) {
-				output += fmt.Sprintf("%s %f\n", metric.Name, v) // Basic histogram representation
+	for _, vec := range r.metricVecs {
+		output += fmt.Sprintf("# HELP %s %s\n", vec.Name, vec.Help)
+		output += fmt.Sprintf("# TYPE %s %s\n", vec.Name, vec.Type)
+
+		for labelKey, metric := range vec.metrics {
+			switch v := metric.value.(type) {
+			case int64:
+				output += fmt.Sprintf("%s{%s} %d\n", vec.Name, labelKey, v)
+			case float64:
+				output += fmt.Sprintf("%s{%s} %f\n", vec.Name, labelKey, v)
+			default:
+				// Fallback for other types
+				output += fmt.Sprintf("%s{%s} %v\n", vec.Name, labelKey, v)
 			}
 		}
 	}
@@ -165,32 +213,21 @@ func main() {
 	// Get the singleton registry
 	registry := GetRegistry()
 
-	registry.NewMetric("my_counter", MetricTypeCounter, "A simple counter")
-	registry.NewMetric("my_gauge", MetricTypeGauge, "A simple gauge")
-	registry.NewMetric("my_histogram", MetricTypeHistogram, "A simple histogram")
+	myCounter := registry.NewCounterVec("my_counter", "Total number of something processed.", []string{"operation", "status"})
+	myGauge := registry.NewGaugeVec("my_gauge", "Current value of something.", []string{"sensor"})
 
 	// Goroutine to update metrics randomly
 	go func() {
 		for {
-			// Counter
-			err := registry.IncCounter("my_counter") // Increment by 1
-			if err != nil {
-				fmt.Println("Error incrementing counter:", err)
-			}
+			// Use like prometheus client library.
 
-			// Gauge
-			gaugeValue := rand.Int63n(100)
-			err = registry.SetGauge("my_gauge", gaugeValue)
-			if err != nil {
-				fmt.Println("Error setting gauge:", err)
-			}
+			// counter
+			myCounter.WithLabelValues("read", "success").Inc()
+			myCounter.WithLabelValues("write", "success").Add(2)
+			myCounter.WithLabelValues("read", "failed").Inc()
 
-			// Histogram
-			histogramValue := rand.Float64() * 10
-			err = registry.ObserveHistogram("my_histogram", histogramValue)
-			if err != nil {
-				fmt.Println("Error observing histogram:", err)
-			}
+			// gauge
+			myGauge.WithLabelValues("temperature").Set(20.0 + rand.Float64()*10.0)
 
 			time.Sleep(time.Duration(rand.Intn(5)+1) * time.Second) // Random sleep between 1 and 5 seconds
 		}
