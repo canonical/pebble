@@ -1,7 +1,7 @@
 (how_to_install_pebble)=
 # How to install Pebble
 
-To install the latest version of Pebble, you can choose any of the following methods:
+To install the latest version of Pebble, choose any of the following methods:
 
 - {ref}`install_pebble_binary`
 - {ref}`install_pebble_from_source`
