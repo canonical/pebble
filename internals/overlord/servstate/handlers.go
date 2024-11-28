@@ -132,7 +132,6 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 	// Start the service and transition to stateStarting.
 	err = service.start()
 	if err != nil {
-		m.removeService(config.Name)
 		return err
 	}
 
@@ -142,17 +141,18 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 	case err := <-service.started:
 		if err != nil {
 			addLastLogs(task, service.logs)
-			m.removeService(config.Name)
-			return fmt.Errorf("cannot start service: %w", err)
+			// Do not remove the service so that Pebble will restart it if the action is restart,
+			// and the logs are still accessible for failed services if the action is ignore.
+			return fmt.Errorf("service start attempt: %w", err)
 		}
 		// Started successfully (ran for small amount of time without exiting).
 		return nil
 	case <-tomb.Dying():
 		// User tried to abort the start, sending SIGKILL to process is about
 		// the best we can do.
-		m.removeService(config.Name)
 		m.servicesLock.Lock()
 		defer m.servicesLock.Unlock()
+		service.transition(stateStopped)
 		err := syscall.Kill(-service.cmd.Process.Pid, syscall.SIGKILL)
 		if err != nil {
 			return fmt.Errorf("start aborted, but cannot send SIGKILL to process: %v", err)
@@ -279,28 +279,6 @@ func (m *ServiceManager) serviceForStop(name string) (service *serviceData, task
 	}
 }
 
-func (m *ServiceManager) removeService(name string) {
-	m.servicesLock.Lock()
-	defer m.servicesLock.Unlock()
-	m.removeServiceInternal(name)
-}
-
-// not concurrency-safe, please lock m.servicesLock before calling
-func (m *ServiceManager) removeServiceInternal(name string) {
-	svc, svcExists := m.services[name]
-	if !svcExists {
-		return
-	}
-	if svc.logs != nil {
-		err := svc.logs.Close()
-		if err != nil {
-			logger.Noticef("Error closing service %q ring buffer: %v", name, err)
-		}
-	}
-
-	delete(m.services, name)
-}
-
 // transition changes the service's state machine to the given state.
 func (s *serviceData) transition(state serviceState) {
 	logger.Debugf("Service %q transitioning to state %q", s.config.Name, state)
@@ -329,6 +307,7 @@ func (s *serviceData) start() error {
 	case stateInitial:
 		err := s.startInternal()
 		if err != nil {
+			s.transition(stateStopped)
 			return err
 		}
 		s.transition(stateStarting)
@@ -439,7 +418,6 @@ func (s *serviceData) startInternal() error {
 		if outputIterator != nil {
 			_ = outputIterator.Close()
 		}
-		_ = s.logs.Close()
 		return fmt.Errorf("cannot start service: %w", err)
 	}
 	logger.Debugf("Service %q started with PID %d", serviceName, s.cmd.Process.Pid)
@@ -510,8 +488,10 @@ func (s *serviceData) exited(exitCode int) error {
 
 	switch s.state {
 	case stateStarting:
-		s.started <- fmt.Errorf("exited quickly with code %d", exitCode)
-		s.transition(stateExited) // not strictly necessary as doStart will return, but doesn't hurt
+		// Send error to select waiting in doStart, then fall through to perform action.
+		action, _ := getAction(s.config, exitCode == 0)
+		s.started <- fmt.Errorf("exited quickly with code %d, will %s", exitCode, action)
+		fallthrough
 
 	case stateRunning:
 		logger.Noticef("Service %q stopped unexpectedly with code %d", s.config.Name, exitCode)

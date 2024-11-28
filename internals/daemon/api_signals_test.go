@@ -31,6 +31,7 @@ services:
     test1:
         override: replace
         command: sleep 10
+        on-failure: ignore
 `)
 	d := s.daemon(c)
 	d.overlord.Loop()
@@ -80,14 +81,17 @@ services:
 	c.Check(rec.Result().StatusCode, Equals, 200)
 	c.Check(rsp.Result, DeepEquals, true)
 
-	// Ensure it goes into inactive state due to the signal
+	// Ensure it goes into error state due to the SIGTERM signal.
+	// The service returns with a non-zero exit code's return code because of SIGTERM,
+	// and since on-failure is configured as ignore, the state is transitioned into
+	// exited, corresponding to the error status.
 	for i := 0; ; i++ {
 		if i > 50 {
 			c.Fatalf("timed out waiting for service to go into backoff")
 		}
 		services, err := serviceMgr.Services([]string{"test1"})
 		c.Assert(err, IsNil)
-		if len(services) == 1 && services[0].Current == servstate.StatusInactive {
+		if len(services) == 1 && services[0].Current == servstate.StatusError {
 			break
 		}
 		time.Sleep(5 * time.Millisecond)

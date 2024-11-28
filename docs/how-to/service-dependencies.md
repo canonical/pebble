@@ -99,7 +99,7 @@ successfully ("active"):
 2024-06-28T02:20:03.346Z [pebble] Service "backend" starting: python3 -m http.server 8081
 2024-06-28T02:20:03.346Z [pebble] Service "database" starting: python3 -m http.server 3306
 2024-06-28T02:20:03.347Z [pebble] Service "frontend" starting: python3 -m http.server 8080
-2024-06-28T02:20:03.396Z [pebble] Change 1 task (Start service "database") failed: cannot start service: exited quickly with code 1
+2024-06-28T02:20:03.396Z [pebble] Change 1 task (Start service "database") failed: service start attempt: exited quickly with code 1, will restart
 2024-06-28T02:20:04.353Z [pebble] Started default services with change 1.
 ```
 
@@ -238,7 +238,7 @@ to:
 2024-06-28T02:28:06.569Z [pebble] Started daemon.
 2024-06-28T02:28:06.575Z [pebble] POST /v1/services 3.212375ms 202
 2024-06-28T02:28:06.578Z [pebble] Service "database" starting: python3 -m http.server 3306
-2024-06-28T02:28:06.627Z [pebble] Change 1 task (Start service "database") failed: cannot start service: exited quickly with code 1
+2024-06-28T02:28:06.627Z [pebble] Change 1 task (Start service "database") failed: service start attempt: exited quickly with code 1, will restart
 2024-06-28T02:28:06.633Z [pebble] GET /v1/changes/1/wait 57.610375ms 200
 2024-06-28T02:28:06.633Z [pebble] Started default services with change 1.
 ```

@@ -80,16 +80,6 @@ func (m *ServiceManager) getPlan() *plan.Plan {
 	return m.plan
 }
 
-// Stop implements overlord.StateStopper and stops background functions.
-func (m *ServiceManager) Stop() {
-	// Close all the service ringbuffers
-	m.servicesLock.Lock()
-	defer m.servicesLock.Unlock()
-	for name := range m.services {
-		m.removeServiceInternal(name)
-	}
-}
-
 // Ensure implements StateManager.Ensure.
 func (m *ServiceManager) Ensure() error {
 	return nil
