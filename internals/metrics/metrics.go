@@ -81,7 +81,12 @@ func formatLabelKey(labels []string, labelValues []string) string {
 
 	// Sort labels for consistency
 	sort.Strings(labelPairs)
-	return strings.Join(labelPairs, ",")
+	res := strings.Join(labelPairs, ",")
+	if res == "" {
+		// a special key for situations where no labels are used
+		res = "__empty__"
+	}
+	return res
 }
 
 // NewCounterVec creates a new counter vector.
@@ -117,8 +122,8 @@ func (r *MetricsRegistry) newMetricVec(name, help string, labels []string, metri
 func (v *MetricVec) WithLabelValues(labelValues ...string) *Metric {
 	if len(labelValues) != len(v.labels) {
 		panic(fmt.Errorf(
-			"%q has %d variable labels named %q but %d values %q were provided",
-			v,
+			"%s has %d variable labels named %q but %d values %q were provided",
+			v.Name,
 			len(v.labels),
 			v.labels,
 			len(labelValues),
@@ -192,15 +197,29 @@ func (r *MetricsRegistry) GatherMetrics() string {
 		output += fmt.Sprintf("# HELP %s %s\n", vec.Name, vec.Help)
 		output += fmt.Sprintf("# TYPE %s %s\n", vec.Name, vec.Type)
 
-		for labelKey, metric := range vec.metrics {
-			switch v := metric.value.(type) {
-			case int64:
-				output += fmt.Sprintf("%s{%s} %d\n", vec.Name, labelKey, v)
-			case float64:
-				output += fmt.Sprintf("%s{%s} %f\n", vec.Name, labelKey, v)
-			default:
-				// Fallback for other types
-				output += fmt.Sprintf("%s{%s} %v\n", vec.Name, labelKey, v)
+		if len(vec.labels) == 0 { // Handle metrics without labels
+			for _, metric := range vec.metrics {
+				switch v := metric.value.(type) {
+				case int64:
+					output += fmt.Sprintf("%s %d\n", vec.Name, v) // No curly braces
+				case float64:
+					output += fmt.Sprintf("%s %.2f\n", vec.Name, v) // No curly braces
+				default:
+					output += fmt.Sprintf("%s %v\n", vec.Name, v) // Fallback
+				}
+			}
+		} else {
+			// Handle metrics with labels.
+			for labelKey, metric := range vec.metrics {
+				switch v := metric.value.(type) {
+				case int64:
+					output += fmt.Sprintf("%s{%s} %d\n", vec.Name, labelKey, v)
+				case float64:
+					output += fmt.Sprintf("%s{%s} %.2f\n", vec.Name, labelKey, v)
+				default:
+					// Fallback for other types
+					output += fmt.Sprintf("%s{%s} %v\n", vec.Name, labelKey, v)
+				}
 			}
 		}
 	}

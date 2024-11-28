@@ -33,53 +33,66 @@ type RegistryTestSuite struct {
 
 func (s *RegistryTestSuite) SetUpTest(c *C) {
 	s.registry = &MetricsRegistry{
-		metrics: make(map[string]*Metric),
+		metricVecs: make(map[string]*MetricVec),
 	}
 }
 
-func (s *RegistryTestSuite) TestCounter(c *C) {
-	s.registry.NewMetric("test_counter", MetricTypeCounter, "Test counter")
-	s.registry.IncCounter("test_counter")
-	s.registry.IncCounter("test_counter")
-	c.Check(s.registry.metrics["test_counter"].value.(int64), Equals, int64(2))
+func (s *RegistryTestSuite) TestCounterWithoutLabels(c *C) {
+	labels := []string{}
+	testCounter := s.registry.NewCounterVec("test_counter", "Total number of something processed", labels)
+	testCounter.WithLabelValues().Inc()
+	c.Check(s.registry.metricVecs["test_counter"].metrics[formatLabelKey(labels, []string{})].value.(int64), Equals, int64(1))
+	testCounter.WithLabelValues().Inc()
+	c.Check(s.registry.metricVecs["test_counter"].metrics[formatLabelKey(labels, []string{})].value.(int64), Equals, int64(2))
+}
+
+func (s *RegistryTestSuite) TestCounterWithLabels(c *C) {
+	labels := []string{"operation", "status"}
+	testCounter := s.registry.NewCounterVec("test_counter", "Total number of something processed", labels)
+	testCounter.WithLabelValues("read", "success").Inc()
+	c.Check(s.registry.metricVecs["test_counter"].metrics[formatLabelKey(labels, []string{"read", "success"})].value.(int64), Equals, int64(1))
+	testCounter.WithLabelValues("write", "fail").Add(2)
+	c.Check(s.registry.metricVecs["test_counter"].metrics[formatLabelKey(labels, []string{"write", "fail"})].value.(int64), Equals, int64(2))
 }
 
 func (s *RegistryTestSuite) TestGauge(c *C) {
-	s.registry.NewMetric("test_gauge", MetricTypeGauge, "Test gauge")
-	s.registry.SetGauge("test_gauge", 10)
-	c.Check(s.registry.metrics["test_gauge"].value.(int64), Equals, int64(10))
-	s.registry.SetGauge("test_gauge", 20)
-	c.Check(s.registry.metrics["test_gauge"].value.(int64), Equals, int64(20))
-}
-
-func (s *RegistryTestSuite) TestHistogram(c *C) {
-	s.registry.NewMetric("test_histogram", MetricTypeHistogram, "Test histogram")
-	s.registry.ObserveHistogram("test_histogram", 1.0)
-	s.registry.ObserveHistogram("test_histogram", 2.0)
-	histogramValues := s.registry.metrics["test_histogram"].value.([]float64)
-	c.Check(len(histogramValues), Equals, 2)
-	c.Check(histogramValues[0], Equals, 1.0)
-	c.Check(histogramValues[1], Equals, 2.0)
+	labels := []string{"sensor"}
+	testGauge := s.registry.NewGaugeVec("test_gauge", "Current value of something", labels)
+	testGauge.WithLabelValues("temperature").Set(10.0)
+	c.Check(s.registry.metricVecs["test_gauge"].metrics[formatLabelKey(labels, []string{"temperature"})].value.(float64), Equals, float64(10.0))
+	testGauge.WithLabelValues("temperature").Set(20.0)
+	c.Check(s.registry.metricVecs["test_gauge"].metrics[formatLabelKey(labels, []string{"temperature"})].value.(float64), Equals, float64(20.0))
 }
 
 func (s *RegistryTestSuite) TestGatherMetrics(c *C) {
-	s.registry.NewMetric("test_counter", MetricTypeCounter, "Test counter")
-	s.registry.IncCounter("test_counter")
+	testCounter := s.registry.NewCounterVec("test_counter", "Total number of something processed", []string{"operation", "status"})
+	testCounter.WithLabelValues("read", "success").Inc()
+	testGauge := s.registry.NewGaugeVec("test_gauge", "Current value of something", []string{"sensor"})
+	testGauge.WithLabelValues("temperature").Set(10.0)
 	metricsOutput := s.registry.GatherMetrics()
-	expectedOutput := "# HELP test_counter Test counter\n# TYPE test_counter counter\ntest_counter 1\n"
+	expectedOutput := "# HELP test_counter Total number of something processed\n# TYPE test_counter counter\ntest_counter{operation=read,status=success} 1\n"
+	expectedOutput += "# HELP test_gauge Current value of something\n# TYPE test_gauge gauge\ntest_gauge{sensor=temperature} 10.00\n"
+	c.Check(metricsOutput, Equals, expectedOutput)
+}
+
+func (s *RegistryTestSuite) TestGatherMetricsWithoutLabels(c *C) {
+	testCounter := s.registry.NewCounterVec("test_counter", "Total number of something processed", []string{})
+	testCounter.WithLabelValues().Inc()
+	metricsOutput := s.registry.GatherMetrics()
+	expectedOutput := "# HELP test_counter Total number of something processed\n# TYPE test_counter counter\ntest_counter 1\n"
 	c.Check(metricsOutput, Equals, expectedOutput)
 }
 
 func (s *RegistryTestSuite) TestRaceConditions(c *C) {
-	s.registry.NewMetric("race_counter", MetricTypeCounter, "Race counter")
+	counter := s.registry.NewCounterVec("test_counter", "Total number of something processed", []string{})
 	var wg sync.WaitGroup
 	for i := 0; i < 1000; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			s.registry.IncCounter("race_counter")
+			counter.WithLabelValues().Inc()
 		}()
 	}
 	wg.Wait()
-	c.Check(s.registry.metrics["race_counter"].value.(int64), Equals, int64(1000))
+	c.Check(s.registry.metricVecs["test_counter"].metrics[formatLabelKey([]string{}, []string{})].value.(int64), Equals, int64(1000))
 }
