@@ -1133,8 +1133,8 @@ func createLanes(names []string, services map[string]*Service) ([][]string, erro
 	serviceLaneMapping := make(map[string]int)
 
 	// Map all services into lanes.
-	var lane = -1
-	var maxLane = 0
+	lane := -1
+	maxLane := 0
 	for _, name := range names {
 		service, ok := services[name]
 		if !ok {
