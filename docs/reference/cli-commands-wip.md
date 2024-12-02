@@ -1,6 +1,31 @@
 # CLI commands (WIP)
 
 
+% (reference_pebble_add_command)=
+## add
+
+The `add` command is used to dynamically add a layer to the plan's layers.
+
+<!-- START AUTOMATED OUTPUT FOR add -->
+```{terminal}
+:input: pebble add --help
+Usage:
+  pebble add [add-OPTIONS] <label> <layer-path>
+
+The add command reads the plan's layer YAML from the path specified and
+appends a layer with the given label to the plan's layers. If --combine
+is specified, combine the layer with an existing layer that has the given
+label (or append if the label is not found).
+
+[add command options]
+      --combine         Combine the new layer with an existing layer that has
+                        the given label (default is to append)
+      --inner           Allow appending a new layer inside an existing
+                        subdirectory
+```
+<!-- END AUTOMATED OUTPUT FOR add -->
+
+
 % (reference_pebble_add-identities_command)=
 ## add-identities
 
@@ -28,31 +53,6 @@ For example, to add a local admin named "bob", use YAML like this:
       --from=   Path of YAML file to read identities from (required)
 ```
 <!-- END AUTOMATED OUTPUT FOR FOR add-identities -->
-
-
-% (reference_pebble_add_command)=
-## add
-
-The `add` command is used to dynamically add a layer to the plan's layers.
-
-<!-- START AUTOMATED OUTPUT FOR add -->
-```{terminal}
-:input: pebble add --help
-Usage:
-  pebble add [add-OPTIONS] <label> <layer-path>
-
-The add command reads the plan's layer YAML from the path specified and
-appends a layer with the given label to the plan's layers. If --combine
-is specified, combine the layer with an existing layer that has the given
-label (or append if the label is not found).
-
-[add command options]
-      --combine         Combine the new layer with an existing layer that has
-                        the given label (default is to append)
-      --inner           Allow appending a new layer inside an existing
-                        subdirectory
-```
-<!-- END AUTOMATED OUTPUT FOR add -->
 
 
 % (reference_pebble_changes_command)=
