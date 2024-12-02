@@ -52,6 +52,7 @@ var (
 	ErrRestartSocket         = fmt.Errorf("daemon stop requested to wait for socket activation")
 	ErrRestartServiceFailure = fmt.Errorf("daemon stop requested due to service failure")
 	ErrRestartCheckFailure   = fmt.Errorf("daemon stop requested due to check failure")
+	ErrRestartExternal       = fmt.Errorf("daemon stop requested due to externally-handled reboot")
 
 	systemdSdNotify = systemd.SdNotify
 	sysGetuid       = sys.Getuid
@@ -508,7 +509,7 @@ func (d *Daemon) HandleRestart(t restart.RestartType) {
 	case restart.RestartSystem:
 		// try to schedule a fallback slow reboot already here,
 		// in case we get stuck shutting down
-		if err := rebootHandler(rebootWaitTimeout); err != nil {
+		if err := fallbackRebootHandler(rebootWaitTimeout); err != nil {
 			logger.Noticef("%s", err)
 		}
 		d.mu.Lock()
@@ -702,7 +703,10 @@ func (d *Daemon) doReboot(sigCh chan<- os.Signal, waitTimeout time.Duration) err
 
 const rebootMsg = "reboot scheduled to update the system"
 
-var rebootHandler = systemdModeReboot
+var (
+	rebootHandler         = systemdModeReboot
+	fallbackRebootHandler = systemdModeReboot
+)
 
 type RebootMode int
 
@@ -711,6 +715,8 @@ const (
 	SystemdMode RebootMode = iota + 1
 	// Reboot uses direct kernel syscalls
 	SyscallMode
+	// Reboot is handled externally after the daemon stops
+	ExternalMode
 )
 
 // SetRebootMode configures how the system issues a reboot. The default
@@ -720,8 +726,13 @@ func SetRebootMode(mode RebootMode) {
 	switch mode {
 	case SystemdMode:
 		rebootHandler = systemdModeReboot
+		fallbackRebootHandler = systemdModeReboot
 	case SyscallMode:
 		rebootHandler = syscallModeReboot
+		fallbackRebootHandler = syscallModeReboot
+	case ExternalMode:
+		rebootHandler = externalModeReboot
+		fallbackRebootHandler = syscallModeReboot
 	default:
 		panic(fmt.Sprintf("unsupported reboot mode %v", mode))
 	}
@@ -771,6 +782,10 @@ func syscallModeReboot(rebootDelay time.Duration) error {
 		})
 	}
 	return nil
+}
+
+func externalModeReboot(rebootDelay time.Duration) error {
+	return ErrRestartExternal
 }
 
 func (d *Daemon) Dying() <-chan struct{} {
