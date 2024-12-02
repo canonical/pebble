@@ -24,6 +24,11 @@ any other services it depends on, in the correct order.
 
 When starting a service, Pebble executes the service's `command`, and waits 1 second to ensure the command doesn't exit too quickly. Assuming the command doesn't exit within that time window, the start is considered successful, otherwise `pebble start` will exit with an error, regardless of the `on-failure` value.
 
+```{include} /reuse/service-auto-restart.md
+   :start-after: Start: Service auto-restart note
+   :end-before: End: Service auto-restart note
+```
+
 ## Examples
 
 To start specific services, run `pebble start` followed by one or more service names. For example, to start two services named "srv1" and "srv2" (and any dependencies), run:
