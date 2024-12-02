@@ -13,6 +13,7 @@ These guides provide technical information about Pebble.
 
 Changes and tasks <changes-and-tasks>
 CLI commands <cli-commands/cli-commands>
+CLI commands (WIP) <cli-commands-wip>
 Health checks <health-checks>
 Identities <identities>
 Layers <layers>

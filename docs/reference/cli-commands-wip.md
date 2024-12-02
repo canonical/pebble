@@ -1,7 +1,7 @@
-# CLI commands
+# CLI commands (WIP)
 
 
-(reference_pebble_add-identities_command)=
+% (reference_pebble_add-identities_command)=
 ## add-identities
 
 The `add-identities` command is used to add new identities.
@@ -30,7 +30,7 @@ For example, to add a local admin named "bob", use YAML like this:
 <!-- END AUTOMATED OUTPUT FOR FOR add-identities -->
 
 
-(reference_pebble_add_command)=
+% (reference_pebble_add_command)=
 ## add
 
 The `add` command is used to dynamically add a layer to the plan's layers.
@@ -55,7 +55,7 @@ label (or append if the label is not found).
 <!-- END AUTOMATED OUTPUT FOR add -->
 
 
-(reference_pebble_changes_command)=
+% (reference_pebble_changes_command)=
 ## changes
 
 The `changes` command is used to list system changes.
@@ -86,10 +86,10 @@ ID  Status  Spawn                Ready                Summary
 3   Done    today at 15:26 NZDT  today at 15:26 NZDT  Stop service "srv1" and 1 more
 ```
 
-Read more: [Changes and tasks](../changes-and-tasks.md).
+Read more: [Changes and tasks](changes-and-tasks.md).
 
 
-(reference_pebble_checks_command)=
+% (reference_pebble_checks_command)=
 ## checks
 
 The `checks` command is used to query the status of configured health checks.
@@ -110,7 +110,7 @@ arguments.
 <!-- END AUTOMATED OUTPUT FOR checks -->
 
 
-(reference_pebble_exec_command)=
+% (reference_pebble_exec_command)=
 ## exec
 
 The `exec` command is used to execute a remote command and wait for it to finish.
@@ -173,10 +173,10 @@ error: cannot perform the following tasks:
 - exec command "sleep" (timed out after 1s: context deadline exceeded)
 ```
 
-Read more: [Use Pebble in containers](../pebble-in-containers.md).
+Read more: [Use Pebble in containers](pebble-in-containers.md).
 
 
-(reference_pebble_health_command)=
+% (reference_pebble_health_command)=
 ## health
 
 The `health` command is used to query health of checks.
@@ -198,7 +198,7 @@ an exit code 1 if at least one of the requested checks are unhealthy.
 <!-- END AUTOMATED OUTPUT FOR health -->
 
 
-(reference_pebble_help_command)=
+% (reference_pebble_help_command)=
 ## help
 
 Use the **help** command (`help` or `-h`) to get a summary or detailed
@@ -254,7 +254,7 @@ To get more details for a specific command, run:
 ```
 
 
-(reference_pebble_identities_command)=
+% (reference_pebble_identities_command)=
 ## identities
 
 The `identities` command is used to list identities.
@@ -281,7 +281,7 @@ pebble remove-identities  Remove identities
 <!-- END AUTOMATED OUTPUT FOR identities -->
 
 
-(reference_pebble_identity_command)=
+% (reference_pebble_identity_command)=
 ## identity
 
 The `identity` command is used to show a single identity.
@@ -297,7 +297,7 @@ The identity command shows details for a single identity in YAML format.
 <!-- END AUTOMATED OUTPUT FOR identity -->
 
 
-(reference_pebble_logs_command)=
+% (reference_pebble_logs_command)=
 ## logs
 
 The Pebble daemon's service manager stores the most recent stdout and stderr from each service, using a 100KB ring buffer per service. Each log line is prefixed with an RFC-3339 timestamp and the `[service-name]` in square brackets.
@@ -369,7 +369,7 @@ If you want to also write service logs to Pebble's own stdout, run the daemon wi
 ```
 
 
-(reference_pebble_ls_command)=
+% (reference_pebble_ls_command)=
 ## ls
 
 The `ls` command is used to list path contents.
@@ -392,10 +392,10 @@ may be specified for the last path element.
 ```
 <!-- END AUTOMATED OUTPUT FOR ls -->
 
-Read more: [Use Pebble in containers](../pebble-in-containers.md).
+Read more: [Use Pebble in containers](pebble-in-containers.md).
 
 
-(reference_pebble_mkdir_command)=
+% (reference_pebble_mkdir_command)=
 ## mkdir
 
 The `mkdir` command is used to create a directory.
@@ -419,10 +419,10 @@ The mkdir command creates the specified directory.
 ```
 <!-- END AUTOMATED OUTPUT FOR mkdir -->
 
-Read more: [Use Pebble in containers](../pebble-in-containers.md).
+Read more: [Use Pebble in containers](pebble-in-containers.md).
 
 
-(reference_pebble_notice_command)=
+% (reference_pebble_notice_command)=
 ## notice
 
 The `notice` command is used to fetch a single notice.
@@ -479,10 +479,10 @@ last-data:
 expire-after: 168h0m0s
 ```
 
-Read more: [Notices](../notices.md).
+Read more: [Notices](notices.md).
 
 
-(reference_pebble_notices_command)=
+% (reference_pebble_notices_command)=
 ## notices
 
 The `notices` command is used to list notices.
@@ -526,10 +526,10 @@ ID   User    Type    Key              First                Repeated             
 2    public  custom  other.com/bar    today at 16:16 NZST  today at 16:16 NZST  1
 ```
 
-Read more: [Notices](../notices.md).
+Read more: [Notices](notices.md).
 
 
-(reference_pebble_notify_command)=
+% (reference_pebble_notify_command)=
 ## notify
 
 The `notify` command is used to record a custom notice.
@@ -565,10 +565,10 @@ Notify with two data fields:
 Recorded notice 2
 ```
 
-Read more: [Notices](../notices.md).
+Read more: [Notices](notices.md).
 
 
-(reference_pebble_okay_command)=
+% (reference_pebble_okay_command)=
 ## okay
 
 The `okay` command is used to acknowledge notices and warnings.
@@ -590,7 +590,7 @@ will again show up until the next 'pebble okay'.
 <!-- END AUTOMATED OUTPUT FOR okay -->
 
 
-(reference_pebble_plan_command)=
+% (reference_pebble_plan_command)=
 ## plan
 
 The `plan` command is used to show the plan with layers combined.
@@ -607,7 +607,7 @@ format. Layers are combined according to the override rules defined in them.
 <!-- END AUTOMATED OUTPUT FOR plan -->
 
 
-(reference_pebble_pull_command)=
+% (reference_pebble_pull_command)=
 ## pull
 
 The `pull` command is used to retrieve a file from the remote system.
@@ -622,10 +622,10 @@ The pull command retrieves a file from the remote system.
 ```
 <!-- END AUTOMATED OUTPUT FOR pull -->
 
-Read more: [Use Pebble in containers](../pebble-in-containers.md).
+Read more: [Use Pebble in containers](pebble-in-containers.md).
 
 
-(reference_pebble_push_command)=
+% (reference_pebble_push_command)=
 ## push
 
 The `push` command is used to transfer a file to the remote system.
@@ -648,10 +648,10 @@ The push command transfers a file to the remote system.
 ```
 <!-- END AUTOMATED OUTPUT FOR push -->
 
-Read more: [Use Pebble in containers](../pebble-in-containers.md).
+Read more: [Use Pebble in containers](pebble-in-containers.md).
 
 
-(reference_pebble_remove-identities_command)=
+% (reference_pebble_remove-identities_command)=
 ## remove-identities
 
 The `remove-identities` command is used to remove identities.
@@ -677,7 +677,7 @@ the YAML input. For example, to remove "alice" and "bob", use this YAML:
 <!-- END AUTOMATED OUTPUT FOR remove-identities -->
 
 
-(reference_pebble_replan_command)=
+% (reference_pebble_replan_command)=
 ## replan
 
 The `replan` command starts, stops, or restarts services that have changed, so that running services exactly match the desired configuration in the current plan.
@@ -749,7 +749,7 @@ If you want to force a service to restart even if its service configuration hasn
 ```
 
 
-(reference_pebble_restart_command)=
+% (reference_pebble_restart_command)=
 ## restart
 
 The `restart` command is used to restart a service.
@@ -769,7 +769,7 @@ The restart command restarts the named service(s) in the correct order.
 <!-- END AUTOMATED OUTPUT FOR restart -->
 
 
-(reference_pebble_rm_command)=
+% (reference_pebble_rm_command)=
 ## rm
 
 The `rm` command is used to remove a file or directory.
@@ -788,10 +788,10 @@ The rm command removes a file or directory.
 ```
 <!-- END AUTOMATED OUTPUT FOR rm -->
 
-Read more: [Use Pebble in containers](../pebble-in-containers.md).
+Read more: [Use Pebble in containers](pebble-in-containers.md).
 
 
-(reference_pebble_run_command)=
+% (reference_pebble_run_command)=
 ## run
 
 The `run` command is used to run the service manager environment.
@@ -825,7 +825,7 @@ pebble run --args myservice --port 8080 \; --hold
 
 ### How it works
 
-`pebble run` will start the Pebble daemon itself, as well as start all the services that are marked as `startup: enabled` in the layer configuration (if you don't want that, use `--hold`). For more detail on layer configuration, see [Layer specification](../layer-specification.md).
+`pebble run` will start the Pebble daemon itself, as well as start all the services that are marked as `startup: enabled` in the layer configuration (if you don't want that, use `--hold`). For more detail on layer configuration, see [Layer specification](layer-specification.md).
 
 After the Pebble daemon starts, other Pebble commands may be used to interact with the running daemon, for example, in another terminal window.
 
@@ -881,7 +881,7 @@ More ways to run the daemon:
     ```
 
 
-(reference_pebble_services_command)=
+% (reference_pebble_services_command)=
 ## services
 
 The `services` command lists status information about the services specified, or about all services if none are specified.
@@ -928,11 +928,11 @@ The "Current" column shows the current status of the service, and can be one of 
 
 * `active`: starting or running
 * `inactive`: not yet started, being stopped, or stopped
-* `backoff`: in a [backoff-restart loop](../service-auto-restart.md)
+* `backoff`: in a [backoff-restart loop](service-auto-restart.md)
 * `error`: in an error state
 
 
-(reference_pebble_signal_command)=
+% (reference_pebble_signal_command)=
 ## signal
 
 The `signal` command is used to send a signal to one or more running services.
@@ -951,7 +951,7 @@ pebble signal HUP mysql nginx
 <!-- END AUTOMATED OUTPUT FOR signal -->
 
 
-(reference_pebble_start_command)=
+% (reference_pebble_start_command)=
 ## start
 
 The `start` command starts the service with the provided name and any other services it depends on, in the correct order.
@@ -984,7 +984,7 @@ pebble start srv1 srv2
 ```
 
 
-(reference_pebble_stop_command)=
+% (reference_pebble_stop_command)=
 ## stop
 
 The `stop` command stops the service with the provided name and any other service that depends on it, in the correct order.
@@ -1017,7 +1017,7 @@ pebble stop srv1
 ```
 
 
-(reference_pebble_tasks_command)=
+% (reference_pebble_tasks_command)=
 ## tasks
 
 The `tasks` command is used to list a change's tasks.
@@ -1057,10 +1057,10 @@ Done    today at 15:26 NZDT  today at 15:26 NZDT  Stop service "srv1"
 Done    today at 15:26 NZDT  today at 15:26 NZDT  Stop service "srv2"
 ```
 
-Read more: [Changes and tasks](../changes-and-tasks.md).
+Read more: [Changes and tasks](changes-and-tasks.md).
 
 
-(reference_pebble_update-identities_command)=
+% (reference_pebble_update-identities_command)=
 ## update-identities
 
 The `update-identities` command is used to update or replace identities.
@@ -1095,7 +1095,7 @@ For example, to add or update "alice" and ensure "bob" is removed, use
 <!-- END AUTOMATED OUTPUT FOR update-identities -->
 
 
-(reference_pebble_version_command)=
+% (reference_pebble_version_command)=
 ## version
 
 The `version` command is used to show version details.
@@ -1114,7 +1114,7 @@ The version command displays the versions of the running client and server.
 <!-- END AUTOMATED OUTPUT FOR version -->
 
 
-(reference_pebble_warnings_command)=
+% (reference_pebble_warnings_command)=
 ## warnings
 
 The `warnings` command is used to list warnings.
