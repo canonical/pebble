@@ -12,8 +12,7 @@ These guides provide technical information about Pebble.
 :maxdepth: 1
 
 Changes and tasks <changes-and-tasks>
-CLI commands <cli-commands/cli-commands>
-CLI commands (WIP) <cli-commands-wip>
+CLI commands <cli-commands>
 Health checks <health-checks>
 Identities <identities>
 Layers <layers>
@@ -40,7 +39,7 @@ Pebble configuration is defined as a stack of "layers".
 
 The `pebble` command has several subcommands.
 
-* [CLI commands](cli-commands/cli-commands)
+* [CLI commands](cli-commands)
 
 
 ## Pebble in containers
