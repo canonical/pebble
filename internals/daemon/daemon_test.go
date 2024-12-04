@@ -794,7 +794,7 @@ func (s *daemonSuite) TestRestartSystemWiring(c *C) {
 	oldRebootWaitTimeout := rebootWaitTimeout
 	defer func() {
 		rebootHandler = systemdModeReboot
-		fallbackRebootHandler = systemdModeReboot
+		rebootMode = SystemdMode
 		rebootNoticeWait = oldRebootNoticeWait
 		rebootWaitTimeout = oldRebootWaitTimeout
 	}()
@@ -806,7 +806,6 @@ func (s *daemonSuite) TestRestartSystemWiring(c *C) {
 		delays = append(delays, d)
 		return nil
 	}
-	fallbackRebootHandler = rebootHandler
 
 	st.Lock()
 	restart.Request(st, restart.RestartSystem)

@@ -509,7 +509,7 @@ func (d *Daemon) HandleRestart(t restart.RestartType) {
 	case restart.RestartSystem:
 		// try to schedule a fallback slow reboot already here,
 		// in case we get stuck shutting down
-		if err := fallbackRebootHandler(rebootWaitTimeout); err != nil {
+		if err := rebootHandler(rebootWaitTimeout); err != nil {
 			logger.Noticef("%s", err)
 		}
 		d.mu.Lock()
@@ -678,6 +678,10 @@ func (d *Daemon) rebootDelay() (time.Duration, error) {
 }
 
 func (d *Daemon) doReboot(sigCh chan<- os.Signal, waitTimeout time.Duration) error {
+	if rebootMode == ExternalMode {
+		return ErrRestartExternal
+	}
+
 	rebootDelay, err := d.rebootDelay()
 	if err != nil {
 		return err
@@ -703,11 +707,6 @@ func (d *Daemon) doReboot(sigCh chan<- os.Signal, waitTimeout time.Duration) err
 
 const rebootMsg = "reboot scheduled to update the system"
 
-var (
-	rebootHandler         = systemdModeReboot
-	fallbackRebootHandler = systemdModeReboot
-)
-
 type RebootMode int
 
 const (
@@ -719,20 +718,21 @@ const (
 	ExternalMode
 )
 
+var (
+	rebootHandler = systemdModeReboot
+	rebootMode    = SystemdMode
+)
+
 // SetRebootMode configures how the system issues a reboot. The default
 // reboot handler mode is SystemdMode, which relies on systemd
 // (or similar) provided functionality to reboot.
 func SetRebootMode(mode RebootMode) {
+	rebootMode = mode
 	switch mode {
 	case SystemdMode:
 		rebootHandler = systemdModeReboot
-		fallbackRebootHandler = systemdModeReboot
-	case SyscallMode:
+	case SyscallMode, ExternalMode:
 		rebootHandler = syscallModeReboot
-		fallbackRebootHandler = syscallModeReboot
-	case ExternalMode:
-		rebootHandler = externalModeReboot
-		fallbackRebootHandler = syscallModeReboot
 	default:
 		panic(fmt.Sprintf("unsupported reboot mode %v", mode))
 	}
@@ -782,10 +782,6 @@ func syscallModeReboot(rebootDelay time.Duration) error {
 		})
 	}
 	return nil
-}
-
-func externalModeReboot(rebootDelay time.Duration) error {
-	return ErrRestartExternal
 }
 
 func (d *Daemon) Dying() <-chan struct{} {
