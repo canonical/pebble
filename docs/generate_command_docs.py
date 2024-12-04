@@ -69,14 +69,11 @@ def process_commands(cmds: typing.List[str]):
         text = file.read()
 
     for cmd in cmds:
-        logger.info("Processing doc for command %s.", cmd)
+        logger.info(f"Generating help output for '{cmd}'")
         markers = Markers(cmd)
-        if markers.start not in text:
-            logger.info(
-                'The marker for automated doc generation is not found for command "%s", ignore.',
-                cmd,
-            )
-            continue
+        if markers.start not in text or markers.end not in text:
+            logging.error(f"Missing marker for '{cmd}' in {file_path}. Aborting doc generation")
+            raise RuntimeError(f"Missing marker for '{cmd}' in {file_path}")
 
         example = generate_example(cmd, markers)
         text = insert_example(text, markers, example)
