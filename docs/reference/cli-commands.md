@@ -792,6 +792,20 @@ The restart command restarts the named service(s) in the correct order.
 
 The `rm` command is used to remove a file or directory.
 
+<!-- START AUTOMATED OUTPUT FOR rm -->
+```{terminal}
+:input: pebble rm --help
+Usage:
+  pebble rm [rm-OPTIONS] <path>
+
+The rm command removes a file or directory.
+
+[rm command options]
+      -r            Remove all files and directories recursively in the
+                    specified path
+```
+<!-- END AUTOMATED OUTPUT FOR rm -->
+
 Read more: [Use Pebble in containers](pebble-in-containers.md).
 
 
