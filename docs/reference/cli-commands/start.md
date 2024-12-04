@@ -22,7 +22,10 @@ any other services it depends on, in the correct order.
 
 ## How it works
 
-When starting a service, Pebble executes the service's `command`, and waits 1 second to ensure the command doesn't exit too quickly. Assuming the command doesn't exit within that time window, the start is considered successful, otherwise `pebble start` will exit with an error, regardless of the `on-failure` value.
+When starting a service, Pebble executes the service's `command`, and waits 1 second to ensure the command doesn't exit too quickly.
+
+- If the command is still running at the end of the 1 second window, the start is considered successful.
+- If the command exits within the 1 second window, Pebble retries the command after a configurable backoff, using the restart logic described in [Service auto-restart](/reference/service-auto-restart.md). If one of the started services exits within the 1 second window, `pebble start` prints an appropriate error message and exits with an error.
 
 ## Examples
 
