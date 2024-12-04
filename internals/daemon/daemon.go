@@ -52,6 +52,7 @@ var (
 	ErrRestartSocket         = fmt.Errorf("daemon stop requested to wait for socket activation")
 	ErrRestartServiceFailure = fmt.Errorf("daemon stop requested due to service failure")
 	ErrRestartCheckFailure   = fmt.Errorf("daemon stop requested due to check failure")
+	ErrRestartExternal       = fmt.Errorf("daemon stop requested due to externally-handled reboot")
 
 	systemdSdNotify = systemd.SdNotify
 	sysGetuid       = sys.Getuid
@@ -677,6 +678,10 @@ func (d *Daemon) rebootDelay() (time.Duration, error) {
 }
 
 func (d *Daemon) doReboot(sigCh chan<- os.Signal, waitTimeout time.Duration) error {
+	if rebootMode == ExternalMode {
+		return ErrRestartExternal
+	}
+
 	rebootDelay, err := d.rebootDelay()
 	if err != nil {
 		return err
@@ -702,8 +707,6 @@ func (d *Daemon) doReboot(sigCh chan<- os.Signal, waitTimeout time.Duration) err
 
 const rebootMsg = "reboot scheduled to update the system"
 
-var rebootHandler = systemdModeReboot
-
 type RebootMode int
 
 const (
@@ -711,16 +714,24 @@ const (
 	SystemdMode RebootMode = iota + 1
 	// Reboot uses direct kernel syscalls
 	SyscallMode
+	// Reboot is handled externally after the daemon stops
+	ExternalMode
+)
+
+var (
+	rebootHandler = systemdModeReboot
+	rebootMode    = SystemdMode
 )
 
 // SetRebootMode configures how the system issues a reboot. The default
 // reboot handler mode is SystemdMode, which relies on systemd
 // (or similar) provided functionality to reboot.
 func SetRebootMode(mode RebootMode) {
+	rebootMode = mode
 	switch mode {
 	case SystemdMode:
 		rebootHandler = systemdModeReboot
-	case SyscallMode:
+	case SyscallMode, ExternalMode:
 		rebootHandler = syscallModeReboot
 	default:
 		panic(fmt.Sprintf("unsupported reboot mode %v", mode))
