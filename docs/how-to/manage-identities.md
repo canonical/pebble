@@ -10,7 +10,7 @@ By default any UID (user ID) connected to the API socket is a `read` user; UID 0
 
 ## Add new identities
 
-To extend access to Pebble's API to additional users, add named identities using the [`add-identities`](../reference/cli-commands/add-identities.md) command with a YAML file configuring the details. For example, to add a new admin "bob" with UID 42 and a new read user "alice" with UID 2000, prepare this file:
+To extend access to Pebble's API to additional users, add named identities using the [`add-identities`](#reference_pebble_add-identities_command) command with a YAML file configuring the details. For example, to add a new admin "bob" with UID 42 and a new read user "alice" with UID 2000, prepare this file:
 
 ```yaml
 # idents-add.yaml
@@ -35,7 +35,7 @@ Added 2 new identities.
 
 ## Remove identities
 
-To remove existing identities, use [`remove-identities`](../reference/cli-commands/remove-identities.md)with a YAML file that has a `null` value for each identity you want to remove. For example, to remove "alice", prepare this file:
+To remove existing identities, use [`remove-identities`](#reference_pebble_remove-identities_command) with a YAML file that has a `null` value for each identity you want to remove. For example, to remove "alice", prepare this file:
 
 ```yaml
 # idents-remove.yaml
@@ -53,7 +53,7 @@ Removed 1 identity.
 
 ## Update or replace identities
 
-To update existing identities, use [`update-identities`](../reference/cli-commands/update-identities.md). For example, prepare this file:
+To update existing identities, use [`update-identities`](#reference_pebble_update-identities_command). For example, prepare this file:
 
 ```yaml
 # idents-update.yaml
@@ -97,7 +97,7 @@ Replaced 3 identities.
 
 ## List identities
 
-You can list identities with the [`identities`](../reference/cli-commands/identities.md) command:
+You can list identities with the [`identities`](#reference_pebble_identities_command) command:
 
 ```{terminal}
    :input: pebble identities
@@ -136,7 +136,7 @@ local:
 
 ## Seed initial identities
 
-To seed a Pebble server with one or more initial identities, use [`pebble run`](../reference/cli-commands/run.md) with the `--identities` option. This has the effect of running `update-identities --replace` with the content of the given identities file before running the server:
+To seed a Pebble server with one or more initial identities, use [`pebble run`](#reference_pebble_run_command) with the `--identities` option. This has the effect of running `update-identities --replace` with the content of the given identities file before running the server:
 
 ```{terminal}
    :input: pebble run --identities idents-add.yaml 

@@ -33,7 +33,7 @@ Pebble is useful for developers who are building [Juju charms on Kubernetes](htt
 ```{grid-item-card} [Reference](reference/index)
 **Technical information**
 - [Layer specification](reference/layer-specification)
-- [CLI commands](reference/cli-commands/cli-commands)
+- [CLI commands](reference/cli-commands)
 - [Pebble in containers](reference/pebble-in-containers)
 ```
 ````
