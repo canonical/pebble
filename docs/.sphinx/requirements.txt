@@ -17,6 +17,6 @@ sphinx-design
 sphinx-notfound-page
 sphinx-tabs
 sphinxcontrib-jquery
+sphinxcontrib-openapi
 sphinxext-opengraph
 watchfiles
-sphinxcontrib-openapi
