@@ -38,6 +38,14 @@ Pebble is useful for developers who are building [Juju charms on Kubernetes](htt
 ```
 ````
 
+## Releases
+
+Pebble releases are tracked in GitHub.
+
+[Read the release notes](https://github.com/canonical/pebble/releases)
+
+To get notified when there's a new release, watch the [Pebble repository](https://github.com/canonical/pebble).
+
 ## Project and community
 
 Pebble is free software and released under [GPL-3.0](https://www.gnu.org/licenses/gpl-3.0.en.html).
