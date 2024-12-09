@@ -44,9 +44,9 @@ Pebble is free software and released under [GPL-3.0](https://www.gnu.org/license
 
 The Pebble project is sponsored by [Canonical Ltd](https://www.canonical.com).
 
-- [Code of conduct](https://ubuntu.com/community/ethos/code-of-conduct).
+- [Code of conduct](https://ubuntu.com/community/ethos/code-of-conduct)
 - [Contribute to the project](https://github.com/canonical/pebble?tab=readme-ov-file#contributing)
-- [Development](https://github.com/canonical/pebble/blob/master/HACKING.md): information on how to run and hack on the Pebble codebase during development.
+- [Development](https://github.com/canonical/pebble/blob/master/HACKING.md): information on how to run and hack on the Pebble codebase during development
 
 ```{filtered-toctree}
 :hidden:
