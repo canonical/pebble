@@ -3,7 +3,7 @@
 # This file is generated automatically.
 # Add custom requirements to the custom_required_modules
 # array in the custom_conf.py file and run:
-# python3 .sphinx/build_requirements.py
+# make clean && make install
 GitPython
 canonical-sphinx-extensions
 furo
