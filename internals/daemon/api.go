@@ -110,7 +110,7 @@ var API = []*Command{{
 	POST:        v1PostIdentities,
 }, {
 	Path:       "/metrics",
-	ReadAccess: UserAccess{},
+	ReadAccess: MetricsAccess{},
 	GET:        Metrics,
 }}
 

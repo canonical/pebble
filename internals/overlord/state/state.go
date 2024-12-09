@@ -172,17 +172,16 @@ type marshalledState struct {
 // marshalledIdentity is used specifically for marshalling to the state
 // database file. Unlike apiIdentity, it should include secrets.
 type marshalledIdentity struct {
-	Access    string                       `json:"access"`
-	Local     *marshalledLocalIdentity     `json:"local,omitempty"`
-	BasicAuth *marshalledBasicAuthIdentity `json:"basicauth,omitempty"`
+	Access string                   `json:"access"`
+	Local  *marshalledLocalIdentity `json:"local,omitempty"`
+	Basic  *marshalledBasicIdentity `json:"basi,omitempty"`
 }
 
 type marshalledLocalIdentity struct {
 	UserID uint32 `json:"user-id"`
 }
 
-type marshalledBasicAuthIdentity struct {
-	Username string `json:"username"`
+type marshalledBasicIdentity struct {
 	Password string `json:"password"`
 }
 
@@ -212,8 +211,8 @@ func (s *State) marshalledIdentities() map[string]*marshalledIdentity {
 		if identity.Local != nil {
 			marshalled[name].Local = &marshalledLocalIdentity{UserID: identity.Local.UserID}
 		}
-		if identity.BasicAuth != nil {
-			marshalled[name].BasicAuth = &marshalledBasicAuthIdentity{Username: identity.BasicAuth.Username, Password: identity.BasicAuth.Password}
+		if identity.Basic != nil {
+			marshalled[name].Basic = &marshalledBasicIdentity{Password: identity.Basic.Password}
 		}
 	}
 	return marshalled
@@ -257,8 +256,8 @@ func (s *State) unmarshalIdentities(marshalled map[string]*marshalledIdentity) {
 		if mi.Local != nil {
 			s.identities[name].Local = &LocalIdentity{UserID: mi.Local.UserID}
 		}
-		if mi.BasicAuth != nil {
-			s.identities[name].BasicAuth = &BasicAuthIdentity{Username: mi.BasicAuth.Username, Password: mi.BasicAuth.Password}
+		if mi.Basic != nil {
+			s.identities[name].Basic = &BasicIdentity{Password: mi.Basic.Password}
 		}
 	}
 }
