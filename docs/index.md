@@ -40,11 +40,9 @@ Pebble is useful for developers who are building [Juju charms on Kubernetes](htt
 
 ## Releases
 
-Pebble releases are tracked in GitHub.
-
 [Read the release notes](https://github.com/canonical/pebble/releases)
 
-To get notified when there's a new release, watch the [Pebble repository](https://github.com/canonical/pebble).
+Pebble releases are tracked in GitHub. To get notified when there's a new release, watch the [Pebble repository](https://github.com/canonical/pebble).
 
 ## Project and community
 
