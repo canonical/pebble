@@ -21,6 +21,7 @@ Log forwarding <log-forwarding>
 Notices <notices>
 Pebble in containers <pebble-in-containers>
 Service auto-restart <service-auto-restart>
+API <api>
 ```
 
 
@@ -86,3 +87,7 @@ Pebble can send service logs to a Loki server.
 Pebble records events as "notices". In addition to the built-in notices, clients can report custom notices.
 
 * [Notices](notices)
+
+## API
+
+* [API](api)
