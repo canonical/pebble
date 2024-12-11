@@ -192,6 +192,8 @@ custom_html_css_files = []
 # Add JavaScript files (located in .sphinx/_static/)
 custom_html_js_files = []
 
+html_extra_path = ['.sphinx/_extra']
+
 ## The following settings override the default configuration.
 
 # Specify a reST string that is included at the end of each file.
@@ -218,3 +220,4 @@ rst_prolog = '''
 .. role:: center
    :class: align-center
 '''
+
