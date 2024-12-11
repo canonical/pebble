@@ -1,152 +1,117 @@
 openapi: 3.1.0
 info:
-  title: Batcomputer API
-  version: 1.0.0
+  title: Pebble API
+  version: v1
 servers:
-- url: //api.batcomputer.com/
+  - url: https://localhost:4000/v1
 paths:
-  /persons:
+  /v1/services:
     get:
-      summary: List Persons
-      description: |
-        Retrieves a list of all persons on file in the bat computer.
-      responses:
-        "200":
-          description: An array of Persons
-          content:
-            '*/*':
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Person'
-  /evidence:
-    get:
-      summary: List Evidence
-      description: |
-        Retrieves a list of evidence ever found by world's greatest
-        detective and his family.
+      summary: Get services
+      tags:
+        - services
       parameters:
-      - name: marker
-        in: query
-        description: |
-          The id of the last seen evidence. It's used for pagination purpose
-          by returning 'limit' number of evidence after this one.
-        schema:
-          minimum: -1
-          type: integer
-          format: int64
-          default: -1
-      - name: limit
-        in: query
-        description: |
-          The maximum number of evidence to be returned by the query.
-        schema:
-          maximum: 1000
-          minimum: 1
-          type: integer
-          format: int32
-          default: 20
+        - in: query
+          name: names
+          description: The names of the services to get, a comma-separated string. If empty, get all services.
+          schema:
+            type: string
+          examples:
+            one:
+              value: svc1
+              summary: one service name
+            two:
+              value: svc1,svc2
+              summary: multiple services names, comma separated
       responses:
-        "200":
-          description: An array of evidence.
+        '200':
+          description: List of services
           content:
-            '*/*':
+            application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Evidence'
-    post:
-      summary: Create an Evidence
-      description: |
-        Creates a new evidence record in database.
-      requestBody:
-        content:
-          '*/*':
-            schema:
-              $ref: '#/components/schemas/Evidence'
-        required: false
-      responses:
-        "201":
-          description: An evidence.
+                $ref: "#/components/schemas/ListOfServices"
+              examples:
+                list all services:
+                  value:
+                    - type: sync
+                      status-code: 200
+                      status: OK
+                      result:
+                        - name: "svc1"
+                          startup: "enabled"
+                          current: "active"
+                          current-since: "2024-12-11T20:10:33.381993977+08:00"
+                        - name: "svc2"
+                          startup: "disabled"
+                          current: "stopped"
+        '500':
+          description: Internal Server Error
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: '#/components/schemas/Evidence'
-      x-codegen-request-body-name: evidence
-  /evidence/{id}:
-    get:
-      summary: Show Requested Evidence
-      description: |
-        Queries and returns an evidence with a passed ID.
-      parameters:
-      - name: id
-        in: path
-        description: |
-          A unique evidence identifier to query.
-        required: true
-        schema:
-          type: integer
-          format: int64
-      - name: If-None-Match
-        in: header
-        description: |
-          Executes a request only if passed ETag doesn't equal to current
-          resource one (i.e. resource has been changed).
-        schema:
-          type: string
-      responses:
-        "200":
-          description: An evidence.
-          headers:
-            ETag:
-              description: |
-                Entity tag is part of HTTP provided for web cache validation
-                problem, but also used for optimistic concurrency control.
-              schema:
-                type: string
-          content:
-            '*/*':
-              schema:
-                $ref: '#/components/schemas/Evidence'
-        "404":
-          description: Evidence not found.
-          content:
-            '*/*':
-              schema:
-                $ref: '#/components/schemas/Error'
+                $ref: "#/components/schemas/ErrorResponse"
+              examples: # Example for 500 error
+                401:
+                  value:
+                    type: error
+                    status-code: 401
+                    status: Unauthorized
+                    result:
+                      kind: login-required
+                      message: access denied
+                500:
+                  value:
+                    type: error
+                    status-code: 500
+                    status: Internal Server Error
 components:
   schemas:
-    Evidence:
+    ErrorResponse:
       type: object
       properties:
-        id:
+        type:
+          type: string
+          description: Response type, "error".
+        status-code:
           type: integer
-          description: A unique evidence identifier.
-          format: int64
-        case:
+          description: HTTP response status code.
+        status:
           type: string
-          description: A case when the evidence is found.
-        data:
-          type: string
-          description: An evidence itself.
-          format: binary
-    Error:
+          description: The text for the HTTP status code, see https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml.
+        result:
+          $ref: "#/components/schemas/errorResult"
+    errorResult:
       type: object
       properties:
-        code:
-          type: string
-          description: A uniqe identifier of error.
         message:
           type: string
-          description: A human readable error message.
-    Person:
+          description: Error message.
+        kind:
+          type: string
+          description: Error kind, possible values are "login-required", "no-default-services", "not-found", "permission-denied", "generic-file-error", "system-restart", and "daemon-restart".
+    ListOfServices:
       type: object
       properties:
-        id:
+        type:
+          type: string
+          description: Response type, one of "sync", "async", "error".
+        status-code:
           type: integer
-          description: Unique ID for a person
-          format: int64
+          description: HTTP response status code.
+        status:
+          type: string
+          description: The text for the HTTP status code, see https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml.
+        result:
+          $ref: "#/components/schemas/serviceInfo"
+    serviceInfo:
+      type: object
+      properties:
         name:
           type: string
-          description: Name of a person
-x-original-swagger-version: "2.0"
+        startup:
+          type: string
+        current:
+          type: string
+        current-since:
+          type: string
+          format: date-time
