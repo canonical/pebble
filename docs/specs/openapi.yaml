@@ -5,6 +5,128 @@ info:
 servers:
   - url: https://localhost:4000/v1
 paths:
+  /v1/changes/{id}/wait:
+    get:
+      summary: Wait for a change to complete
+      tags:
+        - changes
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+          required: true
+          description: The ID of the change to wait for.
+        - in: query
+          name: timeout
+          schema:
+            type: string
+          description: |
+            Optional timeout duration.
+            If specified, wait till change is ready or timeout occurs, whichever is first.
+            Defaults to zero if not specified, in which case the request will wait indefinitely until the change is ready.
+            The format is a decimal number with an optional unit suffix (e.g., "300ms", "1.5s", "2h45m").
+            Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
+      responses:
+        '200':
+          description: Change information.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  type:
+                    type: string
+                    enum: ["sync"]
+                  status-code:
+                    type: integer
+                    example: 200
+                  status:
+                    type: string
+                    example: "OK"
+                  result:
+                    $ref: '#/components/schemas/ChangeInfo'
+              examples:
+                start service:
+                  value:
+                    type: sync
+                    status-code: 200
+                    status: OK
+                    result:
+                      id: "6"
+                      kind: "start"
+                      summary: "Start service \"svc1\""
+                      status: "Done"
+                      tasks:
+                        - id: "4"
+                          kind: "start"
+                          summary: "Start service \"svc1\""
+                          status: "Done"
+                          progress:
+                            label: ""
+                            done: 1
+                            total: 1
+                          spawn-time: "2024-12-12T12:50:29.743512342+08:00"
+                          ready-time: "2024-12-12T12:50:30.751092759+08:00"
+                      ready: true
+                      spawn-time: "2024-12-12T12:50:29.743570175+08:00"
+                      ready-time: "2024-12-12T12:50:30.751094634+08:00"
+        '400':
+          description: Bad Request - invalid timeout parameter.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                invalid timeout unit:
+                  value:
+                    type: error
+                    status-code: 400
+                    status: Bad Request
+                    result:
+                      message: "invalid timeout: time: unknown unit \"y\" in duration \"1y\""
+        '404':
+          description: Not Found - change ID not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                change not found:
+                  value:
+                    type: error
+                    status-code: 404
+                    status: Not Found
+                    result:
+                      message: "cannot find change with id \"100\""
+        '504':
+          description: Gateway Timeout - timeout waiting for change.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                change not found:
+                  value:
+                    type: error
+                    status-code: 504
+                    status: Gateway Timeout
+                    result:
+                      message: "timed out waiting for change after 1s"
+        '500':
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                change not found:
+                  value:
+                    type: error
+                    status-code: 500
+                    status: Internal Server Error
+                    result:
+                      message: "request cancelled"
   /v1/services:
     get:
       summary: Get services
@@ -29,7 +151,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ListOfServices"
+                $ref: "#/components/schemas/GetServices"
               examples:
                 list all services:
                   value:
@@ -50,20 +172,112 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-              examples: # Example for 500 error
-                401:
+              examples:
+                access denied:
                   value:
                     type: error
                     status-code: 401
                     status: Unauthorized
                     result:
                       kind: login-required
-                      message: access denied
-                500:
+                      message: "access denied"
+                internal error:
                   value:
                     type: error
                     status-code: 500
                     status: Internal Server Error
+    post:
+      summary: Manage services
+      tags:
+        - services
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                action:
+                  type: string
+                  description: The action to perform. One of "start", "stop", "restart", "replan", "autostart".
+                  enum: ["start", "stop", "restart", "replan", "autostart"]
+                services:
+                  type: array
+                  description: |
+                    A list of service names.  Required for "start", "stop", and "restart".
+                    Ignored for "replan" and "autostart" (resolved automatically for "autostart" to default services).
+                  items:
+                    type: string
+            examples:
+              start one:
+                value:
+                  action: start
+                  services: ["svc1"]
+              stop multiple:
+                value:
+                  action: stop
+                  services: ["svc1", "svc2"]
+              restart multiple:
+                value:
+                  action: restart
+                  services: ["svc1", "svc2"]
+              replan:
+                value:
+                  action: replan
+              autostart:
+                value:
+                  action: autostart
+      responses:
+        '202':
+          description: Accepted - asynchronous operation started. Returns a change ID.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PostServices"
+              examples:
+                accepted:
+                  value:
+                    type: async
+                    status-code: 202
+                    status: Accepted
+                    change: 1
+                    result: null
+        '400':
+          description: Bad Request - invalid request parameters.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                no services to start provided:
+                  value:
+                    type: error
+                    status-code: 400
+                    status: Bad Request
+                    result:
+                      message: "no services to start provided"
+                no default services:
+                  value:
+                    type: error
+                    status-code: 400
+                    status: Bad Request
+                    result:
+                      message: "no default services"
+                      kind: "no-default-services"
+        '500':
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                internal error:
+                  value:
+                    type: error
+                    status-code: 500
+                    status: Internal Server Error
+                    result:
+                      message: "Internal Server Error"
 components:
   schemas:
     ErrorResponse:
@@ -89,12 +303,13 @@ components:
         kind:
           type: string
           description: Error kind, possible values are "login-required", "no-default-services", "not-found", "permission-denied", "generic-file-error", "system-restart", and "daemon-restart".
-    ListOfServices:
+    GetServices:
       type: object
       properties:
         type:
           type: string
           description: Response type, one of "sync", "async", "error".
+          enum: ["sync", "async", "error"]
         status-code:
           type: integer
           description: HTTP response status code.
@@ -115,3 +330,91 @@ components:
         current-since:
           type: string
           format: date-time
+    PostServices:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: ["async"]
+        status-code:
+          type: integer
+          description: HTTP response status code.
+          example: 202
+        status:
+          type: string
+          description: The text for the HTTP status code, see https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml.
+          example: "Accepted"
+        change:
+          type: string
+          description: The Change ID of the asynchronous change.
+        result:
+          type:
+            - object
+            - 'null'
+    ChangeInfo:
+      type: object
+      properties:
+        id:
+          type: string
+        kind:
+          type: string
+        summary:
+          type: string
+        status:
+          type: string
+        tasks:
+          type: array
+          items:
+            $ref: '#/components/schemas/taskInfo'
+        ready:
+          type: boolean
+        err:
+          type: string
+        spawn-time:
+          type: string
+          format: date-time
+        ready-time:
+          type: string
+          format: date-time
+        data:
+          type: object
+          additionalProperties:
+            type: string
+            format: json-string  # Indicate that values are raw JSON strings.
+    taskInfo:
+      type: object
+      properties:
+        id:
+          type: string
+        kind:
+          type: string
+        summary:
+          type: string
+        status:
+          type: string
+        log:
+          type: array
+          items:
+            type: string
+        progress:
+          $ref: '#/components/schemas/taskInfoProgress'
+        spawn-time:
+          type: string
+          format: date-time
+        ready-time:
+          type: string
+          format: date-time
+        data:
+          type: object
+          additionalProperties:
+            type: string
+            format: json-string # Indicate that values are raw JSON strings。
+    taskInfoProgress:
+      type: object
+      properties:
+        label:
+          type: string
+        done:
+          type: integer
+        total:
+          type: integer
