@@ -1,7 +1,7 @@
 # API
 
 <link rel="stylesheet" type="text/css" href="https://unpkg.com/swagger-ui-dist@5.11.0/swagger-ui.css" ></link>
-<link rel="stylesheet" type="text/css" href="../_static/swagger-override.css" ></link>
+<link rel="stylesheet" type="text/css" href="../../_static/swagger-override.css" ></link>
 <div id="swagger-ui"></div>
 
 <script src="https://unpkg.com/swagger-ui-dist@5.11.0/swagger-ui-bundle.js" charset="UTF-8" crossorigin> </script>
