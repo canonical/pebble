@@ -38,15 +38,21 @@ Pebble is useful for developers who are building [Juju charms on Kubernetes](htt
 ```
 ````
 
+## Releases
+
+[Read the release notes](https://github.com/canonical/pebble/releases)
+
+Pebble releases are tracked in GitHub. To get notified when there's a new release, watch the [Pebble repository](https://github.com/canonical/pebble).
+
 ## Project and community
 
 Pebble is free software and released under [GPL-3.0](https://www.gnu.org/licenses/gpl-3.0.en.html).
 
 The Pebble project is sponsored by [Canonical Ltd](https://www.canonical.com).
 
-- [Code of conduct](https://ubuntu.com/community/ethos/code-of-conduct).
+- [Code of conduct](https://ubuntu.com/community/ethos/code-of-conduct)
 - [Contribute to the project](https://github.com/canonical/pebble?tab=readme-ov-file#contributing)
-- [Development](https://github.com/canonical/pebble/blob/master/HACKING.md): information on how to run and hack on the Pebble codebase during development.
+- [Development](https://github.com/canonical/pebble/blob/master/HACKING.md): information on how to run and hack on the Pebble codebase during development
 
 ```{filtered-toctree}
 :hidden:
