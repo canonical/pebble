@@ -19,8 +19,8 @@ In addition to the Go client, there's also a [Python client](https://github.com/
 API endpoints fall into one of three access levels, from least restricted to most restricted:
 
 * **Open-access** - Allowed from any user, even unauthenticated users using the HTTP-over-TCP listener.
-    * `GET /v1/system-info`, which returns the Pebble version and an identifier for the daemon
-    * `GET /v1/health`, which returns a boolean to indicate the state of Pebble's health checks
+    * `GET /v1/system-info`, which returns the Pebble version and other information
+    * `GET /v1/health`, which returns a boolean to indicate whether Pebble's health checks are all healthy
 
 * **Read-access** - Allowed from any authenticated user. For example, listing services or viewing notices.
     * All `GET` endpoints except the admin-access `GET` endpoints
