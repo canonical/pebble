@@ -11,8 +11,8 @@ identities:
     <name>:
         # (Required) Access level of this identity. Possible values are:
         #
-        # - untrusted: has access only to untrusted or "open" endpoints
-        # - read: has access to read or "user" endpoints
+        # - untrusted: has access to open-access endpoints only
+        # - read: has access to read-access endpoints
         # - admin: has access to all endpoints
         access: untrusted | read | admin
 
