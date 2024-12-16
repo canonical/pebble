@@ -721,7 +721,7 @@ current plan.
 When you update service configuration (by adding a layer), the services changed won't be automatically restarted. `pebble replan ` restarts them and brings the service state in sync with the new configuration.
 
 - The "replan" operation restarts `startup: enabled` services whose configuration have changed between when they started and now; if the configuration hasn't changed, replan does nothing.
-- Replan also starts `startup: enabled` services that have not yet been started.
+- Replan also starts `startup: enabled` services that have not yet been started, or that have been manually stopped.
 
 ### Examples
 
