@@ -12,7 +12,7 @@ For more information, see [](api-and-clients.md) and [](../how-to/manage-identit
 
 ## The Pebble directory
 
-Pebble stores its configuration, internal state, and Unix socket in the `$PEBBLE` directory. If `$PEBBLE` is not set, Pebble uses the directory `/var/lib/pebble/default`.
+Pebble stores its configuration, internal state, and Unix socket in the directory specified by the `PEBBLE` environment variable. If `$PEBBLE` is not set, Pebble uses the directory `/var/lib/pebble/default`.
 
 The `$PEBBLE` directory must be readable and writable by the UID of the pebble process. Make sure that no other UIDs can read or write to the $PEBBLE directory.
 
@@ -21,4 +21,4 @@ The file `$PEBBLE/.pebble.state` contains the internal state of the Pebble daemo
 
 ## Security updates
 
-There are several ways to install Pebble. The easiest way to ensure that you get security updates is to install the snap. See [](#install_pebble_snap).
+There are several ways to install Pebble. The easiest way to ensure that you get security updates is to [install the snap](#install_pebble_snap).
