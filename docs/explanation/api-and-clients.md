@@ -2,7 +2,7 @@
 
 The Pebble daemon exposes an API (HTTP over a unix socket) to allow remote clients to interact with the daemon. It can start and stop services, add configuration layers to the plan, and so on.
 
-If `pebble run` is started with the `--http <address>` option, Pebble also allows access to "untrusted" HTTP endpoints using the given TCP address (see {ref}`api-access-levels` below).
+If `pebble run` is started with the `--http <address>` option, Pebble also exposes open-access HTTP endpoints using the given TCP address (see {ref}`api-access-levels` below).
 
 There is currently no official documentation for the API at the HTTP level (apart from the [code itself](https://github.com/canonical/pebble/blob/master/internals/daemon/api.go)!); most users will interact with it via the Pebble command line interface or by using the Go or Python clients.
 
@@ -18,13 +18,24 @@ In addition to the Go client, there's also a [Python client](https://github.com/
 
 API endpoints fall into one of three access levels, from least restricted to most restricted:
 
-* `untrusted`: these are allowed from any user, even unauthenticated users using the HTTP-over-TCP listener. The only untrusted endpoints are `/v1/system-info` and `/v1/health`.
-* `read`: these are allowed from any authenticated user, regardless of access level. They are usually read operations that use the HTTP `GET` method, such as listing services or viewing notices.
-* `admin`: these are only allowed from admin users. They are usually write or modify operations that use the HTTP `POST` method, such as adding a layer or starting a service.
+* **Open-access** - Allowed from any user, even unauthenticated users using the HTTP-over-TCP listener.
+    * `GET /v1/system-info`, which returns the Pebble version and an identifier for the daemon
+    * `GET /v1/health`, which returns a boolean to indicate the state of Pebble's health checks
+
+* **Read-access** - Allowed from any authenticated user. For example, listing services or viewing notices.
+    * All `GET` endpoints except the admin-access `GET` endpoints
+    * `POST /v1/notices`, which records a custom notice
+
+* **Admin-access** - Only allowed from admin users. For example, adding a layer or starting a service.
+    * `GET /v1/files`, which pulls a file from a remote system
+    * `GET /v1/tasks/{task-id}/websocket/{websocket-id}`
+    * All `POST` endpoints except `POST /v1/notices` (which is read-access)
 
 Pebble authenticates clients that connect to the socket API using peer credentials ([`SO_PEERCRED`](https://man7.org/linux/man-pages/man7/socket.7.html)) to determine the user ID (UID) of the connecting process. If this UID is 0 (root) or the UID of the Pebble daemon, the user's access level is `admin`, otherwise the access level is `read`.
 
-If Pebble can't authenticate the user at all, or if it's an unauthenticated user connecting over TCP, the user is considered `untrusted`.
+If Pebble can't authenticate the user, the user's access level is `untrusted`. Unauthenticated users can only use open-access endpoints.
+
+Pebble doesn't try to authenticate users that connect over TCP. So any user that connects over TCP is unauthenticated (access level `untrusted`) and can only use open-access endpoints.
 
 
 ## Controlling API access using identities
