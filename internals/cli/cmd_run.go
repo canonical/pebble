@@ -57,7 +57,7 @@ type sharedRunEnterOpts struct {
 var sharedRunEnterArgsHelp = map[string]string{
 	"--create-dirs": "Create {{.DisplayName}} directory on startup if it doesn't exist",
 	"--hold":        "Do not start default services automatically",
-	"--http":        `Start HTTP API listening on this address (e.g., ":4000")`,
+	"--http":        `Start HTTP API listening on this address (e.g., ":4000") and expose open-access endpoints`,
 	"--verbose":     "Log all output from services to stdout",
 	"--args":        "Provide additional arguments to a service",
 	"--identities":  "Seed identities from file (like update-identities --replace)",
