@@ -38,3 +38,15 @@ Pebble automatically starts and stops services if you specify dependencies betwe
 Service dependencies <service-dependencies>
 Service start order <service-start-order>
 ```
+
+
+## Security
+
+To use Pebble in a secure way, pay attention to API access levels, the Pebble directory, and how you install Pebble.
+
+```{toctree}
+:titlesonly:
+:maxdepth: 1
+
+Security <security>
+```
