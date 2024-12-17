@@ -726,7 +726,6 @@ For `startup: enabled` services that are running:
 - If the service has changed configuration since it started, replan restarts the service.
 
 Replan also starts any `startup: enabled` services that have not yet been started, or that have been manually stopped.
-- Replan also starts `startup: enabled` services that have not yet been started, or that have been manually stopped.
 
 ### Examples
 
