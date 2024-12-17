@@ -4,11 +4,9 @@ Pebble exposes an API to allow remote clients to interact with the daemon. The A
 
 ## Accessing the API
 
-The API uses HTTP over a Unix socket, with access to the API controlled by user ID. If `pebble run` is started with the `--http <address>` option, Pebble exposes a limited set of open-access API endpoints using the given TCP address. See [API access levels](). <!-- [David] Will we be able to use MD for internal links? -->
+The API uses HTTP over a Unix socket, with access to the API controlled by user ID. If `pebble run` is started with the `--http <address>` option, Pebble exposes a limited set of open-access API endpoints using the given TCP address. See {ref}`api-access-levels`.
 
-See below for some examples of how to use the API. For more examples, see []. <!-- [David] Link to the how-to guide -->
-
-<!-- [David] I've adapted the next paragraphs from /explanation/api-and-clients/#controlling-api-access-using-identities -->
+See below for some examples of how to use the API. For more examples, see "How to use the Pebble API". <!-- [David] Link to the how-to guide -->
 
 There's a Go client for the API. See the [Go client documentation](https://pkg.go.dev/github.com/canonical/pebble/client) and the examples below.
 
@@ -26,13 +24,11 @@ TODO: curl examples.
 
 ## API access levels
 
-API endpoints fall into one of three access levels, from least restricted to most restricted:
-
-<!-- [David] I think we should move the content from /explanation/api-and-clients/#api-access-levels to here -->
+API endpoints fall into one of three access levels, from least restricted to most restricted. See {ref}`api-access-levels`.
 
 ### Identities
 
-<!-- [David] I think we should move the content from /explanation/api-and-clients/#controlling-api-access-using-identities to here -->
+Pebble has the concept of named "identities", which lets administrators manage users' access to the API. See {ref}`controlling-api-access-using-identities`.
 
 ## Common parameters
 
