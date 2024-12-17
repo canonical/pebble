@@ -73,6 +73,18 @@
     display: none;
 }
 
+.swagger-ui .information-container .info .version-stamp {
+    display: none;
+}
+
+.swagger-ui .response-col_links {
+    display: none;
+}
+
+.swagger-ui .parameters-container .parameters .parameters-col_description input {
+    display: none;
+}
+
 @media not print {
     body[data-theme="dark"] {
         .swagger-ui {
@@ -84,4 +96,3 @@
         }
     }
 }
-

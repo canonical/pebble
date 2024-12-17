@@ -2,12 +2,14 @@ openapi: 3.1.0
 info:
   title: Pebble API
   version: v1
-servers:
-  - url: https://localhost:4000/v1
 paths:
   /v1/changes/{id}/wait:
     get:
       summary: Wait for a change to complete
+      description: |
+        Wait for the change to be finished.
+        
+        If the wait operation succeeds, the returned Change.Err string will be non-empty if the change itself had an error.
       tags:
         - changes
       parameters:
@@ -25,8 +27,7 @@ paths:
             Optional timeout duration.
             If specified, wait till change is ready or timeout occurs, whichever is first.
             Defaults to zero if not specified, in which case the request will wait indefinitely until the change is ready.
-            The format is a decimal number with an optional unit suffix (e.g., "300ms", "1.5s", "2h45m").
-            Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
+            Read more on the format of the timeout [here](#timeout).
       responses:
         '200':
           description: Change information.
@@ -77,59 +78,22 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-              examples:
-                invalid timeout unit:
-                  value:
-                    type: error
-                    status-code: 400
-                    status: Bad Request
-                    result:
-                      message: "invalid timeout: time: unknown unit \"y\" in duration \"1y\""
         '404':
           description: Not Found - change ID not found.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-              examples:
-                change not found:
-                  value:
-                    type: error
-                    status-code: 404
-                    status: Not Found
-                    result:
-                      message: "cannot find change with id \"100\""
         '504':
           description: Gateway Timeout - timeout waiting for change.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-              examples:
-                change not found:
-                  value:
-                    type: error
-                    status-code: 504
-                    status: Gateway Timeout
-                    result:
-                      message: "timed out waiting for change after 1s"
-        '500':
-          description: Internal Server Error
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-              examples:
-                change not found:
-                  value:
-                    type: error
-                    status-code: 500
-                    status: Internal Server Error
-                    result:
-                      message: "request cancelled"
   /v1/services:
     get:
       summary: Get services
+      description: Fetch information about specific services (or all of them), ordered by service name.
       tags:
         - services
       parameters:
@@ -166,28 +130,9 @@ paths:
                         - name: "svc2"
                           startup: "disabled"
                           current: "stopped"
-        '500':
-          description: Internal Server Error
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-              examples:
-                access denied:
-                  value:
-                    type: error
-                    status-code: 401
-                    status: Unauthorized
-                    result:
-                      kind: login-required
-                      message: "access denied"
-                internal error:
-                  value:
-                    type: error
-                    status-code: 500
-                    status: Internal Server Error
     post:
       summary: Manage services
+      description: Services operations, like start/stop/restart a service/services, auto-start default services, and replan.
       tags:
         - services
       requestBody:
@@ -248,36 +193,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-              examples:
-                no services to start provided:
-                  value:
-                    type: error
-                    status-code: 400
-                    status: Bad Request
-                    result:
-                      message: "no services to start provided"
-                no default services:
-                  value:
-                    type: error
-                    status-code: 400
-                    status: Bad Request
-                    result:
-                      message: "no default services"
-                      kind: "no-default-services"
-        '500':
-          description: Internal Server Error
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-              examples:
-                internal error:
-                  value:
-                    type: error
-                    status-code: 500
-                    status: Internal Server Error
-                    result:
-                      message: "Internal Server Error"
 components:
   schemas:
     ErrorResponse:

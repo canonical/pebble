@@ -11,6 +11,7 @@ These guides provide technical information about Pebble.
 :titlesonly:
 :maxdepth: 1
 
+API <api>
 Changes and tasks <changes-and-tasks>
 CLI commands <cli-commands>
 Health checks <health-checks>
@@ -21,7 +22,6 @@ Log forwarding <log-forwarding>
 Notices <notices>
 Pebble in containers <pebble-in-containers>
 Service auto-restart <service-auto-restart>
-API <api>
 ```
 
 
@@ -88,6 +88,8 @@ Pebble records events as "notices". In addition to the built-in notices, clients
 
 * [Notices](notices)
 
-## API
+## Accessing the API
+
+Pebble exposes API over HTTP to allow remote clients to interact with the daemon.
 
 * [API](api)
