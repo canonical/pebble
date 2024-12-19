@@ -76,6 +76,9 @@ type Options struct {
 	ServiceOutput io.Writer
 	// Extension allows extending the overlord with externally defined features.
 	Extension Extension
+	// DryRun must be true if state in storage is not meant to be altered.
+	// Otherwise, the Overlord will operate normally.
+	DryRun bool
 }
 
 // Overlord is the central manager of the system, keeping track
@@ -106,6 +109,9 @@ type Overlord struct {
 	logMgr     *logstate.LogManager
 
 	extension Extension
+
+	// If true, no state will be written to file.
+	DryRun bool
 }
 
 // New creates an Overlord with all its state managers.
@@ -116,6 +122,7 @@ func New(opts *Options) (*Overlord, error) {
 		loopTomb:  new(tomb.Tomb),
 		inited:    true,
 		extension: opts.Extension,
+		DryRun:    opts.DryRun,
 	}
 
 	if !filepath.IsAbs(o.pebbleDir) {
@@ -133,6 +140,7 @@ func New(opts *Options) (*Overlord, error) {
 	backend := &overlordStateBackend{
 		path:         statePath,
 		ensureBefore: o.ensureBefore,
+		DryRun:       opts.DryRun,
 	}
 	s, restartMgr, err := loadState(statePath, opts.RestartHandler, backend)
 	if err != nil {

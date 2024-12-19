@@ -84,6 +84,9 @@ type Options struct {
 	// OverlordExtension is an optional interface used to extend the capabilities
 	// of the Overlord.
 	OverlordExtension overlord.Extension
+
+	// If true, no state will be written to file.
+	DryRun bool
 }
 
 // A Daemon listens for requests and routes them to the right command
@@ -852,6 +855,7 @@ func New(opts *Options) (*Daemon, error) {
 		RestartHandler: d,
 		ServiceOutput:  opts.ServiceOutput,
 		Extension:      opts.OverlordExtension,
+		DryRun:         opts.DryRun,
 	}
 
 	ovld, err := overlord.New(&ovldOptions)
