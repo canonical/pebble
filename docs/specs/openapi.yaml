@@ -9,7 +9,7 @@ paths:
       description: |
         Wait for the change to be finished.
         
-        If the wait operation succeeds, the returned Change.Err string will be non-empty if the change itself had an error.
+        If the wait operation succeeds, the result will have the "err" field set to an appropriate error message if the change itself had an error.
       tags:
         - changes
       parameters:
@@ -24,29 +24,16 @@ paths:
           schema:
             type: string
           description: |
-            Optional timeout duration.
-            If specified, wait till change is ready or timeout occurs, whichever is first.
-            Defaults to zero if not specified, in which case the request will wait indefinitely until the change is ready.
-            Read more on the format of the timeout [here](#timeout).
+            Optional timeout (a [duration](#duration)).
+            If specified, wait till the change is ready or a timeout occurs, whichever is first.
+            If not specified or zero, wait indefinitely until the change is ready.
       responses:
         '200':
           description: Change information.
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  type:
-                    type: string
-                    enum: ["sync"]
-                  status-code:
-                    type: integer
-                    example: 200
-                  status:
-                    type: string
-                    example: "OK"
-                  result:
-                    $ref: '#/components/schemas/ChangeInfo'
+                $ref: "#/components/schemas/GetChangeWait"
               examples:
                 start service:
                   value:
@@ -72,43 +59,22 @@ paths:
                       ready: true
                       spawn-time: "2024-12-12T12:50:29.743570175+08:00"
                       ready-time: "2024-12-12T12:50:30.751094634+08:00"
-        '400':
-          description: Bad Request - invalid timeout parameter.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        '404':
-          description: Not Found - change ID not found.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        '504':
-          description: Gateway Timeout - timeout waiting for change.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
   /v1/services:
     get:
-      summary: Get services
-      description: Fetch information about specific services (or all of them), ordered by service name.
+      summary: List services
+      description: Fetch information about specific services (or all of them). Return results ordered by service name.
       tags:
         - services
       parameters:
         - in: query
           name: names
-          description: The names of the services to get, a comma-separated string. If empty, get all services.
+          description: The names of the services to get. To get multiple services, specify this parameter multiple times. If not set, get all services.
           schema:
             type: string
           examples:
             one:
               value: svc1
               summary: one service name
-            two:
-              value: svc1,svc2
-              summary: multiple services names, comma separated
       responses:
         '200':
           description: List of services
@@ -144,8 +110,8 @@ paths:
               properties:
                 action:
                   type: string
-                  description: The action to perform. One of "start", "stop", "restart", "replan", "autostart".
-                  enum: ["start", "stop", "restart", "replan", "autostart"]
+                  description: The action to perform.
+                  enum: ["autostart", "replan", "restart", "start", "stop"]
                 services:
                   type: array
                   description: |
@@ -185,87 +151,68 @@ paths:
                     type: async
                     status-code: 202
                     status: Accepted
-                    change: 1
+                    change: "1"
                     result: null
-        '400':
-          description: Bad Request - invalid request parameters.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
 components:
   schemas:
-    ErrorResponse:
+    BaseResponse:
       type: object
       properties:
         type:
           type: string
-          description: Response type, "error".
+          description: Response type, "sync".
         status-code:
           type: integer
           description: HTTP response status code.
         status:
           type: string
           description: The text for the HTTP status code, see https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml.
-        result:
-          $ref: "#/components/schemas/errorResult"
-    errorResult:
-      type: object
-      properties:
-        message:
-          type: string
-          description: Error message.
-        kind:
-          type: string
-          description: Error kind, possible values are "login-required", "no-default-services", "not-found", "permission-denied", "generic-file-error", "system-restart", and "daemon-restart".
+    GetChangeWait:
+      allOf:
+        - $ref: '#/components/schemas/BaseResponse'
+        - type: object
+          properties:
+            result:
+              $ref: '#/components/schemas/ChangeInfo'
     GetServices:
-      type: object
-      properties:
-        type:
-          type: string
-          description: Response type, one of "sync", "async", "error".
-          enum: ["sync", "async", "error"]
-        status-code:
-          type: integer
-          description: HTTP response status code.
-        status:
-          type: string
-          description: The text for the HTTP status code, see https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml.
-        result:
-          $ref: "#/components/schemas/serviceInfo"
+      allOf:
+        - $ref: '#/components/schemas/BaseResponse'
+        - type: object
+          properties:
+            result:
+              type: array
+              items:
+                $ref: "#/components/schemas/serviceInfo"
     serviceInfo:
       type: object
       properties:
         name:
           type: string
+          description: Name of the service.
         startup:
           type: string
+          description: Configured startup value.
+          enum: ["disabled", "enabled"]
         current:
           type: string
+          description: Current status of the service.
+          enum: ["active", "backup", "error", "inactive"]
         current-since:
           type: string
           format: date-time
+          description: "[Time](#time) the service transitioned to the current status."
     PostServices:
-      type: object
-      properties:
-        type:
-          type: string
-          enum: ["async"]
-        status-code:
-          type: integer
-          description: HTTP response status code.
-          example: 202
-        status:
-          type: string
-          description: The text for the HTTP status code, see https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml.
-          example: "Accepted"
-        change:
-          type: string
-          description: The Change ID of the asynchronous change.
-        result:
-          type:
-            - object
-            - 'null'
+      allOf:
+        - $ref: '#/components/schemas/BaseResponse'
+        - type: object
+          properties:
+            change:
+              type: string
+              description: The Change ID of the asynchronous change.
+            result:
+              type:
+                - object
+                - 'null'
     ChangeInfo:
       type: object
       properties:
@@ -288,9 +235,11 @@ components:
         spawn-time:
           type: string
           format: date-time
+          description: spawn-time is a [time](#time).
         ready-time:
           type: string
           format: date-time
+          description: ready-time is a [time](#time).
         data:
           type: object
           additionalProperties:
@@ -316,9 +265,11 @@ components:
         spawn-time:
           type: string
           format: date-time
+          description: spawn-time is a [time](#time).
         ready-time:
           type: string
           format: date-time
+          description: ready-time is a [time](#time).
         data:
           type: object
           additionalProperties:

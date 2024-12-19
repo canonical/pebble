@@ -69,22 +69,22 @@
     width: 85%
 }
 
+/* Hide the unnecessary link to the yaml spec. */
 .swagger-ui .information-container .url {
     display: none;
 }
 
+/* Hide the OAS 3.1 icon. */
 .swagger-ui .information-container .info .version-stamp {
     display: none;
 }
 
+/* Hide the "Links" column in the response body. */
 .swagger-ui .response-col_links {
     display: none;
 }
 
-.swagger-ui .parameters-container .parameters .parameters-col_description input {
-    display: none;
-}
-
+/* Easier to read in in dark theme. */
 @media not print {
     body[data-theme="dark"] {
         .swagger-ui {
