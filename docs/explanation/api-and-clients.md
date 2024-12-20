@@ -38,6 +38,7 @@ If Pebble can't authenticate the user, the user's access level is `untrusted`. U
 Pebble doesn't try to authenticate users that connect over TCP. So any user that connects over TCP is unauthenticated (access level `untrusted`) and can only use open-access endpoints.
 
 
+(controlling-api-access-using-identities)=
 ## Controlling API access using identities
 
 In addition to the default access control, Pebble admins can also set up named [identities](../reference/identities.md) with specific access levels using the identities CLI commands.
