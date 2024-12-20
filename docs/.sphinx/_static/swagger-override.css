@@ -69,13 +69,8 @@
     width: 85%
 }
 
-/* Hide the unnecessary link to the yaml spec. */
-.swagger-ui .information-container .url {
-    display: none;
-}
-
-/* Hide the OAS 3.1 icon. */
-.swagger-ui .information-container .info .version-stamp {
+/* Hide the swagger header (API name, v1, OAS 3.1, link to tye yaml spec). */
+.swagger-ui .information-container {
     display: none;
 }
 

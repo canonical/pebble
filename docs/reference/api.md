@@ -1,72 +1,12 @@
 # API
 
-Pebble exposes an HTTP API that remote clients can use to interact with the daemon. The API has endpoints for starting and stopping services, adding configuration layers to the plan, and so on.
+Pebble exposes an HTTP API that remote clients can use to interact with the daemon. Pebble API has endpoints for starting and stopping services, adding configuration layers to the plan, and so on.
 
-The API uses HTTP over a Unix socket, with access to the API controlled by user ID. If `pebble run` is started with the `--http <address>` option, Pebble exposes a limited set of open-access endpoints (see {ref}`api-access-levels`) using the given TCP address.
+Pebble API uses HTTP over a Unix socket, with access to Pebble API controlled by user ID. If `pebble run` is started with the `--http <address>` option, Pebble exposes a limited set of open-access endpoints (see {ref}`api-access-levels`) using the given TCP address.
 
-## Structure of the API
+## Using curl
 
-Here is a breakdown of the general structure of most API endpoints in Pebble.
-
-### API endpoint URL
-
-Pebble API uses standard HTTP URLs to get actions and resources. The URLs are made up of a base URL followed by a path and optional query parameters.
-
-- Base URL: The consistent foundation of all API endpoints (for example, `http://localhost:4000/v1/`).
-- Path: Specifies the resource or collection being accessed (for example, `/changes`, `/services`). Paths are hierarchical and use forward slashes as separators.
-- Query parameters: Optional key-value pairs appended to the URL after a question mark (?) and separated by ampersands (&). They provide additional filtering or control over the request (for example, `/services?name=svc1`).
-
-Example:
-
-```bash
-http://localhost:4000/v1/services?name=svc1
-```
-
-### Request
-
-Key components of a request include:
-
-- HTTP Method: The desired action (for example, `GET` for retrieving data, `POST` for creating data, `PUT` for updating data, and `DELETE` for deleting data).
-- Headers: Metadata about the request, such as content type, basic auth, and accepted response formats (for example, `Authorization: Basic <credentials>`, `Content-Type: application/json`).
-- Body: For requests that send data to the server (`POST`, `PUT`), the body contains the data in JSON format.
-
-### Response
-
-After processing a request, Pebble sends back a response. Key components of a response are:
-
-- HTTP status code: the result of the request.
-- Headers: metadata about the response, such as content type and caching information.
-- Body: data returned by Pebble server in JSON format.
-
-### JSON format
-
-Pebble API uses JSON for data exchange. Both request and response bodies are formatted as JSON objects or arrays.
-
-Example JSON Response:
-
-```json
-{
-  "type": "sync",
-  "status-code": 200,
-  "status": "OK",
-  "result": {
-    "name": "svc1",
-    "startup": "disabled",
-    "current": "stopped"
-  }
-}
-```
-
-### Request types
-
-Pebble API supports both synchronous and asynchronous requests.
-
-- Synchronous requests: The client sends a request and waits for the server to return a response before continuing.
-- Asynchronous requests: For long-running operations, Pebble API offers asynchronous processing. The client sends a request and gets an acknowledgment immediately, but the actual processing is still running on the server side. The client can poll for the result. Specific endpoints supporting asynchronous operations are documented below with `type` as `async`.
-
-## Using cURL
-
-To access API endpoints over the Unix socket, use the `--unix-socket` option of `curl`. For example:
+To access Pebble API endpoints over the Unix socket, use the `--unix-socket` option of `curl`. For example:
 
 * TODO
 
@@ -82,29 +22,21 @@ To access API endpoints over the Unix socket, use the `--unix-socket` option of 
 
 ## Using the Go client
 
-To use the Go client to access API endpoints over the Unix socket, first create a client using `New`, and then call the methods on the returned Client to interact with the API. Example:
+To use the [Go client](https://pkg.go.dev/github.com/canonical/pebble/client) to access API endpoints over the Unix socket, first create a client using `New`, and then call the methods on the returned `Client` struct to interact with the API. For example, to stop a service named `mysvc`:
 
 ```go
-import (
-  "log"
-
-	"github.com/canonical/pebble/client"
-)
-
-func main() {
-	pebble, err := client.New(&client.Config{Socket: ".pebble.socket"})
-	if err != nil {
-		log.Fatal(err)
-	}
-	changeID, err := pebble.Stop(&client.ServiceOptions{Names: []string{"mysvc"}})
-	if err != nil {
-		log.Fatal(err)
-	}
-	_, err = pebble.WaitChange(changeID, &client.WaitChangeOptions{})
-	if err != nil {
-		log.Fatal(err)
-	}
-}
+    pebble, err := client.New(&client.Config{Socket: ".pebble.socket"})
+    if err != nil {
+        log.Fatal(err)
+    }
+    changeID, err := pebble.Stop(&client.ServiceOptions{Names: []string{"mysvc"}})
+    if err != nil {
+        log.Fatal(err)
+    }
+    _, err = pebble.WaitChange(changeID, &client.WaitChangeOptions{})
+    if err != nil {
+        log.Fatal(err)
+    }
 ```
 
 We try to never change the underlying HTTP API in a backwards-incompatible way. However, in rare cases we may change the Go client in a backwards-incompatible way.
@@ -113,7 +45,7 @@ For more information, see the [Go client documentation](https://pkg.go.dev/githu
 
 ## Using the Python client
 
-The Ops library for writing and testing Juju charms includes a [Python client for the Pebble API](https://ops.readthedocs.io/en/latest/reference/pebble.html). You can use the Python client to access API endpoints over the Unix socket. For example:
+The Ops library for writing and testing Juju charms includes a [Python client for the Pebble API](https://ops.readthedocs.io/en/latest/reference/pebble.html). You can use the Python client to access Pebble API endpoints over the Unix socket. For example:
 
 ```python
 import ops
@@ -123,25 +55,54 @@ client.start_services(['svc1', 'svc2'])
 
 For more information, see:
 
-- [Ops library documentation for the Python client](https://ops.readthedocs.io/en/latest/reference/pebble.html#ops.pebble.Client)
 - [Source code of the Python client](https://github.com/canonical/operator/blob/main/ops/pebble.py)
 - [Pebble in the context of Juju charms](https://juju.is/docs/sdk/interact-with-pebble)
 
 For more examples, see "How to use the Pebble API". <!-- [David] Link to the how-to guide -->
 
+## Structure of Pebble API
+
+Pebble requests use the `GET` method for reads and the POST method for writes.
+
+Some `GET` requests take optional query parameters for configuring or filtering the response, for example, `/v1/services?names=svc1` to only fetch the data for `svc1`.
+
+All data sent to the API in `POST` bodies and all response data from Pebble API is in JSON format. Requests should have a `Content-Type: application/json` header.
+
+There are two main types of requests: synchronous ("sync"), and asynchronous ("async") for operations that can take some time to execute. Synchronous responses have the following structure:
+
+```json
+{
+  "type": "sync",
+  "status-code": 200,
+  "status": "OK",
+  "result": "<object-or-array>"
+}
+```
+
+Asynchronous responses include a "change" field instead of "result", which is the ID of the [change](changes-and-tasks) operation that can be used to query the operation's status or wait for it to finish:
+
+```json
+{
+  "type": "async",
+  "status-code": 202,
+  "status": "Accepted",
+  "change": "<change-id>"
+}
+```
+
 ## Data formats
 
-Some API parameters use specific formats as defined below.
+Some API parameters and response fields use specific formats as defined below.
 
 ### Duration
 
-The format of the timeout duration string is a sequence of decimal numbers, each with optional fraction and a unit suffix, such as "300ms", "-1.5h" or "2h45m".
+The format of a duration string is a sequence of decimal numbers, each with optional fraction and a unit suffix, such as "300ms", "-1.5h" or "2h45m".
 
 Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
 
 ### Time
 
-A timestamp as a quoted string in the [RFC 3339](https://datatracker.ietf.org/doc/html/rfc3339) format with sub-second precision. Here are some examples:
+A timestamp is a string in the [RFC 3339](https://datatracker.ietf.org/doc/html/rfc3339) format with sub-second precision. Here are some examples:
 
 - "2006-01-02T15:04:05Z07:00"
 - "2006-01-02T15:04:05.999999999Z07:00"
@@ -156,32 +117,30 @@ Errors are always returned in JSON format with the following structure:
 ```json
 {
   "type": "error",
-  "status-code": 500,
-  "status": "Internal Server Error",
+  "status-code": 400,
+  "status": "Bad Request",
   "result": {
-    "message": "error message",
-    "kind": "error kind",
-    "value": {},
-  },
+    "message": "select should be one of: all,in-progress,ready"
+  }
 }
 ```
 
 Possible values for `status-code`:
 
-- 400: Bad request. For example, a badly-formatted parameter, like when starting a service, the service name is not provided.
+- 400: Bad request. For example, if a parameter is missing or badly-formatted, such as trying to start a service without providing a the service name.
 - 401: Unauthorized.
-- 404: Not found. For example, a change with the specified ID does not exist.
-- 500: Internal server error, for example, the Pebble database is corrupt. If these errors keep happening, please [open an issue](https://github.com/canonical/pebble/issues/new).
+- 404: Not found. For example, if a change with the specified ID does not exist.
+- 500: Internal server error. For example, if the Pebble database is corrupt. If these errors keep happening, please [open an issue](https://github.com/canonical/pebble/issues/new).
 
-Possible values for `result.kind`:
+The `result` for some error types includes a `kind` field with the following possible values:
 
+- daemon-restart
+- generic-file-error
 - login-required
 - no-default-services
 - not-found
 - permission-denied
-- generic-file-error
 - system-restart
-- daemon-restart
 
 ## API endpoints
 
