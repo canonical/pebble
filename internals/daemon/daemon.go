@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/rand"
 	"net"
 	"net/http"
 	"os"
@@ -36,6 +37,7 @@ import (
 	"gopkg.in/tomb.v2"
 
 	"github.com/canonical/pebble/internals/logger"
+	"github.com/canonical/pebble/internals/metrics"
 	"github.com/canonical/pebble/internals/osutil"
 	"github.com/canonical/pebble/internals/osutil/sys"
 	"github.com/canonical/pebble/internals/overlord"
@@ -116,8 +118,9 @@ type Daemon struct {
 
 // UserState represents the state of an authenticated API user.
 type UserState struct {
-	Access state.IdentityAccess
-	UID    *uint32
+	// Access state.IdentityAccess
+	// UID    *uint32
+	Identity *state.Identity
 }
 
 // A ResponseFunc handles one of the individual verbs for a method
@@ -147,22 +150,21 @@ const (
 	accessForbidden
 )
 
-func userFromRequest(st *state.State, r *http.Request, ucred *Ucrednet) (*UserState, error) {
-	if ucred == nil {
-		// No ucred details, no UserState. Currently, "local" (ucred-based) is
-		// the only type of identity we support.
-		return nil, nil
+func userFromRequest(st *state.State, r *http.Request, ucred *Ucrednet, username, password string) (*UserState, error) {
+	var userID *uint32
+	if ucred != nil {
+		userID = &ucred.Uid
 	}
 
 	st.Lock()
-	identity := st.IdentityFromInputs(&ucred.Uid)
+	identity := st.IdentityFromInputs(userID, username, password)
 	st.Unlock()
 
 	if identity == nil {
 		// No identity that matches these inputs (for now, just UID).
 		return nil, nil
 	}
-	return &UserState{Access: identity.Access, UID: &ucred.Uid}, nil
+	return &UserState{Identity: identity}, nil
 }
 
 func (d *Daemon) Overlord() *overlord.Overlord {
@@ -213,7 +215,8 @@ func (c *Command) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// not good: https://github.com/canonical/pebble/pull/369
 	var user *UserState
 	if _, isOpen := access.(OpenAccess); !isOpen {
-		user, err = userFromRequest(c.d.state, r, ucred)
+		basicAuthUsername, basicAuthPassword, _ := r.BasicAuth()
+		user, err = userFromRequest(c.d.state, r, ucred, basicAuthUsername, basicAuthPassword)
 		if err != nil {
 			Forbidden("forbidden").ServeHTTP(w, r)
 			return
@@ -224,10 +227,26 @@ func (c *Command) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if user == nil && ucred != nil {
 		if ucred.Uid == 0 || ucred.Uid == uint32(os.Getuid()) {
 			// Admin if UID is 0 (root) or the UID the daemon is running as.
-			user = &UserState{Access: state.AdminAccess, UID: &ucred.Uid}
+			// user = &UserState{Access: state.AdminAccess, UID: &ucred.Uid}
+			user = &UserState{
+				Identity: &state.Identity{
+					Access: state.AdminAccess,
+					Local: &state.LocalIdentity{
+						UserID: ucred.Uid,
+					},
+				},
+			}
 		} else {
 			// Regular read access if any other local UID.
-			user = &UserState{Access: state.ReadAccess, UID: &ucred.Uid}
+			// user = &UserState{Access: state.ReadAccess, UID: &ucred.Uid}
+			user = &UserState{
+				Identity: &state.Identity{
+					Access: state.ReadAccess,
+					Local: &state.LocalIdentity{
+						UserID: ucred.Uid,
+					},
+				},
+			}
 		}
 	}
 
@@ -367,6 +386,22 @@ func (d *Daemon) Init() error {
 	}
 
 	logger.Noticef("Started daemon.")
+
+	registry := metrics.GetRegistry()
+	myCounter := registry.NewCounterVec("my_counter", "Total number of something processed.", []string{"operation", "status"})
+	myGauge := registry.NewGaugeVec("my_gauge", "Current value of something.", []string{"sensor"})
+	// Goroutine to update metrics randomly
+	go func() {
+		for {
+			myCounter.WithLabelValues("read", "success").Inc()
+			myCounter.WithLabelValues("write", "success").Add(2)
+			myCounter.WithLabelValues("read", "failed").Inc()
+			myGauge.WithLabelValues("temperature").Set(20.0 + rand.Float64()*10.0)
+
+			time.Sleep(time.Duration(rand.Intn(5)+1) * time.Second) // Random sleep between 1 and 5 seconds
+		}
+	}()
+
 	return nil
 }
 
