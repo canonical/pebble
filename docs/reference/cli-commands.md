@@ -946,7 +946,7 @@ The "Current" column shows the current status of the service, and can be one of 
 
 * `active`: starting or running
 * `inactive`: not yet started, being stopped, or stopped
-* `backoff`: in a [backoff-restart loop](service-auto-restart.md)
+* `backoff`: in a [backoff-restart loop](service-lifecycle.md)
 * `error`: in an error state
 
 
@@ -992,7 +992,7 @@ any other services it depends on, in the correct order.
 ### How it works
 
 - If the command is still running at the end of the 1 second window, the start is considered successful.
-- If the command exits within the 1 second window, Pebble retries the command after a configurable backoff, using the restart logic described in [](service-auto-restart.md). If one of the started services exits within the 1 second window, `pebble start` prints an appropriate error message and exits with an error.
+- If the command exits within the 1 second window, Pebble retries the command after a configurable backoff, using the restart logic described in [Service lifecycle](service-lifecycle.md). If one of the started services exits within the 1 second window, `pebble start` prints an appropriate error message and exits with an error.
 
 ### Examples
 

@@ -20,7 +20,7 @@ Layer specification <layer-specification>
 Log forwarding <log-forwarding>
 Notices <notices>
 Pebble in containers <pebble-in-containers>
-Service auto-restart <service-auto-restart>
+Service lifecycle <service-lifecycle>
 ```
 
 
@@ -53,7 +53,7 @@ When the Pebble daemon is running inside a remote system (for example, a separat
 
 Pebble provides two ways to automatically restart services when they fail. Auto-restart is based on exit codes from services. Health checks are a more sophisticated way to test and report the availability of services.
 
-* [Service auto-restart](service-auto-restart)
+* [Service lifecycle](service-lifecycle)
 * [Health checks](health-checks)
 
 
