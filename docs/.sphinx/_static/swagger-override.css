@@ -79,6 +79,11 @@
     display: none;
 }
 
+/* Hide the input box in parameters. */
+.swagger-ui .parameters-container .parameters .parameters-col_description input {
+    display: none;
+}
+
 /* Easier to read in in dark theme. */
 @media not print {
     body[data-theme="dark"] {

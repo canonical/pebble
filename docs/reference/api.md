@@ -1,12 +1,18 @@
 # API
 
-Pebble exposes an HTTP API that remote clients can use to interact with the daemon. Pebble API has endpoints for starting and stopping services, adding configuration layers to the plan, and so on.
+Pebble exposes an HTTP API that remote clients can use to interact with the daemon. The API has endpoints for starting and stopping services, adding configuration layers to the plan, and so on.
 
-Pebble API uses HTTP over a Unix socket, with access to Pebble API controlled by user ID. If `pebble run` is started with the `--http <address>` option, Pebble exposes a limited set of open-access endpoints (see {ref}`api-access-levels`) using the given TCP address.
+The API uses HTTP over a Unix socket, with access to the API controlled by user ID. If `pebble run` is started with the `--http <address>` option, Pebble exposes a limited set of open-access endpoints (see {ref}`api-access-levels`) using the given TCP address.
 
-## Using curl
+## Using the API
 
-To access Pebble API endpoints over the Unix socket, use the `--unix-socket` option of `curl`. For example:
+You can use different tools and clients to access the API.
+
+For more examples, see "How to use Pebble API". <!-- [David] Link to the how-to guide -->
+
+### curl
+
+To access the API endpoints over the Unix socket, use the `--unix-socket` option of `curl`. For example:
 
 * TODO
 
@@ -20,7 +26,7 @@ To access Pebble API endpoints over the Unix socket, use the `--unix-socket` opt
     curl ...
     ```
 
-## Using the Go client
+### Go client
 
 To use the [Go client](https://pkg.go.dev/github.com/canonical/pebble/client) to access API endpoints over the Unix socket, first create a client using `New`, and then call the methods on the returned `Client` struct to interact with the API. For example, to stop a service named `mysvc`:
 
@@ -43,9 +49,9 @@ We try to never change the underlying HTTP API in a backwards-incompatible way. 
 
 For more information, see the [Go client documentation](https://pkg.go.dev/github.com/canonical/pebble/client).
 
-## Using the Python client
+### Python client
 
-The Ops library for writing and testing Juju charms includes a [Python client for the Pebble API](https://ops.readthedocs.io/en/latest/reference/pebble.html). You can use the Python client to access Pebble API endpoints over the Unix socket. For example:
+The Ops library for writing and testing Juju charms includes a [Python client for Pebble API](https://ops.readthedocs.io/en/latest/reference/pebble.html). You can use the Python client to access the API endpoints over the Unix socket. For example:
 
 ```python
 import ops
@@ -58,15 +64,13 @@ For more information, see:
 - [Source code of the Python client](https://github.com/canonical/operator/blob/main/ops/pebble.py)
 - [Pebble in the context of Juju charms](https://juju.is/docs/sdk/interact-with-pebble)
 
-For more examples, see "How to use the Pebble API". <!-- [David] Link to the how-to guide -->
-
-## Structure of Pebble API
+## Structure of the API
 
 Pebble requests use the `GET` method for reads and the POST method for writes.
 
 Some `GET` requests take optional query parameters for configuring or filtering the response, for example, `/v1/services?names=svc1` to only fetch the data for `svc1`.
 
-All data sent to the API in `POST` bodies and all response data from Pebble API is in JSON format. Requests should have a `Content-Type: application/json` header.
+All data sent to the API in `POST` bodies and all response data from the API is in JSON format. Requests should have a `Content-Type: application/json` header.
 
 There are two main types of requests: synchronous ("sync"), and asynchronous ("async") for operations that can take some time to execute. Synchronous responses have the following structure:
 
@@ -143,6 +147,8 @@ The `result` for some error types includes a `kind` field with the following pos
 - system-restart
 
 ## API endpoints
+
+**Work-in-progress. Not all APIs have been included yet.**
 
 <link rel="stylesheet" type="text/css" href="https://unpkg.com/swagger-ui-dist@5.11.0/swagger-ui.css" ></link>
 <link rel="stylesheet" type="text/css" href="../../_static/swagger-override.css" ></link>
