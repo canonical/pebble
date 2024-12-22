@@ -1,0 +1,286 @@
+openapi: 3.1.0
+info:
+  title: Pebble API
+  version: v1
+paths:
+  /v1/changes/{id}/wait:
+    get:
+      summary: Wait for a change to complete
+      description: |
+        Wait for the change to be finished.
+        
+        If the wait operation succeeds, the result will have the "err" field set to an appropriate error message if the change itself had an error.
+      tags:
+        - changes
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+          required: true
+          description: The ID of the change to wait for.
+        - in: query
+          name: timeout
+          schema:
+            type: string
+          description: |
+            Optional timeout (a [duration](#duration)).
+            If specified, wait till the change is ready or a timeout occurs, whichever is first.
+            If not specified or zero, wait indefinitely until the change is ready.
+      responses:
+        '200':
+          description: Change information.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetChangeWait"
+              examples:
+                start service:
+                  value:
+                    type: sync
+                    status-code: 200
+                    status: OK
+                    result:
+                      id: "6"
+                      kind: "start"
+                      summary: "Start service \"svc1\""
+                      status: "Done"
+                      tasks:
+                        - id: "4"
+                          kind: "start"
+                          summary: "Start service \"svc1\""
+                          status: "Done"
+                          progress:
+                            label: ""
+                            done: 1
+                            total: 1
+                          spawn-time: "2024-12-12T12:50:29.743512342+08:00"
+                          ready-time: "2024-12-12T12:50:30.751092759+08:00"
+                      ready: true
+                      spawn-time: "2024-12-12T12:50:29.743570175+08:00"
+                      ready-time: "2024-12-12T12:50:30.751094634+08:00"
+  /v1/services:
+    get:
+      summary: List services
+      description: Fetch information about specific services (or all of them). Return results ordered by service name.
+      tags:
+        - services
+      parameters:
+        - in: query
+          name: names
+          description: The names of the services to get. To get multiple services, specify this parameter multiple times. If not set, get all services.
+          schema:
+            type: string
+          examples:
+            one:
+              value: svc1
+              summary: one service name
+      responses:
+        '200':
+          description: List of services
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetServices"
+              examples:
+                list all services:
+                  value:
+                    - type: sync
+                      status-code: 200
+                      status: OK
+                      result:
+                        - name: "svc1"
+                          startup: "enabled"
+                          current: "active"
+                          current-since: "2024-12-11T20:10:33.381993977+08:00"
+                        - name: "svc2"
+                          startup: "disabled"
+                          current: "stopped"
+    post:
+      summary: Manage services
+      description: Services operations, like start/stop/restart a service/services, auto-start default services, and replan.
+      tags:
+        - services
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                action:
+                  type: string
+                  description: The action to perform.
+                  enum: ["autostart", "replan", "restart", "start", "stop"]
+                services:
+                  type: array
+                  description: |
+                    A list of service names.  Required for "start", "stop", and "restart".
+                    Ignored for "replan" and "autostart" (resolved automatically for "autostart" to default services).
+                  items:
+                    type: string
+            examples:
+              start one:
+                value:
+                  action: start
+                  services: ["svc1"]
+              stop multiple:
+                value:
+                  action: stop
+                  services: ["svc1", "svc2"]
+              restart multiple:
+                value:
+                  action: restart
+                  services: ["svc1", "svc2"]
+              replan:
+                value:
+                  action: replan
+              autostart:
+                value:
+                  action: autostart
+      responses:
+        '202':
+          description: Accepted - asynchronous operation started. Returns a change ID.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PostServices"
+              examples:
+                accepted:
+                  value:
+                    type: async
+                    status-code: 202
+                    status: Accepted
+                    change: "1"
+                    result: null
+components:
+  schemas:
+    BaseResponse:
+      type: object
+      properties:
+        type:
+          type: string
+          description: Response type, "sync".
+        status-code:
+          type: integer
+          description: HTTP response status code.
+        status:
+          type: string
+          description: The text for the HTTP status code, see https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml.
+    GetChangeWait:
+      allOf:
+        - $ref: '#/components/schemas/BaseResponse'
+        - type: object
+          properties:
+            result:
+              $ref: '#/components/schemas/ChangeInfo'
+    GetServices:
+      allOf:
+        - $ref: '#/components/schemas/BaseResponse'
+        - type: object
+          properties:
+            result:
+              type: array
+              items:
+                $ref: "#/components/schemas/serviceInfo"
+    serviceInfo:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Name of the service.
+        startup:
+          type: string
+          description: Configured startup value.
+          enum: ["disabled", "enabled"]
+        current:
+          type: string
+          description: Current status of the service.
+          enum: ["active", "backup", "error", "inactive"]
+        current-since:
+          type: string
+          format: date-time
+          description: "[Time](#time) the service transitioned to the current status."
+    PostServices:
+      allOf:
+        - $ref: '#/components/schemas/BaseResponse'
+        - type: object
+          properties:
+            change:
+              type: string
+              description: The Change ID of the asynchronous change.
+            result:
+              type:
+                - object
+                - 'null'
+    ChangeInfo:
+      type: object
+      properties:
+        id:
+          type: string
+        kind:
+          type: string
+        summary:
+          type: string
+        status:
+          type: string
+        tasks:
+          type: array
+          items:
+            $ref: '#/components/schemas/taskInfo'
+        ready:
+          type: boolean
+        err:
+          type: string
+        spawn-time:
+          type: string
+          format: date-time
+          description: spawn-time is a [time](#time).
+        ready-time:
+          type: string
+          format: date-time
+          description: ready-time is a [time](#time).
+        data:
+          type: object
+          additionalProperties:
+            type: string
+            format: json-string  # Indicate that values are raw JSON strings.
+    taskInfo:
+      type: object
+      properties:
+        id:
+          type: string
+        kind:
+          type: string
+        summary:
+          type: string
+        status:
+          type: string
+        log:
+          type: array
+          items:
+            type: string
+        progress:
+          $ref: '#/components/schemas/taskInfoProgress'
+        spawn-time:
+          type: string
+          format: date-time
+          description: spawn-time is a [time](#time).
+        ready-time:
+          type: string
+          format: date-time
+          description: ready-time is a [time](#time).
+        data:
+          type: object
+          additionalProperties:
+            type: string
+            format: json-string # Indicate that values are raw JSON strings。
+    taskInfoProgress:
+      type: object
+      properties:
+        label:
+          type: string
+        done:
+          type: integer
+        total:
+          type: integer

@@ -83,6 +83,7 @@ if __name__ == "__main__":
         "sphinx-copybutton",
         "sphinx-design",
         "sphinxcontrib-jquery",
+        "sphinxcontrib-openapi",
         "watchfiles",
         "GitPython"
 

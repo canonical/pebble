@@ -11,6 +11,7 @@ These guides provide technical information about Pebble.
 :titlesonly:
 :maxdepth: 1
 
+API <api>
 Changes and tasks <changes-and-tasks>
 CLI commands <cli-commands>
 Health checks <health-checks>
@@ -86,3 +87,9 @@ Pebble can send service logs to a Loki server.
 Pebble records events as "notices". In addition to the built-in notices, clients can report custom notices.
 
 * [Notices](notices)
+
+## Accessing the API
+
+Pebble exposes API over HTTP to allow remote clients to interact with the daemon.
+
+* [API](api)
