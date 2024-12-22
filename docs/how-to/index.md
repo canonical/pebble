@@ -14,18 +14,17 @@ Installation follows a similar pattern on all architectures. You can choose to i
 Install Pebble <install-pebble>
 ```
 
-
 ## Service orchestration
 
-As your needs grow, you may want to orchestrate multiple services.
+As your needs grow, you may want to use advanced Pebble features to run services reliably and orchestrate multiple services.
 
 ```{toctree}
 :titlesonly:
 :maxdepth: 1
 
+Run services reliably <run-services-reliably>
 Manage service dependencies <service-dependencies>
 ```
-
 
 ## Identities
 
