@@ -3,62 +3,6 @@ info:
   title: Pebble API
   version: v1
 paths:
-  /v1/changes/{id}/wait:
-    get:
-      summary: Wait for a change to complete
-      description: |
-        Wait for the change to be finished.
-        
-        If the wait operation succeeds, the result will have the "err" field set to an appropriate error message if the change itself had an error.
-      tags:
-        - changes
-      parameters:
-        - in: path
-          name: id
-          schema:
-            type: string
-          required: true
-          description: The ID of the change to wait for.
-        - in: query
-          name: timeout
-          schema:
-            type: string
-          description: |
-            Optional timeout (a [duration](#duration)).
-            If specified, wait till the change is ready or a timeout occurs, whichever is first.
-            If not specified or zero, wait indefinitely until the change is ready.
-      responses:
-        '200':
-          description: Change information.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/GetChangeWait"
-              examples:
-                start service:
-                  value:
-                    type: sync
-                    status-code: 200
-                    status: OK
-                    result:
-                      id: "6"
-                      kind: "start"
-                      summary: "Start service \"svc1\""
-                      status: "Done"
-                      tasks:
-                        - id: "4"
-                          kind: "start"
-                          summary: "Start service \"svc1\""
-                          status: "Done"
-                          progress:
-                            label: ""
-                            done: 1
-                            total: 1
-                          spawn-time: "2024-12-12T12:50:29.743512342+08:00"
-                          ready-time: "2024-12-12T12:50:30.751092759+08:00"
-                      ready: true
-                      spawn-time: "2024-12-12T12:50:29.743570175+08:00"
-                      ready-time: "2024-12-12T12:50:30.751094634+08:00"
   /v1/services:
     get:
       summary: List services
@@ -71,10 +15,6 @@ paths:
           description: The names of the services to get. To get multiple services, specify this parameter multiple times. If not set, get all services.
           schema:
             type: string
-          examples:
-            one:
-              value: svc1
-              summary: one service name
       responses:
         '200':
           description: List of services
@@ -120,24 +60,10 @@ paths:
                   items:
                     type: string
             examples:
-              start one:
+              start one service:
                 value:
                   action: start
                   services: ["svc1"]
-              stop multiple:
-                value:
-                  action: stop
-                  services: ["svc1", "svc2"]
-              restart multiple:
-                value:
-                  action: restart
-                  services: ["svc1", "svc2"]
-              replan:
-                value:
-                  action: replan
-              autostart:
-                value:
-                  action: autostart
       responses:
         '202':
           description: Accepted - asynchronous operation started. Returns a change ID.
@@ -153,6 +79,314 @@ paths:
                     status: Accepted
                     change: "1"
                     result: null
+  /v1/services/{name}:
+    get:
+      summary: Get service information
+      tags:
+        - services
+      description: Not implemented yet.
+    post:
+      summary: Operate a service
+      tags:
+        - services
+      description: Not implemented yet.
+  /v1/health:
+    get:
+      summary: Health of specified checks
+      description: Fetches healthy status of specified checks.
+      tags:
+        - checks
+      parameters:
+        - name: level
+          in: query
+          description: Health check level.
+          schema:
+            type: string
+            enum: [alive, ready]
+        - name: names
+          in: query
+          description: The names of the checks to get. To get multiple checks, specify this parameter multiple times. If not set, get all checks.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Check is healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetHealth"
+              examples:
+                healthy:
+                  value:
+                    type: async
+                    status-code: 200
+                    status: OK
+                    result:
+                      healthy: true
+  /v1/checks:
+    get:
+      summary: Get checks
+      tags:
+        - checks
+      description: Fetch information about specific health checks (or all of them), ordered by check name.
+      parameters:
+        - name: level
+          in: query
+          description: Filter checks by level
+          schema:
+            type: string
+            enum: [alive, ready]
+        - name: names
+          in: query
+          description: The names of the checks to get. To get multiple checks, specify this parameter multiple times. If not set, get all checks.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Get checks
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetChecks"
+              examples:
+                get checks:
+                  value:
+                    type: async
+                    status-code: 200
+                    status: OK
+                    result:
+                      - name: svc1-up
+                        status: up
+                        threshold: 3
+                        change-id: 91
+  /v1/changes:
+    get:
+      summary: Get changes
+      tags:
+        - changes
+      description: Fetch information for the specified changes.
+      parameters:
+        - name: select
+          in: query
+          description: Filter changes by status. Defaults to "in-progress".
+          schema:
+            type: string
+            enum: [all, in-progress, ready]
+            default: in-progress
+        - name: for
+          in: query
+          description: Filter changes for a specific service name.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Get changes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/GetChanges'
+              examples:
+                get changes:
+                  value:
+                    type: sync
+                    status-code: 200
+                    status: OK
+                    result:
+                      - id: 42
+                        kind: perform-check
+                        summary: "Perform HTTP check \"svc1-up\""
+                        status: Doing
+                        tasks: 
+                          - id: 42
+                            kind: perform-check
+                            summary: "Perform HTTP check \"svc1-up\""
+                            status: Doing,
+                            progress:
+                              label: ""
+                              done: 1
+                              total: 1
+                            spawn-time: "2024-12-22T19:53:14.85060309+08:00"
+                            ready: false,
+                        spawn-time: "2024-12-22T19:53:14.850613632+08:00"
+  /v1/changes/{id}:
+    get:
+      summary: Get a specific change
+      tags:
+        - changes
+      description: Fetch information about a Change given its ID.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ID of the change
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetChange'
+              examples:
+                get change:
+                  value:
+                    type: sync
+                    status-code: 200
+                    status: OK
+                    result:
+                      id: 72
+                      kind: autostart
+                      summary: "Autostart service \"svc1\""
+                      status: Done
+                      tasks: 
+                        - id: 72
+                          kind: start
+                          summary: "Start service \"svc1\""
+                          status: Done,
+                          progress:
+                            label: ""
+                            done: 1
+                            total: 1
+                          spawn-time: "2024-12-22T20:05:24.855436063+08:00"
+                          ready-time: "2024-12-22T20:05:25.866100522+08:00"
+                      ready: true,
+                      spawn-time: "2024-12-22T20:05:24.855443855+08:00"
+                      ready-time: "2024-12-22T20:05:25.866103439+08:00"
+    post:
+      summary: Perform an action on a change.
+      tags:
+        - changes
+      description: Perform an action on a change. Currently the only supported action is "abort".
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ID of the change
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                action:
+                  type: string
+                  description: The action to perform on the change.
+                  enum: [abort]
+      responses:
+        '200':
+          description: abort change
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetChange'
+              examples:
+                abort change:
+                  value:
+                    type: sync
+                    status-code: 200
+                    status: OK
+                    result:
+                      id: 76
+                      kind: perform-check
+                      summary: "Perform HTTP check \"svc1-up\""
+                      status: Abort
+                      tasks: 
+                        - id: 76
+                          kind: perform-check
+                          summary: "Perform HTTP check \"svc1-up\""
+                          status: Abort
+                          progress:
+                            label: ""
+                            done: 1
+                            total: 1
+                          spawn-time: "2024-12-22T20:14:54.987825544+08:00"
+                      ready: false,
+                      spawn-time: "2024-12-22T20:14:54.987829502+08:00"
+  /v1/changes/{id}/wait:
+    get:
+      summary: Wait for a change to complete
+      description: |
+        Wait for the change to be finished.
+        
+        If the wait operation succeeds, the result will have the "err" field set to an appropriate error message if the change itself had an error.
+      tags:
+        - changes
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+          required: true
+          description: The ID of the change to wait for.
+        - in: query
+          name: timeout
+          schema:
+            type: string
+          description: |
+            Optional timeout (a [duration](#duration)).
+            If specified, wait till the change is ready or a timeout occurs, whichever is first.
+            If not specified or zero, wait indefinitely until the change is ready.
+      responses:
+        '200':
+          description: Change information
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetChange"
+              examples:
+                start service:
+                  value:
+                    type: sync
+                    status-code: 200
+                    status: OK
+                    result:
+                      id: "6"
+                      kind: "start"
+                      summary: "Start service \"svc1\""
+                      status: "Done"
+                      tasks:
+                        - id: "4"
+                          kind: "start"
+                          summary: "Start service \"svc1\""
+                          status: "Done"
+                          progress:
+                            label: ""
+                            done: 1
+                            total: 1
+                          spawn-time: "2024-12-12T12:50:29.743512342+08:00"
+                          ready-time: "2024-12-12T12:50:30.751092759+08:00"
+                      ready: true
+                      spawn-time: "2024-12-12T12:50:29.743570175+08:00"
+                      ready-time: "2024-12-12T12:50:30.751094634+08:00"
+  /v1/system-info:
+    get:
+      summary: Get system information
+      description: |
+        Get Pebble daemon's version and boot-id of the system.
+      tags:
+        - misc
+      responses:
+        '200':
+          description: System information
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetSystemInfo"
+              examples:
+                system-info:
+                  value:
+                    - type: sync
+                      status-code: 200
+                      status: OK
+                      result:
+                        bootid: "299352d9-4617-4d4b-986a-136a3463b31e"
+                        version: "v1.17.0"
 components:
   schemas:
     BaseResponse:
@@ -167,13 +401,22 @@ components:
         status:
           type: string
           description: The text for the HTTP status code, see https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml.
-    GetChangeWait:
+    GetChanges:
       allOf:
         - $ref: '#/components/schemas/BaseResponse'
         - type: object
           properties:
             result:
-              $ref: '#/components/schemas/ChangeInfo'
+              type: array
+              items:
+                $ref: '#/components/schemas/changeInfo'    
+    GetChange:
+      allOf:
+        - $ref: '#/components/schemas/BaseResponse'
+        - type: object
+          properties:
+            result:
+              $ref: '#/components/schemas/changeInfo'
     GetServices:
       allOf:
         - $ref: '#/components/schemas/BaseResponse'
@@ -183,6 +426,41 @@ components:
               type: array
               items:
                 $ref: "#/components/schemas/serviceInfo"
+    PostServices:
+      allOf:
+        - $ref: '#/components/schemas/BaseResponse'
+        - type: object
+          properties:
+            change:
+              type: string
+              description: The Change ID of the asynchronous change.
+            result:
+              type:
+                - object
+                - 'null'
+    GetSystemInfo:
+      allOf:
+        - $ref: '#/components/schemas/BaseResponse'
+        - type: object
+          properties:
+            result:
+              $ref: "#/components/schemas/systemInfo"
+    GetHealth:
+      allOf:
+        - $ref: '#/components/schemas/BaseResponse'
+        - type: object
+          properties:
+            result:
+              $ref: "#/components/schemas/healthInfo"
+    GetChecks:
+      allOf:
+        - $ref: '#/components/schemas/BaseResponse'
+        - type: object
+          properties:
+            result:
+              type: array
+              items:
+                $ref: "#/components/schemas/checkInfo"
     serviceInfo:
       type: object
       properties:
@@ -201,19 +479,7 @@ components:
           type: string
           format: date-time
           description: "[Time](#time) the service transitioned to the current status."
-    PostServices:
-      allOf:
-        - $ref: '#/components/schemas/BaseResponse'
-        - type: object
-          properties:
-            change:
-              type: string
-              description: The Change ID of the asynchronous change.
-            result:
-              type:
-                - object
-                - 'null'
-    ChangeInfo:
+    changeInfo:
       type: object
       properties:
         id:
@@ -284,3 +550,44 @@ components:
           type: integer
         total:
           type: integer
+    systemInfo:
+      type: object
+      properties:
+        version:
+          type: string
+          description: Version of the Pebble daemon
+        boot-id:
+          type: string
+          description: |
+            Boot ID of the system, `/proc/sys/kernel/random/boot_id`.
+            Or `/proc/sys/kernel/random/boot_id` if pebble is PID 1 since in this case we are most likely running in a container
+            so we don't care about `/proc/sys/kernel/random/boot_id`.
+    healthInfo:
+      type: object
+      properties:
+        healthy:
+          type: boolean
+          description: True if the check is healthy, false otherwise.
+    checkInfo:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Name of the check
+        level:
+          type: string
+          description: Level of the check
+          enum: [alive, ready]
+        status:
+          type: string
+          description: Status of the check
+          enum: [down, up]
+        failures:
+          type: integer
+          description: Number of consecutive failures
+        threshold:
+          type: integer
+          description: Failure threshold
+        change-id:
+          type: string
+          description: ID of the change associated with the check
