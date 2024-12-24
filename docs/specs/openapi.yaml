@@ -173,9 +173,7 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/GetChanges"
+                $ref: "#/components/schemas/GetChanges"
               example:
                 {
                   "type": "sync",
