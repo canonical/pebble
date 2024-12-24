@@ -16,7 +16,7 @@ paths:
           schema:
             type: string
       responses:
-        '200':
+        "200":
           description: List of services
           content:
             application/json:
@@ -65,7 +65,7 @@ paths:
                   action: start
                   services: ["svc1"]
       responses:
-        '202':
+        "202":
           description: Accepted - asynchronous operation started. Returns a change ID.
           content:
             application/json:
@@ -79,17 +79,6 @@ paths:
                     status: Accepted
                     change: "1"
                     result: null
-  /v1/services/{name}:
-    get:
-      summary: Get service information
-      tags:
-        - services
-      description: Not implemented yet.
-    post:
-      summary: Operate a service
-      tags:
-        - services
-      description: Not implemented yet.
   /v1/health:
     get:
       summary: Health of specified checks
@@ -109,7 +98,7 @@ paths:
           schema:
             type: string
       responses:
-        '200':
+        "200":
           description: Check is healthy
           content:
             application/json:
@@ -118,7 +107,7 @@ paths:
               examples:
                 healthy:
                   value:
-                    type: async
+                    type: sync
                     status-code: 200
                     status: OK
                     result:
@@ -142,7 +131,7 @@ paths:
           schema:
             type: string
       responses:
-        '200':
+        "200":
           description: Get checks
           content:
             application/json:
@@ -151,7 +140,7 @@ paths:
               examples:
                 get checks:
                   value:
-                    type: async
+                    type: sync
                     status-code: 200
                     status: OK
                     result:
@@ -168,7 +157,7 @@ paths:
       parameters:
         - name: select
           in: query
-          description: Filter changes by status. Defaults to "in-progress".
+          description: Filter changes by status.
           schema:
             type: string
             enum: [all, in-progress, ready]
@@ -179,37 +168,59 @@ paths:
           schema:
             type: string
       responses:
-        '200':
+        "200":
           description: Get changes
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/GetChanges'
-              examples:
-                get changes:
-                  value:
-                    type: sync
-                    status-code: 200
-                    status: OK
-                    result:
-                      - id: 42
-                        kind: perform-check
-                        summary: "Perform HTTP check \"svc1-up\""
-                        status: Doing
-                        tasks: 
-                          - id: 42
-                            kind: perform-check
-                            summary: "Perform HTTP check \"svc1-up\""
-                            status: Doing,
-                            progress:
-                              label: ""
-                              done: 1
-                              total: 1
-                            spawn-time: "2024-12-22T19:53:14.85060309+08:00"
-                            ready: false,
-                        spawn-time: "2024-12-22T19:53:14.850613632+08:00"
+                  $ref: "#/components/schemas/GetChanges"
+              example:
+                {
+                  "type": "sync",
+                  "status-code": 200,
+                  "status": "OK",
+                  "result": [
+                      {
+                          "id": "4",
+                          "kind": "stop",
+                          "summary": "Stop service \"svc1\" and 1 more",
+                          "status": "Done",
+                          "tasks": [
+                              {
+                                  "id": "7",
+                                  "kind": "stop",
+                                  "summary": "Stop service \"svc1\"",
+                                  "status": "Done",
+                                  "progress": {
+                                      "label": "",
+                                      "done": 1,
+                                      "total": 1
+                                  },
+                                  "spawn-time": "2024-12-24T10:08:14.399194229+08:00",
+                                  "ready-time": "2024-12-24T10:08:14.429319813+08:00"
+                              },
+                              {
+                                  "id": "8",
+                                  "kind": "stop",
+                                  "summary": "Stop service \"svc2\"",
+                                  "status": "Done",
+                                  "progress": {
+                                      "label": "",
+                                      "done": 1,
+                                      "total": 1
+                                  },
+                                  "spawn-time": "2024-12-24T10:08:14.399199354+08:00",
+                                  "ready-time": "2024-12-24T10:08:14.432387271+08:00"
+                              }
+                          ],
+                          "ready": true,
+                          "spawn-time": "2024-12-24T10:08:14.399202521+08:00",
+                          "ready-time": "2024-12-24T10:08:14.432389313+08:00"
+                      }
+                  ]
+              }
   /v1/changes/{id}:
     get:
       summary: Get a specific change
@@ -224,12 +235,12 @@ paths:
           schema:
             type: string
       responses:
-        '200':
+        "200":
           description: Successful operation
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GetChange'
+                $ref: "#/components/schemas/ChangeObject"
               examples:
                 get change:
                   value:
@@ -279,35 +290,40 @@ paths:
                   description: The action to perform on the change.
                   enum: [abort]
       responses:
-        '200':
+        "200":
           description: abort change
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GetChange'
-              examples:
-                abort change:
-                  value:
-                    type: sync
-                    status-code: 200
-                    status: OK
-                    result:
-                      id: 76
-                      kind: perform-check
-                      summary: "Perform HTTP check \"svc1-up\""
-                      status: Abort
-                      tasks: 
-                        - id: 76
-                          kind: perform-check
-                          summary: "Perform HTTP check \"svc1-up\""
-                          status: Abort
-                          progress:
-                            label: ""
-                            done: 1
-                            total: 1
-                          spawn-time: "2024-12-22T20:14:54.987825544+08:00"
-                      ready: false,
-                      spawn-time: "2024-12-22T20:14:54.987829502+08:00"
+                $ref: "#/components/schemas/ChangeObject"
+              example:
+                {
+                  "type": "sync",
+                  "status-code": 200,
+                  "status": "OK",
+                  "result": {
+                      "id": "8",
+                      "kind": "perform-check",
+                      "summary": "Perform HTTP check \"check1\"",
+                      "status": "Abort",
+                      "tasks": [
+                          {
+                              "id": "14",
+                              "kind": "perform-check",
+                              "summary": "Perform HTTP check \"check1\"",
+                              "status": "Abort",
+                              "progress": {
+                                  "label": "",
+                                  "done": 1,
+                                  "total": 1
+                              },
+                              "spawn-time": "2024-12-24T10:15:31.390053104+08:00"
+                          }
+                      ],
+                      "ready": false,
+                      "spawn-time": "2024-12-24T10:15:31.390062521+08:00"
+                  }
+              }
   /v1/changes/{id}/wait:
     get:
       summary: Wait for a change to complete
@@ -333,12 +349,12 @@ paths:
             If specified, wait till the change is ready or a timeout occurs, whichever is first.
             If not specified or zero, wait indefinitely until the change is ready.
       responses:
-        '200':
+        "200":
           description: Change information
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/GetChange"
+                $ref: "#/components/schemas/ChangeObject"
               examples:
                 start service:
                   value:
@@ -368,11 +384,11 @@ paths:
     get:
       summary: Get system information
       description: |
-        Get Pebble daemon's version and boot-id of the system.
+        Get the version of the Pebble daemon and the boot ID of the system.
       tags:
-        - misc
+        - system
       responses:
-        '200':
+        "200":
           description: System information
           content:
             application/json:
@@ -400,26 +416,29 @@ components:
           description: HTTP response status code.
         status:
           type: string
-          description: The text for the HTTP status code, see https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml.
+          description: |
+            The description of the HTTP status code.
+
+            See the [IANA list](https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml).
     GetChanges:
       allOf:
-        - $ref: '#/components/schemas/BaseResponse'
+        - $ref: "#/components/schemas/BaseResponse"
         - type: object
           properties:
             result:
               type: array
               items:
-                $ref: '#/components/schemas/changeInfo'    
-    GetChange:
+                $ref: "#/components/schemas/changeInfo"
+    ChangeObject:
       allOf:
-        - $ref: '#/components/schemas/BaseResponse'
+        - $ref: "#/components/schemas/BaseResponse"
         - type: object
           properties:
             result:
-              $ref: '#/components/schemas/changeInfo'
+              $ref: "#/components/schemas/changeInfo"
     GetServices:
       allOf:
-        - $ref: '#/components/schemas/BaseResponse'
+        - $ref: "#/components/schemas/BaseResponse"
         - type: object
           properties:
             result:
@@ -428,33 +447,31 @@ components:
                 $ref: "#/components/schemas/serviceInfo"
     PostServices:
       allOf:
-        - $ref: '#/components/schemas/BaseResponse'
+        - $ref: "#/components/schemas/BaseResponse"
         - type: object
           properties:
             change:
               type: string
               description: The Change ID of the asynchronous change.
             result:
-              type:
-                - object
-                - 'null'
+              type: "null"
     GetSystemInfo:
       allOf:
-        - $ref: '#/components/schemas/BaseResponse'
+        - $ref: "#/components/schemas/BaseResponse"
         - type: object
           properties:
             result:
               $ref: "#/components/schemas/systemInfo"
     GetHealth:
       allOf:
-        - $ref: '#/components/schemas/BaseResponse'
+        - $ref: "#/components/schemas/BaseResponse"
         - type: object
           properties:
             result:
               $ref: "#/components/schemas/healthInfo"
     GetChecks:
       allOf:
-        - $ref: '#/components/schemas/BaseResponse'
+        - $ref: "#/components/schemas/BaseResponse"
         - type: object
           properties:
             result:
@@ -493,7 +510,7 @@ components:
         tasks:
           type: array
           items:
-            $ref: '#/components/schemas/taskInfo'
+            $ref: "#/components/schemas/taskInfo"
         ready:
           type: boolean
         err:
@@ -527,7 +544,7 @@ components:
           items:
             type: string
         progress:
-          $ref: '#/components/schemas/taskInfoProgress'
+          $ref: "#/components/schemas/taskInfoProgress"
         spawn-time:
           type: string
           format: date-time
@@ -560,7 +577,7 @@ components:
           type: string
           description: |
             Boot ID of the system, `/proc/sys/kernel/random/boot_id`.
-            Or `/proc/sys/kernel/random/boot_id` if pebble is PID 1 since in this case we are most likely running in a container
+            Or `/proc/sys/kernel/random/uuid` if pebble is PID 1 since in this case we are most likely running in a container
             so we don't care about `/proc/sys/kernel/random/boot_id`.
     healthInfo:
       type: object
