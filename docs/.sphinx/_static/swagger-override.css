@@ -84,7 +84,7 @@
     display: none;
 }
 
-/* Hide the select box in parameters. */
+/* Hide the select drop-down in parameters. */
 .swagger-ui .parameters-container .parameters .parameters-col_description select {
     display: none;
 }
