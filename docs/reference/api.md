@@ -175,5 +175,53 @@ window.onload = function() {
   // End Swagger UI call region
 
   window.ui = ui
+
+  function addSwaggerTagsToTOC(tags) {
+    // Find the last H2 entry in the TOC and insert a 'ul' element for the tag list
+    const tocContainer = document.querySelector(
+      ".toc-tree > ul > li > ul > li:last-child"
+    );
+    const tocList = document.createElement("ul");
+    tocContainer.appendChild(tocList);
+    // Add a link for each tag inside the 'ul' element
+    for (const tag of tags) {
+      // Create an 'a' element for the tag link
+      const tocLink = document.createElement("a");
+      tocLink.classList.add("reference", "internal");
+      tocLink.href= `#/${tag}`;
+      tocLink.innerText = tag;
+      tocLink.addEventListener("click", event => {
+        if (event.shiftKey || event.ctrlKey || event.altKey || event.metaKey) {
+          return;
+        }
+        // When the tag link is clicked with no modifier keys:
+        // - Scroll the tag section into view
+        // - If the tag section is closed, open it (by simulating a click)
+        const swaggerHeading = document.getElementById(`operations-tag-${tag}`);
+        swaggerHeading.scrollIntoView({
+          behavior: "smooth"
+        });
+        if (swaggerHeading.getAttribute("data-is-open") == "false") {
+          swaggerHeading.click();
+        }
+      });
+      // Wrap the tag link in a 'li' element and add it to the tag list
+      const tocItem = document.createElement("li");
+      tocItem.appendChild(tocLink);
+      tocList.appendChild(tocItem);
+    }
+  }
+
+  // Make sure to match the tags defined in openapi.yaml
+  addSwaggerTagsToTOC([
+    "plan",
+    "services",
+    "checks",
+    "files",
+    "changes",
+    "notices",
+    "identities",
+    "system"
+  ]);
 }
 </script>

@@ -84,6 +84,11 @@
     display: none;
 }
 
+/* Hide the select box in parameters. */
+.swagger-ui .parameters-container .parameters .parameters-col_description select {
+    display: none;
+}
+
 /* Easier to read in in dark theme. */
 @media not print {
     body[data-theme="dark"] {
