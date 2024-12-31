@@ -215,9 +215,7 @@ paths:
           content:
             application/x-ndjson:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/logs"
+                $ref: "#/components/schemas/logs"
               example:
                 {
                   "time": "2024-12-27T02:32:53.185Z",
