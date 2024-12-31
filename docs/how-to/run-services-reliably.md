@@ -15,36 +15,43 @@ With the rise of the microservice architecture, reliability is becoming more and
 
 ## Health checks
 
-To mitigate the reliability issues mentioned above, we need specific tooling for that, and health checks are one of them - a key mechanism and a critical part of the software development lifecycle (SDLC) in the DevOps culture for monitoring and detecting potential problems in the modern microservice architectures and especially in containerized environments.
+To mitigate the reliability issues mentioned above, we need specific tooling, and health checks are one of them - a key mechanism and a critical part of the software development lifecycle (SDLC) in the DevOps culture for monitoring and detecting potential problems in the modern microservice architectures and especially in containerized environments.
 
 By periodically running health checks, some of the reliability issues listed above can be mitigated:
 
-- Detecting Resource Exhaustion: Health checks can monitor resource usage (CPU, memory, disk space) within a microservice. If resource consumption exceeds predefined thresholds, the health check can signal an unhealthy state, allowing for remedial action (e.g., scaling up the service, restarting it, or alerting operators).
-- Identifying Dependent Service Failures: Health checks can verify the availability of critical dependencies. A service's health check can include checks to ensure it can connect to its database, message queue, or other required services.
-- Catching Deployment Issues: Health checks can be incorporated into the deployment process. After a new version of a service is deployed, the deployment pipeline can monitor its health status. If the health check fails, the deployment can be rolled back, preventing a faulty version from affecting users.
-- Mitigating Cascading Failures: By quickly identifying unhealthy services, health checks can help prevent cascading failures. Load balancers and service discovery mechanisms can use health check information to route traffic away from failing services, giving them time to recover.
+### Detect resource exhaustion
 
-Note that health check is no silver bullet, it can't solve all the reliability challenges posed by the microservice architecture. For example, while health checks can detect the consequence of network issues (e.g., inability to connect to a dependency), they can't fix the underlying network problem itself; and while health checks are a valuable part of a monitoring strategy, they can't replace comprehensive testing and monitoring.
+Health checks can monitor resource usage (CPU, memory, disk space) within a microservice. For example, if resource consumption exceeds predefined thresholds, the health check can signal an unhealthy state, allowing for remediation, for example, scaling up or scaling out the service, restarting it, or issuing alerts.
+
+### Identify dependent service failures
+
+Health checks can verify the availability of critical dependencies. A service's health check can include checks to ensure it can connect to its database, message queues, or other required services.
+
+### Catch deployment issues
+
+Health checks can be incorporated into the deployment process. After a new version of a service is deployed, the deployment pipeline can monitor its health status. If the health check fails, the deployment can be rolled back to the previous state, preventing a faulty version from affecting end users.
+
+### Mitigate cascading failures
+
+By quickly identifying unhealthy services, health checks can help prevent cascading failures. For example, load balancers and service discovery mechanisms can use health check information to route traffic away from failing services, giving them time to recover.
+
+### More on health checks
+
+Note that a health check is no silver bullet, it can't solve all the reliability challenges posed by the microservice architecture. For example, while health checks can detect the consequence of network issues (e.g., inability to connect to a dependency), they can't fix the underlying network problem itself; and while health checks are a valuable part of a monitoring strategy, they can't replace comprehensive testing and monitoring.
 
 Please also note that although health checks are running on a schedule, they should not be used to run scheduled jobs such as periodic backups.
 
 In summary, health checks are a powerful tool for improving the reliability of microservices by enabling early detection of problems and making automated recovery possible.
 
-## Configuring health checks in Pebble
+## Using health checks of the HTTP type
 
-There are three types of health checks in Pebble:
+A health check of the HTTP type issues HTTP `GET` requests to the health check URL at a user-specified interval.
 
-- `http`: an HTTP `GET` request to the URL
-- `tcp`: open the given TCP port
-- `exec`: execute the specified command
+The health check is considered successful if the check returns an HTTP 200 response. After getting a certain number of failures in a row, the health check is considered "down" (or unhealthy).
 
-There are three key options which you can configure for each health check:
+### Configuring HTTP-type health checks
 
-- `period`: How often to run the check (defaults to 10 seconds).
-- `timeout`: If the check hasn't responded before the timeout (defaults to 3 seconds), consider the check an error
-- `threshold`: After how many consecutive errors (defaults to 3 seconds) is the check considered "down"
-
-For example, to configure a health check of HTTP type, named `svc1-up`, which accesses the endpoint `http://127.0.0.1:5000/health` at a 30-second interval with a threshold of 3 (default) and a timeout of 1 second, we can use the following configuration:
+Let's say we have a service `svc1` with a health check endpoint at `http://127.0.0.1:5000/health`. To configure a health check of HTTP type named `svc1-up` that accesses the health check endpoint at a 30-second interval with a timeout of 1 second and considers the check down if we get 3 failures in a row, we can use the following configuration:
 
 ```yaml
 checks:
@@ -52,17 +59,24 @@ checks:
         override: replace
         period: 30s
         timeout: 1s
+        threshold: 3
         http:
             url: http://127.0.0.1:5000/health
 ```
 
-For more information, read [Health checks](../reference/health-checks) and [Layer specification](../reference/layer-specification).
+The configuration above contains three key options that you can tweak for each health check:
 
-## Restarting service on health check failure
+- `period`: How often to run the check (defaults to 10 seconds).
+- `timeout`: If the check hasn't responded before the timeout (defaults to 3 seconds), consider the check an error
+- `threshold`: After how many consecutive errors (defaults to 3) is the check considered "down"
+
+Besides the HTTP type, there are two more health check types in Pebble: `tcp`, which opens the given TCP port, and `exec`, which executes a user-specified command. For more information, see [Health checks](../reference/health-checks) and [Layer specification](../reference/layer-specification).
+
+### Restarting the service when the health check fails
 
 To automatically restart services when a health check fails, use `on-check-failure` in the service configuration.
 
-For example, to restart `svc1` when the health check named `svc1-up` fails, use the following configuration:
+To restart `svc1` when the health check named `svc1-up` fails, use the following configuration:
 
 ```
 services:
