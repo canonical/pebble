@@ -19,7 +19,7 @@ paths:
           required: true
       responses:
         "200":
-          description: Get plan.
+          description: The current plan in YAML format.
           content:
             application/json:
               schema:
@@ -143,11 +143,8 @@ paths:
                     Ignored for "replan" and "autostart" (resolved automatically for "autostart" to default services).
                   items:
                     type: string
-            examples:
-              start one service:
-                value:
-                  action: start
-                  services: ["svc1"]
+            example:
+              {"action": "start", "services": ["svc1"]}
       responses:
         "202":
           description: Accepted - asynchronous operation started. Returns a change ID.
@@ -171,6 +168,14 @@ paths:
       description: |
         Fetch previously-written logs from the given services,
         or request logs from the given services and follows them, in JSON lines format.
+
+        Example:
+
+        ```
+        {"time":"2024-12-31T02:11:09.361Z","service":"svc1","message":" * Serving Flask app 'main'"}
+        {"time":"2024-12-31T02:11:09.361Z","service":"svc1","message":" * Debug mode: off"}
+        {"time":"2024-12-31T02:11:09.382Z","service":"svc1","message":" * Running on http://127.0.0.1:5000"}
+        ```
       parameters:
         - name: services
           in: query
@@ -184,10 +189,7 @@ paths:
             type: string
         - name: follow
           in: query
-          description: |
-            Whether to follow the logs (keep streaming new logs).
-
-            Must be "true" or "false"; defaults to false.
+          description: Whether to follow the logs (keep streaming new logs).
           schema:
             type: string
             enum: ["true", "false"]
@@ -197,21 +199,19 @@ paths:
           description: |
             Number of log entries to retrieve.
 
-            If `follow` is true, this parameter is ignored and defaults to zero.
+            If `follow` is true, `n` is ignored.
 
-            In non-follow mode, the default value is server-defined, currently 30.
+            If `follow` is false:
 
-            If `n` is -1, all available logs are returned (up to a server-defined limit).
-
-            If `n` is 0 and `follow` is false, a server-defined default number of logs is returned.
-
-            If `n` is a positive integer, up to that many logs are returned.
+            - If `n` is -1, all available logs are returned (up to a server-defined limit).
+            - If `n` is 0 or not specified, a server-defined default number of logs is returned. The default is currently 30.
+            - If `n` is a positive integer, up to that many logs are returned.
           schema:
             type: integer
             format: int32
       responses:
         "200":
-          description: Get service logs in JSON lines format.
+          description: Service logs in JSON lines format.
           content:
             application/x-ndjson:
               schema:
@@ -247,11 +247,11 @@ paths:
               required:
                 - signal
                 - services
-              example:
-                {
-                  "signal": "SIGHUP",
-                  "services": ["svc1"]
-                }
+            example:
+              {
+                "signal": "SIGHUP",
+                "services": ["svc1"]
+              }
       responses:
         "200":
           description: Signal sent successfully
@@ -335,7 +335,7 @@ paths:
             type: string
       responses:
         "200":
-          description: Get checks
+          description: Information about health checks.
           content:
             application/json:
               schema:
@@ -386,7 +386,9 @@ paths:
             type: string
         - name: itself
           in: query
-          description: Whether to list the directory itself, rather than its contents for the "list" action.
+          description: |
+            For the "list" action, `itself` specifies whether to return information about the directory itself ("true")
+            or list the contents of the directory ("false").
           schema:
             type: string
             enum: ["false", "true"]
@@ -438,15 +440,15 @@ paths:
                     ]
                   }
     post:
-      summary: Create, write, remove files/directories.
+      summary: Create, write, remove files/directories
       tags:
         - files
       description: |
-        Write content to a path on the remote system;
-        
-        creates a directory or directory tree;
+        This endpoint can:
 
-        delete a file or directory.
+        - Write content to a path on the remote system. For this mode, use a multipart/form-data request body with JSON metadata in the first part. In the JSON metadata, set `action` to `write`.
+        - Create a directory or directory tree. For this mode, use an application/json request body with `action` set to `make-dirs`.
+        - Delete a file or directory. For this mode, use an application/json request body with `action` set to `remove`.
       requestBody:
         content:
           multipart/form-data:  # action: write
@@ -495,7 +497,7 @@ paths:
       summary: Execute a command
       tags:
         - files
-      description: Start a command with the given options, return a value representing the process.
+      description: Start a command with the given options and return a value representing the process.
       requestBody:
         required: true
         content:
@@ -581,7 +583,7 @@ paths:
             type: string
       responses:
         "200":
-          description: Get changes
+          description: Information about changes.
           content:
             application/json:
               schema:
@@ -682,7 +684,7 @@ paths:
                   }
                 }
     post:
-      summary: Perform an action on a change.
+      summary: Perform an action on a change
       tags:
         - changes
       description: Perform an action on a change. Currently the only supported action is "abort".
@@ -809,13 +811,13 @@ paths:
       parameters:
         - in: query
           name: user-id
-          description: Filter notices by user ID (admin only). Only one user ID can be specified.
+          description: Filter notices by user ID. Only one user ID can be specified. This parameter can only be used by admin users.
           schema:
             type: integer
             format: int32
         - in: query
           name: users
-          description: If set to "all", return notices for all users (admin only). Cannot be used with `user-id`.
+          description: If set to "all", return notices for all users. Cannot be used with `user-id`. This parameter can only be used by admin users.
           schema:
             type: string
             enum: ["all"]
@@ -848,7 +850,7 @@ paths:
             format: duration
       responses:
         "200":
-          description: Successful response.
+          description: Notices successfully retrieved.
           content:
             application/json:
               schema:
