@@ -214,8 +214,14 @@ window.onload = function() {
 
   // Make sure to match the tags defined in openapi.yaml
   addSwaggerTagsToTOC([
+    "plan",
+    "services",
+    "checks",
+    "files",
     "changes",
-    "services"
+    "notices",
+    "identities",
+    "system"
   ]);
 }
 </script>
