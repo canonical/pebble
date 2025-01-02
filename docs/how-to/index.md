@@ -37,3 +37,15 @@ Use named "identities" to allow additional users to access the API.
 
 Manage identities <manage-identities>
 ```
+
+
+## API
+
+To integrate Pebble with your automated workflows, you can use Pebble API.
+
+```{toctree}
+:titlesonly:
+:maxdepth: 1
+
+Use Pebble API <use-pebble-api>
+```

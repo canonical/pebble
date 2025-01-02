@@ -1,30 +1,27 @@
 # API
 
-Pebble exposes an HTTP API that remote clients can use to interact with the daemon. The API has endpoints for starting and stopping services, adding configuration layers to the plan, and so on.
-
-The API uses HTTP over a Unix socket, with access to the API controlled by user ID. If `pebble run` is started with the `--http <address>` option, Pebble exposes a limited set of open-access endpoints (see {ref}`api-access-levels`) using the given TCP address.
+```{include} /reuse/api.md
+   :start-after: Start: Pebble API overview
+   :end-before: End: Pebble API overview
+```
 
 ## Using the API
 
 You can use different tools and clients to access the API.
 
-For more examples, see "How to use Pebble API". <!-- [David] Link to the how-to guide -->
+For more examples, see [How to use Pebble API](../how-to/use-pebble-api).
 
 ### curl
 
 To access the API endpoints over the Unix socket, use the `--unix-socket` option of `curl`. For example:
 
-* TODO
+```bash
+curl --unix-socket $PEBBLE/.pebble.socket -XGET http://localhost/v1/services
+```
 
-    ```
-    curl ...
-    ```
-
-* TODO
-
-    ```
-    curl ...
-    ```
+```bash
+curl --unix-socket $PEBBLE/.pebble.socket -XPOST http://localhost/v1/services -d '{"action": "start", "services": ["svc1"]}'
+```
 
 ### Go client
 
