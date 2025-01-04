@@ -29,7 +29,7 @@ Manage service dependencies <service-dependencies>
 
 ## Logging
 
-To better understand the operation of the system, you may need to work with logs.
+To better understand the operation of the services, you may need to work with logs.
 
 ```{toctree}
 :titlesonly:
