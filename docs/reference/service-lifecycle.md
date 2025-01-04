@@ -1,6 +1,6 @@
 # Service lifecycle
 
-Pebble manages the lifecycle of a service, including starting, stopping, and restarting it, with a focus on handling health checks and failures, and implementing auto-restart with backoff strategies, which are achieved using a state machine with the following states:
+Pebble manages the lifecycle of a service, including starting, stopping, and restarting it. Pebble also handles health checks, failures, and auto-restart with backoff. This is all achieved using a state machine with the following states:
 
 - initial: The service's initial state.
 - starting: The service is in the process of starting.
@@ -23,7 +23,7 @@ No matter if the service is in the "starting" or "running" state, if you get the
 
 ## Start failure
 
-If the service exits quickly, the started channel receives an error. The error, along with the last logs, are added to the task (see more in [Changes and tasks](/reference/changes-and-tasks.md)). This also ensures logs are accessible.
+If the service exits quickly, an error along with the last logs are added to the task (see more in [Changes and tasks](/reference/changes-and-tasks.md)). This also ensures logs are accessible.
 
 ## Abort start
 
@@ -31,9 +31,11 @@ If the user interrupts the start process (e.g., with a SIGKILL), the service tra
 
 ## Auto-restart
 
-By default, Pebble's service manager automatically restarts services that exit unexpectedly, regardless of whether the service is in the "starting" state (the `okayDelay` period has not passed) or in the "running" state (`okayDelay` is passed, and the service is considered to be "running").
+By default, Pebble's service manager automatically restarts services that exit unexpectedly, regardless of whether the service is in the "starting" state (the `okayDelay` period has not passed) or in the "running" state (`okayDelay` has passed, and the service is considered to be "running").
 
-This is done whether the exit code is zero or non-zero, but you can fine-tune the behaviour using the `on-success` and `on-failure` fields in a configuration layer. The possible values for these fields are:
+Pebble considers a service to have exited unexpectedly if the exit code is non-zero.
+
+You can fine-tune the auto-restart behaviour using the `on-success` and `on-failure` fields in a configuration layer. The possible values for these fields are:
 
 * `restart`: restart the service and enter a restart-backoff loop (the default behaviour).
 * `shutdown`: shut down and exit the Pebble daemon (with exit code 0 if the service exits successfully, exit code 10 otherwise)
@@ -47,7 +49,7 @@ Pebble implements a backoff mechanism that increases the delay before restarting
 
 The `backoff-delay` defaults to half a second, the `backoff-factor` defaults to 2.0 (doubling), and the increasing delay is capped at `backoff-limit`, which defaults to 30 seconds. All of the three configurations can be customized, read more in [Layer specification](../reference/layer-specification).
 
-For example, with default settings for the above configuration, in `restart` mode, the first time a service exits, Pebble waits for half a second. If the service exits again, Pebble calculates the next backoff delay by multiplying the current delay by `backoff-factor`, which results in a 1-second delay. The next delay will be 2 seconds, then 4 seconds, and so on, capped at 30 seconds.
+With default settings for the above configuration, in `restart` mode, the first time a service exits, Pebble waits for half a second. If the service exits again, Pebble calculates the next backoff delay by multiplying the current delay by `backoff-factor`, which results in a 1-second delay. The next delay will be 2 seconds, then 4 seconds, and so on, capped at 30 seconds.
 
 The `backoff-limit` value is also used as a "backoff reset" time. If the service stays running after a restart for `backoff-limit` seconds, the backoff process is reset and the delay reverts to `backoff-delay`.
 

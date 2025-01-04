@@ -35,14 +35,6 @@ Health checks can be incorporated into the deployment process. After a new versi
 
 By quickly identifying unhealthy services, health checks can help prevent cascading failures. For example, load balancers and service discovery mechanisms can use health check information to route traffic away from failing services, giving them time to recover.
 
-### More on health checks
-
-Note that a health check is no silver bullet, it can't solve all the reliability challenges posed by the microservice architecture. For example, while health checks can detect the consequence of network issues (e.g., inability to connect to a dependency), they can't fix the underlying network problem itself; and while health checks are a valuable part of a monitoring strategy, they can't replace comprehensive testing and monitoring.
-
-Please also note that although health checks are running on a schedule, they should not be used to run scheduled jobs such as periodic backups.
-
-In summary, health checks are a powerful tool for improving the reliability of microservices by enabling early detection of problems and making automated recovery possible.
-
 ## Using health checks of the HTTP type
 
 A health check of the HTTP type issues HTTP `GET` requests to the health check URL at a user-specified interval.
@@ -87,6 +79,14 @@ services:
         on-check-failure:
             svc1-up: restart
 ```
+
+## Limitations of health checks
+
+Note that a health check is no silver bullet, it can't solve all the reliability challenges posed by the microservice architecture. For example, while health checks can detect the consequence of network issues (e.g., inability to connect to a dependency), they can't fix the underlying network problem itself; and while health checks are a valuable part of a monitoring strategy, they can't replace comprehensive testing and monitoring.
+
+Please also note that although health checks are running on a schedule, they should not be used to run scheduled jobs such as periodic backups.
+
+In summary, health checks are a powerful tool for improving the reliability of microservices by enabling early detection of problems and making automated recovery possible.
 
 ## See more
 
