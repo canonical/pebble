@@ -1,43 +1,37 @@
-# How to use Pebble API
+# How to use the Pebble API to manage services
 
-Pebble, as a service manager, provides a command-line interface (CLI) for managing services, similar to systemd. However, Pebble distinguishes itself with its dedicated REST API.
+Pebble provides a command-line interface (CLI) for managing services, similar to systemd. However, Pebble distinguishes itself with its dedicated REST API.
 
-While you can interact with systemd programmatically, it's typically done through [D-Bus](https://en.wikipedia.org/wiki/D-Bus) (a message-oriented middleware mechanism that allows communication between multiple processes running concurrently on the same machine), which has a steeper learning curve and requires more specialized code compared to using a REST API.
-
-This is where Pebble shines, because in contrast, Pebble's REST API offers a simpler, more standardized approach to service management, making it easier to integrate into automated workflows like Continuous Integration/Continuous Deployment (CI/CD) pipelines, unlocking much more potential of Pebble.
+This guide demonstrates how to use the Pebble API to programmatically manage services as part of an automated workflow.
 
 ---
 
 ## API and automated workflows
 
-While the CLI is convenient for manual operations, the API enables integration with automated workflows.
+As an example scenario, consider an automated workflow that starts and tests a group of inter-dependent services as part of a continuous integration pipeline. The tests could include verifying that the services are running, querying their status and health, and running integration tests. After testing the services, the workflow stops the services.
 
-Consider a CI pipeline that needs to setup some services before running tests and teardown the environment afterwards. Rather than relying on shell scripts and CLI commands which are error-prone and hard to maintain, the Pebble API offers a more robust and structured (service orchestration as code) approach. You can programmatically start, stop, and query the status and health of services before running tests in your CI workflows, allowing for tighter integration and more reliable automation.
+Although you could use shell scripts and CLI commands to implement the workflow, the Pebble API enables a more robust and maintainable approach:
 
-For example, your CI workflow could start a service or even a group of inter-dependent services, verify services are running and health checks are OK, run integration tests against those services, and finally stop the services as a cleanup step. This automation reduces intervention, reduces risks of human errors, and ensures consistency and idempotency across different environments.
+- You don't need to parse command output.
+- You can handle errors in a more sophisticated way.
+- You can encapsulate service operations within reusable functions and modules.
 
-The Pebble API offers a significant advantage over CLI-based approaches in CI/CD pipelines. First of all, the structured interface simplifies interactions, eliminating the need for parsing command output. Second, API enables more sophisticated error handling. Last but not least, using the API promotes code reusability and maintainability, because instead of hard-coding shell commands throughout the CI workflow definition, we can encapsulate service operations within dedicated functions and modules, which leads to cleaner and more maintainable workflows.
-
----
-
-## Pebble API
-
-```{include} /reuse/api.md
-   :start-after: Start: Pebble API overview
-   :end-before: End: Pebble API overview
-```
-
-For more information, see [API](/reference/api).
+This approach reduces manual intervention and the risk of human error. It also supports consistency and idempotency across different environments.
 
 ---
 
 ## Using the API
+```{include} /reuse/api.md
+   :start-after: Start: Pebble API overview
+   :end-before: End: Pebble API overview
+```
+For reference information about the API, see [](../explanation/api-and-clients) and [](../reference/api).
 
-You can use different tools and clients to access the API. For more examples, see [API and clients](../explanation/api-and-clients) and the [API reference doc](../reference/api).
+---
 
 ### curl
 
-At the moment (v1.17.0), only a handful of Pebble APIs are exposed via HTTP, most APIs are only available via the linux websocket. With curl, there is a `H       `--unix-socket <path>` parameter, which allows us to connect through this Unix domain socket instead of using the network. In this section, let's see how we can use curl to access Pebble API via the unix socket.
+Most API endpoints are only available via the Unix socket. With curl, there is a `--unix-socket <path>` parameter, which allows us to connect through this Unix socket instead of using the network. In this section, let's see how we can use curl to access the API via the Unix socket.
 
 Suppose we start the Pebble daemon with no default services and an empty layer:
 
@@ -60,7 +54,7 @@ And we should get the following JSON response showing that there is no service:
 {"type":"sync","status-code":200,"status":"OK","result":[]}
 ```
 
-To add a simple layer with one service. run:
+To add a simple layer with one service, run:
 
 ```bash
 curl --unix-socket $PEBBLE/.pebble.socket -XPOST http://localhost/v1/layers -d '{"action": "add", "combine": true, "inner": true, "label": "ci", "format": "yaml", "layer": "summary: ci\nservices:\n  svc1:\n    override: replace\n    command: sleep 100\n"}'
@@ -137,7 +131,7 @@ And we shall get a response similar to the following:
 
 If we try to get the services again, we can see it's active now.
 
-We can integrate these steps in our CI workflow to start services and dependencies, and now we can run some tests against them. Of course, after the CI workflow is finished, we want to do some cleanup like stopping those services.
+We can integrate these steps in our automated workflow to start services and their dependencies. Then we're able to run some tests against the services. As a final step in the workflow, we'll want to stop the services.
 
 To stop a service, run:
 
@@ -145,7 +139,7 @@ To stop a service, run:
 curl --unix-socket $PEBBLE/.pebble.socket -XPOST http://localhost/v1/services -d '{"action": "stop", "services": ["svc1"]}'
 ```
 
-As aforementioned, this endpoint is `async`. We will get a response similar to:
+This endpoint is `async`, so we'll get a response similar to:
 
 ```json
 {"type":"async","status-code":202,"status":"Accepted","change":"2","result":null}
@@ -276,6 +270,6 @@ client.wait_change(changeID)
 ## See more
 
 - [Go client](https://pkg.go.dev/github.com/canonical/pebble/client)
-- [Python client for Pebble API](https://ops.readthedocs.io/en/latest/reference/pebble.html). 
+- [Python client for Pebble API](https://ops.readthedocs.io/en/latest/reference/pebble.html)
 - [API and clients](../explanation/api-and-clients)
 - [API](../reference/api)

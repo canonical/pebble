@@ -41,7 +41,7 @@ Manage identities <manage-identities>
 
 ## API
 
-To integrate Pebble with your automated workflows, you can use Pebble API.
+To integrate Pebble with your automated workflows, you can use the Pebble API.
 
 ```{toctree}
 :titlesonly:
