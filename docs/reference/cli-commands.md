@@ -191,7 +191,7 @@ error: cannot perform the following tasks:
 - exec command "sleep" (timed out after 1s: context deadline exceeded)
 ```
 
-Read more: [Use Pebble in containers](pebble-in-containers.md).
+Read more: [How to use Pebble to manage remote systems](/how-to/manage-remote-systems.md).
 
 
 (reference_pebble_health_command)=
@@ -410,7 +410,7 @@ may be specified for the last path element.
 ```
 <!-- END AUTOMATED OUTPUT FOR ls -->
 
-Read more: [Use Pebble in containers](pebble-in-containers.md).
+Read more: [How to use Pebble to manage remote systems](/how-to/manage-remote-systems.md).
 
 
 (reference_pebble_mkdir_command)=
@@ -437,7 +437,7 @@ The mkdir command creates the specified directory.
 ```
 <!-- END AUTOMATED OUTPUT FOR mkdir -->
 
-Read more: [Use Pebble in containers](pebble-in-containers.md).
+Read more: [How to use Pebble to manage remote systems](/how-to/manage-remote-systems.md).
 
 
 (reference_pebble_notice_command)=
@@ -640,7 +640,7 @@ The pull command retrieves a file from the remote system.
 ```
 <!-- END AUTOMATED OUTPUT FOR pull -->
 
-Read more: [Use Pebble in containers](pebble-in-containers.md).
+Read more: [How to use Pebble to manage remote systems](/how-to/manage-remote-systems.md).
 
 
 (reference_pebble_push_command)=
@@ -666,7 +666,7 @@ The push command transfers a file to the remote system.
 ```
 <!-- END AUTOMATED OUTPUT FOR push -->
 
-Read more: [Use Pebble in containers](pebble-in-containers.md).
+Read more: [How to use Pebble to manage remote systems](/how-to/manage-remote-systems.md).
 
 
 (reference_pebble_remove-identities_command)=
@@ -810,7 +810,7 @@ The rm command removes a file or directory.
 ```
 <!-- END AUTOMATED OUTPUT FOR rm -->
 
-Read more: [Use Pebble in containers](pebble-in-containers.md).
+Read more: [How to use Pebble to manage remote systems](/how-to/manage-remote-systems.md).
 
 
 (reference_pebble_run_command)=
