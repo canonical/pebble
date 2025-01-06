@@ -27,6 +27,18 @@ Manage service dependencies <service-dependencies>
 ```
 
 
+## Manage remote systems
+
+Pebble provides exec and file management APIs to coordinate with remote systems.
+
+```{toctree}
+:titlesonly:
+:maxdepth: 1
+
+Manage remote systems <manage-remote-systems>
+```
+
+
 ## Identities
 
 Use named "identities" to allow additional users to access the API.
