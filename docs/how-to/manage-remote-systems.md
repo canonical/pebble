@@ -1,22 +1,20 @@
 # How to use Pebble to manage remote systems
 
-Managing a cluster of servers remotely is no mean task. It is not only time-consuming since servers need regular software updates, configuration changes, file transfer, and command executions, but also presents security challenges because remote access requires opening ports which increases the potential attack surface.
+Managing a cluster of servers remotely is no mean task. It is not only time-consuming since servers need regular software updates, configuration changes, file transfers, and command executions, but it also presents security challenges because remote access requires opening ports, which increases the potential attack surface.
 
-While it's possible to manually execute commands on remote servers and transfer files from/to remote servers, it is not the most efficient (or secure) approach. There exist several other methods for remote command execution and system administration. Secure Shell (SSH) is one of them, and there are also dedicated configuration management tools like Ansible. However, to use these tools, an extra port for SSH needs to be opened, which not only increases the operational overhead of managing public/private keys but also the potential attack surface.
+While it's possible to manually execute commands on remote servers and transfer files from/to remote servers, it is not the most efficient (or secure) approach. Several other methods exist for remote command execution and system administration. Secure Shell (SSH) is one of them, and there are also dedicated configuration management tools like Ansible. However, to use these tools, an extra port for SSH needs to be opened, which not only increases the operational overhead of managing public/private keys but also the potential attack surface.
 
 ---
 
 ## Pebble in remote systems
 
-Pebble provides various commands and APIs to run commands and manage files and directories in remote systems. With these capabilities, if we run Pebble in a remote system like in a separate container, we can use Pebble APIs coordinate with the remote system without opening a new port.
-
-To know more about Pebble APIs, read [API and clients](/explanation/api-and-clients) and the [API spec](/reference/api).
+Pebble provides various commands and APIs to run commands and manage files and directories in remote systems. With these capabilities, if we run Pebble in a remote system like in a separate container, we can use Pebble APIs to coordinate with the remote system without opening a new port.
 
 ---
 
 ## Run commands in remote systems
 
-One common task in system administration is to update and install packages in remote servers. With Pebble, we can use the `pebble exec` command to achieve this.
+One common task in system administration is updating and installing packages on remote servers. With Pebble, we can use the `pebble exec` command to achieve this.
 
 For example, if Pebble is running with a user with root privilege, we can use this command to update and install packages in remote systems:
 
@@ -67,20 +65,28 @@ With Pebble, this can be done easily. For example, if we want to install Nginx, 
 pebble exec apt install nginx
 ```
 
-Then create our website:
+Then create our website _locally_:
 
 ```bash
-sudo mkdir -p /var/www/pebble
+echo "Hello, Pebble!" > /tmp/index.html
+```
 
-sudo bash -c 'cat <<EOF > /var/www/pebble/index.html
-Hello, Pebble!
-EOF'
+Create a directory in the remote system:
+
+```bash
+pebble mkdir -p /var/www/pebble
+```
+
+Push our local website file to the remote system:
+
+```bash
+pebble push /tmp/index.html /var/www/pebble/index.html
 ```
 
 Create a virtual host configuration _locally_:
 
 ```
-cat <<EOF > ~/pebble
+cat <<EOF > /tmp/pebble
 server {
        listen 81;
        listen [::]:81;
@@ -91,7 +97,7 @@ server {
        index index.html;
 
        location / {
-               try_files $uri $uri/ =404;
+               try_files \$uri \$uri/ =404;
        }
 }
 EOF
@@ -100,23 +106,23 @@ EOF
 Push the file to the remote system:
 
 ```bash
-pebble push ~/pebble /etc/nginx/sites-enabled/pebble
+pebble push /tmp/pebble /etc/nginx/sites-enabled/pebble
 ```
 
-Activate the newly added virtual host:
+Activate the newly added virtual host in the remote system by restarting Nginx:
 
 ```bash
 pebble exec service nginx restart
 ```
 
-And test our result:
+Finally, we can test the final result:
 
 ```{terminal}
 :input: curl localhost:81
 Hello, Pebble!
 ```
 
-For more information on Pebble files related commands, see:
+For more information on files related commands in Pebble, see:
 
 - {ref}`reference_pebble_ls_command`
 - {ref}`reference_pebble_mkdir_command`
@@ -128,8 +134,18 @@ For more information on Pebble files related commands, see:
 
 ## Use Pebble APIs
 
+In previous sections, we used Pebble commands to execute commands and manage files. For automation purposes, we can also do the same with Pebble API.
+
+For example, to push a file to the remote system, we can POST to the `/v1/files` endpoint:
+
+```bash
+curl --unix-socket $PEBBLE/.pebble.socket -XPOST localhost:4000/v1/files -H "Content-Type: multipart/form-data" -F request='{"action": "write", "files": [{"path": "/var/www/pebble/index.html", "make-dirs": true, "permissions": "644"}]}' -F 'files=@/tmp/index.html;type=application/octet-stream;filename=/var/www/pebble/index.html'
+```
+
 ---
 
 ## See more
 
-A summary, more links to Pebble CLI reference docs.
+In this guide, we used Pebble commands and curl to access the APIs. We can also access Pebble API using the Go client and Python client. For more information, see [How to use the Pebble API to manage services](/how-to/use-the-pebble-api).
+
+For more information on the API, read the [API spec](/reference/api).
