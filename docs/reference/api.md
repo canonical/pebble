@@ -9,7 +9,7 @@
 
 You can use different tools and clients to access the API.
 
-For more examples, see [How to use Pebble API](../how-to/use-pebble-api).
+For more examples, see [How to use Pebble API](../how-to/use-the-pebble-api).
 
 ### curl
 
