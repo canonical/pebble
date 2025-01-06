@@ -2,7 +2,7 @@
 
 Managing a cluster of servers remotely is no mean task. It is not only time-consuming since servers need regular software updates, configuration changes, file transfers, and command executions, but it also presents security challenges because remote access requires opening ports, which increases the potential attack surface.
 
-While it's possible to manually execute commands on remote servers and transfer files from/to remote servers, it is not the most efficient (or secure) approach. Several other methods exist for remote command execution and system administration. Secure Shell (SSH) is one of them, and there are also dedicated configuration management tools like Ansible. However, to use these tools, an extra port for SSH needs to be opened, which not only increases the operational overhead of managing public/private keys but also the potential attack surface.
+While it's possible to manually execute commands on remote servers and transfer files from/to remote servers, it is not the most efficient (or secure) approach. Several other methods exist for remote command execution and system administration. Secure Shell (SSH) is one of them, and there are also dedicated configuration management tools like Ansible. However, to use these tools, an extra port for SSH needs to be opened, which not only increases the operational overhead of managing public/private keys but also the potential attack surface. Remember March 29, 2024 which seemed to be another normal Friday? A developer shocked the world by revealing an XZ Utils (data-compression utilities) backdoor which could potentially enable unauthorized access via SSH and remote code execution (read the full story [here](https://www.ssh.com/blog/a-recap-of-the-openssh-and-xz-liblzma-incident)).
 
 ---
 
