@@ -24,6 +24,7 @@ As your needs grow, you may want to orchestrate multiple services.
 :maxdepth: 1
 
 Manage service dependencies <service-dependencies>
+Use layers <use-layers>
 ```
 
 

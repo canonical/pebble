@@ -37,7 +37,7 @@ export PEBBLE=$HOME/.config/pebble
 echo "export PEBBLE=$HOME/.config/pebble" >> ~/.bashrc
 ```
 
-Next, create a [configuration layer](../reference/layers.md) by running:
+Next, create a [configuration layer](../how-to/use-layers.md) by running:
 
 ```{code-block} bash
 :emphasize-lines: 8
@@ -245,5 +245,5 @@ http-server-2  enabled  active   today at 11:40 UTC
 - To learn more about running the Pebble daemon, see [`pebble run`](#reference_pebble_run_command) command.
 - To learn more about viewing, starting and stopping services, see [`pebble services`](#reference_pebble_services_command) command, [`pebble start`](#reference_pebble_start_command) command, and [`pebble stop`](reference_pebble_stop_command) command.
 - To learn more about updating and restarting services, see [`pebble replan`](reference_pebble_replan_command) command.
-- To learn more about configuring layers, see [Layers](../reference/layers.md).
+- To learn more about configuring layers, see [How to use layers](../how-to/use-layers.md).
 - To learn more about layer configuration options, read the [Layer specification](../reference/layer-specification.md).
