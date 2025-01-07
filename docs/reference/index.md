@@ -16,7 +16,6 @@ Changes and tasks <changes-and-tasks>
 CLI commands <cli-commands>
 Health checks <health-checks>
 Identities <identities>
-Layers <layers>
 Layer specification <layer-specification>
 Log forwarding <log-forwarding>
 Notices <notices>
