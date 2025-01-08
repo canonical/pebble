@@ -17,6 +17,7 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"os/signal"
 	"strconv"
@@ -62,6 +63,9 @@ var sharedRunEnterArgsHelp = map[string]string{
 	"--args":        "Provide additional arguments to a service",
 	"--identities":  "Seed identities from file (like update-identities --replace)",
 }
+var runArgsHelp = map[string]string{
+	"--dry": "Start {{.DisplayName}} without side-effects",
+}
 
 type cmdRun struct {
 	client *client.Client
@@ -69,15 +73,19 @@ type cmdRun struct {
 	socketPath string
 	pebbleDir  string
 
+	DryRun bool `long:"dry"`
 	sharedRunEnterOpts
 }
 
 func init() {
+	argsHelp := runArgsHelp
+	maps.Copy(argsHelp, sharedRunEnterArgsHelp)
+
 	AddCommand(&CmdInfo{
 		Name:        "run",
 		Summary:     cmdRunSummary,
 		Description: cmdRunDescription,
-		ArgsHelp:    sharedRunEnterArgsHelp,
+		ArgsHelp:    argsHelp,
 		New: func(opts *CmdOptions) flags.Commander {
 			return &cmdRun{
 				client:     opts.Client,
@@ -185,6 +193,7 @@ func runDaemon(rcmd *cmdRun, ch chan os.Signal, ready chan<- func()) error {
 	dopts := daemon.Options{
 		Dir:        rcmd.pebbleDir,
 		SocketPath: rcmd.socketPath,
+		DryRun:     rcmd.DryRun,
 	}
 	if rcmd.Verbose {
 		dopts.ServiceOutput = os.Stdout
@@ -195,6 +204,16 @@ func runDaemon(rcmd *cmdRun, ch chan os.Signal, ready chan<- func()) error {
 	if err != nil {
 		return err
 	}
+
+	if rcmd.DryRun {
+		// Validation has been performed by initializing the daemon above, so we
+		// don't need the rest of the code to execute for dry-run.
+		// If a hook for manager-specific dry run logic is added in the future, it
+		// should be run immediately above this block.o
+		logger.Noticef("No error encountered: dry-run successful.")
+		return nil
+	}
+
 	if err := d.Init(); err != nil {
 		return err
 	}
