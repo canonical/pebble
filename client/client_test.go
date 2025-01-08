@@ -131,7 +131,7 @@ func (cs *clientSuite) TestContextCancellation(c *C) {
 
 func (cs *clientSuite) TestClientWorks(c *C) {
 	var v []int
-	cs.rsp = `[1, 2]`
+	cs.rsp = `[1,2]`
 	reqBody := io.NopCloser(strings.NewReader(""))
 	resp, err := cs.cli.Requester().Do(context.Background(), &client.RequestOptions{
 		Type:   client.RawRequest,
