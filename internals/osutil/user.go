@@ -28,6 +28,7 @@ import (
 var (
 	userCurrent     = user.Current
 	userLookup      = user.Lookup
+	userLookupId    = user.LookupId
 	userLookupGroup = user.LookupGroup
 
 	enoentMessage = syscall.ENOENT.Error()
@@ -112,11 +113,6 @@ func NormalizeUidGid(uid, gid *int, username, group string) (*int, *int, error) 
 				username, n, *uid)
 		}
 		uid = &n
-		if gid == nil && group == "" {
-			// Group not specified; use user's primary group ID
-			gidVal, _ := strconv.Atoi(u.Gid)
-			gid = &gidVal
-		}
 	}
 	if group != "" {
 		g, err := userLookupGroup(group)
@@ -134,11 +130,21 @@ func NormalizeUidGid(uid, gid *int, username, group string) (*int, *int, error) 
 		}
 		gid = &n
 	}
+	if gid == nil {
+		// Group not specified; use user's primary group ID
+		uidInfo, err := userLookupId(strconv.Itoa(*uid))
+		if err != nil {
+			if strings.Contains(err.Error(), enoentMessage) {
+				// Better error message to work around https://github.com/golang/go/issues/67912
+				return nil, nil, user.UnknownUserIdError(*uid)
+			}
+			return nil, nil, err
+		}
+		gidVal, _ := strconv.Atoi(uidInfo.Gid)
+		gid = &gidVal
+	}
 	if uid == nil && gid != nil {
 		return nil, nil, fmt.Errorf("must specify user, not just group")
-	}
-	if uid != nil && gid == nil {
-		return nil, nil, fmt.Errorf("must specify group, not just UID")
 	}
 	return uid, gid, nil
 }
