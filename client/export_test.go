@@ -15,10 +15,7 @@
 package client
 
 import (
-	"context"
 	"fmt"
-	"io"
-	"net/url"
 )
 
 var (
@@ -28,28 +25,6 @@ var (
 
 func (client *Client) SetDoer(d doer) {
 	client.Requester().(*defaultRequester).doer = d
-}
-
-// TODO: Clean up tests to use the new Requester API. Tests do not generate a client.response type
-// reply in the body while SyncRequest or AsyncRequest responses assume the JSON body can be
-// unmarshalled into client.response.
-func (client *Client) Do(method, path string, query url.Values, body io.Reader, v interface{}) error {
-	resp, err := client.Requester().Do(context.Background(), &RequestOptions{
-		Type:    RawRequest,
-		Method:  method,
-		Path:    path,
-		Query:   query,
-		Headers: nil,
-		Body:    body,
-	})
-	if err != nil {
-		return err
-	}
-	err = decodeInto(resp.Body, v)
-	if err != nil {
-		return err
-	}
-	return nil
 }
 
 func (client *Client) FakeAsyncRequest() (changeId string, err error) {

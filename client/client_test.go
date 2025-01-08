@@ -16,6 +16,7 @@ package client_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -101,7 +102,12 @@ func (cs *clientSuite) TestNewBaseURLError(c *C) {
 
 func (cs *clientSuite) TestClientDoReportsErrors(c *C) {
 	cs.err = errors.New("ouchie")
-	err := cs.cli.Do("GET", "/", nil, nil, nil)
+	_, err := cs.cli.Requester().Do(context.Background(), &client.RequestOptions{
+		Type:   client.RawRequest,
+		Method: "GET",
+		Path:   "/",
+	})
+	c.Assert(err, NotNil)
 	c.Check(err, ErrorMatches, "cannot communicate with server: ouchie")
 	if cs.doCalls < 2 {
 		c.Fatalf("do did not retry")
@@ -125,9 +131,17 @@ func (cs *clientSuite) TestContextCancellation(c *C) {
 
 func (cs *clientSuite) TestClientWorks(c *C) {
 	var v []int
-	cs.rsp = `[1,2]`
+	cs.rsp = `[1, 2]`
 	reqBody := io.NopCloser(strings.NewReader(""))
-	err := cs.cli.Do("GET", "/this", nil, reqBody, &v)
+	resp, err := cs.cli.Requester().Do(context.Background(), &client.RequestOptions{
+		Type:   client.RawRequest,
+		Method: "GET",
+		Path:   "/this",
+		Body:   reqBody,
+	})
+	c.Check(err, IsNil)
+	dec := json.NewDecoder(resp.Body)
+	err = dec.Decode(&v)
 	c.Check(err, IsNil)
 	c.Check(v, DeepEquals, []int{1, 2})
 	c.Assert(cs.req, NotNil)
@@ -138,8 +152,11 @@ func (cs *clientSuite) TestClientWorks(c *C) {
 }
 
 func (cs *clientSuite) TestClientDefaultsToNoAuthorization(c *C) {
-	var v string
-	_ = cs.cli.Do("GET", "/this", nil, nil, &v)
+	_, _ = cs.cli.Requester().Do(context.Background(), &client.RequestOptions{
+		Type:   client.RawRequest,
+		Method: "GET",
+		Path:   "/this",
+	})
 	c.Assert(cs.req, NotNil)
 	authorization := cs.req.Header.Get("Authorization")
 	c.Check(authorization, Equals, "")
@@ -288,9 +305,15 @@ func (cs *clientSuite) TestUserAgent(c *C) {
 	c.Assert(err, IsNil)
 	cli.SetDoer(cs)
 
+	resp, err := cli.Requester().Do(context.Background(), &client.RequestOptions{
+		Type:   client.RawRequest,
+		Method: "GET",
+		Path:   "/",
+	})
+	c.Assert(err, IsNil)
 	var v string
-	_ = cli.Do("GET", "/", nil, nil, &v)
-	c.Assert(cs.req, NotNil)
+	err = resp.DecodeResult(&v)
+	c.Assert(err, NotNil)
 	c.Check(cs.req.Header.Get("User-Agent"), Equals, "some-agent/9.87")
 }
 
