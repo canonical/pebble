@@ -11,13 +11,10 @@ Each of these services needs to be configured, started, and stopped in a coordin
 
 As the system scales, the operational overhead grows exponentially because multiple groups of applications need to be managed, and they need to be deployed in different environments with slightly different configurations. Without proper service orchestration tooling, managing dependencies and ensuring consistent behaviour across multiple services in multiple environments is complex and error-prone. 
 
-With Pebble, it's possible to reduce this operational overhead by splitting service configurations into different layers, and depending on how we make use of this feature, it can offer great advantages, especially when the system scales out:
+With Pebble, it's possible to reduce this operational overhead by splitting service configurations into different layers. Depending on how we make use of this feature, it can offer great advantages, especially when the system scales out:
 
-- We can organize services into logical groups, which greatly improves the readability and maintainability of the configurations. With this declarative, layered approach, it is easier to understand the overall system.
-- We can use a declarative and idempotent approach where we define one set of configurations per environment. In this way, we know exactly what's running in a given environment and we don't have to calculate values and patches to know what's in there.
-- While idempotency is generally desirable, layered configurations can also accommodate imperative overrides when necessary. For example, we can define base layers, environment-specific override layers, and temporary patch layers, so that we can apply the base layers across all environments, apply a temporary patch to a specific service, or customize a service for a particular environment.
-
----
+- We can organize services into logical groups, which greatly improves the readability and maintainability of the configurations. With this declarative, layered approach where we define one set of configurations per environment, it is easier to understand the overall system because in this way, we know exactly what's running in a given environment and we don't have to calculate overlays and patches to know what's in there. For an example, see {ref}`use_layers_as_logical_groups`.
+- While declarative is generally desirable, layered configurations can also accommodate imperative overrides when necessary. For example, we can define base layers, environment-specific override layers, and temporary patch layers, so that we can apply the base layers across all environments, apply a temporary patch to a specific service, or customize a service for a particular environment. The way to achieve this in Pebble is the same as how to organize services into logical groups, with each environment-specific setup as overlays. For an example, see {ref}`use_override_to_configure_environments_differently`.
 
 ## Pebble layers
 
@@ -25,7 +22,7 @@ A layer is a configuration file that defines the desired state of services runni
 
 Layers are organized within a `layers/` subdirectory in the `$PEBBLE` directory, and their filenames are similar to `001-base-layer.yaml`, where the numerically prefixed filenames ensure a specific order of the layers, and the labels after the prefix uniquely identifies the layer. For example, `001-base-layer.yaml`, `002-override-layer.yaml`.
 
-A layer specifies service properties like the command to execute, startup behaviour, dependencies on other services, and environment variables. For example, here is an example of the current configuration format:
+A layer specifies service properties like the command to execute, startup behaviour, dependencies on other services, and environment variables. For example:
 
 ```yaml
 summary: Simple layer
@@ -74,6 +71,37 @@ Each layer can define new services or modify existing ones defined in preceding 
 
 Any of the fields can be replaced individually in a merged service configuration. To illustrate, here is a sample override layer that might sit on top of the one defined in the previous section:
 
+```{code-block} yaml
+:emphasize-lines: 5-11,15-16,19-26
+
+summary: Simple override layer
+
+services:
+    srv1:
+        override: merge
+        environment:
+            VAR3: val3
+        after:
+            - srv4
+        before:
+            - srv5
+
+    srv2:
+        override: replace
+        summary: Replaced service
+        startup: disabled
+        command: cmd
+
+    srv4:
+        override: replace
+        command: cmd
+        startup: enabled
+
+    srv5:
+        override: replace
+        command: cmd
+```
+
 ```yaml
 summary: Simple override layer
 
@@ -105,8 +133,7 @@ services:
 
 See the [full layer specification](../reference/layer-specification) for more details.
 
----
-
+(use_layers_as_logical_groups)=
 ## Use layers as logical groups
 
 If we are to orchestrate multiple applications, we can group related ones into the same layer.
@@ -114,11 +141,11 @@ If we are to orchestrate multiple applications, we can group related ones into t
 For example, if we have an Nginx webserver serving two applications, each with a frontend, a backend and a database:
 
 ```
-nginx ──┬──> app2-frontend -> app2->backend -> app2-db
+nginx ──┬──> app1-frontend -> app1->backend -> app1-db
         └──> app2-frontend -> app2->backend -> app2-db
 ```
 
-We can group them by applications, for example:
+We can group them by application. For example:
 
 `001-nginx.yaml`:
 
@@ -194,7 +221,7 @@ services:
             - app2-backend
 ```
 
-Alternatively, we can also group them by functionalities:
+Alternatively, we can also group them by functionality, and it will yield the same result:
 
 `001-webserver.yaml`:
 
@@ -274,13 +301,13 @@ services:
         command: foo
         startup: enabled
 ```
----
 
-## Use override
+(use_override_to_configure_environments_differently)=
+## Use override to configure environments differently
 
 If we are to run the same set of services in multiple environments with slightly different configurations, we can use a base layer/environment override structure.
 
-For example, if we have a service `app1` running in both `dev` and `test` environments with slightly different configurations (for example, an environment variable named `ENV` with values as `dev` or `test), we can define a base layer, then two override layers, each for one environment:
+For example, if we have a service `app1` running in both `dev` and `test` environments with slightly different configurations (for example, an environment variable named `ENV` with values as `dev` or `test`), we can define a base layer and an override layer for each environment.
 
 `001-base-layer.yaml`:
 
@@ -322,7 +349,7 @@ services:
             ENV: test
 ```
 
-In this way, when we use Pebble to run this service in different environments we can put the `001-base-layer.yaml` file into all environments. Then, in the dev environment, we also put the `002-env-override-dev.yaml` file there, and in the test environment, only ``002-env-override-test.yaml`:
+In this way, when we use Pebble to run this service in different environments, we can put `001-base-layer.yaml` into all environments. Then we can put `002-env-override-dev.yaml` in the dev environment only, and `003-env-override-test.yaml` in the test environment only.
 
 Dev env:
 
