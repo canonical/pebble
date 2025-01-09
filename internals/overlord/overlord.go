@@ -137,10 +137,16 @@ func New(opts *Options) (*Overlord, error) {
 
 	statePath := filepath.Join(o.pebbleDir, cmd.StateFile)
 
-	backend := &overlordStateBackend{
-		path:         statePath,
-		ensureBefore: o.ensureBefore,
-		DryRun:       opts.DryRun,
+	var backend state.Backend
+	if opts.DryRun {
+		backend = &dryRunStateBackend{
+			ensureBefore: o.ensureBefore,
+		}
+	} else {
+		backend = &overlordStateBackend{
+			path:         statePath,
+			ensureBefore: o.ensureBefore,
+		}
 	}
 	s, restartMgr, err := loadState(statePath, opts.RestartHandler, backend)
 	if err != nil {

@@ -25,18 +25,25 @@ type overlordStateBackend struct {
 	path           string
 	ensureBefore   func(d time.Duration)
 	requestRestart func(t restart.RestartType)
-
-	// If this is true, the backend will not actually save anything to file.
-	DryRun bool
 }
 
 func (osb *overlordStateBackend) Checkpoint(data []byte) error {
-	if osb.DryRun {
-		return nil
-	}
 	return osutil.AtomicWriteFile(osb.path, data, 0600, 0)
 }
 
 func (osb *overlordStateBackend) EnsureBefore(d time.Duration) {
 	osb.ensureBefore(d)
+}
+
+// dryRunStateBackend is a backend that does not actually write anything
+type dryRunStateBackend struct {
+	ensureBefore func(d time.Duration)
+}
+
+func (b *dryRunStateBackend) Checkpoint(data []byte) error {
+	return nil
+}
+
+func (b *dryRunStateBackend) EnsureBefore(d time.Duration) {
+	b.ensureBefore(d)
 }
