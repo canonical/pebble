@@ -13,8 +13,9 @@ As the system scales, the operational overhead grows exponentially because multi
 
 With Pebble, it's possible to reduce this operational overhead by splitting service configurations into different layers. Depending on how we make use of this feature, it can offer great advantages, especially when the system scales out:
 
-- We can organize services into logical groups, which greatly improves the readability and maintainability of the configurations. With this declarative, layered approach where we define one set of configurations per environment, it is easier to understand the overall system because in this way, we know exactly what's running in a given environment and we don't have to calculate overlays and patches to know what's in there. For an example, see {ref}`use_layers_as_logical_groups`.
-- While declarative is generally desirable, layered configurations can also accommodate imperative overrides when necessary. For example, we can define base layers, environment-specific override layers, and temporary patch layers, so that we can apply the base layers across all environments, apply a temporary patch to a specific service, or customize a service for a particular environment. The way to achieve this in Pebble is the same as how to organize services into logical groups, with each environment-specific setup as overlays. For an example, see {ref}`use_override_to_configure_environments_differently`.
+- We can organize services into logical groups, which greatly improves the readability and maintainability of the configurations. With this declarative, layered approach where we define one set of configurations per environment, it is easier to understand the overall system because we don't have to calculate overlays and patches to know exactly what's running in a given environment. For an example, see {ref}`use_layers_as_logical_groups`.
+
+- While declarative is generally desirable, layered configurations can also accommodate imperative overrides when necessary. For example, we can define base layers, environment-specific override layers, and temporary patch layers. We can then apply the base layers across all environments, apply a temporary patch to a specific service, or customize a service for a particular environment. For an example, see {ref}`use_override_to_configure_environments_differently`.
 
 ## Pebble layers
 
@@ -74,35 +75,6 @@ Any of the fields can be replaced individually in a merged service configuration
 ```{code-block} yaml
 :emphasize-lines: 5-11,15-16,19-26
 
-summary: Simple override layer
-
-services:
-    srv1:
-        override: merge
-        environment:
-            VAR3: val3
-        after:
-            - srv4
-        before:
-            - srv5
-
-    srv2:
-        override: replace
-        summary: Replaced service
-        startup: disabled
-        command: cmd
-
-    srv4:
-        override: replace
-        command: cmd
-        startup: enabled
-
-    srv5:
-        override: replace
-        command: cmd
-```
-
-```yaml
 summary: Simple override layer
 
 services:
