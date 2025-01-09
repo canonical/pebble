@@ -2,8 +2,6 @@
 
 Managing a cluster of servers remotely is no mean feat. It is time-consuming because servers need regular software updates, configuration changes, file transfers, and command executions. It also presents security challenges because remote access requires opening ports, which increases the potential attack surface.
 
----
-
 ## Why use Pebble?
 
 Pebble provides commands and an HTTP API to run commands and manage files and directories in remote systems. If we run Pebble in a remote system, for example in a separate container, we can use Pebble to coordinate with the remote system without opening a new port.
@@ -11,8 +9,6 @@ Pebble provides commands and an HTTP API to run commands and manage files and di
 While it's possible to manually run commands on remote servers and transfer files from/to remote servers, this isn't the most efficient or secure approach. Even a configuration management tool such as Ansible requires an extra port to be opened for Secure Shell (SSH), which not only increases the operational overhead of managing public/private keys but also the potential attack surface.
 
 Remember March 29, 2024 which seemed to be another normal Friday? A developer shocked the world by revealing an XZ Utils (data-compression utilities) backdoor which could potentially enable unauthorized access via SSH and remote code execution (read the full story [here](https://en.wikipedia.org/wiki/XZ_Utils_backdoor)).
-
----
 
 ## Run commands in remote systems
 
@@ -54,8 +50,6 @@ To confirm the package is successfully installed in the remote system, run:
 ```
 
 For more information on the Pebble `exec` command, see {ref}`reference_pebble_exec_command`.
-
----
 
 ## Manage files in remote systems
 
@@ -132,8 +126,6 @@ For more information about related Pebble commands, see:
 - {ref}`reference_pebble_push_command`
 - {ref}`reference_pebble_pull_command`
 
----
-
 ## Use the API
 
 In the previous sections, we used Pebble commands to run commands and manage files. When automating these tasks, we can use the HTTP API that Pebble provides.
@@ -143,8 +135,6 @@ For example, to push a file to the remote system, we can POST to the `/v1/files`
 ```bash
 curl --unix-socket $PEBBLE/.pebble.socket -XPOST localhost:4000/v1/files -H "Content-Type: multipart/form-data" -F request='{"action": "write", "files": [{"path": "/var/www/pebble/index.html", "make-dirs": true, "permissions": "644"}]}' -F 'files=@/tmp/index.html;type=application/octet-stream;filename=/var/www/pebble/index.html'
 ```
-
----
 
 ## See more
 
