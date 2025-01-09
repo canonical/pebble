@@ -4,8 +4,6 @@ Pebble provides a command-line interface (CLI) for managing services, similar to
 
 This guide demonstrates how to use the Pebble API to programmatically manage services as part of an automated workflow.
 
----
-
 ## API and automated workflows
 
 As an example scenario, consider an automated workflow that starts and tests a group of inter-dependent services as part of a continuous integration pipeline. The tests could include verifying that the services are running, querying their status and health, and running integration tests. After testing the services, the workflow stops the services.
@@ -18,16 +16,12 @@ Although you could use shell scripts and CLI commands to implement the workflow,
 
 This approach reduces manual intervention and the risk of human error. It also supports consistency and idempotency across different environments.
 
----
-
 ## Using the API
 ```{include} /reuse/api.md
    :start-after: Start: Pebble API overview
    :end-before: End: Pebble API overview
 ```
 For reference information about the API, see [](../explanation/api-and-clients) and [](../reference/api).
-
----
 
 ### curl
 
@@ -264,8 +258,6 @@ changeID = client.stop_services(["svc1"])
 # wait for the change
 client.wait_change(changeID)
 ```
-
----
 
 ## See more
 
