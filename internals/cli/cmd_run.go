@@ -64,7 +64,7 @@ var sharedRunEnterArgsHelp = map[string]string{
 	"--identities":  "Seed identities from file (like update-identities --replace)",
 }
 var runArgsHelp = map[string]string{
-	"--dry": "Start {{.DisplayName}} without side-effects",
+	"--dry": "Initializes {{.DisplayName}} without starting the daemon or side-effects",
 }
 
 type cmdRun struct {
@@ -180,14 +180,19 @@ func runDaemon(rcmd *cmdRun, ch chan os.Signal, ready chan<- func()) error {
 	t0 := time.Now().Truncate(time.Millisecond)
 
 	if rcmd.CreateDirs {
+		if rcmd.DryRun {
+			return errors.New("cannot use --create-dirs and --dry at the same time")
+		}
 		err := os.MkdirAll(rcmd.pebbleDir, 0755)
 		if err != nil {
 			return err
 		}
 	}
-	err = maybeCopyPebbleDir(rcmd.pebbleDir, getCopySource())
-	if err != nil {
-		return err
+	if !rcmd.DryRun {
+		err = maybeCopyPebbleDir(rcmd.pebbleDir, getCopySource())
+		if err != nil {
+			return err
+		}
 	}
 
 	dopts := daemon.Options{
@@ -205,17 +210,10 @@ func runDaemon(rcmd *cmdRun, ch chan os.Signal, ready chan<- func()) error {
 		return err
 	}
 
-	if rcmd.DryRun {
-		// Validation has been performed by initializing the daemon above, so we
-		// don't need the rest of the code to execute for dry-run.
-		// If a hook for manager-specific dry run logic is added in the future, it
-		// should be run immediately above this block.o
-		logger.Noticef("No error encountered: dry-run successful.")
-		return nil
-	}
-
-	if err := d.Init(); err != nil {
-		return err
+	if !rcmd.DryRun {
+		if err := d.Init(); err != nil {
+			return err
+		}
 	}
 
 	if rcmd.Args != nil {
@@ -223,9 +221,27 @@ func runDaemon(rcmd *cmdRun, ch chan os.Signal, ready chan<- func()) error {
 		if err != nil {
 			return err
 		}
+		if rcmd.DryRun {
+			logger.Noticef("Setting service args: %v", mappedArgs)
+		}
 		if err := d.SetServiceArgs(mappedArgs); err != nil {
 			return err
 		}
+	}
+
+	var identities map[string]*client.Identity
+	if rcmd.Identities != "" {
+		identities, err = readIdentities(rcmd.Identities)
+		if err != nil {
+			return fmt.Errorf("cannot read identities: %w", err)
+		}
+	}
+
+	if rcmd.DryRun {
+		// If a hook for manager-specific dry run logic is added in the future, it
+		// should be run immediately above this block.
+		logger.Noticef("No error encountered: dry-run successful.")
+		return nil
 	}
 
 	// Run sanity check now, if anything goes wrong with the
@@ -257,10 +273,6 @@ func runDaemon(rcmd *cmdRun, ch chan os.Signal, ready chan<- func()) error {
 	logger.Debugf("activation done in %v", time.Now().Truncate(time.Millisecond).Sub(t0))
 
 	if rcmd.Identities != "" {
-		identities, err := readIdentities(rcmd.Identities)
-		if err != nil {
-			return fmt.Errorf("cannot read identities: %w", err)
-		}
 		err = rcmd.client.ReplaceIdentities(identities)
 		if err != nil {
 			return fmt.Errorf("cannot replace identities: %w", err)
