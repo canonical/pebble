@@ -121,7 +121,7 @@ paths:
                 }
     post:
       summary: Manage services
-      description: Services operations, like start/stop/restart a service/services, auto-start default services, and replan.
+      description: Perform a service operation such as start, stop, or replan.
       tags:
         - services
       requestBody:
@@ -208,7 +208,6 @@ paths:
             - If `n` is a positive integer, up to that many logs are returned.
           schema:
             type: integer
-            format: int32
       responses:
         "200":
           description: Service logs in JSON lines format.
@@ -266,16 +265,58 @@ paths:
                   "status": "OK",
                   "result": true
                 }
+  /v1/checks:
+    get:
+      summary: Get checks
+      tags:
+        - checks
+      description: Fetch information about specific health checks (or all of them), ordered by check name.
+      parameters:
+        - name: level
+          in: query
+          description: Filter checks by level. If omitted, aggregate healthy status of checks with any (or no) level.
+          schema:
+            type: string
+            enum: [alive, ready]
+        - name: names
+          in: query
+          description: The names of the checks to get. To get multiple checks, specify this parameter multiple times. If not set, get all checks.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Information about health checks.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetChecksResponse"
+              example:
+                {
+                  "type": "sync",
+                  "status-code": 200,
+                  "status": "OK",
+                  "result": [
+                    {
+                      "name": "check1",
+                      "status": "up",
+                      "threshold": 3,
+                      "change-id": "37"
+                    }
+                  ]
+                }
   /v1/health:
     get:
       summary: Health of specified checks
-      description: Fetches healthy status of specified checks.
+      description: |
+        Fetches healthy status of specified checks.
+
+        See [Health endpoint](../health-checks#health-endpoint) for more details.
       tags:
         - checks
       parameters:
         - name: level
           in: query
-          description: Health check level.
+          description: Health check level. If omitted, aggregate healthy status of checks with any (or no) level.
           schema:
             type: string
             enum: [alive, ready]
@@ -314,45 +355,6 @@ paths:
                   "result": {
                     "healthy": false
                   }
-                }
-  /v1/checks:
-    get:
-      summary: Get checks
-      tags:
-        - checks
-      description: Fetch information about specific health checks (or all of them), ordered by check name.
-      parameters:
-        - name: level
-          in: query
-          description: Filter checks by level
-          schema:
-            type: string
-            enum: [alive, ready]
-        - name: names
-          in: query
-          description: The names of the checks to get. To get multiple checks, specify this parameter multiple times. If not set, get all checks.
-          schema:
-            type: string
-      responses:
-        "200":
-          description: Information about health checks.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/GetChecksResponse"
-              example:
-                {
-                  "type": "sync",
-                  "status-code": 200,
-                  "status": "OK",
-                  "result": [
-                    {
-                      "name": "check1",
-                      "status": "up",
-                      "threshold": 3,
-                      "change-id": "37"
-                    }
-                  ]
                 }
   /v1/files:
     get:
@@ -395,9 +397,27 @@ paths:
       responses:
         "200":
           description: |
-            For "read":  Multipart form data response with file contents and metadata.
-
             For "list": JSON array of file information.
+
+            For "read":  Multipart form data response with file contents and metadata. Raw multipart response example:
+
+            ```
+            Content-Type: multipart/form-data; boundary=01234567890123456789012345678901\r
+            --01234567890123456789012345678901\r
+            Content-Disposition: form-data; name="files"; filename="/etc/hosts"\r
+            \r
+            127.0.0.1 localhost  # \xf0\x9f\x98\x80\nfoo\r\nbar\r
+            --01234567890123456789012345678901\r
+            Content-Disposition: form-data; name="response"\r
+            \r
+            {
+                "result": [{"path": "/etc/hosts"}],
+                "status": "OK",
+                "status-code": 200,
+                "type": "sync"
+            }\r
+            --01234567890123456789012345678901--\r
+            ```
           content:
             application/json: # list
               schema:
@@ -450,6 +470,23 @@ paths:
         - Create a directory or directory tree. For this mode, use an application/json request body with `action` set to `make-dirs`.
         - Delete a file or directory. For this mode, use an application/json request body with `action` set to `remove`.
       requestBody:
+        description: |
+          For "read":  Multipart form data response with file contents and metadata. Raw multipart request example:
+
+          ```
+          Content-Type: multipart/form-data; boundary=------------------------CH5rDyBTPdcJALbspJ8rzb\r
+          \r
+          --------------------------CH5rDyBTPdcJALbspJ8rzb\r
+          Content-Disposition: form-data; name="request"\r
+          \r
+          {"action": "write", "files": [{"path": "/foo/bar", "00a4: make-dirs": true, "permissions": "644"}]}\r
+          --------------------------CH5rDyBTPdcJALbspJ8rzb\r
+          Content-Disposition: form-data; name="files"; filename="/foo/bar"\r
+          Content-Type: application/octet-stream\r
+          \r
+          some fake content.\r
+          --------------------------CH5rDyBTPdcJALbspJ8rzb--\r
+          ```
         content:
           multipart/form-data:  # action: write
             schema:
@@ -497,7 +534,12 @@ paths:
       summary: Execute a command
       tags:
         - files
-      description: Start a command with the given options and return a value representing the process.
+      description: |
+        Start a command with the given options and return a value representing the process.
+
+        This API returns a `task-id` (see the response schema and the example below),
+        then you need to call `/v1/tasks/{task-id}/websocket/control` and `/v1/tasks/{task-id}/websocket/stdio`
+        (also `/v1/tasks/{task-id}/websocket/stderr` if `split-stderr` is true) with the returned `task-id`.
       requestBody:
         required: true
         content:
@@ -527,41 +569,6 @@ paths:
                     "working-dir": "/home/ubuntu"
                   }
                 }
-  /v1/tasks/{task-id}/websocket/{websocket-id}:
-    get:
-      summary: Connect to a task's websocket
-      tags:
-        - files
-      description: Establishes a websocket connection to a specific task.
-      parameters:
-        - in: path
-          name: task-id
-          schema:
-            type: string
-          required: true
-          description: The ID of the task.
-        - in: path
-          name: websocket-id
-          schema:
-            type: string
-          required: true
-          description: The ID of the websocket.
-          enum: [control, stderr, stdio]
-      responses:
-        "101": # Switching Protocols (Successful Websocket Upgrade)
-          description: |
-            The connection is upgraded to the websocket protocol and the websocket connection is established.
-
-            Upon successful connection, Pebble server will respond with a `101 Switching Protocols` status code.
-            The 101 Switching Protocols response for websockets doesn't have a response body.
-            The following headers are expected in the 101 response:
-
-            - `Connection: Upgrade`
-            - `Upgrade: websocket`
-            - `Sec-WebSocket-Accept: <some_value>` (calculated based on the client's `Sec-WebSocket-Key`)
-          content: 
-            application/json: # A hack to make the automatically rendered result show "null" instead of "string" which is incorrect.
-              example: 
   /v1/changes:
     get:
       summary: Get changes
@@ -802,6 +809,35 @@ paths:
                     "ready-time": "2024-12-27T12:31:27.686371869+08:00"
                   }
                 }
+  /v1/tasks/{task-id}/websocket/{websocket-id}:
+    get:
+      summary: Connect to a task's websocket
+      tags:
+        - changes
+      description: Establishes a websocket connection to a specific task.
+      parameters:
+        - in: path
+          name: task-id
+          schema:
+            type: string
+          required: true
+          description: The ID of the task.
+        - in: path
+          name: websocket-id
+          schema:
+            type: string
+          required: true
+          description: The ID of the websocket.
+          enum: [control, stderr, stdio]
+      responses:
+        "101": # Switching Protocols (Successful Websocket Upgrade)
+          description: |
+            The connection is upgraded to the websocket protocol and the websocket connection is established.
+
+            The full websocket protocol is not documented. For details, see the [Python client code](https://github.com/canonical/operator/blob/main/ops/pebble.py#L1818).
+          content: 
+            application/json: # A hack to make the automatically rendered result show "null" instead of "string" which is incorrect.
+              example: 
   /v1/notices:
     get:
       summary: Get notices
@@ -814,7 +850,6 @@ paths:
           description: Filter notices by user ID. Only one user ID can be specified. This parameter can only be used by admin users.
           schema:
             type: integer
-            format: int32
         - in: query
           name: users
           description: If set to "all", return notices for all users. Cannot be used with `user-id`. This parameter can only be used by admin users.
@@ -823,7 +858,7 @@ paths:
             enum: ["all"]
         - in: query
           name: types
-          description: Filter notices by type. Multiple types can be specified as a comma-separated list.
+          description: Filter notices by type. To specify multiple types, include this parameter multiple times.
           schema:
             type: array
             items:
@@ -831,14 +866,14 @@ paths:
               enum: [change-update, custom, warning]
         - in: query
           name: keys
-          description: Filter notices by keys. Multiple keys can be specified as a comma-separated list.
+          description: Filter notices by keys. To specify multiple keys, include this parameter multiple times.
           schema:
             type: array
             items:
               type: string
         - in: query
           name: after
-          description: Filter notices occurring after the specified timestamp.
+          description: Filter notices occurring after the specified [time](#time).
           schema:
             type: string
             format: date-time
@@ -1006,7 +1041,10 @@ paths:
       summary: Manage identities
       tags:
         - identities
-      description: Add, update, replace, or remove identities in the system.
+      description: |
+        Add, update, replace, or remove identities in the system.
+
+        See [Identities](../identities) for the format of the identities data.
       requestBody:
         required: true
         content:
@@ -1251,14 +1289,12 @@ components:
           description: "Last modified [time](#time) in RFC3339 format."
         user-id:
           type: integer
-          format: int32
           description: User ID of the owner.
         user:
           type: string
           description: Username of the owner.
         group-id:
           type: integer
-          format: int32
           description: Group ID of the owner.
         group:
           type: string
@@ -1501,10 +1537,7 @@ components:
           description: Version of the Pebble daemon
         boot-id:
           type: string
-          description: |
-            Boot ID of the system, `/proc/sys/kernel/random/boot_id`.
-            Or `/proc/sys/kernel/random/uuid` if pebble is PID 1 since in this case we are most likely running in a container
-            so we don't care about `/proc/sys/kernel/random/boot_id`.
+          description: A unique string that represents this boot of the server.
     checkInfo:
       type: object
       properties:
@@ -1581,14 +1614,12 @@ components:
           description: Permissions for the created directory (octal format, e.g., "755").
         user-id:
           type: integer
-          format: int32
           description: User ID of the owner.
         user:
           type: string
           description: Username of the owner.
         group-id:
           type: integer
-          format: int32
           description: Group ID of the owner.
         group:
           type: string
@@ -1612,9 +1643,8 @@ components:
         id:
           type: string
           description: Server-generated unique ID for the notice.
-        user_id:
+        user-id:
           type: integer
-          format: int32
           nullable: true
           description: The user ID associated with the notice (null for public notices).
         type:
@@ -1667,5 +1697,4 @@ components:
           properties:
             user-id:
               type: integer
-              format: int32
               description: The user ID associated with the local identity.
