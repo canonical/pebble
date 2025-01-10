@@ -131,7 +131,8 @@ func NormalizeUidGid(uid, gid *int, username, group string) (*int, *int, error) 
 		gid = &n
 	}
 	if gid == nil {
-		// Group not specified; use user's primary group ID
+		// Neither gid nor group was specified
+		// Either uid or user must have been specified; use user's primary group ID
 		uidInfo, err := userLookupId(strconv.Itoa(*uid))
 		if err != nil {
 			if strings.Contains(err.Error(), enoentMessage) {
