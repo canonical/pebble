@@ -15,6 +15,7 @@
 package client
 
 import (
+	"context"
 	"fmt"
 )
 
@@ -28,7 +29,11 @@ func (client *Client) SetDoer(d doer) {
 }
 
 func (client *Client) FakeAsyncRequest() (changeId string, err error) {
-	resp, err := client.doAsync("GET", "/v1/async-test", nil, nil, nil, nil)
+	resp, err := client.Requester().Do(context.Background(), &RequestOptions{
+		Type:   AsyncRequest,
+		Method: "GET",
+		Path:   "/v1/async-test",
+	})
 	if err != nil {
 		return "", fmt.Errorf("cannot do async test: %v", err)
 	}
