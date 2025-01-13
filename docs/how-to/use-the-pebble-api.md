@@ -265,4 +265,3 @@ client.wait_change(changeID)
 - [Python client for Pebble API](https://ops.readthedocs.io/en/latest/reference/pebble.html)
 - [API and clients](../explanation/api-and-clients)
 - [API](../reference/api)
-
