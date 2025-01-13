@@ -15,15 +15,15 @@ For more examples, see "How to use Pebble API". <!-- [David] Link to the how-to 
 To access the API endpoints over the Unix socket, use the `--unix-socket` option of `curl`. For example:
 
 ```{terminal}
-   :input: curl --unix-socket /path/to/.pebble.socket -XPOST http://localhost/v1/services -d '{"action": "stop", "services": ["svc1"]}'
+   :input: curl --unix-socket /path/to/.pebble.socket http://_/v1/services --data '{"action": "stop", "services": ["svc1"]}'
 {"type":"async","status-code":202,"status":"Accepted","change":"42","result":null}
 ```
 
 <br />
 
 ```{terminal}
-   :input: curl --unix-socket /path/to/.pebble.socket -XGET localhost:4000/v1/changes/42/wait
-{"type":"sync","status-code":200,"status":"OK","result":{"id":"42","kind":"stop","summary":"Stop service \"svc1\"","status":"Done","tasks":[{"id":"42","kind":"stop","summary":"Stop service \"svc1\"","status":"Done","progress":{"label":"","done":1,"total":1},"spawn-time":"2025-01-10T10:59:53.903366896+08:00","ready-time":"2025-01-10T10:59:53.930409771+08:00"}],"ready":true,"spawn-time":"2025-01-10T10:59:53.903373188+08:00","ready-time":"2025-01-10T10:59:53.930410979+08:00"}}
+   :input: curl --unix-socket /path/to/.pebble.socket http://_/v1/changes/42/wait
+{"type":"sync","status-code":200,"status":"OK","result":{...}}
 ```
 
 ### Go client
@@ -56,8 +56,7 @@ The Ops library for writing and testing Juju charms includes a [Python client fo
 ```python
 import ops
 client = ops.pebble.Client("/path/to/.pebble.socket")
-changeID = client.stop_services(["mysvc"])
-client.wait_change(changeID)
+client.stop_services(["mysvc"])  # Python client also waits for change to finish
 ```
 
 For more information, see:
@@ -110,7 +109,7 @@ Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
 A timestamp is a string in the [RFC 3339](https://datatracker.ietf.org/doc/html/rfc3339) format with sub-second precision. Here are some examples:
 
 - "1985-04-12T23:20:50.52Z"
-- "1996-12-19T16:39:57-08:00"
+- "1996-12-19T16:39:57.123456789-08:00"
 
 ## Errors
 

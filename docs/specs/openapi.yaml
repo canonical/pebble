@@ -573,7 +573,7 @@ paths:
     get:
       summary: Get changes
       tags:
-        - changes
+        - changes and tasks
       description: Fetch information for the specified changes.
       parameters:
         - name: select
@@ -644,7 +644,7 @@ paths:
     get:
       summary: Get a specific change
       tags:
-        - changes
+        - changes and tasks
       description: Fetch information about a Change given its ID.
       parameters:
         - name: id
@@ -693,7 +693,7 @@ paths:
     post:
       summary: Perform an action on a change
       tags:
-        - changes
+        - changes and tasks
       description: Perform an action on a change. Currently the only supported action is "abort".
       parameters:
         - name: id
@@ -756,7 +756,7 @@ paths:
         
         If the wait operation succeeds, the result will have the "err" field set to an appropriate error message if the change itself had an error.
       tags:
-        - changes
+        - changes and tasks
       parameters:
         - in: path
           name: id
@@ -813,7 +813,7 @@ paths:
     get:
       summary: Connect to a task's websocket
       tags:
-        - changes
+        - changes and tasks
       description: Establishes a websocket connection to a specific task.
       parameters:
         - in: path
@@ -1262,7 +1262,7 @@ components:
             format: binary
           description: Array of files. Each file part will have its own headers.
         response:
-          $ref: "#/components/schemas/PostFileResponse"
+          $ref: "#/components/schemas/PostFilesResponse"
     FileInfo:
       type: object
       properties:
