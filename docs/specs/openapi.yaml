@@ -8,7 +8,7 @@ paths:
       summary: Get changes
       tags:
         - changes and tasks
-      description: Fetch information for the specified changes.
+      description: This endpoint will fetch information for the specified changes.
       parameters:
         - name: select
           in: query
@@ -79,17 +79,17 @@ paths:
       summary: Get a specific change
       tags:
         - changes and tasks
-      description: Fetch information about a Change given its ID.
+      description: This endpoint will fetch information about a Change given its ID.
       parameters:
         - name: id
           in: path
           required: true
-          description: ID of the change
+          description: ID of the change.
           schema:
             type: string
       responses:
         "200":
-          description: Successful operation
+          description: Get change successfully.
           content:
             application/json:
               schema:
@@ -128,12 +128,12 @@ paths:
       summary: Perform an action on a change
       tags:
         - changes and tasks
-      description: Perform an action on a change. Currently the only supported action is "abort".
+      description: This endpoint will perform an action on a change. Currently the only supported action is "abort".
       parameters:
         - name: id
           in: path
           required: true
-          description: ID of the change
+          description: ID of the change.
           schema:
             type: string
       requestBody:
@@ -149,7 +149,7 @@ paths:
                   enum: [abort]
       responses:
         "200":
-          description: abort change
+          description: Change aborted.
           content:
             application/json:
               schema:
@@ -186,7 +186,7 @@ paths:
     get:
       summary: Wait for a change to complete
       description: |
-        Wait for the change to be finished.
+        This endpoint will wait for the change to be finished.
         
         If the wait operation succeeds, the result will have the "err" field set to an appropriate error message if the change itself had an error.
       tags:
@@ -208,7 +208,7 @@ paths:
             If not specified or zero, wait indefinitely until the change is ready.
       responses:
         "200":
-          description: Change information
+          description: Wait for change.
           content:
             application/json:
               schema:
@@ -248,7 +248,7 @@ paths:
       summary: Connect to a task's websocket
       tags:
         - changes and tasks
-      description: Establishes a websocket connection to a specific task.
+      description: This endpoint will establish a websocket connection to a specific task.
       parameters:
         - in: path
           name: task-id
@@ -277,7 +277,7 @@ paths:
       summary: Get checks
       tags:
         - checks
-      description: Fetch information about specific health checks (or all of them), ordered by check name.
+      description: This endpoint will fetch information about specific health checks (or all of them), ordered by check name.
       parameters:
         - name: level
           in: query
@@ -317,7 +317,7 @@ paths:
       tags:
         - exec
       description: |
-        Start a command with the given options and return a value representing the process.
+        This endpoint will start a command with the given options and return a value representing the process.
 
         This API returns a `task-id` (see the response schema and the example below),
         then you need to call `/v1/tasks/{task-id}/websocket/control` and `/v1/tasks/{task-id}/websocket/stdio`
@@ -356,7 +356,7 @@ paths:
       summary: Read or list files
       tags:
         - files
-      description: Read the contents of files or list files from the remote system.
+      description: This endpoint will read the contents of files or list files from the remote system.
       parameters:
         - name: action
           in: query
@@ -517,7 +517,7 @@ paths:
             description: JSON payload for "make-dirs" or "remove" actions.
       responses:
         "200":
-          description: The result in the response is a JSON array of the file result object containing path and (optional) errors.
+          description: Post files successfully. The result in the response is a JSON array of the file result object containing path and (optional) errors.
           content:
             application/json:
               schema:
@@ -528,7 +528,7 @@ paths:
     get:
       summary: Health of specified checks
       description: |
-        Fetches healthy status of specified checks.
+        This endpoint will fetch healthy status of specified checks.
 
         See [Health endpoint](../health-checks#health-endpoint) for more details.
       tags:
@@ -547,7 +547,7 @@ paths:
             type: string
       responses:
         "200":
-          description: Check is healthy
+          description: Check is healthy.
           content:
             application/json:
               schema:
@@ -562,7 +562,7 @@ paths:
                   }
                 }
         "502":
-          description: Check is not healthy
+          description: Check is not healthy.
           content:
             application/json:
               schema:
@@ -581,7 +581,7 @@ paths:
       summary: Get all identities
       tags:
         - identities
-      description: Get a map of all identities in the system.
+      description: This endpoint will get a map of all identities in the system.
       responses:
         "200":
           description: Identities successfully retrieved.
@@ -608,7 +608,7 @@ paths:
       tags:
         - identities
       description: |
-        Add, update, replace, or remove identities in the system.
+        This endpoint will add, update, replace, or remove identities in the system.
 
         See [Identities](../identities) for the format of the identities data.
       requestBody:
@@ -644,7 +644,7 @@ paths:
               }
       responses:
         "200":
-          description: Operation successful.
+          description: Successful operation.
           content:
             application/json:
               schema:
@@ -660,7 +660,7 @@ paths:
       summary: Add a layer to the plan
       tags:
         - layers
-      description: Adds a layer to the plan's configuration.
+      description: This endpoint will add a layer to the plan's configuration.
       requestBody:
         required: true
         content:
@@ -677,8 +677,7 @@ paths:
                   description: Whether to combine the layer with existing layers (if true) or append it (if false).
                 inner:
                   type: boolean
-                  description: |
-                    Whether to add the layer as an inner layer.
+                  description: Whether to add the layer as an inner layer.
                 label:
                   type: string
                   description: The label for the layer.
@@ -710,7 +709,7 @@ paths:
       tags:
         - logs
       description: |
-        Fetch previously-written logs from the given services,
+        Successful fetch previously-written logs from the given services,
         or request logs from the given services and follows them, in JSON lines format.
 
         Example:
@@ -770,7 +769,7 @@ paths:
       summary: Get notices
       tags:
         - notices
-      description: Get a list of notices that match the filters, ordered by the last-repeated time.
+      description: This endpoint will get a list of notices that match the filters, ordered by the last-repeated time.
       parameters:
         - in: query
           name: user-id
@@ -843,7 +842,7 @@ paths:
       summary: Create a new notice
       tags:
         - notices
-      description: Record an occurrence of a notice with the specified options.
+      description: This endpoint will record an occurrence of a notice with the specified options.
       requestBody:
         required: true
         content:
@@ -902,7 +901,7 @@ paths:
       summary: Get a specific notice
       tags:
         - notices
-      description: Get a single notice by ID.
+      description: This endpoint will get a single notice by ID.
       parameters:
         - in: path
           name: id
@@ -942,7 +941,7 @@ paths:
       summary: Get the current plan
       tags:
         - plan
-      description: Get the plan in YAML format.
+      description: This endpoint will get the plan in YAML format.
       parameters:
         - name: format
           in: query
@@ -968,7 +967,7 @@ paths:
   /v1/services:
     get:
       summary: List services
-      description: Fetch information about specific services (or all of them). Return results ordered by service name.
+      description: This endpoint will fetch information about specific services (or all of them). Return results are ordered by service name.
       tags:
         - services
       parameters:
@@ -979,7 +978,7 @@ paths:
             type: string
       responses:
         "200":
-          description: List of services
+          description: List services.
           content:
             application/json:
               schema:
@@ -1006,7 +1005,7 @@ paths:
                 }
     post:
       summary: Manage services
-      description: Perform a service operation such as start, stop, or replan.
+      description: This endpoint will perform a service operation such as start, stop, or replan.
       tags:
         - services
       requestBody:
@@ -1032,7 +1031,7 @@ paths:
               {"action": "start", "services": ["svc1"]}
       responses:
         "202":
-          description: Accepted - asynchronous operation started. Returns a change ID.
+          description: Accepted - asynchronous operation started.
           content:
             application/json:
               schema:
@@ -1050,7 +1049,7 @@ paths:
       summary: Send a signal to services
       tags:
         - signals
-      description: Send a signal to each of the specified services.
+      description: This endpoint will send a signal to each of the specified services.
       requestBody:
         required: true
         content:
@@ -1077,7 +1076,7 @@ paths:
               }
       responses:
         "200":
-          description: Signal sent successfully
+          description: Signal sent successfully.
           content:
             application/json:
               schema:
@@ -1092,13 +1091,12 @@ paths:
   /v1/system-info:
     get:
       summary: Get system information
-      description: |
-        Get the version of the Pebble daemon and the boot ID of the system.
+      description: This endpoint will get the version of the Pebble daemon and the boot ID of the system.
       tags:
         - system info
       responses:
         "200":
-          description: System information
+          description: System information.
           content:
             application/json:
               schema:
@@ -1534,7 +1532,7 @@ components:
       properties:
         version:
           type: string
-          description: Version of the Pebble daemon
+          description: Version of the Pebble daemon.
         boot-id:
           type: string
           description: A unique string that represents this boot of the server.
@@ -1543,24 +1541,24 @@ components:
       properties:
         name:
           type: string
-          description: Name of the check
+          description: Name of the check.
         level:
           type: string
-          description: Level of the check
+          description: Level of the check.
           enum: [alive, ready]
         status:
           type: string
-          description: Status of the check
+          description: Status of the check.
           enum: [down, up]
         failures:
           type: integer
-          description: Number of consecutive failures
+          description: Number of consecutive failures.
         threshold:
           type: integer
-          description: Failure threshold
+          description: Failure threshold.
         change-id:
           type: string
-          description: ID of the change associated with the check
+          description: ID of the change associated with the check.
     logs:
       type: object
       properties:
