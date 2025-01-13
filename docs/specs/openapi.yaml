@@ -3,102 +3,32 @@ info:
   title: Pebble API
   version: v1
 paths:
-  /v1/plan:
+  /v1/changes:
     get:
-      summary: Get the current plan
+      summary: Get changes
       tags:
-        - plan
-      description: Get the plan in YAML format.
+        - changes and tasks
+      description: Fetch information for the specified changes.
       parameters:
-        - name: format
+        - name: select
           in: query
-          description: The format of the plan.
+          description: Filter changes by status.
           schema:
             type: string
-            enum: [yaml]
-          required: true
-      responses:
-        "200":
-          description: The current plan in YAML format.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/GetPlanResponse"
-              example:
-                {
-                  "type": "sync",
-                  "status-code": 200,
-                  "status": "OK",
-                  "result": "services:\n    svc1:\n        startup: enabled\n        override: replace\n        command: foo\n"
-                }
-  /v1/layers:
-    post:
-      summary: Add a layer to the plan
-      tags:
-        - plan
-      description: Adds a layer to the plan's configuration.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                action:
-                  type: string
-                  description: The action to perform.
-                  enum: [add]
-                combine:
-                  type: boolean
-                  description: Whether to combine the layer with existing layers (if true) or append it (if false).
-                inner:
-                  type: boolean
-                  description: |
-                    Whether to add the layer as an inner layer.
-                label:
-                  type: string
-                  description: The label for the layer.
-                  minLength: 1 # Reflects the "label must be set" requirement.
-                format:
-                  type: string
-                  description: The format of the layer.
-                  enum: [yaml]
-                layer:
-                  type: string
-                  description: The layer data in YAML format.
-      responses:
-        "200":
-          description: Layer added successfully.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PostLayersResponse"
-              example:
-                {
-                  "type": "sync",
-                  "status-code": 200,
-                  "status": "OK",
-                  "result": true
-                }
-  /v1/services:
-    get:
-      summary: List services
-      description: Fetch information about specific services (or all of them). Return results ordered by service name.
-      tags:
-        - services
-      parameters:
-        - in: query
-          name: names
-          description: The names of the services to get. To get multiple services, specify this parameter multiple times. If not set, get all services.
+            enum: [all, in-progress, ready]
+            default: in-progress
+        - name: for
+          in: query
+          description: Filter changes for a specific service name.
           schema:
             type: string
       responses:
         "200":
-          description: List of services
+          description: Information about changes.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/GetServicesResponse"
+                $ref: "#/components/schemas/GetChangesResponse"
               example:
                 {
                   "type": "sync",
@@ -106,24 +36,106 @@ paths:
                   "status": "OK",
                   "result": [
                     {
-                      "name": "svc1",
-                      "startup": "enabled",
-                      "current": "active",
-                      "current-since": "2024-12-27T12:19:27.569602108+08:00"
-                    },
-                    {
-                      "name": "svc2",
-                      "startup": "enabled",
-                      "current": "active",
-                      "current-since": "2024-12-27T12:19:27.5690974+08:00"
+                      "id": "4",
+                      "kind": "stop",
+                      "summary": "Stop service \"svc1\" and 1 more",
+                      "status": "Done",
+                      "tasks": [
+                        {
+                          "id": "7",
+                          "kind": "stop",
+                          "summary": "Stop service \"svc1\"",
+                          "status": "Done",
+                          "progress": {
+                            "label": "",
+                            "done": 1,
+                            "total": 1
+                          },
+                          "spawn-time": "2024-12-27T10:08:14.399194229+08:00",
+                          "ready-time": "2024-12-27T10:08:14.429319813+08:00"
+                        },
+                        {
+                          "id": "8",
+                          "kind": "stop",
+                          "summary": "Stop service \"svc2\"",
+                          "status": "Done",
+                          "progress": {
+                            "label": "",
+                            "done": 1,
+                            "total": 1
+                          },
+                          "spawn-time": "2024-12-27T10:08:14.399199354+08:00",
+                          "ready-time": "2024-12-27T10:08:14.432387271+08:00"
+                        }
+                      ],
+                      "ready": true,
+                      "spawn-time": "2024-12-27T10:08:14.399202521+08:00",
+                      "ready-time": "2024-12-27T10:08:14.432389313+08:00"
                     }
                   ]
                 }
-    post:
-      summary: Manage services
-      description: Perform a service operation such as start, stop, or replan.
+  /v1/changes/{id}:
+    get:
+      summary: Get a specific change
       tags:
-        - services
+        - changes and tasks
+      description: Fetch information about a Change given its ID.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ID of the change
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetChangeByIDResponse"
+              example:
+                {
+                  "type": "sync",
+                  "status-code": 200,
+                  "status": "OK",
+                  "result": {
+                    "id": "38",
+                    "kind": "autostart",
+                    "summary": "Autostart service \"svc1\" and 1 more",
+                    "status": "Done",
+                    "tasks": [
+                      {
+                        "id": "54",
+                        "kind": "start",
+                        "summary": "Start service \"svc1\"",
+                        "status": "Done",
+                        "progress": {
+                          "label": "",
+                          "done": 1,
+                          "total": 1
+                        },
+                        "spawn-time": "2024-12-27T12:31:26.673287868+08:00",
+                        "ready-time": "2024-12-27T12:31:27.681780702+08:00"
+                      }
+                    ],
+                    "ready": true,
+                    "spawn-time": "2024-12-27T12:31:26.673297951+08:00",
+                    "ready-time": "2024-12-27T12:31:27.686371869+08:00"
+                  }
+                }
+    post:
+      summary: Perform an action on a change
+      tags:
+        - changes and tasks
+      description: Perform an action on a change. Currently the only supported action is "abort".
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ID of the change
+          schema:
+            type: string
       requestBody:
         required: true
         content:
@@ -133,138 +145,133 @@ paths:
               properties:
                 action:
                   type: string
-                  description: The action to perform.
-                  enum: ["autostart", "replan", "restart", "start", "stop"]
-                services:
-                  type: array
-                  description: |
-                    A list of service names.  Required for "start", "stop", and "restart".
-
-                    Ignored for "replan" and "autostart" (resolved automatically for "autostart" to default services).
-                  items:
-                    type: string
-            example:
-              {"action": "start", "services": ["svc1"]}
+                  description: The action to perform on the change.
+                  enum: [abort]
       responses:
-        "202":
-          description: Accepted - asynchronous operation started. Returns a change ID.
+        "200":
+          description: abort change
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PostServicesResponse"
-              example:
-                {
-                  "type": "async",
-                  "status-code": 202,
-                  "status": "Accepted",
-                  "change": "29",
-                  "result": null
-                }
-  /v1/logs:
-    get:
-      summary: Get service logs
-      tags:
-        - services
-      description: |
-        Fetch previously-written logs from the given services,
-        or request logs from the given services and follows them, in JSON lines format.
-
-        Example:
-
-        ```
-        {"time":"2024-12-31T02:11:09.361Z","service":"svc1","message":" * Serving Flask app 'main'"}
-        {"time":"2024-12-31T02:11:09.361Z","service":"svc1","message":" * Debug mode: off"}
-        {"time":"2024-12-31T02:11:09.382Z","service":"svc1","message":" * Running on http://127.0.0.1:5000"}
-        ```
-      parameters:
-        - name: services
-          in: query
-          description: |
-            Service name to filter logs by.
-
-            To get logs from multiple services, specify this parameter multiple times.
-
-            If not set, returns logs for all services.
-          schema:
-            type: string
-        - name: follow
-          in: query
-          description: Whether to follow the logs (keep streaming new logs).
-          schema:
-            type: string
-            enum: ["true", "false"]
-            default: "false"
-        - name: n
-          in: query
-          description: |
-            Number of log entries to retrieve.
-
-            If `follow` is true, `n` is ignored.
-
-            If `follow` is false:
-
-            - If `n` is -1, all available logs are returned (up to a server-defined limit).
-            - If `n` is 0 or not specified, a server-defined default number of logs is returned. The default is currently 30.
-            - If `n` is a positive integer, up to that many logs are returned.
-          schema:
-            type: integer
-      responses:
-        "200":
-          description: Service logs in JSON lines format.
-          content:
-            application/x-ndjson:
-              schema:
-                $ref: "#/components/schemas/logs"
-              example:
-                {
-                  "time": "2024-12-27T02:32:53.185Z",
-                  "service": "svc1",
-                  "message": " * Serving Flask app 'main'"
-                }
-  /v1/signals:
-    post:
-      summary: Send a signal to services
-      tags:
-        - services
-      description: Send a signal to each of the specified services.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                signal:
-                  type: string
-                  description: The signal to send. For example, "SIGHUP", "SIGINT", "SIGKILL".
-                services:
-                  type: array
-                  description: List of service names to send the signal to.
-                  items:
-                    type: string
-                  minItems: 1  # At least one service is required.
-              required:
-                - signal
-                - services
-            example:
-              {
-                "signal": "SIGHUP",
-                "services": ["svc1"]
-              }
-      responses:
-        "200":
-          description: Signal sent successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PostSignalsResponse"
+                $ref: "#/components/schemas/GetChangeByIDResponse"
               example:
                 {
                   "type": "sync",
                   "status-code": 200,
                   "status": "OK",
-                  "result": true
+                  "result": {
+                    "id": "8",
+                    "kind": "perform-check",
+                    "summary": "Perform HTTP check \"check1\"",
+                    "status": "Abort",
+                    "tasks": [
+                      {
+                        "id": "14",
+                        "kind": "perform-check",
+                        "summary": "Perform HTTP check \"check1\"",
+                        "status": "Abort",
+                        "progress": {
+                          "label": "",
+                          "done": 1,
+                          "total": 1
+                        },
+                        "spawn-time": "2024-12-27T10:15:31.390053104+08:00"
+                      }
+                    ],
+                    "ready": false,
+                    "spawn-time": "2024-12-27T10:15:31.390062521+08:00"
+                  }
                 }
+  /v1/changes/{id}/wait:
+    get:
+      summary: Wait for a change to complete
+      description: |
+        Wait for the change to be finished.
+        
+        If the wait operation succeeds, the result will have the "err" field set to an appropriate error message if the change itself had an error.
+      tags:
+        - changes and tasks
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+          required: true
+          description: The ID of the change to wait for.
+        - in: query
+          name: timeout
+          schema:
+            type: string
+          description: |
+            Optional timeout (a [duration](#duration)).
+            If specified, wait till the change is ready or a timeout occurs, whichever is first.
+            If not specified or zero, wait indefinitely until the change is ready.
+      responses:
+        "200":
+          description: Change information
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetChangeByIDResponse"
+              example:
+                {
+                  "type": "sync",
+                  "status-code": 200,
+                  "status": "OK",
+                  "result": {
+                    "id": "38",
+                    "kind": "autostart",
+                    "summary": "Autostart service \"svc1\" and 1 more",
+                    "status": "Done",
+                    "tasks": [
+                      {
+                        "id": "54",
+                        "kind": "start",
+                        "summary": "Start service \"svc1\"",
+                        "status": "Done",
+                        "progress": {
+                          "label": "",
+                          "done": 1,
+                          "total": 1
+                        },
+                        "spawn-time": "2024-12-27T12:31:26.673287868+08:00",
+                        "ready-time": "2024-12-27T12:31:27.681780702+08:00"
+                      }
+                    ],
+                    "ready": true,
+                    "spawn-time": "2024-12-27T12:31:26.673297951+08:00",
+                    "ready-time": "2024-12-27T12:31:27.686371869+08:00"
+                  }
+                }
+  /v1/tasks/{task-id}/websocket/{websocket-id}:
+    get:
+      summary: Connect to a task's websocket
+      tags:
+        - changes and tasks
+      description: Establishes a websocket connection to a specific task.
+      parameters:
+        - in: path
+          name: task-id
+          schema:
+            type: string
+          required: true
+          description: The ID of the task.
+        - in: path
+          name: websocket-id
+          schema:
+            type: string
+          required: true
+          description: The ID of the websocket.
+          enum: [control, stderr, stdio]
+      responses:
+        "101": # Switching Protocols (Successful Websocket Upgrade)
+          description: |
+            The connection is upgraded to the websocket protocol and the websocket connection is established.
+
+            The full websocket protocol is not documented. For details, see the [Python client code](https://github.com/canonical/operator/blob/main/ops/pebble.py#L1818).
+          content: 
+            application/json: # A hack to make the automatically rendered result show "null" instead of "string" which is incorrect.
+              example: 
   /v1/checks:
     get:
       summary: Get checks
@@ -569,139 +576,41 @@ paths:
                     "working-dir": "/home/ubuntu"
                   }
                 }
-  /v1/changes:
+  /v1/identities:
     get:
-      summary: Get changes
+      summary: Get all identities
       tags:
-        - changes and tasks
-      description: Fetch information for the specified changes.
-      parameters:
-        - name: select
-          in: query
-          description: Filter changes by status.
-          schema:
-            type: string
-            enum: [all, in-progress, ready]
-            default: in-progress
-        - name: for
-          in: query
-          description: Filter changes for a specific service name.
-          schema:
-            type: string
+        - identities
+      description: Get a map of all identities in the system.
       responses:
         "200":
-          description: Information about changes.
+          description: Identities successfully retrieved.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/GetChangesResponse"
-              example:
-                {
-                  "type": "sync",
-                  "status-code": 200,
-                  "status": "OK",
-                  "result": [
-                    {
-                      "id": "4",
-                      "kind": "stop",
-                      "summary": "Stop service \"svc1\" and 1 more",
-                      "status": "Done",
-                      "tasks": [
-                        {
-                          "id": "7",
-                          "kind": "stop",
-                          "summary": "Stop service \"svc1\"",
-                          "status": "Done",
-                          "progress": {
-                            "label": "",
-                            "done": 1,
-                            "total": 1
-                          },
-                          "spawn-time": "2024-12-27T10:08:14.399194229+08:00",
-                          "ready-time": "2024-12-27T10:08:14.429319813+08:00"
-                        },
-                        {
-                          "id": "8",
-                          "kind": "stop",
-                          "summary": "Stop service \"svc2\"",
-                          "status": "Done",
-                          "progress": {
-                            "label": "",
-                            "done": 1,
-                            "total": 1
-                          },
-                          "spawn-time": "2024-12-27T10:08:14.399199354+08:00",
-                          "ready-time": "2024-12-27T10:08:14.432387271+08:00"
-                        }
-                      ],
-                      "ready": true,
-                      "spawn-time": "2024-12-27T10:08:14.399202521+08:00",
-                      "ready-time": "2024-12-27T10:08:14.432389313+08:00"
-                    }
-                  ]
-                }
-  /v1/changes/{id}:
-    get:
-      summary: Get a specific change
-      tags:
-        - changes and tasks
-      description: Fetch information about a Change given its ID.
-      parameters:
-        - name: id
-          in: path
-          required: true
-          description: ID of the change
-          schema:
-            type: string
-      responses:
-        "200":
-          description: Successful operation
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/GetChangeByIDResponse"
+                $ref: "#/components/schemas/GetIdentitiesResponse"
               example:
                 {
                   "type": "sync",
                   "status-code": 200,
                   "status": "OK",
                   "result": {
-                    "id": "38",
-                    "kind": "autostart",
-                    "summary": "Autostart service \"svc1\" and 1 more",
-                    "status": "Done",
-                    "tasks": [
-                      {
-                        "id": "54",
-                        "kind": "start",
-                        "summary": "Start service \"svc1\"",
-                        "status": "Done",
-                        "progress": {
-                          "label": "",
-                          "done": 1,
-                          "total": 1
-                        },
-                        "spawn-time": "2024-12-27T12:31:26.673287868+08:00",
-                        "ready-time": "2024-12-27T12:31:27.681780702+08:00"
+                    "bob": {
+                      "access": "admin",
+                      "local": {
+                        "user-id": 42
                       }
-                    ],
-                    "ready": true,
-                    "spawn-time": "2024-12-27T12:31:26.673297951+08:00",
-                    "ready-time": "2024-12-27T12:31:27.686371869+08:00"
+                    }
                   }
                 }
     post:
-      summary: Perform an action on a change
+      summary: Manage identities
       tags:
-        - changes and tasks
-      description: Perform an action on a change. Currently the only supported action is "abort".
-      parameters:
-        - name: id
-          in: path
-          required: true
-          description: ID of the change
-          schema:
-            type: string
+        - identities
+      description: |
+        Add, update, replace, or remove identities in the system.
+
+        See [Identities](../identities) for the format of the identities data.
       requestBody:
         required: true
         content:
@@ -711,133 +620,41 @@ paths:
               properties:
                 action:
                   type: string
-                  description: The action to perform on the change.
-                  enum: [abort]
+                  enum: [add, update, replace, remove]
+                  description: The action to perform on the identities.
+                identities:
+                  type: object
+                  additionalProperties:
+                    - $ref: "#/components/schemas/identity"
+                  description: The identities to add, update, or replace.  For "remove", set the values to null.
+              required:
+                - action
+                - identities
+            example:
+              {
+                "action": "add",
+                "identities": {
+                  "bob": {
+                    "access": "admin",
+                    "local": {
+                      "user-id": 42
+                    }
+                  }
+                }
+              }
       responses:
         "200":
-          description: abort change
+          description: Operation successful.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/GetChangeByIDResponse"
+                $ref: "#/components/schemas/BaseResponse"
               example:
                 {
                   "type": "sync",
                   "status-code": 200,
-                  "status": "OK",
-                  "result": {
-                    "id": "8",
-                    "kind": "perform-check",
-                    "summary": "Perform HTTP check \"check1\"",
-                    "status": "Abort",
-                    "tasks": [
-                      {
-                        "id": "14",
-                        "kind": "perform-check",
-                        "summary": "Perform HTTP check \"check1\"",
-                        "status": "Abort",
-                        "progress": {
-                          "label": "",
-                          "done": 1,
-                          "total": 1
-                        },
-                        "spawn-time": "2024-12-27T10:15:31.390053104+08:00"
-                      }
-                    ],
-                    "ready": false,
-                    "spawn-time": "2024-12-27T10:15:31.390062521+08:00"
-                  }
+                  "status": "OK"
                 }
-  /v1/changes/{id}/wait:
-    get:
-      summary: Wait for a change to complete
-      description: |
-        Wait for the change to be finished.
-        
-        If the wait operation succeeds, the result will have the "err" field set to an appropriate error message if the change itself had an error.
-      tags:
-        - changes and tasks
-      parameters:
-        - in: path
-          name: id
-          schema:
-            type: string
-          required: true
-          description: The ID of the change to wait for.
-        - in: query
-          name: timeout
-          schema:
-            type: string
-          description: |
-            Optional timeout (a [duration](#duration)).
-            If specified, wait till the change is ready or a timeout occurs, whichever is first.
-            If not specified or zero, wait indefinitely until the change is ready.
-      responses:
-        "200":
-          description: Change information
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/GetChangeByIDResponse"
-              example:
-                {
-                  "type": "sync",
-                  "status-code": 200,
-                  "status": "OK",
-                  "result": {
-                    "id": "38",
-                    "kind": "autostart",
-                    "summary": "Autostart service \"svc1\" and 1 more",
-                    "status": "Done",
-                    "tasks": [
-                      {
-                        "id": "54",
-                        "kind": "start",
-                        "summary": "Start service \"svc1\"",
-                        "status": "Done",
-                        "progress": {
-                          "label": "",
-                          "done": 1,
-                          "total": 1
-                        },
-                        "spawn-time": "2024-12-27T12:31:26.673287868+08:00",
-                        "ready-time": "2024-12-27T12:31:27.681780702+08:00"
-                      }
-                    ],
-                    "ready": true,
-                    "spawn-time": "2024-12-27T12:31:26.673297951+08:00",
-                    "ready-time": "2024-12-27T12:31:27.686371869+08:00"
-                  }
-                }
-  /v1/tasks/{task-id}/websocket/{websocket-id}:
-    get:
-      summary: Connect to a task's websocket
-      tags:
-        - changes and tasks
-      description: Establishes a websocket connection to a specific task.
-      parameters:
-        - in: path
-          name: task-id
-          schema:
-            type: string
-          required: true
-          description: The ID of the task.
-        - in: path
-          name: websocket-id
-          schema:
-            type: string
-          required: true
-          description: The ID of the websocket.
-          enum: [control, stderr, stdio]
-      responses:
-        "101": # Switching Protocols (Successful Websocket Upgrade)
-          description: |
-            The connection is upgraded to the websocket protocol and the websocket connection is established.
-
-            The full websocket protocol is not documented. For details, see the [Python client code](https://github.com/canonical/operator/blob/main/ops/pebble.py#L1818).
-          content: 
-            application/json: # A hack to make the automatically rendered result show "null" instead of "string" which is incorrect.
-              example: 
   /v1/notices:
     get:
       summary: Get notices
@@ -1010,41 +827,12 @@ paths:
                     "expire-after": "168h0m0s"
                   }
                 }
-  /v1/identities:
-    get:
-      summary: Get all identities
-      tags:
-        - identities
-      description: Get a map of all identities in the system.
-      responses:
-        "200":
-          description: Identities successfully retrieved.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/GetIdentitiesResponse"
-              example:
-                {
-                  "type": "sync",
-                  "status-code": 200,
-                  "status": "OK",
-                  "result": {
-                    "bob": {
-                      "access": "admin",
-                      "local": {
-                        "user-id": 42
-                      }
-                    }
-                  }
-                }
+  /v1/layers:
     post:
-      summary: Manage identities
+      summary: Add a layer to the plan
       tags:
-        - identities
-      description: |
-        Add, update, replace, or remove identities in the system.
-
-        See [Identities](../identities) for the format of the identities data.
+        - plan
+      description: Adds a layer to the plan's configuration.
       requestBody:
         required: true
         content:
@@ -1054,40 +842,252 @@ paths:
               properties:
                 action:
                   type: string
-                  enum: [add, update, replace, remove]
-                  description: The action to perform on the identities.
-                identities:
-                  type: object
-                  additionalProperties:
-                    - $ref: "#/components/schemas/identity"
-                  description: The identities to add, update, or replace.  For "remove", set the values to null.
-              required:
-                - action
-                - identities
-            example:
-              {
-                "action": "add",
-                "identities": {
-                  "bob": {
-                    "access": "admin",
-                    "local": {
-                      "user-id": 42
-                    }
-                  }
-                }
-              }
+                  description: The action to perform.
+                  enum: [add]
+                combine:
+                  type: boolean
+                  description: Whether to combine the layer with existing layers (if true) or append it (if false).
+                inner:
+                  type: boolean
+                  description: |
+                    Whether to add the layer as an inner layer.
+                label:
+                  type: string
+                  description: The label for the layer.
+                  minLength: 1 # Reflects the "label must be set" requirement.
+                format:
+                  type: string
+                  description: The format of the layer.
+                  enum: [yaml]
+                layer:
+                  type: string
+                  description: The layer data in YAML format.
       responses:
         "200":
-          description: Operation successful.
+          description: Layer added successfully.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/BaseResponse"
+                $ref: "#/components/schemas/PostLayersResponse"
               example:
                 {
                   "type": "sync",
                   "status-code": 200,
-                  "status": "OK"
+                  "status": "OK",
+                  "result": true
+                }
+  /v1/plan:
+    get:
+      summary: Get the current plan
+      tags:
+        - plan
+      description: Get the plan in YAML format.
+      parameters:
+        - name: format
+          in: query
+          description: The format of the plan.
+          schema:
+            type: string
+            enum: [yaml]
+          required: true
+      responses:
+        "200":
+          description: The current plan in YAML format.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetPlanResponse"
+              example:
+                {
+                  "type": "sync",
+                  "status-code": 200,
+                  "status": "OK",
+                  "result": "services:\n    svc1:\n        startup: enabled\n        override: replace\n        command: foo\n"
+                }
+  /v1/logs:
+    get:
+      summary: Get service logs
+      tags:
+        - services
+      description: |
+        Fetch previously-written logs from the given services,
+        or request logs from the given services and follows them, in JSON lines format.
+
+        Example:
+
+        ```
+        {"time":"2024-12-31T02:11:09.361Z","service":"svc1","message":" * Serving Flask app 'main'"}
+        {"time":"2024-12-31T02:11:09.361Z","service":"svc1","message":" * Debug mode: off"}
+        {"time":"2024-12-31T02:11:09.382Z","service":"svc1","message":" * Running on http://127.0.0.1:5000"}
+        ```
+      parameters:
+        - name: services
+          in: query
+          description: |
+            Service name to filter logs by.
+
+            To get logs from multiple services, specify this parameter multiple times.
+
+            If not set, returns logs for all services.
+          schema:
+            type: string
+        - name: follow
+          in: query
+          description: Whether to follow the logs (keep streaming new logs).
+          schema:
+            type: string
+            enum: ["true", "false"]
+            default: "false"
+        - name: n
+          in: query
+          description: |
+            Number of log entries to retrieve.
+
+            If `follow` is true, `n` is ignored.
+
+            If `follow` is false:
+
+            - If `n` is -1, all available logs are returned (up to a server-defined limit).
+            - If `n` is 0 or not specified, a server-defined default number of logs is returned. The default is currently 30.
+            - If `n` is a positive integer, up to that many logs are returned.
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Service logs in JSON lines format.
+          content:
+            application/x-ndjson:
+              schema:
+                $ref: "#/components/schemas/logs"
+              example:
+                {
+                  "time": "2024-12-27T02:32:53.185Z",
+                  "service": "svc1",
+                  "message": " * Serving Flask app 'main'"
+                }
+  /v1/services:
+    get:
+      summary: List services
+      description: Fetch information about specific services (or all of them). Return results ordered by service name.
+      tags:
+        - services
+      parameters:
+        - in: query
+          name: names
+          description: The names of the services to get. To get multiple services, specify this parameter multiple times. If not set, get all services.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of services
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetServicesResponse"
+              example:
+                {
+                  "type": "sync",
+                  "status-code": 200,
+                  "status": "OK",
+                  "result": [
+                    {
+                      "name": "svc1",
+                      "startup": "enabled",
+                      "current": "active",
+                      "current-since": "2024-12-27T12:19:27.569602108+08:00"
+                    },
+                    {
+                      "name": "svc2",
+                      "startup": "enabled",
+                      "current": "active",
+                      "current-since": "2024-12-27T12:19:27.5690974+08:00"
+                    }
+                  ]
+                }
+    post:
+      summary: Manage services
+      description: Perform a service operation such as start, stop, or replan.
+      tags:
+        - services
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                action:
+                  type: string
+                  description: The action to perform.
+                  enum: ["autostart", "replan", "restart", "start", "stop"]
+                services:
+                  type: array
+                  description: |
+                    A list of service names.  Required for "start", "stop", and "restart".
+
+                    Ignored for "replan" and "autostart" (resolved automatically for "autostart" to default services).
+                  items:
+                    type: string
+            example:
+              {"action": "start", "services": ["svc1"]}
+      responses:
+        "202":
+          description: Accepted - asynchronous operation started. Returns a change ID.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PostServicesResponse"
+              example:
+                {
+                  "type": "async",
+                  "status-code": 202,
+                  "status": "Accepted",
+                  "change": "29",
+                  "result": null
+                }
+  /v1/signals:
+    post:
+      summary: Send a signal to services
+      tags:
+        - services
+      description: Send a signal to each of the specified services.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                signal:
+                  type: string
+                  description: The signal to send. For example, "SIGHUP", "SIGINT", "SIGKILL".
+                services:
+                  type: array
+                  description: List of service names to send the signal to.
+                  items:
+                    type: string
+                  minItems: 1  # At least one service is required.
+              required:
+                - signal
+                - services
+            example:
+              {
+                "signal": "SIGHUP",
+                "services": ["svc1"]
+              }
+      responses:
+        "200":
+          description: Signal sent successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PostSignalsResponse"
+              example:
+                {
+                  "type": "sync",
+                  "status-code": 200,
+                  "status": "OK",
+                  "result": true
                 }
   /v1/system-info:
     get:

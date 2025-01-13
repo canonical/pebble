@@ -185,7 +185,8 @@ window.onload = function() {
       // Create an 'a' element for the tag link
       const tocLink = document.createElement("a");
       tocLink.classList.add("reference", "internal");
-      tocLink.href= `#/${tag}`;
+      const urlFriendlyTag = tag.replace(/ /g, "-");
+      tocLink.href = `#/${urlFriendlyTag}`;
       tocLink.innerText = tag;
       tocLink.addEventListener("click", event => {
         if (event.shiftKey || event.ctrlKey || event.altKey || event.metaKey) {
@@ -194,7 +195,8 @@ window.onload = function() {
         // When the tag link is clicked with no modifier keys:
         // - Scroll the tag section into view
         // - If the tag section is closed, open it (by simulating a click)
-        const swaggerHeading = document.getElementById(`operations-tag-${tag}`);
+        const operationsTag = tag.replace(/ /g, "_");
+        const swaggerHeading = document.getElementById(`operations-tag-${operationsTag}`);
         swaggerHeading.scrollIntoView({
           behavior: "smooth"
         });
@@ -211,13 +213,13 @@ window.onload = function() {
 
   // Make sure to match the tags defined in openapi.yaml
   addSwaggerTagsToTOC([
-    "plan",
-    "services",
+    "changes and tasks",
     "checks",
     "files",
-    "changes",
-    "notices",
     "identities",
+    "notices",
+    "plan",
+    "services",
     "system"
   ]);
 }
