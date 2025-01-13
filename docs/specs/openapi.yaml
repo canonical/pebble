@@ -8,7 +8,7 @@ paths:
       summary: Get changes
       tags:
         - changes and tasks
-      description: This endpoint will fetch information for the specified changes.
+      description: Fetch information for the specified changes.
       parameters:
         - name: select
           in: query
@@ -79,7 +79,7 @@ paths:
       summary: Get a specific change
       tags:
         - changes and tasks
-      description: This endpoint will fetch information about a Change given its ID.
+      description: Fetch information about a Change given its ID.
       parameters:
         - name: id
           in: path
@@ -128,7 +128,7 @@ paths:
       summary: Perform an action on a change
       tags:
         - changes and tasks
-      description: This endpoint will perform an action on a change. Currently the only supported action is "abort".
+      description: Perform an action on a change. Currently the only supported action is "abort".
       parameters:
         - name: id
           in: path
@@ -186,7 +186,7 @@ paths:
     get:
       summary: Wait for a change to complete
       description: |
-        This endpoint will wait for the change to be finished.
+        Wait for the change to be finished.
         
         If the wait operation succeeds, the result will have the "err" field set to an appropriate error message if the change itself had an error.
       tags:
@@ -248,7 +248,7 @@ paths:
       summary: Connect to a task's websocket
       tags:
         - changes and tasks
-      description: This endpoint will establish a websocket connection to a specific task.
+      description: Establish a websocket connection to a specific task.
       parameters:
         - in: path
           name: task-id
@@ -277,7 +277,7 @@ paths:
       summary: Get checks
       tags:
         - checks
-      description: This endpoint will fetch information about specific health checks (or all of them), ordered by check name.
+      description: Fetch information about specific health checks (or all of them), ordered by check name.
       parameters:
         - name: level
           in: query
@@ -317,7 +317,7 @@ paths:
       tags:
         - exec
       description: |
-        This endpoint will start a command with the given options and return a value representing the process.
+        Start a command with the given options and return a value representing the process.
 
         This API returns a `task-id` (see the response schema and the example below),
         then you need to call `/v1/tasks/{task-id}/websocket/control` and `/v1/tasks/{task-id}/websocket/stdio`
@@ -356,7 +356,7 @@ paths:
       summary: Read or list files
       tags:
         - files
-      description: This endpoint will read the contents of files or list files from the remote system.
+      description: Read the contents of files or list files from the remote system.
       parameters:
         - name: action
           in: query
@@ -528,7 +528,7 @@ paths:
     get:
       summary: Health of specified checks
       description: |
-        This endpoint will fetch healthy status of specified checks.
+        Fetch healthy status of specified checks.
 
         See [Health endpoint](../health-checks#health-endpoint) for more details.
       tags:
@@ -581,7 +581,7 @@ paths:
       summary: Get all identities
       tags:
         - identities
-      description: This endpoint will get a map of all identities in the system.
+      description: Get a map of all identities in the system.
       responses:
         "200":
           description: Identities successfully retrieved.
@@ -608,7 +608,7 @@ paths:
       tags:
         - identities
       description: |
-        This endpoint will add, update, replace, or remove identities in the system.
+        Add, update, replace, or remove identities in the system.
 
         See [Identities](../identities) for the format of the identities data.
       requestBody:
@@ -660,7 +660,7 @@ paths:
       summary: Add a layer to the plan
       tags:
         - layers
-      description: This endpoint will add a layer to the plan's configuration.
+      description: Add a layer to the plan's configuration.
       requestBody:
         required: true
         content:
@@ -769,7 +769,7 @@ paths:
       summary: Get notices
       tags:
         - notices
-      description: This endpoint will get a list of notices that match the filters, ordered by the last-repeated time.
+      description: Get a list of notices that match the filters, ordered by the last-repeated time.
       parameters:
         - in: query
           name: user-id
@@ -842,7 +842,7 @@ paths:
       summary: Create a new notice
       tags:
         - notices
-      description: This endpoint will record an occurrence of a notice with the specified options.
+      description: Record an occurrence of a notice with the specified options.
       requestBody:
         required: true
         content:
@@ -901,7 +901,7 @@ paths:
       summary: Get a specific notice
       tags:
         - notices
-      description: This endpoint will get a single notice by ID.
+      description: Get a single notice by ID.
       parameters:
         - in: path
           name: id
@@ -941,7 +941,7 @@ paths:
       summary: Get the current plan
       tags:
         - plan
-      description: This endpoint will get the plan in YAML format.
+      description: Get the plan in YAML format.
       parameters:
         - name: format
           in: query
@@ -967,7 +967,7 @@ paths:
   /v1/services:
     get:
       summary: List services
-      description: This endpoint will fetch information about specific services (or all of them), ordered by service name.
+      description: Fetch information about specific services (or all of them), ordered by service name.
       tags:
         - services
       parameters:
@@ -1005,7 +1005,7 @@ paths:
                 }
     post:
       summary: Manage services
-      description: This endpoint will perform a service operation such as start, stop, or replan.
+      description: Perform a service operation such as start, stop, or replan.
       tags:
         - services
       requestBody:
@@ -1049,7 +1049,7 @@ paths:
       summary: Send a signal to services
       tags:
         - signals
-      description: This endpoint will send a signal to each of the specified services.
+      description: Send a signal to each of the specified services.
       requestBody:
         required: true
         content:
@@ -1091,7 +1091,7 @@ paths:
   /v1/system-info:
     get:
       summary: Get system information
-      description: This endpoint will get the version of the Pebble daemon and the boot ID of the system.
+      description: Get the version of the Pebble daemon and the boot ID of the system.
       tags:
         - system info
       responses:
