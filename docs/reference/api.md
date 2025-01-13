@@ -215,12 +215,17 @@ window.onload = function() {
   addSwaggerTagsToTOC([
     "changes and tasks",
     "checks",
+    "exec",
     "files",
+    "health",
     "identities",
+    "layers",
+    "logs",
     "notices",
     "plan",
     "services",
-    "system"
+    "signals",
+    "system info"
   ]);
 }
 </script>

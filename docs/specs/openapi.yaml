@@ -311,56 +311,44 @@ paths:
                     }
                   ]
                 }
-  /v1/health:
-    get:
-      summary: Health of specified checks
-      description: |
-        Fetches healthy status of specified checks.
-
-        See [Health endpoint](../health-checks#health-endpoint) for more details.
+  /v1/exec:
+    post:
+      summary: Execute a command
       tags:
-        - checks
-      parameters:
-        - name: level
-          in: query
-          description: Health check level. If omitted, aggregate healthy status of checks with any (or no) level.
-          schema:
-            type: string
-            enum: [alive, ready]
-        - name: names
-          in: query
-          description: The names of the checks to get. To get multiple checks, specify this parameter multiple times. If not set, get all checks.
-          schema:
-            type: string
+        - exec
+      description: |
+        Start a command with the given options and return a value representing the process.
+
+        This API returns a `task-id` (see the response schema and the example below),
+        then you need to call `/v1/tasks/{task-id}/websocket/control` and `/v1/tasks/{task-id}/websocket/stdio`
+        (also `/v1/tasks/{task-id}/websocket/stderr` if `split-stderr` is true) with the returned `task-id`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PostExecRequest"
+            example:
+              command: ["/bin/ls", "-l"]
       responses:
-        "200":
-          description: Check is healthy
+        "202":
+          description: Command execution initiated.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/GetHealthOKResponse"
+                $ref: "#/components/schemas/PostExecResponse"
               example:
                 {
-                  "type": "sync",
-                  "status-code": 200,
-                  "status": "OK",
+                  "type": "async",
+                  "status-code": 202,
+                  "status": "Accepted",
+                  "change": "4",
                   "result": {
-                    "healthy": true
-                  }
-                }
-        "502":
-          description: Check is not healthy
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/GetHealthUnhealthyResponse"
-              example:
-                {
-                  "type": "sync",
-                  "status-code": 502,
-                  "status": "Bad Gateway",
-                  "result": {
-                    "healthy": false
+                    "environment": {
+                      "HOME": "/home/ubuntu"
+                    },
+                    "task-id": "7",
+                    "working-dir": "/home/ubuntu"
                   }
                 }
   /v1/files:
@@ -536,44 +524,56 @@ paths:
                 $ref: "#/components/schemas/PostFilesResponse"
               example:
                 {"type":"sync","status-code":200,"status":"OK","result":[{"path":"/home/ubuntu/foo"}]}
-  /v1/exec:
-    post:
-      summary: Execute a command
-      tags:
-        - files
+  /v1/health:
+    get:
+      summary: Health of specified checks
       description: |
-        Start a command with the given options and return a value representing the process.
+        Fetches healthy status of specified checks.
 
-        This API returns a `task-id` (see the response schema and the example below),
-        then you need to call `/v1/tasks/{task-id}/websocket/control` and `/v1/tasks/{task-id}/websocket/stdio`
-        (also `/v1/tasks/{task-id}/websocket/stderr` if `split-stderr` is true) with the returned `task-id`.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/PostExecRequest"
-            example:
-              command: ["/bin/ls", "-l"]
+        See [Health endpoint](../health-checks#health-endpoint) for more details.
+      tags:
+        - health
+      parameters:
+        - name: level
+          in: query
+          description: Health check level. If omitted, aggregate healthy status of checks with any (or no) level.
+          schema:
+            type: string
+            enum: [alive, ready]
+        - name: names
+          in: query
+          description: The names of the checks to get. To get multiple checks, specify this parameter multiple times. If not set, get all checks.
+          schema:
+            type: string
       responses:
-        "202":
-          description: Command execution initiated.
+        "200":
+          description: Check is healthy
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PostExecResponse"
+                $ref: "#/components/schemas/GetHealthOKResponse"
               example:
                 {
-                  "type": "async",
-                  "status-code": 202,
-                  "status": "Accepted",
-                  "change": "4",
+                  "type": "sync",
+                  "status-code": 200,
+                  "status": "OK",
                   "result": {
-                    "environment": {
-                      "HOME": "/home/ubuntu"
-                    },
-                    "task-id": "7",
-                    "working-dir": "/home/ubuntu"
+                    "healthy": true
+                  }
+                }
+        "502":
+          description: Check is not healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetHealthUnhealthyResponse"
+              example:
+                {
+                  "type": "sync",
+                  "status-code": 502,
+                  "status": "Bad Gateway",
+                  "result": {
+                    "healthy": false
                   }
                 }
   /v1/identities:
@@ -654,6 +654,116 @@ paths:
                   "type": "sync",
                   "status-code": 200,
                   "status": "OK"
+                }
+  /v1/layers:
+    post:
+      summary: Add a layer to the plan
+      tags:
+        - layers
+      description: Adds a layer to the plan's configuration.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                action:
+                  type: string
+                  description: The action to perform.
+                  enum: [add]
+                combine:
+                  type: boolean
+                  description: Whether to combine the layer with existing layers (if true) or append it (if false).
+                inner:
+                  type: boolean
+                  description: |
+                    Whether to add the layer as an inner layer.
+                label:
+                  type: string
+                  description: The label for the layer.
+                  minLength: 1 # Reflects the "label must be set" requirement.
+                format:
+                  type: string
+                  description: The format of the layer.
+                  enum: [yaml]
+                layer:
+                  type: string
+                  description: The layer data in YAML format.
+      responses:
+        "200":
+          description: Layer added successfully.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PostLayersResponse"
+              example:
+                {
+                  "type": "sync",
+                  "status-code": 200,
+                  "status": "OK",
+                  "result": true
+                }
+  /v1/logs:
+    get:
+      summary: Get service logs
+      tags:
+        - logs
+      description: |
+        Fetch previously-written logs from the given services,
+        or request logs from the given services and follows them, in JSON lines format.
+
+        Example:
+
+        ```
+        {"time":"2024-12-31T02:11:09.361Z","service":"svc1","message":" * Serving Flask app 'main'"}
+        {"time":"2024-12-31T02:11:09.361Z","service":"svc1","message":" * Debug mode: off"}
+        {"time":"2024-12-31T02:11:09.382Z","service":"svc1","message":" * Running on http://127.0.0.1:5000"}
+        ```
+      parameters:
+        - name: services
+          in: query
+          description: |
+            Service name to filter logs by.
+
+            To get logs from multiple services, specify this parameter multiple times.
+
+            If not set, returns logs for all services.
+          schema:
+            type: string
+        - name: follow
+          in: query
+          description: Whether to follow the logs (keep streaming new logs).
+          schema:
+            type: string
+            enum: ["true", "false"]
+            default: "false"
+        - name: n
+          in: query
+          description: |
+            Number of log entries to retrieve.
+
+            If `follow` is true, `n` is ignored.
+
+            If `follow` is false:
+
+            - If `n` is -1, all available logs are returned (up to a server-defined limit).
+            - If `n` is 0 or not specified, a server-defined default number of logs is returned. The default is currently 30.
+            - If `n` is a positive integer, up to that many logs are returned.
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Service logs in JSON lines format.
+          content:
+            application/x-ndjson:
+              schema:
+                $ref: "#/components/schemas/logs"
+              example:
+                {
+                  "time": "2024-12-27T02:32:53.185Z",
+                  "service": "svc1",
+                  "message": " * Serving Flask app 'main'"
                 }
   /v1/notices:
     get:
@@ -827,55 +937,6 @@ paths:
                     "expire-after": "168h0m0s"
                   }
                 }
-  /v1/layers:
-    post:
-      summary: Add a layer to the plan
-      tags:
-        - plan
-      description: Adds a layer to the plan's configuration.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                action:
-                  type: string
-                  description: The action to perform.
-                  enum: [add]
-                combine:
-                  type: boolean
-                  description: Whether to combine the layer with existing layers (if true) or append it (if false).
-                inner:
-                  type: boolean
-                  description: |
-                    Whether to add the layer as an inner layer.
-                label:
-                  type: string
-                  description: The label for the layer.
-                  minLength: 1 # Reflects the "label must be set" requirement.
-                format:
-                  type: string
-                  description: The format of the layer.
-                  enum: [yaml]
-                layer:
-                  type: string
-                  description: The layer data in YAML format.
-      responses:
-        "200":
-          description: Layer added successfully.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PostLayersResponse"
-              example:
-                {
-                  "type": "sync",
-                  "status-code": 200,
-                  "status": "OK",
-                  "result": true
-                }
   /v1/plan:
     get:
       summary: Get the current plan
@@ -903,67 +964,6 @@ paths:
                   "status-code": 200,
                   "status": "OK",
                   "result": "services:\n    svc1:\n        startup: enabled\n        override: replace\n        command: foo\n"
-                }
-  /v1/logs:
-    get:
-      summary: Get service logs
-      tags:
-        - services
-      description: |
-        Fetch previously-written logs from the given services,
-        or request logs from the given services and follows them, in JSON lines format.
-
-        Example:
-
-        ```
-        {"time":"2024-12-31T02:11:09.361Z","service":"svc1","message":" * Serving Flask app 'main'"}
-        {"time":"2024-12-31T02:11:09.361Z","service":"svc1","message":" * Debug mode: off"}
-        {"time":"2024-12-31T02:11:09.382Z","service":"svc1","message":" * Running on http://127.0.0.1:5000"}
-        ```
-      parameters:
-        - name: services
-          in: query
-          description: |
-            Service name to filter logs by.
-
-            To get logs from multiple services, specify this parameter multiple times.
-
-            If not set, returns logs for all services.
-          schema:
-            type: string
-        - name: follow
-          in: query
-          description: Whether to follow the logs (keep streaming new logs).
-          schema:
-            type: string
-            enum: ["true", "false"]
-            default: "false"
-        - name: n
-          in: query
-          description: |
-            Number of log entries to retrieve.
-
-            If `follow` is true, `n` is ignored.
-
-            If `follow` is false:
-
-            - If `n` is -1, all available logs are returned (up to a server-defined limit).
-            - If `n` is 0 or not specified, a server-defined default number of logs is returned. The default is currently 30.
-            - If `n` is a positive integer, up to that many logs are returned.
-          schema:
-            type: integer
-      responses:
-        "200":
-          description: Service logs in JSON lines format.
-          content:
-            application/x-ndjson:
-              schema:
-                $ref: "#/components/schemas/logs"
-              example:
-                {
-                  "time": "2024-12-27T02:32:53.185Z",
-                  "service": "svc1",
-                  "message": " * Serving Flask app 'main'"
                 }
   /v1/services:
     get:
@@ -1049,7 +1049,7 @@ paths:
     post:
       summary: Send a signal to services
       tags:
-        - services
+        - signals
       description: Send a signal to each of the specified services.
       requestBody:
         required: true
@@ -1095,7 +1095,7 @@ paths:
       description: |
         Get the version of the Pebble daemon and the boot ID of the system.
       tags:
-        - system
+        - system info
       responses:
         "200":
           description: System information
