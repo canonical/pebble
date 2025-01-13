@@ -208,7 +208,7 @@ paths:
             If not specified or zero, wait indefinitely until the change is ready.
       responses:
         "200":
-          description: Wait for change.
+          description: Wait for a change.
           content:
             application/json:
               schema:
@@ -967,7 +967,7 @@ paths:
   /v1/services:
     get:
       summary: List services
-      description: This endpoint will fetch information about specific services (or all of them). Return results are ordered by service name.
+      description: This endpoint will fetch information about specific services (or all of them), ordered by service name.
       tags:
         - services
       parameters:
