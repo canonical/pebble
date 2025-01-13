@@ -89,7 +89,7 @@ paths:
             type: string
       responses:
         "200":
-          description: Get change successfully.
+          description: Information about the change.
           content:
             application/json:
               schema:
@@ -517,7 +517,7 @@ paths:
             description: JSON payload for "make-dirs" or "remove" actions.
       responses:
         "200":
-          description: Post files successfully. The result in the response is a JSON array of the file result object containing path and (optional) errors.
+          description: Successful operation. The result in the response is a JSON array of the file result object containing path and (optional) errors.
           content:
             application/json:
               schema:
