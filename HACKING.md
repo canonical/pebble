@@ -226,6 +226,18 @@ To pull in the latest style and dependencies from the starter pack, clone the [C
 - Under the `docs/` folder, run `python3 build_requirements.py`. This generates the latest `requirements.txt` under the `.sphinx/` folder.
 - Under the `docs/` folder, run `tox -e docs-dep` to compile a pinned requirements file for tox environments.
 
+### Writing a great doc
+
+- Use short sentences, ideally with one or two clauses
+- Use headings to split the doc into sections. Make sure that the purpose of each section is clear from its heading
+- Avoid a long introduction. Assume that the reader is only going to scan the first paragraph and the headings
+- Avoid background context unless it's essential for the reader to understand
+
+Recommended tone:
+- Use a casual tone, but avoid idioms. Common contractions such as "it's" and "doesn't" are great
+- Use "we" to include the reader in what you're explaining
+- Avoid passive descriptions. If you expect the reader to do something, give a direct instruction
+
 ## Creating a release
 
 To create a new tagged release, go to the [GitHub Releases page](https://github.com/canonical/pebble/releases) and:
