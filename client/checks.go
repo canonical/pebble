@@ -15,6 +15,10 @@
 package client
 
 import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
 	"net/url"
 )
 
@@ -89,4 +93,30 @@ func (client *Client) Checks(opts *ChecksOptions) ([]*CheckInfo, error) {
 		return nil, err
 	}
 	return checks, nil
+}
+
+type CheckPayload struct {
+	Action string
+	Check  string
+}
+
+// RunCheck runs a specific health check immediately and return the status.
+func (client *Client) RunCheck(opts *CheckPayload) (string, error) {
+	body, err := json.Marshal(opts)
+	if err != nil {
+		return "", fmt.Errorf("cannot marshal checks payload: %w", err)
+	}
+
+	resp, err := client.Requester().Do(context.Background(), &RequestOptions{
+		Type:   SyncRequest,
+		Method: "POST",
+		Path:   "/v1/checks",
+		Body:   bytes.NewBuffer(body),
+	})
+	if err != nil {
+		return "", err
+	}
+	var status string
+	err = resp.DecodeResult(&status)
+	return status, err
 }

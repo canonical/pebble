@@ -184,3 +184,9 @@ func pluralise(n int, singular, plural string) string {
 	}
 	return fmt.Sprintf("%d %s", n, plural)
 }
+
+func (m *CheckManager) RunCheck(ctx context.Context, check *plan.Check) error {
+	logger.Debugf("Performing check %q", check.Name)
+	chk := newChecker(check)
+	return runCheck(ctx, chk, check.Timeout.Value)
+}
