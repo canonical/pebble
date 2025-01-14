@@ -14,35 +14,35 @@ For more examples, see "How to use Pebble API". <!-- [David] Link to the how-to 
 
 To access the API endpoints over the Unix socket, use the `--unix-socket` option of `curl`. For example:
 
-* TODO
+```{terminal}
+   :input: curl --unix-socket /path/to/.pebble.socket http://_/v1/services --data '{"action": "stop", "services": ["svc1"]}'
+{"type":"async","status-code":202,"status":"Accepted","change":"42","result":null}
+```
 
-    ```
-    curl ...
-    ```
+<br />
 
-* TODO
-
-    ```
-    curl ...
-    ```
+```{terminal}
+   :input: curl --unix-socket /path/to/.pebble.socket http://_/v1/changes/42/wait
+{"type":"sync","status-code":200,"status":"OK","result":{...}}
+```
 
 ### Go client
 
 To use the [Go client](https://pkg.go.dev/github.com/canonical/pebble/client) to access API endpoints over the Unix socket, first create a client using `New`, and then call the methods on the returned `Client` struct to interact with the API. For example, to stop a service named `mysvc`:
 
 ```go
-    pebble, err := client.New(&client.Config{Socket: ".pebble.socket"})
-    if err != nil {
-        log.Fatal(err)
-    }
-    changeID, err := pebble.Stop(&client.ServiceOptions{Names: []string{"mysvc"}})
-    if err != nil {
-        log.Fatal(err)
-    }
-    _, err = pebble.WaitChange(changeID, &client.WaitChangeOptions{})
-    if err != nil {
-        log.Fatal(err)
-    }
+pebble, err := client.New(&client.Config{Socket: "/path/to/.pebble.socket"})
+if err != nil {
+    log.Fatal(err)
+}
+changeID, err := pebble.Stop(&client.ServiceOptions{Names: []string{"mysvc"}})
+if err != nil {
+    log.Fatal(err)
+}
+_, err = pebble.WaitChange(changeID, &client.WaitChangeOptions{})
+if err != nil {
+    log.Fatal(err)
+}
 ```
 
 We try to never change the underlying HTTP API in a backwards-incompatible way. However, in rare cases we may change the Go client in a backwards-incompatible way.
@@ -55,8 +55,8 @@ The Ops library for writing and testing Juju charms includes a [Python client fo
 
 ```python
 import ops
-client = ops.pebble.Client('/path/to/.pebble.socket')
-client.start_services(['svc1', 'svc2'])
+client = ops.pebble.Client("/path/to/.pebble.socket")
+client.stop_services(["mysvc"])  # Python client also waits for change to finish
 ```
 
 For more information, see:
@@ -108,9 +108,8 @@ Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
 
 A timestamp is a string in the [RFC 3339](https://datatracker.ietf.org/doc/html/rfc3339) format with sub-second precision. Here are some examples:
 
-- "2006-01-02T15:04:05Z07:00"
-- "2006-01-02T15:04:05.999999999Z07:00"
-- "2024-12-18T10:45:29.919907089+08:00"
+- "1985-04-12T23:20:50.52Z"
+- "1996-12-19T16:39:57.123456789-08:00"
 
 ## Errors
 
@@ -131,7 +130,7 @@ Errors are always returned in JSON format with the following structure:
 
 Possible values for `status-code`:
 
-- 400: Bad request. For example, if a parameter is missing or badly-formatted, such as trying to start a service without providing a the service name.
+- 400: Bad request. For example, if a parameter is missing or badly-formatted, such as trying to start a service without providing a service name.
 - 401: Unauthorized.
 - 404: Not found. For example, if a change with the specified ID does not exist.
 - 500: Internal server error. For example, if the Pebble database is corrupt. If these errors keep happening, please [open an issue](https://github.com/canonical/pebble/issues/new).
@@ -147,8 +146,6 @@ The `result` for some error types includes a `kind` field with the following pos
 - system-restart
 
 ## API endpoints
-
-**Work-in-progress. Not all APIs have been included yet.**
 
 <link rel="stylesheet" type="text/css" href="https://unpkg.com/swagger-ui-dist@5.11.0/swagger-ui.css" ></link>
 <link rel="stylesheet" type="text/css" href="../../_static/swagger-override.css" ></link>
@@ -188,7 +185,8 @@ window.onload = function() {
       // Create an 'a' element for the tag link
       const tocLink = document.createElement("a");
       tocLink.classList.add("reference", "internal");
-      tocLink.href= `#/${tag}`;
+      const urlFriendlyTag = tag.replace(/ /g, "-");
+      tocLink.href = `#/${urlFriendlyTag}`;
       tocLink.innerText = tag;
       tocLink.addEventListener("click", event => {
         if (event.shiftKey || event.ctrlKey || event.altKey || event.metaKey) {
@@ -197,7 +195,8 @@ window.onload = function() {
         // When the tag link is clicked with no modifier keys:
         // - Scroll the tag section into view
         // - If the tag section is closed, open it (by simulating a click)
-        const swaggerHeading = document.getElementById(`operations-tag-${tag}`);
+        const operationsTag = tag.replace(/ /g, "_");
+        const swaggerHeading = document.getElementById(`operations-tag-${operationsTag}`);
         swaggerHeading.scrollIntoView({
           behavior: "smooth"
         });
@@ -214,14 +213,19 @@ window.onload = function() {
 
   // Make sure to match the tags defined in openapi.yaml
   addSwaggerTagsToTOC([
+    "changes and tasks",
+    "checks",
+    "exec",
+    "files",
+    "health",
+    "identities",
+    "layers",
+    "logs",
+    "notices",
     "plan",
     "services",
-    "checks",
-    "files",
-    "changes",
-    "notices",
-    "identities",
-    "system"
+    "signals",
+    "system info"
   ]);
 }
 </script>
