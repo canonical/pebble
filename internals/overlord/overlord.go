@@ -39,6 +39,7 @@ import (
 	"github.com/canonical/pebble/internals/overlord/servstate"
 	"github.com/canonical/pebble/internals/overlord/state"
 	"github.com/canonical/pebble/internals/timing"
+	"github.com/canonical/pebble/internals/workload"
 )
 
 var (
@@ -74,6 +75,9 @@ type Options struct {
 	RestartHandler restart.Handler
 	// ServiceOutput is an optional output for the logging manager.
 	ServiceOutput io.Writer
+	// Workloads is an optional instance of a workload.Provider that lets managers gain
+	// information about workloads available on the system.
+	Workloads workload.Provider
 	// Extension allows extending the overlord with externally defined features.
 	Extension Extension
 }
@@ -155,7 +159,11 @@ func New(opts *Options) (*Overlord, error) {
 	if layersDir == "" {
 		layersDir = filepath.Join(opts.PebbleDir, "layers")
 	}
-	o.planMgr, err = planstate.NewManager(layersDir)
+	workloads := opts.Workloads
+	if workloads == nil {
+		workloads = workload.NilProvider{}
+	}
+	o.planMgr, err = planstate.NewManager(workloads, layersDir)
 	if err != nil {
 		return nil, fmt.Errorf("cannot create plan manager: %w", err)
 	}
@@ -168,6 +176,7 @@ func New(opts *Options) (*Overlord, error) {
 		o.runner,
 		opts.ServiceOutput,
 		opts.RestartHandler,
+		workloads,
 		o.logMgr)
 	if err != nil {
 		return nil, fmt.Errorf("cannot create service manager: %w", err)

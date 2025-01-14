@@ -346,9 +346,15 @@ func (s *serviceData) startInternal() error {
 	s.cmd.Dir = s.config.WorkingDir
 
 	// Start as another user if specified in plan.
-	uid, gid, err := osutil.NormalizeUidGid(s.config.UserID, s.config.GroupID, s.config.User, s.config.Group)
-	if err != nil {
-		return err
+	uid, gid := s.manager.workloads.UserInfo(s.config.Workload)
+	if (uid == nil) != (gid == nil) {
+		panic("both uid and gid must be provided by workload")
+	}
+	if uid == nil {
+		uid, gid, err = osutil.NormalizeUidGid(s.config.UserID, s.config.GroupID, s.config.User, s.config.Group)
+		if err != nil {
+			return err
+		}
 	}
 	if uid != nil && gid != nil {
 		isCurrent, err := osutil.IsCurrent(*uid, *gid)
@@ -378,12 +384,21 @@ func (s *serviceData) startInternal() error {
 		}
 	}
 
+	// Apply workload environment overrides.
+	if s.config.Workload != "" {
+		workloadEnv := s.manager.workloads.Environment(s.config.Workload)
+		if workloadEnv != nil {
+			for k, v := range workloadEnv {
+				environment[k] = v
+			}
+		}
+	}
+
 	// Pass service description's environment variables to child process.
 	s.cmd.Env = os.Environ()
 	for k, v := range environment {
 		s.cmd.Env = append(s.cmd.Env, k+"="+v)
 	}
-
 	// Set up stdout and stderr to write to log ring buffer.
 	var outputIterator servicelog.Iterator
 	if s.manager.serviceOutput != nil {

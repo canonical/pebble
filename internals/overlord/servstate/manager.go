@@ -13,7 +13,11 @@ import (
 	"github.com/canonical/pebble/internals/overlord/state"
 	"github.com/canonical/pebble/internals/plan"
 	"github.com/canonical/pebble/internals/servicelog"
+	"github.com/canonical/pebble/internals/workload"
 )
+
+// ServicesField is the top-level string key used in the Pebble plan.
+const ServicesField = "services"
 
 type ServiceManager struct {
 	state *state.State
@@ -30,7 +34,8 @@ type ServiceManager struct {
 	randLock sync.Mutex
 	rand     *rand.Rand
 
-	logMgr LogManager
+	workloads workload.Provider
+	logMgr    LogManager
 }
 
 type LogManager interface {
@@ -41,13 +46,14 @@ type Restarter interface {
 	HandleRestart(t restart.RestartType)
 }
 
-func NewManager(s *state.State, runner *state.TaskRunner, serviceOutput io.Writer, restarter Restarter, logMgr LogManager) (*ServiceManager, error) {
+func NewManager(s *state.State, runner *state.TaskRunner, serviceOutput io.Writer, restarter Restarter, workloads workload.Provider, logMgr LogManager) (*ServiceManager, error) {
 	manager := &ServiceManager{
 		state:         s,
 		services:      make(map[string]*serviceData),
 		serviceOutput: serviceOutput,
 		restarter:     restarter,
 		rand:          rand.New(rand.NewSource(time.Now().UnixNano())),
+		workloads:     workloads,
 		logMgr:        logMgr,
 	}
 

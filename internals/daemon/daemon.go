@@ -46,6 +46,7 @@ import (
 	"github.com/canonical/pebble/internals/overlord/state"
 	"github.com/canonical/pebble/internals/reaper"
 	"github.com/canonical/pebble/internals/systemd"
+	"github.com/canonical/pebble/internals/workload"
 )
 
 var (
@@ -80,6 +81,10 @@ type Options struct {
 	// ServiceOuput is an optional io.Writer for the service log output, if set, all services
 	// log output will be written to the writer.
 	ServiceOutput io.Writer
+
+	// Workloads is an optional workload.Provider that enables overlord managers to access
+	// information about the workloads present in the system.
+	Workloads workload.Provider
 
 	// OverlordExtension is an optional interface used to extend the capabilities
 	// of the Overlord.
@@ -851,6 +856,7 @@ func New(opts *Options) (*Daemon, error) {
 		LayersDir:      opts.LayersDir,
 		RestartHandler: d,
 		ServiceOutput:  opts.ServiceOutput,
+		Workloads:      opts.Workloads,
 		Extension:      opts.OverlordExtension,
 	}
 

@@ -21,6 +21,7 @@ import (
 	"sync"
 
 	"github.com/canonical/pebble/internals/plan"
+	"github.com/canonical/pebble/internals/workload"
 )
 
 // LabelExists is the error returned by AppendLayer when a layer with that
@@ -40,12 +41,14 @@ type PlanManager struct {
 	plan     *plan.Plan
 
 	changeListeners []PlanChangedFunc
+	workloads       workload.Provider
 }
 
-func NewManager(layersDir string) (*PlanManager, error) {
+func NewManager(w workload.Provider, layersDir string) (*PlanManager, error) {
 	manager := &PlanManager{
 		layersDir: layersDir,
 		plan:      &plan.Plan{},
+		workloads: w,
 	}
 	return manager, nil
 }
@@ -57,6 +60,9 @@ func NewManager(layersDir string) (*PlanManager, error) {
 func (m *PlanManager) Load() error {
 	plan, err := plan.ReadDir(m.layersDir)
 	if err != nil {
+		return err
+	}
+	if err := plan.Validate(m.workloads); err != nil {
 		return err
 	}
 
@@ -249,7 +255,7 @@ func (m *PlanManager) updatePlanLayers(layers []*plan.Layer) (*plan.Plan, error)
 		LogTargets: combined.LogTargets,
 		Sections:   combined.Sections,
 	}
-	err = p.Validate()
+	err = p.Validate(m.workloads)
 	if err != nil {
 		return nil, err
 	}

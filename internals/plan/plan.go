@@ -29,8 +29,10 @@ import (
 	"github.com/canonical/x-go/strutil/shlex"
 	"gopkg.in/yaml.v3"
 
+	"github.com/canonical/pebble/cmd"
 	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/osutil"
+	"github.com/canonical/pebble/internals/workload"
 )
 
 // SectionExtension allows the plan layer schema to be extended without
@@ -191,6 +193,7 @@ type Service struct {
 	Requires []string `yaml:"requires,omitempty"`
 
 	// Options for command execution
+	Workload    string            `yaml:"workload,omitempty"`
 	Environment map[string]string `yaml:"environment,omitempty"`
 	UserID      *int              `yaml:"user-id,omitempty"`
 	User        string            `yaml:"user,omitempty"`
@@ -974,11 +977,23 @@ func (layer *Layer) Validate() error {
 
 // Validate checks that the combined layers form a valid plan. See also
 // Layer.Validate, which checks that the individual layers are valid.
-func (p *Plan) Validate() error {
+func (p *Plan) Validate(w workload.Provider) error {
 	for name, service := range p.Services {
 		if service.Command == "" {
 			return &FormatError{
 				Message: fmt.Sprintf(`plan must define "command" for service %q`, name),
+			}
+		}
+		if service.Workload != "" {
+			if !w.Supported() {
+				return &FormatError{
+					Message: fmt.Sprintf(`service %q cannot run in workload %q because workloads are not supported in %v`, name, service.Workload, cmd.DisplayName),
+				}
+			}
+			if !w.Exists(service.Workload) {
+				return &FormatError{
+					Message: fmt.Sprintf(`service %q cannot run in non-existing workload %q`, name, service.Workload),
+				}
 			}
 		}
 	}
@@ -1563,11 +1578,7 @@ func ReadDir(layersDir string) (*Plan, error) {
 		LogTargets: combined.LogTargets,
 		Sections:   combined.Sections,
 	}
-	err = plan.Validate()
-	if err != nil {
-		return nil, err
-	}
-	return plan, err
+	return plan, nil
 }
 
 // MergeServiceContext merges the overrides on top of the service context
