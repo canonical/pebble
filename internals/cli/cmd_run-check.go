@@ -22,12 +22,12 @@ import (
 	"github.com/canonical/pebble/client"
 )
 
-const cmdCheckSummary = "Run check immediately and get the status"
-const cmdCheckDescription = `
+const cmdRunCheckSummary = "Run check immediately and get the status"
+const cmdRunCheckDescription = `
 The check command runs a check immediately and return the status.
 `
 
-type cmdCheck struct {
+type cmdRunCheck struct {
 	client *client.Client
 
 	Positional struct {
@@ -38,15 +38,15 @@ type cmdCheck struct {
 func init() {
 	AddCommand(&CmdInfo{
 		Name:        "run-check",
-		Summary:     cmdCheckSummary,
-		Description: cmdCheckDescription,
+		Summary:     cmdRunCheckSummary,
+		Description: cmdRunCheckDescription,
 		New: func(opts *CmdOptions) flags.Commander {
-			return &cmdCheck{client: opts.Client}
+			return &cmdRunCheck{client: opts.Client}
 		},
 	})
 }
 
-func (cmd *cmdCheck) Execute(args []string) error {
+func (cmd *cmdRunCheck) Execute(args []string) error {
 	if len(args) > 0 {
 		return ErrExtraArgs
 	}
