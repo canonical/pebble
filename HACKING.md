@@ -228,15 +228,15 @@ To pull in the latest style and dependencies from the starter pack, clone the [C
 
 ### Writing a great doc
 
-- Use short sentences, ideally with one or two clauses
-- Use headings to split the doc into sections. Make sure that the purpose of each section is clear from its heading
-- Avoid a long introduction. Assume that the reader is only going to scan the first paragraph and the headings
-- Avoid background context unless it's essential for the reader to understand
+- Use short sentences, ideally with one or two clauses.
+- Use headings to split the doc into sections. Make sure that the purpose of each section is clear from its heading.
+- Avoid a long introduction. Assume that the reader is only going to scan the first paragraph and the headings.
+- Avoid background context unless it's essential for the reader to understand.
 
 Recommended tone:
-- Use a casual tone, but avoid idioms. Common contractions such as "it's" and "doesn't" are great
-- Use "we" to include the reader in what you're explaining
-- Avoid passive descriptions. If you expect the reader to do something, give a direct instruction
+- Use a casual tone, but avoid idioms. Common contractions such as "it's" and "doesn't" are great.
+- Use "we" to include the reader in what you're explaining.
+- Avoid passive descriptions. If you expect the reader to do something, give a direct instruction.
 
 ## Creating a release
 
