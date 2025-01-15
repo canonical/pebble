@@ -30,7 +30,6 @@ import (
 
 	"github.com/canonical/pebble/internals/plan"
 	"github.com/canonical/pebble/internals/testutil"
-	"github.com/canonical/pebble/internals/workload"
 )
 
 const (
@@ -1477,7 +1476,7 @@ func (s *S) TestParseLayer(c *C) {
 					LogTargets: result.LogTargets,
 					Sections:   result.Sections,
 				}
-				err = p.Validate(workload.NilProvider{})
+				err = p.Validate(nil)
 			}
 		}
 		if err != nil || test.error != "" {
@@ -1520,7 +1519,7 @@ services:
 		LogTargets: combined.LogTargets,
 		Sections:   combined.Sections,
 	}
-	err = p.Validate(workload.NilProvider{})
+	err = p.Validate(nil)
 	c.Assert(err, ErrorMatches, `services in before/after loop: .*`)
 	_, ok := err.(*plan.FormatError)
 	c.Assert(ok, Equals, true, Commentf("error must be *plan.FormatError, not %T", err))
@@ -1561,7 +1560,7 @@ services:
 		LogTargets: combined.LogTargets,
 		Sections:   combined.Sections,
 	}
-	err = p.Validate(workload.NilProvider{})
+	err = p.Validate(nil)
 	c.Check(err, ErrorMatches, `plan must define "command" for service "srv1"`)
 	_, ok := err.(*plan.FormatError)
 	c.Check(ok, Equals, true, Commentf("error must be *plan.FormatError, not %T", err))
@@ -1628,7 +1627,7 @@ func (s *S) TestReadDir(c *C) {
 					}
 				}
 			}
-			err = sup.Validate(workload.NilProvider{})
+			err = sup.Validate(nil)
 		}
 		if err != nil || test.error != "" {
 			if test.error != "" {

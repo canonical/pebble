@@ -977,7 +977,7 @@ func (layer *Layer) Validate() error {
 
 // Validate checks that the combined layers form a valid plan. See also
 // Layer.Validate, which checks that the individual layers are valid.
-func (p *Plan) Validate(w workload.Provider) error {
+func (p *Plan) Validate(workloads map[string]workload.Workload) error {
 	for name, service := range p.Services {
 		if service.Command == "" {
 			return &FormatError{
@@ -985,14 +985,16 @@ func (p *Plan) Validate(w workload.Provider) error {
 			}
 		}
 		if service.Workload != "" {
-			if !w.Supported() {
+			if !cmd.SupportsWorkloads {
 				return &FormatError{
 					Message: fmt.Sprintf(`service %q cannot run in workload %q because workloads are not supported in %v`, name, service.Workload, cmd.DisplayName),
 				}
 			}
-			if !w.Exists(service.Workload) {
-				return &FormatError{
-					Message: fmt.Sprintf(`service %q cannot run in non-existing workload %q`, name, service.Workload),
+			if workloads != nil {
+				if _, ok := workloads[service.Workload]; !ok {
+					return &FormatError{
+						Message: fmt.Sprintf(`service %q cannot run in non-existing workload %q`, name, service.Workload),
+					}
 				}
 			}
 		}

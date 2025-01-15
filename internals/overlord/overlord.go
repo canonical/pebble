@@ -75,9 +75,8 @@ type Options struct {
 	RestartHandler restart.Handler
 	// ServiceOutput is an optional output for the logging manager.
 	ServiceOutput io.Writer
-	// Workloads is an optional instance of a workload.Provider that lets managers gain
-	// information about workloads available on the system.
-	Workloads workload.Provider
+	// Workloads contain information about the workloads present in the system.
+	Workloads map[string]workload.Workload
 	// Extension allows extending the overlord with externally defined features.
 	Extension Extension
 }
@@ -159,11 +158,7 @@ func New(opts *Options) (*Overlord, error) {
 	if layersDir == "" {
 		layersDir = filepath.Join(opts.PebbleDir, "layers")
 	}
-	workloads := opts.Workloads
-	if workloads == nil {
-		workloads = workload.NilProvider{}
-	}
-	o.planMgr, err = planstate.NewManager(workloads, layersDir)
+	o.planMgr, err = planstate.NewManager(opts.Workloads, layersDir)
 	if err != nil {
 		return nil, fmt.Errorf("cannot create plan manager: %w", err)
 	}
@@ -176,8 +171,8 @@ func New(opts *Options) (*Overlord, error) {
 		o.runner,
 		opts.ServiceOutput,
 		opts.RestartHandler,
-		workloads,
-		o.logMgr)
+		o.logMgr,
+		opts.Workloads)
 	if err != nil {
 		return nil, fmt.Errorf("cannot create service manager: %w", err)
 	}

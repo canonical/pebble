@@ -14,22 +14,7 @@
 
 package workload
 
-var _ Provider = (*NilProvider)(nil)
-
-type NilProvider struct{}
-
-func (NilProvider) Environment(name string) map[string]string {
-	return nil
-}
-
-func (NilProvider) UserInfo(name string) (uid *int, gid *int) {
-	return nil, nil
-}
-
-func (NilProvider) Supported() bool {
-	return false
-}
-
-func (NilProvider) Exists(name string) bool {
-	return false
+type Workload struct {
+	UID, GID    *int
+	Environment map[string]string
 }

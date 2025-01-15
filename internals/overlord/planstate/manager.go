@@ -41,14 +41,14 @@ type PlanManager struct {
 	plan     *plan.Plan
 
 	changeListeners []PlanChangedFunc
-	workloads       workload.Provider
+	workloads       map[string]workload.Workload
 }
 
-func NewManager(w workload.Provider, layersDir string) (*PlanManager, error) {
+func NewManager(workloads map[string]workload.Workload, layersDir string) (*PlanManager, error) {
 	manager := &PlanManager{
 		layersDir: layersDir,
 		plan:      &plan.Plan{},
-		workloads: w,
+		workloads: workloads,
 	}
 	return manager, nil
 }

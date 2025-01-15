@@ -34,7 +34,7 @@ type ServiceManager struct {
 	randLock sync.Mutex
 	rand     *rand.Rand
 
-	workloads workload.Provider
+	workloads map[string]workload.Workload
 	logMgr    LogManager
 }
 
@@ -46,15 +46,15 @@ type Restarter interface {
 	HandleRestart(t restart.RestartType)
 }
 
-func NewManager(s *state.State, runner *state.TaskRunner, serviceOutput io.Writer, restarter Restarter, workloads workload.Provider, logMgr LogManager) (*ServiceManager, error) {
+func NewManager(s *state.State, runner *state.TaskRunner, serviceOutput io.Writer, restarter Restarter, logMgr LogManager, workloads map[string]workload.Workload) (*ServiceManager, error) {
 	manager := &ServiceManager{
 		state:         s,
 		services:      make(map[string]*serviceData),
 		serviceOutput: serviceOutput,
 		restarter:     restarter,
 		rand:          rand.New(rand.NewSource(time.Now().UnixNano())),
-		workloads:     workloads,
 		logMgr:        logMgr,
+		workloads:     workloads,
 	}
 
 	runner.AddHandler("start", manager.doStart, nil)

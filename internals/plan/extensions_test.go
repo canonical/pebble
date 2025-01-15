@@ -25,7 +25,6 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/canonical/pebble/internals/plan"
-	"github.com/canonical/pebble/internals/workload"
 )
 
 type inputLayer struct {
@@ -393,7 +392,7 @@ nexttest:
 		// Load the plan layer from disk (parse, combine and validate).
 		p, err := plan.ReadDir(layersDir)
 		if err == nil {
-			err = p.Validate(workload.NilProvider{})
+			err = p.Validate(nil)
 		}
 		if testData.error != "" || err != nil {
 			// Expected error.

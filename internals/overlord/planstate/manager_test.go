@@ -22,12 +22,11 @@ import (
 
 	"github.com/canonical/pebble/internals/overlord/planstate"
 	"github.com/canonical/pebble/internals/plan"
-	"github.com/canonical/pebble/internals/workload"
 )
 
 func (ps *planSuite) TestLoadInvalidPebbleDir(c *C) {
 	var err error
-	ps.planMgr, err = planstate.NewManager(workload.NilProvider{}, "/invalid/path")
+	ps.planMgr, err = planstate.NewManager(nil, "/invalid/path")
 	c.Assert(err, IsNil)
 	// Load the plan from the <pebble-dir>/layers directory
 	err = ps.planMgr.Load()
@@ -68,7 +67,7 @@ func (ps *planSuite) TestLoadLayers(c *C) {
 	plan.RegisterSectionExtension(testField, testExtension{})
 	defer plan.UnregisterSectionExtension(testField)
 	var err error
-	ps.planMgr, err = planstate.NewManager(workload.NilProvider{}, ps.layersDir)
+	ps.planMgr, err = planstate.NewManager(nil, ps.layersDir)
 	c.Assert(err, IsNil)
 	// Write layers
 	for _, l := range loadLayers {
@@ -103,7 +102,7 @@ func (ps *planSuite) TestAppendLayers(c *C) {
 	plan.RegisterSectionExtension(testField, testExtension{})
 	defer plan.UnregisterSectionExtension(testField)
 	var err error
-	ps.planMgr, err = planstate.NewManager(workload.NilProvider{}, ps.layersDir)
+	ps.planMgr, err = planstate.NewManager(nil, ps.layersDir)
 	c.Assert(err, IsNil)
 
 	// Append a layer when there are no layers.
@@ -220,7 +219,7 @@ func (ps *planSuite) TestCombineLayers(c *C) {
 	plan.RegisterSectionExtension(testField, testExtension{})
 	defer plan.UnregisterSectionExtension(testField)
 	var err error
-	ps.planMgr, err = planstate.NewManager(workload.NilProvider{}, ps.layersDir)
+	ps.planMgr, err = planstate.NewManager(nil, ps.layersDir)
 	c.Assert(err, IsNil)
 
 	// "Combine" layer with no layers should just append.
@@ -406,7 +405,7 @@ test-field:
 
 func (ps *planSuite) TestSetServiceArgs(c *C) {
 	var err error
-	ps.planMgr, err = planstate.NewManager(workload.NilProvider{}, ps.layersDir)
+	ps.planMgr, err = planstate.NewManager(nil, ps.layersDir)
 	c.Assert(err, IsNil)
 
 	// This is the original plan
@@ -448,7 +447,7 @@ services:
 }
 
 func (ps *planSuite) TestChangeListenerAndLocking(c *C) {
-	manager, err := planstate.NewManager(workload.NilProvider{}, ps.layersDir)
+	manager, err := planstate.NewManager(nil, ps.layersDir)
 	c.Assert(err, IsNil)
 
 	calls := 0
@@ -515,7 +514,7 @@ func (ps *planSuite) TestAppendLayersWithoutInner(c *C) {
 	plan.RegisterSectionExtension(testField, testExtension{})
 	defer plan.UnregisterSectionExtension(testField)
 	var err error
-	ps.planMgr, err = planstate.NewManager(workload.NilProvider{}, ps.layersDir)
+	ps.planMgr, err = planstate.NewManager(nil, ps.layersDir)
 	c.Assert(err, IsNil)
 
 	layer := ps.parseLayer(c, 0, "foo/bar", "")
@@ -533,7 +532,7 @@ func (ps *planSuite) TestAppendLayersWithInner(c *C) {
 	plan.RegisterSectionExtension(testField, testExtension{})
 	defer plan.UnregisterSectionExtension(testField)
 	var err error
-	ps.planMgr, err = planstate.NewManager(workload.NilProvider{}, ps.layersDir)
+	ps.planMgr, err = planstate.NewManager(nil, ps.layersDir)
 	c.Assert(err, IsNil)
 
 	appendLabels := []string{

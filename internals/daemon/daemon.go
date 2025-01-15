@@ -82,9 +82,8 @@ type Options struct {
 	// log output will be written to the writer.
 	ServiceOutput io.Writer
 
-	// Workloads is an optional workload.Provider that enables overlord managers to access
-	// information about the workloads present in the system.
-	Workloads workload.Provider
+	// Workloads contains information about the workloads present in the system.
+	Workloads map[string]workload.Workload
 
 	// OverlordExtension is an optional interface used to extend the capabilities
 	// of the Overlord.

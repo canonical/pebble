@@ -43,7 +43,6 @@ import (
 	"github.com/canonical/pebble/internals/reaper"
 	"github.com/canonical/pebble/internals/servicelog"
 	"github.com/canonical/pebble/internals/testutil"
-	"github.com/canonical/pebble/internals/workload"
 )
 
 const (
@@ -1779,7 +1778,7 @@ services:
 
 func (s *S) newServiceManager(c *C) {
 	var err error
-	s.manager, err = servstate.NewManager(s.st, s.runner, s.logOutput, testRestarter{s.stopDaemon}, workload.NilProvider{}, fakeLogManager{})
+	s.manager, err = servstate.NewManager(s.st, s.runner, s.logOutput, testRestarter{s.stopDaemon}, fakeLogManager{}, nil)
 	c.Assert(err, IsNil)
 }
 

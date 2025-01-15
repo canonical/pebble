@@ -346,7 +346,8 @@ func (s *serviceData) startInternal() error {
 	s.cmd.Dir = s.config.WorkingDir
 
 	// Start as another user if specified in plan.
-	uid, gid := s.manager.workloads.UserInfo(s.config.Workload)
+	w := s.manager.workloads[s.config.Workload]
+	uid, gid := w.UID, w.GID
 	if (uid == nil) != (gid == nil) {
 		panic("both uid and gid must be provided by workload")
 	}
@@ -386,9 +387,8 @@ func (s *serviceData) startInternal() error {
 
 	// Apply workload environment overrides.
 	if s.config.Workload != "" {
-		workloadEnv := s.manager.workloads.Environment(s.config.Workload)
-		if workloadEnv != nil {
-			for k, v := range workloadEnv {
+		if w.Environment != nil {
+			for k, v := range w.Environment {
 				environment[k] = v
 			}
 		}
