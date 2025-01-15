@@ -25,6 +25,3 @@ var DefaultDir string = "/var/lib/pebble/default"
 
 // StateFile is the file name of the state file in pebble dir.
 var StateFile string = ".pebble.state"
-
-// SupportsWorkloads determines whther or not to allow services run on workloads.
-var SupportsWorkloads bool = false

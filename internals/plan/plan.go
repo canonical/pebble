@@ -985,16 +985,14 @@ func (p *Plan) Validate(workloads map[string]workload.Workload) error {
 			}
 		}
 		if service.Workload != "" {
-			if !cmd.SupportsWorkloads {
+			if workloads == nil {
 				return &FormatError{
 					Message: fmt.Sprintf(`service %q cannot run in workload %q because workloads are not supported in %v`, name, service.Workload, cmd.DisplayName),
 				}
 			}
-			if workloads != nil {
-				if _, ok := workloads[service.Workload]; !ok {
-					return &FormatError{
-						Message: fmt.Sprintf(`service %q cannot run in non-existing workload %q`, name, service.Workload),
-					}
+			if _, ok := workloads[service.Workload]; !ok {
+				return &FormatError{
+					Message: fmt.Sprintf(`service %q cannot run in non-existing workload %q`, name, service.Workload),
 				}
 			}
 		}
