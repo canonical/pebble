@@ -226,6 +226,31 @@ To pull in the latest style and dependencies from the starter pack, clone the [C
 - Under the `docs/` folder, run `python3 build_requirements.py`. This generates the latest `requirements.txt` under the `.sphinx/` folder.
 - Under the `docs/` folder, run `tox -e docs-dep` to compile a pinned requirements file for tox environments.
 
+## Updating the CLI reference documentation
+
+To add a new CLI command, ensure that it is added in the list at the top of the [doc](docs/reference/cli-commands.md) in the appropriate section, and then add a new section for the details **in alphabetical order**.
+
+The section should look like:
+
+```
+(reference_pebble_{command name}_command)=
+## {command name}
+
+The `{command name}` command is used to {describe the command}.
+
+<!-- START AUTOMATED OUTPUT FOR {command name} -->
+```{terminal}
+:input: pebble {command name} --help
+```
+<!-- END AUTOMATED OUTPUT FOR {command name} -->
+```
+
+With `{command name}` replaced by the name of the command and `{describe the command}` replaced by a suitable description.
+
+In the `docs` directory, run `tox -e commands` to automatically update the CLI reference documentation.
+
+A CI workflow will fail if the CLI reference documentation does not match the actual output from Pebble.
+
 ### Writing a great doc
 
 - Use short sentences, ideally with one or two clauses.
