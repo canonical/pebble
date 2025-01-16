@@ -15,6 +15,8 @@
 package daemon
 
 import (
+	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/canonical/x-go/strutil"
@@ -25,6 +27,7 @@ import (
 type checkInfo struct {
 	Name      string `json:"name"`
 	Level     string `json:"level,omitempty"`
+	Startup   string `json:"startup,omitempty"`
 	Status    string `json:"status"`
 	Failures  int    `json:"failures,omitempty"`
 	Threshold int    `json:"threshold"`
@@ -56,6 +59,7 @@ func v1GetChecks(c *Command, r *http.Request, _ *UserState) Response {
 			info := checkInfo{
 				Name:      check.Name,
 				Level:     string(check.Level),
+				Startup:   string(check.Startup),
 				Status:    string(check.Status),
 				Failures:  check.Failures,
 				Threshold: check.Threshold,
@@ -65,4 +69,63 @@ func v1GetChecks(c *Command, r *http.Request, _ *UserState) Response {
 		}
 	}
 	return SyncResponse(infos)
+}
+
+func v1PostChecks(c *Command, r *http.Request, _ *UserState) Response {
+	var payload struct {
+		Action   string `json:"action"`
+		Checks []string `json:"checks"`
+	}
+
+	decoder := json.NewDecoder(r.Body)
+	if err := decoder.Decode(&payload); err != nil {
+		return BadRequest("cannot decode data from request body: %v", err)
+	}
+
+	switch payload.Action {
+	case "autostart":
+		if len(payload.Checks) != 0 {
+			return BadRequest("%s accepts no check names", payload.Action)
+		}
+	default:
+		if len(payload.Checks) == 0 {
+			return BadRequest("no checks to %s provided", payload.Action)
+		}
+	}
+
+	var err error
+	var checks []string
+	checkmgr := c.d.overlord.CheckManager()
+	plan := c.d.overlord.PlanManager().Plan()
+
+	switch payload.Action {
+	case "start", "autostart":
+		checks, err = checkmgr.StartChecks(plan, payload.Checks)
+	case "stop":
+		checks, err = checkmgr.StopChecks(plan, payload.Checks)
+	default:
+		return BadRequest("action %q is unsupported", payload.Action)
+	}
+	if err != nil {
+		return BadRequest("cannot %s checks: %v", payload.Action, err)
+	}
+
+	st := c.d.overlord.State()
+	st.EnsureBefore(0) // start and stop tasks right away
+
+	// TODO: figure out what the response should be - nothing? A message? If not
+	// nothing, then it ought to be a JSON payload, so what's the format. It's
+	// all messy right now, and the cmd_*-checks.go files need to be aligned as
+	// well. Maybe there is an existing return object like BadRequest but good
+	// that would be appropriate?
+
+	var result string
+	if len(checks) == 0 {
+		result = fmt.Sprintf("No checks needed to %s", payload.Action)
+	} else if len(checks) == 1 {
+		result = fmt.Sprintf("Queued %s for check %q", payload.Action, checks[0])
+	} else {
+		result = fmt.Sprintf("Queued %s for check %q and %d more", payload.Action, checks[0], len(checks)-1)
+	}
+	return SyncResponse(result)
 }

@@ -420,9 +420,10 @@ const (
 // Check specifies configuration for a single health check.
 type Check struct {
 	// Basic details
-	Name     string     `yaml:"-"`
-	Override Override   `yaml:"override,omitempty"`
-	Level    CheckLevel `yaml:"level,omitempty"`
+	Name     string       `yaml:"-"`
+	Override Override     `yaml:"override,omitempty"`
+	Level    CheckLevel   `yaml:"level,omitempty"`
+	Startup  CheckStartup `yaml:"startup,omitempty"`
 
 	// Common check settings
 	Period    OptionalDuration `yaml:"period,omitempty"`
@@ -454,6 +455,9 @@ func (c *Check) Copy() *Check {
 func (c *Check) Merge(other *Check) {
 	if other.Level != "" {
 		c.Level = other.Level
+	}
+	if other.Startup != "" {
+		c.Startup = other.Startup
 	}
 	if other.Period.IsSet {
 		c.Period = other.Period
@@ -491,6 +495,15 @@ const (
 	UnsetLevel CheckLevel = ""
 	AliveLevel CheckLevel = "alive"
 	ReadyLevel CheckLevel = "ready"
+)
+
+// CheckStartup defines the different startup modes for a check.
+type CheckStartup string
+
+const (
+	UnsetCheckStartup    CheckStartup = ""
+	CheckStartupEnabled  CheckStartup = "enabled"
+	CheckStartupDisabled CheckStartup = "disabled"
 )
 
 // HTTPCheck holds the configuration for an HTTP health check.
@@ -794,6 +807,13 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 	}
 
 	for _, check := range combined.Checks {
+		if check.Startup == UnsetCheckStartup {
+			// Services default to startup:disabled, and it would be nice if
+			// checks aligned with that. However, when checks were added there
+			// wasn't a startup field, and they were effectively startup:enabled
+			// so we need to keep that behaviour, at least until Pebble 2.0.
+			check.Startup = CheckStartupEnabled
+		}
 		if !check.Period.IsSet {
 			check.Period.Value = defaultCheckPeriod
 		}
@@ -906,6 +926,11 @@ func (layer *Layer) Validate() error {
 		if check.Level != UnsetLevel && check.Level != AliveLevel && check.Level != ReadyLevel {
 			return &FormatError{
 				Message: fmt.Sprintf(`plan check %q level must be "alive" or "ready"`, name),
+			}
+		}
+		if check.Startup != UnsetCheckStartup && check.Startup != CheckStartupEnabled && check.Startup != CheckStartupDisabled {
+			return &FormatError{
+				Message: fmt.Sprintf(`plan check %q startup must be "enabled" or "disabled"`, name),
 			}
 		}
 		if check.Period.IsSet && check.Period.Value == 0 {
