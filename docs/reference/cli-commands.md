@@ -236,9 +236,9 @@ Commands can be classified as follows:
 
          Run: run
         Info: help, version
-        Plan: add, plan
-    Services: services, logs, start, restart, signal, stop, replan
-      Checks: checks, health
+        Plan: add, plan, replan
+    Services: services, logs, start, restart, signal, stop
+      Checks: checks, start-checks, stop-checks, health
        Files: push, pull, ls, mkdir, rm, exec
      Changes: changes, tasks
      Notices: warnings, okay, notices, notice, notify
