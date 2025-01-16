@@ -501,7 +501,7 @@ const (
 type CheckStartup string
 
 const (
-	UnsetCheckStartup    CheckStartup = ""
+	CheckStartupUnknown  CheckStartup = ""
 	CheckStartupEnabled  CheckStartup = "enabled"
 	CheckStartupDisabled CheckStartup = "disabled"
 )
@@ -807,13 +807,6 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 	}
 
 	for _, check := range combined.Checks {
-		if check.Startup == UnsetCheckStartup {
-			// Services default to startup:disabled, and it would be nice if
-			// checks aligned with that. However, when checks were added there
-			// wasn't a startup field, and they were effectively startup:enabled
-			// so we need to keep that behaviour, at least until Pebble 2.0.
-			check.Startup = CheckStartupEnabled
-		}
 		if !check.Period.IsSet {
 			check.Period.Value = defaultCheckPeriod
 		}
@@ -928,7 +921,7 @@ func (layer *Layer) Validate() error {
 				Message: fmt.Sprintf(`plan check %q level must be "alive" or "ready"`, name),
 			}
 		}
-		if check.Startup != UnsetCheckStartup && check.Startup != CheckStartupEnabled && check.Startup != CheckStartupDisabled {
+		if check.Startup != CheckStartupUnknown && check.Startup != CheckStartupEnabled && check.Startup != CheckStartupDisabled {
 			return &FormatError{
 				Message: fmt.Sprintf(`plan check %q startup must be "enabled" or "disabled"`, name),
 			}

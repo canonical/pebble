@@ -141,8 +141,10 @@ func (m *CheckManager) PlanChanged(newPlan *plan.Plan) {
 				// We exclude any checks that have changed from startup:enabled
 				// to startup:disabled, because these should now be inactive and
 				// only started when explicitly requested.
+				// If the plan doesn't have an explicit startup value, it
+				// defaults to enabled, for backwards compatibility.
 				if newConfig.Startup == plan.CheckStartupDisabled &&
-					oldConfig.Startup == plan.CheckStartupEnabled {
+					(oldConfig.Startup == plan.CheckStartupEnabled || oldConfig.Startup == plan.CheckStartupUnknown) {
 					continue
 				}
 				// Check is in old and new plans and has been modified.
@@ -155,10 +157,10 @@ func (m *CheckManager) PlanChanged(newPlan *plan.Plan) {
 	}
 
 	// Also find checks that are new (in new plan but not in old one) and have
-	// `startup` set to `enabled`.
+	// `startup` set to `enabled` (or not explicitly set).
 	for _, config := range newPlan.Checks {
 		if !existingChecks[config.Name] {
-			if config.Startup == plan.CheckStartupEnabled {
+			if config.Startup == plan.CheckStartupEnabled || config.Startup == plan.CheckStartupUnknown {
 				newOrModified[config.Name] = true
 			} else {
 				// Check is new and should be inactive - no need to start it,
