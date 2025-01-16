@@ -16,9 +16,9 @@ package client
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
-	"context"
 	"net/url"
 )
 
@@ -76,7 +76,7 @@ type CheckInfo struct {
 
 	// Status is the status of this check: "up" if healthy, "down" if the
 	// number of failures has reached the configured threshold, "inactive" if
-	// the check is disabled.
+	// the check is inactive.
 	Status CheckStatus `json:"status"`
 
 	// Failures is the number of times in a row this check has failed. It is
@@ -159,9 +159,22 @@ func (client *Client) doMultiCheckAction(actionName string, checks []string) (ch
 		"Content-Type": "application/json",
 	}
 
-	resp, err := client.doSync("POST", "/v1/checks", nil, headers, bytes.NewBuffer(data), nil)
+	resp, err := client.Requester().Do(context.Background(), &RequestOptions{
+		Type:    SyncRequest,
+		Method:  "POST",
+		Path:    "/v1/checks",
+		Query:   nil,
+		Headers: headers,
+		Body:    bytes.NewBuffer(data),
+	})
 	if err != nil {
 		return "", err
 	}
-	return string(resp.Result), nil
+	var response string
+	err = resp.DecodeResult(&response)
+	if err != nil {
+		return "", err
+	}
+
+	return response, nil
 }
