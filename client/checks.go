@@ -74,7 +74,7 @@ type CheckInfo struct {
 	Startup CheckStartup `json:"startup"`
 
 	// Status is the status of this check: "up" if healthy, "down" if the
-	// number of failures has reached the configured threshold, "disabled" if
+	// number of failures has reached the configured threshold, "inactive" if
 	// the check is disabled.
 	Status CheckStatus `json:"status"`
 
