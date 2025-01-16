@@ -24,6 +24,7 @@ Pebble is useful for developers who are building [Juju charms on Kubernetes](htt
 ````
 
 ````{grid} 1 1 2 2
+:reverse:
 ```{grid-item-card} [Reference](reference/index)
 **Technical information**
 - [Layer specification](reference/layer-specification)
