@@ -142,7 +142,7 @@ When a check is stopped, the active `perform-check` or `recover-check` change is
 
 You can stop one or more checks using the `pebble stop-checks` command. A stopped check shows in the `pebble checks` output as "inactive" status, and the check will no longer be executed until the check is started again. Stopped (inactive) checks appear in check lists but do not contribute to any overall health calculations - they behave as if the check did not exist.
 
-A stopped check that has `startup` set to `enabled` will be started in a `replan` operation. Stopped checks can also be manually started via the `pebble start-checks` command.
+A stopped check that has `startup` set to `enabled` will be started in a `replan` operation and when the layer is first added. Stopped checks can also be manually started via the `pebble start-checks` command.
 
 Checks that have `startup` set to `disabled` will be added in a stopped (inactive) state. These checks will only be started when instructed by a `pebble start-checks` command.
 
