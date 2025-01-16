@@ -89,7 +89,7 @@ func v1PostChecks(c *Command, r *http.Request, _ *UserState) Response {
 		}
 	default:
 		if len(payload.Checks) == 0 {
-			return BadRequest("no checks to %s provided", payload.Action)
+			return BadRequest("must specify checks for %s action", payload.Action)
 		}
 	}
 
@@ -104,7 +104,7 @@ func v1PostChecks(c *Command, r *http.Request, _ *UserState) Response {
 	case "stop":
 		checks, err = checkmgr.StopChecks(plan, payload.Checks)
 	default:
-		return BadRequest("action %q is unsupported", payload.Action)
+		return BadRequest("invalid action %q", payload.Action)
 	}
 	if err != nil {
 		return BadRequest("cannot %s checks: %v", payload.Action, err)

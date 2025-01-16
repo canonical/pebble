@@ -95,7 +95,7 @@ func v1PostServices(c *Command, r *http.Request, _ *UserState) Response {
 		payload.Services = services
 	default:
 		if len(payload.Services) == 0 {
-			return BadRequest("no services to %s provided", payload.Action)
+			return BadRequest("must specify services for %s action", payload.Action)
 		}
 	}
 
@@ -182,7 +182,7 @@ func v1PostServices(c *Command, r *http.Request, _ *UserState) Response {
 		sort.Strings(services)
 		payload.Services = services
 	default:
-		return BadRequest("action %q is unsupported", payload.Action)
+		return BadRequest("invalid action %q", payload.Action)
 	}
 	if err != nil {
 		return BadRequest("cannot %s services: %v", payload.Action, err)
