@@ -16,6 +16,7 @@ package client
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/url"
 )
@@ -67,7 +68,12 @@ func (client *Client) AddLayer(opts *AddLayerOptions) error {
 	if err := json.NewEncoder(&body).Encode(&payload); err != nil {
 		return err
 	}
-	_, err := client.doSync("POST", "/v1/layers", nil, nil, &body, nil)
+	_, err := client.Requester().Do(context.Background(), &RequestOptions{
+		Type:   SyncRequest,
+		Method: "POST",
+		Path:   "/v1/layers",
+		Body:   &body,
+	})
 	return err
 }
 
@@ -79,7 +85,16 @@ func (client *Client) PlanBytes(_ *PlanOptions) (data []byte, err error) {
 		"format": []string{"yaml"},
 	}
 	var dataStr string
-	_, err = client.doSync("GET", "/v1/plan", query, nil, nil, &dataStr)
+	resp, err := client.Requester().Do(context.Background(), &RequestOptions{
+		Type:   SyncRequest,
+		Method: "GET",
+		Path:   "/v1/plan",
+		Query:  query,
+	})
+	if err != nil {
+		return nil, err
+	}
+	err = resp.DecodeResult(&dataStr)
 	if err != nil {
 		return nil, err
 	}

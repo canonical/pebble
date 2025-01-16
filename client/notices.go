@@ -69,7 +69,16 @@ func (client *Client) Notify(opts *NotifyOptions) (string, error) {
 	result := struct {
 		ID string `json:"id"`
 	}{}
-	_, err := client.doSync("POST", "/v1/notices", nil, nil, &body, &result)
+	resp, err := client.Requester().Do(context.Background(), &RequestOptions{
+		Type:   SyncRequest,
+		Method: "POST",
+		Path:   "/v1/notices",
+		Body:   &body,
+	})
+	if err != nil {
+		return "", err
+	}
+	err = resp.DecodeResult(&result)
 	if err != nil {
 		return "", err
 	}
@@ -154,7 +163,15 @@ func (client *Client) Notice(id string) (*Notice, error) {
 		return nil, fmt.Errorf("invalid notice ID %q", id)
 	}
 	var jn *jsonNotice
-	_, err := client.doSync("GET", "/v1/notices/"+id, nil, nil, nil, &jn)
+	resp, err := client.Requester().Do(context.Background(), &RequestOptions{
+		Type:   SyncRequest,
+		Method: "GET",
+		Path:   "/v1/notices/" + id,
+	})
+	if err != nil {
+		return nil, err
+	}
+	err = resp.DecodeResult(&jn)
 	if err != nil {
 		return nil, err
 	}
@@ -166,7 +183,19 @@ func (client *Client) Notice(id string) (*Notice, error) {
 func (client *Client) Notices(opts *NoticesOptions) ([]*Notice, error) {
 	query := makeNoticesQuery(opts)
 	var jns []*jsonNotice
-	_, err := client.doSync("GET", "/v1/notices", query, nil, nil, &jns)
+	resp, err := client.Requester().Do(context.Background(), &RequestOptions{
+		Type:   SyncRequest,
+		Method: "GET",
+		Path:   "/v1/notices",
+		Query:  query,
+	})
+	if err != nil {
+		return nil, err
+	}
+	err = resp.DecodeResult(&jns)
+	if err != nil {
+		return nil, err
+	}
 	return jsonNoticesToNotices(jns), err
 }
 
