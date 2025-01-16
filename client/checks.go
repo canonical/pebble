@@ -120,13 +120,6 @@ func (client *Client) Checks(opts *ChecksOptions) ([]*CheckInfo, error) {
 	return checks, nil
 }
 
-// AutoStart starts the checks marked as "startup: enabled". opts.Names must
-// be empty for this call. We ignore ops.Level for this action.
-func (client *Client) AutoStartChecks(opts *ChecksOptions) (response string, err error) {
-	response, err = client.doMultiCheckAction("autostart", opts.Names)
-	return response, err
-}
-
 // Start starts the checks named in opts.Names. We ignore ops.Level for this
 // action.
 func (client *Client) StartChecks(opts *ChecksOptions) (response string, err error) {

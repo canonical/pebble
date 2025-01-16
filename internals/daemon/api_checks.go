@@ -82,15 +82,8 @@ func v1PostChecks(c *Command, r *http.Request, _ *UserState) Response {
 		return BadRequest("cannot decode data from request body: %v", err)
 	}
 
-	switch payload.Action {
-	case "autostart":
-		if len(payload.Checks) != 0 {
-			return BadRequest("%s accepts no check names", payload.Action)
-		}
-	default:
-		if len(payload.Checks) == 0 {
-			return BadRequest("must specify checks for %s action", payload.Action)
-		}
+	if len(payload.Checks) == 0 {
+		return BadRequest("must specify checks for %s action", payload.Action)
 	}
 
 	var err error
@@ -99,7 +92,7 @@ func v1PostChecks(c *Command, r *http.Request, _ *UserState) Response {
 	plan := c.d.overlord.PlanManager().Plan()
 
 	switch payload.Action {
-	case "start", "autostart":
+	case "start":
 		checks, err = checkmgr.StartChecks(plan, payload.Checks)
 	case "stop":
 		checks, err = checkmgr.StopChecks(plan, payload.Checks)
