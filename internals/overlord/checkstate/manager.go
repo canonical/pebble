@@ -389,7 +389,7 @@ func (m *CheckManager) StartChecks(currentPlan *plan.Plan, checks []string) ([]s
 		// If the check is not in the plan, return an error.
 		check, ok := currentPlan.Checks[name]
 		if !ok {
-			return nil, fmt.Errorf("check %s is not in the current plan", name)
+			return nil, fmt.Errorf("cannot find check %q in plan", name)
 		}
 		info, ok := m.checks[name]
 		if !ok {
@@ -419,7 +419,7 @@ func (m *CheckManager) StopChecks(currentPlan *plan.Plan, checks []string) ([]st
 		// If the check is not in the current plan, return an error.
 		check, ok := currentPlan.Checks[name]
 		if !ok {
-			return nil, fmt.Errorf("check %s is not in the current plan", name)
+			return nil, fmt.Errorf("cannot find check %q in plan", name)
 		}
 		info, ok := m.checks[name]
 		if !ok {
