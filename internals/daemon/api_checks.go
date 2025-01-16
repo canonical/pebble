@@ -73,7 +73,7 @@ func v1GetChecks(c *Command, r *http.Request, _ *UserState) Response {
 
 func v1PostChecks(c *Command, r *http.Request, _ *UserState) Response {
 	var payload struct {
-		Action   string `json:"action"`
+		Action string   `json:"action"`
 		Checks []string `json:"checks"`
 	}
 

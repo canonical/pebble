@@ -47,8 +47,8 @@ const (
 type CheckStatus string
 
 const (
-	CheckStatusUp   	CheckStatus = "up"
-	CheckStatusDown 	CheckStatus = "down"
+	CheckStatusUp       CheckStatus = "up"
+	CheckStatusDown     CheckStatus = "down"
 	CheckStatusInactive CheckStatus = "inactive"
 )
 
@@ -132,8 +132,8 @@ func (client *Client) StopChecks(opts *ChecksOptions) (response string, err erro
 }
 
 type multiCheckActionData struct {
-	Action   string   `json:"action"`
-	Checks []string   `json:"checks"`
+	Action string   `json:"action"`
+	Checks []string `json:"checks"`
 }
 
 func (client *Client) doMultiCheckAction(actionName string, checks []string) (changeID string, err error) {

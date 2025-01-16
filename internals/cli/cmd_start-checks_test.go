@@ -48,7 +48,7 @@ func (s *PebbleSuite) TestStartChecks(c *check.C) {
 
 		body := DecodedRequestBody(c, r)
 		c.Check(body, check.DeepEquals, map[string]interface{}{
-			"action":   "start",
+			"action": "start",
 			"checks": []interface{}{"chk1", "chk2"},
 		})
 
@@ -73,7 +73,7 @@ func (s *PebbleSuite) TestStartChecksFails(c *check.C) {
 
 		body := DecodedRequestBody(c, r)
 		c.Check(body, check.DeepEquals, map[string]interface{}{
-			"action":   "start",
+			"action": "start",
 			"checks": []interface{}{"chk1", "chk3"},
 		})
 
@@ -95,7 +95,7 @@ func (s *PebbleSuite) TestStartChecksNoWait(c *check.C) {
 
 		body := DecodedRequestBody(c, r)
 		c.Check(body, check.DeepEquals, map[string]interface{}{
-			"action":   "start",
+			"action": "start",
 			"checks": []interface{}{"chk1", "chk2"},
 		})
 
@@ -126,7 +126,7 @@ func (s *PebbleSuite) TestStartChecksFailsGetChange(c *check.C) {
 
 		body := DecodedRequestBody(c, r)
 		c.Check(body, check.DeepEquals, map[string]interface{}{
-			"action":   "start",
+			"action": "start",
 			"checks": []interface{}{"chk1", "chk2"},
 		})
 

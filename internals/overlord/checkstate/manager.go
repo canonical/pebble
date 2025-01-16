@@ -44,7 +44,7 @@ type CheckManager struct {
 	checksLock sync.Mutex
 	checks     map[string]CheckInfo
 
-	plan     *plan.Plan
+	plan *plan.Plan
 }
 
 // FailureFunc is the type of function called when a failure action is triggered.

@@ -15,8 +15,8 @@
 package cli
 
 import (
-	"fmt"
 	"encoding/json"
+	"fmt"
 
 	"github.com/canonical/go-flags"
 
