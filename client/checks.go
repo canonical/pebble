@@ -25,7 +25,7 @@ import (
 type ChecksOptions struct {
 	// Level is the check level to query for. A check is included in the
 	// results if this field is not set, or if it is equal to the check's
-	// level.
+	// level. This field is ignored for start and stop actions.
 	Level CheckLevel
 
 	// Names is the list of check names on which to action. For querying, a
