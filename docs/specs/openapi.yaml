@@ -311,6 +311,47 @@ paths:
                     }
                   ]
                 }
+    post:
+      summary: Manage checks
+      description: Perform a check operation such as start or stop.
+      tags:
+        - checks
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                action:
+                  type: string
+                  description: The action to perform.
+                  enum: ["autostart", "start", "stop"]
+                checks:
+                  type: array
+                  description: |
+                    A list of service names.  Required for "start" and "stop".
+
+                    Ignored for "autostart" (resolved automatically for "autostart" to default services).
+                  items:
+                    type: string
+            example:
+              {"action": "start", "checks": ["svc1"]}
+      responses:
+        "202":
+          description: Accepted - asynchronous operation started.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PostServicesResponse"
+              example:
+                {
+                  "type": "async",
+                  "status-code": 202,
+                  "status": "Accepted",
+                  "change": "25",
+                  "result": null
+                }
   /v1/exec:
     post:
       summary: Execute a command
