@@ -68,33 +68,27 @@ func v1GetChecks(c *Command, r *http.Request, _ *UserState) Response {
 	return SyncResponse(infos)
 }
 
-func v1PostChecks(c *Command, r *http.Request, _ *UserState) Response {
+func v1PostChecksRun(c *Command, r *http.Request, _ *UserState) Response {
 	var payload struct {
-		Action string `json:"action"`
-		Check  string `json:"check"`
+		Check string `json:"check"`
 	}
 	decoder := json.NewDecoder(r.Body)
 	if err := decoder.Decode(&payload); err != nil {
 		return BadRequest("cannot decode data from request body: %v", err)
 	}
-	switch payload.Action {
-	case "run":
-		if payload.Check == "" {
-			return BadRequest("no check to %s provided", payload.Action)
-		}
 
-		check, ok := c.d.overlord.PlanManager().Plan().Checks[payload.Check]
-		if !ok {
-			return SyncResponse("check not found")
-		}
-
-		err := c.d.overlord.CheckManager().RunCheck(r.Context(), check)
-		if err != nil {
-			return SyncResponse(err)
-		}
-		return SyncResponse("check passed")
-
-	default:
-		return BadRequest("action %s not supported", payload.Action)
+	if payload.Check == "" {
+		return BadRequest("no check provided")
 	}
+
+	check, ok := c.d.overlord.PlanManager().Plan().Checks[payload.Check]
+	if !ok {
+		return SyncResponse("check not found")
+	}
+
+	err := c.d.overlord.CheckManager().RunCheck(r.Context(), check)
+	if err != nil {
+		return SyncResponse(err)
+	}
+	return SyncResponse("check passed")
 }

@@ -51,9 +51,8 @@ func (cmd *cmdRunCheck) Execute(args []string) error {
 		return ErrExtraArgs
 	}
 
-	opts := client.CheckPayload{
-		Action: "run",
-		Check:  cmd.Positional.Check,
+	opts := client.RunCheckPayload{
+		Check: cmd.Positional.Check,
 	}
 	status, err := cmd.client.RunCheck(&opts)
 	if err != nil {
