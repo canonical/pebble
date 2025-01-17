@@ -386,13 +386,15 @@ func (m *CheckManager) StartChecks(currentPlan *plan.Plan, checks []string) ([]s
 	m.state.Lock()
 	defer m.state.Unlock()
 
-	var started []string
+	// If any check specified is not in the plan, return an error.
 	for _, name := range checks {
-		// If the check is not in the plan, return an error.
-		check, ok := currentPlan.Checks[name]
-		if !ok {
+		if _, ok := currentPlan.Checks[name]; !ok {
 			return nil, fmt.Errorf("cannot find check %q in plan", name)
 		}
+	}
+	var started []string
+	for _, name := range checks {
+		check := currentPlan.Checks[name]  // We know this is ok because we checked it above.
 		info, ok := m.checks[name]
 		if !ok {
 			panic(fmt.Sprintf("check %s is in the plan but not known to the manager", name))
@@ -416,13 +418,15 @@ func (m *CheckManager) StopChecks(currentPlan *plan.Plan, checks []string) ([]st
 	m.state.Lock()
 	defer m.state.Unlock()
 
-	var stopped []string
+	// If any check specified is not in the plan, return an error.
 	for _, name := range checks {
-		// If the check is not in the current plan, return an error.
-		check, ok := currentPlan.Checks[name]
-		if !ok {
+		if _, ok := currentPlan.Checks[name]; !ok {
 			return nil, fmt.Errorf("cannot find check %q in plan", name)
 		}
+	}
+	var stopped []string
+	for _, name := range checks {
+		check := currentPlan.Checks[name]  // We know this is ok because we checked it above.
 		info, ok := m.checks[name]
 		if !ok {
 			panic(fmt.Sprintf("check %s is in the plan but not known to the manager", name))
