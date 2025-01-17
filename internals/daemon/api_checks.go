@@ -16,6 +16,7 @@ package daemon
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/canonical/x-go/strutil"
@@ -83,12 +84,12 @@ func v1PostChecksRun(c *Command, r *http.Request, _ *UserState) Response {
 
 	check, ok := c.d.overlord.PlanManager().Plan().Checks[payload.Check]
 	if !ok {
-		return SyncResponse("check not found")
+		return NotFound("cannot find check with name %q", payload.Check)
 	}
 
 	err := c.d.overlord.CheckManager().RunCheck(r.Context(), check)
 	if err != nil {
 		return SyncResponse(err)
 	}
-	return SyncResponse("check passed")
+	return SyncResponse(fmt.Sprintf("Check %q succeeded.", payload.Check))
 }

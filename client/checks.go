@@ -104,15 +104,15 @@ func (client *Client) Checks(opts *ChecksOptions) ([]*CheckInfo, error) {
 	return checks, nil
 }
 
-type RunCheckPayload struct {
+type RunCheckOptions struct {
 	Check string
 }
 
-// RunCheck runs a specific health check immediately and return the status.
-func (client *Client) RunCheck(opts *RunCheckPayload) (string, error) {
+// RunCheck runs a specific health check immediately and returns the error.
+func (client *Client) RunCheck(opts *RunCheckOptions) error {
 	body, err := json.Marshal(opts)
 	if err != nil {
-		return "", fmt.Errorf("cannot marshal checks payload: %w", err)
+		return fmt.Errorf("cannot marshal checks payload: %w", err)
 	}
 
 	resp, err := client.Requester().Do(context.Background(), &RequestOptions{
@@ -122,9 +122,8 @@ func (client *Client) RunCheck(opts *RunCheckPayload) (string, error) {
 		Body:   bytes.NewBuffer(body),
 	})
 	if err != nil {
-		return "", err
+		return err
 	}
 	var status string
-	err = resp.DecodeResult(&status)
-	return status, err
+	return resp.DecodeResult(&status)
 }

@@ -51,13 +51,13 @@ func (cmd *cmdRunCheck) Execute(args []string) error {
 		return ErrExtraArgs
 	}
 
-	opts := client.RunCheckPayload{
+	opts := client.RunCheckOptions{
 		Check: cmd.Positional.Check,
 	}
-	status, err := cmd.client.RunCheck(&opts)
+	err := cmd.client.RunCheck(&opts)
 	if err != nil {
 		return err
 	}
-	fmt.Fprintln(Stdout, status)
+	fmt.Fprintf(Stderr, "Check %q succeeded.\n", cmd.Positional.Check)
 	return nil
 }
