@@ -94,7 +94,7 @@ var API = []*Command{{
 	GET:        v1GetChecks,
 }, {
 	Path:        "/v1/checks/run",
-	WriteAccess: UserAccess{},
+	WriteAccess: AdminAccess{},
 	POST:        v1PostChecksRun,
 }, {
 	Path:        "/v1/notices",

@@ -79,17 +79,20 @@ func v1PostChecksRun(c *Command, r *http.Request, _ *UserState) Response {
 	}
 
 	if payload.Check == "" {
-		return BadRequest("no check provided")
+		return BadRequest("must specify check name")
 	}
 
-	check, ok := c.d.overlord.PlanManager().Plan().Checks[payload.Check]
+	plan := c.d.overlord.PlanManager().Plan()
+	check, ok := plan.Checks[payload.Check]
 	if !ok {
 		return NotFound("cannot find check with name %q", payload.Check)
 	}
 
-	err := c.d.overlord.CheckManager().RunCheck(r.Context(), check)
+	checkMgr := c.d.overlord.CheckManager()
+	err := checkMgr.RunCheck(r.Context(), check)
 	if err != nil {
-		return SyncResponse(err)
+		return InternalError("%v", err)
 	}
+
 	return SyncResponse(fmt.Sprintf("Check %q succeeded.", payload.Check))
 }
