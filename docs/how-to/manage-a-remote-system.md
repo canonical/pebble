@@ -136,6 +136,5 @@ We can also use {ref}`api_go_client` and {ref}`api_python_client` for API access
 
 ## See more
 
-In this guide, we used Pebble commands and curl to access the API. We can also access the API using Go and Python. For more information, see [How to use the Pebble API to manage services](/how-to/use-the-pebble-api).
-
-For more information on the API, read the [API spec](/reference/api).
+- [How to use the Pebble API to manage services](/how-to/use-the-pebble-api).
+- [API spec](/reference/api).
