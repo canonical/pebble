@@ -27,7 +27,7 @@ func (cs *clientSuite) TestChecksGet(c *check.C) {
 		"result": [
 			{"name": "chk1", "status": "up"},
 			{"name": "chk3", "status": "down", "failures": 42},
-			{"name": "chk5", "status": "inactive"},
+			{"name": "chk5", "status": "inactive"}
 		],
 		"status": "OK",
 		"status-code": 200,

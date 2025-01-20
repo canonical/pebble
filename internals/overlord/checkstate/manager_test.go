@@ -102,9 +102,9 @@ func (s *ManagerSuite) TestChecks(c *C) {
 
 	// Wait for expected checks to be started.
 	waitChecks(c, s.manager, []*checkstate.CheckInfo{
-		{Name: "chk1", Status: "up", Threshold: 3},
-		{Name: "chk2", Status: "up", Level: "alive", Threshold: 3},
-		{Name: "chk3", Status: "up", Level: "ready", Threshold: 3},
+		{Name: "chk1", Startup: "enabled", Status: "up", Threshold: 3},
+		{Name: "chk2", Startup: "enabled", Status: "up", Level: "alive", Threshold: 3},
+		{Name: "chk3", Startup: "enabled", Status: "up", Level: "ready", Threshold: 3},
 	})
 
 	// Re-configuring should update checks.
@@ -121,7 +121,7 @@ func (s *ManagerSuite) TestChecks(c *C) {
 
 	// Wait for checks to be updated.
 	waitChecks(c, s.manager, []*checkstate.CheckInfo{
-		{Name: "chk4", Status: "up", Threshold: 3},
+		{Name: "chk4", Startup: "enabled", Status: "up", Threshold: 3},
 	})
 }
 
@@ -342,9 +342,9 @@ func (s *ManagerSuite) TestPlanChangedSmarts(c *C) {
 	})
 
 	waitChecks(c, s.manager, []*checkstate.CheckInfo{
-		{Name: "chk1", Status: "up", Threshold: 3},
-		{Name: "chk2", Status: "up", Threshold: 3},
-		{Name: "chk3", Status: "up", Threshold: 3},
+		{Name: "chk1", Startup: "enabled", Status: "up", Threshold: 3},
+		{Name: "chk2", Startup: "enabled", Status: "up", Threshold: 3},
+		{Name: "chk3", Startup: "enabled", Status: "up", Threshold: 3},
 	})
 	checks, err := s.manager.Checks()
 	c.Assert(err, IsNil)
@@ -373,8 +373,8 @@ func (s *ManagerSuite) TestPlanChangedSmarts(c *C) {
 	})
 
 	waitChecks(c, s.manager, []*checkstate.CheckInfo{
-		{Name: "chk1", Status: "up", Threshold: 3},
-		{Name: "chk2", Status: "up", Threshold: 6},
+		{Name: "chk1", Startup: "enabled", Status: "up", Threshold: 3},
+		{Name: "chk2", Startup: "enabled", Status: "up", Threshold: 6},
 	})
 	checks, err = s.manager.Checks()
 	c.Assert(err, IsNil)
@@ -426,8 +426,8 @@ func (s *ManagerSuite) TestPlanChangedServiceContext(c *C) {
 	s.manager.PlanChanged(origPlan)
 
 	waitChecks(c, s.manager, []*checkstate.CheckInfo{
-		{Name: "chk1", Status: "up", Threshold: 3},
-		{Name: "chk2", Status: "up", Threshold: 3},
+		{Name: "chk1", Startup: "enabled", Status: "up", Threshold: 3},
+		{Name: "chk2", Startup: "enabled", Status: "up", Threshold: 3},
 	})
 	checks, err := s.manager.Checks()
 	c.Assert(err, IsNil)
@@ -454,8 +454,8 @@ func (s *ManagerSuite) TestPlanChangedServiceContext(c *C) {
 	})
 
 	waitChecks(c, s.manager, []*checkstate.CheckInfo{
-		{Name: "chk1", Status: "up", Threshold: 3},
-		{Name: "chk2", Status: "up", Threshold: 3},
+		{Name: "chk1", Startup: "enabled", Status: "up", Threshold: 3},
+		{Name: "chk2", Startup: "enabled", Status: "up", Threshold: 3},
 	})
 	checks, err = s.manager.Checks()
 	c.Assert(err, IsNil)

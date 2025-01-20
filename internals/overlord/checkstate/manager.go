@@ -339,10 +339,14 @@ func (m *CheckManager) updateCheckInfo(config *plan.Check, changeID string, fail
 	} else if failures >= config.Threshold {
 		status = CheckStatusDown
 	}
+	startup := config.Startup
+	if startup == plan.CheckStartupUnknown {
+		startup = plan.CheckStartupEnabled
+	}
 	m.checks[config.Name] = CheckInfo{
 		Name:      config.Name,
 		Level:     config.Level,
-		Startup:   config.Startup,
+		Startup:   startup,
 		Status:    status,
 		Failures:  failures,
 		Threshold: config.Threshold,
@@ -394,7 +398,7 @@ func (m *CheckManager) StartChecks(currentPlan *plan.Plan, checks []string) ([]s
 	}
 	var started []string
 	for _, name := range checks {
-		check := currentPlan.Checks[name]  // We know this is ok because we checked it above.
+		check := currentPlan.Checks[name] // We know this is ok because we checked it above.
 		info, ok := m.checks[name]
 		if !ok {
 			panic(fmt.Sprintf("check %s is in the plan but not known to the manager", name))
@@ -426,7 +430,7 @@ func (m *CheckManager) StopChecks(currentPlan *plan.Plan, checks []string) ([]st
 	}
 	var stopped []string
 	for _, name := range checks {
-		check := currentPlan.Checks[name]  // We know this is ok because we checked it above.
+		check := currentPlan.Checks[name] // We know this is ok because we checked it above.
 		info, ok := m.checks[name]
 		if !ok {
 			panic(fmt.Sprintf("check %s is in the plan but not known to the manager", name))

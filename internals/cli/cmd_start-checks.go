@@ -15,7 +15,6 @@
 package cli
 
 import (
-	"encoding/json"
 	"fmt"
 
 	"github.com/canonical/go-flags"
@@ -62,10 +61,6 @@ func (cmd cmdStartChecks) Execute(args []string) error {
 		return err
 	}
 
-	var result interface{}
-	if err := json.Unmarshal([]byte(response), &result); err != nil {
-		return fmt.Errorf("failed to decode JSON response: %w", err)
-	}
-	fmt.Fprintln(Stdout, result)
+	fmt.Fprintln(Stdout, response)
 	return nil
 }

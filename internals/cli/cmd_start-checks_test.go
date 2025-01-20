@@ -25,24 +25,6 @@ import (
 
 func (s *PebbleSuite) TestStartChecks(c *check.C) {
 	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/v1/changes/28" {
-			c.Check(r.Method, check.Equals, "GET")
-			fmt.Fprintf(w, `{
- 	"type": "sync",
- 	"result": {
- 		"id": "28",
- 		"kind": "start",
- 		"summary": "...",
- 		"status": "Done",
- 		"ready": true,
- 		"spawn-time": "2016-04-21T01:02:03Z",
- 		"ready-time": "2016-04-21T01:02:04Z",
- 		"tasks": []
- 	}
- }`)
-			return
-		}
-
 		c.Check(r.Method, check.Equals, "POST")
 		c.Check(r.URL.Path, check.Equals, "/v1/checks")
 
@@ -53,16 +35,16 @@ func (s *PebbleSuite) TestStartChecks(c *check.C) {
 		})
 
 		fmt.Fprintf(w, `{
-     "type": "async",
-     "status-code": 202,
-     "change": "28"
+     "type": "sync",
+     "status-code": 200,
+	 "result": "Queued \"start\" for check chk1 and 1 more"
  }`)
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"start-checks", "chk1", "chk2"})
 	c.Assert(err, check.IsNil)
 	c.Assert(rest, check.HasLen, 0)
-	c.Check(s.Stdout(), check.Equals, "")
+	c.Check(s.Stdout(), check.Equals, "Queued \"start\" for check chk1 and 1 more\n")
 	c.Check(s.Stderr(), check.Equals, "")
 }
 
@@ -82,63 +64,6 @@ func (s *PebbleSuite) TestStartChecksFails(c *check.C) {
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"start-checks", "chk1", "chk3"})
 	c.Assert(err, check.ErrorMatches, "could not foo")
-	c.Assert(rest, check.HasLen, 1)
-	c.Check(s.Stdout(), check.Equals, "")
-	c.Check(s.Stderr(), check.Equals, "")
-}
-
-func (s *PebbleSuite) TestStartChecksNoWait(c *check.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		c.Check(r.Method, check.Equals, "POST")
-		c.Check(r.URL.Path, check.Equals, "/v1/checks")
-		c.Check(r.URL.Path, check.Not(check.Equals), "/v1/changes/28")
-
-		body := DecodedRequestBody(c, r)
-		c.Check(body, check.DeepEquals, map[string]interface{}{
-			"action": "start",
-			"checks": []interface{}{"chk1", "chk2"},
-		})
-
-		fmt.Fprintf(w, `{
-     "type": "async",
-     "status-code": 202,
-     "change": "28"
- }`)
-	})
-
-	rest, err := cli.ParserForTest().ParseArgs([]string{"start-checks", "chk1", "chk2", "--no-wait"})
-	c.Assert(err, check.IsNil)
-	c.Assert(rest, check.HasLen, 0)
-	c.Check(s.Stdout(), check.Equals, "28\n")
-	c.Check(s.Stderr(), check.Equals, "")
-}
-
-func (s *PebbleSuite) TestStartChecksFailsGetChange(c *check.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/v1/changes/28" {
-			c.Check(r.Method, check.Equals, "GET")
-			fmt.Fprintf(w, `{"type": "error", "result": {"message": "could not bar"}}`)
-			return
-		}
-
-		c.Check(r.Method, check.Equals, "POST")
-		c.Check(r.URL.Path, check.Equals, "/v1/checks")
-
-		body := DecodedRequestBody(c, r)
-		c.Check(body, check.DeepEquals, map[string]interface{}{
-			"action": "start",
-			"checks": []interface{}{"chk1", "chk2"},
-		})
-
-		fmt.Fprintf(w, `{
-     "type": "async",
-     "status-code": 202,
-     "change": "28"
- }`)
-	})
-
-	rest, err := cli.ParserForTest().ParseArgs([]string{"start-checks", "chk1", "chk2"})
-	c.Assert(err, check.ErrorMatches, "could not bar")
 	c.Assert(rest, check.HasLen, 1)
 	c.Check(s.Stdout(), check.Equals, "")
 	c.Check(s.Stderr(), check.Equals, "")

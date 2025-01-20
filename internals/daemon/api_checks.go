@@ -106,12 +106,6 @@ func v1PostChecks(c *Command, r *http.Request, _ *UserState) Response {
 	st := c.d.overlord.State()
 	st.EnsureBefore(0) // start and stop tasks right away
 
-	// TODO: figure out what the response should be - nothing? A message? If not
-	// nothing, then it ought to be a JSON payload, so what's the format. It's
-	// all messy right now, and the cmd_*-checks.go files need to be aligned as
-	// well. Maybe there is an existing return object like BadRequest but good
-	// that would be appropriate?
-
 	var result string
 	if len(checks) == 0 {
 		result = fmt.Sprintf("No checks needed to %s", payload.Action)
