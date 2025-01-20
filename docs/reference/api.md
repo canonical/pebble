@@ -11,6 +11,7 @@ You can use different tools and clients to access the API.
 
 For more examples, see [How to use Pebble API](../how-to/use-the-pebble-api).
 
+(api_curl)=
 ### curl
 
 To access the API endpoints over the Unix socket, use the `--unix-socket` option of `curl`. For example:
@@ -27,6 +28,7 @@ To access the API endpoints over the Unix socket, use the `--unix-socket` option
 {"type":"sync","status-code":200,"status":"OK","result":{...}}
 ```
 
+(api_go_client)=
 ### Go client
 
 To use the [Go client](https://pkg.go.dev/github.com/canonical/pebble/client) to access API endpoints over the Unix socket, first create a client using `New`, and then call the methods on the returned `Client` struct to interact with the API. For example, to stop a service named `mysvc`:
