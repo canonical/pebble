@@ -127,7 +127,16 @@ func (client *Client) ListFiles(opts *ListFilesOptions) ([]*FileInfo, error) {
 	}
 
 	var results []fileInfoResult
-	_, err := client.doSync("GET", "/v1/files", q, nil, nil, &results)
+	resp, err := client.Requester().Do(context.Background(), &RequestOptions{
+		Type:   SyncRequest,
+		Method: "GET",
+		Path:   "/v1/files",
+		Query:  q,
+	})
+	if err != nil {
+		return nil, err
+	}
+	err = resp.DecodeResult(&results)
 	if err != nil {
 		return nil, err
 	}
@@ -286,7 +295,18 @@ func (client *Client) MakeDir(opts *MakeDirOptions) error {
 	headers := map[string]string{
 		"Content-Type": "application/json",
 	}
-	if _, err := client.doSync("POST", "/v1/files", nil, headers, &body, &result); err != nil {
+	resp, err := client.Requester().Do(context.Background(), &RequestOptions{
+		Type:    SyncRequest,
+		Method:  "POST",
+		Path:    "/v1/files",
+		Headers: headers,
+		Body:    &body,
+	})
+	if err != nil {
+		return err
+	}
+	err = resp.DecodeResult(&result)
+	if err != nil {
 		return err
 	}
 
@@ -353,7 +373,18 @@ func (client *Client) RemovePath(opts *RemovePathOptions) error {
 	headers := map[string]string{
 		"Content-Type": "application/json",
 	}
-	if _, err := client.doSync("POST", "/v1/files", nil, headers, &body, &result); err != nil {
+	resp, err := client.Requester().Do(context.Background(), &RequestOptions{
+		Type:    SyncRequest,
+		Method:  "POST",
+		Path:    "/v1/files",
+		Headers: headers,
+		Body:    &body,
+	})
+	if err != nil {
+		return err
+	}
+	err = resp.DecodeResult(&result)
+	if err != nil {
 		return err
 	}
 
