@@ -117,6 +117,13 @@ func (s *userSuite) TestNormalizeUidGid(c *check.C) {
 	})
 	defer restoreUser()
 
+	var userIdErr error
+	restoreUserId := osutil.FakeUserLookupId(func(uid string) (*user.User, error) {
+		c.Check(uid, check.Equals, "10")
+		return &user.User{Uid: "10", Gid: "20"}, userIdErr
+	})
+	defer restoreUserId()
+
 	var groupErr error
 	restoreGroup := osutil.FakeUserLookupGroup(func(name string) (*user.Group, error) {
 		c.Check(name, check.Equals, "GROUP")
@@ -127,6 +134,7 @@ func (s *userSuite) TestNormalizeUidGid(c *check.C) {
 	test(nil, nil, "", "", nil, nil, "")
 	test(nil, nil, "", "GROUP", nil, nil, "must specify user, not just group")
 	test(nil, nil, "USER", "", ptr(10), ptr(20), "")
+	test(ptr(10), nil, "", "", ptr(10), ptr(20), "")
 	test(nil, nil, "USER", "GROUP", ptr(10), ptr(30), "")
 
 	test(nil, ptr(2), "", "", nil, nil, "must specify user, not just group")
@@ -134,7 +142,6 @@ func (s *userSuite) TestNormalizeUidGid(c *check.C) {
 	test(nil, ptr(2), "USER", "", ptr(10), ptr(2), "")
 	test(nil, ptr(2), "USER", "GROUP", nil, nil, `group "GROUP" GID \(30\) does not match group-id \(2\)`)
 
-	test(ptr(1), nil, "", "", nil, nil, "must specify group, not just UID")
 	test(ptr(1), nil, "", "GROUP", ptr(1), ptr(30), "")
 	test(ptr(1), nil, "USER", "", nil, nil, `user "USER" UID \(10\) does not match user-id \(1\)`)
 	test(ptr(1), nil, "USER", "GROUP", nil, nil, `user "USER" UID \(10\) does not match user-id \(1\)`)
