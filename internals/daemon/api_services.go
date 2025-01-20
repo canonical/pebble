@@ -99,6 +99,31 @@ func v1PostServices(c *Command, r *http.Request, _ *UserState) Response {
 		}
 	}
 
+	// TODO (ping @benhoyt) This is clearly the wrong place for this - it's out
+	// of the switch below (to avoid deadlocking on the state lock) but even
+	// more so, it doesn't seem correct for the services API to be aware of the
+	// check manager's need to be notified.
+	// It seems like the right thing to do would be to trigger a PlanChanged
+	// (the doc says that it might happen without the plan changing, which is
+	// the case here - but alternatively there could be a ReplanRequested
+	// listener that works similarly). However, notifying the PlanChanged
+	// listeners is a planstate manager thing, and planstate seems to be more
+	// "build the layers into a plan" than actually taking action on the plan.
+	// Maybe planstate should gain a Replan method that does call the listeners
+	// but then this code would be calling that method and it's not clear what
+	// it would do *other* that calling the listeners. planstate's 
+	// callChangeListeners could get a public interface, but it still seems like
+	// it's around the wrong way for the services API to be calling it.
+	// If you don't instinctively know the right way to do this, I'm happy to
+	// have a call to discuss. I missed this earlier (all my replan testing also
+	// had changes to the plan happening so services were started up again), so
+	// have only had a small amount of time to think it over/try things out.
+	if payload.Action == "replan" {
+		checkmgr := c.d.overlord.CheckManager()
+		plan := c.d.overlord.PlanManager().Plan()
+		defer checkmgr.PlanChanged(plan)
+	}
+
 	st := c.d.overlord.State()
 	st.Lock()
 	defer st.Unlock()
@@ -181,6 +206,7 @@ func v1PostServices(c *Command, r *http.Request, _ *UserState) Response {
 		}
 		sort.Strings(services)
 		payload.Services = services
+
 	default:
 		return BadRequest("invalid action %q", payload.Action)
 	}
