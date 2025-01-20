@@ -16,6 +16,7 @@ package client
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -152,7 +153,17 @@ func (client *Client) Exec(opts *ExecOptions) (*ExecProcess, error) {
 		"Content-Type": "application/json",
 	}
 	var result execResult
-	resp, err := client.doAsync("POST", "/v1/exec", nil, headers, &body, &result)
+	resp, err := client.Requester().Do(context.Background(), &RequestOptions{
+		Type:    AsyncRequest,
+		Method:  "POST",
+		Path:    "/v1/exec",
+		Headers: headers,
+		Body:    &body,
+	})
+	if err != nil {
+		return nil, err
+	}
+	err = resp.DecodeResult(&result)
 	if err != nil {
 		return nil, err
 	}

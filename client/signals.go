@@ -16,6 +16,7 @@ package client
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 )
@@ -36,7 +37,12 @@ func (client *Client) SendSignal(opts *SendSignalOptions) error {
 	if err != nil {
 		return fmt.Errorf("cannot encode JSON payload: %w", err)
 	}
-	_, err = client.doSync("POST", "/v1/signals", nil, nil, &body, nil)
+	_, err = client.Requester().Do(context.Background(), &RequestOptions{
+		Type:   SyncRequest,
+		Method: "POST",
+		Path:   "/v1/signals",
+		Body:   &body,
+	})
 	return err
 }
 

@@ -37,12 +37,11 @@ These subcommands are currently supported:
   plan      (1)(2)
   services  (1)(2)
   ls        (1)(2)
-  exec      (2)
   start     (3)
   stop      (3)
 
 (1) Services are not started.
-(2) No logs on stdout unless -v is used.
+(2) No logs on stdout unless -v/--verbose is used.
 (3) Services continue running after the subcommand succeeds.
 `
 
