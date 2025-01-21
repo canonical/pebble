@@ -233,7 +233,7 @@ To add a new CLI command, ensure that it is added in the list at the top of the 
 
 The section should look like:
 
-<code>
+````
 (reference_pebble_{command name}_command)=
 ## {command name}
 
@@ -244,7 +244,7 @@ The `{command name}` command is used to {describe the command}.
 :input: pebble {command name} --help
 ```
 <!-- END AUTOMATED OUTPUT FOR {command name} -->
-</code>
+````
 
 With `{command name}` replaced by the name of the command and `{describe the command}` replaced by a suitable description.
 
