@@ -47,5 +47,5 @@ To integrate Pebble with your automated workflows, you can use the Pebble API.
 :titlesonly:
 :maxdepth: 1
 
-Use Pebble API <use-the-pebble-api>
+Use the Pebble API <use-the-pebble-api>
 ```

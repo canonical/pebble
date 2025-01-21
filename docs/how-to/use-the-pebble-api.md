@@ -1,10 +1,10 @@
 # How to use the Pebble API to manage services
 
-Pebble provides a command-line interface (CLI) for managing services, similar to systemd. However, Pebble distinguishes itself with its dedicated REST API.
+Pebble provides a command-line interface for managing services, similar to systemd. However, Pebble distinguishes itself with its dedicated REST API.
 
-This guide demonstrates how to use the Pebble API to programmatically manage services as part of an automated workflow where we can start, test, and stop interdependent services in a CI pipeline. While shell scripts could be used for this purpose, Pebble API offers a more robust approach with easier error handling and reusable components. This reduces manual work, errors, and ensures consistency across environments.
+This guide demonstrates how to use the Pebble API to programmatically manage services as part of an automated workflow that starts, tests, and stops interdependent services in a CI pipeline. While shell scripts could be used for this purpose, the Pebble API offers a more robust approach with easier error handling and reusable components. This reduces manual work, errors, and ensures consistency across environments.
 
-## Using the API
+## Use the API
 
 ```{include} /reuse/api.md
    :start-after: Start: Pebble API overview
@@ -22,7 +22,7 @@ Suppose we start the Pebble daemon with no default services and an empty layer:
 2024-12-30T01:07:10.281Z [pebble] Cannot start default services: no default services
 ```
 
-Here is an example in Python:
+We can then use a Python client to interact with Pebble:
 
 ```python
 import ops
@@ -43,7 +43,7 @@ services:
 client.add_layer(label="ci", layer=layerYAML, combine=True)
 
 # start services
-changeID = client.start_services(["svc1"])  # Python client also waits for change to finish
+client.start_services(["svc1"])  # Python client also waits for change to finish
 
 #  get services, the service svc1 should be active
 services = client.get_services()
@@ -53,10 +53,7 @@ for svc in services:
 # Now we can run some tests against those services.
 
 # stop services
-changeID = client.stop_services(["svc1"])  # Python client also waits for change to finish
-
-# wait for the change
-client.wait_change(changeID)
+client.stop_services(["svc1"])  # Python client also waits for change to finish
 ```
 
 You can also use Go or curl to achieve the same result. For more information, see {ref}`api_go_client` and {ref}`api_curl`.
