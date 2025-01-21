@@ -92,7 +92,7 @@ func (d *Identity) validate() error {
 
 		return nil
 	default:
-		return errors.New(`identity must have at least one type ("local or "basic")`)
+		return errors.New(`identity must have at least one type ("local" or "basic")`)
 	}
 }
 
@@ -170,7 +170,9 @@ func (s *State) AddIdentities(identities map[string]*Identity) error {
 		if _, ok := s.identities[name]; ok {
 			existing = append(existing, name)
 		}
-		identity.Name = name
+		if identity != nil {
+			identity.Name = name
+		}
 		err := identity.validate()
 		if err != nil {
 			return fmt.Errorf("identity %q invalid: %w", name, err)

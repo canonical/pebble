@@ -101,16 +101,16 @@ func (s *identitiesSuite) TestUnmarshalAPIErrors(c *C) {
 		error string
 	}{{
 		data:  `{"no-type": {"access": "admin"}}`,
-		error: `identity must have at least one type \("local"\)`,
+		error: `identity must have at least one type \("local" or "basic"\)`,
 	}, {
 		data:  `{"invalid-access": {"access": "admin", "local": {}}}`,
 		error: `local identity must specify user-id`,
 	}, {
 		data:  `{"invalid-access": {"access": "foo", "local": {"user-id": 42}}}`,
-		error: `invalid access value "foo", must be "admin", "read", or "untrusted"`,
+		error: `invalid access value "foo", must be "admin", "read", "metrics", or "untrusted"`,
 	}, {
 		data:  `{"invalid-access": {"local": {"user-id": 42}}}`,
-		error: `access value must be specified \("admin", "read", or "untrusted"\)`,
+		error: `access value must be specified \("admin", "read", "metrics", or "untrusted"\)`,
 	}}
 	for _, test := range tests {
 		c.Logf("Input data: %s", test.data)
@@ -263,7 +263,7 @@ func (s *identitiesSuite) TestAddIdentities(c *C) {
 			Local:  &state.LocalIdentity{UserID: 43},
 		},
 	})
-	c.Assert(err, ErrorMatches, `identity "bill" invalid: invalid access value "bar", must be "admin", "read", or "untrusted"`)
+	c.Assert(err, ErrorMatches, `identity "bill" invalid: invalid access value "bar", must be "admin", "read", "metrics", or "untrusted"`)
 
 	// Must have at least one type.
 	err = st.AddIdentities(map[string]*state.Identity{
@@ -271,7 +271,7 @@ func (s *identitiesSuite) TestAddIdentities(c *C) {
 			Access: "admin",
 		},
 	})
-	c.Assert(err, ErrorMatches, `identity "bill" invalid: identity must have at least one type \("local"\)`)
+	c.Assert(err, ErrorMatches, `identity "bill" invalid: identity must have at least one type \(\"local\" or \"basic\"\)`)
 
 	// Ensure user IDs are unique with existing users.
 	err = st.AddIdentities(map[string]*state.Identity{
@@ -430,7 +430,7 @@ func (s *identitiesSuite) TestReplaceIdentities(c *C) {
 			Access: "admin",
 		},
 	})
-	c.Assert(err, ErrorMatches, `identity "bill" invalid: identity must have at least one type \("local"\)`)
+	c.Assert(err, ErrorMatches, `identity "bill" invalid: identity must have at least one type \("local" or "basic"\)`)
 
 	// Ensure unique user ID testing is being done (full testing done in AddIdentity).
 	err = st.ReplaceIdentities(map[string]*state.Identity{
@@ -557,24 +557,24 @@ func (s *identitiesSuite) TestIdentityFromInputs(c *C) {
 	err := st.AddIdentities(original)
 	c.Assert(err, IsNil)
 
-	identity := st.IdentityFromInputs(nil)
+	identity := st.IdentityFromInputs(nil, "", "")
 	c.Assert(identity, IsNil)
 
 	userID := uint32(0)
-	identity = st.IdentityFromInputs(&userID)
+	identity = st.IdentityFromInputs(&userID, "", "")
 	c.Assert(identity, IsNil)
 
 	userID = 100
-	identity = st.IdentityFromInputs(&userID)
+	identity = st.IdentityFromInputs(&userID, "", "")
 	c.Assert(identity, IsNil)
 
 	userID = 42
-	identity = st.IdentityFromInputs(&userID)
+	identity = st.IdentityFromInputs(&userID, "", "")
 	c.Assert(identity, NotNil)
 	c.Check(identity.Name, Equals, "bob")
 
 	userID = 1000
-	identity = st.IdentityFromInputs(&userID)
+	identity = st.IdentityFromInputs(&userID, "", "")
 	c.Assert(identity, NotNil)
 	c.Check(identity.Name, Equals, "mary")
 }

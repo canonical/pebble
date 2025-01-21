@@ -20,7 +20,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math/rand"
 	"net"
 	"net/http"
 	"os"
@@ -37,7 +36,6 @@ import (
 	"gopkg.in/tomb.v2"
 
 	"github.com/canonical/pebble/internals/logger"
-	"github.com/canonical/pebble/internals/metrics"
 	"github.com/canonical/pebble/internals/osutil"
 	"github.com/canonical/pebble/internals/osutil/sys"
 	"github.com/canonical/pebble/internals/overlord"
@@ -376,20 +374,20 @@ func (d *Daemon) Init() error {
 
 	logger.Noticef("Started daemon.")
 
-	registry := metrics.GetRegistry()
-	myCounter := registry.NewCounterVec("my_counter", "Total number of something processed.", []string{"operation", "status"})
-	myGauge := registry.NewGaugeVec("my_gauge", "Current value of something.", []string{"sensor"})
-	// Goroutine to update metrics randomly
-	go func() {
-		for {
-			myCounter.WithLabelValues("read", "success").Inc()
-			myCounter.WithLabelValues("write", "success").Add(2)
-			myCounter.WithLabelValues("read", "failed").Inc()
-			myGauge.WithLabelValues("temperature").Set(20.0 + rand.Float64()*10.0)
+	// registry := metrics.GetRegistry()
+	// myCounter := registry.NewCounterVec("my_counter", "Total number of something processed.", []string{"operation", "status"})
+	// myGauge := registry.NewGaugeVec("my_gauge", "Current value of something.", []string{"sensor"})
+	// // Goroutine to update metrics randomly
+	// go func() {
+	// 	for {
+	// 		myCounter.WithLabelValues("read", "success").Inc()
+	// 		myCounter.WithLabelValues("write", "success").Add(2)
+	// 		myCounter.WithLabelValues("read", "failed").Inc()
+	// 		myGauge.WithLabelValues("temperature").Set(20.0 + rand.Float64()*10.0)
 
-			time.Sleep(time.Duration(rand.Intn(5)+1) * time.Second) // Random sleep between 1 and 5 seconds
-		}
-	}()
+	// 		time.Sleep(time.Duration(rand.Intn(5)+1) * time.Second) // Random sleep between 1 and 5 seconds
+	// 	}
+	// }()
 
 	return nil
 }
