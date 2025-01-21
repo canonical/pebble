@@ -76,7 +76,7 @@ You can set up named "identities" to control access to the API.
 
 ## Log forwarding
 
-Pebble can send service logs to a Loki server.
+Pebble can send service logs to a centralized logging system.
 
 * [Log forwarding](log-forwarding)
 
