@@ -24,19 +24,26 @@ Pebble is useful for developers who are building [Juju charms on Kubernetes](htt
 ````
 
 ````{grid} 1 1 2 2
+:reverse:
+```{grid-item-card} [Reference](reference/index)
+**Technical information**
+- [Layer specification](reference/layer-specification)
+- [CLI commands](reference/cli-commands)
+- [Pebble in containers](reference/pebble-in-containers)
+```
+
 ```{grid-item-card} [Explanation](explanation/index)
 **Discussion and clarification** of key topics
 - [General model](explanation/general-model.md)
 - [API and clients](explanation/api-and-clients.md)
 ```
-
-```{grid-item-card} [Reference](reference/index)
-**Technical information**
-- [Layer specification](reference/layer-specification)
-- [CLI commands](reference/cli-commands/cli-commands)
-- [Pebble in containers](reference/pebble-in-containers)
-```
 ````
+
+## Releases
+
+[Read the release notes](https://github.com/canonical/pebble/releases)
+
+Pebble releases are tracked in GitHub. To get notified when there's a new release, watch the [Pebble repository](https://github.com/canonical/pebble).
 
 ## Project and community
 
@@ -44,9 +51,9 @@ Pebble is free software and released under [GPL-3.0](https://www.gnu.org/license
 
 The Pebble project is sponsored by [Canonical Ltd](https://www.canonical.com).
 
-- [Code of conduct](https://ubuntu.com/community/ethos/code-of-conduct).
+- [Code of conduct](https://ubuntu.com/community/ethos/code-of-conduct)
 - [Contribute to the project](https://github.com/canonical/pebble?tab=readme-ov-file#contributing)
-- [Development](https://github.com/canonical/pebble/blob/master/HACKING.md): information on how to run and hack on the Pebble codebase during development.
+- [Development](https://github.com/canonical/pebble/blob/master/HACKING.md): information on how to run and hack on the Pebble codebase during development
 
 ```{filtered-toctree}
 :hidden:
@@ -54,6 +61,6 @@ The Pebble project is sponsored by [Canonical Ltd](https://www.canonical.com).
 
 :diataxis:Tutorial <tutorial/getting-started>
 :diataxis:how-to/index
-:diataxis:explanation/index
 :diataxis:reference/index
+:diataxis:explanation/index
 ```

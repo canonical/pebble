@@ -1,11 +1,11 @@
 # How-to guides
 
-These guides will walk you through every step of using Pebble through its complete operations lifecycle.
+These guides walk you through key operations you can perform with Pebble.
 
 
 ## Installation
 
-Installation follows a broadly similar pattern on all architectures, and you can choose to install the pre-built binary or build it from the source by yourself.
+Installation follows a similar pattern on all architectures. You can choose to install the pre-built binary or build it from the source by yourself.
 
 ```{toctree}
 :titlesonly:
@@ -29,7 +29,7 @@ Manage service dependencies <service-dependencies>
 
 ## Identities
 
-Use named identities to allow additional users to access the API.
+Use named "identities" to allow additional users to access the API.
 
 ```{toctree}
 :titlesonly:

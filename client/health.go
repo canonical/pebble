@@ -14,7 +14,10 @@
 
 package client
 
-import "net/url"
+import (
+	"context"
+	"net/url"
+)
 
 // HealthOptions holds query options to pass to a Health call.
 type HealthOptions struct {
@@ -42,7 +45,16 @@ func (client *Client) Health(opts *HealthOptions) (health bool, err error) {
 	}
 
 	var info healthInfo
-	_, err = client.doSync("GET", "/v1/health", query, nil, nil, &info)
+	resp, err := client.Requester().Do(context.Background(), &RequestOptions{
+		Type:   SyncRequest,
+		Method: "GET",
+		Path:   "/v1/health",
+		Query:  query,
+	})
+	if err != nil {
+		return false, err
+	}
+	err = resp.DecodeResult(&info)
 	if err != nil {
 		return false, err
 	}

@@ -122,10 +122,16 @@ We can stop the running `http-server` service by running:
 pebble stop http-server
 ```
 
-You should get output similar to the following:
+Now if we check the status of services again:
+
+```bash
+pebble services
+```
+
+We can see that the `http-server` service has been stopped:
 
 ```{terminal}
-   :input: pebble stop http-server
+   :input: pebble services
    :user: user
    :host: host
    :dir: ~
@@ -133,7 +139,7 @@ Service      Startup  Current   Since
 http-server  enabled  inactive  today at 11:33 UTC
 ```
 
-Now the service `http-server` has been stopped. If we run `curl localhost:8080` again, we should get a "connection refused" error, which confirms the service is down.
+If we run `curl localhost:8080` again, we should get a "connection refused" error, which confirms the service is down.
 
 To start it again, run:
 
@@ -236,8 +242,8 @@ http-server-2  enabled  active   today at 11:40 UTC
 (next_steps)=
 ## Next steps
 
-- To learn more about running the Pebble daemon, see [Pebble run command](../reference/cli-commands/run.md).
-- To learn more about viewing, starting and stopping services, see [Pebble services command](../reference/cli-commands/services.md), [Pebble start command](../reference/cli-commands/start.md), and [Pebble stop command](../reference/cli-commands/stop.md).
-- To learn more about updating and restarting services, see [Pebble replan command](../reference/cli-commands/replan.md).
+- To learn more about running the Pebble daemon, see [`pebble run`](#reference_pebble_run_command) command.
+- To learn more about viewing, starting and stopping services, see [`pebble services`](#reference_pebble_services_command) command, [`pebble start`](#reference_pebble_start_command) command, and [`pebble stop`](reference_pebble_stop_command) command.
+- To learn more about updating and restarting services, see [`pebble replan`](reference_pebble_replan_command) command.
 - To learn more about configuring layers, see [Layers](../reference/layers.md).
 - To learn more about layer configuration options, read the [Layer specification](../reference/layer-specification.md).

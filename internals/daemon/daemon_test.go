@@ -17,6 +17,7 @@ package daemon
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -793,6 +794,7 @@ func (s *daemonSuite) TestRestartSystemWiring(c *C) {
 	oldRebootWaitTimeout := rebootWaitTimeout
 	defer func() {
 		rebootHandler = systemdModeReboot
+		rebootMode = SystemdMode
 		rebootNoticeWait = oldRebootNoticeWait
 		rebootWaitTimeout = oldRebootWaitTimeout
 	}()
@@ -1170,6 +1172,58 @@ services:
 	// Ensure it returned a service-failure error.
 	err = d.Stop(nil)
 	c.Assert(err, Equals, ErrRestartServiceFailure)
+}
+
+func (s *daemonSuite) TestRebootExternal(c *C) {
+	oldRebootWaitTimeout := rebootWaitTimeout
+	defer func() {
+		rebootWaitTimeout = oldRebootWaitTimeout
+	}()
+	rebootWaitTimeout = 0
+
+	didFallbackReboot := false
+	defer FakeSyscallSync(func() {})()
+	defer FakeSyscallReboot(func(cmd int) error {
+		if cmd == syscall.LINUX_REBOOT_CMD_RESTART {
+			didFallbackReboot = true
+		}
+		return nil
+	})()
+	SetRebootMode(ExternalMode)
+	defer SetRebootMode(SystemdMode)
+
+	d := s.newDaemon(c)
+	makeDaemonListeners(c, d)
+	c.Assert(d.Start(), IsNil)
+
+	st := d.overlord.State()
+	st.Lock()
+	restart.Request(st, restart.RestartSystem)
+	st.Unlock()
+
+	select {
+	case <-d.Dying():
+	case <-time.After(2 * time.Second):
+		c.Fatal("RequestRestart -> overlord -> Kill chain didn't work")
+	}
+
+	d.mu.Lock()
+	restartType := d.requestedRestart
+	d.mu.Unlock()
+
+	c.Assert(restartType, Equals, restart.RestartSystem)
+
+	err := d.Stop(nil)
+	c.Assert(errors.Is(err, ErrRestartExternal), Equals, true)
+
+	d.mu.Lock()
+	d.requestedRestart = restart.RestartUnset
+	d.mu.Unlock()
+
+	c.Assert(didFallbackReboot, Equals, true)
+	st.Lock()
+	restart.ClearReboot(st)
+	st.Unlock()
 }
 
 func (s *daemonSuite) TestConnTrackerCanShutdown(c *C) {

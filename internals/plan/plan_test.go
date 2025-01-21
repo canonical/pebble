@@ -2073,6 +2073,59 @@ func (s *S) TestStartStopOrderMultipleLanes(c *C) {
 	c.Assert(lanes[2], DeepEquals, []string{"srv3"})
 }
 
+func (s *S) TestStartStopOrderMultipleLanesRandomOrder(c *C) {
+	layer := &plan.Layer{
+		Summary:     "services with no dependencies in different lanes",
+		Description: "a simple layer",
+		Services: map[string]*plan.Service{
+			"srv1": {
+				Name:     "srv1",
+				Override: "replace",
+				Command:  `cmd`,
+				Startup:  plan.StartupEnabled,
+			},
+			"srv2": {
+				Name:     "srv2",
+				Override: "replace",
+				Command:  `cmd`,
+				Startup:  plan.StartupEnabled,
+			},
+			"srv3": {
+				Name:     "srv3",
+				Override: "replace",
+				Command:  `cmd`,
+				Startup:  plan.StartupEnabled,
+			},
+			"srv4": {
+				Name:     "srv4",
+				Override: "replace",
+				Command:  `cmd`,
+				Startup:  plan.StartupEnabled,
+				Requires: []string{"srv1"},
+				After:    []string{"srv1"},
+			},
+		},
+		Checks:     map[string]*plan.Check{},
+		LogTargets: map[string]*plan.LogTarget{},
+	}
+
+	p := plan.Plan{Services: layer.Services}
+
+	lanes, err := p.StartOrder([]string{"srv1", "srv2", "srv3", "srv4"})
+	c.Assert(err, IsNil)
+	c.Assert(len(lanes), Equals, 3)
+	c.Assert(lanes[0], DeepEquals, []string{"srv1", "srv4"})
+	c.Assert(lanes[1], DeepEquals, []string{"srv2"})
+	c.Assert(lanes[2], DeepEquals, []string{"srv3"})
+
+	lanes, err = p.StopOrder([]string{"srv1", "srv2", "srv3", "srv4"})
+	c.Assert(err, IsNil)
+	c.Assert(len(lanes), Equals, 3)
+	c.Assert(lanes[0], DeepEquals, []string{"srv4", "srv1"})
+	c.Assert(lanes[1], DeepEquals, []string{"srv2"})
+	c.Assert(lanes[2], DeepEquals, []string{"srv3"})
+}
+
 // TestSectionFieldStability detects changes in plan.Layer and plan.Plan
 // YAML fields, and fails on any change that could break hardcoded section
 // fields in the code. On failure, please carefully inspect and update

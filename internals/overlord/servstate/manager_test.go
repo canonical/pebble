@@ -174,7 +174,6 @@ func (s *S) TearDownTest(c *C) {
 			// service manager.
 			s.stopRunningServices(c)
 		}
-		s.manager.Stop()
 	}
 	// General test cleanup
 	s.BaseTest.TearDownTest(c)
@@ -633,21 +632,53 @@ services:
 
 func (s *S) TestStartFastExitCommand(c *C) {
 	s.newServiceManager(c)
-	s.planAddLayer(c, testPlanLayer)
+	var layer = `
+services:
+    test4:
+        override: replace
+        command: echo -e 'too-fast\nsecond line'
+`
+	s.planAddLayer(c, layer)
 	s.planChanged(c)
 
 	chg := s.startServices(c, [][]string{{"test4"}})
 
 	s.st.Lock()
 	c.Check(chg.Status(), Equals, state.ErrorStatus)
-	c.Check(chg.Err(), ErrorMatches, `(?s).*\n- Start service "test4" \(cannot start service: exited quickly with code 0\)`)
+	c.Check(chg.Err(), ErrorMatches, `(?s).*\n- Start service "test4" \(service start attempt: exited quickly with code 0, will restart\)`)
 	c.Check(chg.Tasks()[0].Log(), HasLen, 2)
 	c.Check(chg.Tasks()[0].Log()[0], Matches, `(?s).* INFO Most recent service output:\n    too-fast\n    second line`)
-	c.Check(chg.Tasks()[0].Log()[1], Matches, `.* ERROR cannot start service: exited quickly with code 0`)
+	c.Check(chg.Tasks()[0].Log()[1], Matches, `.* ERROR service start attempt: exited quickly with code 0, will restart`)
 	s.st.Unlock()
 
 	svc := s.serviceByName(c, "test4")
-	c.Assert(svc.Current, Equals, servstate.StatusInactive)
+	c.Assert(svc.Current, Equals, servstate.StatusBackoff)
+}
+
+func (s *S) TestStartFastExitCommandOnFailureIgnore(c *C) {
+	s.newServiceManager(c)
+	var layer = `
+services:
+    test1:
+        override: replace
+        command: /bin/sh -c "exit 1"
+        on-failure: ignore
+`
+	s.planAddLayer(c, layer)
+	s.planChanged(c)
+
+	chg := s.startServices(c, [][]string{{"test1"}})
+
+	s.st.Lock()
+	c.Check(chg.Status(), Equals, state.ErrorStatus)
+	c.Check(chg.Err(), ErrorMatches, `(?s).*\n- Start service "test1" \(service start attempt: exited quickly with code 1, will ignore\)`)
+	c.Check(chg.Tasks()[0].Log(), HasLen, 2)
+	c.Check(chg.Tasks()[0].Log()[0], Matches, `(?s).* INFO Most recent service output:\n    `)
+	c.Check(chg.Tasks()[0].Log()[1], Matches, `.* ERROR service start attempt: exited quickly with code 1, will ignore`)
+	s.st.Unlock()
+
+	svc := s.serviceByName(c, "test1")
+	c.Assert(svc.Current, Equals, servstate.StatusError)
 }
 
 func (s *S) TestServices(c *C) {
