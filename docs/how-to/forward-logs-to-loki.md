@@ -10,13 +10,13 @@ This guide demonstrates how to forward Pebble logs to the centralized logging sy
 
 ### Loki
 
-For testing, the easiest way is to [download the latest pre-built binary and run it locally](https://grafana.com/docs/loki/latest/setup/install/local/#install-manually):
+For testing, the easiest way is to download the latest pre-built binary and run it locally:
 
 1. Find the latest release on the [Loki releases page](https://github.com/grafana/loki/releases/) and download the binary according to your operating system and architecture.
 1. Download the sample local config: `wget https://raw.githubusercontent.com/grafana/loki/main/cmd/loki/loki-local-config.yaml`.
 1. Run Loki locally: `loki-linux-amd64 -config.file=loki-local-config.yaml`.
 
-For more information on a production-ready setup, see [Get started with Grafana Loki](https://grafana.com/docs/loki/latest/get-started/) and [Setup Loki](https://grafana.com/docs/loki/latest/setup/).
+For more information, see [Install Grafana Loki locally](https://grafana.com/docs/loki/latest/setup/install/local/). For information about a production-ready setup, see [Get started with Grafana Loki](https://grafana.com/docs/loki/latest/get-started/).
 
 ### LogCLI
 
