@@ -139,7 +139,7 @@ type multiCheckActionData struct {
 	Checks []string `json:"checks"`
 }
 
-func (client *Client) doMultiCheckAction(actionName string, checks []string) (changeID string, err error) {
+func (client *Client) doMultiCheckAction(actionName string, checks []string) (response string, err error) {
 	action := multiCheckActionData{
 		Action: actionName,
 		Checks: checks,
