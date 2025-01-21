@@ -21,6 +21,8 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+
+	"github.com/GehirnInc/crypt/sha512_crypt"
 )
 
 // Identity holds the configuration of a single identity.
@@ -315,9 +317,10 @@ func (s *State) IdentityFromInputs(userID *uint32, username, password string) *I
 			if identity.Local.UserID == *userID {
 				return identity
 			}
-		case identity.Basic != nil && username != "" && password != "":
-			// In real code, compare password hashes, not plain text passwords.
-			if identity.Name == username && identity.Basic.Password == password {
+		case identity.Basic != nil && username != "" && identity.Name == username && password != "":
+			crypt := sha512_crypt.New()
+			err := crypt.Verify(identity.Basic.Password, []byte(password))
+			if err == nil {
 				return identity
 			}
 		}

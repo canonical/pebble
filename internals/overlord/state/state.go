@@ -174,7 +174,7 @@ type marshalledState struct {
 type marshalledIdentity struct {
 	Access string                   `json:"access"`
 	Local  *marshalledLocalIdentity `json:"local,omitempty"`
-	Basic  *marshalledBasicIdentity `json:"basi,omitempty"`
+	Basic  *marshalledBasicIdentity `json:"basic,omitempty"`
 }
 
 type marshalledLocalIdentity struct {
