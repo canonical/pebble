@@ -96,10 +96,11 @@ If we are to manage multiple services and environments, we can use a base layer 
 
 For example, if we have a few teams and each owns different services:
 
-- The operations team: a test Loki server and a staging Loki server (centralized logging systems).- Team foo: `svc1` and `svc2`, whose logs need to be forwarded to the test Loki server.
+- The operations team: a test Loki server and a staging Loki server (centralized logging systems).
+- Team foo: `svc1` and `svc2`, whose logs need to be forwarded to the test Loki server.
 - Team bar: `svc3` and `svc4`, whose logs need to be forwarded to the staging Loki server.
 
-The operations team can define a base layer named `001-base-layer.yaml` with multiple log targets:
+The operations team can define a base layer named `001-base-layer.yaml` with multiple log targets, and they don't need to worry about which services logs should be forwarded to which log targets. In the base layer, `services: [all]` can be used as a start:
 
 ```yaml
 summary: a base layer for log targets
@@ -108,7 +109,7 @@ log-targets:
     override: merge
     type: loki
     location: http://my-test-loki-server:3100/loki/api/v1/push
-    services: [svc1, svc2]
+    services: [all]
     labels:
       owner: '$OWNER'
       env: 'test'
@@ -116,7 +117,7 @@ log-targets:
     override: merge
     type: loki
     location: http://my-staging-loki-server:3100/loki/api/v1/push
-    services: [svc3, svc4]
+    services: [all]
     labels:
       owner: '$OWNER'
       env: 'staging'
@@ -124,7 +125,7 @@ log-targets:
 
 For more information on log targets and log forwarding, see [How to forward logs to Loki](./forward-logs-to-loki).
 
-Team foo can define another layer named `002-foo.yaml` without worrying about the log targets:
+Team foo can define another layer named `002-foo.yaml` without having to redefine the log targets. However, they can decide which services logs are forwarded to which targets by overriding the `services` configuration of a predefined log target in the base layer:
 
 ```yaml
 summary: layer managed by team foo
@@ -141,6 +142,10 @@ services:
     startup: enabled
     environment:
       OWNER: 'foo'
+log-targets:
+  test:
+    override: merge
+    services: [svc1, svc2]
 ```
 
 Team bar can define yet another layer named `003-bar.yaml`:
@@ -160,9 +165,13 @@ services:
     startup: enabled
     environment:
       OWNER: 'bar'
+log-targets:
+  staging:
+    override: merge
+    services: [svc3, svc4]
 ```
 
-In this way, logs for `svc1` and `svc2` managed by team foo ar forwarded to the test Loki, and logs for `svc3` and `svc4` managed by team bar are forwarded to the staging Loki, all with corresponding labels attached.
+In this way, logs for `svc1` and `svc2` managed by team foo ar forwarded to the test Loki, and logs for `svc3` and `svc4` managed by team bar are forwarded to the staging Loki, all with corresponding labels attached. Each team owns its own layer, achieving true cross-team collaboration and delegated layer management.
 
 ## See more
 
