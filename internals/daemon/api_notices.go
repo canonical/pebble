@@ -45,16 +45,16 @@ type addedNotice struct {
 func v1GetNotices(c *Command, r *http.Request, user *UserState) Response {
 	// TODO(benhoyt): the design of notices presumes UIDs; if in future when we
 	//                support identities that aren't UID based, we'll need to fix this.
-	if user == nil || user.Identity.Local == nil {
+	if user == nil || user.UID == nil {
 		return Forbidden("cannot determine UID of request, so cannot retrieve notices")
 	}
 
 	// By default, return notices with the request UID and public notices.
-	userID := &user.Identity.Local.UserID
+	userID := user.UID
 
 	query := r.URL.Query()
 	if len(query["user-id"]) > 0 {
-		if user.Identity.Access != state.AdminAccess {
+		if user.Access != state.AdminAccess {
 			return Forbidden(`only admins may use the "user-id" filter`)
 		}
 		var err error
@@ -65,7 +65,7 @@ func v1GetNotices(c *Command, r *http.Request, user *UserState) Response {
 	}
 
 	if len(query["users"]) > 0 {
-		if user.Identity.Access != state.AdminAccess {
+		if user.Access != state.AdminAccess {
 			return Forbidden(`only admins may use the "users" filter`)
 		}
 		if len(query["user-id"]) > 0 {
@@ -179,7 +179,7 @@ func sanitizeTypesFilter(queryTypes []string) ([]state.NoticeType, error) {
 }
 
 func v1PostNotices(c *Command, r *http.Request, user *UserState) Response {
-	if user == nil || user.Identity.Local == nil {
+	if user == nil || user.UID == nil {
 		return Forbidden("cannot determine UID of request, so cannot create notice")
 	}
 
@@ -228,7 +228,7 @@ func v1PostNotices(c *Command, r *http.Request, user *UserState) Response {
 	st.Lock()
 	defer st.Unlock()
 
-	noticeId, err := st.AddNotice(&user.Identity.Local.UserID, state.CustomNotice, payload.Key, &state.AddNoticeOptions{
+	noticeId, err := st.AddNotice(user.UID, state.CustomNotice, payload.Key, &state.AddNoticeOptions{
 		Data:        data,
 		RepeatAfter: repeatAfter,
 	})
@@ -240,7 +240,7 @@ func v1PostNotices(c *Command, r *http.Request, user *UserState) Response {
 }
 
 func v1GetNotice(c *Command, r *http.Request, user *UserState) Response {
-	if user == nil || user.Identity.Local == nil {
+	if user == nil || user.UID == nil {
 		return Forbidden("cannot determine UID of request, so cannot retrieve notice")
 	}
 	noticeID := muxVars(r)["id"]
@@ -263,10 +263,10 @@ func noticeViewableByUser(notice *state.Notice, user *UserState) bool {
 		// Notice has no UID, so it's viewable by any user (with a UID).
 		return true
 	}
-	if user.Identity.Access == state.AdminAccess {
+	if user.Access == state.AdminAccess {
 		// User is admin, they can view anything.
 		return true
 	}
 	// Otherwise user's UID must match notice's UID.
-	return user.Identity.Local.UserID == userID
+	return *user.UID == userID
 }

@@ -117,9 +117,8 @@ type Daemon struct {
 
 // UserState represents the state of an authenticated API user.
 type UserState struct {
-	// Access state.IdentityAccess
-	// UID    *uint32
-	Identity *state.Identity
+	Access state.IdentityAccess
+	UID    *uint32
 }
 
 // A ResponseFunc handles one of the individual verbs for a method
@@ -163,7 +162,13 @@ func userFromRequest(st *state.State, r *http.Request, ucred *Ucrednet, username
 		// No identity that matches these inputs (for now, just UID).
 		return nil, nil
 	}
-	return &UserState{Identity: identity}, nil
+
+	if identity.Local != nil {
+		return &UserState{Access: identity.Access, UID: userID}, nil
+	} else if identity.Basic != nil {
+		return &UserState{Access: identity.Access}, nil
+	}
+	return nil, nil
 }
 
 func (d *Daemon) Overlord() *overlord.Overlord {
@@ -226,26 +231,10 @@ func (c *Command) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if user == nil && ucred != nil {
 		if ucred.Uid == 0 || ucred.Uid == uint32(os.Getuid()) {
 			// Admin if UID is 0 (root) or the UID the daemon is running as.
-			// user = &UserState{Access: state.AdminAccess, UID: &ucred.Uid}
-			user = &UserState{
-				Identity: &state.Identity{
-					Access: state.AdminAccess,
-					Local: &state.LocalIdentity{
-						UserID: ucred.Uid,
-					},
-				},
-			}
+			user = &UserState{Access: state.AdminAccess, UID: &ucred.Uid}
 		} else {
 			// Regular read access if any other local UID.
-			// user = &UserState{Access: state.ReadAccess, UID: &ucred.Uid}
-			user = &UserState{
-				Identity: &state.Identity{
-					Access: state.ReadAccess,
-					Local: &state.LocalIdentity{
-						UserID: ucred.Uid,
-					},
-				},
-			}
+			user = &UserState{Access: state.ReadAccess, UID: &ucred.Uid}
 		}
 	}
 
