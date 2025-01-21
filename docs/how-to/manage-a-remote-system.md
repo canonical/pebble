@@ -1,16 +1,16 @@
 # How to use Pebble to manage a remote system
 
-Managing server clusters remotely takes time and effort. Servers need regular updates, configuration changes, file transfers, and commands run. Directly managing remote servers or using tools like Ansible, which require SSH, increases overhead and security risks. The [XZ Utils backdoor incident](https://en.wikipedia.org/wiki/XZ_Utils_backdoor) highlighted vulnerabilities associated with SSH access.
+Managing server clusters remotely takes time and effort. Servers need regular updates and configuration changes, which typically involves transferring files and running commands. Directly managing remote servers or using tools that require SSH access (such as Ansible) increases overhead and security risks. The [XZ Utils backdoor incident](https://en.wikipedia.org/wiki/XZ_Utils_backdoor) in 2024 highlighted vulnerabilities associated with SSH access.
 
-Pebble offers commands and an HTTP API over unix socket for remote system management, avoiding the need for extra open ports. 
+Pebble offers commands and an HTTP API over Unix socket for remote system management, avoiding the need for extra open ports. 
 
-> Note: "remote system" means clients can interact with the Pebble daemon via a unix socket.
+> Note: By "remote system", we mean that the Pebble daemon is running in a separate system and there's a Unix socket for clients to interact with the daemon.
 
 ## Run commands in a remote system
 
 One common task in system administration is updating and installing packages. With Pebble, we can use the `pebble exec` command to achieve this.
 
-For example, if Pebble is running as user with root privileges, we can use this command to update and install packages in a remote system:
+For example, if Pebble is running as a user with root privileges, we can use this command to update and install packages in a remote system:
 
 ```{terminal}
 :input: pebble exec apt update
@@ -45,7 +45,7 @@ To confirm the package is successfully installed in the remote system, run:
                 ||     ||
 ```
 
-For more information on the Pebble `exec` command, see {ref}`reference_pebble_exec_command`.
+For more information, see {ref}`reference_pebble_exec_command`.
 
 ## Manage files in a remote system
 
@@ -66,26 +66,26 @@ echo "Hello, Pebble!" > /tmp/index.html
 Create a directory in the remote system:
 
 ```bash
-pebble mkdir -p /var/www/pebble
+pebble mkdir -p /var/www/demo
 ```
 
 Push our local website file to the remote system:
 
 ```bash
-pebble push /tmp/index.html /var/www/pebble/index.html
+pebble push /tmp/index.html /var/www/demo/index.html
 ```
 
 Create a virtual host configuration _locally_:
 
 ```
-cat <<EOF > /tmp/pebble
+cat <<EOF > /tmp/demo
 server {
        listen 81;
        listen [::]:81;
 
        server_name example.ubuntu.com;
 
-       root /var/www/pebble;
+       root /var/www/demo;
        index index.html;
 
        location / {
@@ -98,7 +98,7 @@ EOF
 Push the file to the remote system:
 
 ```bash
-pebble push /tmp/pebble /etc/nginx/sites-enabled/pebble
+pebble push /tmp/demo /etc/nginx/sites-enabled/demo
 ```
 
 Activate the newly added virtual host in the remote system by restarting Nginx:
@@ -107,7 +107,7 @@ Activate the newly added virtual host in the remote system by restarting Nginx:
 pebble exec service nginx restart
 ```
 
-Finally, we can test the final result:
+Finally, we can test the result:
 
 ```{terminal}
 :input: curl localhost:81
@@ -132,9 +132,9 @@ For example, to push a file to the remote system, we can POST to the `/v1/files`
 curl --unix-socket /path/to/.pebble.socket -XPOST http://_/v1/files -H "Content-Type: multipart/form-data" -F request='{"action": "write", "files": [{"path": "/var/www/pebble/index.html", "make-dirs": true, "permissions": "644"}]}' -F 'files=@/tmp/index.html;type=application/octet-stream;filename=/var/www/pebble/index.html'
 ```
 
-We can also use {ref}`api_go_client` and {ref}`api_python_client` for API access.
+We can also use the {ref}`api_python_client` and the {ref}`api_go_client` for API access.
 
 ## See more
 
-- [How to use the Pebble API to manage services](/how-to/use-the-pebble-api).
-- [API spec](/reference/api).
+- [How to use the Pebble API to manage services](/how-to/use-the-pebble-api)
+- [API](/reference/api)
