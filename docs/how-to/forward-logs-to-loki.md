@@ -20,7 +20,7 @@ For more information on a production-ready setup, see [Get started with Grafana 
 
 ### LogCLI
 
-We may also want to install [LogCLI](https://grafana.com/docs/loki/latest/query/logcli/), a command-line tool for querying logs in Loki. Download the `logcli` binary from the [Loki releases page](https://github.com/grafana/loki/releases).
+We'll also install [LogCLI](https://grafana.com/docs/loki/latest/query/logcli/), a command-line tool for querying logs in Loki. Download the `logcli` binary from the [Loki releases page](https://github.com/grafana/loki/releases).
 
 For more information, see [LogCLI installation and reference](https://grafana.com/docs/loki/latest/query/logcli/getting-started/) and [LogCLI tutorial](https://grafana.com/docs/loki/latest/query/logcli/logcli-tutorial/).
 
