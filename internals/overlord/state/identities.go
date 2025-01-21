@@ -110,7 +110,6 @@ type apiLocalIdentity struct {
 }
 
 type apiBasicIdentity struct {
-	Username string `json:"username"`
 	Password string `json:"password"`
 }
 
