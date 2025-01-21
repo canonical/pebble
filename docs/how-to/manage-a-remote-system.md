@@ -10,6 +10,8 @@ Pebble offers commands and an HTTP API over Unix socket for remote system manage
 
 One common task in system administration is updating and installing packages. With Pebble, we can use the `pebble exec` command to achieve this.
 
+> Note: Set the environment variable `PEBBLE_SOCKET` to override the Unix socket used for the API (defaults to `$PEBBLE/.pebble.socket`).
+
 For example, if Pebble is running as a user with root privileges, we can use this command to update and install packages in a remote system:
 
 ```{terminal}
