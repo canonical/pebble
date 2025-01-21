@@ -14,7 +14,7 @@ For testing, the easiest way is to [download the latest pre-built binary and run
 
 1. Find the latest release on the [Loki releases page](https://github.com/grafana/loki/releases/) and download the binary according to your operating system and architecture.
 1. Download the sample local config: `wget https://raw.githubusercontent.com/grafana/loki/main/cmd/loki/loki-local-config.yaml`.
-1. Run Loki locally by running: `loki-linux-amd64 -config.file=loki-local-config.yaml`.
+1. Run Loki locally: `loki-linux-amd64 -config.file=loki-local-config.yaml`.
 
 For more information on a production-ready setup, see [Get started with Grafana Loki](https://grafana.com/docs/loki/latest/get-started/) and [Setup Loki](https://grafana.com/docs/loki/latest/setup/).
 
