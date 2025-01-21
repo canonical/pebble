@@ -25,13 +25,17 @@ import (
 type ChecksOptions struct {
 	// Level is the check level to query for. A check is included in the
 	// results if this field is not set, or if it is equal to the check's
-	// level. This field is ignored for start and stop actions.
+	// level.
 	Level CheckLevel
 
-	// Names is the list of check names on which to action. For querying, a
-	// check is included in the results if this field is nil or empty slice. For
-	// all actions, a check is included in the results if one of the values in
-	// the slice is equal to the check's name.
+	// Names is the list of check names to query for. A check is included in
+	// the results if this field is nil or empty slice, or if one of the
+	// values in the slice is equal to the check's name.
+	Names []string
+}
+
+type ChecksActionOptions struct {
+	// Names is the list of check names on which to perform the action.
 	Names []string
 }
 
@@ -122,14 +126,14 @@ func (client *Client) Checks(opts *ChecksOptions) ([]*CheckInfo, error) {
 
 // Start starts the checks named in opts.Names. We ignore ops.Level for this
 // action.
-func (client *Client) StartChecks(opts *ChecksOptions) (response string, err error) {
+func (client *Client) StartChecks(opts *ChecksActionOptions) (response string, err error) {
 	response, err = client.doMultiCheckAction("start", opts.Names)
 	return response, err
 }
 
 // Stop stops the checks named in opts.Names. We ignore ops.Level for this
 // action.
-func (client *Client) StopChecks(opts *ChecksOptions) (response string, err error) {
+func (client *Client) StopChecks(opts *ChecksActionOptions) (response string, err error) {
 	response, err = client.doMultiCheckAction("stop", opts.Names)
 	return response, err
 }
@@ -156,7 +160,6 @@ func (client *Client) doMultiCheckAction(actionName string, checks []string) (re
 		Type:    SyncRequest,
 		Method:  "POST",
 		Path:    "/v1/checks",
-		Query:   nil,
 		Headers: headers,
 		Body:    bytes.NewBuffer(data),
 	})

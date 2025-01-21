@@ -53,7 +53,7 @@ func (cmd cmdStartChecks) Execute(args []string) error {
 		return ErrExtraArgs
 	}
 
-	checkopts := client.ChecksOptions{
+	checkopts := client.ChecksActionOptions{
 		Names: cmd.Positional.Checks,
 	}
 	response, err := cmd.client.StartChecks(&checkopts)

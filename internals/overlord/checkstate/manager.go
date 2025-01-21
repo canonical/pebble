@@ -384,8 +384,8 @@ type checker interface {
 	check(ctx context.Context) error
 }
 
-// StartChecks starts the specified checks by creating a new perform-checks
-// change for each check that is in the current plan and not already running.
+// StartChecks starts the specified checks, if not already running, and returns
+// the checks that did need to be started.
 func (m *CheckManager) StartChecks(currentPlan *plan.Plan, checks []string) ([]string, error) {
 	m.state.Lock()
 	defer m.state.Unlock()
@@ -415,9 +415,8 @@ func (m *CheckManager) StartChecks(currentPlan *plan.Plan, checks []string) ([]s
 	return started, nil
 }
 
-// StopChecks stops the specified checks by aborting the perform-check or
-// recover-check change associated with the check, skipping any checks that are
-// already inactive.
+// StopChecks stops the specified checks, if currently running, and returns
+// the checks that did need to be stopped.
 func (m *CheckManager) StopChecks(currentPlan *plan.Plan, checks []string) ([]string, error) {
 	m.state.Lock()
 	defer m.state.Unlock()

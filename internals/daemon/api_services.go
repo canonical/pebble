@@ -111,7 +111,7 @@ func v1PostServices(c *Command, r *http.Request, _ *UserState) Response {
 	// "build the layers into a plan" than actually taking action on the plan.
 	// Maybe planstate should gain a Replan method that does call the listeners
 	// but then this code would be calling that method and it's not clear what
-	// it would do *other* that calling the listeners. planstate's 
+	// it would do *other* that calling the listeners. planstate's
 	// callChangeListeners could get a public interface, but it still seems like
 	// it's around the wrong way for the services API to be calling it.
 	// If you don't instinctively know the right way to do this, I'm happy to

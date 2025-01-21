@@ -251,6 +251,8 @@ In the `docs` directory, run `tox -e commands` to automatically update the CLI r
 
 A CI workflow will fail if the CLI reference documentation does not match the actual output from Pebble.
 
+Note that the [OpenAPI spec](docs/specs/openapi.yaml) also needs to be manually updated.
+
 ### Writing a great doc
 
 - Use short sentences, ideally with one or two clauses.

@@ -86,11 +86,11 @@ func v1PostChecks(c *Command, r *http.Request, _ *UserState) Response {
 		return BadRequest("must specify checks for %s action", payload.Action)
 	}
 
-	var err error
-	var checks []string
 	checkmgr := c.d.overlord.CheckManager()
 	plan := c.d.overlord.PlanManager().Plan()
 
+	var err error
+	var checks []string
 	switch payload.Action {
 	case "start":
 		checks, err = checkmgr.StartChecks(plan, payload.Checks)
