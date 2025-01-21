@@ -1,6 +1,6 @@
 # How to forward logs to Loki
 
-Centralized logging system aggregates logs from different sources into a unified platform, simplifying analysis by providing a central view of the apps: When a single request goes through multiple services, it's much easier to troubleshoot with centralized logs.
+Centralized logging aggregates logs from different sources into a unified platform, simplifying analysis by providing a central view of an app. For instance, when a single request goes through multiple services, it's much easier to troubleshoot with centralized logs.
 
 This guide demonstrates how to forward Pebble logs to the centralized logging system [Grafana Loki](https://grafana.com/oss/loki/).
 
