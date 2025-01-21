@@ -1,21 +1,6 @@
 # How to use layers
 
-Orchestrating multiple services in remote systems is a common requirement in modern software. Consider a typical web application, which might involve:
-
-- a web server (like Nginx)
-- an application server (like uWSGI)
-- a database (like PostgreSQL)
-- a caching service (like Redis)
-
-Each of these services needs to be configured, started, and stopped in a coordinated manner.
-
-As the system scales, the operational overhead grows exponentially because multiple groups of applications need to be managed, and they need to be deployed in different environments with slightly different configurations. Without proper service orchestration tooling, managing dependencies and ensuring consistent behaviour across multiple services in multiple environments is complex and error-prone. 
-
-With Pebble, it's possible to reduce this operational overhead by splitting service configurations into different layers. Depending on how we make use of this feature, it can offer great advantages, especially when the system scales out:
-
-- We can organize services into logical groups, which greatly improves the readability and maintainability of the configurations. With this declarative, layered approach where we define one set of configurations per environment, it is easier to understand the overall system because we don't have to calculate overlays and patches to know exactly what's running in a given environment. For an example, see {ref}`use_layers_as_logical_groups`.
-
-- While declarative is generally desirable, layered configurations can also accommodate imperative overrides when necessary. For example, we can define base layers, environment-specific override layers, and temporary patch layers. We can then apply the base layers across all environments, apply a temporary patch to a specific service, or customize a service for a particular environment. For an example, see {ref}`use_override_to_configure_environments_differently`.
+Managing multiple services across different environments becomes complex as systems scale. Pebble simplifies this with layered configurations, improving readability and maintainability. A base layer defines common settings (like logging), while additional layers handle specific services or environment-specific overrides. This declarative approach, along with delegated layer management (for example, operations team managing base layers for logging, service teams managing their services layers), allows for better cross-team collaboration and provides a clear view of each environment's configuration.
 
 ## Pebble layers
 
@@ -61,11 +46,11 @@ services:
         command: cmd
 ```
 
-For full details of all fields, see the [complete layer specification](../reference/layer-specification).
+For full details of all fields, see [layer specification](../reference/layer-specification).
 
 ## Layer override
 
-Each layer can define new services or modify existing ones defined in preceding layers. Crucially, the mandatory `override` field in each service definition determines how the layer's configuration interacts with the previously defined service of the same name (if any):
+Each layer can define new services or modify existing ones defined in preceding layers. The mandatory `override` field in each service definition determines how the layer's configuration interacts with the previously defined service of the same name (if any):
 
 - `override: replace` completely replaces the previous definition of a service.
 - `override: merge` combines the current layer's settings with the existing ones, allowing for incremental modifications.
@@ -105,241 +90,79 @@ services:
 
 See the [full layer specification](../reference/layer-specification) for more details.
 
-(use_layers_as_logical_groups)=
-## Use layers as logical groups
+## Use layers to manage services
 
-If we are to orchestrate multiple applications, we can group related ones into the same layer.
+If we are to manage multiple services and environments, we can use a base layer to define common settings like logging, and other layers to define services.
 
-For example, if we have an Nginx webserver serving two applications, each with a frontend, a backend and a database:
+For example, if we have a few teams and each owns different services:
 
-```
-nginx ──┬──> app1-frontend -> app1->backend -> app1-db
-        └──> app2-frontend -> app2->backend -> app2-db
-```
+- The operations team: a test Loki server and a staging Loki server (centralized logging systems).- Team foo: `svc1` and `svc2`, whose logs need to be forwarded to the test Loki server.
+- Team bar: `svc3` and `svc4`, whose logs need to be forwarded to the staging Loki server.
 
-We can group them by application. For example:
-
-`001-nginx.yaml`:
+The operations team can define a base layer named `001-base-layer.yaml` with multiple log targets:
 
 ```yaml
-summary: Nginx layer
-
-description: |
-    An Nginx layer.
-
-services:
-    nginx:
-        override: replace
-        summary: Nginx
-        command: foo
-        startup: enabled
+summary: a base layer for log targets
+log-targets:
+  test:
+    override: merge
+    type: loki
+    location: http://my-test-loki-server:3100/loki/api/v1/push
+    services: [svc1, svc2]
+    labels:
+      owner: '$OWNER'
+      env: 'test'
+  staging:
+    override: merge
+    type: loki
+    location: http://my-staging-loki-server:3100/loki/api/v1/push
+    services: [svc3, svc4]
+    labels:
+      owner: '$OWNER'
+      env: 'staging'
 ```
 
-`002-app1.yaml`:
+For more information on log targets and log forwarding, see [How to forward logs to Loki](./forward-logs-to-loki).
+
+Team foo can define another layer named `002-foo.yaml` without worrying about the log targets:
 
 ```yaml
-summary: Layer for app1
-
-description: |
-    Layer for app1.
-
+summary: layer managed by team foo
 services:
-    app1-database:
-        override: replace
-        summary: database for app1
-        command: foo
-        startup: enabled
-    app1-backend:
-        override: replace
-        summary: backend for app1
-        command: foo
-        after:
-            - app1-database
-    app1-frontend:
-        override: replace
-        summary: frontend for app1
-        command: foo
-        startup: enabled
-        after:
-            - app1-backend
+  svc1:
+    override: replace
+    command: cmd
+    startup: enabled
+    environment:
+      OWNER: 'foo'
+  svc2:
+    override: replace
+    command: cmd
+    startup: enabled
+    environment:
+      OWNER: 'foo'
 ```
 
-`003-app2.yaml`:
+Team bar can define yet another layer named `003-bar.yaml`:
 
 ```yaml
-summary: Layer for app2
-
-description: |
-    Layer for app2.
-
+summary: layer managed by team bar
 services:
-    app2-database:
-        override: replace
-        summary: database for app2
-        command: foo
-        startup: enabled
-    app2-backend:
-        override: replace
-        summary: backend for app2
-        command: foo
-        after:
-            - app2-database
-    app2-frontend:
-        override: replace
-        summary: frontend for app2
-        command: foo
-        startup: enabled
-        after:
-            - app2-backend
+  svc3:
+    override: replace
+    command: cmd
+    startup: enabled
+    environment:
+      OWNER: 'bar'
+  svc4:
+    override: replace
+    command: cmd
+    startup: enabled
+    environment:
+      OWNER: 'bar'
 ```
 
-Alternatively, we can also group them by functionality, and it will yield the same result:
-
-`001-webserver.yaml`:
-
-```yaml
-summary: Nginx layer
-
-description: |
-    An Nginx layer.
-
-services:
-    nginx:
-        override: replace
-        summary: Nginx
-        command: foo
-        startup: enabled
-```
-
-`002-database.yaml`:
-
-```yaml
-summary: Layer for database
-
-description: |
-    Layer for database.
-
-services:
-    app1-database:
-        override: replace
-        summary: database for app1
-        command: foo
-        startup: enabled
-    app2-database:
-        override: replace
-        summary: database for app2
-        command: foo
-        startup: enabled
-```
-
-`003-backend.yaml`:
-
-```yaml
-summary: Layer for backend
-
-description: |
-    Layer for backend.
-
-services:
-    app1-backend:
-        override: replace
-        summary: backend for app1
-        command: foo
-        startup: enabled
-    app2-backend:
-        override: replace
-        summary: backend for app2
-        command: foo
-        startup: enabled
-```
-
-`004-frontend.yaml`:
-
-```yaml
-summary: Layer for frontend
-
-description: |
-    Layer for frontend.
-
-services:
-    app1-frontend:
-        override: replace
-        summary: frontend for app1
-        command: foo
-        startup: enabled
-    app2-frontend:
-        override: replace
-        summary: frontend for app2
-        command: foo
-        startup: enabled
-```
-
-(use_override_to_configure_environments_differently)=
-## Use override to configure environments differently
-
-If we are to run the same set of services in multiple environments with slightly different configurations, we can use a base layer/environment override structure.
-
-For example, if we have a service `app1` running in both `dev` and `test` environments with slightly different configurations (for example, an environment variable named `ENV` with values as `dev` or `test`), we can define a base layer and an override layer for each environment.
-
-`001-base-layer.yaml`:
-
-```yaml
-summary: Simple layer
-
-description: |
-    A better description for a simple layer.
-
-services:
-    app1:
-        override: replace
-        summary: Service summary
-        command: cmd arg1 "arg2a arg2b"
-        startup: enabled
-```
-
-`002-env-override-dev.yaml`:
-
-```yaml
-summary: Override layer for the dev environment.
-
-services:
-    app1:
-        override: merge
-        environment:
-            ENV: dev
-```
-
-`002-env-override-test.yaml`:
-
-```yaml
-summary: Override layer for the test environment.
-
-services:
-    app1:
-        override: merge
-        environment:
-            ENV: test
-```
-
-In this way, when we use Pebble to run this service in different environments, we can put `001-base-layer.yaml` into all environments. Then we can put `002-env-override-dev.yaml` in the dev environment only, and `003-env-override-test.yaml` in the test environment only.
-
-Dev env:
-
-```bash
-.
-└── layers
-    ├── 001-base-layer.yaml
-    └── 002-env-override-dev.yaml
-```
-
-Test env:
-
-```bash
-.
-└── layers
-    ├── 001-base-layer.yaml
-    └── 002-env-override-test.yaml
-```
+In this way, logs for `svc1` and `svc2` managed by team foo ar forwarded to the test Loki, and logs for `svc3` and `svc4` managed by team bar are forwarded to the staging Loki, all with corresponding labels attached.
 
 ## See more
 
