@@ -53,7 +53,7 @@ type LocalIdentity struct {
 }
 
 // BasicIdentity holds identity configuration specific to the "basic" type
-// (for username/password authentication).
+// (for HTTP basic authentication).
 type BasicIdentity struct {
 	Password string // Note: In a real application, store a password hash, not the plaintext password.
 }
@@ -65,7 +65,6 @@ func (d *Identity) validate() error {
 	}
 
 	if d.Name != "" {
-		// Regular expression to match any character that is not a letter, number, underscore, or hyphen.
 		invalidChars := regexp.MustCompile(`[^a-zA-Z0-9_\-]`)
 		if invalidChars.MatchString(d.Name) {
 			return fmt.Errorf("identity name %q contains invalid characters (only alphanumeric, underscore, and hyphen allowed)", d.Name)

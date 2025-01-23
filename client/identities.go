@@ -49,7 +49,7 @@ type LocalIdentity struct {
 }
 
 // BasicIdentity holds identity configuration specific to the "basic" type
-// (for username/password authentication).
+// (for HTTP basic authentication).
 type BasicIdentity struct {
 	Password string `json:"password" yaml:"password"`
 }
