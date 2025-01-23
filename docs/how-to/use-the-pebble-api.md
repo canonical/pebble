@@ -6,12 +6,9 @@ This guide demonstrates how to use the Pebble API to programmatically manage ser
 
 ## Use the API
 
-```{include} /reuse/api.md
-   :start-after: Start: Pebble API overview
-   :end-before: End: Pebble API overview
-```
+Pebble's API allows remote client interaction with the daemon. It uses HTTP over a Unix socket, with access controlled by user ID.
 
-For reference information about the API, see [](../explanation/api-and-clients) and [](../reference/api).
+For an explanation of API access levels, see [API and clients](/explanation/api-and-clients). For the full API reference, see [API](/reference/api).
 
 Suppose we start the Pebble daemon with no default services and an empty layer:
 
@@ -40,7 +37,7 @@ services:
     override: replace
     command: sleep 100
 """
-client.add_layer(label="ci", layer=layerYAML, combine=True)
+client.add_layer("label1", layerYAML, combine=True)
 
 # start services
 client.start_services(["svc1"])  # Python client also waits for change to finish
@@ -62,5 +59,5 @@ You can also use Go or curl to achieve the same result. For more information, se
 
 - [Go client](https://pkg.go.dev/github.com/canonical/pebble/client)
 - [Python client for Pebble API](https://ops.readthedocs.io/en/latest/reference/pebble.html)
-- [API and clients](../explanation/api-and-clients)
-- [API](../reference/api)
+- [Explanation of API access control](/explanation/api-and-clients)
+- [API reference](/reference/api)
