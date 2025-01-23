@@ -4,6 +4,7 @@ Managing multiple services across different environments becomes complex as syst
 
 A base layer defines common settings (such as logging), while additional layers handle specific services or environment-specific overrides. This declarative approach, along with delegated layer management, allows for better cross-team collaboration and provides a clear view of each environment's configuration. For example, an operations team could manage base layers for logging, and service teams could manage layers for their services.
 
+(use_layers_pebble_layers)=
 ## Pebble layers
 
 A layer is a configuration file that defines the desired state of the managed services.
@@ -49,7 +50,7 @@ Any of the fields can be replaced individually in a merged service configuration
 
 For example, the following is an override layer that can be merged with the example layer defined in the previous section:
 
-```{code-block} bash
+```{code-block} yaml
 :emphasize-lines: 5,10
 
 services:
@@ -66,7 +67,7 @@ checks:
 
 And the merged result will be:
 
-```{code-block} bash
+```{code-block} yaml
 :emphasize-lines: 10,21
 
 services:
@@ -93,6 +94,53 @@ checks:
 ```
 
 See the [full layer specification](../reference/layer-specification) for details.
+
+## Add a layer dynamically
+
+The `pebble add` command can dynamically add a layer to the plan's layers.
+
+For example, given the example layer defined in the {ref}`use_layers_pebble_layers` section, if we add the following layer:
+
+```yaml
+services:
+  a-new-server:
+    override: replace
+    command: flask --app world run
+```
+
+The plan will become:
+
+```{code-block} yaml
+:emphasize-lines: 2-4
+
+services:
+  a-new-server:
+    override: replace
+    command: flask --app world run
+  server:
+    override: replace
+    command: flask --app hello run
+    after:
+      - srv2
+    requires:
+      - srv2
+    environment:
+      PORT: 8080
+      DATABASE: dbserver.example.com
+  database:
+    override: replace
+    command: postgres -D /usr/local/pgsql/data
+    before:
+      - srv1
+checks:
+  server-liveness:
+    override: replace
+    http:
+      url: http://127.0.0.1:8080/health
+```
+
+For more information, see {ref}`reference_pebble_add_command`.
+
 
 ## Use layers to manage services
 
