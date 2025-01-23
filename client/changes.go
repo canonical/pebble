@@ -16,6 +16,7 @@ package client
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/url"
@@ -100,7 +101,15 @@ func (client *Client) Change(id string) (*Change, error) {
 	}
 
 	var chgd changeAndData
-	_, err := client.doSync("GET", "/v1/changes/"+id, nil, nil, nil, &chgd)
+	resp, err := client.Requester().Do(context.Background(), &RequestOptions{
+		Type:   SyncRequest,
+		Method: "GET",
+		Path:   "/v1/changes/" + id,
+	})
+	if err != nil {
+		return nil, err
+	}
+	err = resp.DecodeResult(&chgd)
 	if err != nil {
 		return nil, err
 	}
@@ -126,7 +135,17 @@ func (client *Client) Abort(id string) (*Change, error) {
 	}
 
 	var chg Change
-	if _, err := client.doSync("POST", "/v1/changes/"+id, nil, nil, &body, &chg); err != nil {
+	resp, err := client.Requester().Do(context.Background(), &RequestOptions{
+		Type:   SyncRequest,
+		Method: "POST",
+		Path:   "/v1/changes/" + id,
+		Body:   &body,
+	})
+	if err != nil {
+		return nil, err
+	}
+	err = resp.DecodeResult(&chg)
+	if err != nil {
 		return nil, err
 	}
 
@@ -173,7 +192,16 @@ func (client *Client) Changes(opts *ChangesOptions) ([]*Change, error) {
 	}
 
 	var chgds []changeAndData
-	_, err := client.doSync("GET", "/v1/changes", query, nil, nil, &chgds)
+	resp, err := client.Requester().Do(context.Background(), &RequestOptions{
+		Type:   SyncRequest,
+		Method: "GET",
+		Path:   "/v1/changes",
+		Query:  query,
+	})
+	if err != nil {
+		return nil, err
+	}
+	err = resp.DecodeResult(&chgds)
 	if err != nil {
 		return nil, err
 	}
@@ -209,7 +237,16 @@ func (client *Client) WaitChange(id string, opts *WaitChangeOptions) (*Change, e
 		query.Set("timeout", opts.Timeout.String())
 	}
 
-	_, err := client.doSync("GET", "/v1/changes/"+id+"/wait", query, nil, nil, &chgd)
+	resp, err := client.Requester().Do(context.Background(), &RequestOptions{
+		Type:   SyncRequest,
+		Method: "GET",
+		Path:   "/v1/changes/" + id + "/wait",
+		Query:  query,
+	})
+	if err != nil {
+		return nil, err
+	}
+	err = resp.DecodeResult(&chgd)
 	if err != nil {
 		return nil, err
 	}

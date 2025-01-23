@@ -160,6 +160,7 @@ custom_myst_extensions = []
 # not need to be added here: myst_parser, sphinx_copybutton, sphinx_design,
 # sphinx_reredirects, sphinxcontrib.jquery, sphinxext.opengraph
 custom_extensions = [
+    'sphinxcontrib.openapi',
     'sphinx_tabs.tabs',
     'canonical.youtube-links',
     'canonical.related-links',
@@ -191,6 +192,8 @@ custom_html_css_files = []
 # Add JavaScript files (located in .sphinx/_static/)
 custom_html_js_files = []
 
+html_extra_path = ['.sphinx/_extra']
+
 ## The following settings override the default configuration.
 
 # Specify a reST string that is included at the end of each file.
@@ -217,3 +220,4 @@ rst_prolog = '''
 .. role:: center
    :class: align-center
 '''
+

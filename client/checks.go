@@ -15,6 +15,7 @@
 package client
 
 import (
+	"context"
 	"net/url"
 )
 
@@ -84,7 +85,16 @@ func (client *Client) Checks(opts *ChecksOptions) ([]*CheckInfo, error) {
 		query["names"] = opts.Names
 	}
 	var checks []*CheckInfo
-	_, err := client.doSync("GET", "/v1/checks", query, nil, nil, &checks)
+	resp, err := client.Requester().Do(context.Background(), &RequestOptions{
+		Type:   SyncRequest,
+		Method: "GET",
+		Path:   "/v1/checks",
+		Query:  query,
+	})
+	if err != nil {
+		return nil, err
+	}
+	err = resp.DecodeResult(&checks)
 	if err != nil {
 		return nil, err
 	}

@@ -191,7 +191,7 @@ error: cannot perform the following tasks:
 - exec command "sleep" (timed out after 1s: context deadline exceeded)
 ```
 
-Read more: [Use Pebble in containers](pebble-in-containers.md).
+Read more: [How to use Pebble to manage remote systems](/how-to/manage-a-remote-system.md).
 
 
 (reference_pebble_health_command)=
@@ -410,7 +410,7 @@ may be specified for the last path element.
 ```
 <!-- END AUTOMATED OUTPUT FOR ls -->
 
-Read more: [Use Pebble in containers](pebble-in-containers.md).
+Read more: [How to use Pebble to manage remote systems](/how-to/manage-a-remote-system.md).
 
 
 (reference_pebble_mkdir_command)=
@@ -437,7 +437,7 @@ The mkdir command creates the specified directory.
 ```
 <!-- END AUTOMATED OUTPUT FOR mkdir -->
 
-Read more: [Use Pebble in containers](pebble-in-containers.md).
+Read more: [How to use Pebble to manage remote systems](/how-to/manage-a-remote-system.md).
 
 
 (reference_pebble_notice_command)=
@@ -640,7 +640,7 @@ The pull command retrieves a file from the remote system.
 ```
 <!-- END AUTOMATED OUTPUT FOR pull -->
 
-Read more: [Use Pebble in containers](pebble-in-containers.md).
+Read more: [How to use Pebble to manage remote systems](/how-to/manage-a-remote-system.md).
 
 
 (reference_pebble_push_command)=
@@ -666,7 +666,7 @@ The push command transfers a file to the remote system.
 ```
 <!-- END AUTOMATED OUTPUT FOR push -->
 
-Read more: [Use Pebble in containers](pebble-in-containers.md).
+Read more: [How to use Pebble to manage remote systems](/how-to/manage-a-remote-system.md).
 
 
 (reference_pebble_remove-identities_command)=
@@ -720,8 +720,12 @@ current plan.
 
 When you update service configuration (by adding a layer), the services changed won't be automatically restarted. `pebble replan ` restarts them and brings the service state in sync with the new configuration.
 
-- The "replan" operation restarts `startup: enabled` services whose configuration have changed between when they started and now; if the configuration hasn't changed, replan does nothing.
-- Replan also starts `startup: enabled` services that have not yet been started.
+For `startup: enabled` services that are running:
+
+- If the service hasn't changed configuration since it started, replan does nothing to the service.
+- If the service has changed configuration since it started, replan restarts the service.
+
+Replan also starts any `startup: enabled` services that have not yet been started, or that have been manually stopped.
 
 ### Examples
 
@@ -806,7 +810,7 @@ The rm command removes a file or directory.
 ```
 <!-- END AUTOMATED OUTPUT FOR rm -->
 
-Read more: [Use Pebble in containers](pebble-in-containers.md).
+Read more: [How to use Pebble to manage remote systems](/how-to/manage-a-remote-system.md).
 
 
 (reference_pebble_run_command)=
@@ -833,7 +837,7 @@ pebble run --args myservice --port 8080 \; --hold
           --create-dirs  Create Pebble directory on startup if it doesn't exist
           --hold         Do not start default services automatically
           --http=        Start HTTP API listening on this address (e.g.,
-                         ":4000")
+                         ":4000") and expose open-access endpoints
       -v, --verbose      Log all output from services to stdout
           --args=        Provide additional arguments to a service
           --identities=  Seed identities from file (like update-identities

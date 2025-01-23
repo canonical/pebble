@@ -1,0 +1,1698 @@
+openapi: 3.1.0
+info:
+  title: Pebble API
+  version: v1
+paths:
+  /v1/changes:
+    get:
+      summary: Get changes
+      tags:
+        - changes and tasks
+      description: Fetch information for the specified changes.
+      parameters:
+        - name: select
+          in: query
+          description: Filter changes by status.
+          schema:
+            type: string
+            enum: [all, in-progress, ready]
+            default: in-progress
+        - name: for
+          in: query
+          description: Filter changes for a specific service name.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Information about changes.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetChangesResponse"
+              example:
+                {
+                  "type": "sync",
+                  "status-code": 200,
+                  "status": "OK",
+                  "result": [
+                    {
+                      "id": "4",
+                      "kind": "stop",
+                      "summary": "Stop service \"svc1\" and 1 more",
+                      "status": "Done",
+                      "tasks": [
+                        {
+                          "id": "7",
+                          "kind": "stop",
+                          "summary": "Stop service \"svc1\"",
+                          "status": "Done",
+                          "progress": {
+                            "label": "",
+                            "done": 1,
+                            "total": 1
+                          },
+                          "spawn-time": "2024-12-27T10:08:14.399194229+08:00",
+                          "ready-time": "2024-12-27T10:08:14.429319813+08:00"
+                        },
+                        {
+                          "id": "8",
+                          "kind": "stop",
+                          "summary": "Stop service \"svc2\"",
+                          "status": "Done",
+                          "progress": {
+                            "label": "",
+                            "done": 1,
+                            "total": 1
+                          },
+                          "spawn-time": "2024-12-27T10:08:14.399199354+08:00",
+                          "ready-time": "2024-12-27T10:08:14.432387271+08:00"
+                        }
+                      ],
+                      "ready": true,
+                      "spawn-time": "2024-12-27T10:08:14.399202521+08:00",
+                      "ready-time": "2024-12-27T10:08:14.432389313+08:00"
+                    }
+                  ]
+                }
+  /v1/changes/{id}:
+    get:
+      summary: Get a specific change
+      tags:
+        - changes and tasks
+      description: Fetch information about a Change given its ID.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ID of the change.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Information about the change.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetChangeByIDResponse"
+              example:
+                {
+                  "type": "sync",
+                  "status-code": 200,
+                  "status": "OK",
+                  "result": {
+                    "id": "38",
+                    "kind": "autostart",
+                    "summary": "Autostart service \"svc1\" and 1 more",
+                    "status": "Done",
+                    "tasks": [
+                      {
+                        "id": "54",
+                        "kind": "start",
+                        "summary": "Start service \"svc1\"",
+                        "status": "Done",
+                        "progress": {
+                          "label": "",
+                          "done": 1,
+                          "total": 1
+                        },
+                        "spawn-time": "2024-12-27T12:31:26.673287868+08:00",
+                        "ready-time": "2024-12-27T12:31:27.681780702+08:00"
+                      }
+                    ],
+                    "ready": true,
+                    "spawn-time": "2024-12-27T12:31:26.673297951+08:00",
+                    "ready-time": "2024-12-27T12:31:27.686371869+08:00"
+                  }
+                }
+    post:
+      summary: Perform an action on a change
+      tags:
+        - changes and tasks
+      description: Perform an action on a change. Currently the only supported action is "abort".
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ID of the change.
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                action:
+                  type: string
+                  description: The action to perform on the change.
+                  enum: [abort]
+      responses:
+        "200":
+          description: Change aborted.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetChangeByIDResponse"
+              example:
+                {
+                  "type": "sync",
+                  "status-code": 200,
+                  "status": "OK",
+                  "result": {
+                    "id": "8",
+                    "kind": "perform-check",
+                    "summary": "Perform HTTP check \"check1\"",
+                    "status": "Abort",
+                    "tasks": [
+                      {
+                        "id": "14",
+                        "kind": "perform-check",
+                        "summary": "Perform HTTP check \"check1\"",
+                        "status": "Abort",
+                        "progress": {
+                          "label": "",
+                          "done": 1,
+                          "total": 1
+                        },
+                        "spawn-time": "2024-12-27T10:15:31.390053104+08:00"
+                      }
+                    ],
+                    "ready": false,
+                    "spawn-time": "2024-12-27T10:15:31.390062521+08:00"
+                  }
+                }
+  /v1/changes/{id}/wait:
+    get:
+      summary: Wait for a change to complete
+      description: |
+        Wait for the change to be finished.
+        
+        If the wait operation succeeds, the result will have the "err" field set to an appropriate error message if the change itself had an error.
+      tags:
+        - changes and tasks
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+          required: true
+          description: The ID of the change to wait for.
+        - in: query
+          name: timeout
+          schema:
+            type: string
+          description: |
+            Optional timeout (a [duration](#duration)).
+            If specified, wait till the change is ready or a timeout occurs, whichever is first.
+            If not specified or zero, wait indefinitely until the change is ready.
+      responses:
+        "200":
+          description: Wait for a change.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetChangeByIDResponse"
+              example:
+                {
+                  "type": "sync",
+                  "status-code": 200,
+                  "status": "OK",
+                  "result": {
+                    "id": "38",
+                    "kind": "autostart",
+                    "summary": "Autostart service \"svc1\" and 1 more",
+                    "status": "Done",
+                    "tasks": [
+                      {
+                        "id": "54",
+                        "kind": "start",
+                        "summary": "Start service \"svc1\"",
+                        "status": "Done",
+                        "progress": {
+                          "label": "",
+                          "done": 1,
+                          "total": 1
+                        },
+                        "spawn-time": "2024-12-27T12:31:26.673287868+08:00",
+                        "ready-time": "2024-12-27T12:31:27.681780702+08:00"
+                      }
+                    ],
+                    "ready": true,
+                    "spawn-time": "2024-12-27T12:31:26.673297951+08:00",
+                    "ready-time": "2024-12-27T12:31:27.686371869+08:00"
+                  }
+                }
+  /v1/tasks/{task-id}/websocket/{websocket-id}:
+    get:
+      summary: Connect to a task's websocket
+      tags:
+        - changes and tasks
+      description: Establish a websocket connection to a specific task.
+      parameters:
+        - in: path
+          name: task-id
+          schema:
+            type: string
+          required: true
+          description: The ID of the task.
+        - in: path
+          name: websocket-id
+          schema:
+            type: string
+          required: true
+          description: The ID of the websocket.
+          enum: [control, stderr, stdio]
+      responses:
+        "101": # Switching Protocols (Successful Websocket Upgrade)
+          description: |
+            The connection is upgraded to the websocket protocol and the websocket connection is established.
+
+            The full websocket protocol is not documented. For details, see the [Python client code](https://github.com/canonical/operator/blob/main/ops/pebble.py#L1818).
+          content: 
+            application/json: # A hack to make the automatically rendered result show "null" instead of "string" which is incorrect.
+              example: 
+  /v1/checks:
+    get:
+      summary: Get checks
+      tags:
+        - checks
+      description: Fetch information about specific health checks (or all of them), ordered by check name.
+      parameters:
+        - name: level
+          in: query
+          description: Filter checks by level. If omitted, aggregate healthy status of checks with any (or no) level.
+          schema:
+            type: string
+            enum: [alive, ready]
+        - name: names
+          in: query
+          description: The names of the checks to get. To get multiple checks, specify this parameter multiple times. If not set, get all checks.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Information about health checks.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetChecksResponse"
+              example:
+                {
+                  "type": "sync",
+                  "status-code": 200,
+                  "status": "OK",
+                  "result": [
+                    {
+                      "name": "check1",
+                      "status": "up",
+                      "threshold": 3,
+                      "change-id": "37"
+                    }
+                  ]
+                }
+  /v1/exec:
+    post:
+      summary: Execute a command
+      tags:
+        - exec
+      description: |
+        Start a command with the given options and return a value representing the process.
+
+        This API returns a `task-id` (see the response schema and the example below),
+        then you need to call `/v1/tasks/{task-id}/websocket/control` and `/v1/tasks/{task-id}/websocket/stdio`
+        (also `/v1/tasks/{task-id}/websocket/stderr` if `split-stderr` is true) with the returned `task-id`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PostExecRequest"
+            example:
+              command: ["/bin/ls", "-l"]
+      responses:
+        "202":
+          description: Command execution initiated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PostExecResponse"
+              example:
+                {
+                  "type": "async",
+                  "status-code": 202,
+                  "status": "Accepted",
+                  "change": "4",
+                  "result": {
+                    "environment": {
+                      "HOME": "/home/ubuntu"
+                    },
+                    "task-id": "7",
+                    "working-dir": "/home/ubuntu"
+                  }
+                }
+  /v1/files:
+    get:
+      summary: Read or list files
+      tags:
+        - files
+      description: Read the contents of files or list files from the remote system.
+      parameters:
+        - name: action
+          in: query
+          description: Action to perform.
+          required: true
+          schema:
+            type: string
+            enum: ["list", "read"]
+        - name: path
+          in: query
+          description: |
+            For "read": Absolute file path to read. To read multiple files, specify this parameter multiple times.
+            
+            For "list": Absolute path to the directory to list.
+          required: true
+          schema:
+            type: string
+          style: form # For handling comma-separated values in "read".
+          explode: true # For handling comma-separated values in "read".
+        - name: pattern
+          in: query
+          description: Glob pattern to filter files/directories for the "list" action.
+          schema:
+            type: string
+        - name: itself
+          in: query
+          description: |
+            For the "list" action, `itself` specifies whether to return information about the directory itself ("true")
+            or list the contents of the directory ("false").
+          schema:
+            type: string
+            enum: ["false", "true"]
+      responses:
+        "200":
+          description: |
+            For "list": JSON array of file information.
+
+            For "read":  Multipart form data response with file contents and metadata. Raw multipart response example:
+
+            ```
+            Content-Type: multipart/form-data; boundary=01234567890123456789012345678901\r
+            --01234567890123456789012345678901\r
+            Content-Disposition: form-data; name="files"; filename="/etc/hosts"\r
+            \r
+            127.0.0.1 localhost  # \xf0\x9f\x98\x80\nfoo\r\nbar\r
+            --01234567890123456789012345678901\r
+            Content-Disposition: form-data; name="response"\r
+            \r
+            {
+                "result": [{"path": "/etc/hosts"}],
+                "status": "OK",
+                "status-code": 200,
+                "type": "sync"
+            }\r
+            --01234567890123456789012345678901--\r
+            ```
+          content:
+            application/json: # list
+              schema:
+                $ref: "#/components/schemas/ListFilesResponse"
+              example:
+                {
+                  "type": "sync",
+                  "status-code": 200,
+                  "status": "OK",
+                  "result": [
+                    {
+                      "path": "/home/ubuntu/PEBBLE_HOME/layers/001-simple-layer.yaml",
+                      "name": "001-simple-layer.yaml",
+                      "type": "file",
+                      "size": 122,
+                      "permissions": "664",
+                      "last-modified": "2024-12-27T11:13:31+08:00",
+                      "user-id": 1000,
+                      "user": "ubuntu",
+                      "group-id": 1000,
+                      "group": "ubuntu"
+                    }
+                  ]
+                }
+            multipart/form-data: # read
+              schema:
+                $ref: "#/components/schemas/ReadFilesResponse"
+              example:
+                files:
+                  "foo some file content"
+                response:
+                  {
+                    "type": "sync",
+                    "status-code": 200,
+                    "status": "OK",
+                    "result": [
+                      {
+                        "path": "/home/ubuntu/bar"
+                      }
+                    ]
+                  }
+    post:
+      summary: Create, write, remove files/directories
+      tags:
+        - files
+      description: |
+        This endpoint can:
+
+        - Write content to a path on the remote system. For this mode, use a multipart/form-data request body with JSON metadata in the first part. In the JSON metadata, set `action` to `write`.
+        - Create a directory or directory tree. For this mode, use an application/json request body with `action` set to `make-dirs`.
+        - Delete a file or directory. For this mode, use an application/json request body with `action` set to `remove`.
+      requestBody:
+        description: |
+          For "read":  Multipart form data response with file contents and metadata. Raw multipart request example:
+
+          ```
+          Content-Type: multipart/form-data; boundary=------------------------CH5rDyBTPdcJALbspJ8rzb\r
+          \r
+          --------------------------CH5rDyBTPdcJALbspJ8rzb\r
+          Content-Disposition: form-data; name="request"\r
+          \r
+          {"action": "write", "files": [{"path": "/foo/bar", "00a4: make-dirs": true, "permissions": "644"}]}\r
+          --------------------------CH5rDyBTPdcJALbspJ8rzb\r
+          Content-Disposition: form-data; name="files"; filename="/foo/bar"\r
+          Content-Type: application/octet-stream\r
+          \r
+          some fake content.\r
+          --------------------------CH5rDyBTPdcJALbspJ8rzb--\r
+          ```
+        content:
+          multipart/form-data:  # action: write
+            schema:
+              type: object
+              properties:
+                request:
+                  type: string
+                  description: |
+                    JSON metadata about the files to write.
+
+                    The format is binary because it's in a multipart part.
+
+                    Example: '{"action": "write", "files": [{"path": "/home/ubuntu/foo", "make-dirs": true, "permissions": "644"}]}'
+                  format: binary
+                files:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+                  description: |
+                    The files to be written.
+                    
+                    Each file is a separate part.
+                    
+                    For the file part, "Content-Type" is "application/octet-stream".
+
+                    "Content-Disposition" is "form-data; name="files"; filename=foo".
+          application/json:  # actin: make-dirs, remove
+            schema:
+              oneOf:  # Use oneOf since only one action can be performed at a time.
+                - $ref: "#/components/schemas/PostFilesMakeDirsRequest"
+                - $ref: "#/components/schemas/PostFilesRemovePathsRequest"
+            description: JSON payload for "make-dirs" or "remove" actions.
+      responses:
+        "200":
+          description: Successful operation. The result in the response is a JSON array of the file result object containing path and (optional) errors.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PostFilesResponse"
+              example:
+                {"type":"sync","status-code":200,"status":"OK","result":[{"path":"/home/ubuntu/foo"}]}
+  /v1/health:
+    get:
+      summary: Health of specified checks
+      description: |
+        Fetch healthy status of specified checks.
+
+        See [Health endpoint](../health-checks#health-endpoint) for more details.
+      tags:
+        - health
+      parameters:
+        - name: level
+          in: query
+          description: Health check level. If omitted, aggregate healthy status of checks with any (or no) level.
+          schema:
+            type: string
+            enum: [alive, ready]
+        - name: names
+          in: query
+          description: The names of the checks to get. To get multiple checks, specify this parameter multiple times. If not set, get all checks.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Check is healthy.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetHealthOKResponse"
+              example:
+                {
+                  "type": "sync",
+                  "status-code": 200,
+                  "status": "OK",
+                  "result": {
+                    "healthy": true
+                  }
+                }
+        "502":
+          description: Check is not healthy.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetHealthUnhealthyResponse"
+              example:
+                {
+                  "type": "sync",
+                  "status-code": 502,
+                  "status": "Bad Gateway",
+                  "result": {
+                    "healthy": false
+                  }
+                }
+  /v1/identities:
+    get:
+      summary: Get all identities
+      tags:
+        - identities
+      description: Get a map of all identities in the system.
+      responses:
+        "200":
+          description: Identities successfully retrieved.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetIdentitiesResponse"
+              example:
+                {
+                  "type": "sync",
+                  "status-code": 200,
+                  "status": "OK",
+                  "result": {
+                    "bob": {
+                      "access": "admin",
+                      "local": {
+                        "user-id": 42
+                      }
+                    }
+                  }
+                }
+    post:
+      summary: Manage identities
+      tags:
+        - identities
+      description: |
+        Add, update, replace, or remove identities in the system.
+
+        See [Identities](../identities) for the format of the identities data.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                action:
+                  type: string
+                  enum: [add, update, replace, remove]
+                  description: The action to perform on the identities.
+                identities:
+                  type: object
+                  additionalProperties:
+                    - $ref: "#/components/schemas/identity"
+                  description: The identities to add, update, or replace.  For "remove", set the values to null.
+              required:
+                - action
+                - identities
+            example:
+              {
+                "action": "add",
+                "identities": {
+                  "bob": {
+                    "access": "admin",
+                    "local": {
+                      "user-id": 42
+                    }
+                  }
+                }
+              }
+      responses:
+        "200":
+          description: Successful operation.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BaseResponse"
+              example:
+                {
+                  "type": "sync",
+                  "status-code": 200,
+                  "status": "OK"
+                }
+  /v1/layers:
+    post:
+      summary: Add a layer to the plan
+      tags:
+        - layers
+      description: Add a layer to the plan's configuration.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                action:
+                  type: string
+                  description: The action to perform.
+                  enum: [add]
+                combine:
+                  type: boolean
+                  description: Whether to combine the layer with existing layers (if true) or append it (if false).
+                inner:
+                  type: boolean
+                  description: Whether to add the layer as an inner layer.
+                label:
+                  type: string
+                  description: The label for the layer.
+                  minLength: 1 # Reflects the "label must be set" requirement.
+                format:
+                  type: string
+                  description: The format of the layer.
+                  enum: [yaml]
+                layer:
+                  type: string
+                  description: The layer data in YAML format.
+      responses:
+        "200":
+          description: Layer added successfully.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PostLayersResponse"
+              example:
+                {
+                  "type": "sync",
+                  "status-code": 200,
+                  "status": "OK",
+                  "result": true
+                }
+  /v1/logs:
+    get:
+      summary: Get service logs
+      tags:
+        - logs
+      description: |
+        Successful fetch previously-written logs from the given services,
+        or request logs from the given services and follows them, in JSON lines format.
+
+        Example:
+
+        ```
+        {"time":"2024-12-31T02:11:09.361Z","service":"svc1","message":" * Serving Flask app 'main'"}
+        {"time":"2024-12-31T02:11:09.361Z","service":"svc1","message":" * Debug mode: off"}
+        {"time":"2024-12-31T02:11:09.382Z","service":"svc1","message":" * Running on http://127.0.0.1:5000"}
+        ```
+      parameters:
+        - name: services
+          in: query
+          description: |
+            Service name to filter logs by.
+
+            To get logs from multiple services, specify this parameter multiple times.
+
+            If not set, returns logs for all services.
+          schema:
+            type: string
+        - name: follow
+          in: query
+          description: Whether to follow the logs (keep streaming new logs).
+          schema:
+            type: string
+            enum: ["true", "false"]
+            default: "false"
+        - name: n
+          in: query
+          description: |
+            Number of log entries to retrieve.
+
+            If `follow` is true, `n` is ignored.
+
+            If `follow` is false:
+
+            - If `n` is -1, all available logs are returned (up to a server-defined limit).
+            - If `n` is 0 or not specified, a server-defined default number of logs is returned. The default is currently 30.
+            - If `n` is a positive integer, up to that many logs are returned.
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Service logs in JSON lines format.
+          content:
+            application/x-ndjson:
+              schema:
+                $ref: "#/components/schemas/logs"
+              example:
+                {
+                  "time": "2024-12-27T02:32:53.185Z",
+                  "service": "svc1",
+                  "message": " * Serving Flask app 'main'"
+                }
+  /v1/notices:
+    get:
+      summary: Get notices
+      tags:
+        - notices
+      description: Get a list of notices that match the filters, ordered by the last-repeated time.
+      parameters:
+        - in: query
+          name: user-id
+          description: Filter notices by user ID. Only one user ID can be specified. This parameter can only be used by admin users.
+          schema:
+            type: integer
+        - in: query
+          name: users
+          description: If set to "all", return notices for all users. Cannot be used with `user-id`. This parameter can only be used by admin users.
+          schema:
+            type: string
+            enum: ["all"]
+        - in: query
+          name: types
+          description: Filter notices by type. To specify multiple types, include this parameter multiple times.
+          schema:
+            type: array
+            items:
+              type: string
+              enum: [change-update, custom, warning]
+        - in: query
+          name: keys
+          description: Filter notices by keys. To specify multiple keys, include this parameter multiple times.
+          schema:
+            type: array
+            items:
+              type: string
+        - in: query
+          name: after
+          description: Filter notices occurring after the specified [time](#time).
+          schema:
+            type: string
+            format: date-time
+        - in: query
+          name: timeout
+          description: The maximum time [duration](#duration) to wait for notices. If no notices are available within this time, an empty list is returned.
+          schema:
+            type: string
+            format: duration
+      responses:
+        "200":
+          description: Notices successfully retrieved.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetNoticesResponse"
+              example:
+                {
+                  "type": "sync",
+                  "status-code": 200,
+                  "status": "OK",
+                  "result": [
+                    {
+                      "id": "1",
+                      "user-id": null,
+                      "type": "change-update",
+                      "key": "1",
+                      "first-occurred": "2024-12-27T09:55:13.393868798Z",
+                      "last-occurred": "2024-12-27T09:55:14.400978382Z",
+                      "last-repeated": "2024-12-27T09:55:14.400978382Z",
+                      "occurrences": 3,
+                      "last-data": {
+                        "kind": "autostart"
+                      },
+                      "expire-after": "168h0m0s"
+                    }
+                  ]
+                }
+    post:
+      summary: Create a new notice
+      tags:
+        - notices
+      description: Record an occurrence of a notice with the specified options.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                action:
+                  type: string
+                  enum: ["add"]
+                  description: The action to perform.
+                type:
+                  type: string
+                  enum: ["custom"]
+                  description: The type of notice to create.
+                key:
+                  type: string
+                  description: The key for the notice (must follow the "example.com/path" format).
+                repeat-after:
+                  type: string
+                  format: duration
+                  description: "[Duration](#duration) after which the notice can be repeated."
+                data:
+                  type: object
+                  additionalProperties:
+                    type: string
+                  description: Additional JSON data associated with the notice.
+              required:
+                - action
+                - type
+                - key
+            example:
+              {
+                "action": "add",
+                "type": "custom",
+                "key": "example.com/path"
+              }
+      responses:
+        "200":
+          description: Notice successfully created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PostNoticesResponse"
+              example:
+                {
+                  "type": "sync",
+                  "status-code": 200,
+                  "status": "OK",
+                  "result": {
+                    "id": "3"
+                  }
+                }
+  /v1/notices/{id}:
+    get:
+      summary: Get a specific notice
+      tags:
+        - notices
+      description: Get a single notice by ID.
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+          required: true
+          description: The ID of the notice to retrieve.
+      responses:
+        "200":
+          description: Notice successfully retrieved.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetNoticeByIDResponse"
+              example:
+                {
+                  "type": "sync",
+                  "status-code": 200,
+                  "status": "OK",
+                  "result": {
+                    "id": "1",
+                    "user-id": null,
+                    "type": "change-update",
+                    "key": "1",
+                    "first-occurred": "2024-12-24T10:29:17.63483469Z",
+                    "last-occurred": "2024-12-24T10:29:18.651789065Z",
+                    "last-repeated": "2024-12-24T10:29:18.651789065Z",
+                    "occurrences": 3,
+                    "last-data": {
+                      "kind": "autostart"
+                    },
+                    "expire-after": "168h0m0s"
+                  }
+                }
+  /v1/plan:
+    get:
+      summary: Get the current plan
+      tags:
+        - plan
+      description: Get the plan in YAML format.
+      parameters:
+        - name: format
+          in: query
+          description: The format of the plan.
+          schema:
+            type: string
+            enum: [yaml]
+          required: true
+      responses:
+        "200":
+          description: The current plan in YAML format.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetPlanResponse"
+              example:
+                {
+                  "type": "sync",
+                  "status-code": 200,
+                  "status": "OK",
+                  "result": "services:\n    svc1:\n        startup: enabled\n        override: replace\n        command: foo\n"
+                }
+  /v1/services:
+    get:
+      summary: List services
+      description: Fetch information about specific services (or all of them), ordered by service name.
+      tags:
+        - services
+      parameters:
+        - in: query
+          name: names
+          description: The names of the services to get. To get multiple services, specify this parameter multiple times. If not set, get all services.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List services.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetServicesResponse"
+              example:
+                {
+                  "type": "sync",
+                  "status-code": 200,
+                  "status": "OK",
+                  "result": [
+                    {
+                      "name": "svc1",
+                      "startup": "enabled",
+                      "current": "active",
+                      "current-since": "2024-12-27T12:19:27.569602108+08:00"
+                    },
+                    {
+                      "name": "svc2",
+                      "startup": "enabled",
+                      "current": "active",
+                      "current-since": "2024-12-27T12:19:27.5690974+08:00"
+                    }
+                  ]
+                }
+    post:
+      summary: Manage services
+      description: Perform a service operation such as start, stop, or replan.
+      tags:
+        - services
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                action:
+                  type: string
+                  description: The action to perform.
+                  enum: ["autostart", "replan", "restart", "start", "stop"]
+                services:
+                  type: array
+                  description: |
+                    A list of service names.  Required for "start", "stop", and "restart".
+
+                    Ignored for "replan" and "autostart" (resolved automatically for "autostart" to default services).
+                  items:
+                    type: string
+            example:
+              {"action": "start", "services": ["svc1"]}
+      responses:
+        "202":
+          description: Accepted - asynchronous operation started.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PostServicesResponse"
+              example:
+                {
+                  "type": "async",
+                  "status-code": 202,
+                  "status": "Accepted",
+                  "change": "29",
+                  "result": null
+                }
+  /v1/signals:
+    post:
+      summary: Send a signal to services
+      tags:
+        - signals
+      description: Send a signal to each of the specified services.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                signal:
+                  type: string
+                  description: The signal to send. For example, "SIGHUP", "SIGINT", "SIGKILL".
+                services:
+                  type: array
+                  description: List of service names to send the signal to.
+                  items:
+                    type: string
+                  minItems: 1  # At least one service is required.
+              required:
+                - signal
+                - services
+            example:
+              {
+                "signal": "SIGHUP",
+                "services": ["svc1"]
+              }
+      responses:
+        "200":
+          description: Signal sent successfully.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PostSignalsResponse"
+              example:
+                {
+                  "type": "sync",
+                  "status-code": 200,
+                  "status": "OK",
+                  "result": true
+                }
+  /v1/system-info:
+    get:
+      summary: Get system information
+      description: Get the version of the Pebble daemon and the boot ID of the system.
+      tags:
+        - system info
+      responses:
+        "200":
+          description: System information.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetSystemInfoResponse"
+              example:
+                {
+                  "type": "sync",
+                  "status-code": 200,
+                  "status": "OK",
+                  "result": {
+                    "boot-id": "e14ed96e-5a98-4402-80f7-d19dd949eac3",
+                    "version": "v1.17.0"
+                  }
+                }
+components:
+  schemas:
+    BaseResponse:
+      type: object
+      properties:
+        type:
+          type: string
+          description: Response type, "sync".
+        status-code:
+          type: integer
+          description: HTTP response status code.
+        status:
+          type: string
+          description: |
+            The description of the HTTP status code.
+
+            See the [IANA list](https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml).
+    BaseAsyncResponse:
+      allOf:
+        - $ref: "#/components/schemas/BaseResponse"
+        - type: object
+          properties:
+            change:
+              type: string
+              description: The Change ID of the asynchronous change.
+    GetChangesResponse:
+      allOf:
+        - $ref: "#/components/schemas/BaseResponse"
+        - type: object
+          properties:
+            result:
+              type: array
+              items:
+                $ref: "#/components/schemas/changeInfo"
+    GetChangeByIDResponse:
+      allOf:
+        - $ref: "#/components/schemas/BaseResponse"
+        - type: object
+          properties:
+            result:
+              $ref: "#/components/schemas/changeInfo"
+    GetServicesResponse:
+      allOf:
+        - $ref: "#/components/schemas/BaseResponse"
+        - type: object
+          properties:
+            result:
+              type: array
+              items:
+                $ref: "#/components/schemas/serviceInfo"
+    PostServicesResponse:
+      allOf:
+        - $ref: "#/components/schemas/BaseAsyncResponse"
+        - type: object
+          properties:
+            result:
+              type: "null"
+    GetSystemInfoResponse:
+      allOf:
+        - $ref: "#/components/schemas/BaseResponse"
+        - type: object
+          properties:
+            result:
+              $ref: "#/components/schemas/systemInfo"
+    GetHealthOKResponse:
+      allOf:
+        - $ref: "#/components/schemas/BaseResponse"
+        - type: object
+          properties:
+            result:
+              type: object
+              properties:
+                healthy:
+                  type: boolean
+                  description: True if the check is healthy, false otherwise.
+                  const: true  # Indicate that the value is always true.
+    GetHealthUnhealthyResponse:
+      allOf:
+        - $ref: "#/components/schemas/BaseResponse"
+        - type: object
+          properties:
+            result:
+              type: object
+              properties:
+                healthy:
+                  type: boolean
+                  description: True if the check is healthy, false otherwise.
+                  const: false  # Indicate that the value is always true.
+    GetChecksResponse:
+      allOf:
+        - $ref: "#/components/schemas/BaseResponse"
+        - type: object
+          properties:
+            result:
+              type: array
+              items:
+                $ref: "#/components/schemas/checkInfo"
+    GetPlanResponse:
+      allOf:
+        - $ref: "#/components/schemas/BaseResponse"
+        - type: object
+          properties:
+            result:
+              type: string
+    PostLayersResponse:
+      allOf:
+        - $ref: "#/components/schemas/BaseResponse"
+        - type: object
+          properties:
+            result:
+              type: boolean
+              const: true  # Indicate that the value is always true.
+    PostSignalsResponse:
+      allOf:
+        - $ref: "#/components/schemas/BaseResponse"
+        - type: object
+          properties:
+            result:
+              type: boolean
+              const: true  # Indicate that the value is always true.
+    PostFilesResponse:
+      allOf:
+        - $ref: "#/components/schemas/BaseResponse"
+        - type: object
+          description: JSON metadata about the file read operation.
+          properties:
+            result:
+              type: array
+              items:
+                $ref: "#/components/schemas/fileResult"
+    ListFilesResponse:
+      allOf:
+        - $ref: "#/components/schemas/BaseResponse"
+        - type: object
+          properties:
+            result:
+              type: array
+              items:
+                $ref: "#/components/schemas/FileInfo"
+    ReadFilesResponse:
+      type: object
+      properties:
+        files:
+          type: array
+          items:
+            type: string
+            format: binary
+          description: Array of files. Each file part will have its own headers.
+        response:
+          $ref: "#/components/schemas/PostFilesResponse"
+    FileInfo:
+      type: object
+      properties:
+        path:
+          type: string
+          description: Full path to the file or directory.
+        name:
+          type: string
+          description: Name of the file or directory.
+        type:
+          type: string
+          description: Type of file entry (e.g., "file", "directory", "symlink").
+          enum: ["device", "directory", "file", "named-pipe", "socket", "symlink", "unknown"]
+        size:
+          type: integer
+          format: int64
+          description: Size of the file in bytes (only for regular files).
+        permissions:
+          type: string
+          description: File permissions in octal format (for example, "644").
+        last-modified:
+          type: string
+          format: date-time
+          description: "Last modified [time](#time) in RFC3339 format."
+        user-id:
+          type: integer
+          description: User ID of the owner.
+        user:
+          type: string
+          description: Username of the owner.
+        group-id:
+          type: integer
+          description: Group ID of the owner.
+        group:
+          type: string
+          description: Group name of the owner.
+      required:
+        - path
+        - name
+        - type
+        - permissions
+        - last-modified
+    PostFilesMakeDirsRequest:
+      type: object
+      properties:
+        action:
+          type: string
+          enum: ["make-dirs"]
+        dirs:
+          type: array
+          items:
+            $ref: "#/components/schemas/makeDirsItem"
+      required:
+        - action
+        - dirs
+    PostFilesRemovePathsRequest:
+      type: object
+      properties:
+        action:
+          type: string
+          enum: ["remove"]
+        paths:
+          type: array
+          items:
+             $ref: "#/components/schemas/removePathsItem"
+      required:
+        - action
+        - paths
+    PostExecRequest:
+      type: object
+      properties:
+        command:
+          type: array
+          items:
+            type: string
+          description: The command to execute (including arguments).
+        service-context:
+          type: string
+          description: The service context to use for execution.
+        environment:
+          type: object
+          additionalProperties:
+            type: string
+          description: Environment variables to set for the command.
+        working-dir:
+          type: string
+          description: The working directory for the command.
+        timeout:
+          type: string
+          description: The timeout for the command execution (e.g., "60s", "1m").
+        user-id:
+          type: integer
+          description: The user ID to run the command as.
+        user:
+          type: string
+          description: The username to run the command as.
+        group-id:
+          type: integer
+          description: The group ID to run the command as.
+        group:
+          type: string
+          description: The group name to run the command as.
+        terminal:
+          type: boolean
+          description: Whether to allocate a pseudo-terminal.
+        interactive:
+          type: boolean
+          description: Whether the command is interactive.
+        split-stderr:
+          type: boolean
+          description: Whether to split stderr from stdout.
+        width:
+          type: integer
+          description: The width of the terminal (if applicable).
+        height:
+          type: integer
+          description: The height of the terminal (if applicable).
+      required:
+        - command
+    PostExecResponse:
+      allOf:
+        - $ref: "#/components/schemas/BaseAsyncResponse"
+        - type: object
+          properties:
+            result:
+              type: object
+              properties:
+                environment:
+                  type: object
+                  additionalProperties:
+                    type: string
+                  description: The environment variables.
+                task-id:
+                  type: string
+                  format: uuid
+                  description: The ID of the executed task.
+                working-dir:
+                  type: string
+                  description: The working directory.
+    GetNoticesResponse:
+      allOf:
+        - $ref: "#/components/schemas/BaseResponse"
+        - type: object
+          properties:
+            result:
+              type: array
+              items:
+                $ref: "#/components/schemas/notice"
+    PostNoticesResponse:
+      allOf:
+        - $ref: "#/components/schemas/BaseResponse"
+        - type: object
+          properties:
+            result:
+              type: object
+              properties:
+                id:
+                  type: string
+                  description: Server-generated unique ID for the notice.  
+              required:
+                - id
+    GetNoticeByIDResponse:
+      allOf:
+        - $ref: "#/components/schemas/BaseResponse"
+        - type: object
+          properties:
+            result:
+              $ref: "#/components/schemas/notice"
+    GetIdentitiesResponse:
+      allOf:
+        - $ref: "#/components/schemas/BaseResponse"
+        - type: object
+          properties:
+            result:
+              type: object
+              additionalProperties:
+                $ref: "#/components/schemas/identity"
+    serviceInfo:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Name of the service.
+        startup:
+          type: string
+          description: Configured startup value.
+          enum: ["disabled", "enabled"]
+        current:
+          type: string
+          description: Current status of the service.
+          enum: ["active", "backup", "error", "inactive"]
+        current-since:
+          type: string
+          format: date-time
+          description: "[Time](#time) the service transitioned to the current status."
+    changeInfo:
+      type: object
+      properties:
+        id:
+          type: string
+        kind:
+          type: string
+        summary:
+          type: string
+        status:
+          type: string
+        tasks:
+          type: array
+          items:
+            $ref: "#/components/schemas/taskInfo"
+        ready:
+          type: boolean
+        err:
+          type: string
+        spawn-time:
+          type: string
+          format: date-time
+          description: spawn-time is a [time](#time).
+        ready-time:
+          type: string
+          format: date-time
+          description: ready-time is a [time](#time).
+        data:
+          type: object
+          additionalProperties:
+            type: string
+            format: json-string  # Indicate that values are raw JSON strings.
+    taskInfo:
+      type: object
+      properties:
+        id:
+          type: string
+        kind:
+          type: string
+        summary:
+          type: string
+        status:
+          type: string
+        log:
+          type: array
+          items:
+            type: string
+        progress:
+          $ref: "#/components/schemas/taskInfoProgress"
+        spawn-time:
+          type: string
+          format: date-time
+          description: spawn-time is a [time](#time).
+        ready-time:
+          type: string
+          format: date-time
+          description: ready-time is a [time](#time).
+        data:
+          type: object
+          additionalProperties:
+            type: string
+            format: json-string # Indicate that values are raw JSON strings。
+    taskInfoProgress:
+      type: object
+      properties:
+        label:
+          type: string
+        done:
+          type: integer
+        total:
+          type: integer
+    systemInfo:
+      type: object
+      properties:
+        version:
+          type: string
+          description: Version of the Pebble daemon.
+        boot-id:
+          type: string
+          description: A unique string that represents this boot of the server.
+    checkInfo:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Name of the check.
+        level:
+          type: string
+          description: Level of the check.
+          enum: [alive, ready]
+        status:
+          type: string
+          description: Status of the check.
+          enum: [down, up]
+        failures:
+          type: integer
+          description: Number of consecutive failures.
+        threshold:
+          type: integer
+          description: Failure threshold.
+        change-id:
+          type: string
+          description: ID of the change associated with the check.
+    logs:
+      type: object
+      properties:
+        time:
+          type: string
+          format: date-time
+          description: "[Time](#time) of the log entry in RFC3339 format."
+        service:
+          type: string
+          description: Name of the service that generated the log.
+        message:
+          type: string
+          description: Log message content (trailing newline characters are trimmed).
+      required:
+        - time
+        - service
+        - message
+    errorResult:
+      type: object
+      properties:
+        message:
+          type: string
+          description: Error message.
+        kind:
+          type: string
+          description: Type of error.
+          enum: ["daemon-restart", "generic-file-error", "login-required", "no-default-services", "not-found", "permission-denied", "system-restart"]
+        value:
+          type: object
+          description: Additional error information, if any.
+      required:
+        - message
+    fileResult:
+      type: object
+      properties:
+        path:
+          type: string
+        error:
+          $ref: "#/components/schemas/errorResult"
+    makeDirsItem:
+      type: object
+      properties:
+        path:
+          type: string
+          description: The directory path to create.
+        make-parents:
+          type: boolean
+          description: Whether to create parent directories as needed.
+        permissions:
+          type: string
+          description: Permissions for the created directory (octal format, e.g., "755").
+        user-id:
+          type: integer
+          description: User ID of the owner.
+        user:
+          type: string
+          description: Username of the owner.
+        group-id:
+          type: integer
+          description: Group ID of the owner.
+        group:
+          type: string
+          description: Group name of the owner.
+      required:
+        - path
+    removePathsItem:
+      type: object
+      properties:
+        path:
+          type: string
+          description: The path to the file or directory to remove.
+        recursive:
+          type: boolean
+          description: Whether to remove recursively (for directories).
+      required:
+        - path
+    notice:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Server-generated unique ID for the notice.
+        user-id:
+          type: integer
+          nullable: true
+          description: The user ID associated with the notice (null for public notices).
+        type:
+          type: string
+          description: The type of the notice (e.g., "custom").
+          enum: [change-update, custom, warning]
+        key:
+          type: string
+          description: The key that differentiates notices of the same type.
+        first-occurred:
+          type: string
+          format: date-time
+          description: The first [time](#time) this notice occurred.
+        last-occurred:
+          type: string
+          format: date-time
+          description: The last [time](#time) this notice occurred.
+        last-repeated:
+          type: string
+          format: date-time
+          description: The last [time](#time) this notice was repeated.
+        occurrences:
+          type: integer
+          description: The number of times this notice has occurred.
+        last-data:
+          type: object
+          additionalProperties:
+            type: map
+          description: Additional data from the last occurrence.
+        repeat-after:
+          type: string
+          format: duration
+          description: "[Duration](#duration) after last repeat before allowing another repeat."
+        expire-after:
+          type: string
+          format: duration
+          description: "[Duration](#duration) after last occurrence before the notice expires."
+    identity:
+      type: object
+      properties:
+        name:
+          type: string
+          description: The name of the identity.
+        access:
+          type: string
+          enum: [admin, read, untrusted]
+          description: The access level of the identity.
+        local:
+          type: object
+          properties:
+            user-id:
+              type: integer
+              description: The user ID associated with the local identity.

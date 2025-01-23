@@ -399,48 +399,6 @@ func decodeInto(reader io.Reader, v interface{}) error {
 	return nil
 }
 
-func (client *Client) doSync(method, path string, query url.Values, headers map[string]string, body io.Reader, v interface{}) (*RequestResponse, error) {
-	resp, err := client.Requester().Do(context.Background(), &RequestOptions{
-		Type:    SyncRequest,
-		Method:  method,
-		Path:    path,
-		Query:   query,
-		Headers: headers,
-		Body:    body,
-	})
-	if err != nil {
-		return nil, err
-	}
-	if v != nil {
-		err = resp.DecodeResult(v)
-		if err != nil {
-			return nil, err
-		}
-	}
-	return resp, nil
-}
-
-func (client *Client) doAsync(method, path string, query url.Values, headers map[string]string, body io.Reader, v interface{}) (*RequestResponse, error) {
-	resp, err := client.Requester().Do(context.Background(), &RequestOptions{
-		Type:    AsyncRequest,
-		Method:  method,
-		Path:    path,
-		Query:   query,
-		Headers: headers,
-		Body:    body,
-	})
-	if err != nil {
-		return nil, err
-	}
-	if v != nil {
-		err = resp.DecodeResult(v)
-		if err != nil {
-			return nil, err
-		}
-	}
-	return resp, nil
-}
-
 // A response produced by the REST API will usually fit in this
 // (exceptions are the icons/ endpoints obvs)
 type response struct {
@@ -522,7 +480,16 @@ type SysInfo struct {
 func (client *Client) SysInfo() (*SysInfo, error) {
 	var sysInfo SysInfo
 
-	if _, err := client.doSync("GET", "/v1/system-info", nil, nil, nil, &sysInfo); err != nil {
+	resp, err := client.Requester().Do(context.Background(), &RequestOptions{
+		Type:   SyncRequest,
+		Method: "GET",
+		Path:   "/v1/system-info",
+	})
+	if err != nil {
+		return nil, fmt.Errorf("cannot obtain system details: %w", err)
+	}
+	err = resp.DecodeResult(&sysInfo)
+	if err != nil {
 		return nil, fmt.Errorf("cannot obtain system details: %w", err)
 	}
 
@@ -544,7 +511,19 @@ func (client *Client) DebugPost(action string, params interface{}, result interf
 		return err
 	}
 
-	_, err = client.doSync("POST", "/v1/debug", nil, nil, bytes.NewReader(body), result)
+	resp, err := client.Requester().Do(context.Background(), &RequestOptions{
+		Type:   SyncRequest,
+		Method: "POST",
+		Path:   "/v1/debug",
+		Body:   bytes.NewReader(body),
+	})
+	if err != nil {
+		return err
+	}
+	err = resp.DecodeResult(result)
+	if err != nil {
+		return err
+	}
 	return err
 }
 
@@ -554,8 +533,16 @@ func (client *Client) DebugGet(action string, result interface{}, params map[str
 	for k, v := range params {
 		urlParams.Set(k, v)
 	}
-	_, err := client.doSync("GET", "/v1/debug", urlParams, nil, nil, &result)
-	return err
+	resp, err := client.Requester().Do(context.Background(), &RequestOptions{
+		Type:   SyncRequest,
+		Method: "GET",
+		Path:   "/v1/debug",
+		Query:  urlParams,
+	})
+	if err != nil {
+		return err
+	}
+	return resp.DecodeResult(&result)
 }
 
 type defaultRequester struct {

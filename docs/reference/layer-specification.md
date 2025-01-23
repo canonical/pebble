@@ -37,7 +37,7 @@ services:
             <description>
 
         # (Optional) Control whether the service is started automatically when
-        # Pebble starts. Default is "disabled".
+        # Pebble starts or performs a 'replan' operation. Default is "disabled".
         startup: enabled | disabled
 
         # (Optional) A list of other services in the plan that this service
