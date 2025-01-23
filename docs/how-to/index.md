@@ -40,6 +40,30 @@ Forward logs to Loki <forward-logs-to-loki>
 ```
 
 
+## Manage a remote system
+
+Pebble provides exec and file management functions to coordinate with remote systems.
+
+```{toctree}
+:titlesonly:
+:maxdepth: 1
+
+Manage a remote system <manage-a-remote-system>
+```
+
+
+## Logging
+
+To better understand the operation of the services, you may need to work with logs.
+
+```{toctree}
+:titlesonly:
+:maxdepth: 1
+
+Forward logs to Loki <forward-logs-to-loki>
+```
+
+
 ## Identities
 
 Use named "identities" to allow additional users to access the API.
@@ -49,4 +73,16 @@ Use named "identities" to allow additional users to access the API.
 :maxdepth: 1
 
 Manage identities <manage-identities>
+```
+
+
+## API
+
+To integrate Pebble with your automated workflows, you can use the Pebble API.
+
+```{toctree}
+:titlesonly:
+:maxdepth: 1
+
+Use the Pebble API <use-the-pebble-api>
 ```

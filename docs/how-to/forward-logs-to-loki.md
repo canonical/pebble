@@ -1,8 +1,8 @@
 # How to forward logs to Loki
 
-Centralized logging aggregates logs from various sources into a single, unified platform. This simplifies analysis by providing a centralized view of the application's behavior, which is especially important in microservice architectures. When a single user request traverses multiple services, it can be much easier to troubleshoot using centralized logs.
+Centralized logging aggregates logs from different sources into a unified platform, simplifying analysis by providing a central view of an app. For instance, when a single request goes through multiple services, it's much easier to troubleshoot with centralized logs.
 
-This guide demonstrates how to forward logs from Pebble to the centralized logging system [Grafana Loki](https://grafana.com/oss/loki/).
+This guide demonstrates how to forward Pebble logs to the centralized logging system [Grafana Loki](https://grafana.com/oss/loki/).
 
 > Note: The only logging system that Pebble supports is Grafana Loki.
 
@@ -10,17 +10,17 @@ This guide demonstrates how to forward logs from Pebble to the centralized loggi
 
 ### Loki
 
-For testing purposes, the easiest way is to [download the latest pre-built binary and run it locally](https://grafana.com/docs/loki/latest/setup/install/local/#install-manually):
+For testing, the easiest way is to download the latest pre-built binary and run it locally:
 
-1. Find the latest release on the [releases page](https://github.com/grafana/loki/releases/) and download the binary according to your operating system and architecture.
-1. Download the sample local config by running: `wget https://raw.githubusercontent.com/grafana/loki/main/cmd/loki/loki-local-config.yaml`.
-1. Run Loki locally by running: `loki-linux-amd64 -config.file=loki-local-config.yaml`.
+1. Find the latest release on the [Loki releases page](https://github.com/grafana/loki/releases/) and download the binary according to your operating system and architecture.
+1. Download the sample local config: `wget https://raw.githubusercontent.com/grafana/loki/main/cmd/loki/loki-local-config.yaml`.
+1. Run Loki locally: `loki-linux-amd64 -config.file=loki-local-config.yaml`.
 
-For more information on a production-ready setup, see [Get started with Grafana Loki](https://grafana.com/docs/loki/latest/get-started/) and [Setup Loki](https://grafana.com/docs/loki/latest/setup/).
+For more information, see [Install Grafana Loki locally](https://grafana.com/docs/loki/latest/setup/install/local/). For information about a production-ready setup, see [Get started with Grafana Loki](https://grafana.com/docs/loki/latest/get-started/).
 
 ### LogCLI
 
-Besides Loki itself, you may also want to install [LogCLI](https://grafana.com/docs/loki/latest/query/logcli/), which is a command-line tool for querying and exploring logs in Loki. Download the `logcli` binary from the [Loki releases page](https://github.com/grafana/loki/releases).
+We'll also install [LogCLI](https://grafana.com/docs/loki/latest/query/logcli/), a command-line tool for querying logs in Loki. Download the `logcli` binary from the [Loki releases page](https://github.com/grafana/loki/releases).
 
 For more information, see [LogCLI installation and reference](https://grafana.com/docs/loki/latest/query/logcli/getting-started/) and [LogCLI tutorial](https://grafana.com/docs/loki/latest/query/logcli/logcli-tutorial/).
 
@@ -37,7 +37,7 @@ log-targets:
     services: [all]
 ```
 
-This configuration creates a log target named "test" and will forward logs from all services.
+This creates a log target named "test" and will forward logs from all services.
 
 For more information on log forwarding and `log-targets` configuration, see {ref}`log_forwarding_usage`.
 
@@ -90,7 +90,7 @@ http://localhost:3100/loki/api/v1/query_range?direction=BACKWARD&end=17357485649
 
 ## Forward logs to multiple targets
 
-For example, if we have a Loki for the test environment running at `http://my-test-loki-server:3100` and another Loki for the staging environment running at `http://my-staging-loki-server:3100`, we can specify two log targets:
+If we have a Loki for the test environment running at `http://my-test-loki-server:3100` and another Loki for the staging environment running at `http://my-staging-loki-server:3100`, we can specify two log targets:
 
 ```yaml
 log-targets:

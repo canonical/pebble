@@ -24,17 +24,17 @@ Pebble is useful for developers who are building [Juju charms on Kubernetes](htt
 ````
 
 ````{grid} 1 1 2 2
-```{grid-item-card} [Explanation](explanation/index)
-**Discussion and clarification** of key topics
-- [General model](explanation/general-model.md)
-- [API and clients](explanation/api-and-clients.md)
-```
-
+:reverse:
 ```{grid-item-card} [Reference](reference/index)
 **Technical information**
 - [Layer specification](reference/layer-specification)
 - [CLI commands](reference/cli-commands)
-- [Pebble in containers](reference/pebble-in-containers)
+```
+
+```{grid-item-card} [Explanation](explanation/index)
+**Discussion and clarification** of key topics
+- [General model](explanation/general-model.md)
+- [API and clients](explanation/api-and-clients.md)
 ```
 ````
 
@@ -60,6 +60,6 @@ The Pebble project is sponsored by [Canonical Ltd](https://www.canonical.com).
 
 :diataxis:Tutorial <tutorial/getting-started>
 :diataxis:how-to/index
-:diataxis:explanation/index
 :diataxis:reference/index
+:diataxis:explanation/index
 ```

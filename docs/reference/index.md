@@ -19,7 +19,6 @@ Identities <identities>
 Layer specification <layer-specification>
 Log forwarding <log-forwarding>
 Notices <notices>
-Pebble in containers <pebble-in-containers>
 Service auto-restart <service-auto-restart>
 ```
 
@@ -40,13 +39,6 @@ Pebble configuration is defined as a stack of "layers".
 The `pebble` command has several subcommands.
 
 * [CLI commands](cli-commands)
-
-
-## Pebble in containers
-
-When the Pebble daemon is running inside a remote system (for example, a separate container), you can manage the remote system using subcommands on the Pebble client.
-
-* [Pebble in containers](pebble-in-containers)
 
 
 ## Service failures
