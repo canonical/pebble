@@ -16,6 +16,7 @@ package client
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/url"
@@ -78,7 +79,13 @@ func (client *Client) doMultiServiceAction(actionName string, services []string)
 		"Content-Type": "application/json",
 	}
 
-	resp, err := client.doAsync("POST", "/v1/services", nil, headers, bytes.NewBuffer(data), nil)
+	resp, err := client.Requester().Do(context.Background(), &RequestOptions{
+		Type:    AsyncRequest,
+		Method:  "POST",
+		Path:    "/v1/services",
+		Headers: headers,
+		Body:    bytes.NewBuffer(data),
+	})
 	if err != nil {
 		return "", err
 	}
@@ -124,7 +131,16 @@ func (client *Client) Services(opts *ServicesOptions) ([]*ServiceInfo, error) {
 		"names": []string{strings.Join(opts.Names, ",")},
 	}
 	var services []*ServiceInfo
-	_, err := client.doSync("GET", "/v1/services", query, nil, nil, &services)
+	resp, err := client.Requester().Do(context.Background(), &RequestOptions{
+		Type:   SyncRequest,
+		Method: "GET",
+		Path:   "/v1/services",
+		Query:  query,
+	})
+	if err != nil {
+		return nil, err
+	}
+	err = resp.DecodeResult(&services)
 	if err != nil {
 		return nil, err
 	}

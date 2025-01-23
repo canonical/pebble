@@ -26,6 +26,19 @@ Run services reliably <run-services-reliably>
 Manage service dependencies <service-dependencies>
 ```
 
+
+## Logging
+
+To better understand the operation of the services, you may need to work with logs.
+
+```{toctree}
+:titlesonly:
+:maxdepth: 1
+
+Forward logs to Loki <forward-logs-to-loki>
+```
+
+
 ## Identities
 
 Use named "identities" to allow additional users to access the API.
@@ -35,4 +48,16 @@ Use named "identities" to allow additional users to access the API.
 :maxdepth: 1
 
 Manage identities <manage-identities>
+```
+
+
+## API
+
+To integrate Pebble with your automated workflows, you can use the Pebble API.
+
+```{toctree}
+:titlesonly:
+:maxdepth: 1
+
+Use the Pebble API <use-the-pebble-api>
 ```

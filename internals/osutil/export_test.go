@@ -39,6 +39,12 @@ func FakeUserLookup(f func(name string) (*user.User, error)) func() {
 	return func() { userLookup = oldUserLookup }
 }
 
+func FakeUserLookupId(f func(name string) (*user.User, error)) func() {
+	oldUserLookupId := userLookupId
+	userLookupId = f
+	return func() { userLookupId = oldUserLookupId }
+}
+
 func FakeUserLookupGroup(f func(name string) (*user.Group, error)) func() {
 	oldUserLookupGroup := userLookupGroup
 	userLookupGroup = f
