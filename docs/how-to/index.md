@@ -39,6 +39,18 @@ Manage a remote system <manage-a-remote-system>
 ```
 
 
+## Logging
+
+To better understand the operation of the services, you may need to work with logs.
+
+```{toctree}
+:titlesonly:
+:maxdepth: 1
+
+Forward logs to Loki <forward-logs-to-loki>
+```
+
+
 ## Identities
 
 Use named "identities" to allow additional users to access the API.
