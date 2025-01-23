@@ -20,7 +20,7 @@ Layers <layers>
 Layer specification <layer-specification>
 Log forwarding <log-forwarding>
 Notices <notices>
-Service auto-restart <service-auto-restart>
+Service lifecycle <service-lifecycle>
 ```
 
 
