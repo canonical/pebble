@@ -204,4 +204,5 @@ var (
 	MethodNotAllowed = makeErrorResponder(http.StatusMethodNotAllowed)
 	InternalError    = makeErrorResponder(http.StatusInternalServerError)
 	GatewayTimeout   = makeErrorResponder(http.StatusGatewayTimeout)
+	BadGateway       = makeErrorResponder(http.StatusBadGateway)
 )

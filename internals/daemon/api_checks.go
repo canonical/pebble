@@ -91,7 +91,7 @@ func v1PostChecksRun(c *Command, r *http.Request, _ *UserState) Response {
 	checkMgr := c.d.overlord.CheckManager()
 	err := checkMgr.RunCheck(r.Context(), check)
 	if err != nil {
-		return InternalError("%v", err)
+		return BadGateway("%v", err)
 	}
 
 	return SyncResponse(fmt.Sprintf("Check %q succeeded.", payload.Check))
