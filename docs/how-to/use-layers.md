@@ -6,46 +6,34 @@ A base layer defines common settings (such as logging), while additional layers 
 
 ## Pebble layers
 
-A layer is a configuration file that defines the desired state of services running on a system. 
+A layer is a configuration file that defines the desired state of the managed services.
 
 Layers are organized within a `layers/` subdirectory in the `$PEBBLE` directory. Their filenames are similar to `001-base-layer.yaml`, where the numerically prefixed filenames ensure a specific order of the layers, and the labels after the prefix uniquely identifies the layer. For example, `001-base-layer.yaml`, `002-override-layer.yaml`.
 
-A layer specifies service properties including the command to execute, startup behavior, dependencies on other services, and environment variables. For example:
+A layer can define service properties (command, startup behavior, dependencies, environment variables, and more), health checks, and log targets. For example:
 
 ```yaml
-summary: Simple layer
-
-description: |
-    A better description for a simple layer.
-
 services:
-    srv1:
-        override: replace
-        summary: Service summary
-        command: cmd arg1 "arg2a arg2b"
-        startup: enabled
-        after:
-            - srv2
-        before:
-            - srv3
-        requires:
-            - srv2
-            - srv3
-        environment:
-            VAR1: val1
-            VAR2: val2
-            VAR3: val3
-
-    srv2:
-        override: replace
-        startup: enabled
-        command: cmd
-        before:
-            - srv3
-
-    srv3:
-        override: replace
-        command: cmd
+  server:
+    override: replace
+    command: flask --app hello run
+    after:
+      - srv2
+    requires:
+      - srv2
+    environment:
+      PORT: 5000
+      DATABASE: dbserver.example.com
+  database:
+    override: replace
+    command: postgres -D /usr/local/pgsql/data
+    before:
+      - srv1
+checks:
+  server-liveness:
+    override: replace
+    http:
+      url: http://127.0.0.1:5000/health
 ```
 
 For full details of all fields, see [layer specification](../reference/layer-specification).
@@ -57,11 +45,58 @@ Each layer can define new services or modify existing ones defined in preceding 
 - `override: replace` completely replaces the previous definition of a service.
 - `override: merge` combines the current layer's settings with the existing ones, allowing for incremental modifications.
 
-Any of the fields can be replaced individually in a merged service configuration. See the [full layer specification](../reference/layer-specification) for details.
+Any of the fields can be replaced individually in a merged service configuration.
+
+For example, the following is an override layer that can be merged with the example layer defined in the previous section:
+
+```{code-block} bash
+:emphasize-lines: 5,10
+
+services:
+  server:
+    override: merge
+    environment:
+      PORT: 8080
+checks:
+  server-liveness:
+    override: merge
+    http:
+      url: http://127.0.0.1:8080/health
+```
+
+And the merged result will be:
+
+```{code-block} bash
+:emphasize-lines: 10,21
+
+services:
+  server:
+    override: replace
+    command: flask --app hello run
+    after:
+      - srv2
+    requires:
+      - srv2
+    environment:
+      PORT: 8080
+      DATABASE: dbserver.example.com
+  database:
+    override: replace
+    command: postgres -D /usr/local/pgsql/data
+    before:
+      - srv1
+checks:
+  server-liveness:
+    override: replace
+    http:
+      url: http://127.0.0.1:8080/health
+```
+
+See the [full layer specification](../reference/layer-specification) for details.
 
 ## Use layers to manage services
 
-If we are to manage multiple services and environments, we can use a base layer to define common settings like logging, and other layers to define services.
+If we are to manage multiple services and environments, we can use a base layer to define common settings such as logging, and other layers to define services.
 
 For example, suppose that we have some teams that own different services:
 
@@ -72,7 +107,6 @@ For example, suppose that we have some teams that own different services:
 The operations team can define a base layer named `001-base-layer.yaml` with multiple log targets, and they don't need to worry about which service logs should be forwarded to which log targets. In the base layer, `services: [all]` can be used as a start:
 
 ```yaml
-summary: a base layer for log targets
 log-targets:
   test:
     override: merge
@@ -97,18 +131,15 @@ For more information on log targets and log forwarding, see [How to forward logs
 Team foo can define another layer named `002-foo.yaml` without having to redefine the log targets. However, they can decide which service logs are forwarded to which targets by overriding the `services` configuration of a predefined log target in the base layer:
 
 ```yaml
-summary: layer managed by team foo
 services:
   svc1:
     override: replace
     command: cmd
-    startup: enabled
     environment:
       OWNER: 'foo'
   svc2:
     override: replace
     command: cmd
-    startup: enabled
     environment:
       OWNER: 'foo'
 log-targets:
@@ -120,18 +151,15 @@ log-targets:
 Team bar can define yet another layer named `003-bar.yaml`:
 
 ```yaml
-summary: layer managed by team bar
 services:
   svc3:
     override: replace
     command: cmd
-    startup: enabled
     environment:
       OWNER: 'bar'
   svc4:
     override: replace
     command: cmd
-    startup: enabled
     environment:
       OWNER: 'bar'
 log-targets:
