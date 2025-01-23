@@ -6,7 +6,7 @@ This guide demonstrates how to use the Pebble API to programmatically manage ser
 
 ## Use the API
 
-Pebble's API allows remote client interaction with the daemon. It uses HTTP over a Unix socket, with access controlled by user ID.
+Pebble's API allows clients to interact remotely with the daemon. It uses HTTP over a Unix socket, with access controlled by user ID.
 
 For an explanation of API access levels, see [API and clients](/explanation/api-and-clients). For the full API reference, see [API](/reference/api).
 
