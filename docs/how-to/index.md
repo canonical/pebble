@@ -28,18 +28,6 @@ Use layers <use-layers>
 ```
 
 
-## Logging
-
-To better understand the operation of the services, you may need to work with logs.
-
-```{toctree}
-:titlesonly:
-:maxdepth: 1
-
-Forward logs to Loki <forward-logs-to-loki>
-```
-
-
 ## Manage a remote system
 
 Pebble provides exec and file management functions to coordinate with remote systems.
