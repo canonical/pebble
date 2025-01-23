@@ -18,7 +18,7 @@ log-targets:
       <label name>: <label value>
 ```
 
-Mandatory configuration:
+Required configuration:
 
 - `override`: How this log target definition is combined with other pre-existing definitions with the same name in the plan. Supported values are `merge` and `replace`.
 - `type`: The type of log target. The only supported type is `loki`.
@@ -50,3 +50,7 @@ For all outgoing logs, Pebble will set a default label `pebble_service` with the
 In the `labels` section, you can optionally specify custom labels to be added to any outgoing logs.
 
 The label values may contain `$ENV_VARS`, which will be interpolated using the environment variables for the corresponding service.
+
+## See more
+
+- [How to forward logs to Loki](/how-to/forward-logs-to-loki)
