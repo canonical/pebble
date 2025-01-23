@@ -27,6 +27,18 @@ Manage service dependencies <service-dependencies>
 ```
 
 
+## Manage a remote system
+
+Pebble provides exec and file management functions to coordinate with remote systems.
+
+```{toctree}
+:titlesonly:
+:maxdepth: 1
+
+Manage a remote system <manage-a-remote-system>
+```
+
+
 ## Logging
 
 To better understand the operation of the services, you may need to work with logs.

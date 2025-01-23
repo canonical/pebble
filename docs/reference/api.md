@@ -51,6 +51,7 @@ We try to never change the underlying HTTP API in a backwards-incompatible way. 
 
 For more information, see the [Go client documentation](https://pkg.go.dev/github.com/canonical/pebble/client).
 
+(api_python_client)=
 ### Python client
 
 The Ops library for writing and testing Juju charms includes a [Python client for Pebble API](https://ops.readthedocs.io/en/latest/reference/pebble.html). You can use the Python client to access the API endpoints over the Unix socket. For example:

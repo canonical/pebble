@@ -29,7 +29,6 @@ Pebble is useful for developers who are building [Juju charms on Kubernetes](htt
 **Technical information**
 - [Layer specification](reference/layer-specification)
 - [CLI commands](reference/cli-commands)
-- [Pebble in containers](reference/pebble-in-containers)
 ```
 
 ```{grid-item-card} [Explanation](explanation/index)
