@@ -18,23 +18,32 @@ import (
 	"bytes"
 	"net/http"
 
+	"github.com/canonical/pebble/internals/overlord/checkstate"
 	"github.com/canonical/pebble/internals/overlord/servstate"
 )
 
 func v1GetMetrics(c *Command, r *http.Request, _ *UserState) Response {
 	return metricsResponse{
 		svcMgr: overlordServiceManager(c.d.overlord),
+		chkMgr: overlordCheckManager(c.d.overlord),
 	}
 }
 
 // metricsResponse is a Response implementation to serve the metrics in the OpenMetrics format.
 type metricsResponse struct {
 	svcMgr *servstate.ServiceManager
+	chkMgr *checkstate.CheckManager
 }
 
 func (r metricsResponse) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	var buffer bytes.Buffer
+
 	err := r.svcMgr.Metrics(&buffer)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	err = r.chkMgr.Metrics(&buffer)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return

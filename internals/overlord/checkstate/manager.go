@@ -17,12 +17,14 @@ package checkstate
 import (
 	"context"
 	"fmt"
+	"io"
 	"reflect"
 	"sort"
 	"sync"
 
 	"gopkg.in/tomb.v2"
 
+	"github.com/canonical/pebble/internals/metrics"
 	"github.com/canonical/pebble/internals/overlord/state"
 	"github.com/canonical/pebble/internals/plan"
 )
@@ -329,6 +331,24 @@ func (m *CheckManager) updateCheckInfo(config *plan.Check, changeID string, fail
 	}
 }
 
+func (m *CheckManager) incCheckInfoPerformCheckCount(config *plan.Check) {
+	m.checksLock.Lock()
+	defer m.checksLock.Unlock()
+
+	info := m.checks[config.Name]
+	info.PerformCheckCount += 1
+	m.checks[config.Name] = info
+}
+
+func (m *CheckManager) incCheckInfoRecoverCheckCount(config *plan.Check) {
+	m.checksLock.Lock()
+	defer m.checksLock.Unlock()
+
+	info := m.checks[config.Name]
+	info.RecoverCheckCount += 1
+	m.checks[config.Name] = info
+}
+
 func (m *CheckManager) deleteCheckInfo(name string) {
 	m.checksLock.Lock()
 	defer m.checksLock.Unlock()
@@ -338,12 +358,14 @@ func (m *CheckManager) deleteCheckInfo(name string) {
 
 // CheckInfo provides status information about a single check.
 type CheckInfo struct {
-	Name      string
-	Level     plan.CheckLevel
-	Status    CheckStatus
-	Failures  int
-	Threshold int
-	ChangeID  string
+	Name              string
+	Level             plan.CheckLevel
+	Status            CheckStatus
+	Failures          int
+	Threshold         int
+	ChangeID          string
+	PerformCheckCount int64
+	RecoverCheckCount int64
 }
 
 type CheckStatus string
@@ -355,4 +377,87 @@ const (
 
 type checker interface {
 	check(ctx context.Context) error
+}
+
+func (c *CheckInfo) Metrics(writer io.Writer) error {
+	labels := []string{fmt.Sprintf("check=%s", c.Name)}
+
+	// Write HELP and TYPE comments for pebble_check_up
+	_, err := fmt.Fprintf(writer, "# HELP pebble_check_up Number of times the perform check has run\n")
+	if err != nil {
+		return err
+	}
+	_, err = fmt.Fprintf(writer, "# TYPE pebble_check_up counter\n")
+	if err != nil {
+		return err
+	}
+	checkStatus := 0
+	if c.Status == CheckStatusUp {
+		checkStatus = 1
+	}
+	checkUpMetric := metrics.Metric{
+		Name:       "pebble_check_up",
+		Value:      checkStatus,
+		LabelPairs: labels,
+	}
+	_, err = checkUpMetric.WriteTo(writer)
+	if err != nil {
+		return err
+	}
+
+	// Write HELP and TYPE comments for pebble_perform_check_count
+	_, err = fmt.Fprintf(writer, "# HELP pebble_perform_check_count Number of times the perform check has run\n")
+	if err != nil {
+		return err
+	}
+	_, err = fmt.Fprintf(writer, "# TYPE pebble_perform_check_count counter\n")
+	if err != nil {
+		return err
+	}
+	performCheckCountMetric := metrics.Metric{
+		Name:       "pebble_perform_check_count",
+		Value:      c.PerformCheckCount,
+		LabelPairs: labels,
+	}
+	_, err = performCheckCountMetric.WriteTo(writer)
+	if err != nil {
+		return err
+	}
+
+	// Write HELP and TYPE comments for pebble_recover_check_count
+	_, err = fmt.Fprintf(writer, "# HELP pebble_recover_check_count Number of times the perform check has run\n")
+	if err != nil {
+		return err
+	}
+	_, err = fmt.Fprintf(writer, "# TYPE pebble_recover_check_count counter\n")
+	if err != nil {
+		return err
+	}
+	recoverCheckCountMetric := metrics.Metric{
+		Name:       "pebble_recover_check_count",
+		Value:      c.PerformCheckCount,
+		LabelPairs: labels,
+	}
+	_, err = recoverCheckCountMetric.WriteTo(writer)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// Metrics collects and writes metrics for all checks to the provided writer.
+func (m *CheckManager) Metrics(writer io.Writer) error {
+	infos, err := m.Checks()
+	if err != nil {
+		return err
+	}
+
+	for _, info := range infos {
+		err := info.Metrics(writer)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

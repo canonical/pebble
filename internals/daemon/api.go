@@ -119,6 +119,7 @@ var (
 
 	overlordServiceManager = (*overlord.Overlord).ServiceManager
 	overlordPlanManager    = (*overlord.Overlord).PlanManager
+	overlordCheckManager   = (*overlord.Overlord).CheckManager
 
 	muxVars = mux.Vars
 )
