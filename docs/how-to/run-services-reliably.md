@@ -63,7 +63,7 @@ Although health checks are useful, they are not a complete solution for reliabil
 
 - Health checks can detect issues such as a failed database connection due to network issues, but they can't fix the network issue itself.
 - Health checks also can't replace testing and monitoring.
-- Health checks shouldn't be used for scheduling tasks like backups. Use a cron-style tool for that.
+- Health checks shouldn't be used for scheduling tasks such as backups. Use a cron-style tool for that.
 
 ## See more
 
