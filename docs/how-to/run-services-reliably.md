@@ -27,7 +27,7 @@ The configuration above contains three key options that we can tweak for each he
 
 - `period`: How often to run the check.
 - `timeout`: If the check hasn't responded before the timeout, consider the check an error.
-- `threshold`: After this many consecutive errors the check considered "down".
+- `threshold`: After this many consecutive errors, the check is considered "down".
 
 If we're happy with the default values, a minimum check looks like the following:
 
