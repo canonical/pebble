@@ -23,6 +23,12 @@ checks:
       url: http://127.0.0.1:5000/health
 ```
 
+The configuration above contains three key options that we can tweak for each health check:
+
+- `period`: How often to run the check.
+- `timeout`: If the check hasn't responded before the timeout, consider the check an error.
+- `threshold`: After this many consecutive errors the check considered "down".
+
 If we're happy with the default values, a minimum check looks like the following:
 
 ```yaml
