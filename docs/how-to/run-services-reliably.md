@@ -8,7 +8,7 @@ To help you manage services more reliably, Pebble provides a health check featur
 
 A health check of `http` type issues HTTP `GET` requests to the health check URL at a user-specified interval.
 
-The health check is considered successful if the URL returns any HTTP 2xx response. After getting a certain number of failures in a row, the health check is considered "down" (or unhealthy).
+The health check is considered successful if the URL returns any HTTP 2xx response. After getting a certain number of errors in a row, the health check fails and is considered "down" (or "unhealthy").
 
 For example, we can configure a health check of type `http` named `svc1-up` that checks the endpoint `http://127.0.0.1:5000/health`:
 
