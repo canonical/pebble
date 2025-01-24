@@ -24,6 +24,7 @@ As your needs grow, you may want to use advanced Pebble features to run services
 
 Run services reliably <run-services-reliably>
 Manage service dependencies <service-dependencies>
+Use layers <use-layers>
 ```
 
 
