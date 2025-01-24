@@ -20,7 +20,7 @@ Layers <layers>
 Layer specification <layer-specification>
 Log forwarding <log-forwarding>
 Notices <notices>
-Service lifecycle <service-lifecycle>
+Service auto-restart <service-auto-restart>
 ```
 
 
@@ -46,7 +46,7 @@ The `pebble` command has several subcommands.
 
 Pebble provides two ways to automatically restart services when they fail. Auto-restart is based on exit codes from services. Health checks are a more sophisticated way to test and report the availability of services.
 
-* [Service lifecycle](service-lifecycle)
+* [Service auto-restart](service-auto-restart)
 * [Health checks](health-checks)
 
 
