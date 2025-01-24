@@ -72,17 +72,17 @@ func (s *CheckersSuite) TestHTTP(c *C) {
 	c.Assert(headers.Get("X-Name"), Equals, "Bob Smith")
 	c.Assert(headers.Get("User-Agent"), Equals, "pebble-test")
 
-	// Non-20x status code returns error
+	// Non-2xx status code returns error
 	chk = &httpChecker{url: server.URL + "/404"}
 	err = chk.check(context.Background())
-	c.Assert(err, ErrorMatches, "non-20x status code 404")
+	c.Assert(err, ErrorMatches, "non-2xx status code 404")
 	c.Assert(path, Equals, "/404")
 
-	// In case of non-20x status, short response body is fully included in error details
+	// In case of non-2xx status, short response body is fully included in error details
 	response = "error details"
 	chk = &httpChecker{url: server.URL + "/500"}
 	err = chk.check(context.Background())
-	c.Assert(err, ErrorMatches, "non-20x status code 500")
+	c.Assert(err, ErrorMatches, "non-2xx status code 500")
 	detailsErr, ok := err.(*detailsError)
 	c.Assert(ok, Equals, true)
 	c.Assert(detailsErr.Details(), Equals, "error details")
@@ -95,7 +95,7 @@ func (s *CheckersSuite) TestHTTP(c *C) {
 	response = output.String()
 	chk = &httpChecker{url: server.URL + "/500"}
 	err = chk.check(context.Background())
-	c.Assert(err, ErrorMatches, "non-20x status code 500")
+	c.Assert(err, ErrorMatches, "non-2xx status code 500")
 	detailsErr, ok = err.(*detailsError)
 	c.Assert(ok, Equals, true)
 	c.Assert(detailsErr.Details(), Matches, `(?s)line 1\n.*line 5\n\(\.\.\.\)`)
