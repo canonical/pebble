@@ -26,8 +26,6 @@ services:
   database:
     override: replace
     command: postgres -D /usr/local/pgsql/data
-    before:
-      - srv1
 
 checks:
   server-liveness:
@@ -71,7 +69,7 @@ checks:
 And the combined plan will be:
 
 ```{code-block} yaml
-:emphasize-lines: 8-9,21
+:emphasize-lines: 8-9,19
 
 services:
   server:
@@ -86,8 +84,6 @@ services:
   database:
     override: replace
     command: postgres -D /usr/local/pgsql/data
-    before:
-      - srv1
 
 checks:
   server-liveness:
@@ -131,8 +127,6 @@ services:
   database:
     override: replace
     command: postgres -D /usr/local/pgsql/data
-    before:
-      - srv1
 
 checks:
   server-liveness:
