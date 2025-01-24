@@ -16,6 +16,7 @@ package cli
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/canonical/go-flags"
 
@@ -56,11 +57,18 @@ func (cmd cmdStopChecks) Execute(args []string) error {
 	checkopts := client.ChecksActionOptions{
 		Names: cmd.Positional.Checks,
 	}
-	response, err := cmd.client.StopChecks(&checkopts)
+	results, err := cmd.client.StopChecks(&checkopts)
 	if err != nil {
 		return err
 	}
 
-	fmt.Fprintln(Stdout, response)
+	var summary string
+	if len(results.Changed) == 0 {
+		summary = fmt.Sprintf("Checks already stopped.")
+	} else {
+		summary = fmt.Sprintf("Checks stopped: %s", strings.Join(results.Changed, ", "))
+	}
+
+	fmt.Fprintln(Stdout, summary)
 	return nil
 }

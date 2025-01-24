@@ -39,6 +39,11 @@ type ChecksActionOptions struct {
 	Names []string
 }
 
+// CheckActionResults holds the results of a check action.
+type CheckActionResults struct {
+	Changed []string `json:"changed"`
+}
+
 // CheckLevel represents the level of a health check.
 type CheckLevel string
 
@@ -124,18 +129,16 @@ func (client *Client) Checks(opts *ChecksOptions) ([]*CheckInfo, error) {
 	return checks, nil
 }
 
-// Start starts the checks named in opts.Names. We ignore ops.Level for this
-// action.
-func (client *Client) StartChecks(opts *ChecksActionOptions) (response string, err error) {
-	response, err = client.doMultiCheckAction("start", opts.Names)
-	return response, err
+// Start starts the checks named in opts.Names.
+func (client *Client) StartChecks(opts *ChecksActionOptions) (results *CheckActionResults, err error) {
+	results, err = client.doMultiCheckAction("start", opts.Names)
+	return results, err
 }
 
-// Stop stops the checks named in opts.Names. We ignore ops.Level for this
-// action.
-func (client *Client) StopChecks(opts *ChecksActionOptions) (response string, err error) {
-	response, err = client.doMultiCheckAction("stop", opts.Names)
-	return response, err
+// Stop stops the checks named in opts.Names.
+func (client *Client) StopChecks(opts *ChecksActionOptions) (results *CheckActionResults, err error) {
+	results, err = client.doMultiCheckAction("stop", opts.Names)
+	return results, err
 }
 
 type multiCheckActionData struct {
@@ -143,34 +146,29 @@ type multiCheckActionData struct {
 	Checks []string `json:"checks"`
 }
 
-func (client *Client) doMultiCheckAction(actionName string, checks []string) (response string, err error) {
+func (client *Client) doMultiCheckAction(actionName string, checks []string) (results *CheckActionResults, err error) {
 	action := multiCheckActionData{
 		Action: actionName,
 		Checks: checks,
 	}
 	data, err := json.Marshal(&action)
 	if err != nil {
-		return "", fmt.Errorf("cannot marshal multi-check action: %w", err)
-	}
-	headers := map[string]string{
-		"Content-Type": "application/json",
+		return nil, fmt.Errorf("cannot marshal multi-check action: %w", err)
 	}
 
 	resp, err := client.Requester().Do(context.Background(), &RequestOptions{
-		Type:    SyncRequest,
-		Method:  "POST",
-		Path:    "/v1/checks",
-		Headers: headers,
-		Body:    bytes.NewBuffer(data),
+		Type:   SyncRequest,
+		Method: "POST",
+		Path:   "/v1/checks",
+		Body:   bytes.NewBuffer(data),
 	})
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	var response string
-	err = resp.DecodeResult(&response)
+	err = resp.DecodeResult(&results)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	return response, nil
+	return results, nil
 }

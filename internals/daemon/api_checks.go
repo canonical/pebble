@@ -16,7 +16,6 @@ package daemon
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 
 	"github.com/canonical/x-go/strutil"
@@ -87,15 +86,14 @@ func v1PostChecks(c *Command, r *http.Request, _ *UserState) Response {
 	}
 
 	checkmgr := c.d.overlord.CheckManager()
-	plan := c.d.overlord.PlanManager().Plan()
 
 	var err error
-	var checks []string
+	var changed []*plan.Check
 	switch payload.Action {
 	case "start":
-		checks, err = checkmgr.StartChecks(plan, payload.Checks)
+		changed, err = checkmgr.StartChecks(payload.Checks)
 	case "stop":
-		checks, err = checkmgr.StopChecks(plan, payload.Checks)
+		changed, err = checkmgr.StopChecks(payload.Checks)
 	default:
 		return BadRequest("invalid action %q", payload.Action)
 	}
@@ -106,13 +104,12 @@ func v1PostChecks(c *Command, r *http.Request, _ *UserState) Response {
 	st := c.d.overlord.State()
 	st.EnsureBefore(0) // start and stop tasks right away
 
-	var result string
-	if len(checks) == 0 {
-		result = fmt.Sprintf("No checks needed to %s", payload.Action)
-	} else if len(checks) == 1 {
-		result = fmt.Sprintf("Queued %s for check %q", payload.Action, checks[0])
-	} else {
-		result = fmt.Sprintf("Queued %s for check %q and %d more", payload.Action, checks[0], len(checks)-1)
+	var changedNames []string
+	for _, check := range changed {
+		changedNames = append(changedNames, check.Name)
 	}
-	return SyncResponse(result)
+	type responsePayload struct {
+		Changed []string `json:"changed"`
+	}
+	return SyncResponse(responsePayload{Changed: changedNames})
 }
