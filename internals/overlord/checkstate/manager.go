@@ -472,8 +472,9 @@ func (m *CheckManager) StopChecks(checks []string) ([]*plan.Check, error) {
 }
 
 // Replan handles starting "startup: enabled" checks when a replan occurs.
+// Checks that are "startup: disabled" but are already running do not get
+// stopped in a replan.
 // The state lock must be held when calling this method.
-// TODO: verify that replan does not stop services with startup:disabled
 func (m *CheckManager) Replan() {
 	currentPlan := m.planMgr.Plan()
 
