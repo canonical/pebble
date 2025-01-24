@@ -11,15 +11,13 @@ A layer is a configuration file that defines the desired state of the managed se
 
 Layers are organized within a `layers/` subdirectory in the `$PEBBLE` directory. Their filenames are similar to `001-base-layer.yaml`, where the numerically prefixed filenames ensure a specific order of the layers, and the labels after the prefix uniquely identifies the layer. For example, `001-base-layer.yaml`, `002-override-layer.yaml`.
 
-A layer can define service properties (command, startup behavior, dependencies, environment variables, and more), health checks, and log targets. For example:
+A layer can define service properties, health checks, and log targets. For example:
 
 ```yaml
 services:
   server:
     override: replace
     command: flask --app hello run
-    after:
-      - srv2
     requires:
       - srv2
     environment:
@@ -30,6 +28,7 @@ services:
     command: postgres -D /usr/local/pgsql/data
     before:
       - srv1
+
 checks:
   server-liveness:
     override: replace
@@ -41,51 +40,55 @@ For full details of all fields, see [layer specification](../reference/layer-spe
 
 ## Layer override
 
-Each layer can define new services or modify existing ones defined in preceding layers. The mandatory `override` field in each service definition determines how the layer's configuration interacts with the previously defined service of the same name (if any):
+Each layer can define new services (and health checks and log targets) or modify existing ones defined in preceding layers. The layers -- ordered by numerical prefix -- are combined into the final plan.
+
+The required `override` field in each service (or health check or log target) determines how the layer's configuration interacts with the previously defined object of the same name (if any):
 
 - `override: replace` completely replaces the previous definition of a service.
 - `override: merge` combines the current layer's settings with the existing ones, allowing for incremental modifications.
 
 Any of the fields can be replaced individually in a merged service configuration.
 
-For example, the following is an override layer that can be merged with the example layer defined in the previous section:
+For example, the following is an override layer that can be combined with the example layer defined in the previous section:
 
 ```{code-block} yaml
-:emphasize-lines: 5,10
+:emphasize-lines: 5-6,12
 
 services:
   server:
     override: merge
     environment:
       PORT: 8080
+      VERBOSE_LOGGING: 1
+
 checks:
   server-liveness:
-    override: merge
+    override: replace
     http:
       url: http://127.0.0.1:8080/health
 ```
 
-And the merged result will be:
+And the combined plan will be:
 
 ```{code-block} yaml
-:emphasize-lines: 10,21
+:emphasize-lines: 8-9,21
 
 services:
   server:
     override: replace
     command: flask --app hello run
-    after:
-      - srv2
     requires:
       - srv2
     environment:
       PORT: 8080
+      VERBOSE_LOGGING: 1
       DATABASE: dbserver.example.com
   database:
     override: replace
     command: postgres -D /usr/local/pgsql/data
     before:
       - srv1
+
 checks:
   server-liveness:
     override: replace
@@ -120,8 +123,6 @@ services:
   server:
     override: replace
     command: flask --app hello run
-    after:
-      - srv2
     requires:
       - srv2
     environment:
@@ -132,6 +133,7 @@ services:
     command: postgres -D /usr/local/pgsql/data
     before:
       - srv1
+
 checks:
   server-liveness:
     override: replace
