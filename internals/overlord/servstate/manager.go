@@ -334,6 +334,20 @@ func (m *ServiceManager) CheckFailed(name string) {
 	}
 }
 
+// Metrics collects and writes metrics for all services to the provided writer.
+func (m *ServiceManager) Metrics(writer io.Writer) error {
+	m.servicesLock.Lock()
+	defer m.servicesLock.Unlock()
+
+	for _, service := range m.services {
+		err := service.Metrics(writer)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // servicesToStop is used during service manager shutdown to cleanly terminate
 // all running services. Running services include both services in the
 // stateRunning and stateBackoff, since a service in backoff state can start

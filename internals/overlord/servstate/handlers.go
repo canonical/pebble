@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"os/user"
 	"strconv"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -15,6 +16,7 @@ import (
 	"gopkg.in/tomb.v2"
 
 	"github.com/canonical/pebble/internals/logger"
+	"github.com/canonical/pebble/internals/metrics"
 	"github.com/canonical/pebble/internals/osutil"
 	"github.com/canonical/pebble/internals/overlord/restart"
 	"github.com/canonical/pebble/internals/overlord/state"
@@ -104,6 +106,7 @@ type serviceData struct {
 	resetTimer   *time.Timer
 	restarting   bool
 	currentSince time.Time
+	startCount   atomic.Int64
 }
 
 func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
@@ -455,7 +458,7 @@ func (s *serviceData) startInternal() error {
 
 	// Pass buffer reference to logMgr to start log forwarding
 	s.manager.logMgr.ServiceStarted(s.config, s.logs)
-
+	s.IncStartCount()
 	return nil
 }
 
@@ -823,6 +826,62 @@ func (s *serviceData) checkFailed(action plan.ServiceAction) {
 		logger.Debugf("Service %q: ignoring on-check-failure action %q in state %s",
 			s.config.Name, action, s.state)
 	}
+}
+
+// IncStartCount increments the startCount for the service.
+func (d *serviceData) IncStartCount() {
+	d.startCount.Add(1)
+}
+
+// Metrics writes the service's metrics.
+func (d *serviceData) Metrics(writer io.Writer) error {
+	labels := []string{fmt.Sprintf("service_name=%s", d.config.Name)}
+
+	// Write HELP and TYPE comments for pebble_service_start_count
+	_, err := fmt.Fprintf(writer, "# HELP pebble_service_start_count Number of times the service has started\n")
+	if err != nil {
+		return err
+	}
+	_, err = fmt.Fprintf(writer, "# TYPE pebble_service_start_count counter\n")
+	if err != nil {
+		return err
+	}
+
+	startCountMetric := metrics.Metric{
+		Name:       "pebble_service_start_count",
+		Value:      d.startCount.Load(),
+		LabelPairs: labels,
+	}
+	_, err = startCountMetric.WriteTo(writer)
+	if err != nil {
+		return err
+	}
+
+	// Write HELP and TYPE comments for pebble_service_active
+	_, err = fmt.Fprintf(writer, "# HELP pebble_service_active Indicates if the service is currently active (1) or not (0)\n")
+	if err != nil {
+		return err
+	}
+	_, err = fmt.Fprintf(writer, "# TYPE pebble_service_active gauge\n")
+	if err != nil {
+		return err
+	}
+
+	active := 0
+	if stateToStatus(d.state) == StatusActive {
+		active = 1
+	}
+	activeMetric := metrics.Metric{
+		Name:       "pebble_service_active",
+		Value:      active,
+		LabelPairs: labels,
+	}
+	_, err = activeMetric.WriteTo(writer)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 var setCmdCredential = func(cmd *exec.Cmd, credential *syscall.Credential) {

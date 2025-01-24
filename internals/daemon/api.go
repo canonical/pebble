@@ -111,7 +111,7 @@ var API = []*Command{{
 }, {
 	Path:       "/v1/metrics",
 	ReadAccess: MetricsAccess{},
-	GET:        Metrics,
+	GET:        v1GetMetrics,
 }}
 
 var (

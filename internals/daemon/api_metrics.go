@@ -15,20 +15,30 @@
 package daemon
 
 import (
+	"bytes"
 	"net/http"
 
-	"github.com/canonical/pebble/internals/metrics"
+	"github.com/canonical/pebble/internals/overlord/servstate"
 )
 
-func Metrics(c *Command, r *http.Request, _ *UserState) Response {
-	return metricsResponse{}
+func v1GetMetrics(c *Command, r *http.Request, _ *UserState) Response {
+	return metricsResponse{
+		svcMgr: overlordServiceManager(c.d.overlord),
+	}
 }
 
-// metricsResponse is a Response implementation to serve the metrics in a prometheus metrics format.
-type metricsResponse struct{}
+// metricsResponse is a Response implementation to serve the metrics in the OpenMetrics format.
+type metricsResponse struct {
+	svcMgr *servstate.ServiceManager
+}
 
 func (r metricsResponse) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	registry := metrics.GetRegistry()
+	var buffer bytes.Buffer
+	err := r.svcMgr.Metrics(&buffer)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(registry.GatherMetrics()))
+	w.Write([]byte(buffer.String()))
 }
