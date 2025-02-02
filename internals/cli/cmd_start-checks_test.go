@@ -37,14 +37,14 @@ func (s *PebbleSuite) TestStartChecks(c *check.C) {
 		fmt.Fprintf(w, `{
      "type": "sync",
      "status-code": 200,
-	 "result": "Queued \"start\" for check chk1 and 1 more"
+	 "result": {"changed": ["chk1", "chk2"]}
  }`)
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"start-checks", "chk1", "chk2"})
 	c.Assert(err, check.IsNil)
 	c.Assert(rest, check.HasLen, 0)
-	c.Check(s.Stdout(), check.Equals, "Queued \"start\" for check chk1 and 1 more\n")
+	c.Check(s.Stdout(), check.Equals, "Checks started: chk1, chk2\n")
 	c.Check(s.Stderr(), check.Equals, "")
 }
 

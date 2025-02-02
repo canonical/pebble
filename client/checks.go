@@ -165,6 +165,7 @@ func (client *Client) doMultiCheckAction(actionName string, checks []string) (re
 	if err != nil {
 		return nil, err
 	}
+
 	err = resp.DecodeResult(&results)
 	if err != nil {
 		return nil, err
