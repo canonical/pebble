@@ -336,19 +336,17 @@ paths:
             example:
               {"action": "start", "checks": ["svc1"]}
       responses:
-        "202":
-          description: Accepted - asynchronous operation started.
+        "200":
+          description: Check operations completed.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PostServicesResponse"
+                $ref: "#/components/schemas/CheckActionResponse"
               example:
                 {
-                  "type": "async",
-                  "status-code": 202,
-                  "status": "Accepted",
-                  "change": "25",
-                  "result": null
+                  "type": "sync",
+                  "status-code": 200,
+                  "result": {"changed": ["chk1", "chk2"]}
                 }
   /v1/exec:
     post:
@@ -1175,6 +1173,19 @@ components:
             change:
               type: string
               description: The Change ID of the asynchronous change.
+    CheckActionResponse:
+      allOf:
+        - $ref: "#/components/schemas/BaseResponse"
+        - type: object
+          properties:
+            result:
+              type: object
+              properties:
+                changed:
+                  type: array
+                  items:
+                    type: string
+                  description: List of checks that were changed.
     GetChangesResponse:
       allOf:
         - $ref: "#/components/schemas/BaseResponse"
