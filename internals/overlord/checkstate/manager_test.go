@@ -59,7 +59,7 @@ func (s *ManagerSuite) SetUpTest(c *C) {
 	c.Assert(err, IsNil)
 
 	s.overlord = overlord.Fake()
-	s.manager = checkstate.NewManager(s.overlord.State(), s.overlord.TaskRunner())
+	s.manager = checkstate.NewManager(s.overlord.State(), s.overlord.TaskRunner(), s.overlord.PlanManager())
 	s.overlord.AddManager(s.manager)
 	s.overlord.AddManager(s.overlord.TaskRunner())
 	err = s.overlord.StartUp()
