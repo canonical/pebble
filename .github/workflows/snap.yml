@@ -42,7 +42,7 @@ jobs:
         id: build-snap
         uses: snapcore/action-build@v1.3.0
 
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         if: failure()
         with:
           name: snapcraft-logs
@@ -52,7 +52,7 @@ jobs:
             ${{ env.SNAP_NAME }}_*.txt
 
       - name: Attach ${{ steps.build-snap.outputs.snap }} to GH workflow execution
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.build-snap.outputs.snap }}
           path: ${{ steps.build-snap.outputs.snap }}
@@ -94,7 +94,7 @@ jobs:
         with:
           snapcraft-args: remote-build --build-for=${{ matrix.arch }} --launchpad-accept-public-upload
 
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         if: failure()
         with:
           name: snapcraft-logs
@@ -104,7 +104,7 @@ jobs:
             ${{ env.SNAP_NAME }}_*.txt
 
       - name: Attach ${{ steps.build-snap.outputs.snap }} to GH workflow execution
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: steps.build-snap.outcome == 'success'
         with:
           name: ${{ steps.build-snap.outputs.snap }}
@@ -121,7 +121,7 @@ jobs:
       (needs.local-build.result == 'success' || needs.local-build.result == 'skipped') &&
       (needs.remote-build.result == 'success' || needs.remote-build.result == 'skipped')
     steps:
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
 
       - id: get-snap
         run: echo "filename=$(find ${{ env.SNAP_NAME }}*${{ env.TEST_ON }}*snap/*)" >> $GITHUB_OUTPUT
@@ -146,7 +146,7 @@ jobs:
       matrix:
         arch: ["amd64", "arm64", "ppc64el", "armhf", "s390x"]
     steps:
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
 
       - id: get-snap
         run: echo "filename=$(find ${{ env.SNAP_NAME }}*${{ matrix.arch }}*snap/*)" >> $GITHUB_OUTPUT
