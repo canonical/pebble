@@ -63,7 +63,7 @@ func (cs *clientSuite) TestChecksGet(c *check.C) {
 
 func (cs *clientSuite) TestStartChecks(c *check.C) {
 	cs.rsp = `{
-	    "result": {"changed": ["chk1", "chk2"]},
+		"result": {"changed": ["chk1", "chk2"]},
 		"status": "OK",
 		"status-code": 200,
 		"type": "sync"
@@ -88,7 +88,7 @@ func (cs *clientSuite) TestStartChecks(c *check.C) {
 
 func (cs *clientSuite) TestStopChecks(c *check.C) {
 	cs.rsp = `{
-	    "result": {"changed": ["chk1"]},
+		"result": {"changed": ["chk1"]},
 		"status": "OK",
 		"status-code": 200,
 		"type": "sync"

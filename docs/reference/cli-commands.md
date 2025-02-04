@@ -706,9 +706,9 @@ The `replan` command starts, stops, or restarts services that have changed, so t
 Usage:
   pebble replan [replan-OPTIONS]
 
-The replan command starts, stops, or restarts services that have changed,
-so that running services exactly match the desired configuration in the
-current plan.
+The replan command starts, stops, or restarts services and checks that have
+changed, so that running services and checks exactly match the desired
+configuration in the current plan.
 
 [replan command options]
       --no-wait    Do not wait for the operation to finish but just print the

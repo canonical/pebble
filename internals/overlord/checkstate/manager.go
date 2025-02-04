@@ -39,14 +39,13 @@ const (
 
 // CheckManager starts and manages the health checks.
 type CheckManager struct {
-	state *state.State
+	state   *state.State
+	planMgr *planstate.PlanManager
 
 	failureHandlers []FailureFunc
 
 	checksLock sync.Mutex
 	checks     map[string]CheckInfo
-
-	planMgr *planstate.PlanManager
 }
 
 // FailureFunc is the type of function called when a failure action is triggered.
@@ -390,9 +389,6 @@ type checker interface {
 // StartChecks starts the checks with the specified names, if not already
 // running, and returns the checks that did need to be started.
 func (m *CheckManager) StartChecks(checks []string) ([]*plan.Check, error) {
-	m.state.Lock()
-	defer m.state.Unlock()
-
 	currentPlan := m.planMgr.Plan()
 
 	// If any check specified is not in the plan, return an error.
@@ -401,6 +397,9 @@ func (m *CheckManager) StartChecks(checks []string) ([]*plan.Check, error) {
 			return nil, fmt.Errorf("cannot find check %q in plan", name)
 		}
 	}
+
+	m.state.Lock()
+	defer m.state.Unlock()
 
 	var started []*plan.Check
 	for _, name := range checks {
@@ -430,9 +429,6 @@ func (m *CheckManager) StartChecks(checks []string) ([]*plan.Check, error) {
 // StopChecks stops the checks with the specified names, if currently running,
 // and returns the checks that did need to be stopped.
 func (m *CheckManager) StopChecks(checks []string) ([]*plan.Check, error) {
-	m.state.Lock()
-	defer m.state.Unlock()
-
 	currentPlan := m.planMgr.Plan()
 
 	// If any check specified is not in the plan, return an error.
@@ -441,6 +437,10 @@ func (m *CheckManager) StopChecks(checks []string) ([]*plan.Check, error) {
 			return nil, fmt.Errorf("cannot find check %q in plan", name)
 		}
 	}
+
+	m.state.Lock()
+	defer m.state.Unlock()
+
 	var stopped []*plan.Check
 	for _, name := range checks {
 		check := currentPlan.Checks[name] // We know this is ok because we checked it above.
@@ -459,13 +459,15 @@ func (m *CheckManager) StopChecks(checks []string) ([]*plan.Check, error) {
 			continue
 		}
 		change := m.state.Change(info.ChangeID)
-		change.Abort()
+		if change != nil {
+			change.Abort()
+			stopped = append(stopped, check)
+		}
 		// We pass in the current number of failures so that it remains the
 		// same, so that people can inspect what the state of the check was when
 		// it was stopped. The status of the check will be "inactive", but the
 		// failure count combined with the threshold will give the full picture.
 		m.updateCheckInfo(check, "", info.Failures)
-		stopped = append(stopped, check)
 	}
 
 	return stopped, nil

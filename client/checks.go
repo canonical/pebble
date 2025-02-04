@@ -39,8 +39,8 @@ type ChecksActionOptions struct {
 	Names []string
 }
 
-// CheckActionResults holds the results of a check action.
-type CheckActionResults struct {
+// ChecksActionResult holds the results of a check action.
+type ChecksActionResult struct {
 	Changed []string `json:"changed"`
 }
 
@@ -129,16 +129,14 @@ func (client *Client) Checks(opts *ChecksOptions) ([]*CheckInfo, error) {
 	return checks, nil
 }
 
-// Start starts the checks named in opts.Names.
-func (client *Client) StartChecks(opts *ChecksActionOptions) (results *CheckActionResults, err error) {
-	results, err = client.doMultiCheckAction("start", opts.Names)
-	return results, err
+// StartChecks starts the checks named in opts.Names.
+func (client *Client) StartChecks(opts *ChecksActionOptions) (*ChecksActionResult, error) {
+	return client.doMultiCheckAction("start", opts.Names)
 }
 
-// Stop stops the checks named in opts.Names.
-func (client *Client) StopChecks(opts *ChecksActionOptions) (results *CheckActionResults, err error) {
-	results, err = client.doMultiCheckAction("stop", opts.Names)
-	return results, err
+// StopChecks stops the checks named in opts.Names.
+func (client *Client) StopChecks(opts *ChecksActionOptions) (*ChecksActionResult, error) {
+	return client.doMultiCheckAction("stop", opts.Names)
 }
 
 type multiCheckActionData struct {
@@ -146,7 +144,7 @@ type multiCheckActionData struct {
 	Checks []string `json:"checks"`
 }
 
-func (client *Client) doMultiCheckAction(actionName string, checks []string) (results *CheckActionResults, err error) {
+func (client *Client) doMultiCheckAction(actionName string, checks []string) (*ChecksActionResult, error) {
 	action := multiCheckActionData{
 		Action: actionName,
 		Checks: checks,
@@ -166,6 +164,7 @@ func (client *Client) doMultiCheckAction(actionName string, checks []string) (re
 		return nil, err
 	}
 
+	var results *ChecksActionResult
 	err = resp.DecodeResult(&results)
 	if err != nil {
 		return nil, err

@@ -31,7 +31,7 @@ func (s *PebbleSuite) TestStopChecks(c *check.C) {
 		body := DecodedRequestBody(c, r)
 		c.Check(body, check.DeepEquals, map[string]interface{}{
 			"action": "stop",
-			"checks": []interface{}{"chk1", "chk2"},
+			"checks": []interface{}{"chk1", "chk2", "chk3"},
 		})
 
 		fmt.Fprintf(w, `{
@@ -41,7 +41,7 @@ func (s *PebbleSuite) TestStopChecks(c *check.C) {
  }`)
 	})
 
-	rest, err := cli.ParserForTest().ParseArgs([]string{"stop-checks", "chk1", "chk2"})
+	rest, err := cli.ParserForTest().ParseArgs([]string{"stop-checks", "chk1", "chk2", "chk3"})
 	c.Assert(err, check.IsNil)
 	c.Assert(rest, check.HasLen, 0)
 	c.Check(s.Stdout(), check.Equals, "Checks stopped: chk1, chk2\n")

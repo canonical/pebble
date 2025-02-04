@@ -26,7 +26,7 @@ import (
 type checkInfo struct {
 	Name      string `json:"name"`
 	Level     string `json:"level,omitempty"`
-	Startup   string `json:"startup,omitempty"`
+	Startup   string `json:"startup"`
 	Status    string `json:"status"`
 	Failures  int    `json:"failures,omitempty"`
 	Threshold int    `json:"threshold"`
