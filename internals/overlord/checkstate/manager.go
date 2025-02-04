@@ -386,6 +386,16 @@ type checker interface {
 	check(ctx context.Context) error
 }
 
+// UnknownCheck is the error returned by StartChecks or StopChecks when a check
+// with the specified name is not found in the plan.
+type UnknownCheck struct {
+	Name string
+}
+
+func (e *UnknownCheck) Error() string {
+	return fmt.Sprintf("cannot find check %q in plan", e.Name)
+}
+
 // StartChecks starts the checks with the specified names, if not already
 // running, and returns the checks that did need to be started.
 func (m *CheckManager) StartChecks(checks []string) (started []string, err error) {
@@ -394,7 +404,7 @@ func (m *CheckManager) StartChecks(checks []string) (started []string, err error
 	// If any check specified is not in the plan, return an error.
 	for _, name := range checks {
 		if _, ok := currentPlan.Checks[name]; !ok {
-			return nil, fmt.Errorf("cannot find check %q in plan", name)
+			return nil, &UnknownCheck{Name: name}
 		}
 	}
 
@@ -433,7 +443,8 @@ func (m *CheckManager) StopChecks(checks []string) (stopped []string, err error)
 	// If any check specified is not in the plan, return an error.
 	for _, name := range checks {
 		if _, ok := currentPlan.Checks[name]; !ok {
-			return nil, fmt.Errorf("cannot find check %q in plan", name)
+			return nil, &UnknownCheck{Name: name}
+			return nil, &UnknownCheck{Name: name}
 		}
 	}
 

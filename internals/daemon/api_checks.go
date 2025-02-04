@@ -20,6 +20,7 @@ import (
 
 	"github.com/canonical/x-go/strutil"
 
+	"github.com/canonical/pebble/internals/overlord/checkstate"
 	"github.com/canonical/pebble/internals/plan"
 )
 
@@ -98,7 +99,11 @@ func v1PostChecks(c *Command, r *http.Request, _ *UserState) Response {
 		return BadRequest("invalid action %q", payload.Action)
 	}
 	if err != nil {
-		return BadRequest("cannot %s checks: %v", payload.Action, err)
+		if _, ok := err.(*checkstate.UnknownCheck); ok {
+			return BadRequest("cannot %s checks: %v", payload.Action, err)
+		} else {
+			return InternalError("cannot %s checks: %v", payload.Action, err)
+		}
 	}
 
 	st := c.d.overlord.State()
