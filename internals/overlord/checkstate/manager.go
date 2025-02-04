@@ -388,7 +388,7 @@ type checker interface {
 
 // StartChecks starts the checks with the specified names, if not already
 // running, and returns the checks that did need to be started.
-func (m *CheckManager) StartChecks(checks []string) ([]*plan.Check, error) {
+func (m *CheckManager) StartChecks(checks []string) ([]string, error) {
 	currentPlan := m.planMgr.Plan()
 
 	// If any check specified is not in the plan, return an error.
@@ -401,7 +401,7 @@ func (m *CheckManager) StartChecks(checks []string) ([]*plan.Check, error) {
 	m.state.Lock()
 	defer m.state.Unlock()
 
-	var started []*plan.Check
+	var started []string
 	for _, name := range checks {
 		check := currentPlan.Checks[name] // We know this is ok because we checked it above.
 		m.checksLock.Lock()
@@ -420,7 +420,7 @@ func (m *CheckManager) StartChecks(checks []string) ([]*plan.Check, error) {
 		}
 		changeID := performCheckChange(m.state, check)
 		m.updateCheckInfo(check, changeID, 0)
-		started = append(started, check)
+		started = append(started, check.Name)
 	}
 
 	return started, nil
@@ -428,7 +428,7 @@ func (m *CheckManager) StartChecks(checks []string) ([]*plan.Check, error) {
 
 // StopChecks stops the checks with the specified names, if currently running,
 // and returns the checks that did need to be stopped.
-func (m *CheckManager) StopChecks(checks []string) ([]*plan.Check, error) {
+func (m *CheckManager) StopChecks(checks []string) ([]string, error) {
 	currentPlan := m.planMgr.Plan()
 
 	// If any check specified is not in the plan, return an error.
@@ -441,7 +441,7 @@ func (m *CheckManager) StopChecks(checks []string) ([]*plan.Check, error) {
 	m.state.Lock()
 	defer m.state.Unlock()
 
-	var stopped []*plan.Check
+	var stopped []string
 	for _, name := range checks {
 		check := currentPlan.Checks[name] // We know this is ok because we checked it above.
 		m.checksLock.Lock()
@@ -461,7 +461,7 @@ func (m *CheckManager) StopChecks(checks []string) ([]*plan.Check, error) {
 		change := m.state.Change(info.ChangeID)
 		if change != nil {
 			change.Abort()
-			stopped = append(stopped, check)
+			stopped = append(stopped, check.Name)
 		}
 		// We pass in the current number of failures so that it remains the
 		// same, so that people can inspect what the state of the check was when

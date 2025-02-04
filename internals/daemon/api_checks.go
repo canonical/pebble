@@ -88,7 +88,7 @@ func v1PostChecks(c *Command, r *http.Request, _ *UserState) Response {
 	checkmgr := c.d.overlord.CheckManager()
 
 	var err error
-	var changed []*plan.Check
+	var changed []string
 	switch payload.Action {
 	case "start":
 		changed, err = checkmgr.StartChecks(payload.Checks)
@@ -104,12 +104,8 @@ func v1PostChecks(c *Command, r *http.Request, _ *UserState) Response {
 	st := c.d.overlord.State()
 	st.EnsureBefore(0) // start and stop tasks right away
 
-	var changedNames []string
-	for _, check := range changed {
-		changedNames = append(changedNames, check.Name)
-	}
 	type responsePayload struct {
 		Changed []string `json:"changed"`
 	}
-	return SyncResponse(responsePayload{Changed: changedNames})
+	return SyncResponse(responsePayload{Changed: changed})
 }
