@@ -388,7 +388,7 @@ type checker interface {
 
 // StartChecks starts the checks with the specified names, if not already
 // running, and returns the checks that did need to be started.
-func (m *CheckManager) StartChecks(checks []string) ([]string, error) {
+func (m *CheckManager) StartChecks(checks []string) (started []string, err error) {
 	currentPlan := m.planMgr.Plan()
 
 	// If any check specified is not in the plan, return an error.
@@ -401,7 +401,6 @@ func (m *CheckManager) StartChecks(checks []string) ([]string, error) {
 	m.state.Lock()
 	defer m.state.Unlock()
 
-	var started []string
 	for _, name := range checks {
 		check := currentPlan.Checks[name] // We know this is ok because we checked it above.
 		m.checksLock.Lock()
@@ -428,7 +427,7 @@ func (m *CheckManager) StartChecks(checks []string) ([]string, error) {
 
 // StopChecks stops the checks with the specified names, if currently running,
 // and returns the checks that did need to be stopped.
-func (m *CheckManager) StopChecks(checks []string) ([]string, error) {
+func (m *CheckManager) StopChecks(checks []string) (stopped []string, err error) {
 	currentPlan := m.planMgr.Plan()
 
 	// If any check specified is not in the plan, return an error.
@@ -441,7 +440,6 @@ func (m *CheckManager) StopChecks(checks []string) ([]string, error) {
 	m.state.Lock()
 	defer m.state.Unlock()
 
-	var stopped []string
 	for _, name := range checks {
 		check := currentPlan.Checks[name] // We know this is ok because we checked it above.
 		m.checksLock.Lock()
