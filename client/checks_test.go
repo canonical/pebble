@@ -82,7 +82,7 @@ func (cs *clientSuite) TestStartChecks(c *check.C) {
 	c.Assert(json.NewDecoder(cs.req.Body).Decode(&body), check.IsNil)
 	c.Check(body, check.HasLen, 2)
 	c.Check(body["action"], check.Equals, "start")
-	c.Check(body["checks"], check.DeepEquals, []interface{}{"chk1", "chk2"})
+	c.Check(body["checks"], check.DeepEquals, []any{"chk1", "chk2"})
 
 }
 
@@ -107,5 +107,5 @@ func (cs *clientSuite) TestStopChecks(c *check.C) {
 	c.Assert(json.NewDecoder(cs.req.Body).Decode(&body), check.IsNil)
 	c.Check(body, check.HasLen, 2)
 	c.Check(body["action"], check.Equals, "stop")
-	c.Check(body["checks"], check.DeepEquals, []interface{}{"chk1", "chk2"})
+	c.Check(body["checks"], check.DeepEquals, []any{"chk1", "chk2"})
 }
