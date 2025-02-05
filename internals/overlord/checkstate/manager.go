@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"reflect"
 	"sort"
+	"strings"
 	"sync"
 
 	"gopkg.in/tomb.v2"
@@ -386,14 +387,15 @@ type checker interface {
 	check(ctx context.Context) error
 }
 
-// CheckNotFound is the error returned by StartChecks or StopChecks when a check
+// ChecksNotFound is the error returned by StartChecks or StopChecks when a check
 // with the specified name is not found in the plan.
-type CheckNotFound struct {
-	Name string
+type ChecksNotFound struct {
+	Names []string
 }
 
-func (e *CheckNotFound) Error() string {
-	return fmt.Sprintf("cannot find check %q in plan", e.Name)
+func (e *ChecksNotFound) Error() string {
+	sort.Strings(e.Names)
+	return fmt.Sprintf("cannot find checks in plan: %s", strings.Join(e.Names, ", "))
 }
 
 // StartChecks starts the checks with the specified names, if not already
@@ -402,10 +404,14 @@ func (m *CheckManager) StartChecks(checks []string) (started []string, err error
 	currentPlan := m.planMgr.Plan()
 
 	// If any check specified is not in the plan, return an error.
+	var missing []string
 	for _, name := range checks {
 		if _, ok := currentPlan.Checks[name]; !ok {
-			return nil, &CheckNotFound{Name: name}
+			missing = append(missing, name)
 		}
+	}
+	if len(missing) > 0 {
+		return nil, &ChecksNotFound{Names: missing}
 	}
 
 	m.state.Lock()
@@ -441,11 +447,14 @@ func (m *CheckManager) StopChecks(checks []string) (stopped []string, err error)
 	currentPlan := m.planMgr.Plan()
 
 	// If any check specified is not in the plan, return an error.
+	var missing []string
 	for _, name := range checks {
 		if _, ok := currentPlan.Checks[name]; !ok {
-			return nil, &CheckNotFound{Name: name}
-			return nil, &CheckNotFound{Name: name}
+			missing = append(missing, name)
 		}
+	}
+	if len(missing) > 0 {
+		return nil, &ChecksNotFound{Names: missing}
 	}
 
 	m.state.Lock()

@@ -99,7 +99,7 @@ func v1PostChecks(c *Command, r *http.Request, _ *UserState) Response {
 		return BadRequest("invalid action %q", payload.Action)
 	}
 	if err != nil {
-		if _, ok := err.(*checkstate.CheckNotFound); ok {
+		if _, ok := err.(*checkstate.ChecksNotFound); ok {
 			return BadRequest("cannot %s checks: %v", payload.Action, err)
 		} else {
 			return InternalError("cannot %s checks: %v", payload.Action, err)
