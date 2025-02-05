@@ -29,6 +29,7 @@ import (
 	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/overlord"
 	"github.com/canonical/pebble/internals/overlord/checkstate"
+	"github.com/canonical/pebble/internals/overlord/planstate"
 	"github.com/canonical/pebble/internals/overlord/state"
 	"github.com/canonical/pebble/internals/plan"
 	"github.com/canonical/pebble/internals/reaper"
@@ -41,6 +42,7 @@ func Test(t *testing.T) {
 type ManagerSuite struct {
 	overlord *overlord.Overlord
 	manager  *checkstate.CheckManager
+	planMgr  *planstate.PlanManager
 }
 
 var _ = Suite(&ManagerSuite{})
@@ -59,7 +61,13 @@ func (s *ManagerSuite) SetUpTest(c *C) {
 	c.Assert(err, IsNil)
 
 	s.overlord = overlord.Fake()
-	s.manager = checkstate.NewManager(s.overlord.State(), s.overlord.TaskRunner(), s.overlord.PlanManager())
+	layersDir := filepath.Join(c.MkDir(), "layers")
+	err = os.Mkdir(layersDir, 0755)
+	c.Assert(err, IsNil)
+	s.planMgr, err = planstate.NewManager(layersDir)
+	s.overlord.AddManager(s.planMgr)
+	c.Assert(err, IsNil)
+	s.manager = checkstate.NewManager(s.overlord.State(), s.overlord.TaskRunner(), s.planMgr)
 	s.overlord.AddManager(s.manager)
 	s.overlord.AddManager(s.overlord.TaskRunner())
 	err = s.overlord.StartUp()
@@ -610,7 +618,8 @@ func (s *ManagerSuite) TestStartChecks(c *C) {
 			},
 		},
 	}
-	s.manager.planMgr.AppendLayer(origLayer)
+	s.planMgr.Load()
+	s.planMgr.AppendLayer(origLayer, false)
 	waitChecks(c, s.manager, []*checkstate.CheckInfo{
 		{Name: "chk1", Startup: "enabled", Status: "up", Threshold: 3},
 		{Name: "chk2", Startup: "disabled", Status: "inactive", Threshold: 3},
@@ -658,7 +667,8 @@ func (s *ManagerSuite) TestStartChecksNotFound(c *C) {
 			},
 		},
 	}
-	s.manager.planMgr.AppendLayer(origLayer)
+	s.planMgr.Load()
+	s.planMgr.AppendLayer(origLayer, false)
 	waitChecks(c, s.manager, []*checkstate.CheckInfo{
 		{Name: "chk1", Startup: "enabled", Status: "up", Threshold: 3},
 	})
@@ -695,7 +705,8 @@ func (s *ManagerSuite) TestStopChecks(c *C) {
 			},
 		},
 	}
-	s.manager.planMgr.AppendLayer(origLayer)
+	s.planMgr.Load()
+	s.planMgr.AppendLayer(origLayer, false)
 	waitChecks(c, s.manager, []*checkstate.CheckInfo{
 		{Name: "chk1", Startup: "enabled", Status: "up", Threshold: 3},
 		{Name: "chk2", Startup: "disabled", Status: "inactive", Threshold: 3},
@@ -742,7 +753,8 @@ func (s *ManagerSuite) TestStopChecksNotFound(c *C) {
 			},
 		},
 	}
-	s.manager.planMgr.AppendLayer(origLayer)
+	s.planMgr.Load()
+	s.planMgr.AppendLayer(origLayer, false)
 	waitChecks(c, s.manager, []*checkstate.CheckInfo{
 		{Name: "chk1", Startup: "enabled", Status: "up", Threshold: 3},
 	})
@@ -779,7 +791,8 @@ func (s *ManagerSuite) TestReplan(c *C) {
 			},
 		},
 	}
-	s.manager.planMgr.AppendLayer(origLayer)
+	s.planMgr.Load()
+	s.planMgr.AppendLayer(origLayer, false)
 	waitChecks(c, s.manager, []*checkstate.CheckInfo{
 		{Name: "chk1", Startup: "enabled", Status: "up", Threshold: 3},
 		{Name: "chk2", Startup: "disabled", Status: "inactive", Threshold: 3},
