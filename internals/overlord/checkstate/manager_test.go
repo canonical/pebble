@@ -584,3 +584,172 @@ func changeData(c *C, st *state.State, changeID string) map[string]string {
 	c.Assert(err, IsNil)
 	return data
 }
+
+func (s *ManagerSuite) TestStartChecks(c *C) {
+	origLayer := &plan.Layer{
+		Checks: map[string]*plan.Check{
+			"chk1": {
+				Name:      "chk1",
+				Period:    plan.OptionalDuration{Value: time.Second},
+				Threshold: 3,
+				Exec:      &plan.ExecCheck{Command: "echo chk1"},
+			},
+			"chk2": {
+				Name:      "chk2",
+				Period:    plan.OptionalDuration{Value: time.Second},
+				Threshold: 3,
+				Exec:      &plan.ExecCheck{Command: "echo chk2"},
+				Startup:   plan.CheckStartupDisabled,
+			},
+			"chk3": {
+				Name:      "chk3",
+				Period:    plan.OptionalDuration{Value: time.Second},
+				Threshold: 3,
+				Exec:      &plan.ExecCheck{Command: "echo chk3"},
+				Startup:   plan.CheckStartupEnabled,
+			},
+		},
+	}
+	s.manager.planMgr.AppendLayer(origLayer)
+	waitChecks(c, s.manager, []*checkstate.CheckInfo{
+		{Name: "chk1", Startup: "enabled", Status: "up", Threshold: 3},
+		{Name: "chk2", Startup: "disabled", Status: "inactive", Threshold: 3},
+		{Name: "chk3", Startup: "enabled", Status: "up", Threshold: 3},
+	})
+	checks, err := s.manager.Checks()
+	c.Assert(err, IsNil)
+	var originalChangeIDs []string
+	for _, check := range checks {
+		originalChangeIDs = append(originalChangeIDs, check.ChangeID)
+	}
+
+	changed, err := s.manager.StartChecks([]string{"chk1", "chk2"})
+	waitChecks(c, s.manager, []*checkstate.CheckInfo{
+		{Name: "chk1", Startup: "enabled", Status: "up", Threshold: 3},
+		{Name: "chk2", Startup: "disabled", Status: "up", Threshold: 3},
+		{Name: "chk3", Startup: "enabled", Status: "up", Threshold: 3},
+	})
+	c.Assert(err, IsNil)
+	c.Assert(changed, DeepEquals, []string{"chk2"})
+	checks, err = s.manager.Checks()
+	c.Assert(err, IsNil)
+	// chk1 and chk3 should still have the same change ID, chk2 should have a new one.
+	c.Assert(checks[0].ChangeID, Equals, originalChangeIDs[0])
+	c.Assert(checks[1].ChangeID, Not(Equals), originalChangeIDs[1])
+	c.Assert(checks[2].ChangeID, Equals, originalChangeIDs[2])
+	// chk2's new Change should be a running perform-check.
+	st := s.overlord.State()
+	st.Lock()
+	change := st.Change(originalChangeIDs[1])
+	status := change.Status()
+	st.Unlock()
+	c.Assert(status, Equals, state.DoingStatus)
+	c.Assert(change.Kind(), Equals, "perform-check")
+}
+
+func (s *ManagerSuite) TestStartChecksNotFound(c *C) {
+	origLayer := &plan.Layer{
+		Checks: map[string]*plan.Check{
+			"chk1": {
+				Name:      "chk1",
+				Period:    plan.OptionalDuration{Value: time.Second},
+				Threshold: 3,
+				Exec:      &plan.ExecCheck{Command: "echo chk1"},
+			},
+		},
+	}
+	s.manager.planMgr.AppendLayer(origLayer)
+	waitChecks(c, s.manager, []*checkstate.CheckInfo{
+		{Name: "chk1", Startup: "enabled", Status: "up", Threshold: 3},
+	})
+
+	changed, err := s.manager.StartChecks([]string{"chk1", "chk2"})
+	_, ok := err.(*checkstate.ChecksNotFound)
+	c.Assert(ok, Equals, true)
+	c.Assert(err.(*checkstate.ChecksNotFound).Names, DeepEquals, []string{"chk2"})
+	c.Assert(changed, IsNil)
+}
+
+func (s *ManagerSuite) TestStopChecks(c *C) {
+	origLayer := &plan.Layer{
+		Checks: map[string]*plan.Check{
+			"chk1": {
+				Name:      "chk1",
+				Period:    plan.OptionalDuration{Value: time.Second},
+				Threshold: 3,
+				Exec:      &plan.ExecCheck{Command: "echo chk1"},
+			},
+			"chk2": {
+				Name:      "chk2",
+				Period:    plan.OptionalDuration{Value: time.Second},
+				Threshold: 3,
+				Exec:      &plan.ExecCheck{Command: "echo chk2"},
+				Startup:   plan.CheckStartupDisabled,
+			},
+			"chk3": {
+				Name:      "chk3",
+				Period:    plan.OptionalDuration{Value: time.Second},
+				Threshold: 3,
+				Exec:      &plan.ExecCheck{Command: "echo chk3"},
+				Startup:   plan.CheckStartupEnabled,
+			},
+		},
+	}
+	s.manager.planMgr.AppendLayer(origLayer)
+	waitChecks(c, s.manager, []*checkstate.CheckInfo{
+		{Name: "chk1", Startup: "enabled", Status: "up", Threshold: 3},
+		{Name: "chk2", Startup: "disabled", Status: "inactive", Threshold: 3},
+		{Name: "chk3", Startup: "enabled", Status: "up", Threshold: 3},
+	})
+	checks, err := s.manager.Checks()
+	c.Assert(err, IsNil)
+	var originalChangeIDs []string
+	for _, check := range checks {
+		originalChangeIDs = append(originalChangeIDs, check.ChangeID)
+	}
+
+	changed, err := s.manager.StopChecks([]string{"chk1", "chk2"})
+	waitChecks(c, s.manager, []*checkstate.CheckInfo{
+		{Name: "chk1", Startup: "enabled", Status: "inactive", Threshold: 3},
+		{Name: "chk2", Startup: "disabled", Status: "inactive", Threshold: 3},
+		{Name: "chk3", Startup: "enabled", Status: "up", Threshold: 3},
+	})
+	c.Assert(err, IsNil)
+	c.Assert(changed, DeepEquals, []string{"chk1"})
+	checks, err = s.manager.Checks()
+	c.Assert(err, IsNil)
+	// chk1 and chk3 should still have the same change ID, chk2 should not have one.
+	c.Assert(checks[0].ChangeID, Equals, originalChangeIDs[0])
+	c.Assert(checks[1].ChangeID, Equals, "")
+	c.Assert(checks[2].ChangeID, Equals, originalChangeIDs[2])
+	// chk2's old Change should have aborted.
+	st := s.overlord.State()
+	st.Lock()
+	change := st.Change(originalChangeIDs[1])
+	status := change.Status()
+	st.Unlock()
+	c.Assert(status, Equals, state.AbortStatus)
+}
+
+func (s *ManagerSuite) TestStopChecksNotFound(c *C) {
+	origLayer := &plan.Layer{
+		Checks: map[string]*plan.Check{
+			"chk1": {
+				Name:      "chk1",
+				Period:    plan.OptionalDuration{Value: time.Second},
+				Threshold: 3,
+				Exec:      &plan.ExecCheck{Command: "echo chk1"},
+			},
+		},
+	}
+	s.manager.planMgr.AppendLayer(origLayer)
+	waitChecks(c, s.manager, []*checkstate.CheckInfo{
+		{Name: "chk1", Startup: "enabled", Status: "up", Threshold: 3},
+	})
+
+	changed, err := s.manager.StopChecks([]string{"chk1", "chk2"})
+	_, ok := err.(*checkstate.ChecksNotFound)
+	c.Assert(ok, Equals, true)
+	c.Assert(err.(*checkstate.ChecksNotFound).Names, DeepEquals, []string{"chk2"})
+	c.Assert(changed, IsNil)
+}
