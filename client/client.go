@@ -74,7 +74,7 @@ type RequestResponse struct {
 // DecodeResult decodes the endpoint-specific result payload that is included as part of
 // sync and async request responses. The decoding is performed with the standard JSON
 // package, so the usual field tags should be used to prepare the type for decoding.
-func (resp *RequestResponse) DecodeResult(result interface{}) error {
+func (resp *RequestResponse) DecodeResult(result any) error {
 	reader := bytes.NewReader(resp.Result)
 	dec := json.NewDecoder(reader)
 	dec.UseNumber()
@@ -165,7 +165,7 @@ type clientWebsocket interface {
 }
 
 type jsonWriter interface {
-	WriteJSON(v interface{}) error
+	WriteJSON(v any) error
 }
 
 func New(config *Config) (*Client, error) {
@@ -386,7 +386,7 @@ func (rq *defaultRequester) Do(ctx context.Context, opts *RequestOptions) (*Requ
 	}, nil
 }
 
-func decodeInto(reader io.Reader, v interface{}) error {
+func decodeInto(reader io.Reader, v any) error {
 	dec := json.NewDecoder(reader)
 	if err := dec.Decode(v); err != nil {
 		r := dec.Buffered()
@@ -413,9 +413,9 @@ type response struct {
 
 // Error is the real value of response.Result when an error occurs.
 type Error struct {
-	Kind    string      `json:"kind"`
-	Value   interface{} `json:"value"`
-	Message string      `json:"message"`
+	Kind    string `json:"kind"`
+	Value   any    `json:"value"`
+	Message string `json:"message"`
 
 	StatusCode int
 }
@@ -497,12 +497,12 @@ func (client *Client) SysInfo() (*SysInfo, error) {
 }
 
 type debugAction struct {
-	Action string      `json:"action"`
-	Params interface{} `json:"params,omitempty"`
+	Action string `json:"action"`
+	Params any    `json:"params,omitempty"`
 }
 
 // DebugPost sends a POST debug action to the server with the provided parameters.
-func (client *Client) DebugPost(action string, params interface{}, result interface{}) error {
+func (client *Client) DebugPost(action string, params any, result any) error {
 	body, err := json.Marshal(debugAction{
 		Action: action,
 		Params: params,
@@ -528,7 +528,7 @@ func (client *Client) DebugPost(action string, params interface{}, result interf
 }
 
 // DebugGet sends a GET debug action to the server with the provided parameters.
-func (client *Client) DebugGet(action string, result interface{}, params map[string]string) error {
+func (client *Client) DebugGet(action string, result any, params map[string]string) error {
 	urlParams := url.Values{"action": []string{action}}
 	for k, v := range params {
 		urlParams.Set(k, v)

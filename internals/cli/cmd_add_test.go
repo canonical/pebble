@@ -52,7 +52,7 @@ services:
 	}
 }`)
 			} else {
-				c.Check(body, check.DeepEquals, map[string]interface{}{
+				c.Check(body, check.DeepEquals, map[string]any{
 					"action":  "add",
 					"combine": combine,
 					"label":   "foo",

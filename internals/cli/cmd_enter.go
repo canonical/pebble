@@ -193,7 +193,7 @@ func (cmd *cmdEnter) Execute(args []string) error {
 	}
 
 	runReadyCh := make(chan func(), 1)
-	runResultCh := make(chan interface{})
+	runResultCh := make(chan any)
 	var runStop func()
 
 	go func() {

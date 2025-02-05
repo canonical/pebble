@@ -34,7 +34,7 @@ func (s *responseSuite) TestRespSetsLocationIfAccepted(c *check.C) {
 
 	rsp := &resp{
 		Status: http.StatusAccepted,
-		Result: map[string]interface{}{
+		Result: map[string]any{
 			"resource": "foo/bar",
 		},
 	}
@@ -49,7 +49,7 @@ func (s *responseSuite) TestRespSetsLocationIfCreated(c *check.C) {
 
 	rsp := &resp{
 		Status: http.StatusCreated,
-		Result: map[string]interface{}{
+		Result: map[string]any{
 			"resource": "foo/bar",
 		},
 	}
@@ -64,7 +64,7 @@ func (s *responseSuite) TestRespDoesNotSetLocationIfOther(c *check.C) {
 
 	rsp := &resp{
 		Status: http.StatusTeapot, // I'm a teapot
-		Result: map[string]interface{}{
+		Result: map[string]any{
 			"resource": "foo/bar",
 		},
 	}

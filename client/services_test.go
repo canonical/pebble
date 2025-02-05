@@ -53,11 +53,11 @@ func (cs *clientSuite) TestStartStop(c *check.C) {
 		c.Check(cs.req.Method, check.Equals, "POST")
 		c.Check(cs.req.URL.Path, check.Equals, "/v1/services")
 
-		var body map[string]interface{}
+		var body map[string]any
 		c.Assert(json.NewDecoder(cs.req.Body).Decode(&body), check.IsNil)
 		c.Check(body, check.HasLen, 2)
 		c.Check(body["action"], check.Equals, action)
-		c.Check(body["services"], check.DeepEquals, []interface{}{"one", "two"})
+		c.Check(body["services"], check.DeepEquals, []any{"one", "two"})
 	}
 }
 
@@ -78,7 +78,7 @@ func (cs *clientSuite) TestAutostart(c *check.C) {
 	c.Check(cs.req.Method, check.Equals, "POST")
 	c.Check(cs.req.URL.Path, check.Equals, "/v1/services")
 
-	var body map[string]interface{}
+	var body map[string]any
 	c.Assert(json.NewDecoder(cs.req.Body).Decode(&body), check.IsNil)
 	c.Check(body, check.HasLen, 2)
 	c.Check(body["action"], check.Equals, "autostart")
@@ -130,11 +130,11 @@ func (cs *clientSuite) TestRestart(c *check.C) {
 	c.Check(cs.req.Method, check.Equals, "POST")
 	c.Check(cs.req.URL.Path, check.Equals, "/v1/services")
 
-	var body map[string]interface{}
+	var body map[string]any
 	c.Assert(json.NewDecoder(cs.req.Body).Decode(&body), check.IsNil)
 	c.Check(body, check.HasLen, 2)
 	c.Check(body["action"], check.Equals, "restart")
-	c.Check(body["services"], check.DeepEquals, []interface{}{"one", "two"})
+	c.Check(body["services"], check.DeepEquals, []any{"one", "two"})
 }
 
 func (cs *clientSuite) TestReplan(c *check.C) {
@@ -154,7 +154,7 @@ func (cs *clientSuite) TestReplan(c *check.C) {
 	c.Check(cs.req.Method, check.Equals, "POST")
 	c.Check(cs.req.URL.Path, check.Equals, "/v1/services")
 
-	var body map[string]interface{}
+	var body map[string]any
 	c.Assert(json.NewDecoder(cs.req.Body).Decode(&body), check.IsNil)
 	c.Check(body, check.HasLen, 2)
 	c.Check(body["action"], check.Equals, "replan")

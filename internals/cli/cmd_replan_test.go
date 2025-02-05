@@ -55,7 +55,7 @@ func (s *PebbleSuite) TestReplan(c *check.C) {
 		c.Check(r.URL.Path, check.Equals, "/v1/services")
 
 		body := DecodedRequestBody(c, r)
-		c.Check(body, check.DeepEquals, map[string]interface{}{
+		c.Check(body, check.DeepEquals, map[string]any{
 			"action":   "replan",
 			"services": nil,
 		})
@@ -79,7 +79,7 @@ func (s *PebbleSuite) TestReplanFailsNoDefaultServices(c *check.C) {
 		c.Check(r.Method, check.Equals, "POST")
 		c.Check(r.URL.Path, check.Equals, "/v1/services")
 		body := DecodedRequestBody(c, r)
-		c.Check(body, check.DeepEquals, map[string]interface{}{
+		c.Check(body, check.DeepEquals, map[string]any{
 			"action":   "replan",
 			"services": nil,
 		})
@@ -105,7 +105,7 @@ func (s *PebbleSuite) TestReplanNoWait(c *check.C) {
 		c.Check(r.URL.Path, check.Not(check.Equals), "/v1/changes/43")
 
 		body := DecodedRequestBody(c, r)
-		c.Check(body, check.DeepEquals, map[string]interface{}{
+		c.Check(body, check.DeepEquals, map[string]any{
 			"action":   "replan",
 			"services": nil,
 		})
@@ -136,7 +136,7 @@ func (s *PebbleSuite) TestReplanFailsGetChange(c *check.C) {
 		c.Check(r.URL.Path, check.Equals, "/v1/services")
 
 		body := DecodedRequestBody(c, r)
-		c.Check(body, check.DeepEquals, map[string]interface{}{
+		c.Check(body, check.DeepEquals, map[string]any{
 			"action":   "replan",
 			"services": nil,
 		})

@@ -123,7 +123,7 @@ func v1SystemInfo(c *Command, r *http.Request, _ *UserState) Response {
 	state := c.d.overlord.State()
 	state.Lock()
 	defer state.Unlock()
-	result := map[string]interface{}{
+	result := map[string]any{
 		"version": c.d.Version,
 		"boot-id": restart.BootID(state),
 	}

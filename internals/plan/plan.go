@@ -117,7 +117,7 @@ type Plan struct {
 // MarshalYAML implements an override for top level omitempty tags handling.
 // This is required since Sections are based on an inlined map, for which
 // omitempty and inline together is not currently supported.
-func (p *Plan) MarshalYAML() (interface{}, error) {
+func (p *Plan) MarshalYAML() (any, error) {
 	// Define the content inside a structure so we can control the ordering
 	// of top level sections.
 	ordered := []reflect.StructField{{
@@ -1258,7 +1258,7 @@ func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 	// 2. We honor KnownFields = true behaviour for non extended schema
 	// sections, and at the top field level, which includes Section field
 	// names.
-	builtins := map[string]interface{}{
+	builtins := map[string]any{
 		"summary":     &layer.Summary,
 		"description": &layer.Description,
 		"services":    &layer.Services,

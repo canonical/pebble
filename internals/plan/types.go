@@ -17,7 +17,7 @@ func (o OptionalDuration) IsZero() bool {
 	return !o.IsSet
 }
 
-func (o OptionalDuration) MarshalYAML() (interface{}, error) {
+func (o OptionalDuration) MarshalYAML() (any, error) {
 	if !o.IsSet {
 		return nil, nil
 	}
@@ -46,7 +46,7 @@ func (o OptionalFloat) IsZero() bool {
 	return !o.IsSet
 }
 
-func (o OptionalFloat) MarshalYAML() (interface{}, error) {
+func (o OptionalFloat) MarshalYAML() (any, error) {
 	if !o.IsSet {
 		return nil, nil
 	}
