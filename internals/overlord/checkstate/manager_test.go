@@ -753,3 +753,70 @@ func (s *ManagerSuite) TestStopChecksNotFound(c *C) {
 	c.Assert(err.(*checkstate.ChecksNotFound).Names, DeepEquals, []string{"chk2"})
 	c.Assert(changed, IsNil)
 }
+
+func (s *ManagerSuite) TestReplan(c *C) {
+	origLayer := &plan.Layer{
+		Checks: map[string]*plan.Check{
+			"chk1": {
+				Name:      "chk1",
+				Period:    plan.OptionalDuration{Value: time.Second},
+				Threshold: 3,
+				Exec:      &plan.ExecCheck{Command: "echo chk1"},
+			},
+			"chk2": {
+				Name:      "chk2",
+				Period:    plan.OptionalDuration{Value: time.Second},
+				Threshold: 3,
+				Exec:      &plan.ExecCheck{Command: "echo chk2"},
+				Startup:   plan.CheckStartupDisabled,
+			},
+			"chk3": {
+				Name:      "chk3",
+				Period:    plan.OptionalDuration{Value: time.Second},
+				Threshold: 3,
+				Exec:      &plan.ExecCheck{Command: "echo chk3"},
+				Startup:   plan.CheckStartupEnabled,
+			},
+		},
+	}
+	s.manager.planMgr.AppendLayer(origLayer)
+	waitChecks(c, s.manager, []*checkstate.CheckInfo{
+		{Name: "chk1", Startup: "enabled", Status: "up", Threshold: 3},
+		{Name: "chk2", Startup: "disabled", Status: "inactive", Threshold: 3},
+		{Name: "chk3", Startup: "enabled", Status: "up", Threshold: 3},
+	})
+	s.manager.StopChecks([]string{"chk1"})
+	waitChecks(c, s.manager, []*checkstate.CheckInfo{
+		{Name: "chk1", Startup: "enabled", Status: "inactive", Threshold: 3},
+		{Name: "chk2", Startup: "disabled", Status: "inactive", Threshold: 3},
+		{Name: "chk3", Startup: "enabled", Status: "up", Threshold: 3},
+	})
+	checks, err := s.manager.Checks()
+	var originalChangeIDs []string
+	for _, check := range checks {
+		originalChangeIDs = append(originalChangeIDs, check.ChangeID)
+	}
+
+	s.manager.Replan()
+	waitChecks(c, s.manager, []*checkstate.CheckInfo{
+		{Name: "chk1", Startup: "enabled", Status: "up", Threshold: 3},
+		{Name: "chk2", Startup: "disabled", Status: "inactive", Threshold: 3},
+		{Name: "chk3", Startup: "enabled", Status: "up", Threshold: 3},
+	})
+	c.Assert(err, IsNil)
+	checks, err = s.manager.Checks()
+	c.Assert(err, IsNil)
+	// chk3 should still have the same change ID, chk1 should have a new one,
+	// and chk2 should not have one.
+	c.Assert(checks[0].ChangeID, Not(Equals), originalChangeIDs[0])
+	c.Assert(checks[1].ChangeID, Equals, "")
+	c.Assert(checks[2].ChangeID, Equals, originalChangeIDs[2])
+	// chk1's new Change should be a running perform-check.
+	st := s.overlord.State()
+	st.Lock()
+	change := st.Change(originalChangeIDs[0])
+	status := change.Status()
+	st.Unlock()
+	c.Assert(status, Equals, state.DoingStatus)
+	c.Assert(change.Kind(), Equals, "perform-check")
+}
