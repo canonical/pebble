@@ -191,6 +191,7 @@ type Service struct {
 	Requires []string `yaml:"requires,omitempty"`
 
 	// Options for command execution
+	Workload    string            `yaml:"workload,omitempty"`
 	Environment map[string]string `yaml:"environment,omitempty"`
 	UserID      *int              `yaml:"user-id,omitempty"`
 	User        string            `yaml:"user,omitempty"`

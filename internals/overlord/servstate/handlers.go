@@ -95,6 +95,7 @@ type serviceData struct {
 	manager      *ServiceManager
 	state        serviceState
 	config       *plan.Service
+	workload     *Workload
 	logs         *servicelog.RingBuffer
 	started      chan error
 	stopped      chan error
@@ -120,8 +121,17 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 		return fmt.Errorf("cannot find service %q in plan", request.Name)
 	}
 
+	ws, ok := currentPlan.Sections[WorkloadsField].(*WorkloadsSection)
+	if !ok {
+		return fmt.Errorf("internal error: invalid section type %T", ws)
+	}
+	workload, ok := ws.Entries[config.Workload]
+	if config.Workload != "" && !ok {
+		return fmt.Errorf("cannot find workload %q for service %q in plan", config.Workload, request.Name)
+	}
+
 	// Create the service object (or reuse the existing one by name).
-	service, taskLog := m.serviceForStart(config)
+	service, taskLog := m.serviceForStart(config, workload)
 	if taskLog != "" {
 		addTaskLog(task, taskLog)
 	}
@@ -167,7 +177,7 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 // and is running.
 //
 // It also returns a message to add to the task's log, or empty string if none.
-func (m *ServiceManager) serviceForStart(config *plan.Service) (service *serviceData, taskLog string) {
+func (m *ServiceManager) serviceForStart(config *plan.Service, workload *Workload) (service *serviceData, taskLog string) {
 	m.servicesLock.Lock()
 	defer m.servicesLock.Unlock()
 
@@ -175,12 +185,13 @@ func (m *ServiceManager) serviceForStart(config *plan.Service) (service *service
 	if service == nil {
 		// Not already started, create a new service object.
 		service = &serviceData{
-			manager: m,
-			state:   stateInitial,
-			config:  config.Copy(),
-			logs:    servicelog.NewRingBuffer(maxLogBytes),
-			started: make(chan error, 1),
-			stopped: make(chan error, 2), // enough for killTimeElapsed to send, and exit if it happens after
+			manager:  m,
+			state:    stateInitial,
+			config:   config.Copy(),
+			workload: workload.copy(),
+			logs:     servicelog.NewRingBuffer(maxLogBytes),
+			started:  make(chan error, 1),
+			stopped:  make(chan error, 2), // enough for killTimeElapsed to send, and exit if it happens after
 		}
 		m.services[config.Name] = service
 		return service, ""
@@ -188,6 +199,7 @@ func (m *ServiceManager) serviceForStart(config *plan.Service) (service *service
 
 	// Ensure config is up-to-date from the plan whenever the user starts a service.
 	service.config = config.Copy()
+	service.workload = workload.copy()
 
 	switch service.state {
 	case stateInitial, stateStarting, stateRunning:
@@ -338,7 +350,7 @@ func (s *serviceData) startInternal() error {
 	s.cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
 	// Copy environment to avoid updating original.
-	environment := make(map[string]string)
+	environment := make(map[string]string, len(s.config.Environment))
 	for k, v := range s.config.Environment {
 		environment[k] = v
 	}
@@ -346,7 +358,14 @@ func (s *serviceData) startInternal() error {
 	s.cmd.Dir = s.config.WorkingDir
 
 	// Start as another user if specified in plan.
-	uid, gid, err := osutil.NormalizeUidGid(s.config.UserID, s.config.GroupID, s.config.User, s.config.Group)
+	var uid, gid *int
+	if s.config.UserID != nil || s.config.GroupID != nil || s.config.User != "" || s.config.Group != "" {
+		// User/group config from the service takes precedence
+		uid, gid, err = osutil.NormalizeUidGid(s.config.UserID, s.config.GroupID, s.config.User, s.config.Group)
+	} else if s.workload != nil {
+		// Take user/group config from workload
+		uid, gid, err = osutil.NormalizeUidGid(s.workload.UserID, s.workload.GroupID, s.workload.User, s.workload.Group)
+	}
 	if err != nil {
 		return err
 	}
@@ -375,6 +394,12 @@ func (s *serviceData) startInternal() error {
 			if environment["USER"] == "" {
 				environment["USER"] = u.Username
 			}
+		}
+	}
+
+	if s.workload != nil && len(s.workload.Environment) != 0 {
+		for k, v := range s.workload.Environment {
+			environment[k] = v
 		}
 	}
 
