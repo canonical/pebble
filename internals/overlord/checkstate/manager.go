@@ -479,6 +479,7 @@ func (m *CheckManager) StopChecks(checks []string) (stopped []string, err error)
 		change := m.state.Change(info.ChangeID)
 		if change != nil {
 			change.Abort()
+			change.SetStatus(state.AbortStatus)
 			stopped = append(stopped, check.Name)
 		}
 		// We pass in the current number of failures so that it remains the
