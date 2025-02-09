@@ -415,13 +415,13 @@ func (s *ManagerSuite) TestPlanChangedServiceContext(c *C) {
 		Services: map[string]*plan.Service{
 			"svc1": {
 				Name:       "svc1",
-				Override:  "replace",
+				Override:   "replace",
 				Command:    "dummy1",
 				WorkingDir: "/tmp",
 			},
 			"svc2": {
 				Name:       "svc2",
-				Override:  "replace",
+				Override:   "replace",
 				Command:    "dummy2",
 				WorkingDir: "/tmp",
 			},
