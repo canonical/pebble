@@ -699,9 +699,9 @@ func (s *ManagerSuite) TestStartChecksNotFound(c *C) {
 	})
 
 	changed, err := s.manager.StartChecks([]string{"chk1", "chk2"})
-	_, ok := err.(*checkstate.ChecksNotFound)
+	notFoundErr, ok := err.(*checkstate.ChecksNotFound)
 	c.Assert(ok, Equals, true)
-	c.Assert(err.(*checkstate.ChecksNotFound).Names, DeepEquals, []string{"chk2"})
+	c.Assert(notFoundErr.Names, DeepEquals, []string{"chk2"})
 	c.Assert(changed, IsNil)
 }
 
