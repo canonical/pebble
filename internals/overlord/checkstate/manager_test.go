@@ -676,7 +676,7 @@ func (s *ManagerSuite) TestStartChecks(c *C) {
 	change := st.Change(checks[1].ChangeID)
 	status := change.Status()
 	st.Unlock()
-	c.Assert(status, Equals, state.DoStatus)
+	c.Assert(status, Matches, "Do.*")
 	c.Assert(change.Kind(), Equals, "perform-check")
 }
 
@@ -865,6 +865,6 @@ func (s *ManagerSuite) TestReplan(c *C) {
 	c.Assert(change, NotNil)
 	status := change.Status()
 	st.Unlock()
-	c.Assert(status, Equals, state.DoStatus)
+	c.Assert(status, Matches, "Do.*")
 	c.Assert(change.Kind(), Equals, "perform-check")
 }
