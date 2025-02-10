@@ -121,13 +121,16 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 		return fmt.Errorf("cannot find service %q in plan", request.Name)
 	}
 
-	ws, ok := currentPlan.Sections[WorkloadsField].(*WorkloadsSection)
-	if !ok {
-		return fmt.Errorf("internal error: invalid section type %T", ws)
-	}
-	workload, ok := ws.Entries[config.Workload]
-	if config.Workload != "" && !ok {
-		return fmt.Errorf("cannot find workload %q for service %q in plan", config.Workload, request.Name)
+	var workload *Workload
+	if s, ok := currentPlan.Sections[WorkloadsField]; ok {
+		ws, ok := s.(*WorkloadsSection)
+		if !ok {
+			return fmt.Errorf("internal error: invalid section type %T", ws)
+		}
+		workload, ok = ws.Entries[config.Workload]
+		if config.Workload != "" && !ok {
+			return fmt.Errorf("cannot find workload %q for service %q in plan", config.Workload, request.Name)
+		}
 	}
 
 	// Create the service object (or reuse the existing one by name).
@@ -181,6 +184,11 @@ func (m *ServiceManager) serviceForStart(config *plan.Service, workload *Workloa
 	m.servicesLock.Lock()
 	defer m.servicesLock.Unlock()
 
+	var w *Workload
+	if workload != nil {
+		w = workload.copy()
+	}
+
 	service = m.services[config.Name]
 	if service == nil {
 		// Not already started, create a new service object.
@@ -188,7 +196,7 @@ func (m *ServiceManager) serviceForStart(config *plan.Service, workload *Workloa
 			manager:  m,
 			state:    stateInitial,
 			config:   config.Copy(),
-			workload: workload.copy(),
+			workload: w,
 			logs:     servicelog.NewRingBuffer(maxLogBytes),
 			started:  make(chan error, 1),
 			stopped:  make(chan error, 2), // enough for killTimeElapsed to send, and exit if it happens after
@@ -199,7 +207,7 @@ func (m *ServiceManager) serviceForStart(config *plan.Service, workload *Workloa
 
 	// Ensure config is up-to-date from the plan whenever the user starts a service.
 	service.config = config.Copy()
-	service.workload = workload.copy()
+	service.workload = w
 
 	switch service.state {
 	case stateInitial, stateStarting, stateRunning:
