@@ -26,7 +26,7 @@ type Identity struct {
 	Access IdentityAccess `json:"access" yaml:"access"`
 
 	// One or more of the following type-specific configuration fields must be
-	// non-nil (currently the only types are "local" and "basic").
+	// non-nil.
 	Local *LocalIdentity `json:"local,omitempty" yaml:"local,omitempty"`
 	Basic *BasicIdentity `json:"basic,omitempty" yaml:"basic,omitempty"`
 }

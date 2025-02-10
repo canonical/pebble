@@ -31,7 +31,7 @@ type Identity struct {
 	Access IdentityAccess
 
 	// One or more of the following type-specific configuration fields must be
-	// non-nil (currently the only types are "local" and "basic").
+	// non-nil.
 	Local *LocalIdentity
 	Basic *BasicIdentity
 }
@@ -55,20 +55,29 @@ type LocalIdentity struct {
 // BasicIdentity holds identity configuration specific to the "basic" type
 // (for HTTP basic authentication).
 type BasicIdentity struct {
-	Password string // Note: In a real application, store a password hash, not the plaintext password.
+	Password string // Note: this is the sha512-crypt hashed password.
 }
 
+// This is used to ensure we send a well-formed identity Name.
+var identityNameRegexp = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9_\-]*$`)
+
 // validate checks that the identity is valid, returning an error if not.
-func (d *Identity) validate() error {
+func (d *Identity) validate(name string) error {
 	if d == nil {
 		return errors.New("identity must not be nil")
 	}
 
-	if d.Name != "" {
-		invalidChars := regexp.MustCompile(`[^a-zA-Z0-9_\-]`)
-		if invalidChars.MatchString(d.Name) {
-			return fmt.Errorf("identity name %q contains invalid characters (only alphanumeric, underscore, and hyphen allowed)", d.Name)
-		}
+	if !identityNameRegexp.MatchString(name) {
+		return fmt.Errorf("identity name %q invalid: must start with an alphabetic character and only contain alphanumeric characters, underscore, and hyphen", d.Name)
+	}
+
+	return d.validateExcludingName()
+}
+
+// validateExcludingName checks that the identity is valid, returning an error if not.
+func (d *Identity) validateExcludingName() error {
+	if d == nil {
+		return errors.New("identity must not be nil")
 	}
 
 	switch d.Access {
@@ -86,7 +95,7 @@ func (d *Identity) validate() error {
 		return nil
 	case d.Basic != nil:
 		if d.Basic.Password == "" {
-			return errors.New("basic identity must specify password")
+			return errors.New("basic identity must specify password (hashed)")
 		}
 
 		return nil
@@ -121,7 +130,7 @@ func (d *Identity) MarshalJSON() ([]byte, error) {
 		ai.Local = &apiLocalIdentity{UserID: &d.Local.UserID}
 	}
 	if d.Basic != nil {
-		ai.Basic = &apiBasicIdentity{Password: d.Basic.Password}
+		ai.Basic = &apiBasicIdentity{Password: "*****"}
 	}
 	return json.Marshal(ai)
 }
@@ -144,12 +153,13 @@ func (d *Identity) UnmarshalJSON(data []byte) error {
 		identity.Local = &LocalIdentity{UserID: *ai.Local.UserID}
 	case ai.Basic != nil:
 		if ai.Basic.Password == "" {
-			return errors.New("basic identity must specify password")
+			return errors.New("basic identity must specify password (hashed)")
 		}
 		identity.Basic = &BasicIdentity{Password: ai.Basic.Password}
 	}
+
 	// Perform additional validation using the local Identity type.
-	err = identity.validate()
+	err = identity.validateExcludingName()
 	if err != nil {
 		return err
 	}
@@ -169,13 +179,11 @@ func (s *State) AddIdentities(identities map[string]*Identity) error {
 		if _, ok := s.identities[name]; ok {
 			existing = append(existing, name)
 		}
-		if identity != nil {
-			identity.Name = name
-		}
-		err := identity.validate()
+		err := identity.validate(name)
 		if err != nil {
 			return fmt.Errorf("identity %q invalid: %w", name, err)
 		}
+		identity.Name = name
 	}
 	if len(existing) > 0 {
 		sort.Strings(existing)
@@ -209,7 +217,7 @@ func (s *State) UpdateIdentities(identities map[string]*Identity) error {
 		if _, ok := s.identities[name]; !ok {
 			missing = append(missing, name)
 		}
-		err := identity.validate()
+		err := identity.validate(name)
 		if err != nil {
 			return fmt.Errorf("identity %q invalid: %w", name, err)
 		}
@@ -243,7 +251,7 @@ func (s *State) ReplaceIdentities(identities map[string]*Identity) error {
 
 	for name, identity := range identities {
 		if identity != nil {
-			err := identity.validate()
+			err := identity.validate(name)
 			if err != nil {
 				return fmt.Errorf("identity %q invalid: %w", name, err)
 			}

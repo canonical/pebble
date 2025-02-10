@@ -68,7 +68,7 @@ func (s *identitiesSuite) TestMarshalAPI(c *C) {
     "nancy": {
         "access": "metrics",
         "basic": {
-            "password": "hash"
+            "password": "*****"
         }
     }
 }`[1:])
@@ -127,7 +127,7 @@ func (s *identitiesSuite) TestUnmarshalAPIErrors(c *C) {
 		error: `local identity must specify user-id`,
 	}, {
 		data:  `{"invalid-access": {"access": "metrics", "basic": {}}}`,
-		error: `basic identity must specify password`,
+		error: `basic identity must specify password \(hashed\)`,
 	}, {
 		data:  `{"invalid-access": {"access": "foo", "local": {"user-id": 42}}}`,
 		error: `invalid access value "foo", must be "admin", "read", "metrics", or "untrusted"`,
@@ -647,4 +647,19 @@ func (s *identitiesSuite) TestIdentityFromInputs(c *C) {
 	identity = st.IdentityFromInputs(nil, "nancy", "test")
 	c.Assert(identity, NotNil)
 	c.Check(identity.Name, Equals, "nancy")
+
+	identity = st.IdentityFromInputs(nil, "nancy", "")
+	c.Assert(identity, IsNil)
+
+	identity = st.IdentityFromInputs(nil, "", "test")
+	c.Assert(identity, IsNil)
+
+	identity = st.IdentityFromInputs(nil, "nancy-wrong-username", "test")
+	c.Assert(identity, IsNil)
+
+	identity = st.IdentityFromInputs(nil, "nancy", "wrong-password")
+	c.Assert(identity, IsNil)
+
+	identity = st.IdentityFromInputs(nil, "nancy-wrong-username", "wrong-password")
+	c.Assert(identity, IsNil)
 }

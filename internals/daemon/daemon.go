@@ -218,8 +218,8 @@ func (c *Command) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// not good: https://github.com/canonical/pebble/pull/369
 	var user *UserState
 	if _, isOpen := access.(OpenAccess); !isOpen {
-		basicAuthUsername, basicAuthPassword, _ := r.BasicAuth()
-		user, err = userFromRequest(c.d.state, r, ucred, basicAuthUsername, basicAuthPassword)
+		username, password, _ := r.BasicAuth()
+		user, err = userFromRequest(c.d.state, r, ucred, username, password)
 		if err != nil {
 			Forbidden("forbidden").ServeHTTP(w, r)
 			return
