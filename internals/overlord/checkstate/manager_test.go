@@ -15,6 +15,7 @@
 package checkstate_test
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -699,8 +700,8 @@ func (s *ManagerSuite) TestStartChecksNotFound(c *C) {
 	})
 
 	changed, err := s.manager.StartChecks([]string{"chk1", "chk2"})
-	notFoundErr, ok := err.(*checkstate.ChecksNotFound)
-	c.Assert(ok, Equals, true)
+	var notFoundErr *checkstate.ChecksNotFound
+	c.Assert(errors.As(err, &notFoundErr), Equals, true)
 	c.Assert(notFoundErr.Names, DeepEquals, []string{"chk2"})
 	c.Assert(changed, IsNil)
 }
@@ -789,9 +790,9 @@ func (s *ManagerSuite) TestStopChecksNotFound(c *C) {
 	})
 
 	changed, err := s.manager.StopChecks([]string{"chk1", "chk2"})
-	_, ok := err.(*checkstate.ChecksNotFound)
-	c.Assert(ok, Equals, true)
-	c.Assert(err.(*checkstate.ChecksNotFound).Names, DeepEquals, []string{"chk2"})
+	var notFoundErr *checkstate.ChecksNotFound
+	c.Assert(errors.As(err, &notFoundErr), Equals, true)
+	c.Assert(notFoundErr.Names, DeepEquals, []string{"chk2"})
 	c.Assert(changed, IsNil)
 }
 
