@@ -54,6 +54,7 @@ func (s *healthSuite) TestHealthy(c *C) {
 		return []*checkstate.CheckInfo{
 			{Name: "chk1", Status: checkstate.CheckStatusUp},
 			{Name: "chk2", Status: checkstate.CheckStatusUp},
+			{Name: "chk3", Status: checkstate.CheckStatusInactive},
 		}, nil
 	})
 	defer restore()
@@ -72,6 +73,7 @@ func (s *healthSuite) TestUnhealthy(c *C) {
 			{Name: "chk1", Status: checkstate.CheckStatusUp},
 			{Name: "chk2", Status: checkstate.CheckStatusDown},
 			{Name: "chk3", Status: checkstate.CheckStatusUp},
+			{Name: "chk4", Status: checkstate.CheckStatusInactive},
 		}, nil
 	})
 	defer restore()
@@ -152,6 +154,7 @@ func (s *healthSuite) TestNames(c *C) {
 			{Name: "chk1", Status: checkstate.CheckStatusDown},
 			{Name: "chk2", Status: checkstate.CheckStatusUp},
 			{Name: "chk3", Status: checkstate.CheckStatusUp},
+			{Name: "chk4", Status: checkstate.CheckStatusInactive},
 		}, nil
 	})
 	defer restore()
@@ -178,6 +181,27 @@ func (s *healthSuite) TestNames(c *C) {
 	c.Assert(status, Equals, 200)
 	c.Assert(response, DeepEquals, map[string]interface{}{
 		"healthy": true,
+	})
+
+	// With only an inactive check, this is the same as no checks, so healthy.
+	status, response = serveHealth(c, "GET", "/v1/health?names=chk4", nil)
+	c.Assert(status, Equals, 200)
+	c.Assert(response, DeepEquals, map[string]interface{}{
+		"healthy": true,
+	})
+
+	// One healthy check, one that should be ignored.
+	status, response = serveHealth(c, "GET", "/v1/health?names=chk2,chk4", nil)
+	c.Assert(status, Equals, 200)
+	c.Assert(response, DeepEquals, map[string]interface{}{
+		"healthy": true,
+	})
+
+	// One unhealthy check, one that should be ignored.
+	status, response = serveHealth(c, "GET", "/v1/health?names=chk1,chk4", nil)
+	c.Assert(status, Equals, 502)
+	c.Assert(response, DeepEquals, map[string]interface{}{
+		"healthy": false,
 	})
 }
 

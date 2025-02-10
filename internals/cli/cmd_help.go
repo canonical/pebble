@@ -193,15 +193,15 @@ var HelpCategories = []HelpCategory{{
 }, {
 	Label:       "Plan",
 	Description: "view and change configuration",
-	Commands:    []string{"add", "plan"},
+	Commands:    []string{"add", "plan", "replan"},
 }, {
 	Label:       "Services",
 	Description: "manage services",
-	Commands:    []string{"services", "logs", "start", "restart", "signal", "stop", "replan"},
+	Commands:    []string{"services", "logs", "start", "restart", "signal", "stop"},
 }, {
 	Label:       "Checks",
 	Description: "manage health checks",
-	Commands:    []string{"checks", "health"},
+	Commands:    []string{"checks", "start-checks", "stop-checks", "health"},
 }, {
 	Label:       "Files",
 	Description: "work with files and execute commands",

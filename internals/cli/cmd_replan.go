@@ -20,11 +20,11 @@ import (
 	"github.com/canonical/pebble/client"
 )
 
-const cmdReplanSummary = "Ensure running services match the current plan"
+const cmdReplanSummary = "Ensure running services and checks match the current plan"
 const cmdReplanDescription = `
-The replan command starts, stops, or restarts services that have changed,
-so that running services exactly match the desired configuration in the
-current plan.
+The replan command starts, stops, or restarts services and checks that have
+changed, so that running services and checks exactly match the desired
+configuration in the current plan.
 `
 
 type cmdReplan struct {
