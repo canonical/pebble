@@ -19,8 +19,9 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/canonical/pebble/internals/plan"
 	yaml "gopkg.in/yaml.v3"
+
+	"github.com/canonical/pebble/internals/plan"
 )
 
 var _ plan.SectionExtension = (*WorkloadsSectionExtension)(nil)
