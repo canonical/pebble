@@ -29,9 +29,9 @@ func (s *PebbleSuite) TestStopChecks(c *check.C) {
 		c.Check(r.URL.Path, check.Equals, "/v1/checks")
 
 		body := DecodedRequestBody(c, r)
-		c.Check(body, check.DeepEquals, map[string]interface{}{
+		c.Check(body, check.DeepEquals, map[string]any{
 			"action": "stop",
-			"checks": []interface{}{"chk1", "chk2", "chk3"},
+			"checks": []any{"chk1", "chk2", "chk3"},
 		})
 
 		fmt.Fprintf(w, `{
@@ -54,9 +54,9 @@ func (s *PebbleSuite) TestStopChecksFails(c *check.C) {
 		c.Check(r.URL.Path, check.Equals, "/v1/checks")
 
 		body := DecodedRequestBody(c, r)
-		c.Check(body, check.DeepEquals, map[string]interface{}{
+		c.Check(body, check.DeepEquals, map[string]any{
 			"action": "stop",
-			"checks": []interface{}{"chk1", "chk3"},
+			"checks": []any{"chk1", "chk3"},
 		})
 
 		fmt.Fprintf(w, `{"type": "error", "result": {"message": "could not foo"}}`)

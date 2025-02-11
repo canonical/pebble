@@ -78,7 +78,7 @@ func (cs *clientSuite) TestStartChecks(c *check.C) {
 	c.Assert(cs.req.Method, check.Equals, "POST")
 	c.Assert(cs.req.URL.Path, check.Equals, "/v1/checks")
 
-	var body map[string]interface{}
+	var body map[string]any
 	c.Assert(json.NewDecoder(cs.req.Body).Decode(&body), check.IsNil)
 	c.Check(body, check.HasLen, 2)
 	c.Check(body["action"], check.Equals, "start")
@@ -103,7 +103,7 @@ func (cs *clientSuite) TestStopChecks(c *check.C) {
 	c.Assert(cs.req.Method, check.Equals, "POST")
 	c.Assert(cs.req.URL.Path, check.Equals, "/v1/checks")
 
-	var body map[string]interface{}
+	var body map[string]any
 	c.Assert(json.NewDecoder(cs.req.Body).Decode(&body), check.IsNil)
 	c.Check(body, check.HasLen, 2)
 	c.Check(body["action"], check.Equals, "stop")

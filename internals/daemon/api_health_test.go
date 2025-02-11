@@ -186,21 +186,21 @@ func (s *healthSuite) TestNames(c *C) {
 	// With only an inactive check, this is the same as no checks, so healthy.
 	status, response = serveHealth(c, "GET", "/v1/health?names=chk4", nil)
 	c.Assert(status, Equals, 200)
-	c.Assert(response, DeepEquals, map[string]interface{}{
+	c.Assert(response, DeepEquals, map[string]any{
 		"healthy": true,
 	})
 
 	// One healthy check, one that should be ignored.
 	status, response = serveHealth(c, "GET", "/v1/health?names=chk2,chk4", nil)
 	c.Assert(status, Equals, 200)
-	c.Assert(response, DeepEquals, map[string]interface{}{
+	c.Assert(response, DeepEquals, map[string]any{
 		"healthy": true,
 	})
 
 	// One unhealthy check, one that should be ignored.
 	status, response = serveHealth(c, "GET", "/v1/health?names=chk1,chk4", nil)
 	c.Assert(status, Equals, 502)
-	c.Assert(response, DeepEquals, map[string]interface{}{
+	c.Assert(response, DeepEquals, map[string]any{
 		"healthy": false,
 	})
 }
