@@ -8,8 +8,9 @@ The API uses HTTP over a Unix socket, with access to the API controlled by user 
 
 You can use different tools and clients to access the API.
 
-For more examples, see "How to use Pebble API". <!-- [David] Link to the how-to guide -->
+For more examples, see [How to use Pebble API](../how-to/use-the-pebble-api).
 
+(api_curl)=
 ### curl
 
 To access the API endpoints over the Unix socket, use the `--unix-socket` option of `curl`. For example:
@@ -26,6 +27,7 @@ To access the API endpoints over the Unix socket, use the `--unix-socket` option
 {"type":"sync","status-code":200,"status":"OK","result":{...}}
 ```
 
+(api_go_client)=
 ### Go client
 
 To use the [Go client](https://pkg.go.dev/github.com/canonical/pebble/client) to access API endpoints over the Unix socket, first create a client using `New`, and then call the methods on the returned `Client` struct to interact with the API. For example, to stop a service named `mysvc`:
@@ -49,6 +51,7 @@ We try to never change the underlying HTTP API in a backwards-incompatible way. 
 
 For more information, see the [Go client documentation](https://pkg.go.dev/github.com/canonical/pebble/client).
 
+(api_python_client)=
 ### Python client
 
 The Ops library for writing and testing Juju charms includes a [Python client for Pebble API](https://ops.readthedocs.io/en/latest/reference/pebble.html). You can use the Python client to access the API endpoints over the Unix socket. For example:

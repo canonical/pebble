@@ -15,6 +15,8 @@ checks:
         # Optional
         level: alive | ready
         # Optional
+        startup: enabled | disabled
+        # Optional
         period: <duration>
         # Optional
         timeout: <duration>
@@ -107,20 +109,22 @@ checks:
 
     test:
         override: replace
+        startup: disabled
         http:
             url: http://localhost:8080/test
 ```
 
 ## Checks command
 
-You can view check status using the `pebble checks` command. This reports the checks along with their status (`up` or `down`) and number of failures. For example:
+You can view check status using the `pebble checks` command. This reports the checks along with their status (`up`, `down`, or `inactive`) and number of failures. For example:
 
 ```{terminal}
    :input: pebble checks
-Check   Level  Status  Failures  Change
-up      alive  up      0/1       10
-online  ready  down    1/3       13 (dial tcp 127.0.0.1:8000: connect: connection refused)
-test    -      down    42/3      14 (Get "http://localhost:8080/": dial t... run "pebble tasks 14" for more)
+Check   Level  Startup   Status    Failures  Change
+up      alive  enabled   up        0/1       10
+online  ready  enabled   down      1/3       13 (dial tcp 127.0.0.1:8000: connect: connection refused)
+test    -      disabled  down      42/3      14 (Get "http://localhost:8080/": dial t... run "pebble tasks 14" for more)
+extra   -      disabled  inactive  -         -
 ```
 
 The "Failures" column shows the current number of failures since the check started failing, a slash, and the configured threshold.
@@ -132,9 +136,23 @@ Health checks are implemented using two change kinds:
 * `perform-check`: drives the check while it's "up". The change finishes when the number of failures hits the threshold, at which point the change switches to Error status and a `recover-check` change is spawned. Each check failure records a task log.
 * `recover-check`: drives the check while it's "down". The change finishes when the check starts succeeding again, at which point the change switches to Done status and a new `perform-check` change is spawned. Again, each check failure records a task log.
 
+When a check is stopped, the active `perform-check` or `recover-check` change is aborted. When a stopped (inactive) check is started, a new `perform-check` change is created for the check.
+
+## Start-checks and stop-checks commands
+
+You can stop one or more checks using the `pebble stop-checks` command. A stopped check shows in the `pebble checks` output as "inactive" status, and the check will no longer be executed until the check is started again. Stopped (inactive) checks appear in check lists but do not contribute to any overall health calculations - they behave as if the check did not exist.
+
+A stopped check that has `startup` set to `enabled` will be started in a `replan` operation and when the layer is first added. Stopped checks can also be manually started via the `pebble start-checks` command.
+
+Checks that have `startup` set to `disabled` will be added in a stopped (inactive) state. These checks will only be started when instructed by a `pebble start-checks` command.
+
+Including a check that is already running in a `start-checks` command, or including a check that is already stopped (inactive) in a `stop-checks` command is always safe and will simply have no effect on the check.
+
 ## Health endpoint
 
 If the `--http` option was given when starting `pebble run`, Pebble exposes a `/v1/health` HTTP endpoint that allows a user to query the health of configured checks, optionally filtered by check level with the query string `?level=<level>` This endpoint returns an HTTP 200 status if the checks are healthy, HTTP 502 otherwise.
+
+Stopped (inactive) checks are ignored for health calculations.
 
 Each check can specify a `level` of "alive" or "ready". These have semantic meaning: "alive" means the check or the service it's connected to is up and running; "ready" means it's properly accepting network traffic. These correspond to [Kubernetes "liveness" and "readiness" probes](https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/).
 

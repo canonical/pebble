@@ -600,12 +600,14 @@ var planTests = []planTest{{
 			chk-tcp:
 				override: merge
 				level: ready
+				startup: enabled
 				tcp:
 					port: 7777
 					host: somehost
 		
 			chk-exec:
 				override: replace
+				startup: disabled
 				exec:
 					command: sleep 1
 					environment:
@@ -635,6 +637,7 @@ var planTests = []planTest{{
 				Name:      "chk-tcp",
 				Override:  plan.MergeOverride,
 				Level:     plan.ReadyLevel,
+				Startup:   plan.CheckStartupEnabled,
 				Period:    plan.OptionalDuration{Value: defaultCheckPeriod},
 				Timeout:   plan.OptionalDuration{Value: defaultCheckTimeout},
 				Threshold: defaultCheckThreshold,
@@ -647,6 +650,7 @@ var planTests = []planTest{{
 				Name:      "chk-exec",
 				Override:  plan.ReplaceOverride,
 				Level:     plan.UnsetLevel,
+				Startup:   plan.CheckStartupDisabled,
 				Period:    plan.OptionalDuration{Value: defaultCheckPeriod},
 				Timeout:   plan.OptionalDuration{Value: defaultCheckTimeout},
 				Threshold: defaultCheckThreshold,
@@ -941,6 +945,17 @@ var planTests = []planTest{{
 					service-context: nosvc
 	`},
 }, {
+	summary: `Invalid check startup value`,
+	error:   `plan check "chk1" startup must be "enabled" or "disabled"`,
+	input: []string{`
+			checks:
+				chk1:
+					override: replace
+					startup: true
+					exec:
+						command: foo
+		`},
+}, {}, {
 	summary: "Simple layer with log targets",
 	input: []string{`
 		services:
