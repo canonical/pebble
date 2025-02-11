@@ -74,7 +74,7 @@ type RequestResponse struct {
 // DecodeResult decodes the endpoint-specific result payload that is included as part of
 // sync and async request responses. The decoding is performed with the standard JSON
 // package, so the usual field tags should be used to prepare the type for decoding.
-func (resp *RequestResponse) DecodeResult(result any) error {
+func (resp *RequestResponse) DecodeResult(result interface{}) error {
 	reader := bytes.NewReader(resp.Result)
 	dec := json.NewDecoder(reader)
 	dec.UseNumber()
