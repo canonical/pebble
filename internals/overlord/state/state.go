@@ -38,7 +38,7 @@ type Backend interface {
 
 type customData map[string]*json.RawMessage
 
-func (data customData) get(key string, value interface{}) error {
+func (data customData) get(key string, value any) error {
 	entryJSON := data[key]
 	if entryJSON == nil {
 		return &NoStateError{Key: key}
@@ -54,7 +54,7 @@ func (data customData) has(key string) bool {
 	return data[key] != nil
 }
 
-func (data customData) set(key string, value interface{}) {
+func (data customData) set(key string, value any) {
 	if value == nil {
 		delete(data, key)
 		return
@@ -99,7 +99,7 @@ type State struct {
 
 	modified bool
 
-	cache map[interface{}]interface{}
+	cache map[any]any
 
 	pendingChangeByAttr map[string]func(*Change) bool
 
@@ -118,7 +118,7 @@ func New(backend Backend) *State {
 		notices:             make(map[noticeKey]*Notice),
 		identities:          make(map[string]*Identity),
 		modified:            true,
-		cache:               make(map[interface{}]interface{}),
+		cache:               make(map[any]any),
 		pendingChangeByAttr: make(map[string]func(*Change) bool),
 		taskHandlers:        make(map[int]func(t *Task, old Status, new Status)),
 		changeHandlers:      make(map[int]func(chg *Change, old Status, new Status)),
@@ -331,7 +331,7 @@ func (e *NoStateError) Is(err error) bool {
 // Get unmarshals the stored value associated with the provided key
 // into the value parameter.
 // It returns ErrNoState if there is no entry for key.
-func (s *State) Get(key string, value interface{}) error {
+func (s *State) Get(key string, value any) error {
 	s.reading()
 	return s.data.get(key, value)
 }
@@ -344,21 +344,21 @@ func (s *State) Has(key string) bool {
 
 // Set associates value with key for future consulting by managers.
 // The provided value must properly marshal and unmarshal with encoding/json.
-func (s *State) Set(key string, value interface{}) {
+func (s *State) Set(key string, value any) {
 	s.writing()
 	s.data.set(key, value)
 }
 
 // Cached returns the cached value associated with the provided key.
 // It returns nil if there is no entry for key.
-func (s *State) Cached(key interface{}) interface{} {
+func (s *State) Cached(key any) any {
 	s.reading()
 	return s.cache[key]
 }
 
 // Cache associates value with key for future consulting by managers.
 // The cached value is not persisted.
-func (s *State) Cache(key, value interface{}) {
+func (s *State) Cache(key, value any) {
 	s.reading() // Doesn't touch persisted data.
 	if value == nil {
 		delete(s.cache, key)
@@ -558,7 +558,7 @@ NextChange:
 }
 
 // GetMaybeTimings implements timings.GetSaver
-func (s *State) GetMaybeTimings(timings interface{}) error {
+func (s *State) GetMaybeTimings(timings any) error {
 	if err := s.Get("timings", timings); err != nil && !errors.Is(err, ErrNoState) {
 		return err
 	}
@@ -622,7 +622,7 @@ func (s *State) notifyChangeStatusChangedHandlers(chg *Change, old, new Status) 
 }
 
 // SaveTimings implements timings.GetSaver
-func (s *State) SaveTimings(timings interface{}) {
+func (s *State) SaveTimings(timings any) {
 	s.Set("timings", timings)
 }
 
@@ -639,7 +639,7 @@ func ReadState(backend Backend, r io.Reader) (*State, error) {
 	s.backend = backend
 	s.noticeCond = sync.NewCond(s)
 	s.modified = false
-	s.cache = make(map[interface{}]interface{})
+	s.cache = make(map[any]any)
 	s.pendingChangeByAttr = make(map[string]func(*Change) bool)
 	s.changeHandlers = make(map[int]func(chg *Change, old Status, new Status))
 	s.taskHandlers = make(map[int]func(t *Task, old Status, new Status))

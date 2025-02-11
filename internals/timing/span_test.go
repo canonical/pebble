@@ -82,12 +82,12 @@ func (s *spanSuite) fakeMinNestedSpan(threshold time.Duration) {
 	s.AddCleanup(restore)
 }
 
-func encodeDecode(span *timing.Span) interface{} {
+func encodeDecode(span *timing.Span) any {
 	data, err := json.Marshal(span)
 	if err != nil {
 		panic(err)
 	}
-	var decoded interface{}
+	var decoded any
 	decoder := json.NewDecoder(bytes.NewBuffer(data))
 	decoder.UseNumber()
 	err = decoder.Decode(&decoded)
@@ -118,22 +118,22 @@ func (s *spanSuite) TestSave(c *C) {
 	decoded0 := encodeDecode(spans[0])
 	decoded1 := encodeDecode(spans[1])
 
-	c.Assert(decoded0, DeepEquals, map[string]interface{}{
-		"tags": map[string]interface{}{
+	c.Assert(decoded0, DeepEquals, map[string]any{
+		"tags": map[string]any{
 			"change": "12",
 			"task":   "0",
 		},
 		"base": json.Number("1577840460"),
 		"b":    json.Number("6000000"),
-		"spans": []interface{}{
-			map[string]interface{}{
+		"spans": []any{
+			map[string]any{
 				"label":   "First level",
 				"summary": "...",
 				"depth":   json.Number("1"),
 				"a":       json.Number("2000000"),
 				"b":       json.Number("5000000"),
 			},
-			map[string]interface{}{
+			map[string]any{
 				"label":   "Second level",
 				"summary": "...",
 				"depth":   json.Number("2"),
@@ -142,22 +142,22 @@ func (s *spanSuite) TestSave(c *C) {
 			},
 		},
 	})
-	c.Assert(decoded1, DeepEquals, map[string]interface{}{
-		"tags": map[string]interface{}{
+	c.Assert(decoded1, DeepEquals, map[string]any{
+		"tags": map[string]any{
 			"change": "12",
 			"task":   "1",
 		},
 		"base": json.Number("1577840460"),
 		"b":    json.Number("12000000"),
-		"spans": []interface{}{
-			map[string]interface{}{
+		"spans": []any{
+			map[string]any{
 				"label":   "First level",
 				"summary": "...",
 				"depth":   json.Number("1"),
 				"a":       json.Number("8000000"),
 				"b":       json.Number("11000000"),
 			},
-			map[string]interface{}{
+			map[string]any{
 				"label":   "Second level",
 				"summary": "...",
 				"depth":   json.Number("2"),
@@ -168,7 +168,7 @@ func (s *spanSuite) TestSave(c *C) {
 	})
 }
 
-func (s *spanSuite) testDurationThreshold(c *C, threshold time.Duration, expected interface{}) {
+func (s *spanSuite) testDurationThreshold(c *C, threshold time.Duration, expected any) {
 	s.fakeMinNestedSpan(threshold)
 
 	span1 := timing.Start("", "", nil)
@@ -184,25 +184,25 @@ func (s *spanSuite) testDurationThreshold(c *C, threshold time.Duration, expecte
 }
 
 func (s *spanSuite) TestDurationThresholdAll(c *C) {
-	s.testDurationThreshold(c, 0, map[string]interface{}{
+	s.testDurationThreshold(c, 0, map[string]any{
 		"base": json.Number("1577840460"),
 		"b":    json.Number("8000000"),
-		"spans": []interface{}{
-			map[string]interface{}{
+		"spans": []any{
+			map[string]any{
 				"label":   "main",
 				"summary": "...",
 				"depth":   json.Number("1"),
 				"a":       json.Number("2000000"),
 				"b":       json.Number("7000000"),
 			},
-			map[string]interface{}{
+			map[string]any{
 				"label":   "nested",
 				"summary": "...",
 				"depth":   json.Number("2"),
 				"a":       json.Number("3000000"),
 				"b":       json.Number("6000000"),
 			},
-			map[string]interface{}{
+			map[string]any{
 				"label":   "nested more",
 				"summary": "...",
 				"depth":   json.Number("3"),
@@ -214,18 +214,18 @@ func (s *spanSuite) TestDurationThresholdAll(c *C) {
 }
 
 func (s *spanSuite) TestDurationThreshold(c *C) {
-	s.testDurationThreshold(c, 3000000, map[string]interface{}{
+	s.testDurationThreshold(c, 3000000, map[string]any{
 		"base": json.Number("1577840460"),
 		"b":    json.Number("8000000"),
-		"spans": []interface{}{
-			map[string]interface{}{
+		"spans": []any{
+			map[string]any{
 				"label":   "main",
 				"summary": "...",
 				"depth":   json.Number("1"),
 				"a":       json.Number("2000000"),
 				"b":       json.Number("7000000"),
 			},
-			map[string]interface{}{
+			map[string]any{
 				"label":   "nested",
 				"summary": "...",
 				"depth":   json.Number("2"),
@@ -237,11 +237,11 @@ func (s *spanSuite) TestDurationThreshold(c *C) {
 }
 
 func (s *spanSuite) TestDurationThresholdRootOnly(c *C) {
-	s.testDurationThreshold(c, 4000000, map[string]interface{}{
+	s.testDurationThreshold(c, 4000000, map[string]any{
 		"base": json.Number("1577840460"),
 		"b":    json.Number("8000000"),
-		"spans": []interface{}{
-			map[string]interface{}{
+		"spans": []any{
+			map[string]any{
 				"label":   "main",
 				"summary": "...",
 				"depth":   json.Number("1"),

@@ -123,13 +123,13 @@ func (ovs *overlordSuite) TestNewWithGoodState(c *C) {
 	d, err := state.MarshalJSON()
 	c.Assert(err, IsNil)
 
-	var got, expected map[string]interface{}
+	var got, expected map[string]any
 	err = json.Unmarshal(d, &got)
 	c.Assert(err, IsNil)
 	err = json.Unmarshal(fakeState, &expected)
 	c.Assert(err, IsNil)
 
-	data, _ := got["data"].(map[string]interface{})
+	data, _ := got["data"].(map[string]any)
 	c.Assert(data, NotNil)
 
 	c.Check(got, DeepEquals, expected)

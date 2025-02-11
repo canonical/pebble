@@ -61,9 +61,9 @@ services:
 		c.Check(cs.req.Method, check.Equals, "POST")
 		c.Check(cs.req.URL.Path, check.Equals, "/v1/layers")
 		c.Check(cs.req.URL.Query(), check.HasLen, 0)
-		var body map[string]interface{}
+		var body map[string]any
 		c.Assert(json.NewDecoder(cs.req.Body).Decode(&body), check.IsNil)
-		c.Assert(body, check.DeepEquals, map[string]interface{}{
+		c.Assert(body, check.DeepEquals, map[string]any{
 			"action":  "add",
 			"combine": option.combine,
 			"label":   "foo",
