@@ -17,7 +17,6 @@ package checkstate
 import (
 	"context"
 	"fmt"
-	"io"
 	"reflect"
 	"sort"
 	"sync"
@@ -331,21 +330,21 @@ func (m *CheckManager) updateCheckInfo(config *plan.Check, changeID string, fail
 	}
 }
 
-func (m *CheckManager) incCheckInfoPerformCheckCount(config *plan.Check) {
+func (m *CheckManager) incPerformCheckCount(config *plan.Check) {
 	m.checksLock.Lock()
 	defer m.checksLock.Unlock()
 
 	info := m.checks[config.Name]
-	info.PerformCheckCount += 1
+	info.performCheckCount += 1
 	m.checks[config.Name] = info
 }
 
-func (m *CheckManager) incCheckInfoRecoverCheckCount(config *plan.Check) {
+func (m *CheckManager) incRecoverCheckCount(config *plan.Check) {
 	m.checksLock.Lock()
 	defer m.checksLock.Unlock()
 
 	info := m.checks[config.Name]
-	info.RecoverCheckCount += 1
+	info.recoverCheckCount += 1
 	m.checks[config.Name] = info
 }
 
@@ -364,8 +363,8 @@ type CheckInfo struct {
 	Failures          int
 	Threshold         int
 	ChangeID          string
-	PerformCheckCount int64
-	RecoverCheckCount int64
+	performCheckCount int64
+	recoverCheckCount int64
 }
 
 type CheckStatus string
@@ -379,81 +378,54 @@ type checker interface {
 	check(ctx context.Context) error
 }
 
-func (c *CheckInfo) Metrics(writer io.Writer) error {
-	labels := []string{fmt.Sprintf("check=%s", c.Name)}
-
-	// Write HELP and TYPE comments for pebble_check_up
-	_, err := fmt.Fprintf(writer, "# HELP pebble_check_up Number of times the perform check has run\n")
-	if err != nil {
-		return err
-	}
-	_, err = fmt.Fprintf(writer, "# TYPE pebble_check_up counter\n")
-	if err != nil {
-		return err
-	}
+func (c *CheckInfo) writeMetrics(writer metrics.Writer) error {
 	checkStatus := 0
 	if c.Status == CheckStatusUp {
 		checkStatus = 1
 	}
-	checkUpMetric := metrics.Metric{
+	err := writer.Write(metrics.Metric{
 		Name:       "pebble_check_up",
-		Value:      checkStatus,
-		LabelPairs: labels,
-	}
-	_, err = checkUpMetric.WriteTo(writer)
+		Type:       metrics.TypeGaugeInt,
+		ValueInt64: int64(checkStatus),
+		Comment:    "Whether the health check is up (1) or not (0)",
+		Labels:     []metrics.Label{metrics.NewLabel("check", c.Name)},
+	})
 	if err != nil {
 		return err
 	}
 
-	// Write HELP and TYPE comments for pebble_perform_check_count
-	_, err = fmt.Fprintf(writer, "# HELP pebble_perform_check_count Number of times the perform check has run\n")
-	if err != nil {
-		return err
-	}
-	_, err = fmt.Fprintf(writer, "# TYPE pebble_perform_check_count counter\n")
-	if err != nil {
-		return err
-	}
-	performCheckCountMetric := metrics.Metric{
+	err = writer.Write(metrics.Metric{
 		Name:       "pebble_perform_check_count",
-		Value:      c.PerformCheckCount,
-		LabelPairs: labels,
-	}
-	_, err = performCheckCountMetric.WriteTo(writer)
+		Type:       metrics.TypeCounterInt,
+		ValueInt64: c.performCheckCount,
+		Comment:    "Number of times the perform-check has run",
+		Labels:     []metrics.Label{metrics.NewLabel("check", c.Name)},
+	})
 	if err != nil {
 		return err
 	}
 
-	// Write HELP and TYPE comments for pebble_recover_check_count
-	_, err = fmt.Fprintf(writer, "# HELP pebble_recover_check_count Number of times the perform check has run\n")
-	if err != nil {
-		return err
-	}
-	_, err = fmt.Fprintf(writer, "# TYPE pebble_recover_check_count counter\n")
-	if err != nil {
-		return err
-	}
-	recoverCheckCountMetric := metrics.Metric{
+	err = writer.Write(metrics.Metric{
 		Name:       "pebble_recover_check_count",
-		Value:      c.PerformCheckCount,
-		LabelPairs: labels,
-	}
-	_, err = recoverCheckCountMetric.WriteTo(writer)
+		Type:       metrics.TypeCounterInt,
+		ValueInt64: c.recoverCheckCount,
+		Comment:    "Number of times the recover-check has run",
+		Labels:     []metrics.Label{metrics.NewLabel("check", c.Name)},
+	})
 	if err != nil {
 		return err
 	}
+
 	return nil
 }
 
-// Metrics collects and writes metrics for all checks to the provided writer.
-func (m *CheckManager) Metrics(writer io.Writer) error {
-	infos, err := m.Checks()
-	if err != nil {
-		return err
-	}
+// WriteMetrics collects and writes metrics for all checks to the provided writer.
+func (m *CheckManager) WriteMetrics(writer metrics.Writer) error {
+	m.checksLock.Lock()
+	defer m.checksLock.Unlock()
 
-	for _, info := range infos {
-		err := info.Metrics(writer)
+	for _, info := range m.checks {
+		err := info.writeMetrics(writer)
 		if err != nil {
 			return err
 		}

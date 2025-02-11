@@ -17,34 +17,74 @@ package metrics
 import (
 	"fmt"
 	"io"
-	"sort"
 	"strings"
+)
+
+type MetricType int
+
+const (
+	TypeCounterInt MetricType = iota
+	TypeGaugeInt
 )
 
 // Metric represents a single metric.
 type Metric struct {
 	Name       string
-	Value      interface{}
-	LabelPairs []string
+	Type       MetricType
+	ValueInt64 int64
+	Comment    string
+	Labels     []Label
 }
 
-// WriteTo writes the metric in OpenMetrics format.
-func (m *Metric) WriteTo(w io.Writer) (n int64, err error) {
-	labelStr := ""
-	if len(m.LabelPairs) > 0 {
-		sort.Strings(m.LabelPairs)
-		labelStr = "{" + strings.Join(m.LabelPairs, ",") + "}"
+// Label represents a label for metrics.
+type Label struct {
+	key   string
+	value string
+}
+
+// NewLabel creates a new Label with key and value.
+func NewLabel(key, value string) Label {
+	return Label{key, value}
+}
+
+type Writer interface {
+	Write(Metric) error
+}
+
+// OpenTelemetryWriter implements the Writer interface and formats metrics
+// in OpenTelemetryWriter exposition format.
+type OpenTelemetryWriter struct {
+	w io.Writer
+}
+
+// NewOpenTelemetryWriter creates a new OpenTelemetryWriter.
+func NewOpenTelemetryWriter(w io.Writer) *OpenTelemetryWriter {
+	return &OpenTelemetryWriter{w: w}
+}
+
+func (otw *OpenTelemetryWriter) Write(m Metric) error {
+	var metricType string
+	switch m.Type {
+	case TypeCounterInt:
+		metricType = "counter"
+	case TypeGaugeInt:
+		metricType = "gauge"
 	}
 
-	var written int
-	switch v := m.Value.(type) {
-	case int64:
-		written, err = fmt.Fprintf(w, "%s%s %d\n", m.Name, labelStr, v)
-	case float64:
-		written, err = fmt.Fprintf(w, "%s%s %.2f\n", m.Name, labelStr, v) // Format float appropriately
-	default:
-		written, err = fmt.Fprintf(w, "%s%s %v\n", m.Name, labelStr, m.Value)
+	_, err := fmt.Fprintf(otw.w, "# HELP %s %s\n", m.Name, m.Comment)
+	if err != nil {
+		return err
+	}
+	_, err = fmt.Fprintf(otw.w, "# TYPE %s %s\n", m.Name, metricType)
+	if err != nil {
+		return err
 	}
 
-	return int64(written), err
+	labels := make([]string, len(m.Labels))
+	for i, label := range m.Labels {
+		labels[i] = fmt.Sprintf("%s=%s", label.key, label.value)
+	}
+
+	_, err = fmt.Fprintf(otw.w, "%s{%s} %d\n", m.Name, strings.Join(labels, ","), m.ValueInt64)
+	return err
 }

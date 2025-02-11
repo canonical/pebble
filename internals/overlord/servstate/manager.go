@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/canonical/pebble/internals/metrics"
 	"github.com/canonical/pebble/internals/overlord/restart"
 	"github.com/canonical/pebble/internals/overlord/state"
 	"github.com/canonical/pebble/internals/plan"
@@ -334,13 +335,13 @@ func (m *ServiceManager) CheckFailed(name string) {
 	}
 }
 
-// Metrics collects and writes metrics for all services to the provided writer.
-func (m *ServiceManager) Metrics(writer io.Writer) error {
+// WriteMetrics collects and writes metrics for all services to the provided writer.
+func (m *ServiceManager) WriteMetrics(writer metrics.Writer) error {
 	m.servicesLock.Lock()
 	defer m.servicesLock.Unlock()
 
 	for _, service := range m.services {
-		err := service.Metrics(writer)
+		err := service.writeMetrics(writer)
 		if err != nil {
 			return err
 		}

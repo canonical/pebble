@@ -290,7 +290,7 @@ func (s *serviceData) transition(state serviceState) {
 
 // transitionRestarting changes the service's state and also sets the restarting flag.
 func (s *serviceData) transitionRestarting(state serviceState, restarting bool) {
-	// Update current-since time if derived status is changing.
+	// Update current-s_e time if derived status is changing.
 	oldStatus := stateToStatus(s.state)
 	newStatus := stateToStatus(state)
 	if oldStatus != newStatus {
@@ -458,7 +458,7 @@ func (s *serviceData) startInternal() error {
 
 	// Pass buffer reference to logMgr to start log forwarding
 	s.manager.logMgr.ServiceStarted(s.config, s.logs)
-	s.IncStartCount()
+	s.startCount.Add(1)
 	return nil
 }
 
@@ -828,41 +828,15 @@ func (s *serviceData) checkFailed(action plan.ServiceAction) {
 	}
 }
 
-// IncStartCount increments the startCount for the service.
-func (d *serviceData) IncStartCount() {
-	d.startCount.Add(1)
-}
-
-// Metrics writes the service's metrics.
-func (d *serviceData) Metrics(writer io.Writer) error {
-	labels := []string{fmt.Sprintf("service_name=%s", d.config.Name)}
-
-	// Write HELP and TYPE comments for pebble_service_start_count
-	_, err := fmt.Fprintf(writer, "# HELP pebble_service_start_count Number of times the service has started\n")
-	if err != nil {
-		return err
-	}
-	_, err = fmt.Fprintf(writer, "# TYPE pebble_service_start_count counter\n")
-	if err != nil {
-		return err
-	}
-
-	startCountMetric := metrics.Metric{
+// writeMetrics writes the service's metrics.
+func (d *serviceData) writeMetrics(writer metrics.Writer) error {
+	err := writer.Write(metrics.Metric{
 		Name:       "pebble_service_start_count",
-		Value:      d.startCount.Load(),
-		LabelPairs: labels,
-	}
-	_, err = startCountMetric.WriteTo(writer)
-	if err != nil {
-		return err
-	}
-
-	// Write HELP and TYPE comments for pebble_service_active
-	_, err = fmt.Fprintf(writer, "# HELP pebble_service_active Indicates if the service is currently active (1) or not (0)\n")
-	if err != nil {
-		return err
-	}
-	_, err = fmt.Fprintf(writer, "# TYPE pebble_service_active gauge\n")
+		Type:       metrics.TypeCounterInt,
+		ValueInt64: d.startCount.Load(),
+		Comment:    "Number of times the service has started",
+		Labels:     []metrics.Label{metrics.NewLabel("service", d.config.Name)},
+	})
 	if err != nil {
 		return err
 	}
@@ -871,12 +845,13 @@ func (d *serviceData) Metrics(writer io.Writer) error {
 	if stateToStatus(d.state) == StatusActive {
 		active = 1
 	}
-	activeMetric := metrics.Metric{
+	err = writer.Write(metrics.Metric{
 		Name:       "pebble_service_active",
-		Value:      active,
-		LabelPairs: labels,
-	}
-	_, err = activeMetric.WriteTo(writer)
+		Type:       metrics.TypeGaugeInt,
+		ValueInt64: int64(active),
+		Comment:    "Indicates if the service is currently active (1) or not (0)",
+		Labels:     []metrics.Label{metrics.NewLabel("service", d.config.Name)},
+	})
 	if err != nil {
 		return err
 	}

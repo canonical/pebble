@@ -15,9 +15,10 @@
 package daemon
 
 import (
-	"bytes"
 	"net/http"
 
+	"github.com/canonical/pebble/internals/logger"
+	"github.com/canonical/pebble/internals/metrics"
 	"github.com/canonical/pebble/internals/overlord/checkstate"
 	"github.com/canonical/pebble/internals/overlord/servstate"
 )
@@ -36,18 +37,19 @@ type metricsResponse struct {
 }
 
 func (r metricsResponse) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	var buffer bytes.Buffer
+	openTelemetryWriter := metrics.NewOpenTelemetryWriter(w)
 
-	err := r.svcMgr.Metrics(&buffer)
+	err := r.svcMgr.WriteMetrics(openTelemetryWriter)
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
+		logger.Noticef("Cannot write to HTTP response: %v", err.Error())
+		http.Error(w, "# internal server error", http.StatusInternalServerError)
 		return
 	}
-	err = r.chkMgr.Metrics(&buffer)
+
+	err = r.chkMgr.WriteMetrics(openTelemetryWriter)
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
+		logger.Noticef("Cannot write to HTTP response: %v", err.Error())
+		http.Error(w, "# internal server error", http.StatusInternalServerError)
 		return
 	}
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(buffer.String()))
 }
