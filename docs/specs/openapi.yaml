@@ -311,6 +311,43 @@ paths:
                     }
                   ]
                 }
+    post:
+      summary: Manage checks
+      description: Perform a check operation such as start or stop.
+      tags:
+        - checks
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                action:
+                  type: string
+                  description: The action to perform.
+                  enum: ["start", "stop"]
+                checks:
+                  type: array
+                  description: |
+                    A list of service names.  Required.
+                  items:
+                    type: string
+            example:
+              {"action": "start", "checks": ["svc1"]}
+      responses:
+        "200":
+          description: Check operations completed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CheckActionResponse"
+              example:
+                {
+                  "type": "sync",
+                  "status-code": 200,
+                  "result": {"changed": ["chk1", "chk2"]}
+                }
   /v1/exec:
     post:
       summary: Execute a command
@@ -1136,6 +1173,19 @@ components:
             change:
               type: string
               description: The Change ID of the asynchronous change.
+    CheckActionResponse:
+      allOf:
+        - $ref: "#/components/schemas/BaseResponse"
+        - type: object
+          properties:
+            result:
+              type: object
+              properties:
+                changed:
+                  type: array
+                  items:
+                    type: string
+                  description: List of checks that were changed.
     GetChangesResponse:
       allOf:
         - $ref: "#/components/schemas/BaseResponse"

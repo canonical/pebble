@@ -149,6 +149,10 @@ checks:
         # section in the docs for details.
         level: alive | ready
 
+        # (Optional) Control whether the check is started automatically when
+        # Pebble starts or performs a 'replan' operation. Default is "enabled".
+        startup: enabled | disabled
+
         # (Optional) Check is run every time this period (time interval)
         # elapses. Must not be zero. Default is "10s".
         period: <duration>
