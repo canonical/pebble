@@ -38,10 +38,10 @@ func (s *PebbleSuite) TestRm(c *C) {
 		c.Check(r.URL.Path, Equals, "/v1/files")
 
 		body := DecodedRequestBody(c, r)
-		c.Check(body, DeepEquals, map[string]interface{}{
+		c.Check(body, DeepEquals, map[string]any{
 			"action": "remove",
-			"paths": []interface{}{
-				map[string]interface{}{
+			"paths": []any{
+				map[string]any{
 					"path":      "/foo/bar.baz",
 					"recursive": false,
 				},
@@ -64,10 +64,10 @@ func (s *PebbleSuite) TestRmRecursive(c *C) {
 		c.Check(r.URL.Path, Equals, "/v1/files")
 
 		body := DecodedRequestBody(c, r)
-		c.Check(body, DeepEquals, map[string]interface{}{
+		c.Check(body, DeepEquals, map[string]any{
 			"action": "remove",
-			"paths": []interface{}{
-				map[string]interface{}{
+			"paths": []any{
+				map[string]any{
 					"path":      "/foo/bar",
 					"recursive": true,
 				},
@@ -90,10 +90,10 @@ func (s *PebbleSuite) TestRmFails(c *C) {
 		c.Check(r.URL.Path, Equals, "/v1/files")
 
 		body := DecodedRequestBody(c, r)
-		c.Check(body, DeepEquals, map[string]interface{}{
+		c.Check(body, DeepEquals, map[string]any{
 			"action": "remove",
-			"paths": []interface{}{
-				map[string]interface{}{
+			"paths": []any{
+				map[string]any{
 					"path":      "/foo/bar.baz",
 					"recursive": false,
 				},
@@ -116,10 +116,10 @@ func (s *PebbleSuite) TestRmFailsOnPath(c *C) {
 		c.Check(r.URL.Path, Equals, "/v1/files")
 
 		body := DecodedRequestBody(c, r)
-		c.Check(body, DeepEquals, map[string]interface{}{
+		c.Check(body, DeepEquals, map[string]any{
 			"action": "remove",
-			"paths": []interface{}{
-				map[string]interface{}{
+			"paths": []any{
+				map[string]any{
 					"path":      "/foo/bar",
 					"recursive": true,
 				},

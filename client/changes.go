@@ -44,7 +44,7 @@ type Change struct {
 var ErrNoData = fmt.Errorf("data entry not found")
 
 // Get unmarshals into value the kind-specific data with the provided key.
-func (c *Change) Get(key string, value interface{}) error {
+func (c *Change) Get(key string, value any) error {
 	raw := c.data[key]
 	if raw == nil {
 		return ErrNoData
@@ -68,7 +68,7 @@ type Task struct {
 }
 
 // Get unmarshals into value the kind-specific data with the provided key.
-func (t *Task) Get(key string, value interface{}) error {
+func (t *Task) Get(key string, value any) error {
 	raw := t.Data[key]
 	if raw == nil {
 		return ErrNoData

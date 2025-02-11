@@ -55,7 +55,7 @@ func (s *PebbleSuite) TestAutostart(c *check.C) {
 		c.Check(r.URL.Path, check.Equals, "/v1/services")
 
 		body := DecodedRequestBody(c, r)
-		c.Check(body, check.DeepEquals, map[string]interface{}{
+		c.Check(body, check.DeepEquals, map[string]any{
 			"action":   "autostart",
 			"services": nil,
 		})
@@ -79,7 +79,7 @@ func (s *PebbleSuite) TestAutostartFailsNoDefaultServices(c *check.C) {
 		c.Check(r.Method, check.Equals, "POST")
 		c.Check(r.URL.Path, check.Equals, "/v1/services")
 		body := DecodedRequestBody(c, r)
-		c.Check(body, check.DeepEquals, map[string]interface{}{
+		c.Check(body, check.DeepEquals, map[string]any{
 			"action":   "autostart",
 			"services": nil,
 		})
@@ -105,7 +105,7 @@ func (s *PebbleSuite) TestAutostartNoWait(c *check.C) {
 		c.Check(r.URL.Path, check.Not(check.Equals), "/v1/changes/42")
 
 		body := DecodedRequestBody(c, r)
-		c.Check(body, check.DeepEquals, map[string]interface{}{
+		c.Check(body, check.DeepEquals, map[string]any{
 			"action":   "autostart",
 			"services": nil,
 		})
@@ -136,7 +136,7 @@ func (s *PebbleSuite) TestAutostartFailsGetChange(c *check.C) {
 		c.Check(r.URL.Path, check.Equals, "/v1/services")
 
 		body := DecodedRequestBody(c, r)
-		c.Check(body, check.DeepEquals, map[string]interface{}{
+		c.Check(body, check.DeepEquals, map[string]any{
 			"action":   "autostart",
 			"services": nil,
 		})

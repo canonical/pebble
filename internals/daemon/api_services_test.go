@@ -222,14 +222,14 @@ func (s *apiSuite) TestServicesGet(c *C) {
 	c.Check(rsp.Status, Equals, 200)
 	c.Check(rsp.Type, Equals, ResponseTypeSync)
 	c.Check(rsp.Result, NotNil)
-	var body map[string]interface{}
+	var body map[string]any
 	err = json.Unmarshal(rec.Body.Bytes(), &body)
 	c.Check(err, IsNil)
-	c.Check(body["result"], DeepEquals, []interface{}{
-		map[string]interface{}{"startup": "enabled", "name": "test1", "current": "inactive"},
-		map[string]interface{}{"startup": "disabled", "name": "test2", "current": "inactive"},
-		map[string]interface{}{"startup": "disabled", "name": "test3", "current": "inactive"},
-		map[string]interface{}{"startup": "disabled", "name": "test4", "current": "inactive"},
+	c.Check(body["result"], DeepEquals, []any{
+		map[string]any{"startup": "enabled", "name": "test1", "current": "inactive"},
+		map[string]any{"startup": "disabled", "name": "test2", "current": "inactive"},
+		map[string]any{"startup": "disabled", "name": "test3", "current": "inactive"},
+		map[string]any{"startup": "disabled", "name": "test4", "current": "inactive"},
 	})
 }
 

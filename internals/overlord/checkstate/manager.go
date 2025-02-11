@@ -119,7 +119,7 @@ func (m *CheckManager) PlanChanged(newPlan *plan.Plan) {
 				continue
 			}
 			details := mustGetCheckDetails(change)
-			var configKey interface{}
+			var configKey any
 			if change.Kind() == performCheckKind {
 				configKey = performConfigKey{change.ID()}
 			} else {

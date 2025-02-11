@@ -85,7 +85,7 @@ func (fi *FileInfo) IsDir() bool {
 }
 
 // Sys returns the underlying data source (always nil for client.FileInfo).
-func (fi *FileInfo) Sys() interface{} {
+func (fi *FileInfo) Sys() any {
 	return nil
 }
 
