@@ -47,7 +47,7 @@ type CheckManager struct {
 	failureHandlers []FailureFunc
 
 	checksLock sync.Mutex
-	checks     map[string]CheckInfo
+	checks     map[string]*CheckInfo
 }
 
 // FailureFunc is the type of function called when a failure action is triggered.
@@ -57,7 +57,7 @@ type FailureFunc func(name string)
 func NewManager(s *state.State, runner *state.TaskRunner, planMgr *planstate.PlanManager) *CheckManager {
 	manager := &CheckManager{
 		state:   s,
-		checks:  make(map[string]CheckInfo),
+		checks:  make(map[string]*CheckInfo),
 		planMgr: planMgr,
 	}
 
@@ -324,8 +324,17 @@ func (m *CheckManager) Checks() ([]*CheckInfo, error) {
 
 	infos := make([]*CheckInfo, 0, len(m.checks))
 	for _, info := range m.checks {
-		info := info // take the address of a new variable each time
-		infos = append(infos, &info)
+		copied := &CheckInfo{
+			Name:      info.Name,
+			Level:     info.Level,
+			Startup:   info.Startup,
+			Status:    info.Status,
+			Failures:  info.Failures,
+			Threshold: info.Threshold,
+			ChangeID:  info.ChangeID,
+		}
+		infos = append(infos, copied)
+
 	}
 	sort.Slice(infos, func(i, j int) bool {
 		return infos[i].Name < infos[j].Name
@@ -347,15 +356,24 @@ func (m *CheckManager) updateCheckInfo(config *plan.Check, changeID string, fail
 	if startup == plan.CheckStartupUnknown {
 		startup = plan.CheckStartupEnabled
 	}
-	m.checks[config.Name] = CheckInfo{
-		Name:      config.Name,
-		Level:     config.Level,
-		Startup:   startup,
-		Status:    status,
-		Failures:  failures,
-		Threshold: config.Threshold,
-		ChangeID:  changeID,
+	var performCheckCount int64
+	var recoverCheckCount int64
+	if check, ok := m.checks[config.Name]; ok {
+		performCheckCount = check.PerformCheckCount
+		recoverCheckCount = check.RecoverCheckCount
 	}
+	checkInfo := &CheckInfo{
+		Name:              config.Name,
+		Level:             config.Level,
+		Startup:           startup,
+		Status:            status,
+		Failures:          failures,
+		Threshold:         config.Threshold,
+		ChangeID:          changeID,
+		PerformCheckCount: performCheckCount,
+		RecoverCheckCount: recoverCheckCount,
+	}
+	m.checks[config.Name] = checkInfo
 }
 
 func (m *CheckManager) incPerformCheckCount(config *plan.Check) {
@@ -363,7 +381,7 @@ func (m *CheckManager) incPerformCheckCount(config *plan.Check) {
 	defer m.checksLock.Unlock()
 
 	info := m.checks[config.Name]
-	info.performCheckCount += 1
+	info.PerformCheckCount += 1
 	m.checks[config.Name] = info
 }
 
@@ -372,7 +390,7 @@ func (m *CheckManager) incRecoverCheckCount(config *plan.Check) {
 	defer m.checksLock.Unlock()
 
 	info := m.checks[config.Name]
-	info.recoverCheckCount += 1
+	info.RecoverCheckCount += 1
 	m.checks[config.Name] = info
 }
 
@@ -392,8 +410,8 @@ type CheckInfo struct {
 	Failures          int
 	Threshold         int
 	ChangeID          string
-	performCheckCount int64
-	recoverCheckCount int64
+	PerformCheckCount int64
+	RecoverCheckCount int64
 }
 
 type CheckStatus string
@@ -427,7 +445,7 @@ func (c *CheckInfo) writeMetrics(writer metrics.Writer) error {
 	err = writer.Write(metrics.Metric{
 		Name:       "pebble_perform_check_count",
 		Type:       metrics.TypeCounterInt,
-		ValueInt64: c.performCheckCount,
+		ValueInt64: c.PerformCheckCount,
 		Comment:    "Number of times the perform-check has run",
 		Labels:     []metrics.Label{metrics.NewLabel("check", c.Name)},
 	})
@@ -438,7 +456,7 @@ func (c *CheckInfo) writeMetrics(writer metrics.Writer) error {
 	err = writer.Write(metrics.Metric{
 		Name:       "pebble_recover_check_count",
 		Type:       metrics.TypeCounterInt,
-		ValueInt64: c.recoverCheckCount,
+		ValueInt64: c.RecoverCheckCount,
 		Comment:    "Number of times the recover-check has run",
 		Labels:     []metrics.Label{metrics.NewLabel("check", c.Name)},
 	})

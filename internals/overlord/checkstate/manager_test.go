@@ -451,7 +451,6 @@ func (s *ManagerSuite) TestPlanChangedServiceContext(c *C) {
 		},
 	}
 	s.manager.PlanChanged(origPlan)
-
 	waitChecks(c, s.manager, []*checkstate.CheckInfo{
 		{Name: "chk1", Startup: "enabled", Status: "up", Threshold: 3},
 		{Name: "chk2", Startup: "enabled", Status: "up", Threshold: 3},
