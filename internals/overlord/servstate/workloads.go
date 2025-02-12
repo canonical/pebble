@@ -134,7 +134,7 @@ func (ws *WorkloadsSection) combine(other *WorkloadsSection) error {
 			}
 		default:
 			return &plan.FormatError{
-				Message: fmt.Sprintf(`workload %q has an invalid "override" value: %q`, name, workload.Override),
+				Message: fmt.Sprintf(`workload %q has an invalid "override" policy: %q`, name, workload.Override),
 			}
 		}
 	}
