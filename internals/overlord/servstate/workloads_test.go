@@ -18,10 +18,11 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/canonical/pebble/internals/overlord/servstate"
-	"github.com/canonical/pebble/internals/plan"
 	. "gopkg.in/check.v1"
 	"gopkg.in/yaml.v3"
+
+	"github.com/canonical/pebble/internals/overlord/servstate"
+	"github.com/canonical/pebble/internals/plan"
 )
 
 var schemaTests = []struct {
