@@ -17,9 +17,9 @@ package metrics_test
 import (
 	"bytes"
 
-	"github.com/canonical/pebble/internals/metrics"
-
 	. "gopkg.in/check.v1"
+
+	"github.com/canonical/pebble/internals/metrics"
 )
 
 type OpenTelemetryWriterSuite struct{}
