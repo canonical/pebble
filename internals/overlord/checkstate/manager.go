@@ -385,18 +385,14 @@ func (m *CheckManager) incPerformCheckCount(config *plan.Check) {
 	m.checksLock.Lock()
 	defer m.checksLock.Unlock()
 
-	info := m.checks[config.Name]
-	info.PerformCheckCount += 1
-	m.checks[config.Name] = info
+	m.checks[config.Name].PerformCheckCount += 1
 }
 
 func (m *CheckManager) incRecoverCheckCount(config *plan.Check) {
 	m.checksLock.Lock()
 	defer m.checksLock.Unlock()
 
-	info := m.checks[config.Name]
-	info.RecoverCheckCount += 1
-	m.checks[config.Name] = info
+	m.checks[config.Name].RecoverCheckCount += 1
 }
 
 func (m *CheckManager) deleteCheckInfo(name string) {

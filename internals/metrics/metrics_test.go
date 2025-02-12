@@ -16,12 +16,17 @@ package metrics_test
 
 import (
 	"bytes"
-	"testing"
 
 	"github.com/canonical/pebble/internals/metrics"
+
+	. "gopkg.in/check.v1"
 )
 
-func TestOpenTelemetryWriter(t *testing.T) {
+type OpenTelemetryWriterSuite struct{}
+
+var _ = Suite(&OpenTelemetryWriterSuite{})
+
+func (s *OpenTelemetryWriterSuite) TestOpenTelemetryWriter(c *C) {
 	testCases := []struct {
 		name     string
 		metric   metrics.Metric
@@ -92,16 +97,10 @@ special_chars{key_with_underscore=value_with_underscore,key-with-dash=value-with
 	}
 
 	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			buf := &bytes.Buffer{}
-			writer := metrics.NewOpenTelemetryWriter(buf)
-			err := writer.Write(tc.metric)
-			if err != nil {
-				t.Fatalf("Write failed: %v", err)
-			}
-			if buf.String() != tc.expected {
-				t.Errorf("Output mismatch:\nExpected:\n%s\nGot:\n%s", tc.expected, buf.String())
-			}
-		})
+		buf := &bytes.Buffer{}
+		writer := metrics.NewOpenTelemetryWriter(buf)
+		err := writer.Write(tc.metric)
+		c.Assert(err, IsNil)
+		c.Assert(buf.String(), Equals, tc.expected)
 	}
 }
