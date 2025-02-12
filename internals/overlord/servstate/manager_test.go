@@ -35,6 +35,7 @@ import (
 	. "gopkg.in/check.v1"
 
 	"github.com/canonical/pebble/internals/logger"
+	"github.com/canonical/pebble/internals/metrics"
 	"github.com/canonical/pebble/internals/overlord/checkstate"
 	"github.com/canonical/pebble/internals/overlord/restart"
 	"github.com/canonical/pebble/internals/overlord/servstate"
@@ -2092,4 +2093,50 @@ func waitChecks(c *C, checkMgr *checkstate.CheckManager, f func(checks []*checks
 	}
 	c.Fatal("timed out waiting for checks to settle")
 	return nil
+}
+
+func (s *S) TestMetrics(c *C) {
+	s.newServiceManager(c)
+	s.planAddLayer(c, testPlanLayer)
+	s.planChanged(c)
+
+	s.startTestServices(c, true)
+	if c.Failed() {
+		return
+	}
+	buf := new(bytes.Buffer)
+	openTelemetryWriter := metrics.NewOpenTelemetryWriter(buf)
+	s.manager.WriteMetrics(openTelemetryWriter)
+	metrics := buf.String()
+	c.Assert(metrics, testutil.Contains, "pebble_service_start_count{service=test1} 1")
+	c.Assert(metrics, testutil.Contains, "pebble_service_active{service=test1} 1")
+	c.Assert(metrics, testutil.Contains, "pebble_service_start_count{service=test2} 1")
+	c.Assert(metrics, testutil.Contains, "pebble_service_active{service=test2} 1")
+
+	s.stopTestServices(c)
+	s.manager.WriteMetrics(openTelemetryWriter)
+	metrics = buf.String()
+	c.Assert(metrics, testutil.Contains, "pebble_service_start_count{service=test1} 1")
+	c.Assert(metrics, testutil.Contains, "pebble_service_active{service=test1} 0")
+	c.Assert(metrics, testutil.Contains, "pebble_service_start_count{service=test2} 1")
+	c.Assert(metrics, testutil.Contains, "pebble_service_active{service=test2} 0")
+
+	s.startTestServices(c, true)
+	if c.Failed() {
+		return
+	}
+	s.manager.WriteMetrics(openTelemetryWriter)
+	metrics = buf.String()
+	c.Assert(metrics, testutil.Contains, "pebble_service_start_count{service=test1} 2")
+	c.Assert(metrics, testutil.Contains, "pebble_service_active{service=test1} 1")
+	c.Assert(metrics, testutil.Contains, "pebble_service_start_count{service=test2} 2")
+	c.Assert(metrics, testutil.Contains, "pebble_service_active{service=test2} 1")
+
+	s.stopTestServices(c)
+	s.manager.WriteMetrics(openTelemetryWriter)
+	metrics = buf.String()
+	c.Assert(metrics, testutil.Contains, "pebble_service_start_count{service=test1} 2")
+	c.Assert(metrics, testutil.Contains, "pebble_service_active{service=test1} 0")
+	c.Assert(metrics, testutil.Contains, "pebble_service_start_count{service=test2} 2")
+	c.Assert(metrics, testutil.Contains, "pebble_service_active{service=test2} 0")
 }
