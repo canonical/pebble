@@ -868,3 +868,54 @@ func (s *ManagerSuite) TestReplan(c *C) {
 	c.Assert(status, Matches, "Do.*")
 	c.Assert(change.Kind(), Equals, "perform-check")
 }
+
+func (s *ManagerSuite) TestMetrics(c *C) {
+	origLayer := &plan.Layer{
+		Checks: map[string]*plan.Check{
+			"chk1": {
+				Name:      "chk1",
+				Override:  "replace",
+				Period:    plan.OptionalDuration{Value: 10 * time.Millisecond},
+				Timeout:   plan.OptionalDuration{Value: time.Second},
+				Threshold: 3,
+				Exec:      &plan.ExecCheck{Command: "echo chk1"},
+				Startup:   plan.CheckStartupDisabled,
+			},
+		},
+	}
+	err := s.planMgr.AppendLayer(origLayer, false)
+	c.Assert(err, IsNil)
+
+	// Ensure and wait for the counter to increase.
+	s.manager.PlanChanged(&plan.Plan{
+		Checks: map[string]*plan.Check{
+			"chk1": {
+				Name:      "chk1",
+				Override:  "replace",
+				Period:    plan.OptionalDuration{Value: 10 * time.Millisecond},
+				Timeout:   plan.OptionalDuration{Value: time.Second},
+				Threshold: 3,
+				Exec:      &plan.ExecCheck{Command: "echo chk1"},
+				Startup:   plan.CheckStartupEnabled,
+			},
+		},
+	})
+	waitChecks(c, s.manager, []*checkstate.CheckInfo{
+		{Name: "chk1", Startup: "enabled", Status: "up", Threshold: 3, PerformCheckCount: 2, RecoverCheckCount: 0},
+	})
+	checks, err := s.manager.Checks()
+	c.Assert(err, IsNil)
+	c.Assert(checks[0].PerformCheckCount, Equals, int64(2))
+
+	// Test updateCheckInfo (called by StopChecks) doesn't reset metrics.
+	changed, err := s.manager.StopChecks([]string{"chk1"})
+	waitChecks(c, s.manager, []*checkstate.CheckInfo{
+		{Name: "chk1", Startup: "disabled", Status: "inactive", Threshold: 3, PerformCheckCount: 2, RecoverCheckCount: 0},
+	})
+	c.Assert(err, IsNil)
+	c.Assert(changed, DeepEquals, []string{"chk1"})
+	checks, err = s.manager.Checks()
+	c.Assert(err, IsNil)
+	c.Assert(checks[0].PerformCheckCount, Equals, int64(2))
+	c.Assert(checks[0].RecoverCheckCount, Equals, int64(0))
+}

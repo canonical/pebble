@@ -325,13 +325,15 @@ func (m *CheckManager) Checks() ([]*CheckInfo, error) {
 	infos := make([]*CheckInfo, 0, len(m.checks))
 	for _, info := range m.checks {
 		copied := &CheckInfo{
-			Name:      info.Name,
-			Level:     info.Level,
-			Startup:   info.Startup,
-			Status:    info.Status,
-			Failures:  info.Failures,
-			Threshold: info.Threshold,
-			ChangeID:  info.ChangeID,
+			Name:              info.Name,
+			Level:             info.Level,
+			Startup:           info.Startup,
+			Status:            info.Status,
+			Failures:          info.Failures,
+			Threshold:         info.Threshold,
+			ChangeID:          info.ChangeID,
+			PerformCheckCount: info.PerformCheckCount,
+			RecoverCheckCount: info.RecoverCheckCount,
 		}
 		infos = append(infos, copied)
 
@@ -356,24 +358,27 @@ func (m *CheckManager) updateCheckInfo(config *plan.Check, changeID string, fail
 	if startup == plan.CheckStartupUnknown {
 		startup = plan.CheckStartupEnabled
 	}
-	var performCheckCount int64
-	var recoverCheckCount int64
+
 	if check, ok := m.checks[config.Name]; ok {
-		performCheckCount = check.PerformCheckCount
-		recoverCheckCount = check.RecoverCheckCount
+		check.Level = config.Level
+		check.Startup = startup
+		check.Status = status
+		check.Failures = failures
+		check.Threshold = config.Threshold
+		check.ChangeID = changeID
+	} else {
+		m.checks[config.Name] = &CheckInfo{
+			Name:              config.Name,
+			Level:             config.Level,
+			Startup:           startup,
+			Status:            status,
+			Failures:          failures,
+			Threshold:         config.Threshold,
+			ChangeID:          changeID,
+			PerformCheckCount: 0,
+			RecoverCheckCount: 0,
+		}
 	}
-	checkInfo := &CheckInfo{
-		Name:              config.Name,
-		Level:             config.Level,
-		Startup:           startup,
-		Status:            status,
-		Failures:          failures,
-		Threshold:         config.Threshold,
-		ChangeID:          changeID,
-		PerformCheckCount: performCheckCount,
-		RecoverCheckCount: recoverCheckCount,
-	}
-	m.checks[config.Name] = checkInfo
 }
 
 func (m *CheckManager) incPerformCheckCount(config *plan.Check) {
