@@ -19,11 +19,12 @@ import (
 	"strings"
 	"time"
 
+	. "gopkg.in/check.v1"
+	"gopkg.in/yaml.v3"
+
 	"github.com/canonical/pebble/internals/overlord/servstate"
 	"github.com/canonical/pebble/internals/overlord/state"
 	"github.com/canonical/pebble/internals/plan"
-	. "gopkg.in/check.v1"
-	"gopkg.in/yaml.v3"
 )
 
 var schemaTests = []struct {
