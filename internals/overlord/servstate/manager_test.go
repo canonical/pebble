@@ -1798,12 +1798,15 @@ func (s *S) planAddLayer(c *C, layerYAML string) {
 	layers := append(s.plan.Layers, layer)
 	combined, err := plan.CombineLayers(layers...)
 	c.Assert(err, IsNil)
+	c.Assert(combined.Validate(), IsNil)
 	s.plan = &plan.Plan{
 		Layers:     layers,
 		Services:   combined.Services,
 		Checks:     combined.Checks,
 		LogTargets: combined.LogTargets,
+		Sections:   combined.Sections,
 	}
+	c.Assert(s.plan.Validate(), IsNil)
 }
 
 // Make sure services are all stopped before the next test starts.
