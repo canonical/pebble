@@ -134,6 +134,9 @@ func (s *identitiesSuite) TestUnmarshalAPIErrors(c *C) {
 	}, {
 		data:  `{"invalid-access": {"local": {"user-id": 42}}}`,
 		error: `access value must be specified \("admin", "read", "metrics", or "untrusted"\)`,
+	}, {
+		data:  `{"invalid-access": {"access": "admin", "basic": {"password": "hash"}}}`,
+		error: `basic identity can only have \"metrics\" access, got \"admin\"`,
 	}}
 	for _, test := range tests {
 		c.Logf("Input data: %s", test.data)
@@ -661,5 +664,32 @@ func (s *identitiesSuite) TestIdentityFromInputs(c *C) {
 	c.Assert(identity, IsNil)
 
 	identity = st.IdentityFromInputs(nil, "nancy-wrong-username", "wrong-password")
+	c.Assert(identity, IsNil)
+
+	// userID, username, password all provided, two matching identities, prioritize basic type.
+	userID = 42
+	identity = st.IdentityFromInputs(&userID, "nancy", "test")
+	c.Assert(identity, NotNil)
+	c.Check(identity.Name, Equals, "nancy")
+
+	// userID, username, password all provided, invalid username/password, userID ignored.
+	userID = 42
+	identity = st.IdentityFromInputs(&userID, "nancy", "")
+	c.Assert(identity, IsNil)
+
+	userID = 42
+	identity = st.IdentityFromInputs(&userID, "", "test")
+	c.Assert(identity, IsNil)
+
+	userID = 42
+	identity = st.IdentityFromInputs(&userID, "nancy-wrong-username", "test")
+	c.Assert(identity, IsNil)
+
+	userID = 42
+	identity = st.IdentityFromInputs(&userID, "nancy", "wrong-password")
+	c.Assert(identity, IsNil)
+
+	userID = 42
+	identity = st.IdentityFromInputs(&userID, "nancy-wrong-username", "wrong-password")
 	c.Assert(identity, IsNil)
 }
