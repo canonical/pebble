@@ -300,6 +300,15 @@ func (s *identitiesSuite) TestAddIdentities(c *C) {
 	})
 	c.Assert(err, ErrorMatches, `identity "bill" invalid: invalid access value "bar", must be "admin", "read", "metrics", or "untrusted"`)
 
+	// Basic type identity only allow metrics access.
+	err = st.AddIdentities(map[string]*state.Identity{
+		"bill": {
+			Access: "admin",
+			Basic:  &state.BasicIdentity{Password: "hash"},
+		},
+	})
+	c.Assert(err, ErrorMatches, `identity "bill" invalid: basic identity can only have "metrics" access, got "admin"`)
+
 	// Must have at least one type.
 	err = st.AddIdentities(map[string]*state.Identity{
 		"bill": {
@@ -307,6 +316,16 @@ func (s *identitiesSuite) TestAddIdentities(c *C) {
 		},
 	})
 	c.Assert(err, ErrorMatches, `identity "bill" invalid: identity must have at least one type \(\"local\" or \"basic\"\)`)
+
+	// May have two types.
+	err = st.AddIdentities(map[string]*state.Identity{
+		"peter": {
+			Access: state.MetricsAccess,
+			Basic:  &state.BasicIdentity{Password: "hash"},
+			Local:  &state.LocalIdentity{UserID: 1001},
+		},
+	})
+	c.Assert(err, IsNil)
 
 	// Ensure user IDs are unique with existing users.
 	err = st.AddIdentities(map[string]*state.Identity{
