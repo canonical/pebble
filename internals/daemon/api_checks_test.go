@@ -189,10 +189,10 @@ checks:
 		rsp, body := s.getChecks(c, "")
 		c.Check(rsp.Status, Equals, 200)
 		c.Check(rsp.Type, Equals, ResponseTypeSync)
-		expected := []interface{}{
-			map[string]interface{}{"name": "chk1", "startup": "enabled", "status": "up", "level": "ready", "threshold": 3.0, "change-id": "C0"},
-			map[string]interface{}{"name": "chk2", "startup": "disabled", "status": "inactive", "level": "alive", "threshold": 3.0, "change-id": ""},
-			map[string]interface{}{"name": "chk3", "startup": "enabled", "status": "up", "threshold": 3.0, "change-id": "C2"},
+		expected := []any{
+			map[string]any{"name": "chk1", "startup": "enabled", "status": "up", "level": "ready", "threshold": 3.0, "change-id": "C0"},
+			map[string]any{"name": "chk2", "startup": "disabled", "status": "inactive", "level": "alive", "threshold": 3.0, "change-id": ""},
+			map[string]any{"name": "chk3", "startup": "enabled", "status": "up", "threshold": 3.0, "change-id": "C2"},
 		}
 		if reflect.DeepEqual(body["result"], expected) {
 			break
