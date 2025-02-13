@@ -212,7 +212,7 @@ checks:
 	c.Check(rsp.Result.(responsePayload).Changed, DeepEquals, []string{"chk1", "chk3"})
 }
 
-func (s *apiSuite) postChecks(c *C, body string) (*resp) {
+func (s *apiSuite) postChecks(c *C, body string) *resp {
 	req, err := http.NewRequest("POST", "/v1/checks", strings.NewReader(body))
 	c.Assert(err, IsNil)
 	rsp := v1PostChecks(apiCmd("/v1/checks"), req, nil).(*resp)
