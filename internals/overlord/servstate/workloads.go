@@ -114,7 +114,7 @@ func (ws *WorkloadsSection) Validate() error {
 
 func (ws *WorkloadsSection) combine(other *WorkloadsSection) error {
 	if len(other.Entries) != 0 && ws.Entries == nil {
-		ws.Entries = make(map[string]*Workload)
+		ws.Entries = make(map[string]*Workload, len(other.Entries))
 	}
 	for name, workload := range other.Entries {
 		switch workload.Override {
@@ -181,7 +181,7 @@ func (w *Workload) copy() *Workload {
 
 func (w *Workload) merge(other *Workload) {
 	if len(other.Environment) != 0 && w.Environment == nil {
-		w.Environment = make(map[string]string)
+		w.Environment = make(map[string]string, len(other.Environment))
 	}
 	for k, v := range other.Environment {
 		w.Environment[k] = v

@@ -370,12 +370,15 @@ func (s *serviceData) startInternal() error {
 	if s.config.UserID != nil || s.config.GroupID != nil || s.config.User != "" || s.config.Group != "" {
 		// User/group config from the service takes precedence
 		uid, gid, err = osutil.NormalizeUidGid(s.config.UserID, s.config.GroupID, s.config.User, s.config.Group)
+		if err != nil {
+			return err
+		}
 	} else if s.workload != nil {
 		// Take user/group config from workload
 		uid, gid, err = osutil.NormalizeUidGid(s.workload.UserID, s.workload.GroupID, s.workload.User, s.workload.Group)
-	}
-	if err != nil {
-		return err
+		if err != nil {
+			return err
+		}
 	}
 	if uid != nil && gid != nil {
 		isCurrent, err := osutil.IsCurrent(*uid, *gid)
