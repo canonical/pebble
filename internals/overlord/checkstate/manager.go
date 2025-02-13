@@ -19,10 +19,13 @@ import (
 	"fmt"
 	"reflect"
 	"sort"
+	"strings"
 	"sync"
 
 	"gopkg.in/tomb.v2"
 
+	"github.com/canonical/pebble/internals/logger"
+	"github.com/canonical/pebble/internals/overlord/planstate"
 	"github.com/canonical/pebble/internals/overlord/state"
 	"github.com/canonical/pebble/internals/plan"
 )
@@ -37,7 +40,8 @@ const (
 
 // CheckManager starts and manages the health checks.
 type CheckManager struct {
-	state *state.State
+	state   *state.State
+	planMgr *planstate.PlanManager
 
 	failureHandlers []FailureFunc
 
@@ -49,10 +53,11 @@ type CheckManager struct {
 type FailureFunc func(name string)
 
 // NewManager creates a new check manager.
-func NewManager(s *state.State, runner *state.TaskRunner) *CheckManager {
+func NewManager(s *state.State, runner *state.TaskRunner, planMgr *planstate.PlanManager) *CheckManager {
 	manager := &CheckManager{
-		state:  s,
-		checks: make(map[string]CheckInfo),
+		state:   s,
+		checks:  make(map[string]CheckInfo),
+		planMgr: planMgr,
 	}
 
 	// Health check changes can be long-running; ensure they don't get pruned.
@@ -113,7 +118,7 @@ func (m *CheckManager) PlanChanged(newPlan *plan.Plan) {
 				continue
 			}
 			details := mustGetCheckDetails(change)
-			var configKey interface{}
+			var configKey any
 			if change.Kind() == performCheckKind {
 				configKey = performConfigKey{change.ID()}
 			} else {
@@ -136,6 +141,15 @@ func (m *CheckManager) PlanChanged(newPlan *plan.Plan) {
 					// Don't restart check if its configuration hasn't changed.
 					continue
 				}
+				// We exclude any checks that have changed from startup:enabled
+				// to startup:disabled, because these should now be inactive and
+				// only started when explicitly requested.
+				// If the plan doesn't have an explicit startup value, it
+				// defaults to enabled, for backwards compatibility.
+				if newConfig.Startup == plan.CheckStartupDisabled &&
+					(oldConfig.Startup == plan.CheckStartupEnabled || oldConfig.Startup == plan.CheckStartupUnknown) {
+					continue
+				}
 				// Check is in old and new plans and has been modified.
 				newOrModified[details.Name] = true
 			}
@@ -145,10 +159,17 @@ func (m *CheckManager) PlanChanged(newPlan *plan.Plan) {
 		}
 	}
 
-	// Also find checks that are new (in new plan but not in old one).
+	// Also find checks that are new (in new plan but not in old one) and have
+	// `startup` set to `enabled` (or not explicitly set).
 	for _, config := range newPlan.Checks {
 		if !existingChecks[config.Name] {
-			newOrModified[config.Name] = true
+			if config.Startup == plan.CheckStartupEnabled || config.Startup == plan.CheckStartupUnknown {
+				newOrModified[config.Name] = true
+			} else {
+				// Check is new and should be inactive - no need to start it,
+				// but we need to add it to the list of existing checks.
+				m.updateCheckInfo(config, "", 0)
+			}
 		}
 	}
 
@@ -316,12 +337,19 @@ func (m *CheckManager) updateCheckInfo(config *plan.Check, changeID string, fail
 	defer m.checksLock.Unlock()
 
 	status := CheckStatusUp
-	if failures >= config.Threshold {
+	if changeID == "" {
+		status = CheckStatusInactive
+	} else if failures >= config.Threshold {
 		status = CheckStatusDown
+	}
+	startup := config.Startup
+	if startup == plan.CheckStartupUnknown {
+		startup = plan.CheckStartupEnabled
 	}
 	m.checks[config.Name] = CheckInfo{
 		Name:      config.Name,
 		Level:     config.Level,
+		Startup:   startup,
 		Status:    status,
 		Failures:  failures,
 		Threshold: config.Threshold,
@@ -340,6 +368,7 @@ func (m *CheckManager) deleteCheckInfo(name string) {
 type CheckInfo struct {
 	Name      string
 	Level     plan.CheckLevel
+	Startup   plan.CheckStartup
 	Status    CheckStatus
 	Failures  int
 	Threshold int
@@ -349,10 +378,146 @@ type CheckInfo struct {
 type CheckStatus string
 
 const (
-	CheckStatusUp   CheckStatus = "up"
-	CheckStatusDown CheckStatus = "down"
+	CheckStatusUp       CheckStatus = "up"
+	CheckStatusDown     CheckStatus = "down"
+	CheckStatusInactive CheckStatus = "inactive"
 )
 
 type checker interface {
 	check(ctx context.Context) error
+}
+
+// ChecksNotFound is the error returned by StartChecks or StopChecks when a check
+// with the specified name is not found in the plan.
+type ChecksNotFound struct {
+	Names []string
+}
+
+func (e *ChecksNotFound) Error() string {
+	sort.Strings(e.Names)
+	return fmt.Sprintf("cannot find checks in plan: %s", strings.Join(e.Names, ", "))
+}
+
+// StartChecks starts the checks with the specified names, if not already
+// running, and returns the checks that did need to be started.
+func (m *CheckManager) StartChecks(checks []string) (started []string, err error) {
+	currentPlan := m.planMgr.Plan()
+
+	// If any check specified is not in the plan, return an error.
+	var missing []string
+	for _, name := range checks {
+		if _, ok := currentPlan.Checks[name]; !ok {
+			missing = append(missing, name)
+		}
+	}
+	if len(missing) > 0 {
+		return nil, &ChecksNotFound{Names: missing}
+	}
+
+	m.state.Lock()
+	defer m.state.Unlock()
+
+	for _, name := range checks {
+		check := currentPlan.Checks[name] // We know this is ok because we checked it above.
+		m.checksLock.Lock()
+		info, ok := m.checks[name]
+		m.checksLock.Unlock()
+		if !ok {
+			// This will be rare: either a PlanChanged is running and this is
+			// between the info being removed and then being added back, or the
+			// check is new to the plan and PlanChanged hasn't finished yet.
+			logger.Noticef("check %s is in the plan but not known to the manager", name)
+			continue
+		}
+		// If the check is already running, skip it.
+		if info.ChangeID != "" {
+			continue
+		}
+		changeID := performCheckChange(m.state, check)
+		m.updateCheckInfo(check, changeID, 0)
+		started = append(started, check.Name)
+	}
+
+	return started, nil
+}
+
+// StopChecks stops the checks with the specified names, if currently running,
+// and returns the checks that did need to be stopped.
+func (m *CheckManager) StopChecks(checks []string) (stopped []string, err error) {
+	currentPlan := m.planMgr.Plan()
+
+	// If any check specified is not in the plan, return an error.
+	var missing []string
+	for _, name := range checks {
+		if _, ok := currentPlan.Checks[name]; !ok {
+			missing = append(missing, name)
+		}
+	}
+	if len(missing) > 0 {
+		return nil, &ChecksNotFound{Names: missing}
+	}
+
+	m.state.Lock()
+	defer m.state.Unlock()
+
+	for _, name := range checks {
+		check := currentPlan.Checks[name] // We know this is ok because we checked it above.
+		m.checksLock.Lock()
+		info, ok := m.checks[name]
+		m.checksLock.Unlock()
+		if !ok {
+			// This will be rare: either a PlanChanged is running and this is
+			// between the info being removed and then being added back, or the
+			// check is new to the plan and PlanChanged hasn't finished yet.
+			logger.Noticef("check %s is in the plan but not known to the manager", name)
+			continue
+		}
+		// If the check is not running, skip it.
+		if info.ChangeID == "" {
+			continue
+		}
+		change := m.state.Change(info.ChangeID)
+		if change != nil {
+			change.Abort()
+			change.SetStatus(state.AbortStatus)
+			stopped = append(stopped, check.Name)
+		}
+		// We pass in the current number of failures so that it remains the
+		// same, so that people can inspect what the state of the check was when
+		// it was stopped. The status of the check will be "inactive", but the
+		// failure count combined with the threshold will give the full picture.
+		m.updateCheckInfo(check, "", info.Failures)
+	}
+
+	return stopped, nil
+}
+
+// Replan handles starting "startup: enabled" checks when a replan occurs.
+// Checks that are "startup: disabled" but are already running do not get
+// stopped in a replan.
+// The state lock must be held when calling this method.
+func (m *CheckManager) Replan() {
+	currentPlan := m.planMgr.Plan()
+
+	for _, check := range currentPlan.Checks {
+		m.checksLock.Lock()
+		info, ok := m.checks[check.Name]
+		m.checksLock.Unlock()
+		if !ok {
+			// This will be rare: either a PlanChanged is running and this is
+			// between the info being removed and then being added back, or the
+			// check is new to the plan and PlanChanged hasn't finished yet.
+			logger.Noticef("check %s is in the plan but not known to the manager", check.Name)
+			continue
+		}
+		if check.Startup == plan.CheckStartupDisabled {
+			continue
+		}
+		// If the check is already running, skip it.
+		if info.ChangeID != "" {
+			continue
+		}
+		changeID := performCheckChange(m.state, check)
+		m.updateCheckInfo(check, changeID, 0)
+	}
 }

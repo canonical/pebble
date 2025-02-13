@@ -62,6 +62,10 @@ jobs:
         go fmt ./...
         git diff --exit-code
 
+    - name: Ensure no use of empty interface (should be any)
+      run: |
+        ! egrep -R --exclude-dir .git 'interface\{\}'
+
   docs:
     runs-on: ubuntu-latest
 

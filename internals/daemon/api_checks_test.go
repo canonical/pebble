@@ -56,10 +56,10 @@ checks:
 		rsp, body := s.getChecks(c, "")
 		c.Check(rsp.Status, Equals, 200)
 		c.Check(rsp.Type, Equals, ResponseTypeSync)
-		expected := []interface{}{
-			map[string]interface{}{"name": "chk1", "status": "up", "level": "ready", "threshold": 3.0, "change-id": "C0"},
-			map[string]interface{}{"name": "chk2", "status": "up", "level": "alive", "threshold": 3.0, "change-id": "C1"},
-			map[string]interface{}{"name": "chk3", "status": "up", "threshold": 3.0, "change-id": "C2"},
+		expected := []any{
+			map[string]any{"name": "chk1", "startup": "enabled", "status": "up", "level": "ready", "threshold": 3.0, "change-id": "C0"},
+			map[string]any{"name": "chk2", "startup": "enabled", "status": "up", "level": "alive", "threshold": 3.0, "change-id": "C1"},
+			map[string]any{"name": "chk3", "startup": "enabled", "status": "up", "threshold": 3.0, "change-id": "C2"},
 		}
 		if reflect.DeepEqual(body["result"], expected) {
 			break
@@ -75,34 +75,34 @@ checks:
 	rsp, body := s.getChecks(c, "?names=chk1&names=chk3")
 	c.Check(rsp.Status, Equals, 200)
 	c.Check(rsp.Type, Equals, ResponseTypeSync)
-	c.Check(body["result"], DeepEquals, []interface{}{
-		map[string]interface{}{"name": "chk1", "status": "up", "level": "ready", "threshold": 3.0, "change-id": "C0"},
-		map[string]interface{}{"name": "chk3", "status": "up", "threshold": 3.0, "change-id": "C1"},
+	c.Check(body["result"], DeepEquals, []any{
+		map[string]any{"name": "chk1", "startup": "enabled", "status": "up", "level": "ready", "threshold": 3.0, "change-id": "C0"},
+		map[string]any{"name": "chk3", "startup": "enabled", "status": "up", "threshold": 3.0, "change-id": "C1"},
 	})
 
 	// Request with names filter (comma-separated values)
 	rsp, body = s.getChecks(c, "?names=chk1,chk3")
 	c.Check(rsp.Status, Equals, 200)
 	c.Check(rsp.Type, Equals, ResponseTypeSync)
-	c.Check(body["result"], DeepEquals, []interface{}{
-		map[string]interface{}{"name": "chk1", "status": "up", "level": "ready", "threshold": 3.0, "change-id": "C0"},
-		map[string]interface{}{"name": "chk3", "status": "up", "threshold": 3.0, "change-id": "C1"},
+	c.Check(body["result"], DeepEquals, []any{
+		map[string]any{"name": "chk1", "startup": "enabled", "status": "up", "level": "ready", "threshold": 3.0, "change-id": "C0"},
+		map[string]any{"name": "chk3", "startup": "enabled", "status": "up", "threshold": 3.0, "change-id": "C1"},
 	})
 
 	// Request with level filter
 	rsp, body = s.getChecks(c, "?level=alive")
 	c.Check(rsp.Status, Equals, 200)
 	c.Check(rsp.Type, Equals, ResponseTypeSync)
-	c.Check(body["result"], DeepEquals, []interface{}{
-		map[string]interface{}{"name": "chk2", "status": "up", "level": "alive", "threshold": 3.0, "change-id": "C0"},
+	c.Check(body["result"], DeepEquals, []any{
+		map[string]any{"name": "chk2", "startup": "enabled", "status": "up", "level": "alive", "threshold": 3.0, "change-id": "C0"},
 	})
 
 	// Request with names and level filters
 	rsp, body = s.getChecks(c, "?level=ready&names=chk1")
 	c.Check(rsp.Status, Equals, 200)
 	c.Check(rsp.Type, Equals, ResponseTypeSync)
-	c.Check(body["result"], DeepEquals, []interface{}{
-		map[string]interface{}{"name": "chk1", "status": "up", "level": "ready", "threshold": 3.0, "change-id": "C0"},
+	c.Check(body["result"], DeepEquals, []any{
+		map[string]any{"name": "chk1", "startup": "enabled", "status": "up", "level": "ready", "threshold": 3.0, "change-id": "C0"},
 	})
 }
 
@@ -114,7 +114,7 @@ func (s *apiSuite) TestChecksGetInvalidLevel(c *C) {
 	c.Check(rsp.Status, Equals, 400)
 	c.Check(rsp.Type, Equals, ResponseTypeError)
 	c.Check(rsp.Result, NotNil)
-	c.Check(body["result"], DeepEquals, map[string]interface{}{
+	c.Check(body["result"], DeepEquals, map[string]any{
 		"message": `level must be "alive" or "ready"`,
 	})
 }
@@ -126,24 +126,24 @@ func (s *apiSuite) TestChecksEmpty(c *C) {
 	rsp, body := s.getChecks(c, "")
 	c.Check(rsp.Status, Equals, 200)
 	c.Check(rsp.Type, Equals, ResponseTypeSync)
-	c.Check(body["result"], DeepEquals, []interface{}{}) // should be [] rather than null
+	c.Check(body["result"], DeepEquals, []any{}) // should be [] rather than null
 }
 
-func (s *apiSuite) getChecks(c *C, query string) (*resp, map[string]interface{}) {
+func (s *apiSuite) getChecks(c *C, query string) (*resp, map[string]any) {
 	req, err := http.NewRequest("GET", "/v1/checks"+query, nil)
 	c.Assert(err, IsNil)
 	rsp := v1GetChecks(apiCmd("/v1/checks"), req, nil).(*resp)
 	rec := httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)
 	c.Check(rec.Code, Equals, rsp.Status)
-	var body map[string]interface{}
+	var body map[string]any
 	err = json.Unmarshal(rec.Body.Bytes(), &body)
 	c.Check(err, IsNil)
 
 	// Standardise the change-id fields before comparison as these can vary.
-	if results, ok := body["result"].([]interface{}); ok {
+	if results, ok := body["result"].([]any); ok {
 		for i, result := range results {
-			resultMap := result.(map[string]interface{})
+			resultMap := result.(map[string]any)
 			c.Check(resultMap["change-id"].(string), Not(Equals), "")
 			resultMap["change-id"] = fmt.Sprintf("C%d", i)
 		}

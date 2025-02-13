@@ -149,6 +149,10 @@ checks:
         # section in the docs for details.
         level: alive | ready
 
+        # (Optional) Control whether the check is started automatically when
+        # Pebble starts or performs a 'replan' operation. Default is "enabled".
+        startup: enabled | disabled
+
         # (Optional) Check is run every time this period (time interval)
         # elapses. Must not be zero. Default is "10s".
         period: <duration>
@@ -164,7 +168,7 @@ checks:
         threshold: <failure threshold>
 
         # Configures an HTTP check, which is successful if a GET to the
-        # specified URL returns a 20x status code.
+        # specified URL returns a 2xx status code.
         #
         # Only one of "http", "tcp", or "exec" may be specified.
         http:

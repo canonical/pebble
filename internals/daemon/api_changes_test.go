@@ -222,39 +222,39 @@ func (s *apiSuite) TestStateChange(c *check.C) {
 	c.Check(rsp.Type, check.Equals, ResponseTypeSync)
 	c.Check(rsp.Result, check.NotNil)
 
-	var body map[string]interface{}
+	var body map[string]any
 	err = json.Unmarshal(rec.Body.Bytes(), &body)
 	c.Check(err, check.IsNil)
-	c.Check(body["result"], check.DeepEquals, map[string]interface{}{
+	c.Check(body["result"], check.DeepEquals, map[string]any{
 		"id":         ids[0],
 		"kind":       "install",
 		"summary":    "install...",
 		"status":     "Do",
 		"ready":      false,
 		"spawn-time": "2016-04-21T01:02:03Z",
-		"tasks": []interface{}{
-			map[string]interface{}{
+		"tasks": []any{
+			map[string]any{
 				"id":         ids[2],
 				"kind":       "download",
 				"summary":    "1...",
 				"status":     "Do",
-				"log":        []interface{}{"2016-04-21T01:02:03Z INFO l11", "2016-04-21T01:02:03Z INFO l12"},
-				"progress":   map[string]interface{}{"label": "", "done": 0., "total": 1.},
+				"log":        []any{"2016-04-21T01:02:03Z INFO l11", "2016-04-21T01:02:03Z INFO l12"},
+				"progress":   map[string]any{"label": "", "done": 0., "total": 1.},
 				"spawn-time": "2016-04-21T01:02:03Z",
-				"data": map[string]interface{}{
+				"data": map[string]any{
 					"foo": "bar",
 				},
 			},
-			map[string]interface{}{
+			map[string]any{
 				"id":         ids[3],
 				"kind":       "activate",
 				"summary":    "2...",
 				"status":     "Do",
-				"progress":   map[string]interface{}{"label": "", "done": 0., "total": 1.},
+				"progress":   map[string]any{"label": "", "done": 0., "total": 1.},
 				"spawn-time": "2016-04-21T01:02:03Z",
 			},
 		},
-		"data": map[string]interface{}{
+		"data": map[string]any{
 			"n": float64(42),
 		},
 	})
@@ -298,10 +298,10 @@ func (s *apiSuite) TestStateChangeAbort(c *check.C) {
 	c.Check(rsp.Type, check.Equals, ResponseTypeSync)
 	c.Check(rsp.Result, check.NotNil)
 
-	var body map[string]interface{}
+	var body map[string]any
 	err = json.Unmarshal(rec.Body.Bytes(), &body)
 	c.Check(err, check.IsNil)
-	c.Check(body["result"], check.DeepEquals, map[string]interface{}{
+	c.Check(body["result"], check.DeepEquals, map[string]any{
 		"id":         ids[0],
 		"kind":       "install",
 		"summary":    "install...",
@@ -309,23 +309,23 @@ func (s *apiSuite) TestStateChangeAbort(c *check.C) {
 		"ready":      true,
 		"spawn-time": "2016-04-21T01:02:03Z",
 		"ready-time": "2016-04-21T01:02:03Z",
-		"tasks": []interface{}{
-			map[string]interface{}{
+		"tasks": []any{
+			map[string]any{
 				"id":         ids[2],
 				"kind":       "download",
 				"summary":    "1...",
 				"status":     "Hold",
-				"log":        []interface{}{"2016-04-21T01:02:03Z INFO l11", "2016-04-21T01:02:03Z INFO l12"},
-				"progress":   map[string]interface{}{"label": "", "done": 1., "total": 1.},
+				"log":        []any{"2016-04-21T01:02:03Z INFO l11", "2016-04-21T01:02:03Z INFO l12"},
+				"progress":   map[string]any{"label": "", "done": 1., "total": 1.},
 				"spawn-time": "2016-04-21T01:02:03Z",
 				"ready-time": "2016-04-21T01:02:03Z",
 			},
-			map[string]interface{}{
+			map[string]any{
 				"id":         ids[3],
 				"kind":       "activate",
 				"summary":    "2...",
 				"status":     "Hold",
-				"progress":   map[string]interface{}{"label": "", "done": 1., "total": 1.},
+				"progress":   map[string]any{"label": "", "done": 1., "total": 1.},
 				"spawn-time": "2016-04-21T01:02:03Z",
 				"ready-time": "2016-04-21T01:02:03Z",
 			},
@@ -363,10 +363,10 @@ func (s *apiSuite) TestStateChangeAbortIsReady(c *check.C) {
 	c.Check(rsp.Type, check.Equals, ResponseTypeError)
 	c.Check(rsp.Result, check.NotNil)
 
-	var body map[string]interface{}
+	var body map[string]any
 	err = json.Unmarshal(rec.Body.Bytes(), &body)
 	c.Check(err, check.IsNil)
-	c.Check(body["result"], check.DeepEquals, map[string]interface{}{
+	c.Check(body["result"], check.DeepEquals, map[string]any{
 		"message": fmt.Sprintf("cannot abort change %s with nothing pending", ids[0]),
 	})
 }
@@ -402,10 +402,10 @@ func (s *apiSuite) TestWaitChangeSuccess(c *check.C) {
 	c.Check(rsp.Type, check.Equals, ResponseTypeSync)
 	c.Check(rsp.Result, check.NotNil)
 
-	var body map[string]interface{}
+	var body map[string]any
 	err := json.Unmarshal(rec.Body.Bytes(), &body)
 	c.Check(err, check.IsNil)
-	result := body["result"].(map[string]interface{})
+	result := body["result"].(map[string]any)
 	c.Check(result["id"].(string), check.Equals, changeID)
 	c.Check(result["kind"].(string), check.Equals, "exec")
 	c.Check(result["ready"].(bool), check.Equals, true)

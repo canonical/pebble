@@ -243,7 +243,7 @@ func v1PostChange(c *Command, r *http.Request, _ *UserState) Response {
 	}
 
 	if reqData.Action != "abort" {
-		return BadRequest("change action %q is unsupported", reqData.Action)
+		return BadRequest("invalid action %q", reqData.Action)
 	}
 
 	if chg.Status().Ready() {

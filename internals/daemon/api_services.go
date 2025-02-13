@@ -95,7 +95,7 @@ func v1PostServices(c *Command, r *http.Request, _ *UserState) Response {
 		payload.Services = services
 	default:
 		if len(payload.Services) == 0 {
-			return BadRequest("no services to %s provided", payload.Action)
+			return BadRequest("must specify services for %s action", payload.Action)
 		}
 	}
 
@@ -181,8 +181,17 @@ func v1PostServices(c *Command, r *http.Request, _ *UserState) Response {
 		}
 		sort.Strings(services)
 		payload.Services = services
+
+		// We need to ensure that checks are also updated when a replan occurs,
+		// so we do that directly here. If this gets more complex in the future
+		// - for example other managers also need to be informed, then we might
+		// want to introduce a listener system for replan, but for now we keep
+		// it simple.
+		checkmgr := c.d.overlord.CheckManager()
+		checkmgr.Replan()
+
 	default:
-		return BadRequest("action %q is unsupported", payload.Action)
+		return BadRequest("invalid action %q", payload.Action)
 	}
 	if err != nil {
 		return BadRequest("cannot %s services: %v", payload.Action, err)

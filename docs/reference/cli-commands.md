@@ -8,9 +8,9 @@ The `pebble` command has the following subcommands, organised into logical group
 
 * Run: [run](#reference_pebble_run_command)
 * Info: [help](#reference_pebble_help_command), [version](#reference_pebble_version_command)
-* Plan: [add](#reference_pebble_add_command), [plan](#reference_pebble_plan_command)
-* Services: [services](#reference_pebble_services_command), [logs](#reference_pebble_logs_command), [start](#reference_pebble_start_command), [restart](#reference_pebble_restart_command), [signal](#reference_pebble_signal_command), [stop](#reference_pebble_stop_command), [replan](#reference_pebble_replan_command)
-* Checks: [checks](#reference_pebble_checks_command), [health](#reference_pebble_health_command)
+* Plan: [add](#reference_pebble_add_command), [plan](#reference_pebble_plan_command), [replan](#reference_pebble_replan_command)
+* Services: [services](#reference_pebble_services_command), [logs](#reference_pebble_logs_command), [start](#reference_pebble_start_command), [restart](#reference_pebble_restart_command), [signal](#reference_pebble_signal_command), [stop](#reference_pebble_stop_command)
+* Checks: [checks](#reference_pebble_checks_command), [start-checks](#reference_pebble_start_checks_command), [stop-checks](#reference_pebble_stop_checks_command), [health](#reference_pebble_health_command)
 * Files: [push](#reference_pebble_push_command), [pull](#reference_pebble_pull_command), [ls](#reference_pebble_ls_command), [mkdir](#reference_pebble_mkdir_command), [rm](#reference_pebble_rm_command), [exec](#reference_pebble_exec_command)
 * Changes: [changes](#reference_pebble_changes_command), [tasks](#reference_pebble_tasks_command)
 * Notices: [warnings](#reference_pebble_warnings_command), [okay](#reference_pebble_okay_command), [notices](#reference_pebble_notices_command), [notice](#reference_pebble_notice_command), [notify](#reference_pebble_notify_command)
@@ -191,7 +191,7 @@ error: cannot perform the following tasks:
 - exec command "sleep" (timed out after 1s: context deadline exceeded)
 ```
 
-Read more: [Use Pebble in containers](pebble-in-containers.md).
+Read more: [How to use Pebble to manage remote systems](/how-to/manage-a-remote-system.md).
 
 
 (reference_pebble_health_command)=
@@ -236,9 +236,9 @@ Commands can be classified as follows:
 
          Run: run
         Info: help, version
-        Plan: add, plan
-    Services: services, logs, start, restart, signal, stop, replan
-      Checks: checks, health
+        Plan: add, plan, replan
+    Services: services, logs, start, restart, signal, stop
+      Checks: checks, start-checks, stop-checks, health
        Files: push, pull, ls, mkdir, rm, exec
      Changes: changes, tasks
      Notices: warnings, okay, notices, notice, notify
@@ -410,7 +410,7 @@ may be specified for the last path element.
 ```
 <!-- END AUTOMATED OUTPUT FOR ls -->
 
-Read more: [Use Pebble in containers](pebble-in-containers.md).
+Read more: [How to use Pebble to manage remote systems](/how-to/manage-a-remote-system.md).
 
 
 (reference_pebble_mkdir_command)=
@@ -437,7 +437,7 @@ The mkdir command creates the specified directory.
 ```
 <!-- END AUTOMATED OUTPUT FOR mkdir -->
 
-Read more: [Use Pebble in containers](pebble-in-containers.md).
+Read more: [How to use Pebble to manage remote systems](/how-to/manage-a-remote-system.md).
 
 
 (reference_pebble_notice_command)=
@@ -640,7 +640,7 @@ The pull command retrieves a file from the remote system.
 ```
 <!-- END AUTOMATED OUTPUT FOR pull -->
 
-Read more: [Use Pebble in containers](pebble-in-containers.md).
+Read more: [How to use Pebble to manage remote systems](/how-to/manage-a-remote-system.md).
 
 
 (reference_pebble_push_command)=
@@ -666,7 +666,7 @@ The push command transfers a file to the remote system.
 ```
 <!-- END AUTOMATED OUTPUT FOR push -->
 
-Read more: [Use Pebble in containers](pebble-in-containers.md).
+Read more: [How to use Pebble to manage remote systems](/how-to/manage-a-remote-system.md).
 
 
 (reference_pebble_remove-identities_command)=
@@ -706,9 +706,9 @@ The `replan` command starts, stops, or restarts services that have changed, so t
 Usage:
   pebble replan [replan-OPTIONS]
 
-The replan command starts, stops, or restarts services that have changed,
-so that running services exactly match the desired configuration in the
-current plan.
+The replan command starts, stops, or restarts services and checks that have
+changed, so that running services and checks exactly match the desired
+configuration in the current plan.
 
 [replan command options]
       --no-wait    Do not wait for the operation to finish but just print the
@@ -810,7 +810,7 @@ The rm command removes a file or directory.
 ```
 <!-- END AUTOMATED OUTPUT FOR rm -->
 
-Read more: [Use Pebble in containers](pebble-in-containers.md).
+Read more: [How to use Pebble to manage remote systems](/how-to/manage-a-remote-system.md).
 
 
 (reference_pebble_run_command)=
@@ -1007,6 +1007,31 @@ pebble start srv1 srv2
 ```
 
 
+(reference_pebble_start_checks_command)=
+## start-checks
+
+The `start-checks` command starts the checks with the provided names.
+
+<!-- START AUTOMATED OUTPUT FOR start-checks -->
+```{terminal}
+:input: pebble start-checks --help
+Usage:
+  pebble start-checks <check>...
+
+The start-checks command starts the configured health checks provided as
+positional arguments. For any checks that are already active, the command
+has no effect.
+```
+<!-- END AUTOMATED OUTPUT FOR start-checks -->
+
+### Examples
+
+To start specific checks, run `pebble start-checks` followed by one or more check names. For example, to start two checks named "chk1" and "chk2", run:
+
+```bash
+pebble start-checks chk1 chk2
+```
+
 (reference_pebble_stop_command)=
 ## stop
 
@@ -1037,6 +1062,32 @@ To stop specific services, use `pebble stop` followed by one or more service nam
 
 ```bash
 pebble stop srv1
+```
+
+
+(reference_pebble_stop_checks_command)=
+## stop-checks
+
+The `stop-checks` command stops the checks with the provided names.
+
+<!-- START AUTOMATED OUTPUT FOR stop-checks -->
+```{terminal}
+:input: pebble stop-checks --help
+Usage:
+  pebble stop-checks <check>...
+
+The stop-checks command stops the configured health checks provided as
+positional arguments. For any checks that are inactive, the command has
+no effect.
+```
+<!-- END AUTOMATED OUTPUT FOR stop-checks -->
+
+### Examples
+
+To stop specific checks, use `pebble stop-checks` followed by one or more check names. The following example stops one check named "chk1":
+
+```bash
+pebble stop-checks chk1
 ```
 
 

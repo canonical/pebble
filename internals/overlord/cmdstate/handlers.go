@@ -425,7 +425,7 @@ func setExitCode(task *state.Task, exitCode int) {
 	st := task.State()
 	st.Lock()
 	defer st.Unlock()
-	task.Set("api-data", map[string]interface{}{
+	task.Set("api-data", map[string]any{
 		"exit-code": exitCode,
 	})
 }

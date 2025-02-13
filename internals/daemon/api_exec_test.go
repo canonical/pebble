@@ -437,10 +437,10 @@ func (s *execSuite) TestUserGroupError(c *C) {
 }
 
 type execResponse struct {
-	StatusCode int                    `json:"status-code"`
-	Type       string                 `json:"type"`
-	Change     string                 `json:"change"`
-	Result     map[string]interface{} `json:"result"`
+	StatusCode int            `json:"status-code"`
+	Type       string         `json:"type"`
+	Change     string         `json:"change"`
+	Result     map[string]any `json:"result"`
 }
 
 // execRequest directly calls exec via the ServeHTTP endpoint, rather than

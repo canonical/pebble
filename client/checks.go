@@ -15,7 +15,10 @@
 package client
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"fmt"
 	"net/url"
 )
 
@@ -31,6 +34,16 @@ type ChecksOptions struct {
 	Names []string
 }
 
+type ChecksActionOptions struct {
+	// Names is the list of check names on which to perform the action.
+	Names []string
+}
+
+// ChecksActionResult holds the results of a check action.
+type ChecksActionResult struct {
+	Changed []string `json:"changed"`
+}
+
 // CheckLevel represents the level of a health check.
 type CheckLevel string
 
@@ -44,8 +57,17 @@ const (
 type CheckStatus string
 
 const (
-	CheckStatusUp   CheckStatus = "up"
-	CheckStatusDown CheckStatus = "down"
+	CheckStatusUp       CheckStatus = "up"
+	CheckStatusDown     CheckStatus = "down"
+	CheckStatusInactive CheckStatus = "inactive"
+)
+
+// CheckStartup defines the different startup modes for a check.
+type CheckStartup string
+
+const (
+	CheckStartupEnabled  CheckStartup = "enabled"
+	CheckStartupDisabled CheckStartup = "disabled"
 )
 
 // CheckInfo holds status information for a single health check.
@@ -56,8 +78,14 @@ type CheckInfo struct {
 	// Level is this check's level, from the layer configuration.
 	Level CheckLevel `json:"level"`
 
+	// Startup is the startup mode for the check. If it is "enabled", the check
+	// will be started in a Pebble replan and when Pebble starts. If it is
+	// "disabled", it must be started manually.
+	Startup CheckStartup `json:"startup"`
+
 	// Status is the status of this check: "up" if healthy, "down" if the
-	// number of failures has reached the configured threshold.
+	// number of failures has reached the configured threshold, or "inactive" if
+	// the check is inactive.
 	Status CheckStatus `json:"status"`
 
 	// Failures is the number of times in a row this check has failed. It is
@@ -99,4 +127,48 @@ func (client *Client) Checks(opts *ChecksOptions) ([]*CheckInfo, error) {
 		return nil, err
 	}
 	return checks, nil
+}
+
+// StartChecks starts the checks named in opts.Names.
+func (client *Client) StartChecks(opts *ChecksActionOptions) (*ChecksActionResult, error) {
+	return client.doMultiCheckAction("start", opts.Names)
+}
+
+// StopChecks stops the checks named in opts.Names.
+func (client *Client) StopChecks(opts *ChecksActionOptions) (*ChecksActionResult, error) {
+	return client.doMultiCheckAction("stop", opts.Names)
+}
+
+type multiCheckActionData struct {
+	Action string   `json:"action"`
+	Checks []string `json:"checks"`
+}
+
+func (client *Client) doMultiCheckAction(actionName string, checks []string) (*ChecksActionResult, error) {
+	action := multiCheckActionData{
+		Action: actionName,
+		Checks: checks,
+	}
+	data, err := json.Marshal(&action)
+	if err != nil {
+		return nil, fmt.Errorf("cannot marshal multi-check action: %w", err)
+	}
+
+	resp, err := client.Requester().Do(context.Background(), &RequestOptions{
+		Type:   SyncRequest,
+		Method: "POST",
+		Path:   "/v1/checks",
+		Body:   bytes.NewBuffer(data),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	var results *ChecksActionResult
+	err = resp.DecodeResult(&results)
+	if err != nil {
+		return nil, err
+	}
+
+	return results, nil
 }

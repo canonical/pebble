@@ -33,7 +33,7 @@ func dumbDedent(s string) string {
 	return s
 }
 
-func writeTemplate(filename string, templateString string, templateData interface{}) {
+func writeTemplate(filename string, templateString string, templateData any) {
 	os.MkdirAll(filepath.Dir(filename), 0755)
 
 	t, err := template.New(filename).Parse(templateString)

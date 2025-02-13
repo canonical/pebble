@@ -117,7 +117,7 @@ type Plan struct {
 // MarshalYAML implements an override for top level omitempty tags handling.
 // This is required since Sections are based on an inlined map, for which
 // omitempty and inline together is not currently supported.
-func (p *Plan) MarshalYAML() (interface{}, error) {
+func (p *Plan) MarshalYAML() (any, error) {
 	// Define the content inside a structure so we can control the ordering
 	// of top level sections.
 	ordered := []reflect.StructField{{
@@ -420,9 +420,10 @@ const (
 // Check specifies configuration for a single health check.
 type Check struct {
 	// Basic details
-	Name     string     `yaml:"-"`
-	Override Override   `yaml:"override,omitempty"`
-	Level    CheckLevel `yaml:"level,omitempty"`
+	Name     string       `yaml:"-"`
+	Override Override     `yaml:"override,omitempty"`
+	Level    CheckLevel   `yaml:"level,omitempty"`
+	Startup  CheckStartup `yaml:"startup,omitempty"`
 
 	// Common check settings
 	Period    OptionalDuration `yaml:"period,omitempty"`
@@ -454,6 +455,9 @@ func (c *Check) Copy() *Check {
 func (c *Check) Merge(other *Check) {
 	if other.Level != "" {
 		c.Level = other.Level
+	}
+	if other.Startup != "" {
+		c.Startup = other.Startup
 	}
 	if other.Period.IsSet {
 		c.Period = other.Period
@@ -491,6 +495,15 @@ const (
 	UnsetLevel CheckLevel = ""
 	AliveLevel CheckLevel = "alive"
 	ReadyLevel CheckLevel = "ready"
+)
+
+// CheckStartup defines the different startup modes for a check.
+type CheckStartup string
+
+const (
+	CheckStartupUnknown  CheckStartup = ""
+	CheckStartupEnabled  CheckStartup = "enabled"
+	CheckStartupDisabled CheckStartup = "disabled"
 )
 
 // HTTPCheck holds the configuration for an HTTP health check.
@@ -908,6 +921,11 @@ func (layer *Layer) Validate() error {
 				Message: fmt.Sprintf(`plan check %q level must be "alive" or "ready"`, name),
 			}
 		}
+		if check.Startup != CheckStartupUnknown && check.Startup != CheckStartupEnabled && check.Startup != CheckStartupDisabled {
+			return &FormatError{
+				Message: fmt.Sprintf(`plan check %q startup must be "enabled" or "disabled"`, name),
+			}
+		}
 		if check.Period.IsSet && check.Period.Value == 0 {
 			return &FormatError{
 				Message: fmt.Sprintf("plan check %q period must not be zero", name),
@@ -1258,7 +1276,7 @@ func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 	// 2. We honor KnownFields = true behaviour for non extended schema
 	// sections, and at the top field level, which includes Section field
 	// names.
-	builtins := map[string]interface{}{
+	builtins := map[string]any{
 		"summary":     &layer.Summary,
 		"description": &layer.Description,
 		"services":    &layer.Services,

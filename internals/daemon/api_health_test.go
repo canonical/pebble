@@ -44,7 +44,7 @@ func (s *healthSuite) TestNoChecks(c *C) {
 	status, response := serveHealth(c, "GET", "/v1/health", nil)
 
 	c.Assert(status, Equals, 200)
-	c.Assert(response, DeepEquals, map[string]interface{}{
+	c.Assert(response, DeepEquals, map[string]any{
 		"healthy": true,
 	})
 }
@@ -54,6 +54,7 @@ func (s *healthSuite) TestHealthy(c *C) {
 		return []*checkstate.CheckInfo{
 			{Name: "chk1", Status: checkstate.CheckStatusUp},
 			{Name: "chk2", Status: checkstate.CheckStatusUp},
+			{Name: "chk3", Status: checkstate.CheckStatusInactive},
 		}, nil
 	})
 	defer restore()
@@ -61,7 +62,7 @@ func (s *healthSuite) TestHealthy(c *C) {
 	status, response := serveHealth(c, "GET", "/v1/health", nil)
 
 	c.Assert(status, Equals, 200)
-	c.Assert(response, DeepEquals, map[string]interface{}{
+	c.Assert(response, DeepEquals, map[string]any{
 		"healthy": true,
 	})
 }
@@ -72,6 +73,7 @@ func (s *healthSuite) TestUnhealthy(c *C) {
 			{Name: "chk1", Status: checkstate.CheckStatusUp},
 			{Name: "chk2", Status: checkstate.CheckStatusDown},
 			{Name: "chk3", Status: checkstate.CheckStatusUp},
+			{Name: "chk4", Status: checkstate.CheckStatusInactive},
 		}, nil
 	})
 	defer restore()
@@ -79,7 +81,7 @@ func (s *healthSuite) TestUnhealthy(c *C) {
 	status, response := serveHealth(c, "GET", "/v1/health", nil)
 
 	c.Assert(status, Equals, 502)
-	c.Assert(response, DeepEquals, map[string]interface{}{
+	c.Assert(response, DeepEquals, map[string]any{
 		"healthy": false,
 	})
 }
@@ -128,19 +130,19 @@ func (s *healthSuite) TestLevel(c *C) {
 			status, response := serveHealth(c, "GET", "/v1/health?level=alive", nil)
 			if test.aliveHealthy {
 				c.Check(status, Equals, 200)
-				c.Check(response, DeepEquals, map[string]interface{}{"healthy": true})
+				c.Check(response, DeepEquals, map[string]any{"healthy": true})
 			} else {
 				c.Check(status, Equals, 502)
-				c.Check(response, DeepEquals, map[string]interface{}{"healthy": false})
+				c.Check(response, DeepEquals, map[string]any{"healthy": false})
 			}
 
 			status, response = serveHealth(c, "GET", "/v1/health?level=ready", nil)
 			if test.readyHealthy {
 				c.Check(status, Equals, 200)
-				c.Check(response, DeepEquals, map[string]interface{}{"healthy": true})
+				c.Check(response, DeepEquals, map[string]any{"healthy": true})
 			} else {
 				c.Check(status, Equals, 502)
-				c.Check(response, DeepEquals, map[string]interface{}{"healthy": false})
+				c.Check(response, DeepEquals, map[string]any{"healthy": false})
 			}
 		}()
 	}
@@ -152,32 +154,54 @@ func (s *healthSuite) TestNames(c *C) {
 			{Name: "chk1", Status: checkstate.CheckStatusDown},
 			{Name: "chk2", Status: checkstate.CheckStatusUp},
 			{Name: "chk3", Status: checkstate.CheckStatusUp},
+			{Name: "chk4", Status: checkstate.CheckStatusInactive},
 		}, nil
 	})
 	defer restore()
 
 	status, response := serveHealth(c, "GET", "/v1/health?names=chk1&names=chk3", nil)
 	c.Assert(status, Equals, 502)
-	c.Assert(response, DeepEquals, map[string]interface{}{
+	c.Assert(response, DeepEquals, map[string]any{
 		"healthy": false,
 	})
 
 	status, response = serveHealth(c, "GET", "/v1/health?names=chk1,chk3", nil)
 	c.Assert(status, Equals, 502)
-	c.Assert(response, DeepEquals, map[string]interface{}{
+	c.Assert(response, DeepEquals, map[string]any{
 		"healthy": false,
 	})
 
 	status, response = serveHealth(c, "GET", "/v1/health?names=chk2", nil)
 	c.Assert(status, Equals, 200)
-	c.Assert(response, DeepEquals, map[string]interface{}{
+	c.Assert(response, DeepEquals, map[string]any{
 		"healthy": true,
 	})
 
 	status, response = serveHealth(c, "GET", "/v1/health?names=chk3", nil)
 	c.Assert(status, Equals, 200)
-	c.Assert(response, DeepEquals, map[string]interface{}{
+	c.Assert(response, DeepEquals, map[string]any{
 		"healthy": true,
+	})
+
+	// With only an inactive check, this is the same as no checks, so healthy.
+	status, response = serveHealth(c, "GET", "/v1/health?names=chk4", nil)
+	c.Assert(status, Equals, 200)
+	c.Assert(response, DeepEquals, map[string]any{
+		"healthy": true,
+	})
+
+	// One healthy check, one that should be ignored.
+	status, response = serveHealth(c, "GET", "/v1/health?names=chk2,chk4", nil)
+	c.Assert(status, Equals, 200)
+	c.Assert(response, DeepEquals, map[string]any{
+		"healthy": true,
+	})
+
+	// One unhealthy check, one that should be ignored.
+	status, response = serveHealth(c, "GET", "/v1/health?names=chk1,chk4", nil)
+	c.Assert(status, Equals, 502)
+	c.Assert(response, DeepEquals, map[string]any{
+		"healthy": false,
 	})
 }
 
@@ -190,7 +214,7 @@ func (s *healthSuite) TestBadLevel(c *C) {
 	status, response := serveHealth(c, "GET", "/v1/health?level=foo", nil)
 
 	c.Assert(status, Equals, 400)
-	c.Assert(response, DeepEquals, map[string]interface{}{
+	c.Assert(response, DeepEquals, map[string]any{
 		"message": `level must be "alive" or "ready"`,
 	})
 }
@@ -204,7 +228,7 @@ func (s *healthSuite) TestChecksError(c *C) {
 	status, response := serveHealth(c, "GET", "/v1/health", nil)
 
 	c.Assert(status, Equals, 500)
-	c.Assert(response, DeepEquals, map[string]interface{}{
+	c.Assert(response, DeepEquals, map[string]any{
 		"message": "internal server error",
 	})
 }
@@ -276,7 +300,7 @@ func (s *apiSuite) testHealthStateLockNotHeld(c *C, level string, expectErr bool
 	}
 }
 
-func serveHealth(c *C, method, url string, body io.Reader) (int, map[string]interface{}) {
+func serveHealth(c *C, method, url string, body io.Reader) (int, map[string]any) {
 	recorder := httptest.NewRecorder()
 	request, err := http.NewRequest(method, url, body)
 	c.Assert(err, IsNil)
@@ -285,8 +309,8 @@ func serveHealth(c *C, method, url string, body io.Reader) (int, map[string]inte
 	server.ServeHTTP(recorder, request)
 
 	c.Assert(recorder.Result().Header.Get("Content-Type"), Equals, "application/json")
-	var response map[string]interface{}
+	var response map[string]any
 	err = json.NewDecoder(recorder.Result().Body).Decode(&response)
 	c.Assert(err, IsNil)
-	return recorder.Result().StatusCode, response["result"].(map[string]interface{})
+	return recorder.Result().StatusCode, response["result"].(map[string]any)
 }
