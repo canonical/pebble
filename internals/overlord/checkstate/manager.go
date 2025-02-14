@@ -365,14 +365,20 @@ func (m *CheckManager) incPerformCheckCount(config *plan.Check) {
 	m.checksLock.Lock()
 	defer m.checksLock.Unlock()
 
-	m.checks[config.Name].PerformCheckCount += 1
+	check, ok := m.checks[config.Name]
+	if !ok {
+		check = &CheckInfo{Name: config.Name}
+		m.checks[config.Name] = check
+	}
+
+	m.checks[config.Name].performCheckCount += 1
 }
 
 func (m *CheckManager) incRecoverCheckCount(config *plan.Check) {
 	m.checksLock.Lock()
 	defer m.checksLock.Unlock()
 
-	m.checks[config.Name].RecoverCheckCount += 1
+	m.checks[config.Name].recoverCheckCount += 1
 }
 
 func (m *CheckManager) deleteCheckInfo(name string) {
@@ -391,8 +397,8 @@ type CheckInfo struct {
 	Failures          int
 	Threshold         int
 	ChangeID          string
-	PerformCheckCount int64
-	RecoverCheckCount int64
+	performCheckCount int64
+	recoverCheckCount int64
 }
 
 type CheckStatus string
@@ -426,7 +432,7 @@ func (c *CheckInfo) writeMetrics(writer metrics.Writer) error {
 	err = writer.Write(metrics.Metric{
 		Name:       "pebble_perform_check_count",
 		Type:       metrics.TypeCounterInt,
-		ValueInt64: c.PerformCheckCount,
+		ValueInt64: c.performCheckCount,
 		Comment:    "Number of times the perform-check has run",
 		Labels:     []metrics.Label{metrics.NewLabel("check", c.Name)},
 	})
@@ -437,7 +443,7 @@ func (c *CheckInfo) writeMetrics(writer metrics.Writer) error {
 	err = writer.Write(metrics.Metric{
 		Name:       "pebble_recover_check_count",
 		Type:       metrics.TypeCounterInt,
-		ValueInt64: c.RecoverCheckCount,
+		ValueInt64: c.recoverCheckCount,
 		Comment:    "Number of times the recover-check has run",
 		Labels:     []metrics.Label{metrics.NewLabel("check", c.Name)},
 	})

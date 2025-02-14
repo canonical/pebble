@@ -47,6 +47,7 @@ func (m *CheckManager) doPerformCheck(task *state.Task, tomb *tombpkg.Tomb) erro
 		select {
 		case <-ticker.C:
 			err := runCheck(tomb.Context(nil), chk, config.Timeout.Value)
+			m.incPerformCheckCount(config)
 			if !tomb.Alive() {
 				return checkStopped(config.Name, task.Kind(), tomb.Err())
 			}
@@ -91,7 +92,6 @@ func (m *CheckManager) doPerformCheck(task *state.Task, tomb *tombpkg.Tomb) erro
 				task.Set(checkDetailsAttr, &details)
 				m.state.Unlock()
 			}
-			m.incPerformCheckCount(config)
 
 		case <-tomb.Dying():
 			return checkStopped(config.Name, task.Kind(), tomb.Err())
