@@ -17,7 +17,6 @@ package metrics
 import (
 	"fmt"
 	"io"
-	"strings"
 )
 
 type MetricType int
@@ -86,15 +85,17 @@ func (otw *OpenTelemetryWriter) Write(m Metric) error {
 		return err
 	}
 
-	var labelsStr string
+	io.WriteString(otw.w, m.Name)
 	if len(m.Labels) > 0 {
-		labels := make([]string, len(m.Labels))
+		io.WriteString(otw.w, "{")
 		for i, label := range m.Labels {
-			labels[i] = fmt.Sprintf("%s=%q", label.key, label.value) // Use %q to quote values
+			if i > 0 {
+				io.WriteString(otw.w, ",")
+			}
+			fmt.Fprintf(otw.w, "%s=%q", label.key, label.value) // Use %q to quote values.
 		}
-		labelsStr = fmt.Sprintf("{%s}", strings.Join(labels, ","))
+		io.WriteString(otw.w, "}")
 	}
-
-	_, err = fmt.Fprintf(otw.w, "%s%s %d\n", m.Name, labelsStr, m.ValueInt64)
+	fmt.Fprintf(otw.w, " %d\n", m.ValueInt64)
 	return err
 }
