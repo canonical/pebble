@@ -373,7 +373,6 @@ func (d *Daemon) Init() error {
 	}
 
 	logger.Noticef("Started daemon.")
-
 	return nil
 }
 
