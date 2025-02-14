@@ -20,8 +20,9 @@ import (
 	"net/http/httptest"
 	"time"
 
-	"github.com/canonical/pebble/internals/overlord/servstate"
 	. "gopkg.in/check.v1"
+
+	"github.com/canonical/pebble/internals/overlord/servstate"
 )
 
 func (s *apiSuite) TestMetrics(c *C) {
