@@ -340,7 +340,14 @@ func (m *ServiceManager) WriteMetrics(writer metrics.Writer) error {
 	m.servicesLock.Lock()
 	defer m.servicesLock.Unlock()
 
-	for _, service := range m.services {
+	names := make([]string, 0, len(m.services))
+	for name := range m.services {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	for _, name := range names {
+		service := m.services[name]
 		err := service.writeMetrics(writer)
 		if err != nil {
 			return err

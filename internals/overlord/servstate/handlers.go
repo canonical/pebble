@@ -290,7 +290,7 @@ func (s *serviceData) transition(state serviceState) {
 
 // transitionRestarting changes the service's state and also sets the restarting flag.
 func (s *serviceData) transitionRestarting(state serviceState, restarting bool) {
-	// Update current-s_e time if derived status is changing.
+	// Update current-since time if derived status is changing.
 	oldStatus := stateToStatus(s.state)
 	newStatus := stateToStatus(state)
 	if oldStatus != newStatus {
@@ -849,7 +849,7 @@ func (d *serviceData) writeMetrics(writer metrics.Writer) error {
 		Name:       "pebble_service_active",
 		Type:       metrics.TypeGaugeInt,
 		ValueInt64: int64(active),
-		Comment:    "Indicates if the service is currently active (1) or not (0)",
+		Comment:    "Whether the service is currently active (1) or not (0)",
 		Labels:     []metrics.Label{metrics.NewLabel("service", d.config.Name)},
 	})
 	if err != nil {

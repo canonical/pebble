@@ -16,11 +16,16 @@ package metrics_test
 
 import (
 	"bytes"
+	"testing"
 
 	. "gopkg.in/check.v1"
 
 	"github.com/canonical/pebble/internals/metrics"
 )
+
+func Test(t *testing.T) {
+	TestingT(t)
+}
 
 type OpenTelemetryWriterSuite struct{}
 
@@ -44,10 +49,11 @@ func (s *OpenTelemetryWriterSuite) TestOpenTelemetryWriter(c *C) {
 					metrics.NewLabel("key2", "value2"),
 				},
 			},
-			expected: `# HELP my_counter A simple counter
+			expected: `
+# HELP my_counter A simple counter
 # TYPE my_counter counter
-my_counter{key1=value1,key2=value2} 42
-`,
+my_counter{key1="value1",key2="value2"} 42
+`[1:],
 		},
 		{
 			name: "GaugeInt",
@@ -58,10 +64,11 @@ my_counter{key1=value1,key2=value2} 42
 				Comment:    "A simple gauge",
 				Labels:     []metrics.Label{}, // Test with no labels
 			},
-			expected: `# HELP my_gauge A simple gauge
+			expected: `
+# HELP my_gauge A simple gauge
 # TYPE my_gauge gauge
-my_gauge{} 1
-`,
+my_gauge 1
+`[1:],
 		},
 		{
 			name: "NoComment", // Test without comment
@@ -71,10 +78,10 @@ my_gauge{} 1
 				ValueInt64: 42,
 				Labels:     []metrics.Label{metrics.NewLabel("env", "prod")},
 			},
-			expected: `# HELP no_comment_metric 
+			expected: `
 # TYPE no_comment_metric counter
-no_comment_metric{env=prod} 42
-`,
+no_comment_metric{env="prod"} 42
+`[1:],
 		},
 
 		{
@@ -89,10 +96,11 @@ no_comment_metric{env=prod} 42
 					metrics.NewLabel("key-with-dash", "value-with-dash"),
 				},
 			},
-			expected: `# HELP special_chars Metric with special characters
+			expected: `
+# HELP special_chars Metric with special characters
 # TYPE special_chars gauge
-special_chars{key_with_underscore=value_with_underscore,key-with-dash=value-with-dash} 42
-`,
+special_chars{key_with_underscore="value_with_underscore",key-with-dash="value-with-dash"} 42
+`[1:],
 		},
 	}
 

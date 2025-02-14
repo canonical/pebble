@@ -324,19 +324,8 @@ func (m *CheckManager) Checks() ([]*CheckInfo, error) {
 
 	infos := make([]*CheckInfo, 0, len(m.checks))
 	for _, info := range m.checks {
-		copied := &CheckInfo{
-			Name:              info.Name,
-			Level:             info.Level,
-			Startup:           info.Startup,
-			Status:            info.Status,
-			Failures:          info.Failures,
-			Threshold:         info.Threshold,
-			ChangeID:          info.ChangeID,
-			PerformCheckCount: info.PerformCheckCount,
-			RecoverCheckCount: info.RecoverCheckCount,
-		}
-		infos = append(infos, copied)
-
+		copy := *info
+		infos = append(infos, &copy)
 	}
 	sort.Slice(infos, func(i, j int) bool {
 		return infos[i].Name < infos[j].Name
@@ -359,26 +348,17 @@ func (m *CheckManager) updateCheckInfo(config *plan.Check, changeID string, fail
 		startup = plan.CheckStartupEnabled
 	}
 
-	if check, ok := m.checks[config.Name]; ok {
-		check.Level = config.Level
-		check.Startup = startup
-		check.Status = status
-		check.Failures = failures
-		check.Threshold = config.Threshold
-		check.ChangeID = changeID
-	} else {
-		m.checks[config.Name] = &CheckInfo{
-			Name:              config.Name,
-			Level:             config.Level,
-			Startup:           startup,
-			Status:            status,
-			Failures:          failures,
-			Threshold:         config.Threshold,
-			ChangeID:          changeID,
-			PerformCheckCount: 0,
-			RecoverCheckCount: 0,
-		}
+	check, ok := m.checks[config.Name]
+	if !ok {
+		check = &CheckInfo{Name: config.Name}
+		m.checks[config.Name] = check
 	}
+	check.Level = config.Level
+	check.Startup = startup
+	check.Status = status
+	check.Failures = failures
+	check.Threshold = config.Threshold
+	check.ChangeID = changeID
 }
 
 func (m *CheckManager) incPerformCheckCount(config *plan.Check) {
@@ -428,14 +408,14 @@ type checker interface {
 }
 
 func (c *CheckInfo) writeMetrics(writer metrics.Writer) error {
-	checkStatus := 0
+	checkUp := int64(0)
 	if c.Status == CheckStatusUp {
-		checkStatus = 1
+		checkUp = 1
 	}
 	err := writer.Write(metrics.Metric{
 		Name:       "pebble_check_up",
 		Type:       metrics.TypeGaugeInt,
-		ValueInt64: int64(checkStatus),
+		ValueInt64: checkUp,
 		Comment:    "Whether the health check is up (1) or not (0)",
 		Labels:     []metrics.Label{metrics.NewLabel("check", c.Name)},
 	})
@@ -473,7 +453,14 @@ func (m *CheckManager) WriteMetrics(writer metrics.Writer) error {
 	m.checksLock.Lock()
 	defer m.checksLock.Unlock()
 
-	for _, info := range m.checks {
+	names := make([]string, 0, len(m.checks))
+	for name := range m.checks {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	for _, name := range names {
+		info := m.checks[name]
 		err := info.writeMetrics(writer)
 		if err != nil {
 			return err

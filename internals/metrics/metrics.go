@@ -27,6 +27,17 @@ const (
 	TypeGaugeInt
 )
 
+func (mt MetricType) String() string {
+	switch mt {
+	case TypeCounterInt:
+		return "counter"
+	case TypeGaugeInt:
+		return "gauge"
+	default:
+		panic("invalid metric type")
+	}
+}
+
 // Metric represents a single metric.
 type Metric struct {
 	Name       string
@@ -63,28 +74,27 @@ func NewOpenTelemetryWriter(w io.Writer) *OpenTelemetryWriter {
 }
 
 func (otw *OpenTelemetryWriter) Write(m Metric) error {
-	var metricType string
-	switch m.Type {
-	case TypeCounterInt:
-		metricType = "counter"
-	case TypeGaugeInt:
-		metricType = "gauge"
+	if m.Comment != "" {
+		_, err := fmt.Fprintf(otw.w, "# HELP %s %s\n", m.Name, m.Comment)
+		if err != nil {
+			return err
+		}
 	}
 
-	_, err := fmt.Fprintf(otw.w, "# HELP %s %s\n", m.Name, m.Comment)
-	if err != nil {
-		return err
-	}
-	_, err = fmt.Fprintf(otw.w, "# TYPE %s %s\n", m.Name, metricType)
+	_, err := fmt.Fprintf(otw.w, "# TYPE %s %s\n", m.Name, m.Type.String())
 	if err != nil {
 		return err
 	}
 
-	labels := make([]string, len(m.Labels))
-	for i, label := range m.Labels {
-		labels[i] = fmt.Sprintf("%s=%s", label.key, label.value)
+	var labelsStr string
+	if len(m.Labels) > 0 {
+		labels := make([]string, len(m.Labels))
+		for i, label := range m.Labels {
+			labels[i] = fmt.Sprintf("%s=%q", label.key, label.value) // Use %q to quote values
+		}
+		labelsStr = fmt.Sprintf("{%s}", strings.Join(labels, ","))
 	}
 
-	_, err = fmt.Fprintf(otw.w, "%s{%s} %d\n", m.Name, strings.Join(labels, ","), m.ValueInt64)
+	_, err = fmt.Fprintf(otw.w, "%s%s %d\n", m.Name, labelsStr, m.ValueInt64)
 	return err
 }
