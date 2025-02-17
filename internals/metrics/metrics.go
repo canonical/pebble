@@ -33,7 +33,7 @@ func (mt MetricType) String() string {
 	case TypeGaugeInt:
 		return "gauge"
 	default:
-		panic("invalid metric type")
+		panic(fmt.Sprintf("invalid metric type %d", mt))
 	}
 }
 
@@ -85,17 +85,40 @@ func (otw *OpenTelemetryWriter) Write(m Metric) error {
 		return err
 	}
 
-	io.WriteString(otw.w, m.Name)
+	_, err = io.WriteString(otw.w, m.Name)
+	if err != nil {
+		return err
+	}
+
 	if len(m.Labels) > 0 {
-		io.WriteString(otw.w, "{")
+		_, err = io.WriteString(otw.w, "{")
+		if err != nil {
+			return err
+		}
+
 		for i, label := range m.Labels {
 			if i > 0 {
-				io.WriteString(otw.w, ",")
+				_, err = io.WriteString(otw.w, ",")
+				if err != nil {
+					return err
+				}
 			}
-			fmt.Fprintf(otw.w, "%s=%q", label.key, label.value) // Use %q to quote values.
+			_, err = fmt.Fprintf(otw.w, "%s=%q", label.key, label.value) // Use %q to quote values.
+			if err != nil {
+				return err
+			}
 		}
-		io.WriteString(otw.w, "}")
+
+		_, err = io.WriteString(otw.w, "}")
+		if err != nil {
+			return err
+		}
 	}
-	fmt.Fprintf(otw.w, " %d\n", m.ValueInt64)
-	return err
+
+	_, err = fmt.Fprintf(otw.w, " %d\n", m.ValueInt64)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

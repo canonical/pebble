@@ -333,6 +333,15 @@ func (m *CheckManager) Checks() ([]*CheckInfo, error) {
 	return infos, nil
 }
 
+func (m *CheckManager) ensureCheck(name string) *CheckInfo {
+	check, ok := m.checks[name]
+	if !ok {
+		check = &CheckInfo{Name: name}
+		m.checks[name] = check
+	}
+	return check
+}
+
 func (m *CheckManager) updateCheckInfo(config *plan.Check, changeID string, failures int) {
 	m.checksLock.Lock()
 	defer m.checksLock.Unlock()
@@ -348,11 +357,7 @@ func (m *CheckManager) updateCheckInfo(config *plan.Check, changeID string, fail
 		startup = plan.CheckStartupEnabled
 	}
 
-	check, ok := m.checks[config.Name]
-	if !ok {
-		check = &CheckInfo{Name: config.Name}
-		m.checks[config.Name] = check
-	}
+	check := m.ensureCheck(config.Name)
 	check.Level = config.Level
 	check.Startup = startup
 	check.Status = status
@@ -365,20 +370,16 @@ func (m *CheckManager) incPerformCheckCount(config *plan.Check) {
 	m.checksLock.Lock()
 	defer m.checksLock.Unlock()
 
-	check, ok := m.checks[config.Name]
-	if !ok {
-		check = &CheckInfo{Name: config.Name}
-		m.checks[config.Name] = check
-	}
-
-	m.checks[config.Name].performCheckCount += 1
+	check := m.ensureCheck(config.Name)
+	check.performCheckCount += 1
 }
 
 func (m *CheckManager) incRecoverCheckCount(config *plan.Check) {
 	m.checksLock.Lock()
 	defer m.checksLock.Unlock()
 
-	m.checks[config.Name].recoverCheckCount += 1
+	check := m.ensureCheck(config.Name)
+	check.recoverCheckCount += 1
 }
 
 func (m *CheckManager) deleteCheckInfo(name string) {
