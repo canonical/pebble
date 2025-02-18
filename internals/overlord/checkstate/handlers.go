@@ -56,7 +56,6 @@ func (m *CheckManager) doPerformCheck(task *state.Task, tomb *tombpkg.Tomb) erro
 				// is reached (for example, restarting a service).
 				details.Failures++
 				atThreshold := details.Failures >= config.Threshold
-
 				if !atThreshold {
 					// Update number of failures in check info. In threshold
 					// case, check data will be updated with new change ID by
