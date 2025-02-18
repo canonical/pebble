@@ -69,7 +69,7 @@ func (ac UserAccess) CheckAccess(d *Daemon, r *http.Request, user *UserState) Re
 	return Unauthorized(accessDenied)
 }
 
-// MetricsAccess allows requests over the HTTP from authenticated users
+// MetricsAccess allows requests over the HTTP from authenticated users.
 type MetricsAccess struct{}
 
 func (ac MetricsAccess) CheckAccess(d *Daemon, r *http.Request, user *UserState) Response {

@@ -31,7 +31,7 @@ type Identity struct {
 	Access IdentityAccess
 
 	// One or more of the following type-specific configuration fields must be
-	// non-nil (currently the only types are "local" and "basic").
+	// non-nil.
 	Local *LocalIdentity
 	Basic *BasicIdentity
 }
@@ -53,27 +53,39 @@ type LocalIdentity struct {
 }
 
 // BasicIdentity holds identity configuration specific to the "basic" type
-// (for username/password authentication).
+// (for HTTP basic authentication).
 type BasicIdentity struct {
-	Password string // Note: In a real application, store a password hash, not the plaintext password.
+	Password string // Note: this is the sha512-crypt hashed password.
 }
 
+// This is used to ensure we send a well-formed identity Name.
+var identityNameRegexp = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9_\-]*$`)
+
 // validate checks that the identity is valid, returning an error if not.
-func (d *Identity) validate() error {
+func (d *Identity) validate(name string) error {
 	if d == nil {
 		return errors.New("identity must not be nil")
 	}
 
-	if d.Name != "" {
-		// Regular expression to match any character that is not a letter, number, underscore, or hyphen.
-		invalidChars := regexp.MustCompile(`[^a-zA-Z0-9_\-]`)
-		if invalidChars.MatchString(d.Name) {
-			return fmt.Errorf("identity name %q contains invalid characters (only alphanumeric, underscore, and hyphen allowed)", d.Name)
-		}
+	if !identityNameRegexp.MatchString(name) {
+		return fmt.Errorf("identity name %q invalid: must start with an alphabetic character and only contain alphanumeric characters, underscore, and hyphen", d.Name)
+	}
+
+	return d.validateExcludingName()
+}
+
+// validateExcludingName checks that the identity is valid, returning an error if not.
+func (d *Identity) validateExcludingName() error {
+	if d == nil {
+		return errors.New("identity must not be nil")
 	}
 
 	switch d.Access {
 	case AdminAccess, ReadAccess, MetricsAccess, UntrustedAccess:
+		// Check basic type access level.
+		if d.Basic != nil && d.Access != MetricsAccess {
+			return fmt.Errorf("basic identity can only have %q access, got %q", MetricsAccess, d.Access)
+		}
 	case "":
 		return fmt.Errorf("access value must be specified (%q, %q, %q, or %q)",
 			AdminAccess, ReadAccess, MetricsAccess, UntrustedAccess)
@@ -82,18 +94,21 @@ func (d *Identity) validate() error {
 			d.Access, AdminAccess, ReadAccess, MetricsAccess, UntrustedAccess)
 	}
 
-	switch {
-	case d.Local != nil:
-		return nil
-	case d.Basic != nil:
+	gotType := false
+	if d.Local != nil {
+		gotType = true
+	}
+	if d.Basic != nil {
 		if d.Basic.Password == "" {
-			return errors.New("basic identity must specify password")
+			return errors.New("basic identity must specify password (hashed)")
 		}
-
-		return nil
-	default:
+		gotType = true
+	}
+	if !gotType {
 		return errors.New(`identity must have at least one type ("local" or "basic")`)
 	}
+
+	return nil
 }
 
 // apiIdentity exists so the default JSON marshalling of an Identity (used
@@ -122,7 +137,7 @@ func (d *Identity) MarshalJSON() ([]byte, error) {
 		ai.Local = &apiLocalIdentity{UserID: &d.Local.UserID}
 	}
 	if d.Basic != nil {
-		ai.Basic = &apiBasicIdentity{Password: d.Basic.Password}
+		ai.Basic = &apiBasicIdentity{Password: "*****"}
 	}
 	return json.Marshal(ai)
 }
@@ -137,20 +152,22 @@ func (d *Identity) UnmarshalJSON(data []byte) error {
 	identity := Identity{
 		Access: IdentityAccess(ai.Access),
 	}
-	switch {
-	case ai.Local != nil:
+
+	if ai.Local != nil {
 		if ai.Local.UserID == nil {
 			return errors.New("local identity must specify user-id")
 		}
 		identity.Local = &LocalIdentity{UserID: *ai.Local.UserID}
-	case ai.Basic != nil:
+	}
+	if ai.Basic != nil {
 		if ai.Basic.Password == "" {
-			return errors.New("basic identity must specify password")
+			return errors.New("basic identity must specify password (hashed)")
 		}
 		identity.Basic = &BasicIdentity{Password: ai.Basic.Password}
 	}
+
 	// Perform additional validation using the local Identity type.
-	err = identity.validate()
+	err = identity.validateExcludingName()
 	if err != nil {
 		return err
 	}
@@ -170,13 +187,11 @@ func (s *State) AddIdentities(identities map[string]*Identity) error {
 		if _, ok := s.identities[name]; ok {
 			existing = append(existing, name)
 		}
-		if identity != nil {
-			identity.Name = name
-		}
-		err := identity.validate()
+		err := identity.validate(name)
 		if err != nil {
 			return fmt.Errorf("identity %q invalid: %w", name, err)
 		}
+		identity.Name = name
 	}
 	if len(existing) > 0 {
 		sort.Strings(existing)
@@ -210,7 +225,7 @@ func (s *State) UpdateIdentities(identities map[string]*Identity) error {
 		if _, ok := s.identities[name]; !ok {
 			missing = append(missing, name)
 		}
-		err := identity.validate()
+		err := identity.validate(name)
 		if err != nil {
 			return fmt.Errorf("identity %q invalid: %w", name, err)
 		}
@@ -244,7 +259,7 @@ func (s *State) ReplaceIdentities(identities map[string]*Identity) error {
 
 	for name, identity := range identities {
 		if identity != nil {
-			err := identity.validate()
+			err := identity.validate(name)
 			if err != nil {
 				return fmt.Errorf("identity %q invalid: %w", name, err)
 			}
@@ -309,23 +324,43 @@ func (s *State) Identities() map[string]*Identity {
 
 // IdentityFromInputs returns an identity with the given inputs, or nil
 // if there is none.
+//
+// Identity priority:
+//  1. If both username and password are provided, the function attempts to
+//     match a basic type identity. The userID is ignored in this case. If
+//     a matching username is found but the password verification fails, nil
+//     is returned immediately.
+//  2. If username and password are not both provided, the function attempts to
+//     match a local type identity using the userID.
+//
+// If no matching identity is found for the given inputs, nil is returned.
 func (s *State) IdentityFromInputs(userID *uint32, username, password string) *Identity {
 	s.reading()
 
-	for _, identity := range s.identities {
-		switch {
-		case identity.Local != nil && userID != nil:
-			if identity.Local.UserID == *userID {
-				return identity
+	switch {
+	case username != "" || password != "":
+		// Prioritize username/password if provided, because they come from HTTP
+		// Authorization header, a per-request, client controlled property. If set
+		// by the client, it's intentional, so it should have a higher priority.
+		for _, identity := range s.identities {
+			if identity.Basic != nil && identity.Name == username {
+				crypt := sha512_crypt.New()
+				err := crypt.Verify(identity.Basic.Password, []byte(password))
+				if err == nil {
+					return identity
+				} else {
+					return nil
+				}
 			}
-		case identity.Basic != nil && username != "" && identity.Name == username && password != "":
-			crypt := sha512_crypt.New()
-			err := crypt.Verify(identity.Basic.Password, []byte(password))
-			if err == nil {
+		}
+	case userID != nil:
+		for _, identity := range s.identities {
+			if identity.Local != nil && identity.Local.UserID == *userID {
 				return identity
 			}
 		}
 	}
+
 	return nil
 }
 

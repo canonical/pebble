@@ -161,11 +161,11 @@ func userFromRequest(st *state.State, r *http.Request, ucred *Ucrednet, username
 		// No identity that matches these inputs (for now, just UID).
 		return nil, nil
 	}
-
-	if identity.Local != nil {
-		return &UserState{Access: identity.Access, UID: userID}, nil
-	} else if identity.Basic != nil {
+	if identity.Basic != nil {
+		// Prioritize basic type and ignore UID in this case.
 		return &UserState{Access: identity.Access}, nil
+	} else if identity.Local != nil {
+		return &UserState{Access: identity.Access, UID: userID}, nil
 	}
 	return nil, nil
 }
@@ -218,8 +218,8 @@ func (c *Command) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// not good: https://github.com/canonical/pebble/pull/369
 	var user *UserState
 	if _, isOpen := access.(OpenAccess); !isOpen {
-		basicAuthUsername, basicAuthPassword, _ := r.BasicAuth()
-		user, err = userFromRequest(c.d.state, r, ucred, basicAuthUsername, basicAuthPassword)
+		username, password, _ := r.BasicAuth()
+		user, err = userFromRequest(c.d.state, r, ucred, username, password)
 		if err != nil {
 			Forbidden("forbidden").ServeHTTP(w, r)
 			return
