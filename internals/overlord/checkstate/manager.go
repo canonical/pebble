@@ -374,20 +374,20 @@ func (m *CheckManager) updateCheckData(config *plan.Check, changeID string, fail
 	check.changeID = changeID
 }
 
-func (m *CheckManager) incPerformCheckCount(config *plan.Check) {
+func (m *CheckManager) incSuccessCount(config *plan.Check) {
 	m.checksLock.Lock()
 	defer m.checksLock.Unlock()
 
 	check := m.ensureCheck(config.Name)
-	check.performCheckCount += 1
+	check.successCount += 1
 }
 
-func (m *CheckManager) incRecoverCheckCount(config *plan.Check) {
+func (m *CheckManager) incFailureCount(config *plan.Check) {
 	m.checksLock.Lock()
 	defer m.checksLock.Unlock()
 
 	check := m.ensureCheck(config.Name)
-	check.recoverCheckCount += 1
+	check.failureCount += 1
 }
 
 func (m *CheckManager) deleteCheckData(name string) {
@@ -410,15 +410,15 @@ type CheckInfo struct {
 
 // checkData holds the metrics and other data for a a single check.
 type checkData struct {
-	name              string
-	level             plan.CheckLevel
-	startup           plan.CheckStartup
-	status            CheckStatus
-	failures          int
-	threshold         int
-	changeID          string
-	performCheckCount int64
-	recoverCheckCount int64
+	name         string
+	level        plan.CheckLevel
+	startup      plan.CheckStartup
+	status       CheckStatus
+	failures     int
+	threshold    int
+	changeID     string
+	successCount int64
+	failureCount int64
 }
 
 type CheckStatus string
@@ -450,10 +450,10 @@ func (c *checkData) writeMetrics(writer metrics.Writer) error {
 	}
 
 	err = writer.Write(metrics.Metric{
-		Name:       "pebble_perform_check_count",
+		Name:       "pebble_check_success_count",
 		Type:       metrics.TypeCounterInt,
-		ValueInt64: c.performCheckCount,
-		Comment:    "Number of times the perform-check has run",
+		ValueInt64: c.successCount,
+		Comment:    "Number of times the check has succeeded",
 		Labels:     []metrics.Label{metrics.NewLabel("check", c.name)},
 	})
 	if err != nil {
@@ -461,10 +461,10 @@ func (c *checkData) writeMetrics(writer metrics.Writer) error {
 	}
 
 	err = writer.Write(metrics.Metric{
-		Name:       "pebble_recover_check_count",
+		Name:       "pebble_check_failure_count",
 		Type:       metrics.TypeCounterInt,
-		ValueInt64: c.recoverCheckCount,
-		Comment:    "Number of times the recover-check has run",
+		ValueInt64: c.failureCount,
+		Comment:    "Number of times the check has failed",
 		Labels:     []metrics.Label{metrics.NewLabel("check", c.name)},
 	})
 	if err != nil {

@@ -871,7 +871,7 @@ func (s *ManagerSuite) TestReplan(c *C) {
 	c.Assert(change.Kind(), Equals, "perform-check")
 }
 
-func (s *ManagerSuite) TestMetricsPerformCheck(c *C) {
+func (s *ManagerSuite) TestMetricsCheckSuccess(c *C) {
 	tempDir := c.MkDir()
 	tempFile := filepath.Join(tempDir, "file.txt")
 	command := fmt.Sprintf(`/bin/sh -c 'echo -n x >>%s'`, tempFile)
@@ -908,17 +908,17 @@ func (s *ManagerSuite) TestMetricsPerformCheck(c *C) {
 # HELP pebble_check_up Whether the health check is up (1) or not (0)
 # TYPE pebble_check_up gauge
 pebble_check_up{check="chk1"} 1
-# HELP pebble_perform_check_count Number of times the perform-check has run
-# TYPE pebble_perform_check_count counter
-pebble_perform_check_count{check="chk1"} 2
-# HELP pebble_recover_check_count Number of times the recover-check has run
-# TYPE pebble_recover_check_count counter
-pebble_recover_check_count{check="chk1"} 0
+# HELP pebble_check_success_count Number of times the check has succeeded
+# TYPE pebble_check_success_count counter
+pebble_check_success_count{check="chk1"} 2
+# HELP pebble_check_failure_count Number of times the check has failed
+# TYPE pebble_check_failure_count counter
+pebble_check_failure_count{check="chk1"} 0
 `[1:]
 	c.Assert(buf.String(), Equals, expected)
 }
 
-func (s *ManagerSuite) TestMetricsRecoverCheck(c *C) {
+func (s *ManagerSuite) TestMetricsCheckFailure(c *C) {
 	testPath := c.MkDir() + "/test"
 	err := os.WriteFile(testPath, nil, 0o644)
 	c.Assert(err, IsNil)
@@ -937,7 +937,8 @@ func (s *ManagerSuite) TestMetricsRecoverCheck(c *C) {
 		},
 	})
 
-	// After 2 failures, check is still up, perform-check counter is 2.
+	// After 2 failures, check is still up, pebble_check_success_count counter is 0,
+	// pebble_check_failure_count is 2.
 	waitCheck(c, s.manager, "chk1", func(check *checkstate.CheckInfo) bool {
 		return check.Failures == 2
 	})
@@ -949,50 +950,12 @@ func (s *ManagerSuite) TestMetricsRecoverCheck(c *C) {
 # HELP pebble_check_up Whether the health check is up (1) or not (0)
 # TYPE pebble_check_up gauge
 pebble_check_up{check="chk1"} 1
-# HELP pebble_perform_check_count Number of times the perform-check has run
-# TYPE pebble_perform_check_count counter
-pebble_perform_check_count{check="chk1"} 2
-# HELP pebble_recover_check_count Number of times the recover-check has run
-# TYPE pebble_recover_check_count counter
-pebble_recover_check_count{check="chk1"} 0
-`[1:]
-	c.Assert(buf.String(), Equals, expected)
-
-	// After 3 failures, check is down, perform-check counter is 3, recover-check counter is 0.
-	waitCheck(c, s.manager, "chk1", func(check *checkstate.CheckInfo) bool {
-		return check.Failures == 3
-	})
-	buf.Reset()
-	s.manager.WriteMetrics(writer)
-	expected = `
-# HELP pebble_check_up Whether the health check is up (1) or not (0)
-# TYPE pebble_check_up gauge
-pebble_check_up{check="chk1"} 0
-# HELP pebble_perform_check_count Number of times the perform-check has run
-# TYPE pebble_perform_check_count counter
-pebble_perform_check_count{check="chk1"} 3
-# HELP pebble_recover_check_count Number of times the recover-check has run
-# TYPE pebble_recover_check_count counter
-pebble_recover_check_count{check="chk1"} 0
-`[1:]
-	c.Assert(buf.String(), Equals, expected)
-
-	// After 4 failures, check is down, perform-check counter is 3, recover-check counter is 1.
-	waitCheck(c, s.manager, "chk1", func(check *checkstate.CheckInfo) bool {
-		return check.Failures == 4
-	})
-	buf.Reset()
-	s.manager.WriteMetrics(writer)
-	expected = `
-# HELP pebble_check_up Whether the health check is up (1) or not (0)
-# TYPE pebble_check_up gauge
-pebble_check_up{check="chk1"} 0
-# HELP pebble_perform_check_count Number of times the perform-check has run
-# TYPE pebble_perform_check_count counter
-pebble_perform_check_count{check="chk1"} 3
-# HELP pebble_recover_check_count Number of times the recover-check has run
-# TYPE pebble_recover_check_count counter
-pebble_recover_check_count{check="chk1"} 1
+# HELP pebble_check_success_count Number of times the check has succeeded
+# TYPE pebble_check_success_count counter
+pebble_check_success_count{check="chk1"} 0
+# HELP pebble_check_failure_count Number of times the check has failed
+# TYPE pebble_check_failure_count counter
+pebble_check_failure_count{check="chk1"} 2
 `[1:]
 	c.Assert(buf.String(), Equals, expected)
 }
