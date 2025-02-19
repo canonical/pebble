@@ -25,7 +25,7 @@ import (
 
 const cmdCheckSummary = "Query the status of a configured health check"
 const cmdCheckDescription = `
-The checks command gets status information about a configured health
+The check command gets status information about a configured health
 check with the check name provided as a positional argument.
 `
 

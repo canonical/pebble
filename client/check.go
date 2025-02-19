@@ -20,10 +20,6 @@ import (
 )
 
 type CheckOptions struct {
-	// Refresh true means running the check immediately and returning the
-	// result.
-	Refresh bool
-
 	// Name is the check name to query for.
 	Name string
 }
