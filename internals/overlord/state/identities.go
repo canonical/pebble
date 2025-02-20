@@ -160,9 +160,6 @@ func (d *Identity) UnmarshalJSON(data []byte) error {
 		identity.Local = &LocalIdentity{UserID: *ai.Local.UserID}
 	}
 	if ai.Basic != nil {
-		if ai.Basic.Password == "" {
-			return errors.New("basic identity must specify password (hashed)")
-		}
 		identity.Basic = &BasicIdentity{Password: ai.Basic.Password}
 	}
 
@@ -191,7 +188,6 @@ func (s *State) AddIdentities(identities map[string]*Identity) error {
 		if err != nil {
 			return fmt.Errorf("identity %q invalid: %w", name, err)
 		}
-		identity.Name = name
 	}
 	if len(existing) > 0 {
 		sort.Strings(existing)
@@ -327,11 +323,11 @@ func (s *State) Identities() map[string]*Identity {
 //
 // Identity priority:
 //  1. If both username and password are provided, the function attempts to
-//     match a basic type identity. The userID is ignored in this case. If
+//     match a "basic" type identity. The userID is ignored in this case. If
 //     a matching username is found but the password verification fails, nil
 //     is returned immediately.
 //  2. If username and password are not both provided, the function attempts to
-//     match a local type identity using the userID.
+//     match a "local" type identity using the userID.
 //
 // If no matching identity is found for the given inputs, nil is returned.
 func (s *State) IdentityFromInputs(userID *uint32, username, password string) *Identity {
@@ -342,10 +338,11 @@ func (s *State) IdentityFromInputs(userID *uint32, username, password string) *I
 		// Prioritize username/password if provided, because they come from HTTP
 		// Authorization header, a per-request, client controlled property. If set
 		// by the client, it's intentional, so it should have a higher priority.
+		passwordBytes := []byte(password)
 		for _, identity := range s.identities {
 			if identity.Basic != nil && identity.Name == username {
 				crypt := sha512_crypt.New()
-				err := crypt.Verify(identity.Basic.Password, []byte(password))
+				err := crypt.Verify(identity.Basic.Password, passwordBytes)
 				if err == nil {
 					return identity
 				} else {

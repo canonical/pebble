@@ -689,6 +689,8 @@ func (s *identitiesSuite) TestIdentityFromInputs(c *C) {
 	userID = 42
 	identity = st.IdentityFromInputs(&userID, "nancy", "test")
 	c.Assert(identity, NotNil)
+	c.Check(identity.Local, IsNil)
+	c.Check(identity.Basic, NotNil)
 	c.Check(identity.Name, Equals, "nancy")
 
 	// userID, username, password all provided, invalid username/password, userID ignored.

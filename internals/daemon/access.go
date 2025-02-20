@@ -77,7 +77,7 @@ func (ac MetricsAccess) CheckAccess(d *Daemon, r *http.Request, user *UserState)
 		return Unauthorized(accessDenied)
 	}
 	switch user.Access {
-	case state.MetricsAccess, state.AdminAccess:
+	case state.MetricsAccess, state.ReadAccess, state.AdminAccess:
 		return nil
 	}
 	// An identity explicitly set to "access: untrusted" isn't allowed.
