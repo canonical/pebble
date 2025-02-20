@@ -22,7 +22,7 @@ import (
 type MetricType int
 
 const (
-	TypeCounterInt MetricType = iota
+	TypeCounterInt MetricType = iota + 1
 	TypeGaugeInt
 )
 
@@ -80,7 +80,7 @@ func (otw *OpenTelemetryWriter) Write(m Metric) error {
 		}
 	}
 
-	_, err := fmt.Fprintf(otw.w, "# TYPE %s %s\n", m.Name, m.Type.String())
+	_, err := fmt.Fprintf(otw.w, "# TYPE %s %s\n", m.Name, m.Type)
 	if err != nil {
 		return err
 	}
@@ -115,7 +115,7 @@ func (otw *OpenTelemetryWriter) Write(m Metric) error {
 		}
 	}
 
-	_, err = fmt.Fprintf(otw.w, " %d\n", m.ValueInt64)
+	_, err = fmt.Fprintf(otw.w, " %d\n\n", m.ValueInt64)
 	if err != nil {
 		return err
 	}

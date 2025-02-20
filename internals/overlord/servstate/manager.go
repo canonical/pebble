@@ -348,7 +348,7 @@ func (m *ServiceManager) WriteMetrics(writer metrics.Writer) error {
 
 	for _, name := range names {
 		service := m.services[name]
-		err := service.writeMetrics(writer)
+		err := service.writeMetric(writer)
 		if err != nil {
 			return err
 		}

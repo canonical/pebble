@@ -908,12 +908,15 @@ func (s *ManagerSuite) TestMetricsCheckSuccess(c *C) {
 # HELP pebble_check_up Whether the health check is up (1) or not (0)
 # TYPE pebble_check_up gauge
 pebble_check_up{check="chk1"} 1
+
 # HELP pebble_check_success_count Number of times the check has succeeded
 # TYPE pebble_check_success_count counter
 pebble_check_success_count{check="chk1"} 2
+
 # HELP pebble_check_failure_count Number of times the check has failed
 # TYPE pebble_check_failure_count counter
 pebble_check_failure_count{check="chk1"} 0
+
 `[1:]
 	c.Assert(buf.String(), Equals, expected)
 }
@@ -950,12 +953,50 @@ func (s *ManagerSuite) TestMetricsCheckFailure(c *C) {
 # HELP pebble_check_up Whether the health check is up (1) or not (0)
 # TYPE pebble_check_up gauge
 pebble_check_up{check="chk1"} 1
+
 # HELP pebble_check_success_count Number of times the check has succeeded
 # TYPE pebble_check_success_count counter
 pebble_check_success_count{check="chk1"} 0
+
 # HELP pebble_check_failure_count Number of times the check has failed
 # TYPE pebble_check_failure_count counter
 pebble_check_failure_count{check="chk1"} 2
+
+`[1:]
+	c.Assert(buf.String(), Equals, expected)
+}
+
+func (s *ManagerSuite) TestMetricsInactiveCheck(c *C) {
+	tempDir := c.MkDir()
+	tempFile := filepath.Join(tempDir, "file.txt")
+	command := fmt.Sprintf(`/bin/sh -c 'echo -n x >>%s'`, tempFile)
+	s.manager.PlanChanged(&plan.Plan{
+		Checks: map[string]*plan.Check{
+			"chk1": {
+				Name:      "chk1",
+				Override:  "replace",
+				Period:    plan.OptionalDuration{Value: 10 * time.Millisecond},
+				Timeout:   plan.OptionalDuration{Value: time.Second},
+				Threshold: 3,
+				Exec:      &plan.ExecCheck{Command: command},
+				Startup:   plan.CheckStartupDisabled,
+			},
+		},
+	})
+
+	buf := new(bytes.Buffer)
+	writer := metrics.NewOpenTelemetryWriter(buf)
+	s.manager.WriteMetrics(writer)
+	// Inactive check's pebble_check_up metric is not reported.
+	expected := `
+# HELP pebble_check_success_count Number of times the check has succeeded
+# TYPE pebble_check_success_count counter
+pebble_check_success_count{check="chk1"} 0
+
+# HELP pebble_check_failure_count Number of times the check has failed
+# TYPE pebble_check_failure_count counter
+pebble_check_failure_count{check="chk1"} 0
+
 `[1:]
 	c.Assert(buf.String(), Equals, expected)
 }

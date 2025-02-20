@@ -433,23 +433,26 @@ type checker interface {
 	check(ctx context.Context) error
 }
 
-func (c *checkData) writeMetrics(writer metrics.Writer) error {
-	checkUp := int64(0)
-	if c.status == CheckStatusUp {
-		checkUp = 1
-	}
-	err := writer.Write(metrics.Metric{
-		Name:       "pebble_check_up",
-		Type:       metrics.TypeGaugeInt,
-		ValueInt64: checkUp,
-		Comment:    "Whether the health check is up (1) or not (0)",
-		Labels:     []metrics.Label{metrics.NewLabel("check", c.name)},
-	})
-	if err != nil {
-		return err
+func (c *checkData) writeMetric(writer metrics.Writer) error {
+	// Not to list any inactive checks because they don't have an up or down status.
+	if c.status != CheckStatusInactive {
+		checkUp := int64(0)
+		if c.status == CheckStatusUp {
+			checkUp = 1
+		}
+		err := writer.Write(metrics.Metric{
+			Name:       "pebble_check_up",
+			Type:       metrics.TypeGaugeInt,
+			ValueInt64: checkUp,
+			Comment:    "Whether the health check is up (1) or not (0)",
+			Labels:     []metrics.Label{metrics.NewLabel("check", c.name)},
+		})
+		if err != nil {
+			return err
+		}
 	}
 
-	err = writer.Write(metrics.Metric{
+	err := writer.Write(metrics.Metric{
 		Name:       "pebble_check_success_count",
 		Type:       metrics.TypeCounterInt,
 		ValueInt64: c.successCount,
@@ -487,7 +490,7 @@ func (m *CheckManager) WriteMetrics(writer metrics.Writer) error {
 
 	for _, name := range names {
 		info := m.checks[name]
-		err := info.writeMetrics(writer)
+		err := info.writeMetric(writer)
 		if err != nil {
 			return err
 		}

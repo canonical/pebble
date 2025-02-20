@@ -20,45 +20,35 @@ import (
 
 	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/metrics"
-	"github.com/canonical/pebble/internals/overlord/checkstate"
-	"github.com/canonical/pebble/internals/overlord/servstate"
 )
 
 func v1GetMetrics(c *Command, r *http.Request, _ *UserState) Response {
-	return metricsResponse{
-		svcMgr: overlordServiceManager(c.d.overlord),
-		chkMgr: overlordCheckManager(c.d.overlord),
-	}
-}
+	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		var buf bytes.Buffer
+		metricsWriter := metrics.NewOpenTelemetryWriter(&buf)
 
-// metricsResponse is a Response implementation to serve the metrics in the OpenMetrics format.
-type metricsResponse struct {
-	svcMgr *servstate.ServiceManager
-	chkMgr *checkstate.CheckManager
-}
+		svcMgr := overlordServiceManager(c.d.overlord)
+		chkMgr := overlordCheckManager(c.d.overlord)
 
-func (r metricsResponse) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	var buf bytes.Buffer
-	metricsWriter := metrics.NewOpenTelemetryWriter(&buf)
+		err := svcMgr.WriteMetrics(metricsWriter)
+		if err != nil {
+			logger.Noticef("Cannot write service metrics: %v", err)
+			http.Error(w, "# internal server error", http.StatusInternalServerError)
+			return
+		}
 
-	err := r.svcMgr.WriteMetrics(metricsWriter)
-	if err != nil {
-		logger.Noticef("Cannot write service metrics: %v", err)
-		http.Error(w, "# internal server error", http.StatusInternalServerError)
-		return
-	}
+		err = chkMgr.WriteMetrics(metricsWriter)
+		if err != nil {
+			logger.Noticef("Cannot write check metrics: %v", err)
+			http.Error(w, "# internal server error", http.StatusInternalServerError)
+			return
+		}
 
-	err = r.chkMgr.WriteMetrics(metricsWriter)
-	if err != nil {
-		logger.Noticef("Cannot write check metrics: %v", err)
-		http.Error(w, "# internal server error", http.StatusInternalServerError)
-		return
-	}
-
-	_, err = buf.WriteTo(w)
-	if err != nil {
-		logger.Noticef("Cannot write to HTTP response: %v", err)
-		http.Error(w, "# internal server error", http.StatusInternalServerError)
-		return
-	}
+		_, err = buf.WriteTo(w)
+		if err != nil {
+			logger.Noticef("Cannot write to HTTP response: %v", err)
+			http.Error(w, "# internal server error", http.StatusInternalServerError)
+			return
+		}
+	})
 }

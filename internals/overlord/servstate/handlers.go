@@ -828,8 +828,8 @@ func (s *serviceData) checkFailed(action plan.ServiceAction) {
 	}
 }
 
-// writeMetrics writes the service's metrics.
-func (d *serviceData) writeMetrics(writer metrics.Writer) error {
+// writeMetric writes the service's metrics.
+func (d *serviceData) writeMetric(writer metrics.Writer) error {
 	err := writer.Write(metrics.Metric{
 		Name:       "pebble_service_start_count",
 		Type:       metrics.TypeCounterInt,

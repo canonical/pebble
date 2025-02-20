@@ -53,6 +53,7 @@ func (s *OpenTelemetryWriterSuite) TestOpenTelemetryWriter(c *C) {
 # HELP my_counter A simple counter
 # TYPE my_counter counter
 my_counter{key1="value1",key2="value2"} 42
+
 `[1:],
 		},
 		{
@@ -68,6 +69,7 @@ my_counter{key1="value1",key2="value2"} 42
 # HELP my_gauge A simple gauge
 # TYPE my_gauge gauge
 my_gauge 1
+
 `[1:],
 		},
 		{
@@ -81,6 +83,7 @@ my_gauge 1
 			expected: `
 # TYPE no_comment_metric counter
 no_comment_metric{env="prod"} 42
+
 `[1:],
 		},
 
@@ -100,6 +103,7 @@ no_comment_metric{env="prod"} 42
 # HELP special_chars Metric with special characters
 # TYPE special_chars gauge
 special_chars{key_with_underscore="value_with_underscore",key-with-dash="value-with-dash"} 42
+
 `[1:],
 		},
 	}
