@@ -16,17 +16,15 @@ package cli
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/canonical/go-flags"
 
 	"github.com/canonical/pebble/client"
 )
 
-const cmdCheckSummary = "Query the status of a configured health check"
+const cmdCheckSummary = "Query the details of a configured health check"
 const cmdCheckDescription = `
-The check command gets status information about a configured health
-check with the check name provided as a positional argument.
+The check command shows details for a single check in YAML format.
 `
 
 type cmdCheck struct {
@@ -53,80 +51,41 @@ func (cmd *cmdCheck) Execute(args []string) error {
 		return ErrExtraArgs
 	}
 
-	opts := client.CheckOptions{
-		Name: cmd.Positional.Check,
+	opts := client.ChecksOptions{
+		Names: []string{cmd.Positional.Check},
 	}
-	check, err := cmd.client.Check(&opts)
+	checks, err := cmd.client.Checks(&opts)
 	if err != nil {
 		return err
 	}
-	if check == nil {
+	if len(checks) == 0 {
 		fmt.Fprintln(Stderr, "No matching health checks.")
 		return nil
 	}
 
-	w := tabWriter()
-	defer w.Flush()
-
-	fmt.Fprintln(w, "Check\tLevel\tStartup\tStatus\tFailures\tChange")
-
-	level := check.Level
-	if level == client.UnsetLevel {
-		level = "-"
-	}
-	failures := "-"
-	if check.Status != client.CheckStatusInactive {
-		failures = fmt.Sprintf("%d/%d", check.Failures, check.Threshold)
-	}
-	fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n",
-		check.Name, level, check.Startup, check.Status, failures,
-		cmd.changeInfo(check))
-
+	check := checks[0]
+	fmt.Fprintf(
+		Stdout, "name: %s\nlevel: %s\nstartup: %s\nstatus: %s\nfailures: %d\nthreshold: %d\nchange-id: %s\n",
+		check.Name,
+		check.Level,
+		check.Startup,
+		check.Status,
+		check.Failures,
+		check.Threshold,
+		check.ChangeID,
+	)
 	return nil
 }
 
-func (cmd *cmdCheck) changeInfo(check *client.CheckInfo) string {
-	if check.ChangeID == "" {
-		return "-"
-	}
-	// Only include last task log if check is failing.
-	if check.Failures == 0 {
-		return check.ChangeID
-	}
-	log, err := cmd.lastTaskLog(check.ChangeID)
-	if err != nil {
-		return fmt.Sprintf("%s (%v)", check.ChangeID, err)
-	}
-	if log == "" {
-		return check.ChangeID
-	}
-	// Truncate to limited number of bytes with ellipsis and "for more" text.
-	const maxError = 70
-	if len(log) > maxError {
-		forMore := fmt.Sprintf(`... run "pebble tasks %s" for more`, check.ChangeID)
-		log = log[:maxError-len(forMore)] + forMore
-	}
-	return fmt.Sprintf("%s (%s)", check.ChangeID, log)
-}
-
-func (cmd *cmdCheck) lastTaskLog(changeID string) (string, error) {
+func (cmd *cmdCheck) taskLogs(changeID string) ([]string, error) {
+	var logs []string
 	change, err := cmd.client.Change(changeID)
 	if err != nil {
-		return "", err
+		return logs, err
 	}
 	if len(change.Tasks) < 1 {
-		return "", nil
+		return logs, nil
 	}
-	logs := change.Tasks[0].Log
-	if len(logs) < 1 {
-		return "", nil
-	}
-	// Strip initial "<timestamp> ERROR|INFO" text from log.
-	lastLog := logs[len(logs)-1]
-	fields := strings.SplitN(lastLog, " ", 3)
-	if len(fields) > 2 {
-		lastLog = fields[2]
-	}
-	lastLog = strings.ReplaceAll(lastLog, "\n", "\\n")
-	return lastLog, nil
+	logs = change.Tasks[0].Log
+	return logs, nil
 }

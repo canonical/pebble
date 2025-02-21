@@ -89,10 +89,6 @@ var API = []*Command{{
 	WriteAccess: AdminAccess{},
 	POST:        v1PostSignals,
 }, {
-	Path:       "/v1/check",
-	ReadAccess: UserAccess{},
-	GET:        v1GetCheck,
-}, {
 	Path:        "/v1/checks",
 	ReadAccess:  UserAccess{},
 	WriteAccess: AdminAccess{},

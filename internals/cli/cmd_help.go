@@ -201,7 +201,7 @@ var HelpCategories = []HelpCategory{{
 }, {
 	Label:       "Checks",
 	Description: "manage health checks",
-	Commands:    []string{"checks", "start-checks", "stop-checks", "health"},
+	Commands:    []string{"check", "checks", "start-checks", "stop-checks", "health"},
 }, {
 	Label:       "Files",
 	Description: "work with files and execute commands",

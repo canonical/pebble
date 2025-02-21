@@ -27,21 +27,26 @@ import (
 func (s *PebbleSuite) TestCheck(c *check.C) {
 	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
 		c.Assert(r.Method, check.Equals, "GET")
-		c.Assert(r.URL.Path, check.Equals, "/v1/check")
-		c.Assert(r.URL.Query(), check.DeepEquals, url.Values{"name": {"chk1"}})
+		c.Assert(r.URL.Path, check.Equals, "/v1/checks")
+		c.Assert(r.URL.Query(), check.DeepEquals, url.Values{"names": {"chk1"}})
 		fmt.Fprint(w, `
 {
     "type": "sync",
     "status-code": 200,
-    "result": {"name": "chk1", "startup": "enabled", "status": "up", "threshold": 3, "change-id": "1"}
+    "result": [{"name": "chk1", "startup": "enabled", "status": "up", "threshold": 3, "change-id": "1"}]
 }`)
 	})
 	rest, err := cli.ParserForTest().ParseArgs([]string{"check", "chk1"})
 	c.Assert(err, check.IsNil)
 	c.Assert(rest, check.HasLen, 0)
 	c.Check(s.Stdout(), check.Equals, `
-Check  Level  Startup  Status  Failures  Change
-chk1   -      enabled  up      0/3       1
+name: chk1
+level: 
+startup: enabled
+status: up
+failures: 0
+threshold: 3
+change-id: 1
 `[1:])
 	c.Check(s.Stderr(), check.Equals, "")
 }
@@ -49,18 +54,17 @@ chk1   -      enabled  up      0/3       1
 func (s *PebbleSuite) TestCheckNotFound(c *check.C) {
 	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
 		c.Assert(r.Method, check.Equals, "GET")
-		c.Assert(r.URL.Path, check.Equals, "/v1/check")
-		c.Assert(r.URL.Query(), check.DeepEquals, url.Values{"name": {"chk2"}})
+		c.Assert(r.URL.Path, check.Equals, "/v1/checks")
+		c.Assert(r.URL.Query(), check.DeepEquals, url.Values{"names": {"chk2"}})
 		fmt.Fprint(w, `{
-    "type":"error",
-	"status-code":404,
-	"status":"Not Found",
-	"result":{"message":"cannot find check with name \"chk1\""}}
+    "type": "sync",
+    "status-code": 200,
+    "result": []
 }`)
 	})
 	rest, err := cli.ParserForTest().ParseArgs([]string{"check", "chk2"})
-	c.Assert(err, check.ErrorMatches, "cannot find check with name \"chk1\"")
-	c.Assert(rest, check.HasLen, 1)
+	c.Assert(err, check.IsNil)
+	c.Assert(rest, check.HasLen, 0)
 	c.Check(s.Stdout(), check.Equals, "")
-	c.Check(s.Stderr(), check.Equals, "")
+	c.Check(s.Stderr(), check.Equals, "No matching health checks.\n")
 }
