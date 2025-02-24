@@ -41,12 +41,12 @@ func (s *PebbleSuite) TestCheck(c *check.C) {
 	c.Assert(rest, check.HasLen, 0)
 	c.Check(s.Stdout(), check.Equals, `
 name: chk1
-level: 
+level: ""
 startup: enabled
 status: up
 failures: 0
 threshold: 3
-change-id: 1
+changeid: "1"
 `[1:])
 	c.Check(s.Stderr(), check.Equals, "")
 }
