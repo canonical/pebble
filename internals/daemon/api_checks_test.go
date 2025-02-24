@@ -20,6 +20,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strings"
 	"time"
 
 	. "gopkg.in/check.v1"
@@ -144,10 +145,79 @@ func (s *apiSuite) getChecks(c *C, query string) (*resp, map[string]any) {
 	if results, ok := body["result"].([]any); ok {
 		for i, result := range results {
 			resultMap := result.(map[string]any)
-			c.Check(resultMap["change-id"].(string), Not(Equals), "")
-			resultMap["change-id"] = fmt.Sprintf("C%d", i)
+			// If the change-id is not empty or nil, replace it with a fixed value.
+			if changeID, ok := resultMap["change-id"].(string); ok && changeID != "" {
+				resultMap["change-id"] = fmt.Sprintf("C%d", i)
+			} else {
+				resultMap["change-id"] = ""
+			}
 		}
 	}
 
 	return rsp, body
+}
+
+func (s *apiSuite) TestChecksPost(c *C) {
+	writeTestLayer(s.pebbleDir, `
+checks:
+    chk1:
+        override: replace
+        level: ready
+        http:
+            url: https://example.com/bad
+
+    chk2:
+        override: replace
+        level: alive
+        startup: disabled
+        tcp:
+            port: 8080
+
+    chk3:
+        override: replace
+        startup: enabled
+        exec:
+            command: sleep x
+`)
+	s.daemon(c)
+	s.startOverlord()
+
+	start := time.Now()
+	for {
+		// Health checks are started asynchronously as changes, so wait for
+		// them to appear.
+		rsp, body := s.getChecks(c, "")
+		c.Check(rsp.Status, Equals, 200)
+		c.Check(rsp.Type, Equals, ResponseTypeSync)
+		expected := []any{
+			map[string]any{"name": "chk1", "startup": "enabled", "status": "up", "level": "ready", "threshold": 3.0, "change-id": "C0"},
+			map[string]any{"name": "chk2", "startup": "disabled", "status": "inactive", "level": "alive", "threshold": 3.0, "change-id": ""},
+			map[string]any{"name": "chk3", "startup": "enabled", "status": "up", "threshold": 3.0, "change-id": "C2"},
+		}
+		if reflect.DeepEqual(body["result"], expected) {
+			break
+		}
+		if time.Since(start) > time.Second {
+			c.Fatalf("timed out waiting for checks to settle\nobtained = #%v\nexpected = %#v",
+				body["result"], expected)
+		}
+		time.Sleep(time.Millisecond)
+	}
+
+	rsp := s.postChecks(c, `{"action": "stop", "checks": ["chk2", "chk3", "chk1"]}`)
+	c.Check(rsp.Status, Equals, 200)
+	c.Check(rsp.Type, Equals, ResponseTypeSync)
+	// chk1 and chk3 will have stopped, and the response will list them
+	// alphabetically, not in the order we provided.
+	c.Check(rsp.Result.(responsePayload).Changed, DeepEquals, []string{"chk1", "chk3"})
+}
+
+func (s *apiSuite) postChecks(c *C, body string) *resp {
+	req, err := http.NewRequest("POST", "/v1/checks", strings.NewReader(body))
+	c.Assert(err, IsNil)
+	rsp := v1PostChecks(apiCmd("/v1/checks"), req, nil).(*resp)
+	rec := httptest.NewRecorder()
+	rsp.ServeHTTP(rec, req)
+	c.Check(rec.Code, Equals, rsp.Status)
+	return rsp
 }
