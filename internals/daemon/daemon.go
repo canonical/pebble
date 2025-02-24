@@ -162,7 +162,7 @@ func userFromRequest(st *state.State, r *http.Request, ucred *Ucrednet, username
 		return nil, nil
 	}
 	if identity.Basic != nil {
-		// Prioritize basic type and ignore UID in this case.
+		// Prioritize basic type (HTTP basic authentication) and ignore UID in this case.
 		return &UserState{Access: identity.Access}, nil
 	} else if identity.Local != nil {
 		return &UserState{Access: identity.Access, UID: userID}, nil

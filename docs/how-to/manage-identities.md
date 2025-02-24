@@ -20,9 +20,10 @@ identities:
         local:
             user-id: 42
     alice:
-        access: read
-        local:
-            user-id: 2000
+        access: metrics
+        basic:
+            # The password is sha512-hashed.
+            password: <password hash>
 ```
 
 and run the following command:

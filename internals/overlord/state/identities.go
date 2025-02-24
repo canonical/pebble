@@ -55,7 +55,8 @@ type LocalIdentity struct {
 // BasicIdentity holds identity configuration specific to the "basic" type
 // (for HTTP basic authentication).
 type BasicIdentity struct {
-	Password string // Note: this is the sha512-crypt hashed password.
+	// Password holds the user's sha512-crypt-hashed password.
+	Password string
 }
 
 // This is used to ensure we send a well-formed identity Name.
@@ -71,11 +72,11 @@ func (d *Identity) validate(name string) error {
 		return fmt.Errorf("identity name %q invalid: must start with an alphabetic character and only contain alphanumeric characters, underscore, and hyphen", d.Name)
 	}
 
-	return d.validateExcludingName()
+	return d.validateAccess()
 }
 
-// validateExcludingName checks that the identity is valid, returning an error if not.
-func (d *Identity) validateExcludingName() error {
+// validateAccess checks that the identity's access and type are valid, returning an error if not.
+func (d *Identity) validateAccess() error {
 	if d == nil {
 		return errors.New("identity must not be nil")
 	}
@@ -164,7 +165,7 @@ func (d *Identity) UnmarshalJSON(data []byte) error {
 	}
 
 	// Perform additional validation using the local Identity type.
-	err = identity.validateExcludingName()
+	err = identity.validateAccess()
 	if err != nil {
 		return err
 	}
@@ -335,20 +336,20 @@ func (s *State) IdentityFromInputs(userID *uint32, username, password string) *I
 
 	switch {
 	case username != "" || password != "":
-		// Prioritize username/password if provided, because they come from HTTP
+		// Prioritize username/password if either is provided, because they come from HTTP
 		// Authorization header, a per-request, client controlled property. If set
 		// by the client, it's intentional, so it should have a higher priority.
 		passwordBytes := []byte(password)
 		for _, identity := range s.identities {
-			if identity.Basic != nil && identity.Name == username {
-				crypt := sha512_crypt.New()
-				err := crypt.Verify(identity.Basic.Password, passwordBytes)
-				if err == nil {
-					return identity
-				} else {
-					return nil
-				}
+			if identity.Basic == nil || identity.Name != username {
+				continue
 			}
+			crypt := sha512_crypt.New()
+			err := crypt.Verify(identity.Basic.Password, passwordBytes)
+			if err == nil {
+				return identity
+			}
+			return nil
 		}
 	case userID != nil:
 		for _, identity := range s.identities {

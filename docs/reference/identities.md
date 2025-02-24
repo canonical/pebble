@@ -14,16 +14,18 @@ identities:
         # - untrusted: has access to open-access endpoints only
         # - read: has access to read-access endpoints
         # - admin: has access to all endpoints
-        access: untrusted | read | admin
+        access: untrusted | read | metrics | admin
 
         # Configure local, peer credential-based authentication.
         #
-        # Currently the only suported authentication type is "local". Other
-        # types may be added in future, at which point you may configure an
-        # identity with one or more authentication types.
+        # Currently the supported authentication types are "local" and "basic".
+        # You may configure an identity with one or more authentication types.
         local:
             # (Required) Peer credential UID.
             user-id: <uid>
+        basic:
+            # (Required) Sha512-hashed password
+            password: <password hash>
 ```
 
 For example, a local identity named "bob" with UID 42 that is granted `admin` access would be defined as follows:
@@ -35,3 +37,16 @@ identities:
         local:
             user-id: 42
 ```
+
+For another example, a basic identity named "alice" that is granted `metrics` access would be defined as follows:
+
+```yaml
+identities:
+    alice:
+        access: metrics
+        basic:
+            # The password is sha512-hashed.
+            password: <password hash>
+```
+
+Note that for `basic` type identity, the password is sha512-hashed. Use `openssl passwd -6` to generate a hashed password.
