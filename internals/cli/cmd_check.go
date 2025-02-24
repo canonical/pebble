@@ -18,6 +18,7 @@ import (
 	"fmt"
 
 	"github.com/canonical/go-flags"
+	"gopkg.in/yaml.v3"
 
 	"github.com/canonical/pebble/client"
 )
@@ -64,16 +65,11 @@ func (cmd *cmdCheck) Execute(args []string) error {
 	}
 
 	check := checks[0]
-	fmt.Fprintf(
-		Stdout, "name: %s\nlevel: %s\nstartup: %s\nstatus: %s\nfailures: %d\nthreshold: %d\nchange-id: %s\n",
-		check.Name,
-		check.Level,
-		check.Startup,
-		check.Status,
-		check.Failures,
-		check.Threshold,
-		check.ChangeID,
-	)
+	data, err := yaml.Marshal(check)
+	if err != nil {
+		return err
+	}
+	fmt.Fprint(Stdout, string(data))
 	return nil
 }
 
