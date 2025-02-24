@@ -51,6 +51,7 @@ type LocalIdentity struct {
 // BasicIdentity holds identity configuration specific to the "basic" type
 // (for HTTP basic authentication).
 type BasicIdentity struct {
+	// Password holds the user's sha512-crypt-hashed password.
 	Password string `json:"password" yaml:"password"`
 }
 
