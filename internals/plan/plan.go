@@ -271,6 +271,9 @@ func (s *Service) Merge(other *Service) {
 	s.After = append(s.After, other.After...)
 	s.Before = append(s.Before, other.Before...)
 	s.Requires = append(s.Requires, other.Requires...)
+	if other.Workload != "" {
+		s.Workload = other.Workload
+	}
 	for k, v := range other.Environment {
 		if s.Environment == nil {
 			s.Environment = make(map[string]string)

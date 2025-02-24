@@ -43,7 +43,7 @@ var schemaTests = []struct {
 workloads:
     default:
     `},
-	error: `workload "default" has a null value`,
+	error: `workload "default" cannot have a null value`,
 }, {
 	summary: "single workload with no override policy",
 	layers: []string{`
@@ -99,7 +99,7 @@ workloads:
             bar: baz
         user-id: 1337
         user: alyssa
-        group-id: 1337
+        group-id: 1338
         group: hackers
     `},
 	combinedSection: &servstate.WorkloadsSection{
@@ -111,9 +111,9 @@ workloads:
 					"foo": "bar",
 					"bar": "baz",
 				},
-				UserID:  makeptr(1337),
+				UserID:  ptr(1337),
 				User:    "alyssa",
-				GroupID: makeptr(1337),
+				GroupID: ptr(1338),
 				Group:   "hackers",
 			},
 		},
@@ -127,7 +127,7 @@ workloads:
             foo: bar
         user-id: 1337
         user: alyssa
-        group-id: 1337
+        group-id: 1338
         group: hackers
     `,
 }, {
@@ -142,7 +142,7 @@ workloads:
             e: f
         user-id: 25519
         user: ellie
-        group-id: 25519
+        group-id: 41417
         group: curves
     `, `
 workloads:
@@ -154,8 +154,8 @@ workloads:
             5: 6
         user-id: 256
         user: wilson
-        group-id: 256
-        group: wilson
+        group-id: 257
+        group: users
     `,
 	},
 	combinedSection: &servstate.WorkloadsSection{
@@ -168,10 +168,10 @@ workloads:
 					"3": "4",
 					"5": "6",
 				},
-				UserID:  makeptr(256),
+				UserID:  ptr(256),
 				User:    "wilson",
-				GroupID: makeptr(256),
-				Group:   "wilson",
+				GroupID: ptr(257),
+				Group:   "users",
 			},
 		},
 	},
@@ -185,8 +185,8 @@ workloads:
             "5": "6"
         user-id: 256
         user: wilson
-        group-id: 256
-        group: wilson
+        group-id: 257
+        group: users
     `,
 }, {
 	summary: "merge override policy",
@@ -200,8 +200,8 @@ workloads:
             e: f
         user-id: 1000
         user: ubuntu
-        group-id: 1000
-        group: ubuntu
+        group-id: 1001
+        group: linux
     `, `
 workloads:
     default:
@@ -209,11 +209,12 @@ workloads:
         environment:
             "1": "2"
             "3": "4"
+            a: z
             "5": "6"
         user-id: 1001
         user: live
-        group-id: 1001
-        group: live
+        group-id: 1002
+        group: users
     `},
 	combinedSection: &servstate.WorkloadsSection{
 		Entries: map[string]*servstate.Workload{
@@ -221,17 +222,17 @@ workloads:
 				Name:     "default",
 				Override: plan.MergeOverride,
 				Environment: map[string]string{
-					"a": "b",
+					"a": "z",
 					"1": "2",
 					"c": "d",
 					"3": "4",
 					"e": "f",
 					"5": "6",
 				},
-				UserID:  makeptr(1001),
+				UserID:  ptr(1001),
 				User:    "live",
-				GroupID: makeptr(1001),
-				Group:   "live",
+				GroupID: ptr(1002),
+				Group:   "users",
 			},
 		},
 	},
@@ -243,13 +244,13 @@ workloads:
             "1": "2"
             "3": "4"
             "5": "6"
-            a: b
+            a: z
             c: d
             e: f
         user-id: 1001
         user: live
-        group-id: 1001
-        group: live
+        group-id: 1002
+        group: users
     `,
 }}
 
@@ -339,7 +340,7 @@ services:
         command: /bin/sh -c "echo $PATH; sleep 10"
         workload: non-existing
     `)
-	c.Assert(err, ErrorMatches, `plan service "test1" cannot run in unknown workload "non-existing"`)
+	c.Assert(err, ErrorMatches, `plan service "test1" workload not defined: "non-existing"`)
 }
 
 func (s *S) tryPlanAddLayer(c *C, layerYAML string) error {
@@ -368,6 +369,6 @@ func (s *S) tryPlanAddLayer(c *C, layerYAML string) error {
 	return s.plan.Validate()
 }
 
-func makeptr[T any](v T) *T {
+func ptr[T any](v T) *T {
 	return &v
 }

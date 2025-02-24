@@ -18,9 +18,11 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"maps"
 
-	yaml "gopkg.in/yaml.v3"
+	"gopkg.in/yaml.v3"
 
+	"github.com/canonical/pebble/internals/osutil"
 	"github.com/canonical/pebble/internals/plan"
 )
 
@@ -47,6 +49,7 @@ func (ext *WorkloadsSectionExtension) ParseSection(data yaml.Node) (plan.Section
 	// The following issue prevents us from using the yaml.Node decoder
 	// with KnownFields = true behavior. Once one of the proposals get
 	// merged, we can remove the intermediate Marshal step.
+	// https://github.com/go-yaml/yaml/issues/460
 	if len(data.Content) != 0 {
 		yml, err := yaml.Marshal(data)
 		if err != nil {
@@ -74,10 +77,19 @@ func (ext *WorkloadsSectionExtension) ValidatePlan(p *plan.Plan) error {
 		return fmt.Errorf("internal error: invalid section type %T", ws)
 	}
 	for name, service := range p.Services {
-		_, ok := ws.Entries[service.Workload]
-		if service.Workload != "" && !ok {
+		if service.Workload == "" {
+			continue
+		}
+		if _, ok := ws.Entries[service.Workload]; !ok {
 			return &plan.FormatError{
-				Message: fmt.Sprintf(`plan service %q cannot run in unknown workload %q`, name, service.Workload),
+				Message: fmt.Sprintf(`plan service %q workload not defined: %q`, name, service.Workload),
+			}
+		}
+	}
+	for name, workload := range ws.Entries {
+		if _, _, err := osutil.NormalizeUidGid(workload.UserID, workload.GroupID, workload.User, workload.Group); err != nil {
+			return &plan.FormatError{
+				Message: fmt.Sprintf(`plan workload %q %v`, err, name),
 			}
 		}
 	}
@@ -100,7 +112,7 @@ func (ws *WorkloadsSection) Validate() error {
 	for name, workload := range ws.Entries {
 		if workload == nil {
 			return &plan.FormatError{
-				Message: fmt.Sprintf("workload %q has a null value", name),
+				Message: fmt.Sprintf("workload %q cannot have a null value", name),
 			}
 		}
 		if err := workload.validate(); err != nil {
@@ -113,10 +125,10 @@ func (ws *WorkloadsSection) Validate() error {
 }
 
 func (ws *WorkloadsSection) combine(other *WorkloadsSection) error {
-	if len(other.Entries) != 0 && ws.Entries == nil {
-		ws.Entries = make(map[string]*Workload, len(other.Entries))
-	}
 	for name, workload := range other.Entries {
+		if ws.Entries == nil {
+			ws.Entries = make(map[string]*Workload, len(other.Entries))
+		}
 		switch workload.Override {
 		case plan.MergeOverride:
 			if current, ok := ws.Entries[name]; ok {
@@ -164,46 +176,42 @@ func (w *Workload) validate() error {
 
 func (w *Workload) copy() *Workload {
 	copied := *w
-	if w.Environment != nil {
-		copied.Environment = make(map[string]string, len(w.Environment))
-		for k, v := range w.Environment {
-			copied.Environment[k] = v
-		}
-	}
-	if w.UserID != nil {
-		copied.UserID = copyIntPtr(w.UserID)
-	}
-	if w.GroupID != nil {
-		copied.GroupID = copyIntPtr(w.GroupID)
-	}
+	copied.Environment = maps.Clone(w.Environment)
+	copied.UserID = copyPtr(w.UserID)
+	copied.GroupID = copyPtr(w.GroupID)
 	return &copied
 }
 
 func (w *Workload) merge(other *Workload) {
-	if len(other.Environment) != 0 && w.Environment == nil {
-		w.Environment = make(map[string]string, len(other.Environment))
-	}
-	for k, v := range other.Environment {
-		w.Environment[k] = v
+	if len(other.Environment) > 0 {
+		w.Environment = makeMapIfNil(w.Environment)
+		maps.Copy(w.Environment, other.Environment)
 	}
 	if other.UserID != nil {
-		w.UserID = copyIntPtr(other.UserID)
+		w.UserID = copyPtr(other.UserID)
 	}
 	if other.User != "" {
 		w.User = other.User
 	}
 	if other.GroupID != nil {
-		w.GroupID = copyIntPtr(other.GroupID)
+		w.GroupID = copyPtr(other.GroupID)
 	}
 	if other.Group != "" {
 		w.Group = other.Group
 	}
 }
 
-func copyIntPtr(p *int) *int {
+func copyPtr[T any](p *T) *T {
 	if p == nil {
 		return nil
 	}
 	copied := *p
 	return &copied
+}
+
+func makeMapIfNil[K comparable, V any](m map[K]V) map[K]V {
+	if m == nil {
+		m = make(map[K]V)
+	}
+	return m
 }

@@ -272,6 +272,8 @@ func (m *ServiceManager) Replan() ([][]string, [][]string, error) {
 					return nil, nil, fmt.Errorf("internal error: invalid section type %T", ws)
 				}
 				s.workload = ws.Entries[s.config.Workload].copy()
+			} else {
+				s.workload = nil
 			}
 		}
 		needsRestart[name] = true
