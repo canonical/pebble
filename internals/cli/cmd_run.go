@@ -186,7 +186,7 @@ func runDaemon(rcmd *cmdRun, ch chan os.Signal, ready chan<- func()) error {
 		Dir:        rcmd.pebbleDir,
 		SocketPath: rcmd.socketPath,
 	}
-	if rcmd.Verbose {
+	if os.Getenv("PEBBLE_VERBOSE") == "1" || rcmd.Verbose {
 		dopts.ServiceOutput = os.Stdout
 	}
 	dopts.HTTPAddress = rcmd.HTTP
