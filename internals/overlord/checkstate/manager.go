@@ -436,14 +436,14 @@ type checker interface {
 func (c *checkData) writeMetric(writer metrics.Writer) error {
 	// Not to list any inactive checks because they don't have an up or down status.
 	if c.status != CheckStatusInactive {
-		checkUp := int64(0)
+		checkUp := 0
 		if c.status == CheckStatusUp {
 			checkUp = 1
 		}
 		err := writer.Write(metrics.Metric{
 			Name:       "pebble_check_up",
 			Type:       metrics.TypeGaugeInt,
-			ValueInt64: checkUp,
+			ValueInt64: int64(checkUp),
 			Comment:    "Whether the health check is up (1) or not (0)",
 			Labels:     []metrics.Label{metrics.NewLabel("check", c.name)},
 		})
