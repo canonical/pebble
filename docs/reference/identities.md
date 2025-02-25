@@ -12,9 +12,10 @@ identities:
         # (Required) Access level of this identity. Possible values are:
         #
         # - untrusted: has access to open-access endpoints only
+        # - metrics: has access to the metrics endpoint only
         # - read: has access to read-access endpoints
         # - admin: has access to all endpoints
-        access: untrusted | read | metrics | admin
+        access: untrusted | metrics | read | admin
 
         # Configure local, peer credential-based authentication.
         #
@@ -49,4 +50,4 @@ identities:
             password: <password hash>
 ```
 
-Note that for `basic` type identity, the password is sha512-hashed. Use `openssl passwd -6` to generate a hashed password.
+The password must be sha512-hashed. Use `openssl passwd -6` to generate a hashed password.
