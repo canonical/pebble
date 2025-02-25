@@ -40,7 +40,7 @@ For example, to add a local admin named "bob", use YAML like this:
 >         local:
 >             user-id: 42
 
-To add an identity named "alice" with metrics access using HTTP basic authentication, use YAML like this:
+To add an identity named "alice" with metrics access using HTTP basic authentication:
 
 > identities:
 >     alice:
