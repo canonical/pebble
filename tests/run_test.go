@@ -142,6 +142,53 @@ services:
 	waitForLog(t, stdoutCh, "svc1", "hello world", 3*time.Second)
 }
 
+// TestVerboseEnabledByEnvVar tests that Pebble logs all output from services to stdout
+// with the environment variable `PEBBLE_VERBOSE` set to "1".
+func TestVerboseEnabledByEnvVar(t *testing.T) {
+	os.Setenv("PEBBLE_VERBOSE", "1")
+	defer os.Setenv("PEBBLE_VERBOSE", "")
+
+	pebbleDir := t.TempDir()
+
+	layersFileName := "001-simple-layer.yaml"
+	layerYAML := `
+services:
+    svc1:
+        override: replace
+        command: /bin/sh -c "echo 'hello world'; sleep 10"
+        startup: enabled
+`
+	createLayer(t, pebbleDir, layersFileName, layerYAML)
+
+	stdoutCh, stderrCh := pebbleRun(t, pebbleDir)
+	waitForLog(t, stderrCh, "pebble", "Started daemon", 3*time.Second)
+	waitForLog(t, stdoutCh, "svc1", "hello world", 3*time.Second)
+}
+
+// TestVerboseFlagOverrideEnvVar tests that Pebble logs all output from services to stdout
+// with the environment variable `PEBBLE_VERBOSE` set to "0" but also with the `--verbose`
+// option.
+func TestVerboseFlagOverrideEnvVar(t *testing.T) {
+	os.Setenv("PEBBLE_VERBOSE", "0")
+	defer os.Setenv("PEBBLE_VERBOSE", "")
+
+	pebbleDir := t.TempDir()
+
+	layersFileName := "001-simple-layer.yaml"
+	layerYAML := `
+services:
+    svc1:
+        override: replace
+        command: /bin/sh -c "echo 'hello world'; sleep 10"
+        startup: enabled
+`
+	createLayer(t, pebbleDir, layersFileName, layerYAML)
+
+	stdoutCh, stderrCh := pebbleRun(t, pebbleDir, "--verbose")
+	waitForLog(t, stderrCh, "pebble", "Started daemon", 3*time.Second)
+	waitForLog(t, stdoutCh, "svc1", "hello world", 3*time.Second)
+}
+
 // TestArgs tests that Pebble provides additional arguments to a service
 // with the `--args` option.
 func TestArgs(t *testing.T) {
