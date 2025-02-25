@@ -385,6 +385,9 @@ services:
 }
 
 func (s *S) TestReplanServices(c *C) {
+	plan.RegisterSectionExtension(workloads.WorkloadsField, &workloads.PlanExtension{})
+	defer plan.UnregisterSectionExtension(workloads.WorkloadsField)
+
 	s.newServiceManager(c)
 	s.planAddLayer(c, testPlanLayer)
 	s.planChanged(c)
