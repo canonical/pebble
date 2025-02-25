@@ -411,7 +411,6 @@ services:
 }
 
 func (s *S) TestReplanUpdatesConfig(c *C) {
-	UpdatesConfig
 	plan.RegisterSectionExtension(workloads.WorkloadsField, &workloads.PlanExtension{})
 	defer plan.UnregisterSectionExtension(workloads.WorkloadsField)
 
