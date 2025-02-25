@@ -39,6 +39,16 @@ For example, to add a local admin named "bob", use YAML like this:
 >         access: admin
 >         local:
 >             user-id: 42
+
+To add an identity named "alice" with metrics access using HTTP basic authentication:
+
+> identities:
+>     alice:
+>         access: metrics
+>         basic:
+>             password: <password hash>
+
+Use "openssl passwd -6" to generate a hashed password (sha512-crypt format).
 `
 
 type cmdAddIdentities struct {

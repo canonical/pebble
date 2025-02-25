@@ -41,6 +41,10 @@ func (s *identitiesSuite) TestMarshalAPI(c *C) {
 			Access: state.AdminAccess,
 			Local:  &state.LocalIdentity{UserID: 1000},
 		},
+		"nancy": {
+			Access: state.MetricsAccess,
+			Basic:  &state.BasicIdentity{Password: "hash"},
+		},
 	})
 	c.Assert(err, IsNil)
 
@@ -60,6 +64,12 @@ func (s *identitiesSuite) TestMarshalAPI(c *C) {
         "local": {
             "user-id": 1000
         }
+    },
+    "nancy": {
+        "access": "metrics",
+        "basic": {
+            "password": "*****"
+        }
     }
 }`[1:])
 }
@@ -78,6 +88,12 @@ func (s *identitiesSuite) TestUnmarshalAPI(c *C) {
         "local": {
             "user-id": 1000
         }
+    },
+    "nancy": {
+        "access": "metrics",
+        "basic": {
+            "password": "hash"
+        }
     }
 }`)
 	var identities map[string]*state.Identity
@@ -92,6 +108,10 @@ func (s *identitiesSuite) TestUnmarshalAPI(c *C) {
 			Access: state.AdminAccess,
 			Local:  &state.LocalIdentity{UserID: 1000},
 		},
+		"nancy": {
+			Access: state.MetricsAccess,
+			Basic:  &state.BasicIdentity{Password: "hash"},
+		},
 	})
 }
 
@@ -101,16 +121,22 @@ func (s *identitiesSuite) TestUnmarshalAPIErrors(c *C) {
 		error string
 	}{{
 		data:  `{"no-type": {"access": "admin"}}`,
-		error: `identity must have at least one type \("local"\)`,
+		error: `identity must have at least one type \("local" or "basic"\)`,
 	}, {
 		data:  `{"invalid-access": {"access": "admin", "local": {}}}`,
 		error: `local identity must specify user-id`,
 	}, {
+		data:  `{"invalid-access": {"access": "metrics", "basic": {}}}`,
+		error: `basic identity must specify password \(hashed\)`,
+	}, {
 		data:  `{"invalid-access": {"access": "foo", "local": {"user-id": 42}}}`,
-		error: `invalid access value "foo", must be "admin", "read", or "untrusted"`,
+		error: `invalid access value "foo", must be "admin", "read", "metrics", or "untrusted"`,
 	}, {
 		data:  `{"invalid-access": {"local": {"user-id": 42}}}`,
-		error: `access value must be specified \("admin", "read", or "untrusted"\)`,
+		error: `access value must be specified \("admin", "read", "metrics", or "untrusted"\)`,
+	}, {
+		data:  `{"invalid-access": {"access": "admin", "basic": {"password": "hash"}}}`,
+		error: `basic identity can only have \"metrics\" access, got \"admin\"`,
 	}}
 	for _, test := range tests {
 		c.Logf("Input data: %s", test.data)
@@ -214,6 +240,10 @@ func (s *identitiesSuite) TestAddIdentities(c *C) {
 			Access: state.AdminAccess,
 			Local:  &state.LocalIdentity{UserID: 1000},
 		},
+		"nancy": {
+			Access: state.MetricsAccess,
+			Basic:  &state.BasicIdentity{Password: "hash"},
+		},
 	}
 	err := st.AddIdentities(original)
 	c.Assert(err, IsNil)
@@ -230,6 +260,11 @@ func (s *identitiesSuite) TestAddIdentities(c *C) {
 			Name:   "mary",
 			Access: state.AdminAccess,
 			Local:  &state.LocalIdentity{UserID: 1000},
+		},
+		"nancy": {
+			Name:   "nancy",
+			Access: state.MetricsAccess,
+			Basic:  &state.BasicIdentity{Password: "hash"},
 		},
 	})
 
@@ -263,7 +298,16 @@ func (s *identitiesSuite) TestAddIdentities(c *C) {
 			Local:  &state.LocalIdentity{UserID: 43},
 		},
 	})
-	c.Assert(err, ErrorMatches, `identity "bill" invalid: invalid access value "bar", must be "admin", "read", or "untrusted"`)
+	c.Assert(err, ErrorMatches, `identity "bill" invalid: invalid access value "bar", must be "admin", "read", "metrics", or "untrusted"`)
+
+	// Basic type identity only allow metrics access.
+	err = st.AddIdentities(map[string]*state.Identity{
+		"bill": {
+			Access: "admin",
+			Basic:  &state.BasicIdentity{Password: "hash"},
+		},
+	})
+	c.Assert(err, ErrorMatches, `identity "bill" invalid: basic identity can only have "metrics" access, got "admin"`)
 
 	// Must have at least one type.
 	err = st.AddIdentities(map[string]*state.Identity{
@@ -271,7 +315,17 @@ func (s *identitiesSuite) TestAddIdentities(c *C) {
 			Access: "admin",
 		},
 	})
-	c.Assert(err, ErrorMatches, `identity "bill" invalid: identity must have at least one type \("local"\)`)
+	c.Assert(err, ErrorMatches, `identity "bill" invalid: identity must have at least one type \(\"local\" or \"basic\"\)`)
+
+	// May have two types.
+	err = st.AddIdentities(map[string]*state.Identity{
+		"peter": {
+			Access: state.MetricsAccess,
+			Basic:  &state.BasicIdentity{Password: "hash"},
+			Local:  &state.LocalIdentity{UserID: 1001},
+		},
+	})
+	c.Assert(err, IsNil)
 
 	// Ensure user IDs are unique with existing users.
 	err = st.AddIdentities(map[string]*state.Identity{
@@ -314,6 +368,10 @@ func (s *identitiesSuite) TestUpdateIdentities(c *C) {
 			Access: state.AdminAccess,
 			Local:  &state.LocalIdentity{UserID: 1000},
 		},
+		"nancy": {
+			Access: state.MetricsAccess,
+			Basic:  &state.BasicIdentity{Password: "hash"},
+		},
 	}
 	err := st.AddIdentities(original)
 	c.Assert(err, IsNil)
@@ -326,6 +384,10 @@ func (s *identitiesSuite) TestUpdateIdentities(c *C) {
 		"mary": {
 			Access: state.ReadAccess,
 			Local:  &state.LocalIdentity{UserID: 42},
+		},
+		"nancy": {
+			Access: state.MetricsAccess,
+			Basic:  &state.BasicIdentity{Password: "new hash"},
 		},
 	})
 	c.Assert(err, IsNil)
@@ -342,6 +404,11 @@ func (s *identitiesSuite) TestUpdateIdentities(c *C) {
 			Name:   "mary",
 			Access: state.ReadAccess,
 			Local:  &state.LocalIdentity{UserID: 42},
+		},
+		"nancy": {
+			Name:   "nancy",
+			Access: state.MetricsAccess,
+			Basic:  &state.BasicIdentity{Password: "new hash"},
 		},
 	})
 
@@ -430,7 +497,7 @@ func (s *identitiesSuite) TestReplaceIdentities(c *C) {
 			Access: "admin",
 		},
 	})
-	c.Assert(err, ErrorMatches, `identity "bill" invalid: identity must have at least one type \("local"\)`)
+	c.Assert(err, ErrorMatches, `identity "bill" invalid: identity must have at least one type \("local" or "basic"\)`)
 
 	// Ensure unique user ID testing is being done (full testing done in AddIdentity).
 	err = st.ReplaceIdentities(map[string]*state.Identity{
@@ -460,6 +527,10 @@ func (s *identitiesSuite) TestRemoveIdentities(c *C) {
 			Access: state.AdminAccess,
 			Local:  &state.LocalIdentity{UserID: 1000},
 		},
+		"nancy": {
+			Access: state.MetricsAccess,
+			Basic:  &state.BasicIdentity{Password: "hash"},
+		},
 		"queen": {
 			Access: state.AdminAccess,
 			Local:  &state.LocalIdentity{UserID: 1001},
@@ -469,8 +540,9 @@ func (s *identitiesSuite) TestRemoveIdentities(c *C) {
 	c.Assert(err, IsNil)
 
 	err = st.RemoveIdentities(map[string]struct{}{
-		"bob":  {},
-		"mary": {},
+		"bob":   {},
+		"mary":  {},
+		"nancy": {},
 	})
 	c.Assert(err, IsNil)
 
@@ -512,6 +584,10 @@ func (s *identitiesSuite) TestIdentities(c *C) {
 			Access: state.AdminAccess,
 			Local:  &state.LocalIdentity{UserID: 1000},
 		},
+		"nancy": {
+			Access: state.MetricsAccess,
+			Basic:  &state.BasicIdentity{Password: "hash"},
+		},
 	}
 	err := st.AddIdentities(original)
 	c.Assert(err, IsNil)
@@ -528,6 +604,11 @@ func (s *identitiesSuite) TestIdentities(c *C) {
 			Name:   "mary",
 			Access: state.AdminAccess,
 			Local:  &state.LocalIdentity{UserID: 1000},
+		},
+		"nancy": {
+			Name:   "nancy",
+			Access: state.MetricsAccess,
+			Basic:  &state.BasicIdentity{Password: "hash"},
 		},
 	}
 	c.Assert(identities, DeepEquals, expected)
@@ -553,28 +634,83 @@ func (s *identitiesSuite) TestIdentityFromInputs(c *C) {
 			Access: state.AdminAccess,
 			Local:  &state.LocalIdentity{UserID: 1000},
 		},
+		"nancy": {
+			Access: state.MetricsAccess,
+			Basic: &state.BasicIdentity{
+				// password: test
+				Password: "$6$F9cFSVEKyO4gB1Wh$8S1BSKsNkF.jBAixGc4W7l80OpfCNk65LZBDHBng3NAmbcHuMj4RIm7992rrJ8YA.SJ0hvm.vGk2z483am4Ym1",
+			},
+		},
 	}
 	err := st.AddIdentities(original)
 	c.Assert(err, IsNil)
 
-	identity := st.IdentityFromInputs(nil)
+	identity := st.IdentityFromInputs(nil, "", "")
 	c.Assert(identity, IsNil)
 
 	userID := uint32(0)
-	identity = st.IdentityFromInputs(&userID)
+	identity = st.IdentityFromInputs(&userID, "", "")
 	c.Assert(identity, IsNil)
 
 	userID = 100
-	identity = st.IdentityFromInputs(&userID)
+	identity = st.IdentityFromInputs(&userID, "", "")
 	c.Assert(identity, IsNil)
 
 	userID = 42
-	identity = st.IdentityFromInputs(&userID)
+	identity = st.IdentityFromInputs(&userID, "", "")
 	c.Assert(identity, NotNil)
 	c.Check(identity.Name, Equals, "bob")
 
 	userID = 1000
-	identity = st.IdentityFromInputs(&userID)
+	identity = st.IdentityFromInputs(&userID, "", "")
 	c.Assert(identity, NotNil)
 	c.Check(identity.Name, Equals, "mary")
+
+	identity = st.IdentityFromInputs(nil, "nancy", "test")
+	c.Assert(identity, NotNil)
+	c.Check(identity.Name, Equals, "nancy")
+
+	identity = st.IdentityFromInputs(nil, "nancy", "")
+	c.Assert(identity, IsNil)
+
+	identity = st.IdentityFromInputs(nil, "", "test")
+	c.Assert(identity, IsNil)
+
+	identity = st.IdentityFromInputs(nil, "nancy-wrong-username", "test")
+	c.Assert(identity, IsNil)
+
+	identity = st.IdentityFromInputs(nil, "nancy", "wrong-password")
+	c.Assert(identity, IsNil)
+
+	identity = st.IdentityFromInputs(nil, "nancy-wrong-username", "wrong-password")
+	c.Assert(identity, IsNil)
+
+	// userID, username, password all provided, two matching identities, prioritize basic type.
+	userID = 42
+	identity = st.IdentityFromInputs(&userID, "nancy", "test")
+	c.Assert(identity, NotNil)
+	c.Check(identity.Local, IsNil)
+	c.Check(identity.Basic, NotNil)
+	c.Check(identity.Name, Equals, "nancy")
+
+	// userID, username, password all provided, invalid username/password, userID ignored.
+	userID = 42
+	identity = st.IdentityFromInputs(&userID, "nancy", "")
+	c.Assert(identity, IsNil)
+
+	userID = 42
+	identity = st.IdentityFromInputs(&userID, "", "test")
+	c.Assert(identity, IsNil)
+
+	userID = 42
+	identity = st.IdentityFromInputs(&userID, "nancy-wrong-username", "test")
+	c.Assert(identity, IsNil)
+
+	userID = 42
+	identity = st.IdentityFromInputs(&userID, "nancy", "wrong-password")
+	c.Assert(identity, IsNil)
+
+	userID = 42
+	identity = st.IdentityFromInputs(&userID, "nancy-wrong-username", "wrong-password")
+	c.Assert(identity, IsNil)
 }

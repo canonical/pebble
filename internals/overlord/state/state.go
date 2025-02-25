@@ -174,10 +174,15 @@ type marshalledState struct {
 type marshalledIdentity struct {
 	Access string                   `json:"access"`
 	Local  *marshalledLocalIdentity `json:"local,omitempty"`
+	Basic  *marshalledBasicIdentity `json:"basic,omitempty"`
 }
 
 type marshalledLocalIdentity struct {
 	UserID uint32 `json:"user-id"`
+}
+
+type marshalledBasicIdentity struct {
+	Password string `json:"password"`
 }
 
 // MarshalJSON makes State a json.Marshaller
@@ -202,7 +207,12 @@ func (s *State) marshalledIdentities() map[string]*marshalledIdentity {
 	for name, identity := range s.identities {
 		marshalled[name] = &marshalledIdentity{
 			Access: string(identity.Access),
-			Local:  &marshalledLocalIdentity{UserID: identity.Local.UserID},
+		}
+		if identity.Local != nil {
+			marshalled[name].Local = &marshalledLocalIdentity{UserID: identity.Local.UserID}
+		}
+		if identity.Basic != nil {
+			marshalled[name].Basic = &marshalledBasicIdentity{Password: identity.Basic.Password}
 		}
 	}
 	return marshalled
@@ -242,7 +252,12 @@ func (s *State) unmarshalIdentities(marshalled map[string]*marshalledIdentity) {
 		s.identities[name] = &Identity{
 			Name:   name,
 			Access: IdentityAccess(mi.Access),
-			Local:  &LocalIdentity{UserID: mi.Local.UserID},
+		}
+		if mi.Local != nil {
+			s.identities[name].Local = &LocalIdentity{UserID: mi.Local.UserID}
+		}
+		if mi.Basic != nil {
+			s.identities[name].Basic = &BasicIdentity{Password: mi.Basic.Password}
 		}
 	}
 }
