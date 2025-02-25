@@ -203,6 +203,7 @@ func waitForLog(t *testing.T, logsCh <-chan servicelog.Entry, expectedService, e
 			if !ok {
 				t.Error("channel closed before all expected logs were received")
 			}
+
 			if log.Service == expectedService && strings.Contains(log.Message, expectedLog) {
 				return
 			}
