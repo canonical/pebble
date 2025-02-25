@@ -224,6 +224,7 @@ window.onload = function() {
     "identities",
     "layers",
     "logs",
+    "metrics",
     "notices",
     "plan",
     "services",

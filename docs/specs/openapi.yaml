@@ -801,6 +801,45 @@ paths:
                   "service": "svc1",
                   "message": " * Serving Flask app 'main'"
                 }
+  /v1/metrics:
+    get:
+      summary: Get Pebble metrics
+      description: |
+        Get Pebble services and health checks metrics in [OpenMetrics](https://github.com/prometheus/OpenMetrics) format.
+
+        This endpoint requires HTTP basic authentication using an identity of type "basic". See [Identities](../identities) for more information.
+      tags:
+        - metrics
+      security:
+        - basicAuth: []
+      responses:
+        "200":
+          description: Metrics in OpenMetrics format.
+          content:
+            text/plain:
+              schema:
+                type: string
+                description: OpenMetrics format metrics.
+              example: |
+                # HELP pebble_service_start_count Number of times the service has started
+                # TYPE pebble_service_start_count counter
+                pebble_service_start_count{service="svc1"} 1
+
+                # HELP pebble_service_active Whether the service is currently active (1) or not (0)
+                # TYPE pebble_service_active gauge
+                pebble_service_active{service="svc1"} 1
+
+                # HELP pebble_check_up Whether the health check is up (1) or not (0)
+                # TYPE pebble_check_up gauge
+                pebble_check_up{check="chk1"} 1
+
+                # HELP pebble_check_success_count Number of times the check has succeeded
+                # TYPE pebble_check_success_count counter
+                pebble_check_success_count{check="chk1"} 2
+
+                # HELP pebble_check_failure_count Number of times the check has failed
+                # TYPE pebble_check_failure_count counter
+                pebble_check_failure_count{check="chk1"} 2
   /v1/notices:
     get:
       summary: Get notices
@@ -1149,6 +1188,10 @@ paths:
                   }
                 }
 components:
+  securitySchemes:
+    basicAuth:
+      type: http
+      scheme: basic
   schemas:
     BaseResponse:
       type: object
