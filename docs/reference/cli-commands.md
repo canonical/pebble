@@ -67,7 +67,8 @@ For example, to add a local admin named "bob", use YAML like this:
 >         local:
 >             user-id: 42
 
-To add an identity named "alice" with metrics access using HTTP basic authentication:
+To add an identity named "alice" with metrics access using HTTP basic
+authentication:
 
 > identities:
 >     alice:
@@ -97,7 +98,8 @@ Usage:
 The changes command displays a summary of system changes performed recently.
 
 [changes command options]
-      --abs-time     Display absolute times (in RFC 3339 format). Otherwise, display relative times up to 60 days, then YYYY-MM-DD.
+      --abs-time     Display absolute times (in RFC 3339 format). Otherwise,
+                     display relative times up to 60 days, then YYYY-MM-DD.
 ```
 <!-- END AUTOMATED OUTPUT FOR changes -->
 
