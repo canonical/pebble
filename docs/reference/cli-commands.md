@@ -76,7 +76,7 @@ authentication:
 >         basic:
 >             password: <password hash>
 
-Use "openssl passwd -6" to generate a hashed password.
+Use "openssl passwd -6" to generate a hashed password (sha512-crypt format).
 
 [add-identities command options]
       --from=   Path of YAML file to read identities from (required)

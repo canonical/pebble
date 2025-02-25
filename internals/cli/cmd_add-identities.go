@@ -48,7 +48,7 @@ To add an identity named "alice" with metrics access using HTTP basic authentica
 >         basic:
 >             password: <password hash>
 
-Use "openssl passwd -6" to generate a hashed password.
+Use "openssl passwd -6" to generate a hashed password (sha512-crypt format).
 `
 
 type cmdAddIdentities struct {
