@@ -2,7 +2,7 @@
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+// You may obtain a Copy of the License at
 //
 //     http://www.apache.org/licenses/LICENSE-2.0
 //
@@ -12,30 +12,32 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package servstate_test
+package workloads_test
 
 import (
 	"fmt"
 	"strings"
-	"time"
 
 	. "gopkg.in/check.v1"
 	"gopkg.in/yaml.v3"
 
-	"github.com/canonical/pebble/internals/overlord/servstate"
-	"github.com/canonical/pebble/internals/overlord/state"
 	"github.com/canonical/pebble/internals/plan"
+	"github.com/canonical/pebble/internals/workloads"
 )
+
+type workloadsSuite struct{}
+
+var _ = Suite(&workloadsSuite{})
 
 var schemaTests = []struct {
 	summary         string
 	layers          []string
-	combinedSection *servstate.WorkloadsSection
+	combinedSection *workloads.WorkloadsSection
 	combinedYAML    string
 	error           string
 }{{
 	summary:         "empty section",
-	combinedSection: &servstate.WorkloadsSection{},
+	combinedSection: &workloads.WorkloadsSection{},
 	combinedYAML:    `workloads: {}`,
 }, {
 	summary: "single null workload",
@@ -75,8 +77,8 @@ workloads:
     default:
         override: replace
     `},
-	combinedSection: &servstate.WorkloadsSection{
-		Entries: map[string]*servstate.Workload{
+	combinedSection: &workloads.WorkloadsSection{
+		Entries: map[string]*workloads.Workload{
 			"default": {
 				Name:     "default",
 				Override: plan.ReplaceOverride,
@@ -93,7 +95,7 @@ workloads:
 	layers: []string{`
 workloads:
     default:
-        override: merge
+        override: Merge
         environment:
             foo: bar
             bar: baz
@@ -102,8 +104,8 @@ workloads:
         group-id: 1338
         group: hackers
     `},
-	combinedSection: &servstate.WorkloadsSection{
-		Entries: map[string]*servstate.Workload{
+	combinedSection: &workloads.WorkloadsSection{
+		Entries: map[string]*workloads.Workload{
 			"default": {
 				Name:     "default",
 				Override: plan.MergeOverride,
@@ -121,7 +123,7 @@ workloads:
 	combinedYAML: `
 workloads:
     default:
-        override: merge
+        override: Merge
         environment:
             bar: baz
             foo: bar
@@ -158,8 +160,8 @@ workloads:
         group: users
     `,
 	},
-	combinedSection: &servstate.WorkloadsSection{
-		Entries: map[string]*servstate.Workload{
+	combinedSection: &workloads.WorkloadsSection{
+		Entries: map[string]*workloads.Workload{
 			"default": {
 				Name:     "default",
 				Override: plan.ReplaceOverride,
@@ -189,11 +191,11 @@ workloads:
         group: users
     `,
 }, {
-	summary: "merge override policy",
+	summary: "Merge override policy",
 	layers: []string{`
 workloads:
     default:
-        override: merge
+        override: Merge
         environment:
             a: b
             c: d
@@ -205,7 +207,7 @@ workloads:
     `, `
 workloads:
     default:
-        override: merge
+        override: Merge
         environment:
             "1": "2"
             "3": "4"
@@ -216,8 +218,8 @@ workloads:
         group-id: 1002
         group: users
     `},
-	combinedSection: &servstate.WorkloadsSection{
-		Entries: map[string]*servstate.Workload{
+	combinedSection: &workloads.WorkloadsSection{
+		Entries: map[string]*workloads.Workload{
 			"default": {
 				Name:     "default",
 				Override: plan.MergeOverride,
@@ -239,7 +241,7 @@ workloads:
 	combinedYAML: `
 workloads:
     default:
-        override: merge
+        override: Merge
         environment:
             "1": "2"
             "3": "4"
@@ -253,6 +255,29 @@ workloads:
         group: users
     `,
 }}
+
+func (s *workloadsSuite) TestWorkloadsSectionExtensionSchema(c *C) {
+	plan.RegisterSectionExtension(workloads.WorkloadsField, &workloads.PlanExtension{})
+	defer plan.UnregisterSectionExtension(workloads.WorkloadsField)
+
+	for i, t := range schemaTests {
+		c.Logf("Running TestWorkloadsSectionExtensionSchema %q test using test data index %d\n", t.summary, i)
+		combined, err := parseCombineLayers(t.layers)
+		if t.error != "" {
+			c.Assert(err, ErrorMatches, t.error)
+		} else {
+			c.Assert(err, IsNil)
+			section, ok := combined.Sections[workloads.WorkloadsField]
+			c.Assert(ok, Equals, true)
+			c.Assert(section, NotNil)
+			ws, ok := section.(*workloads.WorkloadsSection)
+			c.Assert(ok, Equals, true)
+			c.Assert(ws, DeepEquals, t.combinedSection)
+			c.Assert(layerYAML(c, combined), Equals, strings.TrimSpace(t.combinedYAML))
+		}
+
+	}
+}
 
 func parseCombineLayers(yamls []string) (*plan.Layer, error) {
 	var layers []*plan.Layer
@@ -270,103 +295,6 @@ func layerYAML(c *C, layer *plan.Layer) string {
 	yml, err := yaml.Marshal(layer)
 	c.Assert(err, IsNil)
 	return strings.TrimSpace(string(yml))
-}
-
-func (s *S) TestWorkloadsSectionExtensionSchema(c *C) {
-	plan.RegisterSectionExtension(servstate.WorkloadsField, &servstate.WorkloadsSectionExtension{})
-	defer plan.UnregisterSectionExtension(servstate.WorkloadsField)
-
-	for i, t := range schemaTests {
-		c.Logf("Running TestWorkloadsSectionExtensionSchema %q test using test data index %d\n", t.summary, i)
-		combined, err := parseCombineLayers(t.layers)
-		if t.error != "" {
-			c.Assert(err, ErrorMatches, t.error)
-		} else {
-			c.Assert(err, IsNil)
-			section, ok := combined.Sections[servstate.WorkloadsField]
-			c.Assert(ok, Equals, true)
-			c.Assert(section, NotNil)
-			ws, ok := section.(*servstate.WorkloadsSection)
-			c.Assert(ok, Equals, true)
-			c.Assert(ws, DeepEquals, t.combinedSection)
-			c.Assert(layerYAML(c, combined), Equals, strings.TrimSpace(t.combinedYAML))
-		}
-
-	}
-}
-
-func (s *S) TestWorkloadAppliesToService(c *C) {
-	plan.RegisterSectionExtension(servstate.WorkloadsField, &servstate.WorkloadsSectionExtension{})
-	defer plan.UnregisterSectionExtension(servstate.WorkloadsField)
-
-	s.newServiceManager(c)
-	s.planAddLayer(c, `
-services:
-    test1:
-        override: replace
-        command: /bin/sh -c "echo $PATH; sleep 10"
-        workload: wl1
-
-workloads:
-    wl1:
-        override: replace
-        environment:
-            PATH: "/private/bin:/bin:/sbin"
-    `)
-	s.planChanged(c)
-
-	chg := s.startServices(c, [][]string{{"test1"}})
-	s.waitUntilService(c, "test1", func(svc *servstate.ServiceInfo) bool {
-		return svc.Current == servstate.StatusActive
-	})
-	c.Assert(s.manager.BackoffNum("test1"), Equals, 0)
-	s.st.Lock()
-	c.Check(chg.Status(), Equals, state.DoneStatus)
-	s.st.Unlock()
-	time.Sleep(10 * time.Millisecond)
-	c.Check(s.readAndClearLogBuffer(), Matches, `(?s).* \[test1\] /private/bin:/bin:/sbin\n`)
-}
-
-func (s *S) TestWorkloadReferenceInvalid(c *C) {
-
-	plan.RegisterSectionExtension(servstate.WorkloadsField, &servstate.WorkloadsSectionExtension{})
-	defer plan.UnregisterSectionExtension(servstate.WorkloadsField)
-
-	s.newServiceManager(c)
-	err := s.tryPlanAddLayer(c, `
-services:
-    test1:
-        override: replace
-        command: /bin/sh -c "echo $PATH; sleep 10"
-        workload: non-existing
-    `)
-	c.Assert(err, ErrorMatches, `plan service "test1" workload not defined: "non-existing"`)
-}
-
-func (s *S) tryPlanAddLayer(c *C, layerYAML string) error {
-	cnt := len(s.plan.Layers)
-	layer, err := plan.ParseLayer(cnt, fmt.Sprintf("test-plan-layer-%v", cnt), []byte(layerYAML))
-	if err != nil {
-		return err
-	}
-	// Resolve {{.NotifyDoneCheck}}
-	s.insertDoneChecks(c, layer)
-	layers := append(s.plan.Layers, layer)
-	combined, err := plan.CombineLayers(layers...)
-	if err != nil {
-		return err
-	}
-	if err := combined.Validate(); err != nil {
-		return err
-	}
-	s.plan = &plan.Plan{
-		Layers:     layers,
-		Services:   combined.Services,
-		Checks:     combined.Checks,
-		LogTargets: combined.LogTargets,
-		Sections:   combined.Sections,
-	}
-	return s.plan.Validate()
 }
 
 func ptr[T any](v T) *T {

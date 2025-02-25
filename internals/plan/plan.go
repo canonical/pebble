@@ -1289,17 +1289,7 @@ func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 
 	for field, section := range sections {
 		if slices.Contains(builtinSections, field) {
-			// The following issue prevents us from using the yaml.Node decoder
-			// with KnownFields = true behaviour. Once one of the proposals get
-			// merged, we can remove the intermediate Marshal step.
-			// https://github.com/go-yaml/yaml/issues/460
-			data, err := yaml.Marshal(&section)
-			if err != nil {
-				return nil, fmt.Errorf("internal error: cannot marshal %v section: %w", field, err)
-			}
-			dec := yaml.NewDecoder(bytes.NewReader(data))
-			dec.KnownFields(true)
-			if err = dec.Decode(builtins[field]); err != nil {
+			if err = SectionDecode(&section, builtins[field]); err != nil {
 				return nil, &FormatError{
 					Message: fmt.Sprintf("cannot parse layer %q section %q: %v", label, field, err),
 				}
@@ -1640,6 +1630,23 @@ type ContextOptions struct {
 	GroupID     *int
 	Group       string
 	WorkingDir  string
+}
+
+func SectionDecode(data *yaml.Node, v any) error {
+	// The following issue prevents us from using the yaml.Node decoder
+	// with KnownFields = true behaviour. Once one of the proposals get
+	// merged, we can remove the intermediate Marshal step.
+	// https://github.com/go-yaml/yaml/issues/460
+	yml, err := yaml.Marshal(data)
+	if err != nil {
+		return fmt.Errorf("cannot marshal YAML: %w", err)
+	}
+	dec := yaml.NewDecoder(bytes.NewReader(yml))
+	dec.KnownFields(true)
+	if err = dec.Decode(v); err != nil {
+		return err
+	}
+	return nil
 }
 
 func copyIntPtr(p *int) *int {

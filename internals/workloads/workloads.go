@@ -2,7 +2,7 @@
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+// You may obtain a Copy of the License at
 //
 //     http://www.apache.org/licenses/LICENSE-2.0
 //
@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package servstate
+package workloads
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"maps"
+	"reflect"
 
 	"gopkg.in/yaml.v3"
 
@@ -26,11 +26,11 @@ import (
 	"github.com/canonical/pebble/internals/plan"
 )
 
-var _ plan.SectionExtension = (*WorkloadsSectionExtension)(nil)
+var _ plan.SectionExtension = (*PlanExtension)(nil)
 
-type WorkloadsSectionExtension struct{}
+type PlanExtension struct{}
 
-func (ext *WorkloadsSectionExtension) CombineSections(sections ...plan.Section) (plan.Section, error) {
+func (ext *PlanExtension) CombineSections(sections ...plan.Section) (plan.Section, error) {
 	ws := &WorkloadsSection{}
 	for _, section := range sections {
 		layer, ok := section.(*WorkloadsSection)
@@ -44,20 +44,14 @@ func (ext *WorkloadsSectionExtension) CombineSections(sections ...plan.Section) 
 	return ws, nil
 }
 
-func (ext *WorkloadsSectionExtension) ParseSection(data yaml.Node) (plan.Section, error) {
+func (ext *PlanExtension) ParseSection(data yaml.Node) (plan.Section, error) {
 	ws := &WorkloadsSection{}
 	// The following issue prevents us from using the yaml.Node decoder
 	// with KnownFields = true behavior. Once one of the proposals get
 	// merged, we can remove the intermediate Marshal step.
 	// https://github.com/go-yaml/yaml/issues/460
 	if len(data.Content) != 0 {
-		yml, err := yaml.Marshal(data)
-		if err != nil {
-			return nil, fmt.Errorf(`internal error: cannot marshal "workloads" section: %w`, err)
-		}
-		dec := yaml.NewDecoder(bytes.NewReader(yml))
-		dec.KnownFields(true)
-		if err = dec.Decode(ws); err != nil {
+		if err := plan.SectionDecode(&data, ws); err != nil {
 			return nil, &plan.FormatError{
 				Message: fmt.Sprintf(`cannot parse the "workloads" section: %v`, err),
 			}
@@ -71,7 +65,7 @@ func (ext *WorkloadsSectionExtension) ParseSection(data yaml.Node) (plan.Section
 	return ws, nil
 }
 
-func (ext *WorkloadsSectionExtension) ValidatePlan(p *plan.Plan) error {
+func (ext *PlanExtension) ValidatePlan(p *plan.Plan) error {
 	ws, ok := p.Sections[WorkloadsField].(*WorkloadsSection)
 	if !ok {
 		return fmt.Errorf("internal error: invalid section type %T", ws)
@@ -115,7 +109,7 @@ func (ws *WorkloadsSection) Validate() error {
 				Message: fmt.Sprintf("workload %q cannot have a null value", name),
 			}
 		}
-		if err := workload.validate(); err != nil {
+		if err := workload.Validate(); err != nil {
 			return &plan.FormatError{
 				Message: fmt.Sprintf("workload %q %v", name, err),
 			}
@@ -132,14 +126,14 @@ func (ws *WorkloadsSection) combine(other *WorkloadsSection) error {
 		switch workload.Override {
 		case plan.MergeOverride:
 			if current, ok := ws.Entries[name]; ok {
-				copied := current.copy()
-				copied.merge(workload)
+				copied := current.Copy()
+				copied.Merge(workload)
 				ws.Entries[name] = copied
 				break
 			}
 			fallthrough
 		case plan.ReplaceOverride:
-			ws.Entries[name] = workload.copy()
+			ws.Entries[name] = workload.Copy()
 		case plan.UnknownOverride:
 			return &plan.FormatError{
 				Message: fmt.Sprintf(`workload %q must define an "override" policy`, name),
@@ -166,7 +160,7 @@ type Workload struct {
 	Group       string            `yaml:"group,omitempty"`
 }
 
-func (w *Workload) validate() error {
+func (w *Workload) Validate() error {
 	if w.Name == "" {
 		return errors.New("cannot have an empty name")
 	}
@@ -174,7 +168,7 @@ func (w *Workload) validate() error {
 	return nil
 }
 
-func (w *Workload) copy() *Workload {
+func (w *Workload) Copy() *Workload {
 	copied := *w
 	copied.Environment = maps.Clone(w.Environment)
 	copied.UserID = copyPtr(w.UserID)
@@ -182,7 +176,7 @@ func (w *Workload) copy() *Workload {
 	return &copied
 }
 
-func (w *Workload) merge(other *Workload) {
+func (w *Workload) Merge(other *Workload) {
 	if len(other.Environment) > 0 {
 		w.Environment = makeMapIfNil(w.Environment)
 		maps.Copy(w.Environment, other.Environment)
@@ -199,6 +193,25 @@ func (w *Workload) merge(other *Workload) {
 	if other.Group != "" {
 		w.Group = other.Group
 	}
+}
+
+func (w *Workload) Equal(other *Workload) bool {
+	if !maps.Equal(w.Environment, other.Environment) {
+		return false
+	}
+
+	uid, gid, err := osutil.NormalizeUidGid(w.UserID, w.GroupID, w.User, w.Group)
+	if err != nil {
+		return reflect.DeepEqual(w, other)
+	}
+	otherUID, otherGID, err := osutil.NormalizeUidGid(other.UserID, other.GroupID, other.User, other.Group)
+	if err != nil {
+		return reflect.DeepEqual(w, other)
+	}
+	if uid != nil && gid != nil && otherUID != nil && otherGID != nil {
+		return *uid == *otherUID && *gid == *otherGID
+	}
+	return reflect.DeepEqual(w, other)
 }
 
 func copyPtr[T any](p *T) *T {

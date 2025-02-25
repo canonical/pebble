@@ -22,6 +22,7 @@ import (
 	"github.com/canonical/pebble/internals/plan"
 	"github.com/canonical/pebble/internals/reaper"
 	"github.com/canonical/pebble/internals/servicelog"
+	"github.com/canonical/pebble/internals/workloads"
 )
 
 // TaskServiceRequest extracts the *ServiceRequest that was associated
@@ -96,7 +97,7 @@ type serviceData struct {
 	manager      *ServiceManager
 	state        serviceState
 	config       *plan.Service
-	workload     *Workload
+	workload     *workloads.Workload
 	logs         *servicelog.RingBuffer
 	started      chan error
 	stopped      chan error
@@ -122,9 +123,9 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 		return fmt.Errorf("cannot find service %q in plan", request.Name)
 	}
 
-	var workload *Workload
+	var workload *workloads.Workload
 	if config.Workload != "" {
-		ws := currentPlan.Sections[WorkloadsField].(*WorkloadsSection)
+		ws := currentPlan.Sections[workloads.WorkloadsField].(*workloads.WorkloadsSection)
 		if workload = ws.Entries[config.Workload]; workload == nil {
 			return fmt.Errorf("cannot find workload %q for service %q in plan", config.Workload, request.Name)
 		}
@@ -177,7 +178,7 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 // and is running.
 //
 // It also returns a message to add to the task's log, or empty string if none.
-func (m *ServiceManager) serviceForStart(config *plan.Service, workload *Workload) (service *serviceData, taskLog string) {
+func (m *ServiceManager) serviceForStart(config *plan.Service, workload *workloads.Workload) (service *serviceData, taskLog string) {
 	m.servicesLock.Lock()
 	defer m.servicesLock.Unlock()
 
@@ -193,7 +194,7 @@ func (m *ServiceManager) serviceForStart(config *plan.Service, workload *Workloa
 		}
 		service.config = config.Copy()
 		if workload != nil {
-			service.workload = workload.copy()
+			service.workload = workload.Copy()
 		}
 		m.services[config.Name] = service
 		return service, ""
@@ -202,7 +203,7 @@ func (m *ServiceManager) serviceForStart(config *plan.Service, workload *Workloa
 	// Ensure config is up-to-date from the plan whenever the user starts a service.
 	service.config = config.Copy()
 	if workload != nil {
-		service.workload = workload.copy()
+		service.workload = workload.Copy()
 	}
 
 	switch service.state {

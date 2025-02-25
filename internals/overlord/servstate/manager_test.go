@@ -43,6 +43,7 @@ import (
 	"github.com/canonical/pebble/internals/reaper"
 	"github.com/canonical/pebble/internals/servicelog"
 	"github.com/canonical/pebble/internals/testutil"
+	"github.com/canonical/pebble/internals/workloads"
 )
 
 const (
@@ -410,6 +411,10 @@ services:
 }
 
 func (s *S) TestReplanUpdatesConfig(c *C) {
+	UpdatesConfig
+	plan.RegisterSectionExtension(workloads.WorkloadsField, &workloads.PlanExtension{})
+	defer plan.UnregisterSectionExtension(workloads.WorkloadsField)
+
 	s.newServiceManager(c)
 	s.planAddLayer(c, testPlanLayer)
 	s.planChanged(c)
@@ -1775,6 +1780,79 @@ services:
 	s.waitUntilService(c, "waitdelay", func(svc *servstate.ServiceInfo) bool {
 		return svc.Current == servstate.StatusInactive
 	})
+}
+
+func (s *S) TestWorkloadAppliesToService(c *C) {
+	plan.RegisterSectionExtension(workloads.WorkloadsField, &workloads.PlanExtension{})
+	defer plan.UnregisterSectionExtension(workloads.WorkloadsField)
+
+	s.newServiceManager(c)
+	s.planAddLayer(c, `
+services:
+    test1:
+        override: replace
+        command: /bin/sh -c "echo $PATH; sleep 10"
+        workload: wl1
+
+workloads:
+    wl1:
+        override: replace
+        environment:
+            PATH: "/private/bin:/bin:/sbin"
+    `)
+	s.planChanged(c)
+
+	chg := s.startServices(c, [][]string{{"test1"}})
+	s.waitUntilService(c, "test1", func(svc *servstate.ServiceInfo) bool {
+		return svc.Current == servstate.StatusActive
+	})
+	c.Assert(s.manager.BackoffNum("test1"), Equals, 0)
+	s.st.Lock()
+	c.Check(chg.Status(), Equals, state.DoneStatus)
+	s.st.Unlock()
+	time.Sleep(10 * time.Millisecond)
+	c.Check(s.readAndClearLogBuffer(), Matches, `(?s).* \[test1\] /private/bin:/bin:/sbin\n`)
+}
+
+func (s *S) TestWorkloadReferenceInvalid(c *C) {
+	plan.RegisterSectionExtension(workloads.WorkloadsField, &workloads.PlanExtension{})
+	defer plan.UnregisterSectionExtension(workloads.WorkloadsField)
+
+	s.newServiceManager(c)
+	err := s.tryPlanAddLayer(c, `
+services:
+    test1:
+        override: replace
+        command: /bin/sh -c "echo $PATH; sleep 10"
+        workload: non-existing
+    `)
+	c.Assert(err, ErrorMatches, `plan service "test1" workload not defined: "non-existing"`)
+}
+
+func (s *S) tryPlanAddLayer(c *C, layerYAML string) error {
+	cnt := len(s.plan.Layers)
+	layer, err := plan.ParseLayer(cnt, fmt.Sprintf("test-plan-layer-%v", cnt), []byte(layerYAML))
+	if err != nil {
+		return err
+	}
+	// Resolve {{.NotifyDoneCheck}}
+	s.insertDoneChecks(c, layer)
+	layers := append(s.plan.Layers, layer)
+	combined, err := plan.CombineLayers(layers...)
+	if err != nil {
+		return err
+	}
+	if err := combined.Validate(); err != nil {
+		return err
+	}
+	s.plan = &plan.Plan{
+		Layers:     layers,
+		Services:   combined.Services,
+		Checks:     combined.Checks,
+		LogTargets: combined.LogTargets,
+		Sections:   combined.Sections,
+	}
+	return s.plan.Validate()
 }
 
 func (s *S) newServiceManager(c *C) {

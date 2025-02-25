@@ -13,6 +13,7 @@ import (
 	"github.com/canonical/pebble/internals/overlord/state"
 	"github.com/canonical/pebble/internals/plan"
 	"github.com/canonical/pebble/internals/servicelog"
+	"github.com/canonical/pebble/internals/workloads"
 )
 
 type ServiceManager struct {
@@ -264,16 +265,15 @@ func (m *ServiceManager) Replan() ([][]string, [][]string, error) {
 			if config.Equal(s.config) {
 				continue
 			}
+			ws := currentPlan.Sections[workloads.WorkloadsField].(*workloads.WorkloadsSection)
+			workload := ws.Entries[s.config.Workload]
+			if workload != nil && workload.Equal(s.workload) {
+				continue
+			}
 			// Update service config and workload from plan
 			s.config = config.Copy()
-			if s.config.Workload != "" {
-				ws, ok := currentPlan.Sections[WorkloadsField].(*WorkloadsSection)
-				if !ok {
-					return nil, nil, fmt.Errorf("internal error: invalid section type %T", ws)
-				}
-				s.workload = ws.Entries[s.config.Workload].copy()
-			} else {
-				s.workload = nil
+			if workload != nil {
+				s.workload = workload.Copy()
 			}
 		}
 		needsRestart[name] = true
