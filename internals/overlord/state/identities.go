@@ -323,7 +323,7 @@ func (s *State) Identities() map[string]*Identity {
 // if there is none.
 //
 // Identity priority:
-//  1. If both username and password are provided, the function attempts to
+//  1. If either username or password are provided, the function attempts to
 //     match a "basic" type identity. The userID is ignored in this case. If
 //     a matching username is found but the password verification fails, nil
 //     is returned immediately.
