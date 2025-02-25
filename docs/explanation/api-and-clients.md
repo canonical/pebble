@@ -23,7 +23,7 @@ API endpoints fall into one of four access levels, from least restricted to most
     * `GET /v1/health`, which returns a boolean to indicate whether Pebble's health checks are all healthy
 
 * **Metrics-access** - Allowed from any authenticated user or any user that has been granted `metrics` access.
-    * `GET /v1/metrics`, which returns metrics for services and health checks in OpenTelemetry exposition format.
+    * `GET /v1/metrics`, which returns metrics for services and health checks in OpenTelemetry format.
 
 * **Read-access** - Allowed from any authenticated user. For example, listing services or viewing notices.
     * All `GET` endpoints except the admin-access `GET` endpoints
