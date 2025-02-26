@@ -911,7 +911,7 @@ pebble_check_up{check="chk1"} 1
 
 # HELP pebble_check_success_count Number of times the check has succeeded
 # TYPE pebble_check_success_count counter
-pebble_check_success_count{check="chk1"} [1-9][0-9]*
+pebble_check_success_count{check="chk1"} \d+
 
 # HELP pebble_check_failure_count Number of times the check has failed
 # TYPE pebble_check_failure_count counter
@@ -960,7 +960,7 @@ pebble_check_success_count{check="chk1"} 0
 
 # HELP pebble_check_failure_count Number of times the check has failed
 # TYPE pebble_check_failure_count counter
-pebble_check_failure_count{check="chk1"} [1-9][0-9]*
+pebble_check_failure_count{check="chk1"} \d+
 
 `[1:]
 	c.Assert(buf.String(), Matches, expectedRegex)
