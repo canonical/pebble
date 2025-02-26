@@ -68,3 +68,19 @@ func (ac UserAccess) CheckAccess(d *Daemon, r *http.Request, user *UserState) Re
 	// An identity explicitly set to "access: untrusted" isn't allowed.
 	return Unauthorized(accessDenied)
 }
+
+// MetricsAccess allows requests over HTTP from authenticated users.
+type MetricsAccess struct{}
+
+func (ac MetricsAccess) CheckAccess(d *Daemon, r *http.Request, user *UserState) Response {
+	if user == nil {
+		return Unauthorized(accessDenied)
+	}
+	switch user.Access {
+	case state.MetricsAccess, state.ReadAccess, state.AdminAccess:
+		return nil
+	default:
+		// All other access levels, including "access: untrusted", are denied.
+		return Unauthorized(accessDenied)
+	}
+}

@@ -26,8 +26,9 @@ type Identity struct {
 	Access IdentityAccess `json:"access" yaml:"access"`
 
 	// One or more of the following type-specific configuration fields must be
-	// non-nil (currently the only type is "local").
+	// non-nil.
 	Local *LocalIdentity `json:"local,omitempty" yaml:"local,omitempty"`
+	Basic *BasicIdentity `json:"basic,omitempty" yaml:"basic,omitempty"`
 }
 
 // IdentityAccess defines the access level for an identity.
@@ -45,6 +46,13 @@ type LocalIdentity struct {
 	// This is a pointer so we can distinguish between not set and 0 (a valid
 	// user-id meaning root).
 	UserID *uint32 `json:"user-id" yaml:"user-id"`
+}
+
+// BasicIdentity holds identity configuration specific to the "basic" type
+// (for HTTP basic authentication).
+type BasicIdentity struct {
+	// Password holds the user's sha512-crypt-hashed password.
+	Password string `json:"password" yaml:"password"`
 }
 
 // For future extension.

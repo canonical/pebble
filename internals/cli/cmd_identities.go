@@ -112,6 +112,9 @@ func (cmd *cmdIdentities) writeText(identities map[string]*client.Identity) erro
 		if identity.Local != nil {
 			types = append(types, "local")
 		}
+		if identity.Basic != nil {
+			types = append(types, "basic")
+		}
 		sort.Strings(types)
 		if len(types) == 0 {
 			types = append(types, "unknown")

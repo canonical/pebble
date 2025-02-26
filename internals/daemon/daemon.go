@@ -147,22 +147,27 @@ const (
 	accessForbidden
 )
 
-func userFromRequest(st *state.State, r *http.Request, ucred *Ucrednet) (*UserState, error) {
-	if ucred == nil {
-		// No ucred details, no UserState. Currently, "local" (ucred-based) is
-		// the only type of identity we support.
-		return nil, nil
+func userFromRequest(st *state.State, r *http.Request, ucred *Ucrednet, username, password string) (*UserState, error) {
+	var userID *uint32
+	if ucred != nil {
+		userID = &ucred.Uid
 	}
 
 	st.Lock()
-	identity := st.IdentityFromInputs(&ucred.Uid)
+	identity := st.IdentityFromInputs(userID, username, password)
 	st.Unlock()
 
 	if identity == nil {
 		// No identity that matches these inputs (for now, just UID).
 		return nil, nil
 	}
-	return &UserState{Access: identity.Access, UID: &ucred.Uid}, nil
+	if identity.Basic != nil {
+		// Prioritize basic type (HTTP basic authentication) and ignore UID in this case.
+		return &UserState{Access: identity.Access}, nil
+	} else if identity.Local != nil {
+		return &UserState{Access: identity.Access, UID: userID}, nil
+	}
+	return nil, nil
 }
 
 func (d *Daemon) Overlord() *overlord.Overlord {
@@ -213,7 +218,8 @@ func (c *Command) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// not good: https://github.com/canonical/pebble/pull/369
 	var user *UserState
 	if _, isOpen := access.(OpenAccess); !isOpen {
-		user, err = userFromRequest(c.d.state, r, ucred)
+		username, password, _ := r.BasicAuth()
+		user, err = userFromRequest(c.d.state, r, ucred, username, password)
 		if err != nil {
 			Forbidden("forbidden").ServeHTTP(w, r)
 			return
