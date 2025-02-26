@@ -75,7 +75,7 @@ identities:
 
 Then run `pebble add-identities --from idents-add.yaml`. See [Identities](../reference/identities) and [How to manage identities](../how-to/manage-identities) for more information.
 
-To access the metrics endpoint, make sure we run Pebble with the `--http` option: `pebble run --http=:4000`, then we can get the metrics data with HTTP basic authentication:
+To access the metrics endpoint, run `pebble run --http=:4000`, then use `curl` and specify the identity that we created:
 
 ```{terminal}
    :input: curl -u alice:<password> http://localhost:4000/v1/metrics
