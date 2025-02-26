@@ -101,7 +101,7 @@ pebble_check_failure_count{check="check1"} 0
 
 ```
 
-To configure Prometheus to scrape a target protected by HTTP basic authentication, add an `http_config` section in the `scrape_config`. Read more [here in the official documentation](https://prometheus.io/docs/prometheus/latest/configuration/configuration/#scrape_config).
+To configure Prometheus to scrape a target protected by HTTP basic authentication, add an `http_config` section in the `scrape_config`. See the [Prometheus configuration documentation](https://prometheus.io/docs/prometheus/latest/configuration/configuration/#scrape_config).
 
 ## Limitations of health checks
 
