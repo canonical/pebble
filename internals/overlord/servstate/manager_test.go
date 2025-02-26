@@ -2108,21 +2108,21 @@ func (s *S) TestMetrics(c *C) {
 	writer := metrics.NewOpenTelemetryWriter(buf)
 	s.manager.WriteMetrics(writer)
 	expected := `
-# HELP pebble_service_start_count Number of times the service has started
-# TYPE pebble_service_start_count counter
-pebble_service_start_count{service="test1"} 1
-
 # HELP pebble_service_active Whether the service is currently active (1) or not (0)
 # TYPE pebble_service_active gauge
 pebble_service_active{service="test1"} 1
 
 # HELP pebble_service_start_count Number of times the service has started
 # TYPE pebble_service_start_count counter
-pebble_service_start_count{service="test2"} 1
+pebble_service_start_count{service="test1"} 1
 
 # HELP pebble_service_active Whether the service is currently active (1) or not (0)
 # TYPE pebble_service_active gauge
 pebble_service_active{service="test2"} 1
+
+# HELP pebble_service_start_count Number of times the service has started
+# TYPE pebble_service_start_count counter
+pebble_service_start_count{service="test2"} 1
 
 `[1:]
 	c.Assert(buf.String(), Equals, expected)
@@ -2131,21 +2131,21 @@ pebble_service_active{service="test2"} 1
 	s.stopTestServices(c)
 	s.manager.WriteMetrics(writer)
 	expected = `
-# HELP pebble_service_start_count Number of times the service has started
-# TYPE pebble_service_start_count counter
-pebble_service_start_count{service="test1"} 1
-
 # HELP pebble_service_active Whether the service is currently active (1) or not (0)
 # TYPE pebble_service_active gauge
 pebble_service_active{service="test1"} 0
 
 # HELP pebble_service_start_count Number of times the service has started
 # TYPE pebble_service_start_count counter
-pebble_service_start_count{service="test2"} 1
+pebble_service_start_count{service="test1"} 1
 
 # HELP pebble_service_active Whether the service is currently active (1) or not (0)
 # TYPE pebble_service_active gauge
 pebble_service_active{service="test2"} 0
+
+# HELP pebble_service_start_count Number of times the service has started
+# TYPE pebble_service_start_count counter
+pebble_service_start_count{service="test2"} 1
 
 `[1:]
 	c.Assert(buf.String(), Equals, expected)
@@ -2157,21 +2157,21 @@ pebble_service_active{service="test2"} 0
 	}
 	s.manager.WriteMetrics(writer)
 	expected = `
-# HELP pebble_service_start_count Number of times the service has started
-# TYPE pebble_service_start_count counter
-pebble_service_start_count{service="test1"} 2
-
 # HELP pebble_service_active Whether the service is currently active (1) or not (0)
 # TYPE pebble_service_active gauge
 pebble_service_active{service="test1"} 1
 
 # HELP pebble_service_start_count Number of times the service has started
 # TYPE pebble_service_start_count counter
-pebble_service_start_count{service="test2"} 2
+pebble_service_start_count{service="test1"} 2
 
 # HELP pebble_service_active Whether the service is currently active (1) or not (0)
 # TYPE pebble_service_active gauge
 pebble_service_active{service="test2"} 1
+
+# HELP pebble_service_start_count Number of times the service has started
+# TYPE pebble_service_start_count counter
+pebble_service_start_count{service="test2"} 2
 
 `[1:]
 	c.Assert(buf.String(), Equals, expected)
@@ -2180,21 +2180,21 @@ pebble_service_active{service="test2"} 1
 	s.stopTestServices(c)
 	s.manager.WriteMetrics(writer)
 	expected = `
-# HELP pebble_service_start_count Number of times the service has started
-# TYPE pebble_service_start_count counter
-pebble_service_start_count{service="test1"} 2
-
 # HELP pebble_service_active Whether the service is currently active (1) or not (0)
 # TYPE pebble_service_active gauge
 pebble_service_active{service="test1"} 0
 
 # HELP pebble_service_start_count Number of times the service has started
 # TYPE pebble_service_start_count counter
-pebble_service_start_count{service="test2"} 2
+pebble_service_start_count{service="test1"} 2
 
 # HELP pebble_service_active Whether the service is currently active (1) or not (0)
 # TYPE pebble_service_active gauge
 pebble_service_active{service="test2"} 0
+
+# HELP pebble_service_start_count Number of times the service has started
+# TYPE pebble_service_start_count counter
+pebble_service_start_count{service="test2"} 2
 
 `[1:]
 	c.Assert(buf.String(), Equals, expected)

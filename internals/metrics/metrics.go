@@ -33,7 +33,7 @@ func (mt MetricType) String() string {
 	case TypeGaugeInt:
 		return "gauge"
 	default:
-		panic(fmt.Sprintf("invalid metric type %d", mt))
+		panic(fmt.Sprintf("internal error: invalid metric type %d", mt))
 	}
 }
 

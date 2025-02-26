@@ -408,7 +408,7 @@ type CheckInfo struct {
 	ChangeID  string
 }
 
-// checkData holds the metrics and other data for a a single check.
+// checkData holds the metrics and other data for a single check.
 type checkData struct {
 	name         string
 	level        plan.CheckLevel
@@ -434,7 +434,7 @@ type checker interface {
 }
 
 func (c *checkData) writeMetric(writer metrics.Writer) error {
-	// Not to list any inactive checks because they don't have an up or down status.
+	// Don't list any inactive checks because they don't have an up or down status.
 	if c.status != CheckStatusInactive {
 		checkUp := 0
 		if c.status == CheckStatusUp {

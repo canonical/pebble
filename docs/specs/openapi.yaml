@@ -807,7 +807,7 @@ paths:
       description: |
         Get Pebble services and health checks metrics in [OpenMetrics](https://github.com/prometheus/OpenMetrics) format.
 
-        This endpoint requires HTTP basic authentication using an identity of type "basic". See [Identities](../identities) for more information.
+        When used over TCP, this endpoint requires HTTP basic authentication using an identity of type "basic". See [Identities](../identities) for more information.
       tags:
         - metrics
       security:

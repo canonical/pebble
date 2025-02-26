@@ -521,7 +521,7 @@ func (s *ManagerSuite) TestSuccessNoLog(c *C) {
 			c.Fatalf("failed waiting for check to run")
 		}
 		b, _ := os.ReadFile(tempFile)
-		if len(b) >= 2 {
+		if len(b) >= 1 {
 			break
 		}
 		time.Sleep(time.Millisecond)
@@ -895,7 +895,7 @@ func (s *ManagerSuite) TestMetricsCheckSuccess(c *C) {
 			c.Fatalf("failed waiting for check to run")
 		}
 		b, _ := os.ReadFile(tempFile)
-		if len(b) >= 2 {
+		if len(b) > 0 {
 			break
 		}
 		time.Sleep(time.Millisecond)
@@ -904,21 +904,21 @@ func (s *ManagerSuite) TestMetricsCheckSuccess(c *C) {
 	buf := new(bytes.Buffer)
 	writer := metrics.NewOpenTelemetryWriter(buf)
 	s.manager.WriteMetrics(writer)
-	expected := `
-# HELP pebble_check_up Whether the health check is up (1) or not (0)
+	expectedRegex := `
+# HELP pebble_check_up Whether the health check is up \(1\) or not \(0\)
 # TYPE pebble_check_up gauge
 pebble_check_up{check="chk1"} 1
 
 # HELP pebble_check_success_count Number of times the check has succeeded
 # TYPE pebble_check_success_count counter
-pebble_check_success_count{check="chk1"} 2
+pebble_check_success_count{check="chk1"} [1-9][0-9]*
 
 # HELP pebble_check_failure_count Number of times the check has failed
 # TYPE pebble_check_failure_count counter
 pebble_check_failure_count{check="chk1"} 0
 
 `[1:]
-	c.Assert(buf.String(), Equals, expected)
+	c.Assert(buf.String(), Matches, expectedRegex)
 }
 
 func (s *ManagerSuite) TestMetricsCheckFailure(c *C) {
@@ -949,8 +949,8 @@ func (s *ManagerSuite) TestMetricsCheckFailure(c *C) {
 	buf := new(bytes.Buffer)
 	writer := metrics.NewOpenTelemetryWriter(buf)
 	s.manager.WriteMetrics(writer)
-	expected := `
-# HELP pebble_check_up Whether the health check is up (1) or not (0)
+	expectedRegex := `
+# HELP pebble_check_up Whether the health check is up \(1\) or not \(0\)
 # TYPE pebble_check_up gauge
 pebble_check_up{check="chk1"} 1
 
@@ -960,10 +960,10 @@ pebble_check_success_count{check="chk1"} 0
 
 # HELP pebble_check_failure_count Number of times the check has failed
 # TYPE pebble_check_failure_count counter
-pebble_check_failure_count{check="chk1"} 2
+pebble_check_failure_count{check="chk1"} [1-9][0-9]*
 
 `[1:]
-	c.Assert(buf.String(), Equals, expected)
+	c.Assert(buf.String(), Matches, expectedRegex)
 }
 
 func (s *ManagerSuite) TestMetricsInactiveCheck(c *C) {

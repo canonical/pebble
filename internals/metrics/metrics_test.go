@@ -31,7 +31,7 @@ type OpenTelemetryWriterSuite struct{}
 
 var _ = Suite(&OpenTelemetryWriterSuite{})
 
-func (s *OpenTelemetryWriterSuite) TestOpenTelemetryWriter(c *C) {
+func (s *OpenTelemetryWriterSuite) TestWriter(c *C) {
 	testCases := []struct {
 		name     string
 		metric   metrics.Metric

@@ -830,26 +830,26 @@ func (s *serviceData) checkFailed(action plan.ServiceAction) {
 
 // writeMetric writes the service's metrics.
 func (d *serviceData) writeMetric(writer metrics.Writer) error {
+	active := 0
+	if stateToStatus(d.state) == StatusActive {
+		active = 1
+	}
 	err := writer.Write(metrics.Metric{
-		Name:       "pebble_service_start_count",
-		Type:       metrics.TypeCounterInt,
-		ValueInt64: d.startCount.Load(),
-		Comment:    "Number of times the service has started",
+		Name:       "pebble_service_active",
+		Type:       metrics.TypeGaugeInt,
+		ValueInt64: int64(active),
+		Comment:    "Whether the service is currently active (1) or not (0)",
 		Labels:     []metrics.Label{metrics.NewLabel("service", d.config.Name)},
 	})
 	if err != nil {
 		return err
 	}
 
-	active := 0
-	if stateToStatus(d.state) == StatusActive {
-		active = 1
-	}
 	err = writer.Write(metrics.Metric{
-		Name:       "pebble_service_active",
-		Type:       metrics.TypeGaugeInt,
-		ValueInt64: int64(active),
-		Comment:    "Whether the service is currently active (1) or not (0)",
+		Name:       "pebble_service_start_count",
+		Type:       metrics.TypeCounterInt,
+		ValueInt64: d.startCount.Load(),
+		Comment:    "Number of times the service has started",
 		Labels:     []metrics.Label{metrics.NewLabel("service", d.config.Name)},
 	})
 	if err != nil {
