@@ -115,7 +115,7 @@ html_context = {
 
 # If your project is on documentation.ubuntu.com, specify the project
 # slug (for example, "lxd") here.
-slug = ""
+slug = "pebble"
 
 ############################################################
 ### Redirects

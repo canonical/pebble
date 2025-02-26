@@ -18,13 +18,11 @@ import (
 	"time"
 
 	"github.com/canonical/pebble/internals/osutil"
-	"github.com/canonical/pebble/internals/overlord/restart"
 )
 
 type overlordStateBackend struct {
-	path           string
-	ensureBefore   func(d time.Duration)
-	requestRestart func(t restart.RestartType)
+	path         string
+	ensureBefore func(d time.Duration)
 }
 
 func (osb *overlordStateBackend) Checkpoint(data []byte) error {
