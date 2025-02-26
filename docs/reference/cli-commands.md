@@ -252,7 +252,7 @@ Commands can be classified as follows:
         Info: help, version
         Plan: add, plan, replan
     Services: services, logs, start, restart, signal, stop
-      Checks: check, checks, start-checks, stop-checks, health
+      Checks: checks, check, start-checks, stop-checks, health
        Files: push, pull, ls, mkdir, rm, exec
      Changes: changes, tasks
      Notices: warnings, okay, notices, notice, notify
