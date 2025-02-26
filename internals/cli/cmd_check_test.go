@@ -19,16 +19,16 @@ import (
 	"net/http"
 	"net/url"
 
-	"gopkg.in/check.v1"
+	. "gopkg.in/check.v1"
 
 	"github.com/canonical/pebble/internals/cli"
 )
 
-func (s *PebbleSuite) TestCheck(c *check.C) {
+func (s *PebbleSuite) TestCheck(c *C) {
 	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		c.Assert(r.Method, check.Equals, "GET")
-		c.Assert(r.URL.Path, check.Equals, "/v1/checks")
-		c.Assert(r.URL.Query(), check.DeepEquals, url.Values{"names": {"chk1"}})
+		c.Assert(r.Method, Equals, "GET")
+		c.Assert(r.URL.Path, Equals, "/v1/checks")
+		c.Assert(r.URL.Query(), DeepEquals, url.Values{"names": {"chk1"}})
 		fmt.Fprint(w, `
 {
     "type": "sync",
@@ -37,25 +37,24 @@ func (s *PebbleSuite) TestCheck(c *check.C) {
 }`)
 	})
 	rest, err := cli.ParserForTest().ParseArgs([]string{"check", "chk1"})
-	c.Assert(err, check.IsNil)
-	c.Assert(rest, check.HasLen, 0)
-	c.Check(s.Stdout(), check.Equals, `
+	c.Assert(err, IsNil)
+	c.Assert(rest, HasLen, 0)
+	c.Check(s.Stdout(), Equals, `
 name: chk1
-level: ""
 startup: enabled
 status: up
 failures: 0
 threshold: 3
-changeid: "1"
+change-id: "1"
 `[1:])
-	c.Check(s.Stderr(), check.Equals, "")
+	c.Check(s.Stderr(), Equals, "")
 }
 
-func (s *PebbleSuite) TestCheckNotFound(c *check.C) {
+func (s *PebbleSuite) TestCheckNotFound(c *C) {
 	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		c.Assert(r.Method, check.Equals, "GET")
-		c.Assert(r.URL.Path, check.Equals, "/v1/checks")
-		c.Assert(r.URL.Query(), check.DeepEquals, url.Values{"names": {"chk2"}})
+		c.Assert(r.Method, Equals, "GET")
+		c.Assert(r.URL.Path, Equals, "/v1/checks")
+		c.Assert(r.URL.Query(), DeepEquals, url.Values{"names": {"chk2"}})
 		fmt.Fprint(w, `{
     "type": "sync",
     "status-code": 200,
@@ -63,8 +62,7 @@ func (s *PebbleSuite) TestCheckNotFound(c *check.C) {
 }`)
 	})
 	rest, err := cli.ParserForTest().ParseArgs([]string{"check", "chk2"})
-	c.Assert(err, check.IsNil)
-	c.Assert(rest, check.HasLen, 0)
-	c.Check(s.Stdout(), check.Equals, "")
-	c.Check(s.Stderr(), check.Equals, "No matching health checks.\n")
+	c.Assert(err, NotNil)
+	c.Assert(rest, HasLen, 1)
+	c.Check(err, ErrorMatches, "cannot find check .*")
 }

@@ -36,6 +36,16 @@ type cmdCheck struct {
 	} `positional-args:"yes"`
 }
 
+type checkInfo struct {
+	Name      string `yaml:"name"`
+	Level     string `yaml:"level,omitempty"`
+	Startup   string `yaml:"startup"`
+	Status    string `yaml:"status"`
+	Failures  int    `yaml:"failures"`
+	Threshold int    `yaml:"threshold"`
+	ChangeID  string `yaml:"change-id,omitempty"`
+}
+
 func init() {
 	AddCommand(&CmdInfo{
 		Name:        "check",
@@ -60,12 +70,20 @@ func (cmd *cmdCheck) Execute(args []string) error {
 		return err
 	}
 	if len(checks) == 0 {
-		fmt.Fprintln(Stderr, "No matching health checks.")
-		return nil
+		return fmt.Errorf("cannot find check %q", cmd.Positional.Check)
 	}
 
 	check := checks[0]
-	data, err := yaml.Marshal(check)
+	checkInfo := checkInfo{
+		Name:      check.Name,
+		Level:     string(check.Level),
+		Startup:   string(check.Startup),
+		Status:    string(check.Status),
+		Failures:  check.Failures,
+		Threshold: check.Threshold,
+		ChangeID:  check.ChangeID,
+	}
+	data, err := yaml.Marshal(checkInfo)
 	if err != nil {
 		return err
 	}
