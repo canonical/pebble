@@ -35,6 +35,7 @@ import (
 	. "gopkg.in/check.v1"
 
 	"github.com/canonical/pebble/internals/logger"
+	"github.com/canonical/pebble/internals/metrics"
 	"github.com/canonical/pebble/internals/overlord/checkstate"
 	"github.com/canonical/pebble/internals/overlord/restart"
 	"github.com/canonical/pebble/internals/overlord/servstate"
@@ -2092,4 +2093,109 @@ func waitChecks(c *C, checkMgr *checkstate.CheckManager, f func(checks []*checks
 	}
 	c.Fatal("timed out waiting for checks to settle")
 	return nil
+}
+
+func (s *S) TestMetrics(c *C) {
+	s.newServiceManager(c)
+	s.planAddLayer(c, testPlanLayer)
+	s.planChanged(c)
+
+	s.startTestServices(c, true)
+	if c.Failed() {
+		return
+	}
+	buf := new(bytes.Buffer)
+	writer := metrics.NewOpenTelemetryWriter(buf)
+	s.manager.WriteMetrics(writer)
+	expected := `
+# HELP pebble_service_active Whether the service is currently active (1) or not (0)
+# TYPE pebble_service_active gauge
+pebble_service_active{service="test1"} 1
+
+# HELP pebble_service_start_count Number of times the service has started
+# TYPE pebble_service_start_count counter
+pebble_service_start_count{service="test1"} 1
+
+# HELP pebble_service_active Whether the service is currently active (1) or not (0)
+# TYPE pebble_service_active gauge
+pebble_service_active{service="test2"} 1
+
+# HELP pebble_service_start_count Number of times the service has started
+# TYPE pebble_service_start_count counter
+pebble_service_start_count{service="test2"} 1
+
+`[1:]
+	c.Assert(buf.String(), Equals, expected)
+
+	buf.Reset()
+	s.stopTestServices(c)
+	s.manager.WriteMetrics(writer)
+	expected = `
+# HELP pebble_service_active Whether the service is currently active (1) or not (0)
+# TYPE pebble_service_active gauge
+pebble_service_active{service="test1"} 0
+
+# HELP pebble_service_start_count Number of times the service has started
+# TYPE pebble_service_start_count counter
+pebble_service_start_count{service="test1"} 1
+
+# HELP pebble_service_active Whether the service is currently active (1) or not (0)
+# TYPE pebble_service_active gauge
+pebble_service_active{service="test2"} 0
+
+# HELP pebble_service_start_count Number of times the service has started
+# TYPE pebble_service_start_count counter
+pebble_service_start_count{service="test2"} 1
+
+`[1:]
+	c.Assert(buf.String(), Equals, expected)
+
+	buf.Reset()
+	s.startTestServices(c, true)
+	if c.Failed() {
+		return
+	}
+	s.manager.WriteMetrics(writer)
+	expected = `
+# HELP pebble_service_active Whether the service is currently active (1) or not (0)
+# TYPE pebble_service_active gauge
+pebble_service_active{service="test1"} 1
+
+# HELP pebble_service_start_count Number of times the service has started
+# TYPE pebble_service_start_count counter
+pebble_service_start_count{service="test1"} 2
+
+# HELP pebble_service_active Whether the service is currently active (1) or not (0)
+# TYPE pebble_service_active gauge
+pebble_service_active{service="test2"} 1
+
+# HELP pebble_service_start_count Number of times the service has started
+# TYPE pebble_service_start_count counter
+pebble_service_start_count{service="test2"} 2
+
+`[1:]
+	c.Assert(buf.String(), Equals, expected)
+
+	buf.Reset()
+	s.stopTestServices(c)
+	s.manager.WriteMetrics(writer)
+	expected = `
+# HELP pebble_service_active Whether the service is currently active (1) or not (0)
+# TYPE pebble_service_active gauge
+pebble_service_active{service="test1"} 0
+
+# HELP pebble_service_start_count Number of times the service has started
+# TYPE pebble_service_start_count counter
+pebble_service_start_count{service="test1"} 2
+
+# HELP pebble_service_active Whether the service is currently active (1) or not (0)
+# TYPE pebble_service_active gauge
+pebble_service_active{service="test2"} 0
+
+# HELP pebble_service_start_count Number of times the service has started
+# TYPE pebble_service_start_count counter
+pebble_service_start_count{service="test2"} 2
+
+`[1:]
+	c.Assert(buf.String(), Equals, expected)
 }

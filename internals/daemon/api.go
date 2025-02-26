@@ -110,6 +110,10 @@ var API = []*Command{{
 	WriteAccess: AdminAccess{},
 	GET:         v1GetIdentities,
 	POST:        v1PostIdentities,
+}, {
+	Path:       "/v1/metrics",
+	ReadAccess: MetricsAccess{},
+	GET:        v1GetMetrics,
 }}
 
 var (
@@ -117,6 +121,7 @@ var (
 
 	overlordServiceManager = (*overlord.Overlord).ServiceManager
 	overlordPlanManager    = (*overlord.Overlord).PlanManager
+	overlordCheckManager   = (*overlord.Overlord).CheckManager
 
 	muxVars = mux.Vars
 )
