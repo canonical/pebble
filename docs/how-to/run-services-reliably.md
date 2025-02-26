@@ -59,7 +59,7 @@ services:
 
 ## Access health metrics in OpenMetrics format
 
-If we run Pebble with the `--http` option, Pebble exposes the `/v1/metrics` endpoint over HTTP, providing metrics data in [OpenMetrics](https://github.com/prometheus/OpenMetrics) format. This endpoint is not open-access and requires HTTP basic authentication.
+If we run Pebble with the `--http` option, Pebble exposes the `/v1/metrics` endpoint over HTTP, providing metrics data in [OpenMetrics](https://github.com/prometheus/OpenMetrics) format. This endpoint requires HTTP basic authentication.
 
 To access the metrics endpoint with HTTP basic authentication, first create a "basic" type identity and give it "metrics" access. Prepare this file:
 
