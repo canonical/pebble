@@ -152,3 +152,26 @@ logs: |
 `[1:])
 	c.Check(s.Stderr(), Equals, "")
 }
+
+func (s *PebbleSuite) TestCheckRefreshNotFound(c *C) {
+	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+		c.Assert(r.Method, Equals, "POST")
+		c.Assert(r.URL.Path, Equals, "/v1/checks/refresh")
+		body := DecodedRequestBody(c, r)
+		c.Check(body, check.DeepEquals, map[string]any{
+			"Name": "chk1",
+		})
+		fmt.Fprint(w, `{
+    "type": "error",
+    "status-code": 404,
+	"status": "Not Found",
+    "result": {
+        "message": "cannot find check with name \"chk1\""
+	}
+}`)
+	})
+	rest, err := cli.ParserForTest().ParseArgs([]string{"check", "--refresh", "chk1"})
+	c.Assert(err, NotNil)
+	c.Assert(rest, HasLen, 1)
+	c.Check(err, ErrorMatches, "cannot find check .*")
+}
