@@ -344,7 +344,10 @@ func (m *CheckManager) Checks() ([]*CheckInfo, error) {
 func (m *CheckManager) ensureCheck(name string) *checkData {
 	check, ok := m.checks[name]
 	if !ok {
-		check = &checkData{name: name}
+		check = &checkData{
+			name:    name,
+			refresh: make(chan struct{}),
+			result:  make(chan error)}
 		m.checks[name] = check
 	}
 	return check
@@ -419,6 +422,8 @@ type checkData struct {
 	changeID     string
 	successCount int64
 	failureCount int64
+	refresh      chan struct{}
+	result       chan error
 }
 
 type CheckStatus string
@@ -631,5 +636,50 @@ func (m *CheckManager) Replan() {
 		}
 		changeID := performCheckChange(m.state, check)
 		m.updateCheckData(check, changeID, 0)
+	}
+}
+
+// RefreshCheck runs a check immediately.
+func (m *CheckManager) RefreshCheck(ctx context.Context, check *plan.Check) (*CheckInfo, error) {
+	// chk := newChecker(check)
+	// return runCheck(ctx, chk, check.Timeout.Value)
+
+	m.checksLock.Lock()
+	checkData := m.ensureCheck(check.Name)
+	refresh := checkData.refresh
+	result := checkData.result
+	m.checksLock.Unlock()
+
+	if refresh == nil || result == nil {
+		return nil, fmt.Errorf("refresh channels not initialized for check %q", checkData.name)
+	}
+
+	getCheckInfo := func() *CheckInfo {
+		m.checksLock.Lock()
+		checkData := m.ensureCheck(check.Name)
+		m.checksLock.Unlock()
+		info := CheckInfo{
+			Name:      checkData.name,
+			Level:     checkData.level,
+			Startup:   checkData.startup,
+			Status:    checkData.status,
+			Failures:  checkData.failures,
+			Threshold: checkData.threshold,
+			ChangeID:  checkData.changeID,
+		}
+		return &info
+	}
+
+	select {
+	case refresh <- struct{}{}:
+	case <-ctx.Done():
+		return getCheckInfo(), ctx.Err()
+	}
+
+	select {
+	case result := <-result:
+		return getCheckInfo(), result
+	case <-ctx.Done():
+		return getCheckInfo(), ctx.Err()
 	}
 }

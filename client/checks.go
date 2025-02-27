@@ -172,3 +172,38 @@ func (client *Client) doMultiCheckAction(actionName string, checks []string) (*C
 
 	return results, nil
 }
+
+type RefreshCheckOptions struct {
+	// Name of check to run, required.
+	Name string
+}
+
+type RefreshCheckResult struct {
+	Info *CheckInfo `json:"info"`
+	// The error message, empty if success.
+	Error string `json:"err"`
+}
+
+// RefreshCheck runs a specific health check immediately.
+func (client *Client) RefreshCheck(opts *RefreshCheckOptions) (*RefreshCheckResult, error) {
+	body, err := json.Marshal(opts)
+	if err != nil {
+		return nil, fmt.Errorf("cannot marshal checks payload: %w", err)
+	}
+
+	resp, err := client.Requester().Do(context.Background(), &RequestOptions{
+		Type:   SyncRequest,
+		Method: "POST",
+		Path:   "/v1/checks/refresh",
+		Body:   bytes.NewBuffer(body),
+	})
+	if err != nil {
+		return nil, err
+	}
+	var result RefreshCheckResult
+	err = resp.DecodeResult(&result)
+	if err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
