@@ -28,12 +28,11 @@ import (
 )
 
 type ThresholdReachedError struct {
-	CheckName string
-	Err       error
+	Err error
 }
 
 func (e *ThresholdReachedError) Error() string {
-	return fmt.Sprintf("check %q reached failure threshold: %v", e.CheckName, e.Err)
+	return e.Err.Error()
 }
 func (m *CheckManager) doPerformCheck(task *state.Task, tomb *tombpkg.Tomb) error {
 	m.state.Lock()
@@ -94,9 +93,7 @@ func (m *CheckManager) doPerformCheck(task *state.Task, tomb *tombpkg.Tomb) erro
 			if atThreshold {
 				logger.Noticef("Check %q threshold %d hit, triggering action and recovering", config.Name, config.Threshold)
 				m.callFailureHandlers(config.Name)
-				// Returning the error means perform-check goes to Error status
-				// and logs the error to the task log.
-				return &ThresholdReachedError{CheckName: config.Name, Err: err}
+				return &ThresholdReachedError{Err: err}
 			}
 			return err
 		}
@@ -122,6 +119,8 @@ func (m *CheckManager) doPerformCheck(task *state.Task, tomb *tombpkg.Tomb) erro
 			result <- err
 			if err != nil {
 				if _, ok := err.(*ThresholdReachedError); ok {
+					// Returning the error means perform-check goes to Error status
+					// and logs the error to the task log.
 					return err
 				}
 			}
@@ -133,7 +132,11 @@ func (m *CheckManager) doPerformCheck(task *state.Task, tomb *tombpkg.Tomb) erro
 			default: // Otherwise don't send result.
 			}
 			if err != nil {
-				return err
+				if _, ok := err.(*ThresholdReachedError); ok {
+					// Returning the error means perform-check goes to Error status
+					// and logs the error to the task log.
+					return err
+				}
 			}
 		case <-tomb.Dying():
 			return checkStopped(config.Name, task.Kind(), tomb.Err())
