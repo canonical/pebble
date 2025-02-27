@@ -117,6 +117,20 @@ ID  Status  Spawn                Ready                Summary
 
 Read more: [Changes and tasks](changes-and-tasks.md).
 
+(reference_pebble_check_command)=
+## check
+
+The `check` command shows details for a single check in YAML format.
+
+<!-- START AUTOMATED OUTPUT FOR check -->
+```{terminal}
+:input: pebble check --help
+Usage:
+  pebble check <check>
+
+The check command shows details for a single check in YAML format.
+```
+<!-- END AUTOMATED OUTPUT FOR check -->
 
 (reference_pebble_checks_command)=
 ## checks
@@ -249,7 +263,7 @@ Commands can be classified as follows:
         Info: help, version
         Plan: add, plan, replan
     Services: services, logs, start, restart, signal, stop
-      Checks: checks, start-checks, stop-checks, health
+      Checks: checks, check, start-checks, stop-checks, health
        Files: push, pull, ls, mkdir, rm, exec
      Changes: changes, tasks
      Notices: warnings, okay, notices, notice, notify
