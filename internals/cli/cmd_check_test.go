@@ -19,6 +19,7 @@ import (
 	"net/http"
 	"net/url"
 
+	"gopkg.in/check.v1"
 	. "gopkg.in/check.v1"
 
 	"github.com/canonical/pebble/internals/cli"
@@ -65,4 +66,89 @@ func (s *PebbleSuite) TestCheckNotFound(c *C) {
 	c.Assert(err, NotNil)
 	c.Assert(rest, HasLen, 1)
 	c.Check(err, ErrorMatches, "cannot find check .*")
+}
+
+func (s *PebbleSuite) TestCheckRefresh(c *C) {
+	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+		c.Assert(r.Method, Equals, "POST")
+		c.Assert(r.URL.Path, Equals, "/v1/checks/refresh")
+		body := DecodedRequestBody(c, r)
+		c.Check(body, check.DeepEquals, map[string]any{
+			"Name": "chk1",
+		})
+		fmt.Fprint(w, `
+{
+    "type": "sync",
+    "status-code": 200,
+    "result": {
+        "info": {"name": "chk1", "startup": "enabled", "status": "up", "threshold": 3, "change-id": "1"},
+        "error": ""
+	}
+}`)
+	})
+	rest, err := cli.ParserForTest().ParseArgs([]string{"check", "--refresh", "chk1"})
+	c.Assert(err, IsNil)
+	c.Assert(rest, HasLen, 0)
+	c.Check(s.Stdout(), Equals, `
+name: chk1
+startup: enabled
+status: up
+failures: 0
+threshold: 3
+change-id: "1"
+`[1:])
+	c.Check(s.Stderr(), Equals, "")
+}
+
+func (s *PebbleSuite) TestCheckRefreshFailure(c *C) {
+	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1/checks/refresh":
+			c.Assert(r.Method, Equals, "POST")
+			c.Assert(r.URL.Path, Equals, "/v1/checks/refresh")
+			body := DecodedRequestBody(c, r)
+			c.Check(body, check.DeepEquals, map[string]any{
+				"Name": "chk1",
+			})
+			fmt.Fprint(w, `
+{
+	"type": "sync",
+	"status-code": 200,
+	"result": {
+		"info": {"name": "chk1", "startup": "enabled", "status": "up", "threshold": 3, "change-id": "1"},
+		"err": "somme error"
+	}
+}`)
+		case "/v1/changes/1":
+			fmt.Fprint(w, `
+{
+	"type": "sync",
+	"result": {
+		"id": "2",
+		"kind": "perform-check",
+		"status": "Doing",
+		"tasks": [{"kind": "perform-check", "status": "Doing", "log": ["2025-02-27T17:06:57Z ERROR"]}]
+	}
+}`)
+
+		default:
+			c.Fatalf("unexpected path %q", r.URL.Path)
+		}
+	})
+
+	rest, err := cli.ParserForTest().ParseArgs([]string{"check", "--refresh", "chk1"})
+	c.Assert(err, IsNil)
+	c.Assert(rest, HasLen, 0)
+	c.Check(s.Stdout(), Equals, `
+name: chk1
+startup: enabled
+status: up
+failures: 0
+threshold: 3
+change-id: "1"
+error: somme error
+logs: |
+    2025-02-27T17:06:57Z ERROR
+`[1:])
+	c.Check(s.Stderr(), Equals, "")
 }

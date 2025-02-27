@@ -109,3 +109,39 @@ func (cs *clientSuite) TestStopChecks(c *check.C) {
 	c.Check(body["action"], check.Equals, "stop")
 	c.Check(body["checks"], check.DeepEquals, []any{"chk1", "chk2"})
 }
+
+func (cs *clientSuite) TestRefreshCheck(c *check.C) {
+	cs.rsp = `{
+		"result": {
+			"info": {
+				"name": "chk1",
+				"startup": "enabled",
+				"status": "up",
+				"failures": 0,
+				"threshold": 3,
+				"change-id": "42"
+			},
+			"error": ""
+		},
+		"status": "OK",
+		"status-code": 200,
+		"type": "sync"
+}`
+
+	opts := client.RefreshCheckOptions{
+		Name: "chk1",
+	}
+	results, err := cs.cli.RefreshCheck(&opts)
+	c.Check(err, check.IsNil)
+	c.Check(*results.Info, check.DeepEquals, client.CheckInfo{
+		Name:      "chk1",
+		Startup:   "enabled",
+		Status:    "up",
+		Failures:  0,
+		Threshold: 3,
+		ChangeID:  "42",
+	})
+	c.Check(results.Error, check.Equals, "")
+	c.Assert(cs.req.Method, check.Equals, "POST")
+	c.Assert(cs.req.URL.Path, check.Equals, "/v1/checks/refresh")
+}
