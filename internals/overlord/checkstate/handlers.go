@@ -99,19 +99,18 @@ func (m *CheckManager) doPerformCheck(task *state.Task, tomb *tombpkg.Tomb) erro
 				return &ThresholdReachedError{CheckName: config.Name, Err: err}
 			}
 			return err
-		} else {
-			m.incSuccessCount(config)
-			if details.Failures > 0 {
-				m.updateCheckData(config, changeID, 0)
-
-				m.state.Lock()
-				task.Logf("succeeded after %s", pluralise(details.Failures, "failure", "failures"))
-				details.Failures = 0
-				task.Set(checkDetailsAttr, &details)
-				m.state.Unlock()
-			}
-			return nil
 		}
+
+		m.incSuccessCount(config)
+		if details.Failures > 0 {
+			m.updateCheckData(config, changeID, 0)
+			m.state.Lock()
+			task.Logf("succeeded after %s", pluralise(details.Failures, "failure", "failures"))
+			details.Failures = 0
+			task.Set(checkDetailsAttr, &details)
+			m.state.Unlock()
+		}
+		return nil
 	}
 
 	for {
