@@ -16,7 +16,10 @@ package cli
 
 import (
 	"fmt"
+<<<<<<< HEAD
 	"strings"
+=======
+>>>>>>> master
 
 	"github.com/canonical/go-flags"
 	"gopkg.in/yaml.v3"
@@ -32,8 +35,11 @@ The check command shows details for a single check in YAML format.
 type cmdCheck struct {
 	client *client.Client
 
+<<<<<<< HEAD
 	Refresh bool `long:"refresh"`
 
+=======
+>>>>>>> master
 	Positional struct {
 		Check string `positional-arg-name:"<check>" required:"1"`
 	} `positional-args:"yes"`
