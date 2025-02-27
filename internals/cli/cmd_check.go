@@ -155,16 +155,3 @@ func (cmd *cmdCheck) taskLogs(changeID string) (string, error) {
 	}
 	return allLogs.String(), nil
 }
-
-// func (cmd *cmdCheck) taskLogs(changeID string) ([]string, error) {
-// 	var logs []string
-// 	change, err := cmd.client.Change(changeID)
-// 	if err != nil {
-// 		return logs, err
-// 	}
-// 	if len(change.Tasks) < 1 {
-// 		return logs, nil
-// 	}
-// 	logs = change.Tasks[0].Log
-// 	return logs, nil
-// }
