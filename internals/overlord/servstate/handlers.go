@@ -127,7 +127,7 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 	if config.Workload != "" {
 		ws := currentPlan.Sections[workloads.WorkloadsField].(*workloads.WorkloadsSection)
 		if workload = ws.Entries[config.Workload]; workload == nil {
-			return fmt.Errorf("cannot find workload %q for service %q in plan", config.Workload, request.Name)
+			return fmt.Errorf("internal error: cannot find workload %q for service %q in plan", config.Workload, request.Name)
 		}
 	}
 
@@ -354,32 +354,40 @@ func (s *serviceData) startInternal() error {
 	s.cmd = exec.Command(args[0], args[1:]...)
 	s.cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
-	// Copy environment to avoid updating original.
 	var environment map[string]string
-	if s.workload != nil && len(s.workload.Environment) > 0 {
-		environment = maps.Clone(s.workload.Environment)
-	} else if len(s.config.Environment) > 0 {
+	if len(s.config.Environment) > 0 {
 		environment = maps.Clone(s.config.Environment)
 	} else {
 		environment = make(map[string]string)
+	}
+	if s.workload != nil {
+		maps.Copy(environment, s.workload.Environment)
 	}
 
 	s.cmd.Dir = s.config.WorkingDir
 
 	// Start as another user if specified in plan.
 	var uid, gid *int
-	if s.config.UserID != nil || s.config.GroupID != nil || s.config.User != "" || s.config.Group != "" {
-		// User/group config from the service takes precedence if any of them are set
-		uid, gid, err = osutil.NormalizeUidGid(s.config.UserID, s.config.GroupID, s.config.User, s.config.Group)
-		if err != nil {
-			return err
-		}
-	} else if s.workload != nil {
-		// Take user/group config from workload
-		uid, gid, err = osutil.NormalizeUidGid(s.workload.UserID, s.workload.GroupID, s.workload.User, s.workload.Group)
-		if err != nil {
-			return err
-		}
+	var username, groupname string
+	if s.workload != nil {
+		uid, gid = s.workload.UserID, s.workload.GroupID
+		username, groupname = s.workload.User, s.workload.Group
+	}
+	if s.config.UserID != nil {
+		uid = s.config.UserID
+	}
+	if s.config.GroupID != nil {
+		gid = s.config.GroupID
+	}
+	if s.config.User != "" {
+		username = s.config.User
+	}
+	if s.config.Group != "" {
+		groupname = s.config.Group
+	}
+	uid, gid, err = osutil.NormalizeUidGid(uid, gid, username, groupname)
+	if err != nil {
+		return err
 	}
 	if uid != nil && gid != nil {
 		isCurrent, err := osutil.IsCurrent(*uid, *gid)

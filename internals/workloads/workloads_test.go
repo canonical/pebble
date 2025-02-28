@@ -25,10 +25,6 @@ import (
 	"github.com/canonical/pebble/internals/workloads"
 )
 
-type workloadsSuite struct{}
-
-var _ = Suite(&workloadsSuite{})
-
 var schemaTests = []struct {
 	summary         string
 	layers          []string
@@ -95,7 +91,7 @@ workloads:
 	layers: []string{`
 workloads:
     default:
-        override: Merge
+        override: merge
         environment:
             foo: bar
             bar: baz
@@ -123,7 +119,7 @@ workloads:
 	combinedYAML: `
 workloads:
     default:
-        override: Merge
+        override: merge
         environment:
             bar: baz
             foo: bar
@@ -195,7 +191,7 @@ workloads:
 	layers: []string{`
 workloads:
     default:
-        override: Merge
+        override: merge
         environment:
             a: b
             c: d
@@ -207,7 +203,7 @@ workloads:
     `, `
 workloads:
     default:
-        override: Merge
+        override: merge
         environment:
             "1": "2"
             "3": "4"
@@ -241,7 +237,7 @@ workloads:
 	combinedYAML: `
 workloads:
     default:
-        override: Merge
+        override: merge
         environment:
             "1": "2"
             "3": "4"
@@ -257,7 +253,7 @@ workloads:
 }}
 
 func (s *workloadsSuite) TestWorkloadsSectionExtensionSchema(c *C) {
-	plan.RegisterSectionExtension(workloads.WorkloadsField, &workloads.PlanExtension{})
+	plan.RegisterSectionExtension(workloads.WorkloadsField, &workloads.SectionExtension{})
 	defer plan.UnregisterSectionExtension(workloads.WorkloadsField)
 
 	for i, t := range schemaTests {

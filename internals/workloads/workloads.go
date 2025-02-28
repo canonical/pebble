@@ -16,136 +16,12 @@ package workloads
 
 import (
 	"errors"
-	"fmt"
 	"maps"
 	"reflect"
-
-	"gopkg.in/yaml.v3"
 
 	"github.com/canonical/pebble/internals/osutil"
 	"github.com/canonical/pebble/internals/plan"
 )
-
-var _ plan.SectionExtension = (*PlanExtension)(nil)
-
-type PlanExtension struct{}
-
-func (ext *PlanExtension) CombineSections(sections ...plan.Section) (plan.Section, error) {
-	ws := &WorkloadsSection{}
-	for _, section := range sections {
-		layer, ok := section.(*WorkloadsSection)
-		if !ok {
-			return nil, fmt.Errorf("internal error: invalid section type %T", layer)
-		}
-		if err := ws.combine(layer); err != nil {
-			return nil, err
-		}
-	}
-	return ws, nil
-}
-
-func (ext *PlanExtension) ParseSection(data yaml.Node) (plan.Section, error) {
-	ws := &WorkloadsSection{}
-	// The following issue prevents us from using the yaml.Node decoder
-	// with KnownFields = true behavior. Once one of the proposals get
-	// merged, we can remove the intermediate Marshal step.
-	// https://github.com/go-yaml/yaml/issues/460
-	if len(data.Content) != 0 {
-		if err := plan.SectionDecode(&data, ws); err != nil {
-			return nil, &plan.FormatError{
-				Message: fmt.Sprintf(`cannot parse the "workloads" section: %v`, err),
-			}
-		}
-	}
-	for name, workload := range ws.Entries {
-		if workload != nil {
-			workload.Name = name
-		}
-	}
-	return ws, nil
-}
-
-func (ext *PlanExtension) ValidatePlan(p *plan.Plan) error {
-	ws, ok := p.Sections[WorkloadsField].(*WorkloadsSection)
-	if !ok {
-		return fmt.Errorf("internal error: invalid section type %T", ws)
-	}
-	for name, service := range p.Services {
-		if service.Workload == "" {
-			continue
-		}
-		if _, ok := ws.Entries[service.Workload]; !ok {
-			return &plan.FormatError{
-				Message: fmt.Sprintf(`plan service %q workload not defined: %q`, name, service.Workload),
-			}
-		}
-	}
-	for name, workload := range ws.Entries {
-		if _, _, err := osutil.NormalizeUidGid(workload.UserID, workload.GroupID, workload.User, workload.Group); err != nil {
-			return &plan.FormatError{
-				Message: fmt.Sprintf(`plan workload %q %v`, err, name),
-			}
-		}
-	}
-	return nil
-}
-
-const WorkloadsField = "workloads"
-
-var _ plan.Section = (*WorkloadsSection)(nil)
-
-type WorkloadsSection struct {
-	Entries map[string]*Workload `yaml:",inline"`
-}
-
-func (ws *WorkloadsSection) IsZero() bool {
-	return len(ws.Entries) == 0
-}
-
-func (ws *WorkloadsSection) Validate() error {
-	for name, workload := range ws.Entries {
-		if workload == nil {
-			return &plan.FormatError{
-				Message: fmt.Sprintf("workload %q cannot have a null value", name),
-			}
-		}
-		if err := workload.Validate(); err != nil {
-			return &plan.FormatError{
-				Message: fmt.Sprintf("workload %q %v", name, err),
-			}
-		}
-	}
-	return nil
-}
-
-func (ws *WorkloadsSection) combine(other *WorkloadsSection) error {
-	for name, workload := range other.Entries {
-		if ws.Entries == nil {
-			ws.Entries = make(map[string]*Workload, len(other.Entries))
-		}
-		switch workload.Override {
-		case plan.MergeOverride:
-			if current, ok := ws.Entries[name]; ok {
-				copied := current.Copy()
-				copied.Merge(workload)
-				ws.Entries[name] = copied
-				break
-			}
-			fallthrough
-		case plan.ReplaceOverride:
-			ws.Entries[name] = workload.Copy()
-		case plan.UnknownOverride:
-			return &plan.FormatError{
-				Message: fmt.Sprintf(`workload %q must define an "override" policy`, name),
-			}
-		default:
-			return &plan.FormatError{
-				Message: fmt.Sprintf(`workload %q has an invalid "override" policy: %q`, name, workload.Override),
-			}
-		}
-	}
-	return nil
-}
 
 type Workload struct {
 	// Basic details
@@ -202,6 +78,8 @@ func (w *Workload) Equal(other *Workload) bool {
 
 	uid, gid, err := osutil.NormalizeUidGid(w.UserID, w.GroupID, w.User, w.Group)
 	if err != nil {
+		// If we can't normalize them (shouldn't happen in practice), fall back to
+		// deeply comparing whether the values are equal.
 		return reflect.DeepEqual(w, other)
 	}
 	otherUID, otherGID, err := osutil.NormalizeUidGid(other.UserID, other.GroupID, other.User, other.Group)

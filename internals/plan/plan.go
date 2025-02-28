@@ -1289,7 +1289,7 @@ func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 
 	for field, section := range sections {
 		if slices.Contains(builtinSections, field) {
-			if err = SectionDecode(&section, builtins[field]); err != nil {
+			if err := SectionDecode(&section, builtins[field]); err != nil {
 				return nil, &FormatError{
 					Message: fmt.Sprintf("cannot parse layer %q section %q: %v", label, field, err),
 				}
@@ -1637,6 +1637,9 @@ func SectionDecode(data *yaml.Node, v any) error {
 	// with KnownFields = true behaviour. Once one of the proposals get
 	// merged, we can remove the intermediate Marshal step.
 	// https://github.com/go-yaml/yaml/issues/460
+	if len(data.Content) == 0 {
+		return nil
+	}
 	yml, err := yaml.Marshal(data)
 	if err != nil {
 		return fmt.Errorf("cannot marshal YAML: %w", err)

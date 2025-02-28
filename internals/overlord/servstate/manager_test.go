@@ -132,6 +132,11 @@ func (s *S) SetUpSuite(c *C) {
 	setLoggerOnce.Do(func() {
 		logger.SetLogger(logger.New(os.Stderr, "[test] "))
 	})
+	plan.RegisterSectionExtension(workloads.WorkloadsField, &workloads.SectionExtension{})
+}
+
+func (s *S) TearDownSuite(c *C) {
+	plan.UnregisterSectionExtension(workloads.WorkloadsField)
 }
 
 func (s *S) SetUpTest(c *C) {
@@ -385,9 +390,6 @@ services:
 }
 
 func (s *S) TestReplanServices(c *C) {
-	plan.RegisterSectionExtension(workloads.WorkloadsField, &workloads.PlanExtension{})
-	defer plan.UnregisterSectionExtension(workloads.WorkloadsField)
-
 	s.newServiceManager(c)
 	s.planAddLayer(c, testPlanLayer)
 	s.planChanged(c)
@@ -413,10 +415,66 @@ services:
 	s.stopTestServices(c)
 }
 
-func (s *S) TestReplanUpdatesConfig(c *C) {
-	plan.RegisterSectionExtension(workloads.WorkloadsField, &workloads.PlanExtension{})
-	defer plan.UnregisterSectionExtension(workloads.WorkloadsField)
+func (s *S) TestReplanServicesWithWorkload(c *C) {
+	s.newServiceManager(c)
+	s.planAddLayer(c, testPlanLayer)
+	s.planAddLayer(c, `
+services:
+    test5:
+        override: merge
+        startup: enabled
+        workload: default
+workloads:
+    default:
+        override: replace
+        user: nobody
+        group: nogroup
+`)
+	s.planChanged(c)
 
+	s.startTestServices(c, true)
+	if c.Failed() {
+		return
+	}
+
+	stops, starts, err := s.manager.Replan()
+	c.Assert(err, IsNil)
+	c.Check(stops, DeepEquals, [][]string{nil})
+	c.Check(starts, DeepEquals, [][]string{[]string{"test1", "test2"}, []string{"test5"}})
+
+	s.planAddLayer(c, `
+services:
+    test5:
+        override: merge
+        workload: new-default
+workloads:
+    new-default:
+        override: replace
+        user: nobody
+        group: nogroup
+`)
+	s.planChanged(c)
+
+	stops, starts, err = s.manager.Replan()
+	c.Assert(err, IsNil)
+	c.Check(stops, DeepEquals, [][]string{nil})
+	c.Check(starts, DeepEquals, [][]string{[]string{"test1", "test2"}, []string{"test5"}})
+
+	s.planAddLayer(c, `
+workloads:
+    new-default:
+        override: replace
+`)
+	s.planChanged(c)
+
+	stops, starts, err = s.manager.Replan()
+	c.Assert(err, IsNil)
+	c.Check(stops, DeepEquals, [][]string{nil})
+	c.Check(starts, DeepEquals, [][]string{[]string{"test1", "test2"}, []string{"test5"}})
+	s.stopTestServices(c)
+}
+
+func (s *S) TestReplanUpdatesConfig(c *C) {
 	s.newServiceManager(c)
 	s.planAddLayer(c, testPlanLayer)
 	s.planChanged(c)
@@ -1785,9 +1843,6 @@ services:
 }
 
 func (s *S) TestWorkloadAppliesToService(c *C) {
-	plan.RegisterSectionExtension(workloads.WorkloadsField, &workloads.PlanExtension{})
-	defer plan.UnregisterSectionExtension(workloads.WorkloadsField)
-
 	s.newServiceManager(c)
 	s.planAddLayer(c, `
 services:
@@ -1817,9 +1872,6 @@ workloads:
 }
 
 func (s *S) TestWorkloadReferenceInvalid(c *C) {
-	plan.RegisterSectionExtension(workloads.WorkloadsField, &workloads.PlanExtension{})
-	defer plan.UnregisterSectionExtension(workloads.WorkloadsField)
-
 	s.newServiceManager(c)
 	err := s.tryPlanAddLayer(c, `
 services:
