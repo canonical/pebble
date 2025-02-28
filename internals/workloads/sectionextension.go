@@ -17,9 +17,10 @@ package workloads
 import (
 	"fmt"
 
+	"gopkg.in/yaml.v3"
+
 	"github.com/canonical/pebble/internals/osutil"
 	"github.com/canonical/pebble/internals/plan"
-	"gopkg.in/yaml.v3"
 )
 
 var _ plan.SectionExtension = (*SectionExtension)(nil)
