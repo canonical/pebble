@@ -1637,9 +1637,6 @@ func SectionDecode(data *yaml.Node, v any) error {
 	// with KnownFields = true behaviour. Once one of the proposals get
 	// merged, we can remove the intermediate Marshal step.
 	// https://github.com/go-yaml/yaml/issues/460
-	if len(data.Content) == 0 {
-		return nil
-	}
 	yml, err := yaml.Marshal(data)
 	if err != nil {
 		return fmt.Errorf("cannot marshal YAML: %w", err)
