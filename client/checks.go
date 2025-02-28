@@ -174,7 +174,7 @@ func (client *Client) doMultiCheckAction(actionName string, checks []string) (*C
 }
 
 type RefreshCheckOptions struct {
-	// Name of check to run, required.
+	// Name of the check to refresh, required.
 	Name string
 }
 

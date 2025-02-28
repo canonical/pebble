@@ -89,7 +89,6 @@ func (cmd *cmdCheck) Execute(args []string) error {
 			ChangeID:  res.Info.ChangeID,
 		}
 		if res.Error != "" {
-			fmt.Println(res.Error)
 			checkInfo.Error = res.Error
 			logs, err := cmd.taskLogs(checkInfo.ChangeID)
 			if err != nil {
