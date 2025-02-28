@@ -16,6 +16,7 @@ package cli
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/canonical/go-flags"
 
@@ -188,7 +189,9 @@ func (cmd *cmdEnter) Execute(args []string) error {
 		return nil
 	}
 
-	if enterFlags&enterSilenceLogging != 0 && !cmd.Verbose {
+	if enterFlags&enterSilenceLogging != 0 && !cmd.Verbose && os.Getenv("PEBBLE_VERBOSE") != "1" {
+		// Respect PEBBLE_VERBOSE even if --verbose is not explicitly set for "enter",
+		// which is disabled for now.
 		logger.SetLogger(logger.NullLogger)
 	}
 
