@@ -126,9 +126,12 @@ The `check` command shows details for a single check in YAML format.
 ```{terminal}
 :input: pebble check --help
 Usage:
-  pebble check <check>
+  pebble check [check-OPTIONS] <check>
 
 The check command shows details for a single check in YAML format.
+
+[check command options]
+      --refresh    Run a check immediately
 ```
 <!-- END AUTOMATED OUTPUT FOR check -->
 
