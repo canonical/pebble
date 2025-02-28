@@ -64,15 +64,6 @@ func (s *spanSuite) fakeTimeNow(c *C) {
 	}))
 }
 
-func (s *spanSuite) fakeSpanDuration(c *C) {
-	// Increase duration by 1 millisecond on each call
-	s.AddCleanup(timing.FakeSpanDuration(func(a, b uint64) time.Duration {
-		c.Check(a < b, Equals, true)
-		s.duration += time.Millisecond
-		return s.duration
-	}))
-}
-
 func (s *spanSuite) fakeMinNestedSpan(threshold time.Duration) {
 	oldThreshold := timing.MinNestedSpan
 	timing.MinNestedSpan = threshold

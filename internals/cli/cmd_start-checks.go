@@ -64,7 +64,7 @@ func (cmd cmdStartChecks) Execute(args []string) error {
 
 	var summary string
 	if len(results.Changed) == 0 {
-		summary = fmt.Sprintf("Checks already started.")
+		summary = "Checks already started."
 	} else {
 		summary = fmt.Sprintf("Checks started: %s", strings.Join(results.Changed, ", "))
 	}

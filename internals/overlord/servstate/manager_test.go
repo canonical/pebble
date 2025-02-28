@@ -118,7 +118,6 @@ type S struct {
 	runner     *state.TaskRunner
 	stopDaemon chan restart.RestartType
 
-	donePath       string
 	plan           *plan.Plan
 	planPropagated bool
 }
@@ -376,7 +375,7 @@ services:
 	s.st.Unlock()
 	s.waitUntilService(c, "test6", func(service *servstate.ServiceInfo) bool {
 		if service.Current == servstate.StatusInactive {
-			c.Assert(time.Now().Sub(startTime) > time.Millisecond*300, Equals, true)
+			c.Assert(time.Since(startTime) > time.Millisecond*300, Equals, true)
 			return true
 		}
 		return false
@@ -986,7 +985,7 @@ checks:
 	b, err = os.ReadFile(tempFile)
 	c.Assert(err, IsNil)
 	c.Assert(string(b), Equals, "x\nx\n")
-	checks = waitChecks(c, checkMgr, func(checks []*checkstate.CheckInfo) bool {
+	_ = waitChecks(c, checkMgr, func(checks []*checkstate.CheckInfo) bool {
 		return len(checks) == 1 && checks[0].Status == checkstate.CheckStatusDown
 	})
 	svc := s.serviceByName(c, "test2")
@@ -1161,7 +1160,7 @@ checks:
 	b, err = os.ReadFile(tempFile)
 	c.Assert(err, IsNil)
 	c.Assert(string(b), Equals, "x\n")
-	checks = waitChecks(c, checkMgr, func(checks []*checkstate.CheckInfo) bool {
+	_ = waitChecks(c, checkMgr, func(checks []*checkstate.CheckInfo) bool {
 		return len(checks) == 1 && checks[0].Status == checkstate.CheckStatusDown
 	})
 	svc := s.serviceByName(c, "test2")

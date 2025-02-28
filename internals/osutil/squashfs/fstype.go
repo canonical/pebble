@@ -39,7 +39,7 @@ func useFuseImpl() bool {
 	}
 
 	virt := strings.TrimSpace(string(out))
-	if virt != "none" {
+	if virt != "none" { // lint:ignore S1008 Should use 'return cond'
 		return true
 	}
 
