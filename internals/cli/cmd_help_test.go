@@ -45,7 +45,7 @@ func (s *PebbleSuite) TestHelpAllWithCommand(c *C) {
 	defer restore()
 
 	err := cli.RunMain()
-	c.Assert(err, ErrorMatches, `help accepts a command, or '--all', but not both.`)
+	c.Assert(err, ErrorMatches, `help accepts a command, or '--all', but not both`)
 	c.Check(s.Stdout(), Equals, "")
 	c.Check(s.Stderr(), Equals, "")
 }
@@ -85,7 +85,7 @@ func (s *PebbleSuite) TestHelpWithUnknownCommand(c *C) {
 	defer restore()
 
 	err := cli.RunMain()
-	c.Assert(err, ErrorMatches, `unknown command "dachshund", see 'pebble help'.`)
+	c.Assert(err, ErrorMatches, `unknown command "dachshund", see 'pebble help'`)
 	c.Check(s.Stdout(), Equals, "")
 	c.Check(s.Stderr(), Equals, "")
 }
@@ -95,7 +95,7 @@ func (s *PebbleSuite) TestHelpWithUnknownSubcommand(c *C) {
 	defer restore()
 
 	err := cli.RunMain()
-	c.Assert(err, ErrorMatches, `unknown command "dachshund", see 'pebble help add'.`)
+	c.Assert(err, ErrorMatches, `unknown command "dachshund", see 'pebble help add'`)
 	c.Check(s.Stdout(), Equals, "")
 	c.Check(s.Stderr(), Equals, "")
 }

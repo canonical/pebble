@@ -112,6 +112,11 @@ func (s *CheckersSuite) TestHTTP(c *C) {
 	chk = &httpChecker{url: server.URL}
 	err = chk.check(context.Background())
 	c.Assert(err, ErrorMatches, ".* connection refused")
+
+	// Malformed URL returns an error
+	chk = &httpChecker{url: "#!@$%@#@"}
+	err = chk.check(ctx)
+	c.Assert(err, ErrorMatches, "cannot build request: .*")
 }
 
 func (s *CheckersSuite) TestTCP(c *C) {

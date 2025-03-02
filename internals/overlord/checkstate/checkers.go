@@ -52,6 +52,9 @@ func (c *httpChecker) check(ctx context.Context) error {
 	logger.Debugf("Check %q (http): requesting %q", c.name, c.url)
 	client := &http.Client{}
 	request, err := http.NewRequestWithContext(ctx, "GET", c.url, nil)
+	if err != nil {
+		return fmt.Errorf("cannot build request: %w", err)
+	}
 	for k, v := range c.headers {
 		request.Header.Set(k, v)
 	}

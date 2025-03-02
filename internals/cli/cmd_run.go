@@ -126,7 +126,7 @@ func runWatchdog(d *daemon.Daemon) (*time.Ticker, error) {
 		// Not running under systemd.
 		return nil, nil
 	}
-	usec, err := strconv.ParseFloat(os.Getenv("WATCHDOG_USEC"), 10)
+	usec, err := strconv.ParseFloat(os.Getenv("WATCHDOG_USEC"), 64)
 	if usec == 0 || err != nil {
 		return nil, fmt.Errorf("cannot parse WATCHDOG_USEC: %q", os.Getenv("WATCHDOG_USEC"))
 	}

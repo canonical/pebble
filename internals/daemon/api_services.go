@@ -208,13 +208,17 @@ func v1PostServices(c *Command, r *http.Request, _ *UserState) Response {
 		// Can happen with a replan that has no services to stop/start. A
 		// change with no tasks needs to be marked Done manually (normally a
 		// change is marked Done when its last task is finished).
+		//
+		//lint:ignore SA1019 strings.Title is deprecated
 		summary = fmt.Sprintf("%s - no services", strings.Title(payload.Action))
 		change := st.NewChange(payload.Action, summary)
 		change.SetStatus(state.DoneStatus)
 		return AsyncResponse(nil, change.ID())
 	case len(services) == 1:
+		//lint:ignore SA1019 strings.Title is deprecated
 		summary = fmt.Sprintf("%s service %q", strings.Title(payload.Action), payload.Services[0])
 	default:
+		//lint:ignore SA1019 strings.Title is deprecated
 		summary = fmt.Sprintf("%s service %q and %d more", strings.Title(payload.Action), payload.Services[0], len(services)-1)
 	}
 

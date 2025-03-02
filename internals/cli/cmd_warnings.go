@@ -87,6 +87,9 @@ func (cmd *cmdWarnings) Execute(args []string) error {
 	}
 
 	warnings, err := cmd.client.Notices(options)
+	if err != nil {
+		return fmt.Errorf("cannot get notices: %w", err)
+	}
 	if len(warnings) == 0 {
 		if cmd.All || state.WarningsLastOkayed.IsZero() {
 			fmt.Fprintln(Stderr, "No warnings.")

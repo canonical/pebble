@@ -255,7 +255,7 @@ func execControlHandler(process *client.ExecProcess, terminal bool, stop <-chan 
 			err = process.SendResize(width, height)
 			if err != nil {
 				logger.Debugf("Cannot set terminal size: %v", err)
-				break
+				break //lint:ignore SA4011 Keep "ineffective" break for consistency
 			}
 		case unix.SIGHUP:
 			logger.Debugf("Received 'SIGHUP' signal, forwarding and exiting")
@@ -272,7 +272,7 @@ func execControlHandler(process *client.ExecProcess, terminal bool, stop <-chan 
 			err := process.SendSignal(unix.SignalName(sig.(unix.Signal)))
 			if err != nil {
 				logger.Debugf("Cannot forward signal '%s': %v", sig, err)
-				break
+				break //lint:ignore SA4011 Keep "ineffective" break for consistency
 			}
 		}
 	}

@@ -96,10 +96,6 @@ func addHelp(parser *flags.Parser) error {
 	return nil
 }
 
-func (cmd *cmdHelp) setParser(parser *flags.Parser) {
-	cmd.parser = parser
-}
-
 // manfixer is a hackish way to fix drawbacks in the generated manpage:
 // - no way to get it into section 8
 // - duplicated TP lines that break older groff (e.g. 14.04), lp:1814767
@@ -150,7 +146,7 @@ func (cmd cmdHelp) Execute(args []string) error {
 	}
 	if cmd.All {
 		if len(cmd.Positional.Subs) > 0 {
-			return fmt.Errorf("help accepts a command, or '--all', but not both.")
+			return fmt.Errorf("help accepts a command, or '--all', but not both")
 		}
 		printLongHelp(cmd.parser)
 		return nil
@@ -164,7 +160,7 @@ func (cmd cmdHelp) Execute(args []string) error {
 			if x := cmd.parser.Command.Active; x != nil && x.Name != "help" {
 				sug = cmdpkg.ProgramName + " help " + x.Name
 			}
-			return fmt.Errorf("unknown command %q, see '%s'.", subname, sug)
+			return fmt.Errorf("unknown command %q, see '%s'", subname, sug)
 		}
 		// this makes "pebble help foo" work the same as "pebble foo --help"
 		cmd.parser.Command.Active = subcmd
