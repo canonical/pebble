@@ -71,77 +71,16 @@ func createLayer(t *testing.T, pebbleDir, layerFileName, layerYAML string) {
 	}
 }
 
-// pebbleRun starts the pebble daemon (`pebble run`) with optional arguments
-// and returns two channels for standard output and standard error.
-func pebbleRun(t *testing.T, pebbleDir string, args ...string) (stdoutCh chan servicelog.Entry, stderrCh chan servicelog.Entry) {
-	t.Helper()
-
-	stdoutCh = make(chan servicelog.Entry)
-	stderrCh = make(chan servicelog.Entry)
-
-	cmd := exec.Command(*pebbleBin, append([]string{"run"}, args...)...)
-	cmd.Env = append(os.Environ(), "PEBBLE="+pebbleDir)
-
-	stdoutPipe, err := cmd.StdoutPipe()
-	if err != nil {
-		t.Fatalf("Cannot create stdout pipe: %v", err)
-	}
-	stderrPipe, err := cmd.StderrPipe()
-	if err != nil {
-		t.Fatalf("Cannot create stderr pipe: %v", err)
-	}
-
-	err = cmd.Start()
-	if err != nil {
-		t.Fatalf("Error starting 'pebble run': %v", err)
-	}
-
-	stopStdout := make(chan struct{})
-	stopStderr := make(chan struct{})
-
-	t.Cleanup(func() {
-		err := cmd.Process.Signal(os.Interrupt)
-		if err != nil {
-			t.Errorf("Error sending SIGINT/Ctrl+C to pebble: %v", err)
-		}
-		cmd.Wait()
-		close(stopStdout)
-		close(stopStderr)
-	})
-
-	readLogs := func(parser *servicelog.Parser, ch chan servicelog.Entry, stop <-chan struct{}) {
-		for parser.Next() {
-			if err := parser.Err(); err != nil {
-				t.Errorf("Cannot parse Pebble logs: %v", err)
-			}
-			select {
-			case ch <- parser.Entry():
-			case <-stop:
-				return
-			}
-		}
-	}
-
-	// Both stderr and stdout are needed, because pebble logs to stderr
-	// while with "--verbose", services output to stdout.
-	stderrParser := servicelog.NewParser(stderrPipe, 4*1024)
-	stdoutParser := servicelog.NewParser(stdoutPipe, 4*1024)
-
-	go readLogs(stdoutParser, stdoutCh, stopStdout)
-	go readLogs(stderrParser, stderrCh, stopStderr)
-
-	return stdoutCh, stderrCh
-}
-
-// pebbleEnter runs `pebble enter` with optional arguments
-// and returns two channels for standard output and standard error.
-func pebbleEnter(t *testing.T, pebbleDir string, args ...string) (stdoutCh chan string, stderrCh chan string) {
+// pebbleDaemon starts the pebble daemon with optional arguments
+// and returns two channels yielding the lines from standard output and
+// standard error. The runOrEnter argument should be "run" or "enter".
+func pebbleDaemon(t *testing.T, pebbleDir string, runOrEnter string, args ...string) (stdoutCh chan string, stderrCh chan string) {
 	t.Helper()
 
 	stdoutCh = make(chan string)
 	stderrCh = make(chan string)
 
-	cmd := exec.Command(*pebbleBin, append([]string{"enter"}, args...)...)
+	cmd := exec.Command(*pebbleBin, append([]string{runOrEnter}, args...)...)
 	cmd.Env = append(os.Environ(), "PEBBLE="+pebbleDir)
 
 	stdoutPipe, err := cmd.StdoutPipe()
@@ -193,15 +132,19 @@ func pebbleEnter(t *testing.T, pebbleDir string, args ...string) (stdoutCh chan 
 
 // waitForLog waits until an expectedLog from an expectedService appears in the logs channel, or fails the test after a
 // specified timeout if the expectedLog is still not found.
-func waitForLog(t *testing.T, logsCh <-chan servicelog.Entry, expectedService, expectedLog string, timeout time.Duration) {
+func waitForLog(t *testing.T, linesCh <-chan string, expectedService, expectedLog string, timeout time.Duration) {
 	t.Helper()
 
 	timeoutCh := time.After(timeout)
 	for {
 		select {
-		case log, ok := <-logsCh:
+		case line, ok := <-linesCh:
 			if !ok {
-				t.Error("channel closed before all expected logs were received")
+				t.Fatalf("channel closed before all expected logs were received")
+			}
+			log, err := servicelog.Parse([]byte(line))
+			if err != nil {
+				t.Fatalf("cannot parse log: %v", err)
 			}
 
 			if log.Service == expectedService && strings.Contains(log.Message, expectedLog) {

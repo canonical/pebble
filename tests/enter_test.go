@@ -37,7 +37,7 @@ sleep 1.1
 		t.Fatal(err)
 	}
 
-	stdoutCh, _ := pebbleEnter(t, pebbleDir, "exec", "/bin/sh", "-c", path)
+	stdoutCh, _ := pebbleDaemon(t, pebbleDir, "enter", "exec", "/bin/sh", "-c", path)
 	waitForText(t, stdoutCh, "hello world", 3*time.Second)
 }
 
@@ -57,7 +57,7 @@ sleep 1.1
 		t.Fatal(err)
 	}
 
-	stdoutCh, stderrCh := pebbleEnter(t, pebbleDir, "exec", "/bin/sh", "-c", path)
+	stdoutCh, stderrCh := pebbleDaemon(t, pebbleDir, "enter", "exec", "/bin/sh", "-c", path)
 	waitForText(t, stderrCh, "Started daemon", 3*time.Second)
 	waitForText(t, stderrCh, "POST /v1/exec", 3*time.Second)
 	waitForText(t, stdoutCh, "hello world", 3*time.Second)
