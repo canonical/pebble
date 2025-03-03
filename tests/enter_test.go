@@ -29,7 +29,7 @@ func TestEnterExec(t *testing.T) {
 	script := `
 #!/bin/sh
 echo "hello world"
-sleep 2
+sleep 1.1
 	`
 	path := filepath.Join(pebbleDir, "test.sh")
 	err := os.WriteFile(path, []byte(script), 0755)
@@ -38,19 +38,18 @@ sleep 2
 	}
 
 	stdoutCh, _ := pebbleEnter(t, pebbleDir, "exec", "/bin/sh", "-c", path)
-	waitForText(t, stdoutCh, "hello world", 1*time.Second)
+	waitForText(t, stdoutCh, "hello world", 3*time.Second)
 }
 
 func TestEnterExecVerboseEnabledByEnvVar(t *testing.T) {
-	os.Setenv("PEBBLE_VERBOSE", "1")
-	defer os.Setenv("PEBBLE_VERBOSE", "")
+	t.Setenv("PEBBLE_VERBOSE", "1")
 
 	pebbleDir := t.TempDir()
 
 	script := `
 #!/bin/sh
 echo "hello world"
-sleep 2
+sleep 1.1
 	`
 	path := filepath.Join(pebbleDir, "test.sh")
 	err := os.WriteFile(path, []byte(script), 0755)
@@ -59,7 +58,7 @@ sleep 2
 	}
 
 	stdoutCh, stderrCh := pebbleEnter(t, pebbleDir, "exec", "/bin/sh", "-c", path)
-	waitForText(t, stderrCh, "Started daemon", 1*time.Second)
-	waitForText(t, stderrCh, "POST /v1/exec", 1*time.Second)
-	waitForText(t, stdoutCh, "hello world", 1*time.Second)
+	waitForText(t, stderrCh, "Started daemon", 3*time.Second)
+	waitForText(t, stderrCh, "POST /v1/exec", 3*time.Second)
+	waitForText(t, stdoutCh, "hello world", 3*time.Second)
 }

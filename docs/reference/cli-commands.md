@@ -16,6 +16,8 @@ The `pebble` command has the following subcommands, organised into logical group
 * Notices: [warnings](#reference_pebble_warnings_command), [okay](#reference_pebble_okay_command), [notices](#reference_pebble_notices_command), [notice](#reference_pebble_notice_command), [notify](#reference_pebble_notify_command)
 * Identities: [identities](#reference_pebble_identities_command), [identity](#reference_pebble_identity_command), [add-identities](#reference_pebble_add-identities_command), [update-identities](#reference_pebble_update-identities_command), [remove-identities](#reference_pebble_remove-identities_command)
 
+You can use environment variables to configure Pebble's behavior. See [Environment variables](environment-variables).
+
 The subcommands are listed alphabetically below.
 
 

@@ -145,8 +145,7 @@ services:
 // TestVerboseEnabledByEnvVar tests that Pebble logs all output from services to stdout
 // with the environment variable `PEBBLE_VERBOSE` set to "1".
 func TestVerboseEnabledByEnvVar(t *testing.T) {
-	os.Setenv("PEBBLE_VERBOSE", "1")
-	defer os.Setenv("PEBBLE_VERBOSE", "")
+	t.Setenv("PEBBLE_VERBOSE", "1")
 
 	pebbleDir := t.TempDir()
 
@@ -165,12 +164,8 @@ services:
 	waitForLog(t, stdoutCh, "svc1", "hello world", 3*time.Second)
 }
 
-// TestVerboseFlagOverrideEnvVar tests that Pebble logs all output from services to stdout
-// with the environment variable `PEBBLE_VERBOSE` set to "0" but also with the `--verbose`
-// option.
-func TestVerboseFlagOverrideEnvVar(t *testing.T) {
-	os.Setenv("PEBBLE_VERBOSE", "0")
-	defer os.Setenv("PEBBLE_VERBOSE", "")
+func TestVerboseFlagOverridesEnvVar(t *testing.T) {
+	t.Setenv("PEBBLE_VERBOSE", "0")
 
 	pebbleDir := t.TempDir()
 

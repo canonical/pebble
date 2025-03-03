@@ -189,9 +189,10 @@ func (cmd *cmdEnter) Execute(args []string) error {
 		return nil
 	}
 
-	if enterFlags&enterSilenceLogging != 0 && !cmd.Verbose && os.Getenv("PEBBLE_VERBOSE") != "1" {
-		// Respect PEBBLE_VERBOSE even if --verbose is not explicitly set for "enter",
-		// which is disabled for now.
+	verbose := os.Getenv("PEBBLE_VERBOSE") == "1" || cmd.Verbose
+	// Turn off stderr logging for certain commands (like "exec") unless
+	// verbose mode is turned on.
+	if enterFlags&enterSilenceLogging != 0 && !verbose {
 		logger.SetLogger(logger.NullLogger)
 	}
 
