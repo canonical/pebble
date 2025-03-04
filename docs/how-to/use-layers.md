@@ -1,3 +1,4 @@
+(how-to-use-layers)=
 # How to use layers
 
 Managing multiple services across different environments becomes complex as systems scale. Pebble simplifies this with layered configurations, improving readability and maintainability.
@@ -36,6 +37,8 @@ checks:
 
 For full details of all fields, see [layer specification](../reference/layer-specification).
 
+
+(use_layers_layer_override)=
 ## Layer override
 
 Each layer can define new services (and health checks and log targets) or modify existing ones defined in preceding layers. The layers -- ordered by numerical prefix -- are combined into the final plan.
