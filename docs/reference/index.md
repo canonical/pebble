@@ -42,7 +42,7 @@ The `pebble` command has several subcommands.
 * [CLI commands](cli-commands)
 
 
-## Pebble environment variables
+## Environment variables
 
 You can use environment variables to configure Pebble's behavior:
 

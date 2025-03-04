@@ -94,7 +94,7 @@ func pebbleDaemon(t *testing.T, pebbleDir string, runOrEnter string, args ...str
 
 	err = cmd.Start()
 	if err != nil {
-		t.Fatalf("Error starting 'pebble enter': %v", err)
+		t.Fatalf("Error starting 'pebble %s': %v", runOrEnter, err)
 	}
 
 	stopStdout := make(chan struct{})
@@ -167,7 +167,7 @@ func waitForText(t *testing.T, textCh <-chan string, expectedText string, timeou
 		select {
 		case text, ok := <-textCh:
 			if !ok {
-				t.Error("channel closed before expected text was received")
+				t.Fatal("channel closed before expected text was received")
 				return // Exit the loop if the channel is closed
 			}
 			if strings.Contains(text, expectedText) {

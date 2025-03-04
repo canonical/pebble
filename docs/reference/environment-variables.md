@@ -4,7 +4,7 @@
 
 Pebble's configuration directory. Defaults to `/var/lib/pebble/default` if not specified.
 
-The `$PEBBLE` directory must contain a `layers/` subdirectory that holds a stack of configuration files. See [general model](../explanation/general-model) for more information.
+The `$PEBBLE` directory must contain a `layers/` subdirectory that holds a stack of configuration files. See [general model](../explanation/general-model) and [How to use layers](../how-to/use-layers) for more information.
 
 ## PEBBLE_COPY_ONCE
 
