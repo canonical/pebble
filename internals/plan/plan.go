@@ -191,6 +191,7 @@ type Service struct {
 	Requires []string `yaml:"requires,omitempty"`
 
 	// Options for command execution
+	Workload    string            `yaml:"workload,omitempty"`
 	Environment map[string]string `yaml:"environment,omitempty"`
 	UserID      *int              `yaml:"user-id,omitempty"`
 	User        string            `yaml:"user,omitempty"`
@@ -270,6 +271,9 @@ func (s *Service) Merge(other *Service) {
 	s.After = append(s.After, other.After...)
 	s.Before = append(s.Before, other.Before...)
 	s.Requires = append(s.Requires, other.Requires...)
+	if other.Workload != "" {
+		s.Workload = other.Workload
+	}
 	for k, v := range other.Environment {
 		if s.Environment == nil {
 			s.Environment = make(map[string]string)
@@ -1303,17 +1307,7 @@ func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 
 	for field, section := range sections {
 		if slices.Contains(builtinSections, field) {
-			// The following issue prevents us from using the yaml.Node decoder
-			// with KnownFields = true behaviour. Once one of the proposals get
-			// merged, we can remove the intermediate Marshal step.
-			// https://github.com/go-yaml/yaml/issues/460
-			data, err := yaml.Marshal(&section)
-			if err != nil {
-				return nil, fmt.Errorf("internal error: cannot marshal %v section: %w", field, err)
-			}
-			dec := yaml.NewDecoder(bytes.NewReader(data))
-			dec.KnownFields(true)
-			if err = dec.Decode(builtins[field]); err != nil {
+			if err := SectionDecode(&section, builtins[field]); err != nil {
 				return nil, &FormatError{
 					Message: fmt.Sprintf("cannot parse layer %q section %q: %v", label, field, err),
 				}
@@ -1654,6 +1648,23 @@ type ContextOptions struct {
 	GroupID     *int
 	Group       string
 	WorkingDir  string
+}
+
+func SectionDecode(data *yaml.Node, v any) error {
+	// The following issue prevents us from using the yaml.Node decoder
+	// with KnownFields = true behaviour. Once one of the proposals get
+	// merged, we can remove the intermediate Marshal step.
+	// https://github.com/go-yaml/yaml/issues/460
+	yml, err := yaml.Marshal(data)
+	if err != nil {
+		return fmt.Errorf("cannot marshal YAML: %w", err)
+	}
+	dec := yaml.NewDecoder(bytes.NewReader(yml))
+	dec.KnownFields(true)
+	if err = dec.Decode(v); err != nil {
+		return err
+	}
+	return nil
 }
 
 func copyIntPtr(p *int) *int {
