@@ -16,6 +16,7 @@ package cli
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/canonical/go-flags"
 
@@ -188,7 +189,10 @@ func (cmd *cmdEnter) Execute(args []string) error {
 		return nil
 	}
 
-	if enterFlags&enterSilenceLogging != 0 && !cmd.Verbose {
+	verbose := os.Getenv("PEBBLE_VERBOSE") == "1" || cmd.Verbose
+	// Turn off stderr logging for certain commands (like "exec") unless
+	// verbose mode is turned on.
+	if enterFlags&enterSilenceLogging != 0 && !verbose {
 		logger.SetLogger(logger.NullLogger)
 	}
 

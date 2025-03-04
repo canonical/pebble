@@ -14,6 +14,7 @@ These guides provide technical information about Pebble.
 API <api>
 Changes and tasks <changes-and-tasks>
 CLI commands <cli-commands>
+Environment variables <environment-variables>
 Health checks <health-checks>
 Identities <identities>
 Layer specification <layer-specification>
@@ -39,6 +40,13 @@ Pebble configuration is defined as a stack of "layers".
 The `pebble` command has several subcommands.
 
 * [CLI commands](cli-commands)
+
+
+## Environment variables
+
+You can use environment variables to configure Pebble's behavior:
+
+* [Environment variables](environment-variables)
 
 
 ## Service failures

@@ -16,6 +16,8 @@ The `pebble` command has the following subcommands, organised into logical group
 * Notices: [warnings](#reference_pebble_warnings_command), [okay](#reference_pebble_okay_command), [notices](#reference_pebble_notices_command), [notice](#reference_pebble_notice_command), [notify](#reference_pebble_notify_command)
 * Identities: [identities](#reference_pebble_identities_command), [identity](#reference_pebble_identity_command), [add-identities](#reference_pebble_add-identities_command), [update-identities](#reference_pebble_update-identities_command), [remove-identities](#reference_pebble_remove-identities_command)
 
+You can use environment variables to configure Pebble's behavior. See [Environment variables](environment-variables).
+
 The subcommands are listed alphabetically below.
 
 
@@ -863,7 +865,8 @@ pebble run --args myservice --port 8080 \; --hold
           --hold         Do not start default services automatically
           --http=        Start HTTP API listening on this address (e.g.,
                          ":4000") and expose open-access endpoints
-      -v, --verbose      Log all output from services to stdout
+      -v, --verbose      Log all output from services to stdout (also
+                         PEBBLE_VERBOSE=1)
           --args=        Provide additional arguments to a service
           --identities=  Seed identities from file (like update-identities
                          --replace)
