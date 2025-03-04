@@ -30,23 +30,23 @@ Service auto-restart <service-auto-restart>
 
 Pebble configuration is defined as a stack of "layers".
 
-* [Layers](layer-specification)
-* [Layer specification](layer-specification)
+* [Layers](./layer-specification)
+* [Layer specification](./layer-specification)
 
 
 ## Pebble commands
 
 The `pebble` command has several subcommands.
 
-* [CLI commands](cli-commands)
+* [CLI commands](./cli-commands)
 
 
 ## Service failures
 
 Pebble provides two ways to automatically restart services when they fail. Auto-restart is based on exit codes from services. Health checks are a more sophisticated way to test and report the availability of services.
 
-* [Service auto-restart](service-auto-restart)
-* [Health checks](health-checks)
+* [Service auto-restart](./service-auto-restart)
+* [Health checks](./health-checks)
 
 
 % COMMENT: After this point, match the alphabetical listing of pages
@@ -56,31 +56,31 @@ Pebble provides two ways to automatically restart services when they fail. Auto-
 
 Pebble tracks system changes as "tasks" grouped into "change" objects.
 
-* [Changes and tasks](changes-and-tasks)
+* [Changes and tasks](./changes-and-tasks)
 
 
 ## Identities
 
 You can set up named "identities" to control access to the API.
 
-* [Identities](identities)
+* [Identities](./identities)
 
 
 ## Log forwarding
 
 Pebble can send service logs to a centralized logging system.
 
-* [Log forwarding](log-forwarding)
+* [Log forwarding](./log-forwarding)
 
 
 ## Notices
 
 Pebble records events as "notices". In addition to the built-in notices, clients can report custom notices.
 
-* [Notices](notices)
+* [Notices](./notices)
 
 ## Accessing the API
 
 Pebble exposes API over HTTP to allow remote clients to interact with the daemon.
 
-* [API](api)
+* [API](./api)
