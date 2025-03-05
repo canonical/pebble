@@ -19,7 +19,6 @@ import (
 	"net/http"
 	"net/url"
 
-	"gopkg.in/check.v1"
 	. "gopkg.in/check.v1"
 
 	"github.com/canonical/pebble/internals/cli"
@@ -73,7 +72,7 @@ func (s *PebbleSuite) TestCheckRefresh(c *C) {
 		c.Assert(r.Method, Equals, "POST")
 		c.Assert(r.URL.Path, Equals, "/v1/checks/refresh")
 		body := DecodedRequestBody(c, r)
-		c.Check(body, check.DeepEquals, map[string]any{
+		c.Check(body, DeepEquals, map[string]any{
 			"Name": "chk1",
 		})
 		fmt.Fprint(w, `
@@ -150,7 +149,7 @@ func (s *PebbleSuite) TestCheckRefreshFailure(c *C) {
 			c.Assert(r.Method, Equals, "POST")
 			c.Assert(r.URL.Path, Equals, "/v1/checks/refresh")
 			body := DecodedRequestBody(c, r)
-			c.Check(body, check.DeepEquals, map[string]any{
+			c.Check(body, DeepEquals, map[string]any{
 				"Name": "chk1",
 			})
 			fmt.Fprint(w, `
@@ -200,7 +199,7 @@ func (s *PebbleSuite) TestCheckRefreshNotFound(c *C) {
 		c.Assert(r.Method, Equals, "POST")
 		c.Assert(r.URL.Path, Equals, "/v1/checks/refresh")
 		body := DecodedRequestBody(c, r)
-		c.Check(body, check.DeepEquals, map[string]any{
+		c.Check(body, DeepEquals, map[string]any{
 			"Name": "chk1",
 		})
 		fmt.Fprint(w, `{
