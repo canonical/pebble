@@ -42,6 +42,13 @@ func (m *CheckManager) doPerformCheck(task *state.Task, tomb *tombpkg.Tomb) erro
 	ticker := time.NewTicker(config.Period.Value)
 	defer ticker.Stop()
 
+	// Retrieve checkData and its channels
+	m.checksLock.Lock()
+	m.ensureCheck(config.Name)
+	checkData := m.checks[details.Name]
+	refresh := checkData.refresh
+	m.checksLock.Unlock()
+
 	chk := newChecker(config)
 
 	performCheck := func() (shouldExit bool, err error) {
@@ -94,17 +101,36 @@ func (m *CheckManager) doPerformCheck(task *state.Task, tomb *tombpkg.Tomb) erro
 				m.state.Unlock()
 			}
 		}
-		return false, nil
+		return false, err
 	}
 
 	for {
 		select {
-		case <-ticker.C:
+		case info := <-refresh:
+			// Reset ticker on refresh.
+			ticker.Reset(config.Period.Value)
 			shouldExit, err := performCheck()
+			select {
+			case info.result <- err:
+			case <-info.ctx.Done():
+			}
 			if shouldExit {
 				return err
 			}
-
+		case <-ticker.C:
+			shouldExit, err := performCheck()
+			select {
+			case info := <-refresh:
+				// If refresh requested while running check, send result.
+				select {
+				case info.result <- err:
+				case <-info.ctx.Done():
+				}
+			default:
+			}
+			if shouldExit {
+				return err
+			}
 		case <-tomb.Dying():
 			return checkStopped(config.Name, task.Kind(), tomb.Err())
 		}
@@ -137,6 +163,13 @@ func (m *CheckManager) doRecoverCheck(task *state.Task, tomb *tombpkg.Tomb) erro
 	ticker := time.NewTicker(config.Period.Value)
 	defer ticker.Stop()
 
+	// Retrieve checkData and its channels
+	m.checksLock.Lock()
+	m.ensureCheck(config.Name)
+	checkData := m.checks[details.Name]
+	refresh := checkData.refresh
+	m.checksLock.Unlock()
+
 	chk := newChecker(config)
 
 	recoverCheck := func() (shouldExit bool, err error) {
@@ -155,7 +188,7 @@ func (m *CheckManager) doRecoverCheck(task *state.Task, tomb *tombpkg.Tomb) erro
 			m.state.Unlock()
 
 			logger.Noticef("Check %q failure %d/%d: %v", config.Name, details.Failures, config.Threshold, err)
-			return false, nil
+			return false, err
 		}
 
 		// Check succeeded, switch to performing a succeeding check.
@@ -171,12 +204,31 @@ func (m *CheckManager) doRecoverCheck(task *state.Task, tomb *tombpkg.Tomb) erro
 
 	for {
 		select {
-		case <-ticker.C:
+		case info := <-refresh:
+			// Reset ticker on refresh.
+			ticker.Reset(config.Period.Value)
 			shouldExit, err := recoverCheck()
+			select {
+			case info.result <- err:
+			case <-info.ctx.Done():
+			}
 			if shouldExit {
 				return err
 			}
-
+		case <-ticker.C:
+			shouldExit, err := recoverCheck()
+			select {
+			case info := <-refresh:
+				// If refresh requested while running check, send result.
+				select {
+				case info.result <- err:
+				case <-info.ctx.Done():
+				}
+			default:
+			}
+			if shouldExit {
+				return err
+			}
 		case <-tomb.Dying():
 			return checkStopped(config.Name, task.Kind(), tomb.Err())
 		}

@@ -57,15 +57,7 @@ func v1GetChecks(c *Command, r *http.Request, _ *UserState) Response {
 		levelMatch := level == plan.UnsetLevel || level == check.Level
 		namesMatch := len(names) == 0 || strutil.ListContains(names, check.Name)
 		if levelMatch && namesMatch {
-			info := checkInfo{
-				Name:      check.Name,
-				Level:     string(check.Level),
-				Startup:   string(check.Startup),
-				Status:    string(check.Status),
-				Failures:  check.Failures,
-				Threshold: check.Threshold,
-				ChangeID:  check.ChangeID,
-			}
+			info := checkInfoFromInternal(check)
 			infos = append(infos, info)
 		}
 	}
@@ -114,6 +106,53 @@ func v1PostChecks(c *Command, r *http.Request, _ *UserState) Response {
 	return SyncResponse(responsePayload{Changed: changed})
 }
 
+func v1PostChecksRefresh(c *Command, r *http.Request, _ *UserState) Response {
+	var payload struct {
+		Name string `json:"name"`
+	}
+	decoder := json.NewDecoder(r.Body)
+	if err := decoder.Decode(&payload); err != nil {
+		return BadRequest("cannot decode data from request body: %v", err)
+	}
+
+	if payload.Name == "" {
+		return BadRequest("must specify check name")
+	}
+
+	plan := c.d.overlord.PlanManager().Plan()
+	check, ok := plan.Checks[payload.Name]
+	if !ok {
+		return NotFound("cannot find check with name %q", payload.Name)
+	}
+
+	checkMgr := c.d.overlord.CheckManager()
+	result, err := checkMgr.RefreshCheck(r.Context(), check)
+	info := checkInfoFromInternal(result)
+	errStr := ""
+	if err != nil {
+		errStr = err.Error()
+	}
+
+	return SyncResponse(refreshPayload{Info: info, Error: errStr})
+}
+
+type refreshPayload struct {
+	Info  checkInfo `json:"info"`
+	Error string    `json:"error,omitempty"`
+}
+
 type responsePayload struct {
 	Changed []string `json:"changed"`
+}
+
+func checkInfoFromInternal(check *checkstate.CheckInfo) checkInfo {
+	return checkInfo{
+		Name:      check.Name,
+		Level:     string(check.Level),
+		Startup:   string(check.Startup),
+		Status:    string(check.Status),
+		Failures:  check.Failures,
+		Threshold: check.Threshold,
+		ChangeID:  check.ChangeID,
+	}
 }

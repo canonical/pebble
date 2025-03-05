@@ -221,3 +221,61 @@ func (s *apiSuite) postChecks(c *C, body string) *resp {
 	c.Check(rec.Code, Equals, rsp.Status)
 	return rsp
 }
+
+func (s *apiSuite) TestPostChecksRefresh(c *C) {
+	writeTestLayer(s.pebbleDir, `
+checks:
+    chk1:
+        override: replace
+        level: ready
+        exec:
+            command: echo "hello"
+`)
+	s.daemon(c)
+	s.startOverlord()
+
+	start := time.Now()
+	for {
+		rsp, body := s.getChecks(c, "")
+		c.Check(rsp.Status, Equals, 200)
+		c.Check(rsp.Type, Equals, ResponseTypeSync)
+		expected := []any{
+			map[string]any{"name": "chk1", "startup": "enabled", "status": "up", "level": "ready", "threshold": 3.0, "change-id": "C0"},
+		}
+		if reflect.DeepEqual(body["result"], expected) {
+			break
+		}
+		if time.Since(start) > time.Second {
+			c.Fatalf("timed out waiting for checks to settle\nobtained = #%v\nexpected = %#v",
+				body["result"], expected)
+		}
+		time.Sleep(time.Millisecond)
+	}
+
+	req, err := http.NewRequest("POST", "/v1/checks/refresh", strings.NewReader(`{"name": "chk1"}`))
+	c.Assert(err, IsNil)
+	rsp := v1PostChecksRefresh(apiCmd("/v1/checks/refresh"), req, nil).(*resp)
+	rec := httptest.NewRecorder()
+	rsp.ServeHTTP(rec, req)
+
+	c.Check(rec.Code, Equals, rsp.Status)
+	c.Check(rsp.Status, Equals, 200)
+	c.Check(rsp.Type, Equals, ResponseTypeSync)
+	info := rsp.Result.(refreshPayload).Info
+
+	// If the change-id is not empty or nil, replace it with a fixed value.
+	if info.ChangeID != "" {
+		info.ChangeID = "C0"
+	}
+
+	c.Check(info, DeepEquals, checkInfo{
+		Name:      "chk1",
+		Level:     "ready",
+		Startup:   "enabled",
+		Status:    "up",
+		Failures:  0,
+		Threshold: 3,
+		ChangeID:  "C0",
+	})
+	c.Check(rsp.Result.(refreshPayload).Error, Equals, "")
+}
