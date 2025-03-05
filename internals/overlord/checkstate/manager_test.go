@@ -1064,9 +1064,8 @@ func (s *ManagerSuite) TestRefreshCheckFailure(c *C) {
 	checks, err := s.manager.Checks()
 	c.Assert(err, IsNil)
 	originalChangeID := checks[0].ChangeID
-
 	checkInfo, err := s.manager.RefreshCheck(context.Background(), chk1)
-	c.Assert(err.Error(), Matches, "exit status 1")
+	c.Assert(err, ErrorMatches, "exit status 1")
 
 	c.Assert(*checkInfo, DeepEquals, checkstate.CheckInfo{
 		Name:      "chk1",
