@@ -64,7 +64,7 @@ func (cmd cmdStopChecks) Execute(args []string) error {
 
 	var summary string
 	if len(results.Changed) == 0 {
-		summary = fmt.Sprintf("Checks already stopped.")
+		summary = "Checks already stopped."
 	} else {
 		summary = fmt.Sprintf("Checks stopped: %s", strings.Join(results.Changed, ", "))
 	}

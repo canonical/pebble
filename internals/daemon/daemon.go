@@ -37,7 +37,6 @@ import (
 
 	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/osutil"
-	"github.com/canonical/pebble/internals/osutil/sys"
 	"github.com/canonical/pebble/internals/overlord"
 	"github.com/canonical/pebble/internals/overlord/checkstate"
 	"github.com/canonical/pebble/internals/overlord/restart"
@@ -55,7 +54,6 @@ var (
 	ErrRestartExternal       = fmt.Errorf("daemon stop requested due to externally-handled reboot")
 
 	systemdSdNotify = systemd.SdNotify
-	sysGetuid       = sys.Getuid
 )
 
 // Options holds the daemon setup required for the initialization of a new daemon.
@@ -138,14 +136,6 @@ type Command struct {
 
 	d *Daemon
 }
-
-type accessResult int
-
-const (
-	accessOK accessResult = iota
-	accessUnauthorized
-	accessForbidden
-)
 
 func userFromRequest(st *state.State, r *http.Request, ucred *Ucrednet, username, password string) (*UserState, error) {
 	var userID *uint32
@@ -309,7 +299,7 @@ func logit(handler http.Handler) http.Handler {
 		ww := &wrappedWriter{w: w}
 		t0 := time.Now()
 		handler.ServeHTTP(ww, r)
-		t := time.Now().Sub(t0)
+		t := time.Since(t0)
 
 		// Don't log GET /v1/changes/{change-id} as that's polled quickly by
 		// clients when waiting for a change (e.g., service starting). Also

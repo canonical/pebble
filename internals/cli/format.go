@@ -12,6 +12,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+//lint:file-ignore U1000 Some things here are not used, but we want to keep in sync with snapd
+
 package cli
 
 import (
@@ -188,7 +190,7 @@ func fill(para string, indent int) string {
 
 	var buf bytes.Buffer
 	indentStr := strings.Repeat(" ", indent)
-	doc.ToText(&buf, para, indentStr, indentStr, width-indent)
+	doc.ToText(&buf, para, indentStr, indentStr, width-indent) //lint:ignore SA1019 Deprecated
 
 	return strings.TrimSpace(buf.String())
 }

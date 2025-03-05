@@ -585,7 +585,6 @@ func waitChecks(c *C, mgr *checkstate.CheckManager, expected []*checkstate.Check
 		c.Logf("check %d: %#v", i, *check)
 	}
 	c.Fatal("timed out waiting for checks to settle")
-	return
 }
 
 func lastTaskLog(st *state.State, changeID string) string {

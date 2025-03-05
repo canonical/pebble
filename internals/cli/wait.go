@@ -38,7 +38,7 @@ var waitArgsHelp = map[string]string{
 	"--no-wait": "Do not wait for the operation to finish but just print the change id.",
 }
 
-var noWait = errors.New("no wait for op")
+var noWait = errors.New("no wait for op") //lint:ignore ST1012 not named errFoo as it's a non-error sentinal value
 
 func (wmx waitMixin) wait(cli *client.Client, id string) (*client.Change, error) {
 	if wmx.NoWait {

@@ -199,7 +199,7 @@ func (client *Client) getTaskWebsocket(taskID, websocketID string) (clientWebsoc
 
 func getWebsocket(transport *http.Transport, url string) (clientWebsocket, error) {
 	dialer := websocket.Dialer{
-		NetDial:          transport.Dial,
+		NetDial:          transport.Dial, //lint:ignore SA1019 Deprecated
 		Proxy:            transport.Proxy,
 		TLSClientConfig:  transport.TLSClientConfig,
 		HandshakeTimeout: 5 * time.Second,
