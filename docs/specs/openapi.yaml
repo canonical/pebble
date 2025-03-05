@@ -810,8 +810,6 @@ paths:
         When used over TCP, this endpoint requires HTTP basic authentication using an identity of type "basic". See [Identities](../identities) for more information.
       tags:
         - metrics
-      security:
-        - basicAuth: []
       responses:
         "200":
           description: Metrics in OpenMetrics format.
@@ -1188,10 +1186,6 @@ paths:
                   }
                 }
 components:
-  securitySchemes:
-    basicAuth:
-      type: http
-      scheme: basic
   schemas:
     BaseResponse:
       type: object
