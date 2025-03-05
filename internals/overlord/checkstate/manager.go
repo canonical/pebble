@@ -684,17 +684,4 @@ func (m *CheckManager) RefreshCheck(ctx context.Context, check *plan.Check) (*Ch
 	case <-ctx.Done():
 		return getCheckInfo(), ctx.Err()
 	}
-
-	// select {
-	// case refresh <- struct{}{}:
-	// case <-ctx.Done():
-	// 	return getCheckInfo(), ctx.Err()
-	// }
-
-	// select {
-	// case result := <-result:
-	// 	return getCheckInfo(), result
-	// case <-ctx.Done():
-	// 	return getCheckInfo(), ctx.Err()
-	// }
 }
