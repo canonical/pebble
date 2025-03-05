@@ -65,6 +65,18 @@ func init() {
 	})
 }
 
+func checkInfoFromClient(check client.CheckInfo) checkInfo {
+	return checkInfo{
+		Name:      check.Name,
+		Level:     string(check.Level),
+		Startup:   string(check.Startup),
+		Status:    string(check.Status),
+		Failures:  check.Failures,
+		Threshold: check.Threshold,
+		ChangeID:  check.ChangeID,
+	}
+}
+
 func (cmd *cmdCheck) Execute(args []string) error {
 	if len(args) > 0 {
 		return ErrExtraArgs
@@ -79,15 +91,8 @@ func (cmd *cmdCheck) Execute(args []string) error {
 			return err
 		}
 
-		info := checkInfo{
-			Name:      res.Info.Name,
-			Level:     string(res.Info.Level),
-			Startup:   string(res.Info.Startup),
-			Status:    string(res.Info.Status),
-			Failures:  res.Info.Failures,
-			Threshold: res.Info.Threshold,
-			ChangeID:  res.Info.ChangeID,
-		}
+		info := checkInfoFromClient(res.Info)
+
 		if res.Error != "" {
 			info.Error = res.Error
 			if info.ChangeID != "" {
@@ -98,6 +103,7 @@ func (cmd *cmdCheck) Execute(args []string) error {
 				info.Logs = logs
 			}
 		}
+
 		data, err := yaml.Marshal(info)
 		if err != nil {
 			return err
@@ -117,18 +123,17 @@ func (cmd *cmdCheck) Execute(args []string) error {
 	if len(checks) == 0 {
 		return fmt.Errorf("cannot find check %q", cmd.Positional.Check)
 	}
-
-	check := checks[0]
-	checkInfo := checkInfo{
-		Name:      check.Name,
-		Level:     string(check.Level),
-		Startup:   string(check.Startup),
-		Status:    string(check.Status),
-		Failures:  check.Failures,
-		Threshold: check.Threshold,
-		ChangeID:  check.ChangeID,
+	info := checkInfoFromClient(*checks[0])
+	if info.Failures > 0 {
+		if info.ChangeID != "" {
+			logs, err := cmd.taskLogs(info.ChangeID)
+			if err != nil {
+				return err
+			}
+			info.Logs = logs
+		}
 	}
-	data, err := yaml.Marshal(checkInfo)
+	data, err := yaml.Marshal(info)
 	if err != nil {
 		return err
 	}
