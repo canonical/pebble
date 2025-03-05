@@ -57,7 +57,7 @@ func init() {
 		Summary:     cmdCheckSummary,
 		Description: cmdCheckDescription,
 		ArgsHelp: map[string]string{
-			"--refresh": "Run a check immediately",
+			"--refresh": "Run the check immediately",
 		},
 		New: func(opts *CmdOptions) flags.Commander {
 			return &cmdCheck{client: opts.Client}
@@ -79,7 +79,7 @@ func (cmd *cmdCheck) Execute(args []string) error {
 			return err
 		}
 
-		checkInfo := checkInfo{
+		info := checkInfo{
 			Name:      res.Info.Name,
 			Level:     string(res.Info.Level),
 			Startup:   string(res.Info.Startup),
@@ -89,14 +89,16 @@ func (cmd *cmdCheck) Execute(args []string) error {
 			ChangeID:  res.Info.ChangeID,
 		}
 		if res.Error != "" {
-			checkInfo.Error = res.Error
-			logs, err := cmd.taskLogs(checkInfo.ChangeID)
-			if err != nil {
-				return err
+			info.Error = res.Error
+			if info.ChangeID != "" {
+				logs, err := cmd.taskLogs(info.ChangeID)
+				if err != nil {
+					return err
+				}
+				info.Logs = logs
 			}
-			checkInfo.Logs = logs
 		}
-		data, err := yaml.Marshal(checkInfo)
+		data, err := yaml.Marshal(info)
 		if err != nil {
 			return err
 		}

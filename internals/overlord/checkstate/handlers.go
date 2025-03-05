@@ -47,7 +47,6 @@ func (m *CheckManager) doPerformCheck(task *state.Task, tomb *tombpkg.Tomb) erro
 	m.ensureCheck(config.Name)
 	checkData := m.checks[details.Name]
 	refresh := checkData.refresh
-	result := checkData.result
 	m.checksLock.Unlock()
 
 	chk := newChecker(config)
@@ -107,23 +106,28 @@ func (m *CheckManager) doPerformCheck(task *state.Task, tomb *tombpkg.Tomb) erro
 
 	for {
 		select {
-		case <-refresh:
+		case info := <-refresh:
 			// Reset ticker on refresh.
 			ticker.Reset(config.Period.Value)
 			shouldExit, err := performCheck()
-			result <- err
+			select {
+			case info.result <- err:
+			case <-info.ctx.Done():
+			}
 			if shouldExit {
 				return err
 			}
 		case <-ticker.C:
 			shouldExit, err := performCheck()
-
 			select {
-			case <-refresh: // If refresh requested while running check, send result.
-				result <- err
-			default: // Otherwise don't send result.
+			case info := <-refresh:
+				// If refresh requested while running check, send result.
+				select {
+				case info.result <- err:
+				case <-info.ctx.Done():
+				}
+			default:
 			}
-
 			if shouldExit {
 				return err
 			}
@@ -164,7 +168,6 @@ func (m *CheckManager) doRecoverCheck(task *state.Task, tomb *tombpkg.Tomb) erro
 	m.ensureCheck(config.Name)
 	checkData := m.checks[details.Name]
 	refresh := checkData.refresh
-	result := checkData.result
 	m.checksLock.Unlock()
 
 	chk := newChecker(config)
@@ -185,7 +188,7 @@ func (m *CheckManager) doRecoverCheck(task *state.Task, tomb *tombpkg.Tomb) erro
 			m.state.Unlock()
 
 			logger.Noticef("Check %q failure %d/%d: %v", config.Name, details.Failures, config.Threshold, err)
-			return false, nil
+			return false, err
 		}
 
 		// Check succeeded, switch to performing a succeeding check.
@@ -201,23 +204,29 @@ func (m *CheckManager) doRecoverCheck(task *state.Task, tomb *tombpkg.Tomb) erro
 
 	for {
 		select {
-		case <-refresh:
+		case info := <-refresh:
 			// Reset ticker on refresh.
 			ticker.Reset(config.Period.Value)
 			shouldExit, err := recoverCheck()
-			result <- err
+			fmt.Printf("=== debug in do recover check: %v\n", err)
+			select {
+			case info.result <- err:
+			case <-info.ctx.Done():
+			}
 			if shouldExit {
 				return err
 			}
 		case <-ticker.C:
 			shouldExit, err := recoverCheck()
-
 			select {
-			case <-refresh: // If refresh requested while running check, send result.
-				result <- err
-			default: // Otherwise don't send result.
+			case info := <-refresh:
+				// If refresh requested while running check, send result.
+				select {
+				case info.result <- err:
+				case <-info.ctx.Done():
+				}
+			default:
 			}
-
 			if shouldExit {
 				return err
 			}

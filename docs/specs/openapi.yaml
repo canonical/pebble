@@ -389,7 +389,7 @@ paths:
                       "threshold": 3,
                       "change-id": "1"
                     },
-                    "err": ""
+                    "error": ""
                   }
                 }
   /v1/exec:
@@ -1358,7 +1358,7 @@ components:
                   type: object
                 error:
                   type: string
-                  description: An error message if the check fails.
+                  description: The error message if the check failed; empty string on success.
     GetPlanResponse:
       allOf:
         - $ref: "#/components/schemas/BaseResponse"

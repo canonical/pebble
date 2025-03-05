@@ -81,8 +81,7 @@ func (s *PebbleSuite) TestCheckRefresh(c *C) {
     "type": "sync",
     "status-code": 200,
     "result": {
-        "info": {"name": "chk1", "startup": "enabled", "status": "up", "threshold": 3, "change-id": "1"},
-        "error": ""
+        "info": {"name": "chk1", "startup": "enabled", "status": "up", "threshold": 3, "change-id": "1"}
 	}
 }`)
 	})
@@ -116,7 +115,7 @@ func (s *PebbleSuite) TestCheckRefreshFailure(c *C) {
 	"status-code": 200,
 	"result": {
 		"info": {"name": "chk1", "startup": "enabled", "status": "up", "threshold": 3, "change-id": "1"},
-		"err": "somme error"
+		"error": "somme error"
 	}
 }`)
 		case "/v1/changes/1":

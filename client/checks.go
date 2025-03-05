@@ -174,14 +174,14 @@ func (client *Client) doMultiCheckAction(actionName string, checks []string) (*C
 }
 
 type RefreshCheckOptions struct {
-	// Name of the check to refresh, required.
+	// Name of the check to refresh (required).
 	Name string
 }
 
 type RefreshCheckResult struct {
-	Info *CheckInfo `json:"info"`
-	// The error message, empty if success.
-	Error string `json:"err"`
+	Info CheckInfo `json:"info"`
+	// The error message from running the check; empty string on success.
+	Error string `json:"error"`
 }
 
 // RefreshCheck runs a specific health check immediately.

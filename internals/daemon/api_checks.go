@@ -16,6 +16,7 @@ package daemon
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"sort"
 
@@ -57,15 +58,7 @@ func v1GetChecks(c *Command, r *http.Request, _ *UserState) Response {
 		levelMatch := level == plan.UnsetLevel || level == check.Level
 		namesMatch := len(names) == 0 || strutil.ListContains(names, check.Name)
 		if levelMatch && namesMatch {
-			info := checkInfo{
-				Name:      check.Name,
-				Level:     string(check.Level),
-				Startup:   string(check.Startup),
-				Status:    string(check.Status),
-				Failures:  check.Failures,
-				Threshold: check.Threshold,
-				ChangeID:  check.ChangeID,
-			}
+			info := checkInfoFromInternal(check)
 			infos = append(infos, info)
 		}
 	}
@@ -135,27 +128,32 @@ func v1PostChecksRefresh(c *Command, r *http.Request, _ *UserState) Response {
 
 	checkMgr := c.d.overlord.CheckManager()
 	result, err := checkMgr.RefreshCheck(r.Context(), check)
-	info := checkInfo{
-		Name:      result.Name,
-		Level:     string(result.Level),
-		Startup:   string(result.Startup),
-		Status:    string(result.Status),
-		Failures:  result.Failures,
-		Threshold: result.Threshold,
-		ChangeID:  result.ChangeID,
-	}
+	info := checkInfoFromInternal(result)
 	errStr := ""
 	if err != nil {
 		errStr = err.Error()
 	}
+	fmt.Printf("=== debug in v1PostChecksRefresh: %s\n", errStr)
 
-	type responsePayload struct {
+	type refreshPayload struct {
 		Info  checkInfo `json:"info"`
-		Error string    `json:"err"`
+		Error string    `json:"error,omitempty"`
 	}
-	return SyncResponse(responsePayload{Info: info, Error: errStr})
+	return SyncResponse(refreshPayload{Info: info, Error: errStr})
 }
 
 type responsePayload struct {
 	Changed []string `json:"changed"`
+}
+
+func checkInfoFromInternal(check *checkstate.CheckInfo) checkInfo {
+	return checkInfo{
+		Name:      check.Name,
+		Level:     string(check.Level),
+		Startup:   string(check.Startup),
+		Status:    string(check.Status),
+		Failures:  check.Failures,
+		Threshold: check.Threshold,
+		ChangeID:  check.ChangeID,
+	}
 }

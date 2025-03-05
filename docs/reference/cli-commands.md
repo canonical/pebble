@@ -133,7 +133,7 @@ Usage:
 The check command shows details for a single check in YAML format.
 
 [check command options]
-      --refresh    Run a check immediately
+      --refresh    Run the check immediately
 ```
 <!-- END AUTOMATED OUTPUT FOR check -->
 

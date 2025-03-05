@@ -346,8 +346,9 @@ func (m *CheckManager) ensureCheck(name string) *checkData {
 	if !ok {
 		check = &checkData{
 			name:    name,
-			refresh: make(chan struct{}),
-			result:  make(chan error)}
+			refresh: make(chan refreshInfo),
+			result:  make(chan error),
+		}
 		m.checks[name] = check
 	}
 	return check
@@ -411,6 +412,11 @@ type CheckInfo struct {
 	ChangeID  string
 }
 
+type refreshInfo struct {
+	ctx    context.Context
+	result chan error
+}
+
 // checkData holds the metrics and other data for a single check.
 type checkData struct {
 	name         string
@@ -422,7 +428,7 @@ type checkData struct {
 	changeID     string
 	successCount int64
 	failureCount int64
-	refresh      chan struct{}
+	refresh      chan refreshInfo
 	result       chan error
 }
 
@@ -641,9 +647,6 @@ func (m *CheckManager) Replan() {
 
 // RefreshCheck runs a check immediately.
 func (m *CheckManager) RefreshCheck(ctx context.Context, check *plan.Check) (*CheckInfo, error) {
-	// chk := newChecker(check)
-	// return runCheck(ctx, chk, check.Timeout.Value)
-
 	m.checksLock.Lock()
 	checkData := m.ensureCheck(check.Name)
 	refresh := checkData.refresh
@@ -651,7 +654,7 @@ func (m *CheckManager) RefreshCheck(ctx context.Context, check *plan.Check) (*Ch
 	m.checksLock.Unlock()
 
 	if refresh == nil || result == nil {
-		return nil, fmt.Errorf("refresh channels not initialized for check %q", checkData.name)
+		panic(fmt.Sprintf("internal error: refresh channels not initialized for check %q", checkData.name))
 	}
 
 	getCheckInfo := func() *CheckInfo {
@@ -671,15 +674,27 @@ func (m *CheckManager) RefreshCheck(ctx context.Context, check *plan.Check) (*Ch
 	}
 
 	select {
-	case refresh <- struct{}{}:
+	case refresh <- refreshInfo{ctx, result}:
+	case <-ctx.Done():
+		return getCheckInfo(), ctx.Err()
+	}
+	select {
+	case err := <-result:
+		return getCheckInfo(), err
 	case <-ctx.Done():
 		return getCheckInfo(), ctx.Err()
 	}
 
-	select {
-	case result := <-result:
-		return getCheckInfo(), result
-	case <-ctx.Done():
-		return getCheckInfo(), ctx.Err()
-	}
+	// select {
+	// case refresh <- struct{}{}:
+	// case <-ctx.Done():
+	// 	return getCheckInfo(), ctx.Err()
+	// }
+
+	// select {
+	// case result := <-result:
+	// 	return getCheckInfo(), result
+	// case <-ctx.Done():
+	// 	return getCheckInfo(), ctx.Err()
+	// }
 }
