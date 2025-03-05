@@ -102,7 +102,7 @@ func (m *CheckManager) doPerformCheck(task *state.Task, tomb *tombpkg.Tomb) erro
 				m.state.Unlock()
 			}
 		}
-		return false, nil
+		return false, err
 	}
 
 	for {
