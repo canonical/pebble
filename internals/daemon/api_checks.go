@@ -133,11 +133,12 @@ func v1PostChecksRefresh(c *Command, r *http.Request, _ *UserState) Response {
 		errStr = err.Error()
 	}
 
-	type refreshPayload struct {
-		Info  checkInfo `json:"info"`
-		Error string    `json:"error,omitempty"`
-	}
 	return SyncResponse(refreshPayload{Info: info, Error: errStr})
+}
+
+type refreshPayload struct {
+	Info  checkInfo `json:"info"`
+	Error string    `json:"error,omitempty"`
 }
 
 type responsePayload struct {
