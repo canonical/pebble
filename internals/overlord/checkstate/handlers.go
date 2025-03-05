@@ -208,7 +208,6 @@ func (m *CheckManager) doRecoverCheck(task *state.Task, tomb *tombpkg.Tomb) erro
 			// Reset ticker on refresh.
 			ticker.Reset(config.Period.Value)
 			shouldExit, err := recoverCheck()
-			fmt.Printf("=== debug in do recover check: %v\n", err)
 			select {
 			case info.result <- err:
 			case <-info.ctx.Done():

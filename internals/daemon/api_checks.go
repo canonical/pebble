@@ -16,7 +16,6 @@ package daemon
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"sort"
 
@@ -133,7 +132,6 @@ func v1PostChecksRefresh(c *Command, r *http.Request, _ *UserState) Response {
 	if err != nil {
 		errStr = err.Error()
 	}
-	fmt.Printf("=== debug in v1PostChecksRefresh: %s\n", errStr)
 
 	type refreshPayload struct {
 		Info  checkInfo `json:"info"`
