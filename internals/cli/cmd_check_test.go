@@ -50,6 +50,50 @@ change-id: "1"
 	c.Check(s.Stderr(), Equals, "")
 }
 
+func (s *PebbleSuite) TestCheckFailure(c *C) {
+	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1/checks":
+			c.Assert(r.Method, Equals, "GET")
+			c.Assert(r.URL.Path, Equals, "/v1/checks")
+			c.Assert(r.URL.Query(), DeepEquals, url.Values{"names": {"chk1"}})
+			fmt.Fprint(w, `
+{
+	"type": "sync",
+	"status-code": 200,
+	"result": [{"name": "chk1", "startup": "enabled", "status": "up", "failures": 1, "threshold": 3, "change-id": "1"}]
+}`)
+		case "/v1/changes/1":
+			fmt.Fprint(w, `
+{
+"type": "sync",
+"result": {
+"id": "2",
+"kind": "perform-check",
+"status": "Doing",
+"tasks": [{"kind": "perform-check", "status": "Doing", "log": ["2025-02-27T17:06:57Z ERROR"]}]
+}
+}`)
+		default:
+			c.Fatalf("unexpected path %q", r.URL.Path)
+		}
+	})
+	rest, err := cli.ParserForTest().ParseArgs([]string{"check", "chk1"})
+	c.Assert(err, IsNil)
+	c.Assert(rest, HasLen, 0)
+	c.Check(s.Stdout(), Equals, `
+name: chk1
+startup: enabled
+status: up
+failures: 1
+threshold: 3
+change-id: "1"
+logs: |
+    2025-02-27T17:06:57Z ERROR
+`[1:])
+	c.Check(s.Stderr(), Equals, "")
+}
+
 func (s *PebbleSuite) TestCheckNotFound(c *C) {
 	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
 		c.Assert(r.Method, Equals, "GET")
@@ -94,50 +138,6 @@ status: up
 failures: 0
 threshold: 3
 change-id: "1"
-`[1:])
-	c.Check(s.Stderr(), Equals, "")
-}
-
-func (s *PebbleSuite) TestCheckFailure(c *C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case "/v1/checks":
-			c.Assert(r.Method, Equals, "GET")
-			c.Assert(r.URL.Path, Equals, "/v1/checks")
-			c.Assert(r.URL.Query(), DeepEquals, url.Values{"names": {"chk1"}})
-			fmt.Fprint(w, `
-{
-	"type": "sync",
-	"status-code": 200,
-	"result": [{"name": "chk1", "startup": "enabled", "status": "up", "failures": 1, "threshold": 3, "change-id": "1"}]
-}`)
-		case "/v1/changes/1":
-			fmt.Fprint(w, `
-{
-"type": "sync",
-"result": {
-"id": "2",
-"kind": "perform-check",
-"status": "Doing",
-"tasks": [{"kind": "perform-check", "status": "Doing", "log": ["2025-02-27T17:06:57Z ERROR"]}]
-}
-}`)
-		default:
-			c.Fatalf("unexpected path %q", r.URL.Path)
-		}
-	})
-	rest, err := cli.ParserForTest().ParseArgs([]string{"check", "chk1"})
-	c.Assert(err, IsNil)
-	c.Assert(rest, HasLen, 0)
-	c.Check(s.Stdout(), Equals, `
-name: chk1
-startup: enabled
-status: up
-failures: 1
-threshold: 3
-change-id: "1"
-logs: |
-    2025-02-27T17:06:57Z ERROR
 `[1:])
 	c.Check(s.Stderr(), Equals, "")
 }
