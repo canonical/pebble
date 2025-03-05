@@ -16,8 +16,11 @@ package workloads
 
 import (
 	"errors"
+	"fmt"
 	"maps"
 	"reflect"
+
+	"gopkg.in/yaml.v3"
 
 	"github.com/canonical/pebble/internals/osutil"
 	"github.com/canonical/pebble/internals/plan"
@@ -36,7 +39,7 @@ type Workload struct {
 	Group       string            `yaml:"group,omitempty"`
 }
 
-func (w *Workload) Validate() error {
+func (w *Workload) validate() error {
 	if w.Name == "" {
 		return errors.New("cannot have an empty name")
 	}
@@ -44,7 +47,7 @@ func (w *Workload) Validate() error {
 	return nil
 }
 
-func (w *Workload) Copy() *Workload {
+func (w *Workload) copy() *Workload {
 	copied := *w
 	copied.Environment = maps.Clone(w.Environment)
 	copied.UserID = copyPtr(w.UserID)
@@ -52,7 +55,7 @@ func (w *Workload) Copy() *Workload {
 	return &copied
 }
 
-func (w *Workload) Merge(other *Workload) {
+func (w *Workload) merge(other *Workload) {
 	if len(other.Environment) > 0 {
 		w.Environment = makeMapIfNil(w.Environment)
 		maps.Copy(w.Environment, other.Environment)
@@ -72,26 +75,116 @@ func (w *Workload) Merge(other *Workload) {
 }
 
 func (w *Workload) Equal(other *Workload) bool {
-	if !maps.Equal(w.Environment, other.Environment) {
-		return false
-	}
-
-	uid, gid, err := osutil.NormalizeUidGid(w.UserID, w.GroupID, w.User, w.Group)
-	if err != nil {
-		// If we can't normalize them (shouldn't happen in practice), fall back to
-		// deeply comparing whether the values are equal.
-		return reflect.DeepEqual(w, other)
-	}
-	otherUID, otherGID, err := osutil.NormalizeUidGid(other.UserID, other.GroupID, other.User, other.Group)
-	if err != nil {
-		return reflect.DeepEqual(w, other)
-	}
-	if uid != nil && gid != nil && otherUID != nil && otherGID != nil {
-		return *uid == *otherUID && *gid == *otherGID
-	}
 	return reflect.DeepEqual(w, other)
 }
 
+const WorkloadsField = "workloads"
+
+var (
+	_ plan.Section          = (*Workloads)(nil)
+	_ plan.SectionExtension = (*Workloads)(nil)
+)
+
+type Workloads struct {
+	Entries map[string]*Workload `yaml:",inline"`
+}
+
+func (w *Workloads) IsZero() bool {
+	return len(w.Entries) == 0
+}
+
+func (w *Workloads) Validate() error {
+	for name, workload := range w.Entries {
+		if workload == nil {
+			return &plan.FormatError{
+				Message: fmt.Sprintf("workload %q: cannot have a null value", name),
+			}
+		}
+		if err := workload.validate(); err != nil {
+			return &plan.FormatError{
+				Message: fmt.Sprintf("workload %q: %v", name, err),
+			}
+		}
+	}
+	return nil
+}
+
+func (w *Workloads) combine(other *Workloads) error {
+	for name, workload := range other.Entries {
+		w.Entries = makeMapIfNil(w.Entries)
+		switch workload.Override {
+		case plan.MergeOverride:
+			if current, ok := w.Entries[name]; ok {
+				copied := current.copy()
+				copied.merge(workload)
+				w.Entries[name] = copied
+				break
+			}
+			fallthrough
+		case plan.ReplaceOverride:
+			w.Entries[name] = workload.copy()
+		case plan.UnknownOverride:
+			return &plan.FormatError{
+				Message: fmt.Sprintf(`workload %q: must define an "override" policy`, name),
+			}
+		default:
+			return &plan.FormatError{
+				Message: fmt.Sprintf(`workload %q: has an invalid "override" policy: %q`, name, workload.Override),
+			}
+		}
+	}
+	return nil
+}
+
+func (*Workloads) CombineSections(sections ...plan.Section) (plan.Section, error) {
+	workloads := &Workloads{}
+	for _, section := range sections {
+		// The following will panic if any of the supplied section is not a WorkloadsSection
+		layer := section.(*Workloads)
+		if err := workloads.combine(layer); err != nil {
+			return nil, err
+		}
+	}
+	return workloads, nil
+}
+
+func (*Workloads) ParseSection(data yaml.Node) (plan.Section, error) {
+	workloads := &Workloads{}
+	if err := plan.SectionDecode(&data, workloads); err != nil {
+		return nil, &plan.FormatError{
+			Message: fmt.Sprintf(`cannot parse the "workloads" section: %v`, err),
+		}
+	}
+	for name, workload := range workloads.Entries {
+		if workload != nil {
+			workload.Name = name
+		}
+	}
+	return workloads, nil
+}
+
+func (*Workloads) ValidatePlan(p *plan.Plan) error {
+	// The following will panic if the "ws" section is not a WorkloadsSection
+	ws := p.Sections[WorkloadsField].(*Workloads)
+	for name, service := range p.Services {
+		if service.Workload == "" {
+			continue
+		}
+		if _, ok := ws.Entries[service.Workload]; !ok {
+			return &plan.FormatError{
+				Message: fmt.Sprintf("workload %q: not defined for service %q", service.Workload, name),
+			}
+		}
+	}
+	for name, workload := range ws.Entries {
+		if _, _, err := osutil.NormalizeUidGid(workload.UserID, workload.GroupID, workload.User, workload.Group); err != nil {
+			return &plan.FormatError{
+				Message: fmt.Sprintf("workload %q: %v", name, err),
+			}
+		}
+	}
+	return nil
+}
 func copyPtr[T any](p *T) *T {
 	if p == nil {
 		return nil

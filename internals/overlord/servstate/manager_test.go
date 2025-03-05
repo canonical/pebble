@@ -132,7 +132,7 @@ func (s *S) SetUpSuite(c *C) {
 	setLoggerOnce.Do(func() {
 		logger.SetLogger(logger.New(os.Stderr, "[test] "))
 	})
-	plan.RegisterSectionExtension(workloads.WorkloadsField, &workloads.SectionExtension{})
+	plan.RegisterSectionExtension(workloads.WorkloadsField, &workloads.Workloads{})
 }
 
 func (s *S) TearDownSuite(c *C) {
@@ -1880,7 +1880,7 @@ services:
         command: /bin/sh -c "echo $PATH; sleep 10"
         workload: non-existing
     `)
-	c.Assert(err, ErrorMatches, `plan service "test1" workload not defined: "non-existing"`)
+	c.Assert(err, ErrorMatches, `workload "non-existing": not defined for service "test1"`)
 }
 
 func (s *S) tryPlanAddLayer(c *C, layerYAML string) error {

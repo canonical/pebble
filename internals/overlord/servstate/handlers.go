@@ -118,14 +118,14 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 	}
 
 	currentPlan := m.getPlan()
-	config, configFound := currentPlan.Services[request.Name]
-	if !configFound {
+	config, ok := currentPlan.Services[request.Name]
+	if !ok {
 		return fmt.Errorf("cannot find service %q in plan", request.Name)
 	}
 
 	var workload *workloads.Workload
 	if config.Workload != "" {
-		ws := currentPlan.Sections[workloads.WorkloadsField].(*workloads.WorkloadsSection)
+		ws := currentPlan.Sections[workloads.WorkloadsField].(*workloads.Workloads)
 		if workload = ws.Entries[config.Workload]; workload == nil {
 			return fmt.Errorf("internal error: cannot find workload %q for service %q in plan", config.Workload, request.Name)
 		}
@@ -194,7 +194,7 @@ func (m *ServiceManager) serviceForStart(config *plan.Service, workload *workloa
 		}
 		service.config = config.Copy()
 		if workload != nil {
-			service.workload = workload.Copy()
+			service.workload = workload
 		}
 		m.services[config.Name] = service
 		return service, ""
@@ -203,7 +203,7 @@ func (m *ServiceManager) serviceForStart(config *plan.Service, workload *workloa
 	// Ensure config is up-to-date from the plan whenever the user starts a service.
 	service.config = config.Copy()
 	if workload != nil {
-		service.workload = workload.Copy()
+		service.workload = workload
 	}
 
 	switch service.state {
@@ -354,12 +354,8 @@ func (s *serviceData) startInternal() error {
 	s.cmd = exec.Command(args[0], args[1:]...)
 	s.cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
-	var environment map[string]string
-	if len(s.config.Environment) > 0 {
-		environment = maps.Clone(s.config.Environment)
-	} else {
-		environment = make(map[string]string)
-	}
+	environment := make(map[string]string)
+	maps.Copy(environment, s.config.Environment)
 	if s.workload != nil {
 		maps.Copy(environment, s.workload.Environment)
 	}

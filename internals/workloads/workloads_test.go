@@ -28,12 +28,12 @@ import (
 var schemaTests = []struct {
 	summary         string
 	layers          []string
-	combinedSection *workloads.WorkloadsSection
+	combinedSection *workloads.Workloads
 	combinedYAML    string
 	error           string
 }{{
 	summary:         "empty section",
-	combinedSection: &workloads.WorkloadsSection{},
+	combinedSection: &workloads.Workloads{},
 	combinedYAML:    `workloads: {}`,
 }, {
 	summary: "single null workload",
@@ -41,7 +41,7 @@ var schemaTests = []struct {
 workloads:
     default:
     `},
-	error: `workload "default" cannot have a null value`,
+	error: `workload "default": cannot have a null value`,
 }, {
 	summary: "single workload with no override policy",
 	layers: []string{`
@@ -49,7 +49,7 @@ workloads:
     no-override-policy:
         user-id: 1337
     `},
-	error: `workload "no-override-policy" must define an "override" policy`,
+	error: `workload "no-override-policy": must define an "override" policy`,
 }, {
 	summary: "single workload with invalid override policy",
 	layers: []string{`
@@ -57,7 +57,7 @@ workloads:
     invalid-override-policy:
         override: bazinga
     `},
-	error: `workload "invalid-override-policy" has an invalid "override" policy: "bazinga"`,
+	error: `workload "invalid-override-policy": has an invalid "override" policy: "bazinga"`,
 }, {
 	summary: "single workload with empty name",
 	layers: []string{`
@@ -65,7 +65,7 @@ workloads:
     "":
         override: replace
     `},
-	error: `workload "" cannot have an empty name`,
+	error: `workload "": cannot have an empty name`,
 }, {
 	summary: "single default workload",
 	layers: []string{`
@@ -73,7 +73,7 @@ workloads:
     default:
         override: replace
     `},
-	combinedSection: &workloads.WorkloadsSection{
+	combinedSection: &workloads.Workloads{
 		Entries: map[string]*workloads.Workload{
 			"default": {
 				Name:     "default",
@@ -100,7 +100,7 @@ workloads:
         group-id: 1338
         group: hackers
     `},
-	combinedSection: &workloads.WorkloadsSection{
+	combinedSection: &workloads.Workloads{
 		Entries: map[string]*workloads.Workload{
 			"default": {
 				Name:     "default",
@@ -156,7 +156,7 @@ workloads:
         group: users
     `,
 	},
-	combinedSection: &workloads.WorkloadsSection{
+	combinedSection: &workloads.Workloads{
 		Entries: map[string]*workloads.Workload{
 			"default": {
 				Name:     "default",
@@ -214,7 +214,7 @@ workloads:
         group-id: 1002
         group: users
     `},
-	combinedSection: &workloads.WorkloadsSection{
+	combinedSection: &workloads.Workloads{
 		Entries: map[string]*workloads.Workload{
 			"default": {
 				Name:     "default",
@@ -253,7 +253,7 @@ workloads:
 }}
 
 func (s *workloadsSuite) TestWorkloadsSectionExtensionSchema(c *C) {
-	plan.RegisterSectionExtension(workloads.WorkloadsField, &workloads.SectionExtension{})
+	plan.RegisterSectionExtension(workloads.WorkloadsField, &workloads.Workloads{})
 	defer plan.UnregisterSectionExtension(workloads.WorkloadsField)
 
 	for i, t := range schemaTests {
@@ -266,7 +266,7 @@ func (s *workloadsSuite) TestWorkloadsSectionExtensionSchema(c *C) {
 			section, ok := combined.Sections[workloads.WorkloadsField]
 			c.Assert(ok, Equals, true)
 			c.Assert(section, NotNil)
-			ws, ok := section.(*workloads.WorkloadsSection)
+			ws, ok := section.(*workloads.Workloads)
 			c.Assert(ok, Equals, true)
 			c.Assert(ws, DeepEquals, t.combinedSection)
 			c.Assert(layerYAML(c, combined), Equals, strings.TrimSpace(t.combinedYAML))
