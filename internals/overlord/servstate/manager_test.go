@@ -44,6 +44,7 @@ import (
 	"github.com/canonical/pebble/internals/reaper"
 	"github.com/canonical/pebble/internals/servicelog"
 	"github.com/canonical/pebble/internals/testutil"
+	"github.com/canonical/pebble/internals/workloads"
 )
 
 const (
@@ -131,6 +132,11 @@ func (s *S) SetUpSuite(c *C) {
 	setLoggerOnce.Do(func() {
 		logger.SetLogger(logger.New(os.Stderr, "[test] "))
 	})
+	plan.RegisterSectionExtension(workloads.WorkloadsField, &workloads.Workloads{})
+}
+
+func (s *S) TearDownSuite(c *C) {
+	plan.UnregisterSectionExtension(workloads.WorkloadsField)
 }
 
 func (s *S) SetUpTest(c *C) {
@@ -175,6 +181,7 @@ func (s *S) TearDownTest(c *C) {
 			s.stopRunningServices(c)
 		}
 	}
+
 	// General test cleanup
 	s.BaseTest.TearDownTest(c)
 
@@ -405,6 +412,66 @@ services:
 	c.Check(stops, DeepEquals, [][]string{{"test2", "test1"}})
 	c.Check(starts, DeepEquals, [][]string{{"test1", "test2"}})
 
+	s.stopTestServices(c)
+}
+
+func (s *S) TestReplanServicesWithWorkload(c *C) {
+	s.newServiceManager(c)
+	s.planAddLayer(c, testPlanLayer)
+	s.planAddLayer(c, `
+services:
+    test6:
+        override: replace
+        startup: enabled
+        command: /bin/test6
+        workload: default
+workloads:
+    default:
+        override: replace
+        user: nobody
+        group: nogroup
+`)
+	s.planChanged(c)
+
+	s.startTestServices(c, true)
+	if c.Failed() {
+		return
+	}
+
+	stops, starts, err := s.manager.Replan()
+	c.Assert(err, IsNil)
+	c.Check(stops, DeepEquals, [][]string{nil})
+	c.Check(starts, DeepEquals, [][]string{[]string{"test1", "test2"}, []string{"test6"}})
+
+	s.planAddLayer(c, `
+services:
+    test6:
+        override: merge
+        workload: new-default
+workloads:
+    new-default:
+        override: replace
+        user: nobody
+        group: nogroup
+`)
+	s.planChanged(c)
+
+	stops, starts, err = s.manager.Replan()
+	c.Assert(err, IsNil)
+	c.Check(stops, DeepEquals, [][]string{nil})
+	c.Check(starts, DeepEquals, [][]string{[]string{"test1", "test2"}, []string{"test6"}})
+
+	s.planAddLayer(c, `
+workloads:
+    new-default:
+        override: replace
+`)
+	s.planChanged(c)
+
+	stops, starts, err = s.manager.Replan()
+	c.Assert(err, IsNil)
+	c.Check(stops, DeepEquals, [][]string{nil})
+	c.Check(starts, DeepEquals, [][]string{[]string{"test1", "test2"}, []string{"test6"}})
 	s.stopTestServices(c)
 }
 
@@ -1776,6 +1843,126 @@ services:
 	})
 }
 
+func (s *S) TestWorkloadAppliesToService(c *C) {
+	s.newServiceManager(c)
+	s.planAddLayer(c, `
+services:
+    test1:
+        override: replace
+        command: /bin/sh -c "echo $PATH; sleep 10"
+        workload: wl1
+
+workloads:
+    wl1:
+        override: replace
+        environment:
+            PATH: "/private/bin:/bin:/sbin"
+    `)
+	s.planChanged(c)
+
+	chg := s.startServices(c, [][]string{{"test1"}})
+	s.waitUntilService(c, "test1", func(svc *servstate.ServiceInfo) bool {
+		return svc.Current == servstate.StatusActive
+	})
+	c.Assert(s.manager.BackoffNum("test1"), Equals, 0)
+	s.st.Lock()
+	c.Check(chg.Status(), Equals, state.DoneStatus)
+	s.st.Unlock()
+	time.Sleep(10 * time.Millisecond)
+	c.Check(s.readAndClearLogBuffer(), Matches, `(?s).* \[test1\] /private/bin:/bin:/sbin\n`)
+}
+
+func (s *S) TestWorkloadReferenceInvalid(c *C) {
+	s.newServiceManager(c)
+	err := s.tryPlanAddLayer(c, `
+services:
+    test1:
+        override: replace
+        command: /bin/sh -c "echo $PATH; sleep 10"
+        workload: non-existing
+    `)
+	c.Assert(err, ErrorMatches, `workload "non-existing": not defined for service "test1"`)
+}
+
+func (s *S) TestWorkloadAndServiceUserIncompatible(c *C) {
+	s.newServiceManager(c)
+	err := s.tryPlanAddLayer(c, `
+services:
+    foo:
+        override: replace
+        command: /bin/foo
+        workload: bar
+        user: alice
+workloads:
+    bar:
+        override: replace
+    `)
+	c.Assert(err, ErrorMatches, `plan service "foo" cannot have user information and a workload at the same time`)
+	err = s.tryPlanAddLayer(c, `
+services:
+    foo:
+        override: replace
+        command: /bin/foo
+        workload: bar
+        user-id: 1000
+workloads:
+    bar:
+        override: replace
+    `)
+	c.Assert(err, ErrorMatches, `plan service "foo" cannot have user information and a workload at the same time`)
+
+	err = s.tryPlanAddLayer(c, `
+services:
+    foo:
+        override: replace
+        command: /bin/foo
+        workload: bar
+        group: bosses
+workloads:
+    bar:
+        override: replace
+    `)
+	c.Assert(err, ErrorMatches, `plan service "foo" cannot have group information and a workload at the same time`)
+	err = s.tryPlanAddLayer(c, `
+services:
+    foo:
+        override: replace
+        command: /bin/foo
+        workload: bar
+        group-id: 1001
+workloads:
+    bar:
+        override: replace
+    `)
+	c.Assert(err, ErrorMatches, `plan service "foo" cannot have group information and a workload at the same time`)
+}
+
+func (s *S) tryPlanAddLayer(c *C, layerYAML string) error {
+	cnt := len(s.plan.Layers)
+	layer, err := plan.ParseLayer(cnt, fmt.Sprintf("test-plan-layer-%v", cnt), []byte(layerYAML))
+	if err != nil {
+		return err
+	}
+	// Resolve {{.NotifyDoneCheck}}
+	s.insertDoneChecks(c, layer)
+	layers := append(s.plan.Layers, layer)
+	combined, err := plan.CombineLayers(layers...)
+	if err != nil {
+		return err
+	}
+	if err := combined.Validate(); err != nil {
+		return err
+	}
+	s.plan = &plan.Plan{
+		Layers:     layers,
+		Services:   combined.Services,
+		Checks:     combined.Checks,
+		LogTargets: combined.LogTargets,
+		Sections:   combined.Sections,
+	}
+	return s.plan.Validate()
+}
+
 func (s *S) newServiceManager(c *C) {
 	var err error
 	s.manager, err = servstate.NewManager(s.st, s.runner, s.logOutput, testRestarter{s.stopDaemon}, fakeLogManager{})
@@ -1797,12 +1984,15 @@ func (s *S) planAddLayer(c *C, layerYAML string) {
 	layers := append(s.plan.Layers, layer)
 	combined, err := plan.CombineLayers(layers...)
 	c.Assert(err, IsNil)
+	c.Assert(combined.Validate(), IsNil)
 	s.plan = &plan.Plan{
 		Layers:     layers,
 		Services:   combined.Services,
 		Checks:     combined.Checks,
 		LogTargets: combined.LogTargets,
+		Sections:   combined.Sections,
 	}
+	c.Assert(s.plan.Validate(), IsNil)
 }
 
 // Make sure services are all stopped before the next test starts.

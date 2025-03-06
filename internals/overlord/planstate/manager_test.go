@@ -22,6 +22,7 @@ import (
 
 	"github.com/canonical/pebble/internals/overlord/planstate"
 	"github.com/canonical/pebble/internals/plan"
+	"github.com/canonical/pebble/internals/workloads"
 )
 
 func (ps *planSuite) TestLoadInvalidPebbleDir(c *C) {
@@ -587,4 +588,21 @@ func (ps *planSuite) TestAppendLayersWithInner(c *C) {
 		c.Assert(plan.Layers[i].Order, Equals, layer.order)
 		c.Assert(plan.Layers[i].Label, Equals, layer.label)
 	}
+}
+
+func (ps *planSuite) TestAppendWorkloadLayer(c *C) {
+	plan.RegisterSectionExtension(workloads.WorkloadsField, &workloads.Workloads{})
+	defer plan.UnregisterSectionExtension(workloads.WorkloadsField)
+	var err error
+	ps.planMgr, err = planstate.NewManager(ps.layersDir)
+	c.Assert(err, IsNil)
+
+	// Append a layer when there are no layers.
+	layer := ps.parseLayer(c, 0, "workload1", `
+workloads:
+    workload1:
+        override: replace
+`)
+	err = ps.planMgr.AppendLayer(layer, false)
+	c.Assert(err, ErrorMatches, "plan workloads cannot be changed")
 }
