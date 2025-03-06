@@ -175,6 +175,16 @@ func (*Workloads) ValidatePlan(p *plan.Plan) error {
 				Message: fmt.Sprintf("workload %q: not defined for service %q", service.Workload, name),
 			}
 		}
+		if service.UserID != nil || service.User != "" {
+			return &plan.FormatError{
+				Message: fmt.Sprintf("plan service %q cannot have user information and a workload at the same time", name),
+			}
+		}
+		if service.GroupID != nil || service.Group != "" {
+			return &plan.FormatError{
+				Message: fmt.Sprintf("plan service %q cannot have group information and a workload at the same time", name),
+			}
+		}
 	}
 	for name, workload := range ws.Entries {
 		if _, _, err := osutil.NormalizeUidGid(workload.UserID, workload.GroupID, workload.User, workload.Group); err != nil {

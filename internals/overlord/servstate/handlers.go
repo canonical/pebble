@@ -355,10 +355,10 @@ func (s *serviceData) startInternal() error {
 	s.cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
 	environment := make(map[string]string)
-	maps.Copy(environment, s.config.Environment)
 	if s.workload != nil {
 		maps.Copy(environment, s.workload.Environment)
 	}
+	maps.Copy(environment, s.config.Environment)
 
 	s.cmd.Dir = s.config.WorkingDir
 

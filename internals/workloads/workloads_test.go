@@ -187,7 +187,7 @@ workloads:
         group: users
     `,
 }, {
-	summary: "Merge override policy",
+	summary: "merge override policy",
 	layers: []string{`
 workloads:
     default:

@@ -420,9 +420,10 @@ func (s *S) TestReplanServicesWithWorkload(c *C) {
 	s.planAddLayer(c, testPlanLayer)
 	s.planAddLayer(c, `
 services:
-    test5:
-        override: merge
+    test6:
+        override: replace
         startup: enabled
+        command: /bin/test6
         workload: default
 workloads:
     default:
@@ -440,11 +441,11 @@ workloads:
 	stops, starts, err := s.manager.Replan()
 	c.Assert(err, IsNil)
 	c.Check(stops, DeepEquals, [][]string{nil})
-	c.Check(starts, DeepEquals, [][]string{[]string{"test1", "test2"}, []string{"test5"}})
+	c.Check(starts, DeepEquals, [][]string{[]string{"test1", "test2"}, []string{"test6"}})
 
 	s.planAddLayer(c, `
 services:
-    test5:
+    test6:
         override: merge
         workload: new-default
 workloads:
@@ -458,7 +459,7 @@ workloads:
 	stops, starts, err = s.manager.Replan()
 	c.Assert(err, IsNil)
 	c.Check(stops, DeepEquals, [][]string{nil})
-	c.Check(starts, DeepEquals, [][]string{[]string{"test1", "test2"}, []string{"test5"}})
+	c.Check(starts, DeepEquals, [][]string{[]string{"test1", "test2"}, []string{"test6"}})
 
 	s.planAddLayer(c, `
 workloads:
@@ -470,7 +471,7 @@ workloads:
 	stops, starts, err = s.manager.Replan()
 	c.Assert(err, IsNil)
 	c.Check(stops, DeepEquals, [][]string{nil})
-	c.Check(starts, DeepEquals, [][]string{[]string{"test1", "test2"}, []string{"test5"}})
+	c.Check(starts, DeepEquals, [][]string{[]string{"test1", "test2"}, []string{"test6"}})
 	s.stopTestServices(c)
 }
 
@@ -1881,6 +1882,59 @@ services:
         workload: non-existing
     `)
 	c.Assert(err, ErrorMatches, `workload "non-existing": not defined for service "test1"`)
+}
+
+func (s *S) TestWorkloadAndServiceUserIncompatible(c *C) {
+	s.newServiceManager(c)
+	err := s.tryPlanAddLayer(c, `
+services:
+    foo:
+        override: replace
+        command: /bin/foo
+        workload: bar
+        user: alice
+workloads:
+    bar:
+        override: replace
+    `)
+	c.Assert(err, ErrorMatches, `plan service "foo" cannot have user information and a workload at the same time`)
+	err = s.tryPlanAddLayer(c, `
+services:
+    foo:
+        override: replace
+        command: /bin/foo
+        workload: bar
+        user-id: 1000
+workloads:
+    bar:
+        override: replace
+    `)
+	c.Assert(err, ErrorMatches, `plan service "foo" cannot have user information and a workload at the same time`)
+
+	err = s.tryPlanAddLayer(c, `
+services:
+    foo:
+        override: replace
+        command: /bin/foo
+        workload: bar
+        group: bosses
+workloads:
+    bar:
+        override: replace
+    `)
+	c.Assert(err, ErrorMatches, `plan service "foo" cannot have group information and a workload at the same time`)
+	err = s.tryPlanAddLayer(c, `
+services:
+    foo:
+        override: replace
+        command: /bin/foo
+        workload: bar
+        group-id: 1001
+workloads:
+    bar:
+        override: replace
+    `)
+	c.Assert(err, ErrorMatches, `plan service "foo" cannot have group information and a workload at the same time`)
 }
 
 func (s *S) tryPlanAddLayer(c *C, layerYAML string) error {
