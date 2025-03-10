@@ -117,12 +117,10 @@ func (cmd *cmdCheck) Execute(args []string) error {
 			info.Logs = logs
 		}
 	}
-
 	data, err := yaml.Marshal(info)
 	if err != nil {
 		return err
 	}
-
 	fmt.Fprint(Stdout, string(data))
 	return nil
 }

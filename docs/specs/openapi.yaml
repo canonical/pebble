@@ -385,7 +385,7 @@ paths:
                       "name": "check1",
                       "startup": "enabled",
                       "status": "up",
-                      "failures": 0,
+                      "failures": 1,
                       "threshold": 3,
                       "change-id": "1"
                     },
