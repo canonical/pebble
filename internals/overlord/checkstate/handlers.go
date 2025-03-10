@@ -42,11 +42,9 @@ func (m *CheckManager) doPerformCheck(task *state.Task, tomb *tombpkg.Tomb) erro
 	ticker := time.NewTicker(config.Period.Value)
 	defer ticker.Stop()
 
-	// Retrieve checkData and its channels
 	m.checksLock.Lock()
-	m.ensureCheck(config.Name)
-	checkData := m.checks[details.Name]
-	refresh := checkData.refresh
+	data := m.ensureCheck(config.Name)
+	refresh := data.refresh
 	m.checksLock.Unlock()
 
 	chk := newChecker(config)
@@ -89,19 +87,20 @@ func (m *CheckManager) doPerformCheck(task *state.Task, tomb *tombpkg.Tomb) erro
 				// and logs the error to the task log.
 				return true, err
 			}
-		} else {
-			m.incSuccessCount(config)
-			if details.Failures > 0 {
-				m.updateCheckData(config, changeID, 0)
-
-				m.state.Lock()
-				task.Logf("succeeded after %s", pluralise(details.Failures, "failure", "failures"))
-				details.Failures = 0
-				task.Set(checkDetailsAttr, &details)
-				m.state.Unlock()
-			}
+			return false, err
 		}
-		return false, err
+
+		m.incSuccessCount(config)
+		if details.Failures > 0 {
+			m.updateCheckData(config, changeID, 0)
+
+			m.state.Lock()
+			task.Logf("succeeded after %s", pluralise(details.Failures, "failure", "failures"))
+			details.Failures = 0
+			task.Set(checkDetailsAttr, &details)
+			m.state.Unlock()
+		}
+		return false, nil
 	}
 
 	for {
@@ -163,11 +162,9 @@ func (m *CheckManager) doRecoverCheck(task *state.Task, tomb *tombpkg.Tomb) erro
 	ticker := time.NewTicker(config.Period.Value)
 	defer ticker.Stop()
 
-	// Retrieve checkData and its channels
 	m.checksLock.Lock()
-	m.ensureCheck(config.Name)
-	checkData := m.checks[details.Name]
-	refresh := checkData.refresh
+	data := m.ensureCheck(config.Name)
+	refresh := data.refresh
 	m.checksLock.Unlock()
 
 	chk := newChecker(config)

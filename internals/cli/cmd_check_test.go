@@ -117,7 +117,7 @@ func (s *PebbleSuite) TestCheckRefresh(c *C) {
 		c.Assert(r.URL.Path, Equals, "/v1/checks/refresh")
 		body := DecodedRequestBody(c, r)
 		c.Check(body, DeepEquals, map[string]any{
-			"Name": "chk1",
+			"name": "chk1",
 		})
 		fmt.Fprint(w, `
 {
@@ -150,7 +150,7 @@ func (s *PebbleSuite) TestCheckRefreshFailure(c *C) {
 			c.Assert(r.URL.Path, Equals, "/v1/checks/refresh")
 			body := DecodedRequestBody(c, r)
 			c.Check(body, DeepEquals, map[string]any{
-				"Name": "chk1",
+				"name": "chk1",
 			})
 			fmt.Fprint(w, `
 {
@@ -200,7 +200,7 @@ func (s *PebbleSuite) TestCheckRefreshNotFound(c *C) {
 		c.Assert(r.URL.Path, Equals, "/v1/checks/refresh")
 		body := DecodedRequestBody(c, r)
 		c.Check(body, DeepEquals, map[string]any{
-			"Name": "chk1",
+			"name": "chk1",
 		})
 		fmt.Fprint(w, `{
     "type": "error",

@@ -82,6 +82,7 @@ func (cmd *cmdCheck) Execute(args []string) error {
 		return ErrExtraArgs
 	}
 
+	var info checkInfo
 	if cmd.Refresh {
 		opts := client.RefreshCheckOptions{
 			Name: cmd.Positional.Check,
@@ -91,52 +92,37 @@ func (cmd *cmdCheck) Execute(args []string) error {
 			return err
 		}
 
-		info := checkInfoFromClient(res.Info)
-
-		if res.Error != "" {
-			info.Error = res.Error
-			if info.ChangeID != "" {
-				logs, err := cmd.taskLogs(info.ChangeID)
-				if err != nil {
-					return err
-				}
-				info.Logs = logs
-			}
+		info = checkInfoFromClient(res.Info)
+		info.Error = res.Error
+	} else {
+		opts := client.ChecksOptions{
+			Names: []string{cmd.Positional.Check},
 		}
-
-		data, err := yaml.Marshal(info)
+		checks, err := cmd.client.Checks(&opts)
 		if err != nil {
 			return err
 		}
-
-		fmt.Fprint(Stdout, string(data))
-		return nil
+		if len(checks) == 0 {
+			return fmt.Errorf("cannot find check %q", cmd.Positional.Check)
+		}
+		info = checkInfoFromClient(*checks[0])
 	}
 
-	opts := client.ChecksOptions{
-		Names: []string{cmd.Positional.Check},
-	}
-	checks, err := cmd.client.Checks(&opts)
-	if err != nil {
-		return err
-	}
-	if len(checks) == 0 {
-		return fmt.Errorf("cannot find check %q", cmd.Positional.Check)
-	}
-	info := checkInfoFromClient(*checks[0])
-	if info.Failures > 0 {
+	if info.Failures > 0 || info.Error != "" {
 		if info.ChangeID != "" {
 			logs, err := cmd.taskLogs(info.ChangeID)
 			if err != nil {
-				return err
+				fmt.Errorf("cannot get task logs for change %s: %w", info.ChangeID, err)
 			}
 			info.Logs = logs
 		}
 	}
+
 	data, err := yaml.Marshal(info)
 	if err != nil {
 		return err
 	}
+
 	fmt.Fprint(Stdout, string(data))
 	return nil
 }

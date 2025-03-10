@@ -347,7 +347,6 @@ func (m *CheckManager) ensureCheck(name string) *checkData {
 		check = &checkData{
 			name:    name,
 			refresh: make(chan refreshInfo),
-			result:  make(chan error),
 		}
 		m.checks[name] = check
 	}
@@ -429,7 +428,6 @@ type checkData struct {
 	successCount int64
 	failureCount int64
 	refresh      chan refreshInfo
-	result       chan error
 }
 
 type CheckStatus string
@@ -648,15 +646,15 @@ func (m *CheckManager) Replan() {
 // RefreshCheck runs a check immediately.
 func (m *CheckManager) RefreshCheck(ctx context.Context, check *plan.Check) (*CheckInfo, error) {
 	m.checksLock.Lock()
-	checkData := m.ensureCheck(check.Name)
-	refresh := checkData.refresh
-	result := checkData.result
+	data := m.ensureCheck(check.Name)
+	refresh := data.refresh
+	changeID := data.changeID
 	m.checksLock.Unlock()
 
 	getCheckInfo := func() *CheckInfo {
 		m.checksLock.Lock()
+		defer m.checksLock.Unlock()
 		checkData := m.ensureCheck(check.Name)
-		m.checksLock.Unlock()
 		info := CheckInfo{
 			Name:      checkData.name,
 			Level:     checkData.level,
@@ -670,15 +668,16 @@ func (m *CheckManager) RefreshCheck(ctx context.Context, check *plan.Check) (*Ch
 	}
 
 	// If the check is stopped, run the check directly without using changes and tasks.
-	if checkData.changeID == "" {
+	if changeID == "" {
 		chk := newChecker(check)
 		err := runCheck(ctx, chk, check.Timeout.Value)
 		return getCheckInfo(), err
 	}
-	if refresh == nil || result == nil {
-		panic(fmt.Sprintf("internal error: refresh channels not initialized for check %q", checkData.name))
+	if refresh == nil {
+		panic(fmt.Sprintf("internal error: refresh channel not initialized for check %q", data.name))
 	}
 
+	result := make(chan error)
 	select {
 	case refresh <- refreshInfo{ctx, result}:
 	case <-ctx.Done():

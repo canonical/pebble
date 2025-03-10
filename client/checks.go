@@ -186,7 +186,12 @@ type RefreshCheckResult struct {
 
 // RefreshCheck runs a specific health check immediately.
 func (client *Client) RefreshCheck(opts *RefreshCheckOptions) (*RefreshCheckResult, error) {
-	body, err := json.Marshal(opts)
+	var payload = struct {
+		Name string `json:"name"`
+	}{
+		Name: opts.Name,
+	}
+	data, err := json.Marshal(&payload)
 	if err != nil {
 		return nil, fmt.Errorf("cannot marshal checks payload: %w", err)
 	}
@@ -195,7 +200,7 @@ func (client *Client) RefreshCheck(opts *RefreshCheckOptions) (*RefreshCheckResu
 		Type:   SyncRequest,
 		Method: "POST",
 		Path:   "/v1/checks/refresh",
-		Body:   bytes.NewBuffer(body),
+		Body:   bytes.NewBuffer(data),
 	})
 	if err != nil {
 		return nil, err

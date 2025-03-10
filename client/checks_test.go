@@ -143,6 +143,10 @@ func (cs *clientSuite) TestRefreshCheck(c *check.C) {
 	c.Check(results.Error, check.Equals, "")
 	c.Assert(cs.req.Method, check.Equals, "POST")
 	c.Assert(cs.req.URL.Path, check.Equals, "/v1/checks/refresh")
+	var body map[string]any
+	c.Assert(json.NewDecoder(cs.req.Body).Decode(&body), check.IsNil)
+	c.Check(body, check.HasLen, 1)
+	c.Check(body["name"], check.Equals, "chk1")
 }
 
 func (cs *clientSuite) TestRefreshCheckError(c *check.C) {

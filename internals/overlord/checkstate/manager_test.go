@@ -1010,12 +1010,12 @@ func (s *ManagerSuite) TestRefreshCheck(c *C) {
 		Threshold: 3,
 		Exec:      &plan.ExecCheck{Command: "echo chk1"},
 	}
-	origLayer := &plan.Layer{
+	layer := &plan.Layer{
 		Checks: map[string]*plan.Check{
 			"chk1": chk1,
 		},
 	}
-	err := s.planMgr.AppendLayer(origLayer, false)
+	err := s.planMgr.AppendLayer(layer, false)
 	c.Assert(err, IsNil)
 	s.manager.PlanChanged(s.planMgr.Plan())
 	waitChecks(c, s.manager, []*checkstate.CheckInfo{
@@ -1051,12 +1051,12 @@ func (s *ManagerSuite) TestRefreshCheckFailure(c *C) {
 		Threshold: 3,
 		Exec:      &plan.ExecCheck{Command: fmt.Sprintf(`/bin/sh -c 'echo details >/dev/stderr; [ ! -f %s ]'`, testPath)},
 	}
-	origLayer := &plan.Layer{
+	layer := &plan.Layer{
 		Checks: map[string]*plan.Check{
 			"chk1": chk1,
 		},
 	}
-	err = s.planMgr.AppendLayer(origLayer, false)
+	err = s.planMgr.AppendLayer(layer, false)
 	c.Assert(err, IsNil)
 	s.manager.PlanChanged(s.planMgr.Plan())
 	waitChecks(c, s.manager, []*checkstate.CheckInfo{
@@ -1087,12 +1087,12 @@ func (s *ManagerSuite) TestRefreshStoppedCheck(c *C) {
 		Threshold: 3,
 		Exec:      &plan.ExecCheck{Command: "echo chk1"},
 	}
-	origLayer := &plan.Layer{
+	layer := &plan.Layer{
 		Checks: map[string]*plan.Check{
 			"chk1": chk1,
 		},
 	}
-	err := s.planMgr.AppendLayer(origLayer, false)
+	err := s.planMgr.AppendLayer(layer, false)
 	c.Assert(err, IsNil)
 	s.manager.PlanChanged(s.planMgr.Plan())
 	waitChecks(c, s.manager, []*checkstate.CheckInfo{

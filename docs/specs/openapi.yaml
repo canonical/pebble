@@ -389,7 +389,7 @@ paths:
                       "threshold": 3,
                       "change-id": "1"
                     },
-                    "error": ""
+                    "error": "check timed out after 1s"
                   }
                 }
   /v1/exec:

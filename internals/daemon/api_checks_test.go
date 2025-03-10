@@ -19,10 +19,13 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"time"
 
+	"gopkg.in/check.v1"
 	. "gopkg.in/check.v1"
 )
 
@@ -223,14 +226,19 @@ func (s *apiSuite) postChecks(c *C, body string) *resp {
 }
 
 func (s *apiSuite) TestPostChecksRefresh(c *C) {
-	writeTestLayer(s.pebbleDir, `
+	checksYAML := `
 checks:
     chk1:
         override: replace
         level: ready
         exec:
-            command: echo "hello"
-`)
+            command: /bin/sh -c "{{.CheckCommand}}"
+`
+	tempDir := c.MkDir()
+	donePath := filepath.Join(tempDir, "doneCheck")
+	checkCommand := fmt.Sprintf("sync; touch %s", donePath)
+	checksYAML = strings.Replace(checksYAML, "{{.CheckCommand}}", checkCommand, -1)
+	writeTestLayer(s.pebbleDir, checksYAML)
 	s.daemon(c)
 	s.startOverlord()
 
@@ -257,6 +265,12 @@ checks:
 	rsp := v1PostChecksRefresh(apiCmd("/v1/checks/refresh"), req, nil).(*resp)
 	rec := httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)
+
+	// Make the sure the check has refreshed.
+	stat, err := os.Stat(donePath)
+	c.Assert(err, IsNil)
+	c.Assert(stat.Mode().IsRegular(), check.Equals, true)
+	os.Remove(donePath)
 
 	c.Check(rec.Code, Equals, rsp.Status)
 	c.Check(rsp.Status, Equals, 200)
