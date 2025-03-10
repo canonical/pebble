@@ -25,7 +25,6 @@ import (
 	"strings"
 	"time"
 
-	"gopkg.in/check.v1"
 	. "gopkg.in/check.v1"
 )
 
@@ -269,7 +268,7 @@ checks:
 	// Make the sure the check has refreshed.
 	stat, err := os.Stat(donePath)
 	c.Assert(err, IsNil)
-	c.Assert(stat.Mode().IsRegular(), check.Equals, true)
+	c.Assert(stat.Mode().IsRegular(), Equals, true)
 	os.Remove(donePath)
 
 	c.Check(rec.Code, Equals, rsp.Status)

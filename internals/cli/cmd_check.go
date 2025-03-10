@@ -112,7 +112,7 @@ func (cmd *cmdCheck) Execute(args []string) error {
 		if info.ChangeID != "" {
 			logs, err := cmd.taskLogs(info.ChangeID)
 			if err != nil {
-				fmt.Errorf("cannot get task logs for change %s: %w", info.ChangeID, err)
+				return fmt.Errorf("cannot get task logs for change %s: %w", info.ChangeID, err)
 			}
 			info.Logs = logs
 		}
