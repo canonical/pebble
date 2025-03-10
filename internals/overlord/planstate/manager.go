@@ -15,15 +15,12 @@
 package planstate
 
 import (
-	"errors"
 	"fmt"
-	"reflect"
 	"slices"
 	"strings"
 	"sync"
 
 	"github.com/canonical/pebble/internals/plan"
-	"github.com/canonical/pebble/internals/workloads"
 )
 
 // LabelExists is the error returned by AppendLayer when a layer with that
@@ -255,10 +252,6 @@ func (m *PlanManager) updatePlanLayers(layers []*plan.Layer) (*plan.Plan, error)
 	err = p.Validate()
 	if err != nil {
 		return nil, err
-	}
-	newWorkloads, ok := p.Sections[workloads.WorkloadsField].(*workloads.Workloads)
-	if ok && !reflect.DeepEqual(newWorkloads, m.plan.Sections[workloads.WorkloadsField]) {
-		return nil, errors.New("plan workloads cannot be changed")
 	}
 	m.plan = p
 	return p, nil

@@ -591,18 +591,29 @@ func (ps *planSuite) TestAppendLayersWithInner(c *C) {
 }
 
 func (ps *planSuite) TestAppendWorkloadLayer(c *C) {
-	plan.RegisterSectionExtension(workloads.WorkloadsField, &workloads.Workloads{})
+	plan.RegisterSectionExtension(workloads.WorkloadsField, &workloads.WorkloadsSectionExtension{})
 	defer plan.UnregisterSectionExtension(workloads.WorkloadsField)
+
 	var err error
 	ps.planMgr, err = planstate.NewManager(ps.layersDir)
 	c.Assert(err, IsNil)
 
-	// Append a layer when there are no layers.
+	// Append the first workloads layer.
 	layer := ps.parseLayer(c, 0, "workload1", `
 workloads:
     workload1:
         override: replace
 `)
+	// First append should succeed (first initialization of workloads in the plan)
 	err = ps.planMgr.AppendLayer(layer, false)
-	c.Assert(err, ErrorMatches, "plan workloads cannot be changed")
+	c.Assert(err, IsNil)
+
+	// An attempt to mutate layers must fail
+	layer = ps.parseLayer(c, 0, "workload2", `
+workloads:
+    workload2:
+        override: replace
+`)
+	err = ps.planMgr.AppendLayer(layer, false)
+	c.Assert(err, ErrorMatches, "cannot change workloads once the plan has been loaded")
 }

@@ -80,21 +80,18 @@ func (w *Workload) Equal(other *Workload) bool {
 
 const WorkloadsField = "workloads"
 
-var (
-	_ plan.Section          = (*Workloads)(nil)
-	_ plan.SectionExtension = (*Workloads)(nil)
-)
+var _ plan.Section = (*WorkloadsSection)(nil)
 
-type Workloads struct {
+type WorkloadsSection struct {
 	Entries map[string]*Workload `yaml:",inline"`
 }
 
-func (w *Workloads) IsZero() bool {
-	return len(w.Entries) == 0
+func (ws *WorkloadsSection) IsZero() bool {
+	return len(ws.Entries) == 0
 }
 
-func (w *Workloads) Validate() error {
-	for name, workload := range w.Entries {
+func (ws *WorkloadsSection) Validate() error {
+	for name, workload := range ws.Entries {
 		if workload == nil {
 			return &plan.FormatError{
 				Message: fmt.Sprintf("workload %q: cannot have a null value", name),
@@ -109,20 +106,20 @@ func (w *Workloads) Validate() error {
 	return nil
 }
 
-func (w *Workloads) combine(other *Workloads) error {
+func (ws *WorkloadsSection) combine(other *WorkloadsSection) error {
 	for name, workload := range other.Entries {
-		w.Entries = makeMapIfNil(w.Entries)
+		ws.Entries = makeMapIfNil(ws.Entries)
 		switch workload.Override {
 		case plan.MergeOverride:
-			if current, ok := w.Entries[name]; ok {
+			if current, ok := ws.Entries[name]; ok {
 				copied := current.copy()
 				copied.merge(workload)
-				w.Entries[name] = copied
+				ws.Entries[name] = copied
 				break
 			}
 			fallthrough
 		case plan.ReplaceOverride:
-			w.Entries[name] = workload.copy()
+			ws.Entries[name] = workload.copy()
 		case plan.UnknownOverride:
 			return &plan.FormatError{
 				Message: fmt.Sprintf(`workload %q: must define an "override" policy`, name),
@@ -136,11 +133,17 @@ func (w *Workloads) combine(other *Workloads) error {
 	return nil
 }
 
-func (*Workloads) CombineSections(sections ...plan.Section) (plan.Section, error) {
-	workloads := &Workloads{}
+var _ plan.SectionExtension = (*WorkloadsSectionExtension)(nil)
+
+type WorkloadsSectionExtension struct {
+	currentPlan *plan.Plan
+}
+
+func (*WorkloadsSectionExtension) CombineSections(sections ...plan.Section) (plan.Section, error) {
+	workloads := &WorkloadsSection{}
 	for _, section := range sections {
 		// The following will panic if any of the supplied section is not a WorkloadsSection
-		layer := section.(*Workloads)
+		layer := section.(*WorkloadsSection)
 		if err := workloads.combine(layer); err != nil {
 			return nil, err
 		}
@@ -148,8 +151,8 @@ func (*Workloads) CombineSections(sections ...plan.Section) (plan.Section, error
 	return workloads, nil
 }
 
-func (*Workloads) ParseSection(data yaml.Node) (plan.Section, error) {
-	workloads := &Workloads{}
+func (*WorkloadsSectionExtension) ParseSection(data yaml.Node) (plan.Section, error) {
+	workloads := &WorkloadsSection{}
 	if err := plan.SectionDecode(&data, workloads); err != nil {
 		return nil, &plan.FormatError{
 			Message: fmt.Sprintf(`cannot parse the "workloads" section: %v`, err),
@@ -163,9 +166,9 @@ func (*Workloads) ParseSection(data yaml.Node) (plan.Section, error) {
 	return workloads, nil
 }
 
-func (*Workloads) ValidatePlan(p *plan.Plan) error {
+func (ext *WorkloadsSectionExtension) ValidatePlan(p *plan.Plan) error {
 	// The following will panic if the "ws" section is not a WorkloadsSection
-	ws := p.Sections[WorkloadsField].(*Workloads)
+	ws := p.Sections[WorkloadsField].(*WorkloadsSection)
 	for name, service := range p.Services {
 		if service.Workload == "" {
 			continue
@@ -193,8 +196,18 @@ func (*Workloads) ValidatePlan(p *plan.Plan) error {
 			}
 		}
 	}
+	if ext.currentPlan != nil {
+		currentWorkloads := ext.currentPlan.Sections[WorkloadsField].(*WorkloadsSection)
+		if !reflect.DeepEqual(currentWorkloads.Entries, ws.Entries) {
+			return &plan.FormatError{
+				Message: fmt.Sprintf("cannot change workloads once the plan has been loaded"),
+			}
+		}
+	}
+	ext.currentPlan = p
 	return nil
 }
+
 func copyPtr[T any](p *T) *T {
 	if p == nil {
 		return nil

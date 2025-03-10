@@ -28,12 +28,12 @@ import (
 var schemaTests = []struct {
 	summary         string
 	layers          []string
-	combinedSection *workloads.Workloads
+	combinedSection *workloads.WorkloadsSection
 	combinedYAML    string
 	error           string
 }{{
 	summary:         "empty section",
-	combinedSection: &workloads.Workloads{},
+	combinedSection: &workloads.WorkloadsSection{},
 	combinedYAML:    `workloads: {}`,
 }, {
 	summary: "single null workload",
@@ -73,7 +73,7 @@ workloads:
     default:
         override: replace
     `},
-	combinedSection: &workloads.Workloads{
+	combinedSection: &workloads.WorkloadsSection{
 		Entries: map[string]*workloads.Workload{
 			"default": {
 				Name:     "default",
@@ -100,7 +100,7 @@ workloads:
         group-id: 1338
         group: hackers
     `},
-	combinedSection: &workloads.Workloads{
+	combinedSection: &workloads.WorkloadsSection{
 		Entries: map[string]*workloads.Workload{
 			"default": {
 				Name:     "default",
@@ -156,7 +156,7 @@ workloads:
         group: users
     `,
 	},
-	combinedSection: &workloads.Workloads{
+	combinedSection: &workloads.WorkloadsSection{
 		Entries: map[string]*workloads.Workload{
 			"default": {
 				Name:     "default",
@@ -214,7 +214,7 @@ workloads:
         group-id: 1002
         group: users
     `},
-	combinedSection: &workloads.Workloads{
+	combinedSection: &workloads.WorkloadsSection{
 		Entries: map[string]*workloads.Workload{
 			"default": {
 				Name:     "default",
@@ -253,7 +253,7 @@ workloads:
 }}
 
 func (s *workloadsSuite) TestWorkloadsSectionExtensionSchema(c *C) {
-	plan.RegisterSectionExtension(workloads.WorkloadsField, &workloads.Workloads{})
+	plan.RegisterSectionExtension(workloads.WorkloadsField, &workloads.WorkloadsSectionExtension{})
 	defer plan.UnregisterSectionExtension(workloads.WorkloadsField)
 
 	for i, t := range schemaTests {
@@ -266,7 +266,7 @@ func (s *workloadsSuite) TestWorkloadsSectionExtensionSchema(c *C) {
 			section, ok := combined.Sections[workloads.WorkloadsField]
 			c.Assert(ok, Equals, true)
 			c.Assert(section, NotNil)
-			ws, ok := section.(*workloads.Workloads)
+			ws, ok := section.(*workloads.WorkloadsSection)
 			c.Assert(ok, Equals, true)
 			c.Assert(ws, DeepEquals, t.combinedSection)
 			c.Assert(layerYAML(c, combined), Equals, strings.TrimSpace(t.combinedYAML))

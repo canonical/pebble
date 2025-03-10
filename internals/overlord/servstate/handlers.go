@@ -125,7 +125,7 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 
 	var workload *workloads.Workload
 	if config.Workload != "" {
-		ws := currentPlan.Sections[workloads.WorkloadsField].(*workloads.Workloads)
+		ws := currentPlan.Sections[workloads.WorkloadsField].(*workloads.WorkloadsSection)
 		if workload = ws.Entries[config.Workload]; workload == nil {
 			return fmt.Errorf("internal error: cannot find workload %q for service %q in plan", config.Workload, request.Name)
 		}

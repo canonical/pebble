@@ -255,7 +255,7 @@ func (m *ServiceManager) ServiceLogs(services []string, last int) (map[string]se
 // because their plans had changed between when they started and this call.
 func (m *ServiceManager) Replan() ([][]string, [][]string, error) {
 	currentPlan := m.getPlan()
-	ws, _ := currentPlan.Sections[workloads.WorkloadsField].(*workloads.Workloads)
+	ws, _ := currentPlan.Sections[workloads.WorkloadsField].(*workloads.WorkloadsSection)
 	m.servicesLock.Lock()
 	defer m.servicesLock.Unlock()
 

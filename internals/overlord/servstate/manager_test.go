@@ -132,11 +132,6 @@ func (s *S) SetUpSuite(c *C) {
 	setLoggerOnce.Do(func() {
 		logger.SetLogger(logger.New(os.Stderr, "[test] "))
 	})
-	plan.RegisterSectionExtension(workloads.WorkloadsField, &workloads.Workloads{})
-}
-
-func (s *S) TearDownSuite(c *C) {
-	plan.UnregisterSectionExtension(workloads.WorkloadsField)
 }
 
 func (s *S) SetUpTest(c *C) {
@@ -162,9 +157,13 @@ func (s *S) SetUpTest(c *C) {
 	s.runner = state.NewTaskRunner(s.st)
 	s.stopDaemon = make(chan restart.RestartType, 1)
 
+	plan.RegisterSectionExtension(workloads.WorkloadsField, &workloads.WorkloadsSectionExtension{})
+
 	restore := servstate.FakeOkayWait(shortOkayDelay)
 	s.AddCleanup(restore)
 	restore = servstate.FakeKillFailDelay(shortKillDelay, shortFailDelay)
+	s.AddCleanup(restore)
+	restore = func() { plan.UnregisterSectionExtension(workloads.WorkloadsField) }
 	s.AddCleanup(restore)
 
 	s.plan = &plan.Plan{}
@@ -418,6 +417,8 @@ services:
 func (s *S) TestReplanServicesWithWorkload(c *C) {
 	s.newServiceManager(c)
 	s.planAddLayer(c, testPlanLayer)
+
+	resetWorkloadsSectionExtension()
 	s.planAddLayer(c, `
 services:
     test6:
@@ -443,6 +444,7 @@ workloads:
 	c.Check(stops, DeepEquals, [][]string{nil})
 	c.Check(starts, DeepEquals, [][]string{[]string{"test1", "test2"}, []string{"test6"}})
 
+	resetWorkloadsSectionExtension()
 	s.planAddLayer(c, `
 services:
     test6:
@@ -461,6 +463,7 @@ workloads:
 	c.Check(stops, DeepEquals, [][]string{nil})
 	c.Check(starts, DeepEquals, [][]string{[]string{"test1", "test2"}, []string{"test6"}})
 
+	resetWorkloadsSectionExtension()
 	s.planAddLayer(c, `
 workloads:
     new-default:
@@ -2282,4 +2285,9 @@ func waitChecks(c *C, checkMgr *checkstate.CheckManager, f func(checks []*checks
 	}
 	c.Fatal("timed out waiting for checks to settle")
 	return nil
+}
+
+func resetWorkloadsSectionExtension() {
+	plan.UnregisterSectionExtension(workloads.WorkloadsField)
+	plan.RegisterSectionExtension(workloads.WorkloadsField, &workloads.WorkloadsSectionExtension{})
 }
