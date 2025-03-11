@@ -210,7 +210,7 @@ func (s *apiSuite) TestStateChange(c *check.C) {
 	stateChangeCmd := apiCmd("/v1/changes/{id}")
 
 	// Execute
-	req, err := http.NewRequest("POST", "/v1/change/"+ids[0], nil)
+	req, err := http.NewRequest("GET", "/v1/change/"+ids[0], nil)
 	c.Assert(err, check.IsNil)
 	rsp := v1GetChange(stateChangeCmd, req, nil).(*resp)
 	rec := httptest.NewRecorder()
