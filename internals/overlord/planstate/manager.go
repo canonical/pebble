@@ -16,6 +16,7 @@ package planstate
 
 import (
 	"fmt"
+	"reflect"
 	"slices"
 	"strings"
 	"sync"
@@ -55,6 +56,11 @@ func NewManager(layersDir string) (*PlanManager, error) {
 // the case of a non-existent layers directory, or no layers in the layers
 // directory, an empty plan is announced to change subscribers.
 func (m *PlanManager) Load() error {
+	if !reflect.DeepEqual(m.plan, &plan.Plan{}) {
+		// Plan already loaded
+		return nil
+	}
+
 	plan, err := plan.ReadDir(m.layersDir)
 	if err != nil {
 		return err
@@ -98,6 +104,12 @@ func (m *PlanManager) Plan() *plan.Plan {
 	m.planLock.Lock()
 	defer m.planLock.Unlock()
 	return m.plan
+}
+
+func (m *PlanManager) SetPlan(p *plan.Plan) {
+	m.planLock.Lock()
+	m.plan = p
+	m.planLock.Unlock()
 }
 
 // AppendLayer takes a Layer, appends it to the plan's layers and updates the
