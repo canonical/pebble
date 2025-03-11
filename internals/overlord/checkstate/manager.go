@@ -671,7 +671,10 @@ func (m *CheckManager) RefreshCheck(ctx context.Context, check *plan.Check) (*Ch
 	if changeID == "" {
 		chk := newChecker(check)
 		err := runCheck(ctx, chk, check.Timeout.Value)
-		return getCheckInfo(), err
+		if err != nil {
+			return getCheckInfo(), fmt.Errorf("%s", errorDetails(err))
+		}
+		return getCheckInfo(), nil
 	}
 	if refresh == nil {
 		panic(fmt.Sprintf("internal error: refresh channel not initialized for check %q", data.name))
@@ -685,7 +688,10 @@ func (m *CheckManager) RefreshCheck(ctx context.Context, check *plan.Check) (*Ch
 	}
 	select {
 	case err := <-result:
-		return getCheckInfo(), err
+		if err != nil {
+			return getCheckInfo(), fmt.Errorf("%s", errorDetails(err))
+		}
+		return getCheckInfo(), nil
 	case <-ctx.Done():
 		return getCheckInfo(), ctx.Err()
 	}
