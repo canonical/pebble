@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/canonical/pebble/internals/metrics"
 	"github.com/canonical/pebble/internals/overlord/restart"
 	"github.com/canonical/pebble/internals/overlord/state"
 	"github.com/canonical/pebble/internals/plan"
@@ -344,6 +345,27 @@ func (m *ServiceManager) CheckFailed(name string) {
 			}
 		}
 	}
+}
+
+// WriteMetrics collects and writes metrics for all services to the provided writer.
+func (m *ServiceManager) WriteMetrics(writer metrics.Writer) error {
+	m.servicesLock.Lock()
+	defer m.servicesLock.Unlock()
+
+	names := make([]string, 0, len(m.services))
+	for name := range m.services {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	for _, name := range names {
+		service := m.services[name]
+		err := service.writeMetric(writer)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // servicesToStop is used during service manager shutdown to cleanly terminate

@@ -28,3 +28,20 @@ jobs:
               golangci-lint run -c .github/.golangci.yml --fix
           and check in the changes.'
           exit 1
+
+  staticcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: actions/setup-go@v4
+        with:
+          go-mod-file: 'go.mod'
+
+      - name: Install staticcheck
+        run: |
+          go install honnef.co/go/tools/cmd/staticcheck@v0.6.0
+
+      - name: Run checks
+        run: |
+          staticcheck ./...

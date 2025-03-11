@@ -116,7 +116,7 @@ func (s *apiSuite) TestSysInfo(c *check.C) {
 	c.Check(rec.Code, check.Equals, 200)
 	c.Check(rec.Result().Header.Get("Content-Type"), check.Equals, "application/json")
 
-	expected := map[string]interface{}{
+	expected := map[string]any{
 		"version": "42b1",
 		"boot-id": "ffffffff-ffff-ffff-ffff-ffffffffffff",
 	}

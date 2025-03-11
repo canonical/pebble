@@ -49,7 +49,7 @@ services:
 
 	createLayer(t, pebbleDir, "001-simple-layer.yaml", layerYAML)
 
-	_, _ = pebbleRun(t, pebbleDir)
+	_, _ = pebbleDaemon(t, pebbleDir, "run")
 	waitForFile(t, filepath.Join(pebbleDir, "svc1"), 3*time.Second)
 	waitForFile(t, filepath.Join(pebbleDir, "svc2"), 3*time.Second)
 }
@@ -60,7 +60,7 @@ func TestCreateDirs(t *testing.T) {
 	tmpDir := t.TempDir()
 	pebbleDir := filepath.Join(tmpDir, "pebble")
 
-	_, stderrCh := pebbleRun(t, pebbleDir, "--create-dirs")
+	_, stderrCh := pebbleDaemon(t, pebbleDir, "run", "--create-dirs")
 	waitForLog(t, stderrCh, "pebble", "Started daemon", 3*time.Second)
 
 	st, err := os.Stat(pebbleDir)
@@ -88,7 +88,7 @@ services:
 	)
 	createLayer(t, pebbleDir, "001-simple-layer.yaml", layerYAML)
 
-	_, _ = pebbleRun(t, pebbleDir, "--hold")
+	_, _ = pebbleDaemon(t, pebbleDir, "run", "--hold")
 
 	// Sleep 100 millisecond before checking services because immediate check
 	// can't guarantee that svc1 is not started shortly after the log "Started daemon".
@@ -109,7 +109,7 @@ func TestHTTPPort(t *testing.T) {
 	pebbleDir := t.TempDir()
 
 	port := "61382"
-	_, stderrCh := pebbleRun(t, pebbleDir, "--http=:"+port)
+	_, stderrCh := pebbleDaemon(t, pebbleDir, "run", "--http=:"+port)
 	waitForLog(t, stderrCh, "pebble", "Started daemon", 3*time.Second)
 
 	resp, err := http.Get(fmt.Sprintf("http://localhost:%s/v1/health", port))
@@ -137,7 +137,49 @@ services:
 `
 	createLayer(t, pebbleDir, layersFileName, layerYAML)
 
-	stdoutCh, stderrCh := pebbleRun(t, pebbleDir, "--verbose")
+	stdoutCh, stderrCh := pebbleDaemon(t, pebbleDir, "run", "--verbose")
+	waitForLog(t, stderrCh, "pebble", "Started daemon", 3*time.Second)
+	waitForLog(t, stdoutCh, "svc1", "hello world", 3*time.Second)
+}
+
+// TestVerboseEnabledByEnvVar tests that Pebble logs all output from services to stdout
+// with the environment variable `PEBBLE_VERBOSE` set to "1".
+func TestVerboseEnabledByEnvVar(t *testing.T) {
+	t.Setenv("PEBBLE_VERBOSE", "1")
+
+	pebbleDir := t.TempDir()
+
+	layersFileName := "001-simple-layer.yaml"
+	layerYAML := `
+services:
+    svc1:
+        override: replace
+        command: /bin/sh -c "echo 'hello world'; sleep 10"
+        startup: enabled
+`
+	createLayer(t, pebbleDir, layersFileName, layerYAML)
+
+	stdoutCh, stderrCh := pebbleDaemon(t, pebbleDir, "run")
+	waitForLog(t, stderrCh, "pebble", "Started daemon", 3*time.Second)
+	waitForLog(t, stdoutCh, "svc1", "hello world", 3*time.Second)
+}
+
+func TestVerboseFlagOverridesEnvVar(t *testing.T) {
+	t.Setenv("PEBBLE_VERBOSE", "0")
+
+	pebbleDir := t.TempDir()
+
+	layersFileName := "001-simple-layer.yaml"
+	layerYAML := `
+services:
+    svc1:
+        override: replace
+        command: /bin/sh -c "echo 'hello world'; sleep 10"
+        startup: enabled
+`
+	createLayer(t, pebbleDir, layersFileName, layerYAML)
+
+	stdoutCh, stderrCh := pebbleDaemon(t, pebbleDir, "run", "--verbose")
 	waitForLog(t, stderrCh, "pebble", "Started daemon", 3*time.Second)
 	waitForLog(t, stdoutCh, "svc1", "hello world", 3*time.Second)
 }
@@ -157,7 +199,7 @@ services:
 	layersFileName := "001-simple-layer.yaml"
 	createLayer(t, pebbleDir, layersFileName, layerYAML)
 
-	stdoutCh, stderrCh := pebbleRun(t, pebbleDir, "--verbose",
+	stdoutCh, stderrCh := pebbleDaemon(t, pebbleDir, "run", "--verbose",
 		"--args",
 		"svc1",
 		"-c",
@@ -184,7 +226,7 @@ identities:
 		t.Fatalf("Cannot write identities file: %v", err)
 	}
 
-	_, stderrCh := pebbleRun(t, pebbleDir, "--identities="+filepath.Join(pebbleDir, identitiesFileName))
+	_, stderrCh := pebbleDaemon(t, pebbleDir, "run", "--identities="+filepath.Join(pebbleDir, identitiesFileName))
 
 	// wait for log "Started daemon" like in other test cases then immediately run `pebble identity` would sometimes
 	// fail because the identities are not fully seeded. Waiting for the next log "POST /v1/services" can guarantee

@@ -17,8 +17,6 @@ package overlord_test
 // test the various managers and their operation together through overlord
 
 import (
-	"time"
-
 	. "gopkg.in/check.v1"
 
 	"github.com/canonical/pebble/internals/overlord"
@@ -48,5 +46,3 @@ func (s *mgrsSuite) SetUpTest(c *C) {
 	c.Assert(err, IsNil)
 	s.o = o
 }
-
-var settleTimeout = 15 * time.Second

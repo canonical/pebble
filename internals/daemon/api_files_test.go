@@ -1210,7 +1210,7 @@ func assertFile(c *C, path string, perm os.FileMode, content string) {
 
 // Read a multipart HTTP response body, parse JSON in "response" field to result,
 // and return map of file field to file content.
-func readMultipart(c *C, response *http.Response, body io.Reader, result interface{}) map[string]string {
+func readMultipart(c *C, response *http.Response, body io.Reader, result any) map[string]string {
 	contentType := response.Header.Get("Content-Type")
 	mediaType, params, err := mime.ParseMediaType(contentType)
 	c.Assert(err, IsNil)
@@ -1271,7 +1271,7 @@ func assertError(c *C, body io.Reader, status int, kind, message string) {
 	c.Assert(r.Status, Equals, status)
 	c.Assert(r.StatusText, Equals, http.StatusText(status))
 	c.Assert(r.Type, Equals, ResponseTypeError)
-	result := r.Result.(map[string]interface{})
+	result := r.Result.(map[string]any)
 	if kind != "" {
 		c.Assert(result["kind"], Equals, kind)
 	}
@@ -1292,8 +1292,8 @@ func writeTempFile(c *C, dir, filename, content string, perm os.FileMode) {
 	c.Assert(err, IsNil)
 }
 
-func assertListResult(c *C, result interface{}, index int, typ, dir, name, perms string, size int) {
-	x := result.([]interface{})[index].(map[string]interface{})
+func assertListResult(c *C, result any, index int, typ, dir, name, perms string, size int) {
+	x := result.([]any)[index].(map[string]any)
 	c.Assert(x["type"], Equals, typ)
 	c.Assert(x["name"], Equals, name)
 	c.Assert(x["path"], Equals, filepath.Join(dir, name))

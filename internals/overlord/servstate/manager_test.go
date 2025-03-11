@@ -35,6 +35,7 @@ import (
 	. "gopkg.in/check.v1"
 
 	"github.com/canonical/pebble/internals/logger"
+	"github.com/canonical/pebble/internals/metrics"
 	"github.com/canonical/pebble/internals/overlord/checkstate"
 	"github.com/canonical/pebble/internals/overlord/restart"
 	"github.com/canonical/pebble/internals/overlord/servstate"
@@ -118,7 +119,6 @@ type S struct {
 	runner     *state.TaskRunner
 	stopDaemon chan restart.RestartType
 
-	donePath       string
 	plan           *plan.Plan
 	planPropagated bool
 }
@@ -381,7 +381,7 @@ services:
 	s.st.Unlock()
 	s.waitUntilService(c, "test6", func(service *servstate.ServiceInfo) bool {
 		if service.Current == servstate.StatusInactive {
-			c.Assert(time.Now().Sub(startTime) > time.Millisecond*300, Equals, true)
+			c.Assert(time.Since(startTime) > time.Millisecond*300, Equals, true)
 			return true
 		}
 		return false
@@ -511,6 +511,11 @@ services:
 	c.Check(config.OnSuccess, Equals, plan.ActionIgnore)
 	c.Check(config.Summary, Equals, "A summary!")
 	c.Check(config.Command, Equals, command)
+}
+
+func resetWorkloadsSectionExtension() {
+	plan.UnregisterSectionExtension(workloads.WorkloadsField)
+	plan.RegisterSectionExtension(workloads.WorkloadsField, &workloads.WorkloadsSectionExtension{})
 }
 
 func (s *S) TestStopStartUpdatesConfig(c *C) {
@@ -978,7 +983,7 @@ func (s *S) TestOnCheckFailureRestartWhileRunning(c *C) {
 	s.planAddLayer(c, testPlanLayer)
 
 	// Create check manager and tell it about plan updates
-	checkMgr := checkstate.NewManager(s.st, s.runner)
+	checkMgr := checkstate.NewManager(s.st, s.runner, nil)
 	defer checkMgr.PlanChanged(&plan.Plan{})
 
 	// Tell service manager about check failures
@@ -1055,7 +1060,7 @@ checks:
 	b, err = os.ReadFile(tempFile)
 	c.Assert(err, IsNil)
 	c.Assert(string(b), Equals, "x\nx\n")
-	checks = waitChecks(c, checkMgr, func(checks []*checkstate.CheckInfo) bool {
+	_ = waitChecks(c, checkMgr, func(checks []*checkstate.CheckInfo) bool {
 		return len(checks) == 1 && checks[0].Status == checkstate.CheckStatusDown
 	})
 	svc := s.serviceByName(c, "test2")
@@ -1073,7 +1078,7 @@ func (s *S) TestOnCheckFailureRestartDuringBackoff(c *C) {
 	s.planAddLayer(c, testPlanLayer)
 
 	// Create check manager and tell it about plan updates
-	checkMgr := checkstate.NewManager(s.st, s.runner)
+	checkMgr := checkstate.NewManager(s.st, s.runner, nil)
 	defer checkMgr.PlanChanged(&plan.Plan{})
 
 	// Tell service manager about check failures
@@ -1165,7 +1170,7 @@ func (s *S) TestOnCheckFailureIgnore(c *C) {
 	s.planAddLayer(c, testPlanLayer)
 
 	// Create check manager and tell it about plan updates
-	checkMgr := checkstate.NewManager(s.st, s.runner)
+	checkMgr := checkstate.NewManager(s.st, s.runner, nil)
 	defer checkMgr.PlanChanged(&plan.Plan{})
 
 	// Tell service manager about check failures
@@ -1230,7 +1235,7 @@ checks:
 	b, err = os.ReadFile(tempFile)
 	c.Assert(err, IsNil)
 	c.Assert(string(b), Equals, "x\n")
-	checks = waitChecks(c, checkMgr, func(checks []*checkstate.CheckInfo) bool {
+	_ = waitChecks(c, checkMgr, func(checks []*checkstate.CheckInfo) bool {
 		return len(checks) == 1 && checks[0].Status == checkstate.CheckStatusDown
 	})
 	svc := s.serviceByName(c, "test2")
@@ -1250,7 +1255,7 @@ func (s *S) testOnCheckFailureShutdown(c *C, action string, restartType restart.
 	s.planAddLayer(c, testPlanLayer)
 
 	// Create check manager and tell it about plan updates
-	checkMgr := checkstate.NewManager(s.st, s.runner)
+	checkMgr := checkstate.NewManager(s.st, s.runner, nil)
 	defer checkMgr.PlanChanged(&plan.Plan{})
 
 	// Tell service manager about check failures
@@ -2287,7 +2292,107 @@ func waitChecks(c *C, checkMgr *checkstate.CheckManager, f func(checks []*checks
 	return nil
 }
 
-func resetWorkloadsSectionExtension() {
-	plan.UnregisterSectionExtension(workloads.WorkloadsField)
-	plan.RegisterSectionExtension(workloads.WorkloadsField, &workloads.WorkloadsSectionExtension{})
+func (s *S) TestMetrics(c *C) {
+	s.newServiceManager(c)
+	s.planAddLayer(c, testPlanLayer)
+	s.planChanged(c)
+
+	s.startTestServices(c, true)
+	if c.Failed() {
+		return
+	}
+	buf := new(bytes.Buffer)
+	writer := metrics.NewOpenTelemetryWriter(buf)
+	s.manager.WriteMetrics(writer)
+	expected := `
+# HELP pebble_service_active Whether the service is currently active (1) or not (0)
+# TYPE pebble_service_active gauge
+pebble_service_active{service="test1"} 1
+
+# HELP pebble_service_start_count Number of times the service has started
+# TYPE pebble_service_start_count counter
+pebble_service_start_count{service="test1"} 1
+
+# HELP pebble_service_active Whether the service is currently active (1) or not (0)
+# TYPE pebble_service_active gauge
+pebble_service_active{service="test2"} 1
+
+# HELP pebble_service_start_count Number of times the service has started
+# TYPE pebble_service_start_count counter
+pebble_service_start_count{service="test2"} 1
+
+`[1:]
+	c.Assert(buf.String(), Equals, expected)
+
+	buf.Reset()
+	s.stopTestServices(c)
+	s.manager.WriteMetrics(writer)
+	expected = `
+# HELP pebble_service_active Whether the service is currently active (1) or not (0)
+# TYPE pebble_service_active gauge
+pebble_service_active{service="test1"} 0
+
+# HELP pebble_service_start_count Number of times the service has started
+# TYPE pebble_service_start_count counter
+pebble_service_start_count{service="test1"} 1
+
+# HELP pebble_service_active Whether the service is currently active (1) or not (0)
+# TYPE pebble_service_active gauge
+pebble_service_active{service="test2"} 0
+
+# HELP pebble_service_start_count Number of times the service has started
+# TYPE pebble_service_start_count counter
+pebble_service_start_count{service="test2"} 1
+
+`[1:]
+	c.Assert(buf.String(), Equals, expected)
+
+	buf.Reset()
+	s.startTestServices(c, true)
+	if c.Failed() {
+		return
+	}
+	s.manager.WriteMetrics(writer)
+	expected = `
+# HELP pebble_service_active Whether the service is currently active (1) or not (0)
+# TYPE pebble_service_active gauge
+pebble_service_active{service="test1"} 1
+
+# HELP pebble_service_start_count Number of times the service has started
+# TYPE pebble_service_start_count counter
+pebble_service_start_count{service="test1"} 2
+
+# HELP pebble_service_active Whether the service is currently active (1) or not (0)
+# TYPE pebble_service_active gauge
+pebble_service_active{service="test2"} 1
+
+# HELP pebble_service_start_count Number of times the service has started
+# TYPE pebble_service_start_count counter
+pebble_service_start_count{service="test2"} 2
+
+`[1:]
+	c.Assert(buf.String(), Equals, expected)
+
+	buf.Reset()
+	s.stopTestServices(c)
+	s.manager.WriteMetrics(writer)
+	expected = `
+# HELP pebble_service_active Whether the service is currently active (1) or not (0)
+# TYPE pebble_service_active gauge
+pebble_service_active{service="test1"} 0
+
+# HELP pebble_service_start_count Number of times the service has started
+# TYPE pebble_service_start_count counter
+pebble_service_start_count{service="test1"} 2
+
+# HELP pebble_service_active Whether the service is currently active (1) or not (0)
+# TYPE pebble_service_active gauge
+pebble_service_active{service="test2"} 0
+
+# HELP pebble_service_start_count Number of times the service has started
+# TYPE pebble_service_start_count counter
+pebble_service_start_count{service="test2"} 2
+
+`[1:]
+	c.Assert(buf.String(), Equals, expected)
 }

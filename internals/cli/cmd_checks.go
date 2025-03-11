@@ -78,16 +78,20 @@ func (cmd *cmdChecks) Execute(args []string) error {
 	w := tabWriter()
 	defer w.Flush()
 
-	fmt.Fprintln(w, "Check\tLevel\tStatus\tFailures\tChange")
+	fmt.Fprintln(w, "Check\tLevel\tStartup\tStatus\tFailures\tChange")
 
 	for _, check := range checks {
 		level := check.Level
 		if level == client.UnsetLevel {
 			level = "-"
 		}
-		fmt.Fprintf(w, "%s\t%s\t%s\t%d/%d\t%s\n",
-			check.Name, level, check.Status, check.Failures,
-			check.Threshold, cmd.changeInfo(check))
+		failures := "-"
+		if check.Status != client.CheckStatusInactive {
+			failures = fmt.Sprintf("%d/%d", check.Failures, check.Threshold)
+		}
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n",
+			check.Name, level, check.Startup, check.Status, failures,
+			cmd.changeInfo(check))
 	}
 	return nil
 }

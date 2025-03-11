@@ -34,7 +34,7 @@ var changeIDMixinArgsHelp = map[string]string{
 }
 
 // should not be user-visible, but keep it clear and polite because mistakes happen
-var noChangeFoundOK = errors.New("no change found but that's ok")
+var noChangeFoundOK = errors.New("no change found but that's ok") //lint:ignore ST1012 not named errFoo as it's a non-error sentinal value
 
 func (l *changeIDMixin) GetChangeID(cli *client.Client) (string, error) {
 	if l.Positional.ChangeID == "" && l.LastChangeType == "" {

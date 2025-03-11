@@ -37,11 +37,11 @@ func (cs *clientSuite) TestSignals(c *C) {
 	c.Check(cs.req.Method, Equals, "POST")
 	c.Check(cs.req.URL.Path, Equals, "/v1/signals")
 
-	var body map[string]interface{}
+	var body map[string]any
 	err = json.NewDecoder(cs.req.Body).Decode(&body)
 	c.Assert(err, IsNil)
-	c.Assert(body, DeepEquals, map[string]interface{}{
+	c.Assert(body, DeepEquals, map[string]any{
 		"signal":   "SIGHUP",
-		"services": []interface{}{"s1", "s2"},
+		"services": []any{"s1", "s2"},
 	})
 }

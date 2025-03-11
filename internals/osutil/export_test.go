@@ -124,3 +124,11 @@ func FakeEnviron(f func() []string) (restore func()) {
 		osEnviron = oldEnviron
 	}
 }
+
+func FakeRandomString(f func(int) string) (restore func()) {
+	old := randomString
+	randomString = f
+	return func() {
+		randomString = old
+	}
+}

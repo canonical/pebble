@@ -43,53 +43,66 @@ func (m *CheckManager) doPerformCheck(task *state.Task, tomb *tombpkg.Tomb) erro
 	defer ticker.Stop()
 
 	chk := newChecker(config)
-	for {
-		select {
-		case <-ticker.C:
-			err := runCheck(tomb.Context(nil), chk, config.Timeout.Value)
-			if !tomb.Alive() {
-				return checkStopped(config.Name, task.Kind(), tomb.Err())
+
+	performCheck := func() (shouldExit bool, err error) {
+		err = runCheck(tomb.Context(nil), chk, config.Timeout.Value)
+		if !tomb.Alive() {
+			return true, checkStopped(config.Name, task.Kind(), tomb.Err())
+		}
+		if err != nil {
+			m.incFailureCount(config)
+			// Record check failure and perform any action if the threshold
+			// is reached (for example, restarting a service).
+			details.Failures++
+			atThreshold := details.Failures >= config.Threshold
+			if !atThreshold {
+				// Update number of failures in check info. In threshold
+				// case, check data will be updated with new change ID by
+				// changeStatusChanged.
+				m.updateCheckData(config, changeID, details.Failures)
 			}
-			if err != nil {
-				// Record check failure and perform any action if the threshold
-				// is reached (for example, restarting a service).
-				details.Failures++
-				atThreshold := details.Failures >= config.Threshold
-				if !atThreshold {
-					// Update number of failures in check info. In threshold
-					// case, check info will be updated with new change ID by
-					// changeStatusChanged.
-					m.updateCheckInfo(config, changeID, details.Failures)
-				}
 
-				m.state.Lock()
-				if atThreshold {
-					details.Proceed = true
-				} else {
-					// Add error to task log, but only if we haven't reached the
-					// threshold. When we hit the threshold, the "return err"
-					// below will cause the error to be logged.
-					logTaskError(task, err)
-				}
-				task.Set(checkDetailsAttr, &details)
-				m.state.Unlock()
+			m.state.Lock()
+			if atThreshold {
+				details.Proceed = true
+			} else {
+				// Add error to task log, but only if we haven't reached the
+				// threshold. When we hit the threshold, the "return err"
+				// below will cause the error to be logged.
+				logTaskError(task, err)
+			}
+			task.Set(checkDetailsAttr, &details)
+			m.state.Unlock()
 
-				logger.Noticef("Check %q failure %d/%d: %v", config.Name, details.Failures, config.Threshold, err)
-				if atThreshold {
-					logger.Noticef("Check %q threshold %d hit, triggering action and recovering", config.Name, config.Threshold)
-					m.callFailureHandlers(config.Name)
-					// Returning the error means perform-check goes to Error status
-					// and logs the error to the task log.
-					return err
-				}
-			} else if details.Failures > 0 {
-				m.updateCheckInfo(config, changeID, 0)
+			logger.Noticef("Check %q failure %d/%d: %v", config.Name, details.Failures, config.Threshold, err)
+			if atThreshold {
+				logger.Noticef("Check %q threshold %d hit, triggering action and recovering", config.Name, config.Threshold)
+				m.callFailureHandlers(config.Name)
+				// Returning the error means perform-check goes to Error status
+				// and logs the error to the task log.
+				return true, err
+			}
+		} else {
+			m.incSuccessCount(config)
+			if details.Failures > 0 {
+				m.updateCheckData(config, changeID, 0)
 
 				m.state.Lock()
 				task.Logf("succeeded after %s", pluralise(details.Failures, "failure", "failures"))
 				details.Failures = 0
 				task.Set(checkDetailsAttr, &details)
 				m.state.Unlock()
+			}
+		}
+		return false, nil
+	}
+
+	for {
+		select {
+		case <-ticker.C:
+			shouldExit, err := performCheck()
+			if shouldExit {
+				return err
 			}
 
 		case <-tomb.Dying():
@@ -125,34 +138,44 @@ func (m *CheckManager) doRecoverCheck(task *state.Task, tomb *tombpkg.Tomb) erro
 	defer ticker.Stop()
 
 	chk := newChecker(config)
+
+	recoverCheck := func() (shouldExit bool, err error) {
+		err = runCheck(tomb.Context(nil), chk, config.Timeout.Value)
+		if !tomb.Alive() {
+			return true, checkStopped(config.Name, task.Kind(), tomb.Err())
+		}
+		if err != nil {
+			m.incFailureCount(config)
+			details.Failures++
+			m.updateCheckData(config, changeID, details.Failures)
+
+			m.state.Lock()
+			task.Set(checkDetailsAttr, &details)
+			logTaskError(task, err)
+			m.state.Unlock()
+
+			logger.Noticef("Check %q failure %d/%d: %v", config.Name, details.Failures, config.Threshold, err)
+			return false, nil
+		}
+
+		// Check succeeded, switch to performing a succeeding check.
+		// Check info will be updated with new change ID by changeStatusChanged.
+		m.incSuccessCount(config)
+		details.Failures = 0 // not strictly needed, but just to be safe
+		details.Proceed = true
+		m.state.Lock()
+		task.Set(checkDetailsAttr, &details)
+		m.state.Unlock()
+		return true, nil
+	}
+
 	for {
 		select {
 		case <-ticker.C:
-			err := runCheck(tomb.Context(nil), chk, config.Timeout.Value)
-			if !tomb.Alive() {
-				return checkStopped(config.Name, task.Kind(), tomb.Err())
+			shouldExit, err := recoverCheck()
+			if shouldExit {
+				return err
 			}
-			if err != nil {
-				details.Failures++
-				m.updateCheckInfo(config, changeID, details.Failures)
-
-				m.state.Lock()
-				task.Set(checkDetailsAttr, &details)
-				logTaskError(task, err)
-				m.state.Unlock()
-
-				logger.Noticef("Check %q failure %d/%d: %v", config.Name, details.Failures, config.Threshold, err)
-				break
-			}
-
-			// Check succeeded, switch to performing a succeeding check.
-			// Check info will be updated with new change ID by changeStatusChanged.
-			details.Failures = 0 // not strictly needed, but just to be safe
-			details.Proceed = true
-			m.state.Lock()
-			task.Set(checkDetailsAttr, &details)
-			m.state.Unlock()
-			return nil
 
 		case <-tomb.Dying():
 			return checkStopped(config.Name, task.Kind(), tomb.Err())

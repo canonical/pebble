@@ -15,6 +15,8 @@
 package checkstate_test
 
 import (
+	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -27,8 +29,10 @@ import (
 	. "gopkg.in/check.v1"
 
 	"github.com/canonical/pebble/internals/logger"
+	"github.com/canonical/pebble/internals/metrics"
 	"github.com/canonical/pebble/internals/overlord"
 	"github.com/canonical/pebble/internals/overlord/checkstate"
+	"github.com/canonical/pebble/internals/overlord/planstate"
 	"github.com/canonical/pebble/internals/overlord/state"
 	"github.com/canonical/pebble/internals/plan"
 	"github.com/canonical/pebble/internals/reaper"
@@ -41,6 +45,7 @@ func Test(t *testing.T) {
 type ManagerSuite struct {
 	overlord *overlord.Overlord
 	manager  *checkstate.CheckManager
+	planMgr  *planstate.PlanManager
 }
 
 var _ = Suite(&ManagerSuite{})
@@ -59,7 +64,14 @@ func (s *ManagerSuite) SetUpTest(c *C) {
 	c.Assert(err, IsNil)
 
 	s.overlord = overlord.Fake()
-	s.manager = checkstate.NewManager(s.overlord.State(), s.overlord.TaskRunner())
+	layersDir := filepath.Join(c.MkDir(), "layers")
+	err = os.Mkdir(layersDir, 0755)
+	c.Assert(err, IsNil)
+	s.planMgr, err = planstate.NewManager(layersDir)
+	c.Assert(err, IsNil)
+	s.overlord.AddManager(s.planMgr)
+	s.manager = checkstate.NewManager(s.overlord.State(), s.overlord.TaskRunner(), s.planMgr)
+	s.planMgr.AddChangeListener(s.manager.PlanChanged)
 	s.overlord.AddManager(s.manager)
 	s.overlord.AddManager(s.overlord.TaskRunner())
 	err = s.overlord.StartUp()
@@ -79,12 +91,14 @@ func (s *ManagerSuite) TestChecks(c *C) {
 		Checks: map[string]*plan.Check{
 			"chk1": {
 				Name:      "chk1",
+				Override:  "replace",
 				Period:    plan.OptionalDuration{Value: time.Second},
 				Threshold: 3,
 				Exec:      &plan.ExecCheck{Command: "echo chk1"},
 			},
 			"chk2": {
 				Name:      "chk2",
+				Override:  "replace",
 				Level:     "alive",
 				Period:    plan.OptionalDuration{Value: time.Second},
 				Threshold: 3,
@@ -92,6 +106,7 @@ func (s *ManagerSuite) TestChecks(c *C) {
 			},
 			"chk3": {
 				Name:      "chk3",
+				Override:  "replace",
 				Level:     "ready",
 				Period:    plan.OptionalDuration{Value: time.Second},
 				Threshold: 3,
@@ -102,9 +117,9 @@ func (s *ManagerSuite) TestChecks(c *C) {
 
 	// Wait for expected checks to be started.
 	waitChecks(c, s.manager, []*checkstate.CheckInfo{
-		{Name: "chk1", Status: "up", Threshold: 3},
-		{Name: "chk2", Status: "up", Level: "alive", Threshold: 3},
-		{Name: "chk3", Status: "up", Level: "ready", Threshold: 3},
+		{Name: "chk1", Startup: "enabled", Status: "up", Threshold: 3},
+		{Name: "chk2", Startup: "enabled", Status: "up", Level: "alive", Threshold: 3},
+		{Name: "chk3", Startup: "enabled", Status: "up", Level: "ready", Threshold: 3},
 	})
 
 	// Re-configuring should update checks.
@@ -112,6 +127,7 @@ func (s *ManagerSuite) TestChecks(c *C) {
 		Checks: map[string]*plan.Check{
 			"chk4": {
 				Name:      "chk4",
+				Override:  "merge",
 				Period:    plan.OptionalDuration{Value: time.Second},
 				Threshold: 3,
 				Exec:      &plan.ExecCheck{Command: "echo chk4"},
@@ -121,7 +137,7 @@ func (s *ManagerSuite) TestChecks(c *C) {
 
 	// Wait for checks to be updated.
 	waitChecks(c, s.manager, []*checkstate.CheckInfo{
-		{Name: "chk4", Status: "up", Threshold: 3},
+		{Name: "chk4", Startup: "enabled", Status: "up", Threshold: 3},
 	})
 }
 
@@ -130,6 +146,7 @@ func (s *ManagerSuite) TestTimeout(c *C) {
 		Checks: map[string]*plan.Check{
 			"chk1": {
 				Name:      "chk1",
+				Override:  "replace",
 				Period:    plan.OptionalDuration{Value: time.Millisecond},
 				Timeout:   plan.OptionalDuration{Value: 25 * time.Millisecond},
 				Threshold: 1,
@@ -171,6 +188,7 @@ func (s *ManagerSuite) TestCheckCanceled(c *C) {
 		Checks: map[string]*plan.Check{
 			"chk1": {
 				Name:      "chk1",
+				Override:  "replace",
 				Period:    plan.OptionalDuration{Value: time.Millisecond},
 				Timeout:   plan.OptionalDuration{Value: time.Second},
 				Threshold: 1,
@@ -219,6 +237,7 @@ func (s *ManagerSuite) TestFailures(c *C) {
 		Checks: map[string]*plan.Check{
 			"chk1": {
 				Name:      "chk1",
+				Override:  "replace",
 				Period:    plan.OptionalDuration{Value: 20 * time.Millisecond},
 				Timeout:   plan.OptionalDuration{Value: 100 * time.Millisecond},
 				Threshold: 3,
@@ -290,6 +309,7 @@ func (s *ManagerSuite) TestFailuresBelowThreshold(c *C) {
 		Checks: map[string]*plan.Check{
 			"chk1": {
 				Name:      "chk1",
+				Override:  "replace",
 				Period:    plan.OptionalDuration{Value: 20 * time.Millisecond},
 				Timeout:   plan.OptionalDuration{Value: 100 * time.Millisecond},
 				Threshold: 3,
@@ -322,18 +342,21 @@ func (s *ManagerSuite) TestPlanChangedSmarts(c *C) {
 		Checks: map[string]*plan.Check{
 			"chk1": {
 				Name:      "chk1",
+				Override:  "replace",
 				Period:    plan.OptionalDuration{Value: time.Second},
 				Threshold: 3,
 				Exec:      &plan.ExecCheck{Command: "echo chk1"},
 			},
 			"chk2": {
 				Name:      "chk2",
+				Override:  "replace",
 				Period:    plan.OptionalDuration{Value: time.Second},
 				Threshold: 3,
 				Exec:      &plan.ExecCheck{Command: "echo chk2"},
 			},
 			"chk3": {
 				Name:      "chk3",
+				Override:  "replace",
 				Period:    plan.OptionalDuration{Value: time.Second},
 				Threshold: 3,
 				Exec:      &plan.ExecCheck{Command: "echo chk3"},
@@ -342,9 +365,9 @@ func (s *ManagerSuite) TestPlanChangedSmarts(c *C) {
 	})
 
 	waitChecks(c, s.manager, []*checkstate.CheckInfo{
-		{Name: "chk1", Status: "up", Threshold: 3},
-		{Name: "chk2", Status: "up", Threshold: 3},
-		{Name: "chk3", Status: "up", Threshold: 3},
+		{Name: "chk1", Startup: "enabled", Status: "up", Threshold: 3},
+		{Name: "chk2", Startup: "enabled", Status: "up", Threshold: 3},
+		{Name: "chk3", Startup: "enabled", Status: "up", Threshold: 3},
 	})
 	checks, err := s.manager.Checks()
 	c.Assert(err, IsNil)
@@ -359,12 +382,14 @@ func (s *ManagerSuite) TestPlanChangedSmarts(c *C) {
 		Checks: map[string]*plan.Check{
 			"chk1": {
 				Name:      "chk1",
+				Override:  "replace",
 				Period:    plan.OptionalDuration{Value: time.Second},
 				Threshold: 3,
 				Exec:      &plan.ExecCheck{Command: "echo chk1"},
 			},
 			"chk2": {
 				Name:      "chk2",
+				Override:  "replace",
 				Period:    plan.OptionalDuration{Value: time.Second},
 				Threshold: 6,
 				Exec:      &plan.ExecCheck{Command: "echo chk2 modified"},
@@ -373,8 +398,8 @@ func (s *ManagerSuite) TestPlanChangedSmarts(c *C) {
 	})
 
 	waitChecks(c, s.manager, []*checkstate.CheckInfo{
-		{Name: "chk1", Status: "up", Threshold: 3},
-		{Name: "chk2", Status: "up", Threshold: 6},
+		{Name: "chk1", Startup: "enabled", Status: "up", Threshold: 3},
+		{Name: "chk2", Startup: "enabled", Status: "up", Threshold: 6},
 	})
 	checks, err = s.manager.Checks()
 	c.Assert(err, IsNil)
@@ -393,11 +418,13 @@ func (s *ManagerSuite) TestPlanChangedServiceContext(c *C) {
 		Services: map[string]*plan.Service{
 			"svc1": {
 				Name:       "svc1",
+				Override:   "replace",
 				Command:    "dummy1",
 				WorkingDir: "/tmp",
 			},
 			"svc2": {
 				Name:       "svc2",
+				Override:   "replace",
 				Command:    "dummy2",
 				WorkingDir: "/tmp",
 			},
@@ -405,6 +432,7 @@ func (s *ManagerSuite) TestPlanChangedServiceContext(c *C) {
 		Checks: map[string]*plan.Check{
 			"chk1": {
 				Name:      "chk1",
+				Override:  "replace",
 				Period:    plan.OptionalDuration{Value: time.Second},
 				Threshold: 3,
 				Exec: &plan.ExecCheck{
@@ -414,6 +442,7 @@ func (s *ManagerSuite) TestPlanChangedServiceContext(c *C) {
 			},
 			"chk2": {
 				Name:      "chk2",
+				Override:  "replace",
 				Period:    plan.OptionalDuration{Value: time.Second},
 				Threshold: 3,
 				Exec: &plan.ExecCheck{
@@ -424,10 +453,9 @@ func (s *ManagerSuite) TestPlanChangedServiceContext(c *C) {
 		},
 	}
 	s.manager.PlanChanged(origPlan)
-
 	waitChecks(c, s.manager, []*checkstate.CheckInfo{
-		{Name: "chk1", Status: "up", Threshold: 3},
-		{Name: "chk2", Status: "up", Threshold: 3},
+		{Name: "chk1", Startup: "enabled", Status: "up", Threshold: 3},
+		{Name: "chk2", Startup: "enabled", Status: "up", Threshold: 3},
 	})
 	checks, err := s.manager.Checks()
 	c.Assert(err, IsNil)
@@ -443,6 +471,7 @@ func (s *ManagerSuite) TestPlanChangedServiceContext(c *C) {
 			"svc1": origPlan.Services["svc1"],
 			"svc2": {
 				Name:       "svc2",
+				Override:   "merge",
 				Command:    "dummy2",
 				WorkingDir: c.MkDir(),
 			},
@@ -454,8 +483,8 @@ func (s *ManagerSuite) TestPlanChangedServiceContext(c *C) {
 	})
 
 	waitChecks(c, s.manager, []*checkstate.CheckInfo{
-		{Name: "chk1", Status: "up", Threshold: 3},
-		{Name: "chk2", Status: "up", Threshold: 3},
+		{Name: "chk1", Startup: "enabled", Status: "up", Threshold: 3},
+		{Name: "chk2", Startup: "enabled", Status: "up", Threshold: 3},
 	})
 	checks, err = s.manager.Checks()
 	c.Assert(err, IsNil)
@@ -477,6 +506,7 @@ func (s *ManagerSuite) TestSuccessNoLog(c *C) {
 		Checks: map[string]*plan.Check{
 			"chk1": {
 				Name:      "chk1",
+				Override:  "replace",
 				Period:    plan.OptionalDuration{Value: 10 * time.Millisecond},
 				Timeout:   plan.OptionalDuration{Value: time.Second},
 				Threshold: 3,
@@ -491,7 +521,7 @@ func (s *ManagerSuite) TestSuccessNoLog(c *C) {
 			c.Fatalf("failed waiting for check to run")
 		}
 		b, _ := os.ReadFile(tempFile)
-		if len(b) >= 2 {
+		if len(b) >= 1 {
 			break
 		}
 		time.Sleep(time.Millisecond)
@@ -555,7 +585,6 @@ func waitChecks(c *C, mgr *checkstate.CheckManager, expected []*checkstate.Check
 		c.Logf("check %d: %#v", i, *check)
 	}
 	c.Fatal("timed out waiting for checks to settle")
-	return
 }
 
 func lastTaskLog(st *state.State, changeID string) string {
@@ -583,4 +612,390 @@ func changeData(c *C, st *state.State, changeID string) map[string]string {
 	err := chg.Get("notice-data", &data)
 	c.Assert(err, IsNil)
 	return data
+}
+
+func (s *ManagerSuite) TestStartChecks(c *C) {
+	origLayer := &plan.Layer{
+		Checks: map[string]*plan.Check{
+			"chk1": {
+				Name:      "chk1",
+				Override:  "replace",
+				Period:    plan.OptionalDuration{Value: time.Second},
+				Threshold: 3,
+				Exec:      &plan.ExecCheck{Command: "echo chk1"},
+			},
+			"chk2": {
+				Name:      "chk2",
+				Override:  "replace",
+				Period:    plan.OptionalDuration{Value: time.Second},
+				Threshold: 3,
+				Exec:      &plan.ExecCheck{Command: "echo chk2"},
+				Startup:   plan.CheckStartupDisabled,
+			},
+			"chk3": {
+				Name:      "chk3",
+				Override:  "replace",
+				Period:    plan.OptionalDuration{Value: time.Second},
+				Threshold: 3,
+				Exec:      &plan.ExecCheck{Command: "echo chk3"},
+				Startup:   plan.CheckStartupEnabled,
+			},
+		},
+	}
+	err := s.planMgr.AppendLayer(origLayer, false)
+	c.Assert(err, IsNil)
+	s.manager.PlanChanged(s.planMgr.Plan())
+	waitChecks(c, s.manager, []*checkstate.CheckInfo{
+		{Name: "chk1", Startup: "enabled", Status: "up", Threshold: 3},
+		{Name: "chk2", Startup: "disabled", Status: "inactive", Threshold: 3},
+		{Name: "chk3", Startup: "enabled", Status: "up", Threshold: 3},
+	})
+	checks, err := s.manager.Checks()
+	c.Assert(err, IsNil)
+	var originalChangeIDs []string
+	for _, check := range checks {
+		originalChangeIDs = append(originalChangeIDs, check.ChangeID)
+	}
+
+	changed, err := s.manager.StartChecks([]string{"chk1", "chk2"})
+	waitChecks(c, s.manager, []*checkstate.CheckInfo{
+		{Name: "chk1", Startup: "enabled", Status: "up", Threshold: 3},
+		{Name: "chk2", Startup: "disabled", Status: "up", Threshold: 3},
+		{Name: "chk3", Startup: "enabled", Status: "up", Threshold: 3},
+	})
+	c.Assert(err, IsNil)
+	c.Assert(changed, DeepEquals, []string{"chk2"})
+	checks, err = s.manager.Checks()
+	c.Assert(err, IsNil)
+	// chk1 and chk3 should still have the same change ID, chk2 should have a new one.
+	c.Assert(checks[0].ChangeID, Equals, originalChangeIDs[0])
+	c.Assert(checks[1].ChangeID, Not(Equals), originalChangeIDs[1])
+	c.Assert(checks[2].ChangeID, Equals, originalChangeIDs[2])
+	// chk2's new Change should be a running perform-check.
+	st := s.overlord.State()
+	st.Lock()
+	change := st.Change(checks[1].ChangeID)
+	status := change.Status()
+	st.Unlock()
+	c.Assert(status, Matches, "Do.*")
+	c.Assert(change.Kind(), Equals, "perform-check")
+}
+
+func (s *ManagerSuite) TestStartChecksNotFound(c *C) {
+	origLayer := &plan.Layer{
+		Checks: map[string]*plan.Check{
+			"chk1": {
+				Name:      "chk1",
+				Override:  "replace",
+				Period:    plan.OptionalDuration{Value: time.Second},
+				Threshold: 3,
+				Exec:      &plan.ExecCheck{Command: "echo chk1"},
+			},
+		},
+	}
+	err := s.planMgr.AppendLayer(origLayer, false)
+	c.Assert(err, IsNil)
+	waitChecks(c, s.manager, []*checkstate.CheckInfo{
+		{Name: "chk1", Startup: "enabled", Status: "up", Threshold: 3},
+	})
+
+	changed, err := s.manager.StartChecks([]string{"chk1", "chk2"})
+	var notFoundErr *checkstate.ChecksNotFound
+	c.Assert(errors.As(err, &notFoundErr), Equals, true)
+	c.Assert(notFoundErr.Names, DeepEquals, []string{"chk2"})
+	c.Assert(changed, IsNil)
+}
+
+func (s *ManagerSuite) TestStopChecks(c *C) {
+	origLayer := &plan.Layer{
+		Checks: map[string]*plan.Check{
+			"chk1": {
+				Name:      "chk1",
+				Override:  "replace",
+				Period:    plan.OptionalDuration{Value: time.Second},
+				Threshold: 3,
+				Exec:      &plan.ExecCheck{Command: "echo chk1"},
+			},
+			"chk2": {
+				Name:      "chk2",
+				Override:  "replace",
+				Period:    plan.OptionalDuration{Value: time.Second},
+				Threshold: 3,
+				Exec:      &plan.ExecCheck{Command: "echo chk2"},
+				Startup:   plan.CheckStartupDisabled,
+			},
+			"chk3": {
+				Name:      "chk3",
+				Override:  "replace",
+				Period:    plan.OptionalDuration{Value: time.Second},
+				Threshold: 3,
+				Exec:      &plan.ExecCheck{Command: "echo chk3"},
+				Startup:   plan.CheckStartupEnabled,
+			},
+		},
+	}
+	err := s.planMgr.AppendLayer(origLayer, false)
+	c.Assert(err, IsNil)
+	waitChecks(c, s.manager, []*checkstate.CheckInfo{
+		{Name: "chk1", Startup: "enabled", Status: "up", Threshold: 3},
+		{Name: "chk2", Startup: "disabled", Status: "inactive", Threshold: 3},
+		{Name: "chk3", Startup: "enabled", Status: "up", Threshold: 3},
+	})
+	checks, err := s.manager.Checks()
+	c.Assert(err, IsNil)
+	var originalChangeIDs []string
+	for _, check := range checks {
+		originalChangeIDs = append(originalChangeIDs, check.ChangeID)
+	}
+
+	changed, err := s.manager.StopChecks([]string{"chk1", "chk2"})
+	waitChecks(c, s.manager, []*checkstate.CheckInfo{
+		{Name: "chk1", Startup: "enabled", Status: "inactive", Threshold: 3},
+		{Name: "chk2", Startup: "disabled", Status: "inactive", Threshold: 3},
+		{Name: "chk3", Startup: "enabled", Status: "up", Threshold: 3},
+	})
+	c.Assert(err, IsNil)
+	c.Assert(changed, DeepEquals, []string{"chk1"})
+	checks, err = s.manager.Checks()
+	c.Assert(err, IsNil)
+	// chk3 should still have the same change ID, chk1 and chk2 should not have one.
+	c.Assert(checks[0].ChangeID, Equals, "")
+	c.Assert(checks[1].ChangeID, Equals, "")
+	c.Assert(checks[2].ChangeID, Equals, originalChangeIDs[2])
+	// chk1's old Change should have aborted.
+	st := s.overlord.State()
+	st.Lock()
+	change := st.Change(originalChangeIDs[0])
+	status := change.Status()
+	st.Unlock()
+	c.Assert(status, Equals, state.AbortStatus)
+}
+
+func (s *ManagerSuite) TestStopChecksNotFound(c *C) {
+	origLayer := &plan.Layer{
+		Checks: map[string]*plan.Check{
+			"chk1": {
+				Name:      "chk1",
+				Override:  "replace",
+				Period:    plan.OptionalDuration{Value: time.Second},
+				Threshold: 3,
+				Exec:      &plan.ExecCheck{Command: "echo chk1"},
+			},
+		},
+	}
+	err := s.planMgr.AppendLayer(origLayer, false)
+	c.Assert(err, IsNil)
+	waitChecks(c, s.manager, []*checkstate.CheckInfo{
+		{Name: "chk1", Startup: "enabled", Status: "up", Threshold: 3},
+	})
+
+	changed, err := s.manager.StopChecks([]string{"chk1", "chk2"})
+	var notFoundErr *checkstate.ChecksNotFound
+	c.Assert(errors.As(err, &notFoundErr), Equals, true)
+	c.Assert(notFoundErr.Names, DeepEquals, []string{"chk2"})
+	c.Assert(changed, IsNil)
+}
+
+func (s *ManagerSuite) TestReplan(c *C) {
+	origLayer := &plan.Layer{
+		Checks: map[string]*plan.Check{
+			"chk1": {
+				Name:      "chk1",
+				Override:  "replace",
+				Period:    plan.OptionalDuration{Value: time.Second},
+				Threshold: 3,
+				Exec:      &plan.ExecCheck{Command: "echo chk1"},
+			},
+			"chk2": {
+				Name:      "chk2",
+				Override:  "replace",
+				Period:    plan.OptionalDuration{Value: time.Second},
+				Threshold: 3,
+				Exec:      &plan.ExecCheck{Command: "echo chk2"},
+				Startup:   plan.CheckStartupDisabled,
+			},
+			"chk3": {
+				Name:      "chk3",
+				Override:  "replace",
+				Period:    plan.OptionalDuration{Value: time.Second},
+				Threshold: 3,
+				Exec:      &plan.ExecCheck{Command: "echo chk3"},
+				Startup:   plan.CheckStartupEnabled,
+			},
+		},
+	}
+	err := s.planMgr.AppendLayer(origLayer, false)
+	c.Assert(err, IsNil)
+	waitChecks(c, s.manager, []*checkstate.CheckInfo{
+		{Name: "chk1", Startup: "enabled", Status: "up", Threshold: 3},
+		{Name: "chk2", Startup: "disabled", Status: "inactive", Threshold: 3},
+		{Name: "chk3", Startup: "enabled", Status: "up", Threshold: 3},
+	})
+	s.manager.StopChecks([]string{"chk1"})
+	waitChecks(c, s.manager, []*checkstate.CheckInfo{
+		{Name: "chk1", Startup: "enabled", Status: "inactive", Threshold: 3},
+		{Name: "chk2", Startup: "disabled", Status: "inactive", Threshold: 3},
+		{Name: "chk3", Startup: "enabled", Status: "up", Threshold: 3},
+	})
+	checks, err := s.manager.Checks()
+	var originalChangeIDs []string
+	for _, check := range checks {
+		originalChangeIDs = append(originalChangeIDs, check.ChangeID)
+	}
+
+	s.overlord.State().Lock()
+	s.manager.Replan()
+	s.overlord.State().Unlock()
+	waitChecks(c, s.manager, []*checkstate.CheckInfo{
+		{Name: "chk1", Startup: "enabled", Status: "up", Threshold: 3},
+		{Name: "chk2", Startup: "disabled", Status: "inactive", Threshold: 3},
+		{Name: "chk3", Startup: "enabled", Status: "up", Threshold: 3},
+	})
+	c.Assert(err, IsNil)
+	checks, err = s.manager.Checks()
+	c.Assert(err, IsNil)
+	// chk3 should still have the same change ID, chk1 should have a new one,
+	// and chk2 should not have one.
+	c.Assert(checks[0].ChangeID, Not(Equals), originalChangeIDs[0])
+	c.Assert(checks[1].ChangeID, Equals, "")
+	c.Assert(checks[2].ChangeID, Equals, originalChangeIDs[2])
+	// chk1's new Change should be a running perform-check.
+	st := s.overlord.State()
+	st.Lock()
+	change := st.Change(checks[0].ChangeID)
+	c.Assert(change, NotNil)
+	status := change.Status()
+	st.Unlock()
+	c.Assert(status, Matches, "Do.*")
+	c.Assert(change.Kind(), Equals, "perform-check")
+}
+
+func (s *ManagerSuite) TestMetricsCheckSuccess(c *C) {
+	tempDir := c.MkDir()
+	tempFile := filepath.Join(tempDir, "file.txt")
+	command := fmt.Sprintf(`/bin/sh -c 'echo -n x >>%s'`, tempFile)
+	s.manager.PlanChanged(&plan.Plan{
+		Checks: map[string]*plan.Check{
+			"chk1": {
+				Name:      "chk1",
+				Override:  "replace",
+				Period:    plan.OptionalDuration{Value: 10 * time.Millisecond},
+				Timeout:   plan.OptionalDuration{Value: time.Second},
+				Threshold: 3,
+				Exec:      &plan.ExecCheck{Command: command},
+				Startup:   plan.CheckStartupEnabled,
+			},
+		},
+	})
+
+	// Wait for check to run at least twice
+	for i := 0; ; i++ {
+		if i >= 1000 {
+			c.Fatalf("failed waiting for check to run")
+		}
+		b, _ := os.ReadFile(tempFile)
+		if len(b) > 0 {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+
+	buf := new(bytes.Buffer)
+	writer := metrics.NewOpenTelemetryWriter(buf)
+	s.manager.WriteMetrics(writer)
+	expectedRegex := `
+# HELP pebble_check_up Whether the health check is up \(1\) or not \(0\)
+# TYPE pebble_check_up gauge
+pebble_check_up{check="chk1"} 1
+
+# HELP pebble_check_success_count Number of times the check has succeeded
+# TYPE pebble_check_success_count counter
+pebble_check_success_count{check="chk1"} \d+
+
+# HELP pebble_check_failure_count Number of times the check has failed
+# TYPE pebble_check_failure_count counter
+pebble_check_failure_count{check="chk1"} 0
+
+`[1:]
+	c.Assert(buf.String(), Matches, expectedRegex)
+}
+
+func (s *ManagerSuite) TestMetricsCheckFailure(c *C) {
+	testPath := c.MkDir() + "/test"
+	err := os.WriteFile(testPath, nil, 0o644)
+	c.Assert(err, IsNil)
+	s.manager.PlanChanged(&plan.Plan{
+		Checks: map[string]*plan.Check{
+			"chk1": {
+				Name:      "chk1",
+				Override:  "replace",
+				Period:    plan.OptionalDuration{Value: 20 * time.Millisecond},
+				Timeout:   plan.OptionalDuration{Value: 100 * time.Millisecond},
+				Threshold: 3,
+				Exec: &plan.ExecCheck{
+					Command: fmt.Sprintf(`/bin/sh -c 'echo details >/dev/stderr; [ ! -f %s ]'`, testPath),
+				},
+			},
+		},
+	})
+
+	// After 2 failures, check is still up, pebble_check_success_count counter is 0,
+	// pebble_check_failure_count is 2.
+	waitCheck(c, s.manager, "chk1", func(check *checkstate.CheckInfo) bool {
+		return check.Failures == 2
+	})
+
+	buf := new(bytes.Buffer)
+	writer := metrics.NewOpenTelemetryWriter(buf)
+	s.manager.WriteMetrics(writer)
+	expectedRegex := `
+# HELP pebble_check_up Whether the health check is up \(1\) or not \(0\)
+# TYPE pebble_check_up gauge
+pebble_check_up{check="chk1"} 1
+
+# HELP pebble_check_success_count Number of times the check has succeeded
+# TYPE pebble_check_success_count counter
+pebble_check_success_count{check="chk1"} 0
+
+# HELP pebble_check_failure_count Number of times the check has failed
+# TYPE pebble_check_failure_count counter
+pebble_check_failure_count{check="chk1"} \d+
+
+`[1:]
+	c.Assert(buf.String(), Matches, expectedRegex)
+}
+
+func (s *ManagerSuite) TestMetricsInactiveCheck(c *C) {
+	tempDir := c.MkDir()
+	tempFile := filepath.Join(tempDir, "file.txt")
+	command := fmt.Sprintf(`/bin/sh -c 'echo -n x >>%s'`, tempFile)
+	s.manager.PlanChanged(&plan.Plan{
+		Checks: map[string]*plan.Check{
+			"chk1": {
+				Name:      "chk1",
+				Override:  "replace",
+				Period:    plan.OptionalDuration{Value: 10 * time.Millisecond},
+				Timeout:   plan.OptionalDuration{Value: time.Second},
+				Threshold: 3,
+				Exec:      &plan.ExecCheck{Command: command},
+				Startup:   plan.CheckStartupDisabled,
+			},
+		},
+	})
+
+	buf := new(bytes.Buffer)
+	writer := metrics.NewOpenTelemetryWriter(buf)
+	s.manager.WriteMetrics(writer)
+	// Inactive check's pebble_check_up metric is not reported.
+	expected := `
+# HELP pebble_check_success_count Number of times the check has succeeded
+# TYPE pebble_check_success_count counter
+pebble_check_success_count{check="chk1"} 0
+
+# HELP pebble_check_failure_count Number of times the check has failed
+# TYPE pebble_check_failure_count counter
+pebble_check_failure_count{check="chk1"} 0
+
+`[1:]
+	c.Assert(buf.String(), Equals, expected)
 }

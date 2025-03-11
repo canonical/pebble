@@ -47,9 +47,9 @@ func (s *PebbleSuite) TestStop(c *check.C) {
 		c.Check(r.URL.Path, check.Equals, "/v1/services")
 
 		body := DecodedRequestBody(c, r)
-		c.Check(body, check.DeepEquals, map[string]interface{}{
+		c.Check(body, check.DeepEquals, map[string]any{
 			"action":   "stop",
-			"services": []interface{}{"srv1", "srv2"},
+			"services": []any{"srv1", "srv2"},
 		})
 
 		fmt.Fprintf(w, `{
@@ -72,9 +72,9 @@ func (s *PebbleSuite) TestStopFails(c *check.C) {
 		c.Check(r.URL.Path, check.Equals, "/v1/services")
 
 		body := DecodedRequestBody(c, r)
-		c.Check(body, check.DeepEquals, map[string]interface{}{
+		c.Check(body, check.DeepEquals, map[string]any{
 			"action":   "stop",
-			"services": []interface{}{"srv1", "srv3"},
+			"services": []any{"srv1", "srv3"},
 		})
 
 		fmt.Fprintf(w, `{"type": "error", "result": {"message": "could not foo"}}`)
@@ -94,9 +94,9 @@ func (s *PebbleSuite) TestStopNoWait(c *check.C) {
 		c.Check(r.URL.Path, check.Not(check.Equals), "/v1/changes/46")
 
 		body := DecodedRequestBody(c, r)
-		c.Check(body, check.DeepEquals, map[string]interface{}{
+		c.Check(body, check.DeepEquals, map[string]any{
 			"action":   "stop",
-			"services": []interface{}{"srv1", "srv2"},
+			"services": []any{"srv1", "srv2"},
 		})
 
 		fmt.Fprintf(w, `{
@@ -125,9 +125,9 @@ func (s *PebbleSuite) TestStopFailsGetChange(c *check.C) {
 		c.Check(r.URL.Path, check.Equals, "/v1/services")
 
 		body := DecodedRequestBody(c, r)
-		c.Check(body, check.DeepEquals, map[string]interface{}{
+		c.Check(body, check.DeepEquals, map[string]any{
 			"action":   "stop",
-			"services": []interface{}{"srv1", "srv2"},
+			"services": []any{"srv1", "srv2"},
 		})
 
 		fmt.Fprintf(w, `{

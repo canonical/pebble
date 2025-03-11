@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"os/user"
 	"strconv"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 	"gopkg.in/tomb.v2"
 
 	"github.com/canonical/pebble/internals/logger"
+	"github.com/canonical/pebble/internals/metrics"
 	"github.com/canonical/pebble/internals/osutil"
 	"github.com/canonical/pebble/internals/overlord/restart"
 	"github.com/canonical/pebble/internals/overlord/state"
@@ -107,6 +109,7 @@ type serviceData struct {
 	resetTimer   *time.Timer
 	restarting   bool
 	currentSince time.Time
+	startCount   atomic.Int64
 }
 
 func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
@@ -490,7 +493,7 @@ func (s *serviceData) startInternal() error {
 
 	// Pass buffer reference to logMgr to start log forwarding
 	s.manager.logMgr.ServiceStarted(s.config, s.logs)
-
+	s.startCount.Add(1)
 	return nil
 }
 
@@ -858,6 +861,37 @@ func (s *serviceData) checkFailed(action plan.ServiceAction) {
 		logger.Debugf("Service %q: ignoring on-check-failure action %q in state %s",
 			s.config.Name, action, s.state)
 	}
+}
+
+// writeMetric writes the service's metrics.
+func (d *serviceData) writeMetric(writer metrics.Writer) error {
+	active := 0
+	if stateToStatus(d.state) == StatusActive {
+		active = 1
+	}
+	err := writer.Write(metrics.Metric{
+		Name:       "pebble_service_active",
+		Type:       metrics.TypeGaugeInt,
+		ValueInt64: int64(active),
+		Comment:    "Whether the service is currently active (1) or not (0)",
+		Labels:     []metrics.Label{metrics.NewLabel("service", d.config.Name)},
+	})
+	if err != nil {
+		return err
+	}
+
+	err = writer.Write(metrics.Metric{
+		Name:       "pebble_service_start_count",
+		Type:       metrics.TypeCounterInt,
+		ValueInt64: d.startCount.Load(),
+		Comment:    "Number of times the service has started",
+		Labels:     []metrics.Label{metrics.NewLabel("service", d.config.Name)},
+	})
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 var setCmdCredential = func(cmd *exec.Cmd, credential *syscall.Credential) {

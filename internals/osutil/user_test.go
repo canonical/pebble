@@ -29,8 +29,6 @@ import (
 
 type userSuite struct {
 	testutil.BaseTest
-
-	restorer func()
 }
 
 var _ = check.Suite(&userSuite{})

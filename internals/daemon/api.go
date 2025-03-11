@@ -89,9 +89,11 @@ var API = []*Command{{
 	WriteAccess: AdminAccess{},
 	POST:        v1PostSignals,
 }, {
-	Path:       "/v1/checks",
-	ReadAccess: UserAccess{},
-	GET:        v1GetChecks,
+	Path:        "/v1/checks",
+	ReadAccess:  UserAccess{},
+	WriteAccess: AdminAccess{},
+	GET:         v1GetChecks,
+	POST:        v1PostChecks,
 }, {
 	Path:        "/v1/notices",
 	ReadAccess:  UserAccess{},
@@ -108,6 +110,10 @@ var API = []*Command{{
 	WriteAccess: AdminAccess{},
 	GET:         v1GetIdentities,
 	POST:        v1PostIdentities,
+}, {
+	Path:       "/v1/metrics",
+	ReadAccess: MetricsAccess{},
+	GET:        v1GetMetrics,
 }}
 
 var (
@@ -115,6 +121,7 @@ var (
 
 	overlordServiceManager = (*overlord.Overlord).ServiceManager
 	overlordPlanManager    = (*overlord.Overlord).PlanManager
+	overlordCheckManager   = (*overlord.Overlord).CheckManager
 
 	muxVars = mux.Vars
 )
@@ -123,7 +130,7 @@ func v1SystemInfo(c *Command, r *http.Request, _ *UserState) Response {
 	state := c.d.overlord.State()
 	state.Lock()
 	defer state.Unlock()
-	result := map[string]interface{}{
+	result := map[string]any{
 		"version": c.d.Version,
 		"boot-id": restart.BootID(state),
 	}

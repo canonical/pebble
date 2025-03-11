@@ -1,3 +1,4 @@
+(layer-specification)=
 # Layer specification
 
 Below is the full specification for a Pebble configuration layer. Layers are added statically using a file in `$PEBBLE/layers`, or dynamically via the layers API or `pebble add`.
@@ -148,6 +149,10 @@ checks:
         # not-ready (but not the other way around). See the "Health endpoint"
         # section in the docs for details.
         level: alive | ready
+
+        # (Optional) Control whether the check is started automatically when
+        # Pebble starts or performs a 'replan' operation. Default is "enabled".
+        startup: enabled | disabled
 
         # (Optional) Check is run every time this period (time interval)
         # elapses. Must not be zero. Default is "10s".

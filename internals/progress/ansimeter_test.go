@@ -17,7 +17,6 @@ package progress_test
 import (
 	"bytes"
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
@@ -26,9 +25,7 @@ import (
 	"github.com/canonical/pebble/internals/progress"
 )
 
-type ansiSuite struct {
-	stdout *os.File
-}
+type ansiSuite struct{}
 
 var _ = check.Suite(ansiSuite{})
 

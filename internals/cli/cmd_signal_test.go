@@ -28,9 +28,9 @@ func (s *PebbleSuite) TestSignalShortName(c *check.C) {
 		body := DecodedRequestBody(c, r)
 		c.Check(r.Method, check.Equals, "POST")
 		c.Check(r.URL.Path, check.Equals, "/v1/signals")
-		c.Check(body, check.DeepEquals, map[string]interface{}{
+		c.Check(body, check.DeepEquals, map[string]any{
 			"signal":   "SIGHUP",
-			"services": []interface{}{"s1"},
+			"services": []any{"s1"},
 		})
 		fmt.Fprint(w, `{
     "type": "sync",
@@ -49,9 +49,9 @@ func (s *PebbleSuite) TestSignalFullName(c *check.C) {
 		body := DecodedRequestBody(c, r)
 		c.Check(r.Method, check.Equals, "POST")
 		c.Check(r.URL.Path, check.Equals, "/v1/signals")
-		c.Check(body, check.DeepEquals, map[string]interface{}{
+		c.Check(body, check.DeepEquals, map[string]any{
 			"signal":   "SIGHUP",
-			"services": []interface{}{"s2"},
+			"services": []any{"s2"},
 		})
 		fmt.Fprint(w, `{
     "type": "sync",
@@ -70,9 +70,9 @@ func (s *PebbleSuite) TestSignalMultipleServices(c *check.C) {
 		body := DecodedRequestBody(c, r)
 		c.Check(r.Method, check.Equals, "POST")
 		c.Check(r.URL.Path, check.Equals, "/v1/signals")
-		c.Check(body, check.DeepEquals, map[string]interface{}{
+		c.Check(body, check.DeepEquals, map[string]any{
 			"signal":   "SIGHUP",
-			"services": []interface{}{"s1", "s2"},
+			"services": []any{"s1", "s2"},
 		})
 		fmt.Fprint(w, `{
     "type": "sync",
@@ -96,9 +96,9 @@ func (s *PebbleSuite) TestSignalServerError(c *check.C) {
 		body := DecodedRequestBody(c, r)
 		c.Check(r.Method, check.Equals, "POST")
 		c.Check(r.URL.Path, check.Equals, "/v1/signals")
-		c.Check(body, check.DeepEquals, map[string]interface{}{
+		c.Check(body, check.DeepEquals, map[string]any{
 			"signal":   "SIGHUP",
-			"services": []interface{}{"s1"},
+			"services": []any{"s1"},
 		})
 		fmt.Fprint(w, `{
 			"type": "error",

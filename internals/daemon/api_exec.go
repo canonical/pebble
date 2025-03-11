@@ -112,7 +112,7 @@ func v1PostExec(c *Command, req *http.Request, _ *UserState) Response {
 
 	stateEnsureBefore(st, 0) // start it right away
 
-	result := map[string]interface{}{
+	result := map[string]any{
 		"environment": metadata.Environment,
 		"task-id":     metadata.TaskID,
 		"working-dir": metadata.WorkingDir,

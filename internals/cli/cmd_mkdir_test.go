@@ -39,10 +39,10 @@ func (s *PebbleSuite) TestMkdir(c *C) {
 		c.Check(r.URL.Path, Equals, "/v1/files")
 
 		body := DecodedRequestBody(c, r)
-		c.Check(body, DeepEquals, map[string]interface{}{
+		c.Check(body, DeepEquals, map[string]any{
 			"action": "make-dirs",
-			"dirs": []interface{}{
-				map[string]interface{}{
+			"dirs": []any{
+				map[string]any{
 					"path":         "/foo",
 					"make-parents": false,
 					"permissions":  "",
@@ -78,10 +78,10 @@ func (s *PebbleSuite) TestMkdirMakeParents(c *C) {
 		c.Check(r.URL.Path, Equals, "/v1/files")
 
 		body := DecodedRequestBody(c, r)
-		c.Check(body, DeepEquals, map[string]interface{}{
+		c.Check(body, DeepEquals, map[string]any{
 			"action": "make-dirs",
-			"dirs": []interface{}{
-				map[string]interface{}{
+			"dirs": []any{
+				map[string]any{
 					"path":         "/foo/bar",
 					"make-parents": true,
 					"permissions":  "",
@@ -109,10 +109,10 @@ func (s *PebbleSuite) TestMkdirPermissions(c *C) {
 		c.Check(r.URL.Path, Equals, "/v1/files")
 
 		body := DecodedRequestBody(c, r)
-		c.Check(body, DeepEquals, map[string]interface{}{
+		c.Check(body, DeepEquals, map[string]any{
 			"action": "make-dirs",
-			"dirs": []interface{}{
-				map[string]interface{}{
+			"dirs": []any{
+				map[string]any{
 					"path":         "/foo/bar",
 					"make-parents": false,
 					"permissions":  "755",
@@ -140,10 +140,10 @@ func (s *PebbleSuite) TestMkdirOwnerIDs(c *C) {
 		c.Check(r.URL.Path, Equals, "/v1/files")
 
 		body := DecodedRequestBody(c, r)
-		c.Check(body, DeepEquals, map[string]interface{}{
+		c.Check(body, DeepEquals, map[string]any{
 			"action": "make-dirs",
-			"dirs": []interface{}{
-				map[string]interface{}{
+			"dirs": []any{
+				map[string]any{
 					"path":         "/foo/bar",
 					"make-parents": false,
 					"permissions":  "",
@@ -171,10 +171,10 @@ func (s *PebbleSuite) TestMkdirOwnerNames(c *C) {
 		c.Check(r.URL.Path, Equals, "/v1/files")
 
 		body := DecodedRequestBody(c, r)
-		c.Check(body, DeepEquals, map[string]interface{}{
+		c.Check(body, DeepEquals, map[string]any{
 			"action": "make-dirs",
-			"dirs": []interface{}{
-				map[string]interface{}{
+			"dirs": []any{
+				map[string]any{
 					"path":         "/foo/bar",
 					"make-parents": false,
 					"permissions":  "",
@@ -202,10 +202,10 @@ func (s *PebbleSuite) TestMkdirFails(c *C) {
 		c.Check(r.URL.Path, Equals, "/v1/files")
 
 		body := DecodedRequestBody(c, r)
-		c.Check(body, DeepEquals, map[string]interface{}{
+		c.Check(body, DeepEquals, map[string]any{
 			"action": "make-dirs",
-			"dirs": []interface{}{
-				map[string]interface{}{
+			"dirs": []any{
+				map[string]any{
 					"path":         "/foo",
 					"make-parents": false,
 					"permissions":  "",
@@ -233,10 +233,10 @@ func (s *PebbleSuite) TestMkdirFailsOnDirectory(c *C) {
 		c.Check(r.URL.Path, Equals, "/v1/files")
 
 		body := DecodedRequestBody(c, r)
-		c.Check(body, DeepEquals, map[string]interface{}{
+		c.Check(body, DeepEquals, map[string]any{
 			"action": "make-dirs",
-			"dirs": []interface{}{
-				map[string]interface{}{
+			"dirs": []any{
+				map[string]any{
 					"path":         "/foobar",
 					"make-parents": false,
 					"permissions":  "",

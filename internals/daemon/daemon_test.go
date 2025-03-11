@@ -53,14 +53,13 @@ import (
 func Test(t *testing.T) { TestingT(t) }
 
 type daemonSuite struct {
-	pebbleDir       string
-	socketPath      string
-	httpAddress     string
-	statePath       string
-	authorized      bool
-	err             error
-	notified        []string
-	restoreBackends func()
+	pebbleDir   string
+	socketPath  string
+	httpAddress string
+	statePath   string
+	authorized  bool
+	err         error
+	notified    []string
 }
 
 var _ = Suite(&daemonSuite{})
@@ -710,7 +709,6 @@ func (s *daemonSuite) TestGracefulStop(c *C) {
 		} else {
 			w.Write([]byte("Gone"))
 		}
-		return
 	})
 
 	generalL, err := net.Listen("tcp", "127.0.0.1:0")
@@ -1017,7 +1015,7 @@ func (s *daemonSuite) TestRestartExpectedRebootOK(c *C) {
 	st := d.overlord.State()
 	st.Lock()
 	defer st.Unlock()
-	var v interface{}
+	var v any
 	// these were cleared
 	c.Check(st.Get("daemon-system-restart-at", &v), testutil.ErrorIs, state.ErrNoState)
 	c.Check(st.Get("system-restart-from-boot-id", &v), testutil.ErrorIs, state.ErrNoState)
@@ -1041,7 +1039,7 @@ func (s *daemonSuite) TestRestartExpectedRebootGiveUp(c *C) {
 	st := d.overlord.State()
 	st.Lock()
 	defer st.Unlock()
-	var v interface{}
+	var v any
 	// these were cleared
 	c.Check(st.Get("daemon-system-restart-at", &v), testutil.ErrorIs, state.ErrNoState)
 	c.Check(st.Get("system-restart-from-boot-id", &v), testutil.ErrorIs, state.ErrNoState)
@@ -1289,14 +1287,14 @@ func (s *daemonSuite) TestHTTPAPI(c *C) {
 	response, err := http.DefaultClient.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
-	var m map[string]interface{}
+	var m map[string]any
 	err = json.NewDecoder(response.Body).Decode(&m)
 	c.Assert(err, IsNil)
-	c.Assert(m, DeepEquals, map[string]interface{}{
+	c.Assert(m, DeepEquals, map[string]any{
 		"type":        "sync",
 		"status-code": float64(http.StatusOK),
 		"status":      "OK",
-		"result": map[string]interface{}{
+		"result": map[string]any{
 			"healthy": true,
 		},
 	})
@@ -1567,7 +1565,7 @@ func (s *rebootSuite) TestSyscallPosRebootDelay(c *C) {
 	case <-time.After(10 * time.Second):
 		c.Fatal("syscall did not take place and we timed out")
 	}
-	elapsed := time.Now().Sub(start)
+	elapsed := time.Since(start)
 	c.Assert(elapsed >= period, Equals, true)
 }
 
@@ -1596,7 +1594,7 @@ func (s *rebootSuite) TestSyscallNegRebootDelay(c *C) {
 	case <-time.After(10 * time.Second):
 		c.Fatal("syscall did not take place and we timed out")
 	}
-	elapsed := time.Now().Sub(start)
+	elapsed := time.Since(start)
 	c.Assert(elapsed < period, Equals, true)
 }
 

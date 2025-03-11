@@ -17,8 +17,10 @@
 package tests
 
 import (
+	"bufio"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -69,15 +71,16 @@ func createLayer(t *testing.T, pebbleDir, layerFileName, layerYAML string) {
 	}
 }
 
-// pebbleRun starts the pebble daemon (`pebble run`) with optional arguments
-// and returns two channels for standard output and standard error.
-func pebbleRun(t *testing.T, pebbleDir string, args ...string) (stdoutCh chan servicelog.Entry, stderrCh chan servicelog.Entry) {
+// pebbleDaemon starts the pebble daemon with optional arguments
+// and returns two channels yielding the lines from standard output and
+// standard error. The runOrEnter argument should be "run" or "enter".
+func pebbleDaemon(t *testing.T, pebbleDir string, runOrEnter string, args ...string) (stdoutCh chan string, stderrCh chan string) {
 	t.Helper()
 
-	stdoutCh = make(chan servicelog.Entry)
-	stderrCh = make(chan servicelog.Entry)
+	stdoutCh = make(chan string)
+	stderrCh = make(chan string)
 
-	cmd := exec.Command(*pebbleBin, append([]string{"run"}, args...)...)
+	cmd := exec.Command(*pebbleBin, append([]string{runOrEnter}, args...)...)
 	cmd.Env = append(os.Environ(), "PEBBLE="+pebbleDir)
 
 	stdoutPipe, err := cmd.StdoutPipe()
@@ -91,7 +94,7 @@ func pebbleRun(t *testing.T, pebbleDir string, args ...string) (stdoutCh chan se
 
 	err = cmd.Start()
 	if err != nil {
-		t.Fatalf("Error starting 'pebble run': %v", err)
+		t.Fatalf("Error starting 'pebble %s': %v", runOrEnter, err)
 	}
 
 	stopStdout := make(chan struct{})
@@ -107,41 +110,41 @@ func pebbleRun(t *testing.T, pebbleDir string, args ...string) (stdoutCh chan se
 		close(stopStderr)
 	})
 
-	readLogs := func(parser *servicelog.Parser, ch chan servicelog.Entry, stop <-chan struct{}) {
-		for parser.Next() {
-			if err := parser.Err(); err != nil {
-				t.Errorf("Cannot parse Pebble logs: %v", err)
-			}
+	readLines := func(reader io.Reader, ch chan string, stop <-chan struct{}) {
+		scanner := bufio.NewScanner(reader)
+		for scanner.Scan() {
 			select {
-			case ch <- parser.Entry():
+			case ch <- scanner.Text():
 			case <-stop:
 				return
 			}
 		}
+		if err := scanner.Err(); err != nil {
+			t.Errorf("Error reading output: %v", err)
+		}
 	}
 
-	// Both stderr and stdout are needed, because pebble logs to stderr
-	// while with "--verbose", services output to stdout.
-	stderrParser := servicelog.NewParser(stderrPipe, 4*1024)
-	stdoutParser := servicelog.NewParser(stdoutPipe, 4*1024)
-
-	go readLogs(stdoutParser, stdoutCh, stopStdout)
-	go readLogs(stderrParser, stderrCh, stopStderr)
+	go readLines(stdoutPipe, stdoutCh, stopStdout)
+	go readLines(stderrPipe, stderrCh, stopStderr)
 
 	return stdoutCh, stderrCh
 }
 
 // waitForLog waits until an expectedLog from an expectedService appears in the logs channel, or fails the test after a
 // specified timeout if the expectedLog is still not found.
-func waitForLog(t *testing.T, logsCh <-chan servicelog.Entry, expectedService, expectedLog string, timeout time.Duration) {
+func waitForLog(t *testing.T, linesCh <-chan string, expectedService, expectedLog string, timeout time.Duration) {
 	t.Helper()
 
 	timeoutCh := time.After(timeout)
 	for {
 		select {
-		case log, ok := <-logsCh:
+		case line, ok := <-linesCh:
 			if !ok {
-				t.Error("channel closed before all expected logs were received")
+				t.Fatalf("channel closed before all expected logs were received")
+			}
+			log, err := servicelog.Parse([]byte(line))
+			if err != nil {
+				t.Fatalf("cannot parse log: %v", err)
 			}
 
 			if log.Service == expectedService && strings.Contains(log.Message, expectedLog) {
@@ -150,6 +153,29 @@ func waitForLog(t *testing.T, logsCh <-chan servicelog.Entry, expectedService, e
 
 		case <-timeoutCh:
 			t.Fatalf("timed out after %v waiting for log %s", 3*time.Second, expectedLog)
+		}
+	}
+}
+
+// waitForText waits until an expected string appears in the textCh channel, or fails the test after a
+// specified timeout if the expectedText is still not found.
+func waitForText(t *testing.T, textCh <-chan string, expectedText string, timeout time.Duration) {
+	t.Helper()
+
+	timeoutCh := time.After(timeout)
+	for {
+		select {
+		case text, ok := <-textCh:
+			if !ok {
+				t.Fatal("channel closed before expected text was received")
+				return // Exit the loop if the channel is closed
+			}
+			if strings.Contains(text, expectedText) {
+				return // Exit the loop if the expected text is found
+			}
+
+		case <-timeoutCh:
+			t.Fatalf("timed out after %v waiting for text: %q", timeout, expectedText)
 		}
 	}
 }

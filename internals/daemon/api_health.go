@@ -51,7 +51,8 @@ func v1Health(c *Command, r *http.Request, _ *UserState) Response {
 		levelMatch := level == plan.UnsetLevel || level == check.Level ||
 			level == plan.ReadyLevel && check.Level == plan.AliveLevel // ready implies alive
 		namesMatch := len(names) == 0 || strutil.ListContains(names, check.Name)
-		if levelMatch && namesMatch && check.Status != checkstate.CheckStatusUp {
+		// CheckStatusUp is healthy, and CheckStatusInactive is ignored.
+		if levelMatch && namesMatch && check.Status == checkstate.CheckStatusDown {
 			healthy = false
 			status = http.StatusBadGateway
 		}

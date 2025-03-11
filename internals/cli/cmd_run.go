@@ -58,7 +58,7 @@ var sharedRunEnterArgsHelp = map[string]string{
 	"--create-dirs": "Create {{.DisplayName}} directory on startup if it doesn't exist",
 	"--hold":        "Do not start default services automatically",
 	"--http":        `Start HTTP API listening on this address (e.g., ":4000") and expose open-access endpoints`,
-	"--verbose":     "Log all output from services to stdout",
+	"--verbose":     "Log all output from services to stdout (also PEBBLE_VERBOSE=1)",
 	"--args":        "Provide additional arguments to a service",
 	"--identities":  "Seed identities from file (like update-identities --replace)",
 }
@@ -126,7 +126,7 @@ func runWatchdog(d *daemon.Daemon) (*time.Ticker, error) {
 		// Not running under systemd.
 		return nil, nil
 	}
-	usec, err := strconv.ParseFloat(os.Getenv("WATCHDOG_USEC"), 10)
+	usec, err := strconv.ParseFloat(os.Getenv("WATCHDOG_USEC"), 64)
 	if usec == 0 || err != nil {
 		return nil, fmt.Errorf("cannot parse WATCHDOG_USEC: %q", os.Getenv("WATCHDOG_USEC"))
 	}
@@ -186,7 +186,7 @@ func runDaemon(rcmd *cmdRun, ch chan os.Signal, ready chan<- func()) error {
 		Dir:        rcmd.pebbleDir,
 		SocketPath: rcmd.socketPath,
 	}
-	if rcmd.Verbose {
+	if os.Getenv("PEBBLE_VERBOSE") == "1" || rcmd.Verbose {
 		dopts.ServiceOutput = os.Stdout
 	}
 	dopts.HTTPAddress = rcmd.HTTP
