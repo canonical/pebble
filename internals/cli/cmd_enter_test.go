@@ -24,6 +24,8 @@ import (
 	. "gopkg.in/check.v1"
 
 	"github.com/canonical/pebble/internals/cli"
+	"github.com/canonical/pebble/internals/plan"
+	"github.com/canonical/pebble/internals/workloads"
 )
 
 func dumbDedent(s string) string {
@@ -116,6 +118,7 @@ func (s *PebbleSuite) TestEnterUnknownCommand(c *C) {
 }
 
 func (s *PebbleSuite) TestEnterServicesStatus(c *C) {
+	plan.UnregisterSectionExtension(workloads.WorkloadsField)
 	expectedOutput := dumbDedent(`
 		Service           Startup   Current   Since
 		write-message-01  enabled   inactive  -
@@ -172,6 +175,7 @@ func (s *PebbleSuite) TestEnterExecListDir(c *C) {
 }
 
 func (s *PebbleSuite) TestEnterExecReadServiceOutputFile(c *C) {
+	plan.UnregisterSectionExtension(workloads.WorkloadsField)
 	writeMessageServices(s)
 
 	script := `
@@ -256,6 +260,7 @@ func (s *PebbleSuite) TestEnterHelpCommandHelpArg(c *C) {
 // TestEnterSubCommandWaits checks that the subcommand in enter
 // starts **after** the default services have started.
 func (s *PebbleSuite) TestEnterSubCommandWaits(c *C) {
+	plan.UnregisterSectionExtension(workloads.WorkloadsField)
 	layerTemplate := dumbDedent(`
 		services:
 		  stat:
