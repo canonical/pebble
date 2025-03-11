@@ -88,7 +88,7 @@ func (s *LogSuite) TestMockLoggerReadWriteThreadsafe(c *C) {
 		return nil
 	})
 	for i := 0; i < 10; i++ {
-		logger.Noticef(s.logbuf.String())
+		logger.Noticef("%s", s.logbuf.String())
 	}
 	err := t.Wait()
 	c.Check(err, IsNil)

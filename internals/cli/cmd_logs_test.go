@@ -31,7 +31,7 @@ func (s *PebbleSuite) TestLogsText(c *C) {
 		c.Check(r.URL.Query(), DeepEquals, url.Values{
 			"n": []string{"30"},
 		})
-		fmt.Fprintf(w, `
+		fmt.Fprint(w, `
 {"time":"2021-05-03T03:55:49.360994155Z","service":"thing","message":"log 1"}
 {"time":"2021-05-03T03:55:49.654334232Z","service":"snappass","message":"log two"}
 {"time":"2021-05-03T03:55:50.076800988Z","service":"thing","message":"the third"}
@@ -55,7 +55,7 @@ func (s *PebbleSuite) TestLogsJSON(c *C) {
 		c.Check(r.URL.Query(), DeepEquals, url.Values{
 			"n": []string{"30"},
 		})
-		fmt.Fprintf(w, `
+		fmt.Fprint(w, `
 {"time":"2021-05-03T03:55:49.360Z","service":"thing","message":"log 1"}
 {"time":"2021-05-03T03:55:49.654Z","service":"snappass","message":"log two"}
 {"time":"2021-05-03T03:55:50.076800988Z","service":"thing","message":"the third"}
@@ -85,7 +85,7 @@ func (s *PebbleSuite) TestLogsN(c *C) {
 		c.Check(r.URL.Query(), DeepEquals, url.Values{
 			"n": []string{"2"},
 		})
-		fmt.Fprintf(w, `
+		fmt.Fprint(w, `
 {"time":"2021-05-03T03:55:49.360994155Z","service":"thing","message":"log 1"}
 {"time":"2021-05-03T03:55:49.654334232Z","service":"snappass","message":"log two"}
 `[1:])
@@ -107,7 +107,7 @@ func (s *PebbleSuite) TestLogsAll(c *C) {
 		c.Check(r.URL.Query(), DeepEquals, url.Values{
 			"n": []string{"-1"},
 		})
-		fmt.Fprintf(w, `
+		fmt.Fprint(w, `
 {"time":"2021-05-03T03:55:49.360994155Z","service":"thing","message":"log 1"}
 {"time":"2021-05-03T03:55:49.654334232Z","service":"snappass","message":"log two"}
 `[1:])
@@ -138,7 +138,7 @@ func (s *PebbleSuite) TestLogsFollow(c *C) {
 			"n":      []string{"30"},
 			"follow": []string{"true"},
 		})
-		fmt.Fprintf(w, `
+		fmt.Fprint(w, `
 {"time":"2021-05-03T03:55:49.360994155Z","service":"thing","message":"log 1"}
 `[1:])
 	})
