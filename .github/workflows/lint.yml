@@ -48,9 +48,8 @@ jobs:
 
       - name: Install staticcheck
         run: |
-          wget https://github.com/dominikh/go-tools/releases/download/2025.1.1/staticcheck_linux_amd64.tar.gz
-          tar -xzvf staticcheck_linux_amd64.tar.gz
-          echo $PATH
+          wget -q https://github.com/dominikh/go-tools/releases/download/2025.1.1/staticcheck_linux_amd64.tar.gz
+          tar -xzf staticcheck_linux_amd64.tar.gz
           cp staticcheck/staticcheck /usr/local/bin
 
       - name: Run checks
