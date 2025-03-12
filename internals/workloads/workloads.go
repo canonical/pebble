@@ -200,7 +200,7 @@ func (ext *WorkloadsSectionExtension) ValidatePlan(p *plan.Plan) error {
 		currentWorkloads := ext.currentPlan.Sections[WorkloadsField].(*WorkloadsSection)
 		if !reflect.DeepEqual(currentWorkloads.Entries, ws.Entries) {
 			return &plan.FormatError{
-				Message: fmt.Sprintf("cannot change workloads once the plan has been loaded"),
+				Message: "cannot change workloads once the plan has been loaded",
 			}
 		}
 	}
