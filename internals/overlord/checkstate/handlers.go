@@ -118,15 +118,6 @@ func (m *CheckManager) doPerformCheck(task *state.Task, tomb *tombpkg.Tomb) erro
 			}
 		case <-ticker.C:
 			shouldExit, err := performCheck()
-			select {
-			case info := <-refresh:
-				// If refresh requested while running check, send result.
-				select {
-				case info.result <- err:
-				case <-info.ctx.Done():
-				}
-			default:
-			}
 			if shouldExit {
 				return err
 			}
@@ -214,15 +205,6 @@ func (m *CheckManager) doRecoverCheck(task *state.Task, tomb *tombpkg.Tomb) erro
 			}
 		case <-ticker.C:
 			shouldExit, err := recoverCheck()
-			select {
-			case info := <-refresh:
-				// If refresh requested while running check, send result.
-				select {
-				case info.result <- err:
-				case <-info.ctx.Done():
-				}
-			default:
-			}
 			if shouldExit {
 				return err
 			}
