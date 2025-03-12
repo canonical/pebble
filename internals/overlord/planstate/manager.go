@@ -74,6 +74,19 @@ func (m *PlanManager) Load() error {
 	return nil
 }
 
+// InitializePlan loads the plan from an existing instance and announced to
+// change subscribers.
+func (m *PlanManager) InitializePlan(p *plan.Plan) {
+	if !reflect.DeepEqual(m.plan, &plan.Plan{}) {
+		// Plan already loaded
+		return
+	}
+	m.planLock.Lock()
+	m.plan = p
+	m.planLock.Unlock()
+	m.callChangeListeners(p)
+}
+
 // PlanChangedFunc is the function type used by AddChangeListener.
 type PlanChangedFunc func(p *plan.Plan)
 
@@ -104,12 +117,6 @@ func (m *PlanManager) Plan() *plan.Plan {
 	m.planLock.Lock()
 	defer m.planLock.Unlock()
 	return m.plan
-}
-
-func (m *PlanManager) SetPlan(p *plan.Plan) {
-	m.planLock.Lock()
-	m.plan = p
-	m.planLock.Unlock()
 }
 
 // AppendLayer takes a Layer, appends it to the plan's layers and updates the
