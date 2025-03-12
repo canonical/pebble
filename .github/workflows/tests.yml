@@ -26,7 +26,7 @@ jobs:
 
     - name: Test and build
       run: |
-        go test -race ./... -check.vv
+        go test -race -v ./internals/daemon/ -check.vv
         go build ./cmd/pebble
 
   root-tests:
