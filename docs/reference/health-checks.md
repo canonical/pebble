@@ -140,7 +140,7 @@ When a check is stopped, the active `perform-check` or `recover-check` change is
 
 ## Testing a check
 
-You can run a check immediately and get the result in YAML format using the `pebble check <name> --refresh` command, which is helpful when developing, testing and debugging a check. For example:
+You can run a check immediately using the `pebble check <name> --refresh` command, which is helpful when developing, testing, and debugging a check. The result of the check is in YAML format. For example:
 
 ```{code-block} bash
 $ pebble check chk1 --refresh
