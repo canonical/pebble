@@ -186,7 +186,6 @@ error: non-2xx status code 500; Health check failed
 Without the optional `--refresh` flag, you can use the command `pebble check <name>` to get the details of a check in YAML format without running it, and if the check has failed previously, it will also show logs from the task that ran the check:
 
 ```{code-block} bash
-:emphasize-lines: 8,9
 
 $ pebble check chk1
 name: chk1
