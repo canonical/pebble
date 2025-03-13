@@ -18,9 +18,9 @@ description: |
   * Manage services remotely, as a client interacting with Pebble in a separate system.
   * And more!
 
-  When Pebble is installed as a snap, Pebble uses the working directory
-  `$HOME/snap/pebble/<snap_revision>/` when it runs services.
-  You can override the working directory on a per-service basis in Pebble's service configuration.
+  Pebble stores its service configuration in the `$PEBBLE/layers` directory.
+  When Pebble is installed as a snap, the `PEBBLE` environment variable is
+  set to `$HOME/snap/pebble/<snap_revision>/` by default.
 
   **Documentation**
 
