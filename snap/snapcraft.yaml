@@ -5,18 +5,26 @@ description: |
   Pebble helps you to orchestrate a set of local service processes
   as an organized set. It resembles well-known tools such as supervisord,
   runit, or s6, in that it can easily manage non-system processes
-  independently from the system services, but it was designed with unique
+  independently from system services, but it was designed with unique
   features that help with more specific use cases.
 
   **Usage**
 
-  * The Pebble snap's default directory is `$SNAP_USER_DATA` (which translates
-  to `$HOME/snap/pebble/<rev>/`).
+  You can use the `pebble` command to:
+
+  * Start and stop services that are defined in Pebble's service configuration.
+  * Modify Pebble's service configuration by adding or removing layers.
+  * Check the health of services.
+  * Manage services remotely, as a client interacting with Pebble in a separate system.
+  * And more!
+
+  When Pebble is installed as a snap, Pebble uses the working directory
+  `$HOME/snap/pebble/<snap_revision>/` when it runs services.
+  You can override the working directory on a per-service basis in Pebble's service configuration.
 
   **Documentation**
 
-  To learn more about Pebble please check the project's documentation at
-  https://github.com/canonical/pebble.
+  To learn more about Pebble, see https://documentation.ubuntu.com/pebble/.
 issues: https://github.com/canonical/pebble/issues
 source-code: https://github.com/canonical/pebble
 license: GPL-3.0
