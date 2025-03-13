@@ -152,7 +152,7 @@ threshold: 3
 change-id: "1"
 ```
 
-If running the check fails, it will also show the error and logs:
+If running the check fails, the result will also show the error and logs:
 
 ```{code-block} bash
 :emphasize-lines: 8-10
