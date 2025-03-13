@@ -138,6 +138,68 @@ Health checks are implemented using two change kinds:
 
 When a check is stopped, the active `perform-check` or `recover-check` change is aborted. When a stopped (inactive) check is started, a new `perform-check` change is created for the check.
 
+## Testing a check
+
+You can run a check immediately and get the result in YAML format using the `pebble check <name> --refresh` command, which is helpful when developing, testing and debugging a check. For example:
+
+```{code-block} bash
+$ pebble check chk1 --refresh
+name: chk1
+startup: enabled
+status: up
+failures: 0
+threshold: 3
+change-id: "1"
+```
+
+If running the check fails, it will also show the error and logs:
+
+```{code-block} bash
+:emphasize-lines: 8-10
+
+$ pebble check chk1 --refresh
+name: chk1
+startup: enabled
+status: up
+failures: 1
+threshold: 3
+change-id: "1"
+error: non-2xx status code 500; Health check failed
+logs: |
+    2025-03-13T10:05:45+08:00 ERROR non-2xx status code 500; Health check failed
+```
+
+You can run a check even if it's inactive (for example, `startup: disabled`, or stopped by [`pebble stop-checks`](#reference_health_checks_start_stop_command). This will only run the check immediately but won't start the check. If running a stopped check fails, it will not change the status or the failures count; it will only show the error but no logs:
+
+```{code-block} bash
+:emphasize-lines: 4,5,7
+
+$ pebble check chk1 --refresh
+name: chk1
+startup: disabled
+status: inactive
+failures: 0
+threshold: 3
+error: non-2xx status code 500; Health check failed
+```
+
+Without the optional `--refresh` flag, you can use the command `pebble check <name>` to get the details of a check in YAML format without running it, and if the check has failed previously, it will also show logs from the task that ran the check:
+
+```{code-block} bash
+:emphasize-lines: 8,9
+
+$ pebble check chk1
+name: chk1
+startup: enabled
+status: up
+failures: 1
+threshold: 3
+change-id: "1"
+logs: |
+    2025-03-13T10:04:40+08:00 ERROR non-2xx status code 500; Health check failed
+```
+
+(reference_health_checks_start_stop_command)=
 ## Start-checks and stop-checks commands
 
 You can stop one or more checks using the `pebble stop-checks` command. A stopped check shows in the `pebble checks` output as "inactive" status, and the check will no longer be executed until the check is started again. Stopped (inactive) checks appear in check lists but do not contribute to any overall health calculations - they behave as if the check did not exist.
