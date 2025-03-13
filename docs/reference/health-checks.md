@@ -169,7 +169,7 @@ logs: |
     2025-03-13T10:05:45+08:00 ERROR non-2xx status code 500; Health check failed
 ```
 
-You can run a check even if it's inactive (for example, `startup: disabled`, or stopped by [`pebble stop-checks`](#reference_health_checks_start_stop_command). This will only run the check immediately but won't start the check. If running a stopped check fails, it will not change the status or the failures count; it will only show the error but no logs:
+You can run a check even if it's inactive (for example, if the check has `startup: disabled` or was stopped by [`pebble stop-checks`](#reference_health_checks_start_stop_command)). This will run the check immediately but won't start the check. If running a stopped check fails, Pebble won't change the status or the failure count, and the result won't include logs:
 
 ```{code-block} bash
 :emphasize-lines: 4,5,7
