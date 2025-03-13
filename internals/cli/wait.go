@@ -70,7 +70,7 @@ func Wait(cli *client.Client, changeID string) (*client.Change, error) {
 		}
 		_, err := cli.Abort(changeID)
 		if err != nil {
-			fmt.Fprintf(Stderr, err.Error()+"\n")
+			fmt.Fprintln(Stderr, err.Error())
 		}
 	}()
 

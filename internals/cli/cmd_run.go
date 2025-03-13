@@ -350,8 +350,7 @@ func maybeCopyPebbleDir(destDir, srcDir string) error {
 		return nil
 	}
 	fsys := os.DirFS(srcDir)
-	// TODO: replace with os.CopyFS when we're using Go 1.23
-	err = copyFS(destDir, fsys)
+	err = os.CopyFS(destDir, fsys)
 	if err != nil {
 		return fmt.Errorf("cannot copy %q to %q: %w", srcDir, destDir, err)
 	}

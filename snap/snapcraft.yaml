@@ -41,7 +41,7 @@ parts:
     plugin: go
     source: .
     build-snaps:
-      - go/1.22/stable
+      - go/1.24/stable
     # The snap build relies on the cmd/version*.go files within the source path.
     # For proper versioning, run "go generate ./cmd/" before building the snap.
     # If doing a "snapcraft remote-build", ensure you've also run
