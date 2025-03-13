@@ -20,7 +20,7 @@ description: |
 
   Pebble stores its service configuration in the `$PEBBLE/layers` directory.
   When Pebble is installed as a snap, the `PEBBLE` environment variable is
-  set to `$HOME/snap/pebble/<snap_revision>/` by default.
+  set to `$HOME/snap/pebble/<snap_revision>` by default.
 
   **Documentation**
 
