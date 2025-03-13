@@ -142,8 +142,8 @@ When a check is stopped, the active `perform-check` or `recover-check` change is
 
 You can run a check immediately using the `pebble check <name> --refresh` command, which is helpful when developing, testing, and debugging a check. The result of the check is in YAML format. For example:
 
-```{code-block} bash
-$ pebble check chk1 --refresh
+```{terminal}
+   :input: pebble check chk1 --refresh
 name: chk1
 startup: enabled
 status: up
@@ -185,9 +185,8 @@ error: non-2xx status code 500; Health check failed
 
 Without the `--refresh` flag, `pebble check <name>` gets the details of a check without running the check. If the check has failed previously, the result will show logs from the task that ran the check. For example:
 
-```{code-block} bash
-
-$ pebble check chk1
+```{terminal}
+   :input: pebble check chk1
 name: chk1
 startup: enabled
 status: up
