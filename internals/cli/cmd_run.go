@@ -29,8 +29,10 @@ import (
 	"github.com/canonical/pebble/cmd"
 	"github.com/canonical/pebble/internals/daemon"
 	"github.com/canonical/pebble/internals/logger"
+	"github.com/canonical/pebble/internals/plan"
 	"github.com/canonical/pebble/internals/reaper"
 	"github.com/canonical/pebble/internals/systemd"
+	"github.com/canonical/pebble/internals/workloads"
 )
 
 const cmdRunSummary = "Run the service manager environment"
@@ -181,6 +183,8 @@ func runDaemon(rcmd *cmdRun, ch chan os.Signal, ready chan<- func()) error {
 	if err != nil {
 		return err
 	}
+
+	plan.RegisterSectionExtension(workloads.WorkloadsField, &workloads.WorkloadsSectionExtension{})
 
 	dopts := daemon.Options{
 		Dir:        rcmd.pebbleDir,
