@@ -154,10 +154,8 @@ change-id: "1"
 
 If running the check fails, the result will also show the error and logs:
 
-```{code-block} bash
-:emphasize-lines: 8-10
-
-$ pebble check chk1 --refresh
+```{terminal}
+   :input: pebble check chk1 --refresh
 name: chk1
 startup: enabled
 status: up
@@ -171,10 +169,8 @@ logs: |
 
 You can run a check even if it's inactive (for example, if the check has `startup: disabled` or was stopped by [`pebble stop-checks`](#reference_health_checks_start_stop_command)). This will run the check immediately but won't start the check. If running a stopped check fails, Pebble won't change the status or the failure count, and the result won't include logs:
 
-```{code-block} bash
-:emphasize-lines: 4,5,7
-
-$ pebble check chk1 --refresh
+```{terminal}
+   :input: pebble check chk1 --refresh
 name: chk1
 startup: disabled
 status: inactive
