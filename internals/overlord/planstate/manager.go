@@ -56,6 +56,9 @@ func NewManager(layersDir string) (*PlanManager, error) {
 // the case of a non-existent layers directory, or no layers in the layers
 // directory, an empty plan is announced to change subscribers.
 func (m *PlanManager) Load() error {
+	m.planLock.Lock()
+	defer m.planLock.Unlock()
+
 	if !reflect.DeepEqual(m.plan, &plan.Plan{}) {
 		// Plan already loaded
 		return nil
@@ -65,25 +68,22 @@ func (m *PlanManager) Load() error {
 	if err != nil {
 		return err
 	}
-
-	m.planLock.Lock()
 	m.plan = plan
-	m.planLock.Unlock()
-
 	m.callChangeListeners(plan)
 	return nil
 }
 
-// InitializePlan loads the plan from an existing instance and announced to
+// Init loads the plan from an existing instance and announces to
 // change subscribers.
-func (m *PlanManager) InitializePlan(p *plan.Plan) {
+func (m *PlanManager) Init(p *plan.Plan) {
+	m.planLock.Lock()
+	defer m.planLock.Unlock()
+
 	if !reflect.DeepEqual(m.plan, &plan.Plan{}) {
 		// Plan already loaded
 		return
 	}
-	m.planLock.Lock()
 	m.plan = p
-	m.planLock.Unlock()
 	m.callChangeListeners(p)
 }
 

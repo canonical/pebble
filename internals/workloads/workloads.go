@@ -166,6 +166,10 @@ func (*WorkloadsSectionExtension) ParseSection(data yaml.Node) (plan.Section, er
 	return workloads, nil
 }
 
+// ValidatePlan validates the services layer against the workloads present
+// in the workloads section. Because workloads are immutable in the plan,
+// it will lock the extension to the validated plan's workloads. Validation
+// will fail if workloads from the plan are different.
 func (ext *WorkloadsSectionExtension) ValidatePlan(p *plan.Plan) error {
 	// The following will panic if the "ws" section is not a WorkloadsSection
 	ws := p.Sections[WorkloadsField].(*WorkloadsSection)
