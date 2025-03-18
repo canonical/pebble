@@ -16,6 +16,7 @@ package planstate
 
 import (
 	"fmt"
+	"reflect"
 	"slices"
 	"strings"
 	"sync"
@@ -55,17 +56,39 @@ func NewManager(layersDir string) (*PlanManager, error) {
 // the case of a non-existent layers directory, or no layers in the layers
 // directory, an empty plan is announced to change subscribers.
 func (m *PlanManager) Load() error {
-	plan, err := plan.ReadDir(m.layersDir)
-	if err != nil {
-		return err
+	m.planLock.Lock()
+	if !reflect.DeepEqual(m.plan, &plan.Plan{}) {
+		// Plan already loaded
+		m.planLock.Unlock()
+		return nil
 	}
 
-	m.planLock.Lock()
+	plan, err := plan.ReadDir(m.layersDir)
+	if err != nil {
+		m.planLock.Unlock()
+		return err
+	}
 	m.plan = plan
 	m.planLock.Unlock()
 
 	m.callChangeListeners(plan)
 	return nil
+}
+
+// Init loads the plan from an existing instance and announces to
+// change subscribers.
+func (m *PlanManager) Init(p *plan.Plan) {
+	m.planLock.Lock()
+
+	if !reflect.DeepEqual(m.plan, &plan.Plan{}) {
+		// Plan already loaded
+		m.planLock.Unlock()
+		return
+	}
+	m.plan = p
+
+	m.planLock.Unlock()
+	m.callChangeListeners(p)
 }
 
 // PlanChangedFunc is the function type used by AddChangeListener.
