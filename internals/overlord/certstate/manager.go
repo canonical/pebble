@@ -45,22 +45,24 @@ type CertManager struct {
 // x509KeyPair represents the X509 public certificate and the private
 // key that signed it.
 type x509KeyPair struct {
-	order       int
-	private     any
-	certificate *x509.Certificate
+	Order       int
+	Private     any
+	Certificate *x509.Certificate
 }
 
-func NewManager(tlsDir string) *CertManager {
+func NewManager(tlsDir string) (*CertManager, error) {
 	manager := &CertManager{tlsDir: tlsDir}
-	manager.loadX509KeyPairs(tlsDir)
-	return manager
+	if err := manager.loadX509KeyPairs(); err != nil {
+		return nil, err
+	}
+	return manager, nil
 }
 
-// TLSCertificate returns a valid TLS certificate instance that
+// X509Keypair returns a valid tls.Certificate instance that
 // can be used for starting a TLS based network listener. A call
-// to this function may generate a new TLS certificate if none
-// of the available certificates are valid.
-func (c *CertManager) TLSCertificate() (*tls.Certificate, error) {
+// to this function may generate a new X509 keypair if none
+// of the available pairs are valid.
+func (c *CertManager) X509Keypair() (*tls.Certificate, error) {
 	c.x509KeyPairsLock.Lock()
 	defer c.x509KeyPairsLock.Unlock()
 
@@ -68,7 +70,7 @@ func (c *CertManager) TLSCertificate() (*tls.Certificate, error) {
 
 	// Try to find an existing valid X509
 	for i, keypair := range c.x509KeyPairs {
-		if !isCertExpired(keypair.certificate) {
+		if !isCertExpired(keypair.Certificate) {
 			selected = &c.x509KeyPairs[i]
 			break
 		}
@@ -76,7 +78,7 @@ func (c *CertManager) TLSCertificate() (*tls.Certificate, error) {
 
 	// Generate a keypair if no one exists.
 	if selected == nil {
-		selected, err := c.generateX509ECP256Keypair()
+		selected, err := c.newX509ECP256Keypair()
 		if err != nil {
 			return nil, fmt.Errorf("cannot generate X509 keypair: %w", err)
 		}
@@ -85,14 +87,14 @@ func (c *CertManager) TLSCertificate() (*tls.Certificate, error) {
 		}
 
 		// Notify subscribers of the new certificate in use
-		c.callChangeListeners(selected.certificate)
+		c.callChangeListeners(selected.Certificate)
 	}
 
-	pemCert, err := x509CertToPEM(selected.certificate)
+	pemCert, err := x509CertToPEM(selected.Certificate)
 	if err != nil {
 		return nil, err
 	}
-	pemKey, err := privateKeyToPEM(selected.private)
+	pemKey, err := privateKeyToPEM(selected.Private)
 	if err != nil {
 		return nil, err
 	}
@@ -124,92 +126,37 @@ func (c *CertManager) callChangeListeners(cert *x509.Certificate) {
 	}
 }
 
-// generateX509ECP256Keypair generates an elliptic P256 private key, an X509
-// self-signed public certificate (signed with the private key). The x509
+// newX509ECP256Keypair generates an elliptic P256 private key and an
+// X509 self-signed public certificate (signed with the private key). The x509
 // certificate includes both the public key and the signature, which allows
 // the certificate signature to be verified with the public key inside the
 // certificate. This allows a client side copy of the certificate to be used
 // as certificate authority for future TLS sessions with the server.
-func (c *CertManager) generateX509ECP256Keypair() (*x509KeyPair, error) {
+func (c *CertManager) newX509ECP256Keypair() (*x509KeyPair, error) {
 	// Get the highest available order
 	order := 1
 	certCount := len(c.x509KeyPairs)
 	if certCount > 0 {
 		// Find the next available order
-		order = c.x509KeyPairs[certCount-1].order + 1
+		order = c.x509KeyPairs[certCount-1].Order + 1
 		if order > 999 {
 			return nil, fmt.Errorf("cannot process order number %v (valid range is 001-999)", order)
 		}
 	}
 
-	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if err != nil {
-		return nil, err
-	}
 	// Valid date range.
 	notBefore := time.Now()
 	notAfter := notBefore.Add(365 * 24 * time.Hour)
-	// Serial just random for now.
-	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
-	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
+	keypair, err := generateX509ECP256Keypair(notBefore, notAfter)
 	if err != nil {
 		return nil, err
 	}
-	template := x509.Certificate{
-		SerialNumber: serialNumber,
-		NotBefore:    notBefore,
-		NotAfter:     notAfter,
-		Subject: pkix.Name{
-			Organization: []string{"Canonical Ltd."},
-		},
-		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign,
-		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
-		BasicConstraintsValid: true,
-		IsCA:                  true,
-	}
-	derBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, &privateKey.PublicKey, privateKey)
-	if err != nil {
-		return nil, err
-	}
-	certificate, err := x509.ParseCertificate(derBytes)
-	if err != nil {
-		return nil, err
-	}
-	return &x509KeyPair{order: order, private: privateKey, certificate: certificate}, nil
+	keypair.Order = order
+	return keypair, nil
 }
 
 func (c *CertManager) persistX509Keypair(keypair *x509KeyPair) error {
-	keyPath := filepath.Join(c.tlsDir, fmt.Sprintf("%03d-key.pem", keypair.order))
-	keyOut, err := os.OpenFile(keyPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
-	if err != nil {
-		return err
-	}
-	keyPEM, err := privateKeyToPEM(keypair.private)
-	if err != nil {
-		return err
-	}
-	if _, err = keyOut.Write(keyPEM); err != nil {
-		return err
-	}
-	if err := keyOut.Close(); err != nil {
-		return err
-	}
-	certPath := filepath.Join(c.tlsDir, fmt.Sprintf("%03d-cert.pem", keypair.order))
-	certOut, err := os.OpenFile(certPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
-	if err != nil {
-		return err
-	}
-	certPEM, err := x509CertToPEM(keypair.certificate)
-	if err != nil {
-		return err
-	}
-	if _, err = certOut.Write(certPEM); err != nil {
-		return err
-	}
-	if err := certOut.Close(); err != nil {
-		return err
-	}
-	return nil
+	return writeX509Keypair(keypair, c.tlsDir)
 }
 
 // PEMCertificates returns the slice of valid X509 certificates
@@ -221,8 +168,8 @@ func (c *CertManager) PEMCertificates() ([][]byte, error) {
 
 	var pemCerts [][]byte
 	for _, keypair := range c.x509KeyPairs {
-		if !isCertExpired(keypair.certificate) {
-			pem, err := x509CertToPEM(keypair.certificate)
+		if !isCertExpired(keypair.Certificate) {
+			pem, err := x509CertToPEM(keypair.Certificate)
 			if err != nil {
 				return nil, err
 			}
@@ -243,17 +190,17 @@ func (c *CertManager) Ensure() error {
 
 // loadX509KeyPairs loads all the persisted X509 keypairs, without
 // changing the state of the system (it does not create new keypairs).
-func (c *CertManager) loadX509KeyPairs(tlsDir string) error {
+func (c *CertManager) loadX509KeyPairs() error {
 	// If the directory does not exist that simply means no keypairs
 	// are currently available, and that is OK.
-	_, err := os.Stat(tlsDir)
+	_, err := os.Stat(c.tlsDir)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil
 		}
 	}
 
-	err = expectPermission(tlsDir, 0o700)
+	err = expectPermission(c.tlsDir, 0o700)
 	if err != nil {
 		return fmt.Errorf("cannot verify X509 keypair directory permission: %w", err)
 	}
@@ -262,7 +209,7 @@ func (c *CertManager) loadX509KeyPairs(tlsDir string) error {
 	// (<order>-key.pem), and another for the X509 certificate
 	// (<order>-cert.pem). The order ranges from 001-999. Entries are
 	// ordered alphanumerically, due to os.ReadDir.
-	entries, err := os.ReadDir(tlsDir)
+	entries, err := os.ReadDir(c.tlsDir)
 	if err != nil {
 		return fmt.Errorf("cannot read X509 keypair directory: %v", err)
 	}
@@ -296,8 +243,8 @@ func (c *CertManager) loadX509KeyPairs(tlsDir string) error {
 			return fmt.Errorf("cannot find the expected X509 certificate or its private key")
 		}
 
-		certPath := filepath.Join(tlsDir, entry.Name())
-		keyPath := filepath.Join(tlsDir, fmt.Sprintf("%3d-key.pem", order))
+		certPath := filepath.Join(c.tlsDir, entry.Name())
+		keyPath := filepath.Join(c.tlsDir, fmt.Sprintf("%3d-key.pem", order))
 
 		err = expectPermission(certPath, 0o644)
 		if err != nil {
@@ -311,16 +258,90 @@ func (c *CertManager) loadX509KeyPairs(tlsDir string) error {
 		// We will process both the X509 certificate and the private key together now.
 		skipNext = true
 
-		keypair := x509KeyPair{order: order}
-		keypair.private, err = privateKeyFromPEM(keyPath)
+		keypair := x509KeyPair{Order: order}
+		keypair.Private, err = privateKeyFromPEM(keyPath)
 		if err != nil {
 			return fmt.Errorf("cannot load private key %q: %w", keyPath, err)
 		}
-		keypair.certificate, err = x509CertFromPEM(certPath)
+		keypair.Certificate, err = x509CertFromPEM(certPath)
 		if err != nil {
 			return fmt.Errorf("cannot load x509 certificate %q: %w", keyPath, err)
 		}
 		c.x509KeyPairs = append(c.x509KeyPairs, keypair)
+	}
+	return nil
+}
+
+// generateX509ECP256Keypair generates an elliptic curve P256 private key
+// and an X509 self-signed public certificate (signed with the private key).
+// The x509 certificate includes both the public key and the signature,
+// which allows the certificate signature to be verified with the public key
+// inside the certificate. This allows a client side copy of the certificate
+// to be used as certificate authority for future TLS sessions with the server.
+func generateX509ECP256Keypair(notBefore time.Time, notAfter time.Time) (*x509KeyPair, error) {
+	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return nil, err
+	}
+	// Serial just random for now.
+	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
+	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
+	if err != nil {
+		return nil, err
+	}
+	template := x509.Certificate{
+		SerialNumber: serialNumber,
+		NotBefore:    notBefore,
+		NotAfter:     notAfter,
+		Subject: pkix.Name{
+			Organization: []string{"Canonical Ltd."},
+		},
+		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		BasicConstraintsValid: true,
+		IsCA:                  true,
+	}
+	derBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, &privateKey.PublicKey, privateKey)
+	if err != nil {
+		return nil, err
+	}
+	certificate, err := x509.ParseCertificate(derBytes)
+	if err != nil {
+		return nil, err
+	}
+	return &x509KeyPair{Private: privateKey, Certificate: certificate}, nil
+}
+
+func writeX509Keypair(keypair *x509KeyPair, tlsDir string) error {
+	keyPath := filepath.Join(tlsDir, fmt.Sprintf("%03d-key.pem", keypair.Order))
+	keyOut, err := os.OpenFile(keyPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
+	if err != nil {
+		return err
+	}
+	keyPEM, err := privateKeyToPEM(keypair.Private)
+	if err != nil {
+		return err
+	}
+	if _, err = keyOut.Write(keyPEM); err != nil {
+		return err
+	}
+	if err := keyOut.Close(); err != nil {
+		return err
+	}
+	certPath := filepath.Join(tlsDir, fmt.Sprintf("%03d-cert.pem", keypair.Order))
+	certOut, err := os.OpenFile(certPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+	if err != nil {
+		return err
+	}
+	certPEM, err := x509CertToPEM(keypair.Certificate)
+	if err != nil {
+		return err
+	}
+	if _, err = certOut.Write(certPEM); err != nil {
+		return err
+	}
+	if err := certOut.Close(); err != nil {
+		return err
 	}
 	return nil
 }

@@ -13,3 +13,10 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package certstate
+
+var (
+	GenerateX509ECP256Keypair = generateX509ECP256Keypair
+	WriteX509Keypair          = writeX509Keypair
+)
+
+type X509KeyPair = x509KeyPair

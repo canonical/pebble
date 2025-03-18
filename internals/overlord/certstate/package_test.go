@@ -16,8 +16,11 @@ package certstate_test
 
 import (
 	"testing"
+	"time"
 
 	. "gopkg.in/check.v1"
+
+	"github.com/canonical/pebble/internals/overlord/certstate"
 )
 
 // Hook up check.v1 into the "go test" runner.
@@ -26,3 +29,11 @@ func Test(t *testing.T) { TestingT(t) }
 type certSuite struct{}
 
 var _ = Suite(&certSuite{})
+
+func (cs *certSuite) createKeypair(c *C, tlsDir string, order int, notBefore time.Time, notAfter time.Time) {
+	keypair, err := certstate.GenerateX509ECP256Keypair(notBefore, notAfter)
+	c.Assert(err, IsNil)
+	keypair.Order = order
+	err = certstate.WriteX509Keypair(keypair, tlsDir)
+	c.Assert(err, IsNil)
+}

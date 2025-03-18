@@ -15,16 +15,42 @@
 package certstate_test
 
 import (
-	. "gopkg.in/check.v1"
 	"os"
 	"path/filepath"
+	"time"
+
+	. "gopkg.in/check.v1"
 
 	"github.com/canonical/pebble/internals/overlord/certstate"
 )
 
-func (cs *certSuite) TestCert(c *C) {
+// The cert manager should successfully start up even if the supplied TLS
+// keypair directory does not exist.
+func (cs *certSuite) TestNoDirectory(c *C) {
 	tlsDir := filepath.Join(c.MkDir(), "tls")
-	err := os.Mkdir(tlsDir, 0700)
+	_, err := certstate.NewManager(tlsDir)
 	c.Assert(err, IsNil)
-	_ = certstate.NewManager(tlsDir)
 }
+
+// The tls directory should have 0o700 permissions
+func (cs *certSuite) TestDirectoryInvalid(c *C) {
+	tlsDir := filepath.Join(c.MkDir(), "tls")
+	os.MkdirAll(tlsDir, 0740)
+	_, err := certstate.NewManager(tlsDir)
+	c.Assert(err, ErrorMatches, ".* expected permission 0o700 .*")
+}
+
+var tests = []struct {
+	summary  string
+	keypairs []map[int]struct {
+		order     int
+		notBefore time.Time
+		notAfter  time.Time
+		generated *certstate.X509KeyPair
+	}
+	errorResult   string
+	selectedOrder int
+}{{
+	summary:     "Driectory does not exist",
+	errorResult: "fred",
+}}
