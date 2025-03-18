@@ -57,18 +57,20 @@ func NewManager(layersDir string) (*PlanManager, error) {
 // directory, an empty plan is announced to change subscribers.
 func (m *PlanManager) Load() error {
 	m.planLock.Lock()
-	defer m.planLock.Unlock()
-
 	if !reflect.DeepEqual(m.plan, &plan.Plan{}) {
 		// Plan already loaded
+		m.planLock.Unlock()
 		return nil
 	}
 
 	plan, err := plan.ReadDir(m.layersDir)
 	if err != nil {
+		m.planLock.Unlock()
 		return err
 	}
 	m.plan = plan
+	m.planLock.Unlock()
+
 	m.callChangeListeners(plan)
 	return nil
 }
@@ -77,13 +79,15 @@ func (m *PlanManager) Load() error {
 // change subscribers.
 func (m *PlanManager) Init(p *plan.Plan) {
 	m.planLock.Lock()
-	defer m.planLock.Unlock()
 
 	if !reflect.DeepEqual(m.plan, &plan.Plan{}) {
 		// Plan already loaded
+		m.planLock.Unlock()
 		return
 	}
 	m.plan = p
+
+	m.planLock.Unlock()
 	m.callChangeListeners(p)
 }
 
