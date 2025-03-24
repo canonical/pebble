@@ -56,21 +56,25 @@ func NewManager(layersDir string) (*PlanManager, error) {
 // the case of a non-existent layers directory, or no layers in the layers
 // directory, an empty plan is announced to change subscribers.
 func (m *PlanManager) Load() (err error) {
+	var p *plan.Plan
+
 	m.planLock.Lock()
 	defer func() {
 		m.planLock.Unlock()
-		m.callChangeListeners(m.plan)
+		if err == nil && p != nil {
+			m.callChangeListeners(p)
+		}
 	}()
 
 	if m.isInitialized {
 		return nil
 	}
 
-	plan, err := plan.ReadDir(m.layersDir)
+	p, err = plan.ReadDir(m.layersDir)
 	if err != nil {
 		return err
 	}
-	m.plan = plan
+	m.plan = p
 	m.isInitialized = true
 	return nil
 }
@@ -81,7 +85,7 @@ func (m *PlanManager) Init(p *plan.Plan) {
 	m.planLock.Lock()
 	defer func() {
 		m.planLock.Unlock()
-		m.callChangeListeners(m.plan)
+		m.callChangeListeners(p)
 	}()
 
 	if m.isInitialized {

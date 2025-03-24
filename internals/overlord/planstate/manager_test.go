@@ -616,7 +616,38 @@ workloads:
 	c.Assert(err, ErrorMatches, "cannot change workloads once the plan has been loaded")
 
 	// We are adding a new layer but we are not mutating existing workloads
-	layer = ps.parseLayer(c, 0, "workloads", `workloads: {}`)
+	layer = ps.parseLayer(c, 0, "workloads", "workloads: {}")
+	err = ps.planMgr.AppendLayer(layer, false)
+	c.Assert(err, IsNil)
+}
+
+func (ps *planSuite) TestCombineWorkloadLayer(c *C) {
+	plan.RegisterSectionExtension(workloads.WorkloadsField, &workloads.WorkloadsSectionExtension{})
+	defer plan.UnregisterSectionExtension(workloads.WorkloadsField)
+
+	ps.writeLayer(c, `
+workloads:
+    workload1:
+        override: replace
+`)
+
+	var err error
+	ps.planMgr, err = planstate.NewManager(ps.layersDir)
+	c.Assert(err, IsNil)
+	err = ps.planMgr.Load()
+	c.Assert(err, IsNil)
+
+	// An attempt to mutate layers must fail
+	layer := ps.parseLayer(c, 0, "workload2", `
+workloads:
+    workload2:
+        override: replace
+`)
+	err = ps.planMgr.CombineLayer(layer, false)
+	c.Assert(err, ErrorMatches, "cannot change workloads once the plan has been loaded")
+
+	// We are adding a new layer but we are not mutating existing workloads
+	layer = ps.parseLayer(c, 0, "workloads", "workloads: {}")
 	err = ps.planMgr.AppendLayer(layer, false)
 	c.Assert(err, IsNil)
 }
