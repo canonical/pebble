@@ -15,7 +15,9 @@ import (
 
 	"github.com/canonical/pebble/cmd"
 	"github.com/canonical/pebble/internals/cli"
+	"github.com/canonical/pebble/internals/plan"
 	"github.com/canonical/pebble/internals/testutil"
+	"github.com/canonical/pebble/internals/workloads"
 )
 
 // Hook up check.v1 into the "go test" runner
@@ -73,6 +75,8 @@ func (s *BasePebbleSuite) TearDownTest(c *C) {
 	cli.Stdout = os.Stdout
 	cli.Stderr = os.Stderr
 	cli.ReadPassword = term.ReadPassword
+
+	plan.UnregisterSectionExtension(workloads.WorkloadsField)
 
 	s.BaseTest.TearDownTest(c)
 }

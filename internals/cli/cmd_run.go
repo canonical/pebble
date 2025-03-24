@@ -95,9 +95,7 @@ func (rcmd *cmdRun) Execute(args []string) error {
 		return ErrExtraArgs
 	}
 
-	plan.RegisterSectionExtension(workloads.WorkloadsField, &workloads.WorkloadsSectionExtension{})
 	rcmd.run(nil)
-	plan.UnregisterSectionExtension(workloads.WorkloadsField)
 
 	return nil
 }
@@ -185,6 +183,8 @@ func runDaemon(rcmd *cmdRun, ch chan os.Signal, ready chan<- func()) error {
 	if err != nil {
 		return err
 	}
+
+	plan.RegisterSectionExtension(workloads.WorkloadsField, &workloads.WorkloadsSectionExtension{})
 
 	dopts := daemon.Options{
 		Dir:        rcmd.pebbleDir,
