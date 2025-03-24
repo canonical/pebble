@@ -361,6 +361,8 @@ func (s *serviceData) startInternal() error {
 	if s.workload != nil {
 		maps.Copy(environment, s.workload.Environment)
 	}
+	// If both workload and service provides the same environment variable,
+	// the workload environment prevails.
 	maps.Copy(environment, s.config.Environment)
 
 	s.cmd.Dir = s.config.WorkingDir
@@ -369,6 +371,9 @@ func (s *serviceData) startInternal() error {
 	var uid, gid *int
 	var username, groupname string
 	if s.workload != nil {
+		// Take user information from the workload. Note that it is guaranteed that,
+		// if the service is running in a workload, the service config will not
+		// include any user information.
 		uid, gid = s.workload.UserID, s.workload.GroupID
 		username, groupname = s.workload.User, s.workload.Group
 	}

@@ -16,7 +16,6 @@ package planstate
 
 import (
 	"fmt"
-	"reflect"
 	"slices"
 	"strings"
 	"sync"
@@ -37,8 +36,9 @@ func (e *LabelExists) Error() string {
 type PlanManager struct {
 	layersDir string
 
-	planLock sync.Mutex
-	plan     *plan.Plan
+	planLock      sync.Mutex
+	plan          *plan.Plan
+	isInitialized bool
 
 	changeListeners []PlanChangedFunc
 }
@@ -55,23 +55,23 @@ func NewManager(layersDir string) (*PlanManager, error) {
 // final plan, and finally notifies registered managers of the plan update. In
 // the case of a non-existent layers directory, or no layers in the layers
 // directory, an empty plan is announced to change subscribers.
-func (m *PlanManager) Load() error {
+func (m *PlanManager) Load() (err error) {
 	m.planLock.Lock()
-	if !reflect.DeepEqual(m.plan, &plan.Plan{}) {
-		// Plan already loaded
+	defer func() {
 		m.planLock.Unlock()
+		m.callChangeListeners(m.plan)
+	}()
+
+	if m.isInitialized {
 		return nil
 	}
 
 	plan, err := plan.ReadDir(m.layersDir)
 	if err != nil {
-		m.planLock.Unlock()
 		return err
 	}
 	m.plan = plan
-	m.planLock.Unlock()
-
-	m.callChangeListeners(plan)
+	m.isInitialized = true
 	return nil
 }
 
@@ -79,16 +79,16 @@ func (m *PlanManager) Load() error {
 // change subscribers.
 func (m *PlanManager) Init(p *plan.Plan) {
 	m.planLock.Lock()
-
-	if !reflect.DeepEqual(m.plan, &plan.Plan{}) {
-		// Plan already loaded
+	defer func() {
 		m.planLock.Unlock()
+		m.callChangeListeners(m.plan)
+	}()
+
+	if m.isInitialized {
 		return
 	}
 	m.plan = p
-
-	m.planLock.Unlock()
-	m.callChangeListeners(p)
+	m.isInitialized = true
 }
 
 // PlanChangedFunc is the function type used by AddChangeListener.
