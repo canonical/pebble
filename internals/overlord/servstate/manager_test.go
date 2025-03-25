@@ -676,7 +676,7 @@ func (s *S) TestUserGroup(c *C) {
 services:
     usrgrp:
         override: merge
-        command: /bin/sh -c "whoami; echo user=$USER home=$HOME; sleep 10"
+        command: /bin/sh -c "whoami; echo user=$USER home=$HOME; {{.NotifyDoneCheck}}; sleep 10"
         user: %s
         group: %s
 `
@@ -693,14 +693,11 @@ services:
 
 	// Start service and ensure it has enough time to write to log.
 	chg := s.startServices(c, [][]string{{"usrgrp"}})
-	s.waitUntilService(c, "usrgrp", func(svc *servstate.ServiceInfo) bool {
-		return svc.Current == servstate.StatusActive
-	})
-	c.Assert(s.manager.BackoffNum("usrgrp"), Equals, 0)
 	s.st.Lock()
-	c.Check(chg.Status(), Equals, state.DoneStatus)
+	c.Assert(chg.Err(), IsNil)
 	s.st.Unlock()
-	time.Sleep(10 * time.Millisecond)
+
+	s.waitForDoneCheck(c, "usrgrp")
 	c.Check(s.readAndClearLogBuffer(), Matches,
 		fmt.Sprintf(`(?s).* \[usrgrp\] %[1]s\n.* \[usrgrp\] user=%[1]s home=/home/%[1]s\n`, username))
 }
@@ -1855,9 +1852,9 @@ func (s *S) TestWorkloadAppliesToService(c *C) {
 	s.newServiceManager(c)
 	s.planAddLayer(c, `
 services:
-    test1:
+    foo:
         override: replace
-        command: /bin/sh -c "echo $PATH; sleep 10"
+        command: /bin/sh -c "echo $PATH; {{.NotifyDoneCheck}}; sleep 10"
         workload: wl1
 
 workloads:
@@ -1868,16 +1865,13 @@ workloads:
     `)
 	s.planChanged(c)
 
-	chg := s.startServices(c, [][]string{{"test1"}})
-	s.waitUntilService(c, "test1", func(svc *servstate.ServiceInfo) bool {
-		return svc.Current == servstate.StatusActive
-	})
-	c.Assert(s.manager.BackoffNum("test1"), Equals, 0)
+	chg := s.startServices(c, [][]string{{"foo"}})
 	s.st.Lock()
-	c.Check(chg.Status(), Equals, state.DoneStatus)
+	c.Assert(chg.Err(), IsNil)
 	s.st.Unlock()
-	time.Sleep(10 * time.Millisecond)
-	c.Check(s.readAndClearLogBuffer(), Matches, `(?s).* \[test1\] /private/bin:/bin:/sbin\n`)
+
+	s.waitForDoneCheck(c, "foo")
+	c.Check(s.readAndClearLogBuffer(), Matches, `(?s).* \[foo\] /private/bin:/bin:/sbin\n`)
 }
 
 func (s *S) TestWorkloadReferenceInvalid(c *C) {
