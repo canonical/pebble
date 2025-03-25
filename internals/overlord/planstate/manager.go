@@ -95,7 +95,7 @@ func (m *PlanManager) Init(p *plan.Plan) (err error) {
 	}()
 
 	if m.isLoaded {
-		return
+		return nil
 	}
 	if p == nil {
 		return errors.New("cannot initialize plan manager with a nil plan")
