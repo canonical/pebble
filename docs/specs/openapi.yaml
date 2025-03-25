@@ -348,6 +348,50 @@ paths:
                   "status-code": 200,
                   "result": {"changed": ["chk1", "chk2"]}
                 }
+  /v1/checks/refresh:
+    post:
+      summary: Refresh a check
+      description: Runs a specified check immediately.
+      tags:
+        - checks
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: The name of the check to refresh.
+              required:
+                - name
+            example:
+              {"name": "chk1"}
+      responses:
+        "200":
+          description: Check refreshed successfully.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RefreshCheckResponse"
+              example:
+                {
+                  "type": "sync",
+                  "status-code": 200,
+                  "status": "OK",
+                  "result": {
+                    "info": {
+                      "name": "check1",
+                      "startup": "enabled",
+                      "status": "up",
+                      "failures": 1,
+                      "threshold": 3,
+                      "change-id": "1"
+                    },
+                    "error": "check timed out after 1s"
+                  }
+                }
   /v1/exec:
     post:
       summary: Execute a command
@@ -1295,6 +1339,20 @@ components:
               type: array
               items:
                 $ref: "#/components/schemas/checkInfo"
+    RefreshCheckResponse:
+      allOf:
+        - $ref: "#/components/schemas/BaseResponse"
+        - type: object
+          properties:
+            result:
+              type: object
+              properties:
+                info:
+                  $ref: "#/components/schemas/checkInfo"
+                  type: object
+                error:
+                  type: string
+                  description: The error message if the check failed; empty string on success.
     GetPlanResponse:
       allOf:
         - $ref: "#/components/schemas/BaseResponse"

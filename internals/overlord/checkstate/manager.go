@@ -344,7 +344,10 @@ func (m *CheckManager) Checks() ([]*CheckInfo, error) {
 func (m *CheckManager) ensureCheck(name string) *checkData {
 	check, ok := m.checks[name]
 	if !ok {
-		check = &checkData{name: name}
+		check = &checkData{
+			name:    name,
+			refresh: make(chan refreshInfo),
+		}
 		m.checks[name] = check
 	}
 	return check
@@ -408,6 +411,11 @@ type CheckInfo struct {
 	ChangeID  string
 }
 
+type refreshInfo struct {
+	ctx    context.Context
+	result chan error
+}
+
 // checkData holds the metrics and other data for a single check.
 type checkData struct {
 	name         string
@@ -419,6 +427,7 @@ type checkData struct {
 	changeID     string
 	successCount int64
 	failureCount int64
+	refresh      chan refreshInfo
 }
 
 type CheckStatus string
@@ -631,5 +640,59 @@ func (m *CheckManager) Replan() {
 		}
 		changeID := performCheckChange(m.state, check)
 		m.updateCheckData(check, changeID, 0)
+	}
+}
+
+// RefreshCheck runs a check immediately.
+func (m *CheckManager) RefreshCheck(ctx context.Context, check *plan.Check) (*CheckInfo, error) {
+	m.checksLock.Lock()
+	data := m.ensureCheck(check.Name)
+	refresh := data.refresh
+	changeID := data.changeID
+	m.checksLock.Unlock()
+
+	getCheckInfo := func() *CheckInfo {
+		m.checksLock.Lock()
+		defer m.checksLock.Unlock()
+		checkData := m.ensureCheck(check.Name)
+		info := CheckInfo{
+			Name:      checkData.name,
+			Level:     checkData.level,
+			Startup:   checkData.startup,
+			Status:    checkData.status,
+			Failures:  checkData.failures,
+			Threshold: checkData.threshold,
+			ChangeID:  checkData.changeID,
+		}
+		return &info
+	}
+
+	// If the check is stopped, run the check directly without using changes and tasks.
+	if changeID == "" {
+		chk := newChecker(check)
+		err := runCheck(ctx, chk, check.Timeout.Value)
+		if err != nil {
+			return getCheckInfo(), fmt.Errorf("%s", errorDetails(err))
+		}
+		return getCheckInfo(), nil
+	}
+	if refresh == nil {
+		panic(fmt.Sprintf("internal error: refresh channel not initialized for check %q", data.name))
+	}
+
+	result := make(chan error)
+	select {
+	case refresh <- refreshInfo{ctx, result}:
+	case <-ctx.Done():
+		return getCheckInfo(), ctx.Err()
+	}
+	select {
+	case err := <-result:
+		if err != nil {
+			return getCheckInfo(), fmt.Errorf("%s", errorDetails(err))
+		}
+		return getCheckInfo(), nil
+	case <-ctx.Done():
+		return getCheckInfo(), ctx.Err()
 	}
 }

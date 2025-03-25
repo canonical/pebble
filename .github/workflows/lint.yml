@@ -34,13 +34,23 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - uses: actions/setup-go@v4
-        with:
-          go-mod-file: 'go.mod'
+      # NOTE: The latest version of staticcheck specifies "go 1.23" in its go.mod
+      # file, but when checking Go 1.24 code, needs to be built with Go 1.24. Use the
+      # pre-built binaries instead, which are built with Go 1.24.
+
+      # - uses: actions/setup-go@v4
+      #   with:
+      #     go-mod-file: 'go.mod'
+
+      # - name: Install staticcheck
+      #   run: |
+      #     go install honnef.co/go/tools/cmd/staticcheck@v0.6.1
 
       - name: Install staticcheck
         run: |
-          go install honnef.co/go/tools/cmd/staticcheck@v0.6.0
+          wget -q https://github.com/dominikh/go-tools/releases/download/2025.1.1/staticcheck_linux_amd64.tar.gz
+          tar -xzf staticcheck_linux_amd64.tar.gz
+          cp staticcheck/staticcheck /usr/local/bin
 
       - name: Run checks
         run: |

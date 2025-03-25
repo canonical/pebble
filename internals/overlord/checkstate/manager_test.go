@@ -16,6 +16,7 @@ package checkstate_test
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -998,4 +999,171 @@ pebble_check_failure_count{check="chk1"} 0
 
 `[1:]
 	c.Assert(buf.String(), Equals, expected)
+}
+
+func (s *ManagerSuite) TestRefreshCheck(c *C) {
+	chk1 := &plan.Check{
+		Name:      "chk1",
+		Override:  "replace",
+		Period:    plan.OptionalDuration{Value: time.Second},
+		Threshold: 3,
+		Exec:      &plan.ExecCheck{Command: "echo chk1"},
+	}
+	layer := &plan.Layer{
+		Checks: map[string]*plan.Check{
+			"chk1": chk1,
+		},
+	}
+	err := s.planMgr.AppendLayer(layer, false)
+	c.Assert(err, IsNil)
+	s.manager.PlanChanged(s.planMgr.Plan())
+	waitChecks(c, s.manager, []*checkstate.CheckInfo{
+		{Name: "chk1", Startup: "enabled", Status: "up", Threshold: 3},
+	})
+	checks, err := s.manager.Checks()
+	c.Assert(err, IsNil)
+	originalChangeID := checks[0].ChangeID
+
+	checkInfo, err := s.manager.RefreshCheck(context.Background(), chk1)
+	c.Assert(err, IsNil)
+
+	c.Assert(*checkInfo, DeepEquals, checkstate.CheckInfo{
+		Name:      "chk1",
+		Level:     "",
+		Startup:   "enabled",
+		Status:    "up",
+		Failures:  0,
+		Threshold: 3,
+		ChangeID:  originalChangeID,
+	})
+}
+
+func (s *ManagerSuite) TestRefreshCheckFailure(c *C) {
+	testPath := c.MkDir() + "/test"
+	err := os.WriteFile(testPath, nil, 0o644)
+	c.Assert(err, IsNil)
+	chk1 := &plan.Check{
+		Name:      "chk1",
+		Override:  "replace",
+		Period:    plan.OptionalDuration{Value: time.Second},
+		Timeout:   plan.OptionalDuration{Value: time.Second},
+		Threshold: 3,
+		Exec:      &plan.ExecCheck{Command: fmt.Sprintf(`/bin/sh -c 'echo details >/dev/stderr; [ ! -f %s ]'`, testPath)},
+	}
+	layer := &plan.Layer{
+		Checks: map[string]*plan.Check{
+			"chk1": chk1,
+		},
+	}
+	err = s.planMgr.AppendLayer(layer, false)
+	c.Assert(err, IsNil)
+	s.manager.PlanChanged(s.planMgr.Plan())
+	waitChecks(c, s.manager, []*checkstate.CheckInfo{
+		{Name: "chk1", Startup: "enabled", Status: "up", Threshold: 3},
+	})
+	checks, err := s.manager.Checks()
+	c.Assert(err, IsNil)
+	originalChangeID := checks[0].ChangeID
+	checkInfo, err := s.manager.RefreshCheck(context.Background(), chk1)
+	c.Assert(err, ErrorMatches, "exit status 1; details")
+	c.Assert(*checkInfo, DeepEquals, checkstate.CheckInfo{
+		Name:      "chk1",
+		Level:     "",
+		Startup:   "enabled",
+		Status:    "up",
+		Failures:  1,
+		Threshold: 3,
+		ChangeID:  originalChangeID,
+	})
+}
+
+func (s *ManagerSuite) TestRefreshStoppedCheck(c *C) {
+	chk1 := &plan.Check{
+		Name:      "chk1",
+		Override:  "replace",
+		Period:    plan.OptionalDuration{Value: time.Second},
+		Timeout:   plan.OptionalDuration{Value: time.Second},
+		Threshold: 3,
+		Exec:      &plan.ExecCheck{Command: "echo chk1"},
+	}
+	layer := &plan.Layer{
+		Checks: map[string]*plan.Check{
+			"chk1": chk1,
+		},
+	}
+	err := s.planMgr.AppendLayer(layer, false)
+	c.Assert(err, IsNil)
+	s.manager.PlanChanged(s.planMgr.Plan())
+	waitChecks(c, s.manager, []*checkstate.CheckInfo{
+		{Name: "chk1", Startup: "enabled", Status: "up", Threshold: 3},
+	})
+	_, err = s.manager.Checks()
+	c.Assert(err, IsNil)
+
+	changed, err := s.manager.StopChecks([]string{"chk1"})
+	waitChecks(c, s.manager, []*checkstate.CheckInfo{
+		{Name: "chk1", Startup: "enabled", Status: "inactive", Threshold: 3},
+	})
+	c.Assert(err, IsNil)
+	c.Assert(changed, DeepEquals, []string{"chk1"})
+	_, err = s.manager.Checks()
+	c.Assert(err, IsNil)
+
+	checkInfo, err := s.manager.RefreshCheck(context.Background(), chk1)
+	c.Assert(err, IsNil)
+	c.Assert(*checkInfo, DeepEquals, checkstate.CheckInfo{
+		Name:      "chk1",
+		Level:     "",
+		Startup:   "enabled",
+		Status:    "inactive",
+		Failures:  0,
+		Threshold: 3,
+	})
+}
+
+func (s *ManagerSuite) TestRefreshStoppedCheckFailure(c *C) {
+	testPath := c.MkDir() + "/test"
+	err := os.WriteFile(testPath, nil, 0o644)
+	c.Assert(err, IsNil)
+	chk1 := &plan.Check{
+		Name:      "chk1",
+		Override:  "replace",
+		Period:    plan.OptionalDuration{Value: time.Second},
+		Timeout:   plan.OptionalDuration{Value: time.Second},
+		Threshold: 3,
+		Exec:      &plan.ExecCheck{Command: fmt.Sprintf(`/bin/sh -c 'echo details >/dev/stderr; [ ! -f %s ]'`, testPath)},
+	}
+	layer := &plan.Layer{
+		Checks: map[string]*plan.Check{
+			"chk1": chk1,
+		},
+	}
+	err = s.planMgr.AppendLayer(layer, false)
+	c.Assert(err, IsNil)
+	s.manager.PlanChanged(s.planMgr.Plan())
+	waitChecks(c, s.manager, []*checkstate.CheckInfo{
+		{Name: "chk1", Startup: "enabled", Status: "up", Threshold: 3},
+	})
+	_, err = s.manager.Checks()
+	c.Assert(err, IsNil)
+
+	changed, err := s.manager.StopChecks([]string{"chk1"})
+	waitChecks(c, s.manager, []*checkstate.CheckInfo{
+		{Name: "chk1", Startup: "enabled", Status: "inactive", Threshold: 3},
+	})
+	c.Assert(err, IsNil)
+	c.Assert(changed, DeepEquals, []string{"chk1"})
+	_, err = s.manager.Checks()
+	c.Assert(err, IsNil)
+
+	checkInfo, err := s.manager.RefreshCheck(context.Background(), chk1)
+	c.Assert(err, ErrorMatches, "exit status 1; details")
+	c.Assert(*checkInfo, DeepEquals, checkstate.CheckInfo{
+		Name:      "chk1",
+		Level:     "",
+		Startup:   "enabled",
+		Status:    "inactive",
+		Failures:  0,
+		Threshold: 3,
+	})
 }
