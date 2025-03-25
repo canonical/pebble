@@ -1855,7 +1855,7 @@ func (s *S) TestWorkloadAppliesToService(c *C) {
 	s.newServiceManager(c)
 	s.planAddLayer(c, `
 services:
-    workload1test:
+    test1:
         override: replace
         command: /bin/sh -c "echo $PATH; sleep 10"
         workload: wl1
@@ -1868,28 +1868,28 @@ workloads:
     `)
 	s.planChanged(c)
 
-	chg := s.startServices(c, [][]string{{"workload1test"}})
-	s.waitUntilService(c, "workload1test", func(svc *servstate.ServiceInfo) bool {
+	chg := s.startServices(c, [][]string{{"test1"}})
+	s.waitUntilService(c, "test1", func(svc *servstate.ServiceInfo) bool {
 		return svc.Current == servstate.StatusActive
 	})
-	c.Assert(s.manager.BackoffNum("workload1test"), Equals, 0)
+	c.Assert(s.manager.BackoffNum("test1"), Equals, 0)
 	s.st.Lock()
 	c.Check(chg.Status(), Equals, state.DoneStatus)
 	s.st.Unlock()
 	time.Sleep(10 * time.Millisecond)
-	c.Check(s.readAndClearLogBuffer(), Matches, `(?s).* \[workload1test\] /private/bin:/bin:/sbin\n`)
+	c.Check(s.readAndClearLogBuffer(), Matches, `(?s).* \[test1\] /private/bin:/bin:/sbin\n`)
 }
 
 func (s *S) TestWorkloadReferenceInvalid(c *C) {
 	s.newServiceManager(c)
 	err := s.tryPlanAddLayer(c, `
 services:
-    non-existing-workload-test:
+    test1:
         override: replace
         command: /bin/sh -c "echo $PATH; sleep 10"
         workload: non-existing
     `)
-	c.Assert(err, ErrorMatches, `workload "non-existing": not defined for service "non-existing-workload-test"`)
+	c.Assert(err, ErrorMatches, `workload "non-existing": not defined for service "test1"`)
 }
 
 func (s *S) TestWorkloadAndServiceUserIncompatible(c *C) {
