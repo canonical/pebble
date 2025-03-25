@@ -362,7 +362,7 @@ func (s *serviceData) startInternal() error {
 		maps.Copy(environment, s.workload.Environment)
 	}
 	// If both workload and service provides the same environment variable,
-	// the workload environment prevails.
+	// the service environment prevails.
 	maps.Copy(environment, s.config.Environment)
 
 	s.cmd.Dir = s.config.WorkingDir

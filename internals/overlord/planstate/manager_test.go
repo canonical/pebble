@@ -15,6 +15,7 @@
 package planstate_test
 
 import (
+	"sync/atomic"
 	"time"
 
 	. "gopkg.in/check.v1"
@@ -27,8 +28,13 @@ import (
 
 func (ps *planSuite) TestLoadInvalidPebbleDir(c *C) {
 	var err error
+	var numChanges atomic.Uint32
+
 	ps.planMgr, err = planstate.NewManager("/invalid/path")
 	c.Assert(err, IsNil)
+	ps.planMgr.AddChangeListener(func(p *plan.Plan) {
+		numChanges.Add(1)
+	})
 	// Load the plan from the <pebble-dir>/layers directory
 	err = ps.planMgr.Load()
 	c.Assert(err, IsNil)
@@ -36,6 +42,65 @@ func (ps *planSuite) TestLoadInvalidPebbleDir(c *C) {
 	out, err := yaml.Marshal(plan)
 	c.Assert(err, IsNil)
 	c.Assert(string(out), Equals, "{}\n")
+	// A new, empty plan was created so change listeners must be called
+	c.Assert(numChanges.Load(), Equals, uint32(1))
+	err = ps.planMgr.Load()
+	c.Assert(err, IsNil)
+	// Plan was already loaded, so no change listeners will be called
+	c.Assert(numChanges.Load(), Equals, uint32(1))
+}
+
+func (ps *planSuite) TestInitInvalidPlan(c *C) {
+	var err error
+	var numChanges atomic.Uint32
+
+	ps.planMgr, err = planstate.NewManager("/unused/path")
+	c.Assert(err, IsNil)
+	ps.planMgr.AddChangeListener(func(p *plan.Plan) {
+		numChanges.Add(1)
+	})
+	// Attempt to initialize with an nil plan
+	err = ps.planMgr.Init(nil)
+	c.Assert(err, ErrorMatches, "cannot initialize plan manager with a nil plan")
+	c.Assert(numChanges.Load(), Equals, uint32(0))
+	// Attempt to initialize with an invalid plan
+	p := &plan.Plan{
+		Layers: []*plan.Layer{},
+		Services: map[string]*plan.Service{
+			// Test service with no command, which will make p.Validate() fail
+			"test": {Command: ""},
+		},
+		Checks:     map[string]*plan.Check{},
+		LogTargets: map[string]*plan.LogTarget{},
+		Sections:   map[string]plan.Section{},
+	}
+	err = ps.planMgr.Init(p)
+	c.Assert(err, ErrorMatches, `plan must define "command" for service "test"`)
+	c.Assert(numChanges.Load(), Equals, uint32(0))
+}
+
+func (ps *planSuite) TestInitOnce(c *C) {
+	var err error
+	var numChanges atomic.Uint32
+
+	ps.planMgr, err = planstate.NewManager("/unused/path")
+	c.Assert(err, IsNil)
+	ps.planMgr.AddChangeListener(func(p *plan.Plan) {
+		numChanges.Add(1)
+	})
+	// Attempt to initialize with an empty plan
+	err = ps.planMgr.Init(&plan.Plan{})
+	c.Assert(err, IsNil)
+	c.Assert(numChanges.Load(), Equals, uint32(1))
+	// Attempt to re-initialize, which will not take effect
+	err = ps.planMgr.Init(nil)
+	// Init() won't fail because the plan is already loaded
+	c.Assert(err, IsNil)
+	c.Assert(numChanges.Load(), Equals, uint32(1))
+	// Attempt to re-initialize with a valid plan, which will also not take effect
+	err = ps.planMgr.Init(&plan.Plan{})
+	c.Assert(err, IsNil)
+	c.Assert(numChanges.Load(), Equals, uint32(1))
 }
 
 var loadLayers = []string{`
@@ -67,9 +132,15 @@ var loadLayers = []string{`
 func (ps *planSuite) TestLoadLayers(c *C) {
 	plan.RegisterSectionExtension(testField, testExtension{})
 	defer plan.UnregisterSectionExtension(testField)
+
 	var err error
+	var numChanges atomic.Uint32
+
 	ps.planMgr, err = planstate.NewManager(ps.layersDir)
 	c.Assert(err, IsNil)
+	ps.planMgr.AddChangeListener(func(p *plan.Plan) {
+		numChanges.Add(1)
+	})
 	// Write layers
 	for _, l := range loadLayers {
 		ps.writeLayer(c, string(reindent(l)))
@@ -77,6 +148,7 @@ func (ps *planSuite) TestLoadLayers(c *C) {
 	// Load the plan from the <pebble-dir>/layers directory
 	err = ps.planMgr.Load()
 	c.Assert(err, IsNil)
+	c.Assert(numChanges.Load(), Equals, uint32(1))
 	plan := ps.planMgr.Plan()
 	out, err := yaml.Marshal(plan)
 	c.Assert(err, IsNil)
@@ -97,6 +169,10 @@ test-field:
         a: something
         b: something else
 `[1:])
+	// Attempt to reload should not take effect
+	err = ps.planMgr.Load()
+	c.Assert(err, IsNil)
+	c.Assert(numChanges.Load(), Equals, uint32(1))
 }
 
 func (ps *planSuite) TestAppendLayers(c *C) {
