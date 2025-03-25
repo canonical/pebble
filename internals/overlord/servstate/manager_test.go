@@ -700,7 +700,7 @@ services:
 	s.st.Lock()
 	c.Check(chg.Status(), Equals, state.DoneStatus)
 	s.st.Unlock()
-	time.Sleep(10 * time.Millisecond)
+	time.Sleep(100 * time.Millisecond)
 	c.Check(s.readAndClearLogBuffer(), Matches,
 		fmt.Sprintf(`(?s).* \[usrgrp\] %[1]s\n.* \[usrgrp\] user=%[1]s home=/home/%[1]s\n`, username))
 }
@@ -1876,7 +1876,7 @@ workloads:
 	s.st.Lock()
 	c.Check(chg.Status(), Equals, state.DoneStatus)
 	s.st.Unlock()
-	time.Sleep(10 * time.Millisecond)
+	time.Sleep(100 * time.Millisecond)
 	c.Check(s.readAndClearLogBuffer(), Matches, `(?s).* \[test1\] /private/bin:/bin:/sbin\n`)
 }
 
