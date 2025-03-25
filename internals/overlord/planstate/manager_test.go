@@ -724,6 +724,6 @@ workloads:
 
 	// We are adding a new layer but we are not mutating existing workloads
 	layer = ps.parseLayer(c, 0, "workloads", "workloads: {}")
-	err = ps.planMgr.AppendLayer(layer, false)
+	err = ps.planMgr.CombineLayer(layer, false)
 	c.Assert(err, IsNil)
 }
