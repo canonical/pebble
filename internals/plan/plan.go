@@ -114,16 +114,16 @@ type Plan struct {
 	Sections map[string]Section `yaml:",inline"`
 }
 
-// NewPlan creates an empty plan that is safe to use everywhere there's
-// an assumption of all sections possibly provided by all registered
-// section extensions being initialized in the plan, even if empty.
+// NewPlan icreates an empty plan which includes empty registered extension
+// fields. In the case of no plan layers, this ensures that plan callback
+// handlers always get a valid extension type to access.
 func NewPlan() *Plan {
 	var err error
 	p := &Plan{Sections: make(map[string]Section, len(sectionExtensions))}
 	for field := range sectionExtensions {
 		p.Sections[field], err = sectionExtensions[field].ParseSection(yaml.Node{})
 		if err != nil {
-			panic(fmt.Sprintf("internal error: ParseSection() of empty node must return a valid section"))
+			panic("internal error: ParseSection() of empty node must return a valid section")
 		}
 	}
 	return p
