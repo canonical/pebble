@@ -114,6 +114,21 @@ type Plan struct {
 	Sections map[string]Section `yaml:",inline"`
 }
 
+// NewPlan creates an empty plan that is safe to use everywhere there's
+// an assumption of all sections possibly provided by all registered
+// section extensions being initialized in the plan, even if empty.
+func NewPlan() *Plan {
+	var err error
+	p := &Plan{Sections: make(map[string]Section, len(sectionExtensions))}
+	for field := range sectionExtensions {
+		p.Sections[field], err = sectionExtensions[field].ParseSection(yaml.Node{})
+		if err != nil {
+			panic(fmt.Sprintf("internal error: ParseSection() of empty node must return a valid section"))
+		}
+	}
+	return p
+}
+
 // MarshalYAML implements an override for top level omitempty tags handling.
 // This is required since Sections are based on an inlined map, for which
 // omitempty and inline together is not currently supported.
@@ -1555,7 +1570,7 @@ func ReadDir(layersDir string) (*Plan, error) {
 	_, err := os.Stat(layersDir)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return &Plan{}, nil
+			return NewPlan(), nil
 		}
 		return nil, err
 	}

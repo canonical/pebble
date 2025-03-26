@@ -166,7 +166,7 @@ func (s *S) SetUpTest(c *C) {
 	restore = func() { plan.UnregisterSectionExtension(workloads.WorkloadsField) }
 	s.AddCleanup(restore)
 
-	s.plan = &plan.Plan{}
+	s.plan = plan.NewPlan()
 	s.planPropagated = false
 	s.manager = nil
 }
@@ -984,7 +984,7 @@ func (s *S) TestOnCheckFailureRestartWhileRunning(c *C) {
 
 	// Create check manager and tell it about plan updates
 	checkMgr := checkstate.NewManager(s.st, s.runner, nil)
-	defer checkMgr.PlanChanged(&plan.Plan{})
+	defer checkMgr.PlanChanged(plan.NewPlan())
 
 	// Tell service manager about check failures
 	checkFailed := make(chan struct{})
@@ -1079,7 +1079,7 @@ func (s *S) TestOnCheckFailureRestartDuringBackoff(c *C) {
 
 	// Create check manager and tell it about plan updates
 	checkMgr := checkstate.NewManager(s.st, s.runner, nil)
-	defer checkMgr.PlanChanged(&plan.Plan{})
+	defer checkMgr.PlanChanged(plan.NewPlan())
 
 	// Tell service manager about check failures
 	checkFailed := make(chan struct{})
@@ -1171,7 +1171,7 @@ func (s *S) TestOnCheckFailureIgnore(c *C) {
 
 	// Create check manager and tell it about plan updates
 	checkMgr := checkstate.NewManager(s.st, s.runner, nil)
-	defer checkMgr.PlanChanged(&plan.Plan{})
+	defer checkMgr.PlanChanged(plan.NewPlan())
 
 	// Tell service manager about check failures
 	checkFailed := make(chan struct{})
@@ -1256,7 +1256,7 @@ func (s *S) testOnCheckFailureShutdown(c *C, action string, restartType restart.
 
 	// Create check manager and tell it about plan updates
 	checkMgr := checkstate.NewManager(s.st, s.runner, nil)
-	defer checkMgr.PlanChanged(&plan.Plan{})
+	defer checkMgr.PlanChanged(plan.NewPlan())
 
 	// Tell service manager about check failures
 	checkFailed := make(chan struct{})

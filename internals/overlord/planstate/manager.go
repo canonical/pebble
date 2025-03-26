@@ -47,7 +47,7 @@ type PlanManager struct {
 func NewManager(layersDir string) (*PlanManager, error) {
 	manager := &PlanManager{
 		layersDir: layersDir,
-		plan:      &plan.Plan{},
+		plan:      plan.NewPlan(),
 	}
 	return manager, nil
 }

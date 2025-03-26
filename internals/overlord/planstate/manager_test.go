@@ -89,7 +89,7 @@ func (ps *planSuite) TestInitOnce(c *C) {
 		numChanges.Add(1)
 	})
 	// Attempt to initialize with an empty plan
-	err = ps.planMgr.Init(&plan.Plan{})
+	err = ps.planMgr.Init(plan.NewPlan())
 	c.Assert(err, IsNil)
 	c.Assert(numChanges.Load(), Equals, uint32(1))
 	// Attempt to re-initialize, which will not take effect
@@ -98,7 +98,7 @@ func (ps *planSuite) TestInitOnce(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(numChanges.Load(), Equals, uint32(1))
 	// Attempt to re-initialize with a valid plan, which will also not take effect
-	err = ps.planMgr.Init(&plan.Plan{})
+	err = ps.planMgr.Init(plan.NewPlan())
 	c.Assert(err, IsNil)
 	c.Assert(numChanges.Load(), Equals, uint32(1))
 }

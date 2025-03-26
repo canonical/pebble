@@ -211,7 +211,7 @@ func (s *ManagerSuite) TestCheckCanceled(c *C) {
 	}
 
 	// Cancel the check in-flight
-	s.manager.PlanChanged(&plan.Plan{})
+	s.manager.PlanChanged(plan.NewPlan())
 	waitChecks(c, s.manager, nil)
 
 	// Ensure command was terminated (output file didn't grow in size)
