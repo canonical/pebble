@@ -114,7 +114,7 @@ type Plan struct {
 	Sections map[string]Section `yaml:",inline"`
 }
 
-// NewPlan icreates an empty plan which includes empty registered extension
+// NewPlan creates an empty plan which includes empty registered extension
 // fields. In the case of no plan layers, this ensures that plan callback
 // handlers always get a valid extension type to access.
 func NewPlan() *Plan {
