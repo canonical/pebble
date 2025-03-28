@@ -15,6 +15,7 @@
 package planstate_test
 
 import (
+	"sync/atomic"
 	"time"
 
 	. "gopkg.in/check.v1"
@@ -22,12 +23,18 @@ import (
 
 	"github.com/canonical/pebble/internals/overlord/planstate"
 	"github.com/canonical/pebble/internals/plan"
+	"github.com/canonical/pebble/internals/workloads"
 )
 
 func (ps *planSuite) TestLoadInvalidPebbleDir(c *C) {
 	var err error
+	var numChanges atomic.Uint32
+
 	ps.planMgr, err = planstate.NewManager("/invalid/path")
 	c.Assert(err, IsNil)
+	ps.planMgr.AddChangeListener(func(p *plan.Plan) {
+		numChanges.Add(1)
+	})
 	// Load the plan from the <pebble-dir>/layers directory
 	err = ps.planMgr.Load()
 	c.Assert(err, IsNil)
@@ -35,6 +42,65 @@ func (ps *planSuite) TestLoadInvalidPebbleDir(c *C) {
 	out, err := yaml.Marshal(plan)
 	c.Assert(err, IsNil)
 	c.Assert(string(out), Equals, "{}\n")
+	// A new, empty plan was created so change listeners must be called
+	c.Assert(numChanges.Load(), Equals, uint32(1))
+	err = ps.planMgr.Load()
+	c.Assert(err, IsNil)
+	// Plan was already loaded, so no change listeners will be called
+	c.Assert(numChanges.Load(), Equals, uint32(1))
+}
+
+func (ps *planSuite) TestInitInvalidPlan(c *C) {
+	var err error
+	var numChanges atomic.Uint32
+
+	ps.planMgr, err = planstate.NewManager("/unused/path")
+	c.Assert(err, IsNil)
+	ps.planMgr.AddChangeListener(func(p *plan.Plan) {
+		numChanges.Add(1)
+	})
+	// Attempt to initialize with an nil plan
+	err = ps.planMgr.Init(nil)
+	c.Assert(err, ErrorMatches, "cannot initialize plan manager with a nil plan")
+	c.Assert(numChanges.Load(), Equals, uint32(0))
+	// Attempt to initialize with an invalid plan
+	p := &plan.Plan{
+		Layers: []*plan.Layer{},
+		Services: map[string]*plan.Service{
+			// Test service with no command, which will make p.Validate() fail
+			"test": {Command: ""},
+		},
+		Checks:     map[string]*plan.Check{},
+		LogTargets: map[string]*plan.LogTarget{},
+		Sections:   map[string]plan.Section{},
+	}
+	err = ps.planMgr.Init(p)
+	c.Assert(err, ErrorMatches, `plan must define "command" for service "test"`)
+	c.Assert(numChanges.Load(), Equals, uint32(0))
+}
+
+func (ps *planSuite) TestInitOnce(c *C) {
+	var err error
+	var numChanges atomic.Uint32
+
+	ps.planMgr, err = planstate.NewManager("/unused/path")
+	c.Assert(err, IsNil)
+	ps.planMgr.AddChangeListener(func(p *plan.Plan) {
+		numChanges.Add(1)
+	})
+	// Attempt to initialize with an empty plan
+	err = ps.planMgr.Init(plan.NewPlan())
+	c.Assert(err, IsNil)
+	c.Assert(numChanges.Load(), Equals, uint32(1))
+	// Attempt to re-initialize, which will not take effect
+	err = ps.planMgr.Init(nil)
+	// Init() won't fail because the plan is already loaded
+	c.Assert(err, IsNil)
+	c.Assert(numChanges.Load(), Equals, uint32(1))
+	// Attempt to re-initialize with a valid plan, which will also not take effect
+	err = ps.planMgr.Init(plan.NewPlan())
+	c.Assert(err, IsNil)
+	c.Assert(numChanges.Load(), Equals, uint32(1))
 }
 
 var loadLayers = []string{`
@@ -66,9 +132,15 @@ var loadLayers = []string{`
 func (ps *planSuite) TestLoadLayers(c *C) {
 	plan.RegisterSectionExtension(testField, testExtension{})
 	defer plan.UnregisterSectionExtension(testField)
+
 	var err error
+	var numChanges atomic.Uint32
+
 	ps.planMgr, err = planstate.NewManager(ps.layersDir)
 	c.Assert(err, IsNil)
+	ps.planMgr.AddChangeListener(func(p *plan.Plan) {
+		numChanges.Add(1)
+	})
 	// Write layers
 	for _, l := range loadLayers {
 		ps.writeLayer(c, string(reindent(l)))
@@ -76,6 +148,7 @@ func (ps *planSuite) TestLoadLayers(c *C) {
 	// Load the plan from the <pebble-dir>/layers directory
 	err = ps.planMgr.Load()
 	c.Assert(err, IsNil)
+	c.Assert(numChanges.Load(), Equals, uint32(1))
 	plan := ps.planMgr.Plan()
 	out, err := yaml.Marshal(plan)
 	c.Assert(err, IsNil)
@@ -96,6 +169,10 @@ test-field:
         a: something
         b: something else
 `[1:])
+	// Attempt to reload should not take effect
+	err = ps.planMgr.Load()
+	c.Assert(err, IsNil)
+	c.Assert(numChanges.Load(), Equals, uint32(1))
 }
 
 func (ps *planSuite) TestAppendLayers(c *C) {
@@ -587,4 +664,66 @@ func (ps *planSuite) TestAppendLayersWithInner(c *C) {
 		c.Assert(plan.Layers[i].Order, Equals, layer.order)
 		c.Assert(plan.Layers[i].Label, Equals, layer.label)
 	}
+}
+
+func (ps *planSuite) TestAppendWorkloadLayer(c *C) {
+	plan.RegisterSectionExtension(workloads.WorkloadsField, &workloads.WorkloadsSectionExtension{})
+	defer plan.UnregisterSectionExtension(workloads.WorkloadsField)
+
+	ps.writeLayer(c, `
+workloads:
+    workload1:
+        override: replace
+`)
+
+	var err error
+	ps.planMgr, err = planstate.NewManager(ps.layersDir)
+	c.Assert(err, IsNil)
+	err = ps.planMgr.Load()
+	c.Assert(err, IsNil)
+
+	// An attempt to mutate layers must fail
+	layer := ps.parseLayer(c, 0, "workload2", `
+workloads:
+    workload2:
+        override: replace
+`)
+	err = ps.planMgr.AppendLayer(layer, false)
+	c.Assert(err, ErrorMatches, "cannot change workloads once the plan has been loaded")
+
+	// We are adding a new layer but we are not mutating existing workloads
+	layer = ps.parseLayer(c, 0, "workloads", "workloads: {}")
+	err = ps.planMgr.AppendLayer(layer, false)
+	c.Assert(err, IsNil)
+}
+
+func (ps *planSuite) TestCombineWorkloadLayer(c *C) {
+	plan.RegisterSectionExtension(workloads.WorkloadsField, &workloads.WorkloadsSectionExtension{})
+	defer plan.UnregisterSectionExtension(workloads.WorkloadsField)
+
+	ps.writeLayer(c, `
+workloads:
+    workload1:
+        override: replace
+`)
+
+	var err error
+	ps.planMgr, err = planstate.NewManager(ps.layersDir)
+	c.Assert(err, IsNil)
+	err = ps.planMgr.Load()
+	c.Assert(err, IsNil)
+
+	// An attempt to mutate layers must fail
+	layer := ps.parseLayer(c, 0, "workload2", `
+workloads:
+    workload2:
+        override: replace
+`)
+	err = ps.planMgr.CombineLayer(layer, false)
+	c.Assert(err, ErrorMatches, "cannot change workloads once the plan has been loaded")
+
+	// We are adding a new layer but we are not mutating existing workloads
+	layer = ps.parseLayer(c, 0, "workloads", "workloads: {}")
+	err = ps.planMgr.CombineLayer(layer, false)
+	c.Assert(err, IsNil)
 }

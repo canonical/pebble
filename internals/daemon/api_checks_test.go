@@ -256,7 +256,7 @@ checks:
 			c.Fatalf("timed out waiting for checks to settle\nobtained = #%v\nexpected = %#v",
 				body["result"], expected)
 		}
-		time.Sleep(time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 	}
 
 	req, err := http.NewRequest("POST", "/v1/checks/refresh", strings.NewReader(`{"name": "chk1"}`))

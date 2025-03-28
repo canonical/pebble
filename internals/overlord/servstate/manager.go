@@ -14,6 +14,7 @@ import (
 	"github.com/canonical/pebble/internals/overlord/state"
 	"github.com/canonical/pebble/internals/plan"
 	"github.com/canonical/pebble/internals/servicelog"
+	"github.com/canonical/pebble/internals/workloads"
 )
 
 type ServiceManager struct {
@@ -255,6 +256,7 @@ func (m *ServiceManager) ServiceLogs(services []string, last int) (map[string]se
 // because their plans had changed between when they started and this call.
 func (m *ServiceManager) Replan() ([][]string, [][]string, error) {
 	currentPlan := m.getPlan()
+	ws, _ := currentPlan.Sections[workloads.WorkloadsField].(*workloads.WorkloadsSection)
 	m.servicesLock.Lock()
 	defer m.servicesLock.Unlock()
 
@@ -262,10 +264,20 @@ func (m *ServiceManager) Replan() ([][]string, [][]string, error) {
 	var stop []string
 	for name, s := range m.services {
 		if config, ok := currentPlan.Services[name]; ok {
-			if config.Equal(s.config) {
+			// Don't restart the service unless the service configuration or its
+			// workload definition (if any) have changed
+			var workload *workloads.Workload
+			if ws != nil {
+				workload = ws.Entries[s.config.Workload]
+			}
+			if config.Equal(s.config) && (workload == nil || workload.Equal(s.workload)) {
 				continue
 			}
-			s.config = config.Copy() // update service config from plan
+			// Update service config and workload from plan
+			s.config = config.Copy()
+			if workload != nil {
+				s.workload = workload
+			}
 		}
 		needsRestart[name] = true
 		stop = append(stop, name)

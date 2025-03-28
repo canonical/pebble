@@ -15,6 +15,7 @@
 package planstate
 
 import (
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -38,6 +39,7 @@ type PlanManager struct {
 
 	planLock sync.Mutex
 	plan     *plan.Plan
+	isLoaded bool
 
 	changeListeners []PlanChangedFunc
 }
@@ -45,7 +47,7 @@ type PlanManager struct {
 func NewManager(layersDir string) (*PlanManager, error) {
 	manager := &PlanManager{
 		layersDir: layersDir,
-		plan:      &plan.Plan{},
+		plan:      plan.NewPlan(),
 	}
 	return manager, nil
 }
@@ -54,17 +56,56 @@ func NewManager(layersDir string) (*PlanManager, error) {
 // final plan, and finally notifies registered managers of the plan update. In
 // the case of a non-existent layers directory, or no layers in the layers
 // directory, an empty plan is announced to change subscribers.
-func (m *PlanManager) Load() error {
-	plan, err := plan.ReadDir(m.layersDir)
+func (m *PlanManager) Load() (err error) {
+	m.planLock.Lock()
+
+	var p *plan.Plan
+	wasLoaded := m.isLoaded
+	defer func() {
+		m.planLock.Unlock()
+		if err == nil && !wasLoaded {
+			m.callChangeListeners(p)
+		}
+	}()
+
+	if m.isLoaded {
+		return nil
+	}
+
+	p, err = plan.ReadDir(m.layersDir)
 	if err != nil {
 		return err
 	}
+	m.plan = p
+	m.isLoaded = true
+	return nil
+}
 
+// Init loads the plan from an existing instance and announces to
+// change subscribers.
+func (m *PlanManager) Init(p *plan.Plan) (err error) {
 	m.planLock.Lock()
-	m.plan = plan
-	m.planLock.Unlock()
 
-	m.callChangeListeners(plan)
+	wasLoaded := m.isLoaded
+	defer func() {
+		m.planLock.Unlock()
+		if err == nil && !wasLoaded {
+			m.callChangeListeners(p)
+		}
+	}()
+
+	if m.isLoaded {
+		return nil
+	}
+	if p == nil {
+		return errors.New("cannot initialize plan manager with a nil plan")
+	}
+
+	if err := p.Validate(); err != nil {
+		return err
+	}
+	m.plan = p
+	m.isLoaded = true
 	return nil
 }
 

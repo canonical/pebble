@@ -44,6 +44,7 @@ import (
 	"github.com/canonical/pebble/internals/reaper"
 	"github.com/canonical/pebble/internals/servicelog"
 	"github.com/canonical/pebble/internals/testutil"
+	"github.com/canonical/pebble/internals/workloads"
 )
 
 const (
@@ -156,12 +157,16 @@ func (s *S) SetUpTest(c *C) {
 	s.runner = state.NewTaskRunner(s.st)
 	s.stopDaemon = make(chan restart.RestartType, 1)
 
+	plan.RegisterSectionExtension(workloads.WorkloadsField, &workloads.WorkloadsSectionExtension{})
+
 	restore := servstate.FakeOkayWait(shortOkayDelay)
 	s.AddCleanup(restore)
 	restore = servstate.FakeKillFailDelay(shortKillDelay, shortFailDelay)
 	s.AddCleanup(restore)
+	restore = func() { plan.UnregisterSectionExtension(workloads.WorkloadsField) }
+	s.AddCleanup(restore)
 
-	s.plan = &plan.Plan{}
+	s.plan = plan.NewPlan()
 	s.planPropagated = false
 	s.manager = nil
 }
@@ -175,6 +180,7 @@ func (s *S) TearDownTest(c *C) {
 			s.stopRunningServices(c)
 		}
 	}
+
 	// General test cleanup
 	s.BaseTest.TearDownTest(c)
 
@@ -408,6 +414,70 @@ services:
 	s.stopTestServices(c)
 }
 
+func (s *S) TestReplanServicesWithWorkload(c *C) {
+	s.newServiceManager(c)
+	s.planAddLayer(c, testPlanLayer)
+
+	resetWorkloadsSectionExtension()
+	s.planAddLayer(c, `
+services:
+    test6:
+        override: replace
+        startup: enabled
+        command: /bin/test6
+        workload: default
+workloads:
+    default:
+        override: replace
+        user: nobody
+        group: nogroup
+`)
+	s.planChanged(c)
+
+	s.startTestServices(c, true)
+	if c.Failed() {
+		return
+	}
+
+	stops, starts, err := s.manager.Replan()
+	c.Assert(err, IsNil)
+	c.Check(stops, DeepEquals, [][]string{nil})
+	c.Check(starts, DeepEquals, [][]string{[]string{"test1", "test2"}, []string{"test6"}})
+
+	resetWorkloadsSectionExtension()
+	s.planAddLayer(c, `
+services:
+    test6:
+        override: merge
+        workload: new-default
+workloads:
+    new-default:
+        override: replace
+        user: nobody
+        group: nogroup
+`)
+	s.planChanged(c)
+
+	stops, starts, err = s.manager.Replan()
+	c.Assert(err, IsNil)
+	c.Check(stops, DeepEquals, [][]string{nil})
+	c.Check(starts, DeepEquals, [][]string{[]string{"test1", "test2"}, []string{"test6"}})
+
+	resetWorkloadsSectionExtension()
+	s.planAddLayer(c, `
+workloads:
+    new-default:
+        override: replace
+`)
+	s.planChanged(c)
+
+	stops, starts, err = s.manager.Replan()
+	c.Assert(err, IsNil)
+	c.Check(stops, DeepEquals, [][]string{nil})
+	c.Check(starts, DeepEquals, [][]string{[]string{"test1", "test2"}, []string{"test6"}})
+	s.stopTestServices(c)
+}
+
 func (s *S) TestReplanUpdatesConfig(c *C) {
 	s.newServiceManager(c)
 	s.planAddLayer(c, testPlanLayer)
@@ -441,6 +511,11 @@ services:
 	c.Check(config.OnSuccess, Equals, plan.ActionIgnore)
 	c.Check(config.Summary, Equals, "A summary!")
 	c.Check(config.Command, Equals, command)
+}
+
+func resetWorkloadsSectionExtension() {
+	plan.UnregisterSectionExtension(workloads.WorkloadsField)
+	plan.RegisterSectionExtension(workloads.WorkloadsField, &workloads.WorkloadsSectionExtension{})
 }
 
 func (s *S) TestStopStartUpdatesConfig(c *C) {
@@ -625,7 +700,7 @@ services:
 	s.st.Lock()
 	c.Check(chg.Status(), Equals, state.DoneStatus)
 	s.st.Unlock()
-	time.Sleep(10 * time.Millisecond)
+	time.Sleep(100 * time.Millisecond)
 	c.Check(s.readAndClearLogBuffer(), Matches,
 		fmt.Sprintf(`(?s).* \[usrgrp\] %[1]s\n.* \[usrgrp\] user=%[1]s home=/home/%[1]s\n`, username))
 }
@@ -909,7 +984,7 @@ func (s *S) TestOnCheckFailureRestartWhileRunning(c *C) {
 
 	// Create check manager and tell it about plan updates
 	checkMgr := checkstate.NewManager(s.st, s.runner, nil)
-	defer checkMgr.PlanChanged(&plan.Plan{})
+	defer checkMgr.PlanChanged(plan.NewPlan())
 
 	// Tell service manager about check failures
 	checkFailed := make(chan struct{})
@@ -1004,7 +1079,7 @@ func (s *S) TestOnCheckFailureRestartDuringBackoff(c *C) {
 
 	// Create check manager and tell it about plan updates
 	checkMgr := checkstate.NewManager(s.st, s.runner, nil)
-	defer checkMgr.PlanChanged(&plan.Plan{})
+	defer checkMgr.PlanChanged(plan.NewPlan())
 
 	// Tell service manager about check failures
 	checkFailed := make(chan struct{})
@@ -1096,7 +1171,7 @@ func (s *S) TestOnCheckFailureIgnore(c *C) {
 
 	// Create check manager and tell it about plan updates
 	checkMgr := checkstate.NewManager(s.st, s.runner, nil)
-	defer checkMgr.PlanChanged(&plan.Plan{})
+	defer checkMgr.PlanChanged(plan.NewPlan())
 
 	// Tell service manager about check failures
 	checkFailed := make(chan struct{})
@@ -1181,7 +1256,7 @@ func (s *S) testOnCheckFailureShutdown(c *C, action string, restartType restart.
 
 	// Create check manager and tell it about plan updates
 	checkMgr := checkstate.NewManager(s.st, s.runner, nil)
-	defer checkMgr.PlanChanged(&plan.Plan{})
+	defer checkMgr.PlanChanged(plan.NewPlan())
 
 	// Tell service manager about check failures
 	checkFailed := make(chan struct{})
@@ -1776,6 +1851,126 @@ services:
 	})
 }
 
+func (s *S) TestWorkloadAppliesToService(c *C) {
+	s.newServiceManager(c)
+	s.planAddLayer(c, `
+services:
+    test1:
+        override: replace
+        command: /bin/sh -c "echo $PATH; sleep 10"
+        workload: wl1
+
+workloads:
+    wl1:
+        override: replace
+        environment:
+            PATH: "/private/bin:/bin:/sbin"
+    `)
+	s.planChanged(c)
+
+	chg := s.startServices(c, [][]string{{"test1"}})
+	s.waitUntilService(c, "test1", func(svc *servstate.ServiceInfo) bool {
+		return svc.Current == servstate.StatusActive
+	})
+	c.Assert(s.manager.BackoffNum("test1"), Equals, 0)
+	s.st.Lock()
+	c.Check(chg.Status(), Equals, state.DoneStatus)
+	s.st.Unlock()
+	time.Sleep(100 * time.Millisecond)
+	c.Check(s.readAndClearLogBuffer(), Matches, `(?s).* \[test1\] /private/bin:/bin:/sbin\n`)
+}
+
+func (s *S) TestWorkloadReferenceInvalid(c *C) {
+	s.newServiceManager(c)
+	err := s.tryPlanAddLayer(c, `
+services:
+    test1:
+        override: replace
+        command: /bin/sh -c "echo $PATH; sleep 10"
+        workload: non-existing
+    `)
+	c.Assert(err, ErrorMatches, `workload "non-existing": not defined for service "test1"`)
+}
+
+func (s *S) TestWorkloadAndServiceUserIncompatible(c *C) {
+	s.newServiceManager(c)
+	err := s.tryPlanAddLayer(c, `
+services:
+    foo:
+        override: replace
+        command: /bin/foo
+        workload: bar
+        user: alice
+workloads:
+    bar:
+        override: replace
+    `)
+	c.Assert(err, ErrorMatches, `plan service "foo" cannot have user information and a workload at the same time`)
+	err = s.tryPlanAddLayer(c, `
+services:
+    foo:
+        override: replace
+        command: /bin/foo
+        workload: bar
+        user-id: 1000
+workloads:
+    bar:
+        override: replace
+    `)
+	c.Assert(err, ErrorMatches, `plan service "foo" cannot have user information and a workload at the same time`)
+
+	err = s.tryPlanAddLayer(c, `
+services:
+    foo:
+        override: replace
+        command: /bin/foo
+        workload: bar
+        group: bosses
+workloads:
+    bar:
+        override: replace
+    `)
+	c.Assert(err, ErrorMatches, `plan service "foo" cannot have group information and a workload at the same time`)
+	err = s.tryPlanAddLayer(c, `
+services:
+    foo:
+        override: replace
+        command: /bin/foo
+        workload: bar
+        group-id: 1001
+workloads:
+    bar:
+        override: replace
+    `)
+	c.Assert(err, ErrorMatches, `plan service "foo" cannot have group information and a workload at the same time`)
+}
+
+func (s *S) tryPlanAddLayer(c *C, layerYAML string) error {
+	cnt := len(s.plan.Layers)
+	layer, err := plan.ParseLayer(cnt, fmt.Sprintf("test-plan-layer-%v", cnt), []byte(layerYAML))
+	if err != nil {
+		return err
+	}
+	// Resolve {{.NotifyDoneCheck}}
+	s.insertDoneChecks(c, layer)
+	layers := append(s.plan.Layers, layer)
+	combined, err := plan.CombineLayers(layers...)
+	if err != nil {
+		return err
+	}
+	if err := combined.Validate(); err != nil {
+		return err
+	}
+	s.plan = &plan.Plan{
+		Layers:     layers,
+		Services:   combined.Services,
+		Checks:     combined.Checks,
+		LogTargets: combined.LogTargets,
+		Sections:   combined.Sections,
+	}
+	return s.plan.Validate()
+}
+
 func (s *S) newServiceManager(c *C) {
 	var err error
 	s.manager, err = servstate.NewManager(s.st, s.runner, s.logOutput, testRestarter{s.stopDaemon}, fakeLogManager{})
@@ -1797,12 +1992,15 @@ func (s *S) planAddLayer(c *C, layerYAML string) {
 	layers := append(s.plan.Layers, layer)
 	combined, err := plan.CombineLayers(layers...)
 	c.Assert(err, IsNil)
+	c.Assert(combined.Validate(), IsNil)
 	s.plan = &plan.Plan{
 		Layers:     layers,
 		Services:   combined.Services,
 		Checks:     combined.Checks,
 		LogTargets: combined.LogTargets,
+		Sections:   combined.Sections,
 	}
+	c.Assert(s.plan.Validate(), IsNil)
 }
 
 // Make sure services are all stopped before the next test starts.

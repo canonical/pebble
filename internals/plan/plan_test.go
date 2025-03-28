@@ -1933,7 +1933,7 @@ func (s *S) TestMergeServiceContextNoContext(c *C) {
 }
 
 func (s *S) TestMergeServiceContextBadService(c *C) {
-	_, err := plan.MergeServiceContext(&plan.Plan{}, "nosvc", plan.ContextOptions{})
+	_, err := plan.MergeServiceContext(plan.NewPlan(), "nosvc", plan.ContextOptions{})
 	c.Assert(err, ErrorMatches, `context service "nosvc" not found`)
 }
 
@@ -2148,7 +2148,7 @@ func (s *S) TestStartStopOrderMultipleLanesRandomOrder(c *C) {
 func (s *S) TestSectionFieldStability(c *C) {
 	layerFields := structYamlFields(plan.Layer{})
 	c.Assert(layerFields, testutil.DeepUnsortedMatches, []string{"summary", "description", "services", "checks", "log-targets", "sections"})
-	planFields := structYamlFields(plan.Plan{})
+	planFields := structYamlFields(*plan.NewPlan())
 	c.Assert(planFields, testutil.DeepUnsortedMatches, []string{"services", "checks", "log-targets", "sections"})
 }
 

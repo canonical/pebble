@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"os/exec"
 	"os/user"
@@ -23,6 +24,7 @@ import (
 	"github.com/canonical/pebble/internals/plan"
 	"github.com/canonical/pebble/internals/reaper"
 	"github.com/canonical/pebble/internals/servicelog"
+	"github.com/canonical/pebble/internals/workloads"
 )
 
 // TaskServiceRequest extracts the *ServiceRequest that was associated
@@ -97,6 +99,7 @@ type serviceData struct {
 	manager      *ServiceManager
 	state        serviceState
 	config       *plan.Service
+	workload     *workloads.Workload
 	logs         *servicelog.RingBuffer
 	started      chan error
 	stopped      chan error
@@ -123,8 +126,16 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 		return fmt.Errorf("cannot find service %q in plan", request.Name)
 	}
 
+	var workload *workloads.Workload
+	if config.Workload != "" {
+		ws := currentPlan.Sections[workloads.WorkloadsField].(*workloads.WorkloadsSection)
+		if workload = ws.Entries[config.Workload]; workload == nil {
+			return fmt.Errorf("internal error: cannot find workload %q for service %q in plan", config.Workload, request.Name)
+		}
+	}
+
 	// Create the service object (or reuse the existing one by name).
-	service, taskLog := m.serviceForStart(config)
+	service, taskLog := m.serviceForStart(config, workload)
 	if taskLog != "" {
 		addTaskLog(task, taskLog)
 	}
@@ -170,7 +181,7 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 // and is running.
 //
 // It also returns a message to add to the task's log, or empty string if none.
-func (m *ServiceManager) serviceForStart(config *plan.Service) (service *serviceData, taskLog string) {
+func (m *ServiceManager) serviceForStart(config *plan.Service, workload *workloads.Workload) (service *serviceData, taskLog string) {
 	m.servicesLock.Lock()
 	defer m.servicesLock.Unlock()
 
@@ -180,10 +191,13 @@ func (m *ServiceManager) serviceForStart(config *plan.Service) (service *service
 		service = &serviceData{
 			manager: m,
 			state:   stateInitial,
-			config:  config.Copy(),
 			logs:    servicelog.NewRingBuffer(maxLogBytes),
 			started: make(chan error, 1),
 			stopped: make(chan error, 2), // enough for killTimeElapsed to send, and exit if it happens after
+		}
+		service.config = config.Copy()
+		if workload != nil {
+			service.workload = workload
 		}
 		m.services[config.Name] = service
 		return service, ""
@@ -191,6 +205,9 @@ func (m *ServiceManager) serviceForStart(config *plan.Service) (service *service
 
 	// Ensure config is up-to-date from the plan whenever the user starts a service.
 	service.config = config.Copy()
+	if workload != nil {
+		service.workload = workload
+	}
 
 	switch service.state {
 	case stateInitial, stateStarting, stateRunning:
@@ -340,16 +357,39 @@ func (s *serviceData) startInternal() error {
 	s.cmd = exec.Command(args[0], args[1:]...)
 	s.cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
-	// Copy environment to avoid updating original.
 	environment := make(map[string]string)
-	for k, v := range s.config.Environment {
-		environment[k] = v
+	if s.workload != nil {
+		maps.Copy(environment, s.workload.Environment)
 	}
+	// If both workload and service provides the same environment variable,
+	// the service environment prevails.
+	maps.Copy(environment, s.config.Environment)
 
 	s.cmd.Dir = s.config.WorkingDir
 
 	// Start as another user if specified in plan.
-	uid, gid, err := osutil.NormalizeUidGid(s.config.UserID, s.config.GroupID, s.config.User, s.config.Group)
+	var uid, gid *int
+	var username, groupname string
+	if s.workload != nil {
+		// Take user information from the workload. Note that it is guaranteed that,
+		// if the service is running in a workload, the service config will not
+		// include any user information.
+		uid, gid = s.workload.UserID, s.workload.GroupID
+		username, groupname = s.workload.User, s.workload.Group
+	}
+	if s.config.UserID != nil {
+		uid = s.config.UserID
+	}
+	if s.config.GroupID != nil {
+		gid = s.config.GroupID
+	}
+	if s.config.User != "" {
+		username = s.config.User
+	}
+	if s.config.Group != "" {
+		groupname = s.config.Group
+	}
+	uid, gid, err = osutil.NormalizeUidGid(uid, gid, username, groupname)
 	if err != nil {
 		return err
 	}
