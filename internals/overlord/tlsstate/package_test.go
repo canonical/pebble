@@ -38,6 +38,7 @@ type tlsSuite struct{}
 
 var _ = Suite(&tlsSuite{})
 
+// GetFakeTime converts a simple string date to the time.Time type for testing purposes.
 func (ts *tlsSuite) GetFakeTime(c *C, date string) time.Time {
 	layout := "2006-01-02"
 	now, err := time.Parse(layout, date)

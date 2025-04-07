@@ -12,7 +12,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-// tlsstate manages tls keypairs
+// tlsstate manages TLS keypairs on behalf of the daemon's HTTPS server.
 package tlsstate
 
 import (
@@ -40,20 +40,47 @@ import (
 )
 
 var (
+	// systemTime can be faked during testing.
 	systemTime = time.Now
 
-	// certificateValidityPeriod determines how long the generated certificate
-	// is valid for from the point it is generated. Note that the same
-	// certificate is invalid before the point in time it is generated.
+	// certificateValidityPeriod determines how long a newly generated
+	// TLS keypair is valid for.
 	certificateValidityPeriod = (10 * 365 * 24 * time.Hour)
 )
 
 type TLSManager struct {
+	// tlsDir is the location of the PEM keypair files.
 	tlsDir         string
 	tlsKeyPairLock sync.Mutex
 	tlsKeyPairs    []*TLSKeyPair
 }
 
+// NewManager creates a new TLS manager and loads existing keypairs from the
+// tlsDir directory.
+//
+// The TLS manager will generate keypairs on demand, so no external keypair
+// generation or lifecycle management of existing keypairs will be required.
+//
+// However, is possible to pre-seed the tlsDir with TLSv1.3 supported keypairs.
+// The following steps provide an example of how to create a TLSv1.3 supported
+// self-signed TLS keypair (the private key must be encoded in PKCS8 format):
+//
+// ~/> openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:prime256v1 -out ec-p256.pem
+// ~/> openssl req -new -x509 -key ec-p256.pem -out ec-p256-cert.pem -days 365
+//
+// The name of the file must match the SHA512/384 hash of the raw public certificate
+// encoded in base32 (without padding), and contain both the private and certificate
+// blocks in a single PEM file:
+//
+// ~/> FINGERPRINT=$(openssl x509 -in ec-p256-cert.pem -outform DER | openssl dgst -sha384 -binary | base32 -w0 | tr -d '=')
+// ~/> cat ec-p256.pem > ${FINGERPRINT}.pem
+// ~/> cat ec-p256-cert.pem >> ${FINGERPRINT}.pem
+//
+// The file permission must be 0o600:
+//
+// ~/> chmod 600 ${FINGERPRINT}.pem
+//
+// The file ${FINGERPRINT}.pem should be copied into tlsDir before the manager is started.
 func NewManager(tlsDir string) (*TLSManager, error) {
 	manager := &TLSManager{tlsDir: tlsDir}
 	if err := manager.loadTLSKeyPairs(); err != nil {
@@ -62,10 +89,9 @@ func NewManager(tlsDir string) (*TLSManager, error) {
 	return manager, nil
 }
 
-// TLSKeyPair the currently preferred certificate. This method may generate
-// a suitable x509 keypair if none exists as the time of the call. The
-// generated keypair will be installed (persisted) in the TLS directory, so
-// a future call to loadX509Keypairs() will load it as well.
+// TLSKeyPair returns the currently preferred keypair. This method may generate
+// a suitable TLS keypair if none exists as the time of the call. The
+// generated keypair will be installed (persisted) in the TLS directory.
 func (m *TLSManager) TLSKeyPair() (*TLSKeyPair, error) {
 	m.tlsKeyPairLock.Lock()
 	defer m.tlsKeyPairLock.Unlock()
@@ -88,12 +114,11 @@ func (m *TLSManager) TLSKeyPair() (*TLSKeyPair, error) {
 			return nil, err
 		}
 	}
-	// Return the TLS certificate (includes the key).
+	// Return the TLS keypair.
 	return selectedKeypair, nil
 }
 
-// TLSKeyPairs returns the slice of currently valid and supported
-// tlsKeyPairs.
+// TLSKeyPairs returns the slice of currently valid and supported tlsKeyPairs.
 func (m *TLSManager) TLSKeyPairs() []*TLSKeyPair {
 	m.tlsKeyPairLock.Lock()
 	defer m.tlsKeyPairLock.Unlock()
@@ -112,10 +137,10 @@ func (m *TLSManager) Ensure() error {
 	return nil
 }
 
-// loadX509Keypairs loads all the keypairs from the TLS directory. This
+// loadTLSKeypairs loads all the keypairs from the TLS directory. This
 // method can be called again to reload the directory during run-time
 // as long as the tlsKeyPairLock is locked is held. The keypairs are ordered
-// by the certificate start date.
+// by the certificate start date, then end date.
 func (m *TLSManager) loadTLSKeyPairs() error {
 	var keypairs []*TLSKeyPair
 	err := m.withPEMFile(func(path string, fingerprint string) error {
@@ -143,16 +168,15 @@ func (m *TLSManager) loadTLSKeyPairs() error {
 	return nil
 }
 
-// filenameRegexp matches PEM files based on an SHA512/244 hash of the
-// x509 certificate, encoded in base32 (49 digits), with an ".pem" suffix.
-var filenameRegexp = regexp.MustCompile(`^[ABCDEFGHIJKLMNOPQRSTUVWXYZ234567]{45}\.pem$`)
+// filenameRegexp matches PEM files based on an SHA512/384 hash of the
+// x509 raw certificate, encoded in base32 (77 digits), with an ".pem" suffix.
+var filenameRegexp = regexp.MustCompile(`^[ABCDEFGHIJKLMNOPQRSTUVWXYZ234567]{77}\.pem$`)
 
-// withPEMFile inspects the TLS directory, locates all the PEM
-// files and call the 'do' function on each valid file.
-// A non-existant or empty TLS directory is valid, but a TLS directory
-// or PEM file with invalid permissions will result in an error.
-// Files in the TLS directory not matching the naming convention will
-// be ignored.
+// withPEMFile inspects the TLS directory, locates all the PEM files and
+// call the 'do' function on each valid file. A non-existant or empty TLS
+// directory is valid, but a TLS directory or PEM file with invalid
+// permissions will result in an error. Files in the TLS directory not
+// matching the naming convention will be ignored.
 func (m *TLSManager) withPEMFile(do func(path string, fingerprint string) error) error {
 	_, err := os.Stat(m.tlsDir)
 	if err != nil {
@@ -191,7 +215,7 @@ func (m *TLSManager) withPEMFile(do func(path string, fingerprint string) error)
 }
 
 // expectPermission return an error if the specified directory or file
-// path is not matching the supplied permission.
+// path is not matching the supplied permissions.
 func expectPermission(path string, perm fs.FileMode) error {
 	info, err := os.Stat(path)
 	if err != nil {
@@ -204,7 +228,7 @@ func expectPermission(path string, perm fs.FileMode) error {
 	return nil
 }
 
-// isTLSKeyPairSupported return true if the TLS keypair is supported.
+// isTLSKeyPairSupported returns true if the TLS keypair is supported.
 func (m *TLSManager) isTLSKeyPairSupported(keypair *TLSKeyPair) bool {
 	// We currently support NIST P-256, P-384, and P-521 elliptic curve
 	// based private keys used for certificate self signing and during
@@ -231,10 +255,10 @@ func (m *TLSManager) isTLSKeyPairSupported(keypair *TLSKeyPair) bool {
 // addNewTLSKeyPair creates a new supported TLS keypair starting on the supplied
 // date, and expiring after the period defined in certificateValidityPeriod.
 // The keypair is first persisted to disk, after which it is added to the
-// keypair slice, and the slice is then re-ordered.
+// managers keypair slice. The keypair slice is sorted before the method returns.
 func (m *TLSManager) addNewTLSKeyPair(notBefore time.Time, notAfter time.Time) (*TLSKeyPair, error) {
 	// Generate
-	keypair, err := m.genX509ECP256Keypair(notBefore, notAfter)
+	keypair, err := m.genECP256Keypair(notBefore, notAfter)
 	if err != nil {
 		return nil, err
 	}
@@ -251,11 +275,11 @@ func (m *TLSManager) addNewTLSKeyPair(notBefore time.Time, notAfter time.Time) (
 	return keypair, nil
 }
 
-// genX509ECP256Keypair generates a new keypair based on ECDSA NIST P-256
+// genECP256Keypair generates a new keypair based on ECDSA NIST P-256
 // private key and X509 public certificate. The certificate is signed with
 // the same private key (self-signed), which means that the public key
 // in the certificate can be used to verify the signature.
-func (m *TLSManager) genX509ECP256Keypair(notBefore time.Time, notAfter time.Time) (*TLSKeyPair, error) {
+func (m *TLSManager) genECP256Keypair(notBefore time.Time, notAfter time.Time) (*TLSKeyPair, error) {
 	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
 		return nil, err
@@ -294,7 +318,8 @@ func (m *TLSManager) genX509ECP256Keypair(notBefore time.Time, notAfter time.Tim
 }
 
 // persistTLSKeyPair persists the TLS keypair in a single PEM file. The file name
-// is the certificate fingerprint string, with a .pem suffix.
+// is the certificate fingerprint string, with a .pem suffix. See the
+// addFingerprint method for information on how the fingerprint is generated.
 func (m *TLSManager) persistTLSKeyPair(keypair *TLSKeyPair) (err error) {
 	// If the TLS directory does not yet exist, create it.
 	_, err = os.Stat(m.tlsDir)
@@ -329,7 +354,7 @@ func (m *TLSManager) persistTLSKeyPair(keypair *TLSKeyPair) (err error) {
 // TLSKeyPair represents a TLS key pair (see tls.LoadX509KeyPair), which
 // includes both the x509 certificate and the private key (unexported). This
 // type can directly be converted to a tls.Certificate for configuring a TLS
-// listener, or exported as a PEM encoded x509 certificate, for easy transport
+// listener, or exported as a PEM encoded x509 certificate for easy transport
 // over the daemon API.
 type TLSKeyPair struct {
 	privateKey  any
@@ -354,7 +379,8 @@ func (t TLSKeyPair) Compare(other *TLSKeyPair) int {
 	return strings.Compare(t.Fingerprint(), other.Fingerprint())
 }
 
-// Fingerprint returns the SHA512/244 fingerprint of the x509 certificate.
+// Fingerprint returns an unpadded base32 encoded SHA512/384 hash of the raw
+// x509 certificate.
 func (t TLSKeyPair) Fingerprint() string {
 	return t.fingerprint
 }
@@ -378,7 +404,7 @@ func (t TLSKeyPair) TLSCertificate() (*tls.Certificate, error) {
 }
 
 // PEMCertificate converts the X509 certificate to a PEM encoded byte slice,
-// useful for sending to clients.
+// useful for sending to daemon API clients.
 func (t TLSKeyPair) PEMCertificate() ([]byte, error) {
 	pemBlock := &pem.Block{
 		Type:  "CERTIFICATE",
@@ -391,7 +417,7 @@ func (t TLSKeyPair) PEMCertificate() ([]byte, error) {
 	return pemBuffer.Bytes(), nil
 }
 
-// pemKey returns the private key in PEM format.
+// pemKey returns a PKCS8 encoded private key in PEM format.
 func (t TLSKeyPair) pemKey() ([]byte, error) {
 	privateBytes, err := x509.MarshalPKCS8PrivateKey(t.privateKey)
 	if err != nil {
@@ -409,7 +435,7 @@ func (t TLSKeyPair) pemKey() ([]byte, error) {
 }
 
 // toPEMBytes converts the private key and x509 certificate into a byte slice
-// that contains two PEM blocks, ready for secure persisting on disk.
+// that contains two PEM blocks, ready for secure storage on disk.
 func (t TLSKeyPair) toPEMBytes() ([]byte, error) {
 	privateBytes, err := x509.MarshalPKCS8PrivateKey(t.privateKey)
 	if err != nil {
@@ -433,9 +459,8 @@ func (t TLSKeyPair) toPEMBytes() ([]byte, error) {
 	return pemBuffer.Bytes(), nil
 }
 
-// fromPEMFile loads the PEM encoded private key and x509 certificate
-// from file. The private key block is expected first, followed by the
-// certificate block.
+// fromPEMFile loads a PKCS8 private key and x509 certificate
+// from a PEM formatted file.
 func (t *TLSKeyPair) fromPEMFile(path string) error {
 	pemData, err := os.ReadFile(path)
 	if err != nil {
@@ -480,10 +505,7 @@ func (t TLSKeyPair) isExpired() bool {
 // this method is called before a certificate was added.
 func (t *TLSKeyPair) addFingerprint() {
 	if t.Certificate != nil {
-		// We use SHA-512/224 to utilize the more secure 64-bit word size, but
-		// a truncated length to make this more human manageable. Collision
-		// chance between different inputs are still not practically possible.
-		hashBytes := sha512.Sum512_224(t.Certificate.Raw)
+		hashBytes := sha512.Sum384(t.Certificate.Raw)
 		t.fingerprint = base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(hashBytes[:])
 	}
 }
