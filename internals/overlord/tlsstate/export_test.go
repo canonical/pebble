@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Canonical Ltd
+// Copyright (c) 2025 Canonical Ltd
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License version 3 as
@@ -42,7 +42,7 @@ func (t TLSKeyPair) IsExpired() bool {
 	return t.isExpired()
 }
 
-// FakeSystemTime allows faking the time.
+// FakeSystemTime allows faking the time for the TLS manager.
 func (m *TLSManager) FakeSystemTime(date string, offset time.Duration) (restore func(), clock time.Time) {
 	layout := "2006-01-02"
 	now, err := time.Parse(layout, date)
@@ -72,7 +72,7 @@ func (m *TLSManager) FakeCertificateValidityPeriod(valid time.Duration) (restore
 // based keypair for testing purposes.
 func (m *TLSManager) AddNewUnsupportedTLSKeyPair(notBefore time.Time, notAfter time.Time) (*TLSKeyPair, error) {
 	// Generate
-	keypair, err := m.genX509ECP224Keypair(notBefore, notAfter)
+	keypair, err := m.genECP224Keypair(notBefore, notAfter)
 	if err != nil {
 		return nil, err
 	}
@@ -89,11 +89,11 @@ func (m *TLSManager) AddNewUnsupportedTLSKeyPair(notBefore time.Time, notAfter t
 	return keypair, nil
 }
 
-// genX509ECP224Keypair generates a new keypair based on ECDSA NIST P-224
+// genECP224Keypair generates a new keypair based on ECDSA NIST P-224
 // private key and X509 public certificate. The certificate is signed with
 // the same private key (self-signed), which means that the public key
 // in the certificate can be used to verify the signature.
-func (m *TLSManager) genX509ECP224Keypair(notBefore time.Time, notAfter time.Time) (*TLSKeyPair, error) {
+func (m *TLSManager) genECP224Keypair(notBefore time.Time, notAfter time.Time) (*TLSKeyPair, error) {
 	privateKey, err := ecdsa.GenerateKey(elliptic.P224(), rand.Reader)
 	if err != nil {
 		return nil, err
