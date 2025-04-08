@@ -161,9 +161,9 @@ func (rm *RestartManager) Pending() (bool, RestartType) {
 	return restarting != RestartUnset, restarting
 }
 
+// NOTE: the state does not need to be locked to set this information.
 func (rm *RestartManager) FakePending(restarting RestartType) RestartType {
-	old := RestartType(rm.restarting.Load())
-	rm.restarting.Store(int32(restarting))
+	old := RestartType(rm.restarting.Swap(int32(restarting)))
 	return old
 }
 
