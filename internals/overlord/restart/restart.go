@@ -24,7 +24,7 @@ import (
 	"github.com/canonical/pebble/internals/overlord/state"
 )
 
-type RestartType int
+type RestartType int32
 
 const (
 	RestartUnset RestartType = iota
