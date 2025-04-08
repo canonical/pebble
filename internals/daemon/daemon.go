@@ -380,6 +380,7 @@ func (d *Daemon) Init() error {
 
 	if d.httpsAddress != "" {
 		tlsConf := &tls.Config{
+			NextProtos: []string{"h2", "http/1.1"},
 			MinVersion: tls.VersionTLS13,
 			MaxVersion: tls.VersionTLS13,
 			GetCertificate: func(*tls.ClientHelloInfo) (*tls.Certificate, error) {
