@@ -16,6 +16,7 @@ package daemon
 
 import (
 	"bytes"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -53,13 +54,14 @@ import (
 func Test(t *testing.T) { TestingT(t) }
 
 type daemonSuite struct {
-	pebbleDir   string
-	socketPath  string
-	httpAddress string
-	statePath   string
-	authorized  bool
-	err         error
-	notified    []string
+	pebbleDir    string
+	socketPath   string
+	httpAddress  string
+	httpsAddress string
+	statePath    string
+	authorized   bool
+	err          error
+	notified     []string
 }
 
 var _ = Suite(&daemonSuite{})
@@ -93,9 +95,10 @@ func (s *daemonSuite) TearDownTest(c *C) {
 
 func (s *daemonSuite) newDaemon(c *C) *Daemon {
 	d, err := New(&Options{
-		Dir:         s.pebbleDir,
-		SocketPath:  s.socketPath,
-		HTTPAddress: s.httpAddress,
+		Dir:          s.pebbleDir,
+		SocketPath:   s.socketPath,
+		HTTPAddress:  s.httpAddress,
+		HTTPSAddress: s.httpsAddress,
 	})
 	c.Assert(err, IsNil)
 	d.addRoutes()
@@ -1296,6 +1299,50 @@ func (s *daemonSuite) TestHTTPAPI(c *C) {
 	request, err = http.NewRequest("GET", fmt.Sprintf("http://localhost:%d/v1/checks", port), nil)
 	c.Assert(err, IsNil)
 	response, err = http.DefaultClient.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusUnauthorized)
+
+	err = d.Stop(nil)
+	c.Assert(err, IsNil)
+	_, err = http.DefaultClient.Do(request)
+	c.Assert(err, ErrorMatches, ".* connection refused")
+}
+
+func (s *daemonSuite) TestHTTPSAPI(c *C) {
+	s.httpsAddress = ":0" // Go will choose port (use listener.Addr() to find it)
+	d := s.newDaemon(c)
+	d.Init()
+	c.Assert(d.Start(), IsNil)
+	port := d.httpsListener.Addr().(*net.TCPAddr).Port
+
+	httpsClient := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true,
+			},
+		},
+	}
+
+	request, err := http.NewRequest("GET", fmt.Sprintf("https://localhost:%d/v1/health", port), nil)
+	c.Assert(err, IsNil)
+	response, err := httpsClient.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+	var m map[string]any
+	err = json.NewDecoder(response.Body).Decode(&m)
+	c.Assert(err, IsNil)
+	c.Assert(m, DeepEquals, map[string]any{
+		"type":        "sync",
+		"status-code": float64(http.StatusOK),
+		"status":      "OK",
+		"result": map[string]any{
+			"healthy": true,
+		},
+	})
+
+	request, err = http.NewRequest("GET", fmt.Sprintf("https://localhost:%d/v1/checks", port), nil)
+	c.Assert(err, IsNil)
+	response, err = httpsClient.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusUnauthorized)
 
