@@ -157,6 +157,9 @@ func Request(st *state.State, t RestartType) {
 // Pending returns whether a restart was requested with Request and of which type.
 // NOTE: the state does not need to be locked to fetch this information.
 func (rm *RestartManager) Pending() (bool, RestartType) {
+	if rm == nil {
+		return false, RestartUnset
+	}
 	restarting := RestartType(rm.restarting.Load())
 	return restarting != RestartUnset, restarting
 }
