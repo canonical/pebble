@@ -38,6 +38,7 @@ import (
 	"github.com/canonical/pebble/internals/overlord/restart"
 	"github.com/canonical/pebble/internals/overlord/servstate"
 	"github.com/canonical/pebble/internals/overlord/state"
+	"github.com/canonical/pebble/internals/overlord/tlsstate"
 	"github.com/canonical/pebble/internals/timing"
 )
 
@@ -70,6 +71,8 @@ type Options struct {
 	PebbleDir string
 	// LayersDir is the path to the layers directory. It defaults to "<PebbleDir>/layers" if empty.
 	LayersDir string
+	// TLSDir is the path to the TLS keypairs. It defaults to "<PebbleDir>/tls" if empty.
+	TLSDir string
 	// RestartHandler is an optional structure to handle restart requests.
 	RestartHandler restart.Handler
 	// ServiceOutput is an optional output for the logging manager.
@@ -104,6 +107,7 @@ type Overlord struct {
 	commandMgr *cmdstate.CommandManager
 	checkMgr   *checkstate.CheckManager
 	logMgr     *logstate.LogManager
+	tlsMgr     *tlsstate.TLSManager
 
 	extension Extension
 }
@@ -160,6 +164,16 @@ func New(opts *Options) (*Overlord, error) {
 		return nil, fmt.Errorf("cannot create plan manager: %w", err)
 	}
 	o.stateEng.AddManager(o.planMgr)
+
+	tlsDir := opts.TLSDir
+	if tlsDir == "" {
+		tlsDir = filepath.Join(opts.PebbleDir, "tls")
+	}
+	o.tlsMgr, err = tlsstate.NewManager(tlsDir)
+	if err != nil {
+		return nil, fmt.Errorf("cannot create TLS manager: %w", err)
+	}
+	o.stateEng.AddManager(o.tlsMgr)
 
 	o.logMgr = logstate.NewLogManager()
 
@@ -562,6 +576,12 @@ func (o *Overlord) CheckManager() *checkstate.CheckManager {
 // system configuration
 func (o *Overlord) PlanManager() *planstate.PlanManager {
 	return o.planMgr
+}
+
+// TLSManager returns the TLS manager responsible for managing
+// TLS keypairs for HTTPS connections.
+func (o *Overlord) TLSManager() *tlsstate.TLSManager {
+	return o.tlsMgr
 }
 
 // Fake creates an Overlord without any managers and with a backend
