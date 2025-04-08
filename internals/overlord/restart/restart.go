@@ -24,7 +24,7 @@ import (
 	"github.com/canonical/pebble/internals/overlord/state"
 )
 
-type RestartType int
+type RestartType int32
 
 const (
 	RestartUnset RestartType = iota
@@ -157,13 +157,16 @@ func Request(st *state.State, t RestartType) {
 // Pending returns whether a restart was requested with Request and of which type.
 // NOTE: the state does not need to be locked to fetch this information.
 func (rm *RestartManager) Pending() (bool, RestartType) {
+	if rm == nil {
+		return false, RestartUnset
+	}
 	restarting := RestartType(rm.restarting.Load())
 	return restarting != RestartUnset, restarting
 }
 
+// NOTE: the state does not need to be locked to set this information.
 func (rm *RestartManager) FakePending(restarting RestartType) RestartType {
-	old := RestartType(rm.restarting.Load())
-	rm.restarting.Store(int32(restarting))
+	old := RestartType(rm.restarting.Swap(int32(restarting)))
 	return old
 }
 

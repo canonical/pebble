@@ -284,11 +284,7 @@ func (s *daemonSuite) TestCommandRestartingState(c *C) {
 	c.Assert(err, IsNil)
 	c.Check(rst.Maintenance, IsNil)
 
-	state := d.overlord.State()
-
-	state.Lock()
 	d.overlord.RestartManager().FakePending(restart.RestartSystem)
-	state.Unlock()
 	rec = httptest.NewRecorder()
 	cmd.ServeHTTP(rec, req)
 	c.Check(rec.Code, Equals, 200)
@@ -299,9 +295,7 @@ func (s *daemonSuite) TestCommandRestartingState(c *C) {
 		Message: "system is restarting",
 	})
 
-	state.Lock()
 	d.overlord.RestartManager().FakePending(restart.RestartDaemon)
-	state.Unlock()
 	rec = httptest.NewRecorder()
 	cmd.ServeHTTP(rec, req)
 	c.Check(rec.Code, Equals, 200)
