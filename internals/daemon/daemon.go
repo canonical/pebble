@@ -18,6 +18,7 @@ import (
 	"bufio"
 	"context"
 	"crypto"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
@@ -66,6 +67,10 @@ type Options struct {
 	// Defaults to "layers" inside the pebble directory.
 	LayersDir string
 
+	// TLSDir is an optional path for where TLS keypairs are persisted.
+	// Defaults to "tls" inside the pebble directory.
+	TLSDir string
+
 	// IDSigner is a private key representing the identity of a Pebble
 	// instance (machine, container or device), which implements the
 	// crypto.Signer interface (for digest signing).
@@ -81,6 +86,11 @@ type Options struct {
 	// server is not started.
 	HTTPAddress string
 
+	// HTTPSAddress is the address for the HTTPS API server, for example
+	// ":8443" to listen on any address, port 8443. If not set, the HTTPS
+	// API server is not started.
+	HTTPSAddress string
+
 	// ServiceOuput is an optional io.Writer for the service log output, if set, all services
 	// log output will be written to the writer.
 	ServiceOutput io.Writer
@@ -95,10 +105,12 @@ type Daemon struct {
 	Version         string
 	StartTime       time.Time
 	options         *Options
+	httpsAddress     string
 	overlord        *overlord.Overlord
 	state           *state.State
 	generalListener net.Listener
 	httpListener    net.Listener
+	httpsListener    net.Listener
 	connTracker     *connTracker
 	serve           *http.Server
 	tomb            tomb.Tomb
@@ -366,6 +378,31 @@ func (d *Daemon) Init() error {
 		logger.Noticef("HTTP API server listening on %q.", d.options.HTTPAddress)
 	}
 
+	if d.httpsAddress != "" {
+		tlsConf := &tls.Config{
+			MinVersion: tls.VersionTLS13,
+			MaxVersion: tls.VersionTLS13,
+			GetCertificate: func(*tls.ClientHelloInfo) (*tls.Certificate, error) {
+				tlsMgr := d.overlord.TLSManager()
+				tlsKeyPair, err := tlsMgr.TLSKeyPair()
+				if err != nil {
+					return nil, err
+				}
+				tlsCert, err := tlsKeyPair.TLSCertificate()
+				if err != nil {
+					return nil, err
+				}
+				return tlsCert, nil
+			},
+		}
+		listener, err := tls.Listen("tcp", d.httpsAddress, tlsConf)
+		if err != nil {
+			return fmt.Errorf("cannot TLS listen on %q: %v", d.httpAddress, err)
+		}
+		d.httpsListener = listener
+		logger.Noticef("HTTPS API server listening on %q.", d.httpsAddress)
+	}
+
 	logger.Noticef("Started daemon.")
 	return nil
 }
@@ -476,10 +513,19 @@ func (d *Daemon) Start() error {
 	})
 
 	if d.httpListener != nil {
-		// Start additional HTTP API (currently only GuestOK endpoints are
-		// available because the HTTP API has no authentication right now).
+		// Start additional HTTP API
 		d.tomb.Go(func() error {
 			err := d.serve.Serve(d.httpListener)
+			if err != http.ErrServerClosed && d.tomb.Err() == tomb.ErrStillAlive {
+				return err
+			}
+			return nil
+		})
+	}
+	if d.httpsListener != nil {
+		// Start additional HTTPS API
+		d.tomb.Go(func() error {
+			err := d.serve.Serve(d.httpsListener)
 			if err != http.ErrServerClosed && d.tomb.Err() == tomb.ErrStillAlive {
 				return err
 			}
@@ -842,11 +888,13 @@ func (d *Daemon) SetServiceArgs(serviceArgs map[string][]string) error {
 func New(opts *Options) (*Daemon, error) {
 	d := &Daemon{
 		options: opts,
+		httpsAddress:     opts.HTTPSAddress,
 	}
 
 	ovldOptions := overlord.Options{
 		PebbleDir:      opts.Dir,
 		LayersDir:      opts.LayersDir,
+		TLSDir:         opts.TLSDir,
 		RestartHandler: d,
 		ServiceOutput:  opts.ServiceOutput,
 		Extension:      opts.OverlordExtension,
