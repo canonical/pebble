@@ -41,7 +41,10 @@ A separate helper service is required for each log file.
 
 ## Include `tail` in a rock image
 
-If your workload is packaged as a rock, you may need to explicitly add `tail`:
+If your main service runs inside a container image created by Rockcraft,
+you might need to explicitly include `tail` when you build the image.
+
+To include `tail`, add the following part to your `rockcraft.yaml` file:
 
 ```yaml
 parts:
@@ -52,6 +55,9 @@ parts:
     organize:
       usr/bin/tail: usr/bin/tail
 ```
+
+To learn more about Rockcraft and `rockcraft.yaml` files, see the
+[Rockcraft documenttion](https://documentation.ubuntu.com/rockcraft/en/stable/).
 
 ## See more
 
