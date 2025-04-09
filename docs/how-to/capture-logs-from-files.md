@@ -1,11 +1,12 @@
 # How to capture logs from files
 
-Some applications do not log to `stdout` or `stderr`, but instead write logs directly to
-files such as `access.log`, `audit.log` or `error.log`. While Pebble does not natively
-support tailing files, you can use `tail` from `coreutils` in a separate Pebble service
-to route file contents into Pebble's log stream.
+Pebble stores the most recent `stdout` and `stderr` from each service. However, some
+applications don't log to `stdout` or `stderr`. Instead, they write logs directly to
+files such as `access.log`, `audit.log`, or `error.log`.
 
-This guide shows how to set that up.
+This guide demonstrates how to use the `tail` command to print log files to `stdout`,
+so that Pebble can capture the logs. The `tail` command is provided by the `coreutils`
+package.
 
 ## Define a layer
 
