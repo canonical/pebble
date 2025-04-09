@@ -49,7 +49,7 @@ To better understand the operation of the services, you may need to work with lo
 :maxdepth: 1
 
 Forward logs to Loki <forward-logs-to-loki>
-Tail file logs <tail-file-logs>
+Capture logs from files <capture-logs-from-files>
 ```
 
 

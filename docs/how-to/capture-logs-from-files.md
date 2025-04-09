@@ -1,4 +1,4 @@
-# How to tail file logs
+# How to capture logs from files
 
 Some applications do not log to `stdout` or `stderr`, but instead write logs directly to
 files such as `access.log`, `audit.log` or `error.log`. While Pebble does not natively
