@@ -111,7 +111,7 @@ var API = []*Command{{
 }, {
 	Path:        "/v1/identities",
 	ReadAccess:  UserAccess{},
-	WriteAccess: AdminAccess{},
+	WriteAccess: IdentityWriteAccess{},
 	GET:         v1GetIdentities,
 	POST:        v1PostIdentities,
 }, {

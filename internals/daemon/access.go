@@ -84,3 +84,44 @@ func (ac MetricsAccess) CheckAccess(d *Daemon, r *http.Request, user *UserState)
 		return Unauthorized(accessDenied)
 	}
 }
+
+// IdentityWriteAccess is a custom access checker only intended for the indentity endpoint. The
+// default behaviour is the same as the AdminAccess checker. However, it adds a special mode for
+// write requests over HTTPS, where it allows the daemon to enable open access for a carefully
+// controlled enrollment period, used during an encrypted client-server pairing process.
+type IdentityWriteAccess struct{}
+
+var identityEnrollmentActive = (*Daemon).identityEnrollmentActive
+
+func (ac IdentityWriteAccess) CheckAccess(d *Daemon, r *http.Request, user *UserState) Response {
+	// This checker is only for identities.
+	if r.URL.Path != "/v1/identities" {
+		return Unauthorized(accessDenied)
+	}
+
+	// Any identity write attempt always closes an active enrollment window. The
+	// enrollment window is a carefully controlled opportunity for an client
+	// without an identity to register a new identity with the server. If this
+	// window is active for any other identities write request, it will be seen
+	// as an abuse of the intended purpose, and as a result the widnow will also
+	// be closed immediately.
+	enrollmentActive := identityEnrollmentActive(d)
+
+	// Zero value is requestSrcUnknown.
+	source, _ := r.Context().Value(requestSrcCtxKey).(requestSrc)
+
+	// The identity enrollment will only proceed if the client provided no
+	// credentials for this request, and if the connection is HTTPS.
+	if user == nil && source == requestSrcHTTPS && enrollmentActive {
+		// Identity enrollment window is active.
+		return nil
+	}
+
+	// If the user has admin, that is OK.
+	if user != nil && user.Access == state.AdminAccess {
+		return nil
+	}
+
+	// All other access levels, including "access: untrusted", are denied.
+	return Unauthorized(accessDenied)
+}

@@ -115,6 +115,13 @@ func (client *Client) RemoveIdentities(identityNames map[string]struct{}) error 
 	return client.postIdentities("remove", identities)
 }
 
+// RequestEnrollmentWindow requests the daemon to enable a client enrollment
+// window specifically for encrypted HTTPS. The daemon will provide
+// a short window of time for an external HTTPS client to add its identity.
+func (client *Client) RequestEnrollmentWindow() error {
+	return client.postIdentities("request-enrollment-window", nil)
+}
+
 func (client *Client) postIdentities(action string, identities map[string]*Identity) error {
 	payload := identitiesPayload{
 		Action:     action,

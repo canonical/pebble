@@ -56,6 +56,22 @@ var (
 	ErrRestartExternal       = fmt.Errorf("daemon stop requested due to externally-handled reboot")
 
 	systemdSdNotify = systemd.SdNotify
+
+	// The identity enrollment window duration, during which it is possible to
+	// add a single new identity (once triggered).
+	identityEnrollmentTimeout = 60 * time.Second
+)
+
+// requestSrc defines a context key and the possible API request sources
+// that we support. This can be extracted from http.Request.Context().
+type requestSrc int
+
+const (
+	requestSrcCtxKey             = requestSrcUnknown
+	requestSrcUnknown requestSrc = iota
+	requestSrcUnixSocket
+	requestSrcHTTP
+	requestSrcHTTPS
 )
 
 // Options holds the daemon setup required for the initialization of a new daemon.
@@ -128,6 +144,10 @@ type Daemon struct {
 	rebootIsMissing bool
 
 	mu sync.Mutex
+
+	// identEnrollTimer when non-nil represents an active
+	// identity enrollment window.
+	identEnrollTimer *time.Timer
 }
 
 // UserState represents the state of an authenticated API user.
@@ -176,6 +196,47 @@ func userFromRequest(st *state.State, r *http.Request, ucred *Ucrednet, username
 		return &UserState{Access: identity.Access, UID: userID}, nil
 	}
 	return nil, nil
+}
+
+// enableIdentityEnrollment enables the identity enrollment window, if not
+// already active. The enrollment window is automatcially closed after the
+// timeout period, unless an actualy identity enrollment takes place, in
+// which case the window is immediately closed following the request approval.
+func (d *Daemon) enableIdentityEnrollment() error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.identEnrollTimer == nil {
+		logger.Noticef("HTTPS identity enrollment active")
+		d.identEnrollTimer = time.AfterFunc(identityEnrollmentTimeout, func() {
+			// Enrollment window closed.
+			d.mu.Lock()
+			defer d.mu.Unlock()
+			logger.Noticef("HTTPS identity enrollment closed")
+			d.identEnrollTimer = nil
+		})
+		return nil
+	}
+	return fmt.Errorf("cannot enable identity enrollment: already active")
+}
+
+// identityEnrollmentActive returns true if the identity enrollment window
+// is acive, but only after the enrollment window was explicitly closed.
+// This allows only a single identity request to be processed during any
+// window.
+func (d *Daemon) identityEnrollmentActive() bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.identEnrollTimer != nil {
+		wasRunning := d.identEnrollTimer.Stop()
+		if wasRunning {
+			logger.Noticef("HTTPS identity enrollment closed")
+		}
+		d.identEnrollTimer = nil
+		// Allow the enrollment request.
+		return true
+	}
+	// Enrollment not active.
+	return false
 }
 
 func (d *Daemon) Overlord() *overlord.Overlord {
@@ -488,6 +549,20 @@ func (d *Daemon) Start() error {
 
 	d.connTracker = &connTracker{conns: make(map[net.Conn]struct{})}
 	d.serve = &http.Server{
+		ConnContext: func(ctx context.Context, c net.Conn) context.Context {
+			// Flag the incoming requests with a context value so we can identify the
+			// source of the request in the http.Request object. We can use this for
+			// refined access checker decisions.
+			switch c.(type) {
+			case *ucrednetConn:
+				return context.WithValue(ctx, requestSrcCtxKey, requestSrcUnixSocket)
+			case *net.TCPConn:
+				return context.WithValue(ctx, requestSrcCtxKey, requestSrcHTTP)
+			case *tls.Conn:
+				return context.WithValue(ctx, requestSrcCtxKey, requestSrcHTTPS)
+			}
+			return context.WithValue(ctx, requestSrcCtxKey, requestSrcUnknown)
+		},
 		Handler: exitOnPanic(logit(d.router), os.Stderr, func() {
 			os.Exit(1)
 		}),
