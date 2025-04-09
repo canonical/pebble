@@ -31,11 +31,11 @@ The helper service `foo-error-log` starts before the main service.
 The `-F` option of the `tail` command ensures that logs are captured reliably,
 even if log files are rotated.
 
-This setup handles a variety of common corner cases:
-- the log file doesn't exist when the service starts
-- the log file is truncated, deleted or replaced
-- a safety net if the log file is large at startup
-- controlled stop order if services are disabled
+This setup handles common corner cases:
+- The log file doesn't exist when the service starts
+- The log file is truncated, deleted or replaced
+- A safety net if the log file is large at startup
+- Controlled stop order if services are disabled
 
 A separate helper service is required for each log file.
 
