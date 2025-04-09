@@ -198,11 +198,11 @@ func userFromRequest(st *state.State, r *http.Request, ucred *Ucrednet, username
 	return nil, nil
 }
 
-// enableIdentityEnrollment enables the identity enrollment window, if not
+// EnableIdentityEnrollment enables the identity enrollment window, if not
 // already active. The enrollment window is automatcially closed after the
 // timeout period, unless an actualy identity enrollment takes place, in
 // which case the window is immediately closed following the request approval.
-func (d *Daemon) enableIdentityEnrollment() error {
+func (d *Daemon) EnableIdentityEnrollment() error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if d.identEnrollTimer == nil {
@@ -253,6 +253,9 @@ func (c *Command) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		InternalError(c.d.degradedErr.Error()).ServeHTTP(w, r)
 		return
 	}
+
+	source, _ := r.Context().Value(requestSrcCtxKey).(requestSrc)
+	fmt.Println("Request Source:", source)
 
 	ucred, err := ucrednetGet(r.RemoteAddr)
 	if err != nil && err != errNoID {

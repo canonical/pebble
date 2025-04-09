@@ -81,7 +81,7 @@ func v1PostIdentities(c *Command, r *http.Request, _ *UserState) Response {
 	case "remove":
 		err = st.RemoveIdentities(identityNames)
 	case "request-enrollment-window":
-		err = c.d.enableIdentityEnrollment()
+		err = c.d.EnableIdentityEnrollment()
 	}
 	if err != nil {
 		return BadRequest("%v", err)
