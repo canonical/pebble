@@ -3,13 +3,13 @@
 Some applications do not log to `stdout` or `stderr`, but instead write logs directly to
 files such as `access.log`, `audit.log` or `error.log`. While Pebble does not natively
 support tailing files, you can use `tail` from `coreutils` in a separate Pebble service
-to route file contents into Pebble’s log stream.
+to route file contents into Pebble's log stream.
 
 This guide shows how to set that up.
 
 ## Example Pebble layer
 
-Here’s how to tail a log file alongside your main service:
+Here's how to tail a log file alongside your main service:
 
 ```{code-block} yaml
   :emphasize-lines: 5, 7, 10
