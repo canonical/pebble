@@ -14,8 +14,6 @@ To use `tail`, we'll define a layer that has a main service (`foo`) and a helper
 for `tail`:
 
 ```{code-block} yaml
-  :emphasize-lines: 5, 7, 10
-
 services:
   foo:
     command: foo
@@ -30,6 +28,10 @@ services:
 ```
 
 The helper service `foo-error-log` starts before the main service.
+Likewise, if the services are disabled, the helper service `foo-error-log` will be
+stopped after the main service `foo`.
+This ensures that logs emitted during both startup and termination are captured.
+
 The `-F` option of the `tail` command ensures that logs are captured reliably,
 even if log files are rotated.
 
@@ -37,7 +39,6 @@ This setup handles common corner cases:
 - The log file doesn't exist when the service starts
 - The log file is truncated, deleted or replaced
 - A safety net if the log file is large at startup
-- Controlled stop order if services are disabled
 
 A separate helper service is required for each log file.
 
@@ -64,4 +65,4 @@ To learn more about Rockcraft and `rockcraft.yaml` files, see the
 ## See more
 
 - After capturing logs, you can [forward the logs to Loki](./forward-logs-to-loki).
-- If `tail` is insufficient, consider using Promtail instead of `tail`.
+- If `tail` is insufficient, consider using the Promtail binary instead.
