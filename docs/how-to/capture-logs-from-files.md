@@ -27,8 +27,9 @@ services:
     startup: enabled
 ```
 
-The separate helper service `tail -F` starts before the main service.
-The `-F` option ensures that logs are captured reliably, even if log files are rotated.
+The helper service `foo-error-log` starts before the main service.
+The `-F` option of the `tail` command ensures that logs are captured reliably,
+even if log files are rotated.
 
 This setup handles a variety of common corner cases:
 - the log file doesn't exist when the service starts
