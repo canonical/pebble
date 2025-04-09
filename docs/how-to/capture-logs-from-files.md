@@ -57,7 +57,7 @@ parts:
 ```
 
 To learn more about Rockcraft and `rockcraft.yaml` files, see the
-[Rockcraft documenttion](https://documentation.ubuntu.com/rockcraft/en/stable/).
+[Rockcraft documentation](https://documentation.ubuntu.com/rockcraft/en/stable/).
 
 ## See more
 
