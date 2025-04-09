@@ -7,7 +7,7 @@ to route file contents into Pebble's log stream.
 
 This guide shows how to set that up.
 
-## Example Pebble layer
+## Define a layer
 
 Here's how to tail a log file alongside your main service:
 
@@ -39,7 +39,7 @@ This setup handles common corner cases:
 
 A separate helper service is required for each log file.
 
-## Rockcraft
+## Include `tail` in a rock image
 
 If your workload is packaged as a rock, you may need to explicitly add `tail`:
 
