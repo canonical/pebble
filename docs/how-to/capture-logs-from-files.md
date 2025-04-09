@@ -10,7 +10,8 @@ package.
 
 ## Define a layer
 
-Here's how to tail a log file alongside your main service:
+To use `tail`, we'll define a layer that has a main service (`foo`) and a helper service
+for `tail`:
 
 ```{code-block} yaml
   :emphasize-lines: 5, 7, 10
