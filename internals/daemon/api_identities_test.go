@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+	"time"
 
 	. "gopkg.in/check.v1"
 
@@ -344,6 +345,101 @@ func (s *apiSuite) TestPostIdentitiesInvalidAction(c *C) {
 	result, ok := rsp.Result.(*errorResult)
 	c.Assert(ok, Equals, true)
 	c.Assert(result.Message, Matches, `invalid action "foobar", must be "add", "update", "replace", or "remove"`)
+}
+
+// TestRequestEnrollmentInvalid ensures that the request will fail if actual
+// identities are supplied with this action.
+func (s *apiSuite) TestRequestEnrollmentInvalid(c *C) {
+	s.daemon(c)
+
+	body := `
+{
+    "action": "request-enrollment-window",
+    "identities": {
+        "mary": null
+    }
+}`
+	rsp := s.postIdentities(c, body)
+	c.Check(rsp.Type, Equals, ResponseTypeError)
+	c.Check(rsp.Status, Equals, http.StatusBadRequest)
+	result, ok := rsp.Result.(*errorResult)
+	c.Assert(ok, Equals, true)
+	c.Assert(result.Message, Matches, `identities must be null .*`)
+}
+
+// TestRequestEnrollmentWindow checks if the request enables the
+// identity enrollment window, and whether a check of the state
+// immediately closes the window, as intended.
+func (s *apiSuite) TestRequestEnrollmentWindow(c *C) {
+	s.daemon(c)
+
+	restore := FakeIdentEnrollmentTimeout(100 * time.Millisecond)
+	defer restore()
+
+	body := `
+{
+    "action": "request-enrollment-window"
+}`
+	rsp := s.postIdentities(c, body)
+	c.Check(rsp.Type, Equals, ResponseTypeSync)
+	c.Check(rsp.Status, Equals, http.StatusOK)
+
+	c.Assert(s.d.identityEnrollmentActive(), Equals, true)
+	// The act of observing the enrollment permission should close the
+	// window, so we should get a false on the next read.
+	c.Assert(s.d.identityEnrollmentActive(), Equals, false)
+}
+
+// TestRequestEnrollmentWindowTooSoon ensures that only the first request
+// will succeed. Subsequent requests should return an error. The enrollment
+// window should still be functional and close on status read.
+func (s *apiSuite) TestRequestEnrollmentWindowTooSoon(c *C) {
+	s.daemon(c)
+
+	restore := FakeIdentEnrollmentTimeout(100 * time.Millisecond)
+	defer restore()
+
+	body := `
+{
+    "action": "request-enrollment-window"
+}`
+	rsp := s.postIdentities(c, body)
+	c.Check(rsp.Type, Equals, ResponseTypeSync)
+	c.Check(rsp.Status, Equals, http.StatusOK)
+
+	rsp = s.postIdentities(c, body)
+	c.Check(rsp.Type, Equals, ResponseTypeError)
+	c.Check(rsp.Status, Equals, http.StatusBadRequest)
+	result, ok := rsp.Result.(*errorResult)
+	c.Assert(ok, Equals, true)
+	c.Assert(result.Message, Matches, `.*already active.*`)
+
+	c.Assert(s.d.identityEnrollmentActive(), Equals, true)
+	// The act of observing the enrollment permission should close the
+	// window, so we should get a false on the next read.
+	c.Assert(s.d.identityEnrollmentActive(), Equals, false)
+}
+
+// TestRequestEnrollmentWindowExpired ensures that the identity
+// enrollment window expired after the expected timeout.
+func (s *apiSuite) TestRequestEnrollmentWindowExpired(c *C) {
+	s.daemon(c)
+
+	restore := FakeIdentEnrollmentTimeout(10 * time.Millisecond)
+	defer restore()
+
+	body := `
+{
+    "action": "request-enrollment-window"
+}`
+	rsp := s.postIdentities(c, body)
+	c.Check(rsp.Type, Equals, ResponseTypeSync)
+	c.Check(rsp.Status, Equals, http.StatusOK)
+
+	// Make sure the window expire.
+	time.Sleep(15 * time.Millisecond)
+
+	c.Assert(s.d.identityEnrollmentActive(), Equals, false)
 }
 
 func (s *apiSuite) postIdentities(c *C, body string) *resp {
