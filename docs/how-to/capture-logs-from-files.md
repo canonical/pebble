@@ -53,9 +53,7 @@ parts:
       usr/bin/tail: usr/bin/tail
 ```
 
-## Further reading
+## See more
 
-This recipe can be composed with [forwarding logs to Loki](./forward-logs-to-loki.md).
-
-Consider Promtail instead of `tail` for advanced use cases or if the latter proves to be
-insufficient.
+- After capturing logs, you can [forward the logs to Loki](./forward-logs-to-loki).
+- If `tail` is insufficient, consider using Promtail instead of `tail`.
