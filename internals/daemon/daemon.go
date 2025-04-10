@@ -254,9 +254,6 @@ func (c *Command) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	source, _ := r.Context().Value(requestSrcCtxKey).(requestSrc)
-	fmt.Println("Request Source:", source)
-
 	ucred, err := ucrednetGet(r.RemoteAddr)
 	if err != nil && err != errNoID {
 		logger.Noticef("Cannot parse UID from remote address %q: %s", r.RemoteAddr, err)
