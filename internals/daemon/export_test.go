@@ -23,6 +23,14 @@ import (
 	"github.com/canonical/pebble/internals/overlord/state"
 )
 
+const (
+	RequestSrcCtxKey     = requestSrcCtxKey
+	RequestSrcUnknown    = requestSrcUnknown
+	RequestSrcUnixSocket = requestSrcUnixSocket
+	RequestSrcHTTP       = requestSrcHTTP
+	RequestSrcHTTPS      = requestSrcHTTPS
+)
+
 func FakeMuxVars(f func(*http.Request) map[string]string) (restore func()) {
 	old := muxVars
 	muxVars = f
@@ -60,5 +68,21 @@ func FakeSyscallReboot(f func(cmd int) error) (restore func()) {
 	syscallReboot = f
 	return func() {
 		syscallReboot = old
+	}
+}
+
+func FakeIdentEnrollmentTimeout(d time.Duration) (restore func()) {
+	old := identityEnrollmentTimeout
+	identityEnrollmentTimeout = d
+	return func() {
+		identityEnrollmentTimeout = old
+	}
+}
+
+func FakeIdentEnrollmentActive(f func(d *Daemon) bool) (restore func()) {
+	old := identityEnrollmentActive
+	identityEnrollmentActive = f
+	return func() {
+		identityEnrollmentActive = old
 	}
 }

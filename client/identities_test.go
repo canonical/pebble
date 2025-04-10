@@ -104,6 +104,24 @@ func (cs *clientSuite) TestRemoveIdentities(c *C) {
 	})
 }
 
+func (cs *clientSuite) TestRequestEnrollmentWindow(c *C) {
+	cs.rsp = `{"type": "sync", "result": null}`
+	err := cs.cli.RequestEnrollmentWindow()
+	c.Assert(err, IsNil)
+	c.Assert(cs.req.Method, Equals, "POST")
+	c.Assert(cs.req.URL.Path, Equals, "/v1/identities")
+
+	body, err := io.ReadAll(cs.req.Body)
+	c.Assert(err, IsNil)
+	var m map[string]any
+	err = json.Unmarshal(body, &m)
+	c.Assert(err, IsNil)
+	c.Assert(m, DeepEquals, map[string]any{
+		"action":     "request-enrollment-window",
+		"identities": nil,
+	})
+}
+
 func (cs *clientSuite) testPostIdentities(c *C, action string, clientFunc func(map[string]*client.Identity) error) {
 	cs.rsp = `{"type": "sync", "result": null}`
 	err := clientFunc(map[string]*client.Identity{
