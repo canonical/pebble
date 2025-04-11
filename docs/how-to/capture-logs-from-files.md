@@ -42,27 +42,32 @@ This setup handles common corner cases:
 
 A separate helper service is required for each log file.
 
-## Include `tail` in a rock image
+## Include `tail` in a chiselled rock
 
-If your main service runs inside a container image created by Rockcraft,
-you might need to explicitly include `tail` when you build the image.
-
-To include `tail`, add the following part to your `rockcraft.yaml` file:
+Chiselled rocks often exclude tools like `coreutils`. To add `/usr/bin/tail`, extend
+[the official example](https://documentation.ubuntu.com/rockcraft/en/latest/how-to/rocks/chisel-existing-rock/)
+by staging `coreutils_bins` slice in your `rockcraft.yaml` file:
 
 ```yaml
-parts:
-  tail:
+  install-python-slices:
     plugin: nil
     stage-packages:
-      - coreutils
-    organize:
-      usr/bin/tail: usr/bin/tail
+      - base-files_release-info
+      - python3.11_core
+      - coreutils_bins  # includes /usr/bin/tail and the required libraries
 ```
 
-To learn more about Rockcraft and `rockcraft.yaml` files, see the
-[Rockcraft documentation](https://documentation.ubuntu.com/rockcraft/en/stable/).
+The `coreutils_bins` slice brings in around a dozen shared objects and some hundred binaries.
+For a truly minimal rock, consider
+[defining a custom chisel slice](https://documentation.ubuntu.com/rockcraft/en/latest/how-to/chisel/create-slice/).
+
+See the
+[Rockcraft documentation](https://documentation.ubuntu.com/rockcraft/en/stable/)
+to learn more.
 
 ## See more
 
 - After capturing logs, you can [forward the logs to Loki](./forward-logs-to-loki).
-- If `tail` is insufficient, consider using the Promtail binary instead.
+- If `tail` is insufficient, consider using the
+  [Promtail binary](https://github.com/canonical/loki-k8s-operator/blob/main/.github/workflows/build-promtail-release.yaml)
+  instead.
