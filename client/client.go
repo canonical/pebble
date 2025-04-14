@@ -564,13 +564,13 @@ func (client *Client) DebugGet(action string, result any, params map[string]stri
 }
 
 type defaultRequester struct {
-	baseURL   url.URL
-	doer      doer
-	userAgent string
+	baseURL       url.URL
+	doer          doer
+	userAgent     string
 	basicAuthUser string
 	basicAuthPass string
-	transport *http.Transport
-	client    *Client
+	transport     *http.Transport
+	client        *Client
 }
 
 func newDefaultRequester(client *Client, opts *Config) (*defaultRequester, error) {
@@ -580,8 +580,8 @@ func newDefaultRequester(client *Client, opts *Config) (*defaultRequester, error
 
 	// Validate Basic Auth constraints.
 	if (opts.BasicAuthUser != "" && opts.BasicAuthPass == "") ||
-	   (opts.BasicAuthPass != "" && opts.BasicAuthUser == "") {
-		   return nil, fmt.Errorf("cannot use incomplete basic auth credentials")
+		(opts.BasicAuthPass != "" && opts.BasicAuthUser == "") {
+		return nil, fmt.Errorf("cannot use incomplete basic auth credentials")
 	}
 
 	var requester *defaultRequester
@@ -591,8 +591,8 @@ func newDefaultRequester(client *Client, opts *Config) (*defaultRequester, error
 		transport := &http.Transport{Dial: unixDialer(opts.Socket), DisableKeepAlives: opts.DisableKeepAlive}
 		baseURL := url.URL{Scheme: "http", Host: "localhost"}
 		requester = &defaultRequester{
-			baseURL: baseURL,
-			transport: transport,
+			baseURL:       baseURL,
+			transport:     transport,
 			basicAuthUser: opts.BasicAuthUser,
 			basicAuthPass: opts.BasicAuthPass,
 		}
@@ -614,8 +614,8 @@ func newDefaultRequester(client *Client, opts *Config) (*defaultRequester, error
 			},
 		}
 		requester = &defaultRequester{
-			baseURL: *baseURL,
-			transport: transport,
+			baseURL:       *baseURL,
+			transport:     transport,
 			basicAuthUser: opts.BasicAuthUser,
 			basicAuthPass: opts.BasicAuthPass,
 		}

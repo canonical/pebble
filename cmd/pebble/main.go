@@ -18,20 +18,20 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/canonical/pebble/internals/cli"
 	"github.com/canonical/pebble/client"
+	"github.com/canonical/pebble/internals/cli"
 )
 
 func main() {
-        cliOptions := &cli.RunOptions{
-                ClientConfig: &client.Config{
-			Socket: os.Getenv("PEBBLE_SOCKET"),
-			BaseURL: os.Getenv("PEBBLE_BASEURL"),
+	cliOptions := &cli.RunOptions{
+		ClientConfig: &client.Config{
+			Socket:        os.Getenv("PEBBLE_SOCKET"),
+			BaseURL:       os.Getenv("PEBBLE_BASEURL"),
 			BasicAuthUser: "fred",
 			BasicAuthPass: "gifappel",
 		},
 		PebbleDir: os.Getenv("PEBBLE"),
-        }
+	}
 
 	if err := cli.Run(cliOptions); err != nil {
 		fmt.Fprintf(cli.Stderr, "error: %v\n", err)
