@@ -217,6 +217,8 @@ func (c *Command) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	fmt.Println(r.Context().Value(requestSrcCtxKey))
+
 	// Optimisation: avoid calling userFromRequest, which acquires the state
 	// lock, in case we don't need to (when endpoint is OpenAccess). This
 	// avoids holding the state lock for /v1/health in particular, which is

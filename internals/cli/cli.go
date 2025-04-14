@@ -289,6 +289,20 @@ func Run(options *RunOptions) error {
 	if options == nil {
 		options = &RunOptions{}
 	}
+	if options.PebbleDir == "" {
+		options.PebbleDir = cmd.DefaultDir
+	}
+	log := options.Logger
+	if log == nil {
+		log = logger.New(os.Stderr, fmt.Sprintf("[%s] ", cmd.ProgramName))
+	}
+	logger.SetLogger(log)
+	if options.ClientConfig == nil {
+		options.ClientConfig = &client.Config{}
+	}
+	if options.ClientConfig.Socket == "" {
+		options.ClientConfig.Socket = filepath.Join(options.PebbleDir, ".pebble.socket")
+	}
 
 	defer func() {
 		if v := recover(); v != nil {
@@ -299,30 +313,14 @@ func Run(options *RunOptions) error {
 		}
 	}()
 
-	log := options.Logger
-	if log == nil {
-		log = logger.New(os.Stderr, fmt.Sprintf("[%s] ", cmd.ProgramName))
-	}
-	logger.SetLogger(log)
-
-	config := options.ClientConfig
-	if config == nil {
-		config = &client.Config{}
-		_, config.Socket = getEnvPaths()
-	}
-	cli, err := client.New(config)
+	cli, err := client.New(options.ClientConfig)
 	if err != nil {
 		return fmt.Errorf("cannot create client: %v", err)
 	}
-
-	pebbleDir := options.PebbleDir
-	if pebbleDir == "" {
-		pebbleDir, _ = getEnvPaths()
-	}
 	parser := Parser(&ParserOptions{
 		Client:     cli,
-		PebbleDir:  pebbleDir,
-		SocketPath: config.Socket,
+		PebbleDir:  options.PebbleDir,
+		SocketPath: options.ClientConfig.Socket,
 	})
 	xtra, err := parser.Parse()
 	if err != nil {
@@ -356,7 +354,7 @@ func Run(options *RunOptions) error {
 		return nil
 	}
 
-	state, err := loadCLIState(config.Socket)
+	state, err := loadCLIState(options.ClientConfig.Socket)
 	if err != nil {
 		return fmt.Errorf("cannot load CLI state: %w", err)
 	}
@@ -401,18 +399,6 @@ func errorToMessage(e error) (normalMessage string, err error) {
 	}
 
 	return msg, nil
-}
-
-func getEnvPaths() (pebbleDir string, socketPath string) {
-	pebbleDir = os.Getenv("PEBBLE")
-	if pebbleDir == "" {
-		pebbleDir = cmd.DefaultDir
-	}
-	socketPath = os.Getenv("PEBBLE_SOCKET")
-	if socketPath == "" {
-		socketPath = filepath.Join(pebbleDir, ".pebble.socket")
-	}
-	return pebbleDir, socketPath
 }
 
 func getCopySource() string {

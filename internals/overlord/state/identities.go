@@ -83,10 +83,6 @@ func (d *Identity) validateAccess() error {
 
 	switch d.Access {
 	case AdminAccess, ReadAccess, MetricsAccess, UntrustedAccess:
-		// Check basic type access level.
-		if d.Basic != nil && d.Access != MetricsAccess {
-			return fmt.Errorf("basic identity can only have %q access, got %q", MetricsAccess, d.Access)
-		}
 	case "":
 		return fmt.Errorf("access value must be specified (%q, %q, %q, or %q)",
 			AdminAccess, ReadAccess, MetricsAccess, UntrustedAccess)

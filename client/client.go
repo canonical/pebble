@@ -17,6 +17,7 @@ package client
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -130,7 +131,20 @@ type doer interface {
 type Config struct {
 	// BaseURL contains the base URL where the Pebble daemon is expected to be.
 	// It can be empty for a default behavior of talking over a unix socket.
+	// If the protocol prefix is https://, TLS will be used.
 	BaseURL string
+
+	// VerifyTLSConnection provides the client with an opportunity to inspect
+	// and optionally reject the incoming server certificate.
+	VerifyTLSConnection func(tls.ConnectionState) error
+
+	// Optional HTTP basic authentication details. If supplied this will
+	// add an HTTP basic authentication header entry.
+	// RFC 7617 (HTTP Authentication: Basic and Digest) support a user without
+	// a password, but we will error if an empty password is provided for
+	// security reasons.
+	BasicAuthUser string
+	BasicAuthPass string
 
 	// Socket is the path to the unix socket to use.
 	Socket string
@@ -255,6 +269,10 @@ func (rq *defaultRequester) dispatch(ctx context.Context, method, urlpath string
 	}
 	if rq.userAgent != "" {
 		req.Header.Set("User-Agent", rq.userAgent)
+	}
+
+	if rq.basicAuthUser != "" && rq.basicAuthPass != "" {
+		req.SetBasicAuth(rq.basicAuthUser, rq.basicAuthPass)
 	}
 
 	for key, value := range headers {
@@ -546,16 +564,24 @@ func (client *Client) DebugGet(action string, result any, params map[string]stri
 }
 
 type defaultRequester struct {
-	baseURL   url.URL
-	doer      doer
-	userAgent string
-	transport *http.Transport
-	client    *Client
+	baseURL       url.URL
+	doer          doer
+	userAgent     string
+	basicAuthUser string
+	basicAuthPass string
+	transport     *http.Transport
+	client        *Client
 }
 
 func newDefaultRequester(client *Client, opts *Config) (*defaultRequester, error) {
 	if opts == nil {
 		opts = &Config{}
+	}
+
+	// Validate Basic Auth constraints.
+	if (opts.BasicAuthUser != "" && opts.BasicAuthPass == "") ||
+		(opts.BasicAuthPass != "" && opts.BasicAuthUser == "") {
+		return nil, fmt.Errorf("cannot use incomplete basic auth credentials")
 	}
 
 	var requester *defaultRequester
@@ -564,15 +590,35 @@ func newDefaultRequester(client *Client, opts *Config) (*defaultRequester, error
 		// By default talk over a unix socket.
 		transport := &http.Transport{Dial: unixDialer(opts.Socket), DisableKeepAlives: opts.DisableKeepAlive}
 		baseURL := url.URL{Scheme: "http", Host: "localhost"}
-		requester = &defaultRequester{baseURL: baseURL, transport: transport}
+		requester = &defaultRequester{
+			baseURL:       baseURL,
+			transport:     transport,
+			basicAuthUser: opts.BasicAuthUser,
+			basicAuthPass: opts.BasicAuthPass,
+		}
 	} else {
 		// Otherwise talk regular HTTP-over-TCP.
 		baseURL, err := url.Parse(opts.BaseURL)
 		if err != nil {
 			return nil, fmt.Errorf("cannot parse base URL: %w", err)
 		}
-		transport := &http.Transport{DisableKeepAlives: opts.DisableKeepAlive}
-		requester = &defaultRequester{baseURL: *baseURL, transport: transport}
+		transport := &http.Transport{
+			DisableKeepAlives: opts.DisableKeepAlive,
+			TLSClientConfig: &tls.Config{
+				// We disable the internal full X509 metadata based validation logic
+				// since the typical use-case do not have the server as a public URL
+				// baked into the certificate, signed with an external CA. The client
+				// provides a TLS verification hook for doing a use-case specific
+				// server certificate verification.
+				InsecureSkipVerify: true,
+			},
+		}
+		requester = &defaultRequester{
+			baseURL:       *baseURL,
+			transport:     transport,
+			basicAuthUser: opts.BasicAuthUser,
+			basicAuthPass: opts.BasicAuthPass,
+		}
 	}
 
 	requester.doer = &http.Client{Transport: requester.transport}
