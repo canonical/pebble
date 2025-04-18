@@ -53,6 +53,7 @@ func (ks *keySuite) TestNew(c *C) {
 
 	// Load the identity key (other boots)
 	nextBoot, err := idkey.New(keyDir)
+	c.Assert(err, IsNil)
 
 	// Both should be the same identity.
 	c.Assert(firstBoot.Fingerprint(), Equals, nextBoot.Fingerprint())
