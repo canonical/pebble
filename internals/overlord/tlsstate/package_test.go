@@ -27,8 +27,7 @@ import (
 	"time"
 
 	. "gopkg.in/check.v1"
-
-	"github.com/canonical/pebble/internals/overlord/tlsstate"
+	//	"github.com/canonical/pebble/internals/overlord/tlsstate"
 )
 
 // Hook up check.v1 into the "go test" runner.
@@ -46,50 +45,24 @@ func (ts *tlsSuite) GetFakeTime(c *C, date string) time.Time {
 	return now
 }
 
-func (ts *tlsSuite) createSupportedKeypair(c *C, tlsDir string, start time.Time, duration time.Duration) *tlsstate.TLSKeyPair {
-	mgr, err := tlsstate.NewManager(tlsDir)
-	c.Assert(err, IsNil)
-	keypair, err := mgr.AddNewTLSKeypair(start, start.Add(duration))
-	c.Assert(err, IsNil)
-	return keypair
-}
-
-func (ts *tlsSuite) createUnsupportedKeypair(c *C, tlsDir string, start time.Time, duration time.Duration) *tlsstate.TLSKeyPair {
-	mgr, err := tlsstate.NewManager(tlsDir)
-	c.Assert(err, IsNil)
-	keypair, err := mgr.AddNewUnsupportedTLSKeyPair(start, start.Add(duration))
-	c.Assert(err, IsNil)
-	return keypair
-}
-
 // testTLSVerifiedClient performs a client TLS connection without server certificate
 // signature verification.
-func (ts *tlsSuite) testTLSInsecureClient(c *C, clock time.Time) (*tlsstate.TLSKeyPair, error) {
+func (ts *tlsSuite) testTLSInsecureClient(c *C, clock time.Time) ([]*x509.Certificate, error) {
 	return ts.testTLSClient(c, nil, clock)
 }
 
 // testTLSVerifiedClient performs a client TLS connection with server certificate
 // signature verification.
-func (ts *tlsSuite) testTLSVerifiedClient(c *C, verifyCert *tlsstate.TLSKeyPair, clock time.Time) (*tlsstate.TLSKeyPair, error) {
-	return ts.testTLSClient(c, verifyCert, clock)
+func (ts *tlsSuite) testTLSVerifiedClient(c *C, ca *x509.Certificate, clock time.Time) ([]*x509.Certificate, error) {
+	return ts.testTLSClient(c, ca, clock)
 }
 
-func (ts *tlsSuite) testTLSClient(c *C, verifyCert *tlsstate.TLSKeyPair, clock time.Time) (*tlsstate.TLSKeyPair, error) {
-	var serverCertificate *x509.Certificate
+func (ts *tlsSuite) testTLSClient(c *C, ca *x509.Certificate, clock time.Time) ([]*x509.Certificate, error) {
+	var serverCerts []*x509.Certificate
 
 	certPool := x509.NewCertPool()
-	if verifyCert != nil {
-		// The root CA pool contains certificates which can verify the
-		// the incoming certificate signature. Since we are using self-signed
-		// certificates, we can actually verify the signature with the public
-		// key part. In practise we will not use the incoming certificate to
-		// verify itself. Instead, a previously saved copy obtained during a
-		// trust exchange routine (i.e. pairing) will be used to make sure
-		// the incoming certificate was signed by the same private key.
-		pem, err := verifyCert.PEMCertificate()
-		c.Assert(err, IsNil)
-		ok := certPool.AppendCertsFromPEM(pem)
-		c.Assert(ok, Equals, true)
+	if ca != nil {
+		certPool.AddCert(ca)
 	}
 	client := &http.Client{
 		Transport: &http.Transport{
@@ -98,12 +71,11 @@ func (ts *tlsSuite) testTLSClient(c *C, verifyCert *tlsstate.TLSKeyPair, clock t
 				MaxVersion:         tls.VersionTLS13,
 				InsecureSkipVerify: true,
 				VerifyConnection: func(ts tls.ConnectionState) error {
-					certs := ts.PeerCertificates
-					if len(certs) == 0 {
+					serverCerts = ts.PeerCertificates
+					if len(serverCerts) == 0 {
 						return fmt.Errorf("no server cert")
 					}
-					serverCertificate = certs[0]
-					if verifyCert == nil {
+					if ca == nil {
 						// No verification.
 						return nil
 					}
@@ -111,7 +83,8 @@ func (ts *tlsSuite) testTLSClient(c *C, verifyCert *tlsstate.TLSKeyPair, clock t
 						Roots:       certPool,
 						CurrentTime: clock,
 					}
-					_, err := serverCertificate.Verify(opts)
+					serverLeaf := serverCerts[0]
+					_, err := serverLeaf.Verify(opts)
 					if err != nil {
 						return fmt.Errorf("Root CA verify failed")
 					}
@@ -130,10 +103,10 @@ func (ts *tlsSuite) testTLSClient(c *C, verifyCert *tlsstate.TLSKeyPair, clock t
 	c.Assert(err, IsNil)
 	c.Assert(string(body), Equals, "TLS 1.3!")
 
-	return &tlsstate.TLSKeyPair{Certificate: serverCertificate}, nil
+	return serverCerts, nil
 }
 
-func (ts *tlsSuite) testTLSServer(c *C, certSource func() *tlsstate.TLSKeyPair) (shutdown func()) {
+func (ts *tlsSuite) testTLSServer(c *C, getCertificate func(*tls.ClientHelloInfo) (*tls.Certificate, error)) (shutdown func()) {
 	// First start a listener so we buffer client requests while the HTTPS
 	// server routine is starting up.
 	listener, err := net.Listen("tcp", ":8888")
@@ -146,15 +119,9 @@ func (ts *tlsSuite) testTLSServer(c *C, certSource func() *tlsstate.TLSKeyPair) 
 			fmt.Fprintf(w, "TLS 1.3!")
 		}),
 		TLSConfig: &tls.Config{
-			MinVersion:       tls.VersionTLS13,
-			MaxVersion:       tls.VersionTLS13,
-			CurvePreferences: []tls.CurveID{tls.CurveP256},
-			GetCertificate: func(*tls.ClientHelloInfo) (*tls.Certificate, error) {
-				cert := certSource()
-				tls, err := cert.TLSCertificate()
-				c.Assert(err, IsNil)
-				return tls, nil
-			},
+			MinVersion:     tls.VersionTLS13,
+			MaxVersion:     tls.VersionTLS13,
+			GetCertificate: getCertificate,
 		},
 	}
 	go func() {
