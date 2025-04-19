@@ -17,6 +17,7 @@ package daemon
 import (
 	"bufio"
 	"context"
+	"crypto"
 	"errors"
 	"fmt"
 	"io"
@@ -64,6 +65,11 @@ type Options struct {
 	// LayersDir is an optional path for the layers directory.
 	// Defaults to "layers" inside the pebble directory.
 	LayersDir string
+
+	// IDSigner is a private key representing the identity of a Pebble
+	// instance (machine, countainer or device), which implements the
+	// crypto.Signer interface (allowing it to sign TLS keypairs).
+	IDSigner crypto.Signer
 
 	// SocketPath is an optional path for the unix socket used for the client
 	// to communicate with the daemon. Defaults to a hidden (dotted) name inside
@@ -848,6 +854,7 @@ func New(opts *Options) (*Daemon, error) {
 		RestartHandler: d,
 		ServiceOutput:  opts.ServiceOutput,
 		Extension:      opts.OverlordExtension,
+		IDSigner:       opts.IDSigner,
 	}
 
 	ovld, err := overlord.New(&ovldOptions)
