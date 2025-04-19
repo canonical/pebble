@@ -12,11 +12,11 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-// idkey supplies an identity key for a machine or device. This package
-// provides an implementation based on an Ed25519 based key, currently
+// idkey supplies an identity key for a machine, container or device. This
+// package provides an implementation based on an Ed25519 based key, currently
 // only supporting a file based key storage solution. This can later be
-// extended to support more secure hardware backed keystore, such as
-// TPM, OP-TEE or UbiKey.
+// extended to support more secure hardware backed keystores, such as TPM,
+// OP-TEE or UbiKey.
 package idkey
 
 import (
@@ -46,10 +46,10 @@ type IDKey struct {
 	key    any
 }
 
-// New checks if an existing identity key exists, and loads the key if it
-// does. It creates a new private identity key and persists it to disk if
-// no key was found. Cases where explicit control is desired on when to
-// generate or load can use GenerateKey and LoadKeyFromFile.
+// New checks if an existing private identity key exists, and loads the key
+// if it does. It creates a new private identity key and persists it to disk
+// if no key was found. Cases where explicit control is desired on when to
+// generate or load can use GenerateKey and LoadKey directly.
 func New(keyDir string) (*IDKey, error) {
 	keyPath := filepath.Join(keyDir, identityKeyFile)
 	_, err := os.Stat(keyPath)
@@ -60,16 +60,16 @@ func New(keyDir string) (*IDKey, error) {
 		}
 		return nil, err
 	}
-	return LoadKeyFromFile(keyDir)
+	return LoadKey(keyDir)
 }
 
 // GenerateKey generates a new identity key and persists it to disk. This
-// function should only ever be called on the first boot of a machine or
-// device, otherwise a new identity will be created.
+// function should only ever be called on the first boot otherwise a new
+// identity will be created.
 //
 // This function is equivalent to running:
 //
-// 	openssl genpkey -algorithm Ed25519 -out key.pem
+//	openssl genpkey -algorithm Ed25519 -out key.pem
 func GenerateKey(keyDir string) (*IDKey, error) {
 	key := &IDKey{
 		keyDir: keyDir,
@@ -87,8 +87,8 @@ func GenerateKey(keyDir string) (*IDKey, error) {
 	return key, nil
 }
 
-// LoadKeyFromFile loads an existing identity key from disk.
-func LoadKeyFromFile(keyDir string) (*IDKey, error) {
+// LoadKey loads an existing identity key from disk.
+func LoadKey(keyDir string) (*IDKey, error) {
 	key := &IDKey{
 		keyDir: keyDir,
 	}

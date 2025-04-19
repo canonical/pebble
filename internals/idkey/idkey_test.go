@@ -35,7 +35,7 @@ func (ks *keySuite) TestNoDirectory(c *C) {
 	c.Assert(err, IsNil)
 
 	// Load the identity key (other boots)
-	nextBoot, err := idkey.LoadKeyFromFile(keyDir)
+	nextBoot, err := idkey.LoadKey(keyDir)
 	c.Assert(err, IsNil)
 
 	// Both should be the same identity.
@@ -67,7 +67,7 @@ func (ks *keySuite) TestDirectoryInvalid(c *C) {
 	c.Assert(err, IsNil)
 
 	// Loading
-	_, err = idkey.LoadKeyFromFile(keyDir)
+	_, err = idkey.LoadKey(keyDir)
 	c.Assert(err, ErrorMatches, ".* expected permission 0o700 .*")
 
 	// Saving
@@ -97,7 +97,7 @@ func (ks *keySuite) TestInvalidKey(c *C) {
 	c.Assert(err, IsNil)
 
 	// Load the identity key (other boots)
-	_, err = idkey.LoadKeyFromFile(keyDir)
+	_, err = idkey.LoadKey(keyDir)
 	c.Assert(err, ErrorMatches, "cannot verify PEM permission .*")
 }
 
@@ -116,7 +116,7 @@ func (ks *keySuite) TestCorruptKey(c *C) {
 	c.Assert(err, IsNil)
 
 	// Load the identity key (other boots)
-	_, err = idkey.LoadKeyFromFile(keyDir)
+	_, err = idkey.LoadKey(keyDir)
 	c.Assert(err, ErrorMatches, "cannot find private identity key .*")
 }
 
