@@ -66,6 +66,10 @@ func New(keyDir string) (*IDKey, error) {
 // GenerateKey generates a new identity key and persists it to disk. This
 // function should only ever be called on the first boot of a machine or
 // device, otherwise a new identity will be created.
+//
+// This function is equivalent to running:
+//
+// 	openssl genpkey -algorithm Ed25519 -out key.pem
 func GenerateKey(keyDir string) (*IDKey, error) {
 	key := &IDKey{
 		keyDir: keyDir,
