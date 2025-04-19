@@ -167,7 +167,7 @@ func (s *PebbleSuite) TestEnterExecListDir(c *C) {
 
 	exitCode := cli.PebbleMain()
 	c.Check(s.Stderr(), Equals, "")
-	c.Check(s.Stdout(), Equals, "bar\nbaz\nfoo\n")
+	c.Check(s.Stdout(), Equals, "bar\nbaz\nfoo\nidentity\n")
 	c.Check(exitCode, Equals, 0)
 }
 
