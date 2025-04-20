@@ -18,8 +18,8 @@ import (
 	"time"
 )
 
-// FakeSystemTime allows faking the time for the TLS manager.
-func (m *TLSManager) FakeSystemTime(date string, offset time.Duration) (restore func(), clock time.Time) {
+// FakeSystemTime fakes the system time for the TLS manager.
+func FakeSystemTime(date string, offset time.Duration) (restore func(), clock time.Time) {
 	layout := "2006-01-02"
 	now, err := time.Parse(layout, date)
 	if err != nil {
@@ -33,4 +33,32 @@ func (m *TLSManager) FakeSystemTime(date string, offset time.Duration) (restore 
 	return func() {
 		systemTime = old
 	}, now
+}
+
+// FakeIDCertValidity fakes the validity period of the identity certificate.
+func FakeIDCertValidity(d time.Duration) (restore func()) {
+	old := idCertValidity
+	idCertValidity = d
+	return func() {
+		idCertValidity = old
+	}
+}
+
+// FakeTLSCertValidity fakes the validity period of the TLS certificate (and private key).
+func FakeTLSCertValidity(d time.Duration) (restore func()) {
+	old := tlsCertValidity
+	tlsCertValidity = d
+	return func() {
+		tlsCertValidity = old
+	}
+}
+
+// FakeTLSCertRenewWindow fakes the grace period towards the end of the expiry date
+// after which the TLS manager will consider it expired.
+func FakeTLSCertRenewWindow(d time.Duration) (restore func()) {
+	old := tlsCertRenewWindow
+	tlsCertRenewWindow = d
+	return func() {
+		tlsCertRenewWindow = old
+	}
 }

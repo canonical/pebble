@@ -115,8 +115,8 @@ func (m *TLSManager) GetCertificate(*tls.ClientHelloInfo) (*tls.Certificate, err
 	// Generate a new in-memory identity signed TLS certificate.
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if err := m.createIDCert(); err != nil {
-		return nil, fmt.Errorf("cannot create identity certificate: %w", err)
+	if err := m.getIDCert(); err != nil {
+		return nil, fmt.Errorf("cannot get identity certificate: %w", err)
 	}
 	if err = m.createTLSCert(); err != nil {
 		return nil, fmt.Errorf("cannot create TLS certificate: %w", err)
@@ -176,42 +176,44 @@ func (m *TLSManager) createDir() error {
 	return os.Mkdir(m.tlsDir, 0o700)
 }
 
-// createIDCert verifies that the identity certificate exists, and that the
+// getIDCert verifies that the identity certificate exists, and that the
 // certificate matches the supplied identity key signer. If the identity key
 // has changed, or the certificate has expired, the identity certificate is
 // replaced with a new identity certificate signed with the identity key.
-func (m *TLSManager) createIDCert() error {
+func (m *TLSManager) getIDCert() error {
 	idPath := filepath.Join(m.tlsDir, idCertFile)
 	exists, err := pathExists(idPath)
 	if err != nil {
 		return err
 	}
 
-	// Make sure the current certificate is valid.
-	if exists {
-		cert, err := loadIDCert(idPath)
+	// Load the identity certificate it not yet loaded.
+	if exists && m.idCert == nil {
+		m.idCert, err = loadIDCert(idPath)
 		if err != nil {
 			return err
 		}
-		isDerived := isCertDerived(cert, m.signer)
-		isActive := isCertActive(cert)
+	}
+
+	// Can we use the existing identity certificate?
+	if m.idCert != nil {
+		isDerived := isCertDerived(m.idCert, m.signer)
+		isActive := isCertActive(m.idCert)
 		if isDerived && isActive {
 			// Existing identity certificate is valid.
-			m.idCert = cert
 			return nil
 		}
 	}
 
 	// If we get here a new identity certificate must be created.
-	cert, err := createIDCert(m.signer)
+	m.idCert, err = createIDCert(m.signer)
 	if err != nil {
 		return err
 	}
-	err = saveIDCert(idPath, cert)
+	err = saveIDCert(idPath, m.idCert)
 	if err != nil {
 		return err
 	}
-	m.idCert = cert
 	return nil
 }
 
@@ -219,6 +221,11 @@ func (m *TLSManager) createIDCert() error {
 // the identity public key. We only allow a single certificate
 // block in the PEM file.
 func loadIDCert(path string) (*x509.Certificate, error) {
+	err := expectPermission(path, 0o600)
+	if err != nil {
+		return nil, err
+	}
+
 	var cert *x509.Certificate
 	pemData, err := os.ReadFile(path)
 	if err != nil {
@@ -324,9 +331,9 @@ func isCertActive(cert *x509.Certificate) bool {
 	// Note that we shorten the NotAfter timestamp by a tlsCertRenewWindow
 	// duration to avoid a TLS handshake race against the expiry time.
 	if now.Before(cert.NotBefore) || now.After(cert.NotAfter.Add(-tlsCertRenewWindow)) {
-		return true
+		return false
 	}
-	return false
+	return true
 }
 
 // isCertDerived checks if the public key in the certificate matches
