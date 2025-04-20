@@ -82,7 +82,7 @@ func (ks *keySuite) TestDirInvalid(c *C) {
 
 	// Saving
 	_, err := idkey.GenerateKey(keyDir)
-	c.Assert(err, ErrorMatches, "cannot create directory leaf .*")
+	c.Assert(err, ErrorMatches, "cannot create identity directory.*")
 }
 
 // TestInvalidKey checks permission of the key file.
@@ -98,11 +98,11 @@ func (ks *keySuite) TestInvalidKey(c *C) {
 
 	// Load the identity key (other boots)
 	_, err = idkey.LoadKey(keyDir)
-	c.Assert(err, ErrorMatches, "cannot verify PEM permission .*")
+	c.Assert(err, ErrorMatches, "cannot load identity key.*")
 }
 
-// TestCorruptKey checks a corrupt key fails to load.
-func (ks *keySuite) TestCorruptKey(c *C) {
+// TestEmptyKey checks if a key fails to load.
+func (ks *keySuite) TestEmptyKey(c *C) {
 	keyDir := filepath.Join(c.MkDir(), "identity")
 
 	// Create a new identity key (first boot)
@@ -117,10 +117,10 @@ func (ks *keySuite) TestCorruptKey(c *C) {
 
 	// Load the identity key (other boots)
 	_, err = idkey.LoadKey(keyDir)
-	c.Assert(err, ErrorMatches, "cannot find private identity key .*")
+	c.Assert(err, ErrorMatches, ".* empty PEM file .*")
 }
 
-// MTestKeySign makes sure the crypto.Signer works.
+// TestKeySign makes sure the crypto.Signer works.
 func (ks *keySuite) TestKeySign(c *C) {
 	keyDir := filepath.Join(c.MkDir(), "identity")
 
