@@ -52,20 +52,19 @@ type IDKey struct {
 // generate or load can use GenerateKey and LoadKey directly.
 func New(keyDir string) (*IDKey, error) {
 	keyPath := filepath.Join(keyDir, identityKeyFile)
-	_, err := os.Stat(keyPath)
+	exists, err := pathExists(keyPath)
 	if err != nil {
-		if os.IsNotExist(err) {
-			// Generate a new key and persist.
-			return GenerateKey(keyDir)
-		}
-		return nil, err
+		return nil, fmt.Errorf("cannot access key file %q: %w", keyPath, err)
 	}
-	return LoadKey(keyDir)
+	if exists {
+		return LoadKey(keyDir)
+	}
+	return GenerateKey(keyDir)
 }
 
 // GenerateKey generates a new identity key and persists it to disk. This
-// function should only ever be called on the first boot otherwise a new
-// identity will be created.
+// function should only ever be called on the first boot otherwise the
+// existing identity will be overwritten.
 //
 // This function is equivalent to running:
 //
@@ -74,15 +73,17 @@ func GenerateKey(keyDir string) (*IDKey, error) {
 	key := &IDKey{
 		keyDir: keyDir,
 	}
-	// Generate new ed25519 private key.
-	err := key.newEd25519()
+	err := key.createDir()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("cannot create identity directory: %w", err)
 	}
-	// Persist to disk.
+	err = key.newEd25519()
+	if err != nil {
+		return nil, fmt.Errorf("cannot generate identity key: %w", err)
+	}
 	err = key.save()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("cannot save identity key: %w", err)
 	}
 	return key, nil
 }
@@ -95,9 +96,24 @@ func LoadKey(keyDir string) (*IDKey, error) {
 	// Load from disk.
 	err := key.load()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("cannot load identity key: %w", err)
 	}
 	return key, nil
+}
+
+// createDir verifies the directory layout and permissions, and creates
+// the leaf element of the key driectory if it does not yet exist.
+func (k *IDKey) createDir() error {
+	exists, err := pathExists(k.keyDir)
+	if err != nil {
+		return err
+	}
+	if exists {
+		return expectPermission(k.keyDir, 0o700)
+	}
+
+	// Create the leaf directory node with 0o700 permissions.
+	return os.Mkdir(k.keyDir, 0o700)
 }
 
 // Public implements the crypto.Signer.
@@ -117,26 +133,25 @@ func (k *IDKey) newEd25519() error {
 	var err error
 	_, k.key, err = ed25519.GenerateKey(rand.Reader)
 	if err != nil {
-		return fmt.Errorf("cannot generate ed25519 key: %w", err)
+		return err
 	}
 	return nil
 }
 
 // load loads the private identity key from storage.
 func (k *IDKey) load() error {
-	// Check the permissions are what we expect.
-	_, err := os.Stat(k.keyDir)
-	if err != nil {
-		return fmt.Errorf("cannot find identity key: directory %q is not accessible", k.keyDir)
+	exists, err := pathExists(k.keyDir)
+	if err != nil || !exists {
+		return fmt.Errorf("directory %q is not accessible", k.keyDir)
 	}
 	err = expectPermission(k.keyDir, 0o700)
 	if err != nil {
-		return fmt.Errorf("cannot verify identity key directory permissions: %w", err)
+		return err
 	}
 	pemPath := filepath.Join(k.keyDir, identityKeyFile)
 	err = expectPermission(pemPath, 0o600)
 	if err != nil {
-		return fmt.Errorf("cannot verify PEM permission for %q: %w", pemPath, err)
+		return err
 	}
 	// Load the key.
 	pemData, err := os.ReadFile(pemPath)
@@ -156,31 +171,34 @@ func (k *IDKey) load() error {
 				return err
 			}
 		default:
-			return fmt.Errorf("cannot load private identity key from block %q in PEM file %q", block.Type, pemPath)
+			return fmt.Errorf("unknown PEM block %q in file %q", block.Type, pemPath)
 		}
 	}
 	if k.key == nil {
-		return fmt.Errorf("cannot find private identity key in PEM file %q", pemPath)
+		return fmt.Errorf("empty PEM file %q", pemPath)
 	}
 	return nil
 }
 
 // save saves the private identity key to storage.
 func (k *IDKey) save() error {
-	// If the identity key directory does not yet exist, create it.
-	_, err := os.Stat(k.keyDir)
-	if os.IsNotExist(err) {
-		// Create the leaf directory node with 0700 permissions.
-		err = os.Mkdir(k.keyDir, 0o700)
-	} else {
+	exists, err := pathExists(k.keyDir)
+	if err != nil {
+		return fmt.Errorf("directory %q is not accessible", k.keyDir)
+	}
+	if exists {
 		err = expectPermission(k.keyDir, 0o700)
 		if err != nil {
-			return fmt.Errorf("cannot verify identity key directory permissions: %w", err)
+			return err
+		}
+	} else {
+		// Create the leaf directory node with 0700 permissions.
+		err = os.Mkdir(k.keyDir, 0o700)
+		if err != nil {
+			return err
 		}
 	}
-	if err != nil {
-		return fmt.Errorf("cannot create directory leaf of path %v: %w", k.keyDir, err)
-	}
+
 	// Create the new private identity file.
 	pemPath := filepath.Join(k.keyDir, identityKeyFile)
 	pemFile, err := os.OpenFile(pemPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
@@ -201,7 +219,7 @@ func (k *IDKey) save() error {
 	}
 	var pemBuffer bytes.Buffer
 	if err := pem.Encode(&pemBuffer, pemPrivateBlock); err != nil {
-		return fmt.Errorf("cannot convert key to PEM: %w", err)
+		return err
 	}
 	if _, err = pemFile.Write(pemBuffer.Bytes()); err != nil {
 		return err
@@ -231,4 +249,17 @@ func expectPermission(path string, perm fs.FileMode) error {
 		return fmt.Errorf("expected permission 0o%o (got 0o%o) for %q", perm, actualPerm, path)
 	}
 	return nil
+}
+
+// pathExists returns true of the path exists, false if it does not. If the
+// operation reports an unrelated error, the error is returned.
+func pathExists(path string) (bool, error) {
+	_, err := os.Stat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
 }
