@@ -128,6 +128,11 @@ func (m *TLSManager) GetCertificate(*tls.ClientHelloInfo) (*tls.Certificate, err
 	return m.tlsCert, nil
 }
 
+// Ensure implements StateManager.Ensure.
+func (m *TLSManager) Ensure() error {
+	return nil
+}
+
 func (m *TLSManager) createTLSCert() error {
 	_, privateKey, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
