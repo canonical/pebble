@@ -67,7 +67,7 @@ type Options struct {
 	// Defaults to "layers" inside the pebble directory.
 	LayersDir string
 
-	// TLSDir is an optional path for where TLS keypairs are persisted.
+	// TLSDir is an optional path for where the TLS manager persists PEM files.
 	// Defaults to "tls" inside the pebble directory.
 	TLSDir string
 
@@ -382,21 +382,11 @@ func (d *Daemon) Init() error {
 
 	if d.httpsAddress != "" {
 		tlsConf := &tls.Config{
-			NextProtos: []string{"h2", "http/1.1"},
-			MinVersion: tls.VersionTLS13,
-			MaxVersion: tls.VersionTLS13,
-			GetCertificate: func(*tls.ClientHelloInfo) (*tls.Certificate, error) {
-				tlsMgr := d.overlord.TLSManager()
-				tlsKeyPair, err := tlsMgr.TLSKeyPair()
-				if err != nil {
-					return nil, err
-				}
-				tlsCert, err := tlsKeyPair.TLSCertificate()
-				if err != nil {
-					return nil, err
-				}
-				return tlsCert, nil
-			},
+			// We now support HTTP1.1 and HTTP2 when using HTTPS.
+			NextProtos:     []string{"h2", "http/1.1"},
+			MinVersion:     tls.VersionTLS13,
+			MaxVersion:     tls.VersionTLS13,
+			GetCertificate: d.overlord.TLSManager().GetCertificate,
 		}
 		listener, err := tls.Listen("tcp", d.httpsAddress, tlsConf)
 		if err != nil {

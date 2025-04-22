@@ -16,6 +16,8 @@ package daemon
 
 import (
 	"bytes"
+	"crypto/ed25519"
+	"crypto/rand"
 	"crypto/tls"
 	"encoding/json"
 	"errors"
@@ -94,11 +96,14 @@ func (s *daemonSuite) TearDownTest(c *C) {
 }
 
 func (s *daemonSuite) newDaemon(c *C) *Daemon {
+	_, signer, err := ed25519.GenerateKey(rand.Reader)
+	c.Assert(err, IsNil)
 	d, err := New(&Options{
 		Dir:          s.pebbleDir,
 		SocketPath:   s.socketPath,
 		HTTPAddress:  s.httpAddress,
 		HTTPSAddress: s.httpsAddress,
+		IDSigner:     signer,
 	})
 	c.Assert(err, IsNil)
 	d.addRoutes()
