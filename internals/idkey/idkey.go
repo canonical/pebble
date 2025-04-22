@@ -16,7 +16,7 @@
 // package provides an implementation based on an Ed25519 based key, currently
 // only supporting a file based key storage solution. This can later be
 // extended to support more secure hardware backed keystores, such as TPM,
-// OP-TEE or UbiKey.
+// OP-TEE or YubiKey.
 package idkey
 
 import (
