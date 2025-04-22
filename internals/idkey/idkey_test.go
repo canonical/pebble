@@ -142,3 +142,13 @@ func (ks *keySuite) TestKeySign(c *C) {
 	ok = ed25519.Verify(pubKey, message, signature)
 	c.Assert(ok, Equals, true)
 }
+
+// BenchmarkKeyGeneration prints some performance metrics. To run this test
+// use: go test -check.b
+func (ks *keySuite) BenchmarkKeyGeneration(c *C) {
+	for i:=0; i< c.N; i++ {
+		keyDir := filepath.Join(c.MkDir(), "identity")
+		_, err := idkey.GenerateKey(keyDir)
+		c.Assert(err, IsNil)
+	}
+}
