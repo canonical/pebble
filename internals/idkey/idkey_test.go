@@ -146,7 +146,7 @@ func (ks *keySuite) TestKeySign(c *C) {
 // BenchmarkKeyGeneration prints some performance metrics. To run this test
 // use: go test -check.b
 func (ks *keySuite) BenchmarkKeyGeneration(c *C) {
-	for i:=0; i< c.N; i++ {
+	for i := 0; i < c.N; i++ {
 		keyDir := filepath.Join(c.MkDir(), "identity")
 		_, err := idkey.GenerateKey(keyDir)
 		c.Assert(err, IsNil)
