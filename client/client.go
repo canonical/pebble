@@ -165,11 +165,9 @@ type Client struct {
 	latestWarning time.Time
 
 	getWebsocket getWebsocketFunc
-
-	host string
 }
 
-type getWebsocketFunc func(url string) (clientWebsocket, error)
+type getWebsocketFunc func(urlPath string) (clientWebsocket, error)
 
 type clientWebsocket interface {
 	wsutil.MessageReader
@@ -194,10 +192,9 @@ func New(config *Config) (*Client, error) {
 	}
 
 	client.requester = requester
-	client.getWebsocket = func(url string) (clientWebsocket, error) {
-		return getWebsocket(requester.Transport(), url)
+	client.getWebsocket = func(urlPath string) (clientWebsocket, error) {
+		return requester.getWebsocket(urlPath)
 	}
-	client.host = requester.baseURL.Host
 
 	return client, nil
 }
@@ -207,19 +204,8 @@ func (client *Client) Requester() Requester {
 }
 
 func (client *Client) getTaskWebsocket(taskID, websocketID string) (clientWebsocket, error) {
-	url := fmt.Sprintf("ws://%s/v1/tasks/%s/websocket/%s", client.host, taskID, websocketID)
-	return client.getWebsocket(url)
-}
-
-func getWebsocket(transport *http.Transport, url string) (clientWebsocket, error) {
-	dialer := websocket.Dialer{
-		NetDial:          transport.Dial, //lint:ignore SA1019 Deprecated
-		Proxy:            transport.Proxy,
-		TLSClientConfig:  transport.TLSClientConfig,
-		HandshakeTimeout: 5 * time.Second,
-	}
-	conn, _, err := dialer.Dial(url, nil)
-	return conn, err
+	urlPath := fmt.Sprintf("/v1/tasks/%s/websocket/%s", taskID, websocketID)
+	return client.getWebsocket(urlPath)
 }
 
 // CloseIdleConnections closes any API connections that are currently unused.
@@ -259,8 +245,8 @@ func (e ConnectionError) Unwrap() error {
 }
 
 func (rq *defaultRequester) dispatch(ctx context.Context, method, urlpath string, query url.Values, headers map[string]string, body io.Reader) (*http.Response, error) {
-	// fake a url to keep http.Client happy
-	u := rq.baseURL
+	// Do not mutate the requester baseURL.
+	u := *rq.baseURL
 	u.Path = path.Join(rq.baseURL.Path, urlpath)
 	u.RawQuery = query.Encode()
 	req, err := http.NewRequestWithContext(ctx, method, u.String(), body)
@@ -564,13 +550,13 @@ func (client *Client) DebugGet(action string, result any, params map[string]stri
 }
 
 type defaultRequester struct {
-	baseURL       url.URL
-	doer          doer
-	userAgent     string
+	baseURL   *url.URL
+	doer      doer
+	userAgent string
 	basicUser string
 	basicPass string
-	transport     *http.Transport
-	client        *Client
+	transport *http.Transport
+	client    *Client
 }
 
 func newDefaultRequester(client *Client, opts *Config) (*defaultRequester, error) {
@@ -589,10 +575,10 @@ func newDefaultRequester(client *Client, opts *Config) (*defaultRequester, error
 	if opts.BaseURL == "" {
 		// By default talk over a unix socket.
 		transport := &http.Transport{Dial: unixDialer(opts.Socket), DisableKeepAlives: opts.DisableKeepAlive}
-		baseURL := url.URL{Scheme: "http", Host: "localhost"}
+		baseURL := &url.URL{Scheme: "http", Host: "localhost"}
 		requester = &defaultRequester{
-			baseURL:       baseURL,
-			transport:     transport,
+			baseURL:   baseURL,
+			transport: transport,
 			basicUser: opts.BasicUser,
 			basicPass: opts.BasicPass,
 		}
@@ -614,8 +600,8 @@ func newDefaultRequester(client *Client, opts *Config) (*defaultRequester, error
 			},
 		}
 		requester = &defaultRequester{
-			baseURL:       *baseURL,
-			transport:     transport,
+			baseURL:   baseURL,
+			transport: transport,
 			basicUser: opts.BasicUser,
 			basicPass: opts.BasicPass,
 		}
@@ -630,4 +616,27 @@ func newDefaultRequester(client *Client, opts *Config) (*defaultRequester, error
 
 func (rq *defaultRequester) Transport() *http.Transport {
 	return rq.transport
+}
+
+func (rq *defaultRequester) getWebsocket(urlPath string) (clientWebsocket, error) {
+	dialer := websocket.Dialer{
+		NetDial:          rq.transport.Dial, //lint:ignore SA1019 Deprecated
+		Proxy:            rq.transport.Proxy,
+		TLSClientConfig:  rq.transport.TLSClientConfig,
+		HandshakeTimeout: 5 * time.Second,
+	}
+
+	var url string
+	if rq.baseURL.Scheme == "https" {
+		url = fmt.Sprintf("wss://%s%s", rq.baseURL.Host, urlPath)
+	} else {
+		url = fmt.Sprintf("ws://%s%s", rq.baseURL.Host, urlPath)
+	}
+
+	r := http.Request{Header: make(http.Header)}
+	if rq.basicUser != "" && rq.basicPass != "" {
+		r.SetBasicAuth(rq.basicUser, rq.basicPass)
+	}
+	conn, _, err := dialer.Dial(url, r.Header)
+	return conn, err
 }
