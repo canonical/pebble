@@ -138,13 +138,13 @@ type Config struct {
 	// and optionally reject the incoming server certificate.
 	VerifyTLSConnection func(tls.ConnectionState) error
 
-	// Optional HTTP basic authentication details. If supplied this will
+	// Optional HTTP Basic Authentication details. If supplied this will
 	// add an HTTP basic authentication header entry.
 	// RFC 7617 (HTTP Authentication: Basic and Digest) support a user without
 	// a password, but we will error if an empty password is provided for
 	// security reasons.
-	BasicAuthUser string
-	BasicAuthPass string
+	BasicUser string
+	BasicPass string
 
 	// Socket is the path to the unix socket to use.
 	Socket string
@@ -271,8 +271,8 @@ func (rq *defaultRequester) dispatch(ctx context.Context, method, urlpath string
 		req.Header.Set("User-Agent", rq.userAgent)
 	}
 
-	if rq.basicAuthUser != "" && rq.basicAuthPass != "" {
-		req.SetBasicAuth(rq.basicAuthUser, rq.basicAuthPass)
+	if rq.basicUser != "" && rq.basicPass != "" {
+		req.SetBasicAuth(rq.basicUser, rq.basicPass)
 	}
 
 	for key, value := range headers {
@@ -567,8 +567,8 @@ type defaultRequester struct {
 	baseURL       url.URL
 	doer          doer
 	userAgent     string
-	basicAuthUser string
-	basicAuthPass string
+	basicUser string
+	basicPass string
 	transport     *http.Transport
 	client        *Client
 }
@@ -579,8 +579,8 @@ func newDefaultRequester(client *Client, opts *Config) (*defaultRequester, error
 	}
 
 	// Validate Basic Auth constraints.
-	if (opts.BasicAuthUser != "" && opts.BasicAuthPass == "") ||
-		(opts.BasicAuthPass != "" && opts.BasicAuthUser == "") {
+	if (opts.BasicUser != "" && opts.BasicPass == "") ||
+		(opts.BasicPass != "" && opts.BasicUser == "") {
 		return nil, fmt.Errorf("cannot use incomplete basic auth credentials")
 	}
 
@@ -593,8 +593,8 @@ func newDefaultRequester(client *Client, opts *Config) (*defaultRequester, error
 		requester = &defaultRequester{
 			baseURL:       baseURL,
 			transport:     transport,
-			basicAuthUser: opts.BasicAuthUser,
-			basicAuthPass: opts.BasicAuthPass,
+			basicUser: opts.BasicUser,
+			basicPass: opts.BasicPass,
 		}
 	} else {
 		// Otherwise talk regular HTTP-over-TCP.
@@ -616,8 +616,8 @@ func newDefaultRequester(client *Client, opts *Config) (*defaultRequester, error
 		requester = &defaultRequester{
 			baseURL:       *baseURL,
 			transport:     transport,
-			basicAuthUser: opts.BasicAuthUser,
-			basicAuthPass: opts.BasicAuthPass,
+			basicUser: opts.BasicUser,
+			basicPass: opts.BasicPass,
 		}
 	}
 
