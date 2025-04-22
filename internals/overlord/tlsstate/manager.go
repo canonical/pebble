@@ -89,21 +89,18 @@ func NewManager(tlsDir string, signer crypto.Signer) (*TLSManager, error) {
 		tlsDir: tlsDir,
 		signer: signer,
 	}
-	if err := manager.createDir(); err != nil {
-		return nil, fmt.Errorf("cannot create TLS directory: %w", err)
-	}
 	return manager, nil
 }
 
-// GetCertificate returns a identity signed TLS certificate. The certificate chain includes
+// GetCertificate returns an identity signed TLS certificate. The certificate chain includes
 // both the TLS leaf certificate, as well as the self signed identity CA certificate. If
 // either the identity or TLS certificate nears expiry, this functions creates new
 // certificates on demand. Note that even if the identity certificate is re-created, this
-// does not mean that the identity key changed.
+// does not mean that the identity key changed (the key itself has no expiry).
 func (m *TLSManager) GetCertificate(*tls.ClientHelloInfo) (*tls.Certificate, error) {
 	var err error
 
-	// Concurrent sessions while the ID and TLS certificate is valid.
+	// Fast path: concurrent sessions while the ID and TLS certificate is valid.
 	m.mu.RLock()
 	tlsCert := m.tlsCert
 	idCert := m.idCert
@@ -112,9 +109,16 @@ func (m *TLSManager) GetCertificate(*tls.ClientHelloInfo) (*tls.Certificate, err
 		return tlsCert, nil
 	}
 
-	// Generate a new in-memory identity signed TLS certificate.
+	// Slow path: generate a new in-memory identity signed TLS certificate.
+	//
+	// If we got here then it means we need to generate a new in-memory TLS
+	// keypair, and potentially an identity certificate (only the first time
+	// or when it expires, or when the key changed).
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if err := m.createDir(); err != nil {
+		return nil, fmt.Errorf("cannot create TLS directory: %w", err)
+	}
 	if err := m.getIDCert(); err != nil {
 		return nil, fmt.Errorf("cannot get identity certificate: %w", err)
 	}

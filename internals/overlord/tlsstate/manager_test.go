@@ -53,7 +53,9 @@ func (ts *tlsSuite) TestDirectoryInvalidPerm(c *C) {
 	err = os.MkdirAll(tlsDir, 0740)
 	c.Assert(err, IsNil)
 
-	_, err = tlsstate.NewManager(tlsDir, key)
+	mgr, err := tlsstate.NewManager(tlsDir, key)
+	c.Assert(err, IsNil)
+	_, err = mgr.GetCertificate(nil)
 	c.Assert(err, ErrorMatches, ".* expected permission 0o700 .*")
 }
 
@@ -65,7 +67,9 @@ func (ts *tlsSuite) TestKeypairDirNoParent(c *C) {
 
 	tlsDir := filepath.Join(c.MkDir(), "something/tls")
 
-	_, err = tlsstate.NewManager(tlsDir, key)
+	mgr, err := tlsstate.NewManager(tlsDir, key)
+	c.Assert(err, IsNil)
+	_, err = mgr.GetCertificate(nil)
 	c.Assert(err, ErrorMatches, "cannot create TLS directory.*")
 }
 
@@ -76,6 +80,8 @@ func (ts *tlsSuite) TestInvalidIDCertContent(c *C) {
 	c.Assert(err, IsNil)
 
 	tlsDir := filepath.Join(c.MkDir(), "tls")
+	err = os.MkdirAll(tlsDir, 0700)
+	c.Assert(err, IsNil)
 
 	mgr, err := tlsstate.NewManager(tlsDir, key)
 	c.Assert(err, IsNil)
@@ -374,4 +380,24 @@ func (ts *tlsSuite) TestTLSServerClientIDKeyChange(c *C) {
 	c.Assert(tlsCert.Equal(certs[0]), Equals, false)
 	// Shut down the HTTPS server.
 	shutdown()
+}
+
+// BenchmarkIDTLSCertGen prints some performance metrics related to the worse case
+// startup condition where both the identity cerrtificate and TLS keypair must be
+// generated. To run this test use: go test -check.b
+func (ts *tlsSuite) BenchmarkIDTLSCertGen(c *C) {
+	_, key, err := ed25519.GenerateKey(rand.Reader)
+	c.Assert(err, IsNil)
+
+	for i := 0; i < c.N; i++ {
+		// New unique temporary directory (so identity cert must be re-created).
+		tlsDir := filepath.Join(c.MkDir(), "tls")
+
+		mgr, err := tlsstate.NewManager(tlsDir, key)
+		c.Assert(err, IsNil)
+
+		// Create identity and TLS certificates on demand.
+		_, err = mgr.GetCertificate(nil)
+		c.Assert(err, IsNil)
+	}
 }
