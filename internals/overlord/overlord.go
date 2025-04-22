@@ -174,7 +174,7 @@ func New(opts *Options) (*Overlord, error) {
 	if tlsDir == "" {
 		tlsDir = filepath.Join(opts.PebbleDir, "tls")
 	}
-	o.tlsMgr, err = tlsstate.NewManager(tlsDir)
+	o.tlsMgr, err = tlsstate.NewManager(tlsDir, opts.IDSigner)
 	if err != nil {
 		return nil, fmt.Errorf("cannot create TLS manager: %w", err)
 	}
