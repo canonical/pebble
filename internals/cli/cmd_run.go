@@ -199,7 +199,7 @@ func runDaemon(rcmd *cmdRun, ch chan os.Signal, ready chan<- func()) error {
 	dopts := daemon.Options{
 		Dir:          rcmd.pebbleDir,
 		SocketPath:   rcmd.socketPath,
-		IDSigner:   idSigner,
+		IDSigner:     idSigner,
 		HTTPAddress:  rcmd.HTTP,
 		HTTPSAddress: rcmd.HTTPS,
 	}
