@@ -1226,6 +1226,7 @@ paths:
                   "status": "OK",
                   "result": {
                     "boot-id": "e14ed96e-5a98-4402-80f7-d19dd949eac3",
+                    "http-address": ":4000",
                     "version": "v1.17.0"
                   }
                 }
@@ -1675,12 +1676,18 @@ components:
     systemInfo:
       type: object
       properties:
-        version:
-          type: string
-          description: Version of the Pebble daemon.
         boot-id:
           type: string
           description: A unique string that represents this boot of the server.
+        http-address:
+          type: string
+          description: Address the HTTP server is listening on, for example `:4000`. Only present if the daemon was started with the `--http` argument.
+        version:
+          type: string
+          description: Version of the Pebble daemon.
+      required:
+        - boot-id
+        - version
     checkInfo:
       type: object
       properties:
