@@ -288,9 +288,6 @@ type RunOptions struct {
 // applyDefaults applies default values to specific options if unset, taking
 // supported environment variables into account.
 func (o *RunOptions) applyDefaults() {
-	if o == nil {
-		o = &RunOptions{}
-	}
 	if o.PebbleDir == "" {
 		o.PebbleDir = os.Getenv("PEBBLE")
 		if o.PebbleDir == "" {
@@ -315,6 +312,9 @@ func (o *RunOptions) applyDefaults() {
 }
 
 func Run(options *RunOptions) error {
+	if options == nil {
+		options = &RunOptions{}
+	}
 	options.applyDefaults()
 
 	logger.SetLogger(options.Logger)
