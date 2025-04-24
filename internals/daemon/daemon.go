@@ -74,6 +74,19 @@ const (
 	requestSrcHTTPS
 )
 
+func (r requestSrc) String() string {
+	switch r {
+	case requestSrcUnixSocket:
+		return "local"
+	case requestSrcHTTP:
+		return "HTTP"
+	case requestSrcHTTPS:
+		return "HTTPS"
+	default:
+		return "unknown"
+	}
+}
+
 // Options holds the daemon setup required for the initialization of a new daemon.
 type Options struct {
 	// Dir is the pebble directory where all setup is found. Defaults to /var/lib/pebble/default.
@@ -380,6 +393,9 @@ func logit(handler http.Handler) http.Handler {
 		handler.ServeHTTP(ww, r)
 		t := time.Since(t0)
 
+		// Zero value is requestSrcUnknown.
+		connSource, _ := r.Context().Value(requestSrcCtxKey).(requestSrc)
+
 		// Don't log GET /v1/changes/{change-id} as that's polled quickly by
 		// clients when waiting for a change (e.g., service starting). Also
 		// don't log GET /v1/system-info or GET /v1/health to avoid hits to
@@ -391,10 +407,10 @@ func logit(handler http.Handler) http.Handler {
 				r.URL.Path == "/v1/health")
 		if !skipLog {
 			if strings.HasSuffix(r.RemoteAddr, ";") {
-				logger.Debugf("%s %s %s %s %d", r.RemoteAddr, r.Method, r.URL, t, ww.status())
-				logger.Noticef("%s %s %s %d", r.Method, r.URL, t, ww.status())
+				logger.Debugf("%s %s %s %s %d (source: %s)", r.RemoteAddr, r.Method, r.URL, t, ww.status(), connSource.String())
+				logger.Noticef("%s %s %s %d (source: %s)", r.Method, r.URL, t, ww.status(), connSource.String())
 			} else {
-				logger.Noticef("%s %s %s %s %d", r.RemoteAddr, r.Method, r.URL, t, ww.status())
+				logger.Noticef("%s %s %s %s %d (source: %s)", r.RemoteAddr, r.Method, r.URL, t, ww.status(), connSource.String())
 			}
 		}
 	})
