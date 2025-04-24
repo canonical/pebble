@@ -67,8 +67,8 @@ type Options struct {
 	LayersDir string
 
 	// IDSigner is a private key representing the identity of a Pebble
-	// instance (machine, countainer or device), which implements the
-	// crypto.Signer interface (allowing it to sign TLS keypairs).
+	// instance (machine, container or device), which implements the
+	// crypto.Signer interface (for digest signing).
 	IDSigner crypto.Signer
 
 	// SocketPath is an optional path for the unix socket used for the client

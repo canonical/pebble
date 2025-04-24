@@ -189,7 +189,7 @@ func runDaemon(rcmd *cmdRun, ch chan os.Signal, ready chan<- func()) error {
 	plan.RegisterSectionExtension(workloads.WorkloadsField, &workloads.WorkloadsSectionExtension{})
 
 	idPath := filepath.Join(rcmd.pebbleDir, "identity")
-	idSigner, err := idkey.New(idPath)
+	idSigner, err := idkey.Get(idPath)
 	if err != nil {
 		return err
 	}

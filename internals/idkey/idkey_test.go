@@ -31,28 +31,28 @@ func (ks *keySuite) TestNoDirectory(c *C) {
 	keyDir := filepath.Join(c.MkDir(), "identity")
 
 	// Create a new identity key (first boot)
-	firstBoot, err := idkey.GenerateKey(keyDir)
+	firstBoot, err := idkey.Generate(keyDir)
 	c.Assert(err, IsNil)
 
 	// Load the identity key (other boots)
-	nextBoot, err := idkey.LoadKey(keyDir)
+	nextBoot, err := idkey.Load(keyDir)
 	c.Assert(err, IsNil)
 
 	// Both should be the same identity.
 	c.Assert(firstBoot.Fingerprint(), Equals, nextBoot.Fingerprint())
 }
 
-// TestNew checks if the New() function correctly only creates a new
+// TestGet checks if the Get() function correctly only creates a new
 // identity the first time.
-func (ks *keySuite) TestNew(c *C) {
+func (ks *keySuite) TestGet(c *C) {
 	keyDir := filepath.Join(c.MkDir(), "identity")
 
 	// Create a new identity key (first boot)
-	firstBoot, err := idkey.New(keyDir)
+	firstBoot, err := idkey.Get(keyDir)
 	c.Assert(err, IsNil)
 
 	// Load the identity key (other boots)
-	nextBoot, err := idkey.New(keyDir)
+	nextBoot, err := idkey.Get(keyDir)
 	c.Assert(err, IsNil)
 
 	// Both should be the same identity.
@@ -67,11 +67,11 @@ func (ks *keySuite) TestDirectoryInvalid(c *C) {
 	c.Assert(err, IsNil)
 
 	// Loading
-	_, err = idkey.LoadKey(keyDir)
+	_, err = idkey.Load(keyDir)
 	c.Assert(err, ErrorMatches, ".* expected permission 0o700 .*")
 
 	// Saving
-	_, err = idkey.GenerateKey(keyDir)
+	_, err = idkey.Generate(keyDir)
 	c.Assert(err, ErrorMatches, ".* expected permission 0o700 .*")
 }
 
@@ -81,7 +81,7 @@ func (ks *keySuite) TestDirInvalid(c *C) {
 	keyDir := filepath.Join(c.MkDir(), "foo/identity")
 
 	// Saving
-	_, err := idkey.GenerateKey(keyDir)
+	_, err := idkey.Generate(keyDir)
 	c.Assert(err, ErrorMatches, "cannot create identity directory.*")
 }
 
@@ -90,15 +90,15 @@ func (ks *keySuite) TestInvalidKey(c *C) {
 	keyDir := filepath.Join(c.MkDir(), "identity")
 
 	// Create a new identity key (first boot)
-	_, err := idkey.GenerateKey(keyDir)
+	_, err := idkey.Generate(keyDir)
 	c.Assert(err, IsNil)
 
 	err = os.Chmod(filepath.Join(keyDir, "key.pem"), 0o644)
 	c.Assert(err, IsNil)
 
 	// Load the identity key (other boots)
-	_, err = idkey.LoadKey(keyDir)
-	c.Assert(err, ErrorMatches, "cannot load identity key.*")
+	_, err = idkey.Load(keyDir)
+	c.Assert(err, ErrorMatches, ".*expected permission.*")
 }
 
 // TestEmptyKey checks if a key fails to load.
@@ -106,7 +106,7 @@ func (ks *keySuite) TestEmptyKey(c *C) {
 	keyDir := filepath.Join(c.MkDir(), "identity")
 
 	// Create a new identity key (first boot)
-	_, err := idkey.GenerateKey(keyDir)
+	_, err := idkey.Generate(keyDir)
 	c.Assert(err, IsNil)
 
 	// Zero the existing file.
@@ -116,8 +116,8 @@ func (ks *keySuite) TestEmptyKey(c *C) {
 	c.Assert(err, IsNil)
 
 	// Load the identity key (other boots)
-	_, err = idkey.LoadKey(keyDir)
-	c.Assert(err, ErrorMatches, ".* empty PEM file .*")
+	_, err = idkey.Load(keyDir)
+	c.Assert(err, ErrorMatches, ".*missing 'PRIVATE KEY' block.*")
 }
 
 // TestKeySign makes sure the crypto.Signer works.
@@ -125,7 +125,7 @@ func (ks *keySuite) TestKeySign(c *C) {
 	keyDir := filepath.Join(c.MkDir(), "identity")
 
 	// Create a new identity key (first boot)
-	signer, err := idkey.GenerateKey(keyDir)
+	signer, err := idkey.Generate(keyDir)
 	c.Assert(err, IsNil)
 
 	message := []byte("hello world")
@@ -148,7 +148,7 @@ func (ks *keySuite) TestKeySign(c *C) {
 func (ks *keySuite) BenchmarkKeyGeneration(c *C) {
 	for i := 0; i < c.N; i++ {
 		keyDir := filepath.Join(c.MkDir(), "identity")
-		_, err := idkey.GenerateKey(keyDir)
+		_, err := idkey.Generate(keyDir)
 		c.Assert(err, IsNil)
 	}
 }

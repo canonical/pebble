@@ -43,53 +43,53 @@ var _ crypto.Signer = (*IDKey)(nil)
 
 type IDKey struct {
 	keyDir string
-	key    any
+	key    ed25519.PrivateKey
 }
 
-// New checks if an existing private identity key exists, and loads the key
+// Get checks if an existing private identity key exists, and loads the key
 // if it does. It creates a new private identity key and persists it to disk
 // if no key was found. Cases where explicit control is desired on when to
-// generate or load can use GenerateKey and LoadKey directly.
-func New(keyDir string) (*IDKey, error) {
+// generate or load can use Generate and Load directly.
+func Get(keyDir string) (*IDKey, error) {
 	keyPath := filepath.Join(keyDir, identityKeyFile)
 	exists, err := pathExists(keyPath)
 	if err != nil {
 		return nil, fmt.Errorf("cannot access key file %q: %w", keyPath, err)
 	}
 	if exists {
-		return LoadKey(keyDir)
+		return Load(keyDir)
 	}
-	return GenerateKey(keyDir)
+	return Generate(keyDir)
 }
 
-// GenerateKey generates a new identity key and persists it to disk. This
+// Generate generates a new identity key and persists it to disk. This
 // function should only ever be called on the first boot otherwise the
 // existing identity will be overwritten.
 //
 // This function is equivalent to running:
 //
 //	openssl genpkey -algorithm Ed25519 -out key.pem
-func GenerateKey(keyDir string) (*IDKey, error) {
-	key := &IDKey{
+func Generate(keyDir string) (*IDKey, error) {
+	k := &IDKey{
 		keyDir: keyDir,
 	}
-	err := key.createDir()
+	err := k.createDir()
 	if err != nil {
 		return nil, fmt.Errorf("cannot create identity directory: %w", err)
 	}
-	err = key.newEd25519()
+	_, k.key, err = ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		return nil, fmt.Errorf("cannot generate identity key: %w", err)
 	}
-	err = key.save()
+	err = k.save()
 	if err != nil {
 		return nil, fmt.Errorf("cannot save identity key: %w", err)
 	}
-	return key, nil
+	return k, nil
 }
 
-// LoadKey loads an existing identity key from disk.
-func LoadKey(keyDir string) (*IDKey, error) {
+// Load loads an existing identity key from disk.
+func Load(keyDir string) (*IDKey, error) {
 	key := &IDKey{
 		keyDir: keyDir,
 	}
@@ -116,33 +116,24 @@ func (k *IDKey) createDir() error {
 	return os.Mkdir(k.keyDir, 0o700)
 }
 
-// Public implements the crypto.Signer.
+// Public implements part of the crypto.Signer interface.
 func (k *IDKey) Public() crypto.PublicKey {
-	signer := k.key.(crypto.Signer)
-	return signer.Public()
+	return k.key.Public()
 }
 
-// Sign implements the crypto.Signer.
+// Sign implements part of the crypto.Signer interface.
 func (k *IDKey) Sign(rand io.Reader, digest []byte, opts crypto.SignerOpts) (signature []byte, err error) {
-	signer := k.key.(crypto.Signer)
-	return signer.Sign(rand, digest, opts)
-}
-
-// newEd25519 generates a new ed25519 key.
-func (k *IDKey) newEd25519() error {
-	var err error
-	_, k.key, err = ed25519.GenerateKey(rand.Reader)
-	if err != nil {
-		return err
-	}
-	return nil
+	return k.key.Sign(rand, digest, opts)
 }
 
 // load loads the private identity key from storage.
 func (k *IDKey) load() error {
 	exists, err := pathExists(k.keyDir)
-	if err != nil || !exists {
-		return fmt.Errorf("directory %q is not accessible", k.keyDir)
+	if err != nil {
+		return fmt.Errorf("directory %q is not accessible: %w", k.keyDir, err)
+	}
+	if !exists {
+		return fmt.Errorf("directory %q not found", k.keyDir)
 	}
 	err = expectPermission(k.keyDir, 0o700)
 	if err != nil {
@@ -158,33 +149,27 @@ func (k *IDKey) load() error {
 	if err != nil {
 		return err
 	}
-	for {
-		var block *pem.Block
-		block, pemData = pem.Decode(pemData)
-		if block == nil {
-			break
-		}
-		switch block.Type {
-		case "PRIVATE KEY":
-			k.key, err = x509.ParsePKCS8PrivateKey(block.Bytes)
-			if err != nil {
-				return err
-			}
-		default:
-			return fmt.Errorf("unknown PEM block %q in file %q", block.Type, pemPath)
-		}
+	block, _ := pem.Decode(pemData)
+	if block == nil || block.Type != "PRIVATE KEY" {
+		return fmt.Errorf("missing 'PRIVATE KEY' block in %q", pemPath)
 	}
-	if k.key == nil {
-		return fmt.Errorf("empty PEM file %q", pemPath)
+	key, err := x509.ParsePKCS8PrivateKey(block.Bytes)
+	if err != nil {
+		return err
+	}
+	var ok bool
+	k.key, ok = key.(ed25519.PrivateKey)
+	if !ok {
+		return fmt.Errorf("ed25519 type private key expected")
 	}
 	return nil
 }
 
 // save saves the private identity key to storage.
-func (k *IDKey) save() error {
+func (k *IDKey) save() (err error) {
 	exists, err := pathExists(k.keyDir)
 	if err != nil {
-		return fmt.Errorf("directory %q is not accessible", k.keyDir)
+		return fmt.Errorf("directory %q is not accessible: %w", k.keyDir, err)
 	}
 	if exists {
 		err = expectPermission(k.keyDir, 0o700)
@@ -206,7 +191,7 @@ func (k *IDKey) save() error {
 		return err
 	}
 	defer func() {
-		err = errors.Join(err, pemFile.Sync())
+		// err here refers to the named error return.
 		err = errors.Join(err, pemFile.Close())
 	}()
 	keyBytes, err := x509.MarshalPKCS8PrivateKey(k.key)
@@ -218,10 +203,13 @@ func (k *IDKey) save() error {
 		Bytes: keyBytes,
 	}
 	var pemBuffer bytes.Buffer
-	if err := pem.Encode(&pemBuffer, pemPrivateBlock); err != nil {
+	if err = pem.Encode(&pemBuffer, pemPrivateBlock); err != nil {
 		return err
 	}
 	if _, err = pemFile.Write(pemBuffer.Bytes()); err != nil {
+		return err
+	}
+	if err = pemFile.Sync(); err != nil {
 		return err
 	}
 	return nil
