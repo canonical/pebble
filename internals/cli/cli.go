@@ -285,24 +285,39 @@ type RunOptions struct {
 	PebbleDir    string
 }
 
+// applyDefaults applies default values to specific options if unset, taking
+// supported environment variables into account.
+func (o *RunOptions) applyDefaults() {
+	if o == nil {
+		o = &RunOptions{}
+	}
+	if o.PebbleDir == "" {
+		o.PebbleDir = os.Getenv("PEBBLE")
+		if o.PebbleDir == "" {
+			o.PebbleDir = cmd.DefaultDir
+		}
+	}
+	if o.Logger == nil {
+		o.Logger = logger.New(os.Stderr, fmt.Sprintf("[%s] ", cmd.ProgramName))
+	}
+	if o.ClientConfig == nil {
+		o.ClientConfig = &client.Config{}
+	}
+	if o.ClientConfig.Socket == "" {
+		o.ClientConfig.Socket = os.Getenv("PEBBLE_SOCKET")
+		if o.ClientConfig.Socket == "" {
+			o.ClientConfig.Socket = filepath.Join(o.PebbleDir, ".pebble.socket")
+		}
+	}
+	if o.ClientConfig.BaseURL == "" {
+		o.ClientConfig.BaseURL = os.Getenv("PEBBLE_BASEURL")
+	}
+}
+
 func Run(options *RunOptions) error {
-	if options == nil {
-		options = &RunOptions{}
-	}
-	if options.PebbleDir == "" {
-		options.PebbleDir = cmd.DefaultDir
-	}
-	log := options.Logger
-	if log == nil {
-		log = logger.New(os.Stderr, fmt.Sprintf("[%s] ", cmd.ProgramName))
-	}
-	logger.SetLogger(log)
-	if options.ClientConfig == nil {
-		options.ClientConfig = &client.Config{}
-	}
-	if options.ClientConfig.Socket == "" {
-		options.ClientConfig.Socket = filepath.Join(options.PebbleDir, ".pebble.socket")
-	}
+	options.applyDefaults()
+
+	logger.SetLogger(options.Logger)
 
 	defer func() {
 		if v := recover(); v != nil {
