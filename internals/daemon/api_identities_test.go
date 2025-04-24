@@ -347,26 +347,6 @@ func (s *apiSuite) TestPostIdentitiesInvalidAction(c *C) {
 	c.Assert(result.Message, Matches, `invalid action "foobar", must be "add", "update", "replace", or "remove"`)
 }
 
-// TestRequestEnrollmentInvalid ensures that the request will fail if actual
-// identities are supplied with this action.
-func (s *apiSuite) TestRequestEnrollmentInvalid(c *C) {
-	s.daemon(c)
-
-	body := `
-{
-    "action": "request-enrollment-window",
-    "identities": {
-        "mary": null
-    }
-}`
-	rsp := s.postIdentities(c, body)
-	c.Check(rsp.Type, Equals, ResponseTypeError)
-	c.Check(rsp.Status, Equals, http.StatusBadRequest)
-	result, ok := rsp.Result.(*errorResult)
-	c.Assert(ok, Equals, true)
-	c.Assert(result.Message, Matches, `identities must be null .*`)
-}
-
 // TestRequestEnrollmentWindow checks if the request enables the
 // identity enrollment window, and whether a check of the state
 // immediately closes the window, as intended.
@@ -376,11 +356,7 @@ func (s *apiSuite) TestRequestEnrollmentWindow(c *C) {
 	restore := FakeIdentEnrollmentTimeout(100 * time.Millisecond)
 	defer restore()
 
-	body := `
-{
-    "action": "request-enrollment-window"
-}`
-	rsp := s.postIdentities(c, body)
+	rsp := s.postIdentitiesEnroll(c)
 	c.Check(rsp.Type, Equals, ResponseTypeSync)
 	c.Check(rsp.Status, Equals, http.StatusOK)
 
@@ -399,15 +375,11 @@ func (s *apiSuite) TestRequestEnrollmentWindowTooSoon(c *C) {
 	restore := FakeIdentEnrollmentTimeout(100 * time.Millisecond)
 	defer restore()
 
-	body := `
-{
-    "action": "request-enrollment-window"
-}`
-	rsp := s.postIdentities(c, body)
+	rsp := s.postIdentitiesEnroll(c)
 	c.Check(rsp.Type, Equals, ResponseTypeSync)
 	c.Check(rsp.Status, Equals, http.StatusOK)
 
-	rsp = s.postIdentities(c, body)
+	rsp = s.postIdentitiesEnroll(c)
 	c.Check(rsp.Type, Equals, ResponseTypeError)
 	c.Check(rsp.Status, Equals, http.StatusBadRequest)
 	result, ok := rsp.Result.(*errorResult)
@@ -428,11 +400,7 @@ func (s *apiSuite) TestRequestEnrollmentWindowExpired(c *C) {
 	restore := FakeIdentEnrollmentTimeout(10 * time.Millisecond)
 	defer restore()
 
-	body := `
-{
-    "action": "request-enrollment-window"
-}`
-	rsp := s.postIdentities(c, body)
+	rsp := s.postIdentitiesEnroll(c)
 	c.Check(rsp.Type, Equals, ResponseTypeSync)
 	c.Check(rsp.Status, Equals, http.StatusOK)
 
@@ -446,6 +414,15 @@ func (s *apiSuite) postIdentities(c *C, body string) *resp {
 	req, err := http.NewRequest("POST", "/v1/identities", strings.NewReader(body))
 	c.Assert(err, IsNil)
 	cmd := apiCmd("/v1/identities")
+	rsp, ok := cmd.POST(cmd, req, nil).(*resp)
+	c.Assert(ok, Equals, true)
+	return rsp
+}
+
+func (s *apiSuite) postIdentitiesEnroll(c *C) *resp {
+	req, err := http.NewRequest("POST", "/v1/identities/enroll", nil)
+	c.Assert(err, IsNil)
+	cmd := apiCmd("/v1/identities/enroll")
 	rsp, ok := cmd.POST(cmd, req, nil).(*resp)
 	c.Assert(ok, Equals, true)
 	return rsp

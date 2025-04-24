@@ -85,13 +85,13 @@ func (ac MetricsAccess) CheckAccess(d *Daemon, r *http.Request, user *UserState)
 	}
 }
 
+var identityEnrollmentActive = (*Daemon).identityEnrollmentActive
+
 // IdentityWriteAccess is a custom access checker only intended for the indentity endpoint. The
 // default behaviour is the same as the AdminAccess checker. However, it adds a special mode for
 // write requests over HTTPS, where it allows the daemon to enable open access for a carefully
 // controlled enrollment period, used during an encrypted client-server pairing process.
 type IdentityWriteAccess struct{}
-
-var identityEnrollmentActive = (*Daemon).identityEnrollmentActive
 
 func (ac IdentityWriteAccess) CheckAccess(d *Daemon, r *http.Request, user *UserState) Response {
 	// This checker is only for identities.
@@ -110,15 +110,41 @@ func (ac IdentityWriteAccess) CheckAccess(d *Daemon, r *http.Request, user *User
 	// Zero value is requestSrcUnknown.
 	source, _ := r.Context().Value(requestSrcCtxKey).(requestSrc)
 
-	// The identity enrollment will only proceed if the client provided no
-	// credentials for this request, and if the connection is HTTPS.
-	if user == nil && source == requestSrcHTTPS && enrollmentActive {
+	// If the access comes in during an enrollment window, we expect the enroller
+	// to provided no credentials for this request, and it must be over HTTPS.
+	if enrollmentActive && user == nil && source == requestSrcHTTPS {
 		// Identity enrollment window is active.
 		return nil
 	}
 
 	// If the user has admin, that is OK.
 	if user != nil && user.Access == state.AdminAccess {
+		return nil
+	}
+
+	// All other access levels, including "access: untrusted", are denied.
+	return Unauthorized(accessDenied)
+}
+
+type IdentityEnrollAccess struct{}
+
+func (ac IdentityEnrollAccess) CheckAccess(d *Daemon, r *http.Request, user *UserState) Response {
+	// This checker is only for identity enrollment.
+	if r.URL.Path != "/v1/identities/enroll" {
+		return Unauthorized(accessDenied)
+	}
+
+	enrollmentActive := identityEnrollmentActive(d)
+
+	// Zero value is requestSrcUnknown.
+	source, _ := r.Context().Value(requestSrcCtxKey).(requestSrc)
+
+	if enrollmentActive {
+		return BadRequest("enrollment was already active")
+	}
+
+	// If the user has admin and this is a local unix socket request, that is OK.
+	if user != nil && user.Access == state.AdminAccess && source == requestSrcUnixSocket {
 		return nil
 	}
 

@@ -115,6 +115,10 @@ var API = []*Command{{
 	GET:         v1GetIdentities,
 	POST:        v1PostIdentities,
 }, {
+	Path:        "/v1/identities/enroll",
+	WriteAccess: IdentityEnrollAccess{},
+	POST:        v1PostIdentitiesEnroll,
+}, {
 	Path:       "/v1/metrics",
 	ReadAccess: MetricsAccess{},
 	GET:        v1GetMetrics,

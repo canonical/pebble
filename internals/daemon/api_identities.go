@@ -58,10 +58,6 @@ func v1PostIdentities(c *Command, r *http.Request, _ *UserState) Response {
 			}
 			identityNames[name] = struct{}{}
 		}
-	case "request-enrollment-window":
-		if payload.Identities != nil {
-			return BadRequest(`identities must be null for %s operation`, payload.Action)
-		}
 	default:
 		return BadRequest(`invalid action %q, must be "add", "update", "replace", or "remove"`, payload.Action)
 	}
@@ -80,12 +76,18 @@ func v1PostIdentities(c *Command, r *http.Request, _ *UserState) Response {
 		err = st.ReplaceIdentities(payload.Identities)
 	case "remove":
 		err = st.RemoveIdentities(identityNames)
-	case "request-enrollment-window":
-		err = c.d.EnableIdentityEnrollment()
 	}
 	if err != nil {
 		return BadRequest("%v", err)
 	}
 
+	return SyncResponse(nil)
+}
+
+func v1PostIdentitiesEnroll(c *Command, r *http.Request, _ *UserState) Response {
+	err := c.d.EnableIdentityEnrollment()
+	if err != nil {
+		return BadRequest("%v", err)
+	}
 	return SyncResponse(nil)
 }
