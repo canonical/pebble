@@ -58,6 +58,31 @@ var (
 	systemdSdNotify = systemd.SdNotify
 )
 
+// requestSrc defines a context key and the possible API request sources
+// that we support. This can be extracted from http.Request.Context().
+type requestSrc int
+
+const (
+	requestSrcCtxKey             = requestSrcUnknown
+	requestSrcUnknown requestSrc = iota
+	requestSrcUnixSocket
+	requestSrcHTTP
+	requestSrcHTTPS
+)
+
+func (r requestSrc) String() string {
+	switch r {
+	case requestSrcUnixSocket:
+		return "local"
+	case requestSrcHTTP:
+		return "HTTP"
+	case requestSrcHTTPS:
+		return "HTTPS"
+	default:
+		return "unknown"
+	}
+}
+
 // Options holds the daemon setup required for the initialization of a new daemon.
 type Options struct {
 	// Dir is the pebble directory where all setup is found. Defaults to /var/lib/pebble/default.
@@ -316,6 +341,9 @@ func logit(handler http.Handler) http.Handler {
 		handler.ServeHTTP(ww, r)
 		t := time.Since(t0)
 
+		// Zero value is requestSrcUnknown.
+		connSource, _ := r.Context().Value(requestSrcCtxKey).(requestSrc)
+
 		// Don't log GET /v1/changes/{change-id} as that's polled quickly by
 		// clients when waiting for a change (e.g., service starting). Also
 		// don't log GET /v1/system-info or GET /v1/health to avoid hits to
@@ -327,10 +355,10 @@ func logit(handler http.Handler) http.Handler {
 				r.URL.Path == "/v1/health")
 		if !skipLog {
 			if strings.HasSuffix(r.RemoteAddr, ";") {
-				logger.Debugf("%s %s %s %s %d", r.RemoteAddr, r.Method, r.URL, t, ww.status())
-				logger.Noticef("%s %s %s %d", r.Method, r.URL, t, ww.status())
+				logger.Debugf("%s %s %s %s %d (source: %s)", r.RemoteAddr, r.Method, r.URL, t, ww.status(), connSource.String())
+				logger.Noticef("%s %s %s %d (source: %s)", r.Method, r.URL, t, ww.status(), connSource.String())
 			} else {
-				logger.Noticef("%s %s %s %s %d", r.RemoteAddr, r.Method, r.URL, t, ww.status())
+				logger.Noticef("%s %s %s %s %d (source: %s)", r.RemoteAddr, r.Method, r.URL, t, ww.status(), connSource.String())
 			}
 		}
 	})
@@ -479,6 +507,20 @@ func (d *Daemon) Start() error {
 
 	d.connTracker = &connTracker{conns: make(map[net.Conn]struct{})}
 	d.serve = &http.Server{
+		ConnContext: func(ctx context.Context, c net.Conn) context.Context {
+			// Flag the incoming requests with a context value so we can identify the
+			// source of the request in the http.Request object. We can use this for
+			// refined access checker decisions.
+			switch c.(type) {
+			case *ucrednetConn:
+				return context.WithValue(ctx, requestSrcCtxKey, requestSrcUnixSocket)
+			case *net.TCPConn:
+				return context.WithValue(ctx, requestSrcCtxKey, requestSrcHTTP)
+			case *tls.Conn:
+				return context.WithValue(ctx, requestSrcCtxKey, requestSrcHTTPS)
+			}
+			return context.WithValue(ctx, requestSrcCtxKey, requestSrcUnknown)
+		},
 		Handler: exitOnPanic(logit(d.router), os.Stderr, func() {
 			os.Exit(1)
 		}),
