@@ -25,8 +25,8 @@ import (
 func main() {
 	cliOptions := &cli.RunOptions{
 		ClientConfig: &client.Config{
-			Socket:    os.Getenv("PEBBLE_SOCKET"),
-			BaseURL:   os.Getenv("PEBBLE_BASEURL"),
+			Socket:  os.Getenv("PEBBLE_SOCKET"),
+			BaseURL: os.Getenv("PEBBLE_BASEURL"),
 		},
 		PebbleDir: os.Getenv("PEBBLE"),
 	}
