@@ -36,7 +36,7 @@ func (ts *tlsSuite) TestNoDirectory(c *C) {
 	c.Assert(err, IsNil)
 
 	tlsDir := filepath.Join(c.MkDir(), "tls")
-	mgr, err := tlsstate.NewManager(tlsDir, key)
+	mgr := tlsstate.NewManager(tlsDir, key)
 	c.Assert(err, IsNil)
 
 	_, err = mgr.GetCertificate(nil)
@@ -53,7 +53,7 @@ func (ts *tlsSuite) TestDirectoryInvalidPerm(c *C) {
 	err = os.MkdirAll(tlsDir, 0740)
 	c.Assert(err, IsNil)
 
-	mgr, err := tlsstate.NewManager(tlsDir, key)
+	mgr := tlsstate.NewManager(tlsDir, key)
 	c.Assert(err, IsNil)
 	_, err = mgr.GetCertificate(nil)
 	c.Assert(err, ErrorMatches, ".* expected permission 0o700 .*")
@@ -67,7 +67,7 @@ func (ts *tlsSuite) TestKeypairDirNoParent(c *C) {
 
 	tlsDir := filepath.Join(c.MkDir(), "something/tls")
 
-	mgr, err := tlsstate.NewManager(tlsDir, key)
+	mgr := tlsstate.NewManager(tlsDir, key)
 	c.Assert(err, IsNil)
 	_, err = mgr.GetCertificate(nil)
 	c.Assert(err, ErrorMatches, "cannot create TLS directory.*")
@@ -83,7 +83,7 @@ func (ts *tlsSuite) TestInvalidIDCertContent(c *C) {
 	err = os.MkdirAll(tlsDir, 0700)
 	c.Assert(err, IsNil)
 
-	mgr, err := tlsstate.NewManager(tlsDir, key)
+	mgr := tlsstate.NewManager(tlsDir, key)
 	c.Assert(err, IsNil)
 
 	f, err := os.OpenFile(filepath.Join(tlsDir, "identity.pem"), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0o600)
@@ -92,7 +92,7 @@ func (ts *tlsSuite) TestInvalidIDCertContent(c *C) {
 	c.Assert(err, IsNil)
 
 	_, err = mgr.GetCertificate(nil)
-	c.Assert(err, ErrorMatches, ".*empty PEM file.*")
+	c.Assert(err, ErrorMatches, ".*missing 'CERTIFICATE' block.*")
 }
 
 // TestInvalidIDCertPerm checks if we detect an invalid permission on
@@ -102,7 +102,7 @@ func (ts *tlsSuite) TestInvalidIDCertPerm(c *C) {
 	c.Assert(err, IsNil)
 
 	tlsDir := filepath.Join(c.MkDir(), "tls")
-	mgr, err := tlsstate.NewManager(tlsDir, key)
+	mgr := tlsstate.NewManager(tlsDir, key)
 	c.Assert(err, IsNil)
 
 	// Create the identity certificate on demand.
@@ -113,7 +113,7 @@ func (ts *tlsSuite) TestInvalidIDCertPerm(c *C) {
 	c.Assert(err, IsNil)
 
 	// Simulate a process restart by creating a new manager.
-	mgr, err = tlsstate.NewManager(tlsDir, key)
+	mgr = tlsstate.NewManager(tlsDir, key)
 	c.Assert(err, IsNil)
 
 	// Create the identity certificate on demand.
@@ -133,7 +133,7 @@ func (ts *tlsSuite) TestTLSServerClient(c *C) {
 
 	_, key, err := ed25519.GenerateKey(rand.Reader)
 	c.Assert(err, IsNil)
-	mgr, err := tlsstate.NewManager(tlsDir, key)
+	mgr := tlsstate.NewManager(tlsDir, key)
 	c.Assert(err, IsNil)
 
 	// Start the HTTPS server.
@@ -182,7 +182,7 @@ func (ts *tlsSuite) TestTLSServerClientTLSReuse(c *C) {
 
 	_, key, err := ed25519.GenerateKey(rand.Reader)
 	c.Assert(err, IsNil)
-	mgr, err := tlsstate.NewManager(tlsDir, key)
+	mgr := tlsstate.NewManager(tlsDir, key)
 	c.Assert(err, IsNil)
 
 	// Start the HTTPS server.
@@ -231,7 +231,7 @@ func (ts *tlsSuite) TestTLSServerClientRenewWindow(c *C) {
 
 	_, key, err := ed25519.GenerateKey(rand.Reader)
 	c.Assert(err, IsNil)
-	mgr, err := tlsstate.NewManager(tlsDir, key)
+	mgr := tlsstate.NewManager(tlsDir, key)
 	c.Assert(err, IsNil)
 
 	// Start the HTTPS server.
@@ -281,7 +281,7 @@ func (ts *tlsSuite) TestTLSServerClientIDRotate(c *C) {
 
 	_, key, err := ed25519.GenerateKey(rand.Reader)
 	c.Assert(err, IsNil)
-	mgr, err := tlsstate.NewManager(tlsDir, key)
+	mgr := tlsstate.NewManager(tlsDir, key)
 	c.Assert(err, IsNil)
 
 	// Start the HTTPS server.
@@ -338,7 +338,7 @@ func (ts *tlsSuite) TestTLSServerClientIDKeyChange(c *C) {
 
 	_, key, err := ed25519.GenerateKey(rand.Reader)
 	c.Assert(err, IsNil)
-	mgr, err := tlsstate.NewManager(tlsDir, key)
+	mgr := tlsstate.NewManager(tlsDir, key)
 	c.Assert(err, IsNil)
 
 	// Start the HTTPS server.
@@ -363,7 +363,7 @@ func (ts *tlsSuite) TestTLSServerClientIDKeyChange(c *C) {
 	// the crypto.Signer no longer gives us the same private key.
 	_, key, err = ed25519.GenerateKey(rand.Reader)
 	c.Assert(err, IsNil)
-	mgr, err = tlsstate.NewManager(tlsDir, key)
+	mgr = tlsstate.NewManager(tlsDir, key)
 	c.Assert(err, IsNil)
 
 	// Start the HTTPS server.
@@ -393,7 +393,7 @@ func (ts *tlsSuite) BenchmarkIDTLSCertGen(c *C) {
 		// New unique temporary directory (so identity cert must be re-created).
 		tlsDir := filepath.Join(c.MkDir(), "tls")
 
-		mgr, err := tlsstate.NewManager(tlsDir, key)
+		mgr := tlsstate.NewManager(tlsDir, key)
 		c.Assert(err, IsNil)
 
 		// Create identity and TLS certificates on demand.

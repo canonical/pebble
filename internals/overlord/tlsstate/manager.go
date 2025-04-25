@@ -84,12 +84,12 @@ type TLSManager struct {
 // TLS certificate chain, allowing a client to pin the identity
 // certificate once trust has been manually established as part of a
 // trust exchange procedure.
-func NewManager(tlsDir string, signer crypto.Signer) (*TLSManager, error) {
-	manager := &TLSManager{
+func NewManager(tlsDir string, signer crypto.Signer) *TLSManager {
+	m := &TLSManager{
 		tlsDir: tlsDir,
 		signer: signer,
 	}
-	return manager, nil
+	return m
 }
 
 // GetCertificate returns an identity signed TLS certificate. The certificate chain includes
@@ -240,30 +240,13 @@ func loadIDCert(path string) (*x509.Certificate, error) {
 	if err != nil {
 		return nil, err
 	}
-	blockCount := 0
-	for {
-		var block *pem.Block
-		block, pemData = pem.Decode(pemData)
-		if block == nil {
-			if blockCount == 1 {
-				break
-			}
-			return nil, fmt.Errorf("empty PEM file")
-		}
-		switch block.Type {
-		case "CERTIFICATE":
-			// We only support a single certificate block.
-			if blockCount == 1 {
-				return nil, fmt.Errorf("unexpected PEM block")
-			}
-			cert, err = x509.ParseCertificate(block.Bytes)
-			if err != nil {
-				return nil, err
-			}
-			blockCount += 1
-		default:
-			return nil, fmt.Errorf("unexpected PEM block")
-		}
+	block, _ := pem.Decode(pemData)
+	if block == nil || block.Type != "CERTIFICATE" {
+		return nil, fmt.Errorf("missing 'CERTIFICATE' block in %q", path)
+	}
+	cert, err = x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return nil, err
 	}
 	return cert, nil
 }
