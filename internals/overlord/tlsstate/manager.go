@@ -20,6 +20,7 @@ import (
 	"crypto"
 	"crypto/ed25519"
 	"crypto/rand"
+	"crypto/subtle"
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
@@ -48,8 +49,8 @@ var (
 	// detail related to TLS (not a signing key). Expiry of this
 	// certificate does not change the identity, but changes the client
 	// pinned identity certificate, forcing the client to re-pair with
-	// the server.
-	idCertValidity = 10 * 365 * 24 * time.Hour
+	// the server. The period is currently just over 10 years.
+	idCertValidity = 10 * 366 * 24 * time.Hour
 
 	// tlsCertValidity defines how long the in-memory TLS keypairs are
 	// valid before a new keypair is generated. This allows for
@@ -71,7 +72,7 @@ var (
 // idSigner includes a crypto.Signer, and expects the provided signer
 // to know how to generate an identity fingerprint. We leave this to
 // the identity signer to ensure a consistent representation of the
-// fingerprint, intead of allowing every consumer to try and generate one.
+// fingerprint, instead of allowing every consumer to try and generate one.
 type idSigner interface {
 	crypto.Signer
 	Fingerprint() string
@@ -95,12 +96,12 @@ type TLSManager struct {
 	tlsTemplate *x509.Certificate
 }
 
-// NewManager create a new TLS keypair manager. The tlsDir must be a
+// NewManager creates a new TLS keypair manager. The tlsDir must be a
 // directory of which only the leaf element, at most, does not exist. The
 // leaf directory will be created with 0o700 permissions. The signer
-// must implement the idSigner interface. The signer represents the
-// identity key of the machine, container or device. The signer will be
-// used to sign TLS keypairs and the identity certificate (CA).
+// represents the identity key of the machine, container or device. The
+// signer will be used to sign TLS keypairs and the identity certificate.
+// The identity certificate acts as the root CA.
 func NewManager(tlsDir string, signer idSigner) *TLSManager {
 	m := &TLSManager{
 		tlsDir: tlsDir,
@@ -127,8 +128,6 @@ func (m *TLSManager) SetX509Templates(idTemplate, tlsTemplate *x509.Certificate)
 // certificates on demand. Note that even if the identity certificate is re-created, this
 // does not mean that the identity key changed (the key itself has no expiry).
 func (m *TLSManager) GetCertificate(*tls.ClientHelloInfo) (*tls.Certificate, error) {
-	var err error
-
 	// Fast path: concurrent sessions while the ID and TLS certificate is valid.
 	m.mu.RLock()
 	tlsCert := m.tlsCert
@@ -151,7 +150,7 @@ func (m *TLSManager) GetCertificate(*tls.ClientHelloInfo) (*tls.Certificate, err
 	if err := m.getIDCert(); err != nil {
 		return nil, fmt.Errorf("cannot get identity certificate: %w", err)
 	}
-	if err = m.createTLSCert(); err != nil {
+	if err := m.createTLSCert(); err != nil {
 		return nil, fmt.Errorf("cannot create TLS certificate: %w", err)
 	}
 	return m.tlsCert, nil
@@ -213,7 +212,7 @@ func (m *TLSManager) createTLSCert() error {
 }
 
 // createDir verifies the directory layout and permissions, and creates
-// the leaf element of the TLS driectory if it does not yet exist.
+// the leaf element of the TLS directory if it does not yet exist.
 func (m *TLSManager) createDir() error {
 	exists, err := pathExists(m.tlsDir)
 	if err != nil {
@@ -233,20 +232,23 @@ func (m *TLSManager) createDir() error {
 // replaced with a new identity certificate signed with the identity key.
 func (m *TLSManager) getIDCert() error {
 	idPath := filepath.Join(m.tlsDir, idCertFile)
-	exists, err := pathExists(idPath)
-	if err != nil {
-		return err
-	}
 
-	// Load the identity certificate it not yet loaded.
-	if exists && m.idCert == nil {
-		m.idCert, err = loadIDCert(idPath)
+	if m.idCert == nil {
+		// No identity certificate loaded yet.
+		exists, err := pathExists(idPath)
 		if err != nil {
 			return err
 		}
+		if exists {
+			// Load if the certificate exists on disk.
+			m.idCert, err = loadIDCert(idPath)
+			if err != nil {
+				return err
+			}
+		}
 	}
 
-	// Can we use the existing identity certificate?
+	// Can we use the loaded identity certificate?
 	if m.idCert != nil {
 		isDerived := isCertDerived(m.idCert, m.signer)
 		isActive := isCertActive(m.idCert)
@@ -257,6 +259,7 @@ func (m *TLSManager) getIDCert() error {
 	}
 
 	// If we get here a new identity certificate must be created.
+	var err error
 	m.idCert, err = createIDCert(m.signer, m.idTemplate)
 	if err != nil {
 		return err
@@ -388,7 +391,7 @@ func isCertActive(cert *x509.Certificate) bool {
 func isCertDerived(cert *x509.Certificate, signer crypto.Signer) bool {
 	signerPublic := signer.Public().(ed25519.PublicKey)
 	certPublic := cert.PublicKey.(ed25519.PublicKey)
-	return bytes.Equal(signerPublic, certPublic)
+	return subtle.ConstantTimeCompare(signerPublic, certPublic) == 1
 }
 
 // expectPermission return an error if the specified directory or file
@@ -410,7 +413,7 @@ func expectPermission(path string, perm fs.FileMode) error {
 func pathExists(path string) (bool, error) {
 	_, err := os.Stat(path)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, fs.ErrNotExist) {
 			return false, nil
 		}
 		return false, err

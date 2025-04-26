@@ -354,7 +354,7 @@ func (ts *tlsSuite) TestTLSServerClientIDKeyChange(c *C) {
 }
 
 // BenchmarkIDTLSCertGen prints some performance metrics related to the worse case
-// startup condition where both the identity cerrtificate and TLS keypair must be
+// startup condition where both the identity certificate and TLS keypair must be
 // generated. To run this test use: go test -check.b
 func (ts *tlsSuite) BenchmarkIDTLSCertGen(c *C) {
 	key := newIDKey(c)

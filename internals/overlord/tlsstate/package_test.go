@@ -40,14 +40,6 @@ type tlsSuite struct{}
 
 var _ = Suite(&tlsSuite{})
 
-// GetFakeTime converts a simple string date to the time.Time type for testing purposes.
-func (ts *tlsSuite) GetFakeTime(c *C, date string) time.Time {
-	layout := "2006-01-02"
-	now, err := time.Parse(layout, date)
-	c.Assert(err, IsNil)
-	return now
-}
-
 // testTLSVerifiedClient performs a client TLS connection without server certificate
 // signature verification.
 func (ts *tlsSuite) testTLSInsecureClient(c *C, clock time.Time) ([]*x509.Certificate, error) {
@@ -71,10 +63,9 @@ func (ts *tlsSuite) testTLSClient(c *C, ca *x509.Certificate, clock time.Time) (
 		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{
 				MinVersion:         tls.VersionTLS13,
-				MaxVersion:         tls.VersionTLS13,
 				InsecureSkipVerify: true,
-				VerifyConnection: func(ts tls.ConnectionState) error {
-					serverCerts = ts.PeerCertificates
+				VerifyConnection: func(cs tls.ConnectionState) error {
+					serverCerts = cs.PeerCertificates
 					if len(serverCerts) == 0 {
 						return fmt.Errorf("no server cert")
 					}
@@ -123,7 +114,6 @@ func (ts *tlsSuite) testTLSServer(c *C, getCertificate func(*tls.ClientHelloInfo
 		}),
 		TLSConfig: &tls.Config{
 			MinVersion:     tls.VersionTLS13,
-			MaxVersion:     tls.VersionTLS13,
 			GetCertificate: getCertificate,
 		},
 	}
