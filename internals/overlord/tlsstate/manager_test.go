@@ -32,12 +32,10 @@ import (
 // identity certificate and TLS keypair if the leaf directory does not
 // yet exist.
 func (ts *tlsSuite) TestNoDirectory(c *C) {
-	key := newIDKey(c)
-
 	tlsDir := filepath.Join(c.MkDir(), "tls")
 
+	key := newIDKey(c)
 	mgr := tlsstate.NewManager(tlsDir, key)
-
 	_, err := mgr.GetCertificate(nil)
 	c.Assert(err, IsNil)
 }
@@ -45,14 +43,12 @@ func (ts *tlsSuite) TestNoDirectory(c *C) {
 // TestDirectoryInvalidPerm checks if startup will fail if the TLS directory
 // does not have the correct permissions.
 func (ts *tlsSuite) TestDirectoryInvalidPerm(c *C) {
-	key := newIDKey(c)
-
 	tlsDir := filepath.Join(c.MkDir(), "tls")
 	err := os.MkdirAll(tlsDir, 0740)
 	c.Assert(err, IsNil)
 
+	key := newIDKey(c)
 	mgr := tlsstate.NewManager(tlsDir, key)
-
 	_, err = mgr.GetCertificate(nil)
 	c.Assert(err, ErrorMatches, ".* expected permission 0o700 .*")
 }
@@ -60,12 +56,10 @@ func (ts *tlsSuite) TestDirectoryInvalidPerm(c *C) {
 // TestKeypairDirNoParent checks if the manager will fail to create the
 // parent directory it does not own.
 func (ts *tlsSuite) TestKeypairDirNoParent(c *C) {
-	key := newIDKey(c)
-
 	tlsDir := filepath.Join(c.MkDir(), "something/tls")
 
+	key := newIDKey(c)
 	mgr := tlsstate.NewManager(tlsDir, key)
-
 	_, err := mgr.GetCertificate(nil)
 	c.Assert(err, ErrorMatches, "cannot create TLS directory.*")
 }
@@ -73,14 +67,14 @@ func (ts *tlsSuite) TestKeypairDirNoParent(c *C) {
 // TestInvalidIDCertContent checks if we detect an invalid PEM file for
 // the identity certificate.
 func (ts *tlsSuite) TestInvalidIDCertContent(c *C) {
-	key := newIDKey(c)
-
 	tlsDir := filepath.Join(c.MkDir(), "tls")
 	err := os.MkdirAll(tlsDir, 0700)
 	c.Assert(err, IsNil)
 
+	key := newIDKey(c)
 	mgr := tlsstate.NewManager(tlsDir, key)
 
+	// Empty the file.
 	f, err := os.OpenFile(filepath.Join(tlsDir, "identity.pem"), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0o600)
 	c.Assert(err, IsNil)
 	err = f.Close()
@@ -93,113 +87,107 @@ func (ts *tlsSuite) TestInvalidIDCertContent(c *C) {
 // TestInvalidIDCertPerm checks if we detect an invalid permission on
 // the identity certificate.
 func (ts *tlsSuite) TestInvalidIDCertPerm(c *C) {
-	key := newIDKey(c)
-
 	tlsDir := filepath.Join(c.MkDir(), "tls")
+
+	key := newIDKey(c)
 	mgr := tlsstate.NewManager(tlsDir, key)
 
-	// Create the identity certificate on demand.
+	// Generate certificates on demand.
 	_, err := mgr.GetCertificate(nil)
 	c.Assert(err, IsNil)
 
+	// Make the permission invalid.
 	err = os.Chmod(filepath.Join(tlsDir, "identity.pem"), 0644)
 	c.Assert(err, IsNil)
 
 	// Simulate a process restart by creating a new manager.
 	mgr = tlsstate.NewManager(tlsDir, key)
-
-	// Create the identity certificate on demand.
 	_, err = mgr.GetCertificate(nil)
 	c.Assert(err, ErrorMatches, ".*expected permission.*")
 }
 
-// TestTLSServerClient checks if the identity CA cert works while we are
-// rotating TLS keypairs.
+// TestTLSServerClient checks if the identity certificate works as the root CA
+// while we are rotating TLS keypairs.
 func (ts *tlsSuite) TestTLSServerClient(c *C) {
-	systemTime := "2000-01-01"
-
 	restoreTLSCertValidity := tlsstate.FakeTLSCertValidity(time.Hour)
 	defer restoreTLSCertValidity()
 
 	tlsDir := filepath.Join(c.MkDir(), "tls")
-
 	key := newIDKey(c)
 	mgr := tlsstate.NewManager(tlsDir, key)
 
 	// Start the HTTPS server.
-	shutdown := ts.testTLSServer(c, mgr.GetCertificate)
-	defer shutdown()
+	shutdownHTTPSServer := ts.testTLSServer(c, mgr.GetCertificate)
+	defer shutdownHTTPSServer()
 
-	// Simulate a client pairing procedure, after which we trust the
-	// identity certificate. This initial session will also ensure
-	// the identity and TLS certs are in place.
-	restore, clock := tlsstate.FakeSystemTime(systemTime, 0)
-	certs, err := ts.testTLSInsecureClient(c, clock)
+	testBaseTime := getTestTime(2000, 1, 1)
+	restoreTime := tlsstate.FakeTimeNow(testBaseTime)
+	// Use an insecure first connection to obtain the certificates. This will
+	// happen during a trust exchange procedure, after which we pin (trust) the
+	// identity certificate by our client.
+	certs, err := ts.testTLSInsecureClient(c, testBaseTime)
 	c.Assert(err, IsNil)
 	tlsCert := certs[0]
-	ca := certs[1]
-	restore()
+	idCert := certs[1]
+	restoreTime()
 
-	// Ensure the client identity CA works even if the TLS cert rotates.
 	previousTLSCerts := []*x509.Certificate{tlsCert}
 	for i := 1; i <= 10; i++ {
-		restore, clock := tlsstate.FakeSystemTime(systemTime, time.Duration(i)*24*time.Hour)
+		// Move the time forward by 1 hour on each iteration.
+		testTime := testBaseTime.Add(time.Duration(i) * 24 * time.Hour)
+		restoreTime := tlsstate.FakeTimeNow(testTime)
 
-		// Test a trusted client connection (we use the identity CA cert).
-		certs, err = ts.testTLSVerifiedClient(c, ca, clock)
+		// Test a trusted client connection (we use the identity as the root CA).
+		certs, err = ts.testTLSVerifiedClient(c, idCert, testTime)
 		c.Assert(err, IsNil)
 
 		tlsCert := certs[0]
 
-		// Ensure the TLS certificate was not seen before because it expires every hour.
+		// Ensure the TLS certificate was not seen before. We expect a new
+		// certificate to get generated every hour.
 		c.Assert(slices.Contains(previousTLSCerts, tlsCert), Equals, false)
-
 		previousTLSCerts = append(previousTLSCerts, tlsCert)
-
-		restore()
+		restoreTime()
 	}
 }
 
 // TestTLSServerClientTLSReuse checks TLS certificates are not rotated while
 // they are valid.
 func (ts *tlsSuite) TestTLSServerClientTLSReuse(c *C) {
-	systemTime := "2000-01-01"
-
 	restoreTLSCertValidity := tlsstate.FakeTLSCertValidity(24 * time.Hour)
 	defer restoreTLSCertValidity()
 
 	tlsDir := filepath.Join(c.MkDir(), "tls")
-
 	key := newIDKey(c)
 	mgr := tlsstate.NewManager(tlsDir, key)
 
 	// Start the HTTPS server.
-	shutdown := ts.testTLSServer(c, mgr.GetCertificate)
-	defer shutdown()
+	shutdownHTTPSServer := ts.testTLSServer(c, mgr.GetCertificate)
+	defer shutdownHTTPSServer()
 
-	// Simulate a client pairing procedure, after which we trust the
-	// identity certificate. This initial session will also ensure
-	// the identity and TLS certs are in place.
-	restore, clock := tlsstate.FakeSystemTime(systemTime, 0)
-	certs, err := ts.testTLSInsecureClient(c, clock)
+	testBaseTime := getTestTime(2000, 1, 1)
+	restoreTime := tlsstate.FakeTimeNow(testBaseTime)
+	// Use an insecure first connection to obtain the certificates. This will
+	// happen during a trust exchange procedure, after which we pin (trust) the
+	// identity certificate by our client.
+	certs, err := ts.testTLSInsecureClient(c, testBaseTime)
 	c.Assert(err, IsNil)
 	tlsCert := certs[0]
-	ca := certs[1]
-	restore()
+	idCert := certs[1]
+	restoreTime()
 
-	// Ensure the client identity CA works even if the TLS cert rotates.
 	for i := 1; i <= 10; i++ {
-		// Time moved forwards 1 hour at a time.
-		restore, clock := tlsstate.FakeSystemTime(systemTime, time.Duration(i)*time.Hour)
+		// Move the time forward by 1 hour on each iteration.
+		testTime := testBaseTime.Add(time.Duration(i) * time.Hour)
+		restoreTime := tlsstate.FakeTimeNow(testTime)
 
-		// Test a trusted client connection (we use the identity CA cert).
-		certs, err = ts.testTLSVerifiedClient(c, ca, clock)
+		// Test a trusted client connection (we use the identity as the root CA).
+		certs, err = ts.testTLSVerifiedClient(c, idCert, testTime)
 		c.Assert(err, IsNil)
 
 		// Should stay the same
 		c.Assert(tlsCert.Equal(certs[0]), Equals, true)
-
-		restore()
+		restoreTime()
 	}
 }
 
@@ -207,41 +195,40 @@ func (ts *tlsSuite) TestTLSServerClientTLSReuse(c *C) {
 // as soon as the Renewal Window is entered (to avoid a race with the expiry
 // time during the TLS handshake).
 func (ts *tlsSuite) TestTLSServerClientRenewWindow(c *C) {
-	systemTime := "2000-01-01"
-
 	restoreTLSCertValidity := tlsstate.FakeTLSCertValidity(time.Hour)
 	defer restoreTLSCertValidity()
 
 	restoreTLSCertRenewWindow := tlsstate.FakeTLSCertRenewWindow(60 * time.Second)
 	defer restoreTLSCertRenewWindow()
 
-	tlsDir := filepath.Join(c.MkDir(), "tls")
-
 	key := newIDKey(c)
+	tlsDir := filepath.Join(c.MkDir(), "tls")
 	mgr := tlsstate.NewManager(tlsDir, key)
 
 	// Start the HTTPS server.
-	shutdown := ts.testTLSServer(c, mgr.GetCertificate)
-	defer shutdown()
+	shutdownHTTPSServer := ts.testTLSServer(c, mgr.GetCertificate)
+	defer shutdownHTTPSServer()
 
-	// Simulate a client pairing procedure, after which we trust the
-	// identity certificate. This initial session will also ensure
-	// the identity and TLS certs are in place.
-	restore, clock := tlsstate.FakeSystemTime(systemTime, 0)
-	certs, err := ts.testTLSInsecureClient(c, clock)
+	testBaseTime := getTestTime(2000, 1, 1)
+	restoreTime := tlsstate.FakeTimeNow(testBaseTime)
+	// Use an insecure first connection to obtain the certificates. This will
+	// happen during a trust exchange procedure, after which we pin (trust) the
+	// identity certificate by our client.
+	certs, err := ts.testTLSInsecureClient(c, testBaseTime)
 	c.Assert(err, IsNil)
 	tlsCert1 := certs[0]
-	ca := certs[1]
-	restore()
+	idCert := certs[1]
+	restoreTime()
 
-	// Set the system time 5 to seconds before the actual timeout, but
+	// Set the system time to 5 seconds before the actual timeout, but
 	// within the renewal window.
 	renewWindow := 5 * time.Second
-	restore, clock = tlsstate.FakeSystemTime(systemTime, time.Hour-renewWindow)
-	defer restore()
+	testTime := testBaseTime.Add(time.Hour - renewWindow)
+	restoreTime = tlsstate.FakeTimeNow(testTime)
+	defer restoreTime()
 
-	// Test a trusted client connection (we use the identity CA cert).
-	certs, err = ts.testTLSVerifiedClient(c, ca, clock)
+	// Test a trusted client connection (we use the identity as the root CA).
+	certs, err = ts.testTLSVerifiedClient(c, idCert, testTime)
 	c.Assert(err, IsNil)
 
 	tlsCert2 := certs[0]
@@ -253,93 +240,95 @@ func (ts *tlsSuite) TestTLSServerClientRenewWindow(c *C) {
 }
 
 // TestTLSServerClientIDRotate checks that when the ID certificate rotates, the
-// TLS certificate will also rotate, and the client will stop working.
+// TLS certificate will also rotate, and the client certificate verification
+// will fail with the pinned identity certificate.
 func (ts *tlsSuite) TestTLSServerClientIDRotate(c *C) {
-	systemTime := "2000-01-01"
-
 	restoreTLSCertValidity := tlsstate.FakeTLSCertValidity(24 * time.Hour)
 	defer restoreTLSCertValidity()
 
 	restoreIDCertValidity := tlsstate.FakeIDCertValidity(12 * time.Hour)
 	defer restoreIDCertValidity()
 
-	tlsDir := filepath.Join(c.MkDir(), "tls")
-
 	key := newIDKey(c)
+	tlsDir := filepath.Join(c.MkDir(), "tls")
 	mgr := tlsstate.NewManager(tlsDir, key)
 
 	// Start the HTTPS server.
-	shutdown := ts.testTLSServer(c, mgr.GetCertificate)
-	defer shutdown()
+	shutdownHTTPSServer := ts.testTLSServer(c, mgr.GetCertificate)
+	defer shutdownHTTPSServer()
 
-	// Simulate a client pairing procedure, after which we trust the
-	// identity certificate. This initial session will also ensure
-	// the identity and TLS certs are in place.
-	restore, clock := tlsstate.FakeSystemTime(systemTime, 0)
-	certs, err := ts.testTLSInsecureClient(c, clock)
+	testBaseTime := getTestTime(2000, 1, 1)
+	restoreTime := tlsstate.FakeTimeNow(testBaseTime)
+	// Use an insecure first connection to obtain the certificates. This will
+	// happen during a trust exchange procedure, after which we pin (trust) the
+	// identity certificate by our client.
+	certs, err := ts.testTLSInsecureClient(c, testBaseTime)
 	c.Assert(err, IsNil)
 	tlsCert := certs[0]
-	ca := certs[1]
-	restore()
+	idCert := certs[1]
+	restoreTime()
 
-	// 1 hour forward
-	restore, clock = tlsstate.FakeSystemTime(systemTime, time.Hour)
-	// Test a trusted client connection (we use the identity CA cert).
-	certs, err = ts.testTLSVerifiedClient(c, ca, clock)
+	// Move the time forward by 1 hour.
+	testTime := testBaseTime.Add(time.Hour)
+	restoreTime = tlsstate.FakeTimeNow(testTime)
+	// Test a trusted client connection (we use the identity as the root CA).
+	certs, err = ts.testTLSVerifiedClient(c, idCert, testTime)
 	c.Assert(err, IsNil)
 	// TLS certificate stays the same
 	c.Assert(tlsCert.Equal(certs[0]), Equals, true)
-	restore()
+	restoreTime()
 
-	// 14 hours forward (ID cert expires)
-	restore, clock = tlsstate.FakeSystemTime(systemTime, 14*time.Hour)
-	// Test a trusted client connection (we use the identity CA cert).
-	_, err = ts.testTLSVerifiedClient(c, ca, clock)
+	// Move the time forward by 14 hours (ID cert expires).
+	testTime = testBaseTime.Add(14 * time.Hour)
+	restoreTime = tlsstate.FakeTimeNow(testTime)
+	// Test a trusted client connection (we use the identity as the root CA).
+	_, err = ts.testTLSVerifiedClient(c, idCert, testTime)
 	c.Assert(err, ErrorMatches, ".*Root CA verify failed.*")
-	// Test non-verified connection.
-	certs, err = ts.testTLSInsecureClient(c, clock)
+	// Test non-verified connection (which should still work).
+	certs, err = ts.testTLSInsecureClient(c, testTime)
 	c.Assert(err, IsNil)
 	// ID certificate changed
-	c.Assert(ca.Equal(certs[1]), Equals, false)
+	c.Assert(idCert.Equal(certs[1]), Equals, false)
 	// TLS certificate changed.
 	c.Assert(tlsCert.Equal(certs[0]), Equals, false)
-	restore()
+	restoreTime()
 }
 
 // TestTLSServerClientIDKeyChange checks that if the crypto.Signer key changes,
 // the ID certificate and the TLS certificate will rotate, and the client
-// will stop working.
+// verification using the pinned identity certificate will fail.
 func (ts *tlsSuite) TestTLSServerClientIDKeyChange(c *C) {
-	systemTime := "2000-01-01"
-
 	restoreTLSCertValidity := tlsstate.FakeTLSCertValidity(2 * time.Hour)
 	defer restoreTLSCertValidity()
 
 	restoreIDCertValidity := tlsstate.FakeIDCertValidity(24 * time.Hour)
 	defer restoreIDCertValidity()
 
-	tlsDir := filepath.Join(c.MkDir(), "tls")
-
 	key := newIDKey(c)
+	tlsDir := filepath.Join(c.MkDir(), "tls")
 	mgr := tlsstate.NewManager(tlsDir, key)
 
 	// Start the HTTPS server.
-	shutdown := ts.testTLSServer(c, mgr.GetCertificate)
-	// Simulate a client pairing procedure, after which we trust the
-	// identity certificate. This initial session will also ensure
-	// the identity and TLS certs are in place.
-	restore, clock := tlsstate.FakeSystemTime(systemTime, 0)
-	certs, err := ts.testTLSInsecureClient(c, clock)
+	shutdownHTTPSServer := ts.testTLSServer(c, mgr.GetCertificate)
+
+	testBaseTime := getTestTime(2000, 1, 1)
+	restoreTime := tlsstate.FakeTimeNow(testBaseTime)
+	// Use an insecure first connection to obtain the certificates. This will
+	// happen during a trust exchange procedure, after which we pin (trust) the
+	// identity certificate by our client.
+	certs, err := ts.testTLSInsecureClient(c, testBaseTime)
 	c.Assert(err, IsNil)
 	tlsCert := certs[0]
-	ca := certs[1]
-	restore()
+	idCert := certs[1]
+	restoreTime()
+
 	// Shut down the HTTPS server.
-	shutdown()
+	shutdownHTTPSServer()
 
 	// 1 hours forward.
-	restore, clock = tlsstate.FakeSystemTime(systemTime, time.Hour)
-	defer restore()
+	testTime := testBaseTime.Add(time.Hour)
+	restoreTime = tlsstate.FakeTimeNow(testTime)
+	defer restoreTime()
 
 	// This simulates a process restart, after which we should detect
 	// the crypto.Signer no longer gives us the same private key.
@@ -347,19 +336,21 @@ func (ts *tlsSuite) TestTLSServerClientIDKeyChange(c *C) {
 	mgr = tlsstate.NewManager(tlsDir, key)
 
 	// Start the HTTPS server.
-	shutdown = ts.testTLSServer(c, mgr.GetCertificate)
-	// Test a trusted client connection (we use the identity CA cert).
-	_, err = ts.testTLSVerifiedClient(c, ca, clock)
+	shutdownHTTPSServer = ts.testTLSServer(c, mgr.GetCertificate)
+
+	// Test a trusted client connection (we use the identity as the root CA).
+	_, err = ts.testTLSVerifiedClient(c, idCert, testTime)
 	c.Assert(err, ErrorMatches, ".*Root CA verify failed.*")
 	// Test non-verified connection.
-	certs, err = ts.testTLSInsecureClient(c, clock)
+	certs, err = ts.testTLSInsecureClient(c, testTime)
 	c.Assert(err, IsNil)
 	// ID certificate changed
-	c.Assert(ca.Equal(certs[1]), Equals, false)
+	c.Assert(idCert.Equal(certs[1]), Equals, false)
 	// TLS certificate changed.
 	c.Assert(tlsCert.Equal(certs[0]), Equals, false)
+
 	// Shut down the HTTPS server.
-	shutdown()
+	shutdownHTTPSServer()
 }
 
 // BenchmarkIDTLSCertGen prints some performance metrics related to the worse case
@@ -380,7 +371,7 @@ func (ts *tlsSuite) BenchmarkIDTLSCertGen(c *C) {
 	}
 }
 
-// TestDefaultCertSubject tests that the name is always no longer than 64 bytes.
+// TestDefaultCertSubject tests that the name is no longer than 64 bytes.
 func (ts *tlsSuite) TestDefaultCertSubject(c *C) {
 	tests := []struct {
 		fingerprint     string
@@ -432,14 +423,11 @@ func (ts *tlsSuite) TestDefaultCertSubject(c *C) {
 // TestTLSServerClientCustomTemplates checks that we can provide custom
 // X509 certificate templates for the identity and tls certificates.
 func (ts *tlsSuite) TestTLSServerClientCustomTemplates(c *C) {
-	systemTime := "2000-01-01"
-
 	restoreTLSCertValidity := tlsstate.FakeTLSCertValidity(time.Hour)
 	defer restoreTLSCertValidity()
 
-	tlsDir := filepath.Join(c.MkDir(), "tls")
-
 	key := newIDKey(c)
+	tlsDir := filepath.Join(c.MkDir(), "tls")
 	mgr := tlsstate.NewManager(tlsDir, key)
 
 	// For the identity certificate.
@@ -489,15 +477,16 @@ func (ts *tlsSuite) TestTLSServerClientCustomTemplates(c *C) {
 	mgr.SetX509Templates(idTemplate, tlsTemplate)
 
 	// Start the HTTPS server.
-	shutdown := ts.testTLSServer(c, mgr.GetCertificate)
-	defer shutdown()
+	shutdownHTTPSServer := ts.testTLSServer(c, mgr.GetCertificate)
+	defer shutdownHTTPSServer()
 
-	restore, clock := tlsstate.FakeSystemTime(systemTime, 0)
-	certs, err := ts.testTLSInsecureClient(c, clock)
+	testBaseTime := getTestTime(2000, 1, 1)
+	restoreTime := tlsstate.FakeTimeNow(testBaseTime)
+	certs, err := ts.testTLSInsecureClient(c, testBaseTime)
 	c.Assert(err, IsNil)
 	tlsCert := certs[0]
-	ca := certs[1]
-	restore()
+	idCert := certs[1]
+	restoreTime()
 
 	// Check the TLS certificate.
 	c.Assert(tlsCert.Subject.String(), Equals, tlsTemplate.Subject.String())
@@ -508,11 +497,11 @@ func (ts *tlsSuite) TestTLSServerClientCustomTemplates(c *C) {
 		c.Fail()
 	}
 	// Check the Identity certificate.
-	c.Assert(ca.Subject.String(), Equals, idTemplate.Subject.String())
-	if !slices.Equal(ca.DNSNames, idTemplate.DNSNames) {
+	c.Assert(idCert.Subject.String(), Equals, idTemplate.Subject.String())
+	if !slices.Equal(idCert.DNSNames, idTemplate.DNSNames) {
 		c.Fail()
 	}
-	if !slices.Equal(ca.EmailAddresses, idTemplate.EmailAddresses) {
+	if !slices.Equal(idCert.EmailAddresses, idTemplate.EmailAddresses) {
 		c.Fail()
 	}
 }

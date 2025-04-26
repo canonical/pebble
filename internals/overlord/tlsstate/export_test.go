@@ -18,21 +18,15 @@ import (
 	"time"
 )
 
-// FakeSystemTime fakes the system time for the TLS manager.
-func FakeSystemTime(date string, offset time.Duration) (restore func(), clock time.Time) {
-	layout := "2006-01-02"
-	now, err := time.Parse(layout, date)
-	if err != nil {
-		panic("invalid date string")
-	}
-	now = now.Add(offset)
-	old := systemTime
-	systemTime = func() time.Time {
-		return now
+// FakeTimeNow fakes the system time for the TLS manager.
+func FakeTimeNow(t time.Time) (restore func()) {
+	old := timeNow
+	timeNow = func() time.Time {
+		return t
 	}
 	return func() {
-		systemTime = old
-	}, now
+		timeNow = old
+	}
 }
 
 // FakeIDCertValidity fakes the validity period of the identity certificate.

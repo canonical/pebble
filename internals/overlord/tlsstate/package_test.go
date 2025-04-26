@@ -141,6 +141,11 @@ func (ts *tlsSuite) testTLSServer(c *C, getCertificate func(*tls.ClientHelloInfo
 	}
 }
 
+// getTestTime helps generate a time for testing purposes.
+func getTestTime(year int, month time.Month, day int) time.Time {
+	return time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
+}
+
 type idkey struct {
 	ed25519.PrivateKey
 }

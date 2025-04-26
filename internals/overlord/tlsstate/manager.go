@@ -39,8 +39,8 @@ import (
 )
 
 var (
-	// systemTime can be faked during testing.
-	systemTime = time.Now
+	// timeNow can be faked during testing.
+	timeNow = time.Now
 
 	// idCertValidity sets the x509 identity key validity period. The
 	// certificate is managed by the TLS manager as it is not directly
@@ -172,12 +172,12 @@ func (m *TLSManager) createTLSCert() error {
 	if err != nil {
 		return err
 	}
-
+	now := timeNow()
 	template := x509.Certificate{
 		SerialNumber:          serialNumber,
 		Subject:               defaultCertSubject(m.signer.Fingerprint()),
-		NotBefore:             systemTime(),
-		NotAfter:              systemTime().Add(tlsCertValidity),
+		NotBefore:             now,
+		NotAfter:              now.Add(tlsCertValidity),
 		KeyUsage:              x509.KeyUsageDigitalSignature,
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 		BasicConstraintsValid: true,
@@ -331,11 +331,12 @@ func createIDCert(signer idSigner, idTemplate *x509.Certificate) (*x509.Certific
 	if err != nil {
 		return nil, err
 	}
+	now := timeNow()
 	template := &x509.Certificate{
 		SerialNumber:          serialNumber,
 		Subject:               defaultCertSubject(signer.Fingerprint()),
-		NotBefore:             systemTime(),
-		NotAfter:              systemTime().Add(idCertValidity),
+		NotBefore:             now,
+		NotAfter:              now.Add(idCertValidity),
 		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
 		ExtKeyUsage:           []x509.ExtKeyUsage{},
 		BasicConstraintsValid: true,
@@ -372,7 +373,7 @@ func createIDCert(signer idSigner, idTemplate *x509.Certificate) (*x509.Certific
 // isCertActive checks of the current time now is within the start and end time
 // validity period as defined by the certificate.
 func isCertActive(cert *x509.Certificate) bool {
-	now := systemTime()
+	now := timeNow()
 	// Note that we shorten the NotAfter timestamp by a tlsCertRenewWindow
 	// duration to avoid a TLS handshake race against the expiry time.
 	if now.Before(cert.NotBefore) || now.After(cert.NotAfter.Add(-tlsCertRenewWindow)) {
