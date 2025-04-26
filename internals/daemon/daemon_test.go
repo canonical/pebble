@@ -18,7 +18,9 @@ import (
 	"bytes"
 	"crypto/ed25519"
 	"crypto/rand"
+	"crypto/sha512"
 	"crypto/tls"
+	"encoding/base32"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -96,18 +98,36 @@ func (s *daemonSuite) TearDownTest(c *C) {
 }
 
 func (s *daemonSuite) newDaemon(c *C) *Daemon {
-	_, signer, err := ed25519.GenerateKey(rand.Reader)
-	c.Assert(err, IsNil)
 	d, err := New(&Options{
 		Dir:          s.pebbleDir,
 		SocketPath:   s.socketPath,
 		HTTPAddress:  s.httpAddress,
 		HTTPSAddress: s.httpsAddress,
-		IDSigner:     signer,
+		IDSigner:     newIDKey(c),
 	})
 	c.Assert(err, IsNil)
 	d.addRoutes()
 	return d
+}
+
+// idkey implements a purely ephemeral tlsstate.IDSigner interface for testing
+// purposes so we do not depend on the idkey package.
+type idkey struct {
+	ed25519.PrivateKey
+}
+
+func newIDKey(c *C) *idkey {
+	k := &idkey{}
+	var err error
+	_, k.PrivateKey, err = ed25519.GenerateKey(rand.Reader)
+	c.Assert(err, IsNil)
+	return k
+}
+
+func (k *idkey) Fingerprint() string {
+	publicBytes := k.PrivateKey.Public().(ed25519.PublicKey)
+	hashBytes := sha512.Sum384(publicBytes)
+	return base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(hashBytes[:])
 }
 
 // a Response suitable for testing
@@ -1282,6 +1302,15 @@ func (s *daemonSuite) TestHTTPAPI(c *C) {
 	d := s.newDaemon(c)
 	d.Init()
 	c.Assert(d.Start(), IsNil)
+
+	cleanupServer := true
+	defer func() {
+		// If we exit early (test failure), clean up.
+		if cleanupServer {
+			d.Stop(nil)
+		}
+	}()
+
 	port := d.httpListener.Addr().(*net.TCPAddr).Port
 
 	request, err := http.NewRequest("GET", fmt.Sprintf("http://localhost:%d/v1/health", port), nil)
@@ -1309,6 +1338,10 @@ func (s *daemonSuite) TestHTTPAPI(c *C) {
 
 	err = d.Stop(nil)
 	c.Assert(err, IsNil)
+
+	// Daemon already stopped, no need to do it again during defer.
+	cleanupServer = false
+
 	_, err = http.DefaultClient.Do(request)
 	c.Assert(err, ErrorMatches, ".* connection refused")
 }
@@ -1318,6 +1351,15 @@ func (s *daemonSuite) TestHTTPSAPI(c *C) {
 	d := s.newDaemon(c)
 	d.Init()
 	c.Assert(d.Start(), IsNil)
+
+	cleanupServer := true
+	defer func() {
+		// If we exit early (test failure), clean up.
+		if cleanupServer {
+			d.Stop(nil)
+		}
+	}()
+
 	port := d.httpsListener.Addr().(*net.TCPAddr).Port
 
 	httpsClient := &http.Client{
@@ -1353,6 +1395,10 @@ func (s *daemonSuite) TestHTTPSAPI(c *C) {
 
 	err = d.Stop(nil)
 	c.Assert(err, IsNil)
+
+	// Daemon already stopped, no need to do it again during defer.
+	cleanupServer = false
+
 	_, err = http.DefaultClient.Do(request)
 	c.Assert(err, ErrorMatches, ".* connection refused")
 }

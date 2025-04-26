@@ -17,7 +17,6 @@ package daemon
 import (
 	"bufio"
 	"context"
-	"crypto"
 	"crypto/tls"
 	"errors"
 	"fmt"
@@ -45,6 +44,7 @@ import (
 	"github.com/canonical/pebble/internals/overlord/servstate"
 	"github.com/canonical/pebble/internals/overlord/standby"
 	"github.com/canonical/pebble/internals/overlord/state"
+	"github.com/canonical/pebble/internals/overlord/tlsstate"
 	"github.com/canonical/pebble/internals/reaper"
 	"github.com/canonical/pebble/internals/systemd"
 )
@@ -73,8 +73,8 @@ type Options struct {
 
 	// IDSigner is a private key representing the identity of a Pebble
 	// instance (machine, container or device), which implements the
-	// crypto.Signer interface (for digest signing).
-	IDSigner crypto.Signer
+	// tlsstate.IDSigner interface (for digest signing).
+	IDSigner tlsstate.IDSigner
 
 	// SocketPath is an optional path for the unix socket used for the client
 	// to communicate with the daemon. Defaults to a hidden (dotted) name inside
@@ -380,10 +380,15 @@ func (d *Daemon) Init() error {
 
 	if d.httpsAddress != "" {
 		tlsConf := &tls.Config{
-			// We now support HTTP1.1 and HTTP2 when using HTTPS.
+			// Enable server support for HTTP1.1 and HTTP2 over TLS. The server
+			// will only pick HTTP2 if the client indicated the same support in
+			// the client hello message. The Pebble client will not pick HTTP2
+			// because it requires integrated websockets to work, which does
+			// not support HTTP2 (it does not yet implement RFC8441). However,
+			// external clients, such as curl, will be able to switch to HTTP2
+			// for non-websocket dependant API calls.
 			NextProtos:     []string{"h2", "http/1.1"},
 			MinVersion:     tls.VersionTLS13,
-			MaxVersion:     tls.VersionTLS13,
 			GetCertificate: d.overlord.TLSManager().GetCertificate,
 		}
 		listener, err := tls.Listen("tcp", d.httpsAddress, tlsConf)

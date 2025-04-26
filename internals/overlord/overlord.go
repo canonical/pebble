@@ -16,7 +16,6 @@
 package overlord
 
 import (
-	"crypto"
 	"errors"
 	"fmt"
 	"io"
@@ -82,8 +81,8 @@ type Options struct {
 	Extension Extension
 	// IDSigner is a private key representing the identity of a Pebble
 	// instance (machine, container or device), which implements the
-	// crypto.Signer interface (allowing it to sign TLS keypairs).
-	IDSigner crypto.Signer
+	// tlsstate.IDSigner interface (allowing it to sign digests).
+	IDSigner tlsstate.IDSigner
 }
 
 // Overlord is the central manager of the system, keeping track
@@ -174,10 +173,7 @@ func New(opts *Options) (*Overlord, error) {
 	if tlsDir == "" {
 		tlsDir = filepath.Join(opts.PebbleDir, "tls")
 	}
-	o.tlsMgr, err = tlsstate.NewManager(tlsDir, opts.IDSigner)
-	if err != nil {
-		return nil, fmt.Errorf("cannot create TLS manager: %w", err)
-	}
+	o.tlsMgr = tlsstate.NewManager(tlsDir, opts.IDSigner)
 	o.stateEng.AddManager(o.tlsMgr)
 
 	o.logMgr = logstate.NewLogManager()
