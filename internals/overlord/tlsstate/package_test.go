@@ -36,7 +36,10 @@ import (
 // Hook up check.v1 into the "go test" runner.
 func Test(t *testing.T) { TestingT(t) }
 
-type tlsSuite struct{}
+type tlsSuite struct {
+	// The HTTPS server port number allocated during a test.
+	serverHTTPSPort int
+}
 
 var _ = Suite(&tlsSuite{})
 
@@ -87,7 +90,7 @@ func (ts *tlsSuite) testTLSClient(c *C, ca *x509.Certificate, clock time.Time) (
 			},
 		},
 	}
-	response, err := client.Get("https://localhost:8888")
+	response, err := client.Get(fmt.Sprintf("https://localhost:%d", ts.serverHTTPSPort))
 	if err != nil {
 		// We want to monitor this error for some tests.
 		return nil, err
@@ -103,10 +106,12 @@ func (ts *tlsSuite) testTLSClient(c *C, ca *x509.Certificate, clock time.Time) (
 func (ts *tlsSuite) testTLSServer(c *C, getCertificate func(*tls.ClientHelloInfo) (*tls.Certificate, error)) (shutdown func()) {
 	// First start a listener so we buffer client requests while the HTTPS
 	// server routine is starting up.
-	listener, err := net.Listen("tcp", ":8888")
+	listener, err := net.Listen("tcp", ":0")
 	if err != nil {
 		c.Assert(err, IsNil)
 	}
+	// Get the allocated port.
+	ts.serverHTTPSPort = listener.Addr().(*net.TCPAddr).Port
 
 	server := &http.Server{
 		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -117,16 +122,24 @@ func (ts *tlsSuite) testTLSServer(c *C, getCertificate func(*tls.ClientHelloInfo
 			GetCertificate: getCertificate,
 		},
 	}
+
+	exitCh := make(chan struct{})
 	go func() {
 		err := server.ServeTLS(listener, "", "")
 		if err != nil && !errors.Is(err, http.ErrServerClosed) {
-			c.Fatalf("Cannot start server: %v", err)
+			// Log an error message.
+			c.Logf("HTTPS server returned an error: %v", err)
+			// Mark the test as failed.
+			c.Fail()
 		}
+		close(exitCh)
 	}()
 
 	// The server must be shutdown when client tests are completed.
 	return func() {
 		server.Shutdown(context.Background())
+		// Wait for server goroutine to complete.
+		<-exitCh
 		listener.Close()
 	}
 }
