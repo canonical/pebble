@@ -62,3 +62,5 @@ func FakeTLSCertRenewWindow(d time.Duration) (restore func()) {
 		tlsCertRenewWindow = old
 	}
 }
+
+var DefaultCertSubject = defaultCertSubject

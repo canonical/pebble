@@ -16,8 +16,12 @@ package tlsstate_test
 
 import (
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
+	"crypto/sha512"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/base32"
 	"errors"
 	"fmt"
 	"io"
@@ -135,4 +139,22 @@ func (ts *tlsSuite) testTLSServer(c *C, getCertificate func(*tls.ClientHelloInfo
 		server.Shutdown(context.Background())
 		listener.Close()
 	}
+}
+
+type idkey struct {
+	ed25519.PrivateKey
+}
+
+func newIDKey(c *C) *idkey {
+	k := &idkey{}
+	var err error
+	_, k.PrivateKey, err = ed25519.GenerateKey(rand.Reader)
+	c.Assert(err, IsNil)
+	return k
+}
+
+func (k *idkey) Fingerprint() string {
+	publicBytes := k.PrivateKey.Public().(ed25519.PublicKey)
+	hashBytes := sha512.Sum384(publicBytes)
+	return base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(hashBytes[:])
 }

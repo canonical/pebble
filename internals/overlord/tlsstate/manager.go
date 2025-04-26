@@ -22,6 +22,7 @@ import (
 	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/pem"
 	"errors"
 	"fmt"
@@ -29,8 +30,12 @@ import (
 	"math/big"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"sync"
 	"time"
+
+	"github.com/canonical/pebble/cmd"
 )
 
 var (
@@ -63,6 +68,15 @@ var (
 	idCertFile = "identity.pem"
 )
 
+// idSigner includes a crypto.Signer, and expects the provided signer
+// to know how to generate an identity fingerprint. We leave this to
+// the identity signer to ensure a consistent representation of the
+// fingerprint, intead of allowing every consumer to try and generate one.
+type idSigner interface {
+	crypto.Signer
+	Fingerprint() string
+}
+
 type TLSManager struct {
 	// tlsDir is the location of the PEM keypair files.
 	tlsDir string
@@ -72,19 +86,22 @@ type TLSManager struct {
 	// The identity certificate loaded from disk.
 	idCert *x509.Certificate
 	// The identity key used for signing TLS certificates.
-	signer crypto.Signer
+	signer idSigner
+
+	// The identity and tls certificate optionally allows a
+	// select number of fields to be supplied from externally
+	// supplied X509 templates (see SetX509Templates).
+	idTemplate  *x509.Certificate
+	tlsTemplate *x509.Certificate
 }
 
 // NewManager create a new TLS keypair manager. The tlsDir must be a
 // directory of which only the leaf element, at most, does not exist. The
 // leaf directory will be created with 0o700 permissions. The signer
-// must implement a crypto.Signer interface. The signer represents the
+// must implement the idSigner interface. The signer represents the
 // identity key of the machine, container or device. The signer will be
-// used to sign TLS keypairs and its certificate (CA) is included in the
-// TLS certificate chain, allowing a client to pin the identity
-// certificate once trust has been manually established as part of a
-// trust exchange procedure.
-func NewManager(tlsDir string, signer crypto.Signer) *TLSManager {
+// used to sign TLS keypairs and the identity certificate (CA).
+func NewManager(tlsDir string, signer idSigner) *TLSManager {
 	m := &TLSManager{
 		tlsDir: tlsDir,
 		signer: signer,
@@ -92,8 +109,20 @@ func NewManager(tlsDir string, signer crypto.Signer) *TLSManager {
 	return m
 }
 
+// SetX509Templates allows select fields of the certificates to be externally
+// supplied. This function must be called before any call to GetCertificate
+// otherwise templates will not be applied consistently. If this function
+// is not called during manager creation, the default template will be used,
+// setting only the subject Common Name (see defaultCertSubject).
+func (m *TLSManager) SetX509Templates(idTemplate, tlsTemplate *x509.Certificate) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.idTemplate = idTemplate
+	m.tlsTemplate = tlsTemplate
+}
+
 // GetCertificate returns an identity signed TLS certificate. The certificate chain includes
-// both the TLS leaf certificate, as well as the self signed identity CA certificate. If
+// both the TLS leaf certificate, as well as the root CA identity certificate. If
 // either the identity or TLS certificate nears expiry, this functions creates new
 // certificates on demand. Note that even if the identity certificate is re-created, this
 // does not mean that the identity key changed (the key itself has no expiry).
@@ -143,14 +172,27 @@ func (m *TLSManager) createTLSCert() error {
 	if err != nil {
 		return err
 	}
+
 	template := x509.Certificate{
 		SerialNumber:          serialNumber,
+		Subject:               defaultCertSubject(m.signer.Fingerprint()),
 		NotBefore:             systemTime(),
 		NotAfter:              systemTime().Add(tlsCertValidity),
 		KeyUsage:              x509.KeyUsageDigitalSignature,
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 		BasicConstraintsValid: true,
 	}
+
+	// If an externally supplied TLS certificate template was provided,
+	// use it to update the supported fields.
+	if m.tlsTemplate != nil {
+		template.Subject = deepCopyName(m.tlsTemplate.Subject)
+		template.Issuer = deepCopyName(m.tlsTemplate.Issuer)
+		// Supported SAN (Subject Alternate Name) fields.
+		template.DNSNames = slices.Clone(m.tlsTemplate.DNSNames)
+		template.EmailAddresses = slices.Clone(m.tlsTemplate.EmailAddresses)
+	}
+
 	// DER encoded bytes
 	derBytes, err := x509.CreateCertificate(rand.Reader, &template, m.idCert, privateKey.Public(), m.signer)
 	if err != nil {
@@ -215,7 +257,7 @@ func (m *TLSManager) getIDCert() error {
 	}
 
 	// If we get here a new identity certificate must be created.
-	m.idCert, err = createIDCert(m.signer)
+	m.idCert, err = createIDCert(m.signer, m.idTemplate)
 	if err != nil {
 		return err
 	}
@@ -283,7 +325,7 @@ func saveIDCert(path string, cert *x509.Certificate) error {
 // key. This certificate is included in the TLS certificate chain as the
 // non-leaf certificate, allowing the client to pin this certificate during
 // the client server trust exchange (pairing) procedure.
-func createIDCert(signer crypto.Signer) (*x509.Certificate, error) {
+func createIDCert(signer idSigner, idTemplate *x509.Certificate) (*x509.Certificate, error) {
 	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
 	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
 	if err != nil {
@@ -291,6 +333,7 @@ func createIDCert(signer crypto.Signer) (*x509.Certificate, error) {
 	}
 	template := &x509.Certificate{
 		SerialNumber:          serialNumber,
+		Subject:               defaultCertSubject(signer.Fingerprint()),
 		NotBefore:             systemTime(),
 		NotAfter:              systemTime().Add(idCertValidity),
 		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
@@ -300,6 +343,16 @@ func createIDCert(signer crypto.Signer) (*x509.Certificate, error) {
 		// We can only sign leaf certificates with this.
 		MaxPathLen:     0,
 		MaxPathLenZero: true,
+	}
+
+	// If an externally supplied TLS certificate template was provided,
+	// use it to update the supported fields.
+	if idTemplate != nil {
+		template.Subject = deepCopyName(idTemplate.Subject)
+		template.Issuer = deepCopyName(idTemplate.Issuer)
+		// Supported SAN (Subject Alternate Name) fields.
+		template.DNSNames = slices.Clone(idTemplate.DNSNames)
+		template.EmailAddresses = slices.Clone(idTemplate.EmailAddresses)
 	}
 
 	// The identity CA cert is self-signed, which allows a client to verify the
@@ -362,4 +415,51 @@ func pathExists(path string) (bool, error) {
 		return false, err
 	}
 	return true, nil
+}
+
+// defaultCertSubject provides a default Subject Common Name for x509
+// certificates.
+func defaultCertSubject(fingerprint string) pkix.Name {
+	// The common name must not exceed 64 bytes (RFC 5280).
+	var cn strings.Builder
+	// <= 55 bytes for the prefix (program name)
+	for _, r := range cmd.ProgramName {
+		cnLen := len(cn.String())
+		runeLen := len(string(r))
+		if (cnLen + runeLen) > 55 {
+			break
+		}
+		cn.WriteRune(r)
+	}
+	// 1 byte for the separator.
+	cn.WriteString("-")
+	prefixLen := len(cn.String())
+	// 8 bytes for the identity fingerprint.
+	for _, r := range fingerprint {
+		cnLen := len(cn.String())
+		runeLen := len(string(r))
+		if (cnLen + runeLen) > (prefixLen + 8) {
+			break
+		}
+		cn.WriteRune(r)
+	}
+	subject := pkix.Name{
+		CommonName: cn.String(),
+	}
+	return subject
+}
+
+// deepCopyName supports deep copying some common fields of the
+// pkix.Name structure. The 'Names' and 'ExtraNames' attributes
+// are ignored.
+func deepCopyName(name pkix.Name) pkix.Name {
+	cpy := name
+	cpy.Country = slices.Clone(name.Country)
+	cpy.Organization = slices.Clone(name.Organization)
+	cpy.OrganizationalUnit = slices.Clone(name.OrganizationalUnit)
+	cpy.Locality = slices.Clone(name.Locality)
+	cpy.Province = slices.Clone(name.Province)
+	cpy.StreetAddress = slices.Clone(name.StreetAddress)
+	cpy.PostalCode = slices.Clone(name.PostalCode)
+	return cpy
 }
