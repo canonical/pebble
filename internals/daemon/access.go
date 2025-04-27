@@ -48,8 +48,8 @@ func (ac AdminAccess) CheckAccess(d *Daemon, r *http.Request, user *UserState) R
 	if user == nil {
 		return Unauthorized(accessDenied)
 	}
-	apiSrc := requestSrc(r)
-	if apiSrc != apiRequestSrcUnixSocket && apiSrc != apiRequestSrcHTTPS {
+	apiSrc := RequestSrc(r)
+	if apiSrc != ApiRequestSrcUnixSocket && apiSrc != ApiRequestSrcHTTPS {
 		return Unauthorized(accessDenied)
 	}
 	if user.Access == state.AdminAccess {
@@ -68,8 +68,8 @@ func (ac UserAccess) CheckAccess(d *Daemon, r *http.Request, user *UserState) Re
 	if user == nil {
 		return Unauthorized(accessDenied)
 	}
-	apiSrc := requestSrc(r)
-	if apiSrc != apiRequestSrcUnixSocket && apiSrc != apiRequestSrcHTTPS {
+	apiSrc := RequestSrc(r)
+	if apiSrc != ApiRequestSrcUnixSocket && apiSrc != ApiRequestSrcHTTPS {
 		return Unauthorized(accessDenied)
 	}
 	switch user.Access {
@@ -94,12 +94,12 @@ func (ac MetricsAccess) CheckAccess(d *Daemon, r *http.Request, user *UserState)
 	}
 	// HTTP access (only basic auth is possible here, so no need to
 	// check with identity type).
-	apiSrc := requestSrc(r)
-	if apiSrc == apiRequestSrcHTTP && user.Access == state.MetricsAccess {
+	apiSrc := RequestSrc(r)
+	if apiSrc == ApiRequestSrcHTTP && user.Access == state.MetricsAccess {
 		return nil
 	}
 	// HTTPS and unix domain socket access.
-	if apiSrc != apiRequestSrcUnixSocket && apiSrc != apiRequestSrcHTTPS {
+	if apiSrc != ApiRequestSrcUnixSocket && apiSrc != ApiRequestSrcHTTPS {
 		return Unauthorized(accessDenied)
 	}
 	switch user.Access {

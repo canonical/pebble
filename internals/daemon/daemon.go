@@ -58,35 +58,38 @@ var (
 	systemdSdNotify = systemd.SdNotify
 )
 
-// apiRequestSrc defines the possible API request sources that we support.
+// ApiRequestSrc defines the possible API request sources that we support.
 // This can be extracted from http.Request using requestSrc.
-type apiRequestSrc int
+type ApiRequestSrc int
 
 const (
-	apiRequestSrcCtxKey                = apiRequestSrcUnknown
-	apiRequestSrcUnknown apiRequestSrc = iota
-	apiRequestSrcUnixSocket
-	apiRequestSrcHTTP
-	apiRequestSrcHTTPS
+	ApiRequestSrcCtxKey                = ApiRequestSrcUnknown
+	ApiRequestSrcUnknown ApiRequestSrc = iota
+	ApiRequestSrcUnixSocket
+	ApiRequestSrcHTTP
+	ApiRequestSrcHTTPS
 )
 
-// requestSrc extracts the source of the HTTP request. If the source
+// RequestSrc extracts the source of the HTTP request. If the source
 // cannot be found in the context, it returns apiRequestSrcUnknown.
-func requestSrc(r *http.Request) apiRequestSrc {
-	src, ok := r.Context().Value(apiRequestSrcCtxKey).(apiRequestSrc)
+func RequestSrc(r *http.Request) ApiRequestSrc {
+	if r == nil {
+		return ApiRequestSrcUnknown
+	}
+	src, ok := r.Context().Value(ApiRequestSrcCtxKey).(ApiRequestSrc)
 	if !ok {
-		return apiRequestSrcUnknown
+		return ApiRequestSrcUnknown
 	}
 	return src
 }
 
-func (r apiRequestSrc) String() string {
-	switch r {
-	case apiRequestSrcUnixSocket:
+func (src ApiRequestSrc) String() string {
+	switch src {
+	case ApiRequestSrcUnixSocket:
 		return "local"
-	case apiRequestSrcHTTP:
+	case ApiRequestSrcHTTP:
 		return "HTTP"
-	case apiRequestSrcHTTPS:
+	case ApiRequestSrcHTTPS:
 		return "HTTPS"
 	default:
 		return "unknown"
@@ -278,6 +281,16 @@ func (c *Command) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// We only proceed with known API sources.
+	requestSource := RequestSrc(r)
+	switch requestSource {
+	case ApiRequestSrcUnixSocket, ApiRequestSrcHTTP, ApiRequestSrcHTTPS:
+	default:
+		// We have a request with an unknown API source context.
+		Forbidden("forbidden").ServeHTTP(w, r)
+		return
+	}
+
 	if rspe := access.CheckAccess(c.d, r, user); rspe != nil {
 		rspe.ServeHTTP(w, r)
 		return
@@ -353,7 +366,7 @@ func logit(handler http.Handler) http.Handler {
 		t := time.Since(t0)
 
 		// Zero value is apiRequestSrcUnknown.
-		connSource, _ := r.Context().Value(apiRequestSrcCtxKey).(apiRequestSrc)
+		connSource, _ := r.Context().Value(ApiRequestSrcCtxKey).(ApiRequestSrc)
 
 		// Don't log GET /v1/changes/{change-id} as that's polled quickly by
 		// clients when waiting for a change (e.g., service starting). Also
@@ -524,13 +537,13 @@ func (d *Daemon) Start() error {
 			// refined access checker decisions.
 			switch c.(type) {
 			case *ucrednetConn:
-				return context.WithValue(ctx, apiRequestSrcCtxKey, apiRequestSrcUnixSocket)
+				return context.WithValue(ctx, ApiRequestSrcCtxKey, ApiRequestSrcUnixSocket)
 			case *net.TCPConn:
-				return context.WithValue(ctx, apiRequestSrcCtxKey, apiRequestSrcHTTP)
+				return context.WithValue(ctx, ApiRequestSrcCtxKey, ApiRequestSrcHTTP)
 			case *tls.Conn:
-				return context.WithValue(ctx, apiRequestSrcCtxKey, apiRequestSrcHTTPS)
+				return context.WithValue(ctx, ApiRequestSrcCtxKey, ApiRequestSrcHTTPS)
 			}
-			return context.WithValue(ctx, apiRequestSrcCtxKey, apiRequestSrcUnknown)
+			return context.WithValue(ctx, ApiRequestSrcCtxKey, ApiRequestSrcUnknown)
 		},
 		Handler: exitOnPanic(logit(d.router), os.Stderr, func() {
 			os.Exit(1)
