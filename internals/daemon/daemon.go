@@ -59,7 +59,7 @@ var (
 )
 
 // ApiRequestSrc defines the possible API request sources that we support.
-// This can be extracted from http.Request using requestSrc.
+// This can be extracted from http.Request using RequestSrc.
 type ApiRequestSrc int
 
 const (
@@ -71,7 +71,7 @@ const (
 )
 
 // RequestSrc extracts the source of the HTTP request. If the source
-// cannot be found in the context, it returns apiRequestSrcUnknown.
+// cannot be found in the context, it returns ApiRequestSrcUnknown.
 func RequestSrc(r *http.Request) ApiRequestSrc {
 	if r == nil {
 		return ApiRequestSrcUnknown
