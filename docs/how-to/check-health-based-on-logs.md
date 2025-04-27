@@ -31,7 +31,7 @@ The check searches Pebble's service logs for lines matching the pattern, such as
 
 If a match is found, the `bash -c '...'` command exits with 1 and the check fails.
 
-By default, Pebble keeps a service running even if a check fails. Although we can configure a service to restart on check failure, this approach isn't helpful here. That's because restarting `foo` won't remove the warning from the logs, so the check remains "down", and subsequent failures won't trigger additional restarts. So, in this particular case, it's better to monitor the check and alert a human operator to investigate.
+By default, Pebble keeps a service running even if a check fails. Although we can configure a service to restart on check failure, this approach isn't helpful here. That's because restarting `foo` won't remove the warning from the logs, so the check remains "down", and subsequent failures won't trigger additional restarts. In this particular case, it's better to monitor the check and alert a human operator to investigate.
 
 ## Get the status of the check
 
