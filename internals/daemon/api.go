@@ -134,9 +134,15 @@ func v1SystemInfo(c *Command, r *http.Request, _ *UserState) Response {
 	state := c.d.overlord.State()
 	state.Lock()
 	defer state.Unlock()
-	result := map[string]any{
-		"version": c.d.Version,
-		"boot-id": restart.BootID(state),
+
+	result := struct {
+		BootID      string `json:"boot-id"`
+		HTTPAddress string `json:"http-address,omitempty"`
+		Version     string `json:"version"`
+	}{
+		BootID:      restart.BootID(state),
+		HTTPAddress: c.d.options.HTTPAddress,
+		Version:     c.d.Version,
 	}
 	return SyncResponse(result)
 }

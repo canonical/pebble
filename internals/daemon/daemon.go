@@ -86,20 +86,18 @@ type Options struct {
 
 // A Daemon listens for requests and routes them to the right command
 type Daemon struct {
-	Version          string
-	StartTime        time.Time
-	pebbleDir        string
-	normalSocketPath string
-	httpAddress      string
-	overlord         *overlord.Overlord
-	state            *state.State
-	generalListener  net.Listener
-	httpListener     net.Listener
-	connTracker      *connTracker
-	serve            *http.Server
-	tomb             tomb.Tomb
-	router           *mux.Router
-	standbyOpinions  *standby.StandbyOpinions
+	Version         string
+	StartTime       time.Time
+	options         *Options
+	overlord        *overlord.Overlord
+	state           *state.State
+	generalListener net.Listener
+	httpListener    net.Listener
+	connTracker     *connTracker
+	serve           *http.Server
+	tomb            tomb.Tomb
+	router          *mux.Router
+	standbyOpinions *standby.StandbyOpinions
 
 	// set to what kind of restart was requested (if any)
 	requestedRestart restart.RestartType
@@ -345,21 +343,21 @@ func exitOnPanic(handler http.Handler, stderr io.Writer, exit func()) http.Handl
 func (d *Daemon) Init() error {
 	listenerMap := make(map[string]net.Listener)
 
-	if listener, err := getListener(d.normalSocketPath, listenerMap); err == nil {
+	if listener, err := getListener(d.options.SocketPath, listenerMap); err == nil {
 		d.generalListener = &ucrednetListener{Listener: listener}
 	} else {
-		return fmt.Errorf("when trying to listen on %s: %v", d.normalSocketPath, err)
+		return fmt.Errorf("when trying to listen on %s: %v", d.options.SocketPath, err)
 	}
 
 	d.addRoutes()
 
-	if d.httpAddress != "" {
-		listener, err := net.Listen("tcp", d.httpAddress)
+	if d.options.HTTPAddress != "" {
+		listener, err := net.Listen("tcp", d.options.HTTPAddress)
 		if err != nil {
-			return fmt.Errorf("cannot listen on %q: %v", d.httpAddress, err)
+			return fmt.Errorf("cannot listen on %q: %v", d.options.HTTPAddress, err)
 		}
 		d.httpListener = listener
-		logger.Noticef("HTTP API server listening on %q.", d.httpAddress)
+		logger.Noticef("HTTP API server listening on %q.", d.options.HTTPAddress)
 	}
 
 	logger.Noticef("Started daemon.")
@@ -837,9 +835,7 @@ func (d *Daemon) SetServiceArgs(serviceArgs map[string][]string) error {
 
 func New(opts *Options) (*Daemon, error) {
 	d := &Daemon{
-		pebbleDir:        opts.Dir,
-		normalSocketPath: opts.SocketPath,
-		httpAddress:      opts.HTTPAddress,
+		options: opts,
 	}
 
 	ovldOptions := overlord.Options{
