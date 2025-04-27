@@ -867,8 +867,8 @@ pebble run --args myservice --port 8080 \; --hold
           --create-dirs  Create Pebble directory on startup if it doesn't exist
           --hold         Do not start default services automatically
           --http=        Start HTTP API listening on this address in
-                         "[ipv4_or_v6_address]:port" format (for example,
-                         ":4000")
+                         "<address>:port" format (for example, ":4000",
+                         "192.0.2.0:4000", "[2001:db8::1]:4000")
       -v, --verbose      Log all output from services to stdout (also
                          PEBBLE_VERBOSE=1)
           --args=        Provide additional arguments to a service
