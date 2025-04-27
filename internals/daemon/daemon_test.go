@@ -267,7 +267,6 @@ func (s *daemonSuite) TestCommandMethodDispatch(c *C) {
 	cmd.WriteAccess = UserAccess{}
 
 	for _, method := range []string{"GET", "POST", "PUT"} {
-		// Add a context that marks this request as incoming over the unix socket.
 		ctx := context.WithValue(context.Background(), ApiRequestSrcCtxKey, ApiRequestSrcUnixSocket)
 		req, err := http.NewRequestWithContext(ctx, method, "", nil)
 		req.Header.Add("User-Agent", fakeUserAgent)
@@ -302,7 +301,6 @@ func (s *daemonSuite) TestCommandRestartingState(c *C) {
 		return SyncResponse(nil)
 	}
 
-	// Add a context that marks this request as incoming over the unix socket.
 	ctx := context.WithValue(context.Background(), ApiRequestSrcCtxKey, ApiRequestSrcUnixSocket)
 	req, err := http.NewRequestWithContext(ctx, "GET", "", nil)
 	c.Assert(err, IsNil)
@@ -410,7 +408,6 @@ func (s *daemonSuite) testAccessChecker(c *C, tests []accessCheckerTestCase, rem
 	}
 
 	doTestReqFunc := func(cmd *Command, method string) *httptest.ResponseRecorder {
-		// Add a context that marks this request as incoming over the unix socket.
 		ctx := context.WithValue(context.Background(), ApiRequestSrcCtxKey, ApiRequestSrcUnixSocket)
 		req, err := http.NewRequestWithContext(ctx, method, "", nil)
 		c.Assert(err, IsNil)
@@ -1635,7 +1632,6 @@ func (s *daemonSuite) TestAPIAccessLevels(c *C) {
 			remoteAddr = fmt.Sprintf("pid=100;uid=%d;socket=;", test.uid)
 		}
 
-		// Add a context that marks this request as incoming over the unix socket.
 		ctx := context.WithValue(context.Background(), ApiRequestSrcCtxKey, ApiRequestSrcUnixSocket)
 		urlStr := "http://localhost" + test.path
 		request, err := http.NewRequestWithContext(
