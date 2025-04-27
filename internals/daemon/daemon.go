@@ -58,25 +58,35 @@ var (
 	systemdSdNotify = systemd.SdNotify
 )
 
-// requestSrc defines a context key and the possible API request sources
-// that we support. This can be extracted from http.Request.Context().
-type requestSrc int
+// apiRequestSrc defines the possible API request sources that we support.
+// This can be extracted from http.Request using requestSrc.
+type apiRequestSrc int
 
 const (
-	requestSrcCtxKey             = requestSrcUnknown
-	requestSrcUnknown requestSrc = iota
-	requestSrcUnixSocket
-	requestSrcHTTP
-	requestSrcHTTPS
+	apiRequestSrcCtxKey                = apiRequestSrcUnknown
+	apiRequestSrcUnknown apiRequestSrc = iota
+	apiRequestSrcUnixSocket
+	apiRequestSrcHTTP
+	apiRequestSrcHTTPS
 )
 
-func (r requestSrc) String() string {
+// requestSrc extracts the source of the HTTP request. If the source
+// cannot be found in the context, it returns apiRequestSrcUnknown.
+func requestSrc(r *http.Request) apiRequestSrc {
+	src, ok := r.Context().Value(apiRequestSrcCtxKey).(apiRequestSrc)
+	if !ok {
+		return apiRequestSrcUnknown
+	}
+	return src
+}
+
+func (r apiRequestSrc) String() string {
 	switch r {
-	case requestSrcUnixSocket:
+	case apiRequestSrcUnixSocket:
 		return "local"
-	case requestSrcHTTP:
+	case apiRequestSrcHTTP:
 		return "HTTP"
-	case requestSrcHTTPS:
+	case apiRequestSrcHTTPS:
 		return "HTTPS"
 	default:
 		return "unknown"
@@ -215,6 +225,7 @@ func (c *Command) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// ucred returned will be nil for request over HTTP and HTTPS.
 	ucred, err := ucrednetGet(r.RemoteAddr)
 	if err != nil && err != errNoID {
 		logger.Noticef("Cannot parse UID from remote address %q: %s", r.RemoteAddr, err)
@@ -341,8 +352,8 @@ func logit(handler http.Handler) http.Handler {
 		handler.ServeHTTP(ww, r)
 		t := time.Since(t0)
 
-		// Zero value is requestSrcUnknown.
-		connSource, _ := r.Context().Value(requestSrcCtxKey).(requestSrc)
+		// Zero value is apiRequestSrcUnknown.
+		connSource, _ := r.Context().Value(apiRequestSrcCtxKey).(apiRequestSrc)
 
 		// Don't log GET /v1/changes/{change-id} as that's polled quickly by
 		// clients when waiting for a change (e.g., service starting). Also
@@ -513,13 +524,13 @@ func (d *Daemon) Start() error {
 			// refined access checker decisions.
 			switch c.(type) {
 			case *ucrednetConn:
-				return context.WithValue(ctx, requestSrcCtxKey, requestSrcUnixSocket)
+				return context.WithValue(ctx, apiRequestSrcCtxKey, apiRequestSrcUnixSocket)
 			case *net.TCPConn:
-				return context.WithValue(ctx, requestSrcCtxKey, requestSrcHTTP)
+				return context.WithValue(ctx, apiRequestSrcCtxKey, apiRequestSrcHTTP)
 			case *tls.Conn:
-				return context.WithValue(ctx, requestSrcCtxKey, requestSrcHTTPS)
+				return context.WithValue(ctx, apiRequestSrcCtxKey, apiRequestSrcHTTPS)
 			}
-			return context.WithValue(ctx, requestSrcCtxKey, requestSrcUnknown)
+			return context.WithValue(ctx, apiRequestSrcCtxKey, apiRequestSrcUnknown)
 		},
 		Handler: exitOnPanic(logit(d.router), os.Stderr, func() {
 			os.Exit(1)

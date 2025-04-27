@@ -32,19 +32,24 @@ type AccessChecker interface {
 	CheckAccess(d *Daemon, r *http.Request, user *UserState) Response
 }
 
-// OpenAccess allows all requests, including non-local sockets (for example, TCP).
+// OpenAccess allows all incoming requests over unix domain sockets, HTTP
+// and HTTPS, even without user credentials (or invalid credentials).
 type OpenAccess struct{}
 
 func (ac OpenAccess) CheckAccess(d *Daemon, r *http.Request, user *UserState) Response {
 	return nil
 }
 
-// AdminAccess allows requests over the unix domain socket from the root UID
-// and the current user's UID.
+// AdminAccess only allows incoming requests over unix domain sockets and
+// HTTPS, and only if the user is valid and has AdminAccess role.
 type AdminAccess struct{}
 
 func (ac AdminAccess) CheckAccess(d *Daemon, r *http.Request, user *UserState) Response {
 	if user == nil {
+		return Unauthorized(accessDenied)
+	}
+	apiSrc := requestSrc(r)
+	if apiSrc != apiRequestSrcUnixSocket && apiSrc != apiRequestSrcHTTPS {
 		return Unauthorized(accessDenied)
 	}
 	if user.Access == state.AdminAccess {
@@ -54,11 +59,17 @@ func (ac AdminAccess) CheckAccess(d *Daemon, r *http.Request, user *UserState) R
 	return Unauthorized(accessDenied)
 }
 
-// UserAccess allows requests over the UNIX domain socket from any local user
+// UserAccess only allows incoming requests over unix domain sockets and
+// HTTPS, and only if the user is valid and has the ReadAccess or
+// AdminAccess role.
 type UserAccess struct{}
 
 func (ac UserAccess) CheckAccess(d *Daemon, r *http.Request, user *UserState) Response {
 	if user == nil {
+		return Unauthorized(accessDenied)
+	}
+	apiSrc := requestSrc(r)
+	if apiSrc != apiRequestSrcUnixSocket && apiSrc != apiRequestSrcHTTPS {
 		return Unauthorized(accessDenied)
 	}
 	switch user.Access {
@@ -69,11 +80,26 @@ func (ac UserAccess) CheckAccess(d *Daemon, r *http.Request, user *UserState) Re
 	return Unauthorized(accessDenied)
 }
 
-// MetricsAccess allows requests over HTTP from authenticated users.
+// MetricsAccess allows incoming requests over unix domain sockets, HTTP and
+// HTTPS. In the case of unix domain sockets and HTTPS, access is granted if
+// the user is valid and has the MetricsAccess, ReadAccess or AdminAccess
+// role. If HTTP is used, access is only available for a valid user with
+// the MetricsAccess user role (to restrict the credentials we are exposing
+// over the clear text channel).
 type MetricsAccess struct{}
 
 func (ac MetricsAccess) CheckAccess(d *Daemon, r *http.Request, user *UserState) Response {
 	if user == nil {
+		return Unauthorized(accessDenied)
+	}
+	// HTTP access (only basic auth is possible here, so no need to
+	// check with identity type).
+	apiSrc := requestSrc(r)
+	if apiSrc == apiRequestSrcHTTP && user.Access == state.MetricsAccess {
+		return nil
+	}
+	// HTTPS and unix domain socket access.
+	if apiSrc != apiRequestSrcUnixSocket && apiSrc != apiRequestSrcHTTPS {
 		return Unauthorized(accessDenied)
 	}
 	switch user.Access {
