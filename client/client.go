@@ -605,12 +605,6 @@ func newDefaultRequester(client *Client, opts *Config) (*defaultRequester, error
 		}
 		basicUser := opts.BasicUser
 		basicPass := opts.BasicPass
-		// Allow the basic auth credentials to be supplied (replaced) via the
-		// base url if debug is enabled.
-		if os.Getenv("PEBBLE_DEBUG") == "1" && baseURL.User != nil {
-			basicUser = baseURL.User.Username()
-			basicPass, _ = baseURL.User.Password()
-		}
 		requester = &defaultRequester{
 			baseURL:   baseURL,
 			transport: transport,
