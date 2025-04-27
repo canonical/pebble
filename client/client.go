@@ -135,7 +135,10 @@ type Config struct {
 	BaseURL string
 
 	// VerifyTLSConnection provides the client with an opportunity to inspect
-	// and optionally reject the incoming server certificate.
+	// the incoming (leaf) TLS certificate. The client can verify the TLS
+	// certificate with a previously trusted (pinned) identity certificate.
+	// Note that the identity certificate is always second in the chain as
+	// returned as part of ConnectionState.
 	VerifyTLSConnection func(tls.ConnectionState) error
 
 	// Optional HTTP Basic Authentication details. If supplied this will
@@ -594,8 +597,9 @@ func newDefaultRequester(client *Client, opts *Config) (*defaultRequester, error
 				// We disable the internal full X509 metadata based validation logic
 				// since the typical use-case do not have the server as a public URL
 				// baked into the certificate, signed with an external CA. The client
-				// provides a TLS verification hook for doing a use-case specific
-				// server certificate verification.
+				// provides a TLS verification hook VerifyTLSConnection in the client
+				// Config that allows a client to verify the incoming (leaf) TLS
+				// certificate with a previously trusted (pinned) identity certificate.
 				InsecureSkipVerify: true,
 			},
 		}
