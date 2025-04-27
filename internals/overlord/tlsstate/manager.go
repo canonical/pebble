@@ -69,11 +69,12 @@ var (
 	idCertFile = "identity.pem"
 )
 
-// idSigner includes a crypto.Signer, and expects the provided signer
+// IDSigner includes a crypto.Signer, and expects the provided signer
 // to know how to generate an identity fingerprint. We leave this to
 // the identity signer to ensure a consistent representation of the
-// fingerprint, instead of allowing every consumer to try and generate one.
-type idSigner interface {
+// fingerprint, instead of relying on every consumer to generate a
+// compliant fingerprint.
+type IDSigner interface {
 	crypto.Signer
 	Fingerprint() string
 }
@@ -87,7 +88,7 @@ type TLSManager struct {
 	// The identity certificate loaded from disk.
 	idCert *x509.Certificate
 	// The identity key used for signing TLS certificates.
-	signer idSigner
+	signer IDSigner
 
 	// The identity and tls certificate optionally allows a
 	// select number of fields to be supplied from externally
@@ -102,7 +103,7 @@ type TLSManager struct {
 // represents the identity key of the machine, container or device. The
 // signer will be used to sign TLS keypairs and the identity certificate.
 // The identity certificate acts as the root CA.
-func NewManager(tlsDir string, signer idSigner) *TLSManager {
+func NewManager(tlsDir string, signer IDSigner) *TLSManager {
 	m := &TLSManager{
 		tlsDir: tlsDir,
 		signer: signer,
@@ -328,7 +329,7 @@ func saveIDCert(path string, cert *x509.Certificate) error {
 // key. This certificate is included in the TLS certificate chain as the
 // non-leaf certificate, allowing the client to pin this certificate during
 // the client server trust exchange (pairing) procedure.
-func createIDCert(signer idSigner, idTemplate *x509.Certificate) (*x509.Certificate, error) {
+func createIDCert(signer IDSigner, idTemplate *x509.Certificate) (*x509.Certificate, error) {
 	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
 	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
 	if err != nil {
