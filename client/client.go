@@ -188,6 +188,13 @@ func New(config *Config) (*Client, error) {
 		config = &Config{}
 	}
 
+	// Make sure untrusted connections are disabled by default.
+	if config.VerifyTLSConnection == nil {
+		config.VerifyTLSConnection = func(tls.ConnectionState) error {
+			return fmt.Errorf("cannot verify server certificates")
+		}
+	}
+
 	client := &Client{}
 	requester, err := newDefaultRequester(client, config)
 	if err != nil {
