@@ -114,6 +114,11 @@ checks:
             url: http://localhost:8080/test
 ```
 
+See also:
+
+- [](/how-to/run-services-reliably)
+- [](/how-to/check-health-based-on-logs)
+
 ## Checks command
 
 You can view check status using the `pebble checks` command. This reports the checks along with their status (`up`, `down`, or `inactive`) and number of failures. For example:

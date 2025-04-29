@@ -41,6 +41,7 @@ checks:
 
 Besides the `http` type, there are two more health check types in Pebble: `tcp`, which opens the given TCP port, and `exec`, which executes a user-specified command. For more information, see [Health checks](../reference/health-checks) and [Layer specification](../reference/layer-specification).
 
+(restart-a-service-when-the-health-check-fails)=
 ## Restart a service when the health check fails
 
 To automatically restart services when a health check fails, use `on-check-failure` in the service configuration.
