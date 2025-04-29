@@ -14,6 +14,7 @@ services:
     override: replace
     command: /bin/foo
     startup: enabled
+
 checks:
   foo-warning:
     override: replace
