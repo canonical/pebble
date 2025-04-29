@@ -2,7 +2,7 @@
 
 Managing server clusters remotely takes time and effort. Servers need regular updates and configuration changes, which typically involves transferring files and running commands. Directly managing remote servers or using tools that require SSH access (such as Ansible) increases overhead and security risks. The [XZ Utils backdoor incident](https://en.wikipedia.org/wiki/XZ_Utils_backdoor) in 2024 highlighted vulnerabilities associated with SSH access.
 
-Pebble offers commands and an HTTP API over Unix socket for remote system management, avoiding the need for extra open ports. 
+Pebble offers commands and an HTTP API over Unix socket for remote system management, avoiding the need for extra open ports.
 
 > Note: By "remote system", we mean that the Pebble daemon is running in a separate system and there's a Unix socket for clients to interact with the daemon.
 
@@ -126,4 +126,6 @@ For more information about related Pebble commands, see:
 
 ## See more
 
-You can also use the Pebble API to run command and manage files. This is normally done using the Go or Python client libraries. For more information, see [How to use the Pebble API](/how-to/use-the-pebble-api).
+You can also use the Pebble API to run commands and manage files. This is normally done using the Go or Python client libraries. For more information, see [How to use the Pebble API](/how-to/use-the-pebble-api).
+
+If your remote system is a Juju-managed Kubernetes container, see the tips and examples in [Debug a charm > For a Kubernetes charm with a workload](https://documentation.ubuntu.com/juju/3.6/howto/manage-charms/#debug-a-k8s-charm-with-a-workload).
