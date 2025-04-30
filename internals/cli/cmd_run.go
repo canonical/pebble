@@ -63,7 +63,7 @@ var sharedRunEnterArgsHelp = map[string]string{
 	"--create-dirs": "Create {{.DisplayName}} directory on startup if it doesn't exist",
 	"--hold":        "Do not start default services automatically",
 	"--http":        `Start HTTP API listening on this address in "<address>:port" format (for example, ":4000", "192.0.2.0:4000", "[2001:db8::1]:4000")`,
-	"--https":       `Start HTTPS API listening on this address (e.g., ":8443")`,
+	"--https":       `Start HTTPS API listening on this address in "<address>:port" format (for example, ":8443", "192.0.2.0:8443", "[2001:db8::1]:8443")`,
 	"--verbose":     "Log all output from services to stdout (also PEBBLE_VERBOSE=1)",
 	"--args":        "Provide additional arguments to a service",
 	"--identities":  "Seed identities from file (like update-identities --replace)",

@@ -105,12 +105,11 @@ type Daemon struct {
 	Version         string
 	StartTime       time.Time
 	options         *Options
-	httpsAddress     string
 	overlord        *overlord.Overlord
 	state           *state.State
 	generalListener net.Listener
 	httpListener    net.Listener
-	httpsListener    net.Listener
+	httpsListener   net.Listener
 	connTracker     *connTracker
 	serve           *http.Server
 	tomb            tomb.Tomb
@@ -378,25 +377,14 @@ func (d *Daemon) Init() error {
 		logger.Noticef("HTTP API server listening on %q.", d.options.HTTPAddress)
 	}
 
-	if d.httpsAddress != "" {
-		tlsConf := &tls.Config{
-			// Enable server support for HTTP1.1 and HTTP2 over TLS. The server
-			// will only pick HTTP2 if the client indicated the same support in
-			// the client hello message. The Pebble client will not pick HTTP2
-			// because it requires integrated websockets to work, which does
-			// not support HTTP2 (it does not yet implement RFC8441). However,
-			// external clients, such as curl, will be able to switch to HTTP2
-			// for non-websocket dependant API calls.
-			NextProtos:     []string{"h2", "http/1.1"},
-			MinVersion:     tls.VersionTLS13,
-			GetCertificate: d.overlord.TLSManager().GetCertificate,
-		}
-		listener, err := tls.Listen("tcp", d.httpsAddress, tlsConf)
+	if d.options.HTTPSAddress != "" {
+		tlsConf := d.overlord.TLSManager().ListenConfig()
+		listener, err := tls.Listen("tcp", d.options.HTTPSAddress, tlsConf)
 		if err != nil {
-			return fmt.Errorf("cannot TLS listen on %q: %v", d.httpAddress, err)
+			return fmt.Errorf("cannot TLS listen on %q: %v", d.options.HTTPSAddress, err)
 		}
 		d.httpsListener = listener
-		logger.Noticef("HTTPS API server listening on %q.", d.httpsAddress)
+		logger.Noticef("HTTPS API server listening on %q.", d.options.HTTPSAddress)
 	}
 
 	logger.Noticef("Started daemon.")
@@ -884,7 +872,6 @@ func (d *Daemon) SetServiceArgs(serviceArgs map[string][]string) error {
 func New(opts *Options) (*Daemon, error) {
 	d := &Daemon{
 		options: opts,
-		httpsAddress:     opts.HTTPSAddress,
 	}
 
 	ovldOptions := overlord.Options{
