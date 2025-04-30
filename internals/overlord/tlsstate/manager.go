@@ -126,6 +126,24 @@ func (m *TLSManager) SetX509Templates(idTemplate, tlsTemplate *x509.Certificate)
 	m.tlsTemplate = tlsTemplate
 }
 
+// ListenConfig provides a complete TLS default configuration, which includes the
+// GetCertificate method for obtaining a valid TLS certificate.
+func (m *TLSManager) ListenConfig() *tls.Config {
+	tlsConf := &tls.Config{
+		// Enable server support for HTTP1.1 and HTTP2 over TLS. The server
+		// will only pick HTTP2 if the client indicated the same support in
+		// the client hello message. The Pebble client will not pick HTTP2
+		// because it requires integrated websockets to work, which does
+		// not support HTTP2 (it does not yet implement RFC8441). However,
+		// external clients, such as curl, will be able to switch to HTTP2
+		// for non-websocket dependant API calls.
+		NextProtos:     []string{"h2", "http/1.1"},
+		MinVersion:     tls.VersionTLS13,
+		GetCertificate: m.GetCertificate,
+	}
+	return tlsConf
+}
+
 // GetCertificate returns an identity signed TLS certificate. The certificate chain includes
 // both the TLS leaf certificate, as well as the root CA identity certificate. If
 // either the identity or TLS certificate nears expiry, this functions creates new
