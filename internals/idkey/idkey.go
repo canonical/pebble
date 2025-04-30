@@ -149,9 +149,12 @@ func (k *IDKey) load() error {
 	if err != nil {
 		return err
 	}
-	block, _ := pem.Decode(pemData)
+	block, rest := pem.Decode(pemData)
 	if block == nil || block.Type != "PRIVATE KEY" {
 		return fmt.Errorf("missing 'PRIVATE KEY' block in %q", pemPath)
+	}
+	if len(rest) != 0 {
+		return fmt.Errorf("unexpected bytes after 'PRIVATE KEY' block in %q", pemPath)
 	}
 	key, err := x509.ParsePKCS8PrivateKey(block.Bytes)
 	if err != nil {

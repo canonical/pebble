@@ -120,6 +120,28 @@ func (ks *keySuite) TestEmptyKey(c *C) {
 	c.Assert(err, ErrorMatches, ".*missing 'PRIVATE KEY' block.*")
 }
 
+// TestKeyWithTrailingBytes checks if a key fails to load if unexpected
+// bytes follow the private key block.
+func (ks *keySuite) TestKeyWithTrailingBytes(c *C) {
+	keyDir := filepath.Join(c.MkDir(), "identity")
+
+	// Create a new identity key (first boot)
+	_, err := idkey.Generate(keyDir)
+	c.Assert(err, IsNil)
+
+	// Append some unexpected bytes after the PEM block.
+	f, err := os.OpenFile(filepath.Join(keyDir, "key.pem"), os.O_RDWR|os.O_APPEND, 0o600)
+	c.Assert(err, IsNil)
+	_, err = f.Write([]byte("\n1234567890"))
+	c.Assert(err, IsNil)
+	err = f.Close()
+	c.Assert(err, IsNil)
+
+	// Load the identity key (other boots)
+	_, err = idkey.Load(keyDir)
+	c.Assert(err, ErrorMatches, ".*unexpected bytes.*")
+}
+
 // TestKeySign makes sure the crypto.Signer works.
 func (ks *keySuite) TestKeySign(c *C) {
 	keyDir := filepath.Join(c.MkDir(), "identity")
