@@ -84,6 +84,34 @@ func (ts *tlsSuite) TestInvalidIDCertContent(c *C) {
 	c.Assert(err, ErrorMatches, ".*missing 'CERTIFICATE' block.*")
 }
 
+// TestIDCertExtraBytes checks if we detect unexpected bytes following
+// the identity certificate.
+func (ts *tlsSuite) TestIDCertExtraBytes(c *C) {
+	tlsDir := filepath.Join(c.MkDir(), "tls")
+	err := os.MkdirAll(tlsDir, 0700)
+	c.Assert(err, IsNil)
+
+	key := newIDKey(c)
+	mgr := tlsstate.NewManager(tlsDir, key)
+
+	// Generate certificates on demand.
+	_, err = mgr.GetCertificate(nil)
+	c.Assert(err, IsNil)
+
+	// Append some random bytes at the end.
+	f, err := os.OpenFile(filepath.Join(tlsDir, "identity.pem"), os.O_RDWR|os.O_APPEND, 0o600)
+	c.Assert(err, IsNil)
+	_, err = f.Write([]byte("\n1234567890"))
+	c.Assert(err, IsNil)
+	err = f.Close()
+	c.Assert(err, IsNil)
+
+	// Simulate a process restart by creating a new manager.
+	mgr = tlsstate.NewManager(tlsDir, key)
+	_, err = mgr.GetCertificate(nil)
+	c.Assert(err, ErrorMatches, ".*unexpected bytes.*")
+}
+
 // TestInvalidIDCertPerm checks if we detect an invalid permission on
 // the identity certificate.
 func (ts *tlsSuite) TestInvalidIDCertPerm(c *C) {
@@ -220,10 +248,13 @@ func (ts *tlsSuite) TestTLSServerClientRenewWindow(c *C) {
 	idCert := certs[1]
 	restoreTime()
 
-	// Set the system time to 5 seconds before the actual timeout, but
-	// within the renewal window.
-	renewWindow := 5 * time.Second
-	testTime := testBaseTime.Add(time.Hour - renewWindow)
+	// The normal rotation period is 1 hour. We will now move the time on
+	// to 59 seconds before the end of the 1 hour. This falls within the
+	// configured 60 second renewal window just before expiry. This now
+	// means that if a new TLS session is requested, a new certificate
+	// should be returned, instead of using the unexpired current one.
+	renewalPoint := (59 * time.Second)
+	testTime := testBaseTime.Add(time.Hour - renewalPoint)
 	restoreTime = tlsstate.FakeTimeNow(testTime)
 	defer restoreTime()
 
@@ -236,7 +267,7 @@ func (ts *tlsSuite) TestTLSServerClientRenewWindow(c *C) {
 	c.Assert(tlsCert1.NotAfter.Sub(tlsCert1.NotBefore), Equals, time.Hour)
 	c.Assert(tlsCert2.NotAfter.Sub(tlsCert2.NotBefore), Equals, time.Hour)
 	// Second certificate should have been rotated 'renewWindow' seconds early
-	c.Assert(tlsCert1.NotAfter.Sub(tlsCert2.NotBefore), Equals, renewWindow)
+	c.Assert(tlsCert1.NotAfter.Sub(tlsCert2.NotBefore), Equals, renewalPoint)
 }
 
 // TestTLSServerClientIDRotate checks that when the ID certificate rotates, the

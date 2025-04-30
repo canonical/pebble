@@ -20,7 +20,6 @@ import (
 	"crypto"
 	"crypto/ed25519"
 	"crypto/rand"
-	"crypto/subtle"
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
@@ -59,9 +58,13 @@ var (
 	// in the creation of a new TLS keypair.
 	tlsCertValidity = time.Hour
 
-	// tlsCertRenewWindow defines how long from the actual certificate
-	// expiry we should rather rotate in order to avoid a race between
-	// the expiry and the session handshake completing in time.
+	// tlsCertRenewWindow defines how long before the certificate
+	// expiry we should actually rotate, in order to avoid a race between
+	// the expiry and the session handshake completing in time. This
+	// means the last practical time a new TLS session can be started
+	// for a TLS certificate is tlsCertRenewWindow period before its
+	// NotAfter timestamp. The rotation happens immediately after this
+	// point in time.
 	tlsCertRenewWindow = 60 * time.Second
 
 	// idCertFile is the public x509 certificate, which holds the
@@ -148,7 +151,7 @@ func (m *TLSManager) GetCertificate(*tls.ClientHelloInfo) (*tls.Certificate, err
 	if err := m.createDir(); err != nil {
 		return nil, fmt.Errorf("cannot create TLS directory: %w", err)
 	}
-	if err := m.getIDCert(); err != nil {
+	if err := m.ensureIDCert(); err != nil {
 		return nil, fmt.Errorf("cannot get identity certificate: %w", err)
 	}
 	if err := m.createTLSCert(); err != nil {
@@ -227,11 +230,11 @@ func (m *TLSManager) createDir() error {
 	return os.Mkdir(m.tlsDir, 0o700)
 }
 
-// getIDCert verifies that the identity certificate exists, and that the
+// ensureIDCert verifies that the identity certificate exists, and that the
 // certificate matches the supplied identity key signer. If the identity key
 // has changed, or the certificate has expired, the identity certificate is
 // replaced with a new identity certificate signed with the identity key.
-func (m *TLSManager) getIDCert() error {
+func (m *TLSManager) ensureIDCert() error {
 	idPath := filepath.Join(m.tlsDir, idCertFile)
 
 	if m.idCert == nil {
@@ -286,9 +289,12 @@ func loadIDCert(path string) (*x509.Certificate, error) {
 	if err != nil {
 		return nil, err
 	}
-	block, _ := pem.Decode(pemData)
+	block, rest := pem.Decode(pemData)
 	if block == nil || block.Type != "CERTIFICATE" {
 		return nil, fmt.Errorf("missing 'CERTIFICATE' block in %q", path)
+	}
+	if len(rest) != 0 {
+		return nil, fmt.Errorf("unexpected bytes after 'CERTIFICATE' block in %q", path)
 	}
 	cert, err = x509.ParseCertificate(block.Bytes)
 	if err != nil {
@@ -299,27 +305,24 @@ func loadIDCert(path string) (*x509.Certificate, error) {
 
 // saveIDCert saves the x509 identity certificate, which contains
 // the identity public key.
-func saveIDCert(path string, cert *x509.Certificate) error {
+func saveIDCert(path string, cert *x509.Certificate) (err error) {
 	certPEMBlock := &pem.Block{
 		Type:  "CERTIFICATE",
 		Bytes: cert.Raw,
 	}
-	var pemBuffer bytes.Buffer
-	if err := pem.Encode(&pemBuffer, certPEMBlock); err != nil {
-		return err
-	}
-	pemBytes := pemBuffer.Bytes()
-
 	pemFile, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
 	if err != nil {
 		return err
 	}
 	defer func() {
-		err = errors.Join(err, pemFile.Sync())
+		// err here refers to the named error return.
 		err = errors.Join(err, pemFile.Close())
 	}()
 
-	if _, err = pemFile.Write(pemBytes); err != nil {
+	if err = pem.Encode(pemFile, certPEMBlock); err != nil {
+		return err
+	}
+	if err = pemFile.Sync(); err != nil {
 		return err
 	}
 	return nil
@@ -392,7 +395,7 @@ func isCertActive(cert *x509.Certificate) bool {
 func isCertDerived(cert *x509.Certificate, signer crypto.Signer) bool {
 	signerPublic := signer.Public().(ed25519.PublicKey)
 	certPublic := cert.PublicKey.(ed25519.PublicKey)
-	return subtle.ConstantTimeCompare(signerPublic, certPublic) == 1
+	return bytes.Equal(signerPublic, certPublic)
 }
 
 // expectPermission return an error if the specified directory or file
@@ -413,40 +416,37 @@ func expectPermission(path string, perm fs.FileMode) error {
 // operation reports an unrelated error, the error is returned.
 func pathExists(path string) (bool, error) {
 	_, err := os.Stat(path)
-	if err != nil {
-		if errors.Is(err, fs.ErrNotExist) {
-			return false, nil
-		}
+	if errors.Is(err, fs.ErrNotExist) {
+		return false, nil
+	} else if err != nil {
 		return false, err
 	}
 	return true, nil
 }
 
 // defaultCertSubject provides a default Subject Common Name for x509
-// certificates.
+// certificates. The fingerprint must not include non-ASCII characters, but
+// this is not the case (see: idkey package).
 func defaultCertSubject(fingerprint string) pkix.Name {
 	// The common name must not exceed 64 bytes (RFC 5280).
 	var cn strings.Builder
-	// <= 55 bytes for the prefix (program name)
+	// <= 55 bytes for the prefix (program name). The program name
+	// will never have non-ASCII characters (r < 128).
 	for _, r := range cmd.ProgramName {
-		cnLen := len(cn.String())
-		runeLen := len(string(r))
-		if (cnLen + runeLen) > 55 {
+		cn.WriteRune(r)
+		if len(cn.String()) == 55 {
 			break
 		}
-		cn.WriteRune(r)
 	}
 	// 1 byte for the separator.
 	cn.WriteString("-")
 	prefixLen := len(cn.String())
 	// 8 bytes for the identity fingerprint.
 	for _, r := range fingerprint {
-		cnLen := len(cn.String())
-		runeLen := len(string(r))
-		if (cnLen + runeLen) > (prefixLen + 8) {
+		cn.WriteRune(r)
+		if len(cn.String()) == (prefixLen + 8) {
 			break
 		}
-		cn.WriteRune(r)
 	}
 	subject := pkix.Name{
 		CommonName: cn.String(),
@@ -458,13 +458,8 @@ func defaultCertSubject(fingerprint string) pkix.Name {
 // pkix.Name structure. The 'Names' and 'ExtraNames' attributes
 // are ignored.
 func deepCopyName(name pkix.Name) pkix.Name {
-	cpy := name
-	cpy.Country = slices.Clone(name.Country)
-	cpy.Organization = slices.Clone(name.Organization)
-	cpy.OrganizationalUnit = slices.Clone(name.OrganizationalUnit)
-	cpy.Locality = slices.Clone(name.Locality)
-	cpy.Province = slices.Clone(name.Province)
-	cpy.StreetAddress = slices.Clone(name.StreetAddress)
-	cpy.PostalCode = slices.Clone(name.PostalCode)
+	cpy := pkix.Name{}
+	rdnSeq := name.ToRDNSequence()
+	cpy.FillFromRDNSequence(&rdnSeq)
 	return cpy
 }
