@@ -241,10 +241,9 @@ func expectPermission(path string, perm fs.FileMode) error {
 // operation reports an unrelated error, the error is returned.
 func pathExists(path string) (bool, error) {
 	_, err := os.Stat(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return false, nil
-		}
+	if errors.Is(err, fs.ErrNotExist) {
+		return false, nil
+	} else if err != nil {
 		return false, err
 	}
 	return true, nil
