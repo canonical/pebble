@@ -20,7 +20,6 @@
 package idkey
 
 import (
-	"bytes"
 	"crypto"
 	"crypto/ed25519"
 	"crypto/rand"
@@ -205,11 +204,7 @@ func (k *IDKey) save() (err error) {
 		Type:  "PRIVATE KEY",
 		Bytes: keyBytes,
 	}
-	var pemBuffer bytes.Buffer
-	if err = pem.Encode(&pemBuffer, pemPrivateBlock); err != nil {
-		return err
-	}
-	if _, err = pemFile.Write(pemBuffer.Bytes()); err != nil {
+	if err = pem.Encode(pemFile, pemPrivateBlock); err != nil {
 		return err
 	}
 	if err = pemFile.Sync(); err != nil {
