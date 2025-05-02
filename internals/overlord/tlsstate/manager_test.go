@@ -270,10 +270,10 @@ func (ts *tlsSuite) TestTLSServerClientRenewWindow(c *C) {
 	c.Assert(tlsCert1.NotAfter.Sub(tlsCert2.NotBefore), Equals, renewalPoint)
 }
 
-// TestTLSServerClientIDRotate checks that when the ID certificate rotates, the
-// TLS certificate will also rotate, and the client certificate verification
-// will fail with the pinned identity certificate.
-func (ts *tlsSuite) TestTLSServerClientIDRotate(c *C) {
+// TestTLSServerClientIDExpires checks that when the ID certificate expires, the
+// TLS certificate will not rotate, and the client certificate verification
+// will fail.
+func (ts *tlsSuite) TestTLSServerClientIDExpires(c *C) {
 	restoreTLSCertValidity := tlsstate.FakeTLSCertValidity(24 * time.Hour)
 	defer restoreTLSCertValidity()
 
@@ -315,13 +315,19 @@ func (ts *tlsSuite) TestTLSServerClientIDRotate(c *C) {
 	// Test a trusted client connection (we use the identity as the root CA).
 	_, err = ts.testTLSVerifiedClient(c, idCert, testTime)
 	c.Assert(err, ErrorMatches, ".*Root CA verify failed.*")
+	// ID certificate did not change (and is expired)
+	c.Assert(idCert.Equal(certs[1]), Equals, true)
+	c.Assert(certs[1].NotAfter.Before(testTime), Equals, true)
+	// TLS certificate did not change.
+	c.Assert(tlsCert.Equal(certs[0]), Equals, true)
 	// Test non-verified connection (which should still work).
 	certs, err = ts.testTLSInsecureClient(c, testTime)
 	c.Assert(err, IsNil)
-	// ID certificate changed
-	c.Assert(idCert.Equal(certs[1]), Equals, false)
-	// TLS certificate changed.
-	c.Assert(tlsCert.Equal(certs[0]), Equals, false)
+	// ID certificate did not change (and is expired)
+	c.Assert(idCert.Equal(certs[1]), Equals, true)
+	c.Assert(certs[1].NotAfter.Before(testTime), Equals, true)
+	// TLS certificate did not change.
+	c.Assert(tlsCert.Equal(certs[0]), Equals, true)
 	restoreTime()
 }
 

@@ -155,7 +155,7 @@ func (m *TLSManager) GetCertificate(*tls.ClientHelloInfo) (*tls.Certificate, err
 	tlsCert := m.tlsCert
 	idCert := m.idCert
 	m.mu.RUnlock()
-	if idCert != nil && isCertActive(idCert) && tlsCert != nil && isCertActive(tlsCert.Leaf) {
+	if idCert != nil && tlsCert != nil && isCertActive(tlsCert.Leaf) {
 		return tlsCert, nil
 	}
 
@@ -163,7 +163,7 @@ func (m *TLSManager) GetCertificate(*tls.ClientHelloInfo) (*tls.Certificate, err
 	//
 	// If we got here then it means we need to generate a new in-memory TLS
 	// keypair, and potentially an identity certificate (only the first time
-	// or when it expires, or when the key changed).
+	// or when the identity key changed).
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if err := m.createDir(); err != nil {
@@ -272,10 +272,14 @@ func (m *TLSManager) ensureIDCert() error {
 
 	// Can we use the loaded identity certificate?
 	if m.idCert != nil {
-		isDerived := isCertDerived(m.idCert, m.signer)
-		isActive := isCertActive(m.idCert)
-		if isDerived && isActive {
-			// Existing identity certificate is valid.
+		if isCertDerived(m.idCert, m.signer) {
+			// The existing identity certificate still matches
+			// our identity private key.
+			//
+			// NOTE: The identity certificate can expire, and we do
+			// not currently re-generate identity certificates to
+			// limit insecure time based attacks. Future work will
+			// add a safe identity certificate rotation scheme.
 			return nil
 		}
 	}
