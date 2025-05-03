@@ -267,7 +267,7 @@ func (s *daemonSuite) TestCommandMethodDispatch(c *C) {
 	cmd.WriteAccess = UserAccess{}
 
 	for _, method := range []string{"GET", "POST", "PUT"} {
-		ctx := context.WithValue(context.Background(), ApiRequestSrcCtxKey, ApiRequestSrcUnixSocket)
+		ctx := context.WithValue(context.Background(), TransportTypeKey{}, TransportTypeUnixSocket)
 		req, err := http.NewRequestWithContext(ctx, method, "", nil)
 		req.Header.Add("User-Agent", fakeUserAgent)
 		c.Assert(err, IsNil)
@@ -301,7 +301,7 @@ func (s *daemonSuite) TestCommandRestartingState(c *C) {
 		return SyncResponse(nil)
 	}
 
-	ctx := context.WithValue(context.Background(), ApiRequestSrcCtxKey, ApiRequestSrcUnixSocket)
+	ctx := context.WithValue(context.Background(), TransportTypeKey{}, TransportTypeUnixSocket)
 	req, err := http.NewRequestWithContext(ctx, "GET", "", nil)
 	c.Assert(err, IsNil)
 	req.RemoteAddr = "pid=100;uid=0;socket=;"
@@ -346,7 +346,7 @@ func (s *daemonSuite) TestFillsWarnings(c *C) {
 	cmd.GET = func(*Command, *http.Request, *UserState) Response {
 		return SyncResponse(nil)
 	}
-	ctx := context.WithValue(context.Background(), ApiRequestSrcCtxKey, ApiRequestSrcUnixSocket)
+	ctx := context.WithValue(context.Background(), TransportTypeKey{}, TransportTypeUnixSocket)
 	req, err := http.NewRequestWithContext(ctx, "GET", "", nil)
 	c.Assert(err, IsNil)
 	req.RemoteAddr = "pid=100;uid=0;socket=;"
@@ -408,7 +408,7 @@ func (s *daemonSuite) testAccessChecker(c *C, tests []accessCheckerTestCase, rem
 	}
 
 	doTestReqFunc := func(cmd *Command, method string) *httptest.ResponseRecorder {
-		ctx := context.WithValue(context.Background(), ApiRequestSrcCtxKey, ApiRequestSrcUnixSocket)
+		ctx := context.WithValue(context.Background(), TransportTypeKey{}, TransportTypeUnixSocket)
 		req, err := http.NewRequestWithContext(ctx, method, "", nil)
 		c.Assert(err, IsNil)
 		req.RemoteAddr = remoteAddr
@@ -581,7 +581,7 @@ func (s *daemonSuite) TestDefaultUcredUsers(c *C) {
 	}
 
 	// Admin access for UID 0.
-	ctx := context.WithValue(context.Background(), ApiRequestSrcCtxKey, ApiRequestSrcUnixSocket)
+	ctx := context.WithValue(context.Background(), TransportTypeKey{}, TransportTypeUnixSocket)
 	req, err := http.NewRequestWithContext(ctx, "GET", "", nil)
 	c.Assert(err, IsNil)
 	req.RemoteAddr = "pid=100;uid=0;socket=;"
@@ -595,7 +595,7 @@ func (s *daemonSuite) TestDefaultUcredUsers(c *C) {
 
 	// Admin access for UID == daemon UID.
 	userSeen = nil
-	ctx = context.WithValue(context.Background(), ApiRequestSrcCtxKey, ApiRequestSrcUnixSocket)
+	ctx = context.WithValue(context.Background(), TransportTypeKey{}, TransportTypeUnixSocket)
 	req, err = http.NewRequestWithContext(ctx, "GET", "", nil)
 	c.Assert(err, IsNil)
 	req.RemoteAddr = fmt.Sprintf("pid=100;uid=%d;socket=;", os.Getuid())
@@ -609,7 +609,7 @@ func (s *daemonSuite) TestDefaultUcredUsers(c *C) {
 
 	// Read access for UID not 0 and not daemon UID.
 	userSeen = nil
-	ctx = context.WithValue(context.Background(), ApiRequestSrcCtxKey, ApiRequestSrcUnixSocket)
+	ctx = context.WithValue(context.Background(), TransportTypeKey{}, TransportTypeUnixSocket)
 	req, err = http.NewRequestWithContext(ctx, "GET", "", nil)
 	c.Assert(err, IsNil)
 	req.RemoteAddr = fmt.Sprintf("pid=100;uid=%d;socket=;", os.Getuid()+1)
@@ -1276,7 +1276,7 @@ func (s *daemonSuite) TestConnTrackerCanShutdown(c *C) {
 }
 
 func doTestReq(c *C, cmd *Command, method string) *httptest.ResponseRecorder {
-	ctx := context.WithValue(context.Background(), ApiRequestSrcCtxKey, ApiRequestSrcUnixSocket)
+	ctx := context.WithValue(context.Background(), TransportTypeKey{}, TransportTypeUnixSocket)
 	req, err := http.NewRequestWithContext(ctx, method, "", nil)
 	c.Assert(err, IsNil)
 	req.RemoteAddr = "pid=100;uid=0;socket=;"
@@ -1632,7 +1632,7 @@ func (s *daemonSuite) TestAPIAccessLevels(c *C) {
 			remoteAddr = fmt.Sprintf("pid=100;uid=%d;socket=;", test.uid)
 		}
 
-		ctx := context.WithValue(context.Background(), ApiRequestSrcCtxKey, ApiRequestSrcUnixSocket)
+		ctx := context.WithValue(context.Background(), TransportTypeKey{}, TransportTypeUnixSocket)
 		urlStr := "http://localhost" + test.path
 		request, err := http.NewRequestWithContext(
 			ctx,
@@ -1824,4 +1824,44 @@ func (s *utilsSuite) TestExitOnPanic(c *C) {
 	c.Check(string(body), Equals, "before")
 	c.Check(stderr.String(), Matches, "(?s)panic: PANIC!.*goroutine.*")
 	c.Check(exited, Equals, true)
+}
+
+type transportTypeSuite struct{}
+
+var _ = Suite(&transportTypeSuite{})
+
+func (t *transportTypeSuite) TestTransportTypeContext(c *C) {
+	// Request pointer is nil
+	r := (*http.Request)(nil)
+	transport := RequestTransportType(r)
+	c.Assert(transport.IsSupported(), Equals, false)
+	c.Assert(transport.IsSafe(), Equals, false)
+	c.Assert(transport.String(), Equals, "unknown")
+	// Request is non-nil, but without a transport context.
+	r = &http.Request{}
+	transport = RequestTransportType(r)
+	c.Assert(transport.IsSupported(), Equals, false)
+	c.Assert(transport.IsSafe(), Equals, false)
+	c.Assert(transport.String(), Equals, "unknown")
+	// Request has Unix Domain Socket context.
+	r = &http.Request{}
+	r = r.WithContext(context.WithValue(context.Background(), TransportTypeKey{}, TransportTypeUnixSocket))
+	transport = RequestTransportType(r)
+	c.Assert(transport.IsSupported(), Equals, true)
+	c.Assert(transport.IsSafe(), Equals, true)
+	c.Assert(transport.String(), Equals, "local")
+	// Request has HTTP context.
+	r = &http.Request{}
+	r = r.WithContext(context.WithValue(context.Background(), TransportTypeKey{}, TransportTypeHTTP))
+	transport = RequestTransportType(r)
+	c.Assert(transport.IsSupported(), Equals, true)
+	c.Assert(transport.IsSafe(), Equals, false)
+	c.Assert(transport.String(), Equals, "HTTP")
+	// Request has HTTPS context.
+	r = &http.Request{}
+	r = r.WithContext(context.WithValue(context.Background(), TransportTypeKey{}, TransportTypeHTTPS))
+	transport = RequestTransportType(r)
+	c.Assert(transport.IsSupported(), Equals, true)
+	c.Assert(transport.IsSafe(), Equals, true)
+	c.Assert(transport.String(), Equals, "HTTPS")
 }

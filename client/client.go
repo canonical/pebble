@@ -146,8 +146,8 @@ type Config struct {
 	// RFC 7617 (HTTP Authentication: Basic and Digest) support a user without
 	// a password, but we will error if an empty password is provided for
 	// security reasons.
-	BasicUser string
-	BasicPass string
+	BasicUsername string
+	BasicPassword string
 
 	// Socket is the path to the unix socket to use.
 	Socket string
@@ -191,7 +191,7 @@ func New(config *Config) (*Client, error) {
 	// Make sure untrusted connections are disabled by default.
 	if config.VerifyTLSConnection == nil {
 		config.VerifyTLSConnection = func(tls.ConnectionState) error {
-			return fmt.Errorf("cannot verify server certificates")
+			return errors.New("cannot verify server certificates")
 		}
 	}
 
@@ -267,8 +267,8 @@ func (rq *defaultRequester) dispatch(ctx context.Context, method, urlpath string
 		req.Header.Set("User-Agent", rq.userAgent)
 	}
 
-	if rq.basicUser != "" && rq.basicPass != "" {
-		req.SetBasicAuth(rq.basicUser, rq.basicPass)
+	if rq.basicUsername != "" && rq.basicPassword != "" {
+		req.SetBasicAuth(rq.basicUsername, rq.basicPassword)
 	}
 
 	for key, value := range headers {
@@ -560,13 +560,13 @@ func (client *Client) DebugGet(action string, result any, params map[string]stri
 }
 
 type defaultRequester struct {
-	baseURL   *url.URL
-	doer      doer
-	userAgent string
-	basicUser string
-	basicPass string
-	transport *http.Transport
-	client    *Client
+	baseURL       *url.URL
+	doer          doer
+	userAgent     string
+	basicUsername string
+	basicPassword string
+	transport     *http.Transport
+	client        *Client
 }
 
 func newDefaultRequester(client *Client, opts *Config) (*defaultRequester, error) {
@@ -575,9 +575,9 @@ func newDefaultRequester(client *Client, opts *Config) (*defaultRequester, error
 	}
 
 	// Validate Basic Auth constraints.
-	if (opts.BasicUser != "" && opts.BasicPass == "") ||
-		(opts.BasicPass != "" && opts.BasicUser == "") {
-		return nil, fmt.Errorf("cannot use incomplete basic auth credentials")
+	if (opts.BasicUsername != "" && opts.BasicPassword == "") ||
+		(opts.BasicPassword != "" && opts.BasicUsername == "") {
+		return nil, errors.New("cannot use incomplete basic auth credentials")
 	}
 
 	var requester *defaultRequester
@@ -587,10 +587,10 @@ func newDefaultRequester(client *Client, opts *Config) (*defaultRequester, error
 		transport := &http.Transport{Dial: unixDialer(opts.Socket), DisableKeepAlives: opts.DisableKeepAlive}
 		baseURL := &url.URL{Scheme: "http", Host: "localhost"}
 		requester = &defaultRequester{
-			baseURL:   baseURL,
-			transport: transport,
-			basicUser: opts.BasicUser,
-			basicPass: opts.BasicPass,
+			baseURL:       baseURL,
+			transport:     transport,
+			basicUsername: opts.BasicUsername,
+			basicPassword: opts.BasicPassword,
 		}
 	} else {
 		// Otherwise talk regular HTTP-over-TCP.
@@ -610,13 +610,11 @@ func newDefaultRequester(client *Client, opts *Config) (*defaultRequester, error
 				InsecureSkipVerify: true,
 			},
 		}
-		basicUser := opts.BasicUser
-		basicPass := opts.BasicPass
 		requester = &defaultRequester{
-			baseURL:   baseURL,
-			transport: transport,
-			basicUser: basicUser,
-			basicPass: basicPass,
+			baseURL:       baseURL,
+			transport:     transport,
+			basicUsername: opts.BasicUsername,
+			basicPassword: opts.BasicPassword,
 		}
 	}
 
@@ -639,16 +637,15 @@ func (rq *defaultRequester) getWebsocket(urlPath string) (clientWebsocket, error
 		HandshakeTimeout: 5 * time.Second,
 	}
 
-	var url string
+	scheme := "ws"
 	if rq.baseURL.Scheme == "https" {
-		url = fmt.Sprintf("wss://%s%s", rq.baseURL.Host, urlPath)
-	} else {
-		url = fmt.Sprintf("ws://%s%s", rq.baseURL.Host, urlPath)
+		scheme = "wss"
 	}
+	url := fmt.Sprintf("%s://%s%s", scheme, rq.baseURL.Host, urlPath)
 
 	r := http.Request{Header: make(http.Header)}
-	if rq.basicUser != "" && rq.basicPass != "" {
-		r.SetBasicAuth(rq.basicUser, rq.basicPass)
+	if rq.basicUsername != "" && rq.basicPassword != "" {
+		r.SetBasicAuth(rq.basicUsername, rq.basicPassword)
 	}
 	conn, _, err := dialer.Dial(url, r.Header)
 	return conn, err

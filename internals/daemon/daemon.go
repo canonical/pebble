@@ -58,42 +58,64 @@ var (
 	systemdSdNotify = systemd.SdNotify
 )
 
-// ApiRequestSrc defines the possible API request sources that we support.
-// This can be extracted from http.Request using RequestSrc.
-type ApiRequestSrc int
+// TransportType defines the possible API transport types we support. The
+// type can be extracted from the http.Request using RequestTransportType.
+type TransportType int
+
+// Used with context.WithValue as the key.
+type TransportTypeKey struct{}
 
 const (
-	ApiRequestSrcCtxKey                = ApiRequestSrcUnknown
-	ApiRequestSrcUnknown ApiRequestSrc = iota
-	ApiRequestSrcUnixSocket
-	ApiRequestSrcHTTP
-	ApiRequestSrcHTTPS
+	TransportTypeUnknown TransportType = iota // Must be zero value => 0
+	TransportTypeUnixSocket
+	TransportTypeHTTP
+	TransportTypeHTTPS
 )
 
-// RequestSrc extracts the source of the HTTP request. If the source
-// cannot be found in the context, it returns ApiRequestSrcUnknown.
-func RequestSrc(r *http.Request) ApiRequestSrc {
+// RequestTransportType extracts the transport type of the HTTP request. If
+// the transport cannot be found in the context, it returns the zero value
+// TransportTypeUnknown.
+func RequestTransportType(r *http.Request) TransportType {
 	if r == nil {
-		return ApiRequestSrcUnknown
+		return TransportTypeUnknown
 	}
-	src, ok := r.Context().Value(ApiRequestSrcCtxKey).(ApiRequestSrc)
-	if !ok {
-		return ApiRequestSrcUnknown
-	}
-	return src
+	// If the assertion fails here, transport will always be the zero
+	// value of TransportType (TransportTypeUnknown).
+	transport, _ := r.Context().Value(TransportTypeKey{}).(TransportType)
+	return transport
 }
 
-func (src ApiRequestSrc) String() string {
-	switch src {
-	case ApiRequestSrcUnixSocket:
+// String returns a string representation of the transport type.
+func (t TransportType) String() string {
+	switch t {
+	case TransportTypeUnixSocket:
 		return "local"
-	case ApiRequestSrcHTTP:
+	case TransportTypeHTTP:
 		return "HTTP"
-	case ApiRequestSrcHTTPS:
+	case TransportTypeHTTPS:
 		return "HTTPS"
 	default:
 		return "unknown"
 	}
+}
+
+// IsSupported returns true of the transport type is not unknown.
+func (t TransportType) IsSupported() bool {
+	switch t {
+	case TransportTypeUnixSocket, TransportTypeHTTP, TransportTypeHTTPS:
+		return true
+	}
+	return false
+}
+
+// IsSafe returns true if the transport type is either encrypted (HTTPS) or
+// if its local to the device (Unix Domain Socket).
+func (t TransportType) IsSafe() bool {
+	switch t {
+	case TransportTypeUnixSocket, TransportTypeHTTPS:
+		return true
+	}
+	return false
 }
 
 // Options holds the daemon setup required for the initialization of a new daemon.
@@ -281,12 +303,8 @@ func (c *Command) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// We only proceed with known API sources.
-	requestSource := RequestSrc(r)
-	switch requestSource {
-	case ApiRequestSrcUnixSocket, ApiRequestSrcHTTP, ApiRequestSrcHTTPS:
-	default:
-		// We have a request with an unknown API source context.
+	// We only proceed if we support the transport (we can identity it).
+	if !RequestTransportType(r).IsSupported() {
 		Forbidden("forbidden").ServeHTTP(w, r)
 		return
 	}
@@ -365,8 +383,7 @@ func logit(handler http.Handler) http.Handler {
 		handler.ServeHTTP(ww, r)
 		t := time.Since(t0)
 
-		// Zero value is apiRequestSrcUnknown.
-		connSource, _ := r.Context().Value(ApiRequestSrcCtxKey).(ApiRequestSrc)
+		transport := RequestTransportType(r)
 
 		// Don't log GET /v1/changes/{change-id} as that's polled quickly by
 		// clients when waiting for a change (e.g., service starting). Also
@@ -379,10 +396,10 @@ func logit(handler http.Handler) http.Handler {
 				r.URL.Path == "/v1/health")
 		if !skipLog {
 			if strings.HasSuffix(r.RemoteAddr, ";") {
-				logger.Debugf("%s %s %s %s %d (source: %s)", r.RemoteAddr, r.Method, r.URL, t, ww.status(), connSource.String())
-				logger.Noticef("%s %s %s %d (source: %s)", r.Method, r.URL, t, ww.status(), connSource.String())
+				logger.Debugf("%s %s %s %s %d (transport: %s)", r.RemoteAddr, r.Method, r.URL, t, ww.status(), transport)
+				logger.Noticef("%s %s %s %d (transport: %s)", r.Method, r.URL, t, ww.status(), transport)
 			} else {
-				logger.Noticef("%s %s %s %s %d (source: %s)", r.RemoteAddr, r.Method, r.URL, t, ww.status(), connSource.String())
+				logger.Noticef("%s %s %s %s %d (transport: %s)", r.RemoteAddr, r.Method, r.URL, t, ww.status(), transport)
 			}
 		}
 	})
@@ -533,17 +550,17 @@ func (d *Daemon) Start() error {
 	d.serve = &http.Server{
 		ConnContext: func(ctx context.Context, c net.Conn) context.Context {
 			// Flag the incoming requests with a context value so we can identify the
-			// source of the request in the http.Request object. We can use this for
+			// transport of the request in the http.Request object. We can use this for
 			// refined access checker decisions.
 			switch c.(type) {
 			case *ucrednetConn:
-				return context.WithValue(ctx, ApiRequestSrcCtxKey, ApiRequestSrcUnixSocket)
+				return context.WithValue(ctx, TransportTypeKey{}, TransportTypeUnixSocket)
 			case *net.TCPConn:
-				return context.WithValue(ctx, ApiRequestSrcCtxKey, ApiRequestSrcHTTP)
+				return context.WithValue(ctx, TransportTypeKey{}, TransportTypeHTTP)
 			case *tls.Conn:
-				return context.WithValue(ctx, ApiRequestSrcCtxKey, ApiRequestSrcHTTPS)
+				return context.WithValue(ctx, TransportTypeKey{}, TransportTypeHTTPS)
 			}
-			return context.WithValue(ctx, ApiRequestSrcCtxKey, ApiRequestSrcUnknown)
+			return context.WithValue(ctx, TransportTypeKey{}, TransportTypeUnknown)
 		},
 		Handler: exitOnPanic(logit(d.router), os.Stderr, func() {
 			os.Exit(1)

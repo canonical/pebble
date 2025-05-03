@@ -33,7 +33,7 @@ var errUnauthorized = daemon.Unauthorized("access denied")
 
 func (s *accessSuite) TestAccess(c *C) {
 	tests := []struct {
-		apiSource       daemon.ApiRequestSrc
+		apiSource       daemon.TransportType
 		user            *daemon.UserState
 		openCheckErr    daemon.Response
 		adminCheckErr   daemon.Response
@@ -43,7 +43,7 @@ func (s *accessSuite) TestAccess(c *C) {
 		// API source: Unix Domain Socket
 		{
 			// User: nil
-			apiSource:       daemon.ApiRequestSrcUnixSocket,
+			apiSource:       daemon.TransportTypeUnixSocket,
 			user:            nil,
 			openCheckErr:    nil,
 			adminCheckErr:   errUnauthorized,
@@ -51,7 +51,7 @@ func (s *accessSuite) TestAccess(c *C) {
 			metricsCheckErr: errUnauthorized,
 		}, {
 			// User access: UntrustedAccess
-			apiSource:       daemon.ApiRequestSrcUnixSocket,
+			apiSource:       daemon.TransportTypeUnixSocket,
 			user:            &daemon.UserState{Access: state.UntrustedAccess},
 			openCheckErr:    nil,
 			adminCheckErr:   errUnauthorized,
@@ -59,7 +59,7 @@ func (s *accessSuite) TestAccess(c *C) {
 			metricsCheckErr: errUnauthorized,
 		}, {
 			// User access: MetricsAccess
-			apiSource:       daemon.ApiRequestSrcUnixSocket,
+			apiSource:       daemon.TransportTypeUnixSocket,
 			user:            &daemon.UserState{Access: state.MetricsAccess},
 			openCheckErr:    nil,
 			adminCheckErr:   errUnauthorized,
@@ -67,7 +67,7 @@ func (s *accessSuite) TestAccess(c *C) {
 			metricsCheckErr: nil,
 		}, {
 			// User access: ReadAccess
-			apiSource:       daemon.ApiRequestSrcUnixSocket,
+			apiSource:       daemon.TransportTypeUnixSocket,
 			user:            &daemon.UserState{Access: state.ReadAccess},
 			openCheckErr:    nil,
 			adminCheckErr:   errUnauthorized,
@@ -75,7 +75,7 @@ func (s *accessSuite) TestAccess(c *C) {
 			metricsCheckErr: nil,
 		}, {
 			// User access: AdminAccess
-			apiSource:       daemon.ApiRequestSrcUnixSocket,
+			apiSource:       daemon.TransportTypeUnixSocket,
 			user:            &daemon.UserState{Access: state.AdminAccess},
 			openCheckErr:    nil,
 			adminCheckErr:   nil,
@@ -85,7 +85,7 @@ func (s *accessSuite) TestAccess(c *C) {
 		// API source: HTTP
 		{
 			// User: nil
-			apiSource:       daemon.ApiRequestSrcHTTP,
+			apiSource:       daemon.TransportTypeHTTP,
 			user:            nil,
 			openCheckErr:    nil,
 			adminCheckErr:   errUnauthorized,
@@ -93,7 +93,7 @@ func (s *accessSuite) TestAccess(c *C) {
 			metricsCheckErr: errUnauthorized,
 		}, {
 			// User access: UntrustedAccess
-			apiSource:       daemon.ApiRequestSrcHTTP,
+			apiSource:       daemon.TransportTypeHTTP,
 			user:            &daemon.UserState{Access: state.UntrustedAccess},
 			openCheckErr:    nil,
 			adminCheckErr:   errUnauthorized,
@@ -101,7 +101,7 @@ func (s *accessSuite) TestAccess(c *C) {
 			metricsCheckErr: errUnauthorized,
 		}, {
 			// User access: MetricsAccess
-			apiSource:       daemon.ApiRequestSrcHTTP,
+			apiSource:       daemon.TransportTypeHTTP,
 			user:            &daemon.UserState{Access: state.MetricsAccess},
 			openCheckErr:    nil,
 			adminCheckErr:   errUnauthorized,
@@ -109,7 +109,7 @@ func (s *accessSuite) TestAccess(c *C) {
 			metricsCheckErr: nil,
 		}, {
 			// User access: ReadAccess
-			apiSource:       daemon.ApiRequestSrcHTTP,
+			apiSource:       daemon.TransportTypeHTTP,
 			user:            &daemon.UserState{Access: state.ReadAccess},
 			openCheckErr:    nil,
 			adminCheckErr:   errUnauthorized,
@@ -117,7 +117,7 @@ func (s *accessSuite) TestAccess(c *C) {
 			metricsCheckErr: errUnauthorized,
 		}, {
 			// User access: AdminAccess
-			apiSource:       daemon.ApiRequestSrcHTTP,
+			apiSource:       daemon.TransportTypeHTTP,
 			user:            &daemon.UserState{Access: state.AdminAccess},
 			openCheckErr:    nil,
 			adminCheckErr:   errUnauthorized,
@@ -127,7 +127,7 @@ func (s *accessSuite) TestAccess(c *C) {
 		// API source: HTTPS
 		{
 			// User: nil
-			apiSource:       daemon.ApiRequestSrcHTTPS,
+			apiSource:       daemon.TransportTypeHTTPS,
 			user:            nil,
 			openCheckErr:    nil,
 			adminCheckErr:   errUnauthorized,
@@ -135,7 +135,7 @@ func (s *accessSuite) TestAccess(c *C) {
 			metricsCheckErr: errUnauthorized,
 		}, {
 			// User access: UntrustedAccess
-			apiSource:       daemon.ApiRequestSrcHTTPS,
+			apiSource:       daemon.TransportTypeHTTPS,
 			user:            &daemon.UserState{Access: state.UntrustedAccess},
 			openCheckErr:    nil,
 			adminCheckErr:   errUnauthorized,
@@ -143,7 +143,7 @@ func (s *accessSuite) TestAccess(c *C) {
 			metricsCheckErr: errUnauthorized,
 		}, {
 			// User access: MetricsAccess
-			apiSource:       daemon.ApiRequestSrcHTTPS,
+			apiSource:       daemon.TransportTypeHTTPS,
 			user:            &daemon.UserState{Access: state.MetricsAccess},
 			openCheckErr:    nil,
 			adminCheckErr:   errUnauthorized,
@@ -151,7 +151,7 @@ func (s *accessSuite) TestAccess(c *C) {
 			metricsCheckErr: nil,
 		}, {
 			// User access: ReadAccess
-			apiSource:       daemon.ApiRequestSrcHTTPS,
+			apiSource:       daemon.TransportTypeHTTPS,
 			user:            &daemon.UserState{Access: state.ReadAccess},
 			openCheckErr:    nil,
 			adminCheckErr:   errUnauthorized,
@@ -159,7 +159,7 @@ func (s *accessSuite) TestAccess(c *C) {
 			metricsCheckErr: nil,
 		}, {
 			// User access: AdminAccess
-			apiSource:       daemon.ApiRequestSrcHTTPS,
+			apiSource:       daemon.TransportTypeHTTPS,
 			user:            &daemon.UserState{Access: state.AdminAccess},
 			openCheckErr:    nil,
 			adminCheckErr:   nil,
@@ -171,7 +171,7 @@ func (s *accessSuite) TestAccess(c *C) {
 		r := &http.Request{
 			URL: &url.URL{},
 		}
-		r = r.WithContext(context.WithValue(context.Background(), daemon.ApiRequestSrcCtxKey, t.apiSource))
+		r = r.WithContext(context.WithValue(context.Background(), daemon.TransportTypeKey{}, t.apiSource))
 		// Check OpenAccess
 		openAccess := daemon.OpenAccess{}
 		err := openAccess.CheckAccess(nil, r, t.user)
