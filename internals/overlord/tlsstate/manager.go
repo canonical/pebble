@@ -447,33 +447,32 @@ func pathExists(path string) (bool, error) {
 }
 
 // defaultCertSubject provides a default Subject Common Name for x509
-// certificates. The fingerprint must not include non-ASCII characters, but
-// this is not the case (see: idkey package).
+// certificates. The ProgramName and fingerprint must not include
+// non-ASCII characters, but this is not the case (see: idkey package).
 func defaultCertSubject(fingerprint string) pkix.Name {
 	// The common name must not exceed 64 bytes (RFC 5280).
 	var cn strings.Builder
 	// <= 55 bytes for the prefix (program name). The program name
 	// will never have non-ASCII characters (r < 128).
-	for _, r := range cmd.ProgramName {
-		cn.WriteRune(r)
-		if len(cn.String()) == 55 {
-			break
-		}
-	}
+	cn.WriteString(cmd.ProgramName[:min(len(cmd.ProgramName), 55)])
 	// 1 byte for the separator.
 	cn.WriteString("-")
-	prefixLen := len(cn.String())
-	// 8 bytes for the identity fingerprint.
-	for _, r := range fingerprint {
-		cn.WriteRune(r)
-		if len(cn.String()) == (prefixLen + 8) {
-			break
-		}
-	}
+	// 8 bytes for the identity fingerprint. The program name
+	// will never have non-ASCII characters (r < 128).
+	cn.WriteString(fingerprint[:min(len(fingerprint), 8)])
+
 	subject := pkix.Name{
 		CommonName: cn.String(),
 	}
 	return subject
+}
+
+// min returns the smallest of the two int arguments.
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 // deepCopyName supports deep copying some common fields of the
