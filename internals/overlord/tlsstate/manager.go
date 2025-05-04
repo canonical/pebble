@@ -467,14 +467,6 @@ func defaultCertSubject(fingerprint string) pkix.Name {
 	return subject
 }
 
-// min returns the smallest of the two int arguments.
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
 // deepCopyName supports deep copying some common fields of the
 // pkix.Name structure. The 'Names' and 'ExtraNames' attributes
 // are ignored.
