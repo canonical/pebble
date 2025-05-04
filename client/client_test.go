@@ -16,6 +16,8 @@ package client_test
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -167,33 +169,6 @@ func (cs *clientSuite) TestClientSysInfo(c *C) {
 	sysInfo, err := cs.cli.SysInfo()
 	c.Check(err, IsNil)
 	c.Check(sysInfo, DeepEquals, &client.SysInfo{Version: "1"})
-}
-
-func (cs *clientSuite) TestClientIntegration(c *C) {
-	l, err := net.Listen("unix", cs.socketPath)
-	if err != nil {
-		c.Fatalf("unable to listen on %q: %v", cs.socketPath, err)
-	}
-
-	f := func(w http.ResponseWriter, r *http.Request) {
-		c.Check(r.URL.Path, Equals, "/v1/system-info")
-		c.Check(r.URL.RawQuery, Equals, "")
-
-		fmt.Fprintln(w, `{"type":"sync", "result":{"version":"1"}}`)
-	}
-
-	srv := &httptest.Server{
-		Listener: l,
-		Config:   &http.Server{Handler: http.HandlerFunc(f)},
-	}
-	srv.Start()
-	defer srv.Close()
-
-	cli, err := client.New(&client.Config{Socket: cs.socketPath})
-	c.Assert(err, IsNil)
-	si, err := cli.SysInfo()
-	c.Check(err, IsNil)
-	c.Check(si.Version, Equals, "1")
 }
 
 func (cs *clientSuite) TestClientReportsOpError(c *C) {
@@ -388,4 +363,202 @@ func (cs *clientSuite) TestLatestWarningTime(c *C) {
 	// this could be done at the end of any sync method
 	latest := cs.cli.LatestWarningTime()
 	c.Check(latest, Equals, time.Date(2018, 9, 19, 12, 44, 19, 680362867, time.UTC))
+}
+
+func (cs *clientSuite) TestClientIntegrationUnixSocket(c *C) {
+	testUsername := "foo"
+	testPassword := "bar"
+	listener, err := net.Listen("unix", cs.socketPath)
+	if err != nil {
+		c.Fatalf("unable to listen on %q: %v", cs.socketPath, err)
+	}
+	defer listener.Close()
+
+	f := func(w http.ResponseWriter, r *http.Request) {
+		c.Check(r.URL.Path, Equals, "/v1/system-info")
+		c.Check(r.URL.RawQuery, Equals, "")
+		// Basic Auth
+		u, p, ok := r.BasicAuth()
+		c.Check(ok, Equals, true)
+		c.Check(u, Equals, testUsername)
+		c.Check(p, Equals, testPassword)
+
+		fmt.Fprintln(w, `{"type":"sync", "result":{"version":"1"}}`)
+	}
+
+	srv := &httptest.Server{
+		Listener: listener,
+		Config:   &http.Server{Handler: http.HandlerFunc(f)},
+	}
+	srv.Start()
+	defer srv.Close()
+
+	cli, err := client.New(&client.Config{
+		Socket:        cs.socketPath,
+		BasicUsername: testUsername,
+		BasicPassword: testPassword,
+	})
+	c.Assert(err, IsNil)
+	si, err := cli.SysInfo()
+	c.Check(err, IsNil)
+	c.Check(si.Version, Equals, "1")
+}
+
+func (cs *clientSuite) TestClientIntegrationHTTP(c *C) {
+	testUsername := "foo"
+	testPassword := "bar"
+	listener, err := net.Listen("tcp", ":0")
+	if err != nil {
+		c.Assert(err, IsNil)
+	}
+	defer listener.Close()
+	// Get the allocated port.
+	testPort := listener.Addr().(*net.TCPAddr).Port
+
+	f := func(w http.ResponseWriter, r *http.Request) {
+		c.Check(r.URL.Path, Equals, "/v1/system-info")
+		c.Check(r.URL.RawQuery, Equals, "")
+		// Basic Auth
+		u, p, ok := r.BasicAuth()
+		c.Check(ok, Equals, true)
+		c.Check(u, Equals, testUsername)
+		c.Check(p, Equals, testPassword)
+
+		fmt.Fprintln(w, `{"type":"sync", "result":{"version":"1"}}`)
+	}
+
+	srv := &httptest.Server{
+		Listener: listener,
+		Config:   &http.Server{Handler: http.HandlerFunc(f)},
+	}
+	srv.Start()
+	defer srv.Close()
+
+	cli, err := client.New(&client.Config{
+		BaseURL:       fmt.Sprintf("http://localhost:%d", testPort),
+		BasicUsername: testUsername,
+		BasicPassword: testPassword,
+	})
+	c.Assert(err, IsNil)
+	si, err := cli.SysInfo()
+	c.Check(err, IsNil)
+	c.Check(si.Version, Equals, "1")
+}
+
+func (cs *clientSuite) TestClientIntegrationHTTPS(c *C) {
+	testUsername := "foo"
+	testPassword := "bar"
+	listener, err := net.Listen("tcp", ":0")
+	if err != nil {
+		c.Assert(err, IsNil)
+	}
+	defer listener.Close()
+	// Get the allocated port.
+	testPort := listener.Addr().(*net.TCPAddr).Port
+
+	f := func(w http.ResponseWriter, r *http.Request) {
+		c.Check(r.URL.Path, Equals, "/v1/system-info")
+		c.Check(r.URL.RawQuery, Equals, "")
+		// Basic Auth
+		u, p, ok := r.BasicAuth()
+		c.Check(ok, Equals, true)
+		c.Check(u, Equals, testUsername)
+		c.Check(p, Equals, testPassword)
+
+		fmt.Fprintln(w, `{"type":"sync", "result":{"version":"1"}}`)
+	}
+
+	srv := &httptest.Server{
+		Listener: listener,
+		Config:   &http.Server{Handler: http.HandlerFunc(f)},
+	}
+	// StartTLS will generate a TLS keypair.
+	srv.StartTLS()
+	defer srv.Close()
+
+	// 1. The default client should not trust any server certificates.
+	cli, err := client.New(&client.Config{
+		BaseURL:       fmt.Sprintf("https://localhost:%d", testPort),
+		BasicUsername: testUsername,
+		BasicPassword: testPassword,
+	})
+	c.Assert(err, IsNil)
+	_, err = cli.SysInfo()
+	c.Assert(err, ErrorMatches, ".*cannot verify server TLS certificates.*")
+
+	verifier := &customTLSVerifier{}
+
+	// 2. Let's simulate a manual trust exchange process where we bypass the
+	//    verifier so extract the certificate and pin it for future
+	//    verification.
+
+	verifier.SetPairingMode(true)
+
+	cli, err = client.New(&client.Config{
+		BaseURL:       fmt.Sprintf("https://localhost:%d", testPort),
+		BasicUsername: testUsername,
+		BasicPassword: testPassword,
+		TLSVerifier:   verifier,
+	})
+	c.Assert(err, IsNil)
+	si, err := cli.SysInfo()
+	c.Check(err, IsNil)
+	c.Check(si.Version, Equals, "1")
+
+	// 3. In the previous step the custom verifier pinned the self-signed
+	// certificate, so now we can use it to properly verify the next
+	// incoming certificate from the server.
+
+	verifier.SetPairingMode(false)
+
+	cli, err = client.New(&client.Config{
+		BaseURL:       fmt.Sprintf("https://localhost:%d", testPort),
+		BasicUsername: testUsername,
+		BasicPassword: testPassword,
+		TLSVerifier:   verifier,
+	})
+	c.Assert(err, IsNil)
+	si, err = cli.SysInfo()
+	c.Check(err, IsNil)
+	c.Check(si.Version, Equals, "1")
+}
+
+// customTLSVerifier is an example verifier that demonstrates how the
+// TLS verifier can be used to dynamically control TLS certificate
+// verification.
+type customTLSVerifier struct {
+	certificate *x509.Certificate
+	pairingMode bool
+}
+
+func (c *customTLSVerifier) SetPairingMode(state bool) {
+	c.pairingMode = state
+}
+
+// VerifyConnection implements the TLSVerifier interface.
+func (c *customTLSVerifier) VerifyConnection(state tls.ConnectionState) error {
+	if c.pairingMode {
+		// The leaf certificate is the TLS certificate and is always
+		// valid on the client side. In the case of the test HTTPS
+		// server, this is self signed, so we can use it to verify
+		// future connections.
+		c.certificate = state.PeerCertificates[0]
+		return nil
+	}
+
+	// Non-pairing mode, so the pinned certificate will be use as the
+	// root CA to verify all new connections to the server.
+	certPool := x509.NewCertPool()
+	certPool.AddCert(c.certificate)
+	opts := x509.VerifyOptions{
+		Roots: certPool,
+	}
+	incomingTLSCert := state.PeerCertificates[0]
+	// Now make sure the incoming certificate was signed by the certificate
+	// we pinned during our trust exchange process (pairing).
+	_, err := incomingTLSCert.Verify(opts)
+	if err != nil {
+		return fmt.Errorf("certificate verification failed: %w", err)
+	}
+	return nil
 }
