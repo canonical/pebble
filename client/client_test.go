@@ -487,13 +487,6 @@ func (cs *clientSuite) TestClientIntegrationHTTPS(c *C) {
 	c.Assert(err, ErrorMatches, ".*cannot verify server TLS certificates.*")
 
 	tlsManager := &customTLSManager{}
-
-	// 2. Let's simulate a manual trust exchange process where we bypass the
-	//    verifier so extract the certificate and pin it for future
-	//    verification.
-
-	tlsManager.SetPairingMode(true)
-
 	cli, err = client.New(&client.Config{
 		BaseURL:          fmt.Sprintf("https://localhost:%d", testPort),
 		BasicUsername:    testUsername,
@@ -501,6 +494,13 @@ func (cs *clientSuite) TestClientIntegrationHTTPS(c *C) {
 		ClientTLSManager: tlsManager,
 	})
 	c.Assert(err, IsNil)
+
+	// 2. Let's simulate a manual trust exchange process where we bypass the
+	//    verifier to extract the certificate and pin it for future
+	//    verification.
+
+	tlsManager.SetPairingMode(true)
+
 	si, err := cli.SysInfo()
 	c.Check(err, IsNil)
 	c.Check(si.Version, Equals, "1")
@@ -511,13 +511,6 @@ func (cs *clientSuite) TestClientIntegrationHTTPS(c *C) {
 
 	tlsManager.SetPairingMode(false)
 
-	cli, err = client.New(&client.Config{
-		BaseURL:          fmt.Sprintf("https://localhost:%d", testPort),
-		BasicUsername:    testUsername,
-		BasicPassword:    testPassword,
-		ClientTLSManager: tlsManager,
-	})
-	c.Assert(err, IsNil)
 	si, err = cli.SysInfo()
 	c.Check(err, IsNil)
 	c.Check(si.Version, Equals, "1")
