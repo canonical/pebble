@@ -486,19 +486,19 @@ func (cs *clientSuite) TestClientIntegrationHTTPS(c *C) {
 	_, err = cli.SysInfo()
 	c.Assert(err, ErrorMatches, ".*cannot verify server TLS certificates.*")
 
-	verifier := &customTLSVerifier{}
+	tlsManager := &customTLSManager{}
 
 	// 2. Let's simulate a manual trust exchange process where we bypass the
 	//    verifier so extract the certificate and pin it for future
 	//    verification.
 
-	verifier.SetPairingMode(true)
+	tlsManager.SetPairingMode(true)
 
 	cli, err = client.New(&client.Config{
-		BaseURL:       fmt.Sprintf("https://localhost:%d", testPort),
-		BasicUsername: testUsername,
-		BasicPassword: testPassword,
-		TLSVerifier:   verifier,
+		BaseURL:          fmt.Sprintf("https://localhost:%d", testPort),
+		BasicUsername:    testUsername,
+		BasicPassword:    testPassword,
+		ClientTLSManager: tlsManager,
 	})
 	c.Assert(err, IsNil)
 	si, err := cli.SysInfo()
@@ -509,13 +509,13 @@ func (cs *clientSuite) TestClientIntegrationHTTPS(c *C) {
 	// certificate, so now we can use it to properly verify the next
 	// incoming certificate from the server.
 
-	verifier.SetPairingMode(false)
+	tlsManager.SetPairingMode(false)
 
 	cli, err = client.New(&client.Config{
-		BaseURL:       fmt.Sprintf("https://localhost:%d", testPort),
-		BasicUsername: testUsername,
-		BasicPassword: testPassword,
-		TLSVerifier:   verifier,
+		BaseURL:          fmt.Sprintf("https://localhost:%d", testPort),
+		BasicUsername:    testUsername,
+		BasicPassword:    testPassword,
+		ClientTLSManager: tlsManager,
 	})
 	c.Assert(err, IsNil)
 	si, err = cli.SysInfo()
@@ -523,20 +523,19 @@ func (cs *clientSuite) TestClientIntegrationHTTPS(c *C) {
 	c.Check(si.Version, Equals, "1")
 }
 
-// customTLSVerifier is an example verifier that demonstrates how the
-// TLS verifier can be used to dynamically control TLS certificate
-// verification.
-type customTLSVerifier struct {
+// customTLSManager is an example manager that demonstrates how to
+// dynamically control TLS certificate verification.
+type customTLSManager struct {
 	certificate *x509.Certificate
 	pairingMode bool
 }
 
-func (c *customTLSVerifier) SetPairingMode(state bool) {
+func (c *customTLSManager) SetPairingMode(state bool) {
 	c.pairingMode = state
 }
 
-// VerifyConnection implements the TLSVerifier interface.
-func (c *customTLSVerifier) VerifyConnection(state tls.ConnectionState) error {
+// VerifyConnection implements part of the ClientTLSManager interface.
+func (c *customTLSManager) VerifyConnection(state tls.ConnectionState) error {
 	if c.pairingMode {
 		// The leaf certificate is the TLS certificate and is always
 		// valid on the client side. In the case of the test HTTPS
