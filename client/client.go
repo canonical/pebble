@@ -134,12 +134,15 @@ type Config struct {
 	// If the protocol prefix is https://, TLS will be used.
 	BaseURL string
 
-	// VerifyTLSConnection provides the client with an opportunity to inspect
-	// the incoming (leaf) TLS certificate. The client can verify the TLS
-	// certificate with a previously trusted (pinned) identity certificate.
-	// Note that the identity certificate is always second in the chain as
-	// returned as part of ConnectionState.
-	VerifyTLSConnection func(tls.ConnectionState) error
+	// TLSVerifier supplies the VerifyConnection hook that allows the
+	// client the opportunity to inspect the incoming server
+	// certificate chain. If no TLSVerifier is supplied (nil), the
+	// defaultTLSVerifier will be assigned, which never trust server TLS
+	// certificates (disables HTTPS). The client can verify the TLS leaf
+	// certificate using a custom TLSVerifier using a previously trusted
+	// (pinned) identity certificate. The identity certificate is always
+	// second in the chain as returned as part of ConnectionState.
+	TLSVerifier TLSVerifier
 
 	// Optional HTTP Basic Authentication details. If supplied this will
 	// add an HTTP basic authentication header entry.
@@ -158,6 +161,19 @@ type Config struct {
 
 	// UserAgent is the User-Agent header sent to the Pebble daemon.
 	UserAgent string
+}
+
+type TLSVerifier interface {
+	// VerifyConnection can be supplied to the tls.Config VerifyConnection
+	// hook to implement a custom verifier.
+	VerifyConnection(tls.ConnectionState) error
+}
+
+// defaultTLSVerifier never trusts any server TLS certificates.
+type defaultTLSVerifier struct{}
+
+func (d defaultTLSVerifier) VerifyConnection(state tls.ConnectionState) error {
+	return errors.New("cannot verify server TLS certificates")
 }
 
 // A Client knows how to talk to the Pebble daemon.
@@ -188,11 +204,9 @@ func New(config *Config) (*Client, error) {
 		config = &Config{}
 	}
 
-	// Make sure untrusted connections are disabled by default.
-	if config.VerifyTLSConnection == nil {
-		config.VerifyTLSConnection = func(tls.ConnectionState) error {
-			return errors.New("cannot verify server certificates")
-		}
+	// The default verifier never trusts any server TLS certificates.
+	if config.TLSVerifier == nil {
+		config.TLSVerifier = &defaultTLSVerifier{}
 	}
 
 	client := &Client{}
@@ -604,10 +618,10 @@ func newDefaultRequester(client *Client, opts *Config) (*defaultRequester, error
 				// We disable the internal full X509 metadata based validation logic
 				// since the typical use-case do not have the server as a public URL
 				// baked into the certificate, signed with an external CA. The client
-				// provides a TLS verification hook VerifyTLSConnection in the client
-				// Config that allows a client to verify the incoming (leaf) TLS
-				// certificate with a previously trusted (pinned) identity certificate.
+				// provides a TLSVerifier interface that allows verifying the incoming
+				// TLS certificates.
 				InsecureSkipVerify: true,
+				VerifyConnection:   opts.TLSVerifier.VerifyConnection,
 			},
 		}
 		requester = &defaultRequester{
