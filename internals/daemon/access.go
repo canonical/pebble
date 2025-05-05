@@ -48,7 +48,7 @@ func (ac AdminAccess) CheckAccess(d *Daemon, r *http.Request, user *UserState) R
 	if user == nil {
 		return Unauthorized(accessDenied)
 	}
-	if !RequestTransportType(r).IsSafe() {
+	if !RequestTransportType(r).IsConcealed() {
 		// Not Unix Domain Socket or HTTPS.
 		return Unauthorized(accessDenied)
 	}
@@ -68,7 +68,7 @@ func (ac UserAccess) CheckAccess(d *Daemon, r *http.Request, user *UserState) Re
 	if user == nil {
 		return Unauthorized(accessDenied)
 	}
-	if !RequestTransportType(r).IsSafe() {
+	if !RequestTransportType(r).IsConcealed() {
 		// Not Unix Domain Socket or HTTPS.
 		return Unauthorized(accessDenied)
 	}
@@ -98,7 +98,7 @@ func (ac MetricsAccess) CheckAccess(d *Daemon, r *http.Request, user *UserState)
 	if transport == TransportTypeHTTP && user.Access == state.MetricsAccess {
 		return nil
 	}
-	if !transport.IsSafe() {
+	if !transport.IsConcealed() {
 		// Not Unix Domain Socket or HTTPS.
 		return Unauthorized(accessDenied)
 	}

@@ -374,7 +374,7 @@ func (cs *clientSuite) TestClientIntegrationUnixSocket(c *C) {
 	}
 	defer listener.Close()
 
-	f := func(w http.ResponseWriter, r *http.Request) {
+	handler := func(w http.ResponseWriter, r *http.Request) {
 		c.Check(r.URL.Path, Equals, "/v1/system-info")
 		c.Check(r.URL.RawQuery, Equals, "")
 		// Basic Auth
@@ -388,7 +388,7 @@ func (cs *clientSuite) TestClientIntegrationUnixSocket(c *C) {
 
 	srv := &httptest.Server{
 		Listener: listener,
-		Config:   &http.Server{Handler: http.HandlerFunc(f)},
+		Config:   &http.Server{Handler: http.HandlerFunc(handler)},
 	}
 	srv.Start()
 	defer srv.Close()
@@ -415,7 +415,7 @@ func (cs *clientSuite) TestClientIntegrationHTTP(c *C) {
 	// Get the allocated port.
 	testPort := listener.Addr().(*net.TCPAddr).Port
 
-	f := func(w http.ResponseWriter, r *http.Request) {
+	handler := func(w http.ResponseWriter, r *http.Request) {
 		c.Check(r.URL.Path, Equals, "/v1/system-info")
 		c.Check(r.URL.RawQuery, Equals, "")
 		// Basic Auth
@@ -429,7 +429,7 @@ func (cs *clientSuite) TestClientIntegrationHTTP(c *C) {
 
 	srv := &httptest.Server{
 		Listener: listener,
-		Config:   &http.Server{Handler: http.HandlerFunc(f)},
+		Config:   &http.Server{Handler: http.HandlerFunc(handler)},
 	}
 	srv.Start()
 	defer srv.Close()
@@ -456,7 +456,7 @@ func (cs *clientSuite) TestClientIntegrationHTTPS(c *C) {
 	// Get the allocated port.
 	testPort := listener.Addr().(*net.TCPAddr).Port
 
-	f := func(w http.ResponseWriter, r *http.Request) {
+	handler := func(w http.ResponseWriter, r *http.Request) {
 		c.Check(r.URL.Path, Equals, "/v1/system-info")
 		c.Check(r.URL.RawQuery, Equals, "")
 		// Basic Auth
@@ -470,7 +470,7 @@ func (cs *clientSuite) TestClientIntegrationHTTPS(c *C) {
 
 	srv := &httptest.Server{
 		Listener: listener,
-		Config:   &http.Server{Handler: http.HandlerFunc(f)},
+		Config:   &http.Server{Handler: http.HandlerFunc(handler)},
 	}
 	// StartTLS will generate a TLS keypair.
 	srv.StartTLS()

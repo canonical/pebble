@@ -1834,34 +1834,34 @@ func (t *transportTypeSuite) TestTransportTypeContext(c *C) {
 	// Request pointer is nil
 	r := (*http.Request)(nil)
 	transport := RequestTransportType(r)
-	c.Assert(transport.IsSupported(), Equals, false)
-	c.Assert(transport.IsSafe(), Equals, false)
+	c.Assert(transport.IsValid(), Equals, false)
+	c.Assert(transport.IsConcealed(), Equals, false)
 	c.Assert(transport.String(), Equals, "unknown")
 	// Request is non-nil, but without a transport context.
 	r = &http.Request{}
 	transport = RequestTransportType(r)
-	c.Assert(transport.IsSupported(), Equals, false)
-	c.Assert(transport.IsSafe(), Equals, false)
+	c.Assert(transport.IsValid(), Equals, false)
+	c.Assert(transport.IsConcealed(), Equals, false)
 	c.Assert(transport.String(), Equals, "unknown")
 	// Request has Unix Domain Socket context.
 	r = &http.Request{}
 	r = r.WithContext(context.WithValue(context.Background(), TransportTypeKey{}, TransportTypeUnixSocket))
 	transport = RequestTransportType(r)
-	c.Assert(transport.IsSupported(), Equals, true)
-	c.Assert(transport.IsSafe(), Equals, true)
-	c.Assert(transport.String(), Equals, "local")
+	c.Assert(transport.IsValid(), Equals, true)
+	c.Assert(transport.IsConcealed(), Equals, true)
+	c.Assert(transport.String(), Equals, "http+unix")
 	// Request has HTTP context.
 	r = &http.Request{}
 	r = r.WithContext(context.WithValue(context.Background(), TransportTypeKey{}, TransportTypeHTTP))
 	transport = RequestTransportType(r)
-	c.Assert(transport.IsSupported(), Equals, true)
-	c.Assert(transport.IsSafe(), Equals, false)
-	c.Assert(transport.String(), Equals, "HTTP")
+	c.Assert(transport.IsValid(), Equals, true)
+	c.Assert(transport.IsConcealed(), Equals, false)
+	c.Assert(transport.String(), Equals, "http")
 	// Request has HTTPS context.
 	r = &http.Request{}
 	r = r.WithContext(context.WithValue(context.Background(), TransportTypeKey{}, TransportTypeHTTPS))
 	transport = RequestTransportType(r)
-	c.Assert(transport.IsSupported(), Equals, true)
-	c.Assert(transport.IsSafe(), Equals, true)
-	c.Assert(transport.String(), Equals, "HTTPS")
+	c.Assert(transport.IsValid(), Equals, true)
+	c.Assert(transport.IsConcealed(), Equals, true)
+	c.Assert(transport.String(), Equals, "https")
 }

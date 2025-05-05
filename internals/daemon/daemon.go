@@ -89,18 +89,18 @@ func RequestTransportType(r *http.Request) TransportType {
 func (t TransportType) String() string {
 	switch t {
 	case TransportTypeUnixSocket:
-		return "local"
+		return "http+unix"
 	case TransportTypeHTTP:
-		return "HTTP"
+		return "http"
 	case TransportTypeHTTPS:
-		return "HTTPS"
+		return "https"
 	default:
 		return "unknown"
 	}
 }
 
-// IsSupported returns true of the transport type is not unknown.
-func (t TransportType) IsSupported() bool {
+// IsValid reports whether the transport type is valid.
+func (t TransportType) IsValid() bool {
 	switch t {
 	case TransportTypeUnixSocket, TransportTypeHTTP, TransportTypeHTTPS:
 		return true
@@ -108,9 +108,9 @@ func (t TransportType) IsSupported() bool {
 	return false
 }
 
-// IsSafe returns true if the transport type is either encrypted (HTTPS) or
+// IsConcealed returns true if the transport type is either encrypted (HTTPS) or
 // if its local to the device (Unix Domain Socket).
-func (t TransportType) IsSafe() bool {
+func (t TransportType) IsConcealed() bool {
 	switch t {
 	case TransportTypeUnixSocket, TransportTypeHTTPS:
 		return true
@@ -304,7 +304,7 @@ func (c *Command) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// We only proceed if we support the transport (we can identity it).
-	if !RequestTransportType(r).IsSupported() {
+	if !RequestTransportType(r).IsValid() {
 		Forbidden("forbidden").ServeHTTP(w, r)
 		return
 	}
@@ -396,10 +396,10 @@ func logit(handler http.Handler) http.Handler {
 				r.URL.Path == "/v1/health")
 		if !skipLog {
 			if strings.HasSuffix(r.RemoteAddr, ";") {
-				logger.Debugf("%s %s %s %s %d (transport: %s)", r.RemoteAddr, r.Method, r.URL, t, ww.status(), transport)
-				logger.Noticef("%s %s %s %d (transport: %s)", r.Method, r.URL, t, ww.status(), transport)
+				logger.Debugf("%s %s %s %s %d (%s)", r.RemoteAddr, r.Method, r.URL, t, ww.status(), transport)
+				logger.Noticef("%s %s %s %d (%s)", r.Method, r.URL, t, ww.status(), transport)
 			} else {
-				logger.Noticef("%s %s %s %s %d (transport: %s)", r.RemoteAddr, r.Method, r.URL, t, ww.status(), transport)
+				logger.Noticef("%s %s %s %s %d (%s)", r.RemoteAddr, r.Method, r.URL, t, ww.status(), transport)
 			}
 		}
 	})
