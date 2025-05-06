@@ -48,13 +48,13 @@ type mgrState2 struct {
 	C *Count2
 }
 
-func (ss *stateSuite) TestLockUnlock(_ *C) {
+func (ss *stateSuite) TestLockUnlock(c *C) {
 	st := state.New(nil)
 	st.Lock()
 	st.Unlock()
 }
 
-func (ss *stateSuite) TestUnlocker(_ *C) {
+func (ss *stateSuite) TestUnlocker(c *C) {
 	st := state.New(nil)
 	unlocker := st.Unlocker()
 	st.Lock()
@@ -781,20 +781,20 @@ func (ss *stateSuite) TestMethodEntrance(c *C) {
 		func() { st.Set("foo", 1) },
 		func() { st.NewChange("install", "...") },
 		func() { st.NewTask("download", "...") },
-		func() { _ = st.UnmarshalJSON(nil) },
+		func() { st.UnmarshalJSON(nil) },
 		func() { st.NewLane() },
 		func() { st.Warnf("hello") },
 	}
 
 	reads := []func(){
-		func() { _ = st.Get("foo", nil) },
+		func() { st.Get("foo", nil) },
 		func() { st.Cached("foo") },
 		func() { st.Cache("foo", 1) },
 		func() { st.Changes() },
 		func() { st.Change("foo") },
 		func() { st.Tasks() },
 		func() { st.Task("foo") },
-		func() { _, _ = st.MarshalJSON() },
+		func() { st.MarshalJSON() },
 		func() { st.Prune(time.Now(), time.Hour, time.Hour, 100) },
 		func() { st.TaskCount() },
 	}
@@ -836,13 +836,13 @@ func (ss *stateSuite) TestPrune(c *C) {
 	chg1.AddTask(t1)
 	state.FakeChangeTimes(chg1, now.Add(-abortWait), unset)
 
-	n1_id, err := st.AddNotice(nil, state.ChangeUpdateNotice, chg1.ID(), nil)
+	n1ID, err := st.AddNotice(nil, state.ChangeUpdateNotice, chg1.ID(), nil)
 	c.Assert(err, IsNil)
 
 	chg2 := st.NewChange("prune", "...")
 	chg2.AddTask(t2)
 	c.Assert(chg2.Status(), Equals, state.DoStatus)
-	n2_id, err := st.AddNotice(nil, state.ChangeUpdateNotice, chg2.ID(), nil)
+	n2ID, err := st.AddNotice(nil, state.ChangeUpdateNotice, chg2.ID(), nil)
 	c.Assert(err, IsNil)
 	state.FakeChangeTimes(chg2, now.Add(-pruneWait), now.Add(-pruneWait))
 
@@ -854,12 +854,13 @@ func (ss *stateSuite) TestPrune(c *C) {
 	chg4.AddTask(t4)
 	state.FakeChangeTimes(chg4, now.Add(-pruneWait/2), unset)
 
-	n4_id, err := st.AddNotice(nil, state.ChangeUpdateNotice, chg4.ID(), &state.AddNoticeOptions{
+	n4ID, err := st.AddNotice(nil, state.ChangeUpdateNotice, chg4.ID(), &state.AddNoticeOptions{
 		// Prune ignores the pruneWait for notices, it only ever pays attention to expireAfter
 		// attribute of the notice, which is hard coded to
 		// defaultNoticeExpireAfter = 7 * 24 * time.Hour
 		Time: now.Add(-8 * 24 * time.Hour),
 	})
+	c.Assert(err, IsNil)
 
 	// unlinked task
 	t5 := st.NewTask("unliked", "...")
@@ -891,9 +892,9 @@ func (ss *stateSuite) TestPrune(c *C) {
 
 	// n1 didn't expire, n2 was pruned because change 2 was removed, and
 	// n4 was pruned because its last occurance was old
-	c.Assert(st.Notice(n1_id), NotNil)
-	c.Assert(st.Notice(n2_id), IsNil)
-	c.Assert(st.Notice(n4_id), IsNil)
+	c.Assert(st.Notice(n1ID), NotNil)
+	c.Assert(st.Notice(n2ID), IsNil)
+	c.Assert(st.Notice(n4ID), IsNil)
 }
 
 func (ss *stateSuite) TestRegisterPendingChangeByAttr(c *C) {
