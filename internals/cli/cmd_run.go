@@ -53,6 +53,7 @@ type sharedRunEnterOpts struct {
 	CreateDirs bool       `long:"create-dirs"`
 	Hold       bool       `long:"hold"`
 	HTTP       string     `long:"http"`
+	HTTPS      string     `long:"https"`
 	Verbose    bool       `short:"v" long:"verbose"`
 	Args       [][]string `long:"args" terminator:";"`
 	Identities string     `long:"identities"`
@@ -62,6 +63,7 @@ var sharedRunEnterArgsHelp = map[string]string{
 	"--create-dirs": "Create {{.DisplayName}} directory on startup if it doesn't exist",
 	"--hold":        "Do not start default services automatically",
 	"--http":        `Start HTTP API listening on this address in "<address>:port" format (for example, ":4000", "192.0.2.0:4000", "[2001:db8::1]:4000")`,
+	"--https":       `Start HTTPS API listening on this address in "<address>:port" format (for example, ":8443", "192.0.2.0:8443", "[2001:db8::1]:8443")`,
 	"--verbose":     "Log all output from services to stdout (also PEBBLE_VERBOSE=1)",
 	"--args":        "Provide additional arguments to a service",
 	"--identities":  "Seed identities from file (like update-identities --replace)",
@@ -195,14 +197,15 @@ func runDaemon(rcmd *cmdRun, ch chan os.Signal, ready chan<- func()) error {
 	}
 
 	dopts := daemon.Options{
-		Dir:        rcmd.pebbleDir,
-		SocketPath: rcmd.socketPath,
-		IDSigner:   idSigner,
+		Dir:          rcmd.pebbleDir,
+		SocketPath:   rcmd.socketPath,
+		IDSigner:     idSigner,
+		HTTPAddress:  rcmd.HTTP,
+		HTTPSAddress: rcmd.HTTPS,
 	}
 	if os.Getenv("PEBBLE_VERBOSE") == "1" || rcmd.Verbose {
 		dopts.ServiceOutput = os.Stdout
 	}
-	dopts.HTTPAddress = rcmd.HTTP
 
 	d, err := daemon.New(&dopts)
 	if err != nil {
@@ -318,8 +321,8 @@ out:
 	}
 
 	// Close the client idle connection to the server (self connection) before we
-	// start with the HTTP shutdown process. This will speed up the server shutdown,
-	// and allow the Pebble process to exit faster.
+	// start with the HTTP/HTTPS shutdown process. This will speed up the server
+	// shutdown, and allow the Pebble process to exit faster.
 	rcmd.client.CloseIdleConnections()
 
 	return d.Stop(ch)

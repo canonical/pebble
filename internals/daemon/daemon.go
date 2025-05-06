@@ -17,7 +17,7 @@ package daemon
 import (
 	"bufio"
 	"context"
-	"crypto"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
@@ -44,6 +44,7 @@ import (
 	"github.com/canonical/pebble/internals/overlord/servstate"
 	"github.com/canonical/pebble/internals/overlord/standby"
 	"github.com/canonical/pebble/internals/overlord/state"
+	"github.com/canonical/pebble/internals/overlord/tlsstate"
 	"github.com/canonical/pebble/internals/reaper"
 	"github.com/canonical/pebble/internals/systemd"
 )
@@ -66,10 +67,14 @@ type Options struct {
 	// Defaults to "layers" inside the pebble directory.
 	LayersDir string
 
+	// TLSDir is an optional path for where the TLS manager persists PEM files.
+	// Defaults to "tls" inside the pebble directory.
+	TLSDir string
+
 	// IDSigner is a private key representing the identity of a Pebble
 	// instance (machine, container or device), which implements the
-	// crypto.Signer interface (for digest signing).
-	IDSigner crypto.Signer
+	// tlsstate.IDSigner interface (for digest signing).
+	IDSigner tlsstate.IDSigner
 
 	// SocketPath is an optional path for the unix socket used for the client
 	// to communicate with the daemon. Defaults to a hidden (dotted) name inside
@@ -80,6 +85,11 @@ type Options struct {
 	// ":4000" to listen on any address, port 4000. If not set, the HTTP API
 	// server is not started.
 	HTTPAddress string
+
+	// HTTPSAddress is the address for the HTTPS API server, for example
+	// ":8443" to listen on any address, port 8443. If not set, the HTTPS
+	// API server is not started.
+	HTTPSAddress string
 
 	// ServiceOuput is an optional io.Writer for the service log output, if set, all services
 	// log output will be written to the writer.
@@ -99,6 +109,7 @@ type Daemon struct {
 	state           *state.State
 	generalListener net.Listener
 	httpListener    net.Listener
+	httpsListener   net.Listener
 	connTracker     *connTracker
 	serve           *http.Server
 	tomb            tomb.Tomb
@@ -366,6 +377,16 @@ func (d *Daemon) Init() error {
 		logger.Noticef("HTTP API server listening on %q.", d.options.HTTPAddress)
 	}
 
+	if d.options.HTTPSAddress != "" {
+		tlsConf := d.overlord.TLSManager().ListenConfig()
+		listener, err := tls.Listen("tcp", d.options.HTTPSAddress, tlsConf)
+		if err != nil {
+			return fmt.Errorf("cannot TLS listen on %q: %v", d.options.HTTPSAddress, err)
+		}
+		d.httpsListener = listener
+		logger.Noticef("HTTPS API server listening on %q.", d.options.HTTPSAddress)
+	}
+
 	logger.Noticef("Started daemon.")
 	return nil
 }
@@ -476,10 +497,19 @@ func (d *Daemon) Start() error {
 	})
 
 	if d.httpListener != nil {
-		// Start additional HTTP API (currently only GuestOK endpoints are
-		// available because the HTTP API has no authentication right now).
+		// Start additional HTTP API
 		d.tomb.Go(func() error {
 			err := d.serve.Serve(d.httpListener)
+			if err != http.ErrServerClosed && d.tomb.Err() == tomb.ErrStillAlive {
+				return err
+			}
+			return nil
+		})
+	}
+	if d.httpsListener != nil {
+		// Start additional HTTPS API
+		d.tomb.Go(func() error {
+			err := d.serve.Serve(d.httpsListener)
 			if err != http.ErrServerClosed && d.tomb.Err() == tomb.ErrStillAlive {
 				return err
 			}
@@ -847,6 +877,7 @@ func New(opts *Options) (*Daemon, error) {
 	ovldOptions := overlord.Options{
 		PebbleDir:      opts.Dir,
 		LayersDir:      opts.LayersDir,
+		TLSDir:         opts.TLSDir,
 		RestartHandler: d,
 		ServiceOutput:  opts.ServiceOutput,
 		Extension:      opts.OverlordExtension,
