@@ -16,6 +16,7 @@
 package overlord
 
 import (
+	"crypto"
 	"errors"
 	"fmt"
 	"io"
@@ -76,6 +77,10 @@ type Options struct {
 	ServiceOutput io.Writer
 	// Extension allows extending the overlord with externally defined features.
 	Extension Extension
+	// IDSigner is a private key representing the identity of a Pebble
+	// instance (machine, container or device), which implements the
+	// crypto.Signer interface (allowing it to sign TLS keypairs).
+	IDSigner crypto.Signer
 }
 
 // Overlord is the central manager of the system, keeping track

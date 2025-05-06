@@ -162,7 +162,7 @@ func (s *PebbleSuite) TestEnterExecListDir(c *C) {
 		}
 	}
 
-	restore := fakeArgs("pebble", "enter", "exec", "ls", s.pebbleDir)
+	restore := fakeArgs("pebble", "enter", "exec", "ls", "--hide=identity", s.pebbleDir)
 	defer restore()
 
 	exitCode := cli.PebbleMain()
