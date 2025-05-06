@@ -531,7 +531,7 @@ func (s *State) Prune(startOfOperation time.Time, pruneWait, abortWait time.Dura
 	}
 	s.latestWarningTime.Store(&latestWarningTime)
 
-	prunedChangeIds := map[string]struct{}{}
+	prunedChangeIDs := make(map[string]struct{})
 
 NextChange:
 	for _, chg := range changes {
@@ -561,7 +561,7 @@ NextChange:
 				delete(s.tasks, t.ID())
 			}
 			delete(s.changes, chg.ID())
-			prunedChangeIds[chg.ID()] = struct{}{}
+			prunedChangeIDs[chg.ID()] = struct{}{}
 			readyChangesCount--
 		}
 	}
@@ -576,11 +576,12 @@ NextChange:
 	// Remove all the notices that refer to changes that have been pruned
 	// Note that we are using the fact that noticeKey redundantly references
 	//  several items from the notice object
-	for k := range s.notices {
-		if k.noticeType == ChangeUpdateNotice {
-			if _, pruned := prunedChangeIds[k.key]; pruned {
-				delete(s.notices, k)
-			}
+	for n := range s.notices {
+		if n.noticeType != ChangeUpdateNotice {
+			continue
+		}
+		if _, pruned := prunedChangeIDs[n.key]; pruned {
+			delete(s.notices, n)
 		}
 	}
 }
