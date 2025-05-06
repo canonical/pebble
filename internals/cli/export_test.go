@@ -30,8 +30,7 @@ func RunOptionsForTest() *RunOptions {
 	o := &RunOptions{
 		ClientConfig: newClientConfig(),
 	}
-	o.applyDefaults()
-	return o
+	return withDefaultRunOptions(o)
 }
 
 var clientConfigBaseURL string
@@ -66,11 +65,9 @@ var (
 	MaybePresentWarnings = maybePresentWarnings
 
 	MaybeCopyPebbleDir = maybeCopyPebbleDir
-)
 
-func (o *RunOptions) ApplyDefaults() {
-	o.applyDefaults()
-}
+	WithDefaultRunOptions = withDefaultRunOptions
+)
 
 func FakeIsStdoutTTY(t bool) (restore func()) {
 	oldIsStdoutTTY := isStdoutTTY

@@ -285,39 +285,48 @@ type RunOptions struct {
 	PebbleDir    string
 }
 
-// applyDefaults applies default values to specific options if unset, taking
-// supported environment variables into account.
-func (o *RunOptions) applyDefaults() {
-	if o.PebbleDir == "" {
-		o.PebbleDir = os.Getenv("PEBBLE")
-		if o.PebbleDir == "" {
-			o.PebbleDir = cmd.DefaultDir
+// withDefaultRunOptions creates a copy of the supplied RunOptions and then
+// applies default values to specific unset options, taking supported
+// environment variables into account.
+func withDefaultRunOptions(opts *RunOptions) *RunOptions {
+	localOpts := RunOptions{}
+	if opts != nil {
+		// Deep copy.
+		localOpts = *opts
+		if opts.ClientConfig != nil {
+			cpy := *opts.ClientConfig
+			localOpts.ClientConfig = &cpy
 		}
 	}
-	if o.Logger == nil {
-		o.Logger = logger.New(os.Stderr, fmt.Sprintf("[%s] ", cmd.ProgramName))
-	}
-	if o.ClientConfig == nil {
-		o.ClientConfig = &client.Config{}
-	}
-	if o.ClientConfig.Socket == "" {
-		o.ClientConfig.Socket = os.Getenv("PEBBLE_SOCKET")
-		if o.ClientConfig.Socket == "" {
-			o.ClientConfig.Socket = filepath.Join(o.PebbleDir, ".pebble.socket")
+
+	if localOpts.PebbleDir == "" {
+		localOpts.PebbleDir = os.Getenv("PEBBLE")
+		if localOpts.PebbleDir == "" {
+			localOpts.PebbleDir = cmd.DefaultDir
 		}
 	}
-	if o.ClientConfig.BaseURL == "" {
-		o.ClientConfig.BaseURL = os.Getenv("PEBBLE_BASEURL")
+	if localOpts.Logger == nil {
+		localOpts.Logger = logger.New(os.Stderr, fmt.Sprintf("[%s] ", cmd.ProgramName))
 	}
+	if localOpts.ClientConfig == nil {
+		localOpts.ClientConfig = &client.Config{}
+	}
+	if localOpts.ClientConfig.Socket == "" {
+		localOpts.ClientConfig.Socket = os.Getenv("PEBBLE_SOCKET")
+		if localOpts.ClientConfig.Socket == "" {
+			localOpts.ClientConfig.Socket = filepath.Join(localOpts.PebbleDir, ".pebble.socket")
+		}
+	}
+	if localOpts.ClientConfig.BaseURL == "" {
+		localOpts.ClientConfig.BaseURL = os.Getenv("PEBBLE_BASEURL")
+	}
+	return &localOpts
 }
 
 func Run(options *RunOptions) error {
-	if options == nil {
-		options = &RunOptions{}
-	}
-	options.applyDefaults()
+	localOptions := withDefaultRunOptions(options)
 
-	logger.SetLogger(options.Logger)
+	logger.SetLogger(localOptions.Logger)
 
 	defer func() {
 		if v := recover(); v != nil {
@@ -328,14 +337,14 @@ func Run(options *RunOptions) error {
 		}
 	}()
 
-	cli, err := client.New(options.ClientConfig)
+	cli, err := client.New(localOptions.ClientConfig)
 	if err != nil {
 		return fmt.Errorf("cannot create client: %v", err)
 	}
 	parser := Parser(&ParserOptions{
 		Client:     cli,
-		PebbleDir:  options.PebbleDir,
-		SocketPath: options.ClientConfig.Socket,
+		PebbleDir:  localOptions.PebbleDir,
+		SocketPath: localOptions.ClientConfig.Socket,
 	})
 	xtra, err := parser.Parse()
 	if err != nil {
@@ -369,7 +378,7 @@ func Run(options *RunOptions) error {
 		return nil
 	}
 
-	state, err := loadCLIState(options.ClientConfig.Socket)
+	state, err := loadCLIState(localOptions.ClientConfig.Socket)
 	if err != nil {
 		return fmt.Errorf("cannot load CLI state: %w", err)
 	}

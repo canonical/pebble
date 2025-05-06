@@ -488,10 +488,10 @@ func (cs *clientSuite) TestClientIntegrationHTTPS(c *C) {
 
 	tlsManager := &customTLSManager{}
 	cli, err = client.New(&client.Config{
-		BaseURL:          fmt.Sprintf("https://localhost:%d", testPort),
-		BasicUsername:    testUsername,
-		BasicPassword:    testPassword,
-		ClientTLSManager: tlsManager,
+		BaseURL:             fmt.Sprintf("https://localhost:%d", testPort),
+		BasicUsername:       testUsername,
+		BasicPassword:       testPassword,
+		VerifyTLSConnection: tlsManager.VerifyTLSConnection,
 	})
 	c.Assert(err, IsNil)
 
@@ -527,8 +527,9 @@ func (c *customTLSManager) SetPairingMode(state bool) {
 	c.pairingMode = state
 }
 
-// VerifyConnection implements part of the ClientTLSManager interface.
-func (c *customTLSManager) VerifyConnection(state tls.ConnectionState) error {
+// VerifyTLSConnection supplies the tls.Config server certificate verification
+// functionality.
+func (c *customTLSManager) VerifyTLSConnection(state tls.ConnectionState) error {
 	if c.pairingMode {
 		// The leaf certificate is the TLS certificate and is always
 		// valid on the client side. In the case of the test HTTPS

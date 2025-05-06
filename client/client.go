@@ -134,9 +134,9 @@ type Config struct {
 	// If the protocol prefix is https://, TLS will be used.
 	BaseURL string
 
-	// ClientTLSManager provides a way to specify how client TLS connections
+	// VerifyTLSConnection provides a way to specify how client TLS connections
 	// should be configured, and how to verify TLS server certificates.
-	ClientTLSManager ClientTLSManager
+	VerifyTLSConnection func(tls.ConnectionState) error
 
 	// Optional HTTP Basic Authentication details. If supplied this will
 	// add an HTTP basic authentication header entry.
@@ -157,16 +157,9 @@ type Config struct {
 	UserAgent string
 }
 
-type ClientTLSManager interface {
-	// VerifyConnection determines how the server TLS certificates are validated.
-	VerifyConnection(tls.ConnectionState) error
-}
-
-// defaultClientTLSManager never trusts any server TLS certificates. The default has
-// to be explicitly overwritten to allow HTTPS to work.
-type defaultClientTLSManager struct{}
-
-func (d defaultClientTLSManager) VerifyConnection(state tls.ConnectionState) error {
+// defaultTLSVerifier blocks all TLS (HTTPS) access by always rejecting the
+// server certificates.
+func defaultTLSVerifier(state tls.ConnectionState) error {
 	return errors.New("cannot verify server TLS certificates")
 }
 
@@ -194,17 +187,19 @@ type jsonWriter interface {
 }
 
 func New(config *Config) (*Client, error) {
-	if config == nil {
-		config = &Config{}
+	// Let's not mutate the input config.
+	localConfig := Config{}
+	if config != nil {
+		localConfig = *config
 	}
 
 	// The default verifier never trusts any server TLS certificates.
-	if config.ClientTLSManager == nil {
-		config.ClientTLSManager = &defaultClientTLSManager{}
+	if localConfig.VerifyTLSConnection == nil {
+		localConfig.VerifyTLSConnection = defaultTLSVerifier
 	}
 
 	client := &Client{}
-	requester, err := newDefaultRequester(client, config)
+	requester, err := newDefaultRequester(client, &localConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -616,7 +611,7 @@ func newDefaultRequester(client *Client, opts *Config) (*defaultRequester, error
 				// VerifyCertificate method for verifying the incoming server
 				// TLS certificates.
 				InsecureSkipVerify: true,
-				VerifyConnection:   opts.ClientTLSManager.VerifyConnection,
+				VerifyConnection:   opts.VerifyTLSConnection,
 			},
 		}
 		requester = &defaultRequester{
