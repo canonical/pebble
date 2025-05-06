@@ -58,6 +58,66 @@ var (
 	systemdSdNotify = systemd.SdNotify
 )
 
+// TransportType defines the possible API transport types we support. The
+// type can be extracted from the http.Request using RequestTransportType.
+type TransportType int
+
+// Used with context.WithValue as the key.
+type TransportTypeKey struct{}
+
+const (
+	TransportTypeUnknown TransportType = iota // Must be zero value => 0
+	TransportTypeUnixSocket
+	TransportTypeHTTP
+	TransportTypeHTTPS
+)
+
+// RequestTransportType extracts the transport type of the HTTP request. If
+// the transport cannot be found in the context, it returns the zero value
+// TransportTypeUnknown.
+func RequestTransportType(r *http.Request) TransportType {
+	if r == nil {
+		return TransportTypeUnknown
+	}
+	// If the assertion fails here, transport will always be the zero
+	// value of TransportType (TransportTypeUnknown).
+	transport, _ := r.Context().Value(TransportTypeKey{}).(TransportType)
+	return transport
+}
+
+// String returns a string representation of the transport type.
+func (t TransportType) String() string {
+	switch t {
+	case TransportTypeUnixSocket:
+		return "http+unix"
+	case TransportTypeHTTP:
+		return "http"
+	case TransportTypeHTTPS:
+		return "https"
+	default:
+		return "unknown"
+	}
+}
+
+// IsValid reports whether the transport type is valid.
+func (t TransportType) IsValid() bool {
+	switch t {
+	case TransportTypeUnixSocket, TransportTypeHTTP, TransportTypeHTTPS:
+		return true
+	}
+	return false
+}
+
+// IsConcealed returns true if the transport type is either encrypted (HTTPS) or
+// if its local to the device (Unix Domain Socket).
+func (t TransportType) IsConcealed() bool {
+	switch t {
+	case TransportTypeUnixSocket, TransportTypeHTTPS:
+		return true
+	}
+	return false
+}
+
 // Options holds the daemon setup required for the initialization of a new daemon.
 type Options struct {
 	// Dir is the pebble directory where all setup is found. Defaults to /var/lib/pebble/default.
@@ -190,6 +250,7 @@ func (c *Command) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// ucred returned will be nil for request over HTTP and HTTPS.
 	ucred, err := ucrednetGet(r.RemoteAddr)
 	if err != nil && err != errNoID {
 		logger.Noticef("Cannot parse UID from remote address %q: %s", r.RemoteAddr, err)
@@ -240,6 +301,12 @@ func (c *Command) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			// Regular read access if any other local UID.
 			user = &UserState{Access: state.ReadAccess, UID: &ucred.Uid}
 		}
+	}
+
+	// We only proceed if we support the transport (we can identity it).
+	if !RequestTransportType(r).IsValid() {
+		Forbidden("forbidden").ServeHTTP(w, r)
+		return
 	}
 
 	if rspe := access.CheckAccess(c.d, r, user); rspe != nil {
@@ -316,6 +383,8 @@ func logit(handler http.Handler) http.Handler {
 		handler.ServeHTTP(ww, r)
 		t := time.Since(t0)
 
+		transport := RequestTransportType(r)
+
 		// Don't log GET /v1/changes/{change-id} as that's polled quickly by
 		// clients when waiting for a change (e.g., service starting). Also
 		// don't log GET /v1/system-info or GET /v1/health to avoid hits to
@@ -327,10 +396,10 @@ func logit(handler http.Handler) http.Handler {
 				r.URL.Path == "/v1/health")
 		if !skipLog {
 			if strings.HasSuffix(r.RemoteAddr, ";") {
-				logger.Debugf("%s %s %s %s %d", r.RemoteAddr, r.Method, r.URL, t, ww.status())
-				logger.Noticef("%s %s %s %d", r.Method, r.URL, t, ww.status())
+				logger.Debugf("%s %s %s %s %d (%s)", r.RemoteAddr, r.Method, r.URL, t, ww.status(), transport)
+				logger.Noticef("%s %s %s %d (%s)", r.Method, r.URL, t, ww.status(), transport)
 			} else {
-				logger.Noticef("%s %s %s %s %d", r.RemoteAddr, r.Method, r.URL, t, ww.status())
+				logger.Noticef("%s %s %s %s %d (%s)", r.RemoteAddr, r.Method, r.URL, t, ww.status(), transport)
 			}
 		}
 	})
@@ -479,6 +548,20 @@ func (d *Daemon) Start() error {
 
 	d.connTracker = &connTracker{conns: make(map[net.Conn]struct{})}
 	d.serve = &http.Server{
+		ConnContext: func(ctx context.Context, c net.Conn) context.Context {
+			// Flag the incoming requests with a context value so we can identify the
+			// transport of the request in the http.Request object. We can use this for
+			// refined access checker decisions.
+			switch c.(type) {
+			case *ucrednetConn:
+				return context.WithValue(ctx, TransportTypeKey{}, TransportTypeUnixSocket)
+			case *net.TCPConn:
+				return context.WithValue(ctx, TransportTypeKey{}, TransportTypeHTTP)
+			case *tls.Conn:
+				return context.WithValue(ctx, TransportTypeKey{}, TransportTypeHTTPS)
+			}
+			return context.WithValue(ctx, TransportTypeKey{}, TransportTypeUnknown)
+		},
 		Handler: exitOnPanic(logit(d.router), os.Stderr, func() {
 			os.Exit(1)
 		}),

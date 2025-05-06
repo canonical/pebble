@@ -27,11 +27,10 @@ func RunMain() error {
 }
 
 func RunOptionsForTest() *RunOptions {
-	pebbleDir, _ := getEnvPaths()
-	return &RunOptions{
+	o := &RunOptions{
 		ClientConfig: newClientConfig(),
-		PebbleDir:    pebbleDir,
 	}
+	return withDefaultRunOptions(o)
 }
 
 var clientConfigBaseURL string
@@ -45,7 +44,6 @@ func FakeClientConfigBaseURL(baseURL string) (restore func()) {
 
 func newClientConfig() *client.Config {
 	config := client.Config{BaseURL: clientConfigBaseURL}
-	_, config.Socket = getEnvPaths()
 	return &config
 }
 
@@ -66,9 +64,9 @@ var (
 
 	MaybePresentWarnings = maybePresentWarnings
 
-	GetEnvPaths = getEnvPaths
-
 	MaybeCopyPebbleDir = maybeCopyPebbleDir
+
+	WithDefaultRunOptions = withDefaultRunOptions
 )
 
 func FakeIsStdoutTTY(t bool) (restore func()) {

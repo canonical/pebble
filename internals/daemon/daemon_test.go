@@ -16,6 +16,7 @@ package daemon
 
 import (
 	"bytes"
+	"context"
 	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/sha512"
@@ -266,7 +267,8 @@ func (s *daemonSuite) TestCommandMethodDispatch(c *C) {
 	cmd.WriteAccess = UserAccess{}
 
 	for _, method := range []string{"GET", "POST", "PUT"} {
-		req, err := http.NewRequest(method, "", nil)
+		ctx := context.WithValue(context.Background(), TransportTypeKey{}, TransportTypeUnixSocket)
+		req, err := http.NewRequestWithContext(ctx, method, "", nil)
 		req.Header.Add("User-Agent", fakeUserAgent)
 		c.Assert(err, IsNil)
 
@@ -298,7 +300,9 @@ func (s *daemonSuite) TestCommandRestartingState(c *C) {
 	cmd.GET = func(*Command, *http.Request, *UserState) Response {
 		return SyncResponse(nil)
 	}
-	req, err := http.NewRequest("GET", "", nil)
+
+	ctx := context.WithValue(context.Background(), TransportTypeKey{}, TransportTypeUnixSocket)
+	req, err := http.NewRequestWithContext(ctx, "GET", "", nil)
 	c.Assert(err, IsNil)
 	req.RemoteAddr = "pid=100;uid=0;socket=;"
 
@@ -342,7 +346,8 @@ func (s *daemonSuite) TestFillsWarnings(c *C) {
 	cmd.GET = func(*Command, *http.Request, *UserState) Response {
 		return SyncResponse(nil)
 	}
-	req, err := http.NewRequest("GET", "", nil)
+	ctx := context.WithValue(context.Background(), TransportTypeKey{}, TransportTypeUnixSocket)
+	req, err := http.NewRequestWithContext(ctx, "GET", "", nil)
 	c.Assert(err, IsNil)
 	req.RemoteAddr = "pid=100;uid=0;socket=;"
 
@@ -402,8 +407,11 @@ func (s *daemonSuite) testAccessChecker(c *C, tests []accessCheckerTestCase, rem
 		return SyncResponse(true)
 	}
 
-	doTestReqFunc := func(cmd *Command, mth string) *httptest.ResponseRecorder {
-		req := &http.Request{Method: mth, RemoteAddr: remoteAddr}
+	doTestReqFunc := func(cmd *Command, method string) *httptest.ResponseRecorder {
+		ctx := context.WithValue(context.Background(), TransportTypeKey{}, TransportTypeUnixSocket)
+		req, err := http.NewRequestWithContext(ctx, method, "", nil)
+		c.Assert(err, IsNil)
+		req.RemoteAddr = remoteAddr
 		rec := httptest.NewRecorder()
 		cmd.ServeHTTP(rec, req)
 		return rec
@@ -573,7 +581,10 @@ func (s *daemonSuite) TestDefaultUcredUsers(c *C) {
 	}
 
 	// Admin access for UID 0.
-	req := &http.Request{Method: "GET", RemoteAddr: "pid=100;uid=0;socket=;"}
+	ctx := context.WithValue(context.Background(), TransportTypeKey{}, TransportTypeUnixSocket)
+	req, err := http.NewRequestWithContext(ctx, "GET", "", nil)
+	c.Assert(err, IsNil)
+	req.RemoteAddr = "pid=100;uid=0;socket=;"
 	rec := httptest.NewRecorder()
 	cmd.ServeHTTP(rec, req)
 	c.Check(rec.Code, Equals, http.StatusOK)
@@ -584,7 +595,10 @@ func (s *daemonSuite) TestDefaultUcredUsers(c *C) {
 
 	// Admin access for UID == daemon UID.
 	userSeen = nil
-	req = &http.Request{Method: "GET", RemoteAddr: fmt.Sprintf("pid=100;uid=%d;socket=;", os.Getuid())}
+	ctx = context.WithValue(context.Background(), TransportTypeKey{}, TransportTypeUnixSocket)
+	req, err = http.NewRequestWithContext(ctx, "GET", "", nil)
+	c.Assert(err, IsNil)
+	req.RemoteAddr = fmt.Sprintf("pid=100;uid=%d;socket=;", os.Getuid())
 	rec = httptest.NewRecorder()
 	cmd.ServeHTTP(rec, req)
 	c.Check(rec.Code, Equals, http.StatusOK)
@@ -595,7 +609,10 @@ func (s *daemonSuite) TestDefaultUcredUsers(c *C) {
 
 	// Read access for UID not 0 and not daemon UID.
 	userSeen = nil
-	req = &http.Request{Method: "GET", RemoteAddr: fmt.Sprintf("pid=100;uid=%d;socket=;", os.Getuid()+1)}
+	ctx = context.WithValue(context.Background(), TransportTypeKey{}, TransportTypeUnixSocket)
+	req, err = http.NewRequestWithContext(ctx, "GET", "", nil)
+	c.Assert(err, IsNil)
+	req.RemoteAddr = fmt.Sprintf("pid=100;uid=%d;socket=;", os.Getuid()+1)
 	rec = httptest.NewRecorder()
 	cmd.ServeHTTP(rec, req)
 	c.Check(rec.Code, Equals, http.StatusOK)
@@ -1258,8 +1275,9 @@ func (s *daemonSuite) TestConnTrackerCanShutdown(c *C) {
 	c.Check(ct.CanStandby(), Equals, true)
 }
 
-func doTestReq(c *C, cmd *Command, mth string) *httptest.ResponseRecorder {
-	req, err := http.NewRequest(mth, "", nil)
+func doTestReq(c *C, cmd *Command, method string) *httptest.ResponseRecorder {
+	ctx := context.WithValue(context.Background(), TransportTypeKey{}, TransportTypeUnixSocket)
+	req, err := http.NewRequestWithContext(ctx, method, "", nil)
 	c.Assert(err, IsNil)
 	req.RemoteAddr = "pid=100;uid=0;socket=;"
 	rec := httptest.NewRecorder()
@@ -1613,16 +1631,24 @@ func (s *daemonSuite) TestAPIAccessLevels(c *C) {
 		if test.uid >= 0 {
 			remoteAddr = fmt.Sprintf("pid=100;uid=%d;socket=;", test.uid)
 		}
-		requestURL, err := url.Parse("http://localhost" + test.path)
+
+		ctx := context.WithValue(context.Background(), TransportTypeKey{}, TransportTypeUnixSocket)
+		urlStr := "http://localhost" + test.path
+		request, err := http.NewRequestWithContext(
+			ctx,
+			test.method,
+			urlStr,
+			io.NopCloser(strings.NewReader(test.body)),
+		)
 		c.Assert(err, IsNil)
-		request := &http.Request{
-			Method:     test.method,
-			URL:        requestURL,
-			Body:       io.NopCloser(strings.NewReader(test.body)),
-			RemoteAddr: remoteAddr,
-		}
+		request.RemoteAddr = remoteAddr
 		recorder := httptest.NewRecorder()
+
+		// Get only the path (without the query) to look up the command.
+		requestURL, err := url.Parse(urlStr)
+		c.Assert(err, IsNil)
 		cmd := apiCmd(requestURL.Path)
+
 		cmd.ServeHTTP(recorder, request)
 
 		response := recorder.Result()
@@ -1798,4 +1824,44 @@ func (s *utilsSuite) TestExitOnPanic(c *C) {
 	c.Check(string(body), Equals, "before")
 	c.Check(stderr.String(), Matches, "(?s)panic: PANIC!.*goroutine.*")
 	c.Check(exited, Equals, true)
+}
+
+type transportTypeSuite struct{}
+
+var _ = Suite(&transportTypeSuite{})
+
+func (t *transportTypeSuite) TestTransportTypeContext(c *C) {
+	// Request pointer is nil
+	r := (*http.Request)(nil)
+	transport := RequestTransportType(r)
+	c.Assert(transport.IsValid(), Equals, false)
+	c.Assert(transport.IsConcealed(), Equals, false)
+	c.Assert(transport.String(), Equals, "unknown")
+	// Request is non-nil, but without a transport context.
+	r = &http.Request{}
+	transport = RequestTransportType(r)
+	c.Assert(transport.IsValid(), Equals, false)
+	c.Assert(transport.IsConcealed(), Equals, false)
+	c.Assert(transport.String(), Equals, "unknown")
+	// Request has Unix Domain Socket context.
+	r = &http.Request{}
+	r = r.WithContext(context.WithValue(context.Background(), TransportTypeKey{}, TransportTypeUnixSocket))
+	transport = RequestTransportType(r)
+	c.Assert(transport.IsValid(), Equals, true)
+	c.Assert(transport.IsConcealed(), Equals, true)
+	c.Assert(transport.String(), Equals, "http+unix")
+	// Request has HTTP context.
+	r = &http.Request{}
+	r = r.WithContext(context.WithValue(context.Background(), TransportTypeKey{}, TransportTypeHTTP))
+	transport = RequestTransportType(r)
+	c.Assert(transport.IsValid(), Equals, true)
+	c.Assert(transport.IsConcealed(), Equals, false)
+	c.Assert(transport.String(), Equals, "http")
+	// Request has HTTPS context.
+	r = &http.Request{}
+	r = r.WithContext(context.WithValue(context.Background(), TransportTypeKey{}, TransportTypeHTTPS))
+	transport = RequestTransportType(r)
+	c.Assert(transport.IsValid(), Equals, true)
+	c.Assert(transport.IsConcealed(), Equals, true)
+	c.Assert(transport.String(), Equals, "https")
 }

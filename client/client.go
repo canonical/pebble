@@ -17,6 +17,7 @@ package client
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -130,7 +131,20 @@ type doer interface {
 type Config struct {
 	// BaseURL contains the base URL where the Pebble daemon is expected to be.
 	// It can be empty for a default behavior of talking over a unix socket.
+	// If the protocol prefix is https://, TLS will be used.
 	BaseURL string
+
+	// VerifyTLSConnection provides a way to specify how client TLS connections
+	// should be configured, and how to verify TLS server certificates.
+	VerifyTLSConnection func(tls.ConnectionState) error
+
+	// Optional HTTP Basic Authentication details. If supplied this will
+	// add an HTTP basic authentication header entry.
+	// RFC 7617 (HTTP Authentication: Basic and Digest) support a user without
+	// a password, but we will error if an empty password is provided for
+	// security reasons.
+	BasicUsername string
+	BasicPassword string
 
 	// Socket is the path to the unix socket to use.
 	Socket string
@@ -143,6 +157,12 @@ type Config struct {
 	UserAgent string
 }
 
+// defaultTLSVerifier blocks all TLS (HTTPS) access by always rejecting the
+// server certificates.
+func defaultTLSVerifier(state tls.ConnectionState) error {
+	return errors.New("cannot verify server TLS certificates")
+}
+
 // A Client knows how to talk to the Pebble daemon.
 type Client struct {
 	requester Requester
@@ -151,11 +171,9 @@ type Client struct {
 	latestWarning time.Time
 
 	getWebsocket getWebsocketFunc
-
-	host string
 }
 
-type getWebsocketFunc func(url string) (clientWebsocket, error)
+type getWebsocketFunc func(urlPath string) (clientWebsocket, error)
 
 type clientWebsocket interface {
 	wsutil.MessageReader
@@ -169,21 +187,27 @@ type jsonWriter interface {
 }
 
 func New(config *Config) (*Client, error) {
-	if config == nil {
-		config = &Config{}
+	// Let's not mutate the input config.
+	localConfig := Config{}
+	if config != nil {
+		localConfig = *config
+	}
+
+	// The default verifier never trusts any server TLS certificates.
+	if localConfig.VerifyTLSConnection == nil {
+		localConfig.VerifyTLSConnection = defaultTLSVerifier
 	}
 
 	client := &Client{}
-	requester, err := newDefaultRequester(client, config)
+	requester, err := newDefaultRequester(client, &localConfig)
 	if err != nil {
 		return nil, err
 	}
 
 	client.requester = requester
-	client.getWebsocket = func(url string) (clientWebsocket, error) {
-		return getWebsocket(requester.Transport(), url)
+	client.getWebsocket = func(urlPath string) (clientWebsocket, error) {
+		return requester.getWebsocket(urlPath)
 	}
-	client.host = requester.baseURL.Host
 
 	return client, nil
 }
@@ -193,19 +217,8 @@ func (client *Client) Requester() Requester {
 }
 
 func (client *Client) getTaskWebsocket(taskID, websocketID string) (clientWebsocket, error) {
-	url := fmt.Sprintf("ws://%s/v1/tasks/%s/websocket/%s", client.host, taskID, websocketID)
-	return client.getWebsocket(url)
-}
-
-func getWebsocket(transport *http.Transport, url string) (clientWebsocket, error) {
-	dialer := websocket.Dialer{
-		NetDial:          transport.Dial, //lint:ignore SA1019 Deprecated
-		Proxy:            transport.Proxy,
-		TLSClientConfig:  transport.TLSClientConfig,
-		HandshakeTimeout: 5 * time.Second,
-	}
-	conn, _, err := dialer.Dial(url, nil)
-	return conn, err
+	urlPath := fmt.Sprintf("/v1/tasks/%s/websocket/%s", taskID, websocketID)
+	return client.getWebsocket(urlPath)
 }
 
 // CloseIdleConnections closes any API connections that are currently unused.
@@ -245,8 +258,8 @@ func (e ConnectionError) Unwrap() error {
 }
 
 func (rq *defaultRequester) dispatch(ctx context.Context, method, urlpath string, query url.Values, headers map[string]string, body io.Reader) (*http.Response, error) {
-	// fake a url to keep http.Client happy
-	u := rq.baseURL
+	// Do not mutate the requester baseURL.
+	u := *rq.baseURL
 	u.Path = path.Join(rq.baseURL.Path, urlpath)
 	u.RawQuery = query.Encode()
 	req, err := http.NewRequestWithContext(ctx, method, u.String(), body)
@@ -255,6 +268,10 @@ func (rq *defaultRequester) dispatch(ctx context.Context, method, urlpath string
 	}
 	if rq.userAgent != "" {
 		req.Header.Set("User-Agent", rq.userAgent)
+	}
+
+	if rq.basicUsername != "" && rq.basicPassword != "" {
+		req.SetBasicAuth(rq.basicUsername, rq.basicPassword)
 	}
 
 	for key, value := range headers {
@@ -546,11 +563,13 @@ func (client *Client) DebugGet(action string, result any, params map[string]stri
 }
 
 type defaultRequester struct {
-	baseURL   url.URL
-	doer      doer
-	userAgent string
-	transport *http.Transport
-	client    *Client
+	baseURL       *url.URL
+	doer          doer
+	userAgent     string
+	basicUsername string
+	basicPassword string
+	transport     *http.Transport
+	client        *Client
 }
 
 func newDefaultRequester(client *Client, opts *Config) (*defaultRequester, error) {
@@ -558,21 +577,49 @@ func newDefaultRequester(client *Client, opts *Config) (*defaultRequester, error
 		opts = &Config{}
 	}
 
+	// Validate Basic Auth constraints.
+	if (opts.BasicUsername != "" && opts.BasicPassword == "") ||
+		(opts.BasicPassword != "" && opts.BasicUsername == "") {
+		return nil, errors.New("cannot use incomplete basic auth credentials")
+	}
+
 	var requester *defaultRequester
 
 	if opts.BaseURL == "" {
 		// By default talk over a unix socket.
 		transport := &http.Transport{Dial: unixDialer(opts.Socket), DisableKeepAlives: opts.DisableKeepAlive}
-		baseURL := url.URL{Scheme: "http", Host: "localhost"}
-		requester = &defaultRequester{baseURL: baseURL, transport: transport}
+		baseURL := &url.URL{Scheme: "http", Host: "localhost"}
+		requester = &defaultRequester{
+			baseURL:       baseURL,
+			transport:     transport,
+			basicUsername: opts.BasicUsername,
+			basicPassword: opts.BasicPassword,
+		}
 	} else {
 		// Otherwise talk regular HTTP-over-TCP.
 		baseURL, err := url.Parse(opts.BaseURL)
 		if err != nil {
 			return nil, fmt.Errorf("cannot parse base URL: %w", err)
 		}
-		transport := &http.Transport{DisableKeepAlives: opts.DisableKeepAlive}
-		requester = &defaultRequester{baseURL: *baseURL, transport: transport}
+		transport := &http.Transport{
+			DisableKeepAlives: opts.DisableKeepAlive,
+			TLSClientConfig: &tls.Config{
+				// We disable the internal full X509 metadata based validation logic
+				// since the typical use-case do not have the server as a public URL
+				// baked into the certificate, signed with an external CA. The client
+				// provides a ClientTLSManager interface that includes the
+				// VerifyCertificate method for verifying the incoming server
+				// TLS certificates.
+				InsecureSkipVerify: true,
+				VerifyConnection:   opts.VerifyTLSConnection,
+			},
+		}
+		requester = &defaultRequester{
+			baseURL:       baseURL,
+			transport:     transport,
+			basicUsername: opts.BasicUsername,
+			basicPassword: opts.BasicPassword,
+		}
 	}
 
 	requester.doer = &http.Client{Transport: requester.transport}
@@ -584,4 +631,26 @@ func newDefaultRequester(client *Client, opts *Config) (*defaultRequester, error
 
 func (rq *defaultRequester) Transport() *http.Transport {
 	return rq.transport
+}
+
+func (rq *defaultRequester) getWebsocket(urlPath string) (clientWebsocket, error) {
+	dialer := websocket.Dialer{
+		NetDial:          rq.transport.Dial, //lint:ignore SA1019 Deprecated
+		Proxy:            rq.transport.Proxy,
+		TLSClientConfig:  rq.transport.TLSClientConfig,
+		HandshakeTimeout: 5 * time.Second,
+	}
+
+	scheme := "ws"
+	if rq.baseURL.Scheme == "https" {
+		scheme = "wss"
+	}
+	url := fmt.Sprintf("%s://%s%s", scheme, rq.baseURL.Host, urlPath)
+
+	r := http.Request{Header: make(http.Header)}
+	if rq.basicUsername != "" && rq.basicPassword != "" {
+		r.SetBasicAuth(rq.basicUsername, rq.basicPassword)
+	}
+	conn, _, err := dialer.Dial(url, r.Header)
+	return conn, err
 }
