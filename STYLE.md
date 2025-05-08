@@ -53,11 +53,11 @@ Order:
 
 - A special order: For example, if you have a validation function that validates user inputs against a couple of rules and the code uses if/switch and puts them in alphabetical order, when adding new code, you should probably follow that existing pattern.
 - Anywhere? This could work in certain cases. For the same example, if existing validation rules are organized in no particular order and now you are adding a new rule, it's probably ok to add it anywhere in the validation function. At the beginning, at the end, or even in the middle.
-- Some logical order: For the same example, if the new rule you add is a naming convention (e.g., it must start with a certain prefix, it must follow a regex, etc.), then there is a correct place to add it and it's the very beginning because it makes more sense: if the name doesn't even follow the convention, there is no need to check for other rules. Lazy thinking would just add this new rule anywhere or just at the bottom of the function because it's just another rule to be added to a validation function and it's the easiest to do; strategic thinking would try to discover the logic and find the best place.
+- Some logical order: For the same example, if the new rule you add is a naming convention (e.g., it must match a certain pattern), then it's almost certainly correct to put it at the very beginning: If the name doesn't even follow the convention, there's no need to check other rules. Lazy thinking would add this new rule anywhere, because it's just another rule; strategic thinking would try to discover the logic and find the best place.
 
 Ownership:
 
-- When adding a new field/flag to an existing struct, think about if the field really _belongs_ to the thing where you are adding it. Do you add it there just because it's simple to do so, or does it truly belong to it? If not, should a new struct be created specifically for it? Understanding existing code before working on it.
+- When adding a new field/flag to an existing struct, think about if the field really _belongs_ to the thing where you are adding it. Are you adding it there just because it's simple to do so, or does it truly belong to it? If not, should a new struct be created specifically for it? Understand existing code before working on it.
 
 An example of order:
 
@@ -89,9 +89,9 @@ MkdirOptions{
 
 (Pay attention to the place of `Chown` because it relates more to `UserID` and `GroupID`.)
 
-### Refactor
+### Refactoring
 
-Compare the logic before/after, there should be no behaviour change, because it's a "refactor". Make sure they are 100% the same.
+Compare the logic before/after. There should be no behavior changes, because it's a "refactor", so make sure that the behavior is 100% the same.
 
 ### Code style
 
@@ -106,7 +106,7 @@ Use Go style:
 
 ##### Named arguments
 
-Clearer to have named arguments when you're returning multiple things of the same type, and it's not clear which is which. Example:
+It's clearer to have named arguments when you're returning multiple things of the same type, and it's not clear which is which. Example:
 
 - Avoid: `func foo() (<-chan servicelog.Entry, <-chan servicelog.Entry) {}`
 - Prefer: `func foo() (stdoutCh <-chan servicelog.Entry, stderrCh <-chan servicelog.Entry) {}`
@@ -121,11 +121,11 @@ Inside a function, use the more go-idiomatic `:=` short assignment for var decla
 On the other hand, if the zero value you'd write with the first way would never be read, use `var foo type`. For example:
 
 ```go
-	var intName string
+	var numberName string
 	if i == 1 {
-		intName = "one"
+		numberName = "one"
 	} else {
-		intName = "not one"
+		numberName = "not one"
 	}
 ```
 
@@ -202,7 +202,7 @@ The two functions don't provide much value because we can simply use
 	stop := rb.writeIndex
 ```
 
-Another example: `strings.Contains` instead of creating a function `containsSubstring`.
+Another example: Use `strings.Contains` instead of creating a function `containsSubstring`.
 
 Exception: If a very short function is used repeatedly in different places and increases readability, maybe we can keep it.
 
@@ -311,10 +311,11 @@ Use pointer when:
 
 - The embedded struct is large: using a pointer avoids copying the entire struct when passing it around.
 - Optional field: If the field can be nil/null (truly optional), a pointer makes this explicit.
-- Mutable shared state: If you need to modify the original CheckInfo from different places.
+- Mutable shared state: If you need to modify the original data from different places.
 - JSON null values: If you need to distinguish between a zero-valued struct and an absent/missing value in JSON (pointer can be nil).
 
 Use direct value when:
+
 - Small struct
 - Required field: If the field should never be nil in a valid struct.
 - Value semantics: If you want each struct to have its own copy of the data.
@@ -328,7 +329,7 @@ Common Practice: Use pointers for struct fields when:
 
 ##### Trailing comma
 
-Trailing comma after the last field, the closing brace is on its own line. Example:
+Trailing comma after the last field, the closing brace is on its own line.
 
 Avoid:
 
@@ -353,7 +354,7 @@ Prefer:
 
 ##### Locks
 
-If func A calls B, B locks/unlocks a lock, then A also locks/unlocks it, it's messy and inefficient. Maybe only do one lock in A.
+Suppose that func A calls B, where B locks/unlocks a lock, and then A also locks/unlocks the same lock. This is messy and inefficient. Put everything lock-related in A.
 
 Example:
 
@@ -495,7 +496,7 @@ Prefer `0o755` over `0755` format to make it super-clear it's octal, unless it's
 
 #### `iota`
 
-The `iota` identifier is used in const declarations to simplify definitions of incrementing numbers. The `iota` keyword represents successive integer constants 0, 1, 2, ... It resets to 0 whenever the word const appears in the source code, and increments after each const specification. To avoid getting the zero value by accident, we can start a list of constants at 1 instead of 0 from `iota + 1`.
+The `iota` identifier is used in const declarations to simplify definitions of incrementing numbers. The `iota` keyword represents successive integer constants 0, 1, 2, ... It resets to 0 whenever the word `const` appears in the source code, and increments after each `const` specification. To avoid getting the zero value by accident, we can start a list of constants at 1 instead of 0 from `iota + 1`.
 
 ### Error handling
 
@@ -513,7 +514,7 @@ Is it because the `pebble-test` label is reserved? Or is it because the `pebble-
 For another example:
 
 - Avoid `fmt.Println("Setup failed with error:", err)` (Ambiguous)
-- Prefer `fmt.Println("Cannot build pebble binary:", err)` (Specific, f we know why it fails)
+- Prefer `fmt.Println("Cannot build pebble binary:", err)` (Specific - we know why it fails)
 
 #### Be consistent
 
@@ -589,7 +590,7 @@ Avoid:
 
 Prefer: `fmt.Errorf("cannot get task logs for change %s: %w", info.ChangeID, err)`
 
-Using `%w` implies that the wrapped error may later be inspected in order to perform some specific action in response. Use this to allow for error recovery. Using `%v` implies that the pasted error is unrecoverable. Given that the only way to extract the underlying error would be to use very fragile string matching, this method very clearly discourages such attempts.
+Using `%w` implies that the wrapped error may later be inspected in order to perform some specific action in response. Use this to allow for error recovery. Using `%v` implies that the wrapped error is unrecoverable. Given that the only way to extract the underlying error would be to use very fragile string matching, this method very clearly discourages such attempts.
 
 ### Tests
 
@@ -597,26 +598,26 @@ Using `%w` implies that the wrapped error may later be inspected in order to per
 
 Put tremendous effort into test names.
 
-Do not just use some casual name that comes to you off the top of the head, but use meaningful, precise naems that follow the convention of existing code.
+Do not just use some casual name that comes to you off the top of your head. Use meaningful, precise names that follow the convention of existing code.
 
-For the same example as mentioned in the error messages section, if we have a validation function that validates the user input layer label and see if reserved prefixes are used:
+For the same example as mentioned in the error messages section, suppose that we have a validation function that validates the user input layer label to catch reserved prefixes:
 
-- Follow Convention: If all tests in the same file follow the "Test(Do)Something(SomeFeature)", like `TestParseCommand`, `TestMergeServiceContextOverrides`, follow the naming convention when adding a new test. Like `TestPebbleLabelPrefixReserved` probably fits better in the context than `TestCannotUseReservedPrefixInLayers`.
-- Be Precise: Are we testing parsing the layer (then see if the label is valid) or are we testing the labels themselves? The latter is more true, hence `TestParseLayer` is not as accurate as `TestLabel`. For another example, don't use `TestNormal` which is too generic, but `TestStartupEnabledServices` is a whole lot better as the name of a test.
+- Follow Convention: If all tests in the same file follow the "Test(Do)Something(SomeFeature)" convention, for example `TestParseCommand` or `TestMergeServiceContextOverrides`, follow the same convention when adding a new test. `TestPebbleLabelPrefixReserved` probably fits better in the context than `TestCannotUseReservedPrefixInLayers`.
+- Be Precise: Are we testing parsing the layer (then see if the label is valid) or are we testing the labels themselves? The latter is more true, hence `TestParseLayer` is not as accurate as `TestLabel`. For another example, don't use `TestNormal` which is too generic; `TestStartupEnabledServices` is a whole lot better as the name of a test.
 
-Following the rules above, the best name probably is `TestLabelReservedPrefix` or `TestLabelReservedPrefix`.
+Following the rules above, the best name probably is `TestLabelReservedPrefix` or `TestLabelReservedPrefix`. Although short names can be used in context, test names are places where longer but precise names are better than short ones.
 
 #### Variable names
 
 Use `foo`, `bar`, `baz`, `qux`, `quux`, and other metasyntactic variables and placeholder names in tests.
 
-However, check existing code and be consistent: If existing tests use "alice" and "bob" or meaningful variable names like `pebble-service-name`, follow the convention. Vice versa, do not use very specific names that actually mean something when it's just a generic name.
+However, check existing code and be consistent: If existing tests use "alice" and "bob" or meaningful variable names like `pebble-service-name`, follow the convention. Conversely, do not use very specific names that actually mean something when it's just a generic name.
 
 #### Copy-paste
 
-When adding unit tests, it's common to copy-paste an existing test which is similar and modify that because it's quicker. It's OK to copy-paste, but examine the naming, the logic, remove unnecessary things carefully, treat it as if you are writing a new test.
+When adding unit tests, it's common to copy-paste an existing test which is similar and modify that because it's quicker. It's OK to copy-paste, but examine the naming, the logic, remove unnecessary things carefully. Treat it as if you are writing a new test.
 
-It's also OK to use a few lines of duplicated code if it makes the test more clear instead of creating helper functions, see [Advanced Testing with Go - Mitchell Hashimoto](https://www.youtube.com/watch?v=8hQG7QlcLBk).
+It's also OK to use a few lines of duplicated code if it makes the test clearer, instead of creating helper functions. See [Advanced Testing with Go - Mitchell Hashimoto](https://www.youtube.com/watch?v=8hQG7QlcLBk).
 
 #### Setup/teardown
 
@@ -624,7 +625,7 @@ It is sometimes necessary for a test to do extra setup or teardown. To support t
 
 `func TestMain(m *testing.M)`
 
-Then the generated test will call `TestMain(m)`` instead of running the tests directly.
+Then the generated test will call `TestMain(m)` instead of running the tests directly.
 
 TestMain runs in the main goroutine and can do whatever setup and teardown is necessary around a call to `m.Run`.
 
@@ -660,17 +661,19 @@ In tests, try to use SIGTERM instead of SIGKILL for a graceful termination.
 
 #### Avoid cached results with `-count=1`
 
-Test outputs are cached to speed up tests. If the code doesn't change, the test output shouldn't change either. Of course, this is not necessarily true, tests may read info from external sources or may use time and random related data which could change from run to run.
+Test outputs are cached to speed up tests. If the code doesn't change, the test output shouldn't change either. Of course, this is not necessarily true in practice - tests may read info from external sources or may use time and random related data which could change from run to run.
 
-When you request multiple test runs using the `-count` flag the intention is to run the tests multiple times, there's no logic in running them just once and showing n-1 times the same result. So `-count` triggers omitting the cached results. Setting `-count=1` explicitly (although the default value is also 1, but the behaviour is different) will simply cause running the tests once, omitting previously cached outputs.
+When you request multiple test runs using the `-count` flag, the intention is to run the tests multiple times. There's no point running them just once and showing the same result n-1 times. So `-count` triggers omitting the cached results.
+
+Setting `-count=1` will cause the tests to run once, omitting previously cached outputs. (The default value of `count` is 1, but you need to explicitly set the value to 1 to change the caching behavior.)
 
 #### `t.Fatalf` or `t.Errorf`?
 
-Be careful, if the test should continue. This makes a difference.
+If a test should not continue at a certain point, use `t.Fatalf` instead of `t.Errorf`. Do not use `t.Errorf` without thinking about it everywhere. There is a difference between them.
 
 #### Ports
 
-When testing a port, use something high like above 60000 so that it's not likely to be used, compared to 4000 or 8080.
+When testing a port, use a high port that's not likely to be used. A port above 60000 would be better than 4000 or 8080.
 
 #### Comments in tests
 
@@ -682,13 +685,13 @@ All complex tests should have a verbose comment describing what they are testing
 
 Try not to have defaults for tests, as they often get in the way of additional tests.
 
-##### Check behaviour, not Logs
+##### Check behaviour, not logs
 
 Do not bother checking the logs in the tests, because stable log formatting isn't part of the contract. Check the expected behaviour or output.
 
 ##### Time-dependent tests
 
-When we need to wait in tests, like a for loop or a sleep, make sure the time is long enough to ensure even when the CPU is loaded, it can still pass, and make sure it's not too long as to slow the tests drastically. Use a reasonable value, refer to existing tests, follow existing convention, and maybe run the test multiple times to get a reasonable value - do not simply set a value and that's it.
+When a test needs to wait (e.g., in a for loop or a sleep), make sure the time is long enough to ensure that the test passes even when the CPU is loaded. Also make sure the time is not excessively long, which would slow the tests drastically. Use a reasonable value, refer to existing tests, follow existing convention, and maybe run the test multiple times to get a reasonable value - do not simply set a value and leave it at that.
 
 ##### Test coverage
 
@@ -700,7 +703,7 @@ Do all newly added functions have tests?
 
 #### Be precise
 
-Choice of words, especially verbs. Return an error? Thrown an error? Etc.
+Think about choice of words, especially verbs. Are errors "returned" or "thrown"?
 
 #### Helper/utility functions
 
@@ -732,7 +735,7 @@ Add a "TODO" in the comment when handling temporary workarounds so it's easier t
 
 #### Housekeeping rule
 
-Be careful when the code you change has some comments/notes or even links to issues. Read them carefully. If your code change solves the issue and it no longer holds, remove it - keep the comment clean and true.
+Be careful when the code you change has some comments/notes or even links to issues. Read them carefully. If your code change solves the issue, remove the link - keep the comment clean and true.
 
 #### Spell-check and grammar-check comments
 
@@ -764,12 +767,12 @@ Exceptions: Only use negative phrasing (e.g., "if X does not happen") when:
 
 Use the active voice as much as possible.
 
-We should only use the passive voice when we don't know or care about who performed the action and are not interested in who did it.
+We should only use the passive voice when we don't know or care about who performed the action.
 
 Example:
 
-- Avoid: "Given the default values, a minimum check looks like the following ..."
-- Prefer: "If we use the default values, a minimum check looks like the following ..."
+- Avoid: "A minimum check is created using the default values"
+- Prefer: "We create a minimum check, using the default values"
 
 #### Avoid subjective, be objective
 
@@ -790,8 +793,6 @@ Examples:
 
 #### Be short
 
-Don't be too long unless it's necessary.
-
 For example, a very long introduction part of a how-to guide or a tutorial probably isn't necessary; it's good if we are writing a blog post or a book, but not so much for a tutorial/how-to guide type of doc.
 
 #### Be concise and reduce repetition
@@ -804,9 +805,7 @@ For example, in the doc "how to use pebble", the section names can simply be "AP
 
 We can either use an alphanumeric order, or a logical order, depending on the context.
 
-If it's a reference doc, alphanumeric order makes more sense.
-
-If it's a list (like an Enum or a list of things), alphanumeric order probably is better. 
+Alphanumeric order is better in the case of a reference doc or a list (e.g., an Enum).
 
 Example (Enum):
 
@@ -840,13 +839,18 @@ Exceptions:
 
 #### Spell out abbreviations
 
-Abbreviations and acronyms in docstrings should usually be spelled out, for example, "for example" rather than "e.g.", "that is" rather than "i.e.", "and so on" rather than "etc", and "unit testing" rather than UT.
+Abbreviations and acronyms in docstrings should usually be spelled out:
+
+- "for example" rather than "e.g."
+- "that is" rather than "i.e."
+- "and so on" rather than "etc"
+- "unit testing" rather than UT, and so on
 
 However, it's okay to use acronyms that are very well known in our domain, like HTTP or JSON or RPC.
 
 #### Use sentence case in headings
 
-`Use sentence case for headings`, instead of `Use Title Case for Headings`.
+`## Use sentence case for headings`, instead of `## Use Title Case for Headings`.
 
 #### Be consistent
 
@@ -854,18 +858,18 @@ Be consistent in every possible way as much as possible, and stay context-consis
 
 Choice of words: For example, if the whole document uses "mandatory", you probably shouldn't use "required" in a newly added paragraph. For another example, if the whole doc uses "list foo" when adding new content, don't use "get a list of bar".
 
-Headings/lists: For example, if the documentation is "How to use Pebble", and there are a few section names already, like "API", "CLI commands", "Health checks", and "Specification", when adding a new section on "environment variables", name it "Environment variables" instead of "Pebble environment variables".
+Headings/lists: For example, if a doc is called "How to use Pebble", with sections "API", "CLI commands", "Health checks", and "Specification", use the heading "Environment variables" for a new section about environment variables, instead of the heading "Pebble environment variables".
 
 #### Be precise
 
-Be precise in names and verbs. Use precise verbs to describe the behaviour. For example, the better verb for `/v1/services` is "list" services while "get a service" is probably a better fit for `/v1/services/{name}`.
+Be precise in names and verbs. Use precise verbs to describe the behaviour. For example, the appropriate description of `/v1/services` is "list services", while "get a service" is probably a better fit for `/v1/services/{name}`.
 
-Split distinct ideas: Use separate sentences/clauses and avoid cramming, don’t merge unrelated details (e.g., parameter format + default behaviour) into a single phrase.
+Split distinct ideas: Use separate sentences/clauses and avoid cramming. Don’t merge unrelated details (e.g., parameter format + default behaviour) into a single phrase.
 
 Example:
 
 - Avoid: "The names of the services to get, a comma-separated string. If empty, get all services."
-- Prefer: "The names of the services to get. Specify multiple times for multiple values. If omitted, it returns all services." (What it does, parameter, behavioral details in three short precise sentences.)
+- Prefer: "The names of the services to get. Specify multiple times for multiple values. If omitted, the method returns all services." (In three short precise sentences we've covered what the parameter does, usage details, and behavioral details.)
 
 Example:
 
@@ -890,18 +894,18 @@ Future-proofing:
 
 #### Avoid implementation-specific terminology
 
-Use generic descriptions instead of what's specific to the code. Focus on behaviour, not internal implementation: Describe what it does (e.g., "returns an error message") rather than how a particular implementation is.
+Use generic descriptions instead of what's specific to the code. Focus on behaviour, not internal implementation: Describe what it does (e.g., "returns an error message") rather than how a particular implementation works.
 
 Example:
 
 - Avoid: "`Change.Err` will be non-empty if the change had an error." (Code-specific)
-- Prefer: "The err field in the response will contain an error message if the operation failed." (General)
+- Prefer: "The `err` field in the response will contain an error message if the operation failed." (General)
 
 Exception: If documenting a client library (e.g., Go/Python SDKs), implementation details are appropriate.
 
 #### Articles
 
-"a" or "the", generic or specific, choose carefully. Examples:
+"a" or "the", generic or specific, choose carefully. When describing generic parameters or behavior:
 
 - Avoid: "The format of the duration string is a sequence of decimal numbers"
 - Prefer: "The format of a duration string is a sequence of decimal numbers." (Describing a generic parameter, not a specific one.)
@@ -913,13 +917,12 @@ Exception: If documenting a client library (e.g., Go/Python SDKs), implementatio
 ### Code blocks
 
 - Consistency: the styles of code blocks and terminal output samples should be the same, at least within the same document.
-- Preferred style: Default to `{terminal}` (`.rst` style) when showing commands or terminal outputs. Avoid using `{code-block}`, unless it's consistent with the existing content in the same document.
-- Highlighting: Use `:emphasize-lines: 8-10` with `{code-block}` for highlighting code lines when necessary. If all the other examples in the same document use the `{terminal}` style, be consistent, and use words and comments to highlight instead of adding an inconsistent `{code-block}` example.
-
+- Preferred style: Use `{code-block}` when showing files. Use `{terminal}` (`.rst` style) when showing commands or terminal output. Avoid using `{code-block}` for commands or terminal output, unless it's consistent with the existing content in the same document.
+- Highlighting: Use `:emphasize-lines: 8-10` with `{code-block}` for highlighting lines in files when necessary. Don't add an inconsistent `{code-block}` so that you can highlight lines in commands or terminal output. Instead, use `{terminal}` along with helpful words and comments.
 
 ### YAML
 
 - Types: Handle strings and integers carefully. For example, if the field "change" is a string in the code, use `change: "1"` in the YAML example, not `change: 1`.
-- Use quotes for strings: Especially useful if a string contains special characters or starts with a number. 
+- Use quotes for strings: This is especially important if a string contains special characters or starts with a number.
 - Indentation: Always use spaces and be consistent with the number of spaces throughout the same file (usually, this should be two or four).
 - Use comments: Comments will help you and others understand what that data is used for.
