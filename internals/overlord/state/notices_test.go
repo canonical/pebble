@@ -455,7 +455,7 @@ func (s *noticesSuite) TestDeleteExpired(c *C) {
 
 	c.Assert(st.NumNotices(), Equals, 5)
 	c.Assert(st.LatestWarningTime().Equal(old), Equals, true)
-	st.Prune(time.Now(), 0, 0, 0)
+	st.Prune(time.Now(), 0, 0, 0, 0)
 	c.Assert(st.NumNotices(), Equals, 2)
 	c.Assert(st.LatestWarningTime().IsZero(), Equals, true)
 

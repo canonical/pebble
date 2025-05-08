@@ -498,8 +498,12 @@ func (s *State) RegisterPendingChangeByAttr(attr string, f func(*Change) bool) {
 //     changes than the limit set via "maxReadyChanges" those changes in ready
 //     state will also removed even if they are below the pruneWait duration.
 //
-//   - it removes expired warnings and notices.
-func (s *State) Prune(startOfOperation time.Time, pruneWait, abortWait time.Duration, maxReadyChanges int) {
+//   - it removes expired warnings and notices. If the notice refers to a
+//     change that was removed, then the notice is removed, if there are still
+//     more than maxReadyNotices they are removed until we reach maxReady. The
+//     order of pruning is based on which notices would expire first, and then
+//     by oldest lastOccurred
+func (s *State) Prune(startOfOperation time.Time, pruneWait, abortWait time.Duration, maxReadyChanges, maxReadyNotices int) {
 	now := time.Now()
 	pruneLimit := now.Add(-pruneWait)
 	abortLimit := now.Add(-abortWait)

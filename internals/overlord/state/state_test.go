@@ -793,7 +793,7 @@ func (ss *stateSuite) TestMethodEntrance(c *C) {
 		func() { st.Tasks() },
 		func() { st.Task("foo") },
 		func() { st.MarshalJSON() },
-		func() { st.Prune(time.Now(), time.Hour, time.Hour, 100) },
+		func() { st.Prune(time.Now(), time.Hour, time.Hour, 100, 100) },
 		func() { st.TaskCount() },
 	}
 
@@ -866,7 +866,7 @@ func (ss *stateSuite) TestPrune(c *C) {
 	state.FakeTaskTimes(t5, now.Add(-pruneWait), now.Add(-pruneWait))
 
 	past := time.Now().AddDate(-1, 0, 0)
-	st.Prune(past, pruneWait, abortWait, 100)
+	st.Prune(past, pruneWait, abortWait, 100, 100)
 
 	c.Assert(st.Change(chg1.ID()), Equals, chg1)
 	c.Assert(st.Change(chg2.ID()), IsNil)
@@ -929,7 +929,7 @@ func (ss *stateSuite) TestRegisterPendingChangeByAttr(c *C) {
 	})
 
 	past := time.Now().AddDate(-1, 0, 0)
-	st.Prune(past, pruneWait, abortWait, 100)
+	st.Prune(past, pruneWait, abortWait, 100, 100)
 
 	c.Assert(st.Change(chg1.ID()), Equals, chg1)
 	c.Assert(st.Change(chg2.ID()), Equals, chg2)
@@ -961,7 +961,7 @@ func (ss *stateSuite) TestPruneEmptyChange(c *C) {
 	state.FakeChangeTimes(chg, now.Add(-pruneWait), time.Time{})
 
 	past := time.Now().AddDate(-1, 0, 0)
-	st.Prune(past, pruneWait, abortWait, 100)
+	st.Prune(past, pruneWait, abortWait, 100, 100)
 	c.Assert(st.Change(chg.ID()), IsNil)
 }
 
@@ -998,12 +998,14 @@ func (ss *stateSuite) TestPruneMaxChangesHappy(c *C) {
 	// maxReadyChanges
 	past := time.Now().AddDate(-1, 0, 0)
 	maxReadyChanges := 100
-	st.Prune(past, pruneWait, abortWait, maxReadyChanges)
+	maxReadyNotices := 100
+	st.Prune(past, pruneWait, abortWait, maxReadyChanges, maxReadyNotices)
 	c.Assert(st.Changes(), HasLen, 15)
 
 	// but with maxReadyChanges we remove the ready ones
 	maxReadyChanges = 5
-	st.Prune(past, pruneWait, abortWait, maxReadyChanges)
+	maxReadyNotices = 5
+	st.Prune(past, pruneWait, abortWait, maxReadyChanges, maxReadyNotices)
 	c.Assert(st.Changes(), HasLen, 10)
 	remaining := map[string]bool{}
 	for _, chg := range st.Changes() {
@@ -1041,7 +1043,7 @@ func (ss *stateSuite) TestPruneMaxChangesSomeNotReady(c *C) {
 	// nothing can be pruned
 	past := time.Now().AddDate(-1, 0, 0)
 	maxChanges := 5
-	st.Prune(past, 1*time.Hour, 3*time.Hour, maxChanges)
+	st.Prune(past, 1*time.Hour, 3*time.Hour, maxChanges, maxChanges)
 	c.Assert(st.Changes(), HasLen, 10)
 }
 
@@ -1071,7 +1073,7 @@ func (ss *stateSuite) TestPruneMaxChangesHonored(c *C) {
 	// this test we do not purge the freshly ready change
 	maxChanges := 10
 	past := time.Now().AddDate(-1, 0, 0)
-	st.Prune(past, 1*time.Hour, 3*time.Hour, maxChanges)
+	st.Prune(past, 1*time.Hour, 3*time.Hour, maxChanges, maxChanges)
 	c.Assert(st.Changes(), HasLen, 11)
 }
 
@@ -1096,14 +1098,14 @@ func (ss *stateSuite) TestPruneHonorsStartOperationTime(c *C) {
 	// start operation time is 2h ago, change is not aborted because
 	// it's less than abortWait limit.
 	opTime := now.Add(-startTime)
-	st.Prune(opTime, pruneWait, abortWait, 100)
+	st.Prune(opTime, pruneWait, abortWait, 100, 100)
 	c.Assert(st.Changes(), HasLen, 1)
 	c.Check(chg.Status(), Equals, state.DoStatus)
 
 	// start operation time is 9h ago, change is aborted.
 	startTime = 9 * time.Hour
 	opTime = time.Now().Add(-startTime)
-	st.Prune(opTime, pruneWait, abortWait, 100)
+	st.Prune(opTime, pruneWait, abortWait, 100, 100)
 	c.Assert(st.Changes(), HasLen, 1)
 	c.Check(chg.Status(), Equals, state.HoldStatus)
 }
