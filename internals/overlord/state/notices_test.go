@@ -439,32 +439,79 @@ func (s *noticesSuite) TestDeleteExpired(c *C) {
 	c.Assert(st.NumNotices(), Equals, 0)
 	c.Assert(st.LatestWarningTime().IsZero(), Equals, true)
 
-	old := time.Now().Add(-8 * 24 * time.Hour)
-	addNotice(c, st, nil, state.CustomNotice, "foo.com/w", &state.AddNoticeOptions{
+	now := time.Now()
+	old := now.Add(-8 * 24 * time.Hour)
+	// 8 days ago, which is outside the 7 day expiry window
+	addNotice(c, st, nil, state.CustomNotice, "foo.com/eight", &state.AddNoticeOptions{
 		Time: old,
 	})
-	addNotice(c, st, nil, state.CustomNotice, "foo.com/x", &state.AddNoticeOptions{
-		Time: old,
-	})
+	// Expired warning notice
 	addNotice(c, st, nil, state.WarningNotice, "warning!", &state.AddNoticeOptions{
 		Time: old,
 	})
-	addNotice(c, st, nil, state.CustomNotice, "foo.com/y", nil)
-	time.Sleep(time.Microsecond)
-	addNotice(c, st, nil, state.CustomNotice, "foo.com/z", nil)
+	// 6 days ago, so this has not yet expired, however, it is close to expiring
+	addNotice(c, st, nil, state.CustomNotice, "foo.com/six", &state.AddNoticeOptions{
+		Time: now.Add(-6 * 24 * time.Hour),
+	})
+	// 6 days ago, so this has not yet expired, but set to expire even later
+	addNotice(c, st, nil, state.CustomNotice, "foo.com/six-longer", &state.AddNoticeOptions{
+		Time:        now.Add(-6 * 24 * time.Hour + time.Microsecond),
+		ExpireAfter: 10 * 24 * time.Hour,
+	})
+	// 5 days ago (so happened more recently), but set to expire at the same time as six
+	addNotice(c, st, nil, state.CustomNotice, "foo.com/five", &state.AddNoticeOptions{
+		Time:        now.Add(-5 * 24 * time.Hour),
+		ExpireAfter: 6 * 24 * time.Hour,
+	})
 
-	c.Assert(st.NumNotices(), Equals, 5)
-	c.Assert(st.LatestWarningTime().Equal(old), Equals, true)
-	st.Prune(time.Now(), 0, 0, 0, 0)
-	c.Assert(st.NumNotices(), Equals, 2)
-	c.Assert(st.LatestWarningTime().IsZero(), Equals, true)
+	// 
+	// 2 days ago, so this has not expired, but it refers to a change that doesn't exist
+	// so this should still be pruned
+	addNotice(c, st, nil, state.ChangeUpdateNotice, "999", &state.AddNoticeOptions{
+		Time: time.Now().Add(-2 * 24 * time.Hour),
+	})
+	// Right now, definitely not expired
+	addNotice(c, st, nil, state.CustomNotice, "foo.com/almost-now", &state.AddNoticeOptions{
+		Time: now,
+	})
+	now = now.Add(time.Microsecond)
+	addNotice(c, st, nil, state.CustomNotice, "foo.com/now", &state.AddNoticeOptions{
+		Time: now,
+	})
+
+	c.Check(st.NumNotices(), Equals, 8)
+	c.Check(st.LatestWarningTime().Equal(old), Equals, true)
+	// Prune everything that has expired by now
+	st.Prune(now, 0, 0, 0, 100)
+	c.Check(st.NumNotices(), Equals, 5)
+	c.Check(st.LatestWarningTime().IsZero(), Equals, true)
 
 	notices := st.Notices(nil)
-	c.Assert(notices, HasLen, 2)
+	c.Assert(notices, HasLen, 5)
 	n := noticeToMap(c, notices[0])
-	c.Assert(n["key"], Equals, "foo.com/y")
+	c.Check(n["key"], Equals, "foo.com/six")
 	n = noticeToMap(c, notices[1])
-	c.Assert(n["key"], Equals, "foo.com/z")
+	c.Check(n["key"], Equals, "foo.com/six-longer")
+	n = noticeToMap(c, notices[2])
+	c.Check(n["key"], Equals, "foo.com/five")
+	n = noticeToMap(c, notices[3])
+	c.Check(n["key"], Equals, "foo.com/almost-now")
+	n = noticeToMap(c, notices[4])
+	c.Check(n["key"], Equals, "foo.com/now")
+
+	// Now we force the prune to be count based, and it should prefer to remove six. five and six both expire at the
+	// same time, but five occurred more recently
+	st.Prune(now, 0, 0, 0, 4)
+	notices = st.Notices(nil)
+	c.Assert(notices, HasLen, 4)
+	n = noticeToMap(c, notices[0])
+	c.Check(n["key"], Equals, "foo.com/six-longer")
+	n = noticeToMap(c, notices[1])
+	c.Check(n["key"], Equals, "foo.com/five")
+	n = noticeToMap(c, notices[2])
+	c.Check(n["key"], Equals, "foo.com/almost-now")
+	n = noticeToMap(c, notices[3])
+	c.Check(n["key"], Equals, "foo.com/now")
 }
 
 func (s *noticesSuite) TestWaitNoticesExisting(c *C) {

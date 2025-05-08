@@ -500,10 +500,10 @@ func (s *State) RegisterPendingChangeByAttr(attr string, f func(*Change) bool) {
 //
 //   - it removes expired warnings and notices. If the notice refers to a
 //     change that was removed, then the notice is removed, if there are still
-//     more than maxReadyNotices they are removed until we reach maxReady. The
+//     more than maxNotices they are removed until we reach maxNotices. The
 //     order of pruning is based on which notices would expire first, and then
 //     by oldest lastOccurred
-func (s *State) Prune(startOfOperation time.Time, pruneWait, abortWait time.Duration, maxReadyChanges, maxReadyNotices int) {
+func (s *State) Prune(startOfOperation time.Time, pruneWait, abortWait time.Duration, maxReadyChanges, maxNotices int) {
 	now := time.Now()
 	pruneLimit := now.Add(-pruneWait)
 	abortLimit := now.Add(-abortWait)
@@ -523,19 +523,6 @@ func (s *State) Prune(startOfOperation time.Time, pruneWait, abortWait time.Dura
 		}
 		readyChangesCount++
 	}
-
-	// Prune expired notices, and update the latest warning time cache.
-	var latestWarningTime time.Time
-	for k, n := range s.notices {
-		if n.expired(now) {
-			delete(s.notices, k)
-		} else if n.noticeType == WarningNotice && n.lastRepeated.After(latestWarningTime) {
-			latestWarningTime = n.lastRepeated
-		}
-	}
-	s.latestWarningTime.Store(&latestWarningTime)
-
-	prunedChangeIDs := make(map[string]struct{})
 
 NextChange:
 	for _, chg := range changes {
@@ -565,7 +552,6 @@ NextChange:
 				delete(s.tasks, t.ID())
 			}
 			delete(s.changes, chg.ID())
-			prunedChangeIDs[chg.ID()] = struct{}{}
 			readyChangesCount--
 		}
 	}
@@ -577,17 +563,46 @@ NextChange:
 			delete(s.tasks, tid)
 		}
 	}
-	// Remove all the notices that refer to changes that have been pruned
-	// Note that we are using the fact that noticeKey redundantly references
-	//  several items from the notice object
-	for n := range s.notices {
-		if n.noticeType != ChangeUpdateNotice {
-			continue
-		}
-		if _, pruned := prunedChangeIDs[n.key]; pruned {
-			delete(s.notices, n)
+	// Prune expired notices, and update the latest warning time cache.
+	var latestWarningTime time.Time
+	for k, n := range s.notices {
+		if n.expired(now) {
+			delete(s.notices, k)
+		} else if n.noticeType == WarningNotice {
+			if n.lastRepeated.After(latestWarningTime) {
+				latestWarningTime = n.lastRepeated
+			}
+		} else if n.noticeType == ChangeUpdateNotice {
+			if _, exists := s.changes[n.key]; !exists {
+				delete(s.notices, k)
+			}
 		}
 	}
+	if len(s.notices) > maxNotices {
+		notices := s.flattenNotices(nil)
+		sort.Slice(notices, func(i, j int) bool {
+			// The notice that expires first should be removed first
+			// and if they expire at the same time, the one that has the oldest
+			// lastOccurred should be removed
+			expiredI := notices[i].lastOccurred.Add(notices[i].expireAfter)
+			expiredJ := notices[j].lastOccurred.Add(notices[j].expireAfter)
+			if expiredI.Before(expiredJ) {
+				return true
+			} else if expiredI.After(expiredJ) {
+				return false
+			}
+			return notices[i].lastOccurred.Before(notices[j].lastOccurred)
+		})
+		for _, n := range notices {
+			if len(s.notices) <= maxNotices {
+				break
+			}
+			userID, hasUserID := flattenUserID(n.userID)
+			uniqueKey := noticeKey{hasUserID, userID, n.noticeType, n.key}
+			delete(s.notices, uniqueKey)
+		}
+	}
+	s.latestWarningTime.Store(&latestWarningTime)
 }
 
 // GetMaybeTimings implements timings.GetSaver
