@@ -632,7 +632,7 @@ func (p *pruneStats) IncludeNotice(n *Notice) {
 func (p *pruneStats) Log() {
 	if p.numChangesPruned == 0 && p.numNoticesPruned == 0 {
 		// For this common case, just log a single line, we might want to move this to Debug
-		logger.Noticef("Prune() removed no Changes or Notices")
+		logger.Noticef("pruned 0 changes and 0 notices")
 	} else {
 		if p.numChangesPruned == 0 {
 			logger.Noticef("pruned 0 changes")
