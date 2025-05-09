@@ -455,14 +455,14 @@ func (s *noticesSuite) TestDeleteExpired(c *C) {
 	})
 	// 6 days ago, so this has not yet expired, but set to expire slightly later
 	addNotice(c, st, nil, state.CustomNotice, "foo.com/six-later", &state.AddNoticeOptions{
-		Time:        now.Add(-6 * 24 * time.Hour + time.Microsecond),
+		Time: now.Add(-6*24*time.Hour + time.Microsecond),
 	})
 	// occurred 10 days ago, but then a second time 5 days ago, so won't expire for a while
 	addNotice(c, st, nil, state.CustomNotice, "foo.com/five", &state.AddNoticeOptions{
-		Time:        now.Add(-10 * 24 * time.Hour + time.Microsecond),
+		Time: now.Add(-10*24*time.Hour + time.Microsecond),
 	})
 	addNotice(c, st, nil, state.CustomNotice, "foo.com/five", &state.AddNoticeOptions{
-		Time:        now.Add(-5 * 24 * time.Hour + time.Microsecond),
+		Time: now.Add(-5*24*time.Hour + time.Microsecond),
 	})
 
 	// 2 days ago, so this has not expired, but it refers to a change that doesn't exist

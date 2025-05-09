@@ -537,7 +537,7 @@ NextChange:
 		if readyTime.IsZero() {
 			if spawnTime.Before(pruneLimit) && len(chg.Tasks()) == 0 {
 				chg.Abort()
-				stats.includeChange(chg)
+				stats.IncludeChange(chg)
 				delete(s.changes, chg.ID())
 			} else if spawnTime.Before(abortLimit) {
 				for attr, pending := range s.pendingChangeByAttr {
@@ -555,7 +555,7 @@ NextChange:
 			for _, t := range chg.Tasks() {
 				delete(s.tasks, t.ID())
 			}
-			stats.includeChange(chg)
+			stats.IncludeChange(chg)
 			delete(s.changes, chg.ID())
 			readyChangesCount--
 		}
@@ -572,7 +572,7 @@ NextChange:
 	var latestWarningTime time.Time
 	for k, n := range s.notices {
 		if n.expired(now) {
-			stats.includeNotice(n)
+			stats.IncludeNotice(n)
 			delete(s.notices, k)
 		} else if n.noticeType == WarningNotice {
 			if n.lastRepeated.After(latestWarningTime) {
@@ -580,7 +580,7 @@ NextChange:
 			}
 		} else if n.noticeType == ChangeUpdateNotice {
 			if _, exists := s.changes[n.key]; !exists {
-				stats.includeNotice(n)
+				stats.IncludeNotice(n)
 				delete(s.notices, k)
 			}
 		}
@@ -589,35 +589,21 @@ NextChange:
 	if len(s.notices) > maxNotices {
 		s.pruneMaxNotices(maxNotices, stats)
 	}
-	if stats.numChangesPruned == 0 && stats.numNoticesPruned == 0 {
-		// For this common case, just log a single line, we might want to move this to Debug
-		logger.Noticef("Prune() removed no Changes or Notices")
-	} else {
-		if stats.numChangesPruned == 0 {
-			logger.Noticef("pruned 0 changes")
-		} else {
-			logger.Noticef("pruned %d changes from %s to %s",
-				stats.numChangesPruned, stats.oldestChangePruned, stats.newestChangePruned)
-		}
-		if stats.numNoticesPruned == 0 {
-			logger.Noticef("pruned 0 notices")
-		} else {
-			logger.Noticef("pruned %d notices from %s to %s",
-				stats.numNoticesPruned, stats.oldestNoticePruned, stats.newestNoticePruned)
-		}
-	}
+	stats.Log()
 }
 
+// pruneStats tracks how many changes and notices have been pruned, and what
+// time range has been affected.
 type pruneStats struct {
-	numChangesPruned int
-	numNoticesPruned int
+	numChangesPruned   int
+	numNoticesPruned   int
 	oldestChangePruned time.Time
 	newestChangePruned time.Time
 	oldestNoticePruned time.Time
 	newestNoticePruned time.Time
 }
 
-func (p *pruneStats) includeChange(chg *Change) {
+func (p *pruneStats) IncludeChange(chg *Change) {
 	p.numChangesPruned++
 	if chg == nil || chg.readyTime.IsZero() {
 		return
@@ -630,7 +616,7 @@ func (p *pruneStats) includeChange(chg *Change) {
 	}
 }
 
-func (p *pruneStats) includeNotice(n *Notice) {
+func (p *pruneStats) IncludeNotice(n *Notice) {
 	p.numNoticesPruned++
 	if n == nil || n.lastOccurred.IsZero() {
 		return
@@ -643,24 +629,44 @@ func (p *pruneStats) includeNotice(n *Notice) {
 	}
 }
 
+func (p *pruneStats) Log() {
+	if p.numChangesPruned == 0 && p.numNoticesPruned == 0 {
+		// For this common case, just log a single line, we might want to move this to Debug
+		logger.Noticef("Prune() removed no Changes or Notices")
+	} else {
+		if p.numChangesPruned == 0 {
+			logger.Noticef("pruned 0 changes")
+		} else {
+			logger.Noticef("pruned %d changes from %s to %s",
+				p.numChangesPruned, p.oldestChangePruned, p.newestChangePruned)
+		}
+		if p.numNoticesPruned == 0 {
+			logger.Noticef("pruned 0 notices")
+		} else {
+			logger.Noticef("pruned %d notices from %s to %s",
+				p.numNoticesPruned, p.oldestNoticePruned, p.newestNoticePruned)
+		}
+	}
+}
+
 // noticeHeap tracks the lastOccurred time in a heap. It will maintain the property that
 // the item that occurred closest to now (the greatest time) will be kept at index[0].
 type noticeHeap []*Notice
 
-func (nh noticeHeap) Len() int { return len(nh) }
+func (nh noticeHeap) Len() int           { return len(nh) }
 func (nh noticeHeap) Less(i, j int) bool { return nh[i].lastOccurred.After(nh[j].lastOccurred) }
-func (nh noticeHeap) Swap(i, j int) { nh[i], nh[j] = nh[j], nh[i] } 
+func (nh noticeHeap) Swap(i, j int)      { nh[i], nh[j] = nh[j], nh[i] }
 
 func (nh *noticeHeap) Push(x any) {
 	*nh = append(*nh, x.(*Notice))
 }
 
 func (nh *noticeHeap) Pop() any {
-        old := *nh
-        n := len(old)
-        x := old[n-1]
-        *nh = old[0 : n-1]
-        return x
+	old := *nh
+	n := len(old)
+	x := old[n-1]
+	*nh = old[0 : n-1]
+	return x
 
 }
 
@@ -684,7 +690,7 @@ func (s *State) pruneMaxNotices(maxNotices int, stats *pruneStats) {
 	for _, n := range noticesToRemove {
 		userID, hasUserID := flattenUserID(n.userID)
 		uniqueKey := noticeKey{hasUserID, userID, n.noticeType, n.key}
-		stats.includeNotice(n)
+		stats.IncludeNotice(n)
 		delete(s.notices, uniqueKey)
 	}
 }
