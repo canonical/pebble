@@ -589,8 +589,23 @@ NextChange:
 	if len(s.notices) > maxNotices {
 		s.pruneMaxNotices(maxNotices, stats)
 	}
-	logger.Noticef("pruned %d changes from %s to %s", stats.numChangesPruned, stats.oldestChangePruned, stats.newestChangePruned)
-	logger.Noticef("pruned %d notices from %s to %s", stats.numNoticesPruned, stats.oldestNoticePruned, stats.newestNoticePruned)
+	if stats.numChangesPruned == 0 && stats.numNoticesPruned == 0 {
+		// For this common case, just log a single line, we might want to move this to Debug
+		logger.Noticef("Prune() removed no Changes or Notices")
+	} else {
+		if stats.numChangesPruned == 0 {
+			logger.Noticef("pruned 0 changes")
+		} else {
+			logger.Noticef("pruned %d changes from %s to %s",
+				stats.numChangesPruned, stats.oldestChangePruned, stats.newestChangePruned)
+		}
+		if stats.numNoticesPruned == 0 {
+			logger.Noticef("pruned 0 notices")
+		} else {
+			logger.Noticef("pruned %d notices from %s to %s",
+				stats.numNoticesPruned, stats.oldestNoticePruned, stats.newestNoticePruned)
+		}
+	}
 }
 
 type pruneStats struct {
