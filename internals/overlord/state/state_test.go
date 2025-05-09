@@ -273,14 +273,14 @@ func (ss *stateSuite) TestImplicitCheckpointRetry(c *C) {
 
 	retries := 0
 	boom := errors.New("boom")
-	error := func() error {
+	err := func() error {
 		retries++
 		if retries == 2 {
 			return nil
 		}
 		return boom
 	}
-	b := &fakeStateBackend{error: error}
+	b := &fakeStateBackend{error: err}
 	st := state.New(b)
 	st.Lock()
 
@@ -795,7 +795,7 @@ func (ss *stateSuite) TestMethodEntrance(c *C) {
 		func() { st.Tasks() },
 		func() { st.Task("foo") },
 		func() { st.MarshalJSON() },
-		func() { st.Prune(time.Now(), time.Hour, time.Hour, 100) },
+		func() { st.Prune(time.Now(), time.Hour, time.Hour, 100, 100) },
 		func() { st.TaskCount() },
 	}
 
@@ -836,9 +836,14 @@ func (ss *stateSuite) TestPrune(c *C) {
 	chg1.AddTask(t1)
 	state.FakeChangeTimes(chg1, now.Add(-abortWait), unset)
 
+	n1ID, err := st.AddNotice(nil, state.ChangeUpdateNotice, chg1.ID(), nil)
+	c.Assert(err, IsNil)
+
 	chg2 := st.NewChange("prune", "...")
 	chg2.AddTask(t2)
 	c.Assert(chg2.Status(), Equals, state.DoStatus)
+	n2ID, err := st.AddNotice(nil, state.ChangeUpdateNotice, chg2.ID(), nil)
+	c.Assert(err, IsNil)
 	state.FakeChangeTimes(chg2, now.Add(-pruneWait), now.Add(-pruneWait))
 
 	chg3 := st.NewChange("ready-but-recent", "...")
@@ -849,13 +854,21 @@ func (ss *stateSuite) TestPrune(c *C) {
 	chg4.AddTask(t4)
 	state.FakeChangeTimes(chg4, now.Add(-pruneWait/2), unset)
 
+	n4ID, err := st.AddNotice(nil, state.ChangeUpdateNotice, chg4.ID(), &state.AddNoticeOptions{
+		// Prune ignores the pruneWait for notices, it only ever pays attention to expireAfter
+		// attribute of the notice, which is hard coded to
+		// defaultNoticeExpireAfter = 7 * 24 * time.Hour
+		Time: now.Add(-8 * 24 * time.Hour),
+	})
+	c.Assert(err, IsNil)
+
 	// unlinked task
 	t5 := st.NewTask("unliked", "...")
 	c.Check(st.Task(t5.ID()), IsNil)
 	state.FakeTaskTimes(t5, now.Add(-pruneWait), now.Add(-pruneWait))
 
 	past := time.Now().AddDate(-1, 0, 0)
-	st.Prune(past, pruneWait, abortWait, 100)
+	st.Prune(past, pruneWait, abortWait, 100, 100)
 
 	c.Assert(st.Change(chg1.ID()), Equals, chg1)
 	c.Assert(st.Change(chg2.ID()), IsNil)
@@ -876,6 +889,12 @@ func (ss *stateSuite) TestPrune(c *C) {
 	c.Assert(t4.Status(), Equals, state.DoStatus)
 
 	c.Check(st.TaskCount(), Equals, 3)
+
+	// n1 didn't expire, n2 was pruned because change 2 was removed, and
+	// n4 was pruned because its last occurance was old
+	c.Assert(st.Notice(n1ID), NotNil)
+	c.Assert(st.Notice(n2ID), IsNil)
+	c.Assert(st.Notice(n4ID), IsNil)
 }
 
 func (ss *stateSuite) TestRegisterPendingChangeByAttr(c *C) {
@@ -912,7 +931,7 @@ func (ss *stateSuite) TestRegisterPendingChangeByAttr(c *C) {
 	})
 
 	past := time.Now().AddDate(-1, 0, 0)
-	st.Prune(past, pruneWait, abortWait, 100)
+	st.Prune(past, pruneWait, abortWait, 100, 100)
 
 	c.Assert(st.Change(chg1.ID()), Equals, chg1)
 	c.Assert(st.Change(chg2.ID()), Equals, chg2)
@@ -944,7 +963,7 @@ func (ss *stateSuite) TestPruneEmptyChange(c *C) {
 	state.FakeChangeTimes(chg, now.Add(-pruneWait), time.Time{})
 
 	past := time.Now().AddDate(-1, 0, 0)
-	st.Prune(past, pruneWait, abortWait, 100)
+	st.Prune(past, pruneWait, abortWait, 100, 100)
 	c.Assert(st.Change(chg.ID()), IsNil)
 }
 
@@ -981,12 +1000,14 @@ func (ss *stateSuite) TestPruneMaxChangesHappy(c *C) {
 	// maxReadyChanges
 	past := time.Now().AddDate(-1, 0, 0)
 	maxReadyChanges := 100
-	st.Prune(past, pruneWait, abortWait, maxReadyChanges)
+	maxReadyNotices := 100
+	st.Prune(past, pruneWait, abortWait, maxReadyChanges, maxReadyNotices)
 	c.Assert(st.Changes(), HasLen, 15)
 
 	// but with maxReadyChanges we remove the ready ones
 	maxReadyChanges = 5
-	st.Prune(past, pruneWait, abortWait, maxReadyChanges)
+	maxReadyNotices = 5
+	st.Prune(past, pruneWait, abortWait, maxReadyChanges, maxReadyNotices)
 	c.Assert(st.Changes(), HasLen, 10)
 	remaining := map[string]bool{}
 	for _, chg := range st.Changes() {
@@ -1024,7 +1045,7 @@ func (ss *stateSuite) TestPruneMaxChangesSomeNotReady(c *C) {
 	// nothing can be pruned
 	past := time.Now().AddDate(-1, 0, 0)
 	maxChanges := 5
-	st.Prune(past, 1*time.Hour, 3*time.Hour, maxChanges)
+	st.Prune(past, 1*time.Hour, 3*time.Hour, maxChanges, maxChanges)
 	c.Assert(st.Changes(), HasLen, 10)
 }
 
@@ -1054,7 +1075,7 @@ func (ss *stateSuite) TestPruneMaxChangesHonored(c *C) {
 	// this test we do not purge the freshly ready change
 	maxChanges := 10
 	past := time.Now().AddDate(-1, 0, 0)
-	st.Prune(past, 1*time.Hour, 3*time.Hour, maxChanges)
+	st.Prune(past, 1*time.Hour, 3*time.Hour, maxChanges, maxChanges)
 	c.Assert(st.Changes(), HasLen, 11)
 }
 
@@ -1079,14 +1100,14 @@ func (ss *stateSuite) TestPruneHonorsStartOperationTime(c *C) {
 	// start operation time is 2h ago, change is not aborted because
 	// it's less than abortWait limit.
 	opTime := now.Add(-startTime)
-	st.Prune(opTime, pruneWait, abortWait, 100)
+	st.Prune(opTime, pruneWait, abortWait, 100, 100)
 	c.Assert(st.Changes(), HasLen, 1)
 	c.Check(chg.Status(), Equals, state.DoStatus)
 
 	// start operation time is 9h ago, change is aborted.
 	startTime = 9 * time.Hour
 	opTime = time.Now().Add(-startTime)
-	st.Prune(opTime, pruneWait, abortWait, 100)
+	st.Prune(opTime, pruneWait, abortWait, 100, 100)
 	c.Assert(st.Changes(), HasLen, 1)
 	c.Check(chg.Status(), Equals, state.HoldStatus)
 }
