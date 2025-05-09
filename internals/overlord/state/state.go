@@ -509,6 +509,8 @@ func (s *State) Prune(startOfOperation time.Time, pruneWait, abortWait time.Dura
 	pruneLimit := now.Add(-pruneWait)
 	abortLimit := now.Add(-abortWait)
 
+	stats := &pruneStats{}
+
 	// sort from oldest to newest
 	changes := s.Changes()
 	sort.Sort(byReadyTime(changes))
@@ -535,6 +537,7 @@ NextChange:
 		if readyTime.IsZero() {
 			if spawnTime.Before(pruneLimit) && len(chg.Tasks()) == 0 {
 				chg.Abort()
+				stats.includeChange(chg)
 				delete(s.changes, chg.ID())
 			} else if spawnTime.Before(abortLimit) {
 				for attr, pending := range s.pendingChangeByAttr {
@@ -552,6 +555,7 @@ NextChange:
 			for _, t := range chg.Tasks() {
 				delete(s.tasks, t.ID())
 			}
+			stats.includeChange(chg)
 			delete(s.changes, chg.ID())
 			readyChangesCount--
 		}
@@ -568,6 +572,7 @@ NextChange:
 	var latestWarningTime time.Time
 	for k, n := range s.notices {
 		if n.expired(now) {
+			stats.includeNotice(n)
 			delete(s.notices, k)
 		} else if n.noticeType == WarningNotice {
 			if n.lastRepeated.After(latestWarningTime) {
@@ -575,13 +580,51 @@ NextChange:
 			}
 		} else if n.noticeType == ChangeUpdateNotice {
 			if _, exists := s.changes[n.key]; !exists {
+				stats.includeNotice(n)
 				delete(s.notices, k)
 			}
 		}
 	}
 	s.latestWarningTime.Store(&latestWarningTime)
 	if len(s.notices) > maxNotices {
-		s.pruneMaxNotices(maxNotices)
+		s.pruneMaxNotices(maxNotices, stats)
+	}
+	logger.Noticef("pruned %d changes from %s to %s", stats.numChangesPruned, stats.oldestChangePruned, stats.newestChangePruned)
+	logger.Noticef("pruned %d notices from %s to %s", stats.numNoticesPruned, stats.oldestNoticePruned, stats.newestNoticePruned)
+}
+
+type pruneStats struct {
+	numChangesPruned int
+	numNoticesPruned int
+	oldestChangePruned time.Time
+	newestChangePruned time.Time
+	oldestNoticePruned time.Time
+	newestNoticePruned time.Time
+}
+
+func (p *pruneStats) includeChange(chg *Change) {
+	p.numChangesPruned++
+	if chg == nil || chg.readyTime.IsZero() {
+		return
+	}
+	if p.oldestChangePruned.IsZero() || p.oldestChangePruned.After(chg.readyTime) {
+		p.oldestChangePruned = chg.readyTime
+	}
+	if p.newestChangePruned.IsZero() || p.newestChangePruned.Before(chg.readyTime) {
+		p.newestChangePruned = chg.readyTime
+	}
+}
+
+func (p *pruneStats) includeNotice(n *Notice) {
+	p.numNoticesPruned++
+	if n == nil || n.lastOccurred.IsZero() {
+		return
+	}
+	if p.oldestNoticePruned.IsZero() || p.oldestNoticePruned.After(n.lastOccurred) {
+		p.oldestNoticePruned = n.lastOccurred
+	}
+	if p.newestNoticePruned.IsZero() || p.newestNoticePruned.Before(n.lastOccurred) {
+		p.newestNoticePruned = n.lastOccurred
 	}
 }
 
@@ -606,7 +649,7 @@ func (nh *noticeHeap) Pop() any {
 
 }
 
-func (s *State) pruneMaxNotices(maxNotices int) {
+func (s *State) pruneMaxNotices(maxNotices int, stats *pruneStats) {
 	// Note: instead of grabbing all notices, sorting them, to pull off the
 	// 'oldest N' notices, we do a single pass to find the k oldest
 	// entries in a single pass. We keep a heap of the oldest items we've found
@@ -626,6 +669,7 @@ func (s *State) pruneMaxNotices(maxNotices int) {
 	for _, n := range noticesToRemove {
 		userID, hasUserID := flattenUserID(n.userID)
 		uniqueKey := noticeKey{hasUserID, userID, n.noticeType, n.key}
+		stats.includeNotice(n)
 		delete(s.notices, uniqueKey)
 	}
 }
