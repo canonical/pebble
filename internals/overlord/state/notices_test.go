@@ -453,18 +453,18 @@ func (s *noticesSuite) TestDeleteExpired(c *C) {
 	addNotice(c, st, nil, state.CustomNotice, "foo.com/six", &state.AddNoticeOptions{
 		Time: now.Add(-6 * 24 * time.Hour),
 	})
-	// 6 days ago, so this has not yet expired, but set to expire even later
-	addNotice(c, st, nil, state.CustomNotice, "foo.com/six-longer", &state.AddNoticeOptions{
+	// 6 days ago, so this has not yet expired, but set to expire slightly later
+	addNotice(c, st, nil, state.CustomNotice, "foo.com/six-later", &state.AddNoticeOptions{
 		Time:        now.Add(-6 * 24 * time.Hour + time.Microsecond),
-		ExpireAfter: 10 * 24 * time.Hour,
 	})
-	// 5 days ago (so happened more recently), but set to expire at the same time as six
+	// occurred 10 days ago, but then a second time 5 days ago, so won't expire for a while
 	addNotice(c, st, nil, state.CustomNotice, "foo.com/five", &state.AddNoticeOptions{
-		Time:        now.Add(-5 * 24 * time.Hour),
-		ExpireAfter: 6 * 24 * time.Hour,
+		Time:        now.Add(-10 * 24 * time.Hour + time.Microsecond),
+	})
+	addNotice(c, st, nil, state.CustomNotice, "foo.com/five", &state.AddNoticeOptions{
+		Time:        now.Add(-5 * 24 * time.Hour + time.Microsecond),
 	})
 
-	// 
 	// 2 days ago, so this has not expired, but it refers to a change that doesn't exist
 	// so this should still be pruned
 	addNotice(c, st, nil, state.ChangeUpdateNotice, "999", &state.AddNoticeOptions{
@@ -491,7 +491,7 @@ func (s *noticesSuite) TestDeleteExpired(c *C) {
 	n := noticeToMap(c, notices[0])
 	c.Check(n["key"], Equals, "foo.com/six")
 	n = noticeToMap(c, notices[1])
-	c.Check(n["key"], Equals, "foo.com/six-longer")
+	c.Check(n["key"], Equals, "foo.com/six-later")
 	n = noticeToMap(c, notices[2])
 	c.Check(n["key"], Equals, "foo.com/five")
 	n = noticeToMap(c, notices[3])
@@ -499,18 +499,16 @@ func (s *noticesSuite) TestDeleteExpired(c *C) {
 	n = noticeToMap(c, notices[4])
 	c.Check(n["key"], Equals, "foo.com/now")
 
-	// Now we force the prune to be count based, and it should prefer to remove six. five and six both expire at the
-	// same time, but five occurred more recently
-	st.Prune(now, 0, 0, 0, 4)
+	// Now we force the prune to be count based, and it should prefer to remove six and six-later
+	// five, almost-now, and now all have occurred more recently
+	st.Prune(now, 0, 0, 0, 3)
 	notices = st.Notices(nil)
-	c.Assert(notices, HasLen, 4)
+	c.Assert(notices, HasLen, 3)
 	n = noticeToMap(c, notices[0])
-	c.Check(n["key"], Equals, "foo.com/six-longer")
-	n = noticeToMap(c, notices[1])
 	c.Check(n["key"], Equals, "foo.com/five")
-	n = noticeToMap(c, notices[2])
+	n = noticeToMap(c, notices[1])
 	c.Check(n["key"], Equals, "foo.com/almost-now")
-	n = noticeToMap(c, notices[3])
+	n = noticeToMap(c, notices[2])
 	c.Check(n["key"], Equals, "foo.com/now")
 }
 

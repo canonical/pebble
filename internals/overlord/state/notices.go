@@ -218,9 +218,6 @@ type AddNoticeOptions struct {
 
 	// Time, if set, overrides time.Now() as the notice occurrence time.
 	Time time.Time
-
-	// ExpireAfter, if set, overrides the default expiry time
-	ExpireAfter time.Duration
 }
 
 // AddNotice records an occurrence of a notice with the specified type and key
@@ -241,9 +238,6 @@ func (s *State) AddNotice(userID *uint32, noticeType NoticeType, key string, opt
 		now = time.Now()
 	}
 	now = now.UTC()
-	if options.ExpireAfter == 0 {
-		options.ExpireAfter = defaultNoticeExpireAfter
-	}
 	newOrRepeated := false
 	uid, hasUserID := flattenUserID(userID)
 	uniqueKey := noticeKey{hasUserID, uid, noticeType, key}
@@ -258,7 +252,7 @@ func (s *State) AddNotice(userID *uint32, noticeType NoticeType, key string, opt
 			key:           key,
 			firstOccurred: now,
 			lastRepeated:  now,
-			expireAfter:   options.ExpireAfter,
+			expireAfter:   defaultNoticeExpireAfter,
 			occurrences:   1,
 		}
 		s.notices[uniqueKey] = notice

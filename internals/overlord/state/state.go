@@ -16,6 +16,7 @@
 package state
 
 import (
+	"container/heap"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -578,31 +579,55 @@ NextChange:
 			}
 		}
 	}
+	s.latestWarningTime.Store(&latestWarningTime)
 	if len(s.notices) > maxNotices {
-		notices := s.flattenNotices(nil)
-		sort.Slice(notices, func(i, j int) bool {
-			// The notice that expires first should be removed first
-			// and if they expire at the same time, the one that has the oldest
-			// lastOccurred should be removed
-			expiredI := notices[i].lastOccurred.Add(notices[i].expireAfter)
-			expiredJ := notices[j].lastOccurred.Add(notices[j].expireAfter)
-			if expiredI.Before(expiredJ) {
-				return true
-			} else if expiredI.After(expiredJ) {
-				return false
-			}
-			return notices[i].lastOccurred.Before(notices[j].lastOccurred)
-		})
-		for _, n := range notices {
-			if len(s.notices) <= maxNotices {
-				break
-			}
-			userID, hasUserID := flattenUserID(n.userID)
-			uniqueKey := noticeKey{hasUserID, userID, n.noticeType, n.key}
-			delete(s.notices, uniqueKey)
+		s.pruneMaxNotices(maxNotices)
+	}
+}
+
+// noticeHeap tracks the lastOccurred time in a heap. It will maintain the property that
+// the item that occurred closest to now (the greatest time) will be kept at index[0].
+type noticeHeap []*Notice
+
+func (nh noticeHeap) Len() int { return len(nh) }
+func (nh noticeHeap) Less(i, j int) bool { return nh[i].lastOccurred.After(nh[j].lastOccurred) }
+func (nh noticeHeap) Swap(i, j int) { nh[i], nh[j] = nh[j], nh[i] } 
+
+func (nh *noticeHeap) Push(x any) {
+	*nh = append(*nh, x.(*Notice))
+}
+
+func (nh *noticeHeap) Pop() any {
+        old := *nh
+        n := len(old)
+        x := old[n-1]
+        *nh = old[0 : n-1]
+        return x
+
+}
+
+func (s *State) pruneMaxNotices(maxNotices int) {
+	// Note: instead of grabbing all notices, sorting them, to pull off the
+	// 'oldest N' notices, we do a single pass to find the k oldest
+	// entries in a single pass. We keep a heap of the oldest items we've found
+	// and if we find an item that is older than whatever we consider the most recent
+	// swap that item into the heap, and keep going
+	removeNNotices := len(s.notices) - maxNotices
+	noticesToRemove := make(noticeHeap, 0, removeNNotices)
+	for _, n := range s.notices {
+		if len(noticesToRemove) < removeNNotices {
+			// No need to compare for the first items, they'll always be the oldest so far :)
+			heap.Push(&noticesToRemove, n)
+		} else if n.lastOccurred.Before(noticesToRemove[0].lastOccurred) {
+			noticesToRemove[0] = n
+			heap.Fix(&noticesToRemove, 0)
 		}
 	}
-	s.latestWarningTime.Store(&latestWarningTime)
+	for _, n := range noticesToRemove {
+		userID, hasUserID := flattenUserID(n.userID)
+		uniqueKey := noticeKey{hasUserID, userID, n.noticeType, n.key}
+		delete(s.notices, uniqueKey)
+	}
 }
 
 // GetMaybeTimings implements timings.GetSaver
