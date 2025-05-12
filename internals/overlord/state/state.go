@@ -501,9 +501,9 @@ func (s *State) RegisterPendingChangeByAttr(attr string, f func(*Change) bool) {
 //
 //   - it removes expired warnings and notices. If the notice refers to a
 //     change that was removed, then the notice is removed, if there are still
-//     more than maxNotices they are removed until we reach maxNotices. The
-//     order of pruning is based on which notices would expire first, and then
-//     by oldest lastOccurred
+//     more than maxNotices they are removed until we reach maxNotices. When pruning
+//     down to maxNotices, the oldest lastOccurred are removed (iow, we keep
+//     recent notices in favor of older notices.)
 func (s *State) Prune(startOfOperation time.Time, pruneWait, abortWait time.Duration, maxReadyChanges, maxNotices int) {
 	now := time.Now()
 	pruneLimit := now.Add(-pruneWait)
