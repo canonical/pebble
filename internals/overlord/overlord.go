@@ -51,8 +51,8 @@ var (
 	// In snapd this is 7d, but also increase that in the context of Pebble.
 	abortWait = 24 * time.Hour * 14
 
-	// Hold no more than 500 completed changes, even if they have not yet expired
-	pruneMaxChanges = 500
+	// Hold no more than 1000 completed changes, even if they have not yet expired
+	pruneMaxChanges = 1000
 
 	// Hold no more than 1000 completed notices, even if they have not yet expired
 	pruneMaxNotices = 1000

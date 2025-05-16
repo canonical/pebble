@@ -16,11 +16,11 @@
 package state
 
 import (
-	"container/heap"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 	"sort"
 	"strconv"
 	"sync"
@@ -579,7 +579,7 @@ NextChange:
 				latestWarningTime = n.lastRepeated
 			}
 		} else if n.noticeType == ChangeUpdateNotice {
-			if _, exists := s.changes[n.key]; !exists {
+			if _, changeExists := s.changes[n.key]; !changeExists {
 				stats.IncludeNotice(n)
 				delete(s.notices, k)
 			}
@@ -595,99 +595,78 @@ NextChange:
 // pruneStats tracks how many changes and notices have been pruned, and what
 // time range has been affected.
 type pruneStats struct {
-	numChangesPruned   int
-	numNoticesPruned   int
-	oldestChangePruned time.Time
-	newestChangePruned time.Time
-	oldestNoticePruned time.Time
-	newestNoticePruned time.Time
+	numChanges   int
+	numNotices   int
+	oldestChange time.Time
+	newestChange time.Time
+	oldestNotice time.Time
+	newestNotice time.Time
 }
 
-func (p *pruneStats) IncludeChange(chg *Change) {
-	p.numChangesPruned++
-	if chg == nil || chg.readyTime.IsZero() {
+func (s *pruneStats) IncludeChange(chg *Change) {
+	s.numChanges++
+	if chg == nil {
+		logger.Noticef("IncludeChange called with a nil Change")
+	}
+	if chg.readyTime.IsZero() {
 		return
 	}
-	if p.oldestChangePruned.IsZero() || p.oldestChangePruned.After(chg.readyTime) {
-		p.oldestChangePruned = chg.readyTime
+	if s.oldestChange.IsZero() || chg.readyTime.Before(s.oldestChange) {
+		s.oldestChange = chg.readyTime
 	}
-	if p.newestChangePruned.IsZero() || p.newestChangePruned.Before(chg.readyTime) {
-		p.newestChangePruned = chg.readyTime
+	if chg.readyTime.After(s.newestChange) {
+		s.newestChange = chg.readyTime
 	}
 }
 
-func (p *pruneStats) IncludeNotice(n *Notice) {
-	p.numNoticesPruned++
-	if n == nil || n.lastOccurred.IsZero() {
+func (s *pruneStats) IncludeNotice(n *Notice) {
+	s.numNotices++
+	if n == nil {
+		logger.Noticef("IncludeNotice called with a nil Notice")
+	}
+	if n.lastOccurred.IsZero() {
+		logger.Noticef("IncludeNotice called with a Notice that has no lastOccurred time")
 		return
 	}
-	if p.oldestNoticePruned.IsZero() || p.oldestNoticePruned.After(n.lastOccurred) {
-		p.oldestNoticePruned = n.lastOccurred
+	if s.oldestNotice.IsZero() || n.lastOccurred.Before(s.oldestNotice) {
+		s.oldestNotice = n.lastOccurred
 	}
-	if p.newestNoticePruned.IsZero() || p.newestNoticePruned.Before(n.lastOccurred) {
-		p.newestNoticePruned = n.lastOccurred
-	}
-}
-
-func (p *pruneStats) Log() {
-	if p.numChangesPruned == 0 && p.numNoticesPruned == 0 {
-		// For this common case, just log a single line, we might want to move this to Debug
-		logger.Noticef("pruned 0 changes and 0 notices")
-	} else {
-		if p.numChangesPruned == 0 {
-			logger.Noticef("pruned 0 changes")
-		} else {
-			logger.Noticef("pruned %d changes from %s to %s",
-				p.numChangesPruned, p.oldestChangePruned, p.newestChangePruned)
-		}
-		if p.numNoticesPruned == 0 {
-			logger.Noticef("pruned 0 notices")
-		} else {
-			logger.Noticef("pruned %d notices from %s to %s",
-				p.numNoticesPruned, p.oldestNoticePruned, p.newestNoticePruned)
-		}
+	if n.lastOccurred.After(s.newestNotice) {
+		s.newestNotice = n.lastOccurred
 	}
 }
 
-// noticeHeap tracks the lastOccurred time in a heap. It will maintain the property that
-// the item that occurred closest to now (the greatest time) will be kept at index[0].
-type noticeHeap []*Notice
-
-func (nh noticeHeap) Len() int           { return len(nh) }
-func (nh noticeHeap) Less(i, j int) bool { return nh[i].lastOccurred.After(nh[j].lastOccurred) }
-func (nh noticeHeap) Swap(i, j int)      { nh[i], nh[j] = nh[j], nh[i] }
-
-func (nh *noticeHeap) Push(x any) {
-	*nh = append(*nh, x.(*Notice))
-}
-
-func (nh *noticeHeap) Pop() any {
-	old := *nh
-	n := len(old)
-	x := old[n-1]
-	*nh = old[0 : n-1]
-	return x
-
+func (s *pruneStats) Log() {
+	if s.numChanges == 0 && s.numNotices == 0 {
+		logger.Debugf("pruned 0 changes and 0 notices")
+		return
+	}
+	if s.numChanges > 0 {
+		logger.Noticef("pruned %d changes from %s to %s",
+			s.numChanges, s.oldestChange, s.newestChange)
+	}
+	if s.numNotices > 0 {
+		logger.Noticef("pruned %d notices from %s to %s",
+			s.numNotices, s.oldestNotice, s.newestNotice)
+	}
 }
 
 func (s *State) pruneMaxNotices(maxNotices int, stats *pruneStats) {
-	// Note: instead of grabbing all notices, sorting them, to pull off the
-	// 'oldest N' notices, we do a single pass to find the k oldest
-	// entries in a single pass. We keep a heap of the oldest items we've found
-	// and if we find an item that is older than whatever we consider the most recent
-	// swap that item into the heap, and keep going
-	removeNNotices := len(s.notices) - maxNotices
-	noticesToRemove := make(noticeHeap, 0, removeNNotices)
+	notices := make([]*Notice, 0, len(s.notices))
 	for _, n := range s.notices {
-		if len(noticesToRemove) < removeNNotices {
-			// No need to compare for the first items, they'll always be the oldest so far :)
-			heap.Push(&noticesToRemove, n)
-		} else if n.lastOccurred.Before(noticesToRemove[0].lastOccurred) {
-			noticesToRemove[0] = n
-			heap.Fix(&noticesToRemove, 0)
-		}
+		notices = append(notices, n)
 	}
-	for _, n := range noticesToRemove {
+	slices.SortFunc(notices, func(a, b *Notice) int {
+		if a.lastOccurred.Before(b.lastOccurred) {
+			return -1
+		}
+		if a.lastOccurred.Equal(b.lastOccurred) {
+			return 0
+		}
+		return 1
+	})
+	numToRemove := len(s.notices) - maxNotices
+	for _, n := range notices[:numToRemove] {
 		userID, hasUserID := flattenUserID(n.userID)
 		uniqueKey := noticeKey{hasUserID, userID, n.noticeType, n.key}
 		stats.IncludeNotice(n)
