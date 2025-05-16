@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 	"sort"
 	"strconv"
 	"sync"
@@ -498,11 +499,17 @@ func (s *State) RegisterPendingChangeByAttr(attr string, f func(*Change) bool) {
 //     changes than the limit set via "maxReadyChanges" those changes in ready
 //     state will also removed even if they are below the pruneWait duration.
 //
-//   - it removes expired warnings and notices.
-func (s *State) Prune(startOfOperation time.Time, pruneWait, abortWait time.Duration, maxReadyChanges int) {
+//   - it removes expired warnings and notices. If the notice refers to a
+//     change that was removed, then the notice is removed, if there are still
+//     more than maxNotices they are removed until we reach maxNotices. When pruning
+//     down to maxNotices, the oldest lastOccurred are removed (in other words,
+//     we keep recent notices in favor of older notices.)
+func (s *State) Prune(startOfOperation time.Time, pruneWait, abortWait time.Duration, maxReadyChanges, maxNotices int) {
 	now := time.Now()
 	pruneLimit := now.Add(-pruneWait)
 	abortLimit := now.Add(-abortWait)
+
+	stats := &pruneStats{}
 
 	// sort from oldest to newest
 	changes := s.Changes()
@@ -520,17 +527,6 @@ func (s *State) Prune(startOfOperation time.Time, pruneWait, abortWait time.Dura
 		readyChangesCount++
 	}
 
-	// Prune expired notices, and update the latest warning time cache.
-	var latestWarningTime time.Time
-	for k, n := range s.notices {
-		if n.expired(now) {
-			delete(s.notices, k)
-		} else if n.noticeType == WarningNotice && n.lastRepeated.After(latestWarningTime) {
-			latestWarningTime = n.lastRepeated
-		}
-	}
-	s.latestWarningTime.Store(&latestWarningTime)
-
 NextChange:
 	for _, chg := range changes {
 		readyTime := chg.ReadyTime()
@@ -541,6 +537,7 @@ NextChange:
 		if readyTime.IsZero() {
 			if spawnTime.Before(pruneLimit) && len(chg.Tasks()) == 0 {
 				chg.Abort()
+				stats.IncludeChange(chg)
 				delete(s.changes, chg.ID())
 			} else if spawnTime.Before(abortLimit) {
 				for attr, pending := range s.pendingChangeByAttr {
@@ -558,6 +555,7 @@ NextChange:
 			for _, t := range chg.Tasks() {
 				delete(s.tasks, t.ID())
 			}
+			stats.IncludeChange(chg)
 			delete(s.changes, chg.ID())
 			readyChangesCount--
 		}
@@ -569,6 +567,106 @@ NextChange:
 			s.writing()
 			delete(s.tasks, tid)
 		}
+	}
+	// Prune expired notices, and update the latest warning time cache.
+	var latestWarningTime time.Time
+	for k, n := range s.notices {
+		if n.expired(now) {
+			stats.IncludeNotice(n)
+			delete(s.notices, k)
+		} else if n.noticeType == WarningNotice {
+			if n.lastRepeated.After(latestWarningTime) {
+				latestWarningTime = n.lastRepeated
+			}
+		} else if n.noticeType == ChangeUpdateNotice {
+			if _, changeExists := s.changes[n.key]; !changeExists {
+				stats.IncludeNotice(n)
+				delete(s.notices, k)
+			}
+		}
+	}
+	s.latestWarningTime.Store(&latestWarningTime)
+	if len(s.notices) > maxNotices {
+		s.pruneMaxNotices(maxNotices, stats)
+	}
+	stats.Log()
+}
+
+// pruneStats tracks how many changes and notices have been pruned, and what
+// time range has been affected.
+type pruneStats struct {
+	numChanges   int
+	numNotices   int
+	oldestChange time.Time
+	newestChange time.Time
+	oldestNotice time.Time
+	newestNotice time.Time
+}
+
+func (s *pruneStats) IncludeChange(chg *Change) {
+	s.numChanges++
+	if chg == nil {
+		logger.Noticef("InternalError: IncludeChange called with a nil Change")
+		return
+	}
+	if chg.readyTime.IsZero() {
+		return
+	}
+	if s.oldestChange.IsZero() || chg.readyTime.Before(s.oldestChange) {
+		s.oldestChange = chg.readyTime
+	}
+	if chg.readyTime.After(s.newestChange) {
+		s.newestChange = chg.readyTime
+	}
+}
+
+func (s *pruneStats) IncludeNotice(n *Notice) {
+	s.numNotices++
+	if n == nil {
+		logger.Noticef("InternalError: IncludeNotice called with a nil Notice")
+		return
+	}
+	if n.lastOccurred.IsZero() {
+		logger.Noticef("InternalError: IncludeNotice called with a Notice that has no lastOccurred time")
+		return
+	}
+	if s.oldestNotice.IsZero() || n.lastOccurred.Before(s.oldestNotice) {
+		s.oldestNotice = n.lastOccurred
+	}
+	if n.lastOccurred.After(s.newestNotice) {
+		s.newestNotice = n.lastOccurred
+	}
+}
+
+func (s *pruneStats) Log() {
+	if s.numChanges == 0 && s.numNotices == 0 {
+		logger.Debugf("pruned 0 changes and 0 notices")
+		return
+	}
+	if s.numChanges > 0 {
+		logger.Noticef("pruned %d changes from %s to %s",
+			s.numChanges, s.oldestChange, s.newestChange)
+	}
+	if s.numNotices > 0 {
+		logger.Noticef("pruned %d notices from %s to %s",
+			s.numNotices, s.oldestNotice, s.newestNotice)
+	}
+}
+
+func (s *State) pruneMaxNotices(maxNotices int, stats *pruneStats) {
+	notices := make([]*Notice, 0, len(s.notices))
+	for _, n := range s.notices {
+		notices = append(notices, n)
+	}
+	slices.SortFunc(notices, func(a, b *Notice) int {
+		return a.lastOccurred.Compare(b.lastOccurred)
+	})
+	numToRemove := len(s.notices) - maxNotices
+	for _, n := range notices[:numToRemove] {
+		userID, hasUserID := flattenUserID(n.userID)
+		uniqueKey := noticeKey{hasUserID, userID, n.noticeType, n.key}
+		stats.IncludeNotice(n)
+		delete(s.notices, uniqueKey)
 	}
 }
 
