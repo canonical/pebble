@@ -606,7 +606,7 @@ type pruneStats struct {
 func (s *pruneStats) IncludeChange(chg *Change) {
 	s.numChanges++
 	if chg == nil {
-		logger.Noticef("IncludeChange called with a nil Change")
+		logger.Noticef("InternalError: IncludeChange called with a nil Change")
 	}
 	if chg.readyTime.IsZero() {
 		return
@@ -622,10 +622,10 @@ func (s *pruneStats) IncludeChange(chg *Change) {
 func (s *pruneStats) IncludeNotice(n *Notice) {
 	s.numNotices++
 	if n == nil {
-		logger.Noticef("IncludeNotice called with a nil Notice")
+		logger.Noticef("InternalError: IncludeNotice called with a nil Notice")
 	}
 	if n.lastOccurred.IsZero() {
-		logger.Noticef("IncludeNotice called with a Notice that has no lastOccurred time")
+		logger.Noticef("InternalError: IncludeNotice called with a Notice that has no lastOccurred time")
 		return
 	}
 	if s.oldestNotice.IsZero() || n.lastOccurred.Before(s.oldestNotice) {
@@ -657,13 +657,7 @@ func (s *State) pruneMaxNotices(maxNotices int, stats *pruneStats) {
 		notices = append(notices, n)
 	}
 	slices.SortFunc(notices, func(a, b *Notice) int {
-		if a.lastOccurred.Before(b.lastOccurred) {
-			return -1
-		}
-		if a.lastOccurred.Equal(b.lastOccurred) {
-			return 0
-		}
-		return 1
+		return a.lastOccurred.Compare(b.lastOccurred)
 	})
 	numToRemove := len(s.notices) - maxNotices
 	for _, n := range notices[:numToRemove] {
