@@ -607,6 +607,7 @@ func (s *pruneStats) IncludeChange(chg *Change) {
 	s.numChanges++
 	if chg == nil {
 		logger.Noticef("InternalError: IncludeChange called with a nil Change")
+		return
 	}
 	if chg.readyTime.IsZero() {
 		return
@@ -623,6 +624,7 @@ func (s *pruneStats) IncludeNotice(n *Notice) {
 	s.numNotices++
 	if n == nil {
 		logger.Noticef("InternalError: IncludeNotice called with a nil Notice")
+		return
 	}
 	if n.lastOccurred.IsZero() {
 		logger.Noticef("InternalError: IncludeNotice called with a Notice that has no lastOccurred time")
