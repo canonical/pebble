@@ -10,7 +10,7 @@ The `pebble` command has the following subcommands, organised into logical group
 * Info: [help](#reference_pebble_help_command), [version](#reference_pebble_version_command)
 * Plan: [add](#reference_pebble_add_command), [plan](#reference_pebble_plan_command), [replan](#reference_pebble_replan_command)
 * Services: [services](#reference_pebble_services_command), [logs](#reference_pebble_logs_command), [start](#reference_pebble_start_command), [restart](#reference_pebble_restart_command), [signal](#reference_pebble_signal_command), [stop](#reference_pebble_stop_command)
-* Checks: [checks](#reference_pebble_checks_command), [start-checks](#reference_pebble_start_checks_command), [stop-checks](#reference_pebble_stop_checks_command), [health](#reference_pebble_health_command)
+* Checks: [checks](#reference_pebble_checks_command), [check](#reference_pebble_check_command), [start-checks](#reference_pebble_start_checks_command), [stop-checks](#reference_pebble_stop_checks_command), [health](#reference_pebble_health_command)
 * Files: [push](#reference_pebble_push_command), [pull](#reference_pebble_pull_command), [ls](#reference_pebble_ls_command), [mkdir](#reference_pebble_mkdir_command), [rm](#reference_pebble_rm_command), [exec](#reference_pebble_exec_command)
 * Changes: [changes](#reference_pebble_changes_command), [tasks](#reference_pebble_tasks_command)
 * Notices: [warnings](#reference_pebble_warnings_command), [okay](#reference_pebble_okay_command), [notices](#reference_pebble_notices_command), [notice](#reference_pebble_notice_command), [notify](#reference_pebble_notify_command)
@@ -866,8 +866,12 @@ pebble run --args myservice --port 8080 \; --hold
 [run command options]
           --create-dirs  Create Pebble directory on startup if it doesn't exist
           --hold         Do not start default services automatically
-          --http=        Start HTTP API listening on this address (e.g.,
-                         ":4000") and expose open-access endpoints
+          --http=        Start HTTP API listening on this address in
+                         "<address>:port" format (for example, ":4000",
+                         "192.0.2.0:4000", "[2001:db8::1]:4000")
+          --https=       Start HTTPS API listening on this address in
+                         "<address>:port" format (for example, ":8443",
+                         "192.0.2.0:8443", "[2001:db8::1]:8443")
       -v, --verbose      Log all output from services to stdout (also
                          PEBBLE_VERBOSE=1)
           --args=        Provide additional arguments to a service

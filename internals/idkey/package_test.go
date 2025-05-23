@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2020 Canonical Ltd
+// Copyright (C) 2025 Canonical Ltd
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License version 3 as
@@ -12,15 +12,17 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package cmd
+package idkey_test
 
-//go:generate ./mkversion.sh
+import (
+	"testing"
 
-// Version will be overwritten at build-time via mkversion.sh
-var Version = "v1.22.0-dev"
+	. "gopkg.in/check.v1"
+)
 
-func MockVersion(version string) (restore func()) {
-	old := Version
-	Version = version
-	return func() { Version = old }
-}
+// Hook up check.v1 into the "go test" runner.
+func Test(t *testing.T) { TestingT(t) }
+
+type keySuite struct{}
+
+var _ = Suite(&keySuite{})

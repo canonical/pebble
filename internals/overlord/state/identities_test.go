@@ -134,9 +134,6 @@ func (s *identitiesSuite) TestUnmarshalAPIErrors(c *C) {
 	}, {
 		data:  `{"invalid-access": {"local": {"user-id": 42}}}`,
 		error: `access value must be specified \("admin", "read", "metrics", or "untrusted"\)`,
-	}, {
-		data:  `{"invalid-access": {"access": "admin", "basic": {"password": "hash"}}}`,
-		error: `basic identity can only have \"metrics\" access, got \"admin\"`,
 	}}
 	for _, test := range tests {
 		c.Logf("Input data: %s", test.data)
@@ -299,15 +296,6 @@ func (s *identitiesSuite) TestAddIdentities(c *C) {
 		},
 	})
 	c.Assert(err, ErrorMatches, `identity "bill" invalid: invalid access value "bar", must be "admin", "read", "metrics", or "untrusted"`)
-
-	// Basic type identity only allow metrics access.
-	err = st.AddIdentities(map[string]*state.Identity{
-		"bill": {
-			Access: "admin",
-			Basic:  &state.BasicIdentity{Password: "hash"},
-		},
-	})
-	c.Assert(err, ErrorMatches, `identity "bill" invalid: basic identity can only have "metrics" access, got "admin"`)
 
 	// Must have at least one type.
 	err = st.AddIdentities(map[string]*state.Identity{

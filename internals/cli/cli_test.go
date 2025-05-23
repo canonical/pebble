@@ -148,23 +148,23 @@ func (s *PebbleSuite) TestErrorResult(c *C) {
 	c.Assert(err, ErrorMatches, `cannot do something`)
 }
 
-func (s *PebbleSuite) TestGetEnvPaths(c *C) {
+func (s *PebbleSuite) TestRunOptionApplyDefaults(c *C) {
 	os.Setenv("PEBBLE", "")
 	os.Setenv("PEBBLE_SOCKET", "")
-	pebbleDir, socketPath := cli.GetEnvPaths()
-	c.Assert(pebbleDir, Equals, "/var/lib/pebble/default")
-	c.Assert(socketPath, Equals, "/var/lib/pebble/default/.pebble.socket")
+	r := cli.WithDefaultRunOptions(nil)
+	c.Assert(r.PebbleDir, Equals, "/var/lib/pebble/default")
+	c.Assert(r.ClientConfig.Socket, Equals, "/var/lib/pebble/default/.pebble.socket")
 
 	os.Setenv("PEBBLE", "/foo")
-	pebbleDir, socketPath = cli.GetEnvPaths()
-	c.Assert(pebbleDir, Equals, "/foo")
-	c.Assert(socketPath, Equals, "/foo/.pebble.socket")
+	r = cli.WithDefaultRunOptions(nil)
+	c.Assert(r.PebbleDir, Equals, "/foo")
+	c.Assert(r.ClientConfig.Socket, Equals, "/foo/.pebble.socket")
 
 	os.Setenv("PEBBLE", "/bar")
 	os.Setenv("PEBBLE_SOCKET", "/path/to/socket")
-	pebbleDir, socketPath = cli.GetEnvPaths()
-	c.Assert(pebbleDir, Equals, "/bar")
-	c.Assert(socketPath, Equals, "/path/to/socket")
+	r = cli.WithDefaultRunOptions(nil)
+	c.Assert(r.PebbleDir, Equals, "/bar")
+	c.Assert(r.ClientConfig.Socket, Equals, "/path/to/socket")
 }
 
 func (s *BasePebbleSuite) readCLIState(c *C) map[string]any {
@@ -179,19 +179,19 @@ func (s *BasePebbleSuite) readCLIState(c *C) map[string]any {
 		c.Fatalf("expected socket map, got %#v", fullState["pebble"])
 	}
 
-	_, socketPath := cli.GetEnvPaths()
-	v, ok := socketMap[socketPath]
+	r := cli.WithDefaultRunOptions(nil)
+	v, ok := socketMap[r.ClientConfig.Socket]
 	if !ok {
-		c.Fatalf("expected state map, got %#v", socketMap[socketPath])
+		c.Fatalf("expected state map, got %#v", socketMap[r.ClientConfig.Socket])
 	}
 	return v.(map[string]any)
 }
 
 func (s *BasePebbleSuite) writeCLIState(c *C, st map[string]any) {
-	_, socketPath := cli.GetEnvPaths()
+	r := cli.WithDefaultRunOptions(nil)
 	fullState := map[string]any{
 		"pebble": map[string]any{
-			socketPath: st,
+			r.ClientConfig.Socket: st,
 		},
 	}
 	err := os.MkdirAll(filepath.Dir(s.cliStatePath), 0o700)

@@ -17,6 +17,7 @@ package daemon
 import (
 	"bufio"
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
@@ -43,6 +44,7 @@ import (
 	"github.com/canonical/pebble/internals/overlord/servstate"
 	"github.com/canonical/pebble/internals/overlord/standby"
 	"github.com/canonical/pebble/internals/overlord/state"
+	"github.com/canonical/pebble/internals/overlord/tlsstate"
 	"github.com/canonical/pebble/internals/reaper"
 	"github.com/canonical/pebble/internals/systemd"
 )
@@ -56,6 +58,66 @@ var (
 	systemdSdNotify = systemd.SdNotify
 )
 
+// TransportType defines the possible API transport types we support. The
+// type can be extracted from the http.Request using RequestTransportType.
+type TransportType int
+
+// Used with context.WithValue as the key.
+type TransportTypeKey struct{}
+
+const (
+	TransportTypeUnknown TransportType = iota // Must be zero value => 0
+	TransportTypeUnixSocket
+	TransportTypeHTTP
+	TransportTypeHTTPS
+)
+
+// RequestTransportType extracts the transport type of the HTTP request. If
+// the transport cannot be found in the context, it returns the zero value
+// TransportTypeUnknown.
+func RequestTransportType(r *http.Request) TransportType {
+	if r == nil {
+		return TransportTypeUnknown
+	}
+	// If the assertion fails here, transport will always be the zero
+	// value of TransportType (TransportTypeUnknown).
+	transport, _ := r.Context().Value(TransportTypeKey{}).(TransportType)
+	return transport
+}
+
+// String returns a string representation of the transport type.
+func (t TransportType) String() string {
+	switch t {
+	case TransportTypeUnixSocket:
+		return "http+unix"
+	case TransportTypeHTTP:
+		return "http"
+	case TransportTypeHTTPS:
+		return "https"
+	default:
+		return "unknown"
+	}
+}
+
+// IsValid reports whether the transport type is valid.
+func (t TransportType) IsValid() bool {
+	switch t {
+	case TransportTypeUnixSocket, TransportTypeHTTP, TransportTypeHTTPS:
+		return true
+	}
+	return false
+}
+
+// IsConcealed returns true if the transport type is either encrypted (HTTPS) or
+// if its local to the device (Unix Domain Socket).
+func (t TransportType) IsConcealed() bool {
+	switch t {
+	case TransportTypeUnixSocket, TransportTypeHTTPS:
+		return true
+	}
+	return false
+}
+
 // Options holds the daemon setup required for the initialization of a new daemon.
 type Options struct {
 	// Dir is the pebble directory where all setup is found. Defaults to /var/lib/pebble/default.
@@ -64,6 +126,15 @@ type Options struct {
 	// LayersDir is an optional path for the layers directory.
 	// Defaults to "layers" inside the pebble directory.
 	LayersDir string
+
+	// TLSDir is an optional path for where the TLS manager persists PEM files.
+	// Defaults to "tls" inside the pebble directory.
+	TLSDir string
+
+	// IDSigner is a private key representing the identity of a Pebble
+	// instance (machine, container or device), which implements the
+	// tlsstate.IDSigner interface (for digest signing).
+	IDSigner tlsstate.IDSigner
 
 	// SocketPath is an optional path for the unix socket used for the client
 	// to communicate with the daemon. Defaults to a hidden (dotted) name inside
@@ -74,6 +145,11 @@ type Options struct {
 	// ":4000" to listen on any address, port 4000. If not set, the HTTP API
 	// server is not started.
 	HTTPAddress string
+
+	// HTTPSAddress is the address for the HTTPS API server, for example
+	// ":8443" to listen on any address, port 8443. If not set, the HTTPS
+	// API server is not started.
+	HTTPSAddress string
 
 	// ServiceOuput is an optional io.Writer for the service log output, if set, all services
 	// log output will be written to the writer.
@@ -86,20 +162,19 @@ type Options struct {
 
 // A Daemon listens for requests and routes them to the right command
 type Daemon struct {
-	Version          string
-	StartTime        time.Time
-	pebbleDir        string
-	normalSocketPath string
-	httpAddress      string
-	overlord         *overlord.Overlord
-	state            *state.State
-	generalListener  net.Listener
-	httpListener     net.Listener
-	connTracker      *connTracker
-	serve            *http.Server
-	tomb             tomb.Tomb
-	router           *mux.Router
-	standbyOpinions  *standby.StandbyOpinions
+	Version         string
+	StartTime       time.Time
+	options         *Options
+	overlord        *overlord.Overlord
+	state           *state.State
+	generalListener net.Listener
+	httpListener    net.Listener
+	httpsListener   net.Listener
+	connTracker     *connTracker
+	serve           *http.Server
+	tomb            tomb.Tomb
+	router          *mux.Router
+	standbyOpinions *standby.StandbyOpinions
 
 	// set to what kind of restart was requested (if any)
 	requestedRestart restart.RestartType
@@ -175,6 +250,7 @@ func (c *Command) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// ucred returned will be nil for request over HTTP and HTTPS.
 	ucred, err := ucrednetGet(r.RemoteAddr)
 	if err != nil && err != errNoID {
 		logger.Noticef("Cannot parse UID from remote address %q: %s", r.RemoteAddr, err)
@@ -225,6 +301,12 @@ func (c *Command) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			// Regular read access if any other local UID.
 			user = &UserState{Access: state.ReadAccess, UID: &ucred.Uid}
 		}
+	}
+
+	// We only proceed if we support the transport (we can identity it).
+	if !RequestTransportType(r).IsValid() {
+		Forbidden("forbidden").ServeHTTP(w, r)
+		return
 	}
 
 	if rspe := access.CheckAccess(c.d, r, user); rspe != nil {
@@ -301,6 +383,8 @@ func logit(handler http.Handler) http.Handler {
 		handler.ServeHTTP(ww, r)
 		t := time.Since(t0)
 
+		transport := RequestTransportType(r)
+
 		// Don't log GET /v1/changes/{change-id} as that's polled quickly by
 		// clients when waiting for a change (e.g., service starting). Also
 		// don't log GET /v1/system-info or GET /v1/health to avoid hits to
@@ -312,10 +396,10 @@ func logit(handler http.Handler) http.Handler {
 				r.URL.Path == "/v1/health")
 		if !skipLog {
 			if strings.HasSuffix(r.RemoteAddr, ";") {
-				logger.Debugf("%s %s %s %s %d", r.RemoteAddr, r.Method, r.URL, t, ww.status())
-				logger.Noticef("%s %s %s %d", r.Method, r.URL, t, ww.status())
+				logger.Debugf("%s %s %s %s %d (%s)", r.RemoteAddr, r.Method, r.URL, t, ww.status(), transport)
+				logger.Noticef("%s %s %s %d (%s)", r.Method, r.URL, t, ww.status(), transport)
 			} else {
-				logger.Noticef("%s %s %s %s %d", r.RemoteAddr, r.Method, r.URL, t, ww.status())
+				logger.Noticef("%s %s %s %s %d (%s)", r.RemoteAddr, r.Method, r.URL, t, ww.status(), transport)
 			}
 		}
 	})
@@ -345,21 +429,31 @@ func exitOnPanic(handler http.Handler, stderr io.Writer, exit func()) http.Handl
 func (d *Daemon) Init() error {
 	listenerMap := make(map[string]net.Listener)
 
-	if listener, err := getListener(d.normalSocketPath, listenerMap); err == nil {
+	if listener, err := getListener(d.options.SocketPath, listenerMap); err == nil {
 		d.generalListener = &ucrednetListener{Listener: listener}
 	} else {
-		return fmt.Errorf("when trying to listen on %s: %v", d.normalSocketPath, err)
+		return fmt.Errorf("when trying to listen on %s: %v", d.options.SocketPath, err)
 	}
 
 	d.addRoutes()
 
-	if d.httpAddress != "" {
-		listener, err := net.Listen("tcp", d.httpAddress)
+	if d.options.HTTPAddress != "" {
+		listener, err := net.Listen("tcp", d.options.HTTPAddress)
 		if err != nil {
-			return fmt.Errorf("cannot listen on %q: %v", d.httpAddress, err)
+			return fmt.Errorf("cannot listen on %q: %v", d.options.HTTPAddress, err)
 		}
 		d.httpListener = listener
-		logger.Noticef("HTTP API server listening on %q.", d.httpAddress)
+		logger.Noticef("HTTP API server listening on %q.", d.options.HTTPAddress)
+	}
+
+	if d.options.HTTPSAddress != "" {
+		tlsConf := d.overlord.TLSManager().ListenConfig()
+		listener, err := tls.Listen("tcp", d.options.HTTPSAddress, tlsConf)
+		if err != nil {
+			return fmt.Errorf("cannot TLS listen on %q: %v", d.options.HTTPSAddress, err)
+		}
+		d.httpsListener = listener
+		logger.Noticef("HTTPS API server listening on %q.", d.options.HTTPSAddress)
 	}
 
 	logger.Noticef("Started daemon.")
@@ -454,6 +548,20 @@ func (d *Daemon) Start() error {
 
 	d.connTracker = &connTracker{conns: make(map[net.Conn]struct{})}
 	d.serve = &http.Server{
+		ConnContext: func(ctx context.Context, c net.Conn) context.Context {
+			// Flag the incoming requests with a context value so we can identify the
+			// transport of the request in the http.Request object. We can use this for
+			// refined access checker decisions.
+			switch c.(type) {
+			case *ucrednetConn:
+				return context.WithValue(ctx, TransportTypeKey{}, TransportTypeUnixSocket)
+			case *net.TCPConn:
+				return context.WithValue(ctx, TransportTypeKey{}, TransportTypeHTTP)
+			case *tls.Conn:
+				return context.WithValue(ctx, TransportTypeKey{}, TransportTypeHTTPS)
+			}
+			return context.WithValue(ctx, TransportTypeKey{}, TransportTypeUnknown)
+		},
 		Handler: exitOnPanic(logit(d.router), os.Stderr, func() {
 			os.Exit(1)
 		}),
@@ -472,10 +580,19 @@ func (d *Daemon) Start() error {
 	})
 
 	if d.httpListener != nil {
-		// Start additional HTTP API (currently only GuestOK endpoints are
-		// available because the HTTP API has no authentication right now).
+		// Start additional HTTP API
 		d.tomb.Go(func() error {
 			err := d.serve.Serve(d.httpListener)
+			if err != http.ErrServerClosed && d.tomb.Err() == tomb.ErrStillAlive {
+				return err
+			}
+			return nil
+		})
+	}
+	if d.httpsListener != nil {
+		// Start additional HTTPS API
+		d.tomb.Go(func() error {
+			err := d.serve.Serve(d.httpsListener)
 			if err != http.ErrServerClosed && d.tomb.Err() == tomb.ErrStillAlive {
 				return err
 			}
@@ -837,17 +954,17 @@ func (d *Daemon) SetServiceArgs(serviceArgs map[string][]string) error {
 
 func New(opts *Options) (*Daemon, error) {
 	d := &Daemon{
-		pebbleDir:        opts.Dir,
-		normalSocketPath: opts.SocketPath,
-		httpAddress:      opts.HTTPAddress,
+		options: opts,
 	}
 
 	ovldOptions := overlord.Options{
 		PebbleDir:      opts.Dir,
 		LayersDir:      opts.LayersDir,
+		TLSDir:         opts.TLSDir,
 		RestartHandler: d,
 		ServiceOutput:  opts.ServiceOutput,
 		Extension:      opts.OverlordExtension,
+		IDSigner:       opts.IDSigner,
 	}
 
 	ovld, err := overlord.New(&ovldOptions)

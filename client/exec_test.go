@@ -37,7 +37,7 @@ type execSuite struct {
 
 var _ = Suite(&execSuite{})
 
-var websocketRegexp = regexp.MustCompile(`^ws://localhost/v1/tasks/T\d+/websocket/(\w+)$`)
+var websocketRegexp = regexp.MustCompile(`^/v1/tasks/T\d+/websocket/(\w+)$`)
 
 func (s *execSuite) SetUpTest(c *C) {
 	s.clientSuite.SetUpTest(c)
