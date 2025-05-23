@@ -77,6 +77,9 @@ func (s *PebbleSuite) TestGetChangesFails(c *check.C) {
 }
 
 func (s *PebbleSuite) TestChanges(c *check.C) {
+	restore := cli.FakeTimeLocalUTC()
+	defer restore()
+
 	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
 		c.Check(r.Method, check.Equals, "GET")
 		c.Check(r.URL.Path, check.Equals, "/v1/changes")

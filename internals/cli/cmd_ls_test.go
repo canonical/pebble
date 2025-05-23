@@ -62,6 +62,9 @@ func (s *PebbleSuite) TestLsDirectory(c *C) {
 }
 
 func (s *PebbleSuite) TestLsLongFormat(c *C) {
+	restore := cli.FakeTimeLocalUTC()
+	defer restore()
+
 	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
 		c.Assert(r.Method, Equals, "GET")
 		c.Assert(r.URL.Path, Equals, "/v1/files")

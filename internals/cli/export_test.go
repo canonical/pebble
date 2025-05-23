@@ -16,6 +16,7 @@ package cli
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/canonical/go-flags"
 
@@ -82,6 +83,14 @@ func FakeIsStdinTTY(t bool) (restore func()) {
 	isStdinTTY = t
 	return func() {
 		isStdinTTY = oldIsStdinTTY
+	}
+}
+
+func FakeTimeLocalUTC() (restore func()) {
+	oldLocal := time.Local
+	time.Local = time.UTC
+	return func() {
+		time.Local = oldLocal
 	}
 }
 
