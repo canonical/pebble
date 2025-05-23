@@ -24,7 +24,7 @@ Usage: pebble <command> [<options>...]
 If you want to build and install the executable to your `~/go/bin` directory (which you may want to add to your path), use `go install`:
 
 ```
-$ go install ./cmd/pebble
+go install ./cmd/pebble
 ```
 
 However, during development it's easiest just to use `go run`, as that will automatically recompile if you've made any changes.
