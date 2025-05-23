@@ -1,5 +1,15 @@
 # Pebble
 
+```{toctree}
+:maxdepth: 2
+:hidden: true
+
+Tutorial <tutorial/getting-started>
+how-to/index
+reference/index
+explanation/index
+```
+
 **Pebble** is a lightweight Linux service manager.
 
 It helps you orchestrate a set of local processes as an organised set. It resembles well-known tools such as _supervisord_, _runit_, or _s6_, in that it can easily manage non-system processes independently from the system services. However, it was designed with unique features such as layered configuration and an HTTP API that help with more specific use cases.
@@ -53,13 +63,3 @@ The Pebble project is sponsored by [Canonical Ltd](https://www.canonical.com).
 - [Code of conduct](https://ubuntu.com/community/ethos/code-of-conduct)
 - [Contribute to the project](https://github.com/canonical/pebble?tab=readme-ov-file#contributing)
 - [Development](https://github.com/canonical/pebble/blob/master/HACKING.md): information on how to run and hack on the Pebble codebase during development
-
-```{filtered-toctree}
-:hidden:
-:titlesonly:
-
-:diataxis:Tutorial <tutorial/getting-started>
-:diataxis:how-to/index
-:diataxis:reference/index
-:diataxis:explanation/index
-```
