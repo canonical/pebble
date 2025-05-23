@@ -77,9 +77,6 @@ func (s *PebbleSuite) TestGetChangesFails(c *check.C) {
 }
 
 func (s *PebbleSuite) TestChanges(c *check.C) {
-	restore := cli.FakeTimeLocalUTC()
-	defer restore()
-
 	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
 		c.Check(r.Method, check.Equals, "GET")
 		c.Check(r.URL.Path, check.Equals, "/v1/changes")
@@ -87,12 +84,15 @@ func (s *PebbleSuite) TestChanges(c *check.C) {
 		fmt.Fprintln(w, fakeChangesJSON)
 	})
 
-	expectedChanges := `(?ms)ID +Status +Spawn +Ready +Summary
-four +Do +2015-02-21 +2015-02-21 +...
-three +Do +2016-01-21 +- +...
-one +Do +2016-03-21 +2016-03-21 +...
-two +Do +2016-04-21 +2016-04-21 +...
-`
+	// The [12] is to allow date 21 or 22, so the tests succeed on timezones
+	// east of UTC and west of UTC (timeutil.Human uses time.Local).
+	expectedChanges := `
+(?ms)ID +Status +Spawn +Ready +Summary
+four +Do +2015-02-21 +2015-02-2[12] +...
+three +Do +2016-01-2[12] +- +...
+one +Do +2016-03-21 +2016-03-2[12] +...
+two +Do +2016-04-21 +2016-04-2[12] +...
+`[1:]
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"changes"})
 	c.Assert(err, check.IsNil)

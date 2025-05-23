@@ -62,9 +62,6 @@ func (s *PebbleSuite) TestLsDirectory(c *C) {
 }
 
 func (s *PebbleSuite) TestLsLongFormat(c *C) {
-	restore := cli.FakeTimeLocalUTC()
-	defer restore()
-
 	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
 		c.Assert(r.Method, Equals, "GET")
 		c.Assert(r.URL.Path, Equals, "/v1/files")
@@ -103,9 +100,12 @@ func (s *PebbleSuite) TestLsLongFormat(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(rest, HasLen, 0)
 
-	c.Check(s.Stdout(), Matches, `(?ms)drwxrwxrwx +root +root +- +2016-04-21 +foo
----------- +toor +toor +1.00GB +2021-04-21 +bar
-`)
+	// The [12] is to allow date 21 or 22, so the tests succeed on timezones
+	// east of UTC and west of UTC (timeutil.Human uses time.Local).
+	c.Check(s.Stdout(), Matches, `
+(?ms)drwxrwxrwx +root +root +- +2016-04-2[12] +foo
+---------- +toor +toor +1.00GB +2021-04-2[12] +bar
+`[1:])
 	c.Check(s.Stderr(), Equals, "")
 }
 
