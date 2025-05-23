@@ -109,6 +109,7 @@ Recommended prefixes are: `fix:`, `feat:`, `build:`, `chore:`, `ci:`, `docs:`, `
 ### Imports
 
 Pebble imports should be arranged in three groups:
+
 - standard library imports
 - third-party / non-Pebble imports
 - Pebble imports (i.e. those prefixed with `github.com/canonical/pebble`)
@@ -116,9 +117,11 @@ Pebble imports should be arranged in three groups:
 Imports should be sorted alphabetically within each group.
 
 We use the [`gopkg.in/check.v1`](https://pkg.go.dev/gopkg.in/check.v1) package for testing. Inside a test file, import this as follows:
+
 ```go
 . "gopkg.in/check.v1"
 ```
+
 so that identifiers from that package will be added to the local namespace.
 
 
@@ -141,11 +144,13 @@ import (
 ### Log and error messages
 
 **Log messages** (that is, those passed to `logger.Noticef` or `logger.Debugf`) should begin with a capital letter, and use "Cannot X" rather than "Error Xing":
+
 ```go
 logger.Noticef("Cannot marshal logs to JSON: %v", err)
 ```
 
 **Error messages** should be lowercase, and again use "cannot ..." instead of "error ...":
+
 ```go
 fmt.Errorf("cannot create log client: %w", err)
 ```
@@ -262,6 +267,7 @@ Note that the [OpenAPI spec](docs/specs/openapi.yaml) also needs to be manually 
 - Avoid background context unless it's essential for the reader to understand.
 
 Recommended tone:
+
 - Use a casual tone, but avoid idioms. Common contractions such as "it's" and "doesn't" are great.
 - Use "we" to include the reader in what you're explaining.
 - Avoid passive descriptions. If you expect the reader to do something, give a direct instruction.
