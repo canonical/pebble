@@ -16,6 +16,7 @@ package cli
 
 import (
 	"fmt"
+
 	"github.com/canonical/go-flags"
 
 	"github.com/canonical/pebble/client"
