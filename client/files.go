@@ -292,15 +292,11 @@ func (client *Client) MakeDir(opts *MakeDirOptions) error {
 	}
 
 	var result []fileResult
-	headers := map[string]string{
-		"Content-Type": "application/json",
-	}
 	resp, err := client.Requester().Do(context.Background(), &RequestOptions{
-		Type:    SyncRequest,
-		Method:  "POST",
-		Path:    "/v1/files",
-		Headers: headers,
-		Body:    &body,
+		Type:   SyncRequest,
+		Method: "POST",
+		Path:   "/v1/files",
+		Body:   &body,
 	})
 	if err != nil {
 		return err
@@ -370,15 +366,11 @@ func (client *Client) RemovePath(opts *RemovePathOptions) error {
 	}
 
 	var result []fileResult
-	headers := map[string]string{
-		"Content-Type": "application/json",
-	}
 	resp, err := client.Requester().Do(context.Background(), &RequestOptions{
-		Type:    SyncRequest,
-		Method:  "POST",
-		Path:    "/v1/files",
-		Headers: headers,
-		Body:    &body,
+		Type:   SyncRequest,
+		Method: "POST",
+		Path:   "/v1/files",
+		Body:   &body,
 	})
 	if err != nil {
 		return err

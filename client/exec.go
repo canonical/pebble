@@ -149,16 +149,12 @@ func (client *Client) Exec(opts *ExecOptions) (*ExecProcess, error) {
 	if err != nil {
 		return nil, fmt.Errorf("cannot encode JSON payload: %w", err)
 	}
-	headers := map[string]string{
-		"Content-Type": "application/json",
-	}
 	var result execResult
 	resp, err := client.Requester().Do(context.Background(), &RequestOptions{
-		Type:    AsyncRequest,
-		Method:  "POST",
-		Path:    "/v1/exec",
-		Headers: headers,
-		Body:    &body,
+		Type:   AsyncRequest,
+		Method: "POST",
+		Path:   "/v1/exec",
+		Body:   &body,
 	})
 	if err != nil {
 		return nil, err
