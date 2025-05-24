@@ -155,6 +155,9 @@ type Config struct {
 
 	// UserAgent is the User-Agent header sent to the Pebble daemon.
 	UserAgent string
+
+	// ContentType is the Content-Type header sent to the Pebble daemon.
+	ContentType string
 }
 
 // defaultTLSVerifier blocks all TLS (HTTPS) access by always rejecting the
@@ -196,6 +199,11 @@ func New(config *Config) (*Client, error) {
 	// The default verifier never trusts any server TLS certificates.
 	if localConfig.VerifyTLSConnection == nil {
 		localConfig.VerifyTLSConnection = defaultTLSVerifier
+	}
+
+	// Set default content type if not specified.
+	if localConfig.ContentType == "" {
+		localConfig.ContentType = "application/json"
 	}
 
 	client := &Client{}
@@ -268,6 +276,9 @@ func (rq *defaultRequester) dispatch(ctx context.Context, method, urlpath string
 	}
 	if rq.userAgent != "" {
 		req.Header.Set("User-Agent", rq.userAgent)
+	}
+	if rq.contentType != "" {
+		req.Header.Set("Content-Type", rq.contentType)
 	}
 
 	if rq.basicUsername != "" && rq.basicPassword != "" {
@@ -566,6 +577,7 @@ type defaultRequester struct {
 	baseURL       *url.URL
 	doer          doer
 	userAgent     string
+	contentType   string
 	basicUsername string
 	basicPassword string
 	transport     *http.Transport
@@ -624,6 +636,7 @@ func newDefaultRequester(client *Client, opts *Config) (*defaultRequester, error
 
 	requester.doer = &http.Client{Transport: requester.transport}
 	requester.userAgent = opts.UserAgent
+	requester.contentType = opts.ContentType
 	requester.client = client
 
 	return requester, nil
