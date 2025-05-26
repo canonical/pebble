@@ -567,7 +567,6 @@ type defaultRequester struct {
 	baseURL       *url.URL
 	doer          doer
 	userAgent     string
-	contentType   string
 	basicUsername string
 	basicPassword string
 	transport     *http.Transport
