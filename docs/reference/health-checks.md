@@ -121,7 +121,7 @@ See also:
 
 ## Checks command
 
-You can view check status using the `pebble checks` command. This reports the checks along with their status (`up`, `down`, or `inactive`) and number of failures. For example:
+You can view check status using the `pebble checks` command. This reports the checks along with their status and number of failures. For example:
 
 ```{terminal}
    :input: pebble checks
@@ -129,8 +129,16 @@ Check   Level  Startup   Status    Failures  Change
 up      alive  enabled   up        0/1       10
 online  ready  enabled   down      1/3       13 (dial tcp 127.0.0.1:8000: connect: connection refused)
 test    -      disabled  down      42/3      14 (Get "http://localhost:8080/": dial t... run "pebble tasks 14" for more)
+slow    -      enabled   unknown   0/3       15
 extra   -      disabled  inactive  -         -
 ```
+
+The "Status" value will be one of the following:
+
+- `unknown`: check has not yet been run at all
+- `up`: check has been run and is healthy
+- `down`: check has failed "threshold" or more times in a row (considered unhealthy by `/v1/health`)
+- `inactive`: check has been stopped
 
 The "Failures" column shows the current number of failures since the check started failing, a slash, and the configured threshold.
 
@@ -213,7 +221,7 @@ Including a check that is already running in a `start-checks` command, or includ
 
 If the `--http` option was given when starting `pebble run`, Pebble exposes a `/v1/health` HTTP endpoint that allows a user to query the health of configured checks, optionally filtered by check level with the query string `?level=<level>` This endpoint returns an HTTP 200 status if the checks are healthy, HTTP 502 otherwise.
 
-Stopped (inactive) checks are ignored for health calculations.
+Stopped (inactive) checks are ignored for health calculations. Checks that haven't yet been run (unknown) are considered healthy.
 
 Each check can specify a `level` of "alive" or "ready". These have semantic meaning: "alive" means the check or the service it's connected to is up and running; "ready" means it's properly accepting network traffic. These correspond to [Kubernetes "liveness" and "readiness" probes](https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/).
 
