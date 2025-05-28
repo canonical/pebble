@@ -221,16 +221,11 @@ We use [`sphinx`](https://www.sphinx-doc.org/en/master/) to build the docs with 
 
 ### Building the Docs
 
-To build the docs, run `tox` under the `docs/` folder.
+To build the docs, run `make run` in the `docs` directory.
 
 ### Pulling in the Latest Style Changes and Dependencies
 
-To pull in the latest style and dependencies from the starter pack, clone the [Canonical Documentation Starter Pack repository](https://github.com/canonical/sphinx-docs-starter-pack), and follow the README there. TL;DR:
-
-- Copy the content into the `docs/` folder.
-- Remove unnecessary files (like Makefile, cheat sheets, etc.)
-- Under the `docs/` folder, run `python3 build_requirements.py`. This generates the latest `requirements.txt` under the `.sphinx/` folder.
-- Under the `docs/` folder, run `tox -e docs-dep` to compile a pinned requirements file for tox environments.
+To update the documentation starter pack, run `make update` in the `docs` directory.
 
 ### Updating the CLI reference documentation
 
@@ -253,7 +248,7 @@ The `{command name}` command is used to {describe the command}.
 
 With `{command name}` replaced by the name of the command and `{describe the command}` replaced by a suitable description.
 
-In the `docs` directory, run `tox -e commands` to automatically update the CLI reference documentation.
+To automatically update the CLI reference documentation, run `make cli-help` in the `docs` directory.
 
 A CI workflow will fail if the CLI reference documentation does not match the actual output from Pebble.
 
