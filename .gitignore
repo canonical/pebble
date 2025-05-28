@@ -7,5 +7,4 @@ cmd/VERSION
 .idea
 .vscode
 /pebble
-.tox/
 dist/
