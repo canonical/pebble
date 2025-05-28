@@ -1227,6 +1227,7 @@ paths:
                   "result": {
                     "boot-id": "e14ed96e-5a98-4402-80f7-d19dd949eac3",
                     "http-address": ":4000",
+                    "https-address": ":4443",
                     "version": "v1.17.0"
                   }
                 }
