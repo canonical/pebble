@@ -107,6 +107,7 @@ func (s *apiSuite) TestSysInfo(c *check.C) {
 	d := s.daemon(c)
 	d.Version = "42b1"
 	d.options.HTTPAddress = ":4000"
+	d.options.HTTPSAddress = ":4443"
 	state := d.overlord.State()
 	state.Lock()
 	_, err := restart.Manager(state, "ffffffff-ffff-ffff-ffff-ffffffffffff", nil)
@@ -118,9 +119,10 @@ func (s *apiSuite) TestSysInfo(c *check.C) {
 	c.Check(rec.Result().Header.Get("Content-Type"), check.Equals, "application/json")
 
 	expected := map[string]any{
-		"boot-id":      "ffffffff-ffff-ffff-ffff-ffffffffffff",
-		"http-address": ":4000",
-		"version":      "42b1",
+		"boot-id":       "ffffffff-ffff-ffff-ffff-ffffffffffff",
+		"http-address":  ":4000",
+		"https-address": ":4443",
+		"version":       "42b1",
 	}
 	var rsp resp
 	c.Assert(json.Unmarshal(rec.Body.Bytes(), &rsp), check.IsNil)
