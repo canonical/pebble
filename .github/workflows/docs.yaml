@@ -1,0 +1,42 @@
+#
+name: Docs
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_call:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  docchecks:
+    name: Checks
+    runs-on: ubuntu-22.04
+    outputs:
+      linkcheck-result: ${{ steps.linkcheck-step.outcome }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Links
+        id: linkcheck-step
+        if: success() || failure()
+        uses: canonical/documentation-workflows/linkcheck@main
+        with:
+          working-directory: docs
+      - name: Markdown lint
+        id: markdown-step
+        if: success() || failure()
+        uses: DavidAnson/markdownlint-cli2-action@v16
+        with:
+          config: "docs/.sphinx/.markdownlint.json"        

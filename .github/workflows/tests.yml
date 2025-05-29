@@ -78,11 +78,8 @@ jobs:
       with:
         python-version: '3.12' 
 
-    - name: Install tox
-      run: pip install tox~=4.17
-
     - name: Ensure no CLI reference doc changes
       run: |
-        tox -e commands
+        make cli-help
         git diff --exit-code
       working-directory: ./docs
