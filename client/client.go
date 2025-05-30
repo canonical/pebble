@@ -269,6 +269,7 @@ func (rq *defaultRequester) dispatch(ctx context.Context, method, urlpath string
 	if rq.userAgent != "" {
 		req.Header.Set("User-Agent", rq.userAgent)
 	}
+	req.Header.Set("Content-Type", "application/json")
 
 	if rq.basicUsername != "" && rq.basicPassword != "" {
 		req.SetBasicAuth(rq.basicUsername, rq.basicPassword)

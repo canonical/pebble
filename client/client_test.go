@@ -292,6 +292,23 @@ func (cs *clientSuite) TestUserAgent(c *C) {
 	c.Check(cs.req.Header.Get("User-Agent"), Equals, "some-agent/9.87")
 }
 
+func (cs *clientSuite) TestContentType(c *C) {
+	cli, err := client.New(&client.Config{})
+	c.Assert(err, IsNil)
+	cli.SetDoer(cs)
+
+	resp, err := cli.Requester().Do(context.Background(), &client.RequestOptions{
+		Type:   client.RawRequest,
+		Method: "GET",
+		Path:   "/",
+	})
+	c.Assert(err, IsNil)
+	var v string
+	err = resp.DecodeResult(&v)
+	c.Assert(err, NotNil)
+	c.Check(cs.req.Header.Get("Content-Type"), Equals, "application/json")
+}
+
 func (cs *clientSuite) TestClientJSONError(c *C) {
 	cs.rsp = `some non-json error message`
 	_, err := cs.cli.SysInfo()

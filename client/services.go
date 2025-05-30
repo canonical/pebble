@@ -75,16 +75,12 @@ func (client *Client) doMultiServiceAction(actionName string, services []string)
 	if err != nil {
 		return "", fmt.Errorf("cannot marshal multi-service action: %w", err)
 	}
-	headers := map[string]string{
-		"Content-Type": "application/json",
-	}
 
 	resp, err := client.Requester().Do(context.Background(), &RequestOptions{
-		Type:    AsyncRequest,
-		Method:  "POST",
-		Path:    "/v1/services",
-		Headers: headers,
-		Body:    bytes.NewBuffer(data),
+		Type:   AsyncRequest,
+		Method: "POST",
+		Path:   "/v1/services",
+		Body:   bytes.NewBuffer(data),
 	})
 	if err != nil {
 		return "", err
