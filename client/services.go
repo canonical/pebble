@@ -77,10 +77,10 @@ func (client *Client) doMultiServiceAction(actionName string, services []string)
 	}
 
 	resp, err := client.Requester().Do(context.Background(), &RequestOptions{
-		Type:    AsyncRequest,
-		Method:  "POST",
-		Path:    "/v1/services",
-		Body:    bytes.NewBuffer(data),
+		Type:   AsyncRequest,
+		Method: "POST",
+		Path:   "/v1/services",
+		Body:   bytes.NewBuffer(data),
 	})
 	if err != nil {
 		return "", err
