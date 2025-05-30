@@ -292,7 +292,7 @@ func (cs *clientSuite) TestUserAgent(c *C) {
 	c.Check(cs.req.Header.Get("User-Agent"), Equals, "some-agent/9.87")
 }
 
-func (cs *clientSuite) TestContenType(c *C) {
+func (cs *clientSuite) TestContentType(c *C) {
 	cli, err := client.New(&client.Config{})
 	c.Assert(err, IsNil)
 	cli.SetDoer(cs)

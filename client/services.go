@@ -80,7 +80,6 @@ func (client *Client) doMultiServiceAction(actionName string, services []string)
 		Type:    AsyncRequest,
 		Method:  "POST",
 		Path:    "/v1/services",
-		Headers: nil,
 		Body:    bytes.NewBuffer(data),
 	})
 	if err != nil {
