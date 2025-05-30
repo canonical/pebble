@@ -64,7 +64,7 @@ func (m *CheckManager) doPerformCheck(task *state.Task, tomb *tombpkg.Tomb) erro
 				// Update number of failures in check info. In threshold
 				// case, check data will be updated with new change ID by
 				// changeStatusChanged.
-				m.updateCheckData(config, changeID, details.Failures)
+				m.updateCheckData(config, changeID, CheckStatusUp, details.Failures)
 			}
 
 			m.state.Lock()
@@ -91,9 +91,8 @@ func (m *CheckManager) doPerformCheck(task *state.Task, tomb *tombpkg.Tomb) erro
 		}
 
 		m.incSuccessCount(config)
+		m.updateCheckData(config, changeID, CheckStatusUp, 0)
 		if details.Failures > 0 {
-			m.updateCheckData(config, changeID, 0)
-
 			m.state.Lock()
 			task.Logf("succeeded after %s", pluralise(details.Failures, "failure", "failures"))
 			details.Failures = 0
@@ -168,7 +167,7 @@ func (m *CheckManager) doRecoverCheck(task *state.Task, tomb *tombpkg.Tomb) erro
 		if err != nil {
 			m.incFailureCount(config)
 			details.Failures++
-			m.updateCheckData(config, changeID, details.Failures)
+			m.updateCheckData(config, changeID, CheckStatusDown, details.Failures)
 
 			m.state.Lock()
 			task.Set(checkDetailsAttr, &details)

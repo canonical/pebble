@@ -57,6 +57,7 @@ const (
 type CheckStatus string
 
 const (
+	CheckStatusUnknown  CheckStatus = "unknown"
 	CheckStatusUp       CheckStatus = "up"
 	CheckStatusDown     CheckStatus = "down"
 	CheckStatusInactive CheckStatus = "inactive"
