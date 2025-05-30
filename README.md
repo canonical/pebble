@@ -7,7 +7,7 @@
 
 _Take control of your internal daemons!_
 
-**Pebble** is a lightweight Linux service manager that helps you orchestrate a set of local processes as an organised set. It resembles well-known tools such as _supervisord_, _runit_, or _s6_, in that it can easily manage non-system processes independently from the system services. However, it was designed with unique features such as layered configuration and an HTTP API that help with more specific use cases.
+**Pebble** is a lightweight Linux service manager that helps you orchestrate a set of local processes as an organized set. It resembles well-known tools such as _supervisord_, _runit_, or _s6_, in that it can easily manage non-system processes independently from the system services. However, it was designed with unique features such as layered configuration and an HTTP API that help with more specific use cases.
 
 Pebble's key features:
 

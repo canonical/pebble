@@ -4,7 +4,7 @@ tocdepth: 2
 
 # CLI commands
 
-The `pebble` command has the following subcommands, organised into logical groups:
+The `pebble` command has the following subcommands, organized into logical groups:
 
 * Run: [run](#reference_pebble_run_command)
 * Info: [help](#reference_pebble_help_command), [version](#reference_pebble_version_command)
@@ -895,7 +895,7 @@ After the Pebble daemon starts, other Pebble commands may be used to interact wi
     pebble run
     ```
 
-* `PEBBLE_COPY_ONCE` - To initialise the `$PEBBLE` directory with the contents of another, in a one-time copy, set the `PEBBLE_COPY_ONCE` environment variable to the source directory.
+* `PEBBLE_COPY_ONCE` - To initialize the `$PEBBLE` directory with the contents of another, in a one-time copy, set the `PEBBLE_COPY_ONCE` environment variable to the source directory.
 
     This will only copy the contents if the target directory, `$PEBBLE`, is empty.
 
