@@ -128,4 +128,4 @@ For more information about related Pebble commands, see:
 
 You can also use the Pebble API to run commands and manage files. This is normally done using the Go or Python client libraries. For more information, see [How to use the Pebble API](/how-to/use-the-pebble-api).
 
-If your remote system is a Juju-managed Kubernetes container, see the tips and examples in [Debug a charm > For a Kubernetes charm with a workload](https://documentation.ubuntu.com/juju/3.6/howto/manage-charms/#debug-a-k8s-charm-with-a-workload).
+If your remote system is a Juju-managed Kubernetes container, see the tips and examples in {external+juju:ref}`Debug a charm > For a Kubernetes charm with a workload <debug-a-k8s-charm-with-a-workload>`.

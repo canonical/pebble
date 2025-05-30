@@ -54,7 +54,7 @@ For more information, see the [Go client documentation](https://pkg.go.dev/githu
 (api_python_client)=
 ### Python client
 
-The Ops library for writing and testing Juju charms includes a [Python client for Pebble API](https://ops.readthedocs.io/en/latest/reference/pebble.html). You can use the Python client to access the API endpoints over the Unix socket. For example:
+The Ops library for writing and testing Juju charms includes a {external+operator:ref}`Python client for the Pebble API <ops_pebble>`. You can use the Python client to access the API endpoints over the Unix socket. For example:
 
 ```python
 import ops
@@ -65,7 +65,7 @@ client.stop_services(["mysvc"])  # Python client also waits for change to finish
 For more information, see:
 
 - [Source code of the Python client](https://github.com/canonical/operator/blob/main/ops/pebble.py)
-- [Pebble in the context of Juju charms](https://juju.is/docs/sdk/interact-with-pebble)
+- {external+operator:ref}`Pebble in the context of Juju charms <run-workloads-with-a-charm-kubernetes>`
 
 ## Structure of the API
 
