@@ -16,7 +16,7 @@ It helps you orchestrate a set of local processes as an organised set. It resemb
 
 If you need a way to manage one or more services in a container, or as a non-root user on a machine, Pebble might be for you. It handles service logs, service dependencies, and allows you to set up ongoing health checks. Plus, it has an "HTTP over unix socket" API for all operations, with simple UID-based access control.
 
-Pebble is useful for developers who are building [Juju charms on Kubernetes](https://juju.is/docs/sdk/from-zero-to-hero-write-your-first-kubernetes-charm), creating [Rocks](https://documentation.ubuntu.com/rockcraft/en/latest/explanation/rocks/) or Docker images, or orchestrating services in the virtual machine.
+Pebble is useful for developers who are building {external+operator:ref}`Juju charms on Kubernetes <from-zero-to-hero-write-your-first-kubernetes-charm>`, creating [Rocks](https://documentation.ubuntu.com/rockcraft/en/latest/explanation/rocks/) or Docker images, or orchestrating services in the virtual machine.
 
 ## In this documentation
 
