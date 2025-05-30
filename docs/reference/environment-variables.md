@@ -8,7 +8,7 @@ The `$PEBBLE` directory must contain a `layers/` subdirectory that holds a stack
 
 ## PEBBLE_COPY_ONCE
 
-To initialise the `$PEBBLE` directory with the contents of another, in a one-time copy, set the `PEBBLE_COPY_ONCE` environment variable to the source directory.
+To initialize the `$PEBBLE` directory with the contents of another, in a one-time copy, set the `PEBBLE_COPY_ONCE` environment variable to the source directory.
 
 This will only copy the contents if the target directory, `$PEBBLE`, is empty.
 
