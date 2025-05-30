@@ -737,39 +737,80 @@ func (s *ManagerSuite) TestStopChecks(c *C) {
 	}
 	err := s.planMgr.AppendLayer(origLayer, false)
 	c.Assert(err, IsNil)
+
+	// Run an Ensure pass to kick the check tasks into Doing status.
+	st := s.overlord.State()
+	st.EnsureBefore(0)
+
 	waitChecks(c, s.manager, []*checkstate.CheckInfo{
 		{Name: "chk1", Startup: "enabled", Status: "up", Threshold: 3},
 		{Name: "chk2", Startup: "disabled", Status: "inactive", Threshold: 3},
 		{Name: "chk3", Startup: "enabled", Status: "up", Threshold: 3},
 	})
+
 	checks, err := s.manager.Checks()
 	c.Assert(err, IsNil)
-	var originalChangeIDs []string
+	var chk1ChangeID, chk3ChangeID string
 	for _, check := range checks {
-		originalChangeIDs = append(originalChangeIDs, check.ChangeID)
+		switch check.Name {
+		case "chk1":
+			chk1ChangeID = check.ChangeID
+		case "chk3":
+			chk3ChangeID = check.ChangeID
+		}
+	}
+	c.Assert(chk1ChangeID, Not(Equals), "")
+	c.Assert(chk3ChangeID, Not(Equals), "")
+
+	start := time.Now()
+	for {
+		if time.Since(start) > 3*time.Second {
+			c.Fatal("timed out waiting for check changes to go to Doing")
+		}
+		st.Lock()
+		chk1Status := st.Change(chk1ChangeID).Status()
+		chk3Status := st.Change(chk3ChangeID).Status()
+		st.Unlock()
+		if chk1Status == state.DoingStatus && chk3Status == state.DoingStatus {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 
 	changed, err := s.manager.StopChecks([]string{"chk1", "chk2"})
+	c.Assert(err, IsNil)
+	c.Assert(changed, DeepEquals, []string{"chk1"})
+
+	// Run an Ensure pass to actually stop the checks.
+	st.EnsureBefore(0)
+
 	waitChecks(c, s.manager, []*checkstate.CheckInfo{
 		{Name: "chk1", Startup: "enabled", Status: "inactive", Threshold: 3},
 		{Name: "chk2", Startup: "disabled", Status: "inactive", Threshold: 3},
 		{Name: "chk3", Startup: "enabled", Status: "up", Threshold: 3},
 	})
-	c.Assert(err, IsNil)
-	c.Assert(changed, DeepEquals, []string{"chk1"})
+
+	// chk3 should still have the same change ID, chk1 and chk2 should not have one.
 	checks, err = s.manager.Checks()
 	c.Assert(err, IsNil)
-	// chk3 should still have the same change ID, chk1 and chk2 should not have one.
 	c.Assert(checks[0].ChangeID, Equals, "")
 	c.Assert(checks[1].ChangeID, Equals, "")
-	c.Assert(checks[2].ChangeID, Equals, originalChangeIDs[2])
-	// chk1's old Change should have aborted.
-	st := s.overlord.State()
-	st.Lock()
-	change := st.Change(originalChangeIDs[0])
-	status := change.Status()
-	st.Unlock()
-	c.Assert(status, Equals, state.AbortStatus)
+	c.Assert(checks[2].ChangeID, Equals, chk3ChangeID)
+
+	// chk1's old change should go to Done.
+	start = time.Now()
+	for {
+		if time.Since(start) > 3*time.Second {
+			c.Fatal("timed out waiting for check changes to go to Done")
+		}
+		st.Lock()
+		chk1Status := st.Change(chk1ChangeID).Status()
+		st.Unlock()
+		if chk1Status == state.DoneStatus {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 }
 
 func (s *ManagerSuite) TestStopChecksNotFound(c *C) {
