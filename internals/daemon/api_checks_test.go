@@ -60,9 +60,9 @@ checks:
 		c.Check(rsp.Status, Equals, 200)
 		c.Check(rsp.Type, Equals, ResponseTypeSync)
 		expected := []any{
-			map[string]any{"name": "chk1", "startup": "enabled", "status": "up", "level": "ready", "threshold": 3.0, "change-id": "C0"},
-			map[string]any{"name": "chk2", "startup": "enabled", "status": "up", "level": "alive", "threshold": 3.0, "change-id": "C1"},
-			map[string]any{"name": "chk3", "startup": "enabled", "status": "up", "threshold": 3.0, "change-id": "C2"},
+			map[string]any{"name": "chk1", "startup": "enabled", "status": "unknown", "level": "ready", "threshold": 3.0, "change-id": "C0"},
+			map[string]any{"name": "chk2", "startup": "enabled", "status": "unknown", "level": "alive", "threshold": 3.0, "change-id": "C1"},
+			map[string]any{"name": "chk3", "startup": "enabled", "status": "unknown", "threshold": 3.0, "change-id": "C2"},
 		}
 		if reflect.DeepEqual(body["result"], expected) {
 			break
@@ -79,8 +79,8 @@ checks:
 	c.Check(rsp.Status, Equals, 200)
 	c.Check(rsp.Type, Equals, ResponseTypeSync)
 	c.Check(body["result"], DeepEquals, []any{
-		map[string]any{"name": "chk1", "startup": "enabled", "status": "up", "level": "ready", "threshold": 3.0, "change-id": "C0"},
-		map[string]any{"name": "chk3", "startup": "enabled", "status": "up", "threshold": 3.0, "change-id": "C1"},
+		map[string]any{"name": "chk1", "startup": "enabled", "status": "unknown", "level": "ready", "threshold": 3.0, "change-id": "C0"},
+		map[string]any{"name": "chk3", "startup": "enabled", "status": "unknown", "threshold": 3.0, "change-id": "C1"},
 	})
 
 	// Request with names filter (comma-separated values)
@@ -88,8 +88,8 @@ checks:
 	c.Check(rsp.Status, Equals, 200)
 	c.Check(rsp.Type, Equals, ResponseTypeSync)
 	c.Check(body["result"], DeepEquals, []any{
-		map[string]any{"name": "chk1", "startup": "enabled", "status": "up", "level": "ready", "threshold": 3.0, "change-id": "C0"},
-		map[string]any{"name": "chk3", "startup": "enabled", "status": "up", "threshold": 3.0, "change-id": "C1"},
+		map[string]any{"name": "chk1", "startup": "enabled", "status": "unknown", "level": "ready", "threshold": 3.0, "change-id": "C0"},
+		map[string]any{"name": "chk3", "startup": "enabled", "status": "unknown", "threshold": 3.0, "change-id": "C1"},
 	})
 
 	// Request with level filter
@@ -97,7 +97,7 @@ checks:
 	c.Check(rsp.Status, Equals, 200)
 	c.Check(rsp.Type, Equals, ResponseTypeSync)
 	c.Check(body["result"], DeepEquals, []any{
-		map[string]any{"name": "chk2", "startup": "enabled", "status": "up", "level": "alive", "threshold": 3.0, "change-id": "C0"},
+		map[string]any{"name": "chk2", "startup": "enabled", "status": "unknown", "level": "alive", "threshold": 3.0, "change-id": "C0"},
 	})
 
 	// Request with names and level filters
@@ -105,7 +105,7 @@ checks:
 	c.Check(rsp.Status, Equals, 200)
 	c.Check(rsp.Type, Equals, ResponseTypeSync)
 	c.Check(body["result"], DeepEquals, []any{
-		map[string]any{"name": "chk1", "startup": "enabled", "status": "up", "level": "ready", "threshold": 3.0, "change-id": "C0"},
+		map[string]any{"name": "chk1", "startup": "enabled", "status": "unknown", "level": "ready", "threshold": 3.0, "change-id": "C0"},
 	})
 }
 
@@ -192,9 +192,9 @@ checks:
 		c.Check(rsp.Status, Equals, 200)
 		c.Check(rsp.Type, Equals, ResponseTypeSync)
 		expected := []any{
-			map[string]any{"name": "chk1", "startup": "enabled", "status": "up", "level": "ready", "threshold": 3.0, "change-id": "C0"},
+			map[string]any{"name": "chk1", "startup": "enabled", "status": "unknown", "level": "ready", "threshold": 3.0, "change-id": "C0"},
 			map[string]any{"name": "chk2", "startup": "disabled", "status": "inactive", "level": "alive", "threshold": 3.0, "change-id": ""},
-			map[string]any{"name": "chk3", "startup": "enabled", "status": "up", "threshold": 3.0, "change-id": "C2"},
+			map[string]any{"name": "chk3", "startup": "enabled", "status": "unknown", "threshold": 3.0, "change-id": "C2"},
 		}
 		if reflect.DeepEqual(body["result"], expected) {
 			break
@@ -247,7 +247,7 @@ checks:
 		c.Check(rsp.Status, Equals, 200)
 		c.Check(rsp.Type, Equals, ResponseTypeSync)
 		expected := []any{
-			map[string]any{"name": "chk1", "startup": "enabled", "status": "up", "level": "ready", "threshold": 3.0, "change-id": "C0"},
+			map[string]any{"name": "chk1", "startup": "enabled", "status": "unknown", "level": "ready", "threshold": 3.0, "change-id": "C0"},
 		}
 		if reflect.DeepEqual(body["result"], expected) {
 			break
