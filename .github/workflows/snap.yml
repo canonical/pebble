@@ -5,8 +5,9 @@ on:
     branches: [master]
   push:
     branches: [master]
-  release:
-    types: [published]
+# NOTE: don't release snap on maintenance branch
+#  release:
+#    types: [published]
 
 # We don't want this workflow to have multiple runs in parallel because
 # what could happen is that a slow-running and older execution will upload
