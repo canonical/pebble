@@ -58,6 +58,6 @@ You can also use Go or curl to achieve the same result. For more information, se
 ## See more
 
 - [Go client](https://pkg.go.dev/github.com/canonical/pebble/client)
-- [Python client for Pebble API](https://ops.readthedocs.io/en/latest/reference/pebble.html)
+- {external+operator:ref}`Python client <ops_pebble>`
 - [Explanation of API access control](/explanation/api-and-clients)
 - [API reference](/reference/api)

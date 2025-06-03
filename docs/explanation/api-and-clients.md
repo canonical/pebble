@@ -10,8 +10,7 @@ The Go client is used primarily by the CLI, but is importable and can be used by
 
 We try to never change the underlying HTTP API in a backwards-incompatible way, however, in rare cases we may change the Go client in a backwards-incompatible way.
 
-In addition to the Go client, there's also a [Python client](https://github.com/canonical/operator/blob/master/ops/pebble.py) for the Pebble API that's part of the [`ops` library](https://github.com/canonical/operator) used by Juju charms ([documentation here](https://juju.is/docs/sdk/interact-with-pebble)).
-
+There's also a {external+operator:ref}`Python client for the Pebble API <ops_pebble>` that's part of the Ops library used by Juju charms. For more information, see the [source code of the Python client](https://github.com/canonical/operator/blob/main/ops/pebble.py) and {external+operator:ref}`Pebble in the context of Juju charms <run-workloads-with-a-charm-kubernetes>`.
 
 (api-access-levels)=
 ## API access levels
