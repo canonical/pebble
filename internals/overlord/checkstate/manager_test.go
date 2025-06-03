@@ -116,11 +116,11 @@ func (s *ManagerSuite) TestChecks(c *C) {
 		},
 	})
 
-	// Wait for expected checks to be present.
+	// Wait for expected checks to be started.
 	waitChecks(c, s.manager, []*checkstate.CheckInfo{
-		{Name: "chk1", Startup: "enabled", Status: "unknown", Threshold: 3},
-		{Name: "chk2", Startup: "enabled", Status: "unknown", Level: "alive", Threshold: 3},
-		{Name: "chk3", Startup: "enabled", Status: "unknown", Level: "ready", Threshold: 3},
+		{Name: "chk1", Startup: "enabled", Status: "up", Threshold: 3},
+		{Name: "chk2", Startup: "enabled", Status: "up", Level: "alive", Threshold: 3},
+		{Name: "chk3", Startup: "enabled", Status: "up", Level: "ready", Threshold: 3},
 	})
 
 	// Re-configuring should update checks.
@@ -138,7 +138,7 @@ func (s *ManagerSuite) TestChecks(c *C) {
 
 	// Wait for checks to be updated.
 	waitChecks(c, s.manager, []*checkstate.CheckInfo{
-		{Name: "chk4", Startup: "enabled", Status: "unknown", Threshold: 3},
+		{Name: "chk4", Startup: "enabled", Status: "up", Threshold: 3},
 	})
 }
 
@@ -366,9 +366,9 @@ func (s *ManagerSuite) TestPlanChangedSmarts(c *C) {
 	})
 
 	waitChecks(c, s.manager, []*checkstate.CheckInfo{
-		{Name: "chk1", Startup: "enabled", Status: "unknown", Threshold: 3},
-		{Name: "chk2", Startup: "enabled", Status: "unknown", Threshold: 3},
-		{Name: "chk3", Startup: "enabled", Status: "unknown", Threshold: 3},
+		{Name: "chk1", Startup: "enabled", Status: "up", Threshold: 3},
+		{Name: "chk2", Startup: "enabled", Status: "up", Threshold: 3},
+		{Name: "chk3", Startup: "enabled", Status: "up", Threshold: 3},
 	})
 	checks, err := s.manager.Checks()
 	c.Assert(err, IsNil)
@@ -399,8 +399,8 @@ func (s *ManagerSuite) TestPlanChangedSmarts(c *C) {
 	})
 
 	waitChecks(c, s.manager, []*checkstate.CheckInfo{
-		{Name: "chk1", Startup: "enabled", Status: "unknown", Threshold: 3},
-		{Name: "chk2", Startup: "enabled", Status: "unknown", Threshold: 6},
+		{Name: "chk1", Startup: "enabled", Status: "up", Threshold: 3},
+		{Name: "chk2", Startup: "enabled", Status: "up", Threshold: 6},
 	})
 	checks, err = s.manager.Checks()
 	c.Assert(err, IsNil)
@@ -455,8 +455,8 @@ func (s *ManagerSuite) TestPlanChangedServiceContext(c *C) {
 	}
 	s.manager.PlanChanged(origPlan)
 	waitChecks(c, s.manager, []*checkstate.CheckInfo{
-		{Name: "chk1", Startup: "enabled", Status: "unknown", Threshold: 3},
-		{Name: "chk2", Startup: "enabled", Status: "unknown", Threshold: 3},
+		{Name: "chk1", Startup: "enabled", Status: "up", Threshold: 3},
+		{Name: "chk2", Startup: "enabled", Status: "up", Threshold: 3},
 	})
 	checks, err := s.manager.Checks()
 	c.Assert(err, IsNil)
@@ -484,8 +484,8 @@ func (s *ManagerSuite) TestPlanChangedServiceContext(c *C) {
 	})
 
 	waitChecks(c, s.manager, []*checkstate.CheckInfo{
-		{Name: "chk1", Startup: "enabled", Status: "unknown", Threshold: 3},
-		{Name: "chk2", Startup: "enabled", Status: "unknown", Threshold: 3},
+		{Name: "chk1", Startup: "enabled", Status: "up", Threshold: 3},
+		{Name: "chk2", Startup: "enabled", Status: "up", Threshold: 3},
 	})
 	checks, err = s.manager.Checks()
 	c.Assert(err, IsNil)
@@ -647,9 +647,9 @@ func (s *ManagerSuite) TestStartChecks(c *C) {
 	c.Assert(err, IsNil)
 	s.manager.PlanChanged(s.planMgr.Plan())
 	waitChecks(c, s.manager, []*checkstate.CheckInfo{
-		{Name: "chk1", Startup: "enabled", Status: "unknown", Threshold: 3},
+		{Name: "chk1", Startup: "enabled", Status: "up", Threshold: 3},
 		{Name: "chk2", Startup: "disabled", Status: "inactive", Threshold: 3},
-		{Name: "chk3", Startup: "enabled", Status: "unknown", Threshold: 3},
+		{Name: "chk3", Startup: "enabled", Status: "up", Threshold: 3},
 	})
 	checks, err := s.manager.Checks()
 	c.Assert(err, IsNil)
@@ -660,9 +660,9 @@ func (s *ManagerSuite) TestStartChecks(c *C) {
 
 	changed, err := s.manager.StartChecks([]string{"chk1", "chk2"})
 	waitChecks(c, s.manager, []*checkstate.CheckInfo{
-		{Name: "chk1", Startup: "enabled", Status: "unknown", Threshold: 3},
-		{Name: "chk2", Startup: "disabled", Status: "unknown", Threshold: 3},
-		{Name: "chk3", Startup: "enabled", Status: "unknown", Threshold: 3},
+		{Name: "chk1", Startup: "enabled", Status: "up", Threshold: 3},
+		{Name: "chk2", Startup: "disabled", Status: "up", Threshold: 3},
+		{Name: "chk3", Startup: "enabled", Status: "up", Threshold: 3},
 	})
 	c.Assert(err, IsNil)
 	c.Assert(changed, DeepEquals, []string{"chk2"})
@@ -697,7 +697,7 @@ func (s *ManagerSuite) TestStartChecksNotFound(c *C) {
 	err := s.planMgr.AppendLayer(origLayer, false)
 	c.Assert(err, IsNil)
 	waitChecks(c, s.manager, []*checkstate.CheckInfo{
-		{Name: "chk1", Startup: "enabled", Status: "unknown", Threshold: 3},
+		{Name: "chk1", Startup: "enabled", Status: "up", Threshold: 3},
 	})
 
 	changed, err := s.manager.StartChecks([]string{"chk1", "chk2"})
@@ -743,9 +743,9 @@ func (s *ManagerSuite) TestStopChecks(c *C) {
 	st.EnsureBefore(0)
 
 	waitChecks(c, s.manager, []*checkstate.CheckInfo{
-		{Name: "chk1", Startup: "enabled", Status: "unknown", Threshold: 3},
+		{Name: "chk1", Startup: "enabled", Status: "up", Threshold: 3},
 		{Name: "chk2", Startup: "disabled", Status: "inactive", Threshold: 3},
-		{Name: "chk3", Startup: "enabled", Status: "unknown", Threshold: 3},
+		{Name: "chk3", Startup: "enabled", Status: "up", Threshold: 3},
 	})
 
 	checks, err := s.manager.Checks()
@@ -787,7 +787,7 @@ func (s *ManagerSuite) TestStopChecks(c *C) {
 	waitChecks(c, s.manager, []*checkstate.CheckInfo{
 		{Name: "chk1", Startup: "enabled", Status: "inactive", Threshold: 3},
 		{Name: "chk2", Startup: "disabled", Status: "inactive", Threshold: 3},
-		{Name: "chk3", Startup: "enabled", Status: "unknown", Threshold: 3},
+		{Name: "chk3", Startup: "enabled", Status: "up", Threshold: 3},
 	})
 
 	// chk3 should still have the same change ID, chk1 and chk2 should not have one.
@@ -828,7 +828,7 @@ func (s *ManagerSuite) TestStopChecksNotFound(c *C) {
 	err := s.planMgr.AppendLayer(origLayer, false)
 	c.Assert(err, IsNil)
 	waitChecks(c, s.manager, []*checkstate.CheckInfo{
-		{Name: "chk1", Startup: "enabled", Status: "unknown", Threshold: 3},
+		{Name: "chk1", Startup: "enabled", Status: "up", Threshold: 3},
 	})
 
 	changed, err := s.manager.StopChecks([]string{"chk1", "chk2"})
@@ -869,15 +869,15 @@ func (s *ManagerSuite) TestReplan(c *C) {
 	err := s.planMgr.AppendLayer(origLayer, false)
 	c.Assert(err, IsNil)
 	waitChecks(c, s.manager, []*checkstate.CheckInfo{
-		{Name: "chk1", Startup: "enabled", Status: "unknown", Threshold: 3},
+		{Name: "chk1", Startup: "enabled", Status: "up", Threshold: 3},
 		{Name: "chk2", Startup: "disabled", Status: "inactive", Threshold: 3},
-		{Name: "chk3", Startup: "enabled", Status: "unknown", Threshold: 3},
+		{Name: "chk3", Startup: "enabled", Status: "up", Threshold: 3},
 	})
 	s.manager.StopChecks([]string{"chk1"})
 	waitChecks(c, s.manager, []*checkstate.CheckInfo{
 		{Name: "chk1", Startup: "enabled", Status: "inactive", Threshold: 3},
 		{Name: "chk2", Startup: "disabled", Status: "inactive", Threshold: 3},
-		{Name: "chk3", Startup: "enabled", Status: "unknown", Threshold: 3},
+		{Name: "chk3", Startup: "enabled", Status: "up", Threshold: 3},
 	})
 	checks, err := s.manager.Checks()
 	var originalChangeIDs []string
@@ -889,9 +889,9 @@ func (s *ManagerSuite) TestReplan(c *C) {
 	s.manager.Replan()
 	s.overlord.State().Unlock()
 	waitChecks(c, s.manager, []*checkstate.CheckInfo{
-		{Name: "chk1", Startup: "enabled", Status: "unknown", Threshold: 3},
+		{Name: "chk1", Startup: "enabled", Status: "up", Threshold: 3},
 		{Name: "chk2", Startup: "disabled", Status: "inactive", Threshold: 3},
-		{Name: "chk3", Startup: "enabled", Status: "unknown", Threshold: 3},
+		{Name: "chk3", Startup: "enabled", Status: "up", Threshold: 3},
 	})
 	c.Assert(err, IsNil)
 	checks, err = s.manager.Checks()
@@ -1059,7 +1059,7 @@ func (s *ManagerSuite) TestRefreshCheck(c *C) {
 	c.Assert(err, IsNil)
 	s.manager.PlanChanged(s.planMgr.Plan())
 	waitChecks(c, s.manager, []*checkstate.CheckInfo{
-		{Name: "chk1", Startup: "enabled", Status: "unknown", Threshold: 3},
+		{Name: "chk1", Startup: "enabled", Status: "up", Threshold: 3},
 	})
 	checks, err := s.manager.Checks()
 	c.Assert(err, IsNil)
@@ -1100,7 +1100,7 @@ func (s *ManagerSuite) TestRefreshCheckFailure(c *C) {
 	c.Assert(err, IsNil)
 	s.manager.PlanChanged(s.planMgr.Plan())
 	waitChecks(c, s.manager, []*checkstate.CheckInfo{
-		{Name: "chk1", Startup: "enabled", Status: "unknown", Threshold: 3},
+		{Name: "chk1", Startup: "enabled", Status: "up", Threshold: 3},
 	})
 	checks, err := s.manager.Checks()
 	c.Assert(err, IsNil)
@@ -1136,7 +1136,7 @@ func (s *ManagerSuite) TestRefreshStoppedCheck(c *C) {
 	c.Assert(err, IsNil)
 	s.manager.PlanChanged(s.planMgr.Plan())
 	waitChecks(c, s.manager, []*checkstate.CheckInfo{
-		{Name: "chk1", Startup: "enabled", Status: "unknown", Threshold: 3},
+		{Name: "chk1", Startup: "enabled", Status: "up", Threshold: 3},
 	})
 	_, err = s.manager.Checks()
 	c.Assert(err, IsNil)
@@ -1183,7 +1183,7 @@ func (s *ManagerSuite) TestRefreshStoppedCheckFailure(c *C) {
 	c.Assert(err, IsNil)
 	s.manager.PlanChanged(s.planMgr.Plan())
 	waitChecks(c, s.manager, []*checkstate.CheckInfo{
-		{Name: "chk1", Startup: "enabled", Status: "unknown", Threshold: 3},
+		{Name: "chk1", Startup: "enabled", Status: "up", Threshold: 3},
 	})
 	_, err = s.manager.Checks()
 	c.Assert(err, IsNil)
