@@ -64,14 +64,20 @@ html_title = project + " documentation"
 copyright = "%s, %s" % (datetime.date.today().year, author)
 
 
-# Documentation website URL
+# Documentation website URL and sitemap
 #
+# NOTE: 'html_baseurl' and 'sitemap_url_scheme' are used by the sphinx_sitemap
+#       extension. See https://sphinx-sitemap.readthedocs.io/
+
+html_baseurl = "https://documentation.ubuntu.com/pebble/"
+sitemap_url_scheme = "{link}"
+
 # TODO: Update with the official URL of your docs or leave empty if unsure.
 #
 # NOTE: The Open Graph Protocol (OGP) enhances page display in a social graph
 #       and is used by social media platforms; see https://ogp.me/
 
-ogp_site_url = "https://documentation.ubuntu.com/pebble/"
+ogp_site_url = html_baseurl
 
 
 # Preview name of the documentation website
@@ -331,8 +337,3 @@ intersphinx_mapping = {
     "operator": ("https://ops.readthedocs.io/en/latest", None),
     "juju": ("https://documentation.ubuntu.com/juju/3.6/", None),
 }
-
-# Configuration for sitemap
-
-html_baseurl = "https://documentation.ubuntu.com/pebble/"
-sitemap_url_scheme = "{link}"
