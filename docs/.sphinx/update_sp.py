@@ -16,6 +16,7 @@ import re
 import subprocess
 import sys
 from requests.exceptions import RequestException
+from packaging.version import parse as parse_version
 
 SPHINX_DIR = os.path.join(os.getcwd(), ".sphinx")
 SPHINX_UPDATE_DIR = os.path.join(SPHINX_DIR, "update")
@@ -36,7 +37,7 @@ def main():
     logging.debug("Checking local version")
     try:
         with open(os.path.join(SPHINX_DIR, "version")) as f:
-            current_version = f.read().strip()
+            local_version = f.read().strip()
     except FileNotFoundError:
         print("WARNING\nWARNING\nWARNING")
         print(
@@ -44,20 +45,20 @@ def main():
         )
         print("You may experience issues using this functionality.")
         logging.debug("No local version found. Setting version to None")
-        current_version = "None"
+        local_version = "None"
     except Exception as e:
         logging.debug(e)
         raise Exception("ERROR executing check local version")
-    logging.debug(f"Local version = {current_version}")
+    logging.debug(f"Local version = {local_version}")
 
     # Check release version
     latest_release = query_api(GITHUB_API_BASE + "/releases/latest").json()["tag_name"]
-    logging.debug(f"current release = {latest_release}")
+    logging.debug(f"Latest release = {latest_release}")
 
-    # Perform actions only if versions are different
+    # Perform actions only if local version is older than release version
     logging.debug("Comparing versions")
-    if current_version != latest_release:
-        logging.debug("Difference identified in current version and release version.")
+    if parse_version(local_version) < parse_version(latest_release):
+        logging.debug("Local version is older than the release version.")
         print("Starter pack is out of date.\n")
 
         # Identify and download '.sphinx' dir files to '.sphinx/update'
@@ -73,7 +74,7 @@ def main():
         # Provide changelog to identify other significant changes
         changelog = query_api(GITHUB_RAW_BASE + "/CHANGELOG.md")
         logging.debug("Changelog obtained")
-        version_regex = re.compile(r"#+ +" + re.escape(current_version) + r" *\n")
+        version_regex = re.compile(r"#+ +" + re.escape(local_version) + r" *\n")
         print("SEE CURRENT CHANGELOG:")
         print(re.split(version_regex, changelog.text)[0])
 
