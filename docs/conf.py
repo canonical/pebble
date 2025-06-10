@@ -334,5 +334,5 @@ intersphinx_mapping = {
 
 # Configuration for sitemap
 
-html_baseurl = 'https://documentation.ubuntu.com/pebble/'
+html_baseurl = "https://documentation.ubuntu.com/pebble/"
 sitemap_url_scheme = "{link}"
