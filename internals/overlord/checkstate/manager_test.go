@@ -1073,6 +1073,7 @@ func (s *ManagerSuite) TestRefreshCheck(c *C) {
 		Level:     "",
 		Startup:   "enabled",
 		Status:    "up",
+		Successes: 1,
 		Failures:  0,
 		Threshold: 3,
 		ChangeID:  originalChangeID,

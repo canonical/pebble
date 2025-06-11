@@ -33,7 +33,7 @@ func (s *PebbleSuite) TestCheck(c *C) {
 {
     "type": "sync",
     "status-code": 200,
-    "result": [{"name": "chk1", "startup": "enabled", "status": "up", "threshold": 3, "change-id": "1"}]
+    "result": [{"name": "chk1", "startup": "enabled", "status": "up", "successes": 5, "threshold": 3, "change-id": "1"}]
 }`)
 	})
 	rest, err := cli.ParserForTest().ParseArgs([]string{"check", "chk1"})
@@ -43,6 +43,7 @@ func (s *PebbleSuite) TestCheck(c *C) {
 name: chk1
 startup: enabled
 status: up
+successes: 5
 failures: 0
 threshold: 3
 change-id: "1"

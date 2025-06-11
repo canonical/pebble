@@ -22,8 +22,9 @@ import (
 )
 
 type checkDetails struct {
-	Name     string `json:"name"`
-	Failures int    `json:"failures"`
+	Name      string `json:"name"`
+	Failures  int    `json:"failures"`
+	Successes int    `json:"successes"`
 	// Whether to proceed to next check type when change is ready
 	Proceed bool `json:"proceed,omitempty"`
 }
@@ -52,10 +53,14 @@ type recoverConfigKey struct {
 	changeID string
 }
 
-func recoverCheckChange(st *state.State, config *plan.Check, failures int) (changeID string) {
+func recoverCheckChange(st *state.State, config *plan.Check, successes, failures int) (changeID string) {
 	summary := fmt.Sprintf("Recover %s check %q", checkType(config), config.Name)
 	task := st.NewTask(recoverCheckKind, summary)
-	task.Set(checkDetailsAttr, &checkDetails{Name: config.Name, Failures: failures})
+	task.Set(checkDetailsAttr, &checkDetails{
+		Name:      config.Name,
+		Successes: successes,
+		Failures:  failures,
+	})
 
 	change := st.NewChangeWithNoticeData(recoverCheckKind, task.Summary(), map[string]string{
 		"check-name": config.Name,

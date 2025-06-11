@@ -30,6 +30,7 @@ type checkInfo struct {
 	Level     string `json:"level,omitempty"`
 	Startup   string `json:"startup"`
 	Status    string `json:"status"`
+	Successes int    `json:"successes"`
 	Failures  int    `json:"failures,omitempty"`
 	Threshold int    `json:"threshold"`
 	ChangeID  string `json:"change-id,omitempty"`
@@ -151,6 +152,7 @@ func checkInfoFromInternal(check *checkstate.CheckInfo) checkInfo {
 		Level:     string(check.Level),
 		Startup:   string(check.Startup),
 		Status:    string(check.Status),
+		Successes: check.Successes,
 		Failures:  check.Failures,
 		Threshold: check.Threshold,
 		ChangeID:  check.ChangeID,
