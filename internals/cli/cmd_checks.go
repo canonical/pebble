@@ -92,7 +92,10 @@ func (cmd *cmdChecks) Execute(args []string) error {
 		}
 		successes := "?"
 		if check.Successes != nil {
-			successes = strconv.Itoa(*check.Successes)
+			successes = "-"
+			if check.Status != client.CheckStatusInactive {
+				successes = strconv.Itoa(*check.Successes)
+			}
 		}
 		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
 			check.Name, level, check.Startup, check.Status, successes, failures,
