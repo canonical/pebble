@@ -127,9 +127,9 @@ You can view check status using the `pebble checks` command. This reports the ch
    :input: pebble checks
 Check   Level  Startup   Status    Successes  Failures  Change
 up      alive  enabled   up        5          0/1       10
-online  ready  enabled   down      2          1/3       13 (dial tcp 127.0.0.1:8000: connect: connection refused)
+online  ready  enabled   up        2          1/3       13 (dial tcp 127.0.0.1:8000: connect: connection refused)
 test    -      disabled  down      0          42/3      14 (Get "http://localhost:8080/": dial t... run "pebble tasks 14" for more)
-extra   -      disabled  inactive  0          -         -
+extra   -      disabled  inactive  -          -         -
 ```
 
 The "Successes" column shows the number of times the check has succeeded. It is reset when the check succeeds again after the check's failure threshold was reached. This will be zero if the check has never run, or has never run successfully.
