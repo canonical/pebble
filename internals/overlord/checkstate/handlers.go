@@ -55,19 +55,14 @@ func (m *CheckManager) doPerformCheck(task *state.Task, tomb *tombpkg.Tomb) erro
 			return true, checkStopped(config.Name, task.Kind(), tomb.Err())
 		}
 		if err != nil {
-			m.incFailureCount(config)
+			m.incFailureMetric(config)
 			// Record check failure and perform any action if the threshold
 			// is reached (for example, restarting a service).
 			details.Failures++
-			atThreshold := details.Failures >= config.Threshold
-			if !atThreshold {
-				// Update number of failures in check info. In threshold
-				// case, check data will be updated with new change ID by
-				// changeStatusChanged.
-				m.updateCheckData(config, changeID, details.Failures)
-			}
+			m.updateCheckData(config, changeID, details.Successes, details.Failures)
 
 			m.state.Lock()
+			atThreshold := details.Failures >= config.Threshold
 			if atThreshold {
 				details.Proceed = true
 			} else {
@@ -90,13 +85,21 @@ func (m *CheckManager) doPerformCheck(task *state.Task, tomb *tombpkg.Tomb) erro
 			return false, err
 		}
 
-		m.incSuccessCount(config)
+		m.incSuccessMetric(config)
+		details.Successes++
 		if details.Failures > 0 {
-			m.updateCheckData(config, changeID, 0)
+			oldFailures := details.Failures
+			details.Failures = 0
+			m.updateCheckData(config, changeID, details.Successes, details.Failures)
 
 			m.state.Lock()
-			task.Logf("succeeded after %s", pluralise(details.Failures, "failure", "failures"))
-			details.Failures = 0
+			task.Logf("succeeded after %s", pluralise(oldFailures, "failure", "failures"))
+			task.Set(checkDetailsAttr, &details)
+			m.state.Unlock()
+		} else {
+			m.updateCheckData(config, changeID, details.Successes, details.Failures)
+
+			m.state.Lock()
 			task.Set(checkDetailsAttr, &details)
 			m.state.Unlock()
 		}
@@ -166,9 +169,9 @@ func (m *CheckManager) doRecoverCheck(task *state.Task, tomb *tombpkg.Tomb) erro
 			return true, checkStopped(config.Name, task.Kind(), tomb.Err())
 		}
 		if err != nil {
-			m.incFailureCount(config)
+			m.incFailureMetric(config)
 			details.Failures++
-			m.updateCheckData(config, changeID, details.Failures)
+			m.updateCheckData(config, changeID, details.Successes, details.Failures)
 
 			m.state.Lock()
 			task.Set(checkDetailsAttr, &details)
@@ -180,9 +183,10 @@ func (m *CheckManager) doRecoverCheck(task *state.Task, tomb *tombpkg.Tomb) erro
 		}
 
 		// Check succeeded, switch to performing a succeeding check.
-		// Check info will be updated with new change ID by changeStatusChanged.
-		m.incSuccessCount(config)
-		details.Failures = 0 // not strictly needed, but just to be safe
+		m.incSuccessMetric(config)
+		details.Successes = 1
+		details.Failures = 0
+		m.updateCheckData(config, changeID, details.Successes, details.Failures)
 		details.Proceed = true
 		m.state.Lock()
 		task.Set(checkDetailsAttr, &details)

@@ -44,6 +44,7 @@ type checkInfo struct {
 	Level     string `yaml:"level,omitempty"`
 	Startup   string `yaml:"startup"`
 	Status    string `yaml:"status"`
+	Successes *int   `yaml:"successes,omitempty"`
 	Failures  int    `yaml:"failures"`
 	Threshold int    `yaml:"threshold"`
 	ChangeID  string `yaml:"change-id,omitempty"`
@@ -71,6 +72,7 @@ func checkInfoFromClient(check client.CheckInfo) checkInfo {
 		Level:     string(check.Level),
 		Startup:   string(check.Startup),
 		Status:    string(check.Status),
+		Successes: check.Successes,
 		Failures:  check.Failures,
 		Threshold: check.Threshold,
 		ChangeID:  check.ChangeID,

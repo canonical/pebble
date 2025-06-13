@@ -125,12 +125,14 @@ You can view check status using the `pebble checks` command. This reports the ch
 
 ```{terminal}
    :input: pebble checks
-Check   Level  Startup   Status    Failures  Change
-up      alive  enabled   up        0/1       10
-online  ready  enabled   down      1/3       13 (dial tcp 127.0.0.1:8000: connect: connection refused)
-test    -      disabled  down      42/3      14 (Get "http://localhost:8080/": dial t... run "pebble tasks 14" for more)
-extra   -      disabled  inactive  -         -
+Check   Level  Startup   Status    Successes  Failures  Change
+up      alive  enabled   up        5          0/1       10
+online  ready  enabled   up        2          1/3       13 (dial tcp 127.0.0.1:8000: connect: connection refused)
+test    -      disabled  down      0          42/3      14 (Get "http://localhost:8080/": dial t... run "pebble tasks 14" for more)
+extra   -      disabled  inactive  -          -         -
 ```
+
+The "Successes" column shows the number of times the check has succeeded. It is reset when the check succeeds again after the check's failure threshold was reached. This will be zero if the check has never run, or has never run successfully.
 
 The "Failures" column shows the current number of failures since the check started failing, a slash, and the configured threshold.
 
@@ -152,6 +154,7 @@ You can run a check immediately using the `pebble check <name> --refresh` comman
 name: chk1
 startup: enabled
 status: up
+successes: 1
 failures: 0
 threshold: 3
 change-id: "1"
@@ -164,6 +167,7 @@ If running the check fails, the result will also show the error and logs:
 name: chk1
 startup: enabled
 status: up
+successes: 0
 failures: 1
 threshold: 3
 change-id: "1"
@@ -172,13 +176,14 @@ logs: |
     2025-03-13T10:05:45+08:00 ERROR non-2xx status code 500; Health check failed
 ```
 
-You can run a check even if it's inactive (for example, if the check has `startup: disabled` or was stopped by [`pebble stop-checks`](#reference_health_checks_start_stop_command)). This will run the check immediately but won't start the check. If running a stopped check fails, Pebble won't change the status or the failure count, and the result won't include logs:
+You can run a check even if it's inactive (for example, if the check has `startup: disabled` or was stopped by [`pebble stop-checks`](#reference_health_checks_start_stop_command)). This will run the check immediately but won't start the check. If running a stopped check fails, Pebble won't change the status or the success or failure count, and the result won't include logs:
 
 ```{terminal}
    :input: pebble check chk1 --refresh
 name: chk1
 startup: disabled
 status: inactive
+successes: 0
 failures: 0
 threshold: 3
 error: non-2xx status code 500; Health check failed
@@ -191,6 +196,7 @@ Without the `--refresh` flag, `pebble check <name>` gets the details of a check 
 name: chk1
 startup: enabled
 status: up
+successes: 0
 failures: 1
 threshold: 3
 change-id: "1"

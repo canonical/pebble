@@ -385,6 +385,7 @@ paths:
                       "name": "check1",
                       "startup": "enabled",
                       "status": "up",
+                      "successes": 2,
                       "failures": 1,
                       "threshold": 3,
                       "change-id": "1"
@@ -1702,7 +1703,10 @@ components:
         status:
           type: string
           description: Status of the check.
-          enum: [down, up]
+          enum: [inactive, down, up]
+        successes:
+          type: integer
+          description: Number of successes since check started or status transitioned from "down" to "up".
         failures:
           type: integer
           description: Number of consecutive failures.

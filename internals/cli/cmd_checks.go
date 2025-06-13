@@ -16,6 +16,7 @@ package cli
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/canonical/go-flags"
@@ -78,7 +79,7 @@ func (cmd *cmdChecks) Execute(args []string) error {
 	w := tabWriter()
 	defer w.Flush()
 
-	fmt.Fprintln(w, "Check\tLevel\tStartup\tStatus\tFailures\tChange")
+	fmt.Fprintln(w, "Check\tLevel\tStartup\tStatus\tSuccesses\tFailures\tChange")
 
 	for _, check := range checks {
 		level := check.Level
@@ -89,8 +90,15 @@ func (cmd *cmdChecks) Execute(args []string) error {
 		if check.Status != client.CheckStatusInactive {
 			failures = fmt.Sprintf("%d/%d", check.Failures, check.Threshold)
 		}
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n",
-			check.Name, level, check.Startup, check.Status, failures,
+		successes := "?"
+		if check.Successes != nil {
+			successes = "-"
+			if check.Status != client.CheckStatusInactive {
+				successes = strconv.Itoa(*check.Successes)
+			}
+		}
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
+			check.Name, level, check.Startup, check.Status, successes, failures,
 			cmd.changeInfo(check))
 	}
 	return nil

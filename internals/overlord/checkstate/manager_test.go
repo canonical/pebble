@@ -1073,6 +1073,7 @@ func (s *ManagerSuite) TestRefreshCheck(c *C) {
 		Level:     "",
 		Startup:   "enabled",
 		Status:    "up",
+		Successes: 1,
 		Failures:  0,
 		Threshold: 3,
 		ChangeID:  originalChangeID,
@@ -1206,5 +1207,52 @@ func (s *ManagerSuite) TestRefreshStoppedCheckFailure(c *C) {
 		Status:    "inactive",
 		Failures:  0,
 		Threshold: 3,
+	})
+}
+
+func (s *ManagerSuite) TestChecksSuccesses(c *C) {
+	testPath := c.MkDir() + "/test"
+	err := os.WriteFile(testPath, nil, 0o644)
+	c.Assert(err, IsNil)
+	s.manager.PlanChanged(&plan.Plan{
+		Checks: map[string]*plan.Check{
+			"chk1": {
+				Name:      "chk1",
+				Override:  "replace",
+				Period:    plan.OptionalDuration{Value: time.Millisecond},
+				Timeout:   plan.OptionalDuration{Value: time.Second},
+				Threshold: 3,
+				Exec: &plan.ExecCheck{
+					Command: fmt.Sprintf(`/bin/sh -c '[ -f %s ]'`, testPath),
+				},
+			},
+		},
+	})
+
+	// Wait for "successes" to go up (to a number we'll be sure to be under when we reset).
+	numSuccesses := 250
+	check := waitCheck(c, s.manager, "chk1", func(chk *checkstate.CheckInfo) bool {
+		return chk.Successes >= numSuccesses
+	})
+
+	// Remove the file to make the check start failing.
+	err = os.Remove(testPath)
+	c.Assert(err, IsNil)
+	failedCheck := waitCheck(c, s.manager, "chk1", func(chk *checkstate.CheckInfo) bool {
+		return chk.Status == checkstate.CheckStatusDown
+	})
+	c.Assert(failedCheck.Failures >= 3, Equals, true)
+	c.Assert(failedCheck.Successes >= check.Successes, Equals, true)
+	failingCheck := waitCheck(c, s.manager, "chk1", func(chk *checkstate.CheckInfo) bool {
+		return chk.Failures > 3
+	})
+	c.Assert(failingCheck.Successes, Equals, failedCheck.Successes)
+
+	// Reinstate the file to make the check succeed and go into "perform" mode again.
+	err = os.WriteFile(testPath, nil, 0o644)
+	c.Assert(err, IsNil)
+	waitCheck(c, s.manager, "chk1", func(chk *checkstate.CheckInfo) bool {
+		c.Assert(chk.Successes, Not(Equals), 0)
+		return chk.Successes >= 2 && chk.Successes < numSuccesses
 	})
 }

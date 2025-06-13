@@ -588,6 +588,9 @@ func (s *serviceData) exited(exitCode int) error {
 			s.transition(stateStopped)
 		}
 
+	case stateStopped:
+		// This can happen when we send SIGKILL after the doStart tomb is killed, ignore.
+
 	default:
 		return fmt.Errorf("internal error: exited invalid in state %q", s.state)
 	}

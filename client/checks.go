@@ -88,6 +88,15 @@ type CheckInfo struct {
 	// the check is inactive.
 	Status CheckStatus `json:"status"`
 
+	// Successes is the number of times this check has succeeded. It is reset
+	// when the check succeeds again after the check's failure threshold was
+	// reached, or if the check is stopped and started again. This will be
+	// zero if the check has never run, or has never run successfully.
+	//
+	// This field will be nil if running against a version of the daemon
+	// before this field was added to the API.
+	Successes *int `json:"successes"`
+
 	// Failures is the number of times in a row this check has failed. It is
 	// reset to zero as soon as the check succeeds.
 	Failures int `json:"failures"`

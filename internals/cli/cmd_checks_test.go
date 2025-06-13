@@ -35,12 +35,12 @@ func (s *PebbleSuite) TestChecks(c *check.C) {
     "type": "sync",
     "status-code": 200,
     "result": [
-		{"name": "chk1", "startup": "enabled", "status": "up", "threshold": 3, "change-id": "1"},
-		{"name": "chk2", "startup": "enabled", "status": "down", "failures": 1, "threshold": 1, "change-id": "2"},
-		{"name": "chk3", "startup": "enabled", "level": "alive", "status": "down", "failures": 42, "threshold": 3, "change-id": "3"},
-		{"name": "chk4", "startup": "enabled", "status": "down", "failures": 6, "threshold": 2, "change-id": "4"},
+		{"name": "chk1", "startup": "enabled", "status": "up", "successes": 5, "threshold": 3, "change-id": "1"},
+		{"name": "chk2", "startup": "enabled", "status": "down", "successes": 6, "failures": 1, "threshold": 1, "change-id": "2"},
+		{"name": "chk3", "startup": "enabled", "level": "alive", "status": "down", "successes": 7, "failures": 42, "threshold": 3, "change-id": "3"},
+		{"name": "chk4", "startup": "enabled", "status": "down", "successes": 0, "failures": 6, "threshold": 2, "change-id": "4"},
 		{"name": "chk5", "startup": "enabled", "status": "down", "failures": 3, "threshold": 2, "change-id": "5"},
-		{"name": "chk6", "startup": "disabled", "status": "inactive", "failures": 0, "threshold": 3, "change-id": ""}
+		{"name": "chk6", "startup": "disabled", "status": "inactive", "successes": 9, "failures": 0, "threshold": 3, "change-id": ""}
 	]
 }`)
 		case "/v1/changes/2":
@@ -90,13 +90,13 @@ func (s *PebbleSuite) TestChecks(c *check.C) {
 	c.Assert(err, check.IsNil)
 	c.Assert(rest, check.HasLen, 0)
 	c.Check(s.Stdout(), check.Equals, `
-Check  Level  Startup   Status    Failures  Change
-chk1   -      enabled   up        0/3       1
-chk2   -      enabled   down      1/1       2 (second)
-chk3   alive  enabled   down      42/3      3 (cannot get change 3)
-chk4   -      enabled   down      6/2       4 (Get "http://localhost:8000/": dial tc... run "pebble tasks 4" for more)
-chk5   -      enabled   down      3/2       5 (error with some\nline breaks\nin it\n)
-chk6   -      disabled  inactive  -         -
+Check  Level  Startup   Status    Successes  Failures  Change
+chk1   -      enabled   up        5          0/3       1
+chk2   -      enabled   down      6          1/1       2 (second)
+chk3   alive  enabled   down      7          42/3      3 (cannot get change 3)
+chk4   -      enabled   down      0          6/2       4 (Get "http://localhost:8000/": dial tc... run "pebble tasks 4" for more)
+chk5   -      enabled   down      ?          3/2       5 (error with some\nline breaks\nin it\n)
+chk6   -      disabled  inactive  -          -         -
 `[1:])
 	c.Check(s.Stderr(), check.Equals, "")
 }
@@ -146,8 +146,8 @@ func (s *PebbleSuite) TestChecksFiltering(c *check.C) {
     "type": "sync",
     "status-code": 200,
     "result": [
-		{"name": "chk1", "startup": "enabled", "status": "up", "threshold": 3},
-		{"name": "chk3", "startup": "enabled", "level": "alive", "status": "down", "failures": 42, "threshold": 3}
+		{"name": "chk1", "startup": "enabled", "status": "up", "successes": 15, "threshold": 3},
+		{"name": "chk3", "startup": "enabled", "level": "alive", "status": "down", "successes": 16, "failures": 42, "threshold": 3}
 	]
 }`)
 	})
@@ -155,9 +155,9 @@ func (s *PebbleSuite) TestChecksFiltering(c *check.C) {
 	c.Assert(err, check.IsNil)
 	c.Assert(rest, check.HasLen, 0)
 	c.Check(s.Stdout(), check.Equals, `
-Check  Level  Startup  Status  Failures  Change
-chk1   -      enabled  up      0/3       -
-chk3   alive  enabled  down    42/3      -
+Check  Level  Startup  Status  Successes  Failures  Change
+chk1   -      enabled  up      15         0/3       -
+chk3   alive  enabled  down    16         42/3      -
 `[1:])
 	c.Check(s.Stderr(), check.Equals, "")
 }
