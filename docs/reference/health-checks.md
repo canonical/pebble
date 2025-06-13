@@ -154,6 +154,7 @@ You can run a check immediately using the `pebble check <name> --refresh` comman
 name: chk1
 startup: enabled
 status: up
+successes: 1
 failures: 0
 threshold: 3
 change-id: "1"
@@ -166,6 +167,7 @@ If running the check fails, the result will also show the error and logs:
 name: chk1
 startup: enabled
 status: up
+successes: 0
 failures: 1
 threshold: 3
 change-id: "1"
@@ -174,13 +176,14 @@ logs: |
     2025-03-13T10:05:45+08:00 ERROR non-2xx status code 500; Health check failed
 ```
 
-You can run a check even if it's inactive (for example, if the check has `startup: disabled` or was stopped by [`pebble stop-checks`](#reference_health_checks_start_stop_command)). This will run the check immediately but won't start the check. If running a stopped check fails, Pebble won't change the status or the failure count, and the result won't include logs:
+You can run a check even if it's inactive (for example, if the check has `startup: disabled` or was stopped by [`pebble stop-checks`](#reference_health_checks_start_stop_command)). This will run the check immediately but won't start the check. If running a stopped check fails, Pebble won't change the status or the success or failure count, and the result won't include logs:
 
 ```{terminal}
    :input: pebble check chk1 --refresh
 name: chk1
 startup: disabled
 status: inactive
+successes: 0
 failures: 0
 threshold: 3
 error: non-2xx status code 500; Health check failed
@@ -193,6 +196,7 @@ Without the `--refresh` flag, `pebble check <name>` gets the details of a check 
 name: chk1
 startup: enabled
 status: up
+successes: 0
 failures: 1
 threshold: 3
 change-id: "1"

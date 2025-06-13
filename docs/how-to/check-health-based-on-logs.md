@@ -52,12 +52,14 @@ To display detailed status information about the check:
 name: foo-warning
 startup: enabled
 status: down
+successes: 0
 failures: 3
 threshold: 1
 change-id: "60"
 logs: |
     2025-04-26T11:22:27+08:00 ERROR exit status 1
     2025-04-26T11:22:37+08:00 ERROR exit status 1
+    2025-04-26T11:22:47+08:00 ERROR exit status 1
 ```
 
 ## See more
