@@ -90,8 +90,8 @@ type CheckInfo struct {
 
 	// Successes is the number of times this check has succeeded. It is reset
 	// when the check succeeds again after the check's failure threshold was
-	// reached. This will be zero if the check has never run, or has never run
-	// successfully.
+	// reached, or if the check is stopped and started again. This will be
+	// zero if the check has never run, or has never run successfully.
 	//
 	// This field will be nil if running against a version of the daemon
 	// before this field was added to the API.
