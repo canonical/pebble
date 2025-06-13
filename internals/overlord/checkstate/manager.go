@@ -208,7 +208,7 @@ func (m *CheckManager) changeStatusChanged(change *state.Change, old, new state.
 		}
 		config := m.state.Cached(recoverConfigKey{change.ID()}).(*plan.Check) // panic if key not present (always should be)
 		changeID := performCheckChange(m.state, config)
-		m.updateCheckData(config, changeID, 0, 0)
+		m.updateCheckData(config, changeID, details.Successes, details.Failures)
 		shouldEnsure = true
 	}
 

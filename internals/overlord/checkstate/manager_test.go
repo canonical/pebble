@@ -1252,6 +1252,7 @@ func (s *ManagerSuite) TestChecksSuccesses(c *C) {
 	err = os.WriteFile(testPath, nil, 0o644)
 	c.Assert(err, IsNil)
 	waitCheck(c, s.manager, "chk1", func(chk *checkstate.CheckInfo) bool {
+		c.Assert(chk.Successes, Not(Equals), 0)
 		return chk.Successes >= 2 && chk.Successes < numSuccesses
 	})
 }
