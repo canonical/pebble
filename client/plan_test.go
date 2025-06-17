@@ -92,3 +92,18 @@ services:
         command: cmd
 `[1:])
 }
+
+func (cs *clientSuite) TestPlan(c *check.C) {
+	cs.rsp = `{
+		"type": "sync",
+		"status-code": 200,
+		"result": "services:\n    foo:\n        override: replace\n        command: cmd\n"
+	}`
+	data, err := cs.cli.Plan()
+	c.Assert(err, check.IsNil)
+	c.Check(cs.req.Method, check.Equals, "GET")
+	c.Check(cs.req.URL.Path, check.Equals, "/v1/plan")
+	c.Check(cs.req.URL.Query(), check.DeepEquals, url.Values{"format": []string{"yaml"}})
+	c.Assert(data.Services["foo"].Override, check.Equals, "replace")
+	c.Assert(data.Services["foo"].Command, check.Equals, "cmd")
+}

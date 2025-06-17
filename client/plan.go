@@ -18,7 +18,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/url"
+
+	"gopkg.in/yaml.v2"
 )
 
 type AddLayerOptions struct {
@@ -99,4 +102,54 @@ func (client *Client) PlanBytes(_ *PlanOptions) (data []byte, err error) {
 		return nil, err
 	}
 	return []byte(dataStr), nil
+}
+
+type ServiceConfig struct {
+	Override string `yaml:"override"`
+	Summary  string `yaml:"summary"`
+	Command  string `yaml:"command"`
+	Startup  string `yaml:"startup"`
+}
+
+type Check struct {
+	Override  string `yaml:"override"`
+	Level     string `yaml:"level"`
+	Startup   string `yaml:"startup"`
+	Period    string `yaml:"period"`
+	Timeout   string `yaml:"timeout"`
+	Threshold string `yaml:"threshold"`
+	HTTP      string `yaml:"http"`
+	TCP       string `yaml:"tcp"`
+	Exec      string `yaml:"exec"`
+}
+
+type LogTarget struct {
+	Override string            `yaml:"override"`
+	Type     string            `yaml:"type"`
+	Location string            `yaml:"location"`
+	Services []string          `yaml:"services"`
+	Labels   map[string]string `yaml:"labels"`
+}
+
+type Plan struct {
+	Services   map[string]ServiceConfig `yaml:"services"`
+	Checks     map[string]Check         `yaml:"checks"`
+	LogTargets map[string]LogTarget     `yaml:"log-targets"`
+}
+
+// Plan fetches the plan and unmarshals it into a Plan struct.
+func (client *Client) Plan() (*Plan, error) {
+	data, err := client.PlanBytes(nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var plan Plan
+
+	err = yaml.Unmarshal(data, &plan)
+	if err != nil {
+		return nil, fmt.Errorf("cannot unmarshal plan: %w", err)
+	}
+
+	return &plan, nil
 }
