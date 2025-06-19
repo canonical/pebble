@@ -255,7 +255,7 @@ database  enabled  inactive  -
 frontend  enabled  inactive  -
 ```
 
-You can use the [Changes and tasks] commands to get more details about the
+You can use the [`changes`](#reference_pebble_changes_command) and [`tasks`](#reference_pebble_tasks_command) commands to get more details about the
 failed run.
 
 ## See more
