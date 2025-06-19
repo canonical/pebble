@@ -255,7 +255,7 @@ database  enabled  inactive  -
 frontend  enabled  inactive  -
 ```
 
-You can use the [Changes and tasks] commands to get more details about the
+You can use the [`changes`](#reference_pebble_changes_command) and [`tasks`](#reference_pebble_tasks_command) commands to get more details about the
 failed run.
 
 ## See more
@@ -264,4 +264,3 @@ failed run.
 - [`pebble start`](#reference_pebble_start_command) command
 - [`pebble stop`](#reference_pebble_stop_command) command
 - [Layer specification](../reference/layer-specification.md)
-- [Changes and tasks](/reference/changes-and-tasks.md)
