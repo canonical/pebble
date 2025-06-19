@@ -264,4 +264,3 @@ failed run.
 - [`pebble start`](#reference_pebble_start_command) command
 - [`pebble stop`](#reference_pebble_stop_command) command
 - [Layer specification](../reference/layer-specification.md)
-- [Changes and tasks](/reference/changes-and-tasks.md)
