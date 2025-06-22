@@ -215,13 +215,14 @@ type Service struct {
 	WorkingDir  string            `yaml:"working-dir,omitempty"`
 
 	// Auto-restart and backoff functionality
-	OnSuccess      ServiceAction            `yaml:"on-success,omitempty"`
-	OnFailure      ServiceAction            `yaml:"on-failure,omitempty"`
-	OnCheckFailure map[string]ServiceAction `yaml:"on-check-failure,omitempty"`
-	BackoffDelay   OptionalDuration         `yaml:"backoff-delay,omitempty"`
-	BackoffFactor  OptionalFloat            `yaml:"backoff-factor,omitempty"`
-	BackoffLimit   OptionalDuration         `yaml:"backoff-limit,omitempty"`
-	KillDelay      OptionalDuration         `yaml:"kill-delay,omitempty"`
+	OnSuccess       ServiceAction            `yaml:"on-success,omitempty"`
+	OnFailure       ServiceAction            `yaml:"on-failure,omitempty"`
+	OnCheckFailure  map[string]ServiceAction `yaml:"on-check-failure,omitempty"`
+	MaxStartRetries int64                    `yaml:"max-restarts,omitempty"`
+	BackoffDelay    OptionalDuration         `yaml:"backoff-delay,omitempty"`
+	BackoffFactor   OptionalFloat            `yaml:"backoff-factor,omitempty"`
+	BackoffLimit    OptionalDuration         `yaml:"backoff-limit,omitempty"`
+	KillDelay       OptionalDuration         `yaml:"kill-delay,omitempty"`
 }
 
 // Copy returns a deep copy of the service.
@@ -315,6 +316,9 @@ func (s *Service) Merge(other *Service) {
 	}
 	if other.BackoffLimit.IsSet {
 		s.BackoffLimit = other.BackoffLimit
+	}
+	if other.MaxStartRetries != 0 {
+		s.MaxStartRetries = other.MaxStartRetries
 	}
 }
 
