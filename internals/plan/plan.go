@@ -218,7 +218,7 @@ type Service struct {
 	OnSuccess       ServiceAction            `yaml:"on-success,omitempty"`
 	OnFailure       ServiceAction            `yaml:"on-failure,omitempty"`
 	OnCheckFailure  map[string]ServiceAction `yaml:"on-check-failure,omitempty"`
-	MaxStartRetries int64                    `yaml:"max-restarts,omitempty"`
+	MaxStartRetries int64                    `yaml:"max-start-retries,omitempty"`
 	BackoffDelay    OptionalDuration         `yaml:"backoff-delay,omitempty"`
 	BackoffFactor   OptionalFloat            `yaml:"backoff-factor,omitempty"`
 	BackoffLimit    OptionalDuration         `yaml:"backoff-limit,omitempty"`
