@@ -1,59 +1,51 @@
 # Pebble Go style guide
 
-This is the Go style guide we use for the Pebble project. It's also the style we're converging on for other projects maintained by the Charm Tech team.
+This is the Go style guide we use for the Pebble project. It's also the style we're converging on for other Go projects maintained by the Charm Tech team.
 
 New code should follow these guidelines, unless there's a good reason not to. Sometimes existing code doesn't follow these, but we're happy for it to be updated to do so (either all at once, or as you change nearby code).
 
 Of course, this is just a start! We add to this list as things come up in code review; this list reflects our team decisions.
 
-For documentation style guide , see [here](https://github.com/canonical/operator/blob/main/STYLE.md#docs-and-docstrings).
+For our documentation style guide, see [STYLE.md in the canonical/operator repo](https://github.com/canonical/operator/blob/main/STYLE.md#docs-and-docstrings).
 
 ## Naming conventions
 
 ### Use `CamelCase` or `camelCase`
 
-The convention in Go is to use MixedCaps or mixedCaps rather than underscores to write multiword names.
+The convention in Go is to use `MixedCaps` for exported names and `mixedCaps` for local variables and non-exported names. Don't use underscores to separate words in multi-word names.
 
-Further more, abbreviations are always written with the same case, which means `HTTPPort`, not `HttpPort`.
+Abbreviations should always be written with the letters in the same case, for example `HTTPPort` or `httpPort`, not `HttpPort`.
 
 ### Don't use `ALL_CAPS`
 
-When it's not an environment variable, do not use `ALL_CAPS` because it looks like one.
+Use `MyConst` for constants (referenced as `mypkg.MyConst`). Only use `ALL_CAPS` for environment variable names.
 
 ### Short names can be used in context
 
-Avoid long names with redundant information which can be inferred from the context. Be concise - a long name can almost always be shortened. 
-
-Example:
+Be concise: avoid long names with redundant information which can be inferred from the context.
 
 - Avoid: `basicAuthUsername, basicAuthPassword, _ := r.BasicAuth()`
 - Prefer: `username, password, _ := r.BasicAuth()`
 
-Because in the context, it can be inferred the username and password are for basic auth.
+In context, it's obvious that the username and password are for basic auth.
 
 ### Be consistent
 
-If `func foo()` returns a `code`, then `returnCode := foo()` is more accurate than `returnVal := foo()` - the result variable naming should be consistent with the function called.
+If `foo()` returns a "code", then `code := foo()` is more accurate and more concise than `returnVal := foo()` -- the result variable should be named consistently with the function called.
 
-If existing code uses `json:"error,omitempty"` instead of `json:"err,omitempty"`, stick to the existing convention.
+If the rest of the API uses `verbNoun` then unless there is a very good reason not to, the next function should be of the form `verbNoun`. For example, if the API has `createUser()`, `updateUser()`, `deleteUser()`, then adding `getUser()` fits perfectly, but if you add `userFetch()` instead of `fetchUser()`, it breaks the consistent pattern, making the API harder to learn and use.
 
-If the rest of the API uses `verbNoun` then unless there is a very good reason not to, the next function should be of the form `verbNoun`.
-
-### Adding code in existing functions and structs
+### Adding code to existing functions and structs
 
 Think stratigically about _where to add the new code._ Study existing code and try to discover a logic or pattern.
 
 Order:
 
-- A special order: For example, if you have a validation function that validates user inputs against a couple of rules and the code uses if/switch and puts them in alphabetical order, when adding new code, you should probably follow that existing pattern.
-- Anywhere? This could work in certain cases. For the same example, if existing validation rules are organized in no particular order and now you are adding a new rule, it's probably ok to add it anywhere in the validation function. At the beginning, at the end, or even in the middle.
-- Some logical order: For the same example, if the new rule you add is a naming convention (e.g., it must match a certain pattern), then it's almost certainly correct to put it at the very beginning: If the name doesn't even follow the convention, there's no need to check other rules. Lazy thinking would add this new rule anywhere, because it's just another rule; strategic thinking would try to discover the logic and find the best place.
+- Alphabetical order: For example, if you're in a function with a switch or series of ifs, and the existing code puts the cases in alphabetical order, follow the existing pattern.
+- Another logical order: For example, by frequency of use. If you're adding a new case to a switch statement, it makes sense to put the most frequently used case at the beginning instead of following alphabetical order.
+- Ownership: when adding a new field to a struct, ask if the field really _belongs_ to the struct you're adding it to? Add the new field to the code that "owns" it, even if it's simpler to add it to another struct.
 
-Ownership:
-
-- When adding a new field/flag to an existing struct, think about if the field really _belongs_ to the thing where you are adding it. Are you adding it there just because it's simple to do so, or does it truly belong to it? If not, should a new struct be created specifically for it? Understand existing code before working on it.
-
-An example of order:
+As an example, consider the placement of the Chown field below. It relates to UserID and GroupID, so it should go directly above them:
 
 Avoid:
 
@@ -81,98 +73,77 @@ MkdirOptions{
 }
 ```
 
-(Pay attention to the place of `Chown` because it relates more to `UserID` and `GroupID`.)
-
-## Refactoring
-
-Compare the logic before/after. There should be no behavior changes, because it's a "refactor", so make sure that the behavior is 100% the same.
-
 ## Code style
 
-### Functions
-
-#### Arguments
-
-Use Go style:
+### Merge arguments of the same type
 
 - Avoid `func foo(a string, b string, c string)`
 - Prefer `func foo(a, b, c string)`
 
-#### Named arguments
+### Named return values
 
-It's clearer to have named arguments when you're returning multiple things of the same type, and it's not clear which is which. Example:
+It's usually clearer to use named arguments when you're returning multiple values of the same type, for example:
 
-- Avoid: `func foo() (<-chan servicelog.Entry, <-chan servicelog.Entry) {}`
-- Prefer: `func foo() (stdoutCh <-chan servicelog.Entry, stderrCh <-chan servicelog.Entry) {}`
+- Avoid: `func run() (<-chan servicelog.Entry, <-chan servicelog.Entry) {}`
+- Prefer: `func run() (stdoutCh <-chan servicelog.Entry, stderrCh <-chan servicelog.Entry) {}`
 
-#### Short variable declarations
+### Short variable declarations
 
-Inside a function, use the more go-idiomatic `:=` short assignment for var declaration with implicit type.
+Where possible, use the more idiomatic `:=` short form variable declaration with an implicit type.
 
 - Prefer: `a := 0`, even if you must explicitly assign a zero value. This will help signify that there are code-paths which read this value before it is assigned to.
 - Avoid: `var a = 0`
 
-On the other hand, if the zero value you'd write with the first way would never be read, use `var foo type`. For example:
+On the other hand, if the zero value would never be read, use `var foo type`. For example:
 
 ```go
-	var numberName string
-	if i == 1 {
-		numberName = "one"
-	} else {
-		numberName = "not one"
-	}
+var name string
+if i == 1 {
+	name = "one"
+} else {
+	name = "not one"
+}
 ```
 
-#### Don't repeat yourself
+That said, in cases like this is sometimes simpler to initialise to the `else` value instead:
 
-Example:
+```go
+name := "not one"
+if i == 1 {
+    name = "one"
+}
+```
+
+### Don't repeat yourself (DRY)
+
+Avoid repeating code where possible.
+
+For example, imagine you had to greet many people, sometimes formally, sometimes informally. Without DRY, you'd write similar `fmt.Println` statements over and over. If you later wanted to change the greeting, you'd have to change every single line where you used it. That's error-prone and time-consuming. Prefer the DRY Solution:
+
+```go
+// Greet prints a greeting message.  Avoid repeating the greeting logic!
+func Greet(name string, formal bool) string {
+	greeting := "Hello, "
+	if formal {
+		greeting = "Greetings, esteemed "
+	}
+	return greeting + name + "!"
+}
+
+func main() {
+	fmt.Println(Greet("Alice", false))   // Hello, Alice!
+	fmt.Println(Greet("Bob", true))      // Greetings, esteemed Bob!
+	fmt.Println(Greet("Charlie", false)) // Hello, Charlie!
+}
+```
+
+This reduces redundancy, is less error-prone, improves readability of the main function (instead of a bunch of prints) and increases reusability.
+
+### Avoid very small functions
+
+In many cases, it's not worth creating a function or method for one-liners that aren't exported. For example, below you could simply write `positions` inline:
 
 Avoid:
-
-```go
-// Create a single directory and perform chmod/chown operations according to options.
-func mkdir(path string, perm os.FileMode, options *MkdirOptions) error {
-	// multiple options != nil
-	if options != nil && options.Chown {
-		// ...
-	}
-
-	// multiple options != nil
-	if options != nil && options.Chmod {
-		// ...
-	}
-
-	// ...
-}
-```
-
-Prefer:
-
-```go
-func Mkdir(path string, perm os.FileMode, options *MkdirOptions) error {
-	// avoid multiple options != nil
-	if options == nil {
-		options = &MkdirOptions{}
-	}
-	
-	if options.Chown {
-		// ...
-	}
-
-	if options.Chmod {
-		// ...
-	}
-
-	// ...
-}
-
-```
-
-#### Avoid very small functions
-
-For example, a one-liner unexported function in the same package probably isn't necessary.
-
-Another example:
 
 ```go
 func (rb *RingBuffer) Positions() (start RingPos, end RingPos) {
@@ -186,80 +157,67 @@ func (rb *RingBuffer) positions() (start RingPos, end RingPos) {
 }
 ```
 
-The two functions don't provide much value because we can simply use 
+Prefer:
 
 ```go
+func (rb *RingBuffer) Positions() (start RingPos, end RingPos) {
 	rb.rwlock.RLock()
 	defer rb.rwlock.RUnlock()
-
-	start := rb.readIndex
-	stop := rb.writeIndex
+	return rb.readIndex, rb.writeIndex
+}
 ```
 
-Another example: Use `strings.Contains` instead of creating a function `containsSubstring`.
-
-Exception: If a very short function is used repeatedly in different places and increases readability, maybe we can keep it.
-
-#### Cuddled braces
+### Cuddled braces
 
 Avoid:
 
 ```go
-	err = osutil.Mkdir(
-		filepath.Dir(filename),
-		0700,
-		&osutil.MkdirOptions{
-			ExistOK: true,
-			Chmod:   true,
-			UserID:  uid,
-			GroupID: gid,
-		},
-	)
+err = osutil.Mkdir(
+	filepath.Dir(filename),
+	0o700,
+	&osutil.MkdirOptions{
+		ExistOK: true,
+		Chmod:   true,
+		UserID:  uid,
+		GroupID: gid,
+	},
+)
 ```
 
 Prefer:
 
 ```go
-	err = osutil.Mkdir(filepath.Dir(filename), 0700, &osutil.MkdirOptions{
-		ExistOK: true,
-		// ...
-	})
+err = osutil.Mkdir(filepath.Dir(filename), 0o700, &osutil.MkdirOptions{
+	ExistOK: true,
+	Chmod:   true,
+	UserID:  uid,
+	GroupID: gid,
+})
 ```
 
-#### Exported or unexported
+### Chaining function calls
 
-`lowerCaseFunction` if it doesn't need to be exported (for example, helper functions). Think carefully about if it really needs to be exported.
+Split long chained calls into multiple lines so it's easier to see what's being called. For example:
 
-#### Guard `nil` values
+- Avoid:
 
-Guard with `if foo != nil { }` as early as possible, before the first possible access.
+```go
+err := c.d.overlord.CheckManager().RunCheck(r.Context(), check)
+```
 
-#### Defer
-
-If you are adding a piece of code that could potentially return prematurely in a function where there are deferred calls, you'd probably want to add your new code _after_ the deferred calls to make sure the defer is always called.
-
-#### Chaining function calls
-
-Split into multiple lines for long chaining calls so it's easier to see what's being called. Example:
-
-- Avoid: `err := c.d.overlord.CheckManager().RunCheck(r.Context(), check)`
 - Prefer:
 
 ```go
-	checkMgr := c.d.overlord.CheckManager()
-	checks, err := checkMgr.Checks()
-	if err != nil {
-		return InternalError("%v", err)
-	}
+checkMgr := c.d.overlord.CheckManager()
+checks, err := checkMgr.Checks()
+if err != nil {
+	return InternalError("%v", err)
+}
 ```
 
-### Struct
+### Grouping struct fields
 
-#### Grouping
-
-Grouping related fields together in a struct.
-
-For example:
+Group related fields together in a struct. For example:
 
 Avoid:
 
@@ -289,68 +247,57 @@ type MkdirOptions struct {
 
 	Chmod bool
 
-	Chown bool
-	UserID sys.UserID
+	Chown   bool
+	UserID  sys.UserID
 	GroupID sys.GroupID
 }
 ```
 
-Because all these three fields are related to ownership.
-
-#### Pointer vs value for struct field
+### Pointer vs value for struct field
 
 Whether to use a pointer or a direct value in a struct depends on several factors:
 
-Use pointer when:
+Use a pointer when:
 
 - The embedded struct is large: using a pointer avoids copying the entire struct when passing it around.
-- Optional field: If the field can be nil/null (truly optional), a pointer makes this explicit.
-- Mutable shared state: If you need to modify the original data from different places.
-- JSON null values: If you need to distinguish between a zero-valued struct and an absent/missing value in JSON (pointer can be nil).
+- It's an optional field and the zero value is a valid value.
+- Mutable shared state: if you need to modify the original data from different places.
+- JSON null values: if you need to distinguish between a zero-valued struct and a missing value in JSON (nil pointer).
 
-Use direct value when:
+Use a value when:
 
-- Small struct
-- Required field: If the field should never be nil in a valid struct.
-- Value semantics: If you want each struct to have its own copy of the data.
-- Simplicity: Avoiding nil checks and pointer dereferencing can make code simpler.
+- The included struct is small.
+- It's a required field: if the field should never be nil in a valid struct.
+- You need value semantics: if you want each struct to have its own copy of the data.
 
-Common Practice: Use pointers for struct fields when:
+See more: [Receiver Type](https://go.dev/wiki/CodeReviewComments#receiver-type).
 
-- The struct is reasonably large
-- The field is truly optional
-- You need to share the same instance between different objects
+### Trailing commas
 
-#### Trailing comma
-
-Trailing comma after the last field, the closing brace is on its own line.
+Add a trailing comma after the last field in a struct or line in an argument list, with the closing brace on its own line.
 
 Avoid:
 
 ```go
-	check = &checkData{
-		name:    name,
-		refresh: make(chan struct{}),
-		result:  make(chan error)}
+check = &checkData{
+	name:    name,
+	refresh: make(chan struct{}),
+	result:  make(chan error)}
 ```
 
 Prefer:
 
 ```go
-	check = &checkData{
-		name:    name,
-		refresh: make(chan struct{}),
-		result:  make(chan error),
-	}
+check = &checkData{
+	name:    name,
+	refresh: make(chan struct{}),
+	result:  make(chan error),
+}
 ```
 
-### Synchronization
+### Locks
 
-#### Locks
-
-Suppose that func A calls B, where B locks/unlocks a lock, and then A also locks/unlocks the same lock. This is messy and inefficient. Put everything lock-related in A.
-
-Example:
+Suppose that func A calls helper B, where B locks and unlocks a mutex, and A also locks and unlocks the same mutex. This is messy and inefficient. Instead, put everything lock-related in A. For example:
 
 Avoid:
 
@@ -385,9 +332,9 @@ func (rb *RingBuffer) HeadIterator(lines int) Iterator {
 }
 ```
 
-#### Channels
+### Cancellation channels
 
-Cancellation channels should be unbuffered channels that are closed.
+Cancellation channels should be unbuffered channels that are closed. For example:
 
 ```go
 	stopStdout := make(chan struct{})
@@ -395,42 +342,39 @@ Cancellation channels should be unbuffered channels that are closed.
 	close(stopStdout)
 ```
 
-#### Channel over sleep
+### Prefer `time.After` over `time.Sleep`
 
-Prefer:
+Using `time.Sleep` is not cancelable, so in cases where you need a cancelable sleep, use `time.After` with a `select`. For example:
 
 ```go
-	timeoutCh := time.After(timeout)
-	for {
-		select {
-		case foo, ok := <-fooCh: ...
-		case <-timeoutCh: ...
-		}
-	}
+select {
+case <-time.After(duration):
+	return nil // Slept the full duration
+case <-ctx.Done():
+	return ctx.Err() // Canceled!
+}
 ```
 
-Instead of sleep.
+### String concatenation or `fmt.Sprintf`
 
-#### Switch default
+It's simpler and more efficient to avoid `fmt.Sprintf` for simple concatenation.
 
-For defensive programming, probably best to add a default case.
+- Avoid: `fmt.Sprintf("FOO=%s", foo)`
+- Prefer: `"FOO="+foo`
 
-### Strings
+However, for more complex cases, fmt.Sprintf is usually clearer:
 
-#### String concatenation or `fmt.Sprintf`
+- Avoid: `name + " is " + strconv.Itoa(age) + " years old"`
+- Prefer: `fmt.Sprintf("%s is %d years old", name, age)`
 
-It's simpler and more efficient to avoid fmt.Sprintf for simple concatenation, like `"FOO="+foo` over `fmt.Sprintf("FOO=%s", foo)`.
+### Multiline strings
 
-_Although this is debatable because, from the perspective of readability, one can argue that `fmt.Sprintf` wins. When in doubt, respect existing code conventions._
-
-#### Multiline strings
-
-It's easier to use `[1:]` for readability. Example:
+It's sometimes useful, especially in tests, to add `[1:]` to multiline strings for readability. This allows the first line to start at column 1.
 
 Avoid:
 
 ```go
-	expected := `This
+expected := `This
 is a 
 multiline
 string.
@@ -440,7 +384,7 @@ string.
 Prefer:
 
 ```go
-	expected := `
+expected := `
 This
 is a 
 multiline
@@ -448,10 +392,10 @@ string.
 `[1:]
 ```
 
-However, if it's YAML, YAML doesn't care about an empty line in the beginning, so it's OK to not have `[1:]`:
+However, if it's JSON or YAML, an empty line at the beginning doesn't matter, so you can avoid the `[1:]`:
 
 ```go
-	someYAML := `
+someYAML := `
 key: value
 foo: bar
 `
@@ -459,16 +403,18 @@ foo: bar
 
 ### Regex
 
-We shouldn't re-compile the regex (a relatively expensive operation) every time we call a function. The regex compilation should be done at the top level so `MustCompile` is run once on package init.
+Don't re-compile a `regexp.Regexp` every time you call a function (it's a relatively expensive operation). Instead, use `MustCompile` at the package level, so that compilation is done once on package init.
 
 Avoid:
 
 ```go
-func foo() {
-	var nameRegexp = regexp.MustCompile(`^[a-z0-9]+$`)
+func foo(name string) {
+	nameRegexp := regexp.MustCompile(`^[a-z0-9]+$`)
+	if !nameRegexp.MatchString(name) {
+		// ...
+	}
 	// ...
 }
-
 ```
 
 Prefer:
@@ -484,31 +430,32 @@ func foo(name string) {
 }
 ```
 
-### Permissions
+### Octal number literals
 
-Prefer `0o755` over `0755` format to make it super-clear it's octal, unless it's already `0755` in existing code.
-
-### `iota`
-
-The `iota` identifier is used in const declarations to simplify definitions of incrementing numbers. The `iota` keyword represents successive integer constants 0, 1, 2, ... It resets to 0 whenever the word `const` appears in the source code, and increments after each `const` specification. To avoid getting the zero value by accident, we can start a list of constants at 1 instead of 0 from `iota + 1`.
+For new code, prefer the `0o755` format over `0755`, to make it very clear the number is octal.
 
 ## Error handling
+
+### Start error messages with "cannot"
+
+Where possible, start error messages with "cannot X" for consistency."
+
+- Avoid: `fmt.Errorf("failed to open file: %w", err)`
+- Prefer: `fmt.Errorf("cannot open file: %w", err)`
 
 ### Be specific
 
 When creating an error message, think from the user's perspective, and see what specific messages would help them the most.
 
-For example, if the user input layer label is `pebble-test` but pebble-* is reserved:
+For example, if the user input layer label is `pebble-test` but pebble-* is reserved, be specific in your error message:
 
-- `fmt.Sprintf("cannot use reserved layer label %q", layer.Label)`
-- ``cannot use reserved label prefix "pebble-"``
-
-Is it because the `pebble-test` label is reserved? Or is it because the `pebble-` prefix is reserved? The latter is true, hence prefer the second error message, and avoid the first. Be specific.
+- Avoid: `fmt.Errorf("cannot use reserved layer label %q", layer.Label)`
+- Prefer: `errors.New("cannot use reserved label prefix "pebble-")`
 
 For another example:
 
-- Avoid `fmt.Println("Setup failed with error:", err)` (Ambiguous)
-- Prefer `fmt.Println("Cannot build pebble binary:", err)` (Specific - we know why it fails)
+- Avoid: `fmt.Println("Setup failed with error:", err)`
+- Prefer: `fmt.Println("Cannot build pebble binary:", err)`
 
 ### Be consistent
 
@@ -527,40 +474,51 @@ When adding a new error for no write permissions:
 
 ### Use `errors.Is`
 
-Use `errors.Is()` to check error types.
+Use `errors.Is()` to check error types, for example:
 
 ```go
-	if errors.Is(err, fs.ErrNotExist) {
-		// ...
-	}
+if errors.Is(err, fs.ErrNotExist) {
+	// ...
+}
 ```
 
 ### Use custom error types
 
 Don't check the error string, which is fragile; use a custom error type.
 
-Examples:
+Avoid:
 
 ```go
-type detailsError struct {
-	error
-	details string
+err := doSomething()
+if err != nil && strings.Contains(err.Error(), "file not found") {
+    // Handle "file not found" case
+}
+```
+
+Prefer:
+
+```go
+// Define a custom error type
+type NotFoundError struct {
+    Path string
 }
 
-message := err.Error()
+func (e *NotFoundError) Error() string {
+    return fmt.Sprintf("file not found: %s", e.Path)
+}
 
-var detailsErr *detailsError
-
-if errors.As(err, &detailsErr) && detailsErr.Details() != "" {
-	message += "; " + detailsErr.Details()
+// Check using errors.Is/As
+err := doSomething()
+var notFoundErr *NotFoundError
+if errors.As(err, &notFoundErr) {
+    // Handle "file not found" case
+    fmt.Printf("Missing file at: %s", notFoundErr.Path)
 }
 ```
 
 In general, a custom error type should be considered as a marker indicating that an error is somehow "recoverable".
 
-Use a custom type if the consumer of your API can be expected to perform some special action in response to an error. If necessary, add public fields to expose data which allows a user to make good decisions about what just went wrong.
-
-Do not use a custom error type if, as is more likely, you are writing an error which the user shouldn't handle specially, but which isn't catastrophic enough to take down the entire system (remember panicking can take down everything else too). In this case, stick to a general-purpose error by using `errors.New` or `fmt.Errorf`.
+Do not use a custom error type if you're returning an error which the user shouldn't handle specially. In this case, stick to a general-purpose error by using `errors.New` or `fmt.Errorf`.
 
 ### Variables
 
@@ -571,35 +529,36 @@ Avoid hard-coded values in errors. Example:
 
 ### Wrap error with more context
 
-A low-level error starts to become meaningless as the circumstances which caused it get lost as it passes up the stack. Instead of returning an error, which might not be a whole lot of information, wrap it with more context. For example:
+A low-level error becomes less useful as it passes up the stack without context. Instead of returning the error directly, wrap it with more context.
 
 Avoid:
 
 ```go
-	logs, err := cmd.taskLogs(info.ChangeID)
-	if err != nil {
-		return err
-	}
+logs, err := cmd.taskLogs(info.ChangeID)
+if err != nil {
+	return err
+}
 ```
 
-Prefer: `fmt.Errorf("cannot get task logs for change %s: %w", info.ChangeID, err)`
+Prefer:
 
-Using `%w` implies that the wrapped error may later be inspected in order to perform some specific action in response. Use this to allow for error recovery. Using `%v` implies that the wrapped error is unrecoverable. Given that the only way to extract the underlying error would be to use very fragile string matching, this method very clearly discourages such attempts.
+```go
+logs, err := cmd.taskLogs(info.ChangeID)
+if err != nil {
+	return fmt.Errorf("cannot get task logs for change %s: %w", info.ChangeID, err)
+}
+```
+
+Using `%w` implies that the wrapped error may later be inspected in order to perform some specific action in response. Using `%v` implies that the wrapped error is unrecoverable. Given that the only way to extract the underlying error would be to use very fragile string matching, using `%v` clearly discourages such attempts.
 
 ## Tests
 
 ### Test naming
 
-Put tremendous effort into test names.
+Put effort into test names. Use meaningful, precise names that follow the conventions of existing code.
 
-Do not just use some casual name that comes to you off the top of your head. Use meaningful, precise names that follow the convention of existing code.
-
-For the same example as mentioned in the error messages section, suppose that we have a validation function that validates the user input layer label to catch reserved prefixes:
-
-- Follow Convention: If all tests in the same file follow the "Test(Do)Something(SomeFeature)" convention, for example `TestParseCommand` or `TestMergeServiceContextOverrides`, follow the same convention when adding a new test. `TestPebbleLabelPrefixReserved` probably fits better in the context than `TestCannotUseReservedPrefixInLayers`.
-- Be Precise: Are we testing parsing the layer (then see if the label is valid) or are we testing the labels themselves? The latter is more true, hence `TestParseLayer` is not as accurate as `TestLabel`. For another example, don't use `TestNormal` which is too generic; `TestStartupEnabledServices` is a whole lot better as the name of a test.
-
-Following the rules above, the best name probably is `TestLabelReservedPrefix` or `TestLabelReservedPrefix`. Although short names can be used in context, test names are places where longer but precise names are better than short ones.
+- Follow Convention: If all tests in the same file follow the "Test(Something)(SomeFeature)" convention, for example `TestParseCommand` or `TestMergeServiceContextOverrides`, follow the same convention when adding a new test.
+- Be Precise: Are we testing parsing the layer (to check if the label is valid) or are we testing the labels themselves? If the latter, `TestParseLayer` is not as accurate as `TestLabel`.
 
 ### Variable names
 
@@ -609,89 +568,64 @@ However, check existing code and be consistent: If existing tests use "alice" an
 
 ### Copy-paste
 
-When adding unit tests, it's common to copy-paste an existing test which is similar and modify that because it's quicker. It's OK to copy-paste, but examine the naming, the logic, remove unnecessary things carefully. Treat it as if you are writing a new test.
+When adding unit tests, it's common to copy-paste an existing test which is similar and modify that. It's okay to copy-paste, but examine the naming and logic, and remove unnecessary things. Treat it as if you are writing a new test.
 
-It's also OK to use a few lines of duplicated code if it makes the test clearer, instead of creating helper functions. See [Advanced Testing with Go - Mitchell Hashimoto](https://www.youtube.com/watch?v=8hQG7QlcLBk).
+It's also okay to use a few lines of duplicated code if it makes the test clearer, instead of creating helper functions. See [Advanced Testing with Go by Mitchell Hashimoto](https://www.youtube.com/watch?v=8hQG7QlcLBk).
 
-### Setup/teardown
-
-It is sometimes necessary for a test to do extra setup or teardown. To support these and other cases, if a test file contains a function:
-
-`func TestMain(m *testing.M)`
-
-Then the generated test will call `TestMain(m)` instead of running the tests directly.
-
-TestMain runs in the main goroutine and can do whatever setup and teardown is necessary around a call to `m.Run`.
-
-A simple implementation of TestMain is:
-
-```go
-func TestMain(m *testing.M) {
-	// global setup here
-	code := m.Run() 
-	// global tear down here
-	os.Exit(code)
-}
-```
-
-TestMain is a low-level primitive and should not be necessary for casual testing needs, where ordinary test functions suffice.
-
-### ENV vars
+### Environment variables in tests
 
 `Setenv` calls `os.Setenv(key, value)` and uses Cleanup to restore the environment variable to its original value after the test. So, instead of doing:
 
+Avoid:
+
 ```go
-	os.Setenv("FOO", "1")
-	defer os.Setenv("FOO", "")
+func TestSomething(t *testing.T) {
+    // Manually set and cleanup env var
+    originalValue := os.Getenv("FOO")
+    os.Setenv("FOO", "1")
+    defer os.Setenv("FOO", originalValue)  // Risky - might not restore properly if test fails
+
+    // Test code that uses FOO environment variable
+}
 ```
 
-We can simply: `t.Setenv("FOO", "1")`.
+Prefer:
 
-### Sending signals
+```go
+func TestSomething(t *testing.T) {
+    // Let the testing package handle cleanup automatically
+    t.Setenv("FOO", "1")  // Automatically restored after test
 
-In the context of process termination, SIGTERM (signal 15) is a polite request for a process to shut down gracefully, allowing it to perform cleanup tasks, while SIGKILL (signal 9) forcefully terminates the process immediately, without any cleanup.
-
-In tests, try to use SIGTERM instead of SIGKILL for a graceful termination.
-
-### Avoid cached results with `-count=1`
-
-Test outputs are cached to speed up tests. If the code doesn't change, the test output shouldn't change either. Of course, this is not necessarily true in practice - tests may read info from external sources or may use time and random related data which could change from run to run.
-
-When you request multiple test runs using the `-count` flag, the intention is to run the tests multiple times. There's no point running them just once and showing the same result n-1 times. So `-count` triggers omitting the cached results.
-
-Setting `-count=1` will cause the tests to run once, omitting previously cached outputs. (The default value of `count` is 1, but you need to explicitly set the value to 1 to change the caching behavior.)
+    // Test code that uses FOO environment variable
+}
+```
 
 ### `t.Fatalf` or `t.Errorf`?
 
-If a test should not continue at a certain point, use `t.Fatalf` instead of `t.Errorf`. Do not use `t.Errorf` without thinking about it everywhere. There is a difference between them.
-
-### Ports
-
-When testing a port, use a high port that's not likely to be used. A port above 60000 would be better than 4000 or 8080.
+If a test should not continue at a certain point, use `t.Fatalf` instead of `t.Errorf`. Do not use `t.Errorf` everywhere without thinking about it.
 
 ### Comments in tests
 
-All complex tests should have a verbose comment describing what they are testing.
+Complex tests should have a verbose comment describing what they are testing. Example:
 
-### Philosophies
+```go
+// TestCreateDirs tests that Pebble will create the Pebble directory on startup
+// with the `--create-dirs` option.
+func TestCreateDirs(t *testing.T) {
+	tmpDir := t.TempDir()
+	pebbleDir := filepath.Join(tmpDir, "pebble")
+	_, stderrCh := pebbleDaemon(t, pebbleDir, "run", "--create-dirs")
+	// ...
+}
+```
 
-#### Avoid defaults
-
-Try not to have defaults for tests, as they often get in the way of additional tests.
-
-#### Check behaviour, not logs
+### Check behaviour, not logs
 
 Do not bother checking the logs in the tests, because stable log formatting isn't part of the contract. Check the expected behaviour or output.
 
-#### Time-dependent tests
+### Time-dependent tests
 
-When a test needs to wait (e.g., in a for loop or a sleep), make sure the time is long enough to ensure that the test passes even when the CPU is loaded. Also make sure the time is not excessively long, which would slow the tests drastically. Use a reasonable value, refer to existing tests, follow existing convention, and maybe run the test multiple times to get a reasonable value - do not simply set a value and leave it at that.
-
-#### Test coverage
-
-Do the tests cover all scenarios?
-
-Do all newly added functions have tests?
+When a test needs to wait (in a `for` loop or a sleep), make sure the time is long enough to ensure that the test passes even when the CPU is loaded. Also make sure the time is not excessively long, which would slow the tests drastically. Use a reasonable value; refer to existing tests, follow existing convention, and maybe run the test multiple times to get a reasonable value.
 
 ## Comments
 
@@ -701,7 +635,7 @@ Think about choice of words, especially verbs. Are errors "returned" or "thrown"
 
 ### Helper/utility functions
 
-Add comments for complex helper/utility functions to describe their use.
+Add comments for complex helper and utility functions to describe their use.
 
 ### Don't write obvious comments
 
@@ -712,7 +646,7 @@ For example:
 - Avoid: "MkdirOptions is a struct of options used for Mkdir()."
 - Prefer: Either remove the comment or: "MkdirOptions holds the options for a call to Mkdir."
 
-For another example:
+For another example, the comment below isn't necessary since the following line is straightforward to understand:
 
 ```go
 	// if path already exists
@@ -721,20 +655,10 @@ For another example:
 	}
 ```
 
-The comment probably isn't necessary since the following line is straightforward to understand.
-
 ### Use `TODO`
 
-Add a "TODO" in the comment when handling temporary workarounds so it's easier to grep for later.
+Add a "TODO" in a comment when handling a temporary workaround, so it's easier to search for later. However, avoid merging TODO comments unless you plan to fix them in a follow-up PR.
 
 ### Housekeeping rule
 
-Be careful when the code you change has some comments/notes or even links to issues. Read them carefully. If your code change solves the issue, remove the link - keep the comment clean and true.
-
-### Spell-check and grammar-check comments
-
-Do this.
-
-### Review newly added/updated comments before committing
-
-Are they precise, are they specific, are they correct, both grammatically and literally?
+Be careful when the code you change has some comments or links to issues. Read them carefully. If your code change solves the issue, remove the comment or link -- keep the comment clean and accurate.
