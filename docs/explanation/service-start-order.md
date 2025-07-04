@@ -8,3 +8,7 @@ The `before` option is a list of services that this service must start before (i
    :start-after: Start: Service start order note
    :end-before: End: Service start order note
 ```
+
+The `before` and `after` options are not designed for scenarios where you need to start service B only after service A has exited. A common workaround is to combine both services into a single service definition, using a command such as `bash -c 'run-service-a && run-service-b'` to ensure that service B starts only after service A exits successfully.
+
+For comparison, in systemd this can be achieved by running service B from service A's `ExecStopPost=` directive. In supervisord, this can be achieved using event listeners.
