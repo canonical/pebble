@@ -9,4 +9,6 @@ The `before` option is a list of services that this service must start before (i
    :end-before: End: Service start order note
 ```
 
-Note that the `before` and `after` options are not designed for scenarios where you need to start service B only after service A has fully exited. For example, in systemd, this can be achieved by running service B from service A's `ExecStopPost=` directive, and in supervisord, by using event listeners. In Pebble, a common workaround is to combine both services into a single service definition, using a command such as `bash -c 'run-service-a && run-service-b'` to ensure service B starts only after service A completes.
+The `before` and `after` options are not designed for scenarios where you need to start service B only after service A has exited. A common workaround is to combine both services into a single service definition, using a command such as `bash -c 'run-service-a && run-service-b'` to ensure that service B starts only after service A exits successfully.
+
+For comparison, in systemd this can be achieved by running service B from service A's `ExecStopPost=` directive. In supervisord, this can be achieved using event listeners.
