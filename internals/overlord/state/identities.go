@@ -22,7 +22,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/GehirnInc/crypt/sha512_crypt"
+	"github.com/canonical/pebble/internals/cryptutil"
 )
 
 // Identity holds the configuration of a single identity.
@@ -335,13 +335,11 @@ func (s *State) IdentityFromInputs(userID *uint32, username, password string) *I
 		// Prioritize username/password if either is provided, because they come from HTTP
 		// Authorization header, a per-request, client controlled property. If set
 		// by the client, it's intentional, so it should have a higher priority.
-		passwordBytes := []byte(password)
 		for _, identity := range s.identities {
 			if identity.Basic == nil || identity.Name != username {
 				continue
 			}
-			crypt := sha512_crypt.New()
-			err := crypt.Verify(identity.Basic.Password, passwordBytes)
+			err := cryptutil.Verify(identity.Basic.Password, password)
 			if err == nil {
 				return identity
 			}
