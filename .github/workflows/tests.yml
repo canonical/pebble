@@ -13,8 +13,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        go: ['1.22']
-        cgo: ['0', '1']
+        go: ['1.22', '1.23', '1.24']
 
     name: Go ${{ matrix.go }}
     steps:
@@ -27,8 +26,29 @@ jobs:
 
     - name: Test and build
       run: |
-        CGO_ENABLED=${{ matrix.cgo }} go test -race ./... -check.vv
-        CGO_ENABLED=${{ matrix.cgo }} go build ./cmd/pebble
+        go build ./cmd/pebble
+        go test -race ./... -check.vv
+
+  build-fips:
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        go: ['1.23-fips/stable']
+
+    name: Go ${{ matrix.go }}
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Go
+      run: |
+        sudo snap install go --channel=${{ matrix.go }} --classic
+
+    - name: Test and build
+      run: |
+        go build ./cmd/pebble
+        go test -race ./... -check.vv
 
   root-tests:
     runs-on: ubuntu-latest
