@@ -740,12 +740,10 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 			switch service.Override {
 			case MergeOverride:
 				if old, ok := combined.Services[name]; ok {
-					copied := old.Copy()
-					copied.Merge(service)
-					combined.Services[name] = copied
-					break
+					old.Merge(service)
+				} else {
+					combined.Services[name] = service.Copy()
 				}
-				fallthrough
 			case ReplaceOverride:
 				combined.Services[name] = service.Copy()
 			case UnknownOverride:
