@@ -269,6 +269,7 @@ exclude_patterns = []
 # Adds custom CSS files, located under 'html_static_path'
 
 html_css_files = [
+    "cookie-banner.css",
     "swagger-override.css",
 ]
 
