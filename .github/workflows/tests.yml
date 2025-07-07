@@ -13,42 +13,53 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        go: ['1.22', '1.23', '1.24']
+        go:
+          - name: '1.23'
+            version: '1.23'
+            channel: '1.23/stable'
+            CGO_ENABLED: 1
+          - name: '1.23-fips'
+            version: '1.23'
+            channel: '1.23-fips/stable'
+            CGO_ENABLED: 1
+          - name: '1.24'
+            version: '1.24'
+            channel: '1.24/stable'
+            CGO_ENABLED: 1
+          - name: '1.24-static'
+            version: '1.24'
+            channel: '1.24/stable'
+            CGO_ENABLED: 0
 
-    name: Go ${{ matrix.go }}
-    steps:
-    - uses: actions/checkout@v3
-
-    - name: Set up Go
-      uses: actions/setup-go@v4
-      with:
-        go-version: ${{ matrix.go }}
-
-    - name: Test and build
-      run: |
-        go build ./cmd/pebble
-        go test -race ./... -check.vv
-
-  build-fips:
-    runs-on: ubuntu-latest
-
-    strategy:
-      fail-fast: false
-      matrix:
-        go: ['1.23-fips/stable']
-
-    name: Go ${{ matrix.go }}
+    name: Go ${{ matrix.go.name }}
     steps:
     - uses: actions/checkout@v3
 
     - name: Set up Go
       run: |
-        sudo snap install go --channel=${{ matrix.go }} --classic
+        sudo snap install go --channel=${{ matrix.go.channel }} --classic
+        export GOTOOLCHAIN=local
+        go mod edit -go=${{ matrix.go.version }}
 
-    - name: Test and build
+    - name: Build
       run: |
+        export GOTOOLCHAIN=local
+        export CGO_ENABLED=${{ matrix.go.CGO_ENABLED }}
         go build ./cmd/pebble
+    
+    - name: Test
+      if: ${{ matrix.go.CGO_ENABLED == 1 }}
+      run: |
+        export GOTOOLCHAIN=local
+        export CGO_ENABLED=1
         go test -race ./... -check.vv
+        
+    - name: Test
+      if: ${{ matrix.go.CGO_ENABLED == 0 }}
+      run: |
+        export GOTOOLCHAIN=local
+        export CGO_ENABLED=0
+        go test ./... -check.vv
 
   root-tests:
     runs-on: ubuntu-latest
