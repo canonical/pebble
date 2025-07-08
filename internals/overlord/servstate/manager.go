@@ -371,19 +371,19 @@ func (m *ServiceManager) WriteMetrics(writer metrics.Writer) error {
 	return nil
 }
 
-// Prune does cleanup tasks to the in-memory serviceData:
-//   - it removes serviceData if the service is inactive and older than pruneWait.
-//   - if there are still over maxServiceData entries of serviceData, try to remove
-//     inactive services (oldest first) even if they are less than maxServiceData
-//     to keep the number of services under maxServiceData.
+// Prune cleans up the in-memory serviceData:
+//   - It removes the serviceData if a service is inactive and its currentSince is older than pruneWait.
+//   - If the number of serviceData entries is still more than maxServiceData, remove inactive services'
+//     serviceData even if they are not older than pruneWait. Inactive services are sorted by currentSince,
+//     and remove the older ones first.
 func (m *ServiceManager) Prune(pruneWait time.Duration, maxServiceData int) {
 	m.servicesLock.Lock()
 	defer m.servicesLock.Unlock()
 
 	now := timeNow()
-
+	pruneLimit := now.Add(-pruneWait)
 	for name, s := range m.services {
-		if s != nil && stateToStatus(s.state) == StatusInactive && now.Sub(s.currentSince) > pruneWait {
+		if s != nil && stateToStatus(s.state) == StatusInactive && s.currentSince.Before(pruneLimit) {
 			delete(m.services, name)
 		}
 	}

@@ -90,7 +90,7 @@ func FakeSetCmdCredential(f func(cmd *exec.Cmd, credential *syscall.Credential))
 	}
 }
 
-// FakeTimeNow fakes the system time for the TLS manager.
+// FakeTimeNow fakes the system time for the service manager for testing purposes.
 func FakeTimeNow(t time.Time) (restore func()) {
 	old := timeNow
 	timeNow = func() time.Time {

@@ -58,8 +58,7 @@ var (
 	// Hold no more than 1000 completed notices, even if they have not yet expired
 	pruneMaxNotices = 1000
 
-	// Hold	no more than 1000 serviceData,
-	// even if it means pruning in active services less than pruneWait.
+	// Hold	no more than 1000 serviceData.
 	pruneMaxServiceData = 1000
 )
 

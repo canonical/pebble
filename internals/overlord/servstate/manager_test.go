@@ -2402,8 +2402,7 @@ func getTestTime(year int, month time.Month, day int) time.Time {
 	return time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
 }
 
-func (s *S) TestPruneInactiveOlderThanPruneWait(c *C) {
-	var layer = `
+var pruneTestingLayer = `
 services:
     test1:
         override: replace
@@ -2426,17 +2425,23 @@ services:
         command: /bin/sh -c "echo test; sleep 10"
         startup: enabled
 `
+
+// TestPruneInactiveOlderThanPruneWait verifies that the ServiceManager's Prune method correctly removes
+// inactive serviceData older than the specified pruneWait duration.
+// It ensures inactive services are not pruned if they are not old enough, and that after some time has
+// passed (by increasing the mock time), only the services that have been inactive longer than pruneWait
+// are pruned.
+// Active services remain unaffected.
+func (s *S) TestPruneInactiveOlderThanPruneWait(c *C) {
 	s.newServiceManager(c)
-	s.planAddLayer(c, layer)
+	s.planAddLayer(c, pruneTestingLayer)
 	s.planChanged(c)
 
-	// Start all 5 services so that they are registered with the service manager.
 	chg := s.startServices(c, [][]string{{"test1", "test2", "test3", "test4", "test5"}})
 	s.st.Lock()
 	c.Check(chg.Status(), Equals, state.DoneStatus, Commentf("Error: %v", chg.Err()))
 	s.st.Unlock()
 
-	// Stop test3, test4, and test5 so that they become inactive.
 	chg = s.stopServices(c, [][]string{{"test3", "test4", "test5"}})
 	s.st.Lock()
 	c.Check(chg.Status(), Equals, state.DoneStatus, Commentf("Error: %v", chg.Err()))
@@ -2451,20 +2456,19 @@ services:
 		c.Assert(services[i].CurrentSince, Not(Equals), time.Time{})
 	}
 
-	// Mock time so that all inactive serviceData for test3, test4, and test5 will be pruned.
+	// Mock time so that all inactive services' serviceData will be pruned.
 	testBaseTime := getTestTime(2100, 1, 1)
 	restoreTime := servstate.FakeTimeNow(testBaseTime)
 	defer restoreTime()
 	s.manager.Prune(7*24*time.Hour, 1000)
 
-	// serviceData for test3, test4, and test5 has been pruned.
 	services, err = s.manager.Services([]string{"test3", "test4", "test5"})
 	c.Assert(err, IsNil)
 	for i := 0; i < len(services); i++ {
 		// If serviceData is pruned, manager.Services returns zero value for CurrentSince.
 		c.Assert(services[i].CurrentSince, Equals, time.Time{})
 	}
-	// test1 and test2 are still active and have not been pruned.
+	// Active services not affected.
 	services, err = s.manager.Services([]string{"test1", "test2"})
 	c.Assert(err, IsNil)
 	for i := range len(services) {
@@ -2472,52 +2476,29 @@ services:
 	}
 }
 
+// TestPruneMaxServiceData ensures that inactive services are pruned to respect the maxServiceData limit,
+// even if they are not older than pruneWait.
 func (s *S) TestPruneMaxServiceData(c *C) {
-	var layer = `
-services:
-    test1:
-        override: replace
-        command: /bin/sh -c "echo test; sleep 10"
-        startup: enabled
-    test2:
-        override: replace
-        command: /bin/sh -c "echo test; sleep 10"
-        startup: enabled
-    test3:
-        override: replace
-        command: /bin/sh -c "echo test; sleep 10"
-        startup: enabled
-    test4:
-        override: replace
-        command: /bin/sh -c "echo test; sleep 10"
-        startup: enabled
-    test5:
-        override: replace
-        command: /bin/sh -c "echo test; sleep 10"
-        startup: enabled
-`
 	s.newServiceManager(c)
-	s.planAddLayer(c, layer)
+	s.planAddLayer(c, pruneTestingLayer)
 	s.planChanged(c)
 
-	// Start all 5 services so that they are registered with the service manager.
 	chg := s.startServices(c, [][]string{{"test1", "test2", "test3", "test4", "test5"}})
 	s.st.Lock()
 	c.Check(chg.Status(), Equals, state.DoneStatus, Commentf("Error: %v", chg.Err()))
 	s.st.Unlock()
 
-	// Stop test3 so that it becomes inactive.
 	chg = s.stopServices(c, [][]string{{"test3"}})
 	s.st.Lock()
 	c.Check(chg.Status(), Equals, state.DoneStatus, Commentf("Error: %v", chg.Err()))
 	s.st.Unlock()
 
-	// Mock time so that test3 is older than pruneWait and will be pruned.
+	// Mock time so that the inactive test3 is older than pruneWait and will be pruned.
 	testBaseTime := getTestTime(2100, 1, 1)
 	restoreTime := servstate.FakeTimeNow(testBaseTime)
 	defer restoreTime()
 
-	// Stop test4 and test5 so that they become inactive but not older than pruneWait.
+	// test4 and test5 become inactive but not older than pruneWait.
 	chg = s.stopServices(c, [][]string{{"test4", "test5"}})
 	s.st.Lock()
 	c.Check(chg.Status(), Equals, state.DoneStatus, Commentf("Error: %v", chg.Err()))
@@ -2529,14 +2510,13 @@ services:
 	// they will be pruned as well.
 	s.manager.Prune(7*24*time.Hour, 2)
 
-	// serviceData for test3, test4, and test5 has been pruned.
 	services, err := s.manager.Services([]string{"test3", "test4", "test5"})
 	c.Assert(err, IsNil)
 	for i := 0; i < len(services); i++ {
 		// If serviceData is pruned, manager.Services returns zero value for CurrentSince.
 		c.Assert(services[i].CurrentSince, Equals, time.Time{})
 	}
-	// test1 and test2 are still active and have not been pruned.
+	// Active services not affected.
 	services, err = s.manager.Services([]string{"test1", "test2"})
 	c.Assert(err, IsNil)
 	for i := range len(services) {
@@ -2544,47 +2524,24 @@ services:
 	}
 }
 
+// TestPruneSortByCurrentSince verifies that service pruning correctly prioritizes
+// inactive services with older currentSince when enforcing the maxServiceData limit.
 func (s *S) TestPruneSortByCurrentSince(c *C) {
-	var layer = `
-services:
-    test1:
-        override: replace
-        command: /bin/sh -c "echo test; sleep 10"
-        startup: enabled
-    test2:
-        override: replace
-        command: /bin/sh -c "echo test; sleep 10"
-        startup: enabled
-    test3:
-        override: replace
-        command: /bin/sh -c "echo test; sleep 10"
-        startup: enabled
-    test4:
-        override: replace
-        command: /bin/sh -c "echo test; sleep 10"
-        startup: enabled
-    test5:
-        override: replace
-        command: /bin/sh -c "echo test; sleep 10"
-        startup: enabled
-`
 	s.newServiceManager(c)
-	s.planAddLayer(c, layer)
+	s.planAddLayer(c, pruneTestingLayer)
 	s.planChanged(c)
 
-	// Start all 5 services so that they are registered with the service manager.
 	chg := s.startServices(c, [][]string{{"test1", "test2", "test3", "test4", "test5"}})
 	s.st.Lock()
 	c.Check(chg.Status(), Equals, state.DoneStatus, Commentf("Error: %v", chg.Err()))
 	s.st.Unlock()
 
-	// Stop test3 so that it becomes inactive first.
 	chg = s.stopServices(c, [][]string{{"test3"}})
 	s.st.Lock()
 	c.Check(chg.Status(), Equals, state.DoneStatus, Commentf("Error: %v", chg.Err()))
 	s.st.Unlock()
 
-	// Mock time, and stop test4 and test5, so that they have a newer current since.
+	// Mock time, and stop test4 and test5, so that they have a newer currentSince.
 	testBaseTime := getTestTime(2100, 1, 1)
 	restoreTime := servstate.FakeTimeNow(testBaseTime)
 	defer restoreTime()
@@ -2599,15 +2556,14 @@ services:
 	// it should be test3 since it's older.
 	s.manager.Prune(100*365*24*time.Hour, 4)
 
-	// serviceData for test3 has been pruned.
 	services, err := s.manager.Services([]string{"test3"})
 	c.Assert(err, IsNil)
 	for i := 0; i < len(services); i++ {
 		// If serviceData is pruned, manager.Services returns zero value for CurrentSince.
 		c.Assert(services[i].CurrentSince, Equals, time.Time{})
 	}
-	// test1, test2 are still active and have not been pruned.
-	// test4, test5 has newer currentSince and they are not pruned either.
+	// Active services not affected;
+	// services with newer currentSince are not pruned either.
 	services, err = s.manager.Services([]string{"test1", "test2", "test4", "test5"})
 	c.Assert(err, IsNil)
 	for i := range len(services) {
