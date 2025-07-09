@@ -391,7 +391,7 @@ func (m *ServiceManager) Prune(pruneWait time.Duration, maxServiceData int) {
 	if len(m.services) > maxServiceData {
 		var inactive []*serviceData
 		for _, s := range m.services {
-			if s != nil && stateToStatus(s.state) == StatusInactive {
+			if stateToStatus(s.state) == StatusInactive {
 				inactive = append(inactive, s)
 			}
 		}
