@@ -395,8 +395,8 @@ func (m *ServiceManager) Prune(pruneWait time.Duration, maxServiceData int) {
 				inactive = append(inactive, s)
 			}
 		}
-		sort.Slice(inactive, func(i, j int) bool {
-			return inactive[i].currentSince.Before(inactive[j].currentSince)
+		slices.SortFunc(inactive, func(a, b *serviceData) bool {
+			return a.currentSince.Compare(b.currentSince)
 		})
 		excess := len(m.services) - maxServiceData
 		toDelete := min(len(inactive), excess)
