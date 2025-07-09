@@ -337,9 +337,9 @@ func (rb *RingBuffer) HeadIterator(lines int) Iterator {
 Cancellation channels should be unbuffered channels that are closed. For example:
 
 ```go
-	stopStdout := make(chan struct{})
-	// ...
-	close(stopStdout)
+stopStdout := make(chan struct{})
+// ...
+close(stopStdout)
 ```
 
 ### Prefer `time.After` over `time.Sleep`
@@ -462,9 +462,9 @@ For another example:
 The form of the phrases used in error messages should be consistent with other code in the same function or even the same module. For example, if existing code uses:
 
 ```go
-	if !osutil.IsDir(o.pebbleDir) {
-		return nil, fmt.Errorf("directory %q does not exist", o.pebbleDir)
-	}
+if !osutil.IsDir(o.pebbleDir) {
+	return nil, fmt.Errorf("directory %q does not exist", o.pebbleDir)
+}
 ```
 
 When adding a new error for no write permissions:
