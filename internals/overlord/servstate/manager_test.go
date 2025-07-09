@@ -2488,26 +2488,13 @@ func (s *S) TestPruneMaxServiceData(c *C) {
 	c.Check(chg.Status(), Equals, state.DoneStatus, Commentf("Error: %v", chg.Err()))
 	s.st.Unlock()
 
-	chg = s.stopServices(c, [][]string{{"test3"}})
+	chg = s.stopServices(c, [][]string{{"test3", "test4", "test5"}})
 	s.st.Lock()
 	c.Check(chg.Status(), Equals, state.DoneStatus, Commentf("Error: %v", chg.Err()))
 	s.st.Unlock()
 
-	// Mock time so that the inactive test3 is older than pruneWait and will be pruned.
-	testBaseTime := getTestTime(9999, 1, 1)
-	restoreTime := servstate.FakeTimeNow(testBaseTime)
-	defer restoreTime()
-
-	// test4 and test5 become inactive but not older than pruneWait.
-	chg = s.stopServices(c, [][]string{{"test4", "test5"}})
-	s.st.Lock()
-	c.Check(chg.Status(), Equals, state.DoneStatus, Commentf("Error: %v", chg.Err()))
-	s.st.Unlock()
-
-	// Prune, with maxServiceData set to 2.
-	// test3 will be pruned since it's already older than pruneWait.
-	// test4 and test5 are not older than pruneWait, but since maxServiceData is set to 2,
-	// they will be pruned as well.
+	// Prune, without time mock and with a very long pruneWait so that all services are not old enough,
+	// but also set maxServiceData set to 2, meaning 3 service will be pruned to respect maxServiceData.
 	s.manager.Prune(7*24*time.Hour, 2)
 
 	services, err := s.manager.Services([]string{"test3", "test4", "test5"})
