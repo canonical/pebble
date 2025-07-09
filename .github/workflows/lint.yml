@@ -34,22 +34,19 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      # NOTE: The latest version of staticcheck specifies "go 1.24.1" in its go.mod
-      # file, but because of CVE-2025-22874, we have upgraded to Go 1.24.4, so it 
-      # needs to be built with Go 1.24.4.
-      - uses: actions/setup-go@v4
-        with:
-          go-mod-file: 'go.mod'
-
-      - name: Install staticcheck
-        run: |
-          go install honnef.co/go/tools/cmd/staticcheck@v0.6.1
+      # - uses: actions/setup-go@v4
+      #   with:
+      #     go-mod-file: 'go.mod'
 
       # - name: Install staticcheck
       #   run: |
-      #     wget -q https://github.com/dominikh/go-tools/releases/download/2025.1.1/staticcheck_linux_amd64.tar.gz
-      #     tar -xzf staticcheck_linux_amd64.tar.gz
-      #     cp staticcheck/staticcheck /usr/local/bin
+      #     go install honnef.co/go/tools/cmd/staticcheck@v0.6.1
+
+      - name: Install staticcheck from binary to avoid go.mod issues
+        run: |
+          wget -q https://github.com/dominikh/go-tools/releases/download/2025.1.1/staticcheck_linux_amd64.tar.gz
+          tar -xzf staticcheck_linux_amd64.tar.gz
+          cp staticcheck/staticcheck /usr/local/bin
 
       - name: Run checks
         run: |
