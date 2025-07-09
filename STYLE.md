@@ -633,10 +633,6 @@ When a test needs to wait (in a `for` loop or a sleep), make sure the time is lo
 
 Think about choice of words, especially verbs. Are errors "returned" or "thrown"?
 
-### Helper/utility functions
-
-Add comments for complex helper and utility functions to describe their use.
-
 ### Don't write obvious comments
 
 Either delete an obvious comment or make it more useful.
