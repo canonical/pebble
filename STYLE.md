@@ -631,7 +631,7 @@ When a test needs to wait (in a `for` loop or a sleep), make sure the time is lo
 
 ### Be precise
 
-Think about choice of words, especially verbs. Are errors "returned" or "thrown"?
+Think about choice of words, especially verbs. For example, errors in Go are "returned", not "thrown".
 
 ### Don't write obvious comments
 
