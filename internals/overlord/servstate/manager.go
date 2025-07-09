@@ -383,7 +383,7 @@ func (m *ServiceManager) Prune(pruneWait time.Duration, maxServiceData int) {
 	now := timeNow()
 	pruneLimit := now.Add(-pruneWait)
 	for name, s := range m.services {
-		if s != nil && stateToStatus(s.state) == StatusInactive && s.currentSince.Before(pruneLimit) {
+		if stateToStatus(s.state) == StatusInactive && s.currentSince.Before(pruneLimit) {
 			delete(m.services, name)
 		}
 	}
