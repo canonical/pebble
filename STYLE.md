@@ -85,7 +85,7 @@ MkdirOptions{
 It's usually clearer to use named arguments when you're returning multiple values of the same type, for example:
 
 - Avoid: `func run() (<-chan servicelog.Entry, <-chan servicelog.Entry) {}`
-- Prefer: `func run() (stdoutCh <-chan servicelog.Entry, stderrCh <-chan servicelog.Entry) {}`
+- Prefer: `func run() (stdoutCh, stderrCh <-chan servicelog.Entry) {}`
 
 ### Short variable declarations
 
