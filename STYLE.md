@@ -438,7 +438,7 @@ For new code, prefer the `0o755` format over `0755`, to make it very clear the n
 
 ### Start error messages with "cannot"
 
-Where possible, start error messages with "cannot X" for consistency."
+Where possible, start error messages with "cannot X" for consistency.
 
 - Avoid: `fmt.Errorf("failed to open file: %w", err)`
 - Prefer: `fmt.Errorf("cannot open file: %w", err)`
