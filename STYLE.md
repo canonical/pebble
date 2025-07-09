@@ -621,7 +621,7 @@ func TestCreateDirs(t *testing.T) {
 
 ### Check behaviour, not logs
 
-Do not bother checking the logs in the tests, because stable log formatting isn't part of the contract. Check the expected behaviour or output.
+Stable log formatting isn't usually part of the contract, so you shouldn't usually check logs in a test. Check the expected behaviour or output instead.
 
 ### Time-dependent tests
 
