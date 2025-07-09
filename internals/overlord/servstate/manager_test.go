@@ -2451,28 +2451,28 @@ func (s *S) TestPruneInactiveOlderThanPruneWait(c *C) {
 	s.manager.Prune(7*24*time.Hour, 1000)
 	services, err := s.manager.Services(nil)
 	c.Assert(err, IsNil)
-	for i := range len(services) {
+	for _, service := range services {
 		// CurrentSince is not nil, meaning the serviceData is not pruned.
-		c.Assert(services[i].CurrentSince, Not(Equals), time.Time{})
+		c.Assert(service.CurrentSince, Not(Equals), time.Time{})
 	}
 
 	// Mock time so that all inactive services' serviceData will be pruned.
-	testBaseTime := getTestTime(2100, 1, 1)
+	testBaseTime := getTestTime(9999, 1, 1)
 	restoreTime := servstate.FakeTimeNow(testBaseTime)
 	defer restoreTime()
 	s.manager.Prune(7*24*time.Hour, 1000)
 
 	services, err = s.manager.Services([]string{"test3", "test4", "test5"})
 	c.Assert(err, IsNil)
-	for i := 0; i < len(services); i++ {
+	for _, service := range services {
 		// If serviceData is pruned, manager.Services returns zero value for CurrentSince.
-		c.Assert(services[i].CurrentSince, Equals, time.Time{})
+		c.Assert(service.CurrentSince, Equals, time.Time{})
 	}
 	// Active services not affected.
 	services, err = s.manager.Services([]string{"test1", "test2"})
 	c.Assert(err, IsNil)
-	for i := range len(services) {
-		c.Assert(services[i].CurrentSince, Not(Equals), time.Time{})
+	for _, service := range services {
+		c.Assert(service.CurrentSince, Not(Equals), time.Time{})
 	}
 }
 
@@ -2494,7 +2494,7 @@ func (s *S) TestPruneMaxServiceData(c *C) {
 	s.st.Unlock()
 
 	// Mock time so that the inactive test3 is older than pruneWait and will be pruned.
-	testBaseTime := getTestTime(2100, 1, 1)
+	testBaseTime := getTestTime(9999, 1, 1)
 	restoreTime := servstate.FakeTimeNow(testBaseTime)
 	defer restoreTime()
 
@@ -2512,15 +2512,15 @@ func (s *S) TestPruneMaxServiceData(c *C) {
 
 	services, err := s.manager.Services([]string{"test3", "test4", "test5"})
 	c.Assert(err, IsNil)
-	for i := 0; i < len(services); i++ {
+	for _, service := range services {
 		// If serviceData is pruned, manager.Services returns zero value for CurrentSince.
-		c.Assert(services[i].CurrentSince, Equals, time.Time{})
+		c.Assert(service.CurrentSince, Equals, time.Time{})
 	}
 	// Active services not affected.
 	services, err = s.manager.Services([]string{"test1", "test2"})
 	c.Assert(err, IsNil)
-	for i := range len(services) {
-		c.Assert(services[i].CurrentSince, Not(Equals), time.Time{})
+	for _, service := range services {
+		c.Assert(service.CurrentSince, Not(Equals), time.Time{})
 	}
 }
 
@@ -2536,37 +2536,39 @@ func (s *S) TestPruneSortByCurrentSince(c *C) {
 	c.Check(chg.Status(), Equals, state.DoneStatus, Commentf("Error: %v", chg.Err()))
 	s.st.Unlock()
 
+	// Stop test3, test4 and test5 one by one so that test3 has older currentSince and test5
+	// has newer currentSince.
 	chg = s.stopServices(c, [][]string{{"test3"}})
 	s.st.Lock()
 	c.Check(chg.Status(), Equals, state.DoneStatus, Commentf("Error: %v", chg.Err()))
 	s.st.Unlock()
 
-	// Mock time, and stop test4 and test5, so that they have a newer currentSince.
-	testBaseTime := getTestTime(2100, 1, 1)
-	restoreTime := servstate.FakeTimeNow(testBaseTime)
-	defer restoreTime()
+	chg = s.stopServices(c, [][]string{{"test4"}})
+	s.st.Lock()
+	c.Check(chg.Status(), Equals, state.DoneStatus, Commentf("Error: %v", chg.Err()))
+	s.st.Unlock()
 
-	chg = s.stopServices(c, [][]string{{"test4", "test5"}})
+	chg = s.stopServices(c, [][]string{{"test5"}})
 	s.st.Lock()
 	c.Check(chg.Status(), Equals, state.DoneStatus, Commentf("Error: %v", chg.Err()))
 	s.st.Unlock()
 
 	// Prune, with a very long pruneWait so that all services are not old enough,
 	// but also set maxServiceData set to 4, meaning one service will be pruned and
-	// it should be test3 since it's older.
+	// it should be test3 since it's the oldest inactive service.
 	s.manager.Prune(100*365*24*time.Hour, 4)
 
 	services, err := s.manager.Services([]string{"test3"})
 	c.Assert(err, IsNil)
-	for i := 0; i < len(services); i++ {
+	for _, service := range services {
 		// If serviceData is pruned, manager.Services returns zero value for CurrentSince.
-		c.Assert(services[i].CurrentSince, Equals, time.Time{})
+		c.Assert(service.CurrentSince, Equals, time.Time{})
 	}
 	// Active services not affected;
 	// services with newer currentSince are not pruned either.
 	services, err = s.manager.Services([]string{"test1", "test2", "test4", "test5"})
 	c.Assert(err, IsNil)
-	for i := range len(services) {
-		c.Assert(services[i].CurrentSince, Not(Equals), time.Time{})
+	for _, service := range services {
+		c.Assert(service.CurrentSince, Not(Equals), time.Time{})
 	}
 }

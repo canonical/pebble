@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"math/rand"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -395,7 +396,7 @@ func (m *ServiceManager) Prune(pruneWait time.Duration, maxServiceData int) {
 				inactive = append(inactive, s)
 			}
 		}
-		slices.SortFunc(inactive, func(a, b *serviceData) bool {
+		slices.SortFunc(inactive, func(a *serviceData, b *serviceData) int {
 			return a.currentSince.Compare(b.currentSince)
 		})
 		excess := len(m.services) - maxServiceData
