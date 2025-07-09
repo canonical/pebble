@@ -583,7 +583,7 @@ func TestSomething(t *testing.T) {
     // Manually set and cleanup env var
     originalValue := os.Getenv("FOO")
     os.Setenv("FOO", "1")
-    defer os.Setenv("FOO", originalValue)  // Risky - might not restore properly if test fails
+    defer os.Setenv("FOO", originalValue)
 
     // Test code that uses FOO environment variable
 }
