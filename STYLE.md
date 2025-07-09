@@ -209,7 +209,7 @@ err := c.d.overlord.CheckManager().RunCheck(r.Context(), check)
 
 ```go
 checkMgr := c.d.overlord.CheckManager()
-checks, err := checkMgr.Checks()
+err := checkMgr.RunCheck(r.Context(), check)
 if err != nil {
 	return InternalError("%v", err)
 }
