@@ -649,7 +649,10 @@ For example:
 For another example, the comment below isn't necessary since the following line is straightforward to understand:
 
 ```go
-	// if path already exists
+// If string has prefix "foo"
+if strings.HasPrefix(s, "foo") {
+    // ...
+}
 	if s, err := os.Stat(path); err == nil {
 		// ...
 	}
