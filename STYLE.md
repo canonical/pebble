@@ -474,7 +474,7 @@ When adding a new error for no write permissions:
 
 ### Use `errors.Is`
 
-Use `errors.Is()` to check error types, for example:
+Use `errors.Is()` instead of `==` to check if an error is a specific value (this handles wrapped errors correctly). For example:
 
 ```go
 if errors.Is(err, fs.ErrNotExist) {
