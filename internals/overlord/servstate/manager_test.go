@@ -2494,8 +2494,9 @@ func (s *S) TestPruneMaxServiceData(c *C) {
 	s.st.Unlock()
 
 	// Prune, without time mock and with a very long pruneWait so that all services are not old enough,
-	// but also set maxServiceData set to 2, meaning 3 service will be pruned to respect maxServiceData.
-	s.manager.Prune(7*24*time.Hour, 2)
+	// but also set maxServiceData set to 0, meaning all 3 inactive service will be pruned to respect
+	// maxServiceData.
+	s.manager.Prune(7*24*time.Hour, 0)
 
 	services, err := s.manager.Services([]string{"test3", "test4", "test5"})
 	c.Assert(err, IsNil)
@@ -2541,9 +2542,9 @@ func (s *S) TestPruneSortByCurrentSince(c *C) {
 	s.st.Unlock()
 
 	// Prune, with a very long pruneWait so that all services are not old enough,
-	// but also set maxServiceData set to 4, meaning one service will be pruned and
+	// but also set maxServiceData set to 2, meaning one service will be pruned and
 	// it should be test3 since it's the oldest inactive service.
-	s.manager.Prune(100*365*24*time.Hour, 4)
+	s.manager.Prune(100*365*24*time.Hour, 2)
 
 	services, err := s.manager.Services([]string{"test3"})
 	c.Assert(err, IsNil)
