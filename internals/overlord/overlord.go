@@ -58,8 +58,8 @@ var (
 	// Hold no more than 1000 completed notices, even if they have not yet expired
 	pruneMaxNotices = 1000
 
-	// Hold	no more than 100 serviceData.
-	pruneMaxServiceData = 100
+	// Hold no more than 100 inactive services.
+	pruneMaxInactiveServices = 100
 )
 
 var pruneTickerC = func(t *time.Ticker) <-chan time.Time {
@@ -429,7 +429,7 @@ func (o *Overlord) Loop() {
 				st.Prune(o.startOfOperationTime, pruneWait, abortWait, pruneMaxChanges, pruneMaxNotices)
 				st.Unlock()
 				serviceMgr := o.ServiceManager()
-				serviceMgr.Prune(pruneWait, pruneMaxServiceData)
+				serviceMgr.Prune(pruneWait, pruneMaxInactiveServices)
 			}
 		}
 	})
