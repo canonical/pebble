@@ -57,6 +57,9 @@ var (
 
 	// Hold no more than 1000 completed notices, even if they have not yet expired
 	pruneMaxNotices = 1000
+
+	// Hold no more than 100 inactive services.
+	pruneMaxInactiveServices = 100
 )
 
 var pruneTickerC = func(t *time.Ticker) <-chan time.Time {
@@ -425,6 +428,8 @@ func (o *Overlord) Loop() {
 				st.Lock()
 				st.Prune(o.startOfOperationTime, pruneWait, abortWait, pruneMaxChanges, pruneMaxNotices)
 				st.Unlock()
+				serviceMgr := o.ServiceManager()
+				serviceMgr.Prune(pruneWait, pruneMaxInactiveServices)
 			}
 		}
 	})
@@ -606,6 +611,7 @@ func FakeWithState(handleRestart func(restart.RestartType)) *Overlord {
 	s := state.New(fakeBackend{o: o})
 	o.stateEng = NewStateEngine(s)
 	o.runner = state.NewTaskRunner(s)
+	o.serviceMgr, _ = servstate.NewManager(s, o.runner, nil, nil, nil)
 	return o
 }
 
