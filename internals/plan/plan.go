@@ -740,12 +740,10 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 			switch service.Override {
 			case MergeOverride:
 				if old, ok := combined.Services[name]; ok {
-					copied := old.Copy()
-					copied.Merge(service)
-					combined.Services[name] = copied
-					break
+					old.Merge(service)
+				} else {
+					combined.Services[name] = service.Copy()
 				}
-				fallthrough
 			case ReplaceOverride:
 				combined.Services[name] = service.Copy()
 			case UnknownOverride:
@@ -765,12 +763,10 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 			switch check.Override {
 			case MergeOverride:
 				if old, ok := combined.Checks[name]; ok {
-					copied := old.Copy()
-					copied.Merge(check)
-					combined.Checks[name] = copied
-					break
+					old.Merge(check)
+				} else {
+					combined.Checks[name] = check.Copy()
 				}
-				fallthrough
 			case ReplaceOverride:
 				combined.Checks[name] = check.Copy()
 			case UnknownOverride:
@@ -790,12 +786,10 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 			switch target.Override {
 			case MergeOverride:
 				if old, ok := combined.LogTargets[name]; ok {
-					copied := old.Copy()
-					copied.Merge(target)
-					combined.LogTargets[name] = copied
-					break
+					old.Merge(target)
+				} else {
+					combined.LogTargets[name] = target.Copy()
 				}
-				fallthrough
 			case ReplaceOverride:
 				combined.LogTargets[name] = target.Copy()
 			case UnknownOverride:

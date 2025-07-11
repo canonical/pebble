@@ -602,12 +602,10 @@ func (xs *xSection) Combine(other plan.Section) error {
 		switch entry.Override {
 		case plan.MergeOverride:
 			if old, ok := xs.Entries[field]; ok {
-				copied := old.Copy()
-				copied.Merge(entry)
-				xs.Entries[field] = copied
-				break
+				old.Merge(entry)
+			} else {
+				xs.Entries[field] = entry.Copy()
 			}
-			fallthrough
 		case plan.ReplaceOverride:
 			xs.Entries[field] = entry.Copy()
 		case plan.UnknownOverride:
@@ -720,12 +718,10 @@ func (ys *ySection) Combine(other plan.Section) error {
 		switch entry.Override {
 		case plan.MergeOverride:
 			if old, ok := ys.Entries[field]; ok {
-				copied := old.Copy()
-				copied.Merge(entry)
-				ys.Entries[field] = copied
-				break
+				old.Merge(entry)
+			} else {
+				ys.Entries[field] = entry.Copy()
 			}
-			fallthrough
 		case plan.ReplaceOverride:
 			ys.Entries[field] = entry.Copy()
 		case plan.UnknownOverride:
