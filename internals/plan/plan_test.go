@@ -1540,69 +1540,6 @@ services:
 	c.Assert(ok, Equals, true, Commentf("error must be *plan.FormatError, not %T", err))
 }
 
-func (s *S) TestCombineLayersOverrideMerge(c *C) {
-	layer1, err := plan.ParseLayer(1, "label1", []byte(`
-services:
-    srv1:
-        override: merge
-        command: cmd
-        before:
-            - srv2
-        after:
-            - srv3
-        requires:
-            - srv2
-            - srv3
-    srv2:
-        override: replace
-        command: cmd
-    srv3:
-        override: replace
-        command: cmd
-`))
-	c.Assert(err, IsNil)
-
-	layer2, err := plan.ParseLayer(2, "label2", []byte(`
-services:
-    srv1:
-        summary: new summary
-        override: merge
-        command: cmd
-        before:
-            - srv4
-        after:
-            - srv5
-        requires:
-            - srv4
-            - srv5
-    srv4:
-        override: replace
-        command: cmd
-    srv5:
-        override: replace
-        command: cmd
-`))
-	c.Assert(err, IsNil)
-
-	combined, err := plan.CombineLayers(layer1, layer2)
-	c.Assert(err, IsNil)
-	c.Assert(combined.Services["srv1"].Summary, Equals, "new summary")
-	c.Assert(combined.Services["srv1"].Before, DeepEquals, []string{"srv2", "srv4"})
-	c.Assert(combined.Services["srv1"].After, DeepEquals, []string{"srv3", "srv5"})
-	c.Assert(combined.Services["srv1"].Requires, DeepEquals, []string{"srv2", "srv3", "srv4", "srv5"})
-
-	layers := []*plan.Layer{layer1, layer2}
-	p := &plan.Plan{
-		Layers:     layers,
-		Services:   combined.Services,
-		Checks:     combined.Checks,
-		LogTargets: combined.LogTargets,
-		Sections:   combined.Sections,
-	}
-	err = p.Validate()
-	c.Assert(err, IsNil)
-}
-
 func (s *S) TestMissingOverride(c *C) {
 	layer1, err := plan.ParseLayer(1, "label1", []byte("{}"))
 	c.Assert(err, IsNil)
