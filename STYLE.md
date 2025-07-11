@@ -649,9 +649,6 @@ For another example, the comment below isn't necessary since the following line 
 if strings.HasPrefix(s, "foo") {
     // ...
 }
-	if s, err := os.Stat(path); err == nil {
-		// ...
-	}
 ```
 
 ### Use `TODO`
