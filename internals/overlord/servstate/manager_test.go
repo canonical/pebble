@@ -2396,3 +2396,167 @@ pebble_service_start_count{service="test2"} 2
 `[1:]
 	c.Assert(buf.String(), Equals, expected)
 }
+
+// getTestTime helps generate a time for testing purposes.
+func getTestTime(year int, month time.Month, day int) time.Time {
+	return time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
+}
+
+var pruneTestingLayer = `
+services:
+    test1:
+        override: replace
+        command: /bin/sh -c "echo test; sleep 10"
+        startup: enabled
+    test2:
+        override: replace
+        command: /bin/sh -c "echo test; sleep 10"
+        startup: enabled
+    test3:
+        override: replace
+        command: /bin/sh -c "echo test; sleep 10"
+        startup: enabled
+    test4:
+        override: replace
+        command: /bin/sh -c "echo test; sleep 10"
+        startup: enabled
+    test5:
+        override: replace
+        command: /bin/sh -c "echo test; sleep 10"
+        startup: enabled
+`
+
+// TestPruneInactiveOlderThanPruneWait verifies that the ServiceManager's Prune method correctly removes
+// inactive serviceData older than the specified pruneWait duration.
+// It ensures inactive services are not pruned if they are not old enough, and that after some time has
+// passed (by increasing the mock time), only the services that have been inactive longer than pruneWait
+// are pruned.
+// Active services remain unaffected.
+func (s *S) TestPruneInactiveOlderThanPruneWait(c *C) {
+	s.newServiceManager(c)
+	s.planAddLayer(c, pruneTestingLayer)
+	s.planChanged(c)
+
+	chg := s.startServices(c, [][]string{{"test1", "test2", "test3", "test4", "test5"}})
+	s.st.Lock()
+	c.Check(chg.Status(), Equals, state.DoneStatus, Commentf("Error: %v", chg.Err()))
+	s.st.Unlock()
+
+	chg = s.stopServices(c, [][]string{{"test3", "test4", "test5"}})
+	s.st.Lock()
+	c.Check(chg.Status(), Equals, state.DoneStatus, Commentf("Error: %v", chg.Err()))
+	s.st.Unlock()
+
+	// Immediately prune; all inactive services are not older than pruneWait, so nothing will be pruned.
+	s.manager.Prune(7*24*time.Hour, 1000)
+	services, err := s.manager.Services(nil)
+	c.Assert(err, IsNil)
+	for _, service := range services {
+		// CurrentSince is not nil, meaning the serviceData is not pruned.
+		c.Assert(service.CurrentSince, Not(Equals), time.Time{})
+	}
+
+	// Mock time so that all inactive services' serviceData will be pruned.
+	testBaseTime := getTestTime(9999, 1, 1)
+	restoreTime := servstate.FakeTimeNow(testBaseTime)
+	defer restoreTime()
+	s.manager.Prune(7*24*time.Hour, 1000)
+
+	services, err = s.manager.Services([]string{"test3", "test4", "test5"})
+	c.Assert(err, IsNil)
+	for _, service := range services {
+		// If serviceData is pruned, manager.Services returns zero value for CurrentSince.
+		c.Assert(service.CurrentSince, Equals, time.Time{})
+	}
+	// Active services not affected.
+	services, err = s.manager.Services([]string{"test1", "test2"})
+	c.Assert(err, IsNil)
+	for _, service := range services {
+		c.Assert(service.CurrentSince, Not(Equals), time.Time{})
+	}
+}
+
+// TestPruneMaxServiceData ensures that inactive services are pruned to respect the maxServiceData limit,
+// even if they are not older than pruneWait.
+func (s *S) TestPruneMaxServiceData(c *C) {
+	s.newServiceManager(c)
+	s.planAddLayer(c, pruneTestingLayer)
+	s.planChanged(c)
+
+	chg := s.startServices(c, [][]string{{"test1", "test2", "test3", "test4", "test5"}})
+	s.st.Lock()
+	c.Check(chg.Status(), Equals, state.DoneStatus, Commentf("Error: %v", chg.Err()))
+	s.st.Unlock()
+
+	chg = s.stopServices(c, [][]string{{"test3", "test4", "test5"}})
+	s.st.Lock()
+	c.Check(chg.Status(), Equals, state.DoneStatus, Commentf("Error: %v", chg.Err()))
+	s.st.Unlock()
+
+	// Prune, without time mock and with a very long pruneWait so that all services are not old enough,
+	// but also set maxServiceData set to 0, meaning all 3 inactive service will be pruned to respect
+	// maxServiceData.
+	s.manager.Prune(7*24*time.Hour, 0)
+
+	services, err := s.manager.Services([]string{"test3", "test4", "test5"})
+	c.Assert(err, IsNil)
+	for _, service := range services {
+		// If serviceData is pruned, manager.Services returns zero value for CurrentSince.
+		c.Assert(service.CurrentSince, Equals, time.Time{})
+	}
+	// Active services not affected.
+	services, err = s.manager.Services([]string{"test1", "test2"})
+	c.Assert(err, IsNil)
+	for _, service := range services {
+		c.Assert(service.CurrentSince, Not(Equals), time.Time{})
+	}
+}
+
+// TestPruneSortByCurrentSince verifies that service pruning correctly prioritizes
+// inactive services with older currentSince when enforcing the maxServiceData limit.
+func (s *S) TestPruneSortByCurrentSince(c *C) {
+	s.newServiceManager(c)
+	s.planAddLayer(c, pruneTestingLayer)
+	s.planChanged(c)
+
+	chg := s.startServices(c, [][]string{{"test1", "test2", "test3", "test4", "test5"}})
+	s.st.Lock()
+	c.Check(chg.Status(), Equals, state.DoneStatus, Commentf("Error: %v", chg.Err()))
+	s.st.Unlock()
+
+	// Stop test3, test4 and test5 one by one so that test3 has older currentSince and test5
+	// has newer currentSince.
+	chg = s.stopServices(c, [][]string{{"test3"}})
+	s.st.Lock()
+	c.Check(chg.Status(), Equals, state.DoneStatus, Commentf("Error: %v", chg.Err()))
+	s.st.Unlock()
+
+	chg = s.stopServices(c, [][]string{{"test4"}})
+	s.st.Lock()
+	c.Check(chg.Status(), Equals, state.DoneStatus, Commentf("Error: %v", chg.Err()))
+	s.st.Unlock()
+
+	chg = s.stopServices(c, [][]string{{"test5"}})
+	s.st.Lock()
+	c.Check(chg.Status(), Equals, state.DoneStatus, Commentf("Error: %v", chg.Err()))
+	s.st.Unlock()
+
+	// Prune, with a very long pruneWait so that all services are not old enough,
+	// but also set maxServiceData set to 2, meaning one service will be pruned and
+	// it should be test3 since it's the oldest inactive service.
+	s.manager.Prune(100*365*24*time.Hour, 2)
+
+	services, err := s.manager.Services([]string{"test3"})
+	c.Assert(err, IsNil)
+	for _, service := range services {
+		// If serviceData is pruned, manager.Services returns zero value for CurrentSince.
+		c.Assert(service.CurrentSince, Equals, time.Time{})
+	}
+	// Active services not affected;
+	// services with newer currentSince are not pruned either.
+	services, err = s.manager.Services([]string{"test1", "test2", "test4", "test5"})
+	c.Assert(err, IsNil)
+	for _, service := range services {
+		c.Assert(service.CurrentSince, Not(Equals), time.Time{})
+	}
+}

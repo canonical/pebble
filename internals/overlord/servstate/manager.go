@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"math/rand"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -16,6 +17,9 @@ import (
 	"github.com/canonical/pebble/internals/servicelog"
 	"github.com/canonical/pebble/internals/workloads"
 )
+
+// timeNow can be faked during testing.
+var timeNow = time.Now
 
 type ServiceManager struct {
 	state *state.State
@@ -366,6 +370,40 @@ func (m *ServiceManager) WriteMetrics(writer metrics.Writer) error {
 		}
 	}
 	return nil
+}
+
+// Prune cleans up the in-memory serviceData:
+//   - It removes the serviceData if a service is inactive and its currentSince is older than pruneWait.
+//   - If the number of inactive serviceData entries is still more than maxServiceData, remove inactive services'
+//     serviceData even if they are not older than pruneWait. Inactive services are sorted by currentSince,
+//     and remove the older ones first.
+func (m *ServiceManager) Prune(pruneWait time.Duration, maxServiceData int) {
+	m.servicesLock.Lock()
+	defer m.servicesLock.Unlock()
+
+	now := timeNow()
+	pruneLimit := now.Add(-pruneWait)
+	for name, s := range m.services {
+		if stateToStatus(s.state) == StatusInactive && s.currentSince.Before(pruneLimit) {
+			delete(m.services, name)
+		}
+	}
+
+	if len(m.services) > maxServiceData {
+		var inactive []*serviceData
+		for _, s := range m.services {
+			if stateToStatus(s.state) == StatusInactive {
+				inactive = append(inactive, s)
+			}
+		}
+		slices.SortFunc(inactive, func(a *serviceData, b *serviceData) int {
+			return a.currentSince.Compare(b.currentSince)
+		})
+		excess := max(len(inactive)-maxServiceData, 0)
+		for i := range excess {
+			delete(m.services, inactive[i].config.Name)
+		}
+	}
 }
 
 // servicesToStop is used during service manager shutdown to cleanly terminate
