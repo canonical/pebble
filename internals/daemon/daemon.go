@@ -158,6 +158,9 @@ type Options struct {
 	// OverlordExtension is an optional interface used to extend the capabilities
 	// of the Overlord.
 	OverlordExtension overlord.Extension
+
+	// Persist specifies whether the overlord state should be persisted to disk.
+	Persist bool
 }
 
 // A Daemon listens for requests and routes them to the right command
@@ -965,6 +968,7 @@ func New(opts *Options) (*Daemon, error) {
 		ServiceOutput:  opts.ServiceOutput,
 		Extension:      opts.OverlordExtension,
 		IDSigner:       opts.IDSigner,
+		Persist:        opts.Persist,
 	}
 
 	ovld, err := overlord.New(&ovldOptions)

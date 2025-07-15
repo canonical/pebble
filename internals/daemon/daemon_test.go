@@ -105,6 +105,7 @@ func (s *daemonSuite) newDaemon(c *C) *Daemon {
 		HTTPAddress:  s.httpAddress,
 		HTTPSAddress: s.httpsAddress,
 		IDSigner:     newIDKey(c),
+		Persist:      true,
 	})
 	c.Assert(err, IsNil)
 	d.addRoutes()

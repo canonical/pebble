@@ -56,6 +56,8 @@ func (b *stateBackend) EnsureBefore(d time.Duration) {
 	}
 }
 
+func (b *stateBackend) NeedsCheckpoint() bool { return false }
+
 func ensureChange(c *C, r *state.TaskRunner, sb *stateBackend, chg *state.Change) {
 	for i := 0; i < 20; i++ {
 		sb.ensureBefore = time.Hour

@@ -243,3 +243,113 @@ local:
 		t.Fatalf("error checking identities. expected: %s; got: %s", expected, output)
 	}
 }
+
+// TestPersistDefault tests that Pebble persists the state to the disk by default
+// without setting the environment variable `PEBBLE_PERSIST`.
+func TestPersistDefault(t *testing.T) {
+	pebbleDir := t.TempDir()
+
+	layerYAML := fmt.Sprintf(`
+services:
+    svc1:
+        override: replace
+        command: /bin/sh -c "touch %s; sleep 10"
+        startup: enabled
+`,
+		filepath.Join(pebbleDir, "svc1"),
+	)
+
+	createLayer(t, pebbleDir, "001-simple-layer.yaml", layerYAML)
+
+	_, _ = pebbleDaemon(t, pebbleDir, "run")
+	waitForFile(t, filepath.Join(pebbleDir, "svc1"), 3*time.Second)
+
+	_, err := os.Stat(filepath.Join(pebbleDir, ".pebble.state"))
+	if err != nil {
+		t.Fatalf("pebble run without setting PEBBLE_PERSIST didn't create the state file: %v", err)
+	}
+}
+
+// TestPersistNever tests that when the environment variable `PEBBLE_PERSIST` is set to "never",
+// Pebble does not persist its state to the disk.
+func TestPersistNever(t *testing.T) {
+	t.Setenv("PEBBLE_PERSIST", "never")
+	pebbleDir := t.TempDir()
+
+	layerYAML := fmt.Sprintf(`
+services:
+    svc1:
+        override: replace
+        command: /bin/sh -c "touch %s; sleep 10"
+        startup: enabled
+`,
+		filepath.Join(pebbleDir, "svc1"),
+	)
+
+	createLayer(t, pebbleDir, "001-simple-layer.yaml", layerYAML)
+
+	_, _ = pebbleDaemon(t, pebbleDir, "run")
+	waitForFile(t, filepath.Join(pebbleDir, "svc1"), 3*time.Second)
+
+	_, err := os.Stat(filepath.Join(pebbleDir, ".pebble.state"))
+	if err == nil {
+		t.Fatalf("pebble run with PEBBLE_PERSIST set to 'never' still created the state file")
+	}
+	if !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("pebble run with PEBBLE_PERSIST set to 'never' got error other than ErrNotExist: %v", err)
+	}
+}
+
+// TestPersistAlways tests that when the environment variable `PEBBLE_PERSIST` is set to "always",
+// Pebble persists the state to the disk.
+func TestPersistAlways(t *testing.T) {
+	t.Setenv("PEBBLE_PERSIST", "always")
+	pebbleDir := t.TempDir()
+
+	layerYAML := fmt.Sprintf(`
+services:
+    svc1:
+        override: replace
+        command: /bin/sh -c "touch %s; sleep 10"
+        startup: enabled
+`,
+		filepath.Join(pebbleDir, "svc1"),
+	)
+
+	createLayer(t, pebbleDir, "001-simple-layer.yaml", layerYAML)
+
+	_, _ = pebbleDaemon(t, pebbleDir, "run")
+	waitForFile(t, filepath.Join(pebbleDir, "svc1"), 3*time.Second)
+
+	_, err := os.Stat(filepath.Join(pebbleDir, ".pebble.state"))
+	if err != nil {
+		t.Fatalf("pebble run with PEBBLE_PERSIST set to 'always' didn't create the state file: %v", err)
+	}
+}
+
+// TestPersistOtherThanNever tests that when the environment variable `PEBBLE_PERSIST` is set to any value
+// other than "never", Pebble persists the state to the disk.
+func TestPersistOtherThanNever(t *testing.T) {
+	t.Setenv("PEBBLE_PERSIST", "foo")
+	pebbleDir := t.TempDir()
+
+	layerYAML := fmt.Sprintf(`
+services:
+    svc1:
+        override: replace
+        command: /bin/sh -c "touch %s; sleep 10"
+        startup: enabled
+`,
+		filepath.Join(pebbleDir, "svc1"),
+	)
+
+	createLayer(t, pebbleDir, "001-simple-layer.yaml", layerYAML)
+
+	_, _ = pebbleDaemon(t, pebbleDir, "run")
+	waitForFile(t, filepath.Join(pebbleDir, "svc1"), 3*time.Second)
+
+	_, err := os.Stat(filepath.Join(pebbleDir, ".pebble.state"))
+	if err != nil {
+		t.Fatalf("pebble run with PEBBLE_PERSIST set to values other than 'never' didn't create the state file: %v", err)
+	}
+}

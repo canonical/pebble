@@ -90,6 +90,8 @@ type Options struct {
 	// instance (machine, container or device), which implements the
 	// tlsstate.IDSigner interface (allowing it to sign digests).
 	IDSigner tlsstate.IDSigner
+	// Persist specifies whether the overlord state should be persisted to disk.
+	Persist bool
 }
 
 // Overlord is the central manager of the system, keeping track
@@ -143,12 +145,21 @@ func New(opts *Options) (*Overlord, error) {
 		return nil, fmt.Errorf("directory %q not writable", o.pebbleDir)
 	}
 
-	statePath := filepath.Join(o.pebbleDir, cmd.StateFile)
-
-	backend := &overlordStateBackend{
-		path:         statePath,
-		ensureBefore: o.ensureBefore,
+	var backend state.Backend
+	var statePath string
+	if opts.Persist {
+		statePath = filepath.Join(o.pebbleDir, cmd.StateFile)
+		backend = &overlordStateBackend{
+			path:         statePath,
+			ensureBefore: o.ensureBefore,
+		}
+	} else {
+		// In-memory backend.
+		backend = &inMemoryBackend{
+			ensureBefore: o.ensureBefore,
+		}
 	}
+
 	s, restartMgr, err := loadState(statePath, opts.RestartHandler, backend)
 	if err != nil {
 		return nil, err
@@ -268,7 +279,8 @@ func loadState(statePath string, restartHandler restart.Handler, backend state.B
 		}
 	}
 
-	if !osutil.CanStat(statePath) {
+	// Check if state file exists only for file-based backend.
+	if backend.NeedsCheckpoint() && !osutil.CanStat(statePath) {
 		// fail fast, mostly interesting for tests, this dir is set up by pebble
 		stateDir := filepath.Dir(statePath)
 		if !osutil.IsDir(stateDir) {
@@ -282,25 +294,33 @@ func loadState(statePath string, restartHandler restart.Handler, backend state.B
 		patch.Init(s)
 		return s, restartMgr, nil
 	}
-	r, err := os.Open(statePath)
-	if err != nil {
-		return nil, nil, fmt.Errorf("cannot read the state file: %s", err)
-	}
-	defer r.Close()
 
 	var s *state.State
-	span := timings.StartNested("read-state", "read state from disk")
-	s, err = state.ReadState(backend, r)
-	span.Stop()
-	if err != nil {
-		return nil, nil, err
-	}
+	// Only load state from file for file-based backend.
+	if backend.NeedsCheckpoint() {
+		r, err := os.Open(statePath)
+		if err != nil {
+			return nil, nil, fmt.Errorf("cannot read the state file: %s", err)
+		}
+		defer r.Close()
 
-	timings.Stop()
-	// TODO Implement function to save timings.
-	//s.Lock()
-	//perfTimings.Save(s)
-	//s.Unlock()
+		span := timings.StartNested("read-state", "read state from disk")
+		s, err = state.ReadState(backend, r)
+		span.Stop()
+		if err != nil {
+			return nil, nil, err
+		}
+
+		timings.Stop()
+		// TODO Implement function to save timings.
+		//s.Lock()
+		//perfTimings.Save(s)
+		//s.Unlock()
+	} else {
+		// Create a new state for in-memory backend.
+		s = state.New(backend)
+		patch.Init(s)
+	}
 
 	restartMgr, err := initRestart(s, curBootID, restartHandler)
 	if err != nil {
@@ -658,6 +678,10 @@ func (mb fakeBackend) EnsureBefore(d time.Duration) {
 	}
 
 	mb.o.ensureBefore(d)
+}
+
+func (mb fakeBackend) NeedsCheckpoint() bool {
+	return false
 }
 
 func (mb fakeBackend) RequestRestart(t restart.RestartType) {

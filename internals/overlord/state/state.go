@@ -35,6 +35,7 @@ import (
 type Backend interface {
 	Checkpoint(data []byte) error
 	EnsureBefore(d time.Duration)
+	NeedsCheckpoint() bool
 }
 
 type customData map[string]*json.RawMessage
@@ -296,20 +297,25 @@ func (s *State) Unlock() {
 		return
 	}
 
-	data := s.checkpointData()
-	var err error
-	start := time.Now()
-	for time.Since(start) <= unlockCheckpointRetryMaxTime {
-		if err = s.backend.Checkpoint(data); err == nil {
-			s.modified = false
-			return
+	if s.backend.NeedsCheckpoint() {
+		data := s.checkpointData()
+		var err error
+		start := time.Now()
+		for time.Since(start) <= unlockCheckpointRetryMaxTime {
+			if err = s.backend.Checkpoint(data); err == nil {
+				s.modified = false
+				return
+			}
+
+			logger.Noticef("Cannot write state file, retrying: %v", err)
+
+			time.Sleep(unlockCheckpointRetryInterval)
 		}
-
-		logger.Noticef("Cannot write state file, retrying: %v", err)
-
-		time.Sleep(unlockCheckpointRetryInterval)
+		logger.Panicf("cannot checkpoint even after %v of retries every %v: %v", unlockCheckpointRetryMaxTime, unlockCheckpointRetryInterval, err)
+	} else {
+		// No checkpoint needed, just reset the modified flag.
+		s.modified = false
 	}
-	logger.Panicf("cannot checkpoint even after %v of retries every %v: %v", unlockCheckpointRetryMaxTime, unlockCheckpointRetryInterval, err)
 }
 
 // EnsureBefore asks for an ensure pass to happen sooner within duration from now.
