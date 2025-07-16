@@ -31,6 +31,7 @@ package cryptutil
 import "C"
 
 import (
+	"crypto/subtle"
 	"errors"
 	"fmt"
 	"runtime"
@@ -49,7 +50,7 @@ func crypt6_verify(hashedKey string, key string) error {
 	defer runtime.UnlockOSThread()
 	lastSep := strings.LastIndex(hashedKey, "$")
 	if lastSep < 0 {
-		return errors.New("illformed key hash")
+		return errors.New("ill-formed key hash")
 	}
 	salt := hashedKey[:lastSep]
 	csalt := C.CString(salt)
@@ -65,8 +66,8 @@ func crypt6_verify(hashedKey string, key string) error {
 	if err != nil {
 		return fmt.Errorf("unable to verify passwd: %w", err)
 	}
-	resultHashedKey := C.GoString(chashedkey)
-	if resultHashedKey == hashedKey {
+	resHashedKey := C.GoString(chashedkey)
+	if subtle.ConstantTimeCompare([]byte(resHashedKey), []byte(hashedKey)) == 1 {
 		return nil
 	}
 	return errors.New("unable to verify passwd")
