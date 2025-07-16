@@ -90,7 +90,7 @@ type Options struct {
 	// instance (machine, container or device), which implements the
 	// tlsstate.IDSigner interface (allowing it to sign digests).
 	IDSigner tlsstate.IDSigner
-	// Persist specifies whether the overlord state should be persisted to disk.
+	// Persist specifies whether the state should be persisted to disk.
 	Persist bool
 }
 
@@ -279,7 +279,7 @@ func loadState(statePath string, restartHandler restart.Handler, backend state.B
 		}
 	}
 
-	// Check if state file exists only for file-based backend.
+	// Only check if the state file exists for backend that needs checkpoint (file-based state, overlordStateBackend).
 	if backend.NeedsCheckpoint() && !osutil.CanStat(statePath) {
 		// fail fast, mostly interesting for tests, this dir is set up by pebble
 		stateDir := filepath.Dir(statePath)
@@ -296,7 +296,7 @@ func loadState(statePath string, restartHandler restart.Handler, backend state.B
 	}
 
 	var s *state.State
-	// Only load state from file for file-based backend.
+	// Only load state from file for backend that needs checkpoint (file-based state, overlordStateBackend).
 	if backend.NeedsCheckpoint() {
 		r, err := os.Open(statePath)
 		if err != nil {

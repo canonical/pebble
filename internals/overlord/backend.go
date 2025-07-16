@@ -42,7 +42,7 @@ type inMemoryBackend struct {
 }
 
 // Checkpoint of the in-memory backend does nothing because
-// we're keeping state in memory only.
+// we're keeping the state in memory only.
 func (imb *inMemoryBackend) Checkpoint(data []byte) error {
 	return nil
 }

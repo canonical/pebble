@@ -159,7 +159,7 @@ type Options struct {
 	// of the Overlord.
 	OverlordExtension overlord.Extension
 
-	// Persist specifies whether the overlord state should be persisted to disk.
+	// Persist specifies whether the state should be persisted to disk.
 	Persist bool
 }
 
