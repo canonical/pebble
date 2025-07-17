@@ -43,6 +43,8 @@ jobs:
       - name: Environment
         working-directory: "docs"
         run: make install
-      - name: Markdown
-        working-directory: "docs"
-        run: make lint-md
+      - name: Markdown (repo root)
+        run: |
+          . docs/.sphinx/venv/bin/activate
+          pip install pymarkdownlnt
+          pymarkdownlnt --config docs/.sphinx/.pymarkdown.json scan --recurse --exclude=./docs/** .
