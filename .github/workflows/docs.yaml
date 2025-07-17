@@ -47,4 +47,4 @@ jobs:
         run: |
           . docs/.sphinx/venv/bin/activate
           pip install pymarkdownlnt
-          pymarkdownlnt --config docs/.sphinx/.pymarkdown.json scan --recurse --exclude=./docs/** .
+          pymarkdownlnt --config docs/.sphinx/.pymarkdown.json scan --recurse --exclude=./docs .
