@@ -29,7 +29,6 @@ go install ./cmd/pebble
 
 However, during development it's easiest just to use `go run`, as that will automatically recompile if you've made any changes.
 
-
 ## Running the daemon
 
 To run the Pebble daemon, set the `$PEBBLE` environment variable and use the `pebble run` sub-command, something like this:
@@ -41,7 +40,6 @@ $ go run ./cmd/pebble run
 2021-09-15T01:37:23.962Z [pebble] Started daemon.
 ...
 ```
-
 
 ## Using the CLI client
 
@@ -59,7 +57,6 @@ $ go run ./cmd/pebble services
 Service   Startup   Current
 snappass  disabled  inactive
 ```
-
 
 ## Using Curl to hit the API
 
@@ -83,7 +80,6 @@ $ curl --unix-socket ~/pebble/.pebble.socket 'http://localhost/v1/services?names
   ]
 }
 ```
-
 
 ## Code style
 
@@ -154,7 +150,6 @@ logger.Noticef("Cannot marshal logs to JSON: %v", err)
 ```go
 fmt.Errorf("cannot create log client: %w", err)
 ```
-
 
 ## Running the tests
 
