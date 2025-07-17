@@ -16,7 +16,7 @@ concurrency:
 jobs:
   docchecks:
     name: Checks
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     outputs:
       linkcheck-result: ${{ steps.linkcheck-step.outcome }}
     steps:
