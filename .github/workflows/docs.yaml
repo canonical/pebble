@@ -19,6 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       linkcheck-result: ${{ steps.linkcheck-step.outcome }}
+      spellcheck-result: ${{ steps.spellcheck-step.outcome }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
