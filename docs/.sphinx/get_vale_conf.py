@@ -17,7 +17,7 @@ logging.basicConfig(
 
 SPHINX_DIR = os.path.join(os.getcwd(), ".sphinx")
 
-GITHUB_REPO = "canonical/praecepta"
+GITHUB_REPO = "canonical/documentation-style-guide"
 GITHUB_CLONE_URL = f"https://github.com/{GITHUB_REPO}.git"
 
 # Source paths to copy from repo

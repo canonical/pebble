@@ -11,7 +11,7 @@ SOURCEDIR       = .
 BUILDDIR        = _build
 VENVDIR         = $(SPHINXDIR)/venv
 PA11Y           = $(SPHINXDIR)/node_modules/pa11y/bin/pa11y.js --config $(SPHINXDIR)/pa11y.json
-VENV         	   = $(VENVDIR)/bin/activate
+VENV            = $(VENVDIR)/bin/activate
 TARGET          = *
 ALLFILES        =  *.rst **/*.rst
 METRICSDIR      = $(SOURCEDIR)/.sphinx/metrics
@@ -32,6 +32,7 @@ help:
 	@echo "* clean full environment:                    make clean"
 	@echo "* regenerate help output in CLI reference:   make cli-help"
 	@echo "* check links:                               make linkcheck"
+	@echo "* check markdown:                            make lint-md"
 	@echo "* check spelling:                            make spelling"
 	@echo "* check spelling (without building again):   make spellcheck"
 	@echo "* check inclusive language:                  make woke"
@@ -43,10 +44,10 @@ help:
 	@echo "-------------------------------------------------------------"
 	@echo
 
-.PHONY: full-help spellcheck-install pa11y-install install run html \
-        epub serve clean clean-doc spelling spellcheck linkcheck woke \
-        allmetrics pa11y pdf-prep-force pdf-prep pdf vale-install vale \
-		update
+.PHONY: help full‑help html epub pdf linkcheck spelling spellcheck woke \
+        vale pa11y run serve install spellcheck‑install pa11y‑install   \
+        vale‑install pdf‑prep pdf‑prep‑force clean clean‑doc allmetrics \
+        update lint-md
 
 full-help: $(VENVDIR)
 	@. $(VENV); $(SPHINXBUILD) -M help "$(SOURCEDIR)" "$(BUILDDIR)" $(SPHINXOPTS) $(O)
@@ -55,10 +56,8 @@ full-help: $(VENVDIR)
 
 # If requirements are updated, venv should be rebuilt and timestamped.
 $(VENVDIR):
-	python3 -c "import venv" || \
-        (echo "You must install python3-venv before you can build the documentation."; exit 1)
 	@echo "... setting up virtualenv"
-	python3 -m venv $(VENVDIR)
+	python3 -m venv $(VENVDIR) || { echo "You must install python3-venv before you can build the documentation."; exit 1; }
 	. $(VENV); pip install $(PIPOPTS) --require-virtualenv \
 	    --upgrade -r requirements.txt \
             --log $(VENVDIR)/pip_install.log
@@ -68,7 +67,7 @@ $(VENVDIR):
 	@touch $(VENVDIR)
 
 spellcheck-install:
-	@type aspell >/dev/null 2>&1 || \
+	@command -v aspell >/dev/null || \
 	{ \
 		echo "Installing system-wide \"aspell\" packages..."; \
 		confirm_sudo=$(CONFIRM_SUDO); \
@@ -83,18 +82,21 @@ spellcheck-install:
 	}
 
 pa11y-install:
-	@type $(PA11Y) >/dev/null 2>&1 || { \
+	@command -v $(PA11Y) >/dev/null || { \
 			echo "Installing \"pa11y\" from npm..."; echo; \
 			mkdir -p $(SPHINXDIR)/node_modules/ ; \
 			npm install --prefix $(SPHINXDIR) pa11y; \
 		}
+
+pymarkdownlnt-install:
+	@. $(VENV); test -d $(SPHINXDIR)/venv/lib/python*/site-packages/pymarkdown || pip install pymarkdownlnt
 
 install: $(VENVDIR)
 
 run: install
 	. $(VENV); $(VENVDIR)/bin/sphinx-autobuild -b dirhtml --host $(SPHINX_HOST) --port $(SPHINX_PORT) "$(SOURCEDIR)" "$(BUILDDIR)" $(SPHINXOPTS)
 
-# Doesn't depend on $(BUILDDIR) to rebuild properly at every run.
+# Does not depend on $(BUILDDIR) to rebuild properly at every run.
 html: install
 	. $(VENV); $(SPHINXBUILD) -W --keep-going -b dirhtml "$(SOURCEDIR)" "$(BUILDDIR)" -w $(SPHINXDIR)/warnings.txt $(SPHINXOPTS)
 
@@ -115,17 +117,15 @@ clean-doc:
 	git clean -fx "$(BUILDDIR)"
 	rm -rf $(SPHINXDIR)/.doctrees
 
-spellcheck: spellcheck-install
-	. $(VENV) ; python3 -m pyspelling -c $(SPHINXDIR)/spellingcheck.yaml -j $(shell nproc)
-
-spelling: html spellcheck
-
 linkcheck: install
 	. $(VENV) ; $(SPHINXBUILD) -b linkcheck "$(SOURCEDIR)" "$(BUILDDIR)" $(SPHINXOPTS) || { grep --color -F "[broken]" "$(BUILDDIR)/output.txt"; exit 1; }
 	exit 0
 
 pa11y: pa11y-install html
 	find $(BUILDDIR) -name *.html -print0 | xargs -n 1 -0 $(PA11Y)
+
+lint-md: pymarkdownlnt-install
+	@. $(VENV); pymarkdownlnt --config $(SPHINXDIR)/.pymarkdown.json scan --recurse --exclude=./$(SPHINXDIR)/** $(SOURCEDIR)
 
 vale-install: install
 	@. $(VENV); test -d $(SPHINXDIR)/venv/lib/python*/site-packages/vale || pip install rst2html vale
@@ -137,21 +137,21 @@ vale-install: install
 
 woke: vale-install
 	@cat $(SPHINXDIR)/styles/config/vocabularies/Canonical/accept.txt > $(SPHINXDIR)/styles/config/vocabularies/Canonical/accept_backup.txt
-	@cat $(SPHINXDIR)/.wordlist.txt $(SOURCEDIR)/.custom_wordlist.txt >> $(SPHINXDIR)/styles/config/vocabularies/Canonical/accept.txt
+	@cat $(SOURCEDIR)/.custom_wordlist.txt >> $(SPHINXDIR)/styles/config/vocabularies/Canonical/accept.txt
 	@echo "Running Vale acceptable term check against $(TARGET). To change target set TARGET= with make command"
 	@. $(VENV); vale --config="$(VALE_CONFIG)" --filter='$(SPHINXDIR)/styles/woke.filter' --glob='*.{md,rst}' $(TARGET)
 	@cat $(SPHINXDIR)/styles/config/vocabularies/Canonical/accept_backup.txt > $(SPHINXDIR)/styles/config/vocabularies/Canonical/accept.txt && rm $(SPHINXDIR)/styles/config/vocabularies/Canonical/accept_backup.txt
 
 vale: vale-install
 	@cat $(SPHINXDIR)/styles/config/vocabularies/Canonical/accept.txt > $(SPHINXDIR)/styles/config/vocabularies/Canonical/accept_backup.txt
-	@cat $(SPHINXDIR)/.wordlist.txt $(SOURCEDIR)/.custom_wordlist.txt >> $(SPHINXDIR)/styles/config/vocabularies/Canonical/accept.txt
+	@cat $(SOURCEDIR)/.custom_wordlist.txt >> $(SPHINXDIR)/styles/config/vocabularies/Canonical/accept.txt
 	@echo "Running Vale against $(TARGET). To change target set TARGET= with make command"
 	@. $(VENV); vale --config="$(VALE_CONFIG)" --filter='$(SPHINXDIR)/styles/error.filter' --glob='*.{md,rst}' $(TARGET)
 	@cat $(SPHINXDIR)/styles/config/vocabularies/Canonical/accept_backup.txt > $(SPHINXDIR)/styles/config/vocabularies/Canonical/accept.txt && rm $(SPHINXDIR)/styles/config/vocabularies/Canonical/accept_backup.txt
 
-vale-spelling: vale-install
+spelling: vale-install
 	@cat $(SPHINXDIR)/styles/config/vocabularies/Canonical/accept.txt > $(SPHINXDIR)/styles/config/vocabularies/Canonical/accept_backup.txt
-	@cat $(SPHINXDIR)/.wordlist.txt $(SOURCEDIR)/.custom_wordlist.txt >> $(SPHINXDIR)/styles/config/vocabularies/Canonical/accept.txt
+	@cat $(SOURCEDIR)/.custom_wordlist.txt >> $(SPHINXDIR)/styles/config/vocabularies/Canonical/accept.txt
 	@echo "Running Vale against $(TARGET). To change target set TARGET= with make command"
 	@. $(VENV); vale --config="$(VALE_CONFIG)" --filter='$(SPHINXDIR)/styles/spelling.filter' --glob='*.{md,rst}' $(TARGET)
 	@cat $(SPHINXDIR)/styles/config/vocabularies/Canonical/accept_backup.txt > $(SPHINXDIR)/styles/config/vocabularies/Canonical/accept.txt && rm $(SPHINXDIR)/styles/config/vocabularies/Canonical/accept_backup.txt
@@ -194,6 +194,7 @@ update: install
 # Catch-all target: route all unknown targets to Sphinx using the new
 # "make mode" option.  $(O) is meant as a shortcut for $(SPHINXOPTS).
 %:
+	$(MAKE) —no-print-directory install
 	. $(VENV); $(SPHINXBUILD) -M $@ "$(SOURCEDIR)" "$(BUILDDIR)" $(SPHINXOPTS) $(O)
 
 cli-help:
