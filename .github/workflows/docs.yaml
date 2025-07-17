@@ -37,6 +37,6 @@ jobs:
       - name: Environment
         working-directory: "docs"
         run: make install
-      - name: Lint markdown
+      - name: Markdown
         working-directory: "docs"
         run: make lint-md
