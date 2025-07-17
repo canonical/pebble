@@ -34,3 +34,9 @@ jobs:
         uses: canonical/documentation-workflows/linkcheck@main
         with:
           working-directory: docs   
+      - name: Environment
+        working-directory: "docs"
+        run: make install
+      - name: Lint markdown
+        working-directory: "docs"
+        run: make lint-md
