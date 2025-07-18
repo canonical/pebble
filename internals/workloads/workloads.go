@@ -112,12 +112,10 @@ func (ws *WorkloadsSection) combine(other *WorkloadsSection) error {
 		switch workload.Override {
 		case plan.MergeOverride:
 			if current, ok := ws.Entries[name]; ok {
-				copied := current.copy()
-				copied.merge(workload)
-				ws.Entries[name] = copied
-				break
+				current.merge(workload)
+			} else {
+				ws.Entries[name] = workload.copy()
 			}
-			fallthrough
 		case plan.ReplaceOverride:
 			ws.Entries[name] = workload.copy()
 		case plan.UnknownOverride:
