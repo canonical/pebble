@@ -202,9 +202,13 @@ func runDaemon(rcmd *cmdRun, ch chan os.Signal, ready chan<- func()) error {
 		IDSigner:     idSigner,
 		HTTPAddress:  rcmd.HTTP,
 		HTTPSAddress: rcmd.HTTPS,
+		Persist:      true,
 	}
 	if os.Getenv("PEBBLE_VERBOSE") == "1" || rcmd.Verbose {
 		dopts.ServiceOutput = os.Stdout
+	}
+	if os.Getenv("PEBBLE_PERSIST") == "never" {
+		dopts.Persist = false
 	}
 
 	d, err := daemon.New(&dopts)

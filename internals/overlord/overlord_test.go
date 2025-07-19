@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"syscall"
@@ -77,7 +78,7 @@ func (ovs *overlordSuite) TestNew(c *C) {
 	restore := patch.Fake(42, 2, nil)
 	defer restore()
 
-	o, err := overlord.New(&overlord.Options{PebbleDir: ovs.dir})
+	o, err := overlord.New(&overlord.Options{PebbleDir: ovs.dir, Persist: true})
 	c.Assert(err, IsNil)
 	c.Check(o, NotNil)
 
@@ -98,6 +99,34 @@ func (ovs *overlordSuite) TestNew(c *C) {
 	c.Check(patchSublevel, Equals, 2)
 }
 
+func (ovs *overlordSuite) TestNewInMemoryBackend(c *C) {
+	restore := patch.Fake(42, 2, nil)
+	defer restore()
+
+	o, err := overlord.New(&overlord.Options{PebbleDir: ovs.dir, Persist: false})
+	c.Assert(err, IsNil)
+	c.Check(o, NotNil)
+
+	c.Check(o.StateEngine(), NotNil)
+	c.Check(o.TaskRunner(), NotNil)
+	c.Check(o.RestartManager(), NotNil)
+
+	s := o.State()
+	c.Check(s, NotNil)
+	c.Check(o.Engine().State(), Equals, s)
+
+	s.Lock()
+	defer s.Unlock()
+	var patchLevel, patchSublevel int
+	s.Get("patch-level", &patchLevel)
+	c.Check(patchLevel, Equals, 42)
+	s.Get("patch-sublevel", &patchSublevel)
+	c.Check(patchSublevel, Equals, 2)
+
+	_, err = os.Stat(ovs.statePath)
+	c.Check(errors.Is(err, fs.ErrNotExist), Equals, true)
+}
+
 func (ovs *overlordSuite) TestNewWithGoodState(c *C) {
 	fakeState := []byte(fmt.Sprintf(`{
 		"data": {"patch-level": %d, "patch-sublevel": %d, "patch-sublevel-last-version": %q, "some": "data"},
@@ -111,7 +140,7 @@ func (ovs *overlordSuite) TestNewWithGoodState(c *C) {
 	err := os.WriteFile(ovs.statePath, fakeState, 0600)
 	c.Assert(err, IsNil)
 
-	o, err := overlord.New(&overlord.Options{PebbleDir: ovs.dir})
+	o, err := overlord.New(&overlord.Options{PebbleDir: ovs.dir, Persist: true})
 	c.Assert(err, IsNil)
 	c.Check(o.RestartManager(), NotNil)
 
@@ -140,7 +169,7 @@ func (ovs *overlordSuite) TestNewWithInvalidState(c *C) {
 	err := os.WriteFile(ovs.statePath, fakeState, 0600)
 	c.Assert(err, IsNil)
 
-	_, err = overlord.New(&overlord.Options{PebbleDir: ovs.dir})
+	_, err = overlord.New(&overlord.Options{PebbleDir: ovs.dir, Persist: true})
 	c.Assert(err, ErrorMatches, "cannot read state: EOF")
 }
 
@@ -159,7 +188,7 @@ func (ovs *overlordSuite) TestNewWithPatches(c *C) {
 	err := os.WriteFile(ovs.statePath, fakeState, 0600)
 	c.Assert(err, IsNil)
 
-	o, err := overlord.New(&overlord.Options{PebbleDir: ovs.dir})
+	o, err := overlord.New(&overlord.Options{PebbleDir: ovs.dir, Persist: true})
 	c.Assert(err, IsNil)
 
 	state := o.State()
@@ -673,7 +702,7 @@ func (ovs *overlordSuite) TestCheckpoint(c *C) {
 	oldUmask := syscall.Umask(0)
 	defer syscall.Umask(oldUmask)
 
-	o, err := overlord.New(&overlord.Options{PebbleDir: ovs.dir})
+	o, err := overlord.New(&overlord.Options{PebbleDir: ovs.dir, Persist: true})
 	c.Assert(err, IsNil)
 
 	s := o.State()
@@ -1009,7 +1038,7 @@ func (ovs *overlordSuite) TestVerifyRebootIsMissing(c *C) {
 
 	rb := &testRestartHandler{}
 
-	_, err = overlord.New(&overlord.Options{PebbleDir: ovs.dir, RestartHandler: rb})
+	_, err = overlord.New(&overlord.Options{PebbleDir: ovs.dir, RestartHandler: rb, Persist: true})
 	c.Assert(err, IsNil)
 
 	c.Check(rb.rebootState, Equals, "did-not-happen")
@@ -1026,7 +1055,7 @@ func (ovs *overlordSuite) TestVerifyRebootIsMissingError(c *C) {
 	e := errors.New("boom")
 	rb := &testRestartHandler{rebootVerifiedErr: e}
 
-	_, err = overlord.New(&overlord.Options{PebbleDir: ovs.dir, RestartHandler: rb})
+	_, err = overlord.New(&overlord.Options{PebbleDir: ovs.dir, RestartHandler: rb, Persist: true})
 	c.Assert(err, Equals, e)
 
 	c.Check(rb.rebootState, Equals, "did-not-happen")
