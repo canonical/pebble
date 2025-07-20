@@ -5,14 +5,20 @@ on:
   schedule:
     - cron:  '0 7 1 * *'
 
+permissions: {}
+
 jobs:
   TICS:
     runs-on: [self-hosted, reactive, amd64, tiobe, noble]
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Set up Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
 
       - name: Install dependencies
         run: |
@@ -30,7 +36,7 @@ jobs:
           gocov-xml < coverage.json > .coverage/coverage.xml
 
       - name: TICS GitHub Action
-        uses: tiobe/tics-github-action@v3
+        uses: tiobe/tics-github-action@009979693978bfefad2ad15c1020066694968dc7  # 3.4.0
         with:
           mode: qserver
           viewerUrl: https://canonical.tiobe.com/tiobeweb/TICS/api/cfg?name=GoProjects
