@@ -96,20 +96,21 @@ const (
 
 // serviceData holds the state and other data for a service under our control.
 type serviceData struct {
-	manager      *ServiceManager
-	state        serviceState
-	config       *plan.Service
-	workload     *workloads.Workload
-	logs         *servicelog.RingBuffer
-	started      chan error
-	stopped      chan error
-	cmd          *exec.Cmd
-	backoffNum   int
-	backoffTime  time.Duration
-	resetTimer   *time.Timer
-	restarting   bool
-	currentSince time.Time
-	startCount   atomic.Int64
+	manager           *ServiceManager
+	state             serviceState
+	config            *plan.Service
+	workload          *workloads.Workload
+	logs              *servicelog.RingBuffer
+	started           chan error
+	stopped           chan error
+	cmd               *exec.Cmd
+	backoffNum        int
+	backoffTime       time.Duration
+	startRetriesCount atomic.Int64
+	resetTimer        *time.Timer
+	restarting        bool
+	currentSince      time.Time
+	startCount        atomic.Int64
 }
 
 func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
@@ -616,6 +617,17 @@ func addLastLogs(task *state.Task, logBuffer *servicelog.RingBuffer) {
 func (s *serviceData) doBackoff(action plan.ServiceAction, onType string) {
 	s.backoffNum++
 	s.backoffTime = calculateNextBackoff(s.config, s.backoffTime)
+
+	if restartCount := s.startRetriesCount.Load(); s.config.MaxStartRetries > 0 && restartCount >= s.config.MaxStartRetries {
+		logger.Noticef("Service %q has reached the maximum start retries (%d), stopping service", s.config.Name, s.config.MaxStartRetries)
+
+		s.startRetriesCount.Store(0)
+		s.transition(stateStopped)
+
+		return
+	}
+	s.startRetriesCount.Add(1)
+
 	logger.Noticef("Service %q %s action is %q, waiting ~%s before restart (backoff %d)",
 		s.config.Name, onType, action, s.backoffTime, s.backoffNum)
 	s.transition(stateBackoff)
@@ -816,6 +828,7 @@ func (s *serviceData) backoffResetElapsed() error {
 			s.config.Name, s.backoffNum, s.backoffTime)
 		s.backoffNum = 0
 		s.backoffTime = 0
+		s.startRetriesCount.Store(0)
 
 	default:
 		// Ignore if timer elapsed in any other state.
