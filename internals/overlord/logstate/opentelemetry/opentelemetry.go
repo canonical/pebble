@@ -19,6 +19,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"sort"
@@ -26,6 +27,7 @@ import (
 	"time"
 
 	"github.com/canonical/pebble/cmd"
+	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/plan"
 	"github.com/canonical/pebble/internals/servicelog"
 )
@@ -35,6 +37,95 @@ const (
 	maxRequestEntries = 100
 	batchSize         = 10
 )
+
+// A collection of ScopeLogs from a Resource.
+// Refer to 'type ResourceLogs struct' in
+// opentelemetry-collector/pdata/internal/data/protogen/logs/v1/logs.pb.go
+type ResourceLogs struct {
+	// The resource for the logs in this message.
+	// If this field is not set then resource info is unknown.
+	Resource Resource `json:"resource"`
+	// A list of ScopeLogs that originate from a resource.
+	ScopeLogs []*ScopeLogs `json:"scope_logs,omitempty"`
+}
+
+// Resource information, partially from 'type Resource struct' in
+// opentelemetry-collector/pdata/internal/data/protogen/resource/v1/resource.pb.go
+type Resource struct {
+	Attributes []KeyValue `json:"attributes"`
+}
+
+type KeyValue struct {
+	Key   string         `json:"key"`
+	Value AttributeValue `json:"value"`
+}
+
+// AttributeValue represents the OTLP attribute value format.
+// Refer to 'type AnyValue struct' in
+// opentelemetry-collector/pdata/internal/data/protogen/common/v1/common.pb.go
+type AttributeValue struct {
+	StringValue *string      `json:"stringValue,omitempty"`
+	BoolValue   *bool        `json:"boolValue,omitempty"`
+	IntValue    *int64       `json:"intValue,omitempty"`
+	DoubleValue *float64     `json:"doubleValue,omitempty"`
+	ArrayValue  *ArrayValue  `json:"arrayValue,omitempty"`
+	KvlistValue *KvlistValue `json:"kvlistValue,omitempty"`
+	BytesValue  []byte       `json:"bytesValue,omitempty"`
+}
+
+type ArrayValue struct {
+	Values []AttributeValue `json:"values"`
+}
+
+type KvlistValue struct {
+	Values []KeyValue `json:"values"`
+}
+
+// A collection of Logs produced by a Scope.
+// Refer to 'type ScopeLogs struct' in
+// opentelemetry-collector/pdata/internal/data/protogen/logs/v1/logs.pb.go
+type ScopeLogs struct {
+	// The instrumentation scope information for the logs in this message.
+	// Semantically when InstrumentationScope isn't set, it is equivalent with
+	// an empty instrumentation scope name (unknown).
+	Scope Scope `json:"scope"`
+	// A list of log records.
+	LogRecords []*LogRecord `json:"log_records,omitempty"`
+}
+
+// Scope is a message representing the instrumentation scope information
+// such as the fully qualified name and version.
+// Refer to `type InstrumentationScope struct` in
+// opentelemetry-collector/pdata/internal/data/protogen/common/v1/common.pb.go
+type Scope struct {
+	Name    string `json:"name"`
+	Version string `json:"version,omitempty"`
+}
+
+// A log record according to OpenTelemetry Log Data Model:
+// https://github.com/open-telemetry/oteps/blob/main/text/logs/0097-log-data-model.md
+// Refer to `type LogRecord struct` in
+// opentelemetry-collector/pdata/internal/data/protogen/logs/v1/logs.pb.go
+type LogRecord struct {
+	// time_unix_nano is the time when the event occurred.
+	// Value is UNIX Epoch time in nanoseconds since 00:00:00 UTC on 1 January 1970.
+	// Value of 0 indicates unknown or missing timestamp.
+	TimeUnixNano uint64 `json:"timeUnixNano"`
+	// The severity text (also known as log level). The original string representation as
+	// it is known at the source. [Optional].
+	SeverityText string `json:"severityText"`
+	// Numerical value of the severity, normalized to values described in Log Data Model.
+	// [Optional].
+	SeverityNumber int `json:"severityNumber"`
+	// A value containing the body of the log record. Can be for example a human-readable
+	// string message (including multi-line) describing the event in a free form or it can
+	// be a structured data composed of arrays and maps of other values. [Optional].
+	Body AttributeValue `json:"body"`
+	// Additional attributes that describe the specific event occurrence. [Optional].
+	// Attribute keys MUST be unique (it is not allowed to have more than one
+	// attribute with the same key).
+	Attributes []KeyValue `json:"attributes,omitempty"`
+}
 
 type Client struct {
 	options    *ClientOptions
@@ -198,18 +289,52 @@ func (c *Client) Flush(ctx context.Context) error {
 		}
 	}
 
+	if len(resourceLogs) == 0 {
+		return nil
+	}
+
 	payload := map[string]any{
 		"resourceLogs": resourceLogs,
 	}
 
-	if len(resourceLogs) > 0 {
-		if err := c.sendBatch(ctx, payload); err != nil {
-			return err
-		}
+	resp, err := c.sendBatch(ctx, payload)
+	if err != nil {
+		return err
 	}
 
-	c.resetBuffer() // Reset buffer after successful send.
-	return nil
+	return c.handleServerResponse(resp)
+}
+
+func (c *Client) sendBatch(ctx context.Context, payload map[string]any) (*http.Response, error) {
+	jsonData, err := json.Marshal(payload)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling log batch: %v", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", c.target.Location+"/v1/logs", bytes.NewBuffer(jsonData))
+	if err != nil {
+		return nil, fmt.Errorf("error creating request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", fmt.Sprintf("pebble/%s", cmd.Version))
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return resp, fmt.Errorf("error sending logs: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		var responseBody map[string]any
+		if err := json.NewDecoder(resp.Body).Decode(&responseBody); err == nil {
+			log.Printf("Error response: %+v", responseBody)
+		} else {
+			log.Printf("Failed to decode error response: %v", err)
+		}
+		return resp, fmt.Errorf("received status code: %d", resp.StatusCode)
+	}
+
+	return resp, nil
 }
 
 // resetBuffer drops all buffered logs (in the case of a successful send, or an unrecoverable error).
@@ -226,123 +351,55 @@ type otelEntryWithService struct {
 	service string
 }
 
-func (c *Client) sendBatch(ctx context.Context, payload map[string]any) error {
-	jsonData, err := json.Marshal(payload)
-	if err != nil {
-		return fmt.Errorf("error marshaling log batch: %v", err)
+// handleServerResponse determines what to do based on the response from the
+// OpenTelemetry collector. 4xx and 5xx responses indicate errors, so in this case, we will
+// bubble up the error to the caller.
+func (c *Client) handleServerResponse(resp *http.Response) error {
+	defer func() {
+		// Drain request body to allow connection reuse
+		// see https://pkg.go.dev/net/http#Response.Body
+		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1024*1024))
+		_ = resp.Body.Close()
+	}()
+
+	code := resp.StatusCode
+	switch {
+	case code == http.StatusOK || code == http.StatusNoContent:
+		// Success - safe to drop logs
+		c.resetBuffer()
+		return nil
+
+	case code == http.StatusTooManyRequests:
+		// For 429, don't drop logs - just retry later
+		return errFromResponse(resp)
+
+	case 400 <= code && code < 500:
+		// Other 4xx codes indicate a client problem, so drop the logs (retrying won't help)
+		logger.Noticef("Target %q: request failed with status %d, dropping %d logs",
+			c.target.Name, code, len(c.entries))
+		c.resetBuffer()
+		return errFromResponse(resp)
+
+	case 500 <= code && code < 600:
+		// 5xx indicates a problem with the server, so don't drop logs (retry later)
+		return errFromResponse(resp)
+
+	default:
+		// Unexpected response - don't drop logs to be safe
+		return fmt.Errorf("unexpected response from server: %v", resp.Status)
+	}
+}
+
+// errFromResponse generates an error from a failed *http.Response.
+// Note: this function reads the response body.
+func errFromResponse(resp *http.Response) error {
+	// Read response body to get more context
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 1024))
+	if err == nil {
+		logger.Debugf("HTTP %d error, response %q", resp.StatusCode, body)
+	} else {
+		logger.Debugf("HTTP %d error, but cannot read response: %v", resp.StatusCode, err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", c.target.Location+"/v1/logs", bytes.NewBuffer(jsonData))
-	if err != nil {
-		return fmt.Errorf("error creating request: %v", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", fmt.Sprintf("pebble/%s", cmd.Version))
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("error sending logs: %v", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 {
-		var responseBody map[string]any
-		if err := json.NewDecoder(resp.Body).Decode(&responseBody); err == nil {
-			log.Printf("Error response: %+v", responseBody)
-		} else {
-			log.Printf("Failed to decode error response: %v", err)
-		}
-		return fmt.Errorf("received status code: %d", resp.StatusCode)
-	}
-
-	return nil
-}
-
-// A collection of ScopeLogs from a Resource.
-// Refer to 'type ResourceLogs struct' in
-// opentelemetry-collector/pdata/internal/data/protogen/logs/v1/logs.pb.go
-type ResourceLogs struct {
-	// The resource for the logs in this message.
-	// If this field is not set then resource info is unknown.
-	Resource Resource `json:"resource"`
-	// A list of ScopeLogs that originate from a resource.
-	ScopeLogs []*ScopeLogs `json:"scope_logs,omitempty"`
-}
-
-// Resource information, partially from 'type Resource struct' in
-// opentelemetry-collector/pdata/internal/data/protogen/resource/v1/resource.pb.go
-type Resource struct {
-	Attributes []KeyValue `json:"attributes"`
-}
-
-type KeyValue struct {
-	Key   string         `json:"key"`
-	Value AttributeValue `json:"value"`
-}
-
-// AttributeValue represents the OTLP attribute value format.
-// Refer to 'type AnyValue struct' in
-// opentelemetry-collector/pdata/internal/data/protogen/common/v1/common.pb.go
-type AttributeValue struct {
-	StringValue *string      `json:"stringValue,omitempty"`
-	BoolValue   *bool        `json:"boolValue,omitempty"`
-	IntValue    *int64       `json:"intValue,omitempty"`
-	DoubleValue *float64     `json:"doubleValue,omitempty"`
-	ArrayValue  *ArrayValue  `json:"arrayValue,omitempty"`
-	KvlistValue *KvlistValue `json:"kvlistValue,omitempty"`
-	BytesValue  []byte       `json:"bytesValue,omitempty"`
-}
-
-type ArrayValue struct {
-	Values []AttributeValue `json:"values"`
-}
-
-type KvlistValue struct {
-	Values []KeyValue `json:"values"`
-}
-
-// A collection of Logs produced by a Scope.
-// Refer to 'type ScopeLogs struct' in
-// opentelemetry-collector/pdata/internal/data/protogen/logs/v1/logs.pb.go
-type ScopeLogs struct {
-	// The instrumentation scope information for the logs in this message.
-	// Semantically when InstrumentationScope isn't set, it is equivalent with
-	// an empty instrumentation scope name (unknown).
-	Scope Scope `json:"scope"`
-	// A list of log records.
-	LogRecords []*LogRecord `json:"log_records,omitempty"`
-}
-
-// Scope is a message representing the instrumentation scope information
-// such as the fully qualified name and version.
-// Refer to `type InstrumentationScope struct` in
-// opentelemetry-collector/pdata/internal/data/protogen/common/v1/common.pb.go
-type Scope struct {
-	Name    string `json:"name"`
-	Version string `json:"version,omitempty"`
-}
-
-// A log record according to OpenTelemetry Log Data Model:
-// https://github.com/open-telemetry/oteps/blob/main/text/logs/0097-log-data-model.md
-// Refer to `type LogRecord struct` in
-// opentelemetry-collector/pdata/internal/data/protogen/logs/v1/logs.pb.go
-type LogRecord struct {
-	// time_unix_nano is the time when the event occurred.
-	// Value is UNIX Epoch time in nanoseconds since 00:00:00 UTC on 1 January 1970.
-	// Value of 0 indicates unknown or missing timestamp.
-	TimeUnixNano uint64 `json:"timeUnixNano"`
-	// The severity text (also known as log level). The original string representation as
-	// it is known at the source. [Optional].
-	SeverityText string `json:"severityText"`
-	// Numerical value of the severity, normalized to values described in Log Data Model.
-	// [Optional].
-	SeverityNumber int `json:"severityNumber"`
-	// A value containing the body of the log record. Can be for example a human-readable
-	// string message (including multi-line) describing the event in a free form or it can
-	// be a structured data composed of arrays and maps of other values. [Optional].
-	Body AttributeValue `json:"body"`
-	// Additional attributes that describe the specific event occurrence. [Optional].
-	// Attribute keys MUST be unique (it is not allowed to have more than one
-	// attribute with the same key).
-	Attributes []KeyValue `json:"attributes,omitempty"`
+	return fmt.Errorf("server returned HTTP %v", resp.Status)
 }
