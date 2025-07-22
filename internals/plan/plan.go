@@ -653,9 +653,10 @@ type LogTarget struct {
 type LogTargetType string
 
 const (
-	LokiTarget     LogTargetType = "loki"
-	SyslogTarget   LogTargetType = "syslog"
-	UnsetLogTarget LogTargetType = ""
+	LokiTarget          LogTargetType = "loki"
+	OpenTelemetryTarget LogTargetType = "opentelemetry"
+	SyslogTarget        LogTargetType = "syslog"
+	UnsetLogTarget      LogTargetType = ""
 )
 
 // Copy returns a deep copy of the log target configuration.
@@ -987,7 +988,7 @@ func (layer *Layer) Validate() error {
 			}
 		}
 		switch target.Type {
-		case LokiTarget, SyslogTarget:
+		case LokiTarget, OpenTelemetryTarget, SyslogTarget:
 			// valid, continue
 		case UnsetLogTarget:
 			// will be checked when the layers are combined
