@@ -39,7 +39,7 @@ const (
 )
 
 // A collection of ScopeLogs from a Resource.
-// Refer to 'type ResourceLogs struct' in
+// Refer to `type ResourceLogs struct` in
 // opentelemetry-collector/pdata/internal/data/protogen/logs/v1/logs.pb.go
 type ResourceLogs struct {
 	// The resource for the logs in this message.
@@ -61,7 +61,7 @@ type KeyValue struct {
 }
 
 // AttributeValue represents the OTLP attribute value format.
-// Refer to 'type AnyValue struct' in
+// Refer to `type AnyValue struct` in
 // opentelemetry-collector/pdata/internal/data/protogen/common/v1/common.pb.go
 type AttributeValue struct {
 	StringValue *string      `json:"stringValue,omitempty"`
@@ -82,7 +82,7 @@ type KvlistValue struct {
 }
 
 // A collection of Logs produced by a Scope.
-// Refer to 'type ScopeLogs struct' in
+// Refer to `type ScopeLogs struct` in
 // opentelemetry-collector/pdata/internal/data/protogen/logs/v1/logs.pb.go
 type ScopeLogs struct {
 	// The instrumentation scope information for the logs in this message.
@@ -356,8 +356,8 @@ type otelEntryWithService struct {
 // bubble up the error to the caller.
 func (c *Client) handleServerResponse(resp *http.Response) error {
 	defer func() {
-		// Drain request body to allow connection reuse
-		// see https://pkg.go.dev/net/http#Response.Body
+		// Drain request body to allow connection reuse.
+		// See https://pkg.go.dev/net/http#Response.Body
 		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1024*1024))
 		_ = resp.Body.Close()
 	}()
@@ -365,27 +365,27 @@ func (c *Client) handleServerResponse(resp *http.Response) error {
 	code := resp.StatusCode
 	switch {
 	case code == http.StatusOK || code == http.StatusNoContent:
-		// Success - safe to drop logs
+		// Success - safe to drop logs.
 		c.resetBuffer()
 		return nil
 
 	case code == http.StatusTooManyRequests:
-		// For 429, don't drop logs - just retry later
+		// For 429, don't drop logs - just retry later.
 		return errFromResponse(resp)
 
 	case 400 <= code && code < 500:
-		// Other 4xx codes indicate a client problem, so drop the logs (retrying won't help)
+		// Other 4xx codes indicate a client problem, so drop the logs (retrying won't help).
 		logger.Noticef("Target %q: request failed with status %d, dropping %d logs",
 			c.target.Name, code, len(c.entries))
 		c.resetBuffer()
 		return errFromResponse(resp)
 
 	case 500 <= code && code < 600:
-		// 5xx indicates a problem with the server, so don't drop logs (retry later)
+		// 5xx indicates a problem with the server, so don't drop logs (retry later).
 		return errFromResponse(resp)
 
 	default:
-		// Unexpected response - don't drop logs to be safe
+		// Unexpected response - don't drop logs to be safe.
 		return fmt.Errorf("unexpected response from server: %v", resp.Status)
 	}
 }
