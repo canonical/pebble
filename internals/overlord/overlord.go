@@ -152,21 +152,6 @@ func New(opts *Options) (*Overlord, error) {
 		return nil, fmt.Errorf("directory %q not writable", o.pebbleDir)
 	}
 
-	var backend state.Backend
-	var statePath string
-	if opts.Persist == PersistDefault {
-		statePath = filepath.Join(o.pebbleDir, cmd.StateFile)
-		backend = &overlordStateBackend{
-			path:         statePath,
-			ensureBefore: o.ensureBefore,
-		}
-	} else {
-		// In-memory backend.
-		backend = &inMemoryBackend{
-			ensureBefore: o.ensureBefore,
-		}
-	}
-
 	curBootID, err := getCurrentBootID()
 	if err != nil {
 		return nil, err
@@ -174,13 +159,25 @@ func New(opts *Options) (*Overlord, error) {
 
 	var s *state.State
 	var restartMgr *restart.RestartManager
-	if backend.NeedsCheckpoint() {
+	if opts.Persist == PersistDefault {
+		statePath := filepath.Join(o.pebbleDir, cmd.StateFile)
+		backend := &overlordStateBackend{
+			path:         statePath,
+			ensureBefore: o.ensureBefore,
+		}
 		s, restartMgr, err = loadState(curBootID, statePath, opts.RestartHandler, backend)
+		if err != nil {
+			return nil, err
+		}
 	} else {
-		s, restartMgr, err = setupState(curBootID, statePath, opts.RestartHandler, backend)
-	}
-	if err != nil {
-		return nil, err
+		// In-memory backend.
+		backend := &inMemoryBackend{
+			ensureBefore: o.ensureBefore,
+		}
+		s, restartMgr, err = setupState(curBootID, opts.RestartHandler, backend)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	o.stateEng = NewStateEngine(s)
@@ -348,7 +345,7 @@ func loadState(curBootID, statePath string, restartHandler restart.Handler, back
 	return s, restartMgr, nil
 }
 
-func setupState(curBootID, statePath string, restartHandler restart.Handler, backend state.Backend) (*state.State, *restart.RestartManager, error) {
+func setupState(curBootID string, restartHandler restart.Handler, backend state.Backend) (*state.State, *restart.RestartManager, error) {
 	// Create a new state for in-memory backend.
 	s := state.New(backend)
 	patch.Init(s)
