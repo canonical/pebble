@@ -167,7 +167,18 @@ func New(opts *Options) (*Overlord, error) {
 		}
 	}
 
-	s, restartMgr, err := loadState(statePath, opts.RestartHandler, backend)
+	curBootID, err := getCurrentBootID()
+	if err != nil {
+		return nil, err
+	}
+
+	var s *state.State
+	var restartMgr *restart.RestartManager
+	if backend.NeedsCheckpoint() {
+		s, restartMgr, err = loadState(curBootID, statePath, opts.RestartHandler, backend)
+	} else {
+		s, restartMgr, err = setupState(curBootID, statePath, opts.RestartHandler, backend)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -267,12 +278,10 @@ func (o *Overlord) Extension() Extension {
 	return o.extension
 }
 
-func loadState(statePath string, restartHandler restart.Handler, backend state.Backend) (*state.State, *restart.RestartManager, error) {
-	timings := timing.Start("", "", map[string]string{"startup": "load-state"})
-
+func getCurrentBootID() (string, error) {
 	curBootID, err := osutil.BootID()
 	if err != nil {
-		return nil, nil, fmt.Errorf("fatal: cannot find current boot ID: %v", err)
+		return curBootID, fmt.Errorf("fatal: cannot find current boot ID: %v", err)
 	}
 	// If pebble is PID 1 we don't care about /proc/sys/kernel/random/boot_id
 	// as we are most likely running in a container. LXD mounts it's own boot_id
@@ -282,12 +291,17 @@ func loadState(statePath string, restartHandler restart.Handler, backend state.B
 	if os.Getpid() == 1 {
 		curBootID, err = randutil.RandomKernelUUID()
 		if err != nil {
-			return nil, nil, fmt.Errorf("fatal: cannot generate psuedo boot-id: %v", err)
+			return curBootID, fmt.Errorf("fatal: cannot generate psuedo boot-id: %v", err)
 		}
 	}
 
-	// Only check if the state file exists for backend that needs checkpoint (file-based state, overlordStateBackend).
-	if backend.NeedsCheckpoint() && !osutil.CanStat(statePath) {
+	return curBootID, nil
+}
+
+func loadState(curBootID, statePath string, restartHandler restart.Handler, backend state.Backend) (*state.State, *restart.RestartManager, error) {
+	timings := timing.Start("", "", map[string]string{"startup": "load-state"})
+
+	if !osutil.CanStat(statePath) {
 		// fail fast, mostly interesting for tests, this dir is set up by pebble
 		stateDir := filepath.Dir(statePath)
 		if !osutil.IsDir(stateDir) {
@@ -301,33 +315,43 @@ func loadState(statePath string, restartHandler restart.Handler, backend state.B
 		patch.Init(s)
 		return s, restartMgr, nil
 	}
+	r, err := os.Open(statePath)
+	if err != nil {
+		return nil, nil, fmt.Errorf("cannot read the state file: %s", err)
+	}
+	defer r.Close()
 
 	var s *state.State
-	// Only load state from file for backend that needs checkpoint (file-based state, overlordStateBackend).
-	if backend.NeedsCheckpoint() {
-		r, err := os.Open(statePath)
-		if err != nil {
-			return nil, nil, fmt.Errorf("cannot read the state file: %s", err)
-		}
-		defer r.Close()
-
-		span := timings.StartNested("read-state", "read state from disk")
-		s, err = state.ReadState(backend, r)
-		span.Stop()
-		if err != nil {
-			return nil, nil, err
-		}
-
-		timings.Stop()
-		// TODO Implement function to save timings.
-		//s.Lock()
-		//perfTimings.Save(s)
-		//s.Unlock()
-	} else {
-		// Create a new state for in-memory backend.
-		s = state.New(backend)
-		patch.Init(s)
+	span := timings.StartNested("read-state", "read state from disk")
+	s, err = state.ReadState(backend, r)
+	span.Stop()
+	if err != nil {
+		return nil, nil, err
 	}
+
+	timings.Stop()
+	// TODO Implement function to save timings.
+	//s.Lock()
+	//perfTimings.Save(s)
+	//s.Unlock()
+
+	restartMgr, err := initRestart(s, curBootID, restartHandler)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// one-shot migrations
+	err = patch.Apply(s)
+	if err != nil {
+		return nil, nil, err
+	}
+	return s, restartMgr, nil
+}
+
+func setupState(curBootID, statePath string, restartHandler restart.Handler, backend state.Backend) (*state.State, *restart.RestartManager, error) {
+	// Create a new state for in-memory backend.
+	s := state.New(backend)
+	patch.Init(s)
 
 	restartMgr, err := initRestart(s, curBootID, restartHandler)
 	if err != nil {
