@@ -31,6 +31,7 @@ import (
 	"github.com/canonical/pebble/internals/daemon"
 	"github.com/canonical/pebble/internals/idkey"
 	"github.com/canonical/pebble/internals/logger"
+	"github.com/canonical/pebble/internals/overlord"
 	"github.com/canonical/pebble/internals/plan"
 	"github.com/canonical/pebble/internals/reaper"
 	"github.com/canonical/pebble/internals/systemd"
@@ -202,13 +203,12 @@ func runDaemon(rcmd *cmdRun, ch chan os.Signal, ready chan<- func()) error {
 		IDSigner:     idSigner,
 		HTTPAddress:  rcmd.HTTP,
 		HTTPSAddress: rcmd.HTTPS,
-		Persist:      true,
 	}
 	if os.Getenv("PEBBLE_VERBOSE") == "1" || rcmd.Verbose {
 		dopts.ServiceOutput = os.Stdout
 	}
 	if os.Getenv("PEBBLE_PERSIST") == "never" {
-		dopts.Persist = false
+		dopts.Persist = overlord.PersistNever
 	}
 
 	d, err := daemon.New(&dopts)

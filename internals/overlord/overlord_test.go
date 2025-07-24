@@ -78,9 +78,7 @@ func (ovs *overlordSuite) TestNew(c *C) {
 	restore := patch.Fake(42, 2, nil)
 	defer restore()
 
-	o, err := overlord.New(&overlord.Options{PebbleDir: ovs.dir, Persist: true})
-	c.Assert(err, IsNil)
-	c.Check(o, NotNil)
+	o, _ := overlord.New(&overlord.Options{PebbleDir: ovs.dir})
 
 	c.Check(o.StateEngine(), NotNil)
 	c.Check(o.TaskRunner(), NotNil)
@@ -97,13 +95,16 @@ func (ovs *overlordSuite) TestNew(c *C) {
 	c.Check(patchLevel, Equals, 42)
 	s.Get("patch-sublevel", &patchSublevel)
 	c.Check(patchSublevel, Equals, 2)
+
+	_, err := os.Stat(ovs.statePath)
+	c.Assert(err, IsNil)
 }
 
 func (ovs *overlordSuite) TestNewInMemoryBackend(c *C) {
 	restore := patch.Fake(42, 2, nil)
 	defer restore()
 
-	o, err := overlord.New(&overlord.Options{PebbleDir: ovs.dir, Persist: false})
+	o, err := overlord.New(&overlord.Options{PebbleDir: ovs.dir, Persist: overlord.PersistNever})
 	c.Assert(err, IsNil)
 	c.Check(o, NotNil)
 
@@ -140,7 +141,7 @@ func (ovs *overlordSuite) TestNewWithGoodState(c *C) {
 	err := os.WriteFile(ovs.statePath, fakeState, 0600)
 	c.Assert(err, IsNil)
 
-	o, err := overlord.New(&overlord.Options{PebbleDir: ovs.dir, Persist: true})
+	o, err := overlord.New(&overlord.Options{PebbleDir: ovs.dir})
 	c.Assert(err, IsNil)
 	c.Check(o.RestartManager(), NotNil)
 
@@ -169,7 +170,7 @@ func (ovs *overlordSuite) TestNewWithInvalidState(c *C) {
 	err := os.WriteFile(ovs.statePath, fakeState, 0600)
 	c.Assert(err, IsNil)
 
-	_, err = overlord.New(&overlord.Options{PebbleDir: ovs.dir, Persist: true})
+	_, err = overlord.New(&overlord.Options{PebbleDir: ovs.dir})
 	c.Assert(err, ErrorMatches, "cannot read state: EOF")
 }
 
@@ -188,7 +189,7 @@ func (ovs *overlordSuite) TestNewWithPatches(c *C) {
 	err := os.WriteFile(ovs.statePath, fakeState, 0600)
 	c.Assert(err, IsNil)
 
-	o, err := overlord.New(&overlord.Options{PebbleDir: ovs.dir, Persist: true})
+	o, err := overlord.New(&overlord.Options{PebbleDir: ovs.dir})
 	c.Assert(err, IsNil)
 
 	state := o.State()
@@ -702,7 +703,7 @@ func (ovs *overlordSuite) TestCheckpoint(c *C) {
 	oldUmask := syscall.Umask(0)
 	defer syscall.Umask(oldUmask)
 
-	o, err := overlord.New(&overlord.Options{PebbleDir: ovs.dir, Persist: true})
+	o, err := overlord.New(&overlord.Options{PebbleDir: ovs.dir})
 	c.Assert(err, IsNil)
 
 	s := o.State()
@@ -1038,7 +1039,7 @@ func (ovs *overlordSuite) TestVerifyRebootIsMissing(c *C) {
 
 	rb := &testRestartHandler{}
 
-	_, err = overlord.New(&overlord.Options{PebbleDir: ovs.dir, RestartHandler: rb, Persist: true})
+	_, err = overlord.New(&overlord.Options{PebbleDir: ovs.dir, RestartHandler: rb})
 	c.Assert(err, IsNil)
 
 	c.Check(rb.rebootState, Equals, "did-not-happen")
@@ -1055,7 +1056,7 @@ func (ovs *overlordSuite) TestVerifyRebootIsMissingError(c *C) {
 	e := errors.New("boom")
 	rb := &testRestartHandler{rebootVerifiedErr: e}
 
-	_, err = overlord.New(&overlord.Options{PebbleDir: ovs.dir, RestartHandler: rb, Persist: true})
+	_, err = overlord.New(&overlord.Options{PebbleDir: ovs.dir, RestartHandler: rb})
 	c.Assert(err, Equals, e)
 
 	c.Check(rb.rebootState, Equals, "did-not-happen")

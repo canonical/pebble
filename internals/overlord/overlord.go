@@ -91,8 +91,15 @@ type Options struct {
 	// tlsstate.IDSigner interface (allowing it to sign digests).
 	IDSigner tlsstate.IDSigner
 	// Persist specifies whether the state should be persisted to disk.
-	Persist bool
+	Persist PersistMode
 }
+
+type PersistMode int
+
+const (
+	PersistDefault PersistMode = 0
+	PersistNever   PersistMode = 1
+)
 
 // Overlord is the central manager of the system, keeping track
 // of all available state managers and related helpers.
@@ -147,7 +154,7 @@ func New(opts *Options) (*Overlord, error) {
 
 	var backend state.Backend
 	var statePath string
-	if opts.Persist {
+	if opts.Persist == PersistDefault {
 		statePath = filepath.Join(o.pebbleDir, cmd.StateFile)
 		backend = &overlordStateBackend{
 			path:         statePath,

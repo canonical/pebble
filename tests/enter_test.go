@@ -26,39 +26,15 @@ import (
 
 func TestEnterExec(t *testing.T) {
 	pebbleDir := t.TempDir()
-
-	script := `
-#!/bin/sh
-echo "hello world"
-sleep 1.1
-	`
-	path := filepath.Join(pebbleDir, "test.sh")
-	err := os.WriteFile(path, []byte(script), 0755)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	stdoutCh, _ := pebbleDaemon(t, pebbleDir, "enter", "exec", "/bin/sh", "-c", path)
+	stdoutCh, _ := pebbleDaemon(t, pebbleDir, "enter", "exec", "/bin/sh", "-c", "echo 'hello world'; sleep 1.1")
 	waitForText(t, stdoutCh, "hello world", 3*time.Second)
 }
 
 func TestEnterExecVerboseEnabledByEnvVar(t *testing.T) {
 	t.Setenv("PEBBLE_VERBOSE", "1")
-
 	pebbleDir := t.TempDir()
 
-	script := `
-#!/bin/sh
-echo "hello world"
-sleep 1.1
-	`
-	path := filepath.Join(pebbleDir, "test.sh")
-	err := os.WriteFile(path, []byte(script), 0755)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	stdoutCh, stderrCh := pebbleDaemon(t, pebbleDir, "enter", "exec", "/bin/sh", "-c", path)
+	stdoutCh, stderrCh := pebbleDaemon(t, pebbleDir, "enter", "exec", "/bin/sh", "-c", "echo 'hello world'; sleep 1.1")
 	waitForText(t, stderrCh, "Started daemon", 3*time.Second)
 	waitForText(t, stderrCh, "POST /v1/exec", 3*time.Second)
 	waitForText(t, stdoutCh, "hello world", 3*time.Second)
@@ -70,21 +46,10 @@ func TestEnterPersistNever(t *testing.T) {
 	t.Setenv("PEBBLE_PERSIST", "never")
 	pebbleDir := t.TempDir()
 
-	script := `
-#!/bin/sh
-echo "hello world"
-sleep 1.1
-	`
-	path := filepath.Join(pebbleDir, "test.sh")
-	err := os.WriteFile(path, []byte(script), 0755)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	stdoutCh, _ := pebbleDaemon(t, pebbleDir, "enter", "exec", "/bin/sh", "-c", path)
+	stdoutCh, _ := pebbleDaemon(t, pebbleDir, "enter", "exec", "/bin/sh", "-c", "echo 'hello world'; sleep 0.1")
 	waitForText(t, stdoutCh, "hello world", 3*time.Second)
 
-	_, err = os.Stat(filepath.Join(pebbleDir, ".pebble.state"))
+	_, err := os.Stat(filepath.Join(pebbleDir, ".pebble.state"))
 	if err == nil {
 		t.Fatalf("pebble enter with PEBBLE_PERSIST set to 'never' still created the state file")
 	}

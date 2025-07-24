@@ -160,7 +160,7 @@ type Options struct {
 	OverlordExtension overlord.Extension
 
 	// Persist specifies whether the state should be persisted to disk.
-	Persist bool
+	Persist overlord.PersistMode
 }
 
 // A Daemon listens for requests and routes them to the right command
