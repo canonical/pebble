@@ -35,6 +35,7 @@ import (
 type Backend interface {
 	Checkpoint(data []byte) error
 	EnsureBefore(d time.Duration)
+	NeedsCheckpoint() bool
 }
 
 type customData map[string]*json.RawMessage
@@ -293,6 +294,11 @@ func (s *State) Unlocker() (unlock func() (relock func())) {
 func (s *State) Unlock() {
 	defer s.unlock()
 	if !s.modified || s.backend == nil {
+		return
+	}
+
+	if !s.backend.NeedsCheckpoint() {
+		s.modified = false
 		return
 	}
 
