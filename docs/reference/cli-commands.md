@@ -899,6 +899,8 @@ After the Pebble daemon starts, other Pebble commands may be used to interact wi
 
     This will only copy the contents if the target directory, `$PEBBLE`, is empty.
 
+* `PEBBLE_PERSIST` - To store the state only in memory without persisting it to a file under the `PEBBLE` directory, set the `PEBBLE_PERSIST` environment variable to "never".
+
 ### Arguments
 
 To provide additional arguments to a service, use `--args <service> <args> ...`. If the `command` field in the service's plan has a `[ <default-arguments...> ]` list, the `--args` arguments will replace the defaults. If not, they will be appended to the command.

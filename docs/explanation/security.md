@@ -14,7 +14,7 @@ For more information, see [](api-and-clients.md) and [](../how-to/manage-identit
 
 ## The Pebble directory
 
-Pebble stores its configuration, internal state, and Unix socket in the directory specified by the `PEBBLE` environment variable. If `$PEBBLE` is not set, Pebble uses the directory `/var/lib/pebble/default`.
+By default, Pebble stores its configuration, internal state, and Unix socket in the directory specified by the `PEBBLE` environment variable. If `$PEBBLE` is not set, Pebble uses the directory `/var/lib/pebble/default`.
 
 The `$PEBBLE` directory must be readable and writable by the UID of the pebble process. Make sure that no other UIDs can read or write to the $PEBBLE directory. You can do that with `chmod`, for example:
 
@@ -24,6 +24,7 @@ The `$PEBBLE` directory must be readable and writable by the UID of the pebble p
 
 The file `$PEBBLE/.pebble.state` contains the internal state of the Pebble daemon. You shouldn't try to edit this file or change its permissions.
 
+If `$PEBBLE_PERSIST` is set to "never", then Pebble will only keep the state in memory without persisting it to the file `$PEBBLE/.pebble.state`.
 
 ## Security updates
 
