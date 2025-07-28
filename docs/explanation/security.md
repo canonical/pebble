@@ -24,7 +24,7 @@ The `$PEBBLE` directory must be readable and writable by the UID of the pebble p
 
 The file `$PEBBLE/.pebble.state` contains the internal state of the Pebble daemon. You shouldn't try to edit this file or change its permissions.
 
-If `$PEBBLE_PERSIST` is set to "never", then Pebble will only keep the state in memory without persisting it to the file `$PEBBLE/.pebble.state`.
+If `$PEBBLE_PERSIST` is set to "never", then Pebble will only keep the state in memory without persisting it to the state file.
 
 ## Security updates
 
