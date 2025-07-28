@@ -170,12 +170,10 @@ func (ts *testSection) Combine(other plan.Section) error {
 		switch entry.Override {
 		case plan.MergeOverride:
 			if old, ok := ts.Entries[field]; ok {
-				copied := old.Copy()
-				copied.Merge(entry)
-				ts.Entries[field] = copied
-				break
+				old.Merge(entry)
+			} else {
+				ts.Entries[field] = entry.Copy()
 			}
-			fallthrough
 		case plan.ReplaceOverride:
 			ts.Entries[field] = entry.Copy()
 		case plan.UnknownOverride:
