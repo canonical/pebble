@@ -368,7 +368,6 @@ func newLogClient(target *plan.LogTarget) (logClient, error) {
 	switch target.Type {
 	case plan.LokiTarget:
 		return loki.NewClient(target), nil
-	//case plan.SyslogTarget: TODO
 	default:
 		return nil, fmt.Errorf("unknown type %q for log target %q", target.Type, target.Name)
 	}
