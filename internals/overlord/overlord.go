@@ -278,7 +278,7 @@ func (o *Overlord) Extension() Extension {
 func getCurrentBootID() (string, error) {
 	curBootID, err := osutil.BootID()
 	if err != nil {
-		return curBootID, fmt.Errorf("fatal: cannot find current boot ID: %v", err)
+		return "", fmt.Errorf("fatal: cannot find current boot ID: %v", err)
 	}
 	// If pebble is PID 1 we don't care about /proc/sys/kernel/random/boot_id
 	// as we are most likely running in a container. LXD mounts it's own boot_id
@@ -288,7 +288,7 @@ func getCurrentBootID() (string, error) {
 	if os.Getpid() == 1 {
 		curBootID, err = randutil.RandomKernelUUID()
 		if err != nil {
-			return curBootID, fmt.Errorf("fatal: cannot generate psuedo boot-id: %v", err)
+			return "", fmt.Errorf("fatal: cannot generate psuedo boot-id: %v", err)
 		}
 	}
 
