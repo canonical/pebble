@@ -16,6 +16,10 @@ This will only copy the contents if the target directory, `$PEBBLE`, is empty.
 
 If set to "1", debug logs will be printed to stderr.
 
+## PEBBLE_PERSIST
+
+If set to "never", Pebble will only keep the state in memory without persisting it to a file. If not set, or set any value other than "never", Pebble will persist its state to file `$PEBBLE/.pebble.state` (the default behaviour).
+
 ## PEBBLE_SOCKET
 
 Pebble socket path. Defaults to `$PEBBLE/.pebble.socket` if not specified, or `/var/lib/pebble/default/.pebble.socket` if `PEBBLE` is not set.

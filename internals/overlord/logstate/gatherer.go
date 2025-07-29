@@ -371,7 +371,6 @@ func newLogClient(target *plan.LogTarget) (logClient, error) {
 		return loki.NewClient(target), nil
 	case plan.OpenTelemetryTarget:
 		return opentelemetry.NewClient(target), nil
-	//case plan.SyslogTarget: TODO
 	default:
 		return nil, fmt.Errorf("unknown type %q for log target %q", target.Type, target.Name)
 	}

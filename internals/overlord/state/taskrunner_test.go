@@ -43,7 +43,9 @@ type stateBackend struct {
 	ensureBeforeSeen chan<- bool
 }
 
-func (b *stateBackend) Checkpoint([]byte) error { return nil }
+func (b *stateBackend) Checkpoint([]byte) error {
+	return nil
+}
 
 func (b *stateBackend) EnsureBefore(d time.Duration) {
 	b.mu.Lock()
@@ -54,6 +56,10 @@ func (b *stateBackend) EnsureBefore(d time.Duration) {
 	if b.ensureBeforeSeen != nil {
 		b.ensureBeforeSeen <- true
 	}
+}
+
+func (b *stateBackend) NeedsCheckpoint() bool {
+	return false
 }
 
 func ensureChange(c *C, r *state.TaskRunner, sb *stateBackend, chg *state.Change) {

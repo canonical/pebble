@@ -655,7 +655,6 @@ type LogTargetType string
 const (
 	LokiTarget          LogTargetType = "loki"
 	OpenTelemetryTarget LogTargetType = "opentelemetry"
-	SyslogTarget        LogTargetType = "syslog"
 	UnsetLogTarget      LogTargetType = ""
 )
 
@@ -741,12 +740,10 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 			switch service.Override {
 			case MergeOverride:
 				if old, ok := combined.Services[name]; ok {
-					copied := old.Copy()
-					copied.Merge(service)
-					combined.Services[name] = copied
-					break
+					old.Merge(service)
+				} else {
+					combined.Services[name] = service.Copy()
 				}
-				fallthrough
 			case ReplaceOverride:
 				combined.Services[name] = service.Copy()
 			case UnknownOverride:
@@ -766,12 +763,10 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 			switch check.Override {
 			case MergeOverride:
 				if old, ok := combined.Checks[name]; ok {
-					copied := old.Copy()
-					copied.Merge(check)
-					combined.Checks[name] = copied
-					break
+					old.Merge(check)
+				} else {
+					combined.Checks[name] = check.Copy()
 				}
-				fallthrough
 			case ReplaceOverride:
 				combined.Checks[name] = check.Copy()
 			case UnknownOverride:
@@ -791,12 +786,10 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 			switch target.Override {
 			case MergeOverride:
 				if old, ok := combined.LogTargets[name]; ok {
-					copied := old.Copy()
-					copied.Merge(target)
-					combined.LogTargets[name] = copied
-					break
+					old.Merge(target)
+				} else {
+					combined.LogTargets[name] = target.Copy()
 				}
-				fallthrough
 			case ReplaceOverride:
 				combined.LogTargets[name] = target.Copy()
 			case UnknownOverride:
@@ -988,14 +981,14 @@ func (layer *Layer) Validate() error {
 			}
 		}
 		switch target.Type {
-		case LokiTarget, OpenTelemetryTarget, SyslogTarget:
+		case LokiTarget, OpenTelemetryTarget:
 			// valid, continue
 		case UnsetLogTarget:
 			// will be checked when the layers are combined
 		default:
 			return &FormatError{
-				Message: fmt.Sprintf(`log target %q has unsupported type %q, must be %q, %q or %q`,
-					name, target.Type, LokiTarget, OpenTelemetryTarget, SyslogTarget),
+				Message: fmt.Sprintf(`log target %q has unsupported type %q, must be %q or %q`,
+					name, target.Type, LokiTarget, OpenTelemetryTarget),
 			}
 		}
 	}
@@ -1063,12 +1056,12 @@ func (p *Plan) Validate() error {
 
 	for name, target := range p.LogTargets {
 		switch target.Type {
-		case LokiTarget, SyslogTarget:
+		case LokiTarget:
 			// valid, continue
 		case UnsetLogTarget:
 			return &FormatError{
-				Message: fmt.Sprintf(`plan must define "type" (%q, %q or %q) for log target %q`,
-					LokiTarget, OpenTelemetryTarget, SyslogTarget, name),
+				Message: fmt.Sprintf(`plan must define "type" (%q or %q) for log target %q`,
+					LokiTarget, OpenTelemetryTarget, name),
 			}
 		}
 
