@@ -974,11 +974,6 @@ var planTests = []planTest{{
 				location: http://10.1.77.196:3100/loki/api/v1/push
 				services: [all]
 				override: merge
-			tgt2:
-				type: syslog
-				location: udp://0.0.0.0:514
-				services: [svc2]
-				override: merge
 `},
 	result: &plan.Layer{
 		Services: map[string]*plan.Service{
@@ -1010,13 +1005,6 @@ var planTests = []planTest{{
 				Services: []string{"all"},
 				Override: plan.MergeOverride,
 			},
-			"tgt2": {
-				Name:     "tgt2",
-				Type:     plan.SyslogTarget,
-				Location: "udp://0.0.0.0:514",
-				Services: []string{"svc2"},
-				Override: plan.MergeOverride,
-			},
 		},
 		Sections: map[string]plan.Section{},
 	},
@@ -1040,11 +1028,6 @@ var planTests = []planTest{{
 				services: [all]
 				override: merge
 			tgt2:
-				type: syslog
-				location: udp://0.0.0.0:514
-				services: [svc2]
-				override: merge
-			tgt3:
 				type: loki
 				location: http://10.1.77.206:3100/loki/api/v1/push
 				services: [all]
@@ -1064,12 +1047,7 @@ var planTests = []planTest{{
 				services: [-all, svc1]
 				override: merge
 			tgt2:
-				type: syslog
-				location: udp://1.2.3.4:514
-				services: []
-				override: replace
-			tgt3:
-				type: syslog
+				type: loki
 				location: udp://0.0.0.0:514
 				services: [-svc1]
 				override: merge
@@ -1102,13 +1080,6 @@ var planTests = []planTest{{
 			},
 			"tgt2": {
 				Name:     "tgt2",
-				Type:     plan.SyslogTarget,
-				Location: "udp://0.0.0.0:514",
-				Services: []string{"svc2"},
-				Override: plan.MergeOverride,
-			},
-			"tgt3": {
-				Name:     "tgt3",
 				Type:     plan.LokiTarget,
 				Location: "http://10.1.77.206:3100/loki/api/v1/push",
 				Services: []string{"all"},
@@ -1141,14 +1112,7 @@ var planTests = []planTest{{
 			},
 			"tgt2": {
 				Name:     "tgt2",
-				Type:     plan.SyslogTarget,
-				Location: "udp://1.2.3.4:514",
-				Services: []string{},
-				Override: plan.ReplaceOverride,
-			},
-			"tgt3": {
-				Name:     "tgt3",
-				Type:     plan.SyslogTarget,
+				Type:     plan.LokiTarget,
 				Location: "udp://0.0.0.0:514",
 				Services: []string{"-svc1"},
 				Override: plan.MergeOverride,
@@ -1188,13 +1152,7 @@ var planTests = []planTest{{
 			},
 			"tgt2": {
 				Name:     "tgt2",
-				Type:     plan.SyslogTarget,
-				Location: "udp://1.2.3.4:514",
-				Override: plan.ReplaceOverride,
-			},
-			"tgt3": {
-				Name:     "tgt3",
-				Type:     plan.SyslogTarget,
+				Type:     plan.LokiTarget,
 				Location: "udp://0.0.0.0:514",
 				Services: []string{"all", "-svc1"},
 				Override: plan.MergeOverride,
@@ -1204,7 +1162,7 @@ var planTests = []planTest{{
 	},
 }, {
 	summary: "Log target requires type field",
-	error:   `plan must define "type" \("loki" or "syslog"\) for log target "tgt1"`,
+	error:   `plan must define "type" \("loki"\) for log target "tgt1"`,
 	input: []string{`
 		log-targets:
 			tgt1:
@@ -1222,7 +1180,7 @@ var planTests = []planTest{{
 				override: merge
 `}}, {
 	summary: "Unsupported log target type",
-	error:   `log target "tgt1" has unsupported type "foobar", must be "loki" or "syslog"`,
+	error:   `log target "tgt1" has unsupported type "foobar", must be "loki"`,
 	input: []string{`
 		log-targets:
 			tgt1:

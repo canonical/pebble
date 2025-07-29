@@ -654,7 +654,6 @@ type LogTargetType string
 
 const (
 	LokiTarget     LogTargetType = "loki"
-	SyslogTarget   LogTargetType = "syslog"
 	UnsetLogTarget LogTargetType = ""
 )
 
@@ -981,14 +980,14 @@ func (layer *Layer) Validate() error {
 			}
 		}
 		switch target.Type {
-		case LokiTarget, SyslogTarget:
+		case LokiTarget:
 			// valid, continue
 		case UnsetLogTarget:
 			// will be checked when the layers are combined
 		default:
 			return &FormatError{
-				Message: fmt.Sprintf(`log target %q has unsupported type %q, must be %q or %q`,
-					name, target.Type, LokiTarget, SyslogTarget),
+				Message: fmt.Sprintf(`log target %q has unsupported type %q, must be %q`,
+					name, target.Type, LokiTarget),
 			}
 		}
 	}
@@ -1056,12 +1055,12 @@ func (p *Plan) Validate() error {
 
 	for name, target := range p.LogTargets {
 		switch target.Type {
-		case LokiTarget, SyslogTarget:
+		case LokiTarget:
 			// valid, continue
 		case UnsetLogTarget:
 			return &FormatError{
-				Message: fmt.Sprintf(`plan must define "type" (%q or %q) for log target %q`,
-					LokiTarget, SyslogTarget, name),
+				Message: fmt.Sprintf(`plan must define "type" (%q) for log target %q`,
+					LokiTarget, name),
 			}
 		}
 
