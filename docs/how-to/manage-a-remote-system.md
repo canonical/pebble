@@ -126,7 +126,7 @@ For more information about related Pebble commands, see:
 
 ## Run Pebble with a read-only file system
 
-Sometimes Pebble needs to be run in a remote system whose filesystem is read-only. For example, when Pebble is used in a Docker context with `docker run --read-only`, or in a Kubernetes context with `readOnlyRootFilesystem` set to true, mounting the container's root filesystem as read-only. In such cases, Pebble can not persist its state to the file `$PEBBLE/.pebble.state`.
+Sometimes Pebble needs to be run in a remote system whose filesystem is read-only. For example, when Pebble is used in a Docker context with `docker run --read-only`, or in a Kubernetes context with `readOnlyRootFilesystem` set to true, the container's root filesystem is mounted as read-only. In such cases, Pebble cannot persist its state to the state file.
 
 To run Pebble without persisting its state and only keep the state in memory, set the environment variable `PEBBLE_PERSIST` to "never". This ensures Pebble operates correctly with read-only filesystems while maintaining state temporarily in memory.
 
