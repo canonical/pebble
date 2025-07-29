@@ -6,6 +6,8 @@ When Pebble performs a (potentially invasive or long-running) operation such as 
 
 The daemon records this state in a JSON file on disk at `$PEBBLE/.pebble.state`.
 
+If the environment variable `PEBBLE_PERSIST` is set to "never", Pebble will only keep the state in memory without persisting it to a file.
+
 ## Commands
 
 - {ref}`reference_pebble_changes_command`

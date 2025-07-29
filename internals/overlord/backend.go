@@ -32,3 +32,25 @@ func (osb *overlordStateBackend) Checkpoint(data []byte) error {
 func (osb *overlordStateBackend) EnsureBefore(d time.Duration) {
 	osb.ensureBefore(d)
 }
+
+func (osb *overlordStateBackend) NeedsCheckpoint() bool {
+	return true
+}
+
+type inMemoryBackend struct {
+	ensureBefore func(d time.Duration)
+}
+
+// Checkpoint of the in-memory backend does nothing because
+// we're keeping the state in memory only.
+func (imb *inMemoryBackend) Checkpoint(data []byte) error {
+	panic("internal error: inMemoryBackend.Checkpoint should never be called")
+}
+
+func (imb *inMemoryBackend) EnsureBefore(d time.Duration) {
+	imb.ensureBefore(d)
+}
+
+func (imb *inMemoryBackend) NeedsCheckpoint() bool {
+	return false
+}

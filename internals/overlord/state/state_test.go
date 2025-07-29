@@ -226,6 +226,10 @@ func (b *fakeStateBackend) EnsureBefore(d time.Duration) {
 	b.ensureBefore = d
 }
 
+func (b *fakeStateBackend) NeedsCheckpoint() bool {
+	return true
+}
+
 func (ss *stateSuite) TestImplicitCheckpointAndRead(c *C) {
 	b := new(fakeStateBackend)
 	st := state.New(b)

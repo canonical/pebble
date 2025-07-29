@@ -90,7 +90,16 @@ type Options struct {
 	// instance (machine, container or device), which implements the
 	// tlsstate.IDSigner interface (allowing it to sign digests).
 	IDSigner tlsstate.IDSigner
+	// Persist specifies whether the state should be persisted to disk.
+	Persist PersistMode
 }
+
+type PersistMode int
+
+const (
+	PersistDefault PersistMode = 0
+	PersistNever   PersistMode = 1
+)
 
 // Overlord is the central manager of the system, keeping track
 // of all available state managers and related helpers.
@@ -143,15 +152,32 @@ func New(opts *Options) (*Overlord, error) {
 		return nil, fmt.Errorf("directory %q not writable", o.pebbleDir)
 	}
 
-	statePath := filepath.Join(o.pebbleDir, cmd.StateFile)
-
-	backend := &overlordStateBackend{
-		path:         statePath,
-		ensureBefore: o.ensureBefore,
-	}
-	s, restartMgr, err := loadState(statePath, opts.RestartHandler, backend)
+	curBootID, err := getCurrentBootID()
 	if err != nil {
 		return nil, err
+	}
+
+	var s *state.State
+	var restartMgr *restart.RestartManager
+	if opts.Persist == PersistDefault {
+		statePath := filepath.Join(o.pebbleDir, cmd.StateFile)
+		backend := &overlordStateBackend{
+			path:         statePath,
+			ensureBefore: o.ensureBefore,
+		}
+		s, restartMgr, err = loadState(curBootID, statePath, opts.RestartHandler, backend)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		// In-memory backend.
+		backend := &inMemoryBackend{
+			ensureBefore: o.ensureBefore,
+		}
+		s, restartMgr, err = setupState(curBootID, opts.RestartHandler, backend)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	o.stateEng = NewStateEngine(s)
@@ -249,12 +275,10 @@ func (o *Overlord) Extension() Extension {
 	return o.extension
 }
 
-func loadState(statePath string, restartHandler restart.Handler, backend state.Backend) (*state.State, *restart.RestartManager, error) {
-	timings := timing.Start("", "", map[string]string{"startup": "load-state"})
-
+func getCurrentBootID() (string, error) {
 	curBootID, err := osutil.BootID()
 	if err != nil {
-		return nil, nil, fmt.Errorf("fatal: cannot find current boot ID: %v", err)
+		return "", fmt.Errorf("fatal: cannot find current boot ID: %v", err)
 	}
 	// If pebble is PID 1 we don't care about /proc/sys/kernel/random/boot_id
 	// as we are most likely running in a container. LXD mounts it's own boot_id
@@ -264,9 +288,15 @@ func loadState(statePath string, restartHandler restart.Handler, backend state.B
 	if os.Getpid() == 1 {
 		curBootID, err = randutil.RandomKernelUUID()
 		if err != nil {
-			return nil, nil, fmt.Errorf("fatal: cannot generate psuedo boot-id: %v", err)
+			return "", fmt.Errorf("fatal: cannot generate psuedo boot-id: %v", err)
 		}
 	}
+
+	return curBootID, nil
+}
+
+func loadState(curBootID, statePath string, restartHandler restart.Handler, backend state.Backend) (*state.State, *restart.RestartManager, error) {
+	timings := timing.Start("", "", map[string]string{"startup": "load-state"})
 
 	if !osutil.CanStat(statePath) {
 		// fail fast, mostly interesting for tests, this dir is set up by pebble
@@ -301,6 +331,24 @@ func loadState(statePath string, restartHandler restart.Handler, backend state.B
 	//s.Lock()
 	//perfTimings.Save(s)
 	//s.Unlock()
+
+	restartMgr, err := initRestart(s, curBootID, restartHandler)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// one-shot migrations
+	err = patch.Apply(s)
+	if err != nil {
+		return nil, nil, err
+	}
+	return s, restartMgr, nil
+}
+
+func setupState(curBootID string, restartHandler restart.Handler, backend state.Backend) (*state.State, *restart.RestartManager, error) {
+	// Create a new state for in-memory backend.
+	s := state.New(backend)
+	patch.Init(s)
 
 	restartMgr, err := initRestart(s, curBootID, restartHandler)
 	if err != nil {
@@ -658,6 +706,10 @@ func (mb fakeBackend) EnsureBefore(d time.Duration) {
 	}
 
 	mb.o.ensureBefore(d)
+}
+
+func (mb fakeBackend) NeedsCheckpoint() bool {
+	return false
 }
 
 func (mb fakeBackend) RequestRestart(t restart.RestartType) {

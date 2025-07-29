@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"syscall"
@@ -77,7 +78,33 @@ func (ovs *overlordSuite) TestNew(c *C) {
 	restore := patch.Fake(42, 2, nil)
 	defer restore()
 
-	o, err := overlord.New(&overlord.Options{PebbleDir: ovs.dir})
+	o, _ := overlord.New(&overlord.Options{PebbleDir: ovs.dir})
+
+	c.Check(o.StateEngine(), NotNil)
+	c.Check(o.TaskRunner(), NotNil)
+	c.Check(o.RestartManager(), NotNil)
+
+	s := o.State()
+	c.Check(s, NotNil)
+	c.Check(o.Engine().State(), Equals, s)
+
+	s.Lock()
+	defer s.Unlock()
+	var patchLevel, patchSublevel int
+	s.Get("patch-level", &patchLevel)
+	c.Check(patchLevel, Equals, 42)
+	s.Get("patch-sublevel", &patchSublevel)
+	c.Check(patchSublevel, Equals, 2)
+
+	_, err := os.Stat(ovs.statePath)
+	c.Assert(err, IsNil)
+}
+
+func (ovs *overlordSuite) TestNewInMemoryBackend(c *C) {
+	restore := patch.Fake(42, 2, nil)
+	defer restore()
+
+	o, err := overlord.New(&overlord.Options{PebbleDir: ovs.dir, Persist: overlord.PersistNever})
 	c.Assert(err, IsNil)
 	c.Check(o, NotNil)
 
@@ -96,6 +123,9 @@ func (ovs *overlordSuite) TestNew(c *C) {
 	c.Check(patchLevel, Equals, 42)
 	s.Get("patch-sublevel", &patchSublevel)
 	c.Check(patchSublevel, Equals, 2)
+
+	_, err = os.Stat(ovs.statePath)
+	c.Check(errors.Is(err, fs.ErrNotExist), Equals, true)
 }
 
 func (ovs *overlordSuite) TestNewWithGoodState(c *C) {
