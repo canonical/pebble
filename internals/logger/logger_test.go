@@ -94,6 +94,14 @@ func (s *LogSuite) TestSecurityWarn(c *C) {
 	)
 }
 
+func (s *LogSuite) TestSecurityCritical(c *C) {
+	logger.SecurityCritical(logger.SecuritySysShutdown, "", "")
+	c.Check(s.logbuf.String(), Matches,
+		`20\d\d-\d\d-\d\dT\d\d:\d\d:\d\d.\d\d\dZ PREFIX: `+
+			`\{"type":"security","datetime":"2\d\d\d-\d\d-\d\dT\d\d:\d\d:\d\dZ","level":"CRITICAL","event":"sys_shutdown","appid":"pebble"\}\n`,
+	)
+}
+
 func (s *LogSuite) TestMockLoggerReadWriteThreadsafe(c *C) {
 	var t tomb.Tomb
 	t.Go(func() error {

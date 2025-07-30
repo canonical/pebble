@@ -78,14 +78,19 @@ func Debugf(format string, v ...any) {
 	logger.Debug(msg)
 }
 
+// SecurityInfo logs a security INFO event with the given arguments.
+func SecurityInfo(event SecurityEvent, arg, description string) {
+	securityEvent("INFO", event, arg, description)
+}
+
 // SecurityWarn logs a security WARN event with the given arguments.
 func SecurityWarn(event SecurityEvent, arg, description string) {
 	securityEvent("WARN", event, arg, description)
 }
 
-// SecurityInfo logs a security INFO event with the given arguments.
-func SecurityInfo(event SecurityEvent, arg, description string) {
-	securityEvent("INFO", event, arg, description)
+// SecurityCritical logs a security CRITICAL event with the given arguments.
+func SecurityCritical(event SecurityEvent, arg, description string) {
+	securityEvent("CRITICAL", event, arg, description)
 }
 
 func securityEvent(level string, event SecurityEvent, arg, description string) {

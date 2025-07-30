@@ -308,13 +308,19 @@ func (c *Command) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// We only proceed if we support the transport (we can identity it).
+	// We only proceed if we support the transport (we can identify it).
 	if !RequestTransportType(r).IsValid() {
 		Forbidden("forbidden").ServeHTTP(w, r)
 		return
 	}
 
 	if rspe := access.CheckAccess(c.d, r, user); rspe != nil {
+		if user != nil {
+			userStr := userString(user)
+			logger.SecurityCritical(logger.SecurityAuthzFail,
+				fmt.Sprintf("%s,%s", userStr, r.URL.Path),
+				fmt.Sprintf("User %s not authorized to access %s", userStr, r.URL.Path))
+		}
 		rspe.ServeHTTP(w, r)
 		return
 	}
