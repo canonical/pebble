@@ -16,6 +16,7 @@ package daemon
 
 import (
 	"net/http"
+	"strconv"
 
 	"github.com/gorilla/mux"
 
@@ -147,4 +148,17 @@ func v1SystemInfo(c *Command, r *http.Request, _ *UserState) Response {
 		Version:      c.d.Version,
 	}
 	return SyncResponse(result)
+}
+
+func userString(u *UserState) string {
+	if u == nil {
+		return "<unknown"
+	}
+	if u.Username != "" {
+		return u.Username
+	}
+	if u.UID != nil {
+		return strconv.Itoa(int(*u.UID))
+	}
+	return "<unknown>"
 }

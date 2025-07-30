@@ -20,6 +20,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/overlord/planstate"
 	"github.com/canonical/pebble/internals/plan"
 )
@@ -39,7 +40,7 @@ func v1GetPlan(c *Command, r *http.Request, _ *UserState) Response {
 	return SyncResponse(string(planYAML))
 }
 
-func v1PostLayers(c *Command, r *http.Request, _ *UserState) Response {
+func v1PostLayers(c *Command, r *http.Request, user *UserState) Response {
 	var payload struct {
 		Action  string `json:"action"`
 		Combine bool   `json:"combine"`
@@ -66,6 +67,8 @@ func v1PostLayers(c *Command, r *http.Request, _ *UserState) Response {
 	if err != nil {
 		return BadRequest("cannot parse layer YAML: %v", err)
 	}
+
+	logger.SecurityWarn(logger.SecurityAuthzAdmin, userString(user)+",add_layer", "Adding layer "+payload.Label)
 
 	planMgr := overlordPlanManager(c.d.overlord)
 	if payload.Combine {

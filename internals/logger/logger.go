@@ -79,21 +79,22 @@ func Debugf(format string, v ...any) {
 }
 
 // SecurityWarn logs a security WARN event with the given arguments.
-func SecurityWarn(event, arg, description string) {
+func SecurityWarn(event SecurityEvent, arg, description string) {
 	securityEvent("WARN", event, arg, description)
 }
 
 // SecurityInfo logs a security INFO event with the given arguments.
-func SecurityInfo(event, arg, description string) {
+func SecurityInfo(event SecurityEvent, arg, description string) {
 	securityEvent("INFO", event, arg, description)
 }
 
-func securityEvent(level, event, arg, description string) {
+func securityEvent(level string, event SecurityEvent, arg, description string) {
 	loggerLock.Lock()
 	defer loggerLock.Unlock()
 
+	eventWithArg := string(event)
 	if arg != "" {
-		event += ":" + arg
+		eventWithArg += ":" + arg
 	}
 	data := struct {
 		Type        string `json:"type"`
@@ -106,7 +107,7 @@ func securityEvent(level, event, arg, description string) {
 		Type:        "security",
 		DateTime:    time.Now().UTC().Format(time.RFC3339),
 		Level:       level,
-		Event:       event,
+		Event:       eventWithArg,
 		Description: description,
 		AppID:       appID,
 	}
@@ -118,6 +119,15 @@ func securityEvent(level, event, arg, description string) {
 	}
 	logger.Notice(string(logJSON))
 }
+
+type SecurityEvent string
+
+const (
+	SecurityAuthzAdmin  SecurityEvent = "authz_admin"
+	SecurityAuthzFail   SecurityEvent = "authz_fail"
+	SecuritySysStartup  SecurityEvent = "sys_startup"
+	SecuritySysShutdown SecurityEvent = "sys_shutdown"
+)
 
 // SetAppID sets the "appid" field used for security logging. The default is "pebble".
 func SetAppID(s string) {

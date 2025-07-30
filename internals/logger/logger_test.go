@@ -79,18 +79,18 @@ func (s *LogSuite) TestPanicf(c *C) {
 }
 
 func (s *LogSuite) TestSecurityInfo(c *C) {
-	logger.SecurityInfo("foo", "bar", "Description")
+	logger.SecurityInfo(logger.SecuritySysStartup, "bar", "Description")
 	c.Check(s.logbuf.String(), Matches,
 		`20\d\d-\d\d-\d\dT\d\d:\d\d:\d\d.\d\d\dZ PREFIX: `+
-			`\{"type":"security","datetime":"2\d\d\d-\d\d-\d\dT\d\d:\d\d:\d\dZ","level":"INFO","event":"foo:bar","description":"Description","appid":"pebble"\}\n`,
+			`\{"type":"security","datetime":"2\d\d\d-\d\d-\d\dT\d\d:\d\d:\d\dZ","level":"INFO","event":"sys_startup:bar","description":"Description","appid":"pebble"\}\n`,
 	)
 }
 
 func (s *LogSuite) TestSecurityWarn(c *C) {
-	logger.SecurityWarn("warnish", "", "")
+	logger.SecurityWarn(logger.SecuritySysShutdown, "", "")
 	c.Check(s.logbuf.String(), Matches,
 		`20\d\d-\d\d-\d\dT\d\d:\d\d:\d\d.\d\d\dZ PREFIX: `+
-			`\{"type":"security","datetime":"2\d\d\d-\d\d-\d\dT\d\d:\d\d:\d\dZ","level":"WARN","event":"warnish","appid":"pebble"\}\n`,
+			`\{"type":"security","datetime":"2\d\d\d-\d\d-\d\dT\d\d:\d\d:\d\dZ","level":"WARN","event":"sys_shutdown","appid":"pebble"\}\n`,
 	)
 }
 

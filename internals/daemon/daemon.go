@@ -193,8 +193,9 @@ type Daemon struct {
 
 // UserState represents the state of an authenticated API user.
 type UserState struct {
-	Access state.IdentityAccess
-	UID    *uint32
+	Access   state.IdentityAccess
+	UID      *uint32
+	Username string
 }
 
 // A ResponseFunc handles one of the individual verbs for a method
@@ -232,7 +233,7 @@ func userFromRequest(st *state.State, r *http.Request, ucred *Ucrednet, username
 	}
 	if identity.Basic != nil {
 		// Prioritize basic type (HTTP basic authentication) and ignore UID in this case.
-		return &UserState{Access: identity.Access}, nil
+		return &UserState{Access: identity.Access, Username: identity.Name}, nil
 	} else if identity.Local != nil {
 		return &UserState{Access: identity.Access, UID: userID}, nil
 	}
@@ -431,7 +432,7 @@ func exitOnPanic(handler http.Handler, stderr io.Writer, exit func()) http.Handl
 // Init sets up the Daemon's internal workings.
 // Don't call more than once.
 func (d *Daemon) Init() error {
-	logger.SecurityWarn("sys_startup", strconv.Itoa(os.Getuid()), "Starting daemon")
+	logger.SecurityWarn(logger.SecuritySysStartup, strconv.Itoa(os.Getuid()), "Starting daemon")
 
 	listenerMap := make(map[string]net.Listener)
 
@@ -651,7 +652,7 @@ var shutdownTimeout = time.Second
 
 // Stop shuts down the Daemon.
 func (d *Daemon) Stop(sigCh chan<- os.Signal) error {
-	logger.SecurityWarn("sys_shutdown", strconv.Itoa(os.Getuid()), "Shutting down daemon")
+	logger.SecurityWarn(logger.SecuritySysShutdown, strconv.Itoa(os.Getuid()), "Shutting down daemon")
 
 	if d.rebootIsMissing {
 		// we need to schedule/wait for a system restart again

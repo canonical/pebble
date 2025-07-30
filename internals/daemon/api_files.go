@@ -31,13 +31,14 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/osutil"
 	"github.com/canonical/pebble/internals/osutil/sys"
 )
 
 const minBoundaryLength = 32
 
-func v1GetFiles(_ *Command, req *http.Request, _ *UserState) Response {
+func v1GetFiles(_ *Command, req *http.Request, user *UserState) Response {
 	query := req.URL.Query()
 	action := query.Get("action")
 	switch action {
@@ -49,7 +50,7 @@ func v1GetFiles(_ *Command, req *http.Request, _ *UserState) Response {
 		if req.Header.Get("Accept") != "multipart/form-data" {
 			return BadRequest(`must accept multipart/form-data`)
 		}
-		return readFilesResponse{paths: paths}
+		return readFilesResponse{paths: paths, user: user}
 	case "list":
 		path := query.Get("path")
 		if path == "" {
@@ -76,6 +77,7 @@ type fileResult struct {
 // Custom Response implementation to serve the multipart.
 type readFilesResponse struct {
 	paths []string
+	user  *UserState
 }
 
 func (r readFilesResponse) ServeHTTP(w http.ResponseWriter, req *http.Request) {
@@ -89,6 +91,7 @@ func (r readFilesResponse) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	// Read each file's contents to multipart response.
 	result := make([]fileResult, len(r.paths))
 	for i, path := range r.paths {
+		logger.SecurityWarn(logger.SecurityAuthzAdmin, userString(r.user)+",pull_file", "Pulling file "+path)
 		err := readFile(path, mw)
 		result[i] = fileResult{
 			Path:  path,
@@ -341,7 +344,7 @@ func listFiles(path, pattern string, itself bool) ([]fileInfoResult, error) {
 	return result, nil
 }
 
-func v1PostFiles(_ *Command, req *http.Request, _ *UserState) Response {
+func v1PostFiles(_ *Command, req *http.Request, user *UserState) Response {
 	contentType := req.Header.Get("Content-Type")
 	mediaType, params, err := mime.ParseMediaType(contentType)
 	if err != nil {
@@ -354,7 +357,7 @@ func v1PostFiles(_ *Command, req *http.Request, _ *UserState) Response {
 		if len(boundary) < minBoundaryLength {
 			return BadRequest("invalid boundary %q", boundary)
 		}
-		return writeFiles(req.Body, boundary)
+		return writeFiles(req.Body, boundary, user)
 	case "application/json":
 		var payload struct {
 			Action string            `json:"action"`
@@ -392,7 +395,7 @@ type writeFilesItem struct {
 	Group       string `json:"group"`
 }
 
-func writeFiles(body io.Reader, boundary string) Response {
+func writeFiles(body io.Reader, boundary string, user *UserState) Response {
 	// Read metadata part (field name "request").
 	mr := multipart.NewReader(body, boundary)
 	part, err := mr.NextPart()
@@ -440,6 +443,7 @@ func writeFiles(body io.Reader, boundary string) Response {
 		if !ok {
 			return BadRequest("no metadata for path %q", path)
 		}
+		logger.SecurityWarn(logger.SecurityAuthzAdmin, userString(user)+",push_file", "Pushing file +"+path)
 		errors[path] = writeFile(info, part)
 		part.Close()
 	}
