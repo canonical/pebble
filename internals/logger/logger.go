@@ -16,6 +16,7 @@ package logger
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -25,6 +26,10 @@ import (
 
 const (
 	timestampFormat = "2006-01-02T15:04:05.000Z07:00"
+)
+
+var (
+	appID = "pebble"
 )
 
 // A Logger is a fairly minimal logging tool.
@@ -71,6 +76,52 @@ func Debugf(format string, v ...any) {
 	defer loggerLock.Unlock()
 	msg := fmt.Sprintf(format, v...)
 	logger.Debug(msg)
+}
+
+// SecurityWarn logs a security WARN event with the given arguments.
+func SecurityWarn(event, arg, description string) {
+	securityEvent("WARN", event, arg, description)
+}
+
+// SecurityInfo logs a security INFO event with the given arguments.
+func SecurityInfo(event, arg, description string) {
+	securityEvent("INFO", event, arg, description)
+}
+
+func securityEvent(level, event, arg, description string) {
+	loggerLock.Lock()
+	defer loggerLock.Unlock()
+
+	if arg != "" {
+		event += ":" + arg
+	}
+	data := struct {
+		Type        string `json:"type"`
+		DateTime    string `json:"datetime"`
+		Level       string `json:"level"`
+		Event       string `json:"event"`
+		Description string `json:"description,omitempty"`
+		AppID       string `json:"appid"`
+	}{
+		Type:        "security",
+		DateTime:    time.Now().UTC().Format(time.RFC3339),
+		Level:       level,
+		Event:       event,
+		Description: description,
+		AppID:       appID,
+	}
+
+	logJSON, err := json.Marshal(data)
+	if err != nil {
+		// Should never happen, and not much more we can do here.
+		return
+	}
+	logger.Notice(string(logJSON))
+}
+
+// SetAppID sets the "appid" field used for security logging. The default is "pebble".
+func SetAppID(s string) {
+	appID = s
 }
 
 type lockedBytesBuffer struct {
