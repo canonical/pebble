@@ -28,6 +28,7 @@ import (
 	"os/signal"
 	"runtime"
 	"runtime/debug"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -430,6 +431,8 @@ func exitOnPanic(handler http.Handler, stderr io.Writer, exit func()) http.Handl
 // Init sets up the Daemon's internal workings.
 // Don't call more than once.
 func (d *Daemon) Init() error {
+	logger.SecurityWarn("sys_startup", strconv.Itoa(os.Getuid()), "Starting daemon")
+
 	listenerMap := make(map[string]net.Listener)
 
 	if listener, err := getListener(d.options.SocketPath, listenerMap); err == nil {
@@ -648,6 +651,8 @@ var shutdownTimeout = time.Second
 
 // Stop shuts down the Daemon.
 func (d *Daemon) Stop(sigCh chan<- os.Signal) error {
+	logger.SecurityWarn("sys_shutdown", strconv.Itoa(os.Getuid()), "Shutting down daemon")
+
 	if d.rebootIsMissing {
 		// we need to schedule/wait for a system restart again
 		return d.doReboot(sigCh, rebootRetryWaitTimeout)
