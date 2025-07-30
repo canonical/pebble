@@ -27,8 +27,8 @@ import (
 
 	. "gopkg.in/check.v1"
 
+	"github.com/canonical/pebble/cmd"
 	"github.com/canonical/pebble/internals/overlord/logstate/opentelemetry"
-	"github.com/canonical/pebble/internals/plan"
 	"github.com/canonical/pebble/internals/servicelog"
 )
 
@@ -83,110 +83,89 @@ func (*suite) TestRequest(c *C) {
 {"resourceLogs": [
 	{
 		"resource": {
-			"attributes": [{"key": "service.name", "value": {"stringValue": "svc1"}}]
+			"attributes": null
 		},
-		"scope_logs": [{
-			"scope": {"name": "pebble", "version": "v1.23.0-dev"},
-			"log_records": [
+		"scopeLogs": [{
+			"scope": {"name": "pebble"},
+			"logRecords": [
 				{
-					"timeUnixNano": 1704026090000000000,
-					"severityText": "",
-					"severityNumber": 0,
+					"timeUnixNano": "1704026090000000000",
 					"body": {"stringValue": "log line #1"}
 				},
 				{
-					"timeUnixNano": 1704026092000000000,
-					"severityText": "",
-					"severityNumber": 0,
+					"timeUnixNano": "1704026092000000000",
 					"body": {"stringValue": "log line #3"}
 				},
 				{
-					"timeUnixNano": 1704026094000000000,
-					"severityText": "",
-					"severityNumber": 0,
+					"timeUnixNano": "1704026094000000000",
 					"body": {"stringValue": "log line #5"}
 				},
 				{
-					"timeUnixNano": 1704026097000000000,
-					"severityText": "",
-					"severityNumber": 0,
+					"timeUnixNano": "1704026097000000000",
 					"body": {"stringValue": "log line #8"}
 				}
 			]
 		}]
 	},{
 		"resource": {
-			"attributes": [{"key": "service.name", "value": {"stringValue": "svc2"}}]
+			"attributes": null
 		},
-		"scope_logs": [{
-			"scope": {"name": "pebble", "version": "v1.23.0-dev"},
-			"log_records": [
+		"scopeLogs": [{
+			"scope": {"name": "pebble"},
+			"logRecords": [
 				{
-					"timeUnixNano": 1704026091000000000,
-					"severityText": "",
-					"severityNumber": 0,
+					"timeUnixNano": "1704026091000000000",
 					"body": {"stringValue": "log line #2"}
 				},
 				{
-					"timeUnixNano": 1704026096000000000,
-					"severityText": "",
-					"severityNumber": 0,
+					"timeUnixNano": "1704026096000000000",
 					"body": {"stringValue": "log line #7"}
 				}
 			]
 		}]
 	},{
 		"resource": {
-			"attributes": [{"key": "service.name", "value": {"stringValue": "svc3"}}]
+			"attributes": null
 		},
-		"scope_logs": [{
-			"scope": {"name": "pebble", "version": "v1.23.0-dev"},
-			"log_records": [
+		"scopeLogs": [{
+			"scope": {"name": "pebble"},
+			"logRecords": [
 				{
-					"timeUnixNano": 1704026093000000000,
-					"severityText": "",
-					"severityNumber": 0,
+					"timeUnixNano": "1704026093000000000",
 					"body": {"stringValue": "log line #4"}
 				},
 				{
-					"timeUnixNano": 1704026095000000000,
-					"severityText": "",
-					"severityNumber": 0,
+					"timeUnixNano": "1704026095000000000",
 					"body": {"stringValue": "log line #6"}
 				}
 			]
 		}]
 	},{
 		"resource": {
-			"attributes": [{"key": "service.name", "value": {"stringValue": "svc4"}}]
+			"attributes": null
 		},
-		"scope_logs": [{
-			"scope": {"name": "pebble", "version": "v1.23.0-dev"},
-			"log_records": [{
-				"timeUnixNano": 1704026098000000000,
-				"severityText": "",
-				"severityNumber": 0,
+		"scopeLogs": [{
+			"scope": {"name": "pebble"},
+			"logRecords": [{
+				"timeUnixNano": "1704026098000000000",
 				"body": {"stringValue": "log line #9"}
 			}]
 		}]
 	}
 ]}`)
-
+	numRequests := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		c.Assert(r.Method, Equals, http.MethodPost)
 		c.Assert(r.Header.Get("Content-Type"), Equals, "application/json")
-
+		c.Assert(r.Header.Get("User-Agent"), Equals, fmt.Sprintf("pebble/%s", cmd.Version))
+		numRequests++
 		reqBody, err := io.ReadAll(r.Body)
 		c.Assert(err, IsNil)
 		c.Assert(string(reqBody), DeepEquals, string(expected))
 	}))
 	defer server.Close()
 
-	client := opentelemetry.NewClient(&plan.LogTarget{Location: server.URL})
-	client.SetLabels("svc1", map[string]string{})
-	client.SetLabels("svc2", map[string]string{})
-	client.SetLabels("svc3", map[string]string{})
-	client.SetLabels("svc4", map[string]string{})
+	client := opentelemetry.NewClient(&opentelemetry.ClientOptions{Location: server.URL})
 	for _, entry := range input {
 		err := client.Add(entry)
 		c.Assert(err, IsNil)
@@ -194,6 +173,7 @@ func (*suite) TestRequest(c *C) {
 
 	err := client.Flush(context.Background())
 	c.Assert(err, IsNil)
+	c.Assert(numRequests, Equals, 1)
 }
 
 func (*suite) TestFlushCancelContext(c *C) {
@@ -208,7 +188,7 @@ func (*suite) TestFlushCancelContext(c *C) {
 	defer server.Close()
 	defer killServer()
 
-	client := opentelemetry.NewClient(&plan.LogTarget{Location: server.URL})
+	client := opentelemetry.NewClient(&opentelemetry.ClientOptions{Location: server.URL})
 	err := client.Add(servicelog.Entry{
 		Time:    time.Now(),
 		Service: "svc1",
@@ -243,12 +223,10 @@ func (*suite) TestServerTimeout(c *C) {
 	defer server.Close()
 	defer close(stopRequest)
 
-	client := opentelemetry.NewClientWithOptions(
-		&plan.LogTarget{Location: server.URL},
-		&opentelemetry.ClientOptions{
-			RequestTimeout: 1 * time.Microsecond,
-		},
-	)
+	client := opentelemetry.NewClient(&opentelemetry.ClientOptions{
+		Location:       server.URL,
+		RequestTimeout: 1 * time.Microsecond,
+	})
 	err := client.Add(servicelog.Entry{
 		Time:    time.Now(),
 		Service: "svc1",
@@ -261,15 +239,11 @@ func (*suite) TestServerTimeout(c *C) {
 }
 
 func (*suite) TestBufferFull(c *C) {
-	client := opentelemetry.NewClientWithOptions(
-		&plan.LogTarget{
-			Name:     "tgt1",
-			Location: "fake",
-		},
-		&opentelemetry.ClientOptions{
-			MaxRequestEntries: 3,
-		},
-	)
+	client := opentelemetry.NewClient(&opentelemetry.ClientOptions{
+		TargetName:        "tgt1",
+		Location:          "fake",
+		MaxRequestEntries: 3,
+	})
 
 	addEntry := func(s string) {
 		err := client.Add(servicelog.Entry{Message: s})
@@ -326,12 +300,7 @@ func (*suite) TestLabels(c *C) {
 	}))
 	defer server.Close()
 
-	client := opentelemetry.NewClientWithOptions(
-		&plan.LogTarget{
-			Location: server.URL,
-		},
-		&opentelemetry.ClientOptions{},
-	)
+	client := opentelemetry.NewClient(&opentelemetry.ClientOptions{Location: server.URL})
 
 	client.SetLabels("svc1", map[string]string{
 		"label1": "val1",
@@ -354,12 +323,10 @@ func (*suite) TestLabels(c *C) {
 			{"key": "label2", "value": {"stringValue": "val2"}}
 		]
 	},
-	"scope_logs": [{
-		"scope": {"name": "pebble", "version": "v1.23.0-dev"},
-		"log_records": [{
-			"timeUnixNano": 1696306833000000000,
-			"severityText": "",
-			"severityNumber": 0,
+	"scopeLogs": [{
+		"scope": {"name": "pebble"},
+		"logRecords": [{
+			"timeUnixNano": "1696306833000000000",
 			"body": {"stringValue": "hello"}
 		}]
 	}]

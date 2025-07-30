@@ -1056,7 +1056,7 @@ func (p *Plan) Validate() error {
 
 	for name, target := range p.LogTargets {
 		switch target.Type {
-		case LokiTarget:
+		case LokiTarget, OpenTelemetryTarget:
 			// valid, continue
 		case UnsetLogTarget:
 			return &FormatError{

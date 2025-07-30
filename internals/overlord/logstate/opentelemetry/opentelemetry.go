@@ -20,7 +20,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"sort"
 	"strings"
@@ -28,76 +27,63 @@ import (
 
 	"github.com/canonical/pebble/cmd"
 	"github.com/canonical/pebble/internals/logger"
-	"github.com/canonical/pebble/internals/plan"
 	"github.com/canonical/pebble/internals/servicelog"
 )
 
 const (
 	requestTimeout    = 10 * time.Second
 	maxRequestEntries = 100
-	batchSize         = 10
 )
 
 // A collection of ScopeLogs from a Resource.
 // Refer to `type ResourceLogs struct` in
-// opentelemetry-collector/pdata/internal/data/protogen/logs/v1/logs.pb.go
-type ResourceLogs struct {
+// https://github.com/open-telemetry/opentelemetry-collector/blob/3c0fd3946f70a0b1fa97813c39dbc4d91d95afa6/pdata/internal/data/protogen/logs/v1/logs.pb.go#L223
+type resourceLogs struct {
 	// The resource for the logs in this message.
 	// If this field is not set then resource info is unknown.
-	Resource Resource `json:"resource"`
+	Resource resource `json:"resource"`
 	// A list of ScopeLogs that originate from a resource.
-	ScopeLogs []*ScopeLogs `json:"scope_logs,omitempty"`
+	ScopeLogs []*scopeLogs `json:"scopeLogs,omitempty"`
 }
 
 // Resource information, partially from 'type Resource struct' in
-// opentelemetry-collector/pdata/internal/data/protogen/resource/v1/resource.pb.go
-type Resource struct {
-	Attributes []KeyValue `json:"attributes"`
+// https://github.com/open-telemetry/opentelemetry-collector/blob/3c0fd3946f70a0b1fa97813c39dbc4d91d95afa6/pdata/internal/data/protogen/resource/v1/resource.pb.go#L30
+type resource struct {
+	Attributes []keyValue `json:"attributes"`
 }
 
-type KeyValue struct {
-	Key   string         `json:"key"`
-	Value AttributeValue `json:"value"`
+// keyValue is a key-value pair that stores	attributes.
+// from 'type KeyValue struct' in
+// https://github.com/open-telemetry/opentelemetry-collector/blob/3c0fd3946f70a0b1fa97813c39dbc4d91d95afa6/pdata/internal/data/protogen/common/v1/common.pb.go#L286
+type keyValue struct {
+	Key   string   `json:"key,omitempty"`
+	Value anyValue `json:"value"`
 }
 
-// AttributeValue represents the OTLP attribute value format.
+// anyValue represents the OTLP attribute value format.
 // Refer to `type AnyValue struct` in
-// opentelemetry-collector/pdata/internal/data/protogen/common/v1/common.pb.go
-type AttributeValue struct {
-	StringValue *string      `json:"stringValue,omitempty"`
-	BoolValue   *bool        `json:"boolValue,omitempty"`
-	IntValue    *int64       `json:"intValue,omitempty"`
-	DoubleValue *float64     `json:"doubleValue,omitempty"`
-	ArrayValue  *ArrayValue  `json:"arrayValue,omitempty"`
-	KvlistValue *KvlistValue `json:"kvlistValue,omitempty"`
-	BytesValue  []byte       `json:"bytesValue,omitempty"`
-}
-
-type ArrayValue struct {
-	Values []AttributeValue `json:"values"`
-}
-
-type KvlistValue struct {
-	Values []KeyValue `json:"values"`
+// https://github.com/open-telemetry/opentelemetry-collector/blob/3c0fd3946f70a0b1fa97813c39dbc4d91d95afa6/pdata/internal/data/protogen/common/v1/common.pb.go#L31
+type anyValue struct {
+	StringValue *string `json:"stringValue,omitempty"`
 }
 
 // A collection of Logs produced by a Scope.
 // Refer to `type ScopeLogs struct` in
-// opentelemetry-collector/pdata/internal/data/protogen/logs/v1/logs.pb.go
-type ScopeLogs struct {
+// https://github.com/open-telemetry/opentelemetry-collector/blob/3c0fd3946f70a0b1fa97813c39dbc4d91d95afa6/pdata/internal/data/protogen/logs/v1/logs.pb.go#L301
+type scopeLogs struct {
 	// The instrumentation scope information for the logs in this message.
 	// Semantically when InstrumentationScope isn't set, it is equivalent with
 	// an empty instrumentation scope name (unknown).
-	Scope Scope `json:"scope"`
+	Scope instrumentationScope `json:"scope"`
 	// A list of log records.
-	LogRecords []*LogRecord `json:"log_records,omitempty"`
+	LogRecords []*logRecord `json:"logRecords,omitempty"`
 }
 
-// Scope is a message representing the instrumentation scope information
+// instrumentationScope is a message representing the instrumentation scope information
 // such as the fully qualified name and version.
 // Refer to `type InstrumentationScope struct` in
-// opentelemetry-collector/pdata/internal/data/protogen/common/v1/common.pb.go
-type Scope struct {
+// https://github.com/open-telemetry/opentelemetry-collector/blob/3c0fd3946f70a0b1fa97813c39dbc4d91d95afa6/pdata/internal/data/protogen/common/v1/common.pb.go#L340
+type instrumentationScope struct {
 	Name    string `json:"name"`
 	Version string `json:"version,omitempty"`
 }
@@ -105,31 +91,30 @@ type Scope struct {
 // A log record according to OpenTelemetry Log Data Model:
 // https://github.com/open-telemetry/oteps/blob/main/text/logs/0097-log-data-model.md
 // Refer to `type LogRecord struct` in
-// opentelemetry-collector/pdata/internal/data/protogen/logs/v1/logs.pb.go
-type LogRecord struct {
+// https://github.com/open-telemetry/opentelemetry-collector/blob/3c0fd3946f70a0b1fa97813c39dbc4d91d95afa6/pdata/internal/data/protogen/logs/v1/logs.pb.go#L372
+type logRecord struct {
 	// time_unix_nano is the time when the event occurred.
 	// Value is UNIX Epoch time in nanoseconds since 00:00:00 UTC on 1 January 1970.
 	// Value of 0 indicates unknown or missing timestamp.
-	TimeUnixNano uint64 `json:"timeUnixNano"`
-	// The severity text (also known as log level). The original string representation as
-	// it is known at the source. [Optional].
-	SeverityText string `json:"severityText"`
+	TimeUnixNano string `json:"timeUnixNano"`
 	// Numerical value of the severity, normalized to values described in Log Data Model.
 	// [Optional].
-	SeverityNumber int `json:"severityNumber"`
+	SeverityNumber int `json:"severityNumber,omitempty"`
+	// The severity text (also known as log level). The original string representation as
+	// it is known at the source. [Optional].
+	SeverityText string `json:"severityText,omitempty"`
 	// A value containing the body of the log record. Can be for example a human-readable
 	// string message (including multi-line) describing the event in a free form or it can
 	// be a structured data composed of arrays and maps of other values. [Optional].
-	Body AttributeValue `json:"body"`
+	Body anyValue `json:"body"`
 	// Additional attributes that describe the specific event occurrence. [Optional].
 	// Attribute keys MUST be unique (it is not allowed to have more than one
 	// attribute with the same key).
-	Attributes []KeyValue `json:"attributes,omitempty"`
+	Attributes []keyValue `json:"attributes,omitempty"`
 }
 
 type Client struct {
 	options    *ClientOptions
-	target     *plan.LogTarget
 	httpClient *http.Client
 
 	// To store log entries, keep a buffer of size 2*MaxRequestEntries with a
@@ -138,32 +123,28 @@ type Client struct {
 	entries []otelEntryWithService
 
 	// Store the custom labels for each service (resource attributes in OTEL).
-	resourceAttributes map[string][]KeyValue
+	resourceAttributes map[string][]keyValue
 }
 
-func NewClient(target *plan.LogTarget) *Client {
-	return NewClientWithOptions(target, &ClientOptions{})
+func NewClient(options *ClientOptions) *Client {
+	options = fillDefaultOptions(options)
+	c := &Client{
+		options:            options,
+		httpClient:         &http.Client{Timeout: options.RequestTimeout},
+		buffer:             make([]otelEntryWithService, 2*options.MaxRequestEntries),
+		resourceAttributes: make(map[string][]keyValue),
+	}
+	// c.entries should be backed by the same array as c.buffer.
+	c.entries = c.buffer[:0]
+	return c
 }
 
 // ClientOptions allows overriding default parameters (e.g. for testing).
 type ClientOptions struct {
 	RequestTimeout    time.Duration
 	MaxRequestEntries int
-	BatchSize         int
-}
-
-func NewClientWithOptions(target *plan.LogTarget, options *ClientOptions) *Client {
-	options = fillDefaultOptions(options)
-	c := &Client{
-		options:            options,
-		target:             target,
-		httpClient:         &http.Client{Timeout: options.RequestTimeout},
-		buffer:             make([]otelEntryWithService, 2*options.MaxRequestEntries),
-		resourceAttributes: make(map[string][]KeyValue),
-	}
-	// c.entries should be backed by the same array as c.buffer.
-	c.entries = c.buffer[:0]
-	return c
+	TargetName        string
+	Location          string
 }
 
 func fillDefaultOptions(options *ClientOptions) *ClientOptions {
@@ -172,9 +153,6 @@ func fillDefaultOptions(options *ClientOptions) *ClientOptions {
 	}
 	if options.MaxRequestEntries == 0 {
 		options.MaxRequestEntries = maxRequestEntries
-	}
-	if options.BatchSize == 0 {
-		options.BatchSize = batchSize
 	}
 	return options
 }
@@ -186,19 +164,27 @@ func (c *Client) SetLabels(serviceName string, attributes map[string]string) {
 		return
 	}
 
-	// Convert attributes to KeyValue format.
-	keyValuePairs := make([]KeyValue, 0, len(attributes)+1)
+	// Convert attributes to keyValue format.
+	keyValuePairs := make([]keyValue, 0, len(attributes)+1)
 
 	// Add service.name attribute.
-	keyValuePairs = append(keyValuePairs, KeyValue{
+	keyValuePairs = append(keyValuePairs, keyValue{
 		Key:   "service.name",
-		Value: AttributeValue{StringValue: &serviceName},
+		Value: anyValue{StringValue: &serviceName},
 	})
 
-	for k, v := range attributes {
-		keyValuePairs = append(keyValuePairs, KeyValue{
+	// Sort other labels to ensure deterministic order.
+	keys := make([]string, 0, len(attributes))
+	for k := range attributes {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	for _, k := range keys {
+		v := attributes[k]
+		keyValuePairs = append(keyValuePairs, keyValue{
 			Key:   k,
-			Value: AttributeValue{StringValue: &v},
+			Value: anyValue{StringValue: &v},
 		})
 	}
 
@@ -233,14 +219,17 @@ func (c *Client) Add(entry servicelog.Entry) error {
 	return nil
 }
 
-func encodeEntry(entry servicelog.Entry) LogRecord {
+func encodeEntry(entry servicelog.Entry) logRecord {
 	message := strings.TrimSuffix(entry.Message, "\n")
 
-	return LogRecord{
-		TimeUnixNano: uint64(entry.Time.UnixNano()),
-		Body:         AttributeValue{StringValue: &message},
-		Attributes:   []KeyValue{},
+	return logRecord{
+		TimeUnixNano: fmt.Sprintf("%d", entry.Time.UnixNano()),
+		Body:         anyValue{StringValue: &message},
 	}
+}
+
+type payload struct {
+	ResourceLogs []resourceLogs `json:"resourceLogs"`
 }
 
 // Flush sends the buffered logs to the OpenTelemetry collector.
@@ -250,7 +239,7 @@ func (c *Client) Flush(ctx context.Context) error {
 	}
 
 	// Group entries by service.
-	serviceBatches := make(map[string][]*LogRecord)
+	serviceBatches := make(map[string][]*logRecord)
 	for _, otelEntryWithService := range c.entries {
 		serviceName := otelEntryWithService.service
 		logRecord := &otelEntryWithService.entry
@@ -264,37 +253,34 @@ func (c *Client) Flush(ctx context.Context) error {
 	// Sort service names to ensure deterministic order.
 	sort.Strings(serviceNames)
 
-	resourceLogs := make([]ResourceLogs, 0, len(serviceNames))
+	logs := make([]resourceLogs, 0, len(serviceNames))
 	for _, serviceName := range serviceNames {
 		batch := serviceBatches[serviceName]
 		if len(batch) > 0 {
 			resourceAttributes := c.resourceAttributes[serviceName]
-			resource := Resource{
+			resource := resource{
 				Attributes: resourceAttributes,
 			}
-			scope := Scope{
-				Name:    "pebble",
-				Version: cmd.Version,
-			}
-			scopeLogs := []*ScopeLogs{
+			scope := instrumentationScope{Name: "pebble"}
+			scopeLogs := []*scopeLogs{
 				{
 					Scope:      scope,
 					LogRecords: batch,
 				},
 			}
-			resourceLogs = append(resourceLogs, ResourceLogs{
+			logs = append(logs, resourceLogs{
 				Resource:  resource,
 				ScopeLogs: scopeLogs,
 			})
 		}
 	}
 
-	if len(resourceLogs) == 0 {
+	if len(logs) == 0 {
 		return nil
 	}
 
-	payload := map[string]any{
-		"resourceLogs": resourceLogs,
+	payload := payload{
+		ResourceLogs: logs,
 	}
 
 	resp, err := c.sendBatch(ctx, payload)
@@ -305,13 +291,13 @@ func (c *Client) Flush(ctx context.Context) error {
 	return c.handleServerResponse(resp)
 }
 
-func (c *Client) sendBatch(ctx context.Context, payload map[string]any) (*http.Response, error) {
+func (c *Client) sendBatch(ctx context.Context, payload payload) (*http.Response, error) {
 	jsonData, err := json.Marshal(payload)
 	if err != nil {
 		return nil, fmt.Errorf("error marshaling log batch: %v", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", c.target.Location+"/v1/logs", bytes.NewBuffer(jsonData))
+	req, err := http.NewRequestWithContext(ctx, "POST", c.options.Location+"/v1/logs", bytes.NewBuffer(jsonData))
 	if err != nil {
 		return nil, fmt.Errorf("error creating request: %v", err)
 	}
@@ -323,16 +309,6 @@ func (c *Client) sendBatch(ctx context.Context, payload map[string]any) (*http.R
 		return resp, fmt.Errorf("error sending logs: %v", err)
 	}
 	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 {
-		var responseBody map[string]any
-		if err := json.NewDecoder(resp.Body).Decode(&responseBody); err == nil {
-			log.Printf("Error response: %+v", responseBody)
-		} else {
-			log.Printf("Failed to decode error response: %v", err)
-		}
-		return resp, fmt.Errorf("received status code: %d", resp.StatusCode)
-	}
 
 	return resp, nil
 }
@@ -347,7 +323,7 @@ func (c *Client) resetBuffer() {
 }
 
 type otelEntryWithService struct {
-	entry   LogRecord
+	entry   logRecord
 	service string
 }
 
@@ -376,7 +352,7 @@ func (c *Client) handleServerResponse(resp *http.Response) error {
 	case 400 <= code && code < 500:
 		// Other 4xx codes indicate a client problem, so drop the logs (retrying won't help).
 		logger.Noticef("Target %q: request failed with status %d, dropping %d logs",
-			c.target.Name, code, len(c.entries))
+			c.options.TargetName, code, len(c.entries))
 		c.resetBuffer()
 		return errFromResponse(resp)
 
