@@ -123,10 +123,14 @@ func securityEvent(level string, event SecurityEvent, arg, description string) {
 type SecurityEvent string
 
 const (
-	SecurityAuthzAdmin  SecurityEvent = "authz_admin"
-	SecurityAuthzFail   SecurityEvent = "authz_fail"
-	SecuritySysStartup  SecurityEvent = "sys_startup"
-	SecuritySysShutdown SecurityEvent = "sys_shutdown"
+	SecurityAuthzAdmin         SecurityEvent = "authz_admin"
+	SecurityAuthzFail          SecurityEvent = "authz_fail"
+	SecurityUserCreated        SecurityEvent = "user_created"
+	SecurityUserDeleted        SecurityEvent = "user_deleted"
+	SecurityUserUpdated        SecurityEvent = "user_updated"
+	SecuritySysMonitorDisabled SecurityEvent = "sys_monitor_disabled"
+	SecuritySysShutdown        SecurityEvent = "sys_shutdown"
+	SecuritySysStartup         SecurityEvent = "sys_startup"
 )
 
 // SetAppID sets the "appid" field used for security logging. The default is "pebble".
