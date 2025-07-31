@@ -68,6 +68,7 @@ to learn more.
 ## See more
 
 - After capturing logs, you can [forward the logs to Loki](./forward-logs-to-loki).
+- [Log forwarding](../reference/log-forwarding.md) also supports the OpenTelemetry protocol (OTLP).
 - If `tail` is insufficient, consider using the
   [Promtail binary](https://github.com/canonical/loki-k8s-operator/blob/main/.github/workflows/build-promtail-release.yaml)
   instead.

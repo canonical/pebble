@@ -253,12 +253,18 @@ log-targets:
     #
     # - loki: Use the Grafana Loki protocol. A "pebble_service" label is
     #   added automatically, with the name of the Pebble service as its value.
+    # - opentelemetry: Use the OpenTelemetry protocol (OTLP). A "service.name"
+    # label is added automatically, with the name of the Pebble service as its
+    # value.
     type: loki
 
     # (Required) The URL of the remote log target.
     # For Loki, this needs to be the fully-qualified URL of the push API,
     # including the API endpoint, e.g.
     #     http://<ip-address>:3100/loki/api/v1/push
+    # For OpenTelemetry, this needs to use the HTTP port (the default value is
+    # 4318) without the API endpoint, e.g.
+    #     http://<ip-address>:4318
     location: <url>
 
     # (Optional) A list of services whose logs will be sent to this target.
