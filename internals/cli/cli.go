@@ -327,6 +327,7 @@ func Run(options *RunOptions) error {
 	localOptions := withDefaultRunOptions(options)
 
 	logger.SetLogger(localOptions.Logger)
+	logger.SetAppID(cmd.ProgramName)
 
 	defer func() {
 		if v := recover(); v != nil {

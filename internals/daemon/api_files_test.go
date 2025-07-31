@@ -33,6 +33,7 @@ import (
 
 	. "gopkg.in/check.v1"
 
+	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/osutil"
 	"github.com/canonical/pebble/internals/osutil/sys"
 )
@@ -209,6 +210,9 @@ type testFilesResponse struct {
 }
 
 func (s *filesSuite) TestReadSingle(c *C) {
+	logBuf, restore := logger.MockLogger("")
+	defer restore()
+
 	tmpDir := createTestFiles(c)
 
 	query := url.Values{
@@ -232,6 +236,8 @@ func (s *filesSuite) TestReadSingle(c *C) {
 	c.Check(files, DeepEquals, map[string]string{
 		tmpDir + "/one.txt": "be",
 	})
+
+	ensureSecurityLog(c, logBuf.String(), "WARN", "authz_admin:<unknown>,pull_file", "Pulling file "+tmpDir+"/one.txt")
 }
 
 func (s *filesSuite) TestReadErrorOnRead(c *C) {
@@ -801,6 +807,9 @@ Content-Disposition: form-data; name="request"
 }
 
 func (s *filesSuite) TestWriteSingle(c *C) {
+	logBuf, restore := logger.MockLogger("")
+	defer restore()
+
 	tmpDir := c.MkDir()
 	path := tmpDir + "/hello.txt"
 
@@ -831,6 +840,8 @@ Hello world
 	checkFileResult(c, r.Result[0], path, "", "")
 
 	assertFile(c, path, 0o644, "Hello world")
+
+	ensureSecurityLog(c, logBuf.String(), "WARN", "authz_admin:<unknown>,push_file", "Pushing file "+tmpDir+"/hello.txt")
 }
 
 func (s *filesSuite) TestWriteOverwrite(c *C) {

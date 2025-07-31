@@ -65,17 +65,33 @@ func (s *LogSuite) TestDebugfEnv(c *C) {
 
 func (s *LogSuite) TestNoticef(c *C) {
 	logger.Noticef("xyzzy")
-	c.Check(s.logbuf.String(), Matches, `20\d\d-\d\d-\d\dT\d\d:\d\d:\d\d.\d\d\dZ PREFIX: xyzzy\n`)
+	c.Check(s.logbuf.String(), Matches, `2\d\d\d-\d\d-\d\dT\d\d:\d\d:\d\d\.\d\d\dZ PREFIX: xyzzy\n`)
 }
 
 func (s *LogSuite) TestNewline(c *C) {
 	logger.Noticef("with newline\n")
-	c.Check(s.logbuf.String(), Matches, `20\d\d-\d\d-\d\dT\d\d:\d\d:\d\d.\d\d\dZ PREFIX: with newline\n`)
+	c.Check(s.logbuf.String(), Matches, `2\d\d\d-\d\d-\d\dT\d\d:\d\d:\d\d\.\d\d\dZ PREFIX: with newline\n`)
 }
 
 func (s *LogSuite) TestPanicf(c *C) {
 	c.Check(func() { logger.Panicf("xyzzy") }, Panics, "xyzzy")
-	c.Check(s.logbuf.String(), Matches, `20\d\d-\d\d-\d\dT\d\d:\d\d:\d\d.\d\d\dZ PREFIX: PANIC xyzzy\n`)
+	c.Check(s.logbuf.String(), Matches, `2\d\d\d-\d\d-\d\dT\d\d:\d\d:\d\d\.\d\d\dZ PREFIX: PANIC xyzzy\n`)
+}
+
+func (s *LogSuite) TestSecurityWarn(c *C) {
+	logger.SecurityWarn(logger.SecuritySysShutdown, "bar", "Desc Ription")
+	c.Check(s.logbuf.String(), Matches,
+		`20\d\d-\d\d-\d\dT\d\d:\d\d:\d\d.\d\d\dZ PREFIX: `+
+			`\{"type":"security","datetime":"2\d\d\d-\d\d-\d\dT\d\d:\d\d:\d\dZ","level":"WARN","event":"sys_shutdown:bar","description":"Desc Ription","appid":"pebble"\}\n`,
+	)
+}
+
+func (s *LogSuite) TestSecurityCritical(c *C) {
+	logger.SecurityCritical(logger.SecuritySysShutdown, "", "")
+	c.Check(s.logbuf.String(), Matches,
+		`20\d\d-\d\d-\d\dT\d\d:\d\d:\d\d.\d\d\dZ PREFIX: `+
+			`\{"type":"security","datetime":"2\d\d\d-\d\d-\d\dT\d\d:\d\d:\d\dZ","level":"CRITICAL","event":"sys_shutdown","appid":"pebble"\}\n`,
+	)
 }
 
 func (s *LogSuite) TestMockLoggerReadWriteThreadsafe(c *C) {

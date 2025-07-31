@@ -28,6 +28,7 @@ import (
 	"os/signal"
 	"runtime"
 	"runtime/debug"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -192,8 +193,9 @@ type Daemon struct {
 
 // UserState represents the state of an authenticated API user.
 type UserState struct {
-	Access state.IdentityAccess
-	UID    *uint32
+	Access   state.IdentityAccess
+	UID      *uint32
+	Username string
 }
 
 // A ResponseFunc handles one of the individual verbs for a method
@@ -231,7 +233,7 @@ func userFromRequest(st *state.State, r *http.Request, ucred *Ucrednet, username
 	}
 	if identity.Basic != nil {
 		// Prioritize basic type (HTTP basic authentication) and ignore UID in this case.
-		return &UserState{Access: identity.Access}, nil
+		return &UserState{Access: identity.Access, Username: identity.Name}, nil
 	} else if identity.Local != nil {
 		return &UserState{Access: identity.Access, UID: userID}, nil
 	}
@@ -306,13 +308,19 @@ func (c *Command) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// We only proceed if we support the transport (we can identity it).
+	// We only proceed if we support the transport (we can identify it).
 	if !RequestTransportType(r).IsValid() {
 		Forbidden("forbidden").ServeHTTP(w, r)
 		return
 	}
 
 	if rspe := access.CheckAccess(c.d, r, user); rspe != nil {
+		if user != nil {
+			userStr := userString(user)
+			logger.SecurityCritical(logger.SecurityAuthzFail,
+				fmt.Sprintf("%s,%s", userStr, r.URL.Path),
+				fmt.Sprintf("User %s not authorized to access %s", userStr, r.URL.Path))
+		}
 		rspe.ServeHTTP(w, r)
 		return
 	}
@@ -430,6 +438,8 @@ func exitOnPanic(handler http.Handler, stderr io.Writer, exit func()) http.Handl
 // Init sets up the Daemon's internal workings.
 // Don't call more than once.
 func (d *Daemon) Init() error {
+	logger.SecurityWarn(logger.SecuritySysStartup, strconv.Itoa(os.Getuid()), "Starting daemon")
+
 	listenerMap := make(map[string]net.Listener)
 
 	if listener, err := getListener(d.options.SocketPath, listenerMap); err == nil {
@@ -648,6 +658,8 @@ var shutdownTimeout = time.Second
 
 // Stop shuts down the Daemon.
 func (d *Daemon) Stop(sigCh chan<- os.Signal) error {
+	logger.SecurityWarn(logger.SecuritySysShutdown, strconv.Itoa(os.Getuid()), "Shutting down daemon")
+
 	if d.rebootIsMissing {
 		// we need to schedule/wait for a system restart again
 		return d.doReboot(sigCh, rebootRetryWaitTimeout)

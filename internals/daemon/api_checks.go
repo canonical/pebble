@@ -16,11 +16,13 @@ package daemon
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"sort"
 
 	"github.com/canonical/x-go/strutil"
 
+	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/overlord/checkstate"
 	"github.com/canonical/pebble/internals/plan"
 )
@@ -65,7 +67,7 @@ func v1GetChecks(c *Command, r *http.Request, _ *UserState) Response {
 	return SyncResponse(infos)
 }
 
-func v1PostChecks(c *Command, r *http.Request, _ *UserState) Response {
+func v1PostChecks(c *Command, r *http.Request, user *UserState) Response {
 	var payload struct {
 		Action string   `json:"action"`
 		Checks []string `json:"checks"`
@@ -88,6 +90,11 @@ func v1PostChecks(c *Command, r *http.Request, _ *UserState) Response {
 	case "start":
 		changed, err = checkmgr.StartChecks(payload.Checks)
 	case "stop":
+		for _, check := range payload.Checks {
+			logger.SecurityWarn(logger.SecuritySysMonitorDisabled,
+				fmt.Sprintf("%s,%s", userString(user), check),
+				fmt.Sprintf("Stopping check %s", check))
+		}
 		changed, err = checkmgr.StopChecks(payload.Checks)
 	default:
 		return BadRequest("invalid action %q", payload.Action)

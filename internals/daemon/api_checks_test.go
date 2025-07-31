@@ -26,6 +26,8 @@ import (
 	"time"
 
 	. "gopkg.in/check.v1"
+
+	"github.com/canonical/pebble/internals/logger"
 )
 
 func (s *apiSuite) TestChecksGet(c *C) {
@@ -160,6 +162,9 @@ func (s *apiSuite) getChecks(c *C, query string) (*resp, map[string]any) {
 }
 
 func (s *apiSuite) TestChecksPost(c *C) {
+	logBuf, restore := logger.MockLogger("")
+	defer restore()
+
 	writeTestLayer(s.pebbleDir, `
 checks:
     chk1:
@@ -212,6 +217,10 @@ checks:
 	// chk1 and chk3 will have stopped, and the response will list them
 	// alphabetically, not in the order we provided.
 	c.Check(rsp.Result.(responsePayload).Changed, DeepEquals, []string{"chk1", "chk3"})
+
+	ensureSecurityLog(c, logBuf.String(), "WARN", "sys_monitor_disabled:<unknown>,chk1", "Stopping check chk1")
+	ensureSecurityLog(c, logBuf.String(), "WARN", "sys_monitor_disabled:<unknown>,chk2", "Stopping check chk2")
+	ensureSecurityLog(c, logBuf.String(), "WARN", "sys_monitor_disabled:<unknown>,chk3", "Stopping check chk3")
 }
 
 func (s *apiSuite) postChecks(c *C, body string) *resp {

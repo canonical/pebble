@@ -21,6 +21,7 @@ import (
 
 	. "gopkg.in/check.v1"
 
+	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/overlord/state"
 )
 
@@ -73,6 +74,9 @@ func (s *apiSuite) TestIdentities(c *C) {
 }
 
 func (s *apiSuite) TestAddIdentities(c *C) {
+	logBuf, restore := logger.MockLogger("")
+	defer restore()
+
 	s.daemon(c)
 
 	body := `
@@ -113,6 +117,9 @@ func (s *apiSuite) TestAddIdentities(c *C) {
 		},
 	})
 	st.Unlock()
+
+	ensureSecurityLog(c, logBuf.String(), "WARN", "user_created:<unknown>,bob,read", "Creating read user bob")
+	ensureSecurityLog(c, logBuf.String(), "WARN", "user_created:<unknown>,mary,admin", "Creating admin user mary")
 }
 
 func (s *apiSuite) TestAddIdentitiesNull(c *C) {
@@ -134,6 +141,9 @@ func (s *apiSuite) TestAddIdentitiesNull(c *C) {
 }
 
 func (s *apiSuite) TestUpdateIdentities(c *C) {
+	logBuf, restore := logger.MockLogger("")
+	defer restore()
+
 	s.daemon(c)
 
 	st := s.d.overlord.State()
@@ -188,6 +198,9 @@ func (s *apiSuite) TestUpdateIdentities(c *C) {
 		},
 	})
 	st.Unlock()
+
+	ensureSecurityLog(c, logBuf.String(), "WARN", "user_updated:<unknown>,bob,admin", "Updating admin user bob")
+	ensureSecurityLog(c, logBuf.String(), "WARN", "user_updated:<unknown>,mary,read", "Updating read user mary")
 }
 
 func (s *apiSuite) TestUpdateIdentitiesNull(c *C) {
@@ -209,6 +222,9 @@ func (s *apiSuite) TestUpdateIdentitiesNull(c *C) {
 }
 
 func (s *apiSuite) TestReplaceIdentities(c *C) {
+	logBuf, restore := logger.MockLogger("")
+	defer restore()
+
 	s.daemon(c)
 
 	st := s.d.overlord.State()
@@ -264,9 +280,16 @@ func (s *apiSuite) TestReplaceIdentities(c *C) {
 		},
 	})
 	st.Unlock()
+
+	ensureSecurityLog(c, logBuf.String(), "WARN", "user_deleted:<unknown>,bob", "Deleting user bob")
+	ensureSecurityLog(c, logBuf.String(), "WARN", "user_updated:<unknown>,mary,read", "Updating read user mary")
+	ensureSecurityLog(c, logBuf.String(), "WARN", "user_updated:<unknown>,newguy,admin", "Updating admin user newguy")
 }
 
 func (s *apiSuite) TestRemoveIdentities(c *C) {
+	logBuf, restore := logger.MockLogger("")
+	defer restore()
+
 	s.daemon(c)
 
 	st := s.d.overlord.State()
@@ -305,6 +328,8 @@ func (s *apiSuite) TestRemoveIdentities(c *C) {
 		},
 	})
 	st.Unlock()
+
+	ensureSecurityLog(c, logBuf.String(), "WARN", "user_deleted:<unknown>,bob", "Deleting user bob")
 }
 
 func (s *apiSuite) TestRemoveIdentitiesNotNull(c *C) {

@@ -20,6 +20,7 @@ import (
 	"net/http"
 	"os/exec"
 
+	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/osutil"
 	"github.com/canonical/pebble/internals/overlord/cmdstate"
 	"github.com/canonical/pebble/internals/overlord/state"
@@ -43,7 +44,7 @@ type execPayload struct {
 	Height         int               `json:"height"`
 }
 
-func v1PostExec(c *Command, req *http.Request, _ *UserState) Response {
+func v1PostExec(c *Command, req *http.Request, user *UserState) Response {
 	var payload execPayload
 	decoder := json.NewDecoder(req.Body)
 	if err := decoder.Decode(&payload); err != nil {
@@ -109,6 +110,8 @@ func v1PostExec(c *Command, req *http.Request, _ *UserState) Response {
 	change := st.NewChange("exec", fmt.Sprintf("Execute command %q", args.Command[0]))
 	taskSet := state.NewTaskSet(task)
 	change.AddAll(taskSet)
+
+	logger.SecurityWarn(logger.SecurityAuthzAdmin, userString(user)+",exec", "Executing command "+args.Command[0])
 
 	stateEnsureBefore(st, 0) // start it right away
 

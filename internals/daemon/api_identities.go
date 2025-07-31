@@ -16,8 +16,10 @@ package daemon
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 
+	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/overlord/state"
 )
 
@@ -30,7 +32,7 @@ func v1GetIdentities(c *Command, r *http.Request, _ *UserState) Response {
 	return SyncResponse(identities)
 }
 
-func v1PostIdentities(c *Command, r *http.Request, _ *UserState) Response {
+func v1PostIdentities(c *Command, r *http.Request, user *UserState) Response {
 	var payload struct {
 		Action     string                     `json:"action"`
 		Identities map[string]*state.Identity `json:"identities"`
@@ -69,12 +71,38 @@ func v1PostIdentities(c *Command, r *http.Request, _ *UserState) Response {
 	var err error
 	switch payload.Action {
 	case "add":
+		for name, identity := range payload.Identities {
+			logger.SecurityWarn(logger.SecurityUserCreated,
+				fmt.Sprintf("%s,%s,%s", userString(user), name, identity.Access),
+				fmt.Sprintf("Creating %s user %s", identity.Access, name))
+		}
 		err = st.AddIdentities(payload.Identities)
 	case "update":
+		for name, identity := range payload.Identities {
+			logger.SecurityWarn(logger.SecurityUserUpdated,
+				fmt.Sprintf("%s,%s,%s", userString(user), name, identity.Access),
+				fmt.Sprintf("Updating %s user %s", identity.Access, name))
+		}
 		err = st.UpdateIdentities(payload.Identities)
 	case "replace":
+		for name, identity := range payload.Identities {
+			if identity == nil {
+				logger.SecurityWarn(logger.SecurityUserDeleted,
+					fmt.Sprintf("%s,%s", userString(user), name),
+					fmt.Sprintf("Deleting user %s", name))
+			} else {
+				logger.SecurityWarn(logger.SecurityUserUpdated,
+					fmt.Sprintf("%s,%s,%s", userString(user), name, identity.Access),
+					fmt.Sprintf("Updating %s user %s", identity.Access, name))
+			}
+		}
 		err = st.ReplaceIdentities(payload.Identities)
 	case "remove":
+		for name := range payload.Identities {
+			logger.SecurityWarn(logger.SecurityUserDeleted,
+				fmt.Sprintf("%s,%s", userString(user), name),
+				fmt.Sprintf("Deleting user %s", name))
+		}
 		err = st.RemoveIdentities(identityNames)
 	}
 	if err != nil {

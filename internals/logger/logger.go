@@ -16,6 +16,7 @@ package logger
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -25,6 +26,10 @@ import (
 
 const (
 	timestampFormat = "2006-01-02T15:04:05.000Z07:00"
+)
+
+var (
+	appID = "pebble"
 )
 
 // A Logger is a fairly minimal logging tool.
@@ -71,6 +76,69 @@ func Debugf(format string, v ...any) {
 	defer loggerLock.Unlock()
 	msg := fmt.Sprintf(format, v...)
 	logger.Debug(msg)
+}
+
+// SecurityWarn logs a security WARN event with the given arguments.
+func SecurityWarn(event SecurityEvent, arg, description string) {
+	securityEvent("WARN", event, arg, description)
+}
+
+// SecurityCritical logs a security CRITICAL event with the given arguments.
+func SecurityCritical(event SecurityEvent, arg, description string) {
+	securityEvent("CRITICAL", event, arg, description)
+}
+
+func securityEvent(level string, event SecurityEvent, arg, description string) {
+	loggerLock.Lock()
+	defer loggerLock.Unlock()
+
+	eventWithArg := string(event)
+	if arg != "" {
+		eventWithArg += ":" + arg
+	}
+	data := struct {
+		Type        string `json:"type"`
+		DateTime    string `json:"datetime"`
+		Level       string `json:"level"`
+		Event       string `json:"event"`
+		Description string `json:"description,omitempty"`
+		AppID       string `json:"appid"`
+	}{
+		Type:        "security",
+		DateTime:    time.Now().UTC().Format(time.RFC3339),
+		Level:       level,
+		Event:       eventWithArg,
+		Description: description,
+		AppID:       appID,
+	}
+
+	var buf bytes.Buffer
+	encoder := json.NewEncoder(&buf)
+	encoder.SetEscapeHTML(false)
+	err := encoder.Encode(data)
+	if err != nil {
+		// Should never happen, and not much more we can do here.
+		return
+	}
+	logger.Notice(buf.String())
+}
+
+type SecurityEvent string
+
+const (
+	SecurityAuthzAdmin         SecurityEvent = "authz_admin"
+	SecurityAuthzFail          SecurityEvent = "authz_fail"
+	SecurityUserCreated        SecurityEvent = "user_created"
+	SecurityUserDeleted        SecurityEvent = "user_deleted"
+	SecurityUserUpdated        SecurityEvent = "user_updated"
+	SecuritySysMonitorDisabled SecurityEvent = "sys_monitor_disabled"
+	SecuritySysShutdown        SecurityEvent = "sys_shutdown"
+	SecuritySysStartup         SecurityEvent = "sys_startup"
+)
+
+// SetAppID sets the "appid" field used for security logging. The default is "pebble".
+func SetAppID(s string) {
+	appID = s
 }
 
 type lockedBytesBuffer struct {
