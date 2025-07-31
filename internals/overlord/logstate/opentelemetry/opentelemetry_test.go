@@ -260,7 +260,7 @@ func (*suite) TestBufferFull(c *C) {
 		for i := range expected {
 			// 'nil' means c.buffer[i] should be zero
 			if expected[i] == nil {
-				c.Assert(buffer[i], DeepEquals, opentelemetry.OtelEntryWithService{},
+				c.Assert(buffer[i], DeepEquals, opentelemetry.EntryWithService{},
 					Commentf("buffer[%d] should be zero, obtained %v", i, buffer[i]))
 				continue
 			}

@@ -14,12 +14,12 @@
 
 package opentelemetry
 
-type OtelEntryWithService = otelEntryWithService
+type EntryWithService = entryWithService
 
-func GetBuffer(c *Client) []OtelEntryWithService {
+func GetBuffer(c *Client) []EntryWithService {
 	return c.buffer
 }
 
-func GetMessage(e OtelEntryWithService) string {
+func GetMessage(e EntryWithService) string {
 	return *e.entry.Body.StringValue
 }
