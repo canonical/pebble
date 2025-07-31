@@ -45,7 +45,7 @@ A separate helper service is required for each log file.
 ## Include `tail` in a chiseled rock
 
 Chiseled rocks often exclude tools like `coreutils`. To add `/usr/bin/tail`, extend
-[the official example](https://documentation.ubuntu.com/rockcraft/en/stable/how-to/rocks/chisel-existing-rock/)
+[the official example](https://documentation.ubuntu.com/rockcraft/stable/how-to/rocks/chisel-existing-rock/)
 by staging the `coreutils_bins` slice in your `rockcraft.yaml` file:
 
 ```yaml
@@ -59,10 +59,10 @@ by staging the `coreutils_bins` slice in your `rockcraft.yaml` file:
 
 The `coreutils_bins` slice brings in around a dozen shared objects and some hundred binaries.
 For a truly minimal rock, consider
-[defining a custom chisel slice](https://documentation.ubuntu.com/rockcraft/en/stable/how-to/chisel/create-slice/).
+[defining a custom chisel slice](https://documentation.ubuntu.com/rockcraft/stable/how-to/chisel/create-slice/).
 
 See the
-[Rockcraft documentation](https://documentation.ubuntu.com/rockcraft/en/stable/)
+[Rockcraft documentation](https://documentation.ubuntu.com/rockcraft/stable/)
 to learn more.
 
 ## See more
