@@ -443,7 +443,7 @@ func writeFiles(body io.Reader, boundary string, user *UserState) Response {
 		if !ok {
 			return BadRequest("no metadata for path %q", path)
 		}
-		logger.SecurityWarn(logger.SecurityAuthzAdmin, userString(user)+",push_file", "Pushing file +"+path)
+		logger.SecurityWarn(logger.SecurityAuthzAdmin, userString(user)+",push_file", "Pushing file "+path)
 		errors[path] = writeFile(info, part)
 		part.Close()
 	}

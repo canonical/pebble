@@ -117,12 +117,15 @@ func securityEvent(level string, event SecurityEvent, arg, description string) {
 		AppID:       appID,
 	}
 
-	logJSON, err := json.Marshal(data)
+	var buf bytes.Buffer
+	encoder := json.NewEncoder(&buf)
+	encoder.SetEscapeHTML(false)
+	err := encoder.Encode(data)
 	if err != nil {
 		// Should never happen, and not much more we can do here.
 		return
 	}
-	logger.Notice(string(logJSON))
+	logger.Notice(buf.String())
 }
 
 type SecurityEvent string

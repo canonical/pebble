@@ -152,7 +152,7 @@ func v1SystemInfo(c *Command, r *http.Request, _ *UserState) Response {
 
 func userString(u *UserState) string {
 	if u == nil {
-		return "<unknown"
+		return "<unknown>"
 	}
 	if u.Username != "" {
 		return u.Username
