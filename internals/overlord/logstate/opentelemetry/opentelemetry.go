@@ -43,7 +43,7 @@ type resourceLogs struct {
 	// If this field is not set then resource info is unknown.
 	Resource resource `json:"resource"`
 	// A list of ScopeLogs that originate from a resource.
-	ScopeLogs []*scopeLogs `json:"scopeLogs,omitempty"`
+	ScopeLogs []scopeLogs `json:"scopeLogs,omitempty"`
 }
 
 // Resource information, partially from 'type Resource struct' in
@@ -76,7 +76,7 @@ type scopeLogs struct {
 	// an empty instrumentation scope name (unknown).
 	Scope instrumentationScope `json:"scope"`
 	// A list of log records.
-	LogRecords []*logRecord `json:"logRecords,omitempty"`
+	LogRecords []logRecord `json:"logRecords,omitempty"`
 }
 
 // instrumentationScope is a message representing the instrumentation scope information
@@ -119,8 +119,8 @@ type Client struct {
 
 	// To store log entries, keep a buffer of size 2*MaxRequestEntries with a
 	// sliding window "entries" of size MaxRequestEntries.
-	buffer  []otelEntryWithService
-	entries []otelEntryWithService
+	buffer  []entryWithService
+	entries []entryWithService
 
 	// Store the custom labels for each service (resource attributes in OTEL).
 	resourceAttributes map[string][]keyValue
@@ -131,7 +131,7 @@ func NewClient(options *ClientOptions) *Client {
 	c := &Client{
 		options:            options,
 		httpClient:         &http.Client{Timeout: options.RequestTimeout},
-		buffer:             make([]otelEntryWithService, 2*options.MaxRequestEntries),
+		buffer:             make([]entryWithService, 2*options.MaxRequestEntries),
 		resourceAttributes: make(map[string][]keyValue),
 	}
 	// c.entries should be backed by the same array as c.buffer.
@@ -195,7 +195,7 @@ func (c *Client) Add(entry servicelog.Entry) error {
 	if n := len(c.entries); n >= c.options.MaxRequestEntries {
 		// "entries" is full - remove the first element to make room.
 		// Zero the removed element to allow garbage collection.
-		c.entries[0] = otelEntryWithService{}
+		c.entries[0] = entryWithService{}
 		c.entries = c.entries[1:]
 	}
 
@@ -208,11 +208,11 @@ func (c *Client) Add(entry servicelog.Entry) error {
 
 		// Zero removed elements to allow garbage collection.
 		for i := len(c.entries); i < len(c.buffer); i++ {
-			c.buffer[i] = otelEntryWithService{}
+			c.buffer[i] = entryWithService{}
 		}
 	}
 
-	c.entries = append(c.entries, otelEntryWithService{
+	c.entries = append(c.entries, entryWithService{
 		entry:   encodeEntry(entry),
 		service: entry.Service,
 	})
@@ -239,10 +239,10 @@ func (c *Client) Flush(ctx context.Context) error {
 	}
 
 	// Group entries by service.
-	serviceBatches := make(map[string][]*logRecord)
+	serviceBatches := make(map[string][]logRecord)
 	for _, otelEntryWithService := range c.entries {
 		serviceName := otelEntryWithService.service
-		logRecord := &otelEntryWithService.entry
+		logRecord := otelEntryWithService.entry
 		serviceBatches[serviceName] = append(serviceBatches[serviceName], logRecord)
 	}
 
@@ -262,7 +262,7 @@ func (c *Client) Flush(ctx context.Context) error {
 				Attributes: resourceAttributes,
 			}
 			scope := instrumentationScope{Name: "pebble"}
-			scopeLogs := []*scopeLogs{
+			scopeLogs := []scopeLogs{
 				{
 					Scope:      scope,
 					LogRecords: batch,
@@ -317,12 +317,12 @@ func (c *Client) sendBatch(ctx context.Context, payload payload) (*http.Response
 func (c *Client) resetBuffer() {
 	// Zero removed elements to allow garbage collection.
 	for i := 0; i < len(c.entries); i++ {
-		c.entries[i] = otelEntryWithService{}
+		c.entries[i] = entryWithService{}
 	}
 	c.entries = c.buffer[:0]
 }
 
-type otelEntryWithService struct {
+type entryWithService struct {
 	entry   logRecord
 	service string
 }
