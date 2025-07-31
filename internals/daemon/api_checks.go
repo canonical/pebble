@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"net/http"
 	"sort"
-	"strings"
 
 	"github.com/canonical/x-go/strutil"
 
@@ -91,9 +90,11 @@ func v1PostChecks(c *Command, r *http.Request, user *UserState) Response {
 	case "start":
 		changed, err = checkmgr.StartChecks(payload.Checks)
 	case "stop":
-		logger.SecurityWarn(logger.SecuritySysMonitorDisabled,
-			fmt.Sprintf("%s,%s", userString(user), payload.Checks[0]),
-			fmt.Sprintf("Stopping checks %s", strings.Join(payload.Checks, ", ")))
+		for _, check := range payload.Checks {
+			logger.SecurityWarn(logger.SecuritySysMonitorDisabled,
+				fmt.Sprintf("%s,%s", userString(user), check),
+				fmt.Sprintf("Stopping check %s", check))
+		}
 		changed, err = checkmgr.StopChecks(payload.Checks)
 	default:
 		return BadRequest("invalid action %q", payload.Action)
