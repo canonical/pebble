@@ -78,11 +78,6 @@ func Debugf(format string, v ...any) {
 	logger.Debug(msg)
 }
 
-// SecurityInfo logs a security INFO event with the given arguments.
-func SecurityInfo(event SecurityEvent, arg, description string) {
-	securityEvent("INFO", event, arg, description)
-}
-
 // SecurityWarn logs a security WARN event with the given arguments.
 func SecurityWarn(event SecurityEvent, arg, description string) {
 	securityEvent("WARN", event, arg, description)
