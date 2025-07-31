@@ -74,14 +74,14 @@ func v1PostIdentities(c *Command, r *http.Request, user *UserState) Response {
 		for name, identity := range payload.Identities {
 			logger.SecurityWarn(logger.SecurityUserCreated,
 				fmt.Sprintf("%s,%s,%s", userString(user), name, identity.Access),
-				fmt.Sprintf("Creating user %s (%s)", name, identity.Access))
+				fmt.Sprintf("Creating %s user %s", identity.Access, name))
 		}
 		err = st.AddIdentities(payload.Identities)
 	case "update":
 		for name, identity := range payload.Identities {
 			logger.SecurityWarn(logger.SecurityUserUpdated,
 				fmt.Sprintf("%s,%s,%s", userString(user), name, identity.Access),
-				fmt.Sprintf("Updating user %s (%s)", name, identity.Access))
+				fmt.Sprintf("Updating %s user %s", identity.Access, name))
 		}
 		err = st.UpdateIdentities(payload.Identities)
 	case "replace":
@@ -93,7 +93,7 @@ func v1PostIdentities(c *Command, r *http.Request, user *UserState) Response {
 			} else {
 				logger.SecurityWarn(logger.SecurityUserUpdated,
 					fmt.Sprintf("%s,%s,%s", userString(user), name, identity.Access),
-					fmt.Sprintf("Updating user %s (%s)", name, identity.Access))
+					fmt.Sprintf("Updating %s user %s", identity.Access, name))
 			}
 		}
 		err = st.ReplaceIdentities(payload.Identities)

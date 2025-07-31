@@ -49,7 +49,9 @@ services:
 
 	createLayer(t, pebbleDir, "001-simple-layer.yaml", layerYAML)
 
-	_, _ = pebbleDaemon(t, pebbleDir, "run")
+	_, stderrCh := pebbleDaemon(t, pebbleDir, "run")
+	waitForLog(t, stderrCh, "pebble", fmt.Sprintf(`"event":"sys_startup:%d","description":"Starting daemon"`, os.Getuid()), 3*time.Second)
+
 	waitForFile(t, filepath.Join(pebbleDir, "svc1"), 3*time.Second)
 	waitForFile(t, filepath.Join(pebbleDir, "svc2"), 3*time.Second)
 }

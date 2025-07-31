@@ -80,12 +80,17 @@ func (s *execSuite) TearDownTest(c *C) {
 // Some of these tests use the Go client for simplicity.
 
 func (s *execSuite) TestStdinStdout(c *C) {
+	logBuf, restore := logger.MockLogger("")
+	defer restore()
+
 	stdout, stderr, waitErr := s.exec(c, "foo bar", &client.ExecOptions{
 		Command: []string{"cat"},
 	})
 	c.Check(waitErr, IsNil)
 	c.Check(stdout, Equals, "foo bar")
 	c.Check(stderr, Equals, "")
+
+	ensureSecurityLog(c, logBuf.String(), "WARN", fmt.Sprintf("authz_admin:%d,exec", os.Getuid()), "Executing command cat")
 }
 
 func (s *execSuite) TestStderr(c *C) {

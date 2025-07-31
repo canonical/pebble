@@ -21,6 +21,8 @@ import (
 
 	. "gopkg.in/check.v1"
 	"gopkg.in/yaml.v3"
+
+	"github.com/canonical/pebble/internals/logger"
 )
 
 var planLayer = `
@@ -126,6 +128,9 @@ func (s *apiSuite) TestLayersErrors(c *C) {
 }
 
 func (s *apiSuite) TestLayersAddAppend(c *C) {
+	logBuf, restore := logger.MockLogger("")
+	defer restore()
+
 	writeTestLayer(s.pebbleDir, planLayer)
 	_ = s.daemon(c)
 	layersCmd := apiCmd("/v1/layers")
@@ -150,6 +155,8 @@ services:
         command: echo static
 `[1:])
 	s.planLayersHasLen(c, 2)
+
+	ensureSecurityLog(c, logBuf.String(), "WARN", "authz_admin:<unknown>,add_layer", "Adding layer foo")
 }
 
 func (s *apiSuite) TestLayersAddCombine(c *C) {

@@ -32,6 +32,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"syscall"
@@ -1316,6 +1317,9 @@ func (s *daemonSuite) TestDegradedModeReply(c *C) {
 }
 
 func (s *daemonSuite) TestHTTPAPI(c *C) {
+	logBuf, restore := logger.MockLogger("")
+	defer restore()
+
 	s.httpAddress = ":0" // Go will choose port (use listener.Addr() to find it)
 	d := s.newDaemon(c)
 	d.Init()
@@ -1362,6 +1366,9 @@ func (s *daemonSuite) TestHTTPAPI(c *C) {
 
 	_, err = http.DefaultClient.Do(request)
 	c.Assert(err, ErrorMatches, ".* connection refused")
+
+	ensureSecurityLog(c, logBuf.String(), "WARN", fmt.Sprintf("sys_startup:%d", os.Getuid()), "Starting daemon")
+	ensureSecurityLog(c, logBuf.String(), "WARN", fmt.Sprintf("sys_shutdown:%d", os.Getuid()), "Shutting down daemon")
 }
 
 func (s *daemonSuite) TestHTTPSAPI(c *C) {
@@ -1660,6 +1667,67 @@ func (s *daemonSuite) TestAPIAccessLevels(c *C) {
 		c.Assert(response.StatusCode, Equals, test.status)
 	}
 }
+
+func (s *daemonSuite) TestSecurityLoggingAuthzFail(c *C) {
+	logBuf, restore := logger.MockLogger("")
+	defer restore()
+
+	_ = s.newDaemon(c)
+
+	request, err := http.NewRequestWithContext(
+		context.WithValue(context.Background(), TransportTypeKey{}, TransportTypeUnixSocket),
+		"POST",
+		"http://_/v1/services",
+		io.NopCloser(strings.NewReader("")),
+	)
+	c.Assert(err, IsNil)
+	request.RemoteAddr = "pid=100;uid=42;socket=;"
+	recorder := httptest.NewRecorder()
+
+	cmd := apiCmd("/v1/services")
+	cmd.ServeHTTP(recorder, request)
+
+	response := recorder.Result()
+	c.Assert(response.StatusCode, Equals, http.StatusUnauthorized)
+
+	ensureSecurityLog(c, logBuf.String(), "CRITICAL", "authz_fail:42,/v1/services", "User 42 not authorized to access /v1/services")
+}
+
+func ensureSecurityLog(c *C, logs, level, event, description string) {
+	type securityLog struct {
+		Type        string `json:"type"`
+		Datetime    string `json:"datetime"`
+		Level       string `json:"level"`
+		Event       string `json:"event"`
+		Description string `json:"description"`
+		AppID       string `json:"appid"`
+	}
+
+	gotLog := false
+	for _, line := range strings.Split(logs, "\n") {
+		// Remove initial datetime prefix
+		fields := strings.SplitN(line, " ", 2)
+		if len(fields) != 2 {
+			continue
+		}
+		var log securityLog
+		err := json.Unmarshal([]byte(fields[1]), &log)
+		if err != nil {
+			continue
+		}
+		if log.Type == "security" &&
+			dateRegexp.MatchString(log.Datetime) &&
+			log.Level == level &&
+			log.Event == event &&
+			log.Description == description &&
+			log.AppID == "pebble" {
+			gotLog = true
+		}
+	}
+	c.Check(gotLog, Equals, true, Commentf("security log not found: %s", logs))
+}
+
+var dateRegexp = regexp.MustCompile(`2\d\d\d-\d\d-\d\dT\d\d:\d\d:\d\dZ`)
 
 type rebootSuite struct{}
 
