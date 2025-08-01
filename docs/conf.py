@@ -337,6 +337,6 @@ if os.path.exists('./reuse/substitutions.yaml'):
 # Add configuration for intersphinx mapping
 
 intersphinx_mapping = {
-    "operator": ("https://ops.readthedocs.io/en/latest", None),
+    "operator": ("https://documentation.ubuntu.com/ops/latest/", None),
     "juju": ("https://documentation.ubuntu.com/juju/3.6/", None),
 }
