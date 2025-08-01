@@ -16,9 +16,10 @@ concurrency:
 jobs:
   docchecks:
     name: Checks
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     outputs:
       linkcheck-result: ${{ steps.linkcheck-step.outcome }}
+      spellcheck-result: ${{ steps.spellcheck-step.outcome }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -34,9 +35,17 @@ jobs:
         uses: canonical/documentation-workflows/linkcheck@main
         with:
           working-directory: docs
-      - name: Markdown lint
-        id: markdown-step
+      - name: Spelling
+        id: spellcheck-step
         if: success() || failure()
-        uses: DavidAnson/markdownlint-cli2-action@v16
+        uses: canonical/documentation-workflows/spellcheck@main
         with:
-          config: "docs/.sphinx/.markdownlint.json"        
+          working-directory: docs
+      - name: Environment
+        working-directory: "docs"
+        run: make install
+      - name: Markdown (repo root)
+        run: |
+          . docs/.sphinx/venv/bin/activate
+          pip install pymarkdownlnt
+          pymarkdownlnt --config docs/.sphinx/.pymarkdown.json scan --recurse --exclude=./docs .

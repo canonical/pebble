@@ -23,7 +23,7 @@ SPHINX_UPDATE_DIR = os.path.join(SPHINX_DIR, "update")
 GITHUB_REPO = "canonical/sphinx-docs-starter-pack"
 GITHUB_API_BASE = f"https://api.github.com/repos/{GITHUB_REPO}"
 GITHUB_API_SPHINX_DIR = f"{GITHUB_API_BASE}/contents/docs/.sphinx"
-GITHUB_RAW_BASE = f"https://raw.githubusercontent.com/{GITHUB_REPO}/check-log"
+GITHUB_RAW_BASE = f"https://raw.githubusercontent.com/{GITHUB_REPO}/main"
 
 TIMEOUT = 10  # seconds
 
@@ -113,7 +113,7 @@ def main():
 
             new_requirements = requirements - local_reqs
 
-            for req in requirements - local_reqs:
+            for req in new_requirements:
                 logging.debug(f"{req} not found in local requirements.txt")
 
             for req in requirements & local_reqs:
