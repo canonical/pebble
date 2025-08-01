@@ -24,13 +24,14 @@ import (
 )
 
 type changeInfo struct {
-	ID      string      `json:"id"`
-	Kind    string      `json:"kind"`
-	Summary string      `json:"summary"`
-	Status  string      `json:"status"`
-	Tasks   []*taskInfo `json:"tasks,omitempty"`
-	Ready   bool        `json:"ready"`
-	Err     string      `json:"err,omitempty"`
+	ID                string      `json:"id"`
+	PrecedentChangeID string      `json:"precedent-change-id,omitempty"`
+	Kind              string      `json:"kind"`
+	Summary           string      `json:"summary"`
+	Status            string      `json:"status"`
+	Tasks             []*taskInfo `json:"tasks,omitempty"`
+	Ready             bool        `json:"ready"`
+	Err               string      `json:"err,omitempty"`
 
 	SpawnTime time.Time  `json:"spawn-time,omitempty"`
 	ReadyTime *time.Time `json:"ready-time,omitempty"`
@@ -61,11 +62,12 @@ type taskInfoProgress struct {
 func change2changeInfo(chg *state.Change) *changeInfo {
 	status := chg.Status()
 	chgInfo := &changeInfo{
-		ID:      chg.ID(),
-		Kind:    chg.Kind(),
-		Summary: chg.Summary(),
-		Status:  status.String(),
-		Ready:   status.Ready(),
+		ID:                chg.ID(),
+		PrecedentChangeID: chg.PrecedentChangeID(),
+		Kind:              chg.Kind(),
+		Summary:           chg.Summary(),
+		Status:            status.String(),
+		Ready:             status.Ready(),
 
 		SpawnTime: chg.SpawnTime(),
 	}

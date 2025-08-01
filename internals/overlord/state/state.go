@@ -391,15 +391,16 @@ func (s *State) Cache(key, value any) {
 
 // NewChange adds a new change to the state.
 func (s *State) NewChange(kind, summary string) *Change {
-	return s.NewChangeWithNoticeData(kind, summary, nil)
+	return s.NewChangeWithNoticeData(kind, summary, "", nil)
 }
 
 // NewChangeWithNoticeData adds a new change to the state, adding in any provided notice data.
-func (s *State) NewChangeWithNoticeData(kind, summary string, noticeData map[string]string) *Change {
+func (s *State) NewChangeWithNoticeData(kind, summary string, precedentChangeID string, noticeData map[string]string) *Change {
 	s.writing()
 	s.lastChangeId++
 	id := strconv.Itoa(s.lastChangeId)
 	chg := newChange(s, id, kind, summary)
+	chg.precedentChangeID = precedentChangeID
 	s.changes[id] = chg
 
 	// Set this before calling addNotice as that needs to use it.
