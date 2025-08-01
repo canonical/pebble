@@ -25,7 +25,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/canonical/pebble/cmd"
 	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/servicelog"
 )
@@ -52,7 +51,7 @@ type resource struct {
 	Attributes []keyValue `json:"attributes"`
 }
 
-// keyValue is a key-value pair that stores	attributes.
+// keyValue is a key-value pair that stores attributes.
 // from 'type KeyValue struct' in
 // https://github.com/open-telemetry/opentelemetry-collector/blob/3c0fd3946f70a0b1fa97813c39dbc4d91d95afa6/pdata/internal/data/protogen/common/v1/common.pb.go#L286
 type keyValue struct {
@@ -143,6 +142,7 @@ func NewClient(options *ClientOptions) *Client {
 type ClientOptions struct {
 	RequestTimeout    time.Duration
 	MaxRequestEntries int
+	UserAgent         string
 	TargetName        string
 	Location          string
 }
@@ -256,23 +256,23 @@ func (c *Client) Flush(ctx context.Context) error {
 	logs := make([]resourceLogs, 0, len(serviceNames))
 	for _, serviceName := range serviceNames {
 		batch := serviceBatches[serviceName]
-		if len(batch) > 0 {
-			resourceAttributes := c.resourceAttributes[serviceName]
-			resource := resource{
-				Attributes: resourceAttributes,
-			}
-			scope := instrumentationScope{Name: "pebble"}
-			scopeLogs := []scopeLogs{
-				{
-					Scope:      scope,
-					LogRecords: batch,
-				},
-			}
-			logs = append(logs, resourceLogs{
-				Resource:  resource,
-				ScopeLogs: scopeLogs,
-			})
+		if len(batch) == 0 {
+			continue
 		}
+
+		resourceAttributes := c.resourceAttributes[serviceName]
+		resource := resource{
+			Attributes: resourceAttributes,
+		}
+		scope := instrumentationScope{Name: "pebble"}
+		scopeLogs := []scopeLogs{{
+			Scope:      scope,
+			LogRecords: batch,
+		}}
+		logs = append(logs, resourceLogs{
+			Resource:  resource,
+			ScopeLogs: scopeLogs,
+		})
 	}
 
 	if len(logs) == 0 {
@@ -302,7 +302,7 @@ func (c *Client) sendBatch(ctx context.Context, payload payload) (*http.Response
 		return nil, fmt.Errorf("error creating request: %v", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", fmt.Sprintf("pebble/%s", cmd.Version))
+	req.Header.Set("User-Agent", c.options.UserAgent)
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {

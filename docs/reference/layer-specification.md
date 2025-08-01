@@ -260,17 +260,17 @@ log-targets:
 
     # (Required) The URL of the remote log target.
     # For Loki, this needs to be the fully-qualified URL of the push API,
-    # including the API endpoint, e.g.
+    # including the API endpoint, for example:
     #     http://<ip-address>:3100/loki/api/v1/push
-    # For OpenTelemetry, this needs to use the HTTP port (the default value is
-    # 4318) without the API endpoint, e.g.
+    # For OpenTelemetry, this needs to include the TCP port (normally 4318)
+    # without the API endpoint, for example:
     #     http://<ip-address>:4318
     location: <url>
 
     # (Optional) A list of services whose logs will be sent to this target.
     # Use the special keyword 'all' to match all services in the plan.
     # When merging log targets, the 'services' lists are appended. Prefix a
-    # service name with a minus (e.g. '-svc1') to remove a previously added
+    # service name with a minus (for example '-svc1') to remove a previously added
     # service. '-all' will remove all services.
     services: [<service names>]
 

@@ -27,7 +27,6 @@ import (
 
 	. "gopkg.in/check.v1"
 
-	"github.com/canonical/pebble/cmd"
 	"github.com/canonical/pebble/internals/overlord/logstate/opentelemetry"
 	"github.com/canonical/pebble/internals/servicelog"
 )
@@ -157,7 +156,7 @@ func (*suite) TestRequest(c *C) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		c.Assert(r.Method, Equals, http.MethodPost)
 		c.Assert(r.Header.Get("Content-Type"), Equals, "application/json")
-		c.Assert(r.Header.Get("User-Agent"), Equals, fmt.Sprintf("pebble/%s", cmd.Version))
+		c.Assert(r.Header.Get("User-Agent"), Equals, "pebble/1.23.0")
 		numRequests++
 		reqBody, err := io.ReadAll(r.Body)
 		c.Assert(err, IsNil)
@@ -165,7 +164,10 @@ func (*suite) TestRequest(c *C) {
 	}))
 	defer server.Close()
 
-	client := opentelemetry.NewClient(&opentelemetry.ClientOptions{Location: server.URL})
+	client := opentelemetry.NewClient(&opentelemetry.ClientOptions{
+		Location:  server.URL,
+		UserAgent: "pebble/1.23.0",
+	})
 	for _, entry := range input {
 		err := client.Add(entry)
 		c.Assert(err, IsNil)
