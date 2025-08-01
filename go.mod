@@ -1,6 +1,8 @@
 module github.com/canonical/pebble
 
-go 1.24.4
+go 1.23.0
+
+toolchain go1.23.10
 
 require (
 	github.com/GehirnInc/crypt v0.0.0-20230320061759-8cc1b52080c5
