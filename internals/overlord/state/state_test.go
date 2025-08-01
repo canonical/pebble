@@ -366,7 +366,7 @@ func (ss *stateSuite) TestNewChangeWithNoticeData(c *C) {
 	defer st.Unlock()
 
 	extraData := map[string]string{"foo": "bar"}
-	chg := st.NewChangeWithNoticeData("perform-check", "...", extraData)
+	chg := st.NewChangeWithNoticeData("perform-check", "...", "", extraData)
 
 	chgs := st.Changes()
 	c.Check(chgs, HasLen, 1)
@@ -383,7 +383,7 @@ func (ss *stateSuite) TestNewChangeWithNilNoticeData(c *C) {
 	defer st.Unlock()
 
 	st.NewChange("replan", "...")
-	st.NewChangeWithNoticeData("replan", "...", nil)
+	st.NewChangeWithNoticeData("replan", "...", "", nil)
 
 	for _, chg := range st.Changes() {
 		c.Assert(chg.Has("notice-data"), Equals, false)

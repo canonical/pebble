@@ -217,3 +217,61 @@ func (s *PebbleSuite) TestCheckRefreshNotFound(c *C) {
 	c.Assert(rest, HasLen, 1)
 	c.Check(err, ErrorMatches, "cannot find check .*")
 }
+
+// TestGetLogFromPrecedentChange tests the behavior when a check fails at its threshold, a new change is created,
+// but the change's task doen't have logs yet, and it gets logs from the precedent change.
+func (s *PebbleSuite) TestGetLogFromPrecedentChange(c *C) {
+	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1/checks":
+			c.Assert(r.Method, Equals, "GET")
+			c.Assert(r.URL.Path, Equals, "/v1/checks")
+			c.Assert(r.URL.Query(), DeepEquals, url.Values{"names": {"chk1"}})
+			fmt.Fprint(w, `
+{
+	"type": "sync",
+	"status-code": 200,
+	"result": [{"name": "chk1", "startup": "enabled", "status": "up", "failures": 3, "threshold": 3, "change-id": "2"}]
+}`)
+		case "/v1/changes/2":
+			fmt.Fprint(w, `
+{
+"type": "sync",
+"result": {
+"id": "2",
+"precedent-change-id": "1",
+"kind": "recover-check",
+"status": "Doing",
+"tasks": [{"kind": "recover-check", "status": "Doing", "log": []}]
+}
+}`)
+		case "/v1/changes/1":
+			fmt.Fprint(w, `
+{
+"type": "sync",
+"result": {
+"id": "1",
+"kind": "perform-check",
+"status": "Doing",
+"tasks": [{"kind": "perform-check", "status": "Doing", "log": ["2025-08-01T08:06:57Z ERROR"]}]
+}
+}`)
+		default:
+			c.Fatalf("unexpected path %q", r.URL.Path)
+		}
+	})
+	rest, err := cli.ParserForTest().ParseArgs([]string{"check", "chk1"})
+	c.Assert(err, IsNil)
+	c.Assert(rest, HasLen, 0)
+	c.Check(s.Stdout(), Equals, `
+name: chk1
+startup: enabled
+status: up
+failures: 3
+threshold: 3
+change-id: "2"
+logs: |
+    2025-08-01T08:06:57Z ERROR
+`[1:])
+	c.Check(s.Stderr(), Equals, "")
+}

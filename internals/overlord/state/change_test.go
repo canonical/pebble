@@ -56,7 +56,7 @@ func (cs *changeSuite) TestNewChangeWithExtraNoticeData(c *C) {
 	st.Lock()
 	defer st.Unlock()
 
-	st.NewChangeWithNoticeData("perform-check", "...", map[string]string{"check-name": "c"})
+	st.NewChangeWithNoticeData("perform-check", "...", "", map[string]string{"check-name": "c"})
 
 	notices := st.Notices(nil)
 	c.Assert(notices, HasLen, 1)

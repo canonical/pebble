@@ -135,6 +135,26 @@ func (cmd *cmdCheck) taskLogs(changeID string) (string, error) {
 	if len(change.Tasks) < 1 {
 		return "", nil
 	}
+
+	logs, err := cmd.getLogsFromChange(change)
+	if err != nil || logs != "" {
+		return logs, err
+	}
+
+	if change.PrecedentChangeID == "" {
+		return "", nil
+	}
+	precedentChange, err := cmd.client.Change(change.PrecedentChangeID)
+	if err != nil {
+		return "", err
+	}
+	if len(precedentChange.Tasks) < 1 {
+		return "", nil
+	}
+	return cmd.getLogsFromChange(precedentChange)
+}
+
+func (cmd *cmdCheck) getLogsFromChange(change *client.Change) (string, error) {
 	logs := change.Tasks[0].Log
 	if len(logs) < 1 {
 		return "", nil

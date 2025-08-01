@@ -26,13 +26,14 @@ import (
 
 // Change is a modification to the system state.
 type Change struct {
-	ID      string  `json:"id"`
-	Kind    string  `json:"kind"`
-	Summary string  `json:"summary"`
-	Status  string  `json:"status"`
-	Tasks   []*Task `json:"tasks,omitempty"`
-	Ready   bool    `json:"ready"`
-	Err     string  `json:"err,omitempty"`
+	ID                string  `json:"id"`
+	PrecedentChangeID string  `json:"precedent-change-id,omitempty"`
+	Kind              string  `json:"kind"`
+	Summary           string  `json:"summary"`
+	Status            string  `json:"status"`
+	Tasks             []*Task `json:"tasks,omitempty"`
+	Ready             bool    `json:"ready"`
+	Err               string  `json:"err,omitempty"`
 
 	SpawnTime time.Time `json:"spawn-time,omitempty"`
 	ReadyTime time.Time `json:"ready-time,omitempty"`

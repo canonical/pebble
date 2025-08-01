@@ -33,12 +33,12 @@ type performConfigKey struct {
 	changeID string
 }
 
-func performCheckChange(st *state.State, config *plan.Check) (changeID string) {
+func performCheckChange(st *state.State, config *plan.Check, precedentChangeID string) (changeID string) {
 	summary := fmt.Sprintf("Perform %s check %q", checkType(config), config.Name)
 	task := st.NewTask(performCheckKind, summary)
 	task.Set(checkDetailsAttr, &checkDetails{Name: config.Name})
 
-	change := st.NewChangeWithNoticeData(performCheckKind, task.Summary(), map[string]string{
+	change := st.NewChangeWithNoticeData(performCheckKind, task.Summary(), precedentChangeID, map[string]string{
 		"check-name": config.Name,
 	})
 	change.Set(noPruneAttr, true)
@@ -53,7 +53,7 @@ type recoverConfigKey struct {
 	changeID string
 }
 
-func recoverCheckChange(st *state.State, config *plan.Check, successes, failures int) (changeID string) {
+func recoverCheckChange(st *state.State, config *plan.Check, precedentChangeID string, successes, failures int) (changeID string) {
 	summary := fmt.Sprintf("Recover %s check %q", checkType(config), config.Name)
 	task := st.NewTask(recoverCheckKind, summary)
 	task.Set(checkDetailsAttr, &checkDetails{
@@ -62,7 +62,7 @@ func recoverCheckChange(st *state.State, config *plan.Check, successes, failures
 		Failures:  failures,
 	})
 
-	change := st.NewChangeWithNoticeData(recoverCheckKind, task.Summary(), map[string]string{
+	change := st.NewChangeWithNoticeData(recoverCheckKind, task.Summary(), precedentChangeID, map[string]string{
 		"check-name": config.Name,
 	})
 	change.Set(noPruneAttr, true)

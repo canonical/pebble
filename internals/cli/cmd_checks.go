@@ -112,7 +112,7 @@ func (cmd *cmdChecks) changeInfo(check *client.CheckInfo) string {
 	if check.Failures == 0 {
 		return check.ChangeID
 	}
-	log, err := cmd.lastTaskLog(check.ChangeID)
+	log, changeID, err := cmd.lastTaskLog(check.ChangeID)
 	if err != nil {
 		return fmt.Sprintf("%s (%v)", check.ChangeID, err)
 	}
@@ -122,20 +122,41 @@ func (cmd *cmdChecks) changeInfo(check *client.CheckInfo) string {
 	// Truncate to limited number of bytes with ellipsis and "for more" text.
 	const maxError = 70
 	if len(log) > maxError {
-		forMore := fmt.Sprintf(`... run "pebble tasks %s" for more`, check.ChangeID)
+		forMore := fmt.Sprintf(`... run "pebble tasks %s" for more`, changeID)
 		log = log[:maxError-len(forMore)] + forMore
 	}
 	return fmt.Sprintf("%s (%s)", check.ChangeID, log)
 }
 
-func (cmd *cmdChecks) lastTaskLog(changeID string) (string, error) {
+func (cmd *cmdChecks) lastTaskLog(changeID string) (string, string, error) {
 	change, err := cmd.client.Change(changeID)
 	if err != nil {
-		return "", err
+		return "", changeID, err
 	}
 	if len(change.Tasks) < 1 {
-		return "", nil
+		return "", changeID, nil
 	}
+
+	lastLog, err := getLastLogFromChange(change)
+	if err != nil || lastLog != "" {
+		return lastLog, changeID, err
+	}
+
+	if change.PrecedentChangeID == "" {
+		return "", changeID, nil
+	}
+	precedentChange, err := cmd.client.Change(change.PrecedentChangeID)
+	if err != nil {
+		return "", precedentChange.ID, err
+	}
+	if len(precedentChange.Tasks) < 1 {
+		return "", precedentChange.ID, nil
+	}
+	lastLog, err = getLastLogFromChange(precedentChange)
+	return lastLog, precedentChange.ID, err
+}
+
+func getLastLogFromChange(change *client.Change) (string, error) {
 	logs := change.Tasks[0].Log
 	if len(logs) < 1 {
 		return "", nil
