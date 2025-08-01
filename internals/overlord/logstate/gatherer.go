@@ -100,14 +100,15 @@ func newLogGatherer(target *plan.LogTarget) (*logGatherer, error) {
 // This function is used in the real implementation, but also allows overriding
 // certain configuration values for testing.
 func newLogGathererInternal(target *plan.LogTarget, options *logGathererOptions) (*logGatherer, error) {
-	options = fillDefaultOptions(options)
-	client, err := options.newClient(target)
+	opts := *options
+	fillDefaultOptions(&opts)
+	client, err := opts.newClient(target)
 	if err != nil {
 		return nil, fmt.Errorf("cannot create log client: %w", err)
 	}
 
 	g := &logGatherer{
-		logGathererOptions: options,
+		logGathererOptions: &opts,
 
 		targetName: target.Name,
 		client:     client,
@@ -122,7 +123,7 @@ func newLogGathererInternal(target *plan.LogTarget, options *logGathererOptions)
 	return g, nil
 }
 
-func fillDefaultOptions(options *logGathererOptions) *logGathererOptions {
+func fillDefaultOptions(options *logGathererOptions) {
 	if options.bufferTimeout == 0 {
 		options.bufferTimeout = bufferTimeout
 	}
@@ -138,7 +139,6 @@ func fillDefaultOptions(options *logGathererOptions) *logGathererOptions {
 	if options.newClient == nil {
 		options.newClient = newLogClient
 	}
-	return options
 }
 
 // PlanChanged is called by the LogManager when the plan is changed, if this
