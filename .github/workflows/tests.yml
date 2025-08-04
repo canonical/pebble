@@ -10,19 +10,14 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
-    strategy:
-      fail-fast: false
-      matrix:
-        go: ['1.22']
-
-    name: Go ${{ matrix.go }}
+    name: Unit tests
     steps:
     - uses: actions/checkout@v3
 
     - name: Set up Go
       uses: actions/setup-go@v4
       with:
-        go-version: ${{ matrix.go }}
+        go-version-file: 'go.mod'
 
     - name: Test and build
       run: |
@@ -39,7 +34,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v4
       with:
-        go-version: ${{ matrix.go }}
+        go-version-file: 'go.mod'
 
     - name: Test
       run: |
