@@ -167,6 +167,7 @@ func (*suite) TestRequest(c *C) {
 	client := opentelemetry.NewClient(&opentelemetry.ClientOptions{
 		Location:  server.URL,
 		UserAgent: "pebble/1.23.0",
+		ScopeName: "pebble",
 	})
 	for _, entry := range input {
 		err := client.Add(entry)
@@ -302,7 +303,10 @@ func (*suite) TestLabels(c *C) {
 	}))
 	defer server.Close()
 
-	client := opentelemetry.NewClient(&opentelemetry.ClientOptions{Location: server.URL})
+	client := opentelemetry.NewClient(&opentelemetry.ClientOptions{
+		Location:  server.URL,
+		ScopeName: "pebble",
+	})
 
 	client.SetLabels("svc1", map[string]string{
 		"label1": "val1",

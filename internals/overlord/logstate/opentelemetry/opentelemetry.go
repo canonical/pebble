@@ -22,6 +22,7 @@ import (
 	"io"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -126,11 +127,12 @@ type Client struct {
 }
 
 func NewClient(options *ClientOptions) *Client {
-	options = fillDefaultOptions(options)
+	opts := *options
+	fillDefaultOptions(&opts)
 	c := &Client{
-		options:            options,
-		httpClient:         &http.Client{Timeout: options.RequestTimeout},
-		buffer:             make([]entryWithService, 2*options.MaxRequestEntries),
+		options:            &opts,
+		httpClient:         &http.Client{Timeout: opts.RequestTimeout},
+		buffer:             make([]entryWithService, 2*opts.MaxRequestEntries),
 		resourceAttributes: make(map[string][]keyValue),
 	}
 	// c.entries should be backed by the same array as c.buffer.
@@ -143,18 +145,18 @@ type ClientOptions struct {
 	RequestTimeout    time.Duration
 	MaxRequestEntries int
 	UserAgent         string
+	ScopeName         string
 	TargetName        string
 	Location          string
 }
 
-func fillDefaultOptions(options *ClientOptions) *ClientOptions {
+func fillDefaultOptions(options *ClientOptions) {
 	if options.RequestTimeout == 0 {
 		options.RequestTimeout = requestTimeout
 	}
 	if options.MaxRequestEntries == 0 {
 		options.MaxRequestEntries = maxRequestEntries
 	}
-	return options
 }
 
 // SetLabels sets resource attributes for a service. Labels are analogous to OpenTelemetry's resource attributes.
@@ -223,7 +225,7 @@ func encodeEntry(entry servicelog.Entry) logRecord {
 	message := strings.TrimSuffix(entry.Message, "\n")
 
 	return logRecord{
-		TimeUnixNano: fmt.Sprintf("%d", entry.Time.UnixNano()),
+		TimeUnixNano: strconv.FormatInt(entry.Time.UnixNano(), 10),
 		Body:         anyValue{StringValue: &message},
 	}
 }
@@ -264,7 +266,7 @@ func (c *Client) Flush(ctx context.Context) error {
 		resource := resource{
 			Attributes: resourceAttributes,
 		}
-		scope := instrumentationScope{Name: "pebble"}
+		scope := instrumentationScope{Name: c.options.ScopeName}
 		scopeLogs := []scopeLogs{{
 			Scope:      scope,
 			LogRecords: batch,
@@ -294,19 +296,19 @@ func (c *Client) Flush(ctx context.Context) error {
 func (c *Client) sendBatch(ctx context.Context, payload payload) (*http.Response, error) {
 	jsonData, err := json.Marshal(payload)
 	if err != nil {
-		return nil, fmt.Errorf("error marshaling log batch: %v", err)
+		return nil, fmt.Errorf("cannot marshal log batch: %v", err)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, "POST", c.options.Location+"/v1/logs", bytes.NewBuffer(jsonData))
 	if err != nil {
-		return nil, fmt.Errorf("error creating request: %v", err)
+		return nil, fmt.Errorf("cannot create request: %v", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", c.options.UserAgent)
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return resp, fmt.Errorf("error sending logs: %v", err)
+		return resp, fmt.Errorf("cannot send logs: %v", err)
 	}
 	defer resp.Body.Close()
 
