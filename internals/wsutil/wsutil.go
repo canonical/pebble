@@ -42,10 +42,6 @@ type MessageReadWriter interface {
 
 var endCommandJSON = []byte(`{"command":"end"}`)
 
-func sendEndCommand(conn MessageWriter) error {
-	return conn.WriteMessage(websocket.TextMessage, endCommandJSON)
-}
-
 func WebsocketSendStream(conn MessageWriter, r io.Reader, bufferSize int) chan bool {
 	ch := make(chan bool)
 
@@ -68,7 +64,7 @@ func WebsocketSendStream(conn MessageWriter, r io.Reader, bufferSize int) chan b
 				break
 			}
 		}
-		sendEndCommand(conn)
+		_ = conn.WriteMessage(websocket.TextMessage, endCommandJSON)
 		close(ch) // NOTE(benhoyt): this was "ch <- true", but that can block
 	}(conn, r)
 
@@ -92,7 +88,9 @@ func recvLoop(w io.Writer, conn MessageReader) {
 	for {
 		mt, r, err := conn.NextReader()
 		if err != nil {
-			logger.Debugf("Cannot get next reader: %v", err)
+			if websocket.IsUnexpectedCloseError(err, websocket.CloseAbnormalClosure, websocket.CloseGoingAway) {
+				logger.Debugf("Cannot get next reader: %v", err)
+			}
 			return
 		}
 

@@ -469,10 +469,15 @@ func (e *execution) controlLoop(execID string, pidCh <-chan int, stop <-chan str
 	logger.Debugf("Exec %s: control handler started for PID %d", execID, pid)
 	for {
 		controlConn := e.getWebsocket(wsControl)
-		_, r, err := controlConn.NextReader()
+		mt, r, err := controlConn.NextReader()
+		if mt == websocket.CloseMessage {
+			break
+		}
+
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseAbnormalClosure, websocket.CloseGoingAway) {
 				logger.Debugf("Exec %s: cannot get next websocket reader for PID %d: %v", execID, pid, err)
+
 				// If an abnormal closure occurred, kill the attached process.
 				err := unix.Kill(pid, unix.SIGKILL)
 				if err != nil {
