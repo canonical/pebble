@@ -100,15 +100,14 @@ func newLogGatherer(target *plan.LogTarget) (*logGatherer, error) {
 // This function is used in the real implementation, but also allows overriding
 // certain configuration values for testing.
 func newLogGathererInternal(target *plan.LogTarget, options *logGathererOptions) (*logGatherer, error) {
-	opts := *options
-	fillDefaultOptions(&opts)
-	client, err := opts.newClient(target)
+	options = fillDefaultOptions(options)
+	client, err := options.newClient(target)
 	if err != nil {
 		return nil, fmt.Errorf("cannot create log client: %w", err)
 	}
 
 	g := &logGatherer{
-		logGathererOptions: &opts,
+		logGathererOptions: options,
 
 		targetName: target.Name,
 		client:     client,
@@ -123,7 +122,7 @@ func newLogGathererInternal(target *plan.LogTarget, options *logGathererOptions)
 	return g, nil
 }
 
-func fillDefaultOptions(options *logGathererOptions) {
+func fillDefaultOptions(options *logGathererOptions) *logGathererOptions {
 	if options.bufferTimeout == 0 {
 		options.bufferTimeout = bufferTimeout
 	}
@@ -139,6 +138,7 @@ func fillDefaultOptions(options *logGathererOptions) {
 	if options.newClient == nil {
 		options.newClient = newLogClient
 	}
+	return options
 }
 
 // PlanChanged is called by the LogManager when the plan is changed, if this
@@ -375,6 +375,7 @@ func newLogClient(target *plan.LogTarget) (logClient, error) {
 			TargetName: target.Name,
 			Location:   target.Location,
 			UserAgent:  fmt.Sprintf("%s/%s", cmd.ProgramName, cmd.Version),
+			ScopeName:  cmd.ProgramName,
 		}), nil
 	default:
 		return nil, fmt.Errorf("unknown type %q for log target %q", target.Type, target.Name)
