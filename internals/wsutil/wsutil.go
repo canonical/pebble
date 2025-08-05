@@ -75,12 +75,11 @@ func WebsocketSendStream(conn MessageWriter, r io.Reader, bufferSize int) chan b
 	return ch
 }
 
-func WebsocketRecvStream(w io.Writer, conn MessageReadWriter) chan bool {
+func WebsocketRecvStream(w io.Writer, conn MessageReader) chan bool {
 	ch := make(chan bool)
 
 	go func() {
 		recvLoop(w, conn)
-		sendEndCommand(conn)
 		close(ch)
 	}()
 
