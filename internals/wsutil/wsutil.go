@@ -64,7 +64,7 @@ func WebsocketSendStream(conn MessageWriter, r io.Reader, bufferSize int) chan b
 				break
 			}
 		}
-		_ = conn.WriteMessage(websocket.TextMessage, endCommandJSON)
+		conn.WriteMessage(websocket.TextMessage, endCommandJSON)
 		close(ch) // NOTE(benhoyt): this was "ch <- true", but that can block
 	}(conn, r)
 
