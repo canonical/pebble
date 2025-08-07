@@ -178,7 +178,7 @@ func (m *CheckManager) PlanChanged(newPlan *plan.Plan) {
 	for _, config := range newPlan.Checks {
 		if newOrModified[config.Name] {
 			merged := mergeServiceContext(newPlan, config)
-			changeID := performCheckChange(m.state, merged)
+			changeID := performCheckChange(m.state, merged, "")
 			m.updateCheckData(config, changeID, 0, 0)
 			shouldEnsure = true
 		}
@@ -197,7 +197,7 @@ func (m *CheckManager) changeStatusChanged(change *state.Change, old, new state.
 			break
 		}
 		config := m.state.Cached(performConfigKey{change.ID()}).(*plan.Check) // panic if key not present (always should be)
-		changeID := recoverCheckChange(m.state, config, details.Successes, details.Failures)
+		changeID := recoverCheckChange(m.state, config, change.ID(), details.Successes, details.Failures)
 		m.updateCheckData(config, changeID, details.Successes, details.Failures)
 		shouldEnsure = true
 
@@ -207,7 +207,7 @@ func (m *CheckManager) changeStatusChanged(change *state.Change, old, new state.
 			break
 		}
 		config := m.state.Cached(recoverConfigKey{change.ID()}).(*plan.Check) // panic if key not present (always should be)
-		changeID := performCheckChange(m.state, config)
+		changeID := performCheckChange(m.state, config, change.ID())
 		m.updateCheckData(config, changeID, details.Successes, details.Failures)
 		shouldEnsure = true
 	}
@@ -548,7 +548,7 @@ func (m *CheckManager) StartChecks(checks []string) (started []string, err error
 		if checkData.changeID != "" {
 			continue
 		}
-		changeID := performCheckChange(m.state, check)
+		changeID := performCheckChange(m.state, check, "")
 		m.updateCheckData(check, changeID, 0, 0)
 		started = append(started, check.Name)
 	}
@@ -631,7 +631,7 @@ func (m *CheckManager) Replan() {
 		if checkData.changeID != "" {
 			continue
 		}
-		changeID := performCheckChange(m.state, check)
+		changeID := performCheckChange(m.state, check, "")
 		m.updateCheckData(check, changeID, 0, 0)
 	}
 }

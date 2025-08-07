@@ -135,6 +135,7 @@ const (
 type Change struct {
 	state                    *State
 	id                       string
+	precedentChangeID        string
 	kind                     string
 	summary                  string
 	status                   Status
@@ -246,6 +247,11 @@ func (c *Change) finishUnmarshal() {
 // ID returns the individual random key for the change.
 func (c *Change) ID() string {
 	return c.id
+}
+
+// PrecedentChangeID returns the precedent Change's ID for the change.
+func (c *Change) PrecedentChangeID() string {
+	return c.precedentChangeID
 }
 
 // Kind returns the nature of the change for managers to know how to handle it.
