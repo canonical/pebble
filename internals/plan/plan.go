@@ -653,8 +653,9 @@ type LogTarget struct {
 type LogTargetType string
 
 const (
-	LokiTarget     LogTargetType = "loki"
-	UnsetLogTarget LogTargetType = ""
+	LokiTarget          LogTargetType = "loki"
+	OpenTelemetryTarget LogTargetType = "opentelemetry"
+	UnsetLogTarget      LogTargetType = ""
 )
 
 // Copy returns a deep copy of the log target configuration.
@@ -980,14 +981,14 @@ func (layer *Layer) Validate() error {
 			}
 		}
 		switch target.Type {
-		case LokiTarget:
+		case LokiTarget, OpenTelemetryTarget:
 			// valid, continue
 		case UnsetLogTarget:
 			// will be checked when the layers are combined
 		default:
 			return &FormatError{
-				Message: fmt.Sprintf(`log target %q has unsupported type %q, must be %q`,
-					name, target.Type, LokiTarget),
+				Message: fmt.Sprintf(`log target %q has unsupported type %q, must be %q or %q`,
+					name, target.Type, LokiTarget, OpenTelemetryTarget),
 			}
 		}
 	}
@@ -1055,12 +1056,12 @@ func (p *Plan) Validate() error {
 
 	for name, target := range p.LogTargets {
 		switch target.Type {
-		case LokiTarget:
+		case LokiTarget, OpenTelemetryTarget:
 			// valid, continue
 		case UnsetLogTarget:
 			return &FormatError{
-				Message: fmt.Sprintf(`plan must define "type" (%q) for log target %q`,
-					LokiTarget, name),
+				Message: fmt.Sprintf(`plan must define "type" (%q or %q) for log target %q`,
+					LokiTarget, OpenTelemetryTarget, name),
 			}
 		}
 

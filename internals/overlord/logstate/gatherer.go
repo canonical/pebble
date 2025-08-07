@@ -22,8 +22,10 @@ import (
 
 	"gopkg.in/tomb.v2"
 
+	"github.com/canonical/pebble/cmd"
 	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/overlord/logstate/loki"
+	"github.com/canonical/pebble/internals/overlord/logstate/opentelemetry"
 	"github.com/canonical/pebble/internals/plan"
 	"github.com/canonical/pebble/internals/servicelog"
 )
@@ -368,6 +370,13 @@ func newLogClient(target *plan.LogTarget) (logClient, error) {
 	switch target.Type {
 	case plan.LokiTarget:
 		return loki.NewClient(target), nil
+	case plan.OpenTelemetryTarget:
+		return opentelemetry.NewClient(&opentelemetry.ClientOptions{
+			TargetName: target.Name,
+			Location:   target.Location,
+			UserAgent:  fmt.Sprintf("%s/%s", cmd.ProgramName, cmd.Version),
+			ScopeName:  cmd.ProgramName,
+		}), nil
 	default:
 		return nil, fmt.Errorf("unknown type %q for log target %q", target.Type, target.Name)
 	}
