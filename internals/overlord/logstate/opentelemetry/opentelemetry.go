@@ -194,7 +194,7 @@ func (c *Client) SetLabels(serviceName string, attributes map[string]string) {
 }
 
 func (c *Client) Add(entry servicelog.Entry) error {
-	if n := len(c.entries); n >= c.options.MaxRequestEntries {
+	if len(c.entries) >= c.options.MaxRequestEntries {
 		// "entries" is full - remove the first element to make room.
 		// Zero the removed element to allow garbage collection.
 		c.entries[0] = entryWithService{}
@@ -258,9 +258,6 @@ func (c *Client) Flush(ctx context.Context) error {
 	logs := make([]resourceLogs, 0, len(serviceNames))
 	for _, serviceName := range serviceNames {
 		batch := serviceBatches[serviceName]
-		if len(batch) == 0 {
-			continue
-		}
 
 		resourceAttributes := c.resourceAttributes[serviceName]
 		resource := resource{
@@ -277,42 +274,32 @@ func (c *Client) Flush(ctx context.Context) error {
 		})
 	}
 
-	if len(logs) == 0 {
-		return nil
-	}
-
 	payload := payload{
 		ResourceLogs: logs,
 	}
 
-	resp, err := c.sendBatch(ctx, payload)
-	if err != nil {
-		return err
-	}
-
-	return c.handleServerResponse(resp)
+	return c.sendBatch(ctx, payload)
 }
 
-func (c *Client) sendBatch(ctx context.Context, payload payload) (*http.Response, error) {
+func (c *Client) sendBatch(ctx context.Context, payload payload) error {
 	jsonData, err := json.Marshal(payload)
 	if err != nil {
-		return nil, fmt.Errorf("cannot marshal log batch: %v", err)
+		return fmt.Errorf("cannot marshal log batch: %v", err)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, "POST", c.options.Location+"/v1/logs", bytes.NewBuffer(jsonData))
 	if err != nil {
-		return nil, fmt.Errorf("cannot create request: %v", err)
+		return fmt.Errorf("cannot create request: %v", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", c.options.UserAgent)
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return resp, fmt.Errorf("cannot send logs: %v", err)
+		return fmt.Errorf("cannot send logs: %v", err)
 	}
-	defer resp.Body.Close()
 
-	return resp, nil
+	return c.handleServerResponse(resp)
 }
 
 // resetBuffer drops all buffered logs (in the case of a successful send, or an unrecoverable error).
