@@ -55,6 +55,10 @@ func NewFormatWriter(dest io.Writer, serviceName string) io.Writer {
 	}
 }
 
+func appendTimestamp(buf []byte, t time.Time) []byte {
+	return t.UTC().AppendFormat(buf, outputTimeFormat)
+}
+
 func (f *formatter) Write(p []byte) (nn int, ee error) {
 	f.mut.Lock()
 	defer f.mut.Unlock()
@@ -62,7 +66,7 @@ func (f *formatter) Write(p []byte) (nn int, ee error) {
 	for len(p) > 0 {
 		if f.writeTimestamp {
 			f.writeTimestamp = false
-			f.timestampBuffer = time.Now().UTC().AppendFormat(f.timestampBuffer[:0], outputTimeFormat)
+			f.timestampBuffer = appendTimestamp(f.timestampBuffer[:0], time.Now())
 			f.timestampBuffer = append(f.timestampBuffer, " ["...)
 			f.timestampBuffer = append(f.timestampBuffer, f.serviceName...)
 			f.timestampBuffer = append(f.timestampBuffer, "] "...)
