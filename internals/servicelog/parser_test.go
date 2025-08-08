@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"testing"
 	"time"
 
 	. "gopkg.in/check.v1"
@@ -191,4 +192,20 @@ func (s *parserSuite) TestNewDataAfterEOF(c *C) {
 	})
 	c.Check(parser.Next(), Equals, false)
 	c.Check(parser.Err(), IsNil)
+}
+
+var entry servicelog.Entry
+
+func BenchmarkParser(b *testing.B) {
+	var err error
+
+	for i := 0; i < b.N; i++ {
+		// Use a fixed log line to avoid allocating new strings.
+		entry, err = servicelog.Parse([]byte("2021-05-26T12:37:00Z [bar] baz"))
+		if err != nil {
+			b.Fatalf("Parse failed: %v", err)
+		}
+	}
+
+	_ = entry // avoid compiler optimization removing the entry variable
 }
