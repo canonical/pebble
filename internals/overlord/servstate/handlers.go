@@ -209,6 +209,12 @@ func (m *ServiceManager) serviceForStart(config *plan.Service, workload *workloa
 		service.workload = workload
 	}
 
+	newLogs := servicelog.NewRingBuffer(maxLogBytes)
+	if _, _, err := service.logs.WriteTo(newLogs, 0); err != nil {
+		logger.Debugf("Failed to copy previous logs for service %q. Continuing, but previous logs may be missing.", config.Name)
+	}
+	service.logs = newLogs
+
 	switch service.state {
 	case stateInitial, stateStarting, stateRunning:
 		return nil, fmt.Sprintf("Service %q already started.", config.Name)
@@ -262,6 +268,11 @@ func (m *ServiceManager) doStop(task *state.Task, tomb *tomb.Tomb) error {
 				return fmt.Errorf("cannot stop service: %w", err)
 			}
 			// Stopped successfully.
+
+			// close the log buffer when done
+			if err := service.logs.Close(); err != nil {
+				logger.Noticef("Cannot close service %q log buffer: %v", request.Name, err)
+			}
 			return nil
 		case <-tomb.Dying():
 			// User tried to abort the stop, but SIGTERM and/or SIGKILL have
