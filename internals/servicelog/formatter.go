@@ -29,11 +29,6 @@ type formatter struct {
 	timestamp       []byte
 }
 
-const (
-	// outputTimeFormat is RFC3339 with millisecond precision.
-	outputTimeFormat = "2006-01-02T15:04:05.000Z07:00"
-)
-
 // NewFormatWriter returns a io.Writer that inserts timestamp and service name for every
 // line in the stream.
 // For the input:
@@ -55,8 +50,82 @@ func NewFormatWriter(dest io.Writer, serviceName string) io.Writer {
 	}
 }
 
-func appendTimestamp(buf []byte, t time.Time) []byte {
-	return t.UTC().AppendFormat(buf, outputTimeFormat)
+// appendTimestamp appends a timestamp in format "YYYY-MM-DDTHH:mm:ss.sssZ" to
+// the given byte slice. Returns the extended slice. Makes no heap allocations.
+// The timestamp is always in UTC and has exactly 3 fractional digits
+// (millisecond precision). Total appended length is always 24 bytes.
+func appendTimestamp(b []byte, t time.Time) []byte {
+	// Convert to UTC to ensure consistent Z suffix
+	utc := t.UTC()
+
+	// Pre-calculate all components
+	year := utc.Year()
+	month := int(utc.Month())
+	day := utc.Day()
+	hour := utc.Hour()
+	minute := utc.Minute()
+	second := utc.Second()
+
+	// Convert nanoseconds to milliseconds as we're only appending millisecond
+	// precision.
+	millisecond := utc.Nanosecond() / 1000000
+
+	// Ensure we have enough capacity for 24 more bytes. This may cause
+	// reallocation, but it's unavoidable if capacity is insufficient.
+
+	if cap(b)-len(b) < 24 {
+		// Grow the slice - this is the only potential allocation
+		newCap := len(b) + 24
+		if newCap < cap(b)*2 {
+			newCap = cap(b) * 2
+		}
+		newB := make([]byte, len(b), newCap)
+		copy(newB, b)
+		b = newB
+	}
+
+	// Extend slice length by 24 bytes
+	b = b[:24]
+
+	// Append year (4 digits)
+	b[0] = byte('0' + year/1000%10)
+	b[1] = byte('0' + year/100%10)
+	b[2] = byte('0' + year/10%10)
+	b[3] = byte('0' + year%10)
+	b[4] = '-'
+
+	// Append month (2 digits)
+	b[5] = byte('0' + month/10)
+	b[6] = byte('0' + month%10)
+	b[7] = '-'
+
+	// Append day (2 digits)
+	b[8] = byte('0' + day/10)
+	b[9] = byte('0' + day%10)
+	b[10] = 'T'
+
+	// Append hour (2 digits)
+	b[11] = byte('0' + hour/10)
+	b[12] = byte('0' + hour%10)
+	b[13] = ':'
+
+	// Append minute (2 digits)
+	b[14] = byte('0' + minute/10)
+	b[15] = byte('0' + minute%10)
+	b[16] = ':'
+
+	// Append second (2 digits)
+	b[17] = byte('0' + second/10)
+	b[18] = byte('0' + second%10)
+	b[19] = '.'
+
+	// Append milliseconds (3 digits)
+	b[20] = byte('0' + millisecond/100%10)
+	b[21] = byte('0' + millisecond/10%10)
+	b[22] = byte('0' + millisecond%10)
+	b[23] = 'Z'
+
+	return b
 }
 
 func (f *formatter) Write(p []byte) (nn int, ee error) {
