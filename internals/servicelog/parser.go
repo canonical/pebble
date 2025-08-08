@@ -113,18 +113,41 @@ func (p *Parser) Err() error {
 // Parse parses a log entry of the form
 // "2021-05-20T15:39:12.345Z [service] log message".
 func Parse(line []byte) (Entry, error) {
-	fields := bytes.SplitN(line, []byte(" "), 3)
-	if len(fields) != 3 {
+	// find first space, telling us where the timestamp ends
+	i := bytes.IndexByte(line, ' ')
+	if i < 1 {
 		return Entry{}, errParseFields
 	}
-	timestamp, err := time.Parse(parseTimeFormat, string(fields[0]))
+	timestampBytes := line[:i]
+	// ensure there is at least one more byte since we're going to slice next,
+	// which could panic otherwise
+	if len(line) <= i+1 {
+		return Entry{}, errParseFields
+	}
+	line = line[i+1:] // Skip the space
+	i = bytes.IndexByte(line, ' ')
+	if i < 1 {
+		return Entry{}, errParseFields
+	}
+	serviceBytes := line[:i]
+
+	if len(line) <= i+1 {
+		return Entry{}, errParseFields
+	}
+	messageBytes := line[i+1:] // Skip the space after service
+
+	timestamp, err := time.Parse(parseTimeFormat, string(timestampBytes))
 	if err != nil {
 		return Entry{}, errParseTime
 	}
-	if len(fields[1]) < 3 || fields[1][0] != '[' || fields[1][len(fields[1])-1] != ']' {
+
+	if len(serviceBytes) < 3 || serviceBytes[0] != '[' || serviceBytes[len(serviceBytes)-1] != ']' {
 		return Entry{}, errParseService
 	}
-	service := string(fields[1][1 : len(fields[1])-1]) // Trim [ and ] from "[service]"
-	message := string(fields[2])
-	return Entry{timestamp, service, message}, nil
+	serviceBytes = serviceBytes[1 : len(serviceBytes)-1] // Trim [ and ] from "[service]"
+	return Entry{
+		timestamp,
+		string(serviceBytes),
+		string(messageBytes),
+	}, nil
 }
