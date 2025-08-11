@@ -14,12 +14,12 @@
 
 package loki
 
-type LokiEntryWithService = lokiEntryWithService
+type EntryWithService = entryWithService
 
-func GetBuffer(c *Client) []LokiEntryWithService {
+func GetBuffer(c *Client) []EntryWithService {
 	return c.buffer
 }
 
-func GetMessage(e LokiEntryWithService) string {
+func GetMessage(e EntryWithService) string {
 	return e.entry[1]
 }

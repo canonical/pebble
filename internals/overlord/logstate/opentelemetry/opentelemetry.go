@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/canonical/pebble/internals/logger"
+	"github.com/canonical/pebble/internals/plan"
 	"github.com/canonical/pebble/internals/servicelog"
 )
 
@@ -115,6 +116,7 @@ type logRecord struct {
 
 type Client struct {
 	options    *ClientOptions
+	target     *plan.LogTarget
 	httpClient *http.Client
 
 	// To store log entries, keep a buffer of size 2*MaxRequestEntries with a
@@ -126,11 +128,12 @@ type Client struct {
 	resourceAttributes map[string][]keyValue
 }
 
-func NewClient(options *ClientOptions) *Client {
+func NewClient(target *plan.LogTarget, options *ClientOptions) *Client {
 	opts := *options
 	fillDefaultOptions(&opts)
 	c := &Client{
 		options:            &opts,
+		target:             target,
 		httpClient:         &http.Client{Timeout: opts.RequestTimeout},
 		buffer:             make([]entryWithService, 2*opts.MaxRequestEntries),
 		resourceAttributes: make(map[string][]keyValue),
@@ -146,8 +149,6 @@ type ClientOptions struct {
 	MaxRequestEntries int
 	UserAgent         string
 	ScopeName         string
-	TargetName        string
-	Location          string
 }
 
 func fillDefaultOptions(options *ClientOptions) {
@@ -287,7 +288,7 @@ func (c *Client) sendBatch(ctx context.Context, payload payload) error {
 		return fmt.Errorf("cannot marshal log batch: %v", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", c.options.Location+"/v1/logs", bytes.NewBuffer(jsonData))
+	req, err := http.NewRequestWithContext(ctx, "POST", c.target.Location+"/v1/logs", bytes.NewBuffer(jsonData))
 	if err != nil {
 		return fmt.Errorf("cannot create request: %v", err)
 	}
@@ -341,7 +342,7 @@ func (c *Client) handleServerResponse(resp *http.Response) error {
 	case 400 <= code && code < 500:
 		// Other 4xx codes indicate a client problem, so drop the logs (retrying won't help).
 		logger.Noticef("Target %q: request failed with status %d, dropping %d logs",
-			c.options.TargetName, code, len(c.entries))
+			c.target.Name, code, len(c.entries))
 		c.resetBuffer()
 		return errFromResponse(resp)
 

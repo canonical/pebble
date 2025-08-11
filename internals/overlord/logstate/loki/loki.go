@@ -26,7 +26,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/canonical/pebble/cmd"
 	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/plan"
 	"github.com/canonical/pebble/internals/servicelog"
@@ -44,30 +43,21 @@ type Client struct {
 
 	// To store log entries, keep a buffer of size 2*MaxRequestEntries with a
 	// sliding window 'entries' of size MaxRequestEntries
-	buffer  []lokiEntryWithService
-	entries []lokiEntryWithService
+	buffer  []entryWithService
+	entries []entryWithService
 
 	// store the custom labels for each service
 	labels map[string]json.RawMessage
 }
 
-func NewClient(target *plan.LogTarget) *Client {
-	return NewClientWithOptions(target, &ClientOptions{})
-}
-
-// ClientOptions allows overriding default parameters (e.g. for testing)
-type ClientOptions struct {
-	RequestTimeout    time.Duration
-	MaxRequestEntries int
-}
-
-func NewClientWithOptions(target *plan.LogTarget, options *ClientOptions) *Client {
-	options = fillDefaultOptions(options)
+func NewClient(target *plan.LogTarget, options *ClientOptions) *Client {
+	opts := *options
+	fillDefaultOptions(&opts)
 	c := &Client{
-		options:    options,
+		options:    &opts,
 		target:     target,
-		httpClient: &http.Client{Timeout: options.RequestTimeout},
-		buffer:     make([]lokiEntryWithService, 2*options.MaxRequestEntries),
+		httpClient: &http.Client{Timeout: opts.RequestTimeout},
+		buffer:     make([]entryWithService, 2*opts.MaxRequestEntries),
 		labels:     make(map[string]json.RawMessage),
 	}
 	// c.entries should be backed by the same array as c.buffer
@@ -75,14 +65,20 @@ func NewClientWithOptions(target *plan.LogTarget, options *ClientOptions) *Clien
 	return c
 }
 
-func fillDefaultOptions(options *ClientOptions) *ClientOptions {
+// ClientOptions allows overriding default parameters (e.g. for testing)
+type ClientOptions struct {
+	RequestTimeout    time.Duration
+	MaxRequestEntries int
+	UserAgent         string
+}
+
+func fillDefaultOptions(options *ClientOptions) {
 	if options.RequestTimeout == 0 {
 		options.RequestTimeout = requestTimeout
 	}
 	if options.MaxRequestEntries == 0 {
 		options.MaxRequestEntries = maxRequestEntries
 	}
-	return options
 }
 
 func (c *Client) SetLabels(serviceName string, labels map[string]string) {
@@ -110,10 +106,10 @@ func (c *Client) SetLabels(serviceName string, labels map[string]string) {
 }
 
 func (c *Client) Add(entry servicelog.Entry) error {
-	if n := len(c.entries); n >= c.options.MaxRequestEntries {
+	if len(c.entries) >= c.options.MaxRequestEntries {
 		// 'entries' is full - remove the first element to make room
 		// Zero the removed element to allow garbage collection
-		c.entries[0] = lokiEntryWithService{}
+		c.entries[0] = entryWithService{}
 		c.entries = c.entries[1:]
 	}
 
@@ -126,11 +122,11 @@ func (c *Client) Add(entry servicelog.Entry) error {
 
 		// Zero removed elements to allow garbage collection
 		for i := len(c.entries); i < len(c.buffer); i++ {
-			c.buffer[i] = lokiEntryWithService{}
+			c.buffer[i] = entryWithService{}
 		}
 	}
 
-	c.entries = append(c.entries, lokiEntryWithService{
+	c.entries = append(c.entries, entryWithService{
 		entry:   encodeEntry(entry),
 		service: entry.Service,
 	})
@@ -152,15 +148,15 @@ func (c *Client) Flush(ctx context.Context) error {
 	req := c.buildRequest()
 	jsonReq, err := json.Marshal(req)
 	if err != nil {
-		return fmt.Errorf("encoding request to JSON: %v", err)
+		return fmt.Errorf("cannot encode request to JSON: %v", err)
 	}
 
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.target.Location, bytes.NewReader(jsonReq))
 	if err != nil {
-		return fmt.Errorf("creating HTTP request: %v", err)
+		return fmt.Errorf("cannot create HTTP request: %v", err)
 	}
 	httpReq.Header.Set("Content-Type", "application/json; charset=utf-8")
-	httpReq.Header.Set("User-Agent", fmt.Sprintf("pebble/%s", cmd.Version))
+	httpReq.Header.Set("User-Agent", c.options.UserAgent)
 
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
@@ -175,7 +171,7 @@ func (c *Client) Flush(ctx context.Context) error {
 func (c *Client) resetBuffer() {
 	// Zero removed elements to allow garbage collection
 	for i := 0; i < len(c.entries); i++ {
-		c.entries[i] = lokiEntryWithService{}
+		c.entries[i] = entryWithService{}
 	}
 	c.entries = c.buffer[:0]
 }
@@ -217,7 +213,7 @@ type lokiStream struct {
 
 type lokiEntry [2]string
 
-type lokiEntryWithService struct {
+type entryWithService struct {
 	entry   lokiEntry
 	service string
 }
