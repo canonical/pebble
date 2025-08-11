@@ -16,6 +16,7 @@ package servicelog
 
 import (
 	"io"
+	"slices"
 	"sync"
 	"time"
 )
@@ -51,14 +52,15 @@ func NewFormatWriter(dest io.Writer, serviceName string) io.Writer {
 }
 
 // appendTimestamp appends a timestamp in format "YYYY-MM-DDTHH:mm:ss.sssZ" to
-// the given byte slice. Returns the extended slice. Makes no heap allocations.
+// the given byte slice and returns the extended slice.
+//
 // The timestamp is always in UTC and has exactly 3 fractional digits
-// (millisecond precision). Total appended length is always 24 bytes.
+// (millisecond precision). Makes no allocations if b has enough capacity.
 func appendTimestamp(b []byte, t time.Time) []byte {
-	// Convert to UTC to ensure consistent Z suffix
+	const capacity = 24
+
 	utc := t.UTC()
 
-	// Pre-calculate all components
 	year := utc.Year()
 	month := int(utc.Month())
 	day := utc.Day()
@@ -66,60 +68,46 @@ func appendTimestamp(b []byte, t time.Time) []byte {
 	minute := utc.Minute()
 	second := utc.Second()
 
-	// Convert nanoseconds to milliseconds as we're only appending millisecond
-	// precision.
-	millisecond := utc.Nanosecond() / 1000000
+	// Convert nanoseconds to milliseconds as we use millisecond precision.
+	millisecond := utc.Nanosecond() / 1_000_000
 
-	// Ensure we have enough capacity for 24 more bytes. This may cause
-	// reallocation, but it's unavoidable if capacity is insufficient.
+	// Ensure slice has enough capacity, and extend length.
+	b = slices.Grow(b, capacity)
+	b = b[:capacity]
 
-	if cap(b)-len(b) < 24 {
-		// Grow the slice - this is the only potential allocation
-		newCap := len(b) + 24
-		if newCap < cap(b)*2 {
-			newCap = cap(b) * 2
-		}
-		newB := make([]byte, len(b), newCap)
-		copy(newB, b)
-		b = newB
-	}
-
-	// Extend slice length by 24 bytes
-	b = b[:24]
-
-	// Append year (4 digits)
+	// Write year (4 digits)
 	b[0] = byte('0' + year/1000%10)
 	b[1] = byte('0' + year/100%10)
 	b[2] = byte('0' + year/10%10)
 	b[3] = byte('0' + year%10)
 	b[4] = '-'
 
-	// Append month (2 digits)
+	// Write month (2 digits)
 	b[5] = byte('0' + month/10)
 	b[6] = byte('0' + month%10)
 	b[7] = '-'
 
-	// Append day (2 digits)
+	// Write day (2 digits)
 	b[8] = byte('0' + day/10)
 	b[9] = byte('0' + day%10)
 	b[10] = 'T'
 
-	// Append hour (2 digits)
+	// Write hour (2 digits)
 	b[11] = byte('0' + hour/10)
 	b[12] = byte('0' + hour%10)
 	b[13] = ':'
 
-	// Append minute (2 digits)
+	// Write minute (2 digits)
 	b[14] = byte('0' + minute/10)
 	b[15] = byte('0' + minute%10)
 	b[16] = ':'
 
-	// Append second (2 digits)
+	// Write second (2 digits)
 	b[17] = byte('0' + second/10)
 	b[18] = byte('0' + second%10)
 	b[19] = '.'
 
-	// Append milliseconds (3 digits)
+	// Write milliseconds (3 digits)
 	b[20] = byte('0' + millisecond/100%10)
 	b[21] = byte('0' + millisecond/10%10)
 	b[22] = byte('0' + millisecond%10)
