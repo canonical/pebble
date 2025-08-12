@@ -108,7 +108,7 @@ func appendTimestamp(b []byte, t time.Time) []byte {
 	b[19] = '.'
 
 	// Write milliseconds (3 digits)
-	b[20] = byte('0' + millisecond/100%10)
+	b[20] = byte('0' + millisecond/100) // millisecond is at most 999, so no need for %10 here
 	b[21] = byte('0' + millisecond/10%10)
 	b[22] = byte('0' + millisecond%10)
 	b[23] = 'Z'
