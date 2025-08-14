@@ -28,7 +28,6 @@ import (
 	. "gopkg.in/check.v1"
 
 	"github.com/canonical/pebble/internals/overlord/logstate/opentelemetry"
-	"github.com/canonical/pebble/internals/plan"
 	"github.com/canonical/pebble/internals/servicelog"
 )
 
@@ -165,13 +164,11 @@ func (*suite) TestRequest(c *C) {
 	}))
 	defer server.Close()
 
-	client := opentelemetry.NewClient(
-		&plan.LogTarget{Location: server.URL},
-		&opentelemetry.ClientOptions{
-			UserAgent: "pebble/1.23.0",
-			ScopeName: "pebble",
-		},
-	)
+	client := opentelemetry.NewClient(&opentelemetry.ClientOptions{
+		Location:  server.URL,
+		UserAgent: "pebble/1.23.0",
+		ScopeName: "pebble",
+	})
 	for _, entry := range input {
 		err := client.Add(entry)
 		c.Assert(err, IsNil)
@@ -194,7 +191,7 @@ func (*suite) TestFlushCancelContext(c *C) {
 	defer server.Close()
 	defer killServer()
 
-	client := opentelemetry.NewClient(&plan.LogTarget{Location: server.URL}, &opentelemetry.ClientOptions{})
+	client := opentelemetry.NewClient(&opentelemetry.ClientOptions{Location: server.URL})
 	err := client.Add(servicelog.Entry{
 		Time:    time.Now(),
 		Service: "svc1",
@@ -229,10 +226,10 @@ func (*suite) TestServerTimeout(c *C) {
 	defer server.Close()
 	defer close(stopRequest)
 
-	client := opentelemetry.NewClient(
-		&plan.LogTarget{Location: server.URL},
-		&opentelemetry.ClientOptions{RequestTimeout: 1 * time.Microsecond},
-	)
+	client := opentelemetry.NewClient(&opentelemetry.ClientOptions{
+		Location:       server.URL,
+		RequestTimeout: 1 * time.Microsecond,
+	})
 	err := client.Add(servicelog.Entry{
 		Time:    time.Now(),
 		Service: "svc1",
@@ -245,10 +242,11 @@ func (*suite) TestServerTimeout(c *C) {
 }
 
 func (*suite) TestBufferFull(c *C) {
-	client := opentelemetry.NewClient(
-		&plan.LogTarget{Name: "tgt1", Location: "fake"},
-		&opentelemetry.ClientOptions{MaxRequestEntries: 3},
-	)
+	client := opentelemetry.NewClient(&opentelemetry.ClientOptions{
+		TargetName:        "tgt1",
+		Location:          "fake",
+		MaxRequestEntries: 3,
+	})
 
 	addEntry := func(s string) {
 		err := client.Add(servicelog.Entry{Message: s})
@@ -305,10 +303,10 @@ func (*suite) TestLabels(c *C) {
 	}))
 	defer server.Close()
 
-	client := opentelemetry.NewClient(
-		&plan.LogTarget{Location: server.URL},
-		&opentelemetry.ClientOptions{ScopeName: "pebble"},
-	)
+	client := opentelemetry.NewClient(&opentelemetry.ClientOptions{
+		Location:  server.URL,
+		ScopeName: "pebble",
+	})
 
 	client.SetLabels("svc1", map[string]string{
 		"label1": "val1",

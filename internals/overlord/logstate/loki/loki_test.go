@@ -28,7 +28,6 @@ import (
 	. "gopkg.in/check.v1"
 
 	"github.com/canonical/pebble/internals/overlord/logstate/loki"
-	"github.com/canonical/pebble/internals/plan"
 	"github.com/canonical/pebble/internals/servicelog"
 )
 
@@ -118,10 +117,10 @@ func (*suite) TestRequest(c *C) {
 	}))
 	defer server.Close()
 
-	client := loki.NewClient(
-		&plan.LogTarget{Location: server.URL},
-		&loki.ClientOptions{UserAgent: "pebble/1.23.0"},
-	)
+	client := loki.NewClient(&loki.ClientOptions{
+		Location:  server.URL,
+		UserAgent: "pebble/1.23.0",
+	})
 	client.SetLabels("svc1", map[string]string{})
 	client.SetLabels("svc2", map[string]string{})
 	client.SetLabels("svc3", map[string]string{})
@@ -147,7 +146,7 @@ func (*suite) TestFlushCancelContext(c *C) {
 	defer server.Close()
 	defer killServer()
 
-	client := loki.NewClient(&plan.LogTarget{Location: server.URL}, &loki.ClientOptions{})
+	client := loki.NewClient(&loki.ClientOptions{Location: server.URL})
 	err := client.Add(servicelog.Entry{
 		Time:    time.Now(),
 		Service: "svc1",
@@ -182,10 +181,10 @@ func (*suite) TestServerTimeout(c *C) {
 	defer server.Close()
 	defer close(stopRequest)
 
-	client := loki.NewClient(
-		&plan.LogTarget{Location: server.URL},
-		&loki.ClientOptions{RequestTimeout: 1 * time.Microsecond},
-	)
+	client := loki.NewClient(&loki.ClientOptions{
+		Location:       server.URL,
+		RequestTimeout: 1 * time.Microsecond,
+	})
 	err := client.Add(servicelog.Entry{
 		Time:    time.Now(),
 		Service: "svc1",
@@ -198,15 +197,11 @@ func (*suite) TestServerTimeout(c *C) {
 }
 
 func (*suite) TestBufferFull(c *C) {
-	client := loki.NewClient(
-		&plan.LogTarget{
-			Name:     "tgt1",
-			Location: "fake",
-		},
-		&loki.ClientOptions{
-			MaxRequestEntries: 3,
-		},
-	)
+	client := loki.NewClient(&loki.ClientOptions{
+		TargetName:        "tgt1",
+		Location:          "fake",
+		MaxRequestEntries: 3,
+	})
 
 	addEntry := func(s string) {
 		err := client.Add(servicelog.Entry{Message: s})
@@ -263,7 +258,7 @@ func (*suite) TestLabels(c *C) {
 	}))
 	defer server.Close()
 
-	client := loki.NewClient(&plan.LogTarget{Location: server.URL}, &loki.ClientOptions{})
+	client := loki.NewClient(&loki.ClientOptions{Location: server.URL})
 
 	client.SetLabels("svc1", map[string]string{
 		"label1": "val1",

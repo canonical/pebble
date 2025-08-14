@@ -27,7 +27,6 @@ import (
 	"time"
 
 	"github.com/canonical/pebble/internals/logger"
-	"github.com/canonical/pebble/internals/plan"
 	"github.com/canonical/pebble/internals/servicelog"
 )
 
@@ -38,7 +37,6 @@ const (
 
 type Client struct {
 	options    *ClientOptions
-	target     *plan.LogTarget
 	httpClient *http.Client
 
 	// To store log entries, keep a buffer of size 2*MaxRequestEntries with a
@@ -50,12 +48,11 @@ type Client struct {
 	labels map[string]json.RawMessage
 }
 
-func NewClient(target *plan.LogTarget, options *ClientOptions) *Client {
+func NewClient(options *ClientOptions) *Client {
 	opts := *options
 	fillDefaultOptions(&opts)
 	c := &Client{
 		options:    &opts,
-		target:     target,
 		httpClient: &http.Client{Timeout: opts.RequestTimeout},
 		buffer:     make([]entryWithService, 2*opts.MaxRequestEntries),
 		labels:     make(map[string]json.RawMessage),
@@ -70,6 +67,8 @@ type ClientOptions struct {
 	RequestTimeout    time.Duration
 	MaxRequestEntries int
 	UserAgent         string
+	TargetName        string
+	Location          string
 }
 
 func fillDefaultOptions(options *ClientOptions) {
@@ -100,7 +99,7 @@ func (c *Client) SetLabels(serviceName string, labels map[string]string) {
 	marshalledLabels, err := json.Marshal(newLabels)
 	if err != nil {
 		// Can't happen as map[string]string will always be marshallable
-		logger.Panicf("Loki client for %q: cannot marshal labels: %v", c.target.Name, err)
+		logger.Panicf("Loki client for %q: cannot marshal labels: %v", c.options.TargetName, err)
 	}
 	c.labels[serviceName] = marshalledLabels
 }
@@ -151,7 +150,7 @@ func (c *Client) Flush(ctx context.Context) error {
 		return fmt.Errorf("cannot encode request to JSON: %v", err)
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.target.Location, bytes.NewReader(jsonReq))
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.options.Location, bytes.NewReader(jsonReq))
 	if err != nil {
 		return fmt.Errorf("cannot create HTTP request: %v", err)
 	}
@@ -243,7 +242,7 @@ func (c *Client) handleServerResponse(resp *http.Response) error {
 	case 400 <= code && code < 500:
 		// Other 4xx codes indicate a client problem, so drop the logs (retrying won't help)
 		logger.Noticef("Target %q: request failed with status %d, dropping %d logs",
-			c.target.Name, code, len(c.entries))
+			c.options.TargetName, code, len(c.entries))
 		c.resetBuffer()
 		return errFromResponse(resp)
 
