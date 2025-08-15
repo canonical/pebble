@@ -33,21 +33,19 @@ There are several ways to install Pebble. The easiest way to ensure that you get
 
 ## Cryptographic technology
 
-Pebble uses cryptographic technology for the "basic" [identity](../reference/identities.md) type and for its TLS handling code.
-
 ### Basic identity type
 
-For the basic identity type, Pebble uses Ulrich Drepper's [SHA-crypt algorithm](https://www.akkadia.org/drepper/SHA-crypt.txt) with SHA-512. Specifically, we use the third party Go library [github.com/GehirnInc/crypt](https://github.com/Gehirninc/crypt) for verifying the password hashes sent in a client's `Authorization` HTTP header.
+For the "basic" [identity](/reference/identities) type, Pebble uses Ulrich Drepper's [SHA-crypt algorithm](https://www.akkadia.org/drepper/SHA-crypt.txt) with SHA-512. Specifically, we use the third party Go library [github.com/GehirnInc/crypt](https://github.com/Gehirninc/crypt) for verifying the password hashes sent in a client's `Authorization` HTTP header.
 
 ### TLS
 
-For TLS, Pebble uses the TLS code in Go's standard library when the `--https` argument is passed to `pebble run`, enabling API access over TLS.
+Pebble uses the TLS code in Go's standard library when the `--https` argument is passed to `pebble run`, enabling API access over TLS.
 
 Server-side TLS certificates are managed by Pebble. On first start, a Pebble identity certificate is generated. Incoming HTTPS requests will use ephemeral TLS certificates, self-signed with the identity certificate. There is currently no support for integration with an external certificate authority.
 
-At present the Pebble client does not support https (TLS) connections, so this only works with `curl --insecure`, and is therefore of limited use.
+Currently, the Pebble client doesn't support HTTPS (TLS). To connect to a Pebble daemon over HTTPS, you'll need to make [API](/reference/api) calls using `curl --insecure`, for example.
 
-Our intention here is that projects that build on Pebble can [override how TLS connections are verified](https://pkg.go.dev/github.com/canonical/pebble@v1.23.0/client#Config).
+Our intention is that projects that build on Pebble can [override how TLS connections are verified](https://pkg.go.dev/github.com/canonical/pebble@v1.23.0/client#Config).
 
 ### FIPS 140
 
