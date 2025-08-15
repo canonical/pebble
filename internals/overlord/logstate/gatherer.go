@@ -369,7 +369,11 @@ type logClient interface {
 func newLogClient(target *plan.LogTarget) (logClient, error) {
 	switch target.Type {
 	case plan.LokiTarget:
-		return loki.NewClient(target), nil
+		return loki.NewClient(&loki.ClientOptions{
+			TargetName: target.Name,
+			Location:   target.Location,
+			UserAgent:  fmt.Sprintf("%s/%s", cmd.ProgramName, cmd.Version),
+		}), nil
 	case plan.OpenTelemetryTarget:
 		return opentelemetry.NewClient(&opentelemetry.ClientOptions{
 			TargetName: target.Name,

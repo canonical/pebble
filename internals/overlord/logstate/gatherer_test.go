@@ -161,7 +161,9 @@ func (s *gathererSuite) TestRetryLoki(c *C) {
 			bufferTimeout:      1 * time.Millisecond,
 			maxBufferedEntries: 5,
 			newClient: func(target *plan.LogTarget) (logClient, error) {
-				return loki.NewClientWithOptions(target, &loki.ClientOptions{
+				return loki.NewClient(&loki.ClientOptions{
+					TargetName:        target.Name,
+					Location:          target.Location,
 					MaxRequestEntries: 5,
 				}), nil
 			},

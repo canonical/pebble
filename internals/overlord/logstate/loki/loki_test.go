@@ -28,7 +28,6 @@ import (
 	. "gopkg.in/check.v1"
 
 	"github.com/canonical/pebble/internals/overlord/logstate/loki"
-	"github.com/canonical/pebble/internals/plan"
 	"github.com/canonical/pebble/internals/servicelog"
 )
 
@@ -110,6 +109,7 @@ func (*suite) TestRequest(c *C) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		c.Assert(r.Method, Equals, http.MethodPost)
 		c.Assert(r.Header.Get("Content-Type"), Equals, "application/json; charset=utf-8")
+		c.Assert(r.Header.Get("User-Agent"), Equals, "pebble/1.23.0")
 
 		reqBody, err := io.ReadAll(r.Body)
 		c.Assert(err, IsNil)
@@ -117,7 +117,10 @@ func (*suite) TestRequest(c *C) {
 	}))
 	defer server.Close()
 
-	client := loki.NewClient(&plan.LogTarget{Location: server.URL})
+	client := loki.NewClient(&loki.ClientOptions{
+		Location:  server.URL,
+		UserAgent: "pebble/1.23.0",
+	})
 	client.SetLabels("svc1", map[string]string{})
 	client.SetLabels("svc2", map[string]string{})
 	client.SetLabels("svc3", map[string]string{})
@@ -143,7 +146,7 @@ func (*suite) TestFlushCancelContext(c *C) {
 	defer server.Close()
 	defer killServer()
 
-	client := loki.NewClient(&plan.LogTarget{Location: server.URL})
+	client := loki.NewClient(&loki.ClientOptions{Location: server.URL})
 	err := client.Add(servicelog.Entry{
 		Time:    time.Now(),
 		Service: "svc1",
@@ -178,12 +181,10 @@ func (*suite) TestServerTimeout(c *C) {
 	defer server.Close()
 	defer close(stopRequest)
 
-	client := loki.NewClientWithOptions(
-		&plan.LogTarget{Location: server.URL},
-		&loki.ClientOptions{
-			RequestTimeout: 1 * time.Microsecond,
-		},
-	)
+	client := loki.NewClient(&loki.ClientOptions{
+		Location:       server.URL,
+		RequestTimeout: 1 * time.Microsecond,
+	})
 	err := client.Add(servicelog.Entry{
 		Time:    time.Now(),
 		Service: "svc1",
@@ -196,15 +197,11 @@ func (*suite) TestServerTimeout(c *C) {
 }
 
 func (*suite) TestBufferFull(c *C) {
-	client := loki.NewClientWithOptions(
-		&plan.LogTarget{
-			Name:     "tgt1",
-			Location: "fake",
-		},
-		&loki.ClientOptions{
-			MaxRequestEntries: 3,
-		},
-	)
+	client := loki.NewClient(&loki.ClientOptions{
+		TargetName:        "tgt1",
+		Location:          "fake",
+		MaxRequestEntries: 3,
+	})
 
 	addEntry := func(s string) {
 		err := client.Add(servicelog.Entry{Message: s})
@@ -221,7 +218,7 @@ func (*suite) TestBufferFull(c *C) {
 		for i := range expected {
 			// 'nil' means c.buffer[i] should be zero
 			if expected[i] == nil {
-				c.Assert(buffer[i], DeepEquals, loki.LokiEntryWithService{},
+				c.Assert(buffer[i], DeepEquals, loki.EntryWithService{},
 					Commentf("buffer[%d] should be zero, obtained %v", i, buffer[i]))
 				continue
 			}
@@ -261,12 +258,7 @@ func (*suite) TestLabels(c *C) {
 	}))
 	defer server.Close()
 
-	client := loki.NewClientWithOptions(
-		&plan.LogTarget{
-			Location: server.URL,
-		},
-		&loki.ClientOptions{},
-	)
+	client := loki.NewClient(&loki.ClientOptions{Location: server.URL})
 
 	client.SetLabels("svc1", map[string]string{
 		"label1": "val1",
