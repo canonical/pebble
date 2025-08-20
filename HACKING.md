@@ -133,7 +133,6 @@ import (
 	"net"
 	"os"
 
-	"github.com/gorilla/mux"
 	. "gopkg.in/check.v1"
 
 	"github.com/canonical/pebble/internals/systemd"

@@ -205,13 +205,13 @@ func (s *apiSuite) TestStateChange(c *check.C) {
 	task := chg.Tasks()[0]
 	task.Set("api-data", map[string]string{"foo": "bar"})
 	st.Unlock()
-	s.vars = map[string]string{"id": ids[0]}
 
 	stateChangeCmd := apiCmd("/v1/changes/{id}")
 
 	// Execute
 	req, err := http.NewRequest("GET", "/v1/change/"+ids[0], nil)
 	c.Assert(err, check.IsNil)
+	req.SetPathValue("id", ids[0])
 	rsp := v1GetChange(stateChangeCmd, req, nil).(*resp)
 	rec := httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)
@@ -276,7 +276,6 @@ func (s *apiSuite) TestStateChangeAbort(c *check.C) {
 	st.Lock()
 	ids := setupChanges(st)
 	st.Unlock()
-	s.vars = map[string]string{"id": ids[0]}
 
 	buf := bytes.NewBufferString(`{"action": "abort"}`)
 
@@ -285,6 +284,7 @@ func (s *apiSuite) TestStateChangeAbort(c *check.C) {
 	// Execute
 	req, err := http.NewRequest("POST", "/v1/changes/"+ids[0], buf)
 	c.Assert(err, check.IsNil)
+	req.SetPathValue("id", ids[0])
 	rsp := v1PostChange(stateChangeCmd, req, nil).(*resp)
 	rec := httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)
@@ -344,7 +344,6 @@ func (s *apiSuite) TestStateChangeAbortIsReady(c *check.C) {
 	ids := setupChanges(st)
 	st.Change(ids[0]).SetStatus(state.DoneStatus)
 	st.Unlock()
-	s.vars = map[string]string{"id": ids[0]}
 
 	buf := bytes.NewBufferString(`{"action": "abort"}`)
 
@@ -353,6 +352,7 @@ func (s *apiSuite) TestStateChangeAbortIsReady(c *check.C) {
 	// Execute
 	req, err := http.NewRequest("POST", "/v1/changes/"+ids[0], buf)
 	c.Assert(err, check.IsNil)
+	req.SetPathValue("id", ids[0])
 	rsp := v1PostChange(stateChangeCmd, req, nil).(*resp)
 	rec := httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)
@@ -459,9 +459,9 @@ func (s *apiSuite) testWaitChange(ctx context.Context, c *check.C, query string,
 	}
 
 	// Execute
-	s.vars = map[string]string{"id": change.ID()}
 	req, err := http.NewRequestWithContext(ctx, "GET", "/v1/changes/"+change.ID()+"/wait"+query, nil)
 	c.Assert(err, check.IsNil)
+	req.SetPathValue("id", change.ID())
 	rsp := v1GetChangeWait(apiCmd("/v1/changes/{id}/wait"), req, nil).(*resp)
 	rec := httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)
