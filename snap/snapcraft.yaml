@@ -41,7 +41,7 @@ parts:
     plugin: go
     source: .
     build-snaps:
-      - go/1.24/stable
+      - go/1.24/candidate  # TODO(benhoyt): switch back to stable once 1.24.6 is promoted to stable (https://snapcraft.io/go)
     # The snap build relies on the cmd/version*.go files within the source path.
     # For proper versioning, run "go generate ./cmd/" before building the snap.
     # If doing a "snapcraft remote-build", ensure you've also run
