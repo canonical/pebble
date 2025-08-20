@@ -30,7 +30,7 @@ API endpoints fall into one of four access levels, from least restricted to most
 
 * **Admin-access** - Only allowed from admin users. For example, adding a layer or starting a service.
     * `GET /v1/files`, which pulls a file from a remote system
-    * `GET /v1/tasks/{task-id}/websocket/{websocket-id}`
+    * `GET /v1/tasks/{taskID}/websocket/{websocketID}`
     * All `POST` endpoints except `POST /v1/notices` (which is read-access)
 
 Pebble authenticates clients that connect to the socket API using peer credentials ([`SO_PEERCRED`](https://man7.org/linux/man-pages/man7/socket.7.html)) to determine the user ID (UID) of the connecting process. If this UID is 0 (root) or the UID of the Pebble daemon, the user's access level is `admin`, otherwise the access level is `read`.
