@@ -63,7 +63,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        arch: ["amd64", "arm64", "ppc64el", "armhf", "s390x"]
+        arch: ["amd64", "arm64", "armhf", "ppc64el", "riscv64", "s390x"]
     steps:
       - name: Checkout Pebble repo
         uses: actions/checkout@v4
@@ -144,7 +144,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        arch: ["amd64", "arm64", "ppc64el", "armhf", "s390x"]
+        arch: ["amd64", "arm64", "armhf", "ppc64el", "riscv64", "s390x"]
     steps:
       - uses: actions/download-artifact@v4
 
@@ -166,7 +166,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        arch: [amd64, arm64, ppc64el, armhf, s390x]
+        arch: ["amd64", "arm64", "armhf", "ppc64el", "riscv64", "s390x"]
     env:
       TO_TRACK: latest
       TO_RISK: candidate
