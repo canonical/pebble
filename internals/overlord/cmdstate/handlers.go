@@ -475,22 +475,19 @@ func (e *execution) controlLoop(execID string, pidCh <-chan int, stop <-chan str
 		}
 
 		if err != nil {
-			logger.Debugf("Exec %s: cannot get next websocket reader for PID %d: %v", execID, pid, err)
-			er, ok := err.(*websocket.CloseError)
-			if !ok {
-				break
-			}
-			if er.Code != websocket.CloseAbnormalClosure {
-				break
+			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway) {
+				logger.Debugf("Exec %s: cannot get next websocket reader for PID %d: %v", execID, pid, err)
 			}
 
-			// If an abnormal closure occurred, kill the attached process.
-			err := unix.Kill(pid, unix.SIGKILL)
-			if err != nil {
-				logger.Noticef("Exec %s: cannot send SIGKILL to pid %d: %v", execID, pid, err)
-			} else {
-				logger.Debugf("Exec %s: sent SIGKILL to pid %d", execID, pid)
+			if websocket.IsCloseError(err, websocket.CloseAbnormalClosure) {
+				err := unix.Kill(pid, unix.SIGKILL)
+				if err != nil {
+					logger.Noticef("Exec %s: cannot send SIGKILL to pid %d: %v", execID, pid, err)
+				} else {
+					logger.Debugf("Exec %s: sent SIGKILL to pid %d", execID, pid)
+				}
 			}
+
 			break
 		}
 
