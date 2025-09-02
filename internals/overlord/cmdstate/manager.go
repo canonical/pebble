@@ -26,6 +26,7 @@ import (
 type CommandManager struct {
 	executions     map[string]*execution
 	executionsCond *sync.Cond
+	errors         map[string]error
 }
 
 // NewManager creates a new CommandManager.
@@ -33,6 +34,7 @@ func NewManager(runner *state.TaskRunner) *CommandManager {
 	manager := &CommandManager{
 		executions:     make(map[string]*execution),
 		executionsCond: sync.NewCond(&sync.Mutex{}),
+		errors:         make(map[string]error),
 	}
 	runner.AddHandler("exec", manager.doExec, nil)
 
@@ -64,15 +66,20 @@ func (m *CommandManager) Connect(r *http.Request, w http.ResponseWriter, task *s
 		// So waitExecution wakes up if it's stuck in Wait().
 		m.executionsCond.L.Lock()
 		close(stopWait)
+		delete(m.errors, task.ID())
 		m.executionsCond.Broadcast()
 		m.executionsCond.L.Unlock()
 	}()
 
 	executionCh := make(chan *execution)
+	errCh := make(chan error)
 	go func() {
-		e := m.waitExecution(task.ID(), stopWait)
+		e, err := m.waitExecution(task.ID(), stopWait)
 		if e != nil {
 			executionCh <- e
+		}
+		if err != nil {
+			errCh <- err
 		}
 	}()
 
@@ -80,26 +87,34 @@ func (m *CommandManager) Connect(r *http.Request, w http.ResponseWriter, task *s
 	select {
 	case e := <-executionCh:
 		return e.connect(r, w, websocketID)
+	case err := <-errCh:
+		return err
 	case <-r.Context().Done():
 		return r.Context().Err()
 	}
 }
 
-func (m *CommandManager) waitExecution(taskID string, stop <-chan struct{}) *execution {
+func (m *CommandManager) waitExecution(taskID string, stop <-chan struct{}) (*execution, error) {
 	m.executionsCond.L.Lock()
 	defer m.executionsCond.L.Unlock()
 
 	for {
 		select {
 		case <-stop:
-			return nil
+			return nil, nil
 		default:
 		}
 
 		e := m.executions[taskID]
 		if e != nil {
-			return e
+			return e, nil
 		}
+
+		err := m.errors[taskID]
+		if err != nil {
+			return nil, err
+		}
+
 		m.executionsCond.Wait()
 	}
 }
