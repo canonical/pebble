@@ -76,12 +76,21 @@ func (m *CommandManager) Connect(r *http.Request, w http.ResponseWriter, task *s
 		}
 	}()
 
+	st := task.State()
+	st.Lock()
+	change := task.Change()
+	st.Unlock()
+
 	// Wait till the execution object is ready or the request is cancelled.
 	select {
 	case e := <-executionCh:
 		return e.connect(r, w, websocketID)
 	case <-r.Context().Done():
 		return r.Context().Err()
+	case <-change.Ready():
+		st.Lock()
+		defer st.Unlock()
+		return change.Err()
 	}
 }
 
