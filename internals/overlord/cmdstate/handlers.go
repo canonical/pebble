@@ -117,13 +117,7 @@ func (m *CommandManager) doExec(task *state.Task, tomb *tomb.Tomb) error {
 
 	// Run the command! Killing the tomb will terminate the command.
 	ctx := tomb.Context(context.Background())
-	err := e.do(ctx, task)
-	if err != nil {
-		m.executionsCond.L.Lock()
-		m.errors[task.ID()] = err
-		m.executionsCond.L.Unlock()
-	}
-	return err
+	return e.do(ctx, task)
 }
 
 var websocketUpgrader = websocket.Upgrader{
