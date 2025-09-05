@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -31,6 +32,7 @@ import (
 
 	"github.com/canonical/pebble/client"
 	"github.com/canonical/pebble/internals/logger"
+	"github.com/canonical/pebble/internals/overlord/state"
 	"github.com/canonical/pebble/internals/plan"
 	"github.com/canonical/pebble/internals/reaper"
 )
@@ -38,8 +40,10 @@ import (
 var _ = Suite(&execSuite{})
 
 type execSuite struct {
-	daemon *Daemon
-	client *client.Client
+	daemon         *Daemon
+	client         *client.Client
+	vars           map[string]string
+	restoreMuxVars func()
 }
 
 func (s *execSuite) SetUpSuite(c *C) {
@@ -51,6 +55,7 @@ func (s *execSuite) SetUpTest(c *C) {
 	if err != nil {
 		c.Fatalf("cannot start reaper: %v", err)
 	}
+	s.restoreMuxVars = FakeMuxVars(s.muxVars)
 
 	socketPath := c.MkDir() + ".pebble.socket"
 	daemon, err := New(&Options{
@@ -67,9 +72,15 @@ func (s *execSuite) SetUpTest(c *C) {
 	c.Assert(err, IsNil)
 }
 
+func (s *execSuite) muxVars(*http.Request) map[string]string {
+	return s.vars
+}
+
 func (s *execSuite) TearDownTest(c *C) {
 	err := s.daemon.Stop(nil)
 	c.Check(err, IsNil)
+
+	s.restoreMuxVars()
 
 	err = reaper.Stop()
 	if err != nil {
@@ -439,6 +450,48 @@ func (s *execSuite) TestUserGroupError(c *C) {
 	c.Check(execResp.StatusCode, Equals, http.StatusBadRequest)
 	c.Check(execResp.Type, Equals, "error")
 	c.Check(execResp.Result["message"], Matches, ".*must specify user, not just group.*")
+}
+
+// TestExecChangeReady simulates the scenario where the change is ready before the websocket
+// connection is established, so the connection should fail.
+func (s *execSuite) TestExecChangeReady(c *C) {
+	httpResp, execResp := execRequest(c, &client.ExecOptions{
+		Command: []string{"echo", "foo"},
+	})
+	c.Assert(httpResp.StatusCode, Equals, http.StatusAccepted)
+	body := new(bytes.Buffer)
+	err := json.NewEncoder(body).Encode(execResp)
+	c.Assert(err, IsNil)
+
+	changeID := execResp.Change
+	c.Assert(changeID, Not(Equals), "")
+
+	st := s.daemon.overlord.State()
+	st.Lock()
+	change := st.Change(changeID)
+	c.Assert(change, NotNil)
+	c.Assert(len(change.Tasks()), Equals, 1)
+	// Set the change as failed and set the error on the task.
+	change.SetStatus(state.ErrorStatus)
+	change.Tasks()[0].Errorf("something went wrong")
+	change.Tasks()[0].SetStatus(state.ErrorStatus)
+	st.Unlock()
+
+	taskID, ok := execResp.Result["task-id"].(string)
+	c.Assert(ok, Equals, true)
+	s.vars = map[string]string{"task-id": taskID, "websocket-id": "control"}
+
+	websocketCmd := apiCmd("/v1/tasks/{task-id}/websocket/{websocket-id}")
+	req, err := http.NewRequest("GET", fmt.Sprintf("/v1/tasks/%s/websocket/%s", taskID, "control"), nil)
+	c.Assert(err, IsNil)
+	rsp := v1GetTaskWebsocket(websocketCmd, req, nil).(websocketResponse)
+	rec := httptest.NewRecorder()
+	rsp.ServeHTTP(rec, req)
+
+	c.Check(rec.Code, Equals, 500)
+	err = rsp.connect(req, rec, rsp.task, rsp.websocketID)
+	c.Assert(err, NotNil)
+	c.Check(err.Error(), Matches, `.*cannot perform the following tasks:\n.*something went wrong.*`)
 }
 
 type execResponse struct {
