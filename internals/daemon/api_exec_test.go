@@ -40,10 +40,8 @@ import (
 var _ = Suite(&execSuite{})
 
 type execSuite struct {
-	daemon         *Daemon
-	client         *client.Client
-	vars           map[string]string
-	restoreMuxVars func()
+	daemon *Daemon
+	client *client.Client
 }
 
 func (s *execSuite) SetUpSuite(c *C) {
@@ -55,7 +53,6 @@ func (s *execSuite) SetUpTest(c *C) {
 	if err != nil {
 		c.Fatalf("cannot start reaper: %v", err)
 	}
-	s.restoreMuxVars = FakeMuxVars(s.muxVars)
 
 	socketPath := c.MkDir() + ".pebble.socket"
 	daemon, err := New(&Options{
@@ -72,15 +69,9 @@ func (s *execSuite) SetUpTest(c *C) {
 	c.Assert(err, IsNil)
 }
 
-func (s *execSuite) muxVars(*http.Request) map[string]string {
-	return s.vars
-}
-
 func (s *execSuite) TearDownTest(c *C) {
 	err := s.daemon.Stop(nil)
 	c.Check(err, IsNil)
-
-	s.restoreMuxVars()
 
 	err = reaper.Stop()
 	if err != nil {
@@ -479,7 +470,12 @@ func (s *execSuite) TestExecChangeReady(c *C) {
 
 	taskID, ok := execResp.Result["task-id"].(string)
 	c.Assert(ok, Equals, true)
-	s.vars = map[string]string{"task-id": taskID, "websocket-id": "control"}
+
+	vars := map[string]string{"task-id": taskID, "websocket-id": "control"}
+	restoreMuxVars := FakeMuxVars(func(*http.Request) map[string]string {
+		return vars
+	})
+	defer restoreMuxVars()
 
 	websocketCmd := apiCmd("/v1/tasks/{task-id}/websocket/{websocket-id}")
 	req, err := http.NewRequest("GET", fmt.Sprintf("/v1/tasks/%s/websocket/%s", taskID, "control"), nil)
