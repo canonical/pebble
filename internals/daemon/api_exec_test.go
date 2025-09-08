@@ -450,9 +450,6 @@ func (s *execSuite) TestExecChangeReady(c *C) {
 		Command: []string{"echo", "foo"},
 	})
 	c.Assert(httpResp.StatusCode, Equals, http.StatusAccepted)
-	body := new(bytes.Buffer)
-	err := json.NewEncoder(body).Encode(execResp)
-	c.Assert(err, IsNil)
 
 	changeID := execResp.Change
 	c.Assert(changeID, Not(Equals), "")
@@ -485,9 +482,8 @@ func (s *execSuite) TestExecChangeReady(c *C) {
 	rsp.ServeHTTP(rec, req)
 
 	c.Check(rec.Code, Equals, 500)
-	err = rsp.connect(req, rec, rsp.task, rsp.websocketID)
-	c.Assert(err, NotNil)
-	c.Check(err.Error(), Matches, `.*cannot perform the following tasks:\n.*something went wrong.*`)
+	fmt.Printf("Response body: %q\n", rec.Body.String())
+	c.Check(rec.Body.String(), Matches, `.*cannot connect to websocket.*something went wrong.*`)
 }
 
 type execResponse struct {

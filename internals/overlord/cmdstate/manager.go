@@ -87,6 +87,8 @@ func (m *CommandManager) Connect(r *http.Request, w http.ResponseWriter, task *s
 		return e.connect(r, w, websocketID)
 	case <-r.Context().Done():
 		return r.Context().Err()
+	// Change unexpectedly marked ready, probably due to the client not sending
+	// websocket requests in time.
 	case <-change.Ready():
 		st.Lock()
 		defer st.Unlock()
