@@ -16,6 +16,7 @@ package state_test
 
 import (
 	"encoding/json"
+	"fmt"
 
 	. "gopkg.in/check.v1"
 
@@ -25,6 +26,30 @@ import (
 type identitiesSuite struct{}
 
 var _ = Suite(&identitiesSuite{})
+
+// Generated using `openssl req -new -x509 -out cert.pem -days 3650 -subj "/CN=canonical.com"`
+const testPEMX509Cert = `
+-----BEGIN CERTIFICATE-----
+MIIBRDCB96ADAgECAhROTkdEcgeil5/5NUNTq1ZRPDLiPTAFBgMrZXAwGDEWMBQG
+A1UEAwwNY2Fub25pY2FsLmNvbTAeFw0yNTA5MDgxNTI2NTJaFw0zNTA5MDYxNTI2
+NTJaMBgxFjAUBgNVBAMMDWNhbm9uaWNhbC5jb20wKjAFBgMrZXADIQDtxRqb9EMe
+ffcoJ0jNn9ys8uDFeHnQ6JRxgNFvomDTHqNTMFEwHQYDVR0OBBYEFI/oHjhG1A7F
+3HM7McXP7w7CxtrwMB8GA1UdIwQYMBaAFI/oHjhG1A7F3HM7McXP7w7CxtrwMA8G
+A1UdEwEB/wQFMAMBAf8wBQYDK2VwA0EA40v4eckaV7RBXyRb0sfcCcgCAGYtiCSD
+jwXVTUH4HLpbhK0RAaEPOL4h5jm36CrWTkxzpbdCrIu4NgPLQKJ6Cw==
+-----END CERTIFICATE-----
+`
+
+// Generated using `openssl req -new -newkey ed25519 -out bad-cert.pem -nodes -subj "/CN=canonical.com"`
+// This is a valid PEM block but not a valid X.509 certificate.
+const testPEMPKCS10Req = `
+-----BEGIN CERTIFICATE REQUEST-----
+MIGXMEsCAQAwGDEWMBQGA1UEAwwNY2Fub25pY2FsLmNvbTAqMAUGAytlcAMhADuu
+TTkzIDS55kZukGFfsWM+kPug1hpJLVx4wKqr5eLNoAAwBQYDK2VwA0EA3QU93q5S
+pV4RrgnD3G7kw2dg8fdJAZ/qn1bXToUzPy89uPMiAZIE+eHXBxzqTJ6GJrVY+2r7
+GV6pXv511MycDg==
+-----END CERTIFICATE REQUEST-----
+`
 
 // IMPORTANT NOTE: be sure secrets aren't included when adding to this!
 func (s *identitiesSuite) TestMarshalAPI(c *C) {
@@ -47,15 +72,17 @@ func (s *identitiesSuite) TestMarshalAPI(c *C) {
 		},
 		"olivia": {
 			Access: state.ReadAccess,
-			Cert:   &state.CertIdentity{Certificate: "pem"},
+			Cert:   &state.CertIdentity{Certificate: testPEMX509Cert},
 		},
 	})
 	c.Assert(err, IsNil)
 
+	jsonCert, err := json.Marshal(testPEMX509Cert)
+	c.Assert(err, IsNil)
 	identities := st.Identities()
 	data, err := json.MarshalIndent(identities, "", "    ")
 	c.Assert(err, IsNil)
-	c.Assert(string(data), Equals, `
+	c.Assert(string(data), Equals, fmt.Sprintf(`
 {
     "bob": {
         "access": "read",
@@ -78,14 +105,16 @@ func (s *identitiesSuite) TestMarshalAPI(c *C) {
     "olivia": {
         "access": "read",
         "cert": {
-            "certificate": "pem"
+            "certificate": %s
         }
     }
-}`[1:])
+}`, jsonCert)[1:])
 }
 
 func (s *identitiesSuite) TestUnmarshalAPI(c *C) {
-	data := []byte(`
+	jsonCert, err := json.Marshal(testPEMX509Cert)
+	c.Assert(err, IsNil)
+	data := fmt.Appendf(nil, `
 {
     "bob": {
         "access": "read",
@@ -108,12 +137,12 @@ func (s *identitiesSuite) TestUnmarshalAPI(c *C) {
     "olivia": {
         "access": "read",
         "cert": {
-            "certificate": "pem"
+            "certificate": %s
         }
     }
-}`)
+}`, jsonCert)
 	var identities map[string]*state.Identity
-	err := json.Unmarshal(data, &identities)
+	err = json.Unmarshal(data, &identities)
 	c.Assert(err, IsNil)
 	c.Assert(identities, DeepEquals, map[string]*state.Identity{
 		"bob": {
@@ -130,12 +159,19 @@ func (s *identitiesSuite) TestUnmarshalAPI(c *C) {
 		},
 		"olivia": {
 			Access: state.ReadAccess,
-			Cert:   &state.CertIdentity{Certificate: "pem"},
+			Cert:   &state.CertIdentity{Certificate: testPEMX509Cert},
 		},
 	})
 }
 
 func (s *identitiesSuite) TestUnmarshalAPIErrors(c *C) {
+	// Marshal a certificate request to test valid PEM but invalid X.509.
+	jsonCertReq, err := json.Marshal(testPEMPKCS10Req)
+	c.Assert(err, IsNil)
+	// Marshall a certificate with extra data after the PEM block.
+	jsonCertExtra, err := json.Marshal(testPEMX509Cert + "42")
+	c.Assert(err, IsNil)
+
 	tests := []struct {
 		data  string
 		error string
@@ -151,6 +187,15 @@ func (s *identitiesSuite) TestUnmarshalAPIErrors(c *C) {
 	}, {
 		data:  `{"invalid-access": {"access": "read", "cert": {}}}`,
 		error: `cert identity must specify certificate \(PEM-encoded\)`,
+	}, {
+		data:  `{"invalid-access": {"access": "read", "cert": {"certificate": "pem"}}}`,
+		error: `cert identity must have at least one valid PEM block`,
+	}, {
+		data:  fmt.Sprintf(`{"invalid-access": {"access": "read", "cert": {"certificate": %s}}}`, jsonCertReq),
+		error: `cannot parse certificate from cert identity: x509: .*`,
+	}, {
+		data:  fmt.Sprintf(`{"invalid-access": {"access": "read", "cert": {"certificate": %s}}}`, jsonCertExtra),
+		error: `cert identity cannot have extra data after the PEM block`,
 	}, {
 		data:  `{"invalid-access": {"access": "foo", "local": {"user-id": 42}}}`,
 		error: `invalid access value "foo", must be "admin", "read", "metrics", or "untrusted"`,
@@ -266,7 +311,7 @@ func (s *identitiesSuite) TestAddIdentities(c *C) {
 		},
 		"olivia": {
 			Access: state.ReadAccess,
-			Cert:   &state.CertIdentity{Certificate: "pem"},
+			Cert:   &state.CertIdentity{Certificate: testPEMX509Cert},
 		},
 	}
 	err := st.AddIdentities(original)
@@ -293,7 +338,7 @@ func (s *identitiesSuite) TestAddIdentities(c *C) {
 		"olivia": {
 			Name:   "olivia",
 			Access: state.ReadAccess,
-			Cert:   &state.CertIdentity{Certificate: "pem"},
+			Cert:   &state.CertIdentity{Certificate: testPEMX509Cert},
 		},
 	})
 

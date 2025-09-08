@@ -15,7 +15,9 @@
 package state
 
 import (
+	"crypto/x509"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"regexp"
@@ -110,6 +112,17 @@ func (d *Identity) validateAccess() error {
 	if d.Cert != nil {
 		if d.Cert.Certificate == "" {
 			return errors.New("cert identity must specify certificate (PEM-encoded)")
+		}
+		block, rest := pem.Decode([]byte(d.Cert.Certificate))
+		if block == nil {
+			return errors.New("cert identity must have at least one valid PEM block")
+		}
+		if len(rest) > 0 {
+			return errors.New("cert identity cannot have extra data after the PEM block")
+		}
+		_, err := x509.ParseCertificate(block.Bytes)
+		if err != nil {
+			return fmt.Errorf("cannot parse certificate from cert identity: %w", err)
 		}
 		gotType = true
 	}
