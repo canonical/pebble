@@ -45,6 +45,10 @@ func (s *identitiesSuite) TestMarshalAPI(c *C) {
 			Access: state.MetricsAccess,
 			Basic:  &state.BasicIdentity{Password: "hash"},
 		},
+		"olivia": {
+			Access: state.ReadAccess,
+			Cert:   &state.CertIdentity{Certificate: "pem"},
+		},
 	})
 	c.Assert(err, IsNil)
 
@@ -70,6 +74,12 @@ func (s *identitiesSuite) TestMarshalAPI(c *C) {
         "basic": {
             "password": "*****"
         }
+    },
+    "olivia": {
+        "access": "read",
+        "cert": {
+            "certificate": "pem"
+        }
     }
 }`[1:])
 }
@@ -94,6 +104,12 @@ func (s *identitiesSuite) TestUnmarshalAPI(c *C) {
         "basic": {
             "password": "hash"
         }
+    },
+    "olivia": {
+        "access": "read",
+        "cert": {
+            "certificate": "pem"
+        }
     }
 }`)
 	var identities map[string]*state.Identity
@@ -112,6 +128,10 @@ func (s *identitiesSuite) TestUnmarshalAPI(c *C) {
 			Access: state.MetricsAccess,
 			Basic:  &state.BasicIdentity{Password: "hash"},
 		},
+		"olivia": {
+			Access: state.ReadAccess,
+			Cert:   &state.CertIdentity{Certificate: "pem"},
+		},
 	})
 }
 
@@ -121,13 +141,16 @@ func (s *identitiesSuite) TestUnmarshalAPIErrors(c *C) {
 		error string
 	}{{
 		data:  `{"no-type": {"access": "admin"}}`,
-		error: `identity must have at least one type \("local" or "basic"\)`,
+		error: `identity must have at least one type \("local", "basic", or "cert"\)`,
 	}, {
 		data:  `{"invalid-access": {"access": "admin", "local": {}}}`,
 		error: `local identity must specify user-id`,
 	}, {
 		data:  `{"invalid-access": {"access": "metrics", "basic": {}}}`,
 		error: `basic identity must specify password \(hashed\)`,
+	}, {
+		data:  `{"invalid-access": {"access": "read", "cert": {}}}`,
+		error: `cert identity must specify certificate \(PEM-encoded\)`,
 	}, {
 		data:  `{"invalid-access": {"access": "foo", "local": {"user-id": 42}}}`,
 		error: `invalid access value "foo", must be "admin", "read", "metrics", or "untrusted"`,
@@ -241,6 +264,10 @@ func (s *identitiesSuite) TestAddIdentities(c *C) {
 			Access: state.MetricsAccess,
 			Basic:  &state.BasicIdentity{Password: "hash"},
 		},
+		"olivia": {
+			Access: state.ReadAccess,
+			Cert:   &state.CertIdentity{Certificate: "pem"},
+		},
 	}
 	err := st.AddIdentities(original)
 	c.Assert(err, IsNil)
@@ -262,6 +289,11 @@ func (s *identitiesSuite) TestAddIdentities(c *C) {
 			Name:   "nancy",
 			Access: state.MetricsAccess,
 			Basic:  &state.BasicIdentity{Password: "hash"},
+		},
+		"olivia": {
+			Name:   "olivia",
+			Access: state.ReadAccess,
+			Cert:   &state.CertIdentity{Certificate: "pem"},
 		},
 	})
 
@@ -303,7 +335,7 @@ func (s *identitiesSuite) TestAddIdentities(c *C) {
 			Access: "admin",
 		},
 	})
-	c.Assert(err, ErrorMatches, `identity "bill" invalid: identity must have at least one type \(\"local\" or \"basic\"\)`)
+	c.Assert(err, ErrorMatches, `identity "bill" invalid: identity must have at least one type \(\"local\", \"basic\", or \"cert\"\)`)
 
 	// May have two types.
 	err = st.AddIdentities(map[string]*state.Identity{
@@ -485,7 +517,7 @@ func (s *identitiesSuite) TestReplaceIdentities(c *C) {
 			Access: "admin",
 		},
 	})
-	c.Assert(err, ErrorMatches, `identity "bill" invalid: identity must have at least one type \("local" or "basic"\)`)
+	c.Assert(err, ErrorMatches, `identity "bill" invalid: identity must have at least one type \("local", "basic", or "cert"\)`)
 
 	// Ensure unique user ID testing is being done (full testing done in AddIdentity).
 	err = st.ReplaceIdentities(map[string]*state.Identity{
