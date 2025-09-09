@@ -482,7 +482,6 @@ func (s *execSuite) TestExecChangeReady(c *C) {
 	rsp.ServeHTTP(rec, req)
 
 	c.Check(rec.Code, Equals, 500)
-	fmt.Printf("Response body: %q\n", rec.Body.String())
 	c.Check(rec.Body.String(), Matches, `.*cannot connect to websocket.*something went wrong.*`)
 }
 
