@@ -133,7 +133,7 @@ func (e *execution) connect(r *http.Request, w http.ResponseWriter, id string) e
 		return os.ErrNotExist
 	}
 	if conn != nil {
-		return fmt.Errorf("websocket %q already connected", id)
+		return fmt.Errorf("%s websocket already connected", id)
 	}
 
 	// Upgrade the HTTP connection to a websocket connection.
