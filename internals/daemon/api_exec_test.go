@@ -482,7 +482,7 @@ func (s *execSuite) TestExecChangeReady(c *C) {
 	rsp.ServeHTTP(rec, req)
 
 	c.Check(rec.Code, Equals, 500)
-	c.Check(rec.Body.String(), Matches, `.*cannot connect to websocket.*something went wrong.*`)
+	c.Check(rec.Body.String(), Matches, `.*cannot perform the following tasks.*something went wrong.*`)
 }
 
 type execResponse struct {
