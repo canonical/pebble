@@ -558,16 +558,7 @@ func (s *serviceData) exited(exitCode int) error {
 			}
 			logger.Noticef("Service %q %s action is %q, triggering %s shutdown",
 				s.config.Name, onType, action, shutdownStr)
-			if restartType == restart.RestartServiceFailure {
-				logger.Debugf("Service %q delaying daemon shutdown by 100ms for failure case", s.config.Name)
-				go func() {
-					time.Sleep(100 * time.Millisecond)
-					logger.Debugf("Service %q triggering daemon shutdown after delay", s.config.Name)
-					s.manager.restarter.HandleRestart(restartType)
-				}()
-			} else {
-				s.manager.restarter.HandleRestart(restartType)
-			}
+			s.manager.restarter.HandleRestart(restartType)
 			s.transition(stateExited)
 
 		case plan.ActionSuccessShutdown:
