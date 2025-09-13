@@ -15,7 +15,9 @@
 package state
 
 import (
+	"crypto/x509"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"regexp"
@@ -34,6 +36,7 @@ type Identity struct {
 	// non-nil.
 	Local *LocalIdentity
 	Basic *BasicIdentity
+	Cert  *CertIdentity
 }
 
 // IdentityAccess defines the access level for an identity.
@@ -57,6 +60,11 @@ type LocalIdentity struct {
 type BasicIdentity struct {
 	// Password holds the user's sha512-crypt-hashed password.
 	Password string
+}
+
+type CertIdentity struct {
+	// Certificate holds the PEM-encoded certificate for the identity.
+	Certificate string
 }
 
 // This is used to ensure we send a well-formed identity Name.
@@ -101,8 +109,25 @@ func (d *Identity) validateAccess() error {
 		}
 		gotType = true
 	}
+	if d.Cert != nil {
+		if d.Cert.Certificate == "" {
+			return errors.New("cert identity must specify certificate (PEM-encoded)")
+		}
+		block, rest := pem.Decode([]byte(d.Cert.Certificate))
+		if block == nil {
+			return errors.New("cert identity must have at least one valid PEM block")
+		}
+		if len(rest) > 0 {
+			return errors.New("cert identity cannot have extra data after the PEM block")
+		}
+		_, err := x509.ParseCertificate(block.Bytes)
+		if err != nil {
+			return fmt.Errorf("cannot parse certificate from cert identity: %w", err)
+		}
+		gotType = true
+	}
 	if !gotType {
-		return errors.New(`identity must have at least one type ("local" or "basic")`)
+		return errors.New(`identity must have at least one type ("local", "basic", or "cert")`)
 	}
 
 	return nil
@@ -115,6 +140,7 @@ type apiIdentity struct {
 	Access string            `json:"access"`
 	Local  *apiLocalIdentity `json:"local,omitempty"`
 	Basic  *apiBasicIdentity `json:"basic,omitempty"`
+	Cert   *apiCertIdentity  `json:"cert,omitempty"`
 }
 
 type apiLocalIdentity struct {
@@ -123,6 +149,10 @@ type apiLocalIdentity struct {
 
 type apiBasicIdentity struct {
 	Password string `json:"password"`
+}
+
+type apiCertIdentity struct {
+	Certificate string `json:"certificate"`
 }
 
 // IMPORTANT NOTE: be sure to exclude secrets when adding to this!
@@ -135,6 +165,9 @@ func (d *Identity) MarshalJSON() ([]byte, error) {
 	}
 	if d.Basic != nil {
 		ai.Basic = &apiBasicIdentity{Password: "*****"}
+	}
+	if d.Cert != nil {
+		ai.Cert = &apiCertIdentity{Certificate: d.Cert.Certificate}
 	}
 	return json.Marshal(ai)
 }
@@ -158,6 +191,9 @@ func (d *Identity) UnmarshalJSON(data []byte) error {
 	}
 	if ai.Basic != nil {
 		identity.Basic = &BasicIdentity{Password: ai.Basic.Password}
+	}
+	if ai.Cert != nil {
+		identity.Cert = &CertIdentity{Certificate: ai.Cert.Certificate}
 	}
 
 	// Perform additional validation using the local Identity type.
