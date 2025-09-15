@@ -22,7 +22,9 @@ import (
 
 	"gopkg.in/check.v1"
 
+	"github.com/canonical/pebble/internals/overlord/pairingstate"
 	"github.com/canonical/pebble/internals/overlord/restart"
+	"github.com/canonical/pebble/internals/plan"
 	"github.com/canonical/pebble/internals/reaper"
 )
 
@@ -40,6 +42,7 @@ type apiSuite struct {
 }
 
 func (s *apiSuite) SetUpTest(c *check.C) {
+	plan.RegisterSectionExtension(pairingstate.PairingField, &pairingstate.SectionExtension{})
 	err := reaper.Start()
 	if err != nil {
 		c.Fatalf("cannot start reaper: %v", err)
@@ -62,6 +65,7 @@ func (s *apiSuite) TearDownTest(c *check.C) {
 	if err != nil {
 		c.Fatalf("cannot stop reaper: %v", err)
 	}
+	plan.UnregisterSectionExtension(pairingstate.PairingField)
 }
 
 func (s *apiSuite) muxVars(*http.Request) map[string]string {
