@@ -53,3 +53,9 @@ func (t *Task) AccumulateUndoingTime(duration time.Duration) {
 func (s *State) NumNotices() int {
 	return len(s.notices)
 }
+
+// Pairing gives access to the underdyling pairing state object for testing.
+func (s *State) Pairing() *Pairing {
+	s.writing()
+	return &s.pairing
+}

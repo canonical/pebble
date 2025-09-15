@@ -32,6 +32,7 @@ import (
 
 	"github.com/canonical/pebble/client"
 	"github.com/canonical/pebble/internals/logger"
+	"github.com/canonical/pebble/internals/overlord/pairingstate"
 	"github.com/canonical/pebble/internals/overlord/state"
 	"github.com/canonical/pebble/internals/plan"
 	"github.com/canonical/pebble/internals/reaper"
@@ -49,6 +50,7 @@ func (s *execSuite) SetUpSuite(c *C) {
 }
 
 func (s *execSuite) SetUpTest(c *C) {
+	plan.RegisterSectionExtension(pairingstate.PairingField, &pairingstate.SectionExtension{})
 	err := reaper.Start()
 	if err != nil {
 		c.Fatalf("cannot start reaper: %v", err)
@@ -77,6 +79,7 @@ func (s *execSuite) TearDownTest(c *C) {
 	if err != nil {
 		c.Fatalf("cannot stop reaper: %v", err)
 	}
+	plan.UnregisterSectionExtension(pairingstate.PairingField)
 }
 
 // Some of these tests use the Go client for simplicity.
