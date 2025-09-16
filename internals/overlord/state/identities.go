@@ -64,7 +64,8 @@ type BasicIdentity struct {
 
 type CertificateIdentity struct {
 	// PEM holds the PEM-encoded certificate for the identity.
-	PEM string
+	//PEM string
+	Certificate *x509.Certificate
 }
 
 // This is used to ensure we send a well-formed identity Name.
@@ -110,16 +111,8 @@ func (d *Identity) validateAccess() error {
 		gotType = true
 	}
 	if d.Certificate != nil {
-		block, rest := pem.Decode([]byte(d.Certificate.PEM))
-		if block == nil {
+		if d.Certificate.Certificate == nil {
 			return errors.New("certificate identity must include a PEM-encoded certificate")
-		}
-		if len(rest) > 0 {
-			return errors.New("certificate identity cannot have extra data after the PEM block")
-		}
-		_, err := x509.ParseCertificate(block.Bytes)
-		if err != nil {
-			return fmt.Errorf("cannot parse certificate from certificate identity: %w", err)
 		}
 		gotType = true
 	}
@@ -164,7 +157,11 @@ func (d *Identity) MarshalJSON() ([]byte, error) {
 		ai.Basic = &apiBasicIdentity{Password: "*****"}
 	}
 	if d.Certificate != nil {
-		ai.Certificate = &apiCertificateIdentity{PEM: d.Certificate.PEM}
+		pemBlock := &pem.Block{
+			Type:  "CERTIFICATE",
+			Bytes: d.Certificate.Certificate.Raw,
+		}
+		ai.Certificate = &apiCertificateIdentity{PEM: string(pem.EncodeToMemory(pemBlock))}
 	}
 	return json.Marshal(ai)
 }
@@ -190,7 +187,18 @@ func (d *Identity) UnmarshalJSON(data []byte) error {
 		identity.Basic = &BasicIdentity{Password: ai.Basic.Password}
 	}
 	if ai.Certificate != nil {
-		identity.Certificate = &CertificateIdentity{PEM: ai.Certificate.PEM}
+		block, rest := pem.Decode([]byte(ai.Certificate.PEM))
+		if block == nil {
+			return errors.New("certificate identity must include a PEM-encoded certificate")
+		}
+		if len(rest) > 0 {
+			return errors.New("certificate identity cannot have extra data after the PEM block")
+		}
+		cert, err := x509.ParseCertificate(block.Bytes)
+		if err != nil {
+			return fmt.Errorf("cannot parse certificate from certificate identity: %w", err)
+		}
+		identity.Certificate = &CertificateIdentity{Certificate: cert}
 	}
 
 	// Perform additional validation using the local Identity type.

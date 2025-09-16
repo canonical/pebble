@@ -15,7 +15,9 @@
 package state_test
 
 import (
+	"crypto/x509"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
 
 	. "gopkg.in/check.v1"
@@ -28,8 +30,7 @@ type identitiesSuite struct{}
 var _ = Suite(&identitiesSuite{})
 
 // Generated using `openssl req -new -x509 -out cert.pem -days 3650 -subj "/CN=canonical.com"`
-const testPEMX509Cert = `
------BEGIN CERTIFICATE-----
+const testPEMX509Cert = `-----BEGIN CERTIFICATE-----
 MIIBRDCB96ADAgECAhROTkdEcgeil5/5NUNTq1ZRPDLiPTAFBgMrZXAwGDEWMBQG
 A1UEAwwNY2Fub25pY2FsLmNvbTAeFw0yNTA5MDgxNTI2NTJaFw0zNTA5MDYxNTI2
 NTJaMBgxFjAUBgNVBAMMDWNhbm9uaWNhbC5jb20wKjAFBgMrZXADIQDtxRqb9EMe
@@ -42,8 +43,7 @@ jwXVTUH4HLpbhK0RAaEPOL4h5jm36CrWTkxzpbdCrIu4NgPLQKJ6Cw==
 
 // Generated using `openssl req -new -newkey ed25519 -out bad-cert.pem -nodes -subj "/CN=canonical.com"`
 // This is a valid PEM block but not a valid X.509 certificate.
-const testPEMPKCS10Req = `
------BEGIN CERTIFICATE REQUEST-----
+const testPEMPKCS10Req = `-----BEGIN CERTIFICATE REQUEST-----
 MIGXMEsCAQAwGDEWMBQGA1UEAwwNY2Fub25pY2FsLmNvbTAqMAUGAytlcAMhADuu
 TTkzIDS55kZukGFfsWM+kPug1hpJLVx4wKqr5eLNoAAwBQYDK2VwA0EA3QU93q5S
 pV4RrgnD3G7kw2dg8fdJAZ/qn1bXToUzPy89uPMiAZIE+eHXBxzqTJ6GJrVY+2r7
@@ -72,7 +72,7 @@ func (s *identitiesSuite) TestMarshalAPI(c *C) {
 		},
 		"olivia": {
 			Access:      state.ReadAccess,
-			Certificate: &state.CertificateIdentity{PEM: testPEMX509Cert},
+			Certificate: &state.CertificateIdentity{Certificate: parseCert(testPEMX509Cert)},
 		},
 	})
 	c.Assert(err, IsNil)
@@ -159,7 +159,7 @@ func (s *identitiesSuite) TestUnmarshalAPI(c *C) {
 		},
 		"olivia": {
 			Access:      state.ReadAccess,
-			Certificate: &state.CertificateIdentity{PEM: testPEMX509Cert},
+			Certificate: &state.CertificateIdentity{Certificate: parseCert(testPEMX509Cert)},
 		},
 	})
 }
@@ -311,7 +311,7 @@ func (s *identitiesSuite) TestAddIdentities(c *C) {
 		},
 		"olivia": {
 			Access:      state.ReadAccess,
-			Certificate: &state.CertificateIdentity{PEM: testPEMX509Cert},
+			Certificate: &state.CertificateIdentity{Certificate: parseCert(testPEMX509Cert)},
 		},
 	}
 	err := st.AddIdentities(original)
@@ -338,7 +338,7 @@ func (s *identitiesSuite) TestAddIdentities(c *C) {
 		"olivia": {
 			Name:        "olivia",
 			Access:      state.ReadAccess,
-			Certificate: &state.CertificateIdentity{PEM: testPEMX509Cert},
+			Certificate: &state.CertificateIdentity{Certificate: parseCert(testPEMX509Cert)},
 		},
 	})
 
@@ -778,4 +778,16 @@ func (s *identitiesSuite) TestIdentityFromInputs(c *C) {
 	userID = 42
 	identity = st.IdentityFromInputs(&userID, "nancy-wrong-username", "wrong-password")
 	c.Assert(identity, IsNil)
+}
+
+func parseCert(pemBlock string) *x509.Certificate {
+	block, _ := pem.Decode([]byte(pemBlock))
+	if block == nil {
+		panic("invalid PEM block")
+	}
+	cert, _ := x509.ParseCertificate(block.Bytes)
+	if cert == nil {
+		panic("invalid x509 certificate")
+	}
+	return cert
 }
