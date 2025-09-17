@@ -45,7 +45,12 @@ func BenchmarkLoggerNoticefConcurrent(b *testing.B) {
 }
 
 // BenchmarkLoggerNoticefStderr tests Noticef with real os.Stderr output.
+// Run with: BENCH_STDERR=1 go test ./internals/logger -bench=BenchmarkLoggerNoticefStderr -v
 func BenchmarkLoggerNoticefStderr(b *testing.B) {
+	if os.Getenv("BENCH_STDERR") == "" {
+		b.SkipNow() // Silent skip - no message
+	}
+
 	logger := New(os.Stderr, "Benchmark: ")
 	SetLogger(logger)
 
@@ -56,7 +61,12 @@ func BenchmarkLoggerNoticefStderr(b *testing.B) {
 }
 
 // BenchmarkLoggerNoticefStderrConcurrent tests concurrent logging to os.Stderr.
+// Run with: BENCH_STDERR=1 go test ./internals/logger -bench=BenchmarkLoggerNoticefStderrConcurrent -v
 func BenchmarkLoggerNoticefStderrConcurrent(b *testing.B) {
+	if os.Getenv("BENCH_STDERR") == "" {
+		b.Skip("Skipping stderr benchmark (set BENCH_STDERR=1 to enable)")
+	}
+
 	logger := New(os.Stderr, "Benchmark: ")
 	SetLogger(logger)
 
