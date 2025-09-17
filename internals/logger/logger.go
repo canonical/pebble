@@ -35,15 +35,15 @@ var (
 // A Logger is a fairly minimal logging tool.
 type Logger interface {
 	// Notice is for messages that the user should see
-	Notice(msg string)
+	Noticef(format string, v ...any)
 	// Debug is for messages that the user should be able to find if they're debugging something
-	Debug(msg string)
+	Debugf(format string, v ...any)
 }
 
 type nullLogger struct{}
 
-func (nullLogger) Notice(string) {}
-func (nullLogger) Debug(string)  {}
+func (nullLogger) Noticef(format string, v ...any) {}
+func (nullLogger) Debugf(format string, v ...any)  {}
 
 // NullLogger is a logger that does nothing
 var NullLogger = nullLogger{}
@@ -58,7 +58,7 @@ func Panicf(format string, v ...any) {
 	loggerLock.Lock()
 	defer loggerLock.Unlock()
 	msg := fmt.Sprintf(format, v...)
-	logger.Notice("PANIC " + msg)
+	logger.Noticef("PANIC %s", msg)
 	panic(msg)
 }
 
@@ -66,16 +66,14 @@ func Panicf(format string, v ...any) {
 func Noticef(format string, v ...any) {
 	loggerLock.Lock()
 	defer loggerLock.Unlock()
-	msg := fmt.Sprintf(format, v...)
-	logger.Notice(msg)
+	logger.Noticef(format, v...)
 }
 
 // Debugf records something in the debug log
 func Debugf(format string, v ...any) {
 	loggerLock.Lock()
 	defer loggerLock.Unlock()
-	msg := fmt.Sprintf(format, v...)
-	logger.Debug(msg)
+	logger.Debugf(format, v...)
 }
 
 // SecurityWarn logs a security WARN event with the given arguments.
@@ -120,7 +118,7 @@ func securityEvent(level string, event SecurityEvent, arg, description string) {
 		// Should never happen, and not much more we can do here.
 		return
 	}
-	logger.Notice(buf.String())
+	logger.Noticef("%s", buf.String())
 }
 
 type SecurityEvent string
@@ -186,21 +184,21 @@ type defaultLogger struct {
 }
 
 // Debug only prints if PEBBLE_DEBUG is set.
-func (l *defaultLogger) Debug(msg string) {
+func (l *defaultLogger) Debugf(format string, v ...any) {
 	if os.Getenv("PEBBLE_DEBUG") == "1" {
-		l.Notice("DEBUG " + msg)
+		l.Noticef("DEBUG "+format, v...)
 	}
 }
 
-// Notice alerts the user about something, as well as putting it syslog
-func (l *defaultLogger) Notice(msg string) {
+// Noticef alerts the user about something, as well as putting it syslog
+func (l *defaultLogger) Noticef(format string, v ...any) {
 	l.buf = l.buf[:0]
 	now := time.Now().UTC()
 	l.buf = now.AppendFormat(l.buf, timestampFormat)
 	l.buf = append(l.buf, ' ')
 	l.buf = append(l.buf, l.prefix...)
-	l.buf = append(l.buf, msg...)
-	if len(msg) == 0 || msg[len(msg)-1] != '\n' {
+	l.buf = fmt.Appendf(l.buf, format, v...)
+	if len(l.buf) == 0 || l.buf[len(l.buf)-1] != '\n' {
 		l.buf = append(l.buf, '\n')
 	}
 	l.w.Write(l.buf)
@@ -209,5 +207,9 @@ func (l *defaultLogger) Notice(msg string) {
 // New creates a log.Logger using the given io.Writer and prefix (which is
 // printed between the timestamp and the message).
 func New(w io.Writer, prefix string) Logger {
-	return &defaultLogger{w: w, prefix: prefix}
+	return &defaultLogger{
+		w:      w,
+		prefix: prefix,
+		buf:    make([]byte, 0, 256),
+	}
 }

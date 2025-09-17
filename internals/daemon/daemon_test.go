@@ -1818,12 +1818,12 @@ type fakeLogger struct {
 	noticeCh chan int
 }
 
-func (f *fakeLogger) Notice(msg string) {
-	f.msg = msg
+func (f *fakeLogger) Noticef(format string, v ...any) {
+	f.msg = fmt.Sprintf(format, v...)
 	f.noticeCh <- 1
 }
 
-func (f *fakeLogger) Debug(msg string) {}
+func (f *fakeLogger) Debugf(format string, v ...any) {}
 
 func (s *rebootSuite) TestSyscallRebootError(c *C) {
 	defer FakeSyscallSync(func() {})()
