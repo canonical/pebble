@@ -157,7 +157,6 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 			addLastLogs(task, service.logs)
 			// Do not remove the service so that Pebble will restart it if the action is restart,
 			// and the logs are still accessible for failed services if the action is ignore.
-			fmt.Printf("========== doStart service.started channel received error: %v, will return\n", err)
 			return fmt.Errorf("service start attempt: %w", err)
 		}
 		// Started successfully (ran for small amount of time without exiting).

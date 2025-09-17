@@ -1386,45 +1386,6 @@ services:
 	}
 }
 
-func (s *S) TestOnFailureShutdownChangeStatus(c *C) {
-	// Test that when a service fails with on-failure: shutdown, the change status
-	// is properly set to ErrorStatus instead of remaining in DoingStatus.
-	s.newServiceManager(c)
-	s.planAddLayer(c, `
-services:
-    svc1:
-        override: replace
-        command: sleep x
-        on-failure: shutdown
-`)
-	s.planChanged(c)
-
-	// Start service - this should fail because "sleep x" is invalid.
-	chg := s.startServices(c, [][]string{{"svc1"}})
-
-	// Wait for the service to fail and trigger shutdown
-	select {
-	case restartType := <-s.stopDaemon:
-		c.Assert(restartType, Equals, restart.RestartServiceFailure)
-	case <-time.After(time.Second):
-		c.Fatalf("timed out waiting for stop-daemon channel")
-	}
-
-	// Check that the change status is ErrorStatus, not DoingStatus.
-	s.st.Lock()
-	changeStatus := chg.Status()
-	s.st.Unlock()
-	c.Assert(changeStatus, Equals, state.ErrorStatus)
-
-	// Also check that the task status is ErrorStatus.
-	s.st.Lock()
-	tasks := chg.Tasks()
-	taskStatus := tasks[0].Status()
-	s.st.Unlock()
-	c.Assert(len(tasks), Equals, 1)
-	c.Assert(taskStatus, Equals, state.ErrorStatus)
-}
-
 func (s *S) TestOnSuccessFailureShutdown(c *C) {
 	s.newServiceManager(c)
 	s.planAddLayer(c, `

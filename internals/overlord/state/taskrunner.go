@@ -15,7 +15,6 @@
 package state
 
 import (
-	"fmt"
 	"sync"
 	"time"
 
@@ -244,7 +243,6 @@ func (r *TaskRunner) run(t *Task) {
 			// preserve
 		default:
 			if r.stopped {
-				fmt.Printf("========== taskrunner.run: we are stopped, replacing error %v with Retry\n", err)
 				// we are shutting down, errors might be due
 				// to cancellations, to be safe retry
 				err = &Retry{}
@@ -253,7 +251,6 @@ func (r *TaskRunner) run(t *Task) {
 
 		switch x := err.(type) {
 		case *Retry:
-			fmt.Printf("========== taskrunner.run got Retry: %v, will set task %s status to DoStatus/UndoStatus\n", x.Reason, t.ID())
 			// Handler asked to be called again later.
 			if t.Status() == AbortStatus {
 				// Would work without it but might take two ensures.
@@ -296,7 +293,6 @@ func (r *TaskRunner) run(t *Task) {
 			}
 		default:
 			r.abortLanes(t.Change(), t.Lanes())
-			fmt.Printf("========== taskrunner.run got error: %v, in the default case (NEVER REACHED!)", err)
 			t.SetStatus(ErrorStatus)
 			t.Errorf("%s", err)
 			// ensure the error is available in the global log too
@@ -522,13 +518,12 @@ func (r *TaskRunner) Stop() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	r.stopped = true
-
 	for _, tb := range r.tombs {
 		tb.Kill(nil)
 	}
 
 	r.wait()
+	r.stopped = true
 }
 
 // Wait waits for all concurrent activities and returns after that's done.
