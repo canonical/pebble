@@ -63,7 +63,7 @@ type BasicIdentity struct {
 }
 
 type CertificateIdentity struct {
-	Certificate *x509.Certificate
+	X509 *x509.Certificate
 }
 
 // This is used to ensure we send a well-formed identity Name.
@@ -109,8 +109,8 @@ func (d *Identity) validateAccess() error {
 		gotType = true
 	}
 	if d.Certificate != nil {
-		if d.Certificate.Certificate == nil {
-			return errors.New("certificate identity must include a PEM-encoded certificate")
+		if d.Certificate.X509 == nil {
+			return errors.New("certificate identity must include an X.509 certificate")
 		}
 		gotType = true
 	}
@@ -157,7 +157,7 @@ func (d *Identity) MarshalJSON() ([]byte, error) {
 	if d.Certificate != nil {
 		pemBlock := &pem.Block{
 			Type:  "CERTIFICATE",
-			Bytes: d.Certificate.Certificate.Raw,
+			Bytes: d.Certificate.X509.Raw,
 		}
 		ai.Certificate = &apiCertificateIdentity{PEM: string(pem.EncodeToMemory(pemBlock))}
 	}
@@ -196,7 +196,7 @@ func (d *Identity) UnmarshalJSON(data []byte) error {
 		if err != nil {
 			return fmt.Errorf("cannot parse certificate from certificate identity: %w", err)
 		}
-		identity.Certificate = &CertificateIdentity{Certificate: cert}
+		identity.Certificate = &CertificateIdentity{X509: cert}
 	}
 
 	// Perform additional validation using the local Identity type.

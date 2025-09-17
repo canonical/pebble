@@ -72,7 +72,7 @@ func (s *identitiesSuite) TestMarshalAPI(c *C) {
 		},
 		"olivia": {
 			Access:      state.ReadAccess,
-			Certificate: &state.CertificateIdentity{Certificate: parseCert(testPEMX509Cert)},
+			Certificate: &state.CertificateIdentity{X509: parseCert(c, testPEMX509Cert)},
 		},
 	})
 	c.Assert(err, IsNil)
@@ -159,7 +159,7 @@ func (s *identitiesSuite) TestUnmarshalAPI(c *C) {
 		},
 		"olivia": {
 			Access:      state.ReadAccess,
-			Certificate: &state.CertificateIdentity{Certificate: parseCert(testPEMX509Cert)},
+			Certificate: &state.CertificateIdentity{X509: parseCert(c, testPEMX509Cert)},
 		},
 	})
 }
@@ -311,7 +311,7 @@ func (s *identitiesSuite) TestAddIdentities(c *C) {
 		},
 		"olivia": {
 			Access:      state.ReadAccess,
-			Certificate: &state.CertificateIdentity{Certificate: parseCert(testPEMX509Cert)},
+			Certificate: &state.CertificateIdentity{X509: parseCert(c, testPEMX509Cert)},
 		},
 	}
 	err := st.AddIdentities(original)
@@ -338,7 +338,7 @@ func (s *identitiesSuite) TestAddIdentities(c *C) {
 		"olivia": {
 			Name:        "olivia",
 			Access:      state.ReadAccess,
-			Certificate: &state.CertificateIdentity{Certificate: parseCert(testPEMX509Cert)},
+			Certificate: &state.CertificateIdentity{X509: parseCert(c, testPEMX509Cert)},
 		},
 	})
 
@@ -380,7 +380,7 @@ func (s *identitiesSuite) TestAddIdentities(c *C) {
 			Access: "admin",
 		},
 	})
-	c.Assert(err, ErrorMatches, `identity "bill" invalid: identity must have at least one type \(\"local\", \"basic\", or \"certificate\"\)`)
+	c.Assert(err, ErrorMatches, `identity "bill" invalid: identity must have at least one type \("local", "basic", or "certificate"\)`)
 
 	// May have two types.
 	err = st.AddIdentities(map[string]*state.Identity{
@@ -780,14 +780,10 @@ func (s *identitiesSuite) TestIdentityFromInputs(c *C) {
 	c.Assert(identity, IsNil)
 }
 
-func parseCert(pemBlock string) *x509.Certificate {
+func parseCert(c *C, pemBlock string) *x509.Certificate {
 	block, _ := pem.Decode([]byte(pemBlock))
-	if block == nil {
-		panic("invalid PEM block")
-	}
+	c.Assert(block, NotNil)
 	cert, _ := x509.ParseCertificate(block.Bytes)
-	if cert == nil {
-		panic("invalid x509 certificate")
-	}
+	c.Assert(cert, NotNil)
 	return cert
 }
