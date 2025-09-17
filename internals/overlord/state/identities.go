@@ -63,8 +63,6 @@ type BasicIdentity struct {
 }
 
 type CertificateIdentity struct {
-	// PEM holds the PEM-encoded certificate for the identity.
-	//PEM string
 	Certificate *x509.Certificate
 }
 

@@ -59,8 +59,8 @@ type BasicIdentity struct {
 // CertificateIdentity holds identity configuration specific to the "certificate" type
 // (for mTLS authentication)
 type CertificateIdentity struct {
-	// Certificate holds the PEM-encoded certificate.
-	Certificate string `json:"certificate" yaml:"certificate"`
+	// PEM holds the PEM-encoded certificate.
+	PEM string `json:"pem" yaml:"pem"`
 }
 
 // For future extension.
