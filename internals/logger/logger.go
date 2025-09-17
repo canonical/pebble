@@ -198,7 +198,7 @@ func (l *defaultLogger) Noticef(format string, v ...any) {
 	l.buf = append(l.buf, ' ')
 	l.buf = append(l.buf, l.prefix...)
 	l.buf = fmt.Appendf(l.buf, format, v...)
-	if len(l.buf) == 0 || l.buf[len(l.buf)-1] != '\n' {
+	if l.buf[len(l.buf)-1] != '\n' {
 		l.buf = append(l.buf, '\n')
 	}
 	l.w.Write(l.buf)
