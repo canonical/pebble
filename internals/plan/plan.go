@@ -118,12 +118,20 @@ type Plan struct {
 // fields. In the case of no plan layers, this ensures that plan callback
 // handlers always get a valid extension type to access.
 func NewPlan() *Plan {
-	var err error
 	p := &Plan{Sections: make(map[string]Section, len(sectionExtensions))}
 	for field := range sectionExtensions {
-		p.Sections[field], err = sectionExtensions[field].ParseSection(yaml.Node{})
+		// Ask the extension for a section instance with a concrete
+		// underlying type.
+		section, err := sectionExtensions[field].ParseSection(yaml.Node{})
 		if err != nil {
 			panic("internal error: ParseSection() of empty node must return a valid section")
+		}
+
+		// Ask the extension to apply all the post-merge rules
+		// (e.g. defaults) on the section instance.
+		p.Sections[field], err = sectionExtensions[field].CombineSections(section)
+		if err != nil {
+			panic("internal error: CombineSections() of empty node must return a valid section")
 		}
 	}
 	return p
