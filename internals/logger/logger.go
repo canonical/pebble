@@ -57,9 +57,8 @@ var (
 func Panicf(format string, v ...any) {
 	loggerLock.Lock()
 	defer loggerLock.Unlock()
-	msg := fmt.Sprintf(format, v...)
-	logger.Noticef("PANIC %s", msg)
-	panic(msg)
+	logger.Noticef("PANIC "+format, v...)
+	panic(fmt.Sprintf(format, v...))
 }
 
 // Noticef notifies the user of something
@@ -118,7 +117,7 @@ func securityEvent(level string, event SecurityEvent, arg, description string) {
 		// Should never happen, and not much more we can do here.
 		return
 	}
-	logger.Noticef("%s", buf.String())
+	logger.Noticef("%s", buf.Bytes())
 }
 
 type SecurityEvent string

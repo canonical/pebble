@@ -16,7 +16,6 @@ package logger
 
 import (
 	"io"
-	"os"
 	"testing"
 )
 
@@ -34,40 +33,6 @@ func BenchmarkLoggerNoticef(b *testing.B) {
 // BenchmarkLoggerNoticefConcurrent tests concurrent logging performance.
 func BenchmarkLoggerNoticefConcurrent(b *testing.B) {
 	logger := New(io.Discard, "Benchmark: ")
-	SetLogger(logger)
-
-	b.ResetTimer()
-	b.RunParallel(func(pb *testing.PB) {
-		for pb.Next() {
-			Noticef("Concurrent message from goroutiner: %d and string: %s", 42, "test")
-		}
-	})
-}
-
-// BenchmarkLoggerNoticefStderr tests Noticef with real os.Stderr output.
-// Run with: BENCH_STDERR=1 go test ./internals/logger -bench=BenchmarkLoggerNoticefStderr -v
-func BenchmarkLoggerNoticefStderr(b *testing.B) {
-	if os.Getenv("BENCH_STDERR") == "" {
-		b.SkipNow() // Silent skip - no message
-	}
-
-	logger := New(os.Stderr, "Benchmark: ")
-	SetLogger(logger)
-
-	b.ResetTimer()
-	for b.Loop() {
-		Noticef("Formatted message with number: %d and string: %s", 42, "test")
-	}
-}
-
-// BenchmarkLoggerNoticefStderrConcurrent tests concurrent logging to os.Stderr.
-// Run with: BENCH_STDERR=1 go test ./internals/logger -bench=BenchmarkLoggerNoticefStderrConcurrent -v
-func BenchmarkLoggerNoticefStderrConcurrent(b *testing.B) {
-	if os.Getenv("BENCH_STDERR") == "" {
-		b.Skip("Skipping stderr benchmark (set BENCH_STDERR=1 to enable)")
-	}
-
-	logger := New(os.Stderr, "Benchmark: ")
 	SetLogger(logger)
 
 	b.ResetTimer()
