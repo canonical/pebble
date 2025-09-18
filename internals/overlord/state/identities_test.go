@@ -71,8 +71,8 @@ func (s *identitiesSuite) TestMarshalAPI(c *C) {
 			Basic:  &state.BasicIdentity{Password: "hash"},
 		},
 		"olivia": {
-			Access:      state.ReadAccess,
-			Certificate: &state.CertificateIdentity{X509: parseCert(c, testPEMX509Cert)},
+			Access: state.ReadAccess,
+			Cert:   &state.CertIdentity{X509: parseCert(c, testPEMX509Cert)},
 		},
 	})
 	c.Assert(err, IsNil)
@@ -104,7 +104,7 @@ func (s *identitiesSuite) TestMarshalAPI(c *C) {
     },
     "olivia": {
         "access": "read",
-        "certificate": {
+        "cert": {
             "pem": %s
         }
     }
@@ -136,7 +136,7 @@ func (s *identitiesSuite) TestUnmarshalAPI(c *C) {
     },
     "olivia": {
         "access": "read",
-        "certificate": {
+        "cert": {
             "pem": %s
         }
     }
@@ -158,8 +158,8 @@ func (s *identitiesSuite) TestUnmarshalAPI(c *C) {
 			Basic:  &state.BasicIdentity{Password: "hash"},
 		},
 		"olivia": {
-			Access:      state.ReadAccess,
-			Certificate: &state.CertificateIdentity{X509: parseCert(c, testPEMX509Cert)},
+			Access: state.ReadAccess,
+			Cert:   &state.CertIdentity{X509: parseCert(c, testPEMX509Cert)},
 		},
 	})
 }
@@ -177,7 +177,7 @@ func (s *identitiesSuite) TestUnmarshalAPIErrors(c *C) {
 		error string
 	}{{
 		data:  `{"no-type": {"access": "admin"}}`,
-		error: `identity must have at least one type \("local", "basic", or "certificate"\)`,
+		error: `identity must have at least one type \("local", "basic", or "cert"\)`,
 	}, {
 		data:  `{"invalid-access": {"access": "admin", "local": {}}}`,
 		error: `local identity must specify user-id`,
@@ -185,17 +185,17 @@ func (s *identitiesSuite) TestUnmarshalAPIErrors(c *C) {
 		data:  `{"invalid-access": {"access": "metrics", "basic": {}}}`,
 		error: `basic identity must specify password \(hashed\)`,
 	}, {
-		data:  `{"invalid-access": {"access": "read", "certificate": {}}}`,
-		error: `certificate identity must include a PEM-encoded certificate`,
+		data:  `{"invalid-access": {"access": "read", "cert": {}}}`,
+		error: `cert identity must include a PEM-encoded certificate`,
 	}, {
-		data:  `{"invalid-access": {"access": "read", "certificate": {"pem": "..."}}}`,
-		error: `certificate identity must include a PEM-encoded certificate`,
+		data:  `{"invalid-access": {"access": "read", "cert": {"pem": "..."}}}`,
+		error: `cert identity must include a PEM-encoded certificate`,
 	}, {
-		data:  fmt.Sprintf(`{"invalid-access": {"access": "read", "certificate": {"pem": %s}}}`, jsonCertReq),
-		error: `cannot parse certificate from certificate identity: x509: .*`,
+		data:  fmt.Sprintf(`{"invalid-access": {"access": "read", "cert": {"pem": %s}}}`, jsonCertReq),
+		error: `cannot parse certificate from cert identity: x509: .*`,
 	}, {
-		data:  fmt.Sprintf(`{"invalid-access": {"access": "read", "certificate": {"pem": %s}}}`, jsonCertExtra),
-		error: `certificate identity cannot have extra data after the PEM block`,
+		data:  fmt.Sprintf(`{"invalid-access": {"access": "read", "cert": {"pem": %s}}}`, jsonCertExtra),
+		error: `cert identity cannot have extra data after the PEM block`,
 	}, {
 		data:  `{"invalid-access": {"access": "foo", "local": {"user-id": 42}}}`,
 		error: `invalid access value "foo", must be "admin", "read", "metrics", or "untrusted"`,
@@ -310,8 +310,8 @@ func (s *identitiesSuite) TestAddIdentities(c *C) {
 			Basic:  &state.BasicIdentity{Password: "hash"},
 		},
 		"olivia": {
-			Access:      state.ReadAccess,
-			Certificate: &state.CertificateIdentity{X509: parseCert(c, testPEMX509Cert)},
+			Access: state.ReadAccess,
+			Cert:   &state.CertIdentity{X509: parseCert(c, testPEMX509Cert)},
 		},
 	}
 	err := st.AddIdentities(original)
@@ -336,9 +336,9 @@ func (s *identitiesSuite) TestAddIdentities(c *C) {
 			Basic:  &state.BasicIdentity{Password: "hash"},
 		},
 		"olivia": {
-			Name:        "olivia",
-			Access:      state.ReadAccess,
-			Certificate: &state.CertificateIdentity{X509: parseCert(c, testPEMX509Cert)},
+			Name:   "olivia",
+			Access: state.ReadAccess,
+			Cert:   &state.CertIdentity{X509: parseCert(c, testPEMX509Cert)},
 		},
 	})
 
@@ -380,7 +380,7 @@ func (s *identitiesSuite) TestAddIdentities(c *C) {
 			Access: "admin",
 		},
 	})
-	c.Assert(err, ErrorMatches, `identity "bill" invalid: identity must have at least one type \("local", "basic", or "certificate"\)`)
+	c.Assert(err, ErrorMatches, `identity "bill" invalid: identity must have at least one type \("local", "basic", or "cert"\)`)
 
 	// May have two types.
 	err = st.AddIdentities(map[string]*state.Identity{
@@ -562,7 +562,7 @@ func (s *identitiesSuite) TestReplaceIdentities(c *C) {
 			Access: "admin",
 		},
 	})
-	c.Assert(err, ErrorMatches, `identity "bill" invalid: identity must have at least one type \("local", "basic", or "certificate"\)`)
+	c.Assert(err, ErrorMatches, `identity "bill" invalid: identity must have at least one type \("local", "basic", or "cert"\)`)
 
 	// Ensure unique user ID testing is being done (full testing done in AddIdentity).
 	err = st.ReplaceIdentities(map[string]*state.Identity{
