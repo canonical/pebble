@@ -20,12 +20,9 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"sync"
 	"time"
-)
-
-const (
-	timestampFormat = "2006-01-02T15:04:05.000Z07:00"
 )
 
 var (
@@ -192,8 +189,7 @@ func (l *defaultLogger) Debugf(format string, v ...any) {
 // Noticef alerts the user about something, as well as putting it syslog
 func (l *defaultLogger) Noticef(format string, v ...any) {
 	l.buf = l.buf[:0]
-	now := time.Now().UTC()
-	l.buf = now.AppendFormat(l.buf, timestampFormat)
+	l.buf = AppendTimestamp(l.buf, time.Now())
 	l.buf = append(l.buf, ' ')
 	l.buf = append(l.buf, l.prefix...)
 	l.buf = fmt.Appendf(l.buf, format, v...)
@@ -211,4 +207,69 @@ func New(w io.Writer, prefix string) Logger {
 		prefix: prefix,
 		buf:    make([]byte, 0, 256),
 	}
+}
+
+// AppendTimestamp appends a timestamp in format "YYYY-MM-DDTHH:mm:ss.sssZ" to
+// the given byte slice and returns the extended slice.
+//
+// The timestamp is always in UTC and has exactly 3 fractional digits
+// (millisecond precision). Makes no allocations if b has enough capacity.
+func AppendTimestamp(b []byte, t time.Time) []byte {
+	const capacity = 24
+
+	utc := t.UTC()
+
+	year := utc.Year()
+	month := int(utc.Month())
+	day := utc.Day()
+	hour := utc.Hour()
+	minute := utc.Minute()
+	second := utc.Second()
+
+	// Convert nanoseconds to milliseconds as we use millisecond precision.
+	millisecond := utc.Nanosecond() / 1_000_000
+
+	// Ensure slice has enough capacity, and extend length.
+	b = slices.Grow(b, capacity)
+	b = b[:capacity]
+
+	// Write year (4 digits)
+	b[0] = byte('0' + year/1000%10)
+	b[1] = byte('0' + year/100%10)
+	b[2] = byte('0' + year/10%10)
+	b[3] = byte('0' + year%10)
+	b[4] = '-'
+
+	// Write month (2 digits)
+	b[5] = byte('0' + month/10)
+	b[6] = byte('0' + month%10)
+	b[7] = '-'
+
+	// Write day (2 digits)
+	b[8] = byte('0' + day/10)
+	b[9] = byte('0' + day%10)
+	b[10] = 'T'
+
+	// Write hour (2 digits)
+	b[11] = byte('0' + hour/10)
+	b[12] = byte('0' + hour%10)
+	b[13] = ':'
+
+	// Write minute (2 digits)
+	b[14] = byte('0' + minute/10)
+	b[15] = byte('0' + minute%10)
+	b[16] = ':'
+
+	// Write second (2 digits)
+	b[17] = byte('0' + second/10)
+	b[18] = byte('0' + second%10)
+	b[19] = '.'
+
+	// Write milliseconds (3 digits)
+	b[20] = byte('0' + millisecond/100) // millisecond is at most 999, so no need for %10 here
+	b[21] = byte('0' + millisecond/10%10)
+	b[22] = byte('0' + millisecond%10)
+	b[23] = 'Z'
+
+	return b
 }

@@ -17,7 +17,30 @@ package logger
 import (
 	"io"
 	"testing"
+	"time"
 )
+
+func BenchmarkAppendFormat(b *testing.B) {
+	t := time.Now()
+	buf := make([]byte, 0, 64)
+
+	for b.Loop() {
+		buf = t.UTC().AppendFormat(buf[:0], "2006-01-02T15:04:05.000Z")
+	}
+
+	_ = buf // ensure buf is not optimized away
+}
+
+func BenchmarkAppendTimestamp(b *testing.B) {
+	t := time.Now()
+	buf := make([]byte, 0, 64)
+
+	for b.Loop() {
+		buf = AppendTimestamp(buf[:0], t)
+	}
+
+	_ = buf // ensure buf is not optimized away
+}
 
 // BenchmarkLoggerNoticef tests Noticef with string formatting.
 func BenchmarkLoggerNoticef(b *testing.B) {
