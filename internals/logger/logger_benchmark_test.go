@@ -10,9 +10,9 @@
 // GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
-// along with this program.  If not, see <http://www.gnu.org/licenses/>
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package servicelog
+package logger
 
 import (
 	"testing"
@@ -23,7 +23,7 @@ func BenchmarkAppendFormat(b *testing.B) {
 	t := time.Now()
 	buf := make([]byte, 0, 64)
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		buf = t.UTC().AppendFormat(buf[:0], "2006-01-02T15:04:05.000Z")
 	}
 
@@ -34,8 +34,8 @@ func BenchmarkAppendTimestamp(b *testing.B) {
 	t := time.Now()
 	buf := make([]byte, 0, 64)
 
-	for i := 0; i < b.N; i++ {
-		buf = appendTimestamp(buf[:0], t)
+	for b.Loop() {
+		buf = AppendTimestamp(buf[:0], t)
 	}
 
 	_ = buf // ensure buf is not optimized away
