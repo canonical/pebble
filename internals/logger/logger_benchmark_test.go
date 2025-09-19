@@ -15,7 +15,6 @@
 package logger
 
 import (
-	"io"
 	"testing"
 	"time"
 )
@@ -40,28 +39,4 @@ func BenchmarkAppendTimestamp(b *testing.B) {
 	}
 
 	_ = buf // ensure buf is not optimized away
-}
-
-// BenchmarkLoggerNoticef tests Noticef with string formatting.
-func BenchmarkLoggerNoticef(b *testing.B) {
-	logger := New(io.Discard, "Benchmark: ")
-	SetLogger(logger)
-
-	b.ResetTimer()
-	for b.Loop() {
-		Noticef("Formatted message with number: %d and string: %s", 42, "test")
-	}
-}
-
-// BenchmarkLoggerNoticefConcurrent tests concurrent logging performance.
-func BenchmarkLoggerNoticefConcurrent(b *testing.B) {
-	logger := New(io.Discard, "Benchmark: ")
-	SetLogger(logger)
-
-	b.ResetTimer()
-	b.RunParallel(func(pb *testing.PB) {
-		for pb.Next() {
-			Noticef("Concurrent message from goroutiner: %d and string: %s", 42, "test")
-		}
-	})
 }
