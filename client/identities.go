@@ -29,6 +29,7 @@ type Identity struct {
 	// non-nil.
 	Local *LocalIdentity `json:"local,omitempty" yaml:"local,omitempty"`
 	Basic *BasicIdentity `json:"basic,omitempty" yaml:"basic,omitempty"`
+	Cert  *CertIdentity  `json:"cert,omitempty" yaml:"cert,omitempty"`
 }
 
 // IdentityAccess defines the access level for an identity.
@@ -53,6 +54,13 @@ type LocalIdentity struct {
 type BasicIdentity struct {
 	// Password holds the user's sha512-crypt-hashed password.
 	Password string `json:"password" yaml:"password"`
+}
+
+// CertIdentity holds identity configuration specific to the "cert" type
+// (for mTLS authentication)
+type CertIdentity struct {
+	// PEM holds the PEM-encoded certificate.
+	PEM string `json:"pem" yaml:"pem"`
 }
 
 // For future extension.

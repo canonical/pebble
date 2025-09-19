@@ -16,7 +16,9 @@
 package state
 
 import (
+	"crypto/x509"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"io"
@@ -177,6 +179,7 @@ type marshalledIdentity struct {
 	Access string                   `json:"access"`
 	Local  *marshalledLocalIdentity `json:"local,omitempty"`
 	Basic  *marshalledBasicIdentity `json:"basic,omitempty"`
+	Cert   *marshalledCertIdentity  `json:"cert,omitempty"`
 }
 
 type marshalledLocalIdentity struct {
@@ -185,6 +188,10 @@ type marshalledLocalIdentity struct {
 
 type marshalledBasicIdentity struct {
 	Password string `json:"password"`
+}
+
+type marshalledCertIdentity struct {
+	PEM string `json:"pem"`
 }
 
 // MarshalJSON makes State a json.Marshaller
@@ -216,6 +223,13 @@ func (s *State) marshalledIdentities() map[string]*marshalledIdentity {
 		if identity.Basic != nil {
 			marshalled[name].Basic = &marshalledBasicIdentity{Password: identity.Basic.Password}
 		}
+		if identity.Cert != nil {
+			pemBlock := &pem.Block{
+				Type:  "CERTIFICATE",
+				Bytes: identity.Cert.X509.Raw,
+			}
+			marshalled[name].Cert = &marshalledCertIdentity{PEM: string(pem.EncodeToMemory(pemBlock))}
+		}
 	}
 	return marshalled
 }
@@ -232,7 +246,9 @@ func (s *State) UnmarshalJSON(data []byte) error {
 	s.changes = unmarshalled.Changes
 	s.tasks = unmarshalled.Tasks
 	s.unflattenNotices(unmarshalled.Notices)
-	s.unmarshalIdentities(unmarshalled.Identities)
+	if err := s.unmarshalIdentities(unmarshalled.Identities); err != nil {
+		return err
+	}
 	s.lastChangeId = unmarshalled.LastChangeId
 	s.lastTaskId = unmarshalled.LastTaskId
 	s.lastLaneId = unmarshalled.LastLaneId
@@ -248,7 +264,7 @@ func (s *State) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (s *State) unmarshalIdentities(marshalled map[string]*marshalledIdentity) {
+func (s *State) unmarshalIdentities(marshalled map[string]*marshalledIdentity) error {
 	s.identities = make(map[string]*Identity, len(marshalled))
 	for name, mi := range marshalled {
 		s.identities[name] = &Identity{
@@ -261,7 +277,16 @@ func (s *State) unmarshalIdentities(marshalled map[string]*marshalledIdentity) {
 		if mi.Basic != nil {
 			s.identities[name].Basic = &BasicIdentity{Password: mi.Basic.Password}
 		}
+		if mi.Cert != nil {
+			block, _ := pem.Decode([]byte(mi.Cert.PEM))
+			cert, err := x509.ParseCertificate(block.Bytes)
+			if err != nil {
+				return fmt.Errorf("cannot parse certificate from cert identity: %w", err)
+			}
+			s.identities[name].Cert = &CertIdentity{X509: cert}
+		}
 	}
+	return nil
 }
 
 func (s *State) checkpointData() []byte {
