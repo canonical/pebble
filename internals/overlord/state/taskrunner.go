@@ -518,12 +518,13 @@ func (r *TaskRunner) Stop() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
+	r.stopped = true
+
 	for _, tb := range r.tombs {
 		tb.Kill(nil)
 	}
 
 	r.wait()
-	r.stopped = true
 }
 
 // Wait waits for all concurrent activities and returns after that's done.
