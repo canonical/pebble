@@ -116,14 +116,22 @@ type Plan struct {
 
 // NewPlan creates an empty plan which includes empty registered extension
 // fields. In the case of no plan layers, this ensures that plan callback
-// handlers always get a valid extension type to access.
+// handlers always get a valid extension backing type to access.
 func NewPlan() *Plan {
-	var err error
 	p := &Plan{Sections: make(map[string]Section, len(sectionExtensions))}
 	for field := range sectionExtensions {
-		p.Sections[field], err = sectionExtensions[field].ParseSection(yaml.Node{})
+		// Ask the extension for a section instance with a concrete
+		// underlying type.
+		section, err := sectionExtensions[field].ParseSection(yaml.Node{})
 		if err != nil {
-			panic("internal error: ParseSection() of empty node must return a valid section")
+			panic("internal error: ParseSection() of empty node must return a valid section: " + err.Error())
+		}
+
+		// Ask the extension to apply all the post-merge rules
+		// (e.g. defaults) on the section instance.
+		p.Sections[field], err = sectionExtensions[field].CombineSections(section)
+		if err != nil {
+			panic("internal error: CombineSections() of empty node must return a valid section: " + err.Error())
 		}
 	}
 	return p
@@ -1529,7 +1537,7 @@ func configLayerEntries(configDir string, dirOK bool) (configs []*configEntry, e
 		label := match[2]
 		order, err := strconv.Atoi(match[1])
 		if err != nil {
-			panic(fmt.Sprintf("internal error: filename regexp is wrong: %v", err))
+			panic("internal error: filename regexp is wrong: " + err.Error())
 		}
 
 		// Let's make sure no duplicate orders or labels appear.
