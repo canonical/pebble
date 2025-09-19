@@ -264,7 +264,7 @@ func (s *ManagerSuite) TestFailures(c *C) {
 	// Should have called failure handler and be unhealthy after 10 failures (threshold)
 	c.Assert(changeData(c, s.overlord.State(), check.ChangeID), DeepEquals, map[string]string{"check-name": "chk1"})
 	check = waitCheck(c, s.manager, "chk1", func(check *checkstate.CheckInfo) bool {
-		return check.Failures >= 10 && check.ChangeID != originalChangeID
+		return check.Failures >= threshold && check.ChangeID != originalChangeID
 	})
 	c.Assert(check.Threshold, Equals, threshold)
 	c.Assert(check.Status, Equals, checkstate.CheckStatusDown)
