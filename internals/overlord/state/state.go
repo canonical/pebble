@@ -95,6 +95,7 @@ type State struct {
 	tasks      map[string]*Task
 	notices    map[noticeKey]*Notice
 	identities map[string]*Identity
+	pairing    Pairing
 
 	noticeCond        *sync.Cond
 	latestWarningTime atomic.Pointer[time.Time]
@@ -164,6 +165,7 @@ type marshalledState struct {
 	Tasks      map[string]*Task               `json:"tasks"`
 	Notices    []*Notice                      `json:"notices,omitempty"`
 	Identities map[string]*marshalledIdentity `json:"identities,omitempty"`
+	Pairing    Pairing                        `json:"pairing,omitempty"`
 
 	LastChangeId int `json:"last-change-id"`
 	LastTaskId   int `json:"last-task-id"`
@@ -196,6 +198,7 @@ func (s *State) MarshalJSON() ([]byte, error) {
 		Tasks:      s.tasks,
 		Notices:    s.flattenNotices(nil),
 		Identities: s.marshalledIdentities(),
+		Pairing:    s.pairing,
 
 		LastTaskId:   s.lastTaskId,
 		LastChangeId: s.lastChangeId,
@@ -233,6 +236,7 @@ func (s *State) UnmarshalJSON(data []byte) error {
 	s.tasks = unmarshalled.Tasks
 	s.unflattenNotices(unmarshalled.Notices)
 	s.unmarshalIdentities(unmarshalled.Identities)
+	s.pairing = unmarshalled.Pairing
 	s.lastChangeId = unmarshalled.LastChangeId
 	s.lastTaskId = unmarshalled.LastTaskId
 	s.lastLaneId = unmarshalled.LastLaneId
