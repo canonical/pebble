@@ -17,7 +17,7 @@ jobs:
         id: lint
         with:
           version: latest
-          args: '-c .github/.golangci.yml --output.text.path --output.text.print-linter-name --output.text.print-issued-lines --output.text.colors'
+          args: '-c .github/.golangci.yml --output.text.print-linter-name --output.text.print-issued-lines --output.text.colors'
           skip-cache: true
 
       - name: Print error message
