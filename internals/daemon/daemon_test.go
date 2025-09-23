@@ -1169,7 +1169,7 @@ func (s *daemonSuite) TestRestartServiceFailure(c *C) {
 services:
     test1:
         override: replace
-        command: /bin/sh -c 'sleep 1.5; exit 1'
+        command: /bin/sh -c 'sleep 0.5; exit 1'
         on-failure: shutdown
 `)
 	d := s.newDaemon(c)
