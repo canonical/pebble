@@ -747,34 +747,9 @@ func (d *Daemon) Stop(sigCh chan<- os.Signal) error {
 	return nil
 }
 
-// stopRunningServices waits for all running changes to complete then stops all running services,
-// waiting for a short time for them all to stop.
+// stopRunningServices stops all running services, waiting for a short time
+// for them all to stop.
 func (d *Daemon) stopRunningServices() error {
-	st := d.state
-	st.Lock()
-	var runningChanges []*state.Change
-	for _, chg := range st.Changes() {
-		status := chg.Status()
-		if status == state.DoStatus || status == state.DoingStatus ||
-			status == state.UndoStatus || status == state.UndoingStatus {
-			runningChanges = append(runningChanges, chg)
-		}
-	}
-	st.Unlock()
-
-	if len(runningChanges) > 0 {
-		logger.Noticef("Waiting for %d running changes to complete before stopping services.", len(runningChanges))
-		for _, chg := range runningChanges {
-			select {
-			case <-chg.Ready():
-				logger.Debugf("Change %s completed.", chg.ID())
-			case <-time.After(d.overlord.ServiceManager().StopTimeout()):
-				logger.Noticef("Timeout waiting for running change %s to complete.", chg.ID())
-			}
-		}
-		logger.Debugf("All running changes completed.")
-	}
-
 	taskSet, err := servstate.StopRunning(d.state, d.overlord.ServiceManager())
 	if err != nil {
 		return err
@@ -786,6 +761,7 @@ func (d *Daemon) stopRunningServices() error {
 
 	// One change to stop them all.
 	logger.Noticef("Stopping all running services.")
+	st := d.state
 	st.Lock()
 	chg := st.NewChange("stop", "Stop all running services")
 	chg.AddAll(taskSet)

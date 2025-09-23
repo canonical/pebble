@@ -1169,7 +1169,7 @@ func (s *daemonSuite) TestRestartServiceFailure(c *C) {
 services:
     test1:
         override: replace
-        command: /bin/sh -c 'sleep 0.5; exit 1'
+        command: /bin/sh -c 'sleep 1.5; exit 1'
         on-failure: shutdown
 `)
 	d := s.newDaemon(c)
@@ -1485,58 +1485,6 @@ services:
 	tasks := change.Tasks()
 	c.Assert(tasks, HasLen, 1)
 	c.Check(tasks[0].Kind(), Equals, "stop")
-}
-
-func (s *daemonSuite) TestStopWithRunningChange(c *C) {
-	// Start the daemon with a service that will fail.
-	writeTestLayer(s.pebbleDir, `
-services:
-    failing-service:
-        override: replace
-        command: /bin/sh -c 'sleep 0.5; exit 1'
-        on-failure: ignore
-`)
-	d := s.newDaemon(c)
-	err := d.Init()
-	c.Assert(err, IsNil)
-	c.Assert(d.Start(), IsNil)
-
-	// Start the failing service - this will create a running change.
-	payload := bytes.NewBufferString(`{"action": "start", "services": ["failing-service"]}`)
-	req, err := http.NewRequest("POST", "/v1/services", payload)
-	c.Assert(err, IsNil)
-	rsp := v1PostServices(apiCmd("/v1/services"), req, nil).(*resp)
-	rec := httptest.NewRecorder()
-	rsp.ServeHTTP(rec, req)
-	c.Check(rec.Result().StatusCode, Equals, 202)
-
-	changeID := rsp.Change
-	c.Assert(changeID, Not(Equals), "")
-
-	// Wait a small amount of time to make sure the change is in a running state.
-	time.Sleep(100 * time.Millisecond)
-
-	// Verify the change is in a running state before stopping.
-	d.state.Lock()
-	change := d.state.Change(changeID)
-	c.Assert(change, NotNil)
-	// The change should be in a running state (DoStatus or DoingStatus)
-	status := change.Status()
-	c.Check(status == state.DoStatus || status == state.DoingStatus, Equals, true)
-	d.state.Unlock()
-
-	// Stop the daemon while the change is still running. This should wait for the
-	// running change to complete and set its status to error.
-	err = d.Stop(nil)
-	c.Assert(err, IsNil)
-
-	// Verify the change status is now ErrorStatus.
-	d.state.Lock()
-	defer d.state.Unlock()
-	change = d.state.Change(changeID)
-	c.Assert(change, NotNil)
-	c.Check(change.Status(), Equals, state.ErrorStatus)
-	c.Check(change.Err(), ErrorMatches, "(?s).*exited quickly with code 1.*")
 }
 
 func (s *daemonSuite) TestStopWithinOkayDelay(c *C) {
