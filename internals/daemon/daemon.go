@@ -18,6 +18,7 @@ import (
 	"bufio"
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"fmt"
 	"io"
@@ -217,26 +218,42 @@ type Command struct {
 	d *Daemon
 }
 
-func userFromRequest(st *state.State, r *http.Request, ucred *Ucrednet, username, password string) (*UserState, error) {
+func userFromRequest(st *state.State, r *http.Request, ucred *Ucrednet) (*UserState, error) {
+	// Does the connection include a single mTLS client identity
+	// certificate?
+	var clientCert *x509.Certificate
+	if r.TLS != nil && len(r.TLS.PeerCertificates) == 1 {
+		clientCert = r.TLS.PeerCertificates[0]
+	}
+
+	// Does the HTTP header include basic auth credentials? Note that
+	// we explicitly prohibit using basic auth credentials for HTTPS
+	// for now.
+	var username string
+	var password string
+	if RequestTransportType(r) != TransportTypeHTTPS {
+		username, password, _ = r.BasicAuth()
+	}
+
+	// Is a unix socket peer credential UID available?
 	var userID *uint32
 	if ucred != nil {
 		userID = &ucred.Uid
 	}
 
 	st.Lock()
-	identity := st.IdentityFromInputs(userID, username, password)
+	identity := st.IdentityFromInputs(userID, username, password, clientCert)
 	st.Unlock()
 
-	if identity == nil {
-		// No identity that matches these inputs (for now, just UID).
-		return nil, nil
+	if identity != nil {
+		u := &UserState{
+			Access:   identity.Access,
+			Username: identity.Name,
+		}
+		// We found an identity match.
+		return u, nil
 	}
-	if identity.Basic != nil {
-		// Prioritize basic type (HTTP basic authentication) and ignore UID in this case.
-		return &UserState{Access: identity.Access, Username: identity.Name}, nil
-	} else if identity.Local != nil {
-		return &UserState{Access: identity.Access, UID: userID}, nil
-	}
+	// No identity match.
 	return nil, nil
 }
 
@@ -289,8 +306,7 @@ func (c *Command) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// not good: https://github.com/canonical/pebble/pull/369
 	var user *UserState
 	if _, isOpen := access.(OpenAccess); !isOpen {
-		username, password, _ := r.BasicAuth()
-		user, err = userFromRequest(c.d.state, r, ucred, username, password)
+		user, err = userFromRequest(c.d.state, r, ucred)
 		if err != nil {
 			Forbidden("forbidden").ServeHTTP(w, r)
 			return
@@ -965,6 +981,13 @@ func (d *Daemon) RebootDidNotHappen(st *state.State) error {
 // existing arguments with the newly specified arguments.
 func (d *Daemon) SetServiceArgs(serviceArgs map[string][]string) error {
 	return d.overlord.PlanManager().SetServiceArgs(serviceArgs)
+}
+
+// pairingWindowEnabled is a helper function to simplify testing of code
+// dependant on the Pairing Manager.
+func (d *Daemon) pairingWindowEnabled() bool {
+	pairingManager := d.overlord.PairingManager()
+	return pairingManager.PairingEnabled()
 }
 
 func New(opts *Options) (*Daemon, error) {
