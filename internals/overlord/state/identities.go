@@ -155,6 +155,9 @@ func (d *Identity) MarshalJSON() ([]byte, error) {
 		ai.Basic = &apiBasicIdentity{Password: "*****"}
 	}
 	if d.Cert != nil {
+		// This isn't actually secret, it's a public key by design, but we
+		// replace it with ***** for consistency with the password field to
+		// avoid confusion for the user. We can show it in future if needed.
 		ai.Cert = &apiCertIdentity{PEM: "*****"}
 	}
 	return json.Marshal(ai)
