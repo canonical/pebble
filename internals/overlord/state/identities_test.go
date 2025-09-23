@@ -77,12 +77,10 @@ func (s *identitiesSuite) TestMarshalAPI(c *C) {
 	})
 	c.Assert(err, IsNil)
 
-	jsonCert, err := json.Marshal(testPEMX509Cert)
-	c.Assert(err, IsNil)
 	identities := st.Identities()
 	data, err := json.MarshalIndent(identities, "", "    ")
 	c.Assert(err, IsNil)
-	c.Assert(string(data), Equals, fmt.Sprintf(`
+	c.Assert(string(data), Equals, `
 {
     "bob": {
         "access": "read",
@@ -105,10 +103,10 @@ func (s *identitiesSuite) TestMarshalAPI(c *C) {
     "olivia": {
         "access": "read",
         "cert": {
-            "pem": %s
+            "pem": "*****"
         }
     }
-}`, jsonCert)[1:])
+}`[1:])
 }
 
 func (s *identitiesSuite) TestUnmarshalAPI(c *C) {

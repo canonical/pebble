@@ -155,11 +155,7 @@ func (d *Identity) MarshalJSON() ([]byte, error) {
 		ai.Basic = &apiBasicIdentity{Password: "*****"}
 	}
 	if d.Cert != nil {
-		pemBlock := &pem.Block{
-			Type:  "CERTIFICATE",
-			Bytes: d.Cert.X509.Raw,
-		}
-		ai.Cert = &apiCertIdentity{PEM: string(pem.EncodeToMemory(pemBlock))}
+		ai.Cert = &apiCertIdentity{PEM: "*****"}
 	}
 	return json.Marshal(ai)
 }
