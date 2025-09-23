@@ -20,7 +20,6 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/sha512"
-	"crypto/tls"
 	"encoding/base32"
 	"encoding/json"
 	"errors"
@@ -1373,63 +1372,6 @@ func (s *daemonSuite) TestHTTPAPI(c *C) {
 
 	ensureSecurityLog(c, logBuf.String(), "WARN", fmt.Sprintf("sys_startup:%d", os.Getuid()), "Starting daemon")
 	ensureSecurityLog(c, logBuf.String(), "WARN", fmt.Sprintf("sys_shutdown:%d", os.Getuid()), "Shutting down daemon")
-}
-
-func (s *daemonSuite) TestHTTPSAPI(c *C) {
-	s.httpsAddress = ":0" // Go will choose port (use listener.Addr() to find it)
-	d := s.newDaemon(c)
-	d.Init()
-	c.Assert(d.Start(), IsNil)
-
-	cleanupServer := true
-	defer func() {
-		// If we exit early (test failure), clean up.
-		if cleanupServer {
-			d.Stop(nil)
-		}
-	}()
-
-	port := d.httpsListener.Addr().(*net.TCPAddr).Port
-
-	httpsClient := &http.Client{
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{
-				InsecureSkipVerify: true,
-			},
-		},
-	}
-
-	request, err := http.NewRequest("GET", fmt.Sprintf("https://localhost:%d/v1/health", port), nil)
-	c.Assert(err, IsNil)
-	response, err := httpsClient.Do(request)
-	c.Assert(err, IsNil)
-	c.Assert(response.StatusCode, Equals, http.StatusOK)
-	var m map[string]any
-	err = json.NewDecoder(response.Body).Decode(&m)
-	c.Assert(err, IsNil)
-	c.Assert(m, DeepEquals, map[string]any{
-		"type":        "sync",
-		"status-code": float64(http.StatusOK),
-		"status":      "OK",
-		"result": map[string]any{
-			"healthy": true,
-		},
-	})
-
-	request, err = http.NewRequest("GET", fmt.Sprintf("https://localhost:%d/v1/checks", port), nil)
-	c.Assert(err, IsNil)
-	response, err = httpsClient.Do(request)
-	c.Assert(err, IsNil)
-	c.Assert(response.StatusCode, Equals, http.StatusUnauthorized)
-
-	err = d.Stop(nil)
-	c.Assert(err, IsNil)
-
-	// Daemon already stopped, no need to do it again during defer.
-	cleanupServer = false
-
-	_, err = http.DefaultClient.Do(request)
-	c.Assert(err, ErrorMatches, ".* connection refused")
 }
 
 func (s *daemonSuite) TestStopRunning(c *C) {

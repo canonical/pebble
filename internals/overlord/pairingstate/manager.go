@@ -164,7 +164,6 @@ func (m *PairingManager) PairMTLS(clientCert *x509.Certificate) error {
 		m.enabled = false
 		m.stopTimer()
 	}()
-
 	// Verify that the client certificate is self-signed (the public
 	// key included must verify the signature). We do this here as a
 	// sanity check since we are about to pair this certificate and use
