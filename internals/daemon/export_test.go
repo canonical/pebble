@@ -62,3 +62,11 @@ func FakeSyscallReboot(f func(cmd int) error) (restore func()) {
 		syscallReboot = old
 	}
 }
+
+func FakePairingWindowEnabled(f func(d *Daemon) bool) (restore func()) {
+	old := pairingWindowEnabled
+	pairingWindowEnabled = f
+	return func() {
+		pairingWindowEnabled = old
+	}
+}

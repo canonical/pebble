@@ -116,6 +116,10 @@ var API = []*Command{{
 	GET:         v1GetIdentities,
 	POST:        v1PostIdentities,
 }, {
+	Path:        "/v1/pairing",
+	WriteAccess: PairingAccess{},
+	POST:        v1PostPairing,
+}, {
 	Path:       "/v1/metrics",
 	ReadAccess: MetricsAccess{},
 	GET:        v1GetMetrics,
