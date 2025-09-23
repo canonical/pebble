@@ -752,29 +752,27 @@ func (d *Daemon) Stop(sigCh chan<- os.Signal) error {
 func (d *Daemon) stopRunningServices() error {
 	st := d.state
 	st.Lock()
-	var startChanges []*state.Change
+	var runningChanges []*state.Change
 	for _, chg := range st.Changes() {
-		if chg.Kind() == "start" && chg.Status() == state.DoingStatus {
-			startChanges = append(startChanges, chg)
+		status := chg.Status()
+		if status == state.DoStatus || status == state.DoingStatus ||
+			status == state.UndoStatus || status == state.UndoingStatus {
+			runningChanges = append(runningChanges, chg)
 		}
 	}
 	st.Unlock()
 
-	if len(startChanges) > 0 {
-		logger.Noticef("Waiting for %d start changes to complete before stopping services.", len(startChanges))
-		timeout := time.After(d.overlord.ServiceManager().StopTimeout())
-	waitLoop:
-		for _, chg := range startChanges {
+	if len(runningChanges) > 0 {
+		logger.Noticef("Waiting for %d running changes to complete before stopping services.", len(runningChanges))
+		for _, chg := range runningChanges {
 			select {
 			case <-chg.Ready():
-				logger.Debugf("Start change %s completed.", chg.ID())
-			case <-timeout:
-				logger.Noticef("Timeout waiting for start change %s to complete.", chg.ID())
-				// Stop waiting on further changes once the global timeout elapses.
-				break waitLoop
+				logger.Debugf("Change %s completed.", chg.ID())
+			case <-time.After(d.overlord.ServiceManager().StopTimeout()):
+				logger.Noticef("Timeout waiting for running change %s to complete.", chg.ID())
 			}
 		}
-		logger.Debugf("All start changes completed.")
+		logger.Debugf("All running changes completed.")
 	}
 
 	taskSet, err := servstate.StopRunning(d.state, d.overlord.ServiceManager())
