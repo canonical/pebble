@@ -18,7 +18,6 @@ package pairingstate
 import (
 	"context"
 	"crypto/x509"
-	"encoding/pem"
 	"errors"
 	"fmt"
 	"strconv"
@@ -68,6 +67,8 @@ func (c *PairingConfig) Validate() error {
 	return nil
 }
 
+// Implements the optional Zeroer interface as used by the YAML library
+// for deciding when to marshal a section or not.
 func (c *PairingConfig) IsZero() bool {
 	return c.Mode == ModeUnset
 }
@@ -79,12 +80,14 @@ func (c *PairingConfig) Combine(other *PairingConfig) {
 }
 
 type PairingManager struct {
-	state       *state.State
-	mu          sync.Mutex
-	config      *PairingConfig
-	open        bool
-	timer       Timer
-	cancelTimer context.CancelFunc
+	state  *state.State
+	mu     sync.Mutex
+	config *PairingConfig
+	open   bool
+	// timer controls the duration of the pairing window.
+	timer Timer
+	// cancelTimerFunc cancels a pairing window if enabled.
+	cancelTimerFunc context.CancelFunc
 }
 
 func NewManager(state *state.State) *PairingManager {
@@ -120,7 +123,7 @@ func (m *PairingManager) Ensure() error {
 
 // PairMTLS adds a client identity with admin permissions to the identity
 // subsystem. A pairing request always closes the pairing window.
-func (m *PairingManager) PairMTLS(clientPEMCert string) error {
+func (m *PairingManager) PairMTLS(clientCert *x509.Certificate) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -128,15 +131,11 @@ func (m *PairingManager) PairMTLS(clientPEMCert string) error {
 		return errors.New("cannot pair client: pairing is not open")
 	}
 
-	block, _ := pem.Decode([]byte(clientPEMCert))
-	if block == nil {
-		return errors.New("cannot load client certificate: invalid PEM certificate")
-	}
-
-	cert, err := x509.ParseCertificate(block.Bytes)
-	if err != nil {
-		return fmt.Errorf("cannot parse certificate: %w", err)
-	}
+	// Any success or failure should always close the pairing window.
+	defer func() {
+		m.open = false
+		m.stopTimer()
+	}()
 
 	m.state.Lock()
 	defer m.state.Unlock()
@@ -145,7 +144,7 @@ func (m *PairingManager) PairMTLS(clientPEMCert string) error {
 
 	for _, identity := range existingIdentities {
 		if identity.Cert != nil && identity.Cert.X509 != nil {
-			if identity.Cert.X509.Equal(cert) {
+			if identity.Cert.X509.Equal(clientCert) {
 				return errors.New("cannot pair client: identity already paired")
 			}
 		}
@@ -155,10 +154,10 @@ func (m *PairingManager) PairMTLS(clientPEMCert string) error {
 
 	newIdentity := &state.Identity{
 		Access: state.AdminAccess,
-		Cert:   &state.CertIdentity{X509: cert},
+		Cert:   &state.CertIdentity{X509: clientCert},
 	}
 
-	err = m.state.AddIdentities(map[string]*state.Identity{
+	err := m.state.AddIdentities(map[string]*state.Identity{
 		username: newIdentity,
 	})
 	if err != nil {
@@ -167,15 +166,12 @@ func (m *PairingManager) PairMTLS(clientPEMCert string) error {
 
 	m.state.SetIsPaired()
 
-	m.open = false
-	m.stopTimer()
-
 	return nil
 }
 
 // generateUniqueUsername generates a unique username following the pattern "user-x"
-// where x starts at 1 and monotonically increments. Users names differently will
-// simply be ignored.
+// where x starts at 1 and monotonically increments. Users names not following this
+// pattern will simply be ignored.
 func (m *PairingManager) generateUniqueUsername(existingIdentities map[string]*state.Identity) string {
 	maxUserNumber := 0
 
@@ -204,9 +200,9 @@ func (m *PairingManager) stopTimer() {
 		m.timer.Stop()
 		m.timer = nil
 	}
-	if m.cancelTimer != nil {
-		m.cancelTimer()
-		m.cancelTimer = nil
+	if m.cancelTimerFunc != nil {
+		m.cancelTimerFunc()
+		m.cancelTimerFunc = nil
 	}
 }
 
@@ -215,7 +211,7 @@ func (m *PairingManager) startTimer(timeout time.Duration) {
 	m.stopTimer()
 
 	ctx, cancel := context.WithCancel(context.Background())
-	m.cancelTimer = cancel
+	m.cancelTimerFunc = cancel
 
 	m.timer = timeAfterFunc(timeout, func() {
 		select {

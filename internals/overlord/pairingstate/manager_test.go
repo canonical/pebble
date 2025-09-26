@@ -37,7 +37,7 @@ func (ps *pairingSuite) TestEnablePairingDisabledMode(c *C) {
 // pairing mode, if we have never paired before.
 func (ps *pairingSuite) TestEnablePairingSingleModeNotPaired(c *C) {
 
-	ps.setupPlan(pairingstate.ModeSingle)
+	ps.updatePlan(pairingstate.ModeSingle)
 
 	timeout := 10 * time.Second
 	err := ps.manager.EnablePairing(timeout)
@@ -58,7 +58,7 @@ func (ps *pairingSuite) TestEnablePairingSingleModeAlreadyPaired(c *C) {
 	ps.state.SetIsPaired()
 	ps.state.Unlock()
 
-	ps.setupPlan(pairingstate.ModeSingle)
+	ps.updatePlan(pairingstate.ModeSingle)
 
 	err := ps.manager.EnablePairing(5 * time.Second)
 	c.Assert(err, ErrorMatches, ".* already paired")
@@ -70,7 +70,7 @@ func (ps *pairingSuite) TestEnablePairingSingleModeAlreadyPaired(c *C) {
 // is set to multiple.
 func (ps *pairingSuite) TestEnablePairingMultipleMode(c *C) {
 
-	ps.setupPlan(pairingstate.ModeMultiple)
+	ps.updatePlan(pairingstate.ModeMultiple)
 
 	timeout := 15 * time.Second
 	err := ps.manager.EnablePairing(timeout)
@@ -91,7 +91,7 @@ func (ps *pairingSuite) TestEnablePairingMultipleModeAlreadyPaired(c *C) {
 	ps.state.SetIsPaired()
 	ps.state.Unlock()
 
-	ps.setupPlan(pairingstate.ModeMultiple)
+	ps.updatePlan(pairingstate.ModeMultiple)
 
 	timeout := 20 * time.Second
 	err := ps.manager.EnablePairing(timeout)
@@ -109,7 +109,7 @@ func (ps *pairingSuite) TestEnablePairingMultipleModeAlreadyPaired(c *C) {
 // the window is still open, the expiry period is reset with the new duration.
 func (ps *pairingSuite) TestEnablePairingResetTimeout(c *C) {
 
-	ps.setupPlan(pairingstate.ModeSingle)
+	ps.updatePlan(pairingstate.ModeSingle)
 
 	timeout1 := 10 * time.Second
 	err := ps.manager.EnablePairing(timeout1)
@@ -134,7 +134,7 @@ func (ps *pairingSuite) TestEnablePairingResetTimeout(c *C) {
 // is reported correctly.
 func (ps *pairingSuite) TestEnablePairingUnknownMode(c *C) {
 
-	ps.setupPlan(pairingstate.Mode("foo"))
+	ps.updatePlan(pairingstate.Mode("foo"))
 
 	err := ps.manager.EnablePairing(5 * time.Second)
 	c.Assert(err, ErrorMatches, ".* unknown pairing mode .*")
@@ -166,13 +166,13 @@ YXJzZUJ1dFdpbGxOb3RCZVRyZWF0ZWRBc0ludmFsaWRQRU0=
 // pairing window and updates identities correctly.
 func (ps *pairingSuite) TestPairMTLSSuccess(c *C) {
 
-	ps.setupPlan(pairingstate.ModeSingle)
+	ps.updatePlan(pairingstate.ModeSingle)
 
 	err := ps.manager.EnablePairing(10 * time.Second)
 	c.Assert(err, IsNil)
 	c.Assert(ps.manager.PairingWindowOpen(), Equals, true)
 
-	err = ps.manager.PairMTLS(testPEMCert1)
+	err = ps.manager.PairMTLS(parseCert(c, testPEMCert1))
 	c.Assert(err, IsNil)
 
 	c.Assert(ps.manager.PairingWindowOpen(), Equals, false)
@@ -201,56 +201,8 @@ func (ps *pairingSuite) TestPairMTLSNotOpen(c *C) {
 
 	c.Assert(ps.manager.PairingWindowOpen(), Equals, false)
 
-	err := ps.manager.PairMTLS(testPEMCert1)
+	err := ps.manager.PairMTLS(parseCert(c, testPEMCert1))
 	c.Assert(err, ErrorMatches, ".* pairing is not open")
-
-	ps.state.Lock()
-	isPaired := ps.state.IsPaired()
-	identities := ps.state.Identities()
-	ps.state.Unlock()
-
-	c.Assert(isPaired, Equals, false)
-	c.Assert(len(identities), Equals, 0)
-}
-
-// TestPairMTLSInvalidPEM check that the pairing request fails if the supplied
-// PEM certificate is invalid.
-func (ps *pairingSuite) TestPairMTLSInvalidPEM(c *C) {
-
-	ps.setupPlan(pairingstate.ModeSingle)
-
-	err := ps.manager.EnablePairing(10 * time.Second)
-	c.Assert(err, IsNil)
-	c.Assert(ps.manager.PairingWindowOpen(), Equals, true)
-
-	err = ps.manager.PairMTLS(testInvalidPEM)
-	c.Assert(err, ErrorMatches, ".* invalid PEM certificate")
-
-	c.Assert(ps.manager.PairingWindowOpen(), Equals, true)
-
-	ps.state.Lock()
-	isPaired := ps.state.IsPaired()
-	identities := ps.state.Identities()
-	ps.state.Unlock()
-
-	c.Assert(isPaired, Equals, false)
-	c.Assert(len(identities), Equals, 0)
-}
-
-// TestPairMTLSInvalidCertificate checks that pairing fails if the supplied
-// X509 certificate embedded in PEM is invalid.
-func (ps *pairingSuite) TestPairMTLSInvalidCertificate(c *C) {
-
-	ps.setupPlan(pairingstate.ModeSingle)
-
-	err := ps.manager.EnablePairing(10 * time.Second)
-	c.Assert(err, IsNil)
-	c.Assert(ps.manager.PairingWindowOpen(), Equals, true)
-
-	err = ps.manager.PairMTLS(testInvalidCert)
-	c.Assert(err, ErrorMatches, "cannot parse certificate: .*")
-
-	c.Assert(ps.manager.PairingWindowOpen(), Equals, true)
 
 	ps.state.Lock()
 	isPaired := ps.state.IsPaired()
@@ -265,19 +217,21 @@ func (ps *pairingSuite) TestPairMTLSInvalidCertificate(c *C) {
 // in the pairing request failing.
 func (ps *pairingSuite) TestPairMTLSDuplicateCertificate(c *C) {
 
-	ps.setupPlan(pairingstate.ModeMultiple)
+	ps.updatePlan(pairingstate.ModeMultiple)
 
 	err := ps.manager.EnablePairing(10 * time.Second)
 	c.Assert(err, IsNil)
 
-	err = ps.manager.PairMTLS(testPEMCert1)
+	err = ps.manager.PairMTLS(parseCert(c, testPEMCert1))
 	c.Assert(err, IsNil)
 
 	err = ps.manager.EnablePairing(10 * time.Second)
 	c.Assert(err, IsNil)
 
-	err = ps.manager.PairMTLS(testPEMCert1)
+	err = ps.manager.PairMTLS(parseCert(c, testPEMCert1))
 	c.Assert(err, ErrorMatches, ".* identity already paired")
+
+	c.Assert(ps.manager.PairingWindowOpen(), Equals, false)
 
 	ps.state.Lock()
 	identities := ps.state.Identities()
@@ -305,13 +259,15 @@ func (ps *pairingSuite) TestPairMTLSUsernameIncrementing(c *C) {
 	})
 	ps.state.Unlock()
 
-	ps.setupPlan(pairingstate.ModeMultiple)
+	ps.updatePlan(pairingstate.ModeMultiple)
 
 	err := ps.manager.EnablePairing(10 * time.Second)
 	c.Assert(err, IsNil)
 
-	err = ps.manager.PairMTLS(testPEMCert1)
+	err = ps.manager.PairMTLS(parseCert(c, testPEMCert1))
 	c.Assert(err, IsNil)
+
+	c.Assert(ps.manager.PairingWindowOpen(), Equals, false)
 
 	ps.state.Lock()
 	identities := ps.state.Identities()
@@ -319,4 +275,20 @@ func (ps *pairingSuite) TestPairMTLSUsernameIncrementing(c *C) {
 
 	_, exists := identities["user-4"]
 	c.Assert(exists, Equals, true)
+}
+
+// TestPlanChangedClosesPairingWindow verifies that when a PlanChanged event
+// modifies the Mode while the pairing window is enabled, the window is closed.
+func (ps *pairingSuite) TestPlanChangedClosesPairingWindow(c *C) {
+
+	ps.updatePlan(pairingstate.ModeSingle)
+
+	err := ps.manager.EnablePairing(10 * time.Second)
+	c.Assert(err, IsNil)
+	c.Assert(ps.manager.PairingWindowOpen(), Equals, true)
+	c.Assert(ps.fakeTimers.TimerCount(), Equals, 1)
+
+	ps.updatePlan(pairingstate.ModeMultiple)
+
+	c.Assert(ps.manager.PairingWindowOpen(), Equals, false)
 }
