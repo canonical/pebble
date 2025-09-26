@@ -143,7 +143,7 @@ func (ps *pairingSuite) TestEnablePairingUnknownMode(c *C) {
 }
 
 // Test certificates for PairMTLS tests
-const testPEMCert1 = `-----BEGIN CERTIFICATE-----
+const testPEMCert = `-----BEGIN CERTIFICATE-----
 MIIBRDCB96ADAgECAhROTkdEcgeil5/5NUNTq1ZRPDLiPTAFBgMrZXAwGDEWMBQG
 A1UEAwwNY2Fub25pY2FsLmNvbTAeFw0yNTA5MDgxNTI2NTJaFw0zNTA5MDYxNTI2
 NTJaMBgxFjAUBgNVBAMMDWNhbm9uaWNhbC5jb20wKjAFBgMrZXADIQDtxRqb9EMe
@@ -151,15 +151,6 @@ ffcoJ0jNn9ys8uDFeHnQ6JRxgNFvomDTHqNTMFEwHQYDVR0OBBYEFI/oHjhG1A7F
 3HM7McXP7w7CxtrwMB8GA1UdIwQYMBaAFI/oHjhG1A7F3HM7McXP7w7CxtrwMA8G
 A1UdEwEB/wQFMAMBAf8wBQYDK2VwA0EA40v4eckaV7RBXyRb0sfcCcgCAGYtiCSD
 jwXVTUH4HLpbhK0RAaEPOL4h5jm36CrWTkxzpbdCrIu4NgPLQKJ6Cw==
------END CERTIFICATE-----`
-
-const testInvalidPEM = `-----BEGIN INVALID-----
-This is not a valid PEM certificate
------END INVALID-----`
-
-const testInvalidCert = `-----BEGIN CERTIFICATE-----
-TWFMZm9ybWVkQkFTRTY0RW5jb2RlZENlcnRpZmljYXRlVGhhdFdpbGxGYWlsVG9Q
-YXJzZUJ1dFdpbGxOb3RCZVRyZWF0ZWRBc0ludmFsaWRQRU0=
 -----END CERTIFICATE-----`
 
 // TestPairMTLSSuccess verifies that a successful pairing request closes the
@@ -172,7 +163,7 @@ func (ps *pairingSuite) TestPairMTLSSuccess(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(ps.manager.PairingWindowOpen(), Equals, true)
 
-	err = ps.manager.PairMTLS(parseCert(c, testPEMCert1))
+	err = ps.manager.PairMTLS(parseCert(c, testPEMCert))
 	c.Assert(err, IsNil)
 
 	c.Assert(ps.manager.PairingWindowOpen(), Equals, false)
@@ -191,7 +182,7 @@ func (ps *pairingSuite) TestPairMTLSSuccess(c *C) {
 	c.Assert(identity.Cert, NotNil)
 	c.Assert(identity.Cert.X509, NotNil)
 
-	expectedCert := parseCert(c, testPEMCert1)
+	expectedCert := parseCert(c, testPEMCert)
 	c.Assert(identity.Cert.X509.Equal(expectedCert), Equals, true)
 }
 
@@ -201,7 +192,7 @@ func (ps *pairingSuite) TestPairMTLSNotOpen(c *C) {
 
 	c.Assert(ps.manager.PairingWindowOpen(), Equals, false)
 
-	err := ps.manager.PairMTLS(parseCert(c, testPEMCert1))
+	err := ps.manager.PairMTLS(parseCert(c, testPEMCert))
 	c.Assert(err, ErrorMatches, ".* pairing is not open")
 
 	ps.state.Lock()
@@ -222,13 +213,13 @@ func (ps *pairingSuite) TestPairMTLSDuplicateCertificate(c *C) {
 	err := ps.manager.EnablePairing(10 * time.Second)
 	c.Assert(err, IsNil)
 
-	err = ps.manager.PairMTLS(parseCert(c, testPEMCert1))
+	err = ps.manager.PairMTLS(parseCert(c, testPEMCert))
 	c.Assert(err, IsNil)
 
 	err = ps.manager.EnablePairing(10 * time.Second)
 	c.Assert(err, IsNil)
 
-	err = ps.manager.PairMTLS(parseCert(c, testPEMCert1))
+	err = ps.manager.PairMTLS(parseCert(c, testPEMCert))
 	c.Assert(err, ErrorMatches, ".* identity already paired")
 
 	c.Assert(ps.manager.PairingWindowOpen(), Equals, false)
@@ -264,7 +255,7 @@ func (ps *pairingSuite) TestPairMTLSUsernameIncrementing(c *C) {
 	err := ps.manager.EnablePairing(10 * time.Second)
 	c.Assert(err, IsNil)
 
-	err = ps.manager.PairMTLS(parseCert(c, testPEMCert1))
+	err = ps.manager.PairMTLS(parseCert(c, testPEMCert))
 	c.Assert(err, IsNil)
 
 	c.Assert(ps.manager.PairingWindowOpen(), Equals, false)
