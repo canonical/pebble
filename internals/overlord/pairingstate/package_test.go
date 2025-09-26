@@ -58,8 +58,8 @@ func (ps *pairingSuite) TearDownTest(c *C) {
 	plan.UnregisterSectionExtension(pairingstate.PairingField)
 }
 
-// setupPlan simulates a plan load with the supplied option set.
-func (ps *pairingSuite) setupPlan(mode pairingstate.Mode) {
+// updatePlan simulates a plan update with the supplied option set.
+func (ps *pairingSuite) updatePlan(mode pairingstate.Mode) {
 	config := &pairingstate.PairingConfig{Mode: mode}
 	testPlan := plan.NewPlan()
 	testPlan.Sections[pairingstate.PairingField] = config
