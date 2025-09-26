@@ -39,7 +39,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gorilla/mux"
 	. "gopkg.in/check.v1"
 
 	"github.com/canonical/pebble/cmd"
@@ -231,12 +230,16 @@ func (s *daemonSuite) TestAddCommand(c *C) {
 	}()
 
 	d := s.newDaemon(c)
-	d.Init()
-	c.Assert(d.Start(), IsNil)
-	defer d.Stop(nil)
 
-	result := d.router.Get(endpoint).GetHandler()
-	c.Assert(result, Equals, &command)
+	ctx := context.WithValue(context.Background(), TransportTypeKey{}, TransportTypeUnixSocket)
+	req, err := http.NewRequestWithContext(ctx, "GET", endpoint, nil)
+	c.Assert(err, IsNil)
+
+	rec := httptest.NewRecorder()
+	d.router.ServeHTTP(rec, req)
+	c.Assert(handler.cmd, Equals, &command)
+	c.Assert(handler.lastMethod, Equals, "GET")
+	c.Assert(rec.Code, Equals, http.StatusOK)
 }
 
 func (s *daemonSuite) TestExplicitPaths(c *C) {
@@ -621,27 +624,6 @@ func (s *daemonSuite) TestDefaultUcredUsers(c *C) {
 	c.Check(userSeen.Access, Equals, state.ReadAccess)
 	c.Assert(userSeen.UID, NotNil)
 	c.Check(*userSeen.UID, Equals, uint32(os.Getuid()+1))
-}
-
-func (s *daemonSuite) TestAddRoutes(c *C) {
-	d := s.newDaemon(c)
-
-	expected := make([]string, len(API))
-	for i, v := range API {
-		if v.PathPrefix != "" {
-			expected[i] = v.PathPrefix
-			continue
-		}
-		expected[i] = v.Path
-	}
-
-	got := make([]string, 0, len(API))
-	c.Assert(d.router.Walk(func(route *mux.Route, router *mux.Router, ancestors []*mux.Route) error {
-		got = append(got, route.GetName())
-		return nil
-	}), IsNil)
-
-	c.Check(got, DeepEquals, expected) // this'll stop being true if routes are added that aren't commands (e.g. for the favicon)
 }
 
 type witnessAcceptListener struct {
@@ -1566,7 +1548,7 @@ func (s *daemonSuite) TestWritesRequireAdminAccess(c *C) {
 	}
 
 	// Task websockets (GET) is used for exec, so requires admin access too.
-	cmd = apiCmd("/v1/tasks/{task-id}/websocket/{websocket-id}")
+	cmd = apiCmd("/v1/tasks/{taskID}/websocket/{websocketID}")
 	switch cmd.ReadAccess.(type) {
 	case OpenAccess, UserAccess:
 		c.Errorf("%s ReadAccess should be AdminAccess, not %T", cmd.Path, cmd.WriteAccess)

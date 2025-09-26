@@ -764,7 +764,7 @@ func (s *apiSuite) TestNotice(c *C) {
 	req, err := http.NewRequest("GET", "/v1/notices/"+noticeIDPublic, nil)
 	c.Assert(err, IsNil)
 	noticesCmd := apiCmd("/v1/notices/{id}")
-	s.vars = map[string]string{"id": noticeIDPublic}
+	req.SetPathValue("id", noticeIDPublic)
 	rsp, ok := noticesCmd.GET(noticesCmd, req, userState(state.ReadAccess, 1000)).(*resp)
 	c.Assert(ok, Equals, true)
 
@@ -780,7 +780,7 @@ func (s *apiSuite) TestNotice(c *C) {
 	req, err = http.NewRequest("GET", "/v1/notices/"+noticeIDPrivate, nil)
 	c.Assert(err, IsNil)
 	noticesCmd = apiCmd("/v1/notices/{id}")
-	s.vars = map[string]string{"id": noticeIDPrivate}
+	req.SetPathValue("id", noticeIDPrivate)
 	rsp, ok = noticesCmd.GET(noticesCmd, req, userState(state.ReadAccess, 1000)).(*resp)
 	c.Assert(ok, Equals, true)
 
@@ -800,7 +800,7 @@ func (s *apiSuite) TestNoticeNotFound(c *C) {
 	req, err := http.NewRequest("GET", "/v1/notices/1234", nil)
 	c.Assert(err, IsNil)
 	noticesCmd := apiCmd("/v1/notices/{id}")
-	s.vars = map[string]string{"id": "1234"}
+	req.SetPathValue("id", "1234")
 	rsp, ok := noticesCmd.GET(noticesCmd, req, userState(state.ReadAccess, 1000)).(*resp)
 	c.Assert(ok, Equals, true)
 
@@ -816,7 +816,7 @@ func (s *apiSuite) TestNoticeUnknownRequestUID(c *C) {
 	req, err := http.NewRequest("GET", "/v1/notices/1234", nil)
 	c.Assert(err, IsNil)
 	noticesCmd := apiCmd("/v1/notices/{id}")
-	s.vars = map[string]string{"id": "1234"}
+	req.SetPathValue("id", "1234")
 	rsp, ok := noticesCmd.GET(noticesCmd, req, &UserState{Access: state.ReadAccess}).(*resp)
 	c.Assert(ok, Equals, true)
 
@@ -839,7 +839,7 @@ func (s *apiSuite) TestNoticeAdminAllowed(c *C) {
 	req, err := http.NewRequest("GET", "/v1/notices/"+noticeID, nil)
 	c.Assert(err, IsNil)
 	noticesCmd := apiCmd("/v1/notices/{id}")
-	s.vars = map[string]string{"id": noticeID}
+	req.SetPathValue("id", noticeID)
 	rsp, ok := noticesCmd.GET(noticesCmd, req, userState(state.AdminAccess, 0)).(*resp)
 	c.Assert(ok, Equals, true)
 
@@ -866,7 +866,7 @@ func (s *apiSuite) TestNoticeNonAdminNotAllowed(c *C) {
 	req, err := http.NewRequest("GET", "/v1/notices/"+noticeID, nil)
 	c.Assert(err, IsNil)
 	noticesCmd := apiCmd("/v1/notices/{id}")
-	s.vars = map[string]string{"id": noticeID}
+	req.SetPathValue("id", noticeID)
 	rsp, ok := noticesCmd.GET(noticesCmd, req, userState(state.ReadAccess, 1001)).(*resp)
 	c.Assert(ok, Equals, true)
 
