@@ -80,10 +80,10 @@ func (c *PairingConfig) Combine(other *PairingConfig) {
 	}
 }
 
-// usernameNumberRange determines the maxmimum number suffix for
-// users auto-allocated by this package when a new certificate os
+// autoUsernameRangeLimit determines the maxmimum number suffix for
+// users auto-allocated by this package when a new certificate is
 // paired.
-const usernameNumberRange uint32 = 1000
+const autoUsernameRangeLimit uint32 = 1000
 
 type PairingManager struct {
 	state  *state.State
@@ -152,6 +152,25 @@ func (m *PairingManager) PairMTLS(clientCert *x509.Certificate) error {
 		m.stopTimer()
 	}()
 
+	// Verify that the client certificate is self-signed (the public
+	// key included must verify the signature). We do this here as a
+	// sanity check since we are about to pair this certificat and use
+	// it in exactly this way for future client credential checks.
+	// Note that the TLS handshake already proved that the client has
+	// access to the private key by verifying the handshake transcript
+	// signature.
+	roots := x509.NewCertPool()
+	roots.AddCert(clientCert)
+	opts := x509.VerifyOptions{
+		Roots: roots,
+		// We only support verifying client TLS certificates.
+		KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
+	}
+	_, err := clientCert.Verify(opts)
+	if err != nil {
+		return fmt.Errorf("cannot verify client certificate signature: %w", err)
+	}
+
 	m.state.Lock()
 	defer m.state.Unlock()
 
@@ -166,23 +185,6 @@ func (m *PairingManager) PairMTLS(clientCert *x509.Certificate) error {
 		if identity.Cert.X509.Equal(clientCert) {
 			return errors.New("cannot pair already paired identity")
 		}
-	}
-
-	// Verify that the client certificate is self-signed (the public
-	// key included must verify the signature). We do this here as a
-	// sanity check since we are about to pair this certificat and use
-	// it in exactly this way for future client credential checks.
-	// Note that the TLS handshake already proved that the client has
-	// access to the private key by verifying the handshake transcript
-	// signature.
-	roots := x509.NewCertPool()
-	roots.AddCert(clientCert)
-	opts := x509.VerifyOptions{
-		Roots: roots,
-	}
-	_, err := clientCert.Verify(opts)
-	if err != nil {
-		return fmt.Errorf("certificate verification failed, must be self-signed: %w", err)
 	}
 
 	username, err := generateUniqueUsername(existingIdentities)
@@ -325,8 +327,8 @@ func generateUniqueUsername(existingIdentities map[string]*state.Identity) (stri
 		userNumberFree += 1
 
 		// Check if we reached the user allocation limit.
-		if userNumberFree > usernameNumberRange {
-			return "", fmt.Errorf("user allocation limit '%d' reached", usernameNumberRange)
+		if userNumberFree > autoUsernameRangeLimit {
+			return "", fmt.Errorf("user allocation limit '%d' reached", autoUsernameRangeLimit)
 		}
 	}
 

@@ -15,9 +15,13 @@
 package pairingstate_test
 
 import (
+	"crypto/ed25519"
+	"crypto/rand"
 	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/pem"
 	"fmt"
+	"math/big"
 	"strings"
 	"sync"
 	"testing"
@@ -72,6 +76,41 @@ func parseCert(c *C, pemData string) *x509.Certificate {
 	c.Assert(block, NotNil)
 	cert, err := x509.ParseCertificate(block.Bytes)
 	c.Assert(err, IsNil)
+	return cert
+}
+
+// generateTestClientCert creates a self-signed client certificate for testing.
+func generateTestClientCert(c *C) *x509.Certificate {
+	// Generate ed25519 key pair
+	_, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	c.Assert(err, IsNil)
+
+	// Generate serial number
+	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
+	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
+	c.Assert(err, IsNil)
+
+	now := time.Now()
+	template := &x509.Certificate{
+		SerialNumber: serialNumber,
+		Subject: pkix.Name{
+			CommonName: "test-client",
+		},
+		NotBefore:             now,
+		NotAfter:              now.Add(24 * time.Hour), // Valid for 24 hours
+		KeyUsage:              x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
+		BasicConstraintsValid: true,
+	}
+
+	// Create self-signed certificate
+	certDER, err := x509.CreateCertificate(rand.Reader, template, template, privateKey.Public(), privateKey)
+	c.Assert(err, IsNil)
+
+	// Parse certificate from DER
+	cert, err := x509.ParseCertificate(certDER)
+	c.Assert(err, IsNil)
+
 	return cert
 }
 

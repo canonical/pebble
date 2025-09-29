@@ -34,7 +34,7 @@ func (ps *pairingSuite) TestEnablePairingDisabledMode(c *C) {
 }
 
 // TestEnablePairingSingleModeNotPaired checks that we can pair when using single
-// pairing mode, if we have never paired before.
+// pairing mode, if we never paired before.
 func (ps *pairingSuite) TestEnablePairingSingleModeNotPaired(c *C) {
 	ps.updatePlan(pairingstate.ModeSingle)
 
@@ -138,17 +138,6 @@ func (ps *pairingSuite) TestEnablePairingUnknownMode(c *C) {
 	c.Assert(ps.fakeTimers.TimerCount(), Equals, 0)
 }
 
-// Test certificates for PairMTLS tests
-const testPEMCert = `-----BEGIN CERTIFICATE-----
-MIIBRDCB96ADAgECAhROTkdEcgeil5/5NUNTq1ZRPDLiPTAFBgMrZXAwGDEWMBQG
-A1UEAwwNY2Fub25pY2FsLmNvbTAeFw0yNTA5MDgxNTI2NTJaFw0zNTA5MDYxNTI2
-NTJaMBgxFjAUBgNVBAMMDWNhbm9uaWNhbC5jb20wKjAFBgMrZXADIQDtxRqb9EMe
-ffcoJ0jNn9ys8uDFeHnQ6JRxgNFvomDTHqNTMFEwHQYDVR0OBBYEFI/oHjhG1A7F
-3HM7McXP7w7CxtrwMB8GA1UdIwQYMBaAFI/oHjhG1A7F3HM7McXP7w7CxtrwMA8G
-A1UdEwEB/wQFMAMBAf8wBQYDK2VwA0EA40v4eckaV7RBXyRb0sfcCcgCAGYtiCSD
-jwXVTUH4HLpbhK0RAaEPOL4h5jm36CrWTkxzpbdCrIu4NgPLQKJ6Cw==
------END CERTIFICATE-----`
-
 // TestPairMTLSSuccess verifies that a successful pairing request closes the
 // pairing window and updates identities correctly.
 func (ps *pairingSuite) TestPairMTLSSuccess(c *C) {
@@ -158,7 +147,8 @@ func (ps *pairingSuite) TestPairMTLSSuccess(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(ps.manager.PairingWindowOpen(), Equals, true)
 
-	err = ps.manager.PairMTLS(parseCert(c, testPEMCert))
+	clientCert := generateTestClientCert(c)
+	err = ps.manager.PairMTLS(clientCert)
 	c.Assert(err, IsNil)
 
 	c.Assert(ps.manager.PairingWindowOpen(), Equals, false)
@@ -177,8 +167,7 @@ func (ps *pairingSuite) TestPairMTLSSuccess(c *C) {
 	c.Assert(identity.Cert, NotNil)
 	c.Assert(identity.Cert.X509, NotNil)
 
-	expectedCert := parseCert(c, testPEMCert)
-	c.Assert(identity.Cert.X509.Equal(expectedCert), Equals, true)
+	c.Assert(identity.Cert.X509.Equal(clientCert), Equals, true)
 }
 
 // TestPairMTLSNotOpen verifies pairing is rejected if the pairing window
@@ -186,7 +175,7 @@ func (ps *pairingSuite) TestPairMTLSSuccess(c *C) {
 func (ps *pairingSuite) TestPairMTLSNotOpen(c *C) {
 	c.Assert(ps.manager.PairingWindowOpen(), Equals, false)
 
-	err := ps.manager.PairMTLS(parseCert(c, testPEMCert))
+	err := ps.manager.PairMTLS(generateTestClientCert(c))
 	c.Assert(err, ErrorMatches, ".* pairing window is closed")
 
 	ps.state.Lock()
@@ -203,16 +192,18 @@ func (ps *pairingSuite) TestPairMTLSNotOpen(c *C) {
 func (ps *pairingSuite) TestPairMTLSDuplicateCertificate(c *C) {
 	ps.updatePlan(pairingstate.ModeMultiple)
 
+	clientCert := generateTestClientCert(c)
+
 	err := ps.manager.EnablePairing(10 * time.Second)
 	c.Assert(err, IsNil)
 
-	err = ps.manager.PairMTLS(parseCert(c, testPEMCert))
+	err = ps.manager.PairMTLS(clientCert)
 	c.Assert(err, IsNil)
 
 	err = ps.manager.EnablePairing(10 * time.Second)
 	c.Assert(err, IsNil)
 
-	err = ps.manager.PairMTLS(parseCert(c, testPEMCert))
+	err = ps.manager.PairMTLS(clientCert)
 	c.Assert(err, ErrorMatches, ".* already paired identity")
 
 	c.Assert(ps.manager.PairingWindowOpen(), Equals, false)
@@ -248,7 +239,7 @@ func (ps *pairingSuite) TestPairMTLSUsernameIncrementing(c *C) {
 	err := ps.manager.EnablePairing(10 * time.Second)
 	c.Assert(err, IsNil)
 
-	err = ps.manager.PairMTLS(parseCert(c, testPEMCert))
+	err = ps.manager.PairMTLS(generateTestClientCert(c))
 	c.Assert(err, IsNil)
 
 	c.Assert(ps.manager.PairingWindowOpen(), Equals, false)
