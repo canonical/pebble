@@ -19,7 +19,6 @@ import (
 	"crypto/rand"
 	"crypto/x509"
 	"crypto/x509/pkix"
-	"encoding/pem"
 	"fmt"
 	"math/big"
 	"strings"
@@ -68,15 +67,6 @@ func (ps *pairingSuite) updatePlan(mode pairingstate.Mode) {
 	testPlan := plan.NewPlan()
 	testPlan.Sections[pairingstate.PairingField] = config
 	ps.manager.PlanChanged(testPlan)
-}
-
-// parseCert converts a PEM certificate to X509.
-func parseCert(c *C, pemData string) *x509.Certificate {
-	block, _ := pem.Decode([]byte(pemData))
-	c.Assert(block, NotNil)
-	cert, err := x509.ParseCertificate(block.Bytes)
-	c.Assert(err, IsNil)
-	return cert
 }
 
 // generateTestClientCert creates a self-signed client certificate for testing.
