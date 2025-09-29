@@ -14,7 +14,11 @@
 
 package pairingstate
 
-import "time"
+import (
+	"time"
+)
+
+var GenerateUniqueUsername = generateUniqueUsername
 
 // FakeAfterFunc replaces the global timeAfterFunc with a fake implementation
 func FakeAfterFunc(fakeAfterFunc func(d time.Duration, f func()) Timer) func() {

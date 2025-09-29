@@ -15,6 +15,7 @@
 package pairingstate_test
 
 import (
+	"fmt"
 	"time"
 
 	. "gopkg.in/check.v1"
@@ -26,9 +27,8 @@ import (
 // TestEnablePairingDisabledMode tests trying to open a pairing window while
 // the configuration says it is disabled (before the plan update was received).
 func (ps *pairingSuite) TestEnablePairingDisabledMode(c *C) {
-
 	err := ps.manager.EnablePairing(5 * time.Second)
-	c.Assert(err, ErrorMatches, "*. pairing disabled")
+	c.Assert(err, ErrorMatches, "*. pairing mode disabled")
 	c.Assert(ps.manager.PairingWindowOpen(), Equals, false)
 	c.Assert(ps.fakeTimers.TimerCount(), Equals, 0)
 }
@@ -36,7 +36,6 @@ func (ps *pairingSuite) TestEnablePairingDisabledMode(c *C) {
 // TestEnablePairingSingleModeNotPaired checks that we can pair when using single
 // pairing mode, if we have never paired before.
 func (ps *pairingSuite) TestEnablePairingSingleModeNotPaired(c *C) {
-
 	ps.updatePlan(pairingstate.ModeSingle)
 
 	timeout := 10 * time.Second
@@ -61,7 +60,7 @@ func (ps *pairingSuite) TestEnablePairingSingleModeAlreadyPaired(c *C) {
 	ps.updatePlan(pairingstate.ModeSingle)
 
 	err := ps.manager.EnablePairing(5 * time.Second)
-	c.Assert(err, ErrorMatches, ".* already paired")
+	c.Assert(err, ErrorMatches, ".* already paired in 'single' pairing mode")
 	c.Assert(ps.manager.PairingWindowOpen(), Equals, false)
 	c.Assert(ps.fakeTimers.TimerCount(), Equals, 0)
 }
@@ -69,7 +68,6 @@ func (ps *pairingSuite) TestEnablePairingSingleModeAlreadyPaired(c *C) {
 // TestEnablePairingMultipleMode verifies we can pair when pairing mode
 // is set to multiple.
 func (ps *pairingSuite) TestEnablePairingMultipleMode(c *C) {
-
 	ps.updatePlan(pairingstate.ModeMultiple)
 
 	timeout := 15 * time.Second
@@ -108,7 +106,6 @@ func (ps *pairingSuite) TestEnablePairingMultipleModeAlreadyPaired(c *C) {
 // TestEnablePairingResetTimeout verifies that when pairing is re-enabled while
 // the window is still open, the expiry period is reset with the new duration.
 func (ps *pairingSuite) TestEnablePairingResetTimeout(c *C) {
-
 	ps.updatePlan(pairingstate.ModeSingle)
 
 	timeout1 := 10 * time.Second
@@ -133,7 +130,6 @@ func (ps *pairingSuite) TestEnablePairingResetTimeout(c *C) {
 // TestEnablePairingUnknownMode verifies that an invalid mode from the plan
 // is reported correctly.
 func (ps *pairingSuite) TestEnablePairingUnknownMode(c *C) {
-
 	ps.updatePlan(pairingstate.Mode("foo"))
 
 	err := ps.manager.EnablePairing(5 * time.Second)
@@ -156,7 +152,6 @@ jwXVTUH4HLpbhK0RAaEPOL4h5jm36CrWTkxzpbdCrIu4NgPLQKJ6Cw==
 // TestPairMTLSSuccess verifies that a successful pairing request closes the
 // pairing window and updates identities correctly.
 func (ps *pairingSuite) TestPairMTLSSuccess(c *C) {
-
 	ps.updatePlan(pairingstate.ModeSingle)
 
 	err := ps.manager.EnablePairing(10 * time.Second)
@@ -189,11 +184,10 @@ func (ps *pairingSuite) TestPairMTLSSuccess(c *C) {
 // TestPairMTLSNotOpen verifies pairing is rejected if the pairing window
 // is not open.
 func (ps *pairingSuite) TestPairMTLSNotOpen(c *C) {
-
 	c.Assert(ps.manager.PairingWindowOpen(), Equals, false)
 
 	err := ps.manager.PairMTLS(parseCert(c, testPEMCert))
-	c.Assert(err, ErrorMatches, ".* pairing is not open")
+	c.Assert(err, ErrorMatches, ".* pairing window is closed")
 
 	ps.state.Lock()
 	isPaired := ps.state.IsPaired()
@@ -207,7 +201,6 @@ func (ps *pairingSuite) TestPairMTLSNotOpen(c *C) {
 // TestPairMTLSDuplicateCertificate verifies that dupliciate identities will result
 // in the pairing request failing.
 func (ps *pairingSuite) TestPairMTLSDuplicateCertificate(c *C) {
-
 	ps.updatePlan(pairingstate.ModeMultiple)
 
 	err := ps.manager.EnablePairing(10 * time.Second)
@@ -220,7 +213,7 @@ func (ps *pairingSuite) TestPairMTLSDuplicateCertificate(c *C) {
 	c.Assert(err, IsNil)
 
 	err = ps.manager.PairMTLS(parseCert(c, testPEMCert))
-	c.Assert(err, ErrorMatches, ".* identity already paired")
+	c.Assert(err, ErrorMatches, ".* already paired identity")
 
 	c.Assert(ps.manager.PairingWindowOpen(), Equals, false)
 
@@ -271,7 +264,6 @@ func (ps *pairingSuite) TestPairMTLSUsernameIncrementing(c *C) {
 // TestPlanChangedClosesPairingWindow verifies that when a PlanChanged event
 // modifies the Mode while the pairing window is enabled, the window is closed.
 func (ps *pairingSuite) TestPlanChangedClosesPairingWindow(c *C) {
-
 	ps.updatePlan(pairingstate.ModeSingle)
 
 	err := ps.manager.EnablePairing(10 * time.Second)
@@ -282,4 +274,102 @@ func (ps *pairingSuite) TestPlanChangedClosesPairingWindow(c *C) {
 	ps.updatePlan(pairingstate.ModeMultiple)
 
 	c.Assert(ps.manager.PairingWindowOpen(), Equals, false)
+}
+
+// TestGenerateUniqueUsername checks that we can generate the name of the
+// next free username.
+func (ps *pairingSuite) TestGenerateUniqueUsername(c *C) {
+	testCases := []struct {
+		name               string
+		existingIdentities map[string]*state.Identity
+		expectedUsername   string
+		expectedError      string
+	}{{
+		name:               "empty identities should return user-1",
+		existingIdentities: map[string]*state.Identity{},
+		expectedUsername:   "user-1",
+	}, {
+		name: "single user-1 should return user-2",
+		existingIdentities: map[string]*state.Identity{
+			"user-1": {Access: state.AdminAccess},
+		},
+		expectedUsername: "user-2",
+	}, {
+		name: "non-sequential users should fill gaps",
+		existingIdentities: map[string]*state.Identity{
+			"user-1": {Access: state.AdminAccess},
+			"user-3": {Access: state.AdminAccess},
+			"user-5": {Access: state.AdminAccess},
+		},
+		expectedUsername: "user-2",
+	}, {
+		name: "non-user prefixed usernames should be ignored",
+		existingIdentities: map[string]*state.Identity{
+			"admin-1":    {Access: state.AdminAccess},
+			"other-user": {Access: state.ReadAccess},
+			"user1":      {Access: state.AdminAccess},
+			"usertest":   {Access: state.AdminAccess},
+		},
+		expectedUsername: "user-1",
+	}, {
+		name: "invalid user suffixes should be ignored",
+		existingIdentities: map[string]*state.Identity{
+			"user-":    {Access: state.AdminAccess},
+			"user-abc": {Access: state.AdminAccess},
+			"user-1.5": {Access: state.AdminAccess},
+			"user-0":   {Access: state.AdminAccess},
+			"user--1":  {Access: state.AdminAccess},
+			"user-1-2": {Access: state.AdminAccess},
+		},
+		expectedUsername: "user-1",
+	}, {
+		name: "sequential users from 1 to 10",
+		existingIdentities: map[string]*state.Identity{
+			"user-1":  {Access: state.AdminAccess},
+			"user-2":  {Access: state.AdminAccess},
+			"user-3":  {Access: state.AdminAccess},
+			"user-4":  {Access: state.AdminAccess},
+			"user-5":  {Access: state.AdminAccess},
+			"user-6":  {Access: state.AdminAccess},
+			"user-7":  {Access: state.AdminAccess},
+			"user-8":  {Access: state.AdminAccess},
+			"user-9":  {Access: state.AdminAccess},
+			"user-10": {Access: state.AdminAccess},
+		},
+		expectedUsername: "user-11",
+	}, {
+		name: "mixed valid and invalid usernames",
+		existingIdentities: map[string]*state.Identity{
+			"user-1":     {Access: state.AdminAccess},
+			"user-abc":   {Access: state.AdminAccess},
+			"user-3":     {Access: state.AdminAccess},
+			"admin-user": {Access: state.AdminAccess},
+			"user-":      {Access: state.AdminAccess},
+			"user-5":     {Access: state.AdminAccess},
+		},
+		expectedUsername: "user-2",
+	}, {
+		name: "limit exceeded should return error",
+		existingIdentities: func() map[string]*state.Identity {
+			identities := make(map[string]*state.Identity)
+			for i := 1; i <= 1000; i++ {
+				identities[fmt.Sprintf("user-%d", i)] = &state.Identity{Access: state.AdminAccess}
+			}
+			return identities
+		}(),
+		expectedError: "user allocation limit '1000' reached",
+	}}
+
+	for _, tc := range testCases {
+		c.Logf("Running test case: %s", tc.name)
+
+		result, err := pairingstate.GenerateUniqueUsername(tc.existingIdentities)
+
+		if tc.expectedError != "" {
+			c.Assert(err, ErrorMatches, tc.expectedError)
+		} else {
+			c.Assert(err, IsNil)
+			c.Assert(result, Equals, tc.expectedUsername)
+		}
+	}
 }

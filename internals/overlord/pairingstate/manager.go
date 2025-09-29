@@ -20,10 +20,10 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
-	"slices"
 	"time"
 
 	"github.com/canonical/pebble/internals/overlord/state"
@@ -122,9 +122,18 @@ func (m *PairingManager) PlanChanged(update *plan.Plan) {
 	m.config = newConfig
 }
 
-// Ensure implements StateManager.Ensure.
+// Ensure implements overlord.StateManager interface.
 func (m *PairingManager) Ensure() error {
 	return nil
+}
+
+// Stop implements overlord.StateStopper interface.
+func (m *PairingManager) Stop() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.open = false
+	m.stopTimer()
 }
 
 // PairMTLS adds a client identity with admin permissions to the identity
@@ -134,7 +143,7 @@ func (m *PairingManager) PairMTLS(clientCert *x509.Certificate) error {
 	defer m.mu.Unlock()
 
 	if !m.open {
-		return errors.New("cannot pair client: pairing is not open")
+		return errors.New("cannot pair while pairing window is closed")
 	}
 
 	// Any success or failure should always close the pairing window.
@@ -149,16 +158,36 @@ func (m *PairingManager) PairMTLS(clientCert *x509.Certificate) error {
 	existingIdentities := m.state.Identities()
 
 	for _, identity := range existingIdentities {
-		if identity.Cert != nil && identity.Cert.X509 != nil {
-			if identity.Cert.X509.Equal(clientCert) {
-				return errors.New("cannot pair client: identity already paired")
-			}
+		if identity.Cert == nil || identity.Cert.X509 == nil {
+			// Not valid certificate identity.
+			continue
+		}
+
+		if identity.Cert.X509.Equal(clientCert) {
+			return errors.New("cannot pair already paired identity")
 		}
 	}
 
-	username, err := m.generateUniqueUsername(existingIdentities)
+	// Verify that the client certificate is self-signed (the public
+	// key included must verify the signature). We do this here as a
+	// sanity check since we are about to pair this certificat and use
+	// it in exactly this way for future client credential checks.
+	// Note that the TLS handshake already proved that the client has
+	// access to the private key by verifying the handshake transcript
+	// signature.
+	roots := x509.NewCertPool()
+	roots.AddCert(clientCert)
+	opts := x509.VerifyOptions{
+		Roots: roots,
+	}
+	_, err := clientCert.Verify(opts)
 	if err != nil {
-		return fmt.Errorf("cannot add identity: %w", err)
+		return fmt.Errorf("certificate verification failed, must be self-signed: %w", err)
+	}
+
+	username, err := generateUniqueUsername(existingIdentities)
+	if err != nil {
+		return fmt.Errorf("cannot create new identity username: %w", err)
 	}
 
 	newIdentity := &state.Identity{
@@ -176,43 +205,6 @@ func (m *PairingManager) PairMTLS(clientCert *x509.Certificate) error {
 	m.state.SetIsPaired()
 
 	return nil
-}
-
-// generateUniqueUsername generates a unique username following the pattern "user-x"
-// where x starts at 1 and monotonically increments. Users names not following this
-// pattern will simply be ignored.
-func (m *PairingManager) generateUniqueUsername(existingIdentities map[string]*state.Identity) (string, error) {
-	// Find all the usernames matching our scheme.
-	var matched []uint32
-	for name := range existingIdentities {
-		if strings.HasPrefix(name, "user-") {
-			numberStr := strings.TrimPrefix(name, "user-")
-			number, err := strconv.ParseUint(numberStr, 10, 32)
-			if err != nil || number == 0 {
-				// Skip this entry becuase the suffix is not a supported number.
-				continue
-			}
-			matched = append(matched, uint32(number))
-		}
-	}
-	// Sort the numbers.
-	slices.Sort(matched)
-	// Find the first available number.
-	userNumberFree := uint32(1)
-	for _, n := range matched {
-		if n > userNumberFree {
-			// We found an available number.
-			break
-		}
-		userNumberFree += 1
-
-		// Check if we reached the user allocation limit.
-		if userNumberFree > usernameNumberRange {
-			return "", fmt.Errorf("user allocation limit %q reached", usernameNumberRange)
-		}
-	}
-
-	return fmt.Sprintf("user-%d", userNumberFree), nil
 }
 
 // PairingWindowOpen returns whether the pairing window is currently open.
@@ -271,7 +263,7 @@ func (m *PairingManager) EnablePairing(timeout time.Duration) error {
 		// Mode is disabled, set Open = False
 		m.open = false
 		m.stopTimer()
-		return errors.New("cannot enable pairing: pairing disabled")
+		return errors.New("cannot enable pairing with pairing mode disabled")
 
 	case ModeSingle:
 		m.state.Lock()
@@ -283,7 +275,7 @@ func (m *PairingManager) EnablePairing(timeout time.Duration) error {
 			// Already paired, set Open = False
 			m.open = false
 			m.stopTimer()
-			return errors.New("cannot enable pairing: already paired")
+			return errors.New("cannot enable pairing when already paired in 'single' pairing mode")
 
 		} else {
 			// Not paired yet, set Open = True
@@ -298,8 +290,45 @@ func (m *PairingManager) EnablePairing(timeout time.Duration) error {
 		// Unknown mode, set Open = False
 		m.open = false
 		m.stopTimer()
-		return fmt.Errorf("cannot enable pairing: unknown pairing mode %q", m.config.Mode)
+		return fmt.Errorf("cannot enable pairing with unknown pairing mode %q", m.config.Mode)
 	}
 
 	return nil
+}
+
+// generateUniqueUsername finds the first unique username following the pattern
+// "user-x" where x starts at 1 and monotonically increments. Users names not
+// following this pattern will simply not be considered.
+func generateUniqueUsername(existingIdentities map[string]*state.Identity) (string, error) {
+	// Find all the usernames matching our scheme.
+	var matched []uint32
+	for name := range existingIdentities {
+		if strings.HasPrefix(name, "user-") {
+			numberStr := strings.TrimPrefix(name, "user-")
+			number, err := strconv.ParseUint(numberStr, 10, 32)
+			if err != nil || number == 0 {
+				// Skip this entry becuase the suffix is not a supported number.
+				continue
+			}
+			matched = append(matched, uint32(number))
+		}
+	}
+	// Sort the numbers.
+	slices.Sort(matched)
+	// Find the first available number.
+	userNumberFree := uint32(1)
+	for _, n := range matched {
+		if n > userNumberFree {
+			// We found an available number.
+			break
+		}
+		userNumberFree += 1
+
+		// Check if we reached the user allocation limit.
+		if userNumberFree > usernameNumberRange {
+			return "", fmt.Errorf("user allocation limit '%d' reached", usernameNumberRange)
+		}
+	}
+
+	return fmt.Sprintf("user-%d", userNumberFree), nil
 }
