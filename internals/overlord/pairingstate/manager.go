@@ -23,6 +23,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"slices"
 	"time"
 
 	"github.com/canonical/pebble/internals/overlord/state"
@@ -79,6 +80,11 @@ func (c *PairingConfig) Combine(other *PairingConfig) {
 	}
 }
 
+// usernameNumberRange determines the maxmimum number suffix for
+// users auto-allocated by this package when a new certificate os
+// paired.
+const usernameNumberRange uint32 = 1000
+
 type PairingManager struct {
 	state  *state.State
 	mu     sync.Mutex
@@ -94,7 +100,7 @@ func NewManager(state *state.State) *PairingManager {
 	m := &PairingManager{
 		state: state,
 		config: &PairingConfig{
-			Mode: ModeDisabled,
+			Mode: ModeUnset,
 		},
 	}
 	return m
@@ -150,14 +156,17 @@ func (m *PairingManager) PairMTLS(clientCert *x509.Certificate) error {
 		}
 	}
 
-	username := m.generateUniqueUsername(existingIdentities)
+	username, err := m.generateUniqueUsername(existingIdentities)
+	if err != nil {
+		return fmt.Errorf("cannot add identity: %w", err)
+	}
 
 	newIdentity := &state.Identity{
 		Access: state.AdminAccess,
 		Cert:   &state.CertIdentity{X509: clientCert},
 	}
 
-	err := m.state.AddIdentities(map[string]*state.Identity{
+	err = m.state.AddIdentities(map[string]*state.Identity{
 		username: newIdentity,
 	})
 	if err != nil {
@@ -172,19 +181,38 @@ func (m *PairingManager) PairMTLS(clientCert *x509.Certificate) error {
 // generateUniqueUsername generates a unique username following the pattern "user-x"
 // where x starts at 1 and monotonically increments. Users names not following this
 // pattern will simply be ignored.
-func (m *PairingManager) generateUniqueUsername(existingIdentities map[string]*state.Identity) string {
-	maxUserNumber := 0
-
+func (m *PairingManager) generateUniqueUsername(existingIdentities map[string]*state.Identity) (string, error) {
+	// Find all the usernames matching our scheme.
+	var matched []uint32
 	for name := range existingIdentities {
 		if strings.HasPrefix(name, "user-") {
 			numberStr := strings.TrimPrefix(name, "user-")
-			if number, err := strconv.Atoi(numberStr); err == nil && number > maxUserNumber {
-				maxUserNumber = number
+			number, err := strconv.ParseUint(numberStr, 10, 32)
+			if err != nil || number == 0 {
+				// Skip this entry becuase the suffix is not a supported number.
+				continue
 			}
+			matched = append(matched, uint32(number))
+		}
+	}
+	// Sort the numbers.
+	slices.Sort(matched)
+	// Find the first available number.
+	userNumberFree := uint32(1)
+	for _, n := range matched {
+		if n > userNumberFree {
+			// We found an available number.
+			break
+		}
+		userNumberFree += 1
+
+		// Check if we reached the user allocation limit.
+		if userNumberFree > usernameNumberRange {
+			return "", fmt.Errorf("user allocation limit %q reached", usernameNumberRange)
 		}
 	}
 
-	return fmt.Sprintf("user-%d", maxUserNumber+1)
+	return fmt.Sprintf("user-%d", userNumberFree), nil
 }
 
 // PairingWindowOpen returns whether the pairing window is currently open.

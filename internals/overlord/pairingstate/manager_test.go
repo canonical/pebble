@@ -264,7 +264,7 @@ func (ps *pairingSuite) TestPairMTLSUsernameIncrementing(c *C) {
 	identities := ps.state.Identities()
 	ps.state.Unlock()
 
-	_, exists := identities["user-4"]
+	_, exists := identities["user-2"]
 	c.Assert(exists, Equals, true)
 }
 
