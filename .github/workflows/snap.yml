@@ -181,7 +181,7 @@ jobs:
         run: |
           revision="$(snapcraft status ${{ env.SNAP_NAME }} \
             --track ${{ env.DEFAULT_TRACK }} --arch ${{ matrix.arch }} \
-            | grep "${{ env.DEFAULT_RISK }}" | awk -F' ' '{print $3}')"
+            | awk 'NR==1 { pos = index($0, "Revision") }  /edge/ { print 0+substr($0, pos) }'"
 
           echo "revision=$revision" >> $GITHUB_OUTPUT
 
