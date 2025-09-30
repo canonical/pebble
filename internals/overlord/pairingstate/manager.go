@@ -42,11 +42,11 @@ type Timer interface {
 // paired.
 const autoUsernameRangeLimit uint32 = 1000
 
-// pairedStateKey is the key to the paired state. If the paired state is set at
+// pairedStateKey is the key to the paired state. If the paired state is true
 // least one client successfully paired with the server. The paired state
-// is significant for "single" pairing mode because once a server paired
-// with a client (and paired state is set to true), no futher pairing is
-// allowed from that point in time onwards.
+// is significant for "single" pairing mode because once the first client
+// paired with the server (and paired state is set to true), no futher pairing
+// is allowed from that point in time (until the state is cleared).
 const pairedStateKey = "paired"
 
 // Mode controls the pairing policy of the pairing manager.
@@ -64,6 +64,9 @@ const (
 	ModeMultiple Mode = "multiple"
 )
 
+var _ plan.Section = (*PairingConfig)(nil)
+
+// PairingConfig contains the options exposed in the plan extension.
 type PairingConfig struct {
 	Mode Mode `yaml:"mode,omitempty"`
 }
@@ -109,7 +112,7 @@ func NewManager(state *state.State) *PairingManager {
 		},
 	}
 
-	// Load the paired state.
+	// Load the paired state at startup.
 	m.state.Lock()
 	defer m.state.Unlock()
 	m.state.Get(pairedStateKey, &m.paired)
