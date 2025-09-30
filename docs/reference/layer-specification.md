@@ -279,4 +279,18 @@ log-targets:
     # be substituted using the environment for the corresponding service.
     labels:
       <label name>: <label value>
+
+# (Optional) Client pairing options controlling the pairing behaviour of the
+# server specifically when HTTPS (mTLS) transport is used.
+pairing:
+
+    # (Optional) Controls the pairing mode of the server
+    #
+    # When 'disabled' (or unset), no client pairing will be possible and as a
+    # result incoming client connections will always be rejected. If set to
+    # 'single' pairing mode, only a single client can pair successfully after
+    # which all subsequent pairing requests will be rejected. Setting the
+    # pairing mode to 'multiple' allows multiple clients to pair throughout
+    # the lifetime of the server.
+    mode: single | multiple | disabled
 ```
