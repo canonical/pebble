@@ -329,7 +329,7 @@ func (s *ManagerSuite) TestFailuresBelowThreshold(c *C) {
 		return check.Failures == 0
 	})
 	c.Assert(check.Status, Equals, checkstate.CheckStatusUp)
-	c.Assert(lastTaskLog(s.overlord.State(), check.ChangeID), Matches, `.* INFO succeeded after \d+ failure`)
+	c.Assert(lastTaskLog(s.overlord.State(), check.ChangeID), Matches, `.* INFO succeeded after \d+ failure.*`)
 }
 
 func (s *ManagerSuite) TestPlanChangedSmarts(c *C) {
