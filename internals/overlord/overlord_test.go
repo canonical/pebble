@@ -140,8 +140,7 @@ func (ovs *overlordSuite) TestNewWithGoodState(c *C) {
 		"last-change-id": 0,
 		"last-task-id": 0,
 		"last-lane-id": 0,
-		"last-notice-id": 0,
-		"pairing": {"is-paired": false}
+		"last-notice-id": 0
 	}`, patch.Level, patch.Sublevel, cmd.Version))
 	err := os.WriteFile(ovs.statePath, fakeState, 0600)
 	c.Assert(err, IsNil)
