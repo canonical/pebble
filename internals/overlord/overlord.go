@@ -648,8 +648,7 @@ func (o *Overlord) TLSManager() *tlsstate.TLSManager {
 	return o.tlsMgr
 }
 
-// PairingManager returns the pairing manager responsible for managing
-// client pairing.
+// PairingManager returns the manager that handles client pairing.
 func (o *Overlord) PairingManager() *pairingstate.PairingManager {
 	return o.pairingMgr
 }

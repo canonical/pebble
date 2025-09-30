@@ -16,13 +16,9 @@
 package pairingstate
 
 import (
-	"context"
 	"crypto/x509"
 	"errors"
 	"fmt"
-	"slices"
-	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -38,6 +34,7 @@ var timeAfterFunc = func(d time.Duration, f func()) Timer {
 // Timer is used so we can supply a fake timer during testing.
 type Timer interface {
 	Stop() bool
+	Reset(time.Duration) bool
 }
 
 // Mode controls the pairing policy of the pairing manager.
@@ -92,8 +89,6 @@ type PairingManager struct {
 	open   bool
 	// timer controls the duration of the pairing window.
 	timer Timer
-	// cancelTimerFunc cancels a pairing window if enabled.
-	cancelTimerFunc context.CancelFunc
 }
 
 func NewManager(state *state.State) *PairingManager {
@@ -154,11 +149,11 @@ func (m *PairingManager) PairMTLS(clientCert *x509.Certificate) error {
 
 	// Verify that the client certificate is self-signed (the public
 	// key included must verify the signature). We do this here as a
-	// sanity check since we are about to pair this certificat and use
+	// sanity check since we are about to pair this certificate and use
 	// it in exactly this way for future client credential checks.
 	// Note that the TLS handshake already proved that the client has
 	// access to the private key by verifying the handshake transcript
-	// signature.
+	// signature using the public key in this certificate.
 	roots := x509.NewCertPool()
 	roots.AddCert(clientCert)
 	opts := x509.VerifyOptions{
@@ -220,31 +215,24 @@ func (m *PairingManager) PairingWindowOpen() bool {
 func (m *PairingManager) stopTimer() {
 	if m.timer != nil {
 		m.timer.Stop()
-		m.timer = nil
-	}
-	if m.cancelTimerFunc != nil {
-		m.cancelTimerFunc()
-		m.cancelTimerFunc = nil
 	}
 }
 
-// startTimer starts a new timer that will close the pairing window after the given timeout
+// startTimer starts a new timer that will close the pairing window after
+// the given timeout. If the timer exists, we will reuse the timer by
+// resetting it with a new duration.
 func (m *PairingManager) startTimer(timeout time.Duration) {
-	m.stopTimer()
-
-	ctx, cancel := context.WithCancel(context.Background())
-	m.cancelTimerFunc = cancel
+	// If timer already exists, just reset it with the new timeout
+	if m.timer != nil {
+		m.timer.Reset(timeout)
+		return
+	}
 
 	m.timer = timeAfterFunc(timeout, func() {
-		select {
-		case <-ctx.Done():
-			return
-		default:
-			m.mu.Lock()
-			m.open = false
-			m.stopTimer()
-			m.mu.Unlock()
-		}
+		m.mu.Lock()
+		defer m.mu.Unlock()
+		m.open = false
+		m.stopTimer()
 	})
 }
 
@@ -263,8 +251,6 @@ func (m *PairingManager) EnablePairing(timeout time.Duration) error {
 	switch m.config.Mode {
 	case ModeDisabled, ModeUnset:
 		// Mode is disabled, set Open = False
-		m.open = false
-		m.stopTimer()
 		return errors.New("cannot enable pairing with pairing mode disabled")
 
 	case ModeSingle:
@@ -275,26 +261,18 @@ func (m *PairingManager) EnablePairing(timeout time.Duration) error {
 		// Single mode: check if already paired
 		if isPaired {
 			// Already paired, set Open = False
-			m.open = false
-			m.stopTimer()
 			return errors.New("cannot enable pairing when already paired in 'single' pairing mode")
 
-		} else {
-			// Not paired yet, set Open = True
-			m.open = true
-			m.startTimer(timeout)
 		}
 	case ModeMultiple:
 		// Multiple mode: always set Open = True
-		m.open = true
-		m.startTimer(timeout)
 	default:
 		// Unknown mode, set Open = False
-		m.open = false
-		m.stopTimer()
 		return fmt.Errorf("cannot enable pairing with unknown pairing mode %q", m.config.Mode)
 	}
 
+	m.open = true
+	m.startTimer(timeout)
 	return nil
 }
 
@@ -302,35 +280,14 @@ func (m *PairingManager) EnablePairing(timeout time.Duration) error {
 // "user-x" where x starts at 1 and monotonically increments. Users names not
 // following this pattern will simply not be considered.
 func generateUniqueUsername(existingIdentities map[string]*state.Identity) (string, error) {
-	// Find all the usernames matching our scheme.
-	var matched []uint32
-	for name := range existingIdentities {
-		if strings.HasPrefix(name, "user-") {
-			numberStr := strings.TrimPrefix(name, "user-")
-			number, err := strconv.ParseUint(numberStr, 10, 32)
-			if err != nil || number == 0 {
-				// Skip this entry becuase the suffix is not a supported number.
-				continue
-			}
-			matched = append(matched, uint32(number))
+	for i := uint32(1); i <= autoUsernameRangeLimit; i++ {
+		username := fmt.Sprintf("user-%d", i)
+
+		// If the generated username doesn't already exist, we can use it.
+		if _, exists := existingIdentities[username]; !exists {
+			return username, nil
 		}
 	}
-	// Sort the numbers.
-	slices.Sort(matched)
-	// Find the first available number.
-	userNumberFree := uint32(1)
-	for _, n := range matched {
-		if n > userNumberFree {
-			// We found an available number.
-			break
-		}
-		userNumberFree += 1
-
-		// Check if we reached the user allocation limit.
-		if userNumberFree > autoUsernameRangeLimit {
-			return "", fmt.Errorf("user allocation limit '%d' reached", autoUsernameRangeLimit)
-		}
-	}
-
-	return fmt.Sprintf("user-%d", userNumberFree), nil
+	// No free username found.
+	return "", fmt.Errorf("user allocation limit '%d' reached", autoUsernameRangeLimit)
 }

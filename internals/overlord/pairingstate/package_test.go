@@ -126,7 +126,9 @@ func layerYAML(c *C, layer *plan.Layer) string {
 }
 
 type fakeTimer struct {
-	stopped bool
+	stopped  bool
+	duration time.Duration
+	callback func()
 }
 
 func (ft *fakeTimer) Stop() bool {
@@ -137,14 +139,20 @@ func (ft *fakeTimer) Stop() bool {
 	return true
 }
 
+func (ft *fakeTimer) Reset(d time.Duration) bool {
+	active := !ft.stopped
+	ft.stopped = false
+	ft.duration = d
+
+	return active
+}
+
 // FakeTimers allows us to test code that uses time.AfterFunc. Instead of
 // writing unit test code with delays, this object allows is to manually
 // trigger the events of interest without delay.
 type FakeTimers struct {
 	mu        sync.Mutex
-	callbacks []func()
-	durations []time.Duration
-	timers    []*fakeTimer
+	fakeTimer *fakeTimer
 }
 
 func NewFakeTimers() *FakeTimers {
@@ -155,44 +163,28 @@ func (f *FakeTimers) AfterFunc(d time.Duration, callback func()) pairingstate.Ti
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
-	f.callbacks = append(f.callbacks, callback)
-	f.durations = append(f.durations, d)
+	f.fakeTimer = &fakeTimer{
+		duration: d,
+		callback: callback,
+	}
 
-	// Create a fake timer that implements the Timer interface
-	fakeTimer := &fakeTimer{}
-	f.timers = append(f.timers, fakeTimer)
-
-	return fakeTimer
+	return f.fakeTimer
 }
 
-// TriggerTimer expires a selected timer, resulting in the AfterFunc callback
+// TriggerTimer expires the timer, resulting in the AfterFunc callback
 // getting called.
-func (f *FakeTimers) TriggerTimer(index int) {
+func (f *FakeTimers) TriggerTimer() {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
-	if index < len(f.callbacks) && index < len(f.timers) {
-		// Only trigger if the timer hasn't been stopped
-		if !f.timers[index].stopped {
-			f.callbacks[index]()
-		}
+	if f.fakeTimer != nil && f.fakeTimer.callback != nil {
+		f.fakeTimer.callback()
 	}
 }
 
-func (f *FakeTimers) GetDuration(index int) time.Duration {
+func (f *FakeTimers) GetDuration() time.Duration {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
-	if index < len(f.durations) {
-		return f.durations[index]
-	}
-	return 0
-}
-
-// TimerCount returns the number of timer instances that was created during the
-// test.
-func (f *FakeTimers) TimerCount() int {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	return len(f.callbacks)
+	return f.fakeTimer.duration
 }
