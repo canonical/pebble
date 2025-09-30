@@ -232,7 +232,6 @@ func (m *PairingManager) startTimer(timeout time.Duration) {
 		m.mu.Lock()
 		defer m.mu.Unlock()
 		m.open = false
-		m.stopTimer()
 	})
 }
 
