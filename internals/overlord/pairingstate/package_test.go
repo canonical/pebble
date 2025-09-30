@@ -163,6 +163,10 @@ func (f *FakeTimers) AfterFunc(d time.Duration, callback func()) pairingstate.Ti
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
+	if f.fakeTimer != nil {
+		panic("we should always reuse the timer")
+	}
+
 	f.fakeTimer = &fakeTimer{
 		duration: d,
 		callback: callback,

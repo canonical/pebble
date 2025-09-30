@@ -250,7 +250,6 @@ func (m *PairingManager) EnablePairing(timeout time.Duration) error {
 	// Check the pairing mode
 	switch m.config.Mode {
 	case ModeDisabled, ModeUnset:
-		// Mode is disabled, set Open = False
 		return errors.New("cannot enable pairing with pairing mode disabled")
 
 	case ModeSingle:
@@ -260,12 +259,10 @@ func (m *PairingManager) EnablePairing(timeout time.Duration) error {
 
 		// Single mode: check if already paired
 		if isPaired {
-			// Already paired, set Open = False
 			return errors.New("cannot enable pairing when already paired in 'single' pairing mode")
 
 		}
 	case ModeMultiple:
-		// Multiple mode: always set Open = True
 	default:
 		// Unknown mode, set Open = False
 		return fmt.Errorf("cannot enable pairing with unknown pairing mode %q", m.config.Mode)
