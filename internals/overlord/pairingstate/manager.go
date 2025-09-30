@@ -263,10 +263,11 @@ func (m *PairingManager) EnablePairing(timeout time.Duration) error {
 		}
 	case ModeMultiple:
 	default:
-		// Unknown mode, set Open = False
 		return fmt.Errorf("cannot enable pairing with unknown pairing mode %q", m.config.Mode)
 	}
 
+	// If we get here we passed all checks and we can open the
+	// pairing window for the given duration.
 	m.open = true
 	m.startTimer(timeout)
 	return nil
