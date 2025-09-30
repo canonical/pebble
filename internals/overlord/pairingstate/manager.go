@@ -37,6 +37,18 @@ type Timer interface {
 	Reset(time.Duration) bool
 }
 
+// autoUsernameRangeLimit determines the maxmimum number suffix for
+// users auto-allocated by this package when a new certificate is
+// paired.
+const autoUsernameRangeLimit uint32 = 1000
+
+// pairedStateKey is the key to the paired state. If the paired state is set at
+// least one client successfully paired with the server. The paired state
+// is significant for "single" pairing mode because once a server paired
+// with a client (and paired state is set to true), no futher pairing is
+// allowed from that point in time onwards.
+const pairedStateKey = "paired"
+
 // Mode controls the pairing policy of the pairing manager.
 type Mode string
 
@@ -77,16 +89,14 @@ func (c *PairingConfig) Combine(other *PairingConfig) {
 	}
 }
 
-// autoUsernameRangeLimit determines the maxmimum number suffix for
-// users auto-allocated by this package when a new certificate is
-// paired.
-const autoUsernameRangeLimit uint32 = 1000
-
 type PairingManager struct {
 	state  *state.State
 	mu     sync.Mutex
 	config *PairingConfig
-	open   bool
+	// paired is true if a previous pairing request succeeded.
+	paired bool
+	// enabled is true if the pairing window is enabled.
+	enabled bool
 	// timer controls the duration of the pairing window.
 	timer Timer
 }
@@ -98,6 +108,12 @@ func NewManager(state *state.State) *PairingManager {
 			Mode: ModeUnset,
 		},
 	}
+
+	// Load the paired state.
+	m.state.Lock()
+	defer m.state.Unlock()
+	m.state.Get(pairedStateKey, &m.paired)
+
 	return m
 }
 
@@ -108,10 +124,9 @@ func (m *PairingManager) PlanChanged(update *plan.Plan) {
 
 	newConfig := update.Sections[PairingField].(*PairingConfig)
 
-	// If the mode changed, force the pairing window to be reopened
-	// taking the new config into account.
+	// If the mode changed, make sure the pairing window is disabled.
 	if m.config.Mode != newConfig.Mode {
-		m.open = false
+		m.enabled = false
 		m.stopTimer()
 	}
 	m.config = newConfig
@@ -127,33 +142,34 @@ func (m *PairingManager) Stop() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	m.open = false
+	m.enabled = false
 	m.stopTimer()
 }
 
 // PairMTLS adds a client identity with admin permissions to the identity
-// subsystem. A pairing request always closes the pairing window.
+// subsystem. A pairing request always leaves the pairing window disabled.
 func (m *PairingManager) PairMTLS(clientCert *x509.Certificate) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if !m.open {
-		return errors.New("cannot pair while pairing window is closed")
+	if !m.enabled {
+		return errors.New("cannot pair while pairing window is disabled")
 	}
 
-	// Any success or failure should always close the pairing window.
+	// Any success or failure should always disable the pairing window.
 	defer func() {
-		m.open = false
+		m.enabled = false
 		m.stopTimer()
 	}()
 
 	// Verify that the client certificate is self-signed (the public
 	// key included must verify the signature). We do this here as a
 	// sanity check since we are about to pair this certificate and use
-	// it in exactly this way for future client credential checks.
-	// Note that the TLS handshake already proved that the client has
-	// access to the private key by verifying the handshake transcript
-	// signature using the public key in this certificate.
+	// it persisted certificate in exactly this way for future client
+	// credential checks. Note that the TLS handshake already proved
+	// that the client has access to the private key by verifying the
+	// handshake transcript signature using the public key in this
+	// certificate.
 	roots := x509.NewCertPool()
 	roots.AddCert(clientCert)
 	opts := x509.VerifyOptions{
@@ -199,16 +215,17 @@ func (m *PairingManager) PairMTLS(clientCert *x509.Certificate) error {
 		return fmt.Errorf("cannot add identity: %w", err)
 	}
 
-	m.state.SetIsPaired()
+	m.paired = true
+	m.state.Set(pairedStateKey, m.paired)
 
 	return nil
 }
 
-// PairingWindowOpen returns whether the pairing window is currently open.
-func (m *PairingManager) PairingWindowOpen() bool {
+// PairingWindowEnabled returns whether the pairing window is currently enabled.
+func (m *PairingManager) PairingWindowEnabled() bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return m.open
+	return m.enabled
 }
 
 // stopTimer stops the current timer if it exists
@@ -218,7 +235,7 @@ func (m *PairingManager) stopTimer() {
 	}
 }
 
-// startTimer starts a new timer that will close the pairing window after
+// startTimer starts a new timer that will disable the pairing window after
 // the given timeout. If the timer exists, we will reuse the timer by
 // resetting it with a new duration.
 func (m *PairingManager) startTimer(timeout time.Duration) {
@@ -231,7 +248,7 @@ func (m *PairingManager) startTimer(timeout time.Duration) {
 	m.timer = timeAfterFunc(timeout, func() {
 		m.mu.Lock()
 		defer m.mu.Unlock()
-		m.open = false
+		m.enabled = false
 	})
 }
 
@@ -240,8 +257,8 @@ func (m *PairingManager) EnablePairing(timeout time.Duration) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	// If Open is already true, reset the timeout duration
-	if m.open {
+	// If the pairing window is already enabled, reset the timeout duration
+	if m.enabled {
 		m.startTimer(timeout)
 		return nil
 	}
@@ -252,12 +269,8 @@ func (m *PairingManager) EnablePairing(timeout time.Duration) error {
 		return errors.New("cannot enable pairing with pairing mode disabled")
 
 	case ModeSingle:
-		m.state.Lock()
-		isPaired := m.state.IsPaired()
-		m.state.Unlock()
-
 		// Single mode: check if already paired
-		if isPaired {
+		if m.paired {
 			return errors.New("cannot enable pairing when already paired in 'single' pairing mode")
 
 		}
@@ -266,9 +279,9 @@ func (m *PairingManager) EnablePairing(timeout time.Duration) error {
 		return fmt.Errorf("cannot enable pairing with unknown pairing mode %q", m.config.Mode)
 	}
 
-	// If we get here we passed all checks and we can open the
+	// If we get here we passed all checks and we can enable the
 	// pairing window for the given duration.
-	m.open = true
+	m.enabled = true
 	m.startTimer(timeout)
 	return nil
 }

@@ -51,7 +51,6 @@ func (ps *pairingSuite) SetUpTest(c *C) {
 	ps.fakeTimers = NewFakeTimers()
 	ps.restore = pairingstate.FakeAfterFunc(ps.fakeTimers.AfterFunc)
 	ps.state = state.New(nil)
-	ps.manager = pairingstate.NewManager(ps.state)
 }
 
 func (ps *pairingSuite) TearDownTest(c *C) {
@@ -59,6 +58,26 @@ func (ps *pairingSuite) TearDownTest(c *C) {
 		ps.restore()
 	}
 	plan.UnregisterSectionExtension(pairingstate.PairingField)
+}
+
+// newManager creates a new pairing manager only after it
+// persists the paired state.
+func (ps *pairingSuite) newManager(paired bool) {
+	ps.state.Lock()
+	ps.state.Set(pairingstate.PairedStateKey, paired)
+	ps.state.Unlock()
+
+	ps.manager = pairingstate.NewManager(ps.state)
+}
+
+// PairedState returns the persisted paired state.
+func (ps *pairingSuite) PairedState() bool {
+	ps.state.Lock()
+	defer ps.state.Unlock()
+
+	var paired bool
+	ps.state.Get(pairingstate.PairedStateKey, &paired)
+	return paired
 }
 
 // updatePlan simulates a plan update with the supplied option set.

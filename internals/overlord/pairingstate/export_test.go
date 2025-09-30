@@ -18,6 +18,8 @@ import (
 	"time"
 )
 
+const PairedStateKey = pairedStateKey
+
 var GenerateUniqueUsername = generateUniqueUsername
 
 // FakeAfterFunc replaces the global timeAfterFunc with a fake implementation
