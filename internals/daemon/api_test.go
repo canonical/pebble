@@ -15,14 +15,21 @@
 package daemon
 
 import (
+	"crypto/ed25519"
+	"crypto/rand"
+	"crypto/x509"
 	"encoding/json"
+	"math/big"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"time"
 
 	"gopkg.in/check.v1"
 
+	"github.com/canonical/pebble/internals/overlord/pairingstate"
 	"github.com/canonical/pebble/internals/overlord/restart"
+	"github.com/canonical/pebble/internals/plan"
 	"github.com/canonical/pebble/internals/reaper"
 )
 
@@ -40,6 +47,7 @@ type apiSuite struct {
 }
 
 func (s *apiSuite) SetUpTest(c *check.C) {
+	plan.RegisterSectionExtension(pairingstate.PairingField, &pairingstate.SectionExtension{})
 	err := reaper.Start()
 	if err != nil {
 		c.Fatalf("cannot start reaper: %v", err)
@@ -62,6 +70,7 @@ func (s *apiSuite) TearDownTest(c *check.C) {
 	if err != nil {
 		c.Fatalf("cannot stop reaper: %v", err)
 	}
+	plan.UnregisterSectionExtension(pairingstate.PairingField)
 }
 
 func (s *apiSuite) muxVars(*http.Request) map[string]string {
@@ -148,4 +157,24 @@ func fakeEnv(key, value string) (restore func()) {
 			panic(err)
 		}
 	}
+}
+
+func createTestClientCertificate(c *check.C) *x509.Certificate {
+	_, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	c.Assert(err, check.IsNil)
+
+	template := x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		NotBefore:    time.Now(),
+		NotAfter:     time.Now().Add(365 * 24 * time.Hour),
+		KeyUsage:     x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
+	}
+
+	certDER, err := x509.CreateCertificate(rand.Reader, &template, &template, privateKey.Public(), privateKey)
+	c.Assert(err, check.IsNil)
+
+	cert, err := x509.ParseCertificate(certDER)
+	c.Assert(err, check.IsNil)
+	return cert
 }

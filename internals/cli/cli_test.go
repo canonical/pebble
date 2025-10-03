@@ -15,6 +15,7 @@ import (
 
 	"github.com/canonical/pebble/cmd"
 	"github.com/canonical/pebble/internals/cli"
+	"github.com/canonical/pebble/internals/overlord/pairingstate"
 	"github.com/canonical/pebble/internals/plan"
 	"github.com/canonical/pebble/internals/testutil"
 	"github.com/canonical/pebble/internals/workloads"
@@ -77,6 +78,7 @@ func (s *BasePebbleSuite) TearDownTest(c *C) {
 	cli.ReadPassword = term.ReadPassword
 
 	plan.UnregisterSectionExtension(workloads.WorkloadsField)
+	plan.UnregisterSectionExtension(pairingstate.PairingField)
 
 	s.BaseTest.TearDownTest(c)
 }

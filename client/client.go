@@ -17,7 +17,11 @@ package client
 import (
 	"bytes"
 	"context"
+	"crypto/ed25519"
+	"crypto/sha512"
 	"crypto/tls"
+	"crypto/x509"
+	"encoding/base32"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -62,6 +66,11 @@ type RequestOptions struct {
 type RequestResponse struct {
 	StatusCode int
 	Headers    http.Header
+	// ServerIDCert holds the server identity certificate acting as CA for
+	// the TLS leaf certificate. This certificate can be pinned during a
+	// pairing process with the server and used for verifying future TLS
+	// certificates recieved from the same server.
+	ServerIDCert *x509.Certificate
 	// ChangeID is typically set when an AsyncRequest type is performed. The
 	// change id allows for introspection and progress tracking of the request.
 	ChangeID string
@@ -134,9 +143,29 @@ type Config struct {
 	// If the protocol prefix is https://, TLS will be used.
 	BaseURL string
 
-	// VerifyTLSConnection provides a way to specify how client TLS connections
-	// should be configured, and how to verify TLS server certificates.
-	VerifyTLSConnection func(tls.ConnectionState) error
+	// TLSServerIDCert provides (a previously pinned) server identity
+	// certificate that will be used to validate the incoming server
+	// TLS (leaf) certificate signature.
+	//
+	// If this field is left nil, a server fingerprint must be supplied
+	// as an alternative verification method.
+	TLSServerIDCert *x509.Certificate
+	// TLSServerFingerprint is an alternative server identity verification
+	// mechanism that should only be used during client server identity
+	// pairing. The mechanism assumes a different means of obtaining the
+	// server identity fingerprint (e.g. mDNS or a physcial display)
+	// as part of the pairing procedure.
+	//
+	// See the Fingerprint method in the idkey package for details. Once
+	// the pairing request has been processed by the server, and the
+	// client pinned the server identity certificate, future TLS
+	// connections must supply the TLSServerIDCert field, and leave
+	// TLSServerFingerprint empty.
+	TLSServerFingerprint string
+	// TLSClientIDCert must hold the client identity certificate when
+	// using a TLS connection to the server. This field must be nil if
+	// a non-TLS based transport is used.
+	TLSClientIDCert *tls.Certificate
 
 	// Optional HTTP Basic Authentication details. If supplied this will
 	// add an HTTP basic authentication header entry.
@@ -155,12 +184,6 @@ type Config struct {
 
 	// UserAgent is the User-Agent header sent to the Pebble daemon.
 	UserAgent string
-}
-
-// defaultTLSVerifier blocks all TLS (HTTPS) access by always rejecting the
-// server certificates.
-func defaultTLSVerifier(state tls.ConnectionState) error {
-	return errors.New("cannot verify server TLS certificates")
 }
 
 // A Client knows how to talk to the Pebble daemon.
@@ -191,11 +214,6 @@ func New(config *Config) (*Client, error) {
 	localConfig := Config{}
 	if config != nil {
 		localConfig = *config
-	}
-
-	// The default verifier never trusts any server TLS certificates.
-	if localConfig.VerifyTLSConnection == nil {
-		localConfig.VerifyTLSConnection = defaultTLSVerifier
 	}
 
 	client := &Client{}
@@ -339,12 +357,20 @@ func (rq *defaultRequester) Do(ctx context.Context, opts *RequestOptions) (*Requ
 		return nil, err
 	}
 
+	var idCert *x509.Certificate
+	// If this is a TLS connection, extract the server identity certificate
+	// which is placed after the TLS certificate.
+	if httpResp.TLS != nil && len(httpResp.TLS.PeerCertificates) == 2 {
+		idCert = httpResp.TLS.PeerCertificates[1]
+	}
+
 	// Is the result expecting a caller-managed raw body?
 	if opts.Type == RawRequest {
 		return &RequestResponse{
-			StatusCode: httpResp.StatusCode,
-			Headers:    httpResp.Header,
-			Body:       httpResp.Body,
+			StatusCode:   httpResp.StatusCode,
+			Headers:      httpResp.Header,
+			ServerIDCert: idCert,
+			Body:         httpResp.Body,
 		}, nil
 	}
 
@@ -397,10 +423,11 @@ func (rq *defaultRequester) Do(ctx context.Context, opts *RequestOptions) (*Requ
 
 	// Common response
 	return &RequestResponse{
-		StatusCode: serverResp.StatusCode,
-		Headers:    httpResp.Header,
-		ChangeID:   serverResp.Change,
-		Result:     serverResp.Result,
+		StatusCode:   serverResp.StatusCode,
+		Headers:      httpResp.Header,
+		ServerIDCert: idCert,
+		ChangeID:     serverResp.Change,
+		Result:       serverResp.Result,
 	}, nil
 }
 
@@ -608,11 +635,17 @@ func newDefaultRequester(client *Client, opts *Config) (*defaultRequester, error
 				// We disable the internal full X509 metadata based validation logic
 				// since the typical use-case do not have the server as a public URL
 				// baked into the certificate, signed with an external CA. The client
-				// provides a ClientTLSManager interface that includes the
-				// VerifyCertificate method for verifying the incoming server
-				// TLS certificates.
+				// config provides a TLSServerVerify hook that must be used to verify
+				// the server certificate chain.
 				InsecureSkipVerify: true,
-				VerifyConnection:   opts.VerifyTLSConnection,
+				VerifyConnection: func(state tls.ConnectionState) error {
+					return verifyConnection(state, opts)
+				},
+				// The server is configured to request a certificate from the client
+				// which will result in this hook getting called to retreive it.
+				GetClientCertificate: func(request *tls.CertificateRequestInfo) (*tls.Certificate, error) {
+					return opts.TLSClientIDCert, nil
+				},
 			},
 		}
 		requester = &defaultRequester{
@@ -628,6 +661,51 @@ func newDefaultRequester(client *Client, opts *Config) (*defaultRequester, error
 	requester.client = client
 
 	return requester, nil
+}
+
+// verifyConnection verifies the incoming server TLS certificate.
+func verifyConnection(state tls.ConnectionState, opts *Config) error {
+	// We always expect two certificates from our server:
+	//
+	// state.PeerCertificates[0] - server TLS certificate
+	// state.PeerCertificates[1] - server Identity certificate (root CA)
+	certCount := len(state.PeerCertificates)
+	if certCount != 2 {
+		return fmt.Errorf("cannot find identity certificate: expected 2 certificates, got %d", certCount)
+	}
+	// Make a local copy of the server identity certificate (root CA).
+	serverIDCert := state.PeerCertificates[1]
+
+	// Pairing mode: we check that the incoming identity fingerprint
+	// (obtained from the certificate) matches the fingerprint supplied
+	// with the configuration.
+	if opts.TLSServerFingerprint != "" {
+		idFingerprint, err := getIdentityFingerprint(serverIDCert)
+		if err != nil {
+			return fmt.Errorf("cannot obtain identity fingerprint: %v", err)
+		}
+		if idFingerprint == opts.TLSServerFingerprint {
+			// Pairing verification passed.
+			return nil
+		}
+		return errors.New("cannot verify server fingerprint")
+
+		// Secure mode: If we get here, we are doing normal certificate validation.
+		// We use the pinned identity certificate supplied with the config for
+		// server certificate verification.
+	} else if opts.TLSServerIDCert != nil {
+		// Create a cert pool and add the identity certificate
+		roots := x509.NewCertPool()
+		roots.AddCert(opts.TLSServerIDCert)
+		opts := x509.VerifyOptions{
+			Roots: roots,
+		}
+		incomingTLS := state.PeerCertificates[0]
+		_, err := incomingTLS.Verify(opts)
+		return err
+	}
+
+	return errors.New("cannot verify server: missing client TLS config")
 }
 
 func (rq *defaultRequester) Transport() *http.Transport {
@@ -659,4 +737,16 @@ func (rq *defaultRequester) getWebsocket(urlPath string) (clientWebsocket, error
 		return conn, parseError(resp)
 	}
 	return conn, err
+}
+
+// getIdentityFingerprint extracts the public key from the certificate and
+// calculates the fingerprint.
+func getIdentityFingerprint(cert *x509.Certificate) (string, error) {
+	pubKey, ok := cert.PublicKey.(ed25519.PublicKey)
+	if !ok {
+		return "", errors.New("cannot extract public key from certificate")
+	}
+	hashBytes := sha512.Sum384(pubKey)
+	fingerprint := base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(hashBytes[:])
+	return fingerprint, nil
 }
