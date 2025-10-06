@@ -42,11 +42,12 @@ type Timer interface {
 // paired.
 const autoUsernameRangeLimit uint32 = 1000
 
-// pairedStateKey is the key to the paired state. If the paired state is true
-// least one client successfully paired with the server. The paired state
-// is significant for "single" pairing mode because once the first client
-// paired with the server (and paired state is set to true), no futher pairing
-// is allowed from that point in time (until the state is cleared).
+// pairedStateKey is the key to the paired state value. If the paired state
+// is true, at least one client successfully paired with the server. The
+// paired state is significant for "single" pairing mode because once the
+// first client paired with the server (and paired state is set to true),
+// no futher pairing is allowed from that point in time (until the state
+// is cleared).
 const pairedStateKey = "paired"
 
 // Mode controls the pairing policy of the pairing manager.
@@ -167,12 +168,11 @@ func (m *PairingManager) PairMTLS(clientCert *x509.Certificate) error {
 
 	// Verify that the client certificate is self-signed (the public
 	// key included must verify the signature). We do this here as a
-	// sanity check since we are about to pair this certificate and use
-	// it persisted certificate in exactly this way for future client
-	// credential checks. Note that the TLS handshake already proved
-	// that the client has access to the private key by verifying the
-	// handshake transcript signature using the public key in this
-	// certificate.
+	// sanity check since we are about to persist this certificate and use
+	// it in exactly this way for future client credential checks. Note
+	// that the TLS handshake already proved that the client has access
+	// to the private key by verifying the handshake transcript signature
+	// using the public key in this certificate.
 	roots := x509.NewCertPool()
 	roots.AddCert(clientCert)
 	opts := x509.VerifyOptions{
