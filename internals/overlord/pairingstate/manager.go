@@ -197,7 +197,13 @@ func (m *PairingManager) PairMTLS(clientCert *x509.Certificate) error {
 		}
 
 		if identity.Cert.X509.Equal(clientCert) {
-			return errors.New("cannot pair already paired identity")
+			// This identity is already added so in this special
+			// case we complete the pairing request without adding
+			// it again with a new username.
+			m.paired = true
+			m.state.Set(pairedStateKey, m.paired)
+
+			return nil
 		}
 	}
 

@@ -180,13 +180,23 @@ func (ps *pairingSuite) TestPairMTLSNotOpen(c *C) {
 	c.Assert(len(identities), Equals, 0)
 }
 
-// TestPairMTLSDuplicateCertificate verifies that dupliciate identities will result
-// in the pairing request failing.
+// TestPairMTLSDuplicateCertificate verifies that identities already added
+// by a different means (e.g. using the identities add CLI) will result in
+// the pairing request succeeding.
 func (ps *pairingSuite) TestPairMTLSDuplicateCertificate(c *C) {
 	ps.newManager(false)
 	ps.updatePlan(pairingstate.ModeMultiple)
 
 	clientCert := generateTestClientCert(c)
+
+	ps.state.Lock()
+	ps.state.AddIdentities(map[string]*state.Identity{
+		"existing-user": {
+			Access: state.AdminAccess,
+			Cert:   &state.CertIdentity{X509: clientCert},
+		},
+	})
+	ps.state.Unlock()
 
 	err := ps.manager.EnablePairing(10 * time.Second)
 	c.Assert(err, IsNil)
@@ -194,19 +204,15 @@ func (ps *pairingSuite) TestPairMTLSDuplicateCertificate(c *C) {
 	err = ps.manager.PairMTLS(clientCert)
 	c.Assert(err, IsNil)
 
-	err = ps.manager.EnablePairing(10 * time.Second)
-	c.Assert(err, IsNil)
-
-	err = ps.manager.PairMTLS(clientCert)
-	c.Assert(err, ErrorMatches, ".* already paired identity")
-
 	c.Assert(ps.manager.PairingWindowEnabled(), Equals, false)
 
+	isPaired := ps.PairedState()
 	ps.state.Lock()
 	identities := ps.state.Identities()
 	ps.state.Unlock()
 
 	c.Assert(len(identities), Equals, 1)
+	c.Assert(isPaired, Equals, true)
 }
 
 // TestPairMTLSUsernameIncrementing verifies name allocation.
