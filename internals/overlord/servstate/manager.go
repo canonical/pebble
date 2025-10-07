@@ -434,15 +434,19 @@ func servicesToStop(m *ServiceManager) ([][]string, error) {
 	defer m.servicesLock.Unlock()
 	var result [][]string
 	for _, services := range stop {
-		var notStopped []string
+		var toStop []string
 		for _, name := range services {
 			s := m.services[name]
-			if s != nil && (s.state == stateStarting || s.state == stateRunning || s.state == stateBackoff) {
-				notStopped = append(notStopped, name)
+			if s == nil {
+				continue
+			}
+			switch s.state {
+			case stateStarting, stateRunning, stateBackoff, stateExited:
+				toStop = append(toStop, name)
 			}
 		}
-		if len(notStopped) > 0 {
-			result = append(result, notStopped)
+		if len(toStop) > 0 {
+			result = append(result, toStop)
 		}
 	}
 	return result, nil
