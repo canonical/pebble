@@ -27,7 +27,7 @@ import (
 // TestEnablePairingDisabledMode tests trying to open a pairing window while
 // the configuration says it is disabled (before the plan update was received).
 func (ps *pairingSuite) TestEnablePairingDisabledMode(c *C) {
-	ps.newManager(false)
+	ps.newManager(c, nil)
 	err := ps.manager.EnablePairing(5 * time.Millisecond)
 	c.Assert(err, ErrorMatches, "*. pairing mode disabled")
 	c.Assert(ps.manager.PairingWindowEnabled(), Equals, false)
@@ -36,7 +36,7 @@ func (ps *pairingSuite) TestEnablePairingDisabledMode(c *C) {
 // TestEnablePairingSingleModeNotPaired checks that we can pair when using single
 // pairing mode, if we never paired before.
 func (ps *pairingSuite) TestEnablePairingSingleModeNotPaired(c *C) {
-	ps.newManager(false)
+	ps.newManager(c, nil)
 	ps.updatePlan(pairingstate.ModeSingle)
 
 	timeout := 10 * time.Millisecond
@@ -52,7 +52,9 @@ func (ps *pairingSuite) TestEnablePairingSingleModeNotPaired(c *C) {
 // TestEnablePairingSingleModeAlreadyPaired verifies that we will fail to pair in
 // single pairing mode if already paired.
 func (ps *pairingSuite) TestEnablePairingSingleModeAlreadyPaired(c *C) {
-	ps.newManager(true)
+	ps.newManager(c, &pairingstate.PairingState{
+		Paired: true,
+	})
 	ps.updatePlan(pairingstate.ModeSingle)
 
 	err := ps.manager.EnablePairing(5 * time.Millisecond)
@@ -63,7 +65,7 @@ func (ps *pairingSuite) TestEnablePairingSingleModeAlreadyPaired(c *C) {
 // TestEnablePairingMultipleMode verifies we can pair when pairing mode
 // is set to multiple.
 func (ps *pairingSuite) TestEnablePairingMultipleMode(c *C) {
-	ps.newManager(false)
+	ps.newManager(c, nil)
 	ps.updatePlan(pairingstate.ModeMultiple)
 
 	timeout := 10 * time.Millisecond
@@ -79,7 +81,9 @@ func (ps *pairingSuite) TestEnablePairingMultipleMode(c *C) {
 // TestEnablePairingMultipleModeAlreadyPaired verifies we can pair again when
 // pairing mode is set to multiple.
 func (ps *pairingSuite) TestEnablePairingMultipleModeAlreadyPaired(c *C) {
-	ps.newManager(true) // <- true means paired state set to true.
+	ps.newManager(c, &pairingstate.PairingState{
+		Paired: true,
+	})
 	ps.updatePlan(pairingstate.ModeMultiple)
 
 	timeout := 10 * time.Millisecond
@@ -95,7 +99,7 @@ func (ps *pairingSuite) TestEnablePairingMultipleModeAlreadyPaired(c *C) {
 // TestEnablePairingResetTimeout verifies that when pairing is re-enabled while
 // the window is still open, the expiry period is reset with the new duration.
 func (ps *pairingSuite) TestEnablePairingResetTimeout(c *C) {
-	ps.newManager(false)
+	ps.newManager(c, nil)
 	ps.updatePlan(pairingstate.ModeSingle)
 
 	timeout1 := 10 * time.Millisecond
@@ -120,7 +124,7 @@ func (ps *pairingSuite) TestEnablePairingResetTimeout(c *C) {
 // TestEnablePairingUnknownMode verifies that an invalid mode from the plan
 // is reported correctly.
 func (ps *pairingSuite) TestEnablePairingUnknownMode(c *C) {
-	ps.newManager(false)
+	ps.newManager(c, nil)
 	ps.updatePlan(pairingstate.Mode("foo"))
 
 	err := ps.manager.EnablePairing(10 * time.Millisecond)
@@ -131,7 +135,7 @@ func (ps *pairingSuite) TestEnablePairingUnknownMode(c *C) {
 // TestPairMTLSSuccess verifies that a successful pairing request closes the
 // pairing window and updates identities correctly.
 func (ps *pairingSuite) TestPairMTLSSuccess(c *C) {
-	ps.newManager(false)
+	ps.newManager(c, nil)
 	ps.updatePlan(pairingstate.ModeSingle)
 
 	err := ps.manager.EnablePairing(10 * time.Millisecond)
@@ -144,12 +148,12 @@ func (ps *pairingSuite) TestPairMTLSSuccess(c *C) {
 
 	c.Assert(ps.manager.PairingWindowEnabled(), Equals, false)
 
-	isPaired := ps.PairedState()
+	pairingState := ps.PairingState()
 	ps.state.Lock()
 	identities := ps.state.Identities()
 	ps.state.Unlock()
 
-	c.Assert(isPaired, Equals, true)
+	c.Assert(pairingState.Paired, Equals, true)
 	c.Assert(len(identities), Equals, 1)
 
 	identity, exists := identities["user-1"]
@@ -164,18 +168,18 @@ func (ps *pairingSuite) TestPairMTLSSuccess(c *C) {
 // TestPairMTLSNotOpen verifies pairing is rejected if the pairing window
 // is not open.
 func (ps *pairingSuite) TestPairMTLSNotOpen(c *C) {
-	ps.newManager(false)
+	ps.newManager(c, nil)
 	c.Assert(ps.manager.PairingWindowEnabled(), Equals, false)
 
 	err := ps.manager.PairMTLS(generateTestClientCert(c))
 	c.Assert(err, ErrorMatches, ".* pairing window is disabled")
 
-	isPaired := ps.PairedState()
+	pairingState := ps.PairingState()
 	ps.state.Lock()
 	identities := ps.state.Identities()
 	ps.state.Unlock()
 
-	c.Assert(isPaired, Equals, false)
+	c.Assert(pairingState.Paired, Equals, false)
 	c.Assert(len(identities), Equals, 0)
 }
 
@@ -183,7 +187,7 @@ func (ps *pairingSuite) TestPairMTLSNotOpen(c *C) {
 // by a different means (e.g. using the identities add CLI) will result in
 // the pairing request succeeding.
 func (ps *pairingSuite) TestPairMTLSDuplicateCertificate(c *C) {
-	ps.newManager(false)
+	ps.newManager(c, nil)
 	ps.updatePlan(pairingstate.ModeMultiple)
 
 	clientCert := generateTestClientCert(c)
@@ -205,18 +209,18 @@ func (ps *pairingSuite) TestPairMTLSDuplicateCertificate(c *C) {
 
 	c.Assert(ps.manager.PairingWindowEnabled(), Equals, false)
 
-	isPaired := ps.PairedState()
+	pairingState := ps.PairingState()
 	ps.state.Lock()
 	identities := ps.state.Identities()
 	ps.state.Unlock()
 
 	c.Assert(len(identities), Equals, 1)
-	c.Assert(isPaired, Equals, true)
+	c.Assert(pairingState.Paired, Equals, true)
 }
 
 // TestPairMTLSUsernameIncrementing verifies name allocation.
 func (ps *pairingSuite) TestPairMTLSUsernameIncrementing(c *C) {
-	ps.newManager(false)
+	ps.newManager(c, nil)
 	ps.state.Lock()
 	ps.state.AddIdentities(map[string]*state.Identity{
 		"user-3": {
@@ -255,7 +259,7 @@ func (ps *pairingSuite) TestPairMTLSUsernameIncrementing(c *C) {
 // TestPlanChangedDisablesPairingWindow verifies that when a PlanChanged event
 // modifies the Mode while the pairing window is enabled, the window is closed.
 func (ps *pairingSuite) TestPlanChangedDisablesPairingWindow(c *C) {
-	ps.newManager(false)
+	ps.newManager(c, nil)
 	ps.updatePlan(pairingstate.ModeSingle)
 
 	err := ps.manager.EnablePairing(10 * time.Millisecond)

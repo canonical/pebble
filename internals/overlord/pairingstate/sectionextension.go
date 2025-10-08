@@ -32,7 +32,7 @@ const PairingField string = "pairing"
 type SectionExtension struct{}
 
 func (s SectionExtension) ParseSection(data yaml.Node) (plan.Section, error) {
-	p := &PairingConfig{}
+	p := &pairingConfig{}
 	// The following issue prevents us from using the yaml.Node decoder
 	// with KnownFields = true behaviour. Once one of the proposals gets
 	// merged, we can remove the intermediate Marshal step.
@@ -54,9 +54,9 @@ func (s SectionExtension) ParseSection(data yaml.Node) (plan.Section, error) {
 }
 
 func (s SectionExtension) CombineSections(sections ...plan.Section) (plan.Section, error) {
-	p := &PairingConfig{}
+	p := &pairingConfig{}
 	for _, section := range sections {
-		pairingLayer, ok := section.(*PairingConfig)
+		pairingLayer, ok := section.(*pairingConfig)
 		if !ok {
 			return nil, fmt.Errorf("internal error: invalid section type %T", section)
 		}

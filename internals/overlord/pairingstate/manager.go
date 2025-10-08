@@ -31,13 +31,17 @@ import (
 // paired.
 const autoUsernameRangeLimit uint32 = 1000
 
-// pairedStateKey is the key to the paired state value. If the paired state
-// is true, at least one client successfully paired with the server. The
-// paired state is significant for "single" pairing mode because once the
-// first client paired with the server (and paired state is set to true),
-// no further pairing is allowed from that point in time (until the state
-// is cleared).
-const pairedStateKey = "paired"
+// pairingStateKey is the key to the pairing state.
+const pairingStateKey = "pairing"
+
+type pairingState struct {
+	// If the paired state is true, at least one client successfully paired
+	// with the server. The paired state is significant for "single"
+	// pairing mode because once the first client paired with the server
+	// (and paired state is set to true), no further pairing is allowed
+	// from that point in time (until the state is cleared).
+	Paired bool `json:"paired"`
+}
 
 // Mode controls the pairing policy of the pairing manager.
 type Mode string
@@ -54,14 +58,14 @@ const (
 	ModeMultiple Mode = "multiple"
 )
 
-var _ plan.Section = (*PairingConfig)(nil)
+var _ plan.Section = (*pairingConfig)(nil)
 
-// PairingConfig contains the options exposed in the plan extension.
-type PairingConfig struct {
+// pairingConfig contains the options exposed in the plan extension.
+type pairingConfig struct {
 	Mode Mode `yaml:"mode,omitempty"`
 }
 
-func (c *PairingConfig) Validate() error {
+func (c *pairingConfig) Validate() error {
 	switch c.Mode {
 	case ModeUnset, ModeDisabled, ModeSingle, ModeMultiple:
 	default:
@@ -72,22 +76,23 @@ func (c *PairingConfig) Validate() error {
 
 // Implements the optional Zeroer interface as used by the YAML library
 // for deciding when to marshal a section or not.
-func (c *PairingConfig) IsZero() bool {
+func (c *pairingConfig) IsZero() bool {
 	return c.Mode == ModeUnset
 }
 
-func (c *PairingConfig) Combine(other *PairingConfig) {
+func (c *pairingConfig) Combine(other *pairingConfig) {
 	if other.Mode != ModeUnset {
 		c.Mode = other.Mode
 	}
 }
 
 type PairingManager struct {
-	state  *state.State
-	mu     sync.Mutex
-	config *PairingConfig
-	// paired is true if a previous pairing request succeeded.
-	paired bool
+	state *state.State
+	mu    sync.Mutex
+	// Plan config of the pairing manager.
+	pairingConfig *pairingConfig
+	// Persisted state of the pairing manager.
+	pairingState *pairingState
 	// enabled is true if the pairing window is enabled.
 	enabled bool
 	// timer controls the duration of the pairing window.
@@ -99,20 +104,31 @@ type PairingManager struct {
 	skipHandlerOnce bool
 }
 
-func NewManager(state *state.State) *PairingManager {
+func NewManager(st *state.State) (*PairingManager, error) {
 	m := &PairingManager{
-		state: state,
-		config: &PairingConfig{
+		state: st,
+		pairingConfig: &pairingConfig{
 			Mode: ModeUnset,
+		},
+		pairingState: &pairingState{
+			Paired: false,
 		},
 	}
 
 	// Load the paired state at startup.
 	m.state.Lock()
 	defer m.state.Unlock()
-	m.state.Get(pairedStateKey, &m.paired)
-
-	return m
+	err := m.state.Get(pairingStateKey, &m.pairingState)
+	if errors.Is(err, state.ErrNoState) {
+		// Let's make sure the state always reflects the pairing state
+		// explicitly.
+		m.state.Set(pairingStateKey, m.pairingState)
+		err = nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return m, nil
 }
 
 // PlanChanged informs the pairing manager that the plan has been updated.
@@ -120,14 +136,14 @@ func (m *PairingManager) PlanChanged(update *plan.Plan) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	newConfig := update.Sections[PairingField].(*PairingConfig)
+	newConfig := update.Sections[PairingField].(*pairingConfig)
 
 	// If the mode changed, make sure the pairing window is disabled.
-	if m.config.Mode != newConfig.Mode {
+	if m.pairingConfig.Mode != newConfig.Mode {
 		m.enabled = false
 		m.stopTimer()
 	}
-	m.config = newConfig
+	m.pairingConfig = newConfig
 }
 
 // Ensure implements overlord.StateManager interface.
@@ -194,8 +210,8 @@ func (m *PairingManager) PairMTLS(clientCert *x509.Certificate) error {
 			// This identity is already added so in this special
 			// case we complete the pairing request without adding
 			// it again with a new username.
-			m.paired = true
-			m.state.Set(pairedStateKey, m.paired)
+			m.pairingState.Paired = true
+			m.state.Set(pairingStateKey, m.pairingState)
 
 			return nil
 		}
@@ -218,8 +234,8 @@ func (m *PairingManager) PairMTLS(clientCert *x509.Certificate) error {
 		return fmt.Errorf("cannot add identity: %w", err)
 	}
 
-	m.paired = true
-	m.state.Set(pairedStateKey, m.paired)
+	m.pairingState.Paired = true
+	m.state.Set(pairingStateKey, m.pairingState)
 
 	return nil
 }
@@ -282,19 +298,19 @@ func (m *PairingManager) EnablePairing(timeout time.Duration) error {
 	}
 
 	// Check the pairing mode
-	switch m.config.Mode {
+	switch m.pairingConfig.Mode {
 	case ModeDisabled, ModeUnset:
 		return errors.New("cannot enable pairing with pairing mode disabled")
 
 	case ModeSingle:
 		// Single mode: check if already paired
-		if m.paired {
+		if m.pairingState.Paired {
 			return errors.New("cannot enable pairing when already paired in 'single' pairing mode")
 
 		}
 	case ModeMultiple:
 	default:
-		return fmt.Errorf("cannot enable pairing with unknown pairing mode %q", m.config.Mode)
+		return fmt.Errorf("cannot enable pairing with unknown pairing mode %q", m.pairingConfig.Mode)
 	}
 
 	// If we get here we passed all checks and we can enable the

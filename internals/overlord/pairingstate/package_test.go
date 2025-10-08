@@ -54,22 +54,27 @@ func (ps *pairingSuite) TearDownTest(c *C) {
 
 // newManager creates a new pairing manager only after it
 // persists the paired state.
-func (ps *pairingSuite) newManager(paired bool) {
-	ps.state.Lock()
-	ps.state.Set(pairingstate.PairedStateKey, paired)
-	ps.state.Unlock()
+func (ps *pairingSuite) newManager(c *C, s *pairingstate.PairingState) {
 
-	ps.manager = pairingstate.NewManager(ps.state)
+	if s != nil {
+		ps.state.Lock()
+		ps.state.Set(pairingstate.PairingStateKey, *s)
+		ps.state.Unlock()
+	}
+
+	var err error
+	ps.manager, err = pairingstate.NewManager(ps.state)
+	c.Assert(err, IsNil)
 }
 
 // PairedState returns the persisted paired state.
-func (ps *pairingSuite) PairedState() bool {
+func (ps *pairingSuite) PairingState() *pairingstate.PairingState {
 	ps.state.Lock()
 	defer ps.state.Unlock()
 
-	var paired bool
-	ps.state.Get(pairingstate.PairedStateKey, &paired)
-	return paired
+	var s *pairingstate.PairingState
+	ps.state.Get(pairingstate.PairingStateKey, &s)
+	return s
 }
 
 // updatePlan simulates a plan update with the supplied option set.

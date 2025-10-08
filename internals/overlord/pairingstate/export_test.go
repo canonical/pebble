@@ -14,6 +14,9 @@
 
 package pairingstate
 
-const PairedStateKey = pairedStateKey
+const PairingStateKey = pairingStateKey
+
+type PairingState = pairingState
+type PairingConfig = pairingConfig
 
 var GenerateUniqueUsername = generateUniqueUsername

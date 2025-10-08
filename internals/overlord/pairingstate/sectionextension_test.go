@@ -85,7 +85,7 @@ pairing:
     mode: single
     unknown-field: value
     `},
-	error: `cannot parse the pairing section: yaml: unmarshal errors:\n  line 2: field unknown-field not found in type pairingstate.PairingConfig`,
+	error: `cannot parse the pairing section: yaml: unmarshal errors:\n  line 2: field unknown-field not found in type pairingstate.pairingConfig`,
 }, {
 	summary: "mode merge works",
 	layers: []string{`

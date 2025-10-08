@@ -211,7 +211,10 @@ func New(opts *Options) (*Overlord, error) {
 	o.tlsMgr = tlsstate.NewManager(tlsDir, opts.IDSigner)
 	o.stateEng.AddManager(o.tlsMgr)
 
-	o.pairingMgr = pairingstate.NewManager(s)
+	o.pairingMgr, err = pairingstate.NewManager(s)
+	if err != nil {
+		return nil, fmt.Errorf("cannot create pairing manager: %w", err)
+	}
 	o.stateEng.AddManager(o.pairingMgr)
 	o.planMgr.AddChangeListener(o.pairingMgr.PlanChanged)
 
