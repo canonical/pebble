@@ -52,7 +52,7 @@ func (ps *pairingSuite) TestEnablePairingSingleModeNotPaired(c *C) {
 // TestEnablePairingSingleModeAlreadyPaired verifies that we will fail to pair in
 // single pairing mode if already paired.
 func (ps *pairingSuite) TestEnablePairingSingleModeAlreadyPaired(c *C) {
-	ps.newManager(c, &pairingstate.PairingState{
+	ps.newManager(c, &pairingstate.PairingDetails{
 		Paired: true,
 	})
 	ps.updatePlan(pairingstate.ModeSingle)
@@ -81,7 +81,7 @@ func (ps *pairingSuite) TestEnablePairingMultipleMode(c *C) {
 // TestEnablePairingMultipleModeAlreadyPaired verifies we can pair again when
 // pairing mode is set to multiple.
 func (ps *pairingSuite) TestEnablePairingMultipleModeAlreadyPaired(c *C) {
-	ps.newManager(c, &pairingstate.PairingState{
+	ps.newManager(c, &pairingstate.PairingDetails{
 		Paired: true,
 	})
 	ps.updatePlan(pairingstate.ModeMultiple)

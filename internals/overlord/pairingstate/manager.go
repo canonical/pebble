@@ -31,10 +31,10 @@ import (
 // paired.
 const autoUsernameRangeLimit uint32 = 1000
 
-// pairingStateKey is the key to the pairing state.
-const pairingStateKey = "pairing"
+// pairingDetailsAttr is the key to the pairing state.
+const pairingDetailsAttr = "pairing-details"
 
-type pairingState struct {
+type pairingDetails struct {
 	// If the paired state is true, at least one client successfully paired
 	// with the server. The paired state is significant for "single"
 	// pairing mode because once the first client paired with the server
@@ -92,7 +92,7 @@ type PairingManager struct {
 	// Plan config of the pairing manager.
 	pairingConfig *pairingConfig
 	// Persisted state of the pairing manager.
-	pairingState *pairingState
+	pairingDetails *pairingDetails
 	// enabled is true if the pairing window is enabled.
 	enabled bool
 	// timer controls the duration of the pairing window.
@@ -110,7 +110,7 @@ func NewManager(st *state.State) (*PairingManager, error) {
 		pairingConfig: &pairingConfig{
 			Mode: ModeUnset,
 		},
-		pairingState: &pairingState{
+		pairingDetails: &pairingDetails{
 			Paired: false,
 		},
 	}
@@ -118,11 +118,11 @@ func NewManager(st *state.State) (*PairingManager, error) {
 	// Load the paired state at startup.
 	m.state.Lock()
 	defer m.state.Unlock()
-	err := m.state.Get(pairingStateKey, &m.pairingState)
+	err := m.state.Get(pairingDetailsAttr, &m.pairingDetails)
 	if errors.Is(err, state.ErrNoState) {
 		// Let's make sure the state always reflects the pairing state
 		// explicitly.
-		m.state.Set(pairingStateKey, m.pairingState)
+		m.state.Set(pairingDetailsAttr, m.pairingDetails)
 		err = nil
 	}
 	if err != nil {
@@ -210,8 +210,8 @@ func (m *PairingManager) PairMTLS(clientCert *x509.Certificate) error {
 			// This identity is already added so in this special
 			// case we complete the pairing request without adding
 			// it again with a new username.
-			m.pairingState.Paired = true
-			m.state.Set(pairingStateKey, m.pairingState)
+			m.pairingDetails.Paired = true
+			m.state.Set(pairingDetailsAttr, m.pairingDetails)
 
 			return nil
 		}
@@ -234,8 +234,8 @@ func (m *PairingManager) PairMTLS(clientCert *x509.Certificate) error {
 		return fmt.Errorf("cannot add identity: %w", err)
 	}
 
-	m.pairingState.Paired = true
-	m.state.Set(pairingStateKey, m.pairingState)
+	m.pairingDetails.Paired = true
+	m.state.Set(pairingDetailsAttr, m.pairingDetails)
 
 	return nil
 }
@@ -304,7 +304,7 @@ func (m *PairingManager) EnablePairing(timeout time.Duration) error {
 
 	case ModeSingle:
 		// Single mode: check if already paired
-		if m.pairingState.Paired {
+		if m.pairingDetails.Paired {
 			return errors.New("cannot enable pairing when already paired in 'single' pairing mode")
 
 		}
