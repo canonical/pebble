@@ -121,6 +121,38 @@ func (ps *pairingSuite) TestEnablePairingResetTimeout(c *C) {
 	})
 }
 
+// TestEnablePairingExtendTimeout is a low level test that makes sure the
+// race condition handling code (see skipHandlerOnce) works as expected.
+func (ps *pairingSuite) TestEnablePairingExtendTimeout(c *C) {
+	ps.newManager(c, nil)
+	ps.updatePlan(pairingstate.ModeSingle)
+
+	timeout1 := 10 * time.Millisecond
+	err := ps.manager.EnablePairing(timeout1)
+	c.Assert(err, IsNil)
+	c.Assert(ps.manager.PairingWindowEnabled(), Equals, true)
+
+	// Make the timeoutHandler block on this mutex.
+	ps.manager.Mu().Lock()
+
+	// Wait for the window to timeout (wait extra time to make sure).
+	time.Sleep(timeout1 + 10*time.Millisecond)
+
+	// Schedule more time on top of the existing window.
+	timeout2 := 20 * time.Millisecond
+	ps.manager.StartTimer(timeout2)
+
+	// Release the blocked timeout handler.
+	ps.manager.Mu().Unlock()
+
+	// The pairing window should still stay enabled for the timeout2
+	// period, and only transition after that.
+	expectWindowEnableDisable(c, timeout2, func() bool {
+		return ps.manager.PairingWindowEnabled()
+
+	})
+}
+
 // TestEnablePairingUnknownMode verifies that an invalid mode from the plan
 // is reported correctly.
 func (ps *pairingSuite) TestEnablePairingUnknownMode(c *C) {

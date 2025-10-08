@@ -271,19 +271,21 @@ func (m *PairingManager) startTimer(timeout time.Duration) {
 		return
 	}
 
-	m.timer = time.AfterFunc(timeout, func() {
-		m.mu.Lock()
-		defer m.mu.Unlock()
+	m.timer = time.AfterFunc(timeout, m.timeoutHandler)
+}
 
-		// This is used in cases where we want to extend the pairing
-		// window duration but this handler was already started, but
-		// blocked on the mutex above.
-		if m.skipHandlerOnce {
-			m.skipHandlerOnce = false
-			return
-		}
-		m.enabled = false
-	})
+func (m *PairingManager) timeoutHandler() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// This is used in cases where we want to extend the pairing
+	// window duration but this handler was already started, but
+	// blocked on the mutex above.
+	if m.skipHandlerOnce {
+		m.skipHandlerOnce = false
+		return
+	}
+	m.enabled = false
 }
 
 // EnablePairing requests the pairing manager to enable the pairing window.
