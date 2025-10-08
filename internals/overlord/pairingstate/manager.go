@@ -308,7 +308,6 @@ func (m *PairingManager) EnablePairing(timeout time.Duration) error {
 		// Single mode: check if already paired
 		if m.pairingDetails.Paired {
 			return errors.New("cannot enable pairing when already paired in 'single' pairing mode")
-
 		}
 	case ModeMultiple:
 	default:
@@ -329,11 +328,9 @@ func generateUniqueUsername(existingIdentities map[string]*state.Identity) (stri
 	for i := uint32(1); i <= autoUsernameRangeLimit; i++ {
 		username := fmt.Sprintf("user-%d", i)
 
-		// If the generated username doesn't already exist, we can use it.
 		if _, exists := existingIdentities[username]; !exists {
 			return username, nil
 		}
 	}
-	// No free username found.
-	return "", fmt.Errorf("user allocation limit '%d' reached", autoUsernameRangeLimit)
+	return "", fmt.Errorf("user allocation limit %d reached", autoUsernameRangeLimit)
 }
