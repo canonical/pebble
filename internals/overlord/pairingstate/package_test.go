@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"math/big"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -38,25 +37,18 @@ import (
 func Test(t *testing.T) { TestingT(t) }
 
 type pairingSuite struct {
-	fakeTimers *FakeTimers
-	restore    func()
-	state      *state.State
-	manager    *pairingstate.PairingManager
+	state   *state.State
+	manager *pairingstate.PairingManager
 }
 
 var _ = Suite(&pairingSuite{})
 
 func (ps *pairingSuite) SetUpTest(c *C) {
 	plan.RegisterSectionExtension(pairingstate.PairingField, &pairingstate.SectionExtension{})
-	ps.fakeTimers = NewFakeTimers()
-	ps.restore = pairingstate.FakeAfterFunc(ps.fakeTimers.AfterFunc)
 	ps.state = state.New(nil)
 }
 
 func (ps *pairingSuite) TearDownTest(c *C) {
-	if ps.restore != nil {
-		ps.restore()
-	}
 	plan.UnregisterSectionExtension(pairingstate.PairingField)
 }
 
@@ -86,6 +78,29 @@ func (ps *pairingSuite) updatePlan(mode pairingstate.Mode) {
 	testPlan := plan.NewPlan()
 	testPlan.Sections[pairingstate.PairingField] = config
 	ps.manager.PlanChanged(testPlan)
+}
+
+// expectWindowEnableDisable makes sure that the pairing window enable phase,
+// and the following transition to disable happens within reasonable bounds.
+func expectWindowEnableDisable(c *C, timeout time.Duration, f func() bool) {
+	// Window just opened, so should be enabled.
+	c.Assert(f(), Equals, true)
+	time.Sleep(timeout - time.Millisecond)
+	// Window should still be open just before timeout.
+	if !f() {
+		c.Fatalf("pairing window disable happened before %v timeout", timeout)
+	}
+	// Should reset to disable within 4 milliseconds (give enough time for
+	// the unit test to settle).
+	deadline := time.Now().Add(4 * time.Millisecond)
+	for time.Now().Before(deadline) {
+		if !f() {
+			// Window should be disabled soon after timeout.
+			return
+		}
+		time.Sleep(time.Millisecond)
+	}
+	c.Fatalf("pairing window did not disable within expected %v", timeout)
 }
 
 // generateTestClientCert creates a self-signed client certificate for testing.
@@ -142,72 +157,4 @@ func layerYAML(c *C, layer *plan.Layer) string {
 	yml, err := yaml.Marshal(layer)
 	c.Assert(err, IsNil)
 	return strings.TrimSpace(string(yml))
-}
-
-type fakeTimer struct {
-	stopped  bool
-	duration time.Duration
-	callback func()
-}
-
-func (ft *fakeTimer) Stop() bool {
-	if ft.stopped {
-		return false
-	}
-	ft.stopped = true
-	return true
-}
-
-func (ft *fakeTimer) Reset(d time.Duration) bool {
-	active := !ft.stopped
-	ft.stopped = false
-	ft.duration = d
-
-	return active
-}
-
-// FakeTimers allows us to test code that uses time.AfterFunc. Instead of
-// writing unit test code with delays, this object allows is to manually
-// trigger the events of interest without delay.
-type FakeTimers struct {
-	mu        sync.Mutex
-	fakeTimer *fakeTimer
-}
-
-func NewFakeTimers() *FakeTimers {
-	return &FakeTimers{}
-}
-
-func (f *FakeTimers) AfterFunc(d time.Duration, callback func()) pairingstate.Timer {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-
-	if f.fakeTimer != nil {
-		panic("we should always reuse the timer")
-	}
-
-	f.fakeTimer = &fakeTimer{
-		duration: d,
-		callback: callback,
-	}
-
-	return f.fakeTimer
-}
-
-// TriggerTimer expires the timer, resulting in the AfterFunc callback
-// getting called.
-func (f *FakeTimers) TriggerTimer() {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-
-	if f.fakeTimer != nil && f.fakeTimer.callback != nil {
-		f.fakeTimer.callback()
-	}
-}
-
-func (f *FakeTimers) GetDuration() time.Duration {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-
-	return f.fakeTimer.duration
 }

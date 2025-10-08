@@ -14,19 +14,6 @@
 
 package pairingstate
 
-import (
-	"time"
-)
-
 const PairedStateKey = pairedStateKey
 
 var GenerateUniqueUsername = generateUniqueUsername
-
-// FakeAfterFunc replaces the global timeAfterFunc with a fake implementation
-func FakeAfterFunc(fakeAfterFunc func(d time.Duration, f func()) Timer) func() {
-	original := timeAfterFunc
-	timeAfterFunc = fakeAfterFunc
-	return func() {
-		timeAfterFunc = original
-	}
-}

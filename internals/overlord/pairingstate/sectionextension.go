@@ -34,8 +34,8 @@ type SectionExtension struct{}
 func (s SectionExtension) ParseSection(data yaml.Node) (plan.Section, error) {
 	p := &PairingConfig{}
 	// The following issue prevents us from using the yaml.Node decoder
-	// with KnownFields = true behaviour. Once one of the proposals get
-	// merged, we can remove the intermediate Marshall step.
+	// with KnownFields = true behaviour. Once one of the proposals gets
+	// merged, we can remove the intermediate Marshal step.
 	// https://github.com/go-yaml/yaml/issues/460
 	if len(data.Content) != 0 {
 		yml, err := yaml.Marshal(data)

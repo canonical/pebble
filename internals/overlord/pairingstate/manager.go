@@ -12,7 +12,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-// pairingstate manages client server pairing.
+// pairingstate manages client-server pairing.
 package pairingstate
 
 import (
@@ -26,18 +26,7 @@ import (
 	"github.com/canonical/pebble/internals/plan"
 )
 
-// timeAfterFunc allows faking time.AfterFunc.
-var timeAfterFunc = func(d time.Duration, f func()) Timer {
-	return time.AfterFunc(d, f)
-}
-
-// Timer is used so we can supply a fake timer during testing.
-type Timer interface {
-	Stop() bool
-	Reset(time.Duration) bool
-}
-
-// autoUsernameRangeLimit determines the maxmimum number suffix for
+// autoUsernameRangeLimit determines the maximum number suffix for
 // users auto-allocated by this package when a new certificate is
 // paired.
 const autoUsernameRangeLimit uint32 = 1000
@@ -46,7 +35,7 @@ const autoUsernameRangeLimit uint32 = 1000
 // is true, at least one client successfully paired with the server. The
 // paired state is significant for "single" pairing mode because once the
 // first client paired with the server (and paired state is set to true),
-// no futher pairing is allowed from that point in time (until the state
+// no further pairing is allowed from that point in time (until the state
 // is cleared).
 const pairedStateKey = "paired"
 
@@ -102,7 +91,12 @@ type PairingManager struct {
 	// enabled is true if the pairing window is enabled.
 	enabled bool
 	// timer controls the duration of the pairing window.
-	timer Timer
+	timer *time.Timer
+	// skipHandlerOnce is used to skip the next AfterFunc handler
+	// execution. This is used for cases where we want to extend
+	// the pairing window, but the handler was already kicked off,
+	// blocked on entry on the Mutex.
+	skipHandlerOnce bool
 }
 
 func NewManager(state *state.State) *PairingManager {
@@ -192,7 +186,7 @@ func (m *PairingManager) PairMTLS(clientCert *x509.Certificate) error {
 
 	for _, identity := range existingIdentities {
 		if identity.Cert == nil || identity.Cert.X509 == nil {
-			// Not valid certificate identity.
+			// Not a valid certificate identity.
 			continue
 		}
 
@@ -250,13 +244,28 @@ func (m *PairingManager) stopTimer() {
 func (m *PairingManager) startTimer(timeout time.Duration) {
 	// If timer already exists, just reset it with the new timeout
 	if m.timer != nil {
-		m.timer.Reset(timeout)
+		alreadyStopped := !m.timer.Reset(timeout)
+		if alreadyStopped && m.enabled {
+			// We get here if we are trying to extend the pairing
+			// window duration while it is still enabled. However,
+			// the handler to disable it already fired, and is now
+			// blocked on the mutex.
+			m.skipHandlerOnce = true
+		}
 		return
 	}
 
-	m.timer = timeAfterFunc(timeout, func() {
+	m.timer = time.AfterFunc(timeout, func() {
 		m.mu.Lock()
 		defer m.mu.Unlock()
+
+		// This is used in cases where we want to extend the pairing
+		// window duration but this handler was already started, but
+		// blocked on the mutex above.
+		if m.skipHandlerOnce {
+			m.skipHandlerOnce = false
+			return
+		}
 		m.enabled = false
 	})
 }
@@ -296,7 +305,7 @@ func (m *PairingManager) EnablePairing(timeout time.Duration) error {
 }
 
 // generateUniqueUsername finds the first unique username following the pattern
-// "user-x" where x starts at 1 and monotonically increments. Users names not
+// "user-x" where x starts at 1 and monotonically increments. Usernames not
 // following this pattern will simply not be considered.
 func generateUniqueUsername(existingIdentities map[string]*state.Identity) (string, error) {
 	for i := uint32(1); i <= autoUsernameRangeLimit; i++ {
