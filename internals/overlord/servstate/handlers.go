@@ -113,6 +113,15 @@ type serviceData struct {
 }
 
 func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
+	// Don't restart services that were left in DoingStatus when the daemon terminated.
+	m.state.Lock()
+	var started bool
+	task.Get("started", &started)
+	m.state.Unlock()
+	if started {
+		return fmt.Errorf("service already started, not retrying")
+	}
+
 	m.state.Lock()
 	request, err := TaskServiceRequest(task)
 	m.state.Unlock()
@@ -148,6 +157,10 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 	if err != nil {
 		return err
 	}
+
+	m.state.Lock()
+	task.Set("started", true)
+	m.state.Unlock()
 
 	// Wait for a small amount of time, and if the service hasn't exited,
 	// consider it a success.
