@@ -384,7 +384,7 @@ func (ps *pairingSuite) TestGenerateUniqueUsername(c *C) {
 			}
 			return identities
 		}(),
-		expectedError: "user allocation limit '1000' reached",
+		expectedError: "user allocation limit 1000 reached",
 	}}
 
 	for _, tc := range testCases {

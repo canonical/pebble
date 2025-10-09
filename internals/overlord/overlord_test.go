@@ -134,7 +134,7 @@ func (ovs *overlordSuite) TestNewInMemoryBackend(c *C) {
 
 func (ovs *overlordSuite) TestNewWithGoodState(c *C) {
 	fakeState := []byte(fmt.Sprintf(`{
-		"data": {"patch-level": %d, "patch-sublevel": %d, "patch-sublevel-last-version": %q, "some": "data"},
+		"data": {"patch-level": %d, "patch-sublevel": %d, "patch-sublevel-last-version": %q, "some": "data", "pairing-details": {"paired": false}},
 		"changes": null,
 		"tasks": null,
 		"last-change-id": 0,
