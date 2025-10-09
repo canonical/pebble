@@ -242,7 +242,7 @@ local:
     user-id: 42
 `[1:]
 	if output != expected {
-		t.Fatalf("error checking identities. expected: %s; got: %s", expected, output)
+		t.Fatalf("unexpected identities output\nWant:\n%s\nGot:\n%s", expected, output)
 	}
 }
 

@@ -99,18 +99,28 @@ func pebbleDaemon(t *testing.T, pebbleDir string, runOrEnter string, args ...str
 
 	stopStdout := make(chan struct{})
 	stopStderr := make(chan struct{})
+	waitDone := make(chan struct{})
 
-	t.Cleanup(func() {
-		err := cmd.Process.Signal(os.Interrupt)
-		if err != nil {
-			t.Errorf("Error sending SIGINT/Ctrl+C to pebble: %v", err)
-		}
+	go func() {
 		cmd.Wait()
 		close(stopStdout)
 		close(stopStderr)
+		close(waitDone)
+	}()
+
+	t.Cleanup(func() {
+		select {
+		case <-waitDone:
+		default:
+			// If Pebble hasn't exited yet, send Ctrl-C signal. Don't error if
+			// it fails (in case it's just terminated).
+			cmd.Process.Signal(os.Interrupt)
+			<-waitDone
+		}
 	})
 
 	readLines := func(reader io.Reader, ch chan string, stop <-chan struct{}) {
+		defer close(ch)
 		scanner := bufio.NewScanner(reader)
 		for scanner.Scan() {
 			select {
@@ -119,9 +129,7 @@ func pebbleDaemon(t *testing.T, pebbleDir string, runOrEnter string, args ...str
 				return
 			}
 		}
-		if err := scanner.Err(); err != nil {
-			t.Errorf("Error reading output: %v", err)
-		}
+		// Don't check scanner.Err: may get "file already closed" errors.
 	}
 
 	go readLines(stdoutPipe, stdoutCh, stopStdout)
@@ -201,6 +209,23 @@ func waitForFile(t *testing.T, file string, timeout time.Duration) {
 	}
 }
 
+// waitForTermination drains the given channel to wait for the command to
+// terminate within a given time.
+func waitForTermination(t *testing.T, ch <-chan string, timeout time.Duration) {
+	timeoutCh := time.After(3 * time.Second)
+	for {
+		select {
+		case _, ok := <-ch:
+			if !ok {
+				// Channel closed, program exited.
+				return
+			}
+		case <-timeoutCh:
+			t.Fatal("timed out waiting for pebble to terminate (channel to drain)")
+		}
+	}
+}
+
 // runPebbleCommand runs a pebble command and returns the standard output.
 func runPebbleCommand(t *testing.T, pebbleDir string, args ...string) string {
 	t.Helper()
@@ -210,7 +235,7 @@ func runPebbleCommand(t *testing.T, pebbleDir string, args ...string) string {
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		t.Fatalf("error executing pebble command: %v", err)
+		t.Fatalf("error executing pebble command: %v\nOutput:\n%s", err, output)
 	}
 
 	return string(output)
