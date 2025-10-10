@@ -16,12 +16,14 @@ package client
 
 import (
 	"context"
+	"crypto/x509"
 	"fmt"
 )
 
 var (
-	ParseErrorInTest  = parseError
-	CalculateFileMode = calculateFileMode
+	ParseErrorInTest       = parseError
+	CalculateFileMode      = calculateFileMode
+	GetIdentityFingerprint = getIdentityFingerprint
 )
 
 func (client *Client) SetDoer(d doer) {
@@ -51,3 +53,24 @@ func (p *ExecProcess) WaitStdinDone() {
 }
 
 type ClientWebsocket = clientWebsocket
+
+// SysInfoWithServerID is a modified version of SysInfo for testing if
+// we get a valid server ID certificate returned while using HTTPS.
+func (client *Client) SysInfoWithServerID() (*x509.Certificate, *SysInfo, error) {
+	var sysInfo SysInfo
+
+	resp, err := client.Requester().Do(context.Background(), &RequestOptions{
+		Type:   SyncRequest,
+		Method: "GET",
+		Path:   "/v1/system-info",
+	})
+	if err != nil {
+		return nil, nil, fmt.Errorf("cannot obtain system details: %w", err)
+	}
+	err = resp.DecodeResult(&sysInfo)
+	if err != nil {
+		return nil, nil, fmt.Errorf("cannot obtain system details: %w", err)
+	}
+
+	return resp.TLSServerIDCert, &sysInfo, nil
+}
