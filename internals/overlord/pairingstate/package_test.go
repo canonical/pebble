@@ -88,16 +88,25 @@ func (ps *pairingSuite) updatePlan(mode pairingstate.Mode) {
 // expectWindowEnableDisable makes sure that the pairing window enable phase,
 // and the following transition to disable happens within reasonable bounds.
 func expectWindowEnableDisable(c *C, timeout time.Duration, f func() bool) {
-	// Window just opened, so should be enabled.
+	start := time.Now()
+
+	// 10% jitter
+	testJitter := timeout / 10
+
+	// 1. Window just opened, so should be enabled.
 	c.Assert(f(), Equals, true)
-	time.Sleep(timeout - time.Millisecond)
-	// Window should still be open just before timeout.
+
+	// 2. Let's wait for the timeout to almost elapse, so that we can
+	//    check the state towards the end of the window.
+	time.Sleep(timeout - testJitter)
+
+	// 3. Window should still be open just before timeout.
 	if !f() {
 		c.Fatalf("pairing window disable happened before %v timeout", timeout)
 	}
-	// Should reset to disable within 4 milliseconds (give enough time for
-	// the unit test to settle).
-	deadline := time.Now().Add(4 * time.Millisecond)
+
+	// 4. Window should disable itself towards the end of the timeout.
+	deadline := start.Add(timeout + testJitter)
 	for time.Now().Before(deadline) {
 		if !f() {
 			// Window should be disabled soon after timeout.

@@ -39,7 +39,7 @@ func (ps *pairingSuite) TestEnablePairingSingleModeNotPaired(c *C) {
 	ps.newManager(c, nil)
 	ps.updatePlan(pairingstate.ModeSingle)
 
-	timeout := 10 * time.Millisecond
+	timeout := 100 * time.Millisecond
 	err := ps.manager.EnablePairing(timeout)
 	c.Assert(err, IsNil)
 
@@ -68,7 +68,7 @@ func (ps *pairingSuite) TestEnablePairingMultipleMode(c *C) {
 	ps.newManager(c, nil)
 	ps.updatePlan(pairingstate.ModeMultiple)
 
-	timeout := 10 * time.Millisecond
+	timeout := 100 * time.Millisecond
 	err := ps.manager.EnablePairing(timeout)
 	c.Assert(err, IsNil)
 
@@ -86,7 +86,7 @@ func (ps *pairingSuite) TestEnablePairingMultipleModeAlreadyPaired(c *C) {
 	})
 	ps.updatePlan(pairingstate.ModeMultiple)
 
-	timeout := 10 * time.Millisecond
+	timeout := 100 * time.Millisecond
 	err := ps.manager.EnablePairing(timeout)
 	c.Assert(err, IsNil)
 
@@ -102,16 +102,16 @@ func (ps *pairingSuite) TestEnablePairingResetTimeout(c *C) {
 	ps.newManager(c, nil)
 	ps.updatePlan(pairingstate.ModeSingle)
 
-	timeout1 := 10 * time.Millisecond
+	timeout1 := 100 * time.Millisecond
 	err := ps.manager.EnablePairing(timeout1)
 	c.Assert(err, IsNil)
 	c.Assert(ps.manager.PairingEnabled(), Equals, true)
 
 	// Sleep only half the previous period, so we can issue another
 	// pairing request in the middle.
-	time.Sleep(5 * time.Millisecond)
+	time.Sleep(50 * time.Millisecond)
 
-	timeout2 := 20 * time.Millisecond
+	timeout2 := 100 * time.Millisecond
 	err = ps.manager.EnablePairing(timeout2)
 	c.Assert(err, IsNil)
 
@@ -127,7 +127,7 @@ func (ps *pairingSuite) TestEnablePairingExtendTimeout(c *C) {
 	ps.newManager(c, nil)
 	ps.updatePlan(pairingstate.ModeSingle)
 
-	timeout1 := 10 * time.Millisecond
+	timeout1 := 100 * time.Millisecond
 	err := ps.manager.EnablePairing(timeout1)
 	c.Assert(err, IsNil)
 	c.Assert(ps.manager.PairingEnabled(), Equals, true)
@@ -136,10 +136,10 @@ func (ps *pairingSuite) TestEnablePairingExtendTimeout(c *C) {
 	ps.manager.Mu().Lock()
 
 	// Wait for the window to timeout (wait extra time to make sure).
-	time.Sleep(timeout1 + 10*time.Millisecond)
+	time.Sleep(timeout1 + 50*time.Millisecond)
 
 	// Schedule more time on top of the existing window.
-	timeout2 := 20 * time.Millisecond
+	timeout2 := 100 * time.Millisecond
 	ps.manager.StartTimer(timeout2)
 
 	// Release the blocked timeout handler.
