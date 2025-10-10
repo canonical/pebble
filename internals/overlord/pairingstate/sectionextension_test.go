@@ -77,7 +77,7 @@ pairing:
 pairing:
     mode: invalid
     `},
-	error: `cannot support pairing mode "invalid": unknown mode`,
+	error: `invalid pairing mode \"invalid\": should be \"disabled\", \"single\" or \"multiple\"`,
 }, {
 	summary: "unknown field",
 	layers: []string{`

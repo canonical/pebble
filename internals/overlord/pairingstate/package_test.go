@@ -1,4 +1,4 @@
-// Copyright (C) 2025 Canonical Ltd
+// Copyright (c) 2025 Canonical Ltd
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License version 3 as
@@ -67,7 +67,7 @@ func (ps *pairingSuite) newManager(c *C, s *pairingstate.PairingDetails) {
 	c.Assert(err, IsNil)
 }
 
-// PairedState returns the persisted paired state.
+// PairingState returns the persisted pairing state.
 func (ps *pairingSuite) PairingState() *pairingstate.PairingDetails {
 	ps.state.Lock()
 	defer ps.state.Unlock()

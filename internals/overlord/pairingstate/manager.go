@@ -26,10 +26,9 @@ import (
 	"github.com/canonical/pebble/internals/plan"
 )
 
-// autoUsernameRangeLimit determines the maximum number suffix for
-// users auto-allocated by this package when a new certificate is
-// paired.
-const autoUsernameRangeLimit uint32 = 1000
+// maxUsernameSuffix determines the maximum number suffix for users
+// auto-allocated by this package when a new certificate is paired.
+const maxUsernameSuffix = 1000
 
 // pairingDetailsAttr is the key to the pairing state.
 const pairingDetailsAttr = "pairing-details"
@@ -50,7 +49,7 @@ const (
 	// ModeUnset is the same as ModeDisabled, but this value prevents the
 	// plan from marshalling the Mode explicitly.
 	ModeUnset Mode = ""
-	// ModeDisabled means no pairing is possible
+	// ModeDisabled means no pairing is possible.
 	ModeDisabled Mode = "disabled"
 	// ModeSingle means only a single client can pair.
 	ModeSingle Mode = "single"
@@ -69,7 +68,8 @@ func (c *pairingConfig) Validate() error {
 	switch c.Mode {
 	case ModeUnset, ModeDisabled, ModeSingle, ModeMultiple:
 	default:
-		return fmt.Errorf("cannot support pairing mode %q: unknown mode", c.Mode)
+		return fmt.Errorf("invalid pairing mode %q: should be %q, %q or %q",
+			c.Mode, ModeDisabled, ModeSingle, ModeMultiple)
 	}
 	return nil
 }
@@ -90,9 +90,9 @@ type PairingManager struct {
 	state *state.State
 	mu    sync.Mutex
 	// Plan config of the pairing manager.
-	pairingConfig *pairingConfig
+	config *pairingConfig
 	// Persisted state of the pairing manager.
-	pairingDetails *pairingDetails
+	details *pairingDetails
 	// enabled is true if the pairing window is enabled.
 	enabled bool
 	// timer controls the duration of the pairing window.
@@ -107,10 +107,10 @@ type PairingManager struct {
 func NewManager(st *state.State) (*PairingManager, error) {
 	m := &PairingManager{
 		state: st,
-		pairingConfig: &pairingConfig{
+		config: &pairingConfig{
 			Mode: ModeUnset,
 		},
-		pairingDetails: &pairingDetails{
+		details: &pairingDetails{
 			Paired: false,
 		},
 	}
@@ -118,11 +118,11 @@ func NewManager(st *state.State) (*PairingManager, error) {
 	// Load the paired state at startup.
 	m.state.Lock()
 	defer m.state.Unlock()
-	err := m.state.Get(pairingDetailsAttr, &m.pairingDetails)
+	err := m.state.Get(pairingDetailsAttr, &m.details)
 	if errors.Is(err, state.ErrNoState) {
 		// Let's make sure the state always reflects the pairing state
 		// explicitly.
-		m.state.Set(pairingDetailsAttr, m.pairingDetails)
+		m.state.Set(pairingDetailsAttr, m.details)
 		err = nil
 	}
 	if err != nil {
@@ -139,11 +139,11 @@ func (m *PairingManager) PlanChanged(update *plan.Plan) {
 	newConfig := update.Sections[PairingField].(*pairingConfig)
 
 	// If the mode changed, make sure the pairing window is disabled.
-	if m.pairingConfig.Mode != newConfig.Mode {
+	if m.config.Mode != newConfig.Mode {
 		m.enabled = false
 		m.stopTimer()
 	}
-	m.pairingConfig = newConfig
+	m.config = newConfig
 }
 
 // Ensure implements overlord.StateManager interface.
@@ -210,8 +210,8 @@ func (m *PairingManager) PairMTLS(clientCert *x509.Certificate) error {
 			// This identity is already added so in this special
 			// case we complete the pairing request without adding
 			// it again with a new username.
-			m.pairingDetails.Paired = true
-			m.state.Set(pairingDetailsAttr, m.pairingDetails)
+			m.details.Paired = true
+			m.state.Set(pairingDetailsAttr, m.details)
 
 			return nil
 		}
@@ -234,20 +234,20 @@ func (m *PairingManager) PairMTLS(clientCert *x509.Certificate) error {
 		return fmt.Errorf("cannot add identity: %w", err)
 	}
 
-	m.pairingDetails.Paired = true
-	m.state.Set(pairingDetailsAttr, m.pairingDetails)
+	m.details.Paired = true
+	m.state.Set(pairingDetailsAttr, m.details)
 
 	return nil
 }
 
-// PairingWindowEnabled returns whether the pairing window is currently enabled.
-func (m *PairingManager) PairingWindowEnabled() bool {
+// PairingEnabled returns whether pairing is currently enabled.
+func (m *PairingManager) PairingEnabled() bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.enabled
 }
 
-// stopTimer stops the current timer if it exists
+// stopTimer stops the current timer if it exists.
 func (m *PairingManager) stopTimer() {
 	if m.timer != nil {
 		m.timer.Stop()
@@ -300,18 +300,18 @@ func (m *PairingManager) EnablePairing(timeout time.Duration) error {
 	}
 
 	// Check the pairing mode
-	switch m.pairingConfig.Mode {
+	switch m.config.Mode {
 	case ModeDisabled, ModeUnset:
 		return errors.New("cannot enable pairing with pairing mode disabled")
 
 	case ModeSingle:
 		// Single mode: check if already paired
-		if m.pairingDetails.Paired {
+		if m.details.Paired {
 			return errors.New("cannot enable pairing when already paired in 'single' pairing mode")
 		}
 	case ModeMultiple:
 	default:
-		return fmt.Errorf("cannot enable pairing with unknown pairing mode %q", m.pairingConfig.Mode)
+		return fmt.Errorf("cannot enable pairing with unknown pairing mode %q", m.config.Mode)
 	}
 
 	// If we get here we passed all checks and we can enable the
@@ -325,12 +325,12 @@ func (m *PairingManager) EnablePairing(timeout time.Duration) error {
 // "user-x" where x starts at 1 and monotonically increments. Usernames not
 // following this pattern will simply not be considered.
 func generateUniqueUsername(existingIdentities map[string]*state.Identity) (string, error) {
-	for i := uint32(1); i <= autoUsernameRangeLimit; i++ {
+	for i := 1; i <= maxUsernameSuffix; i++ {
 		username := fmt.Sprintf("user-%d", i)
 
 		if _, exists := existingIdentities[username]; !exists {
 			return username, nil
 		}
 	}
-	return "", fmt.Errorf("user allocation limit %d reached", autoUsernameRangeLimit)
+	return "", fmt.Errorf("user allocation limit %d reached", maxUsernameSuffix)
 }
