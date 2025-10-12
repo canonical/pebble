@@ -152,15 +152,15 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 		return nil
 	}
 
+	m.state.Lock()
+	task.Set("started", true)
+	m.state.Unlock()
+
 	// Start the service and transition to stateStarting.
 	err = service.start()
 	if err != nil {
 		return err
 	}
-
-	m.state.Lock()
-	task.Set("started", true)
-	m.state.Unlock()
 
 	// Wait for a small amount of time, and if the service hasn't exited,
 	// consider it a success.
