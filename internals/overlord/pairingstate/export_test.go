@@ -14,28 +14,9 @@
 
 package pairingstate
 
-import (
-	"sync"
-	"time"
-)
-
 const PairingDetailsAttr = pairingDetailsAttr
 
 type PairingDetails = pairingDetails
 type PairingConfig = pairingConfig
 
 var GenerateUniqueUsername = generateUniqueUsername
-
-func (m *PairingManager) TimeoutHandler() {
-	m.timeoutHandler()
-}
-
-func (m *PairingManager) StartTimer(timeout time.Duration) {
-	m.startTimer(timeout)
-}
-
-// Mu is used for simulating a specific race condition we want to
-// cover in the unit tests.
-func (m *PairingManager) Mu() *sync.Mutex {
-	return &m.mu
-}

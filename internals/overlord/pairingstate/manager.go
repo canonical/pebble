@@ -22,6 +22,8 @@ import (
 	"sync"
 	"time"
 
+	"gopkg.in/tomb.v2"
+
 	"github.com/canonical/pebble/internals/overlord/state"
 	"github.com/canonical/pebble/internals/plan"
 )
@@ -93,15 +95,11 @@ type PairingManager struct {
 	config *pairingConfig
 	// Persisted state of the pairing manager.
 	details *pairingDetails
-	// enabled is true if the pairing window is enabled.
-	enabled bool
-	// timer controls the duration of the pairing window.
-	timer *time.Timer
-	// skipHandlerOnce is used to skip the next AfterFunc handler
-	// execution. This is used for cases where we want to extend
-	// the pairing window, but the handler was already kicked off,
-	// blocked on entry on the Mutex.
-	skipHandlerOnce bool
+	// tomb manages the lifecycle of the timer goroutine.
+	tomb *tomb.Tomb
+	// reqCh is used to send a pairing request for synchronous processing
+	// in the window manager tomb.
+	reqCh chan pairingReq
 }
 
 func NewManager(st *state.State) (*PairingManager, error) {
@@ -113,6 +111,8 @@ func NewManager(st *state.State) (*PairingManager, error) {
 		details: &pairingDetails{
 			Paired: false,
 		},
+		tomb:  &tomb.Tomb{},
+		reqCh: make(chan pairingReq),
 	}
 
 	// Load the paired state at startup.
@@ -128,6 +128,9 @@ func NewManager(st *state.State) (*PairingManager, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	m.tomb.Go(m.pairingMgr)
+
 	return m, nil
 }
 
@@ -140,8 +143,8 @@ func (m *PairingManager) PlanChanged(update *plan.Plan) {
 
 	// If the mode changed, make sure the pairing window is disabled.
 	if m.config.Mode != newConfig.Mode {
-		m.enabled = false
-		m.stopTimer()
+		// Send disable request to timer goroutine
+		m.disablePairing()
 	}
 	m.config = newConfig
 }
@@ -153,11 +156,43 @@ func (m *PairingManager) Ensure() error {
 
 // Stop implements overlord.StateStopper interface.
 func (m *PairingManager) Stop() {
+	// Kill the timer goroutine and wait for it to finish
+	m.tomb.Kill(nil)
+	m.tomb.Wait()
+}
+
+// PairingEnabled returns whether pairing is currently enabled.
+func (m *PairingManager) PairingEnabled() bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	m.enabled = false
-	m.stopTimer()
+	// Request only the state of the pairing window.
+	return m.pairingEnabled()
+}
+
+// EnablePairing requests the pairing manager to enable the pairing window.
+func (m *PairingManager) EnablePairing(timeout time.Duration) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// Check the pairing mode
+	switch m.config.Mode {
+	case ModeDisabled, ModeUnset:
+		return errors.New("cannot enable pairing with pairing mode disabled")
+
+	case ModeSingle:
+		// Single mode: check if already paired
+		if m.details.Paired {
+			return errors.New("cannot enable pairing when already paired in 'single' pairing mode")
+		}
+	case ModeMultiple:
+	default:
+		return fmt.Errorf("cannot enable pairing with unknown pairing mode %q", m.config.Mode)
+	}
+
+	// If we get here we passed all checks and we can enable the
+	// pairing window for the given duration.
+	return m.enablePairing(timeout)
 }
 
 // PairMTLS adds a client identity with admin permissions to the identity
@@ -166,15 +201,12 @@ func (m *PairingManager) PairMTLS(clientCert *x509.Certificate) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if !m.enabled {
+	if !m.pairingEnabled() {
 		return errors.New("cannot pair while pairing window is disabled")
 	}
 
 	// Any success or failure should always disable the pairing window.
-	defer func() {
-		m.enabled = false
-		m.stopTimer()
-	}()
+	defer m.disablePairing()
 
 	// Verify that the client certificate is self-signed (the public
 	// key included must verify the signature). We do this here as a
@@ -240,85 +272,106 @@ func (m *PairingManager) PairMTLS(clientCert *x509.Certificate) error {
 	return nil
 }
 
-// PairingEnabled returns whether pairing is currently enabled.
-func (m *PairingManager) PairingEnabled() bool {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	return m.enabled
+// pairingReq is used to make requests to the pairing manager loop.
+// The request includes a response channel, enabledCh, which will receive
+// the pairing window state once the request has completed.
+type pairingReq struct {
+	// timeout enables the pairing window for a given duration. If the
+	// duration is nil, no change is made. If the duration is zero, the
+	// pairing window is explicitly disabled.
+	timeout *time.Duration
+	// enabledCh receives the state of the pairing window after the
+	// request has completed.
+	enabledCh chan bool
 }
 
-// stopTimer stops the current timer if it exists.
-func (m *PairingManager) stopTimer() {
-	if m.timer != nil {
-		m.timer.Stop()
-	}
-}
+// pairingMgr manages the state of the pairing window, and exclusively owns
+// both the enabled state and the timer. This means no race conditions
+// between external events are possible, since all channels are unbuffered
+// and handled in a single select statement.
+func (m *PairingManager) pairingMgr() error {
+	var timer *time.Timer
+	var timerCh <-chan time.Time
 
-// startTimer starts a new timer that will disable the pairing window after
-// the given timeout. If the timer exists, we will reuse the timer by
-// resetting it with a new duration.
-func (m *PairingManager) startTimer(timeout time.Duration) {
-	// If timer already exists, just reset it with the new timeout
-	if m.timer != nil {
-		alreadyStopped := !m.timer.Reset(timeout)
-		if alreadyStopped && m.enabled {
-			// We get here if we are trying to extend the pairing
-			// window duration while it is still enabled. However,
-			// the handler to disable it already fired, and is now
-			// blocked on the mutex.
-			m.skipHandlerOnce = true
+	enabled := false
+	for {
+		select {
+		case <-m.tomb.Dying():
+			if timer != nil {
+				timer.Stop()
+			}
+			return nil
+
+		case req := <-m.reqCh:
+			// Timeout == nil returns current state of the window.
+			if req.timeout == nil {
+				req.enabledCh <- enabled
+				break
+			}
+
+			if *req.timeout == 0 {
+				if timer != nil {
+					timer.Stop()
+				}
+				enabled = false
+			} else {
+				if timer == nil {
+					// Create new on first request.
+					timer = time.NewTimer(*req.timeout)
+					timerCh = timer.C
+				} else {
+					// Reuse timer on subsequent requests.
+					timer.Reset(*req.timeout)
+				}
+				enabled = true
+			}
+			req.enabledCh <- enabled
+
+		// Go will not select timerCh while it is nil.
+		case <-timerCh:
+			// Timer expired, disable the pairing window
+			enabled = false
 		}
-		return
 	}
-
-	m.timer = time.AfterFunc(timeout, m.timeoutHandler)
 }
 
-func (m *PairingManager) timeoutHandler() {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+// pairingReq sends a request to the pairing window manager loop, and returns
+// with the state of the pairing window. The request will only return once
+// it is complete, or when an error occurred.
+func (m *PairingManager) pairingReq(timeout *time.Duration) (enabled bool, err error) {
+	enabledCh := make(chan bool)
+	req := pairingReq{timeout: timeout, enabledCh: enabledCh}
 
-	// This is used in cases where we want to extend the pairing
-	// window duration but this handler was already started, but
-	// blocked on the mutex above.
-	if m.skipHandlerOnce {
-		m.skipHandlerOnce = false
-		return
+	select {
+	case m.reqCh <- req:
+		// Wait for the request to be processed in the pairingMgr.
+		enabled = <-enabledCh
+		return enabled, nil
+	case <-m.tomb.Dying():
+		return false, errors.New("cannot enable pairing: manager is shutting down")
 	}
-	m.enabled = false
 }
 
-// EnablePairing requests the pairing manager to enable the pairing window.
-func (m *PairingManager) EnablePairing(timeout time.Duration) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+// enablePairing enables the pairing window. Returns an error if the request
+// is rejected due to us shutting down.
+func (m *PairingManager) enablePairing(timeout time.Duration) error {
+	_, err := m.pairingReq(&timeout)
+	return err
+}
 
-	// If the pairing window is already enabled, reset the timeout duration
-	if m.enabled {
-		m.startTimer(timeout)
-		return nil
-	}
+// disablePairing disables the pairing window explicitly by making a zero
+// duration request. We ignore the error since only a shutdown can
+// cause the error, and in that case the pairing window is disabled.
+func (m *PairingManager) disablePairing() {
+	zero := time.Duration(0)
+	_, _ = m.pairingReq(&zero)
+}
 
-	// Check the pairing mode
-	switch m.config.Mode {
-	case ModeDisabled, ModeUnset:
-		return errors.New("cannot enable pairing with pairing mode disabled")
-
-	case ModeSingle:
-		// Single mode: check if already paired
-		if m.details.Paired {
-			return errors.New("cannot enable pairing when already paired in 'single' pairing mode")
-		}
-	case ModeMultiple:
-	default:
-		return fmt.Errorf("cannot enable pairing with unknown pairing mode %q", m.config.Mode)
-	}
-
-	// If we get here we passed all checks and we can enable the
-	// pairing window for the given duration.
-	m.enabled = true
-	m.startTimer(timeout)
-	return nil
+// pairingEnabled returns if the pairing window is enabled. The only error
+// is when we are shutting down, in which case the window is disabled.
+func (m *PairingManager) pairingEnabled() bool {
+	enabled, _ := m.pairingReq(nil)
+	return enabled
 }
 
 // generateUniqueUsername finds the first unique username following the pattern

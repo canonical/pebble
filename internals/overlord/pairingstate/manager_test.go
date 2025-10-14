@@ -28,6 +28,32 @@ import (
 // long enough to make the test robust on busy test runners.
 const testWindowDuration = 100 * time.Millisecond
 
+// TestEnablePairingAfterStop checks that a late enable will fail as we expect.
+func (ps *pairingSuite) TestEnablePairingAfterStop(c *C) {
+	ps.newManager(c, nil)
+
+	ps.updatePlan(pairingstate.ModeSingle)
+	ps.manager.Stop()
+
+	err := ps.manager.EnablePairing(testWindowDuration)
+	c.Assert(err, ErrorMatches, "*: manager is shutting down")
+	c.Assert(ps.manager.PairingEnabled(), Equals, false)
+}
+
+// TestPairingEnabledAfterStop checks that Stop() will result in the pairing
+// window getting disabled.
+func (ps *pairingSuite) TestPairingEnabledAfterStop(c *C) {
+	ps.newManager(c, nil)
+
+	ps.updatePlan(pairingstate.ModeSingle)
+	err := ps.manager.EnablePairing(testWindowDuration)
+	c.Assert(err, IsNil)
+
+	ps.manager.Stop()
+
+	c.Assert(ps.manager.PairingEnabled(), Equals, false)
+}
+
 // TestEnablePairingDisabledMode tests trying to open a pairing window while
 // the configuration says it is disabled (before the plan update was received).
 func (ps *pairingSuite) TestEnablePairingDisabledMode(c *C) {
