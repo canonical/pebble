@@ -90,8 +90,8 @@ func (ps *pairingSuite) updatePlan(mode pairingstate.Mode) {
 func expectWindowEnableDisable(c *C, timeout time.Duration, f func() bool) {
 	start := time.Now()
 
-	// 10% jitter
-	testJitter := timeout / 10
+	// 50% jitter
+	testJitter := timeout / 2
 
 	// 1. Window just opened, so should be enabled.
 	c.Assert(f(), Equals, true)

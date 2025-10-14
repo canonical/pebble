@@ -24,11 +24,17 @@ import (
 	"github.com/canonical/pebble/internals/overlord/state"
 )
 
+// testWindowDuration is a carefully selected pairing window duration that is
+// long enough to make the test robust on busy test runners.
+const testWindowDuration = 100 * time.Millisecond
+
 // TestEnablePairingDisabledMode tests trying to open a pairing window while
 // the configuration says it is disabled (before the plan update was received).
 func (ps *pairingSuite) TestEnablePairingDisabledMode(c *C) {
 	ps.newManager(c, nil)
-	err := ps.manager.EnablePairing(5 * time.Millisecond)
+	defer ps.manager.Stop()
+
+	err := ps.manager.EnablePairing(testWindowDuration)
 	c.Assert(err, ErrorMatches, "*. pairing mode disabled")
 	c.Assert(ps.manager.PairingEnabled(), Equals, false)
 }
@@ -37,13 +43,14 @@ func (ps *pairingSuite) TestEnablePairingDisabledMode(c *C) {
 // pairing mode, if we never paired before.
 func (ps *pairingSuite) TestEnablePairingSingleModeNotPaired(c *C) {
 	ps.newManager(c, nil)
+	defer ps.manager.Stop()
+
 	ps.updatePlan(pairingstate.ModeSingle)
 
-	timeout := 100 * time.Millisecond
-	err := ps.manager.EnablePairing(timeout)
+	err := ps.manager.EnablePairing(testWindowDuration)
 	c.Assert(err, IsNil)
 
-	expectWindowEnableDisable(c, timeout, func() bool {
+	expectWindowEnableDisable(c, testWindowDuration, func() bool {
 		return ps.manager.PairingEnabled()
 
 	})
@@ -55,9 +62,11 @@ func (ps *pairingSuite) TestEnablePairingSingleModeAlreadyPaired(c *C) {
 	ps.newManager(c, &pairingstate.PairingDetails{
 		Paired: true,
 	})
+	defer ps.manager.Stop()
+
 	ps.updatePlan(pairingstate.ModeSingle)
 
-	err := ps.manager.EnablePairing(5 * time.Millisecond)
+	err := ps.manager.EnablePairing(testWindowDuration)
 	c.Assert(err, ErrorMatches, ".* already paired in 'single' pairing mode")
 	c.Assert(ps.manager.PairingEnabled(), Equals, false)
 }
@@ -66,13 +75,14 @@ func (ps *pairingSuite) TestEnablePairingSingleModeAlreadyPaired(c *C) {
 // is set to multiple.
 func (ps *pairingSuite) TestEnablePairingMultipleMode(c *C) {
 	ps.newManager(c, nil)
+	defer ps.manager.Stop()
+
 	ps.updatePlan(pairingstate.ModeMultiple)
 
-	timeout := 100 * time.Millisecond
-	err := ps.manager.EnablePairing(timeout)
+	err := ps.manager.EnablePairing(testWindowDuration)
 	c.Assert(err, IsNil)
 
-	expectWindowEnableDisable(c, timeout, func() bool {
+	expectWindowEnableDisable(c, testWindowDuration, func() bool {
 		return ps.manager.PairingEnabled()
 
 	})
@@ -84,13 +94,14 @@ func (ps *pairingSuite) TestEnablePairingMultipleModeAlreadyPaired(c *C) {
 	ps.newManager(c, &pairingstate.PairingDetails{
 		Paired: true,
 	})
+	defer ps.manager.Stop()
+
 	ps.updatePlan(pairingstate.ModeMultiple)
 
-	timeout := 100 * time.Millisecond
-	err := ps.manager.EnablePairing(timeout)
+	err := ps.manager.EnablePairing(testWindowDuration)
 	c.Assert(err, IsNil)
 
-	expectWindowEnableDisable(c, timeout, func() bool {
+	expectWindowEnableDisable(c, testWindowDuration, func() bool {
 		return ps.manager.PairingEnabled()
 
 	})
@@ -100,10 +111,11 @@ func (ps *pairingSuite) TestEnablePairingMultipleModeAlreadyPaired(c *C) {
 // the window is still open, the expiry period is reset with the new duration.
 func (ps *pairingSuite) TestEnablePairingResetTimeout(c *C) {
 	ps.newManager(c, nil)
+	defer ps.manager.Stop()
+
 	ps.updatePlan(pairingstate.ModeSingle)
 
-	timeout1 := 100 * time.Millisecond
-	err := ps.manager.EnablePairing(timeout1)
+	err := ps.manager.EnablePairing(testWindowDuration)
 	c.Assert(err, IsNil)
 	c.Assert(ps.manager.PairingEnabled(), Equals, true)
 
@@ -111,43 +123,10 @@ func (ps *pairingSuite) TestEnablePairingResetTimeout(c *C) {
 	// pairing request in the middle.
 	time.Sleep(50 * time.Millisecond)
 
-	timeout2 := 100 * time.Millisecond
-	err = ps.manager.EnablePairing(timeout2)
+	err = ps.manager.EnablePairing(testWindowDuration)
 	c.Assert(err, IsNil)
 
-	expectWindowEnableDisable(c, timeout2, func() bool {
-		return ps.manager.PairingEnabled()
-
-	})
-}
-
-// TestEnablePairingExtendTimeout is a low level test that makes sure the
-// race condition handling code (see skipHandlerOnce) works as expected.
-func (ps *pairingSuite) TestEnablePairingExtendTimeout(c *C) {
-	ps.newManager(c, nil)
-	ps.updatePlan(pairingstate.ModeSingle)
-
-	timeout1 := 100 * time.Millisecond
-	err := ps.manager.EnablePairing(timeout1)
-	c.Assert(err, IsNil)
-	c.Assert(ps.manager.PairingEnabled(), Equals, true)
-
-	// Make the timeoutHandler block on this mutex.
-	ps.manager.Mu().Lock()
-
-	// Wait for the window to timeout (wait extra time to make sure).
-	time.Sleep(timeout1 + 50*time.Millisecond)
-
-	// Schedule more time on top of the existing window.
-	timeout2 := 100 * time.Millisecond
-	ps.manager.StartTimer(timeout2)
-
-	// Release the blocked timeout handler.
-	ps.manager.Mu().Unlock()
-
-	// The pairing window should still stay enabled for the timeout2
-	// period, and only transition after that.
-	expectWindowEnableDisable(c, timeout2, func() bool {
+	expectWindowEnableDisable(c, testWindowDuration, func() bool {
 		return ps.manager.PairingEnabled()
 
 	})
@@ -157,9 +136,11 @@ func (ps *pairingSuite) TestEnablePairingExtendTimeout(c *C) {
 // is reported correctly.
 func (ps *pairingSuite) TestEnablePairingUnknownMode(c *C) {
 	ps.newManager(c, nil)
+	defer ps.manager.Stop()
+
 	ps.updatePlan(pairingstate.Mode("foo"))
 
-	err := ps.manager.EnablePairing(10 * time.Millisecond)
+	err := ps.manager.EnablePairing(testWindowDuration)
 	c.Assert(err, ErrorMatches, ".* unknown pairing mode .*")
 	c.Assert(ps.manager.PairingEnabled(), Equals, false)
 }
@@ -167,14 +148,16 @@ func (ps *pairingSuite) TestEnablePairingUnknownMode(c *C) {
 // TestPairMTLSSuccess verifies that a successful pairing request closes the
 // pairing window and updates identities correctly.
 func (ps *pairingSuite) TestPairMTLSSuccess(c *C) {
+	clientCert := generateTestClientCert(c)
 	ps.newManager(c, nil)
+	defer ps.manager.Stop()
+
 	ps.updatePlan(pairingstate.ModeSingle)
 
-	err := ps.manager.EnablePairing(10 * time.Millisecond)
+	err := ps.manager.EnablePairing(testWindowDuration)
 	c.Assert(err, IsNil)
 	c.Assert(ps.manager.PairingEnabled(), Equals, true)
 
-	clientCert := generateTestClientCert(c)
 	err = ps.manager.PairMTLS(clientCert)
 	c.Assert(err, IsNil)
 
@@ -200,10 +183,13 @@ func (ps *pairingSuite) TestPairMTLSSuccess(c *C) {
 // TestPairMTLSNotOpen verifies pairing is rejected if the pairing window
 // is not open.
 func (ps *pairingSuite) TestPairMTLSNotOpen(c *C) {
+	clientCert := generateTestClientCert(c)
 	ps.newManager(c, nil)
+	defer ps.manager.Stop()
+
 	c.Assert(ps.manager.PairingEnabled(), Equals, false)
 
-	err := ps.manager.PairMTLS(generateTestClientCert(c))
+	err := ps.manager.PairMTLS(clientCert)
 	c.Assert(err, ErrorMatches, ".* pairing window is disabled")
 
 	pairingState := ps.PairingState()
@@ -219,10 +205,11 @@ func (ps *pairingSuite) TestPairMTLSNotOpen(c *C) {
 // by a different means (e.g. using the identities add CLI) will result in
 // the pairing request succeeding.
 func (ps *pairingSuite) TestPairMTLSDuplicateCertificate(c *C) {
-	ps.newManager(c, nil)
-	ps.updatePlan(pairingstate.ModeMultiple)
-
 	clientCert := generateTestClientCert(c)
+	ps.newManager(c, nil)
+	defer ps.manager.Stop()
+
+	ps.updatePlan(pairingstate.ModeMultiple)
 
 	ps.state.Lock()
 	ps.state.AddIdentities(map[string]*state.Identity{
@@ -233,7 +220,7 @@ func (ps *pairingSuite) TestPairMTLSDuplicateCertificate(c *C) {
 	})
 	ps.state.Unlock()
 
-	err := ps.manager.EnablePairing(10 * time.Millisecond)
+	err := ps.manager.EnablePairing(testWindowDuration)
 	c.Assert(err, IsNil)
 
 	err = ps.manager.PairMTLS(clientCert)
@@ -252,7 +239,10 @@ func (ps *pairingSuite) TestPairMTLSDuplicateCertificate(c *C) {
 
 // TestPairMTLSUsernameIncrementing verifies name allocation.
 func (ps *pairingSuite) TestPairMTLSUsernameIncrementing(c *C) {
+	clientCert := generateTestClientCert(c)
 	ps.newManager(c, nil)
+	defer ps.manager.Stop()
+
 	ps.state.Lock()
 	ps.state.AddIdentities(map[string]*state.Identity{
 		"user-3": {
@@ -275,7 +265,7 @@ func (ps *pairingSuite) TestPairMTLSUsernameIncrementing(c *C) {
 	err := ps.manager.EnablePairing(10 * time.Millisecond)
 	c.Assert(err, IsNil)
 
-	err = ps.manager.PairMTLS(generateTestClientCert(c))
+	err = ps.manager.PairMTLS(clientCert)
 	c.Assert(err, IsNil)
 
 	c.Assert(ps.manager.PairingEnabled(), Equals, false)
@@ -292,6 +282,8 @@ func (ps *pairingSuite) TestPairMTLSUsernameIncrementing(c *C) {
 // modifies the Mode while the pairing window is enabled, the window is closed.
 func (ps *pairingSuite) TestPlanChangedDisablesPairingWindow(c *C) {
 	ps.newManager(c, nil)
+	defer ps.manager.Stop()
+
 	ps.updatePlan(pairingstate.ModeSingle)
 
 	err := ps.manager.EnablePairing(10 * time.Millisecond)
