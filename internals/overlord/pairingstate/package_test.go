@@ -28,6 +28,7 @@ import (
 	. "gopkg.in/check.v1"
 	"gopkg.in/yaml.v3"
 
+	"github.com/canonical/pebble/internals/overlord"
 	"github.com/canonical/pebble/internals/overlord/pairingstate"
 	"github.com/canonical/pebble/internals/overlord/state"
 	"github.com/canonical/pebble/internals/plan"
@@ -37,18 +38,23 @@ import (
 func Test(t *testing.T) { TestingT(t) }
 
 type pairingSuite struct {
-	state   *state.State
-	manager *pairingstate.PairingManager
+	overlord *overlord.Overlord
+	state    *state.State
+	manager  *pairingstate.PairingManager
 }
 
 var _ = Suite(&pairingSuite{})
 
 func (ps *pairingSuite) SetUpTest(c *C) {
 	plan.RegisterSectionExtension(pairingstate.PairingField, &pairingstate.SectionExtension{})
-	ps.state = state.New(nil)
+
+	ps.overlord = overlord.Fake()
+	ps.state = ps.overlord.State()
+	ps.overlord.Loop()
 }
 
 func (ps *pairingSuite) TearDownTest(c *C) {
+	ps.overlord.Stop()
 	plan.UnregisterSectionExtension(pairingstate.PairingField)
 }
 
@@ -64,6 +70,10 @@ func (ps *pairingSuite) newManager(c *C, s *pairingstate.PairingDetails) {
 
 	var err error
 	ps.manager, err = pairingstate.NewManager(ps.state)
+	c.Assert(err, IsNil)
+
+	ps.overlord.AddManager(ps.manager)
+	err = ps.overlord.StartUp()
 	c.Assert(err, IsNil)
 }
 
@@ -87,28 +97,30 @@ func (ps *pairingSuite) updatePlan(mode pairingstate.Mode) {
 
 // expectWindowEnableDisable makes sure that the pairing window enable phase,
 // and the following transition to disable happens within reasonable bounds.
-func expectWindowEnableDisable(c *C, timeout time.Duration, f func() bool) {
+// The overlord's ensure loop will automatically handle calling Ensure() on the manager.
+func (ps *pairingSuite) expectWindowEnableDisable(c *C, timeout time.Duration) {
 	start := time.Now()
 
-	// 50% jitter
-	testJitter := timeout / 2
+	// 25% jitter
+	testJitter := timeout / 4
 
 	// 1. Window just opened, so should be enabled.
-	c.Assert(f(), Equals, true)
+	c.Assert(ps.manager.PairingEnabled(), Equals, true)
 
 	// 2. Let's wait for the timeout to almost elapse, so that we can
 	//    check the state towards the end of the window.
 	time.Sleep(timeout - testJitter)
 
 	// 3. Window should still be open just before timeout.
-	if !f() {
+	if !ps.manager.PairingEnabled() {
 		c.Fatalf("pairing window disable happened before %v timeout", timeout)
 	}
 
 	// 4. Window should disable itself towards the end of the timeout.
+	// The overlord's ensure loop will call Ensure() automatically.
 	deadline := start.Add(timeout + testJitter)
 	for time.Now().Before(deadline) {
-		if !f() {
+		if !ps.manager.PairingEnabled() {
 			// Window should be disabled soon after timeout.
 			return
 		}
