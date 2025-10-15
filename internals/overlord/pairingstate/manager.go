@@ -155,7 +155,7 @@ func (m *PairingManager) Ensure() error {
 	now := time.Now()
 	if now.Before(m.expiry) {
 		// The ensure call happened sooner, before the expiry time. We
-		// have to schedule another ensure call to try reach the
+		// have to schedule another ensure call to try to reach the
 		// expiry, so we can disable the pairing window.
 		m.state.EnsureBefore(m.expiry.Sub(now))
 	} else {

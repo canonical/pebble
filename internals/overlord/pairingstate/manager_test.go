@@ -79,7 +79,7 @@ func (ps *pairingSuite) TestEnablePairingMultipleMode(c *C) {
 }
 
 // TestEnablePairingEarlyEnsure verifies that if we receive the ensure
-// early early, do to some other manager requesting it, we still honor
+// early, due to some other manager requesting it, we still honor
 // the expiry.
 func (ps *pairingSuite) TestEnablePairingEarlyEnsure(c *C) {
 	ps.newManager(c, nil)
@@ -89,7 +89,7 @@ func (ps *pairingSuite) TestEnablePairingEarlyEnsure(c *C) {
 	err := ps.manager.EnablePairing(testWindowDuration)
 	c.Assert(err, IsNil)
 
-	// This ensure will be recevied by the pairing manager before
+	// This ensure will be received by the pairing manager before
 	// the expected final ensure that disables the window.
 	ps.state.EnsureBefore(0)
 
