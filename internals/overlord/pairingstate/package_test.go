@@ -77,12 +77,12 @@ func (ps *pairingSuite) newManager(c *C, s *pairingstate.PairingDetails) {
 	c.Assert(err, IsNil)
 }
 
-// PairingState returns the persisted pairing state.
-func (ps *pairingSuite) PairingState() *pairingstate.PairingDetails {
+// PairingDetails returns the persisted pairing state.
+func (ps *pairingSuite) PairingDetails() *pairingstate.PairingDetails {
 	ps.state.Lock()
 	defer ps.state.Unlock()
 
-	var s *pairingstate.PairingDetails
+	s := &pairingstate.PairingDetails{}
 	ps.state.Get(pairingstate.PairingDetailsAttr, &s)
 	return s
 }

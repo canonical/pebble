@@ -184,12 +184,12 @@ func (ps *pairingSuite) TestPairMTLSSuccess(c *C) {
 
 	c.Assert(ps.manager.PairingEnabled(), Equals, false)
 
-	pairingState := ps.PairingState()
+	pairingDetails := ps.PairingDetails()
 	ps.state.Lock()
 	identities := ps.state.Identities()
 	ps.state.Unlock()
 
-	c.Assert(pairingState.Paired, Equals, true)
+	c.Assert(pairingDetails.Paired, Equals, true)
 	c.Assert(len(identities), Equals, 1)
 
 	identity, exists := identities["user-1"]
@@ -212,12 +212,12 @@ func (ps *pairingSuite) TestPairMTLSNotOpen(c *C) {
 	err := ps.manager.PairMTLS(clientCert)
 	c.Assert(err, ErrorMatches, ".* pairing window is disabled")
 
-	pairingState := ps.PairingState()
+	pairingDetails := ps.PairingDetails()
 	ps.state.Lock()
 	identities := ps.state.Identities()
 	ps.state.Unlock()
 
-	c.Assert(pairingState.Paired, Equals, false)
+	c.Assert(pairingDetails.Paired, Equals, false)
 	c.Assert(len(identities), Equals, 0)
 }
 
@@ -247,13 +247,13 @@ func (ps *pairingSuite) TestPairMTLSDuplicateCertificate(c *C) {
 
 	c.Assert(ps.manager.PairingEnabled(), Equals, false)
 
-	pairingState := ps.PairingState()
+	pairingDetails := ps.PairingDetails()
 	ps.state.Lock()
 	identities := ps.state.Identities()
 	ps.state.Unlock()
 
 	c.Assert(len(identities), Equals, 1)
-	c.Assert(pairingState.Paired, Equals, true)
+	c.Assert(pairingDetails.Paired, Equals, true)
 }
 
 // TestPairMTLSUsernameIncrementing verifies name allocation.

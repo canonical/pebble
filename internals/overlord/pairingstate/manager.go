@@ -112,17 +112,12 @@ func NewManager(st *state.State) (*PairingManager, error) {
 		enabled: false,
 	}
 
-	// Load the paired state at startup.
+	// Load the paired state at startup if it exists.
 	m.state.Lock()
 	defer m.state.Unlock()
+
 	err := m.state.Get(pairingDetailsAttr, &m.details)
-	if errors.Is(err, state.ErrNoState) {
-		// Let's make sure the state always reflects the pairing state
-		// explicitly.
-		m.state.Set(pairingDetailsAttr, m.details)
-		err = nil
-	}
-	if err != nil {
+	if err != nil && !errors.Is(err, state.ErrNoState) {
 		return nil, err
 	}
 
