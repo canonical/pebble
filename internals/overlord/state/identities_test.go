@@ -30,7 +30,7 @@ type identitiesSuite struct{}
 var _ = Suite(&identitiesSuite{})
 
 // Generated using `openssl req -new -x509 -out cert.pem -days 3650 -subj "/CN=canonical.com"`
-const testPEMX509Cert1 = `-----BEGIN CERTIFICATE-----
+const validPEMX509Cert = `-----BEGIN CERTIFICATE-----
 MIIBRDCB96ADAgECAhROTkdEcgeil5/5NUNTq1ZRPDLiPTAFBgMrZXAwGDEWMBQG
 A1UEAwwNY2Fub25pY2FsLmNvbTAeFw0yNTA5MDgxNTI2NTJaFw0zNTA5MDYxNTI2
 NTJaMBgxFjAUBgNVBAMMDWNhbm9uaWNhbC5jb20wKjAFBgMrZXADIQDtxRqb9EMe
@@ -41,7 +41,7 @@ jwXVTUH4HLpbhK0RAaEPOL4h5jm36CrWTkxzpbdCrIu4NgPLQKJ6Cw==
 -----END CERTIFICATE-----
 `
 
-const testPEMX509Cert2 = `-----BEGIN CERTIFICATE-----
+const invalidPEMX509Cert = `-----BEGIN CERTIFICATE-----
 MIIBEjCBxQIUbhv2Dwr9CY4ApHMo2ilg6FC/8RMwBQYDK2VwMCwxFDASBgNVBAMM
 C2V4YW1wbGUuY29tMRQwEgYDVQQKDAtFeGFtcGxlIE9yZzAeFw0yNTA5MjYxNTI3
 MDJaFw0yNjA5MjYxNTI3MDJaMCwxFDASBgNVBAMMC2V4YW1wbGUuY29tMRQwEgYD
@@ -82,7 +82,7 @@ func (s *identitiesSuite) TestMarshalAPI(c *C) {
 		},
 		"olivia": {
 			Access: state.ReadAccess,
-			Cert:   &state.CertIdentity{X509: parseCert(c, testPEMX509Cert1)},
+			Cert:   &state.CertIdentity{X509: parseCert(c, validPEMX509Cert)},
 		},
 	})
 	c.Assert(err, IsNil)
@@ -120,7 +120,7 @@ func (s *identitiesSuite) TestMarshalAPI(c *C) {
 }
 
 func (s *identitiesSuite) TestUnmarshalAPI(c *C) {
-	jsonCert, err := json.Marshal(testPEMX509Cert1)
+	jsonCert, err := json.Marshal(validPEMX509Cert)
 	c.Assert(err, IsNil)
 	data := fmt.Appendf(nil, `
 {
@@ -167,7 +167,7 @@ func (s *identitiesSuite) TestUnmarshalAPI(c *C) {
 		},
 		"olivia": {
 			Access: state.ReadAccess,
-			Cert:   &state.CertIdentity{X509: parseCert(c, testPEMX509Cert1)},
+			Cert:   &state.CertIdentity{X509: parseCert(c, validPEMX509Cert)},
 		},
 	})
 }
@@ -177,7 +177,7 @@ func (s *identitiesSuite) TestUnmarshalAPIErrors(c *C) {
 	jsonCertReq, err := json.Marshal(testPEMPKCS10Req)
 	c.Assert(err, IsNil)
 	// Marshal a certificate with extra data after the PEM block.
-	jsonCertExtra, err := json.Marshal(testPEMX509Cert1 + "42")
+	jsonCertExtra, err := json.Marshal(validPEMX509Cert + "42")
 	c.Assert(err, IsNil)
 
 	tests := []struct {
@@ -319,7 +319,7 @@ func (s *identitiesSuite) TestAddIdentities(c *C) {
 		},
 		"olivia": {
 			Access: state.ReadAccess,
-			Cert:   &state.CertIdentity{X509: parseCert(c, testPEMX509Cert1)},
+			Cert:   &state.CertIdentity{X509: parseCert(c, validPEMX509Cert)},
 		},
 	}
 	err := st.AddIdentities(original)
@@ -346,7 +346,7 @@ func (s *identitiesSuite) TestAddIdentities(c *C) {
 		"olivia": {
 			Name:   "olivia",
 			Access: state.ReadAccess,
-			Cert:   &state.CertIdentity{X509: parseCert(c, testPEMX509Cert1)},
+			Cert:   &state.CertIdentity{X509: parseCert(c, validPEMX509Cert)},
 		},
 	})
 
@@ -712,14 +712,14 @@ func (s *identitiesSuite) TestIdentityFromInputs(c *C) {
 		},
 		"cert": {
 			Access: state.AdminAccess,
-			Cert:   &state.CertIdentity{X509: parseCert(c, testPEMX509Cert1)},
+			Cert:   &state.CertIdentity{X509: parseCert(c, validPEMX509Cert)},
 		},
 	}
 	err := st.AddIdentities(ids)
 	c.Assert(err, IsNil)
 
-	validCert := parseCert(c, testPEMX509Cert1)
-	invalidCert := parseCert(c, testPEMX509Cert2)
+	validCert := parseCert(c, validPEMX509Cert)
+	invalidCert := parseCert(c, invalidPEMX509Cert)
 
 	tests := []struct {
 		name           string
