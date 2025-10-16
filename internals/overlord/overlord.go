@@ -33,6 +33,7 @@ import (
 	"github.com/canonical/pebble/internals/overlord/checkstate"
 	"github.com/canonical/pebble/internals/overlord/cmdstate"
 	"github.com/canonical/pebble/internals/overlord/logstate"
+	"github.com/canonical/pebble/internals/overlord/pairingstate"
 	"github.com/canonical/pebble/internals/overlord/patch"
 	"github.com/canonical/pebble/internals/overlord/planstate"
 	"github.com/canonical/pebble/internals/overlord/restart"
@@ -128,6 +129,7 @@ type Overlord struct {
 	checkMgr   *checkstate.CheckManager
 	logMgr     *logstate.LogManager
 	tlsMgr     *tlsstate.TLSManager
+	pairingMgr *pairingstate.PairingManager
 
 	extension Extension
 }
@@ -208,6 +210,13 @@ func New(opts *Options) (*Overlord, error) {
 	}
 	o.tlsMgr = tlsstate.NewManager(tlsDir, opts.IDSigner)
 	o.stateEng.AddManager(o.tlsMgr)
+
+	o.pairingMgr, err = pairingstate.NewManager(s)
+	if err != nil {
+		return nil, fmt.Errorf("cannot create pairing manager: %w", err)
+	}
+	o.stateEng.AddManager(o.pairingMgr)
+	o.planMgr.AddChangeListener(o.pairingMgr.PlanChanged)
 
 	o.logMgr = logstate.NewLogManager()
 
@@ -640,6 +649,11 @@ func (o *Overlord) PlanManager() *planstate.PlanManager {
 // TLS keypairs for HTTPS connections.
 func (o *Overlord) TLSManager() *tlsstate.TLSManager {
 	return o.tlsMgr
+}
+
+// PairingManager returns the manager that handles client pairing.
+func (o *Overlord) PairingManager() *pairingstate.PairingManager {
+	return o.pairingMgr
 }
 
 // Fake creates an Overlord without any managers and with a backend

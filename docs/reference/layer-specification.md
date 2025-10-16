@@ -279,4 +279,19 @@ log-targets:
     # be substituted using the environment for the corresponding service.
     labels:
       <label name>: <label value>
+
+# (Optional) HTTPS (using mTLS) communication between the client and server
+# requires both sides to be paired first. Pairing is currently only supported
+# for HTTPS transport (not HTTP or Unix socket).
+pairing:
+
+    # (Optional) Controls the pairing mode of the server. Possible values are:
+    #
+    # - single: only a single client can pair successfully after which all
+    #   subsequent pairing requests will be rejected.
+    # - multiple: multiple clients can pair throughout the lifetime of the
+    #   server.
+    # - disabled (default): no client pairing will be possible and as a result
+    #   incoming HTTPS client connections will always be rejected.
+    mode: single | multiple | disabled
 ```
