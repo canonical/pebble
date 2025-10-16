@@ -62,6 +62,8 @@ type BasicIdentity struct {
 	Password string
 }
 
+// Certificate identity represents the client in an mTLS connection. We
+// only support a self-signed x509 certificate without intermediaries.
 type CertIdentity struct {
 	X509 *x509.Certificate
 }
@@ -353,26 +355,40 @@ func (s *State) Identities() map[string]*Identity {
 	return result
 }
 
-// IdentityFromInputs returns an identity with the given inputs, or nil
-// if there is none.
+// IdentityFromInputs returns an identity matching the given inputs.
 //
-// Identity priority:
-//  1. If either username or password are provided, the function attempts to
-//     match a "basic" type identity. The userID is ignored in this case. If
-//     a matching username is found but the password verification fails, nil
-//     is returned immediately.
-//  2. If username and password are not both provided, the function attempts to
-//     match a "local" type identity using the userID.
+// We prioritize clientCert and username/password if either is provided,
+// because they are intentionally setup by the client.
 //
 // If no matching identity is found for the given inputs, nil is returned.
-func (s *State) IdentityFromInputs(userID *uint32, username, password string) *Identity {
+func (s *State) IdentityFromInputs(userID *uint32, username, password string, clientCert *x509.Certificate) *Identity {
 	s.reading()
 
 	switch {
+	case clientCert != nil:
+		for _, identity := range s.identities {
+			if identity.Cert != nil && identity.Cert.X509.Equal(clientCert) {
+				// Certificate identities can be added
+				// manually, so we still need to verify
+				// this was a self-signed client identity
+				// certificate without intermediaries.
+				roots := x509.NewCertPool()
+				roots.AddCert(identity.Cert.X509)
+				opts := x509.VerifyOptions{
+					Roots: roots,
+					// We only support verifying client TLS certificates.
+					KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
+				}
+				_, err := clientCert.Verify(opts)
+				if err == nil {
+					return identity
+				}
+			}
+		}
+		// If a client certificate is provided, but did not match, we bail.
+		return nil
+
 	case username != "" || password != "":
-		// Prioritize username/password if either is provided, because they come from HTTP
-		// Authorization header, a per-request, client controlled property. If set
-		// by the client, it's intentional, so it should have a higher priority.
 		passwordBytes := []byte(password)
 		for _, identity := range s.identities {
 			if identity.Basic == nil || identity.Name != username {
@@ -383,14 +399,20 @@ func (s *State) IdentityFromInputs(userID *uint32, username, password string) *I
 			if err == nil {
 				return identity
 			}
-			return nil
+			// No further username match possible.
+			break
 		}
+		// If basic auth credentials were provided, but did not match, we bail.
+		return nil
+
 	case userID != nil:
 		for _, identity := range s.identities {
 			if identity.Local != nil && identity.Local.UserID == *userID {
 				return identity
 			}
 		}
+		// If UID was provided, but did not match, we bail.
+		return nil
 	}
 
 	return nil
