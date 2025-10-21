@@ -218,7 +218,7 @@ type Command struct {
 	d *Daemon
 }
 
-func userFromRequest(st *state.State, r *http.Request, ucred *Ucrednet) (*UserState, error) {
+func userFromRequest(st *state.State, r *http.Request, ucred *Ucrednet) *UserState {
 	// Does the connection include a single mTLS client identity
 	// certificate?
 	var clientCert *x509.Certificate
@@ -251,9 +251,9 @@ func userFromRequest(st *state.State, r *http.Request, ucred *Ucrednet) (*UserSt
 			Username: identity.Name,
 		}
 
-		// TODO: The notices implementation does not yet support
-		// identities and expects a UID even in the case where a named
-		// local identity exists. See the userString function for how
+		// The notices implementation does not yet support identities
+		// and expects a UID even in the case where a named local
+		// identity exists. See the userString function for how
 		// the code should behave. We propagate the UID as a temporary
 		// workaround here, but eventually all code should refer to
 		// identity usernames where available, instead of identity type
@@ -266,10 +266,10 @@ func userFromRequest(st *state.State, r *http.Request, ucred *Ucrednet) (*UserSt
 		}
 
 		// We found an identity match.
-		return u, nil
+		return u
 	}
 	// No identity match.
-	return nil, nil
+	return nil
 }
 
 func (d *Daemon) Overlord() *overlord.Overlord {
@@ -321,11 +321,7 @@ func (c *Command) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// not good: https://github.com/canonical/pebble/pull/369
 	var user *UserState
 	if _, isOpen := access.(OpenAccess); !isOpen {
-		user, err = userFromRequest(c.d.state, r, ucred)
-		if err != nil {
-			Forbidden("forbidden").ServeHTTP(w, r)
-			return
-		}
+		user = userFromRequest(c.d.state, r, ucred)
 	}
 
 	// If we don't have a named-identity user, use ucred UID to see if we have a default.
