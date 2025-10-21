@@ -16,12 +16,15 @@ package client_test
 
 import (
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"math/big"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -40,18 +43,19 @@ import (
 func Test(t *testing.T) { TestingT(t) }
 
 type clientSuite struct {
-	cli        *client.Client
-	req        *http.Request
-	reqs       []*http.Request
-	rsp        string
-	rsps       []string
-	err        error
-	doCalls    int
-	header     http.Header
-	status     int
-	tmpDir     string
-	socketPath string
-	restore    func()
+	cli          *client.Client
+	req          *http.Request
+	reqs         []*http.Request
+	serverIdCert *x509.Certificate
+	rsp          string
+	rsps         []string
+	err          error
+	doCalls      int
+	header       http.Header
+	status       int
+	tmpDir       string
+	socketPath   string
+	restore      func()
 }
 
 var _ = Suite(&clientSuite{})
@@ -81,6 +85,12 @@ func (cs *clientSuite) TearDownTest(c *C) {
 	cs.restore()
 }
 
+// FakeTLSServer results in the inclusion of TLS certificates in the
+// HTTP response.
+func (cs *clientSuite) FakeTLSServer(idCert *x509.Certificate) {
+	cs.serverIdCert = idCert
+}
+
 func (cs *clientSuite) Do(req *http.Request) (*http.Response, error) {
 	cs.req = req
 	cs.reqs = append(cs.reqs, req)
@@ -92,6 +102,17 @@ func (cs *clientSuite) Do(req *http.Request) (*http.Response, error) {
 		Body:       io.NopCloser(strings.NewReader(body)),
 		Header:     cs.header,
 		StatusCode: cs.status,
+	}
+	if cs.serverIdCert != nil {
+		// Pretend this is a HTTPS connection.
+		rsp.TLS = &tls.ConnectionState{
+			PeerCertificates: []*x509.Certificate{
+				// TLS certificate.
+				&x509.Certificate{},
+				// ID Certificate.
+				cs.serverIdCert,
+			},
+		}
 	}
 	cs.doCalls++
 	return rsp, cs.err
@@ -463,8 +484,9 @@ func (cs *clientSuite) TestClientIntegrationHTTP(c *C) {
 }
 
 func (cs *clientSuite) TestClientIntegrationHTTPS(c *C) {
-	testUsername := "foo"
-	testPassword := "bar"
+	clientTLSCerts := createTestClientTLSCerts(c)
+	serverTLSCerts, serverIDCert, serverFingerprint := createTestServerTLSCerts(c)
+
 	listener, err := net.Listen("tcp", ":0")
 	if err != nil {
 		c.Assert(err, IsNil)
@@ -476,99 +498,176 @@ func (cs *clientSuite) TestClientIntegrationHTTPS(c *C) {
 	handler := func(w http.ResponseWriter, r *http.Request) {
 		c.Check(r.URL.Path, Equals, "/v1/system-info")
 		c.Check(r.URL.RawQuery, Equals, "")
-		// Basic Auth
-		u, p, ok := r.BasicAuth()
-		c.Check(ok, Equals, true)
-		c.Check(u, Equals, testUsername)
-		c.Check(p, Equals, testPassword)
+
+		// Validate client identity cert.
+		roots := x509.NewCertPool()
+		roots.AddCert(clientTLSCerts.Leaf)
+		opts := x509.VerifyOptions{
+			Roots:     roots,
+			KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
+		}
+		incomingTLS := r.TLS.PeerCertificates[0]
+		_, err := incomingTLS.Verify(opts)
+		c.Assert(err, IsNil)
 
 		fmt.Fprintln(w, `{"type":"sync", "result":{"version":"1"}}`)
 	}
 
 	srv := &httptest.Server{
 		Listener: listener,
-		Config:   &http.Server{Handler: http.HandlerFunc(handler)},
+		Config: &http.Server{
+			Handler: http.HandlerFunc(handler),
+		},
+		TLS: &tls.Config{
+			NextProtos: []string{"h2", "http/1.1"},
+			MinVersion: tls.VersionTLS13,
+			ClientAuth: tls.RequestClientCert,
+			GetCertificate: func(*tls.ClientHelloInfo) (*tls.Certificate, error) {
+				return serverTLSCerts, nil
+			},
+		},
 	}
 	// StartTLS will generate a TLS keypair.
 	srv.StartTLS()
 	defer srv.Close()
 
-	// 1. The default client should not trust any server certificates.
+	// 1. Client without TLSServerFingerprint or TLSServerIDCert should not
+	// allow a HTTPS connection with the server.
 	cli, err := client.New(&client.Config{
-		BaseURL:       fmt.Sprintf("https://localhost:%d", testPort),
-		BasicUsername: testUsername,
-		BasicPassword: testPassword,
+		BaseURL:         fmt.Sprintf("https://localhost:%d", testPort),
+		TLSClientIDCert: clientTLSCerts,
 	})
 	c.Assert(err, IsNil)
 	_, err = cli.SysInfo()
-	c.Assert(err, ErrorMatches, ".*cannot verify server TLS certificates.*")
+	c.Assert(err, ErrorMatches, ".*cannot verify server: see TLS config options")
 
-	tlsManager := &customTLSManager{}
+	// 2. Client with TLSServerInsecure true should allow a HTTPS connection with the server.
 	cli, err = client.New(&client.Config{
-		BaseURL:             fmt.Sprintf("https://localhost:%d", testPort),
-		BasicUsername:       testUsername,
-		BasicPassword:       testPassword,
-		VerifyTLSConnection: tlsManager.VerifyTLSConnection,
+		BaseURL:           fmt.Sprintf("https://localhost:%d", testPort),
+		TLSServerInsecure: true,
+		TLSClientIDCert:   clientTLSCerts,
 	})
 	c.Assert(err, IsNil)
 
-	// 2. Let's simulate a manual trust exchange process where we bypass the
-	//    verifier to extract the certificate and pin it for future
-	//    verification.
-
-	tlsManager.SetPairingMode(true)
-
-	si, err := cli.SysInfo()
+	cert, si, err := cli.SysInfoWithServerID()
 	c.Check(err, IsNil)
 	c.Check(si.Version, Equals, "1")
+	c.Check(cert, DeepEquals, serverIDCert)
 
-	// 3. In the previous step the custom verifier pinned the self-signed
-	// certificate, so now we can use it to properly verify the next
-	// incoming certificate from the server.
+	// 3. Let's simulate a pairing attempt by supplying the server
+	// fingerprint instead of the server identity certificate.
+	//
+	// Important: This test only tests the client side logic. The test
+	// server in this case does not perform client identity lookup and
+	// access checks.
+	cli, err = client.New(&client.Config{
+		BaseURL:              fmt.Sprintf("https://localhost:%d", testPort),
+		TLSServerFingerprint: serverFingerprint,
+		TLSClientIDCert:      clientTLSCerts,
+	})
+	c.Assert(err, IsNil)
 
-	tlsManager.SetPairingMode(false)
-
-	si, err = cli.SysInfo()
+	cert, si, err = cli.SysInfoWithServerID()
 	c.Check(err, IsNil)
 	c.Check(si.Version, Equals, "1")
+	c.Check(cert, DeepEquals, serverIDCert)
+
+	// 4. Let's simulate a normal TLS request by supplying the server
+	// identity certificate.
+	//
+	// Important: This test only tests the client side logic. The test
+	// server in this case does not perform client identity lookup and
+	// access checks.
+	cli, err = client.New(&client.Config{
+		BaseURL:         fmt.Sprintf("https://localhost:%d", testPort),
+		TLSServerIDCert: serverIDCert,
+		TLSClientIDCert: clientTLSCerts,
+	})
+	c.Assert(err, IsNil)
+
+	cert, si, err = cli.SysInfoWithServerID()
+	c.Check(err, IsNil)
+	c.Check(si.Version, Equals, "1")
+	c.Check(cert, DeepEquals, serverIDCert)
 }
 
-// customTLSManager is an example manager that demonstrates how to
-// dynamically control TLS certificate verification.
-type customTLSManager struct {
-	certificate *x509.Certificate
-	pairingMode bool
+func createTestServerTLSCerts(c *C) (*tls.Certificate, *x509.Certificate, string) {
+	_, caKey, err := ed25519.GenerateKey(rand.Reader)
+	c.Assert(err, IsNil)
+
+	template := x509.Certificate{
+		SerialNumber:          big.NewInt(1),
+		NotBefore:             time.Now(),
+		NotAfter:              time.Now().Add(365 * 24 * time.Hour),
+		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
+		ExtKeyUsage:           []x509.ExtKeyUsage{},
+		BasicConstraintsValid: true,
+		IsCA:                  true,
+		// We can only sign leaf certificates with this.
+		MaxPathLen:     0,
+		MaxPathLenZero: true,
+	}
+
+	// Self-signed certificate.
+	certDER, err := x509.CreateCertificate(rand.Reader, &template, &template, caKey.Public(), caKey)
+	c.Assert(err, IsNil)
+
+	caCert, err := x509.ParseCertificate(certDER)
+	c.Assert(err, IsNil)
+
+	_, tlsKey, err := ed25519.GenerateKey(rand.Reader)
+	c.Assert(err, IsNil)
+
+	template = x509.Certificate{
+		SerialNumber:          big.NewInt(1),
+		NotBefore:             time.Now(),
+		NotAfter:              time.Now().Add(365 * 24 * time.Hour),
+		KeyUsage:              x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		BasicConstraintsValid: true,
+	}
+
+	// CA signed TLS certificate.
+	certDER, err = x509.CreateCertificate(rand.Reader, &template, caCert, tlsKey.Public(), caKey)
+	c.Assert(err, IsNil)
+
+	tlsCert, err := x509.ParseCertificate(certDER)
+	c.Assert(err, IsNil)
+
+	// Fingerprint
+	fingerprint, err := client.GetIdentityFingerprint(caCert)
+	c.Assert(err, IsNil)
+
+	tls := &tls.Certificate{
+		Certificate: [][]byte{tlsCert.Raw, caCert.Raw},
+		PrivateKey:  tlsKey,
+		Leaf:        tlsCert,
+	}
+	return tls, caCert, fingerprint
 }
 
-func (c *customTLSManager) SetPairingMode(state bool) {
-	c.pairingMode = state
-}
+func createTestClientTLSCerts(c *C) *tls.Certificate {
+	_, tlsKeyPair, err := ed25519.GenerateKey(rand.Reader)
+	c.Assert(err, IsNil)
 
-// VerifyTLSConnection supplies the tls.Config server certificate verification
-// functionality.
-func (c *customTLSManager) VerifyTLSConnection(state tls.ConnectionState) error {
-	if c.pairingMode {
-		// The leaf certificate is the TLS certificate and is always
-		// valid on the client side. In the case of the test HTTPS
-		// server, this is self signed, so we can use it to verify
-		// future connections.
-		c.certificate = state.PeerCertificates[0]
-		return nil
+	template := x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		NotBefore:    time.Now(),
+		NotAfter:     time.Now().Add(365 * 24 * time.Hour),
+		KeyUsage:     x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
 	}
 
-	// Non-pairing mode, so the pinned certificate will be use as the
-	// root CA to verify all new connections to the server.
-	certPool := x509.NewCertPool()
-	certPool.AddCert(c.certificate)
-	opts := x509.VerifyOptions{
-		Roots: certPool,
+	// Self-signed certificate.
+	certDER, err := x509.CreateCertificate(rand.Reader, &template, &template, tlsKeyPair.Public(), tlsKeyPair)
+	c.Assert(err, IsNil)
+
+	cert, err := x509.ParseCertificate(certDER)
+	c.Assert(err, IsNil)
+
+	return &tls.Certificate{
+		Certificate: [][]byte{cert.Raw},
+		PrivateKey:  tlsKeyPair,
+		Leaf:        cert,
 	}
-	incomingTLSCert := state.PeerCertificates[0]
-	// Now make sure the incoming certificate was signed by the certificate
-	// we pinned during our trust exchange process (pairing).
-	_, err := incomingTLSCert.Verify(opts)
-	if err != nil {
-		return fmt.Errorf("certificate verification failed: %w", err)
-	}
-	return nil
 }
