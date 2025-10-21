@@ -147,9 +147,9 @@ func (m *TLSManager) ListenConfig() *tls.Config {
 }
 
 func (m *TLSManager) VerifyClientCertificate(state tls.ConnectionState) error {
-	certs := len(state.PeerCertificates)
-	if certs != 1 {
-		return fmt.Errorf("expected one client certificate, received %v", certs)
+	numCerts := len(state.PeerCertificates)
+	if numCerts != 1 {
+		return fmt.Errorf("expected one client certificate, received %d", numCerts)
 	}
 	return nil
 }

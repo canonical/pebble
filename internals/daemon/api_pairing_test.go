@@ -152,13 +152,13 @@ func (s *apiSuite) TestPairingPairNonHTTPS(c *C) {
 	rec := httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)
 
-	c.Check(rec.Code, Equals, 400)
-	c.Check(rsp.Status, Equals, 400)
+	c.Check(rec.Code, Equals, 500)
+	c.Check(rsp.Status, Equals, 500)
 	c.Check(rsp.Type, Equals, ResponseTypeError)
 
 	result, ok := rsp.Result.(*errorResult)
 	c.Assert(ok, Equals, true)
-	c.Assert(result.Message, Equals, `cannot pair using "http" transport type: not supported`)
+	c.Assert(result.Message, Equals, `cannot pair using transport type "http"`)
 }
 
 // TestPairingPairMissingTLSState verifies that missing TLS state
@@ -175,8 +175,8 @@ func (s *apiSuite) TestPairingPairMissingTLSState(c *C) {
 	rec := httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)
 
-	c.Check(rec.Code, Equals, 400)
-	c.Check(rsp.Status, Equals, 400)
+	c.Check(rec.Code, Equals, 500)
+	c.Check(rsp.Status, Equals, 500)
 	c.Check(rsp.Type, Equals, ResponseTypeError)
 
 	result, ok := rsp.Result.(*errorResult)

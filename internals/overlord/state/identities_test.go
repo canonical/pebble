@@ -753,7 +753,7 @@ func (s *identitiesSuite) TestIdentityFromInputs(c *C) {
 	}, {
 		name:           "cert with uid ignored",
 		cert:           validCert,
-		userID:         uint32Ptr(42),
+		userID:         ptr(uint32(42)),
 		expectedUser:   "cert",
 		expectedAccess: state.AdminAccess,
 	}, {
@@ -761,7 +761,7 @@ func (s *identitiesSuite) TestIdentityFromInputs(c *C) {
 		cert:           validCert,
 		basicUser:      "basic",
 		basicPass:      "test",
-		userID:         uint32Ptr(42),
+		userID:         ptr(uint32(42)),
 		expectedUser:   "cert",
 		expectedAccess: state.AdminAccess,
 	}, {
@@ -806,24 +806,24 @@ func (s *identitiesSuite) TestIdentityFromInputs(c *C) {
 		name:           "basic auth with uid ignored",
 		basicUser:      "basic",
 		basicPass:      "test",
-		userID:         uint32Ptr(42),
+		userID:         ptr(uint32(42)),
 		expectedUser:   "basic",
 		expectedAccess: state.ReadAccess,
 	}, {
 		name:         "invalid basic auth with valid uid ignored",
 		basicUser:    "basic",
 		basicPass:    "wrong",
-		userID:       uint32Ptr(42),
+		userID:       ptr(uint32(42)),
 		expectedUser: "",
 	}, {
 		// Local/UID authentication tests (lowest priority)
 		name:           "valid uid",
-		userID:         uint32Ptr(42),
+		userID:         ptr(uint32(42)),
 		expectedUser:   "uid",
 		expectedAccess: state.MetricsAccess,
 	}, {
 		name:         "invalid uid",
-		userID:       uint32Ptr(100),
+		userID:       ptr(uint32(100)),
 		expectedUser: "",
 	}, {
 		// Edge cases
@@ -846,7 +846,7 @@ func (s *identitiesSuite) TestIdentityFromInputs(c *C) {
 	}
 }
 
-func uint32Ptr(v uint32) *uint32 {
+func ptr[T any](v T) *T {
 	return &v
 }
 

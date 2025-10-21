@@ -20,6 +20,13 @@ import (
 )
 
 func v1PostPairing(c *Command, r *http.Request, user *UserState) Response {
+	if transport := RequestTransportType(r); transport != TransportTypeHTTPS {
+		// Note this should not be possible since the
+		// access permission check phase should prevent us getting
+		// here if the POST was received on the wrong transport.
+		return InternalError("cannot pair using transport type %q", transport)
+	}
+
 	var payload struct {
 		Action string `json:"action"`
 	}
@@ -30,24 +37,19 @@ func v1PostPairing(c *Command, r *http.Request, user *UserState) Response {
 
 	switch payload.Action {
 	case "pair":
-		switch transport := RequestTransportType(r); transport {
-		case TransportTypeHTTPS:
-			if r.TLS == nil {
-				return BadRequest("cannot find TLS connection state")
-			}
-			// Validate that exactly one peer certificate is provided
-			if len(r.TLS.PeerCertificates) != 1 {
-				return BadRequest("cannot support client: single certificate expected, got %d", len(r.TLS.PeerCertificates))
-			}
-			// The leaf peer certificate is the client identity certificate.
-			clientCert := r.TLS.PeerCertificates[0]
+		if r.TLS == nil {
+			return InternalError("cannot find TLS connection state")
+		}
+		// Validate that exactly one peer certificate is provided
+		if len(r.TLS.PeerCertificates) != 1 {
+			return BadRequest("cannot support client: single certificate expected, got %d", len(r.TLS.PeerCertificates))
+		}
+		// The leaf peer certificate is the client identity certificate.
+		clientCert := r.TLS.PeerCertificates[0]
 
-			pairingMgr := c.d.overlord.PairingManager()
-			if err := pairingMgr.PairMTLS(clientCert); err != nil {
-				return BadRequest("cannot pair client: %v", err)
-			}
-		default:
-			return BadRequest("cannot pair using %q transport type: not supported", transport.String())
+		pairingMgr := c.d.overlord.PairingManager()
+		if err := pairingMgr.PairMTLS(clientCert); err != nil {
+			return BadRequest("cannot pair client: %v", err)
 		}
 
 	default:

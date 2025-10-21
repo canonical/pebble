@@ -123,7 +123,8 @@ var pairingWindowEnabled = (*Daemon).pairingWindowEnabled
 type PairingAccess struct{}
 
 func (ac PairingAccess) CheckAccess(d *Daemon, r *http.Request, user *UserState) Response {
-	// This checker is only for pairing.
+	// This should only be called for /v1/pairing, but double-check here
+	// just in case.
 	if r.URL.Path != "/v1/pairing" {
 		return Unauthorized(accessDenied)
 	}

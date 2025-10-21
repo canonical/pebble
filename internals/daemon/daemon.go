@@ -250,6 +250,21 @@ func userFromRequest(st *state.State, r *http.Request, ucred *Ucrednet) (*UserSt
 			Access:   identity.Access,
 			Username: identity.Name,
 		}
+
+		// TODO: The notices implementation does not yet support
+		// identities and expects a UID even in the case where a named
+		// local identity exists. See the userString function for how
+		// the code should behave. We propagate the UID as a temporary
+		// workaround here, but eventually all code should refer to
+		// identity usernames where available, instead of identity type
+		// specific details. Note that the UID is still propagated, if
+		// available, for cases where no named identities exist. This
+		// happens outside of this function since we only care about
+		// identities here.
+		if identity.Local != nil {
+			u.UID = userID
+		}
+
 		// We found an identity match.
 		return u, nil
 	}
