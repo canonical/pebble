@@ -76,7 +76,11 @@ func (m *CommandManager) doExec(task *state.Task, tomb *tomb.Tomb) error {
 	st.Unlock()
 	setup, ok := setupObj.(*execSetup)
 	if !ok || setup == nil {
-		return fmt.Errorf("internal error: cannot get exec setup object for task %q", task.ID())
+		// A previously-run task was in Doing status when the daemon was killed,
+		// and the state engine retries it when the daemon is next restarted.
+		// Just ignore so we don't retry exec tasks.
+		logger.Debugf("Cannot get exec setup object for task %q (retried after restart)", task.ID())
+		return nil
 	}
 
 	// Set up the object that will track the execution.
