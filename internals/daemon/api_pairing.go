@@ -20,13 +20,6 @@ import (
 )
 
 func v1PostPairing(c *Command, r *http.Request, user *UserState) Response {
-	if transport := RequestTransportType(r); transport != TransportTypeHTTPS {
-		// Note this should not be possible since the
-		// access permission check phase should prevent us getting
-		// here if the POST was received on the wrong transport.
-		return InternalError("cannot pair using transport type %q", transport)
-	}
-
 	var payload struct {
 		Action string `json:"action"`
 	}

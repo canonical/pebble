@@ -158,7 +158,7 @@ func (s *apiSuite) TestPairingPairNonHTTPS(c *C) {
 
 	result, ok := rsp.Result.(*errorResult)
 	c.Assert(ok, Equals, true)
-	c.Assert(result.Message, Equals, `cannot pair using transport type "http"`)
+	c.Assert(result.Message, Equals, `cannot find TLS connection state`)
 }
 
 // TestPairingPairMissingTLSState verifies that missing TLS state
