@@ -18,6 +18,7 @@ import (
 	"bufio"
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"fmt"
 	"io"
@@ -217,27 +218,58 @@ type Command struct {
 	d *Daemon
 }
 
-func userFromRequest(st *state.State, r *http.Request, ucred *Ucrednet, username, password string) (*UserState, error) {
+func userFromRequest(st *state.State, r *http.Request, ucred *Ucrednet) *UserState {
+	// Does the connection include a single mTLS client identity
+	// certificate?
+	var clientCert *x509.Certificate
+	if r.TLS != nil && len(r.TLS.PeerCertificates) == 1 {
+		clientCert = r.TLS.PeerCertificates[0]
+	}
+
+	// Does the HTTP header include basic auth credentials? Note that
+	// we explicitly prohibit using basic auth credentials for HTTPS
+	// for now.
+	var username string
+	var password string
+	if RequestTransportType(r) != TransportTypeHTTPS {
+		username, password, _ = r.BasicAuth()
+	}
+
+	// Is a unix socket peer credential UID available?
 	var userID *uint32
 	if ucred != nil {
 		userID = &ucred.Uid
 	}
 
 	st.Lock()
-	identity := st.IdentityFromInputs(userID, username, password)
+	identity := st.IdentityFromInputs(userID, username, password, clientCert)
 	st.Unlock()
 
-	if identity == nil {
-		// No identity that matches these inputs (for now, just UID).
-		return nil, nil
+	if identity != nil {
+		u := &UserState{
+			Access:   identity.Access,
+			Username: identity.Name,
+		}
+
+		// The notices implementation does not yet support identities
+		// and expects a UID even in the case where a named local
+		// identity exists. See the userString function for how
+		// the code should behave. We propagate the UID as a temporary
+		// workaround here, but eventually all code should refer to
+		// identity usernames where available, instead of identity type
+		// specific details. Note that the UID is still propagated, if
+		// available, for cases where no named identities exist. This
+		// happens outside of this function since we only care about
+		// identities here.
+		if identity.Local != nil {
+			u.UID = userID
+		}
+
+		// We found an identity match.
+		return u
 	}
-	if identity.Basic != nil {
-		// Prioritize basic type (HTTP basic authentication) and ignore UID in this case.
-		return &UserState{Access: identity.Access, Username: identity.Name}, nil
-	} else if identity.Local != nil {
-		return &UserState{Access: identity.Access, UID: userID}, nil
-	}
-	return nil, nil
+	// No identity match.
+	return nil
 }
 
 func (d *Daemon) Overlord() *overlord.Overlord {
@@ -289,12 +321,7 @@ func (c *Command) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// not good: https://github.com/canonical/pebble/pull/369
 	var user *UserState
 	if _, isOpen := access.(OpenAccess); !isOpen {
-		username, password, _ := r.BasicAuth()
-		user, err = userFromRequest(c.d.state, r, ucred, username, password)
-		if err != nil {
-			Forbidden("forbidden").ServeHTTP(w, r)
-			return
-		}
+		user = userFromRequest(c.d.state, r, ucred)
 	}
 
 	// If we don't have a named-identity user, use ucred UID to see if we have a default.
@@ -965,6 +992,13 @@ func (d *Daemon) RebootDidNotHappen(st *state.State) error {
 // existing arguments with the newly specified arguments.
 func (d *Daemon) SetServiceArgs(serviceArgs map[string][]string) error {
 	return d.overlord.PlanManager().SetServiceArgs(serviceArgs)
+}
+
+// pairingWindowEnabled is a helper function to simplify testing of code
+// dependant on the Pairing Manager.
+func (d *Daemon) pairingWindowEnabled() bool {
+	pairingManager := d.overlord.PairingManager()
+	return pairingManager.PairingEnabled()
 }
 
 func New(opts *Options) (*Daemon, error) {
