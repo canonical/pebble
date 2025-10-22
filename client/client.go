@@ -235,6 +235,21 @@ func New(config *Config) (*Client, error) {
 	// Let's not mutate the input config.
 	localConfig := Config{}
 	if config != nil {
+		// Only one TLS server option is allowed.
+		tlsOptions := 0
+		if config.TLSServerFingerprint != "" {
+			tlsOptions += 1
+		}
+		if config.TLSServerIDCert != nil {
+			tlsOptions += 1
+		}
+		if config.TLSServerInsecure {
+			tlsOptions += 1
+		}
+		if tlsOptions > 1 {
+			return nil, fmt.Errorf("only one TLS server validation option allowed, but %d were provided", tlsOptions)
+		}
+
 		localConfig = *config
 	}
 
@@ -697,21 +712,6 @@ func verifyConnection(state tls.ConnectionState, opts *Config) error {
 	}
 	// Make a local copy of the server identity certificate (root CA).
 	serverIDCert := state.PeerCertificates[1]
-
-	// Only one TLS server option is allowed.
-	tlsOptions := 0
-	if opts.TLSServerFingerprint != "" {
-		tlsOptions += 1
-	}
-	if opts.TLSServerIDCert != nil {
-		tlsOptions += 1
-	}
-	if opts.TLSServerInsecure {
-		tlsOptions += 1
-	}
-	if tlsOptions > 1 {
-		return fmt.Errorf("only one TLS server validation option allowed, but %d were provided", tlsOptions)
-	}
 
 	if opts.TLSServerFingerprint != "" {
 		// Client supplied fingerprint must match the server identity.
