@@ -1920,13 +1920,15 @@ func (s *daemonSuite) TestServeHTTPUserStateLocal(c *C) {
 	c.Check(rec.Code, Equals, http.StatusOK)
 
 	// Verify UserState for Local identity.
-	c.Check(capturedUser.Username, Equals, "localuser")
-	c.Check(capturedUser.Access, Equals, state.AdminAccess)
+	c.Assert(capturedUser, NotNil)
+	c.Assert(capturedUser.Username, Equals, "localuser")
+	c.Assert(capturedUser.Access, Equals, state.AdminAccess)
+	c.Assert(capturedUser.UID, NotNil)
 
 	// This specific expectation is only a temporary workaround to
 	// support code not yet supporting named identities, such as
 	// notices. UID should really be nil in this case.
-	c.Check(*capturedUser.UID, Equals, uint32(1000))
+	c.Assert(*capturedUser.UID, Equals, uint32(1000))
 }
 
 func (s *daemonSuite) TestServeHTTPUserStateUIDOnly(c *C) {
@@ -1955,9 +1957,11 @@ func (s *daemonSuite) TestServeHTTPUserStateUIDOnly(c *C) {
 	c.Check(rec.Code, Equals, http.StatusOK)
 
 	// Verify UserState for UID-only (no named identity)
-	c.Check(capturedUser.Username, Equals, "")
-	c.Check(capturedUser.Access, Equals, state.ReadAccess)
-	c.Check(*capturedUser.UID, Equals, uint32(5000))
+	c.Assert(capturedUser, NotNil)
+	c.Assert(capturedUser.Username, Equals, "")
+	c.Assert(capturedUser.Access, Equals, state.ReadAccess)
+	c.Assert(capturedUser.UID, NotNil)
+	c.Assert(*capturedUser.UID, Equals, uint32(5000))
 }
 
 func (s *daemonSuite) TestServeHTTPUserStateUIDOnlyRoot(c *C) {
@@ -1986,9 +1990,11 @@ func (s *daemonSuite) TestServeHTTPUserStateUIDOnlyRoot(c *C) {
 	c.Check(rec.Code, Equals, http.StatusOK)
 
 	// Verify UserState for root UID.
-	c.Check(capturedUser.Username, Equals, "")
-	c.Check(capturedUser.Access, Equals, state.AdminAccess)
-	c.Check(*capturedUser.UID, Equals, uint32(0))
+	c.Assert(capturedUser, NotNil)
+	c.Assert(capturedUser.Username, Equals, "")
+	c.Assert(capturedUser.Access, Equals, state.AdminAccess)
+	c.Assert(capturedUser.UID, NotNil)
+	c.Assert(*capturedUser.UID, Equals, uint32(0))
 }
 
 func (s *daemonSuite) TestServeHTTPUserStateUIDOnlyDaemonUID(c *C) {
@@ -2018,9 +2024,11 @@ func (s *daemonSuite) TestServeHTTPUserStateUIDOnlyDaemonUID(c *C) {
 	c.Check(rec.Code, Equals, http.StatusOK)
 
 	// Verify UserState for daemon UID.
-	c.Check(capturedUser.Username, Equals, "")
-	c.Check(capturedUser.Access, Equals, state.AdminAccess)
-	c.Check(*capturedUser.UID, Equals, daemonUID)
+	c.Assert(capturedUser, NotNil)
+	c.Assert(capturedUser.Username, Equals, "")
+	c.Assert(capturedUser.Access, Equals, state.AdminAccess)
+	c.Assert(capturedUser.UID, NotNil)
+	c.Assert(*capturedUser.UID, Equals, daemonUID)
 }
 
 func (s *daemonSuite) TestServeHTTPUserStateBasicUnixSocket(c *C) {
@@ -2065,9 +2073,10 @@ func (s *daemonSuite) TestServeHTTPUserStateBasicUnixSocket(c *C) {
 	c.Check(rec.Code, Equals, http.StatusOK)
 
 	// Verify UserState for Basic identity over Unix Socket.
-	c.Check(capturedUser.Username, Equals, "basicuser")
-	c.Check(capturedUser.Access, Equals, state.ReadAccess)
-	c.Check(capturedUser.UID, IsNil)
+	c.Assert(capturedUser, NotNil)
+	c.Assert(capturedUser.Username, Equals, "basicuser")
+	c.Assert(capturedUser.Access, Equals, state.ReadAccess)
+	c.Assert(capturedUser.UID, IsNil)
 }
 
 func (s *daemonSuite) TestServeHTTPUserStateBasicHTTP(c *C) {
@@ -2112,9 +2121,10 @@ func (s *daemonSuite) TestServeHTTPUserStateBasicHTTP(c *C) {
 	c.Check(rec.Code, Equals, http.StatusOK)
 
 	// Verify UserState for Basic identity over HTTP.
-	c.Check(capturedUser.Username, Equals, "basicuser")
-	c.Check(capturedUser.Access, Equals, state.MetricsAccess)
-	c.Check(capturedUser.UID, IsNil)
+	c.Assert(capturedUser, NotNil)
+	c.Assert(capturedUser.Username, Equals, "basicuser")
+	c.Assert(capturedUser.Access, Equals, state.MetricsAccess)
+	c.Assert(capturedUser.UID, IsNil)
 }
 
 func (s *daemonSuite) TestServeHTTPUserStateCert(c *C) {
@@ -2172,7 +2182,8 @@ jwXVTUH4HLpbhK0RAaEPOL4h5jm36CrWTkxzpbdCrIu4NgPLQKJ6Cw==
 	c.Check(rec.Code, Equals, http.StatusOK)
 
 	// Verify UserState for Cert identity.
-	c.Check(capturedUser.Username, Equals, "certuser1")
-	c.Check(capturedUser.Access, Equals, state.AdminAccess)
-	c.Check(capturedUser.UID, IsNil)
+	c.Assert(capturedUser, NotNil)
+	c.Assert(capturedUser.Username, Equals, "certuser1")
+	c.Assert(capturedUser.Access, Equals, state.AdminAccess)
+	c.Assert(capturedUser.UID, IsNil)
 }
