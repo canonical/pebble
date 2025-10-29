@@ -241,7 +241,7 @@ The `{command name}` command is used to {describe the command}.
 
 <!-- START AUTOMATED OUTPUT FOR {command name} -->
 ```{terminal}
-:input: pebble {command name} --help
+pebble {command name} --help
 ```
 <!-- END AUTOMATED OUTPUT FOR {command name} -->
 ````
