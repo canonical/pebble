@@ -1,4 +1,4 @@
-canonical-sphinx[full]
+canonical-sphinx[full]@git+https://github.com/canonical/canonical-sphinx@work/incorporate-extensions
 packaging
 sphinxcontrib-svg2pdfconverter[CairoSVG]
 sphinx-last-updated-by-git
