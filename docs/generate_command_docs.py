@@ -51,7 +51,8 @@ def generate_example(cmd: str, markers: Markers) -> str:
     return f"""\
 {markers.start}
 ```{{terminal}}
-:input: {help_cmd_str}
+{help_cmd_str}
+
 {help_output}
 ```
 {markers.end}"""
