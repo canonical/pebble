@@ -63,7 +63,7 @@ We are using Python's http module to mock the servers.
 If we start the Pebble daemon (`pebble run`):
 
 ```{terminal}
-   :input: pebble run
+pebble run
 
 2024-06-28T02:17:23.347Z [pebble] Started daemon.
 2024-06-28T02:17:23.353Z [pebble] POST /v1/services 2.613042ms 202
@@ -77,7 +77,7 @@ Ideally we would expect all three services to start up successfully
 (`pebble services`):
 
 ```{terminal}
-   :input: pebble services
+pebble services
 
 Service   Startup  Current  Since
 backend   enabled  active   today at 10:17 CST
@@ -92,7 +92,7 @@ For example, the output below shows the `database` service failing to start
 successfully ("active"):
 
 ```{terminal}
-   :input: pebble run
+pebble run
 
 2024-06-28T02:20:03.337Z [pebble] Started daemon.
 2024-06-28T02:20:03.343Z [pebble] POST /v1/services 2.763792ms 202
@@ -104,7 +104,7 @@ successfully ("active"):
 ```
 
 ```{terminal}
-   :input: pebble services
+pebble services
    
 Service   Startup  Current   Since
 backend   enabled  active    today at 10:20 CST
@@ -202,7 +202,7 @@ For more information on `before` and `after`, see [Service start order](../expla
 To verify the start order of services, start the Pebble daemon again:
 
 ```{terminal}
-   :input: pebble run
+pebble run
 
 2024-06-28T03:53:23.307Z [pebble] Started daemon.
 2024-06-28T03:53:23.313Z [pebble] POST /v1/services 3.103291ms 202
@@ -217,7 +217,7 @@ The start order is now `database` -> `backend` -> `frontend` and all services
 are "active".
 
 ```{terminal}
-   :input: pebble services
+pebble services
    
 Service   Startup  Current  Since
 backend   enabled  active   today at 10:17 CST
@@ -233,7 +233,7 @@ for another process), the output for the `pebble run` command should be similar
 to:
 
 ```{terminal}
-   :input: pebble run 
+pebble run 
 
 2024-06-28T02:28:06.569Z [pebble] Started daemon.
 2024-06-28T02:28:06.575Z [pebble] POST /v1/services 3.212375ms 202
@@ -247,7 +247,7 @@ Since a required service fails to start, all services that are dependent on it
 should not start ("inactive") accordingly:
 
 ```{terminal}
-   :input: pebble services
+pebble services
 
 Service   Startup  Current   Since
 backend   enabled  inactive  -

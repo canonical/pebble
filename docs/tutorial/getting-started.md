@@ -76,10 +76,8 @@ pebble run
 This starts the Pebble daemon itself, as well as all the services that are marked as `startup: enabled` (such as the `http-server` service in the simple layer created above). You should get some output similar to the following:
 
 ```{terminal}
-   :input: pebble run
-   :user: user
-   :host: host
-   :dir: ~
+pebble run
+
 2024-06-02T11:30:02.925Z [pebble] Started daemon.
 2024-06-02T11:30:02.936Z [pebble] POST /v1/services 10.751704ms 202
 2024-06-02T11:30:02.936Z [pebble] Started default services with change 77.
@@ -104,10 +102,8 @@ pebble services
 You should see output similar to the following:
 
 ```{terminal}
-   :input: pebble services
-   :user: user
-   :host: host
-   :dir: ~
+pebble services
+
 Service      Startup  Current  Since
 http-server  enabled  active   today at 11:30 UTC
 ```
@@ -131,10 +127,8 @@ pebble services
 We can see that the `http-server` service has been stopped:
 
 ```{terminal}
-   :input: pebble services
-   :user: user
-   :host: host
-   :dir: ~
+pebble services
+
 Service      Startup  Current   Since
 http-server  enabled  inactive  today at 11:33 UTC
 ```
@@ -181,10 +175,8 @@ pebble add layer1 $PEBBLE/layers/002-another-http-server.yaml
 If the layer is added successfully, the above command should produce the following output:
 
 ```{terminal}
-   :input: pebble add layer1 $PEBBLE/layers/002-another-http-server.yaml
-   :user: user
-   :host: host
-   :dir: ~
+pebble add layer1 $PEBBLE/layers/002-another-http-server.yaml
+
 Layer "layer1" added successfully from "/home/ubuntu/PEBBLE_HOME/layers/002-another-http-server.yaml"
 ```
 
@@ -196,10 +188,8 @@ pebble services
 We can see that although the new service `http-server-2` has been added, it's still "inactive":
 
 ```{terminal}
-   :input: pebble services
-   :user: user
-   :host: host
-   :dir: ~
+pebble services
+
 Service        Startup  Current   Since
 http-server    enabled  active    today at 11:41 UTC
 http-server-2  enabled  inactive  -
@@ -214,10 +204,8 @@ pebble replan
 You should get output similar to:
 
 ```{terminal}
-   :input: pebble replan
-   :user: user
-   :host: host
-   :dir: ~
+pebble replan
+
 2024-06-02T11:40:39Z INFO Service "http-server" already started.
 ```
 
@@ -230,10 +218,8 @@ pebble services
 We can see that the new HTTP server `http-server-2` defined in the newly added layer should have been started and be shown as "active":
 
 ```{terminal}
-   :input: pebble services
-   :user: user
-   :host: host
-   :dir: ~
+pebble services
+
 Service        Startup  Current  Since
 http-server    enabled  active   today at 11:34 UTC
 http-server-2  enabled  active   today at 11:40 UTC

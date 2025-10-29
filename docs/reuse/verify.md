@@ -9,10 +9,8 @@ pebble
 This should produce output similar to the following:
 
 ```{terminal}
-   :input: pebble
-   :user: user
-   :host: host
-   :dir: ~
+pebble
+
 Pebble lets you control services and perform management actions on
 the system that is running them.
 

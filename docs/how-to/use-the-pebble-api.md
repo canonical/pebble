@@ -13,7 +13,8 @@ For an explanation of API access levels, see [API and clients](/explanation/api-
 Suppose we start the Pebble daemon with no default services and an empty layer:
 
 ```{terminal}
-   :input: pebble run
+pebble run
+
 2024-12-30T01:07:10.275Z [pebble] Started daemon.
 2024-12-30T01:07:10.281Z [pebble] POST /v1/services 75.042µs 400
 2024-12-30T01:07:10.281Z [pebble] Cannot start default services: no default services
