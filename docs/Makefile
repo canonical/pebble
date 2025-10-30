@@ -30,6 +30,7 @@ help:
 	@echo "* only serve:                                make serve"
 	@echo "* clean built doc files:                     make clean-doc"
 	@echo "* clean full environment:                    make clean"
+	@echo "* regenerate help output in CLI reference:   make cli-help"
 	@echo "* check links:                               make linkcheck"
 	@echo "* check markdown:                            make lint-md"
 	@echo "* check spelling:                            make spelling"
@@ -182,3 +183,7 @@ update: install
 %:
 	$(MAKE) —no-print-directory install
 	. $(VENV); $(SPHINXBUILD) -M $@ "$(SOURCEDIR)" "$(BUILDDIR)" $(SPHINXOPTS) $(O)
+
+cli-help:
+	@echo "Regenerating help output in CLI reference..."
+	@python3 generate_command_docs.py
