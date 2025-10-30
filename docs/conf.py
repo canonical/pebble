@@ -257,7 +257,6 @@ linkcheck_retries = 3
 extensions = [
     "canonical_sphinx",
     "notfound.extension",
-    "sphinx_copybutton",
     "sphinx_design",
     "sphinx_reredirects",
     "sphinx_tabs.tabs",
