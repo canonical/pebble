@@ -15,7 +15,8 @@ One common task in system administration is updating and installing packages. Wi
 For example, if Pebble is running as a user with root privileges, we can use this command to update and install packages in a remote system:
 
 ```{terminal}
-:input: pebble exec apt update
+pebble exec apt update
+
 Hit:1 http://ports.ubuntu.com/ubuntu-ports noble InRelease
 Get:2 http://ports.ubuntu.com/ubuntu-ports noble-updates InRelease [126 kB]
 Get:3 http://ports.ubuntu.com/ubuntu-ports noble-backports InRelease [126 kB]
@@ -36,7 +37,8 @@ pebble exec apt install cowsay
 To confirm the package is successfully installed in the remote system, run:
 
 ```{terminal}
-:input: pebble exec cowsay moo
+pebble exec cowsay moo
+
  _____
 < moo >
  -----
@@ -112,7 +114,8 @@ pebble exec service nginx restart
 Finally, we can test the result:
 
 ```{terminal}
-:input: curl localhost:81
+curl localhost:81
+
 Hello, Pebble!
 ```
 

@@ -240,22 +240,23 @@ linkcheck_retries = 3
 # https://www.sphinx-doc.org/en/master/usage/extensions/index.html
 
 # NOTE: The canonical_sphinx extension is required for the starter pack.
-#       It automatically enables the following extensions:
-#       - custom-rst-roles
-#       - myst_parser
-#       - notfound.extension
-#       - related-links
-#       - sphinx_copybutton
-#       - sphinx_design
-#       - sphinx_reredirects
-#       - sphinx_tabs.tabs
-#       - sphinxcontrib.jquery
-#       - sphinxext.opengraph
-#       - terminal-output
-#       - youtube-links
 
 extensions = [
     "canonical_sphinx",
+    "notfound.extension",
+    "sphinx_design",
+    "sphinx_reredirects",
+    "sphinx_tabs.tabs",
+    "sphinxcontrib.jquery",
+    "sphinxext.opengraph",
+    "sphinx_config_options",
+    "sphinx_contributor_listing",
+    "sphinx_filtered_toctree",
+    "sphinx_related_links",
+    "sphinx_roles",
+    "sphinx_terminal",
+    "sphinx_ubuntu_images",
+    "sphinx_youtube_links",
     "sphinxcontrib.cairosvgconverter",
     "sphinx_last_updated_by_git",
     "sphinx.ext.intersphinx",

@@ -124,7 +124,8 @@ See also:
 You can view check status using the `pebble checks` command. This reports the checks along with their status (`up`, `down`, or `inactive`) and number of failures. For example:
 
 ```{terminal}
-   :input: pebble checks
+pebble checks
+
 Check   Level  Startup   Status    Successes  Failures  Change
 up      alive  enabled   up        5          0/1       10
 online  ready  enabled   up        2          1/3       13 (dial tcp 127.0.0.1:8000: connect: connection refused)
@@ -150,7 +151,8 @@ When a check is stopped, the active `perform-check` or `recover-check` change is
 You can run a check immediately using the `pebble check <name> --refresh` command, which is helpful when developing, testing, and debugging a check. The result of the check is in YAML format. For example:
 
 ```{terminal}
-   :input: pebble check chk1 --refresh
+pebble check chk1 --refresh
+
 name: chk1
 startup: enabled
 status: up
@@ -163,7 +165,8 @@ change-id: "1"
 If running the check fails, the result will also show the error and logs:
 
 ```{terminal}
-   :input: pebble check chk1 --refresh
+pebble check chk1 --refresh
+
 name: chk1
 startup: enabled
 status: up
@@ -179,7 +182,8 @@ logs: |
 You can run a check even if it's inactive (for example, if the check has `startup: disabled` or was stopped by [`pebble stop-checks`](#reference_health_checks_start_stop_command)). This will run the check immediately but won't start the check. If running a stopped check fails, Pebble won't change the status or the success or failure count, and the result won't include logs:
 
 ```{terminal}
-   :input: pebble check chk1 --refresh
+pebble check chk1 --refresh
+
 name: chk1
 startup: disabled
 status: inactive
@@ -192,7 +196,8 @@ error: non-2xx status code 500; Health check failed
 Without the `--refresh` flag, `pebble check <name>` gets the details of a check without running the check. If the check has failed previously, the result will show logs from the task that ran the check. For example:
 
 ```{terminal}
-   :input: pebble check chk1
+pebble check chk1
+
 name: chk1
 startup: enabled
 status: up

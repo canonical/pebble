@@ -39,7 +39,8 @@ By default, Pebble keeps a service running even if a check fails. Although we ca
 To display the status of the check:
 
 ```{terminal}
-   :input: pebble health foo-warning
+pebble health foo-warning
+
 unhealthy
 ```
 
@@ -48,7 +49,8 @@ This command exits with 0 if the check is healthy, or 1 if the check is unhealth
 To display detailed status information about the check:
 
 ```{terminal}
-   :input: pebble check foo-warning
+pebble check foo-warning
+
 name: foo-warning
 startup: enabled
 status: down

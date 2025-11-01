@@ -19,7 +19,7 @@ By default, Pebble stores its configuration, internal state, and Unix socket in 
 The `$PEBBLE` directory must be readable and writable by the UID of the pebble process. Make sure that no other UIDs can read or write to the $PEBBLE directory. You can do that with `chmod`, for example:
 
 ```{terminal}
-   :input: chmod 700 /var/lib/pebble/default
+chmod 700 /var/lib/pebble/default
 ```
 
 The file `$PEBBLE/.pebble.state` contains the internal state of the Pebble daemon. You shouldn't try to edit this file or change its permissions.

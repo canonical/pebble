@@ -28,7 +28,8 @@ The `add` command is used to dynamically add a layer to the plan's layers.
 
 <!-- START AUTOMATED OUTPUT FOR add -->
 ```{terminal}
-:input: pebble add --help
+pebble add --help
+
 Usage:
   pebble add [add-OPTIONS] <label> <layer-path>
 
@@ -53,7 +54,8 @@ The `add-identities` command is used to add new identities.
 
 <!-- START AUTOMATED OUTPUT FOR add-identities -->
 ```{terminal}
-:input: pebble add-identities --help
+pebble add-identities --help
+
 Usage:
   pebble add-identities [add-identities-OPTIONS]
 
@@ -93,7 +95,8 @@ The `changes` command is used to list system changes.
 
 <!-- START AUTOMATED OUTPUT FOR changes -->
 ```{terminal}
-:input: pebble changes --help
+pebble changes --help
+
 Usage:
   pebble changes [changes-OPTIONS] [<service>]
 
@@ -126,7 +129,8 @@ The `check` command shows details for a single check in YAML format.
 
 <!-- START AUTOMATED OUTPUT FOR check -->
 ```{terminal}
-:input: pebble check --help
+pebble check --help
+
 Usage:
   pebble check [check-OPTIONS] <check>
 
@@ -144,7 +148,8 @@ The `checks` command is used to query the status of configured health checks.
 
 <!-- START AUTOMATED OUTPUT FOR checks -->
 ```{terminal}
-:input: pebble checks --help
+pebble checks --help
+
 Usage:
   pebble checks [checks-OPTIONS] [<check>...]
 
@@ -165,7 +170,8 @@ The `exec` command is used to execute a remote command and wait for it to finish
 
 <!-- START AUTOMATED OUTPUT FOR exec -->
 ```{terminal}
-:input: pebble exec --help
+pebble exec --help
+
 Usage:
   pebble exec [exec-OPTIONS] <command>
 
@@ -204,7 +210,8 @@ pebble exec --timeout 10s -- echo -n foo bar
 For example, you could use `exec` to run `pg_dump` and create a PostgreSQL database backup:
 
 ```{terminal}
-   :input: pebble exec pg_dump mydb
+pebble exec pg_dump mydb
+
 --
 -- PostgreSQL database dump
 --
@@ -216,7 +223,8 @@ The exec feature uses WebSockets under the hood, and allows you to stream stdin 
 You can also apply a timeout with `--timeout`, for example:
 
 ```{terminal}
-   :input: pebble exec --timeout 1s -- sleep 3
+pebble exec --timeout 1s -- sleep 3
+
 error: cannot perform the following tasks:
 - exec command "sleep" (timed out after 1s: context deadline exceeded)
 ```
@@ -231,7 +239,8 @@ The `health` command is used to query health of checks.
 
 <!-- START AUTOMATED OUTPUT FOR health -->
 ```{terminal}
-:input: pebble health --help
+pebble health --help
+
 Usage:
   pebble health [health-OPTIONS] [<check>...]
 
@@ -256,7 +265,8 @@ To display a summary about Pebble and the available commands, run:
 
 <!-- START AUTOMATED OUTPUT FOR help -->
 ```{terminal}
-:input: pebble help
+pebble help
+
 Pebble lets you control services and perform management actions on
 the system that is running them.
 
@@ -286,7 +296,8 @@ For a short summary of all commands, run 'pebble help --all'.
 To display a short description of all available `pebble` commands, run:
 
 ```{terminal}
-:input: pebble help --all
+pebble help --all
+
 Pebble lets you control services and perform management actions on
 the system that is running them.
 
@@ -298,7 +309,7 @@ Usage: pebble <command> [<options>...]
 To get more details for a specific command, run:
 
 ```{terminal}
-:input: pebble help <command>
+pebble help <command>
 ```
 
 
@@ -309,7 +320,8 @@ The `identities` command is used to list identities.
 
 <!-- START AUTOMATED OUTPUT FOR identities -->
 ```{terminal}
-:input: pebble identities --help
+pebble identities --help
+
 Usage:
   pebble identities [identities-OPTIONS]
 
@@ -336,7 +348,8 @@ The `identity` command is used to show a single identity.
 
 <!-- START AUTOMATED OUTPUT FOR identity -->
 ```{terminal}
-:input: pebble identity --help
+pebble identity --help
+
 Usage:
   pebble identity <name>
 
@@ -354,7 +367,8 @@ Logs are viewable via the logs API or using `pebble logs`:
 
 <!-- START AUTOMATED OUTPUT FOR logs -->
 ```{terminal}
-:input: pebble logs --help
+pebble logs --help
+
 Usage:
   pebble logs [logs-OPTIONS] [<service>...]
 
@@ -377,7 +391,8 @@ if none are specified) and displays them in chronological order.
 To view logs, run:
 
 ```{terminal}
-   :input: pebble logs
+pebble logs
+
 2022-11-14T01:35:06.979Z [srv1] Log 0 from srv1
 2022-11-14T01:35:08.041Z [srv2] Log 0 from srv2
 2022-11-14T01:35:09.982Z [srv1] Log 1 from srv1
@@ -386,7 +401,8 @@ To view logs, run:
 To view existing logs and follow (tail) new output, use `-f` (press Ctrl-C to exit):
 
 ```{terminal}
-   :input: pebble logs -f
+pebble logs -f
+
 2022-11-14T01:37:56.936Z [srv1] Log 0 from srv1
 2022-11-14T01:37:57.978Z [srv2] Log 0 from srv2
 2022-11-14T01:37:59.939Z [srv1] Log 1 from srv1
@@ -396,7 +412,8 @@ To view existing logs and follow (tail) new output, use `-f` (press Ctrl-C to ex
 You can output logs in JSON Lines format, using `--format=json`:
 
 ```{terminal}
-   :input: pebble logs --format=json
+pebble logs --format=json
+
 {"time":"2022-11-14T01:39:10.886Z","service":"srv1","message":"Log 0 from srv1"}
 {"time":"2022-11-14T01:39:11.943Z","service":"srv2","message":"Log 0 from srv2"}
 {"time":"2022-11-14T01:39:13.889Z","service":"srv1","message":"Log 1 from srv1"}
@@ -405,7 +422,8 @@ You can output logs in JSON Lines format, using `--format=json`:
 If you want to also write service logs to Pebble's own stdout, run the daemon with `--verbose`:
 
 ```{terminal}
-   :input: pebble run --verbose
+pebble run --verbose
+
 2022-10-26T01:41:32.805Z [pebble] Started daemon.
 2022-10-26T01:41:32.835Z [pebble] POST /v1/services 29.743632ms 202
 2022-10-26T01:41:32.835Z [pebble] Started default services with change 7.
@@ -424,7 +442,8 @@ The `ls` command is used to list path contents.
 
 <!-- START AUTOMATED OUTPUT FOR ls -->
 ```{terminal}
-:input: pebble ls --help
+pebble ls --help
+
 Usage:
   pebble ls [ls-OPTIONS] <path>
 
@@ -450,7 +469,8 @@ The `mkdir` command is used to create a directory.
 
 <!-- START AUTOMATED OUTPUT FOR mkdir -->
 ```{terminal}
-:input: pebble mkdir --help
+pebble mkdir --help
+
 Usage:
   pebble mkdir [mkdir-OPTIONS] <path>
 
@@ -477,7 +497,8 @@ The `notice` command is used to fetch a single notice.
 
 <!-- START AUTOMATED OUTPUT FOR notice -->
 ```{terminal}
-:input: pebble notice --help
+pebble notice --help
+
 Usage:
   pebble notice [notice-OPTIONS] <id-or-type> [<key>]
 
@@ -497,7 +518,8 @@ You can fetch a notice either by ID or by type/key combination.
  To fetch the notice with ID "1":
 
 ```{terminal}
-   :input: pebble notice 1
+pebble notice 1
+
 id: "1"
 user-id: 1000
 type: custom
@@ -512,7 +534,8 @@ expire-after: 168h0m0s
 To fetch the notice with type "custom" and key "example.com<span></span>/bar":
 
 ```{terminal}
-   :input: pebble notice custom other.com/bar
+pebble notice custom other.com/bar
+
 id: "2"
 user-id: public
 type: custom
@@ -537,7 +560,8 @@ The `notices` command is used to list notices.
 
 <!-- START AUTOMATED OUTPUT FOR notices -->
 ```{terminal}
-:input: pebble notices --help
+pebble notices --help
+
 Usage:
   pebble notices [notices-OPTIONS]
 
@@ -568,7 +592,8 @@ another user's notices.
 To fetch all notices:
 
 ```{terminal}
-   :input: pebble notices
+pebble notices
+
 ID   User    Type    Key              First                Repeated             Occurrences
 1    1000    custom  example.com/foo  today at 16:16 NZST  today at 16:16 NZST  3
 2    public  custom  other.com/bar    today at 16:16 NZST  today at 16:16 NZST  1
@@ -584,7 +609,8 @@ The `notify` command is used to record a custom notice.
 
 <!-- START AUTOMATED OUTPUT FOR notify -->
 ```{terminal}
-:input: pebble notify --help
+pebble notify --help
+
 Usage:
   pebble notify [notify-OPTIONS] <key> [<name=value>...]
 
@@ -602,14 +628,16 @@ data fields.
 To record `custom` notices, use `pebble notify` -- the notice user ID will be set to the client's user ID:
 
 ```{terminal}
-   :input: pebble notify example.com/foo
+pebble notify example.com/foo
+
 Recorded notice 1
 ```
 
 Notify with two data fields:
 
 ```{terminal}
-   :input: pebble notify other.com/bar name=value email=john@smith.com  
+pebble notify other.com/bar name=value email=john@smith.com  
+
 Recorded notice 2
 ```
 
@@ -623,7 +651,8 @@ The `okay` command is used to acknowledge notices and warnings.
 
 <!-- START AUTOMATED OUTPUT FOR okay -->
 ```{terminal}
-:input: pebble okay --help
+pebble okay --help
+
 Usage:
   pebble okay [okay-OPTIONS]
 
@@ -645,7 +674,8 @@ The `plan` command is used to show the plan with layers combined.
 
 <!-- START AUTOMATED OUTPUT FOR plan -->
 ```{terminal}
-:input: pebble plan --help
+pebble plan --help
+
 Usage:
   pebble plan
 
@@ -662,7 +692,8 @@ The `pull` command is used to retrieve a file from the remote system.
 
 <!-- START AUTOMATED OUTPUT FOR pull -->
 ```{terminal}
-:input: pebble pull --help
+pebble pull --help
+
 Usage:
   pebble pull <remote-path> <local-path>
 
@@ -680,7 +711,8 @@ The `push` command is used to transfer a file to the remote system.
 
 <!-- START AUTOMATED OUTPUT FOR push -->
 ```{terminal}
-:input: pebble push --help
+pebble push --help
+
 Usage:
   pebble push [push-OPTIONS] <local-path> <remote-path>
 
@@ -706,7 +738,8 @@ The `remove-identities` command is used to remove identities.
 
 <!-- START AUTOMATED OUTPUT FOR remove-identities -->
 ```{terminal}
-:input: pebble remove-identities --help
+pebble remove-identities --help
+
 Usage:
   pebble remove-identities [remove-identities-OPTIONS]
 
@@ -732,7 +765,8 @@ The `replan` command starts, stops, or restarts services that have changed, so t
 
 <!-- START AUTOMATED OUTPUT FOR replan -->
 ```{terminal}
-:input: pebble replan --help
+pebble replan --help
+
 Usage:
   pebble replan [replan-OPTIONS]
 
@@ -762,21 +796,24 @@ Replan also starts any `startup: enabled` services that have not yet been starte
 Here is an example, where `srv1` is a service that has `startup: enabled`, and `srv2` does not:
 
 ```{terminal}
-   :input: pebble replan
+pebble replan
+
 2023-04-25T15:06:50+02:00 INFO Service "srv1" already started.
 ```
 
 Update "srv1" config:
 
 ```{terminal}
-   :input: pebble add lay1 layer.yaml
+pebble add lay1 layer.yaml
+
 Layer "lay1" added successfully from "layer.yaml"
 ```
 
 Replan:
 
 ```{terminal}
-   :input: pebble replan
+pebble replan
+
 Stop service "srv1"
 Start service "srv1"
 ```
@@ -784,14 +821,16 @@ Start service "srv1"
 Change "srv2" to "startup: enabled"
 
 ```{terminal}
-   :input: pebble add lay2 layer.yaml
+pebble add lay2 layer.yaml
+
 Layer "lay2" added successfully from "layer.yaml"
 ```
 
 Replan again:
 
 ```{terminal}
-   :input: pebble replan
+pebble replan
+
 2023-04-25T15:11:22+02:00 INFO Service "srv1" already started.
 Start service "srv2"
 ```
@@ -808,7 +847,8 @@ The `restart` command is used to restart a service.
 
 <!-- START AUTOMATED OUTPUT FOR restart -->
 ```{terminal}
-:input: pebble restart --help
+pebble restart --help
+
 Usage:
   pebble restart [restart-OPTIONS] <service>...
 
@@ -828,7 +868,8 @@ The `rm` command is used to remove a file or directory.
 
 <!-- START AUTOMATED OUTPUT FOR rm -->
 ```{terminal}
-:input: pebble rm --help
+pebble rm --help
+
 Usage:
   pebble rm [rm-OPTIONS] <path>
 
@@ -850,7 +891,8 @@ The `run` command is used to run the service manager environment.
 
 <!-- START AUTOMATED OUTPUT FOR run -->
 ```{terminal}
-:input: pebble run --help
+pebble run --help
+
 Usage:
   pebble run [run-OPTIONS]
 
@@ -912,7 +954,8 @@ To indicate the end of an `--args` list, use a `;` (semicolon) terminator, which
 If Pebble is installed and the `$PEBBLE` directory is set up, run the daemon by:
 
 ```{terminal}
- :input: pebble run
+pebble run
+
 2022-10-26T01:18:26.904Z [pebble] Started daemon.
 2022-10-26T01:18:26.921Z [pebble] POST /v1/services 15.53132ms 202
 2022-10-26T01:18:26.921Z [pebble] Started default services with change 50.
@@ -947,7 +990,8 @@ The `services` command lists status information about the services specified, or
 
 <!-- START AUTOMATED OUTPUT FOR services -->
 ```{terminal}
-:input: pebble services --help
+pebble services --help
+
 Usage:
   pebble services [services-OPTIONS] [<service>...]
 
@@ -967,7 +1011,8 @@ You can view the status of one or more services by using `pebble services`:
 To show status of a single service:
 
 ```{terminal}
-   :input: pebble services srv1       
+pebble services srv1       
+
 Service  Startup  Current
 srv1     enabled  active
 ```
@@ -975,7 +1020,8 @@ srv1     enabled  active
 To show status of all services:
 
 ```{terminal}
-   :input: pebble services
+pebble services
+
 Service  Startup   Current
 srv1     enabled   active
 srv2     disabled  inactive
@@ -998,7 +1044,8 @@ The `signal` command is used to send a signal to one or more running services.
 
 <!-- START AUTOMATED OUTPUT FOR signal -->
 ```{terminal}
-:input: pebble signal --help
+pebble signal --help
+
 Usage:
   pebble signal <SIGNAL> <service>...
 
@@ -1017,7 +1064,8 @@ The `start` command starts the service with the provided name and any other serv
 
 <!-- START AUTOMATED OUTPUT FOR start -->
 ```{terminal}
-:input: pebble start --help
+pebble start --help
+
 Usage:
   pebble start [start-OPTIONS] <service>...
 
@@ -1051,7 +1099,8 @@ The `start-checks` command starts the checks with the provided names.
 
 <!-- START AUTOMATED OUTPUT FOR start-checks -->
 ```{terminal}
-:input: pebble start-checks --help
+pebble start-checks --help
+
 Usage:
   pebble start-checks <check>...
 
@@ -1076,7 +1125,8 @@ The `stop` command stops the service with the provided name and any other servic
 
 <!-- START AUTOMATED OUTPUT FOR stop -->
 ```{terminal}
-:input: pebble stop --help
+pebble stop --help
+
 Usage:
   pebble stop [stop-OPTIONS] <service>...
 
@@ -1109,7 +1159,8 @@ The `stop-checks` command stops the checks with the provided names.
 
 <!-- START AUTOMATED OUTPUT FOR stop-checks -->
 ```{terminal}
-:input: pebble stop-checks --help
+pebble stop-checks --help
+
 Usage:
   pebble stop-checks <check>...
 
@@ -1135,7 +1186,8 @@ The `tasks` command is used to list a change's tasks.
 
 <!-- START AUTOMATED OUTPUT FOR tasks -->
 ```{terminal}
-:input: pebble tasks --help
+pebble tasks --help
+
 Usage:
   pebble tasks [tasks-OPTIONS] [<change-id>]
 
@@ -1162,7 +1214,8 @@ change that happened recently.
 To view tasks from the change with ID 3, run:
 
 ```{terminal}
-   :input: pebble tasks 3
+pebble tasks 3
+
 Status  Spawn                Ready                Summary
 Done    today at 15:26 NZDT  today at 15:26 NZDT  Stop service "srv1"
 Done    today at 15:26 NZDT  today at 15:26 NZDT  Stop service "srv2"
@@ -1178,7 +1231,8 @@ The `update-identities` command is used to update or replace identities.
 
 <!-- START AUTOMATED OUTPUT FOR update-identities -->
 ```{terminal}
-:input: pebble update-identities --help
+pebble update-identities --help
+
 Usage:
   pebble update-identities [update-identities-OPTIONS]
 
@@ -1213,7 +1267,8 @@ The `version` command is used to show version details.
 
 <!-- START AUTOMATED OUTPUT FOR version -->
 ```{terminal}
-:input: pebble version --help
+pebble version --help
+
 Usage:
   pebble version [version-OPTIONS]
 
@@ -1232,7 +1287,8 @@ The `warnings` command is used to list warnings.
 
 <!-- START AUTOMATED OUTPUT FOR warnings -->
 ```{terminal}
-:input: pebble warnings --help
+pebble warnings --help
+
 Usage:
   pebble warnings [warnings-OPTIONS]
 

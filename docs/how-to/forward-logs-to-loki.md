@@ -56,7 +56,8 @@ To verify that logs have been forwarded to Loki, use `logcli`.
 First, we can check the existing labels in Loki:
 
 ```{terminal}
-   :input: logcli labels
+logcli labels
+
 http://localhost:3100/loki/api/v1/labels?end=1735748567383845370&start=1735744967383845370
 pebble_service
 service_name
@@ -65,7 +66,8 @@ service_name
 To see the values for label `pebble_service`, run:
 
 ```{terminal}
-   :input: logcli labels pebble_service
+logcli labels pebble_service
+
 http://localhost:3100/loki/api/v1/label/pebble_service/values?end=1735748583854357586&start=1735744983854357586
 svc1
 ```
@@ -73,7 +75,8 @@ svc1
 To query logs from service `svc1`, run:
 
 ```{terminal}
-   :input: logcli query '{pebble_service="svc1"}'
+logcli query '{pebble_service="svc1"}'
+
 http://localhost:3100/loki/api/v1/label/pebble_service/values?end=1735748583854357586&start=1735744983854357586
 http://localhost:3100/loki/api/v1/query_range?direction=BACKWARD&end=1735748593047338924&limit=30&query=%7Bpebble_service%3D%22svc1%22%7D&start=1735744993047338924
 Common labels: {pebble_service="svc1", service_name="unknown_service"}

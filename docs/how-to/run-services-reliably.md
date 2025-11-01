@@ -79,7 +79,8 @@ Then run `pebble add-identities --from idents-add.yaml`. See [Identities](../ref
 To access the metrics endpoint, run `pebble run --http=:4000`, then use `curl` and specify the identity that we created:
 
 ```{terminal}
-   :input: curl -u alice:<password> http://localhost:4000/v1/metrics
+curl -u alice:<password> http://localhost:4000/v1/metrics
+
 # HELP pebble_service_active Whether the service is currently active (1) or not (0)
 # TYPE pebble_service_active gauge
 pebble_service_active{service="svc1"} 1
