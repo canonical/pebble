@@ -70,6 +70,9 @@ var (
 	// failDelay is the duration given to services for shutting down when Pebble
 	// sends a SIGKILL signal.
 	failDelay = 5 * time.Second
+
+	// stopSignalDefault is the signal sent to a service when it's asked to stop.
+	stopSignalDefault = syscall.SIGTERM
 )
 
 const (
@@ -715,6 +718,16 @@ func (s *serviceData) killDelay() time.Duration {
 	return killDelayDefault
 }
 
+// stopSignal returns the signal sent to a service when it's asked to stop.
+// The value returned will either be the service's pre-configured value, or
+// the default stop signal if that is not set.
+func (s *serviceData) stopSignal() (name string, signal syscall.Signal) {
+	if s.config.StopSignal.IsSet {
+		return s.config.StopSignal.Name, s.config.StopSignal.Value
+	}
+	return plan.SignalToString(stopSignalDefault), stopSignalDefault
+}
+
 // stop is called to stop a running (or backing off) service.
 func (s *serviceData) stop() error {
 	s.manager.servicesLock.Lock()
@@ -726,11 +739,12 @@ func (s *serviceData) stop() error {
 		fallthrough
 
 	case stateRunning:
-		logger.Debugf("Attempting to stop service %q by sending SIGTERM", s.config.Name)
+		signalName, stopSignal := s.stopSignal()
+		logger.Debugf("Attempting to stop service %q by sending %s", s.config.Name, signalName)
 		// First send SIGTERM to try to terminate it gracefully.
-		err := syscall.Kill(-s.cmd.Process.Pid, syscall.SIGTERM)
+		err := syscall.Kill(-s.cmd.Process.Pid, stopSignal)
 		if err != nil {
-			logger.Noticef("Cannot send SIGTERM to process: %v", err)
+			logger.Noticef("Cannot send %s to process: %v", signalName, err)
 		}
 		s.transition(stateTerminating)
 		time.AfterFunc(s.killDelay(), func() { logError(s.terminateTimeElapsed()) })
@@ -857,11 +871,12 @@ func (s *serviceData) checkFailed(action plan.ServiceAction) {
 		case plan.ActionRestart:
 			switch s.state {
 			case stateRunning:
+				signalName, stopSignal := s.stopSignal()
 				logger.Noticef("Service %q %s action is %q, terminating process before restarting",
 					s.config.Name, onType, action)
-				err := syscall.Kill(-s.cmd.Process.Pid, syscall.SIGTERM)
+				err := syscall.Kill(-s.cmd.Process.Pid, stopSignal)
 				if err != nil {
-					logger.Noticef("Cannot send SIGTERM to process: %v", err)
+					logger.Noticef("Cannot send %s to process: %v", signalName, err)
 				}
 				s.transitionRestarting(stateTerminating, true)
 				time.AfterFunc(s.killDelay(), func() { logError(s.terminateTimeElapsed()) })
