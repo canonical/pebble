@@ -1,4 +1,4 @@
-//go:build !fips
+//go:build fips
 
 // Copyright (c) 2024 Canonical Ltd
 //
@@ -25,8 +25,6 @@ import (
 	"regexp"
 	"sort"
 	"strings"
-
-	"github.com/GehirnInc/crypt/sha512_crypt"
 )
 
 // Identity holds the configuration of a single identity.
@@ -107,10 +105,8 @@ func (d *Identity) validateAccess() error {
 		gotType = true
 	}
 	if d.Basic != nil {
-		if d.Basic.Password == "" {
-			return errors.New("basic identity must specify password (hashed)")
-		}
-		gotType = true
+		// In FIPS mode, basic authentication is not supported
+		return errors.New("basic authentication is not supported in FIPS mode")
 	}
 	if d.Cert != nil {
 		if d.Cert.X509 == nil {
@@ -119,7 +115,7 @@ func (d *Identity) validateAccess() error {
 		gotType = true
 	}
 	if !gotType {
-		return errors.New(`identity must have at least one type ("local", "basic", or "cert")`)
+		return errors.New(`identity must have at least one type ("local" or "cert"; basic auth not supported in FIPS mode)`)
 	}
 
 	return nil
@@ -185,7 +181,8 @@ func (d *Identity) UnmarshalJSON(data []byte) error {
 		identity.Local = &LocalIdentity{UserID: *ai.Local.UserID}
 	}
 	if ai.Basic != nil {
-		identity.Basic = &BasicIdentity{Password: ai.Basic.Password}
+		// In FIPS mode, basic authentication is not supported
+		return errors.New("basic authentication is not supported in FIPS mode")
 	}
 	if ai.Cert != nil {
 		block, rest := pem.Decode([]byte(ai.Cert.PEM))
@@ -391,20 +388,7 @@ func (s *State) IdentityFromInputs(userID *uint32, username, password string, cl
 		return nil
 
 	case username != "" || password != "":
-		passwordBytes := []byte(password)
-		for _, identity := range s.identities {
-			if identity.Basic == nil || identity.Name != username {
-				continue
-			}
-			crypt := sha512_crypt.New()
-			err := crypt.Verify(identity.Basic.Password, passwordBytes)
-			if err == nil {
-				return identity
-			}
-			// No further username match possible.
-			break
-		}
-		// If basic auth credentials were provided, but did not match, we bail.
+		// Basic authentication is not supported in FIPS mode
 		return nil
 
 	case userID != nil:
