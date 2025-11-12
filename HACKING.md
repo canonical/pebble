@@ -31,7 +31,7 @@ However, during development it's easiest just to use `go run`, as that will auto
 
 ### FIPS 140 builds
 
-Pebble supports building for FIPS 140 compliance using the `fips` build tag. When built with this tag, the third-party `github.com/GehirnInc/crypt` library is excluded, and basic authentication (password-based) identities are disabled.
+Pebble supports building for FIPS 140 compliance using the `fips` build tag. When built with this tag, the third-party `github.com/GehirnInc/crypt` library is excluded, and basic authentication (password-based) and certificate-based identities are disabled.
 
 To build Pebble with FIPS compliance:
 
@@ -45,7 +45,7 @@ To run Pebble in FIPS mode during development:
 go run -tags=fips ./cmd/pebble run
 ```
 
-When running in FIPS mode, only "local" (UID-based) and "cert" (certificate-based) identity types are available. Attempting to add or use basic authentication identities will return an error.
+When running in FIPS mode, only "local" (UID-based) identity authentication is available. Attempting to add or use basic authentication or certificate identities will return an error.
 
 To run tests with FIPS mode enabled:
 

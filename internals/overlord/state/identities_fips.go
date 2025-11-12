@@ -109,13 +109,11 @@ func (d *Identity) validateAccess() error {
 		return errors.New("basic authentication is not supported in FIPS mode")
 	}
 	if d.Cert != nil {
-		if d.Cert.X509 == nil {
-			return errors.New("cert identity must include an X.509 certificate")
-		}
-		gotType = true
+		// In FIPS mode, certificate authentication is not supported
+		return errors.New("certificate authentication is not supported in FIPS mode")
 	}
 	if !gotType {
-		return errors.New(`identity must have at least one type ("local" or "cert"; basic auth not supported in FIPS mode)`)
+		return errors.New(`identity must have type "local" (basic and cert auth not supported in FIPS mode)`)
 	}
 
 	return nil
@@ -185,18 +183,8 @@ func (d *Identity) UnmarshalJSON(data []byte) error {
 		return errors.New("basic authentication is not supported in FIPS mode")
 	}
 	if ai.Cert != nil {
-		block, rest := pem.Decode([]byte(ai.Cert.PEM))
-		if block == nil {
-			return errors.New("cert identity must include a PEM-encoded certificate")
-		}
-		if len(rest) > 0 {
-			return errors.New("cert identity cannot have extra data after the PEM block")
-		}
-		cert, err := x509.ParseCertificate(block.Bytes)
-		if err != nil {
-			return fmt.Errorf("cannot parse certificate from cert identity: %w", err)
-		}
-		identity.Cert = &CertIdentity{X509: cert}
+		// In FIPS mode, certificate authentication is not supported
+		return errors.New("certificate authentication is not supported in FIPS mode")
 	}
 
 	// Perform additional validation using the local Identity type.
@@ -365,26 +353,7 @@ func (s *State) IdentityFromInputs(userID *uint32, username, password string, cl
 
 	switch {
 	case clientCert != nil:
-		for _, identity := range s.identities {
-			if identity.Cert != nil && identity.Cert.X509.Equal(clientCert) {
-				// Certificate identities can be added
-				// manually, so we still need to verify
-				// this was a self-signed client identity
-				// certificate without intermediaries.
-				roots := x509.NewCertPool()
-				roots.AddCert(identity.Cert.X509)
-				opts := x509.VerifyOptions{
-					Roots: roots,
-					// We only support verifying client TLS certificates.
-					KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
-				}
-				_, err := clientCert.Verify(opts)
-				if err == nil {
-					return identity
-				}
-			}
-		}
-		// If a client certificate is provided, but did not match, we bail.
+		// Certificate authentication is not supported in FIPS mode
 		return nil
 
 	case username != "" || password != "":
