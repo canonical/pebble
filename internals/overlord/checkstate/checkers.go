@@ -18,12 +18,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"net"
-	"net/http"
 	"os/exec"
 	"strconv"
-	"strings"
 	"syscall"
 	"time"
 
@@ -46,45 +43,6 @@ type httpChecker struct {
 	name    string
 	url     string
 	headers map[string]string
-}
-
-func (c *httpChecker) check(ctx context.Context) error {
-	logger.Debugf("Check %q (http): requesting %q", c.name, c.url)
-	client := &http.Client{}
-	request, err := http.NewRequestWithContext(ctx, "GET", c.url, nil)
-	if err != nil {
-		return fmt.Errorf("cannot build request: %w", err)
-	}
-	for k, v := range c.headers {
-		request.Header.Set(k, v)
-	}
-
-	response, err := client.Do(request)
-	if err != nil {
-		return err
-	}
-	defer response.Body.Close()
-
-	if response.StatusCode < 200 || response.StatusCode > 299 {
-		// Include first few lines of response body in error details
-		output, err := io.ReadAll(io.LimitReader(response.Body, maxErrorBytes))
-		details := ""
-		if err != nil {
-			details = fmt.Sprintf("cannot read response: %v", err)
-		} else {
-			lines := strings.Split(strings.TrimSpace(string(output)), "\n")
-			if len(lines) > maxErrorLines {
-				lines = lines[:maxErrorLines+1]
-				lines[maxErrorLines] = "(...)"
-			}
-			details = strings.Join(lines, "\n")
-		}
-		return &detailsError{
-			error:   fmt.Errorf("non-2xx status code %d", response.StatusCode),
-			details: details,
-		}
-	}
-	return nil
 }
 
 // tcpChecker is a checker that ensures a TCP port is open.

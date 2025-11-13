@@ -19,7 +19,6 @@ package state
 import (
 	"crypto/x509"
 	"encoding/json"
-	"encoding/pem"
 	"errors"
 	"fmt"
 	"regexp"
