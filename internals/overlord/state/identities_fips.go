@@ -104,8 +104,10 @@ func (d *Identity) validateAccess() error {
 		gotType = true
 	}
 	if d.Basic != nil {
-		// In FIPS mode, basic authentication is not supported
-		return errors.New("basic authentication is not supported in FIPS mode")
+		if d.Basic.Password == "" {
+			return errors.New("basic identity must specify password (hashed)")
+		}
+		gotType = true
 	}
 	if d.Cert != nil {
 		// In FIPS mode, certificate authentication is not supported
@@ -119,9 +121,9 @@ func (d *Identity) validateAccess() error {
 }
 
 // noTypeError returns an error message for when no identity type is specified.
-// FIPS version: only local auth is supported.
+// FIPS version: cert auth not supported, but basic auth can be configured (login blocked).
 func noTypeError() error {
-	return errors.New(`identity must have type "local" (basic and cert auth not supported in FIPS mode)`)
+	return errors.New(`identity must have at least one type ("local" or "basic"; cert auth not supported in FIPS mode)`)
 }
 
 // apiIdentity exists so the default JSON marshalling of an Identity (used
@@ -193,7 +195,7 @@ func (d *Identity) UnmarshalJSON(data []byte) error {
 }
 
 // unmarshalIdentity unmarshals identity-specific fields from apiIdentity.
-// FIPS version: blocks basic and certificate authentication.
+// FIPS version: allows basic identity storage (password hashes), blocks cert auth.
 func unmarshalIdentity(ai *apiIdentity, identity *Identity) error {
 	if ai.Local != nil {
 		if ai.Local.UserID == nil {
@@ -202,8 +204,7 @@ func unmarshalIdentity(ai *apiIdentity, identity *Identity) error {
 		identity.Local = &LocalIdentity{UserID: *ai.Local.UserID}
 	}
 	if ai.Basic != nil {
-		// In FIPS mode, basic authentication is not supported
-		return errors.New("basic authentication is not supported in FIPS mode")
+		identity.Basic = &BasicIdentity{Password: ai.Basic.Password}
 	}
 	if ai.Cert != nil {
 		// In FIPS mode, certificate authentication is not supported
@@ -369,7 +370,7 @@ func (s *State) IdentityFromInputs(userID *uint32, username, password string, cl
 }
 
 // identityFromInputs returns an identity matching the given inputs.
-// FIPS version: blocks basic and certificate authentication.
+// FIPS version: blocks login with basic auth (password verification) and certificate auth.
 func (s *State) identityFromInputs(userID *uint32, username, password string, clientCert *x509.Certificate) *Identity {
 	switch {
 	case clientCert != nil:
@@ -377,7 +378,8 @@ func (s *State) identityFromInputs(userID *uint32, username, password string, cl
 		return nil
 
 	case username != "" || password != "":
-		// Basic authentication is not supported in FIPS mode
+		// Basic authentication login is not supported in FIPS mode (password verification
+		// requires the github.com/GehirnInc/crypt library which is not FIPS-certified)
 		return nil
 
 	case userID != nil:

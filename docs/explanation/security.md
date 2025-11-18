@@ -52,7 +52,8 @@ Our intention is that projects that build on Pebble can [override how TLS connec
 Pebble supports FIPS 140-compliant builds using the `fips` build tag. When built with `-tags=fips`, Pebble will:
 
 - Not include the third-party [github.com/GehirnInc/crypt](https://github.com/Gehirninc/crypt) library
-- Disable basic authentication (password hashes) for identities
+- Disable basic authentication login (password hash verification requires the non-FIPS-certified third-party library)
+- Allow basic identity configuration (password hashes can be stored, but login is blocked)
 - Disable certificate-based authentication for identities
 - Block HTTPS server support (the `--https` flag will return an error)
 - Block HTTPS in HTTP health checks (only HTTP URLs are allowed)
@@ -74,5 +75,6 @@ snap install pebble --classic --channel=fips
 
 When running in FIPS mode:
 - Attempting to start the daemon with `--https` will return an error
-- Attempting to add or use basic authentication or certificate identities will return an error
+- Attempting to add or use certificate identities will return an error
+- Basic identities can be configured (stored), but login with username/password will fail
 - HTTP health checks that use HTTPS URLs or redirect to HTTPS will fail
