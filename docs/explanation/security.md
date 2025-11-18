@@ -66,9 +66,13 @@ To build Pebble for FIPS 140 environments:
 go build -tags=fips ./cmd/pebble
 ```
 
+The [`pebble` snap](https://snapcraft.io/pebble) provides a separate `fips` channel for FIPS 140-compliant builds:
+
+```{terminal}
+snap install pebble --classic --channel=fips
+```
+
 When running in FIPS mode:
 - Attempting to start the daemon with `--https` will return an error
 - Attempting to add or use basic authentication or certificate identities will return an error
 - HTTP health checks that use HTTPS URLs or redirect to HTTPS will fail
-
-The official [`pebble` snap](https://snapcraft.io/pebble) is not currently built with FIPS 140 compliance.
