@@ -112,10 +112,16 @@ func (d *Identity) validateAccess() error {
 		return errors.New("certificate authentication is not supported in FIPS mode")
 	}
 	if !gotType {
-		return errors.New(`identity must have type "local" (basic and cert auth not supported in FIPS mode)`)
+		return noTypeError()
 	}
 
 	return nil
+}
+
+// noTypeError returns an error message for when no identity type is specified.
+// FIPS version: only local auth is supported.
+func noTypeError() error {
+	return errors.New(`identity must have type "local" (basic and cert auth not supported in FIPS mode)`)
 }
 
 // apiIdentity exists so the default JSON marshalling of an Identity (used
@@ -171,6 +177,24 @@ func (d *Identity) UnmarshalJSON(data []byte) error {
 		Access: IdentityAccess(ai.Access),
 	}
 
+	err = unmarshalIdentity(&ai, &identity)
+	if err != nil {
+		return err
+	}
+
+	// Perform additional validation using the local Identity type.
+	err = identity.validateAccess()
+	if err != nil {
+		return err
+	}
+
+	*d = identity
+	return nil
+}
+
+// unmarshalIdentity unmarshals identity-specific fields from apiIdentity.
+// FIPS version: blocks basic and certificate authentication.
+func unmarshalIdentity(ai *apiIdentity, identity *Identity) error {
 	if ai.Local != nil {
 		if ai.Local.UserID == nil {
 			return errors.New("local identity must specify user-id")
@@ -185,14 +209,6 @@ func (d *Identity) UnmarshalJSON(data []byte) error {
 		// In FIPS mode, certificate authentication is not supported
 		return errors.New("certificate authentication is not supported in FIPS mode")
 	}
-
-	// Perform additional validation using the local Identity type.
-	err = identity.validateAccess()
-	if err != nil {
-		return err
-	}
-
-	*d = identity
 	return nil
 }
 
@@ -349,7 +365,12 @@ func (s *State) Identities() map[string]*Identity {
 // If no matching identity is found for the given inputs, nil is returned.
 func (s *State) IdentityFromInputs(userID *uint32, username, password string, clientCert *x509.Certificate) *Identity {
 	s.reading()
+	return s.identityFromInputs(userID, username, password, clientCert)
+}
 
+// identityFromInputs returns an identity matching the given inputs.
+// FIPS version: blocks basic and certificate authentication.
+func (s *State) identityFromInputs(userID *uint32, username, password string, clientCert *x509.Certificate) *Identity {
 	switch {
 	case clientCert != nil:
 		// Certificate authentication is not supported in FIPS mode

@@ -119,10 +119,16 @@ func (d *Identity) validateAccess() error {
 		gotType = true
 	}
 	if !gotType {
-		return errors.New(`identity must have at least one type ("local", "basic", or "cert")`)
+		return noTypeError()
 	}
 
 	return nil
+}
+
+// noTypeError returns an error message for when no identity type is specified.
+// This function exists to allow FIPS builds to customize the error message.
+func noTypeError() error {
+	return errors.New(`identity must have at least one type ("local", "basic", or "cert")`)
 }
 
 // apiIdentity exists so the default JSON marshalling of an Identity (used
@@ -178,6 +184,24 @@ func (d *Identity) UnmarshalJSON(data []byte) error {
 		Access: IdentityAccess(ai.Access),
 	}
 
+	err = unmarshalIdentity(&ai, &identity)
+	if err != nil {
+		return err
+	}
+
+	// Perform additional validation using the local Identity type.
+	err = identity.validateAccess()
+	if err != nil {
+		return err
+	}
+
+	*d = identity
+	return nil
+}
+
+// unmarshalIdentity unmarshals identity-specific fields from apiIdentity.
+// Non-FIPS version: supports all authentication types.
+func unmarshalIdentity(ai *apiIdentity, identity *Identity) error {
 	if ai.Local != nil {
 		if ai.Local.UserID == nil {
 			return errors.New("local identity must specify user-id")
@@ -201,14 +225,6 @@ func (d *Identity) UnmarshalJSON(data []byte) error {
 		}
 		identity.Cert = &CertIdentity{X509: cert}
 	}
-
-	// Perform additional validation using the local Identity type.
-	err = identity.validateAccess()
-	if err != nil {
-		return err
-	}
-
-	*d = identity
 	return nil
 }
 
@@ -365,7 +381,12 @@ func (s *State) Identities() map[string]*Identity {
 // If no matching identity is found for the given inputs, nil is returned.
 func (s *State) IdentityFromInputs(userID *uint32, username, password string, clientCert *x509.Certificate) *Identity {
 	s.reading()
+	return s.identityFromInputs(userID, username, password, clientCert)
+}
 
+// identityFromInputs returns an identity matching the given inputs.
+// Non-FIPS version: supports all authentication types.
+func (s *State) identityFromInputs(userID *uint32, username, password string, clientCert *x509.Certificate) *Identity {
 	switch {
 	case clientCert != nil:
 		for _, identity := range s.identities {
