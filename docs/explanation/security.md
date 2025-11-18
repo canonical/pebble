@@ -49,17 +49,7 @@ Our intention is that projects that build on Pebble can [override how TLS connec
 
 ### FIPS 140
 
-Pebble supports FIPS 140-compliant builds using the `fips` build tag. When built with `-tags=fips`, Pebble will:
-
-- Not include the third-party [github.com/GehirnInc/crypt](https://github.com/Gehirninc/crypt) library
-- Disable basic authentication login (password hash verification requires the non-FIPS-certified third-party library)
-- Allow basic identity configuration (password hashes can be stored, but login is blocked)
-- Disable certificate-based authentication for identities
-- Block HTTPS server support (the `--https` flag will return an error)
-- Block HTTPS in HTTP health checks (only HTTP URLs are allowed)
-- Block HTTPS redirects from HTTP health check requests
-
-Only "local" (UID-based) identity authentication and HTTP-only communication is available in FIPS mode.
+Pebble supports FIPS 140-compliant builds that exclude non-certified cryptographic libraries. In FIPS mode, only "local" (UID-based) identity authentication and HTTP-only communication are available.
 
 To build Pebble for FIPS 140 environments:
 
@@ -73,8 +63,8 @@ The [`pebble` snap](https://snapcraft.io/pebble) provides a separate `fips` chan
 snap install pebble --classic --channel=fips
 ```
 
-When running in FIPS mode:
-- Attempting to start the daemon with `--https` will return an error
-- Attempting to add or use certificate identities will return an error
-- Basic identities can be configured (stored), but login with username/password will fail
-- HTTP health checks that use HTTPS URLs or redirect to HTTPS will fail
+**FIPS mode restrictions:**
+- HTTPS server disabled: the `--https` flag returns an error
+- Certificate identities disabled: cannot add or authenticate using certificate-based identities
+- Basic authentication disabled: basic identities can be configured, but login with username/password is blocked
+- HTTPS health checks disabled: HTTP checks must use HTTP URLs only (HTTPS URLs and redirects to HTTPS will fail)
