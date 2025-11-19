@@ -40,9 +40,7 @@ func (s *accessSuite) TestAccess(c *C) {
 		userCheckErr    daemon.Response
 		metricsCheckErr daemon.Response
 		pairingCheckErr daemon.Response
-	}{{
-		// API source: Unix Domain Socket
-		//
+	}{{ // API source: Unix Domain Socket
 		// User: nil
 		apiSource:       daemon.TransportTypeUnixSocket,
 		user:            nil,
@@ -87,9 +85,7 @@ func (s *accessSuite) TestAccess(c *C) {
 		userCheckErr:    nil,
 		metricsCheckErr: nil,
 		pairingCheckErr: errUnauthorized,
-	}, {
-		// API source: HTTP
-		//
+	}, { // API source: HTTP
 		// User: nil
 		apiSource:       daemon.TransportTypeHTTP,
 		user:            nil,
@@ -134,9 +130,7 @@ func (s *accessSuite) TestAccess(c *C) {
 		userCheckErr:    errUnauthorized,
 		metricsCheckErr: errUnauthorized,
 		pairingCheckErr: errUnauthorized,
-	}, {
-		// API source: HTTPS
-		//
+	}, { // API source: HTTPS
 		// User: nil
 		apiSource:       daemon.TransportTypeHTTPS,
 		user:            nil,
