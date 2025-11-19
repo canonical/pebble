@@ -24,10 +24,12 @@ import (
 	"github.com/canonical/pebble/client"
 )
 
-const cmdPushSummary = "Transfer a file to the remote system"
-const cmdPushDescription = `
+const (
+	cmdPushSummary     = "Transfer a file to the remote system"
+	cmdPushDescription = `
 The push command transfers a file to the remote system.
 `
+)
 
 type cmdPush struct {
 	client *client.Client
@@ -63,6 +65,7 @@ func init() {
 		},
 	})
 }
+
 func (cmd *cmdPush) Execute(args []string) error {
 	if len(args) > 0 {
 		return ErrExtraArgs

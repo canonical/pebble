@@ -26,11 +26,13 @@ import (
 	"github.com/canonical/pebble/client"
 )
 
-const cmdLsSummary = "List path contents"
-const cmdLsDescription = `
+const (
+	cmdLsSummary     = "List path contents"
+	cmdLsDescription = `
 The ls command lists entries in the filesystem at the specified path. A glob pattern
 may be specified for the last path element.
 `
+)
 
 type cmdLs struct {
 	client *client.Client

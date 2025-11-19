@@ -883,7 +883,7 @@ func (s *filesSuite) TestWriteMultiple(c *C) {
 	// Ensure non-zero umask to test the files API's explicit chmod.  This is
 	// also why one file's permissions are 777 - to ensure the umasked
 	// permissions are overwridden as expected.
-	oldmask := syscall.Umask(0002)
+	oldmask := syscall.Umask(0o002)
 	defer syscall.Umask(oldmask)
 
 	tmpDir := c.MkDir()

@@ -136,7 +136,6 @@ type Overlord struct {
 
 // New creates an Overlord with all its state managers.
 func New(opts *Options) (*Overlord, error) {
-
 	o := &Overlord{
 		pebbleDir: opts.PebbleDir,
 		loopTomb:  new(tomb.Tomb),
@@ -337,9 +336,9 @@ func loadState(curBootID, statePath string, restartHandler restart.Handler, back
 
 	timings.Stop()
 	// TODO Implement function to save timings.
-	//s.Lock()
-	//perfTimings.Save(s)
-	//s.Unlock()
+	// s.Lock()
+	// perfTimings.Save(s)
+	// s.Unlock()
 
 	restartMgr, err := initRestart(s, curBootID, restartHandler)
 	if err != nil {

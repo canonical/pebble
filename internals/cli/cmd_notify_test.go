@@ -84,7 +84,8 @@ func (s *PebbleSuite) TestNotifyData(c *C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{
-		"notify", "--repeat-after=1h", "a.b/c", "k=v", "foo=bar bazz"})
+		"notify", "--repeat-after=1h", "a.b/c", "k=v", "foo=bar bazz",
+	})
 	c.Assert(err, IsNil)
 	c.Check(rest, HasLen, 0)
 	c.Check(s.Stdout(), Equals, "Recorded notice 42\n")

@@ -22,8 +22,10 @@ import (
 	"github.com/canonical/pebble/internals/plan"
 )
 
-var CalculateNextBackoff = calculateNextBackoff
-var GetAction = getAction
+var (
+	CalculateNextBackoff = calculateNextBackoff
+	GetAction            = getAction
+)
 
 func (m *ServiceManager) RunningCmds() map[string]*exec.Cmd {
 	m.servicesLock.Lock()

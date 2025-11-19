@@ -24,8 +24,9 @@ import (
 	"github.com/canonical/pebble/internals/logger"
 )
 
-const cmdEnterSummary = "Run subcommand under a container environment"
-const cmdEnterDescription = `
+const (
+	cmdEnterSummary     = "Run subcommand under a container environment"
+	cmdEnterDescription = `
 The enter command facilitates the use of {{.DisplayName}} as an entrypoint for containers.
 When used without a subcommand it mimics the behavior of the run command
 alone, while if used with a subcommand it runs that subcommand in the most
@@ -45,6 +46,7 @@ These subcommands are currently supported:
 (2) No logs on stdout unless -v/--verbose is used.
 (3) Services continue running after the subcommand succeeds.
 `
+)
 
 type cmdEnter struct {
 	client *client.Client
@@ -215,7 +217,6 @@ func (cmd *cmdEnter) Execute(args []string) error {
 	}
 
 	err := commander.Execute(extraArgs)
-
 	if err != nil {
 		cmd.parser.Command.Active = parser.Command.Active
 	}

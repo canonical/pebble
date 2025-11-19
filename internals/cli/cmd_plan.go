@@ -20,11 +20,13 @@ import (
 	"github.com/canonical/pebble/client"
 )
 
-var cmdPlanSummary = "Show the plan with layers combined"
-var cmdPlanDescription = `
+var (
+	cmdPlanSummary     = "Show the plan with layers combined"
+	cmdPlanDescription = `
 The plan command prints out the effective configuration of {{.DisplayName}} in YAML
 format. Layers are combined according to the override rules defined in them.
 `
+)
 
 type cmdPlan struct {
 	client *client.Client

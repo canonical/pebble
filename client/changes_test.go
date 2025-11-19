@@ -48,12 +48,12 @@ func (cs *clientSuite) TestClientChange(c *check.C) {
 			Summary:   "...",
 			Status:    "Do",
 			Progress:  client.TaskProgress{Done: 0, Total: 1},
-			SpawnTime: time.Date(2016, 04, 21, 1, 2, 3, 0, time.UTC),
-			ReadyTime: time.Date(2016, 04, 21, 1, 2, 4, 0, time.UTC),
+			SpawnTime: time.Date(2016, 0o4, 21, 1, 2, 3, 0, time.UTC),
+			ReadyTime: time.Date(2016, 0o4, 21, 1, 2, 4, 0, time.UTC),
 		}},
 
-		SpawnTime: time.Date(2016, 04, 21, 1, 2, 3, 0, time.UTC),
-		ReadyTime: time.Date(2016, 04, 21, 1, 2, 4, 0, time.UTC),
+		SpawnTime: time.Date(2016, 0o4, 21, 1, 2, 3, 0, time.UTC),
+		ReadyTime: time.Date(2016, 0o4, 21, 1, 2, 4, 0, time.UTC),
 	})
 }
 
@@ -82,11 +82,11 @@ func (cs *clientSuite) TestClientWaitChange(c *check.C) {
 			Summary:   "...",
 			Status:    "Do",
 			Progress:  client.TaskProgress{Done: 0, Total: 1},
-			SpawnTime: time.Date(2016, 04, 21, 1, 2, 3, 0, time.UTC),
-			ReadyTime: time.Date(2016, 04, 21, 1, 2, 4, 0, time.UTC),
+			SpawnTime: time.Date(2016, 0o4, 21, 1, 2, 3, 0, time.UTC),
+			ReadyTime: time.Date(2016, 0o4, 21, 1, 2, 4, 0, time.UTC),
 		}},
-		SpawnTime: time.Date(2016, 04, 21, 1, 2, 3, 0, time.UTC),
-		ReadyTime: time.Date(2016, 04, 21, 1, 2, 4, 0, time.UTC),
+		SpawnTime: time.Date(2016, 0o4, 21, 1, 2, 3, 0, time.UTC),
+		ReadyTime: time.Date(2016, 0o4, 21, 1, 2, 4, 0, time.UTC),
 	})
 }
 
@@ -215,7 +215,6 @@ func (cs *clientSuite) TestClientChanges(c *check.C) {
 			}
 		}
 	}
-
 }
 
 func (cs *clientSuite) TestClientChangesData(c *check.C) {
@@ -262,8 +261,8 @@ func (cs *clientSuite) TestClientAbort(c *check.C) {
 		Status:  "Hold",
 		Ready:   true,
 
-		SpawnTime: time.Date(2016, 04, 21, 1, 2, 3, 0, time.UTC),
-		ReadyTime: time.Date(2016, 04, 21, 1, 2, 4, 0, time.UTC),
+		SpawnTime: time.Date(2016, 0o4, 21, 1, 2, 3, 0, time.UTC),
+		ReadyTime: time.Date(2016, 0o4, 21, 1, 2, 4, 0, time.UTC),
 	})
 
 	body, err := io.ReadAll(cs.req.Body)

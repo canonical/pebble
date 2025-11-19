@@ -24,10 +24,12 @@ import (
 	"github.com/canonical/pebble/client"
 )
 
-const cmdMkdirSummary = "Create a directory"
-const cmdMkdirDescription = `
+const (
+	cmdMkdirSummary     = "Create a directory"
+	cmdMkdirDescription = `
 The mkdir command creates the specified directory.
 `
+)
 
 type cmdMkdir struct {
 	client *client.Client

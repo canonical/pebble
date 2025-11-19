@@ -24,12 +24,14 @@ import (
 	"github.com/canonical/pebble/client"
 )
 
-const cmdChecksSummary = "Query the status of configured health checks"
-const cmdChecksDescription = `
+const (
+	cmdChecksSummary     = "Query the status of configured health checks"
+	cmdChecksDescription = `
 The checks command lists status information about the configured health
 checks, optionally filtered by level and check names provided as positional
 arguments.
 `
+)
 
 type cmdChecks struct {
 	client *client.Client

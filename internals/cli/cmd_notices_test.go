@@ -112,7 +112,8 @@ func (s *PebbleSuite) TestNoticesFiltersUsers(c *C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{
-		"notices", "--abs-time", "--users", "all", "--type", "custom", "--key", "a.b/c", "--type", "warning"})
+		"notices", "--abs-time", "--users", "all", "--type", "custom", "--key", "a.b/c", "--type", "warning",
+	})
 	c.Assert(err, IsNil)
 	c.Check(rest, HasLen, 0)
 	c.Check(s.Stdout(), Equals, `
@@ -155,7 +156,8 @@ func (s *PebbleSuite) TestNoticesFiltersUID(c *C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{
-		"notices", "--abs-time", "--uid", "1000", "--type", "custom", "--key", "a.b/c", "--type", "warning"})
+		"notices", "--abs-time", "--uid", "1000", "--type", "custom", "--key", "a.b/c", "--type", "warning",
+	})
 	c.Assert(err, IsNil)
 	c.Check(rest, HasLen, 0)
 	c.Check(s.Stdout(), Equals, `
@@ -261,7 +263,8 @@ func (s *PebbleSuite) TestNoticesTimeout(c *C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{
-		"notices", "--abs-time", "--timeout", "1s"})
+		"notices", "--abs-time", "--timeout", "1s",
+	})
 	c.Assert(err, IsNil)
 	c.Check(rest, HasLen, 0)
 	c.Check(s.Stdout(), Equals, `

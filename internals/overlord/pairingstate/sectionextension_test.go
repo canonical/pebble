@@ -120,7 +120,6 @@ pairing:
 }}
 
 func (s *pairingSuite) TestPairingSectionExtensionSchema(c *C) {
-
 	for i, t := range schemaTests {
 		c.Logf("Running TestPairingSectionExtensionSchema %q test using test data index %d\n", t.summary, i)
 		combined, err := parseCombineLayers(t.layers)

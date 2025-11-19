@@ -43,16 +43,16 @@ var _ = Suite(&planSuite{})
 
 func (ps *planSuite) SetUpTest(c *C) {
 	ps.layersDir = filepath.Join(c.MkDir(), "layers")
-	err := os.Mkdir(ps.layersDir, 0755)
+	err := os.Mkdir(ps.layersDir, 0o755)
 	c.Assert(err, IsNil)
 
-	//Reset write layer counter
+	// Reset write layer counter
 	ps.writeLayerCounter = 1
 }
 
 func (ps *planSuite) writeLayer(c *C, layer string) {
 	filename := fmt.Sprintf("%03[1]d-layer-file-%[1]d.yaml", ps.writeLayerCounter)
-	err := os.WriteFile(filepath.Join(ps.layersDir, filename), []byte(layer), 0644)
+	err := os.WriteFile(filepath.Join(ps.layersDir, filename), []byte(layer), 0o644)
 	c.Assert(err, IsNil)
 
 	ps.writeLayerCounter++

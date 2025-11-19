@@ -18,9 +18,7 @@ import (
 	"io"
 )
 
-var (
-	Jctl = jctl
-)
+var Jctl = jctl
 
 func FakeServicesDir(dir string) (restore func()) {
 	old := ServicesDir

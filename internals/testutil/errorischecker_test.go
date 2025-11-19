@@ -64,5 +64,4 @@ func (*errorIsCheckerSuite) TestErrorIsWithInvalidArguments(c *C) {
 	res, errMsg = ErrorIs.Check([]any{errors.New(""), ""}, []string{"error", "target"})
 	c.Assert(res, Equals, false)
 	c.Assert(errMsg, Equals, "second argument must be an error")
-
 }

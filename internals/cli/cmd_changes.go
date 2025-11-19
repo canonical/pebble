@@ -25,10 +25,12 @@ import (
 	"github.com/canonical/pebble/cmd"
 )
 
-const cmdChangesSummary = "List system changes"
-const cmdChangesDescription = `
+const (
+	cmdChangesSummary     = "List system changes"
+	cmdChangesDescription = `
 The changes command displays a summary of system changes performed recently.
 `
+)
 
 type cmdChanges struct {
 	client *client.Client
@@ -39,11 +41,13 @@ type cmdChanges struct {
 	} `positional-args:"yes"`
 }
 
-const cmdTasksSummary = "List a change's tasks"
-const cmdTasksDescription = `
+const (
+	cmdTasksSummary     = "List a change's tasks"
+	cmdTasksDescription = `
 The tasks command displays a summary of tasks associated with an individual
 change that happened recently.
 `
+)
 
 type cmdTasks struct {
 	client *client.Client

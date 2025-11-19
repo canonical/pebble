@@ -51,7 +51,8 @@ func (s *accessSuite) TestAccess(c *C) {
 			userCheckErr:    errUnauthorized,
 			metricsCheckErr: errUnauthorized,
 			pairingCheckErr: errUnauthorized,
-		}, {
+		},
+		{
 			// User access: UntrustedAccess
 			apiSource:       daemon.TransportTypeUnixSocket,
 			user:            &daemon.UserState{Access: state.UntrustedAccess},
@@ -60,7 +61,8 @@ func (s *accessSuite) TestAccess(c *C) {
 			userCheckErr:    errUnauthorized,
 			metricsCheckErr: errUnauthorized,
 			pairingCheckErr: errUnauthorized,
-		}, {
+		},
+		{
 			// User access: MetricsAccess
 			apiSource:       daemon.TransportTypeUnixSocket,
 			user:            &daemon.UserState{Access: state.MetricsAccess},
@@ -69,7 +71,8 @@ func (s *accessSuite) TestAccess(c *C) {
 			userCheckErr:    errUnauthorized,
 			metricsCheckErr: nil,
 			pairingCheckErr: errUnauthorized,
-		}, {
+		},
+		{
 			// User access: ReadAccess
 			apiSource:       daemon.TransportTypeUnixSocket,
 			user:            &daemon.UserState{Access: state.ReadAccess},
@@ -78,7 +81,8 @@ func (s *accessSuite) TestAccess(c *C) {
 			userCheckErr:    nil,
 			metricsCheckErr: nil,
 			pairingCheckErr: errUnauthorized,
-		}, {
+		},
+		{
 			// User access: AdminAccess
 			apiSource:       daemon.TransportTypeUnixSocket,
 			user:            &daemon.UserState{Access: state.AdminAccess},
@@ -98,7 +102,8 @@ func (s *accessSuite) TestAccess(c *C) {
 			userCheckErr:    errUnauthorized,
 			metricsCheckErr: errUnauthorized,
 			pairingCheckErr: errUnauthorized,
-		}, {
+		},
+		{
 			// User access: UntrustedAccess
 			apiSource:       daemon.TransportTypeHTTP,
 			user:            &daemon.UserState{Access: state.UntrustedAccess},
@@ -107,7 +112,8 @@ func (s *accessSuite) TestAccess(c *C) {
 			userCheckErr:    errUnauthorized,
 			metricsCheckErr: errUnauthorized,
 			pairingCheckErr: errUnauthorized,
-		}, {
+		},
+		{
 			// User access: MetricsAccess
 			apiSource:       daemon.TransportTypeHTTP,
 			user:            &daemon.UserState{Access: state.MetricsAccess},
@@ -116,7 +122,8 @@ func (s *accessSuite) TestAccess(c *C) {
 			userCheckErr:    errUnauthorized,
 			metricsCheckErr: nil,
 			pairingCheckErr: errUnauthorized,
-		}, {
+		},
+		{
 			// User access: ReadAccess
 			apiSource:       daemon.TransportTypeHTTP,
 			user:            &daemon.UserState{Access: state.ReadAccess},
@@ -125,7 +132,8 @@ func (s *accessSuite) TestAccess(c *C) {
 			userCheckErr:    errUnauthorized,
 			metricsCheckErr: errUnauthorized,
 			pairingCheckErr: errUnauthorized,
-		}, {
+		},
+		{
 			// User access: AdminAccess
 			apiSource:       daemon.TransportTypeHTTP,
 			user:            &daemon.UserState{Access: state.AdminAccess},
@@ -145,7 +153,8 @@ func (s *accessSuite) TestAccess(c *C) {
 			userCheckErr:    errUnauthorized,
 			metricsCheckErr: errUnauthorized,
 			pairingCheckErr: errUnauthorized,
-		}, {
+		},
+		{
 			// User access: UntrustedAccess
 			apiSource:       daemon.TransportTypeHTTPS,
 			user:            &daemon.UserState{Access: state.UntrustedAccess},
@@ -154,7 +163,8 @@ func (s *accessSuite) TestAccess(c *C) {
 			userCheckErr:    errUnauthorized,
 			metricsCheckErr: errUnauthorized,
 			pairingCheckErr: errUnauthorized,
-		}, {
+		},
+		{
 			// User access: MetricsAccess
 			apiSource:       daemon.TransportTypeHTTPS,
 			user:            &daemon.UserState{Access: state.MetricsAccess},
@@ -163,7 +173,8 @@ func (s *accessSuite) TestAccess(c *C) {
 			userCheckErr:    errUnauthorized,
 			metricsCheckErr: nil,
 			pairingCheckErr: errUnauthorized,
-		}, {
+		},
+		{
 			// User access: ReadAccess
 			apiSource:       daemon.TransportTypeHTTPS,
 			user:            &daemon.UserState{Access: state.ReadAccess},
@@ -172,7 +183,8 @@ func (s *accessSuite) TestAccess(c *C) {
 			userCheckErr:    nil,
 			metricsCheckErr: nil,
 			pairingCheckErr: errUnauthorized,
-		}, {
+		},
+		{
 			// User access: AdminAccess
 			apiSource:       daemon.TransportTypeHTTPS,
 			user:            &daemon.UserState{Access: state.AdminAccess},
@@ -181,7 +193,8 @@ func (s *accessSuite) TestAccess(c *C) {
 			userCheckErr:    nil,
 			metricsCheckErr: nil,
 			pairingCheckErr: errUnauthorized,
-		}}
+		},
+	}
 	for _, t := range tests {
 		// Fake a test request.
 		r := &http.Request{

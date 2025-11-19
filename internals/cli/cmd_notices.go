@@ -27,8 +27,9 @@ import (
 	"github.com/canonical/pebble/client"
 )
 
-const cmdNoticesSummary = "List notices"
-const cmdNoticesDescription = `
+const (
+	cmdNoticesSummary     = "List notices"
+	cmdNoticesDescription = `
 The notices command lists notices not yet acknowledged, ordered by the
 last-repeated time (oldest first). After it runs, the notices that were shown
 may then be acknowledged by running '{{.ProgramName}} okay'. When a notice repeats, it
@@ -38,6 +39,7 @@ By default, list notices with the current user ID or public notices. Admins
 can use --users=all to view notice with any user ID, or --uid=UID to view
 another user's notices.
 `
+)
 
 type cmdNotices struct {
 	client *client.Client

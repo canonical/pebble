@@ -20,11 +20,13 @@ import (
 	"github.com/canonical/pebble/client"
 )
 
-const cmdAutoStartSummary = "Start services set to start by default"
-const cmdAutoStartDescription = `
+const (
+	cmdAutoStartSummary     = "Start services set to start by default"
+	cmdAutoStartDescription = `
 The autostart command starts the services that were configured
 to start by default.
 `
+)
 
 type cmdAutoStart struct {
 	client *client.Client

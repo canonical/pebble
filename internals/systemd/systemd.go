@@ -316,16 +316,18 @@ type UnitStatus struct {
 	Active   bool
 }
 
-var baseProperties = []string{"Id", "ActiveState", "UnitFileState"}
-var extendedProperties = []string{"Id", "ActiveState", "UnitFileState", "Type"}
-var unitProperties = map[string][]string{
-	".timer":  baseProperties,
-	".socket": baseProperties,
-	// in service units, Type is the daemon type
-	".service": extendedProperties,
-	// in mount units, Type is the fs type
-	".mount": extendedProperties,
-}
+var (
+	baseProperties     = []string{"Id", "ActiveState", "UnitFileState"}
+	extendedProperties = []string{"Id", "ActiveState", "UnitFileState", "Type"}
+	unitProperties     = map[string][]string{
+		".timer":  baseProperties,
+		".socket": baseProperties,
+		// in service units, Type is the daemon type
+		".service": extendedProperties,
+		// in mount units, Type is the fs type
+		".mount": extendedProperties,
+	}
+)
 
 func (s *systemd) getUnitStatus(properties []string, unitNames []string) ([]*UnitStatus, error) {
 	cmd := make([]string, len(unitNames)+2)
@@ -680,7 +682,7 @@ WantedBy=multi-user.target
 `, snapName, revision, what, where, fstype, strings.Join(options, ","))
 
 	mu := MountUnitPath(where)
-	mountUnitName, err := filepath.Base(mu), osutil.AtomicWriteFile(mu, []byte(c), 0644, 0)
+	mountUnitName, err := filepath.Base(mu), osutil.AtomicWriteFile(mu, []byte(c), 0o644, 0)
 	if err != nil {
 		return "", err
 	}

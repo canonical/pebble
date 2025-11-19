@@ -108,7 +108,7 @@ func (cs *clientSuite) Do(req *http.Request) (*http.Response, error) {
 		rsp.TLS = &tls.ConnectionState{
 			PeerCertificates: []*x509.Certificate{
 				// TLS certificate.
-				&x509.Certificate{},
+				{},
 				// ID Certificate.
 				cs.serverIdCert,
 			},

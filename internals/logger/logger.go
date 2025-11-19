@@ -25,9 +25,7 @@ import (
 	"time"
 )
 
-var (
-	appID = "pebble"
-)
+var appID = "pebble"
 
 // A Logger is a fairly minimal logging tool.
 type Logger interface {

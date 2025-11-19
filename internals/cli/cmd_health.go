@@ -22,13 +22,15 @@ import (
 	"github.com/canonical/pebble/client"
 )
 
-const cmdHealthSummary = "Query health of checks"
-const cmdHealthDescription = `
+const (
+	cmdHealthSummary     = "Query health of checks"
+	cmdHealthDescription = `
 The health command queries the health of configured checks.
 
 It returns an exit code 0 if all the requested checks are healthy, or
 an exit code 1 if at least one of the requested checks are unhealthy.
 `
+)
 
 type cmdHealth struct {
 	client *client.Client

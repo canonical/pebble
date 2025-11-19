@@ -84,5 +84,4 @@ func (*humanSuite) TestHuman(c *check.C) {
 	d2 := now.AddDate(0, 3, 0)
 	c.Check(timeutil.Human(d1), check.Equals, d1.Format("2006-01-02"))
 	c.Check(timeutil.Human(d2), check.Equals, d2.Format("2006-01-02"))
-
 }

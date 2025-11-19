@@ -63,7 +63,7 @@ func IsExec(path string) bool {
 	if err != nil {
 		return false
 	}
-	return !stat.IsDir() && (stat.Mode().Perm()&0111 != 0)
+	return !stat.IsDir() && (stat.Mode().Perm()&0o111 != 0)
 }
 
 // IsExecInPath returns true if name is an executable in $PATH.

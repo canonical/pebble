@@ -377,7 +377,6 @@ func (sched *Schedule) Next(last time.Time) ScheduleWindow {
 		}
 		return window
 	}
-
 }
 
 func randDur(a, b time.Time) time.Duration {
@@ -395,9 +394,7 @@ func randDur(a, b time.Time) time.Duration {
 	return randutil.RandomDuration(dur)
 }
 
-var (
-	timeNow = time.Now
-)
+var timeNow = time.Now
 
 // Next returns the earliest event after last according to the provided
 // schedule but no later than maxDuration since last.
@@ -425,7 +422,6 @@ func Next(schedule []*Schedule, last time.Time, maxDuration time.Duration) time.
 	}
 
 	return when
-
 }
 
 var weekdayMap = map[string]time.Weekday{
@@ -608,7 +604,7 @@ func parseWeekday(s string) (week Week, err error) {
 		return week, fmt.Errorf("cannot parse %q: invalid format", s)
 	}
 
-	var day = s
+	day := s
 	var pos uint
 	if l == 4 {
 		day = s[0:3]

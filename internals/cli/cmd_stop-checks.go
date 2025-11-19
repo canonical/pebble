@@ -23,12 +23,14 @@ import (
 	"github.com/canonical/pebble/client"
 )
 
-const cmdStopChecksSummary = "Stop one or more checks"
-const cmdStopChecksDescription = `
+const (
+	cmdStopChecksSummary     = "Stop one or more checks"
+	cmdStopChecksDescription = `
 The stop-checks command stops the configured health checks provided as
 positional arguments. For any checks that are inactive, the command has
 no effect.
 `
+)
 
 type cmdStopChecks struct {
 	client *client.Client

@@ -87,7 +87,8 @@ func (ts *timeutilSuite) TestScheduleString(c *C) {
 		{
 			timeutil.Schedule{
 				ClockSpans: []timeutil.ClockSpan{
-					{Start: timeutil.Clock{Hour: 13, Minute: 41}, End: timeutil.Clock{Hour: 14, Minute: 59}}},
+					{Start: timeutil.Clock{Hour: 13, Minute: 41}, End: timeutil.Clock{Hour: 14, Minute: 59}},
+				},
 			},
 			"13:41-14:59",
 		}, {
@@ -96,60 +97,74 @@ func (ts *timeutilSuite) TestScheduleString(c *C) {
 					{Start: timeutil.Clock{Hour: 13, Minute: 41}, End: timeutil.Clock{Hour: 14, Minute: 59}},
 				},
 				WeekSpans: []timeutil.WeekSpan{
-					{Start: timeutil.Week{Weekday: time.Monday}, End: timeutil.Week{Weekday: time.Monday}}},
+					{Start: timeutil.Week{Weekday: time.Monday}, End: timeutil.Week{Weekday: time.Monday}},
+				},
 			},
 			"mon,13:41-14:59",
 		}, {
 			timeutil.Schedule{
 				ClockSpans: []timeutil.ClockSpan{
-					{Start: timeutil.Clock{Hour: 13, Minute: 41}, End: timeutil.Clock{Hour: 14, Minute: 59}, Spread: true}},
+					{Start: timeutil.Clock{Hour: 13, Minute: 41}, End: timeutil.Clock{Hour: 14, Minute: 59}, Spread: true},
+				},
 			},
 			"13:41~14:59",
 		}, {
 			timeutil.Schedule{
 				ClockSpans: []timeutil.ClockSpan{
-					{Start: timeutil.Clock{Hour: 6}, End: timeutil.Clock{Hour: 6}}},
+					{Start: timeutil.Clock{Hour: 6}, End: timeutil.Clock{Hour: 6}},
+				},
 				WeekSpans: []timeutil.WeekSpan{
-					{Start: timeutil.Week{Weekday: time.Monday}, End: timeutil.Week{Weekday: time.Friday}}},
+					{Start: timeutil.Week{Weekday: time.Monday}, End: timeutil.Week{Weekday: time.Friday}},
+				},
 			},
 			"mon-fri,06:00",
 		}, {
 			timeutil.Schedule{
 				ClockSpans: []timeutil.ClockSpan{
 					{Start: timeutil.Clock{Hour: 6}, End: timeutil.Clock{Hour: 6}},
-					{Start: timeutil.Clock{Hour: 9}, End: timeutil.Clock{Hour: 14}, Spread: true, Split: 2}},
+					{Start: timeutil.Clock{Hour: 9}, End: timeutil.Clock{Hour: 14}, Spread: true, Split: 2},
+				},
 				WeekSpans: []timeutil.WeekSpan{
 					{Start: timeutil.Week{Weekday: time.Monday}, End: timeutil.Week{Weekday: time.Friday}},
-					{Start: timeutil.Week{Weekday: time.Saturday}, End: timeutil.Week{Weekday: time.Saturday}}},
+					{Start: timeutil.Week{Weekday: time.Saturday}, End: timeutil.Week{Weekday: time.Saturday}},
+				},
 			},
 			"mon-fri,sat,06:00,09:00~14:00/2",
 		}, {
 			timeutil.Schedule{
 				ClockSpans: []timeutil.ClockSpan{
-					{Start: timeutil.Clock{Hour: 6}, End: timeutil.Clock{Hour: 6}}},
+					{Start: timeutil.Clock{Hour: 6}, End: timeutil.Clock{Hour: 6}},
+				},
 				WeekSpans: []timeutil.WeekSpan{
-					{Start: timeutil.Week{Weekday: time.Monday, Pos: 1}, End: timeutil.Week{Weekday: time.Friday, Pos: 1}}},
+					{Start: timeutil.Week{Weekday: time.Monday, Pos: 1}, End: timeutil.Week{Weekday: time.Friday, Pos: 1}},
+				},
 			},
 			"mon1-fri1,06:00",
 		}, {
 			timeutil.Schedule{
 				ClockSpans: []timeutil.ClockSpan{
-					{Start: timeutil.Clock{Hour: 6}, End: timeutil.Clock{Hour: 6}}},
+					{Start: timeutil.Clock{Hour: 6}, End: timeutil.Clock{Hour: 6}},
+				},
 				WeekSpans: []timeutil.WeekSpan{
-					{Start: timeutil.Week{Weekday: time.Monday, Pos: 5},
-						End: timeutil.Week{Weekday: time.Monday, Pos: 5}}},
+					{
+						Start: timeutil.Week{Weekday: time.Monday, Pos: 5},
+						End:   timeutil.Week{Weekday: time.Monday, Pos: 5},
+					},
+				},
 			},
 			"mon5,06:00",
 		}, {
 			timeutil.Schedule{
 				WeekSpans: []timeutil.WeekSpan{
-					{Start: timeutil.Week{Weekday: time.Monday}, End: timeutil.Week{Weekday: time.Monday}}},
+					{Start: timeutil.Week{Weekday: time.Monday}, End: timeutil.Week{Weekday: time.Monday}},
+				},
 			},
 			"mon",
 		}, {
 			timeutil.Schedule{
 				ClockSpans: []timeutil.ClockSpan{
-					{Start: timeutil.Clock{Hour: 6}, End: timeutil.Clock{Hour: 9}, Spread: true, Split: 2}},
+					{Start: timeutil.Clock{Hour: 6}, End: timeutil.Clock{Hour: 9}, Spread: true, Split: 2},
+				},
 			},
 			"06:00~09:00/2",
 		},
@@ -174,13 +189,16 @@ func (ts *timeutilSuite) TestParseLegacySchedule(c *C) {
 		// valid
 		{"9:00-11:00", []*timeutil.Schedule{
 			{ClockSpans: []timeutil.ClockSpan{
-				{Start: timeutil.Clock{Hour: 9}, End: timeutil.Clock{Hour: 11}, Spread: true}}},
+				{Start: timeutil.Clock{Hour: 9}, End: timeutil.Clock{Hour: 11}, Spread: true},
+			}},
 		}, ""},
 		{"9:00-11:00/20:00-22:00", []*timeutil.Schedule{
 			{ClockSpans: []timeutil.ClockSpan{
-				{Start: timeutil.Clock{Hour: 9}, End: timeutil.Clock{Hour: 11}, Spread: true}}},
+				{Start: timeutil.Clock{Hour: 9}, End: timeutil.Clock{Hour: 11}, Spread: true},
+			}},
 			{ClockSpans: []timeutil.ClockSpan{
-				{Start: timeutil.Clock{Hour: 20}, End: timeutil.Clock{Hour: 22}, Spread: true}}},
+				{Start: timeutil.Clock{Hour: 20}, End: timeutil.Clock{Hour: 22}, Spread: true},
+			}},
 		}, ""},
 	} {
 		c.Logf("trying: %v", t)
@@ -305,7 +323,6 @@ func (ts *timeutilSuite) TestLegacyScheduleNext(c *C) {
 		next := timeutil.Next(sched, last, maxDuration)
 		c.Check(next >= minDist && next <= maxDist, Equals, true, Commentf("invalid  distance for schedule %q with last refresh %q, now %q, expected %v, got %v", t.schedule, t.last, t.now, t.next, next))
 	}
-
 }
 
 func (ts *timeutilSuite) TestParseSchedule(c *C) {
@@ -350,87 +367,121 @@ func (ts *timeutilSuite) TestParseSchedule(c *C) {
 			in: "9:00-11:00",
 			expected: []*timeutil.Schedule{{
 				ClockSpans: []timeutil.ClockSpan{
-					{Start: timeutil.Clock{Hour: 9}, End: timeutil.Clock{Hour: 11}}}}},
-		}, {
+					{Start: timeutil.Clock{Hour: 9}, End: timeutil.Clock{Hour: 11}},
+				},
+			}},
+		},
+		{
 			in: "9:00-11:00/2",
 			expected: []*timeutil.Schedule{{
 				ClockSpans: []timeutil.ClockSpan{
-					{Start: timeutil.Clock{Hour: 9}, End: timeutil.Clock{Hour: 11}, Split: 2}}}},
-		}, {
+					{Start: timeutil.Clock{Hour: 9}, End: timeutil.Clock{Hour: 11}, Split: 2},
+				},
+			}},
+		},
+		{
 			in: "mon,9:00-11:00",
 			expected: []*timeutil.Schedule{{
 				ClockSpans: []timeutil.ClockSpan{
-					{Start: timeutil.Clock{Hour: 9}, End: timeutil.Clock{Hour: 11}}},
+					{Start: timeutil.Clock{Hour: 9}, End: timeutil.Clock{Hour: 11}},
+				},
 				WeekSpans: []timeutil.WeekSpan{
-					{Start: timeutil.Week{Weekday: time.Monday}, End: timeutil.Week{Weekday: time.Monday}}},
+					{Start: timeutil.Week{Weekday: time.Monday}, End: timeutil.Week{Weekday: time.Monday}},
+				},
 			}},
-		}, {
+		},
+		{
 			in: "fri,mon,9:00-11:00",
 			expected: []*timeutil.Schedule{{
 				ClockSpans: []timeutil.ClockSpan{
-					{Start: timeutil.Clock{Hour: 9}, End: timeutil.Clock{Hour: 11}}},
+					{Start: timeutil.Clock{Hour: 9}, End: timeutil.Clock{Hour: 11}},
+				},
 				WeekSpans: []timeutil.WeekSpan{
 					{Start: timeutil.Week{Weekday: time.Friday}, End: timeutil.Week{Weekday: time.Friday}},
-					{Start: timeutil.Week{Weekday: time.Monday}, End: timeutil.Week{Weekday: time.Monday}}},
+					{Start: timeutil.Week{Weekday: time.Monday}, End: timeutil.Week{Weekday: time.Monday}},
+				},
 			}},
-		}, {
+		},
+		{
 			in: "9:00-11:00,,20:00-22:00",
-			expected: []*timeutil.Schedule{{
-				ClockSpans: []timeutil.ClockSpan{
-					{Start: timeutil.Clock{Hour: 9}, End: timeutil.Clock{Hour: 11}}},
-			}, {
-				ClockSpans: []timeutil.ClockSpan{
-					{Start: timeutil.Clock{Hour: 20}, End: timeutil.Clock{Hour: 22}}}},
+			expected: []*timeutil.Schedule{
+				{
+					ClockSpans: []timeutil.ClockSpan{
+						{Start: timeutil.Clock{Hour: 9}, End: timeutil.Clock{Hour: 11}},
+					},
+				}, {
+					ClockSpans: []timeutil.ClockSpan{
+						{Start: timeutil.Clock{Hour: 20}, End: timeutil.Clock{Hour: 22}},
+					},
+				},
 			},
-		}, {
+		},
+		{
 			in: "mon,9:00-11:00,,wed,22:00-23:00",
 			expected: []*timeutil.Schedule{{
 				ClockSpans: []timeutil.ClockSpan{
-					{Start: timeutil.Clock{Hour: 9}, End: timeutil.Clock{Hour: 11}}},
+					{Start: timeutil.Clock{Hour: 9}, End: timeutil.Clock{Hour: 11}},
+				},
 				WeekSpans: []timeutil.WeekSpan{
-					{Start: timeutil.Week{Weekday: time.Monday}, End: timeutil.Week{Weekday: time.Monday}}},
+					{Start: timeutil.Week{Weekday: time.Monday}, End: timeutil.Week{Weekday: time.Monday}},
+				},
 			}, {
 				ClockSpans: []timeutil.ClockSpan{
-					{Start: timeutil.Clock{Hour: 22}, End: timeutil.Clock{Hour: 23}}},
+					{Start: timeutil.Clock{Hour: 22}, End: timeutil.Clock{Hour: 23}},
+				},
 				WeekSpans: []timeutil.WeekSpan{
-					{Start: timeutil.Week{Weekday: time.Wednesday}, End: timeutil.Week{Weekday: time.Wednesday}}},
+					{Start: timeutil.Week{Weekday: time.Wednesday}, End: timeutil.Week{Weekday: time.Wednesday}},
+				},
 			}},
-		}, {
+		},
+		{
 			in: "mon,9:00,10:00,14:00,15:00",
 			expected: []*timeutil.Schedule{{
 				ClockSpans: []timeutil.ClockSpan{
 					{Start: timeutil.Clock{Hour: 9}, End: timeutil.Clock{Hour: 9}},
 					{Start: timeutil.Clock{Hour: 10}, End: timeutil.Clock{Hour: 10}},
 					{Start: timeutil.Clock{Hour: 14}, End: timeutil.Clock{Hour: 14}},
-					{Start: timeutil.Clock{Hour: 15}, End: timeutil.Clock{Hour: 15}}},
+					{Start: timeutil.Clock{Hour: 15}, End: timeutil.Clock{Hour: 15}},
+				},
 				WeekSpans: []timeutil.WeekSpan{
-					{Start: timeutil.Week{Weekday: time.Monday}, End: timeutil.Week{Weekday: time.Monday}}},
+					{Start: timeutil.Week{Weekday: time.Monday}, End: timeutil.Week{Weekday: time.Monday}},
+				},
 			}},
-		}, {
+		},
+		{
 			in: "mon,wed",
 			expected: []*timeutil.Schedule{{
 				WeekSpans: []timeutil.WeekSpan{
 					{Start: timeutil.Week{Weekday: time.Monday}, End: timeutil.Week{Weekday: time.Monday}},
-					{Start: timeutil.Week{Weekday: time.Wednesday}, End: timeutil.Week{Weekday: time.Wednesday}}},
+					{Start: timeutil.Week{Weekday: time.Wednesday}, End: timeutil.Week{Weekday: time.Wednesday}},
+				},
 			}},
-		}, {
+		},
+		{
 			// same as above
 			in: "mon,,wed",
-			expected: []*timeutil.Schedule{{
-				WeekSpans: []timeutil.WeekSpan{
-					{Start: timeutil.Week{Weekday: time.Monday}, End: timeutil.Week{Weekday: time.Monday}}},
-			}, {
-				WeekSpans: []timeutil.WeekSpan{
-					{Start: timeutil.Week{Weekday: time.Wednesday}, End: timeutil.Week{Weekday: time.Wednesday}}}},
+			expected: []*timeutil.Schedule{
+				{
+					WeekSpans: []timeutil.WeekSpan{
+						{Start: timeutil.Week{Weekday: time.Monday}, End: timeutil.Week{Weekday: time.Monday}},
+					},
+				}, {
+					WeekSpans: []timeutil.WeekSpan{
+						{Start: timeutil.Week{Weekday: time.Wednesday}, End: timeutil.Week{Weekday: time.Wednesday}},
+					},
+				},
 			},
-		}, {
+		},
+		{
 			// but not the same as this one
 			in: "mon-wed",
 			expected: []*timeutil.Schedule{{
 				WeekSpans: []timeutil.WeekSpan{
-					{Start: timeutil.Week{Weekday: time.Monday}, End: timeutil.Week{Weekday: time.Wednesday}}},
+					{Start: timeutil.Week{Weekday: time.Monday}, End: timeutil.Week{Weekday: time.Wednesday}},
+				},
 			}},
-		}, {
+		},
+		{
 			in: "mon-wed,fri,9:00-11:00/2",
 			expected: []*timeutil.Schedule{{
 				ClockSpans: []timeutil.ClockSpan{
@@ -441,44 +492,56 @@ func (ts *timeutilSuite) TestParseSchedule(c *C) {
 					{Start: timeutil.Week{Weekday: time.Friday}, End: timeutil.Week{Weekday: time.Friday}},
 				},
 			}},
-		}, {
+		},
+		{
 			in: "9:00~11:00",
 			expected: []*timeutil.Schedule{{
 				ClockSpans: []timeutil.ClockSpan{
-					{Start: timeutil.Clock{Hour: 9}, End: timeutil.Clock{Hour: 11}, Spread: true}},
+					{Start: timeutil.Clock{Hour: 9}, End: timeutil.Clock{Hour: 11}, Spread: true},
+				},
 			}},
-		}, {
+		},
+		{
 			in: "9:00",
 			expected: []*timeutil.Schedule{{
 				ClockSpans: []timeutil.ClockSpan{
-					{Start: timeutil.Clock{Hour: 9}, End: timeutil.Clock{Hour: 9}}},
+					{Start: timeutil.Clock{Hour: 9}, End: timeutil.Clock{Hour: 9}},
+				},
 			}},
-		}, {
+		},
+		{
 			in: "mon1,9:00",
 			expected: []*timeutil.Schedule{{
 				ClockSpans: []timeutil.ClockSpan{
-					{Start: timeutil.Clock{Hour: 9}, End: timeutil.Clock{Hour: 9}}},
+					{Start: timeutil.Clock{Hour: 9}, End: timeutil.Clock{Hour: 9}},
+				},
 				WeekSpans: []timeutil.WeekSpan{
-					{Start: timeutil.Week{Weekday: time.Monday, Pos: 1}, End: timeutil.Week{Weekday: time.Monday, Pos: 1}}},
+					{Start: timeutil.Week{Weekday: time.Monday, Pos: 1}, End: timeutil.Week{Weekday: time.Monday, Pos: 1}},
+				},
 			}},
-		}, {
+		},
+		{
 			in: "00:00-24:00",
 			expected: []*timeutil.Schedule{{
 				ClockSpans: []timeutil.ClockSpan{
-					{Start: timeutil.Clock{Hour: 0}, End: timeutil.Clock{Hour: 24}}},
+					{Start: timeutil.Clock{Hour: 0}, End: timeutil.Clock{Hour: 24}},
+				},
 			}},
-		}, {
+		},
+		{
 			in: "23:00-01:00",
 			expected: []*timeutil.Schedule{{
 				ClockSpans: []timeutil.ClockSpan{
 					{Start: timeutil.Clock{Hour: 23}, End: timeutil.Clock{Hour: 1}},
 				},
 			}},
-		}, {
+		},
+		{
 			in: "fri-mon",
 			expected: []*timeutil.Schedule{{
 				WeekSpans: []timeutil.WeekSpan{
-					{Start: timeutil.Week{Weekday: time.Friday}, End: timeutil.Week{Weekday: time.Monday}}},
+					{Start: timeutil.Week{Weekday: time.Friday}, End: timeutil.Week{Weekday: time.Monday}},
+				},
 			}},
 		},
 	} {

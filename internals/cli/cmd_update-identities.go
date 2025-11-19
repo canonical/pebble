@@ -22,8 +22,9 @@ import (
 	"github.com/canonical/pebble/client"
 )
 
-const cmdUpdateIdentitiesSummary = "Update or replace identities"
-const cmdUpdateIdentitiesDescription = `
+const (
+	cmdUpdateIdentitiesSummary     = "Update or replace identities"
+	cmdUpdateIdentitiesDescription = `
 The update-identities command updates or replaces one or more identities.
 
 By default, the named identities must already exist and are updated.
@@ -41,6 +42,7 @@ For example, to add or update "alice" and ensure "bob" is removed, use
 >             user-id: 1000
 >     bob: null
 `
+)
 
 type cmdUpdateIdentities struct {
 	client *client.Client

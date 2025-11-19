@@ -256,7 +256,7 @@ func (s *daemonSuite) TestExplicitPaths(c *C) {
 
 	info, err := os.Stat(s.socketPath)
 	c.Assert(err, IsNil)
-	c.Assert(info.Mode(), Equals, os.ModeSocket|0666)
+	c.Assert(info.Mode(), Equals, os.ModeSocket|0o666)
 }
 
 func (s *daemonSuite) TestCommandMethodDispatch(c *C) {
@@ -1002,7 +1002,7 @@ func (s *daemonSuite) TestRestartExpectedRebootIsMissing(c *C) {
 	c.Assert(err, IsNil)
 
 	fakeState := []byte(fmt.Sprintf(`{"data":{"patch-level":%d,"patch-sublevel":%d,"some":"data","system-restart-from-boot-id":%q,"daemon-system-restart-at":"%s"},"changes":null,"tasks":null,"last-change-id":0,"last-task-id":0,"last-lane-id":0}`, patch.Level, patch.Sublevel, curBootID, time.Now().UTC().Format(time.RFC3339)))
-	err = os.WriteFile(s.statePath, fakeState, 0600)
+	err = os.WriteFile(s.statePath, fakeState, 0o600)
 	c.Assert(err, IsNil)
 
 	oldRebootNoticeWait := rebootNoticeWait
@@ -1050,7 +1050,7 @@ func (s *daemonSuite) TestRestartExpectedRebootIsMissing(c *C) {
 
 func (s *daemonSuite) TestRestartExpectedRebootOK(c *C) {
 	fakeState := []byte(fmt.Sprintf(`{"data":{"patch-level":%d,"patch-sublevel":%d,"some":"data","system-restart-from-boot-id":%q,"daemon-system-restart-at":"%s"},"changes":null,"tasks":null,"last-change-id":0,"last-task-id":0,"last-lane-id":0}`, patch.Level, patch.Sublevel, "boot-id-0", time.Now().UTC().Format(time.RFC3339)))
-	err := os.WriteFile(s.statePath, fakeState, 0600)
+	err := os.WriteFile(s.statePath, fakeState, 0o600)
 	c.Assert(err, IsNil)
 
 	cmd := testutil.FakeCommand(c, "shutdown", "")
@@ -1074,7 +1074,7 @@ func (s *daemonSuite) TestRestartExpectedRebootGiveUp(c *C) {
 	c.Assert(err, IsNil)
 
 	fakeState := []byte(fmt.Sprintf(`{"data":{"patch-level":%d,"patch-sublevel":%d,"some":"data","system-restart-from-boot-id":%q,"daemon-system-restart-at":"%s","daemon-system-restart-tentative":3},"changes":null,"tasks":null,"last-change-id":0,"last-task-id":0,"last-lane-id":0}`, patch.Level, patch.Sublevel, curBootID, time.Now().UTC().Format(time.RFC3339)))
-	err = os.WriteFile(s.statePath, fakeState, 0600)
+	err = os.WriteFile(s.statePath, fakeState, 0o600)
 	c.Assert(err, IsNil)
 
 	cmd := testutil.FakeCommand(c, "shutdown", "")

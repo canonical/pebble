@@ -23,10 +23,12 @@ import (
 	"github.com/canonical/pebble/client"
 )
 
-const cmdIdentitySummary = "Show a single identity"
-const cmdIdentityDescription = `
+const (
+	cmdIdentitySummary     = "Show a single identity"
+	cmdIdentityDescription = `
 The identity command shows details for a single identity in YAML format.
 `
+)
 
 type cmdIdentity struct {
 	client *client.Client
