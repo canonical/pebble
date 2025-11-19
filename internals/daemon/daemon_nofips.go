@@ -37,16 +37,3 @@ func (d *Daemon) initHTTPSListener() error {
 	}
 	return nil
 }
-
-// initHTTPListener allows HTTP listener creation in non-FIPS mode.
-func (d *Daemon) initHTTPListener() error {
-	if d.options.HTTPAddress != "" {
-		listener, err := net.Listen("tcp", d.options.HTTPAddress)
-		if err != nil {
-			return fmt.Errorf("cannot listen on %q: %v", d.options.HTTPAddress, err)
-		}
-		d.httpListener = listener
-		logger.Noticef("HTTP API server listening on %q.", d.options.HTTPAddress)
-	}
-	return nil
-}
