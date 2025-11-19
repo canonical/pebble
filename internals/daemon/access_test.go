@@ -40,161 +40,148 @@ func (s *accessSuite) TestAccess(c *C) {
 		userCheckErr    daemon.Response
 		metricsCheckErr daemon.Response
 		pairingCheckErr daemon.Response
-	}{
+	}{{
 		// API source: Unix Domain Socket
-		{
-			// User: nil
-			apiSource:       daemon.TransportTypeUnixSocket,
-			user:            nil,
-			openCheckErr:    nil,
-			adminCheckErr:   errUnauthorized,
-			userCheckErr:    errUnauthorized,
-			metricsCheckErr: errUnauthorized,
-			pairingCheckErr: errUnauthorized,
-		},
-		{
-			// User access: UntrustedAccess
-			apiSource:       daemon.TransportTypeUnixSocket,
-			user:            &daemon.UserState{Access: state.UntrustedAccess},
-			openCheckErr:    nil,
-			adminCheckErr:   errUnauthorized,
-			userCheckErr:    errUnauthorized,
-			metricsCheckErr: errUnauthorized,
-			pairingCheckErr: errUnauthorized,
-		},
-		{
-			// User access: MetricsAccess
-			apiSource:       daemon.TransportTypeUnixSocket,
-			user:            &daemon.UserState{Access: state.MetricsAccess},
-			openCheckErr:    nil,
-			adminCheckErr:   errUnauthorized,
-			userCheckErr:    errUnauthorized,
-			metricsCheckErr: nil,
-			pairingCheckErr: errUnauthorized,
-		},
-		{
-			// User access: ReadAccess
-			apiSource:       daemon.TransportTypeUnixSocket,
-			user:            &daemon.UserState{Access: state.ReadAccess},
-			openCheckErr:    nil,
-			adminCheckErr:   errUnauthorized,
-			userCheckErr:    nil,
-			metricsCheckErr: nil,
-			pairingCheckErr: errUnauthorized,
-		},
-		{
-			// User access: AdminAccess
-			apiSource:       daemon.TransportTypeUnixSocket,
-			user:            &daemon.UserState{Access: state.AdminAccess},
-			openCheckErr:    nil,
-			adminCheckErr:   nil,
-			userCheckErr:    nil,
-			metricsCheckErr: nil,
-			pairingCheckErr: errUnauthorized,
-		},
+		//
+		// User: nil
+		apiSource:       daemon.TransportTypeUnixSocket,
+		user:            nil,
+		openCheckErr:    nil,
+		adminCheckErr:   errUnauthorized,
+		userCheckErr:    errUnauthorized,
+		metricsCheckErr: errUnauthorized,
+		pairingCheckErr: errUnauthorized,
+	}, {
+		// User access: UntrustedAccess
+		apiSource:       daemon.TransportTypeUnixSocket,
+		user:            &daemon.UserState{Access: state.UntrustedAccess},
+		openCheckErr:    nil,
+		adminCheckErr:   errUnauthorized,
+		userCheckErr:    errUnauthorized,
+		metricsCheckErr: errUnauthorized,
+		pairingCheckErr: errUnauthorized,
+	}, {
+		// User access: MetricsAccess
+		apiSource:       daemon.TransportTypeUnixSocket,
+		user:            &daemon.UserState{Access: state.MetricsAccess},
+		openCheckErr:    nil,
+		adminCheckErr:   errUnauthorized,
+		userCheckErr:    errUnauthorized,
+		metricsCheckErr: nil,
+		pairingCheckErr: errUnauthorized,
+	}, {
+		// User access: ReadAccess
+		apiSource:       daemon.TransportTypeUnixSocket,
+		user:            &daemon.UserState{Access: state.ReadAccess},
+		openCheckErr:    nil,
+		adminCheckErr:   errUnauthorized,
+		userCheckErr:    nil,
+		metricsCheckErr: nil,
+		pairingCheckErr: errUnauthorized,
+	}, {
+		// User access: AdminAccess
+		apiSource:       daemon.TransportTypeUnixSocket,
+		user:            &daemon.UserState{Access: state.AdminAccess},
+		openCheckErr:    nil,
+		adminCheckErr:   nil,
+		userCheckErr:    nil,
+		metricsCheckErr: nil,
+		pairingCheckErr: errUnauthorized,
+	}, {
 		// API source: HTTP
-		{
-			// User: nil
-			apiSource:       daemon.TransportTypeHTTP,
-			user:            nil,
-			openCheckErr:    nil,
-			adminCheckErr:   errUnauthorized,
-			userCheckErr:    errUnauthorized,
-			metricsCheckErr: errUnauthorized,
-			pairingCheckErr: errUnauthorized,
-		},
-		{
-			// User access: UntrustedAccess
-			apiSource:       daemon.TransportTypeHTTP,
-			user:            &daemon.UserState{Access: state.UntrustedAccess},
-			openCheckErr:    nil,
-			adminCheckErr:   errUnauthorized,
-			userCheckErr:    errUnauthorized,
-			metricsCheckErr: errUnauthorized,
-			pairingCheckErr: errUnauthorized,
-		},
-		{
-			// User access: MetricsAccess
-			apiSource:       daemon.TransportTypeHTTP,
-			user:            &daemon.UserState{Access: state.MetricsAccess},
-			openCheckErr:    nil,
-			adminCheckErr:   errUnauthorized,
-			userCheckErr:    errUnauthorized,
-			metricsCheckErr: nil,
-			pairingCheckErr: errUnauthorized,
-		},
-		{
-			// User access: ReadAccess
-			apiSource:       daemon.TransportTypeHTTP,
-			user:            &daemon.UserState{Access: state.ReadAccess},
-			openCheckErr:    nil,
-			adminCheckErr:   errUnauthorized,
-			userCheckErr:    errUnauthorized,
-			metricsCheckErr: errUnauthorized,
-			pairingCheckErr: errUnauthorized,
-		},
-		{
-			// User access: AdminAccess
-			apiSource:       daemon.TransportTypeHTTP,
-			user:            &daemon.UserState{Access: state.AdminAccess},
-			openCheckErr:    nil,
-			adminCheckErr:   errUnauthorized,
-			userCheckErr:    errUnauthorized,
-			metricsCheckErr: errUnauthorized,
-			pairingCheckErr: errUnauthorized,
-		},
+		//
+		// User: nil
+		apiSource:       daemon.TransportTypeHTTP,
+		user:            nil,
+		openCheckErr:    nil,
+		adminCheckErr:   errUnauthorized,
+		userCheckErr:    errUnauthorized,
+		metricsCheckErr: errUnauthorized,
+		pairingCheckErr: errUnauthorized,
+	}, {
+		// User access: UntrustedAccess
+		apiSource:       daemon.TransportTypeHTTP,
+		user:            &daemon.UserState{Access: state.UntrustedAccess},
+		openCheckErr:    nil,
+		adminCheckErr:   errUnauthorized,
+		userCheckErr:    errUnauthorized,
+		metricsCheckErr: errUnauthorized,
+		pairingCheckErr: errUnauthorized,
+	}, {
+		// User access: MetricsAccess
+		apiSource:       daemon.TransportTypeHTTP,
+		user:            &daemon.UserState{Access: state.MetricsAccess},
+		openCheckErr:    nil,
+		adminCheckErr:   errUnauthorized,
+		userCheckErr:    errUnauthorized,
+		metricsCheckErr: nil,
+		pairingCheckErr: errUnauthorized,
+	}, {
+		// User access: ReadAccess
+		apiSource:       daemon.TransportTypeHTTP,
+		user:            &daemon.UserState{Access: state.ReadAccess},
+		openCheckErr:    nil,
+		adminCheckErr:   errUnauthorized,
+		userCheckErr:    errUnauthorized,
+		metricsCheckErr: errUnauthorized,
+		pairingCheckErr: errUnauthorized,
+	}, {
+		// User access: AdminAccess
+		apiSource:       daemon.TransportTypeHTTP,
+		user:            &daemon.UserState{Access: state.AdminAccess},
+		openCheckErr:    nil,
+		adminCheckErr:   errUnauthorized,
+		userCheckErr:    errUnauthorized,
+		metricsCheckErr: errUnauthorized,
+		pairingCheckErr: errUnauthorized,
+	}, {
 		// API source: HTTPS
-		{
-			// User: nil
-			apiSource:       daemon.TransportTypeHTTPS,
-			user:            nil,
-			openCheckErr:    nil,
-			adminCheckErr:   errUnauthorized,
-			userCheckErr:    errUnauthorized,
-			metricsCheckErr: errUnauthorized,
-			pairingCheckErr: errUnauthorized,
-		},
-		{
-			// User access: UntrustedAccess
-			apiSource:       daemon.TransportTypeHTTPS,
-			user:            &daemon.UserState{Access: state.UntrustedAccess},
-			openCheckErr:    nil,
-			adminCheckErr:   errUnauthorized,
-			userCheckErr:    errUnauthorized,
-			metricsCheckErr: errUnauthorized,
-			pairingCheckErr: errUnauthorized,
-		},
-		{
-			// User access: MetricsAccess
-			apiSource:       daemon.TransportTypeHTTPS,
-			user:            &daemon.UserState{Access: state.MetricsAccess},
-			openCheckErr:    nil,
-			adminCheckErr:   errUnauthorized,
-			userCheckErr:    errUnauthorized,
-			metricsCheckErr: nil,
-			pairingCheckErr: errUnauthorized,
-		},
-		{
-			// User access: ReadAccess
-			apiSource:       daemon.TransportTypeHTTPS,
-			user:            &daemon.UserState{Access: state.ReadAccess},
-			openCheckErr:    nil,
-			adminCheckErr:   errUnauthorized,
-			userCheckErr:    nil,
-			metricsCheckErr: nil,
-			pairingCheckErr: errUnauthorized,
-		},
-		{
-			// User access: AdminAccess
-			apiSource:       daemon.TransportTypeHTTPS,
-			user:            &daemon.UserState{Access: state.AdminAccess},
-			openCheckErr:    nil,
-			adminCheckErr:   nil,
-			userCheckErr:    nil,
-			metricsCheckErr: nil,
-			pairingCheckErr: errUnauthorized,
-		},
-	}
+		//
+		// User: nil
+		apiSource:       daemon.TransportTypeHTTPS,
+		user:            nil,
+		openCheckErr:    nil,
+		adminCheckErr:   errUnauthorized,
+		userCheckErr:    errUnauthorized,
+		metricsCheckErr: errUnauthorized,
+		pairingCheckErr: errUnauthorized,
+	}, {
+		// User access: UntrustedAccess
+		apiSource:       daemon.TransportTypeHTTPS,
+		user:            &daemon.UserState{Access: state.UntrustedAccess},
+		openCheckErr:    nil,
+		adminCheckErr:   errUnauthorized,
+		userCheckErr:    errUnauthorized,
+		metricsCheckErr: errUnauthorized,
+		pairingCheckErr: errUnauthorized,
+	}, {
+		// User access: MetricsAccess
+		apiSource:       daemon.TransportTypeHTTPS,
+		user:            &daemon.UserState{Access: state.MetricsAccess},
+		openCheckErr:    nil,
+		adminCheckErr:   errUnauthorized,
+		userCheckErr:    errUnauthorized,
+		metricsCheckErr: nil,
+		pairingCheckErr: errUnauthorized,
+	}, {
+		// User access: ReadAccess
+		apiSource:       daemon.TransportTypeHTTPS,
+		user:            &daemon.UserState{Access: state.ReadAccess},
+		openCheckErr:    nil,
+		adminCheckErr:   errUnauthorized,
+		userCheckErr:    nil,
+		metricsCheckErr: nil,
+		pairingCheckErr: errUnauthorized,
+	}, {
+		// User access: AdminAccess
+		apiSource:       daemon.TransportTypeHTTPS,
+		user:            &daemon.UserState{Access: state.AdminAccess},
+		openCheckErr:    nil,
+		adminCheckErr:   nil,
+		userCheckErr:    nil,
+		metricsCheckErr: nil,
+		pairingCheckErr: errUnauthorized,
+	}}
 	for _, t := range tests {
 		// Fake a test request.
 		r := &http.Request{
