@@ -990,6 +990,19 @@ func (d *Daemon) pairingWindowEnabled() bool {
 	return pairingManager.PairingEnabled()
 }
 
+// initHTTPListener creates an HTTP listener in the Daemon object.
+func (d *Daemon) initHTTPListener() error {
+	if d.options.HTTPAddress != "" {
+		listener, err := net.Listen("tcp", d.options.HTTPAddress)
+		if err != nil {
+			return fmt.Errorf("cannot listen on %q: %v", d.options.HTTPAddress, err)
+		}
+		d.httpListener = listener
+		logger.Noticef("HTTP API server listening on %q.", d.options.HTTPAddress)
+	}
+	return nil
+}
+
 func New(opts *Options) (*Daemon, error) {
 	d := &Daemon{
 		options: opts,
@@ -1060,16 +1073,4 @@ func getListener(socketPath string, listenerMap map[string]net.Listener) (net.Li
 
 var getChecks = func(o *overlord.Overlord) ([]*checkstate.CheckInfo, error) {
 	return o.CheckManager().Checks()
-}
-
-func (d *Daemon) initHTTPListener() error {
-	if d.options.HTTPAddress != "" {
-		listener, err := net.Listen("tcp", d.options.HTTPAddress)
-		if err != nil {
-			return fmt.Errorf("cannot listen on %q: %v", d.options.HTTPAddress, err)
-		}
-		d.httpListener = listener
-		logger.Noticef("HTTP API server listening on %q.", d.options.HTTPAddress)
-	}
-	return nil
 }
