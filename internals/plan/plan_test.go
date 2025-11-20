@@ -1190,7 +1190,8 @@ var planTests = []planTest{{
 				type: loki
 				services: [all]
 				override: merge
-`}}, {
+`},
+}, {
 	summary: "Unsupported log target type",
 	error:   `log target "tgt1" has unsupported type "foobar", must be "loki" or "opentelemetry"`,
 	input: []string{`
@@ -1576,11 +1577,11 @@ func (s *S) TestReadDir(c *C) {
 		c.Logf(test.summary)
 		pebbleDir := filepath.Join(tempDir, fmt.Sprintf("pebble-%03d", testIndex))
 		layersDir := filepath.Join(pebbleDir, "layers")
-		err := os.MkdirAll(layersDir, 0755)
+		err := os.MkdirAll(layersDir, 0o755)
 		c.Assert(err, IsNil)
 
 		for i, yml := range test.input {
-			err := os.WriteFile(filepath.Join(layersDir, fmt.Sprintf("%03d-layer-%d.yaml", i, i)), reindent(yml), 0644)
+			err := os.WriteFile(filepath.Join(layersDir, fmt.Sprintf("%03d-layer-%d.yaml", i, i)), reindent(yml), 0o644)
 			c.Assert(err, IsNil)
 		}
 		sup, err := plan.ReadDir(layersDir)
@@ -1636,12 +1637,12 @@ var readDirBadNames = []string{
 func (s *S) TestReadDirBadNames(c *C) {
 	pebbleDir := c.MkDir()
 	layersDir := filepath.Join(pebbleDir, "layers")
-	err := os.Mkdir(layersDir, 0755)
+	err := os.Mkdir(layersDir, 0o755)
 	c.Assert(err, IsNil)
 
 	for _, fname := range readDirBadNames {
 		fpath := filepath.Join(layersDir, fname)
-		err := os.WriteFile(fpath, []byte("<ignore>"), 0644)
+		err := os.WriteFile(fpath, []byte("<ignore>"), 0o644)
 		c.Assert(err, IsNil)
 		_, err = plan.ReadDir(layersDir)
 		c.Assert(err.Error(), Equals, fmt.Sprintf("invalid layer filename: %q (must look like \"123-some-label.yaml\")", fname))
@@ -1658,13 +1659,13 @@ var readDirDupNames = [][]string{
 func (s *S) TestReadDirDupNames(c *C) {
 	pebbleDir := c.MkDir()
 	layersDir := filepath.Join(pebbleDir, "layers")
-	err := os.Mkdir(layersDir, 0755)
+	err := os.Mkdir(layersDir, 0o755)
 	c.Assert(err, IsNil)
 
 	for _, fnames := range readDirDupNames {
 		for _, fname := range fnames {
 			fpath := filepath.Join(layersDir, fname)
-			err := os.WriteFile(fpath, []byte("summary: ignore"), 0644)
+			err := os.WriteFile(fpath, []byte("summary: ignore"), 0o644)
 			c.Assert(err, IsNil)
 		}
 		_, err = plan.ReadDir(layersDir)
@@ -2202,9 +2203,9 @@ func (s *S) TestSectionOrder(c *C) {
 // the missing directories and an empty configuration file.
 func createLayerPath(c *C, base string, name string) {
 	path := filepath.Join(base, name)
-	err := os.MkdirAll(filepath.Dir(path), 0777)
+	err := os.MkdirAll(filepath.Dir(path), 0o777)
 	c.Assert(err, IsNil)
-	file, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0644)
+	file, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0o644)
 	c.Assert(err, IsNil)
 	// Let's mix in the layer name into the command so we can
 	// verify the correct layer has the correct file content.

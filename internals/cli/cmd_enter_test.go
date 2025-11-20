@@ -34,7 +34,7 @@ func dumbDedent(s string) string {
 }
 
 func writeTemplate(filename string, templateString string, templateData any) {
-	os.MkdirAll(filepath.Dir(filename), 0755)
+	os.MkdirAll(filepath.Dir(filename), 0o755)
 
 	t, err := template.New(filename).Parse(templateString)
 	if err != nil {
@@ -63,7 +63,7 @@ func writeMessageServices(s *PebbleSuite) {
 	servicePath := filepath.Join(s.pebbleDir, "write-message")
 
 	writeTemplate(servicePath, serviceTemplate, nil)
-	os.Chmod(servicePath, 0755)
+	os.Chmod(servicePath, 0o755)
 
 	layerTemplate := dumbDedent(`
 		summary: message services
@@ -157,7 +157,7 @@ func (s *PebbleSuite) TestEnterExecListDir(c *C) {
 	files := []string{"foo", "bar", "baz"}
 	for _, file := range files {
 		path := filepath.Join(s.pebbleDir, file)
-		if err := os.WriteFile(path, []byte{}, 0644); err != nil {
+		if err := os.WriteFile(path, []byte{}, 0o644); err != nil {
 			panic(err)
 		}
 	}
@@ -180,8 +180,10 @@ func (s *PebbleSuite) TestEnterExecReadServiceOutputFile(c *C) {
 		cat msg1
 		cat msg2
 	`
-	cmd := []string{"pebble", "enter", "--run", "exec", "--",
-		"bash", "-c", script, "bash", s.pebbleDir}
+	cmd := []string{
+		"pebble", "enter", "--run", "exec", "--",
+		"bash", "-c", script, "bash", s.pebbleDir,
+	}
 	restore := fakeArgs(cmd...)
 	defer restore()
 

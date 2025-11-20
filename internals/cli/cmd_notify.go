@@ -24,11 +24,13 @@ import (
 	"github.com/canonical/pebble/client"
 )
 
-const cmdNotifySummary = "Record a custom notice"
-const cmdNotifyDescription = `
+const (
+	cmdNotifySummary     = "Record a custom notice"
+	cmdNotifyDescription = `
 The notify command records a custom notice with the specified key and optional
 data fields.
 `
+)
 
 type cmdNotify struct {
 	client *client.Client

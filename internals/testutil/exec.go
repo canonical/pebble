@@ -73,7 +73,7 @@ func FakeCommand(c *check.C, basename, script string) *FakeCmd {
 		os.Setenv("PATH", binDir+":"+os.Getenv("PATH"))
 	}
 	fmt.Fprintf(&wholeScript, scriptTpl, logFile, script)
-	err := os.WriteFile(exeFile, wholeScript.Bytes(), 0700)
+	err := os.WriteFile(exeFile, wholeScript.Bytes(), 0o700)
 	if err != nil {
 		panic(err)
 	}
@@ -85,7 +85,7 @@ func FakeCommand(c *check.C, basename, script string) *FakeCmd {
 // Useful when you want to check the ordering of things.
 func (cmd *FakeCmd) Also(basename, script string) *FakeCmd {
 	exeFile := path.Join(cmd.binDir, basename)
-	err := os.WriteFile(exeFile, []byte(fmt.Sprintf(scriptTpl, cmd.logFile, script)), 0700)
+	err := os.WriteFile(exeFile, []byte(fmt.Sprintf(scriptTpl, cmd.logFile, script)), 0o700)
 	if err != nil {
 		panic(err)
 	}

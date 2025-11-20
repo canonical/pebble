@@ -20,9 +20,7 @@ import (
 	"sync"
 )
 
-var (
-	ErrRange = errors.New("out of range")
-)
+var ErrRange = errors.New("out of range")
 
 type RingPos int64
 

@@ -24,11 +24,13 @@ import (
 	"github.com/canonical/pebble/client"
 )
 
-const cmdNoticeSummary = "Fetch a single notice"
-const cmdNoticeDescription = `
+const (
+	cmdNoticeSummary     = "Fetch a single notice"
+	cmdNoticeDescription = `
 The notice command fetches a single notice, either by ID (1-arg variant), or
 by unique type and key combination (2-arg variant).
 `
+)
 
 type cmdNotice struct {
 	client *client.Client

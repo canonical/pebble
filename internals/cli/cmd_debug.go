@@ -14,12 +14,14 @@
 
 package cli
 
-var cmdDebugSummary = "Run debug commands"
-var cmdDebugDescription = `
+var (
+	cmdDebugSummary     = "Run debug commands"
+	cmdDebugDescription = `
 The debug command contains a selection of additional sub-commands.
 
 Debug commands can be removed without notice and may not work on
 non-development systems.
 `
+)
 
 type cmdDebug struct{}

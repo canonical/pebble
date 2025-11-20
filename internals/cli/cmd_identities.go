@@ -26,8 +26,9 @@ import (
 	"github.com/canonical/pebble/client"
 )
 
-const cmdIdentitiesSummary = "List identities"
-const cmdIdentitiesDescription = `
+const (
+	cmdIdentitiesSummary     = "List identities"
+	cmdIdentitiesDescription = `
 The identities command lists all identities.
 
 Other identity-related subcommands are as follows (use --help with any
@@ -38,6 +39,7 @@ subcommand for details):
 {{.ProgramName}} update-identities  Update or replace identities
 {{.ProgramName}} remove-identities  Remove identities
 `
+)
 
 type cmdIdentities struct {
 	client *client.Client

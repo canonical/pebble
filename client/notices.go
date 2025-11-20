@@ -46,7 +46,7 @@ type NotifyOptions struct {
 // Notify records an occurrence of a notice with the specified options,
 // returning the notice ID.
 func (client *Client) Notify(opts *NotifyOptions) (string, error) {
-	var payload = struct {
+	payload := struct {
 		Action      string            `json:"action"`
 		Type        string            `json:"type"`
 		Key         string            `json:"key"`

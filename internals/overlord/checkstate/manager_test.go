@@ -66,7 +66,7 @@ func (s *ManagerSuite) SetUpTest(c *C) {
 
 	s.overlord = overlord.Fake()
 	layersDir := filepath.Join(c.MkDir(), "layers")
-	err = os.Mkdir(layersDir, 0755)
+	err = os.Mkdir(layersDir, 0o755)
 	c.Assert(err, IsNil)
 	s.planMgr, err = planstate.NewManager(layersDir)
 	c.Assert(err, IsNil)
