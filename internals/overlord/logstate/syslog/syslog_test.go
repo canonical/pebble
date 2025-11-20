@@ -120,15 +120,17 @@ func (*suite) TestAddEntries(c *C) {
 	err = client.Flush(context.Background())
 	c.Assert(err, IsNil)
 
-	expectedMsg := `103 <14>1 2023-12-31T12:00:00Z JYsAcer svc1 - - [pebble@28978 env="test" version="0.0.1"] message from svc1` +
-		`120 <14>1 2023-12-31T12:00:01Z JYsAcer svc2 - - [pebble@28978 env="production" owner="team-2" version="1.2.3"] msg from svc2` +
-		`108 <14>1 2023-12-31T12:00:02Z JYsAcer svc1 - - [pebble@28978 env="test" version="0.0.1"] long message from svc1` +
-		`81 <14>1 2023-12-31T12:00:03Z JYsAcer svc3 - - - log of svc3 doesn't have any labels` +
-		`67 <14>1 2023-12-31T12:00:04Z JYsAcer svc4 - - - multiline` + "\nline2" + "\nline3"
 	select {
 	case msg := <-msgChan:
-		c.Check(len(msg), Equals, len(expectedMsg))
-		c.Check(msg, Equals, expectedMsg)
+		// Use regex to match messages with dynamic hostname
+		// Format: <length> <PRI>VERSION TIMESTAMP HOSTNAME APP-NAME PROCID MSGID STRUCTURED-DATA MSG
+		c.Check(msg, Matches, `(?s).*<14>1 2023-12-31T12:00:00Z \S+ svc1 - - \[pebble@28978 env="test" version="0.0.1"\] message from svc1.*`)
+		c.Check(msg, Matches, `(?s).*<14>1 2023-12-31T12:00:01Z \S+ svc2 - - \[pebble@28978 env="production" owner="team-2" version="1.2.3"\] msg from svc2.*`)
+		c.Check(msg, Matches, `(?s).*<14>1 2023-12-31T12:00:02Z \S+ svc1 - - \[pebble@28978 env="test" version="0.0.1"\] long message from svc1.*`)
+		c.Check(msg, Matches, `(?s).*<14>1 2023-12-31T12:00:03Z \S+ svc3 - - - log of svc3 doesn't have any labels.*`)
+		c.Check(msg, Matches, `(?s).*<14>1 2023-12-31T12:00:04Z \S+ svc4 - - - multiline.*`)
+		// // Verify multiline content
+		c.Check(msg, Matches, `(?s).*multiline\nline2\nline3.*`)
 	case <-time.After(2 * time.Second):
 		c.Fatal("timed out waiting for message")
 	}
