@@ -185,7 +185,6 @@ func (c *Client) Add(entry servicelog.Entry) error {
 		message = message[:len(message)-1]
 	}
 
-	// TODO: put real priority, PID, msgID here?
 	c.entries = append(c.entries, entryWithService{
 		Priority:  priorityVal(FacilityUserLevelMessage, SeverityInformational),
 		Version:   1,
@@ -257,7 +256,6 @@ func (c *Client) Flush(ctx context.Context) error {
 	}
 	c.data.Reset()
 
-	// TODO: do we need to sort all log entries by service name here?
 	for _, entry := range c.entries {
 		structuredData, ok := c.labels[entry.service]
 		if !ok {

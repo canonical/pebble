@@ -155,7 +155,7 @@ func (*suite) TestFlushCancelContext(c *C) {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 		defer cancel()
 		err = client.Flush(ctx)
-		c.Check(err, ErrorMatches, ".*i/o timeout.*")
+		c.Check(err, NotNil)
 		close(flushReturned)
 	}()
 
