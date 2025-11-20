@@ -100,7 +100,7 @@ func NewClient(options *ClientOptions) (*Client, error) {
 
 	u, err := url.Parse(opts.Location)
 	if err != nil || u.Host == "" {
-		u, err = url.Parse("//" + opts.Location) // TODO: URL with "//" prefix a valid one?
+		u, err = url.Parse("//" + opts.Location)
 	}
 	if err != nil {
 		return nil, err
@@ -185,6 +185,7 @@ func (c *Client) Add(entry servicelog.Entry) error {
 		message = message[:len(message)-1]
 	}
 
+	// TODO: put real priority, PID, msgID here?
 	c.entries = append(c.entries, entryWithService{
 		Priority:  priorityVal(FacilityUserLevelMessage, SeverityInformational),
 		Version:   1,
