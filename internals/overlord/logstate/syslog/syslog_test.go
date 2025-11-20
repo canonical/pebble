@@ -134,6 +134,37 @@ func (*suite) TestAddEntries(c *C) {
 	}
 }
 
+func (*suite) TestFlushCancelContext(c *C) {
+	client, err := syslog.NewClient(&syslog.ClientOptions{
+		Location: "tcp://fake:514",
+	})
+	c.Assert(err, IsNil)
+	defer client.Close()
+
+	err = client.Add(servicelog.Entry{
+		Time:    time.Date(2023, 12, 31, 12, 0, 0, 0, time.UTC),
+		Service: "svc1",
+		Message: "message from svc1",
+	})
+	c.Assert(err, IsNil)
+
+	flushReturned := make(chan struct{})
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+		defer cancel()
+		err = client.Flush(ctx)
+		c.Check(err, ErrorMatches, ".*i/o timeout.*")
+		close(flushReturned)
+	}()
+
+	// Check Flush returns quickly after context timeout
+	select {
+	case <-flushReturned:
+	case <-time.After(1 * time.Second):
+		c.Fatal("lokiClient.Flush took too long to return after context timeout")
+	}
+
+}
 func (*suite) TestBufferFull(c *C) {
 	client, err := syslog.NewClient(&syslog.ClientOptions{
 		TargetName:        "tgt1",

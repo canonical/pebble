@@ -16,9 +16,10 @@ import (
 
 const (
 	defaultMaxRequestEntries    = 100
-	canonicalPrivEnterpriseNum  = 28978
 	defaultSyslogInitialBackoff = 100 * time.Millisecond
 	defaultSyslogMaxBackoff     = 10 * time.Second
+	defaultDialTimeout          = 10 * time.Second
+	canonicalPrivEnterpriseNum  = 28978
 )
 
 // Syslog Priority values - see RFC 5424 6.2.1
@@ -33,6 +34,7 @@ type ClientOptions struct {
 	Location             string
 	SyslogInitialBackoff time.Duration
 	SyslogMaxBackoff     time.Duration
+	DialTimeout          time.Duration
 }
 
 type entryWithService struct {
@@ -80,6 +82,9 @@ func fillDefaultOptions(options *ClientOptions) {
 	}
 	if options.SyslogMaxBackoff == 0 {
 		options.SyslogMaxBackoff = defaultSyslogMaxBackoff
+	}
+	if options.DialTimeout == 0 {
+		options.DialTimeout = defaultDialTimeout
 	}
 }
 
@@ -207,7 +212,8 @@ func (c *Client) ensureConnected(ctx context.Context) error {
 		}
 	}
 
-	conn, err := net.Dial(c.address.Scheme, c.address.Host)
+	d := net.Dialer{Timeout: c.options.DialTimeout}
+	conn, err := d.DialContext(ctx, c.address.Scheme, c.address.Host)
 	if err != nil {
 		// start an exponential backoff for reconnection attempts
 		if c.waitReconnect == 0 {
