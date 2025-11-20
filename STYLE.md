@@ -18,7 +18,7 @@ Abbreviations should always be written with the letters in the same case, for ex
 
 ### Don't use `ALL_CAPS`
 
-Use `MyConst` for constants (referenced as `mypkg.MyConst`). Only use `ALL_CAPS` for environment variable names.
+Use `MyConst` for exported constants (referenced as `mypkg.MyConst`) or `myConst` for non-exported ones. Only use `ALL_CAPS` for environment variable names.
 
 ### Short names can be used in context
 
@@ -35,54 +35,16 @@ If `foo()` returns a "code", then `code := foo()` is more accurate and more conc
 
 If the rest of the API uses `verbNoun` then unless there is a very good reason not to, the next function should be of the form `verbNoun`. For example, if the API has `createUser()`, `updateUser()`, `deleteUser()`, then adding `getUser()` fits perfectly, but if you add `userFetch()` instead of `fetchUser()`, it breaks the consistent pattern, making the API harder to learn and use.
 
-### Adding code to existing functions and structs
-
-Think stratigically about _where to add the new code._ Study existing code and try to discover a logic or pattern.
-
-Order:
-
-- Alphabetical order: For example, if you're in a function with a switch or series of ifs, and the existing code puts the cases in alphabetical order, follow the existing pattern.
-- Another logical order: For example, by frequency of use. If you're adding a new case to a switch statement, it makes sense to put the most frequently used case at the beginning instead of following alphabetical order.
-- Ownership: when adding a new field to a struct, ask if the field really _belongs_ to the struct you're adding it to? Add the new field to the code that "owns" it, even if it's simpler to add it to another struct.
-
-As an example, consider the placement of the Chown field below. It relates to UserID and GroupID, so it should go directly above them:
-
-Avoid:
-
-```go
-MkdirOptions{
-	MakeParents: true,
-	ExistOK:     true,
-	Chown:       true,
-	Chmod:       true,
-	UserID:      sys.UserID(*uid),
-	GroupID:     sys.GroupID(*gid),
-}
-```
-
-Prefer:
-
-```go
-MkdirOptions{
-	MakeParents: true,
-	ExistOK:     true,
-	Chmod:       true,
-	Chown:       true,
-	UserID:      sys.UserID(*uid),
-	GroupID:     sys.GroupID(*gid),
-}
-```
-
 ## Code style
 
 ### Merge arguments of the same type
 
-- Avoid `func foo(a string, b string, c string)`
-- Prefer `func foo(a, b, c string)`
+- Avoid: `func foo(a string, b string, c string)`
+- Prefer: `func foo(a, b, c string)`
 
 ### Named return values
 
-It's usually clearer to use named arguments when you're returning multiple values of the same type, for example:
+It's usually clearer to use named arguments when you're returning multiple values (apart from `error`), for example:
 
 - Avoid: `func run() (<-chan servicelog.Entry, <-chan servicelog.Entry) {}`
 - Prefer: `func run() (stdoutCh, stderrCh <-chan servicelog.Entry) {}`
@@ -91,8 +53,8 @@ It's usually clearer to use named arguments when you're returning multiple value
 
 Where possible, use the more idiomatic `:=` short form variable declaration with an implicit type.
 
-- Prefer: `a := 0`, even if you must explicitly assign a zero value. This will help signify that there are code-paths which read this value before it is assigned to.
 - Avoid: `var a = 0`
+- Prefer: `a := 0`, even if you must explicitly assign a zero value. This will help signify that there are code-paths which read this value before it is assigned to.
 
 On the other hand, if the zero value would never be read, use `var foo type`. For example:
 
@@ -113,31 +75,6 @@ if i == 1 {
     name = "one"
 }
 ```
-
-### Don't repeat yourself (DRY)
-
-Avoid repeating code where possible.
-
-For example, imagine you had to greet many people, sometimes formally, sometimes informally. Without DRY, you'd write similar `fmt.Println` statements over and over. If you later wanted to change the greeting, you'd have to change every single line where you used it. That's error-prone and time-consuming. Prefer the DRY Solution:
-
-```go
-// Greet prints a greeting message.  Avoid repeating the greeting logic!
-func Greet(name string, formal bool) string {
-	greeting := "Hello, "
-	if formal {
-		greeting = "Greetings, esteemed "
-	}
-	return greeting + name + "!"
-}
-
-func main() {
-	fmt.Println(Greet("Alice", false))   // Hello, Alice!
-	fmt.Println(Greet("Bob", true))      // Greetings, esteemed Bob!
-	fmt.Println(Greet("Charlie", false)) // Hello, Charlie!
-}
-```
-
-This reduces redundancy, is less error-prone, improves readability of the main function (instead of a bunch of prints) and increases reusability.
 
 ### Avoid very small functions
 
@@ -210,9 +147,6 @@ err := c.d.overlord.CheckManager().RunCheck(r.Context(), check)
 ```go
 checkMgr := c.d.overlord.CheckManager()
 err := checkMgr.RunCheck(r.Context(), check)
-if err != nil {
-	return InternalError("%v", err)
-}
 ```
 
 ### Grouping struct fields
@@ -253,6 +187,15 @@ type MkdirOptions struct {
 }
 ```
 
+### Adding code to existing functions and structs
+
+Think strategically about _where to add the new code._ Study existing code and try to discover a logic or pattern.
+
+Order:
+
+- Alphabetical order: For example, if you're in a function with a switch or series of ifs, and the existing code puts the cases in alphabetical order, follow the existing pattern.
+- Another logical order: For example, by frequency of use. If you're adding a new case to a switch statement, it may make sense to put the most frequently used case at the beginning instead of following alphabetical order. (Another example of logical ordering is shown in `MkdirOptions` above.)
+
 ### Pointer vs value for struct field
 
 Whether to use a pointer or a direct value in a struct depends on several factors:
@@ -274,7 +217,7 @@ See more: [Receiver Type](https://go.dev/wiki/CodeReviewComments#receiver-type).
 
 ### Trailing commas
 
-Add a trailing comma after the last field in a struct or line in an argument list, with the closing brace on its own line.
+Add a trailing comma after the last field in a struct or line in an argument list, with the closing brace on its own line. This keeps diffs smaller when adding or removing fields.
 
 Avoid:
 
@@ -408,7 +351,7 @@ Don't re-compile a `regexp.Regexp` every time you call a function (it's a relati
 Avoid:
 
 ```go
-func foo(name string) {
+func validate(name string) {
 	nameRegexp := regexp.MustCompile(`^[a-z0-9]+$`)
 	if !nameRegexp.MatchString(name) {
 		// ...
@@ -422,7 +365,7 @@ Prefer:
 ```go
 var nameRegexp = regexp.MustCompile(`^[a-z0-9]+$`)
 
-func foo(name string) {
+func validate(name string) {
 	if !nameRegexp.MatchString(name) {
 		// ...
 	}
