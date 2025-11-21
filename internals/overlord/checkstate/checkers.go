@@ -49,8 +49,12 @@ type httpChecker struct {
 }
 
 func (c *httpChecker) check(ctx context.Context) error {
+	if err := checkHTTPSURL(c.url); err != nil {
+		return err
+	}
+
 	logger.Debugf("Check %q (http): requesting %q", c.name, c.url)
-	client := &http.Client{}
+	client := createHTTPClient()
 	request, err := http.NewRequestWithContext(ctx, "GET", c.url, nil)
 	if err != nil {
 		return fmt.Errorf("cannot build request: %w", err)

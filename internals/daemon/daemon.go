@@ -477,23 +477,12 @@ func (d *Daemon) Init() error {
 
 	d.addRoutes()
 
-	if d.options.HTTPAddress != "" {
-		listener, err := net.Listen("tcp", d.options.HTTPAddress)
-		if err != nil {
-			return fmt.Errorf("cannot listen on %q: %v", d.options.HTTPAddress, err)
-		}
-		d.httpListener = listener
-		logger.Noticef("HTTP API server listening on %q.", d.options.HTTPAddress)
+	if err := d.initHTTPListener(); err != nil {
+		return err
 	}
 
-	if d.options.HTTPSAddress != "" {
-		tlsConf := d.overlord.TLSManager().ListenConfig()
-		listener, err := tls.Listen("tcp", d.options.HTTPSAddress, tlsConf)
-		if err != nil {
-			return fmt.Errorf("cannot TLS listen on %q: %v", d.options.HTTPSAddress, err)
-		}
-		d.httpsListener = listener
-		logger.Noticef("HTTPS API server listening on %q.", d.options.HTTPSAddress)
+	if err := d.initHTTPSListener(); err != nil {
+		return err
 	}
 
 	logger.Noticef("Started daemon.")
@@ -999,6 +988,19 @@ func (d *Daemon) SetServiceArgs(serviceArgs map[string][]string) error {
 func (d *Daemon) pairingWindowEnabled() bool {
 	pairingManager := d.overlord.PairingManager()
 	return pairingManager.PairingEnabled()
+}
+
+// initHTTPListener creates an HTTP listener in the Daemon object.
+func (d *Daemon) initHTTPListener() error {
+	if d.options.HTTPAddress != "" {
+		listener, err := net.Listen("tcp", d.options.HTTPAddress)
+		if err != nil {
+			return fmt.Errorf("cannot listen on %q: %v", d.options.HTTPAddress, err)
+		}
+		d.httpListener = listener
+		logger.Noticef("HTTP API server listening on %q.", d.options.HTTPAddress)
+	}
+	return nil
 }
 
 func New(opts *Options) (*Daemon, error) {
