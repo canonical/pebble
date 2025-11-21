@@ -979,6 +979,11 @@ var planTests = []planTest{{
 				location: http://10.1.77.196:4318
 				services: [all]
 				override: merge
+			tgt3:
+				type: syslog
+				location: udp://10.1.77.196:514
+				services: [all]
+				override: merge
 `},
 	result: &plan.Layer{
 		Services: map[string]*plan.Service{
@@ -1014,6 +1019,13 @@ var planTests = []planTest{{
 				Name:     "tgt2",
 				Type:     plan.OpenTelemetryTarget,
 				Location: "http://10.1.77.196:4318",
+				Services: []string{"all"},
+				Override: plan.MergeOverride,
+			},
+			"tgt3": {
+				Name:     "tgt3",
+				Type:     plan.SyslogTarget,
+				Location: "udp://10.1.77.196:514",
 				Services: []string{"all"},
 				Override: plan.MergeOverride,
 			},
@@ -1174,7 +1186,7 @@ var planTests = []planTest{{
 	},
 }, {
 	summary: "Log target requires type field",
-	error:   `plan must define "type" \("loki" or "opentelemetry"\) for log target "tgt1"`,
+	error:   `plan must define "type" \("loki", "opentelemetry" or "syslog"\) for log target "tgt1"`,
 	input: []string{`
 		log-targets:
 			tgt1:
@@ -1192,7 +1204,7 @@ var planTests = []planTest{{
 				override: merge
 `}}, {
 	summary: "Unsupported log target type",
-	error:   `log target "tgt1" has unsupported type "foobar", must be "loki" or "opentelemetry"`,
+	error:   `log target "tgt1" has unsupported type "foobar", must be "loki", "opentelemetry" or "syslog"`,
 	input: []string{`
 		log-targets:
 			tgt1:

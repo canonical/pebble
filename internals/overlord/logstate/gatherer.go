@@ -26,6 +26,7 @@ import (
 	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/overlord/logstate/loki"
 	"github.com/canonical/pebble/internals/overlord/logstate/opentelemetry"
+	"github.com/canonical/pebble/internals/overlord/logstate/syslog"
 	"github.com/canonical/pebble/internals/plan"
 	"github.com/canonical/pebble/internals/servicelog"
 )
@@ -381,6 +382,11 @@ func newLogClient(target *plan.LogTarget) (logClient, error) {
 			UserAgent:  fmt.Sprintf("%s/%s", cmd.ProgramName, cmd.Version),
 			ScopeName:  cmd.ProgramName,
 		}), nil
+	case plan.SyslogTarget:
+		return syslog.NewClient(&syslog.ClientOptions{
+			TargetName: target.Name,
+			Location:   target.Location,
+		})
 	default:
 		return nil, fmt.Errorf("unknown type %q for log target %q", target.Type, target.Name)
 	}
