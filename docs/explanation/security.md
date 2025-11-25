@@ -49,7 +49,7 @@ Our intention is that projects that build on Pebble can [override how TLS connec
 
 ### FIPS 140
 
-Pebble supports FIPS 140-compliant builds that exclude non-certified cryptographic libraries. In FIPS mode, only "local" (UID-based) identity authentication and HTTP-only communication are available.
+Pebble supports FIPS 140-compliant builds that exclude non-certified cryptographic libraries. In FIPS builds, only "local" (UID-based) identity authentication and HTTP-only communication are available.
 
 To build Pebble for FIPS 140 environments:
 
@@ -63,7 +63,7 @@ The [`pebble` snap](https://snapcraft.io/pebble) provides a separate `fips` chan
 snap install pebble --classic --channel=fips
 ```
 
-**FIPS mode restrictions:**
+**FIPS build restrictions:**
 - HTTPS server disabled: the `--https` flag returns an error
 - Certificate identities disabled: cannot add or authenticate using certificate-based identities
 - Basic authentication disabled: basic identities can be configured, but login with username/password is blocked

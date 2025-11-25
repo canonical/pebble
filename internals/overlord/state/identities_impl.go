@@ -111,7 +111,6 @@ func (d *Identity) UnmarshalJSON(data []byte) error {
 }
 
 // identityFromInputs returns an identity matching the given inputs.
-// Non-FIPS version: supports all authentication types.
 func (s *State) identityFromInputs(userID *uint32, username, password string, clientCert *x509.Certificate) *Identity {
 	switch {
 	case clientCert != nil:

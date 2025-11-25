@@ -22,23 +22,22 @@ import (
 	"strings"
 )
 
-// checkHTTPSURL returns an error if URL starts with https:// in FIPS mode.
+// checkHTTPSURL blocks HTTPS URLs in FIPS builds.
 func checkHTTPSURL(url string) error {
 	if strings.HasPrefix(strings.ToLower(url), "https://") {
-		return fmt.Errorf("HTTPS health checks are not supported in FIPS mode")
+		return fmt.Errorf("HTTPS health checks are not supported in FIPS builds")
 	}
 	return nil
 }
 
-// createHTTPClient creates an HTTP client that blocks HTTPS redirects in FIPS mode.
+// createHTTPClient creates an HTTP client that blocks HTTPS redirects in FIPS builds.
 func createHTTPClient() *http.Client {
 	return &http.Client{
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			// Block HTTPS redirects in FIPS mode
 			if strings.ToLower(req.URL.Scheme) == "https" {
-				return fmt.Errorf("HTTPS redirects are not supported in FIPS mode")
+				return fmt.Errorf("HTTPS redirects are not supported in FIPS builds")
 			}
-			// Use default redirect behavior for HTTP
+			// Default behaviour in src/net/http/client.go
 			if len(via) >= 10 {
 				return fmt.Errorf("stopped after 10 redirects")
 			}

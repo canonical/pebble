@@ -51,11 +51,10 @@ func (d *Identity) validateAccess() error {
 		gotType = true
 	}
 	if d.Cert != nil {
-		// In FIPS mode, certificate authentication is not supported
-		return errors.New("certificate authentication is not supported in FIPS mode")
+		return errors.New("certificate authentication is not supported in FIPS builds")
 	}
 	if !gotType {
-		return errors.New(`identity must have at least one type ("local" or "basic"; cert auth not supported in FIPS mode)`)
+		return errors.New(`identity must have at least one type ("local" or "basic"; cert auth not supported in FIPS builds)`)
 	}
 
 	return nil
@@ -82,8 +81,7 @@ func (d *Identity) UnmarshalJSON(data []byte) error {
 		identity.Basic = &BasicIdentity{Password: ai.Basic.Password}
 	}
 	if ai.Cert != nil {
-		// In FIPS mode, certificate authentication is not supported
-		return errors.New("certificate authentication is not supported in FIPS mode")
+		return errors.New("certificate authentication is not supported in FIPS builds")
 	}
 
 	// Perform additional validation using the local Identity type.
@@ -101,11 +99,11 @@ func (d *Identity) UnmarshalJSON(data []byte) error {
 func (s *State) identityFromInputs(userID *uint32, username, password string, clientCert *x509.Certificate) *Identity {
 	switch {
 	case clientCert != nil:
-		// Certificate authentication is not supported in FIPS mode
+		// Certificate authentication is not supported in FIPS builds
 		return nil
 
 	case username != "" || password != "":
-		// Basic authentication login is not supported in FIPS mode (password verification
+		// Basic authentication login is not supported in FIPS builds (password verification
 		// requires the github.com/GehirnInc/crypt library which is not FIPS-certified)
 		return nil
 

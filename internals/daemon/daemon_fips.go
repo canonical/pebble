@@ -20,10 +20,10 @@ import (
 	"fmt"
 )
 
-// initHTTPSListener blocks HTTPS listener creation in FIPS mode.
+// initHTTPSListener blocks HTTPS listener creation in FIPS builds.
 func (d *Daemon) initHTTPSListener() error {
 	if d.options.HTTPSAddress != "" {
-		return fmt.Errorf("HTTPS server is not supported in FIPS mode")
+		return fmt.Errorf("HTTPS server is not supported in FIPS builds")
 	}
 	return nil
 }

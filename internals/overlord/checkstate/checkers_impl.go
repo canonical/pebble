@@ -20,12 +20,12 @@ import (
 	"net/http"
 )
 
-// checkHTTPSURL is a no-op in non-FIPS mode - allows HTTPS URLs.
+// checkHTTPSURL is a no-op in the default build.
 func checkHTTPSURL(url string) error {
 	return nil
 }
 
-// createHTTPClient creates a standard HTTP client in non-FIPS mode.
+// createHTTPClient creates a standard HTTP client in the default build.
 func createHTTPClient() *http.Client {
 	return &http.Client{}
 }

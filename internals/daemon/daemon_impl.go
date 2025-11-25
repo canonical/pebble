@@ -23,7 +23,7 @@ import (
 	"github.com/canonical/pebble/internals/logger"
 )
 
-// initHTTPSListener creates HTTPS listener in non-FIPS mode.
+// initHTTPSListener creates HTTPS listener in the default build.
 func (d *Daemon) initHTTPSListener() error {
 	if d.options.HTTPSAddress != "" {
 		tlsConf := d.overlord.TLSManager().ListenConfig()
