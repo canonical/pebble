@@ -32,8 +32,8 @@ type ClientOptions struct {
 	MaxRequestEntries    int
 	TargetName           string
 	Location             string
-	SyslogInitialBackoff time.Duration
-	SyslogMaxBackoff     time.Duration
+	InitialBackoff time.Duration
+	MaxBackoff     time.Duration
 	DialTimeout          time.Duration
 }
 
